@@ -21,9 +21,10 @@ folds over:
   as `zerocheckPZk` absorbs them.
 * **An honest device's round** (`roundFree_honest`): the masked prover sends each value as `v' = v + h_i`, so the
   device's plain value is `v' + h_i` (`unmaskFrames`), and the frame's release of the device's round is the masked
-  prover's round itself (`maskFrames_unmask`, characteristic 2). Its pads are the masked prover's: the frame's pad at
-  pad `j`'s absorbed position (`absPos`) is the draws' pad `j` (`padAt_ofDraws_absPos`), which on `tapeOfDraws` is the
-  masked prover's (`padsOf_tapeOfDraws`).
+  prover's round (`maskFrames_unmask`, characteristic 2) without its domain frames (`dropDoms`): a rep's first round
+  carries its stream's domain, which the masked prover's ask sends and the frame never releases. Its pads are the
+  masked prover's: the frame's pad at pad `j`'s absorbed position (`absPos`) is the draws' pad `j`
+  (`padAt_ofDraws_absPos`), which on `tapeOfDraws` is the masked prover's (`padsOf_tapeOfDraws`).
 -/
 
 namespace Claims.ZKServer
@@ -551,14 +552,23 @@ theorem add_pad_pad (v x : F128) : v + x + x = v := by
   show F128.mk (a ^^^ c ^^^ c) (b ^^^ d ^^^ d) = F128.mk a b
   rw [UInt64.xor_assoc, UInt64.xor_self, UInt64.xor_zero, UInt64.xor_assoc, UInt64.xor_self, UInt64.xor_zero]
 
-/-- A frame other than a domain. -/
-def noDom : Frame → Prop
-  | .dom _ => False
-  | _ => True
+/-- The frames but their domains: what the frame releases of them (the domain frame is the stream's own). -/
+def dropDoms : List Frame → List Frame
+  | [] => []
+  | .dom _ :: fs => dropDoms fs
+  | f :: fs => f :: dropDoms fs
 
-/-- **The device's frames of a released round** `F`: each value of the masked phase with its pad added back, the
-plain value the masked prover padded (`zerocheckPZk`'s `v' = v + h_i`, so `v = v' + h_i`). -/
-def unmaskFrames (c : Cfg) (p : ℕ) (F : List Frame) : List Frame := maskFrames (fun q v => v + padAt c q) p F
+/-- **The device's frames of a masked prover's round** `F`: each value of the masked phase with its pad added back, the
+plain value the masked prover padded (`zerocheckPZk`'s `v' = v + h_i`, so `v = v' + h_i`); every other frame, domains
+included, as it is. -/
+def unmaskFrames (c : Cfg) : ℕ → List Frame → List Frame
+  | _, [] => []
+  | p, .dom b :: fs => .dom b :: unmaskFrames c p fs
+  | p, .label b :: fs => .label b :: unmaskFrames c p fs
+  | p, .bytes b :: fs => .bytes b :: unmaskFrames c p fs
+  | p, .one v :: fs => .one (v + padAt c p) :: unmaskFrames c (p + 1) fs
+  | p, .vec vs :: fs => .vec (maskVals (fun q v => v + padAt c q) p vs) :: unmaskFrames c (p + vs.length) fs
+  | p, .sq k n :: fs => .sq k n :: unmaskFrames c p fs
 
 theorem maskVals_unmask (c : Cfg) : ∀ (p : ℕ) (vs : List F128),
     maskVals (maskVal c false) p (maskVals (fun q v => v + padAt c q) p vs) = vs
@@ -567,114 +577,96 @@ theorem maskVals_unmask (c : Cfg) : ∀ (p : ℕ) (vs : List F128),
     simp only [maskVals, maskVal, Bool.false_and, Bool.false_eq_true, ↓reduceIte, add_pad_pad,
       maskVals_unmask c (p + 1) vs]
 
-theorem maskFrames_unmask (c : Cfg) : ∀ (p : ℕ) (F : List Frame), (∀ f ∈ F, noDom f) →
-    maskFrames (maskVal c false) p (unmaskFrames c p F) = F
-  | _, [], _ => rfl
-  | p, f :: F, hd => by
-    have hd' : ∀ g ∈ F, noDom g := fun g hg => hd g (List.mem_cons_of_mem _ hg)
+/-- **Masking the device's frames gives the masked prover's back**, but its domains. -/
+theorem maskFrames_unmask (c : Cfg) : ∀ (p : ℕ) (F : List Frame),
+    maskFrames (maskVal c false) p (unmaskFrames c p F) = dropDoms F
+  | _, [] => rfl
+  | p, f :: F => by
     cases f with
-    | dom b => exact absurd (hd _ List.mem_cons_self) id
-    | label b => exact congrArg (List.cons _) (maskFrames_unmask c p F hd')
-    | bytes b => exact congrArg (List.cons _) (maskFrames_unmask c p F hd')
+    | dom b => exact maskFrames_unmask c p F
+    | label b => exact congrArg (List.cons _) (maskFrames_unmask c p F)
+    | bytes b => exact congrArg (List.cons _) (maskFrames_unmask c p F)
     | one v =>
       simp only [unmaskFrames, maskFrames, maskVal, Bool.false_and, Bool.false_eq_true, ↓reduceIte, add_pad_pad]
-      exact congrArg (List.cons _) (maskFrames_unmask c (p + 1) F hd')
+      exact congrArg (List.cons _) (maskFrames_unmask c (p + 1) F)
     | vec vs =>
       simp only [unmaskFrames, maskFrames, maskVals_length]
       rw [maskVals_unmask]
-      exact congrArg (List.cons _) (maskFrames_unmask c (p + vs.length) F hd')
-    | sq k n => exact congrArg (List.cons _) (maskFrames_unmask c p F hd')
+      exact congrArg (List.cons _) (maskFrames_unmask c (p + vs.length) F)
+    | sq k n => exact congrArg (List.cons _) (maskFrames_unmask c p F)
 
-theorem nAbs_maskFrames (g : ℕ → F128 → F128) : ∀ (p : ℕ) (F : List Frame), nAbs (maskFrames g p F) = nAbs F
+theorem nAbs_unmask (c : Cfg) : ∀ (p : ℕ) (F : List Frame), nAbs (unmaskFrames c p F) = nAbs F
   | _, [] => rfl
   | p, f :: F => by
-    cases f <;> simp only [maskFrames, nAbs, maskVals_length, nAbs_maskFrames g _ F]
+    cases f <;> simp only [unmaskFrames, nAbs, maskVals_length, nAbs_unmask c _ F]
 
-theorem maskFrames_mid (g : ℕ → F128 → F128) : ∀ (p : ℕ) (F : List Frame), (∀ f ∈ F, midFrame f) →
-    ∀ f ∈ maskFrames g p F, midFrame f
-  | _, [], _ => by simp [maskFrames]
+theorem unmask_mid (c : Cfg) : ∀ (p : ℕ) (F : List Frame), (∀ f ∈ F, midFrame f) →
+    ∀ f ∈ unmaskFrames c p F, midFrame f
+  | _, [], _ => by simp [unmaskFrames]
   | p, f :: F, hm => by
     have hm' : ∀ g ∈ F, midFrame g := fun g hg => hm g (List.mem_cons_of_mem _ hg)
     have h0 := hm f List.mem_cons_self
+    intro x hx
     cases f with
-    | dom b => exact maskFrames_mid g p F hm'
-    | label b =>
-      intro x hx; simp only [maskFrames, List.mem_cons] at hx
-      rcases hx with rfl | hx
-      · exact h0
-      · exact maskFrames_mid g p F hm' x hx
-    | bytes b =>
-      intro x hx; simp only [maskFrames, List.mem_cons] at hx
-      rcases hx with rfl | hx
-      · exact h0
-      · exact maskFrames_mid g p F hm' x hx
-    | one v =>
-      intro x hx; simp only [maskFrames, List.mem_cons] at hx
-      rcases hx with rfl | hx
-      · exact trivial
-      · exact maskFrames_mid g _ F hm' x hx
     | vec vs =>
-      intro x hx; simp only [maskFrames, List.mem_cons] at hx
+      simp only [unmaskFrames, List.mem_cons] at hx
       rcases hx with rfl | hx
-      · show (maskVals g p vs).length < 2 ^ 64; rw [maskVals_length]; exact h0
-      · exact maskFrames_mid g _ F hm' x hx
-    | sq k n =>
-      intro x hx; simp only [maskFrames, List.mem_cons] at hx
+      · show (maskVals _ p vs).length < 2 ^ 64; rw [maskVals_length]; exact h0
+      · exact unmask_mid c _ F hm' x hx
+    | one v =>
+      simp only [unmaskFrames, List.mem_cons] at hx
+      rcases hx with rfl | hx
+      · trivial
+      · exact unmask_mid c _ F hm' x hx
+    | dom b | label b | bytes b | sq k n =>
+      simp only [unmaskFrames, List.mem_cons] at hx
       rcases hx with rfl | hx
       · exact h0
-      · exact maskFrames_mid g p F hm' x hx
+      · exact unmask_mid c _ F hm' x hx
 
-theorem maskFrames_plain (g : ℕ → F128 → F128) : ∀ (p : ℕ) (F : List Frame), (∀ f ∈ F, plainFrame f) →
-    ∀ f ∈ maskFrames g p F, plainFrame f
-  | _, [], _ => by simp [maskFrames]
+theorem unmask_plain (c : Cfg) : ∀ (p : ℕ) (F : List Frame), (∀ f ∈ F, plainFrame f) →
+    ∀ f ∈ unmaskFrames c p F, plainFrame f
+  | _, [], _ => by simp [unmaskFrames]
   | p, f :: F, hm => by
     have hm' : ∀ g ∈ F, plainFrame g := fun g hg => hm g (List.mem_cons_of_mem _ hg)
     have h0 := hm f List.mem_cons_self
+    intro x hx
     cases f with
-    | dom b => exact maskFrames_plain g p F hm'
-    | label b =>
-      intro x hx; simp only [maskFrames, List.mem_cons] at hx
-      rcases hx with rfl | hx
-      · exact h0
-      · exact maskFrames_plain g p F hm' x hx
-    | bytes b =>
-      intro x hx; simp only [maskFrames, List.mem_cons] at hx
-      rcases hx with rfl | hx
-      · exact trivial
-      · exact maskFrames_plain g p F hm' x hx
-    | one v =>
-      intro x hx; simp only [maskFrames, List.mem_cons] at hx
-      rcases hx with rfl | hx
-      · exact trivial
-      · exact maskFrames_plain g _ F hm' x hx
     | vec vs =>
-      intro x hx; simp only [maskFrames, List.mem_cons] at hx
+      simp only [unmaskFrames, List.mem_cons] at hx
       rcases hx with rfl | hx
-      · exact trivial
-      · exact maskFrames_plain g _ F hm' x hx
-    | sq k n =>
-      intro x hx; simp only [maskFrames, List.mem_cons] at hx
+      · trivial
+      · exact unmask_plain c _ F hm' x hx
+    | one v =>
+      simp only [unmaskFrames, List.mem_cons] at hx
+      rcases hx with rfl | hx
+      · trivial
+      · exact unmask_plain c _ F hm' x hx
+    | dom b | label b | bytes b | sq k n =>
+      simp only [unmaskFrames, List.mem_cons] at hx
       rcases hx with rfl | hx
       · exact h0
-      · exact maskFrames_plain g p F hm' x hx
+      · exact unmask_plain c _ F hm' x hx
 
-/-- **An honest device's round inside the algebraic phase leaves as the masked prover's**: where the device sends the
-frames `F` of the masked prover's round with each value's pad added back (`unmaskFrames`, the plain values), a rep that
-has not stopped releases `F` itself, then the squeeze. -/
+/-- **An honest device's round inside the algebraic phase leaves as the masked prover's, but its domains**: where the
+device sends the frames `F` of the masked prover's round with each value's pad added back (`unmaskFrames`, the plain
+values), a rep that has not stopped releases `F` without its domain frames, then the squeeze. A rep's first round
+carries its stream's domain frame (`Transcript.init`), which the masked prover's ask (`squeezeP`'s `framed`) sends and
+the frame keeps for its stream. -/
 theorem roundFree_honest (c : Cfg) (s : Masker) (F : List Frame) (k : UInt8) (n : ℕ)
     (hc : ∀ p, p < c.order.size → c.order[p]! < c.h.size) (hon : s.on = true) (hst : s.stopped = false)
-    (hi : s.inner = none) (hm : ∀ f ∈ F, midFrame f) (hp : ∀ f ∈ F, plainFrame f) (hd : ∀ f ∈ F, noDom f)
+    (hi : s.inner = none) (hm : ∀ f ∈ F, midFrame f) (hp : ∀ f ∈ F, plainFrame f)
     (hk : k = 2 ∨ (k = 1 ∧ n = 1)) (h0 : ¬ (n = 0 ∧ k = 2)) (hn : n < 2 ^ 64)
     (hb : s.pos + nAbs F ≤ c.order.size) :
     ∃ out fr, roundFree c s (ByteArray.mk (encs (unmaskFrames c s.pos F) ++ (Frame.sq k n).enc).toArray) n =
         .ok (out, { s with pos := s.pos + nAbs F, owed := some n }, fr) ∧
-      out.data.toList = encs F ++ (Frame.sq k n).enc := by
-  have hN : nAbs (unmaskFrames c s.pos F) = nAbs F := nAbs_maskFrames _ _ F
+      out.data.toList = encs (dropDoms F) ++ (Frame.sq k n).enc := by
+  have hN : nAbs (unmaskFrames c s.pos F) = nAbs F := nAbs_unmask c _ F
   obtain ⟨out, fr, hr, ho⟩ := roundFree_on c s (unmaskFrames c s.pos F) k n hc hon hi
-    (maskFrames_mid _ _ F hm) (maskFrames_plain _ _ F hp) hk h0 hn (by rw [hN]; exact hb)
+    (unmask_mid c _ F hm) (unmask_plain c _ F hp) hk h0 hn (by rw [hN]; exact hb)
   rw [hN] at hr
   refine ⟨out, fr, hr, ?_⟩
-  rw [ho, hst, maskFrames_unmask c s.pos F hd]
+  rw [ho, hst, maskFrames_unmask c s.pos F]
 
 /-! ## The masked prover's pads in the frame's order -/
 
