@@ -3,7 +3,8 @@
  "proved_in": ["Proofs"],
  "assumptions": {
   "Accounting.Assumptions.Checkpoint.CheckpointGuessAt": {
-   "owner": "@compute-accounting"
+   "owner": "@compute-accounting",
+   "digest": "3f8ca6c767330be922862a3309f35552d61bc7a7232a85bf5aaa0ab599365506"
   },
   "Accounting.Assumptions.EncodeChainHardness": {
    "owner": "@memory-accounting",
@@ -1056,10 +1057,20 @@
    "type_hash": "0a39e7949bbfaf219bed8ea794cb61c9d969c72aec4d51d6451736b6201ad9e3"
   },
   "Accounting.SecurityProofs.Checkpoint.CheckpointGuessOfFresh": {
-   "owner": "@compute-accounting"
+   "owner": "@compute-accounting",
+   "signature": [
+    "Accounting.SecurityProofs.Checkpoint.CheckpointGuessOfFresh : Accounting.Guarantees.Checkpoint.CheckpointGuessOfFresh"
+   ],
+   "assumptions": [],
+   "type_hash": "42f63b1dfabca7d6d5c56e3e6d443facea4eab1d15b4cdb44a7c0435969732c8"
   },
   "Accounting.SecurityProofs.Checkpoint.WholeGuessOfCheckpoints": {
-   "owner": "@compute-accounting"
+   "owner": "@compute-accounting",
+   "signature": [
+    "Accounting.SecurityProofs.Checkpoint.WholeGuessOfCheckpoints : Accounting.Guarantees.Checkpoint.WholeGuessOfCheckpoints"
+   ],
+   "assumptions": [],
+   "type_hash": "10e651c78a63aabea89a5e821f9daf2dfd54d011f248073c2e91a41013c38dd0"
   },
   "Accounting.SecurityProofs.CoinFlow.CoinsThroughNoise": {
    "owner": "@compute-accounting",
@@ -9259,6 +9270,7 @@
     "Accounting.TS.RoundGame.LuckAt": "ed20de7ced73a673a93adb8b77525ccc0aa1979b64c52801b16d6f8813b3a096"
    },
    "guarantees": [
+    "Accounting.SecurityProofs.Checkpoint.WholeGuessOfCheckpoints",
     "Accounting.SecurityProofs.FillerLuck.FillerBudget",
     "Accounting.SecurityProofs.FillerLuck.FillerLuckAt",
     "Accounting.SecurityProofs.FillerLuck.PinnedFillBudget",
@@ -9371,6 +9383,7 @@
     "Accounting.TS.xorAll": "e79c7bb80c4a340fa20f2ac319de5139cc27cdb654e1d37262bb86e7309933b9"
    },
    "guarantees": [
+    "Accounting.SecurityProofs.Checkpoint.WholeGuessOfCheckpoints",
     "Accounting.SecurityProofs.TS.DuoSegmentsBind",
     "Accounting.SecurityProofs.TS.Fx1SegmentsBind",
     "Accounting.SecurityProofs.TS.LiSegmentsBind",
@@ -15029,6 +15042,8 @@
     "Pouw.RelativeSecurity.wRe": "8111c43d37e7e41182d2ee61f0d6d86d9c6f2991686898fc9e1ea46a14ebac70"
    },
    "guarantees": [
+    "Accounting.SecurityProofs.Checkpoint.CheckpointGuessOfFresh",
+    "Accounting.SecurityProofs.Checkpoint.WholeGuessOfCheckpoints",
     "Accounting.SecurityProofs.CoinFlow.PointMass",
     "Accounting.SecurityProofs.FillerLuck.FillerBlocksDeficit",
     "Accounting.SecurityProofs.FillerLuck.FillerBudget",
@@ -20058,6 +20073,16 @@
     "FlockSoundness.Discharge.ZkReg.zk_session_soundHJR_nonvacuous"
    ]
   },
+  "Models.Accounting.Assumptions.Checkpoint": {
+   "digest": "baeb36609b69ee489ce9b9bf198d7f142665425cce525e2949e1100b1f387482",
+   "definitions": {
+    "Accounting.Assumptions.Checkpoint.CheckpointGuessAt": "3f8ca6c767330be922862a3309f35552d61bc7a7232a85bf5aaa0ab599365506"
+   },
+   "guarantees": [
+    "Accounting.SecurityProofs.Checkpoint.CheckpointGuessOfFresh",
+    "Accounting.SecurityProofs.Checkpoint.WholeGuessOfCheckpoints"
+   ]
+  },
   "Models.Accounting.Assumptions.EncodeChain": {
    "digest": "69647f011a16692c256c99f734d2ead132d443b3c639c7334cfd2f6df1dae0af",
    "definitions": {
@@ -20299,6 +20324,17 @@
     "Accounting.Guarantees.DerivedStateResidual": "27a116f68a0c157ba7f8a93b057528b5dec47381f1d9b76135656eeb2a5db4b7"
    },
    "guarantees": ["Accounting.SecurityProofs.CapacityOfStateBound", "Accounting.SecurityProofs.DerivedStateResidual"]
+  },
+  "Models.Accounting.Guarantees.Checkpoint": {
+   "digest": "990e6b17e8c7f0e70209f657a38960afd1aa5acfe9abf1b9b85f54afbbd42a17",
+   "definitions": {
+    "Accounting.Guarantees.Checkpoint.CheckpointGuessOfFresh": "88cef637e51d17d64f449e5c0dd65889cc1d58922ee9f18f3e5f9b945a8aeb27",
+    "Accounting.Guarantees.Checkpoint.WholeGuessOfCheckpoints": "10093259af75a8252cd3a0ea9390c83bbcf06f77a83ddb335c2d315b2324c23f"
+   },
+   "guarantees": [
+    "Accounting.SecurityProofs.Checkpoint.CheckpointGuessOfFresh",
+    "Accounting.SecurityProofs.Checkpoint.WholeGuessOfCheckpoints"
+   ]
   },
   "Models.Accounting.Guarantees.CoinFlow": {
    "digest": "99f4e4094d2d88de5479696cc17615501e7d25714d20fa45af58fa1a647b7421",
