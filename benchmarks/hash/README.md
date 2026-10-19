@@ -15,5 +15,7 @@ ruling, because the commitment's hash is a design rule ("One hash", AGENTS.md).
 | `sharaw/` | hm96-sha512 at 4 KiB leaves near the raw SHA-512 rate |
 | `structure/` | leaf size, tree arity, salts off the step, and SHA-512 fused into the GEMM |
 | `lattice/` | SIS (Ajtai) hashes on the INT8 tensor cores: parameters and throughput |
+| `bytes/` | fewer SHA-512 compressions with the hash kept: values out of the Commit and leaf-format changes, priced through `model/` |
+| `overlap/` | hm96-sha512 hashing of a Qwen3-8B prefill step beside its GEMMs (cuBLASLt, CUTLASS, a persistent hash server) |
 
 The campaign's findings and the recommendation to Daniel are in the notes, `lanes/hash/`.

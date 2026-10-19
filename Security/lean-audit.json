@@ -130,6 +130,38 @@
    "owner": "@memory-accounting",
    "digest": "9191da3bbab04e2c655d21d45cd15f7b317e9cc5cfe9b93627e1b050b7203aec"
   },
+  "Accounting.Remote.Held.Assumptions.Causal": {
+   "owner": "@memory-accounting",
+   "digest": "aea522d86a7abda05eeeb5fcd299485f663d29f83a8a1b4128e8c015b3dcad71"
+  },
+  "Accounting.Remote.Held.Assumptions.ChipCeiling": {
+   "owner": "@memory-accounting",
+   "digest": "e127ae65fbdc438b47177e01b9ac74b58f7ea758327288ae293137cb8b6d8fae"
+  },
+  "Accounting.Remote.Held.Assumptions.Disks": {
+   "owner": "@memory-accounting",
+   "digest": "84e32cdde88cf32113e563a284a9c739239d29c03fe5ee74bc058d1ee987bf15"
+  },
+  "Accounting.Remote.Held.Assumptions.Identity": {
+   "owner": "@memory-accounting",
+   "digest": "22630221fb29250610dca86a4897d9f39909a8e8ca1c425fcb62e8dcf192a236"
+  },
+  "Accounting.Remote.Held.Assumptions.LiveCoins": {
+   "owner": "@memory-accounting",
+   "digest": "68bf6e4151cfbf0c550493d145934dc046109cd73fd4e09a2c1d79218323d84a"
+  },
+  "Accounting.Remote.Held.Assumptions.Routed": {
+   "owner": "@memory-accounting",
+   "digest": "0c27bd1201f655e0bb779bc6b347727d6d0072e9aab93ae409391e18670eca7c"
+  },
+  "Accounting.Remote.Held.Assumptions.SketchBound": {
+   "owner": "@memory-accounting",
+   "digest": "193fa80d7712162f27061c4a392ad4c4703e5ce2a95a7877a8c553b6fce258b4"
+  },
+  "Accounting.Remote.Held.Assumptions.SquaringCeiling": {
+   "owner": "@memory-accounting",
+   "digest": "42634dad8fd6c4435b6d18c96069ebf2a2a46a702914f4d4a54bc5df8105c538"
+  },
   "Claims.ExpectedCR": {
    "owner": "@proofs",
    "digest": "ccb0737889852a6df27bfbac4afc86597d213f0c77267a6c81a44e5c1dd7479e"
@@ -1914,6 +1946,12 @@
    "assumptions": [],
    "type_hash": "6f9da408630883d8770f358eaddf47063f1b76099677faea7bdb35c5e45d777a"
   },
+  "Accounting.SecurityProofs.Remote.Held": {
+   "owner": "@memory-accounting",
+   "signature": ["Accounting.SecurityProofs.Remote.Held : Accounting.Guarantees.Remote.Held"],
+   "assumptions": [],
+   "type_hash": "156e45cf5c184510b4e81f318c0b50e17b6cab0af1582be40fc592c055f0eac2"
+  },
   "Accounting.SecurityProofs.RemoteSessionConservation": {
    "owner": "@memory-accounting",
    "signature": ["Accounting.SecurityProofs.RemoteSessionConservation : Accounting.Guarantees.RemoteSessionConservation"],
@@ -3539,6 +3577,38 @@
    "assumptions": [],
    "type_hash": "30100657bfd33b612c4d1e356209691877a0b4f0d8f46ac06f7398374c5ae88b"
   },
+  "FlockSoundness.Audit.Partition.Refines.twoStage_influence": {
+   "owner": "@proofs",
+   "signature": [
+    "FlockSoundness.Audit.Partition.Refines.twoStage_influence {C : FlockSoundness.Audit.Circuit} {nf nc : Nat}",
+    "  {Pf : FlockSoundness.Audit.Partition C nf} {Pc : FlockSoundness.Audit.Partition C nc} {a : Fin C.N → Bool}",
+    "  {εks δlink δin : ENNReal} {D : Finset (Fin C.N)} (r : Pf.Refines Pc) {L₁ : FlockSoundness.Audit.Law nc}",
+    "  {L₂ : Fin nc → FlockSoundness.Audit.Law nf} {Reg : Type} {Int : Finset (Fin nc) → Type}",
+    "  {session : Finset (Fin nf) → Reg → (S₁ : Finset (Fin nc)) → Int S₁ → FlockSoundness.Game Bool}",
+    "  (X : (R : Reg) → FlockSoundness.Audit.Cont₁ L₁ L₂ Reg Int session R → Fin C.N → Bool)",
+    "  (Yint :",
+    "    (R : Reg) →",
+    "      (ω₁ : L₁.Ω) → (I : Int (L₁.draw ω₁)) → FlockSoundness.Audit.Cont₂ L₁ L₂ Reg Int session R ω₁ I → Fin C.N → Bool)",
+    "  (ext :",
+    "    (S : Finset (Fin nf)) →",
+    "      (R : Reg) →",
+    "        (S₁ : Finset (Fin nc)) → (I : Int S₁) → (session S R S₁ I).Strategy → Fin nf → Option (Fin C.N → Bool))",
+    "  (hks : (r.analysis₂ X Yint ext).KnowledgeSound εks) (hlink : (r.analysis₂ X Yint ext).LinkSound δlink)",
+    "  (hin : FlockSoundness.Audit.Partition.AnchorsSound₂ X a δin) (δ : ENNReal)",
+    "  (σ : (FlockSoundness.Audit.twoStage L₁ L₂ Reg Int session).Strategy) :",
+    "  ENNReal.instLE.le",
+    "    (FlockSoundness.Game.prob",
+    "      (fun o =>",
+    "        And (Eq o.fst Bool.true)",
+    "          (Not",
+    "            (SetLike.instMembership.mem (Pc.influenceSet D (FlockSoundness.Audit.effEscape L₁ L₂ r.parent) a δ)",
+    "              (FlockSoundness.Audit.Partition.out D (X (FlockSoundness.Audit.reg₂ σ) (FlockSoundness.Audit.cont₁ σ))))))",
+    "      (FlockSoundness.Audit.twoStage L₁ L₂ Reg Int session) σ)",
+    "    (instHAdd.hAdd (instHAdd.hAdd (instHAdd.hAdd δ εks) δlink) δin)"
+   ],
+   "assumptions": [],
+   "type_hash": "b8ce8a09ff7fc4588d1395595cb30d4801259e9057c7fa6a5c5b64229456476a"
+  },
   "FlockSoundness.Audit.Partition.audit_exfiltration": {
    "owner": "@proofs",
    "signature": [
@@ -3577,6 +3647,30 @@
    ],
    "assumptions": [],
    "type_hash": "f4da824071ffa02f8a779554c6ce5347bc1c13ecbd46d891b4221d9409494825"
+  },
+  "FlockSoundness.Audit.Partition.audit_influence": {
+   "owner": "@proofs",
+   "signature": [
+    "FlockSoundness.Audit.Partition.audit_influence {C : FlockSoundness.Audit.Circuit} {n : Nat}",
+    "  (P : FlockSoundness.Audit.Partition C n) {L : FlockSoundness.Audit.Law n} {Reg : Type}",
+    "  {session : Finset (Fin n) → Reg → FlockSoundness.Game Bool}",
+    "  {X : (R : Reg) → FlockSoundness.Audit.Cont L Reg session R → Fin C.N → Bool}",
+    "  {ext : (S : Finset (Fin n)) → (R : Reg) → (session S R).Strategy → Fin n → Option (Fin C.N → Bool)}",
+    "  {a : Fin C.N → Bool} {εks δlink δin : ENNReal} {D : Finset (Fin C.N)} (hks : (P.analysis X ext).KnowledgeSound εks)",
+    "  (hlink : (P.analysis X ext).LinkSound δlink) (hin : FlockSoundness.Audit.Partition.AnchorsSound X a δin) (δ : ENNReal)",
+    "  (σ : (FlockSoundness.Audit.audit L Reg session).Strategy) :",
+    "  ENNReal.instLE.le",
+    "    (FlockSoundness.Game.prob",
+    "      (fun o =>",
+    "        And (Eq o.fst Bool.true)",
+    "          (Not",
+    "            (SetLike.instMembership.mem (P.influenceSet D L.escape a δ)",
+    "              (FlockSoundness.Audit.Partition.out D (X (FlockSoundness.Audit.reg σ) (FlockSoundness.Audit.cont σ))))))",
+    "      (FlockSoundness.Audit.audit L Reg session) σ)",
+    "    (instHAdd.hAdd (instHAdd.hAdd (instHAdd.hAdd δ εks) δlink) δin)"
+   ],
+   "assumptions": [],
+   "type_hash": "d3e49bbbe5b63080641d49ab94be7449a1d00a655e35d54f64c409958b2bd798"
   },
   "FlockSoundness.Audit.Partition.card_admissible_le": {
    "owner": "@proofs",
@@ -6880,6 +6974,12 @@
    "signature": ["Pouw.SecurityProofs.WorkWeightedSampling : Pouw.Guarantees.WorkWeightedSampling"],
    "assumptions": [],
    "type_hash": "2f6552a7668b089031af583e72b5e551727622dd8c12b1269790c9ad397ed88b"
+  },
+  "Verity.SecurityProofs.ComposeCone": {
+   "owner": "@proofs",
+   "signature": ["Verity.SecurityProofs.ComposeCone : Verity.Guarantees.ComposeCone"],
+   "assumptions": [],
+   "type_hash": "f565132f61eb73cde2ed8d766ee1d4344bfd8d8939ae9d2120bb9790bcd6f6f7"
   }
  },
  "shape": {
@@ -7632,7 +7732,6 @@
    "Verity.Guarantees.AmpereUnitSound": "unstated: in a Guarantees module, but no lock lists a theorem that proves it (shape sweep, note:proofs/20261009T0100Z-finding-shape-sweep): its owner lists the theorem under guarantees, or moves the statement out",
    "Verity.Guarantees.AmpereUnitSoundZero": "unstated: in a Guarantees module, but no lock lists a theorem that proves it (shape sweep, note:proofs/20261009T0100Z-finding-shape-sweep): its owner lists the theorem under guarantees, or moves the statement out",
    "Verity.Guarantees.Compose": "unstated: in a Guarantees module, but no lock lists a theorem that proves it (shape sweep, note:proofs/20261009T0100Z-finding-shape-sweep): its owner lists the theorem under guarantees, or moves the statement out",
-   "Verity.Guarantees.ComposeCone": "unstated: in a Guarantees module, but no lock lists a theorem that proves it (shape sweep, note:proofs/20261009T0100Z-finding-shape-sweep): its owner lists the theorem under guarantees, or moves the statement out",
    "Verity.Guarantees.ContainsImplements": "unstated: in a Guarantees module, but no lock lists a theorem that proves it (shape sweep, note:proofs/20261009T0100Z-finding-shape-sweep): its owner lists the theorem under guarantees, or moves the statement out",
    "Verity.Guarantees.CorrectOfOpening": "unstated: in a Guarantees module, but no lock lists a theorem that proves it (shape sweep, note:proofs/20261009T0100Z-finding-shape-sweep): its owner lists the theorem under guarantees, or moves the statement out",
    "Verity.Guarantees.HopperStepComplete": "unstated: in a Guarantees module, but no lock lists a theorem that proves it (shape sweep, note:proofs/20261009T0100Z-finding-shape-sweep): its owner lists the theorem under guarantees, or moves the statement out",
@@ -7778,7 +7877,15 @@
    "Nci.SecurityProofs.FitBoundSlots": "frozen (conjecture,no-function): It is about an arbitrary reference circuit, a threading of it with a slot map and its division into windows, under the named empirical premises ReachSlots (F3) and FitsSlots (F1 and F4 per parameter slot) (Security/Models/Nci/Assumptions/Fit.lean), not about the NCI check's code; joining it to Accounting's Windows and the wipe certificate is what would give it an acceptance. It rests on the open conjecture ReachSlots (shape.conjectures, LEAN-35: false at token threads for a token-routed MoE, the per-sequence form at sequence threads).",
    "Nci.SecurityProofs.ThreadedReadsInfoFmt": "frozen (no-function): It is about an arbitrary reference circuit and a threading of it, under the named WeightsSupportFmt (Security/Models/Nci/Assumptions/Fmt.lean), a restatement of the falsified WeightsSupport not yet signed off, not about the NCI check's code; joining it to NciCheck.Properties.Witnesses is what would give it an acceptance.",
    "Nci.SecurityProofs.ThreadedContainedInfoFmt": "frozen (no-function): It is about an arbitrary reference circuit, a threading of it and a declaration that contains it, under the named WeightsSupportFmt (Security/Models/Nci/Assumptions/Fmt.lean), a restatement of the falsified WeightsSupport not yet signed off, not about the NCI check's code; joining it to NciCheck.Properties.Witnesses is what would give it an acceptance.",
-   "Nci.SecurityProofs.ThreadedOfStateFmt": "frozen (no-function): It is about an arbitrary reference circuit, a threading of it and a declaration that contains it, under the named WeightsSupportFmt (Security/Models/Nci/Assumptions/Fmt.lean), a restatement of the falsified WeightsSupport not yet signed off, not about the NCI check's code; joining it to NciCheck.Properties.Witnesses is what would give it an acceptance."
+   "Nci.SecurityProofs.ThreadedOfStateFmt": "frozen (no-function): It is about an arbitrary reference circuit, a threading of it and a declaration that contains it, under the named WeightsSupportFmt (Security/Models/Nci/Assumptions/Fmt.lean), a restatement of the falsified WeightsSupport not yet signed off, not about the NCI check's code; joining it to NciCheck.Properties.Witnesses is what would give it an acceptance.",
+   "Accounting.Guarantees.Remote.HeldOverTime": "unstated: the remote audit's memory line held over time under Identity, for a paced session (the declared time-held line); its proof, the absent-stretch bound, is open, and it is listed once proved (note:20261018T2000Z-report-held-guarantee)",
+   "Accounting.Guarantees.Remote.HeldOverTimeLinks": "unstated: the remote audit's memory line held over time with the boundary links charged, no Identity (the declared link-charged line); its proof, the absent-stretch bound, is open, and it is listed once proved (note:20261018T2000Z-report-held-guarantee)",
+   "Accounting.SecurityProofs.Remote.Held": "frozen (no-function): It is about a trace of where the node's registered blocks are (Accounting.Remote.Held.Trace), not the verifier's code (RemoteAudit); its premises SketchBound and LiveCoins are stated on the trace and not yet derived from Accounting.Guarantees.RateAuditSketch and the session's pooled draw (Accounting.Guarantees.HorizonSampling) (note:20261018T2000Z-report-held-guarantee)",
+   "Pouw.Guarantees.Window.WindowEps": "unstated: M2 with C1, a window's epsilon from its calls' in the compiled tables' shape (max of the calls' knowledge constants, plus one window-level collision term of the prover's state, plus the sum of their link terms at the window's state, at a draw that depends on the registration); stated first, per Daniel's 17 Oct order (statement, red team, card, proof), and its theorem Pouw.SecurityProofs.Window.WindowEps is not proved yet (note:proofs/20261018T0400Z-draft-pouw-gap6-statement).",
+   "Pouw.Guarantees.Window.ServiceEscapes": "unstated: sampled proofs' service draw (one uniform K-subset in rank-ordered sessions, window.py) is within 0 of its sessions' own uniform laws on copy-closed unit sets, so WindowEps reads the deployed draw with each session a call; stated with WindowEps, and its theorem Pouw.SecurityProofs.Window.ServiceEscapes is not proved yet (note:proofs/20261018T0400Z-draft-pouw-gap6-statement).",
+   "FlockSoundness.Audit.Partition.audit_influence": "frozen (obligation,no-function): It takes KnowledgeSound and LinkSound (Security/Proofs/Flock/Soundness/Audit/OneStage.lean:85, :94), open obligations of the backend, as hypotheses, and it is about the abstract one-stage audit rather than a Lean function.",
+   "FlockSoundness.Audit.Partition.Refines.twoStage_influence": "frozen (obligation,no-function): It takes the two-stage KnowledgeSound and LinkSound (Security/Proofs/Flock/Soundness/Audit/TwoStage.lean:121, :130), open obligations of the backend, as hypotheses, and it is about the abstract two-stage audit rather than a Lean function.",
+   "Verity.SecurityProofs.ComposeCone": "frozen (no-function): It is stated over an arbitrary partition and transcript, and takes the anchors' inputs (InputsAgree) and that no unit of the cone is wrong as hypotheses, conditions on the run that are not on the premises list, rather than a function's acceptance."
   },
   "conjectures": {
    "Nci.Assumptions.ActivationsIncompressible": {
@@ -9420,6 +9527,31 @@
     "Accounting.SecurityProofs.RemoteWindowRunConservationRelay"
    ]
   },
+  "Definitions.Accounting.Remote.Held": {
+   "digest": "b44c25c2a9688f025e4e814fbd516d012c84d691831647e5f50d402bf77540be",
+   "definitions": {
+    "Accounting.Remote.Held.Trace": "d9e4172a28affbe2f34f7f996ef26e46a977137450155bbdaa3a75527cf847f2",
+    "Accounting.Remote.Held.Trace.Holds": "287675d5fa1e1562213326a6f5af7a8c85ea11c510ad950f9f42782efbe10163",
+    "Accounting.Remote.Held.Trace.accepts": "fe2d9f4db6bc2395652525e25215d3d0c007852c71e097df5a84f87994cb0d60",
+    "Accounting.Remote.Held.Trace.blocks": "eb20c174fc72ee96a9145b9a04260423158e94522c8b2a99a6e29d413edb5c79",
+    "Accounting.Remote.Held.Trace.chip": "72e5b7171b8a34d3333c88651ae31dad7f1f264c74a9a4ec32e726dae16340a2",
+    "Accounting.Remote.Held.Trace.correct": "f096b008c568da20b28dd41183c45b55ab026337aceed34ecf2499fdbca8176f",
+    "Accounting.Remote.Held.Trace.disk": "ac4dfa8fdb631eeec596a922096903424ddf643d16bd94921038dfb1a439eb5b",
+    "Accounting.Remote.Held.Trace.entered": "acf73bf82b62b3996db64dbdcd3f26e5d90ec452709c7a12c621838a7ac93f84",
+    "Accounting.Remote.Held.Trace.held": "9e75bd81e4f38f7653e9cb526db5133cdfef5c51dd36e2dd28b08ac366b4ab62",
+    "Accounting.Remote.Held.Trace.link": "86f373799becc962d970d5c43d91d3e669954e0ce8af349a5aae68cd3d59c0b3",
+    "Accounting.Remote.Held.Trace.mem": "214e16fb25d8c1ce8dbc428b2bba6207e8e326a7ba139ed3dc2d7286a86bc4c5",
+    "Accounting.Remote.Held.Trace.passes": "08914f6ed9585e2d336a51956fa3745cf387fb3238bada7d525e71a5282d2605",
+    "Accounting.Remote.Held.Trace.plan": "402b4bea9c79e6989d09b1d3433f93d3080a7ef582b23d81f5c184556f44123e",
+    "Accounting.Remote.Held.Trace.planned": "c71f1c122daa0237f17e9612a36e1f1d40f20416715e0e34a277831ea6f6e6ca",
+    "Accounting.Remote.Held.Trace.present": "413e4880d0952d49a65600bb74d91fca94bb03969ecb0326fb74470e1689fa54",
+    "Accounting.Remote.Held.Trace.rebuilt": "f55bfe5e4294f237ac46e44fee93421f9e84ab2fc384bd0a54b6f3ebdb060438",
+    "Accounting.Remote.Held.Trace.tick": "1a02eb2aadaf1f57869459a928f9a70ca73a75eb654f52cbf6b4d1a87ffc0511",
+    "Accounting.Remote.Held.Trace.wrong": "66ce2491350791110ed2c59d50766f1b981e1aa4408d3acc2767af6201e430d9",
+    "Accounting.Remote.Held.over": "7aea3c330c4455d8d1aecb5649147bc73cae0c6f8137f3d65d6a95b0227b0cda"
+   },
+   "guarantees": ["Accounting.SecurityProofs.Remote.Held"]
+  },
   "Definitions.Accounting.Remote.Node": {
    "digest": "3ced36c3ec6c09e23dd55b57b41035d8deb9eeabd9805652c774d7a51937a2b8",
    "definitions": {
@@ -10778,12 +10910,13 @@
    ]
   },
   "Definitions.Core.Circuit": {
-   "digest": "a08239081fcf880dee928fce0029cfa179f6f760db51ccd16bd97d7097f3e541",
+   "digest": "c7b682a12594edbab02b3fb83465e6c5354f9320835f84ad88e478e3bf340ead",
    "definitions": {
     "Verity.Circuit": "c86ddd734da68edae1a4e99343f0dfc3e717418d0f7bc8a55a8a33af0f471a17",
     "Verity.Circuit.Feeds": "986d0f24c069541d74053879ac76d0958fec5ab5ea476d3ef4023bb98ce703cc",
     "Verity.Circuit.Feeds.refl": "40103ada0827f91b00c30c5e33eaef924f854bfa75bb09bd107dd5bd2fbbf844",
     "Verity.Circuit.Feeds.step": "0b0434f3ae7c06fbc07e9c91e1b6364d894a225dd34f8aeb006e3b5360096678",
+    "Verity.Circuit.InputsAgree": "cf654f484182486a9c4bded7e33bb67077ec7112c33fd7f3bff30edeb0bd1492",
     "Verity.Circuit.N": "41024293e7ed9a8b1848ff13d93bc8ddd2e8afa1f9ef29855dca860b83bd8022",
     "Verity.Circuit.Transcript": "143a8f7857fb47ed184789c9def351742e213359fb13b44d565fce324fbf8853",
     "Verity.Circuit.computed": "bfe4079fbbb9d2e78b9758d517ec8e9f9df876d8bbfb7a0d9c71531da5ebc9ef",
@@ -10870,7 +11003,8 @@
     "Nci.SecurityProofs.UpdatedMatMul",
     "Nci.SecurityProofs.UpdatedMatMulReads",
     "Pouw.SecurityProofs.PearlC.TileCheck4WordsCore",
-    "Pouw.SecurityProofs.PearlC.TileCheck8WordsCore"
+    "Pouw.SecurityProofs.PearlC.TileCheck8WordsCore",
+    "Verity.SecurityProofs.ComposeCone"
    ]
   },
   "Definitions.Core.Declaration": {
@@ -10988,7 +11122,7 @@
    ]
   },
   "Definitions.Core.Partition": {
-   "digest": "b3083f886d2688b18c39b60e3c506dcde7a5fceb8bc10c669367c17422f16bfc",
+   "digest": "9d18f9d4bb3cdf8c65948c82452c0c61866865f0dcd6c4c442e19388bb4813af",
    "definitions": {
     "Verity.Partition": "22bc62b950d67ab5a0572f63a989d211fa3064e10e3f2bf031fd12353d29ead2",
     "Verity.Partition.Correct": "78b891db9c227aedecdb4465a0fae50b84cc37ab777bcbdfdc69f5ac0662feee",
@@ -10996,7 +11130,8 @@
     "Verity.Partition.cone": "9baccb73673b4e9a8b7bed3e6524ce4cb0af89e4b00a2399a3af1269e530af87",
     "Verity.Partition.gates": "ee436a2cedef88f54396204589ab1dfaf55be636d8a0a1376f41740dd9ba79c7",
     "Verity.Partition.localEval": "e242da1cf49523aae3ff87f9dc3c63a8048156a209055c554893212d41c48949",
-    "Verity.Partition.unit": "b54d29eb5c65700aaa72158c37899485fbb277203c4bd593696085072d25d7b9"
+    "Verity.Partition.unit": "b54d29eb5c65700aaa72158c37899485fbb277203c4bd593696085072d25d7b9",
+    "Verity.Partition.wrong": "f743923e389a5a0fa4441ad0d02a28e57d61973f65e0a9b998dc6df6445139f8"
    },
    "guarantees": [
     "Accounting.SecurityProofs.Actual.Runtime",
@@ -11026,7 +11161,8 @@
     "Nci.SecurityProofs.UpdatedMatMul",
     "Nci.SecurityProofs.UpdatedMatMulReads",
     "Pouw.SecurityProofs.PearlC.TileCheck4WordsCore",
-    "Pouw.SecurityProofs.PearlC.TileCheck8WordsCore"
+    "Pouw.SecurityProofs.PearlC.TileCheck8WordsCore",
+    "Verity.SecurityProofs.ComposeCone"
    ]
   },
   "Definitions.Core.Prims": {
@@ -12204,6 +12340,7 @@
     "Accounting.SecurityProofs.PearlCStopEndToEndPerRun",
     "Accounting.SecurityProofs.PouwEndToEndPerRun",
     "Accounting.SecurityProofs.PouwLocalOff",
+    "Accounting.SecurityProofs.Remote.Held",
     "Accounting.SecurityProofs.RemoteSessionRoutes",
     "Accounting.SecurityProofs.RemoteSessionRunConservation",
     "Accounting.SecurityProofs.RemoteSessionRunConservationRelay",
@@ -20843,6 +20980,20 @@
     "Accounting.SecurityProofs.RemoteWindowRunConservationRelay"
    ]
   },
+  "Models.Accounting.Assumptions.RemoteHeld": {
+   "digest": "634cad21233c7d4f6b609bf29f6ed7cd391ebeb73f5641509a13fc2c3ed533f3",
+   "definitions": {
+    "Accounting.Remote.Held.Assumptions.Causal": "aea522d86a7abda05eeeb5fcd299485f663d29f83a8a1b4128e8c015b3dcad71",
+    "Accounting.Remote.Held.Assumptions.ChipCeiling": "e127ae65fbdc438b47177e01b9ac74b58f7ea758327288ae293137cb8b6d8fae",
+    "Accounting.Remote.Held.Assumptions.Disks": "84e32cdde88cf32113e563a284a9c739239d29c03fe5ee74bc058d1ee987bf15",
+    "Accounting.Remote.Held.Assumptions.Identity": "22630221fb29250610dca86a4897d9f39909a8e8ca1c425fcb62e8dcf192a236",
+    "Accounting.Remote.Held.Assumptions.LiveCoins": "68bf6e4151cfbf0c550493d145934dc046109cd73fd4e09a2c1d79218323d84a",
+    "Accounting.Remote.Held.Assumptions.Routed": "0c27bd1201f655e0bb779bc6b347727d6d0072e9aab93ae409391e18670eca7c",
+    "Accounting.Remote.Held.Assumptions.SketchBound": "193fa80d7712162f27061c4a392ad4c4703e5ce2a95a7877a8c553b6fce258b4",
+    "Accounting.Remote.Held.Assumptions.SquaringCeiling": "42634dad8fd6c4435b6d18c96069ebf2a2a46a702914f4d4a54bc5df8105c538"
+   },
+   "guarantees": ["Accounting.SecurityProofs.Remote.Held"]
+  },
   "Models.Accounting.Assumptions.Sheet": {
    "digest": "e430a97d67e112236beeb55fd27d9e1630ec47ff36f07038c3cb2278412a320b",
    "definitions": {
@@ -21436,6 +21587,13 @@
     "Accounting.SecurityProofs.SketchRankFiber"
    ]
   },
+  "Models.Accounting.Guarantees.RemoteHeld": {
+   "digest": "7cc2458c0a52d34694e8fe406faa80e9daaeaaba358f498b1a8582b90145465d",
+   "definitions": {
+    "Accounting.Guarantees.Remote.Held": "0de3b0d0e4d33200698159faef6c35a0be207de2cd15853e22263fbe5e451957"
+   },
+   "guarantees": ["Accounting.SecurityProofs.Remote.Held"]
+  },
   "Models.Accounting.Guarantees.Requirement": {
    "digest": "7a21f16296c6f5514f2dd726a10ec31d1e2e1490f70224f575c8f058aade0f4b",
    "definitions": {
@@ -21715,6 +21873,13 @@
     "Accounting.SecurityProofs.Tag.PolyNonCollisionKeyed",
     "Accounting.SecurityProofs.Tag.PolyUnpredictable"
    ]
+  },
+  "Models.Core.Guarantees.Circuit": {
+   "digest": "d4008286fc1153df1918c255903210428f32dc769d4631f93a6a0f9be9c51f15",
+   "definitions": {
+    "Verity.Guarantees.ComposeCone": "87f3ed3cdae5067717a1f9a2b59d5898424f69916d6111aae8ed12180b6a44bd"
+   },
+   "guarantees": ["Verity.SecurityProofs.ComposeCone"]
   },
   "Models.Flock.Guarantees.Audit": {
    "digest": "e95e7804d3b91387a66349a191d56288f14663b77c7d3b58d42a3e5e3d9e05f2",
@@ -24445,7 +24610,7 @@
    ]
   },
   "Proofs.Flock.Soundness.Audit.Circuit": {
-   "digest": "944bbc2a6ee7eb356722ef82470e716ce1eedd355d577f8013229be1ca36a109",
+   "digest": "4fb1156b646e7459c37fe624f943c60a65f5cb3c50c8dbe14034b096e86c0bdf",
    "definitions": {
     "FlockSoundness.Audit.Circuit": "eae3834eb80d05abdb52d58e58d3c548f90ac029f7714633011254b9b86ce639",
     "FlockSoundness.Audit.Circuit.InputsAgree": "946208bc30eceea43a59a532b892b35ffd7f158e33cbc6499dd192a9eb2b5ac3",
@@ -24469,6 +24634,8 @@
     "FlockSoundness.Audit.Op.xor": "5c1dec09723d8ee00d06d1262a7a375eca9ee8f1487a265808a68457a7ed8a38",
     "FlockSoundness.Audit.Partition": "b65f35550e9e6cbc591e4686bca25d01c8306cec89ffb3e3422d0da96829111a",
     "FlockSoundness.Audit.Partition.Correct": "673ff897d997626aa6f690b571dbdd0b3f3a51e18d14d8b4f28bfd5a747fca69",
+    "FlockSoundness.Audit.Partition.Refines": "f3677d05d10b8dc024add85643dd250ac1bc8ab49f8f93bc5e108dad1b2ca29e",
+    "FlockSoundness.Audit.Partition.Refines.parent": "ae3af04b4fc4ae61a9554a7bb872d77c1514fd5604936a5435870c8c7fb38237",
     "FlockSoundness.Audit.Partition.committed": "bcef7bafedba2d514029ac00cacf6b1878d3f8d6f7b21dbba98f80aae4985fce",
     "FlockSoundness.Audit.Partition.io": "ccffea3dcf3ab5824aeb3fd8cea2216dc0cf5c47dacd4a643cd9025c806d9b33",
     "FlockSoundness.Audit.Partition.localEval": "4971f4018cf27dbe5e7af66022e99f0de237dc1939794b0a248d2c3e699b9517",
@@ -24487,7 +24654,9 @@
     "Flock.SecurityProofs.RecursiveAuditC3",
     "Flock.SecurityProofs.RecursiveRanRegistered",
     "Flock.SecurityProofs.RecursiveSound",
+    "FlockSoundness.Audit.Partition.Refines.twoStage_influence",
     "FlockSoundness.Audit.Partition.audit_exfiltration",
+    "FlockSoundness.Audit.Partition.audit_influence",
     "FlockSoundness.Discharge.FailClosed.flock_verify_sound",
     "FlockSoundness.Discharge.FailClosed.flock_verify_sound_205",
     "FlockVBridge.keyProg_parse",
@@ -24604,15 +24773,21 @@
    ]
   },
   "Proofs.Flock.Soundness.Audit.Influence": {
-   "digest": "7dfa9a6314851dba47e1a5ca17834ef69f14e6bf372a1c55036268f559ba46b0",
+   "digest": "df1e957845d27fb8a8e6ab650d985ff805d388821b47f8755d6b00c9a6b7fa8f",
    "definitions": {
     "FlockSoundness.Audit.Circuit.FeedsAvoiding": "9ff4e8dea95db1ea098757331da8c035902200800d8755c3b3ba7d99c3526b09",
     "FlockSoundness.Audit.Circuit.FeedsAvoiding.refl": "c585bb082f05d3d283ba5587d13d03c100171eaa38a19ddc2346fee3b137c034",
     "FlockSoundness.Audit.Circuit.FeedsAvoiding.step": "832616ae94fbfc72796d364196a41cc41ce4bf9c0bfe0c61d6d0856064819e8a",
     "FlockSoundness.Audit.Partition.Separates": "9d269cea0ddce0da684a660ab77be893348a96e8aacfb4d574b46a46b91fb1f5",
+    "FlockSoundness.Audit.Partition.delivered": "5e6e3e45e241c02c043401718b078855f48017dd10a4f6828488d60412bb49f1",
+    "FlockSoundness.Audit.Partition.influenceSet": "b3ee5d870554457ba560502bb4234960f1afcd5c0361f9a5397d2221cc98d8b0",
     "FlockSoundness.Audit.Partition.out": "8dfbea87cc032dc2f1982487d569ba1c725ed4a2f36d927602e5215d9dacd11e"
    },
-   "guarantees": ["FlockSoundness.Audit.Partition.audit_exfiltration"]
+   "guarantees": [
+    "FlockSoundness.Audit.Partition.Refines.twoStage_influence",
+    "FlockSoundness.Audit.Partition.audit_exfiltration",
+    "FlockSoundness.Audit.Partition.audit_influence"
+   ]
   },
   "Proofs.Flock.Soundness.Audit.Law": {
    "digest": "a77100297020ff04630e7649609f1b73416aee869faadbc1c8e40b6f23221565",
@@ -24641,7 +24816,9 @@
     "FlockSoundness.Audit.Law.closure_escape",
     "FlockSoundness.Audit.Law.stratified_miss_eq_greedy",
     "FlockSoundness.Audit.Law.work_escape_le",
+    "FlockSoundness.Audit.Partition.Refines.twoStage_influence",
     "FlockSoundness.Audit.Partition.audit_exfiltration",
+    "FlockSoundness.Audit.Partition.audit_influence",
     "FlockSoundness.Audit.Partition.card_admissible_le",
     "FlockSoundness.Audit.Partitioning.SecurityProofs.Achievability",
     "FlockSoundness.Audit.Partitioning.SecurityProofs.ConverseAsymptotic",
@@ -24700,6 +24877,7 @@
     "Flock.SecurityProofs.RecursiveRanRegistered",
     "Flock.SecurityProofs.RecursiveSound",
     "FlockSoundness.Audit.Partition.audit_exfiltration",
+    "FlockSoundness.Audit.Partition.audit_influence",
     "FlockSoundness.Audit.audit_profile",
     "FlockSoundness.Audit.audit_window_split_of_record",
     "FlockSoundness.Audit.audit_work_floor",
@@ -24803,6 +24981,31 @@
     "FlockSoundness.Audit.Law.stratumRatio": "225b263043cf68fc4cd9db538ee87b51bc50532328a234ddb3e02bd02e8ca23a"
    },
    "guarantees": ["FlockSoundness.Audit.Law.stratified_miss_eq_greedy"]
+  },
+  "Proofs.Flock.Soundness.Audit.TwoStage": {
+   "digest": "215dfb94f0e7c76882ae43724ec9b72cf89bf52d24571a675e2f69dfa3fac2e4",
+   "definitions": {
+    "FlockSoundness.Audit.Analysis₂": "a08a628a65aa09f989cd41377165203cf72854ee30c8ca950fa1ab485aed48de",
+    "FlockSoundness.Audit.Analysis₂.KnowledgeSound": "4ba3c6114960163696c3edd804da07aeaba8ba0ab49dc752e88ed0aa91e79e2d",
+    "FlockSoundness.Audit.Analysis₂.LinkSound": "e4de2ca1379d2fb107036c5129315f23c037c5b8047aaf061139d04bcd70a813",
+    "FlockSoundness.Audit.Analysis₂.TrC": "effdc44d1ad5101bf51c2611c8a28706d2c455a2fc0c96a7a8baa26514616974",
+    "FlockSoundness.Audit.Analysis₂.TrF": "4e549034e309934508dadb41407fb64a422bedf5efdbc9656709d880dd20cf24",
+    "FlockSoundness.Audit.Analysis₂.committedC": "fe85f9dd70496a9f821b135368bb383a65917d5bda16de2aa3c4b52846538fb6",
+    "FlockSoundness.Audit.Analysis₂.committedF": "a80f23549b0e9d1dc4f55fa7f4abacaa7ac9290629bc495f0ab5621c22e631b2",
+    "FlockSoundness.Audit.Analysis₂.ksFail": "25b77d62b5237df05d35d15c666b167537e5da3ade2344caa431f15367c896ba",
+    "FlockSoundness.Audit.Analysis₂.linkFail": "9e67db2206da37115367a9f1d6a9023ccb3c86874099df9cebb26eb6720bfd5e",
+    "FlockSoundness.Audit.Cont₁": "143e4bcd4523b96247524184512e22db11a9799351606beb5415feb30cc709d7",
+    "FlockSoundness.Audit.Cont₂": "34d5e9f8b84bcd9f6d193aec78ac8ac1d48757c02db54b036d4175d172bf7187",
+    "FlockSoundness.Audit.Partition.AnchorsSound₂": "693df68f8eefe5547fe3465d17dcc6a2169a5a6ab947fe0a67c867708ead03ac",
+    "FlockSoundness.Audit.Partition.Refines.analysis₂": "d464cc97d0b2c374d31996fce9c47d8445dd9162fe7e9af40f17ebc5c752bd15",
+    "FlockSoundness.Audit.Partition.extend": "876638b86cfc448f74fada587b55a96c112d262a41c84ca474bc101948ed9603",
+    "FlockSoundness.Audit.cont₁": "2f38fe1c550e0ecead56b3e69cafa8b01a95971e985f863b3ea2e340341004b4",
+    "FlockSoundness.Audit.effEscape": "6ba40dc415aec6003d9d7d04183258ad384c3bbfeb1d8b63f5cf3796e11a6444",
+    "FlockSoundness.Audit.fineDraw": "3407a91272b1cffdf6cb6dfd6993eceba1ff2b13ee43ce7a91941b03e1ec6fb7",
+    "FlockSoundness.Audit.reg₂": "8c9b8795350e1b1eb1dd1586c85439c2216d276d85e7fc34d78a252935a83688",
+    "FlockSoundness.Audit.twoStage": "eeea5eeb530f5e46b04d26b94a3857a4f0d6e1fcf54ecf1a95905a7b935fe00b"
+   },
+   "guarantees": ["FlockSoundness.Audit.Partition.Refines.twoStage_influence"]
   },
   "Proofs.Flock.Soundness.Audit.Window": {
    "digest": "d607b6dd26b72be9479f5d6931c704ab7cd08c1171f102708f10e90f54fa7a40",
@@ -28782,7 +28985,9 @@
     "FlockSoundness.Audit.Law.closure_escape",
     "FlockSoundness.Audit.Law.stratified_miss_eq_greedy",
     "FlockSoundness.Audit.Law.work_escape_le",
+    "FlockSoundness.Audit.Partition.Refines.twoStage_influence",
     "FlockSoundness.Audit.Partition.audit_exfiltration",
+    "FlockSoundness.Audit.Partition.audit_influence",
     "FlockSoundness.Audit.Partition.card_admissible_le",
     "FlockSoundness.Audit.Partitioning.SecurityProofs.Achievability",
     "FlockSoundness.Audit.Partitioning.SecurityProofs.ConverseAsymptotic",
@@ -28964,7 +29169,9 @@
     "Flock.SecurityProofs.RecursiveAuditC3",
     "Flock.SecurityProofs.RecursiveRanRegistered",
     "Flock.SecurityProofs.RecursiveSound",
+    "FlockSoundness.Audit.Partition.Refines.twoStage_influence",
     "FlockSoundness.Audit.Partition.audit_exfiltration",
+    "FlockSoundness.Audit.Partition.audit_influence",
     "FlockSoundness.Audit.audit_profile",
     "FlockSoundness.Audit.audit_window_split_of_record",
     "FlockSoundness.Audit.audit_work_floor",
