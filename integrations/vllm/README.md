@@ -345,8 +345,8 @@ profile (`engine/env.py`), the row's execution label (only a `bi-*` row is batch
 versions.json and summary.json records them.  A row of record (one `manifests/records.json` lists) is done only at its public cap:
 its file declares `sampling.ignore_eos` and every request a `max_tokens`, so its served length is public and the EOS a request
 samples decides no step.  The row file (`config.RowConfig`), `row run`'s precheck (`PRECHECK_FAIL_DONE_SOURCE`) and GP-01
-(`reason: done_source`) refuse one that is not, by name, before any GPU time (`config.done_source_refusal`); a research row keeps
-its EOS stops.
+(`reason: done_source`) refuse one that is not, by name, before any GPU time (`config.done_source_refusal`), and `records publish`,
+whose row becomes one, refuses it before it writes anything; a research row keeps its EOS stops.
 
 The circuit database (`verity_vllm/records.py`) keeps, per row of record, the exact circuit it served and the evidence that it is
 faithful, by row id; committed values are never kept.  A row's entry is a preserved `vllm-config-record/v1` artifact labelled
@@ -364,8 +364,9 @@ last verdict in `stages.txt`; a Build whose Programs passed while its in-stage m
 passes superseded by the manifest of record.  `records.programs(row)` returns `{rank: {part: DecodedProgram}}` (the workload
 Program the Commit binds, and the step and request Programs it composes; `ranks=` and `part=` select), fetched by row id and
 checked against the record's digests, ready for `verity.ml.circuits.evaluation` on synthetic inputs.  `verity-vllm records
-publish` adds a row (a FAIL record, a Commit that committed against another manifest or other Programs than the Build's, a Build
-artifact that lacks a Program the record names, or a needed property neither cited nor a gap, is refused).  `row chain` publishes
+publish` adds a row (a row file not done only at its public cap, a FAIL record, a Commit that committed against another manifest or
+other Programs than the Build's, a Build artifact that lacks a Program the record names, or a needed property neither cited nor a
+gap, is refused).  `row chain` publishes
 it itself once the row's Build, Match and Commit Attempts pass (their artifacts, the Commit's summary.json and each needed
 property's newest capture of record, `--newest-captures`); a row that did not pass publishes nothing, and `records pull ART`
 indexes in a checkout the record a pod's job tree published.  `records show` prints
