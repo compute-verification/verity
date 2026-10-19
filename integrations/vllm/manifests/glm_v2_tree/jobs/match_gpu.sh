@@ -1,8 +1,9 @@
 #!/usr/bin/env bash
 # A v2 row's Match GPU legs (MATCH_PHASE=gpu: the capture and the control) on vy-glm53-eu, from this tree; no Build needed.  The
 # legs take the node's lease themselves (gpu-lease 8 --wait, around each leg) once every GPU reads 0 MiB and no preemptible lease
-# is held: queued behind the batch's other GPU jobs, never preempting.  After the legs, with no lease, the job hashes match/ into
-# $OUT/match.sha256 (paths relative to $SW) for the copy to the CPU node that runs the Match's CPU phase (README "GPU batch").
+# is held: queued behind the batch's other GPU jobs, never preempting.  After the legs, with no lease, the job hashes match/ and
+# $SW/$ROW.tree (REF@SHA: every job of the row refuses another tree) into $OUT/match.sha256 (paths relative to $SW) for the copy
+# to the CPU node that runs the Match's CPU phase (README "GPU batch").
 #   research run --on vy-glm53-eu --gpu-host --mem-gb 400 --timeout 3h --cwd source --project verity -- env ROW=... bash integrations/vllm/manifests/glm_v2_tree/jobs/match_gpu.sh
 # env: ROW, [SW=/workspace/cp/circuits/glm-v2/rows], [REF=cursor/glm-v2-21f3].
 set -uo pipefail
@@ -14,6 +15,9 @@ TREE=$PWD
 D=$SW/$ROW
 mkdir -p "$SW" || exit 3
 [ -z "$(ls -A "$D/match" 2>/dev/null)" ] || { echo "$D/match is not empty: this row dir already ran a Match"; exit 3; }
+T=$SW/$ROW.tree AT=$REF@${RESEARCH_SOURCE_SHA:-$(git -C "$TREE" rev-parse HEAD)}
+if [ -s "$T" ]; then [ "$(cat "$T")" = "$AT" ] || { echo "$ROW is at $(cat "$T"), not $AT: a row's jobs run at one tree (remove $T to restart the row)"; exit 2; }
+else echo "$AT" >"$T"; fi
 nvidia-smi --query-gpu=index,memory.used --format=csv,noheader | tee "$OUT/gpus_at_start.txt"
 df -h /workspace | tail -1 | tee "$OUT/disk_at_start.txt"
 C=$(dirname "$(dirname "$RESEARCH_RUN_DIR")")/requests/$RESEARCH_RUN_ID/custody
@@ -51,5 +55,5 @@ tail -20 "$OUT/chain.out"
 python3 -c 'import json,sys; d=json.load(open(sys.argv[1])); sys.exit(0 if d["capture_rc"] == 0 and d["control_rc"] == 0 else 1)' \
   "$D/match/gpu_legs.json" 2>/dev/null || { echo "the GPU legs did not both pass ($D/match/gpu_legs.json)"; exit 11; }
 du -sh "$D/match" | tee "$OUT/match_du.txt"
-(cd "$SW" && find "$ROW/match" -type f -print0 | xargs -0 -P 16 -n 256 sha256sum) | sort -k2 >"$OUT/match.sha256"
+(cd "$SW" && { echo "$ROW.tree"; find "$ROW/match" -type f; } | tr '\n' '\0' | xargs -0 -P 16 -n 256 sha256sum) | sort -k2 >"$OUT/match.sha256"
 echo "match.sha256: $(wc -l <"$OUT/match.sha256") files"

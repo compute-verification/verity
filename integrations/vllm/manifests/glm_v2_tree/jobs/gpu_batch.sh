@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
-# The v2 rows' GPU work on vy-glm53-eu, submitted in order from a VM at this tree's pushed head (README "GPU batch").  Each job
-# waits for its GPUs on the node (gpu-lease, first come first served, never preempting), so the jobs of a window run back to back.
+# The v2 rows' GPU work on vy-glm53-eu, submitted in order from a VM at a pushed commit of this tree (README "GPU batch"): window B
+# from the rows' tree (`$SW/<row>.tree`; a worktree at it once the branch has moved).  Each job waits for its GPUs on the node
+# (gpu-lease, first come first served, never preempting), so the jobs of a window run back to back.
 #   gpu_batch.sh a            window A: the four rows' Match GPU legs (8 GPUs each)
 #   gpu_batch.sh b ROWS.env   window B: each row's Commit (8), in the file's order; a line is "ROW BUILD_RUN MATCH_RUN"
 #   gpu_batch.sh t1r          the bf16 v6 capture (1 GPU) and the G2 rows-4k point (8), only if T1R's runs of them did not hold
@@ -14,9 +15,9 @@ ROWS=(glm53__fp8__h200__tp8__b1__i256__o32__mixed__greedy__eager
       glm53__fp8__h200__tp8__b8__i256__o32__mixed-arrivals__greedy__eager
       glm53__fp8__h200__tp8__b8__i256__o32__mixed-arrivals__stoch-t0.8-p0.95__eager
       glm53__fp8__h200__tp8__b32__i256__o32__mixed-arrivals__greedy__eager)
-[ "$(git rev-parse --abbrev-ref HEAD)" = cursor/glm-v2-21f3 ] || { echo "not on cursor/glm-v2-21f3"; exit 2; }
 git fetch -q origin cursor/glm-v2-21f3
-[ "$(git rev-parse HEAD)" = "$(git rev-parse origin/cursor/glm-v2-21f3)" ] && git diff --quiet HEAD || { echo "HEAD is not the pushed, clean head"; exit 2; }
+git merge-base --is-ancestor HEAD origin/cursor/glm-v2-21f3 && git diff --quiet HEAD ||
+  { echo "HEAD is not a clean, pushed commit of cursor/glm-v2-21f3"; exit 2; }
 sub() {  # sub TAG RESEARCH_RUN_ARGS... -- CMD...
   local tag=$1; shift
   echo "[$(date -u +%FT%TZ)] $tag at $(git rev-parse --short=10 HEAD): $*" >>"$LOG"

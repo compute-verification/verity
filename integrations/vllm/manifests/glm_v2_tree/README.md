@@ -59,6 +59,11 @@ wrote (T1's B1 legs: 104 GB, 1.1M files, about 11 min). The GPU jobs are submitt
 each waits for its GPUs on eu's lease, so a window runs back to back. eu is held only for a window: the lease, and the node, are
 released where a CPU phase sits between (CIR-51).
 
+A row is built, served and judged at one tree, the one its record cites (`records publish --tree` is not checked against the
+stage runs): its first job writes `<row>.tree` (`cursor/glm-v2-21f3@SHA`) beside the row dir, the copies carry it, and every
+later job of the row refuses another tree. Once the branch moves past a row's tree, that row's later jobs are launched from a
+worktree at it (`git worktree add /tmp/glm-v2-SHA SHA`); a PR head merged after window A starts reaches a row only by rerunning it.
+
 1. CPU, before window B (any order, overlapping window A): `build_record.sh` per row on vy-glm53-cpu-2 (the AOT Build of record:
    predict emit refused unless equal to the row's `aot.trace` Build, with its manifest), `AOT_TRACE=<the v2 trace>` for a row whose
    rehearsal moved a Program (that row is re-pinned with its comparison first).

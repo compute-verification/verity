@@ -15,8 +15,10 @@ D=$SW/$ROW
 [ -f "$D/build_summary.json" ] && [ -s "$D/manifest.json" ] || { echo "no Build of record (build_summary.json, manifest.json) in $D"; exit 3; }
 [ ! -e "$D/match/tp2_match.json" ] || { echo "$D/match already ran its check"; exit 3; }
 if [ -s "$RESEARCH_RUN_DIR/inputs/match.sha256" ]; then
-  (cd "$SW" && sha256sum --quiet -c "$RESEARCH_RUN_DIR/inputs/match.sha256") || { echo "the GPU legs in $D/match are not eu's"; exit 3; }
+  (cd "$SW" && sha256sum --quiet -c "$RESEARCH_RUN_DIR/inputs/match.sha256") || { echo "the GPU legs in $D/match (or $ROW.tree) are not eu's"; exit 3; }
 fi
+AT=$REF@${RESEARCH_SOURCE_SHA:-$(git -C "$TREE" rev-parse HEAD)}
+[ "$(cat "$SW/$ROW.tree" 2>/dev/null)" = "$AT" ] || { echo "$ROW is at $(cat "$SW/$ROW.tree" 2>/dev/null || echo '(no tree file)'), not $AT: a row's jobs run at one tree"; exit 2; }
 C=$(dirname "$(dirname "$RESEARCH_RUN_DIR")")/requests/$RESEARCH_RUN_ID/custody
 [ -f "$C/cred.json" ] || { echo "no custody key at $C"; exit 4; }
 ldconfig -p | grep -q 'libcuda\.so\.1 ' || export LD_LIBRARY_PATH=${CUDA_DRIVER_DIR:-$W0/cuda-driver}${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}

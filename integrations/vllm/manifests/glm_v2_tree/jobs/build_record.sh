@@ -15,12 +15,15 @@ W0=/workspace/cp/circuits
 TREE=$PWD
 D=$SW/$ROW
 [ ! -e "$D/build_summary.json" ] || { echo "$D already holds a Build"; exit 3; }
+mkdir -p "$SW" || exit 3
+T=$SW/$ROW.tree AT=$REF@${RESEARCH_SOURCE_SHA:-$(git -C "$TREE" rev-parse HEAD)}
+if [ -s "$T" ]; then [ "$(cat "$T")" = "$AT" ] || { echo "$ROW is at $(cat "$T"), not $AT: a row's jobs run at one tree (remove $T to restart the row)"; exit 2; }
+else echo "$AT" >"$T"; fi
 SNAP=$W0/hf/hub/models--zai-org--GLM-5.3/snapshots/$REV
 [ -s "$SNAP/config.json" ] && [ -s "$SNAP/model.safetensors.index.json" ] || { echo "no GLM-5.3 metadata at $SNAP"; exit 3; }
 C=$(dirname "$(dirname "$RESEARCH_RUN_DIR")")/requests/$RESEARCH_RUN_ID/custody
 [ -f "$C/cred.json" ] || { echo "no custody key at $C"; exit 4; }
 ldconfig -p | grep -q 'libcuda\.so\.1 ' || export LD_LIBRARY_PATH=${CUDA_DRIVER_DIR:-$W0/cuda-driver}${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}
-mkdir -p "$SW" || exit 3
 (cd "$TREE/integrations/vllm" && WORK=$W0 VENV=$W0/venv312 HF_HOME=$W0/hf bash verity_vllm/ops/pod_bootstrap.sh --cpu --cases "" --out "$OUT/bootstrap") \
   >"$OUT/bootstrap.log" 2>&1 || { tail -30 "$OUT/bootstrap.log"; exit 5; }
 PY=$W0/venv312/bin/python
@@ -42,6 +45,7 @@ rc=$?
 for f in build_summary.json row.json stages.txt; do cp "$D/$f" "$OUT/" 2>/dev/null; done
 grep -E '^build |Elapsed|Maximum resident' "$OUT/chain.out" | tail -4
 grep -q '^build PASS' "$D/stages.txt" 2>/dev/null || { echo "the Build did not pass ($D/stages.txt)"; exit $(( rc ? rc : 7 )); }
-(cd "$SW" && find "$ROW" -type f -not -path "$ROW/match/*" -not -path "$ROW/commit*" -print0 | xargs -0 -P 16 -n 256 sha256sum) | sort -k2 >"$OUT/rowdir.sha256"
+(cd "$SW" && { echo "$ROW.tree"; find "$ROW" -type f -not -path "$ROW/match/*" -not -path "$ROW/commit*"; } | tr '\n' '\0' |
+  xargs -0 -P 16 -n 256 sha256sum) | sort -k2 >"$OUT/rowdir.sha256"
 echo "rowdir.sha256: $(wc -l <"$OUT/rowdir.sha256") files"
 exit $rc

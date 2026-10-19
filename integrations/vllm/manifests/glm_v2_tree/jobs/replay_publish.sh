@@ -20,6 +20,8 @@ B=$RESEARCH_RUN_DIR/inputs/bundles.json
 [ -s "$B" ] || { echo "no inputs/bundles.json (commit.sh's \$OUT/bundles.json): --send it"; exit 2; }
 [ -e "$CK/.verified" ] || { echo "no verified checkpoint at $CK"; exit 2; }
 [ -s "$D/manifest.json" ] && [ -d "$D/build" ] || { echo "no Build of record in $D: copy it in first"; exit 2; }
+[ "$(cat "$SW/$ROW.tree" 2>/dev/null)" = "$REF@$TREE_SHA" ] && [ "${RESEARCH_SOURCE_SHA:-$(git -C "$TREE" rev-parse HEAD)}" = "$TREE_SHA" ] ||
+  { echo "$ROW is at $(cat "$SW/$ROW.tree" 2>/dev/null || echo '(no tree file)'); this job runs at ${RESEARCH_SOURCE_SHA:-?} and was given TREE_SHA=$TREE_SHA: a row's jobs run at one tree"; exit 2; }
 C=$(dirname "$(dirname "$RESEARCH_RUN_DIR")")/requests/$RESEARCH_RUN_ID/custody
 [ -f "$C/cred.json" ] || { echo "no custody key at $C"; exit 4; }
 (cd "$TREE/integrations/vllm" && WORK=$W0 VENV=$W0/venv312 HF_HOME=$W0/hf bash verity_vllm/ops/pod_bootstrap.sh --cpu --cases "" --out "$OUT/bootstrap") \
