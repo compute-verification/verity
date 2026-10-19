@@ -82,8 +82,8 @@ DEFAULTS = {
     "share": 0.01, "overhead": 4.8e12, "replay": 1.1e5, "step_flop": 1.43e4, "p_evade": 2.0 ** -40, "identities": 1.0,
     "luck": 8.0, "step_bits": 16.0, "intake_x": 1.0, "lag_s": 3600.0, "g": 1.0, "mfu": 0.4, "m": 1.0,
     "floor_steps": 1.0,
-    "K": 2e7, "Gamma": 6.4e16, "d": 2048.0, "e": 4e4, "kappa": 0.655,
-    "kappa_chain": 0.075, "d_chain": 1536.0, "e_chain": 12288.0, "b_p": 32.0,
+    "K": 2e7, "Gamma": 6.4e16, "d": 2048.0, "e": 4e4, "kappa": 0.6,
+    "kappa_chain": 0.0695, "d_chain": 1536.0, "e_chain": 12288.0, "b_p": 32.0,
     "nodes": 1e5, "node_flops": 8e15, "years": 1.0,
 }
 
@@ -128,8 +128,8 @@ SPEC = [
     {"key": "Gamma", "label": "NCI: gates per inference block", "unit": "", "min": 1e14, "max": 1e19, "log": True},
     {"key": "d", "label": "Model: entry fee d (thread reads below which a value's fan-out is at most e)", "unit": "", "min": 1, "max": 65536, "log": True},
     {"key": "e", "label": "Model: multiplications per activation value", "unit": "", "min": 1e3, "max": 1e6, "log": True},
-    {"key": "kappa", "label": "Model: share of training FLOP that are counted multiplications", "unit": "", "min": 0.05, "max": 1, "log": False},
-    {"key": "kappa_chain", "label": "Model: share on the proved chain (one forward path)", "unit": "", "min": 0.01, "max": 1, "log": True},
+    {"key": "kappa", "label": "Model: kappa, twice the counted multiplications over the training circuit's gates (Kimi K2's pretraining schedule 0.60; adversarial 0.5; kappa.py)", "unit": "", "min": 0.05, "max": 1, "log": False},
+    {"key": "kappa_chain", "label": "Model: kappa on the proved chain, one forward path (Kimi K2 0.0695)", "unit": "", "min": 0.01, "max": 1, "log": True},
     {"key": "d_chain", "label": "Model: chain's smallest inner dimension", "unit": "", "min": 64, "max": 65536, "log": True},
     {"key": "e_chain", "label": "Model: chain's largest fan-out", "unit": "", "min": 1e3, "max": 1e6, "log": True},
     {"key": "b_p", "label": "Model: partial-sum width a relay op reads", "unit": "bit", "min": 4, "max": 64, "log": True},
