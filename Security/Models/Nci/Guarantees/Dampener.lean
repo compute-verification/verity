@@ -42,7 +42,7 @@ def Dampener : Prop :=
     0 < κ → 0 < C → 0 ≤ U → M ≤ Mu + Mr + Md + Mx →
     (Mu : ℝ) ≤ κ * U / 2 → (Mr : ℝ) ≤ κ * (C - W) / 2 → (Md : ℝ) ≤ C / ρ → (Mx : ℝ) ≤ κ * χ * (C + U) / 2 →
     (Mr : ℝ) + Md ≤ κ * μ * C / 2 →
-      efficiency κ M C U ≤ unmonitoredShare C U + min (residual W C) μ + declaredShare κ ρ C U + χ
+      efficiency κ M C U ≤ unmonitoredShare C U + min (residualShare W C) μ + declaredShare κ ρ C U + χ
 
 /-- **The compute dampener with the memory cap from windows.** As `Dampener`, with the memory cap's hypothesis replaced
 by the servers' windows. `n` servers of `F` gates a tick run for `H > 0` ticks, so that `n F H ≤ C`. Cut each server's
@@ -60,7 +60,7 @@ def DampenerWindows : Prop :=
     n * F * H ≤ C → α * F * L = R → e ≤ reuse * (2 * R) / (4 * d * b_w) →
     b_a * ((Mr : ℝ) + Md) ≤ n * ⌈H / L⌉₊ * ((R + α * F * L) * Lambda reuse e d b_w (R + α * F * L)) →
       efficiency κ M C U ≤
-        unmonitoredShare C U + min (residual W C) (memoryCap reuse κ R α d b_w b_a * (1 + L / H)) +
+        unmonitoredShare C U + min (residualShare W C) (memoryCap reuse κ R α d b_w b_a * (1 + L / H)) +
           declaredShare κ ρ C U + χ
 
 /-- **The compute dampener over NCI's thread bound.** As `DampenerWindows`, with the declared computation's bound proved:
@@ -79,7 +79,7 @@ def DampenerThreaded : Prop :=
     n * F * H ≤ C → α * F * L = R → (e : ℝ) ≤ T.reuse * (2 * R) / (4 * dd * b_w) →
     b_a * ((Mr : ℝ) + T.M.card) ≤ n * ⌈H / L⌉₊ * ((R + α * F * L) * T.bound (R + α * F * L) b_w dd e) →
       efficiency κ M C U ≤
-        unmonitoredShare C U + min (residual W C) (memoryCap T.reuse κ R α dd b_w b_a * (1 + L / H)) +
+        unmonitoredShare C U + min (residualShare W C) (memoryCap T.reuse κ R α dd b_w b_a * (1 + L / H)) +
           declaredShare κ (rhoT α b_a (T.bound (α * Γ) b_w dd e)) C U + χ
 
 end Nci.Guarantees

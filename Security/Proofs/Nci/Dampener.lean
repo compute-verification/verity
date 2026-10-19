@@ -21,29 +21,29 @@ theorem sources_le {κ C U W ρ μ χ M Mu Mr Md Mx : ℝ} (hκ : 0 < κ) (hC : 
     (hM : M ≤ Mu + Mr + Md + Mx) (hu : Mu ≤ κ * U / 2) (hr : Mr ≤ κ * (C - W) / 2) (hd : Md ≤ C / ρ)
     (hx : Mx ≤ κ * χ * (C + U) / 2) (hμ : Mr + Md ≤ κ * μ * C / 2) :
     efficiency κ M C U ≤
-      unmonitoredShare C U + (1 - unmonitoredShare C U) * min (residual W C) μ + declaredShare κ ρ C U + χ := by
+      unmonitoredShare C U + (1 - unmonitoredShare C U) * min (residualShare W C) μ + declaredShare κ ρ C U + χ := by
   have hS : 0 < C + U := by linarith
   have hκi : κ * κ⁻¹ = 1 := mul_inv_cancel₀ hκ.ne'
   have hSi : (C + U) * (C + U)⁻¹ = 1 := mul_inv_cancel₀ hS.ne'
   have hCi : C * C⁻¹ = 1 := mul_inv_cancel₀ hC.ne'
   have hCρ : 0 ≤ C / ρ := hMd.trans hd
-  have hmon : Mr + Md ≤ κ * C / 2 * min (residual W C) μ + C / ρ := by
-    rcases le_total (residual W C) μ with h | h
+  have hmon : Mr + Md ≤ κ * C / 2 * min (residualShare W C) μ + C / ρ := by
+    rcases le_total (residualShare W C) μ with h | h
     · rw [min_eq_left h]
-      have e : κ * C / 2 * residual W C = κ * (C - W) / 2 := by
-        unfold residual
+      have e : κ * C / 2 * residualShare W C = κ * (C - W) / 2 := by
+        unfold residualShare
         linear_combination (-(κ * W / 2)) * hCi
       linarith
     · rw [min_eq_right h]
       linarith
-  have hB : 0 ≤ κ * U / 2 + κ * C / 2 * min (residual W C) μ + C / ρ + κ * χ * (C + U) / 2 - M := by
+  have hB : 0 ≤ κ * U / 2 + κ * C / 2 * min (residualShare W C) μ + C / ρ + κ * χ * (C + U) / 2 - M := by
     linarith
-  have key : unmonitoredShare C U + (1 - unmonitoredShare C U) * min (residual W C) μ + declaredShare κ ρ C U + χ -
+  have key : unmonitoredShare C U + (1 - unmonitoredShare C U) * min (residualShare W C) μ + declaredShare κ ρ C U + χ -
       efficiency κ M C U =
-      2 / κ / (C + U) * (κ * U / 2 + κ * C / 2 * min (residual W C) μ + C / ρ + κ * χ * (C + U) / 2 - M) := by
+      2 / κ / (C + U) * (κ * U / 2 + κ * C / 2 * min (residualShare W C) μ + C / ρ + κ * χ * (C + U) / 2 - M) := by
     simp only [declaredShare, unmonitoredShare, efficiency]
-    linear_combination (-(U * (C + U)⁻¹ + C * min (residual W C) μ * (C + U)⁻¹ + χ * (C + U) * (C + U)⁻¹)) * hκi +
-      (-(min (residual W C) μ + 2 * κ⁻¹ * ρ⁻¹ + χ)) * hSi
+    linear_combination (-(U * (C + U)⁻¹ + C * min (residualShare W C) μ * (C + U)⁻¹ + χ * (C + U) * (C + U)⁻¹)) * hκi +
+      (-(min (residualShare W C) μ + 2 * κ⁻¹ * ρ⁻¹ + χ)) * hSi
   have hfac : 0 ≤ 2 / κ / (C + U) := div_nonneg (div_nonneg zero_le_two hκ.le) hS.le
   linarith [mul_nonneg hfac hB]
 
@@ -52,18 +52,18 @@ nonnegative here, since the residual and the declared computation hold no negati
 theorem dampener_core {κ C U W ρ μ χ M Mu Mr Md Mx : ℝ} (hκ : 0 < κ) (hC : 0 < C) (hU : 0 ≤ U) (hMr : 0 ≤ Mr)
     (hMd : 0 ≤ Md) (hM : M ≤ Mu + Mr + Md + Mx) (hu : Mu ≤ κ * U / 2) (hr : Mr ≤ κ * (C - W) / 2)
     (hd : Md ≤ C / ρ) (hx : Mx ≤ κ * χ * (C + U) / 2) (hμ : Mr + Md ≤ κ * μ * C / 2) :
-    efficiency κ M C U ≤ unmonitoredShare C U + min (residual W C) μ + declaredShare κ ρ C U + χ := by
+    efficiency κ M C U ≤ unmonitoredShare C U + min (residualShare W C) μ + declaredShare κ ρ C U + χ := by
   have h := sources_le hκ hC hU hMd hM hu hr hd hx hμ
   have hS : 0 < C + U := by linarith
   have hCi : C * C⁻¹ = 1 := mul_inv_cancel₀ hC.ne'
   have hs0 : 0 ≤ unmonitoredShare C U := div_nonneg hU hS.le
-  have hr0 : 0 ≤ residual W C := by
+  have hr0 : 0 ≤ residualShare W C := by
     have hCW : 0 ≤ C - W := by
       by_contra hneg
       have h1 : κ * (C - W) < 0 := mul_neg_of_pos_of_neg hκ (not_le.1 hneg)
       linarith
-    have e : residual W C = (C - W) * C⁻¹ := by
-      unfold residual
+    have e : residualShare W C = (C - W) * C⁻¹ := by
+      unfold residualShare
       linear_combination (-1 : ℝ) * hCi
     rw [e]
     exact mul_nonneg hCW (inv_nonneg.2 hC.le)
@@ -71,8 +71,8 @@ theorem dampener_core {κ C U W ρ μ χ M Mu Mr Md Mx : ℝ} (hκ : 0 < κ) (hC
     by_contra hneg
     have h1 : κ * μ * C < 0 := mul_neg_of_neg_of_pos (mul_neg_of_pos_of_neg hκ (not_le.1 hneg)) hC
     linarith
-  have hm0 : 0 ≤ min (residual W C) μ := le_min hr0 hμ0
-  have h2 : (1 - unmonitoredShare C U) * min (residual W C) μ ≤ min (residual W C) μ := by
+  have hm0 : 0 ≤ min (residualShare W C) μ := le_min hr0 hμ0
+  have h2 : (1 - unmonitoredShare C U) * min (residualShare W C) μ ≤ min (residualShare W C) μ := by
     have := mul_nonneg hs0 hm0
     linarith
   linarith
@@ -218,8 +218,8 @@ theorem dampener_attained :
     ((0 : ℕ) : ℝ) ≤ 2 * 0 / 2 ∧ ((1 : ℕ) : ℝ) ≤ 2 * (4 - 3) / 2 ∧ ((1 : ℕ) : ℝ) ≤ 4 / 4 ∧
       ((1 : ℕ) : ℝ) ≤ 2 * (1 / 4) * (4 + 0) / 2 ∧ ((1 : ℕ) : ℝ) + ((1 : ℕ) : ℝ) ≤ 2 * 1 * 4 / 2 ∧
       efficiency 2 ((3 : ℕ) : ℝ) 4 0 =
-        unmonitoredShare 4 0 + min (residual 3 4) 1 + declaredShare 2 4 4 0 + 1 / 4 := by
+        unmonitoredShare 4 0 + min (residualShare 3 4) 1 + declaredShare 2 4 4 0 + 1 / 4 := by
   refine ⟨by norm_num, by norm_num, by norm_num, by norm_num, by norm_num, ?_⟩
-  norm_num [efficiency, unmonitoredShare, residual, declaredShare, min_def]
+  norm_num [efficiency, unmonitoredShare, residualShare, declaredShare, min_def]
 
 end Nci.SecurityProofs

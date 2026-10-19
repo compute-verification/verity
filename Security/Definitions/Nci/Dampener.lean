@@ -11,7 +11,7 @@ each, so the compute efficiency is `η = (2/κ) M / (C + U)` (`efficiency`). The
 `s + min(r, μ) + ν + χ` (`Nci.Guarantees.Dampener`), with:
 
 * `s = U/(C + U)`, the unmonitored compute share (`unmonitoredShare`);
-* `r = 1 − W_cert/C`, the monitored compute residual (`residual`);
+* `r = 1 − W_cert/C`, the monitored compute residual (`residualShare`);
 * `ν = (1 − s) · 2/(κ ρ)`, the declared computation at `ρ` declared gates per counted multiplication (`declaredShare`);
   at NCI's thread bound `ρ = ρ_T = b_a/(α Λ(K))` (`rhoT`), `Λ(K) = max(e, reuse · K/(4 d b_w))` (`Lambda`, which is
   `Nci.Threading.bound`);
@@ -30,7 +30,7 @@ noncomputable def unmonitoredShare (C U : ℝ) : ℝ := U / (C + U)
 
 /-- **The monitored compute residual** `r = 1 − W_cert/C`: the share of the monitored compute `C` outside the compute
 certificate `W_cert`. -/
-noncomputable def residual (W C : ℝ) : ℝ := 1 - W / C
+noncomputable def residualShare (W C : ℝ) : ℝ := 1 - W / C
 
 /-- **Counted multiplications per `b_a` bits read** at read cap `K` (Theorem 1 over threads,
 `Nci.Guarantees.ThreadedReads`): `Λ(K) = max(e, reuse · K/(4 d b_w))`, `max(e, K/(2 d b_w))` at `reuse = 2`. It is
