@@ -1,5 +1,5 @@
-"""The Lean transcriptions of `verity.ml.circuits.ops.scalar`'s primitives (`Security/Definitions/Core/Scalar.lean`) and
-`verity.ml.circuits.ops.prims`' casts (`Verity/Protocol/Prims.lean`) are held to the Python by vectors: `Verity/SecurityProofs/Scalar/
+"""`verity.ml.circuits.ops.scalar`'s primitives and `verity.ml.circuits.ops.prims`' casts are held to their Lean definitions
+(`Security/Definitions/Core/Scalar.lean`, `Verity/Protocol/Prims.lean`) by vectors: `Verity/SecurityProofs/Scalar/
 Vectors.lean` and `Verity/SecurityProofs/Prims/Vectors.lean` state each one as a theorem the kernel checks against the
 Lean, and this test checks the same vectors against the Python: each primitive's evaluator, and `evaluate_batch` (its numpy
 kernel, where one is registered). A change to either side's semantics then fails a build."""
