@@ -190,7 +190,7 @@ def symbols() -> list[dict]:
     p = T.DEFAULTS
     H = p["years"] * T.YEAR
     C = capacity(p)
-    r = T.residual_share(p)
+    r = T.audited_residual(p)
     sampled = T.evaluate(p, T.TIERS["T5"])
     chi = sampled["cheat"]
     R = X.wipe_residual(p)
@@ -210,10 +210,11 @@ def symbols() -> list[dict]:
         ("r̂ GPU", "the GPUs' residual at the locked clock", p["residual"]),
         ("r̂ clock", "GPU capacity above the credited clock", p["clock_share"]),
         ("r̂ host", "host CPUs at INT8 AMX peak", p["host_share"]),
+        ("ε′", "aggregation slack, in r = r̂ + ε′ (δ_win / ε′ = 2.7e-8 at δ_win = 3·2^-40)", p["eps_agg"]),
         ("GPU / r̂", "share of r̂", p["residual"] / r),
         ("clock / r̂", "share of r̂", p["clock_share"] / r),
         ("host / r̂", "share of r̂", p["host_share"] / r),
-        ("r̂", "at the best plausible PoUW design", T.residual_share(p | BEST)),
+        ("r̂", "at the best plausible PoUW design", T.audited_residual(p | BEST)),
         ("K", "novel bits per inference block", p["K"]),
         ("Γ", "gates per inference block", p["Gamma"]),
         ("α = K/Γ", "", p["K"] / p["Gamma"]),
@@ -273,7 +274,7 @@ def ladder() -> list[dict]:
         p = T.DEFAULTS | over
         D = {t: dampener(p, t) for t in LADDER_TIERS}
         D_fit = {t: fit_dampener(p, t) for t in FIT_TIERS}
-        out.append({"rung": name, "overrides": over, "r_hat": T.residual_share(p),
+        out.append({"rung": name, "overrides": over, "r_hat": T.audited_residual(p),
                     "R_wipe_gb": X.wipe_residual(p) / T.GB, "window_min": X.wipe_residual(p) / X.intake(p) / 60,
                     "D": D, "D_fit": D_fit, "years": years(D), "years_fit": years(D_fit)})
     return out
@@ -287,12 +288,14 @@ def substitutes() -> list[dict]:
 
 
 def floor() -> list[dict]:
-    """The floor's limit as the verdict lag goes to 0, and what evaluate gives at zero lag, where with no residual to
-    relay through the partial-sum law binds below nu."""
+    """The floor's limits as the verdict lag goes to 0, with ε′ and as ε′ goes to 0 too, and what evaluate gives at zero
+    lag and ε′, where with no residual to relay through the partial-sum law binds below nu."""
     p = T.DEFAULTS
     return rows([
-        ("MFU_0 / ν, the floor's limit as the verdict lag goes to 0", p["mfu"] / X.nu(p)),
-        ("D at zero lag, r̂ = 0, T3 (the partial-sum law binds)", dampener(p | FLOOR | {"lag_s": 0.0}, "T3")),
+        ("MFU_0 / (ν + ε′), the floor's limit as the verdict lag goes to 0", p["mfu"] / (X.nu(p) + p["eps_agg"])),
+        ("MFU_0 / ν, the same as ε′ goes to 0 too (δ_win / ε′ then needs δ_win → 0)", p["mfu"] / X.nu(p)),
+        ("D at zero lag and ε′, r̂ = 0, T3 (the partial-sum law binds)",
+         dampener(p | FLOOR | {"lag_s": 0.0, "eps_agg": 0.0}, "T3")),
     ])
 
 
@@ -440,8 +443,8 @@ def holes() -> dict:
         ("μ̂ at d = 1, today's R_wipe", X.mu(p | {"d": 1.0})),
         ("1 / slack at 86 rounds and δ = 1/100", 1 / T.slack(p | {"pous_rounds": 86.0})),
         ("slack at 86 rounds and δ = 2^-40", T.slack(p | {"pous_rounds": 86.0, "pous_delta": 2.0 ** -40})),
-        ("1/r̂ under the floor credit", 1 / T.residual_share(p)),
-        ("1/r̂ at the best plausible PoUW design", 1 / T.residual_share(p | BEST)),
+        ("1/r̂ under the floor credit", 1 / T.audited_residual(p)),
+        ("1/r̂ at the best plausible PoUW design", 1 / T.audited_residual(p | BEST)),
     ]
     return {"cases": cases, "t5": t5, "other": rows(other)}
 
