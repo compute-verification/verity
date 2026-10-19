@@ -192,43 +192,56 @@ def recut(fn, rets: list[tuple[int, int, bool]]) -> dict:
             "ands_coverage": round(known / n, 4) if n else None, "live_gates": len(live), "recut_s": round(time.time() - t, 2)}
 
 
-def describe(fn, how: str, a: argparse.Namespace, memo: dict) -> dict:
+def describe(fn, memo: dict) -> dict:
+    """The rule's count off the descriptor and the returns (no unrolled walk)."""
     t = time.time()
     rets = returned(fn)
     ib = input_bits(fn, memo)
     rb = sum(w for _r, w, inp in rets if not inp)
-    rec = {"id": fn.id, "family": K.family(fn.id), "how": how, "gates": fn.gates, "bits": ib + rb, "input_bits": ib,
-           "returned_bits": rb, "returned_gates": len(rets), "returned_widths": dict(Counter(w for _r, w, _i in rets)),
-           "boolean": K.is_boolean(fn), "pinned_ands": DEF_ANDS.get(fn.id)}
-    try:
-        rec["descriptor_id"] = descriptor_id(fn)
-    except Exception as e:  # noqa: BLE001
-        rec["descriptor_id"] = f"error: {e!r}"[:200]
-    if fn.gates <= a.literal_max:
+    return {"id": fn.id, "family": K.family(fn.id), "gates": fn.gates, "bits": ib + rb, "input_bits": ib,
+            "returned_bits": rb, "returned_gates": len(rets), "returned_widths": dict(Counter(w for _r, w, _i in rets)),
+            "boolean": K.is_boolean(fn), "pinned_ands": DEF_ANDS.get(fn.id), "describe_s": round(time.time() - t, 2)}
+
+
+def deep(fn, rec: dict, a: argparse.Namespace, *, recut_too: bool) -> None:
+    """The ported rule and `_committed_bits` (at most `--literal-max` gates), and the re-cut (over 16 bits, at most
+    `--cone-max` gates)."""
+    t = time.time()
+    if fn.gates <= a.literal_max and "bits_literal" not in rec:
         rec.update(literal(fn))
         if rec["bits_literal"] != rec["bits"]:
             rec["disagree"] = True
-    if rec["bits"] > P.UNIT_BITS and fn.gates <= a.cone_max:
+    if recut_too and rec["bits"] > P.UNIT_BITS and fn.gates <= a.cone_max and "recut" not in rec:
         try:
-            rec["recut"] = recut(fn, rets)
+            rec["descriptor_id"] = descriptor_id(fn)
+        except Exception as e:  # noqa: BLE001
+            rec["descriptor_id"] = f"error: {e!r}"[:200]
+        try:
+            rec["recut"] = recut(fn, returned(fn))
         except MemoryError:
             rec["recut"] = {"error": "MemoryError"}
-    rec["describe_s"] = round(time.time() - t, 2)
-    return rec
+    rec["deep_s"] = round(rec.get("deep_s", 0) + time.time() - t, 2)
 
 
-def candidates(root_fn) -> list[tuple[object, str, int]]:
-    """(Definition, how, instances per Call of root_fn) of the templates a Call of root_fn offers."""
-    out = [(root_fn, "row", 1)]
+def candidates(root_fn) -> dict[str, tuple[object, list[str], int]]:
+    """{template id: (Definition, hows, instances per Call of root_fn)} of the templates a Call of root_fn offers; a template
+    two ways reach (a CUT member that is also the chain's) is counted once, at the larger multiplicity."""
+    out: dict[str, tuple[object, list[str], int]] = {}
+
+    def add(f, how: str, per: int) -> None:
+        g, hows, p = out.get(f.id, (f, [], 0))
+        out[f.id] = (g, hows + ([how] if how not in hows else []), max(p, per))
+
+    add(root_fn, "row", 1)
     if K.family(root_fn.id) in CUT:
         for nd in root_fn.body.nodes:
             if nd.form in ("call", "batch") and not is_input(nd.fn):
-                out.append((nd.fn, "cut", int(nd.n) if nd.form == "batch" else 1))
+                add(nd.fn, "cut", int(nd.n) if nd.form == "batch" else 1)
     per = 1
     for f, m in K.chain(root_fn, UNIT_GATES)[1:]:
         per *= m
         if not isinstance(f, PrimitiveDefinition):
-            out.append((f, "a11-chain", per))
+            add(f, "a11-chain", per)
     return out
 
 
@@ -250,7 +263,9 @@ def main() -> int:
     ap.add_argument("--parts", default=None, help="comma-separated parts (step, request_..., workload); default all")
     ap.add_argument("--ranks", default=None)
     ap.add_argument("--literal-max", type=int, default=400_000)
+    ap.add_argument("--literal-cheap", type=int, default=20_000, help="every template this small gets the ported rule")
     ap.add_argument("--cone-max", type=int, default=3_000_000)
+    ap.add_argument("--deep-per-family", type=int, default=3, help="specs per (family, how) given the rule and the re-cut")
     a = ap.parse_args()
     t0 = time.time()
     want_parts = set(a.parts.split(",")) if a.parts else None
@@ -258,6 +273,7 @@ def main() -> int:
     pinned = json.loads(Path(a.pins).read_text()) if a.pins else None
     memo: dict = {}
     seen: dict[str, dict] = {}
+    deep_count: Counter = Counter()
     programs, units = [], defaultdict(lambda: defaultdict(int))
     for rank, part, path in descriptors(a.build):
         if (want_ranks is not None and rank not in want_ranks) or (want_parts is not None and not any(part.startswith(w) for w in want_parts)):
@@ -267,7 +283,8 @@ def main() -> int:
         want = None
         if pinned is not None:
             pr = pinned.get(str(rank), {})
-            want = pr.get(part) if part in ("step", "workload") else (pr.get("requests") or {}).get(f"build_{part}")
+            reqs = pr.get("requests") or {}
+            want = pr.get(part) if part in ("step", "workload") else reqs.get(f"build_{part}", reqs.get(part))
         roots = Counter()
         fns = {}
         for nd in prog.root.body.nodes:
@@ -276,19 +293,34 @@ def main() -> int:
             roots[nd.fn.id] += K.mult(nd)
             fns.setdefault(nd.fn.id, nd.fn)
         key = f"r{rank}/{part}"
+        here: dict[str, object] = {}
         for fid, calls in roots.items():
-            for f, how, per in candidates(fns[fid]):
-                units[f.id][key] += calls * per
-                if f.id not in seen:
-                    seen[f.id] = describe(f, how, a, memo)
-                    seen[f.id]["first_seen"] = key
-                seen[f.id].setdefault("hows", [])
-                if how not in seen[f.id]["hows"]:
-                    seen[f.id]["hows"].append(how)
-                seen[f.id].setdefault("root_families", [])
-                rf = K.family(fid)
-                if rf not in seen[f.id]["root_families"]:
-                    seen[f.id]["root_families"].append(rf)
+            for tid, (f, hows, per) in candidates(fns[fid]).items():
+                units[tid][key] += calls * per
+                here.setdefault(tid, f)
+                if tid not in seen:
+                    seen[tid] = describe(f, memo)
+                    seen[tid]["first_seen"] = key
+                rec = seen[tid]
+                rec["hows"] = sorted(set(rec.get("hows", [])) | set(hows))
+                rec["root_families"] = sorted(set(rec.get("root_families", [])) | {K.family(fid)})
+        for tid, f in here.items():
+            if f.gates <= a.literal_cheap:
+                deep(f, seen[tid], a, recut_too=False)
+        groups: dict[tuple[str, str], list[str]] = defaultdict(list)
+        for tid in here:
+            for how in seen[tid]["hows"]:
+                groups[(seen[tid]["family"], how)].append(tid)
+        for (fam, how), tids in groups.items():
+            for tid in sorted(tids, key=lambda t: -units[t][key]):
+                if deep_count[(fam, how)] >= a.deep_per_family:
+                    break
+                if seen[tid].get("deep_done"):
+                    continue
+                deep(here[tid], seen[tid], a, recut_too=True)
+                seen[tid]["deep_done"] = True
+                deep_count[(fam, how)] += 1
+        del here
         programs.append({"rank": rank, "part": part, "digest": digest, "pinned": want, "digest_ok": (want == digest) if want else None,
                          "root_calls": sum(roots.values()), "root_definitions": len(roots), "gates": prog.gates,
                          "seconds": round(time.time() - t, 1)})
