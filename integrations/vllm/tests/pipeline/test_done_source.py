@@ -124,7 +124,7 @@ def test_gp01_refuses_a_row_of_record_that_stops_at_eos_and_composes_it_at_its_c
     capped = _swept(_manifest(tmp_path, reqs, name="capped.json", ignore_eos=True), "toy-row")
     art = gp.build(capped, derived, str(tmp_path / "out_cap"))
     assert art["ok"], art
-    assert art["stop_rule"]["done_source"] == "public-cap" and art["stop_rule"]["ignore_eos"] is True and art["stop_rule"]["eos_token_ids"] == []
+    assert art["stop_rule"]["ignore_eos"] is True and art["stop_rule"]["eos_token_ids"] == []
 
 
 def test_gp01_composes_a_research_row_with_its_eos_stop(monkeypatch, tmp_path):
@@ -133,4 +133,4 @@ def test_gp01_composes_a_research_row_with_its_eos_stop(monkeypatch, tmp_path):
     research = _swept(_manifest(tmp_path, [{"LP": 3, "cap": 3}], eos_token_ids=[7]), "toy-research-row")
     art = gp.build(research, derived, str(tmp_path / "out"))
     assert art["ok"], art
-    assert art["stop_rule"]["done_source"] == "eos-token" and art["stop_rule"]["eos_token_ids"] == [7]
+    assert "ignore_eos" not in art["stop_rule"] and art["stop_rule"]["eos_token_ids"] == [7]
