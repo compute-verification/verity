@@ -9,8 +9,8 @@ is also recomputed eagerly from the same xq and s_a, at the heuristic's tile for
 and at the tile frozen at the traced M; stock-percall's is the op body's `triton_scaled_mm`.  The calls are compared in
 order: the first whose xq or s_a differ (the GEMM's inputs) and the first whose y differs on equal inputs (the GEMM).
 
-Also per arm: vLLM's compilation counters, and counts of the ops and kernels in Inductor's output code and vLLM's graph
-dump.  OUT/percall_diag.json has the comparisons; OUT/<arm>-<graphs>.json each process's own.
+Also per arm: vLLM's compilation counters, and counts of the ops and kernels in Inductor's output code (its wrappers kept
+as OUT/code-<arm>-<graphs>.tar.gz).  OUT/percall_diag.json has the comparisons; OUT/<arm>-<graphs>.json each process's own.
 """
 from __future__ import annotations
 
@@ -186,9 +186,8 @@ def worker(a) -> int:
         percall.install()
     if rec is not None:
         (rec.install_stock if a.arm == "stock" else rec.install_percall)()
-    cc: dict = {"debug_dump_path": str(s / "dump")}
-    if a.graphs == "none":
-        cc["cudagraph_mode"] = "NONE"
+    # no debug_dump_path: it runs depyf.prepare_debug, whose load_by_key_path patch this torch's Inductor refuses
+    cc: dict = {"cudagraph_mode": "NONE"} if a.graphs == "none" else {}
     llm = LLM(model=str(stock_checkpoint(Path(a.scratch))), compilation_config=cc, max_num_seqs=min(256, a.t),
               max_num_batched_tokens=a.t, gpu_memory_utilization=a.gpu_mem, enable_prefix_caching=False,
               max_model_len=2048, seed=0, kernel_config={"enable_flashinfer_autotune": False})
@@ -211,7 +210,7 @@ def worker(a) -> int:
         rec.on = False
     doc = {"arm": a.arm, "graphs": a.graphs, "t": a.t, "tokens": [list(o.outputs[0].token_ids) for o in outs],
            "counters": counters, "inductor": code_stats(Path(os.environ["TORCHINDUCTOR_CACHE_DIR"]), Path(a.out) / f"code-{tag}.tar.gz"),
-           "dump": code_stats(s / "dump", None), "gpu": torch.cuda.get_device_name()}
+           "gpu": torch.cuda.get_device_name()}
     if a.arm == "stock-percall":
         import percall
         doc["percall"] = percall.summary()
@@ -291,7 +290,7 @@ def main() -> int:
                 rcs[tag] = subprocess.run(cmd, env=env, stdout=log, stderr=subprocess.STDOUT).returncode
             print(f"percall_diag: {tag} rc {rcs[tag]}", flush=True)
     docs = {t: json.loads((out / f"{t}.json").read_text()) for t in rcs if (out / f"{t}.json").exists()}
-    summary: dict = {"t": a.t, "rcs": rcs, "tokens": {}, "counters_differ": {}, "inductor": {}, "dump": {}}
+    summary: dict = {"t": a.t, "rcs": rcs, "tokens": {}, "counters_differ": {}, "inductor": {}}
     tags = sorted(docs)
     for i, x in enumerate(tags):
         for y in tags[i + 1:]:
@@ -303,7 +302,6 @@ def main() -> int:
                                              if p["counters"].get(k) != q["counters"].get(k)}
     for t, d in docs.items():
         summary["inductor"][t] = d["inductor"]["wrappers_tokens"]
-        summary["dump"][t] = d["dump"]["all"]
         if "record" in d:
             summary.setdefault("record", {})[t] = d["record"]
     ra, rb = scratch / "stock-none" / "record.npz", scratch / "stock-percall-none" / "record.npz"
