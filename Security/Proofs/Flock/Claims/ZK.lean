@@ -47,6 +47,7 @@ import Proofs.Flock.Claims.ZK.InnerLeaf
 import Proofs.Flock.Claims.ZK.InnerY
 import Proofs.Flock.Claims.ZK.InnerBatched
 import Proofs.Flock.Claims.ZK.InnerTauVal
+import Proofs.Flock.Claims.ZK.InnerTauRep
 import Proofs.Flock.Claims.ZK.Assemble
 import Proofs.Flock.Claims.ZK.Sent
 import Proofs.Flock.Claims.ZK.Round1
@@ -318,7 +319,9 @@ import Proofs.Flock.Claims.ZK.Stop
   the tape, and `y_τ`'s bytes as the honest pads' `τ` salt (`Masked.ytau_saltBytes`).
 * `InnerY`: `Masked.innerY`, the cut's `Y` is the session's at the honest pads once `β`'s round is answered.
 * `InnerTauVal`: `Masked.innerTauVal_of`, `InnerTauVal` from the inner proof's seven rows before the triple
-  (`Masked.TauRows`).
+  (`Masked.TauRows`), split as the replay's five (`Masked.TauRep`) and level 0's two (`Masked.TauLig`).
+* `InnerTauRep`: `Masked.tauRep`, the replay's three rows and the two ring-switch rows are `rowsOf`'s on the view and
+  `czExe`'s coins; `Masked.innerTauVal_of_tauLig : TauLig → InnerTauVal`.
 * `Assemble`: `Flock.zk_deployZk_masked_exe_split`, Flock's zero knowledge at the deployed masked session from the
   hybrid `SimLig`, `SplitInner`'s open statements `InnerBatched` and `InnerTauVal`, `CausalExe` and `FinExe`: `hstep`
   from `Masked.prefixLive` and `SimSession` (`Masked.hstep_exe`), `SimSession` from `Masked.simCommit`,
