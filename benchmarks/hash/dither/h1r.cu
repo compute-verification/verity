@@ -154,20 +154,98 @@ extern "C" __global__ void h1r_seeds(const H1Call* __restrict__ calls, int ncall
 }
 
 constexpr int XS = 48;  // shared row stride in bytes: lane (g, q)'s fragment words fall in 32 distinct banks
+constexpr int NZ = 17;  // shared noise stride in words: lane l's word s16 in bank (17 l + s16) % 32
 
-template <int NW>
-__global__ void __launch_bounds__(32 * NW) h1r_units_k(const H1Call* __restrict__ calls, int ncalls,
-                                                       const u64* __restrict__ seeds, u64 nt0, u64 nt1, u64 nt2,
-                                                       u32* __restrict__ out, int nowrite) {
+__device__ __forceinline__ void sha_round(u64 v[8], u64 k, u64 w) {
+  const u64 a = v[0], b = v[1], c = v[2], e = v[4], f = v[5], g = v[6];
+  const u64 t1 = v[7] + (sh::rotr64(e, 14) ^ sh::rotr64(e, 18) ^ sh::rotr64(e, 41)) + ((e & f) ^ (~e & g)) + k + w;
+  const u64 t2 = (sh::rotr64(a, 28) ^ sh::rotr64(a, 34) ^ sh::rotr64(a, 39)) + ((a & b) ^ (a & c) ^ (b & c));
+  v[7] = g;
+  v[6] = f;
+  v[5] = e;
+  v[4] = v[3] + t1;
+  v[3] = c;
+  v[2] = b;
+  v[1] = a;
+  v[0] = t1 + t2;
+}
+
+// a noise block's state after rounds 0 .. 10, which read only the tag and the seed (words 0 .. 10): one a unit
+__device__ __forceinline__ void noise_mid(const u64* sd, u64 nt0, u64 nt1, u64 nt2, u64 mid[8]) {
+#pragma unroll
+  for (int j = 0; j < 8; ++j) mid[j] = sh::kSha512Iv[j];
+  sha_round(mid, sh::kSha512K[0], nt0);
+  sha_round(mid, sh::kSha512K[1], nt1);
+  sha_round(mid, sh::kSha512K[2], nt2);
+#pragma unroll
+  for (int j = 0; j < 8; ++j) sha_round(mid, sh::kSha512K[3 + j], sd[j]);
+}
+
+// `nblock` from the unit's midstate: rounds 11 .. 79 only
+__device__ __forceinline__ void nblock_mid(const u64* mid, const u64* sd, u64 t, u64 nt0, u64 nt1, u64 nt2, u32 h[16]) {
+  u64 w[16], v[8];
+  w[0] = nt0;
+  w[1] = nt1;
+  w[2] = nt2;
+#pragma unroll
+  for (int j = 0; j < 8; ++j) w[3 + j] = sd[j];
+  w[11] = t;
+  w[12] = 0x8000000000000000ULL;
+  w[13] = 0;
+  w[14] = 0;
+  w[15] = 96 * 8;
+#pragma unroll
+  for (int j = 0; j < 8; ++j) v[j] = mid[j];
+#pragma unroll
+  for (int j = 11; j < 16; ++j) sha_round(v, sh::kSha512K[j], w[j]);
+#pragma unroll 1
+  for (int r = 16; r < 80; r += 16) {
+#pragma unroll
+    for (int j = 0; j < 16; ++j) {
+      const u64 w15 = w[(j + 1) & 15], w2 = w[(j + 14) & 15];
+      w[j] += (sh::rotr64(w15, 1) ^ sh::rotr64(w15, 8) ^ (w15 >> 7)) + w[(j + 9) & 15] +
+              (sh::rotr64(w2, 19) ^ sh::rotr64(w2, 61) ^ (w2 >> 6));
+      sha_round(v, sh::kSha512K[r + j], w[j]);
+    }
+  }
+#pragma unroll
+  for (int j = 0; j < 8; ++j) {
+    const u64 x = sh::kSha512Iv[j] + v[j];
+    h[2 * j] = (u32)(x >> 32);
+    h[2 * j + 1] = (u32)x;
+  }
+}
+
+__device__ __forceinline__ void prefetch_l2(const void* p, u32 bytes) {
+  asm volatile("cp.async.bulk.prefetch.L2.global [%0], %1;\n" ::"l"(p), "r"(bytes) : "memory");
+}
+
+// V 1: the first kernel.  V 2: a column block's row blocks on adjacent warps (B's tile from L2 when T > 32); noise blocks
+// from the unit's midstate; each chunk's noise words in shared memory; the next segment's A and B words loaded a segment
+// ahead and the next chunk's rows prefetched into L2; at most 170 registers (3 blocks of 4 warps an SM).
+template <int NW, int V>
+__global__ void __launch_bounds__(32 * NW, V >= 2 ? 3 : 1) h1r_units_k(const H1Call* __restrict__ calls, int ncalls,
+                                                                       const u64* __restrict__ seeds, u64 nt0, u64 nt1,
+                                                                       u64 nt2, u32* __restrict__ out, int nowrite) {
   __shared__ __align__(16) uint8_t smem[NW][2][32 * XS];
-  __shared__ u64 sd[NW][16];
+  __shared__ u64 sd[NW][24];
+  __shared__ u32 nzs[V >= 2 ? NW : 1][2][32 * NZ];
   const int c = blockIdx.y;
   if (c >= ncalls) return;
   const H1Call C = calls[c];
   const int lane = threadIdx.x & 31, wid = threadIdx.x >> 5;
-  const int u = blockIdx.x * NW + wid;
-  if (u >= C.units) return;
-  const int ri = u / C.ncb, cj = u % C.ncb;
+  const int v = blockIdx.x * NW + wid;
+  if (v >= C.units) return;
+  int ri, cj;
+  if constexpr (V >= 2) {
+    const int nrb = C.units / C.ncb;
+    ri = v % nrb;
+    cj = v / nrb;
+  } else {
+    ri = v / C.ncb;
+    cj = v % C.ncb;
+  }
+  const int u = ri * C.ncb + cj;
   const int KS = C.k >> 5, m = n_digits(KS), sets = KS + m;
   u32* o = out + C.out0 + (long long)u * 2 * sets;
   if (!C.live[ri]) {
@@ -182,19 +260,38 @@ __global__ void __launch_bounds__(32 * NW) h1r_units_k(const H1Call* __restrict_
   __syncwarp();
   const u64* sj = sd[wid];
   const u64* sr = sd[wid] + 8;
+  const u64* mid = sd[wid] + 16;
+  if constexpr (V >= 2) {
+    u64 mm[8];
+    noise_mid(sj, nt0, nt1, nt2, mm);
+    if (lane < 8) sd[wid][16 + lane] = mm[lane];
+    __syncwarp();
+  }
   const int nb = KS / 16, RB = nb + 1;
   const u64 rowb = (u64)lane * RB, colb = (u64)32 * RB + (u64)lane * RB;
+  auto noise = [&](u64 t, u32 h[16]) {
+    if constexpr (V >= 2)
+      nblock_mid(mid, sj, t, nt0, nt1, nt2, h);
+    else
+      nblock(sj, t, nt0, nt1, nt2, h);
+  };
 
+  const int8_t* arow = C.a + (32LL * ri + lane) * C.lda;
+  const int8_t* brow = C.b + (32LL * cj + lane) * C.ldb;
+  if constexpr (V >= 2) {
+    prefetch_l2(arow, 512);
+    prefetch_l2(brow, 512);
+  }
   u32 st[16];
   nblock(sr, lane, nt0, nt1, nt2, st);
   u32 zc[3];
   u32 Uw[8];
   {
     u32 h[16];
-    nblock(sj, rowb + nb, nt0, nt1, nt2, h);
+    noise(rowb + nb, h);
 #pragma unroll
     for (int d = 0; d < 3; ++d) zc[d] = h[d];
-    nblock(sj, colb + nb, nt0, nt1, nt2, h);
+    noise(colb + nb, h);
 #pragma unroll
     for (int w = 0; w < 8; ++w) {
       u32 x = 0;
@@ -233,31 +330,72 @@ __global__ void __launch_bounds__(32 * NW) h1r_units_k(const H1Call* __restrict_
 #pragma unroll
       for (int e = 0; e < 4; ++e) acc[mi][ni][e] = Y[mi][ni][e] = 0;
 
-  const int8_t* arow = C.a + (32LL * ri + lane) * C.lda;
-  const int8_t* brow = C.b + (32LL * cj + lane) * C.ldb;
+  uint4 pa0, pa1, pb0, pb1;
+  if constexpr (V >= 2) {
+    pa0 = *reinterpret_cast<const uint4*>(arow);
+    pa1 = *reinterpret_cast<const uint4*>(arow + 16);
+    pb0 = *reinterpret_cast<const uint4*>(brow);
+    pb1 = *reinterpret_cast<const uint4*>(brow + 16);
+  }
+  u32* nzr = nzs[V >= 2 ? wid : 0][0] + lane * NZ;
+  u32* nzc = nzs[V >= 2 ? wid : 0][1] + lane * NZ;
   for (int ch = 0; ch < nb; ++ch) {
     u32 hr[16], hc[16];
-    nblock(sj, rowb + ch, nt0, nt1, nt2, hr);
-    nblock(sj, colb + ch, nt0, nt1, nt2, hc);
+    if constexpr (V >= 2) {
+      if (ch + 1 < nb) {
+        prefetch_l2(arow + 512 * (ch + 1), 512);
+        prefetch_l2(brow + 512 * (ch + 1), 512);
+      }
+      noise(rowb + ch, hr);
+#pragma unroll
+      for (int j = 0; j < 16; ++j) nzr[j] = hr[j];
+      noise(colb + ch, hc);
+#pragma unroll
+      for (int j = 0; j < 16; ++j) nzc[j] = hc[j];
+    } else {
+      noise(rowb + ch, hr);
+      noise(colb + ch, hc);
+    }
 #pragma unroll
     for (int s16 = 0; s16 < 16; ++s16) {
       const int s = 16 * ch + s16;
-      const uint4 a0 = *reinterpret_cast<const uint4*>(arow + 32 * s);
-      const uint4 a1 = *reinterpret_cast<const uint4*>(arow + 32 * s + 16);
-      const uint4 b0 = *reinterpret_cast<const uint4*>(brow + 32 * s);
-      const uint4 b1 = *reinterpret_cast<const uint4*>(brow + 32 * s + 16);
+      uint4 a0, a1, b0, b1;
+      u32 nr, nc;
+      if constexpr (V >= 2) {
+        a0 = pa0;
+        a1 = pa1;
+        b0 = pb0;
+        b1 = pb1;
+        nr = nzr[s16];
+        nc = nzc[s16];
+      } else {
+        a0 = *reinterpret_cast<const uint4*>(arow + 32 * s);
+        a1 = *reinterpret_cast<const uint4*>(arow + 32 * s + 16);
+        b0 = *reinterpret_cast<const uint4*>(brow + 32 * s);
+        b1 = *reinterpret_cast<const uint4*>(brow + 32 * s + 16);
+        nr = hr[s16];
+        nc = hc[s16];
+      }
       const u32 av[8] = {a0.x, a0.y, a0.z, a0.w, a1.x, a1.y, a1.z, a1.w};
       const u32 bv[8] = {b0.x, b0.y, b0.z, b0.w, b1.x, b1.y, b1.z, b1.w};
       u32 xw[8], ww[8];
 #pragma unroll
       for (int w = 0; w < 8; ++w) {
-        xw[w] = badd(av[w], spread4(hr[s16] >> (4 * w)));
-        ww[w] = badd(badd(bv[w], Uw[w]), spread4(hc[s16] >> (4 * w)));
+        xw[w] = badd(av[w], spread4(nr >> (4 * w)));
+        ww[w] = badd(badd(bv[w], Uw[w]), spread4(nc >> (4 * w)));
       }
       *reinterpret_cast<uint4*>(Xs + lane * XS) = make_uint4(xw[0], xw[1], xw[2], xw[3]);
       *reinterpret_cast<uint4*>(Xs + lane * XS + 16) = make_uint4(xw[4], xw[5], xw[6], xw[7]);
       *reinterpret_cast<uint4*>(Ws + lane * XS) = make_uint4(ww[0], ww[1], ww[2], ww[3]);
       *reinterpret_cast<uint4*>(Ws + lane * XS + 16) = make_uint4(ww[4], ww[5], ww[6], ww[7]);
+      if constexpr (V >= 2) {
+        if (s + 1 < KS) {
+          pa0 = *reinterpret_cast<const uint4*>(arow + 32 * (s + 1));
+          pa1 = *reinterpret_cast<const uint4*>(arow + 32 * (s + 1) + 16);
+          pb0 = *reinterpret_cast<const uint4*>(brow + 32 * (s + 1));
+          pb1 = *reinterpret_cast<const uint4*>(brow + 32 * (s + 1) + 16);
+        }
+      }
       __syncwarp();
       u32 af[2][4], bf[4][2];
 #pragma unroll
@@ -361,7 +499,7 @@ static void tag3(const char* name, u64 out[3]) {
 constexpr int NW = 4;
 
 extern "C" int h1r_launch(const H1Call* calls_dev, int ncalls, int max_units, const int* ks, const u64* salt_dev,
-                          u64* seeds_dev, u32* out_dev, int nowrite, cudaStream_t stream) {
+                          u64* seeds_dev, u32* out_dev, int nowrite, int version, cudaStream_t stream) {
   for (int i = 0; i < ncalls; ++i)
     if (ks[i] % 512 || ks[i] < 512) return 1;
   u64 st[3], rt[3], nt[3];
@@ -370,8 +508,11 @@ extern "C" int h1r_launch(const H1Call* calls_dev, int ncalls, int max_units, co
   tag3("verity/pouw/noise/v1", nt);
   h1r_seeds<<<dim3((2 * max_units + 127) / 128, ncalls), 128, 0, stream>>>(calls_dev, ncalls, salt_dev, st[0], st[1], st[2],
                                                                           rt[0], rt[1], rt[2], seeds_dev);
-  h1r_units_k<NW><<<dim3((max_units + NW - 1) / NW, ncalls), 32 * NW, 0, stream>>>(calls_dev, ncalls, seeds_dev, nt[0],
-                                                                                   nt[1], nt[2], out_dev, nowrite);
+  const dim3 grid((max_units + NW - 1) / NW, ncalls);
+  if (version == 1)
+    h1r_units_k<NW, 1><<<grid, 32 * NW, 0, stream>>>(calls_dev, ncalls, seeds_dev, nt[0], nt[1], nt[2], out_dev, nowrite);
+  else
+    h1r_units_k<NW, 2><<<grid, 32 * NW, 0, stream>>>(calls_dev, ncalls, seeds_dev, nt[0], nt[1], nt[2], out_dev, nowrite);
   return (int)cudaGetLastError();
 }
 

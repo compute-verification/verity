@@ -3,7 +3,7 @@ stream into buffers the plan owns (allocated once, at `plan`), so a CUDA graph c
 
     lib = H1R("libh1r.so")
     plan = lib.plan([Call(a, b, base, roots, live), ...])   # a [T, K], b [N, K] s8 on the device; roots (16,) int64 words
-    lib.launch(plan, salt)                                  # salt (8,) int64 big-endian words on the device
+    lib.launch(plan, salt)                                  # salt (8,) int64 big-endian words on the device; version=1|2
     plan.receipts(i)                                        # call i's (units, 2 sets) int32 view
 """
 from __future__ import annotations
@@ -54,7 +54,7 @@ class H1R:
     def __init__(self, path: str):
         self.lib = C.CDLL(path)
         self.lib.h1r_launch.argtypes = [C.c_void_p, C.c_int, C.c_int, C.c_void_p, C.c_void_p, C.c_void_p, C.c_void_p, C.c_int,
-                                        C.c_void_p]
+                                        C.c_int, C.c_void_p]
         self.lib.h1r_n_digits.argtypes = [C.c_int]
         if self.lib.h1r_call_bytes() != C.sizeof(_Call):
             raise RuntimeError(f"H1Call is {self.lib.h1r_call_bytes()} bytes in h1r.cu, {C.sizeof(_Call)} here")
@@ -85,9 +85,9 @@ class H1R:
         return Plan(calls, table, ks, max(o[1] for o in offs), torch.empty(seed0 * 16, dtype=torch.int64, device=dev),
                     torch.empty(out0, dtype=torch.int32, device=dev), offs)
 
-    def launch(self, plan: Plan, salt: torch.Tensor, nowrite: bool = False) -> None:
+    def launch(self, plan: Plan, salt: torch.Tensor, nowrite: bool = False, version: int = 2) -> None:
         rc = self.lib.h1r_launch(plan.table.data_ptr(), len(plan.calls), plan.max_units, plan.ks, salt.data_ptr(),
-                                 plan.seeds.data_ptr(), plan.out.data_ptr(), int(nowrite),
+                                 plan.seeds.data_ptr(), plan.out.data_ptr(), int(nowrite), int(version),
                                  torch.cuda.current_stream().cuda_stream)
         if rc:
             raise RuntimeError(f"h1r_launch returned {rc}")
