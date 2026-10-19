@@ -17,6 +17,11 @@ when every slot is in range and no two are equal.  The members are then the TOPK
 exactly when each precedes every non-member.  A slot past N, a negative one or a repeated one fails the count.
 
 `DsaGatherRows_v2` is `boolean_gather.Embedding_v2{V=N, H=W}` per slot: W gathers of 16 bits by the slot's 32-bit index.
+
+Cost at GLM-5.3's statics (TOPK 2048, rows of kv_lora 512 + rope 64 = 576 bf16; two-input ANDs counted over the bodies, run
+r20261018-232448-2766): `DsaTopKOrder_v2{N=2049}` is 4,777,016 (2,211 a slot's decode, 248,888 the verdict) and 2,150 more a key;
+`DsaGatherRows_v2` is about N + 30 an output bit, 39,239,811,072 at N = 2049.  A decode step past an I2048 prompt checks the
+order on the 21 indexer layers (100.3M) and gathers on all 78 (3.06T).
 """
 from __future__ import annotations
 
