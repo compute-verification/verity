@@ -26,10 +26,10 @@ Notes are records, never messages.
                                                                    # --authorizes: only for a named human, who may authorize spend
   research msg deliver --ts TS [--thread T]                         # ring the doorbells for a post no client delivered
   research msg deliver --channel ask-the-team|chat-NAME --event JSON|@PATH|-  # a person's post there: its doorbells name the
-                                                                   # channel; one in a chat naming no one rings its host
-  research msg chat open NAME --email E --host LANE [--start-page URL] [--note T] [--cursor-bot U...]
-                                                                   # a collaborator's private #chat-NAME, recorded in the registry
-  research msg chat close NAME | chat list                         # archive it, keeping the person; each one's channel and host
+                                                                   # channel; a chat's doorbells carry no text (`chat_targets`)
+  research msg chat open NAME (--user U... | --email E) [--start-here URL] [--note T] [--cursor-bot U...]
+                                                                   # a person's private #chat-NAME; the person goes to people.d
+  research msg chat close NAME | chat list                         # archive it and mark it closed; each chat in people.d
   research msg groups sync [--apply]                               # one user group per handle; a plan unless --apply
   research msg slack-app export|diff|apply [--app-id ID] [--manifest PATH]   # the app's manifest: live, against the repo's, update
   research msg ask-daniel --as HANDLE --kind blocking|default --question Q --why W --option VALUE=LABEL... --recommend V
@@ -186,7 +186,9 @@ COLLABORATOR_MAY = "ask a lane for something and request work within its budgets
 COLLABORATOR_NEVER = "spend, access or keys, destructive changes or node changes"
 CHAT_PREFIX = "chat-"                                            # a collaborator's private channel, `chat open NAME`
 CHAT_NAME_RE = re.compile(r"^[a-z0-9][a-z0-9-]{0,74}$")          # Slack's channel names: 80 characters, lower case, no spaces
-CHAT_WATCHER = "top"                                             # subscribes to every chat channel and runs `deliver` on its posts
+CHAT_WATCHER = "top"                                             # subscribes to every chat channel; rings for a post routed to no one
+PEOPLE_DIR = "people.d"                                          # in the notes, beside routes.d: one `<NAME>.json` per chat's person
+PERSON_SCHEMA = "verity/slack-person/v1"
 
 
 class SlackError(RuntimeError):
@@ -269,20 +271,20 @@ def routing_registry(reg: dict, path: Path, now: float | None = None) -> dict:
     if not up:
         return reg
     names = {h["handle"] for h in up["handles"]}
-    mine = {person_name(p): p for p in reg.get("collaborators", [])}
-    theirs = {person_name(p) for p in up.get("collaborators", [])}
-    collabs = [mine[n] if (n := person_name(p)) in mine and mine[n].get("channel") and not p.get("channel") else p
-               for p in up.get("collaborators", [])]           # a channel `chat open` gave before its registry PR lands
-    return {**reg, **up, "handles": [*up["handles"], *(h for h in reg["handles"] if h["handle"] not in names)],
-            "collaborators": [*collabs, *(p for n, p in mine.items() if n not in theirs)]}
+    return with_people({**reg, **up, "collaborators": up.get("collaborators", []),
+                        "handles": [*up["handles"], *(h for h in reg["handles"] if h["handle"] not in names)]},
+                       reg.get("chat_people", []))
 
 
-def load_registry(path: Path) -> dict:
+def load_registry(path: Path, people: bool = True) -> dict:
+    """The registry at `path`, checked; with `people`, also each open chat's person from the notes clone's people.d
+    (`with_people`), which a command that writes the registry back leaves out."""
     try:
         reg = json.loads(path.read_text())
     except (OSError, ValueError) as e:
         raise SlackError(f"registry {path}: {e}") from e
-    return check_registry(reg, str(path))
+    reg = check_registry(reg, str(path))
+    return with_people(reg, ChatPeople().open()) if people else reg
 
 
 def check_registry(reg: dict, path: str) -> dict:
@@ -322,33 +324,16 @@ def check_registry(reg: dict, path: str) -> dict:
 
 
 def check_collaborators(reg: dict, path: str, handles: set[str]) -> None:
-    """`collaborators`: people who may ask a lane for something, each `{name, slack_user, email (optional), note}`, and
-    with a chat channel (`chat open`) its `channel` `{key: chat-NAME, id}` and `host`, the handle that answers there.  Their
-    name (first name, lower case, as a post's author) is no handle's and no other person's, their Slack id no one else's,
-    and their channel's key no other channel's."""
+    """`collaborators`: people who may ask a lane for something, each `{name, slack_user, email (optional), note}`.  Their
+    name (first name, lower case, as a post's author) is no handle's and no other person's, and their Slack id no one else's."""
     collabs = reg.get("collaborators", [])
     if not isinstance(collabs, list):
         raise SlackError(f"registry {path}: collaborators is a list of {{name, slack_user, email, note}}")
     taken = {person_name(p) for p in reg.get("humans", [])} | handles
     ids = {p.get("slack_user") for p in reg.get("humans", [])} - {None}
-    keys = {*(reg.get("channels") or {}), *(a for c in (reg.get("channels") or {}).values() for a in c.get("aliases", []))}
     for p in collabs:
-        if not isinstance(p, dict) or set(p) - {"name", "slack_user", "email", "note", "channel", "host"} \
-                or not {"name", "slack_user", "note"} <= set(p):
-            raise SlackError(f"registry {path}: a collaborator is {{name, slack_user, email (optional), note}}, with channel "
-                             f"{{key, id}} and host once `research msg chat open` gives them a channel, not {p!r}")
-        if ("channel" in p) != ("host" in p):
-            raise SlackError(f"registry {path}: collaborator {p['name']!r} needs both a channel and its host, or neither")
-        if "channel" in p:
-            c = p["channel"]
-            if not (isinstance(c, dict) and set(c) == {"key", "id"} and isinstance(c["key"], str)
-                    and c["key"].startswith(CHAT_PREFIX) and CHAT_NAME_RE.match(c["key"][len(CHAT_PREFIX):])
-                    and isinstance(c["id"], str) and CHANNEL_ID_RE.match(c["id"])) or c["key"] in keys:
-                raise SlackError(f"registry {path}: collaborator {p['name']!r}'s channel {c!r}: {{key: chat-NAME, id: C...}}, "
-                                 "a key no other channel has")
-            if p["host"] not in handles:
-                raise SlackError(f"registry {path}: collaborator {p['name']!r}'s host {p['host']!r} is not a handle")
-            keys.add(c["key"])
+        if not isinstance(p, dict) or set(p) - {"name", "slack_user", "email", "note"} or not {"name", "slack_user", "note"} <= set(p):
+            raise SlackError(f"registry {path}: a collaborator is {{name, slack_user, email (optional), note}}, not {p!r}")
         if not isinstance(p["name"], str) or not p["name"].strip() or not isinstance(p["note"], str) or not p["note"].strip():
             raise SlackError(f"registry {path}: collaborator {p.get('name')!r} needs a name and a note")
         if not NAME_RE.match(name := person_name(p)) or name in taken:
@@ -404,11 +389,76 @@ def entry(reg: dict, handle: str) -> dict:
 
 
 def chat_channels(reg: dict) -> dict[str, dict]:
-    """Each collaborator's chat channel (`chat open`) as a registry channel: its id, its `host` (the handle that answers
-    there) and its `person`; CHAT_WATCHER subscribes to its top level and hands each post to `deliver`."""
-    return {p["channel"]["key"]: {"id": p["channel"]["id"], "host": p["host"], "person": p, "subscribers": [CHAT_WATCHER],
-                                  "purpose": f"{p['name']}'s questions to the lanes, hosted by @{p['host']}"}
-            for p in reg.get("collaborators", []) if p.get("channel") and p.get("host")}
+    """Each open chat (`chat open`, people.d) as a registry channel: its id and its `person`.  CHAT_WATCHER subscribes to its
+    top level and hands each post to `deliver`, until `research msg router` reads them."""
+    return {r["channel"]["key"]: {"id": r["channel"]["id"], "person": r, "subscribers": [CHAT_WATCHER],
+                                  "purpose": f"{r['name']}'s questions to the lanes (private)"}
+            for r in reg.get("chat_people", [])}
+
+
+def _person_ok(r: Any, name: str) -> bool:
+    c = r.get("channel") if isinstance(r, dict) else None
+    return isinstance(r, dict) and r.get("schema") == PERSON_SCHEMA and isinstance(r.get("name"), str) and bool(r["name"].strip()) \
+        and isinstance(c, dict) and c.get("key") == CHAT_PREFIX + name and isinstance(c.get("id"), str) \
+        and bool(CHANNEL_ID_RE.match(c["id"])) and isinstance(r.get("opened"), str)
+
+
+class ChatPeople:
+    """people.d/<NAME>.json in the notes: the person of #chat-NAME (`chat open` writes it, `chat close` marks it closed).  The
+    clone's, and for a name the clone lacks, or when asked (`fresh`), the published copy, read beside the routes' (the
+    sibling `people.d/` of $RESEARCH_ROUTES_URL); of a name's two copies the newer counts (`_newer`), as for routes."""
+
+    def __init__(self, root: Path | None = None, base: str | None = None, get: Callable[[str], bytes | None] | None = None):
+        self.root, self.get = (root or notes_root()), get or http_get
+        routes = (base or os.environ.get("RESEARCH_ROUTES_URL") or ROUTES_RAW).rstrip("/")
+        self.base = routes.rsplit("/", 1)[0] + f"/{PEOPLE_DIR}/"
+        self.local: dict[str, dict] = {}
+        d = self.root / PEOPLE_DIR
+        for p in sorted(d.glob("*.json")) if d.is_dir() else []:
+            try:
+                r = json.loads(p.read_text())
+            except (OSError, ValueError):
+                continue
+            if _person_ok(r, p.stem):
+                self.local[p.stem] = r
+        self._fetched: dict[str, dict | None] = {}
+
+    def get_person(self, name: str, fresh: bool = False) -> dict | None:
+        if not CHAT_NAME_RE.match(name):
+            return None
+        if fresh or name not in self.local:
+            raw = self.get(f"{self.base}{name}.json")
+            try:
+                r = json.loads(raw) if raw else None
+            except ValueError:
+                r = None
+            self._fetched[name] = r if _person_ok(r, name) else None
+        return _newer(self.local.get(name), self._fetched.get(name))
+
+    def all(self) -> dict[str, dict]:
+        return {n: r for n in sorted({**self.local, **self._fetched}) if (r := _newer(self.local.get(n), self._fetched.get(n)))}
+
+    def open(self) -> list[dict]:
+        return [r for r in self.all().values() if not r.get("closed")]
+
+
+def with_people(reg: dict, persons: list[dict]) -> dict:
+    """`reg` with each open chat's person: `chat_people`, and in `collaborators` each who is not a named person already
+    (Daniel, or someone added by hand, by Slack id) and whose entry keeps the registry valid."""
+    chats = {r["channel"]["key"]: r for r in persons if not r.get("closed")}
+    collabs = list(reg.get("collaborators", []))
+    handles = {h["handle"] for h in reg["handles"]}
+    for key, r in chats.items():
+        p = {"name": r["name"], "slack_user": r.get("slack_user"), "note": r.get("note") or f"asks the lanes in #{key}",
+             **({"email": r["email"]} if r.get("email") else {})}
+        if p["slack_user"] and any(q.get("slack_user") == p["slack_user"] for q, _ in people({**reg, "collaborators": collabs})):
+            continue
+        try:
+            check_collaborators({**reg, "collaborators": [*collabs, p]}, PEOPLE_DIR, handles)
+        except SlackError:
+            continue                                                  # a name or id someone else has: the chat stays, unrouted
+        collabs.append(p)
+    return {**reg, "collaborators": collabs, "chat_people": list(chats.values())}
 
 
 def channels(reg: dict) -> dict[str, dict]:
@@ -432,6 +482,13 @@ def resolve_key(reg: dict, key: str) -> str:
 
 def channel_key(ns: argparse.Namespace, reg: dict) -> str:
     key = resolve_key(reg, (ns.channel or FRONT_DOOR).lstrip("#"))
+    if key not in channels(reg) and key.startswith(CHAT_PREFIX):     # a chat the clone lacks: its published person
+        try:
+            r = ChatPeople().get_person(key[len(CHAT_PREFIX):])
+        except SlackError:
+            r = None
+        if r and not r.get("closed"):
+            reg.update(with_people(reg, [*reg.get("chat_people", []), r]))
     if key not in channels(reg):
         raise SlackError(f"no channel #{key} in the registry (it has {', '.join(sorted(channels(reg)))})")
     return key
@@ -1007,15 +1064,14 @@ def pr_watchers(msg: dict, reg: dict, history: list[dict] | tuple = (), branches
 
 
 def route_targets(msg: dict, root: dict | None, reg: dict, inboxes: set[str] | frozenset = frozenset(),
-                  history: list[dict] | tuple = (), branches: dict[str, str] | None = None, host: str | None = None) -> list[str]:
+                  history: list[dict] | tuple = (), branches: dict[str, str] | None = None) -> list[str]:
     """The names a post in #agent-coordination wakes, in order.  `msg` and `root` (its thread's root, None for a top-level
     post) are Slack messages; `inboxes` is every inbox thread's ts.  Nothing in an inbox thread routes; a status line wakes
     only the root's poster; otherwise the names at the start, an announcement's audience (every handle when it names
     none), and on a reply that names no one the root's poster or, when the poster replies, the names the root addressed.
     A quiet post wakes only the names at its start.  A reply under an announcement that names no one but its author, quiet
     or not, also wakes its `pr_watchers` that are handles (with `history` and `branches`, as there); one that names
-    someone wakes only them, whatever PRs and runs its body mentions.  The author is never a target.  In a chat channel
-    (`host`, the handle that answers there), a person's post that reaches no one else, and isn't quiet, wakes the host."""
+    someone wakes only them, whatever PRs and runs its body mentions.  The author is never a target."""
     text, ts, thread = msg.get("text") or "", msg.get("ts"), msg.get("thread_ts")
     reply = bool(thread) and thread != ts
     if (thread or ts) in inboxes or text.startswith(INBOX_HEAD) or \
@@ -1046,9 +1102,23 @@ def route_targets(msg: dict, root: dict | None, reg: dict, inboxes: set[str] | f
     for n in out:
         if n and n != author and n not in seen:
             seen.append(n)
-    if host and not seen and not msg.get("bot_id") and not is_quiet(text) and not is_status(text):
-        seen.append(host)
     return seen
+
+
+def chat_targets(msg: dict, thread: list[dict] | tuple, reg: dict) -> list[str]:
+    """The names a post in a chat channel wakes, until `research msg router` routes them.  `thread` is the post's thread so
+    far (empty for a top-level post).  The names it starts with; else, on a person's reply, the handles that posted in its
+    thread; else, on a person's post, CHAT_WATCHER, who routes it by hand.  A bot's post (a lane handing off in the
+    thread) and a quiet one wake only the names they start with.  The author is never a target."""
+    author, text = poster(msg, reg), msg.get("text") or ""
+    if author is None:
+        return []
+    names = [n for n in lead_names(text, reg) if n != author]
+    if names or msg.get("bot_id") or is_quiet(text):
+        return names
+    handles = {h["handle"] for h in reg["handles"]}
+    lanes = [m["username"] for m in thread if m.get("ts") != msg.get("ts") and ours(m, reg) and m.get("username") in handles]
+    return list(dict.fromkeys(lanes)) or [CHAT_WATCHER]
 
 
 def is_quiet(text: str) -> bool:
@@ -1240,12 +1310,16 @@ def _channel_flag(channel: str) -> str:
     return f"--channel-id {channel}" if CHANNEL_ID_RE.match(channel) else f"--channel {channel}"
 
 
-def doorbell(author: str, thread: str, ts: str, text: str, urgent: bool = False, channel: str | None = None) -> str:
+def doorbell(author: str, thread: str, ts: str, text: str, urgent: bool = False, channel: str | None = None,
+             private: bool = False) -> str:
     """The post itself, so its reader can act without another read: `from infra, thread T[, reply R]: <text>`.  A post in a
     channel other than the front door names it (its registry key, else its id), so its reader answers there: `from daniel,
-    #ask-the-team thread T: <text>`.  Never starts with `@`, so it can't route itself."""
+    #ask-the-team thread T: <text>`.  A `private` post's (a chat's) carries no text, since anyone in the front door reads
+    the inboxes, only where to read it.  Never starts with `@`, so it can't route itself."""
     body = plain(text)
-    if len(body) > DOORBELL_MAX:
+    if private:
+        body = f"(a post in a private channel: research msg read {_channel_flag(channel or '?')} --thread {thread})"
+    elif len(body) > DOORBELL_MAX:
         read = f"research msg read {_channel_flag(channel)} --thread {thread}" if channel else f"research msg read --thread {thread}"
         body = body[:DOORBELL_MAX].rstrip() + f"\u2026 (the rest: `{read}`)"
     where = (f"#{channel} " if channel else "") + f"thread {thread}" + (f", reply {ts}" if ts and ts != thread else "")
@@ -1331,15 +1405,22 @@ def deliver(api: Slack, reg: dict, routes: Routes, ch: str, msg: dict, *, urgent
     what happened.  Every handle's published route and every name's the post starts with is read first, so a clone not
     pulled since a name opened, reopened, closed or changed holder rings what the published table says (`_newer`).  A post
     in another channel (#ask-the-team, a chat channel) routes the same way; its doorbells name the channel (`doorbell`), and
-    where the bot can't read that channel (UNREADABLE) a reply's thread root counts as unknown.  In a chat channel a
-    person's post that names no one rings the channel's host, or CHAT_WATCHER when the host has no open inbox."""
+    where the bot can't read that channel (UNREADABLE) a reply's thread root counts as unknown.  A post in a chat channel
+    rings by `chat_targets`, and its doorbells, like those of a channel the registry doesn't know, carry no text."""
     log = log or sys.stderr
     front = channel_id_for(reg, FRONT_DOOR) or ch
     where = None if ch == front else (key_of(reg, ch) or ch)
+    chat = where in chat_channels(reg)
+    private = where is not None and (chat or where not in channels(reg))
     thread = msg.get("thread_ts") if msg.get("thread_ts") not in (None, msg.get("ts")) else None
     notes: list[str] = []
+    replies: list[dict] = []
     try:
-        root = api.root(ch, thread) if thread else None
+        if thread and chat:
+            replies = api.paged("conversations.replies", "messages", channel=ch, ts=thread)
+            root = next((m for m in replies if m.get("ts") == thread), None)
+        else:
+            root = api.root(ch, thread) if thread else None
     except SlackError as e:                                          # posting still rings the names it starts with
         if not _unreadable(e):
             raise
@@ -1350,10 +1431,6 @@ def deliver(api: Slack, reg: dict, routes: Routes, ch: str, msg: dict, *, urgent
     inboxes = routes.inboxes()
     now = _now().timestamp() if now is None else now
     history, branches = watch_context(api, ch, msg, root, now, log)
-    host = chat_channels(reg).get(where or "", {}).get("host")
-    if host and unreachable(host, *routes.resolve(host)):
-        notes.append(f"#{where}'s host @{host} has no open inbox, so a post there that names no one rings @{CHAT_WATCHER}")
-        host = CHAT_WATCHER
     ch = front                                                       # from here on, `ch` is the inboxes' channel
     author = poster(msg, reg) or "?"
     urgent = urgent or "urgent" in tags_of(msg.get("text", ""))
@@ -1362,7 +1439,7 @@ def deliver(api: Slack, reg: dict, routes: Routes, ch: str, msg: dict, *, urgent
         lines.append("no doorbells: " + ("another app's bot posted it, not Verity's" if reg.get("bot_id") else
                                          "the registry records no bot_id (`research msg groups sync --apply` writes it)"))
     humans = people_names(reg)
-    for name in route_targets(msg, root, reg, inboxes, history, branches, host):
+    for name in (chat_targets(msg, replies, reg) if chat else route_targets(msg, root, reg, inboxes, history, branches)):
         if name in humans:
             continue                                                 # people read Slack itself
         to, r = routes.resolve(name)
@@ -1400,7 +1477,8 @@ def deliver(api: Slack, reg: dict, routes: Routes, ch: str, msg: dict, *, urgent
                 lines.append(f"@{to}: paused (cap of {CAP_PER_HOUR} an hour from @{author} in this thread)")
                 continue
             api.call("chat.postMessage", channel=ch, thread_ts=r["inbox_ts"], username="router", unfurl_links="false",
-                     unfurl_media="false", text=doorbell(author, src, msg.get("ts") or src, msg.get("text", ""), urgent, where))
+                     unfurl_media="false", text=doorbell(author, src, msg.get("ts") or src, msg.get("text", ""), urgent, where,
+                                                         private))
             lines.append(f"@{to}: rang" + (f" (for @{name}, finished)" if to != name else ""))
         except SlackError as e:                                      # the others still ring; `deliver` rings this one later
             lines.append(f"@{to}: NOT RUNG ({e})")
@@ -1557,7 +1635,9 @@ def acting_as(ns: argparse.Namespace, reg: dict, name: str) -> dict:
 
 
 def _route(ns: argparse.Namespace, reg: dict, ch: str) -> tuple[dict, Routes | None] | None:
-    return (reg, routes_of(ns)) if ch == channel_id_for(reg, FRONT_DOOR) else None
+    """A post routes in the front door and in a chat, where a lane hands off by starting a reply with another's name."""
+    chats = {c["id"] for c in chat_channels(reg).values()}
+    return (reg, routes_of(ns)) if ch == channel_id_for(reg, FRONT_DOOR) or ch in chats else None
 
 
 def cmd_ask(ns: argparse.Namespace, reg: dict) -> int:
@@ -1920,8 +2000,10 @@ def cmd_read(ns: argparse.Namespace, reg: dict) -> int:
 
 # --- inboxes ----------------------------------------------------------------------------------------------------------------
 
-def publish_route(root: Path, r: dict, message: str) -> str:
-    """Write `routes.d/<name>.json` in the notes clone at `root` and push it: the line `notes sync` printed."""
+def publish_route(root: Path, r: dict, message: str, where: str = ROUTES_DIR, name: str | None = None) -> str:
+    """Write `<where>/<name>.json` (default `routes.d/<its name>.json`; a chat's person goes to people.d) in the notes clone
+    at `root` and push it: the line `notes sync` printed."""
+    name = name or r["name"]
     if not (root / ".git").exists():
         try:
             from . import notes_sync
@@ -1929,12 +2011,12 @@ def publish_route(root: Path, r: dict, message: str) -> str:
         except ImportError:
             pass
     if not (root / ".git").exists():
-        raise SlackError(f"no notes clone at {root} (set RESEARCH_NOTES, or RESEARCH_NOTES_TOKEN to clone it); the route is:\n"
-                         + json.dumps(r, indent=2))
-    p = root / ROUTES_DIR / f"{r['name']}.json"
+        raise SlackError(f"no notes clone at {root} (set RESEARCH_NOTES, or RESEARCH_NOTES_TOKEN to clone it); {where}/{name}.json "
+                         "is:\n" + json.dumps(r, indent=2))
+    p = root / where / f"{name}.json"
     p.parent.mkdir(parents=True, exist_ok=True)
-    p.write_text(json.dumps(r, indent=2) + "\n")
-    rel = f"{ROUTES_DIR}/{r['name']}.json"
+    p.write_text(json.dumps(r, indent=2, ensure_ascii=False) + "\n")
+    rel = f"{where}/{name}.json"
     try:
         from . import notes_sync
     except ImportError:                                             # a single file: plain git
@@ -1946,7 +2028,7 @@ def publish_route(root: Path, r: dict, message: str) -> str:
     rep = notes_sync.sync(root, paths=[rel], message=message)
     line = notes_sync.render_sync(rep)
     if rep.get("rc", 0) and not rep.get("pushed"):
-        raise SlackError(f"the route is written but not pushed: {line}")
+        raise SlackError(f"{rel} is written but not pushed: {line}")
     return line
 
 
@@ -2459,25 +2541,13 @@ def cmd_groups_sync(ns: argparse.Namespace, reg: dict, path: Path) -> int:
     return 0
 
 
-# --- chat channels: one private channel per collaborator --------------------------------------------------------------------
+# --- chat channels: one private channel per person --------------------------------------------------------------------------
 
-def chat_guide(p: dict, host: str, reg: dict) -> str:
-    """The post `chat open` pins: who answers, how to ask, where the answers come, and what a collaborator may ask for."""
-    lanes = ", ".join(h["handle"] for h in reg["handles"] if h["handle"] != host)
-    deciders = " or ".join(person_name(h).capitalize() for h in reg.get("humans", [])) or "a named human"
-    return (f"*Welcome, {p['name'].split()[0]}.* This channel is yours with Verity's agents. The @{host} lane hosts it: it "
-            "reads every post here and answers it, or brings in the lane that can.\n"
-            f"\u2022 *To ask*, post a new message. A post that names no lane goes to @{host}. To ask another lane, start the "
-            f"post with its name, as in `@circuits how far is the TP8 sweep?` (the lanes: {lanes}).\n"
-            "\u2022 *Agents answer in your post's thread*, so reply there to follow up: one thread per question.\n"
-            f"\u2022 *As a collaborator* you may {COLLABORATOR_MAY}. You can't authorize {COLLABORATOR_NEVER}: "
-            f"only {deciders} can.")
-
-
-def write_registry(reg: dict, path: Path, why: str) -> None:
-    check_registry(reg, str(path))
-    path.write_text(json.dumps(reg, indent=2, ensure_ascii=False) + "\n")
-    print(f"wrote {path}: commit it and open a registry PR ({why})")
+def chat_welcome(name: str) -> str:
+    """The two lines `chat open` pins: whose the channel is, and where the answers come."""
+    return (f"*This channel is {name.split()[0]}'s*, for questions and requests to Verity's agents: post a new message, and "
+            "start it with a lane's name (`@circuits ...`) to ask that lane.\n"
+            "*Agents answer in your post's thread*: reply there to follow up, one thread per question.")
 
 
 def chat_channel(api: Slack, key: str, known: str | None) -> tuple[str, bool]:
@@ -2501,17 +2571,17 @@ def chat_channel(api: Slack, key: str, known: str | None) -> tuple[str, bool]:
             ch = next((c for c in api.paged("conversations.list", "channels", types="private_channel", exclude_archived="false")
                        if c.get("name") == key), None)
             if not ch:
-                raise SlackError(f"#{key} exists, but Verity's bot isn't in it: a member there invites it (`/invite @Verity`), "
+                raise SlackError(f"#{key} exists, but the Agents bot isn't in it: a member there invites it (`/invite @Agents`), "
                                  "or pick another NAME") from None
     if ch.get("is_archived"):
         api.call("conversations.unarchive", channel=ch["id"])
     return ch["id"], new
 
 
-def cursor_bot(api: Slack) -> str | None:
+def cursor_bot(members: list[dict]) -> str | None:
     """Cursor's app's bot user, which must be in a channel for `subscribe_slack_channel` to wake anyone there: a bot whose
     name or real name says cursor (one named exactly `cursor` first)."""
-    bots = [m for m in api.paged("users.list", "members") if m.get("is_bot") and not m.get("deleted") and "cursor" in
+    bots = [m for m in members if m.get("is_bot") and not m.get("deleted") and "cursor" in
             f"{m.get('name', '')} {m.get('real_name', '')} {(m.get('profile') or {}).get('real_name', '')}".lower()]
     bots.sort(key=lambda m: (m.get("name") != "cursor", m.get("id", "")))
     return bots[0]["id"] if bots else None
@@ -2532,23 +2602,37 @@ def connect_step(e: SlackError, email: str, key: str, reg: dict) -> str:
     if e.code == "missing_scope":
         app = reg.get("slack_app_id")
         page = f"https://api.slack.com/apps/{app}/install-on-team" if app else "the install page `research msg slack-app apply` prints"
-        return (f"approve the Verity app's new scope conversations.connect:write: open {page} and click Allow "
+        return (f"approve the Agents app's scope conversations.connect:write: open {page} and click Allow "
                 f"(Slack refused the bot's Slack Connect invite of {email}: missing_scope)")
-    return (f"invite {email} to #{key} yourself: in Slack, open #{key}, click its name, choose Add people and enter {email} "
-            f"(Slack refused the bot's Slack Connect invite: {e.code or e})")
+    return (f"invite {email} to the workspace, or to #{key} yourself (open #{key}, click its name, choose Add people and enter "
+            f"{email}; Slack refused the bot's Slack Connect invite: {e.code or e})")
 
 
-def cmd_chat(ns: argparse.Namespace, reg: dict, path: Path) -> int:
-    """`chat open NAME`: one collaborator's private channel #chat-NAME, with Cursor's bot and the person in it, the guide
-    pinned, and the person recorded in the registry's `collaborators` with the channel and its host (the handle that
-    answers there; `deliver` routes its posts).  Reruns reuse the channel.  `close NAME` archives it and drops the
-    channel and host, keeping the person; `list` shows each collaborator's.  The caller commits the registry."""
+def publish_person(api: Slack, r: dict, message: str) -> None:
+    name = r["channel"]["key"][len(CHAT_PREFIX):]
+    if api.dry_run:
+        print(f"plan: publish {PEOPLE_DIR}/{name}.json to the notes: {json.dumps(r, ensure_ascii=False)}")
+    else:
+        print(publish_route(notes_root(), r, message, PEOPLE_DIR, name))
+
+
+def cmd_chat(ns: argparse.Namespace, reg: dict) -> int:
+    """`chat open NAME`: one person's private channel #chat-NAME, with the person and Cursor's bot in it, the two-line
+    welcome pinned and --start-here bookmarked.  The person is published to the notes as people.d/NAME.json, from which
+    every command takes them into `collaborators` (`with_people`): no registry change.  A rerun reuses the channel and the
+    record (after a Slack Connect invite is accepted, it records their Slack id).  `close NAME` archives the channel and
+    marks the record closed; `list` reads people.d.  `reg` is the registry without people.d."""
+    book = ChatPeople()
     if ns.verb == "list":
-        for p in reg.get("collaborators", []):
-            where = f"#{c['key']} ({c['id']}), hosted by @{p['host']}" if (c := p.get("channel")) else "no channel"
-            print(f"{p['name']} ({p.get('slack_user') or 'user id not recorded'}, {p.get('email') or 'no email'}): {where}")
-        if not reg.get("collaborators"):
-            print("no collaborators")
+        for n in list(book.local):
+            book.get_person(n, fresh=True)
+        rows = book.all()
+        for r in rows.values():
+            state = f"closed {r['closed']}" if r.get("closed") else f"open since {r['opened']}"
+            print(f"#{r['channel']['key']} ({r['channel']['id']}): {r['name']} ({r.get('slack_user') or 'no Slack id yet'}, "
+                  f"{r.get('email') or 'no email'}), {state}")
+        if not rows:
+            print(f"no chat channels in {book.root / PEOPLE_DIR}")
         return 0
     if not ns.name or not CHAT_NAME_RE.match(ns.name):
         raise SlackError(f"chat {ns.verb} needs NAME, in lower case letters, digits and dashes: the channel is #{CHAT_PREFIX}NAME")
@@ -2556,44 +2640,65 @@ def cmd_chat(ns: argparse.Namespace, reg: dict, path: Path) -> int:
     if api.via == "broker" and not api.dry_run:
         raise SlackError("chat needs SLACK_BOT_TOKEN itself (the broker relays no channel or invite calls): run it where the "
                          "token is")
-    collabs = reg.setdefault("collaborators", [])
-    holder = next((p for p in collabs if (p.get("channel") or {}).get("key") == key), None)
+    if key in reg["channels"]:
+        raise SlackError(f"#{key} is a registry channel, not a chat: pick another NAME")
+    prev = book.get_person(ns.name, fresh=True)
     plan = "plan: " if api.dry_run else ""
     if ns.verb == "close":
-        if not holder:
-            raise SlackError(f"no collaborator has #{key} (`research msg chat list`)")
+        if not prev or prev.get("closed"):
+            raise SlackError(f"#{key} is not open (`research msg chat list`)")
         try:
-            api.call("conversations.archive", channel=holder["channel"]["id"])
+            api.call("conversations.archive", channel=prev["channel"]["id"])
         except SlackError as e:
             if e.code != "already_archived":
                 raise
-        print(f"{plan}archived #{key} ({holder['channel']['id']}); {holder['name']} stays a collaborator, with no channel")
-        holder.pop("channel")
-        holder.pop("host")
-        if api.dry_run:
-            print(f"plan: write {path} without {holder['name']}'s channel and host")
-        else:
-            write_registry(reg, path, f"#{key} closed")
+        print(f"{plan}archived #{key} ({prev['channel']['id']})")
+        publish_person(api, {**prev, "closed": _now_stamp()}, f"chat close {ns.name}")
         return 0
 
-    if not ns.email or not EMAIL_RE.match(ns.email) or not ns.host:
-        raise SlackError("chat open needs --email (the person's address) and --host (the lane that answers there)")
-    if ns.start_page and not re.match(r"^https?://\S+$", ns.start_page):
-        raise SlackError(f"--start-page {ns.start_page!r} is not an http(s) link")
+    if bool(ns.user) == bool(ns.email):
+        raise SlackError("chat open needs the person: --user U... (their Slack id) or --email E (their address), one of them")
+    if ns.user and not SLACK_USER_RE.match(ns.user):
+        raise SlackError(f"--user {ns.user!r} is not a Slack user id (U...)")
+    if ns.email and not EMAIL_RE.match(ns.email.strip()):
+        raise SlackError(f"--email {ns.email!r} is not an address")
+    if ns.start_here and not re.match(r"^https?://\S+$", ns.start_here):
+        raise SlackError(f"--start-here {ns.start_here!r} is not an http(s) link")
     if ns.cursor_bot and not SLACK_USER_RE.match(ns.cursor_bot):
         raise SlackError(f"--cursor-bot {ns.cursor_bot!r} is not a Slack user id (U...)")
-    if key in channels(reg) and not holder:
-        raise SlackError(f"#{key} is a registry channel, not a chat: pick another NAME")
-    host, email = entry(reg, ns.host)["handle"], ns.email.strip()
-    p = next((c for c in collabs if (c.get("email") or "").lower() == email.lower()), None)
-    if holder and p is not holder:
-        raise SlackError(f"#{key} is {holder['name']}'s ({holder.get('email') or 'no email'}): `chat close {ns.name}` first, "
-                         "or pick another NAME")
-    p = p or {}
+    members = api.paged("users.list", "members")
+    if ns.user:
+        user = next((m for m in members if m.get("id") == ns.user and not m.get("deleted")), None)
+        if not user and not api.dry_run:
+            raise SlackError(f"no Slack user {ns.user} in the workspace (users.list): check the id, or pass --email")
+        user = user or {"id": ns.user}
+    else:
+        try:
+            user = api.call("users.lookupByEmail", email=ns.email.strip()).get("user")
+        except SlackError as e:
+            if e.code != "users_not_found":
+                raise
+            user = None
+    uid = (user or {}).get("id")
+    email = ns.email.strip() if ns.email else ((user or {}).get("profile") or {}).get("email") or (prev or {}).get("email")
+    live = prev if prev and not prev.get("closed") else None
+    if live and live.get("slack_user") and uid and live["slack_user"] != uid:
+        raise SlackError(f"#{key} is {live['name']}'s ({live['slack_user']}): `chat close {ns.name}` first, or pick another NAME")
+    name = (user or {}).get("real_name") or ((user or {}).get("profile") or {}).get("real_name") or (live or {}).get("name") \
+        or ns.name.capitalize()
+    rec = {"schema": PERSON_SCHEMA, "name": name, "slack_user": uid or (live or {}).get("slack_user"), "email": email,
+           "note": ns.note or (prev or {}).get("note") or f"asks the lanes in #{key}",
+           "channel": {"key": key, "id": None}, "opened": (live or {}).get("opened") or _now_stamp(), "closed": None}
+    human = any(p.get("slack_user") == rec["slack_user"] for p in reg.get("humans", []) if rec["slack_user"])
+    if not human:
+        p = {k: rec[k] for k in ("name", "slack_user", "note")} | ({"email": email} if email else {})
+        check_collaborators({**reg, "collaborators": [*reg.get("collaborators", []), p]}, PEOPLE_DIR,
+                            {h["handle"] for h in reg["handles"]})
 
-    cid, new = chat_channel(api, key, (p.get("channel") or {}).get("id") if (p.get("channel") or {}).get("key") == key else None)
+    cid, new = chat_channel(api, key, (prev or {}).get("channel", {}).get("id"))
+    rec["channel"]["id"] = cid
     print(f"{plan}#{key} {cid}: " + ("created, private" if new else "reused"))
-    bot = ns.cursor_bot or cursor_bot(api)
+    bot = ns.cursor_bot or cursor_bot(members)
     if bot:
         print(f"{plan}Cursor's bot {bot}: {chat_invite(api, cid, bot)}")
     elif api.dry_run:
@@ -2601,16 +2706,9 @@ def cmd_chat(ns: argparse.Namespace, reg: dict, path: Path) -> int:
     else:
         print(f"Cursor's bot: no bot named cursor in users.list, so subscriptions to #{key} wake no one until it is in: rerun "
               "with --cursor-bot U...")
-
     daniel = None
-    try:
-        user = api.call("users.lookupByEmail", email=email).get("user")
-    except SlackError as e:
-        if e.code != "users_not_found":
-            raise
-        user = None
-    if user:
-        print(f"{email} {user['id']}: {chat_invite(api, cid, user['id'])}")
+    if uid:
+        print(f"{plan}{name} {uid}: {chat_invite(api, cid, uid)}")
     elif api.dry_run:
         print(f"plan: invite {email} if users.lookupByEmail finds them in the workspace, else through Slack Connect "
               "(conversations.inviteShared)")
@@ -2621,29 +2719,21 @@ def cmd_chat(ns: argparse.Namespace, reg: dict, path: Path) -> int:
                   "command to record their Slack id (until then their posts ring no one)")
         except SlackError as e:
             daniel = connect_step(e, email, key, reg)
-    person = {"name": p.get("name") or (user or {}).get("real_name") or ((user or {}).get("profile") or {}).get("real_name")
-              or ns.name.capitalize(),
-              "slack_user": (user or {}).get("id") or p.get("slack_user"), "email": email,
-              "note": ns.note or p.get("note") or f"asks the lanes in #{key}",
-              "channel": {"key": key, "id": cid}, "host": host}
 
-    if new or p.get("host") != host or p.get("channel") != person["channel"]:
-        out = api.call("chat.postMessage", channel=cid, username=host, text=chat_guide(person, host, reg),
+    if new or not live or live["channel"]["id"] != cid:
+        out = api.call("chat.postMessage", channel=cid, username=CHAT_WATCHER, text=chat_welcome(name),
                        unfurl_links="false", unfurl_media="false")
         api.call("pins.add", channel=cid, timestamp=out.get("ts") or "DRY-RUN")
-        print(f"{plan}pinned the guide, posted as @{host}")
-    if ns.start_page:
-        api.call("bookmarks.add", channel_id=cid, title="Start here", type="link", link=ns.start_page)
-        print(f"{plan}bookmarked {ns.start_page}")
-
-    if p:
-        collabs[collabs.index(p)] = person
+        print(f"{plan}pinned the welcome")
+    if ns.start_here:
+        api.call("bookmarks.add", channel_id=cid, title="Start here", type="link", link=ns.start_here)
+        print(f"{plan}bookmarked {ns.start_here}")
+    if rec != prev:
+        publish_person(api, rec, f"chat open {ns.name}")
     else:
-        collabs.append(person)
-    if api.dry_run:
-        print(f"plan: write {path} with {json.dumps(person, ensure_ascii=False)}")
-    else:
-        write_registry(reg, path, f"{person['name']} in #{key}, hosted by @{host}")
+        print(f"{PEOPLE_DIR}/{ns.name}.json: unchanged")
+    if human:
+        print(f"{name} is a named human in the registry: their posts in #{key} route as theirs anywhere")
     if daniel:
         print(f"Daniel: {daniel}. Then rerun this command to record their Slack id; everything else is done")
     return 0
@@ -3401,7 +3491,8 @@ def main(argv: list[str], prog: str = "research msg") -> int:
     p.add_argument("--event", required=True, help="the message event as JSON, plain text, @PATH or - (stdin)")
     p.add_argument("--why", action="store_true", help="print the reason (or `not addressed`) on stderr")
     p = cmd("deliver", "ring the doorbells for a post no client delivered (a person's typed post); --channel ask-the-team "
-                       "or chat-NAME: a post there, whose doorbells name the channel (in a chat, naming no one rings its host)")
+                       "or chat-NAME: a post there, whose doorbells name the channel (a chat's carry no text; one naming no "
+                       "one rings @top)")
     p.add_argument("--ts", default=None, help="the post's ts (default: the event's)")
     p.add_argument("--event", default=None, metavar="JSON|@PATH|-",
                    help="the Slack message event, as a watcher gets it: the post's channel, ts and thread, and its text where "
@@ -3450,14 +3541,14 @@ def main(argv: list[str], prog: str = "research msg") -> int:
     p.add_argument("--choice", default=None, metavar="VALUE", help="resolve: the option Daniel chose in the thread")
     p.add_argument("--note", default=None, help="resolve: his words, or a link to them")
     p.add_argument("--json", action="store_true", help="status: the route's whole answer; pages: each page's fields")
-    p = cmd("chat", "a collaborator's private channel #chat-NAME: `open NAME` creates or reuses it, invites Cursor's bot and "
-                    "the person, pins the guide and records them in the registry; `close NAME` archives it; `list`")
+    p = cmd("chat", "a person's private channel #chat-NAME: `open NAME` creates or reuses it, invites the person and Cursor's "
+                    "bot, pins the welcome and publishes the person to the notes' people.d; `close NAME` archives it; `list`")
     p.add_argument("verb", choices=("open", "close", "list"))
     p.add_argument("name", nargs="?", metavar="NAME", help="open, close: the channel is #chat-NAME")
+    p.add_argument("--user", default=None, metavar="U...", help="open: the person's Slack id, in the workspace")
     p.add_argument("--email", default=None, metavar="E", help="open: the person's address (users.lookupByEmail, else Slack Connect)")
-    p.add_argument("--host", default=None, metavar="LANE", help="open: the handle that answers there")
-    p.add_argument("--start-page", default=None, metavar="URL", help="open: a link to bookmark in the channel")
-    p.add_argument("--note", default=None, metavar="TEXT", help="open: who they are, for the registry (default: kept, or a stub)")
+    p.add_argument("--start-here", default=None, metavar="URL", help="open: a link to bookmark in the channel as Start here")
+    p.add_argument("--note", default=None, metavar="TEXT", help="open: who they are (default: kept, or a stub)")
     p.add_argument("--cursor-bot", default=None, metavar="U...", help="open: Cursor's bot user (default: users.list's bot named cursor)")
     p = sub.add_parser("groups", help="the handles' Slack user groups")
     gsub = p.add_subparsers(dest="gcmd", required=True)
@@ -3474,13 +3565,13 @@ def main(argv: list[str], prog: str = "research msg") -> int:
     ns = ap.parse_args(argv)
     try:
         path = registry_path(ns.registry)
-        reg = load_registry(path)
+        reg = load_registry(path, people=ns.cmd not in ("groups", "chat"))     # these two never write people.d's into it
         if ns.cmd == "groups":
             return cmd_groups_sync(ns, reg, path)
         if ns.cmd == "slack-app":
             return cmd_slack_app(ns, reg)
         if ns.cmd == "chat":
-            return cmd_chat(ns, reg, path)
+            return cmd_chat(ns, reg)
         if ns.cmd in ROUTED or ns.cmd == "owners":                # who owns a path now is main's answer too
             reg = routing_registry(reg, path)
         return {"handles": cmd_handles, "owners": cmd_owners, "subscriptions": cmd_subscriptions, "ask": cmd_ask, "announce": cmd_announce, "reply": cmd_reply,
