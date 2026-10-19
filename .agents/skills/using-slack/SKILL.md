@@ -38,10 +38,13 @@ The coordination API has one place, three interactions and one lifecycle.
 - **Only handle holders and the named humans are on Slack.** Workers never post, read or subscribe; a worker asks its own
   coordinator, and the coordinator asks on Slack and relays the answer. So a coordinator decides which of its workers hears
   what.
-- **Three channels.** `#agent-coordination` holds everything between handles. `#agent-alerts` holds machine alerts, and each
+- **Four channels.** `#agent-coordination` holds everything between handles. `#agent-alerts` holds machine alerts, and each
   top-level post there is addressed to `@infra`. `#ask-daniel` (`C0C5UCA0S0Z`, formerly `#approvals`) holds the cards for
   everything that needs Daniel, one question per card, each linking its page in the Asks for Daniel database, where only he
-  decides (`.agents/skills/asking-daniel/SKILL.md`); `@infra` subscribes to its top level.
+  decides (`.agents/skills/asking-daniel/SKILL.md`); `@infra` subscribes to its top level. `#ask-the-team` (`C0CA1JZSYNR`)
+  holds Daniel's questions to the team: `@top` subscribes, routes each one and answers in its thread, and a lane top asks
+  replies there with `research msg reply --channel-id C0CA1JZSYNR --thread <the question's ts>` (the bot can post there but
+  not read it, so give the question's own ts).
 - **Each request is one thread**: the root is the ask or the announcement, and everything about it is a reply.
 
 | Interaction | Command | Tags | Who closes it |

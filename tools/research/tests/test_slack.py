@@ -31,8 +31,6 @@ COORD, ALERTS = "CCOORD", "CALERTS"
 HANDLES = ["infra", "proofs", "circuits", "compute-accounting", "memory-accounting", "network-accounting", "console",
            "ci", "lean", "comms", "top", "vllm", "benchmarks", "kernels", "training"]
 
-HANDLES = [*HANDLES, "training"]
-
 
 class FakeSlack:
     def __init__(self):
@@ -192,7 +190,7 @@ def match(capsys, handle, ev) -> tuple[int, str]:
 def test_the_repository_registry_loads_and_seeds_every_handle_and_channel():
     reg = slack.load_registry(REAL_REGISTRY)
     assert [h["handle"] for h in reg["handles"]] == HANDLES
-    assert set(reg["channels"]) == {"agent-coordination", "agent-alerts", "ask-daniel"}
+    assert set(reg["channels"]) == {"agent-coordination", "agent-alerts", "ask-daniel", "ask-the-team"}
     assert slack.subscribers(reg, "agent-coordination") == []
     assert slack.subscribers(reg, "agent-alerts") == slack.subscribers(reg, "ask-daniel") == ["infra"]
     assert reg["channels"]["ask-daniel"]["id"] == "C0C5UCA0S0Z" and slack.resolve_key(reg, "approvals") == "ask-daniel"
