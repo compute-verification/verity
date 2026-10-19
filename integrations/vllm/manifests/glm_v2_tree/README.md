@@ -48,3 +48,46 @@ power-of-two output classes up to 262,144 bits). Two conflicts, both sides kept:
 
 - T8b's prefix commits (`cursor/prefix-tp-6f04`): ASK-42 is provisionally A (the prefix length is private), so a prefix row
   in a batch is proved cold and T8b's C-public commits stay out.
+
+## GPU batch
+
+Every script is in `jobs/` and runs from this tree's pushed head, `--cwd source` (publish: `--cwd clone`); every row dir is
+`/workspace/cp/circuits/glm-v2/rows/<row>` on each node it visits, because the Commit's replay reads its Build and required
+manifest at the paths the Commit recorded. `/workspace/fs` is not shared between vy-glm53-eu and the CPU nodes, so row dirs move
+with `copy_rowdir.sh SRC DST LIST.sha256`: tar streams through the VM, every file then checked against the list the source job
+wrote (T1's B1 legs: 104 GB, 1.1M files, about 11 min). The GPU jobs are submitted by `gpu_batch.sh a` and `gpu_batch.sh b ROWS.env`;
+each waits for its GPUs on eu's lease, so a window runs back to back. eu is held only for a window: the lease, and the node, are
+released where a CPU phase sits between (CIR-51).
+
+1. CPU, before window B (any order, overlapping window A): `build_record.sh` per row on vy-glm53-cpu-2 (the AOT Build of record:
+   predict emit refused unless equal to the row's `aot.trace` Build, with its manifest), `AOT_TRACE=<the v2 trace>` for a row whose
+   rehearsal moved a Program (that row is re-pinned with its comparison first).
+2. Window A, eu (`gpu_batch.sh a`): the bf16 v6 capture (`cap_bf16_v6.sh`, 1 GPU; then `verity-vllm records capture RUN` gives
+   `BF16_ART`), the four rows' Match GPU legs (`match_gpu.sh`), the G2 point (`benchmarks/served_commit/tp_decode.sh`, `ARM=rows-4k`:
+   rows-sha512's 4 KiB rows, stock against Commit in one TP8 engine, TTFT, prefill and decode TPOT per batch 1, 8, 32). Stop eu.
+3. CPU: each row's legs copied eu -> the Build's node (its `match.sha256`), then `match_cpu.sh` (MATCH_PHASE=cpu, `--build-run`
+   the Build of record, `--send match.sha256`); then the row dir (its `rowdir.sha256` and the Match's files) copied to eu.
+4. Window B, eu (`gpu_batch.sh b ROWS.env`): each row's Commit (`commit.sh`: rows-sha512 under `verity/tp-run-root/v2`,
+   REPLAY_DEFERRED=1 RETAIN=host PAIRS=1, PENDING by design), its bundles and row records preserved in the store. Stop eu.
+5. CPU, vy-nebius-cpu-3 (the verified checkpoint): the Build of record copied in, then `replay_publish.sh` per row (`--send
+   bundles.json`): `tp-commit-replay` of every rank, then `records publish --tier heavy` with the nine captures of record cited
+   by id (#2838's eight served-default captures, which this tree's `check_capture` accepts, and `BF16_ART`).
+
+GPU time (wall of the GPU job, which holds all 8 GPUs but for the capture):
+
+| job | GPUs | wall | measured by |
+|---|---|---|---|
+| bf16 v6 capture | 1 | ~10 min | not yet run at v6 |
+| Match GPU legs B1 | 8 | 23 min | r20261018-094537-15b3 (1402 s) |
+| Match GPU legs B8 greedy | 8 | 28 min | B8 greedy's row, match-gpu 1655 s (17 Oct) |
+| Match GPU legs B8 stochastic | 8 | 17 min | r20261018-071806-5fac (997 s) |
+| Match GPU legs B32 | 8 | ~40 min | never run; B8's scaled |
+| G2 rows-4k point | 8 | 5-9 min | r20261018-194044-414f, r20261018-195722-b284 |
+| Commit B1 | 8 | 58 min | r20261019-074856-7c3a (lease 08:11-09:09Z) |
+| Commit B8 greedy | 8 | 110 min | r20261019-091846-1452 (lease 109.9 min) |
+| Commit B8 stochastic | 8 | ~110 min | never run; B8 greedy's |
+| Commit B32 | 8 | ~4 h | never run; its bundles ~4x B8's |
+
+Window A is about 2.1 node-hours and window B about 8.6, so about 10.7 node-hours (85 GPU-hours) in all, of which 6.7 are
+estimates (the capture, B32's two jobs, B8 stochastic's Commit). Those Commits ran under vllm-v1; rows-sha512's cost at TP8 is what
+the G2 point measures.
