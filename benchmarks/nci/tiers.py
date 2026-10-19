@@ -105,7 +105,7 @@ SPEC = [
     {"key": "floor_steps", "label": "Sampled proofs: steps in a class drawn at a floor of one", "unit": "", "min": 1, "max": 1e17, "log": True},
     {"key": "K", "label": "NCI: novel bits per inference block", "unit": "bit", "min": 1e5, "max": 1e10, "log": True},
     {"key": "Gamma", "label": "NCI: gates per inference block", "unit": "", "min": 1e14, "max": 1e19, "log": True},
-    {"key": "d", "label": "Model: entry fee (smallest inner dimension)", "unit": "", "min": 1, "max": 65536, "log": True},
+    {"key": "d", "label": "Model: entry fee d (thread reads below which a value's fan-out is at most e)", "unit": "", "min": 1, "max": 65536, "log": True},
     {"key": "e", "label": "Model: multiplications per activation value", "unit": "", "min": 1e3, "max": 1e6, "log": True},
     {"key": "kappa", "label": "Model: share of training FLOP that are counted multiplications", "unit": "", "min": 0.05, "max": 1, "log": False},
     {"key": "kappa_chain", "label": "Model: share on the proved chain (one forward path)", "unit": "", "min": 0.01, "max": 1, "log": True},

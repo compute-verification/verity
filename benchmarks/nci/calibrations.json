@@ -41,7 +41,7 @@
   "K": 20000000.0,
   "Gamma": 2e+17,
   "b_tok": 20,
-  "description": "The thread draft's dense example: the thread draft's dense example: 100B active parameters, smallest inner dimension 3072, e = 7168; K = 2e7, Gamma = 2 N D at 1M tokens. Assumes a public cap on the committed parameters' size, a few times the largest permitted model, proved inside the zero-knowledge proof, so no noise tables or corpora of that size can be committed.",
+  "description": "The thread draft's dense example: 100B active parameters, smallest inner dimension 3072, e = 49152 (the draft's 7168 is false: one MLP input value multiplies the up projection's 4 x 12288 weights); K = 2e7, Gamma = 2 N D at 1M tokens. Assumes a public cap on the committed parameters' size, a few times the largest permitted model, proved inside the zero-knowledge proof, so no noise tables or corpora of that size can be committed.",
   "theta_cap": true
  }
 ]
