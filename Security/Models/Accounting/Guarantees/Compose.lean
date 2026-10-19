@@ -9,8 +9,8 @@ THEOREM's composed statement, round 7 (note:compute-accounting/20261018T1758Z-dr
 restated after RT-COMPOSE r6 (note:compute-accounting/20261018T2010Z-draft-rt-compose-r6), RT-COMPOSE r5
 (note:compute-accounting/20261018T1725Z-draft-rt-compose-r5) and RT-DELTA r2
 (note:compute-accounting/20261018T1625Z-draft-rt-delta) under decisions 107, 109–114, 117, 119 and 122. Each
-`def G : Prop` is to be proved as `Accounting.SecurityProofs.Compose.G` in `Proofs.Accounting.Compose`, whose module
-doc says which are proved and which are still `sorry`. The circuit is any `Declared` one, a `Gates.Dag` with its call
+`def G : Prop` is proved as `Accounting.SecurityProofs.Compose.G` in `Proofs.Accounting.Compose`, whose module doc
+gives each proof's steps. The circuit is any `Declared` one, a `Gates.Dag` with its call
 sites, its rounds, their coin modes, the service's commit coins and its proof units, its words, kinds, cuts and late
 cones read off the IR.
 Nothing about its form is a hypothesis beyond `Declared.Wf` (call sites, rounds and units in range; one unit's gates in

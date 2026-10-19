@@ -10,17 +10,17 @@ import Proofs.Accounting.Compose.CircuitWorkSeeded
 import Proofs.Pouw.RelativeSecurity
 
 /-!
-# PoUW's credit on an arbitrary declared circuit: proofs (open)
+# PoUW's credit on an arbitrary declared circuit: proofs
 
-Proved: the three rates, `ServiceBudget`, `ServiceCovers`, `CircuitWork` and `BindingOfECR` (steps 1–6 and 11, each
-in its own file under `Proofs/Accounting/Compose/`), `CreditOfWork` (step 7), `CircuitCredit` (step 8) and
-`CircuitCreditSeeded` as a composition (step 10, so open only through step 9). Open: `CircuitWorkSeeded` (step 9) and
-`WholeLuckOfEntropy` (step 12). note:compute-accounting/20261018T1758Z-draft-compose-r6 gives the order, and this file
-doesn't land until none is a `sorry`. What the window's proofs' layer meets is proved: its static half is
-defined from the IR (`Declared.layer`), so `StageCuts` (under `LayerCommitted`, which `Declared.atIR` meets),
-`StageCoins` (under `Declared.Wf`), `StageSlots`, `WriterReads` and `StageComplete` (under `Declared.Wf` and
-`units ≤ N_p`) are lemmas below, not premises, as are the draw cut of `Declared.atDraw`'s layer and `serviceGame`,
-`tileMode` as `jointGame`, `jointMode` at a split-stage window's joint run.
+Every guarantee here is proved: the three rates, `ServiceBudget`, `ServiceCovers`, `CircuitWork`, `CircuitWorkSeeded`,
+`BindingOfECR` and `WholeLuckOfEntropy` (steps 1–6, 9, 11 and 12, each in its own file under
+`Proofs/Accounting/Compose/`), and `CreditOfWork` (step 7), `CircuitCredit` (step 8) and `CircuitCreditSeeded`
+(step 10) below; note:compute-accounting/20261018T1758Z-draft-compose-r6 gives the order. What the window's proofs'
+layer meets is proved: its static half is defined from the IR (`Declared.layer`), so `StageCuts` (under
+`LayerCommitted`, which `Declared.atIR` meets), `StageCoins` (under `Declared.Wf`), `StageSlots`, `WriterReads` and
+`StageComplete` (under `Declared.Wf` and `units ≤ N_p`) are lemmas below, not premises, as are the draw cut of
+`Declared.atDraw`'s layer and `serviceGame`, `tileMode` as `jointGame`, `jointMode` at a split-stage window's joint
+run.
 
 1. `SplitRateClosed` (proved, `Compose/SplitRateClosed.lean`), from step 2. A larger rate keeps `SplitRateAt` at the
    same `ν, ν₀`, and each closed branch is at least the sharp one: at `c = Kρw_max` and `q = p + (1 − p)e^{−c}`,
@@ -51,14 +51,15 @@ defined from the IR (`Declared.layer`), so `StageCuts` (under `LayerCommitted`, 
    `Accounting.SecurityProofs.TS.Headline.operandLuck_of_pointMass` (Lemma B at fibre 1) on `OperandHMu` and
    `LuckOfReceipt` with `ReceiptLuckAt` give `Pr[folded ∧ same] ≤ (μ + (1 − μ)·r_B)·Pr[folded]` (`r_B ≤ 1` by
    `Scheme.LuckProved`), and `GuessLuckAt` on `tileGame … .whole` gives `Pr[whole ∧ same] ≤ guess·Pr[whole]`; a tile of
-   no credited kind is held to `1`; so `SplitStages.LuckAt (tileLuck …) (tileLuck0 …)`. Each credited tile's round is
-   live (`Scope`'s `Declared.Live`), so its stage's coin is the verifier's, independent of the past, as `LuckAt` and the
-   per-stage games read it; under `LayerCommitted` every value's layer cut is its IR cut (`layer_stageCuts`), so a run
-   input is bound before its first reader's coin. Then `Accounting.SecurityProofs.TS.DrawnRightOff` at `S = 1` (its draw
-   the layer's, `drawOf`) gives one event of probability at most `δ_bind + δ_ks` off which every accepted drawn tile is
-   right at its committed slots, so `Of` gives the share game's pass (RT-I8's `compose_sampled` shape); `ServiceBudget`
-   on `serviceGame` at `a`, `b` and `shareCone` (the same coins and pass) and `budget_tail` at `t = ln(1/δ_s)` bound
-   `a·S_F + b·S_0 ≥ Λ·ln(1/δ_s)` by `δ_s`, `S_F`, `S_0` the folded and whole shares at `shareCone`. Off both,
+   no credited kind is held to `1`; so `SplitStages.LuckAt (tileLuck …) (tileLuck0 …)`. `LuckAt` and the per-stage
+   games read the stages' coins as `SplitStages`' uniform ones; `Scope`'s `Declared.Live` is read by no step: it is the
+   protocol fact under which those are the service's coins, as `SeedNamed` is in step 9. Under `LayerCommitted` every
+   value's layer cut is its IR cut (`layer_stageCuts`), so a run input is bound before its first reader's coin. Then
+   `Accounting.SecurityProofs.TS.DrawnRightOff` at `S = 1` (its draw the layer's, `drawOf`) gives one event of
+   probability at most `δ_bind + δ_ks` off which every accepted drawn tile is right at its committed slots, so `Of`
+   gives the share game's pass (RT-I8's `compose_sampled` shape); `ServiceBudget` on `serviceGame` at `a`, `b` and
+   `shareCone` (the same coins and pass) and `budget_tail` at `t = ln(1/δ_s)` bound `a·S_F + b·S_0 ≥ Λ·ln(1/δ_s)` by
+   `δ_s`, `S_F`, `S_0` the folded and whole shares at `shareCone`. Off both,
    `UnitFixed` (its `WriterReads` by `layer_writerReads`) at `tileMode` and step 5's `Covers` give the good tiles' words
    at least `(1 − (c_F + c₀))·N_w`, `c_F`, `c₀` the folded and whole shares at `tileCone`, and the words not skipped
    whole at least `(1 − S_0)·N_w`, since a tile's words are at most `N_w` times its `shareCone` (a tile's cone holds
@@ -76,40 +77,43 @@ defined from the IR (`Declared.layer`), so `StageCuts` (under `LayerCommitted`, 
 8. `CircuitCredit` (proved): step 6 at `a = aOf`, `b = bOf` (`≥ 0` by `costs_nonneg`,
    from `stars_nonneg` and `Model.Wf`), and step 7 on each run off its event at `r = rOf`; the certificate is issued at
    `.live`.
-9. `CircuitWorkSeeded`: `SeedExtractedAt` gives one event `Off` of probability at most `ε_id(T, |J|)` off which
-   every round's `sq a r` is a query. Per round `r` and mode, `SeedLuckAt` gives the queries' gains `g` and `Break`;
-   off `Off` and `Break` round `r`'s gain is at most `g (sq a r)`, so at most `max_q g q`. Where `θ_r > 0`
-   (`seedTheta r` folded, `wholeTheta r` whole), GRIND's `Accounting.SecurityProofs.TS.GrindPremiumAt` (at `Ω₀` the
-   window's other answers, `redraw`'s one answer the query's, `M = 1`, its own break event empty) bounds
-   `∃ q, ln(T_q/δ_g)/θ_r ≤ g q` by `δ_g`, so round `r`'s gain `L − κ·U` is below `π*_r` except with probability
-   `δ_g + δ_b`, off `Off`; where `θ_r = 0`, `roundPremium` is the round's weight (`roundCone`), which bounds `L` and so
-   the gain (`κ ≥ 0`). A union over the `rounds` rounds and the two modes gives `L_F ≤ 4·U_F + Π_F` and
-   `L_0 ≤ κ₀·U_0 + Π_0` (`premiumOf` at `seedTheta` and at `wholeTheta`) off `ε_id + 2·rounds·(δ_g + δ_b)`, with no
-   stage order: each round's moment fixes every other answer of the window, so
-   a mode that reads a later round's answers is in it. Given the rounds' coins, the service's live draw of a uniform
-   `K_d`-subset misses the tiles whose checked values aren't honest with probability at most
-   `(1 − ρ·U)^{K_d} ≤ e^{−ρ·K_d·U}`, so an accepted run with `ρ·K_d·U ≥ ln(1/δ_s)` has probability at most `δ_s`.
-   Off these, `DrawnRightOff` on `Declared.atDraw`'s layer (its `MovedIn`, `JointSound`, `Pins`) and `Of` give the
-   share game's pass; `UnitFixed` and step 5's `Covers` on `Declared.atIR`'s layer (`LayerCommitted` by
-   `layerCommitted_atIR`) at `jointMode` give the good tiles' words as in step 6. The two layers differ only in their
-   cuts, and `UnitFixed`, `Covers` and the game read none of a layer's committed values, so they combine: `WorkAt` at
-   `a·S_F + b·S_0 ≤ max(5a, (1 + κ₀)·b)·U + a·Π_F + b·Π_0`, strictly below `rOfSeeded`'s first three terms
-   (`a > 0`), with `D₀` as in step 6. `SeedNamed` (in `ScopeSeeded`) is read by no step: it is the protocol fact under
-   which the `UnitFixed` premise on `Declared.atIR`'s layer can hold, as `LayerCommitted` is for the live pair.
-10. `CircuitCreditSeeded` (proved, open through step 9): step 9 at `a = aOf`, `b = bOf`, and step 7 on each
-   run off its event at `r = rOfSeeded`; the certificate is issued at `.seeded`.
+9. `CircuitWorkSeeded` (proved, `Compose/CircuitWorkSeeded.lean`): `SeedExtractedAt` gives one event `Off` of
+   probability at most `ε_id(T, |J|)` off which every round's `sq a r` is a query. Per round `r` and mode,
+   `SeedLuckAt` gives the queries' gains `g` and `Break`; off `Off` and `Break` round `r`'s gain is at most
+   `g (sq a r)`, so at most `max_q g q`. Where `θ_r > 0` (`seedTheta r` folded, `wholeTheta r` whole), GRIND's
+   premium (`grind_le`) bounds `∃ q, ln(T_q/δ_g)/θ_r ≤ g q` by `δ_g`: redrawing the query's one answer is an
+   involution of the window (`redraw_redraw`), so the window's mean of `e^{θ_r·g q}` is the mean of its moment over
+   that answer, at most `1` (`sum_redraw`), and Markov and a union over the `T_q` queries give `δ_g`. So round `r`'s
+   gain `L − κ·U` is below `π*_r` except with probability `δ_g + δ_b`, off `Off` (`gain_le_premium`); where
+   `θ_r = 0`, `roundPremium` is the round's weight (`roundCone`), which bounds `L` and so the gain (`κ ≥ 0`). A union
+   over the `rounds` rounds and the two modes gives `L_F ≤ 4·U_F + Π_F` and `L_0 ≤ κ₀·U_0 + Π_0` (`gainSum_le`,
+   `premiumOf` at `seedTheta` and at `wholeTheta`) off `ε_id + 2·rounds·(δ_g + δ_b)`, with no stage order: each
+   round's moment fixes every other answer of the window, so a mode that reads a later round's answers is in it.
+   Given the rounds' coins, the service's live draw of a uniform `K_d`-subset misses the tiles whose checked values
+   aren't honest with probability at most `(1 − ρ·U)^{K_d} ≤ e^{−ρ·K_d·U}`, so an accepted run with
+   `ρ·K_d·U ≥ ln(1/δ_s)` has probability at most `δ_s` (`live_le`). Off these, `DrawnRightOff` on
+   `Declared.atDraw`'s layer (its `MovedIn`, `JointSound`, `Pins`) and `Of` give the share game's pass; `UnitFixed`
+   and step 5's `Covers` on `Declared.atIR`'s layer (`LayerCommitted` by `layerCommitted_atIR`) at `jointMode` give
+   the good tiles' words as in step 6 (`WorkProof.work_of_bounds`). The two layers differ only in their cuts, and
+   `UnitFixed`, `Covers` and the game read none of a layer's committed values, so they combine: each mode's share is
+   its `L − κ·U` plus `(1 + κ)·U` (`share_split`), so `a·S_F + b·S_0 ≤ max(5a, (1 + κ₀)·b)·U + a·Π_F + b·Π_0`,
+   strictly below `rOfSeeded`'s first three terms (`a > 0`), with `D₀` as in step 6. `SeedNamed` (in `ScopeSeeded`)
+   is read by no step: it is the protocol fact under which the `UnitFixed` premise on `Declared.atIR`'s layer can
+   hold, as `LayerCommitted` is for the live pair.
+10. `CircuitCreditSeeded` (proved): step 9 at `a = aOf`, `b = bOf`, and step 7 on each run off its event at
+   `r = rOfSeeded`; the certificate is issued at `.seeded`.
 11. `BindingOfECR` (proved, `Compose/BindingOfECR.lean`): `Accounting.SecurityProofs.TS.DrawnBindingOfFork` gives
    `Pr[MovedIn] ≤ |L|·√Pr[fork]`; AM–GM, `|L|·√x ≤ δ' + |L|²·x/(4δ')`; then `Pr[fork] ≤ F.Pr H + κ` and, where
    `Claims.ExpectedCR H F` holds, `F.Pr H ≤ E[cost]/2^256`, through `ENNReal.ofReal`'s monotonicity and
    `ofReal_add_le`; where it fails, the right side is `⊤` unless `L` is empty, where `MovedIn` can't hold (no slot to
    move).
-12. `WholeLuckOfEntropy`: per round take `WholeEntropyAt`'s `Wh`, `Lk` and `Break`, and
-   `g q a = Σ_{v ∈ Wh q a} w_v·((1 + κ₀)·[v ∈ Lk q a] − κ₀)`. Off `Break` at `sq a r = some q` the round's whole
-   tiles are `Wh q a` and `same` lands in `Lk q a`, so `roundGain ≤ g q a` (`w ≥ 0`, `1 + κ₀ ≥ 0`). `Wh q` doesn't
-   read `q`'s answer, so on `redraw a r q b` the sum is over one set `W`, and with `x_v = θ_r·w_v`
-   `exp(θ_r·g) = Π_{v ∈ W} (e^{−κ₀x_v} + [v ∈ Lk]·c_v)`, `c_v = e^{x_v} − e^{−κ₀x_v} ≥ 0`
-   (`Finset.prod_add`), `Σ_{S ⊆ W} Π_{v ∈ S} c_v·[S ⊆ Lk]·Π_{v ∉ S} e^{−κ₀x_v}`. Summing over `b`, the entropy
-   conjunct bounds each `Σ_b [S ⊆ Lk]` by `|B|·e^{−Σ_S h}`, and the sum folds back to
+12. `WholeLuckOfEntropy` (proved, `Compose/WholeLuckOfEntropy.lean`): per round take `WholeEntropyAt`'s `Wh`, `Lk`
+   and `Break`, and `g q a = Σ_{v ∈ Wh q a} w_v·((1 + κ₀)·[v ∈ Lk q a] − κ₀)`. Off `Break` at `sq a r = some q` the
+   round's whole tiles are `Wh q a` and `same` lands in `Lk q a`, so `roundGain ≤ g q a` (`w ≥ 0`, `1 + κ₀ ≥ 0`).
+   `Wh q` doesn't read `q`'s answer, so on `redraw a r q b` the sum is over one set `W`, and with `x_v = θ_r·w_v`
+   (`moment_le`) `exp(θ_r·g) = Π_{v ∈ W} ([v ∈ Lk]·c_v + e^{−κ₀x_v})`, `c_v = e^{x_v} − e^{−κ₀x_v} ≥ 0`, which
+   `Finset.prod_add` expands to `Σ_{S ⊆ W} [S ⊆ Lk]·Π_{v ∈ S} c_v·Π_{v ∈ W \ S} e^{−κ₀x_v}`. Summing over `b`, the
+   entropy conjunct bounds each `Σ_b [S ⊆ Lk]` by `|B|·e^{−Σ_S h}`, and the sum folds back to
    `|B|·Π_v (e^{−h_v}·e^{x_v} + (1 − e^{−h_v})·e^{−κ₀x_v})`, each factor in `[0, 1]`.
 -/
 
