@@ -16,6 +16,15 @@ rule).  Two tables' leaves agree on a row exactly when their strings do, and a s
 An opening of a set of ranks is their strings and the multiproof over their leaves (:mod:`multiproof`).  :func:`verify` checks
 one from public data alone (the root, the domain id, the leaf count); a proof that holds the rows and salts recomputes the
 strings from them inside it, and :func:`verify_rows` is that check in the clear (tests, the prover).
+
+Serving commits its tables step by step, each step's before that step's live coin.  A step's tables (one per int8 quantize
+output, in the step's order) take serve-time domains, :func:`table_domain` over ``context`` (64 bytes serving knows before
+its first step: the live coin commitment's root), the step, the table's index and its row count; the step's root is the
+``frame-v3-sha512`` tree over their roots (:func:`step_tree`, leaf schema ``ROOTS_SCHEMA``, domain :func:`step_domain`), the
+one 64-byte root a step records before its coin.  A window's table is the tree over its steps' roots (:class:`RootTree` under
+the caller's domain), so no row is committed twice.  :class:`StepOpening` opens rows of one table and that table's root in
+its step's tree; :func:`verify_step` checks one against the step's root, and :func:`verify_roots` a step's root against the
+window's.
 """
 from __future__ import annotations
 
@@ -26,13 +35,20 @@ from typing import Any
 from verity.errors import InvalidArtifact, ProtocolError
 
 from . import hm96
+from .identity import identity_digest_sha512
+from .indexed import RangeIndexedDomain
 from .merkle import _LEAF, CommitmentDomain, MerkleTree, _hash, _uint
 from .multiproof import multiproof, verify_multiproof
 from .rowleaf import SCHEMA_HM96_SHA512_ROW_SEG, sha512_row_seg_digest
 
-__all__ = ["SCHEMA", "RowOpening", "RowTable", "commit", "leaf", "s8_row", "string", "verify", "verify_rows"]
+__all__ = ["ROOTS_SCHEMA", "SCHEMA", "RootOpening", "RootTree", "RowOpening", "RowTable", "Step", "StepOpening", "commit",
+           "commit_step", "leaf", "root_leaf", "s8_row", "step_domain", "step_tree", "string", "table_domain", "verify",
+           "verify_roots", "verify_rows", "verify_step"]
 
 SCHEMA = SCHEMA_HM96_SHA512_ROW_SEG
+#: the leaf schema of a tree over roots: a step's over its tables', a window's over its steps'
+ROOTS_SCHEMA = "frame-v3-sha512/root/v1"
+TABLE_DOMAIN, STEP_DOMAIN = "verity/row-table/table/v1", "verity/row-table/step/v1"
 INST = hm96.SHA512
 KEY = INST.default_key
 STRING_BYTES = INST.proven_bytes
@@ -159,3 +175,183 @@ def verify_rows(root: bytes, domain_id: bytes, count: int, opening: RowOpening, 
     except (ValueError, ProtocolError, InvalidArtifact):
         return False
     return verify(root, domain_id, count, opening)
+
+
+# --- steps and windows: trees over roots ---------------------------------------------------------------------------------
+
+def _digest(d: Any, what: str) -> bytes:
+    if type(d) is not bytes or len(d) != DIGEST_BYTES:
+        raise ProtocolError(f"{what} is {DIGEST_BYTES} bytes")
+    return d
+
+
+def _count(v: Any, what: str) -> int:
+    if type(v) is not int or v < 0:
+        raise ProtocolError(f"{what} is a nonnegative integer, not {v!r}")
+    return v
+
+
+def _domain(tag: str, manifest: dict[str, Any], leaves: int) -> CommitmentDomain:
+    return CommitmentDomain(identity_digest_sha512(tag, manifest), -1, RangeIndexedDomain(0, leaves), hash="sha512")
+
+
+def table_domain(context: bytes, step: int, index: int, leaves: int) -> CommitmentDomain:
+    """The domain of table ``index`` (in its step's order) of serving step ``step``, of ``leaves`` rows, under ``context``."""
+
+    return _domain(TABLE_DOMAIN, {"context": _digest(context, "a context").hex(), "step": _count(step, "a step"),
+                                  "table": _count(index, "a table index"), "leaves": _count(leaves, "a row count"),
+                                  "schema": SCHEMA}, leaves)
+
+
+def step_domain(context: bytes, step: int, tables: int) -> CommitmentDomain:
+    """The domain of serving step ``step``'s tree over its ``tables`` tables' roots, under ``context``."""
+
+    return _domain(STEP_DOMAIN, {"context": _digest(context, "a context").hex(), "step": _count(step, "a step"),
+                                 "tables": _count(tables, "a table count"), "schema": ROOTS_SCHEMA}, tables)
+
+
+def root_leaf(domain_id: bytes, index: int, root: bytes) -> bytes:
+    """The ``frame-v3-sha512`` leaf at ``index`` of a tree over roots, whose value is ``root``, from the domain id alone."""
+
+    return _hash(_LEAF, domain_id, _uint(index), _uint(index), ROOTS_SCHEMA.encode(), _digest(root, "a root"), hash="sha512")
+
+
+@dataclass(frozen=True, slots=True)
+class RootOpening:
+    """The roots at ``indices`` (ascending, distinct) of a tree over roots and the multiproof over their leaves."""
+
+    indices: tuple[int, ...]
+    roots: tuple[bytes, ...]
+    proof: tuple[bytes, ...]
+
+    def __post_init__(self) -> None:
+        if not self.indices or list(self.indices) != sorted(set(self.indices)) or len(self.roots) != len(self.indices):
+            raise ProtocolError("an opening names its indices ascending and distinct, one root each")
+        for d in (*self.roots, *self.proof):
+            _digest(d, "a root or a multiproof node")
+
+    @property
+    def nbytes(self) -> int:
+        return DIGEST_BYTES * (len(self.roots) + len(self.proof))
+
+    def to_json(self) -> dict[str, Any]:
+        return {"indices": list(self.indices), "roots": [r.hex() for r in self.roots], "proof": [p.hex() for p in self.proof]}
+
+    @classmethod
+    def of_json(cls, doc: Mapping[str, Any]) -> RootOpening:
+        return cls(tuple(int(i) for i in doc["indices"]), tuple(bytes.fromhex(r) for r in doc["roots"]),
+                   tuple(bytes.fromhex(p) for p in doc["proof"]))
+
+
+class RootTree:
+    """A ``frame-v3-sha512`` tree over roots in index order, one ``ROOTS_SCHEMA`` leaf each: a step's over its tables' roots
+    (:func:`step_tree`), or a window's over its steps' roots."""
+
+    __slots__ = ("_tree", "domain", "roots")
+
+    def __init__(self, domain: CommitmentDomain, roots: Sequence[bytes]) -> None:
+        if domain.hash != "sha512":
+            raise ProtocolError("a tree over roots is a frame-v3-sha512 tree")
+        self.domain, self.roots = domain, tuple(_digest(r, "a root") for r in roots)
+        self._tree = MerkleTree(domain, dict(enumerate(self.roots)), lambda _i: ROOTS_SCHEMA)
+
+    @property
+    def root(self) -> bytes:
+        return self._tree.commitment.root
+
+    @property
+    def count(self) -> int:
+        return self.domain.count
+
+    def open(self, indices: Iterable[int]) -> RootOpening:
+        """The opening of ``indices`` (in any order, repeats dropped)."""
+        ordered = tuple(sorted(set(indices)))
+        proof = tuple(multiproof(self._tree, ordered))
+        return RootOpening(ordered, tuple(self.roots[i] for i in ordered), proof)
+
+
+def verify_roots(root: bytes, domain_id: bytes, count: int, opening: RootOpening) -> bool:
+    """Whether ``opening``'s roots are the leaves at its indices of the tree over ``count`` roots under ``root`` and
+    ``domain_id``."""
+
+    leaves = {i: root_leaf(domain_id, i, r) for i, r in zip(opening.indices, opening.roots, strict=True)}
+    return verify_multiproof(root, count, domain_id, leaves, opening.proof, hash="sha512")
+
+
+def step_tree(context: bytes, step: int, table_roots: Sequence[bytes]) -> RootTree:
+    """Serving step ``step``'s tree over its tables' roots (in the step's order): its root is the step's root."""
+
+    return RootTree(step_domain(context, step, len(table_roots)), table_roots)
+
+
+@dataclass(frozen=True, slots=True)
+class StepOpening:
+    """Rows of one of a step's tables: that table's root opened in the step's tree (``table``, one index), and the rows
+    opened against it (``rows``)."""
+
+    table: RootOpening
+    rows: RowOpening
+
+    def __post_init__(self) -> None:
+        if len(self.table.indices) != 1:
+            raise ProtocolError("a step opening opens one table's root")
+
+    @property
+    def index(self) -> int:
+        return self.table.indices[0]
+
+    @property
+    def root(self) -> bytes:
+        return self.table.roots[0]
+
+    @property
+    def nbytes(self) -> int:
+        return self.table.nbytes + self.rows.nbytes
+
+    def to_json(self) -> dict[str, Any]:
+        return {"table": self.table.to_json(), "rows": self.rows.to_json()}
+
+    @classmethod
+    def of_json(cls, doc: Mapping[str, Any]) -> StepOpening:
+        return cls(RootOpening.of_json(doc["table"]), RowOpening.of_json(doc["rows"]))
+
+
+class Step:
+    """One serving step's committed tables, in the step's order, each under its :func:`table_domain`, and the tree over their
+    roots (the prover's); ``root`` is what the step records before its coin."""
+
+    __slots__ = ("context", "step", "tables", "tree")
+
+    def __init__(self, context: bytes, step: int, tables: Sequence[RowTable]) -> None:
+        for i, t in enumerate(tables):
+            if t.domain.domain_id != table_domain(context, step, i, t.count).domain_id:
+                raise ProtocolError(f"step {step}'s table {i} is not under its table domain")
+        self.context, self.step, self.tables = context, step, tuple(tables)
+        self.tree = step_tree(context, step, [t.root for t in self.tables])
+
+    @property
+    def root(self) -> bytes:
+        return self.tree.root
+
+    def open(self, index: int, ranks: Iterable[int]) -> StepOpening:
+        """The opening of table ``index``'s rows at ``ranks``."""
+        return StepOpening(self.tree.open([index]), self.tables[index].open(ranks))
+
+
+def commit_step(context: bytes, step: int, tables: Sequence[tuple[Sequence[tuple[bytes, int]], Sequence[bytes]]]) -> Step:
+    """Serving step ``step``'s tables, each ``(rows, salts)`` as :func:`commit` takes them, in the step's order."""
+
+    return Step(context, step, [commit(table_domain(context, step, i, len(rows)), rows, salts) for i, (rows, salts) in enumerate(tables)])
+
+
+def verify_step(step_root: bytes, context: bytes, step: int, tables: int, leaves: int, opening: StepOpening,
+                rows: Mapping[int, tuple[bytes, int, bytes]] | None = None) -> bool:
+    """Whether ``opening`` opens rows of table ``opening.index`` (of ``leaves`` rows) of serving step ``step``, whose root is
+    ``step_root`` over its ``tables`` tables under ``context``; with ``rows``, they are its rows and salts (:func:`verify_rows`)."""
+
+    if not verify_roots(step_root, step_domain(context, step, tables).domain_id, tables, opening.table):
+        return False
+    did = table_domain(context, step, opening.index, leaves).domain_id
+    if rows is None:
+        return verify(opening.root, did, leaves, opening.rows)
+    return verify_rows(opening.root, did, leaves, opening.rows, rows)

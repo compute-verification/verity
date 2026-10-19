@@ -1,6 +1,8 @@
 """Row tables (`row_table`): the root is frame-v3-sha512's over `row_leaf` of hm96-sha512's tree leaf of each s8 row's
 `sha512/row-seg/v1` commit string, an opening of any set of ranks verifies from public data, and a tampered row, salt, string,
-rank, root, domain or proof does not."""
+rank, root, domain or proof does not.  Steps: a step's root is the tree over its tables' roots and its subtree of the window's
+table, the window's root is the tree over its steps' roots, and a step opening verifies against its step's root while a
+tampered row, table root, index, context, step or count does not."""
 
 from __future__ import annotations
 
@@ -97,3 +99,90 @@ def test_a_malformed_opening_or_table_is_refused():
         RT.commit(domain(3), [RT.s8_row([0], 0)] * 3, [bytes(192)] * 2)
     with pytest.raises(ProtocolError, match="outside"):
         t.open([3])
+
+
+CTX = bytes(range(64))
+#: rows per table of each step: a prefill step of 3 tokens with 3 linears, two decode steps of 2 requests with 3, and one with 1
+STEPS = [(3, 3, 3), (2, 2, 2), (2, 2, 2), (1,)]
+
+
+def steps(ctx: bytes = CTX, seed: int = 5) -> tuple[list[RT.Step], list[list[tuple[list, list]]]]:
+    rng = random.Random(seed)
+    data = [[([RT.s8_row([rng.randrange(-128, 128) for _ in range(64)], rng.getrandbits(32)) for _ in range(n)],
+              [rng.randbytes(192) for _ in range(n)]) for n in ns] for ns in STEPS]
+    return [RT.commit_step(ctx, s, d) for s, d in enumerate(data)], data
+
+
+def window_domain(n: int) -> CommitmentDomain:
+    return CommitmentDomain(b"\x09" * 64, -1, RangeIndexedDomain(0, n), hash="sha512")
+
+
+def fold(dom: CommitmentDomain, roots: list[bytes]) -> bytes:
+    """frame-v3-sha512's root over ``roots`` as ROOTS_SCHEMA leaves, by merkle's own leaf and tree."""
+    return tree_levels(dom, [dom.leaf(i, i, RT.ROOTS_SCHEMA, r) for i, r in enumerate(roots)])[-1][0]
+
+
+def test_a_step_root_is_the_tree_over_its_tables_and_its_subtree_of_the_window_table():
+    ss, data = steps()
+    win = RT.RootTree(window_domain(len(ss)), [s.root for s in ss])
+    for s, (step, d) in zip(ss, enumerate(data)):
+        tables = [RT.commit(RT.table_domain(CTX, step, i, len(rows)), rows, salts) for i, (rows, salts) in enumerate(d)]
+        assert [t.root for t in s.tables] == [t.root for t in tables]
+        assert s.root == fold(RT.step_domain(CTX, step, len(d)), [t.root for t in tables]) == win.roots[step]
+        o = win.open([step])
+        assert RT.verify_roots(win.root, win.domain.domain_id, len(ss), o) and o.roots == (s.root,)
+    assert [RT.root_leaf(win.domain.domain_id, i, r) for i, r in enumerate(win.roots)] == \
+        [win.domain.leaf(i, i, RT.ROOTS_SCHEMA, r) for i, r in enumerate(win.roots)]
+
+
+def test_the_window_root_is_the_tree_over_the_step_roots():
+    ss, _ = steps()
+    roots = [s.root for s in ss]
+    win = RT.RootTree(window_domain(len(ss)), roots)
+    assert win.root == fold(window_domain(len(ss)), roots) and win.count == len(ss)
+    assert RT.RootTree(window_domain(len(ss)), roots[::-1]).root != win.root
+    assert RT.RootTree(window_domain(len(ss) - 1), roots[:-1]).root != win.root
+    o = win.open([3, 0, 2])
+    assert RT.verify_roots(win.root, win.domain.domain_id, 4, o) and RT.RootOpening.of_json(o.to_json()) == o
+    assert o.nbytes == 64 * (3 + len(o.proof))
+    assert not RT.verify_roots(win.root, win.domain.domain_id, 4, RT.RootOpening(o.indices, (roots[1], *o.roots[1:]), o.proof))
+    assert not RT.verify_roots(win.root, window_domain(5).domain_id, 5, o)
+
+
+def test_a_step_opening_verifies_against_its_step_root_and_a_tampered_one_does_not():
+    ss, data = steps()
+    s, (rows, salts) = ss[1], data[1][2]
+    o = s.open(2, [1, 0])
+    honest = {r: (*rows[r], salts[r]) for r in (0, 1)}
+    assert (o.index, o.root, o.rows.ranks) == (2, s.tables[2].root, (0, 1))
+    assert RT.verify_step(s.root, CTX, 1, 3, 2, o) and RT.verify_step(s.root, CTX, 1, 3, 2, o, honest)
+    assert RT.StepOpening.of_json(o.to_json()) == o and o.nbytes == o.table.nbytes + o.rows.nbytes
+    row, bits = rows[1]
+    assert not RT.verify_step(s.root, CTX, 1, 3, 2, o, {**honest, 1: (bytes([row[0] ^ 1]) + row[1:], bits, salts[1])})
+    assert not RT.verify_step(s.root, CTX, 1, 3, 2, o, {**honest, 1: (row, bits, salts[0])})
+    other = ss[2].open(2, [0, 1])                                      # the same shape, another step's table
+    assert not RT.verify_step(s.root, CTX, 1, 3, 2, RT.StepOpening(o.table, other.rows))
+    assert not RT.verify_step(s.root, CTX, 1, 3, 2, RT.StepOpening(other.table, o.rows))
+    for bad in [(ss[2].root, CTX, 1, 3, 2), (s.root, bytes(64), 1, 3, 2), (s.root, CTX, 2, 3, 2), (s.root, CTX, 1, 4, 2),
+                (s.root, CTX, 1, 3, 3)]:
+        assert not RT.verify_step(*bad, o)
+    swapped = s.open(1, [0, 1])
+    assert not RT.verify_step(s.root, CTX, 1, 3, 2, RT.StepOpening(swapped.table, o.rows))
+    assert not RT.verify_step(s.root, CTX, 1, 3, 2, RT.StepOpening(RT.RootOpening((1,), o.table.roots, o.table.proof), o.rows))
+
+
+def test_serve_time_domains_bind_context_step_index_and_count_and_a_step_refuses_a_table_outside_them():
+    ids = {RT.table_domain(c, s, i, n).domain_id for c in (CTX, bytes(64)) for s in (0, 1) for i in (0, 1) for n in (1, 2)}
+    assert len(ids) == 16 and RT.step_domain(CTX, 0, 2).domain_id not in ids
+    assert steps(bytes(64))[0][0].root != steps()[0][0].root
+    with pytest.raises(ProtocolError, match="64 bytes"):
+        RT.table_domain(CTX[:32], 0, 0, 1)
+    with pytest.raises(ProtocolError, match="nonnegative"):
+        RT.step_domain(CTX, -1, 1)
+    ss, _ = steps()
+    with pytest.raises(ProtocolError, match="table 1 is not under its table domain"):
+        RT.Step(CTX, 0, [ss[0].tables[0], ss[0].tables[2]])
+    with pytest.raises(ProtocolError, match="one table's root"):
+        RT.StepOpening(ss[0].tree.open([0, 1]), ss[0].tables[0].open([0]))
+    with pytest.raises(ProtocolError, match="64 bytes"):
+        RT.RootTree(window_domain(1), [bytes(32)])
