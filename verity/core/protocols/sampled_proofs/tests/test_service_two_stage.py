@@ -1,6 +1,12 @@
 """The two-stage law on the proof service's `Stream`: the four steps in order, the draw as the Lean verifier's from the
 challenger's own bytes, the interiors held to the rule, one outcome record binding both registrations, both receipts and
-the draw, and no retries. PoUW's example follows the architecture note: a uniform subset:K' over N equal tiles."""
+the draw, and no retries.
+
+PoUW's example follows the architecture note
+(`note:verity-root/20261006T0545Z-draft-daniel-one-recursive-architecture-v2`, §4.1): a uniform `subset:K′` over `N`
+equal tiles, whose boundaries are A's rows, the tile digests and the per-call records, and whose interiors are A′, the ok
+rows, `rowk`'s carries and the cap rows. A `work:K` first stage runs as well, with the challenger's closure, and an
+accepted audit's profile is `two_stage.TwoStageLaw.profile` of `Stage(law)` over the RUs."""
 
 from __future__ import annotations
 

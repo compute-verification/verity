@@ -106,6 +106,9 @@ ClusterQueue quotas and stop policies, the check and Lean slot files, `gpu-lease
 and node 2's booked windows and CPU sets. `[policy]` in the description declares each, with the handle who decides a
 change; `cluster policy diff` names every key whose live value differs or that the description lacks, and calls a key it
 couldn't read unknown, never as declared (node 2's are all unknown while a timed window is on: it reads nothing else then).
+While node 2's fill runner is down (`status.txt` over 15 min old and no `fill_runner.py` process), node 2 is read as quiet
+from `gpu-lease`'s own lines instead, and `diff` and `apply` print `read as quiet: WHY`: still never while a lease is
+`--timed`, one pid holds every GPU, someone waits for every GPU, or a booked window is on or starts within 30 min.
 A change that should end on its own is an override: `cluster policy override`, run on the key's node, records the value, who,
 why and until when in that node's hash-chained log (`/workspace/research/policy/overrides.jsonl`; a dry run without
 `--apply`), and `show` and `diff` use it until then. `n1_lease.py` takes its pool's `max`, `borrow` and `borrow-until` from
@@ -122,5 +125,5 @@ drop-in's `Delegate=` line (then `daemon-reload`, never `systemctl revert`, and 
 vy-nebius-2 the drop-in is planned only, since `vy-device-cores` owns its cpusets. Lease pools, Kueue's queues, a node's
 `pools` and booked windows have no applier and are skipped, saying so; an unknown key is never applied, nor an undeclared
 one. The write is one command: on node 2 it starts with node 2's gate, so nothing is written while a timed window is on or
-near, and under the log's lock it writes nothing unless every file and the log are byte for byte what it planned from. Exit
+near, nor while the fill runner is down (a write needs its fresh quiet status), and under the log's lock it writes nothing unless every file and the log are byte for byte what it planned from. Exit
 0 nothing left to change, 1 a change planned or a key skipped, 3 a key unknown, 4 an apply that failed or didn't read back.

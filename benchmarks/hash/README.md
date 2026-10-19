@@ -1,6 +1,6 @@
 # Commitment hash
 
-The hash lane's workspace (`@hash`): candidate commitment hashes for served inference, each measured on our GPUs and
+The kernels lane's workspace (`@kernels`): candidate commitment hashes for served inference, each measured on our GPUs and
 judged against the binding notion it is proved to meet in Lean.
 
 The goal is a hash, or a binding commitment under named assumptions, that brings vLLM's commit time down from today's
@@ -15,5 +15,7 @@ ruling, because the commitment's hash is a design rule ("One hash", AGENTS.md).
 | `sharaw/` | hm96-sha512 at 4 KiB leaves near the raw SHA-512 rate |
 | `structure/` | leaf size, tree arity, salts off the step, and SHA-512 fused into the GEMM |
 | `lattice/` | SIS (Ajtai) hashes on the INT8 tensor cores: parameters and throughput |
+| `bytes/` | fewer SHA-512 compressions with the hash kept: values out of the Commit and leaf-format changes, priced through `model/` |
+| `overlap/` | hm96-sha512 hashing of a Qwen3-8B prefill step beside its GEMMs (cuBLASLt, CUTLASS, a persistent hash server) |
 
 The campaign's findings and the recommendation to Daniel are in the notes, `lanes/hash/`.

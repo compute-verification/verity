@@ -2,12 +2,14 @@
 //! the difftest's reference. One request a line on stdin, `{"fn": "op" | "outer", "input": …}` (`Firewall/Json.lean`
 //! documents the inputs), one canonical JSON line back: `{"output": …}`, `{"reject": why}` when the record can't be read,
 //! or `{"error": why}` for a request it can't take. Each request runs on a fresh state directory under STATE_DIR holding
-//! the input's record, and its output carries the record as the request left it.
+//! the input's record, and its output carries the record as the request left it. `release-reference STATE_DIR CORE_FIREWALL`
+//! runs each outer session with the Lean decision as its judge (`release::lean_judge`, `CORE_FIREWALL decide`), as
+//! `flock-circuit prove --firewall-state` does.
 #[allow(dead_code)]
 #[path = "../../../../../../ml/flock/live/src/release.rs"]
 mod release;
 
-use release::{outer_session, Clock, Record};
+use release::{lean_judge, outer_session, Clock, Judge, Record};
 use serde_json::{json, Value};
 use std::cell::Cell;
 use std::io::{self, BufRead, Write};
@@ -76,18 +78,18 @@ fn step(v: &Value) -> Result<(), String> {
     panic!("{}", v["panic"].as_str().unwrap_or_default())
 }
 
-fn outer(rec: &Record, input: &Value) -> io::Result<Value> {
+fn outer(rec: &Record, input: &Value, judge: Option<&Judge>) -> io::Result<Value> {
     let clock = Fake { now: input["now_ms"].as_u64().unwrap_or_default(), slept: Cell::new(None) };
     let send = |_: ()| match &input["send"] {
         Value::Bool(b) => (*b, ()),
         v => panic!("{}", v["panic"].as_str().unwrap_or_default()),
     };
     let o = outer_session(rec, input["session"].as_str().unwrap_or_default(), input["part"].as_str().unwrap_or_default(),
-                          &clock, || {}, || step(&input["prove"]), |_| step(&input["ready"]), send)?;
+                          &clock, || {}, || step(&input["prove"]), |_| step(&input["ready"]), send, judge)?;
     Ok(json!({"outcome": o.outcome, "why": o.why, "sent_at": clock.slept.get()}))
 }
 
-fn handle(dir: &Path, line: &str) -> Value {
+fn handle(dir: &Path, line: &str, judge: Option<&Judge>) -> Value {
     let req: Value = match serde_json::from_str(line) {
         Ok(v) => v,
         Err(e) => return json!({"error": format!("request: not JSON: {e}")}),
@@ -100,7 +102,7 @@ fn handle(dir: &Path, line: &str) -> Value {
     let got = match req["fn"].as_str() {
         Some("op") => op(&rec, input["op"].as_array().map(Vec::as_slice).unwrap_or_default())
             .map(|r| json!({"result": r})),
-        Some("outer") => outer(&rec, input),
+        Some("outer") => outer(&rec, input, judge),
         other => return json!({"error": format!("unknown fn: {other:?}")}),
     };
     let text = std::fs::read_to_string(&path).unwrap_or_default();
@@ -118,10 +120,13 @@ fn handle(dir: &Path, line: &str) -> Value {
 
 fn main() {
     std::panic::set_hook(Box::new(|_| {}));
-    let base = PathBuf::from(std::env::args().nth(1).expect("usage: release-reference STATE_DIR"));
+    let base = PathBuf::from(std::env::args().nth(1).expect("usage: release-reference STATE_DIR [CORE_FIREWALL]"));
+    let exe = std::env::args().nth(2).map(PathBuf::from);
+    let lean = exe.as_deref().map(lean_judge);
+    let judge = lean.as_ref().map(|j| j as &Judge);
     let mut out = io::stdout().lock();
     for (k, line) in io::stdin().lock().lines().enumerate() {
-        let resp = handle(&base.join(k.to_string()), &line.expect("a line"));
+        let resp = handle(&base.join(k.to_string()), &line.expect("a line"), judge);
         writeln!(out, "{}", serde_json::to_string(&resp).expect("JSON")).expect("stdout");
         out.flush().expect("stdout");
     }

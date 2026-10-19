@@ -3,15 +3,20 @@
 from __future__ import annotations
 
 import hashlib
+import re
 from dataclasses import asdict, dataclass, field, replace
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 from typing import Any, Mapping
 
 from verity_config import Admission, ConfigError, gpus, load, sha256
 
 VLLM_PIN = "d9105ea8001e0a6d77a96327d17515bb5791fb36"
 SPEC_ROOT = Path(__file__).resolve().parents[3] / "specs"
+SOURCE_ROOT = SPEC_ROOT.parents[1]
 GPUS = gpus()
+ENV_NAME = re.compile(r"[A-Z_][A-Z0-9_]*")
+# What the dispatcher, the queue or the launcher sets: a spec naming one would be overridden or would override them.
+RESERVED_ENV = re.compile(r"VERITY_BENCH_\w*|RESEARCH_\w*|GPU_LEASE_\w*|CUDA_VISIBLE_DEVICES|CUDA_DEVICE_ORDER|PYTHONPATH|PATH")
 
 
 @dataclass(frozen=True)
@@ -47,6 +52,8 @@ class BenchmarkSpec:
     eager: bool
     preset: Preset
     arm_modules: tuple[str, ...] = ()
+    env: Mapping[str, str] = field(default_factory=dict)
+    setup: str | None = None
     admission: Admission = Admission()
 
 
@@ -71,6 +78,8 @@ class ResolvedSpec:
     eager: bool
     preset: Preset
     arm_modules: tuple[str, ...] = ()
+    env: Mapping[str, str] = field(default_factory=dict)
+    setup: str | None = None
     admission: Admission = Admission()
 
     @property
@@ -101,6 +110,13 @@ def load_spec(spec: str | Path) -> BenchmarkSpec:
         raise ConfigError(f"{path}: gpu_count is outside {doc.preset.gpu_id!r}'s per-node capacity")
     if doc.reps < 1 or not doc.arms:
         raise ConfigError(f"{path}: arms must be nonempty and reps must be positive")
+    bad = sorted(name for name in doc.env if not ENV_NAME.fullmatch(name) or RESERVED_ENV.fullmatch(name))
+    if bad:
+        raise ConfigError(f"{path}: env names must be upper-case and not the dispatcher's, queue's or launcher's: {bad}")
+    if doc.setup is not None:
+        setup = PurePosixPath(doc.setup)
+        if setup.is_absolute() or ".." in setup.parts or not (SOURCE_ROOT / setup).is_file():
+            raise ConfigError(f"{path}: setup {doc.setup!r} must name a script in the source tree, relative to its root")
     return doc
 
 
@@ -129,6 +145,8 @@ def resolve_spec(spec: str | Path) -> ResolvedSpec:
         eager=doc.eager,
         preset=doc.preset,
         arm_modules=doc.arm_modules,
+        env=doc.env,
+        setup=doc.setup,
         admission=doc.admission,
     )
 
