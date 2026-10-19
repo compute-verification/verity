@@ -11,3 +11,7 @@ These go into r5 alongside FoldOptFoldedAt. `FoldOptFoldedAt` at π* does NOT fi
 3. **RT3-DC-2 (nit):** row 11 (TMAB) is empty in Sm100Measured and in DC-90-ri; drop or fill it.
 4. **RT3-DC-3 (γ only):** f_H ≈ 1435 MHz on the B200 beside the MMA (power-capped, an upper estimate), 1722–1742 MHz on the H200 (RT2-HOPPER-8). Use them for γ.
 Pricing evidence: art:685d6a257b2b84c9b8fa07f205568b6a7d349c59d16e770dcd9bff2381b6892c. Report the restated literals; if B200 measured ends over 1%, keep it honest (it was already at 0.998%).
+
+## 19:10Z, coordinator: FOLD-XOR2 proved k = 2 (note:20261019T1335Z-draft-fold-xor2)
+
+All 1,456 two-instruction sequences on DS-100's IMAD/FP menu are unsat (merge run r20261019-183441-c6b3, head `cursor/ca-fold-xor2-ea24` @ df47adaebc; k = 1 at r20261019-125446-db4e). So li's two-word XOR has no IMAD- or FP-pipe program of fewer than 3 instructions, within that modelled menu (IMAD, IMAD.HI, IDP.4A, IDP.2A, FFMA2; IMAD.WIDE, HFMA2 and the ALU class are outside it), and FOLD-XOR2 says k = 3 can't move either sheet. In r5, cite it in the sheet statements' FOLD-OPT docstring and the lock's frozen reasons as a checked fact with its scope, so the narrowed premise no longer needs a card. It doesn't touch RT3-DC-1 or -4 (the unpriced checkpoint classes), which still need the census fix.
