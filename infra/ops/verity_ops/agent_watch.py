@@ -39,12 +39,15 @@ agent whose latest run the API won't read is recorded once as unreadable, and ag
 
 A coordinator holds a handle of `--registry` (the Slack registry): the holder of the handle's open inbox in `--routes` (the notes'
 `routes.d`, which a handover moves first; on 18 Oct the registry still named vllm's predecessor), else the first agent id in the
-handle's `holder`. It runs a 15-minute duty timer, and its inbox thread rings it for each doorbell. It is judged by the run the
+handle's `holder`. Its inbox thread rings it for each doorbell, and it may run a recurring duty timer, which it declares in
+`--timers` (`infra/control/agent_watch_timers.json`, deployed as `/data/agent-watch/timers.json`: `{handle: interval_s}`; comms
+has none by design, waking on its inbox, issue events and one-shot timers). It is judged by the run the
 sweep judges it by (the run followed, else its newest that started: a doorbell mid-turn leaves a run cancelled on arrival as its
 `latestRunId`, vllm at 20:23Z 18 Oct). One whose run's turn is
 over (FINISHED, EXPIRED, or WAITING_FOR_BACKGROUND_WORK, where coordinators mostly sit between wakes) is **ready to wake** when
-nothing has run for `WAKE_S` since its last activity (its timer didn't fire), or when a doorbell for its handle rang after that
-and `DOORBELL_S` has passed with nothing run (its subscription didn't). Its last activity is the later of the run's `updatedAt`
+a doorbell for its handle rang after its last activity and `DOORBELL_S` has passed with nothing run (its subscription didn't),
+or, for a handle that declares a timer, when nothing has run for twice its interval since then (its timer didn't fire); a
+handle that declares none is never woken, or recorded, on idle time alone. Its last activity is the later of the run's `updatedAt`
 (read each sweep) and its last stream event: whether a wake starts a new run or resumes a background-waiting one, it moves. The
 doorbells come from `doorbells.json` beside `--log` (`{"t", "inboxes": {handle: {"agent", "last"}}}`, each inbox's latest
 doorbell as a Slack ts), which infra's relay writes, since only it reads Slack; one older than `BELLS_STALE_S` is not read. The
@@ -118,15 +121,14 @@ CONTINUE = ("continue: your run was held from {since} (the agent watch saw nothi
 AFTER = {"tool_done": "a finished tool call", "turn_ended": "the end of your turn"}
 AFTER_ERROR = ("continue: your last run ended in ERROR (the agent watch restarted you). Read your inbox and carry on from where "
                "you stopped.")
-WAKE_S = 30 * 60            # twice a coordinator's 15-minute duty timer
 DOORBELL_S = 10 * 60
 BELLS_STALE_S = 30 * 60
 # a run whose turn is over; coordinators mostly sit in background work between wakes (12 of 14 at 19:38Z, 18 Oct). CANCELLED is a
 # person's stop or the watch's own; ERROR is `restart`'s
 IDLE_DONE = {"FINISHED", "EXPIRED", "WAITING_FOR_BACKGROUND_WORK"}
 AGENT_RE = re.compile(r"bc-[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}")
-WAKE = ("wake: your duty timer seems not to have fired ({why}; the agent watch started this run). Run your duties, read your "
-        "doorbell (`research msg read --as {handle}`), and set your timer and subscriptions again.")
+WAKE = ("wake: your timer or your inbox subscription seems not to have fired ({why}; the agent watch started this run). Read "
+        "your doorbell (`research msg read --as {handle}`), run your duties, and set again whichever lapsed.")
 SCHEMA = "verity/agent-watch-status/v1"
 AGENT_STATUSES = ("ACTIVE", "IDLE", "ARCHIVED", "unknown")
 RUN_STATUSES = ("CREATING", "RUNNING", "WAITING_FOR_BACKGROUND_WORK", "FINISHED", "ERROR", "CANCELLED", "EXPIRED", "unreadable",
@@ -170,6 +172,13 @@ def holders(registry: Path | None, routes: Path | None) -> dict[str, str]:
         if m := m or AGENT_RE.search(str(h.get("holder", ""))):
             out[m[0]] = h["handle"]
     return out
+
+
+def timers(path: Path | None) -> dict[str, float]:
+    """handle -> its recurring duty timer's interval in seconds, from `--timers` (`{"infra": 900}`), read each sweep; a
+    handle absent, or a value that isn't a positive number, declares none. A missing file declares none for anyone."""
+    return {str(h): float(v) for h, v in read_json(path).items()
+            if isinstance(v, (int, float)) and not isinstance(v, bool) and v > 0}
 
 
 def front_matter(p: Path) -> dict[str, str]:
@@ -343,12 +352,13 @@ def lock(path: Path) -> IO | None:
 
 class Watch:
     def __init__(self, api, log: Path, clock: Callable[[], float] = time.time, registry: Path | None = None,
-                 routes: Path | None = None, wake: bool = False, publish: Callable[[bytes, float], None] | None = None,
+                 routes: Path | None = None, wake: bool = False, timers: Path | None = None,
+                 publish: Callable[[bytes, float], None] | None = None,
                  notes: Path | None = None, worker_long_s: float = WORKER_LONG_S):
         self.api, self.log, self.clock, self.wake, self.publish = api, log, clock, wake, publish
         self.notes, self.worker_long_s = notes, worker_long_s
         self.worker_status: dict[str, str] = {}             # worker -> its status as this sweep read it, for status.json
-        self.registry, self.routes = registry, routes
+        self.registry, self.routes, self.timers = registry, routes, timers
         self.doorbells = ""                         # whether doorbells.json was fresh, stale or missing at the last sweep
         self.runs: dict[str, Run] = {}
         self.states: dict[str, tuple[str, str, str]] = {}   # agent -> (run, its last finding's kind, since), for status.json
@@ -425,15 +435,17 @@ class Watch:
             self.record("crashed", r, status="ERROR", action=f"restart failed: {type(e).__name__}: {e}")
 
     @staticmethod
-    def ready(status: str | None, last: float | None, bell: float | None, t: float) -> str | None:
+    def ready(status: str | None, last: float | None, bell: float | None, t: float, every: float | None = None) -> str | None:
         """Why a coordinator whose latest run is in `status`, last active at `last`, is ready to wake. Only a doorbell after
-        `last` counts: one rung during the turn may have been read in it, and the timer rule catches one that wasn't."""
+        `last` counts: one rung during the turn may have been read in it, and the timer rule catches one that wasn't. Idle
+        time alone counts only for a handle that declares a recurring timer of `every` seconds, after twice that."""
         if status not in IDLE_DONE or last is None:
             return None
         if bell is not None and bell > last and t - bell >= DOORBELL_S:
             return f"a doorbell rang at {iso(bell)} and nothing has run since"
-        if t - last >= WAKE_S:
-            return f"nothing has run for {int((t - last) // 60)} min since its latest run went {status} at {iso(last)}"
+        if every and t - last >= 2 * every:
+            return (f"nothing has run for {int((t - last) // 60)} min since its latest run went {status} at {iso(last)} "
+                    f"(its timer is every {int(every // 60)} min)")
         return None
 
     def wake_up(self, a: dict, handle: str, run: str, why: str, t: float) -> None:
@@ -715,6 +727,7 @@ class Watch:
                 self.restart(a, latest, t)
         self.retry(current, t)
         coords, (bells, fresh) = holders(self.registry, self.routes), doorbells(self.log.with_name("doorbells.json"), t)
+        every = timers(self.timers)
         if fresh != self.doorbells and (coords or self.doorbells):
             print(f"{iso(t)} doorbells.json: {fresh}; {len(coords)} coordinators", file=sys.stderr, flush=True)
         self.doorbells = fresh
@@ -731,7 +744,7 @@ class Watch:
                 r = self.runs.get(run)
                 heard = r.last_t if r and r.last_kind != "start" else None
             last = max((x for x in (epoch(info.get("updatedAt") or info.get("createdAt")), heard) if x is not None), default=None)
-            if why := self.ready(info.get("status"), last, bells.get(handle), t):
+            if why := self.ready(info.get("status"), last, bells.get(handle), t, every.get(handle)):
                 self.wake_up(a, handle, run, why, t)
         self.watch_workers(coords, {a["id"] for a in agents}, t)
         for run, (a, x) in current.items():
@@ -914,6 +927,8 @@ def main(argv: list[str] | None = None) -> int:
     lp.add_argument("--log", type=Path, default=Path("/data/agent-watch/events.jsonl"))
     lp.add_argument("--registry", type=Path, default=None, help="the Slack registry (registry.json): the handles")
     lp.add_argument("--routes", type=Path, default=None, help="the notes' routes.d: who holds each handle's inbox")
+    lp.add_argument("--timers", type=Path, default=Path("/data/agent-watch/timers.json"),
+                    help="handle -> its recurring timer's interval (s): only these are woken on idle time (2x it)")
     lp.add_argument("--wake", action="store_true", help="start a run on a coordinator ready to wake (default: record it only)")
     lp.add_argument("--once", action="store_true", help="one sweep, following no stream")
     lp.add_argument("--dry-run", action="store_true", help="send no POST; print each instead")
@@ -938,7 +953,7 @@ def main(argv: list[str] | None = None) -> int:
     if url := os.environ.get("AGENT_WATCH_PG_URL"):
         publish = Publisher(url) if not ns.dry_run else (
             lambda body, t: print(f"dry-run: would publish {len(body)} bytes to {STATUS_TABLE}", file=sys.stderr, flush=True))
-    watch = Watch(api, ns.log, registry=ns.registry, routes=ns.routes, wake=ns.wake, publish=publish, notes=ns.notes,
+    watch = Watch(api, ns.log, registry=ns.registry, routes=ns.routes, timers=ns.timers, wake=ns.wake, publish=publish, notes=ns.notes,
                   worker_long_s=ns.worker_long_h * 3600)
     if ns.once:
         watch.sweep(lambda r: None)
