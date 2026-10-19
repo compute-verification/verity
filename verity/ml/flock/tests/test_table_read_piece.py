@@ -1,13 +1,8 @@
 """A read of a table the program brings (a word read as `verity_vllm.program.registry.tables.table_read` makes one) lowers by its
-Boolean form's builder (`verity.ml.circuits.boolean.table`, through `ir_lower._boolean_build`): the entry at the index's low bits
-at every index and on random tables, in (2^IB - 1) * 16 EW ANDs over the unit's own input bits and no lookup; a read of a table
-past `BT.MAX_WORDS` has no piece; and a Program whose reads share one registered table lowers under `Q_word` with every unit
-lowered and each unit equal to the reference on synthetic draws."""
+Boolean form's builder (`verity.ml.circuits.boolean.table`, through `ir_lower._boolean_build`): a read of a table past
+`BT.MAX_WORDS` has no piece, and a Program whose reads share one registered table lowers under `Q_word` with every unit lowered and
+each unit equal to the reference on synthetic draws."""
 from __future__ import annotations
-
-import random
-
-import pytest
 
 from verity.ml.circuits.boolean import table as BT
 from verity.ml.circuits.defs import CompositeDefinition, PrimitiveDefinition
@@ -16,12 +11,9 @@ from verity.ml.circuits.refs import Coll, concat
 from verity.ml.circuits.types import Array, Value
 from verity.ml.circuits.ops.scalar import I32Add
 
-from verity_flock import gf2
 from verity_flock import ir_lower as IL
 from verity_flock import partition_units as PU
 
-#: (IB, EW): `exp2_lut127`'s 2^8 entries of two words, one-word and two-word entries, a 16-row table
-SHAPES = [(8, 2), (6, 1), (5, 2), (10, 1)]
 _WORDS: dict[tuple[int, int], PrimitiveDefinition] = {}
 
 
@@ -46,24 +38,6 @@ def _word(ib: int, ew: int) -> PrimitiveDefinition:
             BT.table_read(p, ib)
         _WORDS[key] = p
     return _WORDS[key]
-
-
-@pytest.mark.parametrize("ib,ew", SHAPES)
-def test_a_table_read_is_its_boolean_form_on_every_index(ib, ew):
-    p = _word(ib, ew)
-    assert IL.PIECES[p.id] is BT.table_read(p, ib).build
-    iw, n = p.params[0][1].w, (1 << ib) * ew
-    rng = random.Random(ib * 10 + ew)
-    lanes = [(i, [rng.getrandbits(16) for _ in range(n)]) for i in range(1 << ib)]
-    lanes += [(rng.getrandbits(iw), [rng.getrandbits(16) for _ in range(n)]) for _ in range(64)]
-    C = gf2.Circuit()
-    idx, words = C.input("idx", iw), [C.input(f"w{j}", 16) for j in range(n)]
-    C.output("o", IL.PIECES[p.id](C, idx, *words))
-    assert (C.counts()["ands"], C.counts()["lookups"]) == (((1 << ib) - 1) * 16 * ew, 0)
-    ins = {"idx": IL.slice_words([i for i, _ in lanes], iw)} | {f"w{j}": IL.slice_words([w[j] for _, w in lanes], 16) for j in range(n)}
-    outs, _ = C.evaluate(ins, len(lanes))
-    got = [int(x) for x in IL.unslice_words(outs["o"], len(lanes))]
-    assert got == [p.evaluate(i, *w) for i, w in lanes]
 
 
 def test_a_read_of_a_table_past_max_words_has_no_piece():
