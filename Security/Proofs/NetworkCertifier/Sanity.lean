@@ -8,8 +8,8 @@ import Proofs.NetworkCertifier.Advice
   and fail the status.
 * `witnessProgram` satisfies both dataflow conditions of Theorem 3, in the left-packed count form, and its timing
   advice really changes its rows: the conditions don't force the Program to ignore timing.
-* `ingress_witness` meets every hypothesis of the ingress bound at once (W4's allocation `Allocated` among them), with
-  27 decoded messages, and `ingress_witness_tight` shows the bound is 27: it is met exactly.
+* `ingress_witness` meets every hypothesis of the timing intake bound at once (W4's allocation `Allocated` among
+  them), with 27 decoded messages, and `ingress_witness_tight` shows the bound is 27: it is met exactly.
 * `allocated_witness` meets them all again with an allocation of one frame on two slots (`r = 1 < S = 2`), and
   `allocated_witness_tight` shows its 8 messages meet the bound exactly, below the 27 of `r = S`.
 * The toy of the September draft: `(2 + 1)^6 = 729` left-packed occupancies.
@@ -257,7 +257,7 @@ theorem joint_witness_bound :
   · exact encard_decodable_le_blocks (U := fun _ : Fin 1 × Fin 3 => Fin (2 + 1)) (rI 3) (rP 3) 3 2 (fun _ o => o)
       hW2 hJ (fun c => (c.2 : ℕ)) (fun c => c.2) _ h1 h2 Set.univ (fun z _ => hacc z) rDec (fun z _ => hdec z)
 
-/-! ## A joint witness for the ingress bound
+/-! ## A joint witness for the timing intake bound
 
 Read inward (`NetTiming.Protocol.Ingress`): the outside's message is `z`, and its sender delivers `z k` frames `[true]`
 at step `k`; X's device is `rOp`, reacting to the last count it saw. The certifier is the witness certifier without jitter,
@@ -291,7 +291,7 @@ theorem ingress_witness :
   · decide +kernel
   · decide +kernel
 
-/-- The ingress bound is met exactly by the witness: 27 decoded messages, under a bound of
+/-- The timing intake bound is met exactly by the witness: 27 decoded messages, under a bound of
 `(∏_ℓ (2 + 1))^3 · 1^3 = 27`. -/
 theorem ingress_witness_tight :
     (Set.univ : Set (Fin 3 → Fin 3)).encard = (((∏ _ℓ : Fin 1, (2 + 1)) ^ 3 * 1 ^ 3 : ℕ) : ℕ∞) := by

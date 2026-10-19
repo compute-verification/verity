@@ -1,7 +1,7 @@
 import Proofs.NetworkCertifier.Advice
 
 /-!
-# The ingress timing bound
+# The timing intake bound
 
 `docs/network-transparency/timing-channel.md` §2.5 ("Ingress content") and §3.2. The interaction is read inward
 (`NetTiming.Protocol.Ingress`): the outside holds the message and reacts to every record, and a decoder inside X reads
@@ -177,7 +177,7 @@ theorem encard_ingress_obsDecodable_le_contents (I : Interaction L K S Msg In Ac
     _ = Cs.encard * (((∏ ℓ, (r ℓ + 1)) ^ n * D ^ n : ℕ) : ℕ∞) := by
         rw [Set.encard_prod, Set.encard_coe_eq_coe_finsetCard, hcard]
 
-/-- **The ingress timing bound, from the records.** On runs whose statuses are complete up to `n` and whose frames on
+/-- **The timing intake bound, from the records.** On runs whose statuses are complete up to `n` and whose frames on
 each link are a prefix of the prescribed content, a decoder inside X that reads the records tells apart at most
 `(∏_ℓ (r ℓ + 1))^n · D^n` messages. -/
 theorem encard_ingress_obsDecodable_le (I : Interaction L K S Msg In Act Wire) (n D : ℕ) (r : Fin L → ℕ)
@@ -191,7 +191,7 @@ theorem encard_ingress_obsDecodable_le (I : Interaction L K S Msg In Act Wire) (
     (fun m hm => ⟨c, rfl, hc m hm⟩) dec hdec
   rwa [Set.encard_singleton, one_mul] at this
 
-/-- **The ingress timing bound.** On runs whose statuses are complete up to `n` and whose frames on each link are a
+/-- **The timing intake bound.** On runs whose statuses are complete up to `n` and whose frames on each link are a
 prefix of the prescribed content, a decoder inside X that reads the wire tells apart at most
 `(∏_ℓ (r ℓ + 1))^n · D^n` messages. -/
 theorem encard_ingress_decodable_le (I : Interaction L K S Msg In Act Wire) (n D : ℕ) (r : Fin L → ℕ)

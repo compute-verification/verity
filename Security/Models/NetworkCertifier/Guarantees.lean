@@ -16,7 +16,7 @@ one is open: nothing may cite it until it is proved. The statements that are onl
 counting bound among them, are in `Proofs.NetworkCertifier.Lemmas`, under the same names.
 
 `docs/network-transparency/timing-channel.md`: Proposition 2 (§2.3), Theorem 1(b) (§2.2), Theorem 3 (§2.4), and the
-ingress bound (§2.5, "Ingress content"; §3.2).
+timing intake bound (the doc's "Ingress content", §2.5; §3.2).
 -/
 
 namespace NetTiming.Guarantees
@@ -194,9 +194,9 @@ def EncardDecodableLeConstantRatePerWindow : Prop :=
     (dec : List Wire → Z) (hdec : ∀ z ∈ Zs, dec (I.wireRun z (m * T)) = z),
     Zs.encard ≤ ((Fintype.card Ac * (ss.size * D ^ T) ^ m : ℕ) : ℕ∞)
 
-/-! ## The ingress bound: what the outside can deliver into X through timing -/
+/-! ## The timing intake bound: what the outside can deliver into X through timing -/
 
-/-- **The ingress timing bound, from the records.** As `EncardIngressDecodableLe` below, but the decoder inside X reads
+/-- **The timing intake bound, from the records.** As `EncardIngressDecodableLe` below, but the decoder inside X reads
 the records of the first `n` steps, everything X's devices (`op`) read, rather than the wire. This needs no W2, and the
 wire version follows from it. -/
 def EncardIngressObsDecodableLe : Prop :=
@@ -209,7 +209,7 @@ def EncardIngressObsDecodableLe : Prop :=
     (dec : List (Obs L K S) → Msg) (hdec : ∀ m ∈ Ms, dec (I.obsRun m n) = m),
     Ms.encard ≤ (((∏ ℓ, (r ℓ + 1)) ^ n * D ^ n : ℕ) : ℕ∞)
 
-/-- **The ingress timing bound.** Read the interaction inward (`NetTiming.Protocol.Ingress`): the secret `m` is the
+/-- **The timing intake bound.** Read the interaction inward (`NetTiming.Protocol.Ingress`): the secret `m` is the
 outside's message, `snd m` chooses when ingress frames arrive and reacts to every record (and so to X's egress), `op`
 is X's devices, the record's `rows` are what the `L` ingress links release into X, and `wire` is everything that enters
 X. Take messages `Ms` whose runs keep every status complete up to `n`, and whose frames on each link `ℓ`, in the order

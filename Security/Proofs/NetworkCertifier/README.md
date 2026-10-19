@@ -17,7 +17,7 @@ content and order. Conventions follow POUS's package (`verity/core/protocols/pou
 ../../Models/NetworkCertifier/Assumptions.lean     trusted: the named hypotheses W2–W6 (W4's allocation among them), J, and Theorem 3's two
                                dataflow conditions
 ../../Models/NetworkCertifier/Guarantees.lean      trusted: each guarantee as a `def G : Prop` (Proposition 2, Theorem 3, Theorem 3 for
-                               the constant-rate Program, the ingress bound)
+                               the constant-rate Program, the timing intake bound)
 Lemmas.lean     the statements that are only steps of the guarantees' proofs, Theorem 1(b) among them,
                                each a `def G : Prop` under the same namespace (`Guarantees.G`)
 ../NetworkCertifier.lean  proved: `SecurityProofs.G : Guarantees.G` for each guarantee and lemma, from the modules below
@@ -27,7 +27,7 @@ Advice.lean     Theorem 3 (the 2^A cap, one clock-sync value per window, the fix
                                          block caps)
 Schedule.lean   Theorem 3 for the constant-rate Program (the advice cap, causality, seven bits
                                          per window opened, the composed statement) and its witnesses
-Ingress.lean    the ingress bound (the occupancy of the ingress grid, read from inside X)
+Ingress.lean    the timing intake bound (the occupancy of the ingress grid, read from inside X)
 PerWindow.lean  the last two over the run's first `m` whole windows: the factor per window and
                                          per link-window
 Sanity.lean     a satisfiability witness for every named hypothesis, the joint witnesses, and the
@@ -115,7 +115,7 @@ bound: the horizon is one block (`timing-channel.md` §2.4).
 | Theorem 3, condition 1 | `FramesReadNoTimingAdvice P step occ` | a step's rows read the timing advice only through the predicted occupancy |
 | Theorem 3, condition 2 | `OccupancyReadsOwnBlock blk occ` | a cell's predicted occupancy reads only its own block's timing advice |
 
-For the ingress bound the same `Prop`s are read inward: `Regenerates` is W2 for what enters X, `Packed` and
+For the timing intake bound the same `Prop`s are read inward: `Regenerates` is W2 for what enters X, `Packed` and
 `Allocated` are W4 for the rows the ingress links release into X, and `JitterBounded` is J for their release times.
 
 `NetTiming.SecurityProofs.Sanity` shows every hypothesis is satisfiable: one certifier meets W2–W6 and J together, one
@@ -148,7 +148,7 @@ The other 18 are the rest of the Capacity table's bounds and the schedule's caus
 - **Theorem 3 for the constant-rate Program** (`NetTiming.SecurityProofs.Schedule`, `NetTiming.SecurityProofs.PerWindow`):
   `EncardAccSeqsLeConstantRate`, `EncardAccSeqsLeConstantRateFixedClock`, `ExpectedRowCausal`,
   `EncardAccSeqsLeConstantRateWindows`, `EncardAccSeqsLeConstantRatePerWindow`.
-- **The ingress bound** (`NetTiming.SecurityProofs.Ingress`, `NetTiming.SecurityProofs.PerWindow`):
+- **The timing intake bound** (`NetTiming.SecurityProofs.Ingress`, `NetTiming.SecurityProofs.PerWindow`):
   `EncardIngressDecodableLe`, `EncardIngressObsDecodableLeContents`, `EncardIngressDecodableLeContents`,
   `EncardIngressObsDecodableLeContentsPerWindow`.
 
@@ -194,7 +194,7 @@ three axioms, but they have no record in `lean-audit.json`, so no citation may c
 `--update` like any other.
 
 The statements were frozen and reviewed by a red team before their proofs, and a second round's verdict was GO. The
-ingress bound's statements were frozen before their proofs as well; the review of the first two is on the pull request
+timing intake bound's statements were frozen before their proofs as well; the review of the first two is on the pull request
 that added them (danielreuter/verity#894), and the review of the content versions is on the one stacked on it. The
 constant-rate Program's five statements and the definitions they read were frozen on `sorry` stubs and recorded before
 their proofs. Their statement review, on danielreuter/verity#949, gave GO with one change: the four counts take
@@ -208,7 +208,7 @@ lemmas by name in its tests; its `PROTOCOL.md` lists them per test file. The wit
    Theorem 1(b)'s tree lemma is still stated per step. The per-window ones read the horizon of the run's first `m` whole
    windows of `T` buckets, `n = m·T`, each with its parent's hypotheses at that horizon and no other: the shipped
    schedule's bound is `#Ac · (#Σ_sync · D^T)^m` (`EncardAccSeqsLeConstantRatePerWindow`,
-   `EncardDecodableLeConstantRatePerWindow`), and the ingress bound `(∏_ℓ (r ℓ + 1)^T · D^T)^m` per content assignment
+   `EncardDecodableLeConstantRatePerWindow`), and the timing intake bound `(∏_ℓ (r ℓ + 1)^T · D^T)^m` per content assignment
    (`EncardIngressObsDecodableLePerWindow`, and its `Contents` version). The egress factor per window is the bound's,
    not a count per window: content advice and an earlier window's sync can first show in a later window, so one window
    may continue a given prefix in more than `#Σ_sync · D^T` ways. So the egress bound is cumulative from the run's
@@ -223,7 +223,7 @@ lemmas by name in its tests; its `PROTOCOL.md` lists them per test file. The wit
 6. **Statuses** cover every boundary link, ingress included, since an ingress status is an egress channel.
 7. **Counts** are `Set.encard` in `ℕ∞`, so a bound also says the set is finite.
 
-The ingress bound adds these:
+The timing intake bound adds these:
 
 8. **Ingress reuses the interaction, read inward.** The outside's party is `snd`, X's devices are `op`, and both see
    every record. The outside gets every move of X's (recomputed from the records) rather than only the egress wire,

@@ -23,7 +23,7 @@ computed before σ is known.
 that fits the deadline on the RTX PRO 6000.  `gf31-poly/v1` (`hbm_audit`'s polynomial hash with a fresh point per
 block) is an uncertified fast check: a polynomial evaluated at a point is not unpredictable per block, and a device
 with spare memory can keep a structure per block that evaluates it at any point without reading the block's words
-(Kedlaya–Umans), so no ingress bound holds for it.  Two blocks whose words differ mod p collide with probability at
+(Kedlaya–Umans), so the check certifies no bits read.  Two blocks whose words differ mod p collide with probability at
 most (W − 1) / (p − 2) over `g_j`, and its word map binds only the words mod p, `⌈W·log2 p⌉` bits (`info_bits`).
 """
 

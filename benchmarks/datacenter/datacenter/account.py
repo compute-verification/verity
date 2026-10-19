@@ -1,4 +1,5 @@
-"""The physical layer's reading of the claims: credit, headroom, where things were, and the covert budget, per block.
+"""The physical layer's reading of the claims: credit, the monitored compute residual, where things were, and the covert
+budget, per block.
 
 `account` reads only public things: the claims (logical facts about the prover system) and the profile (the
 placement's public properties, the declaration with its named assumptions, the verifier's plan). For each block it
@@ -7,7 +8,7 @@ concludes:
 - `credited`: the work the claims prove was spent on the declared Program there, each kind at its weight (W_ref);
 - `busy` and `headroom`: the share of the epoch that work needs on the block's devices, each kind at their declared
   rate for it (multiply-adds at a precision, word operations, Boolean gates), and the share the audits leave
-  unaccounted;
+  unaccounted, the block's monitored compute residual;
 - `outsourceable` and `local_at_least`: the work a helper off the block could have done for it, and so the credited
   work that must have run on the block. Crossing bytes bound nothing by themselves: a helper holding the registered
   weights needs only small inputs and outputs. Work is pinned to the block only by data it must consume that only the
@@ -84,7 +85,7 @@ class BlockAccount:
 
     @property
     def headroom(self) -> float:
-        """The share of the epoch the audits leave unaccounted."""
+        """The block's monitored compute residual: the share of the epoch the audits leave unaccounted."""
         return max(1.0 - self.busy, 0.0)
 
     @property

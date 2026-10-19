@@ -15,11 +15,11 @@ import Proofs.NetworkCertifier.Accepted
 
 One theorem `NetTiming.SecurityProofs.G : NetTiming.Guarantees.G` per guarantee and per lemma (`Lemmas`), each the theorem of the same statement
 in `Occupancy` (Proposition 2), `Counting` (Theorem 1(b)), `Advice` (Theorem 3), `Schedule` (Theorem 3 for the
-constant-rate Program), `Ingress` (the ingress bound) or `PerWindow` (the last two over whole windows), and every lemma
-behind them. `Sanity` shows every named assumption satisfiable. `Code` proves the certifier's program (`certifier_program`,
-`NetworkCertifier`), which the difftest runs against the Python audit, equal to these definitions. `Accepted` proves
-`security_properties`' `AcceptedRunsAreProgramRuns` through `Code`: a run the network certificate check accepts is a run
-of the constant-rate Program under the declared advice, so the guarantees here count it.
+constant-rate Program), `Ingress` (the timing intake bound) or `PerWindow` (the last two over whole windows), and every
+lemma behind them. `Sanity` shows every named assumption satisfiable. `Code` proves the certifier's program
+(`certifier_program`, `NetworkCertifier`), which the difftest runs against the Python audit, equal to these definitions.
+`Accepted` proves `security_properties`' `AcceptedRunsAreProgramRuns` through `Code`: a run the network certificate
+check accepts is a run of the constant-rate Program under the declared advice, so the guarantees here count it.
 -/
 
 namespace NetTiming.SecurityProofs
