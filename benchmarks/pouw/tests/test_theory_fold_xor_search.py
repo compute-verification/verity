@@ -154,7 +154,8 @@ def test_merge_reads_through_the_swap():
 
 def test_shared_axis_is_the_word_the_products_read():
     """CEGIS shares x when the first instruction reads x alone, and with `by_mult` when both its multiplicands are x
-    whatever its addends; y likewise; neither when a multiplicand is the other word or a constant."""
+    whatever its addends; y likewise; neither when a multiplicand is the other word or a constant, except that with
+    `pow2` a word beside the constant is shared."""
     hi = lambda ab: (("IMAD.HI", ab), ("IMAD.HI", (3, 3)))
     for by_mult in (False, True):
         assert S.shared_axis(hi((0, 0)), ({2: 0, 3: 2},), by_mult) == 0
@@ -165,6 +166,9 @@ def test_shared_axis_is_the_word_the_products_read():
     assert S.shared_axis(hi((0, 0)), ({2: 1, 3: 2},)) is None
     assert S.shared_axis(hi((0, 0)), ({2: 1, 3: 2},), True) == 0
     assert S.shared_axis(hi((1, 1)), ({2: 0, 3: 2},), True) == 1
+    assert S.shared_axis(hi((0, 2)), ({2: 1, 3: 1},), True) is None
+    assert S.shared_axis(hi((0, 2)), ({2: 1, 3: 1},), pow2=True) == 0
+    assert S.shared_axis(hi((0, 1)), ({2: 0, 3: 0},), pow2=True) is None
 
 
 def test_collision_inputs_agree_on_the_first_results():
@@ -186,7 +190,8 @@ def test_collision_inputs_agree_on_the_first_results():
 @pytest.mark.slow
 def test_a_modifier_case_is_unsat():
     """A case that is unknown at 600 s unsplit (the first IMAD's addend y) is unsat once its modifiers are set; and one
-    unknown at 60 s from the edge pairs (x² + {C:y}, then its high half squared) is unsat from shared values of x."""
+    unknown at 60 s from the edge pairs (x² + {C:y}, then its high half squared) is unsat from shared values of x; one
+    unknown at 120 s is unsat from colliding inputs, and one from x at powers of two."""
     seq = (("IMAD", (0, 0)), ("IMAD.HI", (2, 3)))
     fix = ({2: 1, "np": False, "nc": True, "inv": False, "cx": False},)
     assert S.cegis(seq, fix=fix)["result"] == "unsat"
@@ -197,6 +202,9 @@ def test_a_modifier_case_is_unsat():
     seq = (("IMAD.HI", (0, 0)), ("IMAD.HI", (2, 3)))
     fix = ({2: 2, 3: 1, **dict.fromkeys(("cx", "inv", "na", "nb", "nc", "np", "sa", "sb"), False)},)
     assert S.cegis(seq, timeout_ms=10**9, fix=fix, collide=True)["result"] == "unsat"
+    seq = (("IMAD.HI", (0, 2)), ("IMAD.HI", (0, 2)))
+    fix = ({2: 1, 3: 1, **dict.fromkeys(("cx", "inv", "na", "nc", "np", "sa", "sb"), False), "nb": True},)
+    assert S.cegis(seq, timeout_ms=10**9, fix=fix, pow2=True)["result"] == "unsat"
 
 
 @pytest.mark.slow
