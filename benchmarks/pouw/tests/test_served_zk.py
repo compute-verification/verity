@@ -894,7 +894,7 @@ def test_the_cli_runs_the_window_through_the_service(served, tmp_path, monkeypat
             {"op": "outcome", "name": "honest", "units": f"{t}/units.json", "out": f"{t}/outcome2"},
             {"op": "quit"}, {"op": "select", "name": "honest"}]
     monkeypatch.setattr(sys, "stdin", io.StringIO("".join(json.dumps(r) + "\n" for r in reqs)))
-    monkeypatch.setattr(SC, "Coins", lambda epoch: _coins())      # the process's coins are the ones that salted the pass
+    monkeypatch.setattr(SC, "Coins", lambda epoch, entropy: _coins())   # the process's coins are the ones that salted the pass
     capsys.readouterr()
     assert SC.main(["challenger", p, f"{t}/log", "--lean", str(lean)]) == 0
     replies = capsys.readouterr().out.splitlines()
