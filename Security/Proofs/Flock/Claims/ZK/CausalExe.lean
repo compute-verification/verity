@@ -725,6 +725,134 @@ theorem ligeritoCut_eqAt (ms : MerkleScheme) (sch : Schedule) (T : F128) (cm0 : 
     clear * - hR; omega
   exact eqAt_pureL _ st₁ t₁ (by omega) (by omega)
 
+theorem tsilent_get : TSilent (get : TMW PS Transcript) :=
+  fun _ _ _ _ _ h => (Prod.mk.inj h).2.symm
+
+theorem tsilent_liftV (v : V α) : TSilent (StateT.lift (monadLift v : PS α) : TMW PS α) := by
+  intro t l a t' l' h
+  change ((monadLift v : PS _) >>= fun a => Pure.pure (a, t)).go l = _ at h
+  obtain ⟨b, l₂, e3, e4⟩ := JsonRT.go_bind_ok h
+  rw [JsonRT.monadLift_go] at e3
+  obtain ⟨-, rfl⟩ := Prod.mk.inj e3
+  exact (Prod.mk.inj e4).2.symm
+
+/-- **The cut's inner proof at sources agreeing where sent**: `ρ`, `σ` after `1` send, `τ`'s commitment after `2`, `Y`
+after `3`, `τ` and its salt after `4`; it sends `4` bodies. -/
+theorem innerCut_eqAt (lay : Zk.PadLayout) (ic : InnerCommit) (finalC : F128) (src src' : RepSrc)
+    (cons : Array (String × Zk.Lin)) (t : Transcript) {l : Array Claims.Msg} {L : ℕ} (hl : l.size = L) (hL : L ≤ n)
+    (hrs : L + 1 ≤ n → src.rhoIn = src'.rhoIn ∧ src.sigmaIn = src'.sigmaIn)
+    (htc : L + 2 ≤ n → src.tauCom = src'.tauCom) (hy : L + 3 ≤ n → src.y = src'.y)
+    (hT : L + 4 ≤ n → src.tau = src'.tau ∧ src.tauSalt = src'.tauSalt) :
+    EqAt n (L + 4) (fun _ => True)
+      (((innerCut (asksCut coin n) lay ic finalC src cons).run t).go l)
+      (((innerCut (asksCut coin n) lay ic finalC src' cons).run t).go l) := by
+  unfold innerCut
+  dsimp only
+  refine eqAt_tsilent_bind (tsilent_liftTM _) fun _ t₁ => ?_
+  refine eqAt_tsilent_bind (tsilent_liftTM _) fun _ t₁ => ?_
+  refine eqAt_bindT (eqAt_sampleP coin n t₁ hl) fun eps t₁ l₁ h1 h2 _ => ?_
+  obtain ⟨er, es⟩ := hrs (by omega)
+  rw [er, es]
+  refine eqAt_tsilent_bind (tsilent_liftTM _) fun _ t₁ => ?_
+  refine eqAt_bindT (eqAt_sampleVecP coin n (by simp [Zk.triple]) t₁ h1) fun _ t₁ l₁ h1 h2 _ => ?_
+  rw [htc (by omega)]
+  refine eqAt_tsilent_bind (tsilent_liftTM _) fun _ t₁ => ?_
+  refine eqAt_bindT (eqAt_sampleP coin n t₁ h1) fun beta t₁ l₁ h1 h2 _ => ?_
+  rw [hy (by omega)]
+  by_cases hb : beta.isZero = true
+  · rw [ite_eq_left hb, ite_eq_left hb]
+    exact eqAt_throwT n _ t₁ l₁
+  · rw [ite_eq_right hb, ite_eq_right hb]
+    refine eqAt_tsilent_bind (tsilent_liftTM _) fun _ t₁ => ?_
+    refine eqAt_bindT (eqAt_sampleVecP coin n (by simp [Zk.Q]) t₁ h1) fun _ t₁ l₁ h1 h2 _ => ?_
+    obtain ⟨e1, e2⟩ := hT (by omega)
+    rw [e1, e2]
+    exact eqAt_pureT _ t₁ (by omega) (by omega)
+
 end Phases
+
+/-! ## A rep's reads, by the bodies sent before each -/
+
+/-- A rep's pad layout. -/
+abbrev layOf (st : Setup) (sch : Schedule) : Zk.PadLayout := Zk.PadLayout.new st.m st.kLog sch.k0
+
+/-- The bodies a rep from `B` has sent when its Ligerito opening starts. -/
+abbrev ligAt (B : ℕ) (st : Setup) (e : Array Claim) : ℕ :=
+  B + 3 + (st.m - 6) + (3 + (st.fold.kLog - 6)) + (2 + e.size) + 1
+
+/-- The bodies a rep from `B` has sent when its inner proof starts. -/
+abbrev innerAt (B : ℕ) (st : Setup) (sch : Schedule) (e : Array Claim) : ℕ :=
+  ligAt B st e + (sch.k0 + 7 + 11 * (sch.levels.size - 1))
+
+/-- **Two sources agree on what a rep from body `B` reads**: each field the same wherever the rep reads it with at most
+`n` bodies sent. -/
+structure RepAgree (n B : ℕ) (st : Setup) (sch : Schedule) (e : Array Claim) (src src' : RepSrc) : Prop where
+  ab : B + 2 ≤ n → ∀ i < 64, src.masked ((layOf st sch).r1ab i) = src'.masked ((layOf st sch).r1ab i) ∧
+    src.masked ((layOf st sch).r1c i) = src'.masked ((layOf st sch).r1c i)
+  ml : ∀ i < st.m - 6, B + 3 + i ≤ n → src.masked ((layOf st sch).ml i 0) = src'.masked ((layOf st sch).ml i 0) ∧
+    src.masked ((layOf st sch).ml i 1) = src'.masked ((layOf st sch).ml i 1)
+  f : B + 3 + (st.m - 6) ≤ n → src.masked (layOf st sch).fa = src'.masked (layOf st sch).fa ∧
+    src.masked (layOf st sch).fb = src'.masked (layOf st sch).fb ∧ src.masked (layOf st sch).fc = src'.masked (layOf st sch).fc
+  lc : ∀ j < st.fold.kLog - 6, B + 3 + (st.m - 6) + 2 + j ≤ n →
+    src.masked ((layOf st sch).lc j 0) = src'.masked ((layOf st sch).lc j 0) ∧
+    src.masked ((layOf st sch).lc j 1) = src'.masked ((layOf st sch).lc j 1)
+  zp : B + 3 + (st.m - 6) + 2 + (st.fold.kLog - 6) ≤ n → ∀ i < 64,
+    src.masked ((layOf st sch).zp i) = src'.masked ((layOf st sch).zp i)
+  sv : ∀ k < 2 + e.size, B + 3 + (st.m - 6) + (3 + (st.fold.kLog - 6)) + k ≤ n → src.sv k = src'.sv k
+  ood : ligAt B st e + 1 ≤ n → src.masked ((layOf st sch).lgOod 0) = src'.masked ((layOf st sch).lgOod 0)
+  msg : ∀ j < sch.k0, ligAt B st e + 2 + j ≤ n → ∀ i < 4,
+    src.masked ((layOf st sch).lgMsg j i) = src'.masked ((layOf st sch).lgMsg j i)
+  E : ligAt B st e + 2 + sch.k0 ≤ n → ∀ a < 2, ∀ i < 2,
+    src.masked ((layOf st sch).lgE a i) = src'.masked ((layOf st sch).lgE a i)
+  y1 : ligAt B st e + sch.k0 + 4 ≤ n → src.y1 = src'.y1 ∧ src.ybar = src'.ybar ∧ src.hiSalt = src'.hiSalt
+  rs : innerAt B st sch e + 1 ≤ n → src.rhoIn = src'.rhoIn ∧ src.sigmaIn = src'.sigmaIn
+  tc : innerAt B st sch e + 2 ≤ n → src.tauCom = src'.tauCom
+  y : innerAt B st sch e + 3 ≤ n → src.y = src'.y
+  tau : innerAt B st sch e + 4 ≤ n → src.tau = src'.tau ∧ src.tauSalt = src'.tauSalt
+
+/-- A rep's sends. -/
+abbrev repSends (st : Setup) (sch : Schedule) (e : Array Claim) : ℕ := innerAt 0 st sch e + 4
+
+/-- What a rep's walk needs of its table and schedule: the zerocheck's `m ≥ 14`, a non-empty opening point, `k_0 ≥ 1`, at
+least two levels, and non-empty query sets. -/
+structure SchOk (st : Setup) (sch : Schedule) : Prop where
+  m : 14 ≤ st.m
+  n : sch.n ≠ 0
+  k0 : 1 ≤ sch.k0
+  levels : 2 ≤ sch.levels.size
+  q : ∀ j < sch.levels.size, (sch.levels.getD j default).q ≠ 0
+
+section Rep
+
+variable (coin : ℕ → ℕ → F128) (n : ℕ)
+
+/-- **A cut rep at sources agreeing where read**: the PIOP, the Ligerito opening and the inner proof in turn; it sends
+`repSends` bodies. -/
+theorem repCut_eqAt (st : Setup) (sch : Schedule) (hs : SchOk st sch) (rep : ℕ) (dom : ByteArray) (cm0 : Commit)
+    (extras : Array Claim) (ic : InnerCommit) (src src' : RepSrc) (prior : Array (List F128)) (words : List ℕ)
+    (t : Transcript) {l : Array Claims.Msg} {B : ℕ} (hl : l.size = B) (hB : B ≤ n)
+    (hA : RepAgree n B st sch extras src src') :
+    EqAt n (B + repSends st sch extras) (fun _ => True)
+      (((repCut (asksCut coin n) (Hashes.ofSha512 Sha512.hash) st sch rep dom cm0 extras ic src prior words).run t).go l)
+      (((repCut (asksCut coin n) (Hashes.ofSha512 Sha512.hash) st sch rep dom cm0 extras ic src' prior words).run t).go
+        l) := by
+  unfold repCut
+  dsimp only
+  refine eqAt_bindT (piopCut_eqAt coin n st hs.m (layOf st sch) src src' _ _ extras prior words t hl hB hA.ab hA.ml
+    hA.f hA.lc hA.zp hA.sv) fun r t₁ l₁ h1 h2 _ => ?_
+  obtain ⟨zp, lp, ss, T, sws⟩ := r
+  refine eqAt_bindT (ligeritoCut_eqAt coin n st.merkle sch T cm0 _ (layOf st sch) src src' hs.n hs.k0 hs.levels hs.q t₁
+    h1 h2 hA.ood hA.msg hA.E hA.y1) fun r t₁ l₁ h1 h2 _ => ?_
+  obtain ⟨lg, zl, rec⟩ := r
+  refine eqAt_tsilent_bind tsilent_get fun _ t₁ => ?_
+  refine eqAt_tsilent_bind (tsilent_liftV _) fun rp t₁ => ?_
+  obtain ⟨rp, _⟩ := rp
+  refine eqAt_tsilent_bind (tsilent_liftV _) fun lgc t₁ => ?_
+  refine eqAt_bindT (innerCut_eqAt coin n (layOf st sch) ic _ src src' _ t₁ h1 h2 hA.rs hA.tc hA.y hA.tau)
+    fun _ t₁ l₁ h1 h2 _ => ?_
+  simp only [repSends, innerAt, ligAt] at h1 h2 ⊢
+  exact eqAt_pureT _ t₁ (by omega) (by omega)
+
+end Rep
 
 end FlockComplete.CutEq
