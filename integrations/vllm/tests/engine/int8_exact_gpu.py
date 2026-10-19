@@ -1,5 +1,6 @@
 """VLLM-18 on one GPU: Llama served with `TargetProfile.int8_exact` (`--int8-exact linears|attention|all`, default all), checked end
-to end against `benchmarks/ppl/steps.py` on the CPU.
+to end on the CPU: the linears against `benchmarks/ppl/steps.py`, the attention against compute accounting's LUT softmax
+(`benchmarks/pouw/edited_gemm/fattn_ref.py`, `apv_ref.py`).
 
 One process writes `<out>/int8_exact_gpu.json` (and, with the linears in scope, `<out>/pin_entry.json`, the int8 pin's entry):
 
@@ -22,8 +23,9 @@ One process writes `<out>/int8_exact_gpu.json` (and, with the linears in scope, 
   batch     (linears) every solo-run row whose x is bitwise a row of the batched run's calls of the same module has the batched
             run's y row, bit for bit.
   attention (attention) the first and last attention layers' first calls, request by request (`int8_attention_gpu`): the served
-            rows against a GPU rerun and the CPU with only the softmax on the GPU (both bit for bit), steps.py's own attention
-            on the CPU (counted: the two devices' torch.softmax round apart), and solo requests against the batched ones.
+            rows against a GPU rerun, the CPU and `fattn_oracle.attention`, `fattn_ref.check` on the GPU's softmax of a row (all
+            bit for bit), and solo requests against the batched ones.  The K scales are the served revision's
+            (`engine.int8_k_scales`; `VERITY_VLLM_INT8_K_SCALES` names a calibration run's table).
 
     cd integrations/vllm; PY=/workspace/jobs/venv312/bin/python3     # PYTHONPATH=.:../..:../../tools/research/src
     $PY tests/engine/int8_exact_gpu.py --out DIR --at 2026-10-17T00:00:00Z --by LANE
@@ -49,7 +51,7 @@ from verity_vllm.engine import fp8_checkpoint as F
 from verity_vllm.engine import int8_checkpoint as I
 from verity_vllm.engine import int8_exact as E
 
-SCHEMA = "verity-vllm/int8-exact-gpu/v3"
+SCHEMA = "verity-vllm/int8-exact-gpu/v4"
 RECORD = "int8_exact_gpu.json"
 PROMPTS = ["The capital of France is", "def fibonacci(n):\n    \"\"\"Return the n-th Fibonacci number.\"\"\"\n",
            "The three primary colors are", "Water boils at a temperature of", "Once upon a time, in a small village,"]
@@ -221,22 +223,22 @@ def attention_checks(doc: dict[str, Any], taps: Any, tapped: list[str]) -> bool:
             rec = {"phase": phase, "module": name, "call": r["call"], "request": r["request"], **AG.compare(r)}
             doc["attention_equal"].append(rec)
             print(f"[int8] attn {phase} {name} call {rec['call']} req {rec['request']}: s={rec['s']} n={rec['n']} "
-                  f"rerun!={rec['rerun_mismatch']} gpu_softmax!={rec['gpu_softmax_mismatch']} oracle!={rec['oracle_mismatch']} "
-                  f"cpu_oracle!={rec['cpu_oracle_mismatch']} P moved {rec['p_ints_moved']}/{rec['p_ints']} (max {rec['p_ints_max_move']}) "
-                  f"cache!={rec.get('cache_mismatch', '-')}", flush=True)
+                  f"rerun!={rec['rerun_mismatch']} cpu!={rec['cpu_mismatch']} oracle!={rec['oracle_mismatch']} kv!={rec['kv_mismatch']} "
+                  f"fattn_ref={rec['fattn_ref']} k_clamped={rec['k_clamped']} cache!={rec.get('cache_mismatch', '-')}", flush=True)
     eq = doc["attention_equal"]
-    keys = ("rerun_mismatch", "gpu_softmax_mismatch", "cpu_oracle_mismatch", "cache_mismatch")
+    keys = ("rerun_mismatch", "cpu_mismatch", "oracle_mismatch", "kv_mismatch", "cache_mismatch")
     doc["attention_totals"] = t = {"compared": len(eq), "prefills": sum(r["n"] == r["s"] for r in eq), "words": sum(r["words"] for r in eq),
                                    **{k: sum(r.get(k, 0) for r in eq) for k in keys},
-                                   **{k: sum(r[k] for r in eq) for k in ("oracle_mismatch", "p_ints", "p_ints_moved")},
-                                   "p_ints_max_move": max((r["p_ints_max_move"] for r in eq), default=0),
+                                   "fattn_ref_rows": sum(r["fattn_ref"] is not None for r in eq),
+                                   "fattn_ref_failed": sum(r["fattn_ref"] is False for r in eq),
+                                   "k_clamped": sum(r["k_clamped"] for r in eq),
                                    "scale_is_head_dim": all(r["scale_is_head_dim"] for r in eq)}
     doc["attention_batch_vs_solo"] = AG.batch_vs_solo(taps.got, tapped)
     bvs = [r for per in doc["attention_batch_vs_solo"].values() for r in per]
     doc["attention_batch_vs_solo_totals"] = b = {k: sum(r[k] for r in bvs) for k in ("requests", "matched", "mismatch")}
     print(f"[int8] attention totals={json.dumps(t)} batch_vs_solo={json.dumps(b)}", flush=True)
     return bool(t["compared"] and t["prefills"] and t["scale_is_head_dim"] and not any(t[k] for k in keys)
-                and b["matched"] == b["requests"] > 0 and not b["mismatch"])
+                and t["fattn_ref_rows"] and not t["fattn_ref_failed"] and b["matched"] == b["requests"] > 0 and not b["mismatch"])
 
 
 def applied_attention(model: Any, before: dict[str, Any]) -> dict[str, Any]:

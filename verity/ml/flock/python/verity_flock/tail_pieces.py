@@ -1,8 +1,10 @@
 """Circuits for the primitives a template's units leave outside: attention's softmax (MUFU.EX2, FA2's inverse sum, and the FTZ
 f32 ops, ``F32Max`` and ``GuardNegInfZero`` from `verity.ml.circuits.ops.boolean.softmax`; PTX max / min, the E4M3 cast, the E4M3 widening
 and the E2M1 cast from `verity.ml.circuits.ops.boolean.scalar`), the norms' row scalars (MUFU.RSQ and SQRT, ``div.full``'s reciprocal and
-numerator scaling) and the sampler lane's compare, selects, bit AND and integer add. Each is its IR primitive bit for bit
-(``ir_lower.PIECES``; the piece test and circuit-check compare them).
+numerator scaling), the sampler lane's compare, selects, bit AND and integer add, and the int8 row's LUT softmax (its index,
+its 256-entry table, read one-hot in the circuit, and its 32-bit subtract), its quantizer (rint and the saturating s8 cast),
+its s8 widening, and its float64 A (the exact f32 product widened, RN64 multiplies, and the rounded, saturated u32). Each is
+its IR primitive bit for bit (``ir_lower.PIECES``; the piece test and circuit-check compare them).
 
 A MUFU operation is a table lookup inside exponent and special-case logic (the C++ models ``fa2_model.cpp`` and
 ``rms_triton_model.cpp``, and ``live/src/ir_tail.rs``): the piece computes the table index, reads the pinned table
@@ -11,6 +13,8 @@ finishes the result. The RSQ, SQRT and RCP circuits around the read are M0's (``
 FA2's inverse sum follow ``fa2_model.cpp``.
 """
 from __future__ import annotations
+
+from functools import lru_cache
 
 from verity.ml.circuits.ops.boolean.scalar import e4m3_to_f32, f32_to_e2m1_sat, f32_to_e4m3_sat, fmaxmin as _fmaxmin
 from verity.ml.circuits.ops.boolean.softmax import (_eq_const, _is_nan, f32_add_ftz, f32_fma_ftz, f32_fma_sub_ftz, f32_gt, f32_max, f32_mul_ftz,
@@ -145,6 +149,15 @@ def _word(C, cases, default):
     for cond, w in reversed(cases):
         out = mux(C, cond, w, out)
     return out
+
+
+#: a result bit whose form has more terms is committed (one row): a piece whose result carries an operand's form (a mux, as PTX
+#: max carries the larger operand) would otherwise grow it along a chain, so a row's ``m = fmaxf(m, x)`` over K would cost K^2
+FORM_TERMS = 32
+
+
+def _bounded(C, word):
+    return [C.commit([w])[0] if len(w.s) > FORM_TERMS else w for w in word]
 
 
 # --- attention's softmax (the FTZ f32 ops, F32Max and GuardNegInfZero are `verity.ml.circuits.ops.boolean.softmax`'s) ---------------------
@@ -524,6 +537,199 @@ def gelu_tanh_mul_bf16(C, g, u):
     return fp.f32_to_bf16(C, fp.f32_mul(C, fp.bf16_to_f32(act), uf, ir_nan=True), 0x7FFF)
 
 
+# --- the int8 row's LUT softmax (`verity_vllm.program.registry.int8_exact`: fattn's integer softmax) ----------------------------
+
+#: `Exp2Lut127_v1`'s table, rint(127 2^(-t/16)) for t in 0..255 (``benchmarks/pouw/edited_gemm/fattn_ref.py``'s): the sha256 of its
+#: 256 little-endian u32 words
+EXP2_LUT127_SHA256 = "6eb8e9b3478db58b4e5a711f31968394f7e93fa4e1df2e0d801eab92a5f66f84"
+#: every entry is in [0, 127]
+EXP2_LUT127_BITS = 7
+
+
+@lru_cache(maxsize=None)
+def exp2_lut127_table() -> tuple[int, ...]:
+    """`Exp2Lut127_v1`'s 256 entries, from its own evaluator, checked against :data:`EXP2_LUT127_SHA256`."""
+    import hashlib
+
+    import numpy as np
+    from verity_vllm.program.registry import int8_exact as X
+
+    words = tuple(X.Exp2Lut127.evaluate(t) for t in range(1 << 8))
+    if hashlib.sha256(np.asarray(words, dtype="<u4").tobytes()).hexdigest() != EXP2_LUT127_SHA256:
+        raise ValueError(f"Exp2Lut127_v1's table is not the pinned one ({EXP2_LUT127_SHA256})")
+    return words
+
+
+def exp2_lut127(C, t):
+    """``Exp2Lut127_v1``: the table (:func:`exp2_lut127_table`) at the byte t, as a 32-bit word: a one-hot read (`fp.lookup`) of
+    the entries' 7 bits, the table in the read's linear forms; bits 7..31 are zero."""
+    return fp.lookup(C, list(t), exp2_lut127_table(), EXP2_LUT127_BITS) + [ZERO] * (32 - EXP2_LUT127_BITS)
+
+
+def lut_index(C, d, a):
+    """``LutIndex_v1``: ``min(max(d, 0) a >> 32, 255)`` for a signed d and an unsigned a, as a byte: the product of d's low 31 bits
+    and a (63 bits), its bits 32..39, or 255 once a bit from 40 is set; 0 for a negative d."""
+    p = gf2.multiply(C, list(d[:31]), list(a))
+    below = and_reduce(C, [NOT(b) for b in p[40:63]])
+    keep = NOT(d[31])
+    return [C.AND(keep, NOT(C.AND(below, NOT(b)))) for b in p[32:40]]
+
+
+# --- the int8 row's quantizer, its widening and its float64 A (`int8_exact`) ---------------------------------------------------
+
+def _thermometer(C, bits):
+    """``[value > j]`` for j < 2^len(bits), the unsigned value of ``bits`` (LSB first)."""
+    t = [ZERO]
+    for b in bits:
+        both = [C.AND(b, x) for x in t]
+        t = [b ^ x ^ a for x, a in zip(t, both)] + both                 # b OR x, its AND the one above it
+    return t
+
+
+def _xor_all(bits):
+    acc = ZERO
+    for b in bits:
+        acc = acc ^ b
+    return acc
+
+
+def _or_and(C, bits):
+    """(OR, AND) of ``bits``, the first level's pairs ANDed once for both (two bits' OR is their XOR and their AND)."""
+    a, b, odd = bits[0::2], bits[1::2], list(bits[len(bits) & ~1:])
+    pairs = [C.AND(x, y) for x, y in zip(a, b)]
+    return or_reduce(C, [x ^ y ^ p for x, y, p in zip(a, b, pairs)] + odd), and_reduce(C, pairs + odd)
+
+
+def f32_rint(C, x):
+    """``F32Rint_v1`` (numpy's rint): x to the nearest integer, ties to even, as f32.  From 2^23 on, x is itself (a NaN quieted);
+    below 1 it is a signed 0, or ±1 when 0.5 < |x|; between, its d = 150 - e fractional mantissa bits (a thermometer on d) are
+    cleared and 2^d is added to the encoding when they round up, a significand that overflows carrying into the exponent."""
+    s, e, m = x[31], list(x[23:31]), list(x[:23])
+    sig = m + [ONE]
+    d1, big_e = sub(C, const_bits(149, 8), e, 8)                  # d - 1 = 149 - e, and e >= 150 (its borrow)
+    T = [ONE] + _thermometer(C, d1[:5])[:31]                      # [d > j]: d >= 1 wherever mid is selected
+    hot = [T[j] ^ T[j + 1] for j in range(23)]                    # hot[j]: j = d - 1 (T is a thermometer, so the XOR is the AND)
+    guard = _xor_all(C.AND(hot[j], sig[j]) for j in range(23))
+    at_lsb = [C.AND(hot[j - 1], sig[j]) for j in range(1, 24)]
+    lsb = _xor_all(at_lsb)
+    Z = [sig[0]]
+    for b in sig[1:22]:
+        Z.append(OR(C, Z[-1], b))
+    sticky = _xor_all(C.AND(hot[j + 1], Z[j]) for j in range(22))
+    up = C.AND(guard, OR(C, sticky, lsb))
+    cleared = [ZERO, at_lsb[0]] + [C.AND(NOT(T[j]), m[j]) for j in range(2, 23)] + e     # NOT(T[1]) is hot[0]
+    mid = add(C, cleared, [ZERO] + [C.AND(up, hot[j - 1]) for j in range(1, 24)], width=31) + [s]
+    m_nz = OR(C, Z[21], m[22])
+    e16, e07 = and_reduce(C, e[1:7]), C.AND(e[0], e[7])           # 126 and 255 share exponent bits 1 .. 6
+    up126 = C.AND(C.AND(e16, NOT(e[0] ^ e[7] ^ e07)), m_nz)
+    low = [ZERO] * 23 + [up126] * 7 + [ZERO, s]
+    nan = C.AND(C.AND(e16, e07), m_nz)
+    big = list(x[:22]) + [OR(C, x[22], nan)] + list(x[23:])
+    return mux(C, big_e, big, mux(C, _ult_const(C, e, 127), low, mid))
+
+
+def f32_to_s8_rzi(C, x):
+    """``F32ToS8Rzi_v1`` (`cvt.rzi.sat.s8.f32`): x truncated toward zero, saturated to [-128, 127], as an s8 code; 0 for a NaN.
+    For 1 <= |x| < 128 (e in 127..133) the integer part is the hidden bit and the top 6 mantissa bits shifted right by 133 - e."""
+    s, e, m = x[31], list(x[23:31]), list(x[:23])
+    zero = OR(C, _ult_const(C, e, 127), _is_nan(C, x))
+    sat = NOT(_ult_const(C, e, 134))
+    n = gf2.shr(C, m[17:] + [ONE], sub(C, const_bits(133, 8), e, 8)[0][:3])
+    v = mux(C, sat, [NOT(s)] * 7 + [s], fp.neg_if(C, n + [ZERO], s))
+    return [C.AND(NOT(zero), b) for b in v]
+
+
+def s8_to_f32(C, c):
+    """``S8ToF32_v1``: the s8 code c as f32, exact: |c| (at most 128) normalized with the exponent of its top bit, 2^7."""
+    return fp.round_f32(C, c[7], const_bits(134, 9), 0, fp.neg_if(C, list(c), c[7]), ZERO, underflow=False)
+
+
+def _unpack64(C, w):
+    """An f64 word's (sign, 53-bit significand, effective exponent field (1 for zero and subnormals), nan, inf, zero)."""
+    m, e, s = list(w[:52]), list(w[52:63]), w[63]
+    (e_nz, e_max), m_nz = _or_and(C, e), or_reduce(C, m)
+    nan = C.AND(e_max, m_nz)
+    return s, m + [e_nz], [e[0] ^ NOT(e_nz)] + e[1:], nan, e_max ^ nan, NOT(OR(C, e_nz, m_nz))
+
+
+def _round64(C, sign, E_b, off: int, M, zero_sign, underflow: bool = True):
+    """`fp.round_f32` for f64: the f64 word nearest (ties to even) to ``(-1)^sign M 2^(E - 1023 - (len(M) - 1))``, ``E = E_b - off``
+    the exponent field M's top bit as the hidden bit would have; subnormals kept, overflow to infinity, M = 0 the zero of sign
+    ``zero_sign``.  ``underflow=False`` promises E >= 1."""
+    P = fp.ceil_pow2(max(len(M), 64))
+    Mp = [ZERO] * (P - len(M)) + list(M)
+    az, lz = gf2.lzc(C, Mp)
+    EW = len(E_b)
+    diff, borrow = sub(C, E_b, const_bits((off + 1) % (1 << EW), EW), EW)          # E - 1, borrow iff E < 1
+    sh_l = fp.min_u(C, diff, lz, EW)[:len(lz)]
+    if underflow:
+        sh_l = [C.AND(NOT(borrow), b) for b in sh_l]
+        y, st = fp.shr_sticky(C, fp.shl(C, Mp, sh_l), [C.AND(borrow, b) for b in fp.neg_if(C, diff, ONE)])
+        X = [C.AND(NOT(borrow), b) for b in sub(C, diff, sh_l, EW)[0]]
+    else:
+        y, st = fp.shl(C, Mp, sh_l), ZERO
+        X = sub(C, diff, sh_l, EW)[0]
+    sig, guard = y[P - 53:], y[P - 54]
+    rnd = C.AND(guard, OR(C, OR(C, or_reduce(C, y[:P - 54]), st), sig[0]))
+    ex = add(C, X, [sig[52]], width=EW)
+    ovf = NOT(_ult_const(C, ex, 0x7FF))
+    word = add(C, sig[:52] + ex[:11], [rnd], width=63)
+    word = [C.AND(NOT(ovf), b) for b in word[:52]] + [OR(C, ovf, b) for b in word[52:]]
+    return [C.AND(NOT(az), b) for b in word] + [mux(C, az, [zero_sign], [sign])[0]]
+
+
+def _x86_specials64(C, word, a, b, a_nan, b_nan, invalid, inf, inf_sign):
+    """An x86-64 float64 multiply's special results (the reference's Python floats): a quieted when a is a NaN, else b quieted
+    when b is, else the default NaN 0xFFF8000000000000 of an invalid operation, else the infinity of sign ``inf_sign`` when an
+    operand is infinite.  ``a``, ``b``: the operands as f64 words.  An invalid operation has an infinite operand, so it rides the
+    infinity's select."""
+    word = mux(C, inf, [ZERO] * 51 + [invalid] + [ONE] * 11 + [OR(C, invalid, inf_sign)], word)
+    src = mux(C, a_nan, list(a), list(b))
+    return mux(C, OR(C, a_nan, b_nan), src[:51] + [ONE] + src[52:], word)
+
+
+def f64_mul(C, a, b):
+    """``F64Mul_v1`` (`mul.rn.f64`): RN64(a b), subnormals kept, NaNs as x86-64's (:func:`_x86_specials64`)."""
+    sa, ga, ea, na, ia, za = _unpack64(C, a)
+    sb, gb, eb, nb, ib, zb = _unpack64(C, b)
+    s = sa ^ sb
+    r = _round64(C, s, add(C, ea, eb, width=13), 1022, gf2.multiply(C, fp.trim_low(ga)[0], fp.trim_low(gb)[0]), s)
+    return _x86_specials64(C, r, a, b, na, nb, OR(C, C.AND(ia, zb), C.AND(za, ib)), OR(C, ia, ib), s)
+
+
+def f32_mul_wide(C, a, b):
+    """``F32MulWide_v1``: the f64 product of two f32 values, exact (48 significand bits, an exponent always in f64's normal range):
+    the product normalized, never rounded; a NaN operand widened (its payload under f64's top mantissa bits) then quieted."""
+    A, B = fp.unpack(C, a), fp.unpack(C, b)
+    s = A.s ^ B.s
+    E_b = add(C, add(C, A.e_eff, B.e_eff, width=12), const_bits(770, 12), width=12)
+    r = _round64(C, s, E_b, 0, gf2.multiply(C, fp.trim_low(A.sig)[0], fp.trim_low(B.sig)[0]), s, underflow=False)
+    invalid = OR(C, C.AND(A.inf, B.zero), C.AND(A.zero, B.inf))
+    return _x86_specials64(C, r, _nan_f32_as_f64(a), _nan_f32_as_f64(b), A.nan, B.nan, invalid, OR(C, A.inf, B.inf), s)
+
+
+def _nan_f32_as_f64(w):
+    """An f32 NaN as ``cvtss2sd`` widens it, before quieting: its sign, f64's all-ones exponent, its mantissa as f64's top 23 bits."""
+    return [ZERO] * 29 + list(w[:23]) + [ONE] * 11 + [w[31]]
+
+
+def f64_to_u32_rni_sat(C, x):
+    """``F64ToU32RniSat_v1``: ``min(rint(x), 2^32 - 1)`` (ties to even) as an unsigned word; 0 for a NaN or x <= 0.  For 0.5 <= x
+    < 2^32 (e in 1022..1054) the significand's bits from 20 shift right by 1054 - e, leaving the guard bit and the 32-bit integer
+    part; the bits below are the sticky.  The rounding's carry out of 32 bits, x >= 2^32 and +inf saturate."""
+    s, e, m = x[63], list(x[52:63]), list(x[:52])
+    sig = m + [ONE]
+    amt, past = sub(C, const_bits(1054, 11), e, 11)               # the shift, and e >= 1055 (its borrow)
+    q, st = fp.shr_sticky(C, sig[20:], amt[:6])
+    n = q[1:33]
+    lo = or_reduce(C, m[:20])
+    up = C.AND(q[0], OR(C, OR(C, lo, st), n[0]))
+    r = add(C, n, [up], width=32, carry_out=True)
+    sat = OR(C, past, r[32])
+    zero = OR(C, OR(C, s, _ult_const(C, e, 1022)), C.AND(and_reduce(C, e), OR(C, lo, or_reduce(C, m[20:]))))
+    return [C.AND(NOT(zero), OR(C, sat, b)) for b in r[:32]]
+
+
 def topp_numkeep(C, nd, q):
     """``TopPNumkeep_v1``: ``min(max(nd - qi, 1), nd)`` on u32 counts, qi the f32 q truncated to a u32 (0 unless q is finite and
     > 0, all ones from 2^32 on); 0 when nd is 0."""
@@ -578,8 +784,8 @@ PIECES = {
     "SelectBf16_v1": lambda C, s, a, b: mux(C, s[0], a, b),
     "F32Fabs_v1": lambda C, a: list(a[:31]) + [ZERO],
     "F32Neg_v1": lambda C, a: fp.f32_neg(a),
-    "F32Fmaxf_v1": lambda C, a, b: _fmaxmin(C, a, b, True),
-    "F32Fminf_v1": lambda C, a, b: _fmaxmin(C, a, b, False),
+    "F32Fmaxf_v1": lambda C, a, b: _bounded(C, _fmaxmin(C, a, b, True)),
+    "F32Fminf_v1": lambda C, a, b: _bounded(C, _fmaxmin(C, a, b, False)),
     "F32ToE4m3Sat_v1": f32_to_e4m3_sat,
     # NVFP4 quantization's casts and the bit AND (PoUW's units; verity_vllm.program.registry.nvfp4)
     "E4m3ToF32_v1": e4m3_to_f32,
@@ -607,6 +813,15 @@ PIECES = {
     "MufuTanh_v1": mufu_tanh,
     "TanhF32Rn_v1": tanh_rn,
     "GeluTanhMulBf16_v1": gelu_tanh_mul_bf16,
+    "Exp2Lut127_v1": exp2_lut127,
+    "LutIndex_v1": lut_index,
+    "I32Sub_v1": lambda C, a, b: sub(C, a, b, 32)[0],
+    "F32Rint_v1": f32_rint,
+    "F32ToS8Rzi_v1": f32_to_s8_rzi,
+    "S8ToF32_v1": s8_to_f32,
+    "F32MulWide_v1": f32_mul_wide,
+    "F64Mul_v1": f64_mul,
+    "F64ToU32RniSat_v1": f64_to_u32_rni_sat,
 }
 #: primitive families whose id carries a width: pattern -> piece
 FAMILIES = {r"BitAtx\d+_v1": bit_at, r"GatherBf16x\d+_v1": gather_bf16, r"GatherF32x\d+_v1": gather_f32}

@@ -95,6 +95,7 @@ _CONSTRUCTION_SOURCES = ("verity_vllm/program/frontend/export_compat.py", "verit
                          "verity_vllm/program/frontend/rules/vllm_bindings/elementwise.py",
                          "verity_vllm/program/frontend/rules/vllm_bindings/fp8.py",
                          "verity_vllm/program/frontend/rules/vllm_bindings/fused_norm.py",
+                         "verity_vllm/program/frontend/rules/vllm_bindings/int8.py",
                          "verity_vllm/program/frontend/rules/vllm_bindings/norm_chain.py",
                          "verity_vllm/program/frontend/rules/vllm_bindings/observations.py",
                          "verity_vllm/program/frontend/rules/vllm_bindings/operands.py",
@@ -469,6 +470,8 @@ def _construct(out, res, target, M, pos0, profile, backend, intercept, wrapper, 
         res["target"]["host"] = host_facts()
         t0 = time.time()
         with apply_target_profile(target):  # ONE application of the declared target for config, instantiation, export and derive
+            from verity_vllm.engine.build import register_int8_parts
+            register_int8_parts(target)
             # [R13 hopper] `TargetProfile.engine_args()` = the attention knobs the target applies (`attention_backend`, `attention_config.flash_attn_version`)
             cfg = vm.make_vllm_config(model=model_id or vm.PIN["model"], revision=revision or vm.PIN["revision"], max_model_len=max_model_len,
                                       **target.engine_args(), **(engine_args or {}), tensor_parallel_size=tp)

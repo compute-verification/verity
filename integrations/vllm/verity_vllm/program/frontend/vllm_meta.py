@@ -616,6 +616,8 @@ def attention_impls(model: nn.Module) -> dict:
                   "dcp_world_size", "pcp_world_size", "num_queries_per_kv", "kv_sharing_target_layer_name"):
             v = getattr(impl, k, "<absent>")
             obs[k] = list(v) if isinstance(v, tuple) else (None if isinstance(v, torch.Tensor) and v.numel() == 0 else ("tensor" if isinstance(v, torch.Tensor) else v))
+        if callable(kb := getattr(impl, "k_scale_bits", None)):      # the int8 backend's K scales (engine.int8_attention_vllm)
+            obs["int8_k_scales"] = [b & 0xFFFFFFFF for b in kb(getattr(mod, "layer_name", name))]
         out[getattr(mod, "layer_name", name)] = obs
     for name, mod in model.named_modules():
         if not isinstance(mod, MLAAttention):

@@ -96,9 +96,15 @@ def test_a_checkpoint_not_on_this_host_is_refused_by_name(tmp_path) -> None:
     m.write_text(json.dumps({"checkpoints": [dict(entry, downloaded=False)]}))
     with pytest.raises(SystemExit, match="org/model is not downloaded on this pod"):
         prof.checkpoint_for("ROLE_X", m)
+    made = dict(entry, downloaded=False, recipe={"id": "verity-int8-channel127/v1"})
+    m.write_text(json.dumps({"checkpoints": [made]}))
+    with pytest.raises(SystemExit, match=f"org/model: local snapshot {tmp_path / 'gone'} missing"):
+        prof.checkpoint_for("ROLE_X", m)
     (tmp_path / "gone").mkdir()
     m.write_text(json.dumps({"checkpoints": [entry]}))
     assert prof.checkpoint_for("ROLE_X", m) == entry
+    m.write_text(json.dumps({"checkpoints": [made]}))
+    assert prof.checkpoint_for("ROLE_X", m) == made
 
 
 def test_serving_and_the_build_put_a_shared_expert_on_one_stream() -> None:

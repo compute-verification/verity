@@ -1,0 +1,28 @@
+{
+ "pieces": {
+  "Exp2Lut127_v1": {
+   "and": 73
+  },
+  "F32MulWide_v1": {
+   "and": 1924
+  },
+  "F32Rint_v1": {
+   "and": 275
+  },
+  "F32ToS8Rzi_v1": {
+   "and": 89
+  },
+  "F64Mul_v1": {
+   "and": 8441
+  },
+  "F64ToU32RniSat_v1": {
+   "and": 448
+  },
+  "LutIndex_v1": {
+   "and": 1989
+  },
+  "S8ToF32_v1": {
+   "and": 114
+  }
+ }
+}
