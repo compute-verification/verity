@@ -6,6 +6,7 @@ from __future__ import annotations
 
 import json
 import re
+from fractions import Fraction
 from pathlib import Path
 
 import pytest
@@ -13,7 +14,7 @@ import pytest
 import verity_difftest
 from test_service import DELTA, PAIR, QUERY, SESSION, _lean, _ports, _record, _spec, _stream
 from verity.ml.circuits.codec import canonical_json
-from verity.core.protocols.sampled_proofs import service as S
+from verity.core.protocols.sampled_proofs import service as S, two_stage as TS
 from verity.core.protocols.sampled_proofs.one_stage import (audit, draw as D, hello as H, partition as P, registration as R,
                                                             verifier as V)
 from verity.core.protocols.sampled_proofs.one_stage.verdict import Verdict
@@ -209,6 +210,55 @@ def test_floats_reach_the_lean_as_python_wrote_them():
     for delta in (DELTA, 0.05, 0.1):
         assert V.audit_record(**_args(reg, draw, statement=floats, delta=delta))["verifiers"]["agree"]
     assert not V.audit_record(**_args(reg, draw, statement={"x": -0.0}))["verifiers"]["agree"]
+
+
+def test_the_two_stage_profile_is_the_verifiers_of_record(monkeypatch):
+    """The two-stage law's profile and a proof unit's check probability: both run, the same value is returned with an
+    accepting verdict, both refusing is `refused`, and a Lean that answers otherwise is `DISAGREE` with no value."""
+    law = TS.TwoStageLaw({"decode": TS.Stage(Fraction(1, 2), 2), "tile": TS.Stage({"law": "subset", "k": 3})})
+    units = [TS.ReplayUnit(0, "decode", 4), TS.ReplayUnit(1, "decode", 6), TS.ReplayUnit(2, "tile", 1)]
+    p, v = V.two_stage_profile(law, "decode", units, delta=0.01, programs=("p0",), drawn={TS.REPLAY: 1})
+    assert v.ok and v.verifiers["lean"] == v.verifiers["python"] == {"ok": True}
+    assert p == law.profile("decode", units, delta=0.01, programs=("p0",), drawn={TS.REPLAY: 1})
+    assert p.to_json()["levels"][0]["draw"] == {"bernoulli": "1/6"}
+    p, v = V.two_stage_profile(law, "tile", n_r=5, delta=0.01)
+    assert v.ok and p.to_json()["levels"][0] == {"name": TS.REPLAY, "query": None, "size": 5, "draw": {"subset": 3}}
+    p, v = V.two_stage_profile(law, "tile", n_r=2, delta=0.01)
+    assert p is None and v.codes == ("refused",) and "exceeds" in v.detail["refused"]["python"]
+    q, v = V.check_probability(law, "decode", 6)
+    assert q == Fraction(1, 6) and v.ok
+    assert V.check_probability(law, "tile", 6)[1].codes == ("refused",)
+    _lean_answering(monkeypatch, "two_stage_profile", lambda got: {**got, "linked": True})
+    p, v = V.two_stage_profile(law, "decode", units, delta=0.01)
+    assert p is None and v.codes == (V.DISAGREE,) and v.detail[V.DISAGREE]["lean"]["linked"] is True
+    _lean_answering(monkeypatch, "check_probability", lambda got: {"p": "1/5"})
+    assert V.check_probability(law, "decode", 6)[1].codes == (V.DISAGREE,)
+
+
+def test_a_stream_rules_disagreement_stops_the_stream(monkeypatch):
+    """A stream's own rules decide each op by both, on what they hold of the stream that the op reads: where the Lean
+    decides otherwise, or holds another state after it, the op is refused (`disagree`, naming both), and so is every op
+    after it."""
+    stream, reg, draw = _drawn()
+    assert stream._rule_entries == [{"order": 0, "registration": S._registration_token(reg), "draw": S._draw_token(draw),
+                                     "proved": len(draw.proved), "drawn_at": stream._entries[0].drawn_at,
+                                     "interior": False, "delivered": False, "session": None, "final": False}]
+    _lean_answering(monkeypatch, "stream", lambda got: {**got, "decision": {"ok": "late"}})
+    with pytest.raises(S.Refused) as e:
+        stream.deliver(draw, [SESSION])
+    v = e.value.verdict
+    assert v.codes == (V.DISAGREE,) and v.detail[V.DISAGREE]["lean"]["decision"] == {"ok": "late"}
+    assert v.verifiers["python"]["decision"] == {"unchecked": "now"}
+    monkeypatch.undo()
+    for op in (lambda: stream.deliver(draw, [SESSION]), stream.ready):
+        with pytest.raises(S.Refused) as e:
+            op()
+        assert e.value.verdict is v
+    stream = _stream()
+    _lean_answering(monkeypatch, "stream", lambda got: {**got, "state": got["state"].replace('"failures":0', '"failures":1')})
+    with pytest.raises(S.Refused) as e:
+        stream.register(_record(), _ports(6))
+    assert e.value.verdict.codes == (V.DISAGREE,) and stream.failures == 0 and stream.log == ()
 
 
 def test_the_switch_is_one_line(monkeypatch):

@@ -2,6 +2,7 @@ import SampledProofs.Json
 import SampledProofs.Program
 import SampledProofs.Partition
 import SampledProofs.Draw
+import SampledProofs.Supplied
 import SampledProofs.Registration
 import SampledProofs.Bound
 import SampledProofs.PyJson
@@ -12,6 +13,7 @@ import SampledProofs.Slots
 import SampledProofs.Service
 import SampledProofs.Run
 import SampledProofs.TwoStage
+import SampledProofs.Stream
 import SampledProofs.Pieces
 import SampledProofs.Hello
 import SampledProofs.DomainAgrees
