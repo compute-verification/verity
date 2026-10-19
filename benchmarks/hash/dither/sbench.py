@@ -18,9 +18,19 @@ Arms:
     stock-humming  the same with Triton disabled too: vLLM's third choice, HummingInt8ScaledMMLinearKernel
     exact-eager  served_h1's engine without the option: `engine.build.build_engine` on the int8-exact profile (int8_exact=all),
                  as SERVE-H1 runs it (eager, batch-invariant)
-    dither       stock with Dither's served H1 + fx1 path (`dither_arm.install`), when given
+    exact        the int8-exact linears (`verity_int8::row_quant` + `verity_int8::scaled_mm`, torch._int_mm) compiled with
+                 CUDA graphs, attention vLLM's: today's served y in a compiled engine (built here, outside `build_engine`,
+                 which runs int8_exact eagerly only; both ops are custom ops, opaque to Inductor)
+    dither       exact with every linear's y from Dither's fused GEMM (`dither_fused`: z = xq W^T and its dequantization in
+                 one kernel that also computes the previous step's receipts; A, admit and z tables, the round, the live
+                 coin and the seeds between steps)
 
-    python sbench.py --out OUT [--arms stock,dither] [--reps 3]
+`gate` (--gate, before the reps): exact and dither each generate GATE_TOKENS tokens for the 32 requests; dither's window
+checks one B32 decode step (`dither_fused.check`) and its tokens must equal exact's, under a CUDA profiler range (nsys
+--capture-range=cudaProfilerApi reads the kernels that ran).  The decode gate compares each arm's tokens with its
+reference arm's (dither: exact; any other: the first arm).
+
+    python sbench.py --out OUT [--arms stock,exact,dither] [--reps 3] [--t 64] [--ops decode] [--gate]
 """
 from __future__ import annotations
 
@@ -71,12 +81,13 @@ def stock_checkpoint(pin: str, scratch: Path) -> Path:
 
 def engine_args(gpu_mem: float) -> dict:
     # FlashInfer's autotune off, as `engine.build` sets it for the int8-exact engine (it tunes no kernel these engines run)
-    return {"max_num_seqs": MAX_SEQS, "max_num_batched_tokens": MAX_TOKENS_STEP, "gpu_memory_utilization": gpu_mem,
+    return {"max_num_seqs": MAX_SEQS, "max_num_batched_tokens": int(os.environ.get("SBENCH_T", MAX_TOKENS_STEP)),
+            "gpu_memory_utilization": gpu_mem,
             "enable_prefix_caching": False, "max_model_len": 2048, "seed": 0,
             "kernel_config": {"enable_flashinfer_autotune": False}}
 
 
-DISABLED = {"stock": "CutlassInt8ScaledMMLinearKernel", "dither": "CutlassInt8ScaledMMLinearKernel",
+DISABLED = {"stock": "CutlassInt8ScaledMMLinearKernel",
             "stock-humming": "CutlassInt8ScaledMMLinearKernel,TritonInt8ScaledMMLinearKernel"}
 
 
@@ -97,13 +108,8 @@ def build(arm: str, scratch: Path, gpu_mem: float):
     from vllm import LLM
     if arm in DISABLED:
         os.environ["VLLM_DISABLED_KERNELS"] = DISABLED[arm]
-    if arm in ("stock", "stock-humming", "dither"):
-        llm = LLM(model=str(stock_checkpoint(PIN, scratch)), **engine_args(gpu_mem))
-        if arm == "dither":
-            sys.path.insert(0, str(HERE))
-            import dither_arm
-            dither_arm.install(llm)
-        return llm
+    if arm in ("stock", "stock-humming"):
+        return LLM(model=str(stock_checkpoint(PIN, scratch)), **engine_args(gpu_mem))
     if arm == "exact-eager":
         vllm_dir = ROOT / "integrations" / "vllm"
         sys.path.insert(0, str(vllm_dir))
@@ -119,12 +125,34 @@ def build(arm: str, scratch: Path, gpu_mem: float):
         a = engine_args(gpu_mem)
         eng = build_engine(ckpts, case=ns.role, target=target, max_num_seqs=a.pop("max_num_seqs"), engine_args=a)
         return eng.llm
+    if arm in ("exact", "dither"):
+        sys.path.insert(0, str(HERE))
+        import dither_fused as DF
+        from verity_vllm.engine import int8_vllm
+        int8_vllm.register()
+        a = engine_args(gpu_mem)
+        if arm == "dither":
+            DF.patch(t=a["max_num_batched_tokens"], h1c=os.environ["DITHER_H1C"], h1f=os.environ["DITHER_H1F"], gate=True)
+        llm = LLM(model=str(DF.int8_checkpoint(PIN, scratch)), **a)
+        if arm == "dither":
+            win = DF.hook(llm)
+            llm.dither_stats = win.stats
+            llm.dither_win = win
+        return llm
     raise ValueError(arm)
+
+
+REF_OF = {"dither": "exact"}
+GATE_TOKENS = 8
 
 
 def worker(arm: str, conn, scratch: str, gpu_mem: float) -> None:
     os.environ.setdefault("VLLM_ENABLE_V1_MULTIPROCESSING", "0")
+    import torch
     from vllm import SamplingParams
+    if arm == "dither":
+        sys.path.insert(0, str(HERE))
+        import dither_fused as DF
     t0 = time.perf_counter()
     try:
         llm = build(arm, Path(scratch), gpu_mem)
@@ -155,6 +183,25 @@ def worker(arm: str, conn, scratch: str, gpu_mem: float) -> None:
             t2, outs = gen(ps, N2)
             conn.send({"tpot_b32_ms": round(1e3 * (t2 - t1) / (N2 - N1), 4), "t_n1_s": round(t1, 4), "t_n2_s": round(t2, 4),
                        "tokens": [list(o.outputs[0].token_ids) for o in outs]})
+        elif cmd["op"] == "gate":
+            win = getattr(llm, "dither_win", None)
+            if win is not None:
+                win.gate_armed = B
+            prof = os.environ.get("DITHER_NSYS") == "1" and win is not None
+            if prof:
+                torch.cuda.synchronize()
+                torch.cuda.profiler.start()
+            t, outs = gen(ps, GATE_TOKENS)
+            if prof:
+                torch.cuda.synchronize()
+                torch.cuda.profiler.stop()
+            res = {"gate_s": round(t, 3), "tokens": [list(o.outputs[0].token_ids) for o in outs]}
+            if win is not None:
+                t0 = time.perf_counter()
+                with torch.inference_mode():
+                    res["check"] = DF.check(win, os.environ["DITHER_H1F"])
+                res["check_s"] = round(time.perf_counter() - t0, 1)
+            conn.send(res)
         elif cmd["op"] == "sat":
             t, outs = gen(prompts(SAT_REQS), SAT_TOKENS)
             n = sum(len(o.outputs[0].token_ids) for o in outs)
@@ -172,7 +219,11 @@ def main() -> int:
     ap.add_argument("--reps", type=int, default=3)
     ap.add_argument("--scratch", default=None)
     ap.add_argument("--gpu-mem", type=float, default=0.40)
+    ap.add_argument("--t", type=int, default=MAX_TOKENS_STEP, help="max_num_batched_tokens: the Dither window's T")
+    ap.add_argument("--ops", default="decode,sat")
+    ap.add_argument("--gate", action="store_true")
     a = ap.parse_args()
+    os.environ["SBENCH_T"] = str(a.t)
     out = Path(a.out)
     out.mkdir(parents=True, exist_ok=True)
     import tempfile
@@ -194,10 +245,24 @@ def main() -> int:
         conns[arm].send({"op": "warm"})
         conns[arm].recv(), conns[arm].recv()
     reps: list[dict] = []
-    ref_tokens = None
+    ref_tokens: dict = {}
     gate = {}
+    gate_doc: dict = {}
+    if a.gate:
+        for arm in arms:
+            conns[arm].send({"op": "gate"})
+            res = conns[arm].recv()
+            res["stats"] = conns[arm].recv()["stats"]
+            gate_doc[arm] = res
+        for arm in arms:
+            ref = REF_OF.get(arm, arms[0])
+            if ref in gate_doc and ref != arm:
+                gate_doc[arm]["tokens_equal_" + ref] = gate_doc[arm]["tokens"] == gate_doc[ref]["tokens"]
+        for arm in arms:
+            print(json.dumps({"gate": arm, **{k: v for k, v in gate_doc[arm].items() if k != "tokens"}}), flush=True)
+        (out / "gate.json").write_text(json.dumps(gate_doc, indent=1) + "\n")
     for r in range(a.reps):
-        for op in ("decode", "sat"):
+        for op in a.ops.split(","):
             for j in range(len(arms)):
                 arm = arms[(j + r) % len(arms)]
                 conns[arm].send({"op": op})
@@ -205,9 +270,9 @@ def main() -> int:
                 stats = conns[arm].recv()["stats"]
                 toks = res.pop("tokens", None)
                 if toks is not None:
-                    if arm == arms[0] and ref_tokens is None:
-                        ref_tokens = toks
-                    gate.setdefault(arm, []).append(toks == ref_tokens if ref_tokens is not None else None)
+                    ref_tokens.setdefault((r, arm), toks)
+                    ref = REF_OF.get(arm, arms[0])
+                    gate.setdefault(arm, []).append(None if ref == arm else (r, ref) in ref_tokens and toks == ref_tokens[(r, ref)])
                 row = {"rep": r, "op": op, "arm": arm, **res, "stats": stats}
                 reps.append(row)
                 print(json.dumps(row), flush=True)
@@ -215,19 +280,22 @@ def main() -> int:
                     f.write(json.dumps(row) + "\n")
     for arm in arms:
         conns[arm].send({"op": "stop"})
-    summary = {"arms": arms, "info": info, "gate_tokens_equal_first_arm": gate, "n1": N1, "n2": N2, "b": B,
+    summary = {"arms": arms, "info": info, "gate_tokens_equal_ref_arm": gate, "ref_of": REF_OF, "n1": N1, "n2": N2, "b": B,
+               "gate": {arm: {k: v for k, v in d.items() if k != "tokens"} for arm, d in gate_doc.items()},
                "saturation": {"requests": SAT_REQS, "tokens": SAT_TOKENS, "max_num_seqs": MAX_SEQS,
-                              "max_num_batched_tokens": MAX_TOKENS_STEP}, "per_arm": {}}
+                              "max_num_batched_tokens": a.t}, "per_arm": {}}
     for arm in arms:
         tp = [x["tpot_b32_ms"] for x in reps if x["arm"] == arm and x["op"] == "decode"]
         th = [x["tokens_per_s"] for x in reps if x["arm"] == arm and x["op"] == "sat"]
-        summary["per_arm"][arm] = {"tpot_b32_ms": statistics.median(tp), "tpot_all": tp,
-                                   "tokens_per_s": statistics.median(th), "tokens_per_s_all": th}
+        summary["per_arm"][arm] = {"tpot_b32_ms": statistics.median(tp) if tp else None, "tpot_all": tp,
+                                   "tokens_per_s": statistics.median(th) if th else None, "tokens_per_s_all": th}
     base = summary["per_arm"][arms[0]]
     for arm in arms[1:]:
         p = summary["per_arm"][arm]
-        p["tpot_overhead_pct"] = round(100 * (p["tpot_b32_ms"] / base["tpot_b32_ms"] - 1), 3)
-        p["throughput_overhead_pct"] = round(100 * (1 - p["tokens_per_s"] / base["tokens_per_s"]), 3)
+        if p["tpot_b32_ms"] and base["tpot_b32_ms"]:
+            p["tpot_overhead_pct"] = round(100 * (p["tpot_b32_ms"] / base["tpot_b32_ms"] - 1), 3)
+        if p["tokens_per_s"] and base["tokens_per_s"]:
+            p["throughput_overhead_pct"] = round(100 * (1 - p["tokens_per_s"] / base["tokens_per_s"]), 3)
     (out / "summary.json").write_text(json.dumps(summary, indent=1) + "\n")
     print(json.dumps(summary["per_arm"], indent=1), flush=True)
     return 0

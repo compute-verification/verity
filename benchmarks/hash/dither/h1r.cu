@@ -226,19 +226,12 @@ __device__ __forceinline__ void prefetch_l2(const void* p, u32 bytes) {
 // V 1: the first kernel.  V 2: a column block's row blocks on adjacent warps (B's tile from L2 when T > 32); noise blocks
 // from the unit's midstate; each chunk's noise words in shared memory; the next segment's A and B words loaded a segment
 // ahead and the next chunk's rows prefetched into L2; at most 170 registers (3 blocks of 4 warps an SM).
-template <int NW, int V>
-__global__ void __launch_bounds__(32 * NW, V >= 2 ? 3 : 1) h1r_units_k(const H1Call* __restrict__ calls, int ncalls,
-                                                                       const u64* __restrict__ seeds, u64 nt0, u64 nt1,
-                                                                       u64 nt2, u32* __restrict__ out, int nowrite) {
-  __shared__ __align__(16) uint8_t smem[NW][2][32 * XS];
-  __shared__ u64 sd[NW][24];
-  __shared__ u32 nzs[V >= 2 ? NW : 1][2][32 * NZ];
-  const int c = blockIdx.y;
-  if (c >= ncalls) return;
-  const H1Call C = calls[c];
-  const int lane = threadIdx.x & 31, wid = threadIdx.x >> 5;
-  const int v = blockIdx.x * NW + wid;
-  if (v >= C.units) return;
+// unit v of call C (v in the version's unit order) on one warp, with the warp's shared buffers: Xs and Ws (32 * XS bytes
+// each), sdw (24 words) and, for V 2, nzw (2 * 32 * NZ words)
+template <int V>
+__device__ __forceinline__ void h1r_unit(const H1Call& C, int v, int lane, uint8_t* Xs, uint8_t* Ws, u64* sdw, u32* nzw,
+                                         const u64* __restrict__ seeds, u64 nt0, u64 nt1, u64 nt2, u32* __restrict__ out,
+                                         int nowrite) {
   int ri, cj;
   if constexpr (V >= 2) {
     const int nrb = C.units / C.ncb;
@@ -257,17 +250,15 @@ __global__ void __launch_bounds__(32 * NW, V >= 2 ? 3 : 1) h1r_units_k(const H1C
     return;
   }
   const int g = lane >> 2, q = lane & 3;
-  uint8_t* Xs = smem[wid][0];
-  uint8_t* Ws = smem[wid][1];
-  if (lane < 16) sd[wid][lane] = seeds[(long long)(C.seed0 + u) * 16 + lane];
+  if (lane < 16) sdw[lane] = seeds[(long long)(C.seed0 + u) * 16 + lane];
   __syncwarp();
-  const u64* sj = sd[wid];
-  const u64* sr = sd[wid] + 8;
-  const u64* mid = sd[wid] + 16;
+  const u64* sj = sdw;
+  const u64* sr = sdw + 8;
+  const u64* mid = sdw + 16;
   if constexpr (V >= 2) {
     u64 mm[8];
     noise_mid(sj, nt0, nt1, nt2, mm);
-    if (lane < 8) sd[wid][16 + lane] = mm[lane];
+    if (lane < 8) sdw[16 + lane] = mm[lane];
     __syncwarp();
   }
   const int nb = KS / 16, RB = nb + 1;
@@ -340,8 +331,8 @@ __global__ void __launch_bounds__(32 * NW, V >= 2 ? 3 : 1) h1r_units_k(const H1C
     pb0 = *reinterpret_cast<const uint4*>(brow);
     pb1 = *reinterpret_cast<const uint4*>(brow + 16);
   }
-  u32* nzr = nzs[V >= 2 ? wid : 0][0] + lane * NZ;
-  u32* nzc = nzs[V >= 2 ? wid : 0][1] + lane * NZ;
+  u32* nzr = nzw + lane * NZ;
+  u32* nzc = nzw + 32 * NZ + lane * NZ;
   for (int ch = 0; ch < nb; ++ch) {
     u32 hr[16], hc[16];
     if constexpr (V >= 2) {
@@ -486,6 +477,22 @@ __global__ void __launch_bounds__(32 * NW, V >= 2 ? 3 : 1) h1r_units_k(const H1C
   }
 }
 
+template <int NW, int V>
+__global__ void __launch_bounds__(32 * NW, V >= 2 ? 3 : 1) h1r_units_k(const H1Call* __restrict__ calls, int ncalls,
+                                                                       const u64* __restrict__ seeds, u64 nt0, u64 nt1,
+                                                                       u64 nt2, u32* __restrict__ out, int nowrite) {
+  __shared__ __align__(16) uint8_t smem[NW][2][32 * XS];
+  __shared__ u64 sd[NW][24];
+  __shared__ u32 nzs[V >= 2 ? NW : 1][2][32 * NZ];
+  const int c = blockIdx.y;
+  if (c >= ncalls) return;
+  const H1Call C = calls[c];
+  const int lane = threadIdx.x & 31, wid = threadIdx.x >> 5;
+  const int v = blockIdx.x * NW + wid;
+  if (v >= C.units) return;
+  h1r_unit<V>(C, v, lane, smem[wid][0], smem[wid][1], sd[wid], nzs[V >= 2 ? wid : 0][0], seeds, nt0, nt1, nt2, out, nowrite);
+}
+
 static u64 be64(const char* s, int at) {
   u64 x = 0;
   for (int i = 0; i < 8; ++i) x = (x << 8) | (u64)(uint8_t)s[at + i];
@@ -513,6 +520,7 @@ extern "C" int h1r_launch(const H1Call* calls_dev, int ncalls, int max_units, co
   h1r_seeds<<<dim3((2 * max_units + 127) / 128, ncalls), 128, 0, stream>>>(calls_dev, ncalls, salt_dev, step_base, st[0],
                                                                           st[1], st[2], rt[0], rt[1], rt[2], seeds_dev);
   const dim3 grid((max_units + NW - 1) / NW, ncalls);
+  if (version == 0) return (int)cudaGetLastError();  // the seeds alone (h1f computes the units)
   if (version == 1)
     h1r_units_k<NW, 1><<<grid, 32 * NW, 0, stream>>>(calls_dev, ncalls, seeds_dev, nt[0], nt[1], nt[2], out_dev, nowrite);
   else
