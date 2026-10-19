@@ -14,7 +14,7 @@ import re
 IMAD = re.compile(r"^(IMAD|IMUL)$")
 ALU = re.compile(r"^(IADD3|IADD|LOP3|LOP|SHF|PRMT|LEA)$")
 MODES = {0: "cpw_none", 1: "cpw_redux", 2: "cpw_red64", 3: "cpw_atoms64", 4: "cpw_shfl", 5: "cpw_egress",
-         6: "cpw_pair2"}
+         6: "cpw_pair2", 7: "cpw_st256", 8: "cpw_pair64"}
 INS = re.compile(r"^\s+/\*([0-9a-f]{4,})\*/\s+(@!?U?P\w+\s+)?([A-Z][A-Z0-9_.]*)(.*)$")
 LABEL = re.compile(r"^\s*\.(L_x_\d+):")
 CC_ARCH = {"12.0": "sm_120a"}

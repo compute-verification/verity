@@ -20,8 +20,14 @@ if [ "${CPW_LEASED:-}" != 1 ]; then
   [ -x "$NVCC" ] || NVCC=$(command -v nvcc) || { echo "cpw_sass.sh: no nvcc (CUDA 13.0)" >&2; exit 2; }
   "$NVCC" --version >"$OUT/env/nvcc.txt" 2>&1
   BIN="$OUT/bin/cpw_sass"
-  "$NVCC" -O3 -std=c++17 -gencode arch=compute_120a,code=sm_120a -Xptxas -v "$HERE/cpw_sass.cu" -o "$BIN" \
-    >"$OUT/build.log" 2>&1 || { cat "$OUT/build.log" >&2; exit 1; }
+  flags=(-O3 -std=c++17 -gencode arch=compute_120a,code=sm_120a -Xptxas -v)
+  # st256 (mode 7) only where ptxas takes st.global.v8.b32; build_st256.log keeps a refusal
+  if "$NVCC" "${flags[@]}" -DCPW_ST256 "$HERE/cpw_sass.cu" -o "$BIN" >"$OUT/build_st256.log" 2>&1; then
+    mv "$OUT/build_st256.log" "$OUT/build.log"
+  else
+    echo "cpw_sass.sh: st.global.v8.b32 refused on sm_120a (build_st256.log); building without mode 7" >&2
+    "$NVCC" "${flags[@]}" "$HERE/cpw_sass.cu" -o "$BIN" >"$OUT/build.log" 2>&1 || { cat "$OUT/build.log" >&2; exit 1; }
+  fi
   sha256sum "$BIN" >"$OUT/bin/cpw_sass.sha256"
   "$(dirname "$NVCC")/cuobjdump" -sass "$BIN" >"$OUT/sass/cpw_sass.sass" 2>&1
   python3 "$HERE/cpw_sass_count.py" "$OUT/sass/cpw_sass.sass" >"$OUT/sass/counts.json"

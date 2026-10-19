@@ -13,7 +13,11 @@
 //   5 egress: STSM x4 of the lane's 16 state words, the cheapest way out of the registers (no reduction: a lower-bound
 //     probe, not a checkpoint);
 //   6 pair2: 6 LOP3 take the lane's 16 words to two (y, z) pairs, and two 64-bit red.global.xor put both into the
-//     zeroed receipt word pair: 8 instructions a set-warp, the issue-merged bound (`cpw_floor.py`).
+//     zeroed receipt word pair: 8 instructions a set-warp, the issue-merged bound (`cpw_floor.py`);
+//   7 st256: two 256-bit st.global.v8.b32 of the lane's 16 state words, the widest lane store (egress only, like 5;
+//     built only where ptxas takes it, -DCPW_ST256);
+//   8 pair64: the lane's 8 (y, z) pairs XORed as 64-bit words, then one 64-bit red.global.xor: whether ptxas has a
+//     64-bit logic op that merges more than two words a lane an instruction.
 // `main` runs on the device it finds: bitexact (one warp, 64 sets, every final state and every checkpoint against the
 // host), then tp at 1, 2, 4 warps a SMSP and at full occupancy: SMSP-cycles a warp-set (clock64 a block, max over
 // blocks), 8 units a warp-set.
@@ -70,6 +74,14 @@ __device__ __forceinline__ void stsm4(uint32_t addr, uint32_t a, uint32_t b, uin
                "r"(d)
                : "memory");
 }
+
+#ifdef CPW_ST256
+__device__ __forceinline__ void st256(uint32_t *p, const uint32_t (&v)[NCH]) {
+  asm volatile("st.global.v8.b32 [%0], {%1,%2,%3,%4,%5,%6,%7,%8};" ::"l"(p), "r"(v[0]), "r"(v[1]), "r"(v[2]),
+               "r"(v[3]), "r"(v[4]), "r"(v[5]), "r"(v[6]), "r"(v[7])
+               : "memory");
+}
+#endif
 
 template <int MODE>
 __global__ void __launch_bounds__(NT) cpw(const uint32_t *st, const uint32_t *W, uint32_t *out, uint32_t *cp,
@@ -134,6 +146,17 @@ __global__ void __launch_bounds__(NT) cpw(const uint32_t *st, const uint32_t *W,
       unsigned long long *p = (unsigned long long *)&cp[2 * k];
       red_xor64(p, ya, za);
       red_xor64(p, yb, zb);
+    } else if (MODE == 7) {
+#ifdef CPW_ST256
+      st256(&out[idx * 16], y);
+      st256(&out[idx * 16 + NCH], z);
+#endif
+    } else if (MODE == 8) {
+      unsigned long long v = ((unsigned long long)z[0] << 32) | y[0];
+#pragma unroll
+      for (int j = 1; j < NCH; ++j) v ^= ((unsigned long long)z[j] << 32) | y[j];
+      asm volatile("red.relaxed.gpu.global.xor.b64 [%0], %1;" ::"l"((unsigned long long *)&cp[2 * k]), "l"(v)
+                   : "memory");
     } else if (MODE == 5) {
       stsm4(sb, y[0], y[1], y[2], y[3]);
       stsm4(sb + 512, y[4], y[5], y[6], y[7]);
@@ -143,10 +166,12 @@ __global__ void __launch_bounds__(NT) cpw(const uint32_t *st, const uint32_t *W,
   }
   __syncthreads();
   long long t1 = clock64();
+  if (MODE != 7) {
 #pragma unroll
-  for (int j = 0; j < NCH; ++j) {
-    out[idx * 16 + j] = y[j];
-    out[idx * 16 + NCH + j] = z[j];
+    for (int j = 0; j < NCH; ++j) {
+      out[idx * 16 + j] = y[j];
+      out[idx * 16 + NCH + j] = z[j];
+    }
   }
   if (MODE == 3)
     for (int k = ln; k < CPS; k += 32) ((unsigned long long *)cp)[warp * CPS + k] = scp[wb][k];
@@ -163,6 +188,10 @@ CPW_INST(3)
 CPW_INST(4)
 CPW_INST(5)
 CPW_INST(6)
+#ifdef CPW_ST256
+CPW_INST(7)
+#endif
+CPW_INST(8)
 
 #ifndef __CUDA_ARCH__
 #include <cstdlib>
@@ -222,6 +251,10 @@ int main() {
       {"cpw_none", cpw<0>, 0}, {"cpw_redux", cpw<1>, 1}, {"cpw_red64", cpw<2>, 2},
       {"cpw_atoms64", cpw<3>, 3}, {"cpw_shfl", cpw<4>, 4}, {"cpw_egress", cpw<5>, 5},
       {"cpw_pair2", cpw<6>, 6},
+#ifdef CPW_ST256
+      {"cpw_st256", cpw<7>, 7},
+#endif
+      {"cpw_pair64", cpw<8>, 8},
   };
   const int maxblocks = sms * 32;
   const size_t nthr = (size_t)maxblocks * NT, ncp = (nthr / 32) * CPS * 2;
@@ -247,7 +280,7 @@ int main() {
     cudaMemcpy(cpo, d_cp, sizeof cpo, cudaMemcpyDeviceToHost);
     int bad_st = err != cudaSuccess, bad_cp = 0;
     for (int i = 0; i < 32 * 16; ++i) bad_st += out[i] != fin[i];
-    const bool checked = (e.mode >= 1 && e.mode <= 4) || e.mode == 6;
+    const bool checked = (e.mode >= 1 && e.mode <= 4) || e.mode == 6 || e.mode == 8;
     if (checked)
       for (int i = 0; i < 2 * CPS; ++i) bad_cp += cpo[i] != ck[i];
     int ok = bad_st == 0 && bad_cp == 0;
