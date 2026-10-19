@@ -95,7 +95,7 @@ those roots to the vllm-v1 roots is the committer's opening, not proof. Rows the
   (`check_verdicts`). Its one line
   `RECORD_VERDICT = "lean"` names whose verdict is the record's (`"python"` switches back); both outcomes are recorded
   beside it (`verifiers`), and where they disagree the check is refused naming both. The service's `Stream` and
-  `benchmarks/one_stage` call it. The two are held to each other by
+  `benchmarks/one_stage` call it. Python is held to the Lean by
   `verity/core/service/sampled_proofs/tests/test_difftest.py`. The same package ports the challenger's draw from the
   selection rule on (`SampledProofs/Select.lean`: `service.selection_law`, `draw.derive` and `service.select_draw`,
   with the number of coin bytes it reads), which the difftest holds to the Python on fixed coins, every rule and random
@@ -160,7 +160,7 @@ from verity.core.protocols.sampled_proofs.costfit import fit
   a work table), `check_draw` holds a draw to the registration and the verifier's sampling design, and `check_proved`
   holds the proved units to the draw; `stratum_k`, `work_k`, `work_table` and `proved` are the pieces they use.
 - `partition`: `partition`, `digest`, `units` and `strata` over core's `verity/partition/v1` with the template queries,
-  and the test programs `population_program` and `mixed_population_program`.
+  and the population programs `population_program` and `mixed_population_program`.
 - `registered`: registered values: `Registered.commit` (the prover's rows, salts and tree), `domain`,
   `registered_entries` and `reads` (the verifier's leaf counts, domains and read map, from its own program), `reads_file`
   (the Lean verifier's `--registered`), `verify_read`.
@@ -345,7 +345,7 @@ The audit record (`audit.audit_record`) is `{"format": "verity/one-stage/audit/v
 - `profile` is the profile's JSON, except that a stratified or work sampling design keeps the v0 form: its JSON with
   `delta` and the count drawn per template.
 - `wrong_units` is `{"delta", "of": population, "bound", "rule", ["per_template"]}`: `bound` is core's exact
-  `Stratified.count_bound` at delta for `subset` (one stratum), `stratified` and `work`, and the linear relaxation for
+  `Stratified.count_bound` at delta for `subset` (one stratum), `stratified` and `work`, and `Bernoulli.count_bound` for
   `bernoulli`; a stratified or work sampling design adds each template's own bound.
 - `integrity_profile` is `verity/integrity-profile/v1`: `{"format", "protocol", "program", "query", "partition",
   "population", "registration": <digest>, "scheme", "roots": [{"port", "root", "leaves"}], "law", "drawn",

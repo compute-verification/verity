@@ -239,7 +239,7 @@ def _coord(K):
 
 @lru_cache(maxsize=None)
 def _layer(members):
-    """One Program per population: `TemplatePopulations`' identity is its counts alone, so two of equal counts are one binding."""
+    """One Program per population, built once: `mixed_population_program` makes a new `TemplatePopulations_v1` each call."""
     return OP.mixed_population_program([(_coord(K), n) for K, n in members])
 
 
