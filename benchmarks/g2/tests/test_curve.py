@@ -268,6 +268,13 @@ def test_a_key_with_only_sha256_or_failed_measures_is_no_curve_row():
         C.harness_measures(harness_doc(), run="r1", source="art:1", pin="pinned"))
 
 
+def test_a_curve_rows_stock_is_its_full_columns_run():
+    full = C.harness_measures(harness_doc(), run="r1", source="art:1", pin="pinned")
+    v1_first = [C.Measure(**{**m.__dict__, "run": "r0", "ratio": 1.01, "stock_ms": 1234.0}) for m in full if m.sha256]
+    row = next(ln for ln in C.curve_table(v1_first + full).splitlines() if "| prefill | ttft |" in ln)
+    assert "| 98.70 |" in row and "1234" not in row
+
+
 def test_dedupe_reads_a_run_once():
     ms = C.harness_measures(harness_doc(), run="r1", source="art:1", pin="pinned")
     again = C.harness_measures(harness_doc(), run="r1", source="art:9", pin="pinned")

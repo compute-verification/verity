@@ -358,14 +358,15 @@ def curve_table(measures: list[Measure]) -> str:
     """The curve: per model, GPU, mode, batch and phase, the best counting ratio at full acquisition and per layer, and the
     lowest SHA-256 one beside them."""
     b = best(measures)
-    lines = ["| model | GPU | mode | B | phase | metric | stock ms | full Commit, rows-sha512 | per-layer, rows-sha512 | vllm-v1 (SHA-256, not counted) |",
+    lines = [("| model | GPU | mode | B | phase | metric | stock ms (full's run) | full Commit, rows-sha512 | per-layer, rows-sha512 | "
+              "vllm-v1 (SHA-256, not counted) |"),
              "|---|---|---|---:|---|---|---:|---|---|---|"]
     for k in sorted(b, key=_order):
         model, gpu, mode, batch, phase, metric = k
         if metric not in CURVE_METRICS[phase] or not (b[k].get("full") or b[k].get("per-layer")):
             continue
         cols = b[k]
-        stock = next((m.stock_ms for m in cols.values() if m.stock_ms is not None), None)
+        stock = next((cols[c].stock_ms for c in ("full", "per-layer") if c in cols and cols[c].stock_ms is not None), None)
         lines.append(f"| {model} | {gpu} | {mode} | {batch} | {phase} | {metric} | {'' if stock is None else f'{stock:.2f}'} | "
                      f"{_cell(cols.get('full'))} | {_cell(cols.get('per-layer'))} | {_cell(cols.get(SCHEME_V1))} |")
     return "\n".join(lines)
