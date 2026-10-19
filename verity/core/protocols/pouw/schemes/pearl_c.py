@@ -145,6 +145,13 @@ class S512Seed(bytes):
     """A seed of -h3: its noise lines are drawn by `sample_line`'s SHA-512 rule, not Pearl's BLAKE3 one."""
 
 
+#: h4's seed for the E_A lines of the kernels' padding rows (those past the unit's m rows, which no tile covers and whose
+#: products are dropped): a constant, so those lines wait on no root and A's tree may run beside the tile hashing.  Every row
+#: of the unit, filler rows included, still seeds its own line from its row digest, which the tap's root commits before the
+#: coin.  Under -h3 the padding rows stay under seed_A's line key (its kernels' bytes are pinned)
+PAD_SEED = S512Seed(bytes(32))
+
+
 def unit_seed_a(salt: bytes, root_a: bytes, root_b: bytes, index: int, hashing: str = "h0") -> bytes:
     """A unit's seed_A: H_"pearl-c/v0/seed-A"(salt ‖ root_A ‖ root_B ‖ index u64 LE); under -h3 H_"seed-A" (`s512`)."""
     msg = salt + root_a + root_b + index.to_bytes(8, "little")

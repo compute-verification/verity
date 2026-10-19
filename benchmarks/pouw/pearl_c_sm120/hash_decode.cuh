@@ -362,6 +362,24 @@ DEV void pd_words(uint64_t* w, const uint4* v) {   // a 128-byte block of little
     w[2 * q + 1] = rs_be64(x.z, x.w);
   }
 }
+// two FP32 words widened from BF16 (x << 16) as the BF16 pair's u32 word: lo's high half, then hi's
+DEV uint32_t pd_hi16(uint32_t lo, uint32_t hi) { return lo >> 16 | (hi & 0xFFFF0000u); }
+// block c (128 bytes) of row r's segment j into nb: the row's own bytes (k words a row at p0), or with i4 set (narrow, h4)
+// the BF16 row whose FP32 words (2 k a row at p0, each a BF16 widened) are at p0, read as each word's high half
+DEV void pd_block(const Args& a, int k, int r, int j, int c, uint4* nb) {
+  if (a.i[4]) {
+    const uint4* f = reinterpret_cast<const uint4*>(a.p[0] + 8ull * k * r + 2ull * RS_SEG * j) + 16 * c;
+#pragma unroll
+    for (int q = 0; q < 8; q++) {
+      const uint4 x = f[2 * q], y = f[2 * q + 1];
+      nb[q] = make_uint4(pd_hi16(x.x, x.y), pd_hi16(x.z, x.w), pd_hi16(y.x, y.y), pd_hi16(y.z, y.w));
+    }
+    return;
+  }
+  const uint4* seg = reinterpret_cast<const uint4*>(a.p[0] + 4ull * k * r + (uint64_t)RS_SEG * j) + 8 * c;
+#pragma unroll
+  for (int q = 0; q < 8; q++) nb[q] = seg[q];
+}
 
 // ---------------------------------------------------------------- the pieces
 // the fold's block b < s / 2 + 1 of s segment digests (rs_fold's message after Q)
@@ -775,6 +793,20 @@ DEV void pd_row_seed(const Args& a, const uint32_t* unit, uint64_t index, int r,
   }
   if (a.p[12]) pd_line<V, P>(key, 0, a.p[12] + 32ull * r, on);
 }
+// mode 1's E_A filler lines t in [count, i3), line t under the constant key at p11 (h4's pad key), into p12: by one thread,
+// or (P) by a pair's consumer warp, a lane a line
+template <int V, int P = 0> DEV void pd_pad_lines(const Args& a, int count) {
+  uint32_t k[8];
+  load_key(a.p[11], k);
+  if constexpr (P != 0) {
+    for (int b = count; b < a.i[3]; b += 32) {
+      const int t = b + (int)(threadIdx.x & 31);
+      pd_line<V, 1>(k, (uint32_t)t, a.p[12] + 32ull * t, t < a.i[3]);
+    }
+  } else {
+    for (int t = count; t < a.i[3]; t++) pd_line<V>(k, (uint32_t)t, a.p[12] + 32ull * t);
+  }
+}
 // the tree's levels above level 0 (tm the templates, nodes PD_NODES words, root 8, lk 8: shared), seed_A and line_a, E_A's
 // filler lines (p12 nonzero), and the counter at scratch reset (scratch nonzero).  PD_PAIR: by pair 0 (warps 0 and pw0) and
 // pair 1 (warps c1 and p1), every other warp returning; else by the CTA's threads
@@ -842,10 +874,12 @@ extern "C" __global__ void __launch_bounds__(32) pd_heads(const Args) {
 // templates and the frame leaf run while warp 0 folds, on warps 1, 2 and 3.  p0 A's rows (FP32, k words each), p1 row
 // digests out (64 B a row), p2 A's tree (level 0, then each level above), p3 row seeds out (32 B a row), p4 their line keys
 // out, p5 the unit block (salt ‖ root_B ‖ u64 LE index), p6 dom_a (64 B), p7 the prover's salt key, p8 the hm96 constants,
-// p9 scratch (a u32 counter, zero before the first launch and left zero), p10 seed_A out, p11 line_a out, p12 E_A's codes
-// out (32 B a line: row r's line under its own line key, then the filler lines under line_a) or 0; i0 rows (at most
-// PD_MAX_ROWS), i1 k, i2 mode (0: the tree, seed_A and the filler lines too, 1: level 0 and the rows' lines only), i3 E_A's
-// lines (rows and filler rows); PD_STAMP: p13 the stamps or 0
+// p9 scratch (a u32 counter, zero before the first launch and left zero), p10 seed_A out, p11 line_a out (mode 1: the
+// filler lines' constant key, or 0), p12 E_A's codes out (32 B a line: row r's line under its own line key, then the filler
+// lines under line_a, or in mode 1 under p11's key, CTA 0's) or 0; i0 rows (at most PD_MAX_ROWS), i1 k, i2 mode (0: the
+// tree, seed_A and the filler lines too, 1: level 0 and the rows' lines only, and the filler lines when p11 is given), i3
+// E_A's lines (rows and filler rows), i4 narrow (h4: p0's rows are FP32 words, 2 k a row, each a BF16 widened, and the row
+// hashed is the BF16 row, k words); PD_STAMP: p13 the stamps or 0
 template <int V> DEV void pd_commit_t(const Args a) {
   __shared__ uint64_t dig[RS_MAX_SEGS * 8], xr[8], mk[8], cc[8], ftm[8], ftw[32], hbuf[48], root[8];
   __shared__ uint64_t tm[PD_MAX_LEVELS * PD_TM];
@@ -899,10 +933,8 @@ template <int V> DEV void pd_commit_t(const Args a) {
       const int j = on ? tid : 0;
       uint64_t st[8], w[16];
       rs_seg_head(st, j, s);
-      const uint4* seg = reinterpret_cast<const uint4*>(a.p[0] + 4ull * k * r + (uint64_t)RS_SEG * j);
       uint4 nb[8];
-#pragma unroll
-      for (int q = 0; q < 8; q++) nb[q] = seg[q];
+      pd_block(a, k, r, j, 0, nb);
 #pragma unroll 1
       for (int c = 0; c <= RS_SEG / 128; c++) {
         if (c < RS_SEG / 128) {
@@ -911,10 +943,7 @@ template <int V> DEV void pd_commit_t(const Args a) {
             w[2 * q] = rs_be64(nb[q].x, nb[q].y);
             w[2 * q + 1] = rs_be64(nb[q].z, nb[q].w);
           }
-          if (c + 1 < RS_SEG / 128) {
-#pragma unroll
-            for (int q = 0; q < 8; q++) nb[q] = seg[8 * (c + 1) + q];
-          }
+          if (c + 1 < RS_SEG / 128) pd_block(a, k, r, j, c + 1, nb);
         } else {
           pd_padw(w, 128 + RS_SEG);
         }
@@ -934,14 +963,20 @@ template <int V> DEV void pd_commit_t(const Args a) {
     if (tid < s) {
       uint64_t st[8], w[16];
       rs_seg_head(st, tid, s);
-      const uint4* seg = reinterpret_cast<const uint4*>(a.p[0] + 4ull * k * r + (uint64_t)RS_SEG * tid);
+      const uint4* seg = reinterpret_cast<const uint4*>(a.p[0] + (a.i[4] ? 8ull : 4ull) * k * r
+                                                        + (a.i[4] ? 2ull : 1ull) * RS_SEG * tid);
       if constexpr ((V & PD_PREFETCH) != 0) {
 #pragma unroll
-        for (int c = 0; c < RS_SEG / 128; c++) pd_prefetch(seg + 8 * c);
+        for (int c = 0; c < RS_SEG / 128; c++) {
+          pd_prefetch(seg + 8 * c);
+          if (a.i[4]) pd_prefetch(seg + 8 * c + RS_SEG / 16);
+        }
       }
 #pragma unroll 1
       for (int c = 0; c < RS_SEG / 128; c++) {
-        pd_words(w, seg + 8 * c);
+        uint4 nb[8];
+        pd_block(a, k, r, tid, c, nb);
+        pd_words(w, nb);
         pd_cmp<V>(st, w);
       }
       pd_padc<V>(st, 128 + RS_SEG);
@@ -1001,6 +1036,7 @@ template <int V> DEV void pd_commit_t(const Args a) {
     } else if (warp == c1 || warp == p1) {          // the row's seed, line key and E_A line
       if (warp == c1) {
         pd_row_seed<V, 1>(a, unit, index, r, xr, lane == 0);
+        if (rows && r == 0 && a.p[11] && a.p[12]) pd_pad_lines<V, 1>(a, count);
         if (lane == 0) pd_stamp<V>(sb, r, PS_SEED);
         pd_pstop();
       } else {
@@ -1024,6 +1060,7 @@ template <int V> DEV void pd_commit_t(const Args a) {
     pd_stamp<V>(sb, r, PS_LEAF);
   } else if (tid == 32 * cw) {
     pd_row_seed<V>(a, unit, index, r, xr, true);
+    if (a.i[2] == 1 && r == 0 && a.p[11] && a.p[12]) pd_pad_lines<V>(a, count);
     pd_stamp<V>(sb, r, PS_SEED);
   }
   if (a.i[2] == 1) return;

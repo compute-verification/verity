@@ -16,8 +16,8 @@ device's primary context:
   weight side keeps about a byte per weight (B̃) beside the model's own weight.
 * **Each call** (`gemm`):
   - x's rows are widened into A's FP32 words, with zero filler rows up to m₁₆ (the domain's 16 | m; filler is committed as
-    zero rows) and zero padding up to the kernels' tile.  Under h4 x's rows are first staged as BF16 (``xa16``, the same
-    filler), which A's words widen and A's row digests read: A's tree is then the Commit tap's;
+    zero rows) and zero padding up to the kernels' tile.  Under h4 A's row digests read those words' BF16 halves in place
+    (the kernels' narrow mode), so A's tree is the Commit tap's over x's BF16 rows, and no BF16 copy is staged;
   - ``commit``: A's pads under its domain, each row's SHA-512 row digest (``rowdig_a``: s512_rows, `pearl_c.row_digest`, the
     inner digest of A's hm96 leaves), A's row tree, seed_A and E_A's line key, and each real row's seed over its row digest
     with its line key (``seeds_a``: s512_seeds, `pearl_c.row_seed`);
@@ -29,6 +29,9 @@ device's primary context:
   (``segdig_a``, ``segdig_t``) and, for B's tree at install, a scratch dropped after it (``segdig_b``).  At decode (the
   shapes `run.pd_variant` takes) hash_decode.cuh's launches write the same bytes: ``commit_a`` (pd_commit) does
   ``commit`` with E_A's lines in one launch, over each shape's counter (`_Shape.count`), and ``hash_leaf`` is pd_tiles.
+  Under h4 the padding rows past m₁₆ take their E_A lines under a constant key (`pearl_c.PAD_SEED`'s), so ``commit_a`` is
+  pd_commit's mode 1 (no tree above level 0) and ``tail_a`` (pd_tree: A's levels, seed_A and line_a) runs after the GEMM,
+  where a deferred whole capture forks it with the tile hashing (`_call_names`, `_call_cuts`).
 * **The records** (`pearl_c_work.UnitRecord`): each call's real rows and width, and the rows that fail the per-row rules
   (`pearl_c_work.row_passes`).  The noise floor comes from the kernel's own ρ and α, whose product is exact as a double.
   The liveness is screened in FP32 with a 2⁻¹⁰ band (`screen`), and a row inside the band is decided exactly by
@@ -51,9 +54,10 @@ call's step groups (`STEP_GROUPS`) on lanes.  Under ``deferred``, the measured o
 tile leaves) runs on a side lane at the least priority behind an event after the GEMM, while the next
 calls go on, and the rest of the call runs on a main lane of the run's own at the greatest priority, joined to the caller's
 stream by events on both sides (``deferred-caller`` leaves it on the caller's stream, #564's first cut).  A's commitment stays
-on the main lane: forming reads each row's digest and seed (``row_seeds``), and under -h3 as implemented the filler rows'
-lines read ``line_a`` from A's root, so ``deferred-a`` (A's tree beside the tile hashing) is refused until the filler keying
-changes (card 448a9d2d).  Each shape rotates `Schedule.ring` sets of the buffers the side lane touches
+on the main lane: forming reads each row's digest and seed (``row_seeds``), and under -h3 the padding rows' lines read
+``line_a`` from A's root, so ``deferred-a`` (A's tree beside the tile hashing) is refused there (card 448a9d2d).  Under h4
+A's tree defers in a deferred whole capture (`whole_defer`); the eager ``deferred-a`` stays refused, as its side lane would
+read the call's keys and A's tree from buffers this path doesn't rotate.  Each shape rotates `Schedule.ring` sets of the buffers the side lane touches
 (`rotated`), and a call reuses a set only once the side lane has finished with it; the pass's end, and the next pass's begin,
 wait for the side lane.  The same kernels read and write the same bytes, so the commitments are the serial schedule's.  A
 schedule changes only between passes (`begin`), and one whose placement this path or the scheme's format can't run is refused
@@ -132,8 +136,9 @@ from .pouw_pearl_c_screen import (
 #: -h3, SHA-512 throughout (its seeds, lines, tile leaves and HM96 trees; Daniel's 2026-10-06 ruling), each row's E_A line
 #: from its own seed (the work law capping each credited row too); its tree hash comes from
 #: `verity.core.protocols.pouw.serving.HASH_FORMATS` through the scheme.  h4 is -h3 with A's tree the Commit tap's
-#: (`HashFormat.a_rows`): A's row digests are over each row's BF16 words (``xa16``) under `audit.tap_binding`, and no
-#: tree of A's own is built.  The first name, -h3's, is the default.
+#: (`HashFormat.a_rows`): A's row digests are over each row's BF16 words (read in place from A's FP32 words) under
+#: `audit.tap_binding`, no tree of A's own is built, and the padding rows' lines are under `pearl_c.PAD_SEED`.  The first
+#: name, -h3's, is the default.
 SCHEMES = tuple(C.PearlC(forming="v1", device=d, hashing=h).name for h in ("h3", "h4") for d in (SM120, SM120_UNPROMOTED))
 #: the domain's row granularity: m₁₆ = m rounded up to it, the filler rows zero
 ROW_ALIGN = 16
@@ -150,14 +155,17 @@ EPOCH_STEPS = ("pad_b", "rowdig_b", "hash_rows_b", "tree_b")
 JOB_STEPS = ("lines_eb", "lines_fa", "lines_fb", "stats_b", "eprime_b", "form_b", "bf", "g", "pb")
 CALL_STEPS = ("pad_a", "rowdig_a", "hash_rows_a", "tree_a", "seed_a", "seeds_a", "lines_ea", "stats_a", "eprime_a", "form_a",
               "af", "pa", "gemm_pearlc", "hash_leaf")
-HASH_STEPS = frozenset({"pad_a", "rowdig_a", "hash_rows_a", "tree_a", "seed_a", "seeds_a", "lines_ea", "hash_leaf", "commit_a"})
+HASH_STEPS = frozenset({"pad_a", "rowdig_a", "hash_rows_a", "tree_a", "seed_a", "seeds_a", "lines_ea", "hash_leaf", "commit_a",
+                        "tail_a"})
 #: each call step's group (`verity.core.protocols.pouw.serving.GROUPS`), which a schedule places on a lane.  The per-row
 #: keying forming reads (A's pads, each row's digest, each real row's seed) is ``row_seeds``; A's hm96 leaves, tree and
-#: unit seed are ``a_tree``, movable under h3 once filler rows' lines stop reading `line_a` from the root (card 448a9d2d);
-#: ``commit_a`` (`run.Pipeline.FUSED`), which ends with A's tree and the lines it keys, is ``a_tree``
+#: unit seed are ``a_tree``, after the GEMM under h4, whose padding rows' lines don't read `line_a` (card 448a9d2d);
+#: ``commit_a`` (`run.Pipeline.FUSED`), which ends with A's tree and the lines it keys, is ``a_tree``, and so is h4's
+#: ``tail_a`` (`run.Pipeline.TAP_FUSED`)
 STEP_GROUPS = {"pad_a": "row_seeds", "rowdig_a": "row_seeds", "hash_rows_a": "a_tree", "tree_a": "a_tree", "seed_a": "a_tree",
                "seeds_a": "row_seeds", "lines_ea": "forming", "stats_a": "forming", "eprime_a": "forming", "form_a": "forming",
-               "af": "cleanup", "pa": "cleanup", "gemm_pearlc": "cleanup", "hash_leaf": "tile_hash", "commit_a": "a_tree"}
+               "af": "cleanup", "pa": "cleanup", "gemm_pearlc": "cleanup", "hash_leaf": "tile_hash", "commit_a": "a_tree",
+               "tail_a": "a_tree"}
 #: the steps this path can run on a side lane, with the per-call buffers they read and write (the constant keys and the pass's
 #: leaf buffer aside, which no later call rewrites): each shape rotates these, so a call never overwrites what the side lane
 #: still reads.  Only the tile hashing moves, the tile leaves over C~ and U; A's tree stays on the main lane, and the screen
@@ -176,8 +184,10 @@ def schedule_of(name: str | Schedule, scheme: C.PearlC) -> Schedule:
     s = SCHEDULES[name] if isinstance(name, str) else name
     bad = schedule_refusals(hash_format(scheme), s)
     if "a_tree" in s.side:
-        bad.append(f"{s.name}: this path keys filler rows' lines on line_a from A's root (the `lines` kernel at i4 = m_real),"
-                   " so a_tree is on the GEMM's critical path until the filler keying changes (card 448a9d2d)")
+        why = ("A's tree defers in a whole capture (whole_defer) instead" if scheme.a_tap else
+               "the padding rows' lines read line_a from A's root, so a_tree is on the GEMM's critical path (card 448a9d2d)")
+        bad.append(f"{s.name}: an eager side lane would read the call's keys and A's tree from buffers this path doesn't "
+                   f"rotate, and {why}")
     if set(s.side) - SIDE_GROUPS - {"a_tree"}:
         bad.append(f"{s.name}: this path runs only {', '.join(sorted(SIDE_GROUPS))} on a side lane, not "
                    f"{', '.join(sorted(set(s.side) - SIDE_GROUPS - {'a_tree'}))}")
@@ -288,24 +298,24 @@ def _weight_binding(w: int) -> bytes:
 
 
 def _constants(scheme: C.PearlC, device: Any, salt_key: bytes | None) -> Any:
-    """The pipeline's constant keys on the device: the prover's hm96 salt key and, from byte 256,
-    `audit.hm96_kernel_constants`."""
+    """The pipeline's constant keys on the device: the prover's hm96 salt key, under h4 from byte 32 the padding rows' line
+    key (`pearl_c.PAD_SEED`'s), and from byte 256 `audit.hm96_kernel_constants`."""
     if salt_key is None or len(salt_key) != 32:
         raise ValueError(f"{scheme.name}: -h3's trees take the prover's 32-byte hm96 salt key")
     consts = hm96_kernel_constants()
     t = _zeros(256 + len(consts), device)
-    _put(t, salt_key.ljust(256, b"\0") + consts)
+    _put(t, (salt_key + (C.line_key(C.PAD_SEED) if scheme.a_tap else b"")).ljust(256, b"\0") + consts)
     return t
 
 
 def _constant_keys(t: Any) -> dict[str, int]:
     p = t.data_ptr()
-    return {"salt_key": p, "hm": p + 256}
+    return {"salt_key": p, "pad": p + 32, "hm": p + 256}
 
 
 def _pipeline(kernel: Kernel, m: int, n: int, k: int, bufs: dict[str, int], xb: int, keys: dict[str, int], xa: int = 0,
               m_real: int | None = None, *, variant: str, weight: int = 0, a_tap: bool = False) -> Any:
-    full = {"dom_a": 0, "dom_b": 0, "dom_t": 0, "line_b": 0, "unit": 0, "salt_key": 0, "hm": 0, **keys}
+    full = {"dom_a": 0, "dom_b": 0, "dom_t": 0, "line_b": 0, "unit": 0, "salt_key": 0, "pad": 0, "hm": 0, **keys}
     tap = {"a_tap": True} if a_tap else {}
     return kernel.run.Pipeline(kernel.dev, m, n, k, variant, full, xa, xb, bufs=bufs, m_real=m_real, weight=weight, **tap)
 
@@ -449,9 +459,7 @@ class PearlCDeviceRun(GraphCalls):
             R = self.kernel.run
             mp = R.cdiv(m16, R.BM_D) * R.BM_D
             size = R.Pipeline.sizes(mp, n, k, m16)
-            names = CALL_BUFFERS + (("xa16",) if self.scheme.a_tap else ())
-            size = {**size, "xa16": 2 * mp * k}
-            sh = _Shape(m16, mp, n, k, {x: _zeros(size[x], self.device) for x in names},
+            sh = _Shape(m16, mp, n, k, {x: _zeros(size[x], self.device) for x in CALL_BUFFERS},
                         torch.zeros((mp, k), dtype=torch.float32, device=self.device), _zeros(self.nb + 104, self.device))
             sh.sets = [dict(sh.b)]
             sh.size, sh.count = size, _zeros(16, self.device)
@@ -483,7 +491,9 @@ class PearlCDeviceRun(GraphCalls):
 
     def _call_names(self, pipe: Any) -> tuple[str, ...]:
         """`pipe`'s call step names: every call step but the hashing ones when hashing is off, and but the omitted ones, with
-        each of the pipeline's fused steps (`run.Pipeline.FUSED`) in place of its parts, and dropped if any part is omitted."""
+        each of the pipeline's fused steps (`run.Pipeline.FUSED`) in place of its parts, and dropped if any part is omitted.
+        Under h4 (`a_tap`) the steps that only build A's tree (``a_tree`` after the commit: `tail_a`, or A's hm96 leaves, tree
+        and seed_A) come after the GEMM, before the tile hashing: forming reads none of them."""
         names = [x for x in CALL_STEPS if (self.hashing or x not in HASH_STEPS) and x not in self.omit]
         have = {name for name, _, _ in pipe.steps()}
         for fused, parts in getattr(pipe, "FUSED", {}).items():
@@ -492,6 +502,11 @@ class PearlCDeviceRun(GraphCalls):
                 names = [x for x in names if x not in parts]
                 if at is not None and not self.omit & set(parts):
                     names.insert(at, fused)
+        if getattr(pipe, "a_tap", False):
+            late = [x for x in names if x in ("hash_rows_a", "tree_a", "seed_a", "tail_a")]
+            names = [x for x in names if x not in late]
+            at = names.index("hash_leaf") if "hash_leaf" in names else len(names)
+            names[at:at] = late
         return tuple(names)
 
     def _call_steps(self, pipe: Any) -> list[Any]:
@@ -499,14 +514,15 @@ class PearlCDeviceRun(GraphCalls):
         return _steps(pipe, self._call_names(pipe))
 
     def _call_cuts(self, pipe: Any) -> tuple[int, int]:
-        """Where a deferred whole capture (`whole_defer`) splits `_call_steps`: after A's tree, beside which the call before's
-        tile hashing runs, and before the call's own tile hashing, which it forks."""
+        """Where a deferred whole capture (`whole_defer`) splits `_call_steps`: after A's commitment (under h4 its per-row part),
+        beside which the call before's side steps run, and before the call's own side steps, which it forks: the tile
+        hashing, and under h4 A's tree before it (`_call_names`)."""
         have = {name for name, _, _ in pipe.steps()}
         groups = [STEP_GROUPS[x] for x in self._call_names(pipe) if x in have]
-        commit = ("row_seeds", "a_tree")
+        commit, side = ("row_seeds", "a_tree"), ("a_tree", "tile_hash")
         a = next((i for i, g in enumerate(groups) if g not in commit), len(groups))
-        b = next((i for i, g in enumerate(groups) if g == "tile_hash"), len(groups))
-        if any(g in commit for g in groups[a:]) or any(g != "tile_hash" for g in groups[b:]):
+        b = next((i for i, g in enumerate(groups) if i >= a and g in side), len(groups))
+        if any(g in commit for g in groups[a:b]) or any(g not in side for g in groups[b:]):
             raise RuntimeError(f"{self.entry}: the call's steps {groups} don't start with A's commitment and end with the tile hashing")
         return a, b
 
@@ -578,14 +594,7 @@ class PearlCDeviceRun(GraphCalls):
             raise RuntimeError(f"{self.entry}: the pass is over its capacity ({self.capacity} tiles, {CALL_CAPACITY} calls, "
                                f"{len(self.flag_buf)} screened rows); end it and begin another")
         self.join_before(sh)
-        if self.scheme.a_tap:
-            tap = sh.b["xa16"][:2 * sh.mp * k].view(torch.bfloat16).view(sh.mp, k)
-            tap[:m].copy_(x2)
-            if m16 > m:
-                tap[m:m16].zero_()
-            sh.xa[:m].copy_(tap[:m])
-        else:
-            sh.xa[:m].copy_(x2)
+        sh.xa[:m].copy_(x2)
         if m16 > m:
             sh.xa[m:m16].zero_()
         pipe, steps, side = self._pipe(w, sh)

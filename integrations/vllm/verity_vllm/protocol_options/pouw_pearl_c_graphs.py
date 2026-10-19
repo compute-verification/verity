@@ -13,8 +13,9 @@ they were staged for (else it makes them itself: the same bytes either way).  A 
 call's A words and tree, as its steps leave them, to its weight's stage, from which `whole_replayed` writes the call's record
 and files, as `_retained` writes them for a call made alone.
 
-With ``whole_defer`` (and hashing), a whole capture forks each call's tile hashing and scatter, after its GEMM, onto a side
-stream of the run's own, and the next call joins it after its own A tree, so the two run side by side in the forward's graph;
+With ``whole_defer`` (and hashing), a whole capture forks each call's tile hashing and scatter (under h4 A's tree before
+them, `_call_cuts`), after its GEMM, onto a side stream of the run's own, and the next call joins it after its own A
+commitment, so the two run side by side in the forward's graph;
 a call joins at once when the call before is of its shape (the side steps still read that shape's buffers), and the
 forward's last call joins its own before vLLM's capture ends.  The same kernels write the same bytes, so the commitments are
 the serial capture's.
@@ -114,6 +115,8 @@ class GraphCalls:
             self._whole.append(WholeCall(w, m, sh.k, sh.n, sh.m16, tiles))
             out = self._into(w, sh, pipe, raw, tiles, m)
             if self._whole_retained:
+                if getattr(pipe, "a_tap", False):       # h4's side steps finish A's tree
+                    self._join()
                 for stage, t in zip(self._stages[w], self._kept(sh, pipe), strict=True):
                     stage.copy_(t)
             if self._statement_on():

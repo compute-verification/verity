@@ -225,7 +225,7 @@ def test_each_call_runs_the_pipelines_call_steps_at_its_offset_and_keys(device_r
         assert by["pd_tiles_851"][0][2] == run.leaves.data_ptr() + 64 * before      # the tile leaves, the call's last
         assert by["gemm_pearlc_d"][0][4] == y.data_ptr()
         sh = run.shapes[(32, weights[w].shape[0], 1024)]
-        assert by["pd_commit_851"][0][9] == sh.count.data_ptr() and by["pd_commit_851"][1] == (32, 1024, 0, sh.mp)
+        assert by["pd_commit_851"][0][9] == sh.count.data_ptr() and by["pd_commit_851"][1] == (32, 1024, 0, sh.mp, 0)
         index = len(run.cur.matmuls) - 1
         assert PPD._bytes(sh.keys[:168]) == PPD.call_keys(F, salt, roots[w], index, 32, run.tree_hash)
         assert bool((sh.xa[m:] == 0).all()) and torch.equal(sh.xa[:m], x.float())
@@ -239,8 +239,10 @@ def test_each_call_runs_the_pipelines_call_steps_at_its_offset_and_keys(device_r
 
 
 def test_under_h4_a_calls_row_digests_read_the_commit_taps_bf16_rows():
-    """Under h4 a call stages x's BF16 rows (``xa16``, filler zero), A's FP32 words are those widened, its row digests read
-    the BF16 rows as k/2 words, and its keys are the tap's domain (`audit.tap_binding`): the call builds no tree of A's own."""
+    """Under h4 a call stages no BF16 copy: A's FP32 words are x's widened (filler zero), pd_commit reads their BF16 halves in
+    place (narrow, k/2 words a row) in mode 1 with the padding rows' lines under the pad key (`pearl_c.PAD_SEED`'s, from
+    byte 32 of the constants), pd_tree builds A's tree after the GEMM, and its keys are the tap's domain
+    (`audit.tap_binding`): the call builds no tree of A's own."""
     scheme = "pearl-c-sm120-v1-h4"
     rng = np.random.default_rng(3)
     weights = {0: torch.from_numpy(bf16_words(rng, 128, 1024).view(np.float32).copy()).to(torch.bfloat16)}
@@ -252,12 +254,16 @@ def test_under_h4_a_calls_row_digests_read_the_commit_taps_bf16_rows():
     kernel.dev.log.clear()
     x = torch.randn(20, 1024).to(torch.bfloat16)
     run.gemm(0, x, weights[0], None)
-    assert [n for n, *_ in kernel.dev.log if not n.endswith("_smem")] == PER_CALL
+    assert [n for n, *_ in kernel.dev.log if not n.endswith("_smem")] == PER_CALL[:-1] + ["pd_tree_851", PER_CALL[-1]]
     sh = run.shapes[(32, 128, 1024)]
-    tap = sh.b["xa16"][:2 * sh.mp * 1024].view(torch.bfloat16).view(sh.mp, 1024)
-    assert torch.equal(tap[:20], x) and bool((tap[20:32] == 0).all()) and torch.equal(sh.xa[:32], tap[:32].float())
-    (commit,) = [(p, i) for n, _, p, i in kernel.dev.log if n == "pd_commit_851"]
-    assert commit[0][0] == sh.b["xa16"].data_ptr() and commit[1] == (32, 512, 0, sh.mp)
+    assert "xa16" not in sh.b and torch.equal(sh.xa[:20], x.float()) and bool((sh.xa[20:] == 0).all())
+    by = {n: (p, i) for n, _, p, i in kernel.dev.log}
+    pad = run.const.data_ptr() + 32
+    assert PPD._bytes(run.const[32:64]) == C.line_key(C.PAD_SEED)
+    commit, tree = by["pd_commit_851"], by["pd_tree_851"]
+    assert commit[0][0] == sh.xa.data_ptr() and commit[0][10:12] == (0, pad) and commit[1] == (32, 512, 1, sh.mp, 1)
+    assert tree[0][2] == sh.b["tree_a"].data_ptr() and tree[0][10:13] == (sh.b["seed_a"].data_ptr(), sh.b["line_a"].data_ptr(), 0)
+    assert tree[1] == (32, 0, 0, sh.mp)
     salt = run.salt
     assert PPD._bytes(sh.keys[:168]) == PPD.call_keys(F, salt, roots[0], 0, 32, run.tree_hash, tap_binding)
     assert PPD.call_keys(F, salt, roots[0], 0, 32, run.tree_hash, tap_binding) != PPD.call_keys(F, salt, roots[0], 0, 32, run.tree_hash)
@@ -387,8 +393,9 @@ def test_the_device_paths_keys_and_tree_hash_are_the_schemes(scheme):
         with pytest.raises(ValueError, match="salt key"):
             PPD._constants(s, torch.device("cpu"), bad)
     t = PPD._constants(s, torch.device("cpu"), SALT_KEY)
-    assert PPD._bytes(t) == SALT_KEY.ljust(256, b"\0") + hm96_kernel_constants()
-    assert PPD._constant_keys(t) == {"salt_key": t.data_ptr(), "hm": t.data_ptr() + 256}
+    pad = C.line_key(C.PAD_SEED) if s.a_tap else b""
+    assert PPD._bytes(t) == (SALT_KEY + pad).ljust(256, b"\0") + hm96_kernel_constants()
+    assert PPD._constant_keys(t) == {"salt_key": t.data_ptr(), "pad": t.data_ptr() + 32, "hm": t.data_ptr() + 256}
     rng = np.random.default_rng(1)
     weights = {0: torch.from_numpy(bf16_words(rng, 128, 1024).view(np.float32).copy()).to(torch.bfloat16)}
     roots = PPD.weight_roots(kernel, weights, scheme, salt_key=SALT_KEY)
@@ -404,8 +411,8 @@ def test_every_tree_the_device_path_commits_is_its_hashing_formats(scheme, tmp_p
     their kernels run by `simt_twin` and hash_decode.cuh's host build: each is `MerkleTree`'s root in hm96-sha512
     (frame-v3-sha512 over values salted by the prover's key).  A decode call's commitment is pd_commit's: each row digest
     `pearl_c.row_digest` of its row, the row seeds the scheme's `row_seeds` with their line keys, seed_A the scheme's, and E_A's
-    lines the m₁₆ committed rows' under their own keys and the filler rows' under line_a; its tile leaves (pd_tiles') over
-    the zero C~ and U are `pearl_c.leaf`'s."""
+    lines the m₁₆ committed rows' under their own keys and the filler rows' under line_a (under h4 `pearl_c.PAD_SEED`, and
+    pd_tree builds the tree after the GEMM); its tile leaves (pd_tiles') over the zero C~ and U are `pearl_c.leaf`'s."""
     s = PPD.scheme_of(scheme)
     h, nb, key = s.commitment_hash, 64, SALT_KEY
     rng = np.random.default_rng(5)
@@ -427,6 +434,7 @@ def test_every_tree_the_device_path_commits_is_its_hashing_formats(scheme, tmp_p
         run.gemm(w, x, weights[w], None)
         names = [n for n, *_ in kernel.dev.log if not n.endswith("_smem")]
         assert names[0] == "pd_commit_851" and names[-1] == "pd_tiles_851", names
+        assert ("pd_tree_851" in names) == s.a_tap and (not s.a_tap or names[-2] == "pd_tree_851"), names
         sh, index = run.shapes[(32, weights[w].shape[0], 1024)], len(run.cur.matmuls) - 1
         a = torch.zeros((32, 1024), dtype=torch.float32)
         a[:x.shape[0]] = x.float()
@@ -438,11 +446,11 @@ def test_every_tree_the_device_path_commits_is_its_hashing_formats(scheme, tmp_p
         assert PPD._bytes(sh.b["lkeys_a"][:32 * 32]) == b"".join(C.line_key(z) for z in want)
         assert PPD._bytes(sh.b["seed_a"][:32]) == seed_a
         assert PPD._bytes(sh.b["ea_codes"][:32 * sh.mp]) == b"".join(
-            bytes(C.sample_line(C.S512Seed(want[t]), 0, 0, 0) if t < 32 else C.sample_line(C.S512Seed(seed_a), 0, 0, t))
-            for t in range(sh.mp))
+            bytes(C.sample_line(C.S512Seed(want[t]), 0, 0, 0) if t < 32 else
+                  C.sample_line(C.PAD_SEED if s.a_tap else C.S512Seed(seed_a), 0, 0, t)) for t in range(sh.mp))
         (commit,) = [(p, i) for n, _, p, i in kernel.dev.log if n == "pd_commit_851"]
         assert commit[0][4] == sh.b["lkeys_a"].data_ptr() and commit[0][12] == sh.b["ea_codes"].data_ptr()
-        assert commit[1] == (32, 512 if s.a_tap else 1024, 0, sh.mp)
+        assert commit[1] == ((32, 512, 1, sh.mp, 1) if s.a_tap else (32, 1024, 0, sh.mp, 0))
     for index, (w, x) in enumerate(calls):
         a = torch.zeros((32, 1024), dtype=torch.float32)
         a[:x.shape[0]] = x.float()
@@ -1643,14 +1651,17 @@ def test_the_device_path_commits_with_its_schemes_hashing_format(device_run):
 
 def test_a_schedule_this_path_or_the_format_cannot_run_is_refused():
     """-h3's row seeds come from A's rows, not its root, so its format lets A's tree leave the main lane; this path moves only
-    the tile hashing, which reads C~ and U, the buffers each shape rotates.  A's tree stays refused here with its own reason:
-    the `lines` kernel keys filler rows on line_a from A's root (card 448a9d2d)."""
+    the tile hashing, which reads C~ and U, the buffers each shape rotates.  A's tree stays refused on an eager side lane with
+    its own reasons: under -h3 the padding rows' lines read line_a from A's root (card 448a9d2d), and under h4 A's tree
+    defers in a whole capture instead."""
     from verity.core.protocols.pouw.serving import Schedule
     s = PPD.scheme_of(SCHEME)
-    with pytest.raises(ValueError, match="filler rows' lines on line_a from A's root"):
+    with pytest.raises(ValueError, match="padding rows' lines read line_a from A's root"):
         PPD.schedule_of(Schedule("early-a", frozenset({"a_tree", "tile_hash"}), ring=2), s)
-    with pytest.raises(ValueError, match="filler rows' lines on line_a from A's root"):
+    with pytest.raises(ValueError, match="padding rows' lines read line_a from A's root"):
         PPD.schedule_of("deferred-a", s)
+    with pytest.raises(ValueError, match="defers in a whole capture"):
+        PPD.schedule_of("deferred-a", PPD.scheme_of("pearl-c-sm120-v1-h4"))
     with pytest.raises(ValueError, match="this path runs only tile_hash on a side lane, not screen"):
         PPD.schedule_of(Schedule("screen-aside", frozenset({"tile_hash", "screen"}), ring=2), s)
     with pytest.raises(ValueError, match="a side lane needs ring >= 2"):

@@ -59,13 +59,31 @@ DEV void rs_seg_out(uint64_t p, const uint64_t* st) {
 }
 
 // segment t of the rows (row t / s, segment t % s, s = k / 256: at p0 + 1 KiB · t, the rows being contiguous) into p1 + 64 t.
-// p0 rows, p1 segment digests; i0 rows, i1 k (a multiple of 256, at most 256 RS_MAX_SEGS)
+// p0 rows, p1 segment digests; i0 rows, i1 k (a multiple of 256, at most 256 RS_MAX_SEGS), i2 narrow (h4: p0's rows are FP32
+// words, 2 k a row, each a BF16 widened, and the row hashed is the BF16 row, each word's high half: segment t at p0 + 2 KiB · t)
 extern "C" __global__ void __launch_bounds__(RS_FAST_NT, RS_FAST_MINB) s512_row_segs(const Args a) {
   const int s = a.i[1] / 256;
   const uint64_t t = (uint64_t)blockIdx.x * blockDim.x + threadIdx.x;
   if (t >= (uint64_t)a.i[0] * s) return;
   uint64_t st[8], w[16];
   rs_seg_head(st, (int)(t % s), s);
+  if (a.i[2]) {
+    const uint4* f = reinterpret_cast<const uint4*>(a.p[0] + 2ull * RS_SEG * t);
+#pragma unroll 1
+    for (int c = 0; c < RS_SEG / 128; c++) {
+      uint4 nb[8];
+#pragma unroll
+      for (int q = 0; q < 8; q++) {
+        const uint4 x = f[16 * c + 2 * q], y = f[16 * c + 2 * q + 1];
+        nb[q] = make_uint4(x.x >> 16 | (x.y & 0xFFFF0000u), x.z >> 16 | (x.w & 0xFFFF0000u), y.x >> 16 | (y.y & 0xFFFF0000u),
+                           y.z >> 16 | (y.w & 0xFFFF0000u));
+      }
+      rs_block(st, w, nb);
+    }
+    rs_pad(st, 128 + RS_SEG);
+    rs_seg_out(a.p[1] + 64 * t, st);
+    return;
+  }
   const uint4* seg = reinterpret_cast<const uint4*>(a.p[0] + (uint64_t)RS_SEG * t);
 #pragma unroll 1
   for (int c = 0; c < RS_SEG / 128; c++) rs_block(st, w, seg + 8 * c);

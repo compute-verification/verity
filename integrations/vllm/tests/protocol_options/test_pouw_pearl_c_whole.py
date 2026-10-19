@@ -551,3 +551,22 @@ def test_a_fused_step_takes_its_parts_place_and_an_omitted_part_drops_it():
     assert "commit_a" not in run._call_names(pipe) and run._call_names(pipe)[0] == "stats_a"
     run.omit, run.hashing = frozenset(), False
     assert run._call_names(pipe) == ("stats_a", "eprime_a", "form_a", "af", "pa", "gemm_pearlc")
+
+
+def test_under_h4_a_trees_tail_follows_the_gemm_and_a_deferred_capture_forks_it_with_the_tile_hashing():
+    """Under h4 (`run.Pipeline.TAP_FUSED`) pd_commit's mode 1 is the commitment before forming, and A's tree above level 0
+    (``tail_a``) comes after the GEMM, so a deferred whole capture's side steps are A's tree and then the tile hashing; off
+    pd, A's hm96 leaves, tree and seed_A move there the same way."""
+    tap = {"commit_a": ("pad_a", "rowdig_a", "hash_rows_a", "seeds_a", "lines_ea"), "tail_a": ("tree_a", "seed_a")}
+    every = ("commit_a", "tail_a", *PPD.CALL_STEPS)
+    pipe = SimpleNamespace(steps=lambda: [(x, None, None) for x in every if x not in tap["commit_a"] + tap["tail_a"]],
+                           FUSED=tap, a_tap=True)
+    run = SimpleNamespace(entry="test", hashing=True, omit=frozenset())
+    run._call_names = lambda p: PPD.PearlCDeviceRun._call_names(run, p)
+    assert run._call_names(pipe) == ("commit_a", "stats_a", "eprime_a", "form_a", "af", "pa", "gemm_pearlc", "tail_a",
+                                     "hash_leaf")
+    assert PPD.PearlCDeviceRun._call_cuts(run, pipe) == (1, 7)
+    eager = SimpleNamespace(steps=lambda: [(x, None, None) for x in PPD.CALL_STEPS], a_tap=True)
+    names = run._call_names(eager)
+    assert names[-4:] == ("hash_rows_a", "tree_a", "seed_a", "hash_leaf") and names[:3] == ("pad_a", "rowdig_a", "seeds_a")
+    assert PPD.PearlCDeviceRun._call_cuts(run, eager) == (3, len(names) - 4)

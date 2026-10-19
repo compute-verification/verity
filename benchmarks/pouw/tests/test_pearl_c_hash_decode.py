@@ -182,7 +182,57 @@ def test_pd_writes_pearl_c_h3s_bytes_and_the_no_write_control_fails(host, m, mr,
         assert host.read(bufs["pd_count"], 16) == bytes(16)
         launches = {name: (grid, block, smem, i) for name, grid, block, smem, i in host.log}
         commit, tile = launches[f"pd_commit_{v}"], launches[f"pd_tiles_{v}"]
-        assert commit == (mr, 32 * (R.cdiv(k // 256, 32) * 2 + 2), host.OPTIN, (mr, k, 0, m))
+        assert commit == (mr, 32 * (R.cdiv(k // 256, 32) * 2 + 2), host.OPTIN, (mr, k, 0, m, 0))
         group = bool(v & R.PD_GROUP)
         assert tile == ((R.cdiv(mr, 64) * R.cdiv(n // 64, R.PD_G), 32 * R.PD_G, R.PD_PAIR_SMEM // 2) if group
                         else (tiles, 32, 0)) + ((mr, n),)
+
+
+@pytest.mark.parametrize("m, mr", [(64, 48), (64, 64)])
+def test_pd_under_h4_reads_a_bf16_halves_in_place_and_keys_the_padding_rows_on_the_pad_seed(host, m, mr):
+    """Under h4 (`a_tap`) ``commit_a`` is pd_commit's mode 1 in narrow mode over A's FP32 words (each a BF16 widened) and
+    ``tail_a`` is pd_tree: the row digests are the BF16 rows' (the Commit tap's row table, under `audit.tap_binding`'s
+    domain), the tree, row seeds, seed_A and line_a are the format's over them, and the padding rows' E_A lines are
+    `pearl_c.PAD_SEED`'s.  The no-write control fails every comparison."""
+    k, n, idx = 1024, 384, 5
+    rng = np.random.default_rng(mr + 1)
+    bf = [rng.integers(0, 1 << 16, k, dtype=np.uint16) for _ in range(mr)] + [np.zeros(k, np.uint16)] * (m - mr)
+    xa = b"".join((r.astype(np.uint32) << 16).astype("<u4").tobytes() for r in bf)
+    rows = [r.astype("<u2").tobytes() for r in bf[:mr]]
+    salt, salt_key, root_b = bytes(range(32)), bytes(range(100, 132)), hashlib.sha512(b"root_b").digest()
+    dom_a = rows_domain(audit.tap_binding(salt, idx), idx, mr, audit.HM96)
+    keys = {"salt_key": salt_key, "hm": audit.hm96_kernel_constants(), "unit": salt + root_b + idx.to_bytes(8, "little"),
+            "dom_a": dom_a.domain_id, "dom_b": bytes(64), "dom_t": bytes(64), "line_b": bytes(32), "pad": C.line_key(C.PAD_SEED)}
+    bufs = {name: host.alloc(size) for name, size in R.Pipeline.sizes(m, n, k, mr).items()}
+    bufs["pd_count"] = host.alloc(16)
+    pipe = R.Pipeline(host, m, n, k, "sm120", {name: host.put(v) for name, v in keys.items()}, host.put(xa), 0, bufs=bufs,
+                      m_real=mr, a_tap=True)
+    by = {name: step for name, _, step in pipe.steps()}
+    assert pipe.FUSED is R.Pipeline.TAP_FUSED and {"commit_a", "tail_a"} <= set(by)
+    assert not {x for parts in R.Pipeline.TAP_FUSED.values() for x in parts} & set(by)
+
+    digests = [C.row_digest(r) for r in rows]
+    tree_a = levels(dom_a, rows, ROW_SCHEMA, salt_key, idx)
+    seeds = [C.row_seed(salt, d, root_b, idx, r, "h4") for r, d in enumerate(digests)]
+    seed_a = C.unit_seed_a(salt, tree_a[-64:], root_b, idx, "h4")
+    want = {"rowdig_a": b"".join(digests), "tree_a": tree_a, "seed_a": bytes(seed_a), "line_a": C.line_key(seed_a),
+            "seeds_a": b"".join(seeds), "lkeys_a": b"".join(C.line_key(s) for s in seeds),
+            "ea_codes": b"".join(bytes(C.sample_line(C.S512Seed(seeds[t]), 0, 0, 0) if t < mr else
+                                       C.sample_line(C.PAD_SEED, 0, 0, t)) for t in range(m))}
+    for v in (None, *SERVED):
+        for x in want:
+            host.array(bufs[x])[:] = R.POISON
+        host.log.clear()
+        if v is not None:
+            pipe.pd = v
+            by["commit_a"]()
+            by["tail_a"]()
+        got = {x: host.read(bufs[x], len(want[x])) == want[x] for x in want}
+        if v is None:
+            assert got == dict.fromkeys(want, False), "the no-write control passed"
+            continue
+        assert got == dict.fromkeys(want, True), (v, got)
+        assert host.read(bufs["pd_count"], 16) == bytes(16)
+        launches = {name: (grid, block, smem, i) for name, grid, block, smem, i in host.log}
+        assert launches[f"pd_commit_{v}"] == (mr, 32 * (R.cdiv(k // 512, 32) * 2 + 2), host.OPTIN, (mr, k // 2, 1, m, 1))
+        assert launches[f"pd_tree_{v}"] == (1, 128, host.OPTIN, (mr, 0, 0, m))
