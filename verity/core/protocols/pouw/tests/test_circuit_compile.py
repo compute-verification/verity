@@ -29,6 +29,7 @@ from verity.ml.circuits.ops.boolean import s8 as BS8
 from verity.ml.circuits.program import Program
 from verity.ml.circuits.refs import Coll, array_of, concat
 from verity.ml.circuits.types import Array, Record, Tuple, Value
+from verity.core.protocols.pouw import grind as GR
 from verity.core.protocols.pouw.circuit import compile as C
 from verity.core.protocols.pouw.circuit import hashes as H
 from verity.core.protocols.pouw.circuit import seeds as SD
@@ -239,7 +240,7 @@ def _coord(K):
 
 @lru_cache(maxsize=None)
 def _layer(members):
-    """One Program per population: `TemplatePopulations`' identity is its counts alone, so two of equal counts are one binding."""
+    """One Program per population, built once: `mixed_population_program` makes a new `TemplatePopulations_v1` each call."""
     return OP.mixed_population_program([(_coord(K), n) for K, n in members])
 
 
@@ -589,17 +590,53 @@ GQA = _def("CompileTestGqa", ("H", "N"),
            lambda B, S, q, k: B.batch(bind(SCORES, N=S.N), q, k, axes=(0, None)))
 KINDS = C.register(C.Scheme("compile-test-kinds", (2, 2), {"GemmAccumulatorS8_v1": _unit(UNIT)}))
 COVER2 = C.register(C.Scheme("compile-test-cover", (2, 2), {C.ANY: _unit(UNIT)}, cover=2)).name
-#: the test scheme with no pair cover, and at a QKᵀ cover of n pairs
-QK_OPEN = C.register(C.Scheme("compile-test-qk-open", (2, 2), {C.ANY: _unit(UNIT)}, pair_cover={})).name
-QK_COVER = {n: C.register(C.Scheme(f"compile-test-qk-{n}", (2, 2), {C.ANY: _unit(UNIT)}, pair_cover={"DotBf16_v2": n})).name
-            for n in (4, 5)}
+#: the test scheme with no row form for QKᵀ, so no grind term
+QK_OPEN = C.register(C.Scheme("compile-test-qk-open", (2, 2), {C.ANY: _unit(UNIT)}, rows={})).name
+#: a KV head's query heads × its keys, one tile
+ATTN_TILE = C.register(C.Scheme("compile-test-attn", (4, 16), {C.ANY: _unit(UNIT)})).name
+
+ROW = Array(128, BF)
+QK128 = bind(G.DotBf16, K=128, **G.GEMM_AMPERE)
+#: one query row's scores on its N keys
+KEYS = _def("CompileTestKeys", ("N",), lambda S: ((("q", ROW), ("k", Array(S.N, ROW))), Array(S.N, P.F32)),
+            lambda B, S, q, k: B.batch(QK128, q, k, axes=(None, 0)))
+#: a KV head's G query heads on its N keys (GQA)
+KV_DECODE = _def("CompileTestKvDecode", ("G", "N"),
+                 lambda S: ((("q", Array(S.G, ROW)), ("k", Array(S.N, ROW))), Array(S.G, Array(S.N, P.F32))),
+                 lambda B, S, q, k: B.batch(bind(KEYS, N=S.N), q, k, axes=(0, None)))
+#: decode, one call: C (KV head, request) components
+DECODE = _def("CompileTestDecode", ("C", "G", "N"),
+              lambda S: ((("q", Array(S.C, Array(S.G, ROW))), ("k", Array(S.C, Array(S.N, ROW)))),
+                         Array(S.C, Array(S.G, Array(S.N, P.F32)))),
+              lambda B, S, q, k: B.batch(bind(KV_DECODE, G=S.G, N=S.N), q, k, axes=(0, 0)))
+
+
+def _causal_body(B, S, q, k):
+    parts = [B.batch(QK128, q[i], Coll(Array(i + 1, ROW), k.refs.slice(0, (i + 1) * ROW.leaves)), axes=(None, 0))
+             for i in range(S.L)]
+    return Coll(Array(S.L * (S.L + 1) // 2, P.F32), concat([p.refs for p in parts]))
+
+
+#: one query head's causal scores over an L-token prompt: query i on keys 0 .. i
+CAUSAL = _def("CompileTestCausal", ("L",), lambda S: ((("q", Array(S.L, ROW)), ("k", Array(S.L, ROW))),
+                                                      Array(S.L * (S.L + 1) // 2, P.F32)), _causal_body)
+#: a KV head's G query heads on the prompt's L keys
+KV_PREFILL = _def("CompileTestKvPrefill", ("G", "L"),
+                  lambda S: ((("q", Array(S.G, Array(S.L, ROW))), ("k", Array(S.L, ROW))),
+                             Array(S.G, Array(S.L * (S.L + 1) // 2, P.F32))),
+                  lambda B, S, q, k: B.batch(bind(CAUSAL, L=S.L), q, k, axes=(0, None)))
+#: prefill, one call: C (KV head, request) components
+PREFILL = _def("CompileTestPrefill", ("C", "G", "L"),
+               lambda S: ((("q", Array(S.C, Array(S.G, Array(S.L, ROW)))), ("k", Array(S.C, Array(S.L, ROW)))),
+                          Array(S.C, Array(S.G, Array(S.L * (S.L + 1) // 2, P.F32)))),
+               lambda B, S, q, k: B.batch(bind(KV_PREFILL, G=S.G, L=S.L), q, k, axes=(0, 0)))
 
 
 @compiles
 def test_qk_heads_compile():
     """Attention's QKᵀ is credited (decision 109): each head's scores, `DotBf16` of its query on its keys, are a site's dots,
     its query meeting only its own keys (a 1 × 2 tile a head), and the softmax max chain is the rest (under a scheme with
-    no pair cover: `test_qk_pair_cover`)."""
+    no row form for QKᵀ, so no grind term: `test_qk_grind`)."""
     served = Program(bind(HEADS, H=4, N=2))
     c = C.compile(served, QK_OPEN)
     (s,) = c.sites
@@ -612,22 +649,54 @@ def test_qk_heads_compile():
     assert _run(c, args)[:4] == evaluate(served.fn, *args)
 
 
+def _grind_pct(rows, dots):
+    return f"{100 * GR.visible_premium(rows, GR.T_BITS) / dots:.4g}%"
+
+
 @compiles
-def test_qk_pair_cover():
-    """Decision 122: a seed group's QKᵀ covers at least `QK_PAIRS` (385) (head, request) pairs by default, a pair a component
-    of its dots (here a head's query and its keys), so one call of 4 heads is refused, pointing to decision 36's live coin;
-    at a cover of 4 pairs it compiles, at 5 it is refused. Heads sharing their keys (GQA) are one pair."""
-    served = Program(bind(HEADS, H=4, N=2))
-    e = _refused("cover", served)
-    assert "4 (head, request) pairs of DotBf16_v2, fewer than compile-test's 385" in str(e) and "decision 36" in str(e)
-    assert C.compile(served, QK_COVER[4]).pair_cover == ({"DotBf16_v2": 4},)
-    _refused("cover", served, QK_COVER[5])
-    assert C.compile(Program(bind(GQA, H=4, N=2)), QK_OPEN).pair_cover == ({"DotBf16_v2": 1},)
-    assert C.QK_PAIRS == 385 and C.PV_PAIRS == 791 and C.SCHEMES[SCHEME].pair_cover == C.PAIR_COVER
-    plugged = KINDS.plug("CompileTestPv_v1", _unit(UNIT), "compile-test-kinds-pv", pairs=C.PV_PAIRS)
-    assert plugged.pair_cover == {**C.PAIR_COVER, "CompileTestPv_v1": C.PV_PAIRS}
+def test_qk_grind():
+    """Decision 122: a seed group's QKᵀ carries GRIND's grind term, `grind.visible_premium` over its distinct rows (a Q row
+    k + 320 bits read by its keys, a K row k bits read by the query heads on it) over its dots, and over 0.1% the group is
+    refused, pointing to decision 36's live coin. Four heads on their own keys are 4 Q rows and 8 K rows; four on shared keys
+    (GQA) are 4 Q rows and 2 K rows read 4 times each, one row however many query heads read it."""
+    e = _refused("cover", Program(bind(HEADS, H=4, N=2)))
+    assert "grind term of its DotBf16_v2 dots is " + _grind_pct([(4, 384, 2), (8, 64, 1)], 8) in str(e)
+    assert "decision 36" in str(e)
+    e = _refused("cover", Program(bind(GQA, H=4, N=2)))
+    assert "grind term of its DotBf16_v2 dots is " + _grind_pct([(4, 384, 2), (2, 64, 4)], 8) in str(e)
+    assert C.compile(Program(bind(HEADS, H=4, N=2)), QK_OPEN).grind == ({},)
+    assert C.SCHEMES[SCHEME].rows == C.ROWS and C.ROWS["DotBf16_v2"] == C.QK_ROWS
+    assert C.QK_ROWS.bits(128) == (448, 128) and C.PV_ROWS.bits(2048) == (224, 2048)
+    plugged = KINDS.plug("CompileTestPv_v1", _unit(UNIT), "compile-test-kinds-pv", rows=C.PV_ROWS)
+    assert plugged.rows == {**C.ROWS, "CompileTestPv_v1": C.PV_ROWS}
     with pytest.raises(ValueError):
-        C.register(C.Scheme("compile-test-no-pairs", (2, 2), {C.ANY: _unit(UNIT)}, pair_cover={"DotBf16_v2": 0}))
+        C.register(C.Scheme("compile-test-one-sided", (2, 2), {C.ANY: _unit(UNIT)},
+                            rows={"DotBf16_v2": C.RowNoise(a=(320, 0), b=(0, 0))}))
+
+
+@compiles
+def test_decode_grind_counts_every_query_head_pair():
+    """At decode (Llama-3.1-8B: 8 KV heads of 4 query heads each, a head's query on its request's keys), one call's grind
+    term counts every (query head, request) pair, its Q row, not the (KV head, request) components its K rows join: at 16
+    keys a batch of 12 is over 0.1% (0.1002%) and 13 under it (0.0925%), where 13 requests are 104 components. Over few keys
+    a KV head's K rows, read by all its query heads, bind instead: 70B's batch of 7 (8 query heads a KV head) is under 0.1%
+    over 32 keys but not over 16, where GRIND's per-pair table, which assumes the Q rows bind, would pass it."""
+    _refused("cover", Program(bind(DECODE, C=8 * 12, G=4, N=16)), ATTN_TILE)
+    c = C.compile(Program(bind(DECODE, C=8 * 13, G=4, N=16)), ATTN_TILE)
+    assert 9.2e-4 < c.grind[0]["DotBf16_v2"] <= GR.FLAG and len(c.units) == 8 * 13
+    _refused("cover", Program(bind(DECODE, C=8 * 7, G=8, N=16)), ATTN_TILE)
+    assert C.compile(Program(bind(DECODE, C=8 * 7, G=8, N=32)), ATTN_TILE).grind[0]["DotBf16_v2"] <= GR.FLAG
+
+
+@compiles
+def test_prefill_grind_counts_kv_components():
+    """At prefill a KV head's K rows, read by its query heads on every later token, bind, so a call's grind term counts its
+    (KV head, request) components: a 16-token causal prompt of 4 query heads a KV head needs 166 of them (165 is 0.10009%),
+    far more than a decode's batch and far fewer than its rows. GRIND's table (`grind_price.prefill_cover`) says 171, since it
+    counts every Q row's readers as all 16 keys and every K row's as 4 × 16; the rows' readers here are the causal ones."""
+    _refused("cover", Program(bind(PREFILL, C=165, G=4, L=16)), ATTN_TILE)
+    c = C.compile(Program(bind(PREFILL, C=166, G=4, L=16)), ATTN_TILE)
+    assert 9.9e-4 < c.grind[0]["DotBf16_v2"] <= GR.FLAG
 
 
 @compiles
