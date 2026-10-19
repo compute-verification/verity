@@ -43,3 +43,40 @@ argv = ["python3.12", "-s", "-m", "research.monitors", "relay", "--by", "vy-watc
         "--machine-alerts", "vy-nebius-cpu-1=cpu1:/workspace/monitoring/watchdog/alerts",
         "--alerts", "{dir}/monitors/alerts", "--state", "{dir}/monitors/relay-state.json", "--posts", "{dir}/monitors/relay-posts.json"]
 env_files = ["/root/.config/verity/relay.env", "/root/.config/verity/r2.env"]
+
+# the agent watch's events (/data/agent-watch/events.jsonl) posted to #agent-alerts, and its doorbells.json (tmux
+# `agent-watch-relay`). It waits for its offset: the install writes the events' line count there, so it starts where the VM's
+# relay stopped instead of posting the whole log again
+[[loop]]
+name = "agent-watch-relay"
+argv = ["python3.12", "-s", "{src}/infra/control/agent_watch_relay.py"]
+env_files = ["/root/.config/verity/relay.env"]
+needs = ["{dir}/agent-watch-offset"]
+env = { AGENT_WATCH_ON_POD = "1", AGENT_WATCH_OFFSET = "{dir}/agent-watch-offset" }
+
+# check's preflight on each node, hourly, and the nodes' drift from main (tmux `preflight-probe`). Its tree is a clone the deploy
+# key fetches (README's deploy); the store index it reads for the Lean bundles stays in {dir}/preflight-store
+[[loop]]
+name = "preflight-probe"
+argv = ["python3.12", "-s", "{src}/tools/research/src/research/pods/nebius/preflight_probe.py", "--tree", "{dir}/preflight-tree",
+        "--state", "{dir}/preflight-probe.json"]
+env_files = ["/root/.config/verity/relay.env", "/root/.config/verity/r2.env"]
+needs = ["{dir}/preflight-tree/.git"]
+env = { RESEARCH_STORE = "{dir}/preflight-store" }
+
+# top's asks relay (top_watch.py asks, every 15 min; top's Cursor timer asks-relay-v4). It waits for a Notion connection's token
+# shared on the Asks for Daniel database ({dir}/notion.env: NOTION_API_KEY=..., root 0600), and for its seeded state
+[[loop]]
+name = "top-asks"
+argv = ["python3.12", "-s", "{src}/infra/control/top_watch.py", "asks", "--state", "{dir}/top-asks.json"]
+env_files = ["/root/.config/verity/relay.env", "{dir}/notion.env"]
+needs = ["{dir}/top-asks.json"]
+
+# top's hourly sweep (top_watch.py sweep; top's Cursor timer admin-hourly-v3): unanswered asks, agents with no handle, the rules
+# thread, main stalled while next is ahead, idle H200s from fleet's samples
+[[loop]]
+name = "top-sweep"
+argv = ["python3.12", "-s", "{src}/infra/control/top_watch.py", "sweep", "--state", "{dir}/top-sweep.json"]
+env_files = ["/root/.config/verity/relay.env", "/data/agent-watch/cursor.env"]
+needs = ["{dir}/top-sweep.json"]
+env = { FLEET_DIR = "{dir}/fleet" }
