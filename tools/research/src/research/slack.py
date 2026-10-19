@@ -127,6 +127,10 @@ NOTION_VERSION = "2026-03-11"                                    # the first ver
 NOTION_HOSTS = ("notion.so", "www.notion.so", "app.notion.com")  # and any *.notion.site
 AREAS = ("Claim or assumption", "Access or keys", "Machines or spend", "Process", "Research direction")   # the database's Area
 PAGE_SECTIONS = ("## The problem", "## Background", "## Options", "## What happens next", "## Sources")
+REPLY_CALLOUT = ('<callout icon="✍️" color="yellow_bg">\n'
+                 "\t**Your reply.** Write below this line: a decision, a question or a change. "
+                 "Top relays it to the lane, which answers under your text starting with its handle.\n"
+                 "</callout>\n")                                 # top's asks relay reads the text after the bold line
 SKILL_ASKING = ".agents/skills/asking-daniel/SKILL.md"
 WAIT_EVERY_S = 30
 WAIT_GRACE = timedelta(minutes=5)                                # the site's default cron runs every minute
@@ -2125,7 +2129,15 @@ def page_request(body: dict, area: str, markdown: str, db: dict) -> dict:
                            "Deadline": {"date": {"start": body["deadline"]}},
                            "Lane checked": {"checkbox": True},
                            "Asked by": {"url": body["agent_url"]}},
-            "markdown": markdown, "markdown_version": "v2"}
+            "markdown": with_reply(markdown), "markdown_version": "v2"}
+
+
+def with_reply(markdown: str) -> str:
+    """The page with Daniel's yellow reply callout just above `## The problem`, unless it has one."""
+    if "**Your reply.**" in markdown:
+        return markdown
+    at = re.search(rf"(?m)^{re.escape(PAGE_SECTIONS[0])}[ \t]*$", markdown).start()
+    return markdown[:at] + REPLY_CALLOUT + markdown[at:]
 
 
 def prop_text(p: dict | None) -> str:
