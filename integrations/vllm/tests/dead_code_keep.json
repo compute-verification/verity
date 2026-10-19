@@ -9,7 +9,6 @@
   "verity_vllm.program.frontend.examples": "authored examples of the torch-frontend tests (LIVE frontend.torch_frontend / correspond)",
   "verity_vllm.program.lifting.dump": "complete-assignment dump used by tests/program/test_lifted_tiny.py (LIVE registry.lifted / pad_prims)",
   "verity_vllm.check.poc_required_interface": "imported by tests/commit/synthetic.py",
-  "verity_vllm.program.kernels.fp8_moe_rows": "the fused-MoE expert GEMM's twin, checked against its Definitions by test_fp8_moe.py (LIVE registry.fp8_moe) and run by the H200 capture tests/properties/glm53_block_fp8_capture_gpu.py; live once a replay row binds MoeExpertFp8BlockGemm(W)_v1",
   "verity_vllm.program.kernels.deepgemm_schedule": "DeepGEMM's cc 9.0 launch-configuration model (the chosen layout, its boundaries over M, the sweep and the JIT template arguments), pinned by tests/program/test_deepgemm_schedule.py and read by the capture tests/properties/deepgemm_capture_gpu.py; live once a Program carries a schedule claim",
   "verity_vllm.program.kernels.nvfp4_twins": "the NVFP4 linear's device layouts (scale swizzle, packed E2M1 codes), whose offsets and packing tests/program/test_nvfp4.py checks (LIVE registry.nvfp4, its Definitions); live once a Commit opens an NVFP4 linear",
   "verity_vllm.collectives.collective_record": "TP path (lane/vllm-tp-n); test_tp_collective.py",
