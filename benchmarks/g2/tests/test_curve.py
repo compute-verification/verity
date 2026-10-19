@@ -194,24 +194,51 @@ def test_a_voided_superseded_or_failed_loop_result_doesnt_count(labels, meta):
     assert ms and all(m.counts() == (False, "gates failed") for m in ms)
 
 
-def test_a_loop_runs_own_doc_takes_the_loops_row_size_and_verdict():
-    def doc_measures(run):
-        d = harness_doc()
-        d["identity"]["arms"][2]["id"] = "served-commit-rows-layer"
-        d["points"][0]["arms"]["served-commit-rows-layer"] = d["points"][0]["arms"].pop("served-commit-rows-layer-4k")
-        return C.harness_measures(d, run=run, source="art:1", pin="pinned")
+def loop_doc_measures(run: str, row: str | None) -> list[C.Measure]:
+    """A loop run's own result doc (the loop's arm names), as run_measures reads it: under its job's ROW when it has one."""
+    d = harness_doc()
+    d["identity"]["arms"][2]["id"] = "served-commit-rows-layer"
+    d["points"][0]["arms"]["served-commit-rows-layer"] = d["points"][0]["arms"].pop("served-commit-rows-layer-4k")
+    ms = C.harness_measures(d, run=run, source="art:1", pin="pinned")
+    return ms if row is None else [C.as_loop_row(m, row) for m in ms]
 
-    loop = {"r-11": (11, True), "r-0": (0, True), "r-void": (11, False)}
-    ms = C.as_loop_run(doc_measures("r-11") + doc_measures("r-0") + doc_measures("r-void") + doc_measures("r-other"), loop)
-    assert {m.row_bytes for m in ms if m.run == "r-11" and m.scheme == "rows-sha512"} == {4096}
-    assert one(ms, run="r-0", arm="served-commit-rows", metric="ttft").row_bytes == 256
-    assert one(ms, run="r-0", arm="served-commit-rows-layer", metric="ttft").row_bytes == 4096
-    assert one(ms, run="r-11", arm="served-commit-rows", metric="itl_p50").iteration == 11
-    assert all(m.counts() == (False, "gates failed") for m in ms if m.run == "r-void")
-    other = one(ms, run="r-other", arm="served-commit-rows-layer", metric="ttft")
-    assert (other.row_bytes, other.iteration) == (256, None)
-    loop_own = C.loop_measures(loop_meta(), LOOP_LABELS, source="art:4")
-    assert C.as_loop_run(loop_own, {"r-loop": (0, False)}) == loop_own
+
+def test_a_loop_runs_own_doc_takes_its_rows_iteration_and_row_size():
+    eleven, first, rerun = loop_doc_measures("r-11", "11"), loop_doc_measures("r-0", "0"), loop_doc_measures("r-rt", "redteam-7")
+    assert {m.row_bytes for m in eleven + rerun if m.scheme == "rows-sha512"} == {4096}
+    assert one(first, arm="served-commit-rows", metric="ttft").row_bytes == 256
+    assert one(first, arm="served-commit-rows-layer", metric="ttft").row_bytes == 4096
+    assert one(rerun, arm="served-commit-rows", metric="itl_p50").iteration == 7
+    assert all(m.counts() == (True, "") for m in eleven + first + rerun if m.scheme == "rows-sha512")
+    other = one(loop_doc_measures("r-other", None), arm="served-commit-rows-layer", metric="ttft")
+    assert (other.row_bytes, other.iteration, other.loop_row) == (256, None, None)
+
+
+def test_a_loop_what_if_row_and_a_dropped_iteration_are_off_the_line():
+    what_if = loop_doc_measures("r-w", "what-if-cap33")
+    assert all(m.counts() == (False, "the hash loop's what-if-cap33 row: not its line") for m in what_if
+               if m.scheme == "rows-sha512")
+    ms = C.with_verdicts(loop_doc_measures("r-13", "13") + loop_doc_measures("r-void", "11") + loop_doc_measures("r-11", "11"),
+                         {"r-13": ("dropped", True), "r-void": ("voided", False), "r-11": ("kept", True)})
+    rows = [m for m in ms if m.scheme == "rows-sha512"]
+    assert all(m.counts() == (False, "the hash loop dropped this iteration's change") for m in rows if m.run == "r-13")
+    assert all(m.counts() == (False, "gates failed") for m in rows if m.run == "r-void")
+    assert all(m.counts() == (True, "") and m.verdict == "kept" for m in rows if m.run == "r-11")
+    dropped = C.loop_measures(loop_meta(), {**LOOP_LABELS, "kernel_outcome": "dropped"}, source="art:4")
+    assert dropped and not any(m.counts()[0] for m in dropped)
+    assert C.loop_verdict(loop_meta(), {**LOOP_LABELS, "kernel_outcome": "dropped"}) == ("r-loop", "dropped", True)
+    assert C.loop_verdict(loop_meta(), {**LOOP_LABELS, "arm": "glm-5.3"}) is None
+    assert [C.loop_iteration(r) for r in ("0", "14", "redteam-7", "what-if-a")] == [0, 14, 7, None]
+
+
+def test_the_vllm_v1_column_takes_only_runs_of_record():
+    ms = C.harness_measures(harness_doc(seen="NVIDIA B200"), run="r1", source="art:1", pin="pinned")
+    k = ("Qwen3-8B", "B200", "compiled", 32, "prefill", "ttft")
+    assert k not in C.best(ms) or "vllm-v1" not in C.best(ms)[k]
+    own = C.harness_measures(harness_doc(gpu_id="b200", seen="NVIDIA B200"), run="r2", source="art:2", pin="pinned")
+    assert C.best(own)[k]["vllm-v1"].run == "r2"
+    unpinned = C.harness_measures(harness_doc(gpu_id="b200", seen="NVIDIA B200"), run="r3", source="art:3", pin="unpinned")
+    assert C.best(unpinned).get(k, {}).get("vllm-v1") is None
 
 
 def test_an_unpinned_loop_result_doesnt_count():

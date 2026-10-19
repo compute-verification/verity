@@ -9,7 +9,10 @@ Where the numbers come from:
 - The hash loop's results (campaign=hash-loop, kind bench-result/v1, `benchmarks/hash/loop/collect.py`'s): Qwen3-8B B32
   compiled, one result per iteration and GPU, from the loop branch. Only workload qwen3-8b is read: the loop's glm-5.3 rows
   are copies of campaign=g2 runs, and its other workloads aren't G2's models. Each result's run is read too, for its TTFT
-  and ITL, with the loop's row size for that iteration and the loop's verdict on it.
+  and ITL, under the loop's verdict on it. A run the loop's job made (`ROW` and `HYP` in its env, a re-run `redteam-N`
+  included) takes its row's iteration and that iteration's row size; only the loop's line counts: no what-if row, no
+  iteration whose change the loop dropped (its change is in no code of record, and a minimum over them is a minimum over
+  noise).
 
 Each measure is a Commit arm's ratio to stock in the same run, with the harness's 95% interval over its interleaved reps,
 tp_decode's min and max over its pairs, or the loop's interval where it has one:
@@ -31,9 +34,10 @@ its served preset is for (the GPU is the one the doc saw, else the attempt's har
 another GPU, is mechanism evidence. A measure counts when its comparison's gates passed (the harness's: every arm's tokens
 equal stock's; tp_decode's: tokens equal the control's, every rank's root, no collector error; the loop's validation and
 verdict), its scheme is rows-sha512, and it is pinned or eager. The best per (model, GPU, mode, batch, phase, metric) is the
-lowest counting ratio, at full acquisition and, apart, per layer.
+lowest counting ratio, at full acquisition and, apart, per layer; beside them, the lowest vllm-v1 ratio under the same rules
+but the hash.
 
-    uv run --with matplotlib python3 benchmarks/g2/curve.py [--out DIR] [--no-refresh]
+    uv run --no-project --with matplotlib python3 benchmarks/g2/curve.py [--out DIR] [--no-refresh]
 
 Writes DIR/g2-curve.md (the curve, then every measure), DIR/g2-curve.png and DIR/g2-curve.json (every measure); DIR defaults
 to $OUT, else ./out. `research data refresh` first (a run publishes from its node), unless --no-refresh.
@@ -88,6 +92,8 @@ class Measure:
     committed_gb: float | None = None
     iteration: int | None = None
     preset_gpu: str | None = None   # the GPU the served preset (and its Build) is for, when it names one
+    loop_row: str | None = None     # a hash-loop run's row (its job's ROW: N, redteam-N, what-if-...)
+    verdict: str | None = None      # the hash loop's kernel_outcome on that row (kept, dropped)
 
     @property
     def sha256(self) -> bool:
@@ -101,8 +107,19 @@ class Measure:
             return False, "SHA-256 (vllm-v1): not the one hash"
         if self.scheme != SCHEME_ROWS:
             return False, f"{self.scheme}: not the one hash"
+        return self.of_record()
+
+    def of_record(self) -> tuple[bool, str]:
+        """Whether the run measured the Commit of record, whatever its hash: a passed comparison, no what-if, the Build of
+        record on its own GPU, and on the hash loop's kept line."""
+        if not self.gates:
+            return False, "gates failed"
         if "whatif" in self.arm:
             return False, "a what-if: not a Commit"
+        if self.loop_row is not None and self.iteration is None:
+            return False, f"the hash loop's {self.loop_row} row: not its line"
+        if self.verdict == "dropped":
+            return False, "the hash loop dropped this iteration's change"
         if self.mode == "compiled" and self.preset_gpu and self.preset_gpu != self.gpu:
             return False, f"{self.preset_gpu}'s served preset on {self.gpu}"
         if self.mode == "compiled" and self.pin != "pinned":
@@ -233,20 +250,17 @@ def loop_row_bytes(scheme: str, acquisition: str, iteration: int) -> int | None:
 def loop_measures(meta: dict, labels: dict[str, str], *, source: str) -> list[Measure]:
     """One hash-loop result's measures (Qwen3-8B B32, compiled): run TPOT and throughput from the harness's interleaved ratios,
     and each phase's step from the arm's step time over stock-prof's."""
-    if labels.get("arm", "qwen3-8b") != "qwen3-8b":
-        return []
-    try:
-        iteration = int(labels.get("row", ""))
-    except ValueError:
-        return []           # a what-if row
+    verdict = loop_verdict(meta, labels)
+    iteration = loop_iteration(labels.get("row", ""))
+    if verdict is None or iteration is None:
+        return []           # not a qwen3-8b result, or a what-if row (its run's own doc is read for it)
+    run, outcome, gates = verdict
     fp = meta.get("workload_fingerprint") or {}
-    gates = (meta.get("validation") or {}).get("status") == "passed" and labels.get("kernel_outcome") != "voided" \
-        and not labels.get("superseded_by")
     by: dict[tuple[str, str], dict] = {(m.get("arm") or "", m["name"]): m for m in meta.get("measurements", ())
                                        if m.get("value") is not None}
-    common = {"model": "Qwen3-8B", "gpu": labels.get("hardware", "?"), "mode": "compiled", "batch": 32,
-              "run": str(meta.get("run_id")), "source": source, "pin": (fp.get("pin") or {}).get("state", "unpinned"),
-              "gates": gates, "iteration": iteration}
+    common = {"model": "Qwen3-8B", "gpu": labels.get("hardware", "?"), "mode": "compiled", "batch": 32, "run": run,
+              "source": source, "pin": (fp.get("pin") or {}).get("state", "unpinned"), "gates": gates, "iteration": iteration,
+              "loop_row": labels["row"], "verdict": outcome}
     out = []
     for loop_arm, arm in LOOP_ARMS.items():
         scheme, acq, _ = classify(loop_arm)
@@ -270,14 +284,38 @@ def loop_measures(meta: dict, labels: dict[str, str], *, source: str) -> list[Me
     return out
 
 
-def as_loop_run(measures: list[Measure], loop: dict[str, tuple[int, bool]]) -> list[Measure]:
-    """Measures read from a hash-loop run's own result doc (its TTFT and ITL), under the loop's facts about that run: its
-    iteration's row size (the doc doesn't record it) and its verdict (`loop`: run -> (iteration, gates))."""
+def loop_iteration(row: str) -> int | None:
+    """The iteration a hash-loop row measures: N for row N and for a re-run of it (redteam-N); None for a what-if row."""
+    tail = row.removeprefix("redteam-")
+    return int(tail) if tail.isdigit() else None
+
+
+def loop_verdict(meta: dict, labels: dict[str, str]) -> tuple[str, str | None, bool] | None:
+    """A qwen3-8b hash-loop result's (run, kernel_outcome, passed): passed unless its validation failed or the loop voided or
+    superseded it. None for the loop's other workloads."""
+    run = str(meta.get("run_id"))
+    if labels.get("arm", "qwen3-8b") != "qwen3-8b" or not run.startswith("r"):
+        return None
+    ok = (meta.get("validation") or {}).get("status") == "passed" and labels.get("kernel_outcome") != "voided" \
+        and not labels.get("superseded_by")
+    return run, labels.get("kernel_outcome"), ok
+
+
+def as_loop_row(m: Measure, row: str) -> Measure:
+    """A measure from a run the hash loop's job made (its ROW), with the row's iteration and that iteration's row size, which
+    the run's result doc doesn't record."""
+    it = loop_iteration(row)
+    return replace(m, loop_row=row, iteration=it,
+                   row_bytes=None if it is None else loop_row_bytes(m.scheme, m.acquisition, it))
+
+
+def with_verdicts(measures: list[Measure], verdicts: dict[str, tuple[str | None, bool]]) -> list[Measure]:
+    """Each run's measures under the hash loop's verdict on it (`verdicts`: run -> (kernel_outcome, passed))."""
     out = []
     for m in measures:
-        if m.run in loop and m.iteration is None:
-            it, ok = loop[m.run]
-            m = replace(m, row_bytes=loop_row_bytes(m.scheme, m.acquisition, it), iteration=it, gates=m.gates and ok)
+        if m.run in verdicts:
+            outcome, ok = verdicts[m.run]
+            m = replace(m, verdict=outcome, gates=m.gates and ok)
         out.append(m)
     return out
 
@@ -292,12 +330,12 @@ def dedupe(measures: list[Measure]) -> list[Measure]:
 
 def best(measures: list[Measure]) -> dict[tuple, dict[str, Measure]]:
     """(model, GPU, mode, batch, phase, metric) -> {"full": lowest counting full-acquisition measure, "per-layer": ...,
-    "vllm-v1": lowest SHA-256 one (shown, never counted)}."""
+    "vllm-v1": lowest SHA-256 one of record (shown, never counted)}."""
     out: dict[tuple, dict[str, Measure]] = defaultdict(dict)
     for m in measures:
         k = (m.model, m.gpu, m.mode, m.batch, m.phase, m.metric)
         ok, _ = m.counts()
-        col = m.acquisition if ok else (SCHEME_V1 if m.sha256 and m.gates and m.acquisition == "full" else None)
+        col = m.acquisition if ok else (SCHEME_V1 if m.sha256 and m.acquisition == "full" and m.of_record()[0] else None)
         if col and (col not in out[k] or m.ratio < out[k][col].ratio):
             out[k][col] = m
     return dict(out)
@@ -450,6 +488,9 @@ def run_measures(run: str, scratch: Path) -> list[Measure]:
             n = int(cond.get("hw.count") or s.get("world") or 1)
             gpu = gpu_name(None, cond.get("hw.sku"))
             out += tp_measures(s, run=run, source=rec, gpu=f"{n}x {gpu}" if n > 1 else gpu)
+    env = (att.get("params") or {}).get("env") or {}
+    if env.get("ROW") and env.get("HYP"):     # the hash loop's job.sh: ROW is the row, HYP its hypothesis
+        out = [as_loop_row(m, str(env["ROW"])) for m in out]
     return out
 
 
@@ -459,17 +500,18 @@ def load(refresh: bool = True) -> list[Measure]:
         if rc:
             print(f"curve.py: research data refresh exited {rc}; rendering what the catalog has", file=sys.stderr)
     out: list[Measure] = []
-    loop: dict[str, tuple[int, bool]] = {}
+    verdicts: dict[str, tuple[str | None, bool]] = {}
     for art in research("data", "select", "--label", "campaign=hash-loop", "--kind", "bench-result/v1", "--ids").split():
         man = json.loads(research("data", "show", art, "--json"))
-        ms = loop_measures((man.get("manifest") or man).get("meta") or {}, _labels(art), source=art)
-        out += ms
-        if ms and ms[0].run.startswith("r"):
-            loop[ms[0].run] = (ms[0].iteration, ms[0].gates)
+        meta, labels = (man.get("manifest") or man).get("meta") or {}, _labels(art)
+        out += loop_measures(meta, labels, source=art)
+        v = loop_verdict(meta, labels)
+        if v:
+            verdicts[v[0]] = v[1:]
     with tempfile.TemporaryDirectory(prefix="g2-curve-") as tmp:
-        for run in sorted(set(_labeled_runs("campaign", CAMPAIGN)) | set(loop)):
+        for run in sorted(set(_labeled_runs("campaign", CAMPAIGN)) | set(verdicts)):
             out += run_measures(run, Path(tmp))
-    return dedupe(as_loop_run(out, loop))
+    return dedupe(with_verdicts(out, verdicts))
 
 
 def main() -> int:
