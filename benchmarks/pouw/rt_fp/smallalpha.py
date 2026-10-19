@@ -5,14 +5,17 @@ all 256 s8 values (OMMASF16864 3, QMMA16832 3). Dither-2S puts one fresh {0, 1} 
 wider, so on data whose dithered floors are 0, 1 or 2 every operand is 0..3: an E2M1 and an E4M3 value, products at
 most 9, a 32-step word at most 288, exact in FP32. A cheater who commits such data writes every word on FP4 at split
 1. The model converts an FP accumulator to s32 for free (forms.toml: "the cheater's favour"); fx1's fold XORs the word
-right after its keyed IMAD, so the cheater pays the conversion, about one ALU a word.
+right after its keyed IMAD, so the cheater pays the conversion, about one ALU a word. At L = 32 every gain is the k64
+form's (OMMASF16864, kind::mxf4nvf4), whose one output a cell holds two 32-deep words only packed (the second block at
+scale 2^10: 288·1025 < 2^24, exact), so a mask and a shift a pair cost it one ALU a word even with the conversion free.
 
 It prices, at the floor credit with operands free:
   sm_120 (data/): Dither-2S, FPX-DESIGN's fpx-g1s-fx1 (dither-2s with one more IMAD a word of fold, as FPX-DESIGN
-    31899b9c10's fpx_eps.py writes it) and the record dither-c-peel-fx1 (whose co32c words multiply a resident U of 128
-    values, so FP4 can't take them at split 1: a control), as data/ has them (`base`), with the FP forms at split 1
-    (`fp1`), and at split 1 paying 4 ALU warp instructions an MMA (one a word; `fp1c`, charged only on the lines a form
-    has of its own, which undercharges it);
+    31899b9c10's fpx_eps.py writes it) and the record dither-c-peel-fx1 (H1 + fx1: its co32c and cohalf words carry
+    H1's U, 32 values, which keeps them off split 1 (`h1_grid.py`), but its P·V is Dither-2S; the model gives every
+    word of a design one set of forms, so `fp1` lets all of the record's words take them), as data/ has them (`base`),
+    with the FP forms at split 1 (`fp1`), and at split 1 paying 4 ALU warp instructions an MMA (one a word; `fp1c`,
+    charged only on the lines a form has of its own, which undercharges it);
   sm_100 (data/devices/sm_100/): the record dither-2s-licpw-redux-heavy-l32 with honest's s8 form alone (`base`) and
     beside kind::mxf4nvf4 at k64 (`fp4`), priced an instruction as the s8 form (the sheet's FP4 at twice s8).
 H200 has no FP4 kind, and its FP8 kind runs at the s8 rate, so it isn't priced.
