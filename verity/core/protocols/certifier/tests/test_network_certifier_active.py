@@ -820,41 +820,52 @@ def lms_key(seed: bytes) -> LmsKey:
     return LmsKey(signers.SMALL, lms.public_key(signers.key(seed)))
 
 
+#: a proxy's run id in the tests that fix it (`Proxy(run_nonce=…)`), and another run's
+RUN, OTHER_RUN = bytes([9]) * active.RUN_ID_BYTES, bytes([10]) * active.RUN_ID_BYTES
+
+
 def test_a_signed_reveal_takes_only_the_challengers_request_and_answers_under_the_certifiers_key(tmp_path):
     """With a challenger key and a signer, `reveal(p, registration, request)` and `committed` take only a request the
-    registered challenger signed over `reveal_request_message`, which binds the ingress link, p, the registration's
-    digest and the kind. They refuse none (the two-argument call), one signed by anyone else, and one for another
-    window, registration, kind or link, and a refusal spends nothing. A registration made up whole, receipt and all,
-    which a keyless proxy takes, is refused unless the challenger signs it. They answer a `Revealed` that verifies under
-    the certifier's key over `reveal_response_message`, and under no other key, window, value, kind, registration or
-    link. The once rule and the published condition are `reveal`'s. A signer that refuses spends the reveal and gives
-    nothing. A proxy takes both keys or neither; a keyless one takes no request and serves no endpoint. A deployed
-    signature (`lms.DEPLOYED`), in hex, fits a request line with room for the registration."""
+    registered challenger signed over `reveal_request_message`, which binds the certifier's key id and run id, the
+    ingress link, p, the registration's digest and the kind. They refuse none (the two-argument call), one signed by
+    anyone else, and one for another certifier, run, window, registration, kind or link, and a refusal spends nothing.
+    A registration made up whole, receipt and all, which a keyless proxy takes, is refused unless the challenger signs
+    it. They answer a `Revealed` that names the certifier's key id and run and verifies under the certifier's key over
+    `reveal_response_message`, and under no other key, run, window, value, kind, registration or link. The once rule
+    and the published condition are `reveal`'s. A signer that refuses spends the reveal and gives nothing. A proxy
+    takes both keys or neither; a keyless one takes no request and serves no endpoint. Each proxy draws its own
+    32-byte run id unless given a source. A deployed signature (`lms.DEPLOYED`), in hex, fits a request line with room
+    for the registration."""
     challenger_key, sign = prover_signer(b"challenger")
     _, forge = prover_signer(b"someone else")
     prover_key, prove = prover_signer()
     certifier = signers.signer(tmp_path)
     key, root = certifier.public_key(), bytes([7]) * active.WEIGHTS_ROOT_BYTES
+    stranger = lms_key(b"someone else")
 
     def proxy(**keys) -> Proxy:
         p = Proxy(("127.0.0.1", 9), EGRESS, INGRESS, SYNC_SET, SYNCS, origin=0.0, clock=lambda: 0.0,
-                  salt=lambda w, n: bytes([w + 1]) * n, prover_key=prover_key, **keys)
+                  salt=lambda w, n: bytes([w + 1]) * n, prover_key=prover_key,
+                  **({"run_nonce": lambda n: RUN} | keys))
         p.commit_weights(0, root, prove(active.weights_message("requests", 0, root)))
         for _ in range(2 * INGRESS.buckets):
             p.bucketer.tick()
         return p
 
-    def asks(w: int, reg: Registration, what: bytes = active.SALT_KIND, link: str = "requests", by=sign) -> bytes:
-        return by(active.reveal_request_message(link, w, reg.digest, what))
+    def asks(w: int, reg: Registration, what: bytes = active.SALT_KIND, link: str = "requests", by=sign,
+             key_id: bytes = key.key_id, run_id: bytes = RUN) -> bytes:
+        return by(active.reveal_request_message(key_id, run_id, link, w, reg.digest, what))
 
     p, reg = proxy(challenger_key=challenger_key, signer=certifier), registration(0)
+    assert p.run_id == RUN
     record = {"window": {"kind": "served", "window": 1}, "made": "up"}
     made_up = Registration(record, R.receipt(record, "anyone"), R.digest(record), 1)
     for w, r, request in ((0, reg, None), (0, reg, b""), (0, reg, asks(0, reg, by=forge)), (0, reg, asks(1, reg)),
                           (0, reg, asks(0, registration(1))), (0, reg, asks(0, reg, active.WEIGHTS_KIND)),
-                          (0, reg, asks(0, reg, link="responses")), (0, None, asks(0, reg)),
+                          (0, reg, asks(0, reg, link="responses")), (0, reg, asks(0, reg, run_id=OTHER_RUN)),
+                          (0, reg, asks(0, reg, key_id=stranger.key_id)), (0, None, asks(0, reg)),
                           (1, made_up, asks(1, made_up, by=forge))):
-        with pytest.raises(RuntimeError, match="isn't signed by the registered challenger"):
+        with pytest.raises(RuntimeError, match="isn't signed by the registered challenger for this certifier's run"):
             p.reveal(w, r, request)
     with pytest.raises(RuntimeError, match="isn't signed by the registered challenger"):
         p.committed(0, reg, asks(0, reg))
@@ -863,26 +874,41 @@ def test_a_signed_reveal_takes_only_the_challengers_request_and_answers_under_th
 
     salt = p.reveal(0, reg, asks(0, reg))
     assert isinstance(salt, Revealed) and (salt.window, salt.value) == (0, bytes([1]) * active.SALT_BYTES)
-    assert salt.verify(key, "requests", reg.digest, active.SALT_KIND)
-    for k, answer, link, digest, what in (
-            (lms_key(b"someone else"), salt, "requests", reg.digest, active.SALT_KIND),
-            (key, dataclasses.replace(salt, window=1), "requests", reg.digest, active.SALT_KIND),
-            (key, dataclasses.replace(salt, value=bytes(active.SALT_BYTES)), "requests", reg.digest, active.SALT_KIND),
-            (key, salt, "requests", reg.digest, active.WEIGHTS_KIND),
-            (key, salt, "requests", registration(1).digest, active.SALT_KIND),
-            (key, salt, "responses", reg.digest, active.SALT_KIND)):
-        assert not answer.verify(k, link, digest, what)
+    assert (salt.key_id, salt.run_id) == (key.key_id, RUN)
+    assert salt.verify(key, RUN, "requests", reg.digest, active.SALT_KIND)
+    for k, answer, run, link, digest, what in (
+            (stranger, salt, RUN, "requests", reg.digest, active.SALT_KIND),
+            (stranger, dataclasses.replace(salt, key_id=stranger.key_id), RUN, "requests", reg.digest,
+             active.SALT_KIND),
+            (key, salt, OTHER_RUN, "requests", reg.digest, active.SALT_KIND),
+            (key, dataclasses.replace(salt, run_id=OTHER_RUN), OTHER_RUN, "requests", reg.digest, active.SALT_KIND),
+            (key, dataclasses.replace(salt, run_id=b"short"), b"short", "requests", reg.digest, active.SALT_KIND),
+            (key, dataclasses.replace(salt, window=1), RUN, "requests", reg.digest, active.SALT_KIND),
+            (key, dataclasses.replace(salt, value=bytes(active.SALT_BYTES)), RUN, "requests", reg.digest,
+             active.SALT_KIND),
+            (key, salt, RUN, "requests", reg.digest, active.WEIGHTS_KIND),
+            (key, salt, RUN, "requests", registration(1).digest, active.SALT_KIND),
+            (key, salt, RUN, "responses", reg.digest, active.SALT_KIND)):
+        assert not answer.verify(k, run, link, digest, what)
     with pytest.raises(RuntimeError, match="revealed already"):
         p.reveal(0, reg, asks(0, reg))
     weights = p.committed(0, reg, asks(0, reg, active.WEIGHTS_KIND))
-    assert weights.value == root and weights.verify(key, "requests", reg.digest, active.WEIGHTS_KIND)
-    assert not weights.verify(key, "requests", reg.digest, active.SALT_KIND)
+    assert weights.value == root and weights.verify(key, RUN, "requests", reg.digest, active.WEIGHTS_KIND)
+    assert not weights.verify(key, RUN, "requests", reg.digest, active.SALT_KIND)
     with pytest.raises(RuntimeError, match="no weights"):
         p.committed(1, registration(1), asks(1, registration(1), active.WEIGHTS_KIND))
     assert p.reveal(1, made_up, asks(1, made_up)).value == bytes([2]) * active.SALT_BYTES
     with pytest.raises(ValueError, match="a reveal is of"):
-        active.reveal_request_message("requests", 0, reg.digest, b"other")
+        active.reveal_request_message(key.key_id, RUN, "requests", 0, reg.digest, b"other")
+    with pytest.raises(ValueError, match="run id is 32 bytes"):
+        active.reveal_request_message(key.key_id, RUN[1:], "requests", 0, reg.digest, active.SALT_KIND)
     assert 2 * lms.DEPLOYED.signature_bytes() < active.REVEAL_LINE_BYTES // 8
+
+    drawn = [Proxy(("127.0.0.1", 9), EGRESS, INGRESS, SYNC_SET, SYNCS, origin=0.0).run_id for _ in range(2)]
+    assert [len(r) for r in drawn] == [active.RUN_ID_BYTES] * 2 and drawn[0] != drawn[1]
+    for bad in (lambda n: RUN[1:], lambda n: RUN.hex()):
+        with pytest.raises(ValueError, match="run id is 32 bytes"):
+            proxy(run_nonce=bad)
 
     held = proxy(challenger_key=challenger_key, signer=LmsSigner(certifier.key, certifier.state))
     with pytest.raises(RuntimeError, match="signer refused"):
@@ -907,9 +933,10 @@ def test_reveals_over_the_endpoint_beside_a_run_are_signed_both_ways_and_given_o
     window's salt and the weights' root the prover recorded, each verified under the certifier's key, as plain bytes;
     one tick before, the certifier refuses (unpublished) and the client raises its reason. A second reveal of the
     window is refused, the once rule over the network; a request by anyone but the registered challenger is refused
-    and spends nothing; a window with no weights recorded is refused; a client holding another certifier key refuses
-    the answer; and a line that isn't a request, or is longer than `REVEAL_LINE_BYTES`, is refused. The run's records are
-    the salted run's, and the audit accepts them and the salts the client got."""
+    and spends nothing; a window with no weights recorded is refused; a client holding another certifier's key, or
+    another run's id, asks for that certifier's run and is refused; and a line that isn't a request, or is longer than
+    `REVEAL_LINE_BYTES`, is refused. The run's records are the salted run's, and the audit accepts them and the salts
+    the client got."""
     T, horizon = INGRESS.buckets, WINDOWS * EGRESS.buckets
     rng, drawn = random.Random(7), {}
 
@@ -945,9 +972,11 @@ def test_reveals_over_the_endpoint_beside_a_run_are_signed_both_ways_and_given_o
         if t == 0:
             endpoint["server"] = await active.serve_reveals(proxy, "127.0.0.1", 0)
             at = endpoint["at"] = endpoint["server"].sockets[0].getsockname()[:2]
-            endpoint["challenger"] = RemoteCertifier(*at, certifier.public_key(), challenger, "requests")
-            endpoint["forger"] = RemoteCertifier(*at, certifier.public_key(), forger, "requests")
-            endpoint["misled"] = RemoteCertifier(*at, lms_key(b"someone else"), challenger, "requests")
+            key, run = certifier.public_key(), proxy.run_id
+            endpoint["challenger"] = RemoteCertifier(*at, key, challenger, "requests", run)
+            endpoint["forger"] = RemoteCertifier(*at, key, forger, "requests", run)
+            endpoint["misled"] = RemoteCertifier(*at, lms_key(b"someone else"), challenger, "requests", run)
+            endpoint["stale"] = RemoteCertifier(*at, key, challenger, "requests", OTHER_RUN)
             endpoint["raw"] = [await raw(line) for line in (b"not json\n", b'{"window": 0, "kind": "salt"}\n', b"[1]\n",
                                                              b"x" * (active.REVEAL_LINE_BYTES + 1))]
         for w in range(WINDOWS):
@@ -956,7 +985,7 @@ def test_reveals_over_the_endpoint_beside_a_run_are_signed_both_ways_and_given_o
                 got[w].append(await ask(endpoint["challenger"], "reveal", w))
             if t == published:
                 for client, call in (("forger", "reveal"), ("challenger", "committed"), ("misled", "committed"),
-                                     ("challenger", "reveal"), ("challenger", "reveal")):
+                                     ("stale", "reveal"), ("challenger", "reveal"), ("challenger", "reveal")):
                     got[w].append(await ask(endpoint[client], call, w))
             if w and t == w * T - 1:
                 proxy.commit_weights(w, roots[w], prove(active.weights_message("requests", w, roots[w])))
@@ -967,16 +996,16 @@ def test_reveals_over_the_endpoint_beside_a_run_are_signed_both_ways_and_given_o
     proxy, _ = asyncio.run(replay(honest(), salt=source, probe=probe, prover_key=prover_key,
                                   challenger_key=challenger.public_key(), signer=certifier))
     for w in range(WINDOWS):
-        early, forged, weights, misled, salt, again = got[w]
+        early, forged, weights, misled, stale, salt, again = got[w]
         assert early == ("refused", f"the certifier refused window {w}'s salt: window {w}'s ingress records aren't all "
                                     "published, so its salt isn't revealed")
-        assert forged == ("refused", f"the certifier refused window {w}'s salt: the request for window {w}'s salt isn't "
-                                     "signed by the registered challenger")
+        unsigned = [("refused", f"the certifier refused window {w}'s {kind}: the request for window {w}'s {kind} isn't "
+                                "signed by the registered challenger for this certifier's run") for kind in ("salt",
+                                                                                                         "weights")]
+        assert forged == stale == unsigned[0] and misled == unsigned[1]
         nothing = ("refused", "the certifier refused window 0's weights: no weights were recorded before PoUW window 0's "
                               "salt")
         assert weights == (("gave", roots[w]) if w else nothing)
-        assert misled == (("refused", f"the answer for window {w}'s weights isn't signed by the certifier's key") if w
-                          else nothing)
         assert salt == ("gave", drawn[w])
         assert again == ("refused", f"the certifier refused window {w}'s salt: window {w}'s salt is revealed already")
     assert [list(a) for a in endpoint["raw"]] == [["refused"]] * 4
@@ -987,7 +1016,77 @@ def test_reveals_over_the_endpoint_beside_a_run_are_signed_both_ways_and_given_o
     assert audit(proxy, FRAMES, SYNCS)[0] == [("responses", w, None) for w in range(WINDOWS)] + \
         [("requests", w, None) for w in range(WINDOWS)]
     assert [v.violation for v in active.check_salts(Audit(), "requests", proxy.records, WINDOWS,
-                                                    {w: got[w][4][1] for w in range(WINDOWS)})] == [None] * WINDOWS
+                                                    {w: got[w][5][1] for w in range(WINDOWS)})] == [None] * WINDOWS
+
+
+def test_two_runs_on_one_link_name_neither_take_nor_give_each_others_reveals(tmp_path):
+    """Two proxies with the same ingress link name, certifier key (one signer, as a certifier restarted on its host
+    holds it) and PoUW window, in runs `RUN` and `OTHER_RUN` (RT4-INT-3: their p's collide): a request the challenger
+    signed for one run is refused by the other and spends nothing there, and each answer names its own run and
+    verifies for it and not for the other, so a consumer keying on (key id, run id, p) never takes one for the other.
+    A `RemoteCertifier` refuses another run's answer that an endpoint replays whole, or relabels with its run, and
+    takes the same answer for its own run."""
+    (tmp_path / "challenger").mkdir()
+    certifier = signers.signer(tmp_path)
+    challenger = signers.signer(tmp_path / "challenger", b"challenger")
+    key, reg = certifier.public_key(), registration(0)
+
+    def proxy(run: bytes, fill: int) -> Proxy:
+        p = Proxy(("127.0.0.1", 9), EGRESS, INGRESS, SYNC_SET, SYNCS, origin=0.0, clock=lambda: 0.0,
+                  salt=lambda w, n: bytes([fill]) * n, challenger_key=challenger.public_key(), signer=certifier,
+                  run_nonce=lambda n: run)
+        for _ in range(2 * INGRESS.buckets):
+            p.bucketer.tick()
+        return p
+
+    def asks(run: bytes) -> bytes:
+        return challenger.sign(active.reveal_request_message(key.key_id, run, "requests", 0, reg.digest,
+                                                             active.SALT_KIND))
+
+    runs = {RUN: proxy(RUN, 1), OTHER_RUN: proxy(OTHER_RUN, 2)}
+    other = {RUN: OTHER_RUN, OTHER_RUN: RUN}
+    for run, p in runs.items():
+        with pytest.raises(RuntimeError, match="isn't signed by the registered challenger for this certifier's run"):
+            p.reveal(0, reg, asks(other[run]))
+    answers = {run: p.reveal(0, reg, asks(run)) for run, p in runs.items()}
+    assert {(a.key_id, a.run_id, a.window): a.value for a in answers.values()} == {
+        (key.key_id, RUN, 0): bytes([1]) * active.SALT_BYTES,
+        (key.key_id, OTHER_RUN, 0): bytes([2]) * active.SALT_BYTES}
+    for run, answer in answers.items():
+        assert answer.verify(key, run, "requests", reg.digest, active.SALT_KIND)
+        assert not answer.verify(key, other[run], "requests", reg.digest, active.SALT_KIND)
+        assert not dataclasses.replace(answer, run_id=other[run]).verify(key, other[run], "requests", reg.digest,
+                                                                         active.SALT_KIND)
+
+    async def replaying(answer: Revealed, client_runs: tuple[bytes, ...]) -> list[bytes | str]:
+        line = json.dumps({"window": answer.window} | {f: getattr(answer, f).hex() for f in (
+            "value", "signature", "key_id", "run_id")}).encode() + b"\n"
+
+        async def handle(reader: asyncio.StreamReader, writer: asyncio.StreamWriter) -> None:
+            await reader.readline()
+            writer.write(line)
+            await writer.drain()
+            writer.close()
+
+        server = await asyncio.start_server(handle, "127.0.0.1", 0, limit=active.REVEAL_LINE_BYTES)
+        at, out = server.sockets[0].getsockname()[:2], []
+        for run in client_runs:
+            try:
+                out.append(await asyncio.to_thread(RemoteCertifier(*at, key, challenger, "requests", run).reveal, 0,
+                                                   reg))
+            except RuntimeError as e:
+                out.append(str(e))
+        server.close()
+        await server.wait_closed()
+        return out
+
+    assert asyncio.run(replaying(answers[RUN], (OTHER_RUN, RUN))) == [
+        f"the answer for window 0's salt is another run's, not run {OTHER_RUN.hex()[:16]}…'s",
+        bytes([1]) * active.SALT_BYTES]
+    assert asyncio.run(replaying(dataclasses.replace(answers[RUN], run_id=OTHER_RUN), (OTHER_RUN,))) == [
+        "the answer for window 0's salt isn't signed by the certifier's key"]
+    with pytest.raises(ValueError, match="run id is 32 bytes"):
+        RemoteCertifier("127.0.0.1", 9, key, challenger, "requests", RUN[1:])
 
 
 ENVELOPE = ClockSync(max(SYNC_SET.deltas), min(SYNC_SET.rhos))
