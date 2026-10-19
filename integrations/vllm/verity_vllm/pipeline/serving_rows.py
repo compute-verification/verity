@@ -271,8 +271,9 @@ def members(tmpls: Sequence[str], rows: Sequence[list[Row]], counts: Sequence[in
 def with_row_tables(ms: Sequence[CS.Member], tmpls: Sequence[str], rows: Sequence[list[Row]],
                     arrivals: Mapping[str, int] | None = None) -> tuple[list[CS.Member], tuple[CS.RowTable, ...]]:
     """The row-table layout of ``members``' ``ScaledMmS8Coordinate`` chunks: one row table per (engine step, op_path) of their
-    ``ScaledMmS8_v1`` rows, its token rows in the window's order, and each chunk a shared-row member whose ``x`` table is the
-    distinct token rows its units read (``links``: each one's row table and rank) and whose ``w`` table is its own rows."""
+    ``ScaledMmS8_v1`` rows in the canonical order serving commits them in (``RowTable.key``; each table's token rows by request,
+    then token row), and each chunk a shared-row member whose ``x`` table is the distinct token rows its units read (``links``:
+    each one's row table and rank, in the units' order) and whose ``w`` table is its own rows."""
     tables: dict[tuple[int, str], int] = {}
     specs: list[tuple[int, str, str, int, list[tuple[str, int, int]]]] = []
     segs: dict[str, list[tuple[int, int, int, int]]] = {}
@@ -288,14 +289,19 @@ def with_row_tables(ms: Sequence[CS.Member], tmpls: Sequence[str], rows: Sequenc
             specs[k][4].append((str(rid), int(d["row"]), int(r["i"])))
             segs.setdefault(t, []).append((lo, lo + n, k, len(specs[k][4]) - 1))
             lo += n
+    order = sorted(range(len(specs)), key=lambda k: (specs[k][0], *CS.table_key(specs[k][1])))
+    ranks = [sorted(range(len(s[4])), key=lambda j, rs=s[4]: rs[j][:2]) for s in specs]
+    new_k = {k: i for i, k in enumerate(order)}
+    new_rank = [{j: i for i, j in enumerate(r)} for r in ranks]
     out = []
     for m in ms:
         if m.template not in segs:
             out.append(m)
             continue
-        links = tuple((k, rank) for a, b, k, rank in segs[m.template] if a < m.base + m.n and b > m.base)
+        links = tuple((new_k[k], new_rank[k][rank]) for a, b, k, rank in segs[m.template] if a < m.base + m.n and b > m.base)
         out.append(replace(m, tables=((CS.LINKED, len(links)), ("w", m.n)), links=links))
-    return out, tuple(CS.RowTable(step, op, t, words, tuple(rs)) for step, op, t, words, rs in specs)
+    return out, tuple(CS.RowTable(specs[k][0], specs[k][1], specs[k][2], specs[k][3], tuple(specs[k][4][j] for j in ranks[k]))
+                      for k in order)
 
 
 def law_of(law: str | Mapping[str, Any]) -> dict[str, Any]:
@@ -304,11 +310,12 @@ def law_of(law: str | Mapping[str, Any]) -> dict[str, Any]:
 
 def population(programs: dict[str, dict[str, Any]], partition: Mapping[str, Any], run_root: str,
                program_dirs: dict[str, str] | None = None, index: Mapping[str, Any] | None = None,
-               arrivals: Mapping[str, int] | None = None) -> tuple[CS.Window, list[list[Row]]]:
+               arrivals: Mapping[str, int] | None = None, context: str = "") -> tuple[CS.Window, list[list[Row]]]:
     """The verifier's window over the run's Programs (``partition``: the partition file's ``templates``, ``law`` and ``scope``) and
     each template's rows; refused when the file names a ``partition_digest`` that is not the window's, or a ``query`` other than the
     template queries.  ``row_tables: true`` in the file: the ``ScaledMmS8Coordinate`` chunks in the row-table layout
-    (`with_row_tables`, its engine steps the requests' ``arrivals`` plus their steps)."""
+    (`with_row_tables`, its engine steps the requests' ``arrivals`` plus their steps), under ``context`` (hex: the live coin
+    commitment's root serving committed its step roots under)."""
     tmpls, law = list(partition["templates"]), law_of(partition["law"])
     q = partition.get("query")
     if q is not None and q not in TEMPLATE_QUERIES:
@@ -325,7 +332,7 @@ def population(programs: dict[str, dict[str, Any]], partition: Mapping[str, Any]
         ms, tables = with_row_tables(ms, tmpls, rows, arrivals)
     n_of = {t: sum(m.n for m in ms if m.template == t) for t in tmpls}
     program, query = CS.population_program([(fn, n_of[t]) for fn, t in zip(defs, tmpls, strict=True)], several=q == TEMPLATE_QUERIES[1])
-    window = CS.Window(program, query, law, run_root, tuple(ms), tables)
+    window = CS.Window(program, query, law, run_root, tuple(ms), tables, context)
     want = partition.get("partition_digest")
     if want and want != window.partition_digest:
         raise ValueError(f"the run's population ({', '.join(f'{t} x {n}' for t, n in n_of.items())}) is partition "
@@ -533,22 +540,27 @@ def after_commit(out_dir: str, *, partition_file: str, programs: dict[str, dict[
                  arrivals: dict[str, int] | None = None, program_dirs: dict[str, str] | None = None,
                  digests: Mapping[str, str] | None = None, committer: dict[str, Any] | None = None,
                  workers: int | None = None, stand_in: Mapping[str, Any] | None = None, tp: Mapping[str, Any] | None = None,
-                 index: Mapping[str, Any] | None = None) -> dict[str, Any]:
+                 index: Mapping[str, Any] | None = None, row_tables: Mapping[str, Any] | None = None) -> dict[str, Any]:
     """Commit the verifier's partition's units of a run whose vllm-v1 roots are final and write the window's files into ``out_dir``:
     the registration (core's v1 record, its window the run root ``run_root`` and the provenance: the research run ``run``, the row,
     the committer and the served Programs' ``digests``), ``partition.json``, the index and M0's bodies.  The window is ``served``;
     with ``stand_in`` (its ``of`` and ``link``), a ``stand-in`` with them in its provenance.  A TP rank's window (`pipeline.tp.
-    serving_rows`) gives its run as a string, its world and roots as ``tp`` and its ProgramIndex arguments as ``index``.  It reads
-    the committed values and writes only ``out_dir``."""
+    serving_rows`) gives its run as a string, its world and roots as ``tp`` and its ProgramIndex arguments as ``index``.  A
+    row-table layout takes the serving loop's ``row_tables``: ``{"context": <hex>, "key": <the run's row key>, "step_roots":
+    {engine step: root}}`` (`commit.row_tables.step_roots`), which the window's step roots must be.  It reads the committed values
+    and writes only ``out_dir``."""
     t0 = time.perf_counter()
     dirs = {str(k): v for k, v in (program_dirs or {}).items()}
     pf = json.loads(Path(partition_file).read_text())
-    window, rows = population(programs, pf, run_root if isinstance(run_root, str) else bytes(run_root).hex(), dirs, index, arrivals)
+    rt = row_tables or {}
+    window, rows = population(programs, pf, run_root if isinstance(run_root, str) else bytes(run_root).hex(), dirs, index, arrivals,
+                              rt.get("context", ""))
     ms = window.members
     store = CommittedStore.of_record(bmap, committed, manifest)
     got = read_all(ms, rows, store, weights, arrivals)
     t_read = time.perf_counter()
-    c = CS.commit(window, [g[0] for g in got], workers=workers or min(16, os.cpu_count() or 1))
+    c = CS.commit(window, [g[0] for g in got], row_salt_key=rt.get("key"), step_roots=rt.get("step_roots"),
+                  workers=workers or min(16, os.cpu_count() or 1))
     prov = {"commitment": "vllm-v1", "row": row, "research_run": run, "committer": dict(committer or {}, module=CS.__name__),
             "served_programs": {str(k): str(v) for k, v in sorted((digests or {}).items())}, "scope": pf.get("scope"),
             **({"tp": dict(tp)} if tp else {}), **(stand_in or {})}
