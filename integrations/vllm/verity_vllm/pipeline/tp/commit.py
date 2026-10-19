@@ -245,7 +245,7 @@ def main(args: Options) -> int:
     from verity_vllm.commit.challenge import challenge_positions
     from verity_vllm.commit.partition import require_partition
     from verity_vllm import protocol_options as PO
-    from verity_vllm.acquire.sources.oracle_witness import SUMMARY_KEYS as TPS_SUMMARY_KEYS, condition_on_witnesses
+    from verity_vllm.acquire.sources.oracle_witness import SUMMARY_KEYS as TPS_SUMMARY_KEYS
     if args.world is not None:
         args.tp = int(args.world)
     if args.replay_deferred and (not args.required_manifest or args.no_sampled_replay):
@@ -443,6 +443,7 @@ def main(args: Options) -> int:
     xrank_pairs: list[dict] = []     # [TP-12] one verdict per instrumented pair
     from verity_vllm.program.frontend import collective_kinds
     xrank_families = collective_kinds.cross_rank_families(world)      # [lane vllm-tp-n] the cross-rank families of THIS world, from the registry's composites
+    xrank_on = args.xrank_per_stratum > 0 and not args.no_tp_partials
     runs = schedule(args.pairs, args.only_arm)
     stopped = None
     for pair in range(args.pairs):
@@ -477,11 +478,12 @@ def main(args: Options) -> int:
                         bundles_of[pair] = {int(f["rank"]): (f.get("sampled_replay") or {}).pop("bundle", None) for f in fin}
             if arm != "control":
                 if match_capture_dir is not None:
-                    differs = condition_on_witnesses({int(f["rank"]): f.get("match_oracle") for f in fin})
+                    differs = sorted((w for f in fin for w in (((f.get("match_oracle") or {}).get("witnesses") or {}).get("differs") or [])),
+                                     key=lambda w: (int(w["step"]), int(w["k"]), int(w["rank"])))
                     print(f"[tp2commit] match oracle (tp partials vs capture), {len(differs)} differing MoE align witness(es)"
-                          + (f", first rank {differs[0]['rank']} step {differs[0]['step']} k {differs[0]['k']} {differs[0]['module']}" if differs else "") + ": " + "; ".join(
-                        f"rank {f['rank']} {mo.get('verdict')} steps {mo.get('steps_compared')} tensors {mo.get('tensors')} compared {mo.get('compared')} "
-                        f"equal {mo.get('equal')} exempt {mo.get('exempt')} mismatch {mo.get('mismatch_n')} missing {mo.get('missing_n')} "
+                          + (f", first rank {differs[0]['rank']} step {differs[0]['step']} k {differs[0]['k']} {differs[0]['module']} implies {differs[0]['implies']}" if differs else "") + ": " + "; ".join(
+                        f"rank {f['rank']} {mo.get('verdict')} steps {mo.get('steps_compared')} tensors {mo.get('tensors')} "
+                        f"equal {mo.get('equal')} mismatch {mo.get('mismatch_n')} missing {mo.get('missing_n')} "
                         f"not_in_oracle {mo.get('not_in_oracle_n')} witnesses equal {(mo.get('witnesses') or {}).get('equal')} unpaired {(mo.get('witnesses') or {}).get('unpaired_n')} "
                         f"{mo.get('by_member')} {mo.get('error') or ''}"
                         for f in sorted(fin, key=lambda f: f["rank"]) for mo in [f.get("match_oracle") or {}]), flush=True)
@@ -575,7 +577,7 @@ def main(args: Options) -> int:
                             why_ = f"match oracle (tp partials vs tp2_match capture): {(mo or {}).get('why') or (mo or {}).get('error') or 'not run'}"
                             ok, why = False, (f"{why}; also: {why_}" if not ok and why else why_)
                         ok, why = C2.c2_and_pin_gates(cblock, f, ok, why, rank=rk, replay_on=replay_cfg is not None, required=args.required_manifest is not None,
-                                                   bundle=RB.path(out, pair, rank=rk).name)
+                                                   bundle=RB.path(out, pair, rank=rk).name, xrank_families=xrank_families if xrank_on else None)
                         cblock["commit_pass"], cblock["commit_fail_reason"] = ok, why
                         if ok is False:
                             reasons.append(f"rank {rk}: {why}")
@@ -612,7 +614,7 @@ def main(args: Options) -> int:
                     # combined root, stratified per site x kind x phase).  The only evaluator of the collective-output VUs from committed bytes (the
                     # per-rank replay has none: rev F-r16-18); a FAIL names the site and fails the ranks whose received output is not the definition.
                     xr = {"result": None, "why": "not run (--xrank-per-stratum 0)"}
-                    if args.xrank_per_stratum > 0 and not args.no_tp_partials:
+                    if xrank_on:
                         try:
                             import torch as _torch
 

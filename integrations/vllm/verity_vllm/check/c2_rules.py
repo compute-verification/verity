@@ -28,13 +28,15 @@ def _form_b_complete_over_values(oc: dict | None) -> str | None:
     """[COORD M-0721 (1); rev-cb M-0740 G3] None when form (B) -- the Match-oracle compare -- is COMPLETE over the values: result True, 0
     mismatch, complete (every step snapshotted), compared > 0, attribution complete, and the module outputs (`instance_outputs`, the family
     the gap strata produce) compared > 0 with none left not-compared (weights / hidden_stream have no oracle family and never stand in).
-    Else the named reason it is not."""
+    Else the named reason it is not; a form (B) that is never complete says why in its `scope` (a TP Commit's, `pipeline.tp.c2.tp_form_b`)."""
     if not isinstance(oc, dict):
         return "form (B) absent (no --match-dir oracle compare on the record)"
     if oc.get("result") is not True:
         return f"form (B) result {oc.get('result')} ({oc.get('grade') or 'no grade'})" + (f": {str(oc.get('why'))[:120]}" if oc.get("why") else "")
     if int(oc.get("mismatch_n") or 0) != 0:
         return f"form (B) {oc.get('mismatch_n')} mismatch"
+    if oc.get("complete") is not True and oc.get("scope"):
+        return f"form (B) not complete over the values ({oc['scope']})"
     if oc.get("complete") is not True:
         return f"form (B) not complete ({oc.get('grade') or 'partial'}: steps not snapshotted {oc.get('steps_not_snapshotted') or '?'} -- Match with MATCH_SNAP_STEPS=all)"
     if int(oc.get("compared") or 0) <= 0:

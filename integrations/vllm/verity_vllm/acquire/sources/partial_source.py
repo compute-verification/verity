@@ -481,10 +481,9 @@ class TPPartialSource:
         oracle is `steps_without_oracle` -- each of them FAILS (exhaustive over the family or not a record).  Covers the manifest's
         `tp_rank_partials` family only (this Match is collective-level; instance outputs have no TP Match oracle).
 
-        Witness-conditioned (`oracle_witness.judge`): each MoE align call's committed schedule witness (`<experts>/align.*`,
-        `moe_align_source`) is paired with the capture's (`align.rank<r>.jsonl`) by (step, module), exhaustively, and a tensor with a differing witness in its
-        dependency cone (`oracle_witness.in_cone`) is exempt from the value compare; this rank's own witnesses here, every rank's at
-        the driver (`oracle_witness.condition_on_witnesses`)."""
+        Each MoE align call's committed witness (`<experts>/align.*`, `moe_align_source`) is paired with the capture's
+        (`align.rank<r>.jsonl`) by (step, module), exhaustively; a differing one FAILS by name with what it implies
+        (`oracle_witness.implied`), and no tensor is exempt from the value compare (`oracle_witness.judge`)."""
         import json
         from pathlib import Path
 
@@ -505,7 +504,7 @@ class TPPartialSource:
                                "rule": ("committed bytes == tp2_match capture recorder's stored collective input (part_rank/shard_rank) / output (MoE /out), "
                                         "paired by (step, module) with k recorded, same rank; exhaustive in BOTH directions (every committed step has an oracle "
                                         "step and every oracle step a committed step); a module recorded twice in a step or a truncated .pt is a named FAIL; "
-                                        "where a MoE align witness in the tensor's cone differs between the runs, exempt (witness_rule)")}
+                                        "an MoE align witness that differs between the runs FAILS by name, nothing exempt (witness_rule)")}
         recp = cap / f"coll.rank{self.rank}.jsonl"
         if not recp.exists():
             res["verdict"], res["why"] = "FAIL", f"no oracle records {recp}"
@@ -603,11 +602,11 @@ class TPPartialSource:
         res["steps_committed"] = len(self.c._layouts)
         res["value_source"] = reader.record()
         res["wall_s"] = time.perf_counter() - t0
-        return OW.judge(res, wit["differs"])
+        return OW.judge(res)
 
     def _pair_witnesses(self, step: int, by_name: dict[str, list], recorded: dict[str, dict], reader: Any, res: dict[str, Any]) -> None:
         """This rank's committed MoE align witnesses of ``step`` against the capture's (``recorded``: module -> {k, sha256 per member}),
-        by module: equal, differing (its members named, at the capture's position k) or unpaired (on one side only)."""
+        by module: equal, differing (its members named, at the capture's position k, with what they imply) or unpaired (on one side only)."""
         wit = res["witnesses"]
         committed = {n.rsplit("/", 1)[0] for n in by_name if n.rsplit("/", 1)[-1] in OW.MEMBERS}
         for mod in sorted(committed | set(recorded)):
@@ -632,7 +631,7 @@ class TPPartialSource:
                     differs.append(m)
             else:
                 if differs:
-                    wit["differs"].append({"rank": self.rank, "step": step, "k": rec["k"], "module": mod, "members": differs})
+                    wit["differs"].append({"rank": self.rank, "step": step, "k": rec["k"], "module": mod, "members": differs, "implies": OW.implied(differs)})
                 else:
                     wit["equal"] += 1
 

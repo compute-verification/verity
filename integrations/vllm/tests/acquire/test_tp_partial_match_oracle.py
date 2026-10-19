@@ -8,9 +8,9 @@ Needs torch (torch.save/load of the oracle steps); CPU only.
   * NEGATIVE extra: a committed partial the oracle never recorded -> committed_not_in_oracle -> FAIL (exhaustive or not a record)
   * NEGATIVE no oracle for a committed step -> steps_without_oracle -> FAIL
   * NEGATIVE retained copy changed after the commit (the oracle agrees with the change) -> not_verified -> FAIL
-  * witness-conditioned: equal MoE align witnesses leave every tensor compared; a differing one exempts its cone (this rank's partials
-    from its position on, every rank's received outputs there, every later step) and leaves upstream compared; a tampered value under
-    an equal witness, or a witness on one side only, FAILS
+  * MoE align witnesses: nothing is exempt, so every tensor is compared whatever the witnesses say; a differing witness FAILS by name
+    with what it implies (a routing difference, or routing or schedule), even when every value is equal; a witness on one side only
+    FAILS; a schedule difference alone never reads as routing
 
 The rank's members are committed on the GPU-tree step block path and read through `oracle_compare.OpenedReader` (opened, verified against the
 rank's run root), as `worker.tp2_commit_finalize` reads them.
@@ -81,8 +81,8 @@ def test_positive_three_members_equal_the_stored_collectives(tmp_path):
     src, rd = _src({0: [_meta(f"{OPROJ}/part_rank0", p0), _meta(f"{MOE}/part_rank0", p1), _meta(f"{MOE}/out", o1)]})
     r = src.compare_match_oracle(str(tmp_path), rd)
     assert r["verdict"] == "PASS" and r["tensors"] == 3 and r["equal"] == 3 and r["steps_compared"] == 1
-    assert r["by_member"] == {"partial": {"tensors": 2, "equal": 2, "exempt": 0}, "out": {"tensors": 1, "equal": 1, "exempt": 0}}
-    assert r["compared"] == 3 and r["exempt"] == 0 and r["witness_counts"] == {"equal": 0, "differs": 0, "unpaired": 0}
+    assert r["by_member"] == {"partial": {"tensors": 2, "equal": 2}, "out": {"tensors": 1, "equal": 1}}
+    assert r["compared"] == 3 and "exempt" not in r and r["witness_counts"] == {"equal": 0, "differs": 0, "unpaired": 0}
     assert r["mismatch_n"] == r["missing_n"] == r["not_in_oracle_n"] == r["not_verified_n"] == 0 and r["families_covered"] == ["tp_rank_partials"]
     assert r["value_source"]["source"] == "opened" and r["value_source"]["reads"] == 3 and r["value_source"]["failed"] == 0
 
@@ -253,7 +253,7 @@ def test_a_rank_with_a_row_parallel_site_and_no_re_execution_still_fails():
     assert r["verdict"] == "FAIL" and r["tap_equal"] == 1 and r["reexec_tensors"] == 0 and r["reexec_due"] is True
 
 
-# ---------------------------------------------------------------------------------------------- the witness-conditioned oracle
+# ---------------------------------------------------------------------------------------------- the MoE align witnesses
 
 def _schedule(seed: int) -> list[torch.Tensor]:
     """One MoE align call's committed witness: its rank, start, blk and par words as the float32 view the source commits."""
@@ -280,33 +280,42 @@ def test_equal_witnesses_leave_every_tensor_compared(tmp_path):
         _record_schedule(tmp_path, 0, s, _schedule(s))
     src, rd = _src({0: _step(0, _schedule(0), p0, p1, o1), 1: _step(0, _schedule(1), p1, p0, o0)})
     r = src.compare_match_oracle(str(tmp_path), rd)
-    assert r["verdict"] == "PASS" and r["compared"] == r["equal"] == 6 and r["exempt"] == 0
-    assert r["witness_counts"] == {"equal": 2, "differs": 0, "unpaired": 0} and r["exempt_by"] == []
+    assert r["verdict"] == "PASS" and r["compared"] == r["equal"] == 6
+    assert r["witness_counts"] == {"equal": 2, "differs": 0, "unpaired": 0} and r["witness_differs"] == {"n": 0, "routing": 0, "first": []}
 
 
-def test_a_differing_schedule_exempts_its_cone_and_upstream_is_still_compared(tmp_path):
-    """Step 0's MoE ran another schedule: its partial and received output differ, and so does all of step 1 (its attention reads the
-    KV that output wrote).  o_proj's partial of step 0 is upstream of the align call and is still compared, bit for bit."""
+def test_a_differing_witness_fails_by_name_and_every_tensor_is_still_compared(tmp_path):
+    """Step 0's MoE align call differs from the capture's in every member, par among them (a routing difference: par is the per-expert
+    counts' alone), and the MoE partial and received output it produced differ, as does all of step 1.  Nothing is exempt: every tensor
+    is compared, and the witness is the first fault named."""
     p0, p1, o0, o1 = _tensors()
     q0, q1, u0, u1 = _tensors(seed=8)
     _oracle(tmp_path, 0, {0: ([p0, p1], [o0, o1]), 1: ([p1, p0], [o1, o0])})
     for s in (0, 1):
         _record_schedule(tmp_path, 0, s, _schedule(s))
-    committed = {0: _step(0, _schedule(10), p0, q1, u1), 1: _step(0, _schedule(1), q0, u0, q1)}
-    src, rd = _src(committed)
+    src, rd = _src({0: _step(0, _schedule(10), p0, q1, u1), 1: _step(0, _schedule(1), q0, u0, q1)})
     r = src.compare_match_oracle(str(tmp_path), rd)
-    assert r["verdict"] == "PASS", r.get("why")
-    assert (r["compared"], r["equal"], r["exempt"], r["mismatch_n"]) == (1, 1, 5, 0)
-    assert r["witness_counts"] == {"equal": 1, "differs": 1, "unpaired": 0}
-    assert r["exempt_by"] == [{"rank": 0, "step": 0, "k": 1, "module": MOE, "members": list(OW.MEMBERS)}]
-    assert r["tensor_runs"] == [[0, "out", 1, 1, "exempt", 0, 1], [0, "partial", 0, 0, "equal", None, 1], [0, "partial", 1, 1, "exempt", 0, 1],
-                                [1, "out", 1, 1, "exempt", 0, 1], [1, "partial", 0, 1, "exempt", 0, 2]]
-    committed[0][0] = _meta(f"{OPROJ}/part_rank0", q0)
-    src, rd = _src(committed)
+    assert r["verdict"] == "FAIL" and (r["compared"], r["equal"], r["mismatch_n"]) == (6, 1, 5)
+    w = {"rank": 0, "step": 0, "k": 1, "module": MOE, "members": list(OW.MEMBERS), "implies": OW.ROUTING}
+    assert r["witnesses"]["differs"] == [w] and r["witness_differs"] == {"n": 1, "routing": 1, "first": [w]}
+    assert r["tensor_runs"] == [[0, "out", 1, 1, "mismatch", 1], [0, "partial", 0, 0, "equal", 1], [0, "partial", 1, 1, "mismatch", 1],
+                                [1, "out", 1, 1, "mismatch", 1], [1, "partial", 0, 1, "mismatch", 2]]
+    assert r["why"].startswith("1 MoE align witness(es) differ from the capture's, 1 implying a routing difference") and "implies routing)" in r["why"]
+    assert "also 5 of 6 compared tensor(s) differ" in r["why"]
+
+
+def test_a_schedule_difference_with_every_value_equal_still_fails_named(tmp_path):
+    """Only align.rank differs (a pair's order within its expert, which the schedule or the routing can change) and every value is
+    equal: the capture does not replay the committed schedule, so the oracle cannot say which, and FAILS naming it."""
+    p0, p1, o0, o1 = _tensors()
+    _oracle(tmp_path, 0, {0: ([p0, p1], [o0, o1])})
+    ws = _schedule(0)
+    _record_schedule(tmp_path, 0, 0, ws)
+    src, rd = _src({0: _step(0, [_schedule(9)[0], *ws[1:]], p0, p1, o1)})
     r = src.compare_match_oracle(str(tmp_path), rd)
-    assert r["verdict"] == "FAIL" and r["mismatch_n"] == 1 and r["exempt"] == 5
-    assert (r["mismatches"][0]["step"], r["mismatches"][0]["k"], r["mismatches"][0]["member"]) == (0, 0, f"{OPROJ}/part_rank0")
-    assert "1 of 1 compared tensor(s) differ" in r["why"]
+    assert r["verdict"] == "FAIL" and r["compared"] == r["equal"] == 3 and r["mismatch_n"] == 0
+    assert r["witnesses"]["differs"][0]["members"] == ["align.rank"] and r["witness_differs"]["routing"] == 0
+    assert "implies routing or schedule" in r["why"] and "also" not in r["why"]
 
 
 def test_a_tampered_value_under_an_equal_witness_fails(tmp_path):
@@ -315,34 +324,28 @@ def test_a_tampered_value_under_an_equal_witness_fails(tmp_path):
     _record_schedule(tmp_path, 0, 0, _schedule(0))
     src, rd = _src({0: _step(0, _schedule(0), p0, p1, o0)})
     r = src.compare_match_oracle(str(tmp_path), rd)
-    assert r["verdict"] == "FAIL" and r["exempt"] == 0 and r["mismatch_n"] == 1 and r["mismatches"][0]["member"] == f"{MOE}/out"
+    assert r["verdict"] == "FAIL" and r["mismatch_n"] == 1 and r["mismatches"][0]["member"] == f"{MOE}/out"
 
 
-def test_a_peer_ranks_differing_witness_exempts_this_ranks_received_output_not_its_partial(tmp_path):
-    """Rank 1's experts ran another schedule at step 0: every rank's received MoE output differs, and only rank 1's MoE partial.  Judged
-    with every rank's witnesses, rank 0's received output is exempt and its own MoE partial, upstream of that collective, still compared."""
+def test_a_peer_ranks_differing_witness_fails_that_rank_and_the_tensor_it_changed_here(tmp_path):
+    """Rank 1's experts ran under another align at step 0: rank 1 FAILS by name, and rank 0, whose own witness is equal, compares the
+    received MoE output that align changed and FAILS on it; its own MoE partial, upstream of that collective, is equal."""
     p0, p1, o0, o1 = _tensors()
     q0, q1, u0, _u1 = _tensors(seed=8)
     _oracle(tmp_path, 0, {0: ([p0, p1], [o0, o1])})
     _oracle(tmp_path, 1, {0: ([q0, q1], [o0, o1])})
     _record_schedule(tmp_path, 0, 0, _schedule(0))
     _record_schedule(tmp_path, 1, 0, _schedule(1))
-    rank1 = _src({0: _step(1, _schedule(11), q0, p0, u0)}, rank=1)
-    for part_m, verdict in ((p1, "PASS"), (o1, "FAIL")):
-        rank0 = _src({0: _step(0, _schedule(0), p0, part_m, u0)})
-        blocks = {r_: s_.compare_match_oracle(str(tmp_path), rd_) for r_, (s_, rd_) in enumerate((rank0, rank1))}
-        assert blocks[0]["verdict"] == "FAIL" and blocks[0]["exempt"] == 0          # alone, rank 0 knows only its own witness
-        differs = OW.condition_on_witnesses(blocks)
-        assert differs == [{"rank": 1, "step": 0, "k": 1, "module": MOE, "members": list(OW.MEMBERS)}]
-        assert blocks[0]["verdict"] == verdict and blocks[0]["exempt"] == 1 and blocks[0]["compared"] == 2, blocks[0].get("why")
-        assert blocks[0]["tensor_runs"][0] == [0, "out", 1, 1, "exempt", 0, 1] and blocks[0]["exempt_by"] == differs
-        assert blocks[1]["verdict"] == "PASS" and blocks[1]["exempt"] == 2 and blocks[1]["compared"] == 1
-        assert all("per_tensor" not in b and b["conditioned_on_ranks"] == [0, 1] for b in blocks.values())
+    (s1, rd1), (s0, rd0) = _src({0: _step(1, _schedule(11), q0, p0, u0)}, rank=1), _src({0: _step(0, _schedule(0), p0, p1, u0)})
+    r1, r0 = s1.compare_match_oracle(str(tmp_path), rd1), s0.compare_match_oracle(str(tmp_path), rd0)
+    assert r1["verdict"] == "FAIL" and r1["witness_counts"]["differs"] == 1 and r1["why"].startswith("1 MoE align witness(es) differ")
+    assert r0["verdict"] == "FAIL" and r0["witness_counts"] == {"equal": 1, "differs": 0, "unpaired": 0}
+    assert r0["mismatch_n"] == 1 and r0["mismatches"][0]["member"] == f"{MOE}/out" and r0["equal"] == 2
 
 
 def test_a_witness_on_one_side_only_fails_named(tmp_path):
-    """A capture that recorded no align witness: the committed one has no counterpart, so no tensor can be exempt by it, and the oracle
-    fails by name even though every value is equal."""
+    """A capture that recorded no align witness: the committed one has no counterpart, and the oracle fails by name even though every
+    value is equal."""
     p0, p1, o0, o1 = _tensors()
     _oracle(tmp_path, 0, {0: ([p0, p1], [o0, o1])})
     src, rd = _src({0: _step(0, _schedule(0), p0, p1, o1)})
@@ -351,10 +354,29 @@ def test_a_witness_on_one_side_only_fails_named(tmp_path):
     assert r["witnesses"]["unpaired"] == [{"step": 0, "module": MOE, "in_commit": True, "in_capture": False}] and "on one side only" in r["why"]
 
 
-@pytest.mark.parametrize("rank,step,k,out,reached", [
-    (0, 0, 0, False, False), (0, 0, 0, True, False),     # before the call
-    (1, 0, 1, False, True), (0, 0, 1, False, False),     # at its position: the call's own rank's partial, not a peer's
-    (0, 0, 1, True, True), (0, 0, 2, False, True),       # the collective that carries it, and every partial after it
-    (0, 1, 0, False, True)])                             # every later step
-def test_the_cone_of_a_witness(rank, step, k, out, reached):
-    assert OW.in_cone({"rank": 1, "step": 0, "k": 1}, rank, step, k, out) is reached
+@pytest.mark.parametrize("members,implies", [
+    (["align.par"], OW.ROUTING), (["align.blk"], OW.ROUTING), (["align.start"], OW.ROUTING), (["align.start", "align.blk"], OW.ROUTING),
+    (list(OW.MEMBERS), OW.ROUTING), (["align.rank"], OW.ROUTING_OR_SCHEDULE), (["align.rank", "align.start", "align.blk"], OW.ROUTING_OR_SCHEDULE)])
+def test_what_a_differing_witness_implies(members, implies):
+    assert OW.implied(members) == implies
+
+
+def test_a_schedule_difference_alone_never_reads_as_routing():
+    """Two atomic orders of one routing, the kernel's own freedom (`moe_align_source.align_values` over the emulated kernel): whatever
+    members differ, `implied` says routing or schedule, never routing."""
+    from tests.acquire.test_dsv4_moe_align_source import kernel
+    from verity_vllm.acquire.sources import moe_align_source as MA
+
+    g, E, BM, seen = torch.Generator().manual_seed(5), 6, 4, set()
+    for P in range(2, 30):
+        ids = torch.randint(0, E, (P,), generator=g, dtype=torch.int32)
+        ws = []
+        for _ in range(2):
+            *vals, ok = MA.align_values(ids.reshape(-1, 1), *kernel(ids.tolist(), E, BM, torch.randperm(P, generator=g).tolist()), E, BM)
+            assert bool(ok)
+            ws.append([tps._bytes(v.view(torch.float32)) for v in vals])
+        differs = [m for m, a, b in zip(OW.MEMBERS, *ws) if a != b]
+        if differs:
+            assert OW.implied(differs) == OW.ROUTING_OR_SCHEDULE, (ids.tolist(), differs)
+            seen.add(tuple(differs))
+    assert seen
