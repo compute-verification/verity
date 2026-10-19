@@ -898,6 +898,29 @@ def test_a_lean_check_whose_replay_was_killed_is_a_machines_fault(tmp_path):
     (d / "lean-audit.log").write_text("AUDIT /x/lean-audit-scratch-1/Security/Proofs: FAIL\n    error: build failed\n")
     assert not killed(d)
 
+
+def test_a_circuit_check_whose_only_failures_are_killed_targets_is_a_machines_fault(tmp_path):
+    """19 Oct, r20261019-102541-78d1 on cpu-1: three PoUS SHA-512 targets were OOM-killed at 149-164 GiB, circuit-check failed
+    with rc 1, and drive blamed circuit-check's inputs and tried to revert all 19 landings since 6c4f254d."""
+    from research.drive import killed
+
+    d = tmp_path / "run"
+    d.mkdir()
+    step = '{"step": "circuit-check", "status": "failed", "rc": 1, "log": "circuit-check.log"}\n'
+    (d / "steps.jsonl").write_text(step)
+    died = ("FAIL circuit-check/killed PousSha512Head_v1: its process died (signal 9: the OOM killer?) at a peak of 164.16 GiB\n"
+            "FAIL circuit-check/killed PousSha512Mid_v1{M=1}: its process died (signal 9: the OOM killer?) at a peak of 164.16 GiB\n")
+    tail = "circuit-check: 5211 target(s), 2 new failure(s), 3 known\nwarn dead-gates/ir: 258100 over 309 target(s)\n"
+    (d / "circuit-check.log").write_text(died + tail)
+    assert killed(d)
+    (d / "circuit-check.log").write_text(died + "FAIL partition/unchecked PousSha512Ctr_v1: an output bit is free\n" + tail)
+    assert not killed(d), "a real failure beside the killed ones is the code's"
+    (d / "circuit-check.log").write_text(died + "FAIL circuit_check.known lists Foo, which no longer fails: drop it\n" + tail)
+    assert not killed(d)
+    (d / "circuit-check.log").write_text(died + tail)
+    (d / "steps.jsonl").write_text(step + '{"step": "pytest", "status": "failed", "rc": 1, "log": "pytest.log"}\n')
+    assert not killed(d), "another failed step is judged on its own"
+
 def test_drive_sweeps_the_repositorys_branches_once_a_day(world, monkeypatch):
     """CI-48: nothing deleted a landed PR's branch or an idle one, and the repository reached 3,543 branches."""
     from research.drive import BRANCH_SWEEP_S
