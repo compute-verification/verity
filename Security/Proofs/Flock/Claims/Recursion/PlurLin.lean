@@ -1,3 +1,4 @@
+import Definitions.Claims.RecursionLin
 import Proofs.Flock.Claims.Recursion.InnerAbort
 
 /-!
@@ -43,12 +44,6 @@ theorem Ex_if_zero {α : Type} [Fintype α] (p : α → Prop) [DecidablePred p] 
 def firstDiffers (g : U → Prop) (f : U → Msg) (a : Msg) : (M : ℕ) → (Fin M → U) → Prop
   | 0, _ => False
   | M + 1, us => (g (us 0) ∧ f (us 0) ≠ a) ∨ (¬ g (us 0) ∧ firstDiffers g f a M (Fin.tail us))
-
-open Classical in
-/-- The first of `M` draws where `g` holds. -/
-noncomputable def firstPick (g : U → Prop) : (M : ℕ) → (Fin M → U) → Option U
-  | 0, _ => none
-  | M + 1, us => if g (us 0) then some (us 0) else firstPick g M (Fin.tail us)
 
 omit [Fintype U] in
 theorem firstPick_of_firstDiffers {g : U → Prop} {f : U → Msg} {a : Msg} :
@@ -190,17 +185,6 @@ theorem Pr_plur_link (g : U → Prop) (f : U → Msg) (M : ℕ) :
       exact hne ⟨u, h.1⟩
     rw [h0]
     linarith
-
-open Classical in
-/-- **The loop's SHA-512 calls**: each draw's `c` until the first where `g` holds. -/
-noncomputable def loopCost (g : U → Prop) (c : U → ℕ) : (M : ℕ) → (Fin M → U) → ℕ
-  | 0, _ => 0
-  | M + 1, us => c (us 0) + if g (us 0) then 0 else loopCost g c M (Fin.tail us)
-
-open Classical in
-/-- **The link finder's SHA-512 calls**: the first draw's, and the loop's where `g` holds at it. -/
-noncomputable def linkCost (g : U → Prop) (c : U → ℕ) (M : ℕ) (p : U × (Fin M → U)) : ℕ :=
-  c p.1 + if g p.1 then loopCost g c M p.2 else 0
 
 theorem Ex_loopCost [Nonempty U] (g : U → Prop) (c : U → ℕ) :
     ∀ M, Ex (fun us : Fin M → U => (loopCost g c M us : ℝ)) = Ex (fun u => (c u : ℝ)) * geomS (1 - Pr g) M

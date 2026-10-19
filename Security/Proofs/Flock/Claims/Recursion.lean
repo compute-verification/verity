@@ -13,6 +13,7 @@ import Proofs.Flock.Claims.Recursion.Abort
 import Proofs.Flock.Claims.Recursion.InnerAbort
 import Proofs.Flock.Claims.Recursion.PlurLin
 import Proofs.Flock.Claims.Recursion.BadLin
+import Proofs.Flock.Claims.Recursion.KSLin
 import Proofs.Flock.Claims.Recursion.Gap
 import Proofs.Flock.Claims.Recursion.Registered
 import Proofs.Flock.Claims.Recursion.FlockAbort
