@@ -67,7 +67,7 @@ theorem flatMap_fix_zeros (k a : ℕ) (f : ℕ → ℕ) : ∀ l : List ℕ,
     rw [List.map_cons, List.flatMap_cons, fix_drop_zeros, flatMap_fix_zeros k a f l, List.replicate_append_replicate,
       List.length_cons]
     congr 1
-    first | ring | rw [Nat.mul_add, Nat.mul_one, Nat.add_comm]
+    ring
 
 theorem reads_zeros (p : Place) : Reads p (zeros p) := by
   have hcs : (openOf p (zeros p)).cs.flatMap Subtype.val = List.replicate (16 * p.n) (0 : UInt8) := by
@@ -86,7 +86,6 @@ theorem reads_zeros (p : Place) : Reads p (zeros p) := by
     List.replicate_append_replicate]
   unfold zeros
   congr 1
-  omega
 
 /-! ## The answer -/
 
@@ -94,9 +93,8 @@ theorem u32le_length (v : ℕ) : (u32le v).length = 4 := by
   simp [u32le, u32be]
 
 theorem frame_drop (ws : ℕ) (b : List UInt8) : (frame ws b).drop 5 = b := by
-  first
-  | (show (u32le ws ++ b).drop 4 = b; exact List.drop_left' (u32le_length ws))
-  | simp [frame, u32le, u32be]
+  show (u32le ws ++ b).drop 4 = b
+  exact List.drop_left' (u32le_length ws)
 
 theorem frame20_length : (frame 20 []).length = 5 := by
   simp [frame, u32le_length]
@@ -145,7 +143,7 @@ theorem ansOf_ok (ν : List UInt8) (p : Place) (b k : List UInt8) (hk : k.length
     (hbit : k.getD 255 0 &&& 0x80 = 0) : answerOK (ansOf ν p b k) = true := by
   unfold answerOK
   rw [ans_length ν p b k hk, ans_take, ans_getD, hbit]
-  first | rfl | decide | simp
+  rfl
 
 theorem keyD_ans (ν : List UInt8) (p : Place) (b k : List UInt8) (hk : k.length = 256) :
     keyD (ansOf ν p b k) = ⟨k.toArray⟩ := by
@@ -159,10 +157,11 @@ theorem rootD_ans (ν : List UInt8) (p : Place) (b k : List UInt8) :
   exact List.take_left' (reach_length _ _ _)
 
 theorem zeroKey_length : zeroKey.length = 256 := by
-  simp [zeroKey]
+  unfold zeroKey
+  exact List.length_replicate
 
 theorem zeroKey_bit : zeroKey.getD 255 0 &&& 0x80 = 0 := by
-  first | rfl | decide | simp [zeroKey, List.getD_eq_getElem?_getD]
+  rfl
 
 /-! ## The opening passes -/
 
@@ -174,7 +173,8 @@ theorem parseD_open (p : Place) (ρ b : Msg) (hp : p.ok = true) (hρ : answerOK 
   unfold parseD
   rw [hd, hj, hp, hρ]
   have hm : decide (openMsg p b = frame (p.n + 16 + 4 * p.depth) b) = true := decide_eq_true rfl
-  first | (rw [hm]; rfl) | simp [openMsg]
+  rw [hm]
+  rfl
 
 /-- **The session's check passes the opening** at the place `pl j` in the schedule, under the answer it opens, at
 SHA-512. -/
@@ -189,8 +189,8 @@ theorem chkAt_open (pl : ℕ → Place) (j : ℕ) (hok : (pl j).ok = true) (ν b
   have hv : CoinOpen.reachVal ν (keyD (ansOf ν (pl j) b k)) (openOf (pl j) b) = (rootD (ansOf ν (pl j) b k)).val :=
     (congrArg (fun key => CoinOpen.reachVal ν key (openOf (pl j) b)) (keyD_ans ν (pl j) b k hk)).trans
       (rootD_ans ν (pl j) b k).symm
-  simp only [treeChk, hc, and_self, eq_self_iff_true, ↓reduceIte, CoinOpen.reachK_sha, OC.eval, decide_eq_true_eq]
-  first | exact Subtype.ext hv | exact decide_eq_true (Subtype.ext hv)
+  simp only [treeChk, hc, and_self, ↓reduceIte, CoinOpen.reachK_sha, OC.eval, decide_eq_true_eq]
+  exact Subtype.ext hv
 
 end Claims.ZKMal.CoinPass
 
