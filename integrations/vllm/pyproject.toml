@@ -57,7 +57,7 @@ inputs = ["verity", "verity/README.md", "tools/config/verity_config", "benchmark
           "benchmarks/ppl/steps.py", "benchmarks/ppl/matmul.py", "benchmarks/ppl/gates.py", "benchmarks/ppl/spec.py", "benchmarks/ppl/methodology.py", "benchmarks/ppl/model.py",
           "benchmarks/remote_session/prover.py", "benchmarks/remote_session/verifier.py", "benchmarks/remote_session/wire.py",
           "benchmarks/remote_session/checks.py",
-          "tools/research/src/research/__init__.py", "tools/research/src/research/cli.py", "tools/research/src/research/clone.py",
+          "tools/research/src/research/__init__.py", "tools/research/src/research/cli.py", "tools/research/src/research/waitcap.py", "tools/research/src/research/clone.py",
           "tools/research/src/research/compare.py", "tools/research/src/research/env.py", "tools/research/src/research/pythonpath.py",
           "tools/research/src/research/record.py", "tools/research/src/research/remote.py", "tools/research/src/research/result.py",
           "tools/research/src/research/runs.py", "tools/research/src/research/secret_hint.py", "tools/research/src/research/timefmt.py",
