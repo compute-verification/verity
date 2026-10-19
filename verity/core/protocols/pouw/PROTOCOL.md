@@ -32,9 +32,9 @@ Everything else is the protocol's, the same for every scheme.
 
 ## Lifecycle (`audit`)
 
-Steps 1 to 4 are `audit`'s: what the served path's prover commits and its verifier reads. Steps 5 to 7, run in the clear,
-are a reference tool and not a verifier (``benchmarks/pouw/clear/clear_audit.py``): the served path is the served audit
-window, and its verifier of record is the Lean (`lean/check`).
+Steps 1 to 4 are `audit`'s: what the served path's prover commits and its verifier reads. Step 5 is the served window's
+draw. Steps 6 and 7, run in the clear, are a reference tool and not a verifier (`benchmarks/pouw/clear/clear_audit.py`):
+the served window proves its drawn tiles in zero knowledge, and its verifier of record is the Lean (`lean/check`).
 
 1. **Weights.** Each weight's rows are committed in a `verity.ml.commitments.merkle` tree bound to the weight id (owner −2);
    `weights_root` binds every weight root.
@@ -52,13 +52,29 @@ window, and its verifier of record is the Lean (`lean/check`).
    challenger's clock, and the proof service refuses a later registration, or one before the salt, as
    `late-registration`. That ends the epoch, and the window earns no credit (`served_zk`'s challenger,
    `registration_deadline` in its parameters).
-5. **Selection.** Served accounting uses only the sampled audit.
-   - `Sampled(t)`: `derive(source, "verity/pouw/audit/v1", {"transcript": root, "salt": salt})`, the source
-     being the epoch's draw coin, opened after the verifier recorded the transcript's root (`draw_coin`); draw j is
-     `key.uniform(W, j)` mapped to a tile by cumulative work, so t tiles are drawn independently, each with probability
-     W_ref(tile)/W, a tile's work being its cells' share of its matmul's W_ref (Lean `WorkWeightedSampling`).
-   - `Lottery(target)` is Pearl's mining rule, not one of the audit's sampling designs: the tiles whose digest, read
-     little-endian, is at most target·|rows|·|cols|·k. It stays in `clear_audit`, unwired: no served path selects with it.
+5. **Selection.** A served window's draw is one uniform subset of K′ of its N tiles, without replacement, drawn after
+   its registration's receipt (`benchmarks/pouw/served_zk/served_commit.py`, `Challenger.select`).
+   - **N and K′.** A window of N_real real tiles registers the level `window.bucket(N_real)`: it is credited g_ℓ tiles,
+     the largest grid point at most N_real, and pads with filler tiles to N = g_(ℓ+1) = `window.pad(N_real + 1)`, at
+     least one filler. Every tile is the one template's and does w_max = `tile_work`, and filler tiles are drawn like
+     any other but credited nothing. `window.sampling` registers the law `{"law": "subset", "k": K′}`, the registration's
+     `population` being N, with K′ = `window.k_prime(ε, δ, W, N, w_max)` and W = g_ℓ·w_max the credited work: the
+     smallest K >= 1 with (1 − ε·W/(N·w_max))^K <= δ, compared exactly in rationals (`window.miss_at_most`), N if no
+     K <= N has it, and 1 when ε·W/(N·w_max) = 1. A wrong set holding a share ε of W has at least ε·W/w_max tiles, so
+     the draw misses it with probability at most δ.
+   - **The draw.** The challenger opens the epoch's draw coin once, after the registration (its digest), and keys the
+     draw `derive(coin, "verity/pouw/served-zk-draw/v1", {"stream", "registration", "receipt"})` (`draw_key`,
+     `core_check.draw_key_context`). The units are `core_check.stream_subset(K′, N, ·)`, Lean's `Draw.subset`
+     (`flock-verify draw --population N --k K′ --stream`), over the 2·K′·width(N) + 64 bytes of the key's stream
+     `"draw"` (`draw_bytes`, width(N) = ⌈(bitlen(N) + 64)/8⌉ bytes): a sparse partial Fisher–Yates whose step i swaps
+     position i with i + r, r uniform below N − i by rejection over big-endian width(N)-byte words, and the units are
+     the first K′ positions, ascending. So every K′-subset of [0, N) is equally likely. A stream that runs out refuses
+     (`sampler`), and nothing redraws. `core_check.draw` holds the units to the coin's opening.
+   - **Sessions.** The units are proved in ⌈K′/cap⌉ sessions (`window.sessions`) by ascending rank: session σ's instance
+     s is drawn[σ·cap + s], and the filler tile N − 1 after the last (`window.instance_ts`, "The served audit window").
+   - `Sampled(t)` (t independent work-weighted draws, Lean `WorkWeightedSampling`) and `Lottery(target)` (Pearl's mining
+     rule: the tiles whose digest, read little-endian, is at most target·|rows|·|cols|·k) are the reference tool's
+     (`clear_audit`), unwired: no served path selects with either.
 6. **Check.** For each selected tile the prover opens A's rows, B's rows and the leaf. The verifier checks the openings,
    recomputes the tile through the scheme (`encode`, `admissible`, `checked`, `digest`) and compares the leaf. It refuses
    a tile any of whose opened rows fails the scheme's rules (`encode`'s parse, then `admissible`); Lean's
