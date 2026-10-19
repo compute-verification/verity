@@ -16,8 +16,8 @@ change that closes it has to say so here. Two recorded sets, both fetched fixtur
   statements staged with the inner program; the fixture holds the files these tests read, the circuits and V*'s
   programs xz-compressed, the inner transcript is tracked beside it (`f1-gate-transcript`), and each is checked against
   the art's own listing once decompressed. Lean's verifier builds
-  the inner statement from its own partition object and program (`AcceptsPublic`), V*'s six statements are the ones
-  `outerStatementsAt` counts, each session is one of them byte for byte (`RecVStar.checkStmt`) and draws every unit,
+  the inner statement from its own partition object and program (`AcceptsPublic`), V*'s six staged statements are
+  the ones `outerStatementsAt` lists before RecCap (staged after the gate, which has no RecCap session), each session is one of them byte for byte (`RecVStar.checkStmt`) and draws every unit,
   and the rate is below 1 at `k = 2^23` (at `2^21` for these sessions). The sessions were proved with #1677's OS masks
   in `verity/flock-circuit`'s `--zk` identity, and the verifier of record accepts them as `verity/flock-circuit`: the
   gate is witnessed under today's identity. The event's last conjunct is shown in its executable form only: the honest
