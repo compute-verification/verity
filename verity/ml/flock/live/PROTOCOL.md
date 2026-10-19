@@ -884,8 +884,8 @@ the send check returned, `core-firewall decide` (`FC_CORE_FIREWALL`, else this c
 `verity/core/service/firewall`) decides on the record as it was when the slot was taken, and a session it doesn't decide
 as Rust did (refused, stopped or sent, the why, the release time, and the record after the slot and the admission) is a
 stop, its why naming the difference; a refusal stays one. Nothing leaves that the Lean decision doesn't send, and a Lean
-that can't be run is a stop. `tests/test_firewall_release_agreement.py` holds Rust's sessions with that judge to Lean's
-`outerSession`.
+that can't be run is a stop. `verity/core/service/firewall/tests/test_firewall_release_agreement.py` holds Rust's
+sessions with that judge to Lean's `outerSession`.
 Every stop (the send check's refusal, a fault, a panic, a missed time) drops the connection before `Finish`, and a
 prover killed while it holds the slot is recorded as its session's stop by the next one to take it. Since admission comes
 before the connection, a session cut before its first request is its statement's stop here; through the relay it records
