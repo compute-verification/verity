@@ -358,11 +358,11 @@ def lean(s: Sheet, data: Path) -> str:
     # Not `deriving Fintype`: Mathlib's handler for an enumeration fails its own `rw [Finset.mem_mk, …]` under this
     # toolchain (r20261019-053835-0e45), so each instance lists the constructors.
     out += [*_doc(f"The classes of the `{epoch}` census (its kinds)."), "inductive Kind", *(f"  | {k}" for k in kinds),
-            "  deriving DecidableEq", "", "instance : Fintype Kind :=",
+            "  deriving DecidableEq", "", "instance instFintypeKind : Fintype Kind :=",
             *_wrap(f"Fintype.ofList [{', '.join(f'.{k}' for k in kinds)}]", "  ", "    "),
             "    (by intro k; cases k <;> decide)", ""]
     out += [*_doc(f"The Nsight Compute pipes the `{epoch}` classes issue to."), "inductive Pipe",
-            *(f"  | {q}" for q in pipes), "  deriving DecidableEq", "", "instance : Fintype Pipe :=",
+            *(f"  | {q}" for q in pipes), "  deriving DecidableEq", "", "instance instFintypePipe : Fintype Pipe :=",
             f"  Fintype.ofList [{', '.join(f'.{q}' for q in pipes)}] (by intro p; cases p <;> decide)", ""]
     out += [*_doc("The tensor operand types with a dense peak."), "inductive Ty", *(f"  | {ty}" for ty in types),
             "  deriving DecidableEq", ""]

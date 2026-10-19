@@ -65,7 +65,7 @@ inductive Kind
   | UNI
   deriving DecidableEq
 
-instance : Fintype Kind :=
+instance instFintypeKind : Fintype Kind :=
   Fintype.ofList [.ALU, .BGMMA_B1_N256, .BMMA168256_B1, .DMMA16816, .DMMA1684, .DMMA1688, .DMMA884, .FFMA,
     .HGMMA_BF16_N128, .HGMMA_BF16_N256, .HGMMA_BF16_N256_SP, .HGMMA_F16_N256, .HGMMA_F16_N256_SP, .HGMMA_TF32_N256,
     .HGMMA_TF32_N256_SP, .HMMA16816_BF16, .HMMA16816_F16, .HMMA1688_TF32, .IGMMA_S8_N128, .IGMMA_S8_N16, .IGMMA_S8_N192,
@@ -82,7 +82,7 @@ inductive Pipe
   | uniform
   deriving DecidableEq
 
-instance : Fintype Pipe :=
+instance instFintypePipe : Fintype Pipe :=
   Fintype.ofList [.alu, .imad, .shfl, .uniform] (by intro p; cases p <;> decide)
 
 /-- The tensor operand types with a dense peak. -/
