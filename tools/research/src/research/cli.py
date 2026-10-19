@@ -17,9 +17,9 @@
                                                  # it returns once the machine starts the run; --wait blocks until it ends and exits with its rc
   research run --job-user USER [...] -- CMD...   # the workload as USER in a sandboxed system unit; records stay the runner's (research/jobuser.py)
   research fetch <run-id> [--all] [--on NAME]    # copy the machine's records (or every file, verified) into the local run dir
-  research cancel <run-id> --reason TEXT [--by WHO] [--on NAME]   # SIGTERM to the run's workload process group, recorded as a manual
-                                                 # cancel; never the runner, never SIGKILL, so it still records the exit and publishes
-                                                 # custody.  From any VM: a run another VM launched is found as `inspect` finds it
+  research cancel <run-id> --reason TEXT [--by WHO] [--on NAME]   # SIGTERM to the run's workload process group and its whole cgroup
+                                                 # scope, recorded as a manual cancel; 20 s later the runner SIGKILLs what is left (never
+                                                 # itself), records the exit and publishes custody.  From any VM: as `inspect` finds runs
   research status [RUN] [--on NAME] [--runs-dir D] [--refresh] [--balance] [--all] [--json]
   research inspect <run-id|prefix|path> [--on NAME] [--runs-dir D] [--json | --py-spy]
                                                  # a full run id another VM launched (no local dir): found on --on NAME, else on
@@ -201,7 +201,8 @@ def _cmd_run(argv: list[str], clones: list[Path]) -> int:
     ap.add_argument("--wait-every", type=float, default=30.0, metavar="S", help="with --wait: fetch the run's records every S seconds (30)")
     ap.add_argument("--mem-gb", type=float, default=None, metavar="N",
                     help="with --on: admit only if the machine's memory cgroup has N GB free after live reservations (/workspace/ramlock), "
-                         "and reserve them for the run; else MemoryNotAvailable (research.mem). With --queue: the job's memory cap "
+                         "and reserve them for the run, which the workload reads as $RESEARCH_RUN_MEM_GB (a reservation sets no cgroup "
+                         "cap); else MemoryNotAvailable (research.mem). With --queue: the job's memory cap "
                          "(its scope's MemoryMax=), required unless --kind names a registered kind, whose shape gives it")
     ap.add_argument("--mem-wait", type=float, default=0.0, metavar="S",
                     help="with --mem-gb: wait up to S seconds for the memory instead of refusing, in line behind older waiters "
@@ -1235,7 +1236,9 @@ def cmd_fetch(argv: list[str]) -> int:
 
 def cmd_cancel(argv: list[str]) -> int:
     ap = argparse.ArgumentParser(prog="research cancel", description="stop a remote run the one way that keeps its custody: SIGTERM to its "
-                                                                     "workload's process group, recorded as a manual cancel (remote.cancel)")
+                                                                     "workload's process group and its whole cgroup scope, recorded as a "
+                                                                     "manual cancel; the runner SIGKILLs what is left 20 s later "
+                                                                     "(remote.cancel)")
     ap.add_argument("ref", help="a run id or prefix under the runs root; a full run id another VM launched is found on its machine")
     ap.add_argument("--reason", required=True)
     ap.add_argument("--by", default=os.environ.get("RESEARCH_LANE") or os.environ.get("USER") or "-")
@@ -1253,6 +1256,15 @@ def cmd_cancel(argv: list[str]) -> int:
         return 1
     print(f"research cancel: {run_dir.name}: SIGTERM to its workload's process group {out['pgid']} ({out['processes']} process(es)), "
           f"recorded as a manual cancel; the runner records the exit and publishes custody (`research fetch {run_dir.name}`)")
+    scope = out.get("scope") or {}
+    if scope.get("scopes"):
+        print(f"research cancel: {run_dir.name}: and to the {(scope.get('SIGTERM') or {}).get('n', 0)} other process(es) of its scope(s) "
+              f"{', '.join(p.rsplit('/', 1)[-1] for p in scope['scopes'])}")
+    if scope.get("fallback"):
+        print(f"research cancel: {run_dir.name}: {scope['fallback']}")
+    if scope.get("runner_kills_after_s") is not None:
+        print(f"research cancel: {run_dir.name}: the runner SIGKILLs what is left of the run {scope['runner_kills_after_s']:g} s after the "
+              f"SIGTERM and records it in status.json (`scope_end`)")
     if ran := _ran_text(R.summarize(run_dir), datetime.now(timezone.utc)):
         print(f"research cancel: {run_dir.name} {ran}")
     return 0

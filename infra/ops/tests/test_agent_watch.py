@@ -26,7 +26,8 @@ class FakeApi:
         self.workers, self.gets = workers if workers is not None else {}, []
 
     def agents(self):
-        return iter(self._agents)
+        """Each agent as the list gives it, on Verity's repository unless it says otherwise (`repos`)."""
+        return iter({"repos": [{"url": "https://github.com/compute-verification/verity"}], **a} for a in self._agents)
 
     def get(self, path, **params):
         parts = path.split("/")
@@ -1356,3 +1357,304 @@ def test_every_declared_timer_is_a_registry_handle_with_a_positive_interval():
     assert raw and set(raw) <= handles, f"not registry handles: {sorted(set(raw) - handles)}"
     assert W.timers(root / "infra/control/agent_watch_timers.json") == {h: float(v) for h, v in raw.items()}, \
         "each interval a positive number of seconds"
+
+
+def test_an_agent_not_on_veritys_repository_is_never_acted_on_or_shown(tmp_path):
+    """02:21Z 19 Oct: the watch restarted Daniel's own 'Open calendar for Calendly' (repos null): the key sees every agent on
+    the account. One on another repository, or none, is never streamed, cancelled, restarted or woken, and isn't a status row."""
+    other = [{"url": "https://github.com/someone/calendly-helper"}]
+    agents = [{"id": "bc-run", "status": "ACTIVE", "latestRunId": "run-1", "repos": other},
+              {"id": "bc-err", "status": "IDLE", "latestRunId": "run-e", "updatedAt": W.iso(T0), "repos": None},
+              {"id": CO, "status": "IDLE", "latestRunId": "run-f", "updatedAt": "2026-10-18T19:20:00Z",
+               "repos": [{"url": "https://github.com/compute-verification/research-notes"}]},
+              {"id": "bc-ok", "status": "ACTIVE", "latestRunId": "run-2"}]
+    runs = {"run-1": {"status": "RUNNING"}, "run-e": {"status": "ERROR"}, "run-f": dict(FINISHED), "run-2": {"status": "RUNNING"}}
+    api, clock, w = coordinators(tmp_path, agents, runs, wake=True)
+    started = []
+    w.sweep(started.append)
+    for run in ("run-1", "run-2"):
+        held_tool_call(w, run)
+    clock.t += W.HELD_S
+    w.sweep(started.append)
+    assert [r.run for r in started] == ["run-2"]
+    assert [p for p, _ in api.posts] == ["/v1/agents/bc-ok/runs/run-2/cancel", "/v1/agents/bc-ok/runs"], \
+        "the Verity agent alone is freed: nothing restarted, cancelled or woken on the others"
+    assert [r["agent"] for r in records(tmp_path)] == ["bc-ok"] and set(status(tmp_path)) == {"bc-ok"}
+    assert not any(g.startswith(("/v1/agents/bc-run", "/v1/agents/bc-err", f"/v1/agents/{CO}")) for g in api.gets)
+
+
+def test_a_worker_whose_repos_arent_veritys_is_never_acted_on(tmp_path):
+    notes = tmp_path / "notes"
+    note(notes, "circuits", "a.md", f"circuits workers ({W1_}, {W2_}, {W3_})")
+    listed_elsewhere = {"id": W3_, "status": "ACTIVE", "latestRunId": "run-x", "repos": None}
+    api, clock, w = coordinators(tmp_path, [listed_elsewhere], {"run-x": {"status": "RUNNING"}}, notes=notes, workers={
+        W1_: {**worker("ACTIVE", W.iso(T0 - 7 * 3600)), "repos": [{"url": "https://github.com/someone/else"}]},
+        W2_: worker("ACTIVE", W.iso(T0 - 7 * 3600))}, worker_long_s=3600)
+    for _ in range(3):
+        w.sweep(lambda r: None)
+        clock.t += 60
+    assert api.gets.count(f"/v1/agents/{W1_}") == 1 and f"/v1/agents/{W3_}" not in api.gets, \
+        "read once, then never; an agent the list has (even not Verity's) is no worker"
+    assert [(r["kind"], r["agent"]) for r in records(tmp_path)] == [("worker_long", W2_)] and set(status(tmp_path)) == {W2_}
+
+
+class FakeSh:
+    """`git ls-remote --heads` answers `heads` (branch -> sha), failing while `fail` holds it; ssh to a node runs RUNS_READER here,
+    on the runs root its machines.d entry names (a tmp directory), as `python3 - ROOT SINCE` would there. `calls` counts each."""
+
+    def __init__(self, heads=None):
+        self.heads, self.fail, self.calls = dict(heads or {}), set(), []
+
+    def __call__(self, argv, stdin, timeout):
+        self.calls.append(argv)
+        if argv[:2] == ["git", "ls-remote"]:
+            if "git" in self.fail:
+                return 128, "", "fatal: Could not read from remote repository."
+            return 0, "".join(f"{sha}\trefs/heads/{b}\n" for b, sha in sorted(self.heads.items())), ""
+        host = argv[-2].split("@", 1)[1]
+        if host in self.fail:
+            return 255, "", f"ssh: connect to host {host} port 22: Connection timed out"
+        _, dash, root, since = W.shlex.split(argv[-1])
+        r = W.subprocess.run([W.sys.executable, dash, root, since], input=stdin, capture_output=True, text=True)
+        return r.returncode, r.stdout, r.stderr
+
+
+REMOTE = "git@github.com:compute-verification/verity.git"
+
+
+def sweeps(w, clock, minutes, step=5):
+    for _ in range(minutes // step):
+        clock.t += step * 60
+        w.sweep(lambda r: None)
+
+
+def silent(tmp_path):
+    return [r for r in records(tmp_path) if r["kind"] == "silent"]
+
+
+def test_a_silent_worker_is_rung_once_then_once_more_a_window_later_then_not_until_it_shows_activity(tmp_path):
+    """Daniel, 19 Oct: agents go quiet and nobody notices (proofs' 20 workers, 18 Oct). A worker ACTIVE 90 min with no note of
+    its and no push to its branch rings its coordinator's handle; a second silent window rings again; then nothing until a
+    note or a push."""
+    notes = tmp_path / "notes"
+    note(notes, "circuits", "a.md", f"circuits worker W3 ({W1_}); code cursor/w3-branch-c7a9", age_s=2 * 3600)
+    sh = FakeSh({"cursor/w3-branch-c7a9": "a" * 40, "main": "m" * 40})
+    api, clock, w = coordinators(tmp_path, [], {}, workers={W1_: worker("ACTIVE", W.iso(T0 - 3 * 3600))}, notes=notes,
+                                 git_remote=REMOTE, sh=sh)
+    w.sweep(lambda r: None)
+    sweeps(w, clock, 85)
+    assert silent(tmp_path) == [], "a fresh watch counts from its first heads read: nobody is silent for 90 min"
+    sweeps(w, clock, 5)
+    (rec,) = silent(tmp_path)
+    assert {k: rec[k] for k in ("agent", "name", "run", "handle", "lane", "since", "minutes", "active_minutes", "window",
+                                "branches")} == {
+        "agent": W1_, "name": "ZKS10", "run": "", "handle": "circuits", "lane": "circuits", "since": W.iso(T0), "minutes": 90,
+        "active_minutes": 270, "window": 1, "branches": ["cursor/w3-branch-c7a9"]}
+    sweeps(w, clock, 90)
+    assert [(r["window"], r["minutes"]) for r in silent(tmp_path)] == [(1, 90), (2, 180)]
+    sweeps(w, clock, 180)
+    assert len(silent(tmp_path)) == 2, "two rings a spell"
+    p = note(notes, "circuits", "b.md", f"circuits worker W3 ({W1_}), checkpoint", age_s=0)
+    W.os.utime(p, (clock.t, clock.t))
+    sweeps(w, clock, 85)
+    assert len(silent(tmp_path)) == 2, "a new note is activity"
+    sweeps(w, clock, 5)
+    assert [r["window"] for r in silent(tmp_path)] == [1, 2, 1] and silent(tmp_path)[-1]["since"] == W.iso(p.stat().st_mtime)
+
+
+def test_a_push_to_an_agents_branch_is_activity(tmp_path):
+    """A coordinator's branches: its runs' `git.branches` and every head ending in its id's last four (`cursor/...-cccc`)."""
+    run = {"status": "RUNNING", "createdAt": W.iso(T0), "updatedAt": W.iso(T0),
+           "git": {"branches": [{"repoUrl": "github.com/compute-verification/verity", "branch": "cursor/api-named"},
+                                {"repoUrl": "github.com/someone/else", "branch": "cursor/not-veritys"}]}}
+    sh = FakeSh({"cursor/api-named": "1" * 40, f"cursor/by-suffix-{CO[-4:]}": "2" * 40, "cursor/not-veritys": "3" * 40})
+    api, clock, w = coordinators(tmp_path, [{"id": CO, "name": "verity: circuits", "status": "ACTIVE", "latestRunId": "run-r"}],
+                                 {"run-r": run}, notes=tmp_path / "notes", git_remote=REMOTE, sh=sh)
+    (tmp_path / "notes").mkdir()
+    w.sweep(lambda r: None)
+    sweeps(w, clock, 60)
+    sh.heads[f"cursor/by-suffix-{CO[-4:]}"] = "4" * 40
+    sweeps(w, clock, 60)
+    sh.heads["cursor/api-named"] = "5" * 40
+    sweeps(w, clock, 60)
+    sh.heads["cursor/not-veritys"] = "6" * 40
+    assert silent(tmp_path) == []
+    sweeps(w, clock, 90)
+    (rec,) = silent(tmp_path)
+    assert (rec["agent"], rec["handle"], rec["run"], rec["minutes"], rec["since"]) == (
+        CO, "circuits", "run-r", 90, W.iso(T0 + 125 * 60)), "its last push was seen at the heads read after it"
+    assert rec["branches"] == ["cursor/api-named", f"cursor/by-suffix-{CO[-4:]}"]
+    assert status(tmp_path)[CO]["watch_state"] == "silent"
+
+
+def test_stale_heads_or_no_notes_judge_nobody_and_an_agent_that_goes_idle_ends_its_spell(tmp_path):
+    agents = [{"id": CO, "status": "ACTIVE", "latestRunId": "run-r"}]
+    runs = {"run-r": {"status": "RUNNING", "updatedAt": W.iso(T0)}}
+    sh = FakeSh()
+    api, clock, w = coordinators(tmp_path, agents, runs, notes=tmp_path / "notes", git_remote=REMOTE, sh=sh)
+    w.sweep(lambda r: None)
+    sh.fail.add("git")
+    sweeps(w, clock, 180)
+    assert silent(tmp_path) == [], "no push can be told from heads 3 h old"
+    sh.fail.clear()
+    sweeps(w, clock, 5)
+    assert len(silent(tmp_path)) == 1, "read again: silent since the first read"
+    agents[0]["status"], runs["run-r"]["status"] = "IDLE", "FINISHED"
+    agents[0]["updatedAt"] = W.iso(clock.t)
+    sweeps(w, clock, 5)
+    assert w.silent == {} and w.active == {}
+    agents[0]["status"], runs["run-r"]["status"] = "ACTIVE", "RUNNING"
+    sweeps(w, clock, 85)
+    assert len(silent(tmp_path)) == 1, "a new ACTIVE spell counts from its start, the sweep that saw it ACTIVE again"
+    sweeps(w, clock, 10)
+    assert [r["since"] for r in silent(tmp_path)][1:] == [W.iso(clock.t - W.SILENT_S)]
+    (tmp_path / "no-notes").mkdir()
+    api2, clock2, w2 = coordinators(tmp_path / "no-notes", agents, runs, git_remote=REMOTE, sh=FakeSh())
+    sweeps(w2, clock2, 200)
+    assert silent(tmp_path / "no-notes") == []
+
+
+def test_a_restarted_watch_keeps_the_spells_rings(tmp_path):
+    agents = [{"id": CO, "status": "ACTIVE", "latestRunId": "run-r"}]
+    runs = {"run-r": {"status": "RUNNING", "updatedAt": W.iso(T0)}}
+    (tmp_path / "notes").mkdir()
+    sh = FakeSh({"main": "m" * 40})
+    api, clock, w = coordinators(tmp_path, agents, runs, notes=tmp_path / "notes", git_remote=REMOTE, sh=sh)
+    w.sweep(lambda r: None)
+    sweeps(w, clock, 90)
+    assert len(silent(tmp_path)) == 1
+    again = W.Watch(api, tmp_path / "events.jsonl", clock, registry=tmp_path / "registry.json", routes=tmp_path / "routes.d",
+                    notes=tmp_path / "notes", git_remote=REMOTE, sh=sh)
+    sweeps(again, clock, 85)
+    assert len(silent(tmp_path)) == 1, "neither the ring nor the spell's start is forgotten"
+    sweeps(again, clock, 5)
+    assert [r["window"] for r in silent(tmp_path)] == [1, 2]
+
+
+def node_run(root, rid, ended, *, by="", state="done", rc=0, wall_s=750.0, command=None, job="", lane=""):
+    """A run dir as `research run` leaves it on a node: runs/<rid>/{status,job}.json and requests/<rid>/request.json."""
+    d, q = root / "runs" / rid, root / "requests" / rid
+    d.mkdir(parents=True)
+    q.mkdir(parents=True)
+    (d / "status.json").write_text(json.dumps({"state": state, "rc": rc, "wall_s": wall_s, "transitions": [
+        {"state": "running", "t_utc": W.iso(ended - wall_s)}, {"state": state, "t_utc": W.iso(ended)[:-1] + ".250Z"}]}))
+    (d / "job.json").write_text(json.dumps({"ownership": {"job": job, "lane": lane}, "computation": {"stage": ""}}))
+    (q / "request.json").write_text(json.dumps({"command": command or ["python", "-m", "bench", "--seed", "1"],
+                                                **({"submitted_by": by} if by else {})}))
+    W.os.utime(d / "status.json", (ended, ended))
+
+
+def nodes_setup(tmp_path, **kw):
+    """vy-nebius-1 and vy-nebius-2 in the notes' machines.d, each with its runs root under tmp_path; nodes.json names both."""
+    notes = tmp_path / "notes"
+    (notes / "machines.d").mkdir(parents=True)
+    roots = {}
+    for n in ("vy-nebius-1", "vy-nebius-2"):
+        roots[n] = tmp_path / n
+        (notes / "machines.d" / f"{n}.toml").write_text(
+            f'provider = "ssh"\nhost = "{n}.example"\nuser = "research"\nproject = "verity"\nroot = "{roots[n]}"\n')
+    (tmp_path / "nodes.json").write_text(json.dumps({"nodes": ["vy-nebius-1", "vy-nebius-2"], "every_s": 300,
+                                                     "ssh": ["ssh", "-o", "BatchMode=yes"]}))
+    sh = FakeSh()
+    api, clock, w = coordinators(tmp_path, [{"id": CO, "name": "verity: circuits", "status": "IDLE", "latestRunId": "run-f",
+                                             "updatedAt": "2026-10-18T19:20:00Z"}], {"run-f": dict(FINISHED)}, notes=notes,
+                                 nodes=tmp_path / "nodes.json", sh=sh, timers=None, **kw)
+    return api, clock, w, sh, roots
+
+
+def ended(tmp_path):
+    return [r for r in records(tmp_path) if r["kind"] == "run_ended"]
+
+
+def test_a_run_that_ends_rings_its_senders_handle_once(tmp_path):
+    """A worker that ends its turn to wait on a run never learns it ended: Cursor refuses a new run on a Task worker (400
+    legacy workflow), so its coordinator is rung to resume it; a coordinator's own run rings its own handle."""
+    (tmp_path / "workers.d").mkdir()
+    (tmp_path / "workers.d" / "w1.json").write_text(json.dumps({"agent_id": W1_, "lane": "zk-port", "launched_by": NEW}))
+    api, clock, w, sh, roots = nodes_setup(tmp_path)
+    api.workers[W1_] = worker("ACTIVE", W.iso(T0))
+    node_run(roots["vy-nebius-1"], "r20261018-190000-0001", T0 - 3600, by=f"https://cursor.com/agents/{CO}")
+    w.sweep(lambda r: None)
+    assert ended(tmp_path) == [], "a run that ended before the first read is not rung"
+    assert [a[-1] for a in sh.calls if a[0] == "ssh"] == [f"python3 - {roots[n]} {T0 - W.RUN_ENDS_SLACK_S:.0f}"
+                                                          for n in ("vy-nebius-1", "vy-nebius-2")]
+    assert all(a[-2] == f"research@{n}.example" for a, n in zip(sh.calls, ("vy-nebius-1", "vy-nebius-2")))
+    clock.t += 60
+    node_run(roots["vy-nebius-1"], "r20261018-195000-0002", clock.t, by=f"https://cursor.com/agents/{CO}", job="sweep-a",
+             wall_s=4000)
+    node_run(roots["vy-nebius-2"], "r20261018-195500-0003", clock.t, by=f"https://cursor.com/agents/{W1_}", state="failed", rc=3,
+             command=["python", "bench/run.py", "--n", "8", "--quick"])
+    node_run(roots["vy-nebius-2"], "r20261018-195500-0004", clock.t, command=["slot", "--by", "vllm", "--", "check"], rc=1,
+             state="failed", wall_s=30)
+    node_run(roots["vy-nebius-2"], "r20261018-195500-0005", clock.t, by="https://cursor.com/agents/bc-unknown")
+    w.sweep(lambda r: None)
+    assert ended(tmp_path) == [], "read every 5 min"
+    clock.t += 5 * 60
+    w.sweep(lambda r: None)
+    got = {r["run"]: {k: r.get(k) for k in ("agent", "name", "handle", "role", "node", "what", "rc", "state", "after", "lane")}
+           for r in ended(tmp_path)}
+    assert got == {
+        "r20261018-195000-0002": {"agent": CO, "name": "verity: circuits", "handle": "circuits", "role": "coordinator",
+                                  "node": "vy-nebius-1", "what": "sweep-a", "rc": 0, "state": "done", "after": "1 h 06 min",
+                                  "lane": ""},
+        "r20261018-195500-0003": {"agent": W1_, "name": "ZKS10", "handle": "vllm", "role": "worker", "node": "vy-nebius-2",
+                                  "what": "python bench/run.py --n 8", "rc": 3, "state": "failed", "after": "12 min",
+                                  "lane": "zk-port"},
+        "r20261018-195500-0004": {"agent": "", "name": "", "handle": "vllm", "role": "lane", "node": "vy-nebius-2",
+                                  "what": "slot --by vllm --", "rc": 1, "state": "failed", "after": "30 s", "lane": "vllm"}}, \
+        "the run nobody's handle owns is skipped"
+    assert status(tmp_path)[CO]["watch_state"] != "run_ended", "a research run's end is not the agent's state"
+    for _ in range(3):
+        clock.t += 5 * 60
+        w.sweep(lambda r: None)
+    restarted = W.Watch(api, tmp_path / "events.jsonl", clock, registry=tmp_path / "registry.json", routes=tmp_path / "routes.d",
+                        notes=tmp_path / "notes", nodes=tmp_path / "nodes.json", sh=sh)
+    restarted.sweep(lambda r: None)
+    assert len(ended(tmp_path)) == 3, "each run rings once, across restarts"
+
+
+def test_a_quiet_handles_runs_are_not_rung(tmp_path):
+    """Drive's train checks end every few minutes under `--by ci`, and drive reads them itself: ringing ci for each is noise."""
+    api, clock, w, sh, roots = nodes_setup(tmp_path)
+    cfg = json.loads((tmp_path / "nodes.json").read_text())
+    (tmp_path / "nodes.json").write_text(json.dumps({**cfg, "quiet_handles": ["vllm"]}))
+    w.sweep(lambda r: None)
+    clock.t += 60
+    node_run(roots["vy-nebius-2"], "r20261018-195500-0004", clock.t, command=["slot", "--by", "vllm", "--", "check"])
+    node_run(roots["vy-nebius-1"], "r20261018-195000-0002", clock.t, by=f"https://cursor.com/agents/{CO}")
+    clock.t += 5 * 60
+    w.sweep(lambda r: None)
+    assert [(r["run"], r["handle"]) for r in ended(tmp_path)] == [("r20261018-195000-0002", "circuits")]
+
+
+def test_the_shipped_nodes_file_keeps_ci_quiet():
+    cfg = json.loads((W.Path(__file__).resolve().parents[3] / "infra/control/agent_watch_nodes.json").read_text())
+    assert cfg["quiet_handles"] == ["ci"] and cfg["nodes"] == ["vy-nebius-1", "vy-nebius-2", "vy-nebius-cpu-1", "vy-nebius-cpu-2"]
+
+
+def test_a_node_that_doesnt_answer_is_said_once_an_hour_and_caught_up_when_it_does(tmp_path, capsys):
+    """The H200s stop after 2 h idle: a node read fails, and its runs are read from its last good read once it answers."""
+    api, clock, w, sh, roots = nodes_setup(tmp_path)
+    w.sweep(lambda r: None)
+    sh.fail.add("vy-nebius-2.example")
+    for _ in range(4):
+        clock.t += 5 * 60
+        node_run(roots["vy-nebius-2"], f"r20261018-2000{_:02d}-000{_}", clock.t, by=f"https://cursor.com/agents/{CO}")
+        w.sweep(lambda r: None)
+    err = capsys.readouterr().err
+    assert err.count("vy-nebius-2 unreadable") == 1 and "Connection timed out" in err
+    sh.fail.clear()
+    clock.t += 5 * 60
+    w.sweep(lambda r: None)
+    assert len(ended(tmp_path)) == 4 and {r["node"] for r in ended(tmp_path)} == {"vy-nebius-2"}
+    (tmp_path / "notes" / "machines.d" / "vy-nebius-1.toml").unlink()
+    clock.t += 5 * 60
+    w.sweep(lambda r: None)
+    assert "no host for vy-nebius-1" in capsys.readouterr().err
+
+
+def test_the_deployed_nodes_file_names_the_nebius_nodes_and_an_ssh_argv():
+    root = W.Path(__file__).resolve().parents[3]
+    cfg = W.read_json(root / "infra/control/agent_watch_nodes.json")
+    assert cfg["nodes"] == ["vy-nebius-1", "vy-nebius-2", "vy-nebius-cpu-1", "vy-nebius-cpu-2"] and cfg["every_s"] >= 60
+    assert cfg["ssh"][0] == "ssh" and all(isinstance(a, str) for a in cfg["ssh"]) and "BatchMode=yes" in cfg["ssh"]

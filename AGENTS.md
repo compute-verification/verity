@@ -393,6 +393,23 @@ Coordinators are launched, handed over and archived from Daniel's laptop with `i
   ownership changes or new requirements in a shared file and hope. The shell hook refuses the agent's next command once,
   with your message as the refusal's text, and the agent re-runs it. Agents on other VMs: through their coordinator on
   Slack.
+- **Use cloud workers freely** (Daniel, 18 Oct, 9:59 PM PDT: "It is totally fine to use cloud workers"). This is the
+  standing explicit request that Cursor's Task tool wants before `environment: "cloud"`, for every agent in this repo, so
+  nobody asks Daniel or a coordinator first; spend is the lead's call. Use one when the work is long or heavy, or your VM
+  is full. How a cloud worker differs from a local subagent:
+  - It boots its own VM from the environment's snapshot, with the environment's secrets. It does not reliably get its
+    own branch: with any `cloud_base_branch`, workers have committed onto the launcher's branch and onto each other's
+    commits. So its brief says: "create a new branch `cursor/<lane>-<topic>-<hex>` from `origin/main` and push only to
+    it, never to the launcher's branch, a PR head or `main`."
+  - Its brief is complete: the task, the done-condition, the deadline, and "reread `git show origin/main:AGENTS.md`",
+    since its snapshot can be older than `main`. Nothing reaches it mid-turn, so the brief names an inbox branch it reads
+    at each hourly checkpoint (`git fetch -q origin B && git show origin/B:inbox/<agent-id>.md`), which gets changes to
+    it within the hour. Larger changes go in when you resume it (Task's `resume`, with the `bc-…` id the launch
+    returned) after its turn ends.
+  - It stays reachable as below: when it would wait on a run, it ends its turn naming the run id and ETA, and its
+    launcher resumes it. A running turn holds one of the team's concurrent cloud-agent slots.
+  - It opens its own PR from its VM (`research queue open`), and syncs its notes like any worker. Where that fails, it
+    reports its branch and SHA and the launcher opens the PR for it. Its final message goes to whoever launched it.
 - **Check what's being tried.** Before starting work another agent could plausibly be doing, read the notes'
   `kb/onboarding.md`, check `research notes approaches`, and claim yours at your first checkpoint
   (`research notes claim`).
@@ -403,9 +420,17 @@ Coordinators are launched, handed over and archived from Daniel's laptop with `i
 - **Work in a checkout no other agent uses:** your own VM, or your own `git worktree add` (with its own venv) on a shared
   VM, removed when your task ends. Never check out or switch a branch in a tree another agent uses, and push only to
   branches you created or were handed.
-- **Landing is drive's.** Push your PR, mark it ready and go back to research; you hear back only if your PR fails. A
-  lane works on at most two open PRs; one whose head is on `next` (queued or in a running check) doesn't count until
-  its check fails.
+- **Stay reachable** (Daniel, 19 Oct: silent agents cost whole nights). Push and write a one-line checkpoint in your
+  note at least every 60 minutes. No tool call blocks for more than 20 minutes: launch runs detached, and when you'd
+  otherwise wait on one, end your turn naming the run id and its ETA, so your coordinator resumes you when it ends. A
+  coordinator replaces a worker that stays silent past the agent watch's flag with a fresh agent briefed from its note,
+  and never resumes a local worker a third time.
+- **Landing is drive's.** The worker that made a branch opens its PR (`research queue open --head BRANCH --sha SHA
+  --title T --body-file F --by LANE`, from any VM, with `Lane LANE` in the body), marks it ready and goes back to
+  research; you hear back only if it fails. Before marking, run the Lean check of the packages you touched and
+  `uv run tools/verity/check/suites.py --changed origin/main --quick`, and a suite's slow tier only when you changed that
+  suite's core: drive's train check runs the rest, bisects a failed train and lands its passing prefix, so a full
+  pre-mark run only duplicates it and holds a slot. Prefer small PRs, which bisection lands soonest.
 - **Slack is for handle holders** (coordinators and service agents) and named humans only, at computeverification.slack.com.
   A worker asks its own coordinator. The coordination API is `research msg`: the using-slack skill,
   `.agents/skills/using-slack/SKILL.md`. Work for another lead goes in as a Linear issue into its team (Where writing
@@ -419,6 +444,8 @@ Coordinators are launched, handed over and archived from Daniel's laptop with `i
 - Lean: `.agents/skills/lean-proofs/SKILL.md`.
 - GPU kernel work (PoUW kernels on sm_120): `.agents/skills/kernel-engineering/SKILL.md`.
 - When something gets in your way, and the rulings: `.agents/skills/friction/SKILL.md`.
+- When Daniel or a lead asks for a smell check, before you call something served, end to end, proved or credited, and when
+  you relay another lane's claim: `.agents/skills/smell-check/SKILL.md`, with the catalogue of smells found so far.
 - Asking Daniel for a decision (a page in the Asks for Daniel Notion database, and its `#ask-daniel` card):
   `.agents/skills/asking-daniel/SKILL.md`.
 - Before adding, changing or retiring a process (a rule here or in the lane contract, a gate in `check` or

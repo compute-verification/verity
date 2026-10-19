@@ -224,6 +224,21 @@ def take(slots: list[dict], lock_dir: Path, now: datetime) -> tuple[dict, int] |
     return None
 
 
+def locked(lock: Path) -> bool:
+    """Whether some descriptor, this process's inherited one included, holds `lock`'s flock."""
+    try:
+        fd = os.open(lock, os.O_RDONLY)
+    except OSError:
+        return False
+    try:
+        fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+    except BlockingIOError:
+        return True
+    finally:
+        os.close(fd)
+    return False
+
+
 def holder(lock: Path, proc: Path = Path("/proc")) -> int | None:
     """The pid whose flock holds `lock`, from /proc/locks (a waiter's line has `->` before FLOCK), or None while it's free."""
     try:
@@ -582,6 +597,11 @@ def main(argv: list[str], now=lambda: datetime.now(timezone.utc), sleep=time.sle
     listed = parse(SLOTS.read_text())
     if not listed:
         sys.exit(f"slot: {SLOTS} lists no slots")
+    # already inside a slot this machine's lock still holds (a `research run --pool` job that wraps its own command in slot.py,
+    # 19 Oct: the inner waiter queued behind its own outer lock and stopped cpu-1's research pool): run CMD in that slot
+    if (held := os.environ.get("CHECK_SLOT")) and any(s["name"] == held for s in listed) and locked(SLOTS.parent / f"check-{held}.lock"):
+        print(f"slot: already in check slot {held}; running CMD in it", file=sys.stderr, flush=True)
+        os.execvp(cmd[0], cmd)
     slots = usable(listed)
     if len(slots) < len(listed):
         out = ", ".join(f"{s['name']} ({s['cpus']})" for s in listed if s not in slots)

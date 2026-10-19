@@ -1,0 +1,10 @@
+# /etc/systemd/system/vy-retention-gc.timer on vy-nebius-1 and vy-nebius-2: hourly; a pass does nothing under 80%.
+[Unit]
+Description=retention gc every hour
+
+[Timer]
+OnBootSec=20min
+OnUnitActiveSec=1h
+
+[Install]
+WantedBy=timers.target

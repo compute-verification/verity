@@ -11,8 +11,8 @@ import Mathlib.Tactic.Positivity
 `Accounting.Guarantees.Remote.Held` from its premises: at each outcome where the sketch bound and the live coins' bound
 hold (a union bound, `holdsAnd`), each credited pass's registered blocks are its wrong receipts, the blocks in node
 memory at its start, those on a chip then (at most `S`) and those that came in during the pass (`pass_le`). The passes
-are consecutive (`sum_passes`), so what came in during them came in over `[t_0, t_P) ⊆ [s₀, e]`, at most `s/E + β` a
-tick by rebuilds and disk reads, none over the links.
+are consecutive (`sum_passes`), so what came in during them came in over `[t_0, t_P) ⊆ [s₀, e]`, one interval: at most
+`s/E + β` a tick and one burst of each, `Br + Bd`, by rebuilds and disk reads, none over the links.
 
 The time-held forms are not proved here: `heldOverTime_of_links` reduces `HeldOverTime` to `HeldOverTimeLinks`, at links
 of rate 0, which is all Identity says.
@@ -91,13 +91,13 @@ theorem sum_passes (f : ℕ → ℕ) (t : ℕ → ℕ) (ht : Monotone t) (P : �
   | succ n ih => rw [sum_range_succ, ih, sum_Ico_consecutive _ (ht (Nat.zero_le n)) (ht (Nat.le_succ n))]
 
 /-- `Held` at one outcome. -/
-theorem held_of (ω : Ω) {S s₀ e : ℕ} {s E β W : ℝ} (hE : 0 < E) (hs : 0 ≤ s) (hβ : 0 ≤ β)
-    (hI : Identity T) (hsq : SquaringCeiling T s E) (hd : Disks T β) (hS : ChipCeiling T S) (hr : Routed T)
+theorem held_of (ω : Ω) {S s₀ e : ℕ} {s E β Br Bd W : ℝ} (hE : 0 < E) (hs : 0 ≤ s) (hβ : 0 ≤ β)
+    (hI : Identity T) (hsq : SquaringCeiling T s E Br) (hd : Disks T β Bd) (hS : ChipCeiling T S) (hr : Routed T)
     (hm : Monotone (T.tick ω)) (h0 : s₀ ≤ T.tick ω 0) (hP : T.tick ω T.passes ≤ e)
     (hk : ∀ p < T.passes, ∀ j ∈ T.correct ω p,
       ∃ t, T.tick ω p ≤ t ∧ t < T.tick ω (p + 1) ∧ j ∈ T.present ω t)
     (hw : (T.wrong ω : ℝ) ≤ W) :
-    (T.planned ω : ℝ) - W - (s / E + β) * ((e : ℝ) - s₀) - T.passes * S ≤ T.held ω := by
+    (T.planned ω : ℝ) - W - ((s / E + β) * ((e : ℝ) - s₀) + (Br + Bd)) - T.passes * S ≤ T.held ω := by
   have huv : T.tick ω 0 ≤ T.tick ω T.passes := hm (Nat.zero_le _)
   have hsum : T.planned ω ≤ T.wrong ω + T.held ω + T.passes * S +
       ∑ τ ∈ Ico (T.tick ω 0) (T.tick ω T.passes), T.entered ω τ := by
@@ -111,11 +111,9 @@ theorem held_of (ω : Ω) {S s₀ e : ℕ} {s E β W : ℝ} (hE : 0 < E) (hs : 0
     simp only [sum_add_distrib, hI ω, sum_const_zero, add_zero] at h
     exact h
   have hreb : (over T.rebuilt ω (T.tick ω 0) (T.tick ω T.passes) : ℝ) ≤
-      s / E * ((T.tick ω T.passes - T.tick ω 0 : ℕ) : ℝ) := by
-    rw [div_mul_eq_mul_div, le_div_iff₀ hE, mul_comm _ E]
-    exact hsq ω _ _ huv
+      s / E * ((T.tick ω T.passes - T.tick ω 0 : ℕ) : ℝ) + Br := hsq ω _ _ huv
   have hdisk : (over T.disk ω (T.tick ω 0) (T.tick ω T.passes) : ℝ) ≤
-      β * ((T.tick ω T.passes - T.tick ω 0 : ℕ) : ℝ) := hd ω _ _ huv
+      β * ((T.tick ω T.passes - T.tick ω 0 : ℕ) : ℝ) + Bd := hd ω _ _ huv
   have hspan : ((T.tick ω T.passes - T.tick ω 0 : ℕ) : ℝ) ≤ (e : ℝ) - s₀ := by
     have h0' : (s₀ : ℝ) ≤ T.tick ω 0 := by exact_mod_cast h0
     have hP' : (T.tick ω T.passes : ℝ) ≤ e := by exact_mod_cast hP
@@ -137,22 +135,22 @@ theorem held_of (ω : Ω) {S s₀ e : ℕ} {s E β W : ℝ} (hE : 0 < E) (hs : 0
 
 /-- **The snapshot held, under Identity** (`Accounting.Guarantees.Remote.Held`). -/
 theorem Held : Accounting.Guarantees.Remote.Held := by
-  intro Ω _ T S s₀ e s E β W δs δc hE hs hβ hI hsq hd hS hr hc hk hw
+  intro Ω _ T S s₀ e s E β Br Bd W δs δc hE hs hβ hI hsq hd hS hr hc hk hw
   refine holdsMono (fun ω ha h => ?_) (holdsAnd hk hw)
   obtain ⟨hm, h0, hP⟩ := hc ω ha
   exact held_of ω hE hs hβ hI hsq hd hS hr hm h0 hP h.1 h.2
 
-/-- Identity is the links' ceiling at rate 0. -/
-theorem links_of_identity (hI : Identity T) : Links T 0 := fun ω u v _ => by
+/-- Identity is the links' ceiling at rate 0 and burst 0. -/
+theorem links_of_identity (hI : Identity T) : Links T 0 0 := fun ω u v _ => by
   have h0 : over T.link ω u v = 0 := Finset.sum_eq_zero fun t _ => hI ω t
-  rw [h0, Nat.cast_zero, zero_mul]
+  rw [h0, Nat.cast_zero, zero_mul, add_zero]
 
-/-- **The time-held line under Identity is the link-charged one at links of rate 0**: `HeldOverTime` follows from
-`HeldOverTimeLinks`, so the one time-held proof left is `HeldOverTimeLinks`'s. -/
+/-- **The time-held line under Identity is the link-charged one at links of rate 0 and burst 0**: `HeldOverTime`
+follows from `HeldOverTimeLinks`, so the one time-held proof left is `HeldOverTimeLinks`'s. -/
 theorem heldOverTime_of_links (h : Accounting.Guarantees.Remote.HeldOverTimeLinks) :
     Accounting.Guarantees.Remote.HeldOverTime := by
-  intro Ω _ T K S s E β W δs δc hE hs hβ hW hI hsq hd hS hr hp hcov hk hw
-  simpa only [add_zero] using h Ω T K S s E β 0 W δs δc hE hs hβ le_rfl hW (links_of_identity hI) hsq hd hS hr hp
-    hcov hk hw
+  intro Ω _ T K S s E β Br Bd W δs δc hE hs hβ hW hI hsq hd hS hr hp hcov hk hw
+  simpa only [add_zero] using h Ω T K S s E β 0 Br Bd 0 W δs δc hE hs hβ le_rfl hW (links_of_identity hI) hsq hd hS
+    hr hp hcov hk hw
 
 end Accounting.SecurityProofs.Remote

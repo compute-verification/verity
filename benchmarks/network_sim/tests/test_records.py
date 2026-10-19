@@ -213,8 +213,8 @@ def test_a_fleets_blocks_are_each_audited_and_its_records_checked_on_every_port_
 def test_a_salted_block_publishes_the_records_declared_with_its_revealed_salts(m, setup, tmp_path, capsys):
     """With the certifier's salt on, each ingress window holds one more frame, its first bucket's, and egress is the
     unsalted declaration's. The records declared with the salts the proxy revealed are what it published, and
-    `mockdc.audit` accepts the block on both audits and reads every commitment; declared without them, the ingress
-    windows are refused."""
+    `mockdc.audit` accepts the block on both audits and its salt check accepts every window; declared without them, the
+    ingress windows are refused."""
     from datacenter import Refused, check_records
 
     report, s = setup
@@ -240,7 +240,7 @@ def test_a_salted_block_publishes_the_records_declared_with_its_revealed_salts(m
     assert entry["accepted"] and entry["datacenter"]["accepted"]
     assert entry["salt"] == {"accepted": True, "violations": [], "ingress_salt_frames": [1, 1, 1],
                              "egress_salt_frames": 0, "egress_holds_salt": False, "block_received": True}
-    assert "salt frames ingress [1, 1, 1] egress 0, commitments ACCEPTED, block received True" in capsys.readouterr().out
+    assert "salt frames ingress [1, 1, 1] egress 0, salt check ACCEPTED, block received True" in capsys.readouterr().out
 
 
 def test_a_salted_block_down_for_maintenance_owes_no_salt_in_its_outage(m, setup, tmp_path):

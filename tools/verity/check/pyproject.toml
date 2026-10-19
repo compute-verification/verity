@@ -34,4 +34,5 @@ inputs = [".agents/skills/using-slack/registry.json", "READY.json", "verity/ml/f
           "tools/research/src/research/store/fetchset.py", "tools/research/src/research/store/fixtures.py",
           "tools/research/src/research/store/sealed.py", "tools/research/src/research/telemetry/cancel.py",
           "tools/research/src/research/telemetry/classify.py", "tools/research/src/research/telemetry/procs.py",
-          "tools/research/src/research/telemetry/pyspy.py", "tools/research/src/research/telemetry/run.py"]
+          "tools/research/src/research/telemetry/pyspy.py", "tools/research/src/research/telemetry/run.py",
+          "tools/research/src/research/telemetry/scope.py"]

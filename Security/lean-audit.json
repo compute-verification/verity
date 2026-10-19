@@ -140,7 +140,7 @@
   },
   "Accounting.Remote.Held.Assumptions.Disks": {
    "owner": "@memory-accounting",
-   "digest": "84e32cdde88cf32113e563a284a9c739239d29c03fe5ee74bc058d1ee987bf15"
+   "digest": "44674bd7d2f65c33576c0959754230e2c263738482a6424b37ebd0911c8a25ca"
   },
   "Accounting.Remote.Held.Assumptions.Identity": {
    "owner": "@memory-accounting",
@@ -160,7 +160,7 @@
   },
   "Accounting.Remote.Held.Assumptions.SquaringCeiling": {
    "owner": "@memory-accounting",
-   "digest": "42634dad8fd6c4435b6d18c96069ebf2a2a46a702914f4d4a54bc5df8105c538"
+   "digest": "ec84a74dad72a577c60f568cc9665016654feb62fad1857aef5f2f8a4bb9f098"
   },
   "Claims.ExpectedCR": {
    "owner": "@proofs",
@@ -20981,16 +20981,16 @@
    ]
   },
   "Models.Accounting.Assumptions.RemoteHeld": {
-   "digest": "634cad21233c7d4f6b609bf29f6ed7cd391ebeb73f5641509a13fc2c3ed533f3",
+   "digest": "b68ee7f302bb93e595319449c0d6673fb23151147ebb86d6bbed45c95f05303a",
    "definitions": {
     "Accounting.Remote.Held.Assumptions.Causal": "aea522d86a7abda05eeeb5fcd299485f663d29f83a8a1b4128e8c015b3dcad71",
     "Accounting.Remote.Held.Assumptions.ChipCeiling": "e127ae65fbdc438b47177e01b9ac74b58f7ea758327288ae293137cb8b6d8fae",
-    "Accounting.Remote.Held.Assumptions.Disks": "84e32cdde88cf32113e563a284a9c739239d29c03fe5ee74bc058d1ee987bf15",
+    "Accounting.Remote.Held.Assumptions.Disks": "44674bd7d2f65c33576c0959754230e2c263738482a6424b37ebd0911c8a25ca",
     "Accounting.Remote.Held.Assumptions.Identity": "22630221fb29250610dca86a4897d9f39909a8e8ca1c425fcb62e8dcf192a236",
     "Accounting.Remote.Held.Assumptions.LiveCoins": "68bf6e4151cfbf0c550493d145934dc046109cd73fd4e09a2c1d79218323d84a",
     "Accounting.Remote.Held.Assumptions.Routed": "0c27bd1201f655e0bb779bc6b347727d6d0072e9aab93ae409391e18670eca7c",
     "Accounting.Remote.Held.Assumptions.SketchBound": "193fa80d7712162f27061c4a392ad4c4703e5ce2a95a7877a8c553b6fce258b4",
-    "Accounting.Remote.Held.Assumptions.SquaringCeiling": "42634dad8fd6c4435b6d18c96069ebf2a2a46a702914f4d4a54bc5df8105c538"
+    "Accounting.Remote.Held.Assumptions.SquaringCeiling": "ec84a74dad72a577c60f568cc9665016654feb62fad1857aef5f2f8a4bb9f098"
    },
    "guarantees": ["Accounting.SecurityProofs.Remote.Held"]
   },
@@ -21588,9 +21588,9 @@
    ]
   },
   "Models.Accounting.Guarantees.RemoteHeld": {
-   "digest": "7cc2458c0a52d34694e8fe406faa80e9daaeaaba358f498b1a8582b90145465d",
+   "digest": "483ed8eba00728994e2718cad1f4adfddeab7580d3b64d0a5fefd5fed8bc8207",
    "definitions": {
-    "Accounting.Guarantees.Remote.Held": "0de3b0d0e4d33200698159faef6c35a0be207de2cd15853e22263fbe5e451957"
+    "Accounting.Guarantees.Remote.Held": "b2ba939df43e0c2bc88a656861e9bc078ee880c453fe55db327849510177734f"
    },
    "guarantees": ["Accounting.SecurityProofs.Remote.Held"]
   },
