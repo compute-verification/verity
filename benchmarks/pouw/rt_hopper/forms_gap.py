@@ -12,6 +12,8 @@ already prices, and the data-sheet vector's cliffs in A2u and the fold.
     python forms_gap.py --b1-fit   RT-HOPPER-1: b1 offered at splits 8 and 64 at SS's joint lines times the H200's ratio
     python forms_gap.py --menu     RT-HOPPER-1: each s8-exact sibling (N128, N64, mma.sync m16n8k32) offered beside it,
                                    then every form FIT has fitted from the H200, at once
+    python forms_gap.py --menu-fp  RT-HOPPER-1: each FP kind (f16, bf16, tf32, e4m3, e5m2), untimed beside the LI fold,
+                                   at the lane default, by MACs and by tensor time; then all with the 12 fitted forms
 
 sm_90 has no data/forms.toml, so `eps` restricts the cheater's tensor route to the honest's form, IGMMA_S8_N256 (wgmma
 m64n256k32 s8, A and B from shared memory). The census also prices IGMMA_S8_N256_RS, the same shape with A from
@@ -152,6 +154,23 @@ FIT = {
 }
 SIBLINGS = ("IGMMA_S8_N128", "IGMMA_S8_N64", "IMMA16832_S8", "IGMMA_S8_N192", "IGMMA_S8_N32", "IGMMA_S8_N16",
             "IGMMA_S8_N8", "IMMA16816_S8", "BMMA168256_B1")
+# The census's FP tensor kinds (every one into FP32, as DC's probes time them), not timed beside the LI fold: shape, least
+# split (forms.toml's rules: f16, bf16 and tf32 hold every s8 and a 32-step word is exact in FP32, so 1; e4m3 3, by
+# Karatsuba on balanced nibbles; e5m2 3 as well, the cheater's favour, though its 3 significant bits miss the nibbles'
+# odd sums past 8 and schoolbook takes 4), N256-equivalents an instruction by MACs, and by tensor time (IGMMA_S8_N256's
+# M line over the kind's).
+UNTIMED = {
+    "HGMMA_F16_N256": ([16, 256, 16], 1, 1 / 2, 1.0),
+    "HGMMA_BF16_N256": ([16, 256, 16], 1, 1 / 2, 1.0),
+    "HGMMA_BF16_N128": ([16, 128, 16], 1, 1 / 4, 0.0312468 / 0.0624906),
+    "HGMMA_TF32_N256": ([16, 256, 8], 1, 1 / 4, 1.0),
+    "QGMMA_E4M3_N256": ([16, 256, 32], 3, 1, 1.0),
+    "QGMMA_E4M3_N128": ([16, 128, 32], 3, 1 / 2, 0.0312468 / 0.0624906),
+    "QGMMA_E5M2_N256": ([16, 256, 32], 3, 1, 1.0),
+    "HMMA16816_F16": ([16, 8, 16], 1, 1 / 64, 0.0312468 / 0.656135),
+    "HMMA16816_BF16": ([16, 8, 16], 1, 1 / 64, 0.0312468 / 0.65613),
+    "HMMA1688_TF32": ([16, 8, 8], 1, 1 / 128, 0.0312468 / 0.65613),
+}
 
 
 set_line = set_census
@@ -164,12 +183,13 @@ def form_toml(kind: str, shape: list[int], split: int) -> str:
 def offer(root: Path, kinds: dict[str, float | None]) -> Path:
     """sm_90's data with the honest form and each of `kinds` offered, each at IGMMA's joint lines by its MACs times the
     given scale, or at the census's lane default when the scale is None."""
+    spec = {**FIT, **UNTIMED}
     honest = form_toml("IGMMA_S8_N256", [16, 256, 32], 1)
-    d = scratch(root, rs=True, forms=honest + "".join(form_toml(k, FIT[k][0], FIT[k][1]) for k in kinds))
+    d = scratch(root, rs=True, forms=honest + "".join(form_toml(k, spec[k][0], spec[k][1]) for k in kinds))
     for k, scale in kinds.items():
         if scale is not None:
             for row, u in SS_JI.items():
-                set_line(d, k, row, u * FIT[k][2] * (FIT[k][4][row] if scale == "fit" else scale))
+                set_line(d, k, row, u * spec[k][2] * (FIT[k][4][row] if scale == "fit" else scale))
     return d
 
 
@@ -197,6 +217,33 @@ def menu() -> None:
         d = offer(Path(t) / "all", fitted)
         for vector, q in (("DC-90", 1.22), ("DC-90-ri", 1.22), ("DC-90-ri", 0.5)):
             print(line(f"{vector} q*={q} every fitted form ({len(fitted)}) at its fit", eps(d, vector, q)))
+
+
+def menu_fp() -> None:
+    """RT-HOPPER-1's untimed forms: each FP kind offered beside the honest form at the lane default, at IGMMA's joint
+    lines by its MACs, and by its tensor time (where the s8 siblings' fits fell, at 0.8-0.9 of it), and at 0.8 of that;
+    then all of them at once beside the 12 fitted forms."""
+    with tempfile.TemporaryDirectory() as t:
+        for kind, (_, _, n256, tt) in UNTIMED.items():
+            for i, (label, scale) in enumerate((("the census default", None), ("IGMMA's lines by MACs", 1.0),
+                                                ("IGMMA's lines by tensor time", tt / n256),
+                                                ("0.8 of that", 0.8 * tt / n256))):
+                d = offer(Path(t) / f"{kind}-{i}", {kind: scale})
+                print(line(f"DC-90-ri q*=1.22 +{kind} at {label}", eps(d, "DC-90-ri", 1.22)))
+        for label, f in (("by tensor time", 1.0), ("at 0.8 of tensor time", 0.8)):
+            d = offer(Path(t) / f"all-{f}", {**{k: "fit" for k, s in FIT.items() if s[4] is not None},
+                                             **{k: f * tt / n256 for k, (_, _, n256, tt) in UNTIMED.items()}})
+            for vector, q in (("DC-90", 1.22), ("DC-90-ri", 1.22), ("DC-90-ri", 0.5)):
+                print(line(f"{vector} q*={q} 12 fitted forms and {len(UNTIMED)} FP {label}", eps(d, vector, q)))
+        base = eps(scratch(Path(t) / "base", rs=False), "DC-90-ri", 1.22)["core"]
+        for kind, (_, _, n256, tt) in UNTIMED.items():
+            lo, hi = 0.0, 1.0
+            for i in range(8):
+                mid = (lo + hi) / 2
+                d = offer(Path(t) / f"{kind}-be{i}", {kind: mid * tt / n256})
+                lo, hi = (mid, hi) if eps(d, "DC-90-ri", 1.22)["core"] > base + 1e-5 else (lo, mid)
+            print(f"DC-90-ri q*=1.22 {kind} breaks the honest-only {base * 100:.3f}% below {hi:.3f} of its tensor time "
+                  f"({hi * tt / n256:.3f} of IGMMA's lines by MACs)")
 
 
 def b1_fit() -> None:
@@ -275,9 +322,11 @@ def main() -> int:
     ap.add_argument("--fan-in", action="store_true", help="ε at the fold costs FoldFanIn proves, without FoldOpt")
     ap.add_argument("--b1-fit", action="store_true", help="ε with b1 offered at its joint lines fitted from the H200")
     ap.add_argument("--menu", action="store_true", help="ε with each of the honest's s8-exact siblings offered")
+    ap.add_argument("--menu-fp", action="store_true", help="ε with each FP tensor kind, untimed beside LI, offered")
     a = ap.parse_args()
     (sheet() if a.sheet else b1_gap() if a.b1 else rs_fit() if a.rs_fit else honest_true() if a.honest_true
-     else fan_in() if a.fan_in else b1_fit() if a.b1_fit else menu() if a.menu else forms_gap())
+     else fan_in() if a.fan_in else b1_fit() if a.b1_fit else menu() if a.menu else menu_fp() if a.menu_fp
+     else forms_gap())
     return 0
 
 
