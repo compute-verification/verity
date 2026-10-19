@@ -275,7 +275,9 @@ launcher.log and keeps supervising, so the run still records its end and
 publishes. Stop a run with `research cancel RUN --reason TEXT` from any VM: SIGTERM to its workload's process group
 (status.json `pgid`), its cgroup scopes (`cluster-<run>`, `gpu-lease-<pid>`) and its processes outside the group,
 recorded first as a manual cancel (`CANCELLED_MANUAL`). 20 s later the runner SIGKILLs what is left, recorded in status.json
-`scope_end`; so does a stage timeout (`telemetry.scope`). Never SIGKILL the runner: one killed during
+`scope_end`; so does a stage timeout (`telemetry.scope`). A run still held on its machine before its runner starts (`research
+disk-hold`, `research cpu-hold`) is withdrawn by the same command: its hold process ends, with the same manual-cancel record,
+and refused.json records it `Withdrawn` (`withdraw.py`). Never SIGKILL the runner: one killed during
 its custody upload leaves the run without custody and its minted key on disk. `--exclusive` refuses if any run is live, and
 any launch refuses if an exclusive holder is live.
 

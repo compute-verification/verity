@@ -1246,7 +1246,9 @@ def cmd_cancel(argv: list[str]) -> int:
     ap = argparse.ArgumentParser(prog="research cancel", description="stop a remote run the one way that keeps its custody: SIGTERM to its "
                                                                      "workload's process group and its whole cgroup scope, recorded as a "
                                                                      "manual cancel; the runner SIGKILLs what is left 20 s later "
-                                                                     "(remote.cancel)")
+                                                                     "(remote.cancel). A run that hasn't started, held on "
+                                                                     "its machine (disk-hold, cpu-hold), is withdrawn: its hold "
+                                                                     "ends and refused.json records it Withdrawn")
     ap.add_argument("ref", help="a run id or prefix under the runs root; a full run id another VM launched is found on its machine")
     ap.add_argument("--reason", required=True)
     ap.add_argument("--by", default=os.environ.get("RESEARCH_LANE") or os.environ.get("USER") or "-")
@@ -1259,6 +1261,13 @@ def cmd_cancel(argv: list[str]) -> int:
     except (FileNotFoundError, LookupError, remote.Refused) as e:
         print(f"research cancel: {e}", file=sys.stderr)
         return 1
+    if out.get("withdrawn"):
+        holds = ", ".join(f"research {h['hold']} pid {h['pid']}" for h in out["holds"])
+        print(f"research cancel: {run_dir.name}: withdrawn before it started: SIGTERM to its hold ({holds}), recorded as a manual "
+              f"cancel; refused.json records it {(out.get('refused') or {}).get('fault')}")
+        if out.get("released"):
+            print(f"research cancel: {run_dir.name}: removed what its launch staged: {', '.join(out['released'])}")
+        return 0
     if not out["delivered"]:
         print(f"research cancel: {run_dir.name}: SIGTERM to process group {out['pgid']} not delivered ({out['why']})", file=sys.stderr)
         return 1
