@@ -289,7 +289,7 @@ theorem εtableO_nonneg (x : Claims.Msg) : 0 ≤ εtableO x := by
 /-! ## The instance -/
 
 /-- **The outer verifier**, as the record Flock's claims read: `deployZk rel`'s code and numbers at the recursive
-setup. -/
+setup, with `deployZk`'s honest prover and completeness error. -/
 noncomputable def deployZkRec (rel : Readable.Parsed → Readable.Relation) :
     Claims.Flock.Deploy Coin (List 𝔽) Claims.Flock.ZkTrace where
   zk := true
@@ -308,6 +308,9 @@ noncomputable def deployZkRec (rel : Readable.Parsed → Readable.Relation) :
   weight := weightO
   waits _ := Claims.Flock.Numbers.waits
   cap _ := Claims.Flock.Numbers.cap
+  Tape := FlockComplete.TapeZk
+  P := FlockComplete.ZkTables.honestP
+  δc := FlockComplete.ZkTables.δc
 
 /-- **`ScopeMatches` for the outer verifier** (C's `scopeMatches` at its parser and scope check). -/
 theorem scopeMatches_zkRec (rel : Readable.Parsed → Readable.Relation) : Claims.Flock.ScopeMatches (deployZkRec rel) :=

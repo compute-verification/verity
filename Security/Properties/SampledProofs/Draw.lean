@@ -29,9 +29,12 @@ namespace Properties.SampledProofs
 /-- `L` bytes as `Slots.select` reads its coins. -/
 def bytesOf {L : ℕ} (src : Fin L → Fin 256) : ByteArray := ⟨Array.ofFn fun i => UInt8.ofFin (src i)⟩
 
-/-- The claims' partition of a layout: its classes, each its strata, each its replay units' proof units. -/
+/-- A layout's proof unit `[lo, hi)` as the claims' set of gates. -/
+def puGates (pu : ℕ × ℕ) : List ℕ := List.range' pu.1 (pu.2 - pu.1)
+
+/-- The claims' partition of a layout: its classes, each its strata, each its replay units' proof units' gates. -/
 def slotPartition (l : Slots.Layout) : Claims.Sampling.Partition :=
-  ⟨l.classes.toList.map fun c => c.toList.map fun s => s.toList.map fun r => r.pus.toList⟩
+  ⟨l.classes.toList.map fun c => c.toList.map fun s => s.toList.map fun r => r.pus.toList.map puGates⟩
 
 /-- The claims' one-stage design of a C-Flock law. -/
 def oneStageOf : Flock.Draw.Law → Claims.Sampling.OneStage

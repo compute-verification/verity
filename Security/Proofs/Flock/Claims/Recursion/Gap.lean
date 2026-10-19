@@ -68,6 +68,9 @@ noncomputable def gDO : Flock.Deploy Bool ℕ Unit where
   weight := fun _ => 0
   waits := fun _ => 8
   cap := fun _ => 204800
+  Tape := Unit
+  P := fun _ => ⟨fun _ _ _ => .ret []⟩
+  δc := fun _ _ => 0
 
 /-- The outer session's numbers, `gDO`'s. -/
 noncomputable def gNums : Nums := ⟨0, 100 * Real.exp 1, 0, 1, 8, 204800, 0, 0⟩
