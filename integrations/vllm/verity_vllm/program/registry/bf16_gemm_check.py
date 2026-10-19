@@ -18,7 +18,7 @@ vLLM d9105ea80's choice of kernel for the MoE gate (`GateLinear.forward`, `LLBf1
   so no profile field carries it).  Any other model's bf16-output routes are the cc 9.0 device pin's (`pinned_routes`,
   `verity_vllm/pins/`), measured by `served routes`' probe, which the predicted served Program reads too.  The routes hold
   under the scan's conditions only (`ROUTE_CONDITIONS`): `route_departures` names how a serving process's facts differ, which a
-  TP Commit's verdict refuses for a rank that binds a `ROUTE_FAMILIES` family (`pipeline.tp.c2.route_pin_gate`).
+  TP Commit's verdict refuses for a rank that binds one of the `ROUTE_DEFINITIONS` (`pipeline.tp.c2.route_pin_gate`).
 
 NaN payloads are not part of any comparison (`mla_check._words_equal`): the GPU's FFMA and FADD write 0x7FFFFFFF, numpy keeps
 an operand's.
@@ -36,6 +36,7 @@ from typing import Any
 import numpy as np
 
 from verity_vllm.program.kernels import derived_rows as DR
+from verity_vllm.program.registry import cublas_bf16 as CB
 from verity_vllm.program.registry import mla_check as MK
 
 U32 = np.uint32
@@ -59,9 +60,16 @@ _ROUTES = {(p, int(k), int(n)): runs for (p, k, n), runs in ((key.split(), v) fo
 #: and the launch's shape, so the routes are a serving process's own only when its facts of record (`cublas` in
 #: `check.replay.driver.engine_facts_of_record`) are these
 ROUTE_CONDITIONS: dict[str, Any] = CUBLAS_ROUTES["conditions"]
-#: the families a Program binds only at a route of the pin (`vllm_bindings.bf16_gemm`, the fold, the predictor); `Gemm_v2` is bound
-#: at the pin's non-split linear routes too, but also by every other rule, so its presence does not say the pin was read
-ROUTE_FAMILIES = ("CublasSplitKGemm_v1", "CublasSplitKGemmF32Out_v1", "GemmF32Out_v1")
+#: the Definitions a Program binds only at a route of the pin (the vocabulary's `cublas_*` roles, which `vllm_bindings.bf16_gemm`, the
+#: fold and the predictor bind at `default_cublas_route`); `Gemm_v2` is bound at the pin's non-split linear routes too, but also by
+#: every other rule, so its presence does not say the pin was read
+ROUTE_DEFINITIONS = (CB.CublasSplitKGemmWord, CB.CublasSplitKGemmF32OutWord, CB.GemmF32OutWord)
+
+
+def route_bound(by_family: dict[str, int]) -> dict[str, int]:
+    """The entries of `by_family` (a Program's row counts by Definition id) whose Definition is one of `ROUTE_DEFINITIONS`."""
+    ids = {d.id for d in ROUTE_DEFINITIONS}
+    return {f: n for f, n in sorted(by_family.items()) if f in ids}
 
 
 def route_departures(engine: dict[str, Any] | None) -> list[str]:

@@ -30,8 +30,8 @@ def _words(rng, *shape, scale=1.0) -> np.ndarray:
 
 
 def test_the_families_are_registered_with_their_evaluator_and_provenance():
-    assert set(C.ROWS) == set(BC.ROUTE_FAMILIES)
-    for f in BC.ROUTE_FAMILIES:
+    assert set(C.ROWS) == {d.id for d in BC.ROUTE_DEFINITIONS}
+    for f in C.ROWS:
         assert f in rows.ROWS and rows.EVALUATORS[f].startswith(f"verity_vllm.program.kernels.cublas_gemm_rows.{C.ROWS[f].__name__}")
         assert rows.EVALUATOR_PROVENANCE[f] is C.PROVENANCE
 

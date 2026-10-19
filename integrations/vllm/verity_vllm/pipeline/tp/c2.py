@@ -86,8 +86,8 @@ def query_population_gate(sr: dict | None, *, rank: int, required: bool) -> tupl
 
 
 def route_pin_gate(sr: dict | None, *, rank: int) -> tuple[dict | None, str | None]:
-    """The cuBLAS route pin of THIS rank's Program against the process that served it.  A Program that binds a family only the pin
-    binds (`bf16_gemm_check.ROUTE_FAMILIES`, in the replay's population or its unreplayable families) computes cuBLAS's routes as the
+    """The cuBLAS route pin of THIS rank's Program against the process that served it.  A Program that binds a Definition only the pin
+    binds (`bf16_gemm_check.ROUTE_DEFINITIONS`, in the replay's population or its unreplayable families) computes cuBLAS's routes as the
     pin's scan saw them, which hold only under the scan's conditions (`ROUTE_CONDITIONS`); the rank's facts of record
     (`engine_of_record.cublas`, measured in its process) must be those, else FAIL naming each departure, an unrecorded fact one too.
     Returns (record block | None when no such family is bound, FAIL text | None)."""
@@ -100,11 +100,11 @@ def route_pin_gate(sr: dict | None, *, rank: int) -> tuple[dict | None, str | No
     for u in sr.get("unreplayable") or []:
         f = str(u.get("family")).split(" (")[0]
         fams[f] = fams.get(f, 0) + int(u.get("n") or 0)
-    bound = {f: n for f, n in sorted(fams.items()) if f in BC.ROUTE_FAMILIES}
+    bound = BC.route_bound(fams)
     if not bound:
         return None, None
     departures = BC.route_departures(sr.get("engine_of_record"))
-    block = {"rule": "a rank whose Program binds bf16_gemm_check.ROUTE_FAMILIES served under bf16_gemm_check.ROUTE_CONDITIONS (the route "
+    block = {"rule": "a rank whose Program binds bf16_gemm_check.ROUTE_DEFINITIONS served under bf16_gemm_check.ROUTE_CONDITIONS (the route "
                      "pin's scan), every fact measured in the rank's process; a departure or an unrecorded fact = the rank FAILs by name",
              "rank": int(rank), "families": bound, "pin": BC.CUBLAS_ROUTES["run"], "departures": departures, "ok": not departures}
     if not departures:
