@@ -576,19 +576,19 @@ class Verdict:
 @dataclass(frozen=True, slots=True)
 class WindowRecord:
     """What an accepted window established: chained passes of `lengths` reads of distinct registered blocks each, made
-    after its challenge left at `released_ns` and committed by `deadline_ns` on the verifier's clock; its openings coin
+    after its challenge left at `released_ns` and committed by `deadline_ns` on the verifier's clock, each pass's root
+    arriving at `arrived_ns` on that clock (one a pass, empty in a record no session made); its openings coin
     released at `opened_ns`; the openings' law (`profile`); of each pass's reads, `post_seed` of blocks appended
     after the codec seed (none if empty), which the ledger credits only on the property's verdict; the step each
     pass covers, `steps`, strictly increasing; each pass's head, `heads`, the chain over every append received
-    before its root (`append_head`, None before the first), which its seed binds (`chained`); each pass's stale
+    before its root (`append_head`, None before the first), which its seed binds (`chained`); and each pass's stale
     bound, `stale`: N, the registered store's size, plus the counts of the session's appends that joined window
     `window` − L or before (L `Params.lifetime`), an append joining the window of the first root received after it,
     which is the window of the first pass whose head chains it.  That is the store index below which every appended
     block is past the cap, which a re-key's old index is below at the cap, and the same for every pass of a window;
     `Session._stale_below` takes it as the first index of the earliest append received before the pass's root that
-    joined a window above `window` − L, or the store's extent at that root if none did; and when each pass's root
-    arrived on the verifier's clock, `arrived_ns`, one a pass.  All four are empty in a record no session made, such
-    as `timing.stated`'s model."""
+    joined a window above `window` − L, or the store's extent at that root if none did.  All three are empty in a
+    record no session made, such as `timing.stated`'s model."""
 
     window: int
     lengths: tuple[int, ...]
@@ -653,14 +653,14 @@ class WindowRecord:
 @dataclass(frozen=True, slots=True)
 class Record:
     """An accepted session: its registration, its coin commitment's root, its store's `blocks`, every window's record,
-    and the receipt kind the registration names, whether its receipts bind z, its codec, its block layout and its sketch
-    rows (its digest binds all five; the record repeats them, since what a receipt rests on depends on the kind, `bind`
-    and the rows, μ_rebuild on the codec, and which bytes a credited block is on the layout), the blocks the
-    session appended after the codec seed and released, the lifetime cap it held them to (`Params.lifetime`, None
+    its pace (`Params.pace`, None unpaced), and the receipt kind the registration names, whether its receipts bind z,
+    its codec, its block layout and its sketch rows (its digest binds all five; the record repeats them, since what a
+    receipt rests on depends on the kind, `bind` and the rows, μ_rebuild on the codec, and which bytes a credited block
+    is on the layout), the blocks the session appended after the codec seed and released, the lifetime cap it held
+    them to (`Params.lifetime`, None
     in a record no session made), and the chain over its appends in the order received (`append_head`, None without
     one), which, with each pass's head and stale bound (`WindowRecord.heads`, `WindowRecord.stale`), the
-    memory-map unit's verdict is on (`RequirementLink.mapped`), and its pace (`Params.pace`, None unpaced).
-    `public` is what acceptance makes public;
+    memory-map unit's verdict is on (`RequirementLink.mapped`).  `public` is what acceptance makes public;
     `profile` is the protocol's profile, each window's schedule and openings law (the γ terms need the node's
     capacities: `ledger`)."""
 
