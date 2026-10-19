@@ -4,7 +4,8 @@
 // units of 128 words a lane, with the warp checkpoint (the XOR of the warp's 8·32 chain states, redux.sync.xor) in four
 // placements: CP_SEG one a 128-word segment, lane 0 storing it (the design's LI-CP-W); CP_SEG4 the same, four
 // segments' words in one st.global.v4; CP_SET one a 32-word set (PouwWarpCheck_v1's spacing); CP_RED CP_SEG's word
-// reduced in memory (red.global.xor, no REDUX). Each kernel's output is checked word for word against the host's
+// reduced in memory (red.global.xor, no REDUX), and CP_RED2 and CP_RED8 with 2 and 8 of them a lane, the lane's XOR
+// mostly in memory. Each kernel's output is checked word for word against the host's
 // reference (the same formulas; the run prints the reference's words, which ref_check.py recomputes through
 // segment.py), and clock.sh counts the SASS of each kernel's unit loop (LOP3, IMAD, REDUX, RED, the uniform-to-vector
 // move, STG), which is the cheapest bit-exact program found, a unit.
@@ -58,11 +59,16 @@ __host__ __device__ inline uint32_t xor8(const uint32_t (&y)[8]) {
 // CP_RED: CP_SEG's word with the warp's XOR done by the memory system: every lane's red.global.xor.b32 of its 8 chains'
 // XOR into a zeroed word, one warp instruction (REDG) where the others take REDUX, the uniform-to-vector move and a
 // store. ptxas turns a red to an address it can prove warp-uniform into REDUX and one lane's REDG, so the word's
-// address is out + (lane & zmask), zmask 0 at run time.
-enum { CP_SEG, CP_SEG4, CP_SET, CP_RED };
+// address is out + (lane & zmask), zmask 0 at run time. CP_RED2 and CP_RED8 move more of the lane's XOR to memory: 3
+// LOP3 and 2 REDG (y0..y6's XOR, then y7), and 8 REDG with no LOP3 (each chain's state), so a checkpoint's lane XOR
+// trades ALU for issue: 4 LOP3 + 1 REDG, 3 + 2, 0 + 8.
+enum { CP_SEG, CP_SEG4, CP_SET, CP_RED, CP_RED2, CP_RED8 };
+__device__ __forceinline__ void red_xor(uint32_t* p, uint32_t v) {
+  asm volatile("red.relaxed.gpu.global.xor.b32 [%0], %1;" ::"l"(p), "r"(v) : "memory");
+}
 
 // One warp a block. words: U units x 32 lanes x 128 words (lane-major in a unit), st: 32 lanes x 8 starting states.
-// out (zeroed): the checkpoints (CP_SEG, CP_SEG4, CP_RED: U; CP_SET: 4U), then each lane's final 8 states.
+// out (zeroed): the checkpoints (CP_SET: 4U, the others U), then each lane's final 8 states.
 template <int CP>
 __global__ void __launch_bounds__(32, 1) li_exact(const uint4* __restrict__ words, const uint32_t* st, uint32_t* out,
                                                  int U, uint32_t zmask) {
@@ -98,8 +104,14 @@ __global__ void __launch_bounds__(32, 1) li_exact(const uint4* __restrict__ word
         if (lane == 0) out[u] = r;
       }
       if constexpr (CP == CP_SEG4) keep[j] = __reduce_xor_sync(0xffffffffu, xor8(y));
-      if constexpr (CP == CP_RED)
-        asm volatile("red.relaxed.gpu.global.xor.b32 [%0], %1;" ::"l"(cpw + u), "r"(xor8(y)) : "memory");
+      if constexpr (CP == CP_RED) red_xor(cpw + u, xor8(y));
+      if constexpr (CP == CP_RED2) {
+        red_xor(cpw + u, y[0] ^ y[1] ^ y[2] ^ y[3] ^ y[4] ^ y[5] ^ y[6]);
+        red_xor(cpw + u, y[7]);
+      }
+      if constexpr (CP == CP_RED8)
+#pragma unroll
+        for (int c = 0; c < 8; c++) red_xor(cpw + u, y[c]);
     }
     if constexpr (CP == CP_SEG4)
       if (lane == 0) reinterpret_cast<uint4*>(out)[u4] = make_uint4(keep[0], keep[1], keep[2], keep[3]);
@@ -153,13 +165,16 @@ static int run_exact(int U) {
   printf("{\"probe\": \"ref\", \"units\": %d, \"seed\": %llu, \"cp_seg\": %s, \"cp_set\": %s, \"final\": %s}\n", U,
          0x5EED2026ull, list(cp_seg).c_str(), list(cp_set).c_str(), list(y).c_str());
   int bad = 0;
-  const char* names[4] = {"li_exact<CP_SEG>", "li_exact<CP_SEG4>", "li_exact<CP_SET>", "li_exact<CP_RED>"};
-  for (int cp = 0; cp < 4; cp++) {
+  const char* names[6] = {"li_exact<CP_SEG>", "li_exact<CP_SEG4>", "li_exact<CP_SET>",
+                          "li_exact<CP_RED>", "li_exact<CP_RED2>", "li_exact<CP_RED8>"};
+  for (int cp = 0; cp < 6; cp++) {
     cudaMemset(dout, 0, (4 * U + 256) * 4);
     if (cp == 0) li_exact<CP_SEG><<<1, 32>>>((const uint4*)dw, dst, dout, U, 0u);
     if (cp == 1) li_exact<CP_SEG4><<<1, 32>>>((const uint4*)dw, dst, dout, U, 0u);
     if (cp == 2) li_exact<CP_SET><<<1, 32>>>((const uint4*)dw, dst, dout, U, 0u);
     if (cp == 3) li_exact<CP_RED><<<1, 32>>>((const uint4*)dw, dst, dout, U, 0u);
+    if (cp == 4) li_exact<CP_RED2><<<1, 32>>>((const uint4*)dw, dst, dout, U, 0u);
+    if (cp == 5) li_exact<CP_RED8><<<1, 32>>>((const uint4*)dw, dst, dout, U, 0u);
     cudaError_t e = cudaDeviceSynchronize();
     const int ncp = cp == 2 ? 4 * U : U;
     std::vector<uint32_t> got(ncp + 256);

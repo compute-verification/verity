@@ -6,8 +6,9 @@ has one (ALU, IMAD, SHFL and so on), else the opcode's first word.
 
 The gate (`--gate`): no local-memory access (LDL, STL) in any kernel; each `clk<...>` kernel's loop holds the IGMMA its
 load issues (4 a trip for the three wgmma loads, none for li_alone); each `li_exact<...>` loop holds li's 64 LOP3 and 64
-IMAD a unit (256 and 256 a trip of four units), the checkpoint's REDUX (4 a trip a segment, 16 a set; for CP_RED, 4 RED
-and no REDUX) and its per-lane XOR (4 LOP3 a checkpoint); each `roles<X,R>` kernel's MMA loop holds its 4 IGMMA and the
+IMAD a unit (256 and 256 a trip of four units), the checkpoint's REDUX (4 a trip a segment, 16 a set; for CP_RED,
+CP_RED2 and CP_RED8, 1, 2 and 8 RED a checkpoint and no REDUX) and its per-lane XOR (4 LOP3 a checkpoint; 3 for CP_RED2,
+none for CP_RED8); each `roles<X,R>` kernel's MMA loop holds its 4 IGMMA and the
 poll's LDS, and its lane loop exactly R of the lane's op (IMAD for X = 1, LOP3 for X = 2). Exit 1 when a check fails.
 
 Run: `python sass_count.py SASS [--json OUT] [--gate]`.
@@ -104,12 +105,15 @@ def main() -> int:
         if tag.startswith("li_exact<"):
             cp = int(tag[len("li_exact<"):-1])
             ncp = 16 if cp == 2 else 4
-            redux, red = (0, ncp) if cp == 3 else (ncp, 0)
+            # a checkpoint's REDUX, RED and lane-XOR LOP3: CP_SEG, CP_SEG4, CP_SET 1, 0, 4; CP_RED 0, 1, 4;
+            # CP_RED2 0, 2, 3; CP_RED8 0, 8, 0
+            redux, red, xl = {3: (0, 1, 4), 4: (0, 2, 3), 5: (0, 8, 0)}.get(cp, (1, 0, 4))
+            redux, red = redux * ncp, red * ncp
             got_red = base["RED"] + base["REDG"]
             if base["REDUX"] != redux or got_red != red:
                 fails.append(f"{tag}: {base['REDUX']} REDUX and {got_red} RED a trip, want {redux} and {red}")
-            if base["LOP3"] < 256 + 4 * ncp:
-                fails.append(f"{tag}: {base['LOP3']} LOP3 a trip, want at least {256 + 4 * ncp}")
+            if base["LOP3"] < 256 + xl * ncp:
+                fails.append(f"{tag}: {base['LOP3']} LOP3 a trip, want at least {256 + xl * ncp}")
             imad = sum(n for op, n in ops.items() if op == "IMAD")
             if imad < 256:
                 fails.append(f"{tag}: {imad} IMAD a trip, want at least 256")
