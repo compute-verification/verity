@@ -19,14 +19,18 @@ and decision 107's units, for the window's share `ε` (`0 < ε ≤ 1`, the `ε` 
   sessions' (`ProverModel.sessCalls`).
 * **PoUW's adversary is extracted from the registration** (`WindowWork.StraightLineExtraction`, the one random-oracle
   premise): from every prover within `(T, q)`, an adversary of PoUW's game within `(T + T_ext, q + q_ext)` whose
-  transcript is the transcript the registration's commitments bind (`Ccom`) on every run received by the deadline,
-  except with probability `ε_id(q, N)` over the oracle and the salt. The extraction reads none of the sessions' queries,
-  and a session that opens the registered roots to anything but `Ccom` is the link term inside `WindowBound`'s `β`.
-  `q` counts the sessions' calls too, so `β`'s state terms, which a session state holding a collision of `H` makes
-  about 1, are bounded on average over the oracle by the counted queries on the random-oracle card, as `ε_id` is.
-* **The acceptance is the service's at the registration deadline** (`WindowWork.AcceptsBy`): the sessions accept and the
-  registration was received at most `t_d` after the salt's release (`Check.registration_deadline`; a later one is
-  refused, `late-registration`). The extraction is claimed only on such runs.
+  transcript is the transcript the registration's commitments bind (`Ccom`) on every run received before the draw
+  coin's cutoff, except with probability `ε_id(q, N)` over the oracle and the salt. The extraction reads none of the
+  sessions' queries, and a session that opens the registered roots to anything but `Ccom` is the link term inside
+  `WindowBound`'s `β`. `q` counts the sessions' calls too, so `β`'s state terms, which a session state holding a
+  collision of `H` makes about 1, are bounded on average over the oracle by the counted queries on the random-oracle
+  card, as `ε_id` is.
+* **The acceptance is the service's at the draw coin's cutoff** (`WindowWork.AcceptsBy`): the sessions accept and the
+  challenger received the registration before it released the epoch's draw coin, in its record's order (a window
+  received after the draw coin is refused, `late-registration`). The bound is that order, not a time. The wall-clock
+  deadline (`Check.registration_deadline`, counted from the salt coin's release) is the challenger's, which waits on
+  its record's `released_at`; what it refuses as late is refused on top of the cutoff, so the service accepts only
+  runs inside the event. The extraction is claimed only on runs received before the cutoff.
 * **The work step** is `WindowWork.TileWork γ_u`, at decision 107's coordinate units (`coordDomain`).
 * **The window audit's guarantee is a hypothesis** (`WindowWork.WindowBound`): at each oracle and salt, the audit accepts
   the prover's play while the incorrect work of the registration's transcript is at least the share `ε` of `W` with
@@ -156,13 +160,15 @@ theorem coordDomain_inhabited : ∃ U : Workload, U.InDomain coordDomain ∧ U.l
 
 /-- **A window prover's model**: its programs, and for each a whole strategy in the window audit at every oracle and
 salt (`play`: the registration, then the sessions on every draw), with what the model charges for it. `cost` is the
-work of its online phase, from the salt's release to the registration's receipt, in PoUW's cost units; `received` is
-the challenger's clock at the registration's receipt, in seconds after the salt's release (the service's
-`received_at − salted_at`); `calls` is the registration's oracle calls, the commitments', which `RegQueries` ties to the
-queries of the program that computes it; `sessCalls` is the sessions' oracle calls, the most over every draw and every
-coin of the sessions. The extraction reads none of the sessions' queries, but `Bounded` counts them: a session state
-that holds a collision of `H` makes the window's state terms about 1, and only a count of the queries that found it
-bounds them on average over the oracle. The model fixes all four, as it fixes the cost; a prover only picks a program.
+work of its online phase, from the salt's release to the registration's receipt, in PoUW's cost units; `received` and
+`cutoff` are places in the challenger's record of the epoch's coins, which logs each root's receipt and then its coin's
+release (`LiveRecord.log`, #2584; that the challenger keeps that order is `trusted-nebius-host`'s): the registration's
+receipt, and the release of the epoch's draw coin (`pouw/draw`); `calls` is the registration's oracle calls, the
+commitments', which `RegQueries` ties to the queries of the program that computes it; `sessCalls` is the sessions'
+oracle calls, the most over every draw and every coin of the sessions. The extraction reads none of the sessions'
+queries, but `Bounded` counts them: a session state that holds a collision of `H` makes the window's state terms about
+1, and only a count of the queries that found it bounds them on average over the oracle. The model fixes all five, as it
+fixes the cost; a prover only picks a program.
 A session's strategy is a strategy of the session at `H`, whose type depends on `H`, so no oracle program's output is
 one, and `sessCalls` is tied to the play only through the bound the random-oracle card states at it: a model that
 undercounts can't meet that bound. The window audit is `auditReg Lr (session H s)`: `n` audit units, the law `Lr R` at
@@ -173,7 +179,8 @@ structure ProverModel (Q R S : Type) {n : ℕ} (Reg : Type) (Lr : Reg → Law n)
   play : Prog → (H : Q → R) → Workload → (ℕ → Pouw.Mat) → Pouw.State → (s : S) →
     FlockSoundness.Game.Strategy (auditReg Lr (session H s))
   cost : Prog → (Q → R) → Workload → (ℕ → Pouw.Mat) → Pouw.State → S → ℝ
-  received : Prog → (Q → R) → Workload → (ℕ → Pouw.Mat) → Pouw.State → S → ℝ
+  received : Prog → (Q → R) → Workload → (ℕ → Pouw.Mat) → Pouw.State → S → ℕ
+  cutoff : Prog → (Q → R) → Workload → (ℕ → Pouw.Mat) → Pouw.State → S → ℕ
   calls : Prog → (Q → R) → Workload → (ℕ → Pouw.Mat) → Pouw.State → S → ℕ
   sessCalls : Prog → (Q → R) → Workload → (ℕ → Pouw.Mat) → Pouw.State → S → ℕ
 
@@ -202,9 +209,13 @@ def Prover.play {PM : ProverModel Q R S Reg Lr session} (B : Prover PM) (U : Wor
     FlockSoundness.Game.Strategy (auditReg Lr (session H s)) :=
   PM.play B.online H U B.act (B.pre.eval H) s
 
-/-- When the challenger receives the prover's registration, in seconds after the salt's release. -/
-def Prover.received {PM : ProverModel Q R S Reg Lr session} (B : Prover PM) (U : Workload) (H : Q → R) (s : S) : ℝ :=
+/-- The place of the prover's registration's receipt in the challenger's record. -/
+def Prover.received {PM : ProverModel Q R S Reg Lr session} (B : Prover PM) (U : Workload) (H : Q → R) (s : S) : ℕ :=
   PM.received B.online H U B.act (B.pre.eval H) s
+
+/-- **The draw coin's cutoff**: the place of the epoch's draw coin's release in the challenger's record. -/
+def Prover.cutoff {PM : ProverModel Q R S Reg Lr session} (B : Prover PM) (U : Workload) (H : Q → R) (s : S) : ℕ :=
+  PM.cutoff B.online H U B.act (B.pre.eval H) s
 
 /-- The online phase costs at most `T`, and preprocessing, the registration and the sessions together make at most `q`
 oracle calls, for every oracle and salt (surely). -/
@@ -213,25 +224,30 @@ def Prover.Bounded {PM : ProverModel Q R S Reg Lr session} (B : Prover PM) (U : 
     B.pre.calls H + PM.calls B.online H U B.act (B.pre.eval H) s +
       PM.sessCalls B.online H U B.act (B.pre.eval H) s ≤ q
 
-/-- **The service's acceptance at the registration deadline `t_d`** (`Check.registration_deadline`), for an outcome
-`o` of the window audit against `B`'s play at `H` and `s`: the sessions accept (`o.1`), and the registration was
-received at most `t_d` after the salt's release. A later registration is refused (`late-registration`), whatever it
-holds. It is `Pouw.AcceptsBy` for the window audit. -/
-def AcceptsBy {PM : ProverModel Q R S Reg Lr session} (B : Prover PM) (U : Workload) (td : ℝ) (H : Q → R) (s : S)
+/-- **The service's acceptance at the draw coin's cutoff**, for an outcome `o` of the window audit against `B`'s play
+at `H` and `s`: the sessions accept (`o.1`), and the challenger received the registration before it released the
+epoch's draw coin (`received < cutoff`, in its record's order). A window received after the draw coin is refused
+(`late-registration`), whatever it holds: its registration may depend on the draw, which the window audit's game, the
+registration and then the draw coin, doesn't model. The bound is an order, not a time. The wall-clock deadline
+(`Check.registration_deadline`, counted from the salt coin's release) is the challenger's, which waits on its record's
+`released_at` and refuses a registration past it too, so the service accepts only runs this event holds of. -/
+def AcceptsBy {PM : ProverModel Q R S Reg Lr session} (B : Prover PM) (U : Workload) (H : Q → R) (s : S)
     (o : Bool × Finset (Fin n)) : Prop :=
-  o.1 = true ∧ B.received U H s ≤ td
+  o.1 = true ∧ B.received U H s < B.cutoff U H s
 
 end Prover
 
 /-- **Straight-line extraction of the registration's transcript** (a named premise, open; the random-oracle model,
 claim id `random-oracle`, card 9cd57182), for a prover model `PM`, PoUW's cost model `CM`, a domain `D`, the transcript
 `Ccom H s R` that the registration `R`'s commitments bind at the oracle and the salt (the analysis's committed transcript,
-read at the registration alone), the registration deadline `t_d`, the extractor's cost `T_ext` and calls `q_ext`, and an
-error `ε_id(q, N)`. For every in-domain workload and every prover `B` within `(T, q)` there is an adversary `A` of
-PoUW's game within `(T + T_ext, q + q_ext)` whose transcript is the one `B`'s registration binds, on every run whose
-registration is received by `t_d`, except with probability `ε_id(q, N)` over the oracle and the salt:
-$$\Pr_{H,s}\big[\mathrm{received}_B(H, s) \le t_d \wedge \mathrm{Ccom}(H, s, \mathrm{reg}\,B.\mathrm{play}(H, s)) \ne
-  A.\mathrm{transcript}(H, s)\big] \le \varepsilon_{id}(q, N).$$
+read at the registration alone), the extractor's cost `T_ext` and calls `q_ext`, and an error `ε_id(q, N)`. For every
+in-domain workload and every prover `B` within `(T, q)` there is an adversary `A` of PoUW's game within
+`(T + T_ext, q + q_ext)` whose transcript is the one `B`'s registration binds, on every run whose registration the
+challenger received before the draw coin's cutoff (`AcceptsBy`'s order), except with probability `ε_id(q, N)` over the
+oracle and the salt:
+$$\Pr_{H,s}\big[\mathrm{received}_B(H, s) < \mathrm{cutoff}_B(H, s) \wedge
+  \mathrm{Ccom}(H, s, \mathrm{reg}\,B.\mathrm{play}(H, s)) \ne A.\mathrm{transcript}(H, s)\big]
+  \le \varepsilon_{id}(q, N).$$
 
 The witness is `B`'s online phase run in `CM` with a straight-line extractor: it reads the query log of the online phase
 up to the registration, the commitments' oracle calls that `calls` counts, and decodes each registered root's tree from
@@ -243,8 +259,9 @@ random-oracle content is the probability: over a uniform `H`, which stands for S
 and the noise, the registration's transcript differs from the decoded one only if the `q` queries before the
 registration hold a collision or the registration holds a node that none of them answered, so
 `ε_id(q, N) ≈ (q² + q·N)/2^512` is the expected instance. Its other content is a cost-model fact: `CM` runs `PM`'s
-online programs at their cost. It is claimed only on runs received by the deadline, which the service accepts; a late
-registration's commitments may rest on work the model doesn't charge (compute accounting's charges `[tₛ + ℓ, t_d − ℓ)`).
+online programs at their cost. It is claimed only on runs received before the cutoff, the runs the service accepts: a
+registration received after the draw coin may depend on the draw, which the window audit's game, the registration and
+then the draw coin, doesn't model.
 
 It is stated for models whose registration is an oracle program's output with its queries counted
 (`ProverModel.RegQueries`, its antecedent); the sessions' calls are counted in `q` too (`Prover.Bounded`), which can only
@@ -255,11 +272,12 @@ premises, an adversary that commits first with random-oracle commitments (`Assum
 def StraightLineExtraction [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] {n : ℕ} {Reg : Type}
     {Lr : Reg → Law n} {session : (Q → R) → S → Finset (Fin n) → Reg → FlockSoundness.Game Bool}
     (PM : ProverModel Q R S Reg Lr session) (CM : CostModel Q R S) (D : Layout → Prop)
-    (Ccom : (Q → R) → S → Reg → Pouw.Transcript) (td Text : ℝ) (qext : ℕ) (εid : ℕ → ℕ → ℝ) : Prop :=
+    (Ccom : (Q → R) → S → Reg → Pouw.Transcript) (Text : ℝ) (qext : ℕ) (εid : ℕ → ℕ → ℝ) : Prop :=
   PM.RegQueries → ∀ U : Workload, U.InDomain D → ∀ (T : ℝ) (q : ℕ) (B : Prover PM), B.Bounded U T q →
     ∃ A : Adversary CM, A.Bounded U (T + Text) (q + qext) ∧
       pr (fun x : (Q → R) × S =>
-        B.received U x.1 x.2 ≤ td ∧ Ccom x.1 x.2 (B.play U x.1 x.2).1 ≠ A.transcript U x.1 x.2) ≤ εid q U.layout.N
+        B.received U x.1 x.2 < B.cutoff U x.1 x.2 ∧ Ccom x.1 x.2 (B.play U x.1 x.2).1 ≠ A.transcript U x.1 x.2) ≤
+        εid q U.layout.N
 
 /-- **The window audit's bound on a play** (a hypothesis of `EndToEndWindow`, discharged below), for the window's share
 `ε`, the registration's transcript `Ccom`, a play `σ'` and a bound `β(H, s)`: at every oracle and salt, the audit
@@ -382,20 +400,22 @@ open Finset FlockSoundness.Audit
 open scoped ENNReal
 
 /-- **PoUW's work bound at the window audit** (statement only, no proof yet), at the window's share `ε`
-(`0 < ε ≤ 1`). A prover that passes the window audit, its registration received by the deadline, spent at least a
-`(1 − γ_u)(1 − ε)` share of the window's declared work between the salt's release and the registration's receipt, less
-the extractor's cost, except with probability `E[β] + ε_id(q, N) + η(q + q_ext, N)`.
+(`0 < ε ≤ 1`). A prover that passes the window audit, its registration received before the epoch's draw coin, spent at
+least a `(1 − γ_u)(1 − ε)` share of the window's declared work between the salt's release and the registration's
+receipt, less the extractor's cost, except with probability `E[β] + ε_id(q, N) + η(q + q_ext, N)`.
 
 **What it bounds.** The prover `B` is a program of the prover model `PM` (`WindowWork.Prover`), and the audit runs
 against its play. Its work `T` bounds the cost of its online phase, from the salt's release to the registration's
-receipt, in the cost model's units, which the model fixes, not the prover; an accepted registration is received by
-`t_d`, so that is work between the salt and the deadline. `q` counts its oracle calls, the sessions' among them. Its
-work is compared with the window's declared work `W = ∑_{u < N} W_ref(u)` in `CM`'s units, `W_ref(u)` being the honest
-reference's cost of unit `u` without hash calls, on decision 107's coordinate units (`WindowWork.coordDomain`).
-Averaged over the oracle `H` and the salt `s`, the service accepts the play by the deadline (`WindowWork.AcceptsBy`)
-while `T + T_ext < (1 − γ_u)(1 − ε)·W` with probability at most
-$$\mathbb{E}_{H,s}\Pr[\text{accept by } t_d \wedge T + T_{ext} < (1-\gamma_u)(1-\varepsilon)\,W] \le
+receipt, in the cost model's units, which the model fixes, not the prover; an accepted registration is received before
+the draw coin's release, so that is work between the salt coin and the draw coin. `q` counts its oracle calls, the
+sessions' among them. Its work is compared with the window's declared work `W = ∑_{u < N} W_ref(u)` in `CM`'s units,
+`W_ref(u)` being the honest reference's cost of unit `u` without hash calls, on decision 107's coordinate units
+(`WindowWork.coordDomain`). Averaged over the oracle `H` and the salt `s`, the service accepts the play at the draw
+coin's cutoff (`WindowWork.AcceptsBy`) while `T + T_ext < (1 − γ_u)(1 − ε)·W` with probability at most
+$$\mathbb{E}_{H,s}\Pr[\text{accept before the draw coin} \wedge T + T_{ext} < (1-\gamma_u)(1-\varepsilon)\,W] \le
   \mathbb{E}_{H,s}\,\beta(H, s) + \varepsilon_{id}(q, N) + \eta(q + q_{ext}, N).$$
+The challenger's wall-clock deadline (`Check.registration_deadline`) only refuses more, so the bound holds of what the
+service accepts at any deadline.
 The audit is `FlockSoundness.Audit.auditReg` at the service's law, one uniform `K`-subset of the `n` padded units
 (`Law.subset n K`, `subset:K′` in `window.py`), with any sessions. `ε` is the window's, the `ε` its `K′` was sized at
 (`window.sampling`), so the statement covers each grid main serves, `(0.1%, 2^-40)` and `(1%, 2^-128)`.
@@ -403,18 +423,18 @@ The audit is `FlockSoundness.Audit.auditReg` at the service's law, one uniform `
 **What it assumes**, each a hypothesis:
 * the work step `WindowWork.TileWork γ_u` with error `η` at coordinate units (a named premise; its instance in Lean is
   the metered model, `WindowWork.tileWork_metered`; the deployed device's is EPS1's, gap (3));
-* `WindowWork.StraightLineExtraction` at `(t_d, T_ext, q_ext, ε_id)` (the named random-oracle premise): from `B`, a PoUW
-  adversary within `(T + T_ext, q + q_ext)` whose transcript is the registration's (`Ccom`) on every run received by
-  `t_d`, except with probability `ε_id`; with its antecedent, that the model's registrations are oracle programs'
-  outputs with their queries counted (`ProverModel.RegQueries`);
+* `WindowWork.StraightLineExtraction` at `(T_ext, q_ext, ε_id)` (the named random-oracle premise): from `B`, a PoUW
+  adversary within `(T + T_ext, q + q_ext)` whose transcript is the registration's (`Ccom`) on every run received
+  before the draw coin's cutoff, except with probability `ε_id`; with its antecedent, that the model's registrations
+  are oracle programs' outputs with their queries counted (`ProverModel.RegQueries`);
 * `WindowWork.WindowBound` at `ε` for `B`'s play at `β(H, s)` (discharged by `WindowBoundOfService`, or gap (6)'s
   `WindowEps` through its bridge, each from `WindowWork.Realizes`, which holds by construction at coordinate units).
 
-**What it composes**, at every oracle and salt: either the run is late, which the service refuses; or the
-registration's transcript isn't the extracted adversary's (on average at most `ε_id`); or the work step's event holds
-for that adversary at budget `T + T_ext` (on average at most `η`); or the units correct in the registration's
-transcript are worth at most `(T + T_ext)/(1 − γ_u) < (1 − ε)·W`, so its incorrect work exceeds `ε·W`, and the audit
-accepts with that at most `β(H, s)`. At `γ_u ≥ 1` the event is empty. -/
+**What it composes**, at every oracle and salt: either the registration was received after the draw coin, which the
+service refuses; or the registration's transcript isn't the extracted adversary's (on average at most `ε_id`); or the
+work step's event holds for that adversary at budget `T + T_ext` (on average at most `η`); or the units correct in the
+registration's transcript are worth at most `(T + T_ext)/(1 − γ_u) < (1 − ε)·W`, so its incorrect work exceeds `ε·W`,
+and the audit accepts with that at most `β(H, s)`. At `γ_u ≥ 1` the event is empty. -/
 def EndToEndWindow : Prop :=
   ∀ (Q R S : Type) [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S]
     (CM : CostModel Q R S) (P : Protocol Q R S) (γu : ℝ) (η : ℕ → ℕ → ℝ),
@@ -426,17 +446,17 @@ def EndToEndWindow : Prop :=
     ∀ (n K : ℕ) (hK : K ≤ n) (Reg : Type)
       (session : (Q → R) → S → Finset (Fin n) → Reg → FlockSoundness.Game Bool)
       (Ccom : (Q → R) → S → Reg → Transcript)
-    -- the prover model, the registration deadline, and the extraction of PoUW's adversary from its provers
-      (PM : WindowWork.ProverModel Q R S Reg (fun _ : Reg => Law.subset n K hK) session) (td Text : ℝ) (qext : ℕ)
+    -- the prover model and the extraction of PoUW's adversary from its provers
+      (PM : WindowWork.ProverModel Q R S Reg (fun _ : Reg => Law.subset n K hK) session) (Text : ℝ) (qext : ℕ)
       (εid : ℕ → ℕ → ℝ),
-    PM.RegQueries → 0 ≤ Text → WindowWork.StraightLineExtraction PM CM WindowWork.coordDomain Ccom td Text qext εid →
+    PM.RegQueries → 0 ≤ Text → WindowWork.StraightLineExtraction PM CM WindowWork.coordDomain Ccom Text qext εid →
     ∀ U : Workload, U.InDomain WindowWork.coordDomain → ∀ T : ℝ, 0 ≤ T → ∀ q : ℕ, q + qext ≤ 2 ^ 64 →
     ∀ B : WindowWork.Prover PM, B.Bounded U T q →
     -- the window audit's bound on the prover's play, at each oracle and salt
     ∀ β : (Q → R) → S → ℝ≥0∞, WindowWork.WindowBound P U ε Ccom (B.play U) β →
       FlockSoundness.Game.avg (fun x : (Q → R) × S =>
         FlockSoundness.Game.prob
-          (fun o => WindowWork.AcceptsBy B U td x.1 x.2 o ∧
+          (fun o => WindowWork.AcceptsBy B U x.1 x.2 o ∧
             T + Text < (1 - γu) * (1 - ε) * totalWref P U.layout)
           (auditReg (fun _ : Reg => Law.subset n K hK) (session x.1 x.2)) (B.play U x.1 x.2))
         ≤ FlockSoundness.Game.avg (fun x : (Q → R) × S => β x.1 x.2) + ENNReal.ofReal (εid q U.layout.N) +
