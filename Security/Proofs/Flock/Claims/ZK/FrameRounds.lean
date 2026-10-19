@@ -3,7 +3,7 @@ import Proofs.Flock.Claims.ZK.FrameMask
 import Proofs.Flock.Claims.ZK.Release
 
 /-!
-# The cut's zerocheck, round by round, and the frame's release of the device's
+# The cut's zerocheck and lincheck, round by round, and the frame's release of the device's
 
 The cut session's zerocheck (`FlockComplete.zerocheckCut`) sends the masked values `mk` at the layout's pad indices, and
 the frame releases the device's plain values each plus its pad. This file states both sides at the zerocheck's rounds
@@ -13,7 +13,7 @@ and matches them:
   the cut sends, after the pending bytes, the binding (`zcBind`: the statement's label, digest and capacity, the
   zerocheck's label, the pads' label and root) and `r_skip`'s squeeze; `r_outer`'s squeeze; `round1_ab`'s and
   `round1_c`'s masked values and `z`'s squeeze; then each residual round's two masked values and its coin's squeeze
-  (`zcLoopB_enc`), and leaves the finals' two values pending. The loop is `Replay.forIn_go` from any transcript, each
+  (`pairLoopB_enc`), and leaves the finals' two values pending. The loop is `Replay.forIn_go` from any transcript, each
   step's hypothesis below the openings only (`forIn_go_lt`, `forIn_go_from`).
 * **The frame's rounds** (`roundFree_zcBind`, `roundFree_zcOuter`, `roundFree_zcR1`, `roundFree_zcMl`): at the device's
   binding (no pads' frames: the frame inserts them) the frame starts the algebraic phase and releases the cut's binding;
@@ -23,6 +23,10 @@ and matches them:
   value there plus the frame's pad, the cut's bodies from empty pending bytes are the frame's releases of the device's
   rounds at a rep that has not stopped. A rep's first round also carries its stream's domain, pending before the
   binding: the cut sends it and the frame never releases it (`dropDoms`), so the match is at empty pending bytes.
+* **The lincheck** (`lincheckCut_bodies`, `lcBodies`, `lcBodies_frame`): the same at the lincheck, whose first round
+  carries the zerocheck's two pending finals before its label. Its values but `final_c`'s sit one absorbed position
+  below their pad index (`absPos`), and a round inside the masked phase leaves at the release as its masked frames
+  (`LeanRelease.release_on`).
 * **Between rounds** (`answer_alg`): where the frame takes a round's coins in the algebraic phase, the rep's state is as
   it was, the coins answered (and kept inside the masked phase), so its phase and position carry to the next round.
 * **At the release** (`LeanRelease.release_of_roundFree`, `release_zcBind`, `release_zcOuter`, `release_zcR1`,
@@ -36,7 +40,7 @@ open _root_.Flock (F128 Transcript TMW)
 open _root_.Flock.Transcript (framed)
 open _root_.Flock.Firewall.Frame (Cfg Masker roundFree LABEL_ZC)
 open FlockSoundness.Refine (Frame encs label_enc absorbBytes_enc absorbSlice_enc absorbF_enc framed_enc)
-open FlockComplete (PS asksCut zerocheckCut sampleVecP squeezeP_cut_ok sampleP_cut_ok)
+open FlockComplete (PS asksCut zerocheckCut lincheckCut sampleVecP squeezeP_cut_ok sampleP_cut_ok)
 open FlockComplete.Replay (pF pushes afterSq bind_go liftTM_ok pure_go)
 
 /-! ## The cut's zerocheck, round by round -/
@@ -101,38 +105,34 @@ theorem forIn_go_from {σ : Type} (body : ℕ → σ → TMW PS (ForInStep σ)) 
   have h := forIn_go_lt body S (T t) (B t) L n (hbody t) l hl
   rwa [hT] at h
 
-/-- The transcript of the cut's residual round `i` before its squeeze: `ml i 0`'s and `ml i 1`'s masked values
-absorbed. -/
-def zcPre (lay : _root_.Flock.Zk.PadLayout) (mk : ℕ → F128) (i : ℕ) (t : Transcript) : Transcript :=
-  ⟨t.rounds, t.k, pF (mk (lay.ml i 1)) (pF (mk (lay.ml i 0)) t.pending)⟩
+/-- The transcript of a loop round `i` that absorbs the two masked values `g i 0` and `g i 1` (a residual round's of
+the zerocheck, a round's of the lincheck), before its squeeze. -/
+def pairPre (g : ℕ → ℕ → F128) (i : ℕ) (t : Transcript) : Transcript :=
+  ⟨t.rounds, t.k, pF (g i 1) (pF (g i 0) t.pending)⟩
 
-/-- The cut's zerocheck transcript at its residual rounds, from `t₀`: round `i` absorbs `ml i 0`'s and `ml i 1`'s
-masked values and squeezes the coin at body `L + i`. -/
-def zcLoopT (lay : _root_.Flock.Zk.PadLayout) (mk : ℕ → F128) (coin : ℕ → ℕ → F128) (L : ℕ) (t₀ : Transcript) :
-    ℕ → Transcript
+/-- The transcript of such a loop from `t₀`: round `i` absorbs `g i 0` and `g i 1` and squeezes the coin at body
+`L + i`. -/
+def pairLoopT (g : ℕ → ℕ → F128) (coin : ℕ → ℕ → F128) (L : ℕ) (t₀ : Transcript) : ℕ → Transcript
   | 0 => t₀
-  | i + 1 => afterSq (zcPre lay mk i (zcLoopT lay mk coin L t₀ i)) 1 1 (coin (L + i))
+  | i + 1 => afterSq (pairPre g i (pairLoopT g coin L t₀ i)) 1 1 (coin (L + i))
 
-/-- The body the cut's residual round `i` sends. -/
-def zcLoopB (lay : _root_.Flock.Zk.PadLayout) (mk : ℕ → F128) (coin : ℕ → ℕ → F128) (L : ℕ) (t₀ : Transcript)
-    (i : ℕ) : Claims.Msg :=
-  Claims.toMsg (framed (zcPre lay mk i (zcLoopT lay mk coin L t₀ i)) 1 1)
+/-- The body such a loop's round `i` sends. -/
+def pairLoopB (g : ℕ → ℕ → F128) (coin : ℕ → ℕ → F128) (L : ℕ) (t₀ : Transcript) (i : ℕ) : Claims.Msg :=
+  Claims.toMsg (framed (pairPre g i (pairLoopT g coin L t₀ i)) 1 1)
 
-theorem zcLoopT_pending (lay : _root_.Flock.Zk.PadLayout) (mk : ℕ → F128) (coin : ℕ → ℕ → F128) (L : ℕ)
-    {t₀ : Transcript} (hz : t₀.pending = ByteArray.empty) :
-    ∀ i, (zcLoopT lay mk coin L t₀ i).pending = ByteArray.empty
+theorem pairLoopT_pending (g : ℕ → ℕ → F128) (coin : ℕ → ℕ → F128) (L : ℕ) {t₀ : Transcript}
+    (hz : t₀.pending = ByteArray.empty) : ∀ i, (pairLoopT g coin L t₀ i).pending = ByteArray.empty
   | 0 => hz
   | _ + 1 => rfl
 
 theorem empty_toList : ByteArray.empty.data.toList = [] := rfl
 
-/-- Each residual round's body is its two masked values' frames and its coin's squeeze. -/
-theorem zcLoopB_enc (lay : _root_.Flock.Zk.PadLayout) (mk : ℕ → F128) (coin : ℕ → ℕ → F128) (L : ℕ)
-    {t₀ : Transcript} (hz : t₀.pending = ByteArray.empty) :
-    zcLoopB lay mk coin L t₀ =
-      fun i => encs [.one (mk (lay.ml i 0)), .one (mk (lay.ml i 1))] ++ (Frame.sq 1 1).enc := by
+/-- Each round's body is its two masked values' frames and its coin's squeeze. -/
+theorem pairLoopB_enc (g : ℕ → ℕ → F128) (coin : ℕ → ℕ → F128) (L : ℕ) {t₀ : Transcript}
+    (hz : t₀.pending = ByteArray.empty) :
+    pairLoopB g coin L t₀ = fun i => encs [.one (g i 0), .one (g i 1)] ++ (Frame.sq 1 1).enc := by
   funext i
-  simp only [zcLoopB, Claims.toMsg, framed_enc, zcPre, pF, absorbF_enc, zcLoopT_pending lay mk coin L hz i,
+  simp only [pairLoopB, Claims.toMsg, framed_enc, pairPre, pF, absorbF_enc, pairLoopT_pending g coin L hz i,
     empty_toList, encs, List.flatMap_cons, List.flatMap_nil, List.append_nil, List.nil_append, List.append_assoc]
 
 /-- **The cut's zerocheck, answered by `asksCut` with room for its asks**: from `l`, with `3 + (m − 6)` asks before
@@ -162,7 +162,8 @@ theorem zerocheckCut_bodies (coin : ℕ → ℕ → F128) (n : ℕ) {m : ℕ} (h
   case h3 => simp only [Array.size_push]; omega
   erw [bind_go (forIn_go_from _
       (fun i => (pushes (fun j => (mk (lay.ml j 0), mk (lay.ml j 1))) i, pushes (fun j => coin (l.size + 3 + j) 0) i))
-      (zcLoopT lay mk coin (l.size + 3)) (zcLoopB lay mk coin (l.size + 3)) (l.size + 3) (m - 6)
+      (pairLoopT (fun i t => mk (lay.ml i t)) coin (l.size + 3))
+      (pairLoopB (fun i t => mk (lay.ml i t)) coin (l.size + 3)) (l.size + 3) (m - 6)
       (fun _ => rfl) ?hbody _ _ ?hl0)]
   case hbody =>
     intro t₀ i hi l' hl'
@@ -181,8 +182,8 @@ theorem zerocheckCut_bodies (coin : ℕ → ℕ → F128) (n : ℕ) {m : ℕ} (h
   · simp only [Array.toList_append, Array.toList_push, List.append_assoc, List.cons_append, List.nil_append,
       zcBodies, zcBind, encs, List.flatMap_cons, List.flatMap_nil, List.append_nil, Claims.toMsg, framed_enc,
       label_enc, absorbBytes_enc, absorbSlice_enc, afterSq, Array.toList_map, Array.toList_range, empty_toList,
-      zcLoopB_enc]
-  · simp only [absorbF_enc, zcLoopT_pending lay mk coin (l.size + 3), afterSq, empty_toList, encs, List.flatMap_cons,
+      pairLoopB_enc]
+  · simp only [absorbF_enc, pairLoopT_pending _ coin (l.size + 3), afterSq, empty_toList, encs, List.flatMap_cons,
       List.flatMap_nil, List.append_nil, List.nil_append]
 
 /-! ## The frame's release of the device's zerocheck -/
@@ -325,6 +326,125 @@ theorem zcBodies_frame (m : ℕ) (digest cap : ByteArray) (c : Cfg) (lay : _root
     hmk (lay.ml i 1) (by unfold _root_.Flock.Zk.PadLayout.ml; omega)]
   rfl
 
+/-! ## The cut's lincheck, round by round -/
+
+/-- **The cut's lincheck bodies** after the pending bytes `P` (the zerocheck's finals): the lincheck's label and `α`'s
+squeeze; `β`'s squeeze alone; each round's two masked values and its coin's squeeze; then `zp`'s masked values and
+`r'`'s squeeze. -/
+def lcBodies (kLog : ℕ) (lay : _root_.Flock.Zk.PadLayout) (mk : ℕ → F128) (P : List UInt8) : List Claims.Msg :=
+  (P ++ (Frame.label "flock-lincheck-v0".toUTF8).enc ++ (Frame.sq 1 1).enc) :: (Frame.sq 1 1).enc ::
+    ((List.range (kLog - 6)).map fun j =>
+      encs [.one (mk (lay.lc j 0)), .one (mk (lay.lc j 1))] ++ (Frame.sq 1 1).enc) ++
+    [encs [.vec ((List.range 64).map fun i => mk (lay.zp i))] ++ (Frame.sq 1 1).enc]
+
+/-- **The cut's lincheck, answered by `asksCut` with room for its asks**: from `l`, with `3 + (kLog − 6)` asks before
+round `n` and the circuit's fold defined at `α`, it returns, having sent `lcBodies` after `t`'s pending bytes, with
+nothing pending. -/
+theorem lincheckCut_bodies (coin : ℕ → ℕ → F128) (n : ℕ) (c : _root_.Flock.CircuitFold) (m : ℕ)
+    (lay : _root_.Flock.Zk.PadLayout) (mk : ℕ → F128) (zc : _root_.Flock.ZcOut) (t : Transcript)
+    (l : Array Claims.Msg) (hl : l.size + 3 + (c.kLog - 6) ≤ n)
+    (hf : ∃ v, c.fold (coin l.size 0) (_root_.Flock.skipWeights zc.z) (zc.rho.extract 0 (c.kLog - 6)) = .ok v) :
+    ∃ res t' L', ((lincheckCut (asksCut coin n) c m lay mk zc).run t).go l = (.ok (res, t'), L') ∧
+      L'.toList = l.toList ++ lcBodies c.kLog lay mk t.pending.data.toList ∧ t'.pending = ByteArray.empty := by
+  obtain ⟨v, hv⟩ := hf
+  unfold lincheckCut
+  rw [bind_go (liftTM_ok (_root_.Flock.RecAlgebra.label_eq _ _) _)]
+  rw [bind_go (sampleP_cut_ok coin _ ?h1)]
+  rw [bind_go (sampleP_cut_ok coin _ ?h2)]
+  case h1 => omega
+  case h2 => simp only [Array.size_push]; omega
+  dsimp only
+  rw [hv]
+  dsimp only
+  rw [bind_go (pure_go _ _ _)]
+  erw [bind_go (forIn_go_from _
+      (fun j => (pushes (fun j => (mk (lay.lc j 0), mk (lay.lc j 1))) j, pushes (fun j => coin (l.size + 2 + j) 0) j))
+      (pairLoopT (fun j t => mk (lay.lc j t)) coin (l.size + 2))
+      (pairLoopB (fun j t => mk (lay.lc j t)) coin (l.size + 2)) (l.size + 2) (c.kLog - 6)
+      (fun _ => rfl) ?hbody _ _ ?hl0)]
+  case hbody =>
+    intro t₀ j hj l' hl'
+    dsimp only
+    rw [bind_go (liftTM_ok (_root_.Flock.RecAlgebra.absorbF_eq _ _) _)]
+    rw [bind_go (liftTM_ok (_root_.Flock.RecAlgebra.absorbF_eq _ _) _)]
+    rw [bind_go (sampleP_cut_ok coin _ (by omega))]
+    rw [hl']
+    rfl
+  case hl0 => simp only [Array.size_push]
+  dsimp only
+  rw [bind_go (liftTM_ok (_root_.Flock.RecAlgebra.absorbSlice_eq _ _) _)]
+  rw [bind_go (sampleP_cut_ok coin _ ?h3)]
+  case h3 =>
+    simp only [Array.size_append, Array.size_push, List.size_toArray, List.length_map, List.length_range]
+    omega
+  rw [pure_go]
+  refine ⟨_, _, _, rfl, ?_, rfl⟩
+  simp only [Array.toList_append, Array.toList_push, List.append_assoc, List.cons_append, List.nil_append,
+    lcBodies, encs, List.flatMap_cons, List.flatMap_nil, List.append_nil, Claims.toMsg, framed_enc, label_enc,
+    absorbSlice_enc, afterSq, Array.toList_map, Array.toList_range, empty_toList, pairLoopB_enc,
+    pairLoopT_pending _ coin (l.size + 2)]
+
+/-! ## The frame's release of the device's lincheck -/
+
+/-- The device's first lincheck round from absorbed position `p`: the zerocheck's two finals, then the lincheck's
+label. -/
+def lcFirst (dv : ℕ → F128) (p : ℕ) : List Frame :=
+  [.one (dv p), .one (dv (p + 1)), .label "flock-lincheck-v0".toUTF8]
+
+/-- The device's two values at absorbed positions `p` and `p + 1`. -/
+def twoAt (dv : ℕ → F128) (p : ℕ) : List Frame := [.one (dv p), .one (dv (p + 1))]
+
+theorem absPos_lt (l : _root_.Flock.Zk.PadLayout) {j : ℕ} (h : j < l.fa + 2) : absPos l j = j := by
+  simp [absPos, h]
+
+theorem absPos_ge (l : _root_.Flock.Zk.PadLayout) {j : ℕ} (h : l.fa + 2 ≤ j) : absPos l j = j - 1 := by
+  simp [absPos, show ¬ j < l.fa + 2 by omega]
+
+/-- **The cut's lincheck bodies are the frame's releases of the device's rounds**, where each masked value the cut
+sends but `final_c`'s is the device's value at its absorbed position (`absPos`) plus the frame's pad there: the finals
+and the label from `final_a`'s position, `β`'s squeeze, round `j`'s values from `final_a + 2 + 2j`, and `zp`'s from
+`final_a + 2 + 2 kLog'`, each masked by a rep that has not stopped. -/
+theorem lcBodies_frame (kLog : ℕ) (c : Cfg) (lay : _root_.Flock.Zk.PadLayout) (mk dv : ℕ → F128)
+    (hn : lay.nLc = kLog - 6)
+    (hmk : ∀ j, j ≠ lay.fc → j < lay.zp 64 → mk j = dv (absPos lay j) + padAt c (absPos lay j)) :
+    lcBodies kLog lay mk (encs [.one (mk lay.fa), .one (mk lay.fb)]) =
+      (encs (maskFrames (maskVal c false) lay.fa (lcFirst dv lay.fa)) ++ (Frame.sq 1 1).enc) :: (Frame.sq 1 1).enc ::
+        ((List.range (kLog - 6)).map fun j =>
+          encs (maskFrames (maskVal c false) (lay.fa + 2 + 2 * j) (twoAt dv (lay.fa + 2 + 2 * j))) ++
+            (Frame.sq 1 1).enc) ++
+        [encs (maskFrames (maskVal c false) (lay.fa + 2 + 2 * (kLog - 6))
+          [.vec ((List.range' (lay.fa + 2 + 2 * (kLog - 6)) 64).map dv)]) ++ (Frame.sq 1 1).enc] := by
+  have hfc : lay.fc = lay.fa + 2 := rfl
+  have hfb : lay.fb = lay.fa + 1 := rfl
+  have hlc : ∀ j t, lay.lc j t = lay.fa + 3 + 2 * j + t := fun j t => by
+    show lay.fc + 1 + 2 * j + t = _; omega
+  have hzp : ∀ i, lay.zp i = lay.fa + 3 + 2 * (kLog - 6) + i := fun i => by
+    show lay.lc lay.nLc 0 + i = _; rw [hlc, hn]; omega
+  have hA : mk lay.fa = dv lay.fa + padAt c lay.fa := by
+    rw [hmk _ (by omega) (by rw [hzp]; omega), absPos_lt lay (by omega)]
+  have hB : mk lay.fb = dv (lay.fa + 1) + padAt c (lay.fa + 1) := by
+    rw [hmk _ (by omega) (by rw [hzp]; omega), absPos_lt lay (by omega), hfb]
+  have hL : ∀ j < kLog - 6, ∀ t < 2, mk (lay.lc j t) =
+      dv (lay.fa + 2 + 2 * j + t) + padAt c (lay.fa + 2 + 2 * j + t) := by
+    intro j hj t ht
+    rw [hmk _ (by rw [hlc]; omega) (by rw [hlc, hzp]; omega), absPos_ge lay (by rw [hlc]; omega), hlc]
+    congr 2 <;> omega
+  have hZ : (List.range 64).map (fun i => mk (lay.zp i)) =
+      (List.range' (lay.fa + 2 + 2 * (kLog - 6)) 64).map fun q => dv q + padAt c q := by
+    rw [List.range'_eq_map_range, List.map_map]
+    refine List.map_congr_left fun i hi => ?_
+    rw [List.mem_range] at hi
+    rw [hmk _ (by rw [hzp]; omega) (by rw [hzp, hzp]; omega), absPos_ge lay (by rw [hzp]; omega), hzp,
+      show lay.fa + 3 + 2 * (kLog - 6) + i - 1 = lay.fa + 2 + 2 * (kLog - 6) + i by omega]
+    rfl
+  unfold lcBodies
+  simp only [lcFirst, twoAt, maskFrames, maskVal_false, maskVals_range', hA, hB, hZ, encs, List.flatMap_cons,
+    List.flatMap_nil, List.append_nil, List.append_assoc, List.cons.injEq, true_and, List.cons_append]
+  refine congrArg (· ++ _) (List.map_congr_left fun j hj => ?_)
+  rw [List.mem_range] at hj
+  rw [hL j hj 0 (by omega), hL j hj 1 (by omega)]
+  rfl
+
 /-! ## Between rounds -/
 
 theorem except_bind_ok {ε α β : Type} {x : Except ε α} {f : α → Except ε β} {b : β} (h : (x >>= f) = .ok b) :
@@ -435,6 +555,20 @@ theorem release_zcMl {W R : Type} (L : LeanRelease W R) (x : Msg) (ρ : R) (h : 
       encs (maskFrames (maskVal (L.cfg x ρ h) st) (128 + 2 * i) (zcMl dv i)) ++ (Frame.sq 1 1).enc := by
   obtain ⟨out, fr, hr, ho⟩ := roundFree_zcMl (L.cfg x ρ h) { m with stopped := st } dv i hc hon hi hpos hb
   rw [release_of_roundFree L x ρ h st _ hA hn hr, ho]
+
+/-- **The release of a round inside the algebraic phase**: where the frame takes the coins before it at a state inside
+the masked phase, the release of the device's frames `fs` and squeeze is `fs` with each absorbed value through
+`maskVal` from the state's position on, then the squeeze. -/
+theorem release_on {W R : Type} (L : LeanRelease W R) (x : Msg) (ρ : R) (h : List (Msg × Msg)) (st : Bool)
+    (fs : List Frame) (k : UInt8) {m : Masker} (hA : L.answered x ρ h = .ok m)
+    (hc : ∀ p, p < (L.cfg x ρ h).order.size → (L.cfg x ρ h).order[p]! < (L.cfg x ρ h).h.size)
+    (hon : m.on = true) (hi : m.inner = none) (hm : ∀ f ∈ fs, midFrame f) (hp : ∀ f ∈ fs, plainFrame f)
+    (hk : k = 2 ∨ (k = 1 ∧ L.coins x h.length = 1)) (h0 : ¬ (L.coins x h.length = 0 ∧ k = 2))
+    (hn : L.coins x h.length < 2 ^ 64) (hb : m.pos + nAbs fs ≤ (L.cfg x ρ h).order.size) :
+    L.release x ρ h st (encs fs ++ (Frame.sq k (L.coins x h.length)).enc) =
+      encs (maskFrames (maskVal (L.cfg x ρ h) st) m.pos fs) ++ (Frame.sq k (L.coins x h.length)).enc := by
+  obtain ⟨out, fr, hr, ho⟩ := roundFree_on (L.cfg x ρ h) { m with stopped := st } fs k _ hc hon hi hm hp hk h0 hn hb
+  rw [release_of_roundFree L x ρ h st _ hA rfl hr, ho]
 
 end LeanRelease
 
