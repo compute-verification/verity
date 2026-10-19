@@ -124,7 +124,9 @@ format is here.
 - `vclib.py`: the binding, the spec builders and `parse_openings`; `Cuda`, a minimal libcudart wrapper for the tests.
 - `conformance.py`: every entry point against the references on fixed vectors and random cases, one JSON line a case and a
   summary line; ragged leaf counts, every salt source, every form (wide trees too), chunked launches, graph capture and
-  replay, and openings checked with `verify_opening` and `verify_multiproof`. Every output and scratch buffer is 0xA5 before
+  replay, openings checked with `verify_opening` and `verify_multiproof`, the empty tree through the one-call commit and
+  `vc_open_launch` (the empty root; every position refused, as `MerkleTree.open` refuses it), and row-seg digests at served
+  row counts (4,096, 128 and 32 rows; odd and even segment counts; k = 14,336 at 4,096 rows). Every output and scratch buffer is 0xA5 before
   each checked call (a repeated call or a graph replay included) and compared byte for byte, 64 guard bytes past each buffer
   must stay 0xA5, given salts come from the reference's salt source, and controls the same checks must reject run beside
   the cases: no call, the leaves of half the rows, leaves over salt records nobody wrote, opening records nobody wrote.

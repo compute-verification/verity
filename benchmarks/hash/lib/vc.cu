@@ -1762,8 +1762,9 @@ int vc_open_launch(const void* plan, const void* tables, const uint8_t* x, const
                    const uint8_t* levels, uint64_t n_leaves, const uint32_t* positions, uint64_t m, uint8_t* out, cudaStream_t st) {
   const Plan* p = plan_of(plan);
   if (!p || !levels || !positions || !out || n_leaves > (1ull << 32)) return -1;
-  if (p->has_hm96 && p->leaf.salt_src == VC_SALT_GIVEN && !salts) return -1;
-  if (p->has_hm96 && !bc && x && !tables) return -1;
+  // an empty tree has no position to open: every record comes back outside, and nothing but the positions is read
+  if (n_leaves && p->has_hm96 && p->leaf.salt_src == VC_SALT_GIVEN && !salts) return -1;
+  if (n_leaves && p->has_hm96 && !bc && x && !tables) return -1;
   if (!m) return 0;
   const int depth = n_leaves ? depth_of(n_leaves) : 0;
   k_open<<<blocks(m, 64), 64, 0, st>>>(p->leaf, p->has_hm96, static_cast<const uint8_t*>(tables), x, bc, salts, levels, n_leaves,

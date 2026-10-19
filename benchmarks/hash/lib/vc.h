@@ -117,7 +117,8 @@ int vc_tree_arity_launch(const void* plan, uint8_t* levels, uint64_t n_leaves, i
 
 // One call: n rows' hm96 leaves (x = SHA-512(the plan's prefix block || row): sha512/row/v2, or row/v1's block; salts from the
 // plan's source, or `salts`), pads, and the tree into levels; every leaf's b || c to bc + 128 i when bc is not NULL.
-// scratch: vc_commit_scratch_bytes(n).
+// scratch: vc_commit_scratch_bytes(n). n = 0 writes only the empty root to levels (merkle's empty commitment, whose tree has no
+// levels and whose root is the domain's empty root), in every form.
 uint64_t vc_commit_scratch_bytes(uint64_t n);
 int vc_commit_rows_launch(const void* plan, const void* tables, const uint8_t* rows, uint64_t stride, const uint8_t* salts,
                           uint64_t n, uint8_t* levels, uint8_t* bc, void* scratch, int form, cudaStream_t st);
@@ -131,7 +132,9 @@ int vc_commit_rows_launch(const void* plan, const void* tables, const uint8_t* r
 // y is read from the commit's salt source: salts + 192 position (GIVEN; the whole tree's salts), else the plan's keyed source,
 // the device code the commit ran. b || c is bc + 128 position when bc (the commit's retained b || c) is given, else from x + 64
 // position (the inner digests) and y, else zero. A plan without hm96 leaves (frame_spec) zeroes y and b || c. A record verifies
-// with merkle.verify_opening (the value hm96.SHA512.tree_leaf(b || c)), and the paths gathered with verify_multiproof.
+// with merkle.verify_opening (the value hm96.SHA512.tree_leaf(b || c)), and the paths gathered with verify_multiproof. An empty
+// tree (n_leaves = 0) has no position to open, as MerkleTree.open refuses them all: every record is outside, and salts, x and
+// bc may be NULL.
 uint64_t vc_open_bytes(uint64_t n_leaves);
 int vc_open_launch(const void* plan, const void* tables, const uint8_t* x, const uint8_t* bc, const uint8_t* salts,
                    const uint8_t* levels, uint64_t n_leaves, const uint32_t* positions, uint64_t m, uint8_t* out, cudaStream_t st);

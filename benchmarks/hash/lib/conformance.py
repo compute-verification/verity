@@ -222,6 +222,11 @@ def case_rows(d: Dev, rng: random.Random, quick: bool) -> None:
     shapes = [(b, 5) for b in (8, 5, 8 * 1024, 8 * 1025, 8 * 1024 * 3 + 5, 32768, 8 * 4 * 256, 8 * 4 * 4096, 8 * 1024 * 7 + 8 * 513)]
     shapes += [(8 * 1024 * 3 + 5, 70), (8 * 1024 * 56, 9), (8 * 1024 * 200 + 56, 3), (8 * 1024 * 769 + 8, 2)]
     shapes += [] if quick else [(8 * 4 * 32768, 5)]
+    # served row counts (a prefill step's 4,096 rows, decode's 128 and 32), odd and even segment counts: 57 with a short last
+    # segment, 6 and 7 packed 5 and 4 rows a block (4,101 leaves a ragged last block), 112 and 129 either side of the loop,
+    # 767 and 768 the one launch's last, 770 the two launches'
+    shapes += [(8 * (1024 * 56 + 40), 4096), (8 * 1024 * 6, 4096), (8 * 1024 * 7, 4101), (8 * 1024 * 112, 128),
+               (8 * 1024 * 129, 128), (8 * 1024 * 767, 32), (8 * 1024 * 768, 32), (8 * 1024 * 770, 32)]
     for n_bits, n in shapes:
         rows = rows_of(rng, n, n_bits)
         plan = d.lib.plan(vclib.Spec(**vclib.row_seg_spec(did, n_bits)))
@@ -471,11 +476,13 @@ def case_arity(d: Dev, rng: random.Random, quick: bool) -> None:
 
 
 def f32_rows(rng: random.Random, n: int, k: int) -> list[bytes]:
-    return [struct.pack(f"<{k}I", *(rng.getrandbits(32) for _ in range(k))) for _ in range(n)]
+    return [rng.randbytes(4 * k) for _ in range(n)]
 
 
 def case_pearl(d: Dev, rng: random.Random, quick: bool) -> None:
-    for k, n in ((256, 1), (256, 7), (1024, 64), (4096, 9)):
+    # Llama-3.1-8B's k (4,096 and 14,336: 16 and 56 segments) at decode's m (32, 128) and a prefill step's 4,096 rows
+    served = [(k, m) for k in (4096, 14336) for m in (32, 128, 4096)]
+    for k, n in [(256, 1), (256, 7), (1024, 64), (4096, 9), *served]:
         did = rng.randbytes(64)
         rows = f32_rows(rng, n, k)
         plan = d.lib.plan(vclib.seeds_spec(did, 32 * k))
@@ -717,8 +724,70 @@ def case_open(d: Dev, rng: random.Random, quick: bool) -> None:
         report("open/frame", not bad and bool(control), n=n, bad=bad or None, control_rejected=bool(control))
 
 
+def case_empty(d: Dev, rng: random.Random, quick: bool) -> None:
+    """n = 0 through the one-call commit and open, as merkle defines the empty tree: ``tree_levels`` has no levels and the
+    commitment's root is the domain's empty root, which the commit writes into the levels' 64 bytes (every form and salt
+    source, twice from poison, and captured into a graph), touching neither b || c nor scratch (their guards); and
+    ``MerkleTree.open`` refuses every position, as verify_opening rejects it, so every record comes back outside, with or
+    without salts, x and b || c."""
+    n_bits, schema, n_words = 32768, "hm96-sha512/row/v2", 2048
+    positions = [0, 1, 7, (1 << 32) - 1]
+    sources = [("prf", rng.randbytes(64)), ("given",), ("chacha64", rng.randbytes(32), rng.randrange(1 << 64)),
+               ("chacha-rfc", rng.randbytes(32), rng.randrange(1 << 40))]
+    plans = [(f"hm96_rows/{s[0]}", schema, lambda did, s=s: vclib.hm96_rows(did, n_bits, salt=s, schema=schema), n_bits // 8, s)
+             for s in sources]
+    plans += [(f"served_rows/{s[0]}", SCHEMA_HM96_SHA512_ROW, lambda did, s=s: vclib.served_rows(did, n_words, salt=s), 2 * n_words, s)
+              for s in sources if s[0] in ("given", "chacha-rfc")]
+    plans += [("A-tree", audit.ROW_SCHEMA, lambda did: vclib.hm96_digests(did, salt=sources[2], row_bits=32 * 256), None, sources[2]),
+              ("frame", schema, lambda did: vclib.frame_spec(did, schema), None, None)]
+    for name, sch, spec_of, stride, src in plans:
+        dom = domain(rng, 0)
+        tree = MerkleTree(dom, {}, lambda _, sch=sch: sch)
+        refused = []
+        for p in positions:
+            try:
+                tree.open(p)
+                refused.append(False)
+            except KeyError:
+                refused.append(True)
+        rejected = not any(verify_opening(dom, tree.commitment, MerkleOpening(p, bytes(64), ()), sch, LIMITS) for p in positions)
+        root = tree.commitment.root
+        reference = tree_levels(dom, []) == () and root == dom.empty_root() and all(refused) and rejected
+        plan = d.lib.plan(spec_of(dom.domain_id))
+        tab = d.tables(plan) if plan.tables_bytes else None
+        size = d.lib.tree_bytes(0)
+        lv = d.buf(size)
+        if stride is not None:
+            rp, sc_bytes = d.buf(0), d.lib.commit_scratch_bytes(0)
+            for form, fname in FORMS:
+                lv, bc, sc = d.buf(size), d.buf(0), d.buf(sc_bytes)
+                for call in range(2):
+                    d.poison(lv, bc, sc)
+                    d.lib.commit_rows_launch(plan.ptr, tab, rp, stride, None, 0, lv, bc, sc, form, d.s)
+                    report("empty/commit", reference and size == 64 and d.down(lv, size) == root, plan=name, form=fname, call=call)
+            sc = d.buf(sc_bytes)
+            graph = d.cuda.capture(d.s, lambda s: d.lib.commit_rows_launch(plan.ptr, tab, rp, stride, None, 0, lv, None, sc,
+                                                                            vclib.FORM_AUTO, s))
+            d.poison(lv)
+            no_call = d.down(lv, size) == root
+            d.cuda.replay(graph, d.s)
+            report("empty/commit-graph", reference and d.down(lv, size) == root and not no_call, plan=name,
+                   control_rejected=not no_call)
+        else:
+            d.lib.tree_launch(plan.ptr, lv, 0, d.s)
+
+        def judge(recs):
+            return check_openings(dom, tree.commitment, sch, recs, 0, (), None, None, lambda r: r.bc, asked=positions)
+        given = src is not None and src[0] == "given"
+        absent = judge(open_records(d, plan, tab, None, None, None, lv, 0, positions, graph=not given))
+        present = judge(open_records(d, plan, tab, d.buf(0), d.buf(0), d.buf(0) if given else None, lv, 0, positions))
+        control = judge(open_records(d, plan, tab, None, None, None, lv, 0, positions, call=False))
+        report("empty/open", reference and not absent and not present and bool(control), plan=name, opened=len(positions),
+               record_bytes=d.lib.open_bytes(0), bad=absent or present or None, control_rejected=bool(control))
+
+
 CASES = [case_sha512, case_compress, case_rows, case_frame, case_arity, case_hm96_x, case_hm96_rows, case_fold_wide, case_pearl, case_graph,
-         case_open]
+         case_open, case_empty]
 
 
 def main() -> int:

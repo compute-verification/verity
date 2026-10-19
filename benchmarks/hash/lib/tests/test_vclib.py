@@ -158,6 +158,21 @@ def test_unwritten_or_reordered_records_fail_them():
     assert judge(_records(tree, ys, bcs, positions[1:2] + positions[:1] + positions[2:], n))["positions"] is True
 
 
+def test_an_empty_trees_records_are_all_outside_and_unwritten_ones_fail():
+    dom, tree, ys, bcs = _served(0)
+    positions = [0, 1, 7, (1 << 32) - 1]
+
+    def judge(raw):
+        return cf.check_openings(dom, tree.commitment, SCHEMA_HM96_SHA512_ROW, vclib.parse_openings(raw, 0, len(positions)), 0, (),
+                                 None, None, lambda r: r.bc, asked=positions)
+    raw = _records(tree, ys, bcs, positions, 0)
+    assert len(raw) == vclib.OPEN_HEAD * len(positions) and judge(raw) == {}
+    assert judge(bytes([cf.POISON]) * len(raw))
+    inside = bytearray(raw)
+    inside[8:16] = bytes(8)                                   # position 0 claimed at offset 0 of a tree with no leaves
+    assert judge(bytes(inside))["outside"] == 0
+
+
 def test_parse_openings_refuses_a_buffer_of_another_size():
     with pytest.raises(ValueError):
         vclib.parse_openings(bytes(vclib.OPEN_HEAD), 2, 1)
