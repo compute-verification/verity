@@ -292,13 +292,15 @@ def main() -> int:
                 toks = res.pop("tokens", None)
                 if toks is not None:
                     ref_tokens.setdefault((r, arm), toks)
-                    ref = REF_OF.get(arm, arms[0])
-                    gate.setdefault(arm, []).append(None if ref == arm else (r, ref) in ref_tokens and toks == ref_tokens[(r, ref)])
                 row = {"rep": r, "op": op, "arm": arm, **res, "stats": stats}
                 reps.append(row)
                 print(json.dumps(row), flush=True)
                 with open(out / "reps.jsonl", "a") as f:
                     f.write(json.dumps(row) + "\n")
+        for arm in arms:
+            if (r, arm) in ref_tokens:
+                ref = REF_OF.get(arm, arms[0])
+                gate.setdefault(arm, []).append(None if ref == arm else ref_tokens[(r, arm)] == ref_tokens.get((r, ref)))
     for arm in arms:
         conns[arm].send({"op": "stop"})
     summary = {"arms": arms, "info": info, "gate_tokens_equal_ref_arm": gate, "ref_of": REF_OF, "n1": N1, "n2": N2, "b": B,
