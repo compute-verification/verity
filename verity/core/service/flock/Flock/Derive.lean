@@ -168,15 +168,138 @@ def derive (t : CircuitType) (inSplit outSplit : List Nat) : Except String Deriv
     if !geoOk t G then .error "derive: the port groups do not lay out"
     else .ok ⟨G, t.inBits, t.outBits, (List.range (G.const + 1)).map (G.rowAt t)⟩
 
+/-! ## In linear time
+
+`colOf` and `bitAt` sum a group's port bits at every call, and `t.inBits` sums the input ports, so `derive` as stated
+takes time proportional to the type's rows times its ports: 300k ANDs over 32,900 input ports took five minutes. The same
+functions over each group's sum taken once (`sums`) are equal to them, and `deriveFast` is `derive` over those, with
+`t.inBits` read once. `@[csimp]` compiles it in `derive`'s place, so the verifier runs it while every theorem reads
+`derive`. -/
+
+/-- Each group's first word and its bits' sum: all that `colOf` and `bitAt` read of it. -/
+def sums (gs : List Group) : List (Nat × Nat) := gs.map fun g => (g.word, g.bits.sum)
+
+def colOfS : List (Nat × Nat) → Nat → Option Nat
+  | [], _ => none
+  | (w, n) :: gs, i => if i < n then some (w * WORD + i) else colOfS gs (i - n)
+
+def bitAtS : List (Nat × Nat) → Nat → Option Nat
+  | [], _ => none
+  | (w, n) :: gs, r => if w * WORD ≤ r ∧ r < w * WORD + n then some (r - w * WORD) else (bitAtS gs r).map (· + n)
+
+theorem colOfS_sums (gs : List Group) (i : Nat) : colOfS (sums gs) i = colOf gs i := by
+  induction gs generalizing i with
+  | nil => rfl
+  | cons g gs ih => simp only [sums, List.map_cons, colOfS, colOf] at ih ⊢; rw [ih]
+
+theorem bitAtS_sums (gs : List Group) (r : Nat) : bitAtS (sums gs) r = bitAt gs r := by
+  induction gs with
+  | nil => rfl
+  | cons g gs ih => simp only [sums, List.map_cons, bitAtS, bitAt] at ih ⊢; rw [ih]
+
+/-- `flatOk`, reading `t.inBits` once. -/
+def flatOkS (t : CircuitType) : Bool :=
+  let n := t.inBits
+  (List.range t.items.size).all (fun i => match t.items[i]? with
+    | some (.and a b) => formOk (n + i) a && formOk (n + i) b
+    | _ => false) &&
+  t.outputs.size == t.outBits && t.outputs.all (formOk (n + t.items.size))
+
+theorem flatOkS_eq (t : CircuitType) : flatOkS t = flatOk t := rfl
+
+/-- `geoOk` over the groups' sums `ins` and `outs`. -/
+def geoOkS (t : CircuitType) (G : Geo) (ins outs : List (Nat × Nat)) : Bool :=
+  let nIn := t.inBits
+  let nOut := t.outBits
+  decide (G.andBase + G.nAnd ≤ G.const) &&
+  (List.range nIn).all (fun i => match colOfS ins i with
+    | some c => decide (c < G.andBase) && bitAtS ins c == some i
+    | none => false) &&
+  (List.range G.andBase).all (fun r => match bitAtS ins r with
+    | some i => decide (i < nIn) && colOfS ins i == some r
+    | none => true) &&
+  (List.range nOut).all (fun o => match colOfS outs o with
+    | some c => decide (G.andBase + G.nAnd ≤ c ∧ c < G.const) && bitAtS outs c == some o
+    | none => false) &&
+  (List.range (G.const - (G.andBase + G.nAnd))).all (fun j => match bitAtS outs (G.andBase + G.nAnd + j) with
+    | some o => decide (o < nOut) && colOfS outs o == some (G.andBase + G.nAnd + j)
+    | none => true)
+
+theorem geoOkS_sums (t : CircuitType) (G : Geo) : geoOkS t G (sums G.ins) (sums G.outs) = geoOk t G := by
+  simp only [geoOkS, geoOk, colOfS_sums, bitAtS_sums]
+
+namespace Geo
+
+variable (G : Geo)
+
+/-- `col` over the input groups' sums `ins`. -/
+def colS (ins : List (Nat × Nat)) (nIn w : Nat) : Nat := if w < nIn then (colOfS ins w).getD 0 else G.andBase + (w - nIn)
+
+def formColsS (ins : List (Nat × Nat)) (nIn : Nat) (f : Form) : List Nat :=
+  f.ws.toList.map (G.colS ins nIn) ++ if f.c = 1 then [G.const] else []
+
+/-- `rowAt` over the groups' sums `ins` and `outs`, with the type's input bits `nIn`. -/
+def rowAtS (ins outs : List (Nat × Nat)) (nIn : Nat) (t : CircuitType) (r : Nat) : List Nat × List Nat :=
+  if r = G.const then ([G.const], [G.const])
+  else if r < G.andBase then
+    match bitAtS ins r with
+    | some _ => ([r], [r])
+    | none => ([], [])
+  else if r < G.andBase + G.nAnd then
+    match t.items[r - G.andBase]? with
+    | some (.and a b) => (G.formColsS ins nIn a, G.formColsS ins nIn b)
+    | _ => ([], [])
+  else
+    match bitAtS outs r with
+    | some o => (G.formColsS ins nIn (t.outputs[o]?.getD default), [G.const])
+    | none => ([], [])
+
+theorem colS_sums (nIn : Nat) : G.colS (sums G.ins) nIn = G.col nIn := by
+  funext w; simp only [colS, col, colOfS_sums]
+
+theorem formColsS_sums (nIn : Nat) (f : Form) : G.formColsS (sums G.ins) nIn f = G.formCols nIn f := by
+  simp only [formColsS, formCols, colS_sums]
+
+theorem rowAtS_sums (t : CircuitType) : G.rowAtS (sums G.ins) (sums G.outs) t.inBits t = G.rowAt t := by
+  funext r; simp only [rowAtS, rowAt, formColsS_sums, bitAtS_sums]
+
+end Geo
+
+/-- `derive` in time linear in the type and its port groups. -/
+def deriveFast (t : CircuitType) (inSplit outSplit : List Nat) : Except String Derived :=
+  if !flatOkS t then .error "derive: not a flat type of AND items over earlier wires"
+  else if !(splitOk t.ins.size inSplit && splitOk t.outs.size outSplit) then .error "derive: a split out of order"
+  else
+    let G := geo t inSplit outSplit
+    let ins := sums G.ins
+    let outs := sums G.outs
+    if !geoOkS t G ins outs then .error "derive: the port groups do not lay out"
+    else .ok ⟨G, t.inBits, t.outBits, (List.range (G.const + 1)).map (G.rowAtS ins outs t.inBits t)⟩
+
+@[csimp] theorem derive_eq_deriveFast : @derive = @deriveFast := by
+  funext t inSplit outSplit
+  simp only [derive, deriveFast, flatOkS_eq, geoOkS_sums, Geo.rowAtS_sums]
+
+/-- `order` over the groups' sums: the same list (`orderS_eq`). -/
+def Derived.orderS (d : Derived) : List Nat :=
+  let ins := sums d.geo.ins
+  let outs := sums d.geo.outs
+  (List.range d.nIn).map (fun i => (colOfS ins i).getD 0) ++ [d.geo.const] ++
+    (List.range d.geo.nAnd).map (d.geo.andBase + ·) ++ (List.range d.nOut).map (fun o => (colOfS outs o).getD 0)
+
+theorem Derived.orderS_eq (d : Derived) : d.orderS = d.order := by
+  simp only [orderS, order, colOfS_sums]; rfl
+
 /-- The logical list as the prover's mirror writes it (`verity_flock.derive.logical_text`): per column in `order`,
 `column |A| A.. |B| B..`, the constant's row as the block holds it (a copy of `one`, through Δ), then `one` itself. -/
 def logicalText (d : Derived) : String :=
   let line := fun (c : String) (a b : List String) =>
     " ".intercalate ([c, toString a.length] ++ a ++ [toString b.length] ++ b)
-  let rows := d.order.map fun c =>
+  let rs := d.rows.toArray
+  let rows := d.orderS.map fun c =>
     if c = d.geo.const then line (toString c) ["one"] ["one"]
     else
-      let p := d.rows.getD c ([], [])
+      let p := rs.getD c ([], [])
       line (toString c) (p.1.map toString) (p.2.map toString)
   "\n".intercalate (rows ++ [line "one" ["one"] ["one"]]) ++ "\n"
 

@@ -24,12 +24,17 @@ rule: it is the service's own, a salted root of a declared Value, or an item the
 
 One-stage's record always shows N, each root's leaf count and domain, and the window's provenance, so a Spec over it
 declares them; the joint note's §6 step 0 allows that on test prompts, and hiding them is the hidden layout (step 8).
+The `Stream` runs `check_public` by the verifier of record before one-stage's R1 to R7, reading an entry's fields in key
+order; its codes are `keys`, `roots`, `unsalted`, `query` and `undeclared`.
 
-**The draw.** The challenger draws from its coins as the Lean verifier's `Flock.Draw.drawWith` does
-(`two_stage.draw_first` over `two_stage.OwnRandomness`), with no hash and no derivation, after the receipt. The coins
-are the operating system's bytes as the Lean verifier of record reads them (`verifier.coins`: `IO.getRandomBytes`,
-assumption A3, `uniform/io-getrandombytes`); the Python never reads them from the OS itself. A work draw
-carries the challenger's closure map's closure (`two_stage.closure_of`), which the proof proves with the drawn units.
+**The draw.** `register` logs the record and its receipt, whose `received` is the record's position in the stream's log.
+The challenger then draws once (`select`) from its coins as the Lean verifier's `Flock.Draw.drawWith` does
+(`two_stage.draw_first` over `two_stage.OwnRandomness`), with no hash and no derivation, or by the stream's `sampler`;
+either draw is held to `draw.check_draw`. The coins are the operating system's bytes as the Lean verifier of record
+reads them (`verifier.coins`: `IO.getRandomBytes`, assumption A3, `uniform/io-getrandombytes`); the Python never reads
+them from the OS itself. A work draw carries the challenger's closure map's closure (`select(closure=)`, a map over
+`[0, N)`, refused under another law or out of range before any coin is read; `two_stage.closure_of`), which the proof
+proves with the drawn units.
 From the selection rule to the draw object it is `selection_law`, `draw.derive` and `select_draw`, which the Lean
 verifier's `SampledProofs.Select` ports, held to them by its difftest on fixed coins.
 
@@ -38,8 +43,15 @@ registered first, and the stream draws replay units (RUs) by `replay`; the drawn
 committed after the draw) are then registered once (`register_interiors`), as one-stage's record over the proved RUs in
 ascending order, all of them drawn (`subset:K` at K = their count), logged after the boundary registration, before any
 proof. Every proof unit of a drawn RU is
-checked, so there is no second draw. The outcome accepts only when both registrations' audit records do, and its profile
-is the first stage's law over the RUs (one-stage's profile of the boundary registration).
+checked, so there is no second draw, and a count `k` is refused. The outcome accepts only when both registrations'
+audit records do, `session_roots` split between them by value, and its profile is the first stage's law over the RUs
+(one-stage's profile of the boundary registration). `register_interiors(draw, record, ports)` comes after `select` and
+before `deliver`: unit `i` is RU `draw.proved[i]`, the record's `previous` is the boundary's digest and its `window`
+differs from the boundary's (R6), and the next boundary's `previous` is the interiors' digest. Interiors are never
+registered values. A proof delivered before the interiors is refused (`interior`), unless no RU was drawn or the proof
+is late. The refusals are `rule`, `not-drawn`, `final`, `delivered`, `interior-registered`, `interior-empty` and
+`interior-population` (a population other than the integer `len(draw.proved)`), then the public-items rule's and R1 to
+R7's.
 
 **The salt and the registration deadline.** `Stream.salt` issues the epoch's salt coin once, from the challenger's own
 coins, and reads its release on the challenger's clock (`salted_at`). `Stream.salt_released` instead records a salt
@@ -51,25 +63,53 @@ never retried, and it ends the epoch: the stream receives no registration after 
 the salt (`salted`). It is the rule of `Pouw.AcceptsBy` (`Security/Definitions/Pouw/Game/Deadline.lean`), with `ts` =
 `salted_at`, `tr` = `received_at` and `td` = `ts` + the deadline. The readings are the challenger's own: the stream's
 epoch log (`Stream.epoch_log`) and each `Registration` carry them, and neither the receipt nor an outcome's record does.
+`salt(n=64)` is `n` bytes of the challenger's coins, read in order with the draws'. A level's stream created at its
+first registration still measures from the epoch's release. A salt that isn't non-empty bytes, or a release that isn't a
+finite number, raises `ValueError`, and after the epoch ends a salt of either kind is refused (`epoch-ended`). The epoch
+log holds `{"event": "salt", "salt", "salted_at"}` (with `"external": true` from `salt_released`), then each
+`{"event": "registration", "order", "registration", "salted_at", "received_at"}` or `{"event": "late-registration",
+"salted_at", "received_at"}`. The interiors' registration is not held to the deadline, and with no registration
+deadline `register` reads no clock and logs nothing to the epoch log.
 
 **No retries.** The salt is issued or recorded once (`salt`, `salt_released`). A registration is drawn once, after its receipt (`select`); its
 interiors are registered once; its proof is delivered once (`deliver`); its outcome is final (`outcome`), and nothing
 redraws. A proof delivered after `Check.proof_deadline` (seconds on the challenger's clock, from the draw) is a reject,
 and so is a draw whose proof is not delivered by then: a `Stream` refuses a check without a proof deadline, so every draw
 ends. Each failure is one visible symbol, `reject` or `late`, or a late registration's refusal, `late-registration`.
+A second call of any of these is refused. An outcome is pending until every verifier of record has run, and each verdict
+of record names the delivered sessions and reports the public outputs alike (`check_verdicts`: `pending`, `sessions`,
+`public`, by the verifier of record).
 
-**Sessions over several rounds.** A stream of `rounds` R (1 to `ROUNDS`) holds up to R registrations open at once, so
-one proof session can cover the draws of up to R consecutive registrations (rounds), each round's registration its own
-tables of the session's statement. `Stream.session` opens it once, after the last covered draw (no covered round is
-undrawn), over draws no other session covers and none delivered or final. Each round is committed before its own draw,
-and so before every later round's. The first covered round's `Check.proof_deadline` spans the session. `deliver`
-delivers the session once, and every covered draw's outcome binds the same session records. Each draw's `outcome`
-runs its own audit record, on its own units and its own table's roots, and its record names the session's rounds
-(`session`). A late session is `late` for every round it covers.
+**Sessions over several rounds.** A stream of `rounds` R (1 to `ROUNDS`, 1 under `TwoStage`) holds up to R registrations
+open at once, so one proof session can cover the draws of up to R consecutive registrations (rounds), each round's
+registration its own tables of the session's statement. `Stream.session` opens it once, after the last covered draw
+(no covered round is undrawn), over draws no other session covers and none delivered or final. Each round is committed
+before its own draw, and so before every later round's. The first covered round's `Check.proof_deadline` spans the
+session. `deliver` delivers the session once, and every covered draw's outcome binds the same session records. Each
+draw's `outcome` runs its own audit record, on its own units and its own table's roots, and its record names the
+session's rounds (`session`). A late session is `late` for every round it covers. C-Flock's verifier of record refuses
+such a session (`verity/ml/flock/verifier/PROTOCOL.md` §16.12); `Stream.session` has its refusals.
 
 **The failure budget.** A stream counts its failures, and at the `budget`-th it stops and refuses further registrations.
 It holds at most `budget` minus its failures open registrations (and at most `rounds`), so it never ends with more than
 `budget` failures, though one session that fails is a failure for each round it covers.
+
+**The log's history.** A registration's checks get the log's last record (R6's `previous`), the records whose window may
+equal the registration's (R6's window) and each registered value's first registration (R7's held roots)
+(`Stream._earlier`), so both verifiers of record give the whole log's verdict and the work doesn't grow with the stream.
+The exceptions are windows that aren't plain JSON: a record whose window holds a float or a tuple is read by every check,
+and one whose own window does gets the whole log.
+
+**The records.** The stream's digest is the SHA-512 of `{"format": "verity/proof-service/stream/v0", "spec": <the Spec's
+digest>, "budget", "delta", "challenger"}`, plus `"rounds"` when it is more than 1. An outcome's record is
+`{"format": "verity/proof-service/outcome/v0", "stream", "order", "registration", "receipt", "draw", "sessions",
+"symbol", "public", "audit", "interior"}`: the receipt and the draw as the SHA-512 of their canonical JSON, `audit`
+one-stage's audit record (null for `late`), and `interior` null, or under `TwoStage` `{"registration", "receipt",
+"audit"}` for the interiors in the same forms. `Outcome.record` is its SHA-512.
+
+**Not built yet.** A stream refuses a two-stage count, the `Sequential` rule, a window statement, a timed session and a
+check with no proof deadline. After R1 to R7, `register` refuses a law whose drawn count varies (`shapes`: `bernoulli`
+at `0 < p < 1`); a work draw's closure varies too and is not refused (a planned design).
 """
 from __future__ import annotations
 

@@ -38,6 +38,14 @@ _spec = importlib.util.spec_from_file_location("mc_cases", ROOT / "verity/core/d
 M = sys.modules[_spec.name] = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(M)
 
+
+@pytest.fixture(autouse=True, scope="module")
+def _test_signer_dir(tmp_path_factory):
+    """The test signer's session logs under the suite's basetemp (`pous_test_signer.DIR`)."""
+    M.ts.DIR = tmp_path_factory.mktemp("test-signer")
+    yield
+    M.ts.DIR = None
+
 #: Every scheme `pous-run serve` verifies, by id (`MemoryChallenger.KNOWN_SCHEMES`).
 KNOWN = {**mc.SCHEMES, **M.ts.SCHEMES}
 #: Reduced widths (`2^w − c0` prime, as the spec's ladder) and parameters `P2Params` refuses.

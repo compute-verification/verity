@@ -69,8 +69,9 @@ at most `F`:
 `F = s·t_pass` is the measured capacity: the squarings a second the node can do at the codec's width (all its GPUs and
 host CPUs, the chip being everything on the node that computes), times the pass's duration `t_pass`, in the unit
 `cost` and `WorkHardness`'s `c_root` are priced in. The ceiling is the adversary's best measured rate, not the honest
-one: at the stated codec's 1,024-bit words (masked `p = 2^1024 − 105`, `k = 3`) the stated ceiling is 1.42× the
-reference kernel's rate, 1.68× on the conservative reading (lane ra-squaring-ceiling, verity#1887). With
+one: at the stated codec's 1,024-bit words (masked `p = 2^1024 − 105`, `k = 3`) the stated ceiling is about 1.485×
+the reference kernel's rate on the GPU, 1.67× with the host's share, against 1.68× on the GPU on the conservative
+reading (lane ra-squaring-ceiling, verity#1887; Daniel's card e2a13d4a, 18 Oct). With
 `WorkHardness b rounds c_root cost` it bounds the bits a pass completes by `b·F/(rounds·c_root)`
 (`Accounting.Rate.Deployed.rebuildBits`), the term `μ_rebuild`.
 

@@ -95,8 +95,7 @@ class _Installed:
 
         if self.install.stack is None:
             raise RuntimeError("bandwidth benchmark arm did not install during model loading")
-        raw = target.engine._engine.llm
-        runner = get_model_runner(raw)
+        runner = get_model_runner(target.engine.vllm)
         tensors = []
         for cache in runner.kv_caches:
             tensors.extend(cache if isinstance(cache, (list, tuple)) else (cache,))
