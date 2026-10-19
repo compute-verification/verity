@@ -29,6 +29,7 @@ read back from its graph's outputs) are ``row_tables.step_roots``' on the CPU, a
 from __future__ import annotations
 
 import argparse
+import gc
 import hashlib
 import json
 import os
@@ -192,6 +193,10 @@ def alone(model: Model, ctx: bytes, key: bytes, reps: int) -> dict[str, float]:
             "kernel_ms_all": kernel}
 
 
+def _quantile(v: list[float], q: float) -> float:
+    return sorted(v)[min(len(v) - 1, int(q * len(v)))]
+
+
 def main(argv: list[str] | None = None) -> int:
     ns = parse(sys.argv[1:] if argv is None else argv)
     started = time.perf_counter()
@@ -202,6 +207,10 @@ def main(argv: list[str] | None = None) -> int:
     if any(len(k) != len(model.ops) for k in model.kept) or {id(c) for c, _s in model.kept[0].values()} & \
             {id(c) for c, _s in model.kept[1].values()}:
         raise SystemExit("each kept graph holds its own quantize output per op")
+    # The startup heap leaves the collector's view, as a serving engine's does; otherwise a full collection over it lands in
+    # some step of whichever arm allocates per step.
+    gc.collect()
+    gc.freeze()
 
     # Gate: a step of random rows, on the device, on the CPU twin and on the CPU reference.
     g = torch.Generator(device="cuda").manual_seed(2)
@@ -251,7 +260,8 @@ def main(argv: list[str] | None = None) -> int:
         "kept_pct": 100 * (step_ms["kept"] / step_ms["plain"] - 1),
         "overlapped_pct": 100 * (step_ms["overlapped"] / step_ms["plain"] - 1),
         "overlapped_vs_kept_pct": 100 * (step_ms["overlapped"] / step_ms["kept"] - 1),
-        "latency_ms": {"median": statistics.median(latency), "max": max(latency)},
+        "step_ms_tail": {a: {"p99": 1e3 * _quantile(v, 0.99), "max": 1e3 * max(v)} for a, v in walls_all.items()},
+        "latency_ms": {"median": statistics.median(latency), "p99": _quantile(latency, 0.99), "max": max(latency)},
         **{k: v for k, v in solo.items() if k != "kernel_ms_all"},
     }
     print(json.dumps(summary, indent=1))
@@ -278,9 +288,9 @@ def main(argv: list[str] | None = None) -> int:
             + [{"name": n, "value": summary[n], "unit": "%"} for n in ("copied_pct", "kept_pct", "overlapped_pct",
                                                                         "overlapped_vs_kept_pct")]
             + [{"name": n, "value": summary[n], "unit": "ms"} for n in ("kernel_ms", "host_ms", "plan_ms")]
-            + [{"name": "latency_ms.median", "value": summary["latency_ms"]["median"], "unit": "ms"},
-               {"name": "latency_ms.max", "value": summary["latency_ms"]["max"], "unit": "ms"},
-               {"name": "bytes_hashed", "value": nbytes, "unit": "bytes"},
+            + [{"name": f"latency_ms.{q}", "value": summary["latency_ms"][q], "unit": "ms"} for q in ("median", "p99", "max")]
+            + [{"name": f"step_ms.{a}.{q}", "value": t[q], "unit": "ms"} for a, t in summary["step_ms_tail"].items() for q in t]
+            + [{"name": "bytes_hashed", "value": nbytes, "unit": "bytes"},
                {"name": "workload_wall", "value": time.perf_counter() - started, "unit": "s"}],
             "measurement_files": ["step_root_gpu.json"],
             "artifacts": [],
