@@ -10,6 +10,7 @@
   "Properties.Proofs.Nci",
   "Properties.Proofs.Nci.DescAgree",
   "Properties.Proofs.Nci.Walk",
+  "Properties.NciDesc",
   "Properties.CertifierDevice",
   "Properties.Proofs.CertifierDevice",
   "Properties.Pous",
@@ -132,9 +133,22 @@
    "why": "the commitments' properties are stated against the port's own functions, on Lean core: nothing of Mathlib or of `security`"
   },
   "Properties.Nci": {
-   "imports": ["Mathlib", "Definitions.Core", "Definitions.Nci", "NciCheck.Check", "NciCheck.Desc", "Properties.Nci"],
+   "imports": ["Mathlib", "Definitions.Core", "Definitions.Nci", "NciCheck.Check", "Properties.Nci"],
    "except": [],
    "why": "a property is stated over the definitions and the code it is about, never over a proof"
+  },
+  "Properties.NciDesc": {
+   "imports": [
+    "Mathlib",
+    "Definitions.Core",
+    "Definitions.Nci",
+    "NciCheck.Check",
+    "NciCheck.Desc",
+    "Properties.Nci",
+    "Properties.NciDesc"
+   ],
+   "except": [],
+   "why": "the description-sized check's property is stated over the code it is about (NciCheck.Desc) and the NCI properties it relates it to, never over a proof"
   },
   "Properties.CertifierDevice": {
    "imports": ["CertifierDevice.Device", "CertifierDevice.Issuer"],
