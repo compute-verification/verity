@@ -65,7 +65,9 @@ The model of `note:console/20261012T0645Z-draft-actual-circuit-model` (`Security
   and it admits one (`tick_holding`).
 * `Actual/Source.lean`: ingress by source adds over disjoint sources, and a cover of the outside bounds ingress; under
   `Links`, ingress from a source is at most the capacity of the links joining it to `X`.
-* `Actual/WipePool.lean`: `WipePool`, the memory cap's lifetime pool, by Ville's inequality over the run tree of a
-  prover's wipes: under timed-round soundness, every wipe passes with the un-held fractions summing to at least `H`
-  with probability at most `exp(−k H)`, at any number of wipes; `WipePoolDelta`, at `H = ln(1/δ)/k`, at most `δ`.
+* `Actual/WipePool.lean`: `WipePool`, the memory cap's lifetime pool as a lemma, by Ville's inequality over an
+  abstract run tree of a prover's wipes: on a tree meeting `UnheldFails`, every wipe passes with the un-held fractions
+  summing to at least `H` with probability at most `exp(−k H)`, at any number of wipes; `WipePoolDelta`, at
+  `H = ln(1/δ)/k`, at most `δ`. `UnheldFails` holds of every tree once each un-held set is empty, so it is no physical
+  premise; the pool's physical premise is memory-accounting's restatement on the challenger's verdicts (MEM-55).
 -/
