@@ -849,9 +849,11 @@ def main() -> int:
 
     # negatives: a6's, each re-deciding one input altered
     neg: dict[str, dict] = {}
-    fewer = P.mixed_population_program([(d, n - (1 if i == 0 else 0)) for i, (d, n) in enumerate(zip(defs, ns))])
-    v = V.check(rec, fewer, query, law, a0.SCHEME, want, leaf_layer=leaf_layer)
-    neg["registration-partition-mismatch (R2)"] = {"refused": not v.ok, "codes": list(v.codes)}
+    big = max(range(len(ns)), key=lambda i: ns[i])
+    if ns[big] > 1:
+        fewer = P.mixed_population_program([(d, n - (i == big)) for i, (d, n) in enumerate(zip(defs, ns))])
+        v = V.check(rec, fewer, query, law, a0.SCHEME, want, leaf_layer=leaf_layer)
+        neg["registration-partition-mismatch (R2)"] = {"refused": not v.ok, "codes": list(v.codes)}
     if len(defs) > 1:
         v = V.check(rec, program, P.template_instances_query(defs[:-1]), law, a0.SCHEME, want, leaf_layer=leaf_layer)
         neg["registration-query-drops-a-template (R2)"] = {"refused": not v.ok, "codes": list(v.codes)}
