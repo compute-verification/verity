@@ -270,41 +270,69 @@ theorem lbind_eq {α γ δ : Type} {S : γ × LigState → δ × LigState → Ar
     obtain ⟨rfl, rfl⟩ := Prod.mk.inj hR
     exact h a s₁ t' l' hx
 
-/-- **A loop in lockstep**: if step `i`, from values and states related by `I i` with `L + i` bodies sent, yields ones
-related by `I (i + 1)` after one more body, the loops over `[0:n]` end related by `I n` after `L + n` bodies. -/
+/-- **A loop in lockstep**: if step `i`, from values, states and bodies related by `I i`, yields ones related by
+`I (i + 1)`, the loops over `[0:n]` end related by `I n`. -/
 theorem lforIn {σ τ : Type} (body : ℕ → σ → LP PS (ForInStep σ)) (body' : ℕ → τ → LP PS (ForInStep τ))
-    (I : ℕ → σ × LigState → τ × LigState → Prop) (L n : ℕ)
+    (I : ℕ → σ × LigState → τ × LigState → Array Claims.Msg → Prop) (n : ℕ)
     (hb : ∀ i < n, ∀ (u : σ) (s : LigState) (u' : τ) (s' : LigState) (t : Transcript) (l : Array Claims.Msg),
-      l.size = L + i → I i (u, s) (u', s') →
-      Alike (fun r r' l₁ => ∃ v v', r.1 = .yield v ∧ r'.1 = .yield v' ∧ I (i + 1) (v, r.2) (v', r'.2) ∧
-          l₁.size = L + i + 1)
+      I i (u, s) (u', s') l →
+      Alike (fun r r' l₁ => ∃ v v', r.1 = .yield v ∧ r'.1 = .yield v' ∧ I (i + 1) (v, r.2) (v', r'.2) l₁)
         ((((body i u).run s).run t).go l) ((((body' i u').run s').run t).go l))
-    {u : σ} {u' : τ} {s s' : LigState} (t : Transcript) (l : Array Claims.Msg) (hl : l.size = L)
-    (h₀ : I 0 (u, s) (u', s')) :
-    Alike (fun r r' l₁ => I n r r' ∧ l₁.size = L + n)
+    {u : σ} {u' : τ} {s s' : LigState} (t : Transcript) (l : Array Claims.Msg) (h₀ : I 0 (u, s) (u', s') l) :
+    Alike (fun r r' l₁ => I n r r' l₁)
       ((((forIn [:n] u body).run s).run t).go l) ((((forIn [:n] u' body').run s').run t).go l) := by
   rw [Std.Legacy.Range.forIn_eq_forIn_range', Std.Legacy.Range.forIn_eq_forIn_range']
   simp only [Std.Legacy.Range.size, Nat.sub_zero, Nat.add_sub_cancel, Nat.div_one]
   suffices key : ∀ k a (u : σ) (s : LigState) (u' : τ) (s' : LigState) (t : Transcript) (l : Array Claims.Msg),
-      a + k = n → l.size = L + a → I a (u, s) (u', s') →
-      Alike (fun r r' l₁ => I n r r' ∧ l₁.size = L + n)
+      a + k = n → I a (u, s) (u', s') l →
+      Alike (fun r r' l₁ => I n r r' l₁)
         ((((forIn (List.range' a k) u body).run s).run t).go l)
         ((((forIn (List.range' a k) u' body').run s').run t).go l) from
-    key n 0 u s u' s' t l (by omega) (by omega) h₀
+    key n 0 u s u' s' t l (by omega) h₀
   intro k
   induction k with
   | zero =>
-    intro a u s u' s' t l ha hl hI
+    intro a u s u' s' t l ha hI
     have e : a = n := by omega
-    exact .inr ⟨(u, s), (u', s'), t, l, rfl, rfl, e ▸ hI, by omega⟩
+    exact .inr ⟨(u, s), (u', s'), t, l, rfl, rfl, e ▸ hI⟩
   | succ k ih =>
-    intro a u s u' s' t l ha hl hI
+    intro a u s u' s' t l ha hI
     rw [List.range'_succ, List.forIn_cons, List.forIn_cons]
-    refine lbind (hb a (by omega) u s u' s' t l hl hI) fun r s₁ r' s₁' t₁ l₁ _ _ hr => ?_
-    obtain ⟨v, v', hv, hv', hI₁, hl₁⟩ := hr
+    refine lbind (hb a (by omega) u s u' s' t l hI) fun r s₁ r' s₁' t₁ l₁ _ _ hr => ?_
+    obtain ⟨v, v', hv, hv', hI₁⟩ := hr
     dsimp only at hv hv'
     subst hv hv'
-    exact ih (a + 1) v s₁ v' s₁' t₁ l₁ (by omega) (by omega) hI₁
+    exact ih (a + 1) v s₁ v' s₁' t₁ l₁ (by omega) hI₁
+
+/-- **A loop of equal steps**: bodies alike to equality from every value and state run the loops alike to equality. -/
+theorem lforIn_eq {σ : Type} (body body' : ℕ → σ → LP PS (ForInStep σ)) (n : ℕ)
+    (hb : ∀ i < n, ∀ (u : σ) (s : LigState) (t : Transcript) (l : Array Claims.Msg),
+      Alike (fun a b _ => a = b) ((((body i u).run s).run t).go l) ((((body' i u).run s).run t).go l))
+    (u : σ) (s : LigState) (t : Transcript) (l : Array Claims.Msg) :
+    Alike (fun a b _ => a = b)
+      ((((forIn [:n] u body).run s).run t).go l) ((((forIn [:n] u body').run s).run t).go l) := by
+  rw [Std.Legacy.Range.forIn_eq_forIn_range', Std.Legacy.Range.forIn_eq_forIn_range']
+  simp only [Std.Legacy.Range.size, Nat.sub_zero, Nat.add_sub_cancel, Nat.div_one]
+  suffices key : ∀ k a (u : σ) (s : LigState) (t : Transcript) (l : Array Claims.Msg), a + k = n →
+      Alike (fun a b _ => a = b)
+        ((((forIn (List.range' a k) u body).run s).run t).go l)
+        ((((forIn (List.range' a k) u body').run s).run t).go l) from
+    key n 0 u s t l (by omega)
+  intro k
+  induction k with
+  | zero => intro a u s t l _; exact Alike.refl _
+  | succ k ih =>
+    intro a u s t l ha
+    rw [List.range'_succ, List.forIn_cons, List.forIn_cons]
+    refine lbind (hb a (by omega) u s t l) fun r s₁ r' s₁' t₁ l₁ _ _ hr => ?_
+    obtain ⟨rfl, rfl⟩ := Prod.mk.inj hr
+    rcases r with v | v
+    · exact Alike.refl _
+    · exact ih (a + 1) v s₁ t₁ l₁ (by omega)
+
+/-- Equal programs run alike to equality. -/
+theorem Alike.of_eq {α : Type} {x y : LP PS α} (h : x = y) (s : LigState) (t : Transcript) (l : Array Claims.Msg) :
+    Alike (fun a b _ => a = b) (((x.run s).run t).go l) (((y.run s).run t).go l) := h ▸ Alike.refl _
 
 /-! ## `asksCut`'s squeezes -/
 
@@ -392,6 +420,42 @@ theorem alike_bind_eq_assoc {α γ δ ε : Type} {S : γ → ε → Array Claims
     (hfg : ∀ a t' l', (x.run t).go l = (.ok (a, t'), l') → Alike S (((f a).run t').go l') (((g a >>= C).run t').go l')) :
     Alike S (((x >>= f).run t).go l) ((((x >>= g) >>= C).run t).go l) :=
   alike_bind_assoc (Alike.refl _) fun a b t' l' hx _ (hab : a = b) => by subst hab; exact hfg a t' l' hx
+
+/-! ## Commitments' salts and erased openings -/
+
+/-- A commitment reads its salt function only on its positions, cut to the scheme's width. -/
+theorem commitP_congr (hs : Hashes PS) (ms : MerkleScheme) (lv : Level) (g : Array F128) {s s' : ℕ → ByteArray}
+    (h : ∀ q < 2 ^ lv.d, fitBytes ms.saltBytes (s q) = fitBytes ms.saltBytes (s' q)) :
+    commitP hs ms lv g s = commitP hs ms lv g s' := by
+  have hsalts : (Array.range (2 ^ lv.d)).map (fun q => fitBytes ms.saltBytes (s q)) =
+      (Array.range (2 ^ lv.d)).map (fun q => fitBytes ms.saltBytes (s' q)) := by
+    apply Array.ext (by simp)
+    intro i h1 _
+    simp only [Array.getElem_map, Array.getElem_range]
+    exact h i (by simpa using h1)
+  simp only [commitP, hsalts]
+
+theorem getElem!_map_const {α β : Type} [Inhabited β] (xs : Array α) (b : β) (hb : b = default) (p : ℕ) :
+    (xs.map fun _ => b)[p]! = b := by
+  by_cases hp : p < xs.size
+  · rw [getElem!_pos (xs.map fun _ => b) p (by simpa using hp)]; simp
+  · rw [getElem!_neg (xs.map fun _ => b) p (by simpa using hp), hb]
+
+/-- **An erased commitment opens to the erased opening.** -/
+theorem eraseLP_openP (ms : MerkleScheme) (cm : Commit) (lv : Level) (pos : Array ℕ) :
+    eraseLP (openP ms cm lv pos) = openP ms (eraseC cm) lv pos := by
+  simp only [eraseLP, openP, eraseC]
+  congr 1
+  · rw [Array.map_map]
+    exact congrArg (fun f => Array.map f pos) (funext fun p => (getElem!_map_const cm.rows _ rfl p).symm)
+  · split
+    · simp
+    · rw [Array.map_map]
+      exact congrArg (fun f => Array.map f pos) (funext fun p => (getElem!_map_const cm.salts _ rfl p).symm)
+
+theorem queryP_eraseC (io : Asks PS) (nonce : ℕ → ℕ → UInt64) (ms : MerkleScheme) (lv : Level) (cm : Commit) :
+    queryP io nonce ms lv (eraseC cm) = (fun p => (eraseLP p.1, p.2)) <$> queryP io nonce ms lv cm := by
+  simp only [queryP, map_bind, map_pure, eraseLP_openP]
 
 /-! ## Level 0's opening at the coins from round `p₀` -/
 
@@ -501,7 +565,25 @@ theorem ligeritoCut_alike (coin : ℕ → ℕ → F128) (n : ℕ) (hs : Hashes P
     obtain ⟨hn₈, rfl, hl₈⟩ := sampleP_cut_inv coin e₈
     rw [modify_bind_run, modify_bind_run, get_bind_run]
     dsimp only
-    sorry
+    have hm0 := H.msg 0 H.k0
+    simp only [mmOf] at hm0
+    rw [hl₅, hm0, sendMsg_bind_run, sendMsg_bind_run]
+    refine lliftT fun _ t₉ l₉ e₉ => ?_
+    obtain rfl := liftTM_inv e₉
+    refine lliftT fun _ t₁₀ l₁₀ e₁₀ => ?_
+    obtain rfl := liftTM_inv e₁₀
+    refine lbind (lforIn _ _ (fun j (p : (Array F256 × (F256 × F256) × Zk.Level0Msgs) × LigState)
+        (p' : (Array F256 × (F256 × F256) × Zk.Level0Msgs) × LigState) (l' : Array Claims.Msg) =>
+        p.1 = p'.1 ∧
+        (j < sch.k0 → l'.size = l.size + 2 + j ∧ p'.2 = { p.2 with tab := tabS coin l.size t j } ∧
+          p.2.w = wS coin l.size b sch.n j ∧ p.1.1 = (Array.range j).map (chS coin l.size)) ∧
+        (sch.k0 ≤ j → p.2 = p'.2 ∧ l.size + 3 + sch.k0 < n ∧
+          Zk.rhoIndependent (rhoS coin l.size sch.k0) = true))
+      sch.k0 ?step _ _ ?init) fun r s₁ r' s₁' t₁ l₁ _ _ hI => ?rest
+    case init =>
+      refine ⟨rfl, fun _ => ⟨by omega, rfl, rfl, by simp⟩, fun h => absurd h (by have := H.k0; omega)⟩
+    case step => sorry
+    case rest => sorry
 
 end LigLock
 
