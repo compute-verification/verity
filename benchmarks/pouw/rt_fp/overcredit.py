@@ -23,13 +23,13 @@ from pathlib import Path
 
 #: why an op-free route writes the variant's words, by (device, variant prefix, base design); the first match wins
 ROUTES = [
-    ("*", "fpx-c1-", "*", "C1 is int8 Dither's transcript bit for bit: the device's int8 MMA (IMMA, wgmma s8, kind::i8) "
-                          "writes each s32 word with no extraction"),
+    ("*", "fpx-c1-", "*", ("C1 is int8 Dither's transcript bit for bit: the device's int8 MMA (IMMA, wgmma s8, kind::i8) "
+                          "writes each s32 word with no extraction")),
     ("sm_90", "fpx-2sp-int5-", "*", "the int5 twin's operands lie in [−16, 16] ⊂ s8: wgmma s8 writes the words"),
     ("sm_120", "fpx-", "dither-c-peel-fx1",
-     "fx1's entry is t·m with m = key_mul(1, (4J + e)·32) a compile-time odd constant (egemm.cu fx_chain): "
+     ("fx1's entry is t·m with m = key_mul(1, (4J + e)·32) a compile-time odd constant (egemm.cu fx_chain): "
      "(bits − 0x4B400000)·m = IMAD(bits, m, −0x4B400000·m), one IMAD with a per-position constant addend (a register "
-     "or constant-bank operand) in place of fx1's IMUL"),
+     "or constant-bank operand) in place of fx1's IMUL")),
 ]
 
 #: why the other variants keep the extraction on every route
@@ -37,9 +37,9 @@ NO_ROUTE = ("its fold's entry is XOR (duo; LI-CP-W's d₀), which can't absorb a
             "g1's ±353) are not s8")
 
 #: FPX-DESIGN af74482571 pinned the B200 extraction to IMAD; its 5b835f1e60 added the class split itself
-SPLIT = dict(device="sm_100", name="fpx-2sp-e4m3i-split", base="dither-2s-licpw-redux-heavy-l32", plain=1.0,
-             fold_add={"ALU": 0.5, "IMAD": 0.5}, title="FP8 2SP e4m3i, extraction split ALU/IMAD (RT-FP)",
-             summary="fpx-2sp-e4m3i with the extraction split between IADD3 and the IMAD-pipe add")
+SPLIT = {"device": "sm_100", "name": "fpx-2sp-e4m3i-split", "base": "dither-2s-licpw-redux-heavy-l32", "plain": 1.0,
+             "fold_add": {"ALU": 0.5, "IMAD": 0.5}, "title": "FP8 2SP e4m3i, extraction split ALU/IMAD (RT-FP)",
+             "summary": "fpx-2sp-e4m3i with the extraction split between IADD3 and the IMAD-pipe add"}
 
 
 def load(path: Path):
@@ -76,10 +76,10 @@ def main(fpx_eps: Path, out: Path) -> int:
             fpx.write_variant(v, data)
             why = route(v)
             if why is None:
-                skipped.append(dict(device=dev, variant=v["name"], why=NO_ROUTE))
+                skipped.append({"device": dev, "variant": v["name"], "why": NO_ROUTE})
                 continue
-            x0 = copy.deepcopy(v) | dict(name=f"rt-{v['name']}-x0", fold_add={},
-                                         title=f"{v['name']} with the extraction absorbed (RT-FP)", summary=why)
+            x0 = copy.deepcopy(v) | {"name": f"rt-{v['name']}-x0", "fold_add": {},
+                                         "title": f"{v['name']} with the extraction absorbed (RT-FP)", "summary": why}
             fpx.write_variant(x0, data)
             attacks.append((v["name"], x0["name"], why))
         for vec in spec["vectors"]:
@@ -87,10 +87,10 @@ def main(fpx_eps: Path, out: Path) -> int:
                 v, c = priced(data, var, vec), priced(data, cheat, vec)
                 credit = v["baseline"]["cycles_per_mma"]
                 t = min(c["cheat"]["cycles_per_mma"], c["baseline"]["cycles_per_mma"])
-                rows.append(dict(device=dev, vector=vec or "VF3r-16", variant=var, credit=credit,
-                                 credit_binds=v["baseline"]["binding"], model_machine=v["terms"]["machine"],
-                                 model_core=v["core"], cheater=cheat, cheat=t, bound=1 - t / credit, why=why))
-    (out / "overcredit.json").write_text(json.dumps(dict(rows=rows, no_route=skipped), indent=1) + "\n")
+                rows.append({"device": dev, "vector": vec or "VF3r-16", "variant": var, "credit": credit,
+                                 "credit_binds": v["baseline"]["binding"], "model_machine": v["terms"]["machine"],
+                                 "model_core": v["core"], "cheater": cheat, "cheat": t, "bound": 1 - t / credit, "why": why})
+    (out / "overcredit.json").write_text(json.dumps({"rows": rows, "no_route": skipped}, indent=1) + "\n")
     lines = ["| device | vector | variant | credited ♭ (binds) | model ε_machine | model core ε | T_cheat | ε_machine ≥ |",
              "|---|---|---|---|---|---|---|---|"]
     lines += [f"| {r['device']} | {r['vector']} | {r['variant']} | {r['credit']:.3f} ({', '.join(r['credit_binds'])}) | "
