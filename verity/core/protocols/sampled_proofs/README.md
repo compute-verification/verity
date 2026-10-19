@@ -111,7 +111,9 @@ SHA-256 leaves.
   root's input gates (drawn `all`: the input unit is always checked), each replay unit one proof unit, and the draw's
   checked proof units as `(slot, index)` in class, stratum and replay-unit order.
 - **The challenger** (`challenger`, Lean of record `SampledProofs/Challenger.lean`): every protocol's live coins, by
-  label and index, each opened once, after its root is recorded.
+  label and index, each opened once, after its root is recorded. Its commitment is signed on its host before any coin
+  opens; the verifier trusts only that record (`trusted_commitment`), not the prover's. `benchmarks/live_challenger`
+  serves it (`remote`) on the Lean's coins.
 - **The Python.** `verity.core.protocols.sampled_proofs.one_stage` is the one-stage audit's reference: `registration`,
   `draw` (the draw's checks, not a sampler), `partition`, `audit` and `verdict`. `consumers` reads its profile. `service` is the proof service over it, whose `Stream`
   draws from the challenger's own randomness as `two_stage.draw_first` does. `two_stage` is two-stage sampling and the
