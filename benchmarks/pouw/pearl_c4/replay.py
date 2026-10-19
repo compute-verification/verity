@@ -1,4 +1,4 @@
-"""Pearl-C4's reference replay of a device run's own transcript under the work law (`pearl_c_work.audit`), with
+"""Pearl-C4's reference replay of a device run's own transcript under the work law (`clear_work.audit`), with
 Pearl-C4's domain and debit (`schemes.pearl_c4`).  It opens rows and words and recomputes them in the clear, so its
 ACCEPT is replay-verified (development shortcut; the protocol's check is a ZK proof, PROTOCOL.md), never the protocol's
 verdict.
@@ -16,12 +16,12 @@ many fall outside D-SB's byte range (`device_scales`).
   (`audit.Epoch.unverified`: a recorded replay's salt, with no coin behind it, not the epoch's live coin);
 * the transcript commitment over the device's leaves (`audit.transcript_domain`);
 * the records: one unit, no channel split, its real rows, and as excluded the rows that fail `row_passes` (D-NF) and the
-  rows that pass it but not R1 (`PearlC4.r1_row`, row by row over the workers), as `pearl_c_work.declare` has them;
+  rows that pass it but not R1 (`PearlC4.r1_row`, row by row over the workers), as `clear_work.declare` has them;
 * the draws' beacon, Fiat-Shamir over the commitment (`draw_beacon`), and the openings of the tiles the work law opens
   there: t draws by the records' credit and one tile per excluded row.
 
 **`verify`** recomputes everything from the transcript and the scheme: the salt, the records against the workload, the
-draws, and on every opened tile (`pearl_c_work.check_drawn`) A's and B's openings against the device's roots, the leaf's
+draws, and on every opened tile (`clear_work.check_drawn`) A's and B's openings against the device's roots, the leaf's
 against the commitment, the tile's C̃ and U through the scalar reference to the device's leaf, zero filler rows, credited
 rows passing the per-row rules and R1 and excluded rows failing one of them, and the replayed debit
 (`pearl_c4.tile_debit`: F1′'s base split under the exact noise law given the drawn E lines and the realised scale bytes,
@@ -57,6 +57,11 @@ from verity.core.protocols.pouw.protocol import Context, Matmul, Shape, tagged
 from verity.core.protocols.pouw.schemes import get
 from verity.core.protocols.pouw.schemes import pearl_c4 as F
 from verity.core.protocols.pouw.schemes import pearl_c_work as W
+
+# the work law and the clear audit are a reference tool's (benchmarks/pouw/clear), imported by name
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "clear"))
+import clear_audit as CA  # noqa: E402
+import clear_work as CW  # noqa: E402
 
 FORMAT = "verity/pouw/pearl-c4-transcript/v0"
 REPORT = "verity/pouw/pearl-c4-replay/v0"
@@ -120,8 +125,8 @@ def device_scales(fmt: F.Fmt, data: bytes) -> dict:
     return out
 
 
-def draw_beacon(transcript_root: bytes, records_digest: bytes) -> W.RecordedDraw:
-    return W.RecordedDraw(COMMITTED_ROUND + 1, tagged(DRAW_BEACON_TAG, transcript_root, records_digest))
+def draw_beacon(transcript_root: bytes, records_digest: bytes) -> CW.RecordedDraw:
+    return CW.RecordedDraw(COMMITTED_ROUND + 1, tagged(DRAW_BEACON_TAG, transcript_root, records_digest))
 
 
 def _pool(workers: int, chunksize: int = 1) -> tuple[Callable, Callable[[], None]]:
@@ -193,8 +198,8 @@ def prove(dump: str | os.PathLike, run: str, t: int = 8, workers: int = 1, schem
     splits = {unit.weight: W.Split(k)}
     digest = W.records_root(epoch.salt, epoch.weights_root, splits, [record])
     beacon = draw_beacon(tree.commitment.root, digest)
-    picks = (W.draw(s, [record], W.replay_key(beacon, tree.commitment.root, digest, epoch.salt), t)
-             + W.exclusion_tiles(s, [record]))
+    picks = (CW.draw(s, [record], CW.replay_key(beacon, tree.commitment.root, digest, epoch.salt), t)
+             + CW.exclusion_tiles(s, [record]))
     ids = {(r.matmul, r.tile.rows[0], r.tile.cols[0]): r.id for r in refs}
     opened = sorted({ids[(pos, tile.rows[0], tile.cols[0])] for pos, tile in picks})
     openings = [{"tile": i, "a": [_opening_json(tree_a.open(r)) for r in refs[i].tile.rows],
@@ -224,15 +229,15 @@ class _Openings:
     def __init__(self, refs: Sequence[au.TileRef], openings: Sequence[dict]):
         self.refs, self.by_id = refs, {o["tile"]: o for o in openings}
 
-    def open(self, epoch: au.Epoch, tile_id: int) -> au.TileOpening:
+    def open(self, epoch: au.Epoch, tile_id: int) -> CA.TileOpening:
         if tile_id not in self.by_id:
             raise KeyError(f"the transcript does not open tile {tile_id}")
         o = self.by_id[tile_id]
-        return au.TileOpening(self.refs[tile_id], tuple(_opening(x) for x in o["a"]), tuple(_opening(x) for x in o["b"]),
+        return CA.TileOpening(self.refs[tile_id], tuple(_opening(x) for x in o["a"]), tuple(_opening(x) for x in o["b"]),
                               _opening(o["leaf"]))
 
 
-def _check_with_debit(f: Callable, pick) -> tuple[au.Verdict, dict | None]:
+def _check_with_debit(f: Callable, pick) -> tuple[CA.Verdict, dict | None]:
     scheme = f.args[0]
     scheme.last_debit = None
     v = f(pick)
@@ -251,8 +256,8 @@ def verify(t: dict, workers: int = 1, scheme: F.PearlC4 | None = None) -> dict:
     splits = {int(w): W.Split(sp["k"], tuple(sp["side"]), bytes.fromhex(sp["calibration"]))
               for w, sp in t["splits"].items()}
     commitment = Commitment(bytes.fromhex(t["transcript"]["root"]), t["transcript"]["count"])
-    transcript = au.Transcript(tuple(bytes.fromhex(r) for r in t["activation_roots"]), commitment, ())
-    beacon = W.RecordedDraw(t["draw"]["round"], bytes.fromhex(t["draw"]["value"]))
+    transcript = CA.Transcript(tuple(bytes.fromhex(r) for r in t["activation_roots"]), commitment, ())
+    beacon = CW.RecordedDraw(t["draw"]["round"], bytes.fromhex(t["draw"]["value"]))
     report = {"format": REPORT, "scheme": s.name, "run": t["run"], "shape": t["shape"], "t": t["t"],
               "shortcuts": list(SHORTCUTS), "salt": epoch.salt.hex()}
     fs = draw_beacon(commitment.root, W.records_root(epoch.salt, epoch.weights_root, splits, records))
@@ -267,14 +272,14 @@ def verify(t: dict, workers: int = 1, scheme: F.PearlC4 | None = None) -> dict:
         return [v for v, _ in out]
 
     try:
-        out = W.audit_replay(s, epoch, _Openings(au.tile_refs(s, workload), t["openings"]), transcript, splits, records,
+        out = CW.audit_replay(s, epoch, _Openings(au.tile_refs(s, workload), t["openings"]), transcript, splits, records,
                       t["committed_round"], beacon, t["t"], tile_map=tile_map)
     except KeyError as e:
         return report | {"accepted": False, "reason": str(e)}
     finally:
         done()
     refs = au.tile_refs(s, workload)
-    cell = W.cell_credit(s, records[0])
+    cell = CW.cell_credit(s, records[0])
     tiles = []
     for v, d in zip(out.audit.verdicts, debits or [None] * len(out.audit.verdicts)):
         row = {"tile": v.tile, "ok": v.ok, "reason": v.reason}

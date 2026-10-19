@@ -3,6 +3,8 @@ for by the twins), a flipped word or quant byte found and located, the launch-as
 the verdict (the GPU run is `tests/properties/glm53_block_fp8_capture_gpu.py --out ...` on an H200)."""
 from __future__ import annotations
 
+__models__ = ("zai-org/GLM-5.3",)
+
 import copy
 
 import numpy as np

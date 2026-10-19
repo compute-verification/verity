@@ -2,6 +2,8 @@ import Proofs.Accounting.Memory
 import Proofs.Accounting.Device
 import Proofs.Accounting.FillerLuck
 import Proofs.Accounting.Gates
+import Proofs.Accounting.Gates.Rows
+import Proofs.Accounting.Gates.Macs
 import Proofs.Accounting.Bandwidth
 import Proofs.Accounting.ChainWork
 import Proofs.Accounting.Prob
@@ -12,6 +14,7 @@ import Proofs.Accounting.BandwidthAudit
 import Proofs.Accounting.RateAudit
 import Proofs.Accounting.BoundReceipt
 import Proofs.Accounting.Capacity
+import Proofs.Accounting.DeclaredCircuit
 import Proofs.Accounting.Remote
 import Proofs.Accounting.PerRunTruncation
 import Proofs.Accounting.PerRunPouw
@@ -20,8 +23,12 @@ import Proofs.Accounting.PerRunNecessity
 import Proofs.Accounting.PerRunPriced
 import Proofs.Accounting.PerRunStop
 import Proofs.Accounting.Remote
+import Proofs.Accounting.RemoteHeld
+import Proofs.Accounting.RemoteHeld.Meets
 import Proofs.Accounting.Requirement
+import Proofs.Accounting.RequirementPouw
 import Proofs.Accounting.Sanity
+import Proofs.Accounting.Stacking
 import Proofs.Accounting.Tag
 import Proofs.Accounting.TS
 import Proofs.Accounting.TS.Stages

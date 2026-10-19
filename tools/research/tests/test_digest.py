@@ -137,6 +137,24 @@ def test_a_watched_pr_triggers_when_it_lands_or_its_state_changes_but_not_when_f
     assert any(x.startswith("- TRIGGER #30 is now refused") and "re-mark #31" in x for x in out)
 
 
+def test_a_reverted_landing_is_listed_and_leaves_landed_so_a_watch_on_it_does_not_trigger_as_landed():
+    f, s = Fake(), D.load(D.state_path(LANE, "/nonexistent/x.json"))
+    s["watch"] = {"40": "merge main into #41", "50": "start #51"}
+    f.rows = [row(40, "queued", owner="ci"), row(50, "queued"), row(60, "queued")]
+    D.digest(LANE, s, f.sources())
+    f.rows = []
+    f.main = ("m2", ["Queue: #40 ci's change", "Queue: #50 ours", "Queue: #60 ours", 'Revert "Queue: #40 ci\'s change"',
+                     'Revert "Queue: #2382 landed before the last digest"', 'Revert "Queue: #60 ours"', "Queue: #60 ours, fixed"])
+    out, errors = D.digest(LANE, s, f.sources())
+    assert not errors
+    i = out.index("## Reverted on main (3)")
+    assert out[i + 1:i + 4] == ['- Revert "Queue: #40 ci\'s change"', '- Revert "Queue: #2382 landed before the last digest"',
+                                '- Revert "Queue: #60 ours"']
+    assert "- #50 landed" in out and "- #60 landed" in out
+    assert "- TRIGGER #50 landed: start #51" in out
+    assert not any(x.startswith("- TRIGGER #40") for x in out)
+
+
 def test_the_queue_line_counts_every_lane_by_state_with_the_landings_of_the_last_six_hours():
     f, s = Fake(), D.load(D.state_path(LANE, "/nonexistent/x.json"))
     f.rows = [row(10, "queued"), row(11, "queued", owner="ci"), row(12, "waiting", owner="vllm")]
@@ -165,7 +183,7 @@ def test_a_changed_note_shows_three_lines_of_its_result_so_far_at_the_tip_and_a_
     d = f"lanes/{LANE}"
     f.note_files = ("n2", [f"{d}/a-report.md", f"{d}/b-draft.md", f"{d}/c-gone.md"])
     f.note_texts = {
-        ("n2", f"{d}/a-report.md"): "---\nid: a\n---\n# Report\n\n## Result so far\n\nfirst\n\nsecond\n### a sub-heading\n"
+        ("n2", f"{d}/a-report.md"): "---\nid: a\n---\n# Report\n\n## Result so far\n\nfirst\n\nsecond\nthird\n"
                                     "fourth, not shown\n\n## Next\nnot shown\n",
         ("n1", f"{d}/b-draft.md"): "## Result so far\nan older tip's text, not shown\n",
         ("n2", f"{d}/b-draft.md"): "# Draft\n\nno result section\n",
@@ -173,9 +191,16 @@ def test_a_changed_note_shows_three_lines_of_its_result_so_far_at_the_tip_and_a_
     out, errors = D.digest(LANE, s, f.sources())
     assert not errors
     notes = out[out.index("## Notes changed (3)") + 1:out.index("## Health")]
-    assert notes == ["- a-report.md", "    first", "    second", "    ### a sub-heading", "- b-draft.md", "- c-gone.md"]
+    assert notes == ["- a-report.md", "    first", "    second", "    third", "- b-draft.md", "- c-gone.md"]
     assert D.result_so_far("## Result so far (17 Oct)\none\n## Next\ntwo\n") == ["one"]
     assert D.result_so_far(None) == []
+
+
+def test_result_so_far_reads_the_first_such_heading_of_level_two_to_four_and_stops_at_the_next_heading_of_any_level():
+    text = ("# Result so far, a title\nnot shown\n##### Result so far, too deep\nnot shown\n\n"
+            "### result so far (round 2)\n\nnewest\nnext newest\n## Result so far (round 1)\nstale\n")
+    assert D.result_so_far(text) == ["newest", "next newest"]
+    assert D.result_so_far("#### Result so far\none\n##### detail\ntwo\n") == ["one"]
 
 
 def test_the_roster_parser_reads_tab_separated_workers_and_names_a_bad_line():

@@ -12,7 +12,7 @@ from collections import defaultdict
 
 import pytest
 
-from test_appends import N, Run, payload, salts, store
+from test_appends import N, Run, payload, salts, store, units_mapped
 from verity.core.protocols.remote_bandwidth import audit, codec
 from verity.core.protocols.remote_bandwidth.memory_map import Header, Replay, Step, Written
 
@@ -247,8 +247,9 @@ def test_a_moved_map_writes_or_withdraws_each_landed_block_once_resident_from_it
 @pytest.mark.parametrize("seed", [0, 1])
 def test_a_session_a_moved_map_drives_is_accepted(seed) -> None:
     """Both sides driven by a seeded history's moved map, withdrawals and re-keys among its lines (a pass a step, its
-    appends after its root, its releases naming their withdrawn blocks): every window is accepted, and the record
-    counts the withdrawn blocks released."""
+    appends after its root, its releases naming their withdrawn blocks): every window is accepted, the record counts
+    the withdrawn blocks released, and each pass's head is the chain through the appends of the steps below its own,
+    each append dated at the step that made it, not the line its encode landed in."""
     oracle, encodes, appends, life = history(seed)
     dm = deferred(oracle, encodes, 0, N)
     withdrawn = [j for s in dm for j in s.withdrawn]
@@ -258,6 +259,10 @@ def test_a_session_a_moved_map_drives_is_accepted(seed) -> None:
     assert [v.accepted for v in run.finish()] == [True, True]
     rec = run.s.record()
     assert rec.appended == sum(len(m) for m in appends.values()) and rec.released >= len(withdrawn)
+    made = [(s, a.first, a.count, a.root) for s, a in zip(sorted(appends), run.store.appends, strict=True)]
+    assert units_mapped(rec, made)
+    landed = [(s if land is None else land, *rest) for (_, land, _, _), (s, *rest) in zip(encodes, made, strict=True)]
+    assert landed != made and not units_mapped(rec, landed)
 
 
 def test_the_seeded_histories_reach_every_rule() -> None:

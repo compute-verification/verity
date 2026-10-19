@@ -15,7 +15,7 @@ Hypothesis strategy with their inputs and, for a quarter of them, a mutation bot
 the pinned 2-bit adder of `boolean_vectors.json` on its whole truth table, real Boolean Definitions traced from
 `verity.ml.boolean`'s builders on their one-call Programs, also held to the word Definition each computes, and the malformed
 programs and inputs of `REFUSE`. E1's primitives each run on their one-call Program: every scalar primitive on the grid of its
-operands' edge words (also held to the Python primitive's own evaluator), on words a strategy draws, and on words out of
+operands' edge words (also checked against the Python primitive's own evaluator), on words a strategy draws, and on words out of
 range; every constant of the registry, and renamings of a constant that the Python's id pattern reads or refuses. E2's FP32
 and BF16 primitives each run batched, many calls in one Program: on the grid of their operands' FP edge words (held to the
 Python primitive's evaluator too), on drawn words, on words out of range, and on the GPU's captured words where the fixtures
@@ -714,7 +714,7 @@ def _columns(rows: list[tuple]) -> list[list[int]]:
 
 
 def _batch_request(fn: PrimitiveDefinition, rows: list[tuple]) -> dict:
-    """`fn` on each row of operands, one batched request, its answer held to the Python primitive's own evaluator."""
+    """`fn` on each row of operands, one batched request, its answer checked against the Python primitive's own evaluator."""
     desc = json.loads(_batch_text(fn.id, len(rows)))
     x = _columns(rows)
     assert python_answer(desc, x) == {"output": [fn.evaluate(*(w for v in r for w in _flat(v))) for r in rows]}, fn.id
@@ -1207,7 +1207,7 @@ def _bits_of(words: list[int], w: int) -> list[int]:
 def test_the_traced_steps_are_the_lean_primitives(server):
     """Each dot step's traced Boolean Definition, evaluated gate by gate by the Lean (its And, Xor and Not gates), gives the
     words the Lean primitive gives and the Python primitive's evaluator, on 64 rows: specials at each grid position under
-    edge accumulators, and draws. The Lean's gate walk is held to the Python oracle on Boolean Programs by the random
+    edge accumulators, and draws. The Lean's gate walk is checked against the Python oracle on Boolean Programs by the random
     composites and `test_traced_definitions` (the Ampere step among them); the oracle on these Programs would take about
     45 s a step (448 rows, 11 million gates: 320 s), the Lean takes under a second a step."""
     for fn in TCS:

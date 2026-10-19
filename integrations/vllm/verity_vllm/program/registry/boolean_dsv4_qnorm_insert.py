@@ -17,6 +17,8 @@ word is constant bits and `-x` one NOT gate on x's sign bit.  No table or lookup
 """
 from __future__ import annotations
 
+__models__ = ("deepseek-ai/DeepSeek-V4-Pro",)
+
 from verity.ml.circuits import boolean as BL
 from verity.ml.circuits.boolean.forms import NOT, ONE, ZERO, const_bits, or_reduce, sub
 from verity.ml.circuits.boolean.trace import definition

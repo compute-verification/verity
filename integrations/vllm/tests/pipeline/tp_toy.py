@@ -1,7 +1,7 @@
 """A stand-in for one rank of a W-rank vLLM model, built on the construction's own `CollectiveBus`: a vocab-parallel embedding
 (`verity_tp::embedding_shard` + a cross-rank reduce), a column- then row-parallel MLP (reduce) and column-parallel logits (all-gather).
 At world 2 the reduce is the bus's all-reduce (`AllReduce2`'s recorded identity); a wider world's all-reduce binds only captured
-world-8 routes (`registry.tp_allreduce.CAPTURED`), which the toy's shapes are not, so the reduce is an all-gather and one summing
+routes (`registry.tp_allreduce.CAPTURED`), which the toy's shapes are not, so the reduce is an all-gather and one summing
 linear.  Its rank enters the graph where a vLLM rank's does (the own partial's index in each collective, the shard's START/END), so a
 test can derive any rank of it on CPU without vLLM."""
 from __future__ import annotations

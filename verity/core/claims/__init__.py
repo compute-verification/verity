@@ -190,6 +190,23 @@ ENTRIES: dict[str, Entry] = {e.id: e for e in (
           "copies, anywhere), and any device may compute from the blocks it reads, every such read counted; a layout from "
           "which sketches cost less to read than the blocks themselves, such as a table of precomputed sketches, is "
           "outside it", "Rate sketch store as blocks"),
+    # what lets the stacking guarantees treat the blocks a pass reads as uniform when every appended block is keyed by
+    # a live coin drawn after its root commits its digest, the writers' choices for each append fixed before its coin
+    # and the pass's layout fixed apart from the encodings: `Accounting.Assumptions.KeyBinding`
+    # (Security/Models/Accounting/Assumptions/Stacking.lean); the seed's key alone lets a writer choose a block's
+    # encoding, and each coin keys a block apart (verity/core/protocols/remote_bandwidth/tests/test_key_binding.py)
+    Entry("key-binding", "assumption",
+          "Key binding (append-coin form): for the protocol's codec, whatever the writers choose for each append from "
+          "the codec and the coins of earlier appends (the registration being append 0, whose coin is the seed; every "
+          "appended block keyed by b_j(c_a) = H(DOMAIN || seed || j || d_j || c_a), its append's 32-byte coin c_a drawn "
+          "once, after the append's root has committed every digest d_j), and for any layout of a pass's blocks fixed "
+          "apart from the encodings, the blocks the pass reads are within delta of uniform on every event; in the "
+          "ideal model a round is a random function on pairs {x, p - x} (rho(p - x) = p - rho(x), its output's "
+          "parity its input's Legendre symbol), so delta is at most the writers' advantage at anticipating an "
+          "append's key before its coin, the chance that two round inputs agree up to sign, and the words' values "
+          "at or above p; one live registration per node; a layout chosen from the encodings after their coins is "
+          "not covered",
+          "Key binding", "conjectured"),
     Entry("hash-derived-key", "assumption",
           "A key derived as counter-mode hash output over a public label is not in the 2^-64 fraction of keys for which the "
           "pinned-key hiding bound (N * 2^-192) fails: hm96's pinned keys are H(label || u32be i), with H the instance's hash "
@@ -299,10 +316,13 @@ ENTRIES: dict[str, Entry] = {e.id: e for e in (
           "FILL-OPT: no program runs the verified filler at a certificate's price below (1 − μ_x)·χ*(π), for every "
           "certificate π", "FILL-OPT", "conjectured"),
     Entry("accounting-ts-fan-in", "assumption",
-          "An instruction merges at most m_k components, Σ(sources − 1) over its nodes, by its register operands as "
-          "SASS gives them on sm_80, sm_89, sm_90, sm_100 and sm_120 (LOP3, IADD3, IMAD, IDP.4A, FFMA: 2 a lane, 64 a "
-          "warp instruction), memory a node each access reads (a load 1 a lane; STS.128 and STSM.x4 5 a lane, 160 a "
-          "warp instruction)", "TS fan-in", "measured"),
+          "An instruction merges at most m_k components, Σ(sources − 1) over its nodes, for every SASS form on sm_80, "
+          "sm_89, sm_90, sm_100 and sm_120, counted by dependence: every register, uniform-register and predicate "
+          "word it reads, its guard, a constant bank, the memory node, and every word and predicate it writes, which a "
+          "guarded instruction keeps (a lane: ALU 9, a guarded IADD3.X with a cx[UR] operand on sm_80–sm_90, 8 on "
+          "sm_100 and sm_120; VIMNMX 10, IMNMX.U64; NOROW 10, P2R; a shared load or store 7, a global store 13, a "
+          "shared atomic 15, a global atomic 18, a texture 20; a warp instruction: SHFL 191, IMMA.16832 480, sm_100's "
+          "LDTM.32x32b.x128 4098)", "TS fan-in", "measured"),
     Entry("accounting-ts-luck", "assumption",
           "(L) at p with freshness (F1)–(F2): given the past, a round with a deficient block passes with probability at "
           "most p", "TS luck at p", "proven"),
@@ -321,6 +341,12 @@ ENTRIES: dict[str, Entry] = {e.id: e for e in (
     Entry("accounting-ts-right-fixed", "assumption",
           "Lemma E1(c) with the rounds' equal shares: on an accepted window whose committed values are right for their "
           "derivations, every word that isn't fixed is in its round's share", "TS right fixed", "proven"),
+    Entry("accounting-ts-unit-fixed", "assumption",
+          "Lemma E1(c) per unit with its fold clause, which doesn't read the draw: on an accepted window the fixed "
+          "words per round are at least the good units' words over the rounds, a good unit being one the run computed "
+          "(not skipped and guessed), with every unit writing it a value after the coin its noise reads, so a unit "
+          "whose check passes by luck isn't credited; and the folded words per round are at least the words of the "
+          "units not skipped whole over the rounds", "TS unit fixed", "proven"),
 )}
 
 

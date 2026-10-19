@@ -8,10 +8,14 @@
   tests/kernels/attention/test_deepgemm_attention.py:67-91 at d9105ea80) within the tolerance those tests allow: 1 fp8 step;
 * the ue8m0 scale near every power of two and at its edge words (amax 0, subnormal, 1e-4, the largest finite, inf, NaN), where
   `__nv_log2f`'s ceiling is not torch's `ceil(log2)`;
+* two served index-K rows (`data/dsa_glm53_kslots.npz`): the row and its scale are the bytes the H200 wrote into its cache block
+  where vLLM's block layout puts them, and a 132-byte slot reading is off at the scale word (run A8's disagreement);
 * the short-row top-k against `i < len ? i : -1`;
 * the logit against eight an H200 computed (`data/dsa_h200_logits.npz`): `DsaMqaLogit_v3`'s words, none of them v1's.
 """
 from __future__ import annotations
+
+__models__ = ("zai-org/GLM-5.3",)
 
 import math
 from fractions import Fraction
@@ -277,6 +281,10 @@ LOGIT_V1 = bind(D.DsaMqaLogit, H=32, D=128)
 #: prefill and four paged (``paged``), each the first ones of its kind where `DsaMqaLogit_v1` differs: q (8, 32, 128) and k (8, 128)
 #: e4m3 bytes, w (8, 32) and ks (8,) f32 words, the kernel's logit (8,)
 H200_LOGITS = Path(__file__).parent / "data" / "dsa_h200_logits.npz"
+#: two tokens' index-K rows as an H200 served them (GLM-5.3 TP8 rank 0, layer 0's `_fused_norm_rope_kernel` at step 0, run A8's slice
+#: s01, art:2767c3a80137ce6c... and art:22e7456dcc5018b8...): k (2, 128) bf16, w and b (128,) f32 words, cs (2, 64) bf16, ``offsets``
+#: their slots' offsets in index-K cache block 5 (slots 320 and 321), and ``block``, that block's 8448 bytes after the launch
+SERVED_KSLOTS = Path(__file__).parent / "data" / "dsa_glm53_kslots.npz"
 
 
 # --- the scale ---------------------------------------------------------------------------------------------------------------
@@ -379,6 +387,23 @@ def test_k_row_at_fewer_warps_matches_the_model(Dd: int) -> None:
         k, w, b, cs = _bf16(rng, Dd), _f32(rng, Dd, 1.0, 0.2), _f32(rng, Dd, 0.0, 0.1), _cs(rng, 16)
         qb, s = k_row(k, w, b, cs, 1e-6, rope=16)
         assert _flat(evaluate(fn, k, w, b, cs)) == qb + [s]
+
+
+def test_the_served_cache_holds_each_k_row_and_scale_in_vllms_block_layout() -> None:
+    """The row's 128 e4m3 bytes are the served block's bytes at 128 o and its scale the word at 8192 + 4 o, o the slot's offset in
+    the block (`_fp8_quant_and_cache_write`, kernels.py:63-87).  Read as 132-byte slot rows instead, the block's first slot has the
+    right bytes and its scale word wrong (bytes 128..131 are the next slot's first e4m3 bytes), which is what run A8 found against the
+    capture; any other slot has both wrong."""
+    z = np.load(SERVED_KSLOTS)
+    block = z["block"]
+    scales = block[128 * 64:].view("<u4")
+    for t, o in enumerate(z["offsets"].tolist()):
+        k, w, b, cs = z["k"][t].tolist(), z["w"].tolist(), z["b"].tolist(), z["cs"][t].tolist()
+        got = _flat(evaluate(KROW, k, w, b, cs))
+        qb, s = k_row(k, w, b, cs, 1e-6)
+        assert got == qb + [s] == block[128 * o:128 * o + 128].tolist() + [int(scales[o])]
+        slot132 = block[132 * o:132 * o + 132]
+        assert (got[:128] == slot132[:128].tolist()) == (o == 0) and got[128] != int(slot132[128:].view("<u4")[0])
 
 
 def test_q_head_matches_the_kernel_model() -> None:

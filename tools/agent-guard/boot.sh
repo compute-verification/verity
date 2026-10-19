@@ -11,7 +11,8 @@
 # early in the session, so the file comes before the fetch, and until DEST's copy is there every command is refused. Then it
 # copies origin/main's `tools/agent-guard` to DEST (default /opt/agent-guard), or keeps an earlier copy when origin/main can't
 # be read, checks that the hook refuses `env`, and runs DEST's `install.sh` (the redacting `env` and the git guard ahead of
-# /usr/bin); the hook stays in place if that refuses. Then it starts the VM's OOM recorder (oom_watch.py).
+# /usr/bin); the hook stays in place if that refuses. Then it starts the VM's OOM recorder (oom_watch.py). It also puts research
+# and the GitHub helper on PATH in ~/.bashrc ($AGENT_GUARD_BASHRC), once.
 set -euo pipefail
 ws=${1:-/workspace}
 dest=${AGENT_GUARD_DEST:-/opt/agent-guard}
@@ -27,6 +28,10 @@ else
   "hooks": {
     "beforeShellExecution": [
       {"command": "python3 $dest/shell_hook.py", "timeout": 10, "failClosed": true}
+    ],
+    "preToolUse": [
+      {"command": "python3 $dest/task_hook.py", "matcher": "Task", "timeout": 10},
+      {"command": "python3 $dest/task_hook.py", "matcher": "CallDynamicTool", "timeout": 10}
     ]
   }
 }
@@ -54,6 +59,10 @@ case $verdict in
   *'"deny"'*) ;;
   *) echo "agent-guard: $dest/shell_hook.py let \`env | cut -d= -f1\` through: $verdict" >&2; exit 1 ;;
 esac
+# research (the workspace's venv) and the GitHub helper on every later shell's PATH (INF-71: a fresh VM had neither)
+line='export PATH=/workspace/.git/verity-auth/bin:/workspace/.venv/bin:$PATH'
+rc=${AGENT_GUARD_BASHRC:-$HOME/.bashrc}
+grep -qxF "$line" "$rc" 2>/dev/null || echo "$line" >> "$rc"
 if [ -z "${AGENT_GUARD_SKIP_INSTALL:-}" ]; then
   bash "$dest/install.sh" || echo "agent-guard: install.sh failed or refused (above); the shell hook is in place" >&2
   # the VM's OOM recorder: one per VM (it holds its lock; a second exits), so a reboot or a second boot.sh is harmless

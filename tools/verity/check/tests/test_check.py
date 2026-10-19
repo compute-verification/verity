@@ -1347,6 +1347,23 @@ def test_train_sh_against_keeps_the_quick_tiers_bounds_and_lean_build():
     assert "uv run --locked --all-packages --extra torch-cpu python tools/verity/check/suites.py" == " ".join(queue.QUICK_TIER[:-1])
 
 
+def test_train_sh_stops_a_launcher_that_launched_nothing_in_the_wait(tmp_path):
+    """18 Oct: train.sh gave up on a check.py still gathering verdicts after its wait, and check.py launched its runs later. Drive
+    had no ids for them, so nothing cancelled them, and one held a check slot 3 h on a tree no longer on `next`."""
+    import os
+
+    git, train, _ = _train_repo(tmp_path)
+    bin_, pidf, stopped = tmp_path / "bin", tmp_path / "pid", tmp_path / "stopped"
+    (bin_ / "uv").write_text(f"#!/bin/sh\n{_POST_STUB.format(posted=tmp_path / 'posted')}echo $$ > {pidf}.tmp\nmv {pidf}.tmp {pidf}\n"
+                             f"trap 'touch {stopped}; exit 143' TERM\nwhile :; do :; done\n")
+    (bin_ / "sleep").write_text(f"#!/bin/sh\nuntil [ -e {pidf} ]; do :; done\n")       # each poll waits on the launch, not on a clock
+    p = train("HEAD", "vy-x")
+    assert p.returncode != 0 and "stopped its launcher" in p.stderr, (p.stdout, p.stderr)
+    assert stopped.exists()
+    with pytest.raises(ProcessLookupError):
+        os.kill(int(pidf.read_text()), 0)
+
+
 def test_train_sh_returns_the_exit_of_a_check_that_died_before_launching(tmp_path):
     """check.py killed before it launches a run (the OOM killer, while it gathers verdicts) prints no traceback: train.sh says
     how it exited and returns that, at once, rather than polling the log for ten minutes and saying only that nothing launched."""
