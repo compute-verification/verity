@@ -1163,6 +1163,20 @@ An input node is `Input<w>_v1` (bound per run) or `RegisteredInput<w>_v1` (bound
 **`Q_call` v1** (`Flock.Qcall`, `flock-verify qcall-program`; core's PROTOCOL.md §11) is core's evaluation, refusals and cut
 check, as `Flock.Qcall` documents them.
 
+**σ, a Boolean Program's lift of its word Program** (`Flock.Sigma`, `flock-verify sigma-check WORD BITS`; the mirror is
+`verity_vllm.program.boolean.sigma_check`, held to it by the `verity/core/service/sigma` difftest). A Boolean Program's
+partition of record is its word Program's, lifted by σ (each word Definition to its Boolean version), and the verifier checks
+the lift on the two descriptors, in their size and never over the unrolled circuit. The Boolean descriptor carries σ as data:
+`"word": {"program_sha512": <the word descriptor's SHA-512, hex>, "sigma": {<word definition id>: <Boolean definition id>}}`,
+exactly these two keys. The refusals, in order: `word-link`, `sigma-table`, `sigma-signature` (σ(f) declares f's signature on
+bits), `inputs` (the Boolean root's inputs are bits, the word root's input leaves in order), `signature`, `node-count`, and per
+Call `sigma-table`, `sigma-not-function`, `node-form` (form, members, axes, arity), `operand-type` and `operand-runs` (each run
+moved onto its bits: leaf `j` of an output is bit Σ of its first `j` leaf widths), then `return-runs`. With no refusal a Call
+reads another in the Boolean root exactly when its word Call reads the word one (`Sigma.reads_lift`), so the units of a
+partition read each other in the same graph and `unit-cycle` on the word partition is `unit-cycle` on its lift
+(`Sigma.acyclic_lift`). A `Q_call` cut inside a leaf word Call does not carry across (inside a leaf Boolean Definition its own
+cut applies), and that σ(f) computes f stays a Python conformance fact, since credited work reads Boolean gate counts only.
+
 ### 16.8 Objects by content
 
 The verifier loads each statement's objects from its own archive, keyed by content, and never from the prover's session

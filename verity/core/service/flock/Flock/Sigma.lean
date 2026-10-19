@@ -267,7 +267,7 @@ def linkTable (PW PB : Prog) (link : Json) : Except Refusal (Std.HashMap String 
   let .ok (.obj table) := link.getObjVal? "sigma" | throw { code := "word-link", why := s!"the word link's sigma is not an object: {fix}" }
   let mut out : Std.HashMap String String := {}
   for (w, b) in table.toArray do
-    let .str b := b | throw { code := "sigma-table", definition := w, why := s!"σ({w}) is {b.compress}, not a Boolean definition id" }
+    let .str b := b | throw { code := "sigma-table", definition := w, why := s!"σ({w}) is {b.compress}, not a Boolean definition id: map {w} to its Boolean version's definition id, a string" }
     let some iw := PW.index[w]? | throw { code := "sigma-table", definition := w, why := s!"σ has an entry for {w}, which is no definition of the word descriptor: key σ by the word descriptor's definition ids" }
     let some ib := PB.index[b]? | throw { code := "sigma-table", definition := w, why := s!"σ({w}) = {b}, which is no definition of the Boolean descriptor: include σ's image in the Boolean descriptor" }
     let dw := PW.defs[iw]!
@@ -295,16 +295,16 @@ def operandRefusal (SW SB : Side) (c : Nat) (xw xb : Node) (g : Nat) : Option Re
   match xw.args[g]?, xb.args[g]? with
   | some aw, some ab =>
     if !(bitTy aw.ty == ab.ty) then
-      some { code := "operand-type", call := c, operand := g, why := s!"Call {c} operand {g} has type {ab.ty.render}, the word operand's on bits is {(bitTy aw.ty).render}" }
+      some { code := "operand-type", call := c, operand := g, why := s!"Call {c} operand {g} has type {ab.ty.render}, the word operand's on bits is {(bitTy aw.ty).render}: σ keeps each operand's type, on bits" }
     else
       let rw := seqRuns SW true aw.seq
       let rb := seqRuns SB false ab.seq
       if !(rw.all fun (q, rs) => partGood q rs) || !(rb.all fun (q, rs) => partGood q rs) then
-        some { code := "operand-runs", call := c, operand := g, why := s!"Call {c} operand {g}: a reference part spans no bits" }
+        some { code := "operand-runs", call := c, operand := g, why := s!"Call {c} operand {g}: a reference part spans no bits: each part of n leaves reads n leaves of nonzero width" }
       else if merged (rb.flatMap (·.2)) != merged (rw.flatMap (·.2)) then
         some { code := "operand-runs", call := c, operand := g, why := s!"Call {c} operand {g} reads other bits than the word operand occupies: move each word run onto its bits (leaf j of a node's output is bit Σ widths[0..j))" }
       else none
-  | _, _ => some { code := "node-form", call := c, operand := g, why := s!"Call {c} has no operand {g} on one side" }
+  | _, _ => some { code := "node-form", call := c, operand := g, why := s!"Call {c} has no operand {g} on one side: σ keeps each Call's arity" }
 
 /-- Call `c`: σ of its word Definition, its form, and its operands. `earlier`: whether an earlier Call has its word Definition. -/
 def callRefusal (table : Std.HashMap String String) (PW PB : Prog) (SW SB : Side) (c : Nat) : Option Refusal :=
@@ -326,7 +326,7 @@ def callRefusal (table : Std.HashMap String String) (PW PB : Prog) (SW SB : Side
           && xw.args.size == xb.args.size && bitTy xw.out == xb.out) then
         some { code := "node-form", call := c, why := s!"Call {c} is a {xb.form.name} of {xb.n} over axes {xb.axes} with {xb.args.size} operands out {xb.out.render}, the word Call a {xw.form.name} of {xw.n} over axes {xw.axes} with {xw.args.size} out {xw.out.render} (on bits {(bitTy xw.out).render}): σ keeps each node's form" }
       else (List.range xw.args.size).findSome? (operandRefusal SW SB c xw xb)
-  | _, _ => some { code := "node-count", call := c, why := s!"Call {c} is on one side only" }
+  | _, _ => some { code := "node-count", call := c, why := s!"Call {c} is on one side only: σ maps each Call to one" }
 
 def callsRefusal (table : Std.HashMap String String) (PW PB : Prog) (SW SB : Side) : Option Refusal :=
   (List.range SW.calls.size).findSome? (callRefusal table PW PB SW SB)
@@ -335,7 +335,7 @@ def returnRefusal (SW SB : Side) : Option Refusal :=
   let rw := seqRuns SW true SW.ret
   let rb := seqRuns SB false SB.ret
   if !(rw.all fun (q, rs) => partGood q rs) || !(rb.all fun (q, rs) => partGood q rs) then
-    some { code := "return-runs", why := "a part of the return spans no bits" }
+    some { code := "return-runs", why := "a part of the return spans no bits: each part of n leaves reads n leaves of nonzero width" }
   else if merged (rb.flatMap (·.2)) != merged (rw.flatMap (·.2)) then
     some { code := "return-runs", why := "the Boolean root returns other bits than the word root's return occupies: move each word run onto its bits" }
   else none
@@ -346,7 +346,7 @@ def refusal (table : Std.HashMap String String) (PW PB : Prog) (SW SB : Side) : 
   | some e => some e
   | none =>
     if !(bitTy SW.retType == SB.retType) then
-      some { code := "signature", why := s!"the Boolean root returns {SB.retType.render}, the word root's return on bits is {(bitTy SW.retType).render}" }
+      some { code := "signature", why := s!"the Boolean root returns {SB.retType.render}, the word root's return on bits is {(bitTy SW.retType).render}: the Boolean Program returns the word one's return, lifted" }
     else if SW.calls.size ≠ SB.calls.size then
       some { code := "node-count", why := s!"the Boolean root has {SB.calls.size} Calls, the word root {SW.calls.size}: σ maps each Call to one" }
     else match callsRefusal table PW PB SW SB with

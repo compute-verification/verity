@@ -13,8 +13,10 @@ refusal. `sigma_check` walks a strided part's rows as `refs.runs` does, which dr
 from __future__ import annotations
 
 import copy
+import json
 import re
 import shutil
+import subprocess
 from pathlib import Path
 from types import SimpleNamespace
 from unittest import mock
@@ -289,6 +291,31 @@ server = D.server_fixture(CHECK)
 
 def test_the_lean_check_agrees_with_sigma_check(server):
     D.run(CHECK, examples=120, server=server)
+
+
+def test_flock_verify_sigma_check_prints_the_verdict_and_the_fix(tmp_path):
+    """`flock-verify sigma-check WORD BITS`, the verifier's command: one `SIGMACHECK` line with the verdict the difftest holds,
+    exit 0 when the lift holds and 1 when it is refused, and each refusal's reason followed by its fix."""
+    exe = D.build(LEAN.parent / "flock", "flock-verify")
+    for k, case in enumerate(CASES):
+        files = [tmp_path / f"{k}.{side}.json" for side in ("word", "bits")]
+        for f, side in zip(files, ("word", "bits")):
+            f.write_text(D.canonical(case[side]))
+        p = subprocess.run([str(exe), "sigma-check", *map(str, files)], capture_output=True, text=True)
+        [line] = p.stdout.splitlines()
+        tag, out = line.split(" ", 1)
+        got = json.loads(out)
+        try:
+            want = reference(case)
+        except D.Reject:
+            want = {"ok": False, "code": "decode"}
+        assert tag == "SIGMACHECK" and p.returncode == (0 if want["ok"] else 1), (k, p.returncode, line)
+        if want["ok"]:
+            assert got == want, k
+            continue
+        why = got.pop("why")
+        assert ": " in why, f"case {k}: {why!r} gives no fix"
+        assert got == want or want["code"] == got["code"] == "decode", (k, got, want)
 
 
 # ---- bit offsets: the prefix sums of the leaf widths ---------------------------------------------------------------------------
