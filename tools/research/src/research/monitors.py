@@ -1,7 +1,8 @@
 """Monitors: invariants in code, each with an owner, a severity, a threshold and an action (the infra vision's Signals surface).
 One registry (MONITORS) and one runner. Node 1's service (`vy-monitors.timer`, pods/nebius/monitoring/) runs the node-side
-monitors and writes each incident once when it opens and once when it clears; the relay on infra's VM runs the relay-side ones
-(they need GitHub, the evidence store or Slack) and posts both sets to #agent-alerts. Every Nebius machine runs the `machine`
+monitors and writes each incident once when it opens and once when it clears; the relay on the control pod
+(infra/control/watchers.toml) runs the relay-side ones (they need GitHub, the evidence store or Slack) and posts both sets to
+#agent-alerts. Every Nebius machine runs the `machine`
 monitors (`vy-watchdog.timer`: `run --where machine --machine NAME --peer HOST ...`): memory pressure that holds, each process
 the OOM killer took (named with its run and the run's sender), a peer that stops answering, /workspace filling within hours on its
 recent trend (named with the biggest live runs), a unit deploy.toml runs there that was never installed or is off, and
@@ -10,7 +11,7 @@ yesterday's count of full checks lost to infrastructure. The machines watch each
     research monitors list [--where node|relay] [--json]
     research monitors check [ID ...] [--where node|relay] [--json]     evaluate now and write nothing
     research monitors run --by WHO [--where node|relay] [--state PATH] [--alerts DIR] [--only ID ...] [--json]
-    research monitors relay --by WHO [--node1 HOST] [--node-alerts DIR] [--every 60] [--once] [--dry-run]
+    research monitors relay --by WHO [--node1 HOST] [--node-alerts DIR] [--every 60] [--once] [--dry-run] [--seed]
 
 **A monitor** has an id, an owner handle, a severity (`warn`, or `page` when work stops), where it runs, how often, a check that
 returns findings, and the action its owner takes. A finding's `key` is stable while the incident lasts: the runner opens an
@@ -2082,7 +2083,7 @@ def cmd_relay(ns: argparse.Namespace) -> int:
     if fd is None:
         print(f"monitors: refused: another relay holds {posts}.lock", file=sys.stderr)
         return 3
-    post = slack_post(ns.dry_run)
+    post = (lambda ev, thread: {}) if ns.seed else slack_post(ns.dry_run)
     sources = [Source("node1", ns.node_alerts, host=ns.node1), Source("relay", ns.alerts)]
     for spec in ns.machine_alerts or []:
         name, _, where = spec.partition("=")
@@ -2105,7 +2106,7 @@ def cmd_relay(ns: argparse.Namespace) -> int:
             print(f"{stamp} relay failed: {type(e).__name__}: {e}", flush=True)
         if checkpoint:
             checkpoint()
-        if ns.once:
+        if ns.once or ns.seed:
             return 0
         time.sleep(ns.every)
 
@@ -2149,6 +2150,9 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--every", type=float, default=60.0)
     p.add_argument("--once", action="store_true")
     p.add_argument("--dry-run", action="store_true", help="print the posts instead, and keep what was posted only in memory")
+    p.add_argument("--seed", action="store_true",
+                   help="one pass that records every event as posted and posts none: a relay taking over from another starts "
+                        "where that one is, instead of posting every open incident again")
     ns = ap.parse_args(argv)
     try:
         select(None, getattr(ns, "ids", None) or getattr(ns, "only", None))
