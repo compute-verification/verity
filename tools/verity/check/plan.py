@@ -1,13 +1,16 @@
 """`check.py --plan [COMMIT]`: what `check` would reuse at COMMIT and what it would run, running no test, build or audit.
 
     uv run --locked --all-packages --extra torch-cpu python tools/verity/check/check.py --plan [COMMIT] [--json]
-        [--base REF] [--packs-only] [--no-gather] [--from RUN]... [--verdicts-in PACK]...
+        [--base REF] [--packs-only] [--no-gather] [--from RUN]... [--verdicts-in PACK]... [--on MACHINE]
 
 COMMIT defaults to HEAD: this checkout as it is, uncommitted files included, as `check` would see it here.  Another commit is
 checked out in a temporary worktree and planned there, in that tree's own environment (`DECLARED`, the declared command's `uv
 run`), by that commit's own key code: its `suites.py`, its `check.py` (`env`, `STEP_KEYS`), its `lean_audit.py` and its
 `circuit_check`.  Run it where `check` runs (a check node): the suites' and circuit-check's keys hold the interpreter, the base
-image and the installed versions, so a machine unlike the one that earned a pass never finds it.
+image and the installed versions, so a machine unlike the one that earned a pass never finds it.  `--on MACHINE` does that from
+anywhere the store is (`on_machine`): the packs are gathered here, and COMMIT (always a worktree of it, so committed files only)
+is planned on MACHINE by a short `research run --wait` that ships it with this plan.py, verdicts.py and those packs.  Its keys
+match passes earned on a machine of MACHINE's environment only (the vy-nebius-cpu nodes have no nvidia-smi, the GPU nodes do).
 
 Each part of the check, with its key at COMMIT and the recorded passes under that key:
 
@@ -73,6 +76,8 @@ import importlib.metadata
 import importlib.util
 import json
 import os
+import re
+import shlex
 import shutil
 import subprocess
 import sys
@@ -545,6 +550,57 @@ def _clean_env(tree: Path) -> dict[str, str]:
     return {k: v.replace(str(ROOT), str(tree)) for k, v in e.items()}
 
 
+#: a plan on a node (`--on`): the project its run belongs to, its bound (the tree's environment is synced first where that
+#: machine has none for it yet), and where it writes the plan
+REMOTE_PROJECT, REMOTE_MAX_MIN, REMOTE_OUT = "verity", 30, "out/plan.json"
+#: the run id `research run` prints when it launches one (`research.queue.LAUNCHED_RE`)
+LAUNCHED = re.compile(r"\brun (r20\d{6}-\d{6}-[0-9a-f]{4}) launched\b")
+
+
+def on_machine(machine: str, commit: str, d: Path, packs: list[tuple[str | None, Path]], flags: list[str], out: Path,
+               notes: list[str], run=subprocess.run) -> int:
+    """`--on MACHINE`: plan ``commit`` on MACHINE, a check node, where the keys are that machine's (its interpreter, base image,
+    the tools on its PATH and its check slots' caches), as a `research run --wait` of a worktree of ``commit`` (`--source`,
+    `--cwd source`): this checkout's plan.py and verdicts.py, sent with the run, plan that tree (`--tree .`) in its own
+    environment (`DECLARED`), on the packs gathered here, sent too, since a run on a node can't fetch the store's blobs.  The
+    plan comes back from the run's `REMOTE_OUT` to ``out``.  Returns the run's exit, 2 when it launched none."""
+    if machine == "auto" or "," in machine:
+        print(f"check.py --plan --on {machine}: name one machine; its keys are that machine's", file=sys.stderr)
+        return 2
+    tree, send = d / "on-tree", d / "send"
+    send.mkdir()
+    names = []
+    for i, (rid, p) in enumerate(packs):
+        shutil.copyfile(p, send / (n := f"pack-{i}{''.join(p.suffixes[-2:])}"))
+        names.append((rid, n))
+    cmd = " ".join(['I="$RESEARCH_RUN_DIR/inputs";', 'mkdir -p "$RESEARCH_RUN_DIR/out";', "exec uv --quiet", *DECLARED,
+                    '"$I/plan.py"', "--tree", ".", "--out", f'"$RESEARCH_RUN_DIR/{REMOTE_OUT}"', *map(shlex.quote, flags),
+                    *(shlex.quote(f"--pack={rid or ''}=") + f'"$I/{n}"' for rid, n in names)])
+    sends = [HERE / "plan.py", HERE / "verdicts.py", *(send / n for _, n in names)]
+    _git("worktree", "add", "-q", "--detach", str(tree), commit, repo=ROOT)
+    try:
+        r = run([sys.executable, "-m", "research", "run", "--on", machine, "--project", REMOTE_PROJECT, "--source", str(tree),
+                 "--cwd", "source", "--max-min", str(REMOTE_MAX_MIN), "--wait", "--declared-output", REMOTE_OUT,
+                 *(x for f in sends for x in ("--send", str(f))), "--", "bash", "-lc", cmd],
+                cwd=ROOT, capture_output=True, text=True, stdin=subprocess.DEVNULL)
+    finally:
+        subprocess.run(["git", "worktree", "remove", "--force", str(tree)], cwd=ROOT, capture_output=True)
+    said = f"{r.stdout}\n{r.stderr}".strip()
+    if not (ids := LAUNCHED.findall(said)):
+        print(f"check.py --plan --on {machine}: `research run` launched no run (exit {r.returncode}): {said[-400:]}", file=sys.stderr)
+        return 2
+    rid = ids[-1]
+    notes.append(f"planned on {machine} in run {rid}, on the {len(names)} packs gathered where it was asked")
+    got = run([sys.executable, "-m", "research", "status", rid, "--json", "--also", REMOTE_OUT], cwd=ROOT, capture_output=True,
+              text=True, stdin=subprocess.DEVNULL)
+    try:
+        shutil.copyfile(Path(json.loads(got.stdout)["runs"][0]["dir"]) / REMOTE_OUT, out)
+    except (ValueError, KeyError, IndexError, TypeError, OSError) as e:
+        print(f"check.py --plan --on {machine}: run {rid} (exit {r.returncode}) left no {REMOTE_OUT} here "
+              f"({type(e).__name__}: {e}): {said[-300:]}", file=sys.stderr)
+    return r.returncode
+
+
 def parser() -> argparse.ArgumentParser:
     ap = argparse.ArgumentParser(prog="check.py --plan", description=__doc__.split("\n\n")[0])
     ap.add_argument("commit", nargs="?", default="HEAD")
@@ -554,6 +610,7 @@ def parser() -> argparse.ArgumentParser:
     ap.add_argument("--no-gather", action="store_true", help="take no pack from the newest recorded checks")
     ap.add_argument("--from", dest="from_", action="append", default=[], metavar="RUN", help="also RUN's verdict pack")
     ap.add_argument("--verdicts-in", action="append", default=[], metavar="PACK", help="also this pack (cited by no gate)")
+    ap.add_argument("--on", metavar="MACHINE", help="plan on MACHINE, a check node, as a short `research run` (`on_machine`)")
     ap.add_argument("--tree", type=Path, help=argparse.SUPPRESS)
     ap.add_argument("--pack", action="append", default=[], help=argparse.SUPPRESS)
     ap.add_argument("--agreement", action="store_true", help=argparse.SUPPRESS)
@@ -605,10 +662,13 @@ def main(argv: list[str], host=None) -> int:
     notes: list[str] = []
     with tempfile.TemporaryDirectory(prefix="check-plan-") as d:
         packs = gather(host, Path(d), a, notes, commit)
-        args = [*(["--packs-only"] if a.packs_only else []), *(["--agreement"] if required_agreement(commit, base) else []),
-                *(f"--pack={rid or ''}={p}" for rid, p in packs), *(["--base", base] if base else [])]
+        flags = [*(["--packs-only"] if a.packs_only else []), *(["--agreement"] if required_agreement(commit, base) else []),
+                 *(["--base", base] if base else [])]
+        args = [*flags, *(f"--pack={rid or ''}={p}" for rid, p in packs)]
         out = Path(d) / "plan.json"
-        if commit == head:
+        if a.on:
+            r = on_machine(a.on, commit, Path(d), packs, flags, out, notes)
+        elif commit == head:
             r = main(["--tree", str(ROOT), "--out", str(out), *args])
         else:
             tree = Path(d) / "tree"

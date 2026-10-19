@@ -1051,8 +1051,8 @@ def test_verdicts_admits_a_commit_no_check_ran_on_when_its_plan_shows_every_part
     tree = _git(feat, "rev-parse", f"{tip}^{{tree}}")
     asked = []
 
-    def plan(repo, commit, base, also):
-        asked.append((repo, commit, base, also))
+    def plan(repo, commit, base, also, on=None):
+        asked.append((repo, commit, base, also, on))
         return _plan(commit, tree, [_part("suite:a", rid, sha), _part("lean-audit:pkg", rid, sha),
                                     _part("lean-agreement", None, None, "must-run", required=False)])
     monkeypatch.setattr(M, "run_plan", plan)
@@ -1060,11 +1060,45 @@ def test_verdicts_admits_a_commit_no_check_ran_on_when_its_plan_shows_every_part
     assert merge_main(["feat", "--dry-run"]) == 3 and "no passing `check` attempt" in capsys.readouterr().err
     assert merge_main(["feat", "--verdicts", "--dry-run", "--verdicts-from", "r-x"]) == 0
     assert f"passed in the packs of {rid}, part by part" in capsys.readouterr().out
-    assert asked[-1] == (main, tip, _git(main, "rev-parse", "HEAD"), ("r-x",))
+    assert asked[-1] == (main, tip, _git(main, "rev-parse", "HEAD"), ("r-x",), None)
     assert merge_main(["feat", "--verdicts"]) == 0
     msg = _git(main, "log", "-1", "--format=%B")
     assert f"\nVerdicts: {rid}" in msg and "Check:" not in msg
     assert _git(main, "rev-parse", "HEAD^2") == tip
+
+
+def test_verdicts_plan_on_plans_on_each_machine_in_turn_and_admits_on_the_first_fully_passed(tmp_path, monkeypatch, capsys):
+    """`--plan-on M1,M2`: the plan is `check.py --plan --on M` for each machine in turn (its keys are that machine's); the first
+    whose plan is fully passed by cited passes admits, and a refusal names each machine's reason."""
+    import pytest
+
+    import research.merge as M
+
+    main, feat, tip = _repos(tmp_path)
+    rid, sha = _packed(tmp_path, main, monkeypatch)
+    tree = _git(feat, "rev-parse", f"{tip}^{{tree}}")
+    asked, passes, run_plan = [], {"gpu": False, "cpu": True}, M.run_plan
+
+    def plan(repo, commit, base, also, on=None):
+        asked.append(on)
+        if on == "gone":
+            raise M.Refused(f"`check.py --plan {commit[:12]} --on gone` printed no plan (exit 2): no such machine")
+        return _plan(commit, tree, [_part("lean-audit:pkg", rid, sha), _part("suite:a", rid, sha) if passes[on]
+                                    else _part("suite:a", None, None, "must-run")])
+    monkeypatch.setattr(M, "run_plan", plan)
+    monkeypatch.chdir(main)
+    assert merge_main(["feat", "--verdicts", "--dry-run", "--plan-on", "gone,gpu,cpu"]) == 0 and asked == ["gone", "gpu", "cpu"]
+    capsys.readouterr()
+    passes["cpu"] = False
+    assert merge_main(["feat", "--verdicts", "--dry-run", "--plan-on", "gpu,cpu"]) == 3
+    err = capsys.readouterr().err
+    assert "on gpu: 1 of 2 parts have no cited pass" in err and "on cpu: 1 of 2" in err
+    with pytest.raises(SystemExit):
+        merge_main(["feat", "--plan-on", "cpu"])
+
+    monkeypatch.setattr(M, "PLAN", (sys.executable, "-c", "import json, sys; print(json.dumps({'argv': sys.argv[1:]}))"))
+    assert run_plan(main, tip, "b", ("r-x",), on="cpu")["argv"] == [tip, "--json", "--packs-only", "--base", "b", "--from",
+                                                                      "r-x", "--on", "cpu"]
 
 
 def test_verdicts_cites_only_a_pass_under_its_key_in_an_ended_declared_checks_published_pack(tmp_path, monkeypatch):

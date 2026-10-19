@@ -39,7 +39,9 @@ nothing; a part with no key is never passed, a build step (`plan.IMPLIED`) is `i
 that read what it builds (its `implied_by`), and a pass kept only in a machine's cache is cited by nothing.
 The merge commit carries `Verdicts: <attempt id>...`.  It takes no --train or --push: the push guard takes only a passing
 attempt of the tree.  The plan's keys hold the machine it runs on (Python, the base image, the tools on the PATH), so it finds
-the checks' passes only run on the kind of machine they ran on.
+the checks' passes only run on the kind of machine they ran on: `--plan-on M1,M2` (drive.toml's `on`) makes it on each of those
+check nodes in turn, a short `research run` (`check.py --plan --on`), from packs gathered where the gate runs, and admits on the
+first plan fully passed.
 
 After a history rewrite (`commitmap`: an accepted `commit-map/v1` in the store), an attempt of an old commit counts for its image when
 the rewrite kept the tree, and REF is refused when it holds a commit the rewrite replaced: merging old history would bring it back.
@@ -533,17 +535,19 @@ PACK_STATES = ("done", "failed", "cancelled")
 PACKS = ("verdicts.tar.gz", "verdicts-reused.tar.xz")
 
 
-def run_plan(repo: Path, commit: str, base: str, also: tuple[str, ...] = ()) -> dict:
-    """The target's `check.py --plan COMMIT --json --packs-only --base BASE` (with `--from RUN` for each of ``also``), run in
-    the checkout ``repo``; `Refused` when it prints no plan."""
-    r = subprocess.run([*PLAN, commit, "--json", "--packs-only", "--base", base, *(x for rid in also for x in ("--from", rid))],
-                       cwd=repo, capture_output=True, text=True)
+def run_plan(repo: Path, commit: str, base: str, also: tuple[str, ...] = (), on: str | None = None) -> dict:
+    """The target's `check.py --plan COMMIT --json --packs-only --base BASE` (with `--from RUN` for each of ``also``; `--on
+    MACHINE` with ``on``: planned there, a short `research run`), run in the checkout ``repo``; `Refused` when it prints no
+    plan."""
+    r = subprocess.run([*PLAN, commit, "--json", "--packs-only", "--base", base, *(x for rid in also for x in ("--from", rid)),
+                        *(["--on", on] if on else [])], cwd=repo, capture_output=True, text=True)
     try:
         doc = json.loads(r.stdout)
     except ValueError:
         doc = None
     if not isinstance(doc, dict):
-        raise Refused(f"`check.py --plan {commit[:12]}` printed no plan (exit {r.returncode}): {(r.stderr or r.stdout).strip()[-400:]}")
+        raise Refused(f"`check.py --plan {commit[:12]}{f' --on {on}' if on else ''}` printed no plan (exit {r.returncode}): "
+                      f"{(r.stderr or r.stdout).strip()[-400:]}")
     return doc
 
 
@@ -627,19 +631,28 @@ def plan_refusal(doc: dict, store, commit: str, tree: str, tool: str, command: t
 
 
 def verdict_gate(repo: Path, ref: str, into: str, store, tool: str = "check", log=print, remote: str = "origin",
-                 plan=None, also: tuple[str, ...] = ()) -> tuple[str, list[str]]:
+                 plan=None, also: tuple[str, ...] = (), on: tuple[str, ...] = ()) -> tuple[str, list[str]]:
     """`--verdicts`: (commit, the attempts cited) when ``ref`` passes what `gate` holds it to before any verdict (`_admissible`)
     and the target's `check.py --plan` of it shows every part passed by a cited pass (`plan_refusal`), in place of one passing
     attempt of that commit; `Refused` otherwise.  The steps the change requires (`required_steps`) and every Lake package's
-    audit need a pass under their key: a skip is none."""
+    audit need a pass under their key: a skip is none.  With ``on`` (`--plan-on`), the plan is made on each of those machines in
+    turn (`check.py --plan --on`), and the first whose plan is fully passed admits; else it is made here."""
     commit, _maps = _admissible(repo, ref, into, store, tool, log, remote)
     tree = _git(repo, "rev-parse", f"{commit}^{{tree}}").stdout.strip()
     head = _git(repo, "rev-parse", "HEAD").stdout.strip()
-    doc = (plan or run_plan)(repo, commit, head, also)
-    cited, why = plan_refusal(doc, store, commit, tree, tool, declared_command(repo, tool), required_steps(repo, "HEAD", commit, tool))
-    if why:
-        raise Refused(f"{commit[:12]}'s plan isn't fully passed by recorded checks: {why}")
-    return commit, cited
+    command, need = declared_command(repo, tool), required_steps(repo, "HEAD", commit, tool)
+    whys = []
+    for m in on or (None,):
+        try:
+            doc = (plan or run_plan)(repo, commit, head, also, on=m)
+        except Refused as e:
+            whys.append(str(e))
+            continue
+        cited, why = plan_refusal(doc, store, commit, tree, tool, command, need)
+        if not why:
+            return commit, cited
+        whys.append(f"{f'on {m}: ' if m else ''}{why}")
+    raise Refused(f"{commit[:12]}'s plan isn't fully passed by recorded checks: {' | '.join(whys)}")
 
 
 ZERO = "0" * 40
@@ -1796,9 +1809,12 @@ def main(argv: list[str]) -> int:
                     "attempt of REF itself (`verdict_gate`); not with --train or --push, since the push guard takes only the latter")
     ap.add_argument("--verdicts-from", action="append", default=[], metavar="RUN", help="--verdicts: also look passes up in "
                     "RUN's pack (`check.py --plan --from`), beside the newest recorded checks'")
+    ap.add_argument("--plan-on", default=None, metavar="M1,M2", help="--verdicts: make the plan on each of these check nodes in "
+                    "turn (`check.py --plan --on`: a short `research run` there, whose keys are that machine's; give the machines "
+                    "the checks ran on, drive.toml's `on`), and admit on the first fully passed")
     a = ap.parse_args(argv)
-    if a.verdicts_from and not a.verdicts:
-        ap.error("--verdicts-from goes with --verdicts")
+    if (a.verdicts_from or a.plan_on) and not a.verdicts:
+        ap.error("--verdicts-from and --plan-on go with --verdicts")
     if a.verdicts and (a.train or a.push or a.sweep or a.canary or a.guard_push or a.mirror or a.label_landed):
         ap.error("--verdicts gates one ref, without --train, --push or another mode")
     from .store.local import LocalStore
@@ -1900,7 +1916,7 @@ def main(argv: list[str]) -> int:
     try:
         if a.verdicts:
             commit, cited = verdict_gate(repo, a.ref, a.into, LocalStore(a.store), a.tool, remote=a.remote,
-                                         also=tuple(a.verdicts_from))
+                                         also=tuple(a.verdicts_from), on=tuple(m for m in (a.plan_on or "").split(",") if m))
             attempt, trailer = f"the packs of {', '.join(cited)}, part by part", f"Verdicts: {' '.join(cited)}"
         else:
             commit, attempt = gate(repo, a.ref, a.into, LocalStore(a.store), a.tool, remote=a.remote)

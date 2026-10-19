@@ -271,3 +271,55 @@ def test_a_circuit_targets_pass_names_its_entry_and_the_task_list_that_keys_it(P
     assert (a.part, a.key, a.state, b.state) == ("circuit-check:a", "v1/aa", "passed", "must-run")
     assert a.found == [{"source": "own", "paths": ["check/circuit-check/v1/aa/E.json", "check/circuit-check/v1/ll/L.json"],
                         "entry": "E"}]
+
+
+def test_a_plan_on_a_machine_ships_the_commit_with_this_plan_and_the_packs_and_reads_back_what_it_wrote(P, tmp_path, monkeypatch):
+    """`--on MACHINE` (`on_machine`): a `research run --wait` of a worktree of the commit, sent this plan.py, verdicts.py and
+    each gathered pack under a name of its own, runs the inner plan in that tree's environment on those packs; the plan it
+    writes comes back, and the worktree is gone.  The run's command goes through a real shell here, a fake `uv` its end."""
+    import json
+    import subprocess as sp
+
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    _git(repo, "init", "-q")
+    (repo / "f").write_text("1")
+    first = _commit(repo, "one")
+    (repo / "f").write_text("2")
+    _commit(repo, "two")
+    monkeypatch.setattr(P, "ROOT", repo)
+    for d, name in (("a", "verdicts.tar.gz"), ("b", "verdicts-reused.tar.xz")):
+        (tmp_path / d).mkdir()
+        (tmp_path / d / name).write_bytes(name.encode())
+    packs = [("r1", tmp_path / "a" / "verdicts.tar.gz"), (None, tmp_path / "b" / "verdicts-reused.tar.xz")]
+    bin_ = tmp_path / "bin"
+    bin_.mkdir()
+    (bin_ / "uv").write_text('#!/bin/sh\nwhile [ "$1" != python ]; do shift; done; shift\nexec python3 -c \'import json, os, sys; '
+                             'json.dump(sys.argv[1:], open(os.environ["RESEARCH_RUN_DIR"] + "/out/plan.json", "w"))\' "$@"\n')
+    (bin_ / "uv").chmod(0o755)
+    run_dir, seen = tmp_path / "run", {}
+
+    def run(argv, **k):
+        if argv[3] == "status":
+            return sp.CompletedProcess(argv, 0, json.dumps({"runs": [{"dir": str(run_dir)}]}), "")
+        src = Path(argv[argv.index("--source") + 1])
+        seen.update(head=_git(src, "rev-parse", "HEAD"), on=argv[argv.index("--on") + 1], wait="--wait" in argv)
+        (run_dir / "inputs").mkdir(parents=True)
+        for i, x in enumerate(argv):
+            if x == "--send":
+                shutil.copy(argv[i + 1], run_dir / "inputs")
+        seen["sent"] = sorted(p.name for p in (run_dir / "inputs").iterdir())
+        sp.run(["bash", "-c", argv[-1]], cwd=src, check=True,
+               env={**os.environ, "PATH": f"{bin_}:{os.environ['PATH']}", "RESEARCH_RUN_DIR": str(run_dir)})
+        return sp.CompletedProcess(argv, 1, "research: run r20261019-000000-abcd launched on m (None) pid=1\n", "")
+
+    out, notes = tmp_path / "plan.json", []
+    assert P.on_machine("auto", first, tmp_path, packs, [], out, notes, run=run) == 2
+    assert P.on_machine("m", first, tmp_path, packs, ["--packs-only", "--base", "B"], out, notes, run=run) == 1
+    assert seen == {"head": first, "on": "m", "wait": True,
+                    "sent": ["pack-0.tar.gz", "pack-1.tar.xz", "plan.py", "verdicts.py"]}
+    i = f"{run_dir}/inputs"
+    assert json.loads(out.read_text()) == [f"{i}/plan.py", "--tree", ".", "--out", f"{run_dir}/out/plan.json", "--packs-only",
+                                           "--base", "B", f"--pack=r1={i}/pack-0.tar.gz", f"--pack=={i}/pack-1.tar.xz"]
+    assert notes == ["planned on m in run r20261019-000000-abcd, on the 2 packs gathered where it was asked"]
+    assert len(_git(repo, "worktree", "list").splitlines()) == 1
