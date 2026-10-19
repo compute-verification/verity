@@ -257,13 +257,6 @@ def commit_call(index: int, scheme: str, call: PC.Call, on: str = "host", flags:
     return _commit(on, index, scheme, call, flags, side)[0]
 
 
-def commit_call_timed(index: int, scheme: str, call: PC.Call, on: str = "device", flags: int = HASH,
-                      side: PC.WeightRecord | None = None) -> tuple[PC.CallRecord, float]:
-    """`commit_call` on a device build ("device" or "fused"), and its device time in ms, the inputs resident."""
-    rec, ms = _commit(on, index, scheme, call, flags, side)
-    return rec, float(ms)
-
-
 class FusedCommitter:
     """Linear calls of ``scheme`` committed on the device by `ncp2_fused` from torch tensors on the current stream: A (m × k
     int8, m a multiple of 16), the row scales' FP32 encodings (int32), the weight's int7 rows and scale encodings, the bias's
@@ -435,7 +428,6 @@ __all__ = [
     "FusedCommitter",
     "Toolchain",
     "commit_call",
-    "commit_call_timed",
     "compiler",
     "configure",
     "cuda_flags",
