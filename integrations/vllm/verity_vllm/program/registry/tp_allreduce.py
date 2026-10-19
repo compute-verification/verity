@@ -9,6 +9,8 @@ all-reduce vLLM's batch-invariant mode pins pynccl to, on 4x RTX PRO 6000 with P
     AllReduceCustom_v1{WORLD,SIZE,STAGE}      (parts: Array<WORLD, Array<SIZE, bf16>>) -> Array<SIZE, bf16>
     AllReduceMultimemCoordinate_v1{WORLD,TREE,FTZ}
                                               (col: Array<WORLD, bf16>) -> bf16
+    AllReduceMultimemVector_v1{WORLD,TREE,FTZ}
+                                              (parts: Array<WORLD, Array<8, bf16>>) -> Array<8, bf16>
     AllReduceMultimem_v1{WORLD,SIZE,TREES,FTZ}
                                               (parts: Array<WORLD, Array<SIZE, bf16>>) -> Array<SIZE, bf16>
     AllReduceNcclTreeCoordinate_v1{WORLD,CHAIN}
@@ -69,7 +71,9 @@ Past FlashInfer's 0.5 MiB at TP 8 on sm_90, `CudaCommunicator.all_reduce` hands 
 issues ``multimem.ld_reduce.relaxed.sys.global.add.acc::f32.v4.bf16x2`` over its slice of ``round_up(SIZE, 16 * WORLD) / WORLD``
 elements (`multimem_owners`) and ``multimem.st``s the result to every rank. The NVSwitch reduces the WORLD payloads in f32 in an
 order no source states; `AllReduceMultimem_v1` takes it per owner as TREES, binary trees over the ranks whose nodes are f32 adds
-(IEEE, or FTZ when FTZ), the 8-GPU capture's probes reading each tree off the switch (`tree_from_clusters`), then RN to bf16.
+(IEEE, or FTZ when FTZ), the 8-GPU capture's probes reading each tree off the switch (`tree_from_clusters`), then RN to bf16. Each
+``ld_reduce`` reduces one 16-byte vector, `MULTIMEM_VECTOR` elements, and an owner's slice is whole vectors, so the Definition is a
+batch of `AllReduceMultimemVector_v1` per run of one tree, no vector reading another's words.
 
 Under vLLM's batch-invariant mode (``VLLM_BATCH_INVARIANT=1``) none of those routes is on: `ParallelConfig` disables the custom
 all-reduce, `override_envs_for_invariance` sets ``VLLM_ALLREDUCE_USE_SYMM_MEM=0`` and `CudaCommunicator` leaves FlashInfer's
@@ -103,9 +107,10 @@ from verity_vllm.program.registry import prims as P
 from verity_vllm.program.registry.prims import BF16
 
 __all__ = ["AllReduceCustom", "AllReduceCustomCoordinate", "AllReduceMnnvl", "AllReduceMnnvlCoordinate", "AllReduceMultimem",
-           "AllReduceMultimemCoordinate", "AllReduceNcclTree", "AllReduceNcclTreeCoordinate", "AllReduceRmsNormMnnvl",
-           "BATCH_INVARIANT", "CAPTURED", "CAPTURE_RUNS", "CUSTOM_MAX_BYTES", "CUSTOM_SYMM_MAX_BYTES", "Captured", "FI_MAX_BYTES",
-           "MNNVL_ONE_SHOT_BYTES", "NCCL_TREE_RUNS", "RTX_PRO_6000", "SETTINGS", "SYMM_MEM_MAX_BYTES", "WARP", "chain", "covered",
+           "AllReduceMultimemCoordinate", "AllReduceMultimemVector", "AllReduceNcclTree", "AllReduceNcclTreeCoordinate",
+           "AllReduceRmsNormMnnvl", "BATCH_INVARIANT", "CAPTURED", "CAPTURE_RUNS", "CUSTOM_MAX_BYTES", "CUSTOM_SYMM_MAX_BYTES",
+           "Captured", "FI_MAX_BYTES", "MNNVL_ONE_SHOT_BYTES", "MULTIMEM_VECTOR", "NCCL_TREE_RUNS", "RTX_PRO_6000", "SETTINGS",
+           "SYMM_MEM_MAX_BYTES", "WARP", "chain", "covered",
            "custom_order", "custom_owners", "custom_stage", "device_of", "eps_bits", "fused_max_tokens", "mnnvl_grid", "mnnvl_shot",
            "multimem_owners", "multimem_runs", "multimem_tree", "multimem_trees", "nccl_chain", "offset_free", "ranks",
            "route_binding", "served_route", "settings_of", "strategy", "tree_clusters", "tree_from_clusters", "tree_leaves"]
@@ -123,6 +128,8 @@ CUSTOM_SYMM_MAX_BYTES = 256 * 1024
 SYMM_MEM_MAX_BYTES = 64 * 1024 * 1024
 #: torch's `multimem_all_reduce_` slices are whole 16-byte vectors per rank
 MULTIMEM_ALIGN_BYTES = 16
+#: the bf16 elements of one 16-byte vector, what one ``multimem.ld_reduce.v4.bf16x2`` reduces
+MULTIMEM_VECTOR = MULTIMEM_ALIGN_BYTES // 2
 H200_SMS = 132
 _NEG_ZERO32 = const(32, 0x80000000)
 
@@ -393,8 +400,9 @@ def multimem_owners(world: int, size: int) -> list[tuple[int, int, int]]:
     """[(lo, hi, owner)]: torch's `multimem_all_reduce_` reduces elements lo..hi of a SIZE-element bf16 all-reduce from rank
     `owner`'s ``multimem.ld_reduce``, each rank ``round_up(SIZE, 16 * WORLD) / WORLD`` elements (the kernel's 16-byte alignment
     taken as elements), empty slices dropped."""
-    if size % 8:
-        raise ValueError(f"SIZE={size}: torch's multimem all-reduce at 16-byte alignment takes whole 8-element vectors of bf16")
+    if size % MULTIMEM_VECTOR:
+        raise ValueError(f"SIZE={size}: torch's multimem all-reduce at 16-byte alignment takes whole {MULTIMEM_VECTOR}-element "
+                         "vectors of bf16")
     per = -(-size // (MULTIMEM_ALIGN_BYTES * world)) * MULTIMEM_ALIGN_BYTES
     return [(r * per, min((r + 1) * per, size), r) for r in range(world) if r * per < size]
 
@@ -568,6 +576,17 @@ def AllReduceMultimemCoordinate(B, S, col):
     return B.call(P.F2fpBf16, value(multimem_tree(S.TREE, ranks(S.WORLD))))
 
 
+@composite("AllReduceMultimemVector", 1, ["WORLD", "TREE", "FTZ"],
+           lambda S: ((("parts", Array(int(S.WORLD), Array(MULTIMEM_VECTOR, BF16))),), Array(MULTIMEM_VECTOR, BF16)),
+           conformance="not-yet-established: exercised through the exact-model-tested AllReduceMultimem_v1 captures at vLLM's "
+                       "defaults and with the custom all-reduce off, not tested separately "
+                       "(`CAPTURED`, tests/properties/glm53_tp8_allreduce_capture_gpu.py)")
+def AllReduceMultimemVector(B, S, parts):
+    """One 16-byte vector of torch's multimem all-reduce, the `MULTIMEM_VECTOR` bf16 one ``multimem.ld_reduce`` returns: one
+    `AllReduceMultimemCoordinate_v1{TREE}` per element."""
+    return B.batch(bind(AllReduceMultimemCoordinate, WORLD=S.WORLD, TREE=S.TREE, FTZ=bool(S.FTZ)), parts, axes=(1,))
+
+
 @composite("AllReduceMultimem", 1, ["WORLD", "SIZE", "TREES", "FTZ"],
            lambda S: ((("parts", Array(int(S.WORLD), Array(S.SIZE, BF16))),), Array(S.SIZE, BF16)),
            conformance="exact-model-tested: TP8 on 8 cc 9.0 GPUs (132 SMs) at vLLM's defaults and with the custom all-reduce off, the tree "
@@ -575,13 +594,14 @@ def AllReduceMultimemCoordinate(B, S, col):
                        "37-2048 tokens (`CAPTURED`, tests/properties/glm53_tp8_allreduce_capture_gpu.py)")
 def AllReduceMultimem(B, S, parts):
     """torch's `multimem_all_reduce_` of WORLD ranks' SIZE bf16 (the whole flattened tensor, whose slices name each element's
-    owner): each run of `multimem_runs` one `AllReduceMultimemCoordinate_v1{TREE=TREES[owner]}` per element."""
-    W = ranks(S.WORLD)
+    owner): each run of `multimem_runs` one `AllReduceMultimemVector_v1{TREE=TREES[owner]}` per 16-byte vector."""
+    W, V = ranks(S.WORLD), MULTIMEM_VECTOR
     outs = []
     for lo, hi, tree in multimem_runs(W, int(S.SIZE), S.TREES):
-        cols = array_of([parts[r][lo:hi] for r in range(W)])
-        outs.append(B.batch(bind(AllReduceMultimemCoordinate, WORLD=W, TREE=tree, FTZ=bool(S.FTZ)), cols, axes=(1,)))
-    return outs[0] if len(outs) == 1 else coll_concat(Array(int(S.SIZE), BF16), outs)
+        vectors = Array((hi - lo) // V, Array(V, BF16))
+        cols = array_of([parts[r][lo:hi].reshape(vectors) for r in range(W)])
+        outs.append(B.batch(bind(AllReduceMultimemVector, WORLD=W, TREE=tree, FTZ=bool(S.FTZ)), cols, axes=(1,)))
+    return coll_concat(Array(int(S.SIZE), BF16), outs)
 
 
 # ---------------------------------------------------------------------------------------------------------------------------------
