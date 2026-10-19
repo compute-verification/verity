@@ -20,6 +20,8 @@ Red-team scratch, not for landing.
   than excluding it.
 * `keyedPlay`: `Keyed.keyedLayer` with an honest `Play`, which its file doesn't give, so `Of` and `RightFixed` are met
   by an honest run too (`keyedPlay_proofsSound`).
+* `kept_not_luck`: a round charged and passing at every coin fails `LuckAt` below `1`, the shape of #2722's whole-stage
+  `tileGame` for a live tile whose checked values a whole skip keeps at every coin (RT4-LOGIC's `scale_only` finding).
 -/
 
 namespace Accounting.SecurityProofs.TS.RtLogic4
@@ -224,6 +226,29 @@ theorem keyedPlay_proofsSound (n : ℕ) : ProofsSound (keyedPlay n) 1 0 0 1 :=
       show (1 - (honestRG (n + 1)).game.deficiency x / ((n + 1 : ℕ) : ℝ)) * 1 ≤ 1
       exact le_of_eq (by rw [honestRG_deficiency, zero_div, sub_zero, mul_one]))
 
+theorem prob_true_one {Ω : Type} [Fintype Ω] [Nonempty Ω] : prob (fun _ : Ω => True) = 1 := by
+  rw [prob_eq_card, Finset.filter_true_of_mem fun _ _ => trivial, Finset.card_univ]
+  exact div_self (by exact_mod_cast Fintype.card_ne_zero)
+
+/-- **A round charged at every coin that passes at every coin has no luck below `1`**: the shape of #2722's
+`tileGame mode right same .whole t` for a live tile skipped whole whose checked values the cheater keeps at every coin
+(`mode c t = .whole` and `same c t` for every `c`), as a `scale_only` row's tile's are (zero bytes under a nonzero
+scale: admitted by `PouwQueueAdmit`, its products zero). Its `GuessLuckAt p0` is this `LuckAt`, so it fails at
+every `p0 < 1`. -/
+theorem kept_not_luck {Ω : Type} [Fintype Ω] [Nonempty Ω] (d : Ω → ℝ) (pass right same : Ω → Prop)
+    (hd : ∀ ω, d ω = 1) (hpass : ∀ ω, pass ω) {p0 : ℝ} (hp : p0 < 1) :
+    ¬ Accounting.TS.RoundGame.LuckAt p0 (ReceiptGame.round d pass right same fun _ => .done).game := by
+  intro hL
+  obtain ⟨-, h, -⟩ := (show (∀ ω, 0 ≤ d ω ∧ d ω ≤ 1) ∧
+      prob (fun ω => pass ω ∧ 0 < d ω) ≤ p0 * prob (fun ω => 0 < d ω) ∧
+      ∀ ω, Accounting.TS.RoundGame.LuckAt p0 ((fun _ => (ReceiptGame.done : ReceiptGame Ω 0)) ω).game from hL)
+  have e1 : (fun ω => pass ω ∧ 0 < d ω) = fun _ => True :=
+    funext fun ω => propext ⟨fun _ => trivial, fun _ => ⟨hpass ω, by rw [hd ω]; exact one_pos⟩⟩
+  have e2 : (fun ω => 0 < d ω) = fun _ => True :=
+    funext fun ω => propext ⟨fun _ => trivial, fun _ => by rw [hd ω]; exact one_pos⟩
+  rw [e1, e2, prob_true_one] at h
+  linarith
+
 end Accounting.SecurityProofs.TS.RtLogic4
 
 #print axioms Accounting.SecurityProofs.TS.RtLogic4.guessLayer_not_pins
@@ -233,3 +258,4 @@ end Accounting.SecurityProofs.TS.RtLogic4
 #print axioms Accounting.SecurityProofs.TS.RtLogic4.lastRG_receiptLuck
 #print axioms Accounting.SecurityProofs.TS.RtLogic4.lastRG_pinned
 #print axioms Accounting.SecurityProofs.TS.RtLogic4.keyedPlay_proofsSound
+#print axioms Accounting.SecurityProofs.TS.RtLogic4.kept_not_luck
