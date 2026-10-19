@@ -1,4 +1,5 @@
 import Definitions.Accounting.Compose
+import Definitions.Accounting.Gates.Declared
 import Definitions.Pouw.Game.Deadline
 
 /-!
@@ -22,52 +23,61 @@ live round a call; they differ in the served output and in what a receipt unit r
   each receipt unit opens its tile's `z`;
 * `yOpen`, the alternative kernels prices: no second tree; each receipt unit opens the Commit's own `y` rows of its tile
   and its Program checks `dequant(z) = y`, `z` an inner wire;
-* `perCall`, the schedule a path whose served product is the noised one needs: round `c` is call `c`'s (`steps ×
-  calls` rounds, 2,304 for Llama-3.1-8B); its root covers the call's A rows, its coin noises the call's GEMM, and the
-  call's receipts and its served `y = dequant(z)` go under round `c + 1`'s root, `y` as each unit's own output words,
-  so the Commit's `y` tree is the units' (one tree, compared by root). The unit's Program derives `z` from its noised
-  accumulators, so that `z` and `y` read the coin (`Tie.noised`); `h1tile`'s `z`, its own dot, reads none, and
-  Compose's cut would then put `y` before the coin its GEMM needs.
+* `perCall`, a round a call: round `c` is call `c`'s (`steps × calls` rounds, 2,304 for Llama-3.1-8B); its root
+  covers the call's A rows, its coin noises the call's GEMM, and the call's receipts and its served `y = dequant(z)`
+  go under round `c + 1`'s root, `y` as each unit's own output words, so the Commit's `y` tree is the units' (one
+  tree, compared by root). Its `y` reads the coin (`Tie.noised`, reachability: the coin is in `y`'s cone), which is
+  what puts Compose's cut of `y` after the coin; `h1tile`'s `z`, its own dot, reads none, and Compose's cut would
+  then put `y` before the coin its GEMM needs. It was the schedule a path whose served product is the noised one
+  needs, which credit no longer asks (below).
 
 Integrity of the Commit's `y` is its served partition's sampled units' (proofs' framing, not read here), so it never
-reads the form. The link from that `y` to the proved product does (`Form.ServedLink`): `beside` has none (no unit reads the served `y`);
-`zTree` has it under a premise on the prover's fused kernel, that the `y` it serves is `dequant` of the `z` it commits,
-which nothing checks and the design rules exclude (nothing the prover runs is trusted); `yOpen` has it from the tie,
-whose `linked` field puts the Commit's `y` in every receipt unit, and the Program's check, with no premise; `perCall`
-has it from the tie and the unit's own `dequant(z)`, under the run-time check that the Commit's `y` root of the call is
-the root of those output words. So `yOpen` and `perCall` need the less trusted surface.
+reads the form. The link from that `y` to the proved product does (`Form.ServedLink`): `beside` has none (no unit
+reads the served `y`); `zTree` has it under a premise on the prover's fused kernel, that the `y` it serves is
+`dequant` of the `z` it commits, which nothing checks and the design rules exclude (nothing the prover runs is
+trusted); `yOpen` has it from the tie, whose `linked` field puts a reader of the Commit's `y` in every receipt unit
+(a read, not a dependence), and the Program's check, with no premise; `perCall` has it from the tie and the unit's own
+`dequant(z)`, under the run-time check that the Commit's `y` root of the call is the root of those output words. So
+`yOpen` and `perCall` need the less trusted surface. Under `ValueChecked` (below) a `zTree` unit commits its
+`y = dequant(z)` beside its `z`, and its link is then `perCall`'s run-time `y`-root check, with no premise on the kernel.
 
-The link is an equality of values, which useful-work credit needs and which doesn't give it. In the three forms of a
-round a step the served value is committed before its step's coin and every receipt reads that coin (`Tie.noised`),
-and a receipt's H1 sets are over the noised operands `A + b` and `B + c + U`, which no function of `z` gives: the
-receipts' GEMM runs after the served one, so none of them earns useful-work credit. A schedule whose served product is
-the noised one draws a call's coin after its A rows are committed and before its GEMM, and a step's later calls read
-its earlier calls' outputs, so it has a round a call: `perCall`, the one form whose schedule lets the served product be
-the noised one. That product is the dithered `O = (A + b)(B + c)ᵀ` (H1's digits remove `U`'s part), not the model's
-`z = A Bᵀ`, and serving the model's `y` from it takes the peel `z = O − X cᵀ − b Bᵀ + 256·xa Bᵀ` (`X = A + b`, `xa`
-its wrap), whose corrections are products of `z`'s size. So `perCall` earns useful-work credit only if its served `z`
-is derived from the receipted accumulators `O`, with the corrections as extra products that the credit doesn't count,
-paid in `γ_♭ = T(H)/T_cred` (`Certificate.gamma`): `DerivedZ`, the condition `CreditTie` adds to `Tie`. A `z`
-computed as its own `A Bᵀ` product, which reads no noised word, is computed beside the receipted one and fails it
-(RT2-INT-7). No credit statement is stated here, and no form proves the prover ran the product it served. Today's code
-computes `y` as `dequant` of the exact s32 product (`int8_ops.scaled_mm` at 14e4c23a:
-`RN_bf16(RN32(RN32(RN32(z)·s_a)·s_w))`), so `yOpen`'s check would hold of its `y` once those rows are committed,
-which round 4 doesn't do.
+The link is an equality of values, which useful-work credit needs and which doesn't give it. Useful-work credit is
+Daniel's ASK-71 (19 Oct, 22:09Z): the credited noised work was done on the operands `A`, `B` of a served product that
+is value-checked on every drawn unit, `z_u = A_u B_uᵀ` proved and committed before the draw coin, with the served `y`
+computed from that committed `z_u`. `ValueChecked` states it of the circuit, and `CreditTie` is `Tie` with it. Each
+receipt's unit has an `out` word `z` whose value, on every typed input, is the dot of its call's committed A row with
+the registered B column over the linear's whole `K` (`ProductOf`), and an `out` word `y` whose value is the Program's
+public dequant `dq` of `z`'s and the scales' (`DequantOf`); every `out` word is one or the other. Both are
+function-of statements: a `y` that reads `z` and takes another product's value (`y = 0·z + 1·p`, RT3-INT-3) fails
+`DequantOf`. The receipt reads `z`'s operands (`Feeds`), which is reachability; that it is their noised product is its
+public Program's. The credited work is computation on the served operands, not necessarily the computation that
+produced the served bytes: a prover may serve from a plain GEMM beside the noised one. No check can tell a `z` derived
+from the noised accumulators (kernels' `z = O − X cᵀ − b Bᵀ + 256·xa Bᵀ`, `X = A + b`, `xa` its wrap) from one
+computed beside them (RT3-INT-11), so `ValueChecked` asks neither: a `z` of either kind meets it if its value is
+`A_u B_uᵀ`'s. `CreditTie` reads no form: `zTree` meets it at one round a step (`Properties.Served.witCreditTie`), so
+credit needs neither `perCall`'s schedule nor its rounds; `beside` and `yOpen` have no `out` word, and a window of
+theirs with a receipt fails it (`Properties.Served.wit_notValueChecked`). No credit statement is stated here. Today's
+code computes `y` as `dequant` of the exact s32 product (`int8_ops.scaled_mm` at 14e4c23a:
+`RN_bf16(RN32(RN32(RN32(z)·s_a)·s_w))`, the `dq` a Definition would fix), so `yOpen`'s check and `DequantOf` would
+hold of its `y` once its units commit those words, which round 4 doesn't do.
 
 Between the forms, `LayerCommitted` gains one committed class: at its step's round in `zTree` and `yOpen` (`z`, a
-computed word that reads no coin, or the Commit's `y`, a run input only its own call reads), and at the round after its
-call's in `perCall` (`y`, a computed word that reads the call's coin). The round root gains one table root (`z`'s or
-`y`'s), and the units keep their number, each gaining its tile's `z` or `y` words.
+computed word that reads no coin, and under `ValueChecked` its `y`, or the Commit's `y`, a run input only its own call
+reads), and at the round after its call's in `perCall` (`y`, a computed word that reads the call's coin, and under
+`ValueChecked` its `z`). The round root gains one table root (`z`'s or `y`'s; both under `ValueChecked`), and the
+units keep their number, each gaining its tile's `z` or `y` words.
 
 `commitCoin` is the coin before which the served code commits a value of each class (`Cls`) of round `r`, as the
-served code is to do it: the registration (the weights' root over every linear's root(B), and the request queue's
-root) before the salt coin and so before round `0`'s; a call's A rows and its `z` or `y` rows under its round's root,
-before its coin (`perCall`'s `y` under the next round's); its receipts under the next round's root, the last round's in
-the manifest before the draw. Today's code commits the receipts at the draw (`serve.py`'s receipt trees, built after
-serving), which this schedule is the fix of, and its round root covers the A and admit roots only. The admit words and
-the tally have no class: their always-proved units are not in the per-call Program `Properties.Served.ServedUnits`
-names, so no gate of a served circuit is one (RT2-INT-5). They are PADCREDIT's (R8, R9), and the round root's admit
-root stays a run-time check below.
+served code is to do it: the registration (the weights' root over every linear's root(B)) before the salt coin and so
+before round `0`'s; a call's A rows, the request entries its round admits and its `z` or `y` rows under its round's
+root, before its coin (`perCall`'s `y` under the next round's); its receipts under the next round's root, the last
+round's in the manifest before the draw. A request entry is a run input (`act`), not a registered one: certified
+serving releases a window's requests after its salt frame, so no queue root can precede the salt (RT3-INT-9). Today's
+code commits the receipts at the draw (`serve.py`'s receipt trees, built after serving), which this schedule is the
+fix of, and its round root covers the A and admit roots only. The admit words and the tally have no class: their
+always-proved units are not in the per-call Program `Properties.Served.ServedUnits` names, so no gate of a served
+circuit is one (RT2-INT-5). They are PADCREDIT's (R8, R9), and the round root's admit root stays a run-time check
+below.
 
 `Tie` is what a declared circuit (`Accounting.Compose.Declared`) must be to be the served window's: its call sites and
 rounds the layout's, each value's commit coin `commitCoin` of its class, and the IR facts that put each class's value
@@ -77,17 +87,18 @@ receipt reading its round's coin). `TieCommits` states that the tie gives `Accou
 units, the population and the draw, which read the verifier's partition of each call's Program, are
 `Properties.Served`'s. `EpochTie` ties an epoch's windows: each one's `Tie`, and each timed from the one salt's release,
 `Pouw.TimedRun.ts`, the start of the interval `Pouw.Guarantees.WorkBetweenSaltAndDeadline` counts work in. `CreditTie`
-is `Tie` with what useful-work credit needs of the circuit (`perCall`, `DerivedZ`): a necessary condition, which no
-credit statement reads yet.
+is `Tie` with what useful-work credit needs of the circuit (`ValueChecked`): a necessary condition, which no credit
+statement reads yet.
 
 What the verifier must check at run time for each class, so that a `Declared` meeting `Tie` is the run's (the
 statement is over the declared circuit; these are the checks that make its `commitRound` the code's):
 * `registered`: the salt coin opened against the registration root, recorded before every round's coin; the weights'
   root equal to the served model's published one; each drawn unit's B rows opened under its linear's root(B), and
   root(B) under the weights' root;
-* `act`, `out`, `served`: round `r`'s root, recorded before round `r`'s coin, over the A table, admit (PADCREDIT's),
-  and `z` or Commit `y` roots of exactly round `r`'s calls (`perCall`'s `y` roots in round `r + 1`'s); each drawn
-  unit's rows of them opened under it; in `perCall`, each call's Commit `y` root equal to its units' `y` root;
+* `act`, `out`, `served`: round `r`'s root, recorded before round `r`'s coin, over the A table, the request entries
+  the round admits, admit (PADCREDIT's), and `z` or Commit `y` roots of exactly round `r`'s calls (`perCall`'s `y`
+  roots in round `r + 1`'s; both under `ValueChecked`); each drawn unit's rows of them opened under it; in `perCall`,
+  and in any form under `ValueChecked`, each call's Commit `y` root equal to its units' `y` root;
 * the challenger: every round's coin opened by the live challenger, the auditor's device (AGENTS.md, auditor-trusted
   devices; `trusted-nebius-host`), on a machine the prover doesn't control and never a process on the prover's node.
   A challenger in the prover's process gives the prover its coins as they are drawn, so its coins are seeded ones,
@@ -104,10 +115,11 @@ statement is over the declared circuit; these are the checks that make its `comm
 * the window's `F.rounds L` live rounds (`Llama31Rounds`). Compose's bound reads the largest round's share of the
   words, not the count, which is `1/F.rounds L` only when the rounds are equal (`Llama31Rounds` has the numbers);
 * the draw: `K_d` units of `population` from the draw coin opened after the manifest;
-* for credit (`CreditTie`), `perCall` and `DerivedZ` of each call's compiled Program, checked once per Program by the
-  gate that credits a served window (SERVE-GATE's), as `ServedUnits` is. A fact of the Program's IR, it says nothing
-  of the prover's kernel. The honest kernel `γ_♭` is measured against must derive `z` that way too, a fact of
-  kernels' code.
+* for credit (`CreditTie`), `ValueChecked` of each call's compiled Program at the Program's `dq`, once per Program
+  as `ServedUnits` is. No gate checks it yet: SERVE-GATE's (#2731) has no such check. A fact of the Program's IR, it
+  says nothing of the prover's kernel, which may serve from a GEMM beside the noised one; the credited work is the
+  receipts' noised GEMM on the served operands. `ProductOf` and `DequantOf` bear on a run whose inputs are typed
+  (`Gates.Typed`): each drawn unit's opened input word in the declared range of every input gate of its slot.
 -/
 
 namespace Accounting.Served
@@ -185,9 +197,8 @@ def llama31_8b : Layout where
 /-- **A served window's form**: `beside`, receipts over the committed operands beside cuBLASLt's served `y` (today's
 SERVE-H1); `zTree`, the fused kernel serves `dequant(z)` and commits `z`, which receipt units open (J11's first
 iteration, as kernels describes it); `yOpen`, receipt units open the Commit's `y` and check `dequant(z) = y` (the
-alternative); `perCall`, a round a call, whose units output the served `y = dequant(z)`, `z` derived from the call's
-noised product (`DerivedZ`, for credit). In the first three a step's receipts are computed after its served values
-are committed. -/
+alternative); `perCall`, a round a call, whose units output the served `y = dequant(z)`, committed the round after
+their own. In the first three a step's receipts are computed after its served values are committed. -/
 inductive Form
   | beside
   | zTree
@@ -212,14 +223,15 @@ def Form.outLag : Form → ℕ
   | _ => 0
 
 /-- **A served value's class**:
-* `registered`: a row of a linear's B table (under the weights' root) or an entry of the request queue (under the
-  queue's root), both under the registration root;
-* `act`: a row of a call's A table, its slot's s8 row and scale (the empty row in a slot the queue leaves unassigned);
+* `registered`: a row of a linear's B table, or its scale, under the weights' root, the registration root;
+* `act`: a row of a call's A table, its slot's s8 row and scale (the empty row in a slot no request is assigned to),
+  or a request entry its round admits: a run input under its round's root. Certified serving releases a window's
+  requests after its salt frame, so a request entry can't be committed before the salt (RT3-INT-9);
 * `receipt`: a receipt word of a call's unit;
 * `out`: a word a call's unit computes and commits in a row table: the exact product `z` in `zTree`, the served
-  `y = dequant(z)` in `perCall`, its `z` derived from the unit's noised accumulators;
+  `y = dequant(z)` in `perCall`, and under `ValueChecked` both in either;
 * `served`: a word of the Commit's served output `y` of a call, which its unit opens (`yOpen` only);
-* `inner`: a value no opening reads, a proof unit's own wire (`z` in `beside`, `yOpen` and `perCall`);
+* `inner`: a value no opening reads, a proof unit's own wire (`z` in `beside` and `yOpen`);
 * `coin`: a round's coin input, the unit's salt port.
 A call's admit words have no class: their always-proved units are outside the per-call Program (the module
 docstring). -/
@@ -249,7 +261,7 @@ def commitCoin (F : Form) : Cls → ℕ → ℕ
 
 /-- **What ties receipt `i`'s unit to the served output**, by form: nothing in `beside`; in `zTree` and `perCall`, an
 `out` word of the unit (`z`, or the served `y`); in `yOpen`, a gate of the unit that reads a word of the Commit's
-`y`. -/
+`y`. A read, not a dependence: what ties the `out` word's value to the product is `ValueChecked`. -/
 def Form.Links {ι : Type} (Cd : Declared ι) (cls : ℕ → Cls) : Form → ℕ → Prop
   | .beside, _ => True
   | .zTree, i => ∃ j, j < Cd.dag.length ∧ cls j = .out ∧ Cd.unit j = Cd.unit i
@@ -262,10 +274,9 @@ premise on code the prover runs, which no run-time check reaches; `yOpen` has it
 Program's `dequant(z) = y` check over the opened `y` (a fact of that Program's Definition, which doesn't exist yet),
 with no premise, given the run-time check that the unit's `served` words open under the Commit's `y` root: `Tie`
 doesn't tell a `served` run input from an `act` one. `perCall` has it from `Tie.linked` and the unit's own
-`dequant(z)` output, given the run-time check that the call's Commit `y` root is its units' `y` root. It is an
-equality of values: useful-work credit needs it, and it doesn't give that credit. In the three forms of a round a step
-the receipts' GEMM follows the served one; `perCall`'s schedule lets the served `z` be derived from the receipted
-accumulators (`DerivedZ`), which its credit needs, and no form proves the prover ran it so (the module docstring).
+`dequant(z)` output, given the run-time check that the call's Commit `y` root is its units' `y` root. Under
+`ValueChecked` a `zTree` unit outputs its `y` too, and its link is that run-time check, not `fused`. It is an equality
+of values: useful-work credit needs it, and it doesn't give that credit (`ValueChecked`, the module docstring).
 Integrity reads none of it. -/
 def Form.ServedLink (fused : Prop) : Form → Prop
   | .beside => False
@@ -286,7 +297,10 @@ def Form.ServedLink (fused : Prop) : Form → Prop
   `receipt`, `out` or `inner` gate is no input; so every input's class is its binding's;
 * `committed`: a gate that is no input is `inner` exactly when the IR doesn't mark it a committed output
   (`Gates.Gate.commit`), so no opened value is declared inner and committed at its cut by fiat;
-* `noised`: a `receipt` gate, and in `perCall` an `out` gate, depends on its round's coin (`coinMark` past its round);
+* `noised`: a `receipt` gate, and in `perCall` an `out` gate, reads its round's coin (`coinMark` past its round).
+  This is reachability: the coin input is in the gate's cone, not that the gate's value depends on the coin. It is
+  what Compose's cut reads (`Declared.cutOf`), so it is what the commit order needs; that a receipt's value is the
+  noised product is its public Program's (`Properties.Served.ServedUnits`);
 * `forms`, `linked`: an `out` gate is `zTree`'s or `perCall`'s and a `served` gate `yOpen`'s, and every receipt's unit
   has its form's link to the served output (`Form.Links`);
 * `commit`, `inner`: a value of an opened class is committed at `commitCoin` of its form, class and round, and an
@@ -330,42 +344,67 @@ def TieLive : Prop :=
   ∀ (ι K : Type) (Sc : Scheme K) (L : Layout) (F : Form) (Cd : Declared ι) (cls : ℕ → Cls),
     Tie L F Cd cls → Cd.Live Sc
 
-/-- **Gate `i`'s value reaches gate `j`** along reads: `j` is `i`, or reads a gate `i` reaches. -/
+/-- **Gate `i` is in gate `j`'s cone** along reads: `j` is `i`, or reads a gate whose cone holds `i`. This is
+reachability, not dependence: `j`'s value may ignore `i`'s (`0·i`). -/
 def Feeds {ι : Type} (Cd : Declared ι) (i j : ℕ) : Prop := Relation.ReflTransGen (fun a b => Cd.Reads b a) i j
 
-/-- **Gate `k` is a product's step** (`Gates.Op.IsMma`), as the last step of a product's chain is. -/
-def IsMma {ι : Type} (Cd : Declared ι) (k : ℕ) : Prop :=
-  ∃ g : Gates.Gate ι, Cd.dag[k]? = some g ∧ g.op.IsMma
+/-- Gate `i` is declared an s8 word, `[−128, 127]`: the type of an A row's and a B row's words. -/
+def S8 {ι : Type} (Cd : Declared ι) (i : ℕ) : Prop :=
+  (Cd.dag[i]?).any (fun g => decide (g.lo = -128 ∧ g.hi = 127)) = true
 
-/-- **Gate `z` peels accumulator `o`**: `z` is `c₀ + o + Σ cₖ·tₖ`, an affine gate whose first operand is `o` at
-coefficient `1` and each other operand `tₖ` a product (`IsMma`), as `z = O − X cᵀ − b Bᵀ + 256·xa Bᵀ` is. -/
-def Peels {ι : Type} (Cd : Declared ι) (z o : ℕ) : Prop :=
-  ∃ (g : Gates.Gate ι) (c₀ : ℤ) (cs : List ℤ) (ts : List ℕ), Cd.dag[z]? = some g ∧
-    g.op = .affine c₀ (1 :: cs) ∧ g.args = o :: ts ∧ ∀ t ∈ ts, IsMma Cd t
+/-- **Gate `z` is the product of its call's committed A row and a registered B column** (ASK-71's value check): its
+operands `as`, run inputs of `z`'s call (`act`), and `bs` (`registered`), each declared an s8 word (`S8`), are as many
+as its linear's `K`, and on every typed input (`Gates.Typed`: each input slot a word of its type) `z`'s value is
+`Σ_k a_k·b_k`, a coordinate of `A_u B_uᵀ`. A function-of statement: it holds of any gates with that value (`h1tile`'s
+dot, cuBLASLt's, or a peel of the noised accumulators if its corrections cancel the noise on every typed input), and of
+no `z` whose value differs from it on some typed input. `S8` keeps the typed inputs the served rows' words: an operand
+declared `[0, 0]` would leave only `a = 0` typed. Which row and column `as` and `bs` are is the call's Program's
+(`Properties.Served.ServedUnits`). -/
+def ProductOf {ι : Type} (L : Layout) (Cd : Declared ι) (cls : ℕ → Cls) (z : ℕ) (as bs : List ℕ) : Prop :=
+  as.length = L.kOf (L.linearOf (Cd.call z)) ∧ bs.length = as.length ∧
+    (∀ a ∈ as, a < Cd.dag.length ∧ cls a = .act ∧ Cd.call a = Cd.call z ∧ S8 Cd a) ∧
+    (∀ b ∈ bs, b < Cd.dag.length ∧ cls b = .registered ∧ S8 Cd b) ∧
+    ∀ x, Gates.Typed Cd.dag x →
+      Gates.val Cd.dag x z = (List.zipWith (· * ·) (as.map (Gates.val Cd.dag x)) (bs.map (Gates.val Cd.dag x))).sum
 
-/-- **The served `z` is derived from the receipted accumulators** (S5, RT2-INT-7), what `perCall`'s useful-work credit
-needs of the circuit. Every `out` gate `i` (the served `y = dequant(z)`) is reached from a gate `z` of its unit that
-peels (`Peels`) an accumulator `o`. A product step `m` of the unit reaches `o`, is noised (its coin mark past its
-round) and reaches a receipt of the unit. So `y` is a function of the noised product the receipts fold and of the
-corrections. Each correction is an extra product, which the credit doesn't count and `γ_♭` pays for.
-kernels-dither-rtx2's `z = O − X cᵀ − b Bᵀ + 256·xa Bᵀ`, from the noised accumulators, has this form. A `z` computed
-as its own `A Bᵀ` product, reading no noised word, doesn't: kernels' peeled `h1o` rows (49515731cb) are relabelled
-"z computed beside; not credit". The condition is on the IR's structure, so it can't tell what a correction computes:
-a Definition whose corrections recompute `O` passes it, and ruling that out is the Definition's review
-(circuit-check, red team). -/
-def DerivedZ {ι : Type} (Cd : Declared ι) (cls : ℕ → Cls) : Prop :=
-  ∀ i, i < Cd.dag.length → cls i = .out →
-    ∃ z o m r, Cd.unit z = Cd.unit i ∧ Feeds Cd z i ∧ Peels Cd z o ∧
-      Cd.unit m = Cd.unit i ∧ IsMma Cd m ∧ Feeds Cd m o ∧ Cd.round (Cd.call m) + 1 ≤ (coinMark Cd).getD m 0 ∧
-      r < Cd.dag.length ∧ cls r = .receipt ∧ Cd.unit r = Cd.unit i ∧ Feeds Cd m r
+/-- **Gate `y` is the public dequant `dq` of gate `z`**: on every typed input `y`'s value is `dq` of `z`'s and of the
+scales `ss` (the A row's, `act`, and the weight's, `registered`), so no other value reaches `y`'s. A function-of
+statement: a `y` that reads `z` and takes another product's value (`y = 0·z + 1·p`, RT3-INT-3) fails it unless that
+value is `dq` of `z`'s on every typed input. That `dq` is the dequant the served code computes is the Definition's
+review. -/
+def DequantOf {ι : Type} (dq : List ℤ → ℤ) (Cd : Declared ι) (cls : ℕ → Cls) (y z : ℕ) (ss : List ℕ) : Prop :=
+  (∀ s ∈ ss, s < Cd.dag.length ∧ (cls s = .act ∨ cls s = .registered)) ∧
+    ∀ x, Gates.Typed Cd.dag x → Gates.val Cd.dag x y = dq (Gates.val Cd.dag x z :: ss.map (Gates.val Cd.dag x))
 
-/-- **A tied window meets what useful-work credit needs of its circuit** (S5): the tie, in `perCall`, the one form
-whose served product can be the noised one, with the served `z` derived from the receipted accumulators
-(`DerivedZ`). It is necessary, not sufficient: no credit statement reads it yet, and it is of the declared circuit,
-not of the prover's kernel. The gate that credits a served window (SERVE-GATE's) checks `DerivedZ` of each call's
-compiled Program once. -/
-def CreditTie {ι : Type} (L : Layout) (F : Form) (Cd : Declared ι) (cls : ℕ → Cls) : Prop :=
-  Tie L F Cd cls ∧ F = .perCall ∧ DerivedZ Cd cls
+/-- **Every drawn unit's served product is value-checked** (ASK-71, Daniel, 19 Oct, 22:09Z), what useful-work credit
+needs of the circuit:
+* each receipt `r`'s unit has an `out` word `z` that is the product of its call's A row and a B column (`ProductOf`),
+  and an `out` word `y` that is `dq` of `z` (`DequantOf`), both committed before the draw coin; `r` reads each of
+  `z`'s operands (`Feeds`);
+* every `out` word is such a product, or `dq` of one of its unit's, so the served `y` words, the Commit's under the
+  run-time `y`-root check, are each `dq` of a value-checked `z`.
+`ProductOf` and `DequantOf` are function-of statements. `Feeds` is reachability: `z`'s operands are in the receipt's
+cone, which doesn't say the receipt is their noised product; that is its public Program's
+(`Properties.Served.ServedUnits`). The credited work is the receipts' noised GEMM on the served operands, not
+necessarily the computation that produced the served bytes: a prover may serve from a plain GEMM beside the noised
+one, which no check can tell from a `z` peeled from the noised accumulators (RT3-INT-11), and this asks neither. `dq`
+is the Program's public dequant, `RN_bf16(RN32(RN32(RN32(z)·s_a)·s_w))` in today's code (`int8_ops.scaled_mm` at
+14e4c23a). -/
+def ValueChecked {ι : Type} (L : Layout) (dq : List ℤ → ℤ) (Cd : Declared ι) (cls : ℕ → Cls) : Prop :=
+  (∀ r, r < Cd.dag.length → cls r = .receipt →
+    ∃ z y as bs ss, z < Cd.dag.length ∧ y < Cd.dag.length ∧ Cd.unit z = Cd.unit r ∧ Cd.unit y = Cd.unit r ∧
+      cls z = .out ∧ cls y = .out ∧ Cd.commitRound z ≤ Cd.rounds ∧ Cd.commitRound y ≤ Cd.rounds ∧
+      ProductOf L Cd cls z as bs ∧ DequantOf dq Cd cls y z ss ∧ ∀ t ∈ as ++ bs, Feeds Cd t r) ∧
+    ∀ i, i < Cd.dag.length → cls i = .out →
+      (∃ as bs, ProductOf L Cd cls i as bs) ∨
+        ∃ z as bs ss, Cd.unit z = Cd.unit i ∧ cls z = .out ∧ ProductOf L Cd cls z as bs ∧ DequantOf dq Cd cls i z ss
+
+/-- **A tied window meets what useful-work credit needs of its circuit** (ASK-71): the tie, in any form, with every
+drawn unit's served product value-checked at the Program's public dequant `dq` (`ValueChecked`). It is necessary, not
+sufficient: no credit statement reads it yet, and it is of the declared circuit, not of the prover's kernel. No gate
+checks it yet (SERVE-GATE's, #2731, has no such check). -/
+def CreditTie {ι : Type} (L : Layout) (F : Form) (dq : List ℤ → ℤ) (Cd : Declared ι) (cls : ℕ → Cls) : Prop :=
+  Tie L F Cd cls ∧ ValueChecked L dq Cd cls
 
 /-- **The served Llama-3.1-8B window's shape**: 128 linear calls a step, 86,016 units a step, 1,548,288 a window,
 2,304 rounds in `perCall`, and `llama31_8b` well formed. -/
