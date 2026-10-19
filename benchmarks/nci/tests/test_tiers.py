@@ -59,7 +59,7 @@ def test_absorbed_partial_sums_weaken_the_law_as_ps_prime_says():
 
 def test_the_wipe_floor_is_the_closed_form():
     """With every gate windowed and the wipe period below R / r, efficiency is 4 R r / (kappa b_a b_w d Phi)."""
-    p = T.DEFAULTS | {"residual": 1.0, "wipe_left_gb": 1.0, "sigma": 0.0, "wipe_s": 1.0}
+    p = T.DEFAULTS | {"residual": 1.0, "on_chip_gb": 1.0, "pous_rounds": 1e6, "sigma": 0.0, "wipe_s": 1.0}
     r = T.evaluate(p, T.TIERS["T3"])
     rate = p["tau"] + p["K"] / p["Gamma"] * p["node_flops"]
     closed = 4 * r["wipe_state_bits"] * rate / (p["kappa"] * p["b_a"] * p["b_w"] * p["d"] * p["node_flops"])
@@ -69,9 +69,18 @@ def test_the_wipe_floor_is_the_closed_form():
 
 def test_memory_caps_the_residual_below_the_state_threshold():
     threshold = T.state_threshold(T.DEFAULTS, T.TIERS["T3"]) / T.GB
-    below = T.evaluate(T.DEFAULTS | {"wipe_left_gb": threshold / 2}, T.TIERS["T3"])
-    above = T.evaluate(T.DEFAULTS | {"wipe_left_gb": threshold * 2}, T.TIERS["T3"])
+    tight = T.DEFAULTS | {"pous_rounds": 1e6}
+    below = T.evaluate(tight | {"on_chip_gb": threshold / 2}, T.TIERS["T3"])
+    above = T.evaluate(tight | {"on_chip_gb": threshold * 2}, T.TIERS["T3"])
     assert below["memory_caps_residual"] and not above["memory_caps_residual"]
+
+
+def test_proof_of_space_rounds_set_the_slack():
+    """rho^k <= delta: today's 1/19 certificate takes 86 rounds at delta = 1/100, and about 12,000 rounds leave under 1 GB
+    of a 2.64 TB fill (memory-accounting, 19 Oct)."""
+    assert T.slack(T.DEFAULTS) == pytest.approx(1 / 19, rel=0.02)
+    mem_gb = T.DEFAULTS["hbm_gb"] + T.DEFAULTS["host_gb"]
+    assert T.slack(T.DEFAULTS | {"pous_rounds": 12000}) * mem_gb < 1.02
 
 
 def test_helpers_within_the_read_deadline_refill_what_a_wipe_leaves():

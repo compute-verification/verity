@@ -8,8 +8,10 @@ Efficiency is a sum of four terms, each an upper bound under the model; ``STATUS
 * The monitored compute residual (monitored compute that PoUW doesn't attest) trains at full efficiency unless memory
   caps it. A server-window reads its starting state plus what enters during it, ``K_r = state + ingress L``, and
   contains at most ``K_r Lambda(K_r) / b_a`` counted multiplications (``ThreadedReads`` per region), counting every gate
-  on the server, declared or not. The state is all memory; after a wipe, what the wipe leaves plus what helpers refill
-  within the read deadline; under exhaustion, the HBM the declared workload doesn't hold plus the proof-of-space slack.
+  on the server, declared or not. The state is all memory; after a wipe, the on-chip storage no wipe reaches, plus the
+  proof of space's slack on the filled memory, plus what helpers refill within the read deadline; under exhaustion, the
+  HBM the declared workload doesn't hold plus the slack. The slack is set by the proof of space's timed rounds k:
+  rho^k <= delta certifies a held share rho, so the slack is 1 - delta^(1/k) (1/19 at k = 86 and delta = 1/100).
   Ingress is line rate or, under network accounting, side channels plus certified timing plus the NCI-bounded declared
   ingress ``alpha Phi``.
 * Declared compute trains at the thread bound, ``rho_T = b_a / (alpha Lambda(K))`` gates per counted multiplication with
@@ -41,13 +43,14 @@ BLOCK_BITS = 524288
 BLOCK_NAME_BITS = 25
 
 #: defaults: the Kimi K2 calibration and forward chain; compute-accounting's residual (CircuitWork, 0.744% at r = 1);
-#: 100,000 eight-GPU servers for a year (only the cheating pool, a lifetime constant, depends on the fleet); what a wipe
-#: leaves today (the proved slack of 1/19 on 2.6 TB plus main's declared 16 GB unwipeable); today's uncharged declared
-#: egress; the C-Flock CUDA prover's overhead at a 1% budget
+#: 100,000 eight-GPU servers for a year (only the cheating pool, a lifetime constant, depends on the fleet); today's proof
+#: of space certificate (rho = 18/19, which k = 86 rounds certify at delta = 1/100) and memory-accounting's measured
+#: on-chip storage (3.05 GB on vy-nebius-2); today's uncharged declared egress; the C-Flock CUDA prover's overhead at a
+#: 1% budget
 DEFAULTS = {
     "unmonitored": 0.0, "residual": 0.0074,
-    "wipe_left_gb": 155.0, "sigma": 1e3, "b_w": 2.5, "b_a": 4.0,
-    "f": 0.95, "slack": 1 / 19, "t_read": 1e-3, "wipe_s": 3600.0, "hbm_gb": 640.0, "host_gb": 2000.0,
+    "pous_rounds": 86.0, "on_chip_gb": 3.05, "sigma": 1e3, "b_w": 2.5, "b_a": 4.0,
+    "f": 0.95, "pous_delta": 0.01, "t_read": 1e-3, "wipe_s": 3600.0, "hbm_gb": 640.0, "host_gb": 2000.0,
     "tau": 400.0, "egress_decl": 4.4e9, "nic": 3.2e12,
     "share": 0.01, "overhead": 1.64e8, "replay": 1.1e5, "step_flop": 1.43e4, "p_evade": 0.01, "identities": 1.0,
     "floor_steps": 1.0,
@@ -61,12 +64,13 @@ DEFAULTS = {
 SPEC = [
     {"key": "unmonitored", "main": True, "label": "Unmonitored compute share", "unit": "", "min": 1e-12, "max": 0.5, "log": True, "zero": True},
     {"key": "residual", "main": True, "label": "Monitored compute residual", "unit": "", "min": 1e-12, "max": 1, "log": True, "zero": True},
-    {"key": "wipe_left_gb", "main": True, "label": "Memory a wipe leaves per server (proved 155, declared 16, goal 1)", "unit": "GB", "min": 0.01, "max": 3000, "log": True},
+    {"key": "pous_rounds", "main": True, "label": "Proof-of-space rounds per audit (today's 1/19 certificate: 86; under 1 GB: about 12,000)", "unit": "", "min": 10, "max": 1e6, "log": True},
+    {"key": "on_chip_gb", "main": True, "label": "On-chip storage no wipe reaches, per server (measured 3.05)", "unit": "GB", "min": 0.01, "max": 100, "log": True},
     {"key": "sigma", "main": True, "label": "Side channels per server", "unit": "bit/s", "min": 1, "max": 1e10, "log": True, "zero": True},
     {"key": "b_w", "main": True, "label": "Compression: bits per updated weight", "unit": "bit", "min": 0.1, "max": 16, "log": True},
     {"key": "b_a", "main": True, "label": "Compression: bits per activation", "unit": "bit", "min": 0.1, "max": 16, "log": True},
     {"key": "f", "label": "Exhaustion: declared share of HBM", "unit": "", "min": 0, "max": 0.999, "log": False},
-    {"key": "slack", "label": "Proof-of-space slack on filled memory (proved 1/19)", "unit": "", "min": 1e-5, "max": 0.5, "log": True},
+    {"key": "pous_delta", "label": "Proof-of-space failure probability per certificate", "unit": "", "min": 1e-12, "max": 0.5, "log": True},
     {"key": "t_read", "label": "Wipe read deadline (helpers within it refill blocks)", "unit": "s", "min": 1e-6, "max": 1e-1, "log": True},
     {"key": "wipe_s", "label": "Wipe period", "unit": "s", "min": 1, "max": 1e7, "log": True},
     {"key": "hbm_gb", "label": "HBM per server", "unit": "GB", "min": 80, "max": 4000, "log": True},
@@ -177,6 +181,11 @@ def windows_bound(p: dict, H: float, state: float, ingress: float, period: float
     return best
 
 
+def slack(p: dict) -> float:
+    """The share of filled memory a proof-of-space certificate leaves unaccounted: rho^k <= delta certifies rho."""
+    return 1 - p["pous_delta"] ** (1 / p["pous_rounds"])
+
+
 def ingress(p: dict, mech: dict) -> float:
     return p["sigma"] + p["tau"] + p["K"] / p["Gamma"] * p["node_flops"] if mech["net"] else p["nic"]
 
@@ -238,8 +247,9 @@ def evaluate(p: dict, mech: dict) -> dict:
     mem = (p["hbm_gb"] + p["host_gb"]) * GB
     rate_in = ingress(p, mech)
     help_bits = min(1.0, max(0.0, sigma_eff * p["t_read"] - BLOCK_NAME_BITS) / BLOCK_BITS) * mem
-    wipe_state = p["wipe_left_gb"] * GB + help_bits
-    envelope = (p["hbm_gb"] * (1 - p["f"] * (1 - p["slack"])) + p["host_gb"] * p["slack"]) * GB + sigma_eff * T_AUDIT
+    sl = slack(p)
+    wipe_state = (p["on_chip_gb"] + sl * (p["hbm_gb"] + p["host_gb"])) * GB + help_bits
+    envelope = (p["on_chip_gb"] + p["hbm_gb"] * (1 - p["f"] * (1 - sl)) + p["host_gb"] * sl) * GB + sigma_eff * T_AUDIT
     per_server = math.inf
     if mech["wipes"]:
         per_server = min(per_server, windows_bound(p, H, min(wipe_state, mem), rate_in, p["wipe_s"]))
