@@ -26,7 +26,8 @@ open Accounting.TS Accounting.Assumptions.Checkpoint Accounting.HMuProofs
 open Pouw.RelativeSecurity (prob)
 
 /-- The one-round game of `tileGame`'s shape: share `1` in mode `s`, check `same`. -/
-noncomputable abbrev tile {C M : Type} [DecidableEq M] (mode : C → M) (s : M) (same : C → Prop) : RoundGame C 1 :=
+noncomputable abbrev tile {C M : Type} [DecidableEq M] (mode : C → M) (s : M) (same : C → Prop) :
+    Pouw.RelativeSecurity.RoundGame C 1 :=
   (ReceiptGame.round (fun c => if mode c = s then 1 else 0) same same same fun _ => .done).game
 
 theorem luckAt_tile_iff {C M : Type} [Fintype C] [DecidableEq M] (mode : C → M) (s : M) (same : C → Prop) (p : ℝ) :
