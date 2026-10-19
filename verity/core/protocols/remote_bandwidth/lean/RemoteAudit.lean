@@ -5,3 +5,4 @@ import RemoteAudit.Receipts
 import RemoteAudit.Window
 import RemoteAudit.Session
 import RemoteAudit.Registry
+import RemoteAudit.PostSeed

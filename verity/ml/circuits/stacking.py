@@ -99,7 +99,7 @@ from typing import Any, Callable, Iterator, Mapping, Sequence
 
 from . import ports
 from .census import SCHEMA as CENSUS, step_of
-from .codec import canonical_json
+from .codec import canonical_json, descriptor_id
 from .defs import Body, CompositeDefinition, PrimitiveDefinition, bind
 from .intervals import norm, ref_intervals
 from .program import RUN, input_id, is_input
@@ -524,10 +524,11 @@ def _read(refs: Refs, params: Sequence[Range], segs: Sequence[Segs], cache: dict
 
 
 def _read_segs(refs: Refs, params: Sequence[Range], segs: Sequence[Segs]) -> Segs:
-    """The segments of a body's return, in leaf order: an affine run of a node's leaves keeps that node's segments."""
+    """The segments of a body's return, in leaf order: an affine run of a node's leaves keeps that node's segments. A
+    concatenation is read flat, as the descriptor writes it (`codec._flat_parts`)."""
     out: list[tuple[int, int, Range]] = []
     pos = 0
-    for part in (refs.parts if isinstance(refs, Concat) else [refs]):
+    for part in _parts(refs):
         n = part.count
         if n and isinstance(part, Affine) and part.space == "n":
             for a, b, r in segs[part.idx]:
@@ -544,7 +545,7 @@ def _read_segs(refs: Refs, params: Sequence[Range], segs: Sequence[Segs]) -> Seg
 
 
 def _key(refs: Refs) -> Any:
-    return tuple(refs) if refs.count <= 64 else canonical_json(refs.to_json()).decode()
+    return tuple(refs) if refs.count <= 64 else canonical_json([p.to_json() for p in _parts(refs)]).decode()
 
 
 def _bits(t: Type) -> int:
@@ -678,7 +679,7 @@ class _Pass:
             dyns: list[bool] = []
             out = Tally()
             up: dict = {}
-            for _k, t in self.walk(fn.body, dyn, rng, fn.id, segs, dyns, up):
+            for _k, t in self.walk(fn.body, dyn, rng, descriptor_id(fn), segs, dyns, up):
                 out.add(t)
             out.index = up
             ret = _read_segs(fn.body.ret, rng, segs)
@@ -779,7 +780,7 @@ class Analysis:
     over the Program its primitives and inputs (``gates``: each one's class, instances and operand bits), its
     refusals (gates by primitive, reinterpretations by the Definition whose body reads at another width), proven core steps
     with their products and proven affine maps, the core steps not proven with their sites, and the longest a dynamic value is
-    held."""
+    held. A Definition is named by its descriptor id (`codec.descriptor_id`), as the Program's descriptor names it."""
 
     steps: tuple[dict, ...]
     gates: dict
@@ -808,7 +809,7 @@ def count(fn: Any, dyn: Sequence[bool], ranges: Sequence[Range] | None = None) -
         return p.call(fn, tuple(dyn), rng, (fn.id, 0))[2]
     out = Tally()
     up: dict = {}
-    for _k, t in p.walk(fn.body, tuple(dyn), rng, fn.id, [], [], up):
+    for _k, t in p.walk(fn.body, tuple(dyn), rng, descriptor_id(fn), [], [], up):
         out.add(t)
     if up:
         out.units["gathers"] += sum(bits for _refs, bits, _kind in up.values())
@@ -829,7 +830,7 @@ def analyze(program: Any, census: Mapping) -> Analysis:
     whole = Tally()
     vals = census["values"]
     p = _Pass()
-    for k, t in p.walk(program.root.body, (), (), program.root.id, [], [], {}):
+    for k, t in p.walk(program.root.body, (), (), descriptor_id(program.root), [], [], {}):
         whole.add(t)
         for cls, n in t.units.items():
             units[step(k)][cls] += n

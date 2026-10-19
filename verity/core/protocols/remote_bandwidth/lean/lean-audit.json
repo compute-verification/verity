@@ -1,7 +1,8 @@
 {
  "roots": ["RemoteAudit", "RemoteAudit.Difftest"],
  "exempt": {
-  "RemoteAudit.DifftestMain": "the remote-audit-difftest executable's entry point, one line; it serves RemoteAudit.Difftest.table, audited under RemoteAudit.Difftest, through the difftest server's line protocol: a test and not a proof"
+  "RemoteAudit.DifftestMain": "the remote-audit-difftest executable's entry point, one line; it serves RemoteAudit.Difftest.table, audited under RemoteAudit.Difftest, through the difftest server's line protocol: a test and not a proof",
+  "RemoteAudit.VerdictMain": "the remote-audit-verdict executable's entry point, one line; it serves RemoteAudit.PostSeed.fns, audited under RemoteAudit, through the difftest server's line protocol, which audit.post_seed and the difftest both call: a server and not a proof"
  },
  "layers": {
   "RemoteAudit": {

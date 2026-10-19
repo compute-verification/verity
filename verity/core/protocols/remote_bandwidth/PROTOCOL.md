@@ -1028,11 +1028,41 @@ over them. Until `public()` is trimmed to match (after #2519, which keeps `stale
   payload roots committed before the passes that read them, fresh store indices, each page encoded under its bound
   key and its append's coin with \(d_j\) kept beside it, an opening of one carrying \(d_j\), which check 3 decodes
   under with the coin, and releases that keep a block out of every later plan. Open:
-  - *The verdict's binding.* `ledger` takes the verdict as given (`PostSeedVerdict`: whether it holds, and its carrier
-    bytes for a window's certified reads). That it is of the circuits that wrote this session's appends, and that
-    their payloads are those circuits' values (sampled proofs), are I2's and I4's to check. That no appended block is
-    credited past \(L\) the session checks itself (§4, `lifetime`); that the verdict was computed at the record's
-    \(L\) is the verdict's to say.
+  - *The verdict's binding.* `ledger` reads the verdict as `PostSeedVerdict`: whether it holds, and its carrier bytes
+    for a window's certified reads. The verifier computes it by its Lean definition (`RemoteAudit.PostSeed.verdict`,
+    which `post_seed` runs as `remote-audit-verdict`; Cut 1 of note:proofs/20261018T0530Z-draft-post-seed-verdict-cut),
+    with no unit: property/v1's analysis and judgment of W as the Lean decodes it, at the step ends it is given, so
+    the census it reads is W's by construction. It costs what W's description does, never its unrolled circuit: what
+    a Definition reads and computes is memoized per specialized Definition and multiplied out through `batch` members
+    and `scan` iterations. `ml.circuits.post_seed` mirrors it in Python for the prover, held to it by
+    `lean/tests/test_post_seed_difftest.py`. The verdict binds the result to the session by equalities between things
+    the verifier holds, each refused by name: W's digest is the one-stage audit's `program` (1); each memory-map
+    unit's `val{k}` row is W's value leaf at `pos[k]` (`map_value_leaves`, 2); the session's appends, each pass's head
+    and its stale bound are the map units' (`RequirementLink.mapped(record)`, above, 3). It carries W's digest, its
+    \(L\) and its windows, and `ledger` refuses a `PostSeed` whose \(L\) and windows aren't the record's (4,
+    `property_reading`); a verdict of any other kind is taken as given. That no appended block is credited past \(L\)
+    the session checks itself (§4, `lifetime`).
+
+    The record's windows and lifetime cap convert to property/v1's census steps as follows (memory-accounting,
+    MEM-38). *Step ranges:* pass \(i\), in order, names step \(s_i\), with \(s_0 = -1\), and covers the census steps
+    \((s_{i-1}, s_i]\), so a window covers its passes' steps, with its certified reads \(U_t b\) and its span. The
+    steps after the last pass belong to the closing window's pass. An unpaced session whose last pass is before the
+    census's last step is refused: "steps after the last pass are uncovered". *L in steps:* the cap \(L_w\), in
+    windows, is \(L_{\text{steps}} = \max_w\) of the census steps in windows \(w \ldots w + L_w\) (\(L_w + 1\)
+    windows; rounding up is safe). `check` takes one \(L\), so the verdict judges at \(L_{\text{steps}}\).
+
+    The verdict refuses, by name, what it doesn't cover yet: ports declared on a Definition other than the root; a
+    root Call that may pass one of its arguments through, whose readers the census would hand to the value passed;
+    and a batch whose members read more than \(2^{22}\) runs of their part, where the census approximates. Open:
+    - *Steps are values.* A pass's step is a committed input, not public (memory-accounting, 18 Oct; §7, "Declared
+      outputs"), so the verdict is to read the steps through the record's commitment, never in the clear. The record
+      commits no steps yet: it carries them in the clear (§4), and the verdict reads them so.
+    - *W's step ends.* The prover gives them, and the verdict checks only that they increase through W's root
+      nodes past its inputs to the last. Nothing yet binds them to the steps serving executed.
+    - *Pacing.* This session has no paced mode, so `ledger` reads every record as unpaced.
+    - *The carriers' bytes.* \(R_{\text{in}} L + (c_\rho \cdot U_t b \cdot L / E) b\) reads \(L\) as the carriers'
+      lifetime in seconds, and the verdict's \(L\) is census steps; until the units agree, a `PostSeed`'s
+      `carrier_bytes` raises, so `ledger` credits no post-seed receipt on it.
   - *Appends across sessions.* A session's appends end with it, and the next session starts again from \(N\), so a
     page that outlives its session is appended again in the next, its encoding recomputed under its new index.
     Carrying appends over needs the next session to take the previous one's append roots and releases as its
