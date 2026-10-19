@@ -1,10 +1,10 @@
 """scope_offload.py, run as written. It checks the word-level ceiling (a committed word packs 32 MACs into 4 bytes, so a
 helper that must deliver every word supplies at most 8*BW/MAC_rate of a GPU's credited MACs) and that a tile digest
-carries more MACs a byte than a word, which makes those ceilings floors. It checks the whole-tile host bound (host AMX
-over the headline eps at peak on every device, and at measured efficiency on sm_120 and H200), the word-level NVLink
-floor (~0.3% on H200/B200), and the capacity bound on device memory's word stock. The compression fact is verified
-bit-exact, and every mutation is caught. The Device.lean side-channel check is opt-in (`--device-lean`) and is not run
-here, so this test reads only the package."""
+carries more MACs a byte than a word, which makes those ceilings floors. It checks the whole-tile host share against
+each headline design's credited time a word (the machine model's), at measured per-core rates and at AMX's data-sheet
+peak, read as counted eps at both readings; the word-level NVLink floor (~0.3% on H200/B200); and the capacity bound on
+device memory's word stock. The compression fact is verified bit-exact, and every mutation is caught. The Device.lean
+side-channel check is opt-in (`--device-lean`) and is not run here."""
 from __future__ import annotations
 
 import json
