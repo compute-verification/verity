@@ -4,6 +4,10 @@ The port of `verity/core/protocols/pouw/window.py`, on Lean core and PoUW's comm
 domains, C-Flock's SHA-512 and hm96, core's tagged identity). Once its properties are proven it moves, as a
 pure move, to the same path under `verity/core/`; the Python keeps running until then.
 
+Tokens served past the honest run's end-of-sequence are not useful work, so a row of record serves at a public fixed
+length, ignore_eos at each slot's public max_tokens, which the window registers and the verifier checks (Daniel, 19 Oct,
+ASK-39; `PouwWindow.Length`).
+
 | module | `window.py` |
 | --- | --- |
 | `PouwWindow.Grid` | `GRID_BITS`, `on_grid`, `floor_point`, `pad`, `level`, `point`, `levels`, `Work`, `bucket`, with their refusals |

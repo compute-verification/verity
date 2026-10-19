@@ -2,7 +2,8 @@
 judged through the proof service (`sampled_proofs.service`, P1: a `Stream`'s `register`, `select`, `deliver` and
 `outcome`), and the check that a hidden tile proof's committed rows are the drawn tile's.
 
-  python served_commit.py params PASS_DIR OUT [--eps E --delta D --entries P]   the verifier's own parameters of the window
+  python served_commit.py params PASS_DIR OUT [--eps E --delta D --entries P --max-tokens T]
+                                                                              the verifier's own parameters of the window
   python served_commit.py commit PASS_DIR PARAMS OUT [--calls N | --call I ...]   the committer: the window, salted and committed
   python served_commit.py register COMMIT_DIR PARAMS OUT [--extra ITEM=JSON]  the committer: the record, the public items only
   python served_commit.py edit REGISTRATION OUT KEY=JSON ...                  a control's registration, a field changed
@@ -38,11 +39,16 @@ judged through the proof service (`sampled_proofs.service`, P1: a `Stream`'s `re
   each call, not W's rows, until registered rows (P7) read B from W.  ``commitment.json`` is what the committer registers:
   the context, the level, the public items and the two roots.  ``advice.json`` (the entries and their salts) and
   ``prover.npz`` (rows, salts, b ‖ c) are the prover's.
+- **The fixed length** (Daniel, 19 Oct, ASK-39): the request is served at a public max_tokens under ignore_eos, so its
+  useful work is public.  The verifier's parameters hold its request's max_tokens (``length``), the committer registers
+  the runner's record of how it served it (``served.json`` beside the pass, `served_length`), and PoUW's rule refuses an
+  EOS-keyed row or a served length other than max_tokens (``window-form``).  A pass with no served record registers no
+  length item, which the verifier refuses as registered before the rule.
 - **The service** (P1): the committer's `register` writes one-stage's v1 record, scheme `service.SCHEME`, whose window
   holds exactly `pouw.window.REGISTERED`.  Two rules hold it: the service's (`service.check_public` over the `Spec`,
   which declares what one-stage's record shows besides the two salted roots: N, the window item, each root's leaf count
   and domain) and PoUW's inside the window item (`public_problem`: exactly those items, each the verifier's own
-  recomputation at the registered level from its own context, ε, δ, the grid, P and |W|).  The `Challenger` holds both,
+  recomputation at the registered level from its own context, ε, δ, the grid, P, |W| and max_tokens).  The `Challenger` holds both,
   then `Stream.register` (R1-R7 and the receipt), `select`, `deliver` (the drawn units' session records' SHA-512, once)
   and `outcome` (final), and publishes exactly `pouw.window.PUBLIC`.  A Spec fixes one law and K′ is a function of the
   level, so the challenger holds one Stream per level.
@@ -137,6 +143,10 @@ W_DOMAIN = "verity/pouw/served-zk/weights-domain/v0"
 ENTRIES = 16
 RANGE = (1, 1 << 40)
 EPS, DELTA = "1/2", "1/10"
+#: the max_tokens of the request the verifier issues, `e2e.SERVED_TOKENS`, and the runner's record of how it served it
+#: (``{"ignore_eos", "max_tokens", "served"}``, a list per slot), which `e2e.py` writes beside the retained pass
+MAX_TOKENS = 4
+SERVED_RECORD = "served.json"
 
 
 # ---- the window's parameters and its spec ---------------------------------------------------------------------------------
@@ -170,19 +180,29 @@ def check_item(params: dict) -> dict:
     return {"template": template(params["k"]).id, "tile_work": tile_work(params), "scheme": S.SCHEME, "entries": params["entries"]}
 
 
-def items_of(params: dict, ell: int, root_w: str | None) -> dict:
-    """The registered public items at level `ell` (`pouw.window.REGISTERED`)."""
+def served_length(served: Mapping[str, Any]) -> dict:
+    """The registered length item (`pouw.window.length_item`'s form) of the runner's served record (``served.json``,
+    `e2e.py`'s served requests): each slot's max_tokens and served length, and stop fixed when it served under
+    ignore_eos, else ``eos``, which the verifier refuses as an EOS-keyed row."""
+    return {"max_tokens": list(served["max_tokens"]), "served": list(served["served"]),
+            "stop": Wd.STOP_FIXED if served.get("ignore_eos") is True else "eos"}
+
+
+def items_of(params: dict, ell: int, root_w: str | None, length: Mapping[str, Any] | None = None) -> dict:
+    """The registered public items at level `ell` (`pouw.window.REGISTERED`), the rows' length item `length`; with none,
+    `pouw.window.LEGACY_REGISTERED`, a window the verifier refuses as registered before the fixed-length rule."""
     w = work_at(params, ell)
     return {"work": w.to_json(tile_work(params)), "check": check_item(params),
             "sampling": Wd.sampling(Fraction(params["eps"]), Fraction(params["delta"]), w, tile_work(params), params["grid_bits"]),
-            "root_W": root_w}
+            **({"length": dict(length)} if length is not None else {}), "root_W": root_w}
 
 
 #: what one-stage's record shows besides the two salted roots, each declared to the service's rule with its reason
 LAYOUT = (
     ("population", "structure", "N, the padded tile count g_(ℓ+1): the draw's range, a function of the registered level"),
-    ("window", "output", "PoUW's registered items, exactly `pouw.window.REGISTERED` (work, check, sampling, root_W), each "
-                         "the verifier's own recomputation at the registered level (`public_problem`)"),
+    ("window", "output", "PoUW's registered items, exactly `pouw.window.REGISTERED` (work, check, sampling, length, root_W), "
+                         "each the verifier's own recomputation at the registered level, the length its fixed max_tokens "
+                         "(`public_problem`)"),
     (f"leaves:{PORT}", "structure", "P, the public bound on a window's entries"),
     (f"domain:{PORT}", "structure", "the entries' served domain: the window's program, partition and context"),
     ("leaves:W", "structure", "|W|, the deployment's weight rows at k = n = K"),
@@ -252,7 +272,8 @@ def level_of(rec: Mapping[str, Any]) -> int:
 def public_problem(params: dict, rec: Any) -> Verdict:
     """PoUW's rule inside the window item, which the service's rule declares as one item: the window is
     ``{"kind": "served", "context", "public"}`` under the verifier's own context, its public items are exactly
-    `pouw.window.REGISTERED`, each the verifier's own at the registered level (root_W the registered W root), and N is the
+    `pouw.window.REGISTERED`, each the verifier's own at the registered level (root_W the registered W root; the length a
+    fixed-length window's at the verifier's max_tokens, `pouw.window.length_problem`, else ``window-form``), and N is the
     level's padded count."""
     c = _Collect()
     window = rec.get("window") if isinstance(rec, Mapping) else None
@@ -262,9 +283,16 @@ def public_problem(params: dict, rec: Any) -> Verdict:
     if window["kind"] != "served" or window["context"] != params["context"]:
         c.fail("public-context", {"registered": [window["kind"], window["context"]], "verifier": ["served", params["context"]]})
     items = window["public"]
+    if isinstance(items, Mapping) and set(items) == set(Wd.LEGACY_REGISTERED):
+        c.fail("window-form", "no-fixed-length: registered before the fixed-length rule (19 Oct), so not of record")
+        return c.verdict()
     if not isinstance(items, Mapping) or set(items) != set(Wd.REGISTERED):
         c.fail("public-items", {"registered": sorted(items) if isinstance(items, Mapping) else items,
                                 "declared": sorted(Wd.REGISTERED)})
+        return c.verdict()
+    why = Wd.length_problem(items["length"], params["length"]["max_tokens"])
+    if why is not None:
+        c.fail("window-form", why.split(": ", 1)[1])
         return c.verdict()
     try:
         ell = level_of(rec)
@@ -375,14 +403,15 @@ def filler_shape(fill: int) -> tuple[int, int]:
     return -(-fill // b), b
 
 
-def commit_window(params: dict, calls: list[dict], root_w: str, root_h3: bytes, salts: dict | None = None
-                  ) -> tuple[dict, dict, dict]:
+def commit_window(params: dict, calls: list[dict], root_w: str, root_h3: bytes, salts: dict | None = None,
+                  length: Mapping[str, Any] | None = None) -> tuple[dict, dict, dict]:
     """The window's commitment from its calls (each `{"record", "words": {"a", "b"}}`, the record holding the call's
     ``shape`` [m, k, n] and its first tile in the pass ``tile0``, a side's words None where the scheme refused the row) of
     the pass whose -h3 tile commitment's root is `root_h3`: (``commitment.json``, ``advice.json``, the prover's rows).  Each
     side tree holds the kept rows only, each with its place in the call (`Wd.side_row`); the call's record
     (`advice["records"]`, its SHA-512 in the entry) gains those places (``keep``), and the entry its tile0, cols and m.
-    `salts` replays the salts of an earlier commit's prover file (`load`)."""
+    `salts` replays the salts of an earlier commit's prover file (`load`).  `length` is the registered length item
+    (`served_length` of the pass's served record; none, a window registered before the fixed-length rule)."""
     k = params["k"]
     zero = Wd.side_row([0] * L.ROW_WORDS["fp8-p"](k), 0)
     keeps = [{s: [i for i, w in enumerate(c["words"][s]) if w is not None] for s in SIDES} for c in calls]
@@ -424,7 +453,7 @@ def commit_window(params: dict, calls: list[dict], root_w: str, root_h3: bytes, 
     levels = tree_levels(dom, [entry_leaf(dom, e, entry_bc(x, s)) for e, (x, s) in enumerate(zip(entries, esalts))])
     roots = [{"port": PORT, "root": levels[-1][0].hex(), "leaves": params["entries"], "domain": dom.domain_id.hex()},
              {"port": "W", "root": root_w, "leaves": params["w_rows"], "domain": weights_domain(params).domain_id.hex()}]
-    public = {"schema": SCHEMA, "context": params["context"], "level": ell, "items": items_of(params, ell, root_w),
+    public = {"schema": SCHEMA, "context": params["context"], "level": ell, "items": items_of(params, ell, root_w, length),
               "roots": roots}
     advice = {"schema": SCHEMA, "level": ell, "real": real, "root_h3": root_h3.hex(), "entries": [x.to_json() for x in entries],
               "records": records,
@@ -941,13 +970,14 @@ def _weights(man: dict, calls: list[dict]) -> list[int]:
 
 
 def cmd_params(a) -> int:
-    """The verifier's own parameters, from the served request it audits: its run and manifest name the window, and the
-    model's k = n = K weights give |W|."""
+    """The verifier's own parameters, from the served request it audits: its run and manifest name the window, the
+    model's k = n = K weights give |W|, and the request's one slot its fixed length (``--max-tokens``, ignore_eos)."""
     _, man, sha, calls = _pass(Path(a.pass_dir))
     rows = sum(next(u["n"] for u in calls if int(u["weight"]) == w) for w in _weights(man, calls))
     deployment = f"served-zk/{man.get('run')}"
     params = {"context": f"{deployment}/{sha}", "deployment": deployment, "k": K, "eps": a.eps, "delta": a.delta,
-              "grid_bits": Wd.GRID_BITS, "range": list(RANGE), "entries": a.entries, "w_rows": rows}
+              "grid_bits": Wd.GRID_BITS, "range": list(RANGE), "entries": a.entries, "w_rows": rows,
+              "length": {"max_tokens": [a.max_tokens], "stop": Wd.STOP_FIXED}}
     Path(a.out).write_text(json.dumps(params, sort_keys=True))
     print(json.dumps(params), flush=True)
     return 0
@@ -1000,7 +1030,12 @@ def cmd_commit(a) -> int:
             for j in range(n):
                 yield data[2 * K * j:2 * K * (j + 1)]
     root_w, _ = commit_weights(params, w_rows())
-    public, advice, priv = commit_window(params, window, root_w, root_h3_of(man))
+    served = pass_dir / SERVED_RECORD
+    length = served_length(_json(served)) if served.is_file() else None
+    if length is None:
+        print(f"no {SERVED_RECORD} beside the pass: the window registers no fixed length, and the verifier refuses it",
+              flush=True)
+    public, advice, priv = commit_window(params, window, root_w, root_h3_of(man), length=length)
     advice["provenance"] = {"run": man.get("run"), "manifest_sha512": sha, "scheme": man["scheme"],
                             "transcript_root": man.get("transcript_root"), "commitment": man.get("commitment"),
                             "records_root": man.get("records_root"),
@@ -1263,6 +1298,8 @@ def main(argv=None) -> int:
     p.add_argument("--eps", default=EPS)
     p.add_argument("--delta", default=DELTA)
     p.add_argument("--entries", type=int, default=ENTRIES)
+    p.add_argument("--max-tokens", type=int, default=MAX_TOKENS,
+                   help="the max_tokens the verifier's request set, each row served to it under ignore_eos")
     p = sub.add_parser("commit")
     for x in ("pass_dir", "params", "out"):
         p.add_argument(x)

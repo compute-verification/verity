@@ -71,8 +71,9 @@ and `frame-b3s` that -h1, -h2 and BLAKE3 -h3 named are in `archive/pouw-blake3/`
    `Pouw.Guarantees.WorkWeightedSampling`.
 
 **What is public.** Every protocol is zero-knowledge, and only the minimum is public (Daniel's ruling of 2026-10-05,
-7:48 PM PDT). |W|, the size of the weights, is public (his ruling of 2026-10-06, 8:14 AM PDT). Both rulings are recorded
-in `.agents/skills/friction/SKILL.md`.
+7:48 PM PDT). |W|, the size of the weights, is public (his ruling of 2026-10-06, 8:14 AM PDT). A served window's rows
+serve at a public fixed length, so its useful work is public (his ruling of 19 Oct, ASK-39; "The fixed length" below).
+The rulings are recorded in `.agents/skills/friction/SKILL.md`.
 
 **Randomness.** The protocol owns the outer coins, the salt and the draw, and both are the challenger's epoch coins, never
 a public beacon and never Fiat-Shamir over the prover's roots. A scheme's noise is its own derivation from the salt and the
@@ -163,6 +164,13 @@ A served window is audited by drawing tiles of one fixed template from the windo
 level and K′ are in `window`'s docstring). This section is the window's layout for gates: what its commitment holds, so
 that a drawn tile's reads are a function of public inputs alone. `benchmarks/pouw/served_zk/served_commit.py` commits a
 window this way.
+
+**The fixed length.** Correct tokens served past the honest run's end-of-sequence are not useful work, so a row of record
+serves at a public fixed length, ignore_eos at each slot's public max_tokens, which the window registers (its `length`
+item) and the verifier checks against its own parameters, so W_use is public (Daniel, 19 Oct, ASK-39). PouwCheck refuses
+a row whose stop mode is not `fixed` (`window-form: eos-keyed-row`), a served length or max_tokens other than the
+verifier's (`window-form: length-mismatch`, `window-form: max-tokens`), and a window registered before the rule, with no
+`length` item (`window-form: no-fixed-length`), which is not of record (`window.length_problem`).
 
 **The window root** (port `entries`) is a frame-v3-sha512 tree of P entries (the public bound, 16 for served windows),
 registered before the draw. The calls come first, then exactly one filler, then empty entries up to P. Entry e is an

@@ -75,7 +75,12 @@ def _raw(man: dict) -> bytes:
 
 def _params(run: str, raw: bytes) -> dict:
     return {"context": f"served-zk/{run}/{hashlib.sha512(raw).hexdigest()}", "deployment": f"served-zk/{run}",
-            "k": K, "eps": "1/2", "delta": "1/10", "grid_bits": Wd.GRID_BITS, "range": [1, 1 << 40], "entries": 4, "w_rows": N}
+            "k": K, "eps": "1/2", "delta": "1/10", "grid_bits": Wd.GRID_BITS, "range": [1, 1 << 40], "entries": 4, "w_rows": N,
+            "length": {"max_tokens": [SC.MAX_TOKENS], "stop": Wd.STOP_FIXED}}
+
+
+#: the runner's record of a request served at the verifier's fixed length under ignore_eos
+SERVED = {"ignore_eos": True, "max_tokens": [SC.MAX_TOKENS], "served": [SC.MAX_TOKENS]}
 
 
 #: each window's pass by its parameters' context: (the epoch's coins, the manifest's bytes, the manifest)
@@ -104,15 +109,16 @@ def _weights() -> list[bytes]:
     return [np.arange(K, dtype="<u2").tobytes() for _ in range(N)]
 
 
-def _window(words, run="r-request", coins=None, recorded=False):
+def _window(words, run="r-request", coins=None, recorded=False, served=SERVED):
     """A window of two calls from a pass of `run`, salted by `coins`' salt coin (a seeded one by default) or, `recorded`,
-    by a beacon."""
+    by a beacon, its length registered from the runner's record `served` (none: no length item)."""
     coins = None if recorded else coins or _coins()
     man = _manifest(run, coins)
     params = _params(run, _raw(man))
     PASSES[params["context"]] = (coins, _raw(man), man)
     root_w, _ = SC.commit_weights(params, _weights())
-    public, advice, priv = SC.commit_window(params, _calls(words), root_w, SC.root_h3_of(man))
+    length = SC.served_length(served) if served is not None else None
+    public, advice, priv = SC.commit_window(params, _calls(words), root_w, SC.root_h3_of(man), length=length)
     return params, public, advice, priv
 
 
@@ -184,7 +190,7 @@ def test_the_window_is_padded_to_a_grid_level_with_filler(served):
     assert (call.tile0, call.cols, call.m, entries[1].tile0) == (5, 1, 16, 9) and filler.m == filler.tile0 == 0
     salts = {e: {s: priv[e][s]["salts"] for s in "ab"} for e in range(3)}
     again, advice2, _ = SC.commit_window(params, _calls(words), public["items"]["root_W"], root_h3,
-                                         {**salts, "entries": priv["entries"]})
+                                         {**salts, "entries": priv["entries"]}, length=public["items"]["length"])
     assert again == public and advice2["entries"] == advice["entries"]
     for bad in ({}, {"commitment": {"root": "ab" * 32}}):
         with pytest.raises(SystemExit, match="not a SHA-512"):
@@ -192,7 +198,7 @@ def test_the_window_is_padded_to_a_grid_level_with_filler(served):
 
 
 def test_register_makes_exactly_the_public_items_public(served):
-    """The record's window holds exactly the registered public items (work, check, sampling, root_W) and nothing of the
+    """The record's window holds exactly the registered public items (work, check, sampling, length, root_W) and nothing of the
     calls: no shape, no call index, no row count.  One more item, a root_W that is no registered root, or a commitment
     whose level the range refuses, is refused."""
     *_, words = served
@@ -218,6 +224,38 @@ def test_register_makes_exactly_the_public_items_public(served):
                                                                           "domain:W"}
     with pytest.raises(ValueError, match="outside"):
         SC.work_at({**params, "range": [100, 1 << 40]}, public["level"])
+
+
+#: runner records the verifier refuses, each with its `window.length_problem` code: served until EOS, served short of the
+#: verifier's max_tokens, and served at a max_tokens of the runner's own
+UNFIXED = {"eos-keyed-row": {**SERVED, "ignore_eos": False},
+           "length-mismatch": {**SERVED, "served": [SC.MAX_TOKENS - 1]},
+           "max-tokens": {**SERVED, "max_tokens": [2 * SC.MAX_TOKENS], "served": [2 * SC.MAX_TOKENS]}}
+
+
+def test_rows_of_record_serve_a_public_fixed_length(served):
+    """Daniel, 19 Oct (ASK-39): the window registers its rows' fixed length, the verifier's max_tokens per slot served under
+    ignore_eos, so its useful work is public.  A fixed-length window registers; a row served until EOS, a served length
+    other than max_tokens, or a max_tokens other than the verifier's is refused as ``window-form``; and a window with no
+    length item (registered before the rule) is refused as not of record.  The committer's max_tokens is the served
+    request's (`e2e.SERVED_TOKENS`), and the runner's record of it has the name the committer reads."""
+    sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "pearl_c_vllm"))
+    import e2e
+    assert (SC.MAX_TOKENS, SC.SERVED_RECORD) == (e2e.SERVED_TOKENS, e2e.SERVED_RECORD)
+    *_, words = served
+    params, public, _, _ = _window(words)
+    rec = _register(params, public)
+    assert rec["window"]["public"]["length"] == Wd.length_item([SC.MAX_TOKENS]) == SC.served_length(SERVED)
+    for code, record in UNFIXED.items():
+        p, pub, _, _ = _window(words, served=record)
+        with pytest.raises(S.Refused) as e:
+            _register(p, pub)
+        assert _codes(e) == {"window-form"} and e.value.verdict.detail["window-form"].startswith(code), code
+    p, pub, _, _ = _window(words, served=None)
+    assert set(pub["items"]) == set(Wd.LEGACY_REGISTERED)
+    with pytest.raises(S.Refused) as e:
+        _register(p, pub)
+    assert _codes(e) == {"window-form"} and e.value.verdict.detail["window-form"].startswith("no-fixed-length")
 
 
 def _challenger(params, units=None, coins=None) -> SC.Challenger:
@@ -259,8 +297,9 @@ def test_the_challenger_on_the_serving_controllers_state_holds_its_coins(served,
 @LEAN
 def test_the_challenger_holds_every_item_to_its_own(served):
     """The challenger's stream registers the honest record and its receipt names it.  An extra public key, a raised level
-    (more credit), a K′ other than its own, another request's record (its own context) or a field one-stage doesn't define
-    is refused, and so is a second registration while the first has no outcome."""
+    (more credit), a K′ other than its own, another request's record (its own context), a field one-stage doesn't define,
+    a length that isn't its fixed one or no length item is refused, and so is a second registration while the first has
+    no outcome."""
     *_, words = served
     params, public, _, _ = _window(words)
     rec = _register(params, public)
@@ -283,6 +322,13 @@ def test_the_challenger_holds_every_item_to_its_own(served):
     oparams, opublic, _, _ = _window(words, run="r-other")
     assert refused(_register(oparams, opublic)) == {"window"}
     assert refused({**rec, "tiles": [2, 3]}) == {"keys"}
+    for record in UNFIXED.values():
+        unfixed = json.loads(json.dumps(rec))
+        unfixed["window"]["public"]["length"] = SC.served_length(record)
+        assert refused(unfixed) == {"window-form"}
+    legacy = json.loads(json.dumps(rec))
+    del legacy["window"]["public"]["length"]
+    assert refused(legacy) == {"window-form"}
     assert "x" not in ch.regs
     reg = _held(ch, "honest", rec)
     assert reg.receipt["registration"] == R.digest(rec) == reg.digest and reg.order == 0

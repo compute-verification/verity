@@ -99,8 +99,11 @@ CONTROL_OMITS = frozenset({"pad_a", "rowdig_a", "hash_rows_a", "tree_a", "hash_l
 #: ``--graphs``, whose leaves reach the pass through a copy) the tile leaves alone
 CONTROLS = {"control": CONTROL_OMITS, "control-leaves": frozenset({"hash_leaf"})}
 #: ``--smoke --retain``'s served requests, each one chat prompt (vllm_bench's PROMPTS, by index) as a retained pass: the
-#: request whose calls a ZK proof opens (served_zk), and another request, whose commitment is that proof's foreign control
+#: request whose calls a ZK proof opens (served_zk), and another request, whose commitment is that proof's foreign control.
+#: Each is served at the fixed length SERVED_TOKENS under ignore_eos (Daniel, 19 Oct, ASK-39), and how it was served goes
+#: beside its pass as SERVED_RECORD (``{"ignore_eos", "max_tokens", "served"}``), which served_zk's committer registers
 SERVED, SERVED_TOKENS = {"request": 0, "other": 1}, 4
+SERVED_RECORD = "served.json"
 #: the quality run's schemes: Pearl-C v1 (G = 4) and v2 (no promotion), each in an arm engine of its own
 QUALITY = {"pearlc-v1": "pearl-c-sm120-v1-h3", "pearlc-v2": "pearl-c-sm120-unpromoted-v1-h3"}
 #: WikiText-2 (raw), its test split, at the revision cached on node 2
@@ -596,7 +599,10 @@ def serve(conn, args, group: str, coins: dict) -> None:
                 out = {}
                 for name, i in SERVED.items():
                     _, _, got, outs = timed([chat[i]], sp, retain=str(Path(args.retain) / name))
-                    out[name] = {"prompt": PROMPTS[i], "tokens": list(outs[0].outputs[0].token_ids),
+                    tokens = list(outs[0].outputs[0].token_ids)
+                    length = {"ignore_eos": sp.ignore_eos, "max_tokens": [sp.max_tokens], "served": [len(tokens)]}
+                    (Path(args.retain) / name / SERVED_RECORD).write_text(json.dumps(length, sort_keys=True) + "\n")
+                    out[name] = {"prompt": PROMPTS[i], "tokens": tokens, "length": length,
                                  "text": outs[0].outputs[0].text, "manifest": got.get("manifest"), "commitment": got}
                 conn.send(out)
             else:

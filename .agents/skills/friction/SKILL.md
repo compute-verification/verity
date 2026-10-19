@@ -109,6 +109,11 @@ Only a repeat whose fix needs money, keys or a claim becomes a question for Dani
 
 Newest first. Each is Daniel's unless it names the coordinator.
 
+- 2026-10-19 (00:18Z, 5:18 PM PDT on 18 Oct; ASK-39): correct tokens served past the honest run's end-of-sequence are
+  not useful work. A row of record serves at a public fixed length (ignore_eos at each slot's public max_tokens), which
+  the PoUW window registers as its `length` item and the verifier checks against its own parameters, so W_use is public.
+  PouwCheck refuses an EOS-keyed row, a served length other than max_tokens, and a window registered before the rule
+  (`window-form: …`; `verity/core/protocols/pouw/PROTOCOL.md`, "The fixed length").
 - 2026-10-18 (8:47 AM PDT): every ask is a short Notion page in the Asks for Daniel database (the problem explained, LaTeX
   for the math), where he comments and decides by its Status; the card only notifies him and links it. Template and
   commands: `.agents/skills/asking-daniel/SKILL.md`.
