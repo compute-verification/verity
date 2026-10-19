@@ -332,8 +332,8 @@ malicious-verifier claim rests on beyond the theorems.
     initialized.
   - It keeps no user-space state, so a forked process doesn't repeat its output.
   - A VM snapshot restored more than once must not repeat the kernel's CSPRNG state. That holds when the kernel reseeds
-    on a VM generation change (vmgenid, Linux 5.18 and later, with hypervisor support) or mixes in a hardware RNG.
-  - The CSPRNG is idealized as exactly uniform. The true bound carries its negligible distinguishing advantage.
+    on a VM generation change (vmgenid, Linux 5.18 and later, with hypervisor support); RDSEED, mixed in at reseeds, doesn't.
+  - The CSPRNG is idealized as exactly uniform. The true bound carries its distinguishing advantage.
 - **Split out of A4** at the red team's request: it is a property of what produces the secret, not of the hash.
 - **Upstream:** watch entry `A5-uniform-secret`.
 

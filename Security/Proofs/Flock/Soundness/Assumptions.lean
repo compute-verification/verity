@@ -106,8 +106,9 @@ The CSPRNG is idealized as exactly uniform here, for every event. That is refuta
 the event that the bytes are among the source's outputs has probability 1 there and at most `2^(256 - 8n)` at `n`
 uniform bytes. The true bound carries the CSPRNG's distinguishing advantage against the draw's test, which
 `UniformRandomBytesTest` states. A VM snapshot restored more than once must not repeat the kernel's CSPRNG state, which
-holds when the kernel reseeds on a VM generation change (vmgenid, Linux 5.18 and later, with hypervisor support) or
-mixes in a hardware RNG. -/
+holds when the kernel reseeds on a VM generation change (vmgenid, Linux 5.18 and later, with hypervisor support). A
+hardware RNG doesn't make it hold: from 5.18 the kernel mixes RDSEED in only when it reseeds, about once a minute, and
+not into each read. -/
 def UniformRandomBytes {Ω : Type} [Fintype Ω] {m : ℕ} (L : Fin m → ℕ) (t : Ω → (i : Fin m) → Fin (L i) → Fin 256) :
     Prop :=
   ∀ E : ((i : Fin m) → Fin (L i) → Fin 256) → Prop, prCoin (fun ω => E (t ω)) = prCoin E
@@ -136,8 +137,10 @@ scope, as the salts are, and no premise on a stream generator is left on them. `
 bytes as one salt and takes the hiding theorems to them; `Claims.ZKServer.OsTape` reads the server's tape.
 
 What it leaves out: a VM snapshot restored more than once repeats the kernel's CSPRNG state unless the kernel reseeds on a
-VM generation change (vmgenid, Linux 5.18 and later, with hypervisor support) or mixes in a hardware RNG, and a repeated
-state is a pad reused, under which two sessions' masked values reveal their XOR. A test build (`seed-injection`, the
+VM generation change (vmgenid, Linux 5.18 and later, with hypervisor support), and a repeated state is a pad reused,
+under which two sessions' masked values reveal their XOR. A hardware RNG doesn't close it: the kernel mixes RDSEED in
+only when it reseeds, about once a minute. A read before the kernel's CSPRNG is seeded is outside it too: Lean's runtime
+reads `/dev/urandom`, which, unlike `getrandom(2)`, doesn't wait for that. A test build (`seed-injection`, the
 selftest's) expands the prover's values from an injected `ProverSeed` with ChaCha20 instead: no record from such a build
 is evidence for a theorem that takes A3. Re-read this on any platform but Linux. -/
 def UniformRandomBytesTest {Ω ι : Type} [Fintype Ω] [Fintype ι] [DecidableEq ι] (L : ι → ℕ)
@@ -182,9 +185,9 @@ secret reused across windows is outside it, since later windows would be committ
 The verifier's platform is Linux, with CPython 3.12 or later. There `secrets.token_bytes` reads `os.urandom`, which is
 `getrandom(2)`, the kernel's CSPRNG, and blocks until that is initialized. It keeps no user-space state, so a forked
 process doesn't repeat its output. A VM snapshot restored more than once must not repeat the kernel's CSPRNG state, which
-holds when the kernel reseeds on a VM generation change (vmgenid, Linux 5.18 and later, with hypervisor support) or mixes
-in a hardware RNG. The CSPRNG is idealized as exactly uniform; the true bound carries its negligible distinguishing
-advantage. Re-read this on any other platform. -/
+holds when the kernel reseeds on a VM generation change (vmgenid, Linux 5.18 and later, with hypervisor support). A
+hardware RNG doesn't make it hold: the kernel mixes RDSEED in only when it reseeds, about once a minute. The CSPRNG is
+idealized as exactly uniform; the true bound carries its distinguishing advantage. Re-read this on any other platform. -/
 def UniformSecret {Ω : Type} [Fintype Ω] {S : ℕ} (sec : Ω → Fin S → Fin 256) : Prop :=
   ∀ E : (Fin S → Fin 256) → Prop, prCoin (fun ω => E (sec ω)) = prCoin E
 
