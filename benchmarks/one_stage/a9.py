@@ -59,6 +59,8 @@ STEP_NAME = {1: "m1", 0: "m256"}
 #: each word DOT step's Boolean version, which the `_v2` forms lift (`elementwise.on_bits(..., lifted=["DOT"])`)
 BOOL_DOT = {HopperE4m3MmaV2Dot32.id: BG.HopperE4m3MmaV2Dot32, HopperE4m3QgmmaDot32.id: BG.HopperE4m3QgmmaDot32}
 CONFIGS = [("mmav2", False), ("hopper", True), ("mmav2", True), ("hopper", False)]
+#: a launch's Call, which each unit of its cut records as its own (a8.py's audit names the Call a member stands for)
+CALL = ("name", "spec", "step", "event", "node", "expert", "routed_weight", "twin")
 
 
 class ShareWeights(a8.Weights):
@@ -280,7 +282,8 @@ def main() -> int:
             except Exception as ex:  # noqa: BLE001
                 rec = {"staged": False, "why": f"{type(ex).__name__}: {str(ex)[:400]}", "trace": traceback.format_exc()[-1500:]}
             rec["seconds"] = round(time.time() - t, 1)
-            subs = {name: rec, **{name + sfx: {**c, "of": name, "twin": rec["twin"]} for sfx, c in rec.pop("_cut", {}).items()}}
+            call = {k: rec[k] for k in CALL if k in rec}
+            subs = {name: rec, **{name + sfx: {**c, "of": name, **call} for sfx, c in rec.pop("_cut", {}).items()}}
             for nm, r in subs.items():
                 kv = r.pop("_kv", None)
                 if nm != name:
