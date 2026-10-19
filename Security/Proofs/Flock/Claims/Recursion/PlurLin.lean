@@ -1,0 +1,261 @@
+import Proofs.Flock.Claims.Recursion.InnerAbort
+
+/-!
+# The plurality, linearly: a link finder in place of two forks
+
+`Pr_plur_sq_le` bounds a draw's miss of the plurality by the root of two disagreeing draws, and every `√` in the
+recursion's `γe` comes from it. This file bounds the same miss linearly, by a finder whose loop the honest finder can
+run: draw `u`; if `g u`, draw `u₁ … u_M` until the first where `g` holds, and succeed if its `f` differs from `f u`
+(`firstDiffers`). Its success is exactly `Σ_u [g u]·Pr[g ∧ f ≠ f u]·G_M`, with `q·G_M = 1 − (1 − q)^M` at `q = Pr[g]`
+(`Pr_firstDiffers`, `geomS_mul`), so a miss costs at most the link plus `q(1 − q)^M ≤ 1/(M+1)` (`Pr_plur_link`). The
+finder's expected cost is at most twice one draw's (`Ex_linkCost_le`), so under `ExpectedCR` at it the miss is at most
+`2·E[c]/2^256 + 1/(M+1)` (`Pr_plur_ecr`): no root, and `M` is the finder's to choose.
+-/
+
+namespace Claims.Recursion
+
+open Claims
+
+section PlurLin
+
+variable {U : Type} [Fintype U]
+
+theorem Pr_one {α : Type} [Fintype α] [Nonempty α] : Pr (fun _ : α => True) = 1 := by
+  rw [← Ex_ind (fun _ : α => True)]
+  simpa using Ex_const (α := α) (1 : ℝ)
+
+theorem Pr_compl {α : Type} [Fintype α] [Nonempty α] (p : α → Prop) : Pr (fun a => ¬ p a) = 1 - Pr p := by
+  classical
+  have h : (fun a => (if ¬ p a then (1 : ℝ) else 0) + (if p a then 1 else 0)) = fun _ => 1 :=
+    funext fun a => by by_cases h : p a <;> simp [h]
+  have h2 := Ex_add (fun a => if ¬ p a then (1 : ℝ) else 0) (fun a => if p a then 1 else 0)
+  rw [h, Ex_const, Ex_ind, Ex_ind] at h2
+  linarith
+
+theorem Ex_ite {α : Type} [Fintype α] (p : α → Prop) [DecidablePred p] (c : ℝ) :
+    Ex (fun a => if p a then c else 0) = c * Pr p := by
+  rw [← Ex_ind p, ← Ex_mul_left]
+  congr 1
+  funext a
+  by_cases h : p a <;> simp [h]
+
+/-- **The first of `M` draws where `g` holds has `f` other than `a`.** -/
+def firstDiffers (g : U → Prop) (f : U → Msg) (a : Msg) : (M : ℕ) → (Fin M → U) → Prop
+  | 0, _ => False
+  | M + 1, us => (g (us 0) ∧ f (us 0) ≠ a) ∨ (¬ g (us 0) ∧ firstDiffers g f a M (Fin.tail us))
+
+/-- `G_M = Σ_{i<M} r^i`. -/
+noncomputable def geomS (r : ℝ) : ℕ → ℝ
+  | 0 => 0
+  | M + 1 => 1 + r * geomS r M
+
+theorem geomS_nonneg {r : ℝ} (hr : 0 ≤ r) : ∀ M, 0 ≤ geomS r M
+  | 0 => le_refl 0
+  | M + 1 => by
+    have := geomS_nonneg hr M
+    show 0 ≤ 1 + r * geomS r M
+    positivity
+
+theorem geomS_mul (q : ℝ) : ∀ M, q * geomS (1 - q) M = 1 - (1 - q) ^ M
+  | 0 => by simp [geomS]
+  | M + 1 => by
+    have ih := geomS_mul q M
+    show q * (1 + (1 - q) * geomS (1 - q) M) = 1 - (1 - q) ^ (M + 1)
+    linear_combination (1 - q) * ih
+
+/-- **The geometric tail**: `q(1 − q)^M ≤ 1/(M+1)` on `[0, 1]`. -/
+theorem mul_pow_le_inv {q : ℝ} (h0 : 0 ≤ q) (h1 : q ≤ 1) (M : ℕ) : q * (1 - q) ^ M ≤ 1 / ((M : ℝ) + 1) := by
+  have key : ∀ M : ℕ, (1 - q) ^ M * (1 + M * q) ≤ 1 := by
+    intro M
+    induction M with
+    | zero => simp
+    | succ n ih =>
+      have ht : 0 ≤ (1 - q) ^ n := pow_nonneg (by linarith) n
+      push_cast
+      rw [pow_succ]
+      nlinarith [mul_nonneg (mul_nonneg ht (sq_nonneg q)) (by positivity : (0 : ℝ) ≤ n + 1)]
+  have ht : 0 ≤ (1 - q) ^ M := pow_nonneg (by linarith) M
+  rw [le_div_iff₀ (by positivity)]
+  nlinarith [key M, mul_nonneg ht (sub_nonneg.2 h1), mul_nonneg ht h0]
+
+/-- The first of `M + 1` draws and the rest. -/
+def splitFirst (M : ℕ) : (Fin (M + 1) → U) ≃ U × (Fin M → U) where
+  toFun us := (us 0, Fin.tail us)
+  invFun p := Fin.cons p.1 p.2
+  left_inv us := Fin.cons_self_tail us
+  right_inv p := by simp
+
+theorem Pr_splitFirst {M : ℕ} (P : U → (Fin M → U) → Prop) :
+    Pr (fun us : Fin (M + 1) → U => P (us 0) (Fin.tail us)) = Ex fun u => Pr fun vs => P u vs :=
+  (Pr_equiv (splitFirst M) (fun p : U × (Fin M → U) => P p.1 p.2)).trans (Pr_prod _)
+
+theorem Ex_splitFirst {M : ℕ} (F : U → (Fin M → U) → ℝ) :
+    Ex (fun us : Fin (M + 1) → U => F (us 0) (Fin.tail us)) = Ex fun u => Ex fun vs => F u vs :=
+  (Ex_equiv (splitFirst M) (fun p : U × (Fin M → U) => F p.1 p.2)).trans (Ex_prod _)
+
+/-- **The loop finds a differing draw with probability `Pr[g ∧ f ≠ a]·G_M`** at `r = 1 − Pr[g]`. -/
+theorem Pr_firstDiffers [Nonempty U] (g : U → Prop) (f : U → Msg) (a : Msg) :
+    ∀ M, Pr (firstDiffers g f a M) = Pr (fun u => g u ∧ f u ≠ a) * geomS (1 - Pr g) M
+  | 0 => by
+    rw [Pr_congr (q := fun _ => False) fun _ => Iff.rfl, Pr_false]
+    simp [geomS]
+  | M + 1 => by
+    classical
+    have ih := Pr_firstDiffers g f a M
+    have hpt : ∀ u, (Pr fun vs => (g u ∧ f u ≠ a) ∨ (¬ g u ∧ firstDiffers g f a M vs)) =
+        (if g u ∧ f u ≠ a then 1 else 0) +
+          (if ¬ g u then 1 else 0) * (Pr (fun u => g u ∧ f u ≠ a) * geomS (1 - Pr g) M) := by
+      intro u
+      by_cases hg : g u
+      · by_cases hf : f u = a
+        · rw [Pr_congr (q := fun _ => False) fun vs => by simp [hg, hf], Pr_false]
+          simp [hg, hf]
+        · rw [Pr_congr (q := fun _ => True) fun vs => by simp [hg, hf], Pr_one]
+          simp [hg, hf]
+      · rw [Pr_congr (q := firstDiffers g f a M) fun vs => by simp [hg], ih]
+        simp [hg]
+    calc Pr (firstDiffers g f a (M + 1))
+        = Ex fun u => Pr fun vs => (g u ∧ f u ≠ a) ∨ (¬ g u ∧ firstDiffers g f a M vs) :=
+          Pr_splitFirst (fun u vs => (g u ∧ f u ≠ a) ∨ (¬ g u ∧ firstDiffers g f a M vs))
+      _ = _ := by
+          rw [congrArg Ex (funext hpt), Ex_add, Ex_mul_right, Ex_ind, Ex_ind, Pr_compl]
+          show _ = _ * (1 + (1 - Pr g) * geomS (1 - Pr g) M)
+          ring
+
+/-- **Off the plurality, at most the link and the geometric tail**: a draw where `g` holds misses the plurality at most
+as often as the link finder (a draw `u` where `g` holds, then `M` draws, the first of them where `g` holds differing
+from `f u`) succeeds, plus `1/(M+1)`. Linear, where `Pr_plur_sq_le` is squared. -/
+theorem Pr_plur_link (g : U → Prop) (f : U → Msg) (M : ℕ) :
+    Pr (fun u => g u ∧ f u ≠ plur g f) ≤
+      Pr (fun p : U × (Fin M → U) => g p.1 ∧ firstDiffers g f (f p.1) M p.2) + 1 / ((M : ℝ) + 1) := by
+  classical
+  have hL0 : 0 ≤ Pr (fun p : U × (Fin M → U) => g p.1 ∧ firstDiffers g f (f p.1) M p.2) := Pr_nonneg _
+  have hT0 : (0 : ℝ) ≤ 1 / ((M : ℝ) + 1) := by positivity
+  by_cases hne : ∃ u, g u
+  · obtain ⟨u₀, -, hp, hmax⟩ := plur_spec g f hne
+    haveI : Nonempty U := ⟨u₀⟩
+    rw [hp]
+    have hq0 : 0 ≤ Pr g := Pr_nonneg _
+    have hq1 : Pr g ≤ 1 := Pr_le_one _
+    have hS0 : 0 ≤ geomS (1 - Pr g) M := geomS_nonneg (by linarith) M
+    have hL : Pr (fun p : U × (Fin M → U) => g p.1 ∧ firstDiffers g f (f p.1) M p.2) =
+        Ex fun u => if g u then Pr (fun u' => g u' ∧ f u' ≠ f u) * geomS (1 - Pr g) M else 0 := by
+      rw [Pr_prod]
+      refine congrArg Ex (funext fun u => ?_)
+      by_cases hu : g u
+      · simp only [hu, true_and, ↓reduceIte]
+        exact Pr_firstDiffers g f (f u) M
+      · simp only [hu, false_and, ↓reduceIte]
+        exact Pr_false
+    have hpt : ∀ u, (if g u then Pr (fun u' => g u' ∧ f u' ≠ f u₀) * geomS (1 - Pr g) M else 0) ≤
+        if g u then Pr (fun u' => g u' ∧ f u' ≠ f u) * geomS (1 - Pr g) M else 0 := by
+      intro u
+      by_cases hu : g u
+      · simp only [hu, ↓reduceIte]
+        have h1 := Pr_split g f (f u)
+        have h2 := Pr_split g f (f u₀)
+        exact mul_le_mul_of_nonneg_right (by linarith [hmax u hu]) hS0
+      · simp [hu]
+    have hlow : Pr (fun u => g u ∧ f u ≠ f u₀) * geomS (1 - Pr g) M * Pr g ≤
+        Pr (fun p : U × (Fin M → U) => g p.1 ∧ firstDiffers g f (f p.1) M p.2) := by
+      rw [hL, ← Ex_ite]
+      exact Ex_mono hpt
+    have hgm := geomS_mul (Pr g) M
+    have hdq : Pr (fun u => g u ∧ f u ≠ f u₀) ≤ Pr g := Pr_mono fun u h => h.1
+    have ht : 0 ≤ (1 - Pr g) ^ M := pow_nonneg (by linarith) M
+    have hdt := mul_le_mul_of_nonneg_right hdq ht
+    have htail := mul_pow_le_inv hq0 hq1 M
+    have he : Pr (fun u => g u ∧ f u ≠ f u₀) * geomS (1 - Pr g) M * Pr g =
+        Pr (fun u => g u ∧ f u ≠ f u₀) * (1 - (1 - Pr g) ^ M) := by
+      rw [← hgm]; ring
+    nlinarith
+  · have h0 : Pr (fun u => g u ∧ f u ≠ plur g f) = 0 := by
+      refine le_antisymm ((Pr_mono fun u h => ?_).trans_eq Pr_false) (Pr_nonneg _)
+      exact hne ⟨u, h.1⟩
+    rw [h0]
+    linarith
+
+open Classical in
+/-- **The loop's SHA-512 calls**: each draw's `c` until the first where `g` holds. -/
+noncomputable def loopCost (g : U → Prop) (c : U → ℕ) : (M : ℕ) → (Fin M → U) → ℕ
+  | 0, _ => 0
+  | M + 1, us => c (us 0) + if g (us 0) then 0 else loopCost g c M (Fin.tail us)
+
+open Classical in
+/-- **The link finder's SHA-512 calls**: the first draw's, and the loop's where `g` holds at it. -/
+noncomputable def linkCost (g : U → Prop) (c : U → ℕ) (M : ℕ) (p : U × (Fin M → U)) : ℕ :=
+  c p.1 + if g p.1 then loopCost g c M p.2 else 0
+
+theorem Ex_loopCost [Nonempty U] (g : U → Prop) (c : U → ℕ) :
+    ∀ M, Ex (fun us : Fin M → U => (loopCost g c M us : ℝ)) = Ex (fun u => (c u : ℝ)) * geomS (1 - Pr g) M
+  | 0 => by
+    show Ex (fun _ : Fin 0 → U => ((0 : ℕ) : ℝ)) = _
+    simp [geomS, Ex_const]
+  | M + 1 => by
+    classical
+    have ih := Ex_loopCost g c M
+    have hfun : (fun us : Fin (M + 1) → U => (loopCost g c (M + 1) us : ℝ)) = fun us =>
+        (c (us 0) : ℝ) + if g (us 0) then 0 else (loopCost g c M (Fin.tail us) : ℝ) := by
+      funext us
+      simp only [loopCost, Nat.cast_add, Nat.cast_ite, Nat.cast_zero]
+    have hpt : ∀ u, (Ex fun vs : Fin M → U => (c u : ℝ) + if g u then 0 else (loopCost g c M vs : ℝ)) =
+        (c u : ℝ) + if ¬ g u then Ex (fun vs : Fin M → U => (loopCost g c M vs : ℝ)) else 0 := by
+      intro u
+      by_cases hu : g u
+      · simp [hu, Ex_const]
+      · simp only [hu, ↓reduceIte, not_false_eq_true]
+        rw [Ex_add, Ex_const]
+    rw [hfun, Ex_splitFirst (fun u vs => (c u : ℝ) + if g u then 0 else (loopCost g c M vs : ℝ)),
+      congrArg Ex (funext hpt), Ex_add, Ex_ite, Pr_compl, ih]
+    show _ = _ * (1 + (1 - Pr g) * geomS (1 - Pr g) M)
+    ring
+
+/-- **The link finder costs at most two draws in expectation** (Wald): one draw, then `G_M` more where `g` holds,
+and `Pr[g]·G_M ≤ 1`. -/
+theorem Ex_linkCost_le [Nonempty U] (g : U → Prop) (c : U → ℕ) (M : ℕ) :
+    Ex (fun p : U × (Fin M → U) => (linkCost g c M p : ℝ)) ≤ 2 * Ex (fun u => (c u : ℝ)) := by
+  classical
+  have hpt : ∀ u, (Ex fun vs : Fin M → U => (linkCost g c M (u, vs) : ℝ)) =
+      (c u : ℝ) + if g u then Ex (fun vs : Fin M → U => (loopCost g c M vs : ℝ)) else 0 := by
+    intro u
+    by_cases hu : g u
+    · simp only [linkCost, hu, ↓reduceIte, Nat.cast_add]
+      rw [Ex_add, Ex_const]
+    · simp [linkCost, hu, Ex_const]
+  rw [Ex_prod, congrArg Ex (funext hpt), Ex_add, Ex_ite, Ex_loopCost]
+  have hc : 0 ≤ Ex (fun u => (c u : ℝ)) := Ex_nonneg fun u => Nat.cast_nonneg _
+  have hq0 : 0 ≤ Pr g := Pr_nonneg _
+  have hq1 : Pr g ≤ 1 := Pr_le_one _
+  have hgm := geomS_mul (Pr g) M
+  have ht : 0 ≤ (1 - Pr g) ^ M := pow_nonneg (by linarith) M
+  have he : Ex (fun u => (c u : ℝ)) * geomS (1 - Pr g) M * Pr g = Ex (fun u => (c u : ℝ)) * (1 - (1 - Pr g) ^ M) := by
+    rw [← hgm]; ring
+  nlinarith [mul_nonneg hc ht]
+
+/-- **The link finder**: on `(u, u₁ … u_M)`, the collision its output names, at most `linkCost` calls. -/
+def linkFinder [Nonempty U] (M : ℕ) (out : U × (Fin M → U) → Option (Msg × Msg)) (cost : U × (Fin M → U) → ℕ) :
+    Finder where
+  S := U × (Fin M → U)
+  out := out
+  cost := cost
+
+/-- **Off the plurality under `ExpectedCR`, linearly**: where the link's success names a SHA-512 collision and its
+declared cost is at most `linkCost` (one draw's `c`, then the loop's), a draw where `g` holds misses the plurality with
+probability at most `2·E[c]/2^256 + 1/(M+1)`. -/
+theorem Pr_plur_ecr [Nonempty U] (H : Msg → Msg) (g : U → Prop) (f : U → Msg) (c : U → ℕ) (M : ℕ)
+    (out : U × (Fin M → U) → Option (Msg × Msg)) (cost : U × (Fin M → U) → ℕ)
+    (hout : ∀ p, g p.1 → firstDiffers g f (f p.1) M p.2 → ∃ a b, out p = some (a, b) ∧ Collision H a b)
+    (hcost : ∀ p, cost p ≤ linkCost g c M p) (hcr : ExpectedCR H (linkFinder M out cost)) :
+    Pr (fun u => g u ∧ f u ≠ plur g f) ≤ 2 * Ex (fun u => (c u : ℝ)) / 2 ^ (256 : ℝ) + 1 / ((M : ℝ) + 1) := by
+  have hlink : Pr (fun p : U × (Fin M → U) => g p.1 ∧ firstDiffers g f (f p.1) M p.2) ≤
+      (linkFinder M out cost).Pr H :=
+    Pr_mono fun p h => hout p h.1 h.2
+  have hc : Ex (fun p : U × (Fin M → U) => (cost p : ℝ)) ≤ 2 * Ex (fun u => (c u : ℝ)) :=
+    (Ex_mono fun p => Nat.cast_le.2 (hcost p)).trans (Ex_linkCost_le g c M)
+  have hcr' : (linkFinder M out cost).Pr H ≤ 2 * Ex (fun u => (c u : ℝ)) / 2 ^ (256 : ℝ) :=
+    hcr.trans (div_le_div_of_nonneg_right hc (by positivity))
+  linarith [Pr_plur_link g f M]
+
+end PlurLin
+
+end Claims.Recursion
