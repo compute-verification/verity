@@ -50,8 +50,8 @@ ALLOWED = {
     "ml.private_circuits": {"ml.circuits"},
     "core.claims": set(),
     "core.protocols.profile": {"ml.circuits"},
-    # The two-stage law samples the verifier's own bytes as the Lean verifier does (`two_stage`), and the proof
-    # service's challenger draws with it (`service.Stream.select`).
+    # The verifier's coins sample its own bytes as the Lean verifier does (`coins`), and the proof service's challenger
+    # draws with them (`service.Stream.select`).
     "core.protocols.sampled_proofs": {"ml.circuits", "ml.commitments", "ml.randomness", "core.protocols.profile"},
     "core.protocols.pous": {"core.claims", "ml.circuits", "ml.commitments", "ml.crypto", "ml.randomness"},
     # 2026-10-11 (Daniel, decision 7 of the resource-accounting agenda): the bandwidth audit's store is PoUS's `C*`,

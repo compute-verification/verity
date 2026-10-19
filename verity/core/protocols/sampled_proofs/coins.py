@@ -4,6 +4,13 @@ The verifier draws every coin from its own randomness (`OwnRandomness`), with no
 prover's commitments are registered.  `draw_first` draws a one-stage law's units as the Lean verifier's
 `Flock.Draw.drawWith` does from the same bytes, and `closure_of` widens a work draw by the verifier's closure map.  A
 drawn unit's outcome is final: nothing redraws.
+
+Each stream `draw_first` reads (one for `subset` and `bernoulli`, one per stratum for `stratified` and `work`) is
+`2 k · width(n) + 64` bytes (`2 n · width(den) + 64` for `bernoulli`), extended by as many again and rerun whenever it
+runs out (`OwnRandomness.stream`).  Nothing here derives a draw, the proof service's included: `service.Stream.select` is
+`draw_first` on the challenger's coins (`service.select_draw`), and its draw of record is Lean's `Select.select` on the
+bytes it read (`one_stage.verifier.select`).  vLLM's legacy replay challenge derives its own
+(`verity_vllm.commit.challenge.replay_key`, under the domain `verity/sampled-proofs/vu-sample/v1`) until its re-baseline.
 """
 
 from __future__ import annotations

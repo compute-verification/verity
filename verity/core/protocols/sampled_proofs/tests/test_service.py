@@ -225,6 +225,15 @@ def test_a_stream_refuses_what_isnt_built_and_another_unit():
             S.Stream(_spec(), PAIR, **{"budget": 1, "delta": DELTA, "challenger": "c", **bad})
 
 
+def test_a_two_stage_rule_is_refused_as_retired():
+    """Two-stage sampling is retired (ASK-25): a Spec whose selection rule names it fails closed, saying so."""
+    for rule in ({"rule": "two-stage", "replay": "subset:4", "check": "all"}, "two-stage:subset:4"):
+        with pytest.raises(ValueError, match="two-stage sampling is retired") as e:
+            _spec(rule)
+        assert str(e.value) == S.RETIRED_TWO_STAGE
+    assert not hasattr(S, "TwoStage")
+
+
 def test_one_stage_refusals_come_through_register():
     stream = _stream()
     with pytest.raises(S.Refused) as e:

@@ -35,15 +35,18 @@ def parseLaw (text : String) : V Json := do
       return Json.mkObj [("law", "bernoulli"), ("p", Json.str s!"{num.toNat!}/{den.toNat!}")]
   throw s!"a law is subset:K, stratified:K, work:K or bernoulli:NUM/DEN, not {pyRepr text}"
 
-/-- The selection rules: every unit (`All`) and a one-stage law in `parseLaw`'s syntax (`Law`). `twoStage`, a two-stage
-rule's replay law, is retired: `Rule.ofJson` never reads it, and it stays only while the claims' proofs still name it. -/
+/-- The selection rules: every unit (`All`) and a one-stage law in `parseLaw`'s syntax (`Law`). -/
 inductive Rule where
   | all
   | law (text : String)
-  | twoStage (replay : String)
+
+/-- The refusal of a two-stage selection rule (`service.RETIRED_TWO_STAGE`). -/
+def retiredTwoStage : String :=
+  "two-stage sampling is retired (ASK-25: everything is committed at serve time); a selection rule is all or a law"
 
 /-- A rule as `to_json` writes it, exactly its keys: `{rule: all}` or `{rule: law, law}`, its law text one `parseLaw`
-reads, as `service.Law` refuses any other when it is made. A stream refuses a sequential rule. -/
+reads, as `service.Law` refuses any other when it is made. A stream refuses a sequential rule, and a two-stage rule with
+`retiredTwoStage`: two-stage sampling is retired (ASK-25). -/
 def Rule.ofJson (j : Json) : V Rule := do
   match getD j "rule" with
   | .str "all" => if keys? j == some #["rule"] then return .all
@@ -52,13 +55,14 @@ def Rule.ofJson (j : Json) : V Rule := do
       if let .str t := getD j "law" then
         let _ ← parseLaw t
         return .law t
+  | .str "two-stage" => throw retiredTwoStage
   | _ => pure ()
   throw "a selection rule the stream runs is {rule: all} or {rule: law, law}"
 
 /-- `service.selection_law`: the law a rule names over `n` units, before `Draw.derive` expands it. -/
 def Rule.lawOver : Rule → Nat → V Json
   | .all, n => return Json.mkObj [("law", "subset"), ("k", Lean.toJson n)]
-  | .law t, _ | .twoStage t, _ => parseLaw t
+  | .law t, _ => parseLaw t
 
 /-- The challenger's closure map as `[[unit, [units]], ...]`, integers, each unit named once. -/
 def closureMap? (j : Json) : V (Array (Int × Array Int)) := do

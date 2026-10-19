@@ -230,6 +230,10 @@ class Sequential:
 
 Selection = All | Law | Sequential
 
+RETIRED_TWO_STAGE = ("two-stage sampling is retired (ASK-25: everything is committed at serve time); a selection rule is "
+                     "all or a law")
+"""The refusal of a selection rule that names two-stage sampling, here and in the Lean verifier (`Select.retiredTwoStage`)."""
+
 
 @dataclass(frozen=True)
 class Check:
@@ -270,6 +274,12 @@ class Check:
                 "proof_deadline": self.proof_deadline, "registration_deadline": self.registration_deadline}
 
 
+def _names_two_stage(rule: Any) -> bool:
+    if isinstance(rule, Mapping):
+        return rule.get("rule") == "two-stage"
+    return isinstance(rule, str) and rule.partition(":")[0] == "two-stage"
+
+
 @dataclass(frozen=True)
 class Spec:
     """What a protocol states: `values` (what is committed), `selection` (its selection rule), `check`, `public` (what the
@@ -288,6 +298,8 @@ class Spec:
         names = [v.name for v in self.values]
         if len(set(names)) != len(names):
             raise ValueError("a spec's values have distinct names")
+        if _names_two_stage(self.selection):
+            raise ValueError(RETIRED_TWO_STAGE)
         if not isinstance(self.selection, (All, Law, Sequential)):
             raise ValueError(f"a selection rule is All, Law or Sequential, not {self.selection!r}")
         if not isinstance(self.check, Check):

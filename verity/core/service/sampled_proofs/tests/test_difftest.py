@@ -607,6 +607,8 @@ def _rule(j) -> service.Selection:
             return service.Law(j["law"])
     except ValueError as e:
         raise D.Reject(str(e)) from None
+    if kind == "two-stage":
+        raise D.Reject(service.RETIRED_TWO_STAGE)
     raise D.Reject("not a selection rule the stream runs")
 
 
@@ -1977,7 +1979,8 @@ def test_the_select_piece_draws_every_rule(pieces):
     """One draw under each rule the stream runs, on a partition whose `PAIR` stratum is two ranges apart, Lean's the
     Python's whole: `All` every unit, reading no coins, and each law's draw (a work law's with its closure) reading them,
     each stratum's count its k, which the drawn runs reach only probably. Then the same with every non-ASCII digit
-    `str.isdigit` admits in place of an ASCII one, and the retired two-stage rule, which both refuse."""
+    `str.isdigit` admits in place of an ASCII one, and the retired two-stage rule, which both refuse, saying it is retired
+    (`service.RETIRED_TWO_STAGE`)."""
     desc = json.loads(_population(((0, 2), (1, 3), (0, 4), (2, 1))))
     query = _json(P.template_instances_query([t.id for t in TEMPLATES]))
     table = {PAIR.id: 2, TRIPLE.id: {"floor": 2, "work": 1}, QUAD.id: 0}
@@ -2000,6 +2003,10 @@ def test_the_select_piece_draws_every_rule(pieces):
         assert D.replay(SELECT, case, pieces)[0] == "reject", rule
         with pytest.raises(D.Reject):
             select(case)
+    case = {"closure": None, "program": desc, "query": query, "rule": retired, "source": source, "work_table": table}
+    assert service.RETIRED_TWO_STAGE in D.replay(SELECT, case, pieces)[1]
+    with pytest.raises(D.Reject, match="two-stage sampling is retired"):
+        select(case)
 
 
 def test_the_slots_follow_the_strata(pieces):
