@@ -12,7 +12,8 @@
 #       (exact.jsonl), then probe.py run (gate, then every probe interleaved: probe/times.jsonl, rows.jsonl, gate.json),
 #       and on the B200 the SM clock read in the kernel under each load (clock.jsonl). NVML sampled every 100 ms
 #       (smi.csv), its clock, performance and power reports before and after (smi-{before,after}.txt).
-#       STEPS (default "exact probe clock") picks which run, REPS (default 5) probe.py's reps.
+#       STEPS (default "exact probe clock") picks which run, REPS (default 5) probe.py's reps. Without --send, the
+#       device's own source is built and gated on the node first, outside the lease; a refused gate times no probe.
 # Exit: 0 done, 1 build, gate or a probe failed, 2 no nvcc, no inputs or wrong device.
 set -uo pipefail
 MODE=${1:?usage: run.sh build | time}
@@ -21,45 +22,63 @@ HERE=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 PROBE="$HERE/../opcode_probe/probe.py"
 export PYTHONDONTWRITEBYTECODE=1
 
-case "$MODE" in
-build)
+build_one() {  # SRC ARCH WORK: the binary, its SASS and probe.py's gate of every probe; 1 when a verdict fails
+  NVCC="$NVCC" python3 "$PROBE" build --out "$3" --arch "$2" "$HERE/$1.cu" >"$OUT/build-$1.log" 2>&1 \
+    || { cat "$OUT/build-$1.log" >&2; exit 1; }
+  "$CUDA_HOME/bin/cuobjdump" -sass "$3/$1" | "$CUDA_HOME/bin/cu++filt" >"$OUT/$1.sass" 2>&1
+  python3 "$PROBE" gate "$3/$1" --json "$OUT/gate-$1.json" >"$OUT/gate-$1.txt" 2>&1
+  local g=$?
+  cat "$OUT/gate-$1.txt"
+  return $g
+}
+
+nvcc_or_exit() {
   NVCC=${NVCC:-/usr/local/cuda-13.0/bin/nvcc}
   [ -x "$NVCC" ] || NVCC=$(command -v nvcc) || { echo "run.sh: no nvcc" >&2; exit 2; }
   export CUDA_HOME=${CUDA_HOME:-$(dirname "$(dirname "$NVCC")")}
+  "$NVCC" --version >"$OUT/nvcc.txt" 2>&1
+}
+
+case "$MODE" in
+build)
+  nvcc_or_exit
   WORK=$(mktemp -d)
   trap 'rm -rf "$WORK"' EXIT
-  "$NVCC" --version >"$OUT/nvcc.txt" 2>&1
   rc=0
-  for pair in sm90_cpatom:sm_90a sm100_cpatom:sm_100a; do
-    src=${pair%%:*}
-    arch=${pair##*:}
-    NVCC="$NVCC" python3 "$PROBE" build --out "$WORK" --arch "$arch" "$HERE/$src.cu" >"$OUT/build-$src.log" 2>&1 \
-      || { cat "$OUT/build-$src.log" >&2; exit 1; }
-    "$CUDA_HOME/bin/cuobjdump" -sass "$WORK/$src" | "$CUDA_HOME/bin/cu++filt" >"$OUT/$src.sass" 2>&1
-    python3 "$PROBE" gate "$WORK/$src" --json "$OUT/gate-$src.json" >"$OUT/gate-$src.txt" 2>&1 || rc=1
-    cat "$OUT/gate-$src.txt"
-  done
+  build_one sm90_cpatom sm_90a "$WORK" || rc=1
+  build_one sm100_cpatom sm_100a "$WORK" || rc=1
   tar -C "$WORK" -czf "$OUT/bins.tgz" sm90_cpatom sm100_cpatom
   exit $rc
   ;;
 time)
   IN=${RESEARCH_RUN_DIR:?run under research run}/inputs
   if [ "${RT3_LEASED:-}" != 1 ]; then
-    [ -f "$IN/bins.tgz" ] || { echo "run.sh: no inputs/bins.tgz (pass the build's with --send)" >&2; exit 2; }
     cap=$(nvidia-smi --query-gpu=compute_cap --format=csv,noheader 2>/dev/null | head -1)
     case "${cap%%.*}" in
-    9) B=sm90_cpatom ;;
-    10) B=sm100_cpatom ;;
+    9) B=sm90_cpatom ARCH=sm_90a ;;
+    10) B=sm100_cpatom ARCH=sm_100a ;;
     *) echo "run.sh: needs compute capability 9.x or 10.x, the device reports '$cap'" >&2; exit 2 ;;
     esac
     WORK=$(mktemp -d)
     trap 'rm -rf "$WORK"' EXIT
-    tar -C "$WORK" -xzf "$IN/bins.tgz"
+    gated=1
+    if [ -f "$IN/bins.tgz" ]; then
+      tar -C "$WORK" -xzf "$IN/bins.tgz"
+    else
+      # No build sent: this device's source, built and gated here outside the lease (pipe.sh's way: a minute's
+      # nvcc, no GPU held). A refused gate times no probe; the exact check and the clock still run.
+      nvcc_or_exit
+      build_one "$B" "$ARCH" "$WORK" || gated=0
+    fi
+    steps=${STEPS:-exact probe clock}
+    [ "$gated" = 1 ] || { steps=${steps//probe/}; echo "run.sh: a gate verdict failed, so no probe is timed" >&2; }
     lease=()
     command -v gpu-lease >/dev/null && lease=(gpu-lease 1 --wait --max-min 20 --)
     [ ${#lease[@]} -eq 0 ] && echo "run.sh: no gpu-lease on this node; running on its GPU directly" >&2
-    "${lease[@]}" env RT3_LEASED=1 WORK="$WORK" B="$B" bash "${BASH_SOURCE[0]}" time
-    exit $?
+    "${lease[@]}" env RT3_LEASED=1 WORK="$WORK" B="$B" STEPS="$steps" bash "${BASH_SOURCE[0]}" time
+    rc=$?
+    [ "$gated" = 1 ] || rc=1
+    exit $rc
   fi
   BIN="$WORK/$B"
   nvidia-smi -q -d CLOCK,PERFORMANCE,POWER,TEMPERATURE >"$OUT/smi-before.txt" 2>&1
