@@ -34,7 +34,7 @@ RANGES = {
     "b_a": (1.0, 8.0, "b_a.activation/boundary-training: 1, 4, 8"),
     "f": (0.5, 0.99, "guess"),
     "pous_delta": (1e-6, 0.1, "guess, around today's 1/100"),
-    "pous_floor": (0.0, 0.0094, "0 with labels streamed from the challenger; 0.47% at D = 2; high a guess (2x)"),
+    "pous_floor": (0.0, 0.985, "0 when the slack counts it (MEM-51); 0.985 under the broken reference permutation (C8)"),
     "disk_gb": (0.0, 8000.0, "unplugged; 8 TB of NVMe left in place (dark-compute red team)"),
     "t_read": (1e-4, 1e-2, "guess, around today's 1 ms"),
     "wipe_s": (60.0, 6.048e5, "guess: every minute to weekly"),

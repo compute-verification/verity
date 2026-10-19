@@ -63,7 +63,8 @@ BLOCK_NAME_BITS = 25
 #: defaults: the Kimi K2 calibration and forward chain; the GPUs' residual at compute-accounting's modelled design (floor
 #: credit with verified filler, about 1% of device time; served windows today credit 10.3% of padded MACs) and the host
 #: CPUs at their AMX datasheet peak (two Xeon 6776Ps, about 5% of the GPUs' FP8 rate); 100,000 servers of 8 RTX PRO 6000s (vy-nebius-2's 2.668 TB) for a year;
-#: the deployed proof-of-space audit (k = 111 rounds at delta = 1/100, plus the floor at the deployed D = 2) and the memory
+#: the deployed proof-of-space audit (k = 111 rounds at delta = 1/100; the slack counts the floor once, memory-accounting
+#: MEM-51) and the memory
 #: the fill doesn't reach (3.05 GB on-chip, 18.4 GB GPU reserve, 29.5 GB host gap, about 7 GB of DPU, BMC and flash); disks
 #: unplugged; today's uncharged export; the declared computation's novel intake at alpha F (once NET-35's count check is in
 #: the ZK flow; line rate until then); sampled proofs at 1% on top of serve-time commitments, at today's sparse-draw cost
@@ -71,7 +72,7 @@ BLOCK_NAME_BITS = 25
 DEFAULTS = {
     "unmonitored": 0.0, "residual": 0.01, "host_share": 0.05,
     "pous_rounds": 111.0, "unfilled_gb": 58.0, "sigma": 1e3, "b_w": 2.5, "b_a": 4.0,
-    "f": 0.95, "pous_delta": 0.01, "pous_floor": 0.0047, "t_read": 1e-3, "wipe_s": 3600.0, "hbm_gb": 768.0,
+    "f": 0.95, "pous_delta": 0.01, "pous_floor": 0.0, "t_read": 1e-3, "wipe_s": 3600.0, "hbm_gb": 768.0,
     "host_gb": 1900.0, "disk_gb": 0.0,
     "tau": 400.0, "export": 4.4e9, "nic": 3.2e12,
     "share": 0.01, "overhead": 4.8e12, "replay": 1.1e5, "step_flop": 1.43e4, "p_evade": 2.0 ** -40, "identities": 1.0,
@@ -96,7 +97,7 @@ SPEC = [
     {"key": "b_a", "main": True, "label": "Compression: bits per activation", "unit": "bit", "min": 0.1, "max": 16, "log": True},
     {"key": "f", "label": "Exhaustion: declared share of HBM", "unit": "", "min": 0, "max": 0.999, "log": False},
     {"key": "pous_delta", "label": "Proof-of-space failure probability per certificate", "unit": "", "min": 1e-12, "max": 0.5, "log": True},
-    {"key": "pous_floor", "label": "Proof-of-space certificate floor (0.47% at the deployed D = 2; 0 with labels streamed from the challenger)", "unit": "", "min": 1e-6, "max": 0.05, "log": True, "zero": True},
+    {"key": "pous_floor", "label": "Proof-of-space share the developer can rebuild at any k: 0 when the permutation is ideal or labels are streamed (the slack counts it once); about 0.985 under the broken reference permutation", "unit": "", "min": 1e-6, "max": 1, "log": True, "zero": True},
     {"key": "disk_gb", "label": "Disk per server left in place and unwiped (0 when unplugged)", "unit": "GB", "min": 1, "max": 1e5, "log": True, "zero": True},
     {"key": "t_read", "label": "Wipe read deadline (helpers within it refill proof-of-space blocks)", "unit": "s", "min": 1e-6, "max": 1e-1, "log": True},
     {"key": "wipe_s", "label": "Wipe period", "unit": "s", "min": 1, "max": 1e7, "log": True},

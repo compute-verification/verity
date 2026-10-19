@@ -94,7 +94,7 @@ def test_proof_of_space_rounds_set_the_slack():
     assert T.slack(no_floor) == pytest.approx(1 / 19, rel=0.02)
     mem_gb = T.DEFAULTS["hbm_gb"] + T.DEFAULTS["host_gb"]
     assert T.slack(no_floor | {"pous_rounds": 12000}) * mem_gb < 1.03
-    assert T.slack(T.DEFAULTS | {"pous_rounds": 1e9}) == pytest.approx(T.DEFAULTS["pous_floor"], rel=1e-3)
+    assert T.slack(T.DEFAULTS | {"pous_rounds": 1e9, "pous_floor": 0.015}) == pytest.approx(0.015, rel=1e-3)
 
 
 def test_unbounded_ingress_makes_wipes_cap_nothing():
