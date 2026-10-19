@@ -1,7 +1,8 @@
 """Every memory challenger in this suite runs on an injected clock (AGENTS.md "Tests"). `tests/test_no_wall_clock.py`
 scans for clock reads in test source, and cannot see an `audit.UnsignedRounds`, `ContinuousMemoryChallenger`,
 `memory_challenger.MemoryChallenger` or `streamed_wipe.Challenger` left on its default `time.perf_counter_ns`; such a test
-passes or fails with the load on `check`'s slot. Here the default clock fails the test that reads it, every time."""
+passes or fails with the load on `check`'s slot. Here the default clock fails the test that reads it, every time. The test
+signer's leaf states and session logs go under the suite's basetemp (`pous_test_signer.DIR`)."""
 
 from __future__ import annotations
 
@@ -9,6 +10,7 @@ import inspect
 
 import pytest
 
+import pous_test_signer
 from verity.core.protocols.pous import audit, memory_challenger, streamed_wipe
 from verity.core.protocols.pous.continuous import ContinuousMemoryChallenger
 
@@ -29,3 +31,11 @@ def _no_default_clock(monkeypatch):
         defaults = list(init.__defaults__)
         defaults[defaulted.index("clock")] = _wall_clock
         monkeypatch.setattr(init, "__defaults__", tuple(defaults))
+
+
+@pytest.fixture(autouse=True, scope="session")
+def _test_signer_dir(tmp_path_factory):
+    """`pous_test_signer`'s files under the suite's basetemp, never `$TMPDIR`."""
+    pous_test_signer.DIR = tmp_path_factory.mktemp("test-signer")
+    yield
+    pous_test_signer.DIR = None
