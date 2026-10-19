@@ -16,6 +16,9 @@
 
 #include "../pearl_c/hash_h3.cuh"
 #include "hash_fast.cuh"
+// decode's A commitment and tile leaves (run.py's PD_SERVED): the variants the decode shapes take
+#define PD_VARIANT_LIST(X) X(851) X(979)
+#include "hash_decode.cuh"
 #include "mainloop_sm120.cuh"
 
 // ---------------------------------------------------------------- formats (IEEE, nearest even, no FTZ)

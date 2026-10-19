@@ -41,6 +41,8 @@ from __future__ import annotations
 import time
 from typing import Any, Callable
 
+from verity_vllm.engine.engine_driver import external_id
+
 
 def scheduler_of(llm: Any) -> Any | None:
     """The in-process vLLM V1 scheduler of an offline `LLM` (`llm_engine.engine_core[.engine_core].scheduler`) when it exposes a
@@ -98,7 +100,10 @@ def forwards_from_schedule(computed: list[dict[str, int]]) -> tuple[list[bool], 
 def scheduled_tokens(computed: list[dict[str, int]], prompt_len: dict[str, int]) -> list[tuple[int, int]]:
     """Per iteration: the (prefill, decode) tokens its schedule computed, from successive `num_computed_tokens` snapshots.  A
     request's tokens below its prompt length are prefill, the rest decode.  A count that went down (a preempted request
-    recomputed from the start) counts from 0."""
+    recomputed from the start) counts from 0.
+
+    The scheduler's snapshot keys carry vLLM's internal ``-<8 hex>`` suffix, while `prompt_len` is keyed by the workload id, so
+    the prompt length is read by `external_id` (a bare id passes through unchanged)."""
     out: list[tuple[int, int]] = []
     prev: dict[str, int] = {}
     for snap in computed:
@@ -106,7 +111,7 @@ def scheduled_tokens(computed: list[dict[str, int]], prompt_len: dict[str, int])
         for rid, nc in snap.items():
             was = prev.get(rid, 0)
             was = 0 if nc < was else was
-            p = prompt_len.get(rid, 0)
+            p = prompt_len.get(external_id(rid), 0)
             fill = max(0, min(nc, p) - min(was, p))
             pre += fill
             dec += (nc - was) - fill
@@ -249,9 +254,3 @@ def run_requests_arrivals(llm: Any, requests: list[Any], params_for: Callable[[A
                             "prefill_tokens": None if tokens is None else tokens[j][0],
                             "decode_tokens": None if tokens is None else tokens[j][1]} for j in range(n_it)]
     return finished, timing
-
-
-def admission_order(requests: list[dict]) -> list[dict]:
-    """The same rule for callers that step the engine themselves (noninterference's hooks variant): requests sorted by
-    `arrive_step` (stable), each to be admitted right before that engine step."""
-    return sorted(requests, key=lambda r: int(r.get("arrive_step") or 0))

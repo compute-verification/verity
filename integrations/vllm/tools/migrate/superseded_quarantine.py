@@ -517,7 +517,7 @@ def promote_edits(dest: str | None) -> tuple[tuple[str, str, str], ...]:
          '    assert layer_norm.VEC == 4 and layer_norm.NTHREADS == 128 and layer_norm.MEAN_FMA_ORDER == "A"\n'),
         ("tests/engine/test_gen_ln.py", "bind(layer_norm_aten.LayerNormAten,", "bind(layer_norm.LayerNormAten,"),
         ("tests/engine/test_gen_ov_sampling.py", "# quarantine Definition `GumbelArgmaxBf16_v1`", "# registry Definition `GumbelArgmaxBf16_v1`"),
-        # the promoted norm and GELU table join the dense family's Definition modules (`split_dense.py`'s boundary)
+        # the promoted norm and GELU table join the dense family's Definition modules (that test's boundary)
         ("tests/program/test_dense_family_boundary.py", '          "boolean_rope", "gemm_bias")\n',
          '          "boolean_rope", "gemm_bias", "layer_norm", "gelu_erf_table")\n'),
         ("tests/program/test_layer_norm_aten.py", "(`quarantine/ln/layer_norm_aten_difftest.py`, on the GPU)",

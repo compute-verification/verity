@@ -4,9 +4,11 @@ its reason, or has its carries budgeted. The red team's attacks (benchmarks/prop
 are cases here."""
 from __future__ import annotations
 
+import hashlib
 import json
 import random
 import re
+from fractions import Fraction
 from pathlib import Path
 
 import numpy as np
@@ -15,8 +17,9 @@ import pytest
 from verity.ml.circuits import stacking as P
 from verity.ml.circuits.census import census
 from verity.ml.circuits.codec import canonical_json
-from verity.ml.circuits.defs import CompositeDefinition, PrimitiveDefinition
+from verity.ml.circuits.defs import CompositeDefinition, PrimitiveDefinition, _Widths
 from verity.ml.circuits.ops import fp32, prims, scalar
+from verity.ml.circuits.ops.s8 import S32LowByte
 from verity.ml.circuits.ports import In, Leaves, Out, Ports
 from verity.ml.circuits.program import Program
 from verity.ml.circuits.refs import Coll, Strided, array_of, concat, tuple_of
@@ -51,6 +54,8 @@ SQACC = stand_in("PouwSqAcc", (("acc", Value(576)), ("x", S32)), Value(576))
 U8S8 = stand_in("BlackwellU8S8ImmaDot32", (("acc", S32), ("a", Array(32, S8)), ("b", Array(32, S8))))
 F64MUL = stand_in("F64Mul", (("a", Value(64)), ("b", Value(64))), Value(64))
 EXP2LUT = stand_in("Exp2Lut127", (("t", S8),))
+#: the sha256 of vLLM's LUT softmax table (`engine.int8_attention.LUT` at #2455's head) as 256 little-endian u32 words
+EXP2_LUT127_SHA256 = "6eb8e9b3478db58b4e5a711f31968394f7e93fa4e1df2e0d801eab92a5f66f84"
 
 
 def comp(name: str, params, ret, body, ports=None) -> CompositeDefinition:
@@ -188,12 +193,14 @@ def test_an_accumulator_from_a_run_input_is_refused():
 BOUND = (-(1 << 20), 1 << 20)
 
 
-def test_a_run_inputs_declared_bound_is_not_taken():
-    """No declared `In(bound)` is taken on trust (18 Oct): evaluation doesn't enforce a run input's bound, so the accumulator
-    from a run input whose port bounds it far from the s32 edge is no more proven than one without."""
-    program, ends = int8_program(acc0="input", ports=Ports(params={"c": In(bound=BOUND)}))
-    v = judge(program, ends)
-    assert codes(v) == ["s8-window"] and v.reasons[0]["sites"][0]["acc"] == list(P.S32)
+def test_a_run_inputs_declared_bound_is_refused():
+    """No declared `In(bound)` is taken on trust (18 Oct): evaluation doesn't enforce a run input's bound, so a run input whose
+    port bounds it far from the s32 edge, whole or on some of its leaves, is refused when its Program is built (`E_PORT_BOUND`),
+    and never judged as bounded."""
+    with pytest.raises(ValueError, match=r"E_PORT_BOUND: program function TestInt8Program_v1: parameter 'c' leaves \[0, 1\)"):
+        int8_program(acc0="input", ports=Ports(params={"c": In(bound=BOUND)}))
+    with pytest.raises(ValueError, match=r"E_PORT_BOUND: program function TestFromInputLeaf_v1: parameter 'c' leaves \[0, 1\)"):
+        _from("TestFromInputLeaf", lambda B, c: c[0], C0)
 
 
 def _rem(a, b):
@@ -209,6 +216,7 @@ REM = stand_in("I32Rem", (("a", S32), ("b", S32)), ports=Ports(transfer=_rem))
 FIRST = comp("TestFirst", (("c", Array(2, S32)),), S32, lambda B, _S, c: c[0], ports=Ports(ret=Out(interval=BOUND)))
 SILENT = comp("TestFirstSilent", (("c", Array(2, S32)),), S32, lambda B, _S, c: c[0])
 C0 = Ports(params={"c": Leaves(((0, 1, In(bound=BOUND)),))})
+RANGE = stand_in("TestRangeS32", (("a", S32),), ports=Ports(ret=Out(interval=BOUND)))
 
 
 def _from(name: str, start, ports=None) -> P.Analysis:
@@ -219,19 +227,27 @@ def _from(name: str, start, ports=None) -> P.Analysis:
     return P.analyze(program, census(program, [len(program.root.body.nodes)]))
 
 
-@pytest.mark.parametrize("label,start,ports,proven", [
-    ("declared", lambda B, c: B.call(DIV, c[0], c[1]), None, True),
-    ("undeclared", lambda B, c: B.call(I32DIV, c[0], c[1]), None, False),
-    ("transfer", lambda B, c: B.call(REM, c[0], B.call(prims.const(32, 1000))), None, True),
-    ("transfer-of-any-word", lambda B, c: B.call(REM, c[0], c[1]), None, False),
-    ("input-leaf", lambda B, c: c[0], C0, False),
-    ("composite", lambda B, c: B.call(FIRST, c), C0, True),
-    ("silent-composite", lambda B, c: B.call(SILENT, c), C0, False)])
-def test_a_producers_declared_interval_narrows_its_value(label, start, ports, proven):
-    """A primitive's declared interval, its transfer on its operands' ranges, and a Definition's declared return narrow its
-    value; an input leaf's declared bound doesn't, and a composite that declares nothing gives any word."""
-    a = _from(f"TestFrom{label.title().replace('-', '')}", start, ports)
+@pytest.mark.parametrize("label,start,proven", [
+    ("declared", lambda B, c: B.call(DIV, c[0], c[1]), True),
+    ("undeclared", lambda B, c: B.call(I32DIV, c[0], c[1]), False),
+    ("transfer", lambda B, c: B.call(REM, c[0], B.call(prims.const(32, 1000))), True),
+    ("transfer-of-any-word", lambda B, c: B.call(REM, c[0], c[1]), False),
+    ("input-leaf", lambda B, c: c[0], False),
+    ("composite", lambda B, c: B.call(FIRST, B.batch(RANGE, c, axes=(0,))), True),
+    ("silent-composite", lambda B, c: B.call(SILENT, c), False)])
+def test_a_producers_declared_interval_narrows_its_value(label, start, proven):
+    """A primitive's declared interval, its transfer on its operands' ranges, and a Definition's declared return (held to its
+    body, here a range check's) narrow its value; a run input's leaf spans its width, and so does a composite that declares
+    nothing over it."""
+    a = _from(f"TestFrom{label.title().replace('-', '')}", start)
     assert a.unproven == ({} if proven else {IMMA.id: 2}), label
+
+
+def test_a_declared_return_over_a_run_input_is_refused():
+    """A Definition's declared return holds by its body: over a run input's leaf, which spans its width, it is refused when
+    the Program is built, so a composite's declaration never stands in for a bound on the run input it reads."""
+    with pytest.raises(ValueError, match="E_PORT_INTERVAL: TestFirst_v1 declares Out"):
+        _from("TestFromCompositeUnchecked", lambda B, c: B.call(FIRST, c))
 
 
 def test_port_intervals_read_as_signed_ranges():
@@ -284,14 +300,24 @@ def _reinterpreting_program(how: str) -> tuple[Program, list[int]]:
     return program, [len(program.root.body.nodes)]
 
 
-@pytest.mark.parametrize("how,where", [("broadcast", "Root[TestReinterpretBroadcast_v1]_v1"),
-                                       ("affine", "Root[TestReinterpretAffine_v1]_v1"), ("ret", "TestNarrow_v1"), ("mixed", None)])
-def test_a_word_read_at_another_width_is_refused(how, where):
-    program, ends = _reinterpreting_program(how)
-    v = judge(program, ends)
+_IMMA_A = r"node \d+ \(primitive BlackwellS8ImmaDot32_v1\) argument 'a': leaf 0 is typed Value<8> but names leaf 0 of node \d+"
+
+
+@pytest.mark.parametrize("how,where,built", [
+    ("broadcast", "Root[TestReinterpretBroadcast_v1]_v1", _IMMA_A), ("affine", "Root[TestReinterpretAffine_v1]_v1", _IMMA_A),
+    ("ret", "TestNarrow_v1", r"the body's return: leaf 0 is typed Value<8> but names leaf 0 of parameter 'd'"),
+    ("mixed", None, None)])
+def test_a_word_read_at_another_width_is_refused(how, where, built, monkeypatch):
+    """A word read back at another width is refused when its Program is built (`E_REINTERPRET`, as when decoded); past that
+    check (patched out here), the property refuses it too. The s8 field of a mixed tuple, read at its own width, passes both."""
     if where is None:
+        v = judge(*_reinterpreting_program(how))
         assert v.ok and v.numbers["family_steps"] == 2, v.reasons
         return
+    with pytest.raises(TypeError, match=f"E_REINTERPRET: {built}"):
+        _reinterpreting_program(how)
+    monkeypatch.setattr(_Widths, "first", lambda self, c: None)
+    v = judge(*_reinterpreting_program(how))
     assert codes(v) == ["reinterpretation"] and v.reasons[0]["definitions"] == {where: 1}, v.reasons
 
 
@@ -544,12 +570,29 @@ def test_the_bf16_widening_is_a_free_affine_map():
     assert segs == ((0, 1, (P.S32[0], 0x7FFF0000)),)
 
 
+@pytest.mark.parametrize("prim,ranges", [
+    (prims.Bf16ToF32, [(0, 0xFFFF)]),  # an unsigned reading of the encoding: clipped to s16, half its values would be lost
+    (scalar.I32Add, [(0, (1 << 32) - 1), (0, 0)]),  # clipped to s32, the add would look in range though it wraps
+    (I32SUB, [(0, 0), (0, (1 << 32) - 1)]),
+    (I32MUL, [(1, 1), (0, (1 << 32) - 1)]),
+    (scalar.I32Add, [(P.S32[1], P.S32[1]), (1, 1)]),  # within s32, and the sum wraps
+])
+def test_a_wrapping_affine_map_is_charged_never_clipped(prim, ranges):
+    """Red team round 5: an affine map whose operand's range leaves its width's signed reading, or whose result leaves s32,
+    isn't proven, so it is budgeted (a rounding) rather than free over a range clipped to s16 or s32."""
+    t = P.count(prim, (True,) * len(ranges), ranges)
+    assert (t.units, t.affine) == ({"roundings": 1}, 0)
+
+
 def test_the_lut_softmax_gather_reads_8_index_bits_and_lies_in_its_tables_hull():
     """`Exp2Lut127` (the exact-int8 profile's LUT softmax) is a gather of a constant 256-entry table by an 8-bit index: 8 fresh
     index bits and no selection unit (its column is constant), and its value lies in the hull of rint(127 * 2^(-t/16)) and 0
-    (Lean's `hull0`), so the softmax's sum of them by I32Add is a proven affine chain."""
+    (Lean's `hull0`), so the softmax's sum of them by I32Add is a proven affine chain. The table is its evaluator's: its 256
+    little-endian u32 words hash to vLLM's `engine.int8_attention.LUT`'s sha256."""
     table = np.rint(127.0 * np.exp2(-np.arange(256) / 16.0)).astype(int)
-    assert P.EXP2_LUT127 == (min(0, int(table.min())), max(0, int(table.max())))
+    assert P.EXP2_LUT127_TABLE == tuple(table.tolist())
+    assert hashlib.sha256(np.asarray(P.EXP2_LUT127_TABLE, dtype="<u4").tobytes()).hexdigest() == EXP2_LUT127_SHA256
+    assert P.EXP2_LUT127 == (min(0, int(table.min())), max(0, int(table.max()))) == (0, 127)
     assert P.gather("Exp2Lut127_v1") == (0, 8, "low", False) and P.class_of("Exp2Lut127_v1") == "gathers"
 
     def body(B, _S, t):
@@ -640,6 +683,42 @@ def test_ps_quantizer_bounds_it_to_0_127_so_pv_stays_in_window_to_132104_tokens(
     assert t.units == {"roundings": K, "compare_select": K * (("max" in steps) + ("min" in steps))}
 
 
+LUT_P = comp("TestLutP", (("t", S8),), S8, lambda B, _S, t: B.call(S32LowByte, B.call(EXP2LUT, t)))
+
+
+def _lut_pv(K: int) -> CompositeDefinition:
+    """Lean's `lutPv`: P . V' over K keys, P = S32LowByte(Exp2Lut127(t)) of a run index t, V' any s8, as K/32 chained s8 steps
+    from zero."""
+    def body(B, _S, t, v):
+        p = B.batch(LUT_P, t, axes=(0,))
+        acc = B.call(prims.ZERO32)
+        for j in range(K // 32):
+            acc = B.call(IMMA, acc, p[32 * j:32 * (j + 1)], v[32 * j:32 * (j + 1)])
+        return acc
+    return comp(f"TestLutPV{K}", (("t", Array(K, S8)), ("v", Array(K, S8))), S32, body)
+
+
+@pytest.mark.parametrize("K,entry_max,unproven", [(132_096, None, 0), (132_128, None, 1), (131_040, 128, 0), (131_072, 128, 1)])
+def test_lut_ps_low_byte_keeps_the_tables_hull_so_pv_stays_in_window_to_132096_keys(K, entry_max, unproven, monkeypatch):
+    """Red team round 5: P = S32LowByte(Exp2Lut127(t)) lies in the table's hull, [0, 127], since a word in s8 is its own low
+    byte, so 32 * 128 * 127 a step reaches -2^31 only past K = 132,096 (Lean's `LutPvWindow`). Read at its type, [-128, 127],
+    as with one table entry of 128 (whose low byte is -128), 128 * 128 reaches 2^31 at 131,072."""
+    if entry_max is not None:
+        monkeypatch.setitem(P.RANGES, "Exp2Lut127_v1", lambda _t: (0, entry_max))
+    t = P.count(_lut_pv(K), (True, True))
+    assert (t.family, t.unproven) == (K // 32 - unproven, {IMMA.id: unproven} if unproven else {})
+    assert t.units == {"gathers": 8 * K, "roundings": K}
+
+
+def test_the_low_byte_rule_holds_on_the_evaluator():
+    """`S32LowByte` of a word in s8 is the word (its s8 code read signed), and 128's is -128; a range past s8 is any s8 code."""
+    assert all(P._signed(8, S32LowByte.evaluate(s32_word(y))) == y for y in range(-128, 128))
+    assert P._signed(8, S32LowByte.evaluate(128)) == -128
+    rule = P.RANGES["S32LowByte_v1"]
+    assert P.RANGES["S32LowByte_v2"] is rule
+    assert (rule((0, 127)), rule((-128, 127)), rule((-128, 128)), rule(None)) == ((0, 127), (-128, 127), None, None)
+
+
 def test_the_range_rules_hold_on_the_evaluator():
     """`fmaxf` and `fminf` over sampled operand ranges (+-0, subnormals, +-inf, NaNs of both signs) give values inside the
     rule's range, as signed bit patterns."""
@@ -712,6 +791,26 @@ def test_check_refuses_bad_windows_c_and_another_programs_census():
         P.check(program, census(other, other_ends), c=FREE, windows=[P.Window(range(2), 1, 1)])
 
 
+def test_caps_rates_and_durations_are_exact_and_a_float_is_refused():
+    """Red team round 5: `Fraction(0.1)` is 0.1's binary value, a little more than 1/10, in the attacker's favour. c, R_in and
+    a window's seconds are taken exactly (an int, a Fraction or a str), a float is refused with its exact spelling in the
+    message, and a window's reads is an integer."""
+    program, ends = int8_program(epilogue=True)
+    a = P.analyze(program, census(program, ends))
+    one = [P.Window(range(3), 192, 1)]
+    for cap in (Fraction(1, 32), "1/32", "0.03125"):
+        assert P.judge(a, c={**FREE, "roundings": cap}, windows=one).ok
+    assert codes(P.judge(a, c={**FREE, "roundings": Fraction(1, 33)}, windows=one)) == ["roundings"]
+    bad = [dict(c={**FREE, "roundings": 0.1}, windows=one), dict(c={**FREE, "gathers": np.float64(0.5)}, windows=one),
+           dict(c=FREE, windows=one, R_in=1e5), dict(c=FREE, windows=[P.Window(range(3), 192, 0.5)])]
+    for kw in bad:
+        with pytest.raises(ValueError, match=r"the float .*: give it exactly, as Fraction\('"):
+            P.judge(a, **kw)
+    for kw in (dict(c={**FREE, "folds": None}, windows=one), dict(c=FREE, windows=[P.Window(range(3), 192.0, 1)])):
+        with pytest.raises(ValueError):
+            P.judge(a, **kw)
+
+
 def test_count_reads_a_definition_with_given_ranges():
     st = _step(64)
     assert P.count(st, (True, True, False)).unproven == {"BlackwellS8ImmaDot32_v1": 2}  # an accumulator of any word
@@ -726,5 +825,5 @@ def test_the_table_is_pinned():
     assert P.digest() == PINNED, P.digest()
 
 
-PINNED = ("de40c0fc9cc7613b448d590d3376a3bdd0e77d3536f33374028398be8d1c49e9"
-          "e8643b74d7de0c058ea63bc316bea2b67a1251ea1934b2038135ebf4fae7153f")
+PINNED = ("fc77df15d3eed2a2674fc349bd90e05ff6780b1fd202abd04a10b81fabbc0e1b"
+          "632cff84629a15e07091630bdb5df2fad578398859c00e9e515de3570c6e4c3b")

@@ -9,7 +9,9 @@
 #                (STAGE_FROM=DIR: another job's data/$TAG, both stagings)
 #   STEP=inner   (GPU leases) the plain inner statement proved with ZK off (M0, FC_COINS=os) against the rec proxy
 #                (verity_flock.rec_live, the inner phase's firewall: salted tree tops, the schedule of the statement's public
-#                shape, rec_live --schedule-for; WARM + RUNS sessions), upstream's replay of the last one and V*'s hashing
+#                shape, rec_live --schedule-for; Register answered with the verifier's full draw, rec_live.full_draw over the
+#                inner statement's program and partition, data/$TAG/stage/draw.json; WARM + RUNS sessions), upstream's
+#                replay of the last one and V*'s hashing
 #                reference (rec_vstar) over it, and over two forged copies of its private.json (a round's top: one node one
 #                bit off, one salt one bit off), which it must refuse (CHECKS=0: STEP=icheck's); then (INNER_LOOPBACK=1) the
 #                hm96 statement on loopback, M0 and --zk, WARM + RUNS sessions each (today's numbers)
@@ -28,7 +30,8 @@
 #   STEP=oreplay (CPU) upstream's replay --zk of each statement's session oprove kept
 #   STEP=lean    (CPU) Lean's flock-verify verify --zk on each statement's last session, with V*'s own inputs (the inner
 #                shape, the statement's index and bindings, the shared rows, the inner transcript) (INNER_LEAN=1: also the inner's,
-#                --coins os, on verity/flock-circuit+plain-leaves, which Lean's verify checks without --zk
+#                --coins os and the draw held to its law, --stratified N --program --partition, on
+#                verity/flock-circuit+plain-leaves, which Lean's verify checks without --zk
 #                (ProvedScope.leafOk); ZK_LEAN=1: also today's --zk session; LEVELS=none: neither of V*'s), and
 #                flock-verify statement on the inner statement with the partition object and program vstage wrote. The job
 #                fails unless each statement (staged or proved) and ZK_LEAN's session exited 0 with every VERDICT accepted,
@@ -37,7 +40,7 @@
 # The prover runs on the job's first PCPUS cores, the verifier (proxy, serve, replay) on the rest. Every step writes
 # out/summary-$STEP.json. Only a prove invocation holds a GPU, leased for it alone (on_gpu), so every STEP is launched without
 # --gpus (a CPU phase): staging, the proxy, serve, replay and Lean never hold one.
-# env: FLOCK_WORK=/workspace/jobs/rec-reprice  TAG=k4096  K=4096 (the Gemm_v2 contraction: DEFS is Gemm_v2{K,N=4096})  N=2048
+# env: FLOCK_WORK=/workspace/jobs/rec-reprice  TAG=k4096  K=4096 (the Gemm_v2 contraction: DEFS is Gemm_v2{K,N})  N=2048 (instances: the Call's every unit)
 #      CUDA_TK= (default: CUDA_REDIST=13.3.1's archives under FLOCK_WORK)  SM=120  WARM=1  RUNS=3  PCPUS=16
 #      LEVELS= (comma-separated statement names, default every one: L3,alg; oprove and lean also forged-sum-L6, alg-p1,
 #              ..; a name without its part, alg, names every part)
@@ -199,12 +202,12 @@ loopback() {
   return $rc
 }
 
-# proxied: the rec proxy (WARM + RUNS sessions, each to $DD/inner/s<k>, held to $O/inner/schedule.json) and prove_live
-# against it; the prover's status
+# proxied: the rec proxy (WARM + RUNS sessions, each to $DD/inner/s<k>, held to $O/inner/schedule.json, Register answered
+# with $DD/stage/draw.json) and prove_live against it; the prover's status
 proxied() {
   rm -rf $DD/inner; mkdir -p $DD/inner
   taskset -c $VCPU python3 -m verity_flock.rec_live --listen 127.0.0.1:0 --out $DD/inner --sessions $NS --schedule $O/inner/schedule.json \
-    > $O/inner/proxy/proxy.log 2>&1 &
+    --draw $DD/stage/draw.json > $O/inner/proxy/proxy.log 2>&1 &
   local PP=$!
   wait_serving $O/inner/proxy/proxy.log $PP || { cat $O/inner/proxy/proxy.log; return 1; }
   prove_live proxy $(awk '/^SERVING/ {print $2}' $O/inner/proxy/proxy.log) $D/inst-$N.bin $D/circuit.txt; local rc=$?
@@ -371,12 +374,13 @@ lean_build() {
   )
 }
 
-# stage_inner NAME PLAIN: the inner statement (one Call of Gemm_v2{K, N=4096}, its GemmCoordinate_v2 shape at N instances)
+# stage_inner NAME PLAIN: the inner statement (one Call of Gemm_v2{K, N}, its GemmCoordinate_v2 shape at N instances: the
+# Call's every unit, so the full draw over its partition proves every unit of the statement, which check 5 requires)
 # staged into $DD/NAME from its cache $DD/NAME-cache, its trees' leaves plain SHA-512 when PLAIN is 1; its records in $O/NAME
 stage_inner() {
   local o=$O/$1 c=$DD/$1-cache
   mkdir -p $o
-  python3 -c "import json, sys; json.dump({'Gemm_v2{K=%s,N=4096,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"}}' % sys.argv[1]: 1151}, open(sys.argv[2], 'w'))" $K $o/defs.json
+  python3 -c "import json, sys; json.dump({'Gemm_v2{K=%s,N=%s,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"}}' % (sys.argv[1], sys.argv[2]): 1151}, open(sys.argv[3], 'w'))" $K $N $o/defs.json
   FLOCK_STAGE_CACHE=$c FLOCK_PLAIN_LEAVES=$2 FLOCK_GEMM_TILE=${FLOCK_GEMM_TILE:-4x4} /usr/bin/time -v -o $o/time-stage.txt \
     python3 -m verity_flock.class_statement --definitions $o/defs.json --partition q-word --out $o --stage-only --batch fixed --n $N \
     --max-statement-bits $((1 << 35)) --batch-ands $((1 << 35)) --selftest 0 > $o/stage.log 2>&1
@@ -385,6 +389,37 @@ stage_inner() {
   [ -n "$C" ] && [ -f $C/inst-$N.bin ] || { echo "no staged statement under $c"; return 1; }
   mkdir -p $DD/$1 && for f in circuit.txt inst-$N.bin pub-$N.bin rec.json; do ln -f $C/$f $DD/$1/$f || cp $C/$f $DD/$1/$f; done
   du -sb $DD/$1/* | tee $o/sizes.txt
+}
+
+# inner_partition: the verifier's copies of what the inner statement binds, into $DD/stage: the partition object (q-word over
+# the one-Call program, partition.json) and that program (program.json), which STEP=lean's statement check reads, and the
+# full draw over them (rec_live.full_draw: the stratified law at K = the population, every unit; draw.json), which the rec
+# proxy answers Register with
+inner_partition() {
+  python3 - $K $N $DD/stage <<'EOF'
+import json, sys
+from pathlib import Path
+from verity.ml.circuits import partition_object as PO
+from verity.ml.circuits.codec import canonical_json, encode_program, program_digest
+from verity_flock import class_statement as CS, partition_units as PU, rec_live as RL
+d = Path(sys.argv[3])
+defs = {'Gemm_v2{K=%s,N=%s,DOT={"fn":"HopperBF16WgmmaDot16_v1"}}' % (sys.argv[1], sys.argv[2]): 1151}
+program, _calls, _prov = CS.distinct_calls(None, None, defs, None)
+units = PU.partition_units(program, "q-word")
+obj = PO.build(units.program, units.query)
+with open(d / "circuit.txt") as f:
+    f.readline()
+    meta = json.loads(f.readline()[5:])
+assert (meta["partition"]["digest"], meta["program_sha512"]) == (PO.digest(obj), obj["program"]), "not the circuit's partition"
+(d / "partition.json").write_text(json.dumps(obj, sort_keys=True))
+desc = encode_program(units.program)
+assert program_digest(desc) == obj["program"], "the program file is not the partition's program"
+(d / "program.json").write_bytes(canonical_json(desc))
+draw = RL.full_draw(units.program, obj["query"])
+assert draw["population"] == int(sys.argv[2]), f"the partition's population is {draw['population']}, not the statement's {sys.argv[2]} units"
+(d / "draw.json").write_text(json.dumps(draw))
+print("partition", PO.digest(obj), "program", obj["program"], "template", *meta["program_digests"], "population", draw["population"])
+EOF
 }
 
 case $STEP in
@@ -429,6 +464,9 @@ inner)
   taskset -c $VCPU $B statement --instances $D/pub-$N.bin --circuit $D/circuit.txt > $O/inner/statement.txt 2>&1 \
     || { tail -5 $O/inner/statement.txt; exit 1; }
   python3 -m verity_flock.rec_live --schedule-for $O/inner/statement.txt > $O/inner/schedule.json || exit 1
+  # the verifier's full draw, which verify requires of a session over the inner session (RecSetup.innerDrawn)
+  inner_partition > $O/inner/partition.txt || exit 1
+  cp $D/draw.json $O/inner/
   again proxied
   SESS=$DD/inner/s$((NS - 1))
   [ -f $SESS/session/session.json ] || { tail -20 $O/inner/proxy/proxy.log $O/inner/proxy/prove.err; exit 1; }
@@ -543,27 +581,7 @@ vstage)
     fi
   ) > $O/build-fold.log 2>&1 || { tail -30 $O/build-fold.log; exit 1; }
   mkdir -p $O/vstage
-  # the verifier's copy of the partition object the inner circuit binds: q-word over the build step's one-Call program, and
-  # that program (STEP=lean's statement check reads both)
-  python3 - $K $DD/stage/partition.json $DD/stage/circuit.txt $DD/stage/program.json <<'EOF' || exit 1
-import json, sys
-from verity.ml.circuits import partition_object as PO
-from verity.ml.circuits.codec import canonical_json, encode_program, program_digest
-from verity_flock import class_statement as CS, partition_units as PU
-defs = {'Gemm_v2{K=%s,N=4096,DOT={"fn":"HopperBF16WgmmaDot16_v1"}}' % sys.argv[1]: 1151}
-program, _calls, _prov = CS.distinct_calls(None, None, defs, None)
-units = PU.partition_units(program, "q-word")
-obj = PO.build(units.program, units.query)
-with open(sys.argv[3]) as f:
-    f.readline()
-    meta = json.loads(f.readline()[5:])
-assert (meta["partition"]["digest"], meta["program_sha512"]) == (PO.digest(obj), obj["program"]), "not the circuit's partition"
-open(sys.argv[2], "w").write(json.dumps(obj, sort_keys=True))
-desc = encode_program(units.program)
-assert program_digest(desc) == obj["program"], "the program file is not the partition's program"
-open(sys.argv[4], "wb").write(canonical_json(desc))
-print("partition", PO.digest(obj), "program", obj["program"], "template", *meta["program_digests"])
-EOF
+  inner_partition || exit 1
   cp $DD/stage/partition.json $DD/stage/program.json $O/vstage/
   V=$DD/v; rm -rf $V; mkdir -p $V
   /usr/bin/time -v -o $O/vstage/time-points.txt python3 -m verity_flock.rec_vstage points $INNER $DD/stage/circuit.txt \
@@ -705,7 +723,8 @@ EOF
   done | xargs -d '\n' -P ${JOBS:-4} -I{} sh -c "{}"
   if [ "${INNER_LEAN:-0}" = 1 ]; then
     /usr/bin/time -v -o $O/lean/time-inner.txt $LEAN_BIN verify --statement verity/flock-circuit+plain-leaves --circuit $DD/stage/circuit.txt \
-      --public $DD/stage/pub-$N.bin --partition $DD/stage/partition.json --coins os --session $DD/inner/s$((NS - 1))/session > $O/lean/inner.log 2> $O/lean/inner.err
+      --public $DD/stage/pub-$N.bin --partition $DD/stage/partition.json --program $DD/stage/program.json --stratified $N --coins os \
+      --session $DD/inner/s$((NS - 1))/session > $O/lean/inner.log 2> $O/lean/inner.err
     echo "inner lean exit $?"
   fi
   # ZK_LEAN=1: today's --zk on the same statement (the inner step's last loopback --zk session), for Lean's like-for-like

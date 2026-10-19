@@ -54,6 +54,8 @@ separate sum-of-squares probe, every launch check, the selection and the binding
 """
 from __future__ import annotations
 
+__models__ = ("deepseek-ai/DeepSeek-V4-Pro",)
+
 import argparse
 import functools
 import hashlib
