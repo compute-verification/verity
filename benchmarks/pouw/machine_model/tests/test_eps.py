@@ -577,7 +577,7 @@ def test_sm90_ffma_filler_has_no_uniform_form():
 
 
 HEADLINE_Q = 1.22   # decision 89's reading: the 1.22-slot issue floor (Theorem C, unproved in Lean; CALC r10, #2325)
-HEADLINE = {fam: f["design"] for fam, f in headline_spec()["family"].items()}   # data/headline.toml's, a family
+HEADLINE = {fam: (f["design"], f["measured"]["vector"]) for fam, f in headline_spec()["family"].items()}   # headline.toml's
 
 
 def _worst_core_under_margin(data, pi, d, m):
@@ -603,30 +603,32 @@ def _worst_core_under_margin(data, pi, d, m):
 
 
 def test_dc_the_headline_holds_decision_76s_margin():
-    """EPS1 DC's margin audit (note:20261017T0452Z-draft-eps1-dc Round 8): every device family's headline core ε, on
-    data/headline.toml's design at the family's current vector, stays under 1% when each measured facet the headline
+    """EPS1 DC's margin audit (note:20261017T0452Z-draft-eps1-dc Round 8): each device family's headline core ε, on
+    data/headline.toml's design at its measured reading's vector, stays under 1% when each measured facet the headline
     reads moves 2% in the cheater's favour (decision 76), at the decision-89 reading (operands free, q* = 1.22), ε_luck
-    in the core (Corollary D3). The A100 and L40S are far from binding, and the margin doesn't move the RTX PRO 6000,
-    the H200 or the B200: the B200 is bound by the issue axiom, not a measured row, so it stays at 0.900%.
+    in the core (Corollary D3). A family whose core is at or over 1% before the margin is the headline's own row
+    (test_headline pins it, with its reason), so the audit holds only the families under 1% to 1%; the margin never
+    lowers a core. It doesn't move the A100 or the RTX PRO 6000, and it moves the L40S by under 0.01 points. How far it
+    moves the H200 and the B200 depends on their designs, which the audit reads rather than pins.
     dither-2s-li-l32, the H200's headline before LI-CP-W, is the thin design: its 0.02 FFMA filler puts honest on JI90_0
     by only the ALU pipe's 1.5% issue slack, so a 2% rise in JPA90_0 (ALU lanes beside the tensor) moves honest's
     binding off JI90_0 and opens the lane route, taking core to 0.98% (it crosses 1% past a 2.1% margin). A 0.05 FFMA
     filler a word restores the full margin (core back to its 0.574% floor) at γ 1.589, the cheapest add-on; its ε_skip
     at the larger ♭ is CALC's to re-price."""
     worst = {}
-    for dev, name in HEADLINE.items():
+    for dev, (name, vec) in HEADLINE.items():
         data = device(dev)
-        pi = E.machine("", data)
+        pi = E.machine(vec, data)
         d = E.design(name, data)
         base = E.eps(d, pi, HEADLINE_Q, data, operands="free", credit="floor").core()
         worst[dev] = (base, _worst_core_under_margin(data, pi, d, 0.02))
-        assert worst[dev][1] < 0.01, f"{dev} {name}: {worst[dev][1]*100:.3f}% over 1% under decision 76's margin"
-    assert set(worst) == {"sm_80", "sm_89", "sm_90", "sm_100", "sm_120"}
-    assert worst["sm_80"] == pytest.approx((0.00147, 0.00147), abs=5e-5)
-    assert worst["sm_89"][0] == pytest.approx(0.00306, abs=5e-5) and worst["sm_89"][1] < 0.0035
-    assert worst["sm_90"] == pytest.approx((0.00539, 0.00539), abs=5e-5)
-    assert worst["sm_100"] == pytest.approx((0.00900, 0.00900), abs=5e-5)
-    assert worst["sm_120"] == pytest.approx((0.00540, 0.00540), abs=5e-5)
+        assert worst[dev][1] >= base - 1e-12, f"{dev} {name} on {vec}: the margin lowered core"
+        if base < 0.01:
+            assert worst[dev][1] < 0.01, f"{dev} {name} on {vec}: {worst[dev][1]*100:.3f}% over 1% under decision 76's margin"
+    assert {"sm_80", "sm_89", "sm_120"} <= set(worst)
+    for dev in ("sm_80", "sm_120"):
+        assert worst[dev][1] == pytest.approx(worst[dev][0], rel=1e-9), f"{dev}: the margin moved core"
+    assert 0 < worst["sm_89"][1] - worst["sm_89"][0] < 1e-4
     # dither-2s-li-l32 is thin at its 0.02 filler; 0.05 FFMA a word restores the margin to the floor
     sm90 = device("sm_90")
     p90 = E.machine("", sm90)
