@@ -4,6 +4,8 @@
 # --t 64); SBENCH_SCRIPT runs another script with the same libraries and environment (h1ogate.py: the units kernels at
 # kernel level).  DITHER_NSYS=1 runs it under nsys, recording the kernels inside the gate's CUDA profiler range (each graph's
 # kernels as nodes), then the dither worker's kernels inside the gate's NVTX range (kernels.py over the SQLite export).
+# DITHER_NCU=REGEX runs it under ncu instead (--clock-control none): the first DITHER_NCU_COUNT (16) launches of kernels
+# matching REGEX, their throughput, occupancy, scheduler, warp-state and instruction sections, as ncu.ncu-rep and ncu.csv.
 #   research run --on vy-nebius-2 --project verity --campaign dither-loop --source . --cwd source \
 #     --env GPU_LEASE_WHO=kernels-dither-rtx -- bash benchmarks/hash/dither/sbench.sh
 set -uo pipefail
@@ -46,6 +48,10 @@ NSYS=()
 if [ "${DITHER_NSYS:-}" = 1 ]; then
   NSYS=("$CUDA/bin/nsys" profile -t cuda,nvtx --cuda-graph-trace=node --sample=none --cpuctxsw=none
         --capture-range=cudaProfilerApi --capture-range-end=stop -o "$S/gate" --force-overwrite true)
+elif [ -n "${DITHER_NCU:-}" ]; then
+  NSYS=("$CUDA/bin/ncu" --clock-control none -k "regex:$DITHER_NCU" --launch-count "${DITHER_NCU_COUNT:-16}"
+        --section SpeedOfLight --section Occupancy --section LaunchStats --section SchedulerStats --section WarpStateStats
+        --section ComputeWorkloadAnalysis --section InstructionStats -o "$OUT/ncu" -f)
 fi
 echo "sbench: asking for one GPU at $(date -u +%H:%M:%SZ)"
 nvidia-smi --query-gpu=index,clocks.sm,clocks.mem,power.draw,temperature.gpu,utilization.gpu --format=csv -l 2 > "$OUT/smi.csv" 2>/dev/null &
@@ -60,5 +66,9 @@ if [ -f "$S/gate.nsys-rep" ]; then
   "$CUDA/bin/nsys" stats --report cuda_gpu_kern_sum --format csv -o "$OUT/gate" "$S/gate.nsys-rep" > "$OUT/nsys-stats.log" 2>&1 \
     || echo "sbench: nsys stats rc $?"
   "$PY" "$ROOT/benchmarks/hash/dither/kernels.py" "$S/gate.sqlite" | tee "$OUT/kernels.json"
+fi
+if [ -f "$OUT/ncu.ncu-rep" ]; then
+  "$CUDA/bin/ncu" --import "$OUT/ncu.ncu-rep" --csv --page details > "$OUT/ncu.csv" 2> "$OUT/ncu-import.log" \
+    || echo "sbench: ncu import rc $?"
 fi
 exit "$rc"

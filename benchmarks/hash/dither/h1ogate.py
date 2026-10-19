@@ -11,10 +11,11 @@ a block of six warps, `h1s_unit`), `h1o_unitsb` (a unit a block of five, `h1b_un
           its tree; peeled, its z peeled on the CPU); the control refused and both faults conforming (`gate_verdict`);
           wb's density as the run reads it
     time  per form, at m = 32: the window's 4 NL calls in model order (A table and units) as one CUDA graph, their units
-          launches alone as another, and each site's units alone, replayed between CUDA events with the forms interleaved
+          launches alone as another, and each site's units alone, replayed between CUDA events with the forms interleaved;
+          each over block's (else the first form's) as time_over_base
 
-    python h1ogate.py --out OUT [--nl 8] [--reps 15]     (DITHER_H1C, DITHER_H1O: the libraries; sbench.sh's
-                                                          SBENCH_SCRIPT=h1ogate.py builds them and sets the environment)
+    python h1ogate.py --out OUT [--nl 8] [--reps 15] [--forms split-peel,...]
+        (DITHER_H1C, DITHER_H1O: the libraries; sbench.sh's SBENCH_SCRIPT=h1ogate.py builds them and sets the environment)
 """
 from __future__ import annotations
 
@@ -120,42 +121,48 @@ def main() -> int:
     ap.add_argument("--scratch", default=None)
     ap.add_argument("--nl", type=int, default=8)
     ap.add_argument("--reps", type=int, default=15)
+    ap.add_argument("--forms", default=",".join(FORMS), help="the forms gated and timed, in this order")
     a = ap.parse_args()
+    forms = a.forms.split(",")
+    if not forms or any(f not in FORMS for f in forms):
+        raise SystemExit(f"--forms: some of {','.join(FORMS)}")
     out = Path(a.out)
     out.mkdir(parents=True, exist_ok=True)
     dev = torch.device("cuda")
     model(a.nl, dev)
     doc: dict = {"gpu": torch.cuda.get_device_name(dev), "t": T, "m": M, "nl": a.nl, "shapes": SHAPES, "forms": {}}
     wins = {}
-    for form in FORMS:
+    for form in forms:
         win, outs, caps, verdict = gate(form, dev)
         wins[form] = (win, outs)
         doc["forms"][form] = {"verdict": verdict, "wb": caps["gate"].get("wb"), "checks": caps}
         print(json.dumps({"form": form, "verdict": verdict, "wb": caps["gate"].get("wb"),
                           "vs_h1v3_cpu": caps["gate"].get("vs_h1v3_cpu"), "h1v3": caps["gate"].get("h1v3")},
                          default=str), flush=True)
-    ok = all(doc["forms"][f]["verdict"]["ok"] for f in FORMS)
+    ok = all(doc["forms"][f]["verdict"]["ok"] for f in forms)
     doc["gate_ok"] = ok
     if ok:
-        gs = {f: graphs(*wins[f]) for f in FORMS}
-        for f in FORMS:
+        gs = {f: graphs(*wins[f]) for f in forms}
+        for f in forms:
             for g in gs[f].values():
                 g.replay()
         torch.cuda.synchronize()
-        ms: dict = {f: {n: [] for n in gs[f]} for f in FORMS}
+        ms: dict = {f: {n: [] for n in gs[f]} for f in forms}
         for _ in range(a.reps):
-            for f in FORMS:
+            for f in forms:
                 for n, g in gs[f].items():
                     ms[f][n].append(replay_ms(g))
         per = {"calls": 4 * a.nl, "units": 4 * a.nl, **{f"units/{s}": a.nl for s in DF.SITES}}
         doc["timing"] = {f: {n: {"ms_median": statistics.median(v), "us_per_call": 1e3 * statistics.median(v) / per[n],
-                                 "ms_all": [round(x, 4) for x in v]} for n, v in ms[f].items()} for f in FORMS}
-        doc["time_over_block"] = {f: {n: doc["timing"][f][n]["ms_median"] / doc["timing"]["block"][n]["ms_median"]
-                                      for n in ms["block"]} for f in FORMS}
-        for f in FORMS:
+                                 "ms_all": [round(x, 4) for x in v]} for n, v in ms[f].items()} for f in forms}
+        base = "block" if "block" in forms else forms[0]
+        doc["time_over"] = base
+        doc["time_over_base"] = {f: {n: doc["timing"][f][n]["ms_median"] / doc["timing"][base][n]["ms_median"]
+                                     for n in ms[base]} for f in forms}
+        for f in forms:
             print(json.dumps({"time": f, **{n: round(v["us_per_call"], 2) for n, v in doc["timing"][f].items()}}), flush=True)
-        print(json.dumps({"time_over_block": {f: {n: round(v, 3) for n, v in r.items()}
-                                              for f, r in doc["time_over_block"].items()}}), flush=True)
+        print(json.dumps({"time_over_" + base: {f: {n: round(v, 3) for n, v in r.items()}
+                                                 for f, r in doc["time_over_base"].items()}}), flush=True)
     (out / "h1o-gate.json").write_text(json.dumps(doc, indent=1, default=str) + "\n")
     return 0 if ok else 2
 
