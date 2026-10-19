@@ -5,9 +5,10 @@ unlimited data, divided by the weights one sequence's computation uses (P). The 
 N*/g, and `analysis.py` turns g into D through `benchmarks/nci/fit.py`. The plan, the costs and the decision rule are on the
 Notion page [Settling F3: routed-mixture experiments](https://app.notion.com/p/3fe399515d9e81aa98eefdfd7774e90d).
 
-**Not launched.** The probes need a budget line: about 20 GPU-hours central and 73 worst on one 8-GPU RTX PRO 6000 node,
-USD 36–132, plus about 1.6 TB of downloads (OLMo 2 and FlexOlmo are stored in FP32, and are loaded in BF16). The disk
-holds about 200 GB of them at once: each score model's copy is deleted once it is on its GPU.
+The probes take about 20 GPU-hours central and 73 worst on one 8-GPU RTX PRO 6000 node, USD 36–132 (the `vy-routed-`
+line, USD 150, covers a node of their own), plus about 1.6 TB of downloads (OLMo 2 and FlexOlmo are stored in FP32, and
+are loaded in BF16). The disk holds about 200 GB of them at once: each score model's copy is deleted once it is on its
+GPU. On a shared node they run under `gpu-lease 8 --wait`, which stops preemptible leases for them.
 
 | Path | Holds |
 | --- | --- |
@@ -65,11 +66,13 @@ The verdict, on 95% intervals of g taken across the Besiroglu, Hoffmann and Kapl
  job runs under a lease of `GPUS` GPUs:
 
  ~~~bash
- research run --on NODE --project training --source . --cwd source --gpus 8 --timeout 20h --custody-ttl 22h \
- --send windows.jsonl --send calibration-windows.jsonl -- bash -c 'in=$RESEARCH_RUN_DIR/inputs; \
- WINDOWS=$in/windows.jsonl CALIBRATION=$in/calibration-windows.jsonl HF_HOME=/abs/hf-scratch \
- exec bash benchmarks/nci/probes/routed/run.sh'
+ research run --on NODE --project verity --source . --cwd source --timeout 20h --custody-ttl 22h \
+ --send windows.jsonl --send calibration-windows.jsonl -- gpu-lease 8 --wait -- bash -c \
+ 'in=$RESEARCH_RUN_DIR/inputs; WINDOWS=$in/windows.jsonl CALIBRATION=$in/calibration-windows.jsonl \
+ HF_HOME=/workspace/tmp exec bash benchmarks/nci/probes/routed/run.sh'
  ~~~
+
+ `research run --gpus 8` does the lease itself where the shipped tree's `research` package has it.
 
  `--send` puts each file in `$RESEARCH_RUN_DIR/inputs/`, and the run publishes `$OUT` (scores, routing files,
  `analysis.json`, `verdict.txt`) as its Attempt.

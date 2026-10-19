@@ -38,6 +38,7 @@ import tarfile
 import threading
 import time
 import unicodedata
+from collections import deque
 from pathlib import Path
 
 import requests
@@ -1036,27 +1037,45 @@ def assemble(work: Path, out: Path, seed: int) -> None:
     unchecked = 0
     with cf.ThreadPoolExecutor(8) as ex:
         for stratum, ds in kept.items():
-            clean_docs, have, i = [], 0, 0
-            while i < len(ds) and (stratum == "mixed" or have < need):
-                batch, i = ds[i:i + 64], i + 64
-                todo = [d for d in batch if d["id"] not in cache or cache[d["id"]]["failed"]]
-                for d, c in zip(todo, ex.map(lambda d: contamination(d["text"]), todo)):
-                    cache[d["id"]] = c
-                cache_path.write_text(json.dumps(cache))
-                for d in batch:
-                    c = cache[d["id"]]
-                    if c["failed"] > c["probes"] // 2:
-                        dropped.append({"id": d["id"], "why": "infini-gram unreachable"})
-                    elif c["hits"] >= HIT_LIMIT:
-                        dropped.append({"id": d["id"],
-                                        "why": f"pretraining overlap ({c['hits']} of {c['probes']} spans)"})
-                    else:
-                        d["overlap"] = c
-                        clean_docs.append(d)
-                        have += len(d["text"].encode())
-            unchecked += len(ds) - min(i, len(ds))
-            print(f"infini-gram {stratum}: {len(clean_docs)} clean of {min(i, len(ds))} checked, {have} bytes",
-                  file=sys.stderr)
+            # a window of checks in flight, taken in order, so one throttled query doesn't idle the other workers
+            pending: deque = deque()
+            nxt = iter(ds)
+
+            def submit() -> None:
+                d = next(nxt, None)
+                if d is not None:
+                    fresh = d["id"] not in cache or cache[d["id"]]["failed"]
+                    pending.append((d, ex.submit(contamination, d["text"]) if fresh else None))
+
+            for _ in range(32):
+                submit()
+            clean_docs, have, checked = [], 0, 0
+            while pending and (stratum == "mixed" or have < need):
+                d, fut = pending.popleft()
+                submit()
+                if fut is not None:
+                    try:
+                        cache[d["id"]] = fut.result(timeout=300)
+                    except cf.TimeoutError:  # seen once: a future left pending with every worker idle
+                        cache[d["id"]] = contamination(d["text"])
+                checked += 1
+                if checked % 64 == 0:
+                    cache_path.write_text(json.dumps(cache))
+                c = cache[d["id"]]
+                if c["failed"] > c["probes"] // 2:
+                    dropped.append({"id": d["id"], "why": "infini-gram unreachable"})
+                elif c["hits"] >= HIT_LIMIT:
+                    dropped.append({"id": d["id"], "why": f"pretraining overlap ({c['hits']} of {c['probes']} spans)"})
+                else:
+                    d["overlap"] = c
+                    clean_docs.append(d)
+                    have += len(d["text"].encode())
+            for _, fut in pending:
+                if fut is not None:
+                    fut.cancel()
+            cache_path.write_text(json.dumps(cache))
+            unchecked += len(ds) - checked
+            print(f"infini-gram {stratum}: {len(clean_docs)} clean of {checked} checked, {have} bytes", file=sys.stderr)
             kept[stratum] = clean_docs
     avail = {s: sum(len(d["text"].encode()) for d in kept[s]) for s in STRATA}
     per = min(TARGET_BYTES, min(avail[s] for s in STRATA if avail[s]) - CALIBRATION_BYTES)
