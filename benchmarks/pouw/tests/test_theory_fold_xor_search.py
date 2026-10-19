@@ -113,6 +113,44 @@ def test_splits_are_every_program():
             assert [_val(v) for v in S.imad_hi(o, m0)] == [_val(v) for v in S.imad_hi(o, m1)]
 
 
+def test_swap_is_x_and_y_exchanged():
+    """`swap` permutes k = 2's sequences, an involution; on IMAD.HI[0, 1] it reorders the multiplicands, and a modifier
+    case's per-operand modifiers move with them, so the image computes the case's first results at (y, x)."""
+    seqs = S.sequences(2, True)
+    assert {S.swap(s) for s in seqs} == set(seqs) and all(S.swap(S.swap(s)) == s for s in seqs)
+    assert S.swap((("IMAD.HI", (1, 2)), ("IDP.2A", (0, 3)))) == (("IMAD.HI", (0, 2)), ("IDP.2A", (1, 3)))
+    seq = (("IMAD.HI", (0, 1)), ("IMAD", (2, 3)))
+    fix = ({2: 0, 3: 2, "sa": True, "sb": False, "na": False, "nb": True, "np": True, "nc": False, "inv": False,
+            "cx": True},)
+    img = S.swap_fix(seq, fix)[0]
+    assert img == {**fix[0], 2: 1, "sa": False, "sb": True, "na": True, "nb": False}
+    mods = lambda f: {k: z3.BoolVal(v) for k, v in f.items() if isinstance(k, str)}
+    rng = np.random.default_rng(13)
+    for x, y, c in rng.integers(0, 2**32, size=(16, 3), dtype=np.uint64).tolist():
+        here = S.imad_hi([S.bv(x), S.bv(y), S.bv(x), S.bv(c)], mods(fix[0]))
+        there = S.imad_hi([S.bv(y), S.bv(x), S.bv(x), S.bv(c)], mods(img))
+        assert [_val(v) for v in here] == [_val(v) for v in there]
+
+
+def test_merge_reads_through_the_swap():
+    """A sequence is unsat when its image is, or when each case is (by itself, its image or each sub-case); with one
+    sub-case short, it and its image stay open, and with it, both are unsat."""
+    seqs = S.sequences(1, True)
+    assert S.merge(1, [{"ops": S.label(S.swap(s)), "result": "unsat"} for s in seqs])["unsat"] == len(seqs) == 27
+    seq = (("IMAD.HI", (0, 2)),)
+    img = S.swap(seq)
+    assert img == (("IMAD.HI", (1, 2)),)
+    rest = [{"ops": S.label(s), "result": "unsat"} for s in seqs if s not in (seq, img)]
+    rest.append({"ops": S.label(img), "result": "unknown"})
+    cases = S.splits(seq)
+    recs = [{"ops": f"{S.label(img)} /{S.fix_label(S.swap_fix(seq, f))}", "result": "unsat"} for f in cases[1:]]
+    subs = [{"ops": f"{S.label(seq)} /{S.fix_label(g)}", "result": "unsat"} for g in S.mod_splits(seq, cases[0])]
+    m = S.merge(1, rest + recs + subs[1:])
+    assert m["unsat"] == 25 and m["open"][0] == f"{S.label(seq)} /{S.fix_label(cases[0])}"
+    m = S.merge(1, rest + recs + subs)
+    assert m["unsat"] == 27 and not m["open"], m["open"]
+
+
 @pytest.mark.slow
 def test_a_modifier_case_is_unsat():
     """A case that is unknown at 600 s unsplit (the first IMAD's addend y) is unsat once its modifiers are set."""
