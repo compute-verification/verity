@@ -221,8 +221,8 @@ to a value other than its position's committed value, bound before the coin that
 opened one way for the unit that wrote it and another way for a unit that reads it is a binding failure), the proofs
 are sound jointly over each round's draws at `δ_ks` (`JointSound`) and each unit's relation pins its rightness
 (`Pins`), then outside an event of probability at most `S·(δ_bind + δ_ks)` every drawn unit whose proof is accepted is
-right at its committed values. It reads no play: what it gives is the drawn units' rightness, which the ideal game's check reads
-(`ProofsSoundOfDrawn`) and a composition's folded credit takes as its premise. -/
+right at its committed values. It reads no play: what it gives is the drawn units' rightness, which the ideal game's
+check reads (`ProofsSoundOfDrawn`) and a composition's folded credit takes as its premise. -/
 def DrawnRightOff : Prop :=
   ∀ {J Q Pos V : Type} [Nonempty V] (C B : Type) [Fintype C] [Fintype B] (S m s : ℕ)
     (pf : DrawnLayer C B S m s J Q Pos V) (δbind δks : ℝ),
