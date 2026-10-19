@@ -313,6 +313,7 @@ def test_the_test_signer_leaves_nothing_outside_basetemp(tmp_path_factory, monke
     signer, log = ts.TestSigner(b"k", height=1), ts.session_log()
     signer.sign(SESSION, b"a")
     log.claim(SESSION)
+    assert list(tmp.iterdir()) == []
     assert all(p.resolve().is_relative_to(basetemp) for p in (signer.state.path, log.path))
     own = tmp_path_factory.mktemp("own")
     assert ts.session_log(own).path.parent.parent == ts.TestSigner(b"k", 1, own).state.path.parent.parent == own
