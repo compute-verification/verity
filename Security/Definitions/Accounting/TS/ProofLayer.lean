@@ -12,7 +12,10 @@ TS model's accounting (note:20261017T1817Z-draft-i8-lean):
   differently;
 * **proof soundness at `δ_ZK`**: an accepted proof's opening satisfies its relation on its path, outside `δ_ZK` a proof
   (`ProofLayer.SoundAt`); C-Flock's `Flock.Guarantees.EndToEndHiddenDrawn` is this bound for a session, against the
-  committed transcript fixed at registration;
+  committed transcript fixed at registration. The relation also reads the rows link: the proof's input rows are the
+  rows its registered roots open to, and its output rows (the sinks committed after the coin) the Program's on those
+  rows and the coin. `Flock.Guarantees.EndToEndRegisteredRows` (#2840) states that bound, and it discharges this
+  premise once it is proved;
 * **pinning**: the relations pin every committed value's derivation (`ProofLayer.Pins`), a property of the
   Definitions the proofs pass. A check that takes an absorbed word as free witness lacks it (`PouwSegCheck_v2`: its
   window's absorbed prefix-word sets are witness); one that recomputes every word it absorbs from the unit's operands,
@@ -105,8 +108,9 @@ def Forked (w : Fin S) (x z : Paths Ω S) : Prop :=
 /-- Proof `i` of round `w` is accepted, and its opening fails its relation on the path. -/
 def Unsound (x : Paths Ω S) (w : Fin S) (i : Fin nπ) : Prop := pf.accepted x w i ∧ ¬ pf.rel x w i (pf.opened x w i)
 
-/-- **Proof soundness at `δ_ZK`**: each proof is accepted with an opening that fails its relation with probability at
-most `δ_ZK` over the window's coins. -/
+/-- **Proof soundness at `δ_ZK`**: each proof is accepted with an opening that fails its relation on the path with
+probability at most `δ_ZK` over the window's coins (C-Flock's `Flock.Guarantees.EndToEndRegisteredRows`, #2840, once
+proved). -/
 def SoundAt [Fintype Ω] (δzk : ℝ) : Prop := ∀ w i, prob (fun x => pf.Unsound x w i) ≤ δzk
 
 /-- **The relations pin every committed value**: on every path, values that satisfy every proof's relation there are
