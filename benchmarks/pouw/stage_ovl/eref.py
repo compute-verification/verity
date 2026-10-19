@@ -1,7 +1,7 @@
 """ovl.cu's edited arms' receipts judged by EGEMM's reference: sampled tiles of each dumped call (EG_DUMP; X, W' and the
 receipts of chunk 0's layer-31 call of a linear) recomputed by ``segment.PouwSegCheck_v2{S, duo}``'s own fold
-(``fold_keys``, ``fold_absorb``, ``fold_final`` of benchmarks/pouw/hashed_gemm/segment_e2e.py, cursor/e2e-slice-ea24@3341b0f46's
-segment.py, pinned by its sha256, as hashed_gemm's hgref.py reads it) from the running sums of X W'^T, every word of
+(``fold_keys``, ``fold_absorb``, ``fold_final`` of `verity.core.protocols.pouw.circuit.segment`, as hashed_gemm's
+hgref.py reads it) from the running sums of X W'^T, every word of
 those tiles compared; another seed's fold must differ (the control).
 
     python3 eref.py DUMP...   a dump directory each (dump.json, X.bin, Wp.bin, operand.bin: the receipts, a 2 KiB row a
@@ -11,8 +11,6 @@ Run from the source tree's root with ``PYTHONPATH=.``.
 """
 from __future__ import annotations
 
-import hashlib
-import importlib.util
 import json
 import multiprocessing as mp
 import random
@@ -22,15 +20,7 @@ from pathlib import Path
 
 import numpy as np
 
-HERE = Path(__file__).resolve().parent
-SEG_SHA256 = "4aff8b61dcacf1cf32f11c8ec4e4bd19573fc84e68267a34ac69e8f6f10f28f7"
-_seg_path = HERE.parent / "hashed_gemm" / "segment_e2e.py"
-if hashlib.sha256(_seg_path.read_bytes()).hexdigest() != SEG_SHA256:
-    sys.exit(f"{_seg_path} is not segment.py of cursor/e2e-slice-ea24@3341b0f46 (sha256 {SEG_SHA256}): restore it, don't edit it")
-_spec = importlib.util.spec_from_file_location("verity.core.protocols.pouw.circuit.segment_e2e", _seg_path)
-SG = importlib.util.module_from_spec(_spec)
-sys.modules[_spec.name] = SG
-_spec.loader.exec_module(SG)
+from verity.core.protocols.pouw.circuit import segment as SG
 
 NCT = 512
 

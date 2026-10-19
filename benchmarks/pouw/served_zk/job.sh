@@ -6,6 +6,9 @@
 #   research run --on vy-nebius-2 --project verity --campaign pouw --source <tree> --cwd source --declared-output 'out/*' \
 #     --declared-output 'out/*/*' --env SERVED_RUN=<serve.sh run id> --env HZ_MEM_GB=<GB> \
 #     --env HZ_CACHE=/workspace/research/cache/pouw-hidden-zk --env HZ_JOB=benchmarks/pouw/served_zk/job.sh -- bash benchmarks/pouw/hidden_zk/scope.sh CPUS GB
+# The drawn units run as a parallel fan-out across the scope's cores (step 5): SZ_JOBS workers at once (default HZ_MEM_GB * 3/4 /
+# SZ_MEM_PER_JOB, capped to the CPUs; SZ_JOBS=1 is the old serial loop), SZ_MEM_PER_JOB the GB each is budgeted (default 13, the
+# session's serve + prove peak). Each unit's verdicts go to its own file; a reduce after the fan-out folds them into the summary.
 # In order, each step's files under out/:
 #   1. hidden_zk/job.sh's builds (cached under $HZ_CACHE): flock-circuit (proving and selftest builds), Lean flock-verify, a venv
 #   2. params: the verifier's own parameters of each request's window (<p>/params.json: its context, ε, δ, the grid, P, |W|)
@@ -18,8 +21,8 @@
 #      the challenger re-starts the pass's epoch from its manifest under its own commitment, the request pass, salted by a
 #      beacon before epoch coins, as a recorded replay) and select (draw.json: the epoch's draw coin opened after the
 #      registration, once, and Lean flock-verify draw --population N --k K' --stream over its key)
-#   5. per drawn unit u<t>: stage_tile.py (Pc8TileSide{K=4096,1,1,sm120}), the --zk session, the opening check, Lean;
-#      the selftest build's controls on the first; a filler unit's the same, and the other request's tile staged
+#   5. per drawn unit u<t>, as a parallel fan-out (SZ_JOBS at once): stage_tile.py (Pc8TileSide{K=4096,1,1,sm120}), the --zk
+#      session, the opening check, Lean; the selftest build's controls on the first; a filler unit's the same, and the other request's tile staged
 #   6. deliver (the drawn units' session records' SHA-512) and outcome (one-stage's audit record over every drawn unit and
 #      PoUW's public items, outcome-<case>/); each control on a stream of its own that replays the honest draw
 #   7. the checks, each as expected, into summary.json:
@@ -88,8 +91,13 @@ command -v lake >/dev/null || export PATH="$HOME/.elan/bin:$PATH"
 log "Lean of record: pouw-check, pouw-check-difftest, sampled-proofs-difftest built"
 
 # ---- 2-3. params and commit ---------------------------------------------------------------------------------------------------
+# SZ_EPS / SZ_DELTA drive the draw at a non-default (ε, δ) for a realistic-parameter audit (k_prime grows with ln(1/δ)/ε);
+# unset, served_commit's own defaults stand, so the default run is unchanged.
+PARG=()
+[ -n "${SZ_EPS:-}" ] && PARG+=(--eps "$SZ_EPS")
+[ -n "${SZ_DELTA:-}" ] && PARG+=(--delta "$SZ_DELTA")
 for p in request other; do
-  "$VPY" "$SC" params "$PASSES/$p" "$OUT/$p/params.json" > "$OUT/params-$p.out" 2>&1 || { log "params FAILED: $(tail -3 "$OUT/params-$p.out")"; exit 3; }
+  "$VPY" "$SC" params "$PASSES/$p" "$OUT/$p/params.json" "${PARG[@]}" > "$OUT/params-$p.out" 2>&1 || { log "params FAILED: $(tail -3 "$OUT/params-$p.out")"; exit 3; }
 done
 CALLS=${SZ_CALL_LIST:-$("$PY" -c "import json, random, sys; m = json.load(open(sys.argv[1])); \
 c = sorted(u['index'] for u in m['matmuls'] if u['k'] == u['n'] == 4096); print(' '.join(map(str, sorted(random.SystemRandom().sample(c, int(sys.argv[2]))))))" \
@@ -230,17 +238,52 @@ prove_unit() {   # prove_unit TAG: the --zk session, then its Lean checks in the
 lean_verdict() { "$PY" -c "import json, sys; v = [json.loads(l[8:]) for l in open(sys.argv[1]) if l.startswith('VERDICT ')]; \
 print(('ACCEPT' if v[0]['accepted'] else 'REJECT') if v else 'NONE')" "$1" 2>/dev/null || echo NONE; }
 
-U0=
-REAL_UNIT=
-BG=()
+unit_work() {    # unit_work TAG SIDE UNIT: one unit's stage -> open -> (controls on FIRST) -> --zk session -> Lean, its
+  local tag=$1 p=$2 t=$3 v vf                             # open-TAG and lean-TAG verdicts to its own file for the reduce below
+  vf=$OUT/$tag/verdicts.tsv                               # a separate assignment: set -u expands a single local's words before any take effect
+  mkdir -p "$OUT/$tag"; : > "$vf"
+  stage_unit "$tag" "$p" "$t" || { printf 'open-%s\tACCEPT\tERROR\nlean-%s\tACCEPT\tNONE\n' "$tag" "$tag" > "$vf"; return 0; }
+  v=$("$PY" "$SC" check "$OUT/$p/params.json" "$OUT/$p/registration.json" "$OUT/draw.json" "$t" "$OUT/$tag/pub.bin" "$OUT/$tag/opening.json" \
+    --out "$OUT/open-$tag.json" | tee "$OUT/open-$tag.out" | first)
+  printf 'open-%s\tACCEPT\t%s\n' "$tag" "${v:-ERROR}" > "$vf"
+  [ "$t" = "$FIRST" ] && controls "$W/$tag" "$OUT/$tag" hidden
+  session "$W/$tag" "$OUT/$tag" || log "$tag: --zk session FAILED: $(tail -2 "$OUT/$tag/prove.err")"
+  lean_jobs "$W/$tag" "$OUT/$tag" hidden
+  printf 'lean-%s\tACCEPT\t%s\n' "$tag" "$(lean_verdict "$OUT/$tag/lean-honest-own.out")" >> "$vf"
+  rm -f "$W/$tag/inst.bin"; [ "$t" = "$FIRST" ] || rm -f "$W/$tag/circuit.txt"   # free the ~486 MB circuit; FIRST's stays for lean-foreign-pub
+}
+
+# A parallel fan-out over the drawn units: the session (serve + prove, ~12.5 GB together) bounds the worker count against the
+# scope's memory; the stage and Lean (the ~60 s, ~2.5 GB bottleneck) are single-threaded, so throughput is in the count, not the
+# threads. SZ_JOBS overrides the count (SZ_JOBS=1 is the old serial loop), SZ_MEM_PER_JOB the GB each is budgeted.
+JOBS=${SZ_JOBS:-$(( MEM_GB * 3 / 4 / ${SZ_MEM_PER_JOB:-13} ))}
+[ "$JOBS" -lt 1 ] && JOBS=1
+[ "$JOBS" -gt "$TH" ] && JOBS=$TH
+WT=$(( TH / JOBS )); [ "$WT" -lt 1 ] && WT=1
+FIRST=${UNITS%% *}                                        # the unit the controls run on; the resolved U0 (first that staged) below
+REAL_UNIT=; for t in $UNITS; do [ "$t" -lt "$FILL" ] && { REAL_UNIT=$t; break; }; done
+log "units: $(echo "$UNITS" | wc -w) drawn, $JOBS workers x $WT threads ($MEM_GB GB, $TH CPUs, ${SZ_MEM_PER_JOB:-13} GB each), controls on u$FIRST"
+PIDS=()
 for t in $UNITS; do
-  stage_unit "u$t" request "$t" || continue
-  opencheck "open-u$t" ACCEPT request "$t" "$OUT/u$t/pub.bin" "$OUT/u$t/opening.json"
-  if [ -z "$U0" ]; then U0=$t; controls "$W/u$t" "$OUT/u$t" hidden; fi
-  [ "$t" -lt "$FILL" ] && [ -z "$REAL_UNIT" ] && REAL_UNIT=$t
-  prove_unit "u$t"
+  ( export RAYON_NUM_THREADS=$WT OMP_NUM_THREADS=$WT OPENBLAS_NUM_THREADS=$WT; unit_work "u$t" request "$t" ) &
+  PIDS+=($!)
+  [ "${#PIDS[@]}" -ge "$JOBS" ] && { wait "${PIDS[0]}" 2>/dev/null; PIDS=("${PIDS[@]:1}"); }
 done
-[ -n "$U0" ] || { log "no drawn unit staged: $(tail -1 "$OUT/u${UNITS%% *}/stage.out")"; finish; summary; exit 3; }
+for p in "${PIDS[@]}"; do wait "$p" 2>/dev/null; done
+log "units: fan-out done, reducing per-unit verdicts"
+for t in $UNITS; do
+  vf=$OUT/u$t/verdicts.tsv
+  if [ -f "$vf" ]; then while IFS=$'\t' read -r k e g; do [ -n "$k" ] && expect "$k" "$e" "$g"; done < "$vf"
+  else expect "open-u$t" ACCEPT ERROR; expect "lean-u$t" ACCEPT NONE; fi
+done
+U0=; for t in $UNITS; do [ -f "$OUT/u$t/stage.json" ] && { U0=$t; break; }; done
+[ -n "$U0" ] || { log "no drawn unit staged: $(tail -1 "$OUT/u$FIRST/stage.out" 2>/dev/null)"; finish; summary; exit 3; }
+if [ "$U0" != "$FIRST" ]; then   # the pre-chosen unit's stage failed: put the controls (and circuit for lean-foreign-pub) on the resolved U0
+  [ -f "$W/u$U0/circuit.txt" ] || stage_unit "u$U0" request "$U0"
+  [ -d "$W/u$U0/st" ] || { controls "$W/u$U0" "$OUT/u$U0" hidden; lean_jobs "$W/u$U0" "$OUT/u$U0" hidden; }
+fi
+
+BG=()
 if [ -z "$REAL_UNIT" ]; then stage_unit u0-real request 0 && prove_unit u0-real && REAL_UNIT=0-real; fi
 DRAWN_FILLER=$(for t in $UNITS; do [ "$t" -ge "$FILL" ] && echo "$t"; done | head -1)
 FU=${DRAWN_FILLER:-$FILL}
@@ -262,9 +305,8 @@ if [ -n "$s" ]; then
       --statement verity/flock-circuit --public $OUT/other-tile/pub.bin --session $s" > "$OUT/u$U0/lean-foreign-pub.out" 2> "$OUT/u$U0/lean-foreign-pub.err" ) &
   BG+=($!)
 fi
-log "waiting for the Lean checks"
-wait "${BG[@]}"   # not the challenger
-for t in $UNITS; do expect "lean-u$t" ACCEPT "$(lean_verdict "$OUT/u$t/lean-honest-own.out")"; done
+log "waiting for the post-loop Lean checks"
+[ "${#BG[@]}" -gt 0 ] && wait "${BG[@]}"   # not the challenger: the filler, u0-real and foreign-pub Lean (the drawn units' ran in the fan-out)
 expect lean-filler ACCEPT "$(lean_verdict "$OUT/$FT/lean-honest-own.out")"
 expect lean-foreign-pub REJECT "$(lean_verdict "$OUT/u$U0/lean-foreign-pub.out")"
 for c in $HZ_CASES; do

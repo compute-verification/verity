@@ -13,7 +13,7 @@ Notes are records, never messages.
   research msg close --as NAME --thread TS [--link URL] [--note T] [--declined WHY]   # ✅ or ❌: a status line, and the reaction on an ask
   research msg read --thread TS [--since TS] | --since TS | --as NAME [--peek] [--urgent] [--json]  # --as: NAME's unread doorbells
   research msg names open|read|close|list [--as NAME] [--forward-to @NAME] [--succeeds]  # the names you answer to
-  research msg traffic [--hours H] [--json]                        # the monitor: doorbells, pauses, dropped names, unanswered asks
+  research msg traffic [--hours H] [--replay] [--json]             # the monitor: doorbells, pauses, dropped names, unanswered asks
   research msg watch --as NAME [--every S] [--polls N]             # block until a new doorbell; the hook a wake script runs
   research msg pickup --thread TS                                  # 👀 on an ask you own
   research msg retract --as NAME --ts TS [--thread ROOT] [--why W] # blank a post NAME sent (needs SLACK_BOT_TOKEN)
@@ -25,13 +25,18 @@ Notes are records, never messages.
   research msg deliver --ts TS [--thread T]                         # ring the doorbells for a post no client delivered
   research msg groups sync [--apply]                               # one user group per handle; a plan unless --apply
   research msg ask-daniel --as HANDLE --kind blocking|default --question Q --why W --option VALUE=LABEL... --recommend V
-                          --default V --deadline '3:00 PM'|ISO --link URL [--wait]     # a card in #ask-daniel; prints `<id> <ts> <permalink>`
+                          --default V --deadline '3:00 PM'|ISO (--page FILE.md --area AREA | --link NOTION_URL) [--wait]
+                          # the ask's page in the Asks for Daniel database, and a card in #ask-daniel linking it; prints `<id> <ts> <permalink>`
   research msg ask-daniel status ID [--wait] [--json] | resolve ID --choice V [--note T]
+  research msg ask-daniel pages [--as HANDLE] [--hours H] [--json]  # asks' pages edited lately: Status, Decision, newest comment
 
 `ask`, `announce`, `reply`, `done` and `decline` are the older spellings of `send` and `close`, kept while callers move.
 
 #ask-daniel's cards go through the site's route (ASK_DANIEL, Cursor OIDC with the route as audience), not the Slack API; a route
-that refuses the card's fields (HTTP 400) gets the old Approve/Deny shape `{title, text, link, requested_by}` instead.
+that refuses the card's fields (HTTP 400) gets the old Approve/Deny shape `{title, text, link, requested_by}` instead. Each card
+links its ask's page in the registry's Notion database (the ask-daniel channel's `pages`), where Daniel reads, comments and
+decides; `--page` and `pages` reach it through Notion's API with $NOTION_API_KEY, and $RESEARCH_NOTION_URL points them at
+another server (the tests' fake).
 
 Every subcommand takes `--dry-run` (no request reaches Slack; each one it would send is printed, the token never),
 `--registry PATH` (default $RESEARCH_SLACK_REGISTRY, else the checkout's) and `--channel KEY` (default agent-coordination);
@@ -117,6 +122,12 @@ LABEL_MAX = 75                                                   # Slack's butto
 DEADLINE_MAX = timedelta(days=7)
 CLOCK_RE = re.compile(r"^(\d{1,2}):(\d{2})\s*([AaPp][Mm])$")
 DECIDED = ("decided", "approved", "denied")                      # new cards, then old-shape Approve/Deny cards
+NOTION_API = "https://api.notion.com/v1"
+NOTION_VERSION = "2026-03-11"                                    # the first version whose pages take Notion-flavored Markdown
+NOTION_HOSTS = ("notion.so", "www.notion.so", "app.notion.com")  # and any *.notion.site
+AREAS = ("Claim or assumption", "Access or keys", "Machines or spend", "Process", "Research direction")   # the database's Area
+PAGE_SECTIONS = ("## The problem", "## Background", "## Options", "## What happens next", "## Sources")
+SKILL_ASKING = ".agents/skills/asking-daniel/SKILL.md"
 WAIT_EVERY_S = 30
 WAIT_GRACE = timedelta(minutes=5)                                # the site's default cron runs every minute
 ROUTES_DIR = "routes.d"                                          # in the notes: one `<name>.json` per inbox
@@ -460,6 +471,8 @@ class Slack:
         return self._oidc.send(lambda t: self.transport(BROKER, body, {"Authorization": f"Bearer {t}", "Content-Type": "application/json"}))
 
     def paged(self, method: str, key: str, limit: int | None = None, **params: Any) -> list[dict]:
+        if method == "conversations.replies":
+            return self._replies(key, limit, **params)
         items: list[dict] = []
         cursor = None
         while True:
@@ -467,6 +480,28 @@ class Slack:
             items += out.get(key, [])
             cursor = (out.get("response_metadata") or {}).get("next_cursor")
             if not cursor or (limit and len(items) >= limit):
+                return items[:limit] if limit else items
+
+    def _replies(self, key: str, limit: int | None, **params: Any) -> list[dict]:
+        """A thread's replies, paged by moving `oldest` past the last one seen: Slack's cursor for conversations.replies
+        drops the message at each page boundary (a doorbell lost from a 204-reply inbox read, 18 Oct)."""
+        items: list[dict] = []
+        seen: set[str] = set()
+        while True:
+            out = self.call("conversations.replies", limit=PAGE, **params)
+            page = [m for m in out.get(key, []) if m.get("ts") not in seen]
+            seen.update(m.get("ts") for m in page)
+            items += page
+            cursor = (out.get("response_metadata") or {}).get("next_cursor")
+            if not (out.get("has_more") or cursor) or (limit and len(items) >= limit):
+                return items[:limit] if limit else items
+            newest = max((m["ts"] for m in page if m.get("ts") and m["ts"] != params.get("ts")), key=float, default=None)
+            if newest is not None and float(newest) > float(params.get("oldest") or 0):
+                params.pop("cursor", None)
+                params["oldest"] = newest
+            elif cursor and cursor != params.get("cursor"):
+                params["cursor"] = cursor                                # no progress by `oldest` (a tiny page): one by cursor
+            else:
                 return items[:limit] if limit else items
 
     def root(self, channel: str, thread: str) -> dict | None:
@@ -1722,6 +1757,68 @@ def issue_taken(ident: str, asker: str | None, cache: dict[str, bool]) -> bool:
     return cache[ident]
 
 
+def _stamp_epoch(stamp: str | None) -> float | None:
+    try:
+        return datetime.strptime(stamp, "%Y-%m-%dT%H:%MZ").replace(tzinfo=timezone.utc).timestamp() if stamp else None
+    except ValueError:
+        return None
+
+
+def replay(api: Slack, reg: dict, routes: Routes, ch: str, since: float, log=None) -> list[dict]:
+    """Each post in `ch` since `since` whose doorbells differ from what `route_targets` says it should have rung: the
+    names `missed` (expected, no doorbell in their inbox) and `extra` (a doorbell nothing called for).  A name is expected
+    when its inbox existed then and wasn't closed yet (or forwards); a route closed and reopened inside the window can
+    show false misses for the span it was closed, since routes keep no history."""
+    posts, threads = [], {}
+    for m in api.paged("conversations.history", "messages", channel=ch, oldest=f"{since - HISTORY_S:.6f}"):
+        if (m.get("text") or "").startswith(INBOX_HEAD):
+            continue
+        if float(m["ts"]) > since:
+            posts.append((m, None))
+        if m.get("reply_count") and float(m.get("latest_reply") or 0) > since:
+            threads[m["ts"]] = [x for x in api.paged("conversations.replies", "messages", channel=ch, ts=m["ts"],
+                                                     oldest=f"{since - HISTORY_S:.6f}") if x.get("ts") != m["ts"]]
+            posts += [(x, m) for x in threads[m["ts"]] if float(x["ts"]) > since]
+    for n in {n for m, _ in posts for n in lead_names(m.get("text") or "", reg)}:
+        routes.get_route(n)                                          # a name this clone lacks: its published route
+    reg = with_routes(reg, routes)
+    book, inboxes = routes.all(), routes.inboxes()
+    by_inbox = {r["inbox_ts"]: n for n, r in sorted(book.items(), key=lambda kv: not kv[1].get("closed"))}
+    rang: dict[str, set[str]] = {}
+    for its, name in by_inbox.items():
+        for m in api.paged("conversations.replies", "messages", channel=ch, ts=its, oldest=f"{since:.6f}"):
+            if m.get("ts") != its and (d := DOORBELL_RE.match(m.get("text") or "")):
+                rang.setdefault(d[4] or d[3], set()).add(name)
+    posts = [(m, root) for m, root in posts if (root or m)["ts"] not in inboxes and m["ts"] not in inboxes]
+    humans = {poster({"user": p.get("slack_user")}, reg) for p in reg.get("humans", [])}
+
+    def expected(name: str, t: float) -> str | None:
+        to, r = routes.resolve(name)
+        own = routes.get_route(name)
+        if not own or float(own.get("inbox_ts") or 0) > t:
+            return None
+        closed = _stamp_epoch(own.get("closed"))
+        if closed is None or closed > t:
+            return name
+        return to if r and not r.get("closed") else None
+
+    out = []
+    for m, root in posts:
+        t, author = float(m["ts"]), poster(m, reg)
+        history, branches = [], {}
+        if root and is_announcement(root):
+            history = [x for x in threads.get(root["ts"], []) if t - HISTORY_S <= float(x["ts"]) < t]
+            nums = {n for x in [m, *history] for n in named_prs(x.get("text") or "")[0]}
+            branches = pr_branches(nums, log) if nums else {}
+        want = {e for n in route_targets(m, root, reg, inboxes, history, branches) if n not in humans and (e := expected(n, t))}
+        got = rang.get(m["ts"], set())
+        missed, extra = sorted(want - got - {author}), sorted(got - want)
+        if missed or extra:
+            out.append({"ts": m["ts"], "by": author, "missed": missed, "extra": extra,
+                        "first": " ".join(plain(m.get("text") or "").split())[:80]})
+    return out
+
+
 def cmd_traffic(ns: argparse.Namespace, reg: dict) -> int:
     """Doorbells per inbox (the most in any one hour), pauses, `@name`s nobody owns (dropped), and asks with no 👀 or reply
     after --stale-h hours, over the last --hours."""
@@ -1762,8 +1859,10 @@ def cmd_traffic(ns: argparse.Namespace, reg: dict) -> int:
         if is_ask and not answered and now - float(m["ts"]) > ns.stale_h * 3600:
             if not ((link := LINEAR_LINK_RE.search(m.get("text") or "")) and issue_taken(link[1], poster(m, reg), taken)):
                 stale.append({"ts": m["ts"], "by": poster(m, reg), "to": lead_names(m.get("text") or "", reg)})
+    replayed = replay(api, reg, routes, ch, since) if ns.replay else None
     if ns.json:
-        print(json.dumps({"inboxes": rows, "dropped": dropped, "unanswered": stale}, indent=2))
+        print(json.dumps({"inboxes": rows, "dropped": dropped, "unanswered": stale,
+                          **({"replay": replayed} if replayed is not None else {})}, indent=2))
         return 0
     print(f"traffic over the last {ns.hours:g} h (to {both(now)})")
     for x in rows:
@@ -1773,6 +1872,11 @@ def cmd_traffic(ns: argparse.Namespace, reg: dict) -> int:
         print(f"  DROPPED @{d['name']}: {d['ts']} by @{d['by']} (no inbox and no handle)")
     for s in stale:
         print(f"  UNANSWERED {s['ts']} by @{s['by']} to {' '.join('@' + t for t in s['to']) or 'no one it can ring'} ({both(s['ts'])})")
+    for x in replayed or []:
+        what = "; ".join(f"{k} {' '.join('@' + n for n in x[k])}" for k in ("missed", "extra") if x[k])
+        print(f"  REPLAY {x['ts']} by @{x['by']}: {what}: {x['first']}")
+    if replayed is not None:
+        print(f"  replayed: {len(replayed)} post(s) whose doorbells differ from route_targets")
     return 0
 
 
@@ -1886,9 +1990,11 @@ def parse_deadline(raw: str, now: datetime) -> datetime:
 def card(ns: argparse.Namespace, reg: dict, now: datetime) -> dict:
     """The card's fields (`note:20260930T2045Z-handoff-from-infra-ask-daniel-card-fields`), checked as the route checks them."""
     need = {"--as": ns.handle, "--kind": ns.kind, "--question": ns.question, "--why": ns.why, "--recommend": ns.recommend,
-            "--default": ns.default, "--deadline": ns.deadline, "--link": ns.link}
+            "--default": ns.default, "--deadline": ns.deadline, "--link or --page": ns.link or ns.page}
     if missing := [k for k, v in need.items() if not v]:
         raise SlackError(f"ask-daniel needs {', '.join(missing)}")
+    if ns.link and ns.page:
+        raise SlackError("--page or --link, not both: --page creates the ask's page, --link names one you made")
     h = entry(reg, ns.handle)
     question = ns.question.strip()
     if not question or "\n" in question:
@@ -1917,8 +2023,17 @@ def card(ns: argparse.Namespace, reg: dict, now: datetime) -> dict:
         raise SlackError(f"--deadline {pacific(deadline)} has passed (it is {pacific(now)})")
     if deadline - now > DEADLINE_MAX:
         raise SlackError(f"--deadline {pacific(deadline)} is more than {DEADLINE_MAX.days} days away")
-    if not ns.link.startswith("https://"):
-        raise SlackError(f"--link {ns.link!r}: an https URL to the full context")
+    if ns.link:
+        if not ns.link.startswith("https://"):
+            raise SlackError(f"--link {ns.link!r}: an https URL to the ask's page")
+        host = urllib.parse.urlsplit(ns.link).hostname or ""
+        if host not in NOTION_HOSTS and not host.endswith(".notion.site"):
+            raise SlackError(f"--link {ns.link!r}: the ask's page in the Asks for Daniel database ({asks_db(reg)['database']}), "
+                             f"written to the template in {SKILL_ASKING}; or pass the page's Markdown as --page FILE")
+    else:
+        if ns.area not in AREAS:
+            raise SlackError(f"--page needs --area, one of: {', '.join(AREAS)}")
+        check_page(ns.page)
     url = ns.agent_url or os.environ.get("RESEARCH_AGENT_URL")
     if not url and not ns.dry_run and (me := self_agent_id()):
         url = f"https://cursor.com/agents/{me}"
@@ -1926,6 +2041,140 @@ def card(ns: argparse.Namespace, reg: dict, now: datetime) -> dict:
         raise SlackError("no --agent-url (or $RESEARCH_AGENT_URL): every card links the agent that asked it")
     return {"kind": ns.kind, "question": question, "why": ns.why.strip(), "options": options, "default": ns.default,
             "deadline": _iso(deadline), "link": ns.link, "requested_by": h["handle"], "agent_url": url}
+
+
+def asks_db(reg: dict) -> dict:
+    """The Asks for Daniel database: `{database, data_source}`, the ask-daniel channel's `pages` in the registry."""
+    db = (reg.get("channels", {}).get(ASK_CHANNEL) or {}).get("pages") or {}
+    if not db.get("database") or not db.get("data_source"):
+        raise SlackError(f"the registry's #{ASK_CHANNEL} has no `pages` (the Asks for Daniel database's URL and data source id)")
+    return db
+
+
+def check_page(path: str) -> str:
+    """An ask's page, as Markdown: the template's sections, in order (`SKILL_ASKING`)."""
+    try:
+        text = Path(path).read_text()
+    except OSError as e:
+        raise SlackError(f"--page {path}: {e.strerror or e}") from None
+    at = [m.start() if (m := re.search(rf"(?m)^{re.escape(s)}[ \t]*$", text)) else -1 for s in PAGE_SECTIONS]
+    if missing := [s for s, i in zip(PAGE_SECTIONS, at) if i < 0]:
+        raise SlackError(f"--page {path} lacks {', '.join(missing)}: write it to the template in {SKILL_ASKING}")
+    if at != sorted(at):
+        raise SlackError(f"--page {path}: its sections go in the template's order: {', '.join(PAGE_SECTIONS)}")
+    return text
+
+
+def notion_error(what: str, e: urllib.error.HTTPError) -> str:
+    try:
+        body = json.load(e)
+    except (ValueError, OSError):
+        body = {}
+    why = f"HTTP {e.code} {body.get('code', '')}".rstrip() + (f": {body['message']}" if body.get("message") else "")
+    if e.code == 401:
+        return f"{what}: Notion rejected $NOTION_API_KEY ({why})"
+    if e.code == 404:
+        return f"{what}: Notion can't see it ({why}): share the Asks for Daniel database with the token's connection (its ... menu > Connections)"
+    return f"{what}: Notion answered {why}"
+
+
+class Notion:
+    """The Asks for Daniel database through Notion's API, with $NOTION_API_KEY: a Notion connection's token, shared on the
+    database. $RESEARCH_NOTION_URL points it at another server (the tests' fake)."""
+
+    def __init__(self):
+        self.token = os.environ.get("NOTION_API_KEY")
+        if not self.token:
+            raise SlackError("no $NOTION_API_KEY (a Notion connection's token, shared on the Asks for Daniel database): write the "
+                             "page with the Notion MCP and pass its URL as --link instead of --page")
+        self.base = (os.environ.get("RESEARCH_NOTION_URL") or NOTION_API).rstrip("/")
+
+    def call(self, method: str, path: str, body: dict | None = None) -> dict:
+        data = None if body is None else json.dumps(body).encode()
+        headers = {"Authorization": f"Bearer {self.token}", "Notion-Version": NOTION_VERSION,
+                   **({"Content-Type": "application/json"} if data else {})}
+        what = f"{method} {NOTION_API}{path.split('?')[0]}"
+        try:
+            out = http_json(method, self.base + path, data, headers)
+        except urllib.error.HTTPError as e:
+            raise SlackError(notion_error(what, e)) from None
+        except (urllib.error.URLError, OSError, ValueError) as e:
+            raise SlackError(f"{what}: Notion is unreachable: {getattr(e, 'reason', e)}") from None
+        if not isinstance(out, dict):
+            raise SlackError(f"{what}: the answer is not a JSON object")
+        return out
+
+
+def _text(s: str) -> dict:
+    return {"rich_text": [{"text": {"content": s[:2000]}}]}
+
+
+def page_request(body: dict, area: str, markdown: str, db: dict) -> dict:
+    """POST /v1/pages: the ask's page in the database, its properties from the card's fields."""
+    labels = {o["value"]: o["label"] for o in body["options"]}
+    rec = next(o["label"] for o in body["options"] if o.get("recommended"))
+    when = pacific(datetime.fromisoformat(body["deadline"]))
+    unanswered = f"{labels[body['default']]} applies at {when}" if body["kind"] == "default" else f"Nothing happens; it waits for you (deadline {when})"
+    return {"parent": {"type": "data_source_id", "data_source_id": db["data_source"]},
+            "properties": {"Ask": {"title": [{"text": {"content": body["question"][:2000]}}]},
+                           "Status": {"status": {"name": "Waiting on Daniel"}},
+                           "Lane": {"select": {"name": body["requested_by"]}},
+                           "Kind": {"select": {"name": body["kind"].capitalize()}},
+                           "Area": {"select": {"name": area}},
+                           "Recommendation": _text(rec), "If no answer": _text(unanswered),
+                           "Deadline": {"date": {"start": body["deadline"]}},
+                           "Lane checked": {"checkbox": True},
+                           "Asked by": {"url": body["agent_url"]}},
+            "markdown": markdown, "markdown_version": "v2"}
+
+
+def prop_text(p: dict | None) -> str:
+    """A page property's value as text."""
+    if not p:
+        return ""
+    kind = p.get("type")
+    v = p.get(kind)
+    if kind in ("title", "rich_text"):
+        return "".join(x.get("plain_text") or x.get("text", {}).get("content", "") for x in v or [])
+    if kind in ("select", "status"):
+        return (v or {}).get("name", "")
+    if kind == "date":
+        return (v or {}).get("start", "")
+    if kind == "checkbox":
+        return "yes" if v else "no"
+    return v if isinstance(v, str) else ""
+
+
+def cmd_pages(ns: argparse.Namespace, reg: dict) -> int:
+    """The asks' pages edited in the last --hours, newest first: Status, Decision, and the newest comment."""
+    db = asks_db(reg)
+    where: list[dict] = [{"timestamp": "last_edited_time", "last_edited_time": {"on_or_after": _iso(_now() - timedelta(hours=ns.hours))}}]
+    if ns.handle:
+        where.append({"property": "Lane", "select": {"equals": entry(reg, ns.handle)["handle"]}})
+    query = {"filter": {"and": where}, "sorts": [{"timestamp": "last_edited_time", "direction": "descending"}], "page_size": 100}
+    if ns.dry_run:
+        print(f"dry-run: POST {NOTION_API}/data_sources/{db['data_source']}/query {json.dumps(query, sort_keys=True)}", file=sys.stderr)
+        return 0
+    notion = Notion()
+    rows = []
+    for p in notion.call("POST", f"/data_sources/{db['data_source']}/query", query).get("results", []):
+        props = p.get("properties", {})
+        comments = notion.call("GET", f"/comments?block_id={urllib.parse.quote(p['id'])}&page_size=100").get("results", [])
+        newest = comments[-1] if comments else None
+        rows.append({"url": p.get("url"), "edited": p.get("last_edited_time"),
+                     **{k.lower().replace(" ", "_"): prop_text(props.get(k)) for k in ("Ask", "Lane", "Status", "Decision", "Card ID", "Deadline")},
+                     "comments": len(comments),
+                     "newest_comment": newest and {"at": newest.get("created_time"), "text": prop_text({"type": "rich_text", "rich_text": newest.get("rich_text")})}})
+    if ns.json:
+        print(json.dumps(rows, indent=2, ensure_ascii=False))
+        return 0
+    for r in rows:
+        print(f"{r['status'] or '-':18} @{r['lane'] or '-':19} {r['ask']}  {r['url']}")
+        if r["decision"]:
+            print(f"    decision: {r['decision']}")
+        if c := r["newest_comment"]:
+            print(f"    {r['comments']} comment(s); newest {c['at']}: {c['text'][:300]}")
+    return 0
 
 
 def fallback(body: dict) -> dict:
@@ -2054,6 +2303,8 @@ def no_such_card(verb: str, cid: str) -> str:
 
 
 def cmd_ask_daniel(ns: argparse.Namespace, reg: dict) -> int:
+    if ns.verb == "pages":
+        return cmd_pages(ns, reg)
     if ns.verb:
         if not ns.id:
             raise SlackError(f"ask-daniel {ns.verb} needs the card's ID")
@@ -2090,6 +2341,19 @@ def cmd_ask_daniel(ns: argparse.Namespace, reg: dict) -> int:
     now = _now()
     body = card(ns, reg, now)
     acting_as(ns, reg, ns.handle)
+    made: dict = {}
+    if ns.page:
+        req = page_request(body, ns.area, check_page(ns.page), asks_db(reg))
+        if ns.dry_run:
+            print(f"dry-run: POST {NOTION_API}/pages {json.dumps(req, sort_keys=True, ensure_ascii=False)}", file=sys.stderr)
+            body["link"] = "https://app.notion.com/p/<the new page>"
+        else:
+            notion = Notion()
+            made = notion.call("POST", "/pages", req)
+            if not made.get("url") or not made.get("id"):
+                raise SlackError("Notion's answer has no page url or id")
+            body["link"] = made["url"]
+            print(f"page {made['url']}", file=sys.stderr)
     old = fallback(body)
     if ns.dry_run:
         print(f"dry-run: POST {ASK_DANIEL} {json.dumps(body, sort_keys=True, ensure_ascii=False)}", file=sys.stderr)
@@ -2098,23 +2362,33 @@ def cmd_ask_daniel(ns: argparse.Namespace, reg: dict) -> int:
     route = AskDaniel()
     fell_back = False
     try:
-        out = route.call("POST", "", body)
-    except RouteError as e:
-        if e.status != 400:
-            raise
-        print(f"research msg: the route refused the card's fields ({e}); posting the old shape", file=sys.stderr)
-        out, fell_back = route.call("POST", "", old), True
-    cid, ts = out.get("id"), out.get("ts")
-    if not cid or not ts:
-        raise SlackError("the route's answer has no id or ts")
+        try:
+            out = route.call("POST", "", body)
+        except RouteError as e:
+            if e.status != 400:
+                raise
+            print(f"research msg: the route refused the card's fields ({e}); posting the old shape", file=sys.stderr)
+            out, fell_back = route.call("POST", "", old), True
+        cid, ts = out.get("id"), out.get("ts")
+        if not cid or not ts:
+            raise SlackError("the route's answer has no id or ts")
+    except SlackError as e:
+        if made:
+            raise SlackError(f"{e}; the page is up at {made['url']}: rerun with --link {made['url']} in place of --page") from None
+        raise
     ch = out.get("channel") or channel_id_for(reg, ASK_CHANNEL)
     print(f"{cid} {ts} {permalink(reg, ch, ts)}")
+    if made:
+        try:
+            notion.call("PATCH", f"/pages/{made['id']}", {"properties": {"Card ID": _text(str(cid)), "Slack card": {"url": permalink(reg, ch, ts)}}})
+        except SlackError as e:
+            print(f"the card is up, but its page doesn't name it ({e}): set the page's Card ID and Slack card yourself", file=sys.stderr)
     deciders = " ".join(f"<@{p['slack_user']}>" for p in reg.get("humans", []) if p.get("slack_user"))
     when = pacific(datetime.fromisoformat(body["deadline"]))
     rec = next((o["label"] for o in body["options"] if o.get("recommended")), "")
     ping = (f"{deciders} a decision for you: {body['question']} I recommend: {rec}. "
             + (f"`{body['default']}` applies at {when} unless you choose." if body["kind"] == "default" else f"Blocking: nothing happens until you choose (by {when}).")
-            + f" (card `{cid}`)")
+            + f" Read it, comment or decide on its page: {body['link']} (card `{cid}`)")
     try:                                                             # the card alone notifies nobody; a mention does
         client(ns).call("chat.postMessage", channel=ch, thread_ts=ts, username=body["requested_by"], text=ping, unfurl_links="false")
     except SlackError as e:
@@ -2213,6 +2487,7 @@ def main(argv: list[str], prog: str = "research msg") -> int:
     p = cmd("traffic", "the monitor: doorbells per inbox, pauses, dropped names, unanswered asks")
     p.add_argument("--hours", type=float, default=24)
     p.add_argument("--stale-h", type=float, default=2, help="an ask with no 👀, ✅, ❌ or reply after this many hours is unanswered")
+    p.add_argument("--replay", action="store_true", help="also compare each post's doorbells with what route_targets says it rings")
     p.add_argument("--now", default=None, help=argparse.SUPPRESS)
     p.add_argument("--json", action="store_true")
     cmd("pickup", "\U0001f440 on an ask or alert you own", thread=True)
@@ -2241,10 +2516,13 @@ def main(argv: list[str], prog: str = "research msg") -> int:
     p.add_argument("--peek", action="store_true", help="--as: don't mark them read")
     p.add_argument("--urgent", action="store_true", help="--as: exit 1 unless an unread doorbell is URGENT")
     p.add_argument("--json", action="store_true")
-    p = cmd("ask-daniel", "a card for Daniel in #ask-daniel; `status ID` reads its answer, `resolve ID` records a thread answer", url=True)
-    p.add_argument("verb", nargs="?", choices=("status", "resolve"), help="read a card's decision, or record Daniel's answer from its thread")
+    p = cmd("ask-daniel", "an ask's page in the Asks for Daniel database and its card in #ask-daniel; `status ID` reads the card's "
+            "answer, `resolve ID` records one from its page or thread, `pages` lists the pages edited lately", url=True)
+    p.add_argument("verb", nargs="?", choices=("status", "resolve", "pages"),
+                   help="read a card's decision, record Daniel's answer from its page or thread, or list the asks' pages edited lately")
     p.add_argument("id", nargs="?", metavar="ID", help="the card's id, as posting it printed")
-    p.add_argument("--as", dest="handle", default=None, metavar="HANDLE", help="the asking coordinator's handle (workers ask through theirs)")
+    p.add_argument("--as", dest="handle", default=None, metavar="HANDLE",
+                   help="the asking coordinator's handle (workers ask through theirs); pages: only this lane's")
     p.add_argument("--kind", choices=KINDS, default=None, help="blocking waits for Daniel; default proceeds at the deadline unless he objects")
     p.add_argument("--question", default=None, help="one line")
     p.add_argument("--why", default=None, help="why it matters")
@@ -2252,12 +2530,17 @@ def main(argv: list[str], prog: str = "research msg") -> int:
     p.add_argument("--recommend", default=None, metavar="VALUE")
     p.add_argument("--default", default=None, metavar="VALUE")
     p.add_argument("--deadline", default=None, help="`3:00 PM` (today, Pacific) or an ISO time with its zone")
-    p.add_argument("--link", default=None, metavar="URL", help="the full context")
+    p.add_argument("--page", default=None, metavar="FILE.md",
+                   help=f"the ask's page as Notion-flavored Markdown, LaTeX in $`...`$ and $$ blocks, written to the template in "
+                        f"{SKILL_ASKING}: created in the database (needs $NOTION_API_KEY), and the card links it")
+    p.add_argument("--area", default=None, choices=AREAS, metavar="AREA", help=f"--page: one of {', '.join(AREAS)}")
+    p.add_argument("--link", default=None, metavar="NOTION_URL", help="the ask's page, made with the Notion MCP, in place of --page")
+    p.add_argument("--hours", type=float, default=24, metavar="H", help="pages: edited in the last H hours (default 24)")
     p.add_argument("--wait", action="store_true", help="poll until the card is decided (or overdue); exit 0 once decided")
     p.add_argument("--every", type=float, default=WAIT_EVERY_S, metavar="S", help=f"seconds between polls (default {WAIT_EVERY_S})")
     p.add_argument("--choice", default=None, metavar="VALUE", help="resolve: the option Daniel chose in the thread")
     p.add_argument("--note", default=None, help="resolve: his words, or a link to them")
-    p.add_argument("--json", action="store_true", help="status: the route's whole answer")
+    p.add_argument("--json", action="store_true", help="status: the route's whole answer; pages: each page's fields")
     p = sub.add_parser("groups", help="the handles' Slack user groups")
     gsub = p.add_subparsers(dest="gcmd", required=True)
     gsub.add_parser("sync", parents=[c], help="create or update a user group per handle; a plan unless --apply").add_argument("--apply", action="store_true")

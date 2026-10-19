@@ -6,17 +6,18 @@ from collections import Counter, defaultdict
 
 import pytest
 
+import test_ports as TP
 from test_ir_liveness import Add16, Add32, Embedding, Gemm, Mul16, comp, prim, programs as liveness_programs
-from verity.ml.circuits import census as CE
+from verity.ml.circuits import census as CE, ports
 from verity.ml.circuits.census import census, seal, step_ends
-from verity.ml.circuits.codec import descriptor_id
-from verity.ml.circuits.defs import CompositeDefinition, bind
+from verity.ml.circuits.codec import canonical_json, descriptor_id
+from verity.ml.circuits.defs import CompositeDefinition, PrimitiveDefinition, bind
 from verity.ml.circuits.layout import resolve
 from verity.ml.circuits.program import Program
 from verity.ml.circuits.refs import Coll, array_of, strided_view, tuple_of
 from verity.ml.circuits.types import Array, Tuple, Value
 
-V16, V32 = Value(16), Value(32)
+V8, V16, V32, V64 = Value(8), Value(16), Value(32), Value(64)
 A4 = Array(4, V16)
 
 Lookup = prim("TLookup16", [("i", V32), ("xs", Array(16, V16))], V16, lambda i, *xs: xs[i % 16])
@@ -115,7 +116,7 @@ def signatures(c: dict) -> list[dict]:
         for v in vs:
             cands[v].add(k)
     v = c["values"]
-    return [{"reads": set(r), "cands": cands[i], "output": o} for i, (r, o) in enumerate(zip(v["reads"], v["output"]))]
+    return [{"reads": set(r), "cands": cands[i], "output": o, "fact": f} for i, (r, o, f) in enumerate(zip(v["reads"], v["output"], v["fact"]))]
 
 
 def per_leaf(c: dict) -> dict:
@@ -132,7 +133,7 @@ def test_values_are_the_gates_operands(label, P):
     got = per_leaf(c)
     assert set(got) == set(want), label
     for leaf, w in want.items():
-        assert got[leaf] == {k: w[k] for k in ("reads", "cands", "output")}, (label, leaf)
+        assert {k: got[leaf][k] for k in ("reads", "cands", "output")} == {k: w[k] for k in ("reads", "cands", "output")}, (label, leaf)
     v, sig = c["values"], signatures(c)
     for j, lo, hi, bits in zip(v["producer"], v["lo"], v["hi"], v["bits"]):
         assert bits == sum(want[(j, t)]["bits"] for t in range(lo, hi)), label
@@ -237,3 +238,67 @@ def test_embedding_without_evaluate_lazy_reads_its_table():
     c = census(Program(bind(Embedding)))
     assert c["selects"] == {"call": [], "gates": [], "bits": [], "values": []}
     assert c["values"]["reads"][:2] == [[2], [2]]
+
+
+Wide64 = prim("TWide64", [], V64, lambda: 1 << 60)
+
+
+def typed_programs():
+    """Programs whose Definitions declare ports (`test_ports`): declared intervals, a coin, a constant and a transfer; input
+    bounds on part of an input; and constants at the root, one wider than the canonical JSON's integers."""
+    yield "codec", TP._typed_program()
+    yield "chain", Program(TP.comp("TChainUse", [("x", Array(8, V16))], Array(2, V32),
+                                   lambda Bd, S, x: Bd.call(TP.chain("TChainT", TP.T_S8), Bd.batch(TP.Quant, x, axes=(0,)),
+                                                            Bd.batch(TP.Quant, x, axes=(0,)))))
+    yield "input-bounds", Program(TP.comp("TInB", [("x", Array(4, V16))], Array(4, V32),
+                                          lambda Bd, S, x: array_of([Bd.call(TP.Mul, x[t], x[t]) for t in range(2)] +
+                                                                    [Bd.call(TP.Mul, Bd.call(TP.Quant, x[t]), x[0]) for t in (2, 3)]),
+                                          ports=TP.Ports(params={"x": TP.Leaves(((0, 2, TP.In(bound=(-128, 127))),))})))
+    yield "constants", Program(comp("TConsts", [("x", V64)], Tuple(V64, V64, V8),
+                                    lambda Bd, S, x: tuple_of(Bd.call(Wide64), x, Bd.call(TP.Tag))))
+
+
+
+@pytest.mark.parametrize("label,P", list(programs()) + list(typed_programs()), ids=lambda x: x if isinstance(x, str) else "")
+def test_a_values_fact_is_its_leaves(label, P):
+    """Each value's fact is `ports.facts` of each of its leaves at its producer, and each class carries its declared ports."""
+    c, fx = census(P), ports.facts(P.root)
+    v = c["values"]
+    for j, lo, hi, f in zip(v["producer"], v["lo"], v["hi"], v["fact"]):
+        want = c["facts"][f]
+        for _a, _b, got in fx.node(j).segments(lo, hi):
+            iv = got.interval
+            assert want == got.to_json() | ({"interval": None} if iv and max(-iv[0], iv[1]) > 2 ** 53 - 1 else {}), (label, j, lo)
+    assert len(c["facts"]) == len({canonical_json(f) for f in c["facts"]})
+    for fn in _fns(P.root):
+        assert c["classes"][descriptor_id(fn)].get("ports") == ports.declared(fn), (label, fn.id)
+
+
+def _fns(root):
+    seen, todo = {}, [root]
+    while todo:
+        for nd in todo.pop().body.nodes:
+            if id(nd.fn) not in seen:
+                seen[id(nd.fn)] = nd.fn
+                if not isinstance(nd.fn, PrimitiveDefinition):
+                    todo.append(nd.fn)
+    return list(seen.values())
+
+
+def test_input_bounds_declared_intervals_and_constants_are_facts():
+    c = census(dict(typed_programs())["input-bounds"])
+    v, facts = c["values"], c["facts"]
+    inp = [facts[f]["interval"] for j, lo, hi, f in zip(v["producer"], v["lo"], v["hi"], v["fact"]) if j == 0 for _ in range(lo, hi)]
+    assert inp == [[-128, 127]] * 2 + [None] * 2
+    assert {facts[f]["origin"][0] for j, f in zip(v["producer"], v["fact"]) if j == 0} == {"input"}
+    assert c["classes"]["PortsTestQuant_v1"]["ports"] == {"ret": [[0, 1, {"interval": [-128, 127]}]]}
+    assert "ports" not in c["classes"]["Input16_v1"]
+    c = census(dict(typed_programs())["constants"])
+    k = {c["callees"][i]: j for j, i in enumerate(c["nodes"]["callee"])}
+    by_producer = {j: c["facts"][f] for j, f in zip(c["values"]["producer"], c["values"]["fact"])}
+    assert by_producer[k["PortsTestTag_v1"]] == {"interval": [7, 7], "origin": ["static"], "sink": False, "word": None}
+    assert by_producer[k["TWide64_v1"]] == {"interval": None, "origin": ["static"], "sink": False, "word": None}
+    chain = census(dict(typed_programs())["chain"])
+    words = [chain["facts"][f]["interval"] for j, f in zip(chain["values"]["producer"], chain["values"]["fact"])
+             if chain["callees"][chain["nodes"]["callee"][j]].startswith("TChainT")]
+    assert words == [list(iv) for iv in TP.T_S8]

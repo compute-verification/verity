@@ -26,6 +26,7 @@ class Harness:
                         post=lambda text, to=(): self.posts.append(text) or True, now=lambda: self.clock,
                         cancel=lambda repo, ids, reason: self.cancelled.extend(ids), evidence=lambda repo, ids: self.evidence)
         self.evidence: list = []
+        self.d.launch_touched = lambda repo, commit, machine, base: ([], "")      # a test that wants one sets its own
 
     def launch(self, repo, commit, machine, agreement):
         rid = f"r20261012-0000{len(self.launched):02d}-abcd"
@@ -1000,3 +1001,97 @@ def test_a_train_that_regenerated_locks_waits_for_a_new_check_when_main_moved(wo
     monkeypatch.setattr(merge, "regenerated_records", lambda store, rid, dest=None: {"pkg": ("sha", rec)})
     assert not h.tick().startswith("landed")
     assert any("by regenerating pkg's locks" in x for x in world.logs)
+
+
+def _touched_run(tmp_path, test: str, trace: str):
+    """A touched-suites run's dir (the quick tier's job): its report and log under out/."""
+    import json
+
+    d = tmp_path / "touched"
+    (d / "out" / "logs").mkdir(parents=True)
+    (d / "out" / "suites.json").write_text(json.dumps([{"name": "pkg", "suite": "pkg", "status": "failed", "failed_tests": [test],
+                                                        "log": "/workspace/research/runs/r/out/logs/pkg.log"}]))
+    (d / "out" / "logs" / "pkg.log").write_text(f"E       AssertionError\n\n{trace}: AssertionError\n")
+    return d
+
+
+def test_with_pytest_deferred_a_train_lands_only_once_its_touched_suites_pass(world, monkeypatch, tmp_path):
+    """CI-57: #2271 (17 Oct) and #2382 (18 Oct) each landed with pytest deferred and reverted a landing that a 2-minute run of
+    the one suite they touched would have stopped. With pytest deferred, drive runs the suites a train's change reaches
+    (`train.sh COMMIT MACHINE --against BASE`) beside its check, and lands it once both have passed."""
+    from research.drive import CHECK_STEPS
+
+    h = Harness(world, monkeypatch)
+    h.d.defer = frozenset({"pytest"})
+    touched = []
+    h.d.launch_touched = lambda repo, commit, machine, base: touched.append((commit, base)) or (["r-touched"], "")
+    h.run_state["r-touched"] = ("running", None, None)
+    world.gh.put(1, world.change({"a.txt": "1\n"}))
+    h.tick()
+    tip = _tip(world)
+    assert touched == [(tip, _git(world.origin, "rev-parse", "main"))]
+    (rid,) = [r for r in h.run_state if r != "r-touched"]
+    h.evidence = [_steps_run(tmp_path, rid, {x: "passed" for x in CHECK_STEPS if x != "pytest"})]
+    h.tick()
+    assert _git(world.origin, "rev-parse", "main") != tip                         # its touched suites still run
+    h.run_state["r-touched"] = ("done", 0, None)
+    h.tick()
+    assert _git(world.origin, "rev-parse", "main") == tip
+
+
+def test_a_failed_touched_suites_run_ejects_the_pr_that_changed_the_failing_test(world, monkeypatch, tmp_path):
+    from research.drive import CHECK_STEPS
+
+    h = Harness(world, monkeypatch)
+    h.d.defer, h.d.train_size = frozenset({"pytest"}), 2
+    h.d.launch_touched = lambda repo, commit, machine, base: (["r-touched"], "")
+    h.run_state["r-touched"] = ("running", None, None)
+    world.gh.put(1, world.change({"a.txt": "1\n"}))
+    world.gh.put(2, world.change({"pkg/tests/test_x.py": "def test_y():\n    assert False\n"}))
+    h.tick()
+    (rid,) = [r for r in h.run_state if r != "r-touched"]
+    h.evidence = [_steps_run(tmp_path, rid, {x: "passed" for x in CHECK_STEPS if x != "pytest"})]
+    h.tick()
+    h.run_state["r-touched"] = ("done", 1, None)
+    steps, report = h.evidence, [_touched_run(tmp_path, "tests/test_x.py::test_y", "tests/test_x.py:2")]
+    h.d.evidence = lambda repo, ids: report if ids == ["r-touched"] else steps
+    h.tick()
+    assert any("Ejected #2" in x and "touched suites failed" in x for x in h.posts), h.posts
+
+
+def test_of_several_failed_trains_drive_acts_on_the_lowest_only(world, monkeypatch, tmp_path):
+    """18 Oct 10:30Z: c93469 (#2478 #2479 #2480 #2484) failed lean-audit on #2484's Security change, and 5c00b3 above it failed
+    too. In one tick drive ejected #2484 for the lower and, for the upper, whose lower train was by then failed rather than
+    running, #2478 and #2486 as well. A train above a failed one holds its failure; its own check runs again once `next` is
+    rebuilt."""
+    h = Harness(world, monkeypatch)
+    h.d.train_size, h.d.max_running = 1, 2
+    world.gh.put(1, world.change({"pkgA/A.lean": "theorem a : True := trivial\n"}))
+    world.gh.put(2, world.change({"pkgB/B.lean": "theorem b : True := trivial\n"}))
+    h.tick()
+    low, tip = h.q.chain()[0].commit, _tip(world)
+    _check(world, monkeypatch, low, ("false",))
+    _check(world, monkeypatch, tip, ("false",))
+    lower = [_lean_run(tmp_path / "low", "AUDIT /w/lean-audit-scratch-1-x/pkgA: FAIL\n  dependencies: differ\n")]
+    upper = [_lean_run(tmp_path / "up", "AUDIT /w/lean-audit-scratch-1-x/pkgA: FAIL\nAUDIT /w/lean-audit-scratch-1-x/pkgB: FAIL\n")]
+    ids = {c: v["ids"] for c, v in h.d.q.load_state()["drive"]["launched"].items()}
+    h.d.evidence = lambda repo, rids: lower if rids == ids[low] else upper
+    h.tick()
+    assert len(h.posts) == 1 and "Ejected #1:" in h.posts[0], h.posts
+    assert [m.pr for m in h.q.chain()] == [2]
+
+
+def test_a_train_off_next_has_its_touched_suites_run_cancelled_too(world, monkeypatch):
+    """18 Oct 16:05Z: three touched-suites runs of trains a rebuild had dropped held check slots for 60-140 min, while drive
+    cancelled only those trains' checks."""
+    h = Harness(world, monkeypatch)
+    h.d.defer = frozenset({"pytest"})
+    h.d.launch_touched = lambda repo, commit, machine, base: (["r-touched"], "")
+    h.run_state["r-touched"] = ("running", None, None)
+    old = world.change({"a.txt": "1\n"})
+    world.gh.put(1, old)
+    h.tick()
+    (rid,) = [r for r in h.run_state if r != "r-touched"]
+    h.q.eject(1, "a test", "ci")
+    h.tick()
+    assert set(h.cancelled) == {rid, "r-touched"}

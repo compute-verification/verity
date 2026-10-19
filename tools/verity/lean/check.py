@@ -243,45 +243,99 @@ def cores() -> int:
 #: what auditing a package that pins ArkLib (Security/Proofs, and Security, which audits it beside itself) needs: its build
 #: of C-Flock's soundness peaks at 15–24 GB (the lean-proofs skill); `VERITY_LEAN_MEM_FLOOR_GIB` sets another floor, 0 none
 MEM_FLOOR_GIB = 24
+#: an audit of a spec whose guarantees an ArkLib package proves (Security): its facts of that package held 30–50 GiB between
+#: replays in r20261018-175656-1c85, so with replay threads bounded (`replay_threads`) about this fits
+SPEC_FLOOR_GIB = 64
 #: where a machine below the floor runs it instead
 ON_NODE = ("research run --on vy-nebius-1 --project verity --source . --cwd source --declared-output 'lean-audit/*' -- "
            "python3 tools/verity/lean/lean_changed.py --records {pkg}")
 
 
 def memory_gib(proc: Path = Path("/proc"), cgroup: Path = Path("/sys/fs/cgroup")) -> float:
-    """The memory this process may use, swap included: the machine's, bounded by its cgroup's limits."""
+    """The memory this process may use, swap included: the machine's, bounded by the limits of its cgroup and every cgroup
+    above it (`/proc/self/cgroup`: a queued run's limit is on its own scope, below the hierarchy's root)."""
     info = {}
     for line in (proc / "meminfo").read_text().splitlines():
         k, _, v = line.partition(":")
         info[k] = int(v.split()[0]) * 1024 if v.split() else 0
+    try:
+        own = next((ln.split("::", 1)[1].strip() for ln in (proc / "self" / "cgroup").read_text().splitlines()
+                    if ln.startswith("0::")), "/")
+    except OSError:
+        own = "/"
+    parts = [q for q in own.split("/") if q]
+    dirs = [cgroup.joinpath(*parts[:i]) for i in range(len(parts), -1, -1)]
 
     def limit(name: str) -> int | None:
-        try:
-            v = (cgroup / name).read_text().strip()
-            return None if v == "max" else int(v)
-        except (OSError, ValueError):
-            return None
+        got = []
+        for d in dirs:
+            try:
+                v = (d / name).read_text().strip()
+                if v != "max":
+                    got.append(int(v))
+            except (OSError, ValueError):
+                continue
+        return min(got) if got else None
     ram, swap = info.get("MemTotal", 0), info.get("SwapTotal", 0)
     ram = ram if (m := limit("memory.max")) is None else min(ram, m)
     swap = swap if (s := limit("memory.swap.max")) is None else min(swap, s)
     return (ram + swap) / 2**30
 
 
-def memory_refusal(pkgs: list[Path], have_gib: float, env=os.environ) -> str | None:
-    """Why this machine should not audit ``pkgs``, or None: one pins ArkLib and the memory is below the floor."""
+#: about what one `lean` of a Mathlib or ArkLib build peaks at: Lake runs as many at once as `LEAN_NUM_THREADS`, so a build
+#: of such a package runs no more than its memory holds (two queued Security builds were OOM-killed at 64 and 16 GB, 18 Oct)
+BUILD_GIB_PER_JOB = 8
+
+
+def build_threads(pkg: Path, env=os.environ, have_gib: float | None = None) -> int | None:
+    """The `LEAN_NUM_THREADS` a build of ``pkg`` runs with, when its memory bounds it: ``pkg`` pins Mathlib or ArkLib and
+    `LEAN_NUM_THREADS` is unset; else None (`lake_env`'s value)."""
+    m = pkg / "lake-manifest.json"
     try:
-        floor = float(env.get("VERITY_LEAN_MEM_FLOOR_GIB", MEM_FLOOR_GIB))
-    except ValueError:
-        floor = MEM_FLOOR_GIB
+        names = {d.get("name") for d in json.loads(m.read_text()).get("packages", [])} if m.is_file() else set()
+    except (OSError, ValueError):
+        names = set()
+    if "LEAN_NUM_THREADS" in env or not names & {"mathlib", "Arklib"}:
+        return None
+    gib = memory_gib() if have_gib is None else have_gib
+    return max(1, min(cores(), int(gib // BUILD_GIB_PER_JOB)))
+
+
+#: about what one replay thread of a Mathlib or ArkLib package peaks at: the whole-Security `--build --update` of 18 Oct
+#: (r20261018-175656-1c85, 48 threads) peaked at 145 GiB in one replay, about 3 GiB a thread, and was OOM-killed at 64 and
+#: 96 GiB; a heavy replay runs alone (`_HEAVY_REPLAY`), since two side by side took that run to 183 GiB
+REPLAY_GIB_PER_THREAD = 4
+_HEAVY_REPLAY = threading.Semaphore(1)
+
+
+def replay_threads(pkg: Path, env=os.environ, have_gib: float | None = None) -> int | None:
+    """The `LEAN_NUM_THREADS` the kernel replay of ``pkg`` runs with when its memory bounds it (as `build_threads`, at
+    `REPLAY_GIB_PER_THREAD`); else None."""
+    if build_threads(pkg, env, have_gib=1) is None:
+        return None
+    gib = memory_gib() if have_gib is None else have_gib
+    return max(1, min(cores(), int(gib // REPLAY_GIB_PER_THREAD)))
+
+
+def memory_refusal(pkgs: list[Path], have_gib: float, env=os.environ) -> str | None:
+    """Why this machine should not audit ``pkgs``, or None: one pins ArkLib and the memory is below the floor, which is
+    `SPEC_FLOOR_GIB` when a spec beside it reads its build (`proved_in`: the facts of every guarantee it proves)."""
     heavy = [p for p in pkgs if (m := p / "lake-manifest.json").is_file()
              and any(d.get("name") == "Arklib" for d in json.loads(m.read_text()).get("packages", []))]
+    spec = [p for p in pkgs if (p / POLICY).is_file() and json.loads((p / POLICY).read_text()).get("proved_in")]
+    need = SPEC_FLOOR_GIB if heavy and spec else MEM_FLOOR_GIB
+    try:
+        floor = float(env.get("VERITY_LEAN_MEM_FLOOR_GIB", need))
+    except ValueError:
+        floor = need
     if not heavy or have_gib >= floor:
         return None
     rel = lambda p: os.path.relpath(p, ROOT) if p.resolve().is_relative_to(ROOT) else str(p)
-    return (f"{rel(heavy[0])} pins ArkLib, whose build peaks near {MEM_FLOOR_GIB} GiB, and this machine has "
-            f"{have_gib:.0f} GiB (memory and swap, within its cgroup): run it on a node, "
-            f"`{ON_NODE.format(pkg=rel(pkgs[0]))}` (add --update for the record), or set VERITY_LEAN_MEM_FLOOR_GIB=0 to "
-            f"try here anyway")
+    what = (f"{rel(spec[0])}'s audit reads {rel(heavy[0])}'s facts for every guarantee it proves, about 40 GiB beside the "
+            f"replay" if heavy and spec else f"{rel(heavy[0])} pins ArkLib, whose build peaks near {MEM_FLOOR_GIB} GiB")
+    return (f"{what}, and this machine has {have_gib:.0f} GiB (memory and swap, within its cgroup), under the {floor:.0f} "
+            f"GiB floor: run it on a node, `{ON_NODE.format(pkg=rel(pkgs[0]))}` (add --update for the record), or set "
+            f"VERITY_LEAN_MEM_FLOOR_GIB=0 to try here anyway")
 
 
 #: `--artifacts`: the node's Lake artifact cache, which only a passing audit writes (`lean_audit.LakeArtifacts`)
@@ -2031,8 +2085,11 @@ def replay_step(pkg: Path, policy: dict, facts: dict, toolchain: str, work: Path
     keys = replay_keys(facts, toolchain) if replay_cache else {}
     reused = [m for m in facts["modules"] if m in keys and (replay_cache / f"{keys[m]}.json").is_file()]
     checked = [m for m in facts["modules"] if m not in reused]
-    rc, text = run(["lake", "env", "lean", "--run", str(TOOL / "Replay.lean"), str(found), *checked,
-                    *(["--reused", *reused] if reused else [])], pkg, work / "replay.log")
+    n = replay_threads(pkg)
+    with _HEAVY_REPLAY if n is not None else contextlib.nullcontext():
+        rc, text = run([*([] if n is None else ["env", f"LEAN_NUM_THREADS={n}"]), "lake", "env", "lean", "--run",
+                        str(TOOL / "Replay.lean"), str(found), *checked, *(["--reused", *reused] if reused else [])],
+                       pkg, work / "replay.log")
     fails = []
     if killed(rc):
         fails.append(f"replay: killed (exit {rc}; out of memory?), which is not a kernel verdict: rerun it alone\n{text[-1000:]}")
@@ -2205,11 +2262,14 @@ def audit(pkg: Path, out: Path, build: bool = False, update: bool = False, repla
     t, _peak.bytes = time.monotonic(), 0
     if build:
         rep["sandbox"] = sandboxed()
+        jobs = [] if (n := build_threads(pkg)) is None else ["env", f"LEAN_NUM_THREADS={n}"]
+        if n is not None:
+            rep["build_threads"] = n
         for step, argv in (("setup", None),
-                           ("build-plugins", lambda: (in_sandbox(pkg, ["lake", "build", *ts]) if (ts := plugin_targets(pkg))
+                           ("build-plugins", lambda: (in_sandbox(pkg, [*jobs, "lake", "build", *ts]) if (ts := plugin_targets(pkg))
                                                       else [])),
-                           ("build", in_sandbox(pkg, ["lake", "build"])),
-                           ("build-roots", in_sandbox(pkg, ["lake", "build", *(f"+{r}" for r in policy["roots"])]))):
+                           ("build", in_sandbox(pkg, [*jobs, "lake", "build"])),
+                           ("build-roots", in_sandbox(pkg, [*jobs, "lake", "build", *(f"+{r}" for r in policy["roots"])]))):
             if callable(argv) and not (argv := argv()):
                 continue
             with contextlib.nullcontext() if argv is None else writing(pkg, log):

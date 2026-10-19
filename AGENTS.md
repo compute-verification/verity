@@ -19,16 +19,18 @@ Top-level directories (a grouping, not an import name, except `verity/`):
       its plans and consumers), PoUW (`pouw`), PoUS (`pous`), the bandwidth audit over PoUS's store (`bandwidth`), the
       remote bandwidth audit over a node's registered store (`remote_bandwidth`) and the network certifier
       (`certifier`), each a Python
-      verifier with the code that runs it. A protocol's Lean code is its `lean/`. NCI is Lean only
-      (`verity/core/protocols/network/nci/`).
+      verifier with the code that runs it, until its Lean is its verifier of record (Design rules). A protocol's Lean
+      code is its `lean/`. NCI is Lean only (`verity/core/protocols/network/nci/`).
     - `claims`: the ids of security claims.
-    - The Lean ports in `primitives`, `devices`, `service` and `protocols`. A port is held to the Python it replaces by
-      `difftest` (`verity_difftest`, with its Lake package `verity_difftest`).
+    - The Lean in `primitives`, `devices`, `service` and `protocols`. `difftest` (`verity_difftest`, with its Lake
+      package `verity_difftest`) holds the Python that mirrors each one to the Lean.
     - `service/flock/`: C-Flock's executable verifier of record (no dependencies).
-  - `verity/ml/` (`verity.ml`): Python and CUDA. These units are on the soundness path, because core's verifiers read
-    them: `ml.circuits`, `ml.circuits.ops`, `ml.circuits.silicon`, `ml.circuits.targets`, `ml.kernels`,
+  - `verity/ml/` (`verity.ml`): Python and CUDA: the provers, and Python that mirrors the Lean for the prover's speed.
+    Until each protocol's verifier of record is Lean, these units are on the soundness path, because its Python verifier
+    reads them: `ml.circuits`, `ml.circuits.ops`, `ml.circuits.silicon`, `ml.circuits.targets`, `ml.kernels`,
     `ml.commitments`, `ml.crypto` and `ml.randomness` (`SOUNDNESS_PATH` in `tests/test_boundaries.py`, all that
-    `ALLOWED` lets core reach). The rest, C-Flock's prover and the private circuits, can't affect soundness.
+    `ALLOWED` lets core reach; it only shrinks). The rest, C-Flock's prover and the private circuits, can't affect
+    soundness.
     - `circuits` (format in `circuits/PROTOCOL.md`): circuits and their evaluator (`evaluation`), the Boolean profile
       (`boolean`), what models compute (`ops`, the primitive circuits' Definitions), what the GPUs actually compute
       (`silicon`, the exact hardware semantics) and `targets`.
@@ -75,9 +77,10 @@ Code reaches the Nebius nodes only through `research deploy install` from a push
 
 Dependencies point inward, and `tests/test_boundaries.py` enforces them:
 
-- `verity.core` may import the units of `verity.ml` that `ALLOWED` lists for it, which puts them on the soundness path
-  (`SOUNDNESS_PATH`). `verity.ml` never imports `verity.core`, apart from the files `ML_IMPORTS_CORE` names (C-Flock's
-  tests and V*'s builders, and hm96's test of its claims).
+- A verifier imports no `verity.ml` code (Design rules). Until its protocol's verifier of record is Lean, a Python
+  verifier in `verity.core` keeps the edges into `verity.ml` it had on 18 Oct (`CORE_ML_EDGES`) and gains none, and
+  what they reach (`SOUNDNESS_PATH`) only shrinks. `verity.ml` never imports `verity.core`, apart from the files
+  `ML_IMPORTS_CORE` names (C-Flock's tests and V*'s builders, and hm96's test of its claims).
 - Everything outside `verity/` may import `verity`. `verity` imports no other distribution of the workspace.
 - Inside `verity`, each unit imports only what `ALLOWED` lists. `ml.circuits`, `ml.randomness`, `ml.crypto` and
   `core.claims` import no other unit.
@@ -92,8 +95,8 @@ requires, `verity check tests|lean|circuits` runs only those parts, and `verity 
 
 ~~~text
 uv sync --all-packages --extra torch-cpu  # the whole workspace, editable, with CPU-only torch (GPU work: a member's `torch` extra)
-uv run tools/verity/check/suites.py       # every test suite whose inputs changed since it last passed; --quick skips slow tests
-uv run --extra torch-cpu verity check     # the check a merge requires; --record publishes it as an Attempt
+research run --on auto --cwd source --wait -- bash -lc 'uv sync -q --all-packages --extra torch-cpu && uv run tools/verity/check/suites.py'  # suites whose inputs changed; --quick: no slow tests
+research run --on auto --cwd source --wait -- bash -lc 'uv sync -q --all-packages --extra torch-cpu && uv run --extra torch-cpu verity check'  # the merge check; --record: an Attempt
 ~~~
 
 ## Design rules
@@ -144,6 +147,10 @@ Daniel's, current. `.agents/skills/friction/SKILL.md` has the dated rulings behi
   designer as adversarial). No guarantee rests on a GPU attesting its own SKU, firmware or clocks. Hardware constants
   (f_max, peak rates) come from the data sheet for now, quoted under two or three readings rather than one main line,
   and later from a separate physical calibration.
+- **Lean is the definition and the verifier of record** (Daniel, 18 Oct). Python in `verity.ml` mirrors it, for the
+  prover's speed, and difftest holds that Python to the Lean. A verifier imports no `verity.ml` code. Each protocol still
+  switches by the 8 Oct procedure (the friction skill): until it does, its Python verifier and the ml units it reads stay
+  on `SOUNDNESS_PATH`, which only shrinks, and no core → ml import edge is added (`tests/test_boundaries.py`).
 - **Soundness is one theorem** (see Lean below).
 
 ## Tests
@@ -153,10 +160,15 @@ pytest-xdist workers), cached by input. The repository's own suite (`tests/`) ho
 testing skill, `.agents/skills/testing/SKILL.md`, says how to run them, what a suite may read (`[tool.verity.tests]
 inputs`), and the rules for slow tests, fixtures and dummy credentials.
 
-Heavy work runs on a node, never on an agent VM (16 GB, shared by every agent on it): circuit-check (24 GB a
-process), a Lean build of `Security/Proofs` (ArkLib), and the circuit_check and vLLM suites. Run them with `research run
---on vy-nebius-1 --project verity --source . --cwd source -- …` (the writing-runs skill), or through the quick tier
-(`research queue ready N --on vy-nebius-1`).
+An agent VM does no work beyond editing (Daniel, 18 Oct): it is 16 GB, shared by every agent on it, and one
+out-of-memory kill takes all of them down. Locally, run only git (`git merge-tree` included), reading and editing,
+messaging and the notes, one named test file or `-k` selection of under about a minute and 1 GB, `lake env lean` on one
+file in an already-built tree, a Lean package with no Mathlib or ArkLib, and the lock fast path. Everything else runs
+remotely through `research run --on auto --cwd source [--wait] -- CMD` (the shipped tree needs its own `uv sync`), on the cluster queue as an `agent-test` job (4 CPUs, 16 GiB,
+60 min unless `--cpus`, `--mem-gb` or `--timeout` say otherwise), outside the check slots: every suite (`suites.py`),
+`verity check` and `check.py`, circuit-check (24 GB a process), any build of `Security` or `Security/Proofs`, cargo, nvcc, every e2e run
+and every GPU job (the writing-runs skill). The shell hook refuses those commands locally and names the remote one;
+`AGENT_GUARD_LOCAL_OK=1` in the command is the explicit opt-in.
 
 No test depends on wall-clock time: no sleeps, clock readings or timeouts. Wait on the event itself or inject the clock.
 `tests/test_no_wall_clock.py` enforces it, and its `ALLOWED` list, one reason per entry, holds the exceptions.
@@ -301,9 +313,11 @@ Never print a secret's value.
 - List environment variable names with `compgen -e`, never `env | cut`, `env | grep`, `printenv | …` or tmux's
   `show-environment`: a multi-line value's later lines print as if they were names.
 - `.cursor/hooks.json` refuses any shell command that would print the environment or every process's full command line
-  (`tools/agent-guard/shell_hook.py`). Cloud agents read project hooks only, so on a branch older than the hook the
-  environment's `start` runs origin/main's `tools/agent-guard/boot.sh`, which writes the hook into `/workspace` and runs
-  `install.sh`.
+  (`tools/agent-guard/shell_hook.py`). Cloud agents read project hooks only, so on a branch older than the hook,
+  origin/main's `tools/agent-guard/boot.sh` writes the hook into `/workspace`, runs `install.sh`, starts the VM's OOM
+  recorder and puts `research` on PATH. The environment's `start` runs it after the GitHub helper (since 18 Oct, INF-71),
+  and every coordinator's launch brief (`infra/cursor/launch_coordinator.py`) runs it first too, for a VM booted from an
+  older environment version.
 - A secret is stored as one line (a key as base64, `NAME_B64`), and `tools/agent-guard/install.sh` puts a redacting `env`
   on the VM.
 
@@ -386,6 +400,8 @@ Coordinators are launched, handed over and archived from Daniel's laptop with `i
 - Lean: `.agents/skills/lean-proofs/SKILL.md`.
 - GPU kernel work (PoUW kernels on sm_120): `.agents/skills/kernel-engineering/SKILL.md`.
 - When something gets in your way, and the rulings: `.agents/skills/friction/SKILL.md`.
+- Asking Daniel for a decision (a page in the Asks for Daniel Notion database, and its `#ask-daniel` card):
+  `.agents/skills/asking-daniel/SKILL.md`.
 - Before adding, changing or retiring a process (a rule here or in the lane contract, a gate in `check` or
   `research merge`, a required review, a file every PR must update), assess its effect on research velocity:
   `.agents/skills/process-design/SKILL.md`.

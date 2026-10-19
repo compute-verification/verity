@@ -149,6 +149,7 @@ TERMINAL = ("done", "failed", "cancelled")
 FETCHED_FILE = ".fetched"                     # <run>/.fetched on the machine: written by `fetch --all` once every file verified
 FETCHED_SCHEMA = "research/fetched/v0.1"
 CUSTODY_DIR = "custody"                       # <root>/requests/<run-id>/custody/: --custody-r2's minted key + store.toml (store.custody)
+STORE_READ_DIR = "store-read"                 # --store-read's read-only key, put in the workload's environment (store.custody.READ_DIR_NAME)
 LAUNCH_ACK = ".launch-ack"                    # <root>/requests/<run-id>/.launch-ack: the FIFO the runner names its first record on
 LAUNCH_LOCK = ".launch.lock"                  # <root>/requests/<run-id>/.launch.lock: held by a delivery of the request until it answers
 FIRST_RECORD = "job.json"
@@ -311,6 +312,45 @@ def ssh_argv(host: str, port: int, *, user: str = "root", connect_timeout: int =
 
     base = runpod.ssh_command(host, port, user=user)
     return [*base[:-1], "-o", "BatchMode=yes", "-o", f"ConnectTimeout={connect_timeout}", base[-1]]
+
+
+def sender(environ: dict[str, str] | None = None) -> str | None:
+    """Who sends a run, recorded in its request (`submitted_by`), where the node's alerts read it (INF-50): the sending agent's own
+    Cursor conversation (`CURSOR_CONVERSATION_ID`, which every agent's shell carries, a worker its own rather than its
+    coordinator's), else $RESEARCH_AGENT_URL."""
+    env = os.environ if environ is None else environ
+    if cid := env.get("CURSOR_CONVERSATION_ID", "").strip():
+        return f"https://cursor.com/agents/{cid}"
+    return env.get("RESEARCH_AGENT_URL") or None
+
+
+WAKE_WAIT_S, WAKE_POLL_S = 900.0, 15.0
+
+
+def wake(machine: dict[str, Any], ssh: list[str], *, nebius=None, sleep=time.sleep, clock=time.monotonic) -> str | None:
+    """Start a stopped Nebius VM before a run and wait for its ssh (INF-58: the H200s stop after 2 h idle, disks kept): a machine
+    whose registry entry names its `nebius_instance_id` and whose ssh doesn't answer is started through the Nebius API, then waited
+    for up to WAKE_WAIT_S. Returns what it did, None when the machine answered at once or names no instance."""
+    iid = machine.get("nebius_instance_id")
+    if not iid or ssh_run(ssh, ["true"], timeout=30).returncode == 0:
+        return None
+    if nebius is None:
+        from .pods.nebius.fleet import nb as nebius
+    try:
+        state = (nebius("compute", "instance", "get", "--id", iid).get("status") or {}).get("state")
+        if state in ("STOPPED", "STOPPING"):
+            nebius("compute", "instance", "start", "--id", iid, "--async")
+    except (RuntimeError, OSError, ValueError) as e:
+        raise Refused(f"{machine['name']} doesn't answer on ssh and couldn't be started through the Nebius API ({e}); with no Nebius "
+                      f"credentials here, ask @infra to start {iid}") from None
+    print(f"research: {machine['name']} was {state}; started it through the Nebius API, waiting up to {WAKE_WAIT_S / 60:g} min "
+          f"for its ssh (disks kept)", file=sys.stderr)
+    end = clock() + WAKE_WAIT_S
+    while clock() < end:
+        sleep(WAKE_POLL_S)
+        if ssh_run(ssh, ["true"], timeout=30).returncode == 0:
+            return f"started from {state}"
+    raise Refused(f"{machine['name']} ({iid}) was started from {state} but its ssh didn't answer in {WAKE_WAIT_S / 60:g} min")
 
 
 def ssh_run(ssh: list[str], remote_argv: list[str], *, stdin: bytes | None = None, timeout: float = 120) -> subprocess.CompletedProcess:
@@ -1305,6 +1345,13 @@ def _launch_request(request_path: Path) -> dict[str, Any]:
         env = _runner_env(req, runs_root, src_dir, remote)
         if req.get("custody") and not (request_path.parent / CUSTODY_DIR / "cred.json").is_file():
             raise Refused(f"--custody-r2: no staged key under {request_path.parent / CUSTODY_DIR}; the run could not publish its custody")
+        if req.get("store_read"):
+            from .store import custody as CU
+
+            try:
+                env.update(CU.reader_env(request_path.parent / STORE_READ_DIR))
+            except (OSError, ValueError, KeyError):
+                raise Refused(f"--store-read: no staged key under {request_path.parent / STORE_READ_DIR}") from None
         if req.get("job_user"):
             from . import jobuser
 
@@ -1363,6 +1410,8 @@ def _launch_request(request_path: Path) -> dict[str, Any]:
         argv += ["--exclusive-lock", str(runs_root / ".exclusive.lock")]
     if req.get("custody"):
         argv += ["--custody-dir", str(request_path.parent / CUSTODY_DIR)]
+    if req.get("store_read"):
+        argv += ["--store-read-dir", str(request_path.parent / STORE_READ_DIR)]
     if req.get("job_user"):
         argv += ["--job-user", req["job_user"]]
     argv += [*(req.get("harness_args") or []), "--", *(req.get(QUEUE_WORKLOAD_WRAP) or []), *gpu_lease_wrap(req), *req["command"]]
@@ -1659,7 +1708,7 @@ def launch(*, run_id: str, local_dir: Path, machine_name: str, project: str, com
            source: Path | None, sends: list[Path], cwd: str | None, env: dict[str, str], exclusive: bool,
            mem_gb: float | None = None, mem_wait_s: float = 0.0, custody_ttl: str | None = None,
            preflight_tool: str | None = None, queue: dict[str, Any] | None = None, job_user: str | None = None,
-           gpus: int | None = None) -> dict[str, Any]:
+           gpus: int | None = None, store_read: bool = False) -> dict[str, Any]:
     """`custody_ttl` (--custody-r2): mint a delete-free key for that long and stage it for the machine's runner (store.custody).
     `gpus` (--gpus without --queue): the machine runs the workload under `gpu-lease N --wait` (module doc, GPUs).
     `preflight_tool` (--preflight): run that tool's declared preflight on the machine before this run, whatever the run's --tool.
@@ -1689,10 +1738,28 @@ def launch(*, run_id: str, local_dir: Path, machine_name: str, project: str, com
                 raise Refused(f"--custody-r2: cannot mint the machine's key here: {e} (the parent key: the Cursor secrets, or source "
                               f"~/.config/verity/r2.env; --no-custody-r2 launches without run custody)") from None
             rec["custody"] = custody_pub
+        if store_read:
+            from .store import credentials as C
+            from .store import custody as CU
+
+            if not custody_ttl:
+                raise Refused("--store-read needs run custody (the default with --on): without it the runner's own publish would try "
+                              "the workload's read-only key")
+            if not hasattr(CU, "mint_reader") or "store_read" not in (Path(source_tool_package(source)) / "remote.py").read_text():
+                raise Refused(f"--store-read: the research package in {source} predates it; the machine would not pass the key on")
+            try:
+                read_pub, read_files = CU.mint_reader(custody_ttl or CU.DEFAULT_TTL)
+            except C.MintError as e:
+                raise Refused(f"--store-read: cannot mint a read-only key here: {e} (the parent key: the Cursor secrets, or source "
+                              f"~/.config/verity/r2.env)") from None
+            custody_files = [*custody_files, *read_files]
+            rec["store_read"] = read_pub
         tgt = pod_target(m)
         user = tgt.get("user", "root")
         ssh = ssh_argv(tgt["host"], tgt["port"], user=user)
         rec.update(pod_id=m.get("pod_id"), host=tgt["host"], port=tgt["port"], user=user, root=m["root"], phase="shipping")
+        if woke := wake(m, ssh):
+            rec["woke"] = woke
         write_json_atomic(local_dir / "remote.json", rec)
         tool_pkg = source_tool_package(source)      # --source <tree> with tools/research: the tree's own package runs the run
         if mem_gb and tool_pkg is not None and not (tool_pkg / "mem.py").exists():
@@ -1742,7 +1809,8 @@ def launch(*, run_id: str, local_dir: Path, machine_name: str, project: str, com
                    "guard": {"idle_min": guard_min} if guard_min else None,
                    "lease_extend_s": lease_extend_s(harness_args),
                    **({"custody": custody_pub} if custody_pub else {}),
-                   **({"submitted_by": by} if (by := os.environ.get("RESEARCH_AGENT_URL")) else {}),
+                   **({"store_read": rec["store_read"]} if rec.get("store_read") else {}),
+                   **({"submitted_by": by} if (by := sender()) else {}),
                    **({"preflight_tool": preflight_tool} if preflight_tool else {}),
                    **({"job_user": job_user} if job_user else {}),
                    **({"gpus": gpus} if gpus else {}),

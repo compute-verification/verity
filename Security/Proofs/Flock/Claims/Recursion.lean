@@ -12,12 +12,16 @@ import Proofs.Flock.Claims.Recursion.Inner
 import Proofs.Flock.Claims.Recursion.Abort
 import Proofs.Flock.Claims.Recursion.InnerAbort
 import Proofs.Flock.Claims.Recursion.Gap
+import Proofs.Flock.Claims.Recursion.Registered
 import Proofs.Flock.Claims.Recursion.FlockAbort
 import Proofs.Flock.Claims.Recursion.AbortWait
 import Proofs.Flock.Claims.Recursion.AbortFork
 import Proofs.Flock.Claims.Recursion.FlockKSAbort
 import Proofs.Flock.Claims.Recursion.FlockKSAcc
 import Proofs.Flock.Claims.Recursion.FlockKSDeploy
+import Proofs.Flock.Claims.Recursion.FlockKSRecord
+import Proofs.Flock.Claims.Recursion.KSStated
+import Proofs.Flock.Claims.Recursion.Scope
 
 /-! The ZK-recursion compiler's claims proofs: serving one rerun program's reruns by another's (`Serve`), `E^rep`'s
 weighted reruns by Wald's identity (`Wald`), the composed extractor, `E^rep` served by the outer extractor, with its
@@ -27,4 +31,5 @@ extractor's expected reruns by Wald's argument over forks, which proves the cost
 extraction-based finder `Be` as a fork finder (`Finders`), the composed extractor's failure with the outer extractor
 charged at every rerun (`Hybrid`), and the recursion's `KS` from the outer Flock's KS at each session and the inner
 protocol's KS at the served runs (`KS`), and that outer KS at each session from Flock's own KS at the outer deployment,
-the session's prover simulating the rest of the compiled verifier around it (`OuterKS`). -/
+the session's prover simulating the rest of the compiled verifier around it (`OuterKS`); and `ScopeMatches` at the
+compiled verifier's parser and scope check (`Scope`). -/

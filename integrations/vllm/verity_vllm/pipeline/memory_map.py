@@ -96,6 +96,15 @@ def cache(d: str | Path, program: Any, digest: str) -> dict[str, Any]:
     return {"census": c["digest"], "kv_rows": "refused" not in doc}
 
 
+def census_entry(d: str | Path, program: Any, digest: str) -> dict[str, Any]:
+    """`cache`'s result for the Build's `result.json`, or its error in its place: the census serves the Commit's opt-in
+    memory map, so it decides no Build."""
+    try:
+        return cache(d, program, digest)
+    except Exception as e:  # noqa: BLE001
+        return {"error": repr(e)[:300]}
+
+
 def of_build(d: str | Path, digest: str) -> MM.Rows:
     """The KV rows of Build dir ``d``'s request Program ``digest``: its `KV_ROWS` when they name the Program, else computed from its
     descriptor (refused unless that is Program ``digest``) and cached beside it (`cache`), once per Program digest."""

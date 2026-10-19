@@ -463,8 +463,205 @@
   "Models.Accounting.Assumptions",
   "Models.Accounting.Guarantees",
   "Definitions.Accounting.Bandwidth",
-  "Models.Accounting.Guarantees.Bandwidth"
+  "Models.Accounting.Guarantees.Bandwidth",
+  "Definitions.Hash",
+  "Models.Hash.Guarantees"
  ],
+ "claims": {
+  "modules": ["Definitions.Claims", "Definitions.Claims.Recursion"],
+  "witnesses": {
+   "Claims.Bits": {
+    "fails": "Claims.Bits_fails",
+    "meets": ["Claims.Flock.decoder_meets_plain", "Claims.Flock.decoder_meets_zk"]
+   },
+   "Claims.Complete": {
+    "fails": "Claims.Complete_fails",
+    "meets": ["Claims.Flock.scope_meets_plain", "Claims.Flock.scope_meets_zk"]
+   },
+   "Claims.Flock.Bits": {
+    "fails": "Claims.Flock.Bits_fails",
+    "meets": ["Claims.Flock.decoder_meets_plain", "Claims.Flock.decoder_meets_zk"]
+   },
+   "Claims.Flock.Complete": {
+    "fails": "Claims.Flock.Complete_fails",
+    "meets": ["Claims.Flock.scope_meets_plain", "Claims.Flock.scope_meets_zk"]
+   },
+   "Claims.Flock.Efficient": {
+    "fails": "Claims.Flock.Efficient_fails",
+    "meets": ["Claims.Flock.decoder_meets_plain", "Claims.Flock.decoder_meets_zk"]
+   },
+   "Claims.Flock.KS": {
+    "fails": "Claims.Flock.KS_fails",
+    "meets": ["Claims.Flock.decoder_meets_plain", "Claims.Flock.decoder_meets_zk"]
+   },
+   "Claims.Flock.Nontrivial": {
+    "fails": "Claims.Flock.Nontrivial_fails",
+    "meets": ["Claims.Flock.scope_meets_plain", "Claims.Flock.scope_meets_zk"]
+   },
+   "Claims.Flock.ScopeMatches": {
+    "fails": "Claims.Flock.ScopeMatches_fails",
+    "meets": ["Claims.Flock.scope_meets_plain", "Claims.Flock.scope_meets_zk"]
+   },
+   "Claims.Flock.ZK": {
+    "fails": "Claims.Flock.ZK_fails",
+    "meets": ["Claims.Flock.masked_meets_zk"]
+   },
+   "Claims.KS": {
+    "fails": "Claims.KS_fails",
+    "meets": ["Claims.Flock.decoder_meets_plain", "Claims.Flock.decoder_meets_zk"]
+   },
+   "Claims.KSLin": {
+    "fails": "Claims.KSLin_fails",
+    "meets": ["Claims.Sampling.decoder_meets_plain", "Claims.Sampling.decoder_meets_zk"]
+   },
+   "Claims.Nontrivial": {
+    "fails": "Claims.Nontrivial_fails",
+    "meets": ["Claims.Flock.scope_meets_plain", "Claims.Flock.scope_meets_zk"]
+   },
+   "Claims.Recursion.Bits": {
+    "fails": "Claims.Witness.Recursion.Bits_fails",
+    "meets": ["Claims.Witness.Recursion.Bits_meets"]
+   },
+   "Claims.Recursion.BitsFlock": {
+    "fails": "Claims.Witness.Recursion.BitsFlock_fails",
+    "meets": ["Claims.Witness.Recursion.BitsFlock_meets"]
+   },
+   "Claims.Recursion.Complete": {
+    "fails": "Claims.Witness.Recursion.Complete_fails",
+    "meets": ["Claims.Witness.Recursion.Complete_meets", "Claims.Witness.Recursion.Complete_meets_deployed"]
+   },
+   "Claims.Recursion.Efficient": {
+    "fails": "Claims.Witness.Recursion.Efficient_fails",
+    "meets": ["Claims.Witness.Recursion.Efficient_meets"]
+   },
+   "Claims.Recursion.Inner.KS": {
+    "fails": "Claims.Witness.Recursion.Inner.KS_fails",
+    "meets": ["Claims.Witness.Recursion.Inner.KS_meets"]
+   },
+   "Claims.Recursion.Inner.KSAbort": {
+    "fails": "Claims.Witness.Recursion.Inner.KSAbort_fails",
+    "meets": ["Claims.Witness.Recursion.Inner.KSAbort_meets"]
+   },
+   "Claims.Recursion.KS": {
+    "fails": "Claims.Witness.Recursion.KS_fails",
+    "meets": ["Claims.Witness.Recursion.KS_meets"]
+   },
+   "Claims.Recursion.KSFlock": {
+    "fails": "Claims.Witness.Recursion.KSFlock_fails",
+    "meets": ["Claims.Witness.Recursion.KSFlock_meets"]
+   },
+   "Claims.Recursion.KSPriv": {
+    "fails": "Claims.Witness.Recursion.KSPriv_fails",
+    "meets": ["Claims.Witness.Recursion.KSPriv_meets"]
+   },
+   "Claims.Recursion.Nontrivial": {
+    "fails": "Claims.Witness.Recursion.Nontrivial_fails",
+    "meets": ["Claims.Witness.Recursion.Nontrivial_meets"]
+   },
+   "Claims.Recursion.ScopeMatches": {
+    "fails": "Claims.Witness.Recursion.ScopeMatches_fails",
+    "meets": ["Claims.Witness.Recursion.ScopeMatches_meets"]
+   },
+   "Claims.Recursion.ZK": {
+    "fails": "Claims.Witness.Recursion.ZK_fails",
+    "meets": ["Claims.Witness.Recursion.ZK_meets"]
+   },
+   "Claims.Recursion.ZKPriv": {
+    "fails": "Claims.Witness.Recursion.ZKPriv_fails",
+    "meets": ["Claims.Witness.Recursion.ZKPriv_meets"]
+   },
+   "Claims.Sampling.Binding": {
+    "fails": "Claims.Sampling.Binding_fails",
+    "meets": ["Claims.Sampling.Binding_meets", "Claims.Sampling.Binding_meets_one"]
+   },
+   "Claims.Sampling.Bits": {
+    "fails": "Claims.Sampling.Bits_fails",
+    "meets": ["Claims.Sampling.decoder_meets_plain", "Claims.Sampling.decoder_meets_zk"]
+   },
+   "Claims.Sampling.BitsLin": {
+    "fails": "Claims.Sampling.BitsLin_fails",
+    "meets": ["Claims.Sampling.decoder_meets_plain", "Claims.Sampling.decoder_meets_zk"]
+   },
+   "Claims.Sampling.Complete": {
+    "fails": "Claims.Sampling.Complete_fails",
+    "meets": ["Claims.Sampling.scope_meets"]
+   },
+   "Claims.Sampling.Efficient": {
+    "fails": "Claims.Sampling.Efficient_fails",
+    "meets": ["Claims.Sampling.decoder_meets_plain", "Claims.Sampling.decoder_meets_zk"]
+   },
+   "Claims.Sampling.KS": {
+    "fails": "Claims.Sampling.KS_fails",
+    "meets": ["Claims.Sampling.decoder_meets_plain", "Claims.Sampling.decoder_meets_zk"]
+   },
+   "Claims.Sampling.KSCount": {
+    "fails": "Claims.Sampling.KSCount_fails",
+    "meets": ["Claims.Sampling.decoder_meets_plain", "Claims.Sampling.decoder_meets_zk"]
+   },
+   "Claims.Sampling.Nontrivial": {
+    "fails": "Claims.Sampling.Nontrivial_fails",
+    "meets": ["Claims.Sampling.scope_meets"]
+   },
+   "Claims.Sampling.ScopeMatches": {
+    "fails": "Claims.Sampling.ScopeMatches_fails",
+    "meets": ["Claims.Sampling.scope_meets"]
+   },
+   "Claims.Sampling.Universal": {
+    "fails": "Claims.Sampling.Universal_fails",
+    "meets": ["Claims.Sampling.universal_meets"]
+   },
+   "Claims.Sampling.ZK": {
+    "fails": "Claims.Sampling.ZK_fails",
+    "meets": ["Claims.Sampling.masked_meets_zk"]
+   },
+   "Claims.ScopeMatches": {
+    "fails": "Claims.ScopeMatches_fails",
+    "meets": ["Claims.Flock.scope_meets_plain", "Claims.Flock.scope_meets_zk"]
+   },
+   "Claims.ZKmalR": {
+    "fails": "Claims.ZKmalR_fails",
+    "meets": ["Claims.Flock.masked_meets_zk"]
+   },
+   "Claims.Sampling.KSLinOn": {
+    "fails": "Claims.Sampling.KSLinOn_fails",
+    "meets": ["Claims.Sampling.decoder_meets_plain", "Claims.Sampling.decoder_meets_zk"]
+   }
+  },
+  "not": {
+   "Claims.Collision": "a helper the claims read: two inputs with one output",
+   "Claims.ERepCost": "proved at every deployment (`Claims.ERep_cost`); Flock's `Efficient` reads it",
+   "Claims.ExtractRunsExpLe": "a helper the claims read: an extractor's expected reruns, at most a bound, which every `Efficient` reads",
+   "Claims.ExtractRunsLe": "a helper the claims read: an extractor's reruns, at most a bound, which every `Efficient` reads",
+   "Claims.Flock.InScope": "a helper the claims read: the forms Flock proves, which its scope reads",
+   "Claims.Flock.ListWithin": "the list-decoding spec Flock's KS, Bits and Efficient ask of a decoder, proved of both deployed decoders (`FlockDeploy.listWithin_plain`, `listWithin_zk`)",
+   "Claims.Flock.RelS": "a helper the claims read: a statement's relation, which `Flock.R` reads",
+   "Claims.Flock.Scope": "a helper the claims read: the scope Flock's claims read",
+   "Claims.Recursion.Draw.Full": "a V* session's draw that takes every unit, a clause of the readable scope (`InScope`), no claim",
+   "Claims.Recursion.InScope": "the readable scope's form, which the claims read through `Scope`, no claim",
+   "Claims.Recursion.Scope": "the recursion's scope, which `ScopeMatches` and `Complete` read, no claim",
+   "Claims.Recursion.decOK": "the decoders a claim quantifies over (`Flock.ListWithin` at the deployment), a domain, no claim",
+   "Claims.Rel.L": "a helper the claims read: a relation's language",
+   "Claims.Rel.ext": "a helper the claims read: a relation at an extractor's optional witness",
+   "Claims.Sampling.BoundaryFaulty": "a helper the claims read: a faulty unit on the boundary trace, which `FaultyBoundary` reads",
+   "Claims.Sampling.Commitment.Binds": "a helper the claims read: a commitment's binding, which `Binding` reads",
+   "Claims.Sampling.Design.WellFormed": "a helper the claims read: a well-formed design, one well-formed rule per class",
+   "Claims.Sampling.ExtractOwnLe": "a helper the claims read: an extractor's own calls, at most a bound, which the sampling `Efficient` reads",
+   "Claims.Sampling.Faulty": "a helper the claims read: a faulty unit, which the sampling relation reads",
+   "Claims.Sampling.FaultyBoundary": "proved of every program (`Claims.Sampling.faultyBoundary`), not of a deployment",
+   "Claims.Sampling.InScope": "a helper the claims read: the programs and partitions the sampling scope takes",
+   "Claims.Sampling.LogColl": "a helper the claims read: a collision in a log of `H` calls",
+   "Claims.Sampling.Netlist.Fits": "a helper the claims read: a netlist of a size class",
+   "Claims.Sampling.OneStage.WellFormed": "a helper the claims read: a well-formed one-stage design",
+   "Claims.Sampling.Partition.Partitions": "a helper the claims read: a partition of a program's gates into proof units",
+   "Claims.Sampling.Prog.Correct": "a helper the claims read: a correct gate interval on committed values",
+   "Claims.Sampling.Prog.Topological": "a helper the claims read: a topologically ordered program",
+   "Claims.Sampling.RU.Consecutive": "a helper the claims read: a replay unit of consecutive gate intervals",
+   "Claims.Sampling.RelS": "a helper the claims read: a statement's sampling relation",
+   "Claims.Sampling.Rule.WellFormed": "a helper the claims read: a well-formed rule on its class",
+   "Claims.Sampling.Scope": "a helper the claims read: the scope the sampling claims read",
+   "Claims.SimCost": "a simulator's expected calls; `ClaimsStated` records it, but no claim reads it, so no ZK claim bounds its simulator's cost"
+  }
+ },
  "layers": {
   "Definitions.Core": {
    "imports": ["Mathlib", "Definitions.Core"],
@@ -698,6 +895,16 @@
    "imports": ["Mathlib", "Definitions.Claims"],
    "except": [],
    "why": "the claims and the definitions they read are trusted text: they import no assumption, guarantee or proof"
+  },
+  "Definitions.Hash": {
+   "imports": ["Mathlib", "Definitions.Claims", "Definitions.Hash"],
+   "except": [],
+   "why": "the hash area's definitions are trusted text: the served row leaf's formats (frame-v3 trees, sha512/row-seg/v1, hm96-sha512/v1) over a hash, on Mathlib and the claims' messages and collisions (Definitions.Claims); they import no assumption, guarantee or proof"
+  },
+  "Models.Hash.Guarantees": {
+   "imports": ["Mathlib", "Definitions.Claims", "Definitions.Hash", "Models.Hash.Guarantees"],
+   "except": [],
+   "why": "a guarantee is stated over the hash area's definitions, never over a proof"
   }
  },
  "reads_exempt": {
@@ -712,9 +919,26 @@
   "Proofs.Flock.EndToEndHidden": "C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT)",
   "Proofs.Flock.EndToEndRegistered": "C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT)",
   "Proofs.Flock.ZeroKnowledgeHidden": "C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT)",
-  "Proofs.Pouw.PearlC.FlockTile": "the PoUW × C-Flock statement reads C-Flock's definitions, which are still in Proofs; C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT); lean's Q3 ruling, 6 Oct"
+  "Proofs.Pouw.PearlC.FlockTile": "the PoUW × C-Flock statement reads C-Flock's definitions, which are still in Proofs; C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT); lean's Q3 ruling, 6 Oct",
+  "Proofs.Flock.Claims": "the claims' witnesses (LEAN-26) read C-Flock's deployed records (FlockDeploy, the radius decoders, the readable relation) and the toy records a claim fails at, which are in Proofs; C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT)",
+  "Proofs.Flock.Claims.Deploy": "the claims' meets witnesses state antecedents at Flock's deployed records (`deployPlain`, `deployZk`), still in Proofs; C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT)",
+  "Proofs.Flock.Claims.DeployCode": "the claims' meets witnesses state antecedents at Flock's deployed records (`deployPlain`, `deployZk`), still in Proofs; C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT)",
+  "Proofs.Flock.Claims.DeployPlainCode": "the claims' meets witnesses state antecedents at Flock's deployed records (`deployPlain`, `deployZk`), still in Proofs; C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT)",
+  "Proofs.Flock.Claims.GS.RadiusDeploy": "the deployed plain record's radius decoder (`Claims.GS.plainDecodeRD`), at which the claims' `meets` witnesses (LEAN-26) state the list-decoding spec; C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT)",
+  "Proofs.Flock.Claims.GS.RadiusFamily": "the claims' meets witnesses state antecedents at Flock's deployed records (`deployPlain`, `deployZk`), still in Proofs; C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT)",
+  "Proofs.Flock.Claims.Scope.Readable": "the claims' meets witnesses state antecedents at Flock's deployed records (`deployPlain`, `deployZk`), still in Proofs; C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT)",
+  "Proofs.Flock.Claims.ZkDecodeFlock": "the claims' meets witnesses state antecedents at Flock's deployed records (`deployPlain`, `deployZk`), still in Proofs; C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT)",
+  "Proofs.Flock.Claims.Witnesses.Flock": "a toy outer Flock record (`Claims.Witness.Flock.ksD`), read only by the claims' `fails` witnesses (LEAN-26), which state that a claim is false there; under C-Flock's exception: C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT)",
+  "Proofs.Flock.Claims.Witnesses.Recursion": "the toy recursion records and inner protocols (`ksR`, `compR`, `effR`, `accI`, `noI`, ...), read only by the claims' `fails` witnesses (LEAN-26), which state that a claim is false there; under C-Flock's exception: C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT)",
+  "Proofs.Flock.Claims.Witnesses.Shared": "a toy oracle (`Claims.Witness.constH`), read only by the claims' `fails` witnesses (LEAN-26), which state that a claim is false there; under C-Flock's exception: C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT)",
+  "Proofs.Flock.Claims.ZK.NonVacuous": "the quiet prover (`Claims.ZKMal.quietP`), read only by the claims' `fails` witnesses (LEAN-26), which state that a claim is false there; under C-Flock's exception: C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT)",
+  "Proofs.Flock.Claims.Witnesses.RecursionMeets": "the toy statements of each inner shape (`denseStmt`, `sparseStmt`), at which the claims' `meets` witnesses (LEAN-26) show the readable scope non-empty; C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT)",
+  "Proofs.Flock.Claims.DeployInputs": "the claims' meets witnesses state antecedents at Flock's deployed records (`deployPlain`, `deployZk`), still in Proofs; C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT)",
+  "Proofs.Flock.Claims.NumbersDeploy": "the claims' meets witnesses state antecedents at Flock's deployed records (`deployPlain`, `deployZk`), still in Proofs; C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT)",
+  "Proofs.Flock.Claims.Recursion.Deploy": "the claims' meets witnesses state antecedents at the recursion's deployed record (`RecDeploy.deployRec`, `Brings`), still in Proofs; C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT)",
+  "Proofs.Flock.Claims.Recursion.DeployInputs": "the claims' meets witnesses state antecedents at the recursion's deployed record's inputs (`RecDeploy.RecIns`, `setupO`), still in Proofs; C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT)"
  },
- "four_names": ["Nci", "NetTiming", "Accounting"],
+ "four_names": ["Nci", "NetTiming", "Accounting", "Hash"],
  "guarantees": {
   "Accounting.SecurityProofs.Actual.Runtime": {
    "owner": "@lean",
@@ -837,6 +1061,32 @@
    "signature": ["Accounting.SecurityProofs.CarrierBits : Accounting.Guarantees.CarrierBits"],
    "assumptions": [],
    "type_hash": "ea4f70e25ce50c4ed37d62528245c1c2801cb1b6060e5831f971206042aa4789"
+  },
+  "Accounting.SecurityProofs.CoinFlow.CoinsThroughNoise": {
+   "owner": "@compute-accounting",
+   "signature": [
+    "Accounting.SecurityProofs.CoinFlow.CoinsThroughNoise : Accounting.Guarantees.CoinFlow.CoinsThroughNoise"
+   ],
+   "assumptions": [],
+   "type_hash": "242784ae038abec79a92a83524a14e097297d292d0bf88cd5ba6ba9ad302551f"
+  },
+  "Accounting.SecurityProofs.CoinFlow.OneReader": {
+   "owner": "@compute-accounting",
+   "signature": ["Accounting.SecurityProofs.CoinFlow.OneReader : Accounting.Guarantees.CoinFlow.OneReader"],
+   "assumptions": [],
+   "type_hash": "beb14de87a11cc43a997c57c356978087413cf22ec9574620ba9f4c4ccb31c79"
+  },
+  "Accounting.SecurityProofs.CoinFlow.PointMass": {
+   "owner": "@compute-accounting",
+   "signature": ["Accounting.SecurityProofs.CoinFlow.PointMass : Accounting.Guarantees.CoinFlow.PointMass"],
+   "assumptions": [],
+   "type_hash": "0745b1724b48ccb354df4bccaf890e88858f92d4ae4bedc5948830d074651b9e"
+  },
+  "Accounting.SecurityProofs.CoinFlow.ViewIndependent": {
+   "owner": "@compute-accounting",
+   "signature": ["Accounting.SecurityProofs.CoinFlow.ViewIndependent : Accounting.Guarantees.CoinFlow.ViewIndependent"],
+   "assumptions": [],
+   "type_hash": "7e074a4228ed1d423f1413782d673f6a9e28262668db83fc36e2646a7ae9e909"
   },
   "Accounting.SecurityProofs.Colocation": {
    "owner": "@memory-accounting",
@@ -1856,6 +2106,12 @@
    "assumptions": [],
    "type_hash": "f6a85b032fa3daf1cb90b6693f33ebc1f8e160996e163a97419f35fc0f9ceda0"
   },
+  "Accounting.SecurityProofs.TS.ExchangeTail": {
+   "owner": "@compute-accounting",
+   "signature": ["Accounting.SecurityProofs.TS.ExchangeTail : Accounting.Guarantees.TS.ExchangeTail"],
+   "assumptions": [],
+   "type_hash": "ba03954a0ab6e08c7e67b4dd088307b4a9c461b705a1c582626247a9e2cc835e"
+  },
   "Accounting.SecurityProofs.TS.FanInCount": {
    "owner": "@compute-accounting",
    "signature": ["Accounting.SecurityProofs.TS.FanInCount : Accounting.Guarantees.TS.FanInCount"],
@@ -1898,11 +2154,41 @@
    "assumptions": [],
    "type_hash": "aad18a7a2fbca41c4809056d4c3457aa70bea4a8d619583a0b843828d9d9f63f"
   },
+  "Accounting.SecurityProofs.TS.GrindMass": {
+   "owner": "@compute-accounting",
+   "signature": ["Accounting.SecurityProofs.TS.GrindMass : Accounting.Guarantees.TS.GrindMass"],
+   "assumptions": [],
+   "type_hash": "3062c28c48308e3366d0dd72296df30fa56357ebf7403ff54b7741c42440f161"
+  },
+  "Accounting.SecurityProofs.TS.GrindPremium": {
+   "owner": "@compute-accounting",
+   "signature": ["Accounting.SecurityProofs.TS.GrindPremium : Accounting.Guarantees.TS.GrindPremium"],
+   "assumptions": [],
+   "type_hash": "5dcfdda27bc23284f8f304a5e71cbc2c4839b8ba516ef761bebfe81bb5e7d441"
+  },
+  "Accounting.SecurityProofs.TS.GrindPremiumAt": {
+   "owner": "@compute-accounting",
+   "signature": ["Accounting.SecurityProofs.TS.GrindPremiumAt : Accounting.Guarantees.TS.GrindPremiumAt"],
+   "assumptions": [],
+   "type_hash": "e1dd8d1a85ea18fdecc61a69515f43aa1cd85901327e29d54accb78f800fb0b9"
+  },
+  "Accounting.SecurityProofs.TS.GrindTail": {
+   "owner": "@compute-accounting",
+   "signature": ["Accounting.SecurityProofs.TS.GrindTail : Accounting.Guarantees.TS.GrindTail"],
+   "assumptions": [],
+   "type_hash": "fc15875a2bb37504bad2728ec4d6e8281df1a2d0a30552e1159052da102397c3"
+  },
   "Accounting.SecurityProofs.TS.GrindUnion": {
    "owner": "@compute-accounting",
    "signature": ["Accounting.SecurityProofs.TS.GrindUnion : Accounting.Guarantees.TS.GrindUnion"],
    "assumptions": [],
    "type_hash": "0ca6f0a275123378314dc43e013a4307202190dedf3d89891121f560de9fd854"
+  },
+  "Accounting.SecurityProofs.TS.LiLowBit": {
+   "owner": "@compute-accounting",
+   "signature": ["Accounting.SecurityProofs.TS.LiLowBit : Accounting.Guarantees.TS.LiLowBit"],
+   "assumptions": [],
+   "type_hash": "eb372544b82d54f47ff7224758935ec2e5353159ea6f6ac47b65bebdb4d39242"
   },
   "Accounting.SecurityProofs.TS.LiSegmentsBind": {
    "owner": "@compute-accounting",
@@ -1946,11 +2232,23 @@
    "assumptions": [],
    "type_hash": "d843adb387677d7f782ea44db601e82ebfecf578d72fbe57b4598a2dad87c6e3"
   },
+  "Accounting.SecurityProofs.TS.LuckMoment": {
+   "owner": "@compute-accounting",
+   "signature": ["Accounting.SecurityProofs.TS.LuckMoment : Accounting.Guarantees.TS.LuckMoment"],
+   "assumptions": [],
+   "type_hash": "c7fbbf37ab40d73452c41ba40ad9c630a71fc3eeedf1c7186c2e3edb12548975"
+  },
   "Accounting.SecurityProofs.TS.LuckOfReceipt": {
    "owner": "@compute-accounting",
    "signature": ["Accounting.SecurityProofs.TS.LuckOfReceipt : Accounting.Guarantees.TS.LuckOfReceipt"],
    "assumptions": [],
    "type_hash": "ae399ff4f14b16a994012859adfb2f4af1fa9d30ae7bf2f368d6157b34573189"
+  },
+  "Accounting.SecurityProofs.TS.OneRegisterLowBit": {
+   "owner": "@compute-accounting",
+   "signature": ["Accounting.SecurityProofs.TS.OneRegisterLowBit : Accounting.Guarantees.TS.OneRegisterLowBit"],
+   "assumptions": [],
+   "type_hash": "d04435470eff3391510bbc4f6d43f4299b5917a86a55b8d3fd22da9b8d1ec8a9"
   },
   "Accounting.SecurityProofs.TS.OperandLuckCube": {
    "owner": "@compute-accounting",
@@ -1963,6 +2261,12 @@
    "signature": ["Accounting.SecurityProofs.TS.OutputCount : Accounting.Guarantees.TS.OutputCount"],
    "assumptions": [],
    "type_hash": "f63122b9d09208627838844f85921930911249f025c810b9936cfc84542bef96"
+  },
+  "Accounting.SecurityProofs.TS.PrivateMoment": {
+   "owner": "@compute-accounting",
+   "signature": ["Accounting.SecurityProofs.TS.PrivateMoment : Accounting.Guarantees.TS.PrivateMoment"],
+   "assumptions": [],
+   "type_hash": "bd75f1515987b5d82b349a4a6d544c88b9f7e74abe51fd3c5af932d7425b5fdc"
   },
   "Accounting.SecurityProofs.TS.ProofsSoundOfPinned": {
    "owner": "@compute-accounting",
@@ -2036,6 +2340,18 @@
    "assumptions": [],
    "type_hash": "5803510fd92c96e4606036e0695794c6210805a328862135c17ec7fd7f5544e8"
   },
+  "Accounting.SecurityProofs.TS.TemplateCondition": {
+   "owner": "@compute-accounting",
+   "signature": ["Accounting.SecurityProofs.TS.TemplateCondition : Accounting.Guarantees.TS.TemplateCondition"],
+   "assumptions": [],
+   "type_hash": "ac9e57bcaab6682fc07f07a3d1ca7e2d1406bce586002eb6e46dbf6d8449df06"
+  },
+  "Accounting.SecurityProofs.TS.TemplateMoment": {
+   "owner": "@compute-accounting",
+   "signature": ["Accounting.SecurityProofs.TS.TemplateMoment : Accounting.Guarantees.TS.TemplateMoment"],
+   "assumptions": [],
+   "type_hash": "6026dad870d26691d02086fcffbf934131c8beb1122dab5f8216fa9129bb3347"
+  },
   "Accounting.SecurityProofs.TS.TensorSlotCount": {
    "owner": "@compute-accounting",
    "signature": ["Accounting.SecurityProofs.TS.TensorSlotCount : Accounting.Guarantees.TS.TensorSlotCount"],
@@ -2053,6 +2369,12 @@
    "signature": ["Accounting.SecurityProofs.TS.ThinFoldInjective : Accounting.Guarantees.TS.ThinFoldInjective"],
    "assumptions": [],
    "type_hash": "05c11dc008c2a2607af95ee24298aeb442207dd73f0dc17980a992372e1e94ef"
+  },
+  "Accounting.SecurityProofs.TS.TileLuck": {
+   "owner": "@compute-accounting",
+   "signature": ["Accounting.SecurityProofs.TS.TileLuck : Accounting.Guarantees.TS.TileLuck"],
+   "assumptions": [],
+   "type_hash": "cf8e0fefb25830e7e36b520d9afbda42ca3c6f38cc08f3fcbeabf060ac37d763"
   },
   "Accounting.SecurityProofs.TS.TimeBound": {
    "owner": "@compute-accounting",
@@ -2217,6 +2539,697 @@
    "signature": ["Bandwidth.SecurityProofs.MbwCapacity.{u_1, u_2} : Bandwidth.Guarantees.MbwCapacity"],
    "assumptions": [],
    "type_hash": "14543c855bb73081fb225a17c7df7478387af02155c806d46e19367db0d5f2f6"
+  },
+  "Claims.Bits_fails": {
+   "owner": "@proofs",
+   "signature": [
+    "Claims.Bits_fails {Coin W : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] (H : Claims.Msg → Claims.Msg)",
+    "  (R : Claims.Rel W) (lam : Claims.Msg → Real) (x : Claims.Msg) (hR : ∀ (w : W), Not (R x w))",
+    "  (hlam : Real.instLT.lt 0 (lam x)) : Exists fun V => ∀ (E : Claims.Extractor Coin W V), Not (Claims.Bits H V R E lam)"
+   ],
+   "assumptions": [],
+   "type_hash": "e9d9884782aacbe057d2a3b9a4210535811d2e39770b5f8fca19f43e94babbb3"
+  },
+  "Claims.Complete_fails": {
+   "owner": "@proofs",
+   "signature": [
+    "Claims.Complete_fails {Coin W Ω : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] [Nonempty Ω]",
+    "  (P : W → Claims.Prover Ω) (R : Claims.Rel W) (Scope : Claims.Msg → Prop) (δc : Claims.Msg → Real) {x : Claims.Msg}",
+    "  {w : W} (hs : Scope x) (hr : R x w) (hδ : Real.instLT.lt (δc x) 1) :",
+    "  Exists fun H => Exists fun V => Not (Claims.Complete H V P R Scope δc)"
+   ],
+   "assumptions": [],
+   "type_hash": "da863c78e48aaca44e3a208e5e7b0f1bbb16381ed10e86cbd748228d32e9a200"
+  },
+  "Claims.Flock.Bits_fails": {
+   "owner": "@proofs",
+   "signature": [
+    "Claims.Flock.Bits_fails {Coin : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] (H : Claims.Msg → Claims.Msg) :",
+    "  Exists fun D => Not (Claims.Flock.Bits H D)"
+   ],
+   "assumptions": [],
+   "type_hash": "7baa5b9d74590d849b8bff625081fecdc6ffbf5fc59aff2f918ec08c8ef8459d"
+  },
+  "Claims.Flock.Complete_fails": {
+   "owner": "@proofs",
+   "signature": [
+    "Claims.Flock.Complete_fails {Coin Ω : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] [Nonempty Ω]",
+    "  (P : Claims.Flock.Wit → Claims.Prover Ω) (δc : Claims.Msg → Real) (x : Claims.Msg) (hδ : Real.instLT.lt (δc x) 1) :",
+    "  Exists fun H => Exists fun D => Not (Claims.Flock.Complete H D P δc)"
+   ],
+   "assumptions": [],
+   "type_hash": "41fcaae98a2e881638f9bc77b3fb5e519b60ef00794e55aba46f62460aee62c8"
+  },
+  "Claims.Flock.Efficient_fails": {
+   "owner": "@proofs",
+   "signature": [
+    "Claims.Flock.Efficient_fails {Coin : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin]",
+    "  (H : Claims.Msg → Claims.Msg) : Exists fun z => Exists fun D => Not (Claims.Flock.Efficient H D 0)"
+   ],
+   "assumptions": [],
+   "type_hash": "772074801c726993c19b182871793d43f25eb5b1abcc37aec5bd7b4616804af4"
+  },
+  "Claims.Flock.KS_fails": {
+   "owner": "@proofs",
+   "signature": [
+    "Claims.Flock.KS_fails {Coin : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] (H : Claims.Msg → Claims.Msg) :",
+    "  Exists fun D => Not (Claims.Flock.KS H D)"
+   ],
+   "assumptions": [],
+   "type_hash": "484af4a47096122fbcefaa7b4fc4a4a94e4bb0a2a1da497fbb429efdb2b642e1"
+  },
+  "Claims.Flock.Nontrivial_fails": {
+   "owner": "@proofs",
+   "signature": [
+    "Claims.Flock.Nontrivial_fails {Coin : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin]",
+    "  (H : Claims.Msg → Claims.Msg) : Exists fun D => Exists fun recs => Not (Claims.Flock.Nontrivial H D recs)"
+   ],
+   "assumptions": [],
+   "type_hash": "5771063b99cb35d1908cfd8470ac2e1035dd2efacb2da659dfb6263f7118b8ef"
+  },
+  "Claims.Flock.ScopeMatches_fails": {
+   "owner": "@proofs",
+   "signature": ["Claims.Flock.ScopeMatches_fails {Coin : Type} : Exists fun D => Not (Claims.Flock.ScopeMatches D)"],
+   "assumptions": [],
+   "type_hash": "32747c6f2e45b685e5c82535e07e7f241cbb4538b2396e1ab3888da2b558993a"
+  },
+  "Claims.Flock.ZK_fails": {
+   "owner": "@proofs",
+   "signature": [
+    "Claims.Flock.ZK_fails {N Ω : Type} [Fintype N] [Nonempty N] [Fintype Ω] [Nonempty Ω] (H : Claims.Msg → Claims.Msg)",
+    "  (εzk γ : Claims.Msg → Real) (x : Claims.Msg) (hε : Real.instLT.lt (εzk x) 1) :",
+    "  Exists fun D => Exists fun P => Exists fun S => Not (Claims.Flock.ZK H D P S εzk γ)"
+   ],
+   "assumptions": [],
+   "type_hash": "be054d0e89d219cdd66d91bdf7852c9104c9af1c64e90f0bf495ddbbb9ab3072"
+  },
+  "Claims.Flock.decoder_meets_plain": {
+   "owner": "@proofs",
+   "signature": [
+    "Claims.Flock.decoder_meets_plain (rel : Flock.Readable.Parsed → Flock.Readable.Relation) :",
+    "  Claims.Flock.ListWithin (FlockDeploy.deployPlain rel).len (FlockDeploy.deployPlain rel).enc",
+    "    (FlockDeploy.deployPlain rel).θ (FlockDeploy.deployPlain rel).decode"
+   ],
+   "assumptions": [],
+   "type_hash": "ce42cd724bf1794a91d0d388d76f48a1f8495fefdf4e8d4e2f946d84ef9c5c06"
+  },
+  "Claims.Flock.decoder_meets_zk": {
+   "owner": "@proofs",
+   "signature": [
+    "Claims.Flock.decoder_meets_zk (rel : Flock.Readable.Parsed → Flock.Readable.Relation) :",
+    "  Claims.Flock.ListWithin (FlockDeploy.deployZk rel).len (FlockDeploy.deployZk rel).enc (FlockDeploy.deployZk rel).θ",
+    "    (FlockDeploy.deployZk rel).decode"
+   ],
+   "assumptions": [],
+   "type_hash": "fdd205603fba982a972fbd1231a4a6da260d0e4c48c8615066c70ce5f40e48bb"
+  },
+  "Claims.Flock.masked_meets_zk": {
+   "owner": "@proofs",
+   "signature": [
+    "Claims.Flock.masked_meets_zk (rel : Flock.Readable.Parsed → Flock.Readable.Relation) :",
+    "  Eq (FlockDeploy.deployZk rel).zk Bool.true"
+   ],
+   "assumptions": [],
+   "type_hash": "c9aee9249a386b4232cc2e4430bafa74c02dd818197685ebfd898a3ef2d4c60e"
+  },
+  "Claims.Flock.scope_meets_plain": {
+   "owner": "@proofs",
+   "signature": [
+    "Claims.Flock.scope_meets_plain (rel : Flock.Readable.Parsed → Flock.Readable.Relation) :",
+    "  Exists fun s => Exists fun w => And (Claims.Flock.InScope (FlockDeploy.deployPlain rel).zk s) (Claims.Flock.RelS s w)"
+   ],
+   "assumptions": [],
+   "type_hash": "d5cddab40ddd51aa691c6cfb4ec218fa8cba3fd3cfaf555d44d4049aa35a3f74"
+  },
+  "Claims.Flock.scope_meets_zk": {
+   "owner": "@proofs",
+   "signature": [
+    "Claims.Flock.scope_meets_zk (rel : Flock.Readable.Parsed → Flock.Readable.Relation) :",
+    "  Exists fun s => Exists fun w => And (Claims.Flock.InScope (FlockDeploy.deployZk rel).zk s) (Claims.Flock.RelS s w)"
+   ],
+   "assumptions": [],
+   "type_hash": "ef89c0bbe2549055608cdc278d7f122801096086efb2fdd4f164d35214390933"
+  },
+  "Claims.KSLin_fails": {
+   "owner": "@proofs",
+   "signature": [
+    "Claims.KSLin_fails {Coin W : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] (H : Claims.Msg → Claims.Msg)",
+    "  (R : Claims.Rel W) (κ γ β : Claims.Msg → Real) (x : Claims.Msg) (hR : ∀ (w : W), Not (R x w))",
+    "  (hκ : Real.instLT.lt (κ x) 1) :",
+    "  Exists fun V => Exists fun Fe => ∀ (E : Claims.Extractor Coin W V), Not (Claims.KSLin H V R E κ γ β Fe)"
+   ],
+   "assumptions": [],
+   "type_hash": "7c609d258cb9423d7f24fd49e82bd232d14d7f9d34ee5128721bf49797d1d33f"
+  },
+  "Claims.KS_fails": {
+   "owner": "@proofs",
+   "signature": [
+    "Claims.KS_fails {Coin W : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] (H : Claims.Msg → Claims.Msg)",
+    "  (R : Claims.Rel W) (κ γ : Claims.Msg → Real) (x : Claims.Msg) (hR : ∀ (w : W), Not (R x w))",
+    "  (hκ : Real.instLT.lt (κ x) 1) : Exists fun V => ∀ (E : Claims.Extractor Coin W V), Not (Claims.KS H V R E κ γ)"
+   ],
+   "assumptions": [],
+   "type_hash": "4182bf6632e1ad1477e2d769e3f59a567bade117902b07c6e1f053f3159a9ef5"
+  },
+  "Claims.Nontrivial_fails": {
+   "owner": "@proofs",
+   "signature": [
+    "Claims.Nontrivial_fails {Coin : Type} [Inhabited Coin] (H : Claims.Msg → Claims.Msg) :",
+    "  Exists fun V => Exists fun recs => Not (Claims.Nontrivial H V recs)"
+   ],
+   "assumptions": [],
+   "type_hash": "6357c43f3a417a4aa07cd4a55d4bf45876e2ab47f0ddce2c02107612c69f6ba4"
+  },
+  "Claims.Sampling.Binding_fails": {
+   "owner": "@proofs",
+   "signature": [
+    "Claims.Sampling.Binding_fails {Coin : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] :",
+    "  Exists fun D => Not (Claims.Sampling.Binding D)"
+   ],
+   "assumptions": [],
+   "type_hash": "a0af16afd13fdb6a80be4748a99693cd056ee1f3912bfa7d12db858ea48ee06d"
+  },
+  "Claims.Sampling.Binding_meets": {
+   "owner": "@proofs",
+   "signature": [
+    "Claims.Sampling.Binding_meets (rel : Flock.Readable.Parsed → Flock.Readable.Relation) (c : SamplingDeploy.Code)",
+    "  (roots : List Claims.Msg) (o : Claims.Sampling.Opening Bool) :",
+    "  Iff",
+    "    (Eq (Claims.Sampling.Commitment.Opens Claims.Sampling.sha512Msg (SamplingDeploy.deploy rel c).commit roots o)",
+    "      Bool.true)",
+    "    (Exists fun root =>",
+    "      Exists fun i =>",
+    "        Exists fun reg =>",
+    "          And (Eq (c.at_ roots o.pos) (Option.some { fst := root, snd := i }))",
+    "            (And",
+    "              (Eq (Array.find? (fun p => Decidable.decide (Eq p.root (Claims.Sampling.bytes root))) c.own)",
+    "                (Option.some reg))",
+    "              (Eq",
+    "                (Flock.Registered.opensLeaf reg",
+    "                  (Claims.Sampling.bytes",
+    "                    (FlockSoundness.Binding.digBytes",
+    "                      (FlockSoundness.Refine.H512",
+    "                        (FlockSoundness.Binding.hm96Input (SamplingDeploy.row c.place c.bits o) (c.salt o)))))",
+    "                  i (Claims.Sampling.bytes (c.π o)))",
+    "                Bool.true)))"
+   ],
+   "assumptions": [],
+   "type_hash": "a0a89acdc1c927024954d4c84f5369b2fa82c728adba155ce30ede4e3cbd0f92"
+  },
+  "Claims.Sampling.Binding_meets_one": {
+   "owner": "@proofs",
+   "signature": [
+    "Claims.Sampling.Binding_meets_one (rel : Flock.Readable.Parsed → Flock.Readable.Relation) (c : SamplingDeploy.Code)",
+    "  (roots : List Claims.Msg) (o : Claims.Sampling.Opening Bool) (root : Claims.Msg) (dom : ByteArray)",
+    "  (hat : Eq (c.at_ roots o.pos) (Option.some { fst := root, snd := 0 })) (hπ : Eq (c.π o) List.nil)",
+    "  (hroot :",
+    "    Eq (Claims.Sampling.bytes root)",
+    "      (Flock.Registered.climb dom",
+    "        (Flock.Registered.rowLeaf dom 0",
+    "          (Claims.Sampling.bytes",
+    "            (FlockSoundness.Binding.digBytes",
+    "              (FlockSoundness.Refine.H512",
+    "                (FlockSoundness.Binding.hm96Input (SamplingDeploy.row c.place c.bits o) (c.salt o))))))",
+    "        0 0 (Claims.Sampling.bytes List.nil)))",
+    "  (hown :",
+    "    Eq c.own",
+    "      (List.cons",
+    "          { name := \"\", value := \"\", root := Claims.Sampling.bytes root, leaves := 1, words := Option.none,",
+    "            wordBits := 16, domain := dom, reads := List.nil.toArray }",
+    "          List.nil).toArray) :",
+    "  Eq (Claims.Sampling.Commitment.Opens Claims.Sampling.sha512Msg (SamplingDeploy.deploy rel c).commit roots o) Bool.true"
+   ],
+   "assumptions": [],
+   "type_hash": "415cf277b2412e0bb8ea83b0706ffd1078c21307af429358fa2df94676ef5d6e"
+  },
+  "Claims.Sampling.BitsLin_fails": {
+   "owner": "@proofs",
+   "signature": [
+    "Claims.Sampling.BitsLin_fails {Coin : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin]",
+    "  (H : Claims.Msg → Claims.Msg) :",
+    "  Exists fun V =>",
+    "    Exists fun Scope =>",
+    "      Exists fun R =>",
+    "        Exists fun E => Exists fun Fe => Exists fun lam => Not (Claims.Sampling.BitsLin H V Scope R E Fe lam)"
+   ],
+   "assumptions": [],
+   "type_hash": "e47885553e8f5fb861ed3c170fa7009becd9e97691bf14e6e64a4ed8e488f828"
+  },
+  "Claims.Sampling.Bits_fails": {
+   "owner": "@proofs",
+   "signature": [
+    "Claims.Sampling.Bits_fails {Coin : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] (H : Claims.Msg → Claims.Msg) :",
+    "  Exists fun D => Not (Claims.Sampling.Bits H D)"
+   ],
+   "assumptions": [],
+   "type_hash": "5a484969c254f12c7e57350d1fc893154c78287185b46ecf3ab11b63e5df1cea"
+  },
+  "Claims.Sampling.Complete_fails": {
+   "owner": "@proofs",
+   "signature": [
+    "Claims.Sampling.Complete_fails {Coin Ω : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] [Nonempty Ω]",
+    "  (P : Claims.Sampling.Wit → Claims.Prover Ω) (δc : Claims.Msg → Real) (x : Claims.Msg) (hδ : Real.instLT.lt (δc x) 1) :",
+    "  Exists fun H => Exists fun D => Not (Claims.Sampling.Complete H D P δc)"
+   ],
+   "assumptions": [],
+   "type_hash": "b97a4439dd19cc817fbd3dc80a91c08e6fab0670e940a4123dbc5ec1970b855f"
+  },
+  "Claims.Sampling.Efficient_fails": {
+   "owner": "@proofs",
+   "signature": [
+    "Claims.Sampling.Efficient_fails {Coin : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin]",
+    "  (H : Claims.Msg → Claims.Msg) : Exists fun z => Exists fun D => Not (Claims.Sampling.Efficient H D 0)"
+   ],
+   "assumptions": [],
+   "type_hash": "e6fee080a0a0fdd851f04b5bc8f495b6adadfaf2c8da896e19119409f50b879c"
+  },
+  "Claims.Sampling.KSCount_fails": {
+   "owner": "@proofs",
+   "signature": [
+    "Claims.Sampling.KSCount_fails {Coin : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin]",
+    "  (H : Claims.Msg → Claims.Msg) : Exists fun D => Not (Claims.Sampling.KSCount H D)"
+   ],
+   "assumptions": [],
+   "type_hash": "0a1d567b0f5f769748e539b68a476ffb10390532c09210c21a31b6e8ab090bb4"
+  },
+  "Claims.Sampling.KSLinOn_fails": {
+   "owner": "@proofs",
+   "signature": [
+    "Claims.Sampling.KSLinOn_fails {Coin : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin]",
+    "  (H : Claims.Msg → Claims.Msg) :",
+    "  Exists fun V =>",
+    "    Exists fun Scope =>",
+    "      Exists fun R =>",
+    "        Exists fun E =>",
+    "          Exists fun κ =>",
+    "            Exists fun γ => Exists fun β => Exists fun Fe => Not (Claims.Sampling.KSLinOn H V Scope R E κ γ β Fe)"
+   ],
+   "assumptions": [],
+   "type_hash": "abebd32213005259fa2754347dd54a59c26cf68bf16f917ef2ba76241d292710"
+  },
+  "Claims.Sampling.KS_fails": {
+   "owner": "@proofs",
+   "signature": [
+    "Claims.Sampling.KS_fails {Coin : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] (H : Claims.Msg → Claims.Msg) :",
+    "  Exists fun D => Not (Claims.Sampling.KS H D)"
+   ],
+   "assumptions": [],
+   "type_hash": "258f4c779d989e5863d431b04195b080e48d24114ed77dd994a20f063820be98"
+  },
+  "Claims.Sampling.Nontrivial_fails": {
+   "owner": "@proofs",
+   "signature": [
+    "Claims.Sampling.Nontrivial_fails {Coin : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin]",
+    "  (H : Claims.Msg → Claims.Msg) : Exists fun D => Exists fun recs => Not (Claims.Sampling.Nontrivial H D recs)"
+   ],
+   "assumptions": [],
+   "type_hash": "74f4375bcaab2b1a82a8e3df9bd89bc188e292ffb5b14e85acc8732557798d2c"
+  },
+  "Claims.Sampling.ScopeMatches_fails": {
+   "owner": "@proofs",
+   "signature": [
+    "Claims.Sampling.ScopeMatches_fails {Coin : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] :",
+    "  Exists fun z => Exists fun D => Not (Claims.Sampling.ScopeMatches D)"
+   ],
+   "assumptions": [],
+   "type_hash": "5a97d2eb7088febc4bde6c6877022207d5e4e30052537ae1254eaa255c5819f4"
+  },
+  "Claims.Sampling.Universal_fails": {
+   "owner": "@proofs",
+   "signature": [
+    "Claims.Sampling.Universal_fails {Coin : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] :",
+    "  Exists fun D => Not (Claims.Sampling.Universal D)"
+   ],
+   "assumptions": [],
+   "type_hash": "b183fd073df66b479bba7eeb3703198469a5b049c28f7a2fa4a9157ba4e5fcd4"
+  },
+  "Claims.Sampling.ZK_fails": {
+   "owner": "@proofs",
+   "signature": [
+    "Claims.Sampling.ZK_fails {Coin N Ω : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] [Fintype N] [Nonempty N]",
+    "  [Fintype Ω] [Nonempty Ω] (H : Claims.Msg → Claims.Msg) (εzk γ : Claims.Msg → Real) (x : Claims.Msg)",
+    "  (hε : Real.instLT.lt (εzk x) 1) :",
+    "  Exists fun D => Exists fun P => Exists fun S => Not (Claims.Sampling.ZK H D P S εzk γ)"
+   ],
+   "assumptions": [],
+   "type_hash": "c9d43b7a56001b14ce7531f53eca6ebae0b44431738191689e103087ecde311a"
+  },
+  "Claims.Sampling.decoder_meets_plain": {
+   "owner": "@proofs",
+   "signature": [
+    "Claims.Sampling.decoder_meets_plain (rel : Flock.Readable.Parsed → Flock.Readable.Relation)",
+    "  (D : Claims.Sampling.Deploy FlockDeploy.Coin (List FlockLevel3.GF128) Claims.Flock.PlainTrace)",
+    "  (hD : Eq D.flock (FlockDeploy.deployPlain rel)) :",
+    "  Claims.Flock.ListWithin D.flock.len D.flock.enc D.flock.θ D.flock.decode"
+   ],
+   "assumptions": [],
+   "type_hash": "3b6d24bdc5b41e2c9ad39f6bd2e33b8759ec3fbf14f72bc788b216400d48a182"
+  },
+  "Claims.Sampling.decoder_meets_zk": {
+   "owner": "@proofs",
+   "signature": [
+    "Claims.Sampling.decoder_meets_zk (rel : Flock.Readable.Parsed → Flock.Readable.Relation)",
+    "  (D : Claims.Sampling.Deploy FlockDeploy.Coin (List FlockLevel3.GF128) Claims.Flock.ZkTrace)",
+    "  (hD : Eq D.flock (FlockDeploy.deployZk rel)) :",
+    "  Claims.Flock.ListWithin D.flock.len D.flock.enc D.flock.θ D.flock.decode"
+   ],
+   "assumptions": [],
+   "type_hash": "cf166287f891663417f8cf853af3518f2019b166d57cfd37ebe81a5864d89c61"
+  },
+  "Claims.Sampling.masked_meets_zk": {
+   "owner": "@proofs",
+   "signature": [
+    "Claims.Sampling.masked_meets_zk (rel : Flock.Readable.Parsed → Flock.Readable.Relation)",
+    "  (D : Claims.Sampling.Deploy FlockDeploy.Coin (List FlockLevel3.GF128) Claims.Flock.ZkTrace)",
+    "  (hD : Eq D.flock (FlockDeploy.deployZk rel)) : Eq D.flock.zk Bool.true"
+   ],
+   "assumptions": [],
+   "type_hash": "bd502b58f795b48c8708eb50525eec087e6cdb98c6d89927dab5439b91f88a61"
+  },
+  "Claims.Sampling.scope_meets": {
+   "owner": "@proofs",
+   "signature": ["Claims.Sampling.scope_meets : Exists fun P => Exists fun s => Claims.Sampling.InScope P s"],
+   "assumptions": [],
+   "type_hash": "1fcd7c9a0265579d8a38c4942be635556fb0e8c0944d603de7c409ca33183ef1"
+  },
+  "Claims.Sampling.universal_meets": {
+   "owner": "@proofs",
+   "signature": [
+    "Claims.Sampling.universal_meets :",
+    "  Exists fun c => Exists fun n => Exists fun x => And (Claims.Sampling.Netlist.Fits c n) (Eq x.length c.nIn)"
+   ],
+   "assumptions": [],
+   "type_hash": "b08360cf751d2b6dd16de075df1216368538d3c6302577877fb8206d4f0b89fc"
+  },
+  "Claims.ScopeMatches_fails": {
+   "owner": "@proofs",
+   "signature": ["Claims.ScopeMatches_fails : Not (Claims.ScopeMatches (fun x => False) fun x => Bool.true)"],
+   "assumptions": [],
+   "type_hash": "1934be0f6ae46d344ff607936771e0bf1e3973703001f050761fb7bf78083c1c"
+  },
+  "Claims.Witness.Recursion.BitsFlock_fails": {
+   "owner": "@proofs",
+   "signature": [
+    "Claims.Witness.Recursion.BitsFlock_fails {Coin : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin]",
+    "  (H : Claims.Msg → Claims.Msg) :",
+    "  Not",
+    "    (Claims.Recursion.BitsFlock H (Claims.Witness.Recursion.ksR Coin) (Claims.Witness.Flock.ksD Coin)",
+    "      (Claims.Witness.Flock.ksD Coin))"
+   ],
+   "assumptions": [],
+   "type_hash": "6975d593a94f68fc949af418e85b7e1aa23a4f7c9dd53aa5f6741a7f7e8af9ea"
+  },
+  "Claims.Witness.Recursion.BitsFlock_meets": {
+   "owner": "@proofs",
+   "signature": [
+    "Claims.Witness.Recursion.BitsFlock_meets (rel : Flock.Readable.Parsed → Flock.Readable.Relation) :",
+    "  And (Claims.Recursion.decOK (FlockDeploy.deployPlain rel) Claims.GS.plainDecodeRD)",
+    "    (Claims.Recursion.decOK (FlockDeploy.deployZk rel) Claims.GS.zkDecodeRD)"
+   ],
+   "assumptions": [],
+   "type_hash": "6afb69b897bceb3bdd88e1855ba6c429314dcecb98e84ae3ea2f6f590deb740c"
+  },
+  "Claims.Witness.Recursion.Bits_fails": {
+   "owner": "@proofs",
+   "signature": [
+    "Claims.Witness.Recursion.Bits_fails {Coin : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin]",
+    "  (H : Claims.Msg → Claims.Msg) :",
+    "  Not",
+    "    (Claims.Recursion.Bits H (Claims.Witness.Recursion.ksR Coin) (Claims.Witness.Recursion.accI Coin)",
+    "      (Claims.Witness.Flock.ksD Coin))"
+   ],
+   "assumptions": [],
+   "type_hash": "41d8e688d92208370a4baf1170ce9c4df35b4c61ee801b56596cdedd0141f68b"
+  },
+  "Claims.Witness.Recursion.Bits_meets": {
+   "owner": "@proofs",
+   "signature": [
+    "Claims.Witness.Recursion.Bits_meets (rel : Flock.Readable.Parsed → Flock.Readable.Relation) :",
+    "  Claims.Recursion.decOK (FlockDeploy.deployZk rel) Claims.GS.zkDecodeRD"
+   ],
+   "assumptions": [],
+   "type_hash": "e4655e7ef0e7d660f42d55e0ba0124101fe461ff107517fe014a4d6f1302e59f"
+  },
+  "Claims.Witness.Recursion.Complete_fails": {
+   "owner": "@proofs",
+   "signature": [
+    "Claims.Witness.Recursion.Complete_fails {Coin : Type} [Fintype Coin] [Inhabited Coin] :",
+    "  Not",
+    "    (Claims.Recursion.Complete Claims.Witness.constH (Claims.Witness.Recursion.compR Coin)",
+    "      (Claims.Witness.Recursion.accI Coin))"
+   ],
+   "assumptions": [],
+   "type_hash": "d46a52e48d7b02dcbbb5ad67c5c998597f9a5f17e0fed809506e1f6c61a74109"
+  },
+  "Claims.Witness.Recursion.Complete_meets": {
+   "owner": "@proofs",
+   "signature": [
+    "Claims.Witness.Recursion.Complete_meets :",
+    "  And (Claims.Recursion.InScope (Claims.Witness.Recursion.denseStmt Bool.false))",
+    "    (And (Claims.Recursion.InScope (Claims.Witness.Recursion.denseStmt Bool.true))",
+    "      (And (Claims.Recursion.InScope (Claims.Witness.Recursion.sparseStmt Bool.false))",
+    "        (Claims.Recursion.InScope (Claims.Witness.Recursion.sparseStmt Bool.true))))"
+   ],
+   "assumptions": [],
+   "type_hash": "0fa0c94d38cd2aa7013c2a2487b6e4890c2b69f192b0bbfae653665fba55f9b2"
+  },
+  "Claims.Witness.Recursion.Complete_meets_deployed": {
+   "owner": "@proofs",
+   "signature": [
+    "Claims.Witness.Recursion.Complete_meets_deployed (IV : Claims.Verifier FlockDeploy.Coin) (ivScope : Claims.Msg → Bool)",
+    "  (b : RecDeploy.Brings) (H : Claims.Msg → Claims.Msg) {x : Claims.Msg} {s : FlockDeploy.Ins} {spec : Flock.SessionSpec}",
+    "  {sts : Array Flock.Stmt} (hin : FlockDeploy.PlainIn (RecDeploy.xIOf x) s spec sts)",
+    "  (hready : Eq (RecDeploy.readyRec b.st H x) Bool.true)",
+    "  (hm :",
+    "    ∀ (j : Nat),",
+    "      instLTNat.lt j (RecDeploy.nS x) →",
+    "        ∀ (s' : RecDeploy.RecIns) (spec' : Flock.SessionSpec) (sts' : Array Flock.Stmt),",
+    "          Eq (RecDeploy.setupO (RecDeploy.staged b.st x (RecDeploy.pick b.st x j) j))",
+    "              (Option.some { fst := s', snd := { fst := spec', snd := sts' } }) →",
+    "            ∀ (t : Flock.Stmt), List.instMembership.mem sts'.toList t → instLENat.le t.m 35)",
+    "  (hn : instLENat.le (RecDeploy.nS x) (instHPow.hPow 2 64)) :",
+    "  And",
+    "    (Real.instLE.le ((RecDeploy.deployRec IV ivScope b).δc H x)",
+    "      (instHDiv.hDiv (instHAdd.hAdd (instHMul.hMul 44 sts.size.cast) (instHMul.hMul 50 (RecDeploy.nS x).cast))",
+    "        (instHPow.hPow 2 128)))",
+    "    (Real.instLT.lt ((RecDeploy.deployRec IV ivScope b).δc H x) 1)"
+   ],
+   "assumptions": [],
+   "type_hash": "4cd51bb478b0bd1d87628a711f80367057d78dcda045a91a9368ee9c099c26cd"
+  },
+  "Claims.Witness.Recursion.Efficient_fails": {
+   "owner": "@proofs",
+   "signature": [
+    "Claims.Witness.Recursion.Efficient_fails {Coin : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin]",
+    "  (H : Claims.Msg → Claims.Msg) :",
+    "  Not",
+    "    (Claims.Recursion.Efficient H (Claims.Witness.Recursion.effR Coin) (Claims.Witness.Recursion.accI Coin)",
+    "      (Claims.Witness.Flock.ksD Coin) fun x => List.cons Unit.unit List.nil)"
+   ],
+   "assumptions": [],
+   "type_hash": "7a104914cb6924c29024322190c40853ebce082b1f7ccbf25c07a2b0e1fd1476"
+  },
+  "Claims.Witness.Recursion.Efficient_meets": {
+   "owner": "@proofs",
+   "signature": [
+    "Claims.Witness.Recursion.Efficient_meets (rel : Flock.Readable.Parsed → Flock.Readable.Relation) :",
+    "  Claims.Recursion.decOK (FlockDeploy.deployZk rel) Claims.GS.zkDecodeRD"
+   ],
+   "assumptions": [],
+   "type_hash": "e4655e7ef0e7d660f42d55e0ba0124101fe461ff107517fe014a4d6f1302e59f"
+  },
+  "Claims.Witness.Recursion.Inner.KSAbort_fails": {
+   "owner": "@proofs",
+   "signature": [
+    "Claims.Witness.Recursion.Inner.KSAbort_fails {Coin : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin]",
+    "  (H : Claims.Msg → Claims.Msg) : Not (Claims.Recursion.Inner.KSAbort H (Claims.Witness.Recursion.noI Coin))"
+   ],
+   "assumptions": [],
+   "type_hash": "b2f9e415ec474230daeb042d23ed94a64ce03968b2b9f029e3ae8b90545a3f44"
+  },
+  "Claims.Witness.Recursion.Inner.KSAbort_meets": {
+   "owner": "@proofs",
+   "signature": [
+    "Claims.Witness.Recursion.Inner.KSAbort_meets (rel : Flock.Readable.Parsed → Flock.Readable.Relation) :",
+    "  Claims.Recursion.decOK (FlockDeploy.deployPlain rel) Claims.GS.plainDecodeRD"
+   ],
+   "assumptions": [],
+   "type_hash": "3428d76d26a41b9769df906e67d3204996cb5d716c1cc06a05fb84453a6749a4"
+  },
+  "Claims.Witness.Recursion.Inner.KS_fails": {
+   "owner": "@proofs",
+   "signature": [
+    "Claims.Witness.Recursion.Inner.KS_fails {Coin : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin]",
+    "  (H : Claims.Msg → Claims.Msg) : Not (Claims.Recursion.Inner.KS H (Claims.Witness.Recursion.noI Coin))"
+   ],
+   "assumptions": [],
+   "type_hash": "1d932cf0a946026a5ce2fd9f391520e9088d9c5bab8f541296cdd9f6db7b71d1"
+  },
+  "Claims.Witness.Recursion.Inner.KS_meets": {
+   "owner": "@proofs",
+   "signature": [
+    "Claims.Witness.Recursion.Inner.KS_meets (rel : Flock.Readable.Parsed → Flock.Readable.Relation) :",
+    "  Claims.Recursion.decOK (FlockDeploy.deployPlain rel) Claims.GS.plainDecodeRD"
+   ],
+   "assumptions": [],
+   "type_hash": "3428d76d26a41b9769df906e67d3204996cb5d716c1cc06a05fb84453a6749a4"
+  },
+  "Claims.Witness.Recursion.KSFlock_fails": {
+   "owner": "@proofs",
+   "signature": [
+    "Claims.Witness.Recursion.KSFlock_fails {Coin : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin]",
+    "  (H : Claims.Msg → Claims.Msg) :",
+    "  Not",
+    "    (Claims.Recursion.KSFlock H (Claims.Witness.Recursion.ksR Coin) (Claims.Witness.Flock.ksD Coin)",
+    "      (Claims.Witness.Flock.ksD Coin))"
+   ],
+   "assumptions": [],
+   "type_hash": "1c0ea503e8c8bf39352247093d0a6ce6be423294691c522b9325035720bce78d"
+  },
+  "Claims.Witness.Recursion.KSFlock_meets": {
+   "owner": "@proofs",
+   "signature": [
+    "Claims.Witness.Recursion.KSFlock_meets (rel : Flock.Readable.Parsed → Flock.Readable.Relation) :",
+    "  And (Claims.Recursion.decOK (FlockDeploy.deployPlain rel) Claims.GS.plainDecodeRD)",
+    "    (Claims.Recursion.decOK (FlockDeploy.deployZk rel) Claims.GS.zkDecodeRD)"
+   ],
+   "assumptions": [],
+   "type_hash": "6afb69b897bceb3bdd88e1855ba6c429314dcecb98e84ae3ea2f6f590deb740c"
+  },
+  "Claims.Witness.Recursion.KSPriv_fails": {
+   "owner": "@proofs",
+   "signature": [
+    "Claims.Witness.Recursion.KSPriv_fails {Coin : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin]",
+    "  (H : Claims.Msg → Claims.Msg) :",
+    "  Not",
+    "    (Claims.Recursion.KSPriv H (Claims.Witness.Recursion.ksR Coin) (Claims.Witness.Recursion.accI Coin)",
+    "      (Claims.Witness.Flock.ksD Coin))"
+   ],
+   "assumptions": [],
+   "type_hash": "fab36afedde5034703b785e4ad44f95fc4d922d8d476f879fc3f81dc45b6c3a3"
+  },
+  "Claims.Witness.Recursion.KSPriv_meets": {
+   "owner": "@proofs",
+   "signature": [
+    "Claims.Witness.Recursion.KSPriv_meets (rel : Flock.Readable.Parsed → Flock.Readable.Relation) :",
+    "  Claims.Recursion.decOK (FlockDeploy.deployZk rel) Claims.GS.zkDecodeRD"
+   ],
+   "assumptions": [],
+   "type_hash": "e4655e7ef0e7d660f42d55e0ba0124101fe461ff107517fe014a4d6f1302e59f"
+  },
+  "Claims.Witness.Recursion.KS_fails": {
+   "owner": "@proofs",
+   "signature": [
+    "Claims.Witness.Recursion.KS_fails {Coin : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin]",
+    "  (H : Claims.Msg → Claims.Msg) :",
+    "  Not",
+    "    (Claims.Recursion.KS H (Claims.Witness.Recursion.ksR Coin) (Claims.Witness.Recursion.accI Coin)",
+    "      (Claims.Witness.Flock.ksD Coin))"
+   ],
+   "assumptions": [],
+   "type_hash": "b0911ea26db86625b2f87acc124a89da8ef454c65e180f85cc5ffb46ebc8cbdf"
+  },
+  "Claims.Witness.Recursion.KS_meets": {
+   "owner": "@proofs",
+   "signature": [
+    "Claims.Witness.Recursion.KS_meets (rel : Flock.Readable.Parsed → Flock.Readable.Relation) :",
+    "  Claims.Recursion.decOK (FlockDeploy.deployZk rel) Claims.GS.zkDecodeRD"
+   ],
+   "assumptions": [],
+   "type_hash": "e4655e7ef0e7d660f42d55e0ba0124101fe461ff107517fe014a4d6f1302e59f"
+  },
+  "Claims.Witness.Recursion.Nontrivial_fails": {
+   "owner": "@proofs",
+   "signature": [
+    "Claims.Witness.Recursion.Nontrivial_fails {Coin : Type} [Inhabited Coin] (H : Claims.Msg → Claims.Msg) :",
+    "  Not",
+    "    (Claims.Recursion.Nontrivial H (Claims.Witness.Recursion.compR Coin)",
+    "      (List.cons { x := List.nil, as := List.nil, r := fun x => inst✝.default } List.nil))"
+   ],
+   "assumptions": [],
+   "type_hash": "1da765e87f1bbeca9341debfa39843d3d0f98a4426bc0ecc714945c909a737b8"
+  },
+  "Claims.Witness.Recursion.Nontrivial_meets": {
+   "owner": "@proofs",
+   "signature": [
+    "Claims.Witness.Recursion.Nontrivial_meets :",
+    "  And (Claims.Recursion.InScope (Claims.Witness.Recursion.denseStmt Bool.false))",
+    "    (And (Claims.Recursion.InScope (Claims.Witness.Recursion.denseStmt Bool.true))",
+    "      (And (Claims.Recursion.InScope (Claims.Witness.Recursion.sparseStmt Bool.false))",
+    "        (Claims.Recursion.InScope (Claims.Witness.Recursion.sparseStmt Bool.true))))"
+   ],
+   "assumptions": [],
+   "type_hash": "0fa0c94d38cd2aa7013c2a2487b6e4890c2b69f192b0bbfae653665fba55f9b2"
+  },
+  "Claims.Witness.Recursion.ScopeMatches_fails": {
+   "owner": "@proofs",
+   "signature": [
+    "Claims.Witness.Recursion.ScopeMatches_fails {Coin : Type} :",
+    "  Not (Claims.Recursion.ScopeMatches (Claims.Witness.Recursion.ksR Coin) (Claims.Witness.Recursion.accI Coin))"
+   ],
+   "assumptions": [],
+   "type_hash": "74ffa3021f801e695f345adfd061851df99e61892a50789e7960859b075dd948"
+  },
+  "Claims.Witness.Recursion.ScopeMatches_meets": {
+   "owner": "@proofs",
+   "signature": [
+    "Claims.Witness.Recursion.ScopeMatches_meets (rel : Flock.Readable.Parsed → Flock.Readable.Relation) :",
+    "  Claims.Flock.ScopeMatches (FlockDeploy.deployPlain rel)"
+   ],
+   "assumptions": [],
+   "type_hash": "28802eaa97b3fac8feb7b1807cb67fc8e9da0c3319193ecc96e51d75fb36e780"
+  },
+  "Claims.Witness.Recursion.ZKPriv_fails": {
+   "owner": "@proofs",
+   "signature": [
+    "Claims.Witness.Recursion.ZKPriv_fails {Coin N Ω : Type} [Fintype N] [Nonempty N] [Fintype Ω] [Nonempty Ω]",
+    "  (H : Claims.Msg → Claims.Msg) (SO : Nat → Claims.Msg → Nat → Claims.Recursion.OSim) :",
+    "  Not",
+    "    (Claims.Recursion.ZKPriv H (Claims.Witness.Recursion.zkPR Coin) (Claims.Witness.Recursion.zeroI Coin)",
+    "      (Claims.Witness.Recursion.zkO Coin) (fun x => Claims.ZKMal.quietP N Ω List.nil) SO)"
+   ],
+   "assumptions": [],
+   "type_hash": "fcc5a30350d951e70a6e9eab2b64c99c1051a86ebb8f93319014af2be7f3809f"
+  },
+  "Claims.Witness.Recursion.ZKPriv_meets": {
+   "owner": "@proofs",
+   "signature": [
+    "Claims.Witness.Recursion.ZKPriv_meets (rel : Flock.Readable.Parsed → Flock.Readable.Relation) :",
+    "  Eq (FlockDeploy.deployZk rel).zk Bool.true"
+   ],
+   "assumptions": [],
+   "type_hash": "c9aee9249a386b4232cc2e4430bafa74c02dd818197685ebfd898a3ef2d4c60e"
+  },
+  "Claims.Witness.Recursion.ZK_fails": {
+   "owner": "@proofs",
+   "signature": [
+    "Claims.Witness.Recursion.ZK_fails {Coin N Ω : Type} [Fintype N] [Nonempty N] [Fintype Ω] [Nonempty Ω]",
+    "  (H : Claims.Msg → Claims.Msg) (SO : Nat → Claims.Msg → Nat → Claims.Recursion.OSim) :",
+    "  Not",
+    "    (Claims.Recursion.ZK H (Claims.Witness.Recursion.zkR Coin) (Claims.Witness.Recursion.zeroI Coin)",
+    "      (Claims.Witness.Recursion.zkO Coin) (fun x => Claims.ZKMal.quietP N Ω List.nil) SO)"
+   ],
+   "assumptions": [],
+   "type_hash": "646b5d39058bf198c0b1b0b002bbd59d4dd04700375d5a1ca16d6b81c61f86a0"
+  },
+  "Claims.Witness.Recursion.ZK_meets": {
+   "owner": "@proofs",
+   "signature": [
+    "Claims.Witness.Recursion.ZK_meets (rel : Flock.Readable.Parsed → Flock.Readable.Relation) :",
+    "  Eq (FlockDeploy.deployZk rel).zk Bool.true"
+   ],
+   "assumptions": [],
+   "type_hash": "c9aee9249a386b4232cc2e4430bafa74c02dd818197685ebfd898a3ef2d4c60e"
+  },
+  "Claims.ZKmalR_fails": {
+   "owner": "@proofs",
+   "signature": [
+    "Claims.ZKmalR_fails {N Ω : Type} [Fintype N] [Nonempty N] [Fintype Ω] [Nonempty Ω] (H : Claims.Msg → Claims.Msg)",
+    "  (εzk γ : Claims.Msg → Real) (x : Claims.Msg) (hε : Real.instLT.lt (εzk x) 1) :",
+    "  Exists fun P => Exists fun S => Not (Claims.ZKmalR H (fun x => 1) P (fun x x_1 => True) S εzk γ)"
+   ],
+   "assumptions": [],
+   "type_hash": "186029323a95571ffc1885099305b7bedfb3432f1068675d2dd416e9bd0a90a6"
   },
   "Flock.SecurityProofs.ClaimsStated": {
    "owner": "@proofs",
@@ -4059,6 +5072,12 @@
    "assumptions": [],
    "type_hash": "e68eb3b88c65d2f37e9f5f41402a589d574ad22ab95867ac9f47a796660fcbbe"
   },
+  "Hash.SecurityProofs.Stated": {
+   "owner": "@hash",
+   "signature": ["Hash.SecurityProofs.Stated : Hash.Guarantees.Stated"],
+   "assumptions": [],
+   "type_hash": "f2427bb0d064a77600f917fdfb62cfe489cbcb68556322ce1d0ecea2380f62c5"
+  },
   "Nci.SecurityProofs.FullPositions": {
    "owner": "@lean",
    "signature": ["Nci.SecurityProofs.FullPositions : Nci.Guarantees.FullPositions"],
@@ -4539,6 +5558,12 @@
    "signature": ["Pouw.SecurityProofs.EndToEnd : Pouw.Guarantees.EndToEnd"],
    "assumptions": [],
    "type_hash": "5285cb8cbec9dd6a634d4653607b825be7d9eea4c260b93e29cb3fad67b09cee"
+  },
+  "Pouw.SecurityProofs.Eps1.ClassPSlots": {
+   "owner": "@compute-accounting",
+   "signature": ["Pouw.SecurityProofs.Eps1.ClassPSlots : Pouw.Guarantees.Eps1.ClassPSlots"],
+   "assumptions": [],
+   "type_hash": "1dd2b9b43f48e1ad9ca309ed0b523c70dc046a7df3e3e63bda5e4e126a4d5ef4"
   },
   "Pouw.SecurityProofs.Eps1.WordLocalGeneral": {
    "owner": "@compute-accounting",
@@ -5405,11 +6430,25 @@
    "assumptions": [],
    "type_hash": "df345e2612752aa9ec8b5e914373440a3144dee1268a1312a57876723def0d9a"
   },
+  "Pouw.SecurityProofs.Receipt.DuoPairAtStateNotInjective": {
+   "owner": "@compute-accounting",
+   "signature": [
+    "Pouw.SecurityProofs.Receipt.DuoPairAtStateNotInjective : Pouw.Guarantees.Receipt.DuoPairAtStateNotInjective"
+   ],
+   "assumptions": [],
+   "type_hash": "574b570981922872c2779a182e07ef3ece74b49100d22f41f189290113baeb14"
+  },
   "Pouw.SecurityProofs.Receipt.DuoPairNoKernel": {
    "owner": "@compute-accounting",
    "signature": ["Pouw.SecurityProofs.Receipt.DuoPairNoKernel : Pouw.Guarantees.Receipt.DuoPairNoKernel"],
    "assumptions": [],
    "type_hash": "66ead21683656113cf926808d76850f0e2838d9d8254b0aa9e5e1a4086ad9ddc"
+  },
+  "Pouw.SecurityProofs.Receipt.DuoPairXorNoKernel": {
+   "owner": "@compute-accounting",
+   "signature": ["Pouw.SecurityProofs.Receipt.DuoPairXorNoKernel : Pouw.Guarantees.Receipt.DuoPairXorNoKernel"],
+   "assumptions": [],
+   "type_hash": "c75a298b38c602b2a4d672f00d86e565fad0f8e5016c256ac0c8f5d58bba009f"
   },
   "Pouw.SecurityProofs.Receipt.DuoQuadNoKernel": {
    "owner": "@compute-accounting",
@@ -5422,6 +6461,14 @@
    "signature": ["Pouw.SecurityProofs.Receipt.DuoReceiptNotInjective : Pouw.Guarantees.Receipt.DuoReceiptNotInjective"],
    "assumptions": [],
    "type_hash": "0eef8a8219c603404d51a23bf68d8b863d5db41699d9dd93467b160bd5b683bd"
+  },
+  "Pouw.SecurityProofs.Receipt.DuoRunAtStateNotInjective": {
+   "owner": "@compute-accounting",
+   "signature": [
+    "Pouw.SecurityProofs.Receipt.DuoRunAtStateNotInjective : Pouw.Guarantees.Receipt.DuoRunAtStateNotInjective"
+   ],
+   "assumptions": [],
+   "type_hash": "092d7bbd8d65a070e558e0195332421103ab2a0e5c10e9fdd7c319bf0e8df77b"
   },
   "Pouw.SecurityProofs.Receipt.DuoRunWordInjective": {
    "owner": "@compute-accounting",
@@ -5464,6 +6511,12 @@
    "signature": ["Pouw.SecurityProofs.Receipt.Fx1PairNoKernel : Pouw.Guarantees.Receipt.Fx1PairNoKernel"],
    "assumptions": [],
    "type_hash": "34825d055a5feb43636a9aeb0fb8c67a8f3aa46853d57f4d0748c0466d022587"
+  },
+  "Pouw.SecurityProofs.Receipt.Fx1PairXorNoKernel": {
+   "owner": "@compute-accounting",
+   "signature": ["Pouw.SecurityProofs.Receipt.Fx1PairXorNoKernel : Pouw.Guarantees.Receipt.Fx1PairXorNoKernel"],
+   "assumptions": [],
+   "type_hash": "c59f4c0f75a807c127ebddc6d5ae728828c440d1bf5f35ce993a9d75b70aaa8a"
   },
   "Pouw.SecurityProofs.Receipt.Fx1QuadNoKernel": {
    "owner": "@compute-accounting",
@@ -5816,6 +6869,38 @@
    },
    "Pouw.SecurityProofs.Receipt.DuoLongRunKernel": {
     "function": "Pouw.Receipt.duoRun",
+    "outcome": "none"
+   },
+   "Pouw.SecurityProofs.Receipt.DuoRunAtStateNotInjective": {
+    "function": "Pouw.Receipt.duoRun",
+    "outcome": "none"
+   },
+   "Accounting.SecurityProofs.TS.LiLowBit": {
+    "function": "Pouw.Receipt.liChain",
+    "outcome": "none"
+   },
+   "Accounting.SecurityProofs.CoinFlow.ViewIndependent": {
+    "function": "Accounting.CoinFlow.Program.admits",
+    "outcome": "accept"
+   },
+   "Accounting.SecurityProofs.CoinFlow.CoinsThroughNoise": {
+    "function": "Accounting.CoinFlow.Program.admits",
+    "outcome": "accept"
+   },
+   "Accounting.SecurityProofs.CoinFlow.OneReader": {
+    "function": "Accounting.CoinFlow.Program.admits",
+    "outcome": "accept"
+   },
+   "Accounting.SecurityProofs.CoinFlow.PointMass": {
+    "function": "Accounting.CoinFlow.Program.admits",
+    "outcome": "accept"
+   },
+   "Pouw.SecurityProofs.Receipt.DuoPairXorNoKernel": {
+    "function": ["Pouw.Receipt.stateSpread", "Pouw.Receipt.duoPair"],
+    "outcome": "none"
+   },
+   "Pouw.SecurityProofs.Receipt.Fx1PairXorNoKernel": {
+    "function": ["Pouw.Receipt.stateSpread", "Pouw.Receipt.fx1Pair"],
     "outcome": "none"
    }
   },
@@ -6281,7 +7366,7 @@
    "Accounting.SecurityProofs.RemoteSessionConservationSketch": "frozen (no-function,hash): It composes the verbatim-sector tensor-sketch rank bound at every candidate pass with a causal session's pooled draws; the one shared store and every device read, link sector, rebuild and correct receipt are explicit, but the random-oracle game is not the rate audit's code.",
    "Accounting.SecurityProofs.RemoteSessionConservationSketchDeployed": "frozen (no-function,hash): It is Accounting.SecurityProofs.RemoteSessionConservationSketchSum at the deployed 16-row, 4 KiB-tile and draw parameters, with the two draw terms bounded by 2^-40 and each pass's grinding candidates' queries priced once by the named per-pass hash budget (Accounting.Assumptions.SketchHashBudget): its query term (n P) qtot/2^96 stays explicit, non-vacuous at the measured caps where the product form's was 2^14.",
    "Flock.SecurityProofs.ClaimsStated": "frozen (no-function): It states no property of the verifier: it reads each claim of Security/Definitions/Claims.lean, so the lock records their text, and a claim leaves it when a guarantee states that claim at the deployed verifier.",
-   "Flock.SecurityProofs.RecursionClaimsStated": "frozen (no-function): It states no property of the compiled verifier: it reads each claim of Security/Definitions/Claims/Recursion.lean, so the lock records their text, and a claim leaves it when a guarantee states that claim at the deployed compiled verifier.",
+   "Flock.SecurityProofs.RecursionClaimsStated": "frozen (no-function): It states no property of the verifier: it reads each claim of Security/Definitions/Claims/Recursion.lean, so the lock records their text, and a claim leaves it when a guarantee states that claim at the deployed compiled verifier.",
    "Accounting.SecurityProofs.PouwLocalOff": "frozen (conjecture,no-function,world-unlisted): It is stated over arbitrary strategies (maps from the verifier's coins to Accounting.Actual.Run) and an abstract verdict (Accounting.PouwWork.Verdict, its acceptance a field) rather than a function's acceptance, and it rests on the named open conjecture A3 (Accounting.Assumptions.PouwFloorOff, Security/Models/Accounting/Assumptions/PouwFloor.lean: on paper at L = 32 given a merge price, conjectured at served eta, claimed only at removable markings), a hypothesis that is not on the premises list until shape.conjectures lists it with a falsification test; its other premises, A2, A2b and A5 at 0 (PouwDetection, PouwLuck, PouwHelpBound), are.",
    "Pouw.SecurityProofs.RelativeSecurity.TheoremSStaged": "frozen (no-function): It is a theorem about every staged spot-check play (StagedPlay, its game's acceptance and deficiency) over any finite cells and bits and any ring, not about a Lean function: the service's staged check has no Lean code yet, and once it has, this is restated as that check's property.",
    "Pouw.SecurityProofs.RelativeSecurity.StagedFloorK": "frozen (no-function,world-unlisted,scope): It is stated over an arbitrary Machine and Service and an analysis map (RunMap), not the service's code, and takes three premises about that map: ServiceSoundStaged (live coins, and the proof layer's binding and zero knowledge, with the seed identified with the staged window's coins), KScopeAffine (Theorem K's proved affine scope: products of bit-affine operands, mixed included, row-pure, and E3, which no check of the service refuses a run outside of) and ChargeVF3j16 (the active vector VF3j-16's prices with B_theta complete, for stages that don't overlap). It is a sibling of StagedFloorKOneSided, a floor of record (Daniel, decision 53), proved on its own scope at the luck 3/4: the affine scope isn't inside the one-sided one; K1 is not claimed outside the two proved scopes.",
@@ -6380,7 +7465,23 @@
    "Accounting.SecurityProofs.TS.SegmentSteer": "lemma: the segment bound, zeroing Z saves at most |Z|/a segments when every noise-active segment holds at least a noise-active coordinates; counting over a definition.",
    "Accounting.SecurityProofs.TS.AdaptSteerFail": "lemma: under E1(b)'s accounting LIN-STEER fails for every segmented consumer with fewer noise-active segments than noise-active coordinates; counting over a definition.",
    "Accounting.SecurityProofs.TS.SteerUnion": "lemma: the steering union bound |K| C(G, n) mu^n over any coins, configurations fixed before sigma and per-segment fresh noise of point mass at most mu (a hypothesis); not a property of a Lean function.",
-   "Accounting.SecurityProofs.TS.GrindUnion": "lemma: the grinding bound T C(G, n) mu^n over any coins, T fresh seeds in the random-oracle model and per-segment noise of point mass at most mu, each query's target independent of its own seed (hypotheses); not a property of a Lean function."
+   "Accounting.SecurityProofs.TS.GrindUnion": "lemma: the grinding bound T C(G, n) mu^n over any coins, T fresh seeds in the random-oracle model and per-segment noise of point mass at most mu, each query's target independent of its own seed (hypotheses); not a property of a Lean function.",
+   "Pouw.SecurityProofs.Eps1.ClassPSlots": "frozen (no-function): Theorem C's count of EPS1-QSTAR over issue slots, over every class-P M3 program with its writers' creations a parameter (w), not a Lean function.",
+   "Pouw.SecurityProofs.Receipt.DuoPairAtStateNotInjective": "lemma: the counterexample to two words' binding at a state (two word pairs, one full state at the served chain 0's first two words' keys); a statement about one concrete run, not a property of a Lean function.",
+   "Accounting.SecurityProofs.TS.ExchangeTail": "lemma: the Chernoff tail M e^{-theta pi} of a gain whose exponential moment at rate theta is at most M (a hypothesis), one query; not a property of a Lean function.",
+   "Accounting.SecurityProofs.TS.GrindTail": "lemma: the union T tau over T random-oracle queries, each query's bad event of probability at most tau over its own answer with every other answer fixed (a hypothesis); not a property of a Lean function.",
+   "Accounting.SecurityProofs.TS.GrindPremium": "lemma: the grinding premium T M e^{-theta pi} + delta_b over T random-oracle queries, each query's gain of moment at most M over its own answer (a hypothesis), the commitment's binding break delta_b a parameter; not a property of a Lean function.",
+   "Accounting.SecurityProofs.TS.GrindPremiumAt": "lemma: GrindPremium at pi* = ln(T M / delta) / theta, the premium priced into epsilon outside delta + delta_b; not a property of a Lean function.",
+   "Accounting.SecurityProofs.TS.GrindMass": "lemma: the expectation form, the T queries' exponential moments summing to at most T M in mean under GrindPremium's per-query moment (a hypothesis); not a property of a Lean function.",
+   "Accounting.SecurityProofs.TS.LuckMoment": "lemma: one unit's exponential moment p e^{theta w} + (1 - p) e^{-kappa theta w} at exchange rate kappa, its luck at most p (a hypothesis); not a property of a Lean function.",
+   "Accounting.SecurityProofs.TS.PrivateMoment": "lemma: exponential moments multiply over private coins whatever the shared ones (Fubini), each bound a hypothesis; not a property of a Lean function.",
+   "Accounting.SecurityProofs.TS.TileLuck": "lemma: the deployed tile's exponential moment at most M, n columns sharing coins and r units a column, each unit's dead mass q and alive luck p hypotheses (AM-GM over the columns and over each column's units); not a property of a Lean function.",
+   "Accounting.SecurityProofs.TS.TemplateCondition": "lemma: h1tile's segment (32 columns, words of at most 32 skipped products, a one-bit dither) meets TileLuck's condition with M = 1 at κ = 4 and r·θ = 1/256, from elementary bounds on exp; not a property of a Lean function.",
+   "Accounting.SecurityProofs.TS.TemplateMoment": "lemma: TileLuck at h1tile's segment, the gain's moment at most 1 at θ = 1/(256·r) a product and κ = 4; not a property of a Lean function.",
+   "Accounting.SecurityProofs.TS.OneRegisterLowBit": "lemma: the barrier to a lower bound read off a fold's low bit, over every one-register fold of binding steps (a definition) whose steps' bit 0 is a function of the state's and the word's bits 0 (a hypothesis): the run's bit 0 is a parity of its words' bits 0; not a property of a Lean function.",
+   "Hash.Guarantees.TreeBinding": "unstated: statement first (Daniel, 17 Oct), restated to the served frame node after the red team (note:hash/20261018T0846Z-finding-redteam-2474, T1-T3) and recorded through Hash.SecurityProofs.Stated; next a card to Daniel, then the proof, Hash.SecurityProofs.TreeBinding in Security/Proofs/Hash/, which the lock then lists under guarantees",
+   "Hash.Guarantees.RowBinding": "unstated: statement first (Daniel, 17 Oct), the statement the red team found missing (note:hash/20261018T0846Z-finding-redteam-2474, T4), recorded through Hash.SecurityProofs.Stated; next its red team, a card to Daniel, then the proof, Hash.SecurityProofs.RowBinding in Security/Proofs/Hash/, which the lock then lists under guarantees",
+   "Hash.SecurityProofs.Stated": "frozen (no-function): It states no property of the verifier: it reads the hash area's statements (Hash.Guarantees.RowBinding, Hash.Guarantees.TreeBinding), so the lock records their text, and a statement leaves it when its own proof is listed."
   },
   "conjectures": {
    "Nci.Assumptions.ActivationsIncompressible": {
@@ -6738,6 +7839,37 @@
     "Accounting.SecurityProofs.StackedRequirementSketchDeployed",
     "Accounting.SecurityProofs.StackedSessionConservationRelay",
     "Accounting.SecurityProofs.StackedSessionConservationSketchDeployed"
+   ]
+  },
+  "Definitions.Accounting.CoinFlow": {
+   "digest": "d92058d46cc0cbd1aab092b6fc14252a58e7426340341c403c62f2e94ee9ad66",
+   "definitions": {
+    "Accounting.CoinFlow.Program": "4681b9ef2d5bb5ed9f7a8248b1d51b8358d81e324c63f85f793ae1f5ff9ad34b",
+    "Accounting.CoinFlow.Program.CoinFlowRule": "d9d025fa956f933c362a83c181e2dac5ea3a72ea4d23bbbe319fae0374a8e30a",
+    "Accounting.CoinFlow.Program.Desc": "1a2e96c393b733ce878dc57aa1871589f041a0f8fd81b97ccb4d45e1526559ed",
+    "Accounting.CoinFlow.Program.OneUse": "9627220bf10b73ca5e463bd500711eb2fb0f37d0e9cd21ffeb9025a0b32ed108",
+    "Accounting.CoinFlow.Program.SinkConfined": "ca71ce2ddeea4da132d5a9514d768f764b3d07404e779a5ba3db5871dff42d26",
+    "Accounting.CoinFlow.Program.Topological": "a2c1e3bb6d3f8b333509d02288704e1d44cb4f7967bc317f955482e977631e0a",
+    "Accounting.CoinFlow.Program.View": "b0182cdaa18dd7a1ae21024e91e01e4766d44a64e22d947cee1dd2d7177638e1",
+    "Accounting.CoinFlow.Program.admits": "7f1c2326538d67bfdbb3cc62d019527f9a71e37f5b869d34377f3378131763a0",
+    "Accounting.CoinFlow.Program.coins": "a6f042fe78d33dd0e9e84f5eb92cc0171b3fdbd2d5eb2b3317b20bd57610fedc",
+    "Accounting.CoinFlow.Program.eval": "2775759411bd914fe04150b2c2612cd9ec0baa338f9729501cc3913cea56647c",
+    "Accounting.CoinFlow.Program.fold": "241c37c883c86293fecd9da9141bac9d7b442fafb7b0de441823dc1e94fa5066",
+    "Accounting.CoinFlow.Program.instDecidableCoinFlowRule": "7b23d297063f2616084d702b27ec95621265e236b33c183b825403b859c1b773",
+    "Accounting.CoinFlow.Program.instDecidableOneUse": "e89971d0418c00f0ac987172d5e3f24551564b14f500ed7d5f11766743ed92ce",
+    "Accounting.CoinFlow.Program.instDecidableSinkConfined": "89c6b5749cdb09c529d6faee2eb121a57abeed69d17bdbe7a3be614d642b8419",
+    "Accounting.CoinFlow.Program.instDecidableTopological": "6f3fdb3671ac78effaa76c3c5c14c4ef34c1f717153a17ad42703d2d8e5895e0",
+    "Accounting.CoinFlow.Program.noise": "8e9c216f50c8333899b7be7fa66f28a3610307bcb3bd95031114f29cc0eaae52",
+    "Accounting.CoinFlow.Program.noiseCoins": "2fb184b19832590284924a5decbba2ae6c79949fbc692335bba60a81320ce58f",
+    "Accounting.CoinFlow.Program.op": "aacd9ef2e6f27d1ddef23f9ddd7ffcadbe26fcc79c5810d62beb81a99d603d3d",
+    "Accounting.CoinFlow.Program.reads": "05d5f2584705737f08b2a85201da53cb1f1a207fbf0e085d3f1f65129e8946b4",
+    "Accounting.CoinFlow.Program.view": "f299b57bd927515e8ae6e1fc5370f4bb8e948649e2386bdfe8d451ad9ef72c1a"
+   },
+   "guarantees": [
+    "Accounting.SecurityProofs.CoinFlow.CoinsThroughNoise",
+    "Accounting.SecurityProofs.CoinFlow.OneReader",
+    "Accounting.SecurityProofs.CoinFlow.PointMass",
+    "Accounting.SecurityProofs.CoinFlow.ViewIndependent"
    ]
   },
   "Definitions.Accounting.Confidence": {
@@ -7265,6 +8397,7 @@
     "Accounting.HMu.persist": "d25d873c34651c851b94e9e79a1e17865fcdba8cd0aea86da832ab0037f776ad"
    },
    "guarantees": [
+    "Accounting.SecurityProofs.CoinFlow.PointMass",
     "Accounting.SecurityProofs.HMu.CoinPointMass",
     "Accounting.SecurityProofs.HMu.CoinPointMassHalf",
     "Accounting.SecurityProofs.HMu.LemmaB",
@@ -8188,7 +9321,7 @@
     "Accounting.TS.BindingStep": "c22e666b1e4035abf15886dbdf99fd2528959877bc5022d77ed9b57cb5c62c1c",
     "Accounting.TS.foldRun": "f3251505eafd31ec02c542ba34556238befd8a20f0add7a0c12e73f148c511d0"
    },
-   "guarantees": ["Accounting.SecurityProofs.TS.FoldFanIn"]
+   "guarantees": ["Accounting.SecurityProofs.TS.FoldFanIn", "Accounting.SecurityProofs.TS.OneRegisterLowBit"]
   },
   "Definitions.Accounting.TS.Machine": {
    "digest": "14155d8d7579d0f76acfc5d2bfe15eb21dd222a817df9da2cd141ded2c31c6f0",
@@ -8858,9 +9991,74 @@
     "Claims.waitAcc": "85b751a4e882d0ce61736041f2349297297bc4eb996b472d6a6191513053bca7"
    },
    "guarantees": [
+    "Claims.Bits_fails",
+    "Claims.Complete_fails",
+    "Claims.Flock.Bits_fails",
+    "Claims.Flock.Complete_fails",
+    "Claims.Flock.Efficient_fails",
+    "Claims.Flock.KS_fails",
+    "Claims.Flock.Nontrivial_fails",
+    "Claims.Flock.ScopeMatches_fails",
+    "Claims.Flock.ZK_fails",
+    "Claims.Flock.decoder_meets_plain",
+    "Claims.Flock.decoder_meets_zk",
+    "Claims.Flock.masked_meets_zk",
+    "Claims.Flock.scope_meets_plain",
+    "Claims.Flock.scope_meets_zk",
+    "Claims.KSLin_fails",
+    "Claims.KS_fails",
+    "Claims.Nontrivial_fails",
+    "Claims.Sampling.Binding_fails",
+    "Claims.Sampling.Binding_meets",
+    "Claims.Sampling.Binding_meets_one",
+    "Claims.Sampling.BitsLin_fails",
+    "Claims.Sampling.Bits_fails",
+    "Claims.Sampling.Complete_fails",
+    "Claims.Sampling.Efficient_fails",
+    "Claims.Sampling.KSCount_fails",
+    "Claims.Sampling.KSLinOn_fails",
+    "Claims.Sampling.KS_fails",
+    "Claims.Sampling.Nontrivial_fails",
+    "Claims.Sampling.ScopeMatches_fails",
+    "Claims.Sampling.Universal_fails",
+    "Claims.Sampling.ZK_fails",
+    "Claims.Sampling.decoder_meets_plain",
+    "Claims.Sampling.decoder_meets_zk",
+    "Claims.Sampling.masked_meets_zk",
+    "Claims.Sampling.scope_meets",
+    "Claims.ScopeMatches_fails",
+    "Claims.Witness.Recursion.BitsFlock_fails",
+    "Claims.Witness.Recursion.BitsFlock_meets",
+    "Claims.Witness.Recursion.Bits_fails",
+    "Claims.Witness.Recursion.Bits_meets",
+    "Claims.Witness.Recursion.Complete_fails",
+    "Claims.Witness.Recursion.Complete_meets",
+    "Claims.Witness.Recursion.Complete_meets_deployed",
+    "Claims.Witness.Recursion.Efficient_fails",
+    "Claims.Witness.Recursion.Efficient_meets",
+    "Claims.Witness.Recursion.Inner.KSAbort_fails",
+    "Claims.Witness.Recursion.Inner.KSAbort_meets",
+    "Claims.Witness.Recursion.Inner.KS_fails",
+    "Claims.Witness.Recursion.Inner.KS_meets",
+    "Claims.Witness.Recursion.KSFlock_fails",
+    "Claims.Witness.Recursion.KSFlock_meets",
+    "Claims.Witness.Recursion.KSPriv_fails",
+    "Claims.Witness.Recursion.KSPriv_meets",
+    "Claims.Witness.Recursion.KS_fails",
+    "Claims.Witness.Recursion.KS_meets",
+    "Claims.Witness.Recursion.Nontrivial_fails",
+    "Claims.Witness.Recursion.Nontrivial_meets",
+    "Claims.Witness.Recursion.ScopeMatches_fails",
+    "Claims.Witness.Recursion.ScopeMatches_meets",
+    "Claims.Witness.Recursion.ZKPriv_fails",
+    "Claims.Witness.Recursion.ZKPriv_meets",
+    "Claims.Witness.Recursion.ZK_fails",
+    "Claims.Witness.Recursion.ZK_meets",
+    "Claims.ZKmalR_fails",
     "Flock.SecurityProofs.ClaimsStated",
     "Flock.SecurityProofs.RecursionClaimsStated",
-    "Flock.SecurityProofs.SamplingClaimsStated"
+    "Flock.SecurityProofs.SamplingClaimsStated",
+    "Hash.SecurityProofs.Stated"
    ]
   },
   "Definitions.Claims.Hm96": {
@@ -8869,49 +10067,66 @@
     "Claims.Hm96Hiding": "6c8f345d2254fc1cff51121b293ab6364de0ff01476d75d7dddc94df14080cd2",
     "Claims.PrENNReal": "5e884d85245e6c7c79ae257dff1612fbe5d048d84926996eb79d469f11340473"
    },
-   "guarantees": ["Flock.SecurityProofs.ClaimsStated", "Flock.SecurityProofs.RecursionClaimsStated"]
+   "guarantees": [
+    "Claims.Witness.Recursion.ZKPriv_fails",
+    "Claims.Witness.Recursion.ZK_fails",
+    "Flock.SecurityProofs.ClaimsStated",
+    "Flock.SecurityProofs.RecursionClaimsStated"
+   ]
   },
   "Definitions.Claims.Recursion": {
-   "digest": "f4b8712d1e8dbfaaf6c13f562ab824bb96450e31eccd06ecf6213d3f280d8522",
+   "digest": "7e531baa14a83615ddd5deead132b1672bffbff2d1fa798e829be04f13d4303d",
    "definitions": {
     "Claims.Recursion.BAbort": "cc6d1eae158f7e9353eed3e76a1d0be441485fa6b07023915a3bfb5b17d469a6",
     "Claims.Recursion.Be": "144f16201ad772e1f10447efc6a7622c61aa6d25922226b932a9556d5f11051b",
-    "Claims.Recursion.Bits": "8a8dd1e63c47b45cbb5c955be2e52c2582b083746395eb3d806a8d5b53b4b21e",
-    "Claims.Recursion.BitsFlock": "b1fd50bf48827c34b7d6b993ae8354190ca92f191952a8345b5802272b9bc2d7",
-    "Claims.Recursion.Complete": "c477c5845e419390ea97ef55b78d4b3615421fa5a0f986232677e2d9d5aa5aec",
-    "Claims.Recursion.Deploy": "5439f7936ab4da6fcd71c8e628c8d40c24a7721ac6da3e5680392e22e2bdd591",
-    "Claims.Recursion.Deploy.P": "ab68a98b5d3d796eb4f2ce45e75fc2fc61255552d37ed827393b30b42b415744",
-    "Claims.Recursion.Deploy.Tape": "a00352dd357dc4ccb7ebe98d6d6203ae5989c8635ab84ce9481c4301513e7d38",
+    "Claims.Recursion.Bits": "26c98570c70857c8d120a470160d224c44737d3708df5a814b5ec97aeefc4708",
+    "Claims.Recursion.BitsFlock": "10b5e68b72d96c35d7caec8c60b0459ae053a8b0a70dce72e0dae151207ee88c",
+    "Claims.Recursion.Br": "55d227ee78f6203b646ef60f2221f0a6db3eea9e325ac4d8f98ee177be0dc644",
+    "Claims.Recursion.Complete": "1330750bf535c846ceae4f269dbacde56221735e894593c8d043b91e122aec7b",
+    "Claims.Recursion.Deploy": "07efa262a78f034b94ca4706c30915b541f49ab5f861b229615b656c6710c812",
+    "Claims.Recursion.Deploy.P": "170da8974ffcd6b587bea595e3799efa15e888d869784a2a9228d5d8f0df9e89",
+    "Claims.Recursion.Deploy.Tape": "3b4469b6ad350204891f50849e6f273728046cf619fcb5a3f15ef60cc3dbb0bc",
     "Claims.Recursion.Deploy.V": "beba28d5197c34dabcd32e08ffe0ab260e0862b8b8f5d3a9718daa6a15d5ed3c",
-    "Claims.Recursion.Deploy.calls": "114beca56305fb23ba956409fb11ab6a8493de3783684bce5cab3f71d92af012",
-    "Claims.Recursion.Deploy.innerView": "41310fa88ce9388bb1398ab3a728b260e17c772a754b7ac57cd9a8b71f940ba0",
+    "Claims.Recursion.Deploy.calls": "e4f5e1658b547241d7a045274ba59d66fc3b26e7962b3140fae7ae315990562b",
+    "Claims.Recursion.Deploy.innerView": "42aa754225191a3b860dd0671466378ea4617af943769579b4deccef81ff5ae3",
     "Claims.Recursion.Deploy.kS": "f795134a13b558e60942287d2316a6f21c30e4a622e9a47f5cbab5779ee215d6",
-    "Claims.Recursion.Deploy.mask": "d1e32b7f28be4feb0461811c9630c42e46b67ae056b3e30b8597db9ee9bdf8b6",
-    "Claims.Recursion.Deploy.nS": "fc82116859b2b450b87a91dd077033a7c16a9a0d81b887cf69da69b9c95f9d9e",
-    "Claims.Recursion.Deploy.nums": "dfb84aeb6810d1798a908efd81eb7178347eb5cd1b62d049b8f9e4c0fdc0453e",
+    "Claims.Recursion.Deploy.mask": "96284fbecd4f3b532d1d1f1860878d0a700c2d74f176e38046e0cb0a6ce8c05e",
+    "Claims.Recursion.Deploy.nC": "d23e2276de2e52c120614e219fbce1d4bab4311eb1c00f64194a3bfaaa648a48",
+    "Claims.Recursion.Deploy.nS": "ef4ed3db6d57e2f72088914786bcaa4a1bce04975b19a0d38c66287bb3ff0ee6",
+    "Claims.Recursion.Deploy.nums": "8f38351b2cbccbfa7c919a93562cbd0456bb55043a7c1e12855d7f831d818fb3",
     "Claims.Recursion.Deploy.parse": "0cd24e77fa69beeac127c9721c9977ebaa9e546fde746244f14bbbd256024b5f",
     "Claims.Recursion.Deploy.saltHash": "37f992e2c8616a5ec53c766d19e1a247349f9d245dec6dab296e89969335a099",
-    "Claims.Recursion.Deploy.saltLen": "160f1700da947d35156905078f6150b4c1a88f8aead6b74c647f5aa60eb35bc9",
-    "Claims.Recursion.Deploy.saltPrefix": "8865a7143e63065135b92fd1bbdc387c2edbb796fc99fcb8d686a629c2f5a486",
+    "Claims.Recursion.Deploy.saltLen": "30666f642f7bf3b9a3b19cbd31b5b0e64797cabfd1664724a2d16a94ab1097de",
+    "Claims.Recursion.Deploy.saltPrefix": "b66ef850c3e7a1b7a4c147a34efc702ed0d4d483d981d4c6011327eb73b23a86",
     "Claims.Recursion.Deploy.scopeCheck": "835300273d99d8aef7b09436e65681efc1420dc22ce3d240f3aacf83903df4c7",
-    "Claims.Recursion.Deploy.session": "42b6debd33ac583404d9bdb12433b20fc98e685b8b120ecbe59030bdd2b38ea9",
-    "Claims.Recursion.Deploy.stage": "725436282bd3fd4b7a7fcaba77c76e27ca69cc7404b0b33a86ffd7a1cafd8d51",
-    "Claims.Recursion.Deploy.vstar": "5feea4b7791ec7144411ffedc41619a74386c1b764412f324f13876a1f1237d8",
+    "Claims.Recursion.Deploy.session": "1b5cd4625b87a53fee4ef90ede0d2c8c16906aa470902e137711a5a1f2411d45",
+    "Claims.Recursion.Deploy.setup": "79624cd866ef117a67d503ca9bd5500d9f76c0bce7c2e89945a80ae437d5c7a1",
+    "Claims.Recursion.Deploy.stage": "e8c57f29c18261b5d2591ab5545596f346d7a75d3fe8f1cf27b53877c90eab7a",
+    "Claims.Recursion.Deploy.vstar": "448523cc1bc6ad6f2ed11667a8c4e9f830ab33489f6215ee3b57f8e8a9e04f0f",
     "Claims.Recursion.Deploy.zeroCommit": "f59abc45d3667ed0cd6ae5df3b2bcd9501dca74fd1046d91acd1f5deff49a775",
+    "Claims.Recursion.Deploy.zeroCommits": "fc3cf89cae18e592edd18ab0d91d672e24938b6641f9bcd3d0901bd1522ff420",
+    "Claims.Recursion.Deploy.δc": "d3324917fe92b12365c5404e83fa503e2e0c9860d36d9723dbfdf3fb864cfde2",
+    "Claims.Recursion.Draw": "4470d39c2664f095fd33595396bf900ddfdb4f89c3dea35b31a53ba6a174daae",
+    "Claims.Recursion.Draw.Full": "9637cc9943849b041a7c9b796cda9fa32ce6287f73e32f4752a6c8c628baa9e7",
+    "Claims.Recursion.Draw.closure": "ae424072559b6b700041cc60647b041bf3dd0905400567534244d1b466f57e9e",
+    "Claims.Recursion.Draw.population": "6eddcf57ecca6e2b5e9d22515d0635a0e07256319c40af1226b150fa5761466f",
+    "Claims.Recursion.Draw.subset": "457e6ed51f3f826fd64b71837d617d8e0650d0437f49440289878ae75e6d4c3c",
+    "Claims.Recursion.Draw.units": "1689d238a726b0757edf4a7344019944f7d8143670818502ba7f405b1ac4a368",
     "Claims.Recursion.E": "dad06943bee42b9bb976e2e5e091a1c163e97b36d4c66b1f5ef376d43d232fd9",
     "Claims.Recursion.EO": "b92e5b7cb6a88cdb1be002447ac3b9fb6e3eddb1e1341c82824615a2be42c751",
     "Claims.Recursion.Efficient": "e12a4bcf7cdec5d1b285dc9a76f4bd4fc852e27e574d75c155c902ce98a60b33",
     "Claims.Recursion.Form": "15f627b3a0e196f8d6ada777be911aa9170ba0d4ced138a29a241a4af9af406f",
     "Claims.Recursion.Form.claims": "7000278d5c77426b590b45fbf5c1a7c0b56c45260f00a367b4a01fdf0b434042",
-    "Claims.Recursion.Form.holo": "c6144b029151e29931ccbb8740ebd2ae92fabc0d6be2b136be5e3838e07f8524",
     "Claims.Recursion.Form.kLog": "853d37e50dd7c2cb7d43fa8a1286a535d6f890139f128dfbeb7269d0b0efef12",
     "Claims.Recursion.Form.m": "b7e750bc1b2a3d09f6f4cc311c865fed83d7fb9577001b302a1dc2a74d0a60a8",
     "Claims.Recursion.Form.regions": "0526e46d39d8535009b9b470b964eb54048e47bd99b23de6f6ddb8b3e0c2b94a",
     "Claims.Recursion.Form.sparse": "cdde729c2d9e0ba6c593d6510429157f057864fdf3efa550165d2ab30240888d",
     "Claims.Recursion.Form.stacked": "1e9dd5f6621cad32c8f804f422be77b0d60f6a1fb32c20942d71223ef2695c44",
     "Claims.Recursion.Form.unitRangeInBlock": "e8acc5c08ba23484c86f51648a5fea16fedd2347e66c4689d533b75475ad75db",
-    "Claims.Recursion.InScope": "3c8816d23748e905f9cad0125ad071b6a637c8775fc1646a0721ae459f0db01e",
+    "Claims.Recursion.InScope": "685ca5d1e2adbc3f723160ef818fe26ab96f60c584ba644ab6b65e70c198afd9",
     "Claims.Recursion.Inner": "65cd0218b5669ad9b091267cdb5f14f7e38713bf6cd91c2914507cf8f017ba2c",
+    "Claims.Recursion.Inner.E": "f6beaf3000fe0d8fb3c1a91ffe977178536fe55ae558163299a0b68968cb1161",
+    "Claims.Recursion.Inner.KS": "6ad4decaf41fa1d3feb96b1b6448b340996a76240cb95405ca3f0627f617fea4",
     "Claims.Recursion.Inner.KSAbort": "1a6188656a88cc8a014600268a1574081743885b2f764f89c2a70cedcb8cab84",
     "Claims.Recursion.Inner.Op": "c1c93af54c3edfe6f917c4d47cfe1bda376d1c4eff18f9b90103cb056860cae0",
     "Claims.Recursion.Inner.PrBadAbort": "96b5607afd5f86f947012a2621d62345530afd8cecf77468a2b9ad37a044e1f2",
@@ -8927,9 +10142,9 @@
     "Claims.Recursion.Inner.waits": "63c050b6b3f26c6a079b70b64536aa7cd895d7dc95f544e9fe4d79e8f386db82",
     "Claims.Recursion.Inner.γ": "7bd3c240361fc3143125ac501ac67173d0e3fbf912e0f8e5937ab5c5caccbb1b",
     "Claims.Recursion.Inner.κ": "8724a4a0cc99567c32a2e0e4de422fb97b002c657ad75ae5d63e08e11f0b8977",
-    "Claims.Recursion.KS": "b13703cf55a8b9959c393cdd5374d40fc468d10bf96f6081db37e9a00c952be1",
-    "Claims.Recursion.KSFlock": "8694dcf2bc68c08b3defa5521fde1ec873efb42f6bf88a64d0f277d5acc2aab0",
-    "Claims.Recursion.KSPriv": "649729e7db98a5f859040492bea461b2c6a7c4445eab04523905a2549c35122a",
+    "Claims.Recursion.KS": "05140a1c1c91db19d12aad4c50de9db823fc891d3644a2d21e18f112d36b1b41",
+    "Claims.Recursion.KSFlock": "a74e351886ff9ffb4fb1ac7964323fc0cfcb3c48a9b6647142dedcbab376b727",
+    "Claims.Recursion.KSPriv": "6ac1e9ee33d4fcdca26b1472607508eef84beaa01ad8d6a6f72e749bf73c4947",
     "Claims.Recursion.NI": "334246b6e9ef4802ecd06c2db3aae3a494077be7e57915e2dffa67f1e25133ef",
     "Claims.Recursion.Nontrivial": "8254008bbfe450d7f4237a68ccea9f9c212e6da8e88ac858f451dd2a6cf8d5df",
     "Claims.Recursion.Nums": "4ca40866293e472589b75de5ef556de799b5818fd7e885ac0f246bdf40b31879",
@@ -8951,16 +10166,18 @@
     "Claims.Recursion.OSim.prog": "d2045ee47d9fe9853a50351d97ba90d3e2d3cc84380eef80c0ea92a7c83c6067",
     "Claims.Recursion.PrBAbort": "fd37ef103fd58b179a1453da68055912cfc5178260ef29d2d6ce137af9579d6a",
     "Claims.Recursion.PrBe": "6f93e9bd64f6ba1cc67e0cc8223bf3b08eacb8fda204497a8f1044673d7ebaba",
+    "Claims.Recursion.PrBr": "0a3173b22b5b2550b434624857782b9eebd38bd080a66b033a2bcc420ed2232f",
     "Claims.Recursion.R": "430094b2e8a2a403813a1ba292d8d1eeafdc9136d7b945c8e5018644c3a5ddf1",
     "Claims.Recursion.RPriv": "dc62ecaea7236ec7992258477c1660d47149260edbf84574e9997d7d6b322511",
     "Claims.Recursion.Scope": "c60746741c7a89a0ef7e56a5982f68ad97da91e1bbb2038a7de4f87ec05dcfd6",
     "Claims.Recursion.ScopeMatches": "12159a1f946bf3cd1cbc2acaaa30cbd0288b8be013f7551df5037e14603b72c5",
-    "Claims.Recursion.Sim": "da8385ca403f8bc158090095229275820ad69cd5148b7516cfa52d5ba8b9b1f3",
-    "Claims.Recursion.Stmt": "f814808e9bb87a3637928e0e2656a0fb4e8f9509b5dae19947a99d5f326f3571",
+    "Claims.Recursion.Sim": "23d324e55d9b3473d5628e35630b2ec1c6b54466579356baffb2b889e8687c48",
+    "Claims.Recursion.Stmt": "b4417f5b264fa9f5a787e1f79aaffde9244924c0ecd9b8f213ecf07305d21afb",
     "Claims.Recursion.Stmt.circ": "386c9c6e17d2d2b28e1fd9f4452496b25a8461888919b3fac92576df76bbd47d",
+    "Claims.Recursion.Stmt.draws": "da92efcb236679456c1a66801d7d0895752f5af5d522f6e2dbc9112c89f8343f",
     "Claims.Recursion.Stmt.form": "03c3ae9baea4445629de62656489124345e174ead6601ef9939e78e9bf9c7f73",
     "Claims.Recursion.Stmt.inner": "3f8cb0802cb9e9b2e47a7529077c8daee315a6d0bc0ae05923ad724ae0f7fa47",
-    "Claims.Recursion.Stmt.innerDims": "c8b2ac51079c1b273f939ee7022899890c83b06bcf127bd25a1d07570489a560",
+    "Claims.Recursion.Stmt.innerDims": "dc46d5b4aa594cc9a810f1d7d1ccae3546f0f49d46162844f6546b67100763a8",
     "Claims.Recursion.ZK": "60cd5b9ab8994f1080df72a419e0ec600ac90341935202bb96c43594247d6165",
     "Claims.Recursion.ZKPriv": "a7a385125e416688accfca1d6f4cd3157490ff5c4e6b8ac29af69a1b401ea2a1",
     "Claims.Recursion.abortRun": "003020d451a9b0a6b15fd25af5f420a8fcb2fd5edd4083bf828255b7d970a1ce",
@@ -8970,17 +10187,21 @@
     "Claims.Recursion.dec": "885cc50c83db07955096390366ff59b45b4a5d860e7910a51573aecf3214f5ba",
     "Claims.Recursion.decOK": "8e8ac53969a11e78b92623c8d92de4fc34f0c7bac84f32e70cd0ccf97c9cd353",
     "Claims.Recursion.erep": "90bf56ab0ce2499812a109aab754b41dc4dac5956eb815209b6eb5dd243d422c",
+    "Claims.Recursion.findCollIn": "4d554a9db01983b7415fe6c1f7103026dbbe90107a5378088ab7f58e522f612a",
     "Claims.Recursion.fork": "fbb421d91b3eefecd7f183ac7c52e92f6adb47aa61ce4f447ac082baab08e7c5",
     "Claims.Recursion.goesOn": "4211082584ba923f700244fe105d409ae91a4b12c26c37a794a33016c8890b29",
     "Claims.Recursion.goesOn._sparseCasesOn_1": "b3ccc6fdfa2f16b768c4507e0344a76d871e6f9f32a748207d734348e2a6a872",
     "Claims.Recursion.lam": "9d414e47a7febbe37128d41540fb21c5dc22eb7f6145041ceb8d4cb8f2e9d92d",
     "Claims.Recursion.outerStage": "412166b3eea1f83011e5acbc176a794e45baded8db9a0aafcbf01cc58c21f43d",
     "Claims.Recursion.pLog": "95ca32a7bbaa87a982b4154260f3efe17eaaf3907056a8aa78c98d88ae4d839b",
+    "Claims.Recursion.runStmts": "c76caedc558cd62cf7aa8defc53ee3d4bf945dd06dfbbf2004e9529d43940818",
     "Claims.Recursion.serve": "d0ed223162467e1fcb4718ebfa7aef1e6de175ce8f3e76a69259ef05d468d3a5",
     "Claims.Recursion.served": "1555d45eecfdeb0cd0e8dfa40f476b44880590c8a13bd9825ed69f77e8be8831",
+    "Claims.Recursion.setupCalls": "4d4b89edf5bd5b9d8efdb4357061c4441a538543a8ad2281cb877f4d1ebfd87b",
     "Claims.Recursion.simInner": "1d6fe47118a5014d31c6fbb430f5d1f7c2c2527f0f5bb51ec8e46a144ef39885",
     "Claims.Recursion.simOuter": "ec90b221e1dcac3d8e6fafa3f2e4a53a62d823afa08922bd50248745fca789a8",
     "Claims.Recursion.simRounds": "e6e04df87ecb28c7d7115c2ce304701ca7c945e39e6a43f306de6b370c3c701f",
+    "Claims.Recursion.simStage": "4d79799d206f0003e90eec2306e1e56fd88331260a84334a09fb7ce6cfa7af70",
     "Claims.Recursion.spBind": "3609da4643470267021c694e22243219448287548ab4289518dee4242a65e769",
     "Claims.Recursion.spOf": "aec30eba71b2d6e89c4ae0b59ae7f58bb1e5eee0dec8e17c8eb95c96ea3f8810",
     "Claims.Recursion.spUnder": "89dab3e0f4ec85aab8f5656c9654a4c95304474e1ec2605f43db544fb9c9835e",
@@ -8989,10 +10210,36 @@
     "Claims.Recursion.γ": "0e2f0c7894fd769e8687d7c4f2e222b2a3fc2bce9924d752ea33339a1dc5128c",
     "Claims.Recursion.γe": "6a7dc27533c27a6528221dc888f457d265bb50eeb35a08c3da62dedecf2b6233",
     "Claims.Recursion.γzk": "966861bd3b08be5b8d31c557ecfc6876d004f6d06062b30cb485219d81ebbfa0",
-    "Claims.Recursion.εzk": "e40a6bcbf82825c7689fb1bb635507ddf7fd8eb427c29336661bce378249fd17",
+    "Claims.Recursion.εzk": "ac807fb7a04f0a999a50bbaece23170bd35fa90c9aceb3b825daf4fcb8d45daa",
     "Claims.Recursion.κ": "3ab1013310bb4acce30b5d46750070e246193b79970b956601b32ab97e229979"
    },
-   "guarantees": ["Flock.SecurityProofs.RecursionClaimsStated"]
+   "guarantees": [
+    "Claims.Witness.Recursion.BitsFlock_fails",
+    "Claims.Witness.Recursion.BitsFlock_meets",
+    "Claims.Witness.Recursion.Bits_fails",
+    "Claims.Witness.Recursion.Bits_meets",
+    "Claims.Witness.Recursion.Complete_fails",
+    "Claims.Witness.Recursion.Complete_meets",
+    "Claims.Witness.Recursion.Complete_meets_deployed",
+    "Claims.Witness.Recursion.Efficient_fails",
+    "Claims.Witness.Recursion.Efficient_meets",
+    "Claims.Witness.Recursion.Inner.KSAbort_fails",
+    "Claims.Witness.Recursion.Inner.KSAbort_meets",
+    "Claims.Witness.Recursion.Inner.KS_fails",
+    "Claims.Witness.Recursion.Inner.KS_meets",
+    "Claims.Witness.Recursion.KSFlock_fails",
+    "Claims.Witness.Recursion.KSFlock_meets",
+    "Claims.Witness.Recursion.KSPriv_fails",
+    "Claims.Witness.Recursion.KSPriv_meets",
+    "Claims.Witness.Recursion.KS_fails",
+    "Claims.Witness.Recursion.KS_meets",
+    "Claims.Witness.Recursion.Nontrivial_fails",
+    "Claims.Witness.Recursion.Nontrivial_meets",
+    "Claims.Witness.Recursion.ScopeMatches_fails",
+    "Claims.Witness.Recursion.ZKPriv_fails",
+    "Claims.Witness.Recursion.ZK_fails",
+    "Flock.SecurityProofs.RecursionClaimsStated"
+   ]
   },
   "Definitions.Claims.Sampling": {
    "digest": "70ceacc8d84cf285be89be4f5bc884818cb7f8d2c02a774e28f0831367a0391c",
@@ -9167,7 +10414,28 @@
     "Claims.Sampling.κ": "b88d37f433003d07613a32bb93b7733aa367795821a06c99a3bf88215177f73c",
     "Claims.Sampling.κF": "b16b6f6879030bcd53b3bc53d7eefdd41a2760920c50b413251c17d5d80c61d9"
    },
-   "guarantees": ["Flock.SecurityProofs.SamplingClaimsStated"]
+   "guarantees": [
+    "Claims.Sampling.Binding_fails",
+    "Claims.Sampling.Binding_meets",
+    "Claims.Sampling.Binding_meets_one",
+    "Claims.Sampling.BitsLin_fails",
+    "Claims.Sampling.Bits_fails",
+    "Claims.Sampling.Complete_fails",
+    "Claims.Sampling.Efficient_fails",
+    "Claims.Sampling.KSCount_fails",
+    "Claims.Sampling.KSLinOn_fails",
+    "Claims.Sampling.KS_fails",
+    "Claims.Sampling.Nontrivial_fails",
+    "Claims.Sampling.ScopeMatches_fails",
+    "Claims.Sampling.Universal_fails",
+    "Claims.Sampling.ZK_fails",
+    "Claims.Sampling.decoder_meets_plain",
+    "Claims.Sampling.decoder_meets_zk",
+    "Claims.Sampling.masked_meets_zk",
+    "Claims.Sampling.scope_meets",
+    "Claims.Sampling.universal_meets",
+    "Flock.SecurityProofs.SamplingClaimsStated"
+   ]
   },
   "Definitions.Core.Circuit": {
    "digest": "a08239081fcf880dee928fce0029cfa179f6f760db51ccd16bd97d7097f3e541",
@@ -9399,6 +10667,91 @@
     "Verity.TC.Spec.instDecidableEqCls": "3a9f2d9f9dd81a3082dd77b3999150e40665f3ac40f43fa48d032affd3c94223"
    },
    "guarantees": ["Pouw.SecurityProofs.PearlC.TileCheck4WordsCore", "Pouw.SecurityProofs.PearlC.TileCheck8WordsCore"]
+  },
+  "Definitions.Hash.Basic": {
+   "digest": "96dda4920f1b085b6c1eda9a8476c4dfe121a69c8b18083e26957e1bf2dfae7c",
+   "definitions": {
+    "Hash.CollisionIn": "7711d3fffe8ceadfd2ce498a071fae3b7186f2f53363fe313d7f6c78eebabfde",
+    "Hash.Digest": "a3a4861f5c9384356dd44dcb1a1623b55cad6aff8357834eff6f630b8d92cf71",
+    "Hash.Digest.bytes": "cbf08272cef6a88eb3e022030b115bd1f6b97035993ec4315520e92648dc7dea",
+    "Hash.Msg": "81eca31647a9aa78d4098f30c178d66a70a7539fadaaa91672868ff3b690c99f",
+    "Hash.be": "1f945d5d60fb165788d157937623ac5e53f53bbe2a91810626dc2d5f9c4e2cd4",
+    "Hash.cstr": "cc8a9d2799527c9325f6d52d1f4af04631d52ef3849529d96cd70def0f45ab7b",
+    "Hash.padTo": "d13d242f6c91872c3dc574789e9f2fd063e15ae64aa08096b9dee20717d00477",
+    "Hash.uint": "54f1380cede20ece799c577d798408019afc86701c15097bc10064e1b29ac7bf",
+    "Hash.utf8": "ef81714f5482b6ab1df3203d386a5f234d14a69049d33735cee24064152636c6"
+   },
+   "guarantees": ["Hash.SecurityProofs.Stated"]
+  },
+  "Definitions.Hash.Hm96": {
+   "digest": "a25e93ee3e42e5c6fb4928fcbc844fa373b338928a514b95d66128aac4291dc7",
+   "definitions": {
+    "Hash.Hm96.SALT_BYTES": "10351bca00020e94f2f9c2b83958088e1fa493c563e3343be363674c63680e0c",
+    "Hash.Hm96.bit": "2cdac8a70d48c963a454f52d3e9662f9e4ae5d9cc26221ddaaa92e69f486e0f4",
+    "Hash.Hm96.commitString": "0411449cecc908d4b0682e3ba9764b86da7c76aac7dc27bfacab6595f655dac5",
+    "Hash.Hm96.hashed": "a98aeccee2816061c5a0edaa1d6cacec5fa5c5ee19a7410f7c1c0a0e05b17605",
+    "Hash.Hm96.leaf": "175c156add4ccd92f10da7a595c96eedcb665edfe92e25526e1209256df242ef",
+    "Hash.Hm96.leafPrefix": "b5e6ca6c80c777bcff43dd55cc45fc3a0663c7eb4ea20db85d748a010c234b1d",
+    "Hash.Hm96.mask": "ecce38ff967416b0d2d548778d673c24c6a3e3538dad6f08e7e699e7ad2a161f",
+    "Hash.Hm96.maskBit": "84c9847922cdabdcf8f9e4803039807462219e01b65429a93936bed110e7fbac",
+    "Hash.Hm96.saltPrefix": "74d72964af334edfdb91fc4be5b5e9a07fbb5c930ebc4b745ab2246293d83aa6"
+   },
+   "guarantees": ["Hash.SecurityProofs.Stated"]
+  },
+  "Definitions.Hash.RowLeaf": {
+   "digest": "59daabfc3d76dc4c3b6cd697813f2fa94b4a358f586e509ad4f4770e29572b8c",
+   "definitions": {
+    "Hash.RowLeaf.Opening": "8910cb507cf436e6164cb88b22689f4689fbc98df5d1969eb9ead98b84b72cbe",
+    "Hash.RowLeaf.Opening.row": "1a7f3e8cb436f751b4c19bb2ba565ea5e78c6bfb137833818fb458c31c37e74a",
+    "Hash.RowLeaf.Opening.salt": "a54029a04dad6dcf74412db8e6504e4b945bc41b2f9ba56ef50d01bd4e0486b6",
+    "Hash.RowLeaf.Opening.sibs": "0cc8c9953660890823876ca2dce96218c76b37e219bf6a2217cdd68b07d5736d",
+    "Hash.RowLeaf.SCHEMA": "3c73c778fbe68db97bb8a859022c2106fa7def566576eeba62d04dc8359ff732",
+    "Hash.RowLeaf.Verifier": "70f344e30a234ac192ce808e5b92481561696f80ee984f5db34c125dd6200c50",
+    "Hash.RowLeaf.Verifier.domain": "4479c28106a028df16b1f30df58372370ba5dd780d55d4a71388b47aad3c46a2",
+    "Hash.RowLeaf.Verifier.key": "543756473d4ccec741c25fd709e743fdcb1fd596ef49e4828d2ee92e1b8893bf",
+    "Hash.RowLeaf.accepts": "263fd6e9a4a0df8f6ad4ed23bf92236e58354b1007cca6fe6e818d1fa4862cde",
+    "Hash.RowLeaf.innerHashed": "28932fa064239d1e3c2c2ee132f45679e891b73af65f71dba7008ced7ebcbb44",
+    "Hash.RowLeaf.leafMsg": "6a298fe332784d47c3541c0b347f8b230a2a89f0feea2d98fe945d85950624e5",
+    "Hash.RowLeaf.outerHashed": "5cd7ce5aba7869151a792451bd9cdfed618ae5d327304620785aa3a82225c262"
+   },
+   "guarantees": ["Hash.SecurityProofs.Stated"]
+  },
+  "Definitions.Hash.RowSeg": {
+   "digest": "90bfdb254a02577fb455c429e2b39538b1096a953cb4aa4b3a604bec66068775",
+   "definitions": {
+    "Hash.Row": "8bc49110352d431ea03235bbb82cae3ebc8a0683ec869d66fc10074010221436",
+    "Hash.RowSeg.SEG_BITS": "df5da141c4d9ab6eb03d0296ed625063a140337f56fd64b1c0c725ec83774ebd",
+    "Hash.RowSeg.bitsVal": "637d2b85028346dd0c3868244689396b465ee4e4e7a4898e35fd737ec698d0e1",
+    "Hash.RowSeg.digest": "d68793eb4523442c82e65267cd947a5740652ac3680ca1b7d03172b765251926",
+    "Hash.RowSeg.hashed": "784c2b8d57267a0efdb32f0afc50d1d51cbd804cc696af750f8b564a0c285e63",
+    "Hash.RowSeg.outerMsg": "15c6e58ada42553f0ea568334171deb321a2b6dc3e24cffe84b6d8dcb275d2dc",
+    "Hash.RowSeg.outerPrefix": "344a8487dde4dd96fb2834191b3ab49753553076a26a7abd5eb31899a89574fa",
+    "Hash.RowSeg.packBits": "00defa063bcf1f453f411856eed06df08c617a33b1b472294c9e067dbba5ef49",
+    "Hash.RowSeg.segCount": "2e96d45476de80079021b9deb70bc13d55e3adbbd59c3a33873a65b7df1da123",
+    "Hash.RowSeg.segment": "0d7b76c8b3ace1c7725f7e7d79e7159ceaf4d7242e1bfd2bdc8532b442fb8a79",
+    "Hash.RowSeg.segmentMsg": "4cddf759310c04a6c81641ec0e1eb5bb6f011dc786e42ee759b43ad7b50b2c2c",
+    "Hash.RowSeg.segmentMsgs": "06d9f0294b3435c558727cf0fcbb49bae36cc32a705d683476e81cb81c8cb10a",
+    "Hash.RowSeg.segmentPrefix": "17d166519a13a99d5f75b079467ff2419a10f206a6767e6f65027a12a05c0152"
+   },
+   "guarantees": ["Hash.SecurityProofs.Stated"]
+  },
+  "Definitions.Hash.Tree": {
+   "digest": "c4b8c7ea14f3c9a159c9a52d84b0b56922af0b7ecce92dc113116c019277fdc5",
+   "definitions": {
+    "Hash.Tree.Domain": "18d820d66ef66eabf62aed06754b17984ce78ef1c996d29e01c125ae38453c85",
+    "Hash.Tree.Domain.count": "c7812871a6e03a1a9b88abf30238ba383cab05ec0dd67f385b4c35790c066f53",
+    "Hash.Tree.Domain.id": "c0c05c227c6ba6fc414b7621fb030d2194ad1ce0a44558588da39115dc490a6a",
+    "Hash.Tree.Domain.position": "c65f7b2d58c42f39e01b1d8180f87aa25c7590dfd996399acb4117dc9620c10c",
+    "Hash.Tree.FRAME": "4130405b343d06fadfa665b8b20013788c7d9ec8200a9402f85bf571aac2ffd4",
+    "Hash.Tree.accepts": "3f74d9fed34e2079842ae3580468d60b2c8665410cae66f630120abc695a2c61",
+    "Hash.Tree.climb": "c29b2ce70f8981112e083f789bb3c30021af1156925ce10c21c1e66db8b8d6bb",
+    "Hash.Tree.depth": "fae7624f67ea840b85336f50ef04f61fd932ef6b34c921874243d1950a7ede3f",
+    "Hash.Tree.frame": "13959de8be69faa822b6eea50bee86deef490427851d98c9f0d68743a83d0ec1",
+    "Hash.Tree.hashed": "fec49be19e09a6d3d55132d1b89cb886058710ca1084dadca1bbf710b6239da0",
+    "Hash.Tree.leafMsg": "c03f78eb03c50bae57d161e89fa7af3fe26e1c1584952f654cf4057b3f4b2d77",
+    "Hash.Tree.nodeMsg": "f0246edca6110f84d6a81bbf1e435afe3a2e8da1f97e4b4ee3a97741dff654a8"
+   },
+   "guarantees": ["Hash.SecurityProofs.Stated"]
   },
   "Definitions.Nci": {
    "digest": "cb17b875c510656446a000071eb88c8642b91ee75ceba126abdbf87bbe46f15d",
@@ -10530,12 +11883,21 @@
    "guarantees": ["Pouw.SecurityProofs.Dimension.A2WordsIff"]
   },
   "Definitions.Pouw.Eps1.M3": {
-   "digest": "a67b81a16f2b045d3188008e9a925674ee8de25636b0c0f4704e981ea852a74e",
+   "digest": "259596a012c4c09e5fa286a9d20062fc530ad6dc55cc2f7c0f594788543d41f1",
    "definitions": {
+    "Pouw.Eps1.ClassP": "a701827ced69a6601de286c0a09f129a13cb0c797905954636c3ae3ad8bb16d2",
     "Pouw.Eps1.Cols": "ddd2433ba8ded7d37960c6fe6dd23b4f66e5d14cffc795d7dad1fa886eaa440b",
     "Pouw.Eps1.ColsValid": "dd8588c5c8ca89bca32ad7f49e4e8b3288ef73448a382d2f6d4d65c0c7dff962",
+    "Pouw.Eps1.Creates": "417a1d01e5b0264d5792821003b78d7b5de526a86d1dd2c4bb6e6c7a04b023bc",
     "Pouw.Eps1.Dither": "9fddd81cf94ff83c46caaddfe6ad4615561c7d4623d3e25087ef56da13f6e11c",
+    "Pouw.Eps1.Field": "0e82f1248eca0cb501cf334a51da7233a4d5c816c4f5a375936de4e2848aaf9d",
+    "Pouw.Eps1.Field.E": "dd9a7a0b966e462f2d17a25fbb89c12940ff71048fd17bb21658bb99e708d764",
+    "Pouw.Eps1.Field.range": "bb53451fc74b08592d15741a5153a84ccf1efe038d29973f841e5d92be5d6dbe",
+    "Pouw.Eps1.Field.val": "ad7830d4f4c6ee95eab8ae377ff01ce48d8ffe820f08d75f7c0ee1a87e5ae45b",
+    "Pouw.Eps1.Field.β": "499ffab8d6d7b398996a4959a7859300e9e31f8d2c647f573dfd05831587b3a9",
+    "Pouw.Eps1.Field.τ": "dbb7fb660a13c4b0ca794421f62c03c87f4550c77897364c202777864a4295d8",
     "Pouw.Eps1.GCols": "42178af7d97934917ea654c155fff4636d5eedd9d2ccaa72c410a44036e56add",
+    "Pouw.Eps1.Holds": "01f45b6308168cb7598df365d4154138da03a9e707cc7c4090fc7d2da6d586ee",
     "Pouw.Eps1.Int8Valid": "3c4084db5783f85e7c97d3fd14e1ff170607fe359289740c1609f8084aac60d0",
     "Pouw.Eps1.M3": "ac86c8c2429196e11767d29693e97c27dfad981e8397bd55101236366d0283f4",
     "Pouw.Eps1.M3.IsRun": "b4d51e1aed9022ba775b6c6892a54a43203f84c5871f5c924b17f9cd871f628b",
@@ -10543,6 +11905,10 @@
     "Pouw.Eps1.M3.argVal": "51575cbc9d04b5488781fe6be2415ab5949993e4cd88052d16d958078a462215",
     "Pouw.Eps1.M3.earlier": "8fc1ce3ba363d446fa4d4d2844b16805dc485a306455601b17e0446f27451c45",
     "Pouw.Eps1.M3.op": "e83647ae3decddd1f8090a9aaf486ebb9a94aee2fce55f966ee475ed464d28a3",
+    "Pouw.Eps1.Packing": "6553fcd1dd47b06d4a14c6e466006f56b22d0a65af6a88ae3ec76938eb251440",
+    "Pouw.Eps1.Packing.MixedRadix": "eea8ecbb7cbdfaf79a321a048eb4b0794b21b308fd7f76a0a8fbd56c0c44915f",
+    "Pouw.Eps1.Packing.fields": "cdd0be679aeec5c15e3f089fa9069dd80f38ff5c37e3635df8d64b8f22268dce",
+    "Pouw.Eps1.Packing.word": "8655ac24cef8987f18dc11e4a76430f8d0cca294cca3fc9344e9d0fd294c51c6",
     "Pouw.Eps1.Prog": "25af16756c6dd4bca5f7ebd4adaaee42b23516685027fb26b3e58bebe67cdb9f",
     "Pouw.Eps1.Prog.Computes": "ffff66c5bde493310dc6025e78119be1af37edac280dd2d9ab8a0b2d345e0a4a",
     "Pouw.Eps1.Prog.WordLocal": "f3abe9b84f3c126dc7b0b28b2157e4c51160affdf35719dec932891e97319957",
@@ -10555,12 +11921,17 @@
     "Pouw.Eps1.Tau": "d96e7b513de4861347d2defe2a6091077267a1af9ec521b93579e9554cacc7bd",
     "Pouw.Eps1.Tau.prev": "552db547b4b1964ffc506784f262fc7bfa0f07bcfce430971c7420b5377ecb40",
     "Pouw.Eps1.Word": "c416ef647089b3254a4b4d5c9f5723a021030987d77acac2e300c33a8793f0d3",
+    "Pouw.Eps1.created": "01519347e2374bb7944a441b6a3e3b1c585f3b8e7b34a1bf71cf5a73687e2e85",
     "Pouw.Eps1.genOut": "f1a063b97581f11862f5d34b2b965c8753e2493a6f771e058bc37accb7e11e0d",
     "Pouw.Eps1.zeroOut": "7bd1c8dc83823b26d813171e3aa6e93b8239c615504968ca35ae25e20a41a46d",
     "Pouw.Eps1.zeroPrefix": "5e65b6f7d51a63dd5fc41559ec511b591728e0efd66217359d4dc06e8c19f89b",
     "Pouw.Eps1.zeroSeg": "3dd23aad55a841780af33c88c4f8c8847586d596b4e92c51500f1e2dc3a21ba1"
    },
-   "guarantees": ["Pouw.SecurityProofs.Eps1.WordLocalGeneral", "Pouw.SecurityProofs.Eps1.WordLocalZero"]
+   "guarantees": [
+    "Pouw.SecurityProofs.Eps1.ClassPSlots",
+    "Pouw.SecurityProofs.Eps1.WordLocalGeneral",
+    "Pouw.SecurityProofs.Eps1.WordLocalZero"
+   ]
   },
   "Definitions.Pouw.Fp8Atom.Atom": {
    "digest": "ac94661d29300afde0e3a6146a4f199f42d253ec3b64dad58699e2e3e10496ee",
@@ -13521,7 +14892,7 @@
    "guarantees": ["Pouw.SecurityProofs.PearlC.TileCheck4WordsCore"]
   },
   "Definitions.Pouw.Receipt.Duo": {
-   "digest": "d6877dfa7ab227ee351cd59699d0a9d8cd2c4c38afbad65b8b534cc9053b76b9",
+   "digest": "5b12c291314378fe43ce77460d48fab1098ef4db01e89bf5d2f94017474c868f",
    "definitions": {
     "Pouw.Receipt.DuoQuadKeys": "5380488a8fd7baa4845dff6fe6deacb4dbed92d6658be7c1a8a8b3ce6736239e",
     "Pouw.Receipt.DuoQuadKeys.a₁": "254c072e80dd3e0bf4a0607b536a50bca27b0b29f3f24fb6b46a0d3b292d70a3",
@@ -13549,13 +14920,15 @@
     "Pouw.Receipt.duoRun": "8618a1b49c703cf3480ffe3cac63c3101855ba4299ee5a5e2c7118b784ce523a",
     "Pouw.Receipt.duoTriple": "5a2d96e7a402f773e07fc5d56b4396833148f6a078936f450481a819405448db",
     "Pouw.Receipt.duoWord": "cbd7aa3d7554fa9b6113932c730b75304b994a68bc15cfb4c5e6955f265142a9",
-    "Pouw.Receipt.duoWordSpread": "08852613cd3d92f01f7c27540e39090f366c33796dab54ed49c9fb0ceeedf669"
+    "Pouw.Receipt.duoWordSpread": "08852613cd3d92f01f7c27540e39090f366c33796dab54ed49c9fb0ceeedf669",
+    "Pouw.Receipt.stateSpread": "23239276a3f6223958b4d8b04d2fa89b9930631170c2d015df3bcdf648e566b2"
    },
    "guarantees": [
     "Accounting.SecurityProofs.TS.DuoFoldFanIn",
     "Accounting.SecurityProofs.TS.DuoSegmentsBind",
     "Accounting.SecurityProofs.TS.Fx1FoldFanIn",
     "Accounting.SecurityProofs.TS.Fx1SegmentsBind",
+    "Accounting.SecurityProofs.TS.LiLowBit",
     "Accounting.SecurityProofs.TS.LiSegmentsBind",
     "Accounting.SecurityProofs.TS.LiWindowUnbound",
     "Accounting.SecurityProofs.TS.LuckCaseA",
@@ -13564,9 +14937,12 @@
     "Accounting.SecurityProofs.TS.ReceiptLuckCaseA",
     "Pouw.SecurityProofs.Receipt.DuoCheckpointNoKernel",
     "Pouw.SecurityProofs.Receipt.DuoLongRunKernel",
+    "Pouw.SecurityProofs.Receipt.DuoPairAtStateNotInjective",
     "Pouw.SecurityProofs.Receipt.DuoPairNoKernel",
+    "Pouw.SecurityProofs.Receipt.DuoPairXorNoKernel",
     "Pouw.SecurityProofs.Receipt.DuoQuadNoKernel",
     "Pouw.SecurityProofs.Receipt.DuoReceiptNotInjective",
+    "Pouw.SecurityProofs.Receipt.DuoRunAtStateNotInjective",
     "Pouw.SecurityProofs.Receipt.DuoRunWordInjective",
     "Pouw.SecurityProofs.Receipt.DuoStepBijective",
     "Pouw.SecurityProofs.Receipt.DuoTripleNoKernel",
@@ -13574,6 +14950,7 @@
     "Pouw.SecurityProofs.Receipt.DuoWordInjective",
     "Pouw.SecurityProofs.Receipt.DuoWordProjNoKernel",
     "Pouw.SecurityProofs.Receipt.Fx1PairNoKernel",
+    "Pouw.SecurityProofs.Receipt.Fx1PairXorNoKernel",
     "Pouw.SecurityProofs.Receipt.Fx1QuadNoKernel",
     "Pouw.SecurityProofs.Receipt.Fx1RunWordInjective",
     "Pouw.SecurityProofs.Receipt.Fx1StepBijective",
@@ -13600,6 +14977,7 @@
     "Accounting.SecurityProofs.TS.LuckCaseAKeyed",
     "Accounting.SecurityProofs.TS.ReceiptLuckCaseA",
     "Pouw.SecurityProofs.Receipt.Fx1PairNoKernel",
+    "Pouw.SecurityProofs.Receipt.Fx1PairXorNoKernel",
     "Pouw.SecurityProofs.Receipt.Fx1QuadNoKernel",
     "Pouw.SecurityProofs.Receipt.Fx1RunWordInjective",
     "Pouw.SecurityProofs.Receipt.Fx1StepBijective",
@@ -13619,6 +14997,7 @@
     "Pouw.Receipt.liHalf": "14b4abf8590b72949c821f9d279c60b8fe96deb5cc391c7ac0e9649fe625c1bb"
    },
    "guarantees": [
+    "Accounting.SecurityProofs.TS.LiLowBit",
     "Accounting.SecurityProofs.TS.LiSegmentsBind",
     "Accounting.SecurityProofs.TS.LiWindowUnbound",
     "Accounting.SecurityProofs.TS.LuckCaseA",
@@ -13771,6 +15150,7 @@
     "Pouw.RelativeSecurity.wRe": "8111c43d37e7e41182d2ee61f0d6d86d9c6f2991686898fc9e1ea46a14ebac70"
    },
    "guarantees": [
+    "Accounting.SecurityProofs.CoinFlow.PointMass",
     "Accounting.SecurityProofs.FillerLuck.FillerBlocksDeficit",
     "Accounting.SecurityProofs.FillerLuck.FillerBudget",
     "Accounting.SecurityProofs.FillerLuck.FillerCellLuck",
@@ -13791,11 +15171,16 @@
     "Accounting.SecurityProofs.TS.DIdeal",
     "Accounting.SecurityProofs.TS.DIdealFloor",
     "Accounting.SecurityProofs.TS.DecompositionD",
+    "Accounting.SecurityProofs.TS.ExchangeTail",
     "Accounting.SecurityProofs.TS.FloorCreditD3",
+    "Accounting.SecurityProofs.TS.GrindPremium",
+    "Accounting.SecurityProofs.TS.GrindPremiumAt",
+    "Accounting.SecurityProofs.TS.GrindTail",
     "Accounting.SecurityProofs.TS.GrindUnion",
     "Accounting.SecurityProofs.TS.LuckCaseA",
     "Accounting.SecurityProofs.TS.LuckCaseACube",
     "Accounting.SecurityProofs.TS.LuckCaseAKeyed",
+    "Accounting.SecurityProofs.TS.LuckMoment",
     "Accounting.SecurityProofs.TS.LuckOfReceipt",
     "Accounting.SecurityProofs.TS.OperandLuckCube",
     "Accounting.SecurityProofs.TS.ProofsSoundOfPinned",
@@ -13805,6 +15190,8 @@
     "Accounting.SecurityProofs.TS.StageBudget",
     "Accounting.SecurityProofs.TS.StageIdeal",
     "Accounting.SecurityProofs.TS.SteerUnion",
+    "Accounting.SecurityProofs.TS.TemplateMoment",
+    "Accounting.SecurityProofs.TS.TileLuck",
     "Pouw.SecurityProofs.RelativeSecurity.OverlapFloorK",
     "Pouw.SecurityProofs.RelativeSecurity.OverlapFloorKOneSided",
     "Pouw.SecurityProofs.RelativeSecurity.StagedFloorK",
@@ -13843,6 +15230,9 @@
     "_private.Flock.Bytes.0.Flock.hexDigit": "242ae26c46d2dc228fe0433d3eaba3116be00c18226f89bb07d3bb80ff51768a"
    },
    "guarantees": [
+    "Claims.Sampling.Binding_meets",
+    "Claims.Sampling.Binding_meets_one",
+    "Claims.Witness.Recursion.Complete_meets_deployed",
     "Flock.SecurityProofs.EndToEnd",
     "Flock.SecurityProofs.EndToEndDrawn",
     "Flock.SecurityProofs.EndToEndHidden",
@@ -14044,6 +15434,7 @@
     "Flock.instInhabitedWire.default": "e9f25bc5c2c2da965cfb4d19d740bd50159c32e1c96797e9df4c8ec6e7b0f5a7"
    },
    "guarantees": [
+    "Claims.Witness.Recursion.Complete_meets_deployed",
     "Flock.SecurityProofs.EndToEnd",
     "Flock.SecurityProofs.EndToEndDrawn",
     "Flock.SecurityProofs.EndToEndHidden",
@@ -14146,6 +15537,7 @@
     "_private.Flock.CircuitType.0.Flock.CircuitType.portsOfJson": "85a1e80d9ab12ab9944d8f9e4ae23e0c8e42bf3a119a63e3d3a46be5c46ee99f"
    },
    "guarantees": [
+    "Claims.Witness.Recursion.Complete_meets_deployed",
     "Flock.SecurityProofs.EndToEnd",
     "Flock.SecurityProofs.EndToEndDrawn",
     "Flock.SecurityProofs.EndToEndHidden",
@@ -14207,6 +15599,7 @@
     "Flock.CoinTree.ofHello": "a145ee007c12826ee60aca145efa20c71dc9439960cbb439e48cf12ffb7fa6da"
    },
    "guarantees": [
+    "Claims.Witness.Recursion.Complete_meets_deployed",
     "Flock.SecurityProofs.EndToEnd",
     "Flock.SecurityProofs.EndToEndDrawn",
     "Flock.SecurityProofs.EndToEndHidden",
@@ -14279,6 +15672,7 @@
     "Flock.rd32": "1023ca573b2f5767610f1a96d09b95c162b412865dc098ab0b52fcfc817c3098"
    },
    "guarantees": [
+    "Claims.Witness.Recursion.Complete_meets_deployed",
     "Flock.SecurityProofs.EndToEnd",
     "Flock.SecurityProofs.EndToEndDrawn",
     "Flock.SecurityProofs.EndToEndHidden",
@@ -14325,6 +15719,7 @@
     "Flock.Derive.ceilPow2": "cff16037ede34ed07b6b641f362f23fe908fb00ef0a5c361b12c3d6a4c1df4e0"
    },
    "guarantees": [
+    "Claims.Witness.Recursion.Complete_meets_deployed",
     "Flock.SecurityProofs.EndToEnd",
     "Flock.SecurityProofs.EndToEndDrawn",
     "Flock.SecurityProofs.EndToEndHidden",
@@ -14445,6 +15840,7 @@
     "Flock.DeriveAll.xorCols": "8513b9a13c7edc534fcea36661c4bb85f82d4a03bbf60a1be1a24956d344412e"
    },
    "guarantees": [
+    "Claims.Witness.Recursion.Complete_meets_deployed",
     "Flock.SecurityProofs.EndToEnd",
     "Flock.SecurityProofs.EndToEndDrawn",
     "Flock.SecurityProofs.EndToEndHidden",
@@ -14532,6 +15928,7 @@
     "Flock.DeriveAll.walk._sparseCasesOn_3": "2287c60cb4cbc4629081a9aa0db5774e702e1de63c7f7352719eae3f5d899bba"
    },
    "guarantees": [
+    "Claims.Witness.Recursion.Complete_meets_deployed",
     "Flock.SecurityProofs.EndToEnd",
     "Flock.SecurityProofs.EndToEndDrawn",
     "Flock.SecurityProofs.EndToEndHidden",
@@ -14817,6 +16214,28 @@
     "Flock.phi8Table": "c843996d571e5071f33e1788901951831ea8ffbcfc2f615881a46ee626da9154"
    },
    "guarantees": [
+    "Claims.Flock.decoder_meets_plain",
+    "Claims.Flock.decoder_meets_zk",
+    "Claims.Flock.masked_meets_zk",
+    "Claims.Flock.scope_meets_plain",
+    "Claims.Flock.scope_meets_zk",
+    "Claims.Sampling.Binding_meets",
+    "Claims.Sampling.Binding_meets_one",
+    "Claims.Sampling.decoder_meets_plain",
+    "Claims.Sampling.decoder_meets_zk",
+    "Claims.Sampling.masked_meets_zk",
+    "Claims.Witness.Recursion.BitsFlock_meets",
+    "Claims.Witness.Recursion.Bits_meets",
+    "Claims.Witness.Recursion.Complete_meets_deployed",
+    "Claims.Witness.Recursion.Efficient_meets",
+    "Claims.Witness.Recursion.Inner.KSAbort_meets",
+    "Claims.Witness.Recursion.Inner.KS_meets",
+    "Claims.Witness.Recursion.KSFlock_meets",
+    "Claims.Witness.Recursion.KSPriv_meets",
+    "Claims.Witness.Recursion.KS_meets",
+    "Claims.Witness.Recursion.ScopeMatches_meets",
+    "Claims.Witness.Recursion.ZKPriv_meets",
+    "Claims.Witness.Recursion.ZK_meets",
     "Flock.SecurityProofs.EndToEnd",
     "Flock.SecurityProofs.EndToEndDrawn",
     "Flock.SecurityProofs.EndToEndHidden",
@@ -14976,6 +16395,8 @@
     "Flock.Sha512.word": "b1086da4c00e9cf65abe8a24bde5bf83aa2e6897854b30766e6be070dc7de279"
    },
    "guarantees": [
+    "Claims.Sampling.Binding_meets",
+    "Claims.Sampling.Binding_meets_one",
     "Flock.SecurityProofs.EndToEnd",
     "Flock.SecurityProofs.EndToEndDrawn",
     "Flock.SecurityProofs.EndToEndHidden",
@@ -15061,6 +16482,8 @@
     "_private.Flock.Hm96.0.Flock.Hm96.tag": "824dbcae40eb3817e77d8bdc91e1a12f0b1fe7ccbebc0be5d3097e7c4fc436eb"
    },
    "guarantees": [
+    "Claims.Sampling.Binding_meets",
+    "Claims.Sampling.Binding_meets_one",
     "Flock.SecurityProofs.EndToEnd",
     "Flock.SecurityProofs.EndToEndDrawn",
     "Flock.SecurityProofs.EndToEndHidden",
@@ -15410,6 +16833,8 @@
     "_private.Flock.HmRow.0.Flock.HmRow.templateStrata": "d1afdd12f32817b3c645c55e29c61170a35ba172f9918cee9d3e1221f392b5c6"
    },
    "guarantees": [
+    "Claims.Sampling.Binding_meets",
+    "Claims.Sampling.Binding_meets_one",
     "Flock.SecurityProofs.EndToEnd",
     "Flock.SecurityProofs.EndToEndDrawn",
     "Flock.SecurityProofs.EndToEndHidden",
@@ -15545,6 +16970,7 @@
     "_private.Flock.Layout.0.Flock.Layout.natArr": "1908b58b2178b82233146f7d2ab2142db10b35eee48f9b7ff6721ce79d97aaba"
    },
    "guarantees": [
+    "Claims.Witness.Recursion.Complete_meets_deployed",
     "Flock.SecurityProofs.EndToEnd",
     "Flock.SecurityProofs.EndToEndDrawn",
     "Flock.SecurityProofs.EndToEndHidden",
@@ -15598,6 +17024,7 @@
     "Flock.libraryTable?": "2e4f5eb96b2eaa7ac47dad86353794bc75e4ba83998eb37a6b6780b50bc321cf"
    },
    "guarantees": [
+    "Claims.Witness.Recursion.Complete_meets_deployed",
     "Flock.SecurityProofs.EndToEnd",
     "Flock.SecurityProofs.EndToEndDrawn",
     "Flock.SecurityProofs.EndToEndHidden",
@@ -15821,6 +17248,7 @@
     "Flock.sibsOf": "35ad17c257b59414cec25e4a24c9bcbcf4d5fc94e6451016d84fff8ba8cd403b"
    },
    "guarantees": [
+    "Claims.Witness.Recursion.Complete_meets_deployed",
     "Flock.SecurityProofs.EndToEnd",
     "Flock.SecurityProofs.EndToEndDrawn",
     "Flock.SecurityProofs.EndToEndHidden",
@@ -15917,6 +17345,8 @@
     "_private.Flock.Net.0.Flock.Net.num": "3eabe4a40fe243c1336f63a815a8766ef8f2f271de028d86056f366d4e139592"
    },
    "guarantees": [
+    "Claims.Sampling.Binding_meets",
+    "Claims.Witness.Recursion.Complete_meets_deployed",
     "Flock.SecurityProofs.EndToEnd",
     "Flock.SecurityProofs.EndToEndDrawn",
     "Flock.SecurityProofs.EndToEndHidden",
@@ -16580,6 +18010,9 @@
     "Flock.instInhabitedPublic.default": "32d7220c79f8cee269c9c870fbbb12ec7d42e4e3e3c4c03d7555d33400da438b"
    },
    "guarantees": [
+    "Claims.Sampling.Binding_meets",
+    "Claims.Sampling.Binding_meets_one",
+    "Claims.Witness.Recursion.Complete_meets_deployed",
     "Flock.SecurityProofs.EndToEnd",
     "Flock.SecurityProofs.EndToEndDrawn",
     "Flock.SecurityProofs.EndToEndHidden",
@@ -17074,7 +18507,7 @@
    ]
   },
   "Flock.RecCoins": {
-   "digest": "c165166c5ace7bff2874f2477ab073177336b7392500373f89da2257b16605cd",
+   "digest": "ec8db99d624e1077610b535279d7481dba25206fcc01573b72f0dcfcf7f1ff57",
    "definitions": {
     "Flock.RecCoins.C3": "ad22be988630c4ef35240abbc128d3f3b94009c8858477ff6dbfe4a2d71a68cf",
     "Flock.RecCoins.C3.coins": "fb0c0b18cbe96a25e62783a0293d3bcb904854eaddf13076a480f92d1489c427",
@@ -17087,6 +18520,7 @@
     "Flock.RecCoins.DIRS_WORDS": "19a333c42469f80f155f94115fff18fe185911d4775d9e5922c2db4e0de6fb64",
     "Flock.RecCoins.Files": "3dbec4210f80e709a6737ec6482394161588b9eae69133aab7f20d735fded43e",
     "Flock.RecCoins.Files.circuit": "5ede6f36d3bfdca317e4cfcd49b3f0d2c8a5393814ef0e04c676f48d5357d636",
+    "Flock.RecCoins.Files.drawnSpec": "52e5b095b44e7e227c23b71a8340d9b836109fab2f493614edf928c5aa2c16ee",
     "Flock.RecCoins.Files.inner": "d7600bc8435fc7885f55a2fb568ae17266bc2768fcd4d6b665395230ff50eb01",
     "Flock.RecCoins.Files.partition": "4476fe837bc53787366463c4f8198e4746745fee9386c309766d63c4ca5079bd",
     "Flock.RecCoins.Files.pub": "cc1c82d7268cc1a2da060aebbc36c12cc3b645731ef016b32c4ae1f8c8ad12fb",
@@ -17099,11 +18533,10 @@
     "Flock.RecCoins.Inner.combOf": "79171366d420992ea55c91704738a61f581437e5d8cf0854bf15cd67f0e650cf",
     "Flock.RecCoins.Inner.extras": "839ee7452df0f6317b5a745f01a9574ed815057ac322b879e43199df919931c9",
     "Flock.RecCoins.Inner.kLog": "cdda9a735ff2b3b4e1caafe1308b1e4766368dbaab7a05d2a651bd84407eefb6",
-    "Flock.RecCoins.Inner.load": "823ce8f6de093c9070e4414f46aa881c8af9e20ef522c96a93c4b8ef5f583f28",
+    "Flock.RecCoins.Inner.load": "d7f13cebea0f376d4688b5857a773d89022c1645b3bddf9e5112b38e4be1d844",
     "Flock.RecCoins.Inner.load._sparseCasesOn_1": "88aa8b1d64ec39db02118cf03354cac641238abf71777ee624ffb67c6fe52c12",
     "Flock.RecCoins.Inner.m": "6c4e1e4ac23c2a452a05a6b101a9e06b01aec19e9bea93aabd4d718483e55bcd",
-    "Flock.RecCoins.Inner.ofJson": "25d093de5af67cc1a7e23629423802dd101bcc27bed31a77d5c7b83afd09c904",
-    "Flock.RecCoins.Inner.ofJson._sparseCasesOn_1": "724a8d209f4e924931b032c058380ccf2f873b1bbede208df3a5ba15fdedf203",
+    "Flock.RecCoins.Inner.ofJson": "56787e3293ba35555de4ed3546f6166ad4a4a8b66ecb3dbdd62c7449f75f66ff",
     "Flock.RecCoins.Inner.rep": "ddf71ea4c72c06656faf1967c67cb249b435012245a2a82b51a2310501912492",
     "Flock.RecCoins.Inner.rounds": "dc293f4076ec71db209eb9075f83495647a14f7b8c186f375d955fc5a32f3bfc",
     "Flock.RecCoins.Inner.roundsOf": "792adedcf2a1a6552ddc71dda341d57de348c414be18079aa253e6e77717da8d",
@@ -17158,6 +18591,7 @@
     "Flock.RecCoins.commitRow": "48e36581cf7e3d3796b210f5907cfda8daa430d6b04eb9a04761c5f996990264",
     "Flock.RecCoins.dirsRow": "f40fdeb3beb7826e7eb47eff0b5fd0c7d96735743f3c2996ac36122031909a99",
     "Flock.RecCoins.dotF": "b414dfc1ea6a15f3e744f21fd8fef1ee2fbb4e01b30143a916936660ea9fe2e9",
+    "Flock.RecCoins.drawnSpec": "21c4fe5037040fae6eeac6d689f7ea3902f5ae53500228d9d81d8a39ee62b306",
     "Flock.RecCoins.exceptOf": "3a26d9a356870ca580930b6ec66829aae0abe7635763b57c58e020c28272b55c",
     "Flock.RecCoins.f128Of": "ba2c3f95884de49f1af80f924f1d937a745a377726dd85c9613b4e5b83d3b083",
     "Flock.RecCoins.f128sOf": "d07931e7a75114af8c2a906beaf52e25edb3341c88db35aed500f61e66d14073",
@@ -17165,6 +18599,8 @@
     "Flock.RecCoins.layoutFactors": "c365b62146cbdb55e11f1e522f279f387556eb9aa7dde9fa3d4e9db4c9e0eed8",
     "Flock.RecCoins.opening": "8c9c48b6c0a22e27b1a0f4ff413697d17183184ae0ab8ed313e9eca58b39d893",
     "Flock.RecCoins.padTo": "5acce2e6dbd07c534fe76d7d853a89f80288f6d6d909a1e8bcaea00633b55a21",
+    "Flock.RecCoins.recordDraw": "63feb3ddeeea65f132c3f3bfc6e75318e8d101b359c83a6df83d92e85b80fe46",
+    "Flock.RecCoins.recordDraw._sparseCasesOn_1": "b48f16b447b67e75dcacb10671c7235ad9253c298ec0d17d0e5fd06c44835994",
     "Flock.RecCoins.sparseCoins": "f49cb295170e33f39ebf7b1deb260a2c49c6b84ddb243f696c0ac322a7457eb1",
     "Flock.RecCoins.sparseV": "8b1ff69cae886d49ac3fdbd3bd0cdf6e1513f4558dd8cec83e04c6c1a95b38c0",
     "Flock.RecCoins.stackedParams": "c990ac16582954820e9fbdb87b21f7b1b7242a938a1a5a73c2e98f9dc1a42b76",
@@ -17745,6 +19181,7 @@
     "Flock.StreamRec.rounds": "5b146dec61efbb297a72cb7578d80cbb1da9e81ebd64fae52b0edb5b4919f4f3"
    },
    "guarantees": [
+    "Claims.Witness.Recursion.Complete_meets_deployed",
     "Flock.SecurityProofs.EndToEnd",
     "Flock.SecurityProofs.EndToEndDrawn",
     "Flock.SecurityProofs.EndToEndHidden",
@@ -17822,6 +19259,8 @@
     "_private.Flock.Registered.0.Flock.Registered.tagged": "57d4d01156f6691bd7c899ff653c3c5f75b8fa9183ad7afbcaef5d134b584330"
    },
    "guarantees": [
+    "Claims.Sampling.Binding_meets",
+    "Claims.Sampling.Binding_meets_one",
     "Flock.SecurityProofs.EndToEndRegistered",
     "Flock.SecurityProofs.EndToEndRegisteredDrawn",
     "Flock.SecurityProofs.PublicAudit",
@@ -17853,6 +19292,7 @@
     "Flock.mkRegion": "5f114dc12db36808d8d8d876a67e06d165ba81c44eb0ca2cd345fdadd66b5188"
    },
    "guarantees": [
+    "Claims.Witness.Recursion.Complete_meets_deployed",
     "Flock.SecurityProofs.EndToEnd",
     "Flock.SecurityProofs.EndToEndDrawn",
     "Flock.SecurityProofs.EndToEndHidden",
@@ -18019,6 +19459,7 @@
     "Flock.instInhabitedStmt.default": "2cc8a24a64bf8126a8f5ba4bbc778b1917a99776b220735bfaa7cd4f041eba7d"
    },
    "guarantees": [
+    "Claims.Witness.Recursion.Complete_meets_deployed",
     "Flock.SecurityProofs.EndToEnd",
     "Flock.SecurityProofs.EndToEndDrawn",
     "Flock.SecurityProofs.EndToEndHidden",
@@ -18186,6 +19627,7 @@
     "_private.Flock.Tags.0.Flock.Tags.s": "a4a190d4a37066637be18f3ca5b4adc590b08525521438547f56b4222a5775ff"
    },
    "guarantees": [
+    "Claims.Witness.Recursion.Complete_meets_deployed",
     "Flock.SecurityProofs.EndToEnd",
     "Flock.SecurityProofs.EndToEndDrawn",
     "Flock.SecurityProofs.EndToEndHidden",
@@ -18411,6 +19853,7 @@
     "_private.Flock.Typed.0.Flock.Typed.ctx": "35fd1c8fb7bc6ab93cf2e1f04c60788cdda858e75b8e305bb3d35a34ee42c844"
    },
    "guarantees": [
+    "Claims.Witness.Recursion.Complete_meets_deployed",
     "Flock.SecurityProofs.EndToEnd",
     "Flock.SecurityProofs.EndToEndDrawn",
     "Flock.SecurityProofs.EndToEndHidden",
@@ -19003,6 +20446,21 @@
    },
    "guarantees": ["Accounting.SecurityProofs.CapacityOfStateBound", "Accounting.SecurityProofs.DerivedStateResidual"]
   },
+  "Models.Accounting.Guarantees.CoinFlow": {
+   "digest": "99f4e4094d2d88de5479696cc17615501e7d25714d20fa45af58fa1a647b7421",
+   "definitions": {
+    "Accounting.Guarantees.CoinFlow.CoinsThroughNoise": "2beeecb07dcf0c75733ed413e3cd16e02026ecc2c65e691ccd447b24413121a1",
+    "Accounting.Guarantees.CoinFlow.OneReader": "a5bd869be9c1a01d1840edb0e829355663b08092622b3e6d85e221be562e79b7",
+    "Accounting.Guarantees.CoinFlow.PointMass": "6b45123e0d73c6d05f279fd9cc554141d074d0532c708758bd0db30fa4a56900",
+    "Accounting.Guarantees.CoinFlow.ViewIndependent": "72be5c3ed1a5ef22a2d5d5a1c1564c89cd27978727b2d19bbf6eccd4f39e23cb"
+   },
+   "guarantees": [
+    "Accounting.SecurityProofs.CoinFlow.CoinsThroughNoise",
+    "Accounting.SecurityProofs.CoinFlow.OneReader",
+    "Accounting.SecurityProofs.CoinFlow.PointMass",
+    "Accounting.SecurityProofs.CoinFlow.ViewIndependent"
+   ]
+  },
   "Models.Accounting.Guarantees.Confidence": {
    "digest": "efce790a6464ea41d877ef6d1bf1c6db1c02c97c43a096e52b0936b6c9b035dc",
    "definitions": {
@@ -19535,6 +20993,41 @@
     "Accounting.SecurityProofs.TS.Fx1FoldFanIn"
    ]
   },
+  "Models.Accounting.Guarantees.TS.Grind": {
+   "digest": "1e8eaa8f6aefa25e9b41a4ce55a36f037aaabdd86bc3c0f664b7b42a16f5c811",
+   "definitions": {
+    "Accounting.Guarantees.TS.ExchangeTail": "05121f965b48d60a609591311cc6bdf837caf60d64a9b0ae332f21ecab0bd9a1",
+    "Accounting.Guarantees.TS.GrindMass": "6c0771509d945a8073237af7b9ed7d7f92bd728bc73942c6ea6dc82085b9ac41",
+    "Accounting.Guarantees.TS.GrindPremium": "6e463ba487a23cba9042bf8bc9e779ebd1e85321a24b6402646dc5d9e91c276c",
+    "Accounting.Guarantees.TS.GrindPremiumAt": "be54699c6526dda578aa3134f2405410d0e09a1f3dba4ca813bc7000fc2a57d9",
+    "Accounting.Guarantees.TS.GrindTail": "eeed11b6685efd2a686e030461eacf6e7744e8c0e614626f68846e5b54be02e9",
+    "Accounting.Guarantees.TS.LuckMoment": "310172cf7885c798713c55e9b13fed3c902b6e1f2ea1019eb797cbaded7a7c1d",
+    "Accounting.Guarantees.TS.PrivateMoment": "78eaf96a7e98c0b4b6602ee3f97cb6b392a44a029d46d7759346766584555918",
+    "Accounting.Guarantees.TS.TemplateCondition": "c2c9e4f72510283b3c848a52d48b885355ca11fd3a243d6f402662558ccd70c4",
+    "Accounting.Guarantees.TS.TemplateMoment": "bde268590a7e623401d9553be57e6ce158c8a7dc45fa5985d09ca1da0367110b",
+    "Accounting.Guarantees.TS.TileLuck": "bd43f76f648e6cdf360572662fb48b637b904f1061ce8d73076f346575c4d0ee"
+   },
+   "guarantees": [
+    "Accounting.SecurityProofs.TS.ExchangeTail",
+    "Accounting.SecurityProofs.TS.GrindMass",
+    "Accounting.SecurityProofs.TS.GrindPremium",
+    "Accounting.SecurityProofs.TS.GrindPremiumAt",
+    "Accounting.SecurityProofs.TS.GrindTail",
+    "Accounting.SecurityProofs.TS.LuckMoment",
+    "Accounting.SecurityProofs.TS.PrivateMoment",
+    "Accounting.SecurityProofs.TS.TemplateCondition",
+    "Accounting.SecurityProofs.TS.TemplateMoment",
+    "Accounting.SecurityProofs.TS.TileLuck"
+   ]
+  },
+  "Models.Accounting.Guarantees.TS.LowBit": {
+   "digest": "821f5f90febb8764f6e9e8825df495dbab11706d0cc211b4b0456d4223a95180",
+   "definitions": {
+    "Accounting.Guarantees.TS.LiLowBit": "9e1ac794149ca24e9d47e3c13ac9353f5f345aec23f40606620f4ac759fd39ba",
+    "Accounting.Guarantees.TS.OneRegisterLowBit": "5ce8e66780bfa2df640703a6d7e615b5529195aaa193df00b7a1d373dfe7b32d"
+   },
+   "guarantees": ["Accounting.SecurityProofs.TS.LiLowBit", "Accounting.SecurityProofs.TS.OneRegisterLowBit"]
+  },
   "Models.Accounting.Guarantees.TS.Receipt": {
    "digest": "651e1dea3fd416c5b65434995caf696b4f0489138499787702674ce157cee9bc",
    "definitions": {
@@ -19636,9 +21129,9 @@
    "guarantees": ["Flock.SecurityProofs.ClaimsStated"]
   },
   "Models.Flock.Guarantees.RecursionClaims": {
-   "digest": "db8af79bc1dbef990eb9db9fca394af7c965650deb853b9bb8ba00ddd2deaabe",
+   "digest": "f9c9a8b3e7216b3250360433d3c87f7d47618061af670274116c318eae87ea7e",
    "definitions": {
-    "Flock.Guarantees.RecursionClaimsStated": "2340d5fcc49bcb725668a405eb96a598d85a92e1cdbce1ea0760ca71665cda8e"
+    "Flock.Guarantees.RecursionClaimsStated": "4761214cc9fdd9436ddc6bc3a2f36785428ebb5073bbfb7b11943afc027f3a80"
    },
    "guarantees": ["Flock.SecurityProofs.RecursionClaimsStated"]
   },
@@ -19648,6 +21141,15 @@
     "Flock.Guarantees.SamplingClaimsStated": "1e0fc5c38949339e91de0405310b1ab3387f6310c860ba6841f745ce4dc16309"
    },
    "guarantees": ["Flock.SecurityProofs.SamplingClaimsStated"]
+  },
+  "Models.Hash.Guarantees": {
+   "digest": "6c2584c904a5dff93f2875bde664ff00bf4603d98e68237987ce6521d0999c76",
+   "definitions": {
+    "Hash.Guarantees.RowBinding": "a5f3d22ed07d19252f31e6e2087a0289c6f629a1631b4c00a4f8e272d652820e",
+    "Hash.Guarantees.Stated": "d6ec0d5bf438d5563dd1f1f18ef063e5d036efe021df874888fea7c94d357569",
+    "Hash.Guarantees.TreeBinding": "5a6ac8239b2f217ee43962de29f8aca8baceb9c73ebc5f095fa328da95bd9d1a"
+   },
+   "guarantees": ["Hash.SecurityProofs.Stated"]
   },
   "Models.Nci.Assumptions": {
    "digest": "77db2b40d39cc8b6bc5517178d1ef001594f5057e5465c9e134f7555db16b5f3",
@@ -20340,12 +21842,17 @@
    "guarantees": ["Pouw.SecurityProofs.Dimension.A2WordsIff"]
   },
   "Models.Pouw.Guarantees.Eps1": {
-   "digest": "aa16867d11fcc653ae115f995e369927346d45f04bb50164491a40332af01866",
+   "digest": "57267a69f07e8658ed180d71f752dc72b4f2758e38a2b1884c040a7941b3e709",
    "definitions": {
+    "Pouw.Guarantees.Eps1.ClassPSlots": "5c8ead54d04544607c3df69ac68ed0d14522cdfc86b66ec368255feb0ce66ead",
     "Pouw.Guarantees.Eps1.WordLocalGeneral": "06b1ba2c4f60b3a0a2072cfbddedd342e3660c3110e75667c92473c62c892b4f",
     "Pouw.Guarantees.Eps1.WordLocalZero": "8605a67a07179eaac27dc2366f8f349c0ef6ec8cf34acbe87292092454859e2e"
    },
-   "guarantees": ["Pouw.SecurityProofs.Eps1.WordLocalGeneral", "Pouw.SecurityProofs.Eps1.WordLocalZero"]
+   "guarantees": [
+    "Pouw.SecurityProofs.Eps1.ClassPSlots",
+    "Pouw.SecurityProofs.Eps1.WordLocalGeneral",
+    "Pouw.SecurityProofs.Eps1.WordLocalZero"
+   ]
   },
   "Models.Pouw.Guarantees.Game": {
    "digest": "064ea4e3db6eda646acb0c5d37b084297521cb4a0c034f43ba08118bb232db1a",
@@ -20595,13 +22102,16 @@
    "guarantees": ["Pouw.SecurityProofs.PearlC.TileCheck4WordsCore", "Pouw.SecurityProofs.PearlC.TileCheck8WordsCore"]
   },
   "Models.Pouw.Guarantees.Receipt": {
-   "digest": "7acfa71ad220cd7f4ba8157239211c794d63c136f3e33872423e1de73bf2bab5",
+   "digest": "d4f4b3031b40b0ab8db0fd091cc42e618392d5a2f92cea93b2d1b6c6e8aca3d1",
    "definitions": {
     "Pouw.Guarantees.Receipt.DuoCheckpointNoKernel": "b5b6672f049f845a232bc54e68f32566d77d40b9f6e2110d038b9a60578ff390",
     "Pouw.Guarantees.Receipt.DuoLongRunKernel": "3abfe6c2d5b475b734b6ffde0dc0a5c06a23a551f0eba92cf798912930a4c8c1",
+    "Pouw.Guarantees.Receipt.DuoPairAtStateNotInjective": "da36146359025bb0f7a742f556f73a16592e101a9dd699bf46bb02c485b42f06",
     "Pouw.Guarantees.Receipt.DuoPairNoKernel": "1039a7b3dddf68dfa9e864f897ef57aa49bf17ba7765af07a1332595eef247f9",
+    "Pouw.Guarantees.Receipt.DuoPairXorNoKernel": "1e61522b4d4e8faf1c22cc8c4b4b67c01e0bae576e8c18f3ed66804af03a035e",
     "Pouw.Guarantees.Receipt.DuoQuadNoKernel": "298232eb24c7be9f9f65959660fca3aa8d57d2373f9da1fb34470020a5f872f9",
     "Pouw.Guarantees.Receipt.DuoReceiptNotInjective": "23987edb81eb08f5f48eca3c178776648ed20318a52ad7e6204b8f483e47df87",
+    "Pouw.Guarantees.Receipt.DuoRunAtStateNotInjective": "8d0966afc9a0a6d4580b9fc698e26dc35a5dd3e938bd827375422d862af0216e",
     "Pouw.Guarantees.Receipt.DuoRunWordInjective": "c62e3619993c5ddafb8f07e364d2733dc3f57bd60891bb3006e06a6d32a3ae60",
     "Pouw.Guarantees.Receipt.DuoStepBijective": "5fe72ace79835deaebb0f01d6407fb313ad1f57c2a53375318c667f42c27c828",
     "Pouw.Guarantees.Receipt.DuoTripleNoKernel": "e2f1ae4ae008bc102256d3583daf1493f02dd198e27cb904c16905596c78593d",
@@ -20609,6 +22119,7 @@
     "Pouw.Guarantees.Receipt.DuoWordInjective": "8f4f6573010e26ca624a4fb35b780ab09ff86f3e6b7b5c12867efd287dd3688d",
     "Pouw.Guarantees.Receipt.DuoWordProjNoKernel": "3f76b2cfff750a0195bc6bc92416551ae9e21675b128f85636e8d66b926b7ebd",
     "Pouw.Guarantees.Receipt.Fx1PairNoKernel": "50855c03638c9f1a41b751d04cf419943d70f30b5f9e6634ac87ffae1342cc3a",
+    "Pouw.Guarantees.Receipt.Fx1PairXorNoKernel": "9a7e8b051ee856e6c454d168beabb634ec1e7dad20795fe407c8c0042d90297f",
     "Pouw.Guarantees.Receipt.Fx1QuadNoKernel": "1e7a490c457375d5bda075d70bc62799fa78664faaec8daf222b10f2ccdef308",
     "Pouw.Guarantees.Receipt.Fx1RunWordInjective": "4d5382df57197db1b1f816b1c410f38a3096de8a8e1e162c3cf9c6109e1b4ab7",
     "Pouw.Guarantees.Receipt.Fx1StepBijective": "ca85cc93eb07b153589d6be6bffd65ef4722071ea356286c5c509ad4c7826434",
@@ -20621,9 +22132,12 @@
    "guarantees": [
     "Pouw.SecurityProofs.Receipt.DuoCheckpointNoKernel",
     "Pouw.SecurityProofs.Receipt.DuoLongRunKernel",
+    "Pouw.SecurityProofs.Receipt.DuoPairAtStateNotInjective",
     "Pouw.SecurityProofs.Receipt.DuoPairNoKernel",
+    "Pouw.SecurityProofs.Receipt.DuoPairXorNoKernel",
     "Pouw.SecurityProofs.Receipt.DuoQuadNoKernel",
     "Pouw.SecurityProofs.Receipt.DuoReceiptNotInjective",
+    "Pouw.SecurityProofs.Receipt.DuoRunAtStateNotInjective",
     "Pouw.SecurityProofs.Receipt.DuoRunWordInjective",
     "Pouw.SecurityProofs.Receipt.DuoStepBijective",
     "Pouw.SecurityProofs.Receipt.DuoTripleNoKernel",
@@ -20631,6 +22145,7 @@
     "Pouw.SecurityProofs.Receipt.DuoWordInjective",
     "Pouw.SecurityProofs.Receipt.DuoWordProjNoKernel",
     "Pouw.SecurityProofs.Receipt.Fx1PairNoKernel",
+    "Pouw.SecurityProofs.Receipt.Fx1PairXorNoKernel",
     "Pouw.SecurityProofs.Receipt.Fx1QuadNoKernel",
     "Pouw.SecurityProofs.Receipt.Fx1RunWordInjective",
     "Pouw.SecurityProofs.Receipt.Fx1StepBijective",
@@ -20706,6 +22221,18 @@
     "FlockLevel3.unpack": "34d46d73da3087e523794f03fdf8cc353e89599bab7796dabf68f8d46e7a5d66"
    },
    "guarantees": [
+    "Claims.Flock.decoder_meets_plain",
+    "Claims.Flock.decoder_meets_zk",
+    "Claims.Sampling.decoder_meets_plain",
+    "Claims.Sampling.decoder_meets_zk",
+    "Claims.Witness.Recursion.BitsFlock_meets",
+    "Claims.Witness.Recursion.Bits_meets",
+    "Claims.Witness.Recursion.Efficient_meets",
+    "Claims.Witness.Recursion.Inner.KSAbort_meets",
+    "Claims.Witness.Recursion.Inner.KS_meets",
+    "Claims.Witness.Recursion.KSFlock_meets",
+    "Claims.Witness.Recursion.KSPriv_meets",
+    "Claims.Witness.Recursion.KS_meets",
     "Flock.SecurityProofs.EndToEnd",
     "Flock.SecurityProofs.EndToEndDrawn",
     "Flock.SecurityProofs.EndToEndHidden",
@@ -20825,6 +22352,27 @@
     "FlockLevel3.instFieldGF128": "8d89e3a068c342c818866b82d507901b8cea23772c0345b39cc1467af187f955"
    },
    "guarantees": [
+    "Claims.Flock.decoder_meets_plain",
+    "Claims.Flock.decoder_meets_zk",
+    "Claims.Flock.masked_meets_zk",
+    "Claims.Flock.scope_meets_plain",
+    "Claims.Flock.scope_meets_zk",
+    "Claims.Sampling.Binding_meets",
+    "Claims.Sampling.Binding_meets_one",
+    "Claims.Sampling.decoder_meets_plain",
+    "Claims.Sampling.decoder_meets_zk",
+    "Claims.Sampling.masked_meets_zk",
+    "Claims.Witness.Recursion.BitsFlock_meets",
+    "Claims.Witness.Recursion.Bits_meets",
+    "Claims.Witness.Recursion.Efficient_meets",
+    "Claims.Witness.Recursion.Inner.KSAbort_meets",
+    "Claims.Witness.Recursion.Inner.KS_meets",
+    "Claims.Witness.Recursion.KSFlock_meets",
+    "Claims.Witness.Recursion.KSPriv_meets",
+    "Claims.Witness.Recursion.KS_meets",
+    "Claims.Witness.Recursion.ScopeMatches_meets",
+    "Claims.Witness.Recursion.ZKPriv_meets",
+    "Claims.Witness.Recursion.ZK_meets",
     "Flock.SecurityProofs.EndToEnd",
     "Flock.SecurityProofs.EndToEndDrawn",
     "Flock.SecurityProofs.EndToEndHidden",
@@ -22554,6 +24102,8 @@
     "FlockSoundness.Binding.hm96Pair": "c1ac7aba11bea03bf4156061f96ef5c100b0e3731b63980fccfb9a29476c4083"
    },
    "guarantees": [
+    "Claims.Sampling.Binding_meets",
+    "Claims.Sampling.Binding_meets_one",
     "Flock.SecurityProofs.EndToEnd",
     "Flock.SecurityProofs.EndToEndDrawn",
     "Flock.SecurityProofs.EndToEndHidden",
@@ -26881,6 +28431,8 @@
     "FlockSoundness.Merkle.xorBytes": "1a6543034cfd27812c0fa204112fe907680579ff63b51dbefc752739b3b890cf"
    },
    "guarantees": [
+    "Claims.Sampling.Binding_meets",
+    "Claims.Sampling.Binding_meets_one",
     "Flock.SecurityProofs.EndToEnd",
     "Flock.SecurityProofs.EndToEndDrawn",
     "Flock.SecurityProofs.EndToEndHidden",
@@ -27506,6 +29058,8 @@
     "FlockSoundness.Refine.toDig": "fc09670eec36ed92bef301805e7fd420fc6ae40c8d7e2e886967b6cc3de958a6"
    },
    "guarantees": [
+    "Claims.Sampling.Binding_meets",
+    "Claims.Sampling.Binding_meets_one",
     "Flock.SecurityProofs.EndToEnd",
     "Flock.SecurityProofs.EndToEndDrawn",
     "Flock.SecurityProofs.EndToEndHidden",
@@ -27598,6 +29152,8 @@
     "FlockSoundness.Refine.saltsOf": "a0d5812e80a2fd860d924b9a3b626466509453659b2f05d5e5748a45e51cc96b"
    },
    "guarantees": [
+    "Claims.Sampling.Binding_meets",
+    "Claims.Sampling.Binding_meets_one",
     "Flock.SecurityProofs.EndToEnd",
     "Flock.SecurityProofs.EndToEndDrawn",
     "Flock.SecurityProofs.EndToEndHidden",
