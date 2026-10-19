@@ -84,6 +84,10 @@ note:20261015T0553Z-draft-gpu-model-m1-v2)."""
 CHIP_BYTES = GPUS * GPU_CHIP_BYTES + HOST_CHIP_BYTES
 """S_chip, the node's: every GPU's on-chip storage and the host's caches (the red team's R6 F1,
 note:20261015T0705Z-draft-bandwidth-core-redteam)."""
+LINK_WINDOW_BYTES = 6_291_456
+"""One link window, what the node's boundary link can land in its memory at once beyond the link's rate: its TCP
+receive buffer at most, `net.ipv4.tcp_rmem`'s max on vy-nebius-2 (eth0's ring, 1,024 descriptors at a 1,500-byte MTU,
+holds less; r20261019-004759-4580)."""
 GPU_SQUARINGS_PER_S = {"p1024": 1.597 * 1.499e10, "p512": 1.567 * 5.13e10}
 """Assumption 5 stated per width, one RTX PRO 6000's share of the node: s·(1 + h) over the reference, s the best form
 on the GPU less its MOV and SEL and h the host's 128 cores at their IFMA bound over 8 reference GPUs

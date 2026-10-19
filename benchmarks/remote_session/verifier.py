@@ -28,8 +28,8 @@ One connection serves one registration and then `--sessions` sessions over it, e
    `--host-bytes` the same by kind against the node's HBM and host DRAM (`node_line`).
 
 With `--pace K` each session is paced (`audit.Pace`): a coin every K passes, each boundary message at
-`Session.next_boundary_ns`, the windows `--windows` stretches of about `--window-ms` each and a closing window, so the
-record has a time-held memory line.
+`Session.next_boundary_ns`, as many windows as `--windows` of about `--window-ms` hold at the calibration's median pass
+and a closing window, and γ declared per fixed `--window-ms`, so the record has a time-held memory line.
 
 A node has one live registration (`audit.Registry`), this process's own or kept across processes in `--registry`: a
 hello for a node with a live registration is answered `bye` with the reason and draws nothing. The process closes its
@@ -234,10 +234,14 @@ class Verifier:
     def __init__(self, conn: wire.Conn, *, source: bytes, windows: int, window_ns: int, samples: int, delta: float,
                  jitter_ns: int, clock=None, log=print, checks=None, lifetime: int = audit.LIFETIME,
                  registry: audit.Registry | None = None, hbm_bytes: int = HBM_BYTES, host_bytes: int = 0,
-                 pace: audit.Pace | None = None, disk_bytes_per_s: float = 0.0, link_bytes_per_s: float = 0.0) -> None:
+                 pace: audit.Pace | None = None, groups: int = 1, disk_bytes_per_s: float = 0.0,
+                 link_bytes_per_s: float = 0.0, disk_burst_bytes: float | None = None,
+                 link_burst_bytes: float | None = None) -> None:
         self.conn, self.source, self.W, self.T, self.lifetime = conn, source, windows, window_ns, lifetime
         self.hbm_bytes, self.host_bytes, self.regions, self.deferred = hbm_bytes, host_bytes, None, False
-        self.pace, self.disk_bytes_per_s, self.link_bytes_per_s = pace, disk_bytes_per_s, link_bytes_per_s
+        self.pace, self.groups = pace, groups
+        self.disk_bytes_per_s, self.link_bytes_per_s = disk_bytes_per_s, link_bytes_per_s
+        self.disk_burst_bytes, self.link_burst_bytes = disk_burst_bytes, link_burst_bytes
         self.checks = checks
         self.registry = audit.Registry() if registry is None else registry
         self.samples, self.delta, self.jitter_ns = samples, delta, jitter_ns
@@ -330,12 +334,12 @@ class Verifier:
                                jitter_ns=self.jitter_ns)
 
     def session(self, k: int, allowance_ns: int, not_before_ns: int | None) -> dict:
-        """One session.  Paced (`self.pace`, `audit.Pace`), its windows are `--windows` stretches of `groups` windows
-        of at most k passes each and the closing window, each drawing its share of `--samples`, so a stretch draws as
+        """One session.  Paced (`self.pace`, `audit.Pace`), its windows are `groups` for each of `--windows`, of at
+        most k passes each, and the closing window, each drawing its share of `--samples`, so `groups` windows draw as
         an unpaced window would; each boundary message leaves at `Session.next_boundary_ns`."""
         reg, pace = self.registration, self.pace
-        W = self.W if pace is None else pace.groups * self.W + 1
-        samples, window_ns = (self.samples, self.T) if pace is None else (math.ceil(self.samples / pace.groups), 1)
+        W = self.W if pace is None else self.groups * self.W + 1
+        samples, window_ns = (self.samples, self.T) if pace is None else (math.ceil(self.samples / self.groups), 1)
         params = audit.Params(reg.blocks, allowance_ns, W, samples, self.delta, window_ns=window_ns, codec=reg.codec,
                               receipt=reg.receipt, rows=reg.rows, lifetime=self.lifetime, deferred=self.deferred,
                               pace=pace)
@@ -549,8 +553,8 @@ class Verifier:
     def ledgers(self, record: audit.Record, arrivals: list[list[int]] = (), plans=None) -> dict:
         """The session's declared outputs (`declared`), the protocol's (`ledger`: γ against the node's R at spec and
         measured, per window as declared, and the memory line's forms), on the verifier's node (`ledger.Node.stated`:
-        every GPU's HBM and the host's DRAM, the node's S_chip and squaring ceiling, and `--disk-bytes-per-s` and
-        `--link-bytes-per-s`), whatever share of the node the store is on.  Both R are the verifier's, which the
+        every GPU's HBM and the host's DRAM, the node's S_chip and squaring ceiling, `--disk-bytes-per-s` and
+        `--link-bytes-per-s`, and their bursts), whatever share of the node the store is on.  Both R are the verifier's, which the
         prover's calibration can only raise: a prover reporting a slower read would shrink every term but the timing
         (MEM-24).  Each reading (`spec`, `measured`) also carries the session's terms (`audit.Ledger`) and its
         certified bytes, `(1 − γ)·R·Σ`, the same in both readings: they are what a session over part of the node
@@ -563,7 +567,8 @@ class Verifier:
         cal = self.calibration
         reported = float(cal["read_bytes_per_s"])
         stated = ledger.Node.stated(reported_read_bytes_per_s=reported, disk_bytes_per_s=self.disk_bytes_per_s,
-                                    link_bytes_per_s=self.link_bytes_per_s)
+                                    link_bytes_per_s=self.link_bytes_per_s, disk_burst_bytes=self.disk_burst_bytes,
+                                    link_burst_bytes=self.link_burst_bytes)
         spec, measured = stated.spec_bytes_per_s, stated.read_bytes_per_s
         rebuild = stated.rebuild(record.codec)
         node = {"gpus": timing.GPUS, "gpu_spec_bytes_per_s": timing.GPU_SPEC_BYTES_PER_S,
@@ -573,6 +578,8 @@ class Verifier:
         out = {"inputs": {"spec_bytes_per_s": spec, "measured_read_bytes_per_s": measured,
                           "reported_read_bytes_per_s": reported, "node": node,
                           "disk_bytes_per_s": stated.disk_bytes_per_s, "link_bytes_per_s": stated.link_bytes_per_s,
+                          "rebuild_burst_bytes": stated.rebuild_burst_bytes,
+                          "disk_burst_bytes": stated.disk_burst_bytes, "link_burst_bytes": stated.link_burst_bytes,
                           "chip_bytes": stated.chip_bytes, "encode_bytes_per_s": cal["encode_bytes_per_s"],
                           "squarings_per_s": rebuild.squarings_per_s, "rows": record.rows,
                           "span_ns": record.span_ns, "receipts": record.receipts, "passes": record.passes,
@@ -660,14 +667,19 @@ def main() -> int:
                     help="the node's host DRAM: with it the memory line is also by kind against HBM and DRAM "
                          "(`node_line`)")
     ap.add_argument("--pace", type=int, metavar="K",
-                    help="pace each session (`audit.Pace`): a coin every K passes, `--windows` stretches of about "
-                         "`--window-ms` each at the calibration's median pass (or --pace-pass-ms), and a closing window")
+                    help="pace each session (`audit.Pace`): a coin every K passes, as many windows as `--windows` of "
+                         "about `--window-ms` hold at the calibration's median pass (or --pace-pass-ms), a closing "
+                         "window, and γ per fixed `--window-ms`")
     ap.add_argument("--pace-pass-ms", type=float, default=0.0,
-                    help="the pass time a paced stretch is sized by (0: the calibration's median pass)")
+                    help="the pass time a paced session is sized by (0: the calibration's median pass)")
     ap.add_argument("--disk-bytes-per-s", type=float, default=0.0,
                     help="the node's disks' read ceiling, charged in the memory line (`ledger.Node`)")
     ap.add_argument("--link-bytes-per-s", type=float, default=0.0,
                     help="the node's boundary links' read ceiling, charged in the link-charged memory line")
+    ap.add_argument("--disk-burst-bytes", type=float,
+                    help="the most the disks bring back at once beyond their ceiling (default: a second of it)")
+    ap.add_argument("--link-burst-bytes", type=float,
+                    help="one link window, charged with the links (default: `timing.LINK_WINDOW_BYTES`)")
     ap.add_argument("--close", metavar="NODE_HEX",
                     help="close the node's live registration in --registry, its sessions counted as they stood, "
                          "and exit")
@@ -695,7 +707,8 @@ def main() -> int:
                  delta=2.0 ** a.delta_log2, jitter_ns=round(a.jitter_ms * 1e6),
                  log=lambda m: print(m, flush=True), checks=checks, lifetime=a.lifetime, registry=registry,
                  hbm_bytes=a.hbm_bytes, host_bytes=a.host_bytes, disk_bytes_per_s=a.disk_bytes_per_s,
-                 link_bytes_per_s=a.link_bytes_per_s)
+                 link_bytes_per_s=a.link_bytes_per_s, disk_burst_bytes=a.disk_burst_bytes,
+                 link_burst_bytes=a.link_burst_bytes)
     c0 = time.process_time_ns()
     try:
         reg, cal = v.register()
@@ -713,8 +726,9 @@ def main() -> int:
           flush=True)
     if a.pace is not None:
         pass_ns = a.pace_pass_ms * 1e6 or (cal["pass_ns"]["p50"] if "pass_ns" in cal else cal["pass_ns_max"])
-        v.pace = audit.Pace(a.pace, max(1, round(a.window_ms * 1e6 / (a.pace * pass_ns))))
-        print(f"verifier: paced, {json.dumps(v.pace.to_json())}", flush=True)
+        v.pace = audit.Pace(a.pace, round(a.window_ms * 1e6))
+        v.groups = max(1, round(a.window_ms * 1e6 / (a.pace * pass_ns)))
+        print(f"verifier: paced, {json.dumps(v.pace.to_json())}, {v.groups} windows a --window-ms", flush=True)
     rtt = v.ping(a.pings)
     allowance = v.allowance(rtt, a.quantile)
     print(f"verifier: rtt {json.dumps(rtt)}, allowance A = {allowance / 1e6:.3f} ms", flush=True)

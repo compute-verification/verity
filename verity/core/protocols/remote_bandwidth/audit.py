@@ -128,27 +128,23 @@ windows unless the prover appends it again, which gives it a fresh index and a f
 @dataclass(frozen=True, slots=True)
 class Pace:
     """A paced session's schedule (`PROTOCOL.md` §7, "Pacing"): each window is a group of about `k` passes under a live
-    coin of its own, and the windows are taken `groups` at a time, a stretch, then one more, the closing window, whose
-    reads back the credited span's end (`ledger.memory`).  Window t's boundary message is due once t has k − 1 roots,
-    so that the pass in flight is its last (at k = 1, once window t − 1 has its root, and window 0's at once), and
-    leaves at the latest at max(its challenge + (k − 1)·A, D_(t−1)), never sooner than `Params.window_ns` after its
-    challenge (`Session.next_boundary_ns`)."""
+    coin of its own, the last the closing window, whose reads back the credited span's end (`ledger.memory`).  Window
+    t's boundary message is due once t has k − 1 roots, so that the pass in flight is its last (at k = 1, once window
+    t − 1 has its root, and window 0's at once), and leaves at the latest at max(its challenge + (k − 1)·A, D_(t−1)),
+    never sooner than `Params.window_ns` after its challenge (`Session.next_boundary_ns`).  When its coins leave
+    follows its roots, so is a value: its γ is declared per fixed window of `window_ns`, the stated T, from its first
+    challenge (`ledger.windows`)."""
 
     k: int
-    groups: int
+    window_ns: int = WINDOW_NS
 
     def __post_init__(self) -> None:
-        for name in ("k", "groups"):
+        for name in ("k", "window_ns"):
             if type(getattr(self, name)) is not int or getattr(self, name) < 1:
                 raise ValueError(f"a pace's {name} is a positive integer")
 
-    def stretches(self, windows: int) -> list[range]:
-        """The windows of each stretch, in order, the closing window alone last."""
-        return [range(a, min(a + self.groups, windows - 1)) for a in range(0, windows - 1, self.groups)] + [
-            range(windows - 1, windows)]
-
     def to_json(self) -> dict:
-        return {"groups": self.groups, "k": self.k}
+        return {"k": self.k, "window_ns": self.window_ns}
 
 
 @dataclass(frozen=True, slots=True)
@@ -162,7 +158,7 @@ class Params:
     appended block's residency to its encode (`deferred`, memory-map/v1's deferred residency), which needs L ≥ 2: a
     block appended in window w is resident from w or w + 1, so its re-key falls at age L − 1, and at L = 1 that is
     before it may be resident.  `pace` paces the session (`Pace`, None for a stated window each): its windows are
-    then `groups` a stretch over one or more stretches, and the closing window."""
+    then groups of at most k passes, the last the closing window."""
 
     blocks: int
     deadline_ns: int
@@ -186,10 +182,9 @@ class Params:
                 raise ValueError(f"{name} is a positive integer")
         if type(self.deferred) is not bool:
             raise ValueError("deferred is a bool")
-        if self.pace is not None and (type(self.pace) is not Pace or self.windows <= self.pace.groups
-                                      or (self.windows - 1) % self.pace.groups):
-            raise ValueError("a paced session's windows are its stretches of `groups` windows each, at least one, and "
-                             f"the closing window: m·groups + 1, m ≥ 1, not {self.windows} under {self.pace!r}")
+        if self.pace is not None and (type(self.pace) is not Pace or self.windows < 2):
+            raise ValueError(f"a paced session is a Pace's, with at least one window and the closing window, not "
+                             f"{self.windows} windows under {self.pace!r}")
         if self.deferred and self.lifetime < 2:
             raise ValueError(f"a session that defers residency has a lifetime of at least 2 windows, not "
                              f"{self.lifetime}: a block appended in window w is resident from w or w + 1, so its "

@@ -1,7 +1,7 @@
 """The declared outputs (`ledger`) and pacing (`audit.Pace`) on the small store: a paced session releases a live coin
-every k passes and records each root's arrival, γ is `audit.ledger`'s at both R and per stretch when paced, and the
-memory line's forms are the Lean statements' conclusions read at the record, the paced ones refused for an unpaced
-session or a pass that leaves a registered block out."""
+every k passes and records each root's arrival, γ is `audit.ledger`'s at both R and, paced, per fixed window of the
+stated T, and the memory line's forms are the Lean statements' conclusions read at the record, bursts and all, the
+paced ones refused for an unpaced session, a record of one window or a pass that leaves a registered block out."""
 
 from __future__ import annotations
 
@@ -18,10 +18,14 @@ PASS_NS, DOWN_NS, UP_NS = 300, 20, 30
 B = codec.BLOCK_BYTES
 
 
-def node(*, chip_blocks: int = 1, squarings: float = 0.0, disk: float = 0.0, link: float = 0.0) -> ledger.Node:
-    """A node sized to the small store: `timing`'s R, `chip_blocks` blocks on chip, and the given ceilings."""
+def node(*, chip_blocks: int = 1, squarings: float = 0.0, disk: float = 0.0, link: float = 0.0,
+         bursts: tuple[int, int, int] = (0, 0, 0)) -> ledger.Node:
+    """A node sized to the small store: `timing`'s R, `chip_blocks` blocks on chip, the given ceilings, and bursts of
+    the given blocks (rebuild, disk, link)."""
     return ledger.Node(timing.SPEC_BYTES_PER_S, timing.READ_BYTES_PER_S, chip_blocks * B,
-                       {codec.FALLBACK.field.name: squarings}, disk_bytes_per_s=disk, link_bytes_per_s=link)
+                       {codec.FALLBACK.field.name: squarings}, disk_bytes_per_s=disk, link_bytes_per_s=link,
+                       rebuild_burst_bytes=bursts[0] * B, disk_burst_bytes=bursts[1] * B,
+                       link_burst_bytes=bursts[2] * B)
 
 
 def paced(store, p: audit.Params, plan=None):
@@ -65,8 +69,9 @@ def paced(store, p: audit.Params, plan=None):
 
 @pytest.fixture(scope="module")
 def k1(store):
-    """k = 1, two groups a stretch, two stretches and the closing window, every receipt drawn: no receipt is wrong."""
-    s, prover, passes, clock, arrivals = paced(store, params(windows=5, samples=N, window_ns=1, pace=Pace(1, 2)))
+    """k = 1, five windows, the last the closing window, γ per fixed window of 1,000 ns, every receipt drawn: no
+    receipt is wrong."""
+    s, prover, passes, clock, arrivals = paced(store, params(windows=5, samples=N, window_ns=1, pace=Pace(1, 1000)))
     assert all(v.accepted for v in finish(s, prover, passes, clock))
     return s.record(), arrivals
 
@@ -75,12 +80,12 @@ def test_a_paced_session_releases_a_coin_every_k_passes_and_records_arrivals(sto
     """At k = 1 each window's boundary leaves once the window before has its root (window 0's at once), so the honest
     prover never waits on a coin, and each window holds one pass, its root's arrival on the verifier's clock."""
     r, arrivals = k1
-    assert r.pace == Pace(1, 2) and r.public()["pace"] == {"groups": 2, "k": 1}
+    assert r.pace == Pace(1, 1000) and r.public()["pace"] == {"k": 1, "window_ns": 1000}
     assert [w.released_ns for w in r.windows] == [0, 1, 350, 650, 950]
     assert [w.arrived_ns for w in r.windows] == [(350,), (650,), (950,), (1250,), (1550,)]
     assert {(t, 0): a for t, (a,) in enumerate(w.arrived_ns for w in r.windows)} == arrivals
     assert [w.deadline_ns for w in r.windows] == [1 + A, 350 + A, 650 + A, 950 + A, 1250 + A]
-    s, prover, passes, clock, _ = paced(store, params(windows=3, samples=N, window_ns=1, pace=Pace(3, 2)))
+    s, prover, passes, clock, _ = paced(store, params(windows=3, samples=N, window_ns=1, pace=Pace(3)))
     assert all(v.accepted for v in finish(s, prover, passes, clock))
     assert all(1 <= w.passes <= 3 for w in s.record().windows)
 
@@ -92,7 +97,7 @@ def test_next_boundary_is_the_stated_window_unpaced_and_the_pace_when_paced(stor
     assert s.next_boundary_ns() is None
     s.start()
     assert s.next_boundary_ns() == p.window_ns
-    p = params(windows=3, window_ns=5, pace=Pace(2, 2))
+    p = params(windows=3, window_ns=5, pace=Pace(2))
     s = Session(p, store.registration, None, challenger(store, p), not_before_ns=0, clock=clock)
     coin = s.start()
     assert s.next_boundary_ns() == A, "not due before its first root: at the latest one allowance after its coin"
@@ -107,25 +112,26 @@ def test_next_boundary_is_the_stated_window_unpaced_and_the_pace_when_paced(stor
     assert v == audit.Verdict(0, False, "order"), "a window's (k + 1)-th root is out of turn"
 
 
-def test_params_refuse_a_pace_without_whole_stretches_and_a_closing_window() -> None:
-    assert params(windows=3, pace=Pace(1, 2)).pace == Pace(1, 2)
-    for w in (2, 4):
-        with pytest.raises(ValueError, match="m·groups"):
-            params(windows=w, pace=Pace(1, 2))
-    with pytest.raises(ValueError, match="positive"):
-        Pace(0, 1)
-
-
-def test_a_record_of_one_window_has_no_time_held_line(k1) -> None:
-    """No paced session makes one, but a record of one window has the snapshot only, not an IndexError."""
+def test_a_pace_has_a_closing_window_and_a_record_of_one_window_has_no_time_held_line(k1) -> None:
+    """A paced session has at least one window before its closing one; a record of one window, which no paced session
+    makes, has the snapshot only, and γ per fixed window."""
+    assert params(windows=2, pace=Pace(1)).pace == Pace(1, audit.WINDOW_NS)
+    with pytest.raises(ValueError, match="closing window"):
+        params(windows=1, pace=Pace(1))
+    for bad in ((0,), (1, 0), (1, 1.5)):
+        with pytest.raises(ValueError, match="positive"):
+            Pace(*bad)
     r = k1[0]
-    snap, held, links = ledger.memory(dataclasses.replace(r, windows=r.windows[:1]), node())
+    one = dataclasses.replace(r, windows=r.windows[:1])
+    snap, held, links = ledger.memory(one, node())
     assert "one window" in held.refused and links.refused == held.refused and snap.refused is None
+    assert [w.window for w in ledger.gamma(one, node(), timing.SPEC_BYTES_PER_S).windows] == [0]
 
 
 def test_arrivals_are_one_a_pass_and_out_of_order_ones_have_no_time_held_line(k1) -> None:
     """A record takes any clock's arrivals, one integer a pass (the session's clock is whatever its verifier's is);
-    the time-held line reads them only in order from each window's challenge to its deadline."""
+    the time-held line and γ per fixed window read them only in order from each window's challenge to its deadline,
+    and a paced record without them has neither."""
     r = k1[0]
     w = r.windows[0]
     for bad in ((349, 350), (350.0,)):
@@ -134,6 +140,12 @@ def test_arrivals_are_one_a_pass_and_out_of_order_ones_have_no_time_held_line(k1
     for bad in ((w.released_ns - 1,), (w.deadline_ns + 1,)):
         odd = dataclasses.replace(r, windows=(dataclasses.replace(w, arrived_ns=bad), *r.windows[1:]))
         assert "not in order" in ledger.memory(odd, node())[1].refused
+        with pytest.raises(ValueError, match="not in order"):
+            ledger.gamma(odd, node(), timing.SPEC_BYTES_PER_S)
+    bare = dataclasses.replace(r, windows=tuple(dataclasses.replace(x, arrived_ns=()) for x in r.windows))
+    assert "has none" in ledger.memory(bare, node())[1].refused
+    with pytest.raises(ValueError, match="has none"):
+        ledger.gamma(bare, node(), timing.SPEC_BYTES_PER_S)
 
 
 def test_gamma_is_the_ledger_at_both_r_and_per_window(store) -> None:
@@ -150,31 +162,38 @@ def test_gamma_is_the_ledger_at_both_r_and_per_window(store) -> None:
     assert out.to_json()["gamma"]["spec"]["gamma"] == out.spec.gamma
 
 
-def test_a_paced_session_reads_gamma_per_stretch(k1) -> None:
-    """Each stretch's terms are its windows' bytes over its own span, from its first challenge to its last deadline."""
+def test_a_paced_session_reads_gamma_per_fixed_window(k1) -> None:
+    """`k1` spans [0, 1620) (its last deadline, 1250 + A), so at T = 1,000 its fixed windows are [0, 1000) and
+    [1000, 1620), whatever its coins' times.  A pass is in the one that holds it whole, from its challenge to its
+    root: windows 0 to 2's ([0, 350], [1, 650], [350, 950]) in the first, while windows 3's and 4's ([650, 1250] and
+    [950, 1550]) straddle 1,000 and are in neither, so the second credits nothing."""
     r, _ = k1
-    n = node()
+    n = node(chip_blocks=2, squarings=1e9)
+    assert ledger.windows(r) == [(0, 1000), (1000, 1620)]
     g = ledger.gamma(r, n, n.spec_bytes_per_s)
-    assert [x.window for x in g.windows] == [0, 1, 2] and len(g.ledger.windows) == 5
-    first = g.windows[0]
-    assert first.span_ns == r.windows[1].deadline_ns - r.windows[0].released_ns
-    whole = n.spec_bytes_per_s * first.span_ns / 1e9
-    assert first.timing == pytest.approx(1 - 2 * N * B / whole, rel=1e-12)
-    assert first.chip == pytest.approx(2 * n.chip_bytes / whole, rel=1e-12)
-    assert first.counting == pytest.approx(2 * (audit.named_bits(N) + audit.SLACK_LOG2) / 8 / whole, rel=1e-12)
-    assert g.windows[2] == dataclasses.replace(g.ledger.windows[4], window=2)
+    assert [x.window for x in g.windows] == [0, 1] and len(g.ledger.windows) == 5
+    first, second = g.windows
+    assert (first.span_ns, second.span_ns) == (1000, 620)
+    whole = n.spec_bytes_per_s * 1000 / 1e9
+    assert first.timing == pytest.approx(1 - 3 * N * B / whole, rel=1e-12)
+    assert first.chip == pytest.approx(3 * n.chip_bytes / whole, rel=1e-12)
+    assert first.counting == pytest.approx(3 * (audit.named_bits(N) + audit.SLACK_LOG2) / 8 / whole, rel=1e-12)
+    assert (second.timing, second.chip, second.counting, second.sample, second.horizon) == (1, 0, 0, 0, 0)
+    assert first.rebuild == second.rebuild == g.ledger.rebuild > 0
+    assert g.ledger == audit.ledger(r, capacity_bytes_per_s=n.spec_bytes_per_s, chip_bytes=n.chip_bytes,
+                                    rebuild=n.rebuild(r.codec)), "the session's γ credits every pass"
 
 
 def test_the_snapshot_is_helds_conclusion(store) -> None:
-    """`planned − W − X·span − P·S` blocks over the passes, X the rebuilds' and the disks' rate: here every pass reads
-    the whole store, so ε is (W/P + X·span/P + S)/N."""
+    """`planned − W − (X·span + B) − P·S` blocks over the passes, X the rebuilds' and the disks' rate and B their
+    bursts: here every pass reads the whole store, so ε is (W/P + (X·span + B)/P + S)/N."""
     s, prover, passes, clock = drive(store, params(), SCHEDULE)
     assert all(v.accepted for v in finish(s, prover, passes, clock))
     r = s.record()
-    n = node(chip_blocks=2, squarings=2e9 * codec.FALLBACK.encode_squarings, disk=B * 1e9)
+    n = node(chip_blocks=2, squarings=2e9 * codec.FALLBACK.encode_squarings, disk=B * 1e9, bursts=(3, 5, 7))
     snap, held, links = ledger.memory(r, n)
     W, X, P = audit.pooled(r)[0], 3.0, r.passes
-    assert snap.lost_blocks == pytest.approx(W / P + X * r.span_ns / P + 2, rel=1e-12)
+    assert snap.lost_blocks == pytest.approx(W / P + (X * r.span_ns + 3 + 5) / P + 2, rel=1e-12)
     assert snap.epsilon == min(1, snap.lost_blocks / N) and snap.held_bytes == (1 - snap.epsilon) * N * B
     assert snap.delta == r.windows[0].profile.delta + P * 2.0 ** -audit.SLACK_LOG2 + ledger.sketch(r, n)
     assert "unpaced" in held.refused and links.refused == held.refused and held.epsilon is None
@@ -182,24 +201,39 @@ def test_the_snapshot_is_helds_conclusion(store) -> None:
 
 def test_the_time_held_line_is_held_over_times_conclusion(k1) -> None:
     """On `k1`'s schedule: s = (0, 1, 350, 650, 950), the arrivals 300 later each, so e_0 = 350, L = 650 − 1 and
-    Σ = 950 − 350; no receipt is wrong, so the line charges the chip and 2L·X·(Σ + 2L) over Σ."""
+    Σ = 950 − 350; no receipt is wrong, so the line charges the chip and 2L·(X·(Σ + 2L) + B) over Σ, B the rebuild
+    and disk bursts and, link-charged, the link window too."""
     r, _ = k1
     X = 1e-3
-    n = node(chip_blocks=1, squarings=X * codec.FALLBACK.encode_squarings * 1e9)
+    n = node(chip_blocks=1, squarings=X * codec.FALLBACK.encode_squarings * 1e9, bursts=(2, 3, 0))
     snap, held, links = ledger.memory(r, n)
     L, span = 649, 600
     assert audit.pooled(r)[0] == 0
-    assert held.lost_blocks == pytest.approx(1 + 2 * L * X * (span + 2 * L) / span, rel=1e-12)
+    assert held.lost_blocks == pytest.approx(1 + 2 * L * (X * (span + 2 * L) + 2 + 3) / span, rel=1e-12)
     assert links.lost_blocks == held.lost_blocks
-    more = ledger.memory(r, node(chip_blocks=1, squarings=X * codec.FALLBACK.encode_squarings * 1e9, link=B * 1e6))[2]
-    assert more.lost_blocks == pytest.approx(1 + 2 * L * (X + 1e-3) * (span + 2 * L) / span, rel=1e-12)
-    assert snap.lost_blocks == pytest.approx(X * r.span_ns / r.passes + 1, rel=1e-12)
+    more = ledger.memory(r, node(chip_blocks=1, squarings=X * codec.FALLBACK.encode_squarings * 1e9, link=B * 1e6,
+                                 bursts=(2, 3, 4)))[2]
+    assert more.lost_blocks == pytest.approx(1 + 2 * L * ((X + 1e-3) * (span + 2 * L) + 2 + 3 + 4) / span, rel=1e-12)
+    assert snap.lost_blocks == pytest.approx((X * r.span_ns + 2 + 3) / r.passes + 1, rel=1e-12)
+
+
+def test_the_stated_node_has_a_burst_for_each_way_back() -> None:
+    """`Node.stated`: a rebuild batch is at most S_chip, a disk read a second of the disks' ceiling, and a link window
+    `timing.LINK_WINDOW_BYTES` when the links are charged; each may be stated instead."""
+    n = ledger.Node.stated(disk_bytes_per_s=4.32e9, link_bytes_per_s=50e9)
+    assert (n.rebuild_burst_bytes, n.disk_burst_bytes, n.link_burst_bytes) == (
+        timing.CHIP_BYTES, 4.32e9, timing.LINK_WINDOW_BYTES)
+    assert (ledger.Node.stated().disk_burst_bytes, ledger.Node.stated().link_burst_bytes) == (0, 0)
+    m = ledger.Node.stated(disk_bytes_per_s=4.32e9, disk_burst_bytes=4 << 20, link_burst_bytes=0)
+    assert (m.disk_burst_bytes, m.link_burst_bytes) == (4 << 20, 0) and m.to_json()["disk_burst_bytes"] == 4 << 20
+    with pytest.raises(ValueError, match="link_burst_bytes"):
+        dataclasses.replace(n, link_burst_bytes=-1.0)
 
 
 def test_wrong_receipts_fill_the_groups_at_their_rates(store) -> None:
     """With 7 of 20 receipts drawn a window, the pooled wrong receipts W are spread over the groups at
     v = (1, 349, 300, 300, L) a wrong read, highest first, at most N a group of one pass."""
-    s, prover, passes, clock, _ = paced(store, params(windows=5, samples=7, window_ns=1, pace=Pace(1, 2)))
+    s, prover, passes, clock, _ = paced(store, params(windows=5, samples=7, window_ns=1, pace=Pace(1, 1000)))
     assert all(v.accepted for v in finish(s, prover, passes, clock))
     r = s.record()
     W, L, span = audit.pooled(r)[0], 649, 600
@@ -209,7 +243,7 @@ def test_wrong_receipts_fill_the_groups_at_their_rates(store) -> None:
 
 
 def test_a_pass_that_leaves_a_block_out_has_no_time_held_line(store) -> None:
-    s, prover, passes, clock, _ = paced(store, params(windows=3, samples=N, window_ns=1, pace=Pace(1, 2)),
+    s, prover, passes, clock, _ = paced(store, params(windows=3, samples=N, window_ns=1, pace=Pace(1, 1000)),
                                         plan=lambda t, i: partial(t, i) if t == 1 else None)
     assert all(v.accepted for v in finish(s, prover, passes, clock))
     snap, held, links = ledger.memory(s.record(), node())
@@ -221,6 +255,6 @@ def test_declared_outputs_are_the_verdict_gamma_and_the_line(k1) -> None:
     out = ledger.declared(r, node()).to_json()
     assert set(out) == {"accepted", "gamma", "memory", "windows"} and out["windows"] == 5
     assert set(out["gamma"]) == {"spec", "measured"} and set(out["memory"]) == set(ledger.FORMS)
-    assert [w["window"] for w in out["gamma"]["spec"]["windows"]] == [0, 1, 2]
+    assert [w["window"] for w in out["gamma"]["spec"]["windows"]] == [0, 1]
     assert all(math.isfinite(x["epsilon"]) for x in out["memory"].values())
     assert r.receipt == receipts.SKETCH_SHA512
