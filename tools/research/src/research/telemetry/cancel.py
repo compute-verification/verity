@@ -2,7 +2,7 @@
 
     tele cancel-intent --actor deadman|timeout|guardian|manual (--target-pid P | --target-pgid G | --target-pod ID) --signal 9 --reason "..."
                        [--attempt-dir D | --fallback FILE] [--expect-starttime TICKS] [--expect-comm NAME] [--expect-nonempty]
-                       [--expect-run-dir D] [--deliver] [--job J --attempt N --project P]
+                       [--expect-run-dir D [--grace-s S]] [--deliver] [--job J --attempt N --project P]
 
 The target's identity is verified from /proc (starttime ticks + comm) and recorded; with --deliver, a pid whose starttime does not match
 --expect-starttime is NOT signalled (a recycled pid is not the job), nor a group that fails --expect-nonempty or --expect-run-dir (no member
@@ -10,6 +10,9 @@ whose environment names RESEARCH_RUN_DIR=D, which the runner exports to its work
 group by now).  Logging never blocks the signal: a marker write failure is reported on stderr and the signal is still delivered; the fallback
 file is the safety controller's own scoped record when no attempt dir is reachable.  With --expect-run-dir a delivered group signal also
 reaches the run's workers outside the group (setsid ones whose environment names D, never the leader's ancestors: `run_dir_strays`).
+With --grace-s too (`research cancel`), it reaches every process of the run's own cgroup scopes and the run's processes anywhere
+(scope.Sweep, which never picks the runner), and D/control/cancel asks the runner to SIGKILL whatever is left of them S seconds
+later, confirm they are gone and record it in status.json (`scope_end`; run.py).  A runner that is gone leaves them at the SIGTERM.
 """
 from __future__ import annotations
 
@@ -23,7 +26,11 @@ from typing import Any
 
 from . import CANCEL_ACTORS
 from .events import append, events_path, utc_now_ms
-from .procs import stat_fields
+from .job import write_json_atomic
+from .procs import list_pids, stat_fields
+from .scope import Sweep, cgroup_of, cmdline_of, run_dir_of
+
+CONTROL_CANCEL = Path("control") / "cancel"      # attempt-dir relative: the cancel's grace and the run's scopes, read by the runner
 
 #: the group members a marker names: a whole group's list can pass the record cap (events.MAX_RECORD_BYTES), and the writer then drops
 #: `target`, pgid included, so the classifier can't match the marker to the job it stopped
@@ -50,18 +57,6 @@ def pgid_members(pgid: int) -> list[dict[str, Any]]:
     except OSError:
         pass
     return out[:256]
-
-
-def run_dir_of(pid: int) -> str | None:
-    """RESEARCH_RUN_DIR in the environment `pid` was exec'd with, or None (absent, gone, or not ours to read)."""
-    try:
-        env = Path(f"/proc/{pid}/environ").read_bytes()
-    except OSError:
-        return None
-    for kv in env.split(b"\0"):
-        if kv.startswith(b"RESEARCH_RUN_DIR="):
-            return kv.split(b"=", 1)[1].decode(errors="replace")
-    return None
 
 
 def run_dir_strays(pgid: int, want: str) -> list[dict[str, Any]]:
@@ -156,7 +151,20 @@ def cancel(a: argparse.Namespace) -> int:
     except OSError as e:
         result.update(delivered=False, errno=e.errno, reason=e.strerror)
         rc = 4
-    if a.target_pgid is not None and a.expect_run_dir is not None:
+    grace = getattr(a, "grace_s", None)
+    if a.target_pgid is not None and a.expect_run_dir is not None and grace is not None:
+        want = str(Path(a.expect_run_dir).resolve())
+        sw = Sweep(a.target_pgid, want, stat=stat_fields, pids=list_pids, cgroup=cgroup_of, env_of=run_dir_of, cmdline=cmdline_of,
+                   kill=os.kill)
+        sw.signal(a.signal, skip=[m["pid"] for m in ident.get("members") or []] if result.get("delivered") else ())
+        try:
+            (Path(want) / CONTROL_CANCEL).parent.mkdir(parents=True, exist_ok=True)
+            write_json_atomic(Path(want) / CONTROL_CANCEL, {"grace_s": grace, "actor": a.actor, "reason": a.reason, "scopes": sorted(sw.own),
+                                                            "set_utc": utc_now_ms()})
+            result["scope"] = {**sw.record(), "runner_kills_after_s": grace}
+        except OSError as e:
+            result["scope"] = {**sw.record(), "runner_kills_after_s": None, "control_error": f"{e.__class__.__name__}: {e}"}
+    elif a.target_pgid is not None and a.expect_run_dir is not None:
         strays = run_dir_strays(a.target_pgid, str(Path(a.expect_run_dir).resolve()))
         hit = 0
         for s in strays:
@@ -197,6 +205,9 @@ def add_args(ap: argparse.ArgumentParser) -> None:
     ap.add_argument("--expect-nonempty", action="store_true", help="for --target-pgid: verified only if the group has members")
     ap.add_argument("--expect-run-dir", default=None, metavar="D",
                     help="for --target-pgid: verified only if a member's environment has RESEARCH_RUN_DIR=D (resolved), the run's workload")
+    ap.add_argument("--grace-s", type=float, default=None, metavar="S",
+                    help="with --target-pgid and --expect-run-dir: the signal reaches the run's whole scope too, and its runner SIGKILLs "
+                         "what is left S seconds later and records it (scope.Sweep)")
     ap.add_argument("--deliver", action="store_true", help="send the signal after writing the intent, then record the result")
     ap.add_argument("--confirm-exit-s", type=float, default=0.0, help="after delivery, watch the target for this long and record whether it went")
     ap.add_argument("--project", default=None)

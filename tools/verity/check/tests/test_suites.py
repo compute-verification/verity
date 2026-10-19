@@ -1011,10 +1011,10 @@ def _until_written_or_exited(fifo: Path, p: subprocess.Popen) -> tuple[bool, byt
         os.close(fd)
 
 
-@pytest.mark.parametrize("stop", ["SIGINT", "SIGTERM"])
+@pytest.mark.parametrize("stop", ["SIGINT", "SIGTERM", "SIGTERM SIGTERM"])
 def test_an_interrupted_run_keeps_what_finished(tmp_path, stop):
-    """A stop mid-suite (check.py's SIGINT to the step's processes, or `research cancel`'s SIGTERM to the run's group): the
-    tests that passed before it are kept, and the suite's `--basetemp` is gone."""
+    """A stop mid-suite (check.py's SIGINT to the step's processes, or `research cancel`'s SIGTERM to the run's group, which `uv
+    run` forwards to the runner a second time): the tests that passed before it are kept, and the suite's `--basetemp` is gone."""
     import signal
 
     root, tests = tmp_path / "tree", tmp_path / "tree" / "pkg" / "tests"
@@ -1033,7 +1033,8 @@ def test_an_interrupted_run_keeps_what_finished(tmp_path, stop):
     written, before = _until_written_or_exited(gate, p)    # test_heavy's two tests have passed; test_block is running
     assert written, f"the runner ended before test_block ran:\n{before.decode(errors='replace')}"
     assert len(list(tmp.glob("verity-suite-[0-9]*"))) == 1
-    os.killpg(p.pid, getattr(signal, stop))
+    for s in stop.split():
+        os.killpg(p.pid, getattr(signal, s))
     out = (before + p.communicate()[0]).decode(errors="replace")
     assert p.returncode != 0 and "2 per-test passes kept" in out, out
     assert list(tmp.glob("verity-suite-[0-9]*")) == [], out
