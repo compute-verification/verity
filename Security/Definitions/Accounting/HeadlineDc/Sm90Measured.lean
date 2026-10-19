@@ -1,7 +1,7 @@
 import Definitions.Accounting.HeadlineDc.Sm90
 
 /-!
-# H200 (sm_90)'s measured headline instance: DC-90-ri and `dither-2s-licpw-redux-l32` (trusted; generated)
+# H200 (sm_90)'s measured headline instance: DC-90-ri and `dither-2s-licpw-redux-p1-l32` (trusted; generated)
 
 Written by `benchmarks/pouw/lean_headline_dc.py` from the machine model's data (`benchmarks/pouw/machine_model/data`),
 and checked against it by `benchmarks/pouw/tests/test_lean_headline_dc.py`: edit the data and rerun the exporter, never
@@ -9,12 +9,14 @@ this file. `Accounting.Guarantees.TS.Sm90MeasuredHeadline` reads it.
 
 * `rowNames`, `dc90ri`, `machine`: the measured vector DC-90-ri, 15 rows of SMSP-cycles a warp instruction at its
   epoch's census, each sparse over `Sm90.classes`; every facet SM-clocked, f_max 1980 MHz.
-* `d2s`, `model`: `dither-2s-licpw-redux-l32` on that machine, its writer kinds honest's form and the uniform `UNI` (1):
-  the census prices every other tensor form on the joint rows at the scalar coefficient, a lower bound on its issue
-  cost, so they are off the menu and `NoSum` carries them; `Sm90.d2s`'s vector classes, fold routes, floors and `N_w`;
-  ♭'s filler `Sm90.flatFill` its filler route.
+* `d2s`, `model`: `dither-2s-licpw-redux-p1-l32` on that machine, its writer kinds honest's form and the uniform `UNI`
+  (2, a UR pair: RT-HOPPER-7): the census prices every other tensor form on the joint rows at the scalar coefficient, a
+  lower bound on its issue cost, so they are off the menu and `NoSum` carries them; `Sm90.d2s`'s vector classes, fold
+  routes, floors and `N_w`.
 * `flatSkip`, `flat`: ♭ is `Sm90.flat`'s word production, fold and filler, with ε_skip's skippable work at DC-90-ri's
-  0.465970% (`eps_budget.design_skip` on DC-90-ri), at FFMA's price.
+  0.479984% (`eps_budget.design_skip` on DC-90-ri), at ALU's price; it is honest's program, not `setup`'s floor, which
+  heads some words on honest's lane baseline beside the MMA, so B_♭ is larger and the bound at least the machine
+  model's.
 * `lamStar`: π*, the certificate minimising the bound over this menu (issue 0.003598 + JI90_0 0.966699 + JI90_1
   0.029703).
 -/
@@ -113,11 +115,11 @@ def dc90ri : List Sparse := [
 noncomputable def machine : Machine (Fin 28) (Fin 15) :=
   rowsMachine 28 15 dc90ri 1980
 
-/-- `dither-2s-licpw-redux-l32`'s design data on DC-90-ri: writer kinds as (class, ω), and `Sm90.d2s`'s routes. -/
+/-- `dither-2s-licpw-redux-p1-l32`'s design data on DC-90-ri: writer kinds as (class, ω), and `Sm90.d2s`'s routes. -/
 def d2s : DesignData where
   writers := [
     (14, 4096),  -- IGMMA_S8_N256
-    (27, 1)  -- UNI
+    (27, 2)  -- UNI
   ]
   vec := Sm90.d2s.vec
   folds := Sm90.d2s.folds
@@ -126,12 +128,12 @@ def d2s : DesignData where
   qT := Sm90.d2s.qT
   Nw := Sm90.d2s.Nw
 
-/-- `dither-2s-licpw-redux-l32`'s TS model on the measured machine. -/
+/-- `dither-2s-licpw-redux-p1-l32`'s TS model on the measured machine. -/
 noncomputable def model : Model (Fin 28) (Fin 15) (Fin 2) Unit Empty (Fin 2) Unit :=
-  d2s.modelFill 28 2 2 machine Sm90.flatFill
+  d2s.model 28 2 2 machine
 
-/-- ♭'s skippable work a unit on DC-90-ri, at its FFMA price. -/
-def flatSkip : Sparse := [(3, 633530290148491424466903568, 650650876795497839510646503)]
+/-- ♭'s skippable work a unit on DC-90-ri, at its ALU price. -/
+def flatSkip : Sparse := [(0, 23776785529476034169961021, 49530498467843236765000000)]
 
 /-- The floor program ♭ on DC-90-ri, labelled. -/
 noncomputable def flat : Labelled (Fin 28) :=

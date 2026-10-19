@@ -9,9 +9,10 @@
 `instance()` refuses. The bound is the larger of the folded branch, at w* and φ* on π* with p = 7/8, and the unfolded
 one, `1 − Y·(1 − 41/S)`, where `Y = (N_w w* + N_w φ* + χ*)/B_♭`. Three things differ from sm_120's and sm_80's instances:
 
-- the H200's design runs a verified filler, ffill at p = 0 with pinned receipts. FILL-OPT prices it at χ*, the
-  filler's load on π*, and the pinned check (`PinnedFillLuckAt`, (I7) at 0 under full checking) leaves it no luck
-  term, so χ* enters Y whole. The B200's has none, and χ* is 0;
+- a design credits only work a check reads (RT-LOGIC-12): a filler at p = 0 (pinned receipts) would enter Y whole at
+  χ*, its load on π*, and one at p = 1 enters ♭ not at all. The H200's ffill is at p = 1, since no check reads its
+  chains, and the B200's fold is the plain LI-CP-W redux `PouwWarpCheck` recomputes, so χ* is 0 on every instance,
+  the form `headline_of_branches` proves;
 - π* is the certificate that minimises the Lean bound over the Lean menu (`_best`, an LP over `λ`), made exact
   (`certificate`: weights `λ ≥ 0` summing to 1, `IsCert`), and may be mixed. Every price is π*'s: `w*`, `φ*` and
   `χ*` are the cheapest word route's, fold's and filler's prices at π*, each route's demand read facet by facet as
@@ -30,7 +31,8 @@ kinds are every census MMA class, except on DC-90-ri: its joint rows price every
 coefficient, a lower bound on its issue cost, and no certificate prices them above it, so its menu is honest's form
 and the uniform class, the machine model's, and NoSum carries the rest; the full menu's bound is printed for the
 record. The checks are `lean_headline.instance()`'s: the sheet reproduces every DS coefficient, ♭ is `setup`'s floor
-program, the filler's included, and the bound is at most the family's target.
+program (on a `flat_honest` vector, DC-90-ri, honest's program, a larger ♭ and so a larger bound), and the bound is at
+most the family's target. A uniform writer heads 2 words (`UIMAD.WIDE.U32` writes a UR pair, RT-HOPPER-7).
 """
 from __future__ import annotations
 
@@ -84,6 +86,7 @@ class Family:
     eps: Fraction                        # the sheet's headline target
     eps_m: Fraction                      # the measured reading's
     honest_menu: bool = False            # the measured reading's writer kinds: honest's form and the uniform ones only
+    flat_honest: tuple[str, ...] = ()    # vectors whose ♭ is honest's program, where `setup`'s floor mixes word routes
     bytes: str = "ALU"                   # the table level's byte class, priced 0 at b_T = 0 (neither census has a load)
 
     @property
@@ -94,14 +97,19 @@ class Family:
 # DC-90-ri's joint rows price every tensor form but honest's IGMMA_S8_N256 at the scalar coefficient (rows.csv: "a
 # lower bound on their issue cost"), and no certificate prices them otherwise (M gives a GMMA 32 SMSP-cycles to
 # IGMMA's 62.7 on JI90_0), so its measured menu is the machine model's: honest's form, the rest off it (NoSum).
-SM90 = Family("Sm90", "H200", "sm_90", "dither-2s-licpw-redux-l32", "DS-90", "DC-90-ri",
+# The H200's design credits ffill at p = 1, since no check reads its chains (RT-LOGIC-12, decision 99). Without ffill
+# in ♭, `setup`'s floor on DC-90-ri heads 0.3% of its words on honest's lane baseline (IMAD) beside the IGMMA, so ♭
+# there is honest's program, the IGMMA heading every word: a larger B_♭ (199.10 a unit against the floor's 198.91), so
+# the bound is at least the machine model's. It is over 1%.
+# A uniform instruction heads up to 2 words (UIMAD.WIDE.U32 writes a UR pair, RT-HOPPER-7), so UNI's ω is 2.
+SM90 = Family("Sm90", "H200", "sm_90", "dither-2s-licpw-redux-p1-l32", "DS-90", "DC-90-ri",
               {"DS_alu": ("alu", 64), "DS_imad": ("imad", 64), "DS_shfl": ("shfl", 32)},
-              (1024, 2048, 4096, 16384), 1980, "the data sheet's boost clock", {"UNI": 1},
-              Fraction(1, 100), Fraction(1, 100), honest_menu=True)
+              (1024, 2048, 4096, 16384), 1980, "the data sheet's boost clock", {"UNI": 2},
+              Fraction(1, 100), Fraction(3, 100), honest_menu=True, flat_honest=("DC-90-ri",))
 SM100 = Family("Sm100", "B200", "sm_100", "dither-2s-licpw-redux-ldtm0-l32", "DS-100", "DC-100-ri",
                {"DS_alu": ("alu", 64), "DS_imad": ("imad", 64), "DS_shfl": ("shfl", 32)},
-               (2048, 4096, 8192, 32768), 1965, "the driver's reported maximum (the data sheet gives no clock)", {},
-               Fraction(1, 100), Fraction(1, 100))
+               (2048, 4096, 8192, 32768), 1965, "the driver's reported maximum (the data sheet gives no clock)",
+               {"UNI": 2}, Fraction(1, 100), Fraction(1, 100))
 FAMILIES = (SM90, SM100)
 
 
@@ -212,8 +220,10 @@ def _sheet_check(fam: Family, pi: E.Machine, c: dict, h: E.Honest) -> dict[str, 
     return out
 
 
-def reading(fam: Family, vector: str, full: bool = False) -> Reading:
-    """The family's reading on `vector`; `full` puts every census MMA class on a measured menu `honest_menu` limits."""
+def reading(fam: Family, vector: str, full: bool = False, floor_check: bool = True) -> Reading:
+    """The family's reading on `vector`; `full` puts every census MMA class on a measured menu `honest_menu` limits.
+    `floor_check=False` reads ♭ as honest's program even where `setup`'s floor program mixes word routes (a larger
+    credit than the machine model's, so a bound at least the machine model's), for witnesses only."""
     B_ = LH._eps_budget()
     sheet = vector == fam.sheet
     pi = E.machine(vector, fam.data)
@@ -221,8 +231,8 @@ def reading(fam: Family, vector: str, full: bool = False) -> Reading:
     h = E.honest(d.honest, fam.data)
     if (d.delta, d.p, d.checks) != (2.0 ** -41, float(LH.P_OPERAND), 48000):
         raise SystemExit(f"{fam.design}: the statement takes δ′ = 2^-41, operand luck 3/4 and 48000 checks")
-    if any(f.p != 0 for f in d.filler):
-        raise SystemExit(f"{fam.design}: a filler enters Y whole only at p = 0 (pinned receipts)")
+    if any(f.p not in (0, 1) for f in d.filler):
+        raise SystemExit(f"{fam.design}: a filler enters Y whole at p = 0 (pinned receipts) or not at all at p = 1")
     classes = sorted(pi.c)
     c = _coefs(pi, classes)
     lists = _sheet_check(fam, pi, c, h) if sheet else {}
@@ -234,7 +244,7 @@ def reading(fam: Family, vector: str, full: bool = False) -> Reading:
     nw = {k: exact(v) for k, v in h.tensor("floor", d.floor).items()}
     nf = {k: exact(v) * Nw / E.LANES for k, v in d.fold.items()}
     nx: dict[str, Fraction] = {}
-    for f in d.filler:
+    for f in (f for f in d.filler if f.p == 0):
         tot = sum(exact(v) for v in f.mix.values())
         for k, v in f.mix.items():
             nx[k] = nx.get(k, Fraction(0)) + exact(f.per_word) * Nw * exact(v) / tot / E.LANES
@@ -243,8 +253,8 @@ def reading(fam: Family, vector: str, full: bool = False) -> Reading:
         for k, v in part.items():
             n0[k] = n0.get(k, Fraction(0)) + v
     s = E.setup(d, pi, fam.data, operands="free", credit="floor")
-    if abs(s.baseline.T * Nw - float(max(load(r, n0) for r in pi.rows))) > 1e-6 or any(
-            abs(s.baseline.n.get(k, 0.0) * Nw - float(n0.get(k, 0))) > 1e-6 for k in {*s.baseline.n, *n0}):
+    if floor_check and (abs(s.baseline.T * Nw - float(max(load(r, n0) for r in pi.rows))) > 1e-6 or any(
+            abs(s.baseline.n.get(k, 0.0) * Nw - float(n0.get(k, 0))) > 1e-6 for k in {*s.baseline.n, *n0})):
         raise SystemExit(f"{fam.design} on {vector}: ♭ is not setup's floor program ({s.baseline.n}, T "
                          f"{s.baseline.T})")
     e = E.eps(d, pi, float(Q), fam.data, operands="free", credit="floor")
@@ -361,6 +371,10 @@ def _q(v: Fraction) -> str:
     return f"{v.numerator} / {v.denominator}"
 
 
+def _uniform_words(fam: Family) -> str:
+    return "".join(f" and the uniform `{k}` ({om}, a UR pair: RT-HOPPER-7)" for k, om in fam.uniform.items())
+
+
 def _writer_lines(x: _Exact) -> str:
     return "\n".join(f"    ({x.classes.index(k)}, {om}){',' if j + 1 < len(x.writers) else ''}  -- {k}"
                      for j, (k, om) in enumerate(x.writers))
@@ -410,7 +424,7 @@ def render_sheet(fam: Family, r: Reading) -> str:
         f"Guide widths; no shared-memory row ({fam.sheet} prices none). Its machine reproduces every {fam.sheet} "
         f"coefficient.",
         f"`d2s`, `model`: `{fam.design}` as a TS model on the sheet's machine: writer kinds every census MMA class "
-        f"(ω = m·n, its destination's 32-bit words a warp)" + (f" and the uniform `UNI` (1)" if fam.uniform else "")
+        f"(ω = m·n, its destination's 32-bit words a warp)" + _uniform_words(fam)
         + f"; the vector classes CUDA's lane classes; the design's fold on lanes and alone on the uniform datapath; "
         f"the table level's bytes counted in {fam.bytes}, which `b_T = 0` prices at nothing (the census has no load "
         f"class); A6's floors `q = q_T = ½`, `b_T = 0`; {x.Nw} committed words a unit of honest work ({honest})"
@@ -517,7 +531,7 @@ def render_measured(fam: Family, r: Reading, s: Reading) -> str:
         entries = [f"({ix(k)}, {x.c[k][row].numerator}, {x.c[k][row].denominator})" for k in x.classes if row in x.c[k]]
         body = LH._wrap(entries, "   ", 116)[3:] if entries else ""
         rows.append(f"  -- {j}: {row}\n  [{body}]{',' if j + 1 < m else ''}")
-    menu = ("honest's form and the uniform `UNI` (1): the census prices every other tensor form on the joint rows at "
+    menu = (f"honest's form{_uniform_words(fam)}: the census prices every other tensor form on the joint rows at "
             "the scalar coefficient, a lower bound on its issue cost, so they are off the menu and `NoSum` carries "
             "them" if r.menu == "honest" else "every census MMA class (ω = m·n)")
     lam = LH._wrap([f"({x.rows.index(k)}, {v.numerator}, {v.denominator})" for k, v in x.lam.items()],
@@ -528,7 +542,10 @@ def render_measured(fam: Family, r: Reading, s: Reading) -> str:
         f"`d2s`, `model`: `{fam.design}` on that machine, its writer kinds {menu}; `{fam.ns}.d2s`'s vector classes, "
         f"fold routes, floors and `N_w`" + ("; ♭'s filler `" + fam.ns + ".flatFill` its filler route." if x.nx else "."),
         f"`flatSkip`, `flat`: ♭ is `{fam.ns}.flat`'s word production, fold and filler, with ε_skip's skippable work at "
-        f"{fam.measured}'s {r.eps_skip:.6%} (`eps_budget.design_skip` on {fam.measured}), at {x.skip}'s price.",
+        f"{fam.measured}'s {r.eps_skip:.6%} (`eps_budget.design_skip` on {fam.measured}), at {x.skip}'s price"
+        + (f"; it is honest's program, not `setup`'s floor, which heads some words on honest's lane baseline beside "
+           f"the MMA, so B_♭ is larger and the bound at least the machine model's." if fam.measured in fam.flat_honest
+           else "."),
         f"`lamStar`: π*, the certificate minimising the bound over this menu "
         f"({' + '.join(f'{k} {float(v):.6f}' for k, v in x.lam.items())}).",
     ]
@@ -595,7 +612,7 @@ def main(argv: list[str] | None = None) -> int:
     out, record, files = [], [], {}
     for fam in FAMILIES:
         for v, full in ((fam.sheet, False), (fam.measured, False), *(((fam.measured, True),) if fam.honest_menu else ())):
-            r = reading(fam, v, full)
+            r = reading(fam, v, full, floor_check=v not in fam.flat_honest)
             (record if full else out).append(r)
             if not full:
                 files[OUT / (fam.ns + ("" if r.sheet else "Measured") + ".lean")] = (

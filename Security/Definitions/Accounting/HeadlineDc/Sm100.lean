@@ -13,10 +13,10 @@ this file. `Accounting.Guarantees.TS.Sm100SheetHeadline` reads it.
   m16n8) and its operand type's dense MACs an SM clock; the Nsight Compute pipes ALU, IMAD and SHFL with their
   Programming Guide widths; no shared-memory row (DS-100 prices none). Its machine reproduces every DS-100 coefficient.
 * `d2s`, `model`: `dither-2s-licpw-redux-ldtm0-l32` as a TS model on the sheet's machine: writer kinds every census MMA
-  class (ω = m·n, its destination's 32-bit words a warp); the vector classes CUDA's lane classes; the design's fold on
-  lanes and alone on the uniform datapath; the table level's bytes counted in ALU, which `b_T = 0` prices at nothing
-  (the census has no load class); A6's floors `q = q_T = ½`, `b_T = 0`; 32768 committed words a unit of honest work (an
-  UTCIMMA_M128_N256 at L = 32).
+  class (ω = m·n, its destination's 32-bit words a warp) and the uniform `UNI` (2, a UR pair: RT-HOPPER-7); the vector
+  classes CUDA's lane classes; the design's fold on lanes and alone on the uniform datapath; the table level's bytes
+  counted in ALU, which `b_T = 0` prices at nothing (the census has no load class); A6's floors `q = q_T = ½`, `b_T =
+  0`; 32768 committed words a unit of honest work (an UTCIMMA_M128_N256 at L = 32).
 * `flat`: the floor program ♭ a unit: the MMA and the design's operand floor (word production), the fold, no filler, and
   ε_skip's skippable work at ALU's price, 0.684891% of ♭'s bound (`eps_budget.design_skip` on DS-100).
 * `lamStar`: π*, the certificate minimising the bound over this menu (DS_issue 0.031474 + DS_alu 0.968526).
@@ -84,7 +84,8 @@ def d2s : DesignData where
     (22, 16384),  -- UTCIMMA_M64_N256
     (23, 4096),  -- UTCIMMA_M64_N64
     (24, 16384),  -- UTCQMMA_E4M3_M128_N128
-    (25, 32768)  -- UTCQMMA_E4M3_M128_N256
+    (25, 32768),  -- UTCQMMA_E4M3_M128_N256
+    (15, 2)  -- UNI
   ]
   vec := [1, 2, 0, 14]  -- FFMA, IMAD, ALU, SHFL
   folds := [
@@ -99,8 +100,8 @@ def d2s : DesignData where
 def flatFill : Sparse := []
 
 /-- `dither-2s-licpw-redux-ldtm0-l32`'s TS model on the data sheet's machine. -/
-noncomputable def model : Model (Fin 26) (SheetRow Pipe) (Fin 12) Unit Empty (Fin 2) Unit :=
-  d2s.model 26 12 2 sheet.machine
+noncomputable def model : Model (Fin 26) (SheetRow Pipe) (Fin 13) Unit Empty (Fin 2) Unit :=
+  d2s.model 26 13 2 sheet.machine
 
 /-- ♭'s word production a unit: the MMA and the operand floor. -/
 def flatWords : Sparse := [(9, 0, 1), (18, 1, 1)]

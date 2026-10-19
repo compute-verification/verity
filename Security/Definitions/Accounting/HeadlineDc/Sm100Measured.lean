@@ -87,7 +87,8 @@ def d2s : DesignData where
     (22, 16384),  -- UTCIMMA_M64_N256
     (23, 4096),  -- UTCIMMA_M64_N64
     (24, 16384),  -- UTCQMMA_E4M3_M128_N128
-    (25, 32768)  -- UTCQMMA_E4M3_M128_N256
+    (25, 32768),  -- UTCQMMA_E4M3_M128_N256
+    (15, 2)  -- UNI
   ]
   vec := Sm100.d2s.vec
   folds := Sm100.d2s.folds
@@ -97,8 +98,8 @@ def d2s : DesignData where
   Nw := Sm100.d2s.Nw
 
 /-- `dither-2s-licpw-redux-ldtm0-l32`'s TS model on the measured machine. -/
-noncomputable def model : Model (Fin 26) (Fin 12) (Fin 12) Unit Empty (Fin 2) Unit :=
-  d2s.model 26 12 2 machine
+noncomputable def model : Model (Fin 26) (Fin 12) (Fin 13) Unit Empty (Fin 2) Unit :=
+  d2s.model 26 13 2 machine
 
 /-- ♭'s skippable work a unit on DC-100-ri, at its FFMA price. -/
 def flatSkip : Sparse := [(1, 8675061491317, 991974966243)]
