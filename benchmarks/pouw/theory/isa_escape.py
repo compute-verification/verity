@@ -294,9 +294,12 @@ CANDIDATES = [
         "isa": "UIMAD is an exact s32 MAC, one warp-uniform word an instruction; the census priced it on issue beside "
                "mma.sync (decisions 73, 84, 88), NOT beside a saturated asynchronous wgmma/tcgen05.mma",
         "reason": "bounded by the issue ceiling (decision 84: one instruction a cycle whatever the pipe, uniform "
-                  "included), and the uniform route is already ~0% of the H200/B200 headline eps; UNMEASURED beside "
-                  "async tensor (ptxas moves uniform chains to lanes there) -- a round-2 DC probe should confirm no "
-                  "dual-issue",
+                  "included), and the uniform route is already ~0% of the H200/B200 headline eps; sm_100 MEASURED at "
+                  "saturation, no dual-issue (dc/probes/sm100_a2u.cu, r20261019-055605-6cc2: the chain stays on the "
+                  "uniform datapath beside tcgen05.mma, total issue <= 0.9996 an SMSP-cycle at K 32-135, each uniform "
+                  "instruction 0.95-1.10 of a lane slot); sm_90 MEASURED near saturation, no dual-issue "
+                  "(dc/probes/sm90_emp.cu emp_pack3, r20261019-064443-0ae6: the chain uniform beside 4 wgmma s8 n128 a "
+                  "group, issue 0.87, each uniform instruction 1.08-1.19 SMSP-cycles)",
     },
     # -- sm_100 (B200) only: the 5th-gen tensor core's TMEM movers, block-scaled low-precision forms, and the
     # decompression engine (RT-BLACKWELL, note:20261019T0501Z). The writer tcgen05.mma IS the honest priced route; the
