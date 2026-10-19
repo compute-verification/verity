@@ -14,7 +14,9 @@ round, which `Wf` puts below it. `TieScope` is `Scope` from `TieLive`, `TieCommi
 release leaves uncounted. `Llama31Shape` and `Llama31Rounds` are kernel computations. `witTie`: `Tie` holds of a circuit
 with gates (one call, its coin, an A row and a receipt reading both), so `TieCommits` isn't true only of the empty
 circuit; `witEpoch` and `witEpoch_ownStart` tie two windows of it timed from the salt's release, and refuse them when
-the second is timed from its own start.
+the second is timed from its own start. `witTieCall`: `Tie` holds in `perCall` of a circuit whose served `y` reads its
+round's coin and is committed the round after (`witCall_out_cut`), and `witCall_unnoised` refuses it when `y` reads no
+coin, as `h1tile`'s `z` doesn't.
 -/
 
 namespace Properties.Served
@@ -248,6 +250,71 @@ theorem wit_receipt_cut : witCircuit.Writes 2 ∧ witCircuit.commitRound 2 = 1 �
 
 theorem wit_layerCommitted : LayerCommitted witCircuit :=
   tieCommits Unit witLayout .beside witCircuit witCls witTie
+
+/-- `witLayout`'s one call in `perCall`: its coin, an A row, its served `y` word off the noised sets (reading the coin
+and the A row), committed the round after its own, and a receipt reading `y`. -/
+def witCircuitCall : Declared Unit where
+  dag := [witGate (.input .coin ()) [] false, witGate (.input .run ()) [] false,
+    witGate (.affine 0 [1, 1]) [0, 1] true, witGate (.affine 0 [1]) [2] true]
+  calls := 1
+  call := fun _ => 0
+  rounds := 1
+  round := fun _ => 0
+  coinMode := fun _ => .live
+  commitRound := fun i => if i = 2 ∨ i = 3 then 1 else 0
+  seedNames := fun _ _ => false
+  units := 1
+  unit := fun _ => 0
+
+/-- `witCircuitCall`'s classes: the coin, the A row, the `y` word, the receipt. -/
+def witClsCall : ℕ → Cls
+  | 0 => .coin
+  | 1 => .act
+  | 2 => .out
+  | _ => .receipt
+
+/-- `Tie` holds in `perCall` of a circuit whose served `y` reads its round's coin and is committed the round after. -/
+theorem witTieCall : Tie witLayout .perCall witCircuitCall witClsCall where
+  calls := by decide +kernel
+  rounds := by decide +kernel
+  round := fun c hc => by
+    obtain rfl : c = 0 := by
+      have h1 : c < 1 := hc
+      omega
+    decide +kernel
+  inRange := fun _ _ => Nat.zero_lt_one
+  live := fun _ _ => rfl
+  coin := by decide +kernel
+  registered := by decide +kernel
+  act := fun i hi h =>
+    ⟨(by decide +kernel : ∀ i, i < 4 → (witClsCall i = .act ∨ witClsCall i = .served) →
+        witCircuitCall.binding i = some .run) i hi h, fun _ _ _ => rfl⟩
+  computed := by decide +kernel
+  committed := by decide +kernel
+  noised := by decide +kernel
+  forms := by decide +kernel
+  linked := fun _ _ _ => ⟨2, by decide +kernel, rfl, rfl⟩
+  commit := by decide +kernel
+  inner := by decide +kernel
+
+/-- The `perCall` witness's `y` is committed at coin `1`, its cut, after the coin it reads. -/
+theorem witCall_out_cut :
+    witCircuitCall.Writes 2 ∧ witCircuitCall.commitRound 2 = 1 ∧ witCircuitCall.cutOf 2 = 1 :=
+  ⟨⟨by decide +kernel, by decide +kernel⟩, by decide +kernel, by decide +kernel⟩
+
+theorem witCall_layerCommitted : LayerCommitted witCircuitCall :=
+  tieCommits Unit witLayout .perCall witCircuitCall witClsCall witTieCall
+
+/-- The `perCall` witness with its `y` the unit's own dot of the A row, reading no coin (`h1tile`'s `z`). -/
+def witCircuitUnnoised : Declared Unit :=
+  { witCircuitCall with
+    dag := [witGate (.input .coin ()) [] false, witGate (.input .run ()) [] false,
+      witGate (.affine 0 [1]) [1] true, witGate (.affine 0 [1]) [2] true] }
+
+/-- **`perCall` needs the served `y` to read its round's coin** (G3's P7): a `y` that reads none fails `Tie.noised`,
+whatever its commit coins. -/
+theorem witCall_unnoised : ¬ Tie witLayout .perCall witCircuitUnnoised witClsCall := fun T =>
+  absurd (T.noised 2 (by decide +kernel) (Or.inr ⟨rfl, rfl⟩)) (by decide +kernel)
 
 /-- A timed run from `t` that spends nothing. -/
 def witRunAt (t : ℝ) : Pouw.TimedRun Unit Unit Unit := ⟨t, fun _ _ => 0, fun _ _ _ => 0⟩
