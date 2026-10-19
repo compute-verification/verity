@@ -35,5 +35,6 @@ import Proofs.Accounting.HMu
 import Proofs.Accounting.CoinFlow
 import Proofs.Accounting.Checkpoint
 import Proofs.Accounting.FillRoute
+import Proofs.Accounting.RtLuck
 
 /-! `Proofs.Accounting`: the proofs of resource accounting's guarantees. -/

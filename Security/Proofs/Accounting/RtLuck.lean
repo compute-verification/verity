@@ -3,7 +3,7 @@ import Proofs.Accounting.Checkpoint
 /-!
 # RT-LUCK's witnesses against R-CP's card and the tile-adapted reading
 
-Proofs only, imported by no root: each theorem is a counterexample or a corollary that a red-team finding of
+Proofs only, no guarantee reads them: each theorem is a counterexample or a corollary that a red-team finding of
 note:20261019T1052Z-draft-rt-luck cites. `tile` is the one-round game `WholeGuessOfCheckpoints` concludes on (share `1`
 in mode `s`, check `same`), and `luckAt_tile_iff` unfolds `RoundGame.LuckAt` on it.
 
