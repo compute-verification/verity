@@ -129,6 +129,24 @@ def test_ready_prs_merge_onto_next_in_number_order_drafts_too_and_held_ownerless
     assert [n for n, e in sorted(status.items()) if e.state == "queued"] == [1, 2, 3, 6] and status[3].position == 3
 
 
+def test_a_new_head_on_top_of_the_admitted_one_keeps_its_place_and_any_other_goes_to_the_back(world):
+    """CI-113, 19 Oct: #2738 and #2729 were re-merged five times as the stacked PRs below them took fixes, and each re-mark sent
+    them behind about 100 PRs. A head that descends from the one `next` holds keeps its place; a rewritten one doesn't."""
+    world.gh.put(1, h1 := world.change({"a.txt": "a1\n"}))
+    world.gh.put(2, world.change({"b.txt": "b2\n"}))
+    world.gh.put(3, h3 := world.change({"c.txt": "c3\n"}))
+    q = world.queue()
+    q.sync()
+    assert world.on_next(q) == [1, 2, 3]
+    world.gh.put(1, world.change({"a.txt": "a1 fixed\n"}, base=h1))           # a fix on top of #1's admitted head
+    members, _ = q.sync()
+    assert [m.pr for m in members] == [1, 2, 3] and members[0].head == world.gh.prs[1].head
+    world.gh.put(3, world.change({"c.txt": "c3 again\n"}, base=h3))          # #3 fixed too: it keeps its place
+    world.gh.put(2, world.change({"b.txt": "b2 rewritten\n"}))               # #2 rewritten from main: to the back
+    members, _ = q.sync()
+    assert [m.pr for m in members] == [1, 3, 2]
+
+
 def test_the_queues_merges_carry_the_time_they_are_made_whatever_date_the_caller_pins(world, monkeypatch):
     """12 Oct: the hand-landing recipe pinned 2026-09-28T23:00Z for reproducible merge ids, a merge on `next` built under it
     (ba87196a8) landed with that date, and `git log --since` over `main` stopped early there."""

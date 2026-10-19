@@ -622,11 +622,12 @@ class Queue:
         return out
 
     def order(self, chain: list[Member], entries: dict[int, Entry]) -> list[int]:
-        """Members that keep their head keep their order; the rest follow by PR number, each after the PRs it contains.  The PRs
+        """Members that keep their head, or move it to a descendant (`_same_or_fixed`), keep their order; the rest follow by PR
+        number, each after the PRs it contains.  The PRs
         in `first` (`--first`) that are ready go below all of them, in the order given, so the next train starts with them; but
         above the bottom `hold` members, which a running check covers."""
         ready = {n for n, e in entries.items() if e.state == "ready"}
-        kept = [m.pr for m in chain if m.pr in ready and entries[m.pr].pr.head == m.head or self._frozen(m, entries)]
+        kept = [m.pr for m in chain if m.pr in ready and self._same_or_fixed(m, entries) or self._frozen(m, entries)]
         held: list[int] = []
         for m in chain[:self.hold]:
             if m.pr not in kept:
@@ -648,6 +649,14 @@ class Queue:
         for n in held + [f for f in self.first if f in ready] + kept + [n for n in new if n not in cold] + sorted(cold):
             place(n)
         return out
+
+    def _same_or_fixed(self, m: Member, entries: dict[int, Entry]) -> bool:
+        """Whether member ``m``'s PR is at the head `next` holds, or at a head that descends from it (a fix on top, or a merge of a
+        PR below it): such a re-mark keeps its place, since its new head is preflighted and checked like any other (CI-113, 19
+        Oct: #2738 and #2729 were re-merged five times as stacked PRs below them took fixes, and each re-mark sent them behind
+        about 100 PRs)."""
+        new = entries[m.pr].pr.head
+        return new == m.head or not _git(self.workdir, "merge-base", "--is-ancestor", m.head, new, check=False).returncode
 
     def _frozen(self, m: Member, entries: dict[int, Entry]) -> bool:
         """Whether member ``m`` stays at its old head: `frozen` names it, its PR is still open, and neither ejected nor held."""
