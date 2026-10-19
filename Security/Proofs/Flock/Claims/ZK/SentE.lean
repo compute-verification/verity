@@ -133,7 +133,62 @@ theorem famGuard_of (j : Fin (jOf x)) (r : Fin 2) (p : Session.Phase) (h : guard
   obtain ⟨a0, a1, a2, a3⟩ := slots_le hx hsx hj r.isLt
   cases p with
   | opening =>
-    sorry
+    simp only [guardSlot] at h
+    have hst : (stsOf x)[j.val]! = stAt x j := getElem!_pos (stsOf x) j.val hj
+    obtain ⟨-, -, -, hall⟩ := FlockComplete.ZkTables.tables_of_setup hx.1 hsx
+    have hm : 14 ≤ (stsOf x)[j.val]!.m := by
+      rw [hst]
+      have := (hall j.val hj).1
+      exact le_trans (by norm_num) this
+    have hk6 : 6 ≤ (stsOf x)[j.val]!.c.kLog := by
+      rw [hst]
+      exact (zkTab x j).wf.1.hk6
+    have hr0 : rankSlot x j.val 0 ≤ n := by
+      obtain ⟨-, b1, b2, b3⟩ := slots_le hx hsx hj (r := 0) (by norm_num)
+      rcases Nat.lt_or_ge r.val 1 with hr | hr
+      · rw [show r.val = 0 by omega] at h
+        exact h
+      · rw [show r.val = 1 by omega] at h a0
+        have e0 : repBase x (2 * j.val + 0 + 1) = repBase x (2 * j.val + 1) := rfl
+        omega
+    have hok : FlockComplete.MaskRank.maskRankOk ((if r.val = 1 then ptsOpen c (stsOf x)[j.val]! (2 * j.val)
+        else #[]) ++ ptsOpen c (stsOf x)[j.val]! (2 * j.val + r.val)) (Composed.maskWordsOf (stsOf x)[j.val]!) =
+          true := by
+      by_contra hb
+      exact hn (.inr ⟨j.val, hj, r.val, r.isLt, .inl ⟨hm, hk6, hr0, h, Bool.eq_false_iff.2 hb⟩⟩)
+    rw [hst] at hok
+    have hout : ∀ r' : Fin 2, ((cz x c j).rest : Composed.RestOf (zkTab x j).table (stAt x j)).rOuter r' =
+        fun i => slotAt c (repBase x (2 * j.val + r'.val) + 1) i.val := by
+      intro r'
+      rw [(hp x c j r').2.2]
+      funext i
+      unfold outerAt slotAt
+      rw [outerSlot_eq hsx]
+    have hpts : ∀ k : Fin _root_.Flock.Zk.RANK_POINTS,
+        Composed.pointsOf ((cz x c j).rest : Composed.RestOf (zkTab x j).table (stAt x j)) k =
+          (ptsOpen c (stAt x j) (2 * j.val) ++ ptsOpen c (stAt x j) (2 * j.val + 1))[k.val]! :=
+      fun k => pointsOf_reads _ (fun r n e => slotAt c (repBase x (2 * j.val + r) + n) e)
+        (fun r => (hp x c j r).1) (fun r => (hp x c j r).2.1) hout k
+    rcases Nat.lt_or_ge r.val 1 with hr | hr
+    · have hr' : r = 0 := Fin.ext (by omega)
+      subst hr'
+      simp only [Fin.val_zero, Nat.add_zero, zero_ne_one, ↓reduceIte, Array.empty_append] at hok
+      refine rankOn_of _ (k := 2) (fun i => Composed.pointsOf ((cz x c j).rest :
+          Composed.RestOf (zkTab x j).table (stAt x j)) ⟨i.val, lt_of_lt_of_le i.isLt (by decide)⟩)
+        (tabC P x j).maskWords (fun a => ⟨a.1.val, ?_⟩)
+        (fun a b hab => Subtype.ext (Fin.ext (by have e := Fin.ext_iff.1 hab; exact e))) (fun _ _ => rfl)
+        (maskRankOk_compose rfl (fun i => ?_) hok)
+      · have h2 : (if a.1.val < 2 then (0 : Fin 2) else 1) ≤ 0 := a.2
+        by_contra hk
+        rw [ite_eq_right hk] at h2
+        exact absurd h2 (by decide)
+      · rw [hpts, getElem!_def, getElem!_def,
+          Array.getElem?_append_left (lt_of_lt_of_eq i.isLt rfl)]
+    · have hr' : r = 1 := Fin.ext (by omega)
+      subst hr'
+      simp only [Fin.val_one, ↓reduceIte] at hok
+      exact rankOn_of _ ((tabC P x j).points (cz x c j)) (tabC P x j).maskWords (fun a => a.1)
+        (fun a b hab => Subtype.ext hab) (fun _ _ => rfl) (maskRankOk_compose rfl hpts hok)
   | restart =>
     have hρ : _root_.Flock.Zk.rhoIndependent (rhoAt c j.val r.val) = true := by
       by_contra hb
@@ -144,11 +199,11 @@ theorem famGuard_of (j : Fin (jOf x)) (r : Fin 2) (p : Session.Phase) (h : guard
     have h0 : ((tabC P x j).T (cz x c j)).ρ r 0 = FlockLevel3.GF256.of (rhoAt c j.val r.val).1 := by
       show (if (0 : Fin 2) = 0 then FlockLevel3.GF256.of ((cz x c j).rho r).1
         else FlockLevel3.GF256.of ((cz x c j).rho r).2) = _
-      rw [if_pos rfl, (hc x c j r).2]
+      rw [ite_eq_left (rfl : (0 : Fin 2) = 0), (hc x c j r).2]
     have h1 : ((tabC P x j).T (cz x c j)).ρ r 1 = FlockLevel3.GF256.of (rhoAt c j.val r.val).2 := by
       show (if (1 : Fin 2) = 0 then FlockLevel3.GF256.of ((cz x c j).rho r).1
         else FlockLevel3.GF256.of ((cz x c j).rho r).2) = _
-      rw [if_neg (by decide), (hc x c j r).2]
+      rw [ite_eq_right (by decide : ¬ (1 : Fin 2) = 0), (hc x c j r).2]
     exact Composed.wr_bijective ((tabC P x j).T (cz x c j)) r (rhoAt c j.val r.val) h0 h1 he hρ
   | inner =>
     have hb : (betaAt c j.val r.val).isZero = false := by
