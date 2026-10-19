@@ -211,7 +211,8 @@ def _cmd_run(argv: list[str], clones: list[Path]) -> int:
     ap.add_argument("--pool", default=None, metavar="NAME",
                     help="with --on --source: run in the machine's NAME pool (`research`: any lane's research runs on vy-nebius-cpu-1, "
                          "at nice 19 beside the merge checks; `proofs`): the run takes a slot there and its cwd is its source, or "
-                         "with --cwd clone a private clone of it, for a job that writes into the tree (a Lean check that rewrites a lock)")
+                         "with --cwd clone a private clone of it, for a job that writes into the tree (a Lean check that rewrites a lock); "
+                         "its --timeout counts from taking the slot, after a wait of up to an hour for one")
     ap.add_argument("--as", dest="lane", default=os.environ.get("RESEARCH_LANE"), metavar="LANE",
                     help="with --pool: the lane the slot names (default $RESEARCH_LANE)")
     q = ap.add_argument_group("the queue (--queue): the one queue over the shared nodes (infra/cluster) places and runs the job; "
@@ -305,10 +306,15 @@ def _cmd_run(argv: list[str], clones: list[Path]) -> int:
             print(f"research run: --pool {why}", file=sys.stderr)
             return 2
         try:
-            command = slot_only.in_pool(ns.pool, ns.lane, command)
+            timeout = remote.timeout_seconds(remote.flag_value(harness_opts, "--timeout"))
+            command = slot_only.in_pool(ns.pool, ns.lane, command, timeout)
         except ValueError as e:
             print(f"research run: --pool: {e}", file=sys.stderr)
             return 2
+        if timeout:
+            harness_opts = [*harness_opts, "--timeout", f"{slot_only.POOL_WAIT_S + timeout:g}"]
+            print(f"research run: --pool {ns.pool}: --timeout {timeout:g} s counts from taking a slot (slot.py --run-max); it waits "
+                  f"up to {slot_only.POOL_WAIT_S // 60} min for one, then exits 75 without running", file=sys.stderr)
         if ns.mem_gb is not None:
             # the slot's mem= admits and reserves the run; a launch-time reservation too was held through the wait for a slot,
             # beside the slot's once it ran (INF-61, cpu-3 18 Oct: two waiting runs held 128 GB, admission sat at -89 GB)

@@ -68,6 +68,26 @@ def test_a_pool_run_takes_no_launch_time_memory_reservation_beside_its_slots(tmp
     assert seen == [None, None] and "--mem-gb 96 is dropped" in capsys.readouterr().err
 
 
+def test_a_pool_runs_timeout_counts_from_taking_its_slot_not_from_its_wait(monkeypatch, tmp_path, capsys):
+    """INF-106: a `--pool` run's --timeout counted its wait in the pool's line too, so a run that waited 50 of its 60 min ran 10."""
+    from research import remote
+    from research.cli import main
+
+    assert S.in_pool("research", "x", ["true"], 2400)[4:11] == ["--by", "x", "--wait-max", f"{S.POOL_WAIT_S}", "--run-max", "2400", "--"]
+    assert S.through_slot(S.in_pool("research", "x", ["true"], 2400))
+    seen = []
+    monkeypatch.setattr(remote, "launch", lambda **kw: seen.append(kw) or {"phase": "launched", "pod_id": "p1", "remote_run_dir": "/r",
+                                                                            "launch": {"runner_pid": 1}})
+    argv = ["run", "--runs-dir", str(tmp_path / "runs"), "--on", "m", "--project", "p", "--no-custody-r2", "--source", ".",
+            "--pool", "research", "--as", "infra"]
+    assert main([*argv, "--timeout", "40m", "--", "true"]) == 0 and main([*argv, "--", "true"]) == 0
+    timed, untimed = seen
+    assert timed["command"][-7:] == ["--run-max", "2400", "--", "nice", "-n", "19", "true"]
+    assert remote.flag_value(timed["harness_args"], "--timeout") == f"{S.POOL_WAIT_S + 2400}", "the runner's covers the wait and the run"
+    assert "--timeout 2400 s counts from taking a slot (slot.py --run-max)" in capsys.readouterr().err
+    assert "--run-max" not in untimed["command"] and remote.flag_value(untimed["harness_args"], "--timeout") is None
+
+
 def _run(runs, rid, state, command, *, pgid=None, runner=None):
     d = runs / rid
     d.mkdir(parents=True)
