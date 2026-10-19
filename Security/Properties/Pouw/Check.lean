@@ -25,13 +25,15 @@ open PouwWindow (Work point level floorPoint)
 /-! ## Acceptance -/
 
 /-- The registration keeps PoUW's rule, with `f` the level, sampling item and `root_W` it fixes: a served window in the
-verifier's context registering exactly `window.REGISTERED`; a work level whose credited tiles are at least the range's
+verifier's context registering exactly `window.REGISTERED`; its `length` item a fixed-length window's at the verifier's
+max_tokens (`lengthProblem`: stop mode fixed, the verifier's max_tokens, each slot served its max_tokens); a work level whose credited tiles are at least the range's
 low end and whose next level is at most the floor point of its high end; each item the verifier's own at that level
 (`expected`, compared canonically); the population `N = point(level + 1)`; the law `subset:K′` with `K′` the window's
 exact `kPrime`; and the check's query and scheme. -/
 def RegistrationKeeps (p : Params) (c : Registration) (f : Fixed) : Prop :=
   (c.window.kind = "served" ∧ c.window.context = p.context) ∧
   (keys c.window.items).getD [] = registeredSorted ∧
+  PouwWindow.lengthProblem (get c.window.items "length") p.maxTokens = none ∧
   levelOf c.window.items = some f.work.level ∧
   f.work.level + 1 ≤ level p.gridBits (floorPoint p.gridBits p.hi) ∧ p.lo ≤ point p.gridBits f.work.level ∧
   f.work = Work.at p.gridBits f.work.level ∧
@@ -55,13 +57,13 @@ def ServiceAccepted (p : Params) (c : Registration) (f : Fixed) (e : Evidence) (
   draw.units.size = f.sampling.k ∧ Ascending draw.units.toList ∧ ∀ u ∈ draw.units.toList, u < f.work.n
 
 /-- What the check accepts is a registration that keeps PoUW's rule, which the service accepted as the rule fixes; it
-then publishes the check item, the level's work, the sampling item, `root_W` and the drawn units, and the profile is the
-service's. -/
+then publishes the check item, the level's work, the sampling item, the verifier's max_tokens, `root_W` and the drawn
+units, and the profile is the service's. -/
 def AcceptMeans : Prop :=
   ∀ (p : Params) (c : Registration) (e : Evidence) (pub : Public) (prof : Core.Integrity),
     protocol.check p c e = .accept pub prof →
       ∃ f draw, RegistrationKeeps p c f ∧ ServiceAccepted p c f e prof draw ∧
-        pub = ⟨p.check, f.work, f.sampling, f.rootW, draw.units⟩
+        pub = ⟨p.check, f.work, f.sampling, p.maxTokens, f.rootW, draw.units⟩
 
 /-- An accepted window is credited a grid level inside the declared range: its credited tiles are at least `lo`, and
 the tiles it pads to at most `hi`. -/

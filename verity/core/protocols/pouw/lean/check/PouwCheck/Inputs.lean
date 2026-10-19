@@ -2,12 +2,14 @@ import CoreProtocol.Protocol
 import CoreProtocol.Profile
 import Flock.Hash
 import PouwCheck.Json
+import PouwWindow.Length
 
 /-!
 # The check's three inputs (`core_check.py`, "the three inputs")
 
 * `Params`: the verifier's own parameters of the window: the check item, ε and δ, the grid's bits, the declared range
-  of tile counts, the window's context and the check query's SHA-512.
+  of tile counts, the window's context, the check query's SHA-512, and the rows' fixed length: stop mode `fixed` and
+  each slot's max_tokens.
 * `Registration`: one-stage's record of the window (`registration.record`), canonical JSON, with what PoUW's rule reads;
   its digest is the record's own, `registration.digest`.
 * `Evidence`: the proof service's answer for a registration, read by `Core.Answer.ofJson`: the protocol, the
@@ -24,7 +26,8 @@ open Flock (V)
 
 def scheme : String := "frame-v3-sha512/hm96-sha512"
 def formats : List String := ["verity/registration/v1", "verity/registration/v2"]
-def paramsKeys : List String := ["check", "context", "delta", "eps", "grid_bits", "query", "range"]
+def paramsKeys : List String := ["check", "context", "delta", "eps", "grid_bits", "length", "query", "range"]
+def lengthParamKeys : List String := ["max_tokens", "stop"]
 def checkKeys : List String := ["entries", "scheme", "template", "tile_work"]
 
 /-- The `check` item: the tile template, its work per tile, the commitment scheme and the public bound on entries. -/
@@ -48,6 +51,8 @@ structure Params where
   query : String
   lo : Nat
   hi : Nat
+  /-- Each slot's max_tokens, which a row of record serves whatever it samples (stop mode `fixed`, `ignore_eos`). -/
+  maxTokens : List Nat
   deriving DecidableEq, Repr
 
 def isHexDigest (s : String) : Bool := s.length = 128 && s.all fun c => c.isDigit || ('a' ≤ c && c ≤ 'f')
@@ -81,7 +86,15 @@ def paramsOf (j : Json) : V Params := do
       if 1 ≤ lo ∧ lo ≤ hi then some (lo, hi) else none
     | _ => none
   let some (lo, hi) := range | throw "range is not [lo, hi] with 1 <= lo <= hi"
-  pure { check := ⟨entries, scheme, template, tileWork⟩, context, delta, eps, gridBits, query, lo, hi }
+  let ln := get j "length"
+  let maxTokens : Option (List Nat) := do
+    guard (keys ln == some lengthParamKeys && get ln "stop" == .str PouwWindow.stopFixed)
+    let m ← PouwWindow.nats? (get ln "max_tokens")
+    guard (!m.isEmpty && m.all (1 ≤ ·))
+    pure m
+  let some maxTokens := maxTokens
+    | throw "length is not {max_tokens, stop} with stop fixed and max_tokens a non-empty list of positive natural numbers"
+  pure { check := ⟨entries, scheme, template, tileWork⟩, context, delta, eps, gridBits, query, lo, hi, maxTokens }
 
 /-- One of the record's roots. -/
 structure Root where

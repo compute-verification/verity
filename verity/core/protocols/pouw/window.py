@@ -3,14 +3,15 @@ the size of the uniform draw, and the window's advice (its per-call entries and 
 with the window statement's reference (`note:verity-root/20261006T0545Z-draft-daniel-one-recursive-architecture-v2`,
 PoUW; the joint note's L2, L3 and L4).
 
-**Public items** (`PUBLIC`), exactly the draft's list.  The service refuses a registration that makes anything else public;
-the window's own root and W's root are salted roots, which the rule allows.
+**Public items** (`PUBLIC`), the draft's list and the rows' fixed length (19 Oct).  The service refuses a registration
+that makes anything else public; the window's own root and W's root are salted roots, which the rule allows.
 
     item       kind         source     what it is
     verdict    output       outcome    every drawn tile proved and opened, or not
     work       output       window     the credited work, as the tile count N padded to a grid level (`bucket`)
     check      structure    parameter  the tile template every unit instantiates, its work per tile, the commitment scheme
     sampling   structure    parameter  ε, δ, the grid and the law subset:K′ they fix with the work level (`k_prime`)
+    length     structure    parameter  the rows of record's fixed length: each slot's public max_tokens (`length_item`)
     drawn      coins        outcome    the verifier's own draw, after the receipt
     root_W     commitment   parameter  the weights' salted root
 
@@ -26,6 +27,13 @@ under 1 − 2^-s of the credit (at most 11% at s = 3) and the factor N / g_ℓ <
 **The draw** (L3): uniform subset:K′ over the N equal tiles, K′ the smallest K with (1 − ε·W/(N·w_max))^K <= δ, W the
 credited work and w_max the most work a tile does (`k_prime`).  A wrong set holding a share ε of W has at least ε·W/w_max
 tiles, so a draw of K′ without replacement misses it with probability at most δ.  Filler tiles are credited nothing.
+
+**The fixed length**: correct tokens served past the honest run's end of sequence are not useful work (Daniel, 19 Oct,
+ASK-39).  A row of record serves its slot's public max_tokens whatever it samples (vLLM's ``ignore_eos``), so W_use is
+public: the `length` item is ``{"stop": "fixed", "max_tokens": [...], "served": [...]}``, one entry a slot, and
+`length_problem` refuses an EOS-keyed row (`window-form: eos-keyed-row`) and a slot that served another length
+(`window-form: length-mismatch`).  A registration made before the rule carries `LEGACY_REGISTERED`, without the item,
+and is not of record.
 
 **The advice** (L2): one entry per committed call, then one filler entry, then empty entries up to the public bound P, each
 an `Entry` row committed in one window root registered before the draw.  A call's sides are dense: each side tree holds only
@@ -75,11 +83,15 @@ PUBLIC = (
                                         "scheme fix the auditor's verifier"),
     ("sampling", "structure", "parameter", "ε, δ and the grid, and the law subset:K′ they fix with the level: the guarantee "
                                            "is stated in them"),
+    ("length", "structure", "parameter", "the rows of record's fixed length: each slot's max_tokens, served whatever it "
+                                         "samples (ignore_eos), so the useful work is public"),
     ("drawn", "coins", "outcome", "the verifier's own draw, after the receipt"),
     ("root_W", "commitment", "parameter", "the weights' salted root: what the tiles' weight rows are committed to, hiding"),
 )
 #: the items a registration carries; the verdict and the draw come after it
-REGISTERED = ("work", "check", "sampling", "root_W")
+REGISTERED = ("work", "check", "sampling", "length", "root_W")
+#: what a registration made before the fixed-length rule (19 Oct) carries: no `length`, so not of record
+LEGACY_REGISTERED = ("work", "check", "sampling", "root_W")
 KINDS = ("call", "filler", "none")
 
 
@@ -225,6 +237,47 @@ def sampling(eps: Fraction, delta: Fraction, work: Work, tile_work: int, bits: i
     """The `sampling` item: ε, δ, the grid and the law they fix with the level (every tile does `tile_work`)."""
     k = k_prime(eps, delta, work.credited * tile_work, work.n, tile_work)
     return {"eps": str(Fraction(eps)), "delta": str(Fraction(delta)), "grid_bits": bits, "law": {"law": "subset", "k": k}}
+
+
+# ---- the fixed length -----------------------------------------------------------------------------------------------------
+
+#: a row of record's stop mode: it serves its slot's max_tokens whatever it samples (vLLM's ``ignore_eos``)
+STOP_FIXED = "fixed"
+LENGTH_KEYS = ("max_tokens", "served", "stop")
+
+
+def length_item(max_tokens: Sequence[int]) -> dict[str, Any]:
+    """The `length` item of a window whose slots serve `max_tokens`: stop mode fixed, each slot served its max_tokens."""
+    return {"max_tokens": list(max_tokens), "served": list(max_tokens), "stop": STOP_FIXED}
+
+
+def _nats(x: Any) -> list[int] | None:
+    return list(x) if isinstance(x, list) and all(_int(v) and v >= 0 for v in x) else None
+
+
+def length_problem(item: Any, max_tokens: Sequence[int]) -> str | None:
+    """Why a registered `length` item is not a fixed-length window's at the verifier's `max_tokens` (one per slot), or
+    None, the first rule it breaks: it is ``{max_tokens, served, stop}``; its stop mode is fixed, not EOS-keyed; its
+    max_tokens and served are lists of natural numbers; its max_tokens is the verifier's; and each slot served its
+    max_tokens."""
+    if not isinstance(item, Mapping) or sorted(item) != list(LENGTH_KEYS):
+        return "window-form: length is not {max_tokens, served, stop}"
+    stop = item["stop"]
+    if not isinstance(stop, str):
+        return "window-form: length's stop is not a string"
+    if stop != STOP_FIXED:
+        return f"window-form: eos-keyed-row: the stop mode is {stop}, not {STOP_FIXED} (ignore_eos)"
+    m, served = _nats(item["max_tokens"]), _nats(item["served"])
+    if m is None or served is None:
+        return "window-form: length's max_tokens and served are not lists of natural numbers"
+    if m != list(max_tokens):
+        return f"window-form: max-tokens: registered {m}, the verifier's {list(max_tokens)}"
+    if len(served) != len(m):
+        return f"window-form: length-mismatch: {len(served)} slots served, not {len(m)}"
+    for i, (s, n) in enumerate(zip(served, m)):
+        if s != n:
+            return f"window-form: length-mismatch: slot {i} served {s} tokens, not its max_tokens {n}"
+    return None
 
 
 # ---- the entry row ----------------------------------------------------------------------------------------------------------
@@ -660,8 +713,9 @@ def public_inputs(registration: Mapping[str, Any], drawn: Sequence[int], sigma: 
     return json.dumps(head, sort_keys=True).encode() + b"\n" + body
 
 
-__all__ = ["DEPTHS", "ENTRY_SCHEMA", "Entry", "GRID_BITS", "KINDS", "M_MAX", "PORT", "PUBLIC", "PUBLIC_INPUTS_FORMAT",
-           "PUBLIC_PORTS", "REGISTERED", "T_BITS", "Work", "bucket", "entry_bc", "entry_digest", "entry_leaf", "floor_point",
-           "instance_ts", "k_prime", "layout_problem", "level", "levels", "on_grid", "pad_node", "pass_tiles", "point",
+__all__ = ["DEPTHS", "ENTRY_SCHEMA", "Entry", "GRID_BITS", "KINDS", "LEGACY_REGISTERED", "LENGTH_KEYS", "M_MAX", "PORT",
+           "PUBLIC", "PUBLIC_INPUTS_FORMAT", "PUBLIC_PORTS", "REGISTERED", "STOP_FIXED", "T_BITS", "Work", "bucket",
+           "entry_bc", "entry_digest", "entry_leaf", "floor_point", "instance_ts", "k_prime", "layout_problem",
+           "length_item", "length_problem", "level", "levels", "on_grid", "pad_node", "pass_tiles", "point",
            "public_inputs", "record_digest", "record_problem", "sampling", "session_cap", "sessions", "side_domain",
            "side_index", "side_levels", "side_path", "side_row", "tile_at", "tile_in", "tile_read", "tiles", "window_problem"]

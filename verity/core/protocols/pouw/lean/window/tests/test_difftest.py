@@ -587,6 +587,56 @@ def public_inputs_in(rng: random.Random) -> dict:
 
 # ---- the references ------------------------------------------------------------------------------------------------------
 
+# ---- the fixed length ------------------------------------------------------------------------------------------------------
+
+def _slots(rng: random.Random) -> list[int]:
+    return [rng.choice((1, 4, 64, 1024, rng.randint(1, 1 << 20))) for _ in range(rng.randint(1, 6))]
+
+
+def length_item_in(rng: random.Random) -> dict:
+    return {"max_tokens": _slots(rng)}
+
+
+def length_problem_in(rng: random.Random) -> dict:
+    m = _slots(rng)
+    item: Any = Wd.length_item(m)
+    bad = rng.choice(("none",) * 4 + ("keys", "extra", "notobj", "stoptype", "eos", "stopcase", "notlist", "float",
+                                      "neg", "bool", "max", "count", "short", "long", "slot"))
+    if bad == "keys":
+        del item[rng.choice(Wd.LENGTH_KEYS)]
+    elif bad == "extra":
+        item["ignore_eos"] = True
+    elif bad == "notobj":
+        item = rng.choice(([m], "fixed", None, 4))
+    elif bad == "stoptype":
+        item["stop"] = rng.choice((True, 1, None, ["fixed"]))
+    elif bad == "eos":
+        item["stop"] = "eos"
+    elif bad == "stopcase":
+        item["stop"] = rng.choice(("Fixed", "fixed ", "ignore_eos", ""))
+    elif bad == "notlist":
+        item[rng.choice(("max_tokens", "served"))] = rng.choice((4, "4", None, {"0": 4}))
+    elif bad == "float":
+        item["served"] = [float(x) for x in m]
+    elif bad == "neg":
+        item["served"] = [-1] + m[1:]
+    elif bad == "bool":
+        item["max_tokens"] = [True] * len(m)
+    elif bad == "max":
+        item["max_tokens"] = [x + 1 for x in m]
+        item["served"] = list(item["max_tokens"])
+    elif bad == "count":
+        item["max_tokens"] = item["served"] = m + [m[-1]]
+    elif bad == "short":
+        item["served"] = m[:-1]
+    elif bad == "long":
+        item["served"] = m + [rng.randint(0, 9)]
+    elif bad == "slot":
+        i = rng.randrange(len(m))
+        item["served"] = m[:i] + [rng.choice((m[i] - 1, m[i] + 1, 0))] + m[i + 1:]
+    return {"item": item, "max_tokens": m}
+
+
 def _entry_row(v: dict) -> Wd.Entry:
     return Wd.Entry.from_row(bytes.fromhex(v["row"]))
 
@@ -606,6 +656,8 @@ WINDOW = {"bound": "entries, not the bound", "row": "not an entry row", "layout"
           "overlap": "before the last call's end", "fillerbig": "the filler's range is", "end": "the ranges end at",
           "level": "real tiles are level", "records": "records, not one per call", "indices": "rows' indices are not",
           "record": "record"}
+LENGTH = {"keys": "length is not {", "stoptype": "stop is not a string", "eos": "eos-keyed-row", "lists": "not lists of",
+          "max": "max-tokens: registered", "count": "slots served, not", "slot": "tokens, not its max_tokens"}
 
 
 def layout_problem(v: dict) -> str | None:
@@ -617,6 +669,12 @@ def layout_problem(v: dict) -> str | None:
 def record_problem(v: dict) -> str | None:
     why = Wd.record_problem(_entry_row(v), v["record"])
     _reason("record_problem", why, RECORD)
+    return why
+
+
+def length_problem(v: dict) -> str | None:
+    why = Wd.length_problem(v["item"], v["max_tokens"])
+    _reason("length_problem", why, LENGTH)
     return why
 
 
@@ -657,6 +715,7 @@ def layout_constants(_: dict) -> dict:
 #: of each function that returns one, and its accept.
 REACHES = {"k_prime": {"refused", "capped", "k > 10,000", "n > 2^50", "exact"},
            "layout_problem": {"accept", *LAYOUT}, "record_problem": {"accept", *RECORD},
+           "length_problem": {"accept", *LENGTH},
            "window_problem": {"accept", "refused", *WINDOW}}
 SEEN: dict[str, set[str]] = {fn: set() for fn in REACHES}
 
@@ -722,6 +781,8 @@ PORTS = {
     "side_levels": (_port("side_levels", side_levels, side_levels_in), 300),
     "side_path": (_port("side_path", side_path, side_path_in), 300),
     "window_problem": (_port("window_problem", window_problem, window_in), 3000),
+    "length_item": (_port("length_item", lambda v: Wd.length_item(v["max_tokens"]), length_item_in, need_rejects=False), 200),
+    "length_problem": (_port("length_problem", length_problem, length_problem_in, need_rejects=False), 1500),
     "session_cap": (_port("session_cap", lambda v: Wd.session_cap(v["k_log"], v["per_block"]), session_cap_in), 300),
     "sessions": (_port("sessions", lambda v: Wd.sessions(v["k"], v["cap"]), sessions_in), 300),
     "instance_ts": (_port("instance_ts", lambda v: Wd.instance_ts(v["registration"], v["drawn"], v["sigma"], v["cap"]),
@@ -730,8 +791,9 @@ PORTS = {
     "layout_constants": (D.Port(EXE, "layout_constants", reference=layout_constants, inputs=st.just({}), package=LEAN,
                                 need_rejects=False), 1),
     "constants": (D.Port(EXE, "constants", reference=lambda _: {
-        "PUBLIC": [list(p) for p in Wd.PUBLIC], "REGISTERED": list(Wd.REGISTERED), "KINDS": list(Wd.KINDS),
-        "GRID_BITS": Wd.GRID_BITS}, inputs=st.just({}), package=LEAN, need_rejects=False), 1),
+        "PUBLIC": [list(p) for p in Wd.PUBLIC], "REGISTERED": list(Wd.REGISTERED),
+        "LEGACY_REGISTERED": list(Wd.LEGACY_REGISTERED), "KINDS": list(Wd.KINDS), "GRID_BITS": Wd.GRID_BITS,
+        "STOP_FIXED": Wd.STOP_FIXED}, inputs=st.just({}), package=LEAN, need_rejects=False), 1),
 }
 
 server = D.server_fixture(PORTS["constants"][0])

@@ -1,7 +1,7 @@
 """The difftest's cases: generated windows, each a `serve` case ``{"commitment": hex, "evidence": hex, "params": JSON}``.
 
-A case is an honest window (random grid bits, tile work, ε, δ, range and level; the registration one-stage's record of
-it, the service's answer an acceptance of that registration with its profile and draw), then one mutation (`MUTATIONS`)
+A case is an honest window (random grid bits, tile work, ε, δ, range, level and fixed length; the registration
+one-stage's record of it, the service's answer an acceptance of that registration with its profile and draw), then one mutation (`MUTATIONS`)
 aimed at one refusal of `core_check`: of the parameters, the record, the answer, or a rule of the check.  Every string it
 writes is ASCII and every number an integer, where Lean's canonical JSON and Python's agree.  `tests/test_difftest.py`
 draws them for the harness, and `verity/core/protocols/pouw/tests/test_pouw_core_check.py` holds each mutation to
@@ -34,6 +34,8 @@ def honest(rng: random.Random) -> dict:
                         "tile_work": tw},
               "context": f"served-zk/run-{rng.randrange(1000)}/{_hex(rng, 8)}", "delta": rng.choice(DELTA),
               "eps": rng.choice(EPS), "grid_bits": bits, "query": _hex(rng)}
+    slots = [rng.choice([1, 4, 48, 256]) for _ in range(rng.randint(1, 4))]
+    params["length"] = {"max_tokens": slots, "stop": Wd.STOP_FIXED}
     top = rng.choice([4, 12, 24, 40])
     hi = rng.randint(2, 1 << top)
     ell_hi = Wd.level(Wd.floor_point(hi, bits), bits) - 1
@@ -44,7 +46,8 @@ def honest(rng: random.Random) -> dict:
     k = Wd.k_prime(Fraction(params["eps"]), Fraction(params["delta"]), w.credited * tw, w.n, tw)
     root_w = _hex(rng)
     items = {"check": dict(params["check"]), "root_W": root_w, "work": w.to_json(tw),
-             "sampling": Wd.sampling(Fraction(params["eps"]), Fraction(params["delta"]), w, tw, bits)}
+             "sampling": Wd.sampling(Fraction(params["eps"]), Fraction(params["delta"]), w, tw, bits),
+             "length": Wd.length_item(slots)}
     program, partition = _hex(rng), _hex(rng)
     rec = {"format": CC.FORMATS[0] if rng.random() < 0.9 else CC.FORMATS[1], "protocol": CC.ONE_STAGE,
            "program": program, "query": params["query"], "partition": partition, "population": w.n,
@@ -100,6 +103,16 @@ MUTATIONS = [
     ("params-grid-other", "params", "grid_bits", 7), ("params-tile-other", "params", "check.tile_work", 3),
     ("params-template-other", "params", "check.template", "Other{1}"), ("params-query-other", "params", "query", None),
     ("params-range-low", "params", "range", None), ("params-range-high", "params", "range", None),
+    ("params-length-stop", "params", "length.stop", "eos"), ("params-length-empty", "params", "length.max_tokens", []),
+    ("params-length-zero", "params", "length.max_tokens", [0]), ("params-length-keys", "params", "length.served", [1]),
+    ("params-length-other", "params", "length.max_tokens", None),
+    ("record-legacy", "record", "window.public.length", _DROP), ("record-eos-row", "record", "window.public.length.stop", "eos"),
+    ("record-length-mismatch", "record", "window.public.length.served", None),
+    ("record-length-count", "record", "window.public.length.served", None),
+    ("record-max-tokens", "record", "window.public.length.max_tokens", None),
+    ("record-length-keys", "record", "window.public.length.ignore_eos", True),
+    ("record-length-stop-type", "record", "window.public.length.stop", True),
+    ("record-length-lists", "record", "window.public.length.served", "4"),
     ("record-format", "record", "format", "verity/registration/v0"), ("record-program", "record", "program", 7),
     ("record-partition", "record", "partition", _DROP), ("record-population-type", "record", "population", "8"),
     ("record-law-missing", "record", "law", _DROP), ("record-roots", "record", "roots", [{"port": "W"}]),
@@ -198,6 +211,16 @@ def _derived(name: str, case: dict, rng: random.Random):
         return _hex(rng)
     if name == "record-no-w-root":
         return [r for r in rec["roots"] if r["port"] != "W"]
+    m = p["length"]["max_tokens"]
+    if name == "params-length-other":
+        return [x + 1 for x in m]
+    if name == "record-length-mismatch":
+        i = rng.randrange(len(m))
+        return m[:i] + [m[i] - 1] + m[i + 1:]
+    if name == "record-length-count":
+        return m + [m[-1]]
+    if name == "record-max-tokens":
+        return [x + 1 for x in m]
     if name == "record-population":
         return rec["population"] + rng.choice([-1, 1])
     if name == "record-law":
