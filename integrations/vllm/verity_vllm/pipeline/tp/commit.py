@@ -21,11 +21,9 @@ among them; `--all-pairs` runs every one (timing studies).
 from __future__ import annotations
 
 import gc
-import hashlib
 import json
 import os
 import statistics
-import struct
 import sys
 import time
 from dataclasses import dataclass
@@ -46,20 +44,9 @@ from verity_vllm.pipeline.tp import serving_rows as SRT
 from verity_vllm.pipeline.tp import warmup as WU
 from verity_vllm.pipeline.tp.import_path import write_import_path_runtime
 from verity_vllm.pipeline.tp.negatives import negatives_applied, parse_serve_shard_from
+from verity_vllm.pipeline.tp.run_root import TP_ROOT_TAG, tp_run_root
 
-TP_ROOT_TAG = b"verity/tp-run-root/v1"
 SCHEMA = "verity/commit-integ/delta-tp/v1"
-
-
-def tp_run_root(world: int, roots: dict[int, bytes]) -> bytes:
-    if sorted(roots) != list(range(world)):
-        raise ValueError(f"roots for ranks {sorted(roots)} != 0..{world - 1} (fail-closed: missing rank)")
-    h = hashlib.sha256(TP_ROOT_TAG + struct.pack(">I", world))
-    for r in range(world):
-        if len(roots[r]) != 32:
-            raise ValueError(f"rank {r} root is not 32 bytes")
-        h.update(struct.pack(">I", r) + roots[r])
-    return h.digest()
 
 
 def tree_of_record(root: str | os.PathLike | None = None) -> dict:
