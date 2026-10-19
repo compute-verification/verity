@@ -1,6 +1,8 @@
 """census/v1's `PRODUCTS` names every tensor-core step these Definitions register, word primitive or Boolean Definition, with its k,
 and `PRECISION` each one's operand format; `RULED` names every family with a census rule, which a Program decoded in a process that
-never imported the rule's module refuses rather than count by `PRODUCTS`."""
+never imported the rule's module refuses rather than count by `PRODUCTS`.  Every step is bound to its silicon model (`SILICON`), a
+Boolean step to its word step's, and a word GEMM counts its Boolean version's work: K/16 steps' gates as `tc:bf16`, the cast's
+`cuda:gate`."""
 from __future__ import annotations
 
 import importlib
@@ -12,10 +14,14 @@ import sys
 
 import verity.ml.circuits.ops as OPS
 import verity.ml.circuits.ops.gemm  # noqa: F401  (registers the steps)
+import verity.ml.circuits.ops.boolean.s8  # noqa: F401  (binds the u8 x s8 step)
 from verity.ml.circuits.boolean.trace import word_of
-from verity.ml.circuits.census import COUNTERS, FAMILY_COUNTS, PRECISION, PRODUCTS, RULED, census
-from verity.ml.circuits.codec import encode_program
+from verity.ml.circuits.census import COUNTERS, FAMILY_COUNTS, PRECISION, PRODUCTS, RULED, SILICON, census
+from verity.ml.circuits.codec import descriptor_id, encode_program
 from verity.ml.circuits.defs import REGISTRY, bind
+from verity.ml.circuits.evaluation import bits as BS
+from verity.ml.circuits.ops import gemm as G
+from verity.ml.circuits.ops import prims as P
 from verity.ml.circuits.ops import s8 as S8
 from verity.ml.circuits.ops.boolean import gemm as BG
 from verity.ml.circuits.program import Program
@@ -86,3 +92,65 @@ def test_a_program_decoded_without_its_rules_module_refuses_its_census(tmp_path)
     assert refused.endswith("census.FAMILY_COUNTS lacks: import verity.ml.circuits.ops.s8, which registers it, before taking the census")
     want = {k: census(P)["totals"][k] for k in COUNTERS}
     assert decoded("verity.ml.circuits.ops.s8") == want == {"served_macs": 128, "tail_atoms": 192, "receipt_folds": 0}
+
+
+def test_every_tensor_core_step_is_bound_to_its_silicon_model():
+    """Each registered step's family has its silicon model's precision, `PRECISION`'s; a Boolean step is bound to the model of
+    the word step it computes."""
+    steps = {fid: d for fid, d in REGISTRY.defs.items() if DOT.search(fid)}
+    assert {fid: SILICON.get(fid) for fid in steps} == {fid: PRECISION[fid] for fid in steps}
+    boolean = {fid: d for fid, d in steps.items() if getattr(d, "word", None) is not None}
+    assert len(boolean) == 10 and all(d.silicon is word_of(d).silicon for d in boolean.values()), sorted(boolean)
+    assert {d.silicon.dtype for d in steps.values()} == {"bf16", "e4m3", "e5m2", "e2m1", "s8", "u8"}
+
+
+def _gates(fn) -> tuple[int, int]:
+    """`fn`'s two-input gates and ANDs, from its compiled circuit."""
+    c = BS.compile(fn).counts
+    return sum(c.values()), c["and"]
+
+
+def test_a_word_gemm_counts_its_boolean_versions_work():
+    """`Gemm_v2`'s coordinates through `GemmCoordinate_v3`: N x K/16 Hopper steps' gates are `tc:bf16`, and N casts (`F2fpBf16_v2`)
+    the rest, `cuda:gate`; the Boolean GEMM's census counts the same."""
+    K, N = 32, 3
+    word = Program(bind(G.Gemm, K=K, N=N, DOT=P.HopperBF16WgmmaDot16))
+    coord = bind(BG.GemmCoordinate, K=K, DOT=BG.HopperBF16WgmmaDot16)
+    twins = {descriptor_id(word_of(coord)): coord}
+    c = census(word, boolean=lambda fn: twins[descriptor_id(fn)])
+    (g, a), (cg, ca) = _gates(BG.HopperBF16WgmmaDot16), _gates(BG.F2fpBf16)
+    want = {"cuda:gate": {"gates": N * cg, "and": N * ca}, "tc:bf16": {"gates": N * K // 16 * g, "and": N * K // 16 * a}}
+    assert c["totals"]["work"] == want == census(Program(bind(BG.Gemm, K=K, N=N, DOT=BG.HopperBF16WgmmaDot16)), boolean=True)["totals"]["work"]
+    assert c["classes"][descriptor_id(word_of(coord))]["boolean_version"] == descriptor_id(coord)
+
+
+#: a fresh process: the word primitives registered and bound, then `argv[2:]` imported, then the Boolean work of the decoded Program
+WORK_DECODED = """
+import json, sys
+import verity.ml.circuits.ops.prims
+for m in sys.argv[2:]:
+    __import__(m)
+from verity.ml.circuits.census import census
+from verity.ml.circuits.codec import decode_program
+from verity.ml.circuits.defs import REGISTRY
+try:
+    print(json.dumps(census(decode_program(json.load(open(sys.argv[1])), REGISTRY), boolean=True)["totals"]["work"]))
+except ValueError as e:
+    print(json.dumps({"refused": str(e)}))
+"""
+
+
+def test_a_boolean_program_decoded_without_its_steps_module_refuses_its_work(tmp_path):
+    """Decoding keeps no binding: where `ops.boolean.gemm` was never imported the Boolean GEMM's work is refused, naming the step,
+    instead of counting its gates as `cuda:gate`; with it imported, the decoded Program counts as the built one."""
+    B = Program(bind(BG.Gemm, K=16, N=1, DOT=BG.HopperBF16WgmmaDot16))
+    (tmp_path / "gemm.json").write_text(json.dumps(encode_program(B)))
+
+    def decoded(*modules: str) -> dict:
+        run = [sys.executable, "-c", WORK_DECODED, str(tmp_path / "gemm.json"), *modules]
+        return json.loads(subprocess.run(run, capture_output=True, text=True, check=True).stdout)
+
+    refused = decoded()["refused"]
+    assert refused.startswith("HopperBF16WgmmaDot16_v2 is a tensor-core step (census.PRODUCTS) that census.SILICON binds to no "
+                              "silicon model: import the module defining HopperBF16WgmmaDot16_v2"), refused
+    assert decoded("verity.ml.circuits.ops.boolean.gemm") == census(B, boolean=True)["totals"]["work"]

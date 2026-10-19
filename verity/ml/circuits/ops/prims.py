@@ -22,10 +22,12 @@ equal to `_v1` on every finite input.  A registered id denotes one function, so 
 `BlackwellS8ImmaDot32_v1` is sm_120's s8 `mma.sync` step with `.satfinite` (`integer.BLACKWELL_SM120_S8_M16N8K32`, an s32
 accumulator word), and `S32ToF32Rn_v1` the `cvt.rn.f32.s32` that hands its sum to an f32 epilogue.
 `BlackwellU8S8ImmaDot32_v1` is the step's one sibling, u8 by s8 without `.satfinite` (`integer.BLACKWELL_SM120_U8S8_M16N8K32`,
-wrapping modulo 2^32), from the same probe run.
+wrapping modulo 2^32), from the same probe run.  Each tensor-core step is bound to the model it evaluates through
+(`census.silicon_step`: `.silicon`), whose operand format is its census facet `tc:<precision>`.
 """
 from __future__ import annotations
 
+from verity.ml.circuits.census import silicon_step
 from verity.ml.circuits.defs import PrimitiveDefinition, primitive
 from verity.ml.circuits.types import Array, Value
 
@@ -266,6 +268,14 @@ def BlackwellU8S8ImmaDot32(acc: int, *ab: int) -> int:
     `acc` (an s32 word) plus the 32 exact u8 x s8 products, summed exactly and reduced modulo 2^32 (no `.satfinite`). Total on
     every encoding: `integer.BLACKWELL_SM120_U8S8_M16N8K32.step`."""
     return BLACKWELL_SM120_U8S8_M16N8K32.step(acc, list(ab[:32]), list(ab[32:64]))
+
+
+for _step, _model in ((AmpereBF16TcDot16, AMPERE_BF16_M16N8K16), (HopperBF16WgmmaDot16, HOPPER_BF16_WGMMA_K16),
+                      (HopperE4m3QgmmaDot32, HOPPER_E4M3_WGMMA_K32), (HopperE4m3MmaV2Dot32, HOPPER_E4M3_MMAV2_K32),
+                      (BlackwellE4m3QmmaDot32, BLACKWELL_SM120_E4M3_M16N8K32), (BlackwellE5m2QmmaDot32, BLACKWELL_SM120_E5M2_M16N8K32),
+                      (BlackwellNvf4OmmaDot64, BLACKWELL_SM120_NVF4), (BlackwellMxf4OmmaDot64, BLACKWELL_SM120_MXF4),
+                      (BlackwellS8ImmaDot32, BLACKWELL_SM120_S8_M16N8K32), (BlackwellU8S8ImmaDot32, BLACKWELL_SM120_U8S8_M16N8K32)):
+    silicon_step(_step, _model)
 
 
 @primitive("S32ToF32Rn", 1, [("a", S32)], F32,

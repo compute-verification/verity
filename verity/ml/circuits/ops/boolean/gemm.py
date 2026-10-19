@@ -34,11 +34,13 @@ them. The s8 step is `integer.step_s8_bits` (Baugh-Wooley arrays, one carry-save
 int-to-float cast `fp.s32_to_f32`, and `ScaledMmS8Coordinate_v2` the accumulator, the cast, two `F32Mul_v4` and `F2fpBf16_v2`.
 Each names its word
 Definition (`trace.word_of`; ``DOT'`` is `DOT`'s); the tests check that the two agree, on random and special words and on the
-hardware captures. Each composite refuses at `bind` the K its word Definition refuses (its `refuse`).
+hardware captures. Each composite refuses at `bind` the K its word Definition refuses (its `refuse`). Each step is bound to its
+word step's silicon model (`census.silicon_step`), so the census counts its gates as `tc:<precision>`.
 """
 from __future__ import annotations
 
 from verity.ml.circuits import boolean as BL
+from verity.ml.circuits.census import silicon_step
 from verity.ml.circuits.defs import bind, composite
 from verity.ml.circuits.refs import Coll, broadcast
 from verity.ml.circuits.types import Array
@@ -124,6 +126,10 @@ BlackwellS8ImmaDot32 = definition(
     doc="mma.sync.m16n8k32.satfinite s32.s8.s8.s32 on sm_120, one accumulator coordinate, on bits: BlackwellS8ImmaDot32_v1")
 S32ToF32Rn = definition("S32ToF32Rn", 2, fp.s32_to_f32, (("a", F32),), F32, word=P.S32ToF32Rn,
                         doc="cvt.rn.f32.s32 on bits: S32ToF32Rn_v1 (round to nearest even, zero +0)")
+
+for _step in (AmpereBF16TcDot16, HopperBF16WgmmaDot16, HopperE4m3QgmmaDot32, HopperE4m3MmaV2Dot32, BlackwellE4m3QmmaDot32,
+              BlackwellE5m2QmmaDot32, BlackwellNvf4OmmaDot64, BlackwellMxf4OmmaDot64, BlackwellS8ImmaDot32):
+    silicon_step(_step, _step.word.silicon)
 
 
 def _zero_acc(B) -> Coll:

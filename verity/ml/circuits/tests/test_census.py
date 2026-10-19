@@ -3,13 +3,16 @@ gates' operands, its classes from the activations), served MACs and family rules
 from __future__ import annotations
 
 from collections import Counter, defaultdict
+from types import SimpleNamespace
 
 import pytest
 
 import test_ports as TP
 from test_ir_liveness import Add16, Add32, Coord, Embedding, Gemm, Mul16, comp, prim, programs as liveness_programs
+from verity.ml.circuits import boolean as BL
 from verity.ml.circuits import census as CE, ports
-from verity.ml.circuits.census import census, seal, step_ends
+from verity.ml.circuits.census import NoBooleanWork, census, seal, silicon_step, step_ends
+from verity.ml.circuits.evaluation import bits as BS
 from verity.ml.circuits.codec import canonical_json, descriptor_id
 from verity.ml.circuits.defs import CompositeDefinition, PrimitiveDefinition, bind
 from verity.ml.circuits.layout import resolve
@@ -348,3 +351,167 @@ def test_input_bounds_declared_intervals_and_constants_are_facts():
     words = [chain["facts"][f]["interval"] for j, f in zip(chain["values"]["producer"], chain["values"]["fact"])
              if chain["callees"][chain["nodes"]["callee"][j]].startswith("TChainT")]
     assert words == [list(iv) for iv in TP.T_S8]
+
+
+# -- Boolean work ----------------------------------------------------------------------------------------------------
+
+BIT, B2 = BL.BIT, Array(2, BL.BIT)
+Half = comp("TBHalf", [("a", BIT), ("b", BIT)], B2,
+            lambda Bd, S, a, b: array_of([Bd.call(BL.XOR, BL.operands(a, b)), Bd.call(BL.AND, BL.operands(a, b))]))
+
+
+def _bstep(Bd, S, acc, x):
+    lo = Bd.call(Half, acc[0], x[0])
+    carry = Bd.call(BL.and_gate(3), BL.operands(lo[1], acc[1], x[1]))
+    hi = Bd.call(BL.xor_gate(3), BL.operands(acc[1], x[1], lo[1]))
+    return array_of([lo[0], Bd.call(BL.NOT, Bd.call(BL.XOR, BL.operands(hi, carry)))])
+
+
+#: a toy accumulator step on bits, which a test binds as a tensor-core step
+BStep = comp("TBStep", [("acc", B2), ("x", B2)], B2, _bstep)
+
+
+def _bcoord(Bd, S, x):
+    zero = Bd.call(BL.constant(0))
+    acc = array_of([zero, zero])
+    for k in range(S.K):
+        acc = Bd.call(BStep, acc, x[k])
+    return Bd.call(BL.AND, BL.operands(acc[0], Bd.call(BL.NOT, acc[1])))
+
+
+BCoord = CompositeDefinition("TBCoord", 1, ("K",), lambda S: ((("x", Array(S.K, B2)),), BIT), _bcoord, register=False)
+BScan = comp("TBScanStep", [("c", BIT), ("x", BIT)], Tuple(BIT, BIT),
+             lambda Bd, S, c, x: tuple_of(Bd.call(BL.XOR, BL.operands(c, x)), Bd.call(BL.AND, BL.operands(c, x))))
+
+
+def _broot(Bd, S, x, y):
+    rows = Bd.batch(bind(BCoord, K=3), x, axes=(0,))
+    carry = Bd.scan(BScan, y[0], xs=[rows], n=4)
+    return tuple_of(Bd.call(BL.NOT, carry[0]), Bd.call(Half, y[0], y[1]))
+
+
+#: a tiny Boolean Program: a batch of four coordinates of three steps each, a scan over their outputs and a Call of `TBHalf`
+BRoot = comp("TBRoot", [("x", Array(4, Array(3, B2))), ("y", B2)], Tuple(BIT, B2), _broot)
+
+
+def _walk(fn, tc: dict[str, str], under: str | None = None) -> Counter:
+    """Every gate under `fn`, expanded node by node: its two-input gates and ANDs by facet, a `tc` family's (and everything
+    under it) at its precision."""
+    got: Counter = Counter()
+    for nd in fn.body.nodes:
+        n = nd.n if nd.form in ("batch", "scan") else 1
+        if isinstance(nd.fn, PrimitiveDefinition):
+            if (gk := BL.gate_kind(nd.fn)) is not None:
+                facet = under or "cuda:gate"
+                got[facet, "gates"] += n * max(1, gk[1] - 1)
+                got[facet, "and"] += n * (gk[1] - 1 if gk[0] == "and" else 0)
+            continue
+        fam = CE.family(nd.fn)
+        for key, v in _walk(nd.fn, tc, under or (f"tc:{tc[fam]}" if fam in tc else None)).items():
+            got[key] += n * v
+    return got
+
+
+def _as_work(c: Counter) -> dict:
+    return {f: {"gates": c[f, "gates"], "and": c[f, "and"]} for f in sorted({f for f, _ in c}) if c[f, "gates"]}
+
+
+def _bstep_bound(monkeypatch, dtype: str = "e4m3") -> None:
+    monkeypatch.setitem(CE.PRODUCTS, "TBStep_v1", 2)
+    monkeypatch.setitem(CE.PRECISION, "TBStep_v1", "fp8")
+    monkeypatch.setattr(CE, "SILICON", {})
+    monkeypatch.setattr(BStep, "silicon", None, raising=False)
+    silicon_step(BStep, SimpleNamespace(dtype=dtype))
+
+
+def test_a_boolean_programs_work_is_its_gates(monkeypatch):
+    """Each class's, step's and the totals' work is a direct expansion of the gates (an n-input gate n - 1 two-input gates) and
+    the compiled circuit's two-input operations (`evaluation.bits`); a bound step's gates are its precision's, all others
+    `cuda:gate`. Without `boolean` the census has no work."""
+    P = Program(BRoot)
+    plain = census(P)
+    assert "work" not in plain["totals"] and "work" not in plain["steps"] and all("work" not in e for e in plain["classes"].values())
+    ops = BS.compile(BRoot).counts
+    for tc in ({}, {"TBStep_v1": "fp8"}):
+        if tc:
+            _bstep_bound(monkeypatch)
+        c = census(P, boolean=True)
+        want = _as_work(_walk(P.root, tc))
+        assert c["totals"]["work"] == want and c["steps"]["work"] == [want]
+        assert sum(w["gates"] for w in want.values()) == sum(ops.values()) and sum(w["and"] for w in want.values()) == ops["and"]
+        assert c["classes"]["TBCoord_v1{K=3}"]["work"] == _as_work(_walk(bind(BCoord, K=3), tc)), tc
+        assert c["classes"]["And3_v1"]["work"] == {"cuda:gate": {"gates": 2, "and": 2}}
+        assert c["classes"]["Xor3_v1"]["work"] == {"cuda:gate": {"gates": 2, "and": 0}}
+        assert c["classes"]["Const1[0x0]_v1"]["work"] == {} and c["classes"]["Input1_v1"]["work"] == {}
+    assert set(c["totals"]["work"]) == {"tc:fp8", "cuda:gate"}
+    assert c["classes"]["TBStep_v1"]["work"] == {"tc:fp8": {"gates": 8, "and": 3}}
+    assert c["classes"]["TBHalf_v1"]["work"] == {"cuda:gate": {"gates": 2, "and": 1}}
+
+
+def test_silicon_step_refusals(monkeypatch):
+    """A binding is refused unless `PRODUCTS` counts the family at the model's precision; a `PRODUCTS` step bound to no model
+    is refused when work is counted, and only then."""
+    P = Program(BRoot)
+    with pytest.raises(ValueError, match="census.PRODUCTS has no k for it"):
+        silicon_step(BStep, SimpleNamespace(dtype="e4m3"))
+    monkeypatch.setitem(CE.PRODUCTS, "TBStep_v1", 2)
+    monkeypatch.setitem(CE.PRECISION, "TBStep_v1", "fp8")
+    assert census(P)["totals"]["served_macs_by_precision"] == {"mac:fp8": 24}
+    with pytest.raises(ValueError, match=r"^TBStep_v1 is a tensor-core step \(census.PRODUCTS\) that census.SILICON binds to no "
+                                         r"silicon model: import the module defining TBStep_v1"):
+        census(P, boolean=True)
+    for model, why in ((SimpleNamespace(dtype="bf16"), "computes bf16 products; census.PRECISION gives fp8"),
+                       (SimpleNamespace(dtype="u8", b_dtype="e4m3"), r"operands \('u8', 'e4m3'\) are not one precision"),
+                       (SimpleNamespace(dtype="f16"), "are not one precision")):
+        with pytest.raises(ValueError, match=why):
+            silicon_step(BStep, model)
+    _bstep_bound(monkeypatch)
+    assert CE.SILICON == {"TBStep_v1": "fp8"} and BStep.silicon.dtype == "e4m3"
+
+
+#: a word Program over a word step, and its Boolean twin (`TBCoord_v1`) as a resolver's Boolean version
+WStep = prim("TWStep", [("acc", Value(2)), ("x", Value(2))], Value(2), lambda acc, x: (acc + x) & 3)
+WZero = prim("TWZero2", [], Value(2), lambda: 0)
+WOut = prim("TWOut", [("acc", Value(2))], Value(1), lambda acc: acc & 1)
+
+
+def _wcoord(Bd, S, x):
+    acc = Bd.call(WZero)
+    for k in range(S.K):
+        acc = Bd.call(WStep, acc, x[k])
+    return Bd.call(WOut, acc)
+
+
+WCoord = CompositeDefinition("TWCoord", 1, ("K",), lambda S: ((("x", Array(S.K, Value(2))),), Value(1)), _wcoord, register=False)
+WRoot = comp("TWRoot", [("x", Array(4, Array(3, Value(2))))], Array(4, Value(1)),
+             lambda Bd, S, x: Bd.batch(bind(WCoord, K=3), x, axes=(0,)))
+BTwin = comp("TBTwin", [("x", Array(4, Array(3, B2)))], Array(4, BIT), lambda Bd, S, x: Bd.batch(bind(BCoord, K=3), x, axes=(0,)))
+
+
+def test_a_word_program_counts_through_its_boolean_versions(monkeypatch):
+    _bstep_bound(monkeypatch)
+    twins = {"TWCoord_v1{K=3}": bind(BCoord, K=3)}
+    c = census(Program(WRoot), boolean=lambda fn: twins[descriptor_id(fn)])
+    b = census(Program(BTwin), boolean=True)
+    assert c["totals"]["work"] == b["totals"]["work"] == _as_work(_walk(Program(BTwin).root, {"TBStep_v1": "fp8"}))
+    assert c["steps"]["work"] == b["steps"]["work"]
+    w = c["classes"]["TWCoord_v1{K=3}"]
+    assert w["boolean_version"] == "TBCoord_v1{K=3}" and w["work"] == b["classes"]["TBCoord_v1{K=3}"]["work"]
+    assert "work" not in c["classes"]["TWStep_v1"] and "boolean_version" not in b["classes"]["TBCoord_v1{K=3}"]
+
+
+def test_a_call_without_a_boolean_version_is_refused_by_name():
+    with pytest.raises(NoBooleanWork, match=r"^census work: no Boolean gate count for TWCoord_v1: TWCoord_v1\{K=3\}: it reaches "
+                                            r"TW\w+_v1, which is not a Boolean gate"):
+        census(Program(WRoot), boolean=True)
+
+    def nothing(fn):
+        raise LookupError(f"no Boolean version of {fn.base_id}")
+
+    with pytest.raises(NoBooleanWork) as e:
+        census(Program(WRoot), boolean=nothing)
+    assert e.value.missing == {"TWCoord_v1{K=3}": "no Boolean version of TWCoord_v1"}
+    with pytest.raises(NoBooleanWork, match=r"its Boolean version TWCoord_v1\{K=3\} reaches TW\w+_v1"):
+        census(Program(WRoot), boolean=lambda fn: fn)
+    with pytest.raises(NoBooleanWork, match=r"^census work: no Boolean gate count for TGemmCoordinate_v1: "):
+        census(Program(bind(Gemm, K=32, N=6)), boolean=True)

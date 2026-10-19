@@ -21,19 +21,23 @@ steps end after each sampling event (`step_ends`). Inputs belong to no step.
          "gates": <gates per instance>,
          "primitives": {<primitive id>: <gates per instance>},
          "served_macs": <per instance>, "tail_atoms": <per instance>, "receipt_folds": <per instance>,
-         "served_macs_by_precision": {"mac:<precision>": <per instance>},
+         "served_macs_by_precision": {"mac:<precision>": <per instance>},      # informational: nothing credits them
+         "work": {"tc:<precision>" | "cuda:gate": {"gates": <per instance>, "and": <per instance>}},  # each class work counts
+         "boolean_version": <the descriptor id of the Boolean Definition its work is counted through>,  # a root Call's, if so
          "ports": <its descriptor entry's `ports` (`ports.declared`)>}},  # only on a class that declares ports
      "callees": [<descriptor id>],                                # the classes of the root's nodes
      "inputs": <the number of input nodes>,
      "nodes": {"callee": [<index into callees>], "n": [<activations: a batch's members, a scan's iterations, else 1>]},
      "steps": {"ends": [...], "gates": [...], "served_macs": [...], "tail_atoms": [...], "receipt_folds": [...],
-               "served_macs_by_precision": [{"mac:<precision>": ...}], "select_gates": [...], "select_bits": [...]},
+               "served_macs_by_precision": [{"mac:<precision>": ...}], "select_gates": [...], "select_bits": [...],
+               "work": [{<facet>: {"gates", "and"}}]},                   # with work counted
      "values": {"producer": [<root node>], "lo": [...], "hi": [...], "bits": [...], "reads": [[<root node>]], "output": [<bool>],
                 "fact": [<index into facts>]},
      "facts": [{"interval": [a, b] | null, "origin": [<origin>], "sink": <bool>, "word": <word type> | null}],
      "selects": {"call": [<root node>], "gates": [...], "bits": [...], "values": [[<value>]]},
      "totals": {"gates", "computed_gates", "inputs": {"run" | "registration": {"gates", "bits"}}, "values", "value_bits",
-                "classes", "served_macs", "tail_atoms", "receipt_folds", "served_macs_by_precision", "select_gates", "select_bits"},
+                "classes", "served_macs", "tail_atoms", "receipt_folds", "served_macs_by_precision", "select_gates", "select_bits",
+                "work": {<facet>: {"gates", "and"}}},                    # with work counted
      "approximate": <bool>,
      "digest": <SHA-512 of the canonical JSON of every other field>}
 
@@ -50,6 +54,23 @@ class's ancestors add up what the rule says. A class of a family `RULED` names i
 operand format of the steps
 performing them (`PRECISION[family]`), keyed by the accounting layer's kinds (`mac:bf16`, `mac:int8`, ...), and adds up to
 `served_macs` in every class, step and the totals; a rule's served MACs take the one precision of the steps under it.
+
+**The MAC fields are informational.**  `served_macs` and `served_macs_by_precision` are read from word shapes (a step's k, a rule's
+statics), not from any circuit's gates, and nothing credits them: crediting them would make the lift's work preservation (that a
+word Program's Boolean version does the work its shapes say) a premise.  Credited work is `work`.
+
+**Work.**  `work` is the Boolean work, read bottom-up from Boolean bodies' own primitives: per class and instance, per step and in
+the totals, the two-input gates (`gates`: an n-input And or Xor counts n - 1, a Not 1, a constant bit or an input 0, as
+`evaluation.bits.Compiled.counts`) and among them the ANDs (`and`), by facet.  A tensor-core step's gates are `tc:<precision>`:
+a step is a Definition its module binds to the silicon model it computes (`silicon_step`), and the precision is that model's
+operand format (`DTYPE_PRECISION`), which `SILICON` keeps by family.  Every other gate is `cuda:gate`.  A class's work includes
+its callees'.  The census counts work only when asked (`census(..., boolean=...)`; without it there is no `work`): for a Boolean
+Program, each root Call's own gates; for a word Program, each root Call through the Boolean version a resolver gives
+(`verity_vllm.program.boolean.boolean_version`), named in its class's `boolean_version`, so a class under a word Call has no
+`work`.  A root Call with no Boolean version, or whose Boolean body reaches a primitive other than a gate, a constant bit or an
+input, is refused by name (`NoBooleanWork`), and so is a `PRODUCTS` step bound to no silicon model (its module, which binds it,
+never imported).  A tensor-core step inlined into a traced body (a Definition compiled and traced again as one circuit) is no
+Call of its step there, and its gates are `cuda:gate`.
 
 **Values.** A value is a run `[lo, hi)` of one root node's output leaves whose readers, candidacy, output status and fact are the
 same throughout. `bits` is the sum of its leaves' widths. `reads` are the Calls with a gate that takes one of its leaves as an operand
@@ -82,9 +103,10 @@ from dataclasses import dataclass
 from functools import lru_cache
 from typing import Any, Callable, Iterable
 
+from . import boolean as BL
 from . import ports
 from .codec import MAX_SAFE_INT, _static_json, canonical_json, descriptor_id, jcs_domain_error
-from .defs import Node, PrimitiveDefinition
+from .defs import CompositeDefinition, Node, PrimitiveDefinition, bind
 from .intervals import Intervals, complement, contains, full, isect, norm, ref_intervals, total
 from .layout import resolve
 from .liveness import _MEMBER_LIMIT
@@ -100,6 +122,7 @@ SCHEMA = "verity/census/v1"
 #: count by their `FAMILY_COUNTS` rule
 PRODUCTS: dict[str, int] = {
     "AmpereBF16TcDot16_v1": 16, "AmpereBF16TcDot16_v2": 16, "HopperBF16WgmmaDot16_v1": 16, "HopperTf32WgmmaDot8_v1": 8,
+    "HopperTf32WgmmaDot8_v2": 8,
     "HopperE4m3QgmmaDot32_v1": 32, "HopperE4m3MmaV2Dot32_v1": 32, "BlackwellE4m3QmmaDot32_v1": 32,
     "BlackwellE5m2QmmaDot32_v1": 32, "BlackwellNvf4OmmaDot64_v1": 64, "BlackwellMxf4OmmaDot64_v1": 64,
     "PouwDot16U8S8_v1": 16, "NcpDot16I7_v1": 16,
@@ -114,7 +137,7 @@ PRODUCTS: dict[str, int] = {
 PRECISION: dict[str, str] = {
     **dict.fromkeys(("AmpereBF16TcDot16_v1", "AmpereBF16TcDot16_v2", "AmpereBF16TcDot16_v3", "HopperBF16WgmmaDot16_v1",
                      "HopperBF16WgmmaDot16_v2"), "bf16"),
-    "HopperTf32WgmmaDot8_v1": "tf32",
+    "HopperTf32WgmmaDot8_v1": "tf32", "HopperTf32WgmmaDot8_v2": "tf32",
     **dict.fromkeys(("HopperE4m3QgmmaDot32_v1", "HopperE4m3QgmmaDot32_v2", "HopperE4m3MmaV2Dot32_v1", "HopperE4m3MmaV2Dot32_v2",
                      "BlackwellE4m3QmmaDot32_v1", "BlackwellE4m3QmmaDot32_v2", "BlackwellE5m2QmmaDot32_v1",
                      "BlackwellE5m2QmmaDot32_v2"), "fp8"),
@@ -123,6 +146,15 @@ PRECISION: dict[str, str] = {
     **dict.fromkeys(("PouwDot16U8S8_v1", "NcpDot16I7_v1", "BlackwellS8ImmaDot32_v1", "BlackwellU8S8ImmaDot32_v1",
                      "BlackwellS8ImmaDot32_v2", "BlackwellU8S8ImmaDot32_v2"), "int8"),
 }
+
+#: a silicon model's operand format (its ``dtype``, and ``b_dtype`` where B's differs) -> the precision of the tensor-core step that
+#: computes it, as the accounting layer names its kinds (`tc:<precision>`, `mac:<precision>`)
+DTYPE_PRECISION: dict[str, str] = {"bf16": "bf16", "tf32": "tf32", "e4m3": "fp8", "e5m2": "fp8", "e2m1": "fp4", "s8": "int8",
+                                   "u8": "int8"}
+
+#: tensor-core step family -> the precision of the silicon model it computes: registered by `silicon_step` when the module
+#: defining the step is imported (decoding a Program keeps no Definition's attributes, so the census reads this table)
+SILICON: dict[str, str] = {}
 
 COUNTERS = ("served_macs", "tail_atoms", "receipt_folds")
 
@@ -138,6 +170,27 @@ RULED: dict[str, str] = {"S8Dot_v1": "verity.ml.circuits.ops.s8", "S8Matmul_v1":
 def family(fn: Any) -> str:
     """The family `Name_vN` of a Definition or primitive."""
     return fn.id if isinstance(fn, PrimitiveDefinition) else fn.base_id
+
+
+def silicon_step(fn: Any, model: Any) -> Any:
+    """Bind the tensor-core step `fn` (a word primitive, or the Boolean Definition computing one) to the silicon model it computes
+    (a `verity.ml.circuits.silicon` `GroupSum`, `Pipeline`, `BlockScaledAlignAdd` or `IntegerMma`): `fn.silicon` is `model`, and
+    `SILICON` gives its family the precision of `model`'s operands (`DTYPE_PRECISION`).  Refused unless `PRODUCTS` counts the
+    family and `PRECISION` gives it that precision.  Returns `fn`."""
+    fam = f"{fn.name}_v{fn.version}"
+    dtypes = (model.dtype, getattr(model, "b_dtype", model.dtype))
+    precs = {DTYPE_PRECISION.get(d) for d in dtypes}
+    if None in precs or len(precs) != 1:
+        raise ValueError(f"{fam}: its silicon model's operands {dtypes} are not one precision of census.DTYPE_PRECISION")
+    (prec,) = precs
+    if fam not in PRODUCTS:
+        raise ValueError(f"{fam} is bound as a tensor-core step, and census.PRODUCTS has no k for it: add it")
+    if PRECISION.get(fam) != prec or SILICON.get(fam, prec) != prec:
+        raise ValueError(f"{fam}'s silicon model computes {prec} products; census.PRECISION gives {PRECISION.get(fam)} and "
+                         f"census.SILICON {SILICON.get(fam)}")
+    fn.silicon = model
+    SILICON[fam] = prec
+    return fn
 
 
 def seal(doc: dict) -> dict:
@@ -457,8 +510,135 @@ def _ruled_macs(fn: Any, below: Counter, served: int) -> Counter:
     return Counter({q: served for q in below} if served else {})
 
 
-def _classes(root: Any) -> tuple[dict[str, dict], dict[int, str], dict[int, tuple[int, ...]]]:
-    """The classes under `root`: their entries, the descriptor id by `id(fn)`, and each class's counters per instance."""
+# -- Boolean work ----------------------------------------------------------------------------------------------------
+
+CUDA = "cuda:gate"
+
+
+class NoBooleanWork(ValueError):
+    """Root Calls the census counts no Boolean work for: ``missing``, descriptor id -> why."""
+
+    def __init__(self, missing: dict[str, str]) -> None:
+        self.missing = dict(sorted(missing.items()))
+        names = sorted({k.split("{", 1)[0] for k in self.missing})
+        super().__init__(f"census work: no Boolean gate count for {', '.join(names)}: "
+                         + "; ".join(f"{k}: {v}" for k, v in self.missing.items()))
+
+
+Work = dict[str, tuple[int, int]]
+
+
+class _Work:
+    """Each Definition's Boolean work per instance, by `id(fn)`: its two-input gates and ANDs by facet, or the id of the first
+    primitive it reaches that is not a Boolean gate, a constant bit or an input."""
+
+    def __init__(self) -> None:
+        self._memo: dict[int, tuple[Any, Work | str]] = {}  # the object keeps its id valid
+
+    def get(self, fn: Any) -> Work | str:
+        return self._memo[id(fn)][1]
+
+    def of(self, root: Any) -> Work | str:
+        """`root`'s work, counting every Definition under it not yet counted."""
+        stack: list = [(root, None, None)]
+        while stack:
+            fn, kids, todo = stack.pop()
+            if kids is None:
+                if id(fn) in self._memo:
+                    continue
+                if isinstance(fn, PrimitiveDefinition):
+                    self._memo[id(fn)] = (fn, self._primitive(fn))
+                    continue
+                kids, fns = Counter(), {}
+                for nd in fn.body.nodes:
+                    fns[id(nd.fn)] = nd.fn
+                    kids[id(nd.fn)] += nd.n if nd.form in ("batch", "scan") else 1
+                todo = [f for f in fns.values() if id(f) not in self._memo]
+            if todo:
+                stack.append((fn, kids, todo))
+                stack.append((todo.pop(), None, None))
+            else:
+                self._memo[id(fn)] = (fn, self._composite(fn, kids))
+        return self.get(root)
+
+    @staticmethod
+    def _primitive(fn: PrimitiveDefinition) -> Work | str:
+        gk = BL.gate_kind(fn)
+        if gk is not None:
+            kind, n = gk
+            return {CUDA: (max(1, n - 1), n - 1 if kind == "and" else 0)}
+        if BL.is_constant_bit(fn) or input_id(fn.id):
+            return {}
+        return fn.id
+
+    def _composite(self, fn: Any, kids: Counter) -> Work | str:
+        out: dict[str, list[int]] = {}
+        for k, mult in kids.items():
+            got = self._memo[k][1]
+            if isinstance(got, str):
+                return got
+            for facet, (g, a) in got.items():
+                c = out.setdefault(facet, [0, 0])
+                c[0] += mult * g
+                c[1] += mult * a
+        fam = family(fn)
+        if fam in SILICON:
+            g, a = sum(c[0] for c in out.values()), sum(c[1] for c in out.values())
+            return {f"tc:{SILICON[fam]}": (g, a)} if g else {}
+        if fam in PRODUCTS:
+            raise ValueError(f"{descriptor_id(fn)} is a tensor-core step (census.PRODUCTS) that census.SILICON binds to no silicon "
+                             f"model: import the module defining {fam}, which binds it (census.silicon_step), before taking the census")
+        return {f: (g, a) for f, (g, a) in sorted(out.items())}
+
+
+def _add(into: dict[str, list[int]], work: Work, mult: int) -> None:
+    for facet, (g, a) in work.items():
+        c = into.setdefault(facet, [0, 0])
+        c[0] += mult * g
+        c[1] += mult * a
+
+
+def _work_json(work: Work | dict[str, list[int]]) -> dict[str, dict[str, int]]:
+    return {f: {"gates": g, "and": a} for f, (g, a) in sorted(work.items()) if g}
+
+
+def _calls_work(post: list, ids: dict[int, str], calls: Iterable[Any], boolean: Any) -> tuple[dict[str, Work], dict[str, str]]:
+    """The Boolean work of each class it counts and the Boolean version each root Call class counted through, by descriptor id;
+    refused (`NoBooleanWork`) for every root Call it cannot count."""
+    W = _Work()
+    per: dict[str, Work] = {}
+    for fn in post:
+        if id(fn) in ids and not isinstance(got := W.of(fn), str):
+            per[ids[id(fn)]] = got
+    via: dict[str, str] = {}
+    missing: dict[str, str] = {}
+    for fn in calls:
+        cid = ids[id(fn)]
+        if cid in per or cid in missing:
+            continue
+        reached = W.get(fn)
+        if not callable(boolean):
+            missing[cid] = f"it reaches {reached}, which is not a Boolean gate, a constant bit or an input"
+            continue
+        try:
+            v = boolean(fn)
+        except LookupError as e:
+            missing[cid] = str(e)
+            continue
+        v = bind(v) if isinstance(v, CompositeDefinition) else v
+        got = W.of(v)
+        if isinstance(got, str):
+            missing[cid] = f"its Boolean version {descriptor_id(v)} reaches {got}, which is not a Boolean gate, a constant bit or an input"
+            continue
+        per[cid], via[cid] = got, descriptor_id(v)
+    if missing:
+        raise NoBooleanWork(missing)
+    return per, via
+
+
+def _classes(root: Any) -> tuple[dict[str, dict], dict[int, str], dict[int, tuple[int, ...]], list]:
+    """The classes under `root`: their entries, the descriptor id by `id(fn)`, each class's counters per instance, and every
+    Definition under `root` and `root` itself, callees first."""
     fns: dict[int, Any] = {}
     kids: dict[int, Counter] = {}
     post: list[Any] = []
@@ -536,7 +716,7 @@ def _classes(root: Any) -> tuple[dict[str, dict], dict[int, str], dict[int, tupl
                         **dict(zip(COUNTERS, counts[id(fn)])), "served_macs_by_precision": dict(sorted(macs[id(fn)].items()))}
         if (decl := ports.declared(fn)) is not None:
             classes[cid]["ports"] = decl
-    return classes, ids, counts
+    return classes, ids, counts, post
 
 
 # -- values ----------------------------------------------------------------------------------------------------------
@@ -618,9 +798,12 @@ def _fact_json(f: ports.Fact) -> dict:
     return j
 
 
-def census(program: Any, ends: list[int] | None = None, digest: str | None = None) -> dict:
+def census(program: Any, ends: list[int] | None = None, digest: str | None = None,
+           boolean: bool | Callable[[Any], Any] = False) -> dict:
     """The census/v1 of `program` (a `Program` or a `DecodedProgram`) over the steps `ends` (default: one step), naming the
-    Program by `digest` (`codec.program_digest`) when given."""
+    Program by `digest` (`codec.program_digest`) when given.  With `boolean` it counts Boolean work (`work`): True counts each
+    root Call's own gates, a resolver (`verity_vllm.program.boolean.boolean_version`) each root Call that is not Boolean through
+    the Boolean Definition it returns; either refuses (`NoBooleanWork`) every root Call it cannot count, by name."""
     root = program.root
     nodes = root.body.nodes
     I = sum(1 for nd in nodes if is_input(nd.fn))
@@ -630,10 +813,17 @@ def census(program: Any, ends: list[int] | None = None, digest: str | None = Non
     if any(b <= a for a, b in zip([I] + ends, ends)) or (ends and ends[-1] != len(nodes)) or (not ends and len(nodes) > I):
         raise ValueError(f"step ends {ends[:8]} are not increasing root-node indices past the {I} input nodes ending at {len(nodes)}")
 
-    classes, ids, counts = _classes(root)
+    classes, ids, counts, post = _classes(root)
     callees = sorted({ids[id(nd.fn)] for nd in nodes})
     at = {c: i for i, c in enumerate(callees)}
     mult = [nd.n if nd.form in ("batch", "scan") else 1 for nd in nodes]
+    work: dict[str, Work] | None = None
+    if boolean:
+        work, via = _calls_work(post, ids, (nd.fn for nd in nodes[I:]), boolean)
+        for cid, w in work.items():
+            classes[cid]["work"] = _work_json(w)
+        for cid, v in via.items():
+            classes[cid]["boolean_version"] = v
 
     an = _Analysis()
     spans: list[list[tuple[int, int, tuple]]] = [[] for _ in nodes]
@@ -709,6 +899,12 @@ def census(program: Any, ends: list[int] | None = None, digest: str | None = Non
                 out[q] += mult[k] * n
         return dict(sorted(out.items()))
 
+    def summed(ks: range) -> dict[str, dict[str, int]]:
+        out: dict[str, list[int]] = {}
+        for k in ks:
+            _add(out, work[ids[id(nodes[k].fn)]], mult[k])
+        return _work_json(out)
+
     steps: dict[str, list] = {"ends": ends, "gates": [], **{c: [] for c in COUNTERS}, "served_macs_by_precision": [],
                               "select_gates": [], "select_bits": []}
     for a, b in zip([I] + ends, ends):
@@ -718,6 +914,8 @@ def census(program: Any, ends: list[int] | None = None, digest: str | None = Non
         steps["served_macs_by_precision"].append(by_precision(range(a, b)))
         steps["select_gates"].append(sum(sel[k][0] for k in range(a, b) if k in sel))
         steps["select_bits"].append(sum(sel[k][1] for k in range(a, b) if k in sel))
+    if work is not None:
+        steps["work"] = [summed(range(a, b)) for a, b in zip([I] + ends, ends)]
 
     inputs = {when: {"gates": 0, "bits": 0} for when in ("run", "registration")}
     for nd in nodes[:I]:
@@ -729,6 +927,8 @@ def census(program: Any, ends: list[int] | None = None, digest: str | None = Non
               "values": len(values["producer"]), "classes": len(classes), **dict(zip(COUNTERS, top)),
               "served_macs_by_precision": by_precision(range(I, len(nodes))),
               "select_gates": sum(g for g, _ in sel.values()), "select_bits": sum(b for _, b in sel.values())}
+    if work is not None:
+        totals["work"] = summed(range(I, len(nodes)))
     return seal({"schema": SCHEMA, "program": digest, "classes": classes, "callees": callees, "inputs": I,
                  "nodes": {"callee": [at[ids[id(nd.fn)]] for nd in nodes], "n": mult}, "steps": steps, "values": values,
                  "facts": [_fact_json(f) for f in facts], "selects": selects, "totals": totals, "approximate": approximate})
@@ -740,4 +940,5 @@ def step_of(doc: dict) -> Callable[[int], int]:
     return lambda k: -1 if k < I else bisect.bisect_right(ends, k)
 
 
-__all__ = ["SCHEMA", "PRODUCTS", "PRECISION", "COUNTERS", "FAMILY_COUNTS", "RULED", "census", "family", "seal", "step_ends", "step_of"]
+__all__ = ["SCHEMA", "PRODUCTS", "PRECISION", "DTYPE_PRECISION", "SILICON", "COUNTERS", "FAMILY_COUNTS", "RULED", "CUDA", "NoBooleanWork",
+           "census", "family", "seal", "silicon_step", "step_ends", "step_of"]

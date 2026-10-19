@@ -23,7 +23,7 @@ from typing import Any
 from verity.ml.circuits import boolean as BL
 from verity.ml.circuits.boolean.forms import NOT, ONE, add, and_reduce, compress_columns, const_bits, mux, or_reduce
 from verity.ml.circuits.boolean.trace import definition, word_of
-from verity.ml.circuits.census import FAMILY_COUNTS
+from verity.ml.circuits.census import FAMILY_COUNTS, silicon_step
 from verity.ml.circuits.defs import bind, composite
 from verity.ml.circuits.refs import Coll, broadcast
 from verity.ml.circuits.types import Array
@@ -57,10 +57,11 @@ def _u8s8_step(C, acc, a, b):
     return C.commit(compress_columns(C, cols)[:32])
 
 
-BlackwellU8S8ImmaDot32 = definition(
+BlackwellU8S8ImmaDot32 = silicon_step(definition(
     "BlackwellU8S8ImmaDot32", 2, lambda C, acc, *ab: _u8s8_step(C, acc, ab[:32], ab[32:]),
     (("acc", S32), ("a", A32_8), ("b", A32_8)), S32, word=P.BlackwellU8S8ImmaDot32,
-    doc="mma.sync.m16n8k32 s32.u8.s8.s32 on sm_120, one accumulator coordinate, on bits: BlackwellU8S8ImmaDot32_v1")
+    doc="mma.sync.m16n8k32 s32.u8.s8.s32 on sm_120, one accumulator coordinate, on bits: BlackwellU8S8ImmaDot32_v1"),
+    P.BlackwellU8S8ImmaDot32.silicon)
 
 
 def _zero(B) -> Coll:
