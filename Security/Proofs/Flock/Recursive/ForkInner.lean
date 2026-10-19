@@ -406,8 +406,6 @@ def InnerAtLeavesVZ (zs : Reg → L.Ω → List (Cm × I.Coin) → Reg₂ → (j
 
 /-- **`zk_sessions_recursive_upto` with the inner term at the prover's own leaves** (`recursive_sound_on`). -/
 theorem zk_sessions_recursive_upto_on
-    -- V*'s laws: A3
-    (hA3 : ∀ j, Assumptions.UniformRandomBytes (Vs j).law.Lb (Vs j).law.src)
     -- V*'s sessions at each history and registration
     (zs : Reg → L.Ω → List (Cm × I.Coin) → Reg₂ → (j : Fin S) → (Vs j).Outer Reg')
     (dg : ByteArray → ByteArray) (N : ℕ)
@@ -471,7 +469,7 @@ theorem zk_sessions_recursive_upto_on
         by_cases hb : Bad σ.1 ω t b.1
         · exact Or.inr hb
         · exact Or.inl ⟨ha, fun h => h.elim hb hn⟩
-      · exact outerV_le_dep hA3 (zs σ.1 ω t) dg N hk hRw hM hρ (hr σ.1 ω t) ht' qF qS qW qR
+      · exact outerV_le_dep (zs σ.1 ω t) dg N hk hRw hM hρ (hr σ.1 ω t) ht' qF qS qW qR
           (fun R₂ Xs => Bad σ.1 ω t R₂ ∨ I.accepts (x σ.1 ω) ((wmsg Xs).zip (t.map Prod.snd)))
           (fun R₂ τ o hout h =>
             (Classical.em (Bad σ.1 ω t R₂)).elim Or.inl fun hb => Or.inr (hbr σ.1 ω t R₂ hb τ o hout h)) s
@@ -486,8 +484,6 @@ theorem zk_sessions_recursive_upto_on
 
 /-- **`zk_sessions_recursive_read` with the inner term at the prover's own leaves.** -/
 theorem zk_sessions_recursive_full_on
-    -- V*'s laws: A3
-    (hA3 : ∀ j, Assumptions.UniformRandomBytes (Vs j).law.Lb (Vs j).law.src)
     -- V*'s sessions at each history and registration
     (zs : Reg → L.Ω → List (Cm × I.Coin) → Reg₂ → (j : Fin S) → (Vs j).Outer Reg')
     (dg : ByteArray → ByteArray) (N : ℕ)
@@ -528,7 +524,7 @@ theorem zk_sessions_recursive_full_on
           (expAt σ (fun ω t s => sumV (zs σ.1 ω t) dg N
               (fun R₂ j τ => (zs σ.1 ω t R₂ j).slackIf dg N k Rw M ρ t' qF qS τ) s) +
             (∑ pos, weightS Vs Sk ρ i pos) * ENNReal.ofReal (Real.sqrt (q i ^ 2 / 2 ^ (513 : ℝ)))) + εin := by
-  refine zk_sessions_recursive_upto_on hA3 zs dg N hk hRw hM hρ hr ht' qF qS qW qR σ x wmsg Bad hbr hX same rd hrd
+  refine zk_sessions_recursive_upto_on zs dg N hk hRw hM hρ hr ht' qF qS qW qR σ x wmsg Bad hbr hX same rd hrd
     (obS Vs) (cmtS cmt) (msgS msg) (fun _ R ω t s => trialV (zs R ω t) dg N k Rw s)
     (fun _ R ω t s => sumV (zs R ω t) dg N (fun R₂ j τ => (zs R ω t R₂ j).slackIf dg N k Rw M ρ t' qF qS τ) s)
     (weightS Vs Sk ρ) q (fun i hi ω => AllLeaves.of_forall (fun t s' v e he => ?_) _) hCR hin
@@ -543,7 +539,6 @@ theorem zk_sessions_recursive_full_on
 
 /-- **`zk_sessions_recursive_fork_read` with the inner term at the prover's own leaves.** -/
 theorem zk_sessions_recursive_fork_on
-    (hA3 : ∀ j, Assumptions.UniformRandomBytes (Vs j).law.Lb (Vs j).law.src)
     (zs : Reg → L.Ω → List (Cm × I.Coin) → Reg₂ → (j : Fin S) → (Vs j).Outer Reg')
     (dg : ByteArray → ByteArray) (N : ℕ)
     {k Rw M : ℕ} (hk : 1 ≤ k) (hRw : 1 ≤ Rw) (hM : 1 ≤ M) {ρ : ℝ} (hρ : ρ < 1)
@@ -593,7 +588,7 @@ theorem zk_sessions_recursive_fork_on
     unfold sumV sumS
     exact exG_mono_outcome _ _ fun rs hrs => Finset.sum_le_sum fun j _ =>
       ZkOuter.slackIf_le _ _ _ _ fun hf => hs ⟨rs, hrs, j, hf⟩
-  refine (zk_sessions_recursive_full_on hA3 zs dg N hk hRw hM hρ hr le_rfl 0 0 0 0 σ x wmsg (RegColl zs) hbr
+  refine (zk_sessions_recursive_full_on zs dg N hk hRw hM hρ hr le_rfl 0 0 0 0 σ x wmsg (RegColl zs) hbr
     (prob_regColl_le zs dg N σ (Finder.cr_of_not_finds h0 0)) same rd hrd Sk cmt msg hcmt hdec hfull (fun _ => 0)
     (fun i hi ω pos => Finder.cr_of_not_finds (fun hf => h1 ⟨i, hi, ω, pos, hf⟩) 0) hin).trans
     (add_le_add (add_le_add ?_ ?_) le_rfl)

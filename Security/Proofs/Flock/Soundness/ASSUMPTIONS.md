@@ -30,7 +30,7 @@ knowledge's, not soundness's: a model claim about the honest prover. The develop
 |---|---|---|---|
 | `Assumptions.SHA512CRStrict` | `cr/sha-512` | `q²/2^513`, for at most `q` evaluations on every outcome | the compiled and knowledge terms' collision finders, `δ_tree`, and the registered reads' `δ_reg`, and, in `CROnly`, the link finders stopped at `q` |
 | `Assumptions.SHA512CRExpected` (A2) | `ecr/sha-512` | `T/2^256`, for `T` evaluations in expectation | the link finders (`LinkCR`, `hCR`) |
-| `Assumptions.UniformRandomBytes` (A3) | `uniform/io-getrandombytes` | every event has its probability for uniform bytes | the unit draw (`ht`; `hA3` in the headline); for zero knowledge, the commitments' salts (`Discharge.ZkView.OsSalts`, `recursiveZK_os_gap`) |
+| `Assumptions.UniformRandomBytes` (A3); per test, `UniformRandomBytesTest` | `uniform/io-getrandombytes` | every event has its probability for uniform bytes, the CSPRNG idealized; per test, one event, within `η` | the unit draw (`ht`; `hA3` in the headline); per test, zero knowledge's salts (`Discharge.ZkView.OsSalts`, `recursiveZK_os_gap`) and the ZK server's tape (`Claims.ZKServer.OsTape`) |
 | none: the model's coins (A6) | `uniform/flock-coin-server` | each round's coins uniform, drawn after the prover's message; under `--zk`, committed at `Hello` and opened after it, at a cost of `N·2^-256` (A6, tree coins) | the round coins |
 | `Assumptions.Zk.RecordCustodyZK` | `live-verifier` | none: the record `verify --zk` reads is the one the verifier's coin server wrote for the live session (`RecordsLiveZK`), and its draw file the one `flock-verify draw` printed for the verifier's own draw (`DrawFileZK`) | `--zk`'s `hRec` and `hDraw` (`zk_session_sound_custody`, `hCust`; `hDraw` at each draw of `Law.execOS` is `drawOkZK_of_exec`); at `J` tables `Assumptions.Zk.RecordCustodyZKJ`, the same at `RecordsLiveZKJ` and the subset sampling design (`zk_session_soundJ_custody`; `hDraw` is `drawOkZKJ_of_file`), and under hidden outputs (`zk_session_soundHJ_custody`; `hDraw` is `drawOkZKHJ_of_file`) |
 | none: the model's Ligerito prover (`LigProver`) | none: a model claim, as A6's | the honest Ligerito prover's level-≥ 1 bytes are a function of the table, the statement, the public coins, the restart and fresh salts; nothing proves it (`LigProver`'s docstring, `Discharge/Composed/Inner.lean`) | zero knowledge's view, not soundness: `Composed.zk_session_view`, `zk_session_composed` and `ZkEveryCoin.zk_session_view_all` hold for every such prover `P`, as do `ZkHidden.zk_session_viewH`, `zk_session_viewHJ` and `zk_session_composedHJ` |
@@ -93,18 +93,21 @@ sense, ePrint 2024/1434), for the audit's value layer (Daniel, Sep 27; constant 
 - **Upstream:** watch entries `collision-resistance`, `keyed-cr` and `rom-cr` (see Upstream status).
 
 **A3. The operating system's randomness is independent uniform bytes** (`uniform/io-getrandombytes`), for the
-verifier's unit draw, the proof service's epoch salt (`Stream.salt`) and, for zero knowledge, the commitments' salts.
+verifier's unit draw and the proof service's epoch salt, and, per test, for zero knowledge: the commitments' salts and
+the ZK server's tape.
 
 - **Statement.** A byte source is a finite probability space and, on each outcome, the first `L i` bytes of each stream
   `i`. `UniformRandomBytes L t` says every event about those bytes has the probability it has for independent uniform
-  bytes. What A3 assumes of the operating system is that the running verifier's calls to `IO.getRandomBytes` are such a
-  source, each call's bytes independent of every earlier call's.
-- **Why it is not stated about `IO.getRandomBytes`.** To Lean's logic an `IO` action is a function of the world and
-  `IO.getRandomBytes` an opaque constant, so a `Prop` saying its bytes are random would be refutable, and every theorem
-  taking it vacuous. At run time, Lean v4.34.0's runtime implements it as `lean_io_get_random_bytes`
-  (`src/runtime/io.cpp`), which reads `/dev/urandom` on Unix and calls `BCryptGenRandom` on Windows. Re-read it at every
-  toolchain bump. What ties the statement to the verifier: `assumption-notes/a3-uniform-bytes.md`.
-- **Where it is used, and the salts** (Daniel, 9 Oct, decisions 4(a) and 4(c)): `assumption-notes/a3-uniform-bytes.md`.
+  bytes; the unit draw takes it. `UniformRandomBytesTest L t E η` (as A4 is) says one event `E` has it within
+  `η`; zero knowledge takes it at the event each theorem bounds, and `η` enters the bound. A3 assumes the operating
+  system's reads are such a source, each call independent of the others: the verifier's `IO.getRandomBytes`
+  (Lean v4.34.0's runtime reads `/dev/urandom`), the firewall's frame and tap, and the prover's and a registrant's
+  salts.
+- **Why per test, and the rest.** Any source with fewer outcomes than byte strings refutes the every-event form, as
+  Linux's CRNG does past 32 bytes: its zero idealizes the CSPRNG, and `η` is the CSPRNG's advantage against the
+  theorem's test. `assumption-notes/a3-uniform-bytes.md` has the argument, why A3 isn't about `IO.getRandomBytes`, its
+  tie to the verifier, its scope (the masks included), what is outside it, why no test runs, and where it is used,
+  salts included (Daniel, 9 Oct, decisions 4(a) and 4(c)).
 - **Upstream:** watch entry `A3-uniform-bytes`.
 
 **A6. The coin server's round coins are independent uniform** (`uniform/flock-coin-server`), for the session's
@@ -117,8 +120,8 @@ coins.
   hypothesis about, as A3 is about the unit draw's byte source. Stating it as a `Prop` would need the session played on
   a byte source, which the model doesn't have.
 - **What it assumes of the coin server.** The Rust coin server (`live/src/lib.rs`, `Server::coins`) reads each round's
-  coins from `/dev/urandom` when it has no seed. A3 is about the byte sources the theorems read (the unit draw's and the
-  salts'), so it doesn't cover these bytes, which the model's coin nodes draw.
+  coins from `/dev/urandom` when it has no seed. A3 is about the byte sources the theorems read (the unit draw's, the
+  salts' and the ZK server's tape), so it doesn't cover these bytes, which the model's coin nodes draw.
 - **Seed coins are outside it.** By default M0's non-ZK session derives every coin from one OS seed (`cfg.coin_seed`;
   `live/src/coin_seed.rs`, through `verity.ml.randomness.derive`). Those sessions also rest on `prf/sha-512` (A4's claim)
   and on the seed commitment's hiding, and no headline covers them. Under `FC_COINS=os` the server draws every round's
@@ -330,8 +333,8 @@ malicious-verifier claim rests on beyond the theorems.
     initialized.
   - It keeps no user-space state, so a forked process doesn't repeat its output.
   - A VM snapshot restored more than once must not repeat the kernel's CSPRNG state. That holds when the kernel reseeds
-    on a VM generation change (vmgenid, Linux 5.18 and later, with hypervisor support) or mixes in a hardware RNG.
-  - The CSPRNG is idealized as exactly uniform. The true bound carries its negligible distinguishing advantage.
+    on a VM generation change (vmgenid, Linux 5.18 and later, with hypervisor support); RDSEED, mixed in at reseeds, doesn't.
+  - The CSPRNG is idealized as exactly uniform. The true bound carries its distinguishing advantage.
 - **Split out of A4** at the red team's request: it is a property of what produces the secret, not of the hash.
 - **Upstream:** watch entry `A5-uniform-secret`.
 

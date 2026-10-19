@@ -121,6 +121,16 @@ def Draws.ofBytes (l : Zk.PadLayout) (b : ByteArray) : Draws :=
     tauSalt := b.extract o (o + Zk.TAU_SALT_BYTES),
     salts := b.extract (o + Zk.TAU_SALT_BYTES) (o + Zk.TAU_SALT_BYTES + SALT * codeLen l) }
 
+/-- The draws in the bytes `b` one read returned, refused unless there are exactly `drawBytes l` of them: `Draws.ofBytes`
+reads past a short input as zeros, which would be pads no one drew. -/
+def Draws.ofRead (l : Zk.PadLayout) (b : ByteArray) : Except String Draws :=
+  if b.size = drawBytes l then .ok (Draws.ofBytes l b)
+  else .error s!"{b.size} bytes where the draws take {drawBytes l}"
+
+/-- The rep's draws from a byte source, in one read of `drawBytes l` bytes from `get` (`cmd`'s is `IO.getRandomBytes`). -/
+def drawsWith {m : Type → Type} [Monad m] (get : USize → m ByteArray) (l : Zk.PadLayout) : m (Except String Draws) :=
+  Draws.ofRead l <$> get (drawBytes l).toUSize
+
 /-- The root over leaves `l` (a power of two of them): each node `SHA-512(left ‖ right)`, a level at a time. -/
 def treeRoot (l : Array ByteArray) : ByteArray := go l l.size
 where
@@ -519,8 +529,9 @@ where
       if b.isEmpty then throw (IO.userError s!"frame: input closed {acc.size} bytes into a {n}-byte round")
       go fuel (acc ++ b)
 
-/-- `flock-firewall frame`: one rep's draws, refusals and release, served on stdin and stdout. The first line starts the
-rep (`start`): the frame draws `drawBytes` OS bytes, commits them (`padsRoot`), and answers `ok LEN` followed by the
+/-- `flock-firewall frame`: one rep's draws, refusals and release, served on stdin and stdout, its draws read from `get`.
+The first line starts the rep (`start`): the frame draws `drawBytes` bytes from `get` in one read (`drawsWith`, refusing
+any other count), commits them (`padsRoot`), and answers `ok LEN` followed by the
 `LEN` bytes of `Draws.toBytes`, the draws then the root. `prior N` followed by `16 N` bytes, before the first round, is an
 earlier rep of the table's algebraic-phase coins, whose claim points the rank check covers too; it is answered `ok`.
 
@@ -535,7 +546,7 @@ round `innerOwn` fixes, and refused anywhere else. A round `round` refuses is an
 refusals stop are answered `stop WHY` (`STOP`), nothing of the round leaving, and end the rep. `finish` is answered `ok`,
 or `stop` for a stopped rep, when every masked phase closed with every pad used and the inner proof's rounds all left.
 Anything else is answered `err WHY` and ends the rep: nothing after it leaves. -/
-def cmd (_ : List String) : IO UInt32 := do
+def cmdWith (get : USize → IO ByteArray) (_ : List String) : IO UInt32 := do
   let stdin ← IO.getStdin
   let stdout ← IO.getStdout
   let stderr ← IO.getStderr
@@ -551,7 +562,9 @@ def cmd (_ : List String) : IO UInt32 := do
   let (l, mask) ← match Json.parse first >>= start with
     | .ok x => pure x
     | .error e => return (← refuse s!"the rep's start: {e}")
-  let d := Draws.ofBytes l (← IO.getRandomBytes (drawBytes l).toUSize)
+  let d ← match ← drawsWith get l with
+    | .ok d => pure d
+    | .error e => return (← refuse s!"the rep's start: {e}")
   let c := Cfg.ofDraws l d mask
   if let .error e := c.check then return (← refuse s!"the rep's start: {e}")
   let mut s : Masker := {}
@@ -631,6 +644,9 @@ def cmd (_ : List String) : IO UInt32 := do
       stdout.flush
     | _ => return (← refuse s!"a request `{line}`")
   return 0
+
+/-- `flock-firewall frame` at the operating system's bytes: `cmdWith`, the rep's draws read from `IO.getRandomBytes`. -/
+def cmd : List String → IO UInt32 := cmdWith IO.getRandomBytes
 
 /-- The most bytes one `tap` request takes. -/
 def TAP_MAX : Nat := 2 ^ 24
