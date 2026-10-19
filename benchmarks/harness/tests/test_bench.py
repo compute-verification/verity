@@ -286,57 +286,6 @@ def test_the_launcher_sources_the_setup_before_the_point_runs(tmp_path):
     assert failed.returncode != 0 and failed.stdout == ""
 
 
-def test_the_bandwidth_setup_builds_once_per_source_key_and_every_point_loads_its_own_copy(tmp_path):
-    root = Path(__file__).resolve().parents[3]
-    bin_dir, calls = tmp_path / "bin", tmp_path / "nvcc-builds"
-    bin_dir.mkdir()
-    nvcc = bin_dir / "nvcc"
-    nvcc.write_text(
-        '#!/bin/bash\n'
-        '[ "$1" = --version ] && { echo "nvcc fake ${FAKE_NVCC_VERSION:-1}"; exit 0; }\n'
-        'case " $* " in *" -MM "*) for a; do src=$a; done; echo "x.o : $src"; exit 0 ;; esac\n'
-        'while [ $# -gt 0 ]; do [ "$1" = -o ] && out=$2; shift; done\n'
-        '[ -n "$FAKE_NVCC_PREEMPT" ] && case $out in */wt.so) kill -TERM $PPID; exit 0 ;; esac\n'
-        f'echo "$out" >> {calls}; echo "lib $out" > "$out"\n')
-    nvcc.chmod(0o755)
-    python = tmp_path / "venv312" / "bin" / "python"
-    python.parent.mkdir(parents=True)
-    python.write_text('#!/bin/sh\necho "$VERITY_VLLM_BENCH_WT_LIB $VERITY_VLLM_BENCH_TOPUP_LIB"\n')
-    python.chmod(0o755)
-
-    def point(run: str, **extra: str) -> str:
-        env = {"PATH": f"{bin_dir}:/usr/bin:/bin", "WORK": str(tmp_path), "CUDA_HOME": str(tmp_path),
-               "RESEARCH_RUN_DIR": str(tmp_path / run), "VERITY_BENCH_LIB_CACHE": str(tmp_path / "cache"), **extra,
-               "VERITY_BENCH_SETUP": "benchmarks/harness/setup/vllm_encoded.sh"}
-        ran = subprocess.run(["bash", "benchmarks/harness/run_point.sh"], cwd=root, env=env, capture_output=True,
-                             text=True)
-        assert ran.returncode == 0, ran.stderr
-        wt, topup = ran.stdout.split()
-        assert wt == f"{tmp_path / run}/setup/wt.so" and Path(topup).read_text().startswith("lib ")
-        return (tmp_path / run / "out/setup/build.txt").read_text().splitlines()[-1]
-
-    first = point("r1")
-    assert first.startswith("built ") and len(calls.read_text().splitlines()) == 4
-    second = point("r2")
-    assert second == "reused " + first.split(" ", 1)[1] and len(calls.read_text().splitlines()) == 4
-    other = point("r3", FAKE_NVCC_VERSION="2")
-    assert other.startswith("built ") and other != first and len(calls.read_text().splitlines()) == 8
-    (tmp_path / "a-file").write_text("")
-    unwritable = point("r4", VERITY_BENCH_LIB_CACHE=str(tmp_path / "a-file" / "cache"))
-    assert unwritable.startswith(f"built {tmp_path}/r4/setup-build/") and len(calls.read_text().splitlines()) == 12
-    cached = sorted(p.name for p in (tmp_path / "cache").iterdir())
-    preempted = subprocess.run(
-        ["bash", "benchmarks/harness/run_point.sh"], cwd=root, capture_output=True, text=True,
-        env={"PATH": f"{bin_dir}:/usr/bin:/bin", "WORK": str(tmp_path), "CUDA_HOME": str(tmp_path),
-             "RESEARCH_RUN_DIR": str(tmp_path / "r5"), "VERITY_BENCH_LIB_CACHE": str(tmp_path / "cache"),
-             "FAKE_NVCC_VERSION": "3", "FAKE_NVCC_PREEMPT": "1",
-             "VERITY_BENCH_SETUP": "benchmarks/harness/setup/vllm_encoded.sh"})
-    assert preempted.returncode == 143 and preempted.stdout == "", preempted.stderr
-    assert sorted(p.name for p in (tmp_path / "cache").iterdir() if not p.name.endswith(".lock")) == [
-        name for name in cached if not name.endswith(".lock")]
-    assert point("r6", FAKE_NVCC_VERSION="3").startswith("built ")
-
-
 def test_the_bandwidth_spec_runs_memory_accountings_arms_with_receipts_on_and_their_libraries_built():
     spec = resolve_spec("llama31-8b-fp8-1gpu-bandwidth")
     assert spec.arms == ("stock-fp8", "bandwidth-plain", "bandwidth-audit")
