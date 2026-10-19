@@ -1,7 +1,7 @@
 """The fused exact linear's gate, and stock vLLM int8's kernels against the same statement, on one GPU.
 
 Shapes: Llama-3.1-8B's qkv [6144, 4096], o [4096, 4096], gate_up [28672, 4096] and down [4096, 14336] at M = 1, 32, 256,
-2048 and 8192.  Activations are bf16 with per-channel spread (log-normal channel scales), and from row 0 on (when M allows)
+2048 and 8192 (`--models` adds Qwen3-8B's gate_up [24576, 4096] and down [4096, 12288]; a shape two models share runs once).  Activations are bf16 with per-channel spread (log-normal channel scales), and from row 0 on (when M allows)
 the rows the statement's edges live on: a zero row (the 1e-30 floor), a row whose every entry is +absmax (X = 127
 everywhere, and with weight column 0 = 127 the largest |Y|, 127 * 127 * K), a row of exact ties (absmax 15.875, so s_a =
 0.125 and x / s_a = j + 1/2), a row below the floor (absmax 5e-31), one nonzero entry, a row near 1e30, and a subnormal
@@ -21,7 +21,7 @@ Per shape, the reference is the exact arm's own code on the same GPU, `int8_exac
 plus the PTX of both kernels (`exactlin.ptx_check`).  `gate()` returns the document; `ok` is the fused path's verdict
 (stock's differences are findings, not failures).
 
-    python kgate.py --out OUT [--shapes all|decode] [--json gate.json]
+    python kgate.py --out OUT [--shapes all|decode] [--models llama-3.1-8b,qwen3-8b] [--no-stock]
 """
 from __future__ import annotations
 
@@ -36,8 +36,24 @@ HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
 import exactlin as X  # noqa: E402
 
-LAYERS = {"qkv": (6144, 4096), "o": (4096, 4096), "gate_up": (28672, 4096), "down": (4096, 14336)}
+MODELS = {
+    "llama-3.1-8b": {"layers": 32, "linears": {"qkv": (6144, 4096), "o": (4096, 4096), "gate_up": (28672, 4096),
+                                              "down": (4096, 14336)}},
+    "qwen3-8b": {"layers": 36, "linears": {"qkv": (6144, 4096), "o": (4096, 4096), "gate_up": (24576, 4096),
+                                          "down": (4096, 12288)}},
+}
+LAYERS = MODELS["llama-3.1-8b"]["linears"]
 MS = (1, 32, 256, 2048, 8192)
+DECODE_MS = (1, 32, 256)
+
+
+def shapes_of(models: tuple[str, ...], ms: tuple[int, ...]) -> list[tuple[int, int, int, list[str]]]:
+    """Each distinct (n, k, m) of the models' linears once, with the model:layer names it serves."""
+    out: dict[tuple[int, int], list[str]] = {}
+    for model in models:
+        for name, nk in MODELS[model]["linears"].items():
+            out.setdefault(nk, []).append(f"{model}:{name}")
+    return [(n, k, m, names) for (n, k), names in out.items() for m in ms]
 POISON = 0xA5
 SPECIAL = ("zero", "all_absmax", "ties", "below_floor", "one_nonzero", "huge", "subnormal")
 
@@ -145,9 +161,8 @@ def stock_doc(x, w, s_w, xq_ref, s_ref, y_ref) -> dict:
     return doc
 
 
-def one(name: str, m: int, seed: int, with_stock: bool) -> dict:
+def one(n: int, k: int, m: int, seed: int, with_stock: bool, names: list[str] | None = None) -> dict:
     e = E()
-    n, k = LAYERS[name]
     x = activations(m, k, seed)
     w, s_w = weights(n, k, seed)
     xq_ref, s_ref = e.quantize_rows(x)
@@ -157,7 +172,7 @@ def one(name: str, m: int, seed: int, with_stock: bool) -> dict:
     y = torch.empty_like(y_ref)
     y2 = torch.empty_like(y_ref)
     torch.cuda.synchronize()
-    doc: dict = {"layer": name, "m": m, "n": n, "k": k, "seed": seed}
+    doc: dict = {"layer": ",".join(names or []), "m": m, "n": n, "k": k, "seed": seed}
     poison(xq, s, y)
     poison(y2)
     torch.cuda.synchronize()
@@ -202,27 +217,28 @@ def one(name: str, m: int, seed: int, with_stock: bool) -> dict:
     return doc
 
 
-def gate(shapes: str = "all", with_stock: bool = True, seed: int = 20261019) -> dict:
-    ms = MS if shapes == "all" else (1, 32, 256)
+def gate(shapes: str = "all", with_stock: bool = True, seed: int = 20261019,
+         models: tuple[str, ...] = ("llama-3.1-8b",)) -> dict:
+    ms = MS if shapes == "all" else DECODE_MS
     rows = []
-    for name in LAYERS:
-        for m in ms:
-            d = one(name, m, seed + m, with_stock)
-            rows.append(d)
-            print(json.dumps({k: v for k, v in d.items() if k not in ("ptx", "special")}), flush=True)
-    return {"ok": all(r["ok"] for r in rows), "shapes": len(rows), "poison": f"{POISON:#04x}", "rows": rows,
-            "device": torch.cuda.get_device_name(), "torch": torch.__version__}
+    for n, k, m, names in shapes_of(models, ms):
+        d = one(n, k, m, seed + m, with_stock, names)
+        rows.append(d)
+        print(json.dumps({k: v for k, v in d.items() if k not in ("ptx", "special")}), flush=True)
+    return {"ok": all(r["ok"] for r in rows), "shapes": len(rows), "models": list(models), "poison": f"{POISON:#04x}",
+            "rows": rows, "device": torch.cuda.get_device_name(), "torch": torch.__version__}
 
 
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--out", required=True)
     ap.add_argument("--shapes", default="all")
+    ap.add_argument("--models", default="llama-3.1-8b", help=f"comma-separated, of {tuple(MODELS)}")
     ap.add_argument("--no-stock", action="store_true")
     a = ap.parse_args()
     out = Path(a.out)
     out.mkdir(parents=True, exist_ok=True)
-    doc = gate(a.shapes, not a.no_stock)
+    doc = gate(a.shapes, not a.no_stock, models=tuple(a.models.split(",")))
     (out / "gate.json").write_text(json.dumps(doc, indent=1) + "\n")
     print(json.dumps({"gate_ok": doc["ok"], "shapes": doc["shapes"]}), flush=True)
     return 0 if doc["ok"] else 4
