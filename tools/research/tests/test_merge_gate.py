@@ -1005,3 +1005,119 @@ def test_a_commit_of_the_locks_a_passing_check_regenerated_merges_on_that_check(
     _git(feat, "reset", "-q", "--hard", tip)
     regen = _relock(feat, '{"records": 2}\n', "pkg/lean-audit.json")
     assert merge_main(["feat", "--dry-run"]) == 0 and f"({regen[:12]}) may be merged into main" in capsys.readouterr().out
+
+
+#: a check that publishes a verdict pack among its run files, as check.py does (`verdicts.tar.gz` in its run dir), and passes
+_PACKING = ("import os; open(os.environ['RESEARCH_RUN_DIR'] + '/verdicts.tar.gz', 'wb').write(os.environ.get('PACK', 'a pack').encode()); "
+            + _RESULT % "passed")
+
+
+def _packed(tmp_path: Path, checkout: Path, monkeypatch, pack: str = "a pack", *command: str, program: str = _PACKING) -> tuple[str, str]:
+    """(attempt id, its pack's sha256): a check of ``checkout`` (the declared one, or ``command``) that published a pack among
+    its run files, as a check node's run does (`--run-record`)."""
+    import hashlib
+
+    from research.store.local import LocalStore
+
+    monkeypatch.setenv("FAKE_CHECK", program)
+    monkeypatch.setenv("PACK", pack)
+    before = {r for (r,) in LocalStore().index.sql("SELECT id FROM attempts")}
+    monkeypatch.chdir(checkout)
+    rc = research_main(["run", "--runs-dir", str(tmp_path / "runs"), "--project", "t", "--no-sampler", "--tool", "mytools.decl_check:T",
+                        "--run-record", "--cwd", "source", "--", *(command or CHECKED)])
+    assert rc in (0, 1)
+    [rid] = {r for (r,) in LocalStore().index.sql("SELECT id FROM attempts")} - before
+    return rid, hashlib.sha256(pack.encode()).hexdigest()
+
+
+def _plan(commit: str, tree: str, parts: list[dict]) -> dict:
+    return {"kind": "check-plan/v1", "commit": commit, "tree": tree, "parts": parts}
+
+
+def _part(name: str, rid: str | None, sha: str | None, state: str = "passed", **kw) -> dict:
+    found = [{"source": f"pack:{rid}" if rid else "local", **({"attempt": rid, "pack_sha256": sha} if rid else {})}]
+    return {"part": name, "step": name.split(":")[0], "key": "k", "state": state, "found": found if state == "passed" else [], **kw}
+
+
+def test_verdicts_admits_a_commit_no_check_ran_on_when_its_plan_shows_every_part_passed_in_a_recorded_checks_pack(
+        tmp_path, monkeypatch, capsys):
+    """CI-33: no attempt of feat's tip exists, so the exact-attempt gate (the default) refuses it; with --verdicts, a plan whose
+    every part (a Lake package's audit among them) passed in the pack of a check of main is admitted, and the merge cites that
+    check in `Verdicts:`."""
+    import research.merge as M
+
+    main, feat, tip = _repos(tmp_path)
+    rid, sha = _packed(tmp_path, main, monkeypatch)
+    tree = _git(feat, "rev-parse", f"{tip}^{{tree}}")
+    asked = []
+
+    def plan(repo, commit, base, also):
+        asked.append((repo, commit, base, also))
+        return _plan(commit, tree, [_part("suite:a", rid, sha), _part("lean-audit:pkg", rid, sha),
+                                    _part("lean-agreement", None, None, "must-run", required=False)])
+    monkeypatch.setattr(M, "run_plan", plan)
+    monkeypatch.chdir(main)
+    assert merge_main(["feat", "--dry-run"]) == 3 and "no passing `check` attempt" in capsys.readouterr().err
+    assert merge_main(["feat", "--verdicts", "--dry-run", "--verdicts-from", "r-x"]) == 0
+    assert f"passed in the packs of {rid}, part by part" in capsys.readouterr().out
+    assert asked[-1] == (main, tip, _git(main, "rev-parse", "HEAD"), ("r-x",))
+    assert merge_main(["feat", "--verdicts"]) == 0
+    msg = _git(main, "log", "-1", "--format=%B")
+    assert f"\nVerdicts: {rid}" in msg and "Check:" not in msg
+    assert _git(main, "rev-parse", "HEAD^2") == tip
+
+
+def test_verdicts_cites_only_a_pass_under_its_key_in_an_ended_declared_checks_published_pack(tmp_path, monkeypatch):
+    """What `plan_refusal` refuses: a part that must run or has no key, a Lake package's audit that didn't pass (a skip passes
+    nothing, required or not), a pass kept only in a machine's cache, a pack whose sha256 isn't the one the attempt published,
+    another tool's attempt, a run of another command, a plan of another commit or tree, and a step the change requires that
+    the plan lacks or didn't pass.  A failed check's pack counts: a pack holds only passes."""
+    import research.merge as M
+    from research.store.local import LocalStore
+
+    main, feat, tip = _repos(tmp_path)
+    rid, sha = _packed(tmp_path, main, monkeypatch)
+    failed, failed_sha = _packed(tmp_path, main, monkeypatch, "another pack",
+                                 program=_PACKING.replace(_RESULT % "passed", "raise SystemExit(1)"))
+    other, other_sha = _packed(tmp_path, main, monkeypatch, "a third pack", sys.executable, "-c", _PACKING)
+    store, tree = LocalStore(), _git(feat, "rev-parse", f"{tip}^{{tree}}")
+    command = M.declared_command(main, "check")
+    ok = [_part("suite:a", rid, sha), _part("lean-audit:pkg", rid, sha)]
+
+    def judge(parts, need=None, commit=tip, of=tree, tool="check"):
+        return M.plan_refusal(_plan(commit, of, parts), store, tip, tree, tool, command, need or {})
+
+    assert judge(ok) == ([rid], None)
+    assert judge([*ok, _part("suite:b", None, None, "must-run")])[1].startswith("1 of 3 parts have no cited pass")
+    assert "flock-circuit-build unkeyed (no key)" in judge([*ok, _part("flock-circuit-build", None, None, "unkeyed", why="no key")])[1]
+    assert "lean-audit:q skipped" in judge([*ok, _part("lean-audit:q", None, None, "skipped", required=False)])[1]
+    assert "suite:c (no pass found in a recorded check's pack)" in judge([*ok, _part("suite:c", None, None)])[1]
+    assert "no verdicts.tar.gz of that sha256" in judge([_part("suite:a", rid, "0" * 64)])[1]
+    assert "is a `check` attempt, not `other`" in judge(ok, tool="other")[1]
+    assert "isn't the target's declared" in judge([_part("suite:a", other, other_sha)])[1]
+    assert "not a check-plan/v1 of the clean" in judge(ok, commit=_git(main, "rev-parse", "HEAD"))[1]
+    assert "not a check-plan/v1 of the clean" in judge(ok, of=None)[1]
+    assert "has no part lean-agreement" in judge(ok, need={"lean-agreement": ["flock/"]})[1]
+    agree = _part("lean-agreement", None, None, "must-run", required=False)
+    assert "lean-agreement must-run" in judge([*ok, agree], need={"lean-agreement": ["flock/"]})[1]
+    assert judge([*ok, agree]) == ([rid], None)                                   # not required, not wanted
+    assert store.get_attempt(failed)["status"]["state"] == "failed"
+    assert judge([_part("suite:a", failed, failed_sha)]) == ([failed], None)
+
+
+def test_verdicts_takes_one_ref_and_no_push_and_a_plan_that_prints_nothing_refuses(tmp_path, monkeypatch, capsys):
+    """The push guard admits only a passing attempt of the tree it lands, so --verdicts can't push or run a train."""
+    import pytest
+
+    import research.merge as M
+
+    for argv in (["feat", "--verdicts", "--push"], ["feat", "--verdicts", "--train"], ["feat", "--verdicts-from", "r-x"]):
+        with pytest.raises(SystemExit) as e:
+            merge_main(argv)
+        assert e.value.code == 2
+    capsys.readouterr()
+    main, _feat, tip = _repos(tmp_path)
+    monkeypatch.setattr(M, "PLAN", (sys.executable, "-c", "import sys; print('no plan'); sys.exit(4)"))
+    monkeypatch.chdir(main)
+    assert merge_main(["feat", "--verdicts", "--dry-run"]) == 3
+    assert f"`check.py --plan {tip[:12]}` printed no plan (exit 4): no plan" in capsys.readouterr().err

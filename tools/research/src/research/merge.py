@@ -559,7 +559,7 @@ def pack_refusal(store, rid: str, sha256: str, tool: str, command: tuple[str, ..
     mode, why = invocation(doc.get("argv"), command)
     if mode not in ("check", "shard"):
         return why if mode == "refused" else "it combines shards, and holds no pack of its own"
-    art = (doc.get("outputs") or {}).get("run_files")
+    art = (doc.get("outputs") or {}).get("run_files") or (doc.get("outputs") or {}).get("run_record")
     try:
         rows = {f["path"]: f.get("sha256") for f in store.listing(art)} if art else {}
     except Exception as e:  # noqa: BLE001  (no listing: nothing to cite)
