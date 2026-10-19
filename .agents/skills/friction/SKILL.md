@@ -109,6 +109,16 @@ Only a repeat whose fix needs keys or a claim becomes a question for Daniel.
 
 Newest first. Each is Daniel's unless it names the coordinator.
 
+- 2026-10-19 (18:00Z, card 7d82eba8, its default applied): his "analysis simplification, known false" (9 Oct, 02:46Z)
+  about `ActivationsIncompressible` and `PartialSumsIncompressible` covers declared circuits only, whose wiring the
+  prover controls. On a reference training circuit they stand, and so does `TrainingIncompressible`.
+- 2026-10-19 (18:00Z, card 90f5557c, its default applied): `Nci.Assumptions.TrainingIncompressible` is NCI's single
+  incompressibility premise, a named assumption like `WeightsIncompressible`; the older assumptions stay beside it until
+  the guarantees that read them move to it.
+- 2026-10-19 (18:00Z, card 14452149, its default applied): the routed probe's spend is budget line `vy-routed-`: USD 150,
+  one node, 24 hours.
+- 2026-10-19 (10:47 AM PDT, in chat): that the reference circuit runs ordinary matrix multiplications, one gate per
+  product and no Strassen-like algorithm, is a stated assumption; in Lean it is the `Chain` the reference circuit runs.
 - 2026-10-18 (9:59 PM PDT, to compute-accounting): using cloud workers is totally fine, and nobody asks him again;
   he had been asked for 24 hours. Every lead, its cloud workers and its subagents work from one text, AGENTS.md "Use
   cloud workers freely", which is also the explicit request Cursor's Task tool wants before `environment: "cloud"`.

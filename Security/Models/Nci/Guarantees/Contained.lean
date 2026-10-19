@@ -16,6 +16,10 @@ these guarantees are parameterized by how compressible training is.
 `ContainedMatMulOn` and `ContainedTrainingOn` state the law when the declaration contains `c` only partly
 (`PartialContainment`): the products it computes are throttled, less what the dark gates, computed off the books, absorb
 of the partial sums, which is at most their width.
+
+Both support forms are falsified (`Assumptions.ActivationsSupport`, `Assumptions.PartialSumsSupport`), so every
+guarantee here rests on a falsified premise. The same laws in reads form, under `TrainingIncompressible` on `c`, are
+`IncompressibleContainedTraining`, `IncompressibleContainedMatMulOn` and `IncompressibleContainedTrainingOn`.
 -/
 
 namespace Nci.Guarantees

@@ -10,6 +10,10 @@ import Proofs.Nci.Contained
 division into small IUs it gives `PartialSumsIncompressible`. Conversely the three give the law: on a division with an IU
 that is not small, charge every partial sum to that IU (`trainingIncompressible_iff`). The guarantees then follow from the
 thread and partial-sum proofs, which read only those three.
+
+Through a partial containment each dark gate is an IU of its own (`withDark`), so the law bounds the partial sums it
+absorbs by its reads (`IncompressibleContainedMatMulOn`). At `μ = 1` that budget has no weight, and the activations' half
+alone bounds the products the declaration computes (`ContainedFanOutOn`).
 -/
 
 namespace Nci.SecurityProofs
@@ -152,6 +156,10 @@ theorem IncompressibleThreadedThrottled : Guarantees.IncompressibleThreadedThrot
   intro Γ α b_w b_a c d ch T dd e hα hbw hba hdd hC hP hT h
   exact ThreadedThrottled Γ α b_w b_a c d T dd e hα hbw hba hdd hC hP hT (weightsIncompressible_of_training h)
 
+theorem IncompressibleThreadedThrottledOn : Guarantees.IncompressibleThreadedThrottledOn := by
+  intro Γ α b_w b_a c d ch T dd e M hα hbw hba hdd hP hT h
+  exact ThreadedThrottledOn Γ α b_w b_a c d T dd e M hα hbw hba hdd hP hT (weightsIncompressible_of_training h)
+
 theorem IncompressibleContainedTraining : Guarantees.IncompressibleContainedTraining := by
   intro Γ α b_w b_a κ c d ch T dd hα hbw hba hd hC hP h hκ
   have hF := containedMatMul_of_reads Γ α b_w b_a c d ch dd hα hbw hba hd hC hP
@@ -161,5 +169,60 @@ theorem IncompressibleContainedTraining : Guarantees.IncompressibleContainedTrai
       = F α (α * Γ) b_w b_a dd * (κ * c.D.size c.D.computed) := by ring
     _ ≤ F α (α * Γ) b_w b_a dd * (2 * ch.G) := mul_le_mul_of_nonneg_left hκ hF0
     _ ≤ d.D.size d.D.computed := hF
+
+open Classical in
+/-- **The partial-sum law with dark gates, in reads**: each dark gate is a small IU of its own, whose partial sums are
+within its reads. -/
+theorem IncompressibleContainedMatMulOn : Guarantees.IncompressibleContainedMatMulOn := by
+  intro Γ α K b_w b_a μ c d ch T dd emax M hα hK hw ha hdd hΓ hαK hμ₀ hμ₁ hd he ⟨n, P, hP⟩ hX h
+  obtain ⟨s, hsum, hs⟩ := partialSumsIncompressible_of_training ha.le h _ (withDark M P)
+    (withDark_caps hα hαK hΓ hP hX)
+  have hsP : ∀ u, b_w * ((ch.weightsUsed (piece M P u)).card : ℝ) +
+      b_a * s (Fintype.equivFin (Fin n ⊕ {v // v ∈ M.dark}) (Sum.inl u)) ≤ novelReads d (P.gates u) := fun u => by
+    have h' := hs (Fintype.equivFin (Fin n ⊕ {v // v ∈ M.dark}) (Sum.inl u))
+    rw [withDark_gates_inl] at h'
+    exact h'.trans (by exact_mod_cast novelReads_piece u)
+  have hsZ : ∀ v : {v // v ∈ M.dark},
+      b_a * (s (Fintype.equivFin (Fin n ⊕ {v // v ∈ M.dark}) (Sum.inr v)) : ℝ) ≤ novelReads c {v.1} := fun v => by
+    have h' := hs (Fintype.equivFin (Fin n ⊕ {v // v ∈ M.dark}) (Sum.inr v))
+    rw [withDark_gates_inr] at h'
+    have : 0 ≤ b_w * ((ch.weightsUsed {v.1}).card : ℝ) := by positivity
+    linarith
+  have hZ : b_a * ∑ v : {v // v ∈ M.dark}, (s (Fintype.equivFin (Fin n ⊕ {v // v ∈ M.dark}) (Sum.inr v)) : ℝ) ≤
+      ∑ v ∈ M.dark, (novelReads c {v} : ℝ) := by
+    rw [mul_sum]
+    calc ∑ v : {v // v ∈ M.dark}, b_a * (s (Fintype.equivFin (Fin n ⊕ {v // v ∈ M.dark}) (Sum.inr v)) : ℝ)
+        ≤ ∑ v : {v // v ∈ M.dark}, (novelReads c {v.1} : ℝ) := sum_le_sum fun v _ => hsZ v
+      _ = ∑ v ∈ M.dark, (novelReads c {v} : ℝ) := sum_coe_sort M.dark fun g => (novelReads c {g} : ℝ)
+  have h₀ := matMulOn_of_counts hα hK hw ha hdd hαK hμ₀ hμ₁ hd he hP
+    (activationsIncompressible_of_training ha.le h) (partialSums_count ha.le hsum hsP)
+  exact h₀.trans (by linarith [mul_le_mul_of_nonneg_left hZ (by linarith : (0 : ℝ) ≤ 1 - μ)])
+
+theorem IncompressibleContainedTrainingOn : Guarantees.IncompressibleContainedTrainingOn := by
+  intro Γ α K b_w b_a μ κ c d ch T dd emax M hα hK hw ha hdd hΓ hαK hμ₀ hμ₁ hd he hP hX h hκ
+  exact training_of_counts (le_max_of_le_right (by positivity))
+    (IncompressibleContainedMatMulOn Γ α K b_w b_a μ c d ch T dd emax M hα hK hw ha hdd hΓ hαK hμ₀ hμ₁ hd he hP hX h)
+    hκ (by exact_mod_cast card_products_le_dark M ch)
+
+open Classical in
+/-- **Products done in the declaration are bounded by their fan-out**: at `μ = 1` the dark gates' budget has weight
+`1 − μ = 0`, so any budget does, and the partial sums are not needed. -/
+theorem ContainedFanOutOn : Guarantees.ContainedFanOutOn := by
+  intro Γ α K b_w b_a c d ch dd emax M hα hK hw ha hdd hαK hd he ⟨n, P, hP⟩ hA
+  have h₂ : ∑ u, (b_w * ((ch.weightsUsed (piece M P u)).card : ℝ) + b_a / 2 * (outputsOther ch (piece M P u)).card) ≤
+      ∑ u, (novelReads d (P.gates u) : ℝ) +
+        ∑ u, (b_w * ((ch.weightsUsed (piece M P u)).card : ℝ) + b_a / 2 * (outputsOther ch (piece M P u)).card) :=
+    le_add_of_nonneg_left (sum_nonneg fun u _ => Nat.cast_nonneg _)
+  have h := matMulOn_of_counts (μ := 1) hα hK hw ha hdd hαK zero_le_one le_rfl hd he hP hA h₂
+  have hm : b_a / max (emax : ℝ) (K / (4 * b_w * dd)) ≤
+      max (min ((1 + √1) ^ 2 * (b_w * b_a * dd / K)) (√2 * (1 + √1) * √(1 - 1) * (b_a * √(b_w / K))))
+        (1 * b_a / max (emax : ℝ) (K / (4 * b_w * dd))) :=
+    le_max_of_le_right (le_of_eq (by ring))
+  calc b_a / max (emax : ℝ) (K / (4 * b_w * dd)) *
+        ((univ.filter fun p : (ℓ : Fin ch.L) × Fin ch.N × Fin (ch.e ℓ) × Fin (ch.d ℓ) =>
+          ch.prod p.1 p.2.1 p.2.2.1 p.2.2.2 ∈ M.S).card : ℝ)
+      ≤ _ := mul_le_mul_of_nonneg_right hm (Nat.cast_nonneg _)
+    _ ≤ _ := h
+    _ = α * d.D.size d.D.computed := by ring
 
 end Nci.SecurityProofs
