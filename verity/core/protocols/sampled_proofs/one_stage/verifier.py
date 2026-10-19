@@ -417,7 +417,19 @@ def stream(params: Mapping[str, Any], state: Mapping[str, Any], op: Mapping[str,
     """A proof service stream's rules on `op` (the Lean's `Stream.run` on `state`) against Python's `decision` and the
     state `after` it (`service._step`'s), compared without Python's `detail`, which the decision of record keeps: the
     decision and the state of record, and the verdict, `disagree` where the two differ."""
-    got = lean("stream", {"params": dict(params), "state": dict(state), "op": dict(op)})
+    return _ruled("stream", {"params": dict(params), "state": dict(state), "op": dict(op)}, decision, after)
+
+
+def fleet(state: Mapping[str, Any], op: Mapping[str, Any], decision: Mapping[str, Any],
+          after: Mapping[str, Any]) -> tuple[dict[str, Any], dict[str, Any], Verdict]:
+    """A proof service fleet's rules on `op` (the Lean's `Fleet.run` on `state`) against Python's `decision` and the state
+    `after` it (`service._fleet_step`'s), as `stream` compares a stream's."""
+    return _ruled("fleet", {"state": dict(state), "op": dict(op)}, decision, after)
+
+
+def _ruled(piece: str, args: dict[str, Any], decision: Mapping[str, Any],
+           after: Mapping[str, Any]) -> tuple[dict[str, Any], dict[str, Any], Verdict]:
+    got = lean(piece, args)
     try:
         theirs = {"decision": got["decision"], "state": json.loads(got["state"])}
     except (KeyError, TypeError, ValueError):
@@ -476,4 +488,5 @@ def audit_record(registration: Mapping[str, Any], receipt: Mapping[str, Any], dr
 
 
 __all__ = ["BUILD_LOCK", "DISAGREE", "EXE", "LeanError", "PACKAGE", "RECORD_VERDICT", "audit_record", "check", "check_draw",
-           "check_proved", "check_public", "check_verdicts", "executable", "lean", "matches_public", "run", "select"]
+           "check_proved", "check_public", "check_verdicts", "executable", "fleet", "lean", "matches_public", "run", "select",
+           "stream"]

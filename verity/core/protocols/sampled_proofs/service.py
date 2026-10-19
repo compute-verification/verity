@@ -73,7 +73,8 @@ deadline `register` reads no clock and logs nothing to the epoch log.
 interiors are registered once; its proof is delivered once (`deliver`); its outcome is final (`outcome`), and nothing
 redraws. A proof delivered after `Check.proof_deadline` (seconds on the challenger's clock, from the draw) is a reject,
 and so is a draw whose proof is not delivered by then: a `Stream` refuses a check without a proof deadline, so every draw
-ends. Each failure is one visible symbol, `reject` or `late`, or a late registration's refusal, `late-registration`.
+ends. Each failure is one visible symbol, `reject` or `late`, or a late registration's refusal, `late-registration`;
+an outcome the fleet's halt ends is `halted`.
 A second call of any of these is refused. An outcome is pending until every verifier of record has run, and each verdict
 of record names the delivered sessions and reports the public outputs alike (`check_verdicts`: `pending`, `sessions`,
 `public`, by the verifier of record).
@@ -92,6 +93,14 @@ such a session (`verity/ml/flock/verifier/PROTOCOL.md` §16.12); `Stream.session
 It holds at most `budget` minus its failures open registrations (and at most `rounds`), so it never ends with more than
 `budget` failures, though one session that fails is a failure for each round it covers.
 
+**The fleet's halt (R5-all).** A `Fleet` holds the challenger's streams across protocols and levels, each attached to
+its operator before its first registration. At the failure that brings any stream of an operator to its budget, the
+fleet halts the operator: every stream attached to it halts at once (`Stream.halted`), each of its registrations
+without a final outcome ends as `halted` (with no failure of its own; outcomes already final stay), and each refuses
+every call from then on (`halted`), so nothing of the operator is accepted or registered after its halt. A `late` counts
+toward the budget as a `reject` does. The fleet's rules (`_FleetControl`) decide by their verifier of record, the Lean's
+`SampledProofs.Fleet`, and a halted stream's by `SampledProofs.Stream`'s `halt`.
+
 **The log's history.** A registration's checks get the log's last record (R6's `previous`), the records whose window may
 equal the registration's (R6's window) and each registered value's first registration (R7's held roots)
 (`Stream._earlier`), so both verifiers of record give the whole log's verdict and the work doesn't grow with the stream.
@@ -102,8 +111,9 @@ and one whose own window does gets the whole log.
 digest>, "budget", "delta", "challenger"}`, plus `"rounds"` when it is more than 1. An outcome's record is
 `{"format": "verity/proof-service/outcome/v0", "stream", "order", "registration", "receipt", "draw", "sessions",
 "symbol", "public", "audit", "interior"}`: the receipt and the draw as the SHA-512 of their canonical JSON, `audit`
-one-stage's audit record (null for `late`), and `interior` null, or under `TwoStage` `{"registration", "receipt",
-"audit"}` for the interiors in the same forms. `Outcome.record` is its SHA-512.
+one-stage's audit record (null for `late` and `halted`), and `interior` null, or under `TwoStage` `{"registration",
+"receipt", "audit"}` for the interiors in the same forms. A `halted` outcome adds `"halt"`, the halt's cause, and its
+`draw` is null when the registration was not drawn. `Outcome.record` is its SHA-512.
 
 **Not built yet.** A stream refuses a two-stage count, the `Sequential` rule, a window statement, a timed session and a
 check with no proof deadline. After R1 to R7, `register` refuses a law whose drawn count varies (`shapes`: `bernoulli`
@@ -118,7 +128,7 @@ import os
 import re
 import time
 from dataclasses import dataclass
-from typing import Any, Callable, Mapping, NoReturn, Sequence
+from typing import Any, Callable, Mapping, NoReturn, Sequence, TypeVar
 
 from verity.ml.circuits.codec import canonical_json
 from verity.ml.circuits.defs import SpecializedDefinition
@@ -136,7 +146,7 @@ SOURCES = ("parameter", "window")
 PHASES = ("epoch", "serve", "interior", "in-deadline")
 STREAM = "verity/proof-service/stream/v0"
 OUTCOME = "verity/proof-service/outcome/v0"
-ACCEPT, REJECT, LATE = "accept", "reject", "late"
+ACCEPT, REJECT, LATE, HALTED = "accept", "reject", "late", "halted"
 #: The most rounds (registrations) one proof session covers.
 ROUNDS = 4
 
@@ -382,10 +392,10 @@ class Terms:
 @dataclass(frozen=True)
 class Outcome:
     """A registration's final outcome. `verdict.codes` is empty when accepted, and otherwise the one visible symbol
-    (`reject` or `late`). `profile`: the integrity profile of an accepted sampled selection; `exhaustive`: the fact of an
-    accepted `All`. `public`: the check's public outputs, as the verifier of record reported them. `record`: the SHA-512
-    of the outcome's record, which binds the registration, the draw, the delivered sessions, the audit record and, for a
-    draw a `Session` covers, the session's rounds."""
+    (`reject`, `late`, or `halted`, whose detail is the halt's cause). `profile`: the integrity profile of an accepted
+    sampled selection; `exhaustive`: the fact of an accepted `All`. `public`: the check's public outputs, as the verifier
+    of record reported them. `record`: the SHA-512 of the outcome's record, which binds the registration, the draw, the
+    delivered sessions, the audit record and, for a draw a `Session` covers, the session's rounds."""
 
     accepted: bool
     verdict: Verdict
@@ -394,6 +404,9 @@ class Outcome:
     terms: Terms
     public: Mapping[str, Any]
     record: str
+
+
+_O = TypeVar("_O", Outcome, tuple[Outcome, ...])
 
 
 @dataclass(frozen=True)
@@ -701,9 +714,9 @@ def _need(op: Mapping[str, Any], k: str) -> Any:
 
 #: The ops of a stream's rules, each `_Control`'s method of that name.
 _OPS = ("ready", "salt", "salt_released", "register", "select", "interiors", "session", "deliver", "deliver_session",
-        "outcome")
+        "outcome", "halt")
 #: What the stream's rules hold of an empty stream.
-_EMPTY = {"size": 0, "opened": [], "failures": 0, "salted_at": None, "ended": None, "entries": []}
+_EMPTY = {"size": 0, "opened": [], "failures": 0, "salted_at": None, "ended": None, "halted": None, "entries": []}
 
 
 class _Control:
@@ -937,18 +950,164 @@ class _Control:
             raise ValueError("accepted is a boolean")
         return {"ok": self._finish(e, ACCEPT if accepted else REJECT)}
 
+    def _halt(self, op: Mapping[str, Any]) -> dict[str, Any]:
+        cause = op.get("cause")
+        if not isinstance(cause, dict):
+            raise ValueError("a halt's cause is an object")
+        opened = list(self.s["opened"])
+        for o in opened:
+            self._held(o)["final"] = True
+        self.s.update(opened=[], halted=cause)
+        return {"ok": opened}
+
 
 def _step(params: Mapping[str, Any], state: Mapping[str, Any], op: Mapping[str, Any]) -> tuple[dict[str, Any], dict[str, Any]]:
     """`op`'s decision on `state` by the stream's rules (`_Control`), and what they hold after it: `state` itself where
-    the op ends early, as the verifier of record's `Stream.run` gives them."""
+    the op ends early, as the verifier of record's `Stream.run` gives them. A halted stream refuses every op."""
     name = op.get("op") if isinstance(op, Mapping) else None
     if name not in _OPS:
         raise ValueError("an op is one of " + ", ".join(_OPS))
+    if state["halted"] is not None:
+        return {"refused": [HALTED], "detail": state["halted"]}, dict(state)
     c = _Control(params, state)
     try:
         return getattr(c, "_" + name)(op), c.state()
     except _Stop as s:
         return s.decision, dict(state)
+
+
+#: The ops of a fleet's rules, each `_FleetControl`'s method of that name.
+_FLEET_OPS = ("attach", "register", "failures")
+#: What the fleet's rules hold of an empty fleet.
+_FLEET_EMPTY = {"size": 0, "streams": [], "halted": []}
+
+
+class _FleetControl:
+    """A fleet's own rules, the reference for the verifier of record's (`SampledProofs.Fleet`, whose docstring has the
+    state and the ops): R5-all, each stream attached to its operator with its failure budget, and at the failure that
+    brings one to its budget the operator's halt, which names every stream attached to it. A refusal's `detail` is the
+    fleet's own, which the Lean doesn't write. `ValueError` is an op the Lean doesn't read."""
+
+    def __init__(self, state: Mapping[str, Any]) -> None:
+        self.s = copy.deepcopy(dict(state))
+
+    def _halt_of(self, operator: str) -> dict[str, Any] | None:
+        return next((h["cause"] for h in self.s["halted"] if h["operator"] == operator), None)
+
+    def _attached(self, op: Mapping[str, Any]) -> tuple[int, dict[str, Any]]:
+        i = op.get("stream")
+        if not (_nat(i) and i < len(self.s["streams"])):
+            _no("unattached", {"stream": i})
+        a = self.s["streams"][i]
+        if (cause := self._halt_of(a["operator"])) is not None:
+            _no(HALTED, cause)
+        return i, a
+
+    def _attach(self, op: Mapping[str, Any]) -> dict[str, Any]:
+        operator, budget = op.get("operator"), op.get("budget")
+        if not isinstance(operator, str):
+            raise ValueError("an operator is a string")
+        if not (_nat(budget) and budget >= 1):
+            raise ValueError("a failure budget is a positive integer")
+        if (cause := self._halt_of(operator)) is not None:
+            _no(HALTED, cause)
+        self.s["streams"].append({"operator": operator, "budget": budget})
+        return {"ok": len(self.s["streams"]) - 1}
+
+    def _register(self, op: Mapping[str, Any]) -> dict[str, Any]:
+        self._attached(op)
+        self.s["size"] += 1
+        return {"ok": self.s["size"] - 1}
+
+    def _failures(self, op: Mapping[str, Any]) -> dict[str, Any]:
+        i, a = self._attached(op)
+        if not _nat(f := op.get("failures")):
+            raise ValueError("failures is a count")
+        if f < a["budget"]:
+            return {"ok": None}
+        cause = {"operator": a["operator"], "stream": i, "at": self.s["size"]}
+        streams = [j for j, b in enumerate(self.s["streams"]) if b["operator"] == a["operator"]]
+        self.s["halted"].append({"operator": a["operator"], "cause": cause})
+        return {"ok": {"cause": cause, "streams": streams}}
+
+
+def _fleet_step(state: Mapping[str, Any], op: Mapping[str, Any]) -> tuple[dict[str, Any], dict[str, Any]]:
+    """`op`'s decision on `state` by the fleet's rules (`_FleetControl`), and what they hold after it: `state` itself
+    where the op ends early, as the verifier of record's `Fleet.run` gives them."""
+    name = op.get("op") if isinstance(op, Mapping) else None
+    if name not in _FLEET_OPS:
+        raise ValueError("an op is one of " + ", ".join(_FLEET_OPS))
+    c = _FleetControl(state)
+    try:
+        return getattr(c, "_" + name)(op), c.s
+    except _Stop as s:
+        return s.decision, dict(state)
+
+
+class Fleet:
+    """The challenger's streams across protocols and levels, each attached to its operator, the identity it registers
+    for, with the failure budget it runs under. Its rule is R5-all: at the failure that brings any stream of an operator
+    to its budget (its b-th), the operator halts. Every stream attached to it halts at once (`Stream.halted`): each
+    outcome of it not yet final ends as `halted`, never `accept`, outcomes already final stay, and each refuses every
+    call from then on. The fleet refuses a registration to a stream of a halted operator, and refuses to attach another
+    stream to it (`halted`).
+
+    Each registration the fleet admits has a fleet position, the number it admitted before; a halt's cause
+    (`halted`) names the operator, the stream whose failure halted it (its index, in the order attached) and the fleet
+    position then. The fleet's rules decide each op by their verifier of record (`verifier.fleet`: the Lean's
+    `SampledProofs.Fleet` against `_FleetControl`); where the two disagree the fleet stops, refusing every op after it
+    (`disagree`)."""
+
+    def __init__(self) -> None:
+        self._rules: dict[str, Any] = copy.deepcopy(_FLEET_EMPTY)
+        self._streams: list[Stream] = []
+        self._broken: Verdict | None = None
+
+    @property
+    def size(self) -> int:
+        """The registrations the fleet admitted: the next one's fleet position."""
+        return self._rules["size"]
+
+    @property
+    def halted(self) -> dict[str, dict[str, Any]]:
+        """Each halted operator's halt's cause, `{"operator", "stream", "at"}`."""
+        return {h["operator"]: h["cause"] for h in self._rules["halted"]}
+
+    def attach(self, stream: Stream, operator: str) -> int:
+        """Attach `stream`, before its first registration, to `operator` with its failure budget: its index. Raises
+        `ValueError` for a stream attached already or one that has registered, and `Refused` (`halted`) when the
+        operator halted."""
+        if stream._fleet is not None:
+            raise ValueError("the stream is attached to a fleet already")
+        if stream._rules["size"] or stream._entries:
+            raise ValueError("a stream is attached before its first registration")
+        i = Stream._held(self._decide({"op": "attach", "operator": operator, "budget": stream.budget}))["ok"]
+        if i != len(self._streams):
+            raise RuntimeError(f"the fleet's rules attach stream {i!r}, not the fleet's next")
+        self._streams.append(stream)
+        stream._fleet, stream._fleet_index = self, i
+        return i
+
+    def _decide(self, op: dict[str, Any]) -> dict[str, Any]:
+        if self._broken is not None:
+            raise Refused(self._broken)
+        d, after, v = V.fleet(self._rules, op, *_fleet_step(self._rules, op))
+        if not v.ok:
+            self._broken = v
+            raise Refused(v)
+        self._rules = after
+        return d
+
+    def _admit(self, stream: Stream) -> int:
+        """The registration's fleet position, or `Refused` (`halted`)."""
+        return Stream._held(self._decide({"op": "register", "stream": stream._fleet_index}))["ok"]
+
+    def _failed(self, stream: Stream) -> None:
+        """`stream` ended an outcome as a failure: at its budget, the operator halts, and so does every stream of it."""
+        d = Stream._held(self._decide({"op": "failures", "stream": stream._fleet_index, "failures": stream.failures}))
+        if d["ok"] is not None:
+            for j in d["ok"]["streams"]:
+                self._streams[j]._halt(d["ok"]["cause"])
 
 
 class Stream:
@@ -972,7 +1131,8 @@ class Stream:
     against `_Control`), the clock's readings as floats, on what they hold of the stream that the op reads (`_slice`: its
     counts and the entries it names). What they hold is the verifier of record's state after each op, from the empty
     stream, so an op is decided on a state of a bounded size whatever the stream's length. Where the two disagree the
-    stream stops: that op and every one after it is refused (`disagree`).
+    stream stops: that op and every one after it is refused (`disagree`). A stream attached to a `Fleet`
+    (`Fleet.attach`) is admitted by it at each registration and reports each failure to it, and halts with its operator.
 
     As its log grows, a stream keeps what one-stage's R6 and R7 read of it: where each window was logged, and each
     registered value's first registration. So a registration's checks read the same few records whatever the stream's
@@ -1024,10 +1184,18 @@ class Stream:
         self._records: list[dict[str, Any]] = []
         self._epoch_log: list[dict[str, Any]] = []
         self._salted_at: float | None = None
+        self._fleet: Fleet | None = None
+        self._fleet_index: int | None = None
 
     @property
     def failures(self) -> int:
         return self._rules["failures"]
+
+    @property
+    def halted(self) -> dict[str, Any] | None:
+        """The halt's cause once the stream's fleet halted its operator (`Fleet`), else None. A halted stream refuses
+        every call (`halted`)."""
+        return self._rules["halted"]
 
     @property
     def stopped(self) -> bool:
@@ -1049,7 +1217,7 @@ class Stream:
 
     @property
     def symbols(self) -> tuple[str, ...]:
-        """One symbol per final outcome, in order: `accept`, `reject` or `late`."""
+        """One symbol per final outcome, in order: `accept`, `reject`, `late` or `halted`."""
         return tuple(r["symbol"] for r in self._records)
 
     @property
@@ -1085,9 +1253,10 @@ class Stream:
 
     def _slice(self, op: Mapping[str, Any]) -> dict[str, Any]:
         """What the stream's rules hold that `op` reads: the counts, and the entries it names, with the first round of a
-        session that covers one."""
+        session that covers one; a halt names every open one."""
         entries = self._rule_entries
-        named = [op.get("order")] if "order" in op else [d[0] for d in op.get("draws") or ()]
+        named = list(self._rules["opened"]) if op.get("op") == "halt" else \
+            [op.get("order")] if "order" in op else [d[0] for d in op.get("draws") or ()]
         at: set[int] = set()
         for o in named:
             if _nat(o) and o < len(entries):
@@ -1178,9 +1347,10 @@ class Stream:
         than the deadline after the salt's release, or before any salt, is refused (`late-registration`, with both
         readings) whatever it holds, logged, and ends the epoch; an on-time one carries both readings
         (`Registration.salted_at`, `received_at`) and is logged with them. Raises
-        `Refused`: when the stream has stopped or its epoch ended (`epoch-ended`), while it holds as many registrations
-        without a final outcome as it may (`open`, `ready`), when it is late, when either check fails, or, after both,
-        when the law draws a count that varies (`shapes`, `count_varies`)."""
+        `Refused`: when the stream has stopped or halted (`halted`) or its epoch ended (`epoch-ended`), while it holds as
+        many registrations without a final outcome as it may (`open`, `ready`), when it is late, when either check fails,
+        or, after both, when the law draws a count that varies (`shapes`, `count_varies`) or its fleet refuses it
+        (`halted`)."""
         deadline = self.spec.check.registration_deadline
         op: dict[str, Any] = {"op": "register"}
         got: dict[str, Any] = {}
@@ -1202,6 +1372,11 @@ class Stream:
                 if v.ok and count_varies(law):
                     v = _refuse("shapes", {"law": law}).verdict
                 got.update(program=program, law=law, earlier=earlier)
+            if v.ok and self._fleet is not None:
+                try:
+                    self._fleet._admit(self)
+                except Refused as r:
+                    v = r.verdict
             got["checks"] = v
             if not v.ok:
                 return list(v.codes)
@@ -1374,7 +1549,9 @@ class Stream:
         entries = [self._entries[x.registration.order] for x in draws]
         for e in entries:
             e.sessions = list(sessions)
-        return tuple(self._finish(e, LATE, None, {}) for e in entries) if d["ok"] is not None else None
+        if d["ok"] is None:
+            return None
+        return self._reported(tuple(self._finish(e, LATE, None, {}) for e in entries))
 
     def deliver(self, draw: Draw | Session, sessions: Sequence[str]) -> Outcome | tuple[Outcome, ...] | None:
         """The firewall delivers the draw's proof, once: `sessions` are its session records' SHA-512, which the outcome
@@ -1391,7 +1568,7 @@ class Stream:
                                      "sessions": _session_digests(sessions)}, {"now": lambda: float(self._clock())}))
         e = self._entries[draw.registration.order]
         e.sessions = list(sessions)
-        return self._finish(e, LATE, None, {}) if d["ok"] == LATE else None
+        return self._reported(self._finish(e, LATE, None, {})) if d["ok"] == LATE else None
 
     def outcome(self, draw: Draw, verdicts: Mapping[str, Mapping[str, Any]], statement: Mapping[str, Any], *,
                 proved_units: Sequence[int] | None = None, instances: int | None = None, served: Sequence[int] | None = None,
@@ -1430,8 +1607,22 @@ class Stream:
         d = self._held(self._decide(op, {"now": lambda: float(self._clock()), "verdicts": held}), got.get("verdicts"))
         e = self._entries[draw.registration.order]
         if d["ok"] == LATE:
-            return self._finish(e, LATE, None, {})
-        return self._finish(e, d["ok"], got["audit"], got["public"] if d["ok"] == ACCEPT else {}, got["interior"])
+            return self._reported(self._finish(e, LATE, None, {}))
+        return self._reported(self._finish(e, d["ok"], got["audit"], got["public"] if d["ok"] == ACCEPT else {},
+                                           got["interior"]))
+
+    def _reported(self, outcome: _O) -> _O:
+        """`outcome`, one or a session's, once the stream's fleet has its failures (`Fleet`): at the stream's budget the
+        fleet halts the operator, and every stream of it."""
+        if self._fleet is not None and not all(o.accepted for o in (outcome if isinstance(outcome, tuple) else (outcome,))):
+            self._fleet._failed(self)
+        return outcome
+
+    def _halt(self, cause: Mapping[str, Any]) -> tuple[Outcome, ...]:
+        """The fleet halted the stream's operator, for `cause`: every registration without a final outcome ends now, in
+        order, as `halted`, with no failure of its own, and the stream refuses every call from then on."""
+        d = self._held(self._decide({"op": "halt", "cause": dict(cause)}))
+        return tuple(self._finish(self._entries[o], HALTED, None, {}, halt=cause) for o in d["ok"])
 
     def _audit(self, e: _Entry, draw: Draw, verdicts: Mapping[str, Mapping[str, Any]], statement: Mapping[str, Any],
                proved_units: Sequence[int] | None, instances: int | None, served: Sequence[int] | None,
@@ -1490,11 +1681,12 @@ class Stream:
         return rec, public, inner_rec
 
     def _finish(self, e: _Entry, symbol: str, audit: Mapping[str, Any] | None, public: Mapping[str, Any],
-                interior: Mapping[str, Any] | None = None) -> Outcome:
+                interior: Mapping[str, Any] | None = None, *, halt: Mapping[str, Any] | None = None) -> Outcome:
         reg, draw = e.registration, e.draw
-        assert draw is not None
+        assert draw is not None or symbol == HALTED
         body = {"format": OUTCOME, "stream": self.digest, "order": reg.order, "registration": reg.digest,
-                "receipt": _sha512(dict(reg.receipt)), "draw": _sha512(dict(draw.draw)), "sessions": e.sessions or [],
+                "receipt": _sha512(dict(reg.receipt)), "draw": None if draw is None else _sha512(dict(draw.draw)),
+                "sessions": e.sessions or [],
                 "symbol": symbol, "public": dict(public), "audit": None if audit is None else dict(audit),
                 "interior": None if e.interior is None else {
                     "registration": e.interior.digest, "receipt": _sha512(dict(e.interior.receipt)),
@@ -1502,11 +1694,13 @@ class Stream:
         if e.session is not None:
             body["session"] = {"rounds": [{"order": d.registration.order, "registration": d.registration.digest,
                                            "draw": _sha512(dict(d.draw))} for d in e.session.draws]}
+        if halt is not None:
+            body["halt"] = dict(halt)
         accepted = symbol == ACCEPT
         exhaustive = isinstance(self.spec.selection, All)
         e.outcome = Outcome(
             accepted=accepted,
-            verdict=Verdict(True) if accepted else Verdict(False, (symbol,), {symbol: _why(symbol, audit, interior)}),
+            verdict=Verdict(True) if accepted else Verdict(False, (symbol,), {symbol: _why(symbol, audit, interior, halt)}),
             profile=A.profile(reg.record, draw.draw, self.delta) if accepted and not exhaustive else None,
             exhaustive=Exhaustive(len(draw.draw["units"])) if accepted and exhaustive else None,
             terms=Terms(None if exhaustive else self.delta),
@@ -1516,7 +1710,10 @@ class Stream:
         return e.outcome
 
 
-def _why(symbol: str, audit: Mapping[str, Any] | None, interior: Mapping[str, Any] | None = None) -> Any:
+def _why(symbol: str, audit: Mapping[str, Any] | None, interior: Mapping[str, Any] | None = None,
+         halt: Mapping[str, Any] | None = None) -> Any:
+    if symbol == HALTED:
+        return dict(halt or {})
     if symbol == LATE:
         return "the proof was not delivered by the proof deadline"
     assert audit is not None
@@ -1528,6 +1725,7 @@ def _why(symbol: str, audit: Mapping[str, Any] | None, interior: Mapping[str, An
     return why
 
 
-__all__ = ["ACCEPT", "All", "Check", "Draw", "Exhaustive", "HIDING", "KINDS", "LATE", "Law", "Outcome", "PHASES", "Pending",
-           "Public", "REJECT", "ROUNDS", "Refused", "Registration", "SCHEME", "SOURCES", "Selection", "Sequential", "Session",
-           "Spec", "Stream", "Terms", "TwoStage", "Value", "check_public", "check_verdicts", "select_draw", "selection_law"]
+__all__ = ["ACCEPT", "All", "Check", "Draw", "Exhaustive", "Fleet", "HALTED", "HIDING", "KINDS", "LATE", "Law", "Outcome",
+           "PHASES", "Pending", "Public", "REJECT", "ROUNDS", "Refused", "Registration", "SCHEME", "SOURCES", "Selection",
+           "Sequential", "Session", "Spec", "Stream", "Terms", "TwoStage", "Value", "check_public", "check_verdicts",
+           "select_draw", "selection_law"]
