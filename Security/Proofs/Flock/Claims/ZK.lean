@@ -29,6 +29,7 @@ import Proofs.Flock.Claims.ZK.MaskFamily
 import Proofs.Flock.Claims.ZK.OneTape
 import Proofs.Flock.Claims.ZK.Round0
 import Proofs.Flock.Claims.ZK.ExeLayout
+import Proofs.Flock.Claims.ZK.Refusals
 import Proofs.Flock.Claims.ZK.Worker
 import Proofs.Flock.Claims.ZK.Switched
 import Proofs.Flock.Claims.ZK.Server
@@ -169,6 +170,11 @@ import Proofs.Flock.Claims.ZK.SamplingNonVacuous
   `0`). The layout agrees with it at round `0` (`Masked.agrees0_exe`), so `HonestPreOn` there is its rounds after the
   first (`Masked.honestPreOn_exe_of_pos`, `RefSession.HonestPreOnPos`), and `Flock.zk_deployZk_masked_exe_gap` is
   `Flock.zk_deployZk_masked_layout_gap` at this layout with round `0` discharged.
+* `Refusals`: the last round where a table refuses, at a stopping round plan (`RoundPlan.stop`, `off = []`), refusal by
+  refusal (`Masked.honestOffOn_stop_of`): an outer coin `1` is `honestPR_stop`'s at a plan reading each rep's outer
+  coins at their slots (`Masked.OuterReads`, `Masked.outerHit_of`); `β = 0`, a rank-deficient mask slot and `ρ₀, ρ₁`
+  dependent are one premise each. `Flock.zk_deployZk_masked_exe_stop_gap` is `Flock.zk_deployZk_masked_exe_gap` at a
+  stopping plan with them in place of `HonestOffOn`.
 * `Worker`: Lemma B at any clear values a worker supplies, which never read the pads: the switched prover (`p`'s view
   where its rows hold, else the honest prover's on the pads Lemma A moves) has `S_shvzk`'s distribution on the honest
   `InnerHolds` alone (`sw_shvzk`, `worker_shvzk`), and differs from `p`'s view only in `Y₁`, `C_h` and the pads tree
