@@ -112,7 +112,8 @@ theorem encodeW4a8_w4a8 (sa sw : ℕ → ℚ) (m : ℕ → ℕ → ℕ) (x y : �
 def offGrid : Leaves := ⟨fun _ _ => .fp8 0, fun _ _ => .fp8 103⟩
 
 theorem offGrid_inH1 : offGrid.InH1 :=
-  ⟨fun _ _ => ⟨by decide, by decide⟩, fun _ _ => ⟨by decide, by decide⟩⟩
+  ⟨fun _ _ => ⟨show (-126 : ℤ) ≤ 0 by decide, show (0 : ℤ) ≤ 126 by decide⟩,
+    fun _ _ => ⟨show (-110 : ℤ) ≤ 103 by decide, show (103 : ℤ) ≤ 110 by decide⟩⟩
 
 theorem offGrid_not_fp8 : ¬ offGrid.Fp8 Grids.h1 := by
   rintro ⟨-, h⟩
