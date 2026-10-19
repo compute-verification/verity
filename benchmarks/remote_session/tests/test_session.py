@@ -342,13 +342,47 @@ def test_the_check_workers_bound_each_windows_wrong_receipts_as_its_profile_does
         checks.close(wait=True)
 
 
+def logged_appends(monkeypatch) -> list:
+    """Each append the serving trace's records make, (step, first, count, root), in order."""
+    out, record = [], prover.ServingTrace.record
+
+    def logging(self, s, window, freed, writes, rekey=True):
+        n = len(self.appends)
+        change = record(self, s, window, freed, writes, rekey)
+        out.extend((s, a.first, a.count, a.root) for a in self.appends[n:])
+        return change
+
+    monkeypatch.setattr(prover.ServingTrace, "record", logging)
+    return out
+
+
+def heads_follow_the_steps(record: dict, appends: list) -> bool:
+    """Whether each pass's public head is the chain through `appends` of the steps below its own and the record's
+    chain is through them all, as the memory-map unit checks it (`RequirementLink.mapped`)."""
+
+    def chain(below: int) -> str | None:
+        head = None
+        for s, first, count, root in appends:
+            if s < below:
+                head = audit.append_head(head, first, count, root)
+        return None if head is None else head.hex()
+
+    pub, windows = record["public"], record["profile"]["windows"]
+    return pub["appends"] == chain(audit.STEP_LIMIT) and all(
+        h == chain(s) for w, hs in zip(windows, pub["heads"], strict=True) for s, h in zip(w["steps"], hs, strict=True))
+
+
 def test_kv_pages_past_the_lifetime_are_re_keyed_and_a_prover_that_keeps_them_is_rejected(monkeypatch):
     """Under L = 1 window, sent with the session, every appended page is stale in the window after the one it joined.
     The honest prover re-keys each before that window's first pass (writes its payload again in its slot, at a fresh
-    index) and is accepted. One that never re-keys is rejected at that pass's root (`lifetime`)."""
+    index) and is accepted, each pass's head the chain through the appends of the steps below its own, those of the
+    queued passes each boundary discards among them. One that never re-keys is rejected at that pass's root
+    (`lifetime`)."""
     monkeypatch.setattr(prover, "OPENINGS_PART", 4)
+    appends = logged_appends(monkeypatch)
     (r,), (p,) = run("kv:2", samples=8, kv_every=4, kv_pool=8, lifetime=1)
     assert r["accepted"] and p["accepted"] and r["record"]["public"]["lifetime"] == 1
+    assert appends and heads_follow_the_steps(r["record"], appends) and p["discarded"] > 0
     kv = p["kv"]
     assert kv["lifetime"] == 1 and kv["rekeyed"] > 0 and kv["appended"] == 2 * kv["steps"] + kv["rekeyed"]
     monkeypatch.setattr(prover.ServingTrace, "stale", lambda self, window: [])
@@ -400,11 +434,14 @@ def test_a_pipelined_session_with_serving_up_to_k_steps_past_its_passes_is_accep
     under L = 1 are re-keyed at each window's first pass: the session is accepted, no pass read a block serving had
     overwritten, serving ran more steps than there were passes, every pass read with serving at most k steps past its
     own and some at exactly k, and the fence held serving once: at the first step, whose write overwrites the pool's
-    filler in place and waits on its own step's pass (the filler the next k + 1 steps write is freed there)."""
+    filler in place and waits on its own step's pass (the filler the next k + 1 steps write is freed there).  Each
+    pass's head is the chain through the appends of the steps below its own, the steps serving ran past among them."""
     monkeypatch.setattr(prover, "OPENINGS_PART", 4)
+    appends = logged_appends(monkeypatch)
     (r,), (p,) = run("kv:1", windows=2, samples=16, kv_every=1, kv_pool=8, lifetime=1, ahead=k, fill=True,
                      kv_headroom=k + 1)
     assert r["accepted"] and p["accepted"] and r["failure"] is None and p["misread"] == []
+    assert appends and heads_follow_the_steps(r["record"], appends)
     a, kv = p["ahead"], p["kv"]
     assert all(0 <= lead <= k for lead in a["leads"]) and max(a["leads"]) == k and a["fence_waits"] == 1
     assert len(a["leads"]) == sum(p["passes"]) + p["discarded"] < a["steps"]

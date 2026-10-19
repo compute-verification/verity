@@ -391,6 +391,8 @@ Coordinators are launched, handed over and archived from Daniel's laptop with `i
 - Lean: `.agents/skills/lean-proofs/SKILL.md`.
 - GPU kernel work (PoUW kernels on sm_120): `.agents/skills/kernel-engineering/SKILL.md`.
 - When something gets in your way, and the rulings: `.agents/skills/friction/SKILL.md`.
+- Asking Daniel for a decision (a page in the Asks for Daniel Notion database, and its `#ask-daniel` card):
+  `.agents/skills/asking-daniel/SKILL.md`.
 - Before adding, changing or retiring a process (a rule here or in the lane contract, a gate in `check` or
   `research merge`, a required review, a file every PR must update), assess its effect on research velocity:
   `.agents/skills/process-design/SKILL.md`.
