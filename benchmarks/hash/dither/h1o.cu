@@ -20,6 +20,7 @@
 // density.
 #include "h1r.cu"
 #include <cuda_bf16.h>
+#include <time.h>
 
 struct H1O {
   int8_t* slot[2];      // A slots [T, K] s8
@@ -276,6 +277,59 @@ extern "C" int h1o_ref_launch(const H1Call* call_dev, int units, const u64* seed
   h1o_ref_k<<<(unsigned)units, 32, 0, stream>>>(call_dev, seeds, nt[0], nt[1], nt[2], zref, n, wbc);
   return (int)cudaGetLastError();
 }
+
+// ASK-64's perCall measurement (labelled `percall-rtt`, measured only): between a call's A table and its units, the A
+// root to the host, a host function that holds the stream one challenger round, and a 64-byte coin back to the device,
+// all three on the caller's stream, so a captured graph keeps them (memcpy nodes and a host node).  The round is
+// simulated: the host function spins for the next of the waits h1o_percall_init took (the measured round trips, replayed
+// in order), and the coin it writes is a stand-in (the root, xored) that no unit reads; the stream order holds the units
+// behind the copy, as reading it would.
+struct PcArg {
+  const unsigned char* root;
+  unsigned char* coin;
+};
+static unsigned char* pc_host = nullptr;   // pinned, per linear: the root's 64 bytes, then the coin's
+static PcArg* pc_arg = nullptr;
+static long long* pc_ns = nullptr;
+static int pc_l = 0, pc_n = 0;
+static unsigned long long pc_i = 0, pc_done = 0;
+
+static void CUDART_CB pc_wait(void* p) {
+  const PcArg* a = (const PcArg*)p;
+  const unsigned long long i = __atomic_fetch_add(&pc_i, 1ull, __ATOMIC_RELAXED);
+  const long long ns = pc_ns[i % (unsigned long long)pc_n];
+  if (ns > 0) {
+    timespec t0, t;
+    clock_gettime(CLOCK_MONOTONIC, &t0);
+    do clock_gettime(CLOCK_MONOTONIC, &t);
+    while ((t.tv_sec - t0.tv_sec) * 1000000000ll + (t.tv_nsec - t0.tv_nsec) < ns);
+  }
+  for (int j = 0; j < 64; ++j) a->coin[j] = a->root[j] ^ 0x5a;
+  __atomic_fetch_add(&pc_done, 1ull, __ATOMIC_RELEASE);
+}
+
+// before any capture: L linears' pinned slots, and the n waits (ns) the host function replays
+extern "C" int h1o_percall_init(int L, const long long* ns, int n) {
+  if (L <= 0 || n <= 0 || pc_host) return 1;
+  if (cudaHostAlloc((void**)&pc_host, (size_t)L * 128, cudaHostAllocDefault) != cudaSuccess) return 2;
+  pc_arg = new PcArg[L];
+  for (int w = 0; w < L; ++w) pc_arg[w] = {pc_host + 128 * w, pc_host + 128 * w + 64};
+  pc_ns = new long long[n];
+  for (int i = 0; i < n; ++i) pc_ns[i] = ns[i];
+  pc_l = L, pc_n = n;
+  return 0;
+}
+
+extern "C" int h1o_percall_launch(int w, const void* root_dev, void* coin_dev, cudaStream_t stream) {
+  if (!pc_host || w < 0 || w >= pc_l) return 1;
+  cudaMemcpyAsync(pc_host + 128 * w, root_dev, 64, cudaMemcpyDeviceToHost, stream);
+  cudaLaunchHostFunc(stream, pc_wait, &pc_arg[w]);
+  cudaMemcpyAsync(coin_dev, pc_host + 128 * w + 64, 64, cudaMemcpyHostToDevice, stream);
+  return (int)cudaGetLastError();
+}
+
+// the rounds the host function has served so far (graph replays included)
+extern "C" unsigned long long h1o_percall_done() { return __atomic_load_n(&pc_done, __ATOMIC_ACQUIRE); }
 
 extern "C" int h1o_struct_bytes(int which) { return which == 0 ? (int)sizeof(H1O) : (int)sizeof(H1OStep); }
 extern "C" int h1o_fault_shift() { return FAULT_SHIFT; }

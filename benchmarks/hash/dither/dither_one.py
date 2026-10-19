@@ -44,6 +44,8 @@ CAPTURES = ("gate", "control", "fault", "fault_wb")
 LIB_ENV = "DITHER_H1O"
 UNITS_ENV = "DITHER_UNITS"
 UNITS_FORMS = {"block": "h1o_unitsb_launch", "warp": "h1o_units_launch"}   # h1o.cu's two forms of the same units
+# ASK-64's perCall, measured only: a file of waits (ns, one a line; "0": no wait) that h1o_percall replays, a call each
+PERCALL_ENV = "DITHER_PERCALL"
 LIB = "dither1"
 REG = DF.REG
 CFG: dict = {}
@@ -115,6 +117,17 @@ class Window:
                                   C.c_void_p, C.c_void_p, C.c_void_p, C.c_void_p, C.c_void_p, C.c_void_p]
         if self.o.h1o_struct_bytes(0) != C.sizeof(_O) or self.o.h1o_struct_bytes(1) != 16:
             raise RuntimeError("h1o.cu's structs differ from dither_one's")
+        self.percall = None
+        pc = os.environ.get(PERCALL_ENV)
+        if pc:
+            ns = [0] if pc == "0" else [int(x) for x in open(pc).read().split()]
+            if self.o.h1o_percall_init(L, (C.c_longlong * len(ns))(*ns), len(ns)):
+                raise RuntimeError("h1o_percall_init refused")
+            self.o.h1o_percall_launch.argtypes = [C.c_int, C.c_void_p, C.c_void_p, C.c_void_p]
+            self.o.h1o_percall_done.restype = C.c_ulonglong
+            self.coin = torch.zeros(L * 64, dtype=torch.uint8, device=dev)
+            self.percall = {"waits": pc, "n": len(ns), "mean_us": round(sum(ns) / len(ns) / 1e3, 3),
+                            "p50_us": sorted(ns)[len(ns) // 2] / 1e3}
         self.call_bytes = self.r.lib.h1r_call_bytes()
         self.tab_bytes = C.sizeof(H1CM._Tab)
         tab = (_O * L)()
@@ -193,7 +206,8 @@ class Window:
     def launch(self, w: int, xq: torch.Tensor, s_a: torch.Tensor, s_w: torch.Tensor, y: torch.Tensor,
                z: torch.Tensor) -> None:
         st = torch.cuda.current_stream().cuda_stream
-        rc = self.a_call(w, xq, s_a, st) or self.units_call(w, xq, s_a, s_w, y, z, st)
+        rc = (self.a_call(w, xq, s_a, st) or (self.percall is not None and self.coin_call(w, st))
+              or self.units_call(w, xq, s_a, s_w, y, z, st))
         if rc:
             raise RuntimeError(f"dither1 call {w} (M={xq.shape[0]}): a launch returned {rc}")
         self.calls += 1
@@ -203,6 +217,10 @@ class Window:
         return self.c.lib.h1c_a_call(C.addressof(a.host) + tb, a.dev.data_ptr() + tb,
                                      self.apre.data_ptr() + 8 * self.awords * w, self.S.data_ptr(), xq.data_ptr(),
                                      s_a.data_ptr(), self.slot[w].data_ptr(), self.scale[w].data_ptr(), self.nk[w][1], st)
+
+    def coin_call(self, w: int, st: int) -> int:
+        """root(A_w) to the host, one challenger round's wait, a coin back (`h1o_percall_launch`)."""
+        return self.o.h1o_percall_launch(w, self.pre["mid"].leaves_addr(0) + 64 * w, self.coin.data_ptr() + 64 * w, st)
 
     def units_call(self, w: int, xq: torch.Tensor, s_a: torch.Tensor, s_w: torch.Tensor, y: torch.Tensor,
                    z: torch.Tensor, st: int) -> int:
@@ -289,8 +307,9 @@ class Window:
         med = {str(m): {"steps": len(xs), **{k: round(float(np.median([x[k] for x in xs if k in x])), 4)
                                              for k in dict.fromkeys(k for x in xs for k in x) if k != "m"}}
                for m, xs in sorted(by.items(), key=lambda kv: -len(kv[1]))[:4]}
+        pc = None if self.percall is None else {**self.percall, "rounds_served": int(self.o.h1o_percall_done())}
         return {"steps": self.steps, "one_calls_eager": self.calls, "t": self.t, "s": self.s, "epsilon": "seeded",
-                "units_form": self.units_form, "phases_by_m": med}
+                "units_form": self.units_form, "percall": pc, "phases_by_m": med}
 
 
 # -- the op and the patch --------------------------------------------------------------------------------------------------
