@@ -1,9 +1,9 @@
 ---
 name: friction
 description: >
-  What to do when a tool, rule, check or step gets in your way in Verity: fix it yourself, ask Daniel only when it is money,
-  keys or a claim, record his ruling so nobody asks the same question twice, or leave a short friction note
-  when you can't fix it now. Holds the rulings so far on which changes an agent makes without asking (spend, gates in
+  What to do when a tool, rule, check or step gets in your way in Verity: fix it yourself, ask Daniel only when it is keys
+  or a claim (spend, cloud workers included, is the lead's call), record his ruling so nobody asks the same question
+  twice, or leave a short friction note when you can't fix it now. Holds the rulings so far on which changes an agent makes without asking (spend, gates in
   `check`, tests, shared tools, other lanes' work) and the `kind: friction` note format with its `severity: incident` flag.
   Use when you worked around something, a step bit you twice, you see a better abstraction, you're unsure whether a change
   is yours to make, you just got a ruling from Daniel, you're the coordinator reading friction notes, or a command fails for
@@ -103,12 +103,15 @@ the note in its report, and its coordinator saves it. The notes are public: noth
 
 **The admin's pass.** The admin (`@top`) reads new friction notes once a day in its existing loop
 (`research notes mcp`, `search_notes` with `kind: friction` and `since`). It turns a repeat into a fix assigned to its owner.
-Only a repeat whose fix needs money, keys or a claim becomes a question for Daniel.
+Only a repeat whose fix needs keys or a claim becomes a question for Daniel.
 
 ## Rulings so far
 
 Newest first. Each is Daniel's unless it names the coordinator.
 
+- 2026-10-18 (9:59 PM PDT, to compute-accounting): using cloud workers is totally fine, and nobody asks him again;
+  he had been asked for 24 hours. Every lead, its cloud workers and its subagents work from one text, AGENTS.md "Use
+  cloud workers freely", which is also the explicit request Cursor's Task tool wants before `environment: "cloud"`.
 - 2026-10-19 (04:49Z, to circuits): fix landing throughput and silent agents, whatever it takes, without old CI
   habits. Rolled out as AGENTS.md "Stay reachable" and "Landing is drive's"; the two-open-PR cap is retired.
 - 2026-10-18 (8:47 AM PDT): every ask is a short Notion page in the Asks for Daniel database (the problem explained, LaTeX
@@ -151,13 +154,8 @@ Newest first. Each is Daniel's unless it names the coordinator.
   handle and do no work — then are archived. The admin enforces all of it: audits for splits, assigns each a fate, and
   tells Daniel when an abstraction fails, is abused or turns into red tape.
 - 2026-10-14 (11:34 AM PDT, broadening his 10:14 AM ruling): every coordinator and worker opens and edits its own PRs
-  with no approval step, through Cursor's PR tool or gh through the broker, whichever works (for a branch other than
-  the agent's own run branch, which the PR tool refuses: `research queue open --head BRANCH --title T --body-file F`,
-  which goes through the broker and refuses a duplicate or a moved head). Waiting on dashboard
-  clicks cost about six hours across fourteen finished PRs overnight on 14 Oct; the launcher no longer pins PR
-  creation off per run. A cloud agent whose launch-time run rules still gate both paths registers the request and
-  posts the exact payload where it registered it, so a capable hand opens it without a duplicate; the ruling reaches
-  such an agent at its next launch.
+  with no approval step, now with `research queue open` (AGENTS.md "Landing is drive's"). Waiting on dashboard clicks
+  cost about six hours across fourteen finished PRs overnight on 14 Oct.
 - 2026-10-13 (11:01 PM PDT, cards 2e0ff59b and 54bd993d): a guarantee's checked family may fold in a check the compiled
   verifier already runs, and a new fail-closed refusal modelled the same way: the statement moves toward what the
   verifier refuses, and the landing DM shows the moved records. The same night: a free statement parameter whose
