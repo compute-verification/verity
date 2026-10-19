@@ -376,6 +376,9 @@ class LmHead:
         self.lin = StackLinear(st, "lm_head", w, None, bf=True)
         self.part = torch.empty(self.lin.nch * MAX_ROWS * self.v, dtype=torch.float32, device="cuda")
         self.out = torch.empty((MAX_ROWS, self.v), dtype=torch.bfloat16, device="cuda")
+        # every graph's input, made here: a buffer allocated at a graph's lazy capture would stay in the allocator's
+        # pool mid-serve, taking room the next prefill then cudaMallocs beside the filler
+        self.xs = torch.empty((MAX_ROWS, self.h), dtype=torch.bfloat16, device="cuda")
         self.ones = torch.ones(1, dtype=torch.float32, device="cuda")
         self.graphs: dict[tuple, tuple] = {}
         self.cap = None
@@ -386,7 +389,7 @@ class LmHead:
 
     @property
     def scratch_bytes(self) -> int:
-        return self.part.numel() * 4 + self.out.numel() * 2
+        return self.part.numel() * 4 + self.out.numel() * 2 + self.xs.numel() * 2
 
     def run(self, x: torch.Tensor, commit: bool) -> torch.Tensor:
         """Logits of x (m <= MAX_ROWS BF16 rows, contiguous) into self.out[:m]; commit writes at the pass's offset."""
@@ -416,7 +419,8 @@ class LmHead:
             key = (m, commit, self.lin.at[st.pass_m] if commit else 0)
             g = self.graphs.get(key)
             if g is None:
-                xs = x2.clone()
+                xs = self.xs[:m]
+                xs.copy_(x2)
                 self.run(xs, commit)
                 torch.cuda.synchronize()
                 graph = torch.cuda.CUDAGraph()
