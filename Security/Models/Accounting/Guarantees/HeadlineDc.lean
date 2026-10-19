@@ -29,8 +29,11 @@ against 1074 (DC-100-ri); on the sheets' `π*` an IMAD costs ½ and its 32 ALU 4
 
 Binding is taken in its fork form at `δ_fork` (`BindingForkAt`, the 8 Oct ruling's, no advantage bound) and read at
 `√δ_fork` (`BindingOfFork`), so the budget asks `δ_fork ≤ (2^-41/48,000)²` a round; no ε moves (RT2-LOGIC-2). The proof
-service's other pieces are named premises too: proof soundness (`ProofSoundAt`) and the Definitions' pinning
-(`ProofsPin`), beside `RightFixed`. `ProofLayer.Of` and `ReceiptGame.Pinned` stay hypotheses over `Definitions/`.
+service's other pieces are named premises too: proof soundness (`ProofSoundAt`, which C-Flock's bound doesn't discharge
+until it states the rows link) and the Definitions' pinning (`ProofsPin`, which no Lean checks of the served relations:
+`PouwSegCheck_v2` lacks it, PIN's checks of #2417 recompute every word they absorb), beside `RightFixed` (RT3-LOGIC-3).
+`ProofLayer.Of` and `ReceiptGame.Pinned` stay hypotheses over `Definitions/`. Both measured readings are at A6's proved
+½ floors, so RT3-LOGIC-2's caveat on sm_120's measured `9/8` floors has no counterpart here.
 
 **What ♭ credits: only work a check reads** (RT-LOGIC-12, decision 99). That is the fold the served unit's Definition
 recomputes, and a filler only at the theorem its check meets. `PouwWarpCheck`'s LI absorbs H1's call words with plain
