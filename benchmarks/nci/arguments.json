@@ -359,12 +359,13 @@
    ],
    "title": "Boundary width is the attacker's choice",
    "mechanism": "Subspace-confined residuals cut a crossing about 140x at 1T; joint coding may cut more until the per-step optimizer-state floor.",
-   "effect": "achievable efficiency rises from about 1e-7 to about 1e-5 (one group's results to 8.6B)",
+   "effect": "achievable efficiency rises from about 1e-7 to about 1e-5 (one group's results to 8.6B, if its m stays about 1; a matched-token replication at only 8x loses 14-15% in loss at 1B, m about 0.04)",
    "repair": "Measure boundary rate-distortion at scale; price the construction over codes.",
    "refs": {
     "findings": [
      "ramasinghe-2025-protocolmodels/1",
-     "ryabinin-2023-swarm/2"
+     "ryabinin-2023-swarm/2",
+     "janson-2026-mapl/3"
     ],
     "algorithms": [
      "subspace-activation-compression"

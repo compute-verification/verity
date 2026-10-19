@@ -203,8 +203,8 @@ All values below are from `parameters.json`; render the index for the findings b
 - **Activations set the floor.**
   - Production systems send 8-bit activations across parallel links. The one boundary test in training is stable only
     from about 4.4 bits (`b_a.activation/boundary-training`).
-  - Retrained bottlenecks cut the bits a token carries across a shard boundary by 2–4x, and one unreplicated preprint
-    claims 100x (`activation.boundary_bits/d7168`).
+  - Retrained bottlenecks cut the bits a token carries across a shard boundary by 2–4x. One preprint claims 100x, and
+    its matched-token replication loses 14–15% in loss at only 8x (`activation.boundary_bits/d7168`).
   - The sharding floor is about `w_cut / b_tok`: centrally 7e2, and 60 at the most aggressive claim.
 - **Tokens are the auditor's lever.**
   - Raw token ids carry about 17.3 bits. Arithmetic-coded against a committed base model they carry about 2.2
