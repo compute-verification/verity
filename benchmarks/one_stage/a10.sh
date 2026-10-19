@@ -46,9 +46,14 @@ fetch() {   # fetch ART DEST [GLOB...]: ART's files (those matching the globs) u
   R data fetch "$art" --to "$dest" "${paths[@]}" >> "$OUT/fetch.log" 2>&1 && touch "$dest.done"
 }
 
+build_python_torch() {   # build_python_torch DEST: build_python's venv with CPU torch (the replay's `tp.commit` imports it)
+  build_python "$1" && uv pip install -q --python "$1/bin/python" --index-url https://download.pytorch.org/whl/cpu "torch>=2.4"
+}
+
 case ${A10_MODE:?} in
 values)
-  PY=$(cached venv numpy2.5.3-blake3-1.0.9 build_python)/bin/python
+  PY=$(cached venv numpy2.5.3-blake3-1.0.9-torch-cpu build_python_torch)/bin/python
+  [ -x "$PY" ] || { log "a10: no venv"; tail -20 "$OUT/build-venv.log"; exit 2; }
   log "a10: fetching into $C"
   fetch "$BUNDLE" "$C/bundle" &
   fetch "$ROWMETA" "$C/rowmeta" 'commit/runs.jsonl' 'commit/replay_deferred.json' 'commit/summary.json' &
