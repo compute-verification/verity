@@ -474,3 +474,54 @@ def test_uniform_write_census_is_idempotent(tmp_path):
     import tomllib
     assert tomllib.loads((dev / "vectors" / "DC-90.toml").read_text())["rows"].count("UP") == 1
     assert len(census.uniform_kept(dev, "census.csv", "kind")) == 2 and len(census.uniform_kept(dev, "rows.csv", "row")) == 1
+
+
+def _a2u_out(root: Path, i64_trips: int) -> Path:
+    """sm100_a2u's output for a2_tc_i0 and a2_tc_i64: each a fixed loop (4 UTCIMMA and its uniform chain) and an until loop
+    (the lanes and the stop poll, an LDS), with an instruction outside either, at a 2^20-cycle stop that holds the tensor
+    pipe exactly (2048 trips of 4 MMAs at 128 clocks). a2_tc_i64's lanes run `i64_trips` trips summed over the 31 until
+    warps; a2_tc_i0's run 32703, so its block issues 4 a cycle with one trip a warp dropped."""
+    until = {"IADD3": 64, "FFMA": 63, "LDS": 1, "NOP": 1}
+    fixed = {"a2_tc_i0": {"UTCIMMA": 4, "UIADD3": 1, "UISETP.NE.AND": 1, "NOP": 2},
+             "a2_tc_i64": {"UTCIMMA": 4, "UIMAD": 32, "ULOP3.LUT": 32, "UIADD3": 1, "UISETP.NE.AND": 1}}
+    trips = {"a2_tc_i0": 32703, "a2_tc_i64": i64_trips}
+    out = root / "out"
+    (out / "sass").mkdir(parents=True)
+    (out / "probes").mkdir()
+    sass, verdicts, times = [], [], []
+    for name, fx in fixed.items():
+        order = [until, fx] if name == "a2_tc_i64" else [fx, until]
+        ops, loops = ["S2R R0, SR_TID.X"], []
+        for counts in order:
+            head = 16 * (len(ops) + 1)
+            ops += [f"{op} R1" for op, n in counts.items() for _ in range(n)]
+            loops.append({"head": hex(head), "tail": hex(16 * len(ops))})
+        ops.append("EXIT")
+        sass.append(f"\t\tFunction : {name}\n" + "\n".join(f"        /*{16 * (i + 1):04x}*/   {op} ;   /* 0x0 */"
+                                                           for i, op in enumerate(ops)))
+        verdicts.append({"binary": "sm100_a2u", "probe": name, "verdict": {"loops": loops}})
+        times += [json.dumps({"op": "time", "probe": name, "iters": 2048, "trips": [trips[name]] * 2,
+                              "stop": [2 ** 20] * 2, "sm_mhz": {"during": 1965, "after": 1965}, "throttle": "0x0"})] * 3
+    (out / "sass" / "sm100_a2u.sass").write_text("\n".join(sass) + "\n")
+    (out / "gate-build.json").write_text(json.dumps({"verdicts": verdicts}))
+    (out / "probes" / "times.jsonl").write_text("\n".join(times) + "\n")
+    return out
+
+
+def test_a2u_issue_bound_and_uniform_price(tmp_path):
+    """A2u's test on synthetic timings. Where each added uniform instruction takes an issue slot from the saturated lanes,
+    the block issues one warp instruction an SMSP-cycle and the uniform price is 1; where the uniform datapath issues
+    beside the lanes for free, the block issues 1 + 1/32 and A2u fails at price 0. One trip over 1 at the stop's boundary
+    still holds. NOP is left out of `issue_low` and the instruction outside the loops out of every count; the until loop
+    is told by its stop poll in either order."""
+    a2 = _load("a2u")
+    tight = a2.analyze(_a2u_out(tmp_path / "tight", 31679))
+    base, i64 = tight["probes"]["a2_tc_i0"], tight["probes"]["a2_tc_i64"]
+    assert base["until"] == {"IADD3": 64, "FFMA": 63, "LDS": 1, "NOP": 1} and i64["fixed_uniform_a_trip"] == 66
+    assert tight["a2u_holds"] and abs(tight["max_issue_low"] - 1) < 1e-12 and abs(base["tensor"] - 1) < 1e-12
+    assert abs(i64["uniform_price"] - 1) < 1e-12 and base["issue"] > base["issue_nonop"]
+    free = a2.analyze(_a2u_out(tmp_path / "free", 32703))
+    assert not free["a2u_holds"] and abs(free["max_issue_low"] - 1.03125) < 1e-12
+    assert abs(free["probes"]["a2_tc_i64"]["uniform_price"]) < 1e-12
+    edge = a2.analyze(_a2u_out(tmp_path / "edge", 31680))
+    assert edge["a2u_holds"] and 1 < edge["max_issue_low"] < 1 + a2.TOL
