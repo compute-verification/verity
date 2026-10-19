@@ -168,7 +168,7 @@ RUNNER_PREFIX, RUNNER_ENV = "RESEARCH_", ("PYTHONPYCACHEPREFIX",)
 #: step (its `lean-suites`), and on its own this runs that build before them, so they run or skip alike in both
 AFTER_LEAN = ("verity-flock", "verity-lean-audit", "verity-difftest", "pous-check", "core-identity", "verity-core-composition",
               "verity-core-evaluate", "verity-core-firewall",
-              "verity/core/service/vstar", "verity-core-sampled-proofs",
+              "verity/core/service/vstar", "verity/core/service/sigma", "verity-core-sampled-proofs",
               "verity/core/protocols/remote_bandwidth/lean",
               "verity/core/protocols/network", "verity-pouw-window-difftest",
               "verity-pouw-check-difftest", "memory-challenger-lean", "benchmarks/pous",
