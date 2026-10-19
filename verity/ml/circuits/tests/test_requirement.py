@@ -9,8 +9,10 @@ from itertools import chain, combinations
 import numpy as np
 import pytest
 
+from test_census import programs, request
 from verity.ml.circuits import boundary
 from verity.ml.circuits import requirement as R
+from verity.ml.circuits.census import census, step_ends
 from verity.ml.circuits.defs import CompositeDefinition, PrimitiveDefinition
 from verity.ml.circuits.ops import fp32
 from verity.ml.circuits.parts import Part, n_members
@@ -166,6 +168,83 @@ def test_past_the_executed_prefix_nothing_runs(run):
     assert req.to_json() == {"steps": 2, "live_bits": [320, 384], "read_bits": [128, 192], "registered_bits": 320}
     assert req.last[19] == req.born[19] == 1 and 21 not in req.last
     assert not {19, 21} & (req.live(1) | req.live(2))
+
+
+def _starts(program: Program, ends: list[int]) -> list[int]:
+    """A census's step ends (root nodes) as `Schedule.by_calls`'s starts (Calls)."""
+    return [0] + [e - sum(1 for nd in program.root.body.nodes if is_input(nd.fn)) for e in ends[:-1]]
+
+
+def _span(req: R.Requirement, v: int) -> tuple:
+    """A value's birth and its last read after it (a read in its own step, such as a scan's carry, keeps nothing live)."""
+    b, last = req.born.get(v), req.last.get(v)
+    return b, last if last is not None and b is not None and last > b else None
+
+
+def _census_path(program: Program, ends: list[int]) -> R.Requirement:
+    """`from_census` is `upper_bound` at the census's grain: each census value's gates have its birth and last read, and
+    every step's live gates and bounded reads are its values'."""
+    c = census(program, ends)
+    schedule = R.Schedule.by_calls(program, _starts(program, ends))
+    by_census, by_gates = R.from_census(c, schedule), R.upper_bound(program, schedule)
+    gates = lambda vs: R.census_gates(program, c, vs)  # noqa: E731
+    assert R.census_offsets(c) == list(program.root.body.offsets) and R.from_census(c) == by_census
+    assert gates(by_census.registered) == by_gates.registered
+    for x in range(len(c["values"]["producer"])):
+        assert {_span(by_gates, g) for g in gates([x])} <= {_span(by_census, x)}
+    for t in range(by_gates.steps):
+        assert gates(by_census.live(t)) == by_gates.live(t) and gates(by_census.reads_upper(t)) == by_gates.reads(t)
+    want = by_gates.to_json()
+    if not all(by_census.resolved(t) for t in range(by_census.steps)):
+        want["read_bits_upper"] = want.pop("read_bits")
+    assert by_census.to_json() == want
+    return by_census
+
+
+@pytest.mark.parametrize("label,P", [("decoder", decoder()[0]), *programs()], ids=lambda x: x if isinstance(x, str) else "")
+def test_the_census_path_is_the_expansion(label, P):
+    """On every test Program, with every Call its own step and with one step for all."""
+    calls = [k + 1 for k, nd in enumerate(P.root.body.nodes) if not is_input(nd.fn)]
+    for ends in (calls, calls[-1:]):
+        _census_path(P, ends)
+
+
+def test_the_decoders_census_path(run):
+    """At the decoder's steps: the requirement of `test_the_decoders_requirement`, with its gathers' reads bounded (the
+    whole embedding, 256 bits) and refused, since a census holds no run values."""
+    program, starts, _, req = run
+    nodes = program.root.body.nodes
+    calls = [k for k, nd in enumerate(nodes) if not is_input(nd.fn)]
+    got = _census_path(program, [calls[s] for s in starts[1:]] + [len(nodes)])
+    assert got.to_json() == {"steps": 3, "live_bits": [320, 384, 416], "read_bits_upper": [320, 384, 416], "registered_bits": 320}
+    assert all(got.read_bits_upper(t) - req.read_bits(t) == 6 * 32 for t in range(3))
+    with pytest.raises(ValueError, match="reads_upper"):
+        got.read(0, 1)
+
+
+def test_the_request_census_path():
+    """`test_census.request` at its sampling steps: weights live throughout, a KV row from the step after its write to its
+    last attention, a sampled token into the step that embeds it, the prompt token never (it arrives with step 0); the
+    table's selection leaves every step's reads bounded."""
+    P = request()
+    got = _census_path(P, step_ends(P, {"TSelect_v1"}))
+    assert got.to_json() == {"steps": 3, "live_bits": [1088, 1184, 1248], "read_bits_upper": [1088, 1184, 1248],
+                             "registered_bits": 1088}
+    assert not any(got.resolved(t) for t in range(3))
+
+
+def test_a_split_call_another_schema_and_an_approximate_census_are_refused():
+    program = request()
+    c = census(program)
+    schedule = R.census_schedule(c)
+    lo, hi, s = next(r for r in schedule.ranges if r[1] - r[0] > 1)
+    split = R.Schedule(tuple(r for r in schedule.ranges if r[0] != lo) + ((lo, lo + 1, s), (lo + 1, hi, s)))
+    with pytest.raises(ValueError, match="splits root gates"):
+        R.from_census(c, split)
+    with pytest.raises(ValueError, match="verity/census/v1"):
+        R.from_census(c | {"schema": "verity/census/v0"})
+    with pytest.raises(ValueError, match="approximate"):
+        R.from_census(c | {"approximate": True})
 
 
 def test_a_gather_needs_the_runs_inputs(run):
