@@ -3,35 +3,39 @@ position is cut at, and the shape check that refuses a layout the padded-credit 
 unit and position is a function of the public shape (`window.Call`) and the tile template's depth, so the check runs
 once per shape, before any value exists, and reads no value.
 
-The rule is PADCREDIT's (`note:compute-accounting/20261018T2200Z-draft-padded-credit-rule`, §8 and §9), with W5's
-round-3 findings (`note:compute-accounting/20261018T2310Z-finding-padded-credit-r3`):
+The rule is PADCREDIT's (`note:compute-accounting/20261018T2200Z-draft-padded-credit-rule`, §8 to §10, its
+implementation spec §10.9), with W5's round-3 findings
+(`note:compute-accounting/20261018T2310Z-finding-padded-credit-r3`).
+Each refusal is ``window-form: <kind>``, by §10.9's names:
 
 - **The commit order** (`PHASES`).  The registration holds each weight row B_j with ok_B,j, and each call's
   S_B = Σ_j ok_B,j; then the salt; then the epoch's B formings, whose anchors derive from seed_b = H(salt ‖ root_B);
   then the activation commitment, one leaf per slot holding its raw row x_i, ok_A,i and admit_i, which the A side's
   noise seed hashes; then that noise; then the A formings; then the tiles and the tally; then the draw.  A gate is cut
   before the noise of the operand it gates (`late-selection`).
-- **The formings** are rowk's pieces at the template's depth (`rowk.PORTS8`, cut every `rowk.ROW_K`): each piece reads
-  only its raw row, anchors and its row's earlier pieces' outputs, and the tail writes the formed row a tile reads
-  (`unclosed-forming`, `operand-after-certificate`).  Each tile operand is gated by a certificate of the raw row its
-  forming reads, computed from that row or registered with it (`uncertified-operand`, `uncomputed-certificate`).  An
-  anchor is a public input region the verifier recomputes under its rule's id (`rowk.DERIVATIONS8`), read only by
-  formings (`unpinned-anchor`).  Under h3, E_A is no anchor, since its seed hashes the row's unsalted digest, so the A
-  head derives it in its body (`Pc8RowAHeadSeeded`; `anchored-ea`).
+- **The formings** are rowk's pieces at the template's depth (`rowk.PORTS8`, cut every `rowk.ROW_K`; the table is
+  `FORMINGS`): each piece reads only its raw row, anchors and its row's earlier pieces' outputs (`forming-input`), and
+  the tail writes the formed row a tile reads, at the leaf of its public row (`dense-side`).  Each tile operand is gated
+  by a certificate of the raw row its forming reads, computed from that row or registered with it
+  (`operand-after-certificate`, `uncomputed-certificate`).  An anchor is a public input region the verifier recomputes
+  under its rule's id (`rowk.DERIVATIONS8`), read only by formings; under h3, E_A is no anchor, since its seed hashes
+  the row's unsalted digest, so the A head derives it in its body (`Pc8RowAHeadSeeded`; `anchor-unpinned`,
+  `unnoised-unit`).
 - **The tiles** read the formed rows, A's from the window's side tree and B's from the epoch's B̃ tree, whose domain
-  binds the salt and root_W (`stale-b-rows`).  A tile's credit is gated by ok_A, admit_A and ok_B, which the tally reads
-  through `one`.  The filler's rows and gates are constant zeros, never committed rows (`filler`).
+  binds the salt and root_W and is a public input of every tile instance (`stale-epoch`).  A tile's credit is gated by
+  ok_A, admit_A and ok_B, each an always-proved unit's output or registered (`gate-unsourced`), and read by the tally
+  through `one` or registered (`gate-untallied`).  The filler's rows and gates are constant zeros (`filler`).
 - **The always-proved set** (`missing-proved`): every ok and admission unit, every A forming piece and every tally unit,
   in every window; the B formings once per epoch, either always proved or drawn in proportion to their public fan-out,
   the static count of credited tiles their output reaches plus one (`B_PLANS`; Daniel, 22:42Z).  Tiles are drawn
-  uniformly over the window's N; no draw reads a value (`draw`, `fan-out`).
+  uniformly over the window's N; no draw reads a value (`weighted-by-value`).
 - **The tally** (`tally`) is a Program of limb units, each output at most 16 bits: per call S_A in one limb, S_A·S_B in
-  two, a running sum in three (real < 2^40), then the level.  No unit of the window takes advice (`advice`), and a
-  tally unit reads only gates, registered sums and earlier tally units' limbs (`tally-reads`).
+  two, a running sum in three (real < 2^40), then the level.  No unit of the window takes advice (`tally-advice`,
+  `advice`), and a tally unit reads only gates, registered sums and earlier tally units' limbs (`tally-reads`).
 
-`CONDITIONS` names the round-4 condition (`Accounting.TS.SelectLayer`) each refusal checks.  `DEFINITIONS` names every
-Definition a layout may use, by id, and `TO_BUILD` the ones not on main yet.  The window on
-main is `current`: its tile is `Pc8TileSide` over side rows no proved unit writes, with ok and admit in the side row,
+`CONDITIONS` names the condition of `Accounting.TS.SelectLayer` each refusal checks.  `DEFINITIONS` names every
+Definition a layout may use, by id (the cap's roles are in none), and `TO_BUILD` the ones not on main yet.  The window
+on main is `current`: its tile is `Pc8TileSide` over side rows no proved unit writes, with ok and admit in the side row,
 after the noise, and `problems` refuses it.
 """
 from __future__ import annotations
@@ -41,7 +45,7 @@ from fractions import Fraction
 from typing import Iterable, Mapping, Sequence
 
 from verity.core.protocols.pouw import window as Wd
-from verity.core.protocols.pouw.circuit import pc8, rowk
+from verity.core.protocols.pouw.circuit import pc4, pc8, rowk
 
 PHASES = ("registration", "salt", "epoch", "activation", "noise", "forming", "tiles", "draw")
 _AT = {p: i for i, p in enumerate(PHASES)}
@@ -61,24 +65,32 @@ _PIECES = {f"row_{s}_{p}": d for s, ds in (("a", (rowk.Pc8RowAHeadDef, rowk.Pc8R
 SEEDED_HEAD = "Pc8RowAHeadSeeded"
 OK_UNIT, ADMIT_UNIT = "Pc8RowAOk", "PouwQueueAdmit"
 TALLY = ("PouwTallySum", "PouwTallyProduct", "PouwTallyAdd", "PouwTallyLevel")
-TILES = (pc8.Pc8TileHiddenDef.name, pc8.Pc8TileHiddenH3Def.name, pc8.Pc8TileSideDef.name)
-#: every Definition a layout may name, by id, with its kind; a forming's noise is its anchors or, in-body, its own
-DEFINITIONS = ({d.name: "form" for d in _PIECES.values()} | {SEEDED_HEAD: "form", OK_UNIT: "ok", ADMIT_UNIT: "admit"}
-               | {t: "tally" for t in TALLY} | {t: "tile" for t in TILES})
+TILES = (pc8.Pc8TileDef.name, pc8.Pc8TileHiddenDef.name, pc8.Pc8TileHiddenH3Def.name, pc8.Pc8TileSideDef.name,
+         pc4.Pc4TileDef.name, pc4.Pc4TileHiddenDef.name)
+#: the forming table (§10.9 B): rowk's Pc8 and Pc4 pieces, the unsplit rows (k ≤ 2,560) and the h3 in-body head
+FORMINGS = (tuple(d.name for d in _PIECES.values())
+            + tuple(getattr(rowk, f"Pc4Row{s}{p}Def").name for s in "AB" for p in ("Head", "First", "Form", "Tail"))
+            + (pc8.Pc8RowADef.name, pc8.Pc8RowBDef.name, pc4.Pc4RowADef.name, pc4.Pc4RowBDef.name, SEEDED_HEAD))
+#: every Definition a layout may name, by id, with its kind; a forming's noise is its anchors or, in-body, its own.  The
+#: cap's roles (`row_digest`, `word`, ...) are in none: a padded window refuses them
+DEFINITIONS = ({d: "form" for d in FORMINGS} | {OK_UNIT: "ok", ADMIT_UNIT: "admit"} | {t: "tally" for t in TALLY}
+               | {t: "tile" for t in TILES})
+#: the epoch B̃ tree's domain, derived from (salt, root_W): a public input of every tile instance
+EPOCH_DOMAIN = "epoch-domain"
 #: the Definitions that derive their noise in their own body
 IN_BODY = frozenset({SEEDED_HEAD})
 #: the Definitions this layout names that main doesn't have yet
 TO_BUILD = (SEEDED_HEAD, OK_UNIT, ADMIT_UNIT) + TALLY
-#: each refusal of `problems` and the condition of `Accounting.TS.SelectLayer` (PADCREDIT round 4) it checks
+#: each refusal of `problems` (PADCREDIT §10.9 C's names) and the condition of `Accounting.TS.SelectLayer` it checks
 CONDITIONS = {
-    "hashing": "the scheme's hashings", "draw": "DrawnLayer.draw (value-free)", "plan": "DrawnLayer.draw (value-free)",
-    "unknown-definition": "forms (the forming table)", "advice": "TallyNoAdvice", "missing-proved": "AlwaysProved, TallyIn",
-    "unpinned-anchor": "AnchorsPinned", "unproved-noise": "NoiseProved", "anchored-ea": "AnchorsPinned, noiseSelf",
-    "unclosed-forming": "FormingClosed", "tally-reads": "TallyReads", "fan-out": "SelFan (dw)",
-    "filler": "TallyComputes", "stale-b-rows": "EpochFormedRight", "uncertified-operand": "CertifiedOperands",
     "operand-after-certificate": "CertifiedOperands", "uncomputed-certificate": "CertifiedOperands",
-    "unsourced-gate": "SelectionsProved", "untallied-gate": "GatesTallied", "unnoised-unit": "NoiseProved",
-    "late-selection": "NoLateSelection",
+    "forming-input": "FormingClosed", "late-selection": "NoLateSelection", "gate-unsourced": "SelectionsProved",
+    "gate-untallied": "GatesTallied", "tally-reads": "TallyReads", "tally-advice": "TallyNoAdvice",
+    "advice": "no prover advice in the window", "filler": "TallyComputes (constant-zero filler)",
+    "unnoised-unit": "NoiseProved", "anchor-unpinned": "AnchorsPinned, noiseSelf", "stale-epoch": "EpochFormedRight",
+    "dense-side": "slot = row (§10.9 A.6)", "weighted-by-value": "DrawnLayer.draw value-free, SelFan at dw",
+    "missing-proved": "AlwaysProved, TallyIn", "unknown-definition": "forms (the forming table, §10.9 B)",
+    "plan": "a tile is in the uniform draw", "hashing": "the scheme's hashings",
 }
 
 
@@ -86,8 +98,8 @@ CONDITIONS = {
 class Pos:
     """A committed position: its commit phase, its writer (a unit's name; None for a raw row, a registered value or a
     constant), whether the registration holds it, its constant value (the filler's), the tree it sits in, the raw row a
-    gate certifies, the registered gates a registered sum covers, and the registration record it belongs to (a weight
-    row B_j and its ok_B,j share one)."""
+    gate certifies, the registered gates a registered sum covers, the registration record it belongs to (a weight
+    row B_j and its ok_B,j share one), and its leaf in its tree."""
     phase: str
     writer: str | None = None
     registered: bool = False
@@ -96,14 +108,15 @@ class Pos:
     certifies: str | None = None
     sums: tuple[str, ...] = ()
     record: str | None = None
+    leaf: int | None = None
 
 
 @dataclass(frozen=True)
 class Unit:
     """One unit of the window's Program: its Definition's id and kind, the positions it reads and writes, its anchor
     regions (region, rule id), its advice ports, its plan (always proved, drawn by its public fan-out, or in the uniform
-    draw over the tiles) and, for a weighted unit, that fan-out; a tile's gates (gate, the operand it gates or None) and
-    its floor operands."""
+    draw over the tiles) and, for a weighted unit, that fan-out; a tile's gates (gate, the operand it gates or None),
+    its floor operands, its public inputs and its public (slot, weight row)."""
     definition: str
     kind: str
     reads: tuple[str, ...]
@@ -114,6 +127,8 @@ class Unit:
     fan_out: int = 0
     gates: tuple[tuple[str, str | None], ...] = ()
     floor: tuple[str, ...] = ()
+    public: tuple[str, ...] = ()
+    at: tuple[int, int] | None = None
 
 
 @dataclass(frozen=True)
@@ -127,7 +142,7 @@ class Layout:
     filler: str = "filler"
 
 
-# ---- the layout ----------------------------------------------------------------------------------------------------------
+# ---- the layout ------------------------------------------------------------------------------------------------------
 
 _DERIVATION = {d.rule: d for d in rowk.DERIVATIONS8.values()}
 #: each anchor seed's phase: seed_a hashes the activation commitment's root, seed_b = H(salt ‖ root_B) the epoch's
@@ -138,9 +153,10 @@ def _rule(region: str) -> str:
     return rowk.DERIVATIONS8[region].rule
 
 
-def _row(pos: dict, units: dict, side: str, row: str, k: int, ks: int, hashing: str, plan: str, fan_out: int) -> str:
+def _row(pos: dict, units: dict, side: str, row: str, leaf: int, k: int, ks: int, hashing: str, plan: str,
+         fan_out: int) -> str:
     """Row `row`'s forming pieces on `side`: their units and positions, after its raw row `{row}.x`; the formed row's
-    position."""
+    position, at `leaf` of its tree."""
     phase = "epoch" if side == "b" else "forming"
     tree = EPOCH_B if side == "b" else WINDOW_A
     segs = k // ks
@@ -149,7 +165,7 @@ def _row(pos: dict, units: dict, side: str, row: str, k: int, ks: int, hashing: 
         pos[f"{row}.codes{j}"] = Pos(phase, f"{row}/form{j}")
         pos[f"{row}.carry{j}"] = Pos(phase, f"{row}/form{j}")
     pos[head] = Pos(phase, f"{row}/head")
-    pos[f"{row}.p"] = Pos(phase, f"{row}/tail", tree=tree)
+    pos[f"{row}.p"] = Pos(phase, f"{row}/tail", tree=tree, leaf=leaf)
     pos[f"{row}.formed-ok"] = Pos(phase, f"{row}/tail")
     seeded = side == "a" and hashing == "h3"
     e = () if seeded else (("e", _rule("ea" if side == "a" else "eb")),)
@@ -177,7 +193,7 @@ def layout(shape: Sequence[Wd.Call], k: int, row_k: int = rowk.ROW_K, hashing: s
         raise ValueError(f"a layout takes hashing in {HASHINGS}, b_plan in {B_PLANS} and row_k dividing k, not "
                          f"{hashing!r}, {b_plan!r}, {row_k!r} at k = {k!r}")
     tile = tile or (pc8.Pc8TileHiddenDef.name if hashing == "h0" else pc8.Pc8TileHiddenH3Def.name)
-    pos: dict[str, Pos] = {}
+    pos: dict[str, Pos] = {EPOCH_DOMAIN: Pos("epoch")}
     units: dict[str, Unit] = {}
     for c, call in enumerate(shape):
         sb = f"sb{c}"
@@ -185,7 +201,7 @@ def layout(shape: Sequence[Wd.Call], k: int, row_k: int = rowk.ROW_K, hashing: s
             b = f"b{c}.{j}"
             pos[f"{b}.x"] = Pos("registration", registered=True, tree="W", record=b)
             pos[f"{b}.ok"] = Pos("registration", registered=True, tree="W", certifies=f"{b}.x", record=b)
-            _row(pos, units, "b", b, k, row_k, hashing, b_plan, call.m + 1)
+            _row(pos, units, "b", b, j, k, row_k, hashing, b_plan, call.m + 1)
         pos[sb] = Pos("registration", registered=True, tree="W", sums=tuple(f"b{c}.{j}.ok" for j in range(call.n)))
         gates_a = []
         for i in range(call.m):
@@ -195,7 +211,7 @@ def layout(shape: Sequence[Wd.Call], k: int, row_k: int = rowk.ROW_K, hashing: s
             pos[f"{a}.admit"] = Pos("activation", f"{a}/admit", tree="A")
             units[f"{a}/ok"] = Unit(OK_UNIT, "ok", (f"{a}.x",), (f"{a}.ok",))
             units[f"{a}/admit"] = Unit(ADMIT_UNIT, "admit", (), (f"{a}.admit",))
-            _row(pos, units, "a", a, k, row_k, hashing, "proved", 0)
+            _row(pos, units, "a", a, i, k, row_k, hashing, "proved", 0)
             gates_a += [f"{a}.ok", f"{a}.admit"]
         for i in range(call.m):
             for j in range(call.n):
@@ -203,7 +219,7 @@ def layout(shape: Sequence[Wd.Call], k: int, row_k: int = rowk.ROW_K, hashing: s
                 pos[f"{t}.leaf"] = Pos("tiles", t)
                 units[t] = Unit(tile, "tile", (f"{a}.p", f"{b}.p"), (f"{t}.leaf",), plan="drawn",
                                 gates=((f"{a}.ok", f"{a}.p"), (f"{a}.admit", f"{a}.p"), (f"{b}.ok", f"{b}.p")),
-                                floor=(f"{a}.p", f"{b}.p"))
+                                floor=(f"{a}.p", f"{b}.p"), public=(EPOCH_DOMAIN,), at=(i, j))
         units[f"sum{c}"] = Unit(TALLY[0], "tally", tuple(gates_a), (f"sa{c}",))
         pos[f"sa{c}"] = Pos("tiles", f"sum{c}")
         units[f"prod{c}"] = Unit(TALLY[1], "tally", (f"sa{c}", sb), (f"real{c}.0", f"real{c}.1"))
@@ -235,7 +251,7 @@ def current(shape: Sequence[Wd.Call], k: int) -> Layout:
         for s, count in (("a", call.m), ("b", call.n)):
             for r in range(count):
                 row = f"{s}{c}.{r}"
-                pos[f"{row}.p"] = Pos("forming", tree=f"window-{s}")
+                pos[f"{row}.p"] = Pos("forming", tree=f"window-{s}", leaf=r)
                 pos[f"{row}.ok"] = Pos("forming", tree=f"window-{s}", certifies=f"{row}.p")
                 pos[f"{row}.admit"] = Pos("forming", tree=f"window-{s}")
         for i in range(call.m):
@@ -245,7 +261,7 @@ def current(shape: Sequence[Wd.Call], k: int) -> Layout:
                 units[t] = Unit(pc8.Pc8TileSideDef.name, "tile", (f"{a}.p", f"{b}.p"), (f"{t}.leaf",), plan="drawn",
                                 gates=((f"{a}.ok", f"{a}.p"), (f"{a}.admit", f"{a}.p"), (f"{b}.ok", f"{b}.p"),
                                        (f"{b}.admit", f"{b}.p")),
-                                floor=(f"{a}.p", f"{b}.p"))
+                                floor=(f"{a}.p", f"{b}.p"), at=(i, j))
     for s in ("a", "b"):
         pos[f"filler.{s}.p"] = Pos("forming", tree=f"window-{s}")
         pos[f"filler.{s}.ok"] = Pos("forming", tree=f"window-{s}")
@@ -256,7 +272,7 @@ def current(shape: Sequence[Wd.Call], k: int) -> Layout:
     return Layout("h3", pos, units)
 
 
-# ---- the shape check -----------------------------------------------------------------------------------------------------
+# ---- the shape check -------------------------------------------------------------------------------------------------
 
 def _readers(lay: Layout) -> dict[str, list[str]]:
     out: dict[str, list[str]] = {}
@@ -326,7 +342,7 @@ def problems(lay: Layout) -> list[str]:
     if lay.hashing not in HASHINGS:
         bad("hashing", f"{lay.hashing!r} is none of {HASHINGS}")
     if lay.draw != "uniform":
-        bad("draw", f"the tiles' draw is {lay.draw!r}, not uniform over the N tiles")
+        bad("weighted-by-value", f"the tiles' draw is {lay.draw!r}, not uniform over the N tiles")
     readers = _readers(lay)
     gate_pos = {g for u in lay.units.values() if u.kind == "tile" for g, _ in u.gates}
     raw_rows = {q.certifies for q in lay.positions.values() if q.certifies is not None}
@@ -335,23 +351,25 @@ def problems(lay: Layout) -> list[str]:
             bad("unknown-definition", f"{name}: {u.definition} is no {u.kind} Definition of the table")
             continue
         if u.advice:
-            bad("advice", f"{name} takes advice {list(u.advice)}")
+            bad("tally-advice" if u.kind == "tally" else "advice", f"{name} takes advice {list(u.advice)}")
         want = {"tile": ("drawn",), "form": B_PLANS}.get(u.kind, ("proved",))
         if u.plan not in want:
-            bad("missing-proved" if u.kind != "tile" else "plan", f"{name} ({u.definition}) is {u.plan}, not {' or '.join(want)}")
+            bad("missing-proved" if u.kind != "tile" else "plan",
+                f"{name} ({u.definition}) is {u.plan}, not {' or '.join(want)}")
         if u.anchors and u.kind != "form":
-            bad("unpinned-anchor", f"{name}: a {u.kind} unit reads anchors {[r for r, _ in u.anchors]}; only a forming, "
-                                   "always proved or weighted, does")
+            bad("anchor-unpinned", f"{name}: a {u.kind} unit reads anchors {[r for r, _ in u.anchors]}; only a "
+                                   "forming, always proved or weighted, does")
         for r, rule in u.anchors:
             if rule not in _DERIVATION:
-                bad("unproved-noise", f"{name}: region {r} names no anchor rule ({rule})")
+                bad("anchor-unpinned", f"{name}: region {r} names no rule the verifier recomputes ({rule})")
             elif lay.hashing == "h3" and rule == _rule("ea"):
-                bad("anchored-ea", f"{name}: under h3 E_A's seed hashes the row's unsalted digest, so it is no anchor")
+                bad("anchor-unpinned", f"{name}: under h3 E_A's seed hashes the row's unsalted digest, so it is no "
+                                       "anchor")
         if u.kind == "form":
             stray = [p for p in u.reads if p not in raw_rows and not _is(lay, p, "form")]
             if stray:
-                bad("unclosed-forming", f"{name} reads {stray}, neither a certified raw row, an anchor nor a forming's "
-                                        "output")
+                bad("forming-input", f"{name} reads {stray}, neither a certified raw row, an anchor nor a forming's "
+                                     "output")
         if u.kind == "tally":
             for p in u.reads:
                 q = lay.positions.get(p)
@@ -360,9 +378,8 @@ def problems(lay: Layout) -> list[str]:
                     bad("tally-reads", f"{name} reads {p}, neither a gate, a registered sum nor a tally limb")
     for name, cone in _cones(lay, readers).items():
         if lay.units[name].fan_out != cone:
-            bad("fan-out", f"{name}: its draw weight {lay.units[name].fan_out} is not its static cone {cone}")
+            bad("weighted-by-value", f"{name}: its draw weight {lay.units[name].fan_out} is not its static cone {cone}")
     tallied = {p for u in lay.units.values() if u.kind == "tally" for p in u.reads}
-    covered = {g for p in tallied if p in lay.positions for g in lay.positions[p].sums}
     chains: dict[str, tuple[tuple[str, ...], tuple[str, ...]]] = {}
     for name, u in lay.units.items():
         if u.kind != "tile":
@@ -373,13 +390,16 @@ def problems(lay: Layout) -> list[str]:
             if filler:
                 if q is None or q.constant != 0:
                     bad("filler", f"the filler's operand {operand} is not the constant zero row")
-            elif x == 1 and (q is None or q.tree != EPOCH_B):
-                bad("stale-b-rows", f"{name}: its B operand {operand} is not in the epoch's B̃ tree")
-        if not filler:
-            for operand in u.floor:
-                if not any(op == operand and (lay.positions.get(g) or Pos("")).certifies is not None
-                           for g, op in u.gates):
-                    bad("uncertified-operand", f"{name}: no gate certifies the row its operand {operand} forms")
+                continue
+            if x == 1 and (q is None or q.tree != EPOCH_B):
+                bad("stale-epoch", f"{name}: its B operand {operand} is not in the epoch's B̃ tree")
+            if q is None or u.at is None or q.leaf != u.at[x]:
+                bad("dense-side", f"{name}: its operand {operand} is not at leaf {u.at[x] if u.at else '?'} of its "
+                                  "tree, its public row")
+            if not any(op == operand and (lay.positions.get(g) or Pos("")).certifies is not None for g, op in u.gates):
+                bad("operand-after-certificate", f"{name}: no gate certifies the row its operand {operand} forms")
+        if not filler and EPOCH_DOMAIN not in u.public:
+            bad("stale-epoch", f"{name}: the epoch domain is not a public input of the tile instance")
         for g, operand in u.gates:
             q = lay.positions.get(g)
             if filler:
@@ -387,11 +407,11 @@ def problems(lay: Layout) -> list[str]:
                     bad("filler", f"the filler's gate {g} is not the constant 0")
                 continue
             if q is None or not (q.registered or (_is(lay, g, "ok", "admit") and lay.units[q.writer].plan == "proved")):
-                bad("unsourced-gate", f"{name}: gate {g} is neither registered nor an always-proved unit's output")
+                bad("gate-unsourced", f"{name}: gate {g} is neither registered nor an always-proved unit's output")
                 if q is None:
                     continue
-            if g not in tallied and g not in covered:
-                bad("untallied-gate", f"{name}: no tally unit reads gate {g}")
+            if g not in tallied and not (q.registered and q.writer is None):
+                bad("gate-untallied", f"{name}: no tally unit reads gate {g}, and it isn't registered")
             if operand not in chains:
                 chains[operand] = _forming_chain(lay, operand)
             chain, outside = chains[operand]
@@ -410,8 +430,8 @@ def problems(lay: Layout) -> list[str]:
                                                      f"{g} certifies")
                 stray = [p for p in outside if p != q.certifies]
                 if stray:
-                    bad("unclosed-forming", f"{name}: a forming of {operand} reads {stray}, neither its raw row, an "
-                                            "anchor nor a forming's output")
+                    bad("forming-input", f"{name}: a forming of {operand} reads {stray}, neither its raw row, an "
+                                         "anchor nor a forming's output")
             noise = _noise_phase(lay, chain)
             if noise == len(PHASES):
                 bad("unnoised-unit", f"{name}: the forming of {operand} reads no noise of its row")
@@ -427,7 +447,7 @@ def problem(lay: Layout) -> str | None:
     return p[0] if p else None
 
 
-# ---- the tally's limb Program --------------------------------------------------------------------------------------------
+# ---- the tally's limb Program ----------------------------------------------------------------------------------------
 
 def limbs(x: int, count: int) -> tuple[int, ...]:
     """x in `count` 16-bit limbs, low first; raises ValueError when it doesn't fit."""
@@ -481,7 +501,8 @@ def tally_problem(units: Sequence[Mapping[str, object]], calls: int, bits: int =
         if any(not (Wd._int(w) and 0 <= w < 1 << LIMB) for w in words):
             return f"call {c}: a word is not 16 bits"
         reads = list(s["reads"])  # type: ignore[arg-type]
-        if len(reads) % 2 or list(s["writes"]) != [sum(one(reads[x]) * one(reads[x + 1]) for x in range(0, len(reads), 2))]:
+        masked = sum(one(reads[x]) * one(reads[x + 1]) for x in range(0, len(reads) - 1, 2))
+        if len(reads) % 2 or list(s["writes"]) != [masked]:
             return f"call {c}: its sum is not Σ one(ok)·one(admit) over its slots"
         sa, sb = list(p["reads"])[0], _value(list(p["reads"])[1:])  # type: ignore[arg-type]
         if sa != list(s["writes"])[0] or list(p["writes"]) != list(limbs(sa * sb, 2)):  # type: ignore[arg-type]
@@ -501,7 +522,7 @@ def tally_problem(units: Sequence[Mapping[str, object]], calls: int, bits: int =
     return None
 
 
-# ---- the cost of each B plan ---------------------------------------------------------------------------------------------
+# ---- the cost of each B plan -----------------------------------------------------------------------------------------
 
 def cost(shape: Sequence[Wd.Call], k: int, eps: Fraction, delta: Fraction, row_k: int = rowk.ROW_K,
          windows: int = 1) -> dict[str, object]:

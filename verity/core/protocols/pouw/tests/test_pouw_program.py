@@ -49,7 +49,7 @@ def test_the_layout_is_the_shapes_alone():
 
 def test_mains_window_is_refused():
     kinds = _kinds(Pg.current(SHAPE, K))
-    assert {"unsourced-gate", "untallied-gate", "operand-after-certificate", "stale-b-rows", "filler"} <= kinds
+    assert {"gate-unsourced", "gate-untallied", "operand-after-certificate", "stale-epoch", "filler"} <= kinds
 
 
 @pytest.mark.parametrize("kind, change", [
@@ -57,31 +57,40 @@ def test_mains_window_is_refused():
     ("late-selection", lambda l: _pos(l, "b1.0.ok", phase="epoch", registered=True)),
     ("operand-after-certificate", lambda l: _pos(l, "a0.2.p", writer=None)),
     ("operand-after-certificate", lambda l: _pos(l, "a0.2.ok", certifies="a0.3.x")),
-    ("unsourced-gate", lambda l: _pos(l, "a1.0.ok", writer=None)),
-    ("unsourced-gate", lambda l: _unit(l, "a1.0/admit", plan="drawn")),
-    ("untallied-gate", lambda l: _unit(l, "sum0", reads=l.units["sum0"].reads[2:])),
+    ("gate-unsourced", lambda l: _pos(l, "a1.0.ok", writer=None)),
+    ("gate-unsourced", lambda l: _unit(l, "a1.0/admit", plan="drawn")),
+    ("gate-untallied", lambda l: _unit(l, "sum0", reads=l.units["sum0"].reads[2:])),
     ("missing-proved", lambda l: _unit(l, "a0.0/ok", plan="drawn")),
     ("missing-proved", lambda l: _unit(l, "prod1", plan="weighted")),
     ("missing-proved", lambda l: _unit(l, "b0.1/tail", plan="drawn")),
     ("filler", lambda l: _pos(l, "filler.a.ok", constant=1)),
     ("filler", lambda l: _pos(l, "filler.b.p", constant=None)),
-    ("advice", lambda l: _unit(l, "add1", advice=("carry",))),
+    ("tally-advice", lambda l: _unit(l, "add1", advice=("carry",))),
+    ("advice", lambda l: _unit(l, "a0.1/ok", advice=("alpha",))),
     ("tally-reads", lambda l: _unit(l, "sum1", reads=l.units["sum1"].reads + ("a1.0.x",))),
-    ("stale-b-rows", lambda l: _pos(l, "b0.2.p", tree="window-b")),
+    ("stale-epoch", lambda l: _pos(l, "b0.2.p", tree="window-b")),
+    ("stale-epoch", lambda l: _unit(l, "t1.2.1", public=())),
+    ("dense-side", lambda l: _pos(l, "a0.3.p", leaf=4)),
+    ("dense-side", lambda l: _unit(l, "t0.5.2", at=(5, 1))),
     ("unknown-definition", lambda l: _unit(l, "t0.0.0", definition="Pc8TileCheap")),
-    ("unproved-noise", lambda l: _unit(l, "b0.0/head", anchors=(("e", "verity/pouw/anchor/pearl-c/eb/v0"),))),
+    ("anchor-unpinned", lambda l: _unit(l, "b0.0/head", anchors=(("e", "verity/pouw/anchor/pearl-c/eb/v0"),))),
     ("unnoised-unit", lambda l: _unit(l, "b1.1/head", anchors=())),
-    ("draw", lambda l: replace(l, draw="by-ok")),
-    ("unpinned-anchor", lambda l: _unit(l, "t0.1.1", anchors=(("g", Pg.rowk.DERIVATIONS8["g"].rule),))),
-    ("uncertified-operand", lambda l: _unit(l, "t1.3.0", gates=l.units["t1.3.0"].gates[1:])),
+    ("weighted-by-value", lambda l: replace(l, draw="by-ok")),
+    ("anchor-unpinned", lambda l: _unit(l, "t0.1.1", anchors=(("g", Pg.rowk.DERIVATIONS8["g"].rule),))),
+    ("operand-after-certificate", lambda l: _unit(l, "t1.3.0", gates=l.units["t1.3.0"].gates[1:])),
     ("uncomputed-certificate", lambda l: _unit(l, "a0.5/ok", reads=())),
     ("uncomputed-certificate", lambda l: _pos(l, "b0.1.ok", record="b0.2")),
-    ("unclosed-forming", lambda l: _unit(l, "b0.0/form0", reads=l.units["b0.0/form0"].reads + ("a0.0.ok",))),
+    ("forming-input", lambda l: _unit(l, "b0.0/form0", reads=l.units["b0.0/form0"].reads + ("a0.0.ok",))),
 ])
 def test_each_refusal(kind, change):
     lay = change(Pg.layout(SHAPE, K))
     assert kind in _kinds(lay)
     assert kind in Pg.CONDITIONS
+
+
+def test_a_registered_gate_needs_no_tally_read():
+    lay = Pg.layout(SHAPE, K)
+    assert Pg.problems(_unit(lay, "prod0", reads=("sa0",))) == []
 
 
 def test_every_refusal_names_its_round_4_condition():
@@ -93,21 +102,21 @@ def test_a_forming_that_reads_a_stray_value_is_refused():
     lay = Pg.layout(SHAPE, K)
     lay = replace(lay, positions={**lay.positions, "a0.4.stats": Pg.Pos("activation")})
     lay = _unit(lay, "a0.4/form1", reads=lay.units["a0.4/form1"].reads + ("a0.4.stats",))
-    assert "unclosed-forming" in _kinds(lay)
+    assert "forming-input" in _kinds(lay)
 
 
 def test_ea_is_no_anchor_under_h3():
     lay = Pg.layout(SHAPE, K, hashing="h3")
     lay = _unit(lay, "a0.0/head", definition=Pg.rowk.Pc8RowAHeadDef.name,
                 anchors=(("e", Pg.rowk.DERIVATIONS8["ea"].rule),))
-    assert "anchored-ea" in _kinds(lay)
+    assert "anchor-unpinned" in _kinds(lay)
     assert Pg.problems(Pg.layout(SHAPE, K, hashing="h0")) == []
 
 
 def test_a_weighted_forming_draws_at_its_static_cone():
     lay = Pg.layout(SHAPE, K, b_plan="weighted")
     assert {u.fan_out for n, u in lay.units.items() if n.startswith("b0.")} == {SHAPE[0].m + 1}
-    assert "fan-out" in _kinds(_unit(lay, "b0.0/tail", fan_out=SHAPE[0].m + 2))
+    assert "weighted-by-value" in _kinds(_unit(lay, "b0.0/tail", fan_out=SHAPE[0].m + 2))
 
 
 def _calls():
@@ -131,7 +140,7 @@ def test_the_tally_reads_each_gate_through_one():
     assert Pg.tally(forged)[-1]["writes"] == [0, 0]
 
 
-@pytest.mark.parametrize("unit, field, value", [(1, "writes", [31, 0]), (2, "writes", [61, 0, 0]),
+@pytest.mark.parametrize("unit, field, value", [(0, "reads", [1, 1, 1]), (1, "writes", [31, 0]), (2, "writes", [61, 0, 0]),
                                                 (4, "writes", [60, 1, 0]), (5, "reads", [30, 0, 0, 31, 0]),
                                                 (6, "writes", [9, 1])])
 def test_a_wrong_limb_is_refused(unit, field, value):
