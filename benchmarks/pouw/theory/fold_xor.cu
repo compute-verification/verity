@@ -5,10 +5,11 @@
 //   - pairs: z[i] = xor78(x[i], y[i]) over random words and the edge words crossed, checked on the host;
 //   - chain<N>: a, b = b, xor78(a, b) N times, fully unrolled, no load or address arithmetic a step, so the SASS of
 //     chain<16> less chain<8>, over 8, is one XOR's instruction mix (`fold_xor.py --sass` counts it by census class);
-//   - loop: the same step over a runtime count, not unrolled, so ptxas can hoist what doesn't vary (IMAD.HI's 64-bit
-//     addend pairs, whose low halves are 0) and the loop body is one XOR in steady state.
+//   - loop: the same step over a runtime count, not unrolled, so the loop body is one XOR in steady state.
 // `main` checks pairs, both chains and the loop against the host's a ^ b ^ K, for K = 0 and one key, and exits 3 on a
-// mismatch.
+// mismatch. SASS's IMAD.HI.U32 adds a 64-bit register pair, and ptxas lowers mad.hi.u32's addend c to a pair {0, c}
+// it rebuilds at every use (MOV, HFMA2), unrolled and in the loop alike; `fold_xor.py`'s `sass_body` is the
+// allocation that holds the pairs instead.
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -78,53 +79,9 @@ __global__ void loop(const uint32_t* x, const uint32_t* y, uint32_t* z, int n, i
   z[i] = b;
 }
 
-// IMAD.HI.U32's addend is a 64-bit register pair, hi32(a*b + c). mad.hi.u32 gives ptxas a 32-bit c, and it builds a
-// pair {0, c} at every use; here the pair is the program's own value.
-__device__ __forceinline__ uint32_t mhiw(uint32_t a, uint32_t b, uint64_t c) {
-  uint64_t t;
-  asm("mad.wide.u32 %0, %1, %2, %3;" : "=l"(t) : "r"(a), "r"(b), "l"(c));
-  return (uint32_t)(t >> 32);
-}
-
-// xor78 with every constant in a register: w = FM, FA, GM, GA, C31, C30, SH[1..15], EA[1..15], and 15 zeros ptxas
-// can't see are zero (the low halves of S''s addend pairs); p = {0, 1} and {0, HA[j]} as 64-bit addends.
-__device__ __forceinline__ uint32_t xor78w(uint32_t x, uint32_t y, const uint32_t (&w)[51], const uint64_t (&p)[16]) {
-  uint32_t F = mlo(y, w[0], w[1]), G = mlo(y, w[2], w[3]), Q = mlo(x, F, G);
-#pragma unroll
-  for (int j = 1; j < 16; ++j) {
-    uint32_t Bp = mhiw(y, w[5 + j], p[0]);
-    uint32_t Sp = mhiw(x, w[5 + j], (uint64_t)Bp << 32 | w[35 + j]);
-    uint32_t E = mlo(Bp, w[4], w[20 + j]);
-    uint32_t H = mhiw(Q, w[5], p[j]);
-    Q = mlo(Sp, E, H);
-  }
-  return Q;
-}
-
-// The steady state: the constants loaded once from global memory (which ptxas doesn't rematerialize), and two XORs an
-// iteration, so a, b need no move.
-__global__ void loop2(const uint32_t* x, const uint32_t* y, uint32_t* z, int n, int reps, const uint32_t* kw,
-                      const uint64_t* kp) {
-  int i = blockIdx.x * blockDim.x + threadIdx.x;
-  if (i >= n) return;
-  uint32_t w[51];
-  uint64_t p[16];
-#pragma unroll
-  for (int k = 0; k < 51; ++k) w[k] = kw[k];
-#pragma unroll
-  for (int k = 0; k < 16; ++k) p[k] = kp[k];
-  uint32_t a = x[i], b = y[i];
-#pragma unroll 1
-  for (int r = 0; r < reps; ++r) {
-    a = xor78w(a, b, w, p);
-    b = xor78w(b, a, w, p);
-  }
-  z[i] = b;
-}
-
 static const int AFF[4][2] = {{1, 0}, {-1, 1}, {1, 2}, {-1, 3}};  // u ^ k on 2 bits = s*u + c (mod 4)
 
-static void keyed_constants(uint32_t K, uint32_t* kw, uint64_t* kp) {
+static void keyed_constants(uint32_t K) {
   int s = AFF[K & 3][0], c = AFF[K & 3][1];
   uint32_t fm = (uint32_t)(-(int64_t)s * (1ll << 31)), fa = (uint32_t)((int64_t)s * (1ll << 30)), gm = fa,
            ga = (uint32_t)c << 30;
@@ -147,15 +104,6 @@ static void keyed_constants(uint32_t K, uint32_t* kw, uint64_t* kp) {
   cudaMemcpyToSymbol(ONE, &one, 4);
   cudaMemcpyToSymbol(C31, &c31, 4);
   cudaMemcpyToSymbol(C30, &c30, 4);
-  const uint32_t head[6] = {fm, fa, gm, ga, c31, c30};
-  for (int k = 0; k < 6; ++k) kw[k] = head[k];
-  kp[0] = 1ull << 32;
-  for (int j = 1; j < 16; ++j) {
-    kw[5 + j] = sh[j];
-    kw[20 + j] = ea[j];
-    kw[35 + j] = 0;
-    kp[j] = (uint64_t)ha[j] << 32;
-  }
 }
 
 static uint64_t rng = 0x9E3779B97F4A7C15ull;
@@ -183,23 +131,16 @@ int main() {
   cudaDeviceProp p;
   cudaGetDeviceProperties(&p, 0);
   printf("device %s sm_%d%d\n", p.name, p.major, p.minor);
-  uint32_t kw[51], *dkw;
-  uint64_t kp[16], *dkp;
-  cudaMalloc(&dkw, sizeof kw);
-  cudaMalloc(&dkp, sizeof kp);
   const uint32_t keys[] = {0u, 0x9E13B91Cu};
   long bad_total = 0;
   for (uint32_t K : keys) {
-    keyed_constants(K, kw, kp);
-    cudaMemcpy(dkw, kw, sizeof kw, cudaMemcpyHostToDevice);
-    cudaMemcpy(dkp, kp, sizeof kp, cudaMemcpyHostToDevice);
-    for (int kind = 0; kind < 5; ++kind) {
-      int blocks = (n + 255) / 256, reps = kind == 1 ? 8 : kind == 2 ? 16 : kind == 3 ? 5 : 3;
+    keyed_constants(K);
+    for (int kind = 0; kind < 4; ++kind) {
+      int blocks = (n + 255) / 256, reps = kind == 1 ? 8 : kind == 2 ? 16 : 5;
       if (kind == 0) pairs<<<blocks, 256>>>(dx, dy, dz, n);
       if (kind == 1) chain<8><<<blocks, 256>>>(dx, dy, dz, n);
       if (kind == 2) chain<16><<<blocks, 256>>>(dx, dy, dz, n);
       if (kind == 3) loop<<<blocks, 256>>>(dx, dy, dz, n, reps);
-      if (kind == 4) loop2<<<blocks, 256>>>(dx, dy, dz, n, reps, dkw, dkp);
       cudaError_t e = cudaDeviceSynchronize();
       if (e != cudaSuccess) {
         printf("cuda error %s\n", cudaGetErrorString(e));
@@ -213,7 +154,7 @@ int main() {
           want = hx[i] ^ hy[i] ^ K;
         } else {
           uint32_t a = hx[i], b = hy[i];
-          for (int j = 0; j < (kind == 4 ? 2 : 1) * reps; ++j) {
+          for (int j = 0; j < reps; ++j) {
             uint32_t t = a ^ b ^ K;
             a = b;
             b = t;
@@ -222,7 +163,7 @@ int main() {
         }
         bad += hz[i] != want;
       }
-      const char* name = kind == 0 ? "pairs" : kind == 1 ? "chain8" : kind == 2 ? "chain16" : kind == 3 ? "loop5" : "loop2x3";
+      const char* name = kind == 0 ? "pairs" : kind == 1 ? "chain8" : kind == 2 ? "chain16" : "loop5";
       printf("bitexact key 0x%08x %s %d points %ld mismatches\n", K, name, n, bad);
       bad_total += bad;
     }

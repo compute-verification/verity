@@ -39,6 +39,16 @@ finds nor rules out.
 
 What is shown, and how:
 - A construction: 78, with a bit-exact check over random words and edge cases, for x ⊕ y and x ⊕ y ⊕ k.
+- The same 78 as a SASS loop body with its registers allocated (`sass_body`), checked on the host. SASS's IMAD.HI.U32
+  adds a 64-bit register pair, hi32(a·b + {R[c+1]:R[c]}), so an IMAD.HI with addend c reads a pair {0, c}. The body
+  holds those pairs, and its constants, in registers it never writes, and B' is written into the odd half of a pair
+  whose even half stays 0, so it needs no move: 78 a XOR in steady state, every one class IMAD.
+- On the device (`fold_xor.sh` on vy-dc-b200, r20261019-114028-7a16 and r20261019-114747-10bd): every kernel is
+  bit-exact over 1,048,720 points, for k = 0 and one key, and ptxas's SASS has exactly the program's IMAD 33 and
+  IMAD.HI.U32 45 a XOR. ptxas also rebuilds the pair {0, c} at every use: 47 moves a XOR unrolled (MOV 31.5, HFMA2
+  15.5) and 50 plus 5 constant reloads in the loop. Neither MOV nor HFMA2 is on the menu, and as IMAD.MOV they'd make
+  125, over 93. So the 78 needs the allocation above, which is checked on the host and was not run as hand-written SASS
+  (no sm_100 assembler here).
 - A proof: no program of only IMAD's low-word forms (polynomials mod 2^32) computes x ⊕ y at any length, because
   XOR mod 16 isn't a polynomial function (its Newton coefficient at (2, 4) is 8, which gcd(16, 2!·4!) = 16 doesn't
   divide). Every program needs an IMAD.HI, an IDP or an FP instruction. XOR mod 8 is a polynomial, so 3-bit chunks are
@@ -126,6 +136,84 @@ def run(prog: list[tuple], x: int, y: int) -> int:
 def bit_exact(prog: list[tuple], K: int, rng: random.Random, n: int) -> tuple[int, int]:
     pts = [(a, b) for a in EDGE for b in EDGE] + [(rng.getrandbits(32), rng.getrandbits(32)) for _ in range(n)]
     return len(pts), sum(run(prog, a, b) != a ^ b ^ K for a, b in pts)
+
+
+#: the data registers a loop body rotates over, three XORs a body: s[n+2] = s[n] ^ s[n+1] ^ K with no move
+DATA = (20, 21, 22)
+
+
+def sass_body(K: int = 0) -> tuple[dict[int, int], list[tuple]]:
+    """The 78 as a SASS loop body with its registers allocated: (invariants, body). The invariants are set once before
+    the loop and the body writes none of them. An instruction is (op, d, a, b, c) on registers R0..R22: IMAD
+    d = a·b + c, IMAD.HI.U32 d = hi32(a·b + {R[c+1]:R[c]}) with c an even register (SASS's 64-bit addend pair). b, or
+    an IMAD's c, may be a constant ("c", v) (a constant bank or uniform register), never both."""
+    C = lambda v: ("c", u32(v))
+    s, c = AFFINE[K & 3]
+    inv = {0: 0, 1: 1, 10: 0, 12: 1 << 31, 13: u32(s << 30), 14: u32(c << 30)}
+    pairs, chunks = {}, []
+    for j in range(1, 16):
+        sj, cj = AFFINE[K >> 2 * j & 3]
+        ha = u32((cj - sj) << 30)
+        if ha not in pairs:
+            pairs[ha] = 2 + 2 * len(pairs)
+            inv |= {pairs[ha]: 0, pairs[ha] + 1: ha}
+        chunks.append((1 << (32 - 2 * j), u32(sj * (3 << 30)), pairs[ha]))
+    assert max(pairs.values()) <= 8
+
+    def one(x, y, q):
+        out = [("IMAD", 18, y, C(-s << 31), 13), ("IMAD", 19, y, C(s << 30), 14), ("IMAD", q, x, 18, 19)]
+        for sh, ea, hp in chunks:
+            out += [("IMAD.HI.U32", 11, y, C(sh), 0),      # B' into the odd half of {R10 = 0, R11}
+                    ("IMAD.HI.U32", 15, x, C(sh), 10),     # S' = hi(x·sh) + B'
+                    ("IMAD", 16, 11, 12, C(ea)),           # E
+                    ("IMAD.HI.U32", 17, q, C(1 << 30), hp),  # H
+                    ("IMAD", q, 15, 16, 17)]               # Q
+        return out
+
+    a, b, q = DATA
+    return inv, one(a, b, q) + one(b, q, a) + one(q, a, b)
+
+
+def run_sass(inv: dict[int, int], body: list[tuple], reps: int, x, y):
+    """`reps` passes of `body` from R[DATA[0]], R[DATA[1]] = x, y (numpy uint64 arrays of words); returns R."""
+    R = {r: np.full(x.shape, v, dtype=np.uint64) for r, v in inv.items()}
+    R[DATA[0]], R[DATA[1]] = x.copy(), y.copy()
+    val = lambda o: np.uint64(o[1]) if isinstance(o, tuple) else R[o]
+    for _ in range(reps):
+        for op, d, a, b, c in body:
+            if op == "IMAD":
+                R[d] = (R[a] * val(b) + val(c)) & np.uint64(M32)
+            else:
+                R[d] = (R[a] * val(b) + (R[c + 1] << np.uint64(32) | R[c])) >> np.uint64(32)
+    return R
+
+
+def sass_exact(K: int, rng: random.Random, n: int, reps: int = 3, inv: dict | None = None) -> tuple[int, int]:
+    """`sass_body(K)` over `reps` passes (3·reps XORs in a chain) against the chain on words, edge words crossed and n
+    random pairs; (points, mismatches)."""
+    base, body = sass_body(K)
+    pts = [(a, b) for a in EDGE for b in EDGE] + [(rng.getrandbits(32), rng.getrandbits(32)) for _ in range(n)]
+    x, y = (np.array(v, dtype=np.uint64) for v in zip(*pts))
+    R = run_sass(base if inv is None else inv, body, reps, x, y)
+    seq = [x, y]
+    for _ in range(3 * reps):
+        seq.append(seq[-2] ^ seq[-1] ^ np.uint64(K))
+    return len(pts), int(np.count_nonzero(R[DATA[1]] != seq[-1]))
+
+
+def sass_legal(inv: dict[int, int], body: list[tuple]) -> list[str]:
+    """What breaks SASS's operand rules or the hoisting: an empty list is a legal steady-state body."""
+    bad = []
+    for i, (op, d, a, b, c) in enumerate(body):
+        if op not in ("IMAD", "IMAD.HI.U32") or not isinstance(a, int) or not isinstance(d, int):
+            bad.append(f"{i}: {op} form")
+        elif op == "IMAD.HI.U32" and not (isinstance(c, int) and c % 2 == 0):
+            bad.append(f"{i}: addend pair at R{c}")
+        elif op == "IMAD" and isinstance(b, tuple) and isinstance(c, tuple):
+            bad.append(f"{i}: two constant operands")
+        if d in inv:
+            bad.append(f"{i}: writes invariant R{d}")
+    return bad
 
 
 # ---- the certificates and the re-solve -------------------------------------------------------------------------------
@@ -238,8 +326,7 @@ def combine_search(W: int, depth: int) -> int:
 # ---- the device build's SASS ---------------------------------------------------------------------------------------
 
 CHAINS = {8: "_Z5chainILi8EEvPKjS1_Pji", 16: "_Z5chainILi16EEvPKjS1_Pji"}
-#: the loop kernels by their mangled names' prefix, and the XORs an iteration
-LOOPS = {"_Z4loop": ("loop", 1), "_Z5loop2": ("loop2", 2)}
+LOOP = "_Z4loopPKjS0_Pjii"
 _FUNC = re.compile(r"Function : (\S+)")
 _INSN = re.compile(r"^\s*/\*([0-9a-f]{4,})\*/\s+(?:@!?U?P[T0-9]+\s+)?([A-Z][A-Z0-9_.]*)([^;]*)")
 _TARGET = re.compile(r"0x([0-9a-f]+)")
@@ -255,8 +342,8 @@ def by_class(ops: dict) -> dict:
 def sass_mix(text: str) -> dict:
     """One XOR's SASS mix in `fold_xor.sh`'s build, by census class and by opcode:
     - unrolled: chain<16>'s opcodes less chain<8>'s, over 8 (the chains' loads, store and exit cancel);
-    - loop, loop2: the body of the kernel's one backward branch over its XORs an iteration, the loop's own count,
-      compare and branch in it. loop gives ptxas IMAD.HI's addends as words, loop2 as 64-bit pairs held in registers."""
+    - loop: the body of `loop`'s one backward branch, one XOR an iteration, the loop's own count, compare and branch
+      in it."""
     per, func = {}, None
     for line in text.splitlines():
         if (m := _FUNC.search(line)):
@@ -268,16 +355,13 @@ def sass_mix(text: str) -> dict:
     lo, hi = count(per[CHAINS[8]]), count(per[CHAINS[16]])
     ops = {op: (hi[op] - lo[op]) / 8 for op in sorted(set(lo) | set(hi)) if hi[op] != lo[op]}
     out = {"per_xor_by_class": by_class(ops), "per_xor_by_opcode": ops, "per_xor": sum(ops.values())}
-    for func, insns in per.items():
-        name, xors = next((v for k, v in LOOPS.items() if func[len(k):len(k) + 1].isupper() and func.startswith(k)), (None, 0))
-        if not name:
-            continue
-        back = [(int(t.group(1), 16), at) for at, op, rest in insns
+    if LOOP in per:
+        back = [(int(t.group(1), 16), at) for at, op, rest in per[LOOP]
                 if op.split(".")[0] == "BRA" and (t := _TARGET.search(rest)) and int(t.group(1), 16) < at]
-        assert len(back) == 1, f"{name} has {len(back)} backward branches, not 1"
+        assert len(back) == 1, f"loop has {len(back)} backward branches, not 1"
         start, end = back[0]
-        body = {op: n / xors for op, n in sorted(count(i for i in insns if start <= i[0] <= end).items())}
-        out[name] = {"per_xor_by_class": by_class(body), "per_xor_by_opcode": body, "per_xor": sum(body.values())}
+        body = dict(sorted(count(i for i in per[LOOP] if start <= i[0] <= end).items()))
+        out["loop"] = {"per_xor_by_class": by_class(body), "per_xor_by_opcode": body, "per_xor": sum(body.values())}
     return out
 
 
@@ -290,7 +374,7 @@ def main() -> int:
     ck = Checks()
     rng = random.Random(SEED)
 
-    # -- 1. the program ---------------------------------------------------------------------------------------------------
+    # -- 1. the program ------------------------------------------------------------------------------------------------
     prog = xor_program()
     npts, bad = bit_exact(prog, 0, rng, 200_000)
     ck.check("the 78-instruction program is x ^ y, bit-exact (the 12 edge words crossed, and 200,000 random pairs)",
@@ -300,6 +384,18 @@ def main() -> int:
     ck.check("with li's constant k folded into its constants it is x ^ y ^ k at the same 78 (64 keys, the edge "
              "words and 2,000 random pairs each)", kbad == 0 and all(len(xor_program(K)) == 78 for K in keyed),
              f"{kbad} mismatches")
+    inv, body = sass_body()
+    skeys = [0, 0x9E13B91C, 0xFFFFFFFF, *(rng.getrandbits(32) for _ in range(5))]
+    sbad = [sass_exact(K, rng, 20_000)[1] for K in skeys]
+    sops = Counter(op for op, *_ in body)
+    ck.check("as a SASS loop body with its registers allocated it is 78 a XOR (IMAD 33, IMAD.HI.U32 45, class IMAD) "
+             "and needs no move: three XORs a body over three rotating registers, IMAD.HI.U32's addend pairs {0, c} "
+             "and the constants in registers the body never writes, within SASS's operand rules; bit-exact under the "
+             "pair semantics over 3 passes (9 chained XORs) for 8 keys",
+             len(body) == 3 * 78 and sops == {"IMAD": 99, "IMAD.HI.U32": 135} and not sass_legal(inv, body)
+             and all(sass_body(K)[1] and not sass_legal(*sass_body(K)) for K in skeys)
+             and {class_of(op) for op in sops} == {"IMAD"} and sum(sbad) == 0,
+             {"ops": dict(sops), "invariant registers": len(inv), "mismatches": sbad, "illegal": sass_legal(inv, body)})
     forms = {f: sum(1 for p in prog if p[0] == f) for f in SASS}
     kinds = {f: class_of(SASS[f]) for f in SASS}
     ck.check("its forms are IMAD (33) and IMAD.HI (45), each class IMAD at DS-100 (facet_break.loads.class_of); no "
@@ -337,7 +433,7 @@ def main() -> int:
              "the lucky one", 78 * pm < pa and 78 * lm > la,
              f"plain: 78 x {pm:.5f} = {78 * pm:.4f} < {pa:.4f}; lucky: 78 x {lm:.5f} = {78 * lm:.4f} > {la:.4f}")
 
-    # -- 3. the headline ---------------------------------------------------------------------------------------------------
+    # -- 3. the headline -----------------------------------------------------------------------------------------------
     T0 = s.baseline.T
     lu0 = max(0.0, (plain.T - lucky.T) / T0)
     base = 1 - plain.T / T0
@@ -348,8 +444,8 @@ def main() -> int:
                  "ε_luck", abs(e0.skip - rest) < 1e-12 and e0.mand == 0.0
                  and abs(e0.core() - (rest + base + lu0)) < 1e-9, f"core {e0.core():.5%}")
     h78, m78, l78, x78, mix78, lk78 = headline(s, rest, 78)
-    ck.check("re-solved with the 78 route open, the plain cheater moves a share of li's XORs and ε_machine rises; ε_luck "
-             "falls by as much and the lucky cheater doesn't move, so ε_machine + ε_luck is unchanged",
+    ck.check("re-solved with the 78 route open, the plain cheater moves a share of li's XORs and ε_machine rises; "
+             "ε_luck falls by as much and the lucky cheater doesn't move, so ε_machine + ε_luck is unchanged",
              x78 > 1e-5 and m78 > base and abs((m78 + l78) - (base + lu0)) < 1e-9 and abs(lk78.T - lucky.T) < 1e-12,
              f"x {x78:.6f}; ε_machine {base:.5%} -> {m78:.5%}, ε_luck {lu0:.5%} -> {l78:.5%}")
     hd = {n: headline(s, rest, n)[0] for n in (1, 3, 4, 20, 40, 62, 63, 78, 93)}
@@ -360,7 +456,7 @@ def main() -> int:
              and hd[1] > hd[3] > 0.01 > hd[4] > hd[20] > hd[40] > hd[62] and abs(hd[1] - 0.013288) < 5e-6,
              {n: f"{v:.4%}" for n, v in hd.items()})
 
-    # -- 4. what's proven, and the family search -------------------------------------------------------------------------
+    # -- 4. what's proven, and the family search -----------------------------------------------------------------------
     fails = {w: newton_failures(w) for w in (2, 3, 4)}
     ck.check("XOR mod 4 and mod 8 are polynomial functions and XOR mod 16 isn't (Newton coefficient (2, 4) is 8, not "
              "divisible by 16): no program of IMAD's low-word forms alone computes x ^ y at any length",
@@ -382,10 +478,13 @@ def main() -> int:
         bad1 = [(f, dst, a, u32(b + (1 << 20)) if i == 3 else b, c) for i, (f, dst, a, b, c) in enumerate(prog)]
         ck.mutation("chunk 1's extraction shift off by 2^20 breaks the program (the bit-exact check isn't vacuous)",
                     bit_exact(bad1, 0, rng, 256)[1] > 0)
-        bad2 = [(f, dst, a, b, u32(c - (1 << 30)) if dst == "H" and isinstance(c, int) else c) for f, dst, a, b, c in prog]
+        bad2 = [(f, dst, a, b, u32(c - (1 << 30)) if dst == "H" and isinstance(c, int) else c)
+                for f, dst, a, b, c in prog]
         ck.mutation("the -2^30 folded into H's addend is load-bearing", bit_exact(bad2, 0, rng, 256)[1] > 0)
         ck.mutation("x ^ y's program is wrong for a key with a nonzero chunk (k does change the constants)",
                     bit_exact(prog, 0x0000000C, rng, 256)[1] > 0)
+        ck.mutation("the SASS body's B' pair with a nonzero low half breaks it (the interpreter reads the pair)",
+                    sass_exact(0, rng, 256, inv={**inv, 10: M32})[1] > 0)
         x93, _ = least(s, 93)
         ck.mutation("a route over the plain break-even (93) doesn't pay: the re-solve moves nothing", x93 < 1e-9,
                     f"x {x93:.2e}")
