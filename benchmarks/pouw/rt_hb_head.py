@@ -24,6 +24,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 import lean_headline_dc as LD  # noqa: E402
 from verity_machine_model import eps as E  # noqa: E402
 
+ORIGINAL = {"Sm90": "dither-2s-licpw-redux-l32", "Sm100": "dither-2s-licpw-redux-heavy-ldtm0-l32"}  # #2699 @ f3c3237e8a
 REPAIRED = {"Sm90": "dither-2s-licpw-redux-p1-l32", "Sm100": "dither-2s-licpw-redux-ldtm0-l32"}
 GRID = (1.0, 0.995, 0.99, 0.98, 0.95, 0.93, 0.92, 0.90)
 
@@ -35,7 +36,7 @@ def _per_unit(n: dict[str, float], Nw: int) -> dict[str, float]:
 def readings() -> list[dict]:
     out = []
     for fam in LD.FAMILIES:
-        for design in (fam.design, REPAIRED[fam.ns]):
+        for design in (ORIGINAL[fam.ns], REPAIRED[fam.ns]):
             f = dataclasses.replace(fam, design=design)
             d = E.design(design, f.data)
             for v in (f.sheet, f.measured):
@@ -63,7 +64,7 @@ def cliffs() -> list[dict]:
     out = []
     for fam in LD.FAMILIES:
         pi = E.machine(fam.sheet, fam.data)
-        for design in (fam.design, REPAIRED[fam.ns]):
+        for design in (ORIGINAL[fam.ns], REPAIRED[fam.ns]):
             d0 = E.design(design, fam.data)
             R0 = sum(d0.fold.values())
 
@@ -83,8 +84,15 @@ def cliffs() -> list[dict]:
 
 
 LEAN = Path(__file__).resolve().parents[2] / "Security" / "Definitions" / "Accounting" / "HeadlineDc"
-STATED = {"Sm90": Fraction(728, 100000), "Sm90Measured": Fraction(781, 100000), "Sm100": Fraction(504, 100000),
-          "Sm100Measured": Fraction(556, 100000)}
+STATEMENTS = Path(__file__).resolve().parents[2] / "Security" / "Models" / "Accounting" / "Guarantees" / "HeadlineDc.lean"
+
+
+def stated(name: str) -> Fraction:
+    """The ε `HeadlineDc.lean`'s statement for data file `name` states (`… < 1 - N / 100000`)."""
+    text = STATEMENTS.read_text()
+    stmt = name.replace("Measured", "") + ("Measured" if "Measured" in name else "Sheet") + "Headline"
+    m = re.search(rf"^def {stmt} : Prop :=.*?< 1 - (\d+) / (\d+)\)", text, re.S | re.M)
+    return Fraction(int(m.group(1)), int(m.group(2)))
 LN2_HI = Fraction(6931471808, 10**10)   # Real.log_two_lt_d9
 LN_P_LO = Fraction(1, 8)                # 1 − 7/8 ≤ ln(8/7)
 
@@ -201,15 +209,15 @@ def lean_recompute() -> list[dict]:
             folded = 1 - Y + kappa * 41 * LN2_HI / (LN_P_LO * S)
             unf_2699 = 1 - Y * (1 - Fraction(41, S))
             unf_proved = 1 - Y0 * (1 - Fraction(41, S))
-            out.append({"statement": name, "stated": float(STATED[name]), "B_flat": float(B),
+            out.append({"statement": name, "stated": float(stated(name)), "B_flat": float(B),
                         "flat_facet": max(rows, key=lambda r: load(flat, r)), "certificate": {r: float(x) for r, x in
                                                                                              lam.items()},
                         "wstar_route": wk, "Nw_w": float(Nw * w), "Nw_phi": float(Nw * phi),
                         "fold_prices": [float(x) for x in phis], "chi": float(chi), "folded": float(folded),
                         "unfolded_2699": float(unf_2699), "bound_2699": float(max(folded, unf_2699)),
                         "unfolded_proved": float(unf_proved), "bound_proved": float(max(folded, unf_proved)),
-                        "meets_2699": max(folded, unf_2699) <= STATED[name],
-                        "meets_proved": max(folded, unf_proved) <= STATED[name]})
+                        "meets_2699": max(folded, unf_2699) <= stated(name),
+                        "meets_proved": max(folded, unf_proved) <= stated(name)})
     return out
 
 

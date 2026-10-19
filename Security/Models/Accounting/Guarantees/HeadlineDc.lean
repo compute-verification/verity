@@ -33,10 +33,11 @@ Per device:
   bf16, binary and fp8 forms at about 1), a lower bound on their issue cost that no certificate prices above it, so
   the measured menu is honest's form and the uniform `UNI`, and `NoSum` carries every other form. Over the census's
   full menu the same certificate search gives `29.3%`.
-* The B200 (sm_100) runs `dither-2s-licpw-redux-heavy-ldtm0-l32` (Dither-2S, LI-CP-W redux heavy fold, no filler),
-  whose ♭ credits none of honest's 8 `tcgen05.ld` a MMA: the operands-free cheater never pays them, so crediting them
-  was all of DC-100-ri's `ε_machine`. Honest still runs them; a lower credit is sound for any program. DS-100's
-  `f_max` (1965 MHz) is the driver's reported maximum: the data sheet gives no clock.
+* The B200 (sm_100) runs `dither-2s-licpw-redux-ldtm0-l32` (Dither-2S, LI-CP-W redux, no filler): its fold is the
+  one `PouwWarpCheck` recomputes (`PouwLiAbsorb_v2`, no extra keyed round), and its ♭ credits none of honest's 8
+  `tcgen05.ld` a MMA: the operands-free cheater never pays them, so crediting them was all of DC-100-ri's
+  `ε_machine`. Honest still runs them; a lower credit is sound for any program. DS-100's `f_max` (1965 MHz) is the
+  driver's reported maximum: the data sheet gives no clock.
 
 Outside every statement: `S8MmaExact`, that IGMMA s8 (sm_90a) and tcgen05 `kind::i8` (sm_100a) write `C + Σ a_k b_k`
 exactly in s32 on the design's operands. The bounds read classes and words (A6), not values, so they don't read it;
@@ -48,8 +49,8 @@ the commitments. The sampled path's `ε_sample` and the Fiat–Shamir premium ar
 **The window these numbers are for.** Each statement is typed at `SmX.checks = 48,000` rounds, every round live and
 fully checked (no service draw, so no `K_d`), and `RightFixed` charges each round an equal `1/S` share of the window's
 words (`r = 1`). It says nothing about a window of any other shape, and no served window has this one. The same bound
-at `S` rounds in place of 48,000 needs at least 11,400 (H200 sheet), 19,100 (H200 measured), 7,018 (B200 sheet) and
-7,711 (B200 measured) equal live rounds for `ε < 1%`, and is above 100% at 18 rounds. Unequal rounds pay their
+at `S` rounds in place of 48,000 needs at least 11,400 (H200 sheet), 19,100 (H200 measured), 13,801 (B200 sheet) and
+20,594 (B200 measured) equal live rounds for `ε < 1%`, and is above 100% at 18 rounds. Unequal rounds pay their
 max-over-mean share (RT-INT-2's `r`, an estimate, not a statement): at `r = 2.87` and 48,000 rounds the H200's
 measured reading would be 1.05%.
 
@@ -67,9 +68,9 @@ The statements:
   branch binds).
 * `Sm90MeasuredHeadline`: the H200 on DC-90-ri, at a mixed π* (issue, JI90_0, JI90_1): at least `1 − 0.781%` (the
   folded branch binds).
-* `Sm100SheetHeadline`: the B200 at its data sheet (DS-100), at a mixed π* (DS_issue, DS_alu): at least `1 − 0.504%`
+* `Sm100SheetHeadline`: the B200 at its data sheet (DS-100), at a mixed π* (DS_issue, DS_alu): at least `1 − 0.790%`
   (unfolded).
-* `Sm100MeasuredHeadline`: the B200 on DC-100-ri, at π* = issue: at least `1 − 0.556%` (unfolded).
+* `Sm100MeasuredHeadline`: the B200 on DC-100-ri, at π* = issue: at least `1 − 0.888%` (unfolded).
 
 None is proved yet: `lean-audit.json` lists them under `shape.frozen` as `unstated` until their proofs land, and
 `FillOptFilled` joins the lock's assumptions with the first proved statement that reads it. #2482's unfolded branch
@@ -139,14 +140,14 @@ def Sm90MeasuredHeadline : Prop :=
       (Pl.run x).run.time / Sm90Measured.model.credit Sm90Measured.flat < 1 - 781 / 100000) ≤ (1 / 2) ^ 40
 
 /-- **The B200's headline at the data sheet**, under full checking with live coins. On DS-100's machine
-(`Sm100.sheet`), `dither-2s-licpw-redux-heavy-ldtm0-l32`'s TS model (`Sm100.model`: every census MMA class a writer
+(`Sm100.sheet`), `dither-2s-licpw-redux-ldtm0-l32`'s TS model (`Sm100.model`: every census MMA class a writer
 kind at its committed words an instruction, `q = q_T = ½`, `N_w = 32768`) and its floor program (`Sm100.flat`,
 crediting no `tcgen05.ld`), over `Sm100.checks = 48,000` rounds on any finite coins `Ω`: for any window's play `Pl` and
 proof layer `pf` whose binding and soundness cost at most `2^-41` over the window, if the labelling splits, A1–A7 hold
 on every run
 and FOLD-OPT per word folded prices every run's fold at the words it folds (its unfolded share `Uf`), and the luck and
 proof premises hold as in `Sm90SheetHeadline`, then outside an event of probability at most `2^-40` every accepted
-window's time is at least `1 − 504/100000` (`1 − 0.504%`) of the credit `T_cred = B_♭/f_max`. FILL-OPT is not a
+window's time is at least `1 − 790/100000` (`1 − 0.790%`) of the credit `T_cred = B_♭/f_max`. FILL-OPT is not a
 hypothesis: the design has no filler, so it holds at any run. -/
 def Sm100SheetHeadline : Prop :=
   ∀ (Ω : Type) [Fintype Ω] (Pl : Play Ω Sm100.checks (Fin 26) (Fin 12) Unit Empty) (G : ReceiptGame Ω Sm100.checks)
@@ -160,18 +161,18 @@ def Sm100SheetHeadline : Prop :=
     Pl.game = G.game → G.Pinned → OperandHMu (3 / 4) G → ReceiptLuckAt (1 / 2) G → WholeLuckAt (1 / 2) G Uf →
     pf.Of Pl → (∀ w, prob (fun x => pf.Moved x w) ≤ δbind) → pf.SoundAt δzk →
     pf.Pins → RightFixed Pl pf Sm100.model.Nw →
-    prob (fun x => Pl.accepts x ∧ (Pl.run x).run.time / Sm100.model.credit Sm100.flat < 1 - 504 / 100000) ≤
+    prob (fun x => Pl.accepts x ∧ (Pl.run x).run.time / Sm100.model.credit Sm100.flat < 1 - 790 / 100000) ≤
       (1 / 2) ^ 40
 
 /-- **The B200's headline on its measured vector**, under full checking with live coins. On DC-100-ri's machine
-(`Sm100Measured.machine`), `dither-2s-licpw-redux-heavy-ldtm0-l32`'s TS model on it (`Sm100Measured.model`: every
+(`Sm100Measured.machine`), `dither-2s-licpw-redux-ldtm0-l32`'s TS model on it (`Sm100Measured.model`: every
 census MMA class a writer kind, `q = q_T = ½`, `b_T = 0`, `N_w = 32768`) and its floor program (`Sm100Measured.flat`),
 over `Sm100.checks = 48,000` rounds on any finite coins `Ω`: for any window's play `Pl` and proof layer `pf` whose
 binding and soundness cost at most `2^-41` over the window, if the labelling splits, (I1) `FacetCeilings` holds on
 DC-100-ri's rows, A6 (`SheetWords`) and (I5) `NoSum` hold on every run and FOLD-OPT per word folded prices every run's
 fold at the words it folds (its unfolded share `Uf`), and the luck and proof premises hold as in `Sm90SheetHeadline`,
-then outside an event of probability at most `2^-40` every accepted window's time is at least `1 − 556/100000`
-(`1 − 0.556%`) of the credit `T_cred = B_♭/f_max`. FILL-OPT is not a hypothesis: the design has no filler. -/
+then outside an event of probability at most `2^-40` every accepted window's time is at least `1 − 888/100000`
+(`1 − 0.888%`) of the credit `T_cred = B_♭/f_max`. FILL-OPT is not a hypothesis: the design has no filler. -/
 def Sm100MeasuredHeadline : Prop :=
   ∀ (Ω : Type) [Fintype Ω] (Pl : Play Ω Sm100.checks (Fin 26) (Fin 12) Unit Empty) (G : ReceiptGame Ω Sm100.checks)
     (Uf : Unfolded Ω Sm100.checks) {V : Type} {nπ : ℕ} (pf : ProofLayer Ω Sm100.checks nπ V) (δbind δzk : ℝ),
@@ -184,6 +185,6 @@ def Sm100MeasuredHeadline : Prop :=
     pf.Of Pl → (∀ w, prob (fun x => pf.Moved x w) ≤ δbind) → pf.SoundAt δzk →
     pf.Pins → RightFixed Pl pf Sm100Measured.model.Nw →
     prob (fun x => Pl.accepts x ∧
-      (Pl.run x).run.time / Sm100Measured.model.credit Sm100Measured.flat < 1 - 556 / 100000) ≤ (1 / 2) ^ 40
+      (Pl.run x).run.time / Sm100Measured.model.credit Sm100Measured.flat < 1 - 888 / 100000) ≤ (1 / 2) ^ 40
 
 end Accounting.Guarantees.TS

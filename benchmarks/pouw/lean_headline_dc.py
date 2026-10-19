@@ -98,7 +98,7 @@ SM90 = Family("Sm90", "H200", "sm_90", "dither-2s-licpw-redux-l32", "DS-90", "DC
               {"DS_alu": ("alu", 64), "DS_imad": ("imad", 64), "DS_shfl": ("shfl", 32)},
               (1024, 2048, 4096, 16384), 1980, "the data sheet's boost clock", {"UNI": 1},
               Fraction(1, 100), Fraction(1, 100), honest_menu=True)
-SM100 = Family("Sm100", "B200", "sm_100", "dither-2s-licpw-redux-heavy-ldtm0-l32", "DS-100", "DC-100-ri",
+SM100 = Family("Sm100", "B200", "sm_100", "dither-2s-licpw-redux-ldtm0-l32", "DS-100", "DC-100-ri",
                {"DS_alu": ("alu", 64), "DS_imad": ("imad", 64), "DS_shfl": ("shfl", 32)},
                (2048, 4096, 8192, 32768), 1965, "the driver's reported maximum (the data sheet gives no clock)", {},
                Fraction(1, 100), Fraction(1, 100))
