@@ -237,6 +237,13 @@ REF_OF = {"dither": "exact", "dither-side": "exact", "dither-1s": "exact", "dith
           "exact-fused": "exact", "stock-percall": "stock"}
 # an arm with no window check whose gate is its tokens: equal to its reference arm's or the run times nothing
 TOKENS_ONLY = {"exact-fused", "stock-percall"}
+def token_diff(a: list, b: list) -> dict:
+    """Two arms' greedy outputs for the same requests: how many are equal, and each other one's first differing position."""
+    first = sorted(next((i for i, (x, y) in enumerate(zip(p, q)) if x != y), min(len(p), len(q)))
+                   for p, q in zip(a, b) if p != q)
+    return {"requests_equal": len(a) - len(first), "first_diff": first}
+
+
 PROF_N = (8, 24)
 PROF_RANGE = "verity/exactlin/prof"
 # an arm that serves another value: its tokens are compared, not required equal (an arm not listed: required)
@@ -410,6 +417,8 @@ def main() -> int:
     reps: list[dict] = []
     ref_tokens: dict = {}
     gate = {}
+    vs_ref: dict = {}
+    vs_rep0: dict = {}
     gate_doc: dict = {}
     if a.gate:
         for arm in arms:
@@ -461,9 +470,14 @@ def main() -> int:
             if (r, arm) in ref_tokens:
                 ref = REF_OF.get(arm, arms[0])
                 gate.setdefault(arm, []).append(None if ref == arm else ref_tokens[(r, arm)] == ref_tokens.get((r, ref)))
+                if ref != arm and (r, ref) in ref_tokens:
+                    vs_ref.setdefault(arm, []).append(token_diff(ref_tokens[(r, arm)], ref_tokens[(r, ref)]))
+                if r > 0:
+                    vs_rep0.setdefault(arm, []).append(token_diff(ref_tokens[(r, arm)], ref_tokens[(0, arm)]))
     for arm in arms:
         conns[arm].send({"op": "stop"})
-    summary = {"arms": arms, "info": info, "gate_tokens_equal_ref_arm": gate, "ref_of": REF_OF, "n1": N1, "n2": N2, "b": B,
+    summary = {"arms": arms, "info": info, "gate_tokens_equal_ref_arm": gate, "decode_tokens_vs_ref": vs_ref,
+               "decode_tokens_vs_rep0": vs_rep0, "ref_of": REF_OF, "n1": N1, "n2": N2, "b": B,
                "gate": {arm: {k: v for k, v in d.items() if k != "tokens"} for arm, d in gate_doc.items()},
                "saturation": {"requests": SAT_REQS, "tokens": SAT_TOKENS, "max_num_seqs": min(MAX_SEQS, a.t),
                               "max_num_batched_tokens": a.t}, "per_arm": {}}

@@ -20,7 +20,8 @@ Per shape, the reference is the exact arm's own code on the same GPU, `int8_exac
                 quantizer is exactly q = cvt.rni.sat(x * RN32(127 / a)) with s = RN32(a / 127) (0 for a zero row); the
                 GEMM against the reference's xq and s_a, and against the reverse order RN(RN(Y s_w) s_a); where M is a
                 multiple of 16 and the build has it, CUTLASS's GEMM as vLLM calls it and on the transposed product
-                (`cutlass_swapped`)
+                (`cutlass_swapped`); and triton_scaled_mm's kernel at each tile a traced engine freezes (FROZEN_TILES)
+                against its per-call tile
 plus the PTX of both kernels (`exactlin.ptx_check`).  `gate()` returns the document; `ok` is the fused path's verdict
 (stock's differences are findings, not failures).
 
@@ -165,7 +166,9 @@ def stock_doc(x, w, s_w, xq_ref, s_ref, y_ref) -> dict:
     y_rev = (yy * s_w.reshape(1, -1) * s_ref[:, None]).to(torch.bfloat16)
     y_chain = triton_scaled_mm(xq_st, w.t(), s_st.reshape(-1, 1), s_w, torch.bfloat16)
     doc["gemm"] = {"triton_scaled_mm_y_diff": diff(y_st, y_ref), "reverse_order_y_diff": diff(y_rev, y_ref),
-                   "stock_chain_y_diff": diff(y_chain, y_ref)}
+                   "stock_chain_y_diff": diff(y_chain, y_ref),
+                   "frozen_tile_y_diff": {"x".join(map(str, t)): diff(scaled_mm_at(xq_ref, w.t(), s_ref, s_w, t), y_st)
+                                          for t in FROZEN_TILES}}
     if x.shape[0] % 16 == 0:
         try:
             y_cu = torch.empty_like(y_ref)
@@ -175,6 +178,30 @@ def stock_doc(x, w, s_w, xq_ref, s_ref, y_ref) -> dict:
         except RuntimeError as err:
             doc["gemm"]["cutlass_error"] = str(err).splitlines()[0][:200]
     return doc
+
+
+# the tiles triton_scaled_mm's heuristic freezes when Dynamo traces it at M = max_num_batched_tokens 64 and 256 (sbench's T)
+FROZEN_TILES = ((64, 64, 256), (128, 128, 128))
+
+
+def scaled_mm_at(xq, w_t, s_a, s_w, tile) -> torch.Tensor:
+    """vLLM's scaled_mm_kernel launched at TILE whatever M is, as a stock engine traced at another M runs it
+    (triton_scaled_mm(use_heuristic=False) leaves its tile unset at d9105ea80, so the kernel is launched here)."""
+    import triton
+    import triton.language as tl
+    from vllm.model_executor.layers.quantization.compressed_tensors.triton_scaled_mm import (
+        scaled_mm_kernel,
+    )
+    (m, k), n = xq.shape, w_t.shape[1]
+    bm, bn, bk = tile
+    s_a, s_w = s_a.reshape(-1, 1), s_w.reshape(-1, 1)
+    out = torch.empty((m, n), dtype=torch.bfloat16, device=xq.device)
+    scaled_mm_kernel[(triton.cdiv(m, bm) * triton.cdiv(n, bn),)](
+        xq, w_t, s_a, s_w, out, None, m, n, k, xq.stride(0), xq.stride(1), w_t.stride(0), w_t.stride(1), out.stride(0),
+        out.stride(1), tl.int32, BLOCK_SIZE_M=bm, BLOCK_SIZE_N=bn, BLOCK_SIZE_K=bk,
+        BLOCK_SIZE_SCALE_A=1 if m == 1 else bm, BLOCK_SIZE_SCALE_B=bn, USE_TD=False,
+        B_T=w_t.stride(1) != 1 and w_t.stride(0) == 1)
+    return out
 
 
 def cutlass_swapped(xq, s_a, w, s_w) -> torch.Tensor:
