@@ -42,10 +42,10 @@ this directory builds every variant (`pd.cu`) to measure them against the launch
     compression is about 3,500 instructions (56 KB), and a call's serial compressions are each at a site of their own,
     so inlined they are each fetched cold. On its thread the schedule is a third of a compression's cycles.
 - `hash_decode_host.cpp` (beside `hash_decode.cuh`): the same source run on the CPU (`pd_run`), with Pearl-C's own hash
-  kernels, for `host_test.py`.
+  kernels, for `host_check.py`.
 - `refs.py`: the Python references (`pearl_c.row_digest`, `row_seed`, `unit_seed_a`, `line_key`, `sample_line` and
   `leaf`, and `audit.HM96`'s tree).
-- `host_test.py`: pd's launches against Pearl-C's kernels and the Python references on the CPU: pads, odd segment counts,
+- `host_check.py`: pd's launches against Pearl-C's kernels and the Python references on the CPU: pads, odd segment counts,
   one and two segment warps, both modes and every variant, every output poisoned first.
 - `bench.py`: per Llama-3.1-8B linear and decode's m16, on the GPU:
   - the check: pd in every variant against Pearl-C byte for byte, with Python references, a poison control and a

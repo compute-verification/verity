@@ -6,7 +6,7 @@ counts odd and even and one or two segment warps, in every variant (hash_decode.
 every pd output starts poisoned.  pd_probe's variants are held to each other, and its paired chain to its compressions'.
 Exit 1 on any difference.
 
-  python3 host_test.py [SO]   (default: builds pd_host.so with g++ into a temporary directory)
+  python3 host_check.py [SO]   (default: builds pd_host.so with g++ into a temporary directory)
 """
 from __future__ import annotations
 
@@ -227,7 +227,7 @@ def main(argv: list[str]) -> int:
     print(f"probe: done, {len(fails)} failures so far", flush=True)
     for f in fails:
         print("FAIL", f)
-    print(f"host_test: {cases} pd comparisons, {len(fails)} failures")
+    print(f"host_check: {cases} pd comparisons, {len(fails)} failures")
     return 1 if fails else 0
 
 

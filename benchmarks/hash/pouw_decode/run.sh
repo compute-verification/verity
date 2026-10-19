@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # pouw_decode on one RTX PRO 6000, everything kept under $OUT:
 #   off the lease  Pearl-C's cubin (pearl_c_sm120.cu, build.sh's flags) and pd.cubin, with ptxas's reports and their sha256s;
-#                  host_test.py (pd's launches against Pearl-C's and the Python references on the CPU)
+#                  host_check.py (pd's launches against Pearl-C's and the Python references on the CPU)
 #   one GPU        bench.py: the check, then the interleaved timing (bench.jsonl); then bench.py --trace under nsys
 #                  (--cuda-graph-trace=node)
 #   off the lease  the trace to SQLite and trace.py over it (trace.json, trace.txt)
@@ -47,8 +47,8 @@ grep -E "pd_|spill|stack" "$OUT/ptxas_pd.txt" | head -80 || true
 
 g++ -O2 -std=c++20 -pthread -shared -fPIC -Wno-unknown-pragmas -o "$SCR/pd_host.so" \
   "$ROOT/benchmarks/pouw/pearl_c_sm120/hash_decode_host.cpp"
-PYTHONPATH="$ROOT" python3 "$HERE/host_test.py" "$SCR/pd_host.so" > "$OUT/host_test.txt" 2>&1
-tail -3 "$OUT/host_test.txt"
+PYTHONPATH="$ROOT" python3 "$HERE/host_check.py" "$SCR/pd_host.so" > "$OUT/host_check.txt" 2>&1
+tail -3 "$OUT/host_check.txt"
 
 export PD_SIDE=${PD_SIDE:-19,211,339,467,851,979}
 B=(python3 "$HERE/bench.py" "$SCR/pearl_c_sm120.cubin" "$SCR/pd.cubin" --out "$OUT" --reps "$REPS" --rows "$ROWS" --shapes "$SHAPES")
