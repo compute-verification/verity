@@ -1,7 +1,7 @@
 """One link-window's network certificates through the proof service (N2): the round trip to an accepted, exhaustive
 outcome, the public-items rule on the registration, the head check against the declared grid and the occupancy
 profile, and each way a link-window fails closed, on injected coins and an injected clock. Every round's verdict is
-held to the stand-in (`LinkWindows.stand_in`), the in-the-clear verdict the head check replaced."""
+held to the stand-in (`LinkWindows.stand_in`), the in-the-clear verdict from before the head check."""
 
 import json
 from dataclasses import replace
@@ -81,13 +81,12 @@ class Run:
         self.previous = reg.digest
         return reg
 
-    def round(self, opening, delivered=None, *, content=False) -> S.Outcome:
-        """One registration through its outcome, held to the stand-in. `content`: the egress frames differ from the
-        Program's grid while the head is the profile's, which the stand-in rejects and N2 leaves to N3."""
+    def round(self, opening, delivered=None) -> S.Outcome:
+        """One registration through its outcome, held to the stand-in."""
         draw = self.stream.select(self.register(opening))
         assert self.stream.deliver(draw, [self.lw.session(delivered or opening, draw)]) is None
         out = self.lw.outcome(self.stream, draw, delivered or opening, FRAMES, SYNCS)
-        assert self.lw.stand_in(delivered or opening, draw, FRAMES, SYNCS) == (out.accepted and not content)
+        assert self.lw.stand_in(delivered or opening, draw, FRAMES, SYNCS) == out.accepted
         return out
 
 
@@ -165,11 +164,11 @@ def test_the_profile_binds_egress_too_and_ends_where_it_ends(tmp_path):
     assert run.lw.declares(1, 2, ig[2]) and not run.lw.declares(1, 3, ig[2])
 
 
-def test_under_an_egress_profile_the_head_check_holds_the_egress_grid(tmp_path):
-    """With an egress profile the audit compares no egress grid, and the head check holds the head's status, grid and
-    counts. A window whose frames differ from the Program's grid in content alone is accepted, its content left to N3
-    on the windows it draws, where the stand-in rejects it. An egress head under another parameters digest is rejected
-    though its certificate verifies."""
+def test_under_an_egress_profile_the_egress_grid_is_still_compared(tmp_path):
+    """With an egress profile the head check holds the head's status, grid and counts, and the audit still compares the
+    egress grid in the clear, until N3 runs on every window (NET-38): a window whose frames differ from the Program's
+    grid in content alone, at the profile's counts, is rejected, as the stand-in rejects it. An egress head under
+    another parameters digest is rejected though its certificate verifies."""
     run = Run(tmp_path, occupancy=honest_occupancy())
     honest = egress_records()[0]
     slots = [list(row) for row in honest.grid]
@@ -178,10 +177,11 @@ def test_under_an_egress_profile_the_head_check_holds_the_egress_grid(tmp_path):
     content = replace(honest, grid=tuple(tuple(row) for row in slots))
     assert occupancy(content.grid) == occupancy(honest.grid) and content.grid != honest.grid
     opening = run.lw.commit(0, run.egress(content), run.ingress(ingress_records()[0]), SALTS[0])
-    assert run.round(opening, content=True).accepted
+    assert all(i is not None and HC.reference(i) for i in run.lw.head_checks(opening, bytes.fromhex(run.lw.root(opening))))
+    assert reject(run.round(opening))
     unswept = run.issuer.certify(egress_records()[1], EGRESS, PARAMS, parameters_digest(PARAMS))
     assert reject(run.round(run.lw.commit(1, unswept, run.ingress(ingress_records()[1]), SALTS[1])))
-    assert run.round(run.honest(2)).accepted and run.stream.symbols == ("accept", "reject", "accept")
+    assert run.round(run.honest(2)).accepted and run.stream.symbols == ("reject", "reject", "accept")
 
 
 def test_a_head_of_another_size_class_is_a_reject(tmp_path):

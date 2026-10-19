@@ -180,12 +180,12 @@ def test_service_verify_is_the_same_under_the_adapter(lean, tmp_path, monkeypatc
     assert accepted == [True, False, False, False, False, False]
 
 
-def test_under_an_egress_profile_the_adapter_leaves_the_egress_grid_to_the_head_check(lean, tmp_path, monkeypatch):
-    """With the link's egress occupancy declared, `LinkWindows.verify` compares no egress grid (`check_link(grid=False)`)
-    under the adapter as under `audit.Audit`: a window whose frames differ from the Program's in content alone, at the
-    profile's counts, is accepted by both, where the stand-in rejects it, and a forged signature is still rejected. The
-    adapter's `check_link(grid=False)` maps only the Lean's `mismatch` to an accept, and refuses a record that isn't
-    certified, whose grid no head check holds."""
+def test_under_an_egress_profile_the_adapter_still_compares_the_egress_grid(lean, tmp_path, monkeypatch):
+    """With the link's egress occupancy declared, `LinkWindows.verify` still compares the egress grid in the clear, until
+    N3 runs on every window (NET-38), under the adapter as under `audit.Audit`: a window whose frames differ from the
+    Program's in content alone, at the profile's counts, is rejected by both, as by the stand-in, and a forged signature
+    is rejected. The adapter's `check_link(grid=False)`, kept for that switch, maps only the Lean's `mismatch` to an
+    accept, and refuses a record that isn't certified, whose grid no head check holds."""
     def content(w, r):
         if w != 1:
             return r
@@ -218,7 +218,7 @@ def test_under_an_egress_profile_the_adapter_leaves_the_egress_grid_to_the_head_
             for records in ([raw], [commit(raw, lw.params)]):
                 with pytest.raises(ValueError, match="only a certified record's grid is held by its head check"):
                     lean_audit.Audit(server=lean).check_link("responses", records, *args, grid=False)
-    assert accepted == [True, True, False] and stood == [True, False, False]
+    assert accepted == stood == [True, False, False]
 
 
 def test_a_disagreement_with_the_reference_rejects(lean, tmp_path, monkeypatch):

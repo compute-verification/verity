@@ -50,15 +50,17 @@ Its verifier of record is `LinkWindows.verify`, which runs on the host and reads
 their four salts. It accepts when
 - the opening reproduces the registered root under the link-window's domain;
 - each end's head check accepts (`head_check.reference`, which the tests hold to the circuit);
-- the audit (`audit.Audit`) accepts both records under the certifier's key and session: the egress record under the
-  declared syncs, and the ingress record on its status and parameters. On an egress end with a profile the audit
-  compares no grid (`check_link(grid=False)`): the head check holds the head's status, grid and counts, and the frames'
-  content is N3's. Without an egress profile it compares the certified digest with the Program's grid in the clear.
+- the audit (`audit.Audit`) accepts both records under the certifier's key and session: the egress record against the
+  Program's grid under the declared syncs, and the ingress record on its status and parameters.
+
+The audit compares the certified egress digest with the Program's grid in the clear on every link-window, with a
+profile or without, so the frames' content is checked in full, as a structural check must be, and not only on the
+windows N3 draws. The head check runs beside it and holds the head's status, grid and counts, not its frames.
+`check_link(grid=False)` leaves the grid to the head check and the content to N3, and N2 switches to it once N3 runs on
+every window (NET-38).
 
 `LinkWindows.stand_in` is the verdict as it was before the head check: the in-the-clear audit with the egress grid
-compared, and each head's counts the profile's (`declares`). The tests hold `verify` to it. The two differ only where
-an egress window's frames differ from the Program's grid but its counts are the profile's: the stand-in rejects, and N2
-accepts, leaving the content to N3.
+compared, and each head's counts the profile's (`declares`). The tests hold `verify` to it on every link-window.
 
 When the audit is the Lean check's (`lean_audit.Audit`), `audit.Audit` runs beside it as the reference: a link-window
 where the two differ rejects, and the verdict says `"by": "lean"` and carries the reference's accept bit (`reference`),
@@ -368,11 +370,11 @@ class LinkWindows:
                                    tuple(level[(i >> k) ^ 1] for k, level in enumerate(levels[:-1])), T))
         return out
 
-    def _audit(self, audit: Any, opening: Opening, frames: Sequence[LogicalFrame], syncs: Sequence[ClockSync],
-               grid: bool) -> tuple[list[Any], list[Any]]:
+    def _audit(self, audit: Any, opening: Opening, frames: Sequence[LogicalFrame],
+               syncs: Sequence[ClockSync]) -> tuple[list[Any], list[Any]]:
         w, (egress, ingress) = opening.window, opening.records
         out = audit.check_link(self.link, [egress], frames, list(syncs)[:w + 1], self.sync_set, self.params, key=self.key,
-                               session=self.certifier_session, grid=grid)
+                               session=self.certifier_session)
         inn = audit.check_ingress_link(self.link, [ingress], w + 1, key=self.key, params=self.ingress_params,
                                        session=self.certifier_session)
         return out, inn
@@ -387,15 +389,15 @@ class LinkWindows:
                syncs: Sequence[ClockSync]) -> dict[str, Any]:
         """The verdict of record on the delivered opening: accepted when it reproduces the registered root under the
         link-window's domain, both head checks accept, and the audit accepts both records, comparing the egress grid
-        only on an egress end without a profile (the module docstring). `frames` are the egress Program's logical
-        frames and `syncs` the declared clock syncs of windows 0 … w. The verdict reports the public outputs and never
-        the violation's kind."""
+        with the Program's in the clear on every link-window (the module docstring). `frames` are the egress Program's
+        logical frames and `syncs` the declared clock syncs of windows 0 … w. The verdict reports the public outputs and
+        never the violation's kind."""
         root = self._registered(opening, draw)
         w, (egress, ingress) = opening.window, opening.records
         sealed = self.root(opening) == root
         headed = all(i is not None and HC.reference(i) for i in self.head_checks(opening, bytes.fromhex(root)))
         audit = Audit()
-        out, inn = self._audit(audit, opening, frames, syncs, grid=self.occupancy[0] is None)
+        out, inn = self._audit(audit, opening, frames, syncs)
         accepted = sealed and headed and _accepts(out, inn, w)
         public = {"verdict": int(accepted), "deadline": int(egress.head.deadline and ingress.head.deadline)}
         sessions = [self.session(opening, draw)]
@@ -415,7 +417,7 @@ class LinkWindows:
         reproduces the registered root, the host audit (`audit.Audit`) accepts both records with the egress grid
         compared in the clear, and each head's counts are the profile's (`declares`)."""
         root = self._registered(opening, draw)
-        out, inn = self._audit(host_audit.Audit(), opening, frames, syncs, grid=True)
+        out, inn = self._audit(host_audit.Audit(), opening, frames, syncs)
         counted = all(self.declares(d, opening.window, r.head.counts) for d, r in enumerate(opening.records))
         return self.root(opening) == root and counted and _accepts(out, inn, opening.window)
 
