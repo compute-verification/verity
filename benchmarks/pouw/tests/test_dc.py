@@ -414,24 +414,30 @@ def test_ldtm_loop_counts_takes_the_larger_loop(tmp_path):
 
 
 def test_uniform_write_census_is_idempotent(tmp_path):
-    """--write replaces UNI's lines and the UP row, puts UP in the current vector's rows once, and census.py --write
-    keeps both."""
+    """--write replaces UNI's measured lines in place and the UP row, puts UP in the current vector's rows once, and
+    census.py --write keeps both. The data sheet's UNI,DS_issue (A2u) and DC-90-ri's refit of JI90_0 aren't uniform.py's
+    and stay; JI90_0's new line keeps its `until`, so the refit still replaces it on DC-90-ri."""
     import shutil
     un, census = _load("uniform"), _load("census")
     dev = tmp_path / "sm_90"
     shutil.copytree(DC.parent / "machine_model" / "data" / "devices" / "sm_90", dev)
     res = {"up": {"rate": 0.5, "by": "uz_64i", "cycles": 1.96}, "uniform_alone": {"uz_64i": 0.5}, "violations": [],
            "rows": {"UP": {"c": 1.96}, "issue": {"c": 1.0, "limit": 1.2, "set_by": "uh_64i"},
-                    "A": {"c": 0.0, "limit": 0.9, "set_by": "uh_64i"}}}
+                    "JI90_0": {"c": 0.5}, "A": {"c": 0.0, "limit": 0.9, "set_by": "uh_64i"}}}
+    before = (dev / "census.csv").read_text().splitlines()
     for _ in range(2):
         un.write_census(dev, res, "r20261017-000000-abcd")
     cen = (dev / "census.csv").read_text().splitlines()
-    assert [ln for ln in cen if ln.startswith("UNI,")] == ["UNI,UP,,,1.96,,,,r20261017-000000-abcd",
-                                                         "UNI,issue,,,1,,,,r20261017-000000-abcd"]
+    assert [ln for ln in cen if ln.startswith("UNI,")] == [
+        "UNI,UP,,,1.96,,,,r20261017-000000-abcd", "UNI,issue,,,1,,,,r20261017-000000-abcd",
+        "UNI,JI90_0,,,0.5,,,DC-90,r20261017-000000-abcd", "UNI,JI90_0,,,0.0001862,,DC-90-ri,,r20261017-204843-4803",
+        "UNI,DS_issue,,,1,,,,note:20261017T1818Z-draft-axioms"]
+    first = next(i for i, ln in enumerate(before) if ln.startswith("UNI,"))
+    assert cen[:first] == before[:first] and cen[first].startswith("UNI,UP,")
     assert sum(ln.startswith("UP,") for ln in (dev / "rows.csv").read_text().splitlines()) == 1
     import tomllib
     assert tomllib.loads((dev / "vectors" / "DC-90.toml").read_text())["rows"].count("UP") == 1
-    assert sum(ln["kind"] == "UNI" for ln in census.kept(dev, "census.csv")) == 2
+    assert sum(ln["kind"] == "UNI" for ln in census.kept(dev, "census.csv")) == 5
     assert sum(r["row"] == "UP" for r in census.kept(dev, "rows.csv")) == 1
 
 
