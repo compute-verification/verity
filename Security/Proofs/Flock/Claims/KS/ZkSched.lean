@@ -168,14 +168,6 @@ def ZkFrontAlign (x : Claims.Msg) : Prop :=
 
 end Gen
 
-/-- **The slot alignment at the schedule's count** (`zkRdAt_cap`, two link points per region by `zk_points`). -/
-theorem zkSlotAlign_of_front {x : Claims.Msg} (h : ZkFrontAlign x) : ZkSlotAlign x := by
-  intro s hs hin ins spec sts hset h0 L hz hk hlay d hd Ω P ω j hj C r ℓ u
-  have hv : (zkRd hset h0 L hz hk hlay j (.inl (.inl (r, ℓ)))).val = zkRdAt spec sts j (.inl (.inl (r, ℓ))) := rfl
-  rw [hv, ← zkRdAt_cap h0 L hz hk hlay (zk_points hs hin hset) j r ℓ]
-  exact h s hs hin ins spec sts hset h0 L hz hk hlay d hd Ω P ω j hj C r ℓ u
-
-
 namespace Gen
 
 variable [S : ZkSetup]
@@ -188,5 +180,9 @@ theorem zkSlotAlign_of_front {x : Claims.Msg} (h : ZkFrontAlign x) : ZkSlotAlign
   exact h s hs hin ins spec sts hset h0 L hz hk hlay d hd Ω P ω j hj C r ℓ u
 
 end Gen
+
+/-- **The slot alignment at the schedule's count** (`zkRdAt_cap`, two link points per region by `zk_points`). -/
+theorem zkSlotAlign_of_front {x : Claims.Msg} (h : ZkFrontAlign x) : ZkSlotAlign x :=
+  Gen.zkSlotAlign_of_front (S := S₀) (x := x) (h := h)
 
 end FlockDeploy.KS

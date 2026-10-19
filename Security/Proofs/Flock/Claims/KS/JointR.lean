@@ -250,19 +250,6 @@ namespace FlockDeploy.KS
 
 open Flock
 
-/-- **The deployed masked (`--zk`) verifier: KS**, at SHA-512, from every table's bound counted per round:
-`zk_KS_of_tableBoundJ` at `oneWait_of_tableBoundJR`. -/
-theorem zk_KS_of_tableBoundJR
-    (htab : Claims.Flock.TableBoundJR sha512 (deployZk Readable.relation) (wordLenJ true)
-      (Claims.Flock.orZeroJ (wideJ true))) :
-    Claims.Flock.KS sha512 (deployZk Readable.relation) :=
-  zk_of_oneWait_sha512 Readable.relation zk_splits
-    (Claims.Flock.oneWait_of_tableBoundJR sha512 (deployZk Readable.relation) (wordLenJ true)
-      (fun x => sum_wordLenJ_le true x _) (fun x => εtable_nonneg true x) (V_k_pos true) (k_one_zk _)
-      (zk_parses _) _ (fun _ _ => .inl rfl) (Claims.Flock.colsOkJ_orZero _ _ _ _ (zk_colsOkJ sha512 _))
-      (zk_conflictTiedJ _) htab)
-
-
 namespace Gen
 
 variable [S : ZkSetup]
@@ -281,14 +268,13 @@ theorem zk_KS_of_tableBoundJR
 
 end Gen
 
-/-- **Every masked table's bound counted per round at tables with unopened positions**, from the bound at full-width
-tables and `ExtendJ`. -/
-theorem zk_tableBoundJR_of_extend (rel : Readable.Parsed → Readable.Relation)
-    (hext : Claims.Flock.ExtendJ (deployZk rel) (wordLenJ true) (wideJ true))
-    (htab : Claims.Flock.TableBoundJR sha512 (deployZk rel) (wordLenJ true) (wideJ true)) :
-    Claims.Flock.TableBoundJR sha512 (deployZk rel) (wordLenJ true) (Claims.Flock.orZeroJ (wideJ true)) :=
-  Claims.Flock.tableBoundJR_of_extend _ _ _ _ (wideJ_ne_zero true) (zk_colsOkJ sha512 rel) hext htab
-
+/-- **The deployed masked (`--zk`) verifier: KS**, at SHA-512, from every table's bound counted per round:
+`zk_KS_of_tableBoundJ` at `oneWait_of_tableBoundJR`. -/
+theorem zk_KS_of_tableBoundJR
+    (htab : Claims.Flock.TableBoundJR sha512 (deployZk Readable.relation) (wordLenJ true)
+      (Claims.Flock.orZeroJ (wideJ true))) :
+    Claims.Flock.KS sha512 (deployZk Readable.relation) :=
+  Gen.zk_KS_of_tableBoundJR (S := S₀) (htab := htab)
 
 namespace Gen
 
@@ -303,6 +289,14 @@ theorem zk_tableBoundJR_of_extend (rel : Readable.Parsed → Readable.Relation)
   Claims.Flock.tableBoundJR_of_extend _ _ _ _ (wideJ_ne_zero true) (zk_colsOkJ sha512 rel) hext htab
 
 end Gen
+
+/-- **Every masked table's bound counted per round at tables with unopened positions**, from the bound at full-width
+tables and `ExtendJ`. -/
+theorem zk_tableBoundJR_of_extend (rel : Readable.Parsed → Readable.Relation)
+    (hext : Claims.Flock.ExtendJ (deployZk rel) (wordLenJ true) (wideJ true))
+    (htab : Claims.Flock.TableBoundJR sha512 (deployZk rel) (wordLenJ true) (wideJ true)) :
+    Claims.Flock.TableBoundJR sha512 (deployZk rel) (wordLenJ true) (Claims.Flock.orZeroJ (wideJ true)) :=
+  Gen.zk_tableBoundJR_of_extend (S := S₀) (rel := rel) (hext := hext) (htab := htab)
 
 /-- **The deployed masked verifier: KS**, at SHA-512 at the deployed relation, at every number of tables, from the live
 sessions' bound off the table on a witness lane at the statements some run accepts (`ZkLiveAccWJ`) and `ExtendJ` at

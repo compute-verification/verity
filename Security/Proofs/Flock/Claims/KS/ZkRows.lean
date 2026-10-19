@@ -881,46 +881,6 @@ theorem decodesTableHR_zkTabs {I : Exec.Inputs} (ht : I.tags.typed = false) (hT 
   intro o₀ i
   exact h _ _ (fun o ho => by obtain ⟨ha, rfl⟩ := ho; exact ⟨ha, fun _ _ hw => ⟨hw.1, hw⟩⟩) i
 
-/-- **The deployed `--zk` decoders are right at `zkTabs` at the rows at a masked statement in scope, at one outcome**:
-`decodesTableR_zkTabs` at public outputs, `decodesTableHR_zkTabs` at hidden outputs (`decodesTableW_deploy`). -/
-theorem decodesTableR_deploy {x : Claims.Msg} {s : Claims.Flock.Stmt}
-    (hs : parse true Readable.relation x = some s) (hin : Claims.Flock.InScope true s) {ins : Ins}
-    {spec : SessionSpec} {sts : Array Stmt} (hset : setupOf true x = some (ins, spec, sts)) (h0 : 0 < sts.size)
-    (L : (j : ℕ) → (h : j < sts.size) → Layout sts[j])
-    (hz : ∀ j (h : j < sts.size), Zk.schedule sts[j].m = .ok (Claims.Flock.zkSched sts[j].m))
-    (hk : ∀ j (h : j < sts.size), sts[j].c.kLog ≤ 27)
-    (hlay : ∀ j (h : j < sts.size), ((L j h).model (Refine.regionsOf sts[j])).LinkLayout PT_LOCAL spec.mPts)
-    {d : Lean.Json} (hd : ins.read.draw = some d)
-    (o₀ : LiveOutJ (tabsJ (tables true x).length (zkTabs h0 L hz hk hlay)).length spec.mPts)
-    (i : Fin (tabsJ (tables true x).length (zkTabs h0 L hz hk hlay)).length) :
-    DecodesTable (outJ ZkExec.hs512 (tabsJ (tables true x).length (zkTabs h0 L hz hk hlay)))
-      (fun j out => out.accepted = true ∧ Composed.OpensRows ins.read.I d (Claims.Bridge.Custody.wrS ins.read.I d o₀)
-        j.val ((tabsJ (tables true x).length (zkTabs h0 L hz hk hlay)).get j) out)
-      (fun o => Composed.AcceptsAt ins.read.I d (Claims.Bridge.Custody.wrS ins.read.I d o) ∧ o = o₀)
-      (opnD sts (tabsJ (tables true x).length (zkTabs h0 L hz hk hlay)))
-      (decD (tabsJ (tables true x).length (zkTabs h0 L hz hk hlay))) (fun _ _ => true) (fun _ _ _ => [])
-      (fun rs j => Exec.capOfRoot rs[j.val]!)
-      (repJ execArith ZkExec.hs512 (tabsJ (tables true x).length (zkTabs h0 L hz hk hlay))) i := by
-  have hlen : (tables true x).length = sts.size := by
-    unfold tables
-    rw [hset]
-    simp
-  revert i o₀
-  rw [hlen]
-  intro o₀ i
-  obtain ⟨hzk, hsA⟩ := setupAt_of_setupOf hs hin hset
-  rw [hd] at hsA
-  obtain ⟨ht, hrr, hl⟩ := tags_of_inScope hs hin hset
-  cases hh : ins.read.I.tags.hiddenOutputs
-  · exact decodesTableR_zkTabs ht ⟨hh, hrr, hl⟩ (fun _ : Finset (Fin 0) => d) hsA h0 L hz hk hlay o₀ i
-  · have hshape := Claims.Bridge.Custody.setup_shapeOk (setupOf_some hset).2 hzk
-    obtain ⟨-, hstJ⟩ := setupAt_tableJH hh hsA
-    have hp := (Hidden.setupHidden_spec' (hstJ 0 h0)).parse
-    have hc : HmOut.parse (ZkExec.zkTags ins.read.I) ins.read.I.circuitFile ins.read.I.tables = .ok sts[0].c :=
-      (ZkHidden.parseH_tagsAt ((ZkExec.zkTags_typed _).trans ht) _ _ _ _).symm.trans hp
-    exact decodesTableHR_zkTabs ht ⟨hh, hrr, hl⟩ hc (fun _ : Finset (Fin 0) => d) hsA hshape h0 L hz hk hlay o₀ i
-
-
 namespace Gen
 
 variable [S : ZkSetup]
@@ -965,5 +925,28 @@ theorem decodesTableR_deploy {x : Claims.Msg} {s : Claims.Flock.Stmt}
     exact decodesTableHR_zkTabs ht ⟨hh, hrr, hl⟩ hc (fun _ : Finset (Fin 0) => d) hsA hshape h0 L hz hk hlay o₀ i
 
 end Gen
+
+/-- **The deployed `--zk` decoders are right at `zkTabs` at the rows at a masked statement in scope, at one outcome**:
+`decodesTableR_zkTabs` at public outputs, `decodesTableHR_zkTabs` at hidden outputs (`decodesTableW_deploy`). -/
+theorem decodesTableR_deploy {x : Claims.Msg} {s : Claims.Flock.Stmt}
+    (hs : parse true Readable.relation x = some s) (hin : Claims.Flock.InScope true s) {ins : Ins}
+    {spec : SessionSpec} {sts : Array Stmt} (hset : setupOf true x = some (ins, spec, sts)) (h0 : 0 < sts.size)
+    (L : (j : ℕ) → (h : j < sts.size) → Layout sts[j])
+    (hz : ∀ j (h : j < sts.size), Zk.schedule sts[j].m = .ok (Claims.Flock.zkSched sts[j].m))
+    (hk : ∀ j (h : j < sts.size), sts[j].c.kLog ≤ 27)
+    (hlay : ∀ j (h : j < sts.size), ((L j h).model (Refine.regionsOf sts[j])).LinkLayout PT_LOCAL spec.mPts)
+    {d : Lean.Json} (hd : ins.read.draw = some d)
+    (o₀ : LiveOutJ (tabsJ (tables true x).length (zkTabs h0 L hz hk hlay)).length spec.mPts)
+    (i : Fin (tabsJ (tables true x).length (zkTabs h0 L hz hk hlay)).length) :
+    DecodesTable (outJ ZkExec.hs512 (tabsJ (tables true x).length (zkTabs h0 L hz hk hlay)))
+      (fun j out => out.accepted = true ∧ Composed.OpensRows ins.read.I d (Claims.Bridge.Custody.wrS ins.read.I d o₀)
+        j.val ((tabsJ (tables true x).length (zkTabs h0 L hz hk hlay)).get j) out)
+      (fun o => Composed.AcceptsAt ins.read.I d (Claims.Bridge.Custody.wrS ins.read.I d o) ∧ o = o₀)
+      (opnD sts (tabsJ (tables true x).length (zkTabs h0 L hz hk hlay)))
+      (decD (tabsJ (tables true x).length (zkTabs h0 L hz hk hlay))) (fun _ _ => true) (fun _ _ _ => [])
+      (fun rs j => Exec.capOfRoot rs[j.val]!)
+      (repJ execArith ZkExec.hs512 (tabsJ (tables true x).length (zkTabs h0 L hz hk hlay))) i :=
+  Gen.decodesTableR_deploy (S := S₀) (x := x) (s := s) (hs := hs) (hin := hin) (ins := ins) (spec := spec) (sts := sts)
+    (hset := hset) (h0 := h0) (L := L) (hz := hz) (hk := hk) (hlay := hlay) (d := d) (hd := hd) (o₀ := o₀) (i := i)
 
 end FlockDeploy.KS

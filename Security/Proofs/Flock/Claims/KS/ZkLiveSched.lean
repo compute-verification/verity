@@ -295,14 +295,6 @@ theorem zkStreams_eq : zkStreams spec sts = fromS (fun t => repRounds true spec 
   have ht : k / 2 < sts.size := by omega
   rw [getElem!_pos sts _ ht, zkRepNsOf_length (hz _ ht)]
 
-include hz in
-/-- **There are as many streams as deployed rounds.** -/
-theorem zkStreams_length {x : Claims.Msg} {ins : Ins} (hset : setupOf true x = some (ins, spec, sts)) :
-    (zkStreams spec sts).length = zkN x := by
-  rw [zkStreams_eq hz, length_fromS, sum_nsFrom, zkN, zkK hset, rounds_sum, List.range_eq_range']
-  omega
-
-
 namespace Gen
 
 variable [S : ZkSetup]
@@ -315,6 +307,12 @@ theorem zkStreams_length {x : Claims.Msg} {ins : Ins} (hset : setupOf true x = s
   omega
 
 end Gen
+
+include hz in
+/-- **There are as many streams as deployed rounds.** -/
+theorem zkStreams_length {x : Claims.Msg} {ins : Ins} (hset : setupOf true x = some (ins, spec, sts)) :
+    (zkStreams spec sts).length = zkN x :=
+  Gen.zkStreams_length (S := S₀) (x := x) (ins := ins) (hset := hset) (hz := hz)
 
 include hz in
 /-- **The streams split at table `j`**: the tables in front's, table `j`'s rep 0, its rep 1, then the tables after. -/

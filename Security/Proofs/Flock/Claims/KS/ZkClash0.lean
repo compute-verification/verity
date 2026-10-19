@@ -156,114 +156,6 @@ section Raw
 open Flock
 open FlockSoundness.Refine (ebind_ok entries_eq_of_flat flat_data merkleCheck_cap)
 
-/-- **An accepted masked run's reps open a row of table `j` only as a Merkle opening** of table `j`'s level 0 in its
-own log: `zk_openingJ_raw` at each row whole. -/
-theorem zk_rowJ_raw {Ω : Type} {P : Claims.Prover Ω} {x : Claims.Msg} {ω : Ω} {r : Fin ((V true).k x) → Coin}
-    {j q : ℕ} {u : List 𝔽} (h : (Claims.run sha512 P (V true) x ω r).out = .acc)
-    (hu : (q, u) ∈ zkRawRowsJ (Claims.run sha512 P (V true) x ω r).seen j) :
-    ∃ (s : Ins) (spec : SessionSpec) (sts : Array Stmt) (st : Stmt) (sch : Flock.Schedule) (tPad : ℕ)
-      (link : List ByteArray × List ByteArray) (row : Array F128),
-      setupOf true x = some (s, spec, sts) ∧ sts[j]? = some st ∧ Zk.schedule st.m = .ok (sch, tPad) ∧
-      linkOf ((P.next x [] ω).eval sha512).1 = some link ∧
-      Opening MerkleScheme.hm96Sha512 (sch.levels.getD 0 default)
-        (2 ^ (sch.levels.getD 0 default).lanes + Zk.EXTRA_LANES) link.1.toArray[j]!
-        (Claims.run sha512 P (V true) x ω r).vLog q row ∧
-      u = row.toList.map FlockLevel3.GF128.of := by
-  obtain ⟨s, spec, sts, link, c₁, mids, f, hs, hf, hlink, hc, hv⟩ := acc_within h
-  generalize hL : (Claims.run sha512 P (V true) x ω r).vLog = L at hv ⊢
-  obtain ⟨hx, lv, hlv, hcu⟩ := Claims.Bridge.Custody.checks_ok hc
-  obtain ⟨hroot, -⟩ := Claims.Bridge.Custody.custody_ok hcu
-  unfold zkRawRowsJ at hu
-  split at hu
-  swap
-  · simp at hu
-  rename_i rr hrr
-  obtain ⟨st, extras, hst, hext, rfl⟩ := runOf_eqJ hf hx hs hlv hrr
-  obtain ⟨ρ, hρ, hp⟩ := List.mem_flatMap.1 hu
-  obtain ⟨k, hk, rfl⟩ : ∃ k < 2,
-      ρ = (lv.streams.getD (2 * j + k) #[], f.proofs.getD (2 * j + k) ByteArray.empty) := by
-    simp only [List.mem_cons, List.not_mem_nil, or_false] at hρ
-    rcases hρ with rfl | rfl
-    · exact ⟨0, by omega, rfl⟩
-    · exact ⟨1, by omega, rfl⟩
-  have hstsj : j < sts.size := by
-    rcases Array.getElem?_eq_some_iff.1 hst with ⟨h0, -⟩
-    exact h0
-  have hstj : sts[j] = st := by
-    rcases Array.getElem?_eq_some_iff.1 hst with ⟨h0, e⟩
-    exact e
-  have hj : j < (tabsOf sts).size := by simpa [tabsOf] using hstsj
-  have htj : (tabsOf sts)[j] = Setup.ofCircuit st := by rw [tabsOf_getElem hj]; simp only [hstj]
-  replace hv : Zk.verifyWithM (hashesIn (L.map Prod.fst)) spec (tabsOf sts) f.record f.proofs = .ok () := hv
-  obtain ⟨sess, hdec, hsz, hreps⟩ :=
-    FlockSoundness.ZkQuery.zkQueryRound_verifyWithM (hashesIn (L.map Prod.fst)) spec (tabsOf sts) f.record f.proofs hv
-  obtain ⟨sch, tPad, hsch, hrep⟩ := hreps j hj
-  obtain ⟨stream, extras', zp, hstream, hext', hzp, -, -, hmc, hcap⟩ := hrep k hk
-  simp only [htj] at hsch hext' hzp hmc
-  have hdec' : Record.decode spec f.record = .ok sess := by
-    rw [← With.decodeWith_std]
-    exact (With.decodeWith_sim sub (sub_hashes (L.map Prod.fst)) spec f.record) sess hdec
-  obtain ⟨hrB, hpts, hlsz, hstreams⟩ := Claims.Bridge.Custody.decode_live hdec' hlv
-  rw [hpts, hext] at hext'
-  cases hext'
-  have htab : j < spec.tables.size := by rw [← hsz]; exact hj
-  obtain ⟨hk', hrs⟩ := Claims.Bridge.Custody.repStreams_getElem spec htab hk
-  obtain ⟨y, hy, hfa⟩ := hstreams (2 * j + k) hk'
-  rw [hrs] at hy
-  have hys : y = stream := Option.some.inj (hy.symm.trans hstream)
-  subst hys
-  have hcoins := forall₂_coins (fun _ _ hab => hab.2.1) hfa
-  have hrowsEq : Claims.Flock.zkRepRowsOf
-      (Claims.Flock.zkProofShape (Setup.ofCircuit st).m (Setup.ofCircuit st).kLog (2 + extras.size)
-        (Setup.ofCircuit st).merkle.digestLen (saltLenOf true (Setup.ofCircuit st)))
-      (lv.streams.getD (2 * j + k) #[]) (f.proofs.getD (2 * j + k) ByteArray.empty) =
-      Claims.Flock.zkRepCols (sch.levels.getD 0 default)
-        (y.rounds[Claims.Flock.zkQueryRound (Setup.ofCircuit st).m (Setup.ofCircuit st).kLog sch.k0
-          (2 + extras.size)]!).coins zp.proof.ligerito.initialProof.rows := by
-    have e1 : lv.streams.getD (2 * j + k) #[] = lv.streams[2 * j + k]! := by
-      rw [show (#[] : Array Flock.Round) = default from rfl, getD_eq_getElem!]
-    have e2 : f.proofs.getD (2 * j + k) ByteArray.empty = f.proofs[2 * j + k]! := by
-      rw [show ByteArray.empty = default from rfl, getD_eq_getElem!]
-    have hzs : Claims.Flock.zkSched (Setup.ofCircuit st).m = (sch, tPad) := by
-      simp only [Claims.Flock.zkSched]
-      rw [hsch]
-    have hsh : Claims.Flock.zkProofShape (Setup.ofCircuit st).m (Setup.ofCircuit st).kLog (2 + extras.size)
-        (Setup.ofCircuit st).merkle.digestLen (saltLenOf true (Setup.ofCircuit st)) =
-        FlockSoundness.Discharge.ZkExec.shapeZK (Setup.ofCircuit st) sch extras := by
-      simp only [Claims.Flock.zkProofShape, hzs, FlockSoundness.Discharge.ZkExec.shapeZK, saltLenOf, ite_true]
-    rw [e1, e2, hsh]
-    refine (zkRepRowsOf_congr _ _ fun i => ?_).trans (Claims.Flock.zkRepRowsOf_ok hzp)
-    rw [← Array.getElem?_toList, ← Array.getElem?_toList]
-    exact (hcoins i).symm
-  have hp2 : (q, u) ∈ Claims.Flock.zkRepCols (sch.levels.getD 0 default)
-      (y.rounds[Claims.Flock.zkQueryRound (Setup.ofCircuit st).m (Setup.ofCircuit st).kLog sch.k0
-        (2 + extras.size)]!).coins zp.proof.ligerito.initialProof.rows := by
-    rw [← hrowsEq]
-    exact hp
-  obtain ⟨i, hi, -, hiq, hiu⟩ := mem_zkRepCols hp2
-  have hms : (Setup.ofCircuit st).merkle = MerkleScheme.hm96Sha512 := by
-    have := checks_hm96 hc (setupOf_some hs).2 (setupOf_zk hs) j hstsj
-    rw [hstj] at this
-    exact this
-  rw [hms] at hmc
-  have hruns := With.merkleCheckWith_sim (back (L.map Prod.fst))
-    (With.opsWith_sim (back (L.map Prod.fst)) (back_hashes (L.map Prod.fst)) MerkleScheme.hm96Sha512)
-    MerkleScheme.hm96Sha512 _ _ _ _ _ _ _ _ () hmc
-  rw [opsWith_hm96] at hruns
-  obtain ⟨hpure, hlog⟩ := merkleCheck_logs hruns
-  obtain ⟨hcs, hcw⟩ := merkleCheck_cap hpure
-  refine ⟨s, spec, sts, st, sch, tPad, link, zp.proof.ligerito.initialProof.rows[i]!, hs, hst, hsch, hlink,
-    ⟨Or.inl rfl, zp.proof.cap, zp.proof.ligerito.initialProof.salts.getD i ByteArray.empty,
-      sibsOf zp.proof.ligerito.initialProof.siblings
-        ((sch.levels.getD 0 default).d - (sch.levels.getD 0 default).cap) i,
-      hcs, hcw, ?_, ?_, merkleCheck_sibs _ _ _ _ _ _ _ _ _ hpure i, ?_⟩, hiu⟩
-  · rw [hcap, hrB, ← hroot, Array.toArray_toList]
-  · rw [← hiq]
-    exact merkleCheck_opens _ _ _ _ _ _ _ _ _ hpure i hi
-  · rw [opensInsOf_hm96, ← hiq]
-    exact hlog i hi
-
-
 namespace Gen
 
 variable [S : ZkSetup]
@@ -377,6 +269,21 @@ theorem zk_rowJ_raw {Ω : Type} {P : Claims.Prover Ω} {x : Claims.Msg} {ω : Ω
 
 end Gen
 
+/-- **An accepted masked run's reps open a row of table `j` only as a Merkle opening** of table `j`'s level 0 in its
+own log: `zk_openingJ_raw` at each row whole. -/
+theorem zk_rowJ_raw {Ω : Type} {P : Claims.Prover Ω} {x : Claims.Msg} {ω : Ω} {r : Fin ((V true).k x) → Coin}
+    {j q : ℕ} {u : List 𝔽} (h : (Claims.run sha512 P (V true) x ω r).out = .acc)
+    (hu : (q, u) ∈ zkRawRowsJ (Claims.run sha512 P (V true) x ω r).seen j) :
+    ∃ (s : Ins) (spec : SessionSpec) (sts : Array Stmt) (st : Stmt) (sch : Flock.Schedule) (tPad : ℕ)
+      (link : List ByteArray × List ByteArray) (row : Array F128),
+      setupOf true x = some (s, spec, sts) ∧ sts[j]? = some st ∧ Zk.schedule st.m = .ok (sch, tPad) ∧
+      linkOf ((P.next x [] ω).eval sha512).1 = some link ∧
+      Opening MerkleScheme.hm96Sha512 (sch.levels.getD 0 default)
+        (2 ^ (sch.levels.getD 0 default).lanes + Zk.EXTRA_LANES) link.1.toArray[j]!
+        (Claims.run sha512 P (V true) x ω r).vLog q row ∧
+      u = row.toList.map FlockLevel3.GF128.of :=
+  Gen.zk_rowJ_raw (S := S₀) (Ω := Ω) (P := P) (x := x) (ω := ω) (r := r) (j := j) (q := q) (u := u) (h := h) (hu := hu)
+
 /-- **Two different rows two accepted masked runs open at one position collide in their logs**: the runs share `P`'s
 first message, so table `j`'s level-0 root, and a row of each at one position that differ give a collision among the
 two runs' verifier calls, at SHA-512. -/
@@ -428,16 +335,6 @@ theorem zk_rowClash_tiedJ₂ {Ω : Type} {P : Claims.Prover Ω} {x : Claims.Msg}
 
 end Gen
 
-/-- **Two different rows an accepted masked run opens at one position collide in its own log**: two rows table `j`'s
-reps open at one position that differ give a collision among the run's verifier calls, at SHA-512. -/
-theorem zk_rowClash_tiedJ {Ω : Type} {P : Claims.Prover Ω} {x : Claims.Msg} {ω : Ω}
-    {r : Fin ((V true).k x) → Coin} {j q : ℕ} {u v : List 𝔽} (h : (Claims.run sha512 P (V true) x ω r).out = .acc)
-    (hu : (q, u) ∈ zkRawRowsJ (Claims.run sha512 P (V true) x ω r).seen j)
-    (hv : (q, v) ∈ zkRawRowsJ (Claims.run sha512 P (V true) x ω r).seen j) (huv : u ≠ v) :
-    Claims.TiedColl sha512 (Claims.run sha512 P (V true) x ω r).vLog :=
-  tiedColl_of_append_self (zk_rowClash_tiedJ₂ h h hu hv huv)
-
-
 namespace Gen
 
 variable [S : ZkSetup]
@@ -452,6 +349,16 @@ theorem zk_rowClash_tiedJ {Ω : Type} {P : Claims.Prover Ω} {x : Claims.Msg} {�
   tiedColl_of_append_self (zk_rowClash_tiedJ₂ h h hu hv huv)
 
 end Gen
+
+/-- **Two different rows an accepted masked run opens at one position collide in its own log**: two rows table `j`'s
+reps open at one position that differ give a collision among the run's verifier calls, at SHA-512. -/
+theorem zk_rowClash_tiedJ {Ω : Type} {P : Claims.Prover Ω} {x : Claims.Msg} {ω : Ω}
+    {r : Fin ((V true).k x) → Coin} {j q : ℕ} {u v : List 𝔽} (h : (Claims.run sha512 P (V true) x ω r).out = .acc)
+    (hu : (q, u) ∈ zkRawRowsJ (Claims.run sha512 P (V true) x ω r).seen j)
+    (hv : (q, v) ∈ zkRawRowsJ (Claims.run sha512 P (V true) x ω r).seen j) (huv : u ≠ v) :
+    Claims.TiedColl sha512 (Claims.run sha512 P (V true) x ω r).vLog :=
+  Gen.zk_rowClash_tiedJ (S := S₀) (Ω := Ω) (P := P) (x := x) (ω := ω) (r := r) (j := j) (q := q) (u := u) (v := v)
+    (h := h) (hu := hu) (hv := hv) (huv := huv)
 
 end Raw
 
@@ -546,20 +453,6 @@ def ZkViewClashQ (x : Claims.Msg) (Q : (m : ℕ) → TabZK 𝔽 m → OutZC 𝔽
 
 end Gen
 
-/-- **The view's clash from its three cases**: `SelfClashZ` is `Clash₀Z`, `LaterClashZ` or `PadsZ`. -/
-theorem zkViewClash_of_Q {x : Claims.Msg} (h₀ : ZkViewClashQ x Clash₀Z) (h₁ : ZkViewClashQ x LaterClashZ)
-    (h₂ : ZkViewClashQ x PadsZ) : ZkViewClash x := by
-  intro s hs hin ins spec sts hset h0 L hz hk hlay d hd Ω P ω j hj C hC r hacc s' spec' sts' link c₁ mids f hact
-    ⟨a, ha, hq⟩
-  rcases hq with hq | hq | hq
-  · exact h₀ s hs hin ins spec sts hset h0 L hz hk hlay d hd Ω P ω j hj C hC r hacc s' spec' sts' link c₁ mids f hact
-      ⟨a, ha, hq⟩
-  · exact h₁ s hs hin ins spec sts hset h0 L hz hk hlay d hd Ω P ω j hj C hC r hacc s' spec' sts' link c₁ mids f hact
-      ⟨a, ha, hq⟩
-  · exact h₂ s hs hin ins spec sts hset h0 L hz hk hlay d hd Ω P ω j hj C hC r hacc s' spec' sts' link c₁ mids f hact
-      ⟨a, ha, hq⟩
-
-
 namespace Gen
 
 variable [S : ZkSetup]
@@ -578,6 +471,11 @@ theorem zkViewClash_of_Q {x : Claims.Msg} (h₀ : ZkViewClashQ x Clash₀Z) (h�
       ⟨a, ha, hq⟩
 
 end Gen
+
+/-- **The view's clash from its three cases**: `SelfClashZ` is `Clash₀Z`, `LaterClashZ` or `PadsZ`. -/
+theorem zkViewClash_of_Q {x : Claims.Msg} (h₀ : ZkViewClashQ x Clash₀Z) (h₁ : ZkViewClashQ x LaterClashZ)
+    (h₂ : ZkViewClashQ x PadsZ) : ZkViewClash x :=
+  Gen.zkViewClash_of_Q (S := S₀) (x := x) (h₀ := h₀) (h₁ := h₁) (h₂ := h₂)
 
 /-- **An accepting run's view opens the run's level-0 rows**: the reps' pendings at the view play the deployed decoders'
 tapes, so table `j`'s output there is right at `OpensRows` (`decodesTableR_deploy`); its level-0 openings are the reps'
@@ -758,22 +656,6 @@ theorem zkViewRows₀ {x : Claims.Msg} {s : Claims.Flock.Stmt} (hs : parse true 
 
 end Gen
 
-/-- **A level-0 self-clash at an accepting run's view is a collision in its log**: its level-0 openings are the run's
-rows (`zkViewRows₀`), and two of them at one position that differ collide in the run's log (`zk_rowClash_tiedJ`). -/
-theorem zkViewClashQ₀ (x : Claims.Msg) : ZkViewClashQ x Clash₀Z := by
-  intro s hs hin ins spec sts hset h0 L hz hk hlay d hd Ω P ω j hj C _ r hacc s' spec' sts' link c₁ mids f hact hret
-  obtain ⟨a, ha, hcl⟩ := hret
-  have hrows := zkViewRows₀ hs hin hset h0 L hz hk hlay hd hj hacc hact ha
-  obtain ⟨u, hu, v, hv, huv, -, -, hne⟩ := hcl
-  have hu' : (u.1, u.2.1) ∈ zkRawRowsJ (Claims.run sha512 P (V true) x ω r).seen j := by
-    rw [← hrows]
-    exact List.mem_map_of_mem hu
-  have hv'' : (u.1, v.2.1) ∈ zkRawRowsJ (Claims.run sha512 P (V true) x ω r).seen j := by
-    rw [huv, ← hrows]
-    exact List.mem_map_of_mem hv
-  exact Or.inr (zk_rowClash_tiedJ hacc hu' hv'' hne)
-
-
 namespace Gen
 
 variable [S : ZkSetup]
@@ -794,6 +676,11 @@ theorem zkViewClashQ₀ (x : Claims.Msg) : ZkViewClashQ x Clash₀Z := by
   exact Or.inr (zk_rowClash_tiedJ hacc hu' hv'' hne)
 
 end Gen
+
+/-- **A level-0 self-clash at an accepting run's view is a collision in its log**: its level-0 openings are the run's
+rows (`zkViewRows₀`), and two of them at one position that differ collide in the run's log (`zk_rowClash_tiedJ`). -/
+theorem zkViewClashQ₀ (x : Claims.Msg) : ZkViewClashQ x Clash₀Z :=
+  Gen.zkViewClashQ₀ (S := S₀) (x := x)
 
 end Clash
 

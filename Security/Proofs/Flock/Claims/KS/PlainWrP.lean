@@ -54,18 +54,6 @@ theorem checks_draw {zk : Bool} {s : Ins} {spec : SessionSpec} {x : Claims.Msg}
 
 end Gen
 
-theorem next_acc_draw {zk : Bool} {x : Claims.Msg} {as : List Claims.Msg} {cs : List Coin}
-    (h : ((next zk x as cs).eval sha512).1 = .acc) :
-    ∃ ins spec sts d, setupOf zk x = some (ins, spec, sts) ∧ ins.read.draw = some d := by
-  cases ha : act zk x as cs with
-  | rej => simp [next_rej sha512 ha] at h
-  | coin c => simp [next_coin sha512 ha] at h
-  | decide s spec sts link c₁ mids f =>
-    obtain ⟨-, hc⟩ := (next_decide_sha512 ha).1 h
-    obtain ⟨d, hd⟩ := checks_draw hc
-    exact ⟨s, spec, sts, d, act_decide ha, hd⟩
-
-
 namespace Gen
 
 variable [S : ZkSetup]
@@ -83,15 +71,10 @@ theorem next_acc_draw {zk : Bool} {x : Claims.Msg} {as : List Claims.Msg} {cs : 
 
 end Gen
 
-/-- **A statement some run accepts at SHA-512 sets up at a draw.** -/
-theorem acc_draw {zk : Bool} {x : Claims.Msg} (hacc : ¬ Claims.Flock.NoAcc sha512 (V zk) x) :
-    ∃ ins spec sts d, setupOf zk x = some (ins, spec, sts) ∧ ins.read.draw = some d := by
-  unfold Claims.Flock.NoAcc at hacc
-  push Not at hacc
-  obtain ⟨Ω, P, ω, r, hr⟩ := hacc
-  obtain ⟨as, has⟩ := stepWith_acc _ _ _ _ _ _ _ _ _ hr
-  exact next_acc_draw has
-
+theorem next_acc_draw {zk : Bool} {x : Claims.Msg} {as : List Claims.Msg} {cs : List Coin}
+    (h : ((next zk x as cs).eval sha512).1 = .acc) :
+    ∃ ins spec sts d, setupOf zk x = some (ins, spec, sts) ∧ ins.read.draw = some d :=
+  Gen.next_acc_draw (S := S₀) (zk := zk) (x := x) (as := as) (cs := cs) (h := h)
 
 namespace Gen
 
@@ -107,6 +90,11 @@ theorem acc_draw {zk : Bool} {x : Claims.Msg} (hacc : ¬ Claims.Flock.NoAcc sha5
   exact next_acc_draw has
 
 end Gen
+
+/-- **A statement some run accepts at SHA-512 sets up at a draw.** -/
+theorem acc_draw {zk : Bool} {x : Claims.Msg} (hacc : ¬ Claims.Flock.NoAcc sha512 (V zk) x) :
+    ∃ ins spec sts d, setupOf zk x = some (ins, spec, sts) ∧ ins.read.draw = some d :=
+  Gen.acc_draw (S := S₀) (zk := zk) (x := x) (hacc := hacc)
 
 open Claims.Bridge.CustodyPlain Claims.Bridge.DecodePlain in
 /-- **`wrP`'s verdict at the draw `d`**: flock-verify accepts what `wrP` writes for the outcome at `d` and no drawn

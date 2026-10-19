@@ -479,11 +479,6 @@ theorem zkTauAlign (x : Claims.Msg) : ZkTauAlign x := by
 
 end Gen
 
-/-- **The masked simulator's fork bound at `τ` holds at every message.** -/
-theorem zkSimForkLeTau (x : Claims.Msg) : ZkSimForkLeOn x fun _ i => IsTauZ i :=
-  zkSimForkLeTauZ_of_align (zkTauAlign x)
-
-
 namespace Gen
 
 variable [S : ZkSetup]
@@ -494,10 +489,9 @@ theorem zkSimForkLeTau (x : Claims.Msg) : ZkSimForkLeOn x fun _ i => IsTauZ i :=
 
 end Gen
 
-/-- **Masked knowledge soundness**, at every message: `zk_KS_of_tauAlign` with `τ`'s alignment (`zkTauAlign`). -/
-theorem zk_KS : Claims.Flock.KS sha512 (deployZkTrim Readable.relation) :=
-  zk_KS_of_tauAlign fun x _ => zkTauAlign x
-
+/-- **The masked simulator's fork bound at `τ` holds at every message.** -/
+theorem zkSimForkLeTau (x : Claims.Msg) : ZkSimForkLeOn x fun _ i => IsTauZ i :=
+  Gen.zkSimForkLeTau (S := S₀) (x := x)
 
 namespace Gen
 
@@ -508,5 +502,9 @@ theorem zk_KS : Claims.Flock.KS sha512 (deployZkTrim Readable.relation) :=
   zk_KS_of_tauAlign fun x _ => zkTauAlign x
 
 end Gen
+
+/-- **Masked knowledge soundness**, at every message: `zk_KS_of_tauAlign` with `τ`'s alignment (`zkTauAlign`). -/
+theorem zk_KS : Claims.Flock.KS sha512 (deployZkTrim Readable.relation) :=
+  Gen.zk_KS (S := S₀)
 
 end FlockDeploy.KS

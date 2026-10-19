@@ -80,14 +80,6 @@ theorem zk_stepWith_dep {Ω : Type} (H : Claims.Msg → Claims.Msg) (P : Claims.
       rw [List.length_append, List.length_singleton, ← List.length_map (f := Prod.fst), ht, List.map_append, ht]
       exact ha'
 
-/-- **A deployed run's messages are `P`'s along its coins** (`zk_stepWith_dep`). -/
-theorem zk_run_dep {zk : Bool} (H : Claims.Msg → Claims.Msg) {Ω : Type} (P : Claims.Prover Ω) (x : Claims.Msg)
-    (ω : Ω) (r : Fin ((V zk).k x) → Coin) :
-    (Claims.run H P (V zk) x ω r).msgs.map Prod.fst =
-      (List.range (Claims.run H P (V zk) x ω r).msgs.length).map (zkDepMsg H P x ω (Claims.coinSeq r)) :=
-  zk_stepWith_dep H P (V zk) x ω _ (Claims.Bridge.answersCoin_deploy zk H x) _ [] [] _ rfl rfl rfl
-
-
 namespace Gen
 
 variable [S : ZkSetup]
@@ -100,23 +92,16 @@ theorem zk_run_dep {zk : Bool} (H : Claims.Msg → Claims.Msg) {Ω : Type} (P : 
   zk_stepWith_dep H P (V zk) x ω _ (Claims.Bridge.answersCoin_deploy zk H x) _ [] [] _ rfl rfl rfl
 
 end Gen
+
+/-- **A deployed run's messages are `P`'s along its coins** (`zk_stepWith_dep`). -/
+theorem zk_run_dep {zk : Bool} (H : Claims.Msg → Claims.Msg) {Ω : Type} (P : Claims.Prover Ω) (x : Claims.Msg)
+    (ω : Ω) (r : Fin ((V zk).k x) → Coin) :
+    (Claims.run H P (V zk) x ω r).msgs.map Prod.fst =
+      (List.range (Claims.run H P (V zk) x ω r).msgs.length).map (zkDepMsg H P x ω (Claims.coinSeq r)) :=
+  Gen.zk_run_dep (S := S₀) (zk := zk) (H := H) (Ω := Ω) (P := P) (x := x) (ω := ω) (r := r)
 
 /-! ## A decision's messages and record -/
 
-/-- **A decision's round messages are the messages between the first and the last, after their tags**, each with its
-coin, and its link coin is the first message's. -/
-theorem zk_act_decide_mids {zk : Bool} {x : Claims.Msg} {as : List Claims.Msg} {cs : List Coin} {s : Ins}
-    {spec : SessionSpec} {sts : Array Stmt} {link : List ByteArray × List ByteArray} {c₁ : Coin}
-    {mids : List (Claims.Msg × Coin)} {f : Final} (h : act zk x as cs = .decide s spec sts link c₁ mids f) :
-    ∃ a₁ rest crest, as = a₁ :: rest ∧ cs = c₁ :: crest ∧
-      mids = (rest.dropLast.map List.tail).zip crest.dropLast := by
-  unfold act at h
-  repeat' split at h
-  all_goals first | (cases h; done) | skip
-  cases h
-  exact ⟨_, _, _, rfl, rfl, rfl⟩
-
-
 namespace Gen
 
 variable [S : ZkSetup]
@@ -136,40 +121,15 @@ theorem zk_act_decide_mids {zk : Bool} {x : Claims.Msg} {as : List Claims.Msg} {
 
 end Gen
 
-/-- **A decided run at `zkΦ`'s coins, message by message**: its link coin is the first coin, its round messages are
-`P`'s between the first and the last, after their tags, each with its coin, and it decides on `P`'s last message. -/
-theorem zk_decides_msgs {Ω : Type} {P : Claims.Prover Ω} {x : Claims.Msg} {ω : Ω} {spec : SessionSpec}
-    {sts : Array Stmt} (hL : zkN x + 2 = (V true).k x) {u : zkTape x} {r' : Fin (zkN x + 2) → LCoin 65536}
-    {s : Ins} {spec' : SessionSpec} {sts' : Array Stmt} {link : List ByteArray × List ByteArray} {c₁ : Coin}
-    {mids : List (Claims.Msg × Coin)} {f : Final}
-    (hacc : (Claims.run sha512 P (V true) x ω (zkΦ x spec sts (u, r'))).out = .acc)
-    (hact : act true x ((Claims.run sha512 P (V true) x ω (zkΦ x spec sts (u, r'))).msgs.map Prod.fst)
-        ((List.range ((Claims.run sha512 P (V true) x ω (zkΦ x spec sts (u, r'))).msgs.map Prod.fst).length).map
-          (Claims.coinSeq (zkΦ x spec sts (u, r')))) = .decide s spec' sts' link c₁ mids f) :
-    c₁ = Claims.coinSeq (zkΦ x spec sts (u, r')) 0 ∧
-      mids = (List.range (zkN x)).map (fun k => ((zkDm P x spec sts ω u r' (k + 1)).tail,
-        Claims.coinSeq (zkΦ x spec sts (u, r')) (k + 1))) ∧
-      finalOf (zkDm P x spec sts ω u r' (zkN x + 1)) = some f := by
-  have hlen := next_acc_length_sha512 true (by simp)
-    (run_acc_next sha512 P (V true) x ω (zkΦ x spec sts (u, r')) hacc)
-  have has := zk_run_dep sha512 P x ω (zkΦ x spec sts (u, r'))
-  rw [List.length_map] at hlen
-  rw [hlen] at has
-  rw [has, List.length_map, List.length_range, zk_range_map_ends _ (by omega),
-    zk_range_map_ends (Claims.coinSeq (zkΦ x spec sts (u, r'))) (by omega)] at hact
-  have hfin := act_decide_final hact
-  obtain ⟨a₁, rest, crest, h1, h2, h3⟩ := zk_act_decide_mids hact
-  injection h1 with _ h1
-  injection h2 with h2a h2
-  subst h1 h2
-  refine ⟨h2a.symm, ?_, ?_⟩
-  · rw [h3, List.dropLast_concat, List.dropLast_concat, List.map_map, show (V true).k x - 2 = zkN x by omega]
-    rw [List.zip_map']
-    rfl
-  · rw [← List.cons_append, List.getLast?_concat] at hfin
-    rw [show zkN x + 1 = (V true).k x - 1 by omega]
-    exact hfin
-
+/-- **A decision's round messages are the messages between the first and the last, after their tags**, each with its
+coin, and its link coin is the first message's. -/
+theorem zk_act_decide_mids {zk : Bool} {x : Claims.Msg} {as : List Claims.Msg} {cs : List Coin} {s : Ins}
+    {spec : SessionSpec} {sts : Array Stmt} {link : List ByteArray × List ByteArray} {c₁ : Coin}
+    {mids : List (Claims.Msg × Coin)} {f : Final} (h : act zk x as cs = .decide s spec sts link c₁ mids f) :
+    ∃ a₁ rest crest, as = a₁ :: rest ∧ cs = c₁ :: crest ∧
+      mids = (rest.dropLast.map List.tail).zip crest.dropLast :=
+  Gen.zk_act_decide_mids (S := S₀) (zk := zk) (x := x) (as := as) (cs := cs) (s := s) (spec := spec) (sts := sts)
+    (link := link) (c₁ := c₁) (mids := mids) (f := f) (h := h)
 
 namespace Gen
 
@@ -210,6 +170,24 @@ theorem zk_decides_msgs {Ω : Type} {P : Claims.Prover Ω} {x : Claims.Msg} {ω 
     exact hfin
 
 end Gen
+
+/-- **A decided run at `zkΦ`'s coins, message by message**: its link coin is the first coin, its round messages are
+`P`'s between the first and the last, after their tags, each with its coin, and it decides on `P`'s last message. -/
+theorem zk_decides_msgs {Ω : Type} {P : Claims.Prover Ω} {x : Claims.Msg} {ω : Ω} {spec : SessionSpec}
+    {sts : Array Stmt} (hL : zkN x + 2 = (V true).k x) {u : zkTape x} {r' : Fin (zkN x + 2) → LCoin 65536}
+    {s : Ins} {spec' : SessionSpec} {sts' : Array Stmt} {link : List ByteArray × List ByteArray} {c₁ : Coin}
+    {mids : List (Claims.Msg × Coin)} {f : Final}
+    (hacc : (Claims.run sha512 P (V true) x ω (zkΦ x spec sts (u, r'))).out = .acc)
+    (hact : act true x ((Claims.run sha512 P (V true) x ω (zkΦ x spec sts (u, r'))).msgs.map Prod.fst)
+        ((List.range ((Claims.run sha512 P (V true) x ω (zkΦ x spec sts (u, r'))).msgs.map Prod.fst).length).map
+          (Claims.coinSeq (zkΦ x spec sts (u, r')))) = .decide s spec' sts' link c₁ mids f) :
+    c₁ = Claims.coinSeq (zkΦ x spec sts (u, r')) 0 ∧
+      mids = (List.range (zkN x)).map (fun k => ((zkDm P x spec sts ω u r' (k + 1)).tail,
+        Claims.coinSeq (zkΦ x spec sts (u, r')) (k + 1))) ∧
+      finalOf (zkDm P x spec sts ω u r' (zkN x + 1)) = some f :=
+  Gen.zk_decides_msgs (S := S₀) (Ω := Ω) (P := P) (x := x) (ω := ω) (spec := spec) (sts := sts) (hL := hL) (u := u)
+    (r' := r') (s := s) (spec' := spec') (sts' := sts') (link := link) (c₁ := c₁) (mids := mids) (f := f) (hacc := hacc)
+    (hact := hact)
 
 theorem zk_forall_of_forall₂ {α β : Type} {Q : β → Prop} :
     ∀ {l₁ : List α} {l₂ : List β}, List.Forall₂ (fun _ b => Q b) l₁ l₂ → ∀ b ∈ l₂, Q b
@@ -376,16 +354,6 @@ end Gen
 
 /-! ## The coins `zkΦ` takes from the live coins -/
 
-/-- **`zkΦ`'s coin `j` is the live coin `j` on its first `zkCnt j` entries.** -/
-theorem zkΦ_entry {x : Claims.Msg} {spec : SessionSpec} {sts : Array Stmt} (hL : zkN x + 2 = (V true).k x)
-    (u : zkTape x) (r' : Fin (zkN x + 2) → LCoin 65536) {j : ℕ} (hj : j < (V true).k x) (e : Fin 65536)
-    (he : e.val < zkCnt x spec sts j) :
-    Claims.coinSeq (zkΦ x spec sts (u, r')) j e = (Claims.coinSeq r' j e : 𝔽) := by
-  rw [zkΦ_eq hL]
-  simp only [Claims.coinSeq, hj, show j < zkN x + 2 by omega, ↓reduceDIte]
-  exact ite_eq_left (α := 𝔽) (show e.val < zkNOf x spec sts ⟨j, hj⟩ from he)
-
-
 namespace Gen
 
 variable [S : ZkSetup]
@@ -400,6 +368,14 @@ theorem zkΦ_entry {x : Claims.Msg} {spec : SessionSpec} {sts : Array Stmt} (hL 
   exact ite_eq_left (α := 𝔽) (show e.val < zkNOf x spec sts ⟨j, hj⟩ from he)
 
 end Gen
+
+/-- **`zkΦ`'s coin `j` is the live coin `j` on its first `zkCnt j` entries.** -/
+theorem zkΦ_entry {x : Claims.Msg} {spec : SessionSpec} {sts : Array Stmt} (hL : zkN x + 2 = (V true).k x)
+    (u : zkTape x) (r' : Fin (zkN x + 2) → LCoin 65536) {j : ℕ} (hj : j < (V true).k x) (e : Fin 65536)
+    (he : e.val < zkCnt x spec sts j) :
+    Claims.coinSeq (zkΦ x spec sts (u, r')) j e = (Claims.coinSeq r' j e : 𝔽) :=
+  Gen.zkΦ_entry (S := S₀) (x := x) (spec := spec) (sts := sts) (hL := hL) (u := u) (r' := r') (j := j) (hj := hj)
+    (e := e) (he := he)
 
 /-- **A coin's first `n` values are a live coin's first `n` entries** where the two agree there. -/
 theorem zk_vals_takeE (c : Coin) (u : LCoin 65536) {n : ℕ} (hn : n ≤ 65536)
@@ -411,22 +387,6 @@ theorem zk_vals_takeE (c : Coin) (u : LCoin 65536) {n : ℕ} (hn : n ≤ 65536)
     show i < 65536 by omega, ↓reduceDIte, Coin.at]
   exact h ⟨i, by omega⟩ hi
 
-/-- **A masked statement in scope has two link points**: the setup's link points (`setupTables_pointsAny`). -/
-theorem zk_points {x : Claims.Msg} {s : Claims.Flock.Stmt} (hs : parse true Readable.relation x = some s)
-    (hin : Claims.Flock.InScope true s) {ins : Ins} {spec : SessionSpec} {sts : Array Stmt}
-    (hset : setupOf true x = some (ins, spec, sts)) : spec.points = 2 := by
-  obtain ⟨p, hp, rfl, -, -, -⟩ := parsed_of_parse hs
-  obtain ⟨hpst, hpr, hsr⟩ := parseBytes_setup hp hset
-  subst hpst
-  obtain ⟨-, -, -, -, -, -, -, -, -, hpi, -⟩ := hin
-  simp only [Readable.toReadable, Readable.Read.form, Bool.not_eq_true] at hpi
-  have hpi' : p.publicInputs = none := Option.not_isSome_iff_eq_none.1 (by simp [hpi])
-  rw [← hpr] at hsr
-  unfold Readable.Read.setup at hsr
-  rw [hpi'] at hsr
-  exact (Discharge.HiddenExec.setupTables_pointsAny hsr).1
-
-
 namespace Gen
 
 variable [S : ZkSetup]
@@ -448,36 +408,12 @@ theorem zk_points {x : Claims.Msg} {s : Claims.Flock.Stmt} (hs : parse true Read
 
 end Gen
 
-/-- **The link's points**: the first live coin's points on the masked wire are those of `zkΦ`'s link coin, whose
-`2·mPts` link coordinates are the first live coin's entries. -/
-theorem zkSim_pts {x : Claims.Msg} {spec : SessionSpec} {sts : Array Stmt} (hL : zkN x + 2 = (V true).k x) {J : ℕ}
-    (hw : 2 * spec.mPts ≤ 65536) (hp : spec.points = 2) (u : zkTape x) (r' : Fin (zkN x + 2) → LCoin 65536)
-    (link : List ByteArray × List ByteArray) (f : Final) :
-    (ptsIf (zkWire J spec.mPts hw)).proj (Claims.coinSeq r' 0) =
-      (Claims.Bridge.Custody.viewOf J spec.mPts spec link (Claims.coinSeq (zkΦ x spec sts (u, r')) 0) f).pts := by
-  rw [zk_ptsIf_proj]
-  funext k t
-  have hkt : t.val + spec.mPts * k.val < 2 * spec.mPts := by
-    have := k.isLt
-    have := t.isLt
-    rcases k with ⟨_ | _ | _, _⟩ <;> simp <;> omega
-  show ptsE spec.mPts (zkTakeE (2 * spec.mPts) (Claims.coinSeq r' 0)) k t =
-    Refine.fOf ((pointsOf spec (Claims.coinSeq (zkΦ x spec sts (u, r')) 0))[k.val]!)[t.val]!
-  have e1 : ptsE spec.mPts (zkTakeE (2 * spec.mPts) (Claims.coinSeq r' 0)) k t =
-      zkTakeE (2 * spec.mPts) (Claims.coinSeq r' 0) ⟨t.val + spec.mPts * k.val, hkt⟩ := rfl
-  have e2 : k.val * spec.mPts + t.val = t.val + spec.mPts * k.val := by rw [Nat.mul_comm, Nat.add_comm]
-  have hk2 : k.val < 2 := k.isLt
-  simp only [pointsOf, hp]
-  rw [e1, getElem!_pos _ k.val (by simp [hk2]), Array.getElem_map, Array.getElem_range,
-    getElem!_pos _ t.val (by simp), Array.getElem_map, Array.getElem_range, e2]
-  have he : t.val + spec.mPts * k.val < 65536 := by omega
-  simp only [zkTakeE, Coin.at, he, ↓reduceDIte]
-  have hc : t.val + spec.mPts * k.val < zkCnt x spec sts 0 := by
-    unfold zkCnt
-    simp only [↓reduceIte]
-    exact lt_max_of_lt_right hkt
-  exact (zkΦ_entry (j := 0) hL u r' (by omega) ⟨_, he⟩ hc).symm
-
+/-- **A masked statement in scope has two link points**: the setup's link points (`setupTables_pointsAny`). -/
+theorem zk_points {x : Claims.Msg} {s : Claims.Flock.Stmt} (hs : parse true Readable.relation x = some s)
+    (hin : Claims.Flock.InScope true s) {ins : Ins} {spec : SessionSpec} {sts : Array Stmt}
+    (hset : setupOf true x = some (ins, spec, sts)) : spec.points = 2 :=
+  Gen.zk_points (S := S₀) (x := x) (s := s) (hs := hs) (hin := hin) (ins := ins) (spec := spec) (sts := sts)
+    (hset := hset)
 
 namespace Gen
 
@@ -514,6 +450,16 @@ theorem zkSim_pts {x : Claims.Msg} {spec : SessionSpec} {sts : Array Stmt} (hL :
   exact (zkΦ_entry (j := 0) hL u r' (by omega) ⟨_, he⟩ hc).symm
 
 end Gen
+
+/-- **The link's points**: the first live coin's points on the masked wire are those of `zkΦ`'s link coin, whose
+`2·mPts` link coordinates are the first live coin's entries. -/
+theorem zkSim_pts {x : Claims.Msg} {spec : SessionSpec} {sts : Array Stmt} (hL : zkN x + 2 = (V true).k x) {J : ℕ}
+    (hw : 2 * spec.mPts ≤ 65536) (hp : spec.points = 2) (u : zkTape x) (r' : Fin (zkN x + 2) → LCoin 65536)
+    (link : List ByteArray × List ByteArray) (f : Final) :
+    (ptsIf (zkWire J spec.mPts hw)).proj (Claims.coinSeq r' 0) =
+      (Claims.Bridge.Custody.viewOf J spec.mPts spec link (Claims.coinSeq (zkΦ x spec sts (u, r')) 0) f).pts :=
+  Gen.zkSim_pts (S := S₀) (x := x) (spec := spec) (sts := sts) (hL := hL) (J := J) (hw := hw) (hp := hp) (u := u)
+    (r' := r') (link := link) (f := f)
 
 /-! ## The rep streams -/
 
@@ -865,14 +811,6 @@ theorem zkSimRun {Ω : Type} (P : Claims.Prover Ω) {x : Claims.Msg} (ω : Ω) {
 
 end Gen
 
-/-- **The lockstep holds at every statement** (`zkSimRun`, at the statement's link points: `zk_mPts`,
-`zk_points`). -/
-theorem zkSimRunAt (x : Claims.Msg) : ZkSimRunAt x :=
-  fun _ hs hin _ _ _ hset h0 L hz hk hlay _ P ω =>
-    zkSimRun P ω hset (zk_tabsJ_le hset h0 L hz hk hlay) h0 (zk_mPts_le hs hin hset) (zk_mPts hs hin hset).2
-      (zk_points hs hin hset)
-
-
 namespace Gen
 
 variable [S : ZkSetup]
@@ -885,6 +823,11 @@ theorem zkSimRunAt (x : Claims.Msg) : ZkSimRunAt x :=
       (zk_points hs hin hset)
 
 end Gen
+
+/-- **The lockstep holds at every statement** (`zkSimRun`, at the statement's link points: `zk_mPts`,
+`zk_points`). -/
+theorem zkSimRunAt (x : Claims.Msg) : ZkSimRunAt x :=
+  Gen.zkSimRunAt (S := S₀) (x := x)
 
 /-- **The masked record the claims read: KS**, at SHA-512 at the deployed relation, at every number of tables, from
 the masked simulator's fork bounds and view clashes at the statements some run accepts: its lockstep and abort hold at

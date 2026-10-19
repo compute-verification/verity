@@ -155,13 +155,6 @@ theorem tableWeight_nonneg (zk : Bool) (st : Stmt) : 0 ≤ tableWeight zk st := 
   unfold tableWeight
   split <;> exact Claims.Flock.Numbers.weightOf_nonneg _ _
 
-theorem weight_nonneg (zk : Bool) (x : Claims.Msg) : 0 ≤ weight zk x := by
-  unfold weight
-  refine List.sum_nonneg fun a ha => ?_
-  obtain ⟨p, -, rfl⟩ := List.mem_map.1 ha
-  exact tableWeight_nonneg zk p.2
-
-
 namespace Gen
 
 variable [S : ZkSetup]
@@ -173,6 +166,9 @@ theorem weight_nonneg (zk : Bool) (x : Claims.Msg) : 0 ≤ weight zk x := by
   exact tableWeight_nonneg zk p.2
 
 end Gen
+
+theorem weight_nonneg (zk : Bool) (x : Claims.Msg) : 0 ≤ weight zk x :=
+  Gen.weight_nonneg (S := S₀) (zk := zk) (x := x)
 
 /-- **A table's weight covers its length's share of `k`**: `2 + 4·2^{d₀}/e`, its schedule's level 0 as long as the
 verifier's (`kFits_all`). -/
@@ -204,9 +200,6 @@ theorem lens_le_weights (zk : Bool) (l : List (SessionSpec × Stmt)) :
     rw [e]
     constructor <;> linarith [ih.1, ih.2]
 
-theorem N₀_nonneg (zk : Bool) (x : Claims.Msg) : 0 ≤ N₀ zk x := (lens_le_weights zk (tables zk x)).2
-
-
 namespace Gen
 
 variable [S : ZkSetup]
@@ -215,20 +208,8 @@ theorem N₀_nonneg (zk : Bool) (x : Claims.Msg) : 0 ≤ N₀ zk x := (lens_le_w
 
 end Gen
 
-/-- **`k ≤ weight`** at every statement: `k = ⌈4N₀/e⌉ < 4N₀/e + 1`, and each table's weight holds its length's share
-and `2` more (`lens_le_weights`). -/
-theorem k_le_weight (zk : Bool) (x : Claims.Msg) : (⌈4 * N₀ zk x / Real.exp 1⌉₊ : ℝ) ≤ weight zk x := by
-  have he := Real.exp_pos 1
-  unfold N₀ weight
-  cases ht : tables zk x with
-  | nil => simp
-  | cons p rest =>
-    obtain ⟨h1, h2⟩ := lens_le_weights zk (p :: rest)
-    have hceil := Nat.ceil_lt_add_one (div_nonneg (mul_nonneg (by norm_num : (0 : ℝ) ≤ 4) h2) he.le)
-    simp only [List.length_cons, Nat.cast_add, Nat.cast_one] at h1
-    have : (0 : ℝ) ≤ rest.length := Nat.cast_nonneg _
-    linarith
-
+theorem N₀_nonneg (zk : Bool) (x : Claims.Msg) : 0 ≤ N₀ zk x :=
+  Gen.N₀_nonneg (S := S₀) (zk := zk) (x := x)
 
 namespace Gen
 
@@ -249,6 +230,11 @@ theorem k_le_weight (zk : Bool) (x : Claims.Msg) : (⌈4 * N₀ zk x / Real.exp 
     linarith
 
 end Gen
+
+/-- **`k ≤ weight`** at every statement: `k = ⌈4N₀/e⌉ < 4N₀/e + 1`, and each table's weight holds its length's share
+and `2` more (`lens_le_weights`). -/
+theorem k_le_weight (zk : Bool) (x : Claims.Msg) : (⌈4 * N₀ zk x / Real.exp 1⌉₊ : ℝ) ≤ weight zk x :=
+  Gen.k_le_weight (S := S₀) (zk := zk) (x := x)
 
 theorem plain_k_le (rel : Readable.Parsed → Readable.Relation) (x : Claims.Msg) :
     ((deployPlain rel).k x : ℝ) ≤ 2 * (deployPlain rel).weight x := by
@@ -257,14 +243,6 @@ theorem plain_k_le (rel : Readable.Parsed → Readable.Relation) (x : Claims.Msg
   show (⌈4 * N₀ false x / Real.exp 1⌉₊ : ℝ) ≤ 2 * weight false x
   linarith
 
-theorem zk_k_le (rel : Readable.Parsed → Readable.Relation) (x : Claims.Msg) :
-    ((deployZk rel).k x : ℝ) ≤ 2 * (deployZk rel).weight x := by
-  have := k_le_weight true x
-  have := weight_nonneg true x
-  show (⌈4 * N₀ true x / Real.exp 1⌉₊ : ℝ) ≤ 2 * weight true x
-  linarith
-
-
 namespace Gen
 
 variable [S : ZkSetup]
@@ -277,6 +255,10 @@ theorem zk_k_le (rel : Readable.Parsed → Readable.Relation) (x : Claims.Msg) :
   linarith
 
 end Gen
+
+theorem zk_k_le (rel : Readable.Parsed → Readable.Relation) (x : Claims.Msg) :
+    ((deployZk rel).k x : ℝ) ≤ 2 * (deployZk rel).weight x :=
+  Gen.zk_k_le (S := S₀) (rel := rel) (x := x)
 
 /-! ## Acceptance in scope -/
 
@@ -305,21 +287,6 @@ theorem checks_scope {zk : Bool} {s : Ins} {spec : SessionSpec} {x : Claims.Msg}
 
 end Gen
 
-/-- **An accepting step at SHA-512** is an accepting verdict at the statement's setup, after which the scope check
-passed. -/
-theorem next_acc_check {zk : Bool} {x : Claims.Msg} {as : List Claims.Msg} {cs : List Coin}
-    (h : ((next zk x as cs).eval sha512).1 = .acc) :
-    ∃ ins spec sts record proofs, setupOf zk x = some (ins, spec, sts) ∧
-      (if zk then Zk.verify spec (tabsOf sts) record proofs else verify spec (tabsOf sts) record proofs) = .ok () ∧
-      ins.read.check = .ok () := by
-  cases ha : act zk x as cs with
-  | rej => simp [next_rej sha512 ha] at h
-  | coin c => simp [next_coin sha512 ha] at h
-  | decide s spec sts link c₁ mids f =>
-    obtain ⟨hv, hc⟩ := (next_decide_sha512 ha).1 h
-    exact ⟨s, spec, sts, f.record, f.proofs, act_decide ha, hv, checks_scope hc⟩
-
-
 namespace Gen
 
 variable [S : ZkSetup]
@@ -340,16 +307,14 @@ theorem next_acc_check {zk : Bool} {x : Claims.Msg} {as : List Claims.Msg} {cs :
 
 end Gen
 
-theorem acc_check {zk : Bool} {x : Claims.Msg} (hacc : ¬ Claims.Flock.NoAcc sha512 (V zk) x) :
+/-- **An accepting step at SHA-512** is an accepting verdict at the statement's setup, after which the scope check
+passed. -/
+theorem next_acc_check {zk : Bool} {x : Claims.Msg} {as : List Claims.Msg} {cs : List Coin}
+    (h : ((next zk x as cs).eval sha512).1 = .acc) :
     ∃ ins spec sts record proofs, setupOf zk x = some (ins, spec, sts) ∧
       (if zk then Zk.verify spec (tabsOf sts) record proofs else verify spec (tabsOf sts) record proofs) = .ok () ∧
-      ins.read.check = .ok () := by
-  unfold Claims.Flock.NoAcc at hacc
-  push Not at hacc
-  obtain ⟨Ω, P, ω, r, hr⟩ := hacc
-  obtain ⟨as, has⟩ := stepWith_acc _ _ _ _ _ _ _ _ _ hr
-  exact next_acc_check has
-
+      ins.read.check = .ok () :=
+  Gen.next_acc_check (S := S₀) (zk := zk) (x := x) (as := as) (cs := cs) (h := h)
 
 namespace Gen
 
@@ -367,16 +332,11 @@ theorem acc_check {zk : Bool} {x : Claims.Msg} (hacc : ¬ Claims.Flock.NoAcc sha
 
 end Gen
 
-/-- **The parser reads every statement the verifier sets up**: under `--zk` the setup passes every table's
-`Zk.shapeOk` (`setup_shapeOk`). -/
-theorem read_parse_of_setup {ins : Ins} {spec : SessionSpec} {sts : Array Stmt} (hs : ins.setup = .ok (spec, sts)) :
-    ins.read.parse = some { ins.read with sts } := by
-  unfold Readable.Read.parse Readable.Read.tablesOf
-  rw [Ins.setup_read hs]
-  cases hz : ins.read.zk
-  · simp only [Bool.false_eq_true, ↓reduceIte, Option.map_some]
-  · simp only [↓reduceIte, Claims.Bridge.Custody.setup_shapeOk hs hz, Option.map_some]
-
+theorem acc_check {zk : Bool} {x : Claims.Msg} (hacc : ¬ Claims.Flock.NoAcc sha512 (V zk) x) :
+    ∃ ins spec sts record proofs, setupOf zk x = some (ins, spec, sts) ∧
+      (if zk then Zk.verify spec (tabsOf sts) record proofs else verify spec (tabsOf sts) record proofs) = .ok () ∧
+      ins.read.check = .ok () :=
+  Gen.acc_check (S := S₀) (zk := zk) (x := x) (hacc := hacc)
 
 namespace Gen
 
@@ -393,6 +353,12 @@ theorem read_parse_of_setup {zk : Bool} {ins : Ins} {spec : SessionSpec} {sts : 
   · simp only [↓reduceIte, Claims.Bridge.Custody.setup_shapeOk hs hz, Option.map_some]
 
 end Gen
+
+/-- **The parser reads every statement the verifier sets up**: under `--zk` the setup passes every table's
+`Zk.shapeOk` (`setup_shapeOk`). -/
+theorem read_parse_of_setup {ins : Ins} {spec : SessionSpec} {sts : Array Stmt} (hs : ins.setup = .ok (spec, sts)) :
+    ins.read.parse = some { ins.read with sts } :=
+  Gen.read_parse_of_setup (S := S₀) (zk := ins.read.zk) (ins := ins) (spec := spec) (sts := sts) (hs := hs)
 
 /-- **The deployed verifier accepts only in scope**, at SHA-512: a statement some run accepts parses, in scope. The
 checks after the verdict run the scope check (`checks_scope`), and the shipped `verify` serves only `m ≥ 22`
@@ -525,43 +491,6 @@ theorem zOf_readTrace {J : ℕ} (hJ : J = 1) (m lanes cols : ℕ) (M : FlockSoun
   rw [mul_one, add_zero, Claims.Flock.readTrace_hid]
   exact toZ_decide _
 
-/-- **The parser reads the setup's statement**: its tables are the setup's, read off the setup's `Read`. -/
-theorem parseBytes_setup {zk : Bool} {x : Claims.Msg} {p : Readable.Parsed} {ins : Ins} {spec : SessionSpec}
-    {sts : Array Stmt} (hp : Readable.parseBytes (readOf zk) x = some p) (hset : setupOf zk x = some (ins, spec, sts)) :
-    p.sts = sts ∧ p.toRead = ins.read ∧ ins.read.setup = .ok (spec, sts) := by
-  have hins : insOf zk x = some ins ∧ ins.setup = .ok (spec, sts) := by
-    unfold setupOf at hset
-    cases hi : insOf zk x with
-    | none => rw [hi] at hset; cases hset
-    | some ins' =>
-      rw [hi] at hset
-      cases hs : ins'.setup with
-      | error e => simp [hs, Except.toOption] at hset
-      | ok v =>
-        obtain ⟨spec', sts'⟩ := v
-        simp only [hs, Except.toOption, Option.bind_eq_bind, Option.bind_some, Option.pure_def,
-          Option.some.injEq, Prod.mk.injEq] at hset
-        obtain ⟨rfl, rfl, rfl⟩ := hset
-        exact ⟨rfl, hs⟩
-  have hsr := Ins.setup_read hins.2
-  have hr : readOf zk x = some ins.read := by unfold readOf; rw [hins.1]; rfl
-  have hzk : ins.read.zk = zk := readOf_zk hr
-  unfold Readable.parseBytes at hp
-  rw [hr, Option.bind_some] at hp
-  unfold Readable.Read.parse Readable.Read.tablesOf at hp
-  rw [hsr, hzk] at hp
-  cases zk
-  · simp only [Bool.false_eq_true, ↓reduceIte, Option.map_some, Option.some.injEq] at hp
-    subst hp
-    exact ⟨rfl, rfl, hsr⟩
-  · simp only [↓reduceIte] at hp
-    split at hp
-    · simp only [Option.map_some, Option.some.injEq] at hp
-      subst hp
-      exact ⟨rfl, rfl, hsr⟩
-    · cases hp
-
-
 namespace Gen
 
 variable [S : ZkSetup]
@@ -590,6 +519,13 @@ theorem parseBytes_setup {zk : Bool} {x : Claims.Msg} {p : Readable.Parsed} {ins
     · cases hp
 
 end Gen
+
+/-- **The parser reads the setup's statement**: its tables are the setup's, read off the setup's `Read`. -/
+theorem parseBytes_setup {zk : Bool} {x : Claims.Msg} {p : Readable.Parsed} {ins : Ins} {spec : SessionSpec}
+    {sts : Array Stmt} (hp : Readable.parseBytes (readOf zk) x = some p) (hset : setupOf zk x = some (ins, spec, sts)) :
+    p.sts = sts ∧ p.toRead = ins.read ∧ ins.read.setup = .ok (spec, sts) :=
+  Gen.parseBytes_setup (S := S₀) (zk := zk) (x := x) (p := p) (ins := ins) (spec := spec) (sts := sts) (hp := hp)
+    (hset := hset)
 
 /-- **At one table, a message satisfying table 0's model statement reads as a witness**: at a statement in scope that
 the deployed parser reads at the deployed relation (`relS_deployed`), when the setup has one table, a message whose
@@ -665,16 +601,6 @@ theorem zk_hwit {x : Claims.Msg} {s : Claims.Flock.Stmt}
         (Claims.Flock.readTrace FlockSoundness.execArith i.m (Claims.Flock.zkLanes i) (Claims.Flock.zkCols i) P) :=
   fun P hsat => relS_of_table0 hs hin hset hone L hi P hsat
 
-/-- The readable statement's `m` is table 0's. -/
-theorem parse_m {zk : Bool} {x : Claims.Msg} {s : Claims.Flock.Stmt} (hs : parse zk Readable.relation x = some s)
-    {ins : Ins} {spec : SessionSpec} {sts : Array Stmt} (hset : setupOf zk x = some (ins, spec, sts))
-    (h0 : 0 < sts.size) : s.m = sts[0].m := by
-  obtain ⟨p, hp, rfl⟩ := Option.map_eq_some_iff.1 hs
-  obtain ⟨hpst, -, -⟩ := parseBytes_setup hp hset
-  subst hpst
-  simp only [Readable.toReadable, Array.getElem?_eq_getElem h0, Option.map_some, Option.getD_some]
-
-
 namespace Gen
 
 variable [S : ZkSetup]
@@ -689,6 +615,13 @@ theorem parse_m {zk : Bool} {x : Claims.Msg} {s : Claims.Flock.Stmt} (hs : parse
   simp only [Readable.toReadable, Array.getElem?_eq_getElem h0, Option.map_some, Option.getD_some]
 
 end Gen
+
+/-- The readable statement's `m` is table 0's. -/
+theorem parse_m {zk : Bool} {x : Claims.Msg} {s : Claims.Flock.Stmt} (hs : parse zk Readable.relation x = some s)
+    {ins : Ins} {spec : SessionSpec} {sts : Array Stmt} (hset : setupOf zk x = some (ins, spec, sts))
+    (h0 : 0 < sts.size) : s.m = sts[0].m :=
+  Gen.parse_m (S := S₀) (zk := zk) (x := x) (s := s) (hs := hs) (ins := ins) (spec := spec) (sts := sts) (hset := hset)
+    (h0 := h0)
 
 /-- **Table 0's statement is the parsed one** where the verifier sets up one table. -/
 theorem table_zero_of_setup {zk : Bool} {x : Claims.Msg} {s : Claims.Flock.Stmt}

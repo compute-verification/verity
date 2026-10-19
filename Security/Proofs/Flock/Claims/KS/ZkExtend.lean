@@ -228,20 +228,6 @@ theorem zk_card : ∑ i : Claims.Flock.ZkIdx, 2 ^ Claims.Flock.zkLen i < Fintype
         Finset.sum_le_sum fun i _ => Nat.pow_le_pow_right (by norm_num) (Claims.Flock.zkShape_fits i).1
     _ < 2 ^ 128 := by simp
 
-/-- **A first lane no masked trace one agreement short of its radius has at `p`**, at any word `W`, read at the
-untrimmed masked instance (`Claims.GS.exists_avoid` at the deployed masked code). -/
-theorem zk_avoid (rel : Readable.Parsed → Readable.Relation) (W : ℕ → List 𝔽) (p : ℕ) :
-    ∃ c : 𝔽, ∀ M : Claims.Flock.ZkTrace,
-      (1 - (deployZk rel).θ M) * ((deployZk rel).len M : ℝ) ≤
-        (((Finset.univ : Finset (Fin ((deployZk rel).len M))).filter fun q =>
-          (deployZk rel).enc M q.val = W q.val).card : ℝ) + 1 →
-      ((deployZk rel).enc M p)[0]? ≠ some c :=
-  Claims.GS.exists_avoid Claims.Flock.flockZkLevelZero (fun _ => pow_pos (by norm_num) _)
-    (fun i => 2 ^ Claims.Flock.zkLen i)
-    (fun i => 1 - Real.sqrt (((2 : ℝ) ^ Claims.Flock.zkCols i + Claims.Flock.zkPad i) / 2 ^ Claims.Flock.zkLen i) -
-      1 / 200) zk_inj zk_reg zk_card W p
-
-
 namespace Gen
 
 variable [S : ZkSetup]
@@ -260,6 +246,16 @@ theorem zk_avoid (rel : Readable.Parsed → Readable.Relation) (W : ℕ → List
       1 / 200) zk_inj zk_reg zk_card W p
 
 end Gen
+
+/-- **A first lane no masked trace one agreement short of its radius has at `p`**, at any word `W`, read at the
+untrimmed masked instance (`Claims.GS.exists_avoid` at the deployed masked code). -/
+theorem zk_avoid (rel : Readable.Parsed → Readable.Relation) (W : ℕ → List 𝔽) (p : ℕ) :
+    ∃ c : 𝔽, ∀ M : Claims.Flock.ZkTrace,
+      (1 - (deployZk rel).θ M) * ((deployZk rel).len M : ℝ) ≤
+        (((Finset.univ : Finset (Fin ((deployZk rel).len M))).filter fun q =>
+          (deployZk rel).enc M q.val = W q.val).card : ℝ) + 1 →
+      ((deployZk rel).enc M p)[0]? ≠ some c :=
+  Gen.zk_avoid (S := S₀) (rel := rel) (W := W) (p := p)
 
 theorem extTab_update_self {n : ℕ} (C : Fin n → List 𝔽) (p : Fin n) (u : List 𝔽) :
     Claims.Flock.extTab (Function.update C p u) p.val = u := by
@@ -440,12 +436,6 @@ theorem zk_extendJ (rel : Readable.Parsed → Readable.Relation) :
 
 end Gen
 
-/-- **Masked knowledge soundness at the untrimmed instance**, at SHA-512 at the deployed relation, with no premise:
-`zk_KS_untrim_of_extendJ` with `ExtendJ` (`zk_extendJ`). -/
-theorem zk_KS_untrim : Claims.Flock.KS sha512 (deployZk Readable.relation) :=
-  zk_KS_untrim_of_extendJ (zk_extendJ Readable.relation)
-
-
 namespace Gen
 
 variable [S : ZkSetup]
@@ -456,5 +446,10 @@ theorem zk_KS_untrim : Claims.Flock.KS sha512 (deployZk Readable.relation) :=
   zk_KS_untrim_of_extendJ (zk_extendJ Readable.relation)
 
 end Gen
+
+/-- **Masked knowledge soundness at the untrimmed instance**, at SHA-512 at the deployed relation, with no premise:
+`zk_KS_untrim_of_extendJ` with `ExtendJ` (`zk_extendJ`). -/
+theorem zk_KS_untrim : Claims.Flock.KS sha512 (deployZk Readable.relation) :=
+  Gen.zk_KS_untrim (S := S₀)
 
 end FlockDeploy.KS

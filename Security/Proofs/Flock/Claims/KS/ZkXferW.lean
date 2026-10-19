@@ -29,33 +29,6 @@ theorem zkLevel0_d_eq : ∀ m : Fin 11, (Claims.Flock.zkLevel0 (m.val + 25)).d =
     ((Accounting.m1Schedule (m.val + 25)).levels.headD default).logLen := by
   decide +kernel
 
-/-- **Table `j`'s word has level 0's `2^logLen` columns** at C-Flock ZK's padded tables of a masked statement in
-scope. -/
-theorem wordLenJ_zkTabs {x : Claims.Msg} {s : Claims.Flock.Stmt}
-    (hs : parse true Readable.relation x = some s) (hin : Claims.Flock.InScope true s) {ins : Ins}
-    {spec : SessionSpec} {sts : Array Stmt} (hset : setupOf true x = some (ins, spec, sts)) (h0 : 0 < sts.size)
-    (L : (j : ℕ) → (h : j < sts.size) → Layout sts[j])
-    (hz : ∀ j (h : j < sts.size), Zk.schedule sts[j].m = .ok (Claims.Flock.zkSched sts[j].m))
-    (hk : ∀ j (h : j < sts.size), sts[j].c.kLog ≤ 27)
-    (hlay : ∀ j (h : j < sts.size), ((L j h).model (Refine.regionsOf sts[j])).LinkLayout PT_LOCAL spec.mPts)
-    {j : ℕ} (hj : j < (tables true x).length) :
-    wordLenJ true x j = 2 ^ (lvOf (zkTabs h0 L hz hk hlay j).sch 0).logLen := by
-  have hlen : (tables true x).length = sts.size := by
-    unfold tables
-    rw [hset]
-    simp
-  rw [hlen] at hj
-  have ht : (tables true x)[j]? = some (spec, sts[j]) := tables_getElem? hset (Array.getElem?_eq_getElem hj)
-  obtain ⟨h25, h35, -⟩ := zk_scopeJ hs hin hset hj
-  rw [zkTabs_of_lt h0 L hz hk hlay hj, (zkTab_m1 (L j hj) (hz j hj) (hk j hj) spec (hlay j hj)).1,
-    Claims.Flock.lvOf_zero]
-  have he := zkLevel0_d_eq ⟨sts[j].m - 25, by omega⟩
-  simp only [Nat.sub_add_cancel h25] at he
-  unfold wordLenJ
-  rw [ht]
-  simp only [↓reduceIte, he]
-
-
 namespace Gen
 
 variable [S : ZkSetup]
@@ -87,6 +60,20 @@ theorem wordLenJ_zkTabs {x : Claims.Msg} {s : Claims.Flock.Stmt}
   simp only [↓reduceIte, he]
 
 end Gen
+
+/-- **Table `j`'s word has level 0's `2^logLen` columns** at C-Flock ZK's padded tables of a masked statement in
+scope. -/
+theorem wordLenJ_zkTabs {x : Claims.Msg} {s : Claims.Flock.Stmt}
+    (hs : parse true Readable.relation x = some s) (hin : Claims.Flock.InScope true s) {ins : Ins}
+    {spec : SessionSpec} {sts : Array Stmt} (hset : setupOf true x = some (ins, spec, sts)) (h0 : 0 < sts.size)
+    (L : (j : ℕ) → (h : j < sts.size) → Layout sts[j])
+    (hz : ∀ j (h : j < sts.size), Zk.schedule sts[j].m = .ok (Claims.Flock.zkSched sts[j].m))
+    (hk : ∀ j (h : j < sts.size), sts[j].c.kLog ≤ 27)
+    (hlay : ∀ j (h : j < sts.size), ((L j h).model (Refine.regionsOf sts[j])).LinkLayout PT_LOCAL spec.mPts)
+    {j : ℕ} (hj : j < (tables true x).length) :
+    wordLenJ true x j = 2 ^ (lvOf (zkTabs h0 L hz hk hlay j).sch 0).logLen :=
+  Gen.wordLenJ_zkTabs (S := S₀) (x := x) (s := s) (hs := hs) (hin := hin) (ins := ins) (spec := spec) (sts := sts)
+    (hset := hset) (h0 := h0) (L := L) (hz := hz) (hk := hk) (hlay := hlay) (j := j) (hj := hj)
 
 open Classical in
 /-- **The masked live sessions' bound at the deployed decoders, off the table on a witness lane**: `ZkXferJ` with the

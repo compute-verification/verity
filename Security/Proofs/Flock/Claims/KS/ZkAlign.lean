@@ -405,16 +405,6 @@ def ZkSlotAlign (x : Claims.Msg) : Prop :=
 
 end Gen
 
-/-- **The alignment from the slot's coin count**: `ZkForkAlign` from `ZkSlotAlign` by `advRSZ_le_forkC`, table `j`'s
-position in the session being `j` (`take_gamesZC_length`). -/
-theorem zkForkAlign_of_slot {x : Claims.Msg} (h : ZkSlotAlign x) : ZkForkAlign x := by
-  intro s hs hin ins spec sts hset h0 L hz hk hlay d hd Ω P ω j hj C r ℓ u
-  have ha := advRSZ_le_forkC execArith ZkExec.hs512 (zkTabs h0 L hz hk hlay j) _ _ _ r ℓ.val _ _
-    (h s hs hin ins spec sts hset h0 L hz hk hlay d hd Ω P ω j hj C r ℓ u)
-  rw [take_gamesZC_length] at ha
-  exact ha
-
-
 namespace Gen
 
 variable [S : ZkSetup]
@@ -430,16 +420,10 @@ theorem zkForkAlign_of_slot {x : Claims.Msg} (h : ZkSlotAlign x) : ZkForkAlign x
 
 end Gen
 
-/-- **The deployed masked verifier: KS, from the caps' slot alignment and clash, `τ`'s fork bound, and the pads'
-premises**, at SHA-512 at the trimmed record at the deployed relation: `zk_KS_of_align` at `zkForkAlign_of_slot`. -/
-theorem zk_KS_of_slot (ha : ∀ x, ¬ Claims.Flock.NoAcc sha512 (V true) x → ZkSlotAlign x)
-    (hc : ∀ x, ¬ Claims.Flock.NoAcc sha512 (V true) x → ZkForkClash x)
-    (ht : ∀ x, ¬ Claims.Flock.NoAcc sha512 (V true) x → ZkSimForkLeOn x fun _ i => IsTauZ i)
-    (hp : ∀ x, ¬ Claims.Flock.NoAcc sha512 (V true) x → ZkSimForkLeOn x fun _ i => IsPadsEvZ i)
-    (hpads : ∀ x, ¬ Claims.Flock.NoAcc sha512 (V true) x → ZkViewClashQ x PadsZ) :
-    Claims.Flock.KS sha512 (deployZkTrim Readable.relation) :=
-  zk_KS_of_align (fun x hno => zkForkAlign_of_slot (ha x hno)) hc ht hp hpads
-
+/-- **The alignment from the slot's coin count**: `ZkForkAlign` from `ZkSlotAlign` by `advRSZ_le_forkC`, table `j`'s
+position in the session being `j` (`take_gamesZC_length`). -/
+theorem zkForkAlign_of_slot {x : Claims.Msg} (h : ZkSlotAlign x) : ZkForkAlign x :=
+  Gen.zkForkAlign_of_slot (S := S₀) (x := x) (h := h)
 
 namespace Gen
 
@@ -456,5 +440,15 @@ theorem zk_KS_of_slot (ha : ∀ x, ¬ Claims.Flock.NoAcc sha512 (V true) x → Z
   zk_KS_of_align (fun x hno => zkForkAlign_of_slot (ha x hno)) hc ht hp hpads
 
 end Gen
+
+/-- **The deployed masked verifier: KS, from the caps' slot alignment and clash, `τ`'s fork bound, and the pads'
+premises**, at SHA-512 at the trimmed record at the deployed relation: `zk_KS_of_align` at `zkForkAlign_of_slot`. -/
+theorem zk_KS_of_slot (ha : ∀ x, ¬ Claims.Flock.NoAcc sha512 (V true) x → ZkSlotAlign x)
+    (hc : ∀ x, ¬ Claims.Flock.NoAcc sha512 (V true) x → ZkForkClash x)
+    (ht : ∀ x, ¬ Claims.Flock.NoAcc sha512 (V true) x → ZkSimForkLeOn x fun _ i => IsTauZ i)
+    (hp : ∀ x, ¬ Claims.Flock.NoAcc sha512 (V true) x → ZkSimForkLeOn x fun _ i => IsPadsEvZ i)
+    (hpads : ∀ x, ¬ Claims.Flock.NoAcc sha512 (V true) x → ZkViewClashQ x PadsZ) :
+    Claims.Flock.KS sha512 (deployZkTrim Readable.relation) :=
+  Gen.zk_KS_of_slot (S := S₀) (ha := ha) (hc := hc) (ht := ht) (hp := hp) (hpads := hpads)
 
 end FlockDeploy.KS

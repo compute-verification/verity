@@ -220,11 +220,6 @@ theorem zkPadsAlign (x : Claims.Msg) : ZkPadsAlign x := by
 
 end Gen
 
-/-- **The masked simulator's fork bound at the pads holds at every message.** -/
-theorem zkSimForkLePads (x : Claims.Msg) : ZkSimForkLeOn x fun _ i => IsPadsEvZ i :=
-  zkSimForkLePads_of (zkPadsAlign x)
-
-
 namespace Gen
 
 variable [S : ZkSetup]
@@ -234,5 +229,9 @@ theorem zkSimForkLePads (x : Claims.Msg) : ZkSimForkLeOn x fun _ i => IsPadsEvZ 
   zkSimForkLePads_of (zkPadsAlign x)
 
 end Gen
+
+/-- **The masked simulator's fork bound at the pads holds at every message.** -/
+theorem zkSimForkLePads (x : Claims.Msg) : ZkSimForkLeOn x fun _ i => IsPadsEvZ i :=
+  Gen.zkSimForkLePads (S := S₀) (x := x)
 
 end FlockDeploy.KS

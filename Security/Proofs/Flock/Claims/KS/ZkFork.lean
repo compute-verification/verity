@@ -45,17 +45,6 @@ def IsTauZ {Lv : ℕ} : Claims.Flock.IZW Lv → Prop
   | .inl (.inr (.inr _)) => True
   | _ => False
 
-/-- **`ZkSimForkLeOn` at the caps and `τ` from each.** -/
-theorem zkSimForkLeOn_capTau {x : Claims.Msg} (hc : ZkSimForkLeOn x fun _ i => IsCapZ i)
-    (ht : ZkSimForkLeOn x fun _ i => IsTauZ i) : ZkSimForkLeOn x fun _ i => IsCapTauZ i := by
-  intro s hs hin ins spec sts hset h0 L hz hk hlay d hd Ω P ω j hj C hC i hi
-  rcases i with ((_ | (_ | _)) | ⟨⟩)
-  · exact hc s hs hin ins spec sts hset h0 L hz hk hlay d hd Ω P ω j hj C hC _ trivial
-  · exact False.elim hi
-  · exact ht s hs hin ins spec sts hset h0 L hz hk hlay d hd Ω P ω j hj C hC _ trivial
-  · exact False.elim hi
-
-
 namespace Gen
 
 variable [S : ZkSetup]
@@ -71,6 +60,11 @@ theorem zkSimForkLeOn_capTau {x : Claims.Msg} (hc : ZkSimForkLeOn x fun _ i => I
   · exact False.elim hi
 
 end Gen
+
+/-- **`ZkSimForkLeOn` at the caps and `τ` from each.** -/
+theorem zkSimForkLeOn_capTau {x : Claims.Msg} (hc : ZkSimForkLeOn x fun _ i => IsCapZ i)
+    (ht : ZkSimForkLeOn x fun _ i => IsTauZ i) : ZkSimForkLeOn x fun _ i => IsCapTauZ i :=
+  Gen.zkSimForkLeOn_capTau (S := S₀) (x := x) (hc := hc) (ht := ht)
 
 section Event
 
@@ -208,21 +202,6 @@ noncomputable def zkAdvCapAt {x : Claims.Msg} {s : Claims.Flock.Stmt} (hs : pars
 
 end Gen
 
-theorem zkAdvSim_cap {x : Claims.Msg} {s : Claims.Flock.Stmt} (hs : parse true Readable.relation x = some s)
-    (hin : Claims.Flock.InScope true s) {ins : Ins} {spec : SessionSpec} {sts : Array Stmt}
-    (hset : setupOf true x = some (ins, spec, sts)) (h0 : 0 < sts.size)
-    (L : (j : ℕ) → (h : j < sts.size) → Layout sts[j])
-    (hz : ∀ j (h : j < sts.size), Zk.schedule sts[j].m = .ok (Claims.Flock.zkSched sts[j].m))
-    (hk : ∀ j (h : j < sts.size), sts[j].c.kLog ≤ 27)
-    (hlay : ∀ j (h : j < sts.size), ((L j h).model (Refine.regionsOf sts[j])).LinkLayout PT_LOCAL spec.mPts)
-    {d : Lean.Json} (hd : ins.read.draw = some d) {Ω : Type} (P : Claims.Prover Ω) (ω : Ω) (j : ℕ)
-    (hj : j < (tables true x).length) (C : Fin (wordLenJ true x j) → List 𝔽) (r : Fin 2)
-    (ℓ : Fin (zkTabs h0 L hz hk hlay j).sch.levels.length) :
-    zkAdvSim hs hin hset h0 L hz hk hlay hd P ω j hj C (.inl (.inl (r, ℓ))) =
-      (∑ u, zkAdvCapAt hs hin hset h0 L hz hk hlay hd P ω j hj C r ℓ.val u) / Fintype.card (zkTape x) :=
-  rfl
-
-
 namespace Gen
 
 variable [S : ZkSetup]
@@ -242,6 +221,22 @@ theorem zkAdvSim_cap {x : Claims.Msg} {s : Claims.Flock.Stmt} (hs : parse true R
   rfl
 
 end Gen
+
+theorem zkAdvSim_cap {x : Claims.Msg} {s : Claims.Flock.Stmt} (hs : parse true Readable.relation x = some s)
+    (hin : Claims.Flock.InScope true s) {ins : Ins} {spec : SessionSpec} {sts : Array Stmt}
+    (hset : setupOf true x = some (ins, spec, sts)) (h0 : 0 < sts.size)
+    (L : (j : ℕ) → (h : j < sts.size) → Layout sts[j])
+    (hz : ∀ j (h : j < sts.size), Zk.schedule sts[j].m = .ok (Claims.Flock.zkSched sts[j].m))
+    (hk : ∀ j (h : j < sts.size), sts[j].c.kLog ≤ 27)
+    (hlay : ∀ j (h : j < sts.size), ((L j h).model (Refine.regionsOf sts[j])).LinkLayout PT_LOCAL spec.mPts)
+    {d : Lean.Json} (hd : ins.read.draw = some d) {Ω : Type} (P : Claims.Prover Ω) (ω : Ω) (j : ℕ)
+    (hj : j < (tables true x).length) (C : Fin (wordLenJ true x j) → List 𝔽) (r : Fin 2)
+    (ℓ : Fin (zkTabs h0 L hz hk hlay j).sch.levels.length) :
+    zkAdvSim hs hin hset h0 L hz hk hlay hd P ω j hj C (.inl (.inl (r, ℓ))) =
+      (∑ u, zkAdvCapAt hs hin hset h0 L hz hk hlay hd P ω j hj C r ℓ.val u) / Fintype.card (zkTape x) :=
+  Gen.zkAdvSim_cap (S := S₀) (x := x) (s := s) (hs := hs) (hin := hin) (ins := ins) (spec := spec) (sts := sts)
+    (hset := hset) (h0 := h0) (L := L) (hz := hz) (hk := hk) (hlay := hlay) (d := d) (hd := hd) (Ω := Ω) (P := P)
+    (ω := ω) (j := j) (hj := hj) (C := C) (r := r) (ℓ := ℓ)
 
 open Classical in
 /-- **The simulated fork's alignment at a cap at tape `u`**: against `zkSimAt`, the fork at rep `r`'s level-`ℓ + 1`
@@ -510,37 +505,6 @@ theorem zkAdvCap_le_of {x : Claims.Msg} {s : Claims.Flock.Stmt} (hs : parse true
 
 end Gen
 
-/-- **A live fork event's pair**: where `P'` aborts on rejected runs (`zkSimAbortAt`), the live fork event gives two
-accepting runs, which collide by `ZkForkClash`. -/
-theorem pairEvZ_of_forkClash {x : Claims.Msg} (hc : ZkForkClash x) {s : Claims.Flock.Stmt}
-    (hs : parse true Readable.relation x = some s) (hin : Claims.Flock.InScope true s) {ins : Ins}
-    {spec : SessionSpec} {sts : Array Stmt} (hset : setupOf true x = some (ins, spec, sts)) (h0 : 0 < sts.size)
-    (L : (j : ℕ) → (h : j < sts.size) → Layout sts[j])
-    (hz : ∀ j (h : j < sts.size), Zk.schedule sts[j].m = .ok (Claims.Flock.zkSched sts[j].m))
-    (hk : ∀ j (h : j < sts.size), sts[j].c.kLog ≤ 27)
-    (hlay : ∀ j (h : j < sts.size), ((L j h).model (Refine.regionsOf sts[j])).LinkLayout PT_LOCAL spec.mPts)
-    {d : Lean.Json} (hd : ins.read.draw = some d) {Ω : Type} {P : Claims.Prover Ω} {ω : Ω} {j : ℕ}
-    (hj : j < (tables true x).length) {C : Fin (wordLenJ true x j) → List 𝔽} (hC : ∀ p, wideJ true x j (C p))
-    {u : zkTape x} {r₁ r₂ : Fin (zkN x + 2) → LCoin 65536} {r : Fin 2}
-    {ℓ : Fin (zkTabs h0 L hz hk hlay j).sch.levels.length}
-    (h : ZkLiveFork hs hin hset h0 L hz hk hlay d P ω j C u r₁ r₂ r ℓ.val) :
-    Claims.Flock.pairEv sha512 (V true) P x ω (zkΦ x spec sts (u, r₁)) (zkΦ x spec sts (u, r₂)) := by
-  obtain ⟨a, a', ha, ha', -⟩ := id h
-  have hacc : ∀ (r' : Fin (zkN x + 2) → LCoin 65536) a, Claims.Bridge.RetOK (outJ ZkExec.hs512 (tabsJ (tables true x).length (zkTabs h0 L hz hk hlay)))
-      (AccTxJ ins.read.I d j (zkRoot P x ω) C) (opnD sts _) (decD _) (fun _ _ => true) (fun _ _ _ => [])
-      (fun rs j => Exec.capOfRoot rs[j.val]!)
-      (repJ execArith ZkExec.hs512 (tabsJ (tables true x).length (zkTabs h0 L hz hk hlay)))
-      (liveOut (fun _ => (tabsJ (tables true x).length (zkTabs h0 L hz hk hlay)).length) (fun _ => spec.mPts) zkN
-        spec.dg (zkW (tabsJ (tables true x).length (zkTabs h0 L hz hk hlay)).length spec (zk_mPts_le hs hin hset))
-        sha512 (zkSim P x spec sts) x (ω, u) r') a →
-      (Claims.run sha512 P (V true) x ω (zkΦ x spec sts (u, r'))).out = .acc := fun r' _ ha => by
-    by_contra hn
-    exact zkSimAbortAt x s hs hin ins spec sts hset h0 L hz hk hlay d hd Ω P ω j hj C hC u r' hn ha.1
-  have h₁ := hacc _ _ ha
-  have h₂ := hacc _ _ ha'
-  exact ⟨h₁, h₂, hc s hs hin ins spec sts hset h0 L hz hk hlay d hd Ω P ω j hj C hC u r₁ r₂ r ℓ h h₁ h₂⟩
-
-
 namespace Gen
 
 variable [S : ZkSetup]
@@ -577,17 +541,24 @@ theorem pairEvZ_of_forkClash {x : Claims.Msg} (hc : ZkForkClash x) {s : Claims.F
 
 end Gen
 
-/-- **The fork bound at the caps from the alignment and the clash**: `ZkSimForkLeOn` at `IsCapZ` from `ZkForkAlign` and
-`ZkForkClash`, by `zkAdvCap_le_of` at the abort (`zkSimAbortAt`). -/
-theorem zkSimForkLeCap_of {x : Claims.Msg} (ha : ZkForkAlign x) (hc : ZkForkClash x) :
-    ZkSimForkLeOn x fun _ i => IsCapZ i := by
-  intro s hs hin ins spec sts hset h0 L hz hk hlay d hd Ω P ω j hj C hC i hi
-  rcases i with ((⟨r, ℓ⟩ | _ | _) | ⟨⟩)
-  · exact zkAdvCap_le_of hs hin hset h0 L hz hk hlay hd P ω j hj C r ℓ _
-      (ha s hs hin ins spec sts hset h0 L hz hk hlay d hd Ω P ω j hj C r ℓ)
-      fun _ _ _ hq => pairEvZ_of_forkClash hc hs hin hset h0 L hz hk hlay hd hj hC hq
-  all_goals exact False.elim hi
-
+/-- **A live fork event's pair**: where `P'` aborts on rejected runs (`zkSimAbortAt`), the live fork event gives two
+accepting runs, which collide by `ZkForkClash`. -/
+theorem pairEvZ_of_forkClash {x : Claims.Msg} (hc : ZkForkClash x) {s : Claims.Flock.Stmt}
+    (hs : parse true Readable.relation x = some s) (hin : Claims.Flock.InScope true s) {ins : Ins}
+    {spec : SessionSpec} {sts : Array Stmt} (hset : setupOf true x = some (ins, spec, sts)) (h0 : 0 < sts.size)
+    (L : (j : ℕ) → (h : j < sts.size) → Layout sts[j])
+    (hz : ∀ j (h : j < sts.size), Zk.schedule sts[j].m = .ok (Claims.Flock.zkSched sts[j].m))
+    (hk : ∀ j (h : j < sts.size), sts[j].c.kLog ≤ 27)
+    (hlay : ∀ j (h : j < sts.size), ((L j h).model (Refine.regionsOf sts[j])).LinkLayout PT_LOCAL spec.mPts)
+    {d : Lean.Json} (hd : ins.read.draw = some d) {Ω : Type} {P : Claims.Prover Ω} {ω : Ω} {j : ℕ}
+    (hj : j < (tables true x).length) {C : Fin (wordLenJ true x j) → List 𝔽} (hC : ∀ p, wideJ true x j (C p))
+    {u : zkTape x} {r₁ r₂ : Fin (zkN x + 2) → LCoin 65536} {r : Fin 2}
+    {ℓ : Fin (zkTabs h0 L hz hk hlay j).sch.levels.length}
+    (h : ZkLiveFork hs hin hset h0 L hz hk hlay d P ω j C u r₁ r₂ r ℓ.val) :
+    Claims.Flock.pairEv sha512 (V true) P x ω (zkΦ x spec sts (u, r₁)) (zkΦ x spec sts (u, r₂)) :=
+  Gen.pairEvZ_of_forkClash (S := S₀) (x := x) (hc := hc) (s := s) (hs := hs) (hin := hin) (ins := ins) (spec := spec)
+    (sts := sts) (hset := hset) (h0 := h0) (L := L) (hz := hz) (hk := hk) (hlay := hlay) (d := d) (hd := hd) (Ω := Ω)
+    (P := P) (ω := ω) (j := j) (hj := hj) (C := C) (hC := hC) (u := u) (r₁ := r₁) (r₂ := r₂) (r := r) (ℓ := ℓ) (h := h)
 
 namespace Gen
 
@@ -605,6 +576,12 @@ theorem zkSimForkLeCap_of {x : Claims.Msg} (ha : ZkForkAlign x) (hc : ZkForkClas
   all_goals exact False.elim hi
 
 end Gen
+
+/-- **The fork bound at the caps from the alignment and the clash**: `ZkSimForkLeOn` at `IsCapZ` from `ZkForkAlign` and
+`ZkForkClash`, by `zkAdvCap_le_of` at the abort (`zkSimAbortAt`). -/
+theorem zkSimForkLeCap_of {x : Claims.Msg} (ha : ZkForkAlign x) (hc : ZkForkClash x) :
+    ZkSimForkLeOn x fun _ i => IsCapZ i :=
+  Gen.zkSimForkLeCap_of (S := S₀) (x := x) (ha := ha) (hc := hc)
 
 /-- **The deployed masked verifier: KS, from the caps' alignment and clash, `τ`'s fork bound, and the pads' premises**,
 at SHA-512 at the trimmed record at the deployed relation: `zk_KS_of_kinds` at `zkSimForkLeOn_capTau` and

@@ -783,18 +783,6 @@ theorem zkAdvPads_le_of {x : Claims.Msg} {s : Claims.Flock.Stmt} (hs : parse tru
 
 end Gen
 
-/-- **The fork bound at the pads from the alignment**: `ZkSimForkLeOn` at `IsPadsEvZ` from `ZkPadsAlign`, the clash
-holding outright (`zkAdvPads_le_of`). -/
-theorem zkSimForkLePads_of {x : Claims.Msg} (ha : ZkPadsAlign x) : ZkSimForkLeOn x fun _ i => IsPadsEvZ i := by
-  intro s hs hin ins spec sts hset h0 L hz hk hlay d hd Ω P ω j hj C hC i hi
-  rcases i with ((_ | (r | _)) | ⟨⟩)
-  · exact False.elim hi
-  · exact zkAdvPads_le_of hs hin hset h0 L hz hk hlay hd P ω j hj C hC r _
-      (ha s hs hin ins spec sts hset h0 L hz hk hlay d hd Ω P ω j hj C r)
-  · exact False.elim hi
-  · exact False.elim hi
-
-
 namespace Gen
 
 variable [S : ZkSetup]
@@ -811,6 +799,11 @@ theorem zkSimForkLePads_of {x : Claims.Msg} (ha : ZkPadsAlign x) : ZkSimForkLeOn
   · exact False.elim hi
 
 end Gen
+
+/-- **The fork bound at the pads from the alignment**: `ZkSimForkLeOn` at `IsPadsEvZ` from `ZkPadsAlign`, the clash
+holding outright (`zkAdvPads_le_of`). -/
+theorem zkSimForkLePads_of {x : Claims.Msg} (ha : ZkPadsAlign x) : ZkSimForkLeOn x fun _ i => IsPadsEvZ i :=
+  Gen.zkSimForkLePads_of (S := S₀) (x := x) (ha := ha)
 
 end Live
 

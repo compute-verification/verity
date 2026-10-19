@@ -479,17 +479,6 @@ theorem zkSimForkLe₀ (x : Claims.Msg) : ZkSimForkLeOn x fun _ i => IsLevel0Z i
 
 end Gen
 
-/-- **`ZkSimForkLe` from its cap and `τ` events and its pads events**, level 0's holding (`zkSimForkLe₀`). -/
-theorem zkSimForkLe_of_kinds {x : Claims.Msg} (hct : ZkSimForkLeOn x fun _ i => IsCapTauZ i)
-    (hp : ZkSimForkLeOn x fun _ i => IsPadsEvZ i) : ZkSimForkLe x := by
-  intro s hs hin ins spec sts hset h0 L hz hk hlay d hd Ω P ω j hj C hC i
-  rcases i with ((_ | (_ | _)) | ⟨⟩)
-  · exact hct s hs hin ins spec sts hset h0 L hz hk hlay d hd Ω P ω j hj C hC _ trivial
-  · exact hp s hs hin ins spec sts hset h0 L hz hk hlay d hd Ω P ω j hj C hC _ trivial
-  · exact hct s hs hin ins spec sts hset h0 L hz hk hlay d hd Ω P ω j hj C hC _ trivial
-  · exact zkSimForkLe₀ x s hs hin ins spec sts hset h0 L hz hk hlay d hd Ω P ω j hj C hC _ trivial
-
-
 namespace Gen
 
 variable [S : ZkSetup]
@@ -505,20 +494,16 @@ theorem zkSimForkLe_of_kinds {x : Claims.Msg} (hct : ZkSimForkLeOn x fun _ i => 
   · exact zkSimForkLe₀ x s hs hin ins spec sts hset h0 L hz hk hlay d hd Ω P ω j hj C hC _ trivial
 
 end Gen
+
+/-- **`ZkSimForkLe` from its cap and `τ` events and its pads events**, level 0's holding (`zkSimForkLe₀`). -/
+theorem zkSimForkLe_of_kinds {x : Claims.Msg} (hct : ZkSimForkLeOn x fun _ i => IsCapTauZ i)
+    (hp : ZkSimForkLeOn x fun _ i => IsPadsEvZ i) : ZkSimForkLe x :=
+  Gen.zkSimForkLe_of_kinds (S := S₀) (x := x) (hct := hct) (hp := hp)
 
 end Level0
 
 open Flock
 
-/-- **The deployed masked verifier: KS, from the cap/`τ` and pads fork bounds and the pads clash**, at SHA-512 at the
-trimmed record at the deployed relation: `zk_KS_of_pads` at `zkSimForkLe_of_kinds`. -/
-theorem zk_KS_of_kinds (hct : ∀ x, ¬ Claims.Flock.NoAcc sha512 (V true) x → ZkSimForkLeOn x fun _ i => IsCapTauZ i)
-    (hp : ∀ x, ¬ Claims.Flock.NoAcc sha512 (V true) x → ZkSimForkLeOn x fun _ i => IsPadsEvZ i)
-    (hpads : ∀ x, ¬ Claims.Flock.NoAcc sha512 (V true) x → ZkViewClashQ x PadsZ) :
-    Claims.Flock.KS sha512 (deployZkTrim Readable.relation) :=
-  zk_KS_of_pads (fun x hno => zkSimForkLe_of_kinds (hct x hno) (hp x hno)) hpads
-
-
 namespace Gen
 
 variable [S : ZkSetup]
@@ -532,6 +517,14 @@ theorem zk_KS_of_kinds (hct : ∀ x, ¬ Claims.Flock.NoAcc sha512 (V true) x →
   zk_KS_of_pads (fun x hno => zkSimForkLe_of_kinds (hct x hno) (hp x hno)) hpads
 
 end Gen
+
+/-- **The deployed masked verifier: KS, from the cap/`τ` and pads fork bounds and the pads clash**, at SHA-512 at the
+trimmed record at the deployed relation: `zk_KS_of_pads` at `zkSimForkLe_of_kinds`. -/
+theorem zk_KS_of_kinds (hct : ∀ x, ¬ Claims.Flock.NoAcc sha512 (V true) x → ZkSimForkLeOn x fun _ i => IsCapTauZ i)
+    (hp : ∀ x, ¬ Claims.Flock.NoAcc sha512 (V true) x → ZkSimForkLeOn x fun _ i => IsPadsEvZ i)
+    (hpads : ∀ x, ¬ Claims.Flock.NoAcc sha512 (V true) x → ZkViewClashQ x PadsZ) :
+    Claims.Flock.KS sha512 (deployZkTrim Readable.relation) :=
+  Gen.zk_KS_of_kinds (S := S₀) (hct := hct) (hp := hp) (hpads := hpads)
 
 end FlockDeploy.KS
 

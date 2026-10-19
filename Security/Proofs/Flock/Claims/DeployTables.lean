@@ -59,24 +59,6 @@ theorem setupTables_size {tags : Tags} {cf pf : ByteArray} {coins : Coins} {coun
     | (simp only [List.size_toArray, List.length_singleton]; omega)
     | (obtain ⟨hsz, -⟩ := range_mapM_ok (by assumption); omega)
 
-/-- **A setup makes as many tables as the parsed statement counts.** -/
-theorem setupOf_size_eq_tables {zk : Bool} {rel : Readable.Parsed → Readable.Relation} {x : Claims.Msg}
-    {i : Ins} {spec : SessionSpec} {sts : Array Stmt} {s : Claims.Flock.Stmt}
-    (h : setupOf zk x = some (i, spec, sts)) (hp : parse zk rel x = some s) : sts.size = s.tables := by
-  obtain ⟨hi, hs⟩ := setupOf_some h
-  have hr := Ins.setup_read hs
-  have hform : s.form.tables = i.read.I.count := by
-    unfold parse Readable.parseOf Readable.parseBytes readOf at hp
-    rw [hi] at hp
-    simp only [Option.map_some, Option.bind_some] at hp
-    obtain ⟨p, hpp, rfl⟩ := Option.map_eq_some_iff.1 hp
-    unfold Readable.Read.parse at hpp
-    obtain ⟨sts', -, rfl⟩ := Option.map_eq_some_iff.1 hpp
-    rfl
-  have hsize : sts.size = max 1 i.read.I.count := setupTables_size hr
-  rw [hsize, Claims.Flock.Stmt.tables, hform]
-
-
 namespace KS.Gen
 
 variable [S : ZkSetup]
@@ -100,16 +82,12 @@ theorem setupOf_size_eq_tables {zk : Bool} {rel : Readable.Parsed → Readable.R
 
 end KS.Gen
 
-/-- **The records' tables are the parsed statement's**: where the statement sets up, the session's tables number
-`Claims.Flock.Stmt.tables` of the parsed statement. -/
-theorem tables_length {zk : Bool} {rel : Readable.Parsed → Readable.Relation} {x : Claims.Msg}
-    {s : Claims.Flock.Stmt} (hp : parse zk rel x = some s) (hx : (setupOf zk x).isSome) :
-    (tables zk x).length = s.tables := by
-  obtain ⟨⟨i, spec, sts⟩, h⟩ := Option.isSome_iff_exists.1 hx
-  unfold tables
-  rw [h, List.length_map, Array.length_toList]
-  exact setupOf_size_eq_tables h hp
-
+/-- **A setup makes as many tables as the parsed statement counts.** -/
+theorem setupOf_size_eq_tables {zk : Bool} {rel : Readable.Parsed → Readable.Relation} {x : Claims.Msg}
+    {i : Ins} {spec : SessionSpec} {sts : Array Stmt} {s : Claims.Flock.Stmt}
+    (h : setupOf zk x = some (i, spec, sts)) (hp : parse zk rel x = some s) : sts.size = s.tables :=
+  KS.Gen.setupOf_size_eq_tables (S := KS.S₀) (zk := zk) (rel := rel) (x := x) (i := i) (spec := spec) (sts := sts)
+    (s := s) (h := h) (hp := hp)
 
 namespace KS.Gen
 
@@ -126,25 +104,19 @@ theorem tables_length {zk : Bool} {rel : Readable.Parsed → Readable.Relation} 
   exact setupOf_size_eq_tables h hp
 
 end KS.Gen
+
+/-- **The records' tables are the parsed statement's**: where the statement sets up, the session's tables number
+`Claims.Flock.Stmt.tables` of the parsed statement. -/
+theorem tables_length {zk : Bool} {rel : Readable.Parsed → Readable.Relation} {x : Claims.Msg}
+    {s : Claims.Flock.Stmt} (hp : parse zk rel x = some s) (hx : (setupOf zk x).isSome) :
+    (tables zk x).length = s.tables :=
+  KS.Gen.tables_length (S := KS.S₀) (zk := zk) (rel := rel) (x := x) (s := s) (hp := hp) (hx := hx)
 
 /-- **A statement the verifier parses has `max 1 count` tables.** -/
 theorem size_of_parses {p : Readable.Parsed} (hp : Readable.Parses p) : p.sts.size = max 1 p.I.count := by
   obtain ⟨spec, hset⟩ := Readable.setup_of_tablesOf (Readable.tablesOf_of_parses hp)
   exact setupTables_size hset
 
-/-- **What the claims' parser accepts**: the readable form of a statement the verifier parses, whose tables number
-`Claims.Flock.Stmt.tables`, and each table's own statement (`table`) is its table alone. -/
-theorem parsed_of_parse {zk : Bool} {rel : Readable.Parsed → Readable.Relation} {x : Claims.Msg}
-    {s : Claims.Flock.Stmt} (hs : parse zk rel x = some s) :
-    ∃ p : Readable.Parsed, Readable.parseBytes (readOf zk) x = some p ∧ s = Readable.toReadable rel p ∧
-      Readable.Parses p ∧ p.sts.size = s.tables ∧ ∀ j, table zk rel x j = some (Readable.toReadable rel (p.only j)) := by
-  obtain ⟨p, hp, rfl⟩ := Option.map_eq_some_iff.1 hs
-  obtain ⟨r, -, hrp⟩ := Option.bind_eq_some_iff.1 hp
-  have hP := Readable.parses_of_parse hrp
-  refine ⟨p, hp, rfl, hP, (size_of_parses hP).trans rfl, fun j => ?_⟩
-  simp only [table, Readable.tableOf, hp, Option.map_some]
-
-
 namespace KS.Gen
 
 variable [S : ZkSetup]
@@ -162,6 +134,14 @@ theorem parsed_of_parse {zk : Bool} {rel : Readable.Parsed → Readable.Relation
   simp only [table, Readable.tableOf, hp, Option.map_some]
 
 end KS.Gen
+
+/-- **What the claims' parser accepts**: the readable form of a statement the verifier parses, whose tables number
+`Claims.Flock.Stmt.tables`, and each table's own statement (`table`) is its table alone. -/
+theorem parsed_of_parse {zk : Bool} {rel : Readable.Parsed → Readable.Relation} {x : Claims.Msg}
+    {s : Claims.Flock.Stmt} (hs : parse zk rel x = some s) :
+    ∃ p : Readable.Parsed, Readable.parseBytes (readOf zk) x = some p ∧ s = Readable.toReadable rel p ∧
+      Readable.Parses p ∧ p.sts.size = s.tables ∧ ∀ j, table zk rel x j = some (Readable.toReadable rel (p.only j)) :=
+  KS.Gen.parsed_of_parse (S := KS.S₀) (zk := zk) (rel := rel) (x := x) (s := s) (hs := hs)
 
 /-- **The deployed relation splits by table**: at an in-scope statement the claims' parser accepts, a witness is in the
 relation exactly when, for every table `j`, its share (`Readable.tableWit`: hidden values `a·J + j`) is in the relation

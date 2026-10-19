@@ -109,18 +109,6 @@ theorem run_head {Ω Coin : Type} [Inhabited Coin] (H : Claims.Msg → Claims.Ms
     ∃ rest, (Claims.run H P V x ω r).msgs.map Prod.fst = ((P.next x [] ω).eval H).1 :: rest :=
   stepWith_head H P x ω _ (V.k x) [] [] ⟨[], [], [], .rej⟩ h
 
-/-- **A decision reads its link from the first message.** -/
-theorem act_decide_link {zk : Bool} {x : Claims.Msg} {as : List Claims.Msg} {cs : List Coin} {s : Ins}
-    {spec : SessionSpec} {sts : Array Stmt} {link : List ByteArray × List ByteArray} {c₁ : Coin}
-    {mids : List (Claims.Msg × Coin)} {f : Final} (h : act zk x as cs = .decide s spec sts link c₁ mids f) :
-    ∃ rest, as = (as.headD []) :: rest ∧ linkOf (as.headD []) = some link := by
-  unfold act at h
-  split at h
-  · cases h
-  · repeat' split at h
-    all_goals first | (cases h; done) | (cases h; exact ⟨_, rfl, by assumption⟩)
-
-
 namespace Gen
 
 variable [S : ZkSetup]
@@ -137,6 +125,14 @@ theorem act_decide_link {zk : Bool} {x : Claims.Msg} {as : List Claims.Msg} {cs 
     all_goals first | (cases h; done) | (cases h; exact ⟨_, rfl, by assumption⟩)
 
 end Gen
+
+/-- **A decision reads its link from the first message.** -/
+theorem act_decide_link {zk : Bool} {x : Claims.Msg} {as : List Claims.Msg} {cs : List Coin} {s : Ins}
+    {spec : SessionSpec} {sts : Array Stmt} {link : List ByteArray × List ByteArray} {c₁ : Coin}
+    {mids : List (Claims.Msg × Coin)} {f : Final} (h : act zk x as cs = .decide s spec sts link c₁ mids f) :
+    ∃ rest, as = (as.headD []) :: rest ∧ linkOf (as.headD []) = some link :=
+  Gen.act_decide_link (S := S₀) (zk := zk) (x := x) (as := as) (cs := cs) (s := s) (spec := spec) (sts := sts)
+    (link := link) (c₁ := c₁) (mids := mids) (f := f) (h := h)
 
 /-! ## The decision, within the run's log -/
 
@@ -150,31 +146,6 @@ theorem outOf_acc (H : Claims.Msg → Claims.Msg) (d : OCV Unit) (h : ((outOf d)
   | ok u => rfl
   | error e => rw [hr] at h; cases h
 
-/-- **An accepted run decides, within its own verifier log.** -/
-theorem acc_decide {zk : Bool} {H : Claims.Msg → Claims.Msg} {Ω : Type} {P : Claims.Prover Ω} {x : Claims.Msg}
-    {ω : Ω} {r : Fin ((V zk).k x) → Coin} (h : (Claims.run H P (V zk) x ω r).out = .acc) :
-    ∃ s spec sts link c₁ mids f,
-      act zk x ((Claims.run H P (V zk) x ω r).msgs.map Prod.fst)
-          ((List.range ((Claims.run H P (V zk) x ω r).msgs.map Prod.fst).length).map (Claims.coinSeq r)) =
-        .decide s spec sts link c₁ mids f ∧
-      Runs H (decision zk s x link c₁ mids f) () ((Claims.run H P (V zk) x ω r).vLog.map Prod.fst) := by
-  have ha := run_acc_next H P (V zk) x ω r h
-  have hl := run_acc_log H P (V zk) x ω r h
-  generalize (List.range _).map (Claims.coinSeq r) = cs at ha hl
-  replace ha : ((next zk x ((Claims.run H P (V zk) x ω r).msgs.map Prod.fst) cs).eval H).1 = .acc := ha
-  replace hl : ∀ p ∈ ((next zk x ((Claims.run H P (V zk) x ω r).msgs.map Prod.fst) cs).eval H).2,
-      p ∈ (Claims.run H P (V zk) x ω r).vLog := hl
-  cases hact : act zk x ((Claims.run H P (V zk) x ω r).msgs.map Prod.fst) cs with
-  | rej => rw [next_rej H hact] at ha; cases ha
-  | coin c => rw [next_coin H hact] at ha; cases ha
-  | decide s spec sts link c₁ mids f =>
-    refine ⟨s, spec, sts, link, c₁, mids, f, rfl, ?_, fun p hp => List.mem_map_of_mem (hl p ?_)⟩
-    · simp only [next, hact] at ha
-      exact outOf_acc H _ ha
-    · simp only [next, hact, outOf_log]
-      exact hp
-
-
 namespace Gen
 
 variable [S : ZkSetup]
@@ -205,24 +176,15 @@ theorem acc_decide {zk : Bool} {H : Claims.Msg → Claims.Msg} {Ω : Type} {P : 
 
 end Gen
 
-/-- **A decision within `L`**, at SHA-512 on a statement that sets up at `(spec, sts)`: the setup over the oracle is the
-statement's, then the verdict within `L`, and the checks. -/
-theorem decision_runs {zk : Bool} {s : Ins} {spec : SessionSpec} {sts : Array Stmt} {x : Claims.Msg}
-    {link : List ByteArray × List ByteArray} {c₁ : Coin} {mids : List (Claims.Msg × Coin)} {f : Final}
-    {L : List Claims.Msg} (hs : s.setup = .ok (spec, sts)) (h : Runs sha512 (decision zk s x link c₁ mids f) () L) :
-    Runs sha512 (verdictM zk Claims.Hashes.oc spec (tabsOf sts) f.record f.proofs) () L ∧
-      checks zk s spec x link c₁ mids f = .ok () := by
-  unfold decision at h
-  obtain ⟨⟨spec', sts'⟩, h0, h⟩ := Runs.bind h
-  have e : setupWith (Claims.hOf sha512) s.read = .ok (spec', sts') := by
-    rw [← (setupM_eval sha512 s.read).1]
-    exact h0.1
-  rw [hOf_sha512, setupWith_sha512, Ins.setup_read hs] at e
-  obtain ⟨rfl, rfl⟩ := Prod.mk.inj (Except.ok.inj e)
-  unfold decisionAt at h
-  obtain ⟨⟨⟩, h1, h2⟩ := Runs.bind h
-  exact ⟨h1, Runs.lift h2⟩
-
+/-- **An accepted run decides, within its own verifier log.** -/
+theorem acc_decide {zk : Bool} {H : Claims.Msg → Claims.Msg} {Ω : Type} {P : Claims.Prover Ω} {x : Claims.Msg}
+    {ω : Ω} {r : Fin ((V zk).k x) → Coin} (h : (Claims.run H P (V zk) x ω r).out = .acc) :
+    ∃ s spec sts link c₁ mids f,
+      act zk x ((Claims.run H P (V zk) x ω r).msgs.map Prod.fst)
+          ((List.range ((Claims.run H P (V zk) x ω r).msgs.map Prod.fst).length).map (Claims.coinSeq r)) =
+        .decide s spec sts link c₁ mids f ∧
+      Runs H (decision zk s x link c₁ mids f) () ((Claims.run H P (V zk) x ω r).vLog.map Prod.fst) :=
+  Gen.acc_decide (S := S₀) (zk := zk) (H := H) (Ω := Ω) (P := P) (x := x) (ω := ω) (r := r) (h := h)
 
 namespace Gen
 
@@ -247,6 +209,16 @@ theorem decision_runs {zk : Bool} {s : Ins} {spec : SessionSpec} {sts : Array St
   exact ⟨h1, Runs.lift h2⟩
 
 end Gen
+
+/-- **A decision within `L`**, at SHA-512 on a statement that sets up at `(spec, sts)`: the setup over the oracle is the
+statement's, then the verdict within `L`, and the checks. -/
+theorem decision_runs {zk : Bool} {s : Ins} {spec : SessionSpec} {sts : Array Stmt} {x : Claims.Msg}
+    {link : List ByteArray × List ByteArray} {c₁ : Coin} {mids : List (Claims.Msg × Coin)} {f : Final}
+    {L : List Claims.Msg} (hs : s.setup = .ok (spec, sts)) (h : Runs sha512 (decision zk s x link c₁ mids f) () L) :
+    Runs sha512 (verdictM zk Claims.Hashes.oc spec (tabsOf sts) f.record f.proofs) () L ∧
+      checks zk s spec x link c₁ mids f = .ok () :=
+  Gen.decision_runs (S := S₀) (zk := zk) (s := s) (spec := spec) (sts := sts) (x := x) (link := link) (c₁ := c₁)
+    (mids := mids) (f := f) (L := L) (hs := hs) (h := h)
 
 /-- **The verdict within `L` is the verdict with SHA-512 answered only within `L`.** -/
 theorem verdict_within {zk : Bool} {spec : SessionSpec} {tabs : Array Setup} {record : String}
@@ -307,39 +279,6 @@ end Gen
 
 /-! ## The tables' Merkle scheme -/
 
-/-- **The checks pin the tables' Merkle scheme**: every table the statement sets up commits under `hm96Sha512`, or,
-for a statement read without `--zk`, under plain SHA-512 leaves. -/
-theorem checks_leaf {zk : Bool} {s : Ins} {spec : SessionSpec} {x : Claims.Msg}
-    {link : List ByteArray × List ByteArray} {c₁ : Coin} {mids : List (Claims.Msg × Coin)} {f : Final}
-    {sts : Array Stmt} (hc : checks zk s spec x link c₁ mids f = .ok ()) (hs : s.setup = .ok (spec, sts)) :
-    ∀ (j : ℕ) (hj : j < sts.size), sts[j].merkle = MerkleScheme.hm96Sha512 ∨
-      (s.read.zk = false ∧ sts[j].merkle = MerkleScheme.sha512 "flock-leaf/sha512-unsalted") := by
-  unfold checks at hc
-  obtain ⟨_, -, hc⟩ := ebind_ok hc
-  obtain ⟨_, -, hc⟩ := ebind_ok hc
-  obtain ⟨_, -, hc⟩ := ebind_ok hc
-  obtain ⟨_, -, hc⟩ := ebind_ok hc
-  obtain ⟨_, hck, -⟩ := ebind_ok hc
-  have hck' : ProvedScope.check s.read.tags s.read.zk s.read.I.circuitFile s.read.I.publicFile s.read.I.tables
-      s.read.I.count s.read.publicInputs.isSome s.read.registered = .ok () := hck
-  obtain ⟨⟨-, -, -, hl, -, hpi⟩, -⟩ := (Readable.check_ok_iff _ _ _ _ _ _ _ _).1 hck'
-  have hpi' : s.read.publicInputs = none := by
-    cases hp : s.read.publicInputs with
-    | none => rfl
-    | some _ => rw [hp] at hpi; cases hpi
-  have hset := Ins.setup_read hs
-  unfold Readable.Read.setup at hset
-  rw [hpi'] at hset
-  obtain ⟨-, hall⟩ := FlockSoundness.Discharge.HiddenExec.setupTables_setupOne hset
-  intro j hj
-  obtain ⟨d, hd, -⟩ := hall j hj
-  rcases hl with hl | ⟨hz, hh, hl⟩
-  · exact Or.inl (FlockSoundness.Discharge.HiddenExec.setupOne_tagsAt_hm96 hl hd)
-  · rcases FlockSoundness.Discharge.HiddenExec.setupOne_tagsAt_leaf (Or.inr ⟨hh, hl⟩) hd with ⟨-, hm⟩ | ⟨-, hm⟩
-    · exact Or.inl hm
-    · exact Or.inr ⟨hz, hm⟩
-
-
 namespace Gen
 
 variable [S : ZkSetup]
@@ -379,11 +318,15 @@ theorem checks_leaf {zk : Bool} {s : Ins} {spec : SessionSpec} {x : Claims.Msg}
 
 end Gen
 
-/-- A statement set up at `zk` is read at `zk`. -/
-theorem setupOf_zk {zk : Bool} {x : Claims.Msg} {s : Ins} {spec : SessionSpec} {sts : Array Stmt}
-    (h : setupOf zk x = some (s, spec, sts)) : s.read.zk = zk :=
-  readOf_zk (x := x) (by simp [readOf, (setupOf_some h).1])
-
+/-- **The checks pin the tables' Merkle scheme**: every table the statement sets up commits under `hm96Sha512`, or,
+for a statement read without `--zk`, under plain SHA-512 leaves. -/
+theorem checks_leaf {zk : Bool} {s : Ins} {spec : SessionSpec} {x : Claims.Msg}
+    {link : List ByteArray × List ByteArray} {c₁ : Coin} {mids : List (Claims.Msg × Coin)} {f : Final}
+    {sts : Array Stmt} (hc : checks zk s spec x link c₁ mids f = .ok ()) (hs : s.setup = .ok (spec, sts)) :
+    ∀ (j : ℕ) (hj : j < sts.size), sts[j].merkle = MerkleScheme.hm96Sha512 ∨
+      (s.read.zk = false ∧ sts[j].merkle = MerkleScheme.sha512 "flock-leaf/sha512-unsalted") :=
+  Gen.checks_leaf (S := S₀) (zk := zk) (s := s) (spec := spec) (x := x) (link := link) (c₁ := c₁) (mids := mids)
+    (f := f) (sts := sts) (hc := hc) (hs := hs)
 
 namespace Gen
 
@@ -396,18 +339,10 @@ theorem setupOf_zk {zk : Bool} {x : Claims.Msg} {s : Ins} {spec : SessionSpec} {
 
 end Gen
 
-/-- **The checks pin `hm96-sha512/v1` under `--zk`**: every table a masked statement sets up commits under
-`hm96Sha512`. -/
-theorem checks_hm96 {zk : Bool} {s : Ins} {spec : SessionSpec} {x : Claims.Msg}
-    {link : List ByteArray × List ByteArray} {c₁ : Coin} {mids : List (Claims.Msg × Coin)} {f : Final}
-    {sts : Array Stmt} (hc : checks zk s spec x link c₁ mids f = .ok ()) (hs : s.setup = .ok (spec, sts))
-    (hz : s.read.zk = true) : ∀ (j : ℕ) (hj : j < sts.size), sts[j].merkle = MerkleScheme.hm96Sha512 := by
-  intro j hj
-  rcases checks_leaf hc hs j hj with h | ⟨h, -⟩
-  · exact h
-  · rw [hz] at h
-    cases h
-
+/-- A statement set up at `zk` is read at `zk`. -/
+theorem setupOf_zk {zk : Bool} {x : Claims.Msg} {s : Ins} {spec : SessionSpec} {sts : Array Stmt}
+    (h : setupOf zk x = some (s, spec, sts)) : s.read.zk = zk :=
+  Gen.setupOf_zk (S := S₀) (zk := zk) (x := x) (s := s) (spec := spec) (sts := sts) (h := h)
 
 namespace Gen
 
@@ -426,5 +361,14 @@ theorem checks_hm96 {zk : Bool} {s : Ins} {spec : SessionSpec} {x : Claims.Msg}
     cases h
 
 end Gen
+
+/-- **The checks pin `hm96-sha512/v1` under `--zk`**: every table a masked statement sets up commits under
+`hm96Sha512`. -/
+theorem checks_hm96 {zk : Bool} {s : Ins} {spec : SessionSpec} {x : Claims.Msg}
+    {link : List ByteArray × List ByteArray} {c₁ : Coin} {mids : List (Claims.Msg × Coin)} {f : Final}
+    {sts : Array Stmt} (hc : checks zk s spec x link c₁ mids f = .ok ()) (hs : s.setup = .ok (spec, sts))
+    (hz : s.read.zk = true) : ∀ (j : ℕ) (hj : j < sts.size), sts[j].merkle = MerkleScheme.hm96Sha512 :=
+  Gen.checks_hm96 (S := S₀) (zk := zk) (s := s) (spec := spec) (x := x) (link := link) (c₁ := c₁) (mids := mids)
+    (f := f) (sts := sts) (hc := hc) (hs := hs) (hz := hz)
 
 end FlockDeploy.KS

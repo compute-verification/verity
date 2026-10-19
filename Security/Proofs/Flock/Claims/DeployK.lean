@@ -490,30 +490,6 @@ theorem linkOf_head {a : Claims.Msg} {link : List ByteArray × List ByteArray} (
   · rfl
   · cases h
 
-/-- **A decision's round messages are all the messages but the link message and the last**, with one coin per
-message. -/
-theorem act_decide_length {zk : Bool} {x : Claims.Msg} {as : List Claims.Msg} {cs : List Coin} {s : Ins}
-    {spec : SessionSpec} {sts : Array Stmt} {link : List ByteArray × List ByteArray} {c₁ : Coin}
-    {mids : List (Claims.Msg × Coin)} {f : Final} (hcs : cs.length = as.length)
-    (h : act zk x as cs = .decide s spec sts link c₁ mids f) : as.length = mids.length + 2 := by
-  unfold act at h
-  repeat' split at h
-  all_goals first | (cases h; done) | skip
-  rename_i a _ _ _ _ a₁ rest _ crest hfin hlast _ _ _ hlink
-  cases h
-  cases rest with
-  | nil =>
-    simp only [List.getLast?_singleton, Option.some.injEq] at hlast
-    subst hlast
-    have h1 := finalOf_head hfin
-    rw [linkOf_head hlink] at h1
-    cases h1
-  | cons b rest =>
-    simp only [List.length_cons] at hcs
-    simp only [List.length_cons, List.length_zip, List.length_map, List.length_dropLast]
-    omega
-
-
 namespace KS.Gen
 
 variable [S : ZkSetup]
@@ -542,6 +518,15 @@ theorem act_decide_length {zk : Bool} {x : Claims.Msg} {as : List Claims.Msg} {c
     omega
 
 end KS.Gen
+
+/-- **A decision's round messages are all the messages but the link message and the last**, with one coin per
+message. -/
+theorem act_decide_length {zk : Bool} {x : Claims.Msg} {as : List Claims.Msg} {cs : List Coin} {s : Ins}
+    {spec : SessionSpec} {sts : Array Stmt} {link : List ByteArray × List ByteArray} {c₁ : Coin}
+    {mids : List (Claims.Msg × Coin)} {f : Final} (hcs : cs.length = as.length)
+    (h : act zk x as cs = .decide s spec sts link c₁ mids f) : as.length = mids.length + 2 :=
+  KS.Gen.act_decide_length (S := KS.S₀) (zk := zk) (x := x) (as := as) (cs := cs) (s := s) (spec := spec) (sts := sts)
+    (link := link) (c₁ := c₁) (mids := mids) (f := f) (hcs := hcs) (h := h)
 
 /-- The checks pass only on the live session's custody. -/
 theorem checks_custody {zk : Bool} {s : Ins} {spec : SessionSpec} {x : Claims.Msg}
@@ -958,16 +943,6 @@ theorem next_acc_length (zk : Bool) (H : Claims.Msg → Claims.Msg) {x : Claims.
 
 end KS.Gen
 
-/-- **At the SHA-512 oracle, `Deploy.V`'s round count is the rounds the shipped verifier reads**: wherever the verifier
-accepts against `sha512`, with one coin per message, the prover sent `(V zk).k x` messages. -/
-theorem next_acc_length_sha512 (zk : Bool) {x : Claims.Msg} {as : List Claims.Msg} {cs : List Coin}
-    (hcs : cs.length = as.length) (h : ((next zk x as cs).eval sha512).1 = .acc) : as.length = (V zk).k x :=
-  next_acc_length zk sha512 hcs (fun s spec sts spec' sts' hso hsu => by
-    rw [hOf_sha512, setupWith_sha512, Ins.setup_read (setupOf_some hso).2] at hsu
-    cases hsu
-    rfl) h
-
-
 namespace KS.Gen
 
 variable [S : ZkSetup]
@@ -982,5 +957,11 @@ theorem next_acc_length_sha512 (zk : Bool) {x : Claims.Msg} {as : List Claims.Ms
     rfl) h
 
 end KS.Gen
+
+/-- **At the SHA-512 oracle, `Deploy.V`'s round count is the rounds the shipped verifier reads**: wherever the verifier
+accepts against `sha512`, with one coin per message, the prover sent `(V zk).k x` messages. -/
+theorem next_acc_length_sha512 (zk : Bool) {x : Claims.Msg} {as : List Claims.Msg} {cs : List Coin}
+    (hcs : cs.length = as.length) (h : ((next zk x as cs).eval sha512).1 = .acc) : as.length = (V zk).k x :=
+  KS.Gen.next_acc_length_sha512 (S := KS.S₀) (zk := zk) (x := x) (as := as) (cs := cs) (hcs := hcs) (h := h)
 
 end FlockDeploy

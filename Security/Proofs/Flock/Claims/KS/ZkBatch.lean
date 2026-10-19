@@ -284,11 +284,6 @@ theorem zkFrontAlign_of_batch {x : Claims.Msg} (h : ZkBatchAlign x) : ZkFrontAli
 
 end Gen
 
-/-- **The slot alignment from the schedule.** -/
-theorem zkSlotAlign_of_batch {x : Claims.Msg} (h : ZkBatchAlign x) : ZkSlotAlign x :=
-  zkSlotAlign_of_front (zkFrontAlign_of_batch h)
-
-
 namespace Gen
 
 variable [S : ZkSetup]
@@ -298,5 +293,9 @@ theorem zkSlotAlign_of_batch {x : Claims.Msg} (h : ZkBatchAlign x) : ZkSlotAlign
   zkSlotAlign_of_front (zkFrontAlign_of_batch h)
 
 end Gen
+
+/-- **The slot alignment from the schedule.** -/
+theorem zkSlotAlign_of_batch {x : Claims.Msg} (h : ZkBatchAlign x) : ZkSlotAlign x :=
+  Gen.zkSlotAlign_of_batch (S := S₀) (x := x) (h := h)
 
 end FlockDeploy.KS

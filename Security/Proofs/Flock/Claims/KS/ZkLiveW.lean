@@ -285,26 +285,6 @@ theorem zkSessWJ_of_liveW {K D Sl : Type} [Field K] [Fintype K] [DecidableEq K] 
 
 end Gen
 
-/-- **Every masked table's bound at a statement from the live sessions' bound off the table on a witness lane**, the
-escapes counted per round (`zk_tableBoundJAccAtR_of_sessionsW` at `zkSessWJ_of_liveW`). -/
-theorem zk_tableBoundJAccAtR_of_liveW {K D Sl : Type} [Field K] [Fintype K] [DecidableEq K] [Inhabited D]
-    [Inhabited Sl] (A : Model.Arith 𝔽 K) (hA : A.Correct) (Hs : Hashes 𝔽 D Sl)
-    (rel : Readable.Parsed → Readable.Relation) (Ok : Claims.Msg → ℕ → List 𝔽 → Prop) {x : Claims.Msg}
-    (hn : Claims.Flock.nTab (deployZk rel) x = (tables true x).length) {spec : SessionSpec} (st : ℕ → Stmt)
-    (hst : ∀ j < (tables true x).length, (tables true x)[j]? = some (spec, st j)) (T : ℕ → TabZK 𝔽 spec.mPts)
-    (hT : ∀ j < (tables true x).length, 25 ≤ (st j).m ∧ (st j).m ≤ 35 ∧
-      (T j).sch = Accounting.m1Schedule (st j).m ∧ (T j).t = Accounting.m1Pad (st j).m ∧ (T j).e = 2 ∧
-      (T j).S.shape spec.mPts = acct spec (st j) ∧ (T j).N ≤ 2 ^ 13 ∧ (T j).q = 168 ∧ 7 / 16 ≤ (T j).δ ∧
-      (T j).N ≤ Claims.Flock.Numbers.padDomain
-        (Zk.PadLayout.new (st j).m (st j).c.kLog (Claims.Flock.zkSched (st j).m).1.k0))
-    (hnc : ∀ j < (tables true x).length, ∀ C : Fin (wordLenJ true x j) → List 𝔽, (∀ p, Ok x j (C p)) →
-      ¬ Claims.Flock.GoodTableAt (deployZk rel) (wordLenJ true) x j C →
-        ¬ (T j).Committed A (Claims.Flock.oracleOf C))
-    (hl : ZkLiveAccAtWJ A Hs Ok x T) :
-    Claims.Flock.TableBoundJAccAtR sha512 (deployZk rel) (wordLenJ true) Ok x :=
-  zk_tableBoundJAccAtR_of_sessionsW A hA Hs rel Ok hn st hst T hT hnc (zkSessWJ_of_liveW hl)
-
-
 namespace Gen
 
 variable [S : ZkSetup]
@@ -329,6 +309,26 @@ theorem zk_tableBoundJAccAtR_of_liveW {K D Sl : Type} [Field K] [Fintype K] [Dec
   zk_tableBoundJAccAtR_of_sessionsW A hA Hs rel Ok hn st hst T hT hnc (zkSessWJ_of_liveW hl)
 
 end Gen
+
+/-- **Every masked table's bound at a statement from the live sessions' bound off the table on a witness lane**, the
+escapes counted per round (`zk_tableBoundJAccAtR_of_sessionsW` at `zkSessWJ_of_liveW`). -/
+theorem zk_tableBoundJAccAtR_of_liveW {K D Sl : Type} [Field K] [Fintype K] [DecidableEq K] [Inhabited D]
+    [Inhabited Sl] (A : Model.Arith 𝔽 K) (hA : A.Correct) (Hs : Hashes 𝔽 D Sl)
+    (rel : Readable.Parsed → Readable.Relation) (Ok : Claims.Msg → ℕ → List 𝔽 → Prop) {x : Claims.Msg}
+    (hn : Claims.Flock.nTab (deployZk rel) x = (tables true x).length) {spec : SessionSpec} (st : ℕ → Stmt)
+    (hst : ∀ j < (tables true x).length, (tables true x)[j]? = some (spec, st j)) (T : ℕ → TabZK 𝔽 spec.mPts)
+    (hT : ∀ j < (tables true x).length, 25 ≤ (st j).m ∧ (st j).m ≤ 35 ∧
+      (T j).sch = Accounting.m1Schedule (st j).m ∧ (T j).t = Accounting.m1Pad (st j).m ∧ (T j).e = 2 ∧
+      (T j).S.shape spec.mPts = acct spec (st j) ∧ (T j).N ≤ 2 ^ 13 ∧ (T j).q = 168 ∧ 7 / 16 ≤ (T j).δ ∧
+      (T j).N ≤ Claims.Flock.Numbers.padDomain
+        (Zk.PadLayout.new (st j).m (st j).c.kLog (Claims.Flock.zkSched (st j).m).1.k0))
+    (hnc : ∀ j < (tables true x).length, ∀ C : Fin (wordLenJ true x j) → List 𝔽, (∀ p, Ok x j (C p)) →
+      ¬ Claims.Flock.GoodTableAt (deployZk rel) (wordLenJ true) x j C →
+        ¬ (T j).Committed A (Claims.Flock.oracleOf C))
+    (hl : ZkLiveAccAtWJ A Hs Ok x T) :
+    Claims.Flock.TableBoundJAccAtR sha512 (deployZk rel) (wordLenJ true) Ok x :=
+  Gen.zk_tableBoundJAccAtR_of_liveW (S := S₀) (K := K) (D := D) (Sl := Sl) (A := A) (hA := hA) (Hs := Hs) (rel := rel)
+    (Ok := Ok) (x := x) (hn := hn) (spec := spec) (st := st) (hst := hst) (T := T) (hT := hT) (hnc := hnc) (hl := hl)
 
 /-! ## The deployed masked tables -/
 
@@ -359,21 +359,6 @@ def ZkLiveAccWJ (x : Claims.Msg) : Prop :=
 
 end Gen
 
-/-- **Every masked table's bound at a statement in scope, off the table on a witness lane**, the escapes counted per
-round: `zk_tableBoundJAccAtR_of_liveW` at C-Flock ZK's padded tables (`zk_atTabs`). -/
-theorem zk_tableBoundJAccAtR_live {x : Claims.Msg} {s : Claims.Flock.Stmt}
-    (hs : parse true Readable.relation x = some s) (hin : Claims.Flock.InScope true s) {ins : Ins}
-    {spec : SessionSpec} {sts : Array Stmt} (hset : setupOf true x = some (ins, spec, sts)) (h0 : 0 < sts.size)
-    (hl : ZkLiveAccWJ x) :
-    Claims.Flock.TableBoundJAccAtR sha512 (deployZk Readable.relation) (wordLenJ true) (wideJ true) x := by
-  obtain ⟨L, hz, hk, hlay, hb⟩ := zk_atTabs hs hin hset h0
-    (B := fun T => ZkLiveAccAtWJ execArith Discharge.ZkExec.hs512 (wideJ true) x T →
-      Claims.Flock.TableBoundJAccAtR sha512 (deployZk Readable.relation) (wordLenJ true) (wideJ true) x)
-    fun T hn hst hT hnc => zk_tableBoundJAccAtR_of_liveW execArith execArith_correct Discharge.ZkExec.hs512
-      Readable.relation (wideJ true) hn (stJ h0) hst T hT hnc
-  exact hb (hl ins spec sts hset h0 L hz hk hlay)
-
-
 namespace Gen
 
 variable [S : ZkSetup]
@@ -394,17 +379,15 @@ theorem zk_tableBoundJAccAtR_live {x : Claims.Msg} {s : Claims.Flock.Stmt}
 
 end Gen
 
-/-- **Every masked table's bound at every statement, off the table on a witness lane**, the escapes counted per
-round, at full-width columns, from `ZkLiveAccWJ` at the statements some run accepts; elsewhere no run accepts. -/
-theorem zk_tableBoundJAccAtR (hl : ∀ x, ¬ Claims.Flock.NoAcc sha512 (V true) x → ZkLiveAccWJ x) (x : Claims.Msg) :
-    Claims.Flock.TableBoundJAccAtR sha512 (deployZk Readable.relation) (wordLenJ true) (wideJ true) x := by
-  by_cases hno : Claims.Flock.NoAcc sha512 (V true) x
-  · exact Claims.Flock.tableBoundJAccAtR_of_noAcc _ _ _ _ x hno (zk_k_le Readable.relation x)
-      (εtable_nonneg true x) (V_k_pos true x)
-  · obtain ⟨s, hs, hin⟩ := acc_inScope Readable.relation hno
-    obtain ⟨ins, spec, sts, record, proofs, hset, hv, -⟩ := acc_check hno
-    exact zk_tableBoundJAccAtR_live hs hin hset (served_zk (by simpa using hv)).1 (hl x hno)
-
+/-- **Every masked table's bound at a statement in scope, off the table on a witness lane**, the escapes counted per
+round: `zk_tableBoundJAccAtR_of_liveW` at C-Flock ZK's padded tables (`zk_atTabs`). -/
+theorem zk_tableBoundJAccAtR_live {x : Claims.Msg} {s : Claims.Flock.Stmt}
+    (hs : parse true Readable.relation x = some s) (hin : Claims.Flock.InScope true s) {ins : Ins}
+    {spec : SessionSpec} {sts : Array Stmt} (hset : setupOf true x = some (ins, spec, sts)) (h0 : 0 < sts.size)
+    (hl : ZkLiveAccWJ x) :
+    Claims.Flock.TableBoundJAccAtR sha512 (deployZk Readable.relation) (wordLenJ true) (wideJ true) x :=
+  Gen.zk_tableBoundJAccAtR_live (S := S₀) (x := x) (s := s) (hs := hs) (hin := hin) (ins := ins) (spec := spec)
+    (sts := sts) (hset := hset) (h0 := h0) (hl := hl)
 
 namespace Gen
 
@@ -422,6 +405,12 @@ theorem zk_tableBoundJAccAtR (hl : ∀ x, ¬ Claims.Flock.NoAcc sha512 (V true) 
     exact zk_tableBoundJAccAtR_live hs hin hset (served_zk (by simpa using hv)).1 (hl x hno)
 
 end Gen
+
+/-- **Every masked table's bound at every statement, off the table on a witness lane**, the escapes counted per
+round, at full-width columns, from `ZkLiveAccWJ` at the statements some run accepts; elsewhere no run accepts. -/
+theorem zk_tableBoundJAccAtR (hl : ∀ x, ¬ Claims.Flock.NoAcc sha512 (V true) x → ZkLiveAccWJ x) (x : Claims.Msg) :
+    Claims.Flock.TableBoundJAccAtR sha512 (deployZk Readable.relation) (wordLenJ true) (wideJ true) x :=
+  Gen.zk_tableBoundJAccAtR (S := S₀) (hl := hl) (x := x)
 
 /-- **Table 0's masked bound at every statement, off the table on a witness lane, with escapes on accepted runs
 counted per round**, at full-width columns, from `ZkLiveAccWJ` at the statements some run accepts:

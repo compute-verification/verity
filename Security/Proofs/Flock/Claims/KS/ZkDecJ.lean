@@ -30,15 +30,6 @@ open FlockSoundness.Discharge.Tables (DecodesTable)
 
 local notation "𝔽" => FlockLevel3.GF128
 
-/-- **A statement some run accepts carries a draw**, at the inputs `Deploy.V` reads of it (`acc_draw`). -/
-theorem acc_draw_of_setup {zk : Bool} {x : Claims.Msg} (hacc : ¬ Claims.Flock.NoAcc sha512 (V zk) x) {ins : Ins}
-    {spec : SessionSpec} {sts : Array Stmt} (hset : setupOf zk x = some (ins, spec, sts)) :
-    ∃ d, ins.read.draw = some d := by
-  obtain ⟨ins', spec', sts', d, hset', hd⟩ := acc_draw hacc
-  obtain ⟨rfl, -⟩ := Prod.mk.inj (Option.some.inj (hset'.symm.trans hset))
-  exact ⟨d, hd⟩
-
-
 namespace Gen
 
 variable [S : ZkSetup]
@@ -53,20 +44,12 @@ theorem acc_draw_of_setup {zk : Bool} {x : Claims.Msg} (hacc : ¬ Claims.Flock.N
 
 end Gen
 
-/-- **`Deploy.V`'s setup of a masked statement in scope is `verify --zk`'s at its draw**: `Read.setup` under `--zk`
-reads `zkTags` and `zkCoins` (`zkInputs`), and the scope refuses `--public-inputs`. -/
-theorem setupAt_of_setupOf {x : Claims.Msg} {s : Claims.Flock.Stmt}
-    (hs : parse true Readable.relation x = some s) (hin : Claims.Flock.InScope true s) {ins : Ins}
-    {spec : SessionSpec} {sts : Array Stmt} (hset : setupOf true x = some (ins, spec, sts)) :
-    ins.read.zk = true ∧ setupAt (ZkExec.zkInputs ins.read.I) ins.read.draw = .ok (spec, sts) := by
-  obtain ⟨hins, hsetup⟩ := setupOf_some hset
-  have hzk : ins.read.zk = true := readOf_zk (x := x) (by simp [readOf, hins])
-  have hpi := Claims.Bridge.Custody.publicInputs_none_of_inScope hs hin hins
-  refine ⟨hzk, ?_⟩
-  rw [← Ins.setup_read hsetup]
-  simp only [setupAt, Readable.Read.setup, Readable.Read.tags, Readable.Read.coins, ZkExec.zkInputs, hzk, hpi,
-    ite_true]
-
+/-- **A statement some run accepts carries a draw**, at the inputs `Deploy.V` reads of it (`acc_draw`). -/
+theorem acc_draw_of_setup {zk : Bool} {x : Claims.Msg} (hacc : ¬ Claims.Flock.NoAcc sha512 (V zk) x) {ins : Ins}
+    {spec : SessionSpec} {sts : Array Stmt} (hset : setupOf zk x = some (ins, spec, sts)) :
+    ∃ d, ins.read.draw = some d :=
+  Gen.acc_draw_of_setup (S := S₀) (zk := zk) (x := x) (hacc := hacc) (ins := ins) (spec := spec) (sts := sts)
+    (hset := hset)
 
 namespace Gen
 
@@ -88,26 +71,14 @@ theorem setupAt_of_setupOf {x : Claims.Msg} {s : Claims.Flock.Stmt}
 
 end Gen
 
-/-- **The scope fixes `verify --zk`'s tags**: at a masked statement in scope, the inputs `Deploy.V` reads are untyped,
-with retained rounds and `hm96-sha512/v1` leaves (`InScope`'s `form`, which is `Read.form` at `zkTags`). -/
-theorem tags_of_inScope {x : Claims.Msg} {s : Claims.Flock.Stmt}
+/-- **`Deploy.V`'s setup of a masked statement in scope is `verify --zk`'s at its draw**: `Read.setup` under `--zk`
+reads `zkTags` and `zkCoins` (`zkInputs`), and the scope refuses `--public-inputs`. -/
+theorem setupAt_of_setupOf {x : Claims.Msg} {s : Claims.Flock.Stmt}
     (hs : parse true Readable.relation x = some s) (hin : Claims.Flock.InScope true s) {ins : Ins}
     {spec : SessionSpec} {sts : Array Stmt} (hset : setupOf true x = some (ins, spec, sts)) :
-    ins.read.I.tags.typed = false ∧ ins.read.I.tags.retainRounds = true ∧
-      ins.read.I.tags.merkleLeaf = "hm96-sha512/v1" := by
-  have hzk := (setupAt_of_setupOf hs hin hset).1
-  obtain ⟨p, hp, rfl, -, -, -⟩ := parsed_of_parse hs
-  obtain ⟨-, hpr, -⟩ := parseBytes_setup hp hset
-  obtain ⟨-, -, -, -, -, ht, hrr, hl, -⟩ := hin
-  replace hl := hl.resolve_right fun h => h.1 rfl
-  simp only [Readable.toReadable, Readable.Read.form, Bool.not_eq_true] at ht hrr hl
-  have htags : p.toRead.tags = ZkExec.zkTags ins.read.I := by
-    rw [hpr]
-    simp [Readable.Read.tags, hzk]
-  rw [htags] at ht hrr hl
-  exact ⟨(ZkExec.zkTags_typed _).symm.trans ht, (ZkExec.zkTags_retainRounds _).symm.trans hrr,
-    (ZkExec.zkTags_merkleLeaf _).symm.trans hl⟩
-
+    ins.read.zk = true ∧ setupAt (ZkExec.zkInputs ins.read.I) ins.read.draw = .ok (spec, sts) :=
+  Gen.setupAt_of_setupOf (S := S₀) (x := x) (s := s) (hs := hs) (hin := hin) (ins := ins) (spec := spec) (sts := sts)
+    (hset := hset)
 
 namespace Gen
 
@@ -134,6 +105,16 @@ theorem tags_of_inScope {x : Claims.Msg} {s : Claims.Flock.Stmt}
     (ZkExec.zkTags_merkleLeaf _).symm.trans hl⟩
 
 end Gen
+
+/-- **The scope fixes `verify --zk`'s tags**: at a masked statement in scope, the inputs `Deploy.V` reads are untyped,
+with retained rounds and `hm96-sha512/v1` leaves (`InScope`'s `form`, which is `Read.form` at `zkTags`). -/
+theorem tags_of_inScope {x : Claims.Msg} {s : Claims.Flock.Stmt}
+    (hs : parse true Readable.relation x = some s) (hin : Claims.Flock.InScope true s) {ins : Ins}
+    {spec : SessionSpec} {sts : Array Stmt} (hset : setupOf true x = some (ins, spec, sts)) :
+    ins.read.I.tags.typed = false ∧ ins.read.I.tags.retainRounds = true ∧
+      ins.read.I.tags.merkleLeaf = "hm96-sha512/v1" :=
+  Gen.tags_of_inScope (S := S₀) (x := x) (s := s) (hs := hs) (hin := hin) (ins := ins) (spec := spec) (sts := sts)
+    (hset := hset)
 
 /-- **The deployed `--zk` decoders are right at `zkTabs` at a masked statement in scope**: where the statement parses
 in scope, `Deploy.V` sets it up at the draw `d` and at least one table, at every layout and link layout at the

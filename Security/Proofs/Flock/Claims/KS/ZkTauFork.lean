@@ -444,16 +444,6 @@ theorem zkAdvTau_le_of {x : Claims.Msg} (hc : ZkTauClash x) {s : Claims.Flock.St
 
 end Gen
 
-/-- **The fork bound at `τ` from the alignment and the clash**: `ZkSimForkLeOn` at the `τ` events from `ZkTauAlign`
-and `ZkTauClash` (`zkAdvTau_le_of`). -/
-theorem zkSimForkLeTau_of {x : Claims.Msg} (ha : ZkTauAlign x) (hc : ZkTauClash x) :
-    ZkSimForkLeOn x fun _ i => ∃ r, i = .inl (.inr (.inr r)) := by
-  intro s hs hin ins spec sts hset h0 L hz hk hlay d hd Ω P ω j hj C hC i hi
-  obtain ⟨r, rfl⟩ := hi
-  exact zkAdvTau_le_of hc hs hin hset h0 L hz hk hlay hd P ω j hj C hC r _
-    (ha s hs hin ins spec sts hset h0 L hz hk hlay d hd Ω P ω j hj C r)
-
-
 namespace Gen
 
 variable [S : ZkSetup]
@@ -468,6 +458,12 @@ theorem zkSimForkLeTau_of {x : Claims.Msg} (ha : ZkTauAlign x) (hc : ZkTauClash 
     (ha s hs hin ins spec sts hset h0 L hz hk hlay d hd Ω P ω j hj C r)
 
 end Gen
+
+/-- **The fork bound at `τ` from the alignment and the clash**: `ZkSimForkLeOn` at the `τ` events from `ZkTauAlign`
+and `ZkTauClash` (`zkAdvTau_le_of`). -/
+theorem zkSimForkLeTau_of {x : Claims.Msg} (ha : ZkTauAlign x) (hc : ZkTauClash x) :
+    ZkSimForkLeOn x fun _ i => ∃ r, i = .inl (.inr (.inr r)) :=
+  Gen.zkSimForkLeTau_of (S := S₀) (x := x) (ha := ha) (hc := hc)
 
 end Live
 

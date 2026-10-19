@@ -366,13 +366,6 @@ theorem zkXferWJ_of_simWJ {x : Claims.Msg} (hx : ZkSimWJ x) : ZkXferWJ x := by
 
 end Gen
 
-/-- **The masked record the claims read: KS**, at SHA-512 at the deployed relation, at every number of tables, from a
-simulator of each prover at the statements some run accepts (`ZkSimWJ`). -/
-theorem zk_KS_trim_of_simWJ (hs : ∀ x, ¬ Claims.Flock.NoAcc sha512 (V true) x → ZkSimWJ x) :
-    Claims.Flock.KS sha512 (deployZkTrim Readable.relation) :=
-  zk_KS_trim_of_xferWJ fun x hno => zkXferWJ_of_simWJ (hs x hno)
-
-
 namespace Gen
 
 variable [S : ZkSetup]
@@ -384,6 +377,12 @@ theorem zk_KS_trim_of_simWJ (hs : ∀ x, ¬ Claims.Flock.NoAcc sha512 (V true) x
   zk_KS_trim_of_xferWJ fun x hno => zkXferWJ_of_simWJ (hs x hno)
 
 end Gen
+
+/-- **The masked record the claims read: KS**, at SHA-512 at the deployed relation, at every number of tables, from a
+simulator of each prover at the statements some run accepts (`ZkSimWJ`). -/
+theorem zk_KS_trim_of_simWJ (hs : ∀ x, ¬ Claims.Flock.NoAcc sha512 (V true) x → ZkSimWJ x) :
+    Claims.Flock.KS sha512 (deployZkTrim Readable.relation) :=
+  Gen.zk_KS_trim_of_simWJ (S := S₀) (hs := hs)
 
 /-- **Table 0's masked bound at every statement, off the table on a witness lane, with escapes on accepted runs
 counted per round**, at full-width columns, from a simulator of each prover at the statements some run accepts. -/

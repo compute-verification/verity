@@ -27,47 +27,6 @@ section Rows
 open Flock FlockSoundness FlockSoundness.Refine FlockSoundness.Discharge FlockSoundness.Discharge.Exec
 open Claims.Bridge.Custody
 
-/-- **An accepted masked run's level-`ℓ` rows of table `j`'s rep `k`**: `rawRows_zk` at one rep and one level, on the
-live session's rep stream `2j + k` and proof file `2j + k`. -/
-theorem rawLevelRows_zk (hs : Hashes Flock.V) {seen : Claims.Seen} {f : Final} {ins : Ins} {spec : SessionSpec}
-    {sts : Array Stmt} {lv : Live} {j : ℕ} {sch : Schedule} {tPad : ℕ} (hf : lastFinal seen = some f)
-    (hset : setupOf true f.stmt = some (ins, spec, sts)) (hlv : liveOf spec f.record = .ok lv)
-    (hv : Zk.verifyWithM hs spec (tabsOf sts) f.record f.proofs = .ok ()) (hj : j < sts.size)
-    (hsch : Zk.schedule sts[j].m = .ok (sch, tPad)) (hp2 : spec.points = 2) (k : ℕ) (hk : k < 2) (ℓ : ℕ) :
-    zkRawLevelRowsJ seen j k ℓ =
-      zkLevelRowsOf (ZkExec.shapeZKn (Setup.ofCircuit sts[j]) sch (2 * sts[j].regions.size))
-        (lv.streams.getD (2 * j + k) #[]) (f.proofs.getD (2 * j + k) ByteArray.empty) ℓ := by
-  obtain ⟨hsz, hall⟩ := rep_zk hs hv hlv
-  obtain ⟨sess, sch', tPad', stream, c, hpts, hpn, hf', hrep, -, -⟩ := hall (2 * j) (by omega)
-  obtain ⟨-, extras, -, hex, -⟩ := zkVerifyRepWith_rounds hs hf' hrep
-  have hj' : sts[2 * j / 2]! = sts[j] := by
-    rw [show 2 * j / 2 = j by omega]
-    exact getElem!_pos sts j hj
-  rw [hj', hpts] at hex
-  have hx : extras.size = 2 * sts[j].regions.size := by
-    rw [extraClaims_size (st := sts[j]) hex, ← hpts, hpn, hp2, Nat.mul_comm]
-  have hzs : Claims.Flock.zkSched (Setup.ofCircuit sts[j]).m = (sch, tPad) := by
-    simp only [Claims.Flock.zkSched]
-    rw [show (Setup.ofCircuit sts[j]).m = sts[j].m from rfl, hsch]
-  have hsh : Claims.Flock.zkProofShape (Setup.ofCircuit sts[j]).m (Setup.ofCircuit sts[j]).kLog (2 + extras.size)
-      (Setup.ofCircuit sts[j]).merkle.digestLen (saltLenOf true (Setup.ofCircuit sts[j])) =
-      ZkExec.shapeZKn (Setup.ofCircuit sts[j]) sch (2 * sts[j].regions.size) := by
-    simp only [Claims.Flock.zkProofShape, hzs, ZkExec.shapeZKn, saltLenOf, hx, ite_true]
-  have hrun : runOf true seen j = some
-      { m := (Setup.ofCircuit sts[j]).m, kLog := (Setup.ofCircuit sts[j]).kLog, claims := 2 + extras.size,
-        hashLen := (Setup.ofCircuit sts[j]).merkle.digestLen, saltLen := saltLenOf true (Setup.ofCircuit sts[j]),
-        reps := [(lv.streams.getD (2 * j) #[], f.proofs.getD (2 * j) ByteArray.empty),
-                 (lv.streams.getD (2 * j + 1) #[], f.proofs.getD (2 * j + 1) ByteArray.empty)] } := by
-    unfold runOf
-    simp [hf, hset, Array.getElem?_eq_getElem hj, hlv, hex, Except.toOption]
-  unfold zkRawLevelRowsJ
-  rw [hrun, ← hsh]
-  rcases k with _ | _ | k
-  · rfl
-  · rfl
-  · omega
-
-
 namespace Gen
 
 variable [S : ZkSetup]
@@ -113,6 +72,20 @@ theorem rawLevelRows_zk (hs : Hashes Flock.V) {seen : Claims.Seen} {f : Final} {
   · omega
 
 end Gen
+
+/-- **An accepted masked run's level-`ℓ` rows of table `j`'s rep `k`**: `rawRows_zk` at one rep and one level, on the
+live session's rep stream `2j + k` and proof file `2j + k`. -/
+theorem rawLevelRows_zk (hs : Hashes Flock.V) {seen : Claims.Seen} {f : Final} {ins : Ins} {spec : SessionSpec}
+    {sts : Array Stmt} {lv : Live} {j : ℕ} {sch : Schedule} {tPad : ℕ} (hf : lastFinal seen = some f)
+    (hset : setupOf true f.stmt = some (ins, spec, sts)) (hlv : liveOf spec f.record = .ok lv)
+    (hv : Zk.verifyWithM hs spec (tabsOf sts) f.record f.proofs = .ok ()) (hj : j < sts.size)
+    (hsch : Zk.schedule sts[j].m = .ok (sch, tPad)) (hp2 : spec.points = 2) (k : ℕ) (hk : k < 2) (ℓ : ℕ) :
+    zkRawLevelRowsJ seen j k ℓ =
+      zkLevelRowsOf (ZkExec.shapeZKn (Setup.ofCircuit sts[j]) sch (2 * sts[j].regions.size))
+        (lv.streams.getD (2 * j + k) #[]) (f.proofs.getD (2 * j + k) ByteArray.empty) ℓ :=
+  Gen.rawLevelRows_zk (S := S₀) (hs := hs) (seen := seen) (f := f) (ins := ins) (spec := spec) (sts := sts) (lv := lv)
+    (j := j) (sch := sch) (tPad := tPad) (hf := hf) (hset := hset) (hlv := hlv) (hv := hv) (hj := hj) (hsch := hsch)
+    (hp2 := hp2) (k := k) (hk := hk) (ℓ := ℓ)
 
 end Rows
 
