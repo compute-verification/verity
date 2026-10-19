@@ -18,16 +18,16 @@ PROF_RANGE = "verity/exactlin/prof/"
 CATEGORIES = [
     ("fused quant (exactlin)", re.compile(r"exactlin_quant_rows")),
     ("fused GEMM (exactlin)", re.compile(r"exactlin_scaled_mm")),
-    ("stock quant (scaled_int8_quant)", re.compile(r"dynamic_scaled_int8_quant")),
-    ("stock GEMM (triton_scaled_mm)", re.compile(r"scaled_mm_kernel")),
+    ("stock quant (scaled_int8_quant)", re.compile(r"vllm::dynamic_scaled_int8_quant")),
+    ("stock GEMM (triton_scaled_mm)", re.compile(r"^scaled_mm_kernel")),
+    ("Inductor/Triton fused (norms, rope, act)", re.compile(r"^triton_(poi|red|per)_")),
+    ("attention", re.compile(r"flash|attn|attention|paged|reshape_and_cache", re.I)),
     ("int8 GEMM (torch._int_mm, cuBLASLt)", re.compile(r"(gemm|xmma|nvjet|cutlass|cublas).*(i8|s8|int8|imma)|"
                                                       r"(i8|s8|int8|imma).*(gemm|xmma|nvjet)", re.I)),
-    ("other GEMM", re.compile(r"gemm|xmma|nvjet|cutlass|cublas|splitK", re.I)),
+    ("other GEMM (lm_head)", re.compile(r"gemm|xmma|nvjet|cutlass|cublas|splitK", re.I)),
     ("torch cat/copy (padding, casts)", re.compile(r"CatArrayBatchedCopy|direct_copy_kernel|copy_kernel")),
     ("torch reduce (amax)", re.compile(r"at::native::.*reduce_kernel")),
     ("torch elementwise", re.compile(r"at::native::")),
-    ("attention", re.compile(r"flash|attn|attention|paged", re.I)),
-    ("Inductor/Triton fused (norms, rope, act)", re.compile(r"^triton_|triton_(poi|red|per)_")),
 ]
 
 
@@ -121,14 +121,22 @@ def analyse(path: str) -> dict:
             "launches_per_step": round(sum(r["launches_per_step"] for r in rows), 3),
             "categories": dict(sorted(cats.items(), key=lambda kv: -kv[1]["us_per_step"])),
             "api_per_step": dict(sorted(((k, v) for k, v in api_rows.items() if v), key=lambda kv: -kv[1])[:12]),
-            "kernels": rows[:60]}
+            "kernels": rows}
     return doc
 
 
 def compare(paths: list[str]) -> dict:
+    """Categories are recomputed from the kernels' names, so a capture read under an older CATEGORIES compares too."""
     arms = {}
     for p in paths:
         arms.update(json.load(open(p))["arms"])
+    for a in arms.values():
+        a["categories"] = {}
+        for r in a["kernels"]:
+            r["category"] = category(r["name"])
+            c = a["categories"].setdefault(r["category"], {"launches_per_step": 0.0, "us_per_step": 0.0})
+            c["launches_per_step"] = round(c["launches_per_step"] + r["launches_per_step"], 3)
+            c["us_per_step"] = round(c["us_per_step"] + r["us_per_step"], 2)
     names = list(arms)
     base = names[0]
     cats = sorted({c for a in arms.values() for c in a.get("categories", {})})
