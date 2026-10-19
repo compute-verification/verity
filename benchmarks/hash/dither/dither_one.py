@@ -346,8 +346,10 @@ def patch(t: int, h1c: str, h1o: str, key: bytes | None = None, gate: bool = Fal
 
     if credit:
         import importlib.util
+        import sys
         spec = importlib.util.spec_from_file_location("credit_gate_2684", credit)
         CG = importlib.util.module_from_spec(spec)
+        sys.modules[spec.name] = CG     # its dataclasses look their module up there
         spec.loader.exec_module(CG)
         CREDIT.update(calls=0, credited=0, reasons=Counter(), kernels=Counter(), sample=[])
         served = apply
