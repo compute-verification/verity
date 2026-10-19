@@ -27,6 +27,7 @@ from __future__ import annotations
 import ctypes as C
 import os
 import sys
+import time
 from pathlib import Path
 
 import numpy as np
@@ -136,6 +137,9 @@ class Window:
         self.gate_armed: int | None = None
         self.gate: dict = {}
         self.round_log: list[dict] = []
+        self.phases: list[dict] = []
+        self.t_before = 0.0
+        self.ev = [torch.cuda.Event(enable_timing=True) for _ in range(7)]
         self._coins()
 
     def _coins(self) -> None:
@@ -164,11 +168,12 @@ class Window:
             fs = {"window": W, "step": 0, "linear": w, "module": self.names[w], "slots": t, "schema": CM.SCHEMA}
             tabs.append(Tab(Dom("admit", fs, t // 16, {"step": (1, 0)}), t // 16, data=self.admit[p], stride=2, body=2,
                             length=2, lab=("s/", f"/{w}"), out=mid.leaves_addr(1) + 64 * w))
+        zt = []
         for w, (n, k) in enumerate(self.nk):
             fz = {"window": W, "step": 0, "linear": w, "module": self.names[w], "slots": t, "n": n, "schema": CM.SCHEMA}
-            tabs.append(Tab(Dom("z-table", fz, t, {"step": (1, 0)}), t, data=self.z[w][p].view(torch.uint8), stride=4 * n,
-                            body=4 * n, length=4 * n, lab=("z/", f"/{w}"), out=mid.leaves_addr(2) + 64 * w))
-        return {"round": rnd, "mid": mid, "calls": c.set(tabs)}
+            zt.append(Tab(Dom("z-table", fz, t, {"step": (1, 0)}), t, data=self.z[w][p].view(torch.uint8), stride=4 * n,
+                          body=4 * n, length=4 * n, lab=("z/", f"/{w}"), out=mid.leaves_addr(2) + 64 * w))
+        return {"round": rnd, "mid": mid, "calls": c.set(tabs), "z": c.set(zt)}
 
     def launch(self, w: int, xq: torch.Tensor, s_a: torch.Tensor, wt: torch.Tensor, s_w: torch.Tensor, y: torch.Tensor) -> None:
         n, k = self.nk[w]
@@ -191,28 +196,48 @@ class Window:
             self.dump, self.gate_armed = 1, None
             self.gate = {"s": self.s, "m": m}
         self.S.copy_(torch.tensor([self.parity, m, self.rc_on, self.dump], dtype=torch.int32))
+        self.t_before = time.perf_counter()
 
     def after(self) -> None:
         torch.cuda.synchronize()
+        t_fwd = time.perf_counter()
         s, p, m, t = self.s, self.parity, self.m, self.t
+        ev = self.ev
         bits = np.arange(t) < m
         self.live[p].copy_(torch.from_numpy((np.arange(t // 32) * 32 < m).astype(np.uint8)))
         self.admit[p].copy_(torch.frombuffer(bytearray(b"".join(CR.word_rows(CR.words(bits)))), dtype=torch.uint8))
         self.stepv.copy_(torch.tensor([s, max(s - 1, 0)], dtype=torch.int32))
         pre = self.pre[p]
-        for k in ("calls", "mid", "round"):
-            self.c.build(pre[k], self.stepv[0:1])
+        ev[0].record()
+        self.c.build(pre["calls"], self.stepv[0:1])
+        ev[1].record()
+        self.c.build(pre["z"], self.stepv[0:1])
+        ev[2].record()
+        self.c.build(pre["mid"], self.stepv[0:1])
+        self.c.build(pre["round"], self.stepv[0:1])
+        ev[3].record()
         if self.rc_on:
             self.c.build(self.rset, self.stepv[1:2])
+        ev[4].record()
         if self.gate.get("s") == s - 1 and "receipts" not in self.gate:
             self.gate["receipts"] = self.plans[0].out.clone()
             self.gate["r_roots"] = self.rset.roots.clone()
         root = unwords(pre["round"].root(0))
+        t_root = time.perf_counter()
         opening = self.rounds.record(root)
         salt = self.HT.live_salt(self.lch.commitment, opening.coin, s, root)
+        t_coin = time.perf_counter()
         self.salt.copy_(torch.from_numpy(words(salt)))
         self.step_base.fill_(s * self.u_step)
+        ev[5].record()
         self.r.launch(self.plans[p], self.salt, version=0, step_base=self.step_base)
+        ev[6].record()
+        ev[6].synchronize()
+        t_end = time.perf_counter()
+        self.phases.append({"m": m, "forward_ms": 1e3 * (t_fwd - self.t_before), "a_admit_tables_ms": ev[0].elapsed_time(ev[1]),
+                            "z_tables_ms": ev[1].elapsed_time(ev[2]), "step_trees_ms": ev[2].elapsed_time(ev[3]),
+                            "receipt_trees_ms": ev[3].elapsed_time(ev[4]), "coin_host_ms": 1e3 * (t_coin - t_root),
+                            "seeds_ms": ev[5].elapsed_time(ev[6]), "between_ms": 1e3 * (t_end - t_fwd)})
         if self.gate.get("s") == s and "a" not in self.gate:
             self.gate.update(p=p, root=root, salt=salt, a=[x[p].clone() for x in self.slot],
                              sa=[x[p].clone() for x in self.scale], z=[x[p].clone() for x in self.z],
@@ -231,7 +256,14 @@ class Window:
             raise RuntimeError(f"the window's {ROUNDS} rounds are spent")
 
     def stats(self) -> dict:
-        return {"steps": self.steps, "fused_calls_eager": self.calls, "t": self.t, "s": self.s}
+        """Steps so far and the per-step phase medians since the last call, by step size m (decode B32: m = 32)."""
+        ph, self.phases = self.phases, []
+        by: dict = {}
+        for x in ph:
+            by.setdefault(x["m"], []).append(x)
+        med = {str(m): {"steps": len(xs), **{k: round(float(np.median([x[k] for x in xs])), 4) for k in xs[0] if k != "m"}}
+               for m, xs in sorted(by.items(), key=lambda kv: -len(kv[1]))[:4]}
+        return {"steps": self.steps, "fused_calls_eager": self.calls, "t": self.t, "s": self.s, "phases_by_m": med}
 
 
 # -- the op and the patch --------------------------------------------------------------------------------------------------

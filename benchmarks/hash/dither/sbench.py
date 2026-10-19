@@ -81,7 +81,9 @@ def stock_checkpoint(pin: str, scratch: Path) -> Path:
 
 def engine_args(gpu_mem: float) -> dict:
     # FlashInfer's autotune off, as `engine.build` sets it for the int8-exact engine (it tunes no kernel these engines run)
-    return {"max_num_seqs": MAX_SEQS, "max_num_batched_tokens": int(os.environ.get("SBENCH_T", MAX_TOKENS_STEP)),
+    # vLLM refuses max_num_seqs above max_num_batched_tokens; every arm of a run gets the same cap
+    t = int(os.environ.get("SBENCH_T", MAX_TOKENS_STEP))
+    return {"max_num_seqs": min(MAX_SEQS, t), "max_num_batched_tokens": t,
             "gpu_memory_utilization": gpu_mem,
             "enable_prefix_caching": False, "max_model_len": 2048, "seed": 0,
             "kernel_config": {"enable_flashinfer_autotune": False}}
@@ -282,7 +284,7 @@ def main() -> int:
         conns[arm].send({"op": "stop"})
     summary = {"arms": arms, "info": info, "gate_tokens_equal_ref_arm": gate, "ref_of": REF_OF, "n1": N1, "n2": N2, "b": B,
                "gate": {arm: {k: v for k, v in d.items() if k != "tokens"} for arm, d in gate_doc.items()},
-               "saturation": {"requests": SAT_REQS, "tokens": SAT_TOKENS, "max_num_seqs": MAX_SEQS,
+               "saturation": {"requests": SAT_REQS, "tokens": SAT_TOKENS, "max_num_seqs": min(MAX_SEQS, a.t),
                               "max_num_batched_tokens": a.t}, "per_arm": {}}
     for arm in arms:
         tp = [x["tpot_b32_ms"] for x in reps if x["arm"] == arm and x["op"] == "decode"]
