@@ -589,7 +589,8 @@ def test_verify_run_rejects_a_wrong_weight_row_and_undeclared_exclusions(honest_
 @pytest.mark.slow
 def test_h3_screens_check_holds_a_pass_to_the_reference(honest_pass):
     """h3_screen's check on a pass the reference proved: every tile's leaf is the reference's, and a call's dumped row digests,
-    row seeds, seed_A and E_A lines (16 padding rows under seed_A) are; a wrong line or row digest is caught."""
+    row seeds, seed_A and E_A lines (16 padding rows under seed_A, under h4 `pearl_c.PAD_SEED`) are; a wrong line or row
+    digest is caught."""
     path, s, epoch, prover, tr, splits, records = honest_pass
     HS = load("pearl_c_vllm_h3_screen", KERNEL.parent / "pearl_c_vllm" / "h3_screen.py")
     d = path.parent
@@ -599,7 +600,8 @@ def test_h3_screens_check_holds_a_pass_to_the_reference(honest_pass):
         data = VR.Files(d)(json.loads(path.read_text())["matmuls"][u.index]["rows"])
         rows = [(VR.tap_row if s.a_tap else VR.f32_row)(data, u.shape.k, i) for i in range(u.shape.m)]
         seeds, seed_a = s.row_seeds(ctx, rows, range(u.shape.m)), s.noise(ctx).seed_a
-        lines = [C.sample_line(x, 0, 0, 0) for x in seeds] + [C.sample_line(seed_a, 0, 0, r) for r in range(u.shape.m, u.shape.m + 16)]
+        pad = C.PAD_SEED if s.a_tap else seed_a
+        lines = [C.sample_line(x, 0, 0, 0) for x in seeds] + [C.sample_line(pad, 0, 0, r) for r in range(u.shape.m, u.shape.m + 16)]
         (d / f"call{u.index}.seeds_a").write_bytes(b"".join(seeds))
         (d / f"call{u.index}.seed_a").write_bytes(seed_a)
         (d / f"call{u.index}.ea_codes").write_bytes(b"".join(bytes(x) for x in lines))
