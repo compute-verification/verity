@@ -40,14 +40,19 @@ It is `WeightsSupportFmt` with four changes, at the deployed point (`d = 2048`, 
   interval. Under compute-accounting's interval model one token's fprop on a DeepSeek-V3 128 × 128 E4M3 block refutes
   it below `k₀` = 2, 4 and 7 steps at lr 2.2·10⁻⁴ and σ = 0.006, 0.01 and 0.02 (4, 5 and 9 when `|m₀|/√v₀` is
   gradient noise's 0.23), below 18 to 61 at 2.2·10⁻⁵, 53 to 175 at 7.3·10⁻⁶, and 83 to 151 in warmup from the
-  initialization. `k₀` is a model's and its schedule's, and the first `k₀` steps after each checkpoint leave the count.
+  initialization. A subcircuit that reads the block's copies at several consecutive steps, one token a step, needs
+  more, since each step's copy is its own source charged `b_w` and a step moves an FP8 weight by fewer bits: over
+  chains of 1 to 64 steps the least `k₀` no chain refutes is 3, 6 and 13 to 16 at lr 2.2·10⁻⁴ (17 to 20 at noise's
+  0.23 and σ = 0.02), 61 to 80 and 201 to 300 at 2.2·10⁻⁵ (σ = 0.006 and 0.02), 151 to 250 and 801 to 1,200 at
+  7.3·10⁻⁶, and 151 to 200 and 301 to 400 in warmup. `k₀` is a model's and its schedule's, and the first `k₀` steps
+  after each checkpoint leave the count.
 
-It fails where a subcircuit reads one weight's copies at several steps past `k₀`: each step's copy is its own source,
-charged `b_w`, but a step moves an FP8 weight by fewer than `b_w` bits. One token a step on one block refutes it at
-`b_w = 2.5` over 2 to 16 steps from the single-step `k₀` at lr 2.2·10⁻⁴, and over 2 to 64 from `k = 18` at
-2.2·10⁻⁵; whether some `k₀` survives every length is open. It fails where counted multiplications read activations that
-take fewer than `n` values (a one-hot embedding matmul), and the fan-out bound pays only for values counted
-multiplications read directly: a subcircuit that computes its activations from fewer novel reads pays only by those. -/
+It fails at a `k₀` below those. The chain values bound the support from above by a worst-case reachable interval per
+step, so they refute soundly and their not refuting proves nothing; chains longer than 64 steps are untried, and at
+7.3·10⁻⁶ and σ = 0.02 the `b_w` above which a chain refutes it still falls slowly at 64 steps. It fails where counted
+multiplications read activations that take fewer than `n` values (a one-hot embedding matmul), and the fan-out bound
+pays only for values counted multiplications read directly: a subcircuit that computes its activations from fewer novel
+reads pays only by those. -/
 def WeightsSupportFmt2 (c : Declaration) (θv : c.D.Transcript) (T : Threading c) (Src : T.Sources) (Γ : ℕ)
     (S b_w b_a : ℝ) (d e n k₀ : ℕ) : Prop :=
   Src.FanOutBound b_a e n → Src.OffFresh k₀ →
