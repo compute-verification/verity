@@ -35,7 +35,8 @@
   the salt reaches only the seed, through the units' salt port (``salt-flow``); each unit's seed reads the unit's own position
   and roots parameters whole, and at the root each unit batch reads its own slots of `pouw.positions` and its site's of
   `pouw.roots` (its group's), so no unit chooses its position and no two units share one (``position``); a unit derives one seed
-  (``seed``) and its z reads none of it (``noise-in-z``); served values reach a unit only through its z (``separator``);
+  (``seed``) and its z reads none of it (``noise-in-z``), or under a one-stream scheme (`Scheme.stream`) each z leaf is
+  recombined from words its receipt folds (``stream``: z is then the served product of the noised operands); served values reach a unit only through its z (``separator``);
   every node outside the units meets `cut.WIDTH_RULE` (``width``). `Compiled.check_gates` adds the gate-level cut (no value
   computed in two units), the separator and the width rule by reachability, for a Program small enough to flatten.
 
@@ -237,13 +238,19 @@ class Scheme:
     (`seeds.seed_call`), or `seeds.PouwUnitSeeds` (`seeds.unit_seeds_call`) where its receipt folds take keys, which come
     from σ_R, never from seed_j (decision 121). It derives its noise from seed_j (`seeds.noise_blocks`), holds the noised
     arm, the receipt fold and the spot check, and returns its cells' exact products as z. A factory may raise
-    `CompileError` ("scheme") for a dot or tile it doesn't take."""
+    `CompileError` ("scheme") for a dot or tile it doesn't take.
+
+    `stream`, for a one-stream scheme (`h1tile.SCHEME_V3`): the Definitions that recombine a cell's z from the words its
+    receipt folds. Such a unit's z is the served product of the noised operands, so it reads the seed by design, and the
+    unit check's ``noise-in-z`` rule gives way to ``stream``: every z leaf is the output of a call of one of them, and every
+    leaf such a call reads is read by the receipt's own cone. The served values are then that product, not the Call's."""
 
     name: str
     tile: tuple[int, int]
     units: Mapping[str, Callable[[Dot, Tile], Any]]
     cover: int = 1
     rows: Mapping[str, RowNoise] = field(default_factory=lambda: dict(ROWS))
+    stream: tuple[Any, ...] = ()
 
     def unit(self, dot: Dot, tile: Tile) -> Any:
         f = self.units.get(dot.family, self.units.get(ANY))
@@ -256,7 +263,7 @@ class Scheme:
         """This scheme with `unit` as kind's factory (its noise form), under its own name (register it); `rows`, the form's
         `RowNoise` (`PV_ROWS` for P·V), where a matched row is visible."""
         return Scheme(name, self.tile, {**self.units, kind: unit}, self.cover,
-                      {**self.rows, **({kind: rows} if rows is not None else {})})
+                      {**self.rows, **({kind: rows} if rows is not None else {})}, self.stream)
 
 
 #: the schemes the pass compiles to, by name (protocol structure, keyed by silicon target in the registration). Separate from
@@ -1162,9 +1169,10 @@ def _reads(r: Refs, space: str, idx: int) -> bool:
 
 
 @lru_cache(maxsize=None)
-def _check_unit(U: Any, boolean: bool) -> None:
+def _check_unit(U: Any, boolean: bool, stream: tuple[Any, ...] = ()) -> None:
     """One unit Definition: one seed, on its salt, position and roots parameters whole; the salt read by nothing else; and its
-    z reached from no node the seed reaches."""
+    z reached from no node the seed reaches, or for a one-stream scheme (`stream`) recombined from words its receipt folds
+    (`_check_stream`)."""
     body = U.body
     at = [k for k, nd in enumerate(body.nodes) if SD.is_seed(nd.fn)]
     if len(at) != 1 or body.nodes[at[0]].form != "call":
@@ -1186,6 +1194,9 @@ def _check_unit(U: Any, boolean: bool) -> None:
                                                 f"the seed")
     if _reads(body.ret, "p", 2):
         raise CompileError("salt-flow", f"{U.id} returns a leaf of the salt")
+    if stream:
+        _check_stream(U, stream)
+        return
     tainted: set[int] = set()
     for k, nd in enumerate(body.nodes):
         if k == ks or any(s == "n" and i in tainted for a in nd.args for s, i, _lo, _hi in runs(a.refs)):
@@ -1195,6 +1206,36 @@ def _check_unit(U: Any, boolean: bool) -> None:
     if hit:
         raise CompileError("noise-in-z", f"{U.id}'s z reads node {hit[0]} ({body.nodes[hit[0]].fn.id}), which the seed reaches: "
                                          f"z is the exact product")
+
+
+def _check_stream(U: Any, stream: tuple[Any, ...]) -> None:
+    """A one-stream unit's z: each leaf an output of a call of a `stream` Definition, every leaf of whose operands a node in
+    the receipt's cone reads, so z is a function of the words the receipt folds and of nothing else."""
+    body = U.body
+    lz = U.signature()[1].fields[0][1].leaves
+    cone, todo = set(), [i for s, i, _lo, _hi in runs(body.ret.slice(lz, body.ret.count)) if s == "n"]
+    while todo:
+        k = todo.pop()
+        if k not in cone:
+            cone.add(k)
+            todo += [i for a in body.nodes[k].args for s, i, _lo, _hi in runs(a.refs) if s == "n"]
+    folded: dict[int, bytearray] = {}
+    for k in cone:
+        for a in body.nodes[k].args:
+            for s, i, lo, hi in runs(a.refs):
+                if s == "n":
+                    folded.setdefault(i, bytearray(body.nodes[i].out.leaves))[lo:hi] = b"\x01" * (hi - lo)
+    ids = {id(f) for f in stream}
+    for s, i, _lo, _hi in runs(body.ret.slice(0, lz)):
+        nd = body.nodes[i] if s == "n" else None
+        if nd is None or id(getattr(nd.fn, "defn", nd.fn)) not in ids:
+            raise CompileError("stream", f"{U.id}'s z reads {s}{i} ({nd.fn.id if nd else 'a parameter'}), not a recombination "
+                                         f"of the words its receipt folds ({', '.join(f.id for f in stream)})")
+        for a in nd.args:
+            for s2, j, lo, hi in runs(a.refs):
+                if s2 != "n" or j not in folded or not all(folded[j][lo:hi]):
+                    raise CompileError("stream", f"{U.id}'s z at node {i} ({nd.fn.id}) reads {s2}{j} [{lo}, {hi}), which the "
+                                                 f"receipt doesn't fold: z is the one stream's served output")
 
 
 def _check(c: Compiled) -> None:
@@ -1251,7 +1292,7 @@ def _check(c: Compiled) -> None:
         if s != "n" or i not in period or lo % period[i][1] < period[i][0]:
             raise CompileError("separator", f"the receipts read {s}{i} [{lo}, {hi}), not a unit's receipt")
     for g in plan.groups:
-        _check_unit(g.unit, plan.boolean)
+        _check_unit(g.unit, plan.boolean, c.scheme.stream)
     read = {k: bytearray(nd.out.leaves) for k, nd in enumerate(body.nodes) if k not in period}
     for r in [a.refs for nd in body.nodes for a in nd.args] + [body.ret]:
         for s, i, lo, hi in runs(r):

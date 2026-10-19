@@ -21,10 +21,21 @@ The unit is ``(a: r rows of X, b: c rows of W, salt, position, roots) -> {z, rec
   across lanes): 2 (KS + m) words.
 * **z** is each cell's exact product, the served Call's own Definition on the cell's rows of A and B, which no noise reaches.
 
+**The one-stream unit**, `PouwH1Tile_v3` (`SCHEME_V3`, `eps1-sm120-h1fx1-os`), is v1 with z taken from the words the
+receipt folds instead of a product of its own: each cell's z is cgemm.cu's served output O = O' - sum_d 128^d D_d
+(`PouwOneStream2` at m = 2, `PouwOneStream3` at m = 3), mod 2^32, from the cell's lane's O' and D_1 .. D_(m-1). Its noise,
+lanes, sets and receipt are v1's bit for bit. Since T_last = X W'ᵀ, O' = T_last - A_0 Uᵀ and D_d = A_d Uᵀ, with
+sum_d 128^d A_d the residue sums of X, z is the served product of the noised operands, X Ŵᵀ with X = A + b and
+Ŵ = B + c, exact in s32 (not A Bᵀ: the served linear is cgemm.cu's dithered one, `cgemm_ref.check`'s ``O_is_served``),
+wherever W' = B + c + U has no int8 wrap: every B entry in [-64, 62], U being in ±64. A unit whose z is not X Ŵᵀ is one
+whose weights leave that range. So z exists only through the MMAs whose words are credited: a kernel serving
+y = dequant(z) serves the receipted words. The compile pass replaces its ``noise-in-z`` rule for a one-stream scheme
+(`compile.Scheme.stream`) with ``stream``: every z leaf is a recombination whose operands the receipt's folds read.
+
 The scheme takes the Boolean s8 kinds (`KINDS`) on whole-lane grid tiles: a full r × c grid with 4 | r and 8 | c, 32 | K
 and KS = K / 32 >= 2; any other dot or tile is `CompileError("scheme")`. `scheme(tile, name)` builds it at another tile;
-`SCHEME` is registered at a warp, 32 × 32, and `PouwH1Tile` as a Definition, when `segment` (E2E-120) is on the tree.
-`reference` is the unit on words.
+`SCHEME` is registered at a warp, 32 × 32, and `PouwH1Tile` as a Definition, when `segment` (E2E-120) is on the tree;
+`SCHEME_V3` and `PouwH1Tile3` the same. `reference` is the unit on words (``stream=True``: v3's).
 """
 from __future__ import annotations
 
@@ -32,9 +43,9 @@ from dataclasses import dataclass
 from typing import Any, Sequence
 
 from verity.ml.circuits import boolean as BL
-from verity.ml.circuits.boolean.forms import NOT, add, or_reduce
+from verity.ml.circuits.boolean.forms import NOT, ONE, add, or_reduce
 from verity.ml.circuits.boolean.trace import definition
-from verity.ml.circuits.defs import CompositeDefinition, PrimitiveDefinition, bind
+from verity.ml.circuits.defs import CompositeDefinition, PrimitiveDefinition, bind, primitive
 from verity.ml.circuits.refs import Coll, array_of, concat
 from verity.ml.circuits.types import Array, Record, Value
 
@@ -53,6 +64,8 @@ except ImportError:  # port types (circuits PROTOCOL.md §12) are not on this tr
     _ports = None
 
 SCHEME = "eps1-sm120-h1fx1"
+#: the one-stream unit's scheme (`PouwH1Tile3`)
+SCHEME_V3 = "eps1-sm120-h1fx1-os"
 FOLD = "fx1"
 #: the dot kinds the unit takes: the s8 families on bits
 KINDS = ("GemmAccumulatorS8_v2", "S8Dot_v2")
@@ -154,6 +167,43 @@ PouwU129 = definition("PouwU129", 2, _u129_bits, (("x", I8),), I8, word=PouwU129
                       doc="-64 + x mod 129 on bits (x + 192, or x + 63 where x >= 129): PouwU129_v1")
 
 
+# -- the one stream ----------------------------------------------------------------------------------------------------------
+
+def one_stream(op: int, d: Sequence[int]) -> int:
+    """cgemm.cu's served output from a cell's absorbed words: O' - sum_d 128^d D_d mod 2^32 (d = 1 .. m - 1)."""
+    return (op - sum(w << 7 * (t + 1) for t, w in enumerate(d))) & M32
+
+
+@primitive("PouwOneStream2", 1, [("op", Value(32)), ("d1", Value(32))], Value(32), conformance="protocol-defined")
+def PouwOneStream2Word(op: int, d1: int) -> int:
+    """O' - 128 D_1 mod 2^32."""
+    return one_stream(op, [d1])
+
+
+@primitive("PouwOneStream3", 1, [("op", Value(32)), ("d1", Value(32)), ("d2", Value(32))], Value(32),
+           conformance="protocol-defined")
+def PouwOneStream3Word(op: int, d1: int, d2: int) -> int:
+    """O' - 128 D_1 - 128² D_2 mod 2^32."""
+    return one_stream(op, [d1, d2])
+
+
+def _one_stream_bits(C_, op, *d):
+    acc = list(op)
+    for t, w in enumerate(d):
+        sh = 7 * (t + 1)
+        acc = add(C_, acc, [ONE] * sh + [NOT(v) for v in w[:32 - sh]], ONE, width=32)
+    return acc
+
+
+PouwOneStream2 = definition("PouwOneStream2", 2, _one_stream_bits, (("op", U32), ("d1", U32)), U32, word=PouwOneStream2Word,
+                            conformance="protocol-defined", doc="O' - 128 D_1 mod 2^32 on bits: PouwOneStream2_v1")
+PouwOneStream3 = definition("PouwOneStream3", 2, _one_stream_bits, (("op", U32), ("d1", U32), ("d2", U32)), U32,
+                            word=PouwOneStream3Word, conformance="protocol-defined",
+                            doc="O' - 128 D_1 - 128² D_2 mod 2^32 on bits: PouwOneStream3_v1")
+#: the recombination at m digits
+ONE_STREAM = {2: PouwOneStream2, 3: PouwOneStream3}
+
+
 # -- the reference -----------------------------------------------------------------------------------------------------------
 
 def _stream(seed_j: bytes, block: int, n: int) -> list[int]:
@@ -191,32 +241,45 @@ def fold_keys(sigma_r: bytes, lay: Layout) -> list[list[int]]:
     return keys
 
 
+def lane_sets(a: Sequence[Sequence[int]], b: Sequence[Sequence[int]], rows: list, cols: list, lay: Layout,
+              ln: int) -> list[list[int]]:
+    """Lane ln's absorbed sets on words (`segment.call_words`): T_0 .. T_(KS-1), O', D_1 .. D_(m-1), 32 entries each."""
+    R, Cs = lay.rows(ln), lay.cols(ln)
+    seg = [range(32 * s, 32 * s + 32) for s in range(lay.ks)]
+    xr = [[[a[i][t] for t in ts] for i in R] for ts in seg]
+    bb = [[[rows[i][0][t] for t in ts] for i in R] for ts in seg]
+    wr = [[[b[j][t] for t in ts] for j in Cs] for ts in seg]
+    cc = [[[cols[j][0][t] for t in ts] for j in Cs] for ts in seg]
+    return SG.call_words(xr, bb, wr, cc, [cols[j][1] for j in Cs], [[rows[i][1][d] for i in R] for d in range(lay.m - 1)])
+
+
 def reference(a: Sequence[Sequence[int]], b: Sequence[Sequence[int]], salt: bytes, position: int,
-              roots: tuple[bytes, bytes], pairs: Sequence[tuple[int, int]] | None = None) -> tuple[list[int], list[int]]:
+              roots: tuple[bytes, bytes], pairs: Sequence[tuple[int, int]] | None = None,
+              stream: bool = False) -> tuple[list[int], list[int]]:
     """The unit on words: (z, receipt) for A's r rows and B's c rows (int8 encodings), its salt, position and roots, z at
-    `pairs` (the full grid in row-major order by default)."""
+    `pairs` (the full grid in row-major order by default). `stream`: v3's z, each cell's `one_stream` of its lane's O' and
+    D words; else v1's, the exact A Bᵀ cell."""
     lay = Layout(len(a), len(b), len(a[0]))
     rows, cols = noise(SD.seed(salt, position, *roots), lay)
     keys = fold_keys(SD.receipt_seed(salt, position, *roots), lay)
-    ks, m = lay.ks, lay.m
+    ks = lay.ks
     cp = [[0, 0] for _ in range(lay.sets)]
+    served: dict[tuple[int, int], int] = {}
     for ln in range(lay.lanes):
-        R, Cs = lay.rows(ln), lay.cols(ln)
-        seg = [range(32 * s, 32 * s + 32) for s in range(ks)]
-        xr = [[[a[i][t] for t in ts] for i in R] for ts in seg]
-        bb = [[[rows[i][0][t] for t in ts] for i in R] for ts in seg]
-        wr = [[[b[j][t] for t in ts] for j in Cs] for ts in seg]
-        cc = [[[cols[j][0][t] for t in ts] for j in Cs] for ts in seg]
+        sets = lane_sets(a, b, rows, cols, lay, ln)
         st = list(keys[ln])
-        for s, p in enumerate(SG.call_words(xr, bb, wr, cc, [cols[j][1] for j in Cs],
-                                            [[rows[i][1][d] for i in R] for d in range(m - 1)])):
+        for s, p in enumerate(sets):
             st = SG.absorb(FOLD, st, p)
             for h in range(2):
                 for v in st[8 * h:8 * h + 8]:
                     cp[s][h] ^= v
+        for e in range(32):
+            cell = (lay.rows(ln)[SG.row_slot(e)], lay.cols(ln)[SG.col_slot(e)])
+            served[cell] = one_stream(sets[ks][e], [d[e] for d in sets[ks + 1:]])
     if pairs is None:
         pairs = [(i, j) for i in range(lay.r) for j in range(lay.c)]
-    return [SG.seg_dot(0, a[i], b[j]) for i, j in pairs], [w & M32 for s in cp for w in s]
+    z = [served[p] for p in pairs] if stream else [SG.seg_dot(0, a[i], b[j]) for i, j in pairs]
+    return z, [w & M32 for s in cp for w in s]
 
 
 # -- the unit ----------------------------------------------------------------------------------------------------------------
@@ -253,7 +316,8 @@ def _xor(B: Any, words: list[Coll]) -> Coll:
     return words[0]
 
 
-def _body(B: Any, S: Any, a: Coll, b: Coll, salt: Coll, position: Coll, roots: Coll) -> Coll:
+def _sets(B: Any, S: Any, a: Coll, b: Coll, salt: Coll, position: Coll, roots: Coll) -> tuple[list, dict]:
+    """The receipt's refs, and per cell (i, j) its lane's O' and D_1 .. D_(m-1) words, as the receipt folds them."""
     lay = _layout(S)
     k, ks = lay.k, lay.ks
     seed_j, sigma_r = SD.unit_seeds_call(B, salt, position, roots, True)
@@ -277,6 +341,7 @@ def _body(B: Any, S: Any, a: Coll, b: Coll, salt: Coll, position: Coll, roots: C
         W.append(B.batch(SG.PouwI8Add, wc, Coll(Array(k, I8), concat([U[-1].refs] * ks)), axes=(0, 0)))
     rs, cs = [SG.row_slot(e) for e in range(32)], [SG.col_slot(e) for e in range(32)]
     cps: list[list[tuple[Coll, Coll]]] = [[] for _ in range(lay.sets)]
+    words: dict[tuple[int, int], list[Coll]] = {}
     for ln in range(lay.lanes):
         R, Cs = lay.rows(ln), lay.cols(ln)
         T, prev = [], None
@@ -292,8 +357,21 @@ def _body(B: Any, S: Any, a: Coll, b: Coll, salt: Coll, position: Coll, roots: C
         for s, p in enumerate([*T, op, *D]):
             state = B.call(SG.PouwFx1Absorb, state, array_of(p))
             cps[s].append((B.call(SG.PouwXinFinal, state[0:256]), B.call(SG.PouwXinFinal, state[256:512])))
-    receipt = [_xor(B, [w[h] for w in words]).refs for words in cps for h in range(2)]
+        for e in range(32):
+            words[(R[rs[e]], Cs[cs[e]])] = [op[e]] + [d[e] for d in D]
+    return [_xor(B, [w[h] for w in ws]).refs for ws in cps for h in range(2)], words
+
+
+def _body(B: Any, S: Any, a: Coll, b: Coll, salt: Coll, position: Coll, roots: Coll) -> Coll:
+    receipt, _words = _sets(B, S, a, b, salt, position, roots)
     z = [B.call(S.EXACT, a[i], b[j]).refs for i, j in S.PAIRS]
+    return Coll(_signature(S)[1], concat(z + receipt))
+
+
+def _body_v3(B: Any, S: Any, a: Coll, b: Coll, salt: Coll, position: Coll, roots: Coll) -> Coll:
+    receipt, words = _sets(B, S, a, b, salt, position, roots)
+    f = ONE_STREAM[_layout(S).m]
+    z = [B.call(f, *words[p]).refs for p in S.PAIRS]
     return Coll(_signature(S)[1], concat(z + receipt))
 
 
@@ -309,12 +387,20 @@ PouwH1Tile = CompositeDefinition(
         "and its seed group's roots, to {z: EXACT on each cell of PAIRS, receipt: per set the lanes' XOR of y, then of z}.",
     **({"ports": _unit_ports} if _ports is not None else {}))
 
+PouwH1Tile3 = CompositeDefinition(
+    "PouwH1Tile", 3, ("EXACT", "R", "C", "PAIRS"), _signature, _body_v3, conformance="protocol-defined",
+    register=SG is not None,
+    doc="The one-stream H1 + fx1 tile (`circuit.h1tile`): v1's noise, sets and receipt, and z on each cell of PAIRS its "
+        "lane's O' - sum_d 128^d D_d mod 2^32, the served product X Ŵᵀ of the noised operands (EXACT's type, never called).",
+    **({"ports": _unit_ports} if _ports is not None else {}))
+
 
 @dataclass(frozen=True)
 class _Unit:
     """The scheme's factory: `compile.Scheme.units`' per kind."""
 
     name: str
+    defn: Any = PouwH1Tile
 
     def __call__(self, dot: C.Dot, tile: C.Tile) -> Any:
         if dot.family not in KINDS or dot.a != Array(dot.k, I8) or dot.b != Array(dot.k, I8):
@@ -326,17 +412,24 @@ class _Unit:
         if dot.k % 32 or dot.k < 64:
             raise C.CompileError("scheme", f"{self.name}'s H1 tile needs 32 | K and KS = K / 32 >= 2 (a digit word), "
                                            f"not K = {dot.k}")
-        return bind(PouwH1Tile, EXACT=dot.exact, R=tile.r, C=tile.c, PAIRS=tile.pairs)
+        if self.defn is PouwH1Tile3 and SG.n_digits(dot.k // 32) not in ONE_STREAM:
+            raise C.CompileError("scheme", f"{self.name}'s one stream recombines m = 2 or 3 digits, not "
+                                           f"m = {SG.n_digits(dot.k // 32)} at K = {dot.k}")
+        return bind(self.defn, EXACT=dot.exact, R=tile.r, C=tile.c, PAIRS=tile.pairs)
 
 
-def scheme(tile: tuple[int, int] = (32, 32), name: str = SCHEME) -> C.Scheme:
-    """H1 + fx1 as a compile-pass scheme at `tile` (register it with `compile.register`)."""
-    f = _Unit(name)
-    return C.Scheme(name, tile, {kind: f for kind in KINDS})
+def scheme(tile: tuple[int, int] = (32, 32), name: str = SCHEME, defn: Any = PouwH1Tile) -> C.Scheme:
+    """H1 + fx1 as a compile-pass scheme at `tile` (register it with `compile.register`); `defn` `PouwH1Tile3` for the one
+    stream (`SCHEME_V3`), whose z the pass checks is recombined from folded words."""
+    f = _Unit(name, defn)
+    stream = tuple(ONE_STREAM.values()) if defn is PouwH1Tile3 else ()
+    return C.Scheme(name, tile, {kind: f for kind in KINDS}, stream=stream)
 
 
 if SG is not None:
     C.register(scheme())
+    C.register(scheme(name=SCHEME_V3, defn=PouwH1Tile3))
 
-__all__ = ["FOLD", "KINDS", "Layout", "PouwH1Tile", "PouwU129", "PouwU129Word", "SCHEME", "fold_keys", "noise", "reference",
-           "scheme", "u129"]
+__all__ = ["FOLD", "KINDS", "Layout", "ONE_STREAM", "PouwH1Tile", "PouwH1Tile3", "PouwOneStream2", "PouwOneStream2Word",
+           "PouwOneStream3", "PouwOneStream3Word", "PouwU129", "PouwU129Word", "SCHEME", "SCHEME_V3", "fold_keys", "lane_sets",
+           "noise", "one_stream", "reference", "scheme", "u129"]
