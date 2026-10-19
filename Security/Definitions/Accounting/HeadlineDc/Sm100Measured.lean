@@ -1,7 +1,7 @@
 import Definitions.Accounting.HeadlineDc.Sm100
 
 /-!
-# B200 (sm_100)'s measured headline instance: DC-100-ri and `dither-2s-licpw-redux-heavy-ldtm0-l32` (trusted; generated)
+# B200 (sm_100)'s measured headline instance: DC-100-ri and `dither-2s-licpw-redux-ldtm0-l32` (trusted; generated)
 
 Written by `benchmarks/pouw/lean_headline_dc.py` from the machine model's data (`benchmarks/pouw/machine_model/data`),
 and checked against it by `benchmarks/pouw/tests/test_lean_headline_dc.py`: edit the data and rerun the exporter, never
@@ -9,10 +9,10 @@ this file. `Accounting.Guarantees.TS.Sm100MeasuredHeadline` reads it.
 
 * `rowNames`, `dc100ri`, `machine`: the measured vector DC-100-ri, 12 rows of SMSP-cycles a warp instruction at its
   epoch's census, each sparse over `Sm100.classes`; every facet SM-clocked, f_max 1965 MHz.
-* `d2s`, `model`: `dither-2s-licpw-redux-heavy-ldtm0-l32` on that machine, its writer kinds every census MMA class (ω =
-  m·n); `Sm100.d2s`'s vector classes, fold routes, floors and `N_w`.
+* `d2s`, `model`: `dither-2s-licpw-redux-ldtm0-l32` on that machine, its writer kinds every census MMA class (ω = m·n);
+  `Sm100.d2s`'s vector classes, fold routes, floors and `N_w`.
 * `flatSkip`, `flat`: ♭ is `Sm100.flat`'s word production, fold and filler, with ε_skip's skippable work at DC-100-ri's
-  0.470745% (`eps_budget.design_skip` on DC-100-ri), at FFMA's price.
+  0.802503% (`eps_budget.design_skip` on DC-100-ri), at FFMA's price.
 * `lamStar`: π*, the certificate minimising the bound over this menu (issue 1.000000).
 -/
 
@@ -72,8 +72,8 @@ def dc100ri : List Sparse := [
 noncomputable def machine : Machine (Fin 26) (Fin 12) :=
   rowsMachine 26 12 dc100ri 1965
 
-/-- `dither-2s-licpw-redux-heavy-ldtm0-l32`'s design data on DC-100-ri: writer kinds as (class, ω), and `Sm100.d2s`'s
-routes. -/
+/-- `dither-2s-licpw-redux-ldtm0-l32`'s design data on DC-100-ri: writer kinds as (class, ω), and `Sm100.d2s`'s routes.
+-/
 def d2s : DesignData where
   writers := [
     (3, 128),  -- IMMA16816_S8
@@ -96,12 +96,12 @@ def d2s : DesignData where
   qT := Sm100.d2s.qT
   Nw := Sm100.d2s.Nw
 
-/-- `dither-2s-licpw-redux-heavy-ldtm0-l32`'s TS model on the measured machine. -/
+/-- `dither-2s-licpw-redux-ldtm0-l32`'s TS model on the measured machine. -/
 noncomputable def model : Model (Fin 26) (Fin 12) (Fin 12) Unit Empty (Fin 2) Unit :=
   d2s.model 26 12 2 machine
 
 /-- ♭'s skippable work a unit on DC-100-ri, at its FFMA price. -/
-def flatSkip : Sparse := [(1, 8704074567411, 995292550261)]
+def flatSkip : Sparse := [(1, 8675061491317, 991974966243)]
 
 /-- The floor program ♭ on DC-100-ri, labelled. -/
 noncomputable def flat : Labelled (Fin 26) :=

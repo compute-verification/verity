@@ -1,7 +1,7 @@
 import Definitions.Accounting.HeadlineDc.Encoding
 
 /-!
-# B200 (sm_100)'s headline instance: DS-100 and `dither-2s-licpw-redux-heavy-ldtm0-l32` (trusted; generated)
+# B200 (sm_100)'s headline instance: DS-100 and `dither-2s-licpw-redux-ldtm0-l32` (trusted; generated)
 
 Written by `benchmarks/pouw/lean_headline_dc.py` from the machine model's data (`benchmarks/pouw/machine_model/data`),
 and checked against it by `benchmarks/pouw/tests/test_lean_headline_dc.py`: edit the data and rerun the exporter, never
@@ -12,14 +12,14 @@ this file. `Accounting.Guarantees.TS.Sm100SheetHeadline` reads it.
   no clock)); each tensor class's dense MACs a warp instruction (sm_100's tcgen05 MMA whole (`m·n·k`), its mma.sync as
   m16n8) and its operand type's dense MACs an SM clock; the Nsight Compute pipes ALU, IMAD and SHFL with their
   Programming Guide widths; no shared-memory row (DS-100 prices none). Its machine reproduces every DS-100 coefficient.
-* `d2s`, `model`: `dither-2s-licpw-redux-heavy-ldtm0-l32` as a TS model on the sheet's machine: writer kinds every
-  census MMA class (ω = m·n, its destination's 32-bit words a warp); the vector classes CUDA's lane classes; the
-  design's fold on lanes and alone on the uniform datapath; the table level's bytes counted in ALU, which `b_T = 0`
-  prices at nothing (the census has no load class); A6's floors `q = q_T = ½`, `b_T = 0`; 32768 committed words a unit
-  of honest work (an UTCIMMA_M128_N256 at L = 32).
+* `d2s`, `model`: `dither-2s-licpw-redux-ldtm0-l32` as a TS model on the sheet's machine: writer kinds every census MMA
+  class (ω = m·n, its destination's 32-bit words a warp); the vector classes CUDA's lane classes; the design's fold on
+  lanes and alone on the uniform datapath; the table level's bytes counted in ALU, which `b_T = 0` prices at nothing
+  (the census has no load class); A6's floors `q = q_T = ½`, `b_T = 0`; 32768 committed words a unit of honest work (an
+  UTCIMMA_M128_N256 at L = 32).
 * `flat`: the floor program ♭ a unit: the MMA and the design's operand floor (word production), the fold, no filler, and
-  ε_skip's skippable work at ALU's price, 0.406401% of ♭'s bound (`eps_budget.design_skip` on DS-100).
-* `lamStar`: π*, the certificate minimising the bound over this menu (DS_issue 0.031381 + DS_alu 0.968619).
+  ε_skip's skippable work at ALU's price, 0.684891% of ♭'s bound (`eps_budget.design_skip` on DS-100).
+* `lamStar`: π*, the certificate minimising the bound over this menu (DS_issue 0.031474 + DS_alu 0.968526).
 * `checks`: the checks a window, one a round (Theorem S's S).
 -/
 
@@ -70,7 +70,7 @@ def ds100 : SheetData Pipe where
 /-- The data sheet over the census's classes. -/
 noncomputable def sheet : Sheet (Fin 26) Pipe := ds100.sheet 26
 
-/-- `dither-2s-licpw-redux-heavy-ldtm0-l32`'s design data: writer kinds as (class, ω), vector classes, fold routes. -/
+/-- `dither-2s-licpw-redux-ldtm0-l32`'s design data: writer kinds as (class, ω), vector classes, fold routes. -/
 def d2s : DesignData where
   writers := [
     (3, 128),  -- IMMA16816_S8
@@ -88,8 +88,8 @@ def d2s : DesignData where
   ]
   vec := [1, 2, 0, 14]  -- FFMA, IMAD, ALU, SHFL
   folds := [
-    [(0, 29, 1024), (2, 7, 256), (14, 3, 4096)],
-    [(15, 231, 128)]]
+    [(0, 17, 1024), (2, 1, 64), (14, 3, 4096)],
+    [(15, 135, 128)]]
   bytes := 0  -- ALU
   q := 1 / 2
   qT := 1 / 2
@@ -98,7 +98,7 @@ def d2s : DesignData where
 /-- ♭'s filler a unit: none. -/
 def flatFill : Sparse := []
 
-/-- `dither-2s-licpw-redux-heavy-ldtm0-l32`'s TS model on the data sheet's machine. -/
+/-- `dither-2s-licpw-redux-ldtm0-l32`'s TS model on the data sheet's machine. -/
 noncomputable def model : Model (Fin 26) (SheetRow Pipe) (Fin 12) Unit Empty (Fin 2) Unit :=
   d2s.model 26 12 2 sheet.machine
 
@@ -106,18 +106,18 @@ noncomputable def model : Model (Fin 26) (SheetRow Pipe) (Fin 12) Unit Empty (Fi
 def flatWords : Sparse := [(9, 0, 1), (18, 1, 1)]
 
 /-- ♭'s fold a unit: the lane fold for 32768 words. -/
-def flatFold : Sparse := [(0, 928, 1), (2, 896, 1), (14, 24, 1)]
+def flatFold : Sparse := [(0, 544, 1), (2, 512, 1), (14, 24, 1)]
 
 /-- ♭'s skippable work a unit, at ALU's price. -/
-def flatSkip : Sparse := [(0, 3771400998816, 995935990303)]
+def flatSkip : Sparse := [(0, 116431542624, 31035971429)]
 
 /-- The floor program ♭, labelled. -/
 noncomputable def flat : Labelled (Fin 26) := labelled 26 flatWords flatFold flatFill flatSkip
 
 /-- π*: the certificate, its weights exact and summing to 1. -/
 noncomputable def lamStar : SheetRow Pipe → ℝ
-  | .issue => 7845259 / 250000000
-  | .pipe .alu => 242154741 / 250000000
+  | .issue => 7868549 / 250000000
+  | .pipe .alu => 242131451 / 250000000
   | _ => 0
 
 /-- The checks a window. -/
