@@ -11,6 +11,7 @@
 #   table's kinds K1 and K2 are probed again first (a11_kinds.py --table, $OUT/kinds-reprobe.json) and the audit reads that.
 # env: A11_MODE  A11_MEM_GB (the job's --mem-gb)  A11_JOBS (a11_kinds' --jobs)  A11_CHILD_GB (its --mem-gb)  A11_ONLY (its --only)
 #      A11_K (a11.py's --k)  A11_CACHE (the build cache, kept on the node)  A11_ARGS (more a11.py arguments)  A11_REPROBE
+#      A11_BOOLEAN (a11_kinds' --boolean: kinds probed through their Boolean version first)
 # Kept in $OUT/a11: a11's records and logs, the public files and the sessions; never a prover's file (inst-*), a circuit (its
 # pin is kept) or a session's archive.
 set -uo pipefail
@@ -33,7 +34,8 @@ kinds)
     n=$(basename "$d" .json.gz)
     log "a11 kinds: $n"
     "$PY" benchmarks/one_stage/a11_kinds.py --descriptor "$d" --out "$OUT/kinds-$n.json" --jobs "${A11_JOBS:-12}" \
-      --mem-gb "${A11_CHILD_GB:-160}" ${A11_ONLY:+--only "$A11_ONLY"} 2>&1 | tee -a "$OUT/kinds-$n.log" | cut -c1-2000 || rc=1
+      --mem-gb "${A11_CHILD_GB:-160}" ${A11_ONLY:+--only "$A11_ONLY"} ${A11_BOOLEAN:+--boolean "$A11_BOOLEAN"} 2>&1 \
+      | tee -a "$OUT/kinds-$n.log" | cut -c1-2000 || rc=1
   done
   wait
   log "a11 kinds: done, builds $(cat "$W/flock.dir" "$W/lean.dir" 2>/dev/null | tr '\n' ' ')"
@@ -55,7 +57,8 @@ audit)
   if [ -n "${A11_REPROBE:-}" ]; then
     log "a11: probing $A11_REPROBE again from $(basename "$KINDS")"
     "$PY" benchmarks/one_stage/a11_kinds.py --table "$KINDS" --only "$A11_REPROBE" --out "$OUT/kinds-reprobe.json" \
-      --jobs "${A11_JOBS:-4}" --mem-gb "${A11_CHILD_GB:-160}" 2>&1 | tee -a "$OUT/kinds-reprobe.log" | cut -c1-2000
+      --jobs "${A11_JOBS:-4}" --mem-gb "${A11_CHILD_GB:-160}" ${A11_BOOLEAN:+--boolean "$A11_BOOLEAN"} 2>&1 \
+      | tee -a "$OUT/kinds-reprobe.log" | cut -c1-2000
     KINDS=$OUT/kinds-reprobe.json
   fi
   # shellcheck disable=SC2086
