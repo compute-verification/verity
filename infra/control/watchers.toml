@@ -62,14 +62,15 @@ needs = ["{dir}/agent-watch-offset"]
 env = { AGENT_WATCH_ON_POD = "1", AGENT_WATCH_OFFSET = "{dir}/agent-watch-offset" }
 
 # check's preflight on each node, hourly, and the nodes' drift from main (tmux `preflight-probe`). Its tree is a clone the deploy
-# key fetches (README's deploy); the store index it reads for the Lean bundles stays in {dir}/preflight-store
+# key fetches (README's deploy). The store index it reads for the Lean bundles is on the pod's own disk: on /data's NFS, indexing
+# the attempts takes hours and the lean-deps step times out; after a reset, the first pass rebuilds it in a few minutes
 [[loop]]
 name = "preflight-probe"
 argv = ["python3.12", "-s", "{src}/tools/research/src/research/pods/nebius/preflight_probe.py", "--tree", "{dir}/preflight-tree",
         "--state", "{dir}/preflight-probe.json"]
 env_files = ["/root/.config/verity/relay.env", "/root/.config/verity/r2.env"]
 needs = ["{dir}/preflight-tree/.git"]
-env = { RESEARCH_STORE = "{dir}/preflight-store" }
+env = { RESEARCH_STORE = "/root/watchers-preflight-store" }
 
 # top's asks relay (top_watch.py asks, every 15 min; top's Cursor timer asks-relay-v4). It waits for a Notion connection's token
 # shared on the Asks for Daniel database ({dir}/notion.env: NOTION_API_KEY=..., root 0600), and for its seeded state

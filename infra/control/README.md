@@ -67,7 +67,7 @@ read-only deploy key; if `watch.log` shows `FETCH-FAILED`, remove `--reap` until
 | `/data/chats` | `/workspace/chats` | the chats archive |
 | `/data/research`, `/data/research-control` | `/workspace/research`, `/workspace/research-control` | `research run` state and control worktrees |
 | `/data/infra` | `/workspace/infra` | infra's pod scripts and their logs; `msg-repo` and `msg-notes`, `msg.sh`'s checkout and notes clone |
-| `/data/watchers` | | the watchers supervisor: `run.sh`, `watchers.toml`, `vm_stop.toml`, `src`, `log/`, `status.json`, each loop's state (`vm_stop.json`, `fleet/`, `monitors/`, `n1-alerts.json`, `agent-watch-offset`, `preflight-probe.json` with `preflight-tree` and `preflight-store`, `top-asks.json`, `top-sweep.json`), `extra.d/`, `known_hosts`; `notion.env` (`NOTION_API_KEY`, for `top-asks`) and `nebius-stop.env` (a Nebius account that may stop instances, for `vm-stop`) once placed (root, 0600) |
+| `/data/watchers` | | the watchers supervisor: `run.sh`, `watchers.toml`, `vm_stop.toml`, `src`, `log/`, `status.json`, each loop's state (`vm_stop.json`, `fleet/`, `monitors/`, `n1-alerts.json`, `agent-watch-offset`, `preflight-probe.json` with `preflight-tree` (its store index is `/root/watchers-preflight-store`, on the pod's own disk), `top-asks.json`, `top-sweep.json`), `extra.d/`, `known_hosts`; `notion.env` (`NOTION_API_KEY`, for `top-asks`) and `nebius-stop.env` (a Nebius account that may stop instances, for `vm-stop`) once placed (root, 0600) |
 | `/data/backup`, `/data/tmp` | | backups and transfer bundles |
 
 Secrets stay on the volume and never in git: this README names the files, never their contents.
