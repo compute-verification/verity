@@ -96,6 +96,37 @@ def _die(_=None) -> None:
     os.kill(os.getpid(), signal.SIGKILL)
 
 
+def _in_a_daemon(q) -> None:
+    import multiprocessing as mp
+
+    from verity_vllm.check.replay.fork import fork_pool
+
+    try:
+        with pytest.raises(AssertionError, match="daemonic"):
+            mp.get_context("fork").Pool(1)
+        with fork_pool(2) as pool:
+            got = pool.map(_pdeathsig, range(4))
+        q.put((os.getpid(), got, mp.current_process().daemon))
+    except BaseException as e:  # noqa: BLE001 -- reported to the test, which fails on it
+        q.put(repr(e))
+
+
+def test_a_daemonic_process_forks_a_pool_whose_workers_die_with_it():
+    """vLLM's TP workers are daemonic, and multiprocessing refuses a daemon children: every rank of the GLM-5.3 TP8 B8 Commit's
+    replay fell back to serial (r20261018-221605-e5e7, `--replay-workers 4`)."""
+    import multiprocessing as mp
+
+    ctx = mp.get_context("fork")
+    q = ctx.SimpleQueue()
+    p = ctx.Process(target=_in_a_daemon, args=(q,), daemon=True)
+    p.start()
+    got = q.get()
+    p.join()
+    assert isinstance(got, tuple), got
+    parent, workers, still_daemon = got
+    assert {sig for _, sig in workers} == {signal.SIGKILL} and parent not in {pid for pid, _ in workers} and still_daemon is True
+
+
 def test_a_replacement_worker_sets_no_signal_and_the_pool_terminates():
     """The pool forks a dead worker's replacement from its worker-handler thread, which `terminate()` ends: a signal following that
     thread would kill the replacement inside `terminate()`, maybe holding the task queue's read lock, and `terminate()` would hang."""
