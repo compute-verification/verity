@@ -16,21 +16,29 @@ in the served output and in what a receipt unit reads of it (`Form`):
 * `beside`, today's SERVE-H1: the tile proves receipts over the call's committed A rows and the registered B, beside
   the served linear's own GEMM (`int8_ops.scaled_mm`: `y = dequantize(torch._int_mm(A, B), s_a, s_w)`, cuBLASLt's s8
   GEMM, at the round-4 run's commit 14e4c23a), whose `y` no unit reads;
-* `zTree`, J11's first iteration (kernels-dither-rtx): one fused GEMM serves `y = dequant(z)` from its exact product `z`
-  (bit-exact to `h1tile.reference`, no noise) and commits `z` as an AROW row table under the step's round root; each
-  receipt unit opens its tile's `z`;
+* `zTree`, J11's first iteration as kernels-dither-rtx describes it (its coin schedule unread here): one fused GEMM
+  serves `y = dequant(z)` from its exact product `z` and commits `z` as an AROW row table under the step's round root;
+  each receipt unit opens its tile's `z`;
 * `yOpen`, the alternative kernels prices: no second tree; each receipt unit opens the Commit's own `y` rows of its tile
   and its Program checks `dequant(z) = y`, `z` an inner wire.
 
 The served partition's sampled units prove the Commit's `y` in every form, so integrity never reads the form. The
-link from that `y` to the proved product, which useful-work credit needs, does (`Form.ServedLink`): `beside` has none
-(no unit reads the served `y`); `zTree` has it under a premise on the prover's fused kernel, that the `y` it serves is
-`dequant` of the `z` it commits, which nothing checks and the design rules exclude (nothing the prover runs is
-trusted); `yOpen` has it from the tie, whose `linked` field puts the Commit's `y` in every receipt unit, and the
-Program's check, with no premise. So `yOpen` needs the less trusted surface. It needs no fused kernel either: today's
-served `y` is already `dequant` of the exact s32 product (`RN_bf16(RN32(RN32(RN32(z)·s_a)·s_w))`), so the check holds
-of today's serving, whose second GEMM is overhead, not a gap in the link. No form states that the prover computed `y`
-and the receipts in one GEMM: that is not observable, and no link claims it. Between the forms, `LayerCommitted` gains one committed class at its step's round (`z`, a computed
+link from that `y` to the proved product does (`Form.ServedLink`): `beside` has none (no unit reads the served `y`);
+`zTree` has it under a premise on the prover's fused kernel, that the `y` it serves is `dequant` of the `z` it commits,
+which nothing checks and the design rules exclude (nothing the prover runs is trusted); `yOpen` has it from the tie,
+whose `linked` field puts the Commit's `y` in every receipt unit, and the Program's check, with no premise. So `yOpen`
+needs the less trusted surface.
+
+The link is an equality of values, which useful-work credit needs and which doesn't give it. In every form the served
+value is committed before its step's coin and every receipt reads that coin (`Tie.noised`), and a receipt's H1 sets
+are over the noised operands `A + b` and `B + c + U`, which no function of `z` gives: the receipts' GEMM runs after the
+served one, in every form. A schedule whose served GEMM is the noised one draws a call's coin after its A rows are
+committed and before its GEMM, and a step's later calls read its earlier calls' outputs, so it has about a round a
+call, not a step; this module doesn't state one. Today's code computes `y` as `dequant` of the exact s32 product
+(`int8_ops.scaled_mm` at 14e4c23a: `RN_bf16(RN32(RN32(RN32(z)·s_a)·s_w))`), so `yOpen`'s check would hold of its `y`
+once those rows are committed, which round 4 doesn't do.
+
+Between the forms, `LayerCommitted` gains one committed class at its step's round (`z`, a computed
 word that reads no coin, or the Commit's `y`, a run input only its own call reads) and the round root one table root
 (`z`'s or the Commit's `y` rows'); the units keep their number, each gaining its tile's `z` or `y` words.
 
@@ -137,7 +145,8 @@ def llama31_8b : Layout where
 
 /-- **A served window's form**: `beside`, receipts over the committed operands beside cuBLASLt's served `y` (today's
 SERVE-H1); `zTree`, the fused kernel serves `dequant(z)` and commits `z`, which receipt units open (J11's first
-iteration); `yOpen`, receipt units open the Commit's `y` and check `dequant(z) = y` (the alternative). -/
+iteration, as kernels describes it); `yOpen`, receipt units open the Commit's `y` and check `dequant(z) = y` (the
+alternative). In all three the step's receipts are computed after its served values are committed. -/
 inductive Form
   | beside
   | zTree
@@ -186,12 +195,13 @@ def Form.Links {ι : Type} (Cd : Declared ι) (cls : ℕ → Cls) : Form → ℕ
   | .zTree, i => ∃ j, j < Cd.dag.length ∧ cls j = .out ∧ Cd.unit j = Cd.unit i
   | .yOpen, i => ∃ g j, g < Cd.dag.length ∧ Cd.unit g = Cd.unit i ∧ Cd.Reads g j ∧ cls j = .served
 
-/-- **The served `y` is the proved product's**, by form, the link useful-work credit needs, where `fused` is the fused
-kernel's premise (the `y` it serves is `dequant` of the `z` rows it commits): `beside` has no link (`False`); `zTree`
-has it exactly under `fused`, a premise on code the prover runs, which no run-time check reaches; `yOpen` has it from
-`Tie.linked` and the receipt Program's `dequant(z) = y` check over the opened `y` (a fact of the Program's Definition,
-which circuit-check pins), with no premise. It says nothing of how many GEMMs the prover ran, which no verifier
-observes. Integrity reads none of it: the served partition's units prove the Commit's `y` in every form. -/
+/-- **The served `y` is the proved product's**, by form, where `fused` is the fused kernel's premise (the `y` it serves
+is `dequant` of the `z` rows it commits): `beside` has no link (`False`); `zTree` has it exactly under `fused`, a
+premise on code the prover runs, which no run-time check reaches; `yOpen` has it from `Tie.linked` and the receipt
+Program's `dequant(z) = y` check over the opened `y` (a fact of that Program's Definition, which doesn't exist yet),
+with no premise. It is an equality of values: useful-work credit needs it, and it doesn't give that credit, since in
+every form the receipts' GEMM follows the served one (the module docstring). Integrity reads none of it: the served
+partition's units prove the Commit's `y` in every form. -/
 def Form.ServedLink (fused : Prop) : Form → Prop
   | .beside => False
   | .zTree => fused
@@ -213,8 +223,8 @@ def Form.ServedLink (fused : Prop) : Form → Prop
 * `commit`, `inner`: a value of an opened class is committed at `commitCoin` of its class and step, and an inner value
   at its own cut.
 The `commit` and `inner` fields are how the declared circuit is built from the layout; the others are facts of each
-call's Program, which its compile checks once; the commit coins are the code's only if the verifier checks the run's
-round log (the module docstring's list). -/
+call's Program, which no code checks yet (an extractor building `Cd` from the compiled Programs is to); the commit
+coins are the code's only if the verifier checks the run's round log (the module docstring's list). -/
 structure Tie {ι : Type} (L : Layout) (F : Form) (Cd : Declared ι) (cls : ℕ → Cls) : Prop where
   calls : Cd.calls = L.steps * L.calls
   rounds : Cd.rounds = L.steps
