@@ -1309,6 +1309,27 @@ def inbox(fake, routes_dirs, name, where="local", **kw):
     return root["ts"]
 
 
+def test_a_token_that_may_post_but_not_read_still_rings_the_names_a_post_starts_with(fake, registry, routes_dirs, capsys, monkeypatch):
+    """19 Oct 15:40Z: the bot lost channels:history, so every inbox read answered missing_scope and no doorbell rang
+    (COMM-48).  Unread, an inbox is rung unchecked; any other failure still marks the name NOT RUNG."""
+    monkeypatch.setattr(slack, "_now", lambda: datetime.fromtimestamp(1700000100, timezone.utc))
+    first, second = inbox(fake, routes_dirs, "circuits"), inbox(fake, routes_dirs, "proofs")
+    real, error = slack.post, ["missing_scope"]
+
+    def unreadable(url, data, headers):
+        if url.endswith(("conversations.replies", "conversations.history")):
+            return {"ok": False, "error": error[0], "needed": "channels:history"}
+        return real(url, data, headers)
+
+    monkeypatch.setattr(slack, "post", unreadable)
+    rc, _, err = run(capsys, "send", "--as", "infra", "--to", "@circuits", "@proofs", "--text", "node 2 is free")
+    assert rc == 0 and "route @circuits: rang" in err and "route @proofs: rang" in err, err
+    assert (len(bells(fake, first)), len(bells(fake, second))) == (1, 1)
+    error[0] = "ratelimited"
+    rc, _, err = run(capsys, "send", "--as", "infra", "--to", "@circuits", "--text", "again")
+    assert rc == 0 and "route @circuits: NOT RUNG" in err and len(bells(fake, first)) == 1
+
+
 def test_a_doorbell_that_fails_leaves_the_others_ringing_and_deliver_rings_it_later(fake, registry, routes_dirs, capsys, monkeypatch):
     monkeypatch.setattr(slack, "_now", lambda: datetime.fromtimestamp(1700000100, timezone.utc))
     first, second = inbox(fake, routes_dirs, "circuits"), inbox(fake, routes_dirs, "proofs")
@@ -2400,23 +2421,3 @@ def test_traffic_does_not_count_the_askers_own_comment_as_taken_when_linear_writ
     nodes[1:] = [{"botActor": None, "user": {"name": "Daniel Reuter"}, "body": "looking now"}]
     assert slack.issue_taken("INF-1", "infra", {}) is True
 
-
-def test_a_token_that_may_post_but_not_read_still_rings_the_names_a_post_starts_with(fake, registry, routes_dirs, capsys, monkeypatch):
-    """19 Oct 15:40Z: the bot lost channels:history, so every inbox read answered missing_scope and no doorbell rang
-    (COMM-48).  Unread, an inbox is rung unchecked; any other failure still marks the name NOT RUNG."""
-    monkeypatch.setattr(slack, "_now", lambda: datetime.fromtimestamp(1700000100, timezone.utc))
-    first, second = inbox(fake, routes_dirs, "circuits"), inbox(fake, routes_dirs, "proofs")
-    real, error = slack.post, ["missing_scope"]
-
-    def unreadable(url, data, headers):
-        if url.endswith(("conversations.replies", "conversations.history")):
-            return {"ok": False, "error": error[0], "needed": "channels:history"}
-        return real(url, data, headers)
-
-    monkeypatch.setattr(slack, "post", unreadable)
-    rc, _, err = run(capsys, "send", "--as", "infra", "--to", "@circuits", "@proofs", "--text", "node 2 is free")
-    assert rc == 0 and "route @circuits: rang" in err and "route @proofs: rang" in err, err
-    assert (len(bells(fake, first)), len(bells(fake, second))) == (1, 1)
-    error[0] = "ratelimited"
-    rc, _, err = run(capsys, "send", "--as", "infra", "--to", "@circuits", "--text", "again")
-    assert rc == 0 and "route @circuits: NOT RUNG" in err and len(bells(fake, first)) == 1
