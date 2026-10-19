@@ -30,6 +30,7 @@ import Proofs.Flock.Claims.ZK.Blind
 import Proofs.Flock.Claims.ZK.Release
 import Proofs.Flock.Claims.ZK.Refine
 import Proofs.Flock.Claims.ZK.Os
+import Proofs.Flock.Claims.ZK.FrameTape
 import Proofs.Flock.Claims.ZK.NonVacuous
 import Proofs.Flock.Claims.ZK.SamplingNonVacuous
 import Proofs.Flock.Claims.ZK.Compose
@@ -197,6 +198,11 @@ import Proofs.Flock.Claims.ZK.Stop
   of any other length refused, `drawsWith_refuses`), and the step to a uniform tape beside independent randomness under
   A3 per test, up to its slack `η` (`Pr_os_prod`). `ZkDeferredOs`, `ZkServerBlindOs` and `ZkServerLeanOs` state the
   three theorems at those bytes, the bound plus `η`, proved as `zkDeferredOs`, `zkServerBlindOs` and `zkServerLeanOs`.
+* `FrameTape`: the frames' draws read as the masked prover's tape (`tapeOfDraws`: table `i`'s rep `r` reads frame rep
+  `rep i r`'s bytes as its `h`, `μ`, their padding, `τ`'s salt and leaf salts), whose pads are the frame's
+  (`padsOf_tapeOfDraws`, `padsOf_drawsAt`, with `h_ab` and `w`), whose leaf salts are the frame's (`innerSalt_fit`), and
+  which the release's configuration carries at the rep's rounds (`cfg_tapeOfDraws`), at the operating system's bytes
+  too (`padsOf_os`).
 * `NonVacuous`: the claim is not vacuous. A prover that makes no calls has `Fork.Pr = 0`, so the simulator that hashes a
   collision and outputs the empty transcript fails `ZKmalR` at every `ε_zk < 1` and every `γ` (`not_zkmalR_collSim`),
   a prover that sends its witness has no simulator at `ε_zk < 1/2` (`not_zkmalR_leak`), and both fail `ZKAt` at
