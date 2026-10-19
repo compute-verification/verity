@@ -11,6 +11,7 @@ by the check it names, or nothing is timed at all.
 | `probe.py` | `build` (nvcc; `--arch` sm_120a, or sm_90a / sm_100a for `../dc/`'s probes), `gate` (CPU only), `run` (gate, time, write the rows) |
 | `rows.py` | The census line (`kind,row,rate,noise,cycles,u,since,until,runs`), machine_model's `u_of`, and MACs a word |
 | `run.sh` | The job: build and gate outside the lease, then gate and time under one `gpu-lease` |
+| `isa_accept.sh` | CPU only: a one-instruction PTX kernel for each form A7's menu has no verdict for (add with an immediate, f32x2 FMA, f64 MMA, s4 and b1 MMA, `kind::f8f6f4` at each type, tcgen05, redux), assembled by ptxas for a target; whether ptxas accepts it and the SASS it becomes |
 | `probes/lm.cu` | LDSM and STSM by register count, LDS.128, STS.128, and the two known-invalid round-7 forms |
 | `probes/issue.cu` | IMMA alone, and k_spec/k_mixu: DADD, DFMA or RED.64 beside IMMA (joint points, no census line) |
 | `probes/atom.cu` | ATOMS, ATOMG, REDG and ATOM.E, 32- and 64-bit (ATOME64: generic EXCH.64 and CAS.64 to shared); each global form on 16 SMs (its row) and on every SM (L2red) |
