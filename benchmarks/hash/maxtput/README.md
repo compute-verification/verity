@@ -10,8 +10,12 @@ native compiled vLLM at saturation on one GPU, against the Commit's arms on the 
   the saturation evidence).
 - `job.sh`, one run on one GPU: the Build pin (`served-pin seed/check`, as `served_commit/prof.sh`), an nvidia-smi log, the
   driver, then `row.py`.
-- `row.py`: the run's result, and one result per arm (`arm=maxtput:<arm>`) for `benchmarks/hash/loop/plot.py`.
+- `row.py`: the run's result, one result per arm (`arm=maxtput:<arm>`) for `benchmarks/hash/loop/plot.py`, and `--table`, a
+  row's published arms from the store.
 - `launch.sh`: the three cards from the pushed HEAD through `research run`, then the per-arm results published and labeled.
+  The arms are circuits' committer (`served_commit`'s arms, `harness/env.sh` and the committer's GPU tests), which lands
+  separately, so a run goes from a branch that merges its iterations (`cursor/hash-commit-loop-15ad`) with this directory;
+  `launch.sh` refuses a tree without them.
 - `build_job.sh`: `served-match` alone, for a Build of record on a model that has none (run it from a tree whose `served-match`
   accepts the card).
 
@@ -19,6 +23,7 @@ native compiled vLLM at saturation on one GPU, against the Commit's arms on the 
 bash benchmarks/hash/maxtput/launch.sh 11                                        # Qwen3-8B, every card
 MACHINES=vy-nebius-2 MAXTPUT_ARGS="--kv-bytes 58000000000" bash benchmarks/hash/maxtput/launch.sh 11
 uv run --with matplotlib python3 benchmarks/hash/loop/plot.py --table             # the rows, from the store
+python3 benchmarks/hash/maxtput/row.py --table --row 11                           # every arm's absolutes and saturation evidence
 ```
 
 On the RTX PRO 6000 (96 GB) the full Commit doesn't fit beside stock's KV pool at 0.9, so its runs pin every engine's pool

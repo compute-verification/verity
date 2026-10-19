@@ -20,6 +20,10 @@ BRANCH=$(git rev-parse --abbrev-ref HEAD) HEAD_SHA=$(git rev-parse HEAD)
 [ -z "$(git status --porcelain)" ] || { echo "launch: the tree is dirty; commit (and push) first" >&2; exit 2; }
 git fetch -q origin "$BRANCH" && [ "$(git rev-parse FETCH_HEAD)" = "$HEAD_SHA" ] \
   || { echo "launch: HEAD $HEAD_SHA is not origin/$BRANCH's tip; push it first" >&2; exit 2; }
+[ -f benchmarks/served_commit/prof_arm.py ] && [ -f benchmarks/harness/env.sh ] \
+  || { echo "launch: this tree has no committer (benchmarks/served_commit/, benchmarks/harness/env.sh); run from a branch that" \
+            "merges circuits' committer iterations (origin/cursor/hash-commit-loop-15ad) with this one, as cursor/kernels-maxtput-15ad" >&2
+       exit 2; }
 MODEL=${MODEL:-qwen3-8b}
 declare -A ENVS=(
   [vy-dc-h200]="WORK=/workspace/cp VERITY_BENCH_VENV=/workspace/cp/venv312 NATIVE_COLLECT_BUILD=/workspace/cp/nc_build HF_HOME=/workspace/hf"
