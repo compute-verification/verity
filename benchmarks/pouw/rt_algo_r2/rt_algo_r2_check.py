@@ -39,10 +39,10 @@ def _unit(rng, r, c, K, zero_a=False):
     return a, b, salt, rng.randint(0, 1 << 20), roots
 
 
-# -- (c) the prefix barrier in the served layout -----------------------------------------------------------------------
+# -- (c) the prefix barrier in the compiled unit -----------------------------------------------------------------------
 
 def check_receipt_is_2_sets(rng):
-    """The served unit's receipt is 2 (KS + m) words, one pair a set: KS prefix sets, O' and D_1 .. D_(m-1)."""
+    """The compiled unit's receipt is 2 (KS + m) words, one pair a set: KS prefix sets, O' and D_1 .. D_(m-1)."""
     for r, c, K in ((4, 8, 64), (4, 8, 128), (8, 16, 256)):
         lay = Layout(r, c, K)
         _z, receipt = reference(*_unit(rng, r, c, K))
@@ -100,7 +100,7 @@ def check_zero_rows_do_noised_work(rng):
     admission reads the queue, not the row."""
     _z, receipt = reference(*_unit(rng, 4, 8, 64, zero_a=True))
     if not any(w & M32 for w in receipt):
-        return False, "an all-zero A tile's receipt is all zero without a gate"
+        return False, "an all-zero A tile's receipt is all zero (a dead-tile gate zeroed its noised work)"
     return True, f"all-zero A, 4x8 K=64: {sum(1 for w in receipt if w & M32)} of {len(receipt)} receipt words nonzero"
 
 

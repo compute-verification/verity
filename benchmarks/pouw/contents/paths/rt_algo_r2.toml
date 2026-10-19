@@ -1,4 +1,4 @@
 order = 341
 path = "`rt_algo_r2/`"
 runs_on = "CPU"
-what = "RT-ALGO round 2's red-team check of three targets' credited-word algebra, bit-exact against main's `h1tile` and `segment`: the served receipt's final words order-invariant beside its running prefix partials, no H1 unit for attention, a near-zero P row's residue collapse defeated by the prefix, and the FP-native two-coin entry a single square mod 2^m iff v₂(c) >= ⌈(m + 1)/2⌉ (`rt_algo_r2_check.py`; RT-ALGO, note:20261019T0618Z-draft-rt-algo-r2)"
+what = "RT-ALGO round 2's red-team check of three targets' credited-word algebra, bit-exact against main's `h1tile` and `segment`: the compiled unit's final words order-invariant beside its running prefix partials, no H1 unit for attention, a near-zero P row's residue collapse defeated by the prefix, the FP-native two-coin entry a single square mod 2^m iff v₂(c) >= ⌈(m + 1)/2⌉, design A's e4m3i and FP4 grids inside `AdmWrap` at s32, and design A's entries paired by a shift (`rt_algo_r2_check.py`; RT-ALGO, note:20261019T0618Z-draft-rt-algo-r2)"
