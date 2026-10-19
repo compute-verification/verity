@@ -27,6 +27,7 @@ Nothing in `verity` reads this directory. The theorems it cites are in `Security
 | `catalog.py` | loading, and `problems()`: every rule below that a file breaks |
 | `library.py` | queries over the library: a bracket and the per-block read breakdown for any algorithm, model, policy and data mode |
 | `slowdown.py` | the bracket per row; `python benchmarks/nci/slowdown.py [--calibration ID] [--row ID]` |
+| `kappa.py` | kappa per token and over each frontier model's pretraining schedule, by part; `python benchmarks/nci/kappa.py [--model ID]` |
 | `render.py` | the whole index as Markdown on stdout |
 
 Topics: `weights`, `updates`, `seed-based`, `gradients`, `activations`, `tokens`, `capability-per-bit`, `theory`,
@@ -147,8 +148,20 @@ For each row under each calibration of its model, `slowdown.py` computes a brack
   with \(f\) the read factor of \(b_w\), \(b_a\) and the chain's smallest inner dimension. Its only assumptions are that
   one chain of the reference circuit is incompressible at \(b_w\) and \(b_a\), in support form. A chain charges each
   weight once per layer, so it is one forward path, and a row's `chain` gives that path's share \(\kappa_{\text{chain}}\)
-  and inner dimension. For Kimi K2 the path is the dense one (MLA projections and the shared expert), 7.5% of training's
+  and inner dimension. For Kimi K2 the path is the dense one (MLA projections and the shared expert), 7% of training's
   work. The activation rate is capped by a compressed boundary's bits per residual entry. Rows without a chain get none.
+
+\(\kappa\) is the thread theorem's hypothesis \(\kappa\,|\text{computed}| \le 2|M|\): twice the multiplications of an
+updated weight by an activation or an activation gradient, over every gate of the reference circuit, one gate per scalar
+operation (a multiply-add is two). `kappa.py` counts both from each model's config and its report's pretraining
+schedule. The weight gradients, the LM head's forward, attention's score and value products, softmax, norms, routing
+and the optimizer step are in the denominator only, so \(\kappa < 2/3\). Kimi K2's schedule gives 0.60 (0.603 at 4k,
+0.40 at 32k), DeepSeek-V3's 0.56, Llama 3 405B's 0.63 and Qwen3-235B's 0.57. The adversarial 0.5 is an attention-heavy
+shape with a fifth of its tokens at 32k; reported runs put at most about 5% of their tokens above their base context
+(Llama 3's 800B of 15.6T). A lower \(\kappa\) is
+the defender's conservative side: it lowers the thread bound and raises \(\nu\) and \(\mu\) (`tiers.py`). A cheater's
+own lower-\(\kappa\) recipe (longer contexts, more heads) buys gates that aren't the reference recipe's work: what they
+are worth enters through `m`.
 
 `--sweep` prints the bracket over a grid of `b_w` and `b_a`. `--efficiency` prices training recipes (BF16, FP8,
 4-bit, ternary, and extrapolated 2- and 1-bit) at the rates their matmuls read, each with its compute multiplier
@@ -203,8 +216,8 @@ All values below are from `parameters.json`; render the index for the findings b
 - **Activations set the floor.**
   - Production systems send 8-bit activations across parallel links. The one boundary test in training is stable only
     from about 4.4 bits (`b_a.activation/boundary-training`).
-  - Retrained bottlenecks cut the bits a token carries across a shard boundary by 2–4x, and one unreplicated preprint
-    claims 100x (`activation.boundary_bits/d7168`).
+  - Retrained bottlenecks cut the bits a token carries across a shard boundary by 2–4x. One preprint claims 100x, and
+    its matched-token replication loses 14–15% in loss at only 8x (`activation.boundary_bits/d7168`).
   - The sharding floor is about `w_cut / b_tok`: centrally 7e2, and 60 at the most aggressive claim.
 - **Tokens are the auditor's lever.**
   - Raw token ids carry about 17.3 bits. Arithmetic-coded against a committed base model they carry about 2.2
@@ -223,8 +236,8 @@ All values below are from `parameters.json`; render the index for the findings b
 
 `library.py` answers questions across training algorithms.
 
-- **The library holds 71 algorithms in 17 families.** 59 come from a scaling corpus of 91 sources.
-- **47 algorithms carry a measured `multiplier`:** a compute-equivalent gain over a dense AdamW Chinchilla-optimal
+- **The library holds 83 algorithms in 17 families.** 59 come from a scaling corpus of 91 sources.
+- **60 algorithms carry a measured `multiplier`:** a compute-equivalent gain over a dense AdamW Chinchilla-optimal
   reference, citing its findings, with the full `scaling` evidence beside it.
 - **Each algorithm states its `convention`.** `as-published` keeps the method's state at its stored precision
   (weights and optimizer moments). `attacker` assumes the cheapest rates at about the same quality. Queries default
@@ -281,7 +294,7 @@ Under `kimi-k2-1m-raw` (K = 2e7 bits, a 1M-token session at 32B active parameter
 
 | Row | Lower (proven) | Upper (construction) |
 | --- | --- | --- |
-| `pretrain-full` | 1.1e5 | 1.5e7 (shard) |
+| `pretrain-full` | 9.6e4 | 1.4e7 (shard) |
 | `rl-full-weights` | 1.4e5 | 9.2e6 (shard) |
 | `rl-rank1-lora-all-experts` | 4 | 6.3e4 (shard) |
 | `mezo-seed-finetune` | 1 | 2.4e3 (decode-shard) |
@@ -295,7 +308,7 @@ The widest brackets are the research targets:
 
 - **`rl-rank1-lora-all-experts`** (4 to 6.3e4) decides whether frontier RL escapes.
 - **The seed-based rows.** Their lower bound is 1, so their cost is whatever the best construction pays.
-- **`pretrain-full`**. The proven bound (1e5) and the construction (1.5e7) are 140x apart.
+- **`pretrain-full`**. The proven bound (9.6e4) and the construction (1.4e7) are 150x apart.
 
 ## What the committed parameters may hold
 

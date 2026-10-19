@@ -7,7 +7,7 @@
   "d_model": 7168,
   "entry_fee": 2048,
   "fanout": 40000.0,
-  "note": "entry_fee is the routed-expert width, the smallest inner dimension; fanout is the thread draft's MoE estimate of the updated weights one activation multiplies"
+  "note": "entry_fee is the routed-expert width (MLA's kv latent, 512, is a narrower inner dimension); fanout is the thread draft's MoE estimate of the updated weights one activation multiplies, which covers an MoE input value's 37,248 (router, shared expert and 8 routed experts) but not the LM head: one final hidden value multiplies all 163,840 vocabulary rows, so Threaded(d, 4e4) needs the LM head's forward products out of the counted multiplications"
  },
  {
   "id": "dense-4m",

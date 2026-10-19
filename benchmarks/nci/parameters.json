@@ -447,7 +447,7 @@
     "central": 14336,
     "high": 57344,
     "confidence": "low",
-    "merge": "High: production practice, d at 8 bits. Central: a bottleneck retrained to 0.5 d at 4 bits (a linear d/2 bottleneck costs SWARM 26-28% more steps; ESPACE projects to 0.25 d at +0.18 perplexity). Low: Subspace Networks' claimed 100x (0.01 d at 16 bits), one unreplicated preprint. A standard architecture at FP4 is 28672. An unmodified model's boundary activations are not low-rank.",
+    "merge": "High: production practice, d at 8 bits. Central: a bottleneck retrained to 0.5 d at 4 bits (a linear d/2 bottleneck costs SWARM 26-28% more steps; ESPACE projects to 0.25 d at +0.18 perplexity). Low: Subspace Networks' claimed 100x (0.01 d at 16 bits), one preprint whose matched-token replication loses 14-26% in loss at only 8x. A standard architecture at FP4 is 28672. An unmodified model's boundary activations are not low-rank.",
     "evidence": [
      "deepseekai-2024-deepseek-v3/3",
      "ryabinin-2023-swarm/2",

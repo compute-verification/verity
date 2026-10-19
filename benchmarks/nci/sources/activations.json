@@ -754,6 +754,16 @@
     "grade": "measured-small",
     "bears_on": "Negative replication: the same 8x rate that costs 1.4-2% with learned per-stage projectors costs about 14% with a fixed global subspace, so the method matters as much as the rate.",
     "from_review": "activations"
+   },
+   {
+    "id": "janson-2026-mapl/4",
+    "claim": "SSN's loss gap grows with scale in the replication: +8.4-8.6% at 150M (4x), +8.9-9.9% at 500M (6x) and +13.9-15.1% at 1B (8x), against uncompressed baselines of 3.13, 2.84 and 2.68 on DCLM at 20 tokens per parameter (Table 1).",
+    "quote": "At all scales the SSN performs much worse and looses a maximum of nearly 14% performance compared to uncompressed baseline.",
+    "location": "Section 4.2; Table 1",
+    "quantities": [],
+    "grade": "measured-small",
+    "bears_on": "The uncompressed rows are a compute-optimal reference curve, so SSN's compute at equal loss reads off them directly: about 0.1-0.125 at 500M and 0.034-0.044 at 1B (derived).",
+    "from_review": "activations"
    }
   ]
  },
@@ -1490,6 +1500,26 @@
     "quantities": [],
     "grade": "measured-small",
     "bears_on": "100x requires the architectural change; post-hoc codecs on standard models do not reach it.",
+    "from_review": "activations"
+   },
+   {
+    "id": "ramasinghe-2025-protocolmodels/9",
+    "claim": "The one compute-optimal held-out comparison is a 640M model on about 12B tokens, where the compressed model's validation perplexity is marginally below the centralized baseline's (C4 12.53 vs 12.61, BookCorpus 12.67 vs 12.79, Table 2).",
+    "quote": "Consequently, we trained a 640M-parameter model for around 12 billion tokens, aligning closely with the compute-optimal recommendation.",
+    "location": "Section 8.4; Table 2",
+    "quantities": [],
+    "grade": "measured-small",
+    "bears_on": "Supports m_A about 1 at 640M only; it is the paper's sole compute-optimal held-out result.",
+    "from_review": "activations"
+   },
+   {
+    "id": "ramasinghe-2025-protocolmodels/10",
+    "claim": "C4 results, which include the 8B run and the ablations, are training loss only.",
+    "quote": "for C4, due to computational constraints, we report training loss only.",
+    "location": "Section 8.1",
+    "quantities": [],
+    "grade": "measured-at-scale",
+    "bears_on": "The 8B 'convergence on par' is training loss against wall-clock time, so it does not measure compute at equal held-out loss.",
     "from_review": "activations"
    }
   ]
