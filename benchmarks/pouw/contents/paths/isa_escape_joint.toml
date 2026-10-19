@@ -1,0 +1,4 @@
+order = 336
+path = "`theory/isa_escape_joint.py`"
+runs_on = "CPU"
+what = "Lemma J, the slot-step identity, on sm_120, H200 (sm_90a) and B200 (sm_100a): every tensor form's full-depth instruction (PTX ISA 9.4's mma / mma.sp, wgmma and tcgen05.mma shapes) takes exactly the credited instruction's time a slot at the sheet's rate (FP64 slower), each shallower shape graded by premise (M) (measured on sm_120 for four forms, unmeasured elsewhere; false on sm_89), and FPX's 19/9/21 open joint pairs and the rank floor's FP-kind closures given TIE / TIE-ON-M verdicts; mutations of a rate, a shape and (M) are caught; stdlib + exact_kit, seconds"
