@@ -19,6 +19,9 @@
 // `roles`: sm90_wgmma.cu's wg_spec (the JP*90 rows' block-timed points) with each role's own time (RT-BLACKWELL-16's
 // test on the H200): every warp records the cycle its fixed loop ends, and each MMA warp the iterations it had done when
 // the first lane warp ended (one LDS an iteration), so the joint phase's tensor and lane rates are both exact.
+//
+// `lirate`: the fold with the lane alone on every SM, each checkpoint placement in one loop, its cycles a unit a
+// warp-slot (whether a REDG costs one issue slot and nothing else, as RT2-HOPPER-1's REDG routes take it).
 #define main sm90_wgmma_main
 #include "../dc/probes/sm90_wgmma.cu"
 #undef main
@@ -374,14 +377,119 @@ static int run_all_roles(int iters, int reps) {
   return bad;
 }
 
+// ---- lirate --------------------------------------------------------------------------------------------------------
+
+// The fold's cost on the chip with the lane alone, every checkpoint in the same loop: W warps a block, one block a SM
+// (W/4 a SMSP), fold 4 units an iteration (64 LOP3 + 64 IMAD a unit on the Lane's 8 chains, li_fold's ops) and
+// checkpoint each unit into a ring of 1024 words a warp. CK_NONE has none (the chains' floor); CK_SEG is LI-CP-W's (4
+// LOP3, REDUX, the uniform-to-vector move, lane 0's STG); CK_RED, CK_RED2 and CK_RED8 are li_exact's CP_RED, CP_RED2 and
+// CP_RED8 (4 LOP3 + 1 REDG, 3 + 2, 0 + 8), all 32 lanes into the warp's one word (zm 0 at run time). A unit a warp-slot
+// is the block's cycles over iters x 4 units x W/4 warps a SMSP: on a loop bound by issue or the ALU pipe (LOP3 at half
+// rate), max(issue, 2 x LOP3) a unit. A REDG that costs more than its issue slot (the L2's atomic unit taking a warp's 32
+// lanes into one word) shows as CK_RED8 above that.
+enum { CK_NONE, CK_SEG, CK_RED, CK_RED2, CK_RED8 };
+__device__ __forceinline__ uint32_t lop3x(uint32_t a, uint32_t b, uint32_t c) {
+  uint32_t r;
+  asm volatile("lop3.b32 %0,%1,%2,%3,0x96;" : "=r"(r) : "r"(a), "r"(b), "r"(c));
+  return r;
+}
+template <int K>
+DC_DEV void li_ck(const uint32_t (&r)[8], uint32_t* w, int lane) {
+  if constexpr (K == CK_SEG || K == CK_RED) {
+    uint32_t x = lop3x(lop3x(lop3x(r[0], r[1], r[2]), r[3], r[4]), r[5], r[6]);
+    asm volatile("xor.b32 %0,%0,%1;" : "+r"(x) : "r"(r[7]));
+    if constexpr (K == CK_SEG) {
+      asm volatile("redux.sync.xor.b32 %0,%0,0xffffffff;" : "+r"(x));
+      if (lane == 0) asm volatile("st.global.b32 [%0], %1;" ::"l"(w), "r"(x) : "memory");
+    } else {
+      red_xor(w, x);
+    }
+  }
+  if constexpr (K == CK_RED2) {
+    red_xor(w, lop3x(lop3x(lop3x(r[0], r[1], r[2]), r[3], r[4]), r[5], r[6]));
+    red_xor(w, r[7]);
+  }
+  if constexpr (K == CK_RED8)
+#pragma unroll
+    for (int c = 0; c < 8; c++) red_xor(w, r[c]);
+}
+template <int K, int W>
+__global__ void __launch_bounds__(W * 32, 1) lirate(OpArgs a, uint32_t* cp, uint32_t zm) {
+  Lane l(threadIdx.x);
+  const int lane = threadIdx.x & 31;
+  uint32_t* const w = cp + ((size_t)blockIdx.x * W + (threadIdx.x >> 5)) * 1024 + (lane & zm);
+  OP_BEGIN
+  OP_LOOP(it) {
+    uint32_t* const wi = w + ((it & 255) << 2);
+#pragma unroll
+    for (int u = 0; u < 4; u++) {
+#pragma unroll
+      for (int c = 0; c < 64; c++) {
+        l.op<L_LOP3>(c);
+        l.op<L_IMAD>(c);
+      }
+      li_ck<K>(l.r, wi + u, lane);
+    }
+  }
+  OP_END
+  OP_SINK(l.fold() ^ threadIdx.x)
+}
+
+template <int K, int W>
+static int run_lirate(const char* name, int iters, int reps) {
+  int dev = 0, sms = 0;
+  cudaDeviceGetAttribute(&sms, cudaDevAttrMultiProcessorCount, dev);
+  OpArgs a{};
+  cudaMalloc(&a.rec, sms * sizeof(OpClk));
+  cudaMalloc(&a.sink, (size_t)sms * W * 32 * sizeof(unsigned));
+  a.iters = iters;
+  uint32_t* cp;
+  cudaMalloc(&cp, (size_t)sms * W * 1024 * 4);
+  cudaMemset(cp, 0, (size_t)sms * W * 1024 * 4);
+  std::vector<OpClk> rec(sms);
+  int bad = 0;
+  for (int r = 0; r < reps; r++) {
+    lirate<K, W><<<sms, W * 32>>>(a, cp, 0u);
+    cudaError_t e = cudaDeviceSynchronize();
+    cudaMemcpy(rec.data(), a.rec, sms * sizeof(OpClk), cudaMemcpyDeviceToHost);
+    std::vector<double> u(sms);
+    for (int b = 0; b < sms; b++) u[b] = (double)rec[b].cyc / iters / 4 / (W / 4);
+    std::sort(u.begin(), u.end());
+    printf("{\"probe\": \"lirate\", \"name\": \"%s\", \"warps\": %d, \"rep\": %d, \"iters\": %d, \"blocks\": %d, "
+           "\"cyc_unit_slot_min\": %.3f, \"cyc_unit_slot_med\": %.3f, \"cyc_unit_slot_max\": %.3f, \"cuda\": \"%s\"}\n",
+           name, W, r, iters, sms, u[0], u[sms / 2], u[sms - 1], cudaGetErrorString(e));
+    fflush(stdout);
+    bad += e != cudaSuccess;
+  }
+  cudaFree(cp);
+  cudaFree(a.rec);
+  cudaFree(a.sink);
+  return bad;
+}
+
+template <int W>
+static int run_lirate_w(int iters, int reps) {
+  int bad = 0;
+  bad += run_lirate<CK_NONE, W>("ck_none", iters, reps);
+  bad += run_lirate<CK_SEG, W>("ck_seg", iters, reps);
+  bad += run_lirate<CK_RED, W>("ck_red", iters, reps);
+  bad += run_lirate<CK_RED2, W>("ck_red2", iters, reps);
+  bad += run_lirate<CK_RED8, W>("ck_red8", iters, reps);
+  return bad;
+}
+
 int main(int argc, char** argv) {
   if (argc >= 2 && !strcmp(argv[1], "exact")) return run_exact(argc >= 3 ? atoi(argv[2]) : 64) ? 1 : 0;
+  if (argc >= 2 && !strcmp(argv[1], "lirate")) {
+    const int iters = argc >= 3 ? atoi(argv[2]) : 20000, reps = argc >= 4 ? atoi(argv[3]) : 5;
+    return run_lirate_w<8>(iters, reps) + run_lirate_w<16>(iters, reps) ? 1 : 0;
+  }
   if (argc >= 2 && !strcmp(argv[1], "roles"))
     return run_all_roles(argc >= 3 ? atoi(argv[2]) : 4096, argc >= 4 ? atoi(argv[3]) : 3) ? 1 : 0;
   if (argc >= 5 && !strcmp(argv[1], "clock")) return run_clock(atoi(argv[2]), atoi(argv[3]), atoi(argv[4])) ? 1 : 0;
   // sm90_wgmma.cu's own probes by name (its op_main: --time NAME... [--reps R]), e.g. wgspec_lop3_r256 beside wgU_lop3
   if (argc >= 2 && !strcmp(argv[1], "probe")) return sm90_wgmma_main(argc - 1, argv + 1);
   fprintf(stderr, "usage: sm90_clock exact [U] | clock LOAD(0 wgmma, 1 wgli, 2 wgli_fill, 3 li) ITERS LAUNCHES | roles "
-                  "[ITERS [REPS]] | probe --time NAME...\n");
+                  "[ITERS [REPS]] | lirate [ITERS [REPS]] | probe --time NAME...\n");
   return 2;
 }
