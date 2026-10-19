@@ -19,7 +19,7 @@ this file. `Accounting.Guarantees.TS.Sm90SheetHeadline` reads it.
   counted in ALU, which `b_T = 0` prices at nothing (the census has no load class); A6's floors `q = q_T = ½`, `b_T =
   0`; 4096 committed words a unit of honest work (an IGMMA_S8_N256 at L = 32).
 * `flat`: the floor program ♭ a unit: the MMA and the design's operand floor (word production), the fold, no filler, and
-  ε_skip's skippable work at FFMA's price, 0.684891% of ♭'s bound (`eps_budget.design_skip` on DS-90).
+  ε_skip's skippable work at FFMA's price, 0.845817% of ♭'s bound (`eps_budget.design_skip` on DS-90).
 * `lamStar`: π*, the certificate minimising the bound over this menu (DS_issue 1.000000).
 * `checks`: the checks a window, one a round (Theorem S's S).
 -/
@@ -123,7 +123,7 @@ def flatWords : Sparse := [(14, 1, 1)]
 def flatFold : Sparse := [(0, 68, 1), (20, 64, 1), (26, 3, 1)]
 
 /-- ♭'s skippable work a unit, at FFMA's price. -/
-def flatSkip : Sparse := [(3, 29107885656, 31035971429)]
+def flatSkip : Sparse := [(3, 1150310631352, 991541833593)]
 
 /-- The floor program ♭, labelled. -/
 noncomputable def flat : Labelled (Fin 28) := labelled 28 flatWords flatFold flatFill flatSkip

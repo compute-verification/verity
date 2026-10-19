@@ -13,3 +13,11 @@ def _merkle_roots() -> list[Any]:
     from verity.ml.commitments.gates.frame_v3 import read
 
     return [read(1, "hm96-sha512/row/v2")]
+
+
+def _merkle_read_at_roots() -> list[Any]:
+    """The read at a rank, a four-byte position and a depth (`FrameV3ReadAt`), at one level over ``hm96-sha512/row/v2``
+    leaves: its leaf laid out at every position length, one node and the pick at depth 0 or 1."""
+    from verity.ml.commitments.gates.frame_v3 import read_at
+
+    return [read_at(1, 4, "hm96-sha512/row/v2")]
