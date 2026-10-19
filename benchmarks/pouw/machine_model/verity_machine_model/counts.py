@@ -23,7 +23,7 @@ from pathlib import Path
 
 import numpy as np
 
-from verity_machine_model.eps import MMA, Machine, binding
+from verity_machine_model.eps import MMA, Machine, binding, honest
 from verity_machine_model.model import DATA
 
 TERMS = ("stage", "tile", "cross", "launch")
@@ -60,6 +60,7 @@ class Counts:
     bound_tolerance: float                           # the model bound at n against at ncu's counts, relative
     variants: dict[str, dict[str, dict[str, float]]]  # variant -> term -> class -> coefficient
     obs: tuple[Obs, ...]
+    form: str = MMA                                  # the census kind its MMAs are priced as (its honest profile's)
 
     def variant(self, k: int) -> str:
         return "k3" if k > self.k3_above else "k2"
@@ -84,9 +85,13 @@ class Counts:
         c = self.n(m, n, k)
         return {k_: v / c[MMA] for k_, v in c.items()}
 
+    def priced(self, per: dict[str, float]) -> dict[str, float]:
+        """Counts by class with the MMAs under their form's class, as the ε LP prices them."""
+        return {self.form if c == MMA else c: v for c, v in per.items()}
+
     def bound(self, pi: Machine, m: int, n: int, k: int) -> tuple[float, tuple[str, ...]]:
         """The model's time for the kernel at m x n x k, SMSP-cycles a MMA, and its binding rows."""
-        load = pi.load(self.per_mma(m, n, k))
+        load = pi.load(self.priced(self.per_mma(m, n, k)))
         t = max(load.values())
         return t, binding(load, t)
 
@@ -107,7 +112,7 @@ class Counts:
         bad = []
         for o in self.obs:
             want, _ = self.bound(pi, *o.shape)
-            load = pi.load({c: v / o.counts[MMA] for c, v in o.counts.items()})
+            load = pi.load(self.priced({c: v / o.counts[MMA] for c, v in o.counts.items()}))
             got = max(load.values())
             if abs(want - got) > self.bound_tolerance * got:
                 bad.append(f"{o.run} {'x'.join(map(str, o.shape))}: bound at n {want:.4f}, at ncu's counts {got:.4f}")
@@ -149,7 +154,7 @@ def load(name: str, data: Path = DATA) -> Counts:
                   k3_above=t["k3_above"], shapes=tuple(t["shapes"]), tolerance=dict(t["tolerance"]),
                   exact=tuple(t["exact"]), bound_tolerance=t["bound_tolerance"],
                   variants={v: {term: dict(t["variant"][v].get(term, {})) for term in TERMS} for v in t["variant"]},
-                  obs=obs)
+                  obs=obs, form=honest(t["name"], data).form if (data / "honest" / f"{t['name']}.toml").is_file() else MMA)
 
 
 def names(data: Path = DATA) -> list[str]:
