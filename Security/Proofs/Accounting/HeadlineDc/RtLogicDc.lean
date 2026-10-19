@@ -337,6 +337,52 @@ theorem not_premises_noFill (Ω : Type) [Fintype Ω] [Nonempty Ω]
   · rw [h0]
     norm_num
 
+/-! ### RT-LOGIC-13: the H200 on DC-90-ri, where mma.sync's s8 form is off the menu -/
+
+/-- DC-90-ri's row `r` as rationals, by class index. -/
+def dcCoef (r i : ℕ) : ℚ := Sparse.coeff (Sm90Measured.dc90ri.getD r []) i
+
+def dcRow (r : Fin 15) (i : ℕ) : ℚ := dcCoef r.val i
+
+def flatAllDc : Sparse := Sm90.flatWords ++ Sm90.flatFold ++ Sm90.flatFill ++ Sm90Measured.flatSkip
+
+/-- ♭'s bound on DC-90-ri, on JI90_0 (row 5). -/
+def BqDc : ℚ := dot (dcCoef 5) 28 flatAllDc
+
+theorem dc_max : ∀ i < 15, dot (dcCoef i) 28 flatAllDc ≤ BqDc := by decide +kernel
+
+theorem dc_hG : ∀ r k, Sm90Measured.model.G.a r k = (dcRow r k.val : ℝ) := fun _ _ => rfl
+
+theorem dc_bnd : Sm90Measured.model.bnd Sm90Measured.flat = (BqDc : ℝ) := by
+  unfold Model.bnd
+  rw [show Sm90Measured.flat.n = Sparse.counts flatAllDc from
+    labelled_n 28 Sm90.flatWords Sm90.flatFold Sm90.flatFill Sm90Measured.flatSkip]
+  exact bound_eq _ dcRow dc_hG flatAllDc 5 fun r => dc_max r.val r.isLt
+
+/-- ♭ with `817/1000` of its words written by mma.sync m16n8k32 s8 (`IMMA16832_S8`, 128 words an instruction, the
+s32 words honest's wgmma writes): `183/1000` of honest's IGMMA a unit and `3268/125` IMMA16832, with ♭'s fold, filler
+and skippable work. -/
+def immaAll : Sparse :=
+  [(14, 183, 1000), (22, 3268, 125)] ++ Sm90.flatFold ++ Sm90.flatFill ++ Sm90Measured.flatSkip
+
+theorem imma_rows : ∀ i < 15, dot (dcCoef i) 28 immaAll ≤ 875 / 1000 * BqDc := by decide +kernel
+
+/-- The model's floor for that program on DC-90-ri is at most `0.875·B_♭`. -/
+theorem imma_bound :
+    Sm90Measured.model.G.bound (Sparse.counts immaAll) ≤ 875 / 1000 * Sm90Measured.model.bnd Sm90Measured.flat := by
+  rw [dc_bnd]
+  unfold Machine.bound
+  refine ciSup_le fun r => ?_
+  rw [load_counts _ dcRow dc_hG]
+  have h' : ((dot (dcRow r) 28 immaAll : ℚ) : ℝ) ≤ ((875 / 1000 * BqDc : ℚ) : ℝ) :=
+    Rat.cast_le.mpr (imma_rows r.val r.isLt)
+  push_cast at h'
+  exact h'
+
+/-- `IMMA16832_S8` is a writer kind of DS-90's model at 128 words an instruction, and no writer kind of DC-90-ri's. -/
+theorem imma_off_menu : (22, 128) ∈ Sm90.d2s.writers ∧ 22 ∉ Sm90Measured.d2s.writers.map Prod.fst := by
+  decide +kernel
+
 end Accounting.SecurityProofs.TS.HeadlineDc.RtLogic
 
 #print axioms Accounting.SecurityProofs.TS.HeadlineDc.RtLogic.plain_bound
@@ -345,3 +391,5 @@ end Accounting.SecurityProofs.TS.HeadlineDc.RtLogic
 #print axioms Accounting.SecurityProofs.TS.HeadlineDc.RtLogic.noFill_bound
 #print axioms Accounting.SecurityProofs.TS.HeadlineDc.RtLogic.not_optPair_noFill
 #print axioms Accounting.SecurityProofs.TS.HeadlineDc.RtLogic.not_premises_noFill
+#print axioms Accounting.SecurityProofs.TS.HeadlineDc.RtLogic.imma_bound
+#print axioms Accounting.SecurityProofs.TS.HeadlineDc.RtLogic.imma_off_menu
