@@ -48,9 +48,10 @@ def test_the_fit_bound_is_the_window_bound_with_the_entry_fee_at_window_scale():
                for m in range(1, 9))
 
 
-def test_a_server_carrying_tokens_across_its_wipes_stays_within_the_bound():
-    """A server that holds half a window's reads as weights and half as tokens carried in its residual, a stage per
-    wipe period, does more work than counting token entries against intake alone allows, and no more than the bound."""
+def test_a_window_reading_carried_tokens_stays_within_the_bound():
+    """A one-period window that reads half its S as weights and half as tokens carried across the wipe that opens it
+    meets F1-F4, does more work than a count charging token entries to intake alone allows, and no more than the
+    bound."""
     p = F.params(6.0)
     N, w, b = 87.6e9, F.BOUNDARY["central"], p["b_w"]
     S = F.state(p, 6.0 * T.GB)
