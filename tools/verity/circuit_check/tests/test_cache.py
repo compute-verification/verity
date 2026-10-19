@@ -283,7 +283,7 @@ for _mod, m in SC.binding_modules():                            # each sidecar's
 TG.load_registries = lambda: None
 TG.suite = lambda: dict(sorted(suite.items()))
 TG.templates = lambda: []
-TG.call_families = lambda: set()
+TG.call_families = lambda found=None: set()
 CK.check_definition = check.check_definition
 rep = cli.run([], CK.Options(), everything=True, log=None, cache=root / "cache")
 hits = sorted(t["target"] for t in rep["targets"] if "cache" in t)

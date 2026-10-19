@@ -92,7 +92,7 @@ def _tasks(specs: list[str], opts: CK.Options, everything: bool, as_call: bool |
     """The targets' checks in target order (deterministic: a worker rebuilds the same list and runs entries by index).  Traced
     (`cache.tracing`), each check gets a memo of its own, so its result never rests on what an earlier target's check computed,
     and the pins it looks up are recorded (`cache.recorded_pins`); a suite Definition's ``as_call`` is resolved here (the catalog's
-    `targets.call_families`), so it is in the target's key rather than a read of its check."""
+    `targets.call_families`, of this suite), so it is in the target's key rather than a read of its check."""
     from verity.ml.circuits.evaluation.reference import resolve
 
     TG.load_registries()
@@ -102,8 +102,10 @@ def _tasks(specs: list[str], opts: CK.Options, everything: bool, as_call: bool |
     pins = CC.recorded_pins(CK.load_pins()) if fresh else CK.load_pins()
     tasks: list[tuple] = []
     if everything:
-        for fid, fn in TG.suite().items():
-            call = TG.family(resolve(fn)) in TG.call_families()
+        found = TG.suite()
+        calls = TG.call_families(found)
+        for fid, fn in found.items():
+            call = TG.family(resolve(fn)) in calls
             tasks.append(("definition", fid, lambda fn=fn, call=call: CK.check_definition(fn, opts, memo=memo(), pins=pins, as_call=call),
                           {"as_call": call, "units": sorted(TG.BINDINGS.get(fid, ())), "roots": [fn]}))
         for label, sub, sts in TG.templates():

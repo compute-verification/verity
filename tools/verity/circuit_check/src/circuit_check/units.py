@@ -19,9 +19,11 @@ what `cli._tasks` would build: `targets.select` over what the roots reach in `ta
 each target's units (`targets.BINDINGS`), whether it is a Call (`targets.call_families`: the word Call families, and the
 Boolean version of each suite Definition of one, made from its binding where no built binding holds it, `_materialize`) and
 its key.  A target that misses is made from a binding that reaches it, along the path its record lists, and its descriptor
-computed again: one that differs from its record's, two records that differ on one Definition, or a registry that grew while
-the bindings ran, is `Stale`, and the run builds the whole catalog.  A full build stores every binding's record only when
-the task list derived from those records is the one it built (`recorded`).
+computed again: one that differs from its record's, or two records that differ on one Definition, is `Stale`, and the run
+builds the whole catalog.  What a body build registers (a constant's primitive, a lifted Definition) is never a root: the
+catalog's registered roots are taken before any binding runs, here and in `targets.catalog`, and `cli._tasks` reads the Calls
+off that one suite.  A full build stores every binding's record only when the task list derived from those records is the one
+it built (`cli._record_units`).
 
 Not covered, beyond what `circuit_check.cache` leaves out: a body whose structure depends on module state a binding that makes
 roots sets (a binding's own state is in its reads; one that makes no root is held by every record), when no other record
@@ -336,7 +338,6 @@ def plan(cache: Path, repo: Path, log: Callable[[str], None] | None = None) -> P
     if not CC._dir(cache, first).is_dir():
         return None
     registered = TG._registered()
-    ids0 = [fn.id for fn in registered]
     entries = [Entry(REGISTERED, "registered", "", first, registered)]
     TG.ROOT_ERRORS.clear()
     seen: Counter = Counter()
@@ -377,8 +378,6 @@ def plan(cache: Path, repo: Path, log: Callable[[str], None] | None = None) -> P
                 objects.setdefault(fid, fn)
     d = derive(entries)
     calls = call_families(entries, d, objects)
-    if [fn.id for fn in TG._registered()] != ids0:
-        raise Stale("the registry grew while the bindings ran")
     if log:
         log(f"circuit-check: catalog from records: {sum(e.reused for e in entries)} of {len(entries)} bindings reused, "
             f"{len(objects)} Definitions built")

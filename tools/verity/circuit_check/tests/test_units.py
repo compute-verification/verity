@@ -40,11 +40,11 @@ def bindings():
 
 
 TG.load_registries = lambda: None
-TG._registered = lambda: []
+TG._registered = getattr(catalog, "registered", lambda: [])
 TG.catalog_units = bindings
 TG.pouw_bindings = lambda: []
 TG.templates = lambda: []
-TG.call_families = lambda: set()
+TG.word_call_families = lambda: set()
 TG.row_families = lambda: set()
 TG.boolean_call_candidates = lambda words: set()
 CK.check_definition = check.check_definition
@@ -120,6 +120,51 @@ def test_a_missing_or_unreadable_record_rebuilds_its_binding(tmp_path):
     assert sorted(out["stats"]["units"]["rebuilt"]) == ["_sized_roots", "_xor_roots"]
     assert out["stats"]["units"]["stored"] == 2 and out["hits"] == sorted(out["values"])
     assert len(_records(root, ("_sized_roots",))) == 1
+
+
+#: SynLater, whose body build registers the primitive it calls (as a body on the real tree registers its constants' primitives),
+#: its binding, and the registered roots the catalog starts from: that primitive, once something registered it
+LATE = """
+from verity.ml.circuits import composite, primitive
+
+from syn.prims import V
+
+
+@composite("SynLater", 1, [], lambda S: ((("a", V), ("b", V)), V))
+def SynLater(B, S, a, b):
+    @primitive("SynLate", 1, [("a", V), ("b", V)], V)
+    def SynLate(a, b):
+        return (a - b) & 0xFFFF
+    return B.call(SynLate, a, b)
+"""
+LATE_BINDING = """def late():
+    from syn import late
+    return [bind(late.SynLater)]
+
+
+def registered():
+    from verity.ml.circuits.defs import REGISTRY
+    return [d for d in REGISTRY.defs.values() if d.id == "SynLate_v1"]
+
+
+"""
+
+
+def test_what_a_body_build_registers_leaves_every_record_counting(tmp_path):
+    """SynLater's body build registers SynLate after the catalog took its registered roots: the full build reads its Calls off
+    the suite it built (a second catalog would start from SynLate), so it stores every record, and an edit of SynLate rebuilds
+    only SynLater's binding, whose build registers SynLate again, and gives the verdicts a full build gives."""
+    root = _tree(tmp_path / "t")
+    (root / "syn/late.py").write_text(LATE.lstrip("\n"))
+    _edit(root, "syn/catalog.py", "BINDINGS = [", LATE_BINDING + "BINDINGS = [")
+    _bindings(root, '(("_late_roots",), late)')
+    first = _run(root)
+    assert first["stats"]["units"] == {"stored": 4}
+    assert {"SynLate_v1", "SynLater_v1"} <= set(first["values"])
+    _edit(root, "syn/late.py", "(a - b)", "(b - a)")
+    out = _run(root)
+    assert out["stats"]["units"]["rebuilt"] == ["_late_roots"] and out["stats"]["units"]["reused"] == 3, out["stats"]["units"]
+    assert out["values"] == _fresh(root)["values"] and out["values"]["SynLate_v1"] == [0x0105 - 3]
 
 
 def test_a_binding_that_makes_no_root_is_held_by_every_record(tmp_path):

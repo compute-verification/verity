@@ -567,15 +567,16 @@ def word_call_families() -> set[str]:
     return _SHORT["words"]
 
 
-def call_families() -> set[str]:
+def call_families(found: dict[str, Any] | None = None) -> set[str]:
     """The Definition families a served Program calls, where the partition invariant applies: the word Call families
     (`word_call_families`: the replay's row families, every frontend vocabulary kind, every template's Definition), and the
     Boolean version of each of those (`boolean_call_families`: the Program on bits calls them in their place).  Any other
-    Definition's gates are partitioned inside the Call that contains them.  It builds the whole catalog; `is_call` asks whether
-    one family is among them, mostly without."""
+    Definition's gates are partitioned inside the Call that contains them.  It builds the whole catalog, or takes ``found``, a
+    `suite` built already (`cli._tasks`'s: a later one would also hold what building its bodies registered); `is_call` asks
+    whether one family is among them, mostly without."""
     if not _CALLS:
         words = word_call_families()
-        _CALLS.update(words | boolean_call_families(set(words)))
+        _CALLS.update(words | boolean_call_families(set(words), found))
     return _CALLS
 
 
@@ -688,13 +689,14 @@ def boolean_links() -> tuple[dict[str, set[str]], dict[str, set[str]]]:
             {k: {f"{d.name}_v{d.version}" for d in ds} for k, ds in by_name.items()})
 
 
-def boolean_call_families(word_calls: set[str]) -> set[str]:
+def boolean_call_families(word_calls: set[str], found: dict[str, Any] | None = None) -> set[str]:
     """Sigma's image of the word Call families ``word_calls``: the family of `verity_vllm.program.boolean.boolean_version` (the
-    switch's table of `word=` links) of each catalog specialization of a word Call family that has one."""
+    switch's table of `word=` links) of each catalog specialization (of ``found``, a `suite`, given) of a word Call family that
+    has one."""
     from verity.ml.circuits.evaluation import ScalarReference
     from verity.ml.circuits import boolean as BL
     out: set[str] = set()
-    for fn in suite().values():
+    for fn in (suite() if found is None else found).values():
         if family(fn) not in word_calls or isinstance(fn, ScalarReference) or BL.is_boolean(fn):
             continue
         if (f := boolean_family(fn)) is not None:
