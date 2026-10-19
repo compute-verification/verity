@@ -1240,8 +1240,9 @@ PREFLIGHT_BUDGET_S = 60.0
 PREFLIGHT_JOBS = 2
 #: below this share of memory available, no suite is collected, so a mark never OOMs the VM's other agents (infra's hook threshold)
 PREFLIGHT_MIN_FREE = 0.25
-#: the temporary worktrees' prefix, `<tmp>/research-preflight-<pid>-*`: one whose process is gone is swept (a kill skips `finally`)
-PREFLIGHT_PREFIX = "research-preflight-"
+#: the temporary worktrees' prefix (`merged_worktree`), `<tmp>/research-merged-<pid>-*`: one whose process is gone is swept (a kill
+#: skips `finally`)
+MERGED_PREFIX = "research-merged-"
 #: prints the paths of the suites `suites.py`'s `touched` selects for the change from commit argv[1] to tree argv[2], as JSON
 _TOUCHED = ("import json, sys; sys.path.insert(0, 'tools/verity/check'); import suites as S; "
             "print(json.dumps([s.path for s in S.touched(S.discover(), S.members(), sys.argv[1], sys.argv[2], S.locked())]))")
@@ -1258,17 +1259,185 @@ def free_memory() -> float | None:
 _SUMMARY_RE = re.compile(r"^(?:FAILED|ERROR) (.+?)(?: - (.*))?$", re.M)
 _LOCK_STALE = "needs to be updated"
 
+#: where a touched-suites run on a node writes its report and logs, under its run dir (`quick_tier`'s `out/`): drive reads them
+TOUCHED_REPORT, TOUCHED_LOGS = "out/suites.json", "out/logs"
+#: drive's touched-suites run (`RemoteSuites`): queued with `research run --on auto` onto vy-nebius-2's Verity share, outside the
+#: check slots (18 Oct: in a priority check slot through slot.py, those runs waited 21-93 min for a 560 GB slot and ran 27-48 min,
+#: competing with the trains for six slots); 16 CPUs, 160 GB (suites.py gives a parallel suite a worker per 9 GB of the cgroup's
+#: memory, so 64 GB left one at most 7 workers of the 16), 120 min (the slowest touched run took 48 min in a slot), `--jobs 16`
+TOUCHED_ON, TOUCHED_CPUS, TOUCHED_MEM_GB, TOUCHED_MAX_MIN = "auto", 16, 160, 120
+#: what `research run` prints of a run it launched
+LAUNCHED_RE = re.compile(r"\brun (r20\d{6}-\d{6}-[0-9a-f]{4}) launched\b")
+
+
+@dataclass
+class Touched:
+    """What `touched_suites` gave.  ``failed``: each failed suite in `suites.py --json`'s shape (`quick_tier.ROW_KEYS`, status
+    failed, with each failing test's summary line under `summary`), as drive reads a remote run's from its `TOUCHED_REPORT` once it
+    ends; ``suites``: those that ran here; ``ids``: the runs launched; ``notes``: what kept a suite or a launch from running;
+    ``tail``: the launch's output."""
+    suites: list[str] = field(default_factory=list)
+    failed: list[dict] = field(default_factory=list)
+    ids: list[str] = field(default_factory=list)
+    notes: list[str] = field(default_factory=list)
+    tail: str = ""
+
+
+def failed_row(suite: str, failures: dict[str, str]) -> dict:
+    """Suite ``suite``'s failures, {node id: its summary line}, as `suites.py --json` reports a failed suite."""
+    return {"name": suite, "suite": suite, "status": "failed", "failed_tests": list(failures), "log": None,
+            "summary": list(failures.values())}
+
+
+def pytest_failures(run: Callable[[list[str], Path], tuple[subprocess.CompletedProcess | None, str]], py: str, cwd: Path,
+                    args: list[str]) -> dict[str, str] | str:
+    """{node id: its summary line} of what failed in `pytest ARGS` in ``cwd`` (empty: passed), or why it didn't run."""
+    r, why = run([py, "-P", "-m", "pytest", "-q", "-p", "no:cacheprovider", *args], cwd)
+    if r is None:
+        return why
+    if r.returncode in (0, 5):                                   # 5: nothing collected
+        return {}
+    found = {m.group(1): m.group(0) for m in _SUMMARY_RE.finditer(r.stdout)}
+    return found or {f"exit {r.returncode}": f"pytest exited {r.returncode}: {(r.stdout + r.stderr).strip()[-300:]}"}
+
+
+@contextlib.contextmanager
+def merged_worktree(repo: Path, commit: str, root: Path | None = None):
+    """A detached worktree of ``repo`` at ``commit`` in a temporary directory under ``root`` (`MERGED_PREFIX`), removed with it
+    whatever happens; one a dead process left is swept first."""
+    root = Path(root or tempfile.gettempdir())
+    root.mkdir(parents=True, exist_ok=True)
+    for d in root.glob(f"{MERGED_PREFIX}*"):
+        pid = d.name.removeprefix(MERGED_PREFIX).split("-", 1)[0]
+        if pid.isdigit() and int(pid) != os.getpid() and not Path(f"/proc/{pid}").exists():
+            shutil.rmtree(d, ignore_errors=True)
+    _git(repo, "worktree", "prune", check=False)
+    tmp = Path(tempfile.mkdtemp(prefix=f"{MERGED_PREFIX}{os.getpid()}-", dir=root))
+    wt = tmp / "tree"
+    try:
+        _git(repo, "worktree", "add", "-q", "--detach", str(wt), commit)
+        yield wt
+    finally:
+        _git(repo, "worktree", "remove", "--force", str(wt), check=False)
+        shutil.rmtree(tmp, ignore_errors=True)
+        _git(repo, "worktree", "prune", check=False)
+
+
+@dataclass
+class LocalSuites:
+    """`touched_suites` here, as the preflight runs them: `pytest ARGS` (`--collect-only`) in each suite `suites.py`'s own `touched`
+    selects (run with the tree's ``python``; `PREFLIGHT_UNCOLLECTED` left out), or in ``suites`` alone when given, ``jobs`` at once,
+    each through ``run`` (the caller's budget); none while under `PREFLIGHT_MIN_FREE` of memory is available."""
+    python: str
+    run: Callable[[list[str], Path], tuple[subprocess.CompletedProcess | None, str]]
+    jobs: int = PREFLIGHT_JOBS
+    free: Callable[[], float | None] = free_memory
+    suites: list[str] | None = None
+    args: tuple[str, ...] = ("--collect-only",)
+
+    def __call__(self, wt: Path, commit: str, base: str) -> Touched:
+        out = Touched()
+        suites = self.suites
+        if suites is None:
+            r, why = self.run([self.python, "-P", "-c", _TOUCHED, base, _out(wt, "rev-parse", f"{commit}^{{tree}}")], wt)
+            try:
+                suites = json.loads(r.stdout.strip().splitlines()[-1]) if r is not None and r.returncode == 0 else None
+            except (ValueError, IndexError):
+                suites = None
+            if suites is None:
+                out.notes.append(f"no suite collected: `suites.py` couldn't say which the change touches "
+                                 f"({why or (r.stderr or r.stdout).strip()[-200:]})")
+                suites = []
+            out.notes += [f"{s} not collected: {PREFLIGHT_UNCOLLECTED[s]}" for s in suites if s in PREFLIGHT_UNCOLLECTED]
+            suites = [s for s in suites if s not in PREFLIGHT_UNCOLLECTED]
+        todo = [s for s in suites if (wt / s).is_dir()]
+        if todo and (f := self.free()) is not None and f < PREFLIGHT_MIN_FREE:
+            out.notes.append(f"no suite collected: {f:.0%} of memory available, under {PREFLIGHT_MIN_FREE:.0%}; the train's check "
+                             "still collects them")
+            todo = []
+        with concurrent.futures.ThreadPoolExecutor(max_workers=max(1, min(self.jobs, len(todo) or 1))) as pool:
+            for s, res in zip(todo, pool.map(lambda s: pytest_failures(self.run, self.python, wt / s, list(self.args)), todo)):
+                if isinstance(res, str):
+                    out.notes.append(f"collect:{s} not checked: {res}")
+                    continue
+                out.suites.append(s)
+                if res:
+                    out.failed.append(failed_row(s, res))
+        if self.suites is None:
+            out.notes.append(f"collected {len(todo)} suite(s)" + (f" ({', '.join(todo)})" if len(todo) <= 6 else ""))
+        return out
+
+
+def _launch_env(argv: list[str], cwd: Path, env: dict[str, str]) -> subprocess.CompletedProcess:
+    return subprocess.run(argv, cwd=cwd, capture_output=True, text=True, stdin=subprocess.DEVNULL,
+                          env={**os.environ, **env, "GIT_TERMINAL_PROMPT": "0"})
+
+
+@dataclass
+class RemoteSuites:
+    """`touched_suites` on a node: a `research run --on auto` (`TOUCHED_ON`, the `agent-test` queue on vy-nebius-2, outside the
+    check slots) of the worktree's tree (`--source`, `--cwd source`), sized ``cpus``, ``mem_gb`` and ``max_min``, whose job is
+    `quick_tier.py` (sent with the run: the head checked, the store required, the run's own environment kept from the tests)
+    running `suites.py --changed BASE --jobs CPUS`, slow tests included, with `--local` where that tree's suites.py has it (on 18
+    Oct the share's affinity was 48 CPUs around a 16-CPU job, and suites.py planned 43 processes); its report is
+    `TOUCHED_REPORT`, its logs `TOUCHED_LOGS`.  It returns once the run is launched, with the run id `research run` printed;
+    ``env`` is added to the launch's environment."""
+    on: str = TOUCHED_ON
+    cpus: int = TOUCHED_CPUS
+    mem_gb: float = TOUCHED_MEM_GB
+    max_min: int = TOUCHED_MAX_MIN
+    env: dict[str, str] = field(default_factory=dict)
+    launch: Callable[[list[str], Path, dict[str, str]], subprocess.CompletedProcess] = _launch_env
+
+    def argv(self, wt: Path, head: str, base: str) -> list[str]:
+        job = Path(quick_tier.__file__)
+        runner = wt / SUITES
+        local = ["--local"] if runner.is_file() and '"--local"' in runner.read_text() else []
+        args = ["--head", head, "--base", base, "--", *(x for x in QUICK_TIER if x != "--quick"), "--jobs", str(self.cpus), *local]
+        return [sys.executable, "-m", "research", "run", "--on", self.on, "--source", str(wt), "--cwd", "source",
+                "--cpus", str(self.cpus), "--mem-gb", f"{self.mem_gb:g}", "--max-min", str(self.max_min),
+                "--send", str(job), "--require-result", "--declared-output", "out/*",
+                "--", "sh", "-c", f'exec python3 "$RESEARCH_RUN_DIR/inputs/{job.name}" {shlex.join(args)}']
+
+    def __call__(self, wt: Path, commit: str, base: str) -> Touched:
+        head, base = _out(wt, "rev-parse", "HEAD"), _out(wt, "rev-parse", f"{base}^{{commit}}")
+        r = self.launch(self.argv(wt, head, base), wt, self.env)
+        said = f"{r.stdout}\n{r.stderr}"
+        ids = list(dict.fromkeys(LAUNCHED_RE.findall(said)))
+        out = Touched(ids=ids, tail=said.strip()[-600:])
+        if not ids:
+            out.notes.append(f"`research run --on {self.on}` launched no run (exit {r.returncode}): {said.strip()[-300:]}")
+        return out
+
+
+def touched_suites(repo: Path, commit: str, base: str, how: LocalSuites | RemoteSuites, *, wt: Path | None = None,
+                   root: Path | None = None) -> Touched:
+    """The suites the change from ``base`` to ``commit`` (a merged tree) touches, run at ``commit`` by ``how``: here, within the
+    caller's budget (`LocalSuites`: the preflight, a PR's head merged onto `next`), or as a run on a node (`RemoteSuites`: drive,
+    a train's commit against `main`).  In ``wt`` when given (checked out at ``commit``), else in a temporary worktree of ``repo``
+    at ``commit`` (`merged_worktree`), removed once ``how`` returns: a remote run has shipped its tree by then.  The failures
+    come back in `suites.py --json`'s shape: here in `Touched.failed`, from a node in the run's `TOUCHED_REPORT` once it ends.
+    A worktree that can't be made is a note, and nothing runs."""
+    if wt is not None:
+        return how(wt, commit, base)
+    try:
+        with merged_worktree(repo, commit, root) as tree:
+            return how(tree, commit, base)
+    except QueueError as e:
+        why = f"no worktree of {commit[:12]}: {e}"
+        return Touched(notes=[why], tail=why)
+
 
 class Preflight:
     """`ready`'s preflight, before the mark (and before the quick tier): refused, each refusal naming its fix, when the head
     (a) conflicts with `next` (`conflicting_files`, no worktree), naming the paths and the PRs on `next` that touched them;
     (b) merged onto `next`, fails `pins.py --stale`, a test of `PREFLIGHT_TEST_PATHS`, or `pytest --collect-only` in a suite whose inputs
-    the change touches (`suites.py`'s own `touched`, from `next` to the merged tree), or the merged tree's `uv sync --locked`
+    the change touches (`touched_suites` with `LocalSuites`, from `next` to the merged tree), or the merged tree's `uv sync --locked`
     finds its lock stale; or (c) contains another open PR's head that isn't admitted (no ready mark at that head, held, or no
     owner), naming each.  17 Oct's train breakers were each one of these (memory accounting's thread in #agent-coordination).
 
     `next` is fetched fresh; a PR already on it is merged onto the commit below its old head, as drive's next sync would rebuild
-    it.  The checks of (b) run in a temporary worktree of the caller's repository at the merge, with its own environment
+    it.  The checks of (b) run in a temporary worktree of the caller's repository at the merge (`merged_worktree`), with its own environment
     (`sync`; ``python`` stands in for its interpreter), under `budget_s` together, and the worktree is removed whatever
     happens.  A failure that `next` has too (a pin already stale there, a fixture this machine never fetched) isn't the PR's:
     each failed check runs again at `next` in the same worktree, within the same budget, and only what fails on the merge alone
@@ -1366,23 +1535,14 @@ class Preflight:
             return []
         tree = r.stdout.split()[0]
         commit = _out(self.repo, "commit-tree", tree, "-p", base, "-p", pr.head, "-m", f"preflight: #{pr.number} onto {base[:12]}")
-        self.root.mkdir(parents=True, exist_ok=True)
-        self._sweep()
-        tmp = Path(tempfile.mkdtemp(prefix=f"{PREFLIGHT_PREFIX}{os.getpid()}-", dir=self.root))
-        wt = tmp / "tree"
         deadline = self.clock() + self.budget_s
-        try:
-            _git(self.repo, "worktree", "add", "-q", "--detach", str(wt), commit)
+        with merged_worktree(self.repo, commit, self.root) as wt:
             failed = self._checks(wt, base, tree, None, notes, deadline)
             if not any(failed.values()):
                 return []
             _git(wt, "checkout", "-q", "--detach", "--force", base)
             _git(wt, "clean", "-qffdx", "-e", "/.venv")
             again = self._checks(wt, base, tree, {k for k, v in failed.items() if v}, [], deadline)
-        finally:
-            _git(self.repo, "worktree", "remove", "--force", str(wt), check=False)
-            shutil.rmtree(tmp, ignore_errors=True)
-            _git(self.repo, "worktree", "prune", check=False)
         out = []
         for name, fails in failed.items():
             if fails and name not in again:
@@ -1408,13 +1568,6 @@ class Preflight:
         return (f"`pytest --collect-only` in {where} fails on the merged tree: {shown}: a test reads what another queued PR "
                 f"changes or what only an unlanded PR adds; make it read what `main` and `next` hold, or wait for that PR")
 
-    def _sweep(self) -> None:
-        for d in self.root.glob(f"{PREFLIGHT_PREFIX}*"):
-            pid = d.name.removeprefix(PREFLIGHT_PREFIX).split("-", 1)[0]
-            if pid.isdigit() and int(pid) != os.getpid() and not Path(f"/proc/{pid}").exists():
-                shutil.rmtree(d, ignore_errors=True)
-        _git(self.repo, "worktree", "prune", check=False)
-
     def _run(self, argv: list[str], cwd: Path, deadline: float) -> tuple[subprocess.CompletedProcess | None, str]:
         """``argv`` in ``cwd`` with what's left of the budget, outside the caller's environment (`quick_tier.CALLER_ENV`,
         pytest's own variables); and why it didn't finish."""
@@ -1429,16 +1582,6 @@ class Preflight:
             return None, f"still running when the {self.budget_s:g} s budget ran out"
         except OSError as e:
             return None, f"{argv[0]} didn't start ({e})"
-
-    def _pytest(self, py: str, cwd: Path, args: list[str], deadline: float) -> dict[str, str] | str:
-        """{node id: its summary line} of what failed (empty: passed), or why it didn't run."""
-        r, why = self._run([py, "-P", "-m", "pytest", "-q", "-p", "no:cacheprovider", *args], cwd, deadline)
-        if r is None:
-            return why
-        if r.returncode in (0, 5):                                   # 5: nothing collected
-            return {}
-        found = {m.group(1): m.group(0) for m in _SUMMARY_RE.finditer(r.stdout)}
-        return found or {f"exit {r.returncode}": f"pytest exited {r.returncode}: {(r.stdout + r.stderr).strip()[-300:]}"}
 
     def _checks(self, wt: Path, base: str, tree: str, only: set[str] | None, notes: list[str],
                 deadline: float) -> dict[str, dict[str, str]]:
@@ -1469,35 +1612,16 @@ class Preflight:
                     notes.append(f"the merged tree's tests not run: `{' '.join(self.sync)}` failed ({text})")
                 return out
         py = self.python or str(wt / ".venv" / "bin" / "python")
+        run = lambda argv, cwd: self._run(argv, cwd, deadline)                         # noqa: E731
         for d, files in PREFLIGHT_TESTS:
             if want(f"tests:{d}") and (present := [f for f in files if (wt / d / f).is_file()]):
-                got(f"tests:{d}", self._pytest(py, wt / d, present, deadline))
-        if only is None:
-            r, why = self._run([py, "-P", "-c", _TOUCHED, base, tree], wt, deadline)
-            try:
-                suites = json.loads(r.stdout.strip().splitlines()[-1]) if r is not None and r.returncode == 0 else None
-            except (ValueError, IndexError):
-                suites = None
-            if suites is None:
-                notes.append(f"no suite collected: `suites.py` couldn't say which the change touches "
-                             f"({why or (r.stderr or r.stdout).strip()[-200:]})")
-                suites = []
-            for s in suites:
-                if s in PREFLIGHT_UNCOLLECTED:
-                    notes.append(f"{s} not collected: {PREFLIGHT_UNCOLLECTED[s]}")
-            suites = [s for s in suites if s not in PREFLIGHT_UNCOLLECTED]
-        else:
-            suites = [n.partition(":")[2] for n in only if n.startswith("collect:")]
-        todo = [s for s in suites if (wt / s).is_dir()]
-        if todo and (f := self.free()) is not None and f < PREFLIGHT_MIN_FREE:
-            notes.append(f"no suite collected: {f:.0%} of memory available, under {PREFLIGHT_MIN_FREE:.0%}; the train's check "
-                         "still collects them")
-            todo = []
-        with concurrent.futures.ThreadPoolExecutor(max_workers=max(1, min(self.jobs, len(todo) or 1))) as pool:
-            for s, res in zip(todo, pool.map(lambda s: self._pytest(py, wt / s, ["--collect-only"], deadline), todo)):
-                got(f"collect:{s}", res)
-        if only is None:
-            notes.append(f"collected {len(todo)} suite(s)" + (f" ({', '.join(todo)})" if len(todo) <= 6 else ""))
+                got(f"tests:{d}", pytest_failures(run, py, wt / d, present))
+        names = None if only is None else [n.partition(":")[2] for n in only if n.startswith("collect:")]
+        res = touched_suites(self.repo, tree, base, LocalSuites(py, run, self.jobs, self.free, names), wt=wt)
+        notes += res.notes
+        failed = {row["suite"]: dict(zip(row["failed_tests"], row["summary"])) for row in res.failed}
+        for s in res.suites:
+            out[f"collect:{s}"] = failed.get(s, {})
         return out
 
 
