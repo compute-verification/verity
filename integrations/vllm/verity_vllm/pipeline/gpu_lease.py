@@ -62,6 +62,7 @@ LEASED = ("CUDA_VISIBLE_DEVICES", "CUDA_DEVICE_ORDER", "GPU_LEASE_UUID")   # wha
 WEIGHTS_HASH = "VERITY_WEIGHTS_HASH"   # commit's --weights-hash; a leased Commit's default is device
 
 EMPTY_LOOKS, EMPTY_EVERY_S = 120, 0.5   # how long the holder outlives the Commit's exit at most, waiting for its context to go
+CLEAR_LOOKS, CLEAR_EVERY_S = 240, 5.0   # how long a new lease waits at most for another process to leave its GPUs
 
 # the holder: start marker, the lease's lock descriptors to the Commit (socket argv[2]), the leased devices on stdout, then wait for
 # the Commit to let go (EOF on stdin: its release, or its exit). A Commit's exit closes the lease's descriptors before the driver has
@@ -161,11 +162,24 @@ def _end_with(holder: subprocess.Popen) -> None:
         os.kill(os.getpid(), signal.SIGKILL)
 
 
-def acquire(tl: Any = None, environ: MutableMapping[str, str] | None = None) -> None:
+def _foreign(leased_uuids: list[str], wait: Callable[[float], Any], looks: int) -> tuple[int, list[str]]:
+    """Waits while nvidia-smi lists a compute process on the newly leased GPUs: another process's, since this one has no context yet
+    (a cancelled Commit's engine workers outlive its lease, and its next waiter's engine found the GPUs full). Returns the looks that
+    found one and the GPUs still occupied after ``looks`` more; none when nvidia-smi can't say, and the engine's own check stands."""
+    k, on = 0, on_gpus(leased_uuids)
+    while on and k < looks:
+        k += 1
+        wait(CLEAR_EVERY_S)
+        on = on_gpus(leased_uuids)
+    return k, on or []
+
+
+def acquire(tl: Any = None, environ: MutableMapping[str, str] | None = None, wait: Callable[[float], Any] = time.sleep) -> None:
     """Take the leased Commit's GPUs now (``VERITY_LEASE_STARTED`` set in ``environ``, default the CLI's; else nothing): wait for the
-    lease, then see only its devices. Nothing before this call may initialise CUDA (the process sees no device until it returns). The
-    lease's locks are this process's from here to its ``release`` or its exit; the holder ending first (the lease tool's --max-min)
-    kills this process. A process that holds its lease already (a grouped Commit's later rows, `commit_group`) keeps it."""
+    lease and for any other process to leave its GPUs (`_foreign`), then see only its devices. Nothing before this call may initialise
+    CUDA (the process sees no device until it returns). The lease's locks are this process's from here to its ``release`` or its exit;
+    the holder ending first (the lease tool's --max-min) kills this process. A process that holds its lease already (a grouped
+    Commit's later rows, `commit_group`) keeps it."""
     environ = environ if environ is not None else (_ENVIRON[0] if _ENVIRON else None)
     if environ is None or not environ.get(STARTED) or not leased(environ):
         return
@@ -191,6 +205,13 @@ def acquire(tl: Any = None, environ: MutableMapping[str, str] | None = None) -> 
         holder.kill()
         raise SystemExit(f"GPU lease: the holder passed {len(fds)} lock descriptor(s) for {want} GPU(s); the Commit would not hold its lease")
     environ.update(json.loads(line))
+    k, left = _foreign(uuids(environ), wait, CLEAR_LOOKS)
+    if left:
+        holder.kill()
+        raise SystemExit(f"GPU lease: nvidia-smi still lists another process on the leased GPU(s) {left} after {k} look(s) "
+                         f"{CLEAR_EVERY_S:g} s apart (a cancelled Commit's engine workers outlive its lease): no engine can start there")
+    if k:
+        print(f"{_utc(time.time())} GPU lease: another process left the leased GPU(s) after {k} look(s)", file=sys.stderr, flush=True)
     _HELD.append((holder, ours, fds, environ[STARTED], environ))
     atexit.register(_EXITING.set)        # registered after torch's and vLLM's, so it runs before their teardown
     threading.Thread(target=_end_with, args=(holder,), daemon=True).start()
