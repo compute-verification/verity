@@ -17,7 +17,7 @@ from test_service import DELTA, PAIR, RUN, SESSION, Clock, _half, _interiors, _l
 class _Whole(S.Stream):
     """A stream whose every check reads its whole log, as a stream's did before it kept what R6 and R7 read."""
 
-    def _earlier(self, record):
+    def _earlier(self, record, supplied=None):
         return self._log
 
 
@@ -120,10 +120,10 @@ def _one_stage(cls) -> tuple[list, tuple, tuple, tuple, S.Stream]:
 class _Forgetful(S.Stream):
     """A stream that leaves the records whose window has no key out of its checks."""
 
-    def _earlier(self, record):
+    def _earlier(self, record, supplied=None):
         irregular, self._irregular = self._irregular, []
         try:
-            return super()._earlier(record)
+            return super()._earlier(record, supplied)
         finally:
             self._irregular = irregular
 
