@@ -19,8 +19,9 @@ another unit reads. Records are v1 and, on the programs with root parameters to 
 (`REGISTERED_SETUPS`, 16- and 32-bit), mostly v2: the verifier expects values registered (`registered`, with its program
 function's `parameters`), and the record (and an earlier one in the log) registers `Registered.commit`'s entries; on
 the programs with a pair of digests to fill (`SUPPLIED_SETUPS`, 32- and 1-bit leaves) the verifier fills it itself from
-the record, the log's positions and its coin bound to the record's window (`supplied`, `registered.supplied_root`), which
-the record registers as it fills it, and it may pin a value's root (`pinned`, R7-held).
+the record, the log's positions and its coin bound to its binding and the record's window (`supplied`,
+`registered.supplied_root`), which the record registers as it fills it, and it may pin a value's root (`pinned`, R7-held)
+and be bound to a stream and a prover (`binding`, which the record's window names: R6-stream, R6-prover).
 The verifier's program is looked up among this file's programs by its descriptor. Inputs
 stay inside what Python reads as Lean does: integers that are not booleans where Python compares with `==`, and integer
 populations in a draw.
@@ -119,6 +120,8 @@ LEAF = "ee" * 64
 ROOTS = {"out": "cd" * 64, "x": "ab" * 64}
 #: the verifier's coin a window salt binds
 COIN = "c0" * 64
+#: the verifier's binding (its stream's digest and the prover's registered identity), which a bound record's window names
+BINDING = {"stream": "3c" * 64, "prover": "d0" * 32}
 WINDOW = {"kind": "served", "row": 101, "run": "r-test"}
 EARLIER = {"kind": "served", "row": 100, "run": "r-test"}
 RECEIVED = "2026-10-07T00:00:00Z"
@@ -437,7 +440,8 @@ def decode_params(j) -> dict:
     v2 = isinstance(j, dict) and j.get("registered") is not None
     keys = PARAM_KEYS | {"parameters"} if v2 else PARAM_KEYS
     keys = keys | {"supplied"} if isinstance(j, dict) and "supplied" in j else keys
-    _exactly(j, keys | {"pinned"} if isinstance(j, dict) and "pinned" in j else keys, "the parameters")
+    keys = keys | {"pinned"} if isinstance(j, dict) and "pinned" in j else keys
+    _exactly(j, keys | {"binding"} if isinstance(j, dict) and "binding" in j else keys, "the parameters")
     desc = _obj(j["program"], "program")
     if not desc:
         raise D.Reject("not a program descriptor")
@@ -482,6 +486,13 @@ def decode_params(j) -> dict:
             R._pins(j["pinned"], j["registered"] or {}, G.sources(j.get("supplied", {})))
         except ValueError as e:
             raise D.Reject(str(e)) from None
+    if "binding" in j:
+        if not isinstance(j["binding"], dict):
+            raise D.Reject("the binding is not an object")
+        try:
+            R._binding(j["binding"])
+        except ValueError as e:
+            raise D.Reject(str(e)) from None
     delta = ratio(j["delta"])
     if not 0 < delta < 1:
         raise D.Reject("delta is not in (0, 1)")
@@ -519,7 +530,8 @@ def _registered_reads(verdicts: dict) -> None:
 
 def _registration(p: dict, rec) -> tuple[str, ...]:
     return R.check(rec, p["program"], p["query"], p["law"], p["scheme"], p["ports"], p["leaf_layer"], p["anchors"], p["log"],
-                   p["partition"], p["work_table"], p["registered"], p.get("supplied"), p.get("pinned")).codes
+                   p["partition"], p["work_table"], p["registered"], p.get("supplied"), p.get("pinned"),
+                   p.get("binding")).codes
 
 
 def check(p: dict, c: tuple[dict, bytes], e: dict) -> tuple:
@@ -1243,16 +1255,22 @@ def drawn(draw, law: dict, n: int) -> dict:
     return d
 
 
-def _record_of(s: Setup, values, law: dict, window: dict, log=(), **kw) -> dict:
+def _reads_window(supplied: dict) -> bool:
+    """Whether a supplied value reads the window's salt, which no verifier without a binding fills."""
+    return any(k == "window" for rows in G.sources(supplied).values() for row in rows for k, _ in row)
+
+
+def _record_of(s: Setup, values, law: dict, window: dict, log=(), binding=None, **kw) -> dict:
     """`R.record` over `ROOTS` registering `values`: `s`'s commitments, and each value the verifier fills itself as it fills
-    it from that record and `log` (`registered.supplied_value`)."""
+    it from that record, `log` and its `binding` (`registered.supplied_value`)."""
     roots = [{"port": p, "root": ROOTS[p], **s.ports[p]} for p in s.ports]
     sup = s.supplied(values) if isinstance(s, RegisteredSetup) else {}
     entries = s.entries({v: w for v, w in values.items() if v not in sup}) if values else []
     rec = R.record(s.program, s.query, law, SCHEME, roots, window, registered=entries, **kw)
     if not sup:
         return rec
-    filled = [G.supplied_value(s.program, v, rows, rec, sorted(sup), list(log)).entry() for v, rows in G.sources(sup).items()]
+    filled = [G.supplied_value(s.program, v, rows, rec, sorted(sup), list(log), binding=binding).entry()
+              for v, rows in G.sources(sup).items()]
     return R.record(s.program, s.query, law, SCHEME, roots, window, registered=entries + filled, **kw)
 
 
@@ -1288,7 +1306,9 @@ def audits(draw, setups=(*SETUPS, *REGISTERED_SETUPS)) -> tuple[dict, dict, dict
                         EARLIER, leaf_layer=LEAF, partition=part, work_table=table,
                         registered=s.entries(held) if held else ())]
     anchors = draw(st.sampled_from([[], ["weights"]]))
-    rec = _record_of(s, values, law, WINDOW, log, leaf_layer=LEAF, anchors=anchors,
+    sup = s.supplied(values) if isinstance(s, RegisteredSetup) else {}
+    binding = BINDING if _reads_window(sup) or draw(st.booleans()) else None
+    rec = _record_of(s, values, law, {**WINDOW, **(binding or {})}, log, binding, leaf_layer=LEAF, anchors=anchors,
                      previous=R.digest(log[-1]) if log else None, partition=part, work_table=table)
     assert rec["law"] == mine
     params = {"anchors": anchors, "delta": draw(st.sampled_from(["1/1000", "1/10", "1/2", "999/1000"])), "law": law,
@@ -1300,6 +1320,8 @@ def audits(draw, setups=(*SETUPS, *REGISTERED_SETUPS)) -> tuple[dict, dict, dict
         params["supplied"] = s.supplied(values)
     if values and "W" in values and "W" not in params.get("supplied", {}) and draw(st.booleans()):
         params["pinned"] = {"W": next(e["root"] for e in rec["registered"] if e["value"] == "W")}
+    if binding:
+        params["binding"] = binding
     d = drawn(draw, mine, n)
     proved = DR.proved(d)
     verdicts = {"lean": {"accepted": True, "digest": "aa" * 64, "of_record": True}}
@@ -1557,7 +1579,36 @@ SUPPLIED = [
     _roots(lambda rs, x: [{**r, "root": "12" * 64} if r["port"] == ["x", "out"][x % 2] else r for r in rs]),
     _entries(lambda es, x: [{**e, "root": "12" * 64} if e["value"] == "W" else e for e in es]),
 ]
-GROUPS = [RECORD, PARAMS, DRAW, EVIDENCE, VERDICTS_OF, ENTRIES, REGISTERED_PARAMS, REGISTERED_EVIDENCE, SUPPLIED]
+
+
+def _bound(f):
+    """A change to the verifier's binding (`f(binding or None, x)`)."""
+    def change(a, x):
+        a["params"]["binding"] = f(a["params"].get("binding"), x)
+    return change
+
+
+def _replayed(a, x):
+    """The record as another stream's (or prover's) verifier would see it replayed, relabeled to its binding."""
+    k, other = [("stream", "3d" * 64), ("prover", "d1" * 32)][x % 2]
+    a["params"]["binding"] = {**(a["params"].get("binding") or BINDING), k: other}
+    a["record"]["window"] = {**a["record"]["window"], k: other}
+
+
+#: One change each to the verifier's binding (another stream's or prover's, in another form, or none) and to the record's
+#: window that names it, and the record replayed to another stream or prover.
+BINDINGS = [
+    _bound(lambda b, x: {**(b or BINDING), **[{"stream": "3d" * 64}, {"prover": "d1" * 32}][x % 2]}),
+    _bound(lambda b, x: [None, 5, [], "s", {}, {"stream": "3c" * 64}, {**BINDING, "run": "r"}, {**BINDING, "stream": "3C" * 64},
+                         {**BINDING, "stream": "3c" * 63}, {**BINDING, "prover": ""}, {**BINDING, "prover": "d0d"},
+                         {**BINDING, "prover": 1}, {**BINDING, "stream": None}][x % 13]),
+    lambda a, x: a["params"].pop("binding"),
+    _set("record", "window", lambda a, x: {**a["record"]["window"], ["stream", "prover"][x % 2]:
+                                           [BINDING["stream"].upper(), "d1" * 32, None, 5][x // 2 % 4]}),
+    _set("record", "window", lambda a, x: {k: v for k, v in a["record"]["window"].items() if k != ["stream", "prover"][x % 2]}),
+    _replayed,
+]
+GROUPS = [RECORD, PARAMS, DRAW, EVIDENCE, VERDICTS_OF, ENTRIES, REGISTERED_PARAMS, REGISTERED_EVIDENCE, SUPPLIED, BINDINGS]
 
 
 @st.composite
@@ -1672,6 +1723,7 @@ REGISTRATION = D.Port(PIECES, "registration", registration, st.one_of(
     changed_audits([ENTRIES], 1, 1, REGISTERED_SETUPS).map(_REGISTRATION_OF),
     changed_audits([SUPPLIED], 1, 0, SUPPLIED_SETUPS).map(_REGISTRATION_OF),
     changed_audits([SUPPLIED, ENTRIES, RECORD], 2, 2, SUPPLIED_SETUPS).map(_REGISTRATION_OF),
+    changed_audits([BINDINGS], 1, 1, SUPPLIED_SETUPS).map(_REGISTRATION_OF),
     changed_audits([REGISTERED_PARAMS], 1, 1, REGISTERED_SETUPS).map(_REGISTRATION_OF),
     changed_audits([ENTRIES, RECORD], 2, 2, REGISTERED_SETUPS).map(_REGISTRATION_OF),
     st.builds(lambda a, r: {"params": a["params"], "record": r}, changed_audits(most=0), JSON)), package=PACKAGE)
@@ -2105,7 +2157,7 @@ def _with_interior(c: dict) -> dict:
                        previous=R.digest(c["record"]))
     except (TypeError, ValueError):
         return c
-    params = {**{k: v for k, v in p.items() if k != "parameters"}, "law": law, "log": [*p["log"], c["record"]],
+    params = {**{k: v for k, v in p.items() if k not in ("parameters", "binding")}, "law": law, "log": [*p["log"], c["record"]],
               "partition": None, "ports": s.ports, "program": s.desc, "registered": None, "work_table": None}
     roots = c["session_roots"]
     return _json({**c, "interior": {"params": params, "received": "1", "record": rec},
@@ -2556,12 +2608,13 @@ R7_CODES = {"R7-registered", "R7-values", "R7-root", "R7-leaves", "R7-words", "R
 
 def _v2_audit(s: RegisteredSetup, values: dict) -> dict:
     """One valid v2 audit of `s` expecting `values` registered, the log's earlier record registering them under the same
-    roots."""
+    roots, by a verifier bound to `BINDING`."""
     law = {"k": 1, "law": "subset"}
     roots = [{"port": p, "root": ROOTS[p], **s.ports[p]} for p in s.ports]
     earlier = R.record(s.program, s.query, law, SCHEME, roots, EARLIER, leaf_layer=LEAF, registered=s.entries(values))
-    rec = _record_of(s, values, law, WINDOW, [earlier], leaf_layer=LEAF, previous=R.digest(earlier))
-    params = {"anchors": [], "delta": "1/10", "law": law, "leaf_layer": LEAF, "log": [earlier], "parameters": s.signature,
+    rec = _record_of(s, values, law, {**WINDOW, **BINDING}, [earlier], BINDING, leaf_layer=LEAF, previous=R.digest(earlier))
+    params = {"anchors": [], "binding": BINDING, "delta": "1/10", "law": law, "leaf_layer": LEAF, "log": [earlier],
+              "parameters": s.signature,
               "partition": None, "ports": s.ports, "program": s.desc, "query": s.query, "registered": values,
               "scheme": SCHEME, "work_table": None, **({"supplied": s.supplied(values)} if s.supplied(values) else {})}
     evidence = {"draw": {**law, "population": s.population, "units": [0]}, "instances": 1, "proved_units": [0],
@@ -2588,6 +2641,38 @@ def test_every_r7_code_is_reached(pieces):
                 kind, out = D.replay(REGISTRATION, _json(_REGISTRATION_OF(b)), pieces)
                 seen |= set(json.loads(out)["codes"]) if kind == "output" else set()
     assert R7_CODES <= seen, sorted(R7_CODES - seen)
+
+
+def test_a_tile_replayed_across_streams_in_one_window_is_refused(pieces):
+    """The supplied setup whose seeds read the window's salt and positions, bound to one stream and prover: its record, as
+    another stream's (or prover's) verifier checks it in the same window, is refused as it stands (`R6-stream` or
+    `R6-prover`, and `R7-supplied`) and relabeled to that verifier's binding (`R7-supplied`: its seeds are the first
+    stream's), and by a verifier with no binding (`R7-supplied`), Lean and Python agreeing; every binding change reaches
+    those codes or a refused binding, and nothing else."""
+    s = next(s for s in SUPPLIED_SETUPS if _reads_window(s.supplied(s.values[0])))
+    a = _v2_audit(s, s.values[0])
+
+    def codes(b):
+        kind, out = D.replay(REGISTRATION, _json(_REGISTRATION_OF(b)), pieces)
+        return json.loads(out)["codes"] if kind == "output" else kind
+
+    assert codes(a) == []
+    for k, other in (("stream", "3d" * 64), ("prover", "d1" * 32)):
+        b = copy.deepcopy(a)
+        b["params"]["binding"] = {**BINDING, k: other}
+        assert codes(b) == [f"R6-{k}", "R7-supplied"], k
+        b["record"]["window"] = {**b["record"]["window"], k: other}
+        assert codes(b) == ["R7-supplied"], k
+    b = copy.deepcopy(a)
+    del b["params"]["binding"]
+    assert codes(b) == ["R7-supplied"]
+    seen: set[str] = set()
+    for change, x in ((c, x) for c in BINDINGS for x in range(16)):
+        b = copy.deepcopy(a)
+        change(b, x)
+        got = codes(b)
+        seen |= {got} if isinstance(got, str) else set(got)
+    assert seen == {"R6-stream", "R6-prover", "R7-supplied", "reject"}, seen
 
 
 def test_a_root_with_a_trailing_newline_is_refused(pieces):

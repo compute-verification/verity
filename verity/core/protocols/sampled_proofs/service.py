@@ -99,7 +99,9 @@ The exceptions are windows that aren't plain JSON: a record whose window holds a
 and one whose own window does gets the whole log.
 
 **The records.** The stream's digest is the SHA-512 of `{"format": "verity/proof-service/stream/v0", "spec": <the Spec's
-digest>, "budget", "delta", "challenger"}`, plus `"rounds"` when it is more than 1. An outcome's record is
+digest>, "budget", "delta", "challenger"}`, plus `"rounds"` when it is more than 1 and `"prover"`, the identity the
+challenger registered the stream's prover under, when the stream has one (`Stream(prover=)`); such a stream binds each
+registration to itself and the prover (`registration.check`'s `binding`). An outcome's record is
 `{"format": "verity/proof-service/outcome/v0", "stream", "order", "registration", "receipt", "draw", "sessions",
 "symbol", "public", "audit", "interior"}`: the receipt and the draw as the SHA-512 of their canonical JSON, `audit`
 one-stage's audit record (null for `late`), and `interior` null, or under `TwoStage` `{"registration", "receipt",
@@ -644,7 +646,10 @@ class Stream:
     once, and so the most one `Session` covers; 1 under `TwoStage`) are public parameters of the stream. `coins` is
     the challenger's own randomness (n bytes a call, read in order by `OwnRandomness`), and `clock` its clock in seconds;
     tests inject both. `sampler`, when given, draws instead of the coins (`flock-verify draw` in a process of its own,
-    say): it takes the challenger's law and N, and its draw is held to them like any other.
+    say): it takes the challenger's law and N, and its draw is held to them like any other. `prover`, when given, is the
+    identity the challenger registered the stream's prover under (lowercase hex): the stream's digest names it, and every
+    registration is bound to the stream and the prover (`binding`, `registration.check`'s): its window names both, and a
+    window salt is bound to them, so a tile seeded for one prover's stream is refused in any other.
 
     A stream runs one epoch with one salt: `salt` issues it from the coins, or `salt_released` records one released
     elsewhere with its release, and under `Check.registration_deadline` every registration is received within the
@@ -658,7 +663,7 @@ class Stream:
 
     def __init__(self, spec: Spec, unit: SpecializedDefinition, *, budget: int, delta: float, challenger: str,
                  coins: Callable[[int], bytes] = os.urandom, clock: Callable[[], float] = time.monotonic,
-                 sampler: Sampler | None = None, rounds: int = 1) -> None:
+                 sampler: Sampler | None = None, rounds: int = 1, prover: str | None = None) -> None:
         if isinstance(spec.selection, Sequential):
             raise ValueError("the service doesn't run a Sequential selection yet")
         if isinstance(spec.selection, TwoStage) and spec.selection.check != "all":
@@ -686,7 +691,9 @@ class Stream:
         self.rounds = rounds
         self._coins, self._clock, self._sampler = coins, clock, sampler
         self.digest = _sha512({"format": STREAM, "spec": spec.digest(), "budget": budget, "delta": delta,
-                               "challenger": challenger, **({"rounds": rounds} if rounds > 1 else {})})
+                               "challenger": challenger, **({"rounds": rounds} if rounds > 1 else {}),
+                               **({"prover": prover} if prover is not None else {})})
+        self.binding = None if prover is None else R._binding({"stream": self.digest, "prover": prover})
         self._entries: list[_Entry] = []
         self._open: dict[int, None] = {}
         self._log: list[dict[str, Any]] = []
@@ -822,7 +829,7 @@ class Stream:
         law = selection_law(self.spec.selection, n)
         earlier = self._earlier(record, supplied)
         v = V.check(record, program, self.spec.check.query, law, SCHEME, ports, leaf_layer, anchors, earlier, None,
-                    work_table, registered, supplied, pinned)
+                    work_table, registered, supplied, pinned, self.binding)
         if not v.ok:
             raise Refused(v)
         if count_varies(law):
@@ -1124,7 +1131,7 @@ class Stream:
                       self.challenger, reg.receipt["received"], e.read, e.closure, e.sessions, verdicts, outputs,
                       statement, self.delta, *asked, served, session_roots,
                       interior_values=[(x.name, x.registered) for x in self._values(interior=True)] if staged else (),
-                      interior=interior, supplied=supplied, pinned=pinned)
+                      interior=interior, supplied=supplied, pinned=pinned, binding=self.binding)
             if not v.ok:
                 accepted = False
                 rec = {**rec, "accepted": False, "profile": None, "integrity_profile": None, "wrong_units": None,

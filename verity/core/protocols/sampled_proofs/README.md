@@ -234,12 +234,17 @@ only inside a proof (`one_stage.registered`).
   of P), `{"value": V}` (a registered entry's root, never a supplied value's), `{"bytes": hex}`, `{"position": "K"}` (K
   below the record's population, after the log's earlier records' populations, `log_base`, as a big-endian u64, so no
   two records of one log share a position) and `{"window": coin}` (`window_salt`: SHA-512 of the coin bound to the
-  record's window, a salt per window since R6 takes one record a window). The rows are committed under public salts
+  verifier's binding, its stream and its prover, and to the record's window; a salt per prover, stream and window since
+  R6 takes one record a window, and refused without a binding). The rows are committed under public salts
   (`supplied_salts`), and R7 refuses an entry whose root is not the one it recomputes (`R7-supplied`). PoUW's seed
   inputs (`pouw.roots`, `pouw.salt`, `pouw.positions`) are supplied values
   (`verity/core/protocols/pouw/tests/test_pouw_supplied_inputs.py`).
 - Pinned roots (`check(..., pinned={value: root})`): roots of registered values the verifier doesn't fill, held before
   the record (a model's weights recorded before the salt). R7 holds such a value to its pin as to a root the log holds.
+- Binding (`check(..., binding={"stream", "prover"})`, lowercase hex: the verifier's stream digest and the identity it
+  registered the prover under): R6 refuses a record whose window doesn't name both (`R6-stream`, `R6-prover`), and the
+  window salt binds them, so each (prover, stream, window, position) gets its own seed and a tile proved for one stream
+  is refused in another, in the same window or not.
 - Reads at a public position: the verifier derives every unit's reads from its own program (`reads`). A unit's template
   parameter whose leaves are exactly row `r` of a registered value reads row `r`; a parameter that holds part of a row,
   or reads the value in one unit and not in another of its template, is refused. Data-dependent reads are not public

@@ -9,7 +9,7 @@ from typing import Any
 from verity.core.protocols.sampled_proofs import service as S
 from verity.core.protocols.sampled_proofs.one_stage import registration as R, verifier as V
 
-from test_registered import (LAW, MIXED, Q, SCHEME, SERVED, _mixed_case, _program, _registered,
+from test_registered import (BINDING, BOUND, LAW, MIXED, Q, SCHEME, SERVED, _mixed_case, _program, _registered,
                              _record as _registered_record, _seeded_case)
 from test_service import DELTA, PAIR, RUN, SESSION, Clock, _half, _interiors, _lean, _ports, _record, _spec, _two_spec
 
@@ -217,14 +217,14 @@ def test_a_supplied_position_reads_the_whole_log():
     base = _seeded_case()
     stream, log = _stream(), []
     for i in range(6):
-        rec, _, _ = _mixed_case(base, log=log, window={**SERVED, "row": SERVED["row"] + i})
+        rec, _, _ = _mixed_case(base, log=log, window={**BOUND, "row": SERVED["row"] + i})
         stream._log_record(rec, i)
         log.append(rec)
-    cand, check, _ = _mixed_case(base, log=log, window={**SERVED, "row": SERVED["row"] + 6})
+    cand, check, _ = _mixed_case(base, log=log, window={**BOUND, "row": SERVED["row"] + 6})
     assert stream._earlier(cand, MIXED) is stream._log and len(few := stream._earlier(cand)) == 2
     args = (cand, check["program"], check["query"], LAW, SCHEME, check["ports"], None, ())
-    assert V.check(*args, stream.log, None, None, check["registered"], MIXED).ok
-    assert V.check(*args, few, None, None, check["registered"], MIXED).codes == ("R7-supplied",)
+    assert V.check(*args, stream.log, None, None, check["registered"], MIXED, binding=BINDING).ok
+    assert V.check(*args, few, None, None, check["registered"], MIXED, binding=BINDING).codes == ("R7-supplied",)
 
 
 def test_windows_equal_to_either_verifier_share_a_key():

@@ -13,9 +13,13 @@ A v2 record (`verity/registration/v2`) adds `"registered": [{"value", "root", "l
 (`Registered.entries`), a value the verifier pinned before the record to its root (`pinned`: the weights' root recorded
 before the salt), and each value an earlier record of the log registered to that record's root (`heldRoots`). The
 verifier expects a v2 record exactly when it expects values registered. A value it fills itself (`supplied`,
-`Supplied.root`: rows of the record's roots, positions after the log's, its coin bound to the record's window and its own
-bytes, under public salts) is held to the root it recomputes from this record and the log instead (`R7-supplied`), never
-to the log's.
+`Supplied.root`: rows of the record's roots, positions after the log's, its coin bound to its binding and the record's
+window and its own bytes, under public salts) is held to the root it recomputes from this record and the log instead
+(`R7-supplied`), never to the log's.
+
+A verifier bound to a stream and a prover (`binding`: its stream's digest and the identity it registered the prover under)
+holds the record's window to name both (`R6-stream`, `R6-prover`), and a window salt is bound to them, so a tile seeded
+for one prover's stream is refused in any other's.
 -/
 import SampledProofs.Draw
 import SampledProofs.Registered
@@ -71,6 +75,8 @@ structure Verifier where
   supplied : Array (String × Supplied.Rows) := #[]
   /-- of `registered`, values it doesn't fill whose roots it held before the record, `(value, root)` each -/
   pinned : Array (String × String) := #[]
+  /-- the stream and prover it registers the record for, `(stream, prover)`, each lowercase hex -/
+  binding : Option (String × String) := none
 
 private def optStr : Option String → Json
   | some s => Json.str s
@@ -187,11 +193,14 @@ def check (rec : Json) (v : Verifier) : Array String := Id.run do
     | none => Json.null
   if !jeq (get "previous") previous then c := addCode c "R6-previous"
   if v.log.any (fun e => jeq (getD e "window") (get "window")) then c := addCode c "R6-window"
+  if let some (stream, prover) := v.binding then
+    if !jeq (getD (get "window") "stream") (Json.str stream) then c := addCode c "R6-stream"
+    if !jeq (getD (get "window") "prover") (Json.str prover) then c := addCode c "R6-prover"
   -- R7
   if v2 then
     c := checkRegistered c (get "registered") (Registered.entries v.program.desc v.params v.registered)
       (v.pinned ++ heldRoots v.log) v.supplied
-      (Supplied.root rec v.log v.params (Flock.hexOf v.program.desc.sha512) (v.supplied.map (·.1)))
+      (Supplied.root rec v.log v.binding v.params (Flock.hexOf v.program.desc.sha512) (v.supplied.map (·.1)))
   return c
 
 end SampledProofs.Registration
