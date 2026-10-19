@@ -491,7 +491,7 @@ them.
     value, signature, key_id, run_id)`, signed by the certifier's own key (`signer`, the network certifier's, as its
     `Issuer` signs with) over `reveal_response_message`, the request's fields then u32be len(value) ‖ value under
     `verity-network-certifier/reveal-response/v1`. `Revealed.verify(key, run_id, link, digest, what)` holds only if it
-    names that key's id and that run and the signature verifies, so a consumer keys p on (key id, run id, p): two
+    names that key's id and that run and the signature verifies, so a consumer can key p on (key id, run id, p): two
     proxies with one link name, whose p's collide, or two runs of one certifier, never answer for each other. A signer
     that refuses leaves p's reveal spent and gives nothing. The salt needs authenticity, not confidentiality: after t_d
     the block's server already holds it, and the verifier fills `pouw.salt` as a public input, so nothing is

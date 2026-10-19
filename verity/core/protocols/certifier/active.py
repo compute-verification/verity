@@ -59,7 +59,7 @@ at construction (`Proxy.run_id`). They refuse one that doesn't verify before rea
 spends p's one reveal, nor does a request for another certifier or another run, and a registration counts only if the
 challenger signed its digest, which binds its record. They answer a `Revealed`: the value, the certifier's key id and
 run id, and its own signature (`signer`, the network certifier's key) over `reveal_response_message`, which binds the
-value too, so a consumer keys p on (key id, run id, p) and two proxies on one link name never collide. The
+value too, so a consumer can key p on (key id, run id, p), where two proxies on one link name don't collide. The
 salt needs authenticity, not confidentiality: after t_d the block's server already holds it, and the verifier fills
 `pouw.salt` as a public input, so nothing is encrypted. `serve_reveals(proxy, host, port)` serves both calls beside
 `run`, one JSON line per request and per answer, and `RemoteCertifier` is the challenger's client, which takes the
@@ -219,8 +219,8 @@ def reveal_response_message(key_id: bytes, run_id: bytes, link: str, window: int
 @dataclass(frozen=True, slots=True)
 class Revealed:
     """The certifier's signed answer to a reveal request: PoUW window `window`'s salt or weights' root, `value`, its
-    `signature` over `reveal_response_message`, and the certifier's `key_id` and `run_id` that it binds. A consumer keys
-    the window on (key id, run id, window), so two proxies on one link name, or two runs of one, never collide."""
+    `signature` over `reveal_response_message`, and the certifier's `key_id` and `run_id` that it binds. Keyed on
+    (key id, run id, window), two proxies on one link name, or two runs of one, don't collide."""
 
     window: int
     value: bytes
@@ -1031,16 +1031,15 @@ async def serve_reveals(proxy: Proxy, host: str, port: int) -> asyncio.Server:
 class RemoteCertifier:
     """The auditor challenger's handle on a network certifier's reveal endpoint (`serve_reveals`) at `host`:`port`, in
     place of the `Proxy` an in-process caller holds. `run_id` is that proxy's `Proxy.run_id`, which the auditor's
-    deployment record gives beside `certifier_key`, as it gives the certifier `challenger_key`: the certifier says
-    nothing unasked, so the client has nothing to learn it from that the record doesn't already hold. `reveal(p,
-    registration)` and `committed(p, registration)` sign the request for `certifier_key`'s key id and `run_id` with
-    `challenger_signer` (whose key the certifier registered as `challenger_key`), send it, and return the value once
-    the answer names that key id and run and its signature verifies under `certifier_key` over
-    `reveal_response_message` for ingress link `link` and p. So a consumer keys p on (`certifier_key.key_id`,
-    `run_id`, p). A refusal, an answer of another run, one that doesn't verify or names another window, a signer
-    that refuses and a connection that fails all raise `RuntimeError`, so `pouw.salt.revealed` fails closed on them as
-    on a `Proxy`'s refusal. Each call is one connection, one request line (then its end) and one answer line;
-    `timeout` bounds its socket's waits (None: no bound)."""
+    deployment record gives beside `certifier_key`, as it gives the certifier `challenger_key` (not a signed hello,
+    which would sign for any caller or need a signed request of its own). `reveal(p, registration)` and `committed(p,
+    registration)` sign the request for `certifier_key`'s key id and `run_id` with `challenger_signer` (whose key the
+    certifier registered as `challenger_key`), send it, and return the value once the answer names that key id and run
+    and its signature verifies under `certifier_key` over `reveal_response_message` for ingress link `link` and p, so a
+    consumer can key p on (`certifier_key.key_id`, `run_id`, p). A refusal, an answer of another run, one that doesn't
+    verify or names another window, a signer that refuses and a connection that fails all raise `RuntimeError`, as a
+    `Proxy`'s refusal does, so a caller that fails closed on one fails closed on them. Each call is one connection, one
+    request line (then its end) and one answer line; `timeout` bounds its socket's waits (None: no bound)."""
 
     def __init__(self, host: str, port: int, certifier_key: PublicKey, challenger_signer: Signer, link: str,
                  run_id: bytes, *, timeout: float | None = None) -> None:
