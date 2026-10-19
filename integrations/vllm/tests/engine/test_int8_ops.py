@@ -72,9 +72,11 @@ def test_the_cuda_kernels_are_the_torch_bodies(m, k, n):
     """On CUDA the two ops run `engine.int8_fused`'s kernels (Llama-3.1-8B's K, M on both sides of int8_exact's padding): xq,
     s_a and y bit for bit the torch bodies' on the CPU, and a capture still sees the two ops, one per call."""
     x, w, sw = _linear_args(m, k, n, seed=m)
+    on_gpu = x.cuda(), w.cuda(), sw.cuda()
     with _Ops() as mode:
-        xq, sa, y = (t.cpu() for t in OPS.linear(x.cuda(), w.cuda(), sw.cuda()))
+        got = OPS.linear(*on_gpu)
     assert mode.seen == ["verity_int8.row_quant.default", "verity_int8.scaled_mm.default"]
+    xq, sa, y = (t.cpu() for t in got)
     wq, ws = E.quantize_rows(x)
     assert torch.equal(xq, wq) and torch.equal(sa, ws)
     assert torch.equal(y.view(torch.int16), E.plain_linear(x, w, sw).view(torch.int16))
