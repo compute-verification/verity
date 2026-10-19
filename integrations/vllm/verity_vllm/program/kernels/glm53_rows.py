@@ -25,11 +25,6 @@ EVALUATORS = {
                                   "BLOCK}: the bf16 residual add, four square-pair sums per vector, CUB BlockReduce, rsqrt.approx) -> out, residual",
     "LlBf16DotprodGemm_v1": "verity_vllm.program.registry.bf16_gemm_check.dotprod_rows (LlBf16DotprodGemm_v1{N,K,BS,VEC,FMA}: BS thread "
                             "chains from +0, the VEC/2 tail, the FMA or FMUL+FADD rounds, each warp's butterfly, the warp sums in order) -> f32",
-    "CublasSplitKGemm_v1": "verity_vllm.program.registry.bf16_gemm_check.cublas_splitk_rows (CublasSplitKGemm_v1{K,N,SPLIT_K,DOT}: 64-aligned "
-                           "contiguous chunks, one ascending HopperBF16WgmmaDot16 chain from +0 each, the serial f32 reduction in split "
-                           "order, one bf16 rounding)",
-    "CublasSplitKGemmF32Out_v1": "verity_vllm.program.registry.bf16_gemm_check.cublas_splitk_rows (CublasSplitKGemmF32Out_v1{K,N,SPLIT_K,DOT}: "
-                                 "CublasSplitKGemm_v1's chains and reduction, the f32 sum as the output)",
     "Fp8GroupQuantUe8m0_v1": "verity_vllm.program.kernels.deepgemm_twins.ue8m0_group_quant_row (Fp8GroupQuantUe8m0_v1{K,G}: the fmaxf fold "
                              "from 1e-10, div.rn by 448, the ue8m0 ceiling, div.rn, cvt.rn.satfinite.e4m3) -> q, s",
     "MoeExpertFp8Gemm_v1": "verity_vllm.program.kernels.fp8_moe_rows.moe_expert_fp8_block_row over w[e], ws[e], e the committed router_ids "
@@ -110,26 +105,6 @@ def ll_dotprod_gemm(statics: dict[str, Any], ops: Sequence[np.ndarray]) -> dict[
     out = dotprod_rows(_bf16(ops[0], K)[None], _bf16(ops[1], N * K).reshape(N, K), BS=int(statics["BS"]), VEC=int(statics["VEC"]),
                        FMA=int(statics["FMA"]))
     return {"0": np.asarray(out, dtype=np.uint32).reshape(N)}
-
-
-def _cublas_splitk(family: str, out: str, statics: dict[str, Any], ops: Sequence[np.ndarray]) -> dict[str, np.ndarray]:
-    from verity_vllm.program.registry.bf16_gemm_check import cublas_splitk_rows
-    dot = prim_static(statics, "DOT", family)
-    if dot != "HopperBF16WgmmaDot16_v1":
-        raise Declined(f"{family}: no twin for DOT={dot} (cublas_splitk_rows chains HopperBF16WgmmaDot16_v1)")
-    K, N = int(statics["K"]), int(statics["N"])
-    y = cublas_splitk_rows(_bf16(ops[0], K)[None], _bf16(ops[1], N * K).reshape(N, K), int(statics["SPLIT_K"]), out=out)
-    return {"0": np.asarray(y, dtype=np.uint16 if out == "bf16" else np.uint32).reshape(N)}
-
-
-def cublas_splitk_gemm(statics: dict[str, Any], ops: Sequence[np.ndarray]) -> dict[str, np.ndarray]:
-    """`CublasSplitKGemm_v1{K,N,SPLIT_K,DOT}(x, w)` -> N bf16 words."""
-    return _cublas_splitk("CublasSplitKGemm_v1", "bf16", statics, ops)
-
-
-def cublas_splitk_gemm_f32(statics: dict[str, Any], ops: Sequence[np.ndarray]) -> dict[str, np.ndarray]:
-    """`CublasSplitKGemmF32Out_v1{K,N,SPLIT_K,DOT}(x, w)` -> N f32 words."""
-    return _cublas_splitk("CublasSplitKGemmF32Out_v1", "f32", statics, ops)
 
 
 def fp8_group_quant_ue8m0(statics: dict[str, Any], ops: Sequence[np.ndarray]) -> dict[str, np.ndarray]:
@@ -256,8 +231,6 @@ ROWS: dict[str, tuple[Callable[..., dict[str, np.ndarray]], tuple[str, ...]]] = 
     "RMSNormCudaVector8_v1": (rmsnorm_cuda_vector8, ("0",)),
     "RMSNormFusedCudaVector8_v1": (rmsnorm_fused_cuda_vector8, ("0", "1")),
     "LlBf16DotprodGemm_v1": (ll_dotprod_gemm, ("0",)),
-    "CublasSplitKGemm_v1": (cublas_splitk_gemm, ("0",)),
-    "CublasSplitKGemmF32Out_v1": (cublas_splitk_gemm_f32, ("0",)),
     "Fp8GroupQuantUe8m0_v1": (fp8_group_quant_ue8m0, ("0", "1")),
     "MoeExpertFp8Gemm_v1": (moe_expert_fp8_gemm, ("0",)),
     "MoeExpertFp8GemmW_v1": (moe_expert_fp8_gemm_w, ("0",)),
@@ -277,7 +250,7 @@ def check_targets(family: str) -> list:
     """The small specialisations `family`'s self-check binds (the served statics are too wide for the reference)."""
     from verity.ml.circuits.defs import bind
     from verity.ml.circuits.ops.prims import HopperE4m3MmaV2Dot32, HopperE4m3QgmmaDot32
-    from verity_vllm.program.registry import b1, boolean_rope, cublas_bf16, cuda_rmsnorm, deepgemm, dsa, fp8_moe_experts, hopper
+    from verity_vllm.program.registry import b1, boolean_rope, cuda_rmsnorm, deepgemm, dsa, fp8_moe_experts, hopper
     from verity_vllm.program.registry import ll_bf16, moe, sparse_mla_split
     hop = hopper.HopperBF16WgmmaDot16
     moe_cases = [dict(E=2, K=128, N=96, G=64, KB=64, SWAP=False, DOT=HopperE4m3QgmmaDot32),
@@ -290,9 +263,6 @@ def check_targets(family: str) -> list:
                                        for n, e, b in ((16, 1e-6, 2), (64, 1e-5, 3), (64, 1e-5, 16))],
         "LlBf16DotprodGemm_v1": [bind(ll_bf16.LlBf16DotprodGemmWord, N=3, K=k, BS=bs, VEC=v, FMA=f)
                                  for k, bs, v, f in ((128, 64, 2, 1), (128, 64, 2, 0), (160, 32, 4, 1))],
-        "CublasSplitKGemm_v1": [bind(cublas_bf16.CublasSplitKGemmWord, K=k, N=3, SPLIT_K=s, DOT=hop) for k, s in ((64, 2), (64, 4), (192, 3))],
-        "CublasSplitKGemmF32Out_v1": [bind(cublas_bf16.CublasSplitKGemmF32OutWord, K=k, N=3, SPLIT_K=s, DOT=hop)
-                                      for k, s in ((64, 2), (64, 4), (192, 3))],
         "Fp8GroupQuantUe8m0_v1": [bind(deepgemm.Fp8GroupQuantUe8m0, K=256, G=128)],
         "MoeExpertFp8Gemm_v1": [bind(fp8_moe_experts.MoeExpertFp8Gemm, **c) for c in moe_cases],
         "MoeExpertFp8GemmW_v1": [bind(fp8_moe_experts.MoeExpertFp8GemmW, **c) for c in moe_cases],

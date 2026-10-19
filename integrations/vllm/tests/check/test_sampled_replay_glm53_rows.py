@@ -1,4 +1,5 @@
-"""GLM-5.3 TP8 B1's row evaluators (`kernels.glm53_rows`) as the sampled replay calls them.  Every family the per-rank no-evaluator
+"""GLM-5.3 TP8 B1's row evaluators (`kernels.glm53_rows`, and `kernels.cublas_gemm_rows` for the cuBLAS split-K pair) as the sampled
+replay calls them.  Every family the per-rank no-evaluator
 rule named on the TP8 Commit r20261016-213336-6c35 has one.  The replay hands a row kernel the statics `spec_statics` parses from
 the Program's spec text (`{"f64":...}` floats, `true` / `False`, `{"fn":...}` or bare step ids, quoted kernel names), not the Python
 values the kernel self-check binds, so each family is checked here on those spellings against its Definition's word reference."""
