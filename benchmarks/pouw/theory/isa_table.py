@@ -19,7 +19,7 @@ row family and `IsaComplete`, that every head is an instance of a class. This sc
     Blackwell's list without its tensor core memory instructions; and where `class_of` (`facet_break/loads.py`) places
     a bare mnemonic it agrees, but for the disagreements `CLASS_OF_WRONG` names, and a dotted form it places in a class
     whose row may not bound it is moved by the map to one that does (`FORMS_MOVED`);
-  - the same against RT-MACHINE-2's hand triage (`TRIAGE_ART`, derived to `machine_model/data/rt_machine_triage.json`)
+  - the same against RT-MACHINE-2's hand triage (`TRIAGE_ART`, derived to `machine_model/data/rt_machine_classes.json`)
     of the 175 Blackwell opcodes A7's menu didn't name: each is placed on a priced route or writes no word, a traced
     class only for a mover, an opcode it finds can multiply (`TRIAGE_PRICED`) placed, and its opcodes absent on sm_120
     are the tensor core memory list, outside sm_120's table;
@@ -290,7 +290,7 @@ COUNT_TWO = {"FFMA2": "FFMA", "FMUL2": "FFMA"}
 #: RT-MACHINE-2's triage (note:20261019T0456Z-draft-rt-machine): each Blackwell opcode no menu file named, classed by
 #: hand by what it can do to a committed word, its store artifact, and the fixture `--write-triage` derives from it
 TRIAGE_ART = "art:fac984dca8c0141d83e5f147ba04787c02b7d59bd49edcb1ffb64727eeeb7e0c"
-TRIAGE = DATA / "rt_machine_triage.json"
+TRIAGE = DATA / "rt_machine_classes.json"
 #: its classes that can multiply or fold words, which the map must place on a priced route
 TRIAGE_PRICED = {"PRICED-LANE-MAC", "LOW-PRECISION", "PRICED-UNIFORM", "REDUCER"}
 TRIAGE_CLASSES = TRIAGE_PRICED | {"NO-MULTIPLY", "MOVER", "MEMORY", "CONTROL", "ABSENT-ON-SM120"}
