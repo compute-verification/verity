@@ -10,11 +10,11 @@ which is its first reader's, since only its own call reads it (`firstRead_cases`
 `TieLive`: a unit with a word has a first gate, its round is a round of the window, and every one is live.
 `SeededScheduleNotLive`: `UnitsOfLayout` puts a read run input at the draw, `LayerCommitted` at its first reader's
 round, which `Wf` puts below it. `TieScope` is `Scope` from `TieLive`, `TieCommits` and its three hypotheses, and
-`epochScope` each window's of an `EpochTie`. `CoinsFresh` is not vacuous: one salt an epoch fails it over two windows
-(`oneSalt_not_fresh`) and a live epoch a window meets it (`perWindow_fresh`). `Llama31Shape` and `Llama31Rounds` are
-kernel computations. `witTie`: `Tie` holds of a circuit with gates (one call, its coin, an A row and a receipt reading
-both), so `TieCommits` isn't true only of the empty circuit; `witEpoch` and `witEpoch_oneSalt` tie two windows of it,
-and refuse them under one coin a round across both.
+`epochScope` each window's of an `EpochTie`. `spentIn_split` is what a window timed from its own start after the salt's
+release leaves uncounted. `Llama31Shape` and `Llama31Rounds` are kernel computations. `witTie`: `Tie` holds of a circuit
+with gates (one call, its coin, an A row and a receipt reading both), so `TieCommits` isn't true only of the empty
+circuit; `witEpoch` and `witEpoch_ownStart` tie two windows of it timed from the salt's release, and refuse them when
+the second is timed from its own start.
 -/
 
 namespace Properties.Served
@@ -150,23 +150,17 @@ theorem tieScope : TieScope := by
   exact ⟨hWf, tieLive ι K Sc L F Cd cls T, hδ, hL, tieCommits ι L F Cd cls T⟩
 
 /-- Each window of a tied epoch is in Compose's scope. -/
-theorem epochScope {ι C K : Type} {L : Layout} {F : Form} {W : ℕ} {Cd : ℕ → Declared ι} {cls : ℕ → ℕ → Cls}
-    {coin : ℕ → ℕ → C} (E : EpochTie L F W Cd cls coin) (Sc : Scheme K) (δs : ℝ) {w : ℕ} (hw : w < W)
-    (hWf : (Cd w).Wf) (hδ : 0 < δs) (hL : Sc.LuckProved) : Scope Sc (Cd w) δs :=
+theorem epochScope {ι Q R S K : Type} {L : Layout} {F : Form} {W : ℕ} {Cd : ℕ → Declared ι} {cls : ℕ → ℕ → Cls}
+    {release : ℝ} {run : ℕ → Pouw.TimedRun Q R S} (E : EpochTie L F W Cd cls release run) (Sc : Scheme K) (δs : ℝ)
+    {w : ℕ} (hw : w < W) (hWf : (Cd w).Wf) (hδ : 0 < δs) (hL : Sc.LuckProved) : Scope Sc (Cd w) δs :=
   tieScope ι K Sc L F (Cd w) (cls w) δs (E.tie w hw) hWf hδ hL
 
-/-- A coin that doesn't read the window, as main's one salt an epoch (`c` constant), isn't fresh over two windows of a
-round. -/
-theorem oneSalt_not_fresh {C : Type} {W R : ℕ} (c : ℕ → C) (hW : 2 ≤ W) (hR : 0 < R) :
-    ¬ CoinsFresh W R (fun _ r => c r) := by
-  intro h
-  have h01 := (h 0 0 1 0 (by omega) (by omega) hR hR rfl).1
-  omega
-
-/-- A live epoch a window, window `w`'s round-`r` coin `(w, r)`, is fresh. -/
-theorem perWindow_fresh (W R : ℕ) : CoinsFresh W R (fun w r => (w, r)) := by
-  intro w r w' r' _ _ _ _ h
-  exact ⟨congrArg Prod.fst h, congrArg Prod.snd h⟩
+/-- What a run spends in `(a, c]` is what it spends in `(a, b]` and then in `(b, c]`: a window timed from its own start
+`b` after the salt's release `a` leaves its spending in `(a, b]` uncounted. -/
+theorem spentIn_split {Q R S : Type} (run : Pouw.TimedRun Q R S) (H : Q → R) (s : S) (a b c : ℝ) :
+    run.spentIn H s a c = run.spentIn H s a b + run.spentIn H s b c := by
+  unfold Pouw.TimedRun.spentIn
+  exact (sub_add_sub_cancel' _ _ _).symm
 
 theorem llama31Rounds : Llama31Rounds := by
   unfold Llama31Rounds
@@ -255,12 +249,20 @@ theorem wit_receipt_cut : witCircuit.Writes 2 ∧ witCircuit.commitRound 2 = 1 �
 theorem wit_layerCommitted : LayerCommitted witCircuit :=
   tieCommits Unit witLayout .beside witCircuit witCls witTie
 
-/-- Two windows of the witness, a coin a window and round, are a tied epoch. -/
-theorem witEpoch : EpochTie witLayout .beside 2 (fun _ => witCircuit) (fun _ => witCls) (fun w r => (w, r)) :=
-  ⟨fun _ _ => witTie, perWindow_fresh 2 _⟩
+/-- A timed run from `t` that spends nothing. -/
+def witRunAt (t : ℝ) : Pouw.TimedRun Unit Unit Unit := ⟨t, fun _ _ => 0, fun _ _ _ => 0⟩
 
-/-- The same two windows with one coin a round across both are not. -/
-theorem witEpoch_oneSalt : ¬ EpochTie witLayout .beside 2 (fun _ => witCircuit) (fun _ => witCls) (fun _ r => r) :=
-  fun E => oneSalt_not_fresh (fun r => r) (le_refl 2) (by decide +kernel) E.fresh
+/-- Two windows of the witness, both timed from the salt's release `0`, are a tied epoch. -/
+theorem witEpoch : EpochTie witLayout .beside 2 (fun _ => witCircuit) (fun _ => witCls) 0 (fun _ => witRunAt 0) :=
+  ⟨fun _ _ => witTie, fun _ _ => rfl⟩
+
+/-- The same two windows with the second timed from its own start `1` are not. -/
+theorem witEpoch_ownStart : ¬ EpochTie witLayout .beside 2 (fun _ => witCircuit) (fun _ => witCls) 0
+    (fun w => witRunAt (if w = 0 then 0 else 1)) := by
+  intro E
+  have h := E.salted 1 (by decide)
+  first
+    | exact one_ne_zero h
+    | simp [witRunAt] at h
 
 end Properties.Served
