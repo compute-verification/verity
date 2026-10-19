@@ -50,6 +50,7 @@ import itertools
 import json
 import random
 import sys
+import time
 from concurrent.futures import ProcessPoolExecutor, as_completed
 
 import z3
@@ -365,18 +366,15 @@ def shared_inputs(rng: random.Random, axis: int) -> list[tuple[int, int]]:
     return [(a, b) if axis == 0 else (b, a) for a in few for b in many]
 
 
-CHEAP = (0, M32, *(1 << i for i in range(32)), *(M32 ^ (1 << i) for i in range(32)))
-
-
 def cegis(ops: tuple[str, ...], tname: str = "xor", timeout_ms: int = 0, seed: int = SEED,
-          edge_only: bool = False, domain: str = "all", fix: tuple = (), cheap: bool = False) -> dict:
+          edge_only: bool = False, domain: str = "all", fix: tuple = ()) -> dict:
     """One sequence of opcodes: unsat (no program of it computes the target), FOUND (one does, with its wiring), or
-    unknown (a timeout). On the nan domain both inputs range over the NaN patterns only (`reduce_nan`). With `fix`
-    (one of `splits`), only the programs whose addend sources it names; when the first instruction then reads only x
-    (or only y), CEGIS starts from `shared_inputs` and looks for counterexamples at those words first. With `cheap`,
-    it starts from the edge pairs and looks for counterexamples among the words with at most one bit set or clear
-    (`CHEAP`) before any other: their products by an earlier result are few distinct terms."""
+    unknown (a timeout), with the seconds it took. On the nan domain both inputs range over the NaN patterns only
+    (`reduce_nan`). With `fix` (one of `splits`), only the programs whose addend sources it names; when the first
+    instruction then reads only x (or only y), CEGIS starts from `shared_inputs` and looks for counterexamples at
+    those words first."""
     name = label(ops) + (f" /{fix_label(fix)}" if fix else "")
+    t0 = time.monotonic()
     rng = random.Random(f"{seed}:{name}:{tname}")
     prog, cons = skeleton(ops, fix)
     K = z3.BitVec("K", 32)
@@ -392,26 +390,30 @@ def cegis(ops: tuple[str, ...], tname: str = "xor", timeout_ms: int = 0, seed: i
 
     reads = first_reads(ops, fix) if fix and domain == "all" else None
     axis = 0 if reads == {0} else 1 if reads == {1} else None
-    for x, y in (shared_inputs(rng, axis) if axis is not None else initial_inputs(rng, edge_only or cheap, domain)):
+    for x, y in (shared_inputs(rng, axis) if axis is not None else initial_inputs(rng, edge_only, domain)):
         add(x, y)
+
+    def end(result: str, **more) -> dict:
+        return {"ops": name, "result": result, "inputs": len(inputs), **more,
+                "seconds": round(time.monotonic() - t0, 1)}
+
     X, Y = z3.BitVec("X", 32), z3.BitVec("Y", 32)
     general = evaluate(prog, X, Y) != target(tname, X, Y, K)
     if domain == "nan":
         general = z3.And(general, nan_bits(X), nan_bits(Y))
     free = [v for _, slots, m in prog for s, c in slots for v in (s, c) if not isinstance(v, int)]
     free += [v for _, _, m in prog for v in m.values() if not (z3.is_true(v) or z3.is_false(v))]
-    small = [z3.And(*(z3.Or([V == bv(w) for w in CHEAP]) for V in (X, Y)))] if cheap and domain == "all" else []
     while True:
         r = syn.check()
         if r == z3.unsat:
-            return {"ops": name, "result": "unsat", "inputs": len(inputs)}
+            return end("unsat")
         if r != z3.sat:
-            return {"ops": name, "result": "unknown", "inputs": len(inputs), "stage": "synthesis"}
+            return end("unknown", stage="synthesis")
         mdl = syn.model()
         sol = [(v, mdl.eval(v, model_completion=True)) for v in free + [K]]
         cx = None
         shared = [z3.Or([(X, Y)[axis] == bv(p[axis]) for p in inputs])] if axis is not None else []
-        for near in small + shared + [None]:
+        for near in shared + [None]:
             ver = z3.Solver()
             if timeout_ms:
                 ver.set("timeout", timeout_ms)
@@ -423,10 +425,9 @@ def cegis(ops: tuple[str, ...], tname: str = "xor", timeout_ms: int = 0, seed: i
                 cx = ver.model()
                 break
             if rv != z3.unsat:
-                return {"ops": name, "result": "unknown", "inputs": len(inputs), "stage": "verification"}
+                return end("unknown", stage="verification")
         if cx is None:
-            return {"ops": name, "result": "FOUND", "inputs": len(inputs),
-                    "program": {str(v): str(val) for v, val in sol}}
+            return end("FOUND", program={str(v): str(val) for v, val in sol})
         add(cx.eval(X, model_completion=True).as_long(), cx.eval(Y, model_completion=True).as_long())
 
 
@@ -482,7 +483,7 @@ def reduce_nan(ops: tuple):
 
 def search(k: int, fp: bool = True, tname: str = "xor", jobs: int = 1, timeout_ms: int = 0, stream=None,
            part: str = "all", shard: tuple[int, int] = (0, 1), labels: set | None = None,
-           edge_only: bool = False, via_nan: bool = False, split: bool = False, cheap: bool = False,
+           edge_only: bool = False, via_nan: bool = False, split: bool = False,
            cases: set | None = None, split_mods: bool = False) -> dict:
     """Every sequence of k opcodes (`part` int: those without an FP form, fp: those with one); each result is also
     written to `stream` (JSON lines) as it finishes. With `via_nan`, each sequence is settled by its `reduce_nan`
@@ -529,13 +530,13 @@ def search(k: int, fp: bool = True, tname: str = "xor", jobs: int = 1, timeout_m
 
     if jobs > 1:
         with ProcessPoolExecutor(jobs) as ex:
-            futs = {ex.submit(cegis, c, tname, timeout_ms, SEED, edge_only, domain, f, cheap): (c, f)
+            futs = {ex.submit(cegis, c, tname, timeout_ms, SEED, edge_only, domain, f): (c, f)
                     for c, f in todo}
             for fut in as_completed(futs):
                 got(*futs[fut], fut.result())
     else:
         for c, f in todo:
-            got(c, f, cegis(c, tname, timeout_ms, SEED, edge_only, domain, f, cheap))
+            got(c, f, cegis(c, tname, timeout_ms, SEED, edge_only, domain, f))
     if split:
         for name, c in cover.items():
             rs = [found[c, fix_label(f)] for f in parts(c)]
@@ -570,8 +571,6 @@ def main() -> int:
                     help="settle each sequence by its integer suffix on NaN-pattern inputs (reduce_nan)")
     ap.add_argument("--split", action="store_true", help="search each sequence as its first instruction's addend cases")
     ap.add_argument("--cases", help="with --split, only the cases whose labels ('SEQUENCE /CASE') are this file's lines")
-    ap.add_argument("--cheap", action="store_true",
-                    help="start from the edge pairs and look for counterexamples among CHEAP's words first")
     ap.add_argument("--split-mods", action="store_true",
                     help="with --split, search each case as its first instruction's modifier assignments")
     ap.add_argument("--merge", nargs="+", metavar="JSONL",
@@ -595,7 +594,7 @@ def main() -> int:
         labels = set(open(a.labels, encoding="utf-8").read().splitlines()) if a.labels else None
         cases = set(open(a.cases, encoding="utf-8").read().splitlines()) - {""} if a.cases else None
         r = search(k, not a.no_fp, a.target, a.jobs, a.timeout_ms, stream, a.part,
-                   tuple(int(v) for v in a.shard.split("/")), labels, a.edge_only, a.via_nan, a.split, a.cheap, cases,
+                   tuple(int(v) for v in a.shard.split("/")), labels, a.edge_only, a.via_nan, a.split, cases,
                    a.split_mods)
         out.append(r)
         print(f"k = {k}: {r['sequences']} sequences, {r['tally']}" + ("  -- proved" if r["proved"] else ""),
