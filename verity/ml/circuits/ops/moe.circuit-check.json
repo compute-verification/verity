@@ -1,0 +1,10 @@
+{
+ "pieces": {
+  "MoeSelectBf16x128_v1": {
+   "and": 2072
+  },
+  "MoeSelectBf16x3_v1": {
+   "and": 93
+  }
+ }
+}
