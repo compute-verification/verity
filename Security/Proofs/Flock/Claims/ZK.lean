@@ -47,6 +47,9 @@ import Proofs.Flock.Claims.ZK.InnerSlotTriple
 import Proofs.Flock.Claims.ZK.InnerLeaf
 import Proofs.Flock.Claims.ZK.InnerY
 import Proofs.Flock.Claims.ZK.InnerBatched
+import Proofs.Flock.Claims.ZK.InnerTauVal
+import Proofs.Flock.Claims.ZK.InnerTauRep
+import Proofs.Flock.Claims.ZK.InnerTauLig
 import Proofs.Flock.Claims.ZK.Assemble
 import Proofs.Flock.Claims.ZK.Sent
 import Proofs.Flock.Claims.ZK.Round1
@@ -65,7 +68,11 @@ import Proofs.Flock.Claims.ZK.PiopSrcSv
 import Proofs.Flock.Claims.ZK.SimPiop
 import Proofs.Flock.Claims.ZK.SimLig
 import Proofs.Flock.Claims.ZK.FinExe
+import Proofs.Flock.Claims.ZK.FinPads
+import Proofs.Flock.Claims.ZK.CausalExe
 import Proofs.Flock.Claims.ZK.LiveEnd
+import Proofs.Flock.Claims.ZK.FinTau
+import Proofs.Flock.Claims.ZK.FinInner
 import Proofs.Flock.Claims.ZK.Worker
 import Proofs.Flock.Claims.ZK.Switched
 import Proofs.Flock.Claims.ZK.Server
@@ -330,15 +337,31 @@ import Proofs.Flock.Claims.ZK.Stop
 * `InnerY`: `Masked.innerY`, the cut's `Y` is the session's at the honest pads once `β`'s round is answered.
 * `InnerBatched`: `Masked.innerBatched`, the batched constraint over the shared phases' constraints holds at the honest
   pads.
+* `InnerTauVal`: `Masked.innerTauVal_of`, `InnerTauVal` from the inner proof's seven rows before the triple
+  (`Masked.TauRows`), split as the replay's five (`Masked.TauRep`) and level 0's two (`Masked.TauLig`).
+* `InnerTauRep`: `Masked.tauRep`, the replay's three rows and the two ring-switch rows are `rowsOf`'s on the view and
+  `czExe`'s coins (the run being the session's, `Masked.innerPre_cutE`); `Masked.innerTauVal_of_tauLig : TauLig →
+  InnerTauVal`.
+* `InnerTauLig`: `Masked.tauLig`, level 0's two lane rows are `limbRows` of the model's `laneRow` at `czExe`'s coins
+  (`Masked.lanesA`), so **`Masked.innerTauVal`**: `InnerTauVal`.
 * `SimLig`: `Masked.simLig`, hybrid 1 against hybrid 2: Ligerito from the cut's source is the session's.
-* `FinExe`: `FinExe` from `LiveEnd`, `SimCommit`, the three hybrids and the per-rep statements `RepOpenFinal`,
-  `RepExact` and `RepPoints` (`Masked.finExe_of_open`).
+* `FinExe`: `FinExe` from `LiveEnd`, `SimCommit`, the three hybrids, `RepTau` and the opened positions' fields
+  `RepOpenRest` (`Masked.finExe_of_rest`); the rep count and rep 0's claim points (`Masked.repExact`,
+  `Masked.repPoints`); and `FinalRest`'s level-0 half: level 0's opened rows and salts read from the views are the
+  session's (`Masked.repOpenRest_l0`).
+* `FinPads`: `Masked.repOpenRest_pads`, `FinalRest`'s pads half: the pads' opened columns and salts read from the views
+  are the session's.
 * `LiveEnd`: `Masked.liveEnd`, the session answered by the openings ends as the one answered by the opened coins.
-* `Assemble`: `Flock.zk_deployZk_masked_exe_split`, Flock's zero knowledge at the deployed masked session from
-  `SplitInner`'s `InnerTauVal`, `CausalExe`, and `FinExe`'s `RepOpenFinal`, `RepExact` and `RepPoints`: `hstep` from
-  `Masked.prefixLive` and `SimSession` (`Masked.hstep_exe`), `SimSession` from `Masked.simCommit`, `Masked.simPiop`,
-  `Masked.simLig` and `SimInner` (`Masked.simSession_of`), `SimInner` from `SplitInner` (`Masked.simInner_of_split`),
-  the last message from `Masked.liveEnd` (`Masked.finExe_of_open`).
+* `FinTau`: `Masked.repTau_of`, `FinExe`'s `RepTau` from `InnerTauVal`: the session's rep's `τ` is `innerP`'s after the
+  shared phases, at the rep's `ε` slot's coins.
+* `FinInner`: `Masked.repOpenRest` (both halves of `FinalRest`) and `Masked.finExe_of_inner`, `FinExe` from `LiveEnd`,
+  `SimCommit`, the three hybrids and `InnerTauVal`.
+* `CausalExe`: `Masked.causalExe`, `CausalExe`: every executable send reads only coins drawn before it.
+* `Assemble`: **`Flock.zk_deployZk_masked_exe_split`**, Flock's zero knowledge at the deployed masked session given
+  only that `H` is SHA-512 and `0 < t`: `hstep` from `Masked.prefixLive` and `SimSession` (`Masked.hstep_exe`),
+  `SimSession` from `Masked.simCommit`, `Masked.simPiop`, `Masked.simLig` and `SimInner` (`Masked.simSession_of`),
+  `SimInner` from `SplitInner` (`Masked.simInner_of_split`, `τ`'s value `Masked.innerTauVal`), `Causal` by
+  `Masked.causalExe`, and the last message from `Masked.liveEnd` and `Masked.innerTauVal` (`Masked.finExe_of_inner`).
 * `Worker`: Lemma B at any clear values a worker supplies, which never read the pads: the switched prover (`p`'s view
   where its rows hold, else the honest prover's on the pads Lemma A moves) has `S_shvzk`'s distribution on the honest
   `InnerHolds` alone (`sw_shvzk`, `worker_shvzk`), and differs from `p`'s view only in `Y₁`, `C_h` and the pads tree
