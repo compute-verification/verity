@@ -340,7 +340,7 @@ theorem lastStepBinds_deployed (rel : _root_.Flock.Readable.Parsed → _root_.Fl
     (final : Msg → Option (List (List (Msg × Salt)) × Msg)) (w : Msg → ℝ) (H : Msg → Msg) (h : PlainLastBinds H) :
     (bdDeployed rel (FlockDeploy.V false).next (FlockDeploy.deployPlainTrim rel).cols wE join rowIn final
       w).LastStepBinds H := by
-  refine lastStepBinds_of_V H _ rfl (fun _ => rfl) (fun _ _ heq => ?_) h
+  refine lastStepBinds_of_V H _ rfl (bdDeployed_ans rel _ _ wE join rowIn final w) (fun _ _ heq => ?_) h
   rw [bdDeployed_cols]
   exact plainTrim_cols_congr rel heq
 
