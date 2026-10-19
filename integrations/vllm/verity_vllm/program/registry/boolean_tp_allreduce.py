@@ -9,8 +9,6 @@ bits (bf16 = Array<16, Value<1>>).
                                                                                           word view: AllReduceCustom_v1
     AllReduceMultimemCoordinate_v2{WORLD,TREE,FTZ}
                                                (col: Array<WORLD, BF16>) -> BF16          word view: AllReduceMultimemCoordinate_v1
-    AllReduceMultimemVector_v2{WORLD,TREE,FTZ} (parts: Array<WORLD, Array<8, BF16>>) -> Array<8, BF16>
-                                                                                          word view: AllReduceMultimemVector_v1
     AllReduceMultimem_v2{WORLD,SIZE,TREES,FTZ} (parts: Array<WORLD, Array<SIZE, BF16>>) -> Array<SIZE, BF16>
                                                                                           word view: AllReduceMultimem_v1
     AllReduceNcclTreeCoordinate_v2{WORLD,CHAIN}
@@ -47,8 +45,8 @@ from verity.ml.circuits.types import Array
 from verity_vllm.program.registry import tp_allreduce as TA
 
 __all__ = ["AllReduceCustom", "AllReduceCustomCoordinate", "AllReduceMnnvl", "AllReduceMnnvlCoordinate", "AllReduceMultimem",
-           "AllReduceMultimemCoordinate", "AllReduceMultimemVector", "AllReduceNcclTree", "AllReduceNcclTreeCoordinate",
-           "custom_sum", "mnnvl_sum", "multimem_sum", "nccl_tree_sum"]
+           "AllReduceMultimemCoordinate", "AllReduceNcclTree", "AllReduceNcclTreeCoordinate", "custom_sum", "mnnvl_sum",
+           "multimem_sum", "nccl_tree_sum"]
 
 BF16 = Array(16, BL.BIT)
 
@@ -168,27 +166,15 @@ AllReduceMultimemCoordinate = EW.specialized(
     word=lambda b: bind(TA.AllReduceMultimemCoordinate, WORLD=b["WORLD"], TREE=b["TREE"], FTZ=b["FTZ"]))
 
 
-def _multimem_vector(B, S, parts):
-    """`AllReduceMultimemVector_v1`'s body on bits: one `AllReduceMultimemCoordinate_v2` per element."""
-    return B.batch(bind(AllReduceMultimemCoordinate, WORLD=S.WORLD, TREE=S.TREE, FTZ=bool(S.FTZ)), parts, axes=(1,))
-
-
-AllReduceMultimemVector = EW.on_bits(
-    "AllReduceMultimemVector", 2, ("WORLD", "TREE", "FTZ"),
-    lambda S: ((("parts", Array(int(S.WORLD), Array(TA.MULTIMEM_VECTOR, BF16))),), Array(TA.MULTIMEM_VECTOR, BF16)),
-    _multimem_vector, TA.AllReduceMultimemVector)
-
-
 def _multimem(B, S, parts):
-    """`AllReduceMultimem_v1`'s body on bits: each run of `tp_allreduce.multimem_runs` one `AllReduceMultimemVector_v2` per 16-byte
-    vector."""
-    world, V = TA.ranks(S.WORLD), TA.MULTIMEM_VECTOR
+    """`AllReduceMultimem_v1`'s body on bits: each run of `tp_allreduce.multimem_runs` one `AllReduceMultimemCoordinate_v2` per
+    element."""
+    world = TA.ranks(S.WORLD)
     outs = []
     for lo, hi, tree in TA.multimem_runs(world, int(S.SIZE), S.TREES):
-        vectors = Array((hi - lo) // V, Array(V, BF16))
-        cols = array_of([parts[r][lo:hi].reshape(vectors) for r in range(world)])
-        outs.append(B.batch(bind(AllReduceMultimemVector, WORLD=world, TREE=tree, FTZ=bool(S.FTZ)), cols, axes=(1,)))
-    return coll_concat(Array(int(S.SIZE), BF16), outs)
+        cols = array_of([parts[r][lo:hi] for r in range(world)])
+        outs.append(B.batch(bind(AllReduceMultimemCoordinate, WORLD=world, TREE=tree, FTZ=bool(S.FTZ)), cols, axes=(1,)))
+    return outs[0] if len(outs) == 1 else coll_concat(Array(int(S.SIZE), BF16), outs)
 
 
 AllReduceMultimem = EW.on_bits(
