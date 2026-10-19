@@ -1,14 +1,15 @@
 """`h1o.cu`'s forms of a served call's units at kernel level, on a synthetic Llama-3.1-8B window: `h1o_unitss` (a unit
 a block of six warps, `h1s_unit`), `h1o_unitsb` (a unit a block of five, `h1b_unit`) and `h1o_units` (a unit a warp,
-`h1r_unit<2>`), each gated through `dither_one.check`, then timed
-against each other.
+`h1r_unit<2>`), and the first two peeled (`split-peel`, `block-peel`: z = A B^T, DITHER_PEEL=1), each gated through
+`dither_one.check`, then timed against each other.
 
     gate  per form, a `dither_one.Window` (T = 64) over NL layers' four linears with the served shapes, random full-range
           int8 weights and positive scales; four decode steps of m = 32 random rows captured (gate, control, fault,
           fault_wb; every buffer 0xA5 first) and `dither_one.check` on each: the A, admit and z roots and the round =
-          commit.py's, every receipt = h1r v1's, every z = h1o_ref's, y = dequant(z), 3 units = CA's H1V3 on the CPU (and
-          H1V3's own code where DITHER_H1V3_TREE names its tree); the control refused and both faults conforming
-          (`gate_verdict`); wb's density as the run reads it
+          commit.py's, every receipt = h1r v1's, every z = h1o_ref's (peeled: = A B^T, and y = today's scaled_mm on
+          every call), y = dequant(z), 3 units = CA's H1V3 on the CPU (and H1V3's own code where DITHER_H1V3_TREE names
+          its tree; peeled, its z peeled on the CPU); the control refused and both faults conforming (`gate_verdict`);
+          wb's density as the run reads it
     time  per form, at m = 32: the window's 4 NL calls in model order (A table and units) as one CUDA graph, their units
           launches alone as another, and each site's units alone, replayed between CUDA events with the forms interleaved
 
@@ -36,7 +37,7 @@ import dither_one as DO  # noqa: E402
 SHAPES = {"self_attn.qkv_proj": (6144, 4096), "self_attn.o_proj": (4096, 4096), "mlp.gate_up_proj": (28672, 4096),
           "mlp.down_proj": (4096, 14336)}
 T, M = 64, 32
-FORMS = ("split", "block", "warp")
+FORMS = ("split", "block", "warp", "split-peel", "block-peel")
 
 
 def model(nl: int, dev) -> None:
@@ -65,7 +66,8 @@ def step(win: DO.Window, xs: list, outs: list) -> None:
 
 
 def gate(form: str, dev) -> tuple:
-    os.environ[DO.UNITS_ENV] = form
+    os.environ[DO.UNITS_ENV] = form.split("-")[0]
+    os.environ[DO.PEEL_ENV] = "1" if form.endswith("-peel") else "0"
     win = DO.Window(T, os.urandom(64), os.environ["DITHER_H1C"], os.environ[DO.LIB_ENV], True, dev)
     outs = [(torch.empty(M, n, dtype=torch.bfloat16, device=dev), torch.empty(M, n, dtype=torch.int32, device=dev))
             for n, _ in win.nk]
@@ -148,12 +150,12 @@ def main() -> int:
         per = {"calls": 4 * a.nl, "units": 4 * a.nl, **{f"units/{s}": a.nl for s in DF.SITES}}
         doc["timing"] = {f: {n: {"ms_median": statistics.median(v), "us_per_call": 1e3 * statistics.median(v) / per[n],
                                  "ms_all": [round(x, 4) for x in v]} for n, v in ms[f].items()} for f in FORMS}
-        doc["speedup_warp_over_block"] = {n: doc["timing"]["warp"][n]["ms_median"] / doc["timing"]["block"][n]["ms_median"]
-                                          for n in ms["block"]}
+        doc["time_over_block"] = {f: {n: doc["timing"][f][n]["ms_median"] / doc["timing"]["block"][n]["ms_median"]
+                                      for n in ms["block"]} for f in FORMS}
         for f in FORMS:
             print(json.dumps({"time": f, **{n: round(v["us_per_call"], 2) for n, v in doc["timing"][f].items()}}), flush=True)
-        print(json.dumps({"speedup_warp_over_block": {n: round(v, 3) for n, v in doc["speedup_warp_over_block"].items()}}),
-              flush=True)
+        print(json.dumps({"time_over_block": {f: {n: round(v, 3) for n, v in r.items()}
+                                              for f, r in doc["time_over_block"].items()}}), flush=True)
     (out / "h1o-gate.json").write_text(json.dumps(doc, indent=1, default=str) + "\n")
     return 0 if ok else 2
 

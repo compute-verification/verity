@@ -70,6 +70,18 @@ __device__ __forceinline__ u32 badd(u32 a, u32 b) {
 }
 // bits 0..3 of x, one to each byte's bit 0
 __device__ __forceinline__ u32 spread4(u32 x) { return ((x & 0xFu) * 0x00204081u) & 0x01010101u; }
+// per-byte a - b mod 2^8, each byte of b 0 or 1
+__device__ __forceinline__ u32 bsub1(u32 a, u32 b) { return ((a | 0x80808080u) - b) ^ ((a ^ ~b) & 0x80808080u); }
+// X's A-operand fragment back to A's (X = A + b mod 2^8 a byte), from the b words of rows g, g + 8, g + 16 and g + 24
+__device__ __forceinline__ void peel_af(u32 (&af)[2][4], const u32 (&nb4)[4], int q) {
+#pragma unroll
+  for (int mi = 0; mi < 2; ++mi) {
+    af[mi][0] = bsub1(af[mi][0], spread4(nb4[2 * mi] >> (4 * q)));
+    af[mi][1] = bsub1(af[mi][1], spread4(nb4[2 * mi + 1] >> (4 * q)));
+    af[mi][2] = bsub1(af[mi][2], spread4(nb4[2 * mi] >> (16 + 4 * q)));
+    af[mi][3] = bsub1(af[mi][3], spread4(nb4[2 * mi + 1] >> (16 + 4 * q)));
+  }
+}
 
 __device__ __forceinline__ void mma(int c[4], const u32 a[4], u32 b0, u32 b1) {
   asm volatile(
@@ -237,9 +249,14 @@ __device__ __forceinline__ void prefetch_l2(const void* p, u32 bytes) {
 // from the B, c and U bytes its W' is made of, as an s8 {-1, 0, 1} operand in E's shared buffer (E::wbs, 32 * XS bytes),
 // and one more MMA a fragment against the same X.  E writes z; it also says which A rows are the canonical empty row (read
 // as zero), what a dead unit writes, and may perturb a noised accumulator word or flip a wb⁺ bit (the conformance tests).
+// With E::PEEL (CA, 11:02Z: b and c peeled, so the served model is the registered one) z is A Bᵀ itself: that MMA takes
+// the wrap MMA's place, its B operand B's own bytes where wb's were and its A operand X's fragment less b a byte; the
+// receipts are the same words.  It is the peel z - b Bᵀ - A cᵀ - b cᵀ + 256 xw (B + c)ᵀ (xw = [A = 127 and b = 1], where
+// the s8 X wraps), integer for integer; the block and split forms have it.
 // NoEpi: the receipts alone.
 struct NoEpi {
   static constexpr bool ON = false;
+  static constexpr bool PEEL = false;
   static constexpr bool SEEDS = false;  // with SEEDS, lanes 0 and 1 derive the unit's seed_j and σ_R (E::seed), not read them
   __device__ bool a_ok(int) const { return true; }
   __device__ void dead(int, int, int) const {}
@@ -271,6 +288,7 @@ template <int V, class E = NoEpi>
 __device__ __forceinline__ void h1r_unit(const H1Call& C, int v, int lane, uint8_t* Xs, uint8_t* Ws, u64* sdw, u32* nzw,
                                          const u64* __restrict__ seeds, u64 nt0, u64 nt1, u64 nt2, u32* __restrict__ out,
                                          int nowrite, const E& ep = E()) {
+  static_assert(!E::PEEL, "the warp form serves the dithered product only");
   int ri, cj;
   if constexpr (V >= 2) {
     const int nrb = C.units / C.ncb;
@@ -568,8 +586,8 @@ __device__ __forceinline__ void nbar_arrive(int id, int n) { asm volatile("bar.a
 // values as `h1r_unit<2, E>` (so the same receipt, z and y).  The operand warps 0 .. BOW - 1 hash the noise a group of
 // chunks at a time, one compression a thread (group 0: chunk 0, with U's and σ_R's blocks; then the chunks in pairs,
 // double-buffered), and build segment s's X, W' and wb rows in warp s % BOW's slot; each also runs its segments' residue
-// and wrap MMAs (Y and X wbᵀ, read only after the last segment), summed over the operand warps through shared memory at
-// the end.  The fold warp (BOW) runs T_s's MMAs, E's fault and the absorb in segment order, then the tail and E's output.
+// and wrap MMAs (Y and X wbᵀ, or A Bᵀ peeled, read only after the last segment), summed over the operand warps through
+// shared memory at the end.  The fold warp (BOW) runs T_s's MMAs, E's fault and the absorb in segment order, then the tail and E's output.
 // A slot is handed over by named barriers: FULL after the operand warp's stores, EMPTY after the fold warp's loads.
 constexpr int BOW = 4;
 constexpr int BTH = 32 * (BOW + 1);
@@ -577,10 +595,10 @@ enum : int { NB_FULL = 1, NB_EMPTY = NB_FULL + BOW, NB_OPS = NB_EMPTY + BOW, NB_
 constexpr int RS = 33;  // the reduction's lane stride in words
 
 struct __align__(16) H1BShared {
-  uint8_t op[BOW][3][32 * XS];  // operand warp w's slot: X (row l at l XS), W' (column l), wb (column l)
+  uint8_t op[BOW][3][32 * XS];  // operand warp w's slot: X (row l at l XS), W' (column l), wb or, peeled, B (column l)
   union {
     u32 nz[2][2][2][32 * NZ];  // [buffer][chunk of the group][row, column][l NZ + s16]
-    int red[2][32 * RS];       // after the last segment: Y and X wbᵀ summed over the operand warps, [lane RS + entry]
+    int red[2][32 * RS];       // after the last segment: Y and X wbᵀ (peeled: A Bᵀ) summed over the operand warps
   };
   uint8_t us[32 * XS];  // U: column l's 32 residues at l XS
   uint8_t xs[32 * XS];  // the fold warp's digit rows
@@ -722,13 +740,19 @@ __device__ __forceinline__ void h1b_unit(const H1Call& C, int v, H1BShared& sh, 
         const u32 nr = sh.nz[buf][ci][0][lane * NZ + s16], nc = sh.nz[buf][ci][1][lane * NZ + s16];
         const u32 av[8] = {a0.x, a0.y, a0.z, a0.w, a1.x, a1.y, a1.z, a1.w};
         const u32 bv[8] = {b0.x, b0.y, b0.z, b0.w, b1.x, b1.y, b1.z, b1.w};
-        u32 xw[8], ww[8], wq[8];
+        u32 xw[8], ww[8], wq[8], nb4[4];
 #pragma unroll
         for (int i = 0; i < 8; ++i) {
           xw[i] = badd(av[i], spread4(nr >> (4 * i)));
           ww[i] = badd(badd(bv[i], Uw[i]), spread4(nc >> (4 * i)));
         }
-        if constexpr (E::ON) {
+        if constexpr (E::PEEL) {
+#pragma unroll
+          for (int i = 0; i < 8; ++i) wq[i] = bv[i];
+          ep.b_fault(u, lane, s, wq);
+#pragma unroll
+          for (int j = 0; j < 4; ++j) nb4[j] = sh.nz[buf][ci][0][(g + 8 * j) * NZ + s16];
+        } else if constexpr (E::ON) {
           u32 P[8], N[8];
 #pragma unroll
           for (int i = 0; i < 8; ++i) wrap_masks(bv[i], Uw[i], ww[i], P[i], N[i]);
@@ -762,13 +786,25 @@ __device__ __forceinline__ void h1b_unit(const H1Call& C, int v, H1BShared& sh, 
             wf[ni][1] = *reinterpret_cast<const u32*>(Bs + (8 * ni + g) * XS + 16 + 4 * q);
           }
         }
+        if constexpr (E::PEEL) {
 #pragma unroll
-        for (int mi = 0; mi < 2; ++mi)
+          for (int mi = 0; mi < 2; ++mi)
 #pragma unroll
-          for (int ni = 0; ni < 4; ++ni) {
-            mma(Y[mi][ni], af[mi], IB[ni][0], IB[ni][1]);
-            if constexpr (E::ON) mma(cr[mi][ni], af[mi], wf[ni][0], wf[ni][1]);
-          }
+            for (int ni = 0; ni < 4; ++ni) mma(Y[mi][ni], af[mi], IB[ni][0], IB[ni][1]);
+          peel_af(af, nb4, q);
+#pragma unroll
+          for (int mi = 0; mi < 2; ++mi)
+#pragma unroll
+            for (int ni = 0; ni < 4; ++ni) mma(cr[mi][ni], af[mi], wf[ni][0], wf[ni][1]);
+        } else {
+#pragma unroll
+          for (int mi = 0; mi < 2; ++mi)
+#pragma unroll
+            for (int ni = 0; ni < 4; ++ni) {
+              mma(Y[mi][ni], af[mi], IB[ni][0], IB[ni][1]);
+              if constexpr (E::ON) mma(cr[mi][ni], af[mi], wf[ni][0], wf[ni][1]);
+            }
+        }
       }
     }
     // the noise buffers are free once every operand warp is past its last segment
@@ -904,7 +940,7 @@ __device__ __forceinline__ void h1b_unit(const H1Call& C, int v, H1BShared& sh, 
           for (int e = 0; e < 4; ++e) P[mi][ni][e] = (int)((u32)acc[mi][ni][e] - (u32)P[mi][ni][e]);
     }
     absorb(st, P, o, KS + d, lane, nowrite);
-    if constexpr (E::ON) {
+    if constexpr (E::ON && !E::PEEL) {
 #pragma unroll
       for (int mi = 0; mi < 2; ++mi)
 #pragma unroll
@@ -914,7 +950,9 @@ __device__ __forceinline__ void h1b_unit(const H1Call& C, int v, H1BShared& sh, 
             acc[mi][ni][e] = d == 0 ? P[mi][ni][e] : (int)((u32)acc[mi][ni][e] - ((u32)P[mi][ni][e] << (7 * d)));
     }
   }
-  if constexpr (E::ON) {
+  if constexpr (E::PEEL) {
+    ep.out(ri, cj, lane, cr);
+  } else if constexpr (E::ON) {
 #pragma unroll
     for (int mi = 0; mi < 2; ++mi)
 #pragma unroll
@@ -928,8 +966,8 @@ __device__ __forceinline__ void h1b_unit(const H1Call& C, int v, H1BShared& sh, 
 // The split form: one unit a block of six warps, the same values as `h1r_unit<2, E>`.  Warps 2 and 3 hash chunk c's row
 // and column noise blocks (one compression a thread) while chunk c - 1 is built, into nz[c & 1]; warps 0 and 1 build the
 // segments s = b mod 2 of each chunk into slot s % 4 (X, W' and wb, from A, B and the noise) and run their residue and
-// wrap MMAs (Y and X wbᵀ, summed through shared memory after the last segment); warps 4 and 5 are the fold's halves.  Set
-// t's chains (st[4 (t % 2) + e] and st[8 + 4 (t % 2) + e]) read only fragment (t / 4, t % 4), so half F owns the column
+// wrap MMAs (Y and X wbᵀ or A Bᵀ, summed through shared memory after the last segment); warps 4 and 5 are the fold's
+// halves.  Set t's chains (st[4 (t % 2) + e] and st[8 + 4 (t % 2) + e]) read only fragment (t / 4, t % 4), so half F owns the column
 // fragments ni = F and F + 2, their accumulators, chains and outputs, and XORs its share of each receipt word into
 // shared memory; the tail's digits are exchanged through shared memory, a digit at a time.  Live units come first, a
 // column block's live row blocks on adjacent blocks.  Named barriers: a slot's FULL and EMPTY (a builder and both
@@ -940,10 +978,10 @@ constexpr int SSETS = 16384 / 32 + 4;  // the receipt's sets at the largest K th
 enum : int { SN_FULL = 1, SN_EMPTY = 5, SN_NZF = 9, SN_NZE = 11, SN_BLD = 13, SN_RED = 14, SN_FOLD = 15 };
 
 struct __align__(16) H1SShared {
-  uint8_t op[4][3][32 * XS];  // slot s % 4: X (row l at l XS), W' (column l), wb (column l)
+  uint8_t op[4][3][32 * XS];  // slot s % 4: X (row l at l XS), W' (column l), wb or, peeled, B (column l)
   union {
     u32 nz[2][2][32 * NZ];  // [chunk & 1][row, column][l NZ + s16]
-    int red[2][32 * RS];    // after the last segment: Y and X wbᵀ summed over the builders, [lane RS + entry]
+    int red[2][32 * RS];    // after the last segment: Y and X wbᵀ (peeled: A Bᵀ) summed over the builders
   };
   uint8_t us[32 * XS];     // U: column l's 32 residues at l XS
   uint8_t xs[2][32 * XS];  // the tail's digit rows, digit d in xs[d & 1]
@@ -1109,7 +1147,7 @@ __device__ __forceinline__ void h1s_fold(H1SShared& sh, int u, int ri, int cj, i
           for (int e = 0; e < 4; ++e) P[mi][k][e] = (int)((u32)acc[mi][k][e] - (u32)P[mi][k][e]);
     }
     absorb_half<F>(st, P, sh.rcp, KS + d, lane);
-    if constexpr (E::ON) {
+    if constexpr (E::ON && !E::PEEL) {
 #pragma unroll
       for (int mi = 0; mi < 2; ++mi)
 #pragma unroll
@@ -1119,7 +1157,9 @@ __device__ __forceinline__ void h1s_fold(H1SShared& sh, int u, int ri, int cj, i
             acc[mi][k][e] = d == 0 ? P[mi][k][e] : (int)((u32)acc[mi][k][e] - ((u32)P[mi][k][e] << (7 * d)));
     }
   }
-  if constexpr (E::ON) {
+  if constexpr (E::PEEL) {
+    ep.template out_half<F>(ri, cj, lane, cr);
+  } else if constexpr (E::ON) {
 #pragma unroll
     for (int mi = 0; mi < 2; ++mi)
 #pragma unroll
@@ -1266,6 +1306,11 @@ __device__ __forceinline__ void h1s_unit(const H1Call& C, int v, H1SShared& sh, 
       pb1 = *reinterpret_cast<const uint4*>(brow + 32 * (s + 2) + 16);
     }
     const u32 nr = sh.nz[c & 1][0][lane * NZ + s16], nc = sh.nz[c & 1][1][lane * NZ + s16];
+    u32 nb4[4];
+    if constexpr (E::PEEL) {
+#pragma unroll
+      for (int j = 0; j < 4; ++j) nb4[j] = sh.nz[c & 1][0][(g + 8 * j) * NZ + s16];
+    }
     if (s16 == 14 + b && c + 2 < nb) nbar_arrive(SN_NZE + (c & 1), 128);
     const u32 av[8] = {a0.x, a0.y, a0.z, a0.w, a1.x, a1.y, a1.z, a1.w};
     const u32 bv[8] = {b0.x, b0.y, b0.z, b0.w, b1.x, b1.y, b1.z, b1.w};
@@ -1275,7 +1320,11 @@ __device__ __forceinline__ void h1s_unit(const H1Call& C, int v, H1SShared& sh, 
       xw[i] = badd(av[i], spread4(nr >> (4 * i)));
       ww[i] = badd(badd(bv[i], Uw[i]), spread4(nc >> (4 * i)));
     }
-    if constexpr (E::ON) {
+    if constexpr (E::PEEL) {
+#pragma unroll
+      for (int i = 0; i < 8; ++i) wq[i] = bv[i];
+      ep.b_fault(u, lane, s, wq);
+    } else if constexpr (E::ON) {
       u32 P[8], N[8];
 #pragma unroll
       for (int i = 0; i < 8; ++i) wrap_masks(bv[i], Uw[i], ww[i], P[i], N[i]);
@@ -1312,13 +1361,25 @@ __device__ __forceinline__ void h1s_unit(const H1Call& C, int v, H1SShared& sh, 
         wf[ni][1] = *reinterpret_cast<const u32*>(Bs + (8 * ni + g) * XS + 16 + 4 * q);
       }
     }
+    if constexpr (E::PEEL) {
 #pragma unroll
-    for (int mi = 0; mi < 2; ++mi)
+      for (int mi = 0; mi < 2; ++mi)
 #pragma unroll
-      for (int ni = 0; ni < 4; ++ni) {
-        mma(Y[mi][ni], af[mi], IB[ni][0], IB[ni][1]);
-        if constexpr (E::ON) mma(cr[mi][ni], af[mi], wf[ni][0], wf[ni][1]);
-      }
+        for (int ni = 0; ni < 4; ++ni) mma(Y[mi][ni], af[mi], IB[ni][0], IB[ni][1]);
+      peel_af(af, nb4, q);
+#pragma unroll
+      for (int mi = 0; mi < 2; ++mi)
+#pragma unroll
+        for (int ni = 0; ni < 4; ++ni) mma(cr[mi][ni], af[mi], wf[ni][0], wf[ni][1]);
+    } else {
+#pragma unroll
+      for (int mi = 0; mi < 2; ++mi)
+#pragma unroll
+        for (int ni = 0; ni < 4; ++ni) {
+          mma(Y[mi][ni], af[mi], IB[ni][0], IB[ni][1]);
+          if constexpr (E::ON) mma(cr[mi][ni], af[mi], wf[ni][0], wf[ni][1]);
+        }
+    }
   }
   // the noise buffers become the reduction once both builders are past their last segment
   nbar_sync(SN_BLD, 64);

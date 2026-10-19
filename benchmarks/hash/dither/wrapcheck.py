@@ -4,7 +4,10 @@ DITHER_H1V3_TREE, run through `h1v3_ref.py`):
 * the byte-mask rule `h1r.cu` computes wb with (`badd`, `wrap_masks`, `wrap_s8`, emulated here word for word) equals
   H1V3's `wrap_bits` on every (B, c, U) byte triple, and on random words (4 entries at once);
 * this lane's CPU twin (`dither_one.h1v3_unit`, the gate's) equals H1V3's `h1tile.reference(stream=True)` in z and
-  receipt on random full-range units (entries at A = 127 and |B| = 127 forced) at m = 2 and m = 3, and z = X (B + c)^T.
+  receipt on random full-range units (entries at A = 127 and |B| = 127 forced) at m = 2 and m = 3, and z = X (B + c)^T;
+* the peel (CA, 11:02Z) on H1V3's own z: z - b B^T - A c^T - b c^T + 256 xw (B + c)^T = A B^T on every cell, xw =
+  [A = 127 and b = 1] where the s8 X wraps (the cells CA's formula as written misses are counted), and the peeled
+  kernel's A operand (`bsub1` of X's byte and b, emulated) is A on every byte and bit.
 
     python wrapcheck.py    # one JSON line; exit 1 on any difference, 2 without a tree
 """
@@ -28,6 +31,10 @@ def badd(a: int, b: int) -> int:
 
 def spread4(x: int) -> int:
     return ((x & 0xF) * 0x00204081) & 0x01010101
+
+
+def bsub1(a: int, b: int) -> int:
+    return (((a | 0x80808080) - b) ^ ((a ^ ~b) & 0x80808080)) & M
 
 
 def kernel_wb(bw: int, uw: int, c4: int) -> list[int]:
@@ -57,6 +64,10 @@ def main() -> int:
         got = kernel_wb(bw, uw, c4)
         bad_words += any(got[i] != want[(256 * ((c4 >> i) & 1) + ((uw >> (8 * i)) & 0xFF)) * 256 + ((bw >> (8 * i)) & 0xFF)]
                          for i in range(4))
+    bad_peel = [(a, c) for c in range(2) for a in range(256) if bsub1(badd(a, c), c) != a]
+    for _ in range(20000):
+        aw, c4 = rng.getrandbits(32), rng.getrandbits(4)
+        bad_peel += [(aw, c4)] if bsub1(badd(aw, spread4(c4)), spread4(c4)) != aw else []
     units, twins = [], []
     g = np.random.default_rng(7)
     for k in (64, 4128):
@@ -73,13 +84,18 @@ def main() -> int:
     hv = DO.h1v3_itself(units)
     cases = []
     for k, tw, hu in zip((64, 4128), twins, hv.get("units", [])):
-        cases.append({"k": k, "z_equal": bool((tw["z"] == np.array(hu["z"], dtype=np.int64)).all()),
+        hz = np.array(hu["z"], dtype=np.int64)
+        cases.append({"k": k, "z_equal": bool((tw["z"] == hz).all()),
                       "receipt_equal": tw["receipt"] == hu["receipt"], "cells_z_ne_x_bc": int((tw["z"] != tw["xw"]).sum()),
-                      "wb": tw["wb_plus"] + tw["wb_minus"]})
-    ok = (not bad_bytes and not bad_words and len(cases) == 2
-          and all(c["z_equal"] and c["receipt_equal"] and c["cells_z_ne_x_bc"] == 0 and c["wb"] > 0 for c in cases))
+                      "wb": tw["wb_plus"] + tw["wb_minus"], "x_wraps": tw["x_wraps"],
+                      "peel_ca_cells_ne_ab": int((DO._s32(hz - tw["peel"]) != tw["today"]).sum()),
+                      "peel_xw_cells_ne_ab": int((DO._s32(hz - tw["peel"] + tw["xw_term"]) != tw["today"]).sum())})
+    ok = (not bad_bytes and not bad_words and not bad_peel and len(cases) == 2
+          and all(c["z_equal"] and c["receipt_equal"] and c["cells_z_ne_x_bc"] == 0 and c["wb"] > 0
+                  and c["x_wraps"] > 0 and c["peel_xw_cells_ne_ab"] == 0 for c in cases))
     print(json.dumps({"ok": ok, "h1tile": tab["h1tile"], "h1v3_sha": tab.get("sha"), "bytes_bad": bad_bytes[:8],
-                      "words_bad": bad_words, "units": cases, "h1v3_error": hv.get("error")}))
+                      "words_bad": bad_words, "peel_operand_bad": bad_peel[:8], "units": cases,
+                      "h1v3_error": hv.get("error")}))
     return 0 if ok else 1
 
 

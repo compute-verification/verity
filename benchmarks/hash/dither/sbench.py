@@ -35,6 +35,9 @@ Arms:
                  `credit_gate.Trace`, the file DITHER_CREDIT_GATE names): the gate reports its verdicts (`credit_2684`)
     dither-1s-warp  dither-1s with its units a warp each (DITHER_UNITS=warp, `h1o_units`), not a block each
     dither-1s-split  dither-1s with its units in the split form (DITHER_UNITS=split, `h1o_unitss`: six warps a unit)
+    dither-1s-peel  dither-1s peeled (DITHER_PEEL=1, `h1o_unitsbp`; CA, 11:02Z): z = A B^T, so y is today's served y and
+                 its tokens must equal exact's; the receipts are dither-1s's
+    dither-1s-split-peel  dither-1s-peel in the split form (`h1o_unitssp`)
     dither-1s-percall0  dither-1s with ASK-64's per-call round between each call's A table and its units (`h1o_percall`:
                  root(A) to the host, a host function, a coin back, all captured in the graphs) and no wait: its plumbing
     dither-1s-percall-rtt  the same with the host function holding each call one measured challenger round trip
@@ -161,12 +164,14 @@ def build(arm: str, scratch: Path, gpu_mem: float):
             llm.dither_win = win
         return llm
     if arm in ("dither-1s", "dither-1s-credit", "dither-1s-warp", "dither-1s-split", "dither-1s-percall0",
-               "dither-1s-percall-rtt"):
+               "dither-1s-percall-rtt", "dither-1s-peel", "dither-1s-split-peel"):
         sys.path.insert(0, str(HERE))
         import dither_fused as DF
         import dither_one as DO
-        if arm in ("dither-1s-warp", "dither-1s-split"):
-            os.environ[DO.UNITS_ENV] = arm.rsplit("-", 1)[1]
+        if arm in ("dither-1s-warp", "dither-1s-split", "dither-1s-split-peel"):
+            os.environ[DO.UNITS_ENV] = arm.split("-")[2]
+        if arm in ("dither-1s-peel", "dither-1s-split-peel"):
+            os.environ[DO.PEEL_ENV] = "1"
         if arm == "dither-1s-percall0":
             os.environ[DO.PERCALL_ENV] = "0"
         if arm == "dither-1s-percall-rtt":
@@ -188,8 +193,8 @@ def build(arm: str, scratch: Path, gpu_mem: float):
 
 REF_OF = {"dither": "exact", "dither-side": "exact", "dither-1s": "exact", "dither-1s-credit": "exact",
           "dither-1s-warp": "exact", "dither-1s-split": "exact", "dither-1s-percall0": "exact",
-          "dither-1s-percall-rtt": "exact"}
-# an arm that serves another value: its tokens are compared, not required equal
+          "dither-1s-percall-rtt": "exact", "dither-1s-peel": "exact", "dither-1s-split-peel": "exact"}
+# an arm that serves another value: its tokens are compared, not required equal (an arm not listed: required)
 TOKENS_GATED = {"dither-1s": False, "dither-1s-credit": False, "dither-1s-warp": False, "dither-1s-split": False,
                 "dither-1s-percall0": False, "dither-1s-percall-rtt": False}
 GATE_TOKENS = 16    # enough B32 decode steps for the gate's capture, its receipts, the control's and its receipts
@@ -328,6 +333,8 @@ def main() -> int:
             ref = REF_OF.get(arm, arms[0])
             if ref in gate_doc and ref != arm:
                 gate_doc[arm]["tokens_equal_" + ref] = gate_doc[arm]["tokens"] == gate_doc[ref]["tokens"]
+            if "stock" in gate_doc and arm != "stock":
+                gate_doc[arm]["tokens_equal_stock"] = gate_doc[arm]["tokens"] == gate_doc["stock"]["tokens"]
         for arm in arms:
             print(json.dumps({"gate": arm, **{k: v for k, v in gate_doc[arm].items() if k != "tokens"}}), flush=True)
         (out / "gate.json").write_text(json.dumps(gate_doc, indent=1) + "\n")
