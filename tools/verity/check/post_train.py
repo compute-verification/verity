@@ -58,6 +58,10 @@ LOCK = Path(tempfile.gettempdir()) / "verity-post-train.lock"
 #: the run's bound on the machine: the rebuilds took 89 and 104 min on cores 96-127 beside other lanes' jobs (3 Oct; #39's is the
 #: longest); a run that outlives it is cut off before its junit, and is inconclusive, not a failure
 TIMEOUT_S = 4 * 3600
+#: the run's memory, reserved on the machine (`research run --mem-gb`, waiting up to MEM_WAIT_S for it), and its xdist workers
+#: capped at MEM_GB // WORKER_GB: 19 Oct, r20261019-043523-415a ran about 20 workers at ~28 GB each with nothing reserved, 570 GB,
+#: filled vy-nebius-1's slice at 05:31Z and got two other lanes' runs killed
+MEM_GB, WORKER_GB, MEM_WAIT_S = 200, 28, 3600
 #: `research run --on` returns once the run is launched, so its records are fetched until they show its end (`research merge` too)
 POLL_S = 60
 #: a runner that died before writing its end is waited for no longer than the run's bound and the runner's publish margin, twice
@@ -204,7 +208,9 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("commit", nargs="?", default="origin/main", help="a landing of main (default origin/main)")
     ap.add_argument("--on", default=MACHINE, metavar="MACHINE", help=f"where the rebuilds run (default {MACHINE})")
     ap.add_argument("--cores", default=CORES, metavar="LIST", help=f"`taskset -c LIST` for them (default {CORES}; '' for none)")
-    ap.add_argument("--workers", type=int, default=12, help="pytest-xdist workers: a row's rebuild each (default 12)")
+    ap.add_argument("--workers", type=int, default=12, help="pytest-xdist workers: a row's rebuild each (default 12; at most --mem-gb "
+                                                                f"// {WORKER_GB})")
+    ap.add_argument("--mem-gb", type=int, default=MEM_GB, help=f"the memory the run reserves on the machine (default {MEM_GB})")
     ap.add_argument("--project", default="verity")
     ap.add_argument("--force", action="store_true", help="run even when the attempt has its label, or could carry the one before's")
     ap.add_argument("--dry-run", action="store_true", help="run, and print the label instead of writing it (any commit: a branch's too)")
@@ -251,9 +257,10 @@ def _land(a: argparse.Namespace, sha: str, attempt: str | None) -> int:
         rid = a.run or new_run_id()
         if not a.run:
             print(f"post-train: {sha[:12]} (check {attempt}) on {a.on}, cores {a.cores or 'any'}: run {rid}", flush=True)
+            workers = max(1, min(a.workers, a.mem_gb // WORKER_GB))
             p = research("run", "--id", rid, "--on", a.on, "--project", a.project, "--stage", "post-train-regression", "--timeout",
-                         str(TIMEOUT_S), "--source", str(tree), "--cwd", "source", "--declared-output", "out/*", "--",
-                         "bash", "-c", job(a.cores, a.workers), cwd=tree)
+                         str(TIMEOUT_S), "--mem-gb", str(a.mem_gb), "--mem-wait", str(MEM_WAIT_S), "--source", str(tree),
+                         "--cwd", "source", "--declared-output", "out/*", "--", "bash", "-c", job(a.cores, workers), cwd=tree)
             print((p.stdout + p.stderr)[-4000:], flush=True)
             if p.returncode:
                 print(f"post-train: run {rid} was not launched; nothing labelled", file=sys.stderr)

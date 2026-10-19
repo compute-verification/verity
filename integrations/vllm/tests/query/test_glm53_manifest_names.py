@@ -1,23 +1,27 @@
-"""GLM-5.3's TP8 manifest spells every required identity as the runtime commits it (the Commit of record r20261016-124321-8e1d bound
-none of 26,686 of rank 0's): on a rank Program shaped like GLM's -- dense layer 0, MoE layers 3 and 4 with the shared expert under the
-runner's held path `_shared_experts._layer`, a prefill step on the unfused all-reduce + `RMSNormFusedCudaVector8` and DeepGEMM path
-and a decode step on the fused `AllReduceRmsNormMnnvl` and FlashInfer path -- every `instance_outputs` / `tp_rank_partials` identity is
-a name the capture map `glm-moe-dsa-eager-hopper-tp8-v0` commits, except the three the committer binds per call
-(`native_host.CALL_DEPENDENT_RE`):
+"""Every identity of GLM-5.3's TP8 manifest binds from what the runtime commits (the Commit of record r20261016-124321-8e1d bound none
+of 26,686 of rank 0's, by name): on a rank Program shaped like GLM's -- dense layer 0, MoE layers 3 and 4 with the shared expert under
+the runner's held path `_shared_experts._layer`, a prefill step on the unfused all-reduce + `RMSNormFusedCudaVector8` and DeepGEMM path
+and a decode step on the fused `AllReduceRmsNormMnnvl` and FlashInfer path -- every `instance_outputs` / `tp_rank_partials` identity
+binds (`verity_vllm.query.manifest.bind`) from the names the capture map `glm-moe-dsa-eager-hopper-tp8-v0` commits and the ones the committer
+commits per call (`native_host.CALL_DEPENDENT_RE`):
 
-* `<norm>/all_reduce`, the unfused path's all-reduced tensor (`allreduce_norm`, from the norm's pre-hook);
-* `<linear>/x_q` and `<linear>/x_s`, `DeepGemmFp8Linear_v1`'s quant of its input (ports `0` / `1`, `linear_quant_source`), so the
-  hook's `<linear>/0` is y."""
+* `<norm>/all_reduce`, the unfused path's all-reduced tensor (`allreduce_norm`, from the norm's pre-hook), the norm site's member;
+* `<linear>/x_q` and `<linear>/x_s`, `DeepGemmFp8Linear_v1`'s quant of its input, which `linear_quant_source` declares as its ports
+  `0` / `1`, so the hook's `<linear>/0` binds the one left, y."""
 from __future__ import annotations
+
+__models__ = ("zai-org/GLM-5.3",)
 
 import pytest
 
 from tests.acquire.glm53_model import CMAP, ENV
+from verity_vllm.acquire.sources import linear_quant_source as LQ
 from verity_vllm.commit import capture_map as CM
+from verity_vllm.query.manifest.bind import Binder
 from verity_vllm.commit.committer.native_host import CALL_DEPENDENT_RE
 from verity_vllm.correspondence.reader_for_query import Correspondence, held_module_paths, parse_call_name
+from verity_vllm.query.collective_names import NORM_SITE_MEMBER
 from verity_vllm.query.compose import merge_ranks
-from verity_vllm.query.manifest.format import committed_identity
 from verity_vllm.query.program_view import CallView, InputView, Port, ProgramView
 from verity_vllm.query.required import Population, request_manifest
 from verity_vllm.query.units import ValueRef as R
@@ -33,8 +37,8 @@ FUSED = f"AllReduceRmsNormMnnvl_v1{{WORLD=8,N={N},SHOT=1,CLUSTER=8,EPS=1e-05,FMA
 class _Build:
     """A rank Program built Call by Call under v1 names (`<module>/<fx node>[/<hint>][row]`)."""
 
-    def __init__(self, rank: int):
-        self.rank, self.calls, self.weights, self.peers, self.coll = rank, [], [], [], 0
+    def __init__(self, rank: int, fused=lambda step, norm: step > 0):
+        self.rank, self.calls, self.weights, self.peers, self.coll, self.fused = rank, [], [], [], 0, fused
 
     def w(self, path: str) -> R:
         if path not in self.weights:
@@ -69,19 +73,20 @@ class _Build:
                 for i, r in enumerate(x)]
 
     def norm_site(self, site: str, norm: str, own: list[R], residual: list[R], step: int) -> tuple[list[R], list[R]]:
-        """`fused_allreduce_rms_norm(own, residual, norm)` called from `site`: flat at prefill (one all-reduce, then the norm's rows),
-        fused at decode (one Call reading the residual and the norm weight)."""
+        """`fused_allreduce_rms_norm(own, residual, norm)` called from `site`: flat (one all-reduce over the M rows, then the norm's rows),
+        or fused (`self.fused`, by default at decode: one Call per row reading its residual and the norm weight, the route's
+        Definition being one token)."""
         M, nw = len(own), self.w(f"{norm}.weight")
-        if step == 0:
+        if not self.fused(step, norm):
             ar = self.call("AllReduceMultimem_v1", f"{site}.all_reduce_{self.coll}/all_reduce[0]/all_reduce", self.parts(own, M * N),
                            (("out", M * N, 16),))
             rows = [self.call("RMSNormFusedCudaVector8_v1", f"{norm}/fused_add_rms_norm[{i}]", [R(ar, "out"), residual[i], nw],
                               (("0", N, 16), ("1", N, 16))) for i in range(M)]
             return [R(c, "0") for c in rows], [R(c, "1") for c in rows]
-        assert M == 1
-        f = self.call(FUSED, f"{site}.fused_allreduce_rms_norm_{self.coll}/fused_allreduce_rms_norm[0]/fused_all_reduce_rmsnorm",
-                      [*self.parts(own, N), residual[0], nw], (("0", N, 16), ("1", N, 16)))
-        return [R(f, "0")], [R(f, "1")]
+        k = self.coll
+        rows = [self.call(FUSED, f"{site}.fused_allreduce_rms_norm_{k}/fused_allreduce_rms_norm[{i}]/fused_all_reduce_rmsnorm",
+                          [*self.parts([r], N), residual[i], nw], (("0", N, 16), ("1", N, 16))) for i, r in enumerate(own)]
+        return [R(c, "0") for c in rows], [R(c, "1") for c in rows]
 
     def step(self, step: int, M: int) -> None:
         emb = [self.call("EmbeddingShard_v1", f"model.embed_tokens/embedding_shard[{i}]/shard", [R(-2, "ids"), self.w("model.embed_tokens.weight")])
@@ -123,15 +128,15 @@ class _Build:
         return ProgramView(tuple(self.calls), (weights, ids, *self.peers), (R(len(self.calls) - 1, "out"),), "synthetic", "synthetic")
 
 
-def rank_program(rank: int, M: int = 2) -> ProgramView:
-    b = _Build(rank)
+def rank_program(rank: int, M: int = 2, **kw) -> ProgramView:
+    b = _Build(rank, **kw)
     b.step(0, M)
     b.step(1, 1)
     return b.program()
 
 
-def _manifest(rank: int) -> dict:
-    P = rank_program(rank)
+def _manifest(rank: int, **kw) -> dict:
+    P = rank_program(rank, **kw)
     res = {"program": {"digest": f"d{rank}", "function": "f"}, "target": {"declared": {"compute_capability": [9, 0]}},
            "tp": {"world": WORLD, "rank": rank}}
     return request_manifest(P, Correspondence(P), res, request_id="r0", rank=rank, ranks=WORLD).manifest
@@ -140,9 +145,9 @@ def _manifest(rank: int) -> dict:
 NORMS = {f"model.layers.{k}.{n}" for k in DENSE + MOE for n in ("input_layernorm", "post_attention_layernorm")} - {"model.layers.0.input_layernorm"} | {"model.norm"}
 QUANT_LINEARS = {f"model.layers.{k}.self_attn.o_proj" for k in DENSE + MOE} | {f"model.layers.0.mlp.{p}" for p in ("gate_up_proj", "down_proj")} | \
     {f"model.layers.{k}.mlp.shared_experts.{p}" for k in MOE for p in ("gate_up_proj", "down_proj")}
-#: the identities the committer binds per call (the norm path, the linear's quant branch), not from a capture-map tap
-NEEDS_SOURCE = {(n, "all_reduce") for n in NORMS} | {(m, q) for m in QUANT_LINEARS for q in ("x_q", "x_s")}
-assert all(CALL_DEPENDENT_RE.search(f"{op}/{mem}") for op, mem in NEEDS_SOURCE)
+#: what the committer commits per call at the prefill (the norm path, the linear's quant branch), not from a capture-map tap
+PER_CALL = [f"{n}/{NORM_SITE_MEMBER}" for n in sorted(NORMS)] + [f"{m}/{q}" for m in sorted(QUANT_LINEARS) for q in LQ.MEMBERS]
+assert all(CALL_DEPENDENT_RE.search(n) for n in PER_CALL)
 
 
 @pytest.fixture(scope="module")
@@ -150,11 +155,11 @@ def manifests() -> list[dict]:
     return [_manifest(rank) for rank in range(WORLD)]
 
 
-def _committed(rank: int) -> set[tuple[str, str]]:
-    out = set()
-    for routes in (("sparse-mqa",), ("dense-mha",)):
-        out |= {committed_identity(n) for n in CM.committer_names(CMAP, ENV, routes=routes, rank=rank)}
-    return out
+def _events(rank: int, step: int) -> list[str]:
+    """What one step commits on `rank`: the capture map's names (both attention routes; this Program has no attention module), and at
+    the prefill the per-call names."""
+    names = {n for routes in (("sparse-mqa",), ("dense-mha",)) for n in CM.committer_names(CMAP, ENV, routes=routes, rank=rank)}
+    return sorted(names) + (PER_CALL if step == 0 else [])
 
 
 def _named(m: dict) -> set[tuple[int, str, str]]:
@@ -162,13 +167,16 @@ def _named(m: dict) -> set[tuple[int, str, str]]:
 
 
 @pytest.mark.parametrize("rank", [0, 5])
-def test_every_required_identity_is_a_name_the_capture_map_commits(manifests, rank):
+def test_every_required_identity_binds_from_what_the_rank_commits(manifests, rank):
     m = manifests[rank]
     assert m["complete"], m["unmodelled"]
+    binder = Binder(m["identities"], rank=rank, ports=LQ.PORTS)
+    for step in (0, 1):
+        bound = [(step, op, mem) for op, mem, _k, how in binder.bind(step, _events(rank, step)) if how != "unbound"]
+        assert len(bound) == len(set(bound)), "an identity bound twice"
+        missing = {x for x in _named(m) if x[0] == step} - set(bound)
+        assert not missing, sorted(missing)
     named = {(op, mem) for _s, op, mem in _named(m)}
-    missing = named - _committed(rank) - NEEDS_SOURCE
-    assert not missing, sorted(missing)
-    assert NEEDS_SOURCE <= named, sorted(NEEDS_SOURCE - named)
     assert not [op for op, _m in named if op in ("model", *(f"model.layers.{k}" for k in DENSE + MOE)) or op.startswith(HELD)]
     assert m["op_path_aliases"] == {}, "no collective site is left at its enclosing module"
 
@@ -198,19 +206,20 @@ def test_each_norms_collective_is_spelt_under_the_norm_on_both_paths(manifests):
         assert {v[1] for v in (*pre.values(), *dec.values())} == {0}
 
 
-def test_a_linear_reading_its_own_weight_returns_slot_0_on_every_route(manifests):
-    rows = {(r["step"], r["op_path"], r["output_member"]): r for r in manifests[0]["identities"] if r["family"] == "instance_outputs"}
+def test_deepgemms_quant_branch_binds_its_ports_so_the_hooks_slot_0_is_y(manifests):
+    """At the prefill a quantized linear is `DeepGemmFp8Linear_v1`, whose ports (x_q, x_s, y) the manifest names `0` / `1` / `2`; the
+    quant source's `x_q` / `x_s` bind ports 0 / 1 and the hook's slot 0 the one left.  Without the quant branch slot 0 binds nothing,
+    never q.  At the decode FlashInfer's one output is `out`, which slot 0 binds."""
+    m = manifests[0]
+    rows = {(r["step"], r["op_path"], r["output_member"]): r for r in m["identities"] if r["family"] == "instance_outputs"}
+    binder = Binder(m["identities"], rank=0, ports=LQ.PORTS)
     for lin in QUANT_LINEARS:
-        y = rows[(0, lin, "0")]
-        assert (y["spec"], y["width"], y["dtype"], y["boundary"]["structural_member"]) == (DEEPGEMM, N, "bf16", "2"), "slot 0 is y, never q"
-        assert (rows[(0, lin, "x_q")]["dtype"], rows[(0, lin, "x_s")]["dtype"]) == ("w8", "f32")
-        assert rows[(1, lin, "0")]["spec"] == FLASHINFER and (1, lin, "out") not in rows
+        assert [(rows[(0, lin, p)]["spec"], rows[(0, lin, p)]["dtype"]) for p in "012"] == [(DEEPGEMM, "w8"), (DEEPGEMM, "f32"), (DEEPGEMM, "bf16")]
+        assert binder.bind(0, [f"{lin}/x_q", f"{lin}/0", f"{lin}/x_s"]) == [(lin, "0", 0, "port"), (lin, "2", 0, "slot"), (lin, "1", 0, "port")]
+        assert binder.bind(0, [f"{lin}/0"]) == [(lin, "", 0, "unbound")]
+        assert rows[(1, lin, "out")]["spec"] == FLASHINFER and binder.bind(1, [f"{lin}/0"]) == [(lin, "out", 0, "slot")]
     for k in MOE:
-        assert {s: rows[(s, f"model.layers.{k}.mlp.gate", "0")]["spec"] for s in (0, 1)} == GATE
-    applied = manifests[0]["query"]["residuals_applied"]
-    for key in ("FlashInferFp8Linear_v1:out->0", "DeepGemmFp8Linear_v1:2->0", "DeepGemmFp8Linear_v1:0->x_q", "DeepGemmFp8Linear_v1:1->x_s",
-                "LlBf16DotprodGemm_v1:out->0", "CublasSplitKGemmF32Out_v1:out->0", "encoding:norm site"):
-        assert applied.get(key), key
+        assert {s: rows[(s, f"model.layers.{k}.mlp.gate", "out")]["spec"] for s in (0, 1)} == GATE
 
 
 def test_the_shared_expert_is_each_layers_own(manifests):
@@ -218,8 +227,8 @@ def test_the_shared_expert_is_each_layers_own(manifests):
     rows = {(r["step"], r["op_path"], r["output_member"]): r["rows"] for r in manifests[0]["identities"] if r["family"] == "instance_outputs"}
     for k in MOE:
         sh = f"model.layers.{k}.mlp.shared_experts"
-        assert [rows[(0, f"{sh}.{leaf}", mem)] for leaf, mem in (("gate_up_proj", "0"), ("act_fn", "out"), ("down_proj", "0"))] == [2, 2, 2]
-        assert [rows[(1, f"{sh}.{leaf}", mem)] for leaf, mem in (("gate_up_proj", "0"), ("act_fn", "out"), ("down_proj", "0"))] == [1, 1, 1]
+        assert [rows[(0, f"{sh}.{leaf}", mem)] for leaf, mem in (("gate_up_proj", "2"), ("act_fn", "out"), ("down_proj", "2"))] == [2, 2, 2]
+        assert [rows[(1, f"{sh}.{leaf}", mem)] for leaf, mem in (("gate_up_proj", "out"), ("act_fn", "out"), ("down_proj", "out"))] == [1, 1, 1]
     corr = manifests[0]["correspondence"]
     assert corr["held_modules"] == {"resolved": 3 * 2 * len(MOE) + 3 * len(MOE), "unresolved": {}}
 
@@ -240,8 +249,8 @@ def test_a_held_path_resolves_only_from_its_own_weights_or_producers():
     assert held == {"resolved": 1, "unresolved": {f"{HELD}.act_fn": 1}}
 
 
-def _mutated(edit) -> Population:
-    b = _Build(0)
+def _mutated(edit, **kw) -> Population:
+    b = _Build(0, **kw)
     b.step(0, 1)
     b.step(1, 1)
     edit(b)
@@ -249,8 +258,17 @@ def _mutated(edit) -> Population:
     return Population(P, Correspondence(P), tp={"world": WORLD, "rank": 0})
 
 
-def _with_reads(b: _Build, c: CallView, reads) -> None:
-    b.calls[c.id] = CallView(c.id, c.definition, c.family, c.form, c.name, c.port_table, tuple(reads))
+def _with_reads(b: _Build, c: CallView, reads, name: str | None = None) -> None:
+    b.calls[c.id] = CallView(c.id, c.definition, c.family, c.form, name or c.name, c.port_table, tuple(reads))
+
+
+def _respelt(b: _Build, step: int, src: str, dst: str) -> None:
+    """`src`'s collective of `step` re-spelt as norm `dst`'s: its Calls read `dst.weight`, and the flat route's rows sit under `dst`."""
+    cut = next(c.id for c in b.calls if c.family == "ArgmaxTokenSelect_v1")
+    for c in list(b.calls):
+        if (c.id > cut) == bool(step) and R(-1, f"{src}.weight") in c.reads:
+            _with_reads(b, c, [R(-1, f"{dst}.weight") if r == R(-1, f"{src}.weight") else r for r in c.reads],
+                        c.name.replace(f"{src}/fused_add_rms_norm", f"{dst}/fused_add_rms_norm_of_{src.replace('.', '_')}"))
 
 
 def test_a_collective_that_is_not_one_norms_is_refused_by_name():
@@ -270,3 +288,29 @@ def test_a_collective_that_is_not_one_norms_is_refused_by_name():
         pop = _mutated(edit)
         assert len(pop.tp_faults) == 1 and "not one norm's collective" in pop.tp_faults[0], (edit.__name__, pop.tp_faults)
         assert len(pop.norm_site) == 2 * len(NORMS) - 1, edit.__name__
+
+
+def test_a_short_prefill_on_the_fused_route_is_the_rows_of_the_norms_identities():
+    """A step of at most 42 rows takes FlashInfer's fused route (the GLM B8 mixed-arrivals row's two 11-token prefills), whose
+    Definition is one token: M `AllReduceRmsNormMnnvl_v1` Calls per norm in the step, the M rows of `<norm>/0`, `/1` and
+    `/part_rank<r>` -- the whole [M, N] tensors `allreduce_norm` commits -- with every peer bound."""
+    ms = [_manifest(rank, fused=lambda step, norm: True) for rank in range(WORLD)]
+    assert all(m["complete"] for m in ms), [m["unmodelled"] for m in ms]
+    rank = 6
+    pre = {r["output_member"]: r for r in ms[rank]["identities"] if r["step"] == 0 and r["op_path"] == "model.layers.3.input_layernorm"}
+    assert {k: (r["spec"], r["rows"], r["element_range"]) for k, r in pre.items()} == \
+        dict.fromkeys(("0", "1", f"part_rank{rank}"), ("AllReduceRmsNormMnnvl_v1", 2, [0, 2 * N]))
+    b = merge_ranks(ms)["tp_peer_binding"]
+    assert b["n_unbound"] == 0 and b["bound"] == b["collective_outputs"] * (WORLD - 1), b
+
+
+def test_a_norms_collectives_of_one_step_are_one_or_all_fused():
+    """Two fused Calls of one norm in a step are its rows; two flat all-reduces, or a fused Call beside a flat one, are refused by
+    name, each of them."""
+    norm, other = "model.layers.3.post_attention_layernorm", "model.layers.4.input_layernorm"
+    pop = _mutated(lambda b: _respelt(b, 1, other, norm))
+    assert not pop.tp_faults and len(pop.norm_site) == 2 * len(NORMS), pop.tp_faults
+    for fused in (lambda step, n: step > 0, lambda step, n: step > 0 or n == norm):
+        pop = _mutated(lambda b: _respelt(b, 0, other, norm), fused=fused)
+        assert len(pop.tp_faults) == 2 and all("not one norm's collective" in f for f in pop.tp_faults), pop.tp_faults
+        assert len(pop.norm_site) == 2 * len(NORMS) - 2

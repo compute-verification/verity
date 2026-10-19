@@ -432,7 +432,7 @@ theorem liveRefine_withStops (S : RefSession) (Rf : (x : Msg) → (Fin (refK x) 
         rw [hN ν t m₀ ρ₀ ops v' (by omega) hok] at ht
         cases ht
     next hok =>
-      have h1 := hO ν t m₀ ρ₀ ops (eq_false_of_ne_true hok)
+      have h1 := hO ν t m₀ ρ₀ ops (Bool.eq_false_of_ne_true hok)
       cases h1.symm.trans hr
 
 /-- **The stand-in rounds' bytes**, the per-round byte equality at the firewall's scheduled rounds: below the last round
@@ -477,7 +477,7 @@ theorem fillRefine_withStops (S : RefSession) (Rf : (x : Msg) → (Fin (refK x) 
       exact (S.swMsgAt_withStops_go Rf L.stop x (S.wt x w) (vs x w ν) t (ops.map fun p => S.decOf p.2)
         ((hR ν t m₀ ρ₀ ops hlen hok).symm.trans hr)).trans (hE.2 ν t κ m₀ ρ₀ ops hlt hl hok hr).symm
     next hok =>
-      have h1 := hO ν t m₀ ρ₀ ops (eq_false_of_ne_true hok)
+      have h1 := hO ν t m₀ ρ₀ ops (Bool.eq_false_of_ne_true hok)
       cases h1.symm.trans hr
 
 /-! ## The stops of a transport that reads only the coins -/

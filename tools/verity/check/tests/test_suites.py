@@ -1011,10 +1011,10 @@ def _until_written_or_exited(fifo: Path, p: subprocess.Popen) -> tuple[bool, byt
         os.close(fd)
 
 
-@pytest.mark.parametrize("stop", ["SIGINT", "SIGTERM"])
+@pytest.mark.parametrize("stop", ["SIGINT", "SIGTERM", "SIGTERM SIGTERM"])
 def test_an_interrupted_run_keeps_what_finished(tmp_path, stop):
-    """A stop mid-suite (check.py's SIGINT to the step's processes, or `research cancel`'s SIGTERM to the run's group): the
-    tests that passed before it are kept, and the suite's `--basetemp` is gone."""
+    """A stop mid-suite (check.py's SIGINT to the step's processes, or `research cancel`'s SIGTERM to the run's group, which `uv
+    run` forwards to the runner a second time): the tests that passed before it are kept, and the suite's `--basetemp` is gone."""
     import signal
 
     root, tests = tmp_path / "tree", tmp_path / "tree" / "pkg" / "tests"
@@ -1033,7 +1033,8 @@ def test_an_interrupted_run_keeps_what_finished(tmp_path, stop):
     written, before = _until_written_or_exited(gate, p)    # test_heavy's two tests have passed; test_block is running
     assert written, f"the runner ended before test_block ran:\n{before.decode(errors='replace')}"
     assert len(list(tmp.glob("verity-suite-[0-9]*"))) == 1
-    os.killpg(p.pid, getattr(signal, stop))
+    for s in stop.split():
+        os.killpg(p.pid, getattr(signal, s))
     out = (before + p.communicate()[0]).decode(errors="replace")
     assert p.returncode != 0 and "2 per-test passes kept" in out, out
     assert list(tmp.glob("verity-suite-[0-9]*")) == [], out
@@ -1531,6 +1532,17 @@ def test_the_suites_in_one_process_get_the_fewest_slots_that_finish_them_with_th
     assert S.serial_slots([100.0, 100.0] + [None] * 40, 2, 32) == 10
     assert S.serial_slots([100.0] * 40, 1, 32) == 31, "the parallel suites keep a slot"
     assert S.serial_slots([5.0], 0, 32) == 32 and S.serial_slots([], 3, 32) == 0
+
+
+def test_the_suites_in_one_process_get_no_more_slots_than_the_memory_holds(tmp_path, monkeypatch):
+    """18 Oct: a 16 GiB agent-test job on 48 CPUs started 44 test processes, which only the parallel suites' workers were sized
+    against memory for, and the OOM killer took the whole scope."""
+    S = _suites(monkeypatch, tmp_path)
+    assert S.serial_slots([5.0] * 48, 0, 48, 16) == 1, "16 GiB holds one process at TEST_PROCESS_GB"
+    assert S.serial_slots([5.0] * 48, 0, 48, 64) == 64 // S.TEST_PROCESS_GB
+    assert S.serial_slots([100.0] * 40, 1, 32, 1000) == 31 and S.serial_slots([100.0] * 40, 1, 32, None) == 31
+    assert S.serial_slots([100.0] * 40, 1, 32, 2) == 1, "even a job smaller than one process runs its suites, one at a time"
+    assert S.serial_slots([], 3, 32, 16) == 0
 
 
 def test_a_parallel_suite_runs_beside_the_others_on_the_slots_they_leave(tmp_path):

@@ -41,8 +41,8 @@ theorem sends_length (lay : Zk.PadLayout) (h : Array F128) (m : ℕ) (digest cap
 
 end ZcZ
 
-theorem push3_append {α : Type} (l : Array α) (a b c : α) (X : List α) :
-    ((l.push a).push b).push c ++ X.toArray = l ++ (a :: b :: c :: X).toArray := by
+theorem push3_append {α : Type} (l : Array α) (a b c : α) (xs : List α) :
+    ((l.push a).push b).push c ++ xs.toArray = l ++ (a :: b :: c :: xs).toArray := by
   rw [List.push_append_toArray, List.push_append_toArray, List.push_append_toArray]
 
 /-- **The masked prover's zerocheck, in closed form, with its sends**: `zerocheckPZk_go`, its sent bodies `ZcZ.sends`. -/

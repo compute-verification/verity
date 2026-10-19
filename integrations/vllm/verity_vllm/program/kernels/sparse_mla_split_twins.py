@@ -7,6 +7,8 @@ q = [q_rope | q_nope], k = [k_pe | kv_c] and v = [kv_c | 0] (`AttnBlock_v4`'s st
 (`attn_block`'s ``nonfinite``)."""
 from __future__ import annotations
 
+__models__ = ("zai-org/GLM-5.3",)
+
 import numpy as np
 
 from verity_vllm.program.kernels import derived_rows as DR

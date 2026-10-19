@@ -9,6 +9,8 @@ strided W_UV view at 131,072 runs a read) folded with the GLM53 profile and pers
 """
 from __future__ import annotations
 
+__models__ = ("zai-org/GLM-5.3",)
+
 import collections
 import itertools
 import json

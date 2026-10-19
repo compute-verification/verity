@@ -5,8 +5,10 @@ them, the verifier's plan, a run with what the trusted devices record, the audit
 
 The accounting layer has two layers. The **logical layer** is where the cryptography happens: `logical` (a
 `verity.ml.circuits` Program, the one circuit format the sampled proofs, PoUW's compiler and the census all read, at the
-census's grain: its root nodes, the census values they pass each other and each Call's work by kind; its evaluation; and
-the hm96-sha512 commitments to its registered inputs and to every value of a run) and `claims` (`audit`: what the trusted
+census's grain: its root nodes, the census values they pass each other and each Call's work by kind; its evaluation, a
+Call at a time through `verity.ml.circuits.evaluation`'s kernels; and the hm96-sha512 commitments to its registered
+inputs and to a run's census values, a row per element, so that inputs and rows are words in the word view whether the
+Program is Boolean or not) and `claims` (`audit`: what the trusted
 devices' records and the commitments establish about the prover system, with no device premise). The **physical layer**
 interprets those claims with declared hardware, named assumptions and trusted devices: `physical` (devices, blocks,
 links, certifier ports, the certifiers' cadence and trusted clock, datacenters and fleets, every number an
@@ -23,8 +25,8 @@ their certifiers on a leaf-spine fabric), `rack` (the demo's) and `two_sites` (a
 a WAN between their spines). A link between datacenters is fabric, as a switch is: coverage is per block, every block's
 boundary is certified already, and the outside world is everything off every block. `benchmarks/network_sim/graph.py`
 exports them as a network, a netns plan or a GML graph, and its tests pin their values against `verity` and the census.
-`models` builds the demo's and the tests' small Programs from registered Definitions (`Gemm_v2` on the BF16 tensor-core
-step).
+`models` builds the demo's and the tests' small Programs from registered Boolean Definitions (`Gemm_v3`, the BF16
+tensor-core step on bits, which `Gemm_v2`'s kernel evaluates through the word view).
 
 ~~~python
 from datacenter import *

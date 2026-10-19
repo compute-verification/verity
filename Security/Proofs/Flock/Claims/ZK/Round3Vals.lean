@@ -13,8 +13,8 @@ Round `3` of the masked session absorbs the padded `round1_ab` and `round1_c`, w
 * `Zerocheck.honest_round1ab_congr`, `honest_round1c_congr`: the honest first round reads its tables below `64 · 2^n`
   only (`skipAt_congr`).
 * `Composed.zcH_round1ab`, `zcH_round1c`: so the draw's clear first round is the executable's on a trace whose bits are
-  the model's tables, at the draw's zerocheck vector `rF`; `honestAt_r1ab`, `honestAt_r1c`: the clear values a cut
-  masks at layout indices `i` and `64 + i` (`innerOf`'s `vals`).
+  the model's tables, at the draw's zerocheck vector `rF`; `honestAt_r1ab_exe`, `honestAt_r1c_exe`: the clear values a
+  cut masks at `round1_ab`'s and `round1_c`'s layout indices (`innerOf`'s `vals`).
 * `Masked.outerAt_eq`: a rep's outer coin at the opened coins is the coin of the round after its first
   (`repBase + 1`), the one the session's second zerocheck squeeze reads.
 -/
@@ -59,10 +59,8 @@ theorem honest_round1ab_congr (n : ℕ) {a b a' b' : ℕ → 𝔽} (c c' : ℕ �
     (ha : ∀ i < 64 * 2 ^ n, a i = a' i) (hb : ∀ i < 64 * 2 ^ n, b i = b' i) :
     (honest n a b c r rho z).round1ab = (honest n a' b' c' r rho' z').round1ab := by
   simp only [honest]
-  congr 1
-  funext i
-  congr 1
-  refine Finset.sum_congr rfl fun x hx => ?_
+  refine Array.map_congr_left fun i _ => ?_
+  refine congrArg _ (Finset.sum_congr rfl fun x hx => ?_)
   rw [skipAt_congr ha _ (Finset.mem_range.mp hx), skipAt_congr hb _ (Finset.mem_range.mp hx)]
 
 /-- **The honest `round1_c` reads the witness table below `64 · 2^n` only.** -/
@@ -70,10 +68,8 @@ theorem honest_round1c_congr (n : ℕ) (a b a' b' : ℕ → 𝔽) {c c' : ℕ �
     (hc : ∀ i < 64 * 2 ^ n, c i = c' i) :
     (honest n a b c r rho z).round1c = (honest n a' b' c' r rho' z').round1c := by
   simp only [honest]
-  congr 1
-  funext i
-  congr 1
-  refine Finset.sum_congr rfl fun x hx => ?_
+  refine Array.map_congr_left fun i _ => ?_
+  refine congrArg _ (Finset.sum_congr rfl fun x hx => ?_)
   rw [skipAt_congr hc _ (Finset.mem_range.mp hx)]
 
 end FlockSoundness.Discharge.Composed.Zerocheck
@@ -111,29 +107,24 @@ theorem zcH_round1c (tr : FlockComplete.Trace) (hrs : (rF Tz st c r).size = Tz.S
   exact Zerocheck.honest_round1c_congr _ _ _ _ _ _ _ _ _ _
     (fun i hi => (hz i (hi.trans_eq (sixtyFour_mul_pow Tz))).symm)
 
-theorem honestAt_lt64 {L : ℕ} (R : Fin 2 → Fin L → 𝔽) {k : ℕ} (hk : k < 64) :
-    honestAt Tz st c r zw R k = fOf (zcH Tz st c r zw).round1ab[k]! := by
-  simp only [honestAt, hk, ↓reduceIte]
-
-theorem honestAt_lt128 {L : ℕ} (R : Fin 2 → Fin L → 𝔽) {k : ℕ} (hk : 64 ≤ k) (hk' : k < 128) :
-    honestAt Tz st c r zw R k = fOf (zcH Tz st c r zw).round1c[k - 64]! := by
-  simp only [honestAt, show ¬ k < 64 by omega, hk', ↓reduceIte]
-
-/-- **The clear value at layout index `i < 64`** (`round1_ab`'s) is the executable's `round1_ab` at `i`. -/
-theorem honestAt_r1ab (tr : FlockComplete.Trace) (hrs : (rF Tz st c r).size = Tz.S.m - 6)
+/-- **The clear value at `round1_ab`'s layout index `i`** is the executable's `round1_ab` at `i`
+(`honestAt_r1ab`, `zcH_round1ab`). -/
+theorem honestAt_r1ab_exe (tr : FlockComplete.Trace) (hrs : (rF Tz st c r).size = Tz.S.m - 6)
     (ha : ∀ i < 2 ^ Tz.S.m, FlockComplete.Replay.Zc.bitF tr.az i = aT Tz zw i)
     (hb : ∀ i < 2 ^ Tz.S.m, FlockComplete.Replay.Zc.bitF tr.bz i = bT Tz zw i)
     {L : ℕ} (R : Fin 2 → Fin L → 𝔽) {i : ℕ} (hi : i < 64) :
-    honestAt Tz st c r zw R i = fOf (FlockComplete.Replay.Zc.r1ab tr (Tz.S.m - 6) (rF Tz st c r))[i]! := by
-  rw [honestAt_lt64 Tz st c r zw R hi, zcH_round1ab Tz st c r zw tr hrs ha hb]
+    honestAt Tz st c r zw R ((layOf Tz st).r1ab i) =
+      fOf (FlockComplete.Replay.Zc.r1ab tr (Tz.S.m - 6) (rF Tz st c r))[i]! := by
+  rw [honestAt_r1ab Tz st c r zw R i hi, zcH_round1ab Tz st c r zw tr hrs ha hb]
 
-/-- **The clear value at layout index `64 + i`** (`round1_c`'s) is the executable's `round1_c` at `i`. -/
-theorem honestAt_r1c (tr : FlockComplete.Trace) (hrs : (rF Tz st c r).size = Tz.S.m - 6)
+/-- **The clear value at `round1_c`'s layout index `i`** is the executable's `round1_c` at `i`
+(`honestAt_r1c`, `zcH_round1c`). -/
+theorem honestAt_r1c_exe (tr : FlockComplete.Trace) (hrs : (rF Tz st c r).size = Tz.S.m - 6)
     (hz : ∀ i < 2 ^ Tz.S.m, FlockComplete.Replay.Zc.bitF tr.z i = cT Tz zw i)
     {L : ℕ} (R : Fin 2 → Fin L → 𝔽) {i : ℕ} (hi : i < 64) :
-    honestAt Tz st c r zw R (64 + i) = fOf (FlockComplete.Replay.Zc.r1c tr (Tz.S.m - 6) (rF Tz st c r))[i]! := by
-  rw [honestAt_lt128 Tz st c r zw R (by omega) (by omega), Nat.add_sub_cancel_left,
-    zcH_round1c Tz st c r zw tr hrs hz]
+    honestAt Tz st c r zw R ((layOf Tz st).r1c i) =
+      fOf (FlockComplete.Replay.Zc.r1c tr (Tz.S.m - 6) (rF Tz st c r))[i]! := by
+  rw [honestAt_r1c Tz st c r zw R i hi, zcH_round1c Tz st c r zw tr hrs hz]
 
 end FlockSoundness.Discharge.Composed
 
@@ -142,10 +133,6 @@ namespace Claims.ZKMal
 open Claims FlockSoundness.Discharge
 
 namespace Masked
-
-theorem outerSlot_eq {x : Msg} {s spec sts} (hsx : FlockDeploy.setupOf true x = some (s, spec, sts)) (j r : ℕ) :
-    outerSlot x j r = repBase x (2 * j + r) + 1 := by
-  simp only [outerSlot, repBase, hsx]
 
 /-- **A rep's outer coin is read at the round after its first**: at a live setup, table `j`'s rep `r`'s outer coin
 `i` is element `i` of the coin at `repBase + 1`, the round of the session's `rOuter` squeeze. -/

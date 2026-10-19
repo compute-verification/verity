@@ -19,6 +19,7 @@ import Proofs.Flock.Claims.ZK.Prefinal
 import Proofs.Flock.Claims.ZK.Deployed
 import Proofs.Flock.Claims.ZK.Reference
 import Proofs.Flock.Claims.ZK.CoinLayer
+import Proofs.Flock.Claims.ZK.CoinOpen
 import Proofs.Flock.Claims.ZK.Tape
 import Proofs.Flock.Claims.ZK.Capacity
 import Proofs.Flock.Claims.ZK.Session
@@ -37,6 +38,7 @@ import Proofs.Flock.Claims.ZK.SaltProver
 import Proofs.Flock.Claims.ZK.CutSession
 import Proofs.Flock.Claims.ZK.ExePlan
 import Proofs.Flock.Claims.ZK.Split
+import Proofs.Flock.Claims.ZK.Assemble
 import Proofs.Flock.Claims.ZK.Sent
 import Proofs.Flock.Claims.ZK.Round1
 import Proofs.Flock.Claims.ZK.Round1Pads
@@ -44,6 +46,11 @@ import Proofs.Flock.Claims.ZK.Round1Root
 import Proofs.Flock.Claims.ZK.Round1Enc
 import Proofs.Flock.Claims.ZK.Round2
 import Proofs.Flock.Claims.ZK.Round3Vals
+import Proofs.Flock.Claims.ZK.SimZerocheck
+import Proofs.Flock.Claims.ZK.SimPiopGo
+import Proofs.Flock.Claims.ZK.SimPiop
+import Proofs.Flock.Claims.ZK.PiopSrcVals
+import Proofs.Flock.Claims.ZK.PiopSrcLc
 import Proofs.Flock.Claims.ZK.Worker
 import Proofs.Flock.Claims.ZK.Switched
 import Proofs.Flock.Claims.ZK.Server
@@ -140,6 +147,10 @@ import Proofs.Flock.Claims.ZK.Stop
   committed schedule's places, the opening read from `Resp::Coins`'s words, the coin handed on its words), and
   **`Flock.zk_deployZk_ref`** at it, at every rep rounds' coin counts; `Claims.Witness.Flock.ZK_meets` states its coin
   layer and `ZK_coins_fails` that the degenerate one (every opening passes, the coin is the opening) is not it.
+* `CoinOpen`: the Lean coin check (`flock-firewall coins`, `Flock.Firewall.Coins`), whose verdict `coin_tree::Checked`
+  takes, is that coin layer's at SHA-512: one opening (`CoinOpen.treeChk_sha`, `CoinOpen.check_isOk`), and a session's
+  openings when its requests follow the committed schedule (`CoinOpen.coinLayer_verdict`), so it refuses the openings
+  ZKS10's `LeanRelease.OpeningsRefused` (`Claims/ZK/Refine.lean`) names (`CoinOpen.coinLayer_refuses`).
 * `Tape`: `TapeOK` makes the tape onto the leaves' salts (`RefSession.eP_surjective`), so a session has fewer tables than
   tapes at every statement (`RefSession.J_lt_card_of_tapeOK`), and none with statements of every table count meets it
   (`RefSession.not_tapeOK`): the masked scope bounds no table count.
@@ -238,10 +249,27 @@ import Proofs.Flock.Claims.ZK.Stop
   value, commitment or coin; its encoding (`Masked.enc2`) reads round `0`'s coin only (`Masked.enc2_causal`) and is
   round `2`'s `hstep` at every tape (`Masked.honest_round2_exe`), so `Flock.zk_deployZk_masked_exe_round2_gap` asks
   `hstep` after the third round only.
-* `Round3Vals`: toward round `3` (`SimPiop`'s zerocheck), the clear values a cut masks at layout indices `i` and
-  `64 + i` are the executable's `round1_ab` and `round1_c` at the draw's zerocheck vector, on a trace whose bits are the
-  model's tables (`Composed.honestAt_r1ab`, `Composed.honestAt_r1c`, from `Replay.Zc.r1ab_eq`); a rep's outer coin is
-  read at the round after its first (`Masked.outerAt_eq`).
+* `Round3Vals`: toward round `3` (`SimPiop`'s zerocheck), the clear values a cut masks at `round1_ab`'s and
+  `round1_c`'s layout indices are the executable's `round1_ab` and `round1_c` at the draw's zerocheck vector, on a trace
+  whose bits are the model's tables (`Composed.honestAt_r1ab_exe`, `Composed.honestAt_r1c_exe`, from
+  `Replay.Zc.r1ab_eq`); a rep's outer coin is read at the round after its first (`Masked.outerAt_eq`).
+* `SimZerocheck`: `SimPiop`'s zerocheck: two runs in lockstep (`FlockComplete.GoAlike`), `asksCut`'s squeezes, and the
+  cut's zerocheck against the session's where the cut's masked values are the plain prover's plus their pads
+  (`FlockComplete.zerocheckCut_alike`).
+* `SimPiopGo`: the rest of `SimPiop`'s PIOP in lockstep: the cut's lincheck against the session's
+  (`FlockComplete.lincheckCut_alike`), its ring switch (`FlockComplete.ringSwitchCut_alike`), and the cut's PIOP
+  returning the session's from a source at the cut's coins (`FlockComplete.PiopSrc`, `FlockComplete.piopCut_alike`).
+* `SimPiop`: `Masked.SimPiop` from the deployed source at the opened coins (`Masked.PiopSrcE`, `Masked.simPiop_of`):
+  `repMix 0` and `repMix 1` differ only in the PIOP (`FlockComplete.repMix_zero_one`).
+* `PiopSrcVals`: `Masked.PiopSrcE`'s zerocheck fields: the deployed source masks at the zerocheck's layout indices
+  the plain prover's messages at the opened coins plus the session's pads (`Masked.src_r1ab`, `Masked.src_r1c`,
+  `Masked.src_ml0`, `Masked.src_ml1`, `Masked.src_fa`, `Masked.src_fb`, `Masked.src_fc`), since the model's tables are
+  the session's trace's bits (`Masked.trsE_bits`) and the draw's honest zerocheck is the executable's
+  (`Masked.zcH_exe`).
+* `PiopSrcLc`: `Masked.PiopSrcE`'s lincheck fields: the deployed source masks at the lincheck's layout indices the
+  plain prover's round messages and `z_partial` at `lcCoins` plus the session's pads (`Masked.src_lc0`,
+  `Masked.src_lc1`, `Masked.src_zp`), since the prover's halved columns are the model's `lcU`, `lcV` folded at the round
+  coins (`Replay.Lc.msg_lcMsg`) and the draw's coins are the executable's (`Masked.lcH_exe`).
 * `HiSalts`: levels ≥ 1's salts by level and position (`Masked.hiSalt`, at `Masked.hiIdx`): at the executable's
   layout, the salts the model hands table `j`'s rep `r` are the masked prover's tape's `salt j r l p` on the schedule's
   levels `l ≥ 1` and their positions (`Masked.hiSalt_exe`), so a Ligerito prover of levels ≥ 1 built from one reading
@@ -259,6 +287,9 @@ import Proofs.Flock.Claims.ZK.Stop
 * `Split`: the open premises of `Flock.zk_deployZk_masked_exe_sent_gap` at the deployed plan, as eight statements
   (`Masked.PrefixLive`, `Masked.SimPiop`, `Masked.SimLig`, `Masked.SimInner`, `Masked.SimCommit`, `Masked.SimSession`,
   `Masked.CausalExe`, `Masked.FinExe`).
+* `Assemble`: `Flock.zk_deployZk_masked_exe_split`, Flock's zero knowledge at the deployed masked session from those eight
+  statements: `hstep` from `PrefixLive` and `SimSession` (`Masked.hstep_exe`), `SimSession` from `SimCommit` and the
+  hybrids.
 * `Worker`: Lemma B at any clear values a worker supplies, which never read the pads: the switched prover (`p`'s view
   where its rows hold, else the honest prover's on the pads Lemma A moves) has `S_shvzk`'s distribution on the honest
   `InnerHolds` alone (`sw_shvzk`, `worker_shvzk`), and differs from `p`'s view only in `Y₁`, `C_h` and the pads tree
