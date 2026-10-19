@@ -116,3 +116,5 @@ def test_a_row_counts_its_cyclic_calls_and_their_share(tmp_path):
     assert "(2 Definitions, 2 Calls pending)" in AC.render([part])
     merged = AC.merge(json.loads(json.dumps(part)), [log])
     assert {k: merged["totals"][k] for k in t} == t and merged["cyclic_families"] == r["cyclic_families"]
+    upper = AC.analyze_descriptor(path, AC.Cycles(gates_from=2), "toy")["totals"]
+    assert (upper["units"], upper["cyclic_calls"], upper["pending_calls"]) == (5, 1, 1)

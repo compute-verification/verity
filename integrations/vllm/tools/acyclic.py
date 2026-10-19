@@ -238,20 +238,21 @@ class Cycles:
     resolved by all the jobs, the rest one per job.  Each result is appended to `log` as it lands."""
 
     def __init__(self, rules: Iterable[str | Path] = (), log: str | Path | None = None, jobs: int = 1,
-                 gates_below: int | None = None) -> None:
+                 gates_below: int | None = None, gates_from: int = 0) -> None:
         self.cache = load_logs(rules)
-        self.log, self.jobs, self.gates_below = log, jobs, gates_below
+        self.log, self.jobs, self.gates_below, self.gates_from = log, jobs, gates_below, gates_from
         self.counts = Counter()
 
     def of(self, fns: dict[str, Any]) -> dict[str, str]:
-        """name -> the `definition_digest` of `fns[name]`, each digest's result in `cache` unless its Definition has `gates_below`
-        gates or more (pending)."""
+        """name -> the `definition_digest` of `fns[name]`, each digest's result in `cache` unless its Definition's gates are
+        outside [`gates_from`, `gates_below`) (pending)."""
         from verity_vllm.query.word import definition_digest
         digest = {fn.id: definition_digest(fn) for fn in fns.values()}
         todo = {fn.id: fn for fn in fns.values() if digest[fn.id] not in self.cache}
         self.counts["cached"] += len({fn.id for fn in fns.values()}) - len(todo)
-        if self.gates_below is not None:
-            held = {i for i, fn in todo.items() if fn.gates >= self.gates_below}
+        if self.gates_below is not None or self.gates_from:
+            held = {i for i, fn in todo.items()
+                    if fn.gates < self.gates_from or (self.gates_below is not None and fn.gates >= self.gates_below)}
             self.counts["pending"] += len(held)
             todo = {i: fn for i, fn in todo.items() if i not in held}
         for r in self._run(sorted(todo.values(), key=lambda fn: -fn.gates)):
@@ -461,6 +462,7 @@ def main(argv: list[str] | None = None) -> int:
         x.add_argument("--rules", action="append", default=[], help="an earlier --log to reuse results from (repeatable)")
         x.add_argument("--gates-below", type=int, default=None, metavar="G",
                        help="compute only Definitions of fewer than G gates; the rest stay pending (see `merge`)")
+        x.add_argument("--gates-from", type=int, default=0, metavar="G", help="compute only Definitions of at least G gates")
     m = sub.add_parser("merge", help="fill a report's pending Definitions from other runs' --logs, without loading the Program")
     m.add_argument("report")
     m.add_argument("--rules", action="append", default=[], required=True)
@@ -478,7 +480,7 @@ def main(argv: list[str] | None = None) -> int:
     if a.cmd == "merge":
         Path(a.out).write_text(json.dumps(merge(json.loads(Path(a.report).read_text()), a.rules), indent=1))
         return 0
-    helper = Cycles(a.rules, a.log, a.jobs, a.gates_below)
+    helper = Cycles(a.rules, a.log, a.jobs, a.gates_below, a.gates_from)
     r = (analyze_descriptor if a.cmd == "descriptor" else analyze_served)(a.path, helper, a.name)
     Path(a.out).write_text(json.dumps(r, indent=1))
     t = r["totals"]
