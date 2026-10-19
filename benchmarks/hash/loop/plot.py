@@ -200,9 +200,14 @@ def main() -> int:
     labels = sorted(seen)
     handles = [seen[lab] for lab in labels]
     hyps = sorted({(r["row"], r["label"]) for r in results if isinstance(r["row"], int) and r["valid"]})
-    fig.legend(handles, labels, loc="upper center", ncol=6, fontsize=8)
+    ncol = 3
+    width, panels = fig.get_size_inches()
+    legend_in, text_in = 0.17 * -(-len(labels) // ncol) + 0.2, 0.12 * len(hyps) + 0.2   # 8 pt legend rows, 7 pt text lines
+    height = panels + legend_in + text_in
+    fig.set_size_inches(width, height)
+    fig.legend(handles, labels, loc="upper center", ncol=ncol, fontsize=8)
     fig.text(0.01, 0.005, "\n".join(f"{row}: {h}" for row, h in hyps), fontsize=7, va="bottom")
-    fig.tight_layout(rect=(0, 0.02 + 0.015 * len(hyps), 1, 0.95))
+    fig.tight_layout(rect=(0, text_in / height, 1, 1 - legend_in / height))
     png = a.out / "hash-loop.png"
     fig.savefig(png, dpi=110)
     (a.out / "hash-loop.json").write_text(json.dumps({"results": [{k: v for k, v in r.items() if k != "measures"} for r in results],
