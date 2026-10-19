@@ -155,5 +155,6 @@ def test_the_lean_pass_matches_elaborated_types_and_finds_sorry(tmp_path):
                                              "absent": {"about": "y", "mentions": ["Control.nosuch"], "ack": []}}}
     hits = U.lean_pass(pkg, cfg, tmp_path / "out")
     assert {h["name"]: (h["proved"], h["axioms"]) for h in hits["doubling"]} == {
-        "Control.bad": (False, ["sorryAx"]), "Control.helper": (True, []), "Control.main_thm": (True, [])}
+        "Control.bad": (False, ["sorryAx"]), "Control.helper": (True, []), "Control.main_thm": (True, []),
+        "Control.Small_meets": (True, [])}
     assert hits["absent"] == []

@@ -29,7 +29,8 @@ judgement; `check.py` holds the policy.
   declaration range: what Lean generates for them has none), projections and internal names aside, each with whether it
   is a statement (`def G : Prop`) and whether it is a predicate (its type, past its binders, is `Prop`).
 - each pin's `body`: the constant its statement applies past its `∀` and `∃` binders (`head`), and whether a `¬` stands
-  before that application (`negated`), read as written: nothing is unfolded.
+  before that application (`negated`), read as written: nothing is unfolded; and its `conclusion`, split at `∧`, with
+  what each conjunct applies (`conclusionOf`).
 - `instances`: each constant with a declaration range whose name (a private one's as written) ends in a component
   starting with `inst`, with that component as an identifier (`id`) and where its declaration's name is (`at`: line,
   codepoint column). An anonymous `instance` has its name there as the keyword `instance` itself.
@@ -464,6 +465,35 @@ partial def bodyHead (t : Expr) : MetaM (Option Name × Bool) :=
     else
       return (b.getAppFn.constName?, false)
 
+/-- A statement's conclusion past its `∀`, `→` and `∃` binders, split at its `∧`s, each conjunct again past its own: for
+each conjunct its head constant (`head`), the definitions declared under `meaning` it applies itself (`defs`, followed no
+further), whether it is a reflexivity (`a = a`, `a ↔ a`, `HEq a a`: `refl`) and whether it is a hypothesis in scope, the
+hypotheses split at `∧` (`assumed`); and whether a hypothesis is `False` (`absurd`). Read as written: nothing is
+unfolded. -/
+partial def conclusionOf (env : Environment) (meaning : Array Name) (t : Expr) (hyps : Array Expr := #[]) :
+    MetaM (Array Json × Bool) :=
+  forallTelescope t fun xs b => do
+    let mut hs := hyps
+    for x in xs do
+      let ty ← inferType x
+      if ← isProp ty then hs := hs ++ (conjuncts ty.consumeMData).toArray.map (·.consumeMData)
+    let b := b.consumeMData
+    if b.isAppOfArity ``And 2 then
+      let (l, a) ← conclusionOf env meaning b.appFn!.appArg! hs
+      let (r, a') ← conclusionOf env meaning b.appArg! hs
+      return (l ++ r, a || a')
+    if b.isAppOfArity ``Exists 2 then
+      if let .lam n ty body bi := b.appArg!.consumeMData then
+        return ← withLocalDecl n bi ty fun x => conclusionOf env meaning (body.instantiate1 x) hs
+    let defs := b.getUsedConstants.filter fun c => match env.find? c, env.getModuleIdxFor? c with
+      | some (.defnInfo _), some i | some (.opaqueInfo _), some i => under meaning (moduleName env i)
+      | _, _ => false
+    let refl := ((b.isAppOfArity ``Eq 3 || b.isAppOfArity ``Iff 2) && b.appFn!.appArg! == b.appArg!) ||
+      (b.isAppOfArity ``HEq 4 && b.getArg! 1 == b.getArg! 3)
+    return (#[Json.mkObj [("head", toJson (b.getAppFn.constName?.map toString)),
+      ("defs", toJson ((defs.qsort Name.lt).map toString)), ("refl", toJson refl), ("assumed", toJson (hs.contains b))]],
+      hs.any (·.isConstOf ``False))
+
 def pinInfo (env : Environment) (meaning : Array Name) (axioms : Std.HashMap Name NameSet)
     (ranges : Std.HashMap Name DeclarationRanges) (rs : Array (Name × Name × ConstantInfo) × Array (Name × Name)) (n : Name) :
     MetaM Json := do
@@ -495,7 +525,9 @@ def pinInfo (env : Environment) (meaning : Array Name) (axioms : Std.HashMap Nam
     ("premises", ← (do return toJson (← premisesOf env moduleOf 3 ci.type)) <|> pure Json.null),
     ("body", ← (do
       let (h, neg) ← bodyHead ci.type
-      return Json.mkObj [("head", toJson (h.map toString)), ("negated", toJson neg)]) <|> pure Json.null),
+      let (cs, absurd) ← conclusionOf env meaning ci.type
+      return Json.mkObj [("head", toJson (h.map toString)), ("negated", toJson neg), ("conclusion", toJson cs),
+        ("absurd", toJson absurd)]) <|> pure Json.null),
     ("type_hash", toJson (hex ci.type.hash)),
     ("reads", toJson (rs.1.map readJson)),
     ("outside", toJson (rs.2.map fun (c, m) => #[c.toString, m.toString]))]
