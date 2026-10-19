@@ -28,7 +28,7 @@ namespace Masked
 def HiAt (ls : List FlockSoundness.Accounting.Level) (l p : ℕ) : Prop :=
   1 ≤ l ∧ l < ls.length ∧ p < 2 ^ (ls.getD l default).logLen
 
-instance (ls : List FlockSoundness.Accounting.Level) (l p : ℕ) : Decidable (HiAt ls l p) := by
+instance instDecidableHiAt (ls : List FlockSoundness.Accounting.Level) (l p : ℕ) : Decidable (HiAt ls l p) := by
   unfold HiAt; infer_instance
 
 /-- **Level `l`'s salt at position `p`** of the array `hi` of levels ≥ 1's salts in level order (`hiIdx`), empty off the
