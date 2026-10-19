@@ -24,8 +24,9 @@ list; else a counting-only tie, with no construction known and no proof that it 
 data-independent 2:4 metadata, open by counting with data-dependent metadata: its gain is the data's zero patterns, an
 epsilon_skip), OPEN. A JOINT route (elements spread across shared slots) is bounded by counting alone only at
 log2 |S| / (bits a position), without rounding up; `joint_gap` is rho over that bound, and every form where it exceeds 1
-is listed. The rank floor (`rank_lower`: exact products and sums, vendor-stated for the integer kinds and measured only
-for FP) closes those at rho <= 1; those at rho >= 2 stay open until a lemma bounds a joint route's passes. The units with no tensor form (vector, uniform, tables, reductions, movers, side units) keep
+is listed. The rank floor (`rank_lower`: exact products and sums on every input) closes those at rho <= 1 on the integer
+kinds, where mma and wgmma state it; on FP kinds nothing does (premise (a) covers the small grid only), so its closures
+there stay open (RT-FP-6), as do the pairs at rho >= 2 everywhere, until a lemma bounds a joint route's passes. The units with no tensor form (vector, uniform, tables, reductions, movers, side units) keep
 isa_escape.py's classes, re-read for FP words.
 
 It also replays premise (a), the small-grid exactness `Accounting.Assumptions.TS.Fp8GridExact` and `Fp4GridExact`
@@ -113,6 +114,7 @@ ALPHABETS = {  # the design's operand values (S); each holds 0 and 1, which the 
     "int5": {Q(i) for i in range(-16, 16)},
     "pm16": {Q(i) for i in range(-16, 17)},
     "e4m3i": {v for v in E4M3 if v.denominator == 1},
+    "g1s": {v + b for v in E4M3 if v.denominator == 1 and abs(v) <= 120 for b in (0, 1)},  # FPX-DESIGN's R + b
     "e4m3": E4M3,
     "e2m1": values("e2m1"),
     "e2m1x2": {2 * v for v in values("e2m1")},
@@ -121,7 +123,7 @@ ALPHABETS = {  # the design's operand values (S); each holds 0 and 1, which the 
 # ---- the data sheets' tensor rates (A3), dense MACs per SM per clock; a 2:4 form does twice the logical MACs ----
 # sm_120: RTX PRO 6000 Blackwell sheet (kind::f8f6f4 at the FP8 rate, block-scaled FP4 at twice it; FP16/BF16 with FP32
 # accumulate at half; TF32 a quarter). sm_90a: H200 sheet (= H100 SXM: INT8 = FP8, FP16 half, TF32 a quarter, FP64
-# tensor 67 TF). sm_100a: B200 sheet (INT8 = FP8 = FP6 4.5 P dense, FP4 9 P, FP16 2.25 P, TF32 1.1 P, FP64 40 T). DMMA
+# tensor 67 TF). sm_100a: B200 sheet (INT8 = FP8 = FP6 4.5 P dense, FP4 9 P, FP16 2.25 P, TF32 1.1 P, FP64 37 T). DMMA
 # rows are generous upper bounds (no FP64 tensor on sm_120). MM-SHEETS grades the sheets; only these ratios are read.
 RATES = {
     "sm_120": {"s8": 1024, "e4m3": 1024, "e5m2": 1024, "e3m2": 1024, "e2m3": 1024, "e2m1": 1024, "nvf4": 2048,
@@ -140,7 +142,7 @@ KIND = {"s8": ("s8", None), "e4m3": ("e4m3", None), "e5m2": ("e5m2", None), "e3m
         "f64": ("f64", None)}
 WIDE = {"f16": 16, "bf16": 16, "tf32": 19, "f64": 64}   # code bits of the wide kinds (each holds every alphabet here)
 CREDIT = {"i": "e4m3", "ii": {"sm_120": "nvf4", "sm_90a": "e4m3", "sm_100a": "nvf4"}, "iii": "s8"}
-WORDS = {"i": ("int5", "pm16", "e4m3i", "e4m3"), "ii": ("e2m1", "e2m1x2"), "iii": ("int8",)}
+WORDS = {"i": ("int5", "pm16", "g1s", "e4m3i", "e4m3"), "ii": ("e2m1", "e2m1x2"), "iii": ("int8",)}
 
 
 def credit_row(word: str, dev: str) -> str:
@@ -667,17 +669,22 @@ def main() -> int:
         ranked = sorted({(r["route"], r["word"]) for r in mine if r["rank_gap"] > 1})
         worst = max(mine, key=lambda r: r["joint_gap"])
         worst_r = max(mine, key=lambda r: r["rank_gap"])
+        fp_rank = sorted({(r["route"], r["word"]) for r in mine
+                          if r["joint_gap"] > 1 and r["rank_gap"] <= 1 and r["route"].split(".")[0] != "s8"})
         checks.check(f"{dev}: joint encodings: counting alone leaves {len(joint)} (form, word) pairs open; the rank "
-                     f"floor (exact products and sums: measured only on FP kinds) leaves {len(ranked)}, all at rho = 2 "
-                     "or more (block-scaled FP4 against FP8/int8 credits, 2:4 forms); closing those is open",
+                     f"floor (exact products and sums on every input) leaves {len(ranked)}, all at rho = 2 or more "
+                     "(block-scaled FP4 against FP8/int8 credits, 2:4 forms); closing those is open. Of the pairs it "
+                     f"closes, {len(fp_rank)} are on FP kinds, where nothing states that exactness (premise (a) covers "
+                     "the small grid only), so they stay open too",
                      all(r["rho"] >= 2 for r in mine if r["rank_gap"] > 1),
                      {"worst_counting": f"{worst['alphabet']}/{worst['route']} {worst['joint_gap']:.3f}",
                       "worst_rank": f"{worst_r['alphabet']}/{worst_r['route']} {worst_r['rank_gap']:.3f}",
-                      "open_with_rank": [f"{f}:{w}" for f, w in ranked]})
-    imma_ties = [r for r in rows if r["word"] == "i" and r["route"] == "s8" and r["alphabet"] in ("int5", "pm16")]
-    checks.check("an FP8 word on an int8-fitting grid (int5, +-16) ties on IMMA / wgmma s8 / kind::i8 in one plane: "
-                 "the LP must list the int8 form (and IMMA writes s32, saving the FP word's extraction)",
-                 len(imma_ties) == 6 and all(r["outcome"] == "TIE" and r["one_plane"] for r in imma_ties))
+                      "open_with_rank": [f"{f}:{w}" for f, w in ranked],
+                      "open_on_fp_kinds": [f"{f}:{w}" for f, w in fp_rank]})
+    imma_ties = [r for r in rows if r["word"] == "i" and r["route"] == "s8" and r["alphabet"] in ("int5", "pm16", "g1s")]
+    checks.check("an FP8 word on an int8-fitting grid (int5, +-16, g1s's R + b) ties on IMMA / wgmma s8 / kind::i8 in "
+                 "one plane: the LP must list the int8 form (and IMMA writes s32, saving the FP word's extraction)",
+                 len(imma_ties) == 9 and all(r["outcome"] == "TIE" and r["one_plane"] for r in imma_ties))
     h200_fp4 = [r for r in rows if r["word"] == "ii" and r["device"] == "sm_90a" and r["route"] in ("s8", "e4m3")]
     checks.check("H200 has no FP4 kind: an FP4 word there is credited at E4M3 and ties on s8 (2x E2M1 is int8) and E4M3",
                  all(r["outcome"] == "TIE" for r in h200_fp4) and len(h200_fp4) == 4)
