@@ -3515,7 +3515,10 @@
    "type_hash": "51bd3f7e82387c8acf4e636b2b68f2a2a4688846c86ce302c18139bddb9cdcd0"
   },
   "Nci.SecurityProofs.FitRate": {
-   "owner": "@lean"
+   "owner": "@lean",
+   "signature": ["Nci.SecurityProofs.FitRate.{u_1, u_2} : Nci.Guarantees.FitRate"],
+   "assumptions": [],
+   "type_hash": "4ad0e8c3c012b570f1e87d47bbda107dce81f9772c33432b68aabccbf103a0da"
   },
   "Nci.SecurityProofs.FullPositions": {
    "owner": "@lean",
@@ -5598,7 +5601,8 @@
     "Bandwidth.SecurityProofs.B3CapacityRO",
     "Bandwidth.SecurityProofs.B3RO",
     "Bandwidth.SecurityProofs.Mbw",
-    "Bandwidth.SecurityProofs.MbwCapacity"
+    "Bandwidth.SecurityProofs.MbwCapacity",
+    "Nci.SecurityProofs.FitRate"
    ]
   },
   "Definitions.Accounting.Bandwidth.Causal": {
@@ -6080,7 +6084,8 @@
     "Accounting.SecurityProofs.Actual.Windows",
     "Accounting.SecurityProofs.Actual.WindowsAt",
     "Accounting.SecurityProofs.B4",
-    "Accounting.SecurityProofs.B4Covered"
+    "Accounting.SecurityProofs.B4Covered",
+    "Nci.SecurityProofs.FitRate"
    ]
   },
   "Definitions.Accounting.Pouw": {
@@ -7522,6 +7527,7 @@
     "Nci.SecurityProofs.ContainedMatMul",
     "Nci.SecurityProofs.ContainedTraining",
     "Nci.SecurityProofs.FitBound",
+    "Nci.SecurityProofs.FitRate",
     "Nci.SecurityProofs.FullPositions",
     "Nci.SecurityProofs.Inference",
     "Nci.SecurityProofs.IuReads",
@@ -7555,6 +7561,7 @@
     "Nci.SecurityProofs.ContainedMatMul",
     "Nci.SecurityProofs.ContainedTraining",
     "Nci.SecurityProofs.FitBound",
+    "Nci.SecurityProofs.FitRate",
     "Nci.SecurityProofs.Inference",
     "Nci.SecurityProofs.IuReads",
     "Nci.SecurityProofs.ReadBound",
@@ -7646,6 +7653,7 @@
     "Nci.SecurityProofs.ContainedMatMul",
     "Nci.SecurityProofs.ContainedTraining",
     "Nci.SecurityProofs.FitBound",
+    "Nci.SecurityProofs.FitRate",
     "Nci.SecurityProofs.Inference",
     "Nci.SecurityProofs.OtherPositions",
     "Nci.SecurityProofs.ReadBound",
@@ -7748,6 +7756,7 @@
     "Nci.SecurityProofs.ContainedMatMul",
     "Nci.SecurityProofs.ContainedTraining",
     "Nci.SecurityProofs.FitBound",
+    "Nci.SecurityProofs.FitRate",
     "Nci.SecurityProofs.FullPositions",
     "Nci.SecurityProofs.Inference",
     "Nci.SecurityProofs.IuReads",
@@ -7768,7 +7777,7 @@
     "Nci.Threading.threadWeights": "54c0d1f8eac0ec96f58180c349bf11a5453623c6f55a0ebcfd596336e4f238b0",
     "Nci.Threading.visits": "ed525037dccc0f61881cb547cf45d9e86c54c7caa257882af522168199aebb13"
    },
-   "guarantees": ["Nci.SecurityProofs.FitBound"]
+   "guarantees": ["Nci.SecurityProofs.FitBound", "Nci.SecurityProofs.FitRate"]
   },
   "Definitions.Nci.Reads": {
    "digest": "ea861ee96af5b3f36899e1ad16651717b7aede9bf1cdf2273f53e091ed1eac19",
@@ -7818,6 +7827,7 @@
     "Accounting.SecurityProofs.Actual.ThreadedRate",
     "Accounting.SecurityProofs.Actual.ThreadedRuntime",
     "Nci.SecurityProofs.FitBound",
+    "Nci.SecurityProofs.FitRate",
     "Nci.SecurityProofs.ThreadedReads",
     "Nci.SecurityProofs.ThreadedThrottled",
     "Nci.SecurityProofs.ThreadedTraining"
@@ -17413,7 +17423,7 @@
     "Nci.Assumptions.Fits": "a01008a9dfd298221a497fc46bddfc00be4ca6c55915429dccc9bcd2bdef6864",
     "Nci.Assumptions.Reach": "b3c25b0f62c270144816c888bbb3fce4fecde3554892478b3d83a6aa22baf7a5"
    },
-   "guarantees": ["Nci.SecurityProofs.FitBound"]
+   "guarantees": ["Nci.SecurityProofs.FitBound", "Nci.SecurityProofs.FitRate"]
   },
   "Models.Nci.Assumptions.Threads": {
    "digest": "e97519a8245dbe34eb8f42c2febf3910370ac44e740cd319415594e0bed0b43f",
@@ -17465,6 +17475,13 @@
     "Nci.Guarantees.FitBound": "ec54acc63f9765c03cf44dfcd919608d77f980b4210b08e04ef29edc38547f69"
    },
    "guarantees": ["Nci.SecurityProofs.FitBound"]
+  },
+  "Models.Nci.Guarantees.FitRate": {
+   "digest": "2cecfce7569747177d84fadf7d4b8a7d9d8a3dfb95c1235062fdf4b4671eb8d4",
+   "definitions": {
+    "Nci.Guarantees.FitRate": "d54914aa985b553290b88ee1006b760b1ec5a5049c58c21e87a0b2358f7bbf24"
+   },
+   "guarantees": ["Nci.SecurityProofs.FitRate"]
   },
   "Models.Nci.Guarantees.Reads": {
    "digest": "016cca93308e9ac6c0ad97c73b18da826f0fc8fbd33eb77535c28f63f61b3f72",
