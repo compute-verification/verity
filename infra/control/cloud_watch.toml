@@ -69,6 +69,13 @@ started_by = "/data/infra/control-disk/run.sh (control_disk.sh)"
 file = "/data/infra/control-disk/seen.json"
 period_s = 300
 
+[[loop]]
+name = "Watchers"
+started_by = "/data/watchers/run.sh (watchers.sh: the watchers supervisor, watchers.py)"
+file = "/data/watchers/status.json"
+json = "all_up_t"                    # the last minute every loop was up (running 2 min, waiting on a need, or done)
+period_s = 300
+
 [r2]
 page_cap = 100                       # ListObjectsV2 pages (1000 keys, one class-A op each) per bucket per pass
 keep_sweeps = 60                     # complete sweeps kept per bucket (the 7-day mean needs a week of them)

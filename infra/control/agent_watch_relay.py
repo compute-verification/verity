@@ -1,6 +1,6 @@
-"""Infra's relay for the agent watch (INF-69, `agent_watch.sh` on the control pod). The pod holds no Slack credential, so every 2
-minutes this reads the lines added to /data/agent-watch/events.jsonl over ssh and posts each in #agent-alerts: a held run the watch
-cancelled and continued, a tool call running 45 minutes, a crashed run, a coordinator ready to wake. An agent that holds a handle
+"""Infra's relay for the agent watch (INF-69, `agent_watch.sh` on the control pod). Every 2 minutes this reads the lines added to
+/data/agent-watch/events.jsonl (on the pod itself with $AGENT_WATCH_ON_POD, else over ssh) and posts each in #agent-alerts: a
+held run the watch cancelled and continued, a tool call running 45 minutes, a crashed run, a coordinator ready to wake. An agent that holds a handle
 (the Slack registry's `holder`) is named by its handle. What the watch leaves for a person (`TOP`: erroring, stuck, a refused
 cancel, held again within the hour, and a run unreadable for an hour; the first unreadable line is posted nowhere) leads with
 @top, and rings @top's inbox thread as `ring_decision` does for a decided card (the inbox is in the front door, so the post's
@@ -12,14 +12,15 @@ launcher's, for a run whose sender is a lane, the lane's. A failure the watch ac
 its run ended, relaunched) leads with the record's `owner` and rings its inbox: @top for a coordinator, the launcher's handle for a
 worker. Several workers of one parent that stopped together come as one `workers_failed`, posted and rung once to the lane's handle
 with each worker named, and the wake-up it says it set. A handle renamed in the registry ("renamed from @OLD") is rung by its new
-name. The pod frees held runs whether or not this runs; it stops when infra's VM is suspended, and resumes from the offset it last
+name. The pod frees held runs whether or not this runs; this relay stops with the pod, and resumes from the offset it last
 posted.
 
 Each pass also writes /data/agent-watch/doorbells.json, which the watch's ready-to-wake rule reads: each open inbox's holder (the
 notes' routes.d) and its latest doorbell in the last day (a reply in the inbox thread, `from NAME, thread ...`). The watch ignores
-it once 30 minutes old, so a suspended VM silences that half of the rule, never fakes it.
+it once 30 minutes old, so a stopped relay silences that half of the rule, never fakes it.
 
-usage (tmux agent-watch-relay, research importable, $SLACK_BOT_TOKEN set, $RESEARCH_SLACK_REGISTRY when not run from a checkout):
+usage (the watchers' `agent-watch-relay` loop on the control pod, infra/control/watchers.toml; research importable, $SLACK_BOT_TOKEN
+set, $RESEARCH_SLACK_REGISTRY when not run from a checkout, $AGENT_WATCH_OFFSET the offset's file, default ~/agent-watch/offset):
   python3 infra/control/agent_watch_relay.py [--once] [--dry-run]"""
 import json
 import os

@@ -1782,7 +1782,7 @@ def select(where: str | None, only: list[str] | None) -> list[Monitor]:
     return [m for m in MONITORS if (not where or m.where == where) and (not only or m.id in only)]
 
 
-# ---- the relay (infra's VM: Slack) --------------------------------------------------------------------------------------------
+# ---- the relay (the control pod: Slack) ---------------------------------------------------------------------------------------
 
 def still_open(events: list[dict]) -> list[dict]:
     """The opens among `events` that no later clear ends, oldest first."""
