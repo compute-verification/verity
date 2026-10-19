@@ -517,6 +517,32 @@ def full_draw(program, query: dict) -> dict:
     return {**law, "population": n, "units": list(range(n))}
 
 
+#: `RecSetup.noInnerDraw`: the verifier's refusal, last in a session's verdict, of a session over an inner session whose
+#: record holds no draw
+NO_INNER_DRAW = ("refused: the inner session's record (--rec-inner-session) holds no draw (unit_draw): the recursion's inner "
+                 "session is drawn (the coin server's full draw, rec_live.full_draw), the only inner session the recursion's "
+                 "proof covers")
+
+
+def _not_json(c: str):
+    raise ValueError(f"{c} is not JSON")
+
+
+def inner_draw(record: str):
+    """The inner session's draw: its record's ``unit_draw`` (`Proxy.session_record`) as the verifier reads it
+    (`RecCoins.recordDraw`: absent or null, or a record that is not a JSON object, is none). The verifier refuses every
+    session over an inner session without one (`RecSetup.innerDrawn`, last in its verdict), so V*'s statements over it
+    would all be refused: ValueError (`NO_INNER_DRAW`)."""
+    try:
+        j = json.loads(record, parse_constant=_not_json)
+    except ValueError:
+        j = None
+    d = j.get("unit_draw") if isinstance(j, dict) else None
+    if d is None:
+        raise ValueError(NO_INNER_DRAW)
+    return d
+
+
 def statement_of(text: str) -> dict:
     """The ``STATEMENT`` record in ``flock-circuit statement``'s output (its other lines ignored), or the text as one JSON
     object."""
