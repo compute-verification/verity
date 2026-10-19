@@ -93,14 +93,14 @@ def clean_gate_tokens(llm) -> None:
 def main() -> int:
     rc = sbench.main()
     summary = Path(sys.argv[sys.argv.index("--out") + 1]) / "summary.json"
-    if rc or not summary.exists():
+    if (rc and rc != 4) or not summary.exists():
         return rc
     eq = json.loads(summary.read_text())["gate_tokens_equal_ref_arm"]
     failed = {arm: eq[arm] for arm in eq if sbench.base_arm(arm) in TOKENS_EVERY_REP and not all(eq[arm])}
     if failed:
         print(json.dumps({"reps_tokens_failed": failed}), flush=True)
         return 4
-    return 0
+    return rc
 
 
 sbench.build = build

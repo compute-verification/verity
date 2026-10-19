@@ -469,6 +469,8 @@ def main() -> int:
                     help="stock arms at vLLM's own max_num_seqs and max_num_batched_tokens, not --t's")
     ap.add_argument("--arm-mem", type=arm_mem, default={},
                     help="ARM=F,...: those arms' gpu_memory_utilization (a stock arm's own batch needs KV room for it)")
+    ap.add_argument("--time-passed", action="store_true",
+                    help="on a failed gate, stop the failed arms and time the rest (the exit is 4 still)")
     a = ap.parse_args()
     os.environ["SBENCH_T"] = str(a.t)
     if a.stock_own_batch:
@@ -499,6 +501,7 @@ def main() -> int:
         conns[arm].send({"op": "warm"})
         recv(arm, conns[arm], "warm"), recv(arm, conns[arm], "warm")
     reps: list[dict] = []
+    rc = 0
     ref_tokens: dict = {}
     gate = {}
     vs_ref: dict = {}
@@ -531,10 +534,13 @@ def main() -> int:
                                                 or not TOKENS_GATED.get(arm, True)))]
         failed += [arm for arm in arms if arm in TOKENS_ONLY and gate_doc[arm].get("tokens_equal_" + REF_OF[arm]) is not True]
         if failed:
-            print(json.dumps({"gate_failed": failed, "timed": False}), flush=True)
-            for arm in arms:
+            print(json.dumps({"gate_failed": failed, "timed": a.time_passed}), flush=True)
+            for arm in failed if a.time_passed else arms:
                 conns[arm].send({"op": "stop"})
-            return 4
+            if not a.time_passed:
+                return 4
+            arms = [x for x in arms if x not in failed]
+            rc = 4
     for r in range(a.reps):
         for op in a.ops.split(","):
             for j in range(len(arms)):
@@ -578,9 +584,10 @@ def main() -> int:
             p["tpot_overhead_pct"] = round(100 * (p["tpot_b32_ms"] / base["tpot_b32_ms"] - 1), 3)
         if p["tokens_per_s"] and base["tokens_per_s"]:
             p["throughput_overhead_pct"] = round(100 * (1 - p["tokens_per_s"] / base["tokens_per_s"]), 3)
+    summary["gate_failed"] = [x for x in gate_doc if x not in arms]
     (out / "summary.json").write_text(json.dumps(summary, indent=1) + "\n")
     print(json.dumps(summary["per_arm"], indent=1), flush=True)
-    return 0
+    return rc
 
 
 if __name__ == "__main__":
