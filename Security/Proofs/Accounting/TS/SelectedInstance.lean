@@ -124,7 +124,7 @@ noncomputable def sl : SelectLayer Unit Bool 1 1 10 U (Fin 5) P Bool where
   proved := Finset.univ.image (fun i => ((0 : Fin 1), provedList i))
   tally := {(0, .L)}
   regd := regdP
-  regRight := fun _ => True
+  regRight := fun _ _ => True
   out := .out
   credOf := fun _ => 0
   noise := fun _ => noiseU
@@ -135,7 +135,7 @@ noncomputable def sl : SelectLayer Unit Bool 1 1 10 U (Fin 5) P Bool where
   dw := fun _ _ => 0
   epoch := fun _ => none
   epochRow := fun _ => .out
-  epochRight := fun _ => True
+  epochRight := fun _ _ => True
   advised := ∅
 
 theorem first_step {α : Type} {r : α → α → Prop} {a b : α} (h : Relation.TransGen r a b) : ∃ c, r a c := by
@@ -225,12 +225,12 @@ gated tiles of weight 1. -/
 theorem structure_holds :
     sl.toDrawnLayer.WriterReads ∧ sl.SelectionsSourced ∧ sl.SelectionsProved ∧ sl.CertifiedOperands ∧
       sl.FormingClosed ∧ sl.NoLateSelection ∧ sl.NoiseProved wt ∧ sl.AnchorsPinned ∧ sl.AlwaysProved ∧
-      sl.TallyIn ∧ sl.GatesTallied ∧ sl.TallyReads ∧ sl.TallyNoAdvice ∧ sl.RegisteredRight ∧
-      sl.EpochFormedRight ∧ sl.SelFan wt 1 ∧ (∀ w j, 0 ≤ wt w j) ∧
+      sl.TallyIn ∧ sl.GatesTallied ∧ sl.TallyReads ∧ sl.TallyNoAdvice ∧ (∀ x, sl.RegisteredRight x) ∧
+      (∀ x, sl.EpochFormedRight x) ∧ sl.SelFan wt 1 ∧ (∀ w j, 0 ≤ wt w j) ∧
       (∀ c, 0 < wt 0 (.tile c) ∧ (sl.gates 0 (.tile c)).Nonempty) :=
   ⟨writerReads, selectionsSourced, selectionsProved, certifiedOperands, formingClosed, noLateSelection,
     noiseProved, anchorsPinned, alwaysProved, tallyIn, gatesTallied, tallyReads, tallyNoAdvice,
-    fun _ => trivial, fun _ => trivial, selFan,
+    fun _ _ => trivial, fun _ _ => trivial, selFan,
     fun _ j => by cases j <;> simp [wt],
     fun c => ⟨by simp [wt], ⟨.okA c, by simp [sl, gatesU]⟩⟩⟩
 

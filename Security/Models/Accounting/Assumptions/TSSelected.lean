@@ -4,7 +4,7 @@ import Models.Accounting.Assumptions.TS
 # A padded window's named assumption: E1(c) per selected unit (trusted)
 
 `UnitFixed`'s counterpart for a window that credits only its selected units (`Accounting.TS.SelectLayer`,
-note:20261018T2200Z-draft-padded-credit-rule, round 4). Statement draft: its claim id `accounting-ts-selected-fixed`
+note:20261018T2200Z-draft-padded-credit-rule, round 5). Statement draft: its claim id `accounting-ts-selected-fixed`
 is proposed, not yet in `verity.core.claims`, pending the red team and the decision.
 -/
 
@@ -22,8 +22,8 @@ selections have sources, whose floor operands are formings of their certificates
 `FormingClosed`), whose selections are committed before their units' coins, whose noise steps that fan out are always
 proved or weighted (`NoiseProved`) and whose anchors are the verifier's (`AnchorsPinned`), under the
 run's modes `mode` (a unit is paid only if the run computed it, from the operands it committed, under its noise), on
-every accepted path where the registration's certificates and every
-always-proved unit are right:
+every accepted path where the registration's certificates, the salt's epoch records and every always-proved unit are
+right:
 * the run's owned right fixed words per round are at least the words `wt w j` of the selected units that are good with
   their selections (`SelectLayer.SelGood`: the run paid for every unit feeding it along late edges and along gates from
   units outside the always-proved set) over `S`. A certificate written by a paid unit, an always-proved right one or
@@ -47,8 +47,9 @@ def SelectedFixed {C B : Type} {S m s : ℕ} {J Q Pos V : Type} [Fintype C] [Fin
     (mode : Paths (Paths C m × B) S → Fin S × J → Mode) (wt : Fin S → J → ℝ) (folded : Paths (Paths C m × B) S → ℝ) :
     Prop :=
   sl.toDrawnLayer.WriterReads → sl.SelectionsSourced → sl.CertifiedOperands → sl.FormingClosed →
-    sl.NoLateSelection → sl.NoiseProved wt → sl.AnchorsPinned → sl.RegisteredRight → sl.EpochFormedRight →
-    ∀ x, P.accepts x → (∀ t ∈ sl.proved, sl.right x t.1 t.2 (sl.toDrawnLayer.view x t.1 t.2)) →
+    sl.NoLateSelection → sl.NoiseProved wt → sl.AnchorsPinned →
+    ∀ x, P.accepts x → sl.RegisteredRight x → sl.EpochFormedRight x →
+      (∀ t ∈ sl.proved, sl.right x t.1 t.2 (sl.toDrawnLayer.view x t.1 t.2)) →
       (∑ w, ∑ j, if sl.Selected x w j ∧ sl.SelGood mode x w j then wt w j else 0) / S ≤ (P.run x).fixed ∧
         (∑ w, ∑ j, if sl.Selected x w j ∧ mode x (w, j) ≠ .whole then wt w j else 0) / S ≤ folded x
 

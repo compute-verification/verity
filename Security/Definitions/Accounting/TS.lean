@@ -5,7 +5,9 @@ import Definitions.Accounting.TS.Slots
 import Definitions.Accounting.TS.ProofLayer
 import Definitions.Accounting.TS.Drawn
 import Definitions.Accounting.TS.Selected
+import Definitions.Accounting.TS.Registered
 
 /-! The tensor–scalar model (EPS1, note:20261017T0324Z-draft-eps1-spec): the machine, its facets and bound, routes and
 labelled programs with the terms of the decomposition, the full-checking and sampled plays, a padded window's
-selections, and the counting objects of the tensor slot count, the output count and LIN-STEER. -/
+selections and its records (the registration, the epoch), and the counting objects of the tensor slot count, the
+output count and LIN-STEER. -/

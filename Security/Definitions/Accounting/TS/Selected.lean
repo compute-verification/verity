@@ -8,7 +8,7 @@ credited its words. A padded static window (Daniel, 18 Oct, 20:52Z) credits only
 circuit shaped by public parameters, a static superset of units, and which of them are credited is a value, a selection
 (a mask, a forming's `ok`, a done flag) that a unit computes from committed values, or that the weights' registration
 proved once, and that is committed like any value. A wrong unit can emit a wrong selection; it can't rewire. This is
-the credit rule of note:20261018T2200Z-draft-padded-credit-rule (round 4, after
+the credit rule of note:20261018T2200Z-draft-padded-credit-rule (round 5, after
 note:20261018T2310Z-finding-padded-credit-r3, note:20261018T2207Z-report-redteam-padded-credit and
 note:proofs/20261018T2230Z-report-rt10-padded-credit), on the conditions of
 note:20261018T2125Z-report-format-table-r4-r5 (C4's ✓):
@@ -96,8 +96,10 @@ open Pouw.RelativeSecurity
 * `regd ℓ`: the weights' registration record `ℓ` belongs to, if any (a raw weight row `B_j` and its `ok_B,j` share
   one), committed and proved once at registration, before every salt; the formed B row is not in it (its noise reads
   the epoch's salt);
-* `regRight r`: record `r`'s certificate is its raw row's forming verdict (finite, `ρ·α ≥ 1`, at most `k/64` dead
-  lanes), at the record's committed values, and a weight's registered `S_B` is `Σ_j ok_B,j` over its rows;
+* `regRight x r`: on `x`, record `r`'s certificate is its raw row's forming verdict (finite, `ρ·α ≥ 1`, at most `k/64`
+  dead lanes), at the record's committed values, and a weight's registered `S_B` is `Σ_j ok_B,j` over its rows. The
+  window's coins carry the registration's as their earliest coordinates, so whether it is right is an event on the
+  window's paths, of probability at most `δ_reg` on accepted paths (`Accounting.Guarantees.TS.RegisteredRightOff`);
 * `out`, `credOf`: the tally's output position, and the credit its value reads (`point(level)` tiles' words, at most
   16 bits of output);
 * `noise w j`: the slots carrying unit `j` of round `w`'s noise or the values it is derived from, read off its
@@ -114,10 +116,11 @@ open Pouw.RelativeSecurity
 * `weighted`: the units drawn in proportion to their public static fan-out rather than always proved (a forming, a
   noise step: Daniel's 22:42Z third option, `F ≈ 3`), each its `dw w j`, the public static draw weight its index is
   replicated in, never a committed value;
-* `epoch ℓ`, `epochRow e`, `epochRight e`: the epoch record position `ℓ` belongs to, if any (a formed B row
+* `epoch ℓ`, `epochRow e`, `epochRight x e`: the epoch record position `ℓ` belongs to, if any (a formed B row
   `B̃_j ‖ P_B,j` in the salt-bound epoch tree, whose domain binds `(salt, root_W)` and is a public input of every tile
-  instance), the raw row record `e` forms, and whether record `e` is that raw row's forming under the salt's noise (the
-  per-salt forming proofs' guarantee, at their `δ_salt`);
+  instance), the raw row record `e` forms, and whether on `x` record `e` is that raw row's forming under the salt's
+  noise (an event on the window's paths, the epoch's coins among their earliest coordinates, of probability at most
+  `δ_epoch` on accepted paths: `Accounting.Guarantees.TS.EpochFormedRightOff`);
 * `advised`: the units with C-Flock advice ports (parameters in the unit's io and in no read set, which nothing
   binds). -/
 structure SelectLayer (C B : Type) (S m s : ℕ) (J Q Pos V : Type) extends DrawnLayer C B S m s J Q Pos V where
@@ -129,7 +132,7 @@ structure SelectLayer (C B : Type) (S m s : ℕ) (J Q Pos V : Type) extends Draw
   proved : Finset (Fin S × J)
   tally : Finset (Fin S × J)
   regd : Pos → Option ℕ
-  regRight : ℕ → Prop
+  regRight : Paths (Paths C m × B) S → ℕ → Prop
   out : Pos
   credOf : V → ℝ
   noise : Fin S → J → Finset Q
@@ -140,7 +143,7 @@ structure SelectLayer (C B : Type) (S m s : ℕ) (J Q Pos V : Type) extends Draw
   dw : Fin S → J → ℝ
   epoch : Pos → Option ℕ
   epochRow : ℕ → Pos
-  epochRight : ℕ → Prop
+  epochRight : Paths (Paths C m × B) S → ℕ → Prop
   advised : Finset (Fin S × J)
 
 namespace SelectLayer
@@ -307,11 +310,12 @@ def AnchorsPinned : Prop :=
     ∀ x w i k, sl.accepted x w i → sl.anchor (sl.pos w (sl.toDrawnLayer.drawnAt x w i) k) →
       sl.opened x w i k = sl.derive (sl.pos w (sl.toDrawnLayer.drawnAt x w i) k) x
 
-/-- **The epoch's formed rows are right**: every epoch record is its raw row's forming under the salt's noise. The
-per-salt forming proofs' own guarantee (each B forming proved once per salt, opened by the window's tiles against the
-epoch tree whose domain binds `(salt, root_W)`, so a stale salt's row has the wrong domain), at its own `δ_salt`,
-which a composition adds as it adds `δ_reg`. -/
-def EpochFormedRight : Prop := ∀ e, sl.epochRight e
+/-- **The epoch's formed rows are right on `x`**: every epoch record is its raw row's forming under the salt's noise.
+The per-salt forming proofs' own guarantee (each B forming proved once per salt, opened by the window's tiles against
+the epoch tree whose domain binds `(salt, root_W)`, so a stale salt's row has the wrong domain), failing on accepted
+paths with probability at most `δ_epoch` (`Accounting.Guarantees.TS.EpochFormedRightOff`), which a composition adds as
+it adds `δ_reg`. -/
+def EpochFormedRight (x : Paths (Paths C m × B) S) : Prop := ∀ e, sl.epochRight x e
 
 /-- **The always-proved units are in every draw**: each is named by every draw of its round. Protocol structure. -/
 def AlwaysProved : Prop := ∀ t ∈ sl.proved, ∀ b : B, ∃ i, sl.draw b i = t.2
@@ -325,10 +329,11 @@ registered sum (`S_B = Σ_j ok_B,j`, `RegisteredRight`). Protocol structure. -/
 def GatesTallied : Prop :=
   ∀ w j, ∀ ℓ ∈ sl.gates w j, (∃ t ∈ sl.tally, ∃ k, sl.pos t.1 t.2 k = ℓ) ∨ (sl.src ℓ = none ∧ (sl.regd ℓ).isSome)
 
-/-- **The registration's certificates are right**: every record's certificate is its raw row's forming verdict
+/-- **The registration's certificates are right on `x`**: every record's certificate is its raw row's forming verdict
 (`ok_B,j` over `B_j` alone, which no salt changes). The registration's own guarantee (each `ok_B` proved once, at
-registration, before every salt), at its own `δ_reg`. -/
-def RegisteredRight : Prop := ∀ r, sl.regRight r
+registration, before every salt), failing on accepted paths with probability at most `δ_reg`
+(`Accounting.Guarantees.TS.RegisteredRightOff`). -/
+def RegisteredRight (x : Paths (Paths C m × B) S) : Prop := ∀ r, sl.regRight x r
 
 /-- **The tally reads only the selections and itself**: every slot of a tally unit is a gate position, or written by
 a tally unit (a limb, a carry between limbs, a partial sum). A tally reading a value a data unit writes could be moved
@@ -352,7 +357,7 @@ rounded down to `point(level)`), proved for each window. It holds only if the ta
 the registration's sum, so it is stated under `RegisteredRight`; the filler's rows are constant zero, not committed
 rows (a junk row is admitted at 1). -/
 def TallyComputes [Fintype C] [Fintype B] [Nonempty V] [Fintype J] (wt : Fin S → J → ℝ) : Prop :=
-  sl.RegisteredRight → ∀ x, (∀ t ∈ sl.tally, sl.right x t.1 t.2 (sl.toDrawnLayer.view x t.1 t.2)) →
+  ∀ x, sl.RegisteredRight x → (∀ t ∈ sl.tally, sl.right x t.1 t.2 (sl.toDrawnLayer.view x t.1 t.2)) →
     sl.published x ≤ sl.credited wt x
 
 open Classical in
