@@ -205,13 +205,15 @@ def rank_lower(alpha: int, kind: str, sparse: bool) -> float:
 
 
 def fits(alpha_set, kind: str) -> bool:
-    """Does every alphabet value have a code of `kind` (so one plane, unscaled, carries it)?"""
-    fmt, _ = KIND[kind]
+    """Does every alphabet value have a code of `kind` (so one plane carries it, a block-scaled kind at one fixed
+    power-of-two scale)?"""
+    fmt, scale = KIND[kind]
     if fmt == "f64":
         return True
     if fmt in WIDE_GRID:
         return all(exact_in(v, *WIDE_GRID[fmt]) for v in alpha_set)
-    return alpha_set <= values(fmt)
+    shifts = range(-8, 9) if scale else (0,)
+    return any({v / Q(2) ** e for v in alpha_set} <= values(fmt) for e in shifts)
 
 
 def verdicts() -> list[dict]:
