@@ -943,8 +943,7 @@ noncomputable def swsE (x : Msg) (c : Fin (refK x) → FlockDeploy.Coin) (w : Cl
       (FlockComplete.Replay.Lc.out (FlockDeploy.tabsOf (stsOf x))[j.val]!.fold (FlockDeploy.tabsOf (stsOf x))[j.val]!.m
         (trsE x w (UE.tapeZk τ))[j.val]!
         (FlockComplete.Replay.Zc.out (FlockDeploy.tabsOf (stsOf x))[j.val]!.m
-          (FlockComplete.Replay.Zc.coinsAt (ligRespE c) (repBase x (2 * j.val + r.val)))
-          (trsE x w (UE.tapeZk τ))[j.val]!)
+          (FlockComplete.Replay.Zc.coinsAt (ligRespE c) (repBase x (2 * j.val + r.val))) (trsE x w (UE.tapeZk τ))[j.val]!)
         (FlockComplete.Replay.Lc.coinsAt (ligRespE c)
           (repBase x (2 * j.val + r.val) + 3 + ((FlockDeploy.tabsOf (stsOf x))[j.val]!.m - 6))
           ((FlockDeploy.tabsOf (stsOf x))[j.val]!.fold.kLog - 6))) ++ extras)
