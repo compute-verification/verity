@@ -25,7 +25,7 @@ note:20261019T0546Z-draft-rt-fp). Each V with an extraction is therefore also wr
 `keep` for `fold_add`: V's row is its honest cost (γ), and V-x0's is its credit, the floor the words cost with no
 extraction, and its ε. OUT/credit.md has, per reading, V's γ, V-x0's ε, and V's own ε beside the bound
 1 - T / ♭_V, T the lesser of V-x0's cheater and floor: what crediting V's own floor would give a cheater that doesn't
-extract, at V's L, marked (`CAVEATS`) where V's operands are past s8 and the bound is no witness. RT-FP's
+extract, at V's L, marked (`CAVEATS`) where that is no witness (operands past s8, or FP4's k64 words). RT-FP's
 overcredit.py prices the routes at other L's (FP4's chained int8 pair, e4m3i352's limbs).
 
 g1 (gap-one) serves the FP model's nearest levels R, in row units, moved by a fair live coin b of 1 and centred:
@@ -177,15 +177,15 @@ def x0(v: dict) -> dict | None:
                 "summary": f"{v['name']}'s words at the cost of a route that doesn't extract (lanes or the int8 MMA)"}
 
 
-#: where V-x0's cheater, which the model lets write any word on the int8 MMA, is no route to V's own words; V-x0's
-#: credited ε stands (a real cheater costs no less), but the bound on V's own floor is no witness
+#: where V-x0's cheater at V's L, which the model lets write any word on the int8 MMA, is no route to V's own words;
+#: V-x0's credited ε stands (a real cheater costs no less), but the bound on V's own floor is no witness
 CAVEATS = {
     "A1": "operands to 448 are past s8, so no int8 route at V's L writes V's words: the bound is no witness; a limb "
           "route (m = 4, 16 int8 MMAs a word) is unpriced",
     "I352": "operands to 352 are past s8, so the bound at V's L is no witness; RT-FP's overcredit.py prices the limb "
             "route (m = 3, L 576)",
-    "NVI": "a witness at block scales to 10 (|R + b| <= 121, s8); at scales to 15 RT-FP's overcredit.py prices the "
-           "two-limb route (L 256)",
+    "NVI": "V's FP4 words are k64, so the bound at V's L is no witness; RT-FP's overcredit.py prices two chained int8 "
+           "MMAs at L 64 (block scales to 10, |R + b| <= 121) and two limbs at L 256 (scales to 15)",
 }
 
 CREDIT_HEAD = ("| device | reading | design | γ (V) | credited ε (V-x0) | V-x0's ♭ | V's ♭ | V's own ε | "
