@@ -9,10 +9,11 @@ opens the vllm-v1 SHA-256 leaves (`pipeline.deferred_rows`).
 
 A TP Commit's windows (`tp-commit --serving-rows`, `pipeline.tp.serving_rows`) are `served`: each rank commits its window from its own
 committed store while serving, after every rank's root is final and before any draw, under ``run = <TP run root>/rank<r>``. Serving's
-own commitment, made before any draw, is what the audit holds; that those rows are the values under the ranks' vllm-v1 roots is
+own commitment, made before any draw, is what the audit holds; that those rows are the values under the ranks' rows-sha512 roots is
 the rank's claim, not proved (the profile makes no claim that they are, `pipeline.serving_rows`). A5 takes a TP window as served only
-under a SHA-512 TP run root, as it takes a deferred Commit's: the TP run root is SHA-256 today (`tp.run_root`), so every TP Commit's
-windows are refused by name before the draw (`source`: `sha512`).
+under a SHA-512 TP run root, as it takes a deferred Commit's: a TP Commit's ranks commit under rows-sha512 and its TP run root is
+SHA-512 (`tp.run_root`, ``verity/tp-run-root/v2``), and an old record's SHA-256 v1 root is refused by name before the draw
+(`source`: `sha512`).
 
     PYTHONPATH=<tree>:<tree>/benchmarks/numerical/python:<tree>/integrations/vllm \\
       python benchmarks/one_stage/a5.py --bundle DIR --row-dir DIR --window DIR \\
