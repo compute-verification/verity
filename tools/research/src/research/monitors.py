@@ -875,6 +875,8 @@ def fixtures_public(ctx: Ctx) -> list[Finding]:
 # ---- every machine: its memory, the runs infrastructure killed, the peers it watches, the checks lost -----------------------------
 
 USER_SLICE = "/sys/fs/cgroup/user.slice/user-1001.slice"      # each research run is a session scope here (one ssh login each)
+QUEUE_SCOPES = "user@1001.service/app.slice"                   # under USER_SLICE: a `--queue` run's cluster-RUN.scope
+CLUSTER_SCOPE_RE = re.compile(r"^cluster-(r\d{8}-\d{6}-[0-9a-f]{4})\.scope$")
 RUNS = "/workspace/research/runs"
 REQUESTS = "/workspace/research/requests"
 PSI_FULL_PCT = 10.0         # every non-idle task stalled on memory for 10% of the last minute: the machine is thrashing
@@ -897,11 +899,13 @@ def _read(p: Path) -> str:
 
 
 def run_scopes(ctx: Ctx) -> dict[str, dict]:
-    """Each session scope under USER_SLICE: its memory now, and the run whose `research run --id` it holds (None: not a run)."""
+    """Each session scope under USER_SLICE, and each `--queue` run's cluster scope: its memory now, and the run whose
+    `research run --id` it holds (None: not a run); a cluster scope names its run."""
     out = {}
-    for d in sorted(ctx.path(USER_SLICE).glob("session-*.scope")):
-        rid = None
-        for pid in _read(d / "cgroup.procs").split()[:200]:
+    slice_ = ctx.path(USER_SLICE)
+    for d in sorted(slice_.glob("session-*.scope")) + sorted((slice_ / QUEUE_SCOPES).glob("cluster-*.scope")):
+        rid = m[1] if (m := CLUSTER_SCOPE_RE.match(d.name)) else None
+        for pid in [] if rid else _read(d / "cgroup.procs").split()[:200]:
             argv = _read(ctx.path(f"/proc/{pid}/cmdline")).split("\0")
             if "research" in argv and "run" in argv and "--id" in argv[:-1]:
                 rid = argv[argv.index("--id") + 1]
@@ -958,7 +962,7 @@ def oom_kills(ctx: Ctx) -> list[Finding]:
             continue
         f = dict(re.findall(r"(?:^|,)(oom_memcg|task_memcg|task|pid)=([^,]*)", m[2]))
         scope = (f.get("task_memcg") or "").rsplit("/", 1)[-1]
-        rid = (seen.get(scope) or {}).get("run")
+        rid = (seen.get(scope) or {}).get("run") or (m2[1] if (m2 := CLUSTER_SCOPE_RE.match(scope)) else None)
         who = submitter(ctx, rid) if rid else None
         limit = f"the limit of `{f['oom_memcg']}`" if f.get("oom_memcg") else "the whole machine's memory"
         run = f"run {rid}" + (f", sent by {who}" if who else "") if rid else f"`{f.get('task_memcg') or '?'}`, no research run"
@@ -1460,9 +1464,9 @@ MONITORS: list[Monitor] = [
             "Read node 2's fill status and the wait files in /run/gpu-lease; while the cluster agent holds agent.lock, it "
             "grants: see its log. A waiter pinned (`on=`) to a busy GPU waits by design.", n2="waiters"),
     Monitor("fill-status-n2", "infra", "warn", "node", fill_status_n2,
-            "Stale: restart node 2's fill runner (tmux `pouw-infra-fill`) after reading why it stopped; until its status is "
-            "fresh, no monitor reads node 2. Unwatched: find the lease holding `timed` (`/run/gpu-lease` on node 2) and the "
-            "window it belongs to; ask its owner to end it, or release it once it is dead."),
+            "Stale: restart node 2's fill runner (research's `systemctl --user restart pouw-infra-fill`) after reading why it "
+            "stopped; until its status is fresh, no monitor reads node 2. Unwatched: find the lease holding `timed` "
+            "(`/run/gpu-lease` on node 2) and the window it belongs to; ask its owner to end it, or release it once it is dead."),
     Monitor("fast-preempt-n1", "infra", "warn", "node", fast_preempt_n1, FAST),
     Monitor("fast-preempt-n2", "infra", "warn", "node", fast_preempt_n2, FAST, n2="preempted"),
     Monitor("units-n1", "infra", "warn", "node", units("n1"), UNITS_ACTION, every_s=300, clear_s=UNITS_CLEAR_S),

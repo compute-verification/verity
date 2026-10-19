@@ -5,6 +5,7 @@
                                  and memory; one JSON line per VM in $FLEET_DIR/samples-YYYYMMDD.jsonl
     fleet.py report [--hours 24] [--now ISO]   per VM over the window: $ (rate x hours seen RUNNING), GPU busy %, CPU load, peak
                                  memory, idle hours (no GPU at >= 5% and load under a tenth of its cores)
+    fleet.py instances           every VM in the tenant's projects as JSON (the control pod's cloud watch reads it)
     fleet.py quota               each tenant quota at >= 80% of its limit, and the card's day so far against $FLEET_CARD_DAILY_USD
     fleet.py loop                sample every 5 min, quota every 30 (an alert in #agent-alerts once per quota and UTC day), and at
                                  15:00Z (08:00 PDT) the last 24 h's report to infra's status thread and @top
@@ -231,6 +232,7 @@ def main(argv: list[str] | None = None) -> int:
     rp = sub.add_parser("report")
     rp.add_argument("--hours", type=float, default=24)
     rp.add_argument("--now", default=None)
+    sub.add_parser("instances")
     sub.add_parser("quota")
     sub.add_parser("loop")
     a = ap.parse_args(argv)
@@ -239,6 +241,8 @@ def main(argv: list[str] | None = None) -> int:
     elif a.cmd == "report":
         end = datetime.strptime(a.now, "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=timezone.utc).timestamp() if a.now else time.time()
         print(render(report(load_samples(end - a.hours * 3600, end), a.hours), a.hours, end))
+    elif a.cmd == "instances":
+        print(json.dumps(instances()))
     elif a.cmd == "quota":
         print(json.dumps(quota_findings(), indent=1))
     else:

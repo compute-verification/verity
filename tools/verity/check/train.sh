@@ -20,23 +20,32 @@
 # `research queue`'s `place` picks). It is a `research run --cwd source` of COMMIT's tree with a `quick-tier/v1` result, not
 # a merge check: `research merge` still wants the check. It takes no --agreement.
 #
+# `--deferred STEP,...`: the post-landing run (`research queue drive --defer`) in place of the check: only those ci.toml jobs
+# and what they need (`check.py --record --deferred`), in a priority slot as a check runs, recorded without `--tool check`, so
+# no gate reads it; drive reads its steps and suites. It takes neither --agreement nor --against.
+#
 # Run it where the parent store key is (the Cursor secrets), from a Verity checkout with `machines.d` for MACHINE. It refuses a
 # temporary credential, which cannot mint the run's custody key, a shell that skips the store-backed tests, a COMMIT that is
 # empty (its tree is its base's: BASE, or else where it leaves origin/main, or its parent for a commit on main) or that origin
 # doesn't hold, and a BASE that isn't an ancestor of COMMIT.
 set -euo pipefail
-[ $# -ge 2 ] || { sed -n '2,26p' "$0" | sed 's/^# \{0,1\}//'; exit 2; }
+[ $# -ge 2 ] || { sed -n '2,30p' "$0" | sed 's/^# \{0,1\}//'; exit 2; }
 commit=$1 machine=$2; shift 2
-pass=() against=
+pass=() against= deferred=
 while [ $# -gt 0 ]; do
   case $1 in
     --agreement) pass+=(--agreement) ;;
     --against) [ $# -ge 2 ] || { echo "train: --against needs BASE" >&2; exit 2; }; against=$2; shift ;;
-    *) echo "train: $1 refused: train.sh runs the merge queue's check, which takes --agreement and --against BASE alone" >&2; exit 2 ;;
+    --deferred) [[ $# -ge 2 && $2 =~ ^[a-z0-9-]+(,[a-z0-9-]+)*$ ]] || { echo "train: --deferred needs STEP,..." >&2; exit 2; }
+      deferred=$2; shift ;;
+    *) echo "train: $1 refused: train.sh runs the merge queue's check, which takes --agreement, --against BASE and --deferred STEPS alone" >&2; exit 2 ;;
   esac
   shift
 done
 [ -z "$against" ] || [ ${#pass[@]} -eq 0 ] || { echo "train: --agreement refused with --against: a touched-suites run sends no build" >&2; exit 2; }
+[ -z "$deferred" ] || { [ -z "$against" ] && [ ${#pass[@]} -eq 0 ]; } \
+  || { echo "train: --deferred takes neither --agreement nor --against: a post-landing run is its steps alone" >&2; exit 2; }
+[ -z "$deferred" ] || pass+=(--deferred "$deferred")
 [ -z "${VERITY_SKIP_STORE:-}" ] || { echo "train: VERITY_SKIP_STORE is set; a recorded train runs the store-backed tests" >&2; exit 1; }
 [ -z "${AWS_SESSION_TOKEN:-}" ] || { echo "train: AWS_SESSION_TOKEN is set; a temporary credential cannot mint the custody key" >&2; exit 1; }
 [ -n "${AWS_ACCESS_KEY_ID:-}" ] && [ -n "${R2_ENDPOINT:-}" ] || { echo "train: no parent store key (AWS_ACCESS_KEY_ID, R2_ENDPOINT)" >&2; exit 1; }
@@ -48,7 +57,7 @@ die() { echo "train: $*" | tee -a "$why" >&2; exit 1; }
 tell() {
   local rc=$?
   if [ "$rc" -ne 0 ]; then
-    { echo "@${TRAIN_AS:-ci} train: ${sha:-$commit} on $machine${against:+ --against $against} registered no run (exit $rc):"
+    { echo "@${TRAIN_AS:-ci} train: ${sha:-$commit} on $machine${against:+ --against $against}${deferred:+ --deferred $deferred} registered no run (exit $rc):"
       tail -n 5 "$why"; [ -z "$log" ] || { echo "$log:"; tail -n 12 "$log" 2>/dev/null; }; } > "$why.post"
     uv run -q research msg reply --as "${TRAIN_AS:-ci}" --thread "${MERGE_THREAD:-1790957906.278529}" --quiet \
       --file "$why.post" > /dev/null 2>&1 || echo "train: and could not post that to the merge thread" >&2
@@ -114,6 +123,15 @@ for _ in $(seq 120); do
   sleep 5
 done
 ids=$(grep -oE 'run r20[0-9]{6}-[0-9]{6}-[0-9a-f]{4} launched' "$log" | cut -d' ' -f2 | awk '!seen[$0]++' | tr '\n' ' ') || true
+# a launcher still running with no run after the wait is stopped, its whole session (setsid): left, it launched runs nobody
+# followed, which held check slots for hours on trees no longer on `next` (18 Oct: r20261018-173205-b114, 3 h, launched past
+# the wait while check.py gathered verdicts)
+if [ -z "${ids// /}" ] && kill -0 "$pid" 2>/dev/null; then
+  kill -TERM -- "-$pid" 2>/dev/null || kill -TERM "$pid" 2>/dev/null || true
+  wait "$pid" 2>/dev/null || true
+  ids=$(grep -oE 'run r20[0-9]{6}-[0-9]{6}-[0-9a-f]{4} launched' "$log" | cut -d' ' -f2 | awk '!seen[$0]++' | tr '\n' ' ') || true
+  [ -n "${ids// /}" ] || die "no run launched in the wait; stopped its launcher (pid $pid), so none launches later; see $log"
+fi
 grep -E "^check:|refused|rror" "$log" | head -5 || true
 if [ -z "${ids// /}" ] && ! kill -0 "$pid" 2>/dev/null; then
   rc=0; wait "$pid" || rc=$?

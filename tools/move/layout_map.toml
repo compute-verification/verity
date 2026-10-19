@@ -6,7 +6,8 @@
 # [modules] lists the renames at package level, and the script fails when what it derives disagrees with them. [aliases]
 # adds old names that no file in the tree carries any more. [retired] lists the old paths the move empties, and [drop] the
 # files it deletes (an `__init__.py` of a package level that goes, a pyproject whose distribution folds into `verity`).
-# The hand fixups that follow the generated move, as a commit of their own: `tools/move/fixups/platform.py`.
+# The hand fixups that followed the generated move, as a commit of their own: `tools/move/fixups/platform.py`, removed once
+# the move landed (`git show 7d291b14d:tools/move/fixups/platform.py`).
 
 [roots]
 # import name -> its package directory, before and after; a module outside every root is named by its path from the root
@@ -92,9 +93,9 @@ paths = ["catalog/", "kernels/", "experimental/", "backends/flock/", "verity/pri
 "README.md: catalog" = "prose about C-Flock or the catalog as a whole (AGENTS.md and README: the docs worker's)"
 "archive/README.md: backends/flock" = "prose about C-Flock or the catalog as a whole (AGENTS.md and README: the docs worker's)"
 "archive/README.md: backends/flock/verifier" = "prose about C-Flock or the catalog as a whole (AGENTS.md and README: the docs worker's)"
-"backends/flock/live/src/circuit.rs: backends" = "a join from the crate's directory, not the file's: fixups/platform.py corrects it"
-"backends/flock/live/src/lookup.rs: backends" = "a join from the crate's directory, not the file's: fixups/platform.py corrects it"
-"backends/flock/live/src/sha512_native.rs: backends" = "a join from the crate's directory, not the file's: fixups/platform.py corrects it"
+"backends/flock/live/src/circuit.rs: backends" = "a join from the crate's directory, not the file's: the move's hand fixups corrected it"
+"backends/flock/live/src/lookup.rs: backends" = "a join from the crate's directory, not the file's: the move's hand fixups corrected it"
+"backends/flock/live/src/sha512_native.rs: backends" = "a join from the crate's directory, not the file's: the move's hand fixups corrected it"
 "backends/flock/pod/10-link.sh: backends/flock" = "the prover's own files (its patches, the live crate, its pod scripts), all under ml/flock"
 "backends/flock/pod/20-pure.sh: backends/flock" = "the prover's own files (its patches, the live crate, its pod scripts), all under ml/flock"
 "backends/flock/pod/50-preflight.sh: backends/flock" = "the prover's own files (its patches, the live crate, its pod scripts), all under ml/flock"
@@ -112,10 +113,10 @@ paths = ["catalog/", "kernels/", "experimental/", "backends/flock/", "verity/pri
 "integrations/vllm/tests/program/test_dense_family_boundary.py: catalog" = "the catalog's Definitions, all under ml/circuits (the census that leaves holds none)"
 "integrations/vllm/tests/program/test_sampling_split.py: catalog" = "the catalog's Definitions, all under ml/circuits (the census that leaves holds none)"
 "integrations/vllm/tools/migrate/split_sampling.py: catalog" = "the catalog's Definitions, all under ml/circuits (the census that leaves holds none)"
-"integrations/vllm/verity_vllm/ops/pod_bootstrap.sh: catalog" = "the bootstrap's distributions check, which fixups/platform.py rewrites"
+"integrations/vllm/verity_vllm/ops/pod_bootstrap.sh: catalog" = "the bootstrap's distributions check, which the move's hand fixups rewrote"
 "pyproject.toml: backends/flock" = "a suite's inputs, members or test paths: a suite that reads outside its inputs fails"
 "pyproject.toml: catalog" = "a suite's inputs, members or test paths: a suite that reads outside its inputs fails"
-"tests/test_doc_paths.py: verity/primitives" = "a synthetic tree's directory, which fixups/platform.py restores"
+"tests/test_doc_paths.py: verity/primitives" = "a synthetic tree's directory, which the move's hand fixups restored"
 "tests/test_gate_paths.py: backends/flock" = "a toy rule, tree or record inside a test, rewritten the same way on both sides of its assertions"
 "tools/check/check.py: backends/flock" = "docstrings, and the Rust tests' inputs (the build script, patches and live crate, all under ml/flock)"
 "tools/check/check.py: backends/flock/verifier" = "FLOCK_VERIFIER, the agreement's scripts; the Lean package is FLOCK_LEAN, which agreement_closure reads too"

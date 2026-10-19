@@ -14,13 +14,12 @@ import numpy as np
 import pytest
 
 from verity.core.protocols.certifier import certificate as CT
-from verity.core.protocols.certifier.active import DATA, HEADER, LAST, encode_frame
+from verity.core.protocols.certifier.active import DATA, HEADER, LAST, PLACEHOLDER, encode_frame
 from verity.core.protocols.certifier.grid import GridParams, Reason, Record, Status
 from verity.ml.circuits.boolean.forms import Circuit
 from verity.ml.circuits.defs import bind
 from verity.ml.circuits.evaluation.bits import evaluate_bits
 from verity.ml.commitments.gates.frame_v3 import root_ref
-from verity.ml.commitments.identity import tagged_sha512
 from verity.ml.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2 as SCHEMA
 from workload import framing as F
 from workload import lab as L
@@ -391,8 +390,8 @@ def cut(stream: int, request: bytes, B: int) -> list[bytes]:
     return [encode_frame(LAST if j == len(chunks) - 1 else DATA, stream, c, B) for j, c in enumerate(chunks)]
 
 
-def commitment(block: str, window: int) -> bytes:
-    return tagged_sha512("verity-network-certifier/salt/v1", f"{block}/{window}".encode().ljust(64, b"\0"))
+#: 64 bytes a salt frame's payload doesn't carry: the live certifier's is `PLACEHOLDER`.
+OTHER = bytes([1]) * 64
 
 
 def lab_records(block: str, egress: list[bytes], ingress: list[bytes], B: int, salted: bool) -> list[Record]:
@@ -402,7 +401,7 @@ def lab_records(block: str, egress: list[bytes], ingress: list[bytes], B: int, s
         for w in range(0, len(frames), 2):
             fs = frames[w:w + 2]
             if salted and link == L.INGRESS:
-                fs = [U.salt_frame(w // 2, commitment(block, w // 2), B)] + fs
+                fs = [U.salt_frame(w // 2, PLACEHOLDER, B)] + fs
             slots = fs + [None] * (4 - len(fs))
             out.append(Record(link, w // 2, (tuple(slots[:2]), tuple(slots[2:])), Status()))
     return out
@@ -515,16 +514,16 @@ def test_a_lab_record_whose_coverage_wasnt_established_is_refused_with_no_frames
     assert w.why == "the record's status is coverage-never-established"
 
 
-def revealed(lab) -> dict[tuple[str, int], bytes]:
-    return {(b, w): commitment(b, w) for b in lab[2] for w in range(len(lab[2][b][1]))}
+def payloads(lab) -> dict[tuple[str, int], bytes]:
+    return {(b, w): PLACEHOLDER for b in lab[2] for w in range(len(lab[2][b][1]))}
 
 
-def test_a_salted_ingress_window_holds_against_its_revealed_commitment_alone(salted_lab):
-    salts = revealed(salted_lab)
+def test_a_salted_ingress_window_holds_against_its_salt_frames_payload_alone(salted_lab):
+    salts = payloads(salted_lab)
     assert not not_ok(lab_windows(salted_lab, salts=salts)[1])
     unsalted = not_ok(lab_windows(salted_lab, salts={})[1])
     assert unsalted and all(p.endswith(L.INGRESS) for p, _ in unsalted)
-    wrong = salts | {(BLOCK, 0): commitment(BLOCK, 99)}
+    wrong = salts | {(BLOCK, 0): OTHER}
     assert not_ok(lab_windows(salted_lab, salts=wrong)[1]) == {(INGRESS, 0)}
 
 
@@ -541,14 +540,14 @@ def test_n3frame_is_assemble_on_the_labs_frames(lab):
 
 @pytest.mark.slow
 def test_a_salted_window_is_its_reference(salted_lab):
-    """The salted window (B = 96): honest, with a wrong revealed commitment, and with the salt frame's slot pointing
-    at a data frame. It is the one test of the salt path, which the demo can't reach (a salt frame needs B >= 81):
-    the slot's one-hot selection of the salt frame, its comparison with the revealed commitment, and the routing of
-    the other frames onto the descriptors."""
-    salts = revealed(salted_lab)
+    """The salted window (B = 96): honest, with a wrong salt payload, and with the salt frame's slot pointing at a
+    data frame. It is the one test of the salt path, which the demo can't reach (a salt frame needs B >= 81): the
+    slot's one-hot selection of the salt frame, its comparison with the public payload, and the routing of the other
+    frames onto the descriptors."""
+    salts = payloads(salted_lab)
     honest = next(w for w in lab_windows(salted_lab, salts=salts)[1] if w.port == INGRESS and w.window == 0).instance
     wrong = copy.deepcopy(honest)
-    wrong.args["salt"] = wrong.args["salt"][:8] + commitment(BLOCK, 99)
+    wrong.args["salt"] = wrong.args["salt"][:8] + OTHER
     moved = copy.deepcopy(honest)
     moved.args["slot"] = 1
     cases = [honest, wrong, moved]

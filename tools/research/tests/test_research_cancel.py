@@ -62,7 +62,11 @@ def test_cancel_terms_the_workloads_group_records_a_manual_cancel_and_leaves_the
         assert intent["target"]["pgid"] == workload.pid and intent["reason"] == "train superseded (research cancel by lander)"
         assert intent["verified"] is True and intent["target"]["run_dir_members"] == [workload.pid]
         assert result["kind"] == "cancel_result" and result["delivered"] is True
-        assert f"process group {workload.pid} (1 process(es))" in capsys.readouterr().out
+        out = capsys.readouterr().out
+        assert f"process group {workload.pid} (1 process(es))" in out
+        assert "the runner SIGKILLs what is left of the run 20 s after the SIGTERM" in out
+        assert json.loads((d / "control" / "cancel").read_text())["grace_s"] == remote.CANCEL_GRACE_S == 20
+        assert result["scope"]["runner_kills_after_s"] == 20
     finally:
         _end(workload, runner)
 
@@ -201,6 +205,31 @@ def test_a_run_whose_tool_predates_the_workload_check_is_refused_not_signalled_u
     try:
         assert cli.main(["cancel", RUN, "--on", "vy-b", "--reason", "x", "--runs-dir", str(here)]) == 1
         assert "predates the workload check, so nothing was signalled" in capsys.readouterr().err and workload.poll() is None
+    finally:
+        _end(workload)
+
+
+def test_a_run_whose_tool_predates_the_scope_end_gets_the_group_sigterm_and_is_told_so(tmp_path, monkeypatch, capsys):
+    """A run launched before the scope end (INF-93) ships a cancel-intent without --grace-s: the cancel is delivered the old way and
+    says that nothing SIGKILLs what ignores it."""
+    here, d, workload = _launched_elsewhere(tmp_path, monkeypatch)
+    old = tmp_path / "b" / "tool" / "old" / "research" / "telemetry"
+    old.mkdir(parents=True)
+    (old.parent / "__init__.py").write_text("")
+    (old / "__init__.py").write_text("")
+    (old / "__main__.py").write_text(
+        "import os, sys\n"
+        "if '--grace-s' in sys.argv:\n"
+        "    sys.stderr.write('tele cancel-intent: error: unrecognized arguments: --grace-s 20\\n')\n"
+        "    sys.exit(2)\n"
+        f"os.execve(sys.executable, [sys.executable, '-m', 'research.telemetry', *sys.argv[1:]], {{**os.environ, 'PYTHONPATH': {str(TOOL)!r}}})\n")
+    (d / "job.json").write_text(json.dumps({"run": {"remote": {"machine": "vy-b", "tool": str(tmp_path / "b" / "tool" / "old")}}}))
+    try:
+        assert cli.main(["cancel", RUN, "--on", "vy-b", "--reason", "x", "--runs-dir", str(here)]) == 0
+        assert workload.wait() == -signal.SIGTERM
+        out = capsys.readouterr().out
+        assert "predates the scope end: SIGTERM to its group and to the processes naming its run dir only" in out
+        assert "the runner SIGKILLs" not in out and not (d / "control" / "cancel").exists()
     finally:
         _end(workload)
 

@@ -41,8 +41,6 @@ runs/
 *.png
 *.pdf
 *.html
-# not read by code: kept with the rest of fixtures/redteam until the red team rules on it
-!fixtures/redteam/vu-battery/v1/a/results_r20260922-070024-e7d1.jsonl
 .bench-cell/
 
 # Lean build outputs (lake)

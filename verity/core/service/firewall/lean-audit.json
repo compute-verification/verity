@@ -1,7 +1,7 @@
 {
  "roots": ["Firewall"],
  "exempt": {
-  "FirewallMain": "the core-firewall executable's entry point, one line; its command is Core.Protocol.main of Core.Firewall.protocol, audited under Firewall and CoreProtocol",
+  "FirewallMain": "the core-firewall executable's entry point: `decide` is Core.Firewall.decideMain, every other command Core.Protocol.main of Core.Firewall.protocol, audited under Firewall and CoreProtocol",
   "FirewallDifftest": "the core-firewall-difftest executable's entry point, one line: Difftest.serve over Core.Firewall.opFn and outerFn, audited under Firewall and Difftest"
  },
  "escapes": {

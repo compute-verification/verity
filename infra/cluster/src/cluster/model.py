@@ -77,9 +77,6 @@ class Node:
         """No allocation may run past this instant: the stop less the drain (final backups, custody)."""
         return None if self.stops_at is None else self.stops_at - self.drain_s
 
-    def numa_of_cpu(self, cpu: int) -> int:
-        return next(n for n, cs in self.numa.items() if cpu in cs)
-
     def gpu(self, index: int) -> Gpu:
         return next(g for g in self.gpus if g.index == index)
 
