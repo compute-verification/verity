@@ -20,8 +20,9 @@ verdict over a session is `Session.start` at the answer, then `Session.openAll` 
   exactly where `allOk` does, and so does the whole verdict for a session of at least one opening. A malformed answer
   ends the session before any opening, as it fails every opening's `parseD`.
 * `coinLayer_verdict`, `coinLayer_refuses`: the same at `CoinLayer.session nr T`'s check (`refP.chk`), at the nonce whose
-  bytes `Hello` carries. `coinLayer_refuses` is what `LeanRelease.OpeningsRefused` asks of the frame at SHA-512: where
-  `allOk` of the openings fails, the Lean check refuses.
+  bytes `Hello` carries. `coinLayer_refuses` is the Lean check's side of `LeanRelease.OpeningsRefused` (ZKS10's
+  `Claims/ZK/Refine.lean`) at SHA-512: where `allOk` of the openings fails, the Lean check refuses. The transport ends
+  the session at that refusal (`coin_tree::Checked`), so the frame takes no coins past it.
 -/
 
 namespace Claims.ZKMal.CoinOpen
@@ -298,8 +299,8 @@ theorem coinLayer_verdict (nr : Msg → ℕ → ℕ) (T : TableData) (x : Msg) (
   rw [refP_chk_eq, ← hν]
   exact verdict_isOk h ρ os (place nr x) hf hne
 
-/-- **The Lean check refuses what `LeanRelease.OpeningsRefused` names**, at SHA-512: where `allOk` of the deployed
-check fails on the openings, the Lean check's verdict over them is a refusal. -/
+/-- **The Lean check refuses the openings `LeanRelease.OpeningsRefused` names**, at SHA-512: where `allOk` of the
+deployed check fails on the openings, the Lean check's verdict over them is a refusal. -/
 theorem coinLayer_refuses (nr : Msg → ℕ → ℕ) (T : TableData) (x : Msg) (ν : Nonce) (h : Coins.Hello) (ρ : Msg)
     (os : List (String × ℕ × Msg)) (hν : h.nonce = nb ν) (hf : Follows (place nr x) h.spec h.links 0 [] os)
     (hm : ((allOk ((session nr T).refP.chk x ν ρ) 0 (os.map fun o => o.2.2)).eval shaH).1 = false) :
