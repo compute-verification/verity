@@ -5,6 +5,10 @@ import Proofs.Population.Pointer
 import Proofs.Population.Leakage
 import Proofs.Population.Work
 import Proofs.Population.Instance
+import Proofs.Population.Oblivious
+import Proofs.Population.Transfer
+import Proofs.Population.Converse
+import Proofs.Population.HonestCone
 
 /-!
 # Populations: which object each policy needs of sampled proofs' guarantee
@@ -27,4 +31,15 @@ root's weight; a copied unit is correct work never done, so luck needs distinct 
 `Instance`: a circuit's partition is a single-assignment population whose wrong units are the partition's, and an
 acyclic one when its units are ordered along the wires (intervals in layout order, as `Q_call` v1 cuts); a unit that
 sandwiches another on a path of wires, as `Q_word` v1 can cut, makes a cycle.
+`Oblivious`: every time-ordered trace pads to a checked population with its own wrong units, and an oblivious one (read
+sets independent of every value, or of all but the public inputs) is that population with nothing added. Locality and
+the skipped-work cone hold in the honest run's own dataflow with no obliviousness, and the pointer machine is
+oblivious in the classical sense yet leaks secrets its honest wiring never has upstream. With the address slots
+honest, a run is an assignment of the honest run's frozen dataflow.
+`Transfer`: every theorem above holds for a time-ordered program with the cones and upstreams of its padding, which
+are public when the padded assignments are those holding the public values; that cone holds every honest run's.
+`Converse`: the padding is the least wiring that expresses every program with a given address map, and the pointer
+machine's honest wiring, which never has a secret upstream of the egress, does not bound its egress.
+`HonestCone`: Daniel's leakage form and the skipped work hold for every time-ordered, address-closed program at the
+cones over its honest runs, with no obliviousness; what needs the padding is isolation, a secret's place upstream.
 -/
