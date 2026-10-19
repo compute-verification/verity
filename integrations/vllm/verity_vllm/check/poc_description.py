@@ -454,12 +454,6 @@ class Description:
     def __contains__(self, op: str) -> bool:
         return op in self._by_op
 
-    def nodes_of_type(self, op_type: str) -> list[Node]:
-        return [n for n in self.nodes if n.op_type == op_type]
-
-    def op_families(self) -> list[str]:
-        return sorted({n.op_type for n in self.nodes})
-
     def resolve_shape(self, shape: Sequence[int | str]) -> tuple[int, ...]:
         out = []
         for dim in shape:

@@ -76,8 +76,7 @@ RMS_NUM_WARPS = 4
 
 #: FA2 (`vllm-project/flash-attention 506341a`, `_vllm_fa2_C.varlen_fwd`): under `VLLM_BATCH_INVARIANT=1`
 #: `num_splits = 1` selects `run_mha_fwd_splitkv_align` → `Flash_fwd_kernel_traits<64, 64, 128, 4>`: kBlockM 64,
-#: kBlockN 128 (measured on the 4090, `out/curve/e10/KERNEL-GEOMETRY.md` §A).  The `Attention_v3` static `BN`.
-ATTN_BN = C["BN"]
+#: kBlockN 128 (measured on the 4090, `out/curve/e10/KERNEL-GEOMETRY.md` §A).  `C["BN"]` is the `Attention_v3` static `BN`.
 ATTN_NUM_SPLITS = 1
 
 #: KV cache of the FlashAttention backend in κ (M1 log): the per-layer cache is one bf16 buffer

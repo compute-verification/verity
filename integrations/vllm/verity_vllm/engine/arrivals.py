@@ -254,9 +254,3 @@ def run_requests_arrivals(llm: Any, requests: list[Any], params_for: Callable[[A
                             "prefill_tokens": None if tokens is None else tokens[j][0],
                             "decode_tokens": None if tokens is None else tokens[j][1]} for j in range(n_it)]
     return finished, timing
-
-
-def admission_order(requests: list[dict]) -> list[dict]:
-    """The same rule for callers that step the engine themselves (noninterference's hooks variant): requests sorted by
-    `arrive_step` (stable), each to be admitted right before that engine step."""
-    return sorted(requests, key=lambda r: int(r.get("arrive_step") or 0))

@@ -273,10 +273,6 @@ def host_cap() -> tuple[int | None, str | None]:
     return None, None
 
 
-def _cgroup_cap() -> int | None:
-    return host_cap()[0]
-
-
 @dataclass(frozen=True, kw_only=True)
 class Options:
     workload: str = option("--workload",
