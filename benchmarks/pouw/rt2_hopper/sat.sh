@@ -19,6 +19,11 @@ for w in 4 6 8; do
   for q in half1 half2 half3 pair pair_xor half1_enc half2_enc; do jobs+=("$w $q low"); done
 done
 for q in half1 half2 pair half1_enc; do jobs+=("32 $q high"); done
+# ONLY="W:QUERY:KIND ..." (e.g. "4:half2:low 32:half2:high") runs just those
+if [ -n "${ONLY:-}" ]; then
+  jobs=()
+  for j in $ONLY; do IFS=: read -r w q k <<<"$j"; jobs+=("$w $q $k"); done
+fi
 printf '%s\n' "${jobs[@]}" | xargs -P "$P" -L 1 bash -c '
   w=$0 q=$1 kind=$2
   flags=(--width "$w"); [ "$kind" = high ] && flags=(--high)
