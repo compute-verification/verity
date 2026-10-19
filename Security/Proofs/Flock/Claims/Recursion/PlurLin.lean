@@ -78,8 +78,8 @@ theorem geomS_mul (q : ℝ) : ∀ M, q * geomS (1 - q) M = 1 - (1 - q) ^ M
     show q * (1 + (1 - q) * geomS (1 - q) M) = 1 - (1 - q) ^ (M + 1)
     linear_combination (1 - q) * ih
 
-/-- **The geometric tail**: `q(1 − q)^M ≤ 1/(M+1)` on `[0, 1]`. -/
-theorem mul_pow_le_inv {q : ℝ} (h0 : 0 ≤ q) (h1 : q ≤ 1) (M : ℕ) : q * (1 - q) ^ M ≤ 1 / ((M : ℝ) + 1) := by
+/-- **The geometric tail**: `q(1 − q)^M ≤ 1/(M+1)` for `q ≤ 1`. -/
+theorem mul_pow_le_inv {q : ℝ} (h1 : q ≤ 1) (M : ℕ) : q * (1 - q) ^ M ≤ 1 / ((M : ℝ) + 1) := by
   have key : ∀ M : ℕ, (1 - q) ^ M * (1 + M * q) ≤ 1 := by
     intro M
     induction M with
@@ -91,7 +91,7 @@ theorem mul_pow_le_inv {q : ℝ} (h0 : 0 ≤ q) (h1 : q ≤ 1) (M : ℕ) : q * (
       nlinarith [mul_nonneg (mul_nonneg ht (sq_nonneg q)) (by positivity : (0 : ℝ) ≤ n + 1)]
   have ht : 0 ≤ (1 - q) ^ M := pow_nonneg (by linarith) M
   rw [le_div_iff₀ (by positivity)]
-  nlinarith [key M, mul_nonneg ht (sub_nonneg.2 h1), mul_nonneg ht h0]
+  nlinarith [key M, mul_nonneg ht (sub_nonneg.2 h1)]
 
 /-- The first of `M + 1` draws and the rest. -/
 def splitFirst (M : ℕ) : (Fin (M + 1) → U) ≃ U × (Fin M → U) where
@@ -112,7 +112,7 @@ theorem Ex_splitFirst {M : ℕ} (F : U → (Fin M → U) → ℝ) :
 theorem Pr_firstDiffers [Nonempty U] (g : U → Prop) (f : U → Msg) (a : Msg) :
     ∀ M, Pr (firstDiffers g f a M) = Pr (fun u => g u ∧ f u ≠ a) * geomS (1 - Pr g) M
   | 0 => by
-    rw [Pr_congr (q := fun _ => False) fun _ => Iff.rfl, Pr_false]
+    rw [Pr_congr (p := firstDiffers g f a 0) (q := fun _ => False) fun _ => by simp [firstDiffers], Pr_false]
     simp [geomS]
   | M + 1 => by
     classical
@@ -148,7 +148,7 @@ theorem Pr_plur_link (g : U → Prop) (f : U → Msg) (M : ℕ) :
   have hT0 : (0 : ℝ) ≤ 1 / ((M : ℝ) + 1) := by positivity
   by_cases hne : ∃ u, g u
   · obtain ⟨u₀, -, hp, hmax⟩ := plur_spec g f hne
-    haveI : Nonempty U := ⟨u₀⟩
+    have : Nonempty U := ⟨u₀⟩
     rw [hp]
     have hq0 : 0 ≤ Pr g := Pr_nonneg _
     have hq1 : Pr g ≤ 1 := Pr_le_one _
@@ -179,7 +179,7 @@ theorem Pr_plur_link (g : U → Prop) (f : U → Msg) (M : ℕ) :
     have hdq : Pr (fun u => g u ∧ f u ≠ f u₀) ≤ Pr g := Pr_mono fun u h => h.1
     have ht : 0 ≤ (1 - Pr g) ^ M := pow_nonneg (by linarith) M
     have hdt := mul_le_mul_of_nonneg_right hdq ht
-    have htail := mul_pow_le_inv hq0 hq1 M
+    have htail := mul_pow_le_inv hq1 M
     have he : Pr (fun u => g u ∧ f u ≠ f u₀) * geomS (1 - Pr g) M * Pr g =
         Pr (fun u => g u ∧ f u ≠ f u₀) * (1 - (1 - Pr g) ^ M) := by
       rw [← hgm]; ring
@@ -314,7 +314,6 @@ theorem Pr_plur_fork_lin {Coin : Type} [Fintype Coin] [Nonempty Coin] {Ω C : Ty
     rw [Pr_prod]
     refine congrArg Ex (funext fun ω => ?_)
     rw [Pr_prod]
-    rfl
   have hab : ∀ ω r, a ω r ≤ b ω r + 1 / ((M : ℝ) + 1) := fun ω r => Pr_plur_link (Gr ω r) (Fr ω r) M
   rw [hL, hR]
   calc (Ex fun ω => Ex fun r => a ω r) ≤ Ex fun ω => Ex fun r => b ω r + 1 / ((M : ℝ) + 1) :=
