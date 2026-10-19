@@ -30,6 +30,19 @@ On the RTX PRO 6000 (96 GB) the full Commit doesn't fit beside stock's KV pool a
 lower (`--kv-bytes`), and a stock-only run at vLLM's own sizing gives the native number. A pinned B200 run takes its Build's
 attention backend (`--attention-backend FLASH_ATTN`); vLLM's default there is FlashInfer.
 
+Each arm's result carries two losses: `throughput_overhead_pct`, against the same cycle's stock (the cost of the Commit on one
+engine configuration), and `native_loss_pct`, against the native reference run's stock (what the arm gives up against native
+compiled vLLM on that card and model). The native reference is a run's own stock when that runs at vLLM's own KV sizing and
+attention backend, else `row.py --publish --native RUN`'s stock-only run; the loop plot's maxtput throughput panels plot
+`native_loss_pct`.
+
+```text
+python3 benchmarks/hash/maxtput/row.py --publish RUN... --row 11                            # each run's own stock is native
+python3 benchmarks/hash/maxtput/row.py --publish RUN... --row 11 --native REF               # RTX pinned pool, B200 FLASH_ATTN
+```
+
+A republished run's earlier results are labeled `superseded_by` the new ones, and neither table nor plot reads them.
+
 `XCHECK=1` checks the driver's stock engine against vLLM's own entry point: `vllm bench throughput` at the same engine settings
 on its random dataset at 1024/128 exactly, before and after the driver run on the same fixed load (`--load fixed`), compared over
 the whole run (`driver_vs_vllm_bench_pct` in the run's result; the launch line is in `launch.sh`). vLLM's figure samples at
