@@ -612,9 +612,9 @@ def AllReduceNcclTreeCoordinate(B, S, col):
 
 @composite("AllReduceNcclTree", 1, ["WORLD", "SIZE", "CHAIN"],
            lambda S: ((("parts", Array(int(S.WORLD), Array(S.SIZE, BF16))),), Array(S.SIZE, BF16)),
-           conformance="exact-model-tested: Llama-3.1-70B int8 TP4 on 4 cc 12.0 GPUs (188 SMs) under vLLM's batch invariance with "
-                       "NCCL_P2P_DISABLE=1, every all-reduce of its 32 steps (256 and 1 tokens at N=8192) on every rank "
-                       "(`CAPTURED`, tests/properties/tp4_nccl_tree_replay.py)")
+           conformance="exact-model-tested: the int8 70B TP4 capture `NCCL_TREE_RUNS` names, on 4 cc 12.0 GPUs (188 SMs) under "
+                       "vLLM's batch invariance with NCCL_P2P_DISABLE=1, every all-reduce of its 32 steps (256 and 1 tokens at "
+                       "N=8192) on every rank (`CAPTURED`, tests/properties/tp4_nccl_tree_replay.py)")
 def AllReduceNcclTree(B, S, parts):
     """pynccl's ``ncclAllReduce(ncclSum, ncclBfloat16)`` of WORLD ranks' SIZE bf16 on NCCL's intra-node tree (the flattened
     tensor; no element's adds read its position): one `AllReduceNcclTreeCoordinate_v1` per element."""
@@ -685,12 +685,13 @@ def route_binding(c: Captured, world: int, M: int, N: int, rows: int | None = No
         raise ValueError(f"route {c.route!r} ({c.definition} {c.statics}) reduces an element by its offset among the launch's {M} "
                          f"tokens, which a call of this request's {rows} rows does not know")
     size = rows * N
-    if c.definition == "AllReduceMnnvl_v1":
-        return AllReduceMnnvl, {"WORLD": world, "N": size, "SHOT": mnnvl_shot(M, N, world)}
-    if c.definition == "AllReduceMultimem_v1":
-        return AllReduceMultimem, {"WORLD": world, "SIZE": size, **c.statics}
-    if c.definition == "AllReduceCustom_v1":
-        return AllReduceCustom, {"WORLD": world, "SIZE": size, **c.statics}
-    if c.definition == "AllReduceNcclTree_v1":
-        return AllReduceNcclTree, {"WORLD": world, "SIZE": size, "CHAIN": nccl_chain(c.statics["CHAIN"], world)}
-    raise ValueError(f"covered route {c.route!r} names unsupported definition {c.definition!r}")
+    binding = {
+        "AllReduceMnnvl_v1": lambda: (AllReduceMnnvl, {"WORLD": world, "N": size, "SHOT": mnnvl_shot(M, N, world)}),
+        "AllReduceMultimem_v1": lambda: (AllReduceMultimem, {"WORLD": world, "SIZE": size, **c.statics}),
+        "AllReduceCustom_v1": lambda: (AllReduceCustom, {"WORLD": world, "SIZE": size, **c.statics}),
+        "AllReduceNcclTree_v1": lambda: (AllReduceNcclTree,
+                                         {"WORLD": world, "SIZE": size, "CHAIN": nccl_chain(c.statics["CHAIN"], world)}),
+    }.get(c.definition)
+    if binding is None:
+        raise ValueError(f"covered route {c.route!r} names unsupported definition {c.definition!r}")
+    return binding()
