@@ -611,7 +611,12 @@ def _post(api: Slack, ch: str, handle: str, text: str, thread: str | None = None
     head, *rest = _pieces(slack_dates(text))
     text = f"{head}{_footer(tags)}"
     if thread and not api.dry_run:                       # a reply's ts (a doorbell's `reply R`): its thread
-        first = api.call("conversations.replies", channel=ch, ts=thread, limit=1).get("messages", [])
+        try:
+            first = api.call("conversations.replies", channel=ch, ts=thread, limit=1).get("messages", [])
+        except SlackError as e:                          # a channel the bot may post in but not read (#ask-the-team)
+            if not any(w in str(e) for w in ("missing_scope", "not_in_channel")):
+                raise
+            first = []
         thread = (first[0].get("thread_ts") or first[0].get("ts") or thread) if first else thread
     out = api.call("chat.postMessage", channel=ch, thread_ts=thread, username=handle, text=text,
                    unfurl_links="false", unfurl_media="false")

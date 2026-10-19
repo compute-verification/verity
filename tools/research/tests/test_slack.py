@@ -2560,3 +2560,22 @@ def test_a_bare_run_suffix_needs_a_letter_and_a_digit():
     which had named its own PR beside "dead code" earlier in the thread."""
     assert slack.run_ids("prove from r20261018-234409-19cd, after dd21 and 2584; dead code, a bead, the face of 2026") == {"19cd", "dd21"}
     assert slack.run_ids("r20261018-234409-dead") == {"dead"}
+
+
+def test_a_reply_in_a_channel_the_bot_cannot_read_posts_in_the_thread_it_was_given(fake, registry, capsys, monkeypatch):
+    """#ask-the-team: the bot may post there but lacks channels:history, so finding a reply's thread failed the whole post
+    (top, 19 Oct). A refused read keeps the thread as given; any other failure still stops it."""
+    root = fake.add(COORD, text="a question from Daniel", username="daniel", bot_id=BOT)
+    real, error = slack.post, ["missing_scope"]
+
+    def unreadable(url, data, headers):
+        if url.endswith("conversations.replies"):
+            return {"ok": False, "error": error[0], "needed": "channels:history"}
+        return real(url, data, headers)
+
+    monkeypatch.setattr(slack, "post", unreadable)
+    rc, _, err = run(capsys, "send", "--as", "infra", "--thread", root["ts"], "--text", "the node is free")
+    assert rc == 0, err
+    assert [m["text"].split("\n")[0] for m in fake.messages[COORD] if m.get("thread_ts") == root["ts"]] == ["the node is free"]
+    error[0] = "channel_not_found"
+    assert run(capsys, "send", "--as", "infra", "--thread", root["ts"], "--text", "again")[0] == 2
