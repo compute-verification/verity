@@ -44,14 +44,16 @@ def check(tree: Path) -> dict:
                      "binding": binding, "literal": float(fam.eps), "Nw": i.Nw,
                      "w_star": str(min([lh.coef(i, i.pistar, k) / om for k, om in i.writers])),
                      "phi_star": str(min(lh.load(i, i.pistar, f) for f in i.folds)),
-                     "tight_per_unit": float(i.B * (1 - fam.eps))},
+                     "tight_per_unit": float(i.B * (1 - fam.eps)),
+                     "margin": float(fam.eps - i.bound)},
             "machine_model": r and {k: r[k] for k in ("design", "vector", "q", "skip", "mand", "machine", "luck",
                                                       "core", "binding", "floor")},
         }
         agree = []
         if r:
             agree.append(("pistar_in_binding", i.pistar in r["binding"]))
-            agree.append(("eps_skip", abs(float(i.eps_skip) - r["skip"]) < 1e-9))
+            # headline.toml records ε_skip to 6 decimals; the exporter reads eps_budget's full value
+            agree.append(("eps_skip", abs(float(i.eps_skip) - r["skip"]) < 1e-6))
             agree.append(("design", r["design"] == fam.design))
         agree.append(("bound_le_literal", i.bound <= fam.eps))
         res["agree"] = dict(agree)
