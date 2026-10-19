@@ -12,8 +12,9 @@ beside `LayerCommitted` on a circuit with a run input any gate reads (`SeededSch
 the served schedule, which `Tie.commit` states. What stays of it here, per call:
 
 * **units** (`CallUnits`): call site `c` is a run of linear `linearOf c`'s Program (`VllmInt8LinearH1{K, N, M = T}`,
-  #2615) on the gates `[start c, start (c + 1))` of the declared circuit; each non-input gate lies in a proof-unit span
-  of a replay unit of that Program's layout, and its declared unit is that replay unit's number shifted by the call's
+  #2615, in the form's variant: with each unit's `z` words for `zTree`, its `y` words and the `dequant(z) = y` check
+  for `yOpen`) on the gates `[start c, start (c + 1))` of the declared circuit; each non-input gate lies in a
+  proof-unit span of a replay unit of that Program's layout, and its declared unit is that replay unit's number shifted by the call's
   first position (`Layout.base`); each input slot's gate is an input; and every replay unit's number is below the call's
   unit count (`Layout.unitsOf`), so the calls' units tile the window's positions without overlap (W-a);
 * **population** (`ServedUnits`): each linear's Program has the layout's unit count, and the declared circuit's units are
@@ -26,8 +27,9 @@ the served schedule, which `Tie.commit` states. What stays of it here, per call:
 The seed-preimage conjunct goes: the served live path's rounds are all live (`Tie.live`), and the live statements read no
 seed.
 
-These are stated, not proved. The units and population conjuncts are facts of four compiled Programs, checkable once by
-evaluation; the draw conjunct is a property of `drawUnits`, with no premise.
+These are stated, not proved. The units and population conjuncts are facts of four compiled Programs a form, checkable
+once by evaluation; the forms' Programs differ in each unit's spans, never in the unit count, so `population` is one for
+all three. The draw conjunct is a property of `drawUnits`, with no premise.
 -/
 
 open Lean (Json)
