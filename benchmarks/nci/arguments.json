@@ -272,7 +272,7 @@
    "id": "p-library",
    "kind": "model",
    "status": "measured",
-   "statement": "The algorithm library: 71 algorithms with traits and measured multipliers; queries give a bracket and the read breakdown.",
+   "statement": "The algorithm library: 83 algorithms with traits and measured multipliers; queries give a bracket and the read breakdown.",
    "refs": {
     "algorithms": [
      "fine-grained-moe",

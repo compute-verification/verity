@@ -223,8 +223,8 @@ All values below are from `parameters.json`; render the index for the findings b
 
 `library.py` answers questions across training algorithms.
 
-- **The library holds 71 algorithms in 17 families.** 59 come from a scaling corpus of 91 sources.
-- **47 algorithms carry a measured `multiplier`:** a compute-equivalent gain over a dense AdamW Chinchilla-optimal
+- **The library holds 83 algorithms in 17 families.** 59 come from a scaling corpus of 91 sources.
+- **60 algorithms carry a measured `multiplier`:** a compute-equivalent gain over a dense AdamW Chinchilla-optimal
   reference, citing its findings, with the full `scaling` evidence beside it.
 - **Each algorithm states its `convention`.** `as-published` keeps the method's state at its stored precision
   (weights and optimizer moments). `attacker` assumes the cheapest rates at about the same quality. Queries default
