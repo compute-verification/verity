@@ -17,6 +17,8 @@ position `p` commits `row0 (col0At w b p)`. Here, at every coin vector of a `--z
   `encodeRowsZk`'s row at `q` as its `row0`.
 * `Claims.ZKMal.Masked.zkLevel0`: every `--zk` schedule's level 0 has `d = cols + rate`, `rate ≥ 1`, `lanes = k₀` and
   `t_pad ≤ 2^cols`, and is the model schedule's level 0 (one `decide +kernel` per `m`, `round0Facts_all`).
+* `FlockComplete.wordOf_packed`, `FlockComplete.zOf_traces`: a table's lanes, the model's packed words of its share of
+  the witness, are `packed`'s entries of the executable's trace of that share.
 -/
 
 namespace FlockSoundness.Discharge.Composed
@@ -244,6 +246,30 @@ theorem row0_eq_encodeRowsZk {nL L tp : ℕ} (lv : Level) (tPad : ℕ) (g : Arra
     · exact h2 0 1
     · exact h2 1 0
     · exact h2 1 1
+
+/-- **The model's packed word is the executable's** (`Composed.wordOf`, `packed`): where the witness reads the trace's
+bits, its word `y` is `packed`'s entry `y`. -/
+theorem wordOf_packed (tr : Trace) {M : ℕ} (zw : Model.Witness M)
+    (hz : ∀ a : Fin (2 ^ M), zw a = Flock.Readable.toZ tr.z[a.val]!) {y : ℕ} (hy : y < 2 ^ (M - 7)) (hM : 7 ≤ M) :
+    Composed.wordOf zw y = fOf (packed tr M)[y]! := by
+  rw [Replay.Lg.fOf_packed tr M y hy, Composed.wordOf]
+  show FlockLevel3.pack _ = _
+  rw [Refine.pack_eq_sum, Finset.sum_range]
+  refine Finset.sum_congr rfl fun v _ => ?_
+  have e : 2 ^ M = 2 ^ 7 * 2 ^ (M - 7) := by rw [← pow_add]; congr 1; omega
+  have hlt : 128 * y + v.val < 2 ^ M := by rw [e]; have := v.isLt; norm_num; omega
+  simp only [hlt, ↓reduceDIte, hz]
+  cases tr.z[128 * y + v.val]! <;> simp [Flock.Readable.toZ, Replay.Lg.bF]
+
+/-- **A table's share of the witness is its trace's bits** (`Readable.zOf`, `ZkTables.traces`). -/
+theorem zOf_traces (sts : Array Stmt) (w : Claims.Flock.Wit) {j : ℕ} (hj : j < sts.size) (a : Fin (2 ^ sts[j].m)) :
+    Flock.Readable.zOf sts.size w j sts[j].m a = Flock.Readable.toZ (ZkTables.traces sts w)[j]!.z[a.val]! := by
+  have hs : sts[j]! = sts[j] := getElem!_pos sts j hj
+  rw [ZkTables.traces, Refine.getElem!_range_map _ hj]
+  simp only [traceOf, hs]
+  rw [Refine.getElem!_range_map _ a.isLt, Nat.zero_add, Array.getD_eq_getD_getElem?, List.getElem?_toArray,
+    ← List.getD_eq_getElem?_getD, Flock.Readable.tableWit_getD hj]
+  rfl
 
 end FlockComplete
 
