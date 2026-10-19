@@ -119,11 +119,13 @@ research msg subscriptions --as <your handle>    # prints the subscribe calls to
   Anything another handle must read about your issue comes on Slack, naming you, and rings your inbox.
 - `@infra` subscribes to `#agent-alerts` and `#ask-daniel`. Every channel subscription is `topLevelOnly: true`.
 - **A person's post in `#ask-the-team` rings the lanes it names.** Typed in Slack, it goes through no `research msg`, so
-  its watcher (top's subscription, or infra's agent watch) hands each new one to `research msg deliver --channel
+  the Slack events service (`integrations/slack-events/`) delivers it from Slack's event; until that is deployed, its
+  watcher (top's subscription, or infra's agent watch) hands each new one to `research msg deliver --channel
   ask-the-team --event -` (the Slack message event on stdin; the bot can't read that channel). That rings each lane the
   post starts with (`@name`s and user-group mentions), once per post, with a doorbell that names the channel: `from
   daniel, #ask-the-team thread T[, reply R]: ...`. Answer there: `research msg reply --as ME --channel ask-the-team
-  --thread T` (or `--channel-id C0CA1JZSYNR`).
+  --thread T` (or `--channel-id C0CA1JZSYNR`). `#resource-accounting` (collaborators' questions on compute, memory and
+  network accounting) routes the same way, by the service only; its subscribers are the five lanes that answer there.
 - **Subscribe to a thread (`subscribe_slack_thread`) only where a human may answer**: your own `#ask-daniel` card, a
   or a thread a named human posted in. A task for Daniel's console, laptop or browser goes to `#ask-daniel` as a card
   with the exact steps. Between handles your inbox already carries every reply addressed to you: one that names
@@ -262,6 +264,7 @@ A person who asks the lanes gets a private channel of their own, `#chat-NAME`. `
 research msg chat open NAME (--user U... | --email E) --start-here URL [--note TEXT]   # create or reuse it; invite, pin, publish
 research msg chat list                                                              # each chat in people.d, open or closed
 research msg chat close NAME                                                        # archive it; its record is marked closed
+research msg chat expect NAME --email E [--note TEXT]                                # someone Daniel invited: opened when they join
 ~~~
 
 - `open` invites the person (`--user`, their Slack id; or `--email`, by `users.lookupByEmail`, else through Slack Connect)
@@ -271,10 +274,16 @@ research msg chat close NAME                                                    
 - **No registry PR.** `open` publishes the person to the notes as `people.d/NAME.json` (beside `routes.d`, published the
   same way), and every command reads each open one into `collaborators`; a clone without it reads the published copy.
   `close` marks it closed. The registry's own `collaborators` is for people added by hand. `--dry-run` prints the plan.
-- **Who answers.** `@top` subscribes to each chat channel's top level (`subscriptions --as top` lists them) and hands each
-  post to `research msg deliver --channel chat-NAME --event -`. Until the router (`research msg router`) runs, a post
-  rings the lanes it starts with; a reply that names no one rings the lanes that posted in its thread; anything else,
-  unaddressed, rings `@top`. Answer in the channel (`research msg send --as ME --channel chat-NAME --thread T`) and
+- **Newcomers.** For someone Daniel invites to the workspace, `expect` publishes `people.d/NAME.json` with status
+  `expected`, their email and no channel (`chat list` shows it). When they join, the Slack events service's `team_join`
+  handler finds them by email (`users.info`) and runs `open` for them with the onboarding page as `--start-here`; until
+  it is deployed, `@top` runs `open NAME --email E` once they have joined.
+- **Who answers.** The Slack events service (`integrations/slack-events/`) delivers each post; until it is deployed,
+  `@top` subscribes to each chat channel's top level (`subscriptions --as top` lists them) and hands each post to
+  `research msg deliver --channel chat-NAME --event -`. A post rings the lanes it starts with; a reply that names no one
+  rings the lanes that posted in its thread; anything else, unaddressed, rings `@top`, and the service says so in its
+  thread (routing by model is off). Its watchdog rings again a post with no 👀 and no lane reply after 15 minutes, and
+  `@top` after 60. Answer in the channel (`research msg send --as ME --channel chat-NAME --thread T`) and
   subscribe to that thread, since a person posts in it.
 - **Doorbells carry no text.** The channel is private and the inboxes are not, so a chat's doorbell names the person and
   the thread only; read the post with `research msg read --channel chat-NAME --thread T`.

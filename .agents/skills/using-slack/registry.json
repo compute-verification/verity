@@ -50,6 +50,17 @@
       "subscribers": [
         "top"
       ]
+    },
+    "resource-accounting": {
+      "id": "C0CABUKBT2S",
+      "purpose": "Collaborators' questions on compute, memory and network accounting and the GPU model they rest on.",
+      "subscribers": [
+        "compute-accounting",
+        "memory-accounting",
+        "network-accounting",
+        "proofs",
+        "kernels"
+      ]
     }
   },
   "handles": [
@@ -417,7 +428,8 @@
         "tools/research/tests/test_slack.py",
         "tools/research/tests/slack_routing_vectors.json",
         "tools/research/src/research/linear.py",
-        "tools/research/tests/test_linear.py"
+        "tools/research/tests/test_linear.py",
+        "integrations/slack-events/"
       ],
       "branch_suffixes": [
         "b252",
