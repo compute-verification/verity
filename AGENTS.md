@@ -165,7 +165,8 @@ out-of-memory kill takes all of them down. Locally, run only git (`git merge-tre
 messaging and the notes, one named test file or `-k` selection of under about a minute and 1 GB, `lake env lean` on one
 file in an already-built tree, a Lean package with no Mathlib or ArkLib, and the lock fast path. Everything else runs
 remotely through `research run --on auto --cwd source [--wait] -- CMD` (the shipped tree needs its own `uv sync`), on the cluster queue as an `agent-test` job (4 CPUs, 16 GiB,
-60 min unless `--cpus`, `--mem-gb` or `--timeout` say otherwise), outside the check slots: every suite (`suites.py`),
+60 min unless `--cpus`, `--mem-gb` or `--timeout` say otherwise), on whichever of node 2, node 1 and cpu-1's `research` pool has
+room beside the check slots: every suite (`suites.py`),
 `verity check` and `check.py`, circuit-check (24 GB a process), any build of `Security` or `Security/Proofs`, cargo, nvcc, every e2e run
 and every GPU job (the writing-runs skill). The shell hook refuses those commands locally and names the remote one;
 `AGENT_GUARD_LOCAL_OK=1` in the command is the explicit opt-in.

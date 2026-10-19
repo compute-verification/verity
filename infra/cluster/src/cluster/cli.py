@@ -145,6 +145,9 @@ def main(argv: list[str] | None = None) -> int:
     sb.add_argument("--preempt", choices=("requeue", "never"), default="requeue")
     sb.add_argument("--quiet", action="store_true", default=None)
     sb.add_argument("--on", dest="node", metavar="NODE")
+    sb.add_argument("--room", metavar="JSON", help="each machine's `research room --json` (or why it couldn't be read), by name: a kind "
+                                                    "that lists nodes is placed among them (without it, the answer names what to read)")
+    sb.add_argument("--no-pools", action="store_true", help="skip a kind's check-slot pools (MACHINE/POOL): a pool run needs a lane")
     sb.add_argument("--gpu-ids", default="", help="comma-separated GPU indices the job must get")
     sb.add_argument("--gpu-host", action="store_true", help="a job without --gpus that takes its GPUs with gpu-lease itself: its scope runs "
                                                                "at a GPU job's CPU weight (node 1: not idle)")
@@ -213,7 +216,8 @@ def main(argv: list[str] | None = None) -> int:
                                 question=a.question, gpus=a.gpus, cpus=a.cpus, memory_gib=a.mem_gb, max_s=a.max_s,
                                 quiet=a.quiet, preempt=a.preempt, disk_gb=a.disk_gb, project=a.project, submitter=a.submitter,
                                 priority=a.priority, gpu_model=a.gpu_model, custody_s=a.custody_s, node=a.node,
-                                gpu_ids=tuple(int(x) for x in a.gpu_ids.split(",") if x), gpu_host=a.gpu_host)
+                                gpu_ids=tuple(int(x) for x in a.gpu_ids.split(",") if x), gpu_host=a.gpu_host,
+                                room=json.loads(a.room) if a.room else None, pools=not a.no_pools)
         except (submit.Refused, ValueError) as e:
             print(json.dumps({"refused": str(e)}))
             return 3

@@ -7,11 +7,13 @@ The executors, as they stand:
 - **vy-nebius-2, GPUs:** `gpu-lease N --wait`, with the job's flags, around the workload; the runner is in the CPU scope
   below. Under the node agent's live mode, gpu-lease's wait file is the brain's queue and its grant is the brain's
   decision; with the agent down, gpu-lease's own rules decide.
-- **vy-nebius-2, CPUs only:** a systemd scope with the memory cap, pinned to the project's CPUs, CUDA hidden. A guest runs at
-  nice 19 on its share's CPUs, and node 2's ops daemon pauses it through a timed window. The scope holds the CPUs itself
-  (`AllowedCPUs=`), so a workload's own `taskset` can't leave them; systemd drops that without a word where user@.service
-  doesn't delegate cpuset (research's pods/nebius/user-cpuset.conf), so the wrapper starts nothing (exit 70) unless the
-  scope's cpuset is the pin.
+- **vy-nebius-2, CPUs only:** a systemd scope with the memory cap, pinned to the project's CPUs, CUDA hidden, and node 2's ops
+  daemon pauses a guest through a timed window. A guest gets `cpus` CPUs of its share in whole cores of its own (`cores` in
+  the placement: the machine's `research cpu-hold` claims them, waits while none are free, and puts them in this wrapper in
+  place of the share), at nice 0: every queued run had all of 48-95 at nice 19, 34 at once at load 1000 (19 Oct), and nice
+  orders nothing between scopes. The scope holds the CPUs itself (`AllowedCPUs=`), so a workload's own `taskset` can't
+  leave them; systemd drops that without a word where user@.service doesn't delegate cpuset (research's
+  pods/nebius/user-cpuset.conf), so the wrapper starts nothing (exit 70) unless the scope's cpuset is the pin.
 - **vy-nebius-1, CPUs only:** the same scope on the CPUs outside the reserved pools, idle (`CPUWeight=idle`): GPU jobs' host
   threads share those CPUs, and network's timing chunks among them stalled for seconds behind Lean audits' replays
   (network-accounting, art:894c0447). An idle scope runs only on CPU time its siblings leave. A job that takes its GPUs
@@ -80,11 +82,12 @@ def wrappers(cluster: Cluster, j: Job, node: str, run_id: str, kind: str | None 
                       f"GPUs (n1_lease.py borrows beyond it only while every waiter is --preemptible), and this asks for {j.gpus}")
     guest = cluster.standing(j.project, node) != OWNER
     pin = cpuset.format(allowed_cpus(cluster, cluster.nodes[node], j))
+    nice = guest and not claims_cores(cluster, j, node)
     runner = ["env", f"GPU_LEASE_WHO={f'{kind}:' if kind else ''}{j.submitter}", f"RESEARCH_RUN_ID={run_id}", "CUDA_VISIBLE_DEVICES=",
               "systemd-run", "--user", "--scope", "--quiet", "--collect", "--unit", f"cluster-{run_id}",
               "-p", f"MemoryMax={j.memory_gib}G", "-p", "MemorySwapMax=0", "-p", f"AllowedCPUs={pin}",
               *(["-p", "CPUWeight=idle"] if node == NODE1 and not j.gpus and not gpu_host else []), "--",
-              "sh", "-c", CPUSET_CHECK, "cpuset-check", pin, "taskset", "-c", pin, *(["nice", "-n", "19"] if guest else [])]
+              "sh", "-c", CPUSET_CHECK, "cpuset-check", pin, "taskset", "-c", pin, *(["nice", "-n", "19"] if nice else [])]
     if not j.gpus:
         return runner, []
     lease = ["env", *N1_LEASE_ENV, GPU_LEASE_N1] if node == NODE1 else [GPU_LEASE]
@@ -95,8 +98,14 @@ def wrappers(cluster: Cluster, j: Job, node: str, run_id: str, kind: str | None 
     return runner, [*lease, "--"]
 
 
+def claims_cores(cluster: Cluster, j: Job, node: str) -> bool:
+    """Whether the job takes whole cores of its share on the machine (`research cpu-hold`): a guest's CPU job on node 2."""
+    return node == NODE2 and not j.gpus and cluster.standing(j.project, node) != OWNER
+
+
 def resolve(cluster: Cluster, j: Job, run_id: str, now: int, kind: str | None = None, gpu_host: bool = False) -> dict[str, Any]:
-    """Where the job runs and under what: `{node, machine, why, job, wrap, workload_wrap}`. The router's node first, then any other node
+    """Where the job runs and under what: `{node, machine, why, job, wrap, workload_wrap}`, and `cores` (`{cpus, n}`: n CPUs of
+    the pin cpus, which the wrapper names) when the job claims whole cores on the machine. The router's node first, then any other node
     that could run it (only the pinned one when `j.node` is set); Refused with each node's reason when none can."""
     first = place(cluster, j, {}, now)
     if first.node is None:
@@ -113,18 +122,91 @@ def resolve(cluster: Cluster, j: Job, run_id: str, now: int, kind: str | None = 
         except Refused as e:
             reasons.append(f"{name}: {e}")
             continue
+        cores = {"cores": {"cpus": cpuset.format(allowed_cpus(cluster, cluster.nodes[name], pinned)), "n": pinned.cpus}} \
+            if claims_cores(cluster, pinned, name) else {}
         return {"node": name, "machine": name, "why": first.why if name == first.node else f"{reasons[-1]}; so {name}",
-                "job": job_to_dict(pinned), "wrap": wrap, "workload_wrap": workload_wrap}
+                "job": job_to_dict(pinned), "wrap": wrap, "workload_wrap": workload_wrap, **cores}
     raise Refused("; ".join(reasons))
+
+
+def room_machines(k: Kind) -> list[str]:
+    """The machines whose room (`research room --json`) placing a job of kind `k` among its `nodes` reads, in its order."""
+    return list(dict.fromkeys(t.partition("/")[0] for t in k.nodes))
+
+
+def among(cluster: Cluster, k: Kind, j: Job, run_id: str, now: int, room: dict[str, Any], kind: str | None = None,
+          gpu_host: bool = False, pools: bool = True) -> dict[str, Any]:
+    """A job of kind `k`, not pinned, placed among the kind's `nodes` by each machine's `room` (`research room --json`, or why
+    it couldn't be read). A NODE of the cluster takes it as `resolve` would, pinned there, and has room for it when its memory fits
+    the node's headroom (memory free less what its idle check slots are promised). MACHINE/POOL is a check-slot pool on a machine
+    outside the queue (`research run --on MACHINE --pool POOL`; cpu-1 takes runs only through its slots), whose slot line and mem=
+    admit it: it may go there when its memory fits the pool's slots and its time the machine's deadline, and has room when a slot
+    is free (`pools` False skips them: a pool run needs a lane). The first target with room, in the kind's order; else the first
+    that may take it, a pool first since its line waits for memory and a node's scope doesn't; Refused with every reason when none
+    may."""
+    gb = j.memory_gib * 2 ** 30 / 1e9
+    ready, later, reasons = [], [], []
+    for t in k.nodes:
+        machine, _, pool = t.partition("/")
+        doc, unread = room.get(machine), ""
+        if not isinstance(doc, dict):
+            doc = None
+            unread = f"its room can't be read ({room.get(machine) or 'not read'})"
+        if pool:
+            p = (doc or {}).get("pools", {}).get(pool)
+            left = (doc or {}).get("deadline_in_s")
+            why = ("a pool run needs a lane (--as LANE or $RESEARCH_LANE)" if not pools
+                   else "a check-slot pool runs no GPU job" if j.gpus
+                   else unread if doc is None
+                   else f"{machine} has no slot pool {pool!r}" if p is None
+                   else f"its slots admit {p['mem_gb']:g} GB, and the job takes {gb:.0f} GB" if p["mem_gb"] is not None and gb > p["mem_gb"]
+                   else f"{machine} stops in {left // 60} min, before the job's {j.max_s // 60} min" if left is not None and j.max_s > left
+                   else None)
+            if why:
+                reasons.append(f"{t}: {why}")
+                continue
+            placed = {"node": machine, "machine": machine, "pool": pool, "job": job_to_dict(replace(j, node=machine)),
+                      "wrap": [], "workload_wrap": []}
+            (ready if p["free"] else later).append((0, t, placed, f"{t}: {p['free']} of {p['slots']} slots free"))
+            continue
+        if t not in cluster.nodes:
+            reasons.append(f"{t}: not a node of the cluster")
+            continue
+        try:
+            if why := static_refusal(cluster, t, replace(j, node=t), now):
+                raise Refused(why)
+            placed = resolve(cluster, replace(j, node=t), run_id, now, kind, gpu_host)
+        except Refused as e:
+            reasons.append(f"{t}: {e}")
+            continue
+        if doc is None:
+            later.append((1, t, placed, f"{t}: {unread}"))
+        elif gb <= doc["headroom_gb"]:
+            ready.append((1, t, placed, f"{t}: {doc['headroom_gb']:g} GB free beside its check slots"))
+        else:
+            later.append((1, t, placed, f"{t}: {doc['headroom_gb']:g} GB free beside its check slots, under the job's {gb:.0f} GB"))
+    if ready:
+        _, t, placed, why = ready[0]
+        skipped = [w for *_, w in later] + reasons
+    elif later:
+        _, t, placed, why = min(later, key=lambda x: x[0])
+        why = f"no target has room now, so {t}, where it waits in its slot line" if placed.get("pool") else \
+            f"no target has room now, so {t} ({why.split(': ', 1)[1]})"
+        skipped = [w for *_, w in later if not w.startswith(f"{t}:")] + reasons
+    else:
+        raise Refused("; ".join(reasons))
+    return {**placed, "why": why + (f"; not {'; '.join(skipped)}" if skipped else "")}
 
 
 def submit(cluster: Cluster, registry: dict[str, Kind], *, run_id: str, now: int, kind: str = "adhoc", question: str = "",
            gpus: int | None = None, cpus: int | None = None, memory_gib: int | None = None, max_s: int | None = None,
            quiet: bool | None = None, preempt: str = "requeue", disk_gb: float | None = None, gpu_host: bool = False,
-           **declared: Any) -> dict[str, Any]:
+           room: dict[str, Any] | None = None, pools: bool = True, **declared: Any) -> dict[str, Any]:
     """`resolve` for a job of `kind`: what the job leaves unsaid comes from its registered kind (else 0 GPUs, 1 CPU), and the
     placement also names the kind, its question, the registry file it came from, and the held rules it breaks. A job whose
-    kind isn't registered names its memory: the scope's `MemoryMax=` kills the job at that cap."""
+    kind isn't registered names its memory: the scope's `MemoryMax=` kills the job at that cap. A job whose kind lists `nodes`
+    and that isn't pinned is placed `among` them by each machine's `room`; without it, the placement is `{"read": machines}`,
+    the machines whose room the caller reads and submits again with."""
     k = registry.get(kind)
     shape = k.shape if k else {}
     gpus = gpus if gpus is not None else int(shape.get("gpus", 0))
@@ -143,7 +225,12 @@ def submit(cluster: Cluster, registry: dict[str, Kind], *, run_id: str, now: int
         raise Refused(f"--gpu-host is for a job that takes its GPUs with gpu-lease itself; this one asks the queue for {gpus}")
     j = job(run_id=run_id, gpus=gpus, cpus=cpus, memory_gib=memory_gib, max_s=max_s, quiet=quiet, preempt=preempt,
             submitted=now, **declared)
-    out = resolve(cluster, j, run_id, now, kind, gpu_host)
+    if k is not None and k.nodes and j.node is None:
+        if room is None:
+            return {"read": room_machines(k), "kind": kind}
+        out = among(cluster, k, j, run_id, now, room, kind, gpu_host, pools)
+    else:
+        out = resolve(cluster, j, run_id, now, kind, gpu_host)
     disk_gb = disk_gb if disk_gb is not None else k.disk_gb if k and k.disk_gb is not None else DISK_GB
     out.update(kind=kind, question=question, max_s=max_s, disk_gb=disk_gb, kind_source=k.source if k else None, gpu_host=gpu_host,
                warnings=warnings(k, kind, question=question, gpus=gpus, cpus=cpus, memory_gib=memory_gib, max_s=max_s,
@@ -151,4 +238,5 @@ def submit(cluster: Cluster, registry: dict[str, Kind], *, run_id: str, now: int
     return out
 
 
-__all__ = ["CPUSET_CHECK", "GPU_LEASE", "GPU_LEASE_N1", "N1_POOL_QUEUE", "UNSEEN_POOL", "Refused", "job", "wrappers", "resolve", "submit"]
+__all__ = ["CPUSET_CHECK", "claims_cores", "GPU_LEASE", "GPU_LEASE_N1", "N1_POOL_QUEUE", "UNSEEN_POOL", "Refused", "job", "wrappers", "resolve",
+           "room_machines", "among", "submit"]

@@ -283,9 +283,10 @@ def test_a_tool_package_that_predates_the_queue_is_told_apart(tmp_path):
     assert remote.knows_gpus(None) and remote.knows_gpus(Path(remote.__file__).parent) and not remote.knows_gpus(pkg)
 
 
-def test_on_auto_is_the_queue_onto_node_2_from_this_checkout(tmp_path, monkeypatch, capsys):
-    """`research run --on auto` (18 Oct, remote by default): --queue pinned to vy-nebius-2 (its Verity share, nice 19 inside the check
-    slots), from the checkout it runs in, as project verity and kind agent-test, which gives what the run doesn't declare."""
+def test_on_auto_is_the_queue_among_agent_tests_nodes_from_this_checkout(tmp_path, monkeypatch, capsys):
+    """`research run --on auto` (18 Oct, remote by default): --queue from the checkout it runs in, as project verity and kind
+    agent-test, which gives what the run doesn't declare and lists the nodes the queue places it among (another --kind is pinned
+    to vy-nebius-2, inside its check slots); with no lane, the queue leaves out the check-slot pools a pool run needs one for."""
     from research import remote
 
     specs, sources = [], []
@@ -300,6 +301,7 @@ def test_on_auto_is_the_queue_onto_node_2_from_this_checkout(tmp_path, monkeypat
     cwds = []
     real = C._run_queued
     monkeypatch.setattr(C, "_run_queued", lambda ns, opts, cmd: (cwds.append(remote.flag_value(opts, "--cwd")), real(ns, opts, cmd))[1])
+    monkeypatch.delenv("RESEARCH_LANE", raising=False)
     repo = tmp_path / "repo"
     repo.mkdir()
     subprocess.run(["git", "init", "-q"], cwd=repo, check=True)
@@ -307,14 +309,110 @@ def test_on_auto_is_the_queue_onto_node_2_from_this_checkout(tmp_path, monkeypat
     runs = ["run", "--runs-dir", str(tmp_path / "runs"), "--on", "auto"]
     assert main([*runs, "--", "pytest", "-q"]) == 3
     assert main([*runs, "--cpus", "8", "--mem-gb", "32", "--timeout", "2h", "--", "pytest"]) == 3
-    assert [(s["project"], s["kind"], s["node"], s["cpus"], s["mem-gb"], s["max-s"]) for s in specs] == [
-        ("verity", "agent-test", "vy-nebius-2", None, None, None), ("verity", "agent-test", "vy-nebius-2", 8, 32, 7200)]
+    monkeypatch.setenv("RESEARCH_LANE", "infra")
+    assert main([*runs, "--kind", "lean-audit", "--", "true"]) == 3
+    assert [(s["project"], s["kind"], s["node"], s["cpus"], s["mem-gb"], s["max-s"], s["no-pools"]) for s in specs] == [
+        ("verity", "agent-test", None, None, None, None, True), ("verity", "agent-test", None, 8, 32, 7200, True),
+        ("verity", "lean-audit", "vy-nebius-2", None, None, None, False)]
+    specs.pop()
     assert sources[0].resolve() == repo.resolve() and {s["preempt"] for s in specs} == {"requeue"}, "a guest on node 2 is preemptible"
-    assert cwds == ["source", "source"], "--on auto runs in the shipped tree unless --cwd says otherwise (INF-65)"
-    assert "queued onto vy-nebius-2 as agent-test" in capsys.readouterr().err
+    assert cwds == ["source", "source", "source"], "--on auto runs in the shipped tree unless --cwd says otherwise (INF-65)"
+    err = capsys.readouterr().err
+    assert "queued as agent-test, among its kind's nodes" in err and "queued as lean-audit onto vy-nebius-2" in err
     assert main([*runs, "--queue", "--", "true"]) == 2 and "takes no --queue or --pool" in capsys.readouterr().err
     monkeypatch.chdir(tmp_path)
     assert main([*runs, "--", "true"]) == 2 and "no git checkout here" in capsys.readouterr().err
+
+
+def test_on_auto_placed_in_a_check_slot_pool_runs_there_through_slot_py(tmp_path, monkeypatch, capsys):
+    """A placement in cpu-1's research pool is `--on vy-nebius-cpu-1 --pool research`: the workload goes through the shipped
+    tree's slot.py with the run's lane, outside the queue (no wrap), and the queue's time as its timeout."""
+    from research import cli as C
+    from research import remote
+
+    monkeypatch.setattr(remote, "queue_placement", lambda src, run_id, spec: {
+        "node": "vy-nebius-cpu-1", "machine": "vy-nebius-cpu-1", "pool": "research", "job": {"cpus": 4}, "wrap": [],
+        "workload_wrap": [], "why": "vy-nebius-cpu-1/research: 2 of 4 slots free", "max_s": 3600, "kind": "agent-test"})
+    seen = []
+    monkeypatch.setattr(C, "_run_remote", lambda ns, run_id, run_dir, opts, cmd, queue=None: seen.append((ns, opts, cmd, queue)) or 0)
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    subprocess.run(["git", "init", "-q"], cwd=repo, check=True)
+    monkeypatch.chdir(repo)
+    assert main(["run", "--runs-dir", str(tmp_path / "runs"), "--on", "auto", "--as", "ci", "--mem-gb", "20", "--", "pytest", "-q"]) == 0
+    ns, opts, cmd, queue = seen[0]
+    assert (ns.on, ns.pool, ns.queue, queue, ns.mem_gb) == ("vy-nebius-cpu-1", "research", False, None, None)
+    assert cmd == ["env", "CHECK_SLOTS=/workspace/research/locks/research/slots", "python3", "tools/verity/check/slot.py", "--by", "ci",
+                   "--", "nice", "-n", "19", "pytest", "-q"]
+    assert remote.flag_value(opts, "--timeout") == "3600" and remote.flag_value(opts, "--cwd") == "source"
+    assert "runs in vy-nebius-cpu-1's research pool, through slot.py" in capsys.readouterr().err
+
+
+def test_the_queue_placement_reads_the_rooms_its_kind_names_and_submits_again(tmp_path, monkeypatch):
+    from research import remote
+
+    (tmp_path / "infra" / "cluster" / "src" / "cluster").mkdir(parents=True)
+    (tmp_path / "infra" / "cluster" / "src" / "cluster" / "submit.py").write_text("")
+    calls, reads = [], []
+
+    def run(argv, **kw):
+        calls.append(argv)
+        out = {"read": ["n2", "cpu-1"], "kind": "agent-test"} if "--room" not in argv else {"node": "n2", "machine": "n2", "why": "x"}
+        return subprocess.CompletedProcess(argv, 0, json.dumps(out) + "\n", "")
+
+    monkeypatch.setattr(remote.subprocess, "run", run)
+    monkeypatch.setattr(remote, "read_room", lambda names, project, pkg: reads.append((names, project)) or {"n2": {"headroom_gb": 9}})
+    out = remote.queue_placement(tmp_path, "r1", {"project": "verity", "kind": "agent-test", "no-pools": True, "node": None})
+    assert out["node"] == "n2" and reads == [(["n2", "cpu-1"], "verity")] and len(calls) == 2
+    assert "--no-pools" in calls[0] and calls[1][calls[1].index("--room") + 1] == '{"n2": {"headroom_gb": 9}}'
+
+
+def test_on_auto_sizes_a_suites_run_of_named_suites_from_their_declared_worker_gb_and_timeout_s(tmp_path, monkeypatch, capsys):
+    """vllm's suite declares worker_gb 8 and timeout_s 14400 (#2696): `--on auto` gives its suites.py run 4 CPUs x 8 GB and the
+    suite's 4 h plus 10 min to sync, where the run says neither; what the run gives, and a run of no named suite, a suite that
+    declares nothing, a name that matches none or another kind, keep the kind's size."""
+    from research import cli as C
+    from research import remote
+
+    specs = []
+
+    def place(src, run_id, spec):
+        specs.append((spec["cpus"], spec["mem-gb"], spec["max-s"]))
+        raise remote.Refused("placement reached")
+
+    monkeypatch.setattr(remote, "queue_placement", place)
+    repo = tmp_path / "repo"
+    for path, body in {".": '[project]\nname = "verity"\n[tool.pytest.ini_options]\n',
+                       "integrations/vllm": '[project]\nname = "verity_vllm"\n[tool.pytest.ini_options]\n'
+                                            '[tool.verity.tests]\nworker_gb = 8\ntimeout_s = 14400\nparallel = true\n',
+                       "verity/core": '[project]\nname = "verity-core"\n[tool.pytest.ini_options]\n[tool.verity.tests]\ntimeout_s = 1800\n',
+                       "tools/x": '[project]\nname = "x"\n'}.items():
+        (repo / path).mkdir(parents=True, exist_ok=True)
+        (repo / path / "pyproject.toml").write_text(body)
+    subprocess.run(["git", "init", "-q"], cwd=repo, check=True)
+    subprocess.run(["git", "add", "-A"], cwd=repo, check=True)
+    monkeypatch.chdir(repo)
+    runs = ["run", "--runs-dir", str(tmp_path / "runs"), "--on", "auto"]
+    suites = ["uv", "run", "tools/verity/check/suites.py"]
+    for extra, cmd, want in (
+            ([], [*suites, "verity-vllm", "--quick"], (None, 32, 15000)),
+            (["--cpus", "8"], [*suites, "--jobs", "2", "integrations/vllm"], (8, 16, 15000)),     # 2 workers x 8 GB: the kind's 16
+            (["--cpus", "8"], [*suites, "vllm", "verity-core"], (8, 64, 14400 + 1800 + 600)),
+            (["--mem-gb", "20"], [*suites, "vllm"], (None, 20, 15000)),
+            (["--timeout", "2h"], [*suites, "vllm"], (None, 32, 7200)),
+            (["--max-min", "30"], ["python3", "tools/verity/check/suites.py", "vllm"], (None, 32, 1800)),
+            ([], [*suites, "verity-core"], (None, None, 3600)),               # 30 min and the sync: the kind's hour
+            ([], [*suites, "--quick"], (None, None, None)),
+            ([], [*suites, "repository"], (None, None, None)),
+            ([], [*suites, "nosuch"], (None, None, None)),
+            ([], [*suites, "verity_vllm"], (None, None, None)),             # suites.py's names are normalized: it matches none
+            ([], [*suites, "verity"], (None, None, None)),                  # in two: suites.py refuses it
+            ([], ["pytest", "integrations/vllm"], (None, None, None)),
+            (["--kind", "adhoc-x"], [*suites, "vllm"], (None, None, None))):
+        specs.clear()
+        assert C.main([*runs, *extra, "--", *cmd]) == 3, (extra, cmd)
+        assert specs == [want], (extra, cmd)
+    assert "32 GB and 250 min, from the [tool.verity.tests] of verity-vllm" in capsys.readouterr().err
 
 
 def test_gpus_with_on_reaches_the_machine_and_without_on_or_queue_means_nothing(tmp_path, monkeypatch, capsys):

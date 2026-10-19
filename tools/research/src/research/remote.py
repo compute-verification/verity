@@ -59,7 +59,7 @@
                     the FIFO <root>/requests/<run-id>/.launch-ack (`ack_launch`), found from the request path its --remote-json carries,
                     so no wrapper has to pass an fd or the environment through.  A runner (or a wrapper ahead of it) that exits first is
                     refused (RunnerFailed, refused.json with its rc and launcher.log's tail), so `research run --on` exits 3, never
-                    `launched`.  `disk-hold` ahead of the runner acknowledges when it starts holding: the launch stays detached.  When
+                    `launched`.  `disk-hold` or `cpu-hold` ahead of the runner acknowledges when it starts holding: the launch stays detached.  When
                     launch-request can't tell (job.json is there without an ack, the wrapper exited but its process group lives on, or the
                     wait itself failed), it answers started with `unconfirmed` and releases nothing: a live run is never called refused.
     exclusive       --exclusive takes <root>/runs/.exclusive.lock (O_EXCL) naming the run; a live holder refuses the launch with the reason.
@@ -533,14 +533,59 @@ def queue_placement(source: Path | None, run_id: str, spec: dict[str, Any]) -> d
             argv.append(f"--{k}")
         elif v not in (None, False):
             argv += [f"--{k}", str(v)]
-    r = subprocess.run(argv, env=env, capture_output=True, text=True, timeout=60)
-    try:
-        out = json.loads(r.stdout.strip().splitlines()[-1])
-    except (IndexError, ValueError):
-        raise Refused(f"--queue: `cluster submit` failed (exit {r.returncode}): {r.stderr.strip()[-400:]}") from None
-    if "refused" in out:
-        raise Refused(f"the queue refuses the job: {out['refused']}")
+
+    def submit(extra: list[str]) -> dict[str, Any]:
+        r = subprocess.run([*argv, *extra], env=env, capture_output=True, text=True, timeout=60)
+        try:
+            out = json.loads(r.stdout.strip().splitlines()[-1])
+        except (IndexError, ValueError):
+            raise Refused(f"--queue: `cluster submit` failed (exit {r.returncode}): {r.stderr.strip()[-400:]}") from None
+        if "refused" in out:
+            raise Refused(f"the queue refuses the job: {out['refused']}")
+        return out
+
+    out = submit([])
+    if "read" in out:                    # a kind listing several nodes: placed by each one's room beside its check slots
+        out = submit(["--room", json.dumps(read_room(out["read"], str(spec.get("project") or ""), source_tool_package(source)))])
     return out
+
+
+#: how long reading one machine's room may take, ssh and the tool's shipping included
+ROOM_TIMEOUT_S = 60
+
+
+def read_room(machines: list[str], project: str, tool_pkg: Path | None, *, machines_reg: dict | None = None,
+              ship=None, run=None) -> dict[str, Any]:
+    """Each machine's `research room --json` (research.room), read at once with the research package this run ships, or why it
+    couldn't be: not a machine `project` may use, ssh failing or silent for ROOM_TIMEOUT_S, an answer that isn't JSON."""
+    from concurrent.futures import ThreadPoolExecutor
+
+    ship = ship or ship_tool
+    run = run or (lambda ssh, a: ssh_run(ssh, a, timeout=ROOM_TIMEOUT_S))
+
+    def one(name: str) -> dict[str, Any] | str:
+        try:
+            m = resolve_machine(name, project, machines_reg)
+            t = pod_target(m)
+            ssh = ssh_argv(t["host"], t["port"], user=t.get("user", "root"))
+            tool = ship(ssh, m["root"], tool_pkg)
+            r = run(ssh, ["env", f"PYTHONPATH={tool}", m.get("python") or "python3", "-m", "research", "room", "--json",
+                          *(["--ramlock", m["ramlock"]] if m.get("ramlock") else [])])
+        except subprocess.TimeoutExpired:
+            return f"no answer in {ROOM_TIMEOUT_S} s"
+        except Exception as e:                                   # not listed, another project's, its pod gone: never chosen
+            return str(e) or type(e).__name__
+        if r.returncode:
+            err = (r.stderr.decode(errors="replace") if isinstance(r.stderr, bytes) else r.stderr or "").strip().splitlines()
+            return f"exit {r.returncode}: {err[-1] if err else 'no output'}"
+        try:
+            doc = json.loads(r.stdout)
+        except ValueError:
+            return f"its answer is not JSON: {r.stdout[:120]!r}"
+        return doc if isinstance(doc, dict) and "headroom_gb" in doc else f"its answer is not a room: {r.stdout[:120]!r}"
+
+    with ThreadPoolExecutor(max_workers=max(1, len(machines))) as ex:
+        return dict(zip(machines, ex.map(one, machines)))
 
 
 def knows_job_user(pkg: Path | None) -> bool:
@@ -1417,6 +1462,10 @@ def _launch_request(request_path: Path) -> dict[str, Any]:
     argv += [*(req.get("harness_args") or []), "--", *(req.get(QUEUE_WORKLOAD_WRAP) or []), *gpu_lease_wrap(req), *req["command"]]
     if req.get(QUEUE_WRAP):                        # --queue: the runner, custody included, runs inside the job's CPU allocation
         argv = [*req[QUEUE_WRAP], *argv]
+        if cores := (req.get("queue") or {}).get("cores"):   # held here until whole cores of the share are its own (research.cores)
+            argv = [req.get("python") or sys.executable, "-m", "research", "cpu-hold", "--cpus", str(cores["n"]), "--from",
+                    cores["cpus"], "--wrap", str(len(req[QUEUE_WRAP])), "--who", run_id, "--ack",
+                    str(request_path.parent / LAUNCH_ACK), "--", *argv]
     if (req.get("queue") or {}).get("disk_gb"):    # held here, ahead of the allocation, while the disk would pass 80% (research.disk)
         argv = [req.get("python") or sys.executable, "-m", "research", "disk-hold", "--gb", str(req["queue"]["disk_gb"]),
                 "--path", str(runs_root), "--ack", str(request_path.parent / LAUNCH_ACK), "--", *argv]
@@ -1450,7 +1499,7 @@ def _launch_request(request_path: Path) -> dict[str, Any]:
 
 
 def ack_launch(path: Path | str, what: str) -> None:
-    """Tell the launch-request waiting on the FIFO `path` that `what` (the run's first record, or `disk-hold`) is in place.  Never
+    """Tell the launch-request waiting on the FIFO `path` that `what` (the run's first record, `disk-hold` or `cpu-hold`) is in place.  Never
     blocks: no FIFO there, or nobody reading it any more (ENXIO), means nobody waits on this launch."""
     try:
         fd = os.open(path, os.O_WRONLY | os.O_NONBLOCK)

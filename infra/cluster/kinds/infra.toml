@@ -1,10 +1,14 @@
 # infra's jobs on the queue.
 
 # `research run --on auto`: an agent's suite, test, build or probe, which runs on a node rather than on the agent's VM (every
-# handle, at Daniel's request, 18 Oct). A run that declares its own --cpus, --mem-gb or --timeout keeps them.
+# handle, at Daniel's request, 18 Oct). A run that declares its own --cpus, --mem-gb or --timeout keeps them. It goes to the
+# first of `nodes` with room for it beside the check slots (`research room`, cluster submit's `among`): node 2's Verity share,
+# node 1's CPUs outside its pools (96-127, at idle weight), or a slot of cpu-1's `research` pool, which takes runs only through
+# its slots (research's pods/nebius/slot_only.py).
 [kinds.agent-test]
 phase = "cpu-test"
 max_wall_min = 60
 question = "Does this change pass its tests and builds, run on a node instead of the agent's VM?"
 outputs = ["$RESEARCH_RUN_DIR/stdout.log", "$RESEARCH_RUN_DIR/stderr.log"]
 restart = "idempotent"
+nodes = ["vy-nebius-2", "vy-nebius-1", "vy-nebius-cpu-1/research"]
