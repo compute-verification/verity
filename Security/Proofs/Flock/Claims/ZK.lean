@@ -46,6 +46,7 @@ import Proofs.Flock.Claims.ZK.Round2
 import Proofs.Flock.Claims.ZK.Round3Vals
 import Proofs.Flock.Claims.ZK.SimZerocheck
 import Proofs.Flock.Claims.ZK.SimPiopGo
+import Proofs.Flock.Claims.ZK.SimPiop
 import Proofs.Flock.Claims.ZK.Worker
 import Proofs.Flock.Claims.ZK.Switched
 import Proofs.Flock.Claims.ZK.Server
@@ -250,6 +251,8 @@ import Proofs.Flock.Claims.ZK.Stop
 * `SimPiopGo`: the rest of `SimPiop`'s PIOP in lockstep: the cut's lincheck against the session's
   (`FlockComplete.lincheckCut_alike`), its ring switch (`FlockComplete.ringSwitchCut_alike`), and the cut's PIOP
   returning the session's from a source at the cut's coins (`FlockComplete.PiopSrc`, `FlockComplete.piopCut_alike`).
+* `SimPiop`: `Masked.SimPiop` from the deployed source at the opened coins (`Masked.PiopSrcE`, `Masked.simPiop_of`):
+  `repMix 0` and `repMix 1` differ only in the PIOP (`FlockComplete.repMix_zero_one`).
 * `HiSalts`: levels ≥ 1's salts by level and position (`Masked.hiSalt`, at `Masked.hiIdx`): at the executable's
   layout, the salts the model hands table `j`'s rep `r` are the masked prover's tape's `salt j r l p` on the schedule's
   levels `l ≥ 1` and their positions (`Masked.hiSalt_exe`), so a Ligerito prover of levels ≥ 1 built from one reading
