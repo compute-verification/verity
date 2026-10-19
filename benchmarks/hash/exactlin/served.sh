@@ -4,6 +4,8 @@
 # SERVED_MAX_MIN (25) minutes, with the clocks read before and after, and with an exact-fused arm only after kgate.py's
 # bitwise gate (decode shapes, both models) passed in the same lease.  Extra arguments go to sbench.py; stock first, so its
 # overheads are against stock.  DITHER_NSYS=1 runs it under nsys with the prof op's per-step kernels (steps.py).
+# SERVED_SCRIPT (a path from the repository root) runs another script in sbench.py's place, e.g. values.py; SERVED_KGATE=1|0
+# forces the gate on or off.
 #   research run --on vy-dc-h200 --project verity --campaign exactlin --source . --cwd source \
 #     --env GPU_LEASE_WHO=kernels-exactlin -- bash benchmarks/hash/exactlin/served.sh \
 #     --arms stock-cutlass,stock,exact,exact-fused --gate --ops decode --reps 3 --t 64 --gpu-mem 0.2
@@ -36,6 +38,8 @@ cd integrations/vllm
 MAX_MIN=${SERVED_MAX_MIN:-25}
 # an exact-fused arm is timed only after kgate.py's bitwise gate passes on this GPU, in the same lease (OUT/kgate)
 case " $* " in *exact-fused*) KGATE=1 ;; *) KGATE=0 ;; esac
+KGATE=${SERVED_KGATE:-$KGATE}
+SCRIPT=$ROOT/${SERVED_SCRIPT:-benchmarks/hash/dither/sbench.py}
 export KGATE KGATE_PY=$PY KGATE_SCRIPT=$ROOT/benchmarks/hash/exactlin/kgate.py
 echo "served: asking for one GPU at $(date -u +%H:%M:%SZ)"
 gpu-lease 1 --wait --preemptible --max-min "$MAX_MIN" -- bash -c '
@@ -55,7 +59,7 @@ gpu-lease 1 --wait --preemptible --max-min "$MAX_MIN" -- bash -c '
   r=$?
   kill "$smi" 2>/dev/null
   nvidia-smi -i "$GPU_LEASE_UUID" --query-gpu=$q --format=csv > "$0/clocks.after.csv"
-  exit $r' "$OUT" "${NSYS[@]}" "$PY" "$ROOT/benchmarks/hash/dither/sbench.py" --out "$OUT" --scratch "$S" "$@"
+  exit $r' "$OUT" "${NSYS[@]}" "$PY" "$SCRIPT" --out "$OUT" --scratch "$S" "$@"
 rc=$?
 echo "served: exited $rc at $(date -u +%H:%M:%SZ)"
 if [ -f "$S/gate.nsys-rep" ]; then
