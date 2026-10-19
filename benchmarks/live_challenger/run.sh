@@ -16,12 +16,14 @@
 # machine (default ~/.local/state/live-challenger/key, made on first use over KEYGEN_WORKERS cores, never under out/);
 # PARAMS=W,H an LMS width and height other than lms.DEPLOYED's; HOST_NAME the host the record names (default this
 # machine's name in /etc/vy/peers, by its address); PY the Python (default python3: the challenger reads only the
-# standard library and this tree). The verifier reads out/record.json, out/key.json and out/releases.jsonl from this run
-# (`research fetch RUN`, then `remote.trusted_session`), never from the prover's.
+# standard library and this tree). Its coins are the Lean verifier of record's (`one_stage.verifier.coins`), built with
+# this machine's lake (~/.elan/bin) on first use. The verifier reads out/record.json, out/key.json and out/releases.jsonl
+# from this run (`research fetch RUN`, then `remote.trusted_session`), never from the prover's.
 #   research fetch RUN --all   # the run's out/ lands in ~/.research/runs/RUN/out
 set -euo pipefail
 O=${RESEARCH_RUN_DIR:?}/out
 mkdir -p "$O"
+command -v lake >/dev/null || PATH="$HOME/.elan/bin:$PATH"
 for ip in $(hostname -I); do
   HOST_NAME=${HOST_NAME:-$(awk -v ip="$ip" '{n = split($NF, a, "@")} a[n] == ip {print $1; exit}' /etc/vy/peers || true)}
 done

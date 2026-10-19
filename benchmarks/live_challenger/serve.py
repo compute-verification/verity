@@ -10,6 +10,9 @@ one client session, its record signed with the host's LMS key and written before
   `tree.sha512`) and `state.json` (`lms.LeafState`, which refuses a used leaf across runs).  A missing key is made there
   first, at `lms.DEPLOYED` (about 1.1G SHA-512 hashes over `--keygen-workers`) or at `--params W,H` (tests).  A key inside
   `--out` is refused, since a run's `out/` is published.
+- **The coins** are the operating system's bytes as the Lean verifier of record reads them (`one_stage.verifier.coins`:
+  `IO.getRandomBytes`, A3), its `sampled-proofs-verifier` built with `lake` on first use; a host where the Lean can't
+  answer starts no session.
 - **The session.**  It commits to the layout's coins (`--scheme`, `--epoch`, `--families` as `[[label, count], ...]`),
   signs and writes `record.json`, `key.json` and the head of `releases.jsonl` to `--out` (`remote.open_session`), and only
   then listens on 127.0.0.1:PORT and prints `listening 127.0.0.1:PORT` (PORT 0: one the system picks).  With `--peer` it
@@ -38,6 +41,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
 from verity.core.protocols.sampled_proofs import remote  # noqa: E402
 from verity.core.protocols.sampled_proofs.challenger import ChallengerKey, CoinError, LiveChallenger  # noqa: E402
+from verity.core.protocols.sampled_proofs.one_stage import verifier as V  # noqa: E402
 from verity.ml.crypto import lms  # noqa: E402
 
 KEY = Path.home() / ".local" / "state" / "live-challenger" / "key"
@@ -110,7 +114,7 @@ def main(argv: list[str] | None = None) -> int:
         return 2
     try:
         params = lms.DEPLOYED if args.params is None else lms.Params(64, *map(int, args.params.split(",")))
-        challenger = LiveChallenger(args.scheme, args.epoch, args.families)
+        challenger = LiveChallenger(args.scheme, args.epoch, args.families, V.coins)
         ssh = peer_ssh(args.peers, args.peer) if args.peer else None
         out.mkdir(parents=True, exist_ok=True)
         key, state = load_key(key_dir, params, args.keygen_workers)
@@ -119,7 +123,7 @@ def main(argv: list[str] | None = None) -> int:
                                 lambda m: lms.sign(key, state, m).encode(), out)
         finally:
             state.close()
-    except (CoinError, ValueError, TypeError, OSError, lms.StateError) as e:
+    except (CoinError, V.LeanError, ValueError, TypeError, OSError, lms.StateError) as e:
         print(f"the challenger refused to start: {e}", file=sys.stderr)
         return 2
 

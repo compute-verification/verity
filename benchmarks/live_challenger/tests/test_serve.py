@@ -1,7 +1,9 @@
-"""The challenger's host process (`serve.py`) over loopback with a test key: it signs and writes its record before it
-listens, serves one session and publishes nothing secret; the verifier checks the session from the process's `out/`
-alone.  A second session signs at the key's next leaf, a key inside `out/` is refused, a broken sequence ends the
-session with exit 1, and with `--peer` the tunnel opens once the challenger listens and a tunnel that ends first ends it."""
+"""The challenger's host process (`serve.py`) over loopback with a test key and the Lean verifier's coins stubbed
+(`stub_serve.py`): it draws every coin and salt from those coins, signs and writes its record before it listens, serves one
+session and publishes nothing secret; the verifier checks the session from the process's `out/` alone.  A Lean that can't
+answer starts no session, a second session signs at the key's next leaf, a key inside `out/` is refused, a broken sequence
+ends the session with exit 1, and with `--peer` the tunnel opens once the challenger listens and a tunnel that ends first
+ends it."""
 
 from __future__ import annotations
 
@@ -18,6 +20,7 @@ from verity.core.protocols.sampled_proofs import remote as R
 from verity.ml.crypto import lms
 
 SERVE = Path(__file__).resolve().parents[1] / "serve.py"
+STUB = Path(__file__).resolve().parent / "stub_serve.py"
 FAMILIES = [["positions", 2], ["replay", 1]]
 HOST = "vy-nebius-cpu-1"
 
@@ -30,10 +33,11 @@ def lms_verify(key: C.ChallengerKey, message: bytes, signature: bytes) -> bool:
 def start(tmp_path: Path, out: str = "out", key: Path | None = None, *extra: str, env=None) -> tuple:
     out_dir = tmp_path / out
     proc = subprocess.Popen(
-        [sys.executable, str(SERVE), "--out", str(out_dir), "--port", "0", "--scheme", "verity/test/coins/v1",
+        [sys.executable, str(STUB), str(SERVE), "--out", str(out_dir), "--port", "0", "--scheme", "verity/test/coins/v1",
          "--families", json.dumps(FAMILIES), "--key", str(key or tmp_path / "key"), "--params", "4,2",
          "--keygen-workers", "1", "--host", HOST, *extra],
-        stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, env=env)
+        stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True,
+        env={"COINS_LOG": str(tmp_path / "coins.log"), **(os.environ if env is None else env)})
     return proc, out_dir, proc.stdout.readline()
 
 
@@ -65,6 +69,23 @@ def test_the_challenger_signs_before_it_listens_and_the_verifier_checks_its_out_
     assert summary["ended"] == "closed by the client" and summary["commitment"] == commitment.to_json()
     seed = (tmp_path / "key" / "seed").read_bytes()
     assert all(seed not in p.read_bytes() and seed.hex() not in p.read_text() for p in out.iterdir())
+
+
+def test_every_coin_and_salt_is_the_lean_verifiers(tmp_path):
+    """The challenger reads its coins from `one_stage.verifier.coins` alone: one coin and one salt request per coin of the
+    layout, in order, and no other source."""
+    proc, out, first = start(tmp_path)
+    session(first.split()[1])
+    assert finish(proc)[0] == 0
+    asked = [int(n) for n in (tmp_path / "coins.log").read_text().split()]
+    assert asked == [C.COIN_BYTES, C.HM96.salt_bytes] * sum(n for _, n in FAMILIES)
+
+
+def test_a_lean_that_cannot_answer_starts_no_session(tmp_path):
+    proc, out, first = start(tmp_path, env={**os.environ, "COINS_REFUSE": "1"})
+    code, err = finish(proc)
+    assert (code, first) == (2, "") and "the challenger refused to start" in err and "refused 64 coin bytes" in err
+    assert not out.exists() and not (tmp_path / "key").exists()
 
 
 def test_a_second_session_signs_at_the_keys_next_leaf(tmp_path):
