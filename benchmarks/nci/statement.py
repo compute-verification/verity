@@ -140,9 +140,9 @@ def fit_mu(gb: float) -> float:
 
 def capped(p: dict, tier: str, mu: float) -> float:
     """D at ``tier`` with ``mu`` as the memory cap in place of the closed form: ``tiers.evaluate`` without wipes or
-    exhaustion, its monitored terms capped at ``mu`` of C."""
+    exhaustion, its monitored terms capped at ``m mu`` of C (the recipe multiplier scales the cap, as there)."""
     r = T.evaluate(p, T.TIERS[tier] | {"wipes": False, "exhaust": False})
-    monitored = min(r["residual"] + r["declared"], p["g"] * (1 - min(p["unmonitored"], 0.999)) * mu)
+    monitored = min(r["residual"] + r["declared"], p["g"] * (1 - min(p["unmonitored"], 0.999)) * p["m"] * mu)
     return max(1.0, p["g"] / (r["unmonitored"] + (monitored + r["cheat"]) / p["mfu"]))
 
 

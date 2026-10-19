@@ -121,6 +121,16 @@ def test_the_fit_edges_are_where_the_fit_bound_crosses_each_level():
                 assert S.capped(P, tier, S.fit_mu(gb * (1 - 1e-6))) >= level > S.capped(P, tier, S.fit_mu(gb * (1 + 1e-6)))
 
 
+def test_the_recipe_multiplier_scales_the_fit_bounds_cap():
+    """As in ``tiers.evaluate``, where monitored efficiency is capped at m times the memory cap: at 6 GB the cap binds
+    on the best design, so D is MFU_0 / (m mu) by both ``statement.capped`` and ``fit.dampener``."""
+    mu = S.fit_mu(6.0)
+    for m in (1.0, 3.0):
+        q = P | S.BEST | S.streamed(6.0) | {"m": m}
+        assert S.fit_dampener(q, "T3") == pytest.approx(P["mfu"] / (m * mu), rel=1e-9), m
+        assert F.dampener(F.params(6.0) | {"m": m}, mu, 0.0) == pytest.approx(P["mfu"] / (m * mu), rel=1e-9), m
+
+
 def test_alpha_falls_only_where_k_reaches_the_level_in_its_range():
     lo, hi = X.SPECS["K"]["min"], X.SPECS["K"]["max"]
     assert S.alpha_falls({"below": {100.0: "always"}, "intervals": {100.0: [[lo, hi]]}}) is None

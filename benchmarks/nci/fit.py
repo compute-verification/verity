@@ -176,8 +176,8 @@ def residual_with_lag(p: dict) -> float:
 
 
 def dampener(p: dict, mu: float, declared: float, cheat: float = 0.0) -> float:
-    """D under a memory cap ``mu``: 1/D = (min(r + declared, mu) + cheat) / mfu, as in ``tiers.evaluate``."""
-    return max(1.0, p["mfu"] / (min(residual_with_lag(p) + declared, mu) + cheat))
+    """D under a memory cap ``mu``: 1/D = (min(r + declared, m mu) + cheat) / mfu, as in ``tiers.evaluate``."""
+    return max(1.0, p["mfu"] / (min(residual_with_lag(p) + declared, p["m"] * mu) + cheat))
 
 
 def attack_dampener(p: dict, efficiency: float) -> float:
