@@ -37,6 +37,7 @@ root, out = Path.cwd(), Path(a[a.index("--out") + 1])
 named = [Path(x) for i, x in enumerate(a) if not x.startswith("--") and not (i and a[i - 1] in ("--out", "--repo", "--replay-cache", "--artifacts"))]
 out.mkdir(parents=True, exist_ok=True)
 (out / "repo.txt").write_text(a[a.index("--repo") + 1] if "--repo" in a else "")
+(out / "argv.json").write_text(json.dumps(a))
 reps, failed = [], []
 for pkg in named:
     pol = pkg / "lean-audit.json"
@@ -108,6 +109,21 @@ def test_verdicts_are_reused_only_while_every_input_is_unchanged(tmp_path, monke
     assert rc == 0 and sorted(ran) == ["pkg/a warm", "pkg/b cold"] and doc["cached"] == {}
     (root / "tools/verity/lean/check.py").write_text(FAKE_AUDIT + "\n# the auditor changed\n")
     assert sorted(_run(tmp_path, 5)[1]) == ["pkg/a warm", "pkg/b cold"]     # the auditor is an input of every package
+
+
+def test_the_audit_replays_the_import_closure_against_the_kept_cache_and_a_fresh_one_against_its_own(tmp_path, monkeypatch):
+    _tree(tmp_path, monkeypatch)
+    cache = tmp_path / "cache"
+    argv = lambda out: json.loads((out / "argv.json").read_text())
+    LA.run(tmp_path / "kept", cache / "lean-audit", cache / "lean-deps", log=lambda s: None)
+    a = argv(tmp_path / "kept")
+    assert "--closure" in a and Path(a[a.index("--replay-cache") + 1]).resolve() == (cache / "lean-replay").resolve()
+    LA.run(tmp_path / "fresh", cache / "lean-audit", cache / "lean-deps", fresh=True, log=lambda s: None)
+    a = argv(tmp_path / "fresh")
+    run_cache = Path(a[a.index("--replay-cache") + 1])
+    # the packages of one fresh run share a cache in its scratch tree, gone with it; the kept one isn't read
+    assert "--closure" in a and "--artifacts" not in a and run_cache.name == "lean-replay"
+    assert run_cache.parent.name.startswith(LA.SCRATCH) and not run_cache.parent.exists()
 
 
 #: a stand-in for check.py that knows `--regenerate`: a package whose policy says "stale" fails on a record difference, or with
