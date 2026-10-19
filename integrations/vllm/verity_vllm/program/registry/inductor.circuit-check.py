@@ -28,8 +28,8 @@ def _model_roots() -> list[tuple[str, Callable[[], Any]]]:
         ("InductorRoPE_v1", lambda: bind(inductor.InductorRoPE, NHEADS=2, D=64)),
         ("InductorQKNormRoPEHead_v1", lambda: bind(inductor.InductorQKNormRoPEHead, R0_BLOCK=128, **qk)),
         ("InductorQKNormRoPE_v1", lambda: bind(inductor.InductorQKNormRoPE, NHEADS=2, R0_BLOCK=64, **qk)),
-        ("InductorQKNormRoPEHead_v1", lambda: bind(inductor.InductorQKNormRoPEHead, **{**qk, "XBLOCK": 64, "R0_BLOCK": 64,
-                                                                                        "NUM_WARPS": 16})),
+        ("InductorQKNormRoPEHead_v1/cc120", lambda: bind(inductor.InductorQKNormRoPEHead, **{**qk, "XBLOCK": 64, "R0_BLOCK": 64,
+                                                                                              "NUM_WARPS": 16})),
         ("Fa3AttentionHeadSplit_v1", lambda: bind(inductor.Fa3AttentionHeadSplit, T=300, NS=2, MASKED_FROM=1, **fa3)),
         ("Fa3AttentionSplit_v1", lambda: bind(inductor.Fa3AttentionSplit, T=300, NS=2, NH=4, KVH=2, MASKED_FROM=1, **fa3)),
     ]
