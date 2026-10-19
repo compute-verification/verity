@@ -51,7 +51,7 @@ theorem coverW_mono {wE wE' : Msg → ℝ} {x : Msg} (h : wE x ≤ wE' x) : cove
   unfold coverW
   have hc : 0 ≤ (1 + 210 * (⌈4 * FlockDeploy.N₀ false x / Real.exp 1⌉₊ : ℝ)) *
       Real.sqrt ((FlockDeploy.V false).k x / 32) := by positivity
-  exact pow_le_pow_left₀ (add_nonneg (Real.sqrt_nonneg _) hc) (add_le_add_right (Real.sqrt_le_sqrt h) _) 2
+  exact pow_le_pow_left₀ (add_nonneg (Real.sqrt_nonneg _) hc) (add_le_add (Real.sqrt_le_sqrt h) le_rfl) 2
 
 /-- **(P3) at the deployed bound record**, wherever `DE`'s weight is at most the deployed plain record's. -/
 theorem weightCovers_bdCover (rel : _root_.Flock.Readable.Parsed → _root_.Flock.Readable.Relation)
@@ -60,7 +60,8 @@ theorem weightCovers_bdCover (rel : _root_.Flock.Readable.Parsed → _root_.Floc
     (rowIn : Msg → Msg) (final : Msg → Option (List (List (Msg × Salt)) × Msg))
     (hwE : ∀ x, wE x ≤ (FlockDeploy.deployPlainTrim rel).weight x) :
     (bdCover rel nextE colsE wE join rowIn final).WeightCovers :=
-  (weightCovers_deployed_iff rel nextE colsE wE join rowIn final (wCover rel)).2 fun x => coverW_mono (hwE x)
+  (weightCovers_deployed_iff rel nextE colsE wE join rowIn final (wCover rel)).2 fun x =>
+    coverW_mono (wE' := (FlockDeploy.deployPlainTrim rel).weight) (hwE x)
 
 /-- **(P3) at the deployed bound record, at the intended `DE` weight**, the deployed plain record's: there `wCover` is
 `coverW` at `DE`'s weight (`weightCovers_coverW`). -/
@@ -69,7 +70,7 @@ theorem weightCovers_bdCover_plain (rel : _root_.Flock.Readable.Parsed → _root
     (colsE : Claims.Seen → ℕ → List (ℕ × List FlockLevel3.GF128)) (join : List Msg → Msg)
     (rowIn : Msg → Msg) (final : Msg → Option (List (List (Msg × Salt)) × Msg)) :
     (bdCover rel nextE colsE (FlockDeploy.deployPlainTrim rel).weight join rowIn final).WeightCovers :=
-  weightCovers_coverW rel nextE colsE _ join rowIn final
+  weightCovers_coverW rel nextE colsE (FlockDeploy.deployPlainTrim rel).weight join rowIn final
 
 /-- **The deployed route with (P3) discharged**: `ksBoundRoute` at the deployed bound record (`bdCover`), wherever
 `DE`'s weight is at most the deployed plain record's (the intended choice among them), with (P3) from
