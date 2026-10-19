@@ -27,7 +27,7 @@ import time
 from pathlib import Path
 from typing import Any
 
-SCHEMA = "verity-vllm/int8-decode-split/v2"
+SCHEMA = "verity-vllm/int8-decode-split/v3"
 CLASSES = ("int8_linear", "lm_head", "int8_attention", "bf16_gemm", "other", "unattributed")
 LINEAR_OPS = ("verity_int8::row_quant", "verity_int8::scaled_mm")
 BF16_GEMMS = ("aten::mm", "aten::addmm", "aten::matmul", "aten::linear")
@@ -66,8 +66,8 @@ def scope(module: Any, name: str) -> None:
 
 
 def profiled(llm: Any, prompt: list[int], max_tokens: int) -> dict[str, Any]:
-    """Every device kernel's time by class: kernels the profiler correlates with a CPU op by `classify`, and device events it could
-    not correlate (`unattributed`, e.g. a Triton launch through the driver API) by name."""
+    """Every device kernel's time by class: kernels the profiler correlates with a CPU op by `classify`, and per kernel name the
+    device time beyond them (`unattributed`, e.g. a Triton launch through the driver API)."""
     import torch
     from torch.autograd import DeviceType
     from vllm import SamplingParams
@@ -81,16 +81,21 @@ def profiled(llm: Any, prompt: list[int], max_tokens: int) -> dict[str, Any]:
         wall = time.perf_counter() - t0
     us = dict.fromkeys(CLASSES, 0.0)
     names: dict[str, dict[str, float]] = {c: {} for c in CLASSES}
+    device: dict[str, float] = {}
     for evt in prof.events():
         if evt.device_type == DeviceType.CUDA:
-            c, d = "unattributed", evt.time_range.elapsed_us()
-            us[c] += d
-            names[c][evt.name] = names[c].get(evt.name, 0.0) + d
+            device[evt.name] = device.get(evt.name, 0.0) + evt.time_range.elapsed_us()
             continue
         for k in getattr(evt, "kernels", ()):
             c = classify(evt)
             us[c] += k.duration
             names[c][k.name] = names[c].get(k.name, 0.0) + k.duration
+    # every kernel is also a device event of its own: what the device events hold beyond the correlated kernels is unattributed
+    for n, d in device.items():
+        rest = d - sum(names[c].get(n, 0.0) for c in CLASSES if c != "unattributed")
+        if rest > 0:
+            us["unattributed"] += rest
+            names["unattributed"][n] = rest
     top = {c: dict(sorted(((n[:120], v / 1e3) for n, v in d.items()), key=lambda x: -x[1])[:TOP]) for c, d in names.items()}
     return {"max_tokens": max_tokens, "wall_ms": wall * 1e3, "kernel_ms": {c: v / 1e3 for c, v in us.items()}, "top_kernels_ms": top,
             "tokens": list(out[0].outputs[0].token_ids)}
