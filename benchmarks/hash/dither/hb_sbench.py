@@ -21,6 +21,8 @@
     dither-1s-hbk  dither-1s-hbp on the unit's K split (an h1u.cu build with H1U_KSPLIT, from the .so HB_H1U_KSPLIT names):
                    h1k for the calls a warp-a-unit form underfills, h1u for the rest; gated as dither-1s-hbp is.
 
+Each arm takes sbench's -xl suffix (exactlin's quantizer under it, gated as the arm is).
+
 sbench's arms run in spawned worker processes, which import this file as their main module before unpickling
 `sbench.worker`, so the change below applies in every worker too. Run by hb_served.sh with HB_DITHER_DIR, the source tree's
 benchmarks/hash/dither.
@@ -58,6 +60,7 @@ def build(arm: str, scratch, gpu_mem: float):
         hb_peel.install()
         llm = _build("dither-1s", scratch, gpu_mem)
         llm.dither_mod = hb_peel
+        llm.dither_win.captures = hb_peel.CAPTURES
         clean_gate_tokens(llm)
         return llm
     if arm != "stock-cutlass":
@@ -92,7 +95,7 @@ def main() -> int:
     if rc or not summary.exists():
         return rc
     eq = json.loads(summary.read_text())["gate_tokens_equal_ref_arm"]
-    failed = {arm: eq[arm] for arm in TOKENS_EVERY_REP if arm in eq and not all(eq[arm])}
+    failed = {arm: eq[arm] for arm in eq if sbench.base_arm(arm) in TOKENS_EVERY_REP and not all(eq[arm])}
     if failed:
         print(json.dumps({"reps_tokens_failed": failed}), flush=True)
         return 4

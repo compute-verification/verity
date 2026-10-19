@@ -1,8 +1,10 @@
 #!/usr/bin/env bash
-# Dither's served standard number on the H200 and the B200: kernels-dither-rtx's fused served linear (h1f.cu, h1c.cu,
-# dither_fused.py) and its served bench (sbench.py), run from that lane's pushed commit, not copied. The run's source is a
-# clean worktree of origin/cursor/kernels-dither-rtx-15ad at a pinned commit; this script and hb_sbench.py are sent with
-# --send from this branch's pushed commit, so the run records both. Two modes, so no CPU phase runs on a dc node:
+# Dither's served standard number on the H200 and the B200: the fused served linear (h1f.cu, h1c.cu, dither_fused.py,
+# dither_one.py) and the served bench (sbench.py) from the run's source tree. A tree with hb_sbench.py and its hb_*.py
+# (kernels-dither-cut and later) serves them from itself; an older one (kernels-dither-rtx's) needs them sent with --send,
+# as the example below does. DITHER_NSYS=prof captures sbench's prof op instead of the gate (steps.py, stepprof.py), and an
+# exact-fused or -xl arm runs only after exactlin's kgate.py passes in the same lease (HB_KGATE=0|1 overrides).
+# Two modes, so no CPU phase runs on a dc node:
 #   build ARCH[,ARCH]  (vy-nebius-2) libh1c.so, libh1f.so and libh1o.so for each arch into $OUT/lib/ARCH, their SASS and resource
 #                      usage, and BUILD.txt: the source commit and arch, and per library the sha256 of the files nvcc -M names
 #   run ARCH [ARGS]    (vy-dc-h200 sm_90a, vy-dc-b200 sm_100a) sbench.py through hb_sbench.py on one leased GPU for at most
@@ -53,8 +55,11 @@ srchash() { (cd "$ROOT" && cat "$@" | sha256sum | cut -c1-16); }
 [ -n "${HB_H1U:-}" ] && HB_H1U=$INPUTS/$(basename "$HB_H1U")
 [ -n "${HB_H1U_PEEL:-}" ] && HB_H1U_PEEL=$INPUTS/$(basename "$HB_H1U_PEEL")
 [ -n "${HB_H1U_KSPLIT:-}" ] && HB_H1U_KSPLIT=$INPUTS/$(basename "$HB_H1U_KSPLIT")
-sha256sum "$0" "$INPUTS"/hb_sbench.py "$INPUTS"/hb_side.py "$INPUTS"/hb_one.py "$INPUTS"/hb_peel.py ${HB_H1U:+"$HB_H1U"} \
-  ${HB_H1U_PEEL:+"$HB_H1U_PEEL"} ${HB_H1U_KSPLIT:+"$HB_H1U_KSPLIT"} 2>/dev/null | sed "s#$INPUTS/##" > "$OUT/env/wrapper.txt"
+# the hb_*.py files: the source tree's where it has them (it is first on sbench's sys.path), else the ones sent
+HB=$ROOT/$DITHER
+[ -f "$HB/hb_sbench.py" ] || HB=$INPUTS
+sha256sum "$0" "$HB"/hb_sbench.py "$HB"/hb_side.py "$HB"/hb_one.py "$HB"/hb_peel.py ${HB_H1U:+"$HB_H1U"} \
+  ${HB_H1U_PEEL:+"$HB_H1U_PEEL"} ${HB_H1U_KSPLIT:+"$HB_H1U_KSPLIT"} 2>/dev/null | sed "s#$INPUTS/##; s#$ROOT/##" > "$OUT/env/wrapper.txt"
 echo "source $SHA" >> "$OUT/env/wrapper.txt"
 
 if [ "$MODE" = build ]; then
@@ -89,27 +94,27 @@ fi
 
 [ "$MODE" = run ] || { echo "hb_served.sh: no mode $MODE" >&2; exit 2; }
 [ -f "$INPUTS/BUILD.txt" ] || { echo "hb_served.sh: no inputs/BUILD.txt: --send the build's lib/$ARCH/BUILD.txt" >&2; exit 2; }
-[ -f "$INPUTS/hb_sbench.py" ] || { echo "hb_served.sh: --send benchmarks/hash/dither/hb_sbench.py" >&2; exit 2; }
+[ -f "$HB/hb_sbench.py" ] || { echo "hb_served.sh: --send benchmarks/hash/dither/hb_sbench.py" >&2; exit 2; }
 case " $* " in *dither-hb*)
-  [ -f "$INPUTS/hb_side.py" ] && [ -f "${HB_H1U:-/nonexistent}" ] || {
+  [ -f "$HB/hb_side.py" ] && [ -f "${HB_H1U:-/nonexistent}" ] || {
     echo "hb_served.sh: dither-hb needs --send benchmarks/hash/dither/hb_side.py, a job.sh build's h1u .so and --env HB_H1U=ITS_NAME" >&2
     exit 2; }
   export HB_H1U ;;
 esac
 case " $* " in *dither-1s-hb*)
-  [ -f "$INPUTS/hb_one.py" ] && [ -f "$INPUTS/hb_side.py" ] && [ -f "${HB_H1U:-/nonexistent}" ] || {
+  [ -f "$HB/hb_one.py" ] && [ -f "$HB/hb_side.py" ] && [ -f "${HB_H1U:-/nonexistent}" ] || {
     echo "hb_served.sh: dither-1s-hb needs --send benchmarks/hash/dither/hb_one.py and hb_side.py, a job.sh build's h1u .so and --env HB_H1U=ITS_NAME" >&2
     exit 2; }
   export HB_H1U ;;
 esac
 case " $* " in *dither-1s-hbp*)
-  [ -f "$INPUTS/hb_peel.py" ] && [ -f "${HB_H1U_PEEL:-${HB_H1U:-/nonexistent}}" ] || {
+  [ -f "$HB/hb_peel.py" ] && [ -f "${HB_H1U_PEEL:-${HB_H1U:-/nonexistent}}" ] || {
     echo "hb_served.sh: dither-1s-hbp needs --send benchmarks/hash/dither/hb_peel.py too (and HB_H1U_PEEL's .so, if set)" >&2
     exit 2; }
   [ -n "${HB_H1U_PEEL:-}" ] && export HB_H1U_PEEL ;;
 esac
 case " $* " in *dither-1s-hbk*)
-  [ -f "$INPUTS/hb_peel.py" ] && [ -f "${HB_H1U_KSPLIT:-/nonexistent}" ] || {
+  [ -f "$HB/hb_peel.py" ] && [ -f "${HB_H1U_KSPLIT:-/nonexistent}" ] || {
     echo "hb_served.sh: dither-1s-hbk needs --send benchmarks/hash/dither/hb_peel.py and an H1U_KSPLIT build's .so, --env HB_H1U_KSPLIT=ITS_NAME" >&2
     exit 2; }
   export HB_H1U_KSPLIT ;;
@@ -165,12 +170,15 @@ esac
 export PATH=$(dirname "$PY"):$CUDA/bin:$PATH FLASHINFER_CUDA_ARCH_LIST=$FI HF_HOME=${HF_HOME:-/workspace/hf}
 export PYTHONPATH=.:$ROOT:$ROOT/tools/research/src:$ROOT/$DITHER HB_DITHER_DIR=$ROOT/$DITHER
 NSYS=()
-if [ "${DITHER_NSYS:-}" = 1 ]; then
+if [ "${DITHER_NSYS:-}" = 1 ] || [ "${DITHER_NSYS:-}" = prof ]; then
   NSYS=("$CUDA/bin/nsys" profile -t cuda,nvtx --cuda-graph-trace=node --sample=none --cpuctxsw=none
         --capture-range=cudaProfilerApi --capture-range-end=stop -o "$S/gate" --force-overwrite true)
 fi
 cd integrations/vllm
-printf '%s\n' "$PY $INPUTS/hb_sbench.py --out $OUT --scratch $S $*" > "$OUT/env/cmd.txt"
+printf '%s\n' "$PY $HB/hb_sbench.py --out $OUT --scratch $S $*" > "$OUT/env/cmd.txt"
+# an exact-fused or -xl arm is timed only after exactlin's kgate.py passes on this GPU, in the same lease (OUT/kgate)
+case " $* " in *exact-fused*|*-xl[\ ,]*) KGATE=1 ;; *) KGATE=0 ;; esac
+export KGATE=${HB_KGATE:-$KGATE} KGATE_PY=$PY KGATE_SCRIPT=$ROOT/benchmarks/hash/exactlin/kgate.py
 read -r -a lease <<< "${LEASE:---max-min 14}"
 echo "hb_served: asking for one GPU at $(date -u +%H:%M:%SZ)"
 GPU_LEASE_WHO=${HB_WHO:-kernels-dither-hb} gpu-lease 1 --wait "${lease[@]}" -- bash -c '
@@ -179,16 +187,28 @@ GPU_LEASE_WHO=${HB_WHO:-kernels-dither-hb} gpu-lease 1 --wait "${lease[@]}" -- b
   nvidia-smi -i "$GPU_LEASE_UUID" --query-gpu=index,clocks.sm,clocks.mem,power.draw,temperature.gpu,utilization.gpu \
     --format=csv -l 2 > "$0/smi.csv" 2>/dev/null &
   smi=$!
-  timeout "${RUN_TIMEOUT:-820}" "$@"
+  if [ "$KGATE" = 1 ]; then
+    timeout 900 "$KGATE_PY" "$KGATE_SCRIPT" --out "$0/kgate" --shapes all --models llama-3.1-8b,qwen3-8b --no-stock \
+      > "$0/kgate.log" 2>&1
+    g=$?
+    tail -1 "$0/kgate.log"
+    if [ $g -ne 0 ]; then echo "hb_served: kgate rc $g, nothing timed"; kill "$smi" 2>/dev/null; exit 4; fi
+  fi
+  timeout $(( ${RUN_TIMEOUT:-820} - SECONDS )) "$@"
   r=$?
   kill "$smi" 2>/dev/null
   nvidia-smi -i "$GPU_LEASE_UUID" --query-gpu=$q --format=csv > "$0/clocks.after.csv"
-  exit $r' "$OUT" "${NSYS[@]}" "$PY" "$INPUTS/hb_sbench.py" --out "$OUT" --scratch "$S" "$@"
+  exit $r' "$OUT" "${NSYS[@]}" "$PY" "$HB/hb_sbench.py" --out "$OUT" --scratch "$S" "$@"
 rc=$?
 echo "hb_served: exited $rc at $(date -u +%H:%M:%SZ)"
 if [ -f "$S/gate.nsys-rep" ]; then
   "$CUDA/bin/nsys" stats --report cuda_gpu_kern_sum --format csv -o "$OUT/gate" "$S/gate.nsys-rep" > "$OUT/nsys-stats.log" 2>&1 \
     || echo "hb_served: nsys stats rc $?"
   "$PY" "$ROOT/$DITHER/kernels.py" "$S/gate.sqlite" | tee "$OUT/kernels.json"
+  "$PY" "$ROOT/benchmarks/hash/exactlin/steps.py" "$S/gate.sqlite" > "$OUT/steps.json" || echo "hb_served: steps.py rc $?"
+  "$PY" "$ROOT/$DITHER/stepprof.py" "$S/gate.sqlite" > "$OUT/stepprof.json" \
+    && "$PY" "$ROOT/$DITHER/stepprof.py" --table "$OUT/stepprof.json" | tee "$OUT/stepprof.txt" \
+    || echo "hb_served: stepprof.py rc $?"
+  [ "$(stat -c %s "$S/gate.nsys-rep")" -lt 209715200 ] && cp "$S/gate.nsys-rep" "$OUT/"
 fi
 exit "$rc"

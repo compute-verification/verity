@@ -47,6 +47,7 @@ import h1c as H1CM
 F_DUMP, F_NW_TILES, F_NW_UNITS, F_FAULT, F_FAULT_WB, F_FAULT_XA = 1, 2, 4, 8, 16, 32     # h1o.cu's H1OStep.flags
 CAPTURES = ("gate", "control", "fault", "fault_wb")     # a peeled window's add "fault_xa" (`Window.captures`)
 LIB_ENV = "DITHER_H1O"
+PHASE_RANGE = "verity/dither/phase/"    # `Window.phase`'s NVTX ranges, under DITHER_NSYS=prof only
 UNITS_ENV = "DITHER_UNITS"
 UNITS_FORMS = {"split": "h1o_unitss_launch", "block": "h1o_unitsb_launch", "warp": "h1o_units_launch",   # h1o.cu's forms of the same units
                "split2": "h1o_unitss2_launch", "block2": "h1o_unitsb2_launch"}   # those two at the maximum carveout (`h1o_init`)
@@ -186,6 +187,8 @@ class Window:
         self.phases: list[dict] = []
         self.t_before = 0.0
         self.ev = [torch.cuda.Event(enable_timing=True) for _ in range(5)]
+        self.nvtx = os.environ.get("DITHER_NSYS") == "prof"
+        self.phase_open = False
         self._epoch()
 
     def _epoch(self) -> None:
@@ -266,9 +269,21 @@ class Window:
         for x in ts:
             x.view(torch.uint8).fill_(DF.POISON)
 
+    def phase(self, name: str | None) -> None:
+        """Under DITHER_NSYS=prof, close the open phase's NVTX range and open PHASE_RANGE/NAME's (stepprof.py gives each
+        kernel the phase its launch was in)."""
+        if not self.nvtx:
+            return
+        if self.phase_open:
+            torch.cuda.nvtx.range_pop()
+        self.phase_open = name is not None
+        if name is not None:
+            torch.cuda.nvtx.range_push(PHASE_RANGE + name)
+
     def before(self, m: int) -> None:
         if m > self.t:
             raise RuntimeError(f"a step of {m} tokens in a window of T = {self.t} slots")
+        self.phase("before")
         self.m, self.flags, self.cap = m, 0, None
         if self.arms and m == self.arm_m:
             self.cap = name = self.arms.pop(0)
@@ -291,26 +306,35 @@ class Window:
             raise RuntimeError(f"h1c_a_step returned {rc}")
         if self.cap:
             torch.cuda.synchronize()
+        self.phase(None)
         self.t_before = time.perf_counter()
 
     def after(self) -> None:
+        self.phase("forward_wait")
         torch.cuda.synchronize()
         t_fwd = time.perf_counter()
         s, m, pre, ev = self.s, self.m, self.pre, self.ev
+        self.phase("admit_tables")
         ev[0].record()
         self.c.build(pre["admit"], self.stepv[0:1])
         ev[1].record()
+        self.phase("z_tables")
         self.c.build(pre["z"], self.stepv[0:1])
         ev[2].record()
+        self.phase("step_trees")
         self.c.build(pre["mid"], self.stepv[0:1])
         self.c.build(pre["round"], self.stepv[0:1])
         ev[3].record()
+        self.phase("receipt_trees")
         self.c.build(self.rset, self.stepv[0:1])
         ev[4].record()
+        self.phase("root_read")
         root = unwords(pre["round"].root(0))
         t_root = time.perf_counter()
+        self.phase("record_host")
         self.rounds.record(root)
         t_end = time.perf_counter()
+        self.phase(None)
         self.phases.append({"m": m, "forward_ms": 1e3 * (t_fwd - self.t_before), "admit_tables_ms": ev[0].elapsed_time(ev[1]),
                             "z_tables_ms": ev[1].elapsed_time(ev[2]), "step_trees_ms": ev[2].elapsed_time(ev[3]),
                             "receipt_trees_ms": ev[3].elapsed_time(ev[4]), "record_host_ms": 1e3 * (t_end - t_root),
@@ -595,12 +619,11 @@ def check(win: Window, lib_h1o: str, which: str = "gate", n_cpu_units: int = 3,
     perturbed MMA word reached what serves).  "fault_wb" wants every receipt unmoved (wb is not receipted), z moved only in
     column 0 of unit 0, by `wb_fault_expected` on CPU_CALLS and by multiples of 256 elsewhere, and y = dequant of that z.
     Peeled (`Window.peel`), z's reference is A B^T itself (a float64 product on the device, exact: every partial sum is
-    an integer below 2^53), y must be today's served y (`int8_ops.scaled_mm`) on every call, the CPU units' z the kernel's
+    an integer below 2^53), y must be today's served y (`int8_ops.scaled_mm`'s body) on every call, the CPU units' z the kernel's
     peel of their z, and each fault wants what it wants unpeeled against A B^T: so a z that reads no noised word (one
     computed beside the receipted MMAs) is refused at "fault".  "fault_xa" (peeled) wants every receipt unmoved, z moved
     only in row 0 of unit 0, by `xa_fault_expected` on CPU_CALLS and by ±256 B[:32, 0] elsewhere, and y = dequant of it."""
     from verity_vllm.engine import int8_exact as E
-    from verity_vllm.engine import int8_ops
     g = win.caps.get(which, {})
     if "receipts" not in g or "a" not in g:
         return {"ok": False, "complete": False, "why": f"{which} step incomplete: {sorted(g)}"}
@@ -745,7 +768,8 @@ def check(win: Window, lib_h1o: str, which: str = "gate", n_cpu_units: int = 3,
     if g["y"] is not None and which == "gate":
         eq, rel = 0, []
         for w in range(L):
-            yt = int8_ops.scaled_mm(g["a"][w][:m], g["sa"][w][:m], win.wt[w], REG[w][1].weight_scale).float()
+            # the op's own body, not the op: an -xl arm serves verity_int8::scaled_mm from exactlin
+            yt = E.dequantize(E.int_mm(g["a"][w][:m], win.wt[w]), g["sa"][w][:m], REG[w][1].weight_scale).float()
             yk = g["y"][w].float()
             eq += int(torch.equal(yt, yk))
             rel.append(float((yk - yt).norm() / yt.norm().clamp_min(1e-30)))

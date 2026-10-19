@@ -4,6 +4,8 @@
 # --t 64); SBENCH_SCRIPT runs another script with the same libraries and environment (h1ogate.py: the units kernels at
 # kernel level).  DITHER_NSYS=1 runs it under nsys, recording the kernels inside the gate's CUDA profiler range (each graph's
 # kernels as nodes), then the dither worker's kernels inside the gate's NVTX range (kernels.py over the SQLite export).
+# DITHER_NSYS=prof captures the prof op's range instead (the gate unprofiled): steps.py's and stepprof.py's step by part.
+# An exact-fused or -xl arm runs only after exactlin's kgate.py passes in the same lease (SBENCH_KGATE=0|1 overrides).
 # DITHER_NCU=REGEX runs it under ncu instead (--clock-control none): the first DITHER_NCU_COUNT (16) launches of kernels
 # matching REGEX, their throughput, occupancy, scheduler, warp-state and instruction sections, as ncu.ncu-rep and ncu.csv.
 #   research run --on vy-nebius-2 --project verity --campaign dither-loop --source . --cwd source \
@@ -53,7 +55,7 @@ export HF_HOME=${HF_HOME:-/workspace/hf} FLASHINFER_CUDA_ARCH_LIST=12.0f
 "$PY" "$ROOT/benchmarks/hash/dither/wrapcheck.py" | tee "$OUT/wrapcheck.json"
 case ${PIPESTATUS[0]} in 0) ;; 2) echo "sbench: wrapcheck skipped (no H1V3 tree)" ;; *) echo "sbench: WRAPCHECK_FAIL"; exit 12 ;; esac
 NSYS=()
-if [ "${DITHER_NSYS:-}" = 1 ]; then
+if [ "${DITHER_NSYS:-}" = 1 ] || [ "${DITHER_NSYS:-}" = prof ]; then
   NSYS=("$CUDA/bin/nsys" profile -t cuda,nvtx --cuda-graph-trace=node --sample=none --cpuctxsw=none
         --capture-range=cudaProfilerApi --capture-range-end=stop -o "$S/gate" --force-overwrite true)
 elif [ -n "${DITHER_NCU:-}" ]; then
@@ -61,11 +63,22 @@ elif [ -n "${DITHER_NCU:-}" ]; then
         --section SpeedOfLight --section Occupancy --section LaunchStats --section SchedulerStats --section WarpStateStats
         --section ComputeWorkloadAnalysis --section InstructionStats -o "$OUT/ncu" -f)
 fi
+# an exact-fused or -xl arm is timed only after exactlin's kgate.py passes on this GPU, in the same lease (OUT/kgate)
+case " $* " in *exact-fused*|*-xl[\ ,]*) KGATE=1 ;; *) KGATE=0 ;; esac
+export KGATE=${SBENCH_KGATE:-$KGATE} KGATE_PY=$PY KGATE_SCRIPT=$ROOT/benchmarks/hash/exactlin/kgate.py
 echo "sbench: asking for one GPU at $(date -u +%H:%M:%SZ)"
 nvidia-smi --query-gpu=index,clocks.sm,clocks.mem,power.draw,temperature.gpu,utilization.gpu --format=csv -l 2 > "$OUT/smi.csv" 2>/dev/null &
 SMI=$!
 MAX_MIN=${SBENCH_MAX_MIN:-40}
-gpu-lease 1 --wait --max-min "$MAX_MIN" -- timeout $((60 * MAX_MIN - 50)) "${NSYS[@]}" "$PY" \
+gpu-lease 1 --wait --preemptible --max-min "$MAX_MIN" -- bash -c '
+  if [ "$KGATE" = 1 ]; then
+    timeout 900 "$KGATE_PY" "$KGATE_SCRIPT" --out "$0/kgate" --shapes all --models llama-3.1-8b,qwen3-8b --no-stock \
+      > "$0/kgate.log" 2>&1
+    g=$?
+    tail -1 "$0/kgate.log"
+    if [ $g -ne 0 ]; then echo "sbench: kgate rc $g, nothing timed"; exit 4; fi
+  fi
+  exec timeout $((60 * '"$MAX_MIN"' - 50 - SECONDS)) "$@"' "$OUT" "${NSYS[@]}" "$PY" \
   "$ROOT/benchmarks/hash/dither/${SBENCH_SCRIPT:-sbench.py}" --out "$OUT" --scratch "$S" "$@"
 rc=$?
 kill "$SMI" 2>/dev/null
@@ -76,6 +89,9 @@ if [ -f "$S/gate.nsys-rep" ]; then
   "$PY" "$ROOT/benchmarks/hash/dither/kernels.py" "$S/gate.sqlite" | tee "$OUT/kernels.json"
   # the prof op's ranges: each arm's kernels a decode step (exactlin/steps.py); the report kept when under 200 MB
   "$PY" "$ROOT/benchmarks/hash/exactlin/steps.py" "$S/gate.sqlite" > "$OUT/steps.json" || echo "sbench: steps.py rc $?"
+  "$PY" "$ROOT/benchmarks/hash/dither/stepprof.py" "$S/gate.sqlite" > "$OUT/stepprof.json" \
+    && "$PY" "$ROOT/benchmarks/hash/dither/stepprof.py" --table "$OUT/stepprof.json" | tee "$OUT/stepprof.txt" \
+    || echo "sbench: stepprof.py rc $?"
   [ "$(stat -c %s "$S/gate.nsys-rep")" -lt 209715200 ] && cp "$S/gate.nsys-rep" "$OUT/"
 fi
 if [ -f "$OUT/ncu.ncu-rep" ]; then

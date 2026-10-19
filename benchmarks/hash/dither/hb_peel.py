@@ -9,7 +9,7 @@ against h1r v1 (the receipts don't move with the peel); y (dumped) = dequant of 
 h1o_ref; 0xA5 over every buffer read. Changed, all against A B^T by torch's int8 GEMM (int8_exact.int_mm) in place of
 h1o_ref's v3 z:
   * gate: z on every slot row of every call (rows >= m and dead row blocks are A = 0, so z = 0); y equal to today's
-    (int8_ops.scaled_mm, the exact arm's) on every call, required; three units on the CPU: the kernel's z = A B^T, the
+    (int8_ops.scaled_mm's body, the exact arm's) on every call, required; three units on the CPU: the kernel's z = A B^T, the
     receipt = CA's definition's (`dither_one.h1v3_unit`) and CA's own code's (`h1v3_itself`, H1V3's h1tile.reference),
     and CA's z peeled on the CPU from its own noise (`peel_cpu`) = A B^T, where the literal peel z - b B^T - A c^T - b c^T
     is reported (it misses the wrap term 256 xa (B + c)^T); and, where hb_served.sh extracted H1V3 with the peel
@@ -111,7 +111,6 @@ def peel_cpu(z_v3: np.ndarray, a32: np.ndarray, b32: np.ndarray, salt: bytes, po
 def check(win: DO.Window, lib_h1o: str, which: str = "gate", n_cpu_units: int = 3,
           cpu_calls: tuple = (0, 1, 2, 3, 126, 127)) -> dict:
     from verity_vllm.engine import int8_exact as E
-    from verity_vllm.engine import int8_ops
     g = win.caps.get(which, {})
     if "receipts" not in g or "a" not in g:
         return {"ok": False, "complete": False, "why": f"{which} step incomplete: {sorted(g)}"}
@@ -245,7 +244,8 @@ def check(win: DO.Window, lib_h1o: str, which: str = "gate", n_cpu_units: int = 
     if g["y"] is not None and which == "gate":
         eq, rel = 0, []
         for w in range(L):
-            yt = int8_ops.scaled_mm(g["a"][w][:m], g["sa"][w][:m], win.wt[w], DO.REG[w][1].weight_scale)
+            # the op's own body, not the op: an -xl arm serves verity_int8::scaled_mm from exactlin
+            yt = E.dequantize(E.int_mm(g["a"][w][:m], win.wt[w]), g["sa"][w][:m], DO.REG[w][1].weight_scale)
             yk = g["y"][w]
             same = torch.equal(yt.view(torch.int16), yk.view(torch.int16))
             eq += int(same)

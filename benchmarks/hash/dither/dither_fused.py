@@ -465,13 +465,12 @@ def int8_checkpoint(pin: str, scratch: Path) -> Path:
 def check(win: Window, lib_h1r: str, which: str = "gate", n_ref_units: int = 3,
           cpu_calls: tuple = (0, 1, 2, 3, 126, 127)) -> dict:
     """Capture `which`'s checks (`Window.arm`), after the step after it ran (its receipts): per call z = torch._int_mm
-    (cuBLASLt) on the slots' rows < m and zero above, y (dumped) = int8_ops.scaled_mm on the same rows (today's served y),
+    (cuBLASLt) on the slots' rows < m and zero above, y (dumped) = int8_ops.scaled_mm's body on the same rows (today's served y),
     every receipt = h1r v1 (another unit implementation than the served v2's, gated against receipts.py) on the saved
     slots, a few units = h1tile.reference (z and receipt),
     every call's A, admit and z roots, the receipt roots of CPU_CALLS and the step's round = commit.py's.  Every buffer
     read was 0xA5 before the kernels wrote it; the control capture's kernels wrote none of them, so it must fail."""
     from verity_vllm.engine import int8_exact as E
-    from verity_vllm.engine import int8_ops
     g = win.caps.get(which, {})
     if "receipts" not in g or "a" not in g:
         return {"ok": False, "complete": False, "why": f"{which} step incomplete: {sorted(g)}"}
@@ -486,7 +485,8 @@ def check(win: Window, lib_h1r: str, which: str = "gate", n_ref_units: int = 3,
         if bool(z[m:].any()) or bool(a[m:].any()) or bool(sa[m:].any()):
             zero_bad.append(w)
         if g["y"] is not None:
-            yr = int8_ops.scaled_mm(a[:m], sa[:m], win.wt[w], REG[w][1].weight_scale)
+            # the op's own body, not the op: an -xl arm serves verity_int8::scaled_mm from exactlin
+            yr = E.dequantize(zr, sa[:m], REG[w][1].weight_scale)
             if not torch.equal(yr.view(torch.int16), g["y"][w].view(torch.int16)):
                 y_bad.append(w)
     doc.update(z_vs_int_mm_bad=z_bad, y_vs_scaled_mm_bad=y_bad if g["y"] is not None else None, empty_rows_bad=zero_bad)

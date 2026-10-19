@@ -55,6 +55,10 @@ Arms:
                  root(A) to the host, a host function, a coin back, all captured in the graphs) and no wait: its plumbing
     dither-1s-percall-rtt  the same with the host function holding each call one measured challenger round trip
                  (DITHER_PERCALL_WAITS: `percall_rtt.py`'s paced samples from the serving node, replayed in order)
+    ARM-xl       any dither arm with `verity_int8::row_quant`'s CUDA body exactlin's quantizer (`exactlin.install`, which
+                 serves `scaled_mm` from exactlin's GEMM too; the dither arms call row_quant only): the same xq and s_a, so
+                 ARM's gate and reference arm, and its tokens gated as ARM's are; sbench.sh and hb_served.sh run exactlin's
+                 kgate.py in the lease before an -xl or exact-fused arm is timed
 
 `gate` (--gate, before the reps): exact and dither each generate GATE_TOKENS tokens for the 32 requests; dither's window
 checks one B32 decode step (`dither_fused.check`, its transcript buffers 0xA5 before the kernels wrote them) and refuses
@@ -68,10 +72,11 @@ column 0 of every call's y at one step), the capture run's kept as tokens_captur
 that errs or dies ends the run (exit 5, its gates so far in gate.json).  Each dither arm's gate captures are freed once
 checked, so N arms need N engines' memory plus one arm's captures.
 
-`prof` (an op, for any arm; under DITHER_NSYS=1): generates PROF_N[0] and then PROF_N[1] tokens for the 32 requests inside
-one CUDA profiler range, each generation in its own NVTX range PROF_RANGE/<arm>/n<N>, so a kernel's launches and time a
-decode step are the two ranges' difference over PROF_N[1] - PROF_N[0] (`exactlin/steps.py`).  nsys's capture range ends at
-the first profiler stop, so a run profiles one arm.
+`prof` (an op, for any arm; under DITHER_NSYS=1 or prof): generates PROF_N[0] and then PROF_N[1] tokens for the 32 requests
+inside one CUDA profiler range, each generation in its own NVTX range PROF_RANGE/<arm>/n<N>, so a kernel's launches and time
+a decode step are the two ranges' difference over PROF_N[1] - PROF_N[0] (`exactlin/steps.py`; `stepprof.py` splits a dither
+arm's step by part, its between-step phases by their NVTX ranges).  nsys's capture range ends at the first profiler stop,
+so a run profiles one arm: under DITHER_NSYS=prof the gate runs unprofiled, so a gated run's prof op is the capture.
 
     python sbench.py --out OUT [--arms stock,exact,dither] [--reps 3] [--t 64] [--ops decode] [--gate]
 """
@@ -149,8 +154,26 @@ def kernels_of(llm) -> dict:
     return seen
 
 
+XL = "-xl"
+
+
+def base_arm(arm: str) -> str:
+    return arm[:-len(XL)] if arm.endswith(XL) and arm.startswith("dither") else arm
+
+
+def install_exactlin() -> None:
+    sys.path.insert(0, str(HERE.parent / "exactlin"))
+    import exactlin
+    if not getattr(exactlin, "_sbench_installed", False):
+        exactlin.install()
+        exactlin._sbench_installed = True
+
+
 def build(arm: str, scratch: Path, gpu_mem: float):
     from vllm import LLM
+    if base_arm(arm) != arm:
+        install_exactlin()
+        return build(base_arm(arm), scratch, gpu_mem)
     if arm in DISABLED:
         os.environ["VLLM_DISABLED_KERNELS"] = DISABLED[arm]
     if arm == "stock-cutlass":
@@ -185,9 +208,7 @@ def build(arm: str, scratch: Path, gpu_mem: float):
         from verity_vllm.engine import int8_vllm
         int8_vllm.register()
         if arm == "exact-fused":
-            sys.path.insert(0, str(HERE.parent / "exactlin"))
-            import exactlin
-            exactlin.install()
+            install_exactlin()
             llm = LLM(model=str(DF.int8_checkpoint(PIN, scratch)), **engine_args(gpu_mem))
             return llm
         a = engine_args(gpu_mem)
@@ -333,7 +354,7 @@ def worker(arm: str, conn, scratch: str, gpu_mem: float) -> None:
                 res["tokens"] = [list(o.outputs[0].token_ids) for o in outs]
             conn.send(res)
         elif cmd["op"] == "prof":
-            prof = os.environ.get("DITHER_NSYS") == "1"
+            prof = os.environ.get("DITHER_NSYS") in ("1", "prof")
             torch.cuda.synchronize()
             if prof:
                 torch.cuda.profiler.start()
@@ -401,6 +422,13 @@ def main() -> int:
     import tempfile
     scratch = Path(a.scratch or tempfile.mkdtemp(prefix="sbench."))
     arms = a.arms.split(",")
+    for arm in arms:
+        base = base_arm(arm)
+        if base != arm:
+            if base in REF_OF:
+                REF_OF[arm] = REF_OF[base]
+            if base in TOKENS_GATED:
+                TOKENS_GATED[arm] = TOKENS_GATED[base]
     ctx = mp.get_context("spawn")
     conns, procs, info = {}, {}, {}
     for arm in arms:      # one engine at a time comes up, so their memory profiling doesn't race
