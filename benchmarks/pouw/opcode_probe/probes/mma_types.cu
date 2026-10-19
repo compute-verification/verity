@@ -78,12 +78,12 @@ __device__ __forceinline__ void dmma(double* d, double a, double b) {
 
 OP_KERNEL(dmma_f64, TPB) {
   const uint32_t lane = threadIdx.x & 31;
-  const double a = (double)(lane + 1u), b = 1.5 + (double)(lane & 7u);
+  const double p = (double)(lane + 1u), q = 1.5 + (double)(lane & 7u);
   double d[8][2] = {};
   OP_BEGIN
   OP_LOOP(it) {
 #pragma unroll
-    for (int c = 0; c < 8; c++) dmma(d[c], a, b);
+    for (int c = 0; c < 8; c++) dmma(d[c], p, q);
   }
   OP_END
   uint32_t s = lane;
