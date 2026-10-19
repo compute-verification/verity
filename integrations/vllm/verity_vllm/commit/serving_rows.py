@@ -39,7 +39,7 @@ member ``k``'s bodies as M0's ``m<k>-pub-<n>.bin`` (``rows: false``) and ``m<k>-
 A window may carry row tables (:class:`RowTable`, ``Window.row_tables``): one per int8 quantize output (an engine step's token rows
 of one linear, as its ``ScaledMmS8_v1`` rows read them), each a tree of ``hm96-sha512/row-seg/v1`` leaves, committed step by step
 before each step's live coin (``row_tables.step_roots``): a step's tables in ``RowTable.key`` order (rows by request, then token
-row) under the serve-time ``table_domain`` of the window's ``context``, salted by ``table_salts`` under the run's row key, and the
+row) under the serve-time ``table_domain`` of the window's ``context``, salted by ``step_salts`` under the run's row key, and the
 step's root the tree over their roots.  The window registers one port for them, ``row-table``: the tree over its steps' roots
 (served-domain rule, leaf schema ``ROOTS_SCHEMA``), so no row is committed twice.  Its linked members (``Member.links``) are
 shared-row chunks whose ``x`` table holds the distinct token rows they read, each under its row table row's salt (so the same
@@ -140,9 +140,10 @@ def salts(key: bytes, port_index: int, n: int) -> bytes:
     return chacha20(key, port_index.to_bytes(12, "little"), n * SALT_BYTES)
 
 
-def table_salts(key: bytes, engine_step: int, index: int, n: int) -> bytes:
-    """The ``n`` rows' salts of table ``index`` of ``engine_step`` under the run's row key (192 bytes each, concatenated)."""
-    return chacha20(key, engine_step.to_bytes(8, "little") + index.to_bytes(4, "little"), n * SALT_BYTES)
+def step_salts(key: bytes, engine_step: int, n: int) -> bytes:
+    """The salts of ``engine_step``'s ``n`` table rows under the run's row key (192 bytes each, concatenated): its tables in order,
+    each table's rows in rank order, one stream per step (nonce = the engine step, 12 bytes LE)."""
+    return chacha20(key, engine_step.to_bytes(12, "little"), n * SALT_BYTES)
 
 
 def table_key(op_path: str) -> tuple[int, str]:
@@ -558,7 +559,7 @@ def commit(window: Window, data: Sequence[dict[str, dict[str, np.ndarray]]], *, 
            chunk: int = CHUNK) -> Committed:
     """Commit every member's rows (``data[k]["rows"][port]``: (n, words) u16) and output words (``data[k]["outs"][port]``, each
     port's committed as its output row); and each row table, its rows read off its linked members' ``x`` tables, whose rows take
-    their row table row's salt.  Salt nonces: the members' ports in order; a row table's, ``table_salts`` under ``row_salt_key``.
+    their row table row's salt.  Salt nonces: the members' ports in order; a step's tables', ``step_salts`` under ``row_salt_key``.
     The row tables' roots make each step's root and the ``row-table`` port is the tree over those; with ``step_roots`` (what
     serving recorded before each step's coin, by engine step), each must be the window's, or the commit is refused.
 
@@ -602,7 +603,10 @@ def commit(window: Window, data: Sequence[dict[str, dict[str, np.ndarray]]], *, 
     rk = os.urandom(32) if row_salt_key is None else bytes(row_salt_key)
     for k, (t, a) in enumerate(zip(window.row_tables, _table_rows(window, rows), strict=True)):
         rows[t.port], schemas[t.port], domains[t.port] = a, TABLE_SCHEMA, window.table_domain(k)
-        ys[t.port] = table_salts(rk, t.engine_step, window.places[k], t.n)
+    for s, ks in window.steps:
+        ss, at = step_salts(rk, s, sum(window.row_tables[k].n for k in ks)), 0
+        for t in (window.row_tables[k] for k in ks):
+            ys[t.port], at = ss[at:at + t.n * SALT_BYTES], at + t.n * SALT_BYTES
     del rk
     for m in ms:
         if m.links:
@@ -744,8 +748,8 @@ def write(c: Committed, out_dir: str | Path, provenance: dict[str, Any], index: 
                        "public_sha512": hashlib.sha512(pub).hexdigest(), "private": f"t{t}-private.bin"})
     steps = {"context": c.window.context, "port": TABLE_PORT, "root_schema": ROOTS_SCHEMA,
              "steps": [{"engine_step": s, "tables": list(ks), "root": c.step_roots[s].hex()} for s, ks in c.window.steps],
-             "salt_rule": "chacha20 (rfc 8439) under the run's 32-byte row key, nonce = the engine step (8 bytes le) || the table's "
-             "index in its step (4 bytes le), row i at stream offset 192 i"}
+             "salt_rule": "chacha20 (rfc 8439) under the run's 32-byte row key, nonce = the engine step (12 bytes le), the step's "
+             "tables in order and each table's rows in rank order at consecutive 192-byte offsets"}
     win = {"schema": "verity-vllm/serving-rows/v2", "scheme": SCHEME, "population": c.window.population, "members": members,
            **({"row_tables": tables, "row_table_steps": steps} if tables else {}),
            "partition": c.window.partition, "partition_digest": c.window.partition_digest, "run": c.window.run,
