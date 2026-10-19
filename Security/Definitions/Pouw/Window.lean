@@ -39,9 +39,11 @@ guarantee `audit_window_split_of_record` is stated over), on its own so that a g
   and `LinkSoundIn` (a call's link term in the window, against the window's committed transcript, a function of the
   window's state);
 * `coll`: the window's collision term, the calls' state terms `g_c` summed along the window's run, in expectation over
-  the draw;
-* `ServedTie` (premise `δ_in`): the window accepts while its committed transcript isn't anchored and served with
-  probability at most a term of the window's state;
+  the draw; `CollCounted` (premise): on average over the oracle, at most a function of the sessions' counted queries;
+* `ServedPass`, `Anchored`, `Served`: what the served pass committed (its anchors and its `-h3` leaves), and a
+  transcript whose inputs are the anchors' and whose outputs are the served leaves' words;
+* `ServedTie` (premise `δ_in`, open on main): the window accepts while its committed transcript isn't anchored and
+  served with probability at most a term of the window's state;
 * the deployed draw, sampled proofs' service (`verity/core/protocols/pouw/window.py`): `subsetDraw`, one uniform `K`-of-`N`
   tile subset; `sessions`, `chunk` and `serviceLaw`, its rank-ordered sessions, each a call of the window whose units are
   the `N` tiles; `share` and `sessionLaw`, each session's own uniform law; `CopyClosed`, the unit sets that hold a tile
@@ -305,9 +307,11 @@ structure CallAnalysis {Reg Tr : Type} (U : UnitStmts Tr n) (c : Fin C)
 
 /-- **A call's knowledge soundness, as a compiled table bounds it** (premises `κ_c`, `g_c`): whatever the draw, the
 registration and the state `τ` the prover brings to the session, `Pr[accept ∧ extraction of a drawn unit fails]` is at
-most `κ_c + g_c(τ)`. The bound depends on the state: a compiled table bounds it pointwise in the state (`ksJoint_le`,
-`ksBound` in `Proofs/Flock/Soundness/Audit/FlockCompiled.lean`), with the constant `κ_c = 2^logLen/(e·Kr)` and the
-state's collision terms `g_c(τ) = ε_c⁻(τ) + Kr·adv₀(τ)`. No constant bounds it for every state of a hashed session: a
+most `κ_c + g_c(τ)`. The bound depends on the state: a compiled table bounds it pointwise in the state. Main's window
+proves each drawn unit in its own `--zk` session over hm96 hiding leaves, whose analysis is `analysisZC`
+(`Proofs/Flock/Soundness/Discharge/ZkLink/Analysis.lean`); its joint inequality `jointZC_ksBound` gives `κ_c = 0` and
+`g_c(τ) = ⨆_j ksBoundAccZ_j(τ)/(1 − rateZ_j)`, `ksBoundAccZ = ε_SZ + √(k·adv₀SZ)` the state's collision finders'
+advantages (`Pouw.Window.flockKnowledgeSound_analysisZC`). No constant bounds it for every state of a hashed session: a
 state that holds a hash collision passes with extraction failing, `ks ≈ 1`, so a constant holds only at the oracle
 layer. In the window the state is the one the calls before and the whole draw left, and the window's collision term
 `coll` sums the calls' `g_c` along its run. -/
@@ -340,13 +344,28 @@ def LinkSoundIn {Reg Tr : Type} {U : UnitStmts Tr n} (Lw : Reg → Law (WUnit n)
 `g c` (`CallAnalysis.KnowledgeSound`), each at the state the window's run brings to call `c`'s session, counted on the
 runs in which the calls before it accept and summed over the calls (`along`), in expectation over the draw. It bounds
 the term at whichever call holds the unit a rule picks, so it is one window-level term, in the place of `coll(R, τ)` in
-gap (4)'s knowledge bound `κ + coll(R, τ)`. -/
+gap (4)'s knowledge bound `κ + coll(R, τ)`. At one oracle no count bounds it: a state that holds a collision of the
+oracle makes it about 1. It is bounded on average over the oracle, at the sessions' counted queries (`CollCounted`). -/
 noncomputable def coll {Reg : Type} (Lw : Reg → Law (WUnit n))
     (sess : (c : Fin C) → Finset (Fin (n c)) → Reg → Game Bool)
     (g : (c : Fin C) → (S : Finset (Fin (n c))) → (R : Reg) → Strategy (sess c S R) → ℝ≥0∞) (R : Reg)
     (τ : Cont Lw (windowSession sess) R) : ℝ≥0∞ :=
   avg fun ω => along (fun c => sess c (slice ((Lw R).draw ω) c) R)
     (fun c τc => g c (slice ((Lw R).draw ω) c) R τc) (List.finRange C) (τ ω)
+
+/-- **The window's collision term at the sessions' counted queries** (premise, open; the random-oracle card's, with gap
+(4)'s `ε_id`): for windows indexed by the oracle `H`, uniform on a finite `O` (the window's game, its laws, sessions
+and state terms at each oracle), every prover's plays `σ H` whose sessions make at most `q` oracle calls by the count
+`qs` have collision term at most `f q` on average over the oracle. `qs` is the prover model's count of its sessions'
+calls (gap (4)'s `ProverModel.sessCalls`, which its `Prover.Bounded` counts); a count that undercounts can't meet the
+bound, since a play that holds a collision of every oracle makes `coll` about 1 at each. Its expected instance is the
+random oracle's collision bound, `f q ≈ q²/2^512` times the tables' factors. -/
+def CollCounted {O Reg : Type} [Fintype O] (Lw : O → Reg → Law (WUnit n))
+    (sess : O → (c : Fin C) → Finset (Fin (n c)) → Reg → Game Bool)
+    (g : (H : O) → (c : Fin C) → (S : Finset (Fin (n c))) → (R : Reg) → Strategy (sess H c S R) → ℝ≥0∞)
+    (qs : (H : O) → Strategy (auditReg (Lw H) (windowSession (sess H))) → ℕ) (f : ℕ → ℝ≥0∞) : Prop :=
+  ∀ (q : ℕ) (σ : (H : O) → Strategy (auditReg (Lw H) (windowSession (sess H)))), (∀ H, qs H (σ H) ≤ q) →
+    avg (fun H => coll (Lw H) (sess H) (g H) (reg (σ H)) (cont (σ H))) ≤ f q
 
 /-- **The window's draw is within `η` of the product law on the family `𝓑`** at every registration (premise): the
 escape of every unit set in `𝓑` under the law the verifier runs at `R` is at most its escape under the calls' laws at
@@ -358,21 +377,57 @@ def EscapesWithin {Reg : Type} (Lw : Reg → Law (WUnit n)) (L : Reg → (c : Fi
     (𝓑 : Finset (WUnit n) → Prop) (η : ℝ≥0∞) : Prop :=
   ∀ R B, 𝓑 B → (Lw R).escape B ≤ (Law.prod (L R)).escape B + η
 
-/-- **The tie to what's served** (premise `δ_in`, PoUW's reading of `WindowEps`): for the window's committed transcript
-`committed`, the predicates `anchored` (the transcript's values at the units' input wires are the anchors', what the
-served pass committed for its activations and weights) and `served` (its outputs at each unit are the served `-h3` leaf
-words that unit reads, `tile_read` under the pass's `-h3` root, which the window's entries hold), every prover's window
-accepts while its committed transcript isn't anchored and served with probability at most `δin(R, τ)`, a function of
-the window's state. `WindowEps` bounds the wrong units of whatever transcript the analysis commits; this is what makes
-that transcript the served computation's, not a self-consistent copy the prover chose. The units' statements `U` are the
-verifier's own (`Check.program`, protocol structure), so the prover can't pick them either. Its discharge is C-Flock's
-`AnchorsSound` (`δ_in`, `Proofs/Flock/Soundness/Audit/OneStage.lean`) for the inputs and the window statement's opening
-of the `-h3` root for the outputs (`window_problem`, not yet a Program), each a binding term at the window's state. -/
+/-- **What the served pass committed**, as the window's units read it, fixed before the window's registration:
+* `anchor p`: the words the served pass committed for the inputs (activations and weights) of the tile at position
+  `p`, its anchors;
+* `rootH3`: the pass's `-h3` root; `leaf p`, the `-h3` leaf at position `p` under it; `tileRead l v`, the words of leaf
+  `l` that unit `v` reads (`tile_read` in `verity/core/protocols/pouw/window.py`);
+* `inputs X v`, `outputs X v`: a transcript `X`'s values at unit `v`'s input and output wires; `rootOf X`, the `-h3`
+  root the window's entries hold in `X`.
+The positions are the units' statements' (`UnitStmts.Pos`), so a unit reads the anchors and the leaf at its own place in
+the transcript. -/
+structure ServedPass (Tr : Type) {C : ℕ} (n : Fin C → ℕ) (Pos : Type) where
+  In : Type
+  Out : Type
+  Root : Type
+  Leaf : Type
+  anchor : Pos → In
+  rootH3 : Root
+  leaf : Pos → Leaf
+  tileRead : Leaf → WUnit n → Out
+  inputs : Tr → WUnit n → In
+  outputs : Tr → WUnit n → Out
+  rootOf : Tr → Root
+
+/-- **An anchored transcript**: its values at every unit's input wires are the served pass's anchors at the unit's
+position. -/
+def Anchored {Tr : Type} (U : UnitStmts Tr n) (P : ServedPass Tr n U.Pos) (X : Tr) : Prop :=
+  ∀ v, P.inputs X v = P.anchor (U.pos X v)
+
+/-- **A served transcript**: its window entries hold the served pass's `-h3` root, and its outputs at every unit are
+the words that unit reads from the `-h3` leaf at its position. -/
+def Served {Tr : Type} (U : UnitStmts Tr n) (P : ServedPass Tr n U.Pos) (X : Tr) : Prop :=
+  P.rootOf X = P.rootH3 ∧ ∀ v, P.outputs X v = P.tileRead (P.leaf (U.pos X v)) v
+
+/-- **The tie to what's served** (premise `δ_in`, PoUW's reading of `WindowEps`; open on main): every prover's window
+accepts while its committed transcript isn't anchored and served (`Anchored`, `Served`, against the served pass `P`)
+with probability at most `δin(R, τ)`, a function of the window's state. `WindowEps` bounds the wrong units of whatever
+transcript the analysis commits; this is what makes that transcript the served computation's, not a self-consistent copy
+the prover chose. The units' statements `U` and the served pass `P` are fixed before the window, so the prover picks
+neither.
+
+It is open on main, where `δin = 1` is the only bound: the window's tile Program (`Pc8TileSide`) reads
+`[ac, bc, pa, pb, ia, jb]` and passes neither `ia` nor `jb` on, its side ports' regions are empty, nothing outside
+`window.py` calls `tile_read`, and `window_problem` is Python only, so no Program reads the `-h3` leaf. It is discharged
+when the window's Program reads the `-h3` leaf in gates (`tile_read`) and `window_problem` is a Program: then the
+outputs' half is that Program's opening of the `-h3` root, and the inputs' half is C-Flock's `AnchorsSound` (`δ_in`,
+`Proofs/Flock/Soundness/Audit/OneStage.lean`), each a binding term at the window's state. -/
 def ServedTie {Reg Tr : Type} (Lw : Reg → Law (WUnit n)) (sess : (c : Fin C) → Finset (Fin (n c)) → Reg → Game Bool)
-    (committed : (R : Reg) → Cont Lw (windowSession sess) R → Tr) (anchored served : Tr → Prop)
+    (committed : (R : Reg) → Cont Lw (windowSession sess) R → Tr) (U : UnitStmts Tr n) (P : ServedPass Tr n U.Pos)
     (δin : (R : Reg) → Cont Lw (windowSession sess) R → ℝ≥0∞) : Prop :=
   ∀ σ : Strategy (auditReg Lw (windowSession sess)),
-    prob (fun o => o.1 = true ∧ ¬ (anchored (committed (reg σ) (cont σ)) ∧ served (committed (reg σ) (cont σ))))
+    prob (fun o => o.1 = true ∧
+        ¬ (Anchored U P (committed (reg σ) (cont σ)) ∧ Served U P (committed (reg σ) (cont σ))))
       (auditReg Lw (windowSession sess)) σ ≤ δin (reg σ) (cont σ)
 
 end Window

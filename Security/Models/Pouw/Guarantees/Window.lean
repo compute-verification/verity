@@ -25,8 +25,8 @@ Knowledge soundness enters at its largest call's constant: whatever the draw, th
 and that call's extraction fails from the state the window brings with probability at most `κ_c + g_c(state)`. The
 state terms are one window-level collision term, in expectation over the window's run. The link terms add: each bounds
 the picked unit's disagreement with the window's committed transcript on the draws where the unit is its call's. So
-`WindowEps` gives gap (4)'s premises (`cursor/pouw-work-bound-stmt-c7a9`, `KnowledgeSound fun R τ => κ + coll R τ` and
-`LinkSound δlink`) at `κ := max_c κ_c`, `coll := Pouw.Window.coll` and `δlink := ∑_c δlink_c`.
+`WindowEps` gives gap (4)'s premises (`WindowBoundOfService` on `cursor/pouw-work-bound-stmt2-c7a9`, `KnowledgeSound εks`
+and `LinkSound δlink`) at `εks R τ := max_c κ_c + coll R τ` with `coll := Pouw.Window.coll`, and `δlink := ∑_c δlink_c`.
 
 **The deployed draw** (decision 102, `verity/core/protocols/pouw/window.py`). The window's calls are the service's
 sessions and its units the `N` tiles in each (`serviceLaw`): after the receipt the verifier draws one uniform
@@ -34,8 +34,10 @@ sessions and its units the `N` tiles in each (`serviceLaw`): after the receipt t
 uniform `share σ`-subsets on coins of their own (`sessionLaw`), so `η = 0` (`ServiceEscapes`). PoUW reads `WindowEps` at
 `𝓑 = harmSets Wref ε ∧ CopyClosed`, where `Wref ⟨σ, t⟩` is tile `t`'s work: a copy-closed set holding the share `ε` of
 the work is every session's copy of a tile set holding the share `ε` of the window's, at least `ε·W/w_max` tiles, so
-the first term is at most `∏_σ (1 − ε·W/(N·w_max))^{share σ} = (1 − ε·W/(N·w_max))^{K′} ≤ δ`, which is how `k_prime`
-sizes `K′`. The service doesn't fix the order of the sessions; the window runs them in a fixed order
+the first term is at most `∏_σ (1 − ε·W/(N·w_max))^{share σ} = (1 − ε·W/(N·w_max))^{K′}`, which is at most `δ` where
+`K′ < N`: that is how `k_prime` sizes `K′`. Where `K′ = N` (`k_prime`'s answer when no `K < N` reaches `δ`) the product
+law still misses, while the service's draw misses nothing (the discharge table's last row). The service doesn't fix the
+order of the sessions; the window runs them in a fixed order
 (`List.finRange`), and a relabelling of the sessions covers any other fixed order. The circuit path (`anchors.py`,
 decision 101's keyed draw) is retired.
 
@@ -45,10 +47,20 @@ decision 101's keyed draw) is retired.
 * `CallAnalysis.cover`: each session's tile instances at the public input `t` from the verifier's own draw, the window
   root and domains from the registration (`PUBLIC_PORTS`, `public_inputs`), and the tile's place, rows and roots from
   `X`'s entries under that root (`tile_at`), so a unit's seed inputs are `UnitStmts.seedIn X ⟨σ, t⟩`.
-* `CallAnalysis.KnowledgeSound (κ σ) (g σ)`: each session's compiled table, `ksJoint_le` pointwise in the state, with
-  `κ = 2^logLen/(e·Kr)` and `g = ε_c⁻ + Kr·adv₀`.
+* `CallAnalysis.KnowledgeSound (κ σ) (g σ)`: each drawn unit's compiled `--zk` session over hm96 hiding leaves
+  (`analysisZC` at `ksBoundAccZ`, its joint inequality `jointZC_ksBound`), pointwise in the state, with `κ = 0` and
+  `g = ⨆_j ksBoundAccZ_j/(1 − rateZ_j)` at the session's strategy, `ksBoundAccZ = ε_c⁻ + √(k·adv₀)` and
+  `rateZ = N₀/(ek)` (`Pouw.Window.flockKnowledgeSound_analysisZC`, proved, read through the bridge below).
+  `ksJoint_le` (`κ = 2^logLen/(e·Kr)`) is the non-ZK plain-leaf table's, which main's window doesn't run.
 * `LinkSoundIn … σ (δlink σ)`: C-Flock's link finder at the window's state, over the window's run.
-* The harm family's first term: `k_prime`'s `K′`.
+* `coll`: the random-oracle card's collision bound at the sessions' counted queries (`CollCounted`, premise, open), on
+  average over the oracle, with the queries counted by gap (4)'s `ProverModel.sessCalls`; `WindowEps`'s bound at each
+  oracle reads it through `Pouw.Window.avg_counted_le` (proved).
+* The harm family's first term: `k_prime`'s `K′`, at most `δ` where `K′ < N`. Where `K′ = N` (levels 87 to 100 at
+  `(ε, δ) = (0.1%, 2^-40)` and level 87 at `(1%, 2^-128)`, note:compute-accounting/20261018T2336Z-finding-pw8-rered,
+  probe 2), the product law, one uniform pick per session, misses up to `2^-13.0` (`2^-118.8`), while the service's draw
+  misses nothing. PoUW's reading there takes the service's own escape (gap (4)'s `WindowBoundOfService`, the subset
+  law's miss, `0` at `K′ = N`).
 
 **PoUW's reading: three links.** `WindowEps` bounds the committed transcript's wrong units. PoUW's reading of it needs
 three more links, each stated:
@@ -57,20 +69,26 @@ three more links, each stated:
   its tile and the window's common words, never the session), and their wrong sets are copy-closed, proved
   (`Pouw.Window.wrongCopyClosed_copies`). On them `𝓑 = harmSets Wref ε ∧ CopyClosed` holds of a wrong set exactly when
   `harmSets` does (`Pouw.Window.harmSets_copyClosed_iff`).
-* **The tie to what's served** (`ServedTie`, premise `δ_in`): the window accepts while its committed transcript's inputs
-  aren't the anchors' (C-Flock's `AnchorsSound`, its `δ_in`, `Proofs/Flock/Soundness/Audit/OneStage.lean`) or its outputs
-  aren't the served `-h3` leaves each unit reads (`tile_read` under the pass's `-h3` root, which the window's entries
-  hold) with probability at most `δ_in(R, τ)`. The units' statements are the verifier's own (`Check.program`), not a
-  copy the prover chose. Stated as a premise, since its discharge is those binding terms. PoUW's event, the window
-  accepting while its committed transcript isn't anchored, served and outside `𝓑`, is then at most `WindowEps`'s bound
-  plus `δ_in` (`Pouw.Window.window_served_le`, proved).
+* **The tie to what's served** (`ServedTie`, premise `δ_in`, open on main): the window accepts while its committed
+  transcript isn't anchored (`Anchored`: its values at every unit's input wires are the served pass's anchors at the
+  unit's position) and served (`Served`: its window entries hold the pass's `-h3` root, and its outputs at every unit
+  are the words `tile_read` reads from the `-h3` leaf at the unit's position) with probability at most `δ_in(R, τ)`.
+  The units' statements are the verifier's own (`Check.program`) and the served pass is fixed before the window, so
+  the prover picks neither. On main no Program reads the `-h3` leaf (`Pc8TileSide` passes neither `ia` nor `jb` on, its
+  side ports' regions are empty, nothing outside `window.py` calls `tile_read`, and `window_problem` is Python only), so
+  `δ_in = 1`. It is discharged when the window's Program reads the `-h3` leaf in gates and `window_problem` is a
+  Program: the outputs' half is that Program's opening of the `-h3` root, the inputs' half C-Flock's `AnchorsSound`
+  (`Proofs/Flock/Soundness/Audit/OneStage.lean`). PoUW's event, the window accepting while its committed transcript
+  isn't anchored, served and outside `𝓑`, is then at most `WindowEps`'s bound plus `δ_in`
+  (`Pouw.Window.window_served_le`, proved).
 * **The bridge to C-Flock** (`Proofs/Pouw/Window/FlockBridge.lean`): C-Flock's sessions read in this game
   (`Pouw.Window.ofFlock`) win with the same probabilities (`prob_ofFlock`, proved), a C-Flock `ExtractionAnalysis` of a
   session is a `CallAnalysis` of its call (`CallAnalysis.ofFlock`), and C-Flock's pointwise knowledge bound
-  (`FlockKnowledgeSound`, premise) is the call's `KnowledgeSound` (`ofFlock_knowledgeSound`, proved). The bound reads
-  the session's own table coins and the extractor's `Kr` reruns, at the state the registration, the draw and the earlier
-  sessions left, never the draw's coin. At the compiled tables it is `ksJoint_le`, which identifies `κ_c = 2^logLen/(e·Kr)`
-  and `g_c = ε_c⁻ + Kr·adv₀`; `δlink_c` is C-Flock's link finder at the window's state.
+  (`FlockKnowledgeSound`) is the call's `KnowledgeSound` (`ofFlock_knowledgeSound`, proved). The bound reads the
+  session's own coins and the extractor's `k` accepted reruns, at the state the registration, the draw and the earlier
+  sessions left, never the draw's coin. At main's `--zk` sessions it is proved (`flockKnowledgeSound_analysisZC`, from
+  `jointZC_ksBound`), with `κ_c = 0` and `g_c = ⨆_j ksBoundAccZ_j/(1 − rateZ_j)`; `δlink_c` is C-Flock's link finder at
+  the window's state.
 
 Each unit's statement carries its position: its seed inputs (tag, salt, position, root(A_j), root(B_j)) are
 `UnitStmts.seedIn X v`, the tag and salt public, and the position and roots functions of the place `v` and `X`, bound

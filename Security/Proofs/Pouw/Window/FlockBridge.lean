@@ -1,5 +1,6 @@
 import Models.Pouw.Guarantees.Window
 import Proofs.Flock.Soundness.Audit.Extraction
+import Proofs.Flock.Soundness.Discharge.ZkLink.SessionZ
 
 /-!
 # The bridge from the window's game to C-Flock's
@@ -9,24 +10,28 @@ two are the same trees: this file maps a C-Flock session into the window's game 
 it back to C-Flock's (`Strategy.toFlock`), and proves that every probability agrees (`prob_ofFlock`). A C-Flock
 `ExtractionAnalysis` of a call's session is then a `CallAnalysis` of that call in the window (`CallAnalysis.ofFlock`),
 given that the window's wrong units of the call are wrong in C-Flock's transcript, and C-Flock's knowledge bound,
-pointwise in the session's state (`FlockKnowledgeSound`, the one premise here), is the call's `KnowledgeSound`
-(`CallAnalysis.ofFlock_knowledgeSound`).
+pointwise in the session's state (`FlockKnowledgeSound`), is the call's `KnowledgeSound`
+(`CallAnalysis.ofFlock_knowledgeSound`). At main's `--zk` sessions `FlockKnowledgeSound` is proved
+(`flockKnowledgeSound_analysisZC`).
 
-**Which coins the service's `ksJoint_le` reads.** Call `c`'s session is the subtree `ofFlock (fsess c S R)` of the
-window's game, entered after the registration `R`, the draw's coin and the earlier calls' sessions. Its coins are the
-compiled table's own (the verifier's challenges in `(plan S R).game`), and its extractor reruns the table `Kr` times from
-its first commitment on. The state it bounds is the strategy the window's prover plays in that subtree, which the
-registration, the draw and the earlier sessions fixed. So `ksJoint_le` bounds `ks` conditionally on everything before
-the session, never over the draw's coin or another session's, and the window's collision term (`coll`) takes the
-expectation of the state terms over those.
+**Which coins the `--zk` analysis reads.** Call `c`'s session is the subtree `ofFlock (fsess c S R)` of the window's
+game, entered after the registration `R`, the draw's coin and the earlier calls' sessions. Its coins are the compiled
+session's own (the verifier's challenges in `batchedSessionZC`), and `analysisZC`'s extractor reruns everything after
+its `Commit` until `k` reruns accept. The state it bounds is the strategy the window's prover plays in that subtree,
+which the registration, the draw and the earlier sessions fixed. So `jointZC_ksBound` bounds `ks` conditionally on
+everything before the session, never over the draw's coin or another session's, and the window's collision term
+(`coll`) takes the expectation of the state terms over those.
 
-**What `κ` and `g` are at the compiled tables.** At `Partition.analysisC` over `Partition.sessionC`
-(`Proofs/Flock/Soundness/Audit/FlockCompiled.lean`), `ks S R τ u = ofReal (ksJoint Kr (tabStrat τ))`, and `ksJoint_le`
-bounds it by `ksBound = ε_c⁻ + Kr·adv₀ + 2^logLen/(e·Kr)` at the table strategy. So `FlockKnowledgeSound` holds there with
-`κ = 2^logLen/(e·Kr)` (the level-0 length the plan fixes, one for every session of the service's cap) and
-`g S R τ = ofReal (ε_c⁻ + Kr·adv₀)` at `tabStrat τ`, the state's collision finders' advantages, and these are the
-`κ_c` and `g_c` `WindowEps` reads through `ofFlock_knowledgeSound`. Its discharge is that module's (ArkLib), so it is a
-named premise here. The link term `δlink_c` stays `LinkSoundIn`, C-Flock's link finder at the window's state.
+**What `κ` and `g` are at main's sessions.** Main's window proves each drawn unit in a compiled `--zk` session over hm96
+hiding leaves (`batchedSessionZC`), whose analysis is `analysisZC` (`Proofs/Flock/Soundness/Discharge/ZkLink/Analysis.lean`)
+at the knowledge bound `ksBoundAccZ`, with its joint inequality discharged (`jointZC_ksBound`). There
+`ks S R τ u = ofReal (ksBoundAccZ_j(zcStrat τ) / (1 − rateZ_j))` at `u`'s table `j`, with `ksBoundAccZ = ε_c⁻ + √(k·adv₀)`
+the table's own terms and `rateZ = N₀/(ek) < 1`. So `FlockKnowledgeSound` holds with `κ = 0` and
+`g S R τ = ⨆_j ofReal (ksBoundAccZ_j / (1 − rateZ_j))` at `zcStrat τ`, the state's collision finders' advantages, and
+these are the `κ_c` and `g_c` `WindowEps` reads through `ofFlock_knowledgeSound`: the relative term sits in the
+denominator, not in `κ`. `ksJoint_le` (`Proofs/Flock/Soundness/Audit/FlockCompiled.lean`, `κ = 2^logLen/(e·Kr)`) is the
+non-ZK plain-leaf table's, which main's window doesn't run. The link term `δlink_c` stays `LinkSoundIn`, C-Flock's link
+finder at the window's state.
 -/
 
 namespace Pouw.Window
@@ -79,10 +84,10 @@ def CallAnalysis.ofFlock (U : UnitStmts Tr n) (c : Fin C)
     rw [prob_ofFlock]
     exact AF.cover S R _ u (proj X) hS (hwrong X u hX)
 
-/-- **C-Flock's knowledge bound, pointwise in the session's state** (premise): from every state `τ` of the session on
-every draw `S` and registration `R`, `Pr[accept ∧ extraction of a drawn unit fails] ≤ κ + g(S, R, τ)`. At the compiled
-tables it is `ksJoint_le` (`Proofs/Flock/Soundness/Audit/FlockCompiled.lean`) at `Partition.analysisC`, with
-`κ = 2^logLen/(e·Kr)` and `g = ofReal (ε_c⁻ + Kr·adv₀)` at `tabStrat τ` (module doc). -/
+/-- **C-Flock's knowledge bound, pointwise in the session's state**: from every state `τ` of the session on every draw
+`S` and registration `R`, `Pr[accept ∧ extraction of a drawn unit fails] ≤ κ + g(S, R, τ)`. At main's `--zk` sessions
+(`analysisZC`) it holds with `κ = 0` and `g = ⨆_j ofReal (ksBoundAccZ_j / (1 − rateZ_j))` at `zcStrat τ`
+(`flockKnowledgeSound_analysisZC`, module doc). -/
 def FlockKnowledgeSound {m : ℕ} {fsess : Finset (Fin m) → Reg → FlockSoundness.Game Bool}
     {LF : FlockSoundness.Audit.Law m} (AF : FlockSoundness.Audit.ExtractionAnalysis LF Reg fsess) (κ : ℝ≥0∞)
     (g : (S : Finset (Fin m)) → (R : Reg) → FlockSoundness.Game.Strategy (fsess S R) → ℝ≥0∞) : Prop :=
@@ -102,3 +107,34 @@ theorem CallAnalysis.ofFlock_knowledgeSound (U : UnitStmts Tr n) (c : Fin C)
 end Call
 
 end Pouw.Window
+
+namespace FlockSoundness.Discharge.ZkLink
+
+open Game Model Accounting Audit ZkSession
+open scoped ENNReal
+
+variable {F K : Type} [Field F] [Fintype F] [DecidableEq F] [Field K] [Fintype K] [DecidableEq K] {mPts : ℕ}
+variable {D Sl : Type} [Inhabited D] [Inhabited Sl]
+
+/-- **C-Flock's knowledge bound at main's `--zk` sessions**: `analysisZC` at the knowledge bound `ksBoundAccZ`, whose
+joint inequality `jointZC_ksBound` discharges for `k ≥ 1` accepted reruns, is `FlockKnowledgeSound` with `κ = 0` and the
+state term `⨆_j ofReal (ksBoundAccZ_j / (1 − rateZ_j))` at `zcStrat τ`: a drawn unit's `ks` is that term at its own
+table. -/
+theorem _root_.Pouw.Window.flockKnowledgeSound_analysisZC (A : Arith F K) (hA : A.Correct) (Hs : Hashes F D Sl)
+    {C : Circuit} {n : ℕ} (P : Partition C n) {Reg : Type} (planZ : Finset (Fin n) → Reg → List (TabZK F mPts))
+    (tab : (S : Finset (Fin n)) → (R : Reg) → Fin n → Fin (planZ S R).length) {L : Law n}
+    (decode : DecoderZK (C := C) planZ tab)
+    (Xc : (R : Reg) → Cont L Reg (batchedSessionZC A Hs planZ) R → (Fin C.N → Bool)) {k : ℕ} (hk : 1 ≤ k)
+    (hr : ∀ S R j, rateZ (planZ S R) j k < 1) (hlow : LoweringSoundZK A P planZ tab decode) :
+    Pouw.Window.FlockKnowledgeSound
+      (analysisZC A Hs P planZ tab decode Xc k hr hlow (fun S R τ j => ksBoundAccZ A Hs (planZ S R) j k τ)
+        (jointZC_ksBound A hA Hs planZ hk)) 0
+      (fun S R τ => ⨆ j : Fin (planZ S R).length,
+        ENNReal.ofReal (ksBoundAccZ A Hs (planZ S R) j k (zcStrat A Hs planZ τ) / (1 - rateZ (planZ S R) j k))) := by
+  intro S R τ u _
+  rw [zero_add]
+  exact le_iSup (fun j : Fin (planZ S R).length =>
+    ENNReal.ofReal (ksBoundAccZ A Hs (planZ S R) j k (zcStrat A Hs planZ τ) / (1 - rateZ (planZ S R) j k)))
+    (tab S R u)
+
+end FlockSoundness.Discharge.ZkLink
