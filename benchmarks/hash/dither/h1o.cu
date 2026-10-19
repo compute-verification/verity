@@ -228,6 +228,9 @@ __global__ void __launch_bounds__(128) h1o_bandrows_k(const H1O* __restrict__ F,
                                                       const u64* __restrict__ salt, const u64* __restrict__ step_base,
                                                       u32* __restrict__ bws, int g, int J, u64 nt0, u64 nt1, u64 nt2,
                                                       u64 st0, u64 st1, u64 st2) {
+#if __CUDA_ARCH__ >= 900
+  asm volatile("griddepcontrol.launch_dependents;\n" ::: "memory");
+#endif
   const H1Call C = *F->rc[S->parity];
   const int lane = threadIdx.x & 31;
   const long long item = ((long long)blockIdx.x * blockDim.x + threadIdx.x) >> 5;
@@ -395,7 +398,8 @@ H1O_UNITS_EXPORT(h1o_unitss2p_launch, unitss, true, 2)
 // J10 banded, peeled (measured only; noise=j10-banded, kernels' reading of SharedNoise.lean): bws holds
 // h1o_band_bytes(units, n, k, g) bytes, the call's own; form 0 block2 (OCC 2) and 3 block with the rows read in the
 // segment loop (NoEpi::BAND 1), 1 split and 2 split2 (staged), 4 block2 and 5 block staged (BAND 2); mode 0 the band-rows
-// pass then the units, 1 the units alone (rows from the last pass), 2 the pass alone
+// pass then the units, 1 the units alone (rows from the last pass), 2 the pass alone, 3 mode 0 with the units launched as
+// the pass's programmatic dependents (their seeds, midstates and column blocks overlap the pass; band_wait before the rows)
 static int band_J(int units, int ncb, int k, int g) {
   const long long nrb = units / ncb, nl = (ncb + g - 1) / g, RB = (k >> 9) + 1;
   int J = 1;
@@ -428,7 +432,7 @@ extern "C" int h1o_band_launch(int form, int mode, const H1O* F, const H1OStep* 
                                const u64* step_base, u32* bws, int g, cudaStream_t stream) {
   const BandUnitsK kf = band_kernel(form);
   if (M <= 0 || n % 32 || k % 512 || k < 512 || units <= 0 || !salt || !step_base || !bws || g < 1 || !kf || mode < 0
-      || mode > 2 || band_split(form) && k > 16384)
+      || mode > 3 || band_split(form) && k > 16384)
     return 1;
   u64 nt[3], st[3], rt[3];
   tag3("verity/pouw/noise/v1", nt);
@@ -441,6 +445,20 @@ extern "C" int h1o_band_launch(int form, int mode, const H1O* F, const H1OStep* 
                                                                             nt[2], st[0], st[1], st[2]);
   }
   if (mode == 2) return (int)cudaGetLastError();
+  if (mode == 3) {
+    cudaLaunchAttribute at[1];
+    at[0].id = cudaLaunchAttributeProgrammaticStreamSerialization;
+    at[0].val.programmaticStreamSerializationAllowed = 1;
+    cudaLaunchConfig_t cfg = {};
+    cfg.gridDim = dim3((unsigned)units);
+    cfg.blockDim = dim3(band_split(form) ? STH : BTH);
+    cfg.stream = stream;
+    cfg.attrs = at;
+    cfg.numAttrs = 1;
+    const cudaError_t e = cudaLaunchKernelEx(&cfg, kf, F, S, xq, sa, M, sw, (__nv_bfloat16*)y, zo, salt, step_base, nt[0],
+                                             nt[1], nt[2], st[0], st[1], st[2], rt[0], rt[1], rt[2], (const u32*)bws, g);
+    return e != cudaSuccess ? (int)e : (int)cudaGetLastError();
+  }
   kf<<<(unsigned)units, band_split(form) ? STH : BTH, 0, stream>>>(F, S, xq, sa, M, sw, (__nv_bfloat16*)y, zo, salt,
                                                                     step_base, nt[0], nt[1], nt[2], st[0], st[1], st[2],
                                                                     rt[0], rt[1], rt[2], bws, g);

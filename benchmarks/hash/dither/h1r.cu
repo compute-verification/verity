@@ -237,6 +237,14 @@ __device__ __forceinline__ void prefetch_l2(const void* p, u32 bytes) {
   asm volatile("cp.async.bulk.prefetch.L2.global [%0], %1;\n" ::"l"(p), "r"(bytes) : "memory");
 }
 
+// h1o_band_launch's mode 3 launches the units as the band-rows pass's programmatic dependents, so every thread that reads
+// the band workspace waits for the pass first (a no-op when the units were not launched as its dependents)
+__device__ __forceinline__ void band_wait() {
+#if __CUDA_ARCH__ >= 900
+  asm volatile("griddepcontrol.wait;\n" ::: "memory");
+#endif
+}
+
 // a band workspace's noise block (16 words, 64-byte aligned) into registers, and from them to a lane's noise row
 __device__ __forceinline__ void band_load(const u32* src, uint4 (&v)[4]) {
 #pragma unroll
@@ -753,6 +761,7 @@ __device__ __forceinline__ void h1b_unit(const H1Call& C, int v, H1BShared& sh, 
     u32 h[16];
     if (fold) {
       if constexpr (E::BAND) {
+        band_wait();
 #pragma unroll
         for (int d = 0; d < 3; ++d) zc[d] = __ldg(rwp + 16 * (lane * RB + nb) + d);
       } else {
@@ -763,6 +772,7 @@ __device__ __forceinline__ void h1b_unit(const H1Call& C, int v, H1BShared& sh, 
     } else if (wid < 2) {
       if (E::BAND && wid == 0) {
         if constexpr (!LDG) {
+          band_wait();
           uint4 v[4];
           band_load(rwp + 16 * lane * RB, v);
           band_store(v, sh.nz[0][0][0] + lane * NZ);
@@ -791,6 +801,7 @@ __device__ __forceinline__ void h1b_unit(const H1Call& C, int v, H1BShared& sh, 
       for (int j = 0; j < 16; ++j) sh.sts[lane * NZ + j] = h[j];
     }
   }
+  if constexpr (E::BAND) band_wait();
   __syncthreads();
 
   if (!fold) {
@@ -1369,6 +1380,7 @@ __device__ __forceinline__ void h1s_unit(const H1Call& C, int v, H1SShared& sh, 
     u32 h[16];
     if (wid >= 4) {
       if constexpr (E::BAND) {
+        band_wait();
 #pragma unroll
         for (int d = 0; d < 3; ++d) zc[d] = __ldg(rwp + 16 * (lane * RB + nb) + d);
       } else {
@@ -1379,6 +1391,7 @@ __device__ __forceinline__ void h1s_unit(const H1Call& C, int v, H1SShared& sh, 
     } else if (wid >= 2) {
       u32* d = sh.nz[0][wid - 2] + lane * NZ;
       if (E::BAND && wid == 2) {
+        band_wait();
         uint4 v[4];
         band_load(rwp + 16 * lane * RB, v);
         band_store(v, d);
@@ -1405,6 +1418,7 @@ __device__ __forceinline__ void h1s_unit(const H1Call& C, int v, H1SShared& sh, 
       for (int j = 0; j < 16; ++j) sh.sts[lane * NZ + j] = h[j];
     }
   }
+  if constexpr (E::BAND) band_wait();
   __syncthreads();
 
   if (wid == 4) return h1s_fold<0>(sh, u, ri, cj, lane, KS, m, sets, zc, o, nowrite, ep);

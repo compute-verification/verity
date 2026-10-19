@@ -9,6 +9,8 @@ until CA's reference lands. Measured only: nothing here is served or credited.
           mix-cpeel-bG     g = G column tiles a band (G in --gs, 64 and 16 by default), block2's rows read from the
                            workspace in its segment loop (groups of 4 chunks, h1o.cu's forms 0 and 3)
           mix-cpeel-bGs    the same with block2's rows staged in its noise buffers (forms 4 and 5); split always stages
+          mix-cpeel-bGp    mix-cpeel-bG with the units launched as the pass's programmatic dependents (h1o_band_launch's
+                           mode 3: their seeds, midstates and column blocks overlap the pass, which decode's latency is)
     gate  per arm and window, as h1ogate.py: a dither_one.Window over NL layers with the served shapes, a step of m rows
           captured per Window.captures (0xA5 first, the band workspace too) and dither_one.check on each, the gate
           verdict over gate, control, fault, fault_wb and fault_xa. For a banded arm check runs with its receipts
@@ -66,7 +68,7 @@ class BandWindow(DO.Window):
     """dither_one's window whose units_call is h1o_band_launch at g (mode 0 the pass and the units, 1 the units, 2 the
     pass), each call with its own band workspace (poisoned with the window's buffers at a captured step)."""
 
-    def __init__(self, t: int, key: bytes, h1c: str, h1o: str, gate: bool, dev, g: int, staged: bool):
+    def __init__(self, t: int, key: bytes, h1c: str, h1o: str, gate: bool, dev, g: int, staged: bool, pdl: bool = False):
         super().__init__(t, key, h1c, h1o, gate, dev)
         if not self.peel:
             raise RuntimeError("the banded kernels are peeled only (DITHER_PEEL=1)")
@@ -76,7 +78,8 @@ class BandWindow(DO.Window):
         o.h1o_band_launch.argtypes = [ci, ci, vp, vp, ci, ci, ci, vp, vp, ci, vp, vp, vp, vp, vp, vp, ci, vp]
         if o.h1o_band_init():
             raise RuntimeError("h1o_band_init refused")
-        self.g, self.mode = g, 0
+        self.mode0 = 3 if pdl else 0  # h1o_band_launch's mode 3: the units as the pass's programmatic dependents
+        self.g, self.mode = g, self.mode0
         self.staged = staged
         self.form_id = [(FORM_STAGED if staged else FORM_ID)[f] for f in self.call_forms]
         self.bws = [torch.empty(int(o.h1o_band_bytes(self.units[w], n, k, g)), dtype=torch.uint8, device=dev)
@@ -217,9 +220,10 @@ def gate(arm: str, t: int, ms: list[int], dev, rng: random.Random) -> tuple:
     os.environ[DO.PEEL_ENV] = "1"
     h1c, h1o = os.environ["DITHER_H1C"], os.environ[DO.LIB_ENV]
     tail = None if arm == "mix-cpeel" else arm.rsplit("-b", 1)[1]
-    g = None if tail is None else int(tail.rstrip("s"))
+    g = None if tail is None else int(tail.rstrip("sp"))
     win = DO.Window(t, os.urandom(64), h1c, h1o, True, dev) if g is None else BandWindow(t, os.urandom(64), h1c, h1o,
-                                                                                         True, dev, g, tail.endswith("s"))
+                                                                                         True, dev, g, "s" in tail,
+                                                                                         "p" in tail)
     res = {}
     for m in ms:
         outs = [(torch.empty(m, n, dtype=torch.bfloat16, device=dev), torch.empty(m, n, dtype=torch.int32, device=dev))
@@ -263,7 +267,7 @@ def graphs(win, m: int) -> dict:
 
     def cap(name, fn, mode=0):
         if isinstance(win, BandWindow):
-            win.mode = mode
+            win.mode = win.mode0 if mode == 0 else mode
         gr = torch.cuda.CUDAGraph()
         with torch.cuda.graph(gr):
             st = torch.cuda.current_stream().cuda_stream
@@ -283,7 +287,7 @@ def graphs(win, m: int) -> dict:
         cap("pass", unit, 2)
         for i, site in enumerate(DF.SITES):
             cap(f"pass/{site}", lambda w, st, i=i: 0 if w % 4 != i else unit(w, st), 2)
-        win.mode = 0
+        win.mode = win.mode0
     torch.cuda.synchronize()
     return out
 
@@ -297,14 +301,15 @@ def main() -> int:
     ap.add_argument("--reps", type=int, default=15)
     ap.add_argument("--no-b1", action="store_true", help="skip the g = 1 banded arm")
     ap.add_argument("--variants", default="ldg,staged", help="the banded block forms: ldg (rows read in the segment "
-                    "loop, groups of 4 chunks), staged (rows copied into the noise buffers); split always stages")
+                    "loop, groups of 4 chunks), staged (rows copied into the noise buffers), pdl (ldg with the units "
+                    "launched as the pass's programmatic dependents); split always stages")
     a = ap.parse_args()
     out = Path(a.out)
     out.mkdir(parents=True, exist_ok=True)
     dev = torch.device("cuda")
     rng = random.Random(0x4A10B)
     ms = [int(x) for x in a.ms.split(",")]
-    vs = [{"ldg": "", "staged": "s"}[v] for v in a.variants.split(",")]
+    vs = [{"ldg": "", "staged": "s", "pdl": "p"}[v] for v in a.variants.split(",")]
     arms = (["mix-cpeel"] + ([] if a.no_b1 else ["mix-cpeel-b1s"])
             + [f"mix-cpeel-b{g}{v}" for g in a.gs.split(",") for v in vs])
     by_t: dict[int, list[int]] = {}
