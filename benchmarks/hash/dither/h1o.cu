@@ -55,11 +55,12 @@ struct H1OStep {
   int parity, m, pad, flags;
 };
 
-template <bool PL>
+template <bool PL, bool BD = false>
 struct OutEpiT {
   static constexpr bool ON = true;
   static constexpr bool PEEL = PL;  // z = A Bᵀ from O (h1r.cu's E::PEEL)
   static constexpr bool SEEDS = true;
+  static constexpr bool BAND = BD;  // J10 banded (h1o_band_launch): the rows from bws, band leader (ri, (cj / g) g)'s
   int* z;
   int* zo;  // [M, N] s32: the op's z output (rows < M of the slot's z), what the credit gate reads beside y
   __nv_bfloat16* y;
@@ -71,7 +72,13 @@ struct OutEpiT {
   const u64* salt;       // the window's salt (8 words)
   const u64* step_base;  // the step's first position
   u64 st0, st1, st2, rt0, rt1, rt2;  // the seed and receipt tags
+  const u32* bws = nullptr;  // BAND: the call's band workspace (h1o_bandrows_k), band (ri, b) at 16 (ri nl + b) 32 RB words
+  int g = 1;                 // BAND: column tiles a band
 
+  __device__ const u32* band_rows(const H1Call& C, int ri, int cj, int RB) const {
+    const int nl = (C.ncb + g - 1) / g;
+    return bws + 16ull * ((unsigned long long)(ri * nl + cj / g) * 32 * RB);
+  }
   __device__ bool a_ok(int row) const { return row < m; }
   __device__ void seed(const H1Call& C, int u, int kind, u64* o) const {
     u64 s[8];
@@ -170,13 +177,14 @@ __global__ void __launch_bounds__(32 * NW, 2) h1o_units_k(const H1O* __restrict_
 
 // the block form: a unit a block (`h1b_unit<OutEpi>`), the same values as h1o_units_k's (PL: peeled, z = A Bᵀ from O;
 // OCC: 2 for the instantiation `h1o_init` gives the maximum carveout, else 1, the same code)
-template <bool PL, int OCC>
+template <bool PL, int OCC, bool BD = false>
 __global__ void __launch_bounds__(BTH, 2) h1o_unitsb_k(const H1O* __restrict__ F, const H1OStep* __restrict__ S,
                                                        const int8_t* __restrict__ xq, const float* __restrict__ sa, int M,
                                                        const float* __restrict__ sw, __nv_bfloat16* __restrict__ y,
                                                        int* __restrict__ zo, const u64* __restrict__ salt,
                                                        const u64* __restrict__ step_base, u64 nt0, u64 nt1, u64 nt2,
-                                                       u64 st0, u64 st1, u64 st2, u64 rt0, u64 rt1, u64 rt2) {
+                                                       u64 st0, u64 st1, u64 st2, u64 rt0, u64 rt1, u64 rt2,
+                                                       const u32* __restrict__ bws, int g) {
   __shared__ H1BShared sh;
   const H1OStep st = *S;
   const int p = st.parity;
@@ -184,20 +192,21 @@ __global__ void __launch_bounds__(BTH, 2) h1o_unitsb_k(const H1O* __restrict__ F
   if ((int)blockIdx.x >= C.units) return;
   C.a = xq;
   C.lda = F->k;
-  const OutEpiT<PL> ep{F->z[p], zo, y, F->ydump, sa, sw, F->n, M, st.m, st.flags, nullptr, salt, step_base,
-                       st0, st1, st2, rt0, rt1, rt2};
-  h1b_unit<OutEpiT<PL>, OCC == 2>(C, blockIdx.x, sh, F->seeds, nt0, nt1, nt2, F->out[p], (st.flags & F_NW_UNITS) ? 1 : 0,
-                                  ep);
+  const OutEpiT<PL, BD> ep{F->z[p], zo, y, F->ydump, sa, sw, F->n, M, st.m, st.flags, nullptr, salt, step_base,
+                           st0, st1, st2, rt0, rt1, rt2, bws, g};
+  h1b_unit<OutEpiT<PL, BD>, OCC == 2>(C, blockIdx.x, sh, F->seeds, nt0, nt1, nt2, F->out[p],
+                                      (st.flags & F_NW_UNITS) ? 1 : 0, ep);
 }
 
 // the split form: a unit a block of six warps (`h1s_unit<OutEpi>`), the same values again
-template <bool PL, int OCC>
+template <bool PL, int OCC, bool BD = false>
 __global__ void __launch_bounds__(STH, 2) h1o_unitss_k(const H1O* __restrict__ F, const H1OStep* __restrict__ S,
                                                        const int8_t* __restrict__ xq, const float* __restrict__ sa, int M,
                                                        const float* __restrict__ sw, __nv_bfloat16* __restrict__ y,
                                                        int* __restrict__ zo, const u64* __restrict__ salt,
                                                        const u64* __restrict__ step_base, u64 nt0, u64 nt1, u64 nt2,
-                                                       u64 st0, u64 st1, u64 st2, u64 rt0, u64 rt1, u64 rt2) {
+                                                       u64 st0, u64 st1, u64 st2, u64 rt0, u64 rt1, u64 rt2,
+                                                       const u32* __restrict__ bws, int g) {
   __shared__ H1SShared sh;
   const H1OStep st = *S;
   const int p = st.parity;
@@ -205,9 +214,37 @@ __global__ void __launch_bounds__(STH, 2) h1o_unitss_k(const H1O* __restrict__ F
   if ((int)blockIdx.x >= C.units) return;
   C.a = xq;
   C.lda = F->k;
-  const OutEpiT<PL> ep{F->z[p], zo, y, F->ydump, sa, sw, F->n, M, st.m, st.flags, nullptr, salt, step_base,
-                       st0, st1, st2, rt0, rt1, rt2};
-  h1s_unit<OutEpiT<PL>>(C, blockIdx.x, sh, F->seeds, nt0, nt1, nt2, F->out[p], (st.flags & F_NW_UNITS) ? 1 : 0, ep);
+  const OutEpiT<PL, BD> ep{F->z[p], zo, y, F->ydump, sa, sw, F->n, M, st.m, st.flags, nullptr, salt, step_base,
+                           st0, st1, st2, rt0, rt1, rt2, bws, g};
+  h1s_unit<OutEpiT<PL, BD>>(C, blockIdx.x, sh, F->seeds, nt0, nt1, nt2, F->out[p], (st.flags & F_NW_UNITS) ? 1 : 0, ep);
+}
+
+// J10 banded (measured only; labelled noise=j10-banded, kernels' reading of SharedNoise.lean, j10b_ref.py): band (ri, b)
+// of g column tiles reads one set of row streams, its leader unit ri ncb + b g's h1tile rows (seed_j's blocks l RB + c),
+// written here once a step into bws before the call's units, which hash only their own columns.  One warp a (live row
+// block ri, band b, J consecutive chunks), lane l row l; every lane derives the leader's seed_j (`unit_seed`, the
+// position base + step + ri ncb + b g), so the pass reads root(A) as the units do, after the call's A table.
+__global__ void __launch_bounds__(128) h1o_bandrows_k(const H1O* __restrict__ F, const H1OStep* __restrict__ S,
+                                                      const u64* __restrict__ salt, const u64* __restrict__ step_base,
+                                                      u32* __restrict__ bws, int g, int J, u64 nt0, u64 nt1, u64 nt2,
+                                                      u64 st0, u64 st1, u64 st2) {
+  const H1Call C = *F->rc[S->parity];
+  const int lane = threadIdx.x & 31;
+  const long long item = ((long long)blockIdx.x * blockDim.x + threadIdx.x) >> 5;
+  const int nrb = C.units / C.ncb, nl = (C.ncb + g - 1) / g, RB = (C.k >> 9) + 1, per = (RB + J - 1) / J;
+  if (item >= (long long)nrb * nl * per) return;
+  const int L = (int)(item / per), c0 = (int)(item % per) * J, ri = L / nl, b = L % nl;
+  if (!C.live[ri]) return;
+  u64 sd[8], mid[8];
+  unit_seed(C, C.base + *step_base + (u64)(ri * C.ncb + b * g), salt, st0, st1, st2, sd);
+  noise_mid(sd, nt0, nt1, nt2, mid);
+  for (int c = c0; c < c0 + J && c < RB; ++c) {
+    u32 h[16];
+    nblock_mid(mid, sd, (u64)lane * RB + c, nt0, nt1, nt2, h);
+    uint4* o = reinterpret_cast<uint4*>(bws + 16ull * ((unsigned long long)L * 32 * RB + (unsigned long long)lane * RB + c));
+#pragma unroll
+    for (int i = 0; i < 4; ++i) o[i] = make_uint4(h[4 * i], h[4 * i + 1], h[4 * i + 2], h[4 * i + 3]);
+  }
 }
 
 // the reference: unit u = ri * ncb + cj of call C (A rows from C.a, rows >= the slot's m already zero), z_ref [T, N]
@@ -320,7 +357,8 @@ static int unitsb(const H1O* F, const H1OStep* S, int units, int n, int k, const
   tag3("verity/pouw/seed/v2", st);
   tag3("verity/pouw/receipt/v1", rt);
   h1o_unitsb_k<PL, OCC><<<(unsigned)units, BTH, 0, stream>>>(F, S, xq, sa, M, sw, (__nv_bfloat16*)y, zo, salt, step_base,
-                                                             nt[0], nt[1], nt[2], st[0], st[1], st[2], rt[0], rt[1], rt[2]);
+                                                             nt[0], nt[1], nt[2], st[0], st[1], st[2], rt[0], rt[1], rt[2],
+                                                             nullptr, 1);
   return (int)cudaGetLastError();
 }
 
@@ -333,7 +371,8 @@ static int unitss(const H1O* F, const H1OStep* S, int units, int n, int k, const
   tag3("verity/pouw/seed/v2", st);
   tag3("verity/pouw/receipt/v1", rt);
   h1o_unitss_k<PL, OCC><<<(unsigned)units, STH, 0, stream>>>(F, S, xq, sa, M, sw, (__nv_bfloat16*)y, zo, salt, step_base,
-                                                             nt[0], nt[1], nt[2], st[0], st[1], st[2], rt[0], rt[1], rt[2]);
+                                                             nt[0], nt[1], nt[2], st[0], st[1], st[2], rt[0], rt[1], rt[2],
+                                                             nullptr, 1);
   return (int)cudaGetLastError();
 }
 
@@ -352,6 +391,75 @@ H1O_UNITS_EXPORT(h1o_unitsb2_launch, unitsb, false, 2)
 H1O_UNITS_EXPORT(h1o_unitsb2p_launch, unitsb, true, 2)
 H1O_UNITS_EXPORT(h1o_unitss2_launch, unitss, false, 2)
 H1O_UNITS_EXPORT(h1o_unitss2p_launch, unitss, true, 2)
+
+// J10 banded, peeled (measured only; noise=j10-banded, kernels' reading of SharedNoise.lean): bws holds
+// h1o_band_bytes(units, n, k, g) bytes, the call's own; form 0 block2 (OCC 2), 1 split, 2 split2, 3 block; mode 0 the
+// band-rows pass then the units, 1 the units alone (rows from the last pass), 2 the pass alone
+static int band_J(int units, int ncb, int k, int g) {
+  const long long nrb = units / ncb, nl = (ncb + g - 1) / g, RB = (k >> 9) + 1;
+  int J = 1;
+  while (J < RB && nrb * nl * ((RB + J - 1) / J) > 16384) ++J;
+  return J;
+}
+
+extern "C" unsigned long long h1o_band_bytes(int units, int n, int k, int g) {
+  const int ncb = n / 32;
+  return 64ull * (unsigned long long)(units / ncb) * ((ncb + g - 1) / g) * 32 * ((k >> 9) + 1);
+}
+
+extern "C" int h1o_band_launch(int form, int mode, const H1O* F, const H1OStep* S, int units, int n, int k,
+                               const int8_t* xq, const float* sa, int M, const float* sw, void* y, int* zo, const u64* salt,
+                               const u64* step_base, u32* bws, int g, cudaStream_t stream) {
+  if (M <= 0 || n % 32 || k % 512 || k < 512 || units <= 0 || !salt || !step_base || !bws || g < 1 || form < 0 || form > 3
+      || mode < 0 || mode > 2 || (form == 1 || form == 2) && k > 16384)
+    return 1;
+  u64 nt[3], st[3], rt[3];
+  tag3("verity/pouw/noise/v1", nt);
+  tag3("verity/pouw/seed/v2", st);
+  tag3("verity/pouw/receipt/v1", rt);
+  if (mode != 1) {
+    const int ncb = n / 32, J = band_J(units, ncb, k, g), RB = (k >> 9) + 1;
+    const long long items = (long long)(units / ncb) * ((ncb + g - 1) / g) * ((RB + J - 1) / J);
+    h1o_bandrows_k<<<(unsigned)((items * 32 + 127) / 128), 128, 0, stream>>>(F, S, salt, step_base, bws, g, J, nt[0], nt[1],
+                                                                            nt[2], st[0], st[1], st[2]);
+  }
+  if (mode == 2) return (int)cudaGetLastError();
+  const auto yb = (__nv_bfloat16*)y;
+  if (form == 0)
+    h1o_unitsb_k<true, 2, true><<<(unsigned)units, BTH, 0, stream>>>(F, S, xq, sa, M, sw, yb, zo, salt, step_base, nt[0], nt[1],
+                                                                     nt[2], st[0], st[1], st[2], rt[0], rt[1], rt[2], bws, g);
+  else if (form == 3)
+    h1o_unitsb_k<true, 1, true><<<(unsigned)units, BTH, 0, stream>>>(F, S, xq, sa, M, sw, yb, zo, salt, step_base, nt[0], nt[1],
+                                                                     nt[2], st[0], st[1], st[2], rt[0], rt[1], rt[2], bws, g);
+  else if (form == 1)
+    h1o_unitss_k<true, 1, true><<<(unsigned)units, STH, 0, stream>>>(F, S, xq, sa, M, sw, yb, zo, salt, step_base, nt[0], nt[1],
+                                                                     nt[2], st[0], st[1], st[2], rt[0], rt[1], rt[2], bws, g);
+  else
+    h1o_unitss_k<true, 2, true><<<(unsigned)units, STH, 0, stream>>>(F, S, xq, sa, M, sw, yb, zo, salt, step_base, nt[0], nt[1],
+                                                                     nt[2], st[0], st[1], st[2], rt[0], rt[1], rt[2], bws, g);
+  return (int)cudaGetLastError();
+}
+
+// h1o_init for the banded kernels (the OCC = 2 ones' carveout), and their blocks an SM: which 0..3 as h1o_band_launch's form
+extern "C" int h1o_band_init() {
+  const void* fs[] = {(const void*)h1o_unitsb_k<true, 2, true>, (const void*)h1o_unitss_k<true, 2, true>};
+  for (const void* f : fs) {
+    const cudaError_t e = cudaFuncSetAttribute(f, cudaFuncAttributePreferredSharedMemoryCarveout,
+                                               (int)cudaSharedmemCarveoutMaxShared);
+    if (e != cudaSuccess) return (int)e;
+  }
+  return 0;
+}
+
+extern "C" int h1o_band_occupancy(int form) {
+  const void* fs[] = {(const void*)h1o_unitsb_k<true, 2, true>, (const void*)h1o_unitss_k<true, 1, true>,
+                      (const void*)h1o_unitss_k<true, 2, true>, (const void*)h1o_unitsb_k<true, 1, true>};
+  if (form < 0 || form > 3) return -1;
+  int nb = 0;
+  if (cudaOccupancyMaxActiveBlocksPerMultiprocessor(&nb, fs[form], (form == 1 || form == 2) ? STH : BTH, 0) != cudaSuccess)
+    return -1;
+  return nb;
+}
 
 // once a process, before any capture: the OCC = 2 kernels' preferred carveout to the maximum shared memory
 extern "C" int h1o_init() {
