@@ -64,6 +64,13 @@ json = "t"                           # each sweep (60 s) rewrites it
 period_s = 300
 
 [[loop]]
+name = "Drive"
+started_by = "/data/infra/drive.sh"
+file = "/data/drive/drive.log"
+pattern = '^(\S+Z) (?:tick rc=0 |stopped: )'   # a tick, then 2 min of sleep; stopped, a line every 10 min
+period_s = 1800                      # a tick that launches several trains waits on each launch (train.sh: up to 10 min)
+
+[[loop]]
 name = "Control disk relay"
 started_by = "/data/infra/control-disk/run.sh, by hand: post_start.sh doesn't start it, so a pod reset stops it"
 file = "/data/infra/control-disk/seen.json"

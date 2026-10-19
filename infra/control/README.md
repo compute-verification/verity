@@ -29,6 +29,7 @@ editing on the pod.
 | Store panels, every 10 min | `/data/console/console-loop.sh` (`tools/research/console/`) | `/data/console` | `/data/console/console.log` |
 | Agent watch (INF-69): follows every running cloud agent's run stream and cancels and continues a run held 15 min after a finished tool call, and records a coordinator ready to wake (a doorbell pending 10 min, or, for a handle in `agent_watch_timers.json`, no run for twice its timer's interval; with `--wake`, on while `/data/agent-watch/wake` exists, it starts a run), and records a cloud worker (a Task subagent) that went from ACTIVE to IDLE or has been ACTIVE 6 h (`worker_idle`, `worker_long`; record only: only its coordinator can resume it), a coordinator or worker ACTIVE 90 min with no note and no push to its branches (`silent`, twice at most per spell), and each `research run` that ended on a node of `nodes.json`, for its sender's handle (`run_ended`) (`verity_ops/agent_watch.py`) | `agent_watch.sh`, deployed as `/data/infra/agent_watch.sh`; waits for `/data/agent-watch/cursor.env` (root, 0600, `CURSOR_API_KEY=`) | `/data/infra/agent_watch.py` (a copy of `infra/ops/verity_ops/agent_watch.py`); coordinators from `/data/infra/fixtures-export-repo`'s registry and `/data/steward/research-notes/routes.d`, recurring timers from `/data/agent-watch/timers.json` (a copy of `agent_watch_timers.json`), doorbells from the relay's `/data/agent-watch/doorbells.json`; workers from the `origin:` of `/data/steward/research-notes/lanes/*/*.md` modified in the last 12 h (`--notes`) and `/data/agent-watch/workers.d/*.json` (`{agent_id, lane, launched_by, branch}`); pushes from `git ls-remote --heads` with `/data/state/secrets/verity-deploy`; nodes from `/data/agent-watch/nodes.json` (a copy of `agent_watch_nodes.json`, read each sweep: names and ssh options), their hosts from the notes clone's `machines.d` | `/data/agent-watch/watch.log`; findings in `/data/agent-watch/events.jsonl`; each sweep's snapshot in `/data/agent-watch/status.json` (schema `verity/agent-watch-status/v1`, read by console); what must outlive a restart in `/data/agent-watch/state.json`, the branch heads it saw in `heads.json` and the nodes' runs already seen in `run_ends.json`; with `/root/.config/verity/store-index.env` present, the same snapshot in Neon's `store_private.agent_watch_status` (newest 60) |
 | Cloud watch (INF-73), every 15 min: each loop above's success marker, R2's size and growth by top-level prefix and the Lean cache's last publish, Neon, spend against budgets.toml's lines, the GitHub rate limit, jobs nobody claims and the Vercel site's endpoints; posts only anomalies in #agent-alerts naming @infra (once when one opens, once when it clears) and a digest at 15:00Z, naming each check a missing key leaves unmonitored (`cloud_watch.py`'s docstring) | `cloud_watch.sh`, deployed as `/data/infra/cloud_watch.sh`; sources `r2.env`, `relay.env` and `store-index.env` | `/data/infra/cloud_watch.py` and `/data/infra/cloud_watch.toml` (copies of this directory's) | `/data/cloud-watch/watch.log`; state in `/data/cloud-watch/state.json` |
+| Drive (INF-129): `research queue drive`, ci's landing automation, one tick every 2 min as lane ci, flags from main's `tools/verity/check/drive.toml` plus `/data/drive/args`; sources `r2.env` and `relay.env` (its `GH_TOKEN` pushes `next` and `main` through the checkout's credential helper, which reads the variable; `gh` is `/data/drive/bin/gh`); nodes as `research run --on` reaches them, from the steward's notes clone's `machines.d` | `drive.sh`, deployed as `/data/infra/drive.sh`; no tick while `/data/drive/stopped` exists: ci runs `/data/infra/drive.sh stop` (waits for the tick in progress), `start`, `status`, or `once --dry-run` | `/data/drive/verity` (a checkout of origin/main it fetches each tick; its `tools/research`) | `/data/drive/drive.log`; the queue's clone and `verity.state.json` in `/root/.research/queue/`; the store's cache in `/root/drive-store` |
 
 The disk alert, `control_disk_alert.py`, ran on infra's VM (tmux `control-disk-alert`) while the pod held no Slack credential.
 Since 13 Oct the pod has `relay.env` (`SLACK_BOT_TOKEN`, `GH_TOKEN`), and a copy runs on the pod from
@@ -44,6 +45,11 @@ to `agent_watch_timers.json` (`{"infra": 900}`) in a PR; infra copies the file t
 watch reads each sweep, so no restart is needed. It is then woken (or, with `--wake` off, recorded) once nothing has run for
 twice that interval. A handle that isn't listed (comms wakes on its inbox, issue events and one-shot timers) is woken only by
 a doorbell pending in its inbox, never on idle time alone.
+
+Drive moved here from ci's VM (INF-129). `post_start.sh` starts its loop, and the loop ticks only while `/data/drive/stopped`
+is absent, so a reset brings drive back in whichever state ci left it. Two drives must never tick against one `next`: ci
+stops its own loop before `drive.sh start` here. Its checkout was cloned over https with `--filter=blob:none`, with
+`notes_sync.CREDENTIAL_HELPER`'s helper for `GH_TOKEN` as its local `credential.helper`; the read-only deploy key can't push.
 
 The steward holds a lease, so a second copy stands by instead of running. Its `--reap` reads `lane/*` tips from origin with the
 read-only deploy key; if `watch.log` shows `FETCH-FAILED`, remove `--reap` until the fetch works again.
@@ -64,6 +70,7 @@ read-only deploy key; if `watch.log` shows `FETCH-FAILED`, remove `--reap` until
 | `/data/chats` | `/workspace/chats` | the chats archive |
 | `/data/research`, `/data/research-control` | `/workspace/research`, `/workspace/research-control` | `research run` state and control worktrees |
 | `/data/infra` | `/workspace/infra` | infra's pod scripts and their logs |
+| `/data/drive` | | drive's checkout (`verity`), `bin/gh`, `gh-config`, `args`, the stop file `stopped` and `drive.log` |
 | `/data/backup`, `/data/tmp` | | backups and transfer bundles |
 
 Secrets stay on the volume and never in git: this README names the files, never their contents.
@@ -87,6 +94,8 @@ $CP "cat > /data/infra/agent_watch.py" < infra/ops/verity_ops/agent_watch.py
 $CP "cat > /data/agent-watch/timers.json" < infra/control/agent_watch_timers.json
 $CP "cat > /data/agent-watch/nodes.json" < infra/control/agent_watch_nodes.json
 $CP "python3.12 /data/infra/agent_watch.py runs --notes /data/steward/research-notes --hours 2"   # each node's ended runs, recording nothing
+$CP "cat > /data/infra/drive.sh && chmod +x /data/infra/drive.sh" < infra/control/drive.sh
+$CP "/data/infra/drive.sh once --dry-run"     # one tick that pushes, launches and posts nothing
 git archive HEAD tools/research | $CP "rm -rf /data/infra/store-index-src.new && mkdir /data/infra/store-index-src.new && tar -x --strip-components=2 -C /data/infra/store-index-src.new && echo $(git rev-parse HEAD) > /data/infra/store-index-src.new/COMMIT && rm -rf /data/infra/store-index-src && mv /data/infra/store-index-src.new /data/infra/store-index-src"
 ~~~
 
