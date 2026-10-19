@@ -97,7 +97,7 @@ research pods sync TARGET [SRC] [--dest DIR] [--exclude G]...     # the worktree
 research tele SUBCOMMAND ...             # the harness's own surface
 research data SUBCOMMAND ...             # the evidence store (below)
 research merge REF [--into main] [--tool check] [-m MSG] [--push] [--dry-run]   # the merge gate (merge.py)
-research merge REF --verdicts [--verdicts-from RUN] [--dry-run]         # opt-in (CI-33): passed part by part in recorded packs (merge.py)
+research merge REF --verdicts [--verdicts-from RUN] [--dry-run]         # opt-in (CI-108): passed part by part in recorded packs (merge.py)
 research merge --train A B C [--on MACHINE --project P] [--command CMD] [--push]  # several refs, one checked candidate
 research merge --train --prepare BRANCH [--onto BASE] [--allow-removal PATH] N@SHA ...  # build, lint, push a train
 research merge --sweep [--into main] [--remote origin] [--dry-run]       # close the PRs that landed, retarget their children

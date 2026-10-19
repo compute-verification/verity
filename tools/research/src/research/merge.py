@@ -30,12 +30,13 @@ the diff from its tip either way.  The merge commit carries a `Check: <attempt i
 --dry-run), 1 a failure past the gate (git's merge, the push, the sweep, a train's offending ref), 2 usage, 3 refused
 (`research.gates.refuse`: the gate, the push guard, a train or its build).
 
-With --verdicts (opt-in; CI-33) the same refusals hold before any verdict, and in place of a passing attempt of REF, REF is
+With --verdicts (opt-in; CI-108) the same refusals hold before any verdict, and in place of a passing attempt of REF, REF is
 admitted when the target's `check.py --plan REF --packs-only --base HEAD` (`PLAN`, `verdict_gate`) shows every part it
 requires passed under its key at REF, each by a pass that a recorded check's verdict pack holds: an attempt of the tool that
 ended, ran the declared command whole or as a shard, and lists that pack, by sha256, among its run files (`pack_refusal`).
 Every Lake package's audit and every step the change requires (`required_steps`) is among those parts, so a skip passes
-nothing; a part with no key (`plan.KEYLESS`) is never passed, and a pass kept only in a machine's cache is cited by nothing.
+nothing; a part with no key is never passed, a build step (`plan.IMPLIED`) is `implied` only by the cited passes of the parts
+that read what it builds (its `implied_by`), and a pass kept only in a machine's cache is cited by nothing.
 The merge commit carries `Verdicts: <attempt id>...`.  It takes no --train or --push: the push guard takes only a passing
 attempt of the tree.  The plan's keys hold the machine it runs on (Python, the base image, the tools on the PATH), so it finds
 the checks' passes only run on the kind of machine they ran on.
@@ -589,9 +590,19 @@ def plan_refusal(doc: dict, store, commit: str, tree: str, tool: str, command: t
     if missing := [s for s in need if s not in by]:
         return [], f"the plan has no part {', '.join(missing)}, which {commit[:12]}'s change requires"
     wanted = [p for p in parts if p.get("required", True) or p["part"] in need or p["part"].startswith("lean-audit")]
+    resting = {n for p in wanted if p.get("state") == "implied" and isinstance(p.get("implied_by"), list) for n in p["implied_by"]}
+    wanted += [p for p in parts if p["part"] in resting and p not in wanted]
     judged: dict[tuple[str, str], str | None] = {}
     cited, bad = set(), []
     for p in wanted:
+        if p.get("state") == "implied":
+            # a build step: satisfied by the passes of the parts that read what it builds, each judged as a part of its own
+            rests = p.get("implied_by")
+            if not isinstance(rests, list) or not rests or not all(isinstance(n, str) and n in by for n in rests):
+                bad.append(f"{p['part']} implied (by no part this plan lists)")
+            elif short := [n for n in rests if by[n].get("state") != "passed"]:
+                bad.append(f"{p['part']} implied ({', '.join(short[:3])} not passed)")
+            continue
         if p.get("state") != "passed":
             bad.append(f"{p['part']} {p.get('state')}" + (f" ({p['why']})" if p.get("why") else ""))
             continue

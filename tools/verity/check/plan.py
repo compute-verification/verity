@@ -12,19 +12,45 @@ image and the installed versions, so a machine unlike the one that earned a pass
 Each part of the check, with its key at COMMIT and the recorded passes under that key:
 
     suite:NAME            a suite, in pytest or (`AFTER_LEAN`) lean-suites: `suites.key` under that step's environment, a pass
-                          `cached` that `holds`, or the suite's traced pass (`PerTest.whole`); a suite whose key reads what
-                          lean-build builds (a declared artifact under the verifier's `.lake/`) is `unkeyed`
+                          `cached` that `holds`, or the suite's traced pass (`PerTest.whole`); what lean-build builds keys a
+                          suite by the verifier's sources (`suites.built_from`), and a suite whose key reads it otherwise (a
+                          tree whose suites.py keys the bytes) is `unkeyed`
     circuit-check:TARGET  each target `circuit-check --all` checks, at the keys its task list's cache entry holds
                           (`circuit_check.cache.lookup`, as `cli.run` reads them); with that entry in no source the step is one
                           part, `circuit-check`, `unkeyed`: its targets' keys need the task list built (every Definition)
     lean-audit:PACKAGE    `lean_audit.key`, a pass whose report has the kernel replay (`check.lean_fast`'s rule)
-    flock-rust-tests, lean-agreement
+    flock-rust-tests, lean-agreement, preflight-lints
                           `STEP_KEYS`, under the step environment of each check slot here (the key reads VERITY_TEST_CACHE,
-                          which a slot sets to its own test cache), so a pass counts in the slot that earned it
-    preflight-lints       the repository's own suite (tests/), which holds `LINTS`
+                          which a slot sets to its own test cache), so a pass counts in the slot that earned it; preflight-lints
+                          passes too where the repository's own suite (tests/), which holds `LINTS`, passed
     lean                  `skipped`, in place of every Lean part, on a tree without the verifier's Lean package (check
                           skips its Lean group there): a skip passes nothing
-    the rest              `KEYLESS`: no key, so each must run; lean-changed is no verdict, never required
+    lean-changed          no verdict, never required: it vouches for nothing, the audit decides
+
+The steps that build or fetch what other steps read (`IMPLIED`) keep no verdict of their own (Daniel, 19 Oct).  Each is
+`implied` when every part that reads what it makes has passed (`implied_by`), and `must-run` when one hasn't.  Why those passes
+answer for each:
+
+    preflight-lock        `uv lock --check`: uv.lock is what the workspace's pyproject files resolve to.  A plan of a commit
+                          runs in that commit's tree under `uv run --locked` (`DECLARED`, and `research merge`'s `PLAN`), which
+                          refuses a lock that isn't current, so a plan exists only where it would pass; and every suite's key
+                          holds the lock's resolution of what the suite imports.  Implied by every suite.
+    preflight-fixtures    fetches each fixture `fixtures/artifacts.json` lists that git doesn't hold.  A suite's key holds the
+                          art id of each such fixture it reads (`suites.fetched_fixtures`), and a suite whose fixture can't be
+                          fetched fails, never passes; a fixture no suite reads decides no verdict.  Implied by every suite.
+    flock-circuit-build   `check_build.sh`'s `cargo check` of flock-circuit in each CPU feature set.  flock-rust-tests' key
+                          (`rust_tests_key`) holds everything the build reads (the script, its pinned Flock commit and
+                          toolchain, the patches, the live crate), and its tests compile those crates in release.  They don't
+                          compile the `flock-circuit` binary target or the `sha512,glue` set, so an error only there is what
+                          this leaves to the post-landing run.  Implied by flock-rust-tests.
+    lean-build            `lake build` of the verifier.  Its audit (`lean-audit:` the verifier's package) builds every file of
+                          the package from the same sources and toolchain, its key holding them, and replays each declaration;
+                          the suites that run its binaries are keyed by those sources (`suites.built_from`) and ran on them,
+                          as lean-agreement did when the change requires it.  Implied by those.
+    lean-unit-cut         `unit_cut_agree.py` on 500 random cuts against the binary lean-build built.  verity-flock's
+                          `test_unit_cut_agrees_with_the_reference` runs it on the first 300 of the same seed, against the
+                          binary its key now names, so this leaves the last 200 cuts to the post-landing run.  Implied by
+                          the suite that runs it.
 
 The passes are looked up in this machine's caches (`local`: $CHECK_CACHE, $VERITY_TEST_CACHE and every check slot's test
 cache; not with --packs-only), in the verdict pack of each recorded check `gather_verdicts` would take (none with
@@ -33,9 +59,10 @@ passes it stored, `verdicts.tar.gz`, and those it reused, `verdicts-reused.tar.x
 (which no gate cites).  A pass found in a recorded check's pack names that attempt, the pack's sha256, which `research merge
 --verdicts` cites, the run that earned it, and the files it is (`paths`).
 
-A part is `passed` (a pass is found), `must-run` (none under its key), `unkeyed` (its key can't be computed without running a
-step first: it must run), `skipped` or `no-verdict`.  lean-agreement is required when the job's `merge_requires` covers the change from
---base (default: COMMIT's first parent).  The plan is fully passed when every required part is passed.  `--json` prints the
+A part is `passed` (a pass is found), `implied` (above), `must-run` (none under its key), `unkeyed` (its key can't be computed
+without running a step first: it must run), `skipped` or `no-verdict`.  lean-agreement is required when the job's
+`merge_requires` covers the change from --base (default: COMMIT's first parent).  The plan is fully passed when every required
+part is passed or implied.  `--json` prints the
 plan as `KIND`.  Exit 0 fully passed, 1 not, 2 usage.
 """
 from __future__ import annotations
@@ -60,17 +87,29 @@ ROOT = HERE.parents[2]
 KIND = "check-plan/v1"
 #: how a check runs a tree (`tools/verity/check/tool.py`'s command, less `python check.py`)
 DECLARED = ["run", "--locked", "--all-packages", "--extra", "torch-cpu", "python"]
-#: the parts no key covers, and why: each must run
-KEYLESS = {
-    "preflight-lock": "`uv lock --check` keeps no pass",
-    "preflight-fixtures": "the fixtures' fetch from the store keeps no pass",
-    "flock-circuit-build": "`cargo check` of flock-circuit keeps no pass",
-    "lean-build": "`lake build` of the verifier keeps no pass",
-    "lean-unit-cut": "the partition check runs the verifier lean-build builds, and keeps no pass",
+#: the steps that build or fetch what other parts read, and keep no verdict of their own (the module docstring says why each
+#: is satisfied by the passes of the parts that read what it makes): {step: (what it makes, the parts that read it)}
+IMPLIED = {
+    "preflight-lock": ("the current uv.lock every suite's key resolves", lambda C, parts: _named(parts, "suite:")),
+    "preflight-fixtures": ("the fetched fixtures, each in the key of every suite that reads it",
+                           lambda C, parts: _named(parts, "suite:")),
+    "flock-circuit-build": ("the patched Flock crates, which flock-rust-tests compiles from what its key holds",
+                            lambda C, parts: _named(parts, "flock-rust-tests")),
+    "lean-build": ("the verifier, built from the sources its audit and the suites that run it are keyed by",
+                   lambda C, parts: [p.part for p in parts if p.reads == "lean-build" or (p.part == "lean-agreement" and p.required)
+                                     or p.part == f"lean-audit:{C.FLOCK_LEAN.relative_to(C.ROOT).as_posix()}"]),
+    "lean-unit-cut": ("the partition check of the first 300 of its 500 cuts, which verity-flock runs",
+                      lambda C, parts: _named(parts, "suite:verity-flock")),
 }
+
+
+def _named(parts: list["Part"], prefix: str) -> list[str]:
+    return [p.part for p in parts if p.part.startswith(prefix)]
 #: a recorded check's packs (`check.PACK_FILES`): the passes its steps stored, and those it found here before they ran, which it
 #: reused (`check.Reused`)
 PACK, REUSED = "verdicts.tar.gz", "verdicts-reused.tar.xz"
+#: the states of a part the plan counts as passed
+OK = ("passed", "implied")
 #: the parts of one step the text lists that didn't pass (`--json` lists every part)
 SHOWN = 25
 
@@ -135,6 +174,10 @@ class Part:
     found: list[dict] = field(default_factory=list)
     why: str | None = None
     required: bool = True
+    #: the build step whose output its key names (a suite keyed by the verifier's sources)
+    reads: str | None = None
+    #: the parts whose passes satisfy it (`IMPLIED`)
+    implied_by: list[str] | None = None
 
     def doc(self) -> dict:
         return {k: v for k, v in self.__dict__.items() if v is not None}
@@ -253,7 +296,8 @@ def suite_parts(C, sources: list[Source], lean: bool) -> list[Part]:
                         files = [per.dir / f"{S.WHOLE}--{w['key']}.json", per.dir / S.TRACED / f"{w['traced']}.json"]
                         found.append({**src.where(w.get("run"), files), "traced": True})
                         break
-            out.append(Part(f"suite:{s.name}", step, k, "passed" if found else "must-run", found))
+            reads = "lean-build" if any((C.ROOT / a).resolve().is_relative_to(built) for a in s.artifacts) else None
+            out.append(Part(f"suite:{s.name}", step, k, "passed" if found else "must-run", found, reads=reads))
     finally:
         S.CACHE = was
     return out
@@ -363,10 +407,17 @@ def plan_tree(tree: Path, sources: list[Source], agreement: bool, local: bool = 
     root = next((p for p in suites if p.part == f"suite:{own}"), None)
     parts = []
     for name, _argv, _cwd in C.preflight():
-        if name == "preflight-lints" and root is not None:
+        if name in C.STEP_KEYS:
+            [p] = keyed_step_parts(C, sources, [name])
+            if p.state != "passed" and name == "preflight-lints" and root is not None and root.state == "passed":
+                p = Part(name, name, p.key, "passed", root.found, f"the repository's own suite ({root.part}), which holds it, passed")
+            parts.append(p)
+        elif name == "preflight-lints" and root is not None:
             parts.append(Part(name, name, root.key, root.state, root.found, f"the repository's own suite ({root.part}) holds it"))
+        elif name in IMPLIED:
+            parts.append(Part(name, name, None, "implied"))
         else:
-            parts.append(Part(name, name, None, "unkeyed", why=KEYLESS.get(name, "no key covers it")))
+            parts.append(Part(name, name, None, "unkeyed", why="no key covers it"))
     parts += [p for p in suites if p.step == "pytest"]
     for j in jobs:
         if j == "circuit-check":
@@ -387,20 +438,31 @@ def plan_tree(tree: Path, sources: list[Source], agreement: bool, local: bool = 
             parts += [p for p in suites if p.step == "lean-suites"]
         elif j == "lean-changed":
             parts.append(Part(j, j, None, "no-verdict", why="it vouches for nothing: the audit decides", required=False))
-        elif j in KEYLESS:
-            parts.append(Part(j, j, None, "unkeyed", why=KEYLESS[j]))
+        elif j in IMPLIED:
+            parts.append(Part(j, j, None, "implied"))
         elif j != "pytest":
             parts.append(Part(j, j, None, "unkeyed", why="the plan doesn't know this job's key"))
+    by = {p.part: p for p in parts}
+    for p in parts:
+        if p.state == "implied":
+            makes, readers = IMPLIED[p.part]
+            p.implied_by = readers(C, parts)
+            short = [n for n in p.implied_by if by[n].state != "passed"]
+            if not p.implied_by or short:
+                p.state = "must-run"
+                p.why = f"it makes {makes}: " + (f"{', '.join(short[:5])} not passed" if short else "no part here reads it")
+            else:
+                p.why = f"it makes {makes}: all {len(p.implied_by)} passed"
     return parts
 
 
 def document(parts: list[Part], commit: str, tree: str | None, base: str | None, sources: list[Source], notes: list[str]) -> dict:
     req = [p for p in parts if p.required]
-    count = {s: sum(p.state == s for p in req) for s in ("passed", "must-run", "unkeyed", "skipped")}
+    count = {s: sum(p.state == s for p in req) for s in ("passed", "implied", "must-run", "unkeyed", "skipped")}
     return {"kind": KIND, "commit": commit, "tree": tree, "base": base,
             "sources": [{"source": s.name, **({"attempt": s.attempt, "pack_sha256": s.sha256} if s.attempt else {})} for s in sources],
             "notes": notes, "summary": {"parts": len(parts), "required": len(req), **count},
-            "fully_passed": all(p.state == "passed" for p in req), "parts": [p.doc() for p in parts]}
+            "fully_passed": all(p.state in OK for p in req), "parts": [p.doc() for p in parts]}
 
 
 def text(doc: dict) -> list[str]:
@@ -411,10 +473,10 @@ def text(doc: dict) -> list[str]:
     for p in doc["parts"]:
         steps.setdefault(p["step"], []).append(p)
     for step, ps in steps.items():
-        ok = [p for p in ps if p["state"] == "passed"]
+        ok = [p for p in ps if p["state"] in OK]
         srcs = sorted({f.get("attempt") or f["source"] for p in ok for f in p["found"][:1]})
         lines.append(f"plan: {step}: {len(ok)} of {len(ps)} parts passed" + (f" (first found in {', '.join(srcs)})" if srcs else ""))
-        shown = [p for p in ps if p["state"] != "passed" or len(ps) == 1]
+        shown = [p for p in ps if p["state"] not in OK or len(ps) == 1]
         for p in shown[:SHOWN]:
             where = (p["found"][0].get("attempt") or p["found"][0]["source"]) if p["found"] else ""
             lines.append(f"plan:   {p['part']:60} {p['state']:9} {str(p.get('key'))[:16]:16} {where}"
@@ -422,8 +484,10 @@ def text(doc: dict) -> list[str]:
         if len(shown) > SHOWN:
             lines.append(f"plan:   ... and {len(shown) - SHOWN} more not passed (--json lists every part)")
     s = doc["summary"]
-    lines.append(f"plan: {'FULLY PASSED' if doc['fully_passed'] else 'not fully passed'}: {s['passed']} of {s['required']} required "
-                 f"parts passed, {s['must-run']} must run, {s['unkeyed']} unkeyed" + (f", {s['skipped']} skipped" if s.get("skipped") else ""))
+    lines.append(f"plan: {'FULLY PASSED' if doc['fully_passed'] else 'not fully passed'}: {s['passed'] + s.get('implied', 0)} of "
+                 f"{s['required']} required parts passed" + (f" ({s['implied']} implied by those that read what they build)"
+                                                               if s.get("implied") else "")
+                 + f", {s['must-run']} must run, {s['unkeyed']} unkeyed" + (f", {s['skipped']} skipped" if s.get("skipped") else ""))
     return lines
 
 

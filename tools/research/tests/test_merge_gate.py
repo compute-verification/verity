@@ -1041,7 +1041,7 @@ def _part(name: str, rid: str | None, sha: str | None, state: str = "passed", **
 
 def test_verdicts_admits_a_commit_no_check_ran_on_when_its_plan_shows_every_part_passed_in_a_recorded_checks_pack(
         tmp_path, monkeypatch, capsys):
-    """CI-33: no attempt of feat's tip exists, so the exact-attempt gate (the default) refuses it; with --verdicts, a plan whose
+    """CI-108: no attempt of feat's tip exists, so the exact-attempt gate (the default) refuses it; with --verdicts, a plan whose
     every part (a Lake package's audit among them) passed in the pack of a check of main is admitted, and the merge cites that
     check in `Verdicts:`."""
     import research.merge as M
@@ -1122,6 +1122,30 @@ def test_verdicts_cites_a_pass_in_a_checks_reused_pack_as_that_check(tmp_path, m
                             "check", M.declared_command(main, "check"), {}) for s in (reused, "0" * 64)]
     assert judge[0] == ([rid], None)
     assert "no verdicts.tar.gz or verdicts-reused.tar.xz of that sha256" in judge[1][1]
+
+
+def test_verdicts_admits_a_build_step_only_by_the_cited_passes_of_the_parts_that_read_what_it_builds(tmp_path, monkeypatch):
+    """A build step keeps no verdict (`plan.IMPLIED`): it is `implied` by the parts that read its output, each of which needs
+    its own cited pass, required or not; one that names no part, or a part that didn't pass or has no cited pass, refuses."""
+    import research.merge as M
+    from research.store.local import LocalStore
+
+    main, feat, tip = _repos(tmp_path)
+    rid, sha = _packed(tmp_path, main, monkeypatch)
+    store, tree = LocalStore(), _git(feat, "rev-parse", f"{tip}^{{tree}}")
+
+    def judge(*parts):
+        return M.plan_refusal(_plan(tip, tree, [_part("lean-audit:pkg", rid, sha), *parts]), store, tip, tree, "check",
+                              M.declared_command(main, "check"), {})
+
+    build = {"part": "lean-build", "step": "lean-build", "state": "implied", "found": [], "implied_by": ["suite:a", "lean-agreement"]}
+    agree = _part("lean-agreement", rid, sha, required=False)
+    assert judge(build, _part("suite:a", rid, sha), agree) == ([rid], None)
+    assert "lean-build implied (lean-agreement not passed)" in judge(build, _part("suite:a", rid, sha),
+                                                                       _part("lean-agreement", None, None, "must-run", required=False))[1]
+    assert "lean-agreement (no pass found" in judge(build, _part("suite:a", rid, sha), _part("lean-agreement", None, None, required=False))[1]
+    assert "lean-build implied (by no part this plan lists)" in judge({**build, "implied_by": []}, _part("suite:a", rid, sha))[1]
+    assert "by no part this plan lists" in judge({**build, "implied_by": ["suite:gone"]}, _part("suite:a", rid, sha))[1]
 
 
 def test_verdicts_takes_one_ref_and_no_push_and_a_plan_that_prints_nothing_refuses(tmp_path, monkeypatch, capsys):

@@ -117,8 +117,9 @@ def test_a_change_no_key_reads_plans_as_the_checked_commit_and_one_a_suite_reads
     suite `one`, they count for every suite but `one`, which must run at its new key, so the gate refuses C until a check
     records a pass under it.  The repository's own suite, whose key reads every file, has a new key too, and passes as `check`
     would reuse it: by its traced pass (`PerTest.whole`), every file its run read being as it was.  What no plan passes is the parts without a key
-    (`KEYLESS`, flock-rust-tests here without its toolchain) and the Lean group this tree has no verifier for (`lean`,
-    skipped, in place of lean-build and every Lean part): the gate refuses on those alone, whatever passes exist.  Runs the suites twice for real (about 5 s)."""
+    (flock-rust-tests here without its toolchain, and so flock-circuit-build, which only its pass implies) and the Lean group
+    this tree has no verifier for (`lean`, skipped, in place of lean-build and every Lean part): the gate refuses on those
+    alone, whatever passes exist.  The other build steps (`IMPLIED`) are implied by the suites, so they must run with one.  Runs the suites twice for real (about 5 s)."""
     root = tmp_path / "tree"
     a = _tree(root)
     packs = {"r-a": _checked(P, root, tmp_path, "r-a")}
@@ -128,11 +129,17 @@ def test_a_change_no_key_reads_plans_as_the_checked_commit_and_one_a_suite_reads
     assert suites == ["suite:one", "suite:repository", "suite:two"]
     assert all(by_a[n]["state"] == "passed" and by_a[n]["found"][0]["attempt"] == "r-a" for n in suites)
     assert by_a["suite:one"]["found"][0]["paths"] == [f"tests/{by_a['suite:one']['key']}.json"], "what `check.Reused` packs"
-    assert by_a["preflight-lints"]["state"] == "passed" and by_a["preflight-lints"]["key"] == by_a["suite:repository"]["key"]
-    unpassed = {n for n, p in by_a.items() if p.get("required", True) and p["state"] != "passed"}
-    assert unpassed == {*P.KEYLESS, "flock-rust-tests", "lean"} - {"lean-build", "lean-unit-cut"}
-    assert by_a["lean"]["state"] == "skipped" and all(by_a[n]["state"] == "unkeyed" for n in unpassed - {"lean"})
-    assert not plan_a["fully_passed"] and P.text(plan_a)[-1].startswith("plan: not fully passed: 4 of 9 required parts passed")
+    lints = by_a["preflight-lints"]
+    assert lints["state"] == "passed" and lints["found"] == by_a["suite:repository"]["found"], "no check stored its own pass here"
+    assert lints["key"] and lints["key"] != by_a["suite:repository"]["key"]
+    for build in ("preflight-lock", "preflight-fixtures"):
+        assert by_a[build]["state"] == "implied" and by_a[build]["implied_by"] == suites
+    assert by_a["flock-circuit-build"]["state"] == "must-run" and by_a["flock-circuit-build"]["implied_by"] == ["flock-rust-tests"]
+    unpassed = {n for n, p in by_a.items() if p.get("required", True) and p["state"] not in P.OK}
+    assert unpassed == {"flock-circuit-build", "flock-rust-tests", "lean"}
+    assert by_a["lean"]["state"] == "skipped" and by_a["flock-rust-tests"]["state"] == "unkeyed"
+    assert not plan_a["fully_passed"] and P.text(plan_a)[-1].startswith(
+        "plan: not fully passed: 6 of 9 required parts passed (2 implied by those that read what they build)")
     cited, why = _judged(plan_a, packs)
     assert cited == [] and why.startswith(f"{len(unpassed)} of ") and "suite:" not in why and "lean skipped" in why
 
@@ -140,8 +147,9 @@ def test_a_change_no_key_reads_plans_as_the_checked_commit_and_one_a_suite_reads
     _commit(root, "b")
     plan_b = _plan(P, root, tmp_path, packs)
     assert plan_b["commit"] != a
-    assert ([(p["part"], p.get("key"), p["state"]) for p in plan_b["parts"]]
-            == [(p["part"], p.get("key"), p["state"]) for p in plan_a["parts"]])
+    assert ([(p["part"], p.get("key") if p["part"] != "preflight-lints" else None, p["state"]) for p in plan_b["parts"]]
+            == [(p["part"], p.get("key") if p["part"] != "preflight-lints" else None, p["state"]) for p in plan_a["parts"]])
+    assert plan_b["parts"][1]["key"] != lints["key"], "the lints read every file, Markdown too"
     assert _judged(plan_b, packs)[1] == why
 
     (root / "one" / "tests" / "test_it.py").write_text("def test_one():\n    assert True\n")
@@ -155,6 +163,7 @@ def test_a_change_no_key_reads_plans_as_the_checked_commit_and_one_a_suite_reads
     assert whole.startswith("tests/per-test/repository/(suite)--") and reads.startswith("tests/per-test/repository/traced/")
     _, why_c = _judged(_plan(P, root, tmp_path, packs), packs)
     assert "suite:one must-run" in why_c and "suite:two" not in why_c and "suite:repository" not in why_c
+    assert "preflight-lock must-run (it makes the current uv.lock every suite's key resolves: suite:one not passed)" in why_c
 
     packs["r-c"] = _checked(P, root, tmp_path, "r-c")
     plan_c = _plan(P, root, tmp_path, packs)
