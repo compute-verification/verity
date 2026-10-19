@@ -45,7 +45,7 @@ def at(s: float) -> str:
 
 def train(tmp: Path, name: str, steps: dict[str, tuple[int, int]], end: int, suites: list[dict] = ()) -> Path:
     """A train's directory: each step (start, seconds) after T0, a slot taken at 300 s after joining at 120 s, its commit at -600 s,
-    registered at 0 s and started at 120 s."""
+    launched at 0 s and started at 120 s."""
     d = tmp / name
     d.mkdir()
     (d / "steps.jsonl").write_text("".join(json.dumps({"step": n, "status": "passed", "seconds": float(s), "ended_utc": at(b + s)}) + "\n"
@@ -53,7 +53,7 @@ def train(tmp: Path, name: str, steps: dict[str, tuple[int, int]], end: int, sui
     (d / "slot.json").write_text(json.dumps({"state": "held", "since": at(120), "took": at(300)}))
     (d / "suites.json").write_text(json.dumps(suites))
     (d / "train.json").write_text(json.dumps({"run": name, "commit": "c" * 40, "machine": "vy-nebius-1", "verdict": "passed",
-                                              "committed_utc": at(-600), "registered_utc": at(0), "start_utc": at(120),
+                                              "committed_utc": at(-600), "launched_utc": at(0), "start_utc": at(120),
                                               "end_utc": at(end)}))
     return d
 
@@ -93,21 +93,21 @@ def test_lean_suites_chain_back_through_its_after_job(tmp_path):
     assert dict(c["path"])["other"] == 1                # lean-suites started a second after lean-build ended
 
 
-def test_report_takes_median_p90_and_max_and_counts_a_reused_suite_as_zero(tmp_path):
+def test_report_takes_mean_median_p90_and_max_and_counts_a_reused_suite_as_zero(tmp_path):
     js = jobs(tmp_path)
     steps = {**PRE, "pytest": (410, 100), "circuit-check": (410, 300)}
     a = train(tmp_path, "r20261019-010000-aaaa", steps, end=800,
               suites=[{"suite": "verity/ml/flock", "status": "passed", "seconds": 60.0}])
     b = train(tmp_path, "r20261019-020000-bbbb", {**steps, "circuit-check": (410, 500)}, end=1000)
     rep = TT.report([TT.load_dir(a), TT.load_dir(b)], js)
-    assert rep["steps"]["circuit-check"] == {"n": 2, "median": 400, "p90": 500, "max": 500}
-    assert rep["steps"]["pytest: verity/ml/flock"] == {"n": 2, "median": 30, "p90": 60, "max": 60}
+    assert rep["steps"]["circuit-check"] == {"n": 2, "mean": 400, "median": 400, "p90": 500, "max": 500}
+    assert rep["steps"]["pytest: verity/ml/flock"] == {"n": 2, "mean": 30, "median": 30, "p90": 60, "max": 60}
     assert rep["steps"]["slot wait"]["median"] == 180
     assert list(rep["path"])[:3] == ["queued", "circuit-check", "slot wait"]
     assert rep["path"]["circuit-check"]["long_pole_in"] == 2
     text = TT.render(rep)
     assert "| r20261019-020000-bbbb | cccccccccccc | vy-nebius-1 | passed | 10.0 | 2.0 | 3.0 | 1.7 |" in text
-    assert "| pytest: verity/ml/flock | 2 | 0.5 | 1.0 | 1.0 |" in text
+    assert "| pytest: verity/ml/flock | 2 | 0.5 | 0.5 | 1.0 | 1.0 |" in text
 
 
 def test_the_command_reads_train_directories(tmp_path, capsys):

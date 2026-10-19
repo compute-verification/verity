@@ -2,13 +2,14 @@
 """`tools/verity/check/train_times.py [--last N] [--save DIR] [--json] [--no-refresh]`: where the train checks' wall time goes.
 
 Reads the store's check Attempts (`tool = 'check'`) that drive launched on `next` (`train.sh`: `slot.py --priority`, its twins
-grouped by their pair), keeps the last N whose check reached a verdict, and prints per step the median, p90 and max wall time
-over them, and per train its critical path and the long pole on it.  A step's time is its `steps.jsonl` record's `seconds`
+grouped by their pair), keeps the last N whose check reached a verdict, and prints per step the mean, median, p90 and max wall
+time over them, per train its critical path and the long pole on it, and the critical path's costs ranked by their mean.  A step's time is its `steps.jsonl` record's `seconds`
 (the result's `steps`); a suite's is its row in the result's `reuse` (0 when reused); the slot wait is the run's `slot.json`
 (`since` to `took`).  The phases around the steps:
 
-    queued     the train's commit on `next` (its commit time) until `research run` registered the check (its run id's time)
-    launch     registered until the run started on the machine
+    queued     the train's commit on `next` (its commit time) until `check.py --record` launched its check (the twins' pair
+               stamp; without twins, the run id's time, after the verdict packs were gathered)
+    launch     launched until the run started on the machine (the verdict packs, the source shipped)
     slot wait  waiting in the machine's check line (`slot.py`)
     setup      the slot taken until the first step started (`uv run --locked` and the verdict import)
     finish     the last step's end until the run ended (the result and the verdict pack)
@@ -40,6 +41,8 @@ TOL_S = 2.0
 PHASES = ("queued", "launch", "slot wait", "setup", "finish")
 SUITE_STEPS = (("pytest", "suites.json"), ("lean-suites", "suites-lean.json"))
 RUN_TIME = re.compile(r"^r(\d{8}-\d{6})-")
+#: a twin pair (`check.py --record`'s `pair`), stamped when it launched, before it gathered the verdict packs
+PAIR_TIME = re.compile(r"^(\d{8}T\d{6}Z)-")
 
 
 def utc(s: str | None) -> datetime | None:
@@ -101,7 +104,7 @@ def costs(train: dict, js: dict[str, dict]) -> dict:
         before = group + [a for n in group + [cur] if (a := js.get(n, {}).get("after")) in spans]
         before = [n for n in before if spans[n][1] <= spans[cur][0] + TOL_S and n not in chain]
         cur = max(before, key=lambda n: spans[n][1], default=None)
-    t = {k: utc(train.get(k)) for k in ("committed_utc", "registered_utc", "start_utc", "end_utc")}
+    t = {k: utc(train.get(k)) for k in ("committed_utc", "launched_utc", "start_utc", "end_utc")}
     since, took = utc(train["slot"].get("since")), utc(train["slot"].get("took"))
     start = since or t["start_utc"]
 
@@ -110,12 +113,12 @@ def costs(train: dict, js: dict[str, dict]) -> dict:
         b = b.timestamp() if isinstance(b, datetime) else b
         return None if a is None or b is None else max(0.0, b - a)
 
-    phases = {"queued": gap(t["committed_utc"], t["registered_utc"]), "launch": gap(t["registered_utc"], t["start_utc"]),
+    phases = {"queued": gap(t["committed_utc"], t["launched_utc"]), "launch": gap(t["launched_utc"], t["start_utc"]),
               "slot wait": gap(since, took) if took else (0.0 if start else None), "setup": gap(took or start, first),
               "finish": gap(spans[last][1] if last else None, t["end_utc"])}
     path = [(p, phases[p]) for p in PHASES[:4] if phases[p] is not None]
     path += [(n, spans[n][2]) for n in pre + chain] + ([("finish", phases["finish"])] if phases["finish"] is not None else [])
-    total = gap(t["committed_utc"] or t["registered_utc"] or t["start_utc"], t["end_utc"])
+    total = gap(t["committed_utc"] or t["launched_utc"] or t["start_utc"], t["end_utc"])
     if total is not None:
         path.append(("other", max(0.0, total - sum(s for _, s in path))))
     pole = max(chain, key=lambda n: spans[n][2], default=None)
@@ -144,12 +147,12 @@ def report(trains: list[dict], js: dict[str, dict]) -> dict:
         step = k.split(": ", 1)[0] if ": " in k else None
         names[k] = [r["times"][k] if k in r["times"] else 0.0 for r in rows if k in r["times"] or (step and step in r["times"])]
     def stats(xs: list[float]) -> dict:
-        return {"n": len(xs), "median": statistics.median(xs), "p90": pct(xs, 0.9), "max": max(xs)}
+        return {"n": len(xs), "mean": statistics.fmean(xs), "median": statistics.median(xs), "p90": pct(xs, 0.9), "max": max(xs)}
     per = {k: stats(v) for k, v in names.items() if v}
     on_path = sorted({n for r in rows for n, _ in r["path"]})
     path = {n: {**stats([dict(r["path"]).get(n, 0.0) for r in rows]),
                 "long_pole_in": sum(r["long_pole"] == n for r in rows)} for n in on_path}
-    return {"trains": rows, "steps": per, "path": dict(sorted(path.items(), key=lambda kv: (-kv[1]["median"], -kv[1]["max"])))}
+    return {"trains": rows, "steps": per, "path": dict(sorted(path.items(), key=lambda kv: (-kv[1]["mean"], -kv[1]["max"])))}
 
 
 def minutes(s: float | None) -> str:
@@ -167,14 +170,15 @@ def render(rep: dict, note: str = "") -> str:
         out.append(f"| {r['run']} | {r['commit']} | {r['machine'] or ''} | {r['verdict'] or ''} | "
                    + " | ".join(minutes(t.get(p)) for p in PHASES[:4]) + f" | {minutes(r['check_s'])} | {minutes(t.get('finish'))} | "
                    f"{minutes(r['total_s'])} | {r['long_pole'] or ''} {minutes(t.get(r['long_pole']))} | {crit} |")
-    out += ["", "## The critical path's costs (0 where off a train's path; long pole in: trains where it was the long pole)", "",
-            "| cost | median | p90 | max | long pole in |", "|---|---|---|---|---|"]
-    out += [f"| {n} | {minutes(s['median'])} | {minutes(s['p90'])} | {minutes(s['max'])} | {s['long_pole_in']} |"
+    out += ["", "## The critical path's costs, by mean (0 where off a train's path; the means add up to the mean total; long pole "
+            "in: the trains where it was)", "", "| cost | mean | median | p90 | max | long pole in |", "|---|---|---|---|---|---|"]
+    out += [f"| {n} | {minutes(s['mean'])} | {minutes(s['median'])} | {minutes(s['p90'])} | {minutes(s['max'])} | {s['long_pole_in']} |"
             for n, s in rep["path"].items()]
-    out += ["", "## Per step (a suite: 0 where its step reused it)", "", "| step | n | median | p90 | max |", "|---|---|---|---|---|"]
-    order = list(PHASES) + sorted((k for k in rep["steps"] if k not in PHASES and ": " not in k), key=lambda k: -rep["steps"][k]["median"])
-    order += sorted((k for k in rep["steps"] if ": " in k), key=lambda k: (-rep["steps"][k]["median"], -rep["steps"][k]["max"]))
-    out += [f"| {k} | {s['n']} | {minutes(s['median'])} | {minutes(s['p90'])} | {minutes(s['max'])} |"
+    out += ["", "## Per step (a suite: 0 where its step reused it)", "", "| step | n | mean | median | p90 | max |",
+            "|---|---|---|---|---|---|"]
+    order = list(PHASES) + sorted((k for k in rep["steps"] if k not in PHASES and ": " not in k), key=lambda k: -rep["steps"][k]["mean"])
+    order += sorted((k for k in rep["steps"] if ": " in k), key=lambda k: -rep["steps"][k]["mean"])
+    out += [f"| {k} | {s['n']} | {minutes(s['mean'])} | {minutes(s['median'])} | {minutes(s['p90'])} | {minutes(s['max'])} |"
             for k in order if (s := rep["steps"].get(k)) and (": " not in k or s["max"] > 0)]
     return "\n".join(out) + "\n"
 
@@ -227,10 +231,12 @@ def from_store(last: int, save: Path, refresh: bool = True) -> tuple[list[Path],
         if rec and any(f["path"] == "slot.json" for f in store.listing(rec)):
             store.fetch(rec, d, paths=["slot.json"])
         ex, sha = a.get("execution") or {}, (a.get("source") or {}).get("commit") or ""
-        reg = datetime.strptime(RUN_TIME.match(a["id"])[1], "%Y%m%d-%H%M%S").replace(tzinfo=timezone.utc)
+        pair = PAIR_TIME.match(str((a.get("params") or {}).get("twin") or ""))
+        launched = (datetime.strptime(pair[1], "%Y%m%dT%H%M%SZ") if pair else
+                    datetime.strptime(RUN_TIME.match(a["id"])[1], "%Y%m%d-%H%M%S"))
         (d / "train.json").write_text(json.dumps({
             "run": a["id"], "commit": sha, "machine": ex.get("machine") or ex.get("host"), "verdict": a["status"]["validation"],
-            "committed_utc": committed(sha) if sha else None, "registered_utc": reg.strftime("%Y-%m-%dT%H:%M:%SZ"),
+            "committed_utc": committed(sha) if sha else None, "launched_utc": launched.strftime("%Y-%m-%dT%H:%M:%SZ"),
             "start_utc": ex.get("start_utc"), "end_utc": ex.get("end_utc")}, indent=1))
         dirs.append(d)
     note = (f"The last {len(dirs)} of {len(ran)} train checks in the store that reached a verdict; left out: {stopped} stopped "
