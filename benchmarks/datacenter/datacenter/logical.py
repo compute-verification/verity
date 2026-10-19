@@ -29,7 +29,8 @@ registration (`program.bindings`), then its Calls. The accounting layer reads it
 
 `evaluate` computes the census values, each Call through `verity.ml.circuits.evaluation.evaluate_batch` (a kernel where
 one is registered, a Boolean Definition's word Definition's among them; bit-sliced otherwise); `register` commits the
-registered inputs before any run, and `commit` gives the hiding commitment a run's values sit under: the census values,
+registered inputs before any run, bound to the occupancy profiles the developer may choose from (`profile_digest`), and
+`commit` gives the hiding commitment a run's values sit under: the census values,
 which are what can cross between devices (a Call's own wires are witness of its proof units). Both are hm96-sha512 rows,
 one per element, in one frame-v3-sha512 tree (`verity.ml.commitments.advice`), bound to the Program's digest.
 """
@@ -38,8 +39,9 @@ from __future__ import annotations
 import hashlib
 import weakref
 from collections import Counter
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
+from typing import Any
 
 import numpy as np
 
@@ -330,8 +332,19 @@ def evaluate(program: Program, inputs: dict[str, int | Sequence[int]]) -> dict[i
     return t
 
 
-def _binding(label: bytes, program: Program) -> bytes:
-    return hashlib.sha512(label + b"\0" + bytes.fromhex(program_digest(program))).digest()
+def _binding(label: bytes, program: Program, profiles: Sequence[bytes] = ()) -> bytes:
+    return hashlib.sha512(label + b"\0" + bytes.fromhex(program_digest(program)) + b"".join(profiles)).digest()
+
+
+def profile_digest(occupancy: Mapping[Any, Mapping[int, int]], origin: int = 0) -> bytes:
+    """The digest of an occupancy profile (`binding.occupancy`: frames per certifier port and bucket), its buckets
+    counted from `origin`, the first bucket of the epoch it is chosen for, so one registered profile fits every epoch."""
+    h = hashlib.sha512(b"datacenter/occupancy/v1\0")
+    for port in sorted(occupancy, key=repr):
+        for b, n in sorted(occupancy[port].items()):
+            if n:
+                h.update(f"{port!r}\0{b - origin}\0{n}\0".encode())
+    return h.digest()
 
 
 def _rows(words: list[int], bits: int) -> list[bytes]:
@@ -340,10 +353,14 @@ def _rows(words: list[int], bits: int) -> list[bytes]:
 
 @dataclass(frozen=True)
 class Registration:
-    """A Program's registered inputs, committed before any run: `root` is public, the values and salts the developer's."""
+    """A Program's registered inputs and the occupancy profiles its developer may choose from, committed before any run:
+    `root` is public, and so is the number of profiles; the values, salts and profiles are the developer's."""
 
     values: dict[str, int | tuple[int, ...]]
     rows: advice.Registration
+    #: the digests of the occupancy profiles the developer may choose from (`profile_digest`), which the root binds;
+    #: none: one profile, the placement's own
+    profiles: tuple[bytes, ...] = ()
 
     @property
     def root(self) -> bytes:
@@ -354,17 +371,20 @@ class Registration:
         return self.rows.salts
 
 
-def register(program: Program, inputs: dict[str, int | Sequence[int]], salts: Sequence[bytes] | None = None) -> Registration:
+def register(program: Program, inputs: dict[str, int | Sequence[int]], salts: Sequence[bytes] | None = None,
+             profiles: Sequence[Mapping[Any, Mapping[int, int]] | bytes] = ()) -> Registration:
     """Commit the values of `program`'s registered parameters, a row per element, under a binding to the Program's
-    digest."""
+    digest and to the occupancy `profiles` the developer may choose from (each with its buckets counted from its
+    epoch's first, or its `profile_digest`)."""
     params = [(n, t) for (n, b), (_, t) in zip(parameters(program), program.fn.signature()[0]) if b == REGISTRATION]
     if not params:
         raise ValueError("the Program registers no parameter")
     regd = {n: inputs[n] if isinstance(inputs[n], int) else tuple(inputs[n]) for n, _ in params}
     words = [w for n in regd for w in ([regd[n]] if isinstance(regd[n], int) else regd[n])]
     width = max(sum(e) for _, t in params for e in layout(t))
-    return Registration(regd, advice.register(_rows(words, width), width, _binding(b"datacenter/registration/v1", program),
-                                              salts))
+    digests = tuple(o if isinstance(o, bytes) else profile_digest(o) for o in profiles)
+    return Registration(regd, advice.register(_rows(words, width), width,
+                                              _binding(b"datacenter/registration/v1", program, digests), salts), digests)
 
 
 _committed: weakref.WeakKeyDictionary = weakref.WeakKeyDictionary()
@@ -392,5 +412,5 @@ def commit(program: Program, transcript: dict[int, int], salts: Sequence[bytes] 
 
 
 __all__ = ["PRECISION", "REGISTRATION", "RUN", "Registration", "Value", "bind_inputs", "binding", "calls", "census_of",
-           "commit", "committed", "evaluate", "gate_work", "gates", "layout", "names", "nodes", "parameters", "precision", "reach",
-           "read", "register", "rows", "values", "work"]
+           "commit", "committed", "evaluate", "gate_work", "gates", "layout", "names", "nodes", "parameters", "precision",
+           "profile_digest", "reach", "read", "register", "rows", "values", "work"]

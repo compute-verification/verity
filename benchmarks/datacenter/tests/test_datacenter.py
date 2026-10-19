@@ -19,7 +19,7 @@ from verity.ml.circuits.types import Array, Tuple
 from datacenter import (FLEET_CLOSED, SALT_CUSTODY, SERVED_PARTITION, Assumption, Block, Cadence, Carried, Challenge, Computed, Credit,
                         Datacenter, Deviation, Device, Entered, Fleet, Held, Interval, Ledger, Link, Maintenance, On,
                         Plan, Port, Record, Refused, Store, Wipe, account, audit, check_records, crossings,
-                        double_credit, evaluate, names, place, read, register, run, traffic, values, work)
+                        double_credit, evaluate, names, occupancy, place, read, register, run, traffic, values, work)
 from datacenter.binding import hops
 from datacenter.logical import census_of, committed
 from datacenter.models import DOT, LINEAR, MAT, VEC, WEIGHTS, X, program, two_stage, word, words
@@ -59,9 +59,9 @@ def wipes(*devices: str, at: int = 0) -> list[Wipe]:
     return [Wipe(d, HBM - RESIDUAL, Interval(at, at + 2)) for d in devices]
 
 
-def staged(dc: Datacenter, **kw):
+def staged(dc: Datacenter, registration=REG, **kw):
     """The two stages on a and b: x enters a from the world, h crosses from a to b, y leaves b for the world."""
-    return place(PROGRAM, dc, "a.gpu", registration=REG, deliver="world", x="world", h="a.gpu", y="b.gpu", **kw)
+    return place(PROGRAM, dc, "a.gpu", registration=registration, deliver="world", x="world", h="a.gpu", y="b.gpu", **kw)
 
 
 @pytest.fixture
@@ -521,11 +521,32 @@ def test_an_image_pull_is_a_registered_input_free_unless_its_bytes_differ():
     assert swapped == [Refused(On("input", "image"), "its bytes differ from the registration")]
 
 
-def test_choosing_the_profile_from_a_registered_set_costs_its_log(setup):
+def test_the_occupancy_profile_is_one_of_those_the_registration_commits_and_costs_the_log_of_their_number(setup):
+    """Training's red team, W9: choosing the occupancy profile is advice worth log2 of how many the developer may choose
+    from, so that number is fixed before the run and public. The registration commits the profiles' digests, each
+    counted from its epoch's first bucket, and the plan reads their number from it: here the night's schedule may start
+    at any of 8 ticks, 3 bits, in any epoch. A declared occupancy that isn't one of them is refused, and so is a plan
+    with another number; a plan takes no count of its own. With none registered the one profile is the placement's own,
+    as before."""
     dc, p = setup
-    plan = Plan(EPOCH, profiles=8)
-    acc = account(audit(run(p, INPUTS, plan), p.public(plan)), p.public(plan))
-    assert acc.advice_bits == 3 and acc.covert_bits == 3 + acc.timing_bits + 512
+    eight = register(PROGRAM, WEIGHTS, profiles=[occupancy(staged(dc, start=s)) for s in range(8)])
+    assert len(eight.profiles) == 8 and register(PROGRAM, WEIGHTS, eight.salts).root != eight.root
+
+    def night(q, plan):
+        return account(audit(run(q, INPUTS, plan), q.public(plan)), q.public(plan))
+
+    chosen = staged(dc, eight, start=3)
+    acc = night(chosen, Plan(EPOCH, profiles=eight))
+    assert acc.sound and acc.advice_bits == 3 and acc.covert_bits == 3 + acc.timing_bits + 512
+    assert night(staged(dc, eight, start=16 + 3), Plan(Interval(16, 32), profiles=eight)).sound
+    unlisted = night(staged(dc, eight, start=8), Plan(EPOCH, profiles=eight))
+    assert unlisted.refused == [Refused(On("profile", "occupancy"),
+                                        "the declared occupancy is not one of the registered profiles")]
+    assert [r.why for r in night(chosen, Plan(EPOCH)).refused] == ["the plan's number of profiles is not the registration's"]
+    with pytest.raises(TypeError, match="from the registration that commits them"):
+        Plan(EPOCH, profiles=8)
+    own = night(p, Plan(EPOCH, profiles=REG))
+    assert Plan(EPOCH, profiles=REG).profiles == 1 and own.sound and own.advice_bits == 0
 
 
 def test_a_program_placed_across_a_fleet_crosses_the_inter_datacenter_link():
