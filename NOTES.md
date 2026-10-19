@@ -11,3 +11,9 @@
   parallelizes Facts.lean pins/canon. Don't duplicate.
 - Step 2 candidate: drop from every key the auditor files the audit never reads (lean_changed.py, merge.py, run_daily.py,
   tool.py, pyproject.toml); 4 of 19 landings in a week touched only those and re-audited all 29 packages.
+- 00:02Z: step 1 posted as note lean/20261018T2357Z-report-lean-check-time-profile (research msg reply --as lean was
+  refused: @lean is held by the coordinator's agent id, not this worker's; the coordinator must post it in thread
+  1792351349.615669). Step 2 committed (82dd76765: NOT_READ in lean_audit.py, test in
+  tools/verity/check/tests/test_lean_audit.py). Before/after run r20261019-000145-5ff5 (vy-nebius-2, --cwd clone,
+  script /tmp/lt/before_after.sh shipped with --send): after-warm, after-merge-edit, before-warm, before-merge-edit
+  on the 26 non-Security packages; summary in its out/summary.txt.
