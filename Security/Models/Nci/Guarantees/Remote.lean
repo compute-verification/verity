@@ -14,8 +14,9 @@ terms that `DampenerThreaded` takes inside its residual's hypothesis derived:
 * `VerdictLag` ([VERDICT-LAG]): under `TerminalDetection`, the declared work skipped between each identity's first
   faulty proof block and its halt `Δ` later is at most `(JΔ/H) C`;
 * `DampenerRemote` composes them with `ThreadedThrottled`'s declared computation: with probability at least
-  `1 − p/ε'`, `η ≤ s + (r̂ + ε' + JΔ/H) + ν_T + χ`, and the hardware multiple the developer needs is at least
-  `ρ = max(1, 1/(s + (r̂ + ε' + JΔ/H + ν_T + χ)/MFU₀))`.
+  `1 − p/ε'`, `η ≤ s + (1 − s)(r̂ + ε' + JΔ/H) + ν_T + χ`, and the hardware multiple the developer needs is at least
+  `ρ = max(1, 1/(s + ((1 − s)(r̂ + ε' + JΔ/H) + ν_T + χ)/MFU₀))`. The factor `1 − s = C/(C + U)` is tiers' (`evaluate`
+  counts the residual over `C + U`); it only raises `ρ` over the form above, as `0 ≤ s ≤ 1`.
 -/
 
 namespace Nci.Guarantees
@@ -54,8 +55,8 @@ trains at full efficiency on the monitored compute outside the work certified co
 the wrong windows' capacity and the skipped work (`M_r ≤ κ (C − W_cert + wrongCapacity + skipped)/2`); the declared
 computation is bounded by `ThreadedThrottled`; faulty proof blocks inject at most the cheating share `χ`, 0 with no
 sampling. Then, with probability at least `1 − δ`, `δ = p/ε'`, the compute efficiency is at most
-`s + (r̂ + ε' + JΔ/H) + ν_T + χ`, and the hardware multiple the developer needs is at least
-`ρ = max(1, 1/(s + (r̂ + ε' + JΔ/H + ν_T + χ)/MFU₀))`, with `r̂ = 1 − W_cert/C`. -/
+`s + (1 − s)(r̂ + ε' + JΔ/H) + ν_T + χ`, and the hardware multiple the developer needs is at least
+`ρ = max(1, 1/(s + ((1 − s)(r̂ + ε' + JΔ/H) + ν_T + χ)/MFU₀))`, with `r̂ = 1 − W_cert/C`. -/
 def DampenerRemote : Prop :=
   ∀ (Ω : Type) [Fintype Ω] (μ : PMF Ω) (N : ℕ) (c : Fin N → ℝ) (wrong : Ω → Fin N → Prop) (p ε : ℝ)
     (β ι : Type) [DecidableEq ι] (bad : Ω → Finset β) (I : Finset ι) (ident : β → ι) (τ w : β → ℝ) (Φ Δ H : ℝ)
@@ -73,10 +74,10 @@ def DampenerRemote : Prop :=
     (∀ ω, (Mr ω : ℝ) ≤ κ * (C - W + wrongCapacity c (wrong ω) + ∑ b ∈ bad ω, w b) / 2) →
     (∀ ω, (Mx ω : ℝ) ≤ κ * χ * (C + U) / 2) →
       1 - p / ε ≤ prob μ (fun ω => efficiency κ (M ω) C U ≤
-          unmonitoredShare C U + (residualShare W C + ε + lagShare I.card Δ H) +
+          unmonitoredShare C U + (1 - unmonitoredShare C U) * (residualShare W C + ε + lagShare I.card Δ H) +
             declaredShare κ (rhoT α b_a (T.bound (α * Γ) b_w dd e)) C U + χ ∧
         remoteDampener mfu (unmonitoredShare C U)
-            (residualShare W C + ε + lagShare I.card Δ H +
+            ((1 - unmonitoredShare C U) * (residualShare W C + ε + lagShare I.card Δ H) +
               declaredShare κ (rhoT α b_a (T.bound (α * Γ) b_w dd e)) C U + χ) ≤
           hardwareMultiple mfu κ (M ω) C U)
 

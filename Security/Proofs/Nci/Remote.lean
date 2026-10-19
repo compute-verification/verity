@@ -169,31 +169,19 @@ theorem multiple_le {a s x η : ℝ} (ha : 0 < a) (hη : 0 < η) (h : η ≤ a *
     exact h
 
 /-- **The remote dampener's arithmetic core**: the sources summed with no memory cap and unmonitored compute at
-`MFU₀ ≤ 1` bound both the efficiency, `η ≤ s + r + ν + χ`, and the hardware multiple,
-`max(1, 1/(s + (r + ν + χ)/MFU₀)) ≤ max(1, MFU₀/η)`. -/
+`MFU₀ ≤ 1` bound both the efficiency, `η ≤ s + (1 − s) r + ν + χ`, and the hardware multiple,
+`max(1, 1/(s + ((1 − s) r + ν + χ)/MFU₀)) ≤ max(1, MFU₀/η)`. -/
 theorem remote_core {κ C U W ρ χ a M Mu Mr Md Mx : ℝ} (hκ : 0 < κ) (hC : 0 < C) (hU : 0 ≤ U) (ha : 0 < a)
-    (ha1 : a ≤ 1) (hM0 : 0 < M) (hMr : 0 ≤ Mr) (hM : M ≤ Mu + Mr + Md + Mx) (hu : Mu ≤ a * κ * U / 2)
+    (ha1 : a ≤ 1) (hM0 : 0 < M) (hM : M ≤ Mu + Mr + Md + Mx) (hu : Mu ≤ a * κ * U / 2)
     (hr : Mr ≤ κ * (C - W) / 2) (hd : Md ≤ C / ρ) (hx : Mx ≤ κ * χ * (C + U) / 2) :
-    efficiency κ M C U ≤ unmonitoredShare C U + residualShare W C + declaredShare κ ρ C U + χ ∧
-      remoteDampener a (unmonitoredShare C U) (residualShare W C + declaredShare κ ρ C U + χ) ≤
+    efficiency κ M C U ≤
+        unmonitoredShare C U + (1 - unmonitoredShare C U) * residualShare W C + declaredShare κ ρ C U + χ ∧
+      remoteDampener a (unmonitoredShare C U)
+          ((1 - unmonitoredShare C U) * residualShare W C + declaredShare κ ρ C U + χ) ≤
         hardwareMultiple a κ M C U := by
   have h := sources_le_at hκ hC hU hM hu hr hd hx
   have hS : 0 < C + U := by linarith
-  have hCi : C * C⁻¹ = 1 := mul_inv_cancel₀ hC.ne'
   have hs0 : 0 ≤ unmonitoredShare C U := div_nonneg hU hS.le
-  have hr0 : 0 ≤ residualShare W C := by
-    have hCW : 0 ≤ C - W := by
-      by_contra hneg
-      have h1 : κ * (C - W) < 0 := mul_neg_of_pos_of_neg hκ (not_le.1 hneg)
-      linarith
-    have e : residualShare W C = (C - W) * C⁻¹ := by
-      unfold residualShare
-      linear_combination (-1 : ℝ) * hCi
-    rw [e]
-    exact mul_nonneg hCW (inv_nonneg.2 hC.le)
-  have h1 : (1 - unmonitoredShare C U) * residualShare W C ≤ residualShare W C := by
-    have := mul_nonneg hs0 hr0
-    linarith
   have h2 : a * unmonitoredShare C U ≤ unmonitoredShare C U := by
     have := mul_le_mul_of_nonneg_right ha1 hs0
     linarith
@@ -225,8 +213,8 @@ theorem DampenerRemote : Guarantees.DampenerRemote := by
         κ * (C - (W - ε * C - lagShare I.card Δ H * C)) :=
       mul_le_mul_of_nonneg_left (by linarith) hκ.le
     linarith
-  obtain ⟨h1, h2⟩ := remote_core hκ hC hU hmfu hmfu1 (Nat.cast_pos.2 (hM0 ω)) (Nat.cast_nonneg (Mr ω))
-    (by exact_mod_cast hM ω) (hu ω) hr (declared_le hα hbw hba hdd hcd hcomp hthr hW hsize) (hx ω)
+  obtain ⟨h1, h2⟩ := remote_core hκ hC hU hmfu hmfu1 (Nat.cast_pos.2 (hM0 ω)) (by exact_mod_cast hM ω) (hu ω) hr
+    (declared_le hα hbw hba hdd hcd hcomp hthr hW hsize) (hx ω)
   rw [residualShare_sub hC] at h1 h2
   exact ⟨h1, h2⟩
 
