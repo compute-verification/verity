@@ -39,7 +39,8 @@ trusted); `yOpen` has it from the tie, whose `linked` field puts a reader of the
 (a read, not a dependence), and the Program's check, with no premise; `perCall` has it from the tie and the unit's own
 `dequant(z)`, under the run-time check that the Commit's `y` root of the call is the root of those output words. So
 `yOpen` and `perCall` need the less trusted surface. Under `ValueChecked` (below) a `zTree` unit commits its
-`y = dequant(z)` beside its `z`, and its link is then `perCall`'s run-time `y`-root check, with no premise on the kernel.
+`y = dequant(z)` beside its `z`, and its link is then `perCall`'s run-time `y`-root check, with no premise on the
+kernel.
 
 The link is an equality of values, which useful-work credit needs and which doesn't give it. Useful-work credit is
 Daniel's ASK-71 (19 Oct, 22:09Z): the credited noised work was done on the operands `A`, `B` of a served product that
@@ -55,8 +56,12 @@ produced the served bytes: a prover may serve from a plain GEMM beside the noise
 from the noised accumulators (kernels' `z = O − X cᵀ − b Bᵀ + 256·xa Bᵀ`, `X = A + b`, `xa` its wrap) from one
 computed beside them (RT3-INT-11), so `ValueChecked` asks neither: a `z` of either kind meets it if its value is
 `A_u B_uᵀ`'s. `CreditTie` reads no form: `zTree` meets it at one round a step (`Properties.Served.witCreditTie`), so
-credit needs neither `perCall`'s schedule nor its rounds; `beside` and `yOpen` have no `out` word, and a window of
-theirs with a receipt fails it (`Properties.Served.wit_notValueChecked`). No credit statement is stated here. Today's
+credit needs neither `perCall`'s schedule nor its rounds, and `perCall` meets it with a `z` peeled from the noised
+product (`Properties.Served.witCallCredit`); `beside` and `yOpen` have no `out` word, and a window of theirs with a
+receipt fails it (`Properties.Served.wit_notValueChecked`). Where `z` is committed is the form's: under its round's
+root before the coin in `zTree`, where it reads no coin; with the receipts in `perCall`, where `Tie.noised` asks its
+cone, an `out` word's, to hold the call's coin, which a peeled `z` meets and a dot beside the noised product doesn't
+(its cut is then its own round, which a commit after the coin is past). No credit statement is stated here. Today's
 code computes `y` as `dequant` of the exact s32 product (`int8_ops.scaled_mm` at 14e4c23a:
 `RN_bf16(RN32(RN32(RN32(z)·s_a)·s_w))`, the `dq` a Definition would fix), so `yOpen`'s check and `DequantOf` would
 hold of its `y` once its units commit those words, which round 4 doesn't do.
