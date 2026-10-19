@@ -8,14 +8,20 @@
 # store_private.agent_watch_status as AGENT_WATCH_PG_URL, the store indexer's URL, read from store-index.env with
 # store_index.sh's sed (its URL has `&`); without that file the watch publishes nothing.
 # Workers (Task subagents) come from the same notes clone's recent notes and $DIR/workers.d/*.json.
+# Pushes, for the silent rule, are read with `git ls-remote` and the read-only deploy key fixtures_export.sh fetches with. The nodes
+# whose ended runs ring their sender are $DIR/nodes.json (a copy of agent_watch_nodes.json, read each sweep), their hosts the notes
+# clone's machines.d.
 # While $DIR/wake exists the watch starts a run on a coordinator ready to wake (--wake); remove the file to go back to recording.
 DIR=/data/agent-watch
 LOG=$DIR/watch.log
 CONF=/root/.config/verity
+NOTES=/data/steward/research-notes
 mkdir -p "$DIR"
 exec 9> /root/agent-watch.lock
 flock -n 9 || { echo "$(date -u +%FT%TZ) another copy holds /root/agent-watch.lock" >> "$LOG"; exit 0; }
 val() { sed -n "s/^$1=//p" "$2" | tr -d "\"'"; }
+export GIT_SSH_COMMAND="ssh -i /data/state/secrets/verity-deploy -o IdentitiesOnly=yes -o StrictHostKeyChecking=accept-new -o UserKnownHostsFile=/data/state/secrets/known_hosts"
+export GIT_TERMINAL_PROMPT=0
 said=
 while :; do
   if [ -f "$DIR/cursor.env" ]; then
@@ -26,7 +32,8 @@ while :; do
      fi
      exec python3.12 /data/infra/agent_watch.py loop --log "$DIR/events.jsonl" \
       --registry /data/infra/fixtures-export-repo/.agents/skills/using-slack/registry.json \
-      --routes /data/steward/research-notes/routes.d --notes /data/steward/research-notes $([ -f "$DIR/wake" ] && echo --wake)) >> "$LOG" 2>&1
+      --routes $NOTES/routes.d --notes $NOTES --git-remote git@github.com:compute-verification/verity.git \
+      --nodes "$DIR/nodes.json" $([ -f "$DIR/wake" ] && echo --wake)) >> "$LOG" 2>&1
     echo "$(date -u +%FT%TZ) watch exited rc=$?" >> "$LOG"
   elif [ -z "$said" ]; then
     echo "$(date -u +%FT%TZ) no $DIR/cursor.env yet: waiting" >> "$LOG"; said=1

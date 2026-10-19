@@ -66,14 +66,34 @@ note of its changes; a 404 never again), and records **worker_idle** when it wen
 at its `updatedAt`, which moves on a status change and not during work) and **worker_long** once when it has been ACTIVE for
 `--worker-long-h` (6). It records only; the relay rings the lane's handle.
 
+An agent that works but says nothing is **silent**: a coordinator or a worker ACTIVE for `SILENT_S` (90 min) with no note of
+its (a note whose `origin:` names it, new or changed by its mtime) and no push to its branches. Its branches are the API's
+(`git.branches` of its runs, or of a worker's GET), a worker's workers.d `branch`, those its notes' origins name, and every
+head ending in its id's last four characters (a coordinator's `cursor/...-1037`); pushes are read every `HEADS_EVERY_S` with
+`git ls-remote --heads` of `--git-remote` (the deploy key fixtures_export.sh fetches with), a branch's push time being when the
+watch first saw its sha (`heads.json` beside `--log`). The 90 min count from the latest of its ACTIVE spell's start, its newest
+note, its newest push and the first heads read, so a fresh deploy judges nobody for 90 min. It is recorded once, and again
+after a second window (`SILENT_RINGS`), then not until one of those moves; the relay rings its handle (a coordinator's own, a
+worker's launcher's). Without `--notes` and heads read in the last `HEADS_STALE_S`, nobody is judged.
+
+When a `research run` on a node ends, its sender learns of it only by polling, and a worker that ended its turn to wait never
+does. Every `every_s` of `--nodes` (`infra/control/agent_watch_nodes.json`, deployed as `/data/agent-watch/nodes.json`: the
+node names, the ssh options with the key, optionally `machines_d`), the watch reads each node's runs that ended since its last
+read over one ssh (`RUNS_READER`, host, port, user and runs root from the node's machines.d entry in the notes clone), and
+records each once as **run_ended** for whoever sent it (the request's `submitted_by`, else the command's `--by`, else the job's
+lane): a coordinator's own handle, a worker's launcher's (its coordinator resumes it with Task: Cursor refuses a run on a worker),
+else the lane's when that is a handle; a run no handle owns, or one whose handle `quiet_handles` lists (ci: drive reads its own
+train checks' ends), is skipped. `run_ends.json` keeps each node's last read and the runs
+seen (`RUN_ENDS_KEEP_S`); runs that ended before the first read are never rung. `agent_watch.py runs` prints what it would read.
+
 Each finding is a line of JSON in `--log`; each sweep ends by replacing `status.json` beside it atomically, in the schema
 `verity/agent-watch-status/v1` (`snapshot`: its time `t`, `poll_s`, and per agent read its id, the run the watch judges,
 statuses, watch state, since and restart count, in categories only), so a reader can tell a quiet watch from a dead one; a
 sweep that fails leaves the last one. With `$AGENT_WATCH_PG_URL` set, the same bytes are then inserted, never
 overwriting, into Neon's `store_private.agent_watch_status` (`Publisher`, through `psql`; the newest `STATUS_ROWS` kept), for
 readers off the pod. `state.json` beside it keeps what must outlive a restart (the watch restarts on every
-deploy): when it last cancelled or restarted each agent, and recorded it ready to wake, the restart counts, the continue runs still to start and the runs
-already recorded. `watch.lock` beside it keeps a second watch from running. The control pod holds no Slack credential, so
+deploy): when it last cancelled or restarted each agent, and recorded it ready to wake, the restart counts, the continue runs still to start, the runs
+already recorded, and since when each coordinator has been ACTIVE and each silent spell's rings. `watch.lock` beside it keeps a second watch from running. The control pod holds no Slack credential, so
 infra's relay reads the findings over ssh and posts each in #agent-alerts. Cancelling and restarting don't wait for it.
 `--once --dry-run` runs one sweep that follows no stream and sends no POST (each is printed).
 """
@@ -88,9 +108,11 @@ import os
 import re
 import subprocess
 import sys
+import shlex
 import tempfile
 import threading
 import time
+import tomllib
 import urllib.error
 import urllib.parse
 import urllib.request
@@ -135,12 +157,21 @@ AGENT_STATUSES = ("ACTIVE", "IDLE", "ARCHIVED", "unknown")
 RUN_STATUSES = ("CREATING", "RUNNING", "WAITING_FOR_BACKGROUND_WORK", "FINISHED", "ERROR", "CANCELLED", "EXPIRED", "unreadable",
                 "unknown")
 WATCH_STATES = ("ok", "followed", "held", "held_again", "continued", "continue_failed", "cancel_refused", "long_call", "stuck",
-                "crashed", "erroring", "unreadable", "ready_to_wake", "worker_idle", "worker_long")
+                "crashed", "erroring", "unreadable", "ready_to_wake", "worker_idle", "worker_long", "silent", "run_ended")
 WORKER_NOTES_S = 12 * 3600      # a note modified this recently names its author as a worker to watch
 WORKER_IDLE_S = 12 * 3600       # a worker IDLE this long is read again only when a note of its changes
 WORKER_LONG_S = 6 * 3600        # ACTIVE this long is recorded once (--worker-long-h)
 WORKER_KEEP_S = 2 * 86400       # a worker idle or gone this long, and in no recent note, is forgotten
 WORKERS_NEW = 20                # workers read for the first time per sweep: a fresh notes clone names hundreds
+SILENT_S = 90 * 60              # ACTIVE with no note of its and no push to its branches this long: rung, again a window later
+SILENT_RINGS = 2                # rings per silent spell; then none until it shows activity
+HEADS_EVERY_S = 5 * 60          # the branch heads (`git ls-remote --heads`) are read this often
+HEADS_STALE_S = 3 * HEADS_EVERY_S   # heads older than this tell no push apart from none: nobody is judged silent
+RUN_ENDS_EVERY_S = 5 * 60       # the nodes' ended runs are read this often (nodes.json `every_s`)
+RUN_ENDS_SLACK_S = 10 * 60      # each node is read back this far past its last read: a run's status lands late, clocks differ
+RUN_ENDS_KEEP_S = 3 * 86400     # a run rung (or skipped) this long ago is forgotten
+SAY_EVERY_S = 3600              # a failing ls-remote or node read is printed at most this often
+BRANCH_RE = re.compile(r"\b(?:cursor|lane)/[A-Za-z0-9._/-]*[A-Za-z0-9]")
 
 
 def iso(t: float) -> str:
@@ -199,38 +230,175 @@ def front_matter(p: Path) -> dict[str, str]:
     return out
 
 
-def workers(notes: Path | None, workers_d: Path, registry: Path | None, coords: dict[str, str], t: float) -> dict[str, dict]:
-    """agent id -> {"lane", "handle", "heard"}: each cloud worker (a Task subagent, which `GET /v1/agents` doesn't list) named
-    by `workers_d/*.json` (`{agent_id, lane, launched_by}`, which a coordinator writes for the workers it launches) or by the
-    `origin:` of a note under `notes/lanes/` modified in the last `WORKER_NOTES_S`, minus the coordinators (`coords`). Its
-    handle is its launcher's (`launched_by`), else its lane's when the lane is a handle, else that of a coordinator its note's
-    origin names (`started by proofs bc-...`); `heard` is the newest such file's mtime."""
-    names = {str(h.get("handle")) for h in read_json(registry).get("handles") or []}
-    out: dict[str, dict] = {}
-
-    def add(agent: str, lane: str, handle: str | None, heard: float) -> None:
-        w = out.setdefault(agent, {"lane": lane, "handle": handle, "heard": heard})
-        w["lane"], w["handle"], w["heard"] = w["lane"] or lane, w["handle"] or handle, max(w["heard"], heard)
-
-    for p in sorted(workers_d.glob("*.json")) if workers_d.is_dir() else []:
-        d = read_json(p)
-        if (m := AGENT_RE.fullmatch(str(d.get("agent_id") or ""))) and m[0] not in coords:
-            lane, by = str(d.get("lane") or ""), AGENT_RE.search(str(d.get("launched_by") or ""))
-            add(m[0], lane, (coords.get(by[0]) if by else None) or (lane if lane in names else None), p.stat().st_mtime)
+def recent_notes(notes: Path | None, t: float) -> Iterator[tuple[Path, float, dict[str, str]]]:
+    """(path, mtime, front-matter) of each note under `notes/lanes/` modified in the last `WORKER_NOTES_S`. The notes clone is
+    synced every 2 min, and git gives a file it adds or changes the time it did so, so a note's mtime is when it arrived."""
     for p in sorted((notes / "lanes").glob("*/*.md")) if notes else []:
         try:
             heard = p.stat().st_mtime
         except OSError:
             continue
-        if t - heard >= WORKER_NOTES_S:
-            continue
-        fm = front_matter(p)
+        if t - heard < WORKER_NOTES_S:
+            yield p, heard, front_matter(p)
+
+
+def workers(notes: Path | None, workers_d: Path, registry: Path | None, coords: dict[str, str], t: float) -> dict[str, dict]:
+    """agent id -> {"lane", "handle", "heard", "branches"}: each cloud worker (a Task subagent, which `GET /v1/agents` doesn't
+    list) named by `workers_d/*.json` (`{agent_id, lane, launched_by, branch}`, which a coordinator writes for the workers it
+    launches) or by the `origin:` of a note under `notes/lanes/` modified in the last `WORKER_NOTES_S`, minus the coordinators
+    (`coords`). Its handle is its launcher's (`launched_by`), else its lane's when the lane is a handle, else that of a
+    coordinator its note's origin names (`started by proofs bc-...`); `heard` is the newest such file's mtime; `branches` the
+    `branch` its workers.d file names."""
+    names = {str(h.get("handle")) for h in read_json(registry).get("handles") or []}
+    out: dict[str, dict] = {}
+
+    def add(agent: str, lane: str, handle: str | None, heard: float, branches: tuple[str, ...] = ()) -> None:
+        w = out.setdefault(agent, {"lane": lane, "handle": handle, "heard": heard, "branches": []})
+        w["lane"], w["handle"], w["heard"] = w["lane"] or lane, w["handle"] or handle, max(w["heard"], heard)
+        w["branches"] = sorted({*w["branches"], *branches})
+
+    for p in sorted(workers_d.glob("*.json")) if workers_d.is_dir() else []:
+        d = read_json(p)
+        if (m := AGENT_RE.fullmatch(str(d.get("agent_id") or ""))) and m[0] not in coords:
+            lane, by = str(d.get("lane") or ""), AGENT_RE.search(str(d.get("launched_by") or ""))
+            add(m[0], lane, (coords.get(by[0]) if by else None) or (lane if lane in names else None), p.stat().st_mtime,
+                (str(d["branch"]),) if d.get("branch") else ())
+    for p, heard, fm in recent_notes(notes, t):
         ids, lane = AGENT_RE.findall(fm.get("origin", "")), fm.get("lane") or p.parent.name
         launcher = next((coords[i] for i in ids if i in coords), None)
         for agent in ids:
             if agent not in coords:
                 add(agent, lane, lane if lane in names else launcher, heard)
     return out
+
+
+def note_times(notes: Path | None, t: float) -> tuple[dict[str, float], dict[str, set[str]]]:
+    """(agent id -> its newest note's mtime, agent id -> the branches its notes' origins name), over the notes `recent_notes`
+    gives: a note is an agent's when its `origin:` names it (`ZKS10, bc-...; code cursor/zk-frame-c7a9`)."""
+    heard: dict[str, float] = {}
+    named: dict[str, set[str]] = {}
+    for _, mtime, fm in recent_notes(notes, t):
+        origin = fm.get("origin", "")
+        for agent in AGENT_RE.findall(origin):
+            heard[agent] = max(heard.get(agent, mtime), mtime)
+            named.setdefault(agent, set()).update(BRANCH_RE.findall(origin))
+    return heard, named
+
+
+def pushed_branches(rec: dict) -> set[str]:
+    """The Verity branches an API record names: a run's or an agent's `git.branches[]` (`{repoUrl, branch}`, the agent's pushed
+    branches, the same on every run of it), and its `repos[].startingRef` when it works on that branch (`workOnCurrentBranch`)."""
+    out = {str(b["branch"]) for b in (rec.get("git") or {}).get("branches") or []
+           if isinstance(b, dict) and b.get("branch") and VERITY_REPO.search(str(b.get("repoUrl") or ""))}
+    if rec.get("workOnCurrentBranch"):
+        out |= {str(r["startingRef"]) for r in rec.get("repos") or [] if isinstance(r, dict) and r.get("startingRef")
+                and VERITY_REPO.search(str(r.get("url") or ""))}
+    return out
+
+
+def run_cmd(argv: list[str], stdin: str | None, timeout: float) -> tuple[int, str, str]:
+    """(rc, stdout, stderr) of a command; a command that can't start or runs past `timeout` is rc 255."""
+    try:
+        r = subprocess.run(argv, input=stdin, capture_output=True, text=True, timeout=timeout)
+    except (OSError, subprocess.TimeoutExpired) as e:
+        return 255, "", f"{type(e).__name__}: {e}"
+    return r.returncode, r.stdout, r.stderr
+
+
+def duration(s: object) -> str:
+    """A run's wall time as a person reads it: `40 s`, `12 min`, `2 h 05 min`; `?` when unknown."""
+    if not isinstance(s, (int, float)) or isinstance(s, bool) or s < 0:
+        return "?"
+    if s < 60:
+        return f"{s:.0f} s"
+    m = int(s // 60)
+    return f"{m} min" if m < 60 else f"{m // 60} h {m % 60:02d} min"
+
+
+# Run on a node over ssh (`python3 - ROOT SINCE`), standard library only: each run under ROOT/runs whose status.json changed at
+# or after SINCE (epoch s) and reads a terminal state, with who sent it (its request's `submitted_by`, else the `--by` its command
+# passes) and what it was, as one JSON list.
+RUNS_READER = r'''
+import json, os, sys
+root, since = sys.argv[1], float(sys.argv[2])
+def load(p):
+    try:
+        with open(p) as f:
+            d = json.load(f)
+    except (OSError, ValueError):
+        return {}
+    return d if isinstance(d, dict) else {}
+out, runs = [], os.path.join(root, "runs")
+try:
+    names = sorted(os.listdir(runs))
+except OSError:
+    names = []
+for n in names:
+    p = os.path.join(runs, n, "status.json")
+    try:
+        mtime = os.stat(p).st_mtime
+    except OSError:
+        continue
+    if not n.startswith("r") or mtime < since:
+        continue
+    st = load(p)
+    if st.get("state") not in ("done", "failed", "cancelled"):
+        continue
+    tr = st.get("transitions") or [{}]
+    job, req = load(os.path.join(runs, n, "job.json")), load(os.path.join(root, "requests", n, "request.json"))
+    cmd = [str(a) for a in (req.get("command") or (job.get("execution") or {}).get("command") or [])]
+    own, comp = job.get("ownership") or {}, job.get("computation") or {}
+    out.append({"run": n, "state": st.get("state"), "rc": st.get("rc"), "wall_s": st.get("wall_s"),
+                "ended": tr[-1].get("t_utc"), "mtime": mtime, "submitted_by": req.get("submitted_by") or "",
+                "by": cmd[cmd.index("--by") + 1] if "--by" in cmd[:-1] else "", "lane": own.get("lane") or "",
+                "job": own.get("job") or "", "stage": comp.get("stage") or "", "command": " ".join(cmd)[:200]})
+print(json.dumps(out))
+'''
+
+
+def machine(machines_d: Path, name: str) -> dict | None:
+    """A node's `machines.d/<name>.toml` (`research pods register --host`): host, port, user, root and python, with research's
+    defaults; None when it is missing or names no host."""
+    try:
+        m = tomllib.loads((machines_d / f"{name}.toml").read_text())
+    except (OSError, UnicodeDecodeError, tomllib.TOMLDecodeError):
+        return None
+    if not isinstance(m.get("host"), str) or not m["host"]:
+        return None
+    return {"port": 22, "user": "root", "root": "/workspace/research", "python": "python3", **m}
+
+
+def node_runs(cfg: dict, notes: Path | None, node: str, since: float,
+              sh: Callable[[list[str], str | None, float], tuple[int, str, str]]) -> tuple[list[dict] | None, str]:
+    """(the node's runs `RUNS_READER` lists from `since`, "") over one ssh (`cfg["ssh"]`, then `-p PORT user@host`), or (None,
+    why) when the node has no machines.d entry (`cfg["machines_d"]`, else the notes clone's) or doesn't answer."""
+    md = Path(cfg["machines_d"]) if cfg.get("machines_d") else notes / "machines.d" if notes else None
+    if (m := machine(md, node) if md else None) is None:
+        return None, f"no host for {node} in {md}/{node}.toml"
+    ssh = [str(a) for a in cfg.get("ssh") or ["ssh", "-o", "BatchMode=yes", "-o", "ConnectTimeout=15"]]
+    argv = [*ssh, "-p", str(m["port"]), f"{m['user']}@{m['host']}",
+            shlex.join([str(m["python"]), "-", str(m["root"]), f"{since:.0f}"])]
+    rc, out, err = sh(argv, RUNS_READER, 120)
+    try:
+        rows = json.loads(out) if rc == 0 else None
+    except ValueError:
+        rows = None
+    if not isinstance(rows, list):
+        return None, f"{node} unreadable (ssh exited {rc}: {err.strip()[-200:]})"
+    return rows, ""
+
+
+def print_runs(nodes: Path, notes: Path | None, hours: float) -> int:
+    """`agent_watch.py runs`: each node's runs that ended in the last `hours`, one JSON line each, as the watch would read them."""
+    cfg, rc = read_json(nodes), 0
+    for node in cfg.get("nodes") or []:
+        rows, why = node_runs(cfg, notes, str(node), time.time() - hours * 3600, run_cmd)
+        if rows is None:
+            print(why, file=sys.stderr)
+            rc = 1
+        for row in rows or []:
+            print(json.dumps({"node": node, **row}, sort_keys=True))
+    return rc
 
 
 def doorbells(path: Path, t: float) -> tuple[dict[str, float], str]:
@@ -363,9 +531,18 @@ class Watch:
     def __init__(self, api, log: Path, clock: Callable[[], float] = time.time, registry: Path | None = None,
                  routes: Path | None = None, wake: bool = False, timers: Path | None = None,
                  publish: Callable[[bytes, float], None] | None = None,
-                 notes: Path | None = None, worker_long_s: float = WORKER_LONG_S):
+                 notes: Path | None = None, worker_long_s: float = WORKER_LONG_S, git_remote: str | None = None,
+                 nodes: Path | None = None, sh: Callable[[list[str], str | None, float], tuple[int, str, str]] = run_cmd):
         self.api, self.log, self.clock, self.wake, self.publish = api, log, clock, wake, publish
         self.notes, self.worker_long_s = notes, worker_long_s
+        self.git_remote, self.nodes, self.sh = git_remote, nodes, sh
+        self.heads_path, self.ends_path = log.with_name("heads.json"), log.with_name("run_ends.json")
+        self.heads = read_json(self.heads_path)     # {"t0", "t", "heads": {branch: [sha, when the watch first saw it]}}
+        self.ends = read_json(self.ends_path)       # {"since", "nodes": {node: last read}, "seen": {node/run: when}}
+        self.heads_read = self.ends_read = -float("inf")
+        self.said: dict[str, float] = {}            # what failed -> when it was last printed
+        self.names: dict[str, str] = {}             # listed agent -> its name, for run_ended
+        self.branches: dict[str, set[str]] = {}     # listed agent -> the branches its run records name
         self.worker_status: dict[str, str] = {}             # worker -> its status as this sweep read it, for status.json
         self.registry, self.routes, self.timers = registry, routes, timers
         self.doorbells = ""                         # whether doorbells.json was fresh, stale or missing at the last sweep
@@ -385,6 +562,8 @@ class Watch:
         self.done: dict[str, float] = s.get("done", {})           # runs judged once (ERROR, stuck, unreadable) -> when
         self.woken: dict[str, float] = s.get("woken", {})         # agent -> when the watch last recorded it ready to wake
         self.workers: dict[str, dict] = s.get("workers", {})      # worker -> lane, handle, status, updated, since, read, ...
+        self.active: dict[str, float] = s.get("active", {})       # coordinator -> since when the watch has seen it ACTIVE
+        self.silent: dict[str, dict] = s.get("silent", {})        # agent -> {"from": its last activity, "rings"} while silent
         self.final: dict[str, dict] = {}                          # run -> its terminal record, never read again (not saved)
 
     def save(self) -> None:
@@ -394,12 +573,21 @@ class Watch:
         tmp = self.state_path.with_suffix(".tmp")
         tmp.write_text(json.dumps({"freed": self.freed, "errors": self.errors, "left": sorted(self.left),
                                    "pending": self.pending, "done": self.done, "woken": self.woken,
-                                   "workers": self.workers}) + "\n")
+                                   "workers": self.workers, "active": self.active, "silent": self.silent}) + "\n")
         tmp.replace(self.state_path)
 
-    def record(self, kind: str, r: Run, **detail) -> None:
+    def say(self, what: str, msg: str, t: float) -> None:
+        """Print a failure, at most once every `SAY_EVERY_S` for the same `what`."""
+        if t - self.said.get(what, -SAY_EVERY_S) >= SAY_EVERY_S:
+            self.said[what] = t
+            print(f"{iso(t)} {msg} (said at most once an hour)", file=sys.stderr, flush=True)
+
+    def record(self, kind: str, r: Run, *, judged: bool = True, **detail) -> None:
+        """A finding as a line of `--log`; one about a run the watch judges the agent by (not a `research run`'s end) is also
+        its status row's state."""
         rec = {"t": iso(self.clock()), "kind": kind, "agent": r.agent, "name": r.name, "run": r.run, **detail}
-        self.states[r.agent] = (r.run, kind, str(detail.get("since") or rec["t"]))
+        if judged:
+            self.states[r.agent] = (r.run, kind, str(detail.get("since") or rec["t"]))
         self.log.parent.mkdir(parents=True, exist_ok=True)
         with open(self.log, "a") as f:
             f.write(json.dumps(rec) + "\n")
@@ -649,6 +837,8 @@ class Watch:
             w = self.workers.setdefault(agent, {"heard": 0.0})
             w.update(lane=d["lane"] or w.get("lane") or "", handle=d["handle"] or w.get("handle"),
                      heard=max(w["heard"], d["heard"]))
+            if d["branches"]:
+                w["branches"] = sorted({*w.get("branches", []), *d["branches"]})
         self.worker_status, new = {}, 0
         for agent, w in sorted(self.workers.items()):
             if agent in listed or agent in coords:              # an agent the sweep reads already, or a coordinator now
@@ -679,6 +869,8 @@ class Watch:
                 continue
             status, updated, prev = str(info.get("status") or "unknown"), epoch(info.get("updatedAt")) or t, w.get("status")
             w.update(status=status, updated=updated, name=str(info.get("name") or w.get("name") or ""))
+            if pushed := pushed_branches(info):
+                w["branches"] = sorted({*w.get("branches", []), *pushed})
             self.worker_status[agent] = status
             r = Run(agent, "", w["name"])
             detail = {"lane": w["lane"], **({"handle": w["handle"]} if w.get("handle") else {})}
@@ -699,6 +891,120 @@ class Watch:
         if json.dumps(self.workers, sort_keys=True) != before:
             self.save()
 
+    def read_heads(self, t: float) -> None:
+        """Every `HEADS_EVERY_S`, Verity's branch heads (`git ls-remote --heads`, the deploy key fixtures_export.sh fetches with):
+        a branch whose sha moved, or that appeared, was pushed when the watch saw it; `heads.json` keeps them across restarts."""
+        if not self.git_remote or t - self.heads_read < HEADS_EVERY_S:
+            return
+        self.heads_read = t
+        rc, out, err = self.sh(["git", "ls-remote", "--heads", self.git_remote], None, 120)
+        if rc != 0:
+            self.say("heads", f"git ls-remote {self.git_remote} exited {rc}: {err.strip()[-200:]}; no one is judged silent "
+                              "while the heads are stale", t)
+            return
+        old, new = self.heads.get("heads") or {}, {}
+        for line in out.splitlines():
+            sha, _, ref = line.strip().partition("\t")
+            if ref.startswith("refs/heads/") and sha:
+                b = ref[len("refs/heads/"):]
+                new[b] = old[b] if isinstance(old.get(b), list) and old[b][0] == sha else [sha, t]
+        self.heads = {"t0": self.heads.get("t0", t), "t": t, "heads": new}
+        write_atomic(self.heads_path, (json.dumps(self.heads, sort_keys=True) + "\n").encode())
+
+    def watch_silence(self, known: dict[str, dict], t: float) -> None:
+        """Record `silent` for each agent in `known` (agent -> {name, handle, lane, run, since: ACTIVE since, branches}) with no
+        note of its (`note_times`) and no push to its branches (its own, the ones its notes name, and every head ending in its
+        id's last four characters, as a coordinator's `cursor/...-1037`) for `SILENT_S`, counted from the latest of those, its
+        ACTIVE spell's start and the first heads read; again after a second window, then not until one of those moves. Needs
+        `--notes` and heads read in the last `HEADS_STALE_S`."""
+        changed = False
+        for agent in [a for a in self.silent if a not in known]:
+            self.silent.pop(agent)
+            changed = True
+        if self.notes is None or not self.git_remote or t - self.heads.get("t", -HEADS_STALE_S) >= HEADS_STALE_S:
+            if changed:
+                self.save()
+            return
+        heard, named = note_times(self.notes, t)
+        heads = self.heads.get("heads") or {}
+        for agent, k in sorted(known.items()):
+            mine = {*k["branches"], *named.get(agent, ()), *(b for b in heads if b.endswith("-" + agent[-4:]))}
+            pushed = max((heads[b][1] for b in mine if b in heads), default=None)
+            last = max(x for x in (k["since"], heard.get(agent), pushed, self.heads["t0"]) if x is not None)
+            s = self.silent.get(agent)
+            if s and s["from"] != last:
+                self.silent.pop(agent)
+                s, changed = None, True
+            n = s["rings"] if s else 0
+            if n >= SILENT_RINGS or t - last < SILENT_S * (n + 1):
+                continue
+            self.silent[agent] = {"from": last, "rings": n + 1}
+            changed = True
+            self.record("silent", Run(agent, k["run"], k["name"]), since=iso(last), minutes=int((t - last) // 60),
+                        active_minutes=int((t - k["since"]) // 60), window=n + 1, lane=k["lane"],
+                        branches=sorted(b for b in mine if b in heads) or sorted(mine),
+                        **({"handle": k["handle"]} if k["handle"] else {}))
+        if changed:
+            self.save()
+
+    def run_ends(self, coords: dict[str, str], t: float) -> None:
+        """Every `every_s` of `--nodes` (`{"nodes": [...], "ssh": [...], "machines_d"?, "every_s"?}`), each node's runs that
+        ended since its last read (`RUNS_READER`, one ssh per node, host and root from its machines.d entry), each recorded once
+        as `run_ended` for the handle of whoever sent it: a coordinator's own, a worker's launcher's (only its coordinator can
+        resume it, with Task), else its lane's (`--by`, or the job's lane) when that is a handle. A run no handle owns is skipped.
+        `run_ends.json` keeps each node's last read and the runs already seen; runs that ended before the first read are not
+        rung."""
+        cfg = read_json(self.nodes)
+        nodes = [str(n) for n in cfg.get("nodes") or []]
+        every = cfg.get("every_s") if isinstance(cfg.get("every_s"), (int, float)) else RUN_ENDS_EVERY_S
+        if not nodes or t - self.ends_read < every:
+            return
+        self.ends_read = t
+        st = {"since": self.ends.get("since", t), "nodes": dict(self.ends.get("nodes") or {}),
+              "seen": {k: v for k, v in (self.ends.get("seen") or {}).items() if v >= t - RUN_ENDS_KEEP_S}}
+        handles = {str(h.get("handle")) for h in read_json(self.registry).get("handles") or []}
+        quiet = {str(h) for h in cfg.get("quiet_handles") or []}
+        for node in nodes:
+            since = max(st["since"], st["nodes"].get(node, st["since"])) - RUN_ENDS_SLACK_S
+            rows, why = node_runs(cfg, self.notes, node, since, self.sh)
+            if rows is None:
+                self.say(f"node {node}", f"run ends: {why}", t)
+                continue
+            st["nodes"][node] = t
+            for row in rows:
+                if not isinstance(row, dict) or (key := f"{node}/{row.get('run')}") in st["seen"]:
+                    continue
+                st["seen"][key] = t
+                ended = epoch(row.get("ended")) or row.get("mtime") or t
+                if ended >= st["since"]:
+                    self.ring_run(node, row, coords, handles, ended, quiet)
+        self.ends = st
+        write_atomic(self.ends_path, (json.dumps(st, sort_keys=True) + "\n").encode())
+
+    def ring_run(self, node: str, row: dict, coords: dict[str, str], handles: set[str], ended: float,
+                 quiet: set[str] = frozenset()) -> None:
+        by = AGENT_RE.search(str(row.get("submitted_by") or ""))
+        agent = by[0] if by else ""
+        lane = next((x for x in (row.get("by"), row.get("lane")) if x in handles), None)
+        w = self.workers.get(agent) or {}
+        if agent in coords:
+            handle, role, name = coords[agent], "coordinator", self.names.get(agent, "")
+        elif w.get("handle"):
+            handle, role, name = w["handle"], "worker", str(w.get("name") or "")
+        elif lane:
+            handle, role, name = lane, "lane", ""
+        else:
+            print(f"{iso(self.clock())} run ends: {node} {row.get('run')} sent by {row.get('submitted_by') or row.get('by') or '?'}"
+                  ", which no handle owns: not rung", file=sys.stderr, flush=True)
+            return
+        if handle in quiet:
+            return
+        what = row.get("job") or row.get("stage") or " ".join(str(row.get("command") or "").split()[:4]) or "?"
+        self.record("run_ended", Run(agent, str(row.get("run")), name), judged=False, handle=handle, role=role, node=node,
+                    what=what[:80],
+                    rc=row.get("rc"), state=row.get("state"), after=duration(row.get("wall_s")), at=iso(ended),
+                    lane=w.get("lane") or lane or "")
+
     def sweep(self, start_stream: Callable[[Run], None]) -> None:
         """One pass: find each live agent's current run and follow it, record runs stuck in CREATING, restart an ERROR one,
         start refused continue runs, then judge every followed run."""
@@ -718,6 +1024,8 @@ class Watch:
             latest = a["latestRunId"]
             if (runs := self.runs_of(a, t)) is None:
                 continue
+            if pushed := set().union(*(pushed_branches(x) for x in runs)):
+                self.branches[a["id"]] = pushed
             follow = next((x for x in runs if x.get("status") in FOLLOW and not str(x.get("id")).startswith(GOAL)), None)
             newer_started = False                       # a CREATING run with a newer one started after it blocks nothing,
             for x in runs if follow is None else ():    # and one behind a followed run waits for it, judged in its place
@@ -763,6 +1071,24 @@ class Watch:
             if why := self.ready(info.get("status"), last, bells.get(handle), t, every.get(handle)):
                 self.wake_up(a, handle, run, why, t)
         self.watch_workers(coords, listed, t)
+        self.names = {a["id"]: str(a.get("name") or "") for a in agents}
+        known, active = {}, {}
+        for a in agents:
+            if a["id"] in coords and a.get("status") == "ACTIVE":
+                active[a["id"]] = since = self.active.get(a["id"], t)
+                known[a["id"]] = {"name": self.names[a["id"]], "handle": coords[a["id"]], "lane": coords[a["id"]],
+                                  "run": (judges.get(a["id"]) or {}).get("id") or a.get("latestRunId") or "", "since": since,
+                                  "branches": sorted(self.branches.get(a["id"], set()) | pushed_branches(a))}
+        if active != self.active:
+            self.active = active
+            self.save()
+        for agent, w in self.workers.items():
+            if w.get("status") == "ACTIVE" and not w.get("gone") and w.get("since") is not None:
+                known[agent] = {"name": str(w.get("name") or ""), "handle": w.get("handle"), "lane": w.get("lane") or "",
+                                "run": "", "since": w["since"], "branches": list(w.get("branches") or [])}
+        self.read_heads(t)
+        self.watch_silence(known, t)
+        self.run_ends(coords, t)
         for run, (a, x) in current.items():
             with self.lock:
                 r = self.runs.get(run)
@@ -950,7 +1276,17 @@ def main(argv: list[str] | None = None) -> int:
     lp.add_argument("--dry-run", action="store_true", help="send no POST; print each instead")
     lp.add_argument("--notes", type=Path, default=None, help="a research-notes clone: its recent notes' origins name workers")
     lp.add_argument("--worker-long-h", type=float, default=WORKER_LONG_S / 3600, help="hours ACTIVE before a worker is recorded")
+    lp.add_argument("--git-remote", default=None,
+                    help="Verity's remote, for `git ls-remote --heads` (pushes; without it nobody is judged silent)")
+    lp.add_argument("--nodes", type=Path, default=Path("/data/agent-watch/nodes.json"),
+                    help="the nodes whose ended runs ring their sender's handle (no file: none)")
+    rp = sub.add_parser("runs", help="print each node's runs that ended in the last --hours, as the watch reads them; record nothing")
+    rp.add_argument("--nodes", type=Path, default=Path("/data/agent-watch/nodes.json"))
+    rp.add_argument("--notes", type=Path, default=None, help="the notes clone whose machines.d names the nodes' hosts")
+    rp.add_argument("--hours", type=float, default=2.0)
     ns = ap.parse_args(argv)
+    if ns.cmd == "runs":
+        return print_runs(ns.nodes, ns.notes, ns.hours)
     key = os.environ.get("CURSOR_API_KEY")
     if not key:
         print("agent_watch: no CURSOR_API_KEY in the environment", file=sys.stderr)
@@ -970,7 +1306,7 @@ def main(argv: list[str] | None = None) -> int:
         publish = Publisher(url) if not ns.dry_run else (
             lambda body, t: print(f"dry-run: would publish {len(body)} bytes to {STATUS_TABLE}", file=sys.stderr, flush=True))
     watch = Watch(api, ns.log, registry=ns.registry, routes=ns.routes, timers=ns.timers, wake=ns.wake, publish=publish, notes=ns.notes,
-                  worker_long_s=ns.worker_long_h * 3600)
+                  worker_long_s=ns.worker_long_h * 3600, git_remote=ns.git_remote, nodes=ns.nodes)
     if ns.once:
         watch.sweep(lambda r: None)
         return 0

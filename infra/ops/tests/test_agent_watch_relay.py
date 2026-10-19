@@ -161,3 +161,32 @@ def test_a_wake_cursor_refuses_with_409_posts_nothing(relay):
         line("run-v", "ready_to_wake", handle="vllm", reason="nothing has run for 40 min", action="started run-z")]) + "\n"
     relay.once()
     assert len(relay.posts) == 1 and "run-v" in relay.posts[0] and relay.OFFSET.read_text() == "2"
+
+
+def test_a_silent_agent_and_an_ended_run_lead_with_the_records_handle_and_ring_it(relay):
+    proofs = relay.slack.tag(relay.slack.entry(relay.REG, "proofs"))
+    w, co = "bc-22222222-2222-2222-2222-222222222222", PROOFS_INBOX["holder"]
+    relay.log_text["text"] = "\n".join(json.dumps(r) for r in [
+        {"kind": "silent", "agent": w, "name": "ZKS10", "run": "", "handle": "proofs", "lane": "proofs", "minutes": 90,
+         "active_minutes": 95, "window": 1, "since": "2026-10-19T03:00:00Z"},
+        {"kind": "silent", "agent": w, "name": "ZKS10", "run": "", "handle": "proofs", "lane": "proofs", "minutes": 180,
+         "active_minutes": 185, "window": 2, "since": "2026-10-19T03:00:00Z"},
+        {"kind": "run_ended", "agent": w, "name": "ZKS10", "run": "r20261019-040000-ab12", "handle": "proofs", "role": "worker",
+         "node": "vy-nebius-1", "what": "sweep-a", "rc": 0, "state": "done", "after": "1 h 06 min"},
+        {"kind": "run_ended", "agent": co, "name": "verity: proofs", "run": "r20261019-040000-cd34", "handle": "proofs",
+         "role": "coordinator", "node": "vy-nebius-2", "what": "lean build", "rc": 1, "state": "failed", "after": "12 min"},
+        {"kind": "run_ended", "agent": "", "name": "", "run": "r20261019-040000-ef56", "handle": "proofs", "role": "lane",
+         "node": "vy-nebius-2", "what": "slot --by proofs --", "rc": 0, "state": "done", "after": "30 s"}]) + "\n"
+    relay.once()
+    link = f"<https://cursor.com/agents/{w}|{w}>"
+    assert relay.posts == [
+        f"{proofs} *Agent watch:* agent ZKS10 ({link}) has been ACTIVE 95 min with no note and no push for 90 min; check on it.",
+        f"{proofs} *Agent watch:* agent ZKS10 ({link}) has been ACTIVE 185 min with no note and no push for 180 min; check on "
+        "it. Second window: the last ring until it shows activity.",
+        f"{proofs} *Agent watch:* run r20261019-040000-ab12 (sweep-a) of worker ZKS10 ({link}) ended rc=0 after 1 h 06 min on "
+        "vy-nebius-1; resume ZKS10 with Task.",
+        f"{proofs} *Agent watch:* your run r20261019-040000-cd34 (lean build) (<https://cursor.com/agents/{co}|{co}>) ended rc=1 "
+        "after 12 min on vy-nebius-2; resume.",
+        f"{proofs} *Agent watch:* run r20261019-040000-ef56 (slot --by proofs --) of lane proofs ended rc=0 after 30 s on "
+        "vy-nebius-2."]
+    assert [r["thread_ts"] for r in rings(relay)] == [PROOFS_INBOX["inbox_ts"]] * 5
