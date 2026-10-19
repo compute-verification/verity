@@ -27,7 +27,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Literal
 
-from .integer import BLACKWELL_SM120_S8_M16N8K32
+from .integer import BLACKWELL_SM100_S8_K32, BLACKWELL_SM120_S8_M16N8K32, HOPPER_SM90_S8_K32
 from .models import (
     ADA_BF16_M16N8K16,
     ADA_E4M3_M16N8K32,
@@ -455,6 +455,65 @@ INSTRUCTIONS: dict[str, Instruction] = {
                       "r20261015-084000-06d8 (tc-evidence art:67b817fc8b2237694c271a97110f6a9881644c4d7701cdd4abcc090b3d220148)",
                       "census r20261015-062626-f65b: IMMA.16832 at 1,023.6 MACs/SM/clk (QMMA.16832: 1,023.8), 16 SMSP cycles "
                       "per warp MMA, dependent latency 27.2 cycles"),
+        ),
+        # --- the int8 grid's instruction on the datacenter cards (lane compute-accounting, 2026-10-19) -------------
+        # One function on every card: these entries' models are sm120.mma.m16n8k32.s8's step under each arch's name.
+        # benchmarks/tc_probe/trust.py computed PINNED (P1-P5) from the store on 2026-10-19 before these entries said so;
+        # each measured on one card, which is its anchor.
+        _i(
+            id="sm90.wgmma.m64n8k32.s8",
+            sm="sm_90",
+            ptx="wgmma.mma_async.sync.aligned.m64n8k32.s32.s8.s8.satfinite",
+            shape=(64, 8, 32),
+            a_dtype="s8", b_dtype="s8", acc_dtype="s32", scale=None,
+            model=HOPPER_SM90_S8_K32,
+            status="pinned",
+            dossier="art:c222e6aa27484eb4a5b5aab7131c7e0a2f843e1bbb441c072705c7df1a17deb6",
+            anchor_device="NVIDIA H200",
+            evidence=(HOPPER_SM90_S8_K32.validated,
+                      "SASS IGMMA.64x8x32.S8.S8.SAT, one per tile kernel; 0 mismatches over 10,254,336 elements: "
+                      "r20261019-043020-f267 (tc-evidence art:240115d34164094f3254ce6c2c68aff72eda20cc62195b7150d990fa226ba14c)"),
+        ),
+        _i(
+            id="sm90.mma.m16n8k32.s8",
+            sm="sm_90",
+            ptx="mma.sync.aligned.m16n8k32.row.col.satfinite.s32.s8.s8.s32",
+            shape=(16, 8, 32),
+            a_dtype="s8", b_dtype="s8", acc_dtype="s32", scale=None,
+            model=HOPPER_SM90_S8_K32,
+            status="pinned",
+            dossier="art:c096491133b0b29c7de13f61da53b485181c2e787d75a531921445b4e759c1c8",
+            anchor_device="NVIDIA H200",
+            evidence=(HOPPER_SM90_S8_K32.validated,
+                      "SASS IMMA.16832.S8.S8.SAT, one per tile kernel; 0 mismatches over 10,243,968 elements: "
+                      "r20261019-043020-f267 (tc-evidence art:685ea38bbfba1f93c37a73587b3d8ae365d452e70427afcfaa60d5bdd4e746ac)"),
+        ),
+        _i(
+            id="sm100.tcgen05.mma.s8",
+            sm="sm_100",
+            ptx="tcgen05.mma.cta_group::1.kind::i8 [d_tmem], a_desc, b_desc, idesc(s8 x s8 -> s32, saturate, M128 N32 K32, "
+                "K-major), enable_input_d",
+            shape=(128, 32, 32),
+            a_dtype="s8", b_dtype="s8", acc_dtype="s32", scale=None,
+            model=BLACKWELL_SM100_S8_K32,
+            status="pinned",
+            dossier="art:919827b671e809b6410ba2f17d587b3cf516705aecd2815d84f7e914abf2cb8c",
+            evidence=(BLACKWELL_SM100_S8_K32.validated,
+                      "SASS UTCIMMA, one per tile kernel; 0 mismatches over 10,334,208 elements: "
+                      "r20261019-042817-8fd3 (tc-evidence art:643f9653b0c66bd3668e204c6cda6681ced32f2003138061a365a1ee3f401939)"),
+        ),
+        _i(
+            id="sm100.mma.m16n8k32.s8",
+            sm="sm_100",
+            ptx="mma.sync.aligned.m16n8k32.row.col.satfinite.s32.s8.s8.s32",
+            shape=(16, 8, 32),
+            a_dtype="s8", b_dtype="s8", acc_dtype="s32", scale=None,
+            model=BLACKWELL_SM100_S8_K32,
+            status="pinned",
+            dossier="art:e643f46610121a534fc3c78045df77681bae7670e1f50abfa9c5dbb2f90411a1",
+            evidence=(BLACKWELL_SM100_S8_K32.validated,
+                      "SASS IMMA.16832.S8.S8.SAT, one per tile kernel; 0 mismatches over 10,243,968 elements: "
+                      "r20261019-042817-8fd3 (tc-evidence art:dbe41cd4d04534db4a7ac27d01950e172d4a12e9714e59abd04c6f88143a613a)"),
         ),
         # --- Blackwell datacenter (sm_100, tcgen05) ---------------------------------------------------------------
         _i(

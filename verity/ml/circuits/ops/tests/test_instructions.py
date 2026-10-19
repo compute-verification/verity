@@ -22,6 +22,8 @@ from verity.ml.circuits.silicon.models import (
     ADA_E5M2_M16N8K32,
     HOPPER_E5M2_K32,
     BLACKWELL_SM120_S8_M16N8K32,
+    BLACKWELL_SM100_S8_K32,
+    HOPPER_SM90_S8_K32,
     Model,
 )
 
@@ -42,6 +44,10 @@ EXPECTED_IDS = {
     "sm120.mma.m16n8k64.e2m1.nvf4",
     "sm120.mma.m16n8k64.e2m1.mxf4",
     "sm120.mma.m16n8k32.s8",
+    "sm90.wgmma.m64n8k32.s8",
+    "sm90.mma.m16n8k32.s8",
+    "sm100.tcgen05.mma.s8",
+    "sm100.mma.m16n8k32.s8",
     "sm100.tcgen05.mma.e2m1.nvf4",
     "sm100.tcgen05.mma.e2m1.mxf4",
     "sm100.tcgen05.mma.bf16",
@@ -75,11 +81,16 @@ def test_pinned_instructions_and_their_models() -> None:
         "sm120.mma.m16n8k64.e2m1.nvf4": BLACKWELL_SM120_NVF4,      # lane fp4-proof 2026-09-22: 5090, 17.3M (fp4-re + fresh seed), 0 mismatches
         "sm120.mma.m16n8k64.e2m1.mxf4": BLACKWELL_SM120_MXF4,      # lane fp4-proof 2026-09-22: 5090, 14.4M, 0 mismatches
         "sm120.mma.m16n8k32.s8": BLACKWELL_SM120_S8_M16N8K32,      # lane compute-accounting 2026-10-15: RTX PRO 6000, 10.2M, 0 mismatches
+        "sm90.wgmma.m64n8k32.s8": HOPPER_SM90_S8_K32,              # lane compute-accounting 2026-10-19: H200, 10.3M, 0 mismatches
+        "sm90.mma.m16n8k32.s8": HOPPER_SM90_S8_K32,                # the same run: 10.2M, 0 mismatches
+        "sm100.tcgen05.mma.s8": BLACKWELL_SM100_S8_K32,            # lane compute-accounting 2026-10-19: B200, 10.3M, 0 mismatches
+        "sm100.mma.m16n8k32.s8": BLACKWELL_SM100_S8_K32,           # the same run: 10.2M, 0 mismatches
     }
     # registry <= computed level (lane pin-bf16): the sm120 FP4 pair flipped to "pinned" only once benchmarks/tc_probe/trust.py
     # computed PINNED (P2 closed by fp4-proof's fresh-seed sweeps), and each points at its published dossier
     for iid in ("sm120.mma.m16n8k64.e2m1.nvf4", "sm120.mma.m16n8k64.e2m1.mxf4", "sm120.mma.m16n8k32.e4m3", "sm120.mma.m16n8k32.e5m2",
-                "sm120.mma.m16n8k32.s8"):
+                "sm120.mma.m16n8k32.s8", "sm90.wgmma.m64n8k32.s8", "sm90.mma.m16n8k32.s8", "sm100.tcgen05.mma.s8",
+                "sm100.mma.m16n8k32.s8"):
         ins = INSTRUCTIONS[iid]
         assert ins.status == "pinned" and ins.dossier is not None and ins.dossier.startswith("art:")
     # measured on the PRO 6000 only: its entry names that anchor, as the e4m3 target does

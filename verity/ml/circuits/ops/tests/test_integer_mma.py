@@ -9,9 +9,11 @@ import pytest
 from verity.ml.circuits.silicon.errors import InvalidArtifact
 from verity.ml.circuits.silicon.instructions import INSTRUCTIONS
 from verity.ml.circuits.silicon.integer import (
+    BLACKWELL_SM100_S8_K32,
     BLACKWELL_SM120_S8_M16N8K32,
     BLACKWELL_SM120_S8_M16N8K32_WRAP,
     BLACKWELL_SM120_U8S8_M16N8K32,
+    HOPPER_SM90_S8_K32,
     S32_MAX,
     S32_MIN,
     decode_int8,
@@ -138,6 +140,31 @@ def test_u8s8_sibling_wraps_the_exact_dot() -> None:
         exact = c + sum(x * y for x, y in zip(a, b))
         d = P.BlackwellU8S8ImmaDot32.evaluate(s32_word(c), *a, *[code(y) for y in b])
         assert d == U8S8.step(s32_word(c), a, [code(y) for y in b]) == exact & 0xFFFFFFFF
+
+
+@pytest.mark.parametrize("iid, model", [("sm90.wgmma.m64n8k32.s8", HOPPER_SM90_S8_K32), ("sm90.mma.m16n8k32.s8", HOPPER_SM90_S8_K32),
+                                        ("sm100.tcgen05.mma.s8", BLACKWELL_SM100_S8_K32),
+                                        ("sm100.mma.m16n8k32.s8", BLACKWELL_SM100_S8_K32)])
+def test_the_datacenter_cards_compute_the_sm120_step(iid, model) -> None:
+    """The H200's and B200's integer instructions are sm_120's step under their own arch's name: field for field, and on words
+    `BlackwellS8ImmaDot32_v1` itself, so one Definition (and the Boolean step `step_s8_bits` builds) serves all three cards."""
+    from dataclasses import fields
+
+    from verity.ml.circuits.ops import prims as P
+
+    ins = INSTRUCTIONS[iid]
+    assert ins.model is model and ins.status == "pinned" and ins.dossier.startswith("art:") and MODELS[model.name] is model
+    assert ins.sm == model.arch and ins.acc_dtype == "s32"
+    for f in fields(model):
+        if f.name not in ("name", "arch", "validated"):
+            assert getattr(model, f.name) == getattr(SAT, f.name), f.name
+    rng = random.Random(7)
+    edges = [S32_MAX, S32_MIN, S32_MAX - 1000, S32_MIN + 1000, 0, -1]
+    for _ in range(300):
+        a = [rng.randrange(256) for _ in range(32)]
+        b = [rng.randrange(256) for _ in range(32)]
+        c = s32_word(rng.choice(edges) if rng.random() < 0.3 else rng.randrange(S32_MIN, S32_MAX + 1))
+        assert model.step(c, a, b) == P.BlackwellS8ImmaDot32.evaluate(c, *a, *b) == SAT.step(c, a, b)
 
 
 def test_refuses_words_outside_the_formats() -> None:

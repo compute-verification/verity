@@ -3,6 +3,8 @@
 
     s8_mma.py gen --family F --out CASES --meta META     the case file s8_mma.cu reads for family F (mma, wg or tc)
     s8_mma.py check --family F --cases CASES --meta META --words DIR --sass SASS --json OUT [--structured OUT2]
+    s8_mma.py evidence --family F --out-dir RUN_OUT --instruction ID --run RUN --json OUT
+                                                         one instruction's tc-evidence/v1 meta (benchmarks/tc_probe/trust.py)
 
 Families and their tiles (M x N, K = 32): ``mma`` mma.sync m16n8k32 (16 x 8, both cards), ``wg`` wgmma m64n8k32 (64 x 8,
 sm_90a), ``tc`` tcgen05.mma kind::i8 (128 x 32, sm_100a). Eight forms each (s8/u8 x s8/u8, saturating or not) run over the
@@ -343,6 +345,39 @@ def check(args) -> int:
     return 0 if ok else 1
 
 
+def evidence(args) -> int:
+    """The ``tc-evidence/v1`` meta (``benchmarks/tc_probe/trust.py``'s nested ``tc_evidence``) of one family's s8.s8 .satfinite
+    form in a run's outputs: its families with their word and mismatch counts against the registry instruction's model, and
+    its SASS."""
+    from verity.ml.circuits.silicon.instructions import INSTRUCTIONS
+
+    out = Path(args.out_dir)
+    ins = INSTRUCTIONS[args.instruction]
+    rep = json.loads((out / f"check-{args.family}.json").read_text())
+    meta = json.loads((out / f"meta-{args.family}.json").read_text())
+    form = rep["forms"]["s8s8_sat"]
+    sass = rep["sass"][f"{args.family}_s8s8_sat"]
+    gpu = (out / "gpu.txt").read_text().splitlines()[1].split(", ")
+    m, n, _ = rep["tile"]
+    model = ins.model.name
+    fams = {f["family"]: {"elements": f["tiles"] * m * n, "asserted": True,
+                          "mismatches": {model: form["mismatches_by_family"][f["family"]]}} for f in meta}
+    fams["specials"] = {**fams["extremes"], "asserted": False,
+                        "note": "integer operands have no special encodings: the extremes family's constant tiles of -128, 127, 255 and 0"}
+    te = {"instruction": ins.id, "sku": gpu[2], "arch": ins.sm, "driver": gpu[3], "gpu_uuid": gpu[1],
+          "nvcc": (out / "nvcc.txt").read_text().split("\n")[0].strip(), "seed": 20261015, "families": fams,
+          "total_mismatches_by_model": {model: form["mismatches"]},
+          "sass": {"single_instruction": sass["count"] == 1, "tile_kernel_mma_count": sass["count"], "expected_mma_count": 1,
+                   "ok": sass["count"] == 1, "opcode": sass["opcodes"]},
+          "clamp_hypotheses_consistent": form.get("clamp_hypotheses_consistent"), "form": "s8s8_sat",
+          "compared_against": form["model"]}
+    doc = {"run_id": args.run, "tc_evidence": te,
+           "workload_fingerprint": {"instruction": ins.id, "model": model, "probe": "benchmarks/pouw/dc/s8_mma.py"}}
+    Path(args.json).write_text(json.dumps(doc, indent=1))
+    print(json.dumps({k: v for k, v in te.items() if k != "families"}))
+    return 0 if form["mismatches"] == 0 and rep["ok"] else 1
+
+
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     sub = ap.add_subparsers(dest="cmd", required=True)
@@ -356,7 +391,13 @@ def main() -> int:
     for a in ("--cases", "--meta", "--words", "--sass", "--json"):
         c.add_argument(a, required=True)
     c.add_argument("--structured")
+    e = sub.add_parser("evidence")
+    e.add_argument("--family", required=True, choices=sorted(SHAPES))
+    for a in ("--out-dir", "--instruction", "--run", "--json"):
+        e.add_argument(a, required=True)
     a = ap.parse_args()
+    if a.cmd == "evidence":
+        return evidence(a)
     if a.cmd == "gen":
         A, B, C, meta = generate(a.family, a.seed)
         write_cases(Path(a.out), A, B, C)

@@ -27,6 +27,7 @@ there; the rates and the GEMM's exactness need the GPU (`run.sh`).
 | `probes/uchain.cuh`, `probes/sm90_async.cu`, `probes/sm100_async.cu` | The same 8 warp-uniform chains (now in `uchain.cuh`, shared with `uniform.cuh`) beside a *saturated async* tensor op (RT-ISA round 2 WATCH): on sm_90a, 4 wgmma s8 m64n256k32 a group, bare (`uwg_`), with an in-loop accumulator fold (`uwgf_`), and with the honest mma.sync step (`uwgh_`); on sm_100a, 4 tcgen05.mma i8 128×256×32 a group from one warp, bare (`utc_`) and with the honest step (`utch_`). K sweeps 0, 32, 64, 128; each loop's full SASS is pinned, so a chain that moves off its datapath refuses (`UNI_TABLES=async`) |
 | `probes/imad_forms.cuh`, `probes/sm90_imad.cu`, `probes/sm100_imad.cu` | The IMAD forms of duo's ALU work: IMAD.HI.U32 alone, beside duo against IMAD and LOP3, and duo with its LEA.HI as IMAD.HI + IMAD on every word (`f_duoi`) and on one in three (`f_duom`) |
 | `uni.sh`, `uniform.py` | Their job for one family and its analysis: UP (the uniform pipe), UNI's lines (UP; an issue slot on the issue rows; no other row, each row's limit recorded), every facet checked at every point, and the IMAD forms; `census --write` puts UNI's lines in the device directory, which census.py's `--write` keeps |
+| `probes/s8_mma.cu`, `s8_mma.py`, `s8_mma.sh` | The integer step's semantics on each card, one instruction a tile in eight forms (s8/u8 × s8/u8, with and without `.satfinite`): mma.sync m16n8k32 on both, wgmma m64n8k32 on sm_90a, tcgen05.mma kind::i8 128×32×32 on sm_100a (idesc bit 3 saturates), each against `verity.ml.circuits.silicon.integer` on sm_120's IMMA probe's families at its tile, with the clamp tiles; `s8_mma.py evidence` writes an instruction's `tc-evidence/v1`, which pinned `sm90.*.s8` and `sm100.*.s8` |
 
 The tests are `../tests/test_dc.py` (wgmma.cuh current, the twin against a per-word loop at L = 32 and 64 and against
 dgemm.cu's host reference, analyze's arithmetic, census.py's facets on a synthetic run, the device directories' form,
@@ -53,6 +54,7 @@ research run --on vy-dc-b200 ... --env UNI_TABLES=ldtm ... -- bash benchmarks/po
 research run --on vy-dc-b200 ... --env UNI_TABLES=async ... -- bash benchmarks/pouw/dc/uni.sh sm100   # uniform beside a saturated async tcgen05/wgmma
 python3 benchmarks/pouw/dc/uniform.py census ~/.research/runs/RUN/out ~/.research/runs/SAT_RUN/out... --write
 research run --on vy-dc-h200 ... --timeout 40m ... -- bash benchmarks/pouw/dc/ffill.sh     # ffill's conformance and cost
+research run --on vy-dc-h200 ... -- bash benchmarks/pouw/dc/s8_mma.sh sm90     # sm100 on vy-dc-b200: the integer step
 ~~~
 
 The node needs CUDA 13.0 (`/usr/local/cuda-13.0`, driver ≥ 580). Each run builds and SASS-gates everything before it

@@ -16,6 +16,13 @@ order (in each form with a signed operand; u8 x u8 sums only grow, so there ever
 Without it, D wraps modulo 2^32.  An earlier library-kernel probe (run r20261015-071801-6d3c, CUTLASS ``i16832gemm_s8``
 through ``torch._int_mm``) agrees: random int8 products exact to k = 133,120, and the s32 edge saturating.
 
+The datacenter cards compute the same function (`benchmarks/pouw/dc/s8_mma.py`, the same families at each instruction's tile).
+An H200 (sm_90a, run r20261019-043020-f267) ran ``wgmma.mma_async`` m64n8k32 (SASS ``IGMMA.64x8x32.<A>.<B>[.SAT]``) and
+``mma.sync`` m16n8k32; a B200 (sm_100a, run r20261019-042817-8fd3) ran ``tcgen05.mma.cta_group::1.kind::i8`` M128 N32 K32
+(SASS ``UTCIMMA``, the formats and the saturation in the instruction descriptor, its bit 3 ``.satfinite``) and ``mma.sync``
+m16n8k32.  Each of the eight forms of each instruction reproduces this module's step at its formats on every word, with the
+clamp at D.  `HOPPER_SM90_S8_K32` and `BLACKWELL_SM100_S8_K32` are that step under each architecture's name.
+
 `step_s8_bits` is the s8 x s8 step as a GF(2) circuit (`verity.ml.circuits.boolean.forms`), the builder of
 `verity.ml.circuits.ops.boolean.gemm.BlackwellS8ImmaDot32_v2`.
 """
@@ -34,6 +41,8 @@ __all__ = [
     "BLACKWELL_SM120_S8_M16N8K32",
     "BLACKWELL_SM120_S8_M16N8K32_WRAP",
     "BLACKWELL_SM120_U8S8_M16N8K32",
+    "BLACKWELL_SM100_S8_K32",
+    "HOPPER_SM90_S8_K32",
     "IntegerMma",
     "S32_MAX",
     "S32_MIN",
@@ -169,6 +178,45 @@ BLACKWELL_SM120_U8S8_M16N8K32 = IntegerMma(
     k_per_instruction=32,
     satfinite=False,
     validated="the u8.s8 form without .satfinite on the device: " + _PRO6000_IMMA_PROBE + "; out-of-range sums wrap modulo 2^32",
+)
+
+_DC_FORMS = (
+    "eight forms (s8.s8, s8.u8, u8.s8, u8.u8, each with and without .satfinite), each reproducing IntegerMma at its formats "
+    "on every word, the clamp tiles admitting only a clamp at D; CUDA 13.0 V13.0.88, driver 580.173.02, seed 20261015"
+)
+
+#: ``wgmma.mma_async.sync.aligned.m64nNk32.s32.s8.s8.satfinite`` and ``mma.sync.aligned.m16n8k32.row.col.satfinite.s32.s8.s8.s32``
+#: on sm_90a: the sm_120 step's function (``BLACKWELL_SM120_S8_M16N8K32``) under Hopper's name.
+HOPPER_SM90_S8_K32 = IntegerMma(
+    name="hopper_sm90_s8_k32",
+    arch="sm_90",
+    dtype="s8",
+    b_dtype="s8",
+    operand_bits=8,
+    k_per_instruction=32,
+    satfinite=True,
+    validated=(
+        "run r20261019-043020-f267 (NVIDIA H200, cc 9.0, sm_90a, GPU-8ca4992f): wgmma m64n8k32 (SASS IGMMA.64x8x32.<A>.<B>[.SAT], "
+        "one per tile kernel), 20,028 tiles, 10,254,336 words per form, and mma.sync m16n8k32 (IMMA.16832.<A>.<B>[.SAT]), "
+        "80,031 tiles, 10,243,968 words per form; " + _DC_FORMS
+    ),
+)
+
+#: ``tcgen05.mma.cta_group::1.kind::i8`` (idesc D s32, A and B s8, saturate) and ``mma.sync.aligned.m16n8k32.row.col.satfinite.
+#: s32.s8.s8.s32`` on sm_100a: the sm_120 step's function under datacenter Blackwell's name.
+BLACKWELL_SM100_S8_K32 = IntegerMma(
+    name="blackwell_sm100_s8_k32",
+    arch="sm_100",
+    dtype="s8",
+    b_dtype="s8",
+    operand_bits=8,
+    k_per_instruction=32,
+    satfinite=True,
+    validated=(
+        "run r20261019-042817-8fd3 (NVIDIA B200, cc 10.0, sm_100a, GPU-2e39ef52): tcgen05.mma kind::i8 M128 N32 K32 (SASS UTCIMMA, "
+        "one per tile kernel; idesc bit 3 selects .satfinite), 2,523 tiles, 10,334,208 words per form, and mma.sync m16n8k32 "
+        "(IMMA.16832.<A>.<B>[.SAT]), 80,031 tiles, 10,243,968 words per form; " + _DC_FORMS
+    ),
 )
 
 #: Baugh-Wooley's constant for one s8 x s8 product: the two negated rows' -(2^14 - 2^7) each

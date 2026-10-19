@@ -22,7 +22,9 @@ equal to `_v1` on every finite input.  A registered id denotes one function, so 
 `BlackwellS8ImmaDot32_v1` is sm_120's s8 `mma.sync` step with `.satfinite` (`integer.BLACKWELL_SM120_S8_M16N8K32`, an s32
 accumulator word), and `S32ToF32Rn_v1` the `cvt.rn.f32.s32` that hands its sum to an f32 epilogue.
 `BlackwellU8S8ImmaDot32_v1` is the step's one sibling, u8 by s8 without `.satfinite` (`integer.BLACKWELL_SM120_U8S8_M16N8K32`,
-wrapping modulo 2^32), from the same probe run.
+wrapping modulo 2^32), from the same probe run.  Both are also the H200's (sm_90a: `wgmma` m64nNk32 and `mma.sync` m16n8k32)
+and the B200's (sm_100a: `tcgen05.mma` kind::i8 and `mma.sync` m16n8k32) steps at the same formats: one function on every card
+(`integer.HOPPER_SM90_S8_K32`, `integer.BLACKWELL_SM100_S8_K32`), so a circuit over them names no architecture.
 """
 from __future__ import annotations
 
@@ -250,21 +252,27 @@ def E4m3ToF32(x: int) -> int:
 @primitive("BlackwellS8ImmaDot32", 1, [("acc", S32), ("a", A32_S8), ("b", A32_S8)], S32,
            conformance="exact-model-tested; RTX PRO 6000 Blackwell Server Edition (cc 12.0) IMMA.16832.S8.S8.SAT: run "
                        "r20261015-084000-06d8, 10,243,968 words, 0 mismatches, the clamp tiles admitting only a clamp at D (trust "
-                       "dossier art:86f39a17b5a0c8a8c92e5e25dcdfbee95d6f65408130bc1db6c54d440dfd8474, PINNED)")
+                       "dossier art:86f39a17b5a0c8a8c92e5e25dcdfbee95d6f65408130bc1db6c54d440dfd8474, PINNED); the same words on an "
+                       "H200 (IGMMA.64x8x32.S8.S8.SAT and IMMA.16832.S8.S8.SAT, run r20261019-043020-f267) and a B200 (UTCIMMA "
+                       "kind::i8 and IMMA.16832.S8.S8.SAT, run r20261019-042817-8fd3), each PINNED (silicon.instructions sm90.*.s8, "
+                       "sm100.*.s8)")
 def BlackwellS8ImmaDot32(acc: int, *ab: int) -> int:
     """One accumulator coordinate of `mma.sync.aligned.m16n8k32.row.col.satfinite.s32.s8.s8.s32` on sm_120a (SASS
     `IMMA.16832.S8.S8.SAT`): `acc` (an s32 word) plus the 32 exact s8 x s8 products, summed exactly and clamped once to
-    [-2^31, 2^31 - 1]. Total on every encoding: `integer.BLACKWELL_SM120_S8_M16N8K32.step`."""
+    [-2^31, 2^31 - 1]. Total on every encoding: `integer.BLACKWELL_SM120_S8_M16N8K32.step`. The same function on sm_90a
+    (`wgmma` m64nNk32 `.satfinite`, `mma.sync` m16n8k32) and sm_100a (`tcgen05.mma` kind::i8 saturating, `mma.sync`)."""
     return BLACKWELL_SM120_S8_M16N8K32.step(acc, list(ab[:32]), list(ab[32:64]))
 
 
 @primitive("BlackwellU8S8ImmaDot32", 1, [("acc", S32), ("a", A32_U8), ("b", A32_S8)], S32,
            conformance="exact-model-tested; RTX PRO 6000 Blackwell Server Edition (cc 12.0) IMMA.16832.U8.S8: run "
-                       "r20261015-084000-06d8, 10,243,968 words, 0 mismatches, out-of-range sums wrapping modulo 2^32")
+                       "r20261015-084000-06d8, 10,243,968 words, 0 mismatches, out-of-range sums wrapping modulo 2^32; the same "
+                       "words from the u8.s8 forms without .satfinite on an H200 (IGMMA.64x8x32.U8.S8, IMMA.16832.U8.S8, run "
+                       "r20261019-043020-f267) and a B200 (UTCIMMA kind::i8, IMMA.16832.U8.S8, run r20261019-042817-8fd3)")
 def BlackwellU8S8ImmaDot32(acc: int, *ab: int) -> int:
     """One accumulator coordinate of `mma.sync.aligned.m16n8k32.row.col.s32.u8.s8.s32` on sm_120a (SASS `IMMA.16832.U8.S8`):
     `acc` (an s32 word) plus the 32 exact u8 x s8 products, summed exactly and reduced modulo 2^32 (no `.satfinite`). Total on
-    every encoding: `integer.BLACKWELL_SM120_U8S8_M16N8K32.step`."""
+    every encoding: `integer.BLACKWELL_SM120_U8S8_M16N8K32.step`. The same function on sm_90a and sm_100a."""
     return BLACKWELL_SM120_U8S8_M16N8K32.step(acc, list(ab[:32]), list(ab[32:64]))
 
 
