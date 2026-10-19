@@ -26,6 +26,7 @@ import Proofs.Flock.Claims.Complete.ZkTables.Table
 import Proofs.Flock.Claims.Complete.ZkTables.Round0
 import Proofs.Flock.Claims.Complete.ZkTables.Pass
 import Proofs.Flock.Claims.Complete.ZkTables.Refuse
+import Proofs.Flock.Claims.Complete.ZkTables.Round1
 
 /-! Flock's completeness at the deployed masked verifier at any number of tables. The honest masked prover runs each
 table on its share of the witness (`Honest`: `traces`, `honestP`, which is `honestPZk` at one table); the record's
@@ -85,4 +86,6 @@ the tables' level-0 caps, each cap a function of its level's leaves, over `encod
 pair-coin and rank refusals at their slots (`Pass`: `sessionPZk_pass`, each rep sending exactly its rounds,
 `repPZk_exact`, its rank check at its claim points at its sends' coins, `repPZk_rank`),
 so one that does not return is sent as `[]` once its sends are answered (`Refuse`: `honestP_err`, `honestPR_err`,
-`feed_sim_ge`). -/
+`feed_sim_ge`). The session's second body is table `0` rep `0`'s first zerocheck squeeze, from the domain's transcript
+with the digest, the level-0 cap and the pads' root absorbed, or, where that table's extra claims throw, the session
+stops after the link message (`Round1`: `sessionPZk_go_round1`, `sessionPZk_go_round1_err`). -/
