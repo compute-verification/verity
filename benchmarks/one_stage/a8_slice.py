@@ -124,5 +124,50 @@ def ckpt_subset(ckpt: Path, layers: set[int], dst: Path, extra: frozenset[str] =
     return {"dir": str(ckpt), "layers": sorted(layers), "tensors": len(want), "bytes": off}
 
 
+EXPERT = re.compile(r"model\.layers\.(\d+)\.mlp\.experts\.(\d+)\.(gate_proj|up_proj|down_proj)\.(weight|weight_scale_inv)$")
+
+
+def ckpt_experts(ckpt: Path, layer: int, world: int, rank: int, dst: Path) -> dict:
+    """One safetensors file holding rank `rank` of `world`'s share of layer `layer`'s routed experts, under their checkpoint names:
+    each gate_proj/up_proj part's dim-0 row range and each down_proj part's dim-1 column range (weights and block scales alike),
+    byte for byte. `weights_of_record.compose` at world 1 over these is its world-`world` composition of the whole tensors whenever
+    each cut falls on the scale grid, which is checked here (the share of every block-scale dimension is whole)."""
+    want = []
+    for fn in sorted(p.name for p in ckpt.glob("*.safetensors")):
+        with open(ckpt / fn, "rb") as f:
+            n = int.from_bytes(f.read(8), "little")
+            hdr = json.loads(f.read(n))
+        for name, meta in hdr.items():
+            m = EXPERT.match(name)
+            if m and int(m[1]) == layer:
+                want.append((name, fn, 8 + n, meta, 1 if m[3] == "down_proj" else 0))
+    size = {"F8_E4M3": 1, "F32": 4, "BF16": 2}
+    header, off, cut = {}, 0, []
+    for name, _fn, _base, meta, d in want:
+        shape = list(meta["shape"])
+        if len(shape) != 2 or shape[d] % world:
+            raise ValueError(f"{name}: shape {shape} does not split by {world} along dim {d}")
+        n = shape[d] // world
+        cut.append((rank * n, (rank + 1) * n))
+        shape[d] = n
+        nb = shape[0] * shape[1] * size[meta["dtype"]]
+        header[name] = {"dtype": meta["dtype"], "shape": shape, "data_offsets": [off, off + nb]}
+        off += nb
+    hb = json.dumps(header).encode()
+    hb += b" " * (-len(hb) % 8)
+    with open(dst, "wb") as o:
+        o.write(len(hb).to_bytes(8, "little"))
+        o.write(hb)
+        for (name, fn, base, meta, d), (lo, hi) in zip(want, cut):
+            s, (R, C) = size[meta["dtype"]], meta["shape"]
+            a, b = meta["data_offsets"]
+            with open(ckpt / fn, "rb") as f:
+                f.seek(base + a)
+                buf = f.read(b - a)
+            o.write(buf[lo * C * s:hi * C * s] if d == 0 else b"".join(buf[i * C * s + lo * s:i * C * s + hi * s] for i in range(R)))
+    return {"dir": str(ckpt), "layer": layer, "world": world, "rank": rank, "tensors": len(want), "bytes": off,
+            "experts": len({EXPERT.match(w[0])[2] for w in want})}
+
+
 if __name__ == "__main__":
     raise SystemExit(main())
