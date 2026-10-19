@@ -1,10 +1,13 @@
 """served_h1's credit by the padded-window rule (PADCREDIT round 2 with RT10's fixes, coordinator 22:35Z and 22:39Z): credit
-only the selected slots, from selections that always-proved units compute from the raw committed rows.
+only the selected slots, from selections that always-proved units compute from the committed request queue.
 
-    admit     slot i of a call is selected iff its committed A row is not the canonical empty row (K zero bytes, scale 0):
-              the OR of the row's K + 4 bytes, a function of the raw row alone, no noise; the admit unit refuses a row of
-              zero bytes under a nonzero scale (`scale_only`), so a tile, which reads only the bytes, sees a dead row as
-              an all-zero row
+    queue     the scheduler's request queue, committed before the window's first coin (`queue_of`, `queue_leaves`): per
+              (step, slot) the index of the request in that slot (0 for none), per request the steps [start, stop) it is
+              live in (`pouw.circuit.admit`)
+    admit     slot i of a call at step t is selected iff the queue assigns it a request live at t (`queue_admit`, the
+              word of `PouwQueueAdmit`), never a function of the slot's row; the admit unit refuses a slot that is not
+              selected unless its row is the canonical empty row (K zero bytes, scale 0: `junk`), and a row of zero bytes
+              under a nonzero scale (`scale_only`), so a tile, which reads only the bytes, sees a dead row as an all-zero row
     words     a call's T admit bits as T / 16 words of 16 bits (bit b of word q is slot 16 q + b), one admit unit each: a
               proof unit's outputs are at most 16 bits; each word is its own hiding leaf, in the call's admit tree
     dead      a unit (32 slot rows by 32 weight rows) is dead iff its 32 slots' admit bits are all 0: its rows are the
@@ -16,7 +19,7 @@ only the selected slots, from selections that always-proved units compute from t
               window.level(window.floor_point(Cr)) and the published credit Pub = window.point(level) <= Cr
 
 Every admit unit and every tally unit is proved in every window (`proof_plan`); the draw is uniform over every unit position
-of the window, dead ones included, never weighted by an annotation.  Stdlib and numpy only.
+of the window, dead ones included, never weighted by an annotation.  Numpy and `pouw.circuit.admit`'s word.
 """
 from __future__ import annotations
 
@@ -29,9 +32,60 @@ WORD = 16
 LIMB = 1 << 16
 
 
-def admit(rows: np.ndarray) -> np.ndarray:
-    """(T,) bool: slot i is selected iff its committed row (K s8 bytes ‖ f32 scale, `commit.s8_rows`) has a nonzero byte."""
+def nonempty(rows: np.ndarray) -> np.ndarray:
+    """(T,) bool: slot i's committed row (K s8 bytes ‖ f32 scale, `commit.s8_rows`) is not the canonical empty row."""
     return np.asarray(rows, dtype=np.uint8).reshape(rows.shape[0], -1).any(axis=1)
+
+
+def queue_of(spans: Sequence[Sequence[tuple[str, int]]], steps: int, t: int) -> dict:
+    """The request queue from the scheduler's record: ``spans[s]``, step s's (request id, rows) in batch order, its rows the
+    step's slots in that order.  Requests take indices 1, 2, .. by first appearance; each is live from its first step to
+    one past its last.  Steps past the record are empty."""
+    from verity.core.protocols.pouw.circuit import admit as A
+    if len(spans) > steps:
+        raise ValueError(f"the record has {len(spans)} steps, past the window's {steps}")
+    index: dict[str, int] = {}
+    life: list[list[int]] = []
+    slot_map = np.zeros((steps, t), dtype=np.uint16)
+    for s, step in enumerate(spans):
+        at = 0
+        for rid, n in step:
+            if rid not in index:
+                index[rid] = len(index) + 1
+                life.append([s, s + 1])
+            q = index[rid]
+            life[q - 1][1] = s + 1
+            if at + n > t or q > A.M16:
+                raise ValueError(f"step {s}: request {rid}'s {n} rows past the call's {t} slots, or past 2^16 requests")
+            slot_map[s, at:at + n] = q
+            at += n
+    return {"slot_map": slot_map, "requests": [(0, 0)] + [tuple(x) for x in life], "ids": list(index)}
+
+
+def queue_admit(queue: dict, s: int) -> np.ndarray:
+    """(T,) bool: step s's admit bits, `PouwQueueAdmit`'s word on each 16 slots' queue entries."""
+    from verity.core.protocols.pouw.circuit import admit as A
+    q = [int(x) for x in queue["slot_map"][s]]
+    req = queue["requests"]
+    ws = [A.admit_word(s, q[g:g + WORD], [req[x][0] for x in q[g:g + WORD]], [req[x][1] for x in q[g:g + WORD]])
+          for g in range(0, len(q), WORD)]
+    return bits_of(ws)
+
+
+def queue_leaves(queue: dict) -> tuple[list[bytes], list[bytes]]:
+    """The queue's two tables' leaves: the slot map, one per (step, 16 slots), 16 u16 LE in step-major order; the requests,
+    (start, stop) as two u16 LE per index, the null request first, padded with null entries to S·T + 1 (every slot a request
+    of its own), so the table's size shows no request count."""
+    sm = queue["slot_map"]
+    slots = [np.ascontiguousarray(sm[s, g:g + WORD], dtype="<u2").tobytes() for s in range(sm.shape[0])
+             for g in range(0, sm.shape[1], WORD)]
+    reqs = list(queue["requests"]) + [(0, 0)] * (sm.size + 1 - len(queue["requests"]))
+    return slots, [int(a).to_bytes(2, "little") + int(b).to_bytes(2, "little") for a, b in reqs]
+
+
+def junk(rows: np.ndarray, bits: np.ndarray) -> list[int]:
+    """The slots the admit unit refuses: not selected, yet not the canonical empty row."""
+    return [int(i) for i in np.flatnonzero(nonempty(rows) & ~np.asarray(bits, dtype=bool))]
 
 
 def scale_only(rows: np.ndarray) -> list[int]:
@@ -106,8 +160,10 @@ def proof_plan(n_calls: int, t: int, steps: int, sites: Sequence[str], populatio
             "draw": "uniform over every unit position of the window, live or dead, by the window's draw coin: public "
                     "structure, never weighted by an annotation",
             "always_proved": {"admit": admit_units, "tally": tally_units, "total": admit_units + tally_units},
-            "admit_unit": "reads 16 slots' committed A rows (opened from the call's a-table), outputs their 16 admit bits "
-                          "(the OR of each row's bytes), the leaf of the call's admit tree it writes",
+            "admit_unit": "PouwQueueAdmit on the step and 16 slots' queue entries (the slot map's leaf and each slot's "
+                          "request entry, opened from the queue committed before the first coin), outputs their 16 admit "
+                          "bits, the leaf of the call's admit tree it writes; it opens the 16 slots' A rows from the call's "
+                          "a-table and refuses a slot not admitted whose row is not the canonical empty row",
             "tally_units": f"{steps * len(sites)} per (step, site) popcount sums (<= 2^11), {len(sites)} per-site sums over "
                            "the steps (< 2^16), and one level unit (window.level(floor_point(sum_site count N K)), <= 9 bits)",
             "dead_unit": "a drawn dead unit proves, with the live tile's proof shape (one gated template), that its 32 "
@@ -117,5 +173,5 @@ def proof_plan(n_calls: int, t: int, steps: int, sites: Sequence[str], populatio
                       "prefix [1] * m + [0] * (T - m) in every call)"}
 
 
-__all__ = ["admit", "bits_of", "live_blocks", "live_units", "proof_plan", "published", "scale_only", "tally", "word_rows",
-           "words"]
+__all__ = ["bits_of", "junk", "live_blocks", "live_units", "nonempty", "proof_plan", "published", "queue_admit", "queue_leaves",
+           "queue_of", "scale_only", "tally", "word_rows", "words"]

@@ -3,13 +3,13 @@
 
 The receipts bind extra work beside cuBLASLt's served y, not the served kernel's.  vllm's PoUW option
 (``pouw:eps1-sm120-h1fx1``, `verity_vllm.protocol_options.pouw_h1`) hands over each int8-exact linear call's s8 rows and scales
-and its layer, and holds every layer's root(B), the weights' root and the epoch's 64-byte salt from the challenger's salt coin
-(`pouw_h1.program_salt`).  Its own per-call positions and padding follow the step's real rows, so this window doesn't use
-them.  Instead:
+and its layer, and holds its own stand-in root(B) per layer (`pouw_h1.weight_root`), their weights' root and the epoch's
+64-byte salt from the challenger's salt coin (`pouw_h1.program_salt`).  Its own per-call positions, padding and stand-in
+roots follow the step's real rows, so this window doesn't use them (the seeded mode keeps the option's salt).  Instead:
 
 * **Public parameters**: the model, the batch slots (vLLM's ``max_num_seqs``), ``T`` rows a step (``max_num_batched_tokens``:
   the scheduler never puts more of a step's tokens in a linear), ``S`` steps and the max tokens.
-* **A side**: each (step s, linear w) call's A table holds all T slot rows, as AROW's row table (`commit.a_table`,
+* **A side**: each (step s, linear w) call's A table holds all T slot rows, as AROW's row table (`commit.s8_table`,
   `verity.ml.commitments.row_table`: K s8 bytes, then the f32 scale).  The step's real rows fill slots 0 .. m - 1, and every
   other slot is an empty row, committed like the rest: zero bytes with scale 0.  Since a served row's scale is never 0,
   "empty" is read from the committed row.  Steps past the last served one are all empty.  A row count never comes from the
@@ -18,15 +18,24 @@ them.  Instead:
 * **Units and positions**: the call's units are its T/32 row blocks by N/32 column blocks, at positions
   s·U + off(w) + u.  Here U = Σ_w (T/32)(N_w/32), off(w) is the sum over the linears before w, and u runs row block by row block.
   The units' count, S·U, is fixed by the public parameters.
-* **Selection** (`credit`): slot i is admitted iff its committed A row is not the canonical empty row, the OR of its bytes,
-  a function of the raw row alone.  A call's T admit bits are T/16 16-bit words, each its own hiding leaf of the call's
-  admit tree, written by an always-proved admit unit that reads the 16 rows.
+* **B side**: each linear's B table holds its N weight rows in the same row-table format (K s8 bytes, then the row's f32
+  weight scale), and the weights' root is the tree over the linears' B roots in linear order (`b_tables`).  It is registered
+  before every salt: the challenger's salt coin opens against the registration root over it and the queue's root.
+* **Request queue** (`credit.queue_of`): the scheduler's record of a reference pass over the same prompts (`schedule_tap`:
+  each engine step's requests and their rows in batch order) as the slot map (per step and slot, the request's index, 0
+  for none) and each request's live steps [start, stop), committed (`commit_queue`) before the first coin.  The served
+  pass's record must be the same queue.
+* **Selection** (`credit`): slot i of step t is admitted iff the queue assigns it a request live at t
+  (`pouw.circuit.admit.PouwQueueAdmit`), never a function of the row.  A call's T admit bits are T/16 16-bit words, each its
+  own hiding leaf of the call's admit tree, written by an always-proved admit unit that reads the 16 slots' queue entries
+  and refuses a slot it does not admit unless its row is the canonical empty row (`credit.junk`).
 * **Receipts**: `h1tile`'s unit on the GPU (`receipts.gated_receipts`) on every live unit, one with an admitted slot among
   its 32 rows.  Seeds come from the salt, the position and the call's (root(A), root(B)), inside the unit.  A dead unit skips
   the noise and the receipt: its leaf is the canonical empty receipt (zero words), so every receipt tree keeps its shape.
   There is one receipt tree per call.
 * **Coins** (``--coins``): seeded, the option's one salt, opened at install before serving; or live, a round a step from
-  the proof service's challenger (`pouw.window.live_challenger`, `sampled_proofs.challenger.LiveRecord`).  Step s's round
+  the proof service's challenger (`pouw.window.live_challenger`, `sampled_proofs.challenger.LiveRecord`), whose salt coin
+  opens first, against the registration root over the weights' root and the queue's root.  Step s's round
   root, over its A root and its admit root, is recorded before round s's coin opens, and the step's units take the round's
   salt (`h1tile.live_salt`: `window.round_key(...).stream(0, 64)`), so every candidate and every selection a round's noise
   reads is committed before that noise's coin.
@@ -40,8 +49,11 @@ In order, into OUT (`record.json` throughout, `manifest.json` at the end, the op
   timing    `noise.cu` over a call's per-unit noise against `torch._int_mm` of the same call, CUDA events, K = 4096 and 14336
   engine    the int8 pin and `engine.build.build_engine(target=from_device() + int8_exact)`, eager, prefix caching off, T and slots
   wrap      the fraction of weights that W' = B + c + U mod 2^8 wraps, per layer and site (`wrap_counts`)
-  reference the prompts generated with no option installed
-  install   the option: every layer's root(B), the weights' root, the challenger's salt coin opened after it, the salt
+  reference the prompts generated with no option installed, the scheduler's record taken (`schedule_tap`)
+  queue     the request queue from that record, committed
+  install   the option (its own stand-in weight roots and salt, unused under live coins)
+  weights   every linear's B table and root(B), the weights' root, and the registration root over it and the queue's root,
+            which the live challenger's salt coin opens against
   serve     the prompts again with the option; inside its `record`, each call's A table, admit words and receipts; then the
             empty steps; the token ids must be the reference's
   receipts  one receipt tree per call (one leaf per unit, `commit`)
@@ -52,9 +64,10 @@ In order, into OUT (`record.json` throughout, `manifest.json` at the end, the op
   gate      drawn units, live and dead, of real and empty steps, against the gated `h1tile.reference` (receipt) and the
             served integer product (z); controls: the unit at the next position, a flipped receipt bit, root(A) rebuilt (and
             a tampered row, real or empty), the tile's 32 A rows opened against root(A) and the step's A root and A' = -b
-            (the tile's B rows negated) refused there, its re-commitment moving both roots (CMP-38), root(B) rebuilt (and a
-            tampered row), the admit root rebuilt from the rows, a
-            dead unit's rows empty and its skipped noise real work, a tampered empty row admitted, a live unit not empty
+            (the tile's B rows negated) refused there, its re-commitment moving both roots (CMP-38), root(B) rebuilt, the
+            tile's 32 B rows opened against it and a tampered weight row refused, the admit root rebuilt from the queue, a
+            dead unit's rows empty and its skipped noise real work, a junk row in a slot the queue leaves unassigned refused
+            and not admitted, a live unit not empty
 
     cd integrations/vllm; PYTHONPATH=.:../..:../../tools/research/src:../../benchmarks/pouw/served_h1
     $PY ../../benchmarks/pouw/served_h1/serve.py --out OUT --cubin noise.cubin --at 2026-10-18T00:00:00Z --by compute-accounting
@@ -232,6 +245,105 @@ def step_roots(window: str, s: int, cs: list[dict]) -> dict:
     return {"fields": r_fields, "a_step": a_step, "admit_step": admit_step, "root": root}
 
 
+def schedule_tap(runner) -> tuple[list, dict, Any]:
+    """(spans, info, restore): each engine step's (request id, rows) in batch order, the order its token rows take in every
+    linear, read once the runner's `execute_model` returns, from the step's batch (the new runner's `gather_batch_req_state`
+    rows, else `execute_model_state.input_batch`, else the persistent `input_batch`) and its scheduled tokens.  ``info``
+    counts the steps whose rows don't sum to the step's scheduled tokens (``short``)."""
+    spans: list[list[tuple[str, int]]] = []
+    info: dict[str, Any] = {"src": None, "short": 0}
+    seen: dict[str, Any] = {}
+    orig_exec, orig_gather = runner.execute_model, getattr(runner, "gather_batch_req_state", None)
+
+    def gather_batch_req_state(*args, **kw):
+        res = orig_gather(*args, **kw)
+        bs = res[0] if isinstance(res, tuple) else res
+        if getattr(bs, "req_ids", None) is not None:
+            seen["batch"] = bs
+        return res
+
+    def execute_model(so, *args, **kw):
+        out = orig_exec(so, *args, **kw)
+        n_tok = int(getattr(so, "total_num_scheduled_tokens", 0) or 0)
+        if not n_tok:
+            return out
+        nst = dict(getattr(so, "num_scheduled_tokens", None) or {})
+        ib, src = seen.pop("batch", None), "gather_batch_req_state"
+        if ib is None:
+            ib, src = getattr(getattr(runner, "execute_model_state", None), "input_batch", None), "execute_model_state.input_batch"
+        if ib is None:
+            ib, src = getattr(runner, "input_batch", None), "input_batch"
+        ids = list(getattr(ib, "req_ids", None) or [])
+        n = int(getattr(ib, "num_reqs", len(ids)) or len(ids))
+        per_row = getattr(ib, "num_scheduled_tokens", None)
+        per_row = None if per_row is None or isinstance(per_row, dict) else [int(x) for x in per_row]
+        step = []
+        for i, rid in enumerate(ids[:n]):
+            k = per_row[i] if per_row is not None and i < len(per_row) else int(nst.get(rid, 0))
+            if rid is not None and k > 0:
+                step.append((str(rid), k))
+        info["src"] = src
+        info["short"] += int(sum(k for _, k in step) != n_tok)
+        spans.append(step)
+        return out
+
+    runner.execute_model = execute_model
+    if orig_gather is not None:
+        runner.gather_batch_req_state = gather_batch_req_state
+
+    def restore() -> None:
+        runner.execute_model = orig_exec
+        if orig_gather is not None:
+            runner.gather_batch_req_state = orig_gather
+
+    return spans, info, restore
+
+
+def commit_queue(window: str, key: bytes, queue: dict) -> dict:
+    """The queue's two hiding tables (`credit.queue_leaves`: 'queue-slots', one leaf per step and 16 slots; 'queue-requests',
+    padded to the public bound S·T + 1) and its root over their roots ('queue')."""
+    slots, reqs = CR.queue_leaves(queue)
+    sm = queue["slot_map"]
+    s_dom = CM.domain({"window": window, "steps": int(sm.shape[0]), "slots": int(sm.shape[1])}, len(slots), "queue-slots")
+    r_dom = CM.domain({"window": window, "requests": len(reqs)}, len(reqs), "queue-requests")
+    s_lv = CM.levels(s_dom, [CM.leaf(s_dom, key, "q", i, x)[0] for i, x in enumerate(slots)])
+    r_lv = CM.levels(r_dom, [CM.leaf(r_dom, key, "qr", i, x)[0] for i, x in enumerate(reqs)])
+    fields = {"window": window, "leaves": "queue-slots root, queue-requests root"}
+    root = CM.step_root(CM.domain(fields, 2, "queue"), [s_lv[-1][0], r_lv[-1][0]])
+    return {"root": root, "slots_root": s_lv[-1][0], "requests_root": r_lv[-1][0], "fields": fields,
+            "slot_leaves": len(slots), "request_leaves": len(reqs), "s_levels": s_lv, "r_levels": r_lv}
+
+
+def b_rows(layer) -> np.ndarray:
+    """A linear's B table rows (`commit.s8_rows`): each weight row's N s8 bytes, then its f32 weight scale."""
+    w = layer.weight.detach().cpu().numpy()
+    s = layer.weight_scale.detach().float().reshape(-1).cpu().numpy()
+    if s.size == 1:
+        s = np.full(w.shape[0], s[0], dtype=np.float32)
+    if s.size != w.shape[0]:
+        raise ValueError(f"a weight of {w.shape[0]} rows with {s.size} scales")
+    return CM.s8_rows(w, s)
+
+
+def b_fields(model: dict, w: int, module: str, n: int, k: int) -> dict:
+    return {"model": model, "layer": w, "module": module, "rows": n, "k": k, "schema": CM.SCHEMA}
+
+
+def b_tables(pool, model: dict, layers: list, names: dict, key: bytes, chunk: int = 2048) -> dict:
+    """Each linear's B table root (AROW's row-table format over `b_rows`, domain 'b-table', labels b/<w>), built in pool
+    tasks, and the weights' root, the tree over them in linear order ('weights')."""
+    roots = []
+    for w, m in enumerate(layers):
+        rows = b_rows(m)
+        n, k = int(m.weight.shape[0]), int(m.weight.shape[1])
+        dom = CM.domain(b_fields(model, w, names[w], n, k), n, "b-table")
+        got = pool.map(CM.leaves, [(dom.binding, dom.count, key, f"b/{w}", at, rows[at:at + chunk])
+                                   for at in range(0, n, chunk)], chunksize=1)
+        roots.append(CM.levels(dom, [x for g in got for x in CM.split(g)])[-1][0])
+    fields = {"model": model, "layers": len(layers)}
+    return {"roots": roots, "root": CM.step_root(CM.domain(fields, len(layers), "weights"), roots), "fields": fields}
+
+
 def run(a: argparse.Namespace) -> dict:
     import multiprocessing as mp
     import torch
@@ -284,8 +396,21 @@ def run(a: argparse.Namespace) -> dict:
     offs, u_step = static_layout([int(m.weight.shape[0]) for m in layers], t_max)
     rec.step("wrap", wrap_counts({names[w]: m for w, m in enumerate(layers)}))
 
-    reference = G.generate(eng.llm, prompts, a.max_tokens)
-    rec.step("reference", {"requests": len(reference), "tokens": sum(len(r["token_ids"]) for r in reference)})
+    ref_spans, ref_tap, restore = schedule_tap(eng.runner)
+    try:
+        reference = G.generate(eng.llm, prompts, a.max_tokens)
+    finally:
+        restore()
+    rec.step("reference", {"requests": len(reference), "tokens": sum(len(r["token_ids"]) for r in reference),
+                           "schedule": {"steps": len(ref_spans), "rows": [sum(k for _, k in x) for x in ref_spans], **ref_tap}})
+
+    window = os.environ.get("RESEARCH_RUN_ID") or "local"
+    key = os.urandom(64)
+    queue = CR.queue_of(ref_spans, s_max, t_max)
+    q_commit = commit_queue(window, key, queue)
+    rec.step("queue", {"root": q_commit["root"].hex(), "requests": len(queue["requests"]) - 1,
+                       "lifetimes": queue["requests"][1:], "assigned_per_step": [int((r > 0).sum()) for r in queue["slot_map"]],
+                       "slot_leaves": q_commit["slot_leaves"], "request_leaves": q_commit["request_leaves"]})
 
     option = f"pouw:{PH.SCHEME}"
     ctx = PO.Context(stage="serve", enabled=(option,), settings={"pouw": {"coins": Challenger(a.epoch), "retain_steps": 0,
@@ -298,8 +423,13 @@ def run(a: argparse.Namespace) -> dict:
                          "coins": h1.commits.get("coins"), "salt_opening": h1.commits.get("salt_opening"),
                          "weight_roots": {names[w]: r.hex() for w, r in sorted(h1.weight_roots.items())}, "roots": PH.ROOTS})
 
-    window = os.environ.get("RESEARCH_RUN_ID") or "local"
-    key = os.urandom(64)
+    t0 = time.perf_counter()
+    weights = b_tables(pool, public["model"], layers, names, key)
+    reg_fields = {"window": window, "leaves": "weights root, queue root"}
+    registration = CM.step_root(CM.domain(reg_fields, 2, "registration"), [weights["root"], q_commit["root"]])
+    rec.step("weights", {"s": round(time.perf_counter() - t0, 1), "weights_root": weights["root"].hex(),
+                         "b_roots": {names[w]: r.hex() for w, r in enumerate(weights["roots"])},
+                         "registration": registration.hex(), "registration_fields": reg_fields})
     dev = layers[0].weight.device
     st = {"on": True, "step": -1, "last": None, "order_ok": True, "refused": []}
     stash: dict[int, tuple] = {}
@@ -320,7 +450,7 @@ def run(a: argparse.Namespace) -> dict:
         from verity.core.protocols.pouw.circuit import h1tile as HT
         from verity.core.protocols.sampled_proofs import challenger as Ch
         lch = Wd.live_challenger(a.epoch, s_max)
-        live_salt = lch.open(Wd.SALT, 0, bytes.fromhex(h1.commits["weights_root"]))
+        live_salt = lch.open(Wd.SALT, 0, registration)
         rounds = Ch.LiveRecord(lch, Wd.ROUND)
 
     def receipts(i: int, slots, salt: bytes) -> None:
@@ -361,17 +491,17 @@ def run(a: argparse.Namespace) -> dict:
         dom = CM.domain(fields, t_max, "a-table")
         q = slots.cpu().numpy()
         rows = CM.s8_rows(q, scales)
-        root_a = CM.a_table(dom, key, f"a/{s}/{w}", q, scales).root
-        bits = CR.admit(rows)
+        root_a = CM.s8_table(dom, key, f"a/{s}/{w}", q, scales).root
+        bits = CR.queue_admit(queue, s)
         ws = CR.words(bits)
         s_fields = {"window": window, "step": s, "linear": w, "module": name, "slots": t_max, "schema": CM.SCHEMA}
         s_dom = CM.domain(s_fields, len(ws), "admit")
         s_lv = CM.levels(s_dom, [CM.leaf(s_dom, key, f"s/{s}/{w}", q, x)[0] for q, x in enumerate(CR.word_rows(ws))])
         calls.append({"step": s, "linear": w, "module": name, "layer": layer, "site": site, "k": k, "n": n, "slots": t_max,
                       "base": s * u_step + offs[w], "units": (t_max // 32) * (n // 32), "root_a": root_a.hex(),
-                      "root_b": h1.weight_roots[w].hex(), "a_domain": dom.domain_id.hex(), "a_fields": fields,
+                      "root_b": weights["roots"][w].hex(), "a_domain": dom.domain_id.hex(), "a_fields": fields,
                       "root_admit": s_lv[-1][0].hex(), "admit_fields": s_fields, "selected": int(bits.sum()),
-                      "scale_only": len(CR.scale_only(rows))})
+                      "scale_only": len(CR.scale_only(rows)), "junk": len(CR.junk(rows, bits))})
         data.append({"m": m, "xq": slots[:m].cpu().numpy(), "sa": scales[:m].copy(), "receipts": None, "admit": bits,
                      "words": ws, "s_levels": s_lv, "prefix": bool(np.array_equal(bits, np.arange(t_max) < m))})
         if not live:
@@ -411,12 +541,19 @@ def run(a: argparse.Namespace) -> dict:
         return call
 
     int8_ops.linear, h1.record = tap, record
+    srv_spans, srv_tap, restore = schedule_tap(eng.runner)
     t0 = time.perf_counter()
     try:
         served = G.generate(eng.llm, prompts, a.max_tokens)
     finally:
         int8_ops.linear = orig_linear
+        restore()
         st["on"] = False
+    srv_queue = CR.queue_of(srv_spans, s_max, t_max) if len(srv_spans) <= s_max else None
+    queue_check = {"served_steps": len(srv_spans), **{f"served_{k}": v for k, v in srv_tap.items()},
+                   "served_is_committed": srv_queue is not None
+                   and np.array_equal(srv_queue["slot_map"], queue["slot_map"])
+                   and srv_queue["requests"] == queue["requests"]}
     serve_s = time.perf_counter() - t0
     done = st["step"] + 1
     complete = st["last"] == len(layers) - 1
@@ -463,6 +600,7 @@ def run(a: argparse.Namespace) -> dict:
                        "receipts_s": round(sum(c["receipts_s"] for c in calls), 1), "live_units": live_u,
                        "admit_is_served_prefix": all(d["prefix"] for d in data),
                        "scale_only_rows": sum(c["scale_only"] for c in calls),
+                       "queue": {**queue_check, "junk_rows": sum(c["junk"] for c in calls)},
                        "real_rows_per_step": [max((d["m"] for c, d in zip(calls, data) if c["step"] == s), default=0)
                                               for s in range(s_max)]})
     equal = [s_["token_ids"] == r["token_ids"] for s_, r in zip(served, reference)]
@@ -548,39 +686,59 @@ def run(a: argparse.Namespace) -> dict:
                                          "AROW computes it at serve time",
                           "a_window_rule": "the window's A table: the tree over the steps' A roots (domain 'a-window')",
                           **a_roots,
-                          "b": "the option's pouw_h1.weight_root of the layer (a stand-in, pouw_h1.ROOTS)"},
+                          "b": "the linear's B table root: AROW's row-table format over its N weight rows (K s8 bytes, "
+                               "then the row's f32 weight scale), domain 'b-table' ({model, layer, module, rows, k, "
+                               "schema}), labels b/<w>",
+                          "b_roots": [r.hex() for r in weights["roots"]], "weights_root": weights["root"].hex(),
+                          "weights_rule": "the tree over the linears' B roots in linear order ('weights', {model, layers})",
+                          "queue": {k: (v.hex() if isinstance(v, bytes) else v) for k, v in q_commit.items()
+                                    if k not in ("s_levels", "r_levels")},
+                          "queue_rule": "the tree over [the slot map's root ('queue-slots', {window, steps, slots}: one "
+                                        "leaf per step and 16 slots, 16 u16 LE request indices, 0 for none), the requests' "
+                                        "root ('queue-requests', {window, requests}: (start, stop) u16 LE per index, the "
+                                        "null request first, padded to S T + 1)] ('queue', {window, leaves})",
+                          "registration": registration.hex(), "registration_fields": reg_fields,
+                          "registration_rule": "the tree over [weights_root, the queue's root] ('registration'): live, "
+                                               "the challenger's salt coin opens against it before every other coin"},
                 "positions": "call (s, w) at base s U + off(w), U = sum_w (T / 32)(N_w / 32), off(w) the sum over linears "
                              "before w; unit u = slot rows 32 (u // (N_w / 32)) .., weight rows 32 (u % (N_w / 32)) ..",
                 "u_step": u_step, "offsets": offs, "units": s_max * u_step,
                 "leaves": {"a": "slot row i: K s8 bytes then its f32 scale LE; an empty slot (the canonical empty row) "
                                 "zero bytes and scale 0",
-                           "s": "admit word q: slots 16 q .. 16 q + 15's admit bits (bit b slot 16 q + b), u16 LE",
+                           "b": "weight row j: K s8 bytes then its f32 weight scale LE",
+                           "s": "admit word q: slots 16 q .. 16 q + 15's admit bits (bit b slot 16 q + b), u16 LE, "
+                                "PouwQueueAdmit's word on the step and the slots' queue entries",
                            "r": "unit u: its receipt's 2 (KS + m) u32 words LE (per set y then z); a dead unit's the "
                                 "canonical empty receipt, zero words",
                            "t": "tally limb i: u16 LE, the per (step, site) limbs in step-major order, the per-site limbs, "
                                 "the level",
                            "schema": CM.SCHEMA, "tree": "frame-v3-sha512, one per call and kind (one tally tree)",
                            "domain": "identity_digest_sha512('verity/pouw/served-h1/<a-table|admit|receipts|tally|a-step|"
-                                     "admit-step|round|a-window>/v0', "
+                                     "admit-step|round|a-window|b-table|weights|queue-slots|queue-requests|queue|"
+                                     "registration>/v0', "
                                      "fields), owner -1, ranks 0 .. count - 1",
                            "salts": "SHA-512(SALT_TAG || key || u32be len(label) || label || u64be i || u8 c), c = 0..2, "
-                                    "labels a/<s>/<w>, s/<s>/<w>, r/<s>/<w> and t; the key is the prover's"},
+                                    "labels a/<s>/<w>, s/<s>/<w>, r/<s>/<w>, t, b/<w>, q and qr; the key is the prover's"},
                 "credit": {**{k: v for k, v in credit.items() if k != "tally"},
-                           "rule": "PADCREDIT round 2 with RT10's fixes: only admitted slots are credited; admit is the OR "
-                                   "of the slot's committed A row, written by an always-proved admit unit into its own "
-                                   "leaf, committed (live) in the round root before the round's coin; the tally is "
-                                   "16-bit limbs, every tally unit always proved; Pub = point(level(floor_point(Cr)))"},
+                           "rule": "PADCREDIT round 2 with RT10's fixes: only admitted slots are credited; slot i of step "
+                                   "t is admitted iff the request queue (committed before the first coin) assigns it a "
+                                   "request live at t (pouw.circuit.admit.PouwQueueAdmit, never the row), written by an "
+                                   "always-proved admit unit into its own leaf, which refuses a slot not admitted whose row "
+                                   "is not the canonical empty row; the admit leaves are committed (live) in the round "
+                                   "root before the round's coin; the tally is 16-bit limbs, every tally unit always "
+                                   "proved; Pub = point(level(floor_point(Cr)))"},
                 "calls": calls, "tokens_equal": all(equal)}
     (out / "manifest.json").write_text(json.dumps(manifest, indent=1, default=str) + "\n")
     rec.step("prover", prover(a, out, key, calls, data))
     try:
-        rec.step("gate", gate(a, calls, data, levels, layers, h1, key, E, PH, t_max, done))
+        rec.step("gate", gate(a, calls, data, levels, layers, public["model"], names, queue, weights, key, E, t_max, done))
     except Exception as e:  # noqa: BLE001
         rec.step("gate", {"ok": False, "error": f"{type(e).__name__}: {e}"[:4000]})
     s = rec.doc["steps"]["serve"]
     rec.doc["ok"] = bool(all(equal) and calls and not a_check["mismatch"] and not a_check["untapped"] and not s["refused"]
                          and s["order_ok"] and s["last_step_complete"] and s["static"] and rec.doc["steps"]["gate"]["ok"]
                          and coins["ok"] and s["admit_is_served_prefix"] and not s["scale_only_rows"]
+                         and s["queue"]["served_is_committed"] and not s["queue"]["junk_rows"]
                          and credit["tally_tree"]["limbs_16_bit"]
                          and credit["credited"]["pub_macs"] <= credit["credited"]["macs"])
     rec.save()
@@ -590,8 +748,8 @@ def run(a: argparse.Namespace) -> dict:
     return rec.doc
 
 
-def gate(a, calls: list[dict], data: list[dict], levels: list, layers: list, h1, key: bytes, E, PH, t_max: int,
-         done: int) -> dict:
+def gate(a, calls: list[dict], data: list[dict], levels: list, layers: list, model: dict, names: dict, queue: dict,
+         weights: dict, key: bytes, E, t_max: int, done: int) -> dict:
     """Drawn units against the gated `h1tile.reference`, and the controls: per site a live and a dead unit of real steps'
     calls, then units of empty steps (dead)."""
     import torch
@@ -611,7 +769,9 @@ def gate(a, calls: list[dict], data: list[dict], levels: list, layers: list, h1,
             picks.append((i, rng.choice(sorted(set(range(calls[i]["units"])) - set(data[i]["live"])))))
     empty = [i for i, c in enumerate(calls) if c["step"] >= done]
     picks += [(i, rng.randrange(calls[i]["units"])) for i in rng.sample(empty, min(2, len(empty)))]
-    units, ok, b_roots = [], True, {}
+    units, ok, b_tabs = [], True, {}
+    w_dom = CM.domain(weights["fields"], len(weights["roots"]), "weights")
+    w_lv = CM.levels(w_dom, weights["roots"])
     for i, u in picks:
         c, d = calls[i], data[i]
         weight = layers[c["linear"]].weight
@@ -623,7 +783,7 @@ def gate(a, calls: list[dict], data: list[dict], levels: list, layers: list, h1,
         salt = bytes.fromhex(c["salt"])
         ri, cj = call.units[u]
         a_rows = CM.s8_rows(slots.numpy(), scales)
-        bits = CR.admit(a_rows)
+        bits = CR.queue_admit(queue, c["step"])
         live = bool(bits[32 * ri:32 * ri + 32].any())
         z, template = RC.reference(call, salt, c["base"], root_a, root_b, u)
         ungated = template if live else RC.reference(call, salt, c["base"], root_a, root_b, u, gated=False)[1]
@@ -635,23 +795,24 @@ def gate(a, calls: list[dict], data: list[dict], levels: list, layers: list, h1,
         s_dom = CM.domain(c["admit_fields"], t_max // CR.WORD, "admit")
         s_label = f"s/{c['step']}/{c['linear']}"
 
-        def admit_root(rows) -> bytes:
-            return CM.levels(s_dom, [CM.leaf(s_dom, key, s_label, q, x)[0]
-                                     for q, x in enumerate(CR.word_rows(CR.words(CR.admit(rows))))])[-1][0]
-
-        empty_rows = a_rows.copy()
-        tile_row = 32 * ri + rng.randrange(32)
-        empty_rows[tile_row, rng.randrange(empty_rows.shape[1])] ^= 1
-        sel = {"live": live, "admit_root_rebuilt": admit_root(a_rows) == bytes.fromhex(c["root_admit"]),
-               "admit_words_committed": CR.words(bits) == d["words"]}
+        admit_root = CM.levels(s_dom, [CM.leaf(s_dom, key, s_label, q, x)[0]
+                                       for q, x in enumerate(CR.word_rows(CR.words(bits)))])[-1][0]
+        sel = {"live": live, "admit_root_rebuilt": admit_root == bytes.fromhex(c["root_admit"]),
+               "admit_words_committed": CR.words(bits) == d["words"], "no_junk_row": not CR.junk(a_rows, bits)}
+        free = [r_ for r_ in range(32 * ri, 32 * ri + 32) if not bits[r_]]
+        if free:
+            jr = rng.choice(free)
+            junk_rows = a_rows.copy()
+            junk_rows[jr, :-4] = np.frombuffer(os.urandom(junk_rows.shape[1] - 4), dtype=np.uint8) | 1
+            junk_rows[jr, -4:] = np.frombuffer(np.float32(0.5).tobytes(), dtype=np.uint8)
+            sel.update(junk_row_refused=CR.junk(junk_rows, bits) == [jr],
+                       junk_row_not_admitted=not CR.queue_admit(queue, c["step"])[jr] and int(bits.sum()) == c["selected"])
         if live:
             sel.update(next_position_differs=nxt != got, live_unit_not_empty=bool(a_rows[32 * ri:32 * ri + 32].any()))
         else:
             sel.update(dead_receipt_is_empty_receipt=not any(got),
                        dead_rows_canonical_empty=not a_rows[32 * ri:32 * ri + 32].any(),
-                       skipped_noise_was_work=any(ungated) and ungated != got,
-                       tampered_empty_row_admitted=bool(CR.admit(empty_rows)[tile_row])
-                       and admit_root(empty_rows) != bytes.fromhex(c["root_admit"]))
+                       skipped_noise_was_work=any(ungated) and ungated != got)
         dom = CM.domain(c["receipt_fields"], c["units"])
         root_r = bytes.fromhex(c["receipt_root"])
         rows = CM.receipt_rows(d["receipts"][u:u + 1])[0]
@@ -664,7 +825,7 @@ def gate(a, calls: list[dict], data: list[dict], levels: list, layers: list, h1,
         a_dom = CM.domain(c["a_fields"], t_max, "a-table")
         a_label = f"a/{c['step']}/{c['linear']}"
         q = slots.numpy()
-        a_tab = CM.a_table(a_dom, key, a_label, q, scales)
+        a_tab = CM.s8_table(a_dom, key, a_label, q, scales)
         a_root = a_tab.root
         ranks = range(32 * ri, 32 * ri + 32)
         opening = a_tab.open(ranks)
@@ -680,7 +841,7 @@ def gate(a, calls: list[dict], data: list[dict], levels: list, layers: list, h1,
         at = step_cs.index(c)
         s_dom = CM.domain({"window": c["a_fields"]["window"], "step": c["step"], "linears": len(step_cs)}, len(step_cs), "a-step")
         s_lv = CM.levels(s_dom, [bytes.fromhex(cc["root_a"]) for cc in step_cs])
-        forged_root = CM.a_table(a_dom, key, a_label, q_forged, scales).root
+        forged_root = CM.s8_table(a_dom, key, a_label, q_forged, scales).root
         forged_step = CM.step_root(s_dom, [forged_root if cc is c else bytes.fromhex(cc["root_a"]) for cc in step_cs])
         cmp38 = {"a_opens_against_step_root": CM.RT.verify_rows(root_a, a_dom.domain_id, t_max, opening, witness(a_rows))
                  and CM.verify(s_dom, s_lv[-1][0], at, root_a, CM.path(s_lv, at)),
@@ -692,11 +853,25 @@ def gate(a, calls: list[dict], data: list[dict], levels: list, layers: list, h1,
         a_tampered = CM.levels(a_dom, [CM.leaf(a_dom, key, a_label, r, bytes(x))[0] for r, x in enumerate(t_rows)])[-1][0]
         committed = CM.s8_rows(slots.numpy(), scales)
         useful = sum(int(np.frombuffer(bytes(x[-4:]), "<f4")[0] != 0) for x in committed)
-        if c["linear"] not in b_roots:
-            b_rows = weight.cpu().numpy().copy()
-            rebuilt = PH.weight_root(c["linear"], b_rows)
-            b_rows[rng.randrange(c["n"]), rng.randrange(c["k"])] ^= 1
-            b_roots[c["linear"]] = (rebuilt, PH.weight_root(c["linear"], b_rows))
+        w = c["linear"]
+        if w not in b_tabs:
+            rows_b = b_rows(layers[w])
+            b_dom = CM.domain(b_fields(model, w, names[w], c["n"], c["k"]), c["n"], "b-table")
+            b_tabs[w] = (b_dom, rows_b, CM.s8_table(b_dom, key, f"b/{w}", rows_b[:, :-4].view(np.int8),
+                                                    rows_b[:, -4:].copy().view("<f4").reshape(-1)))
+        b_dom, rows_b, b_tab = b_tabs[w]
+        b_ranks = range(32 * cj, 32 * cj + 32)
+        b_open = b_tab.open(b_ranks)
+        t_b = rows_b.copy()
+        t_b[32 * cj + rng.randrange(32), rng.randrange(c["k"])] ^= 1
+
+        def witness_b(rows_) -> dict:
+            return {r_: (bytes(rows_[r_]), 8 * rows_.shape[1], CM.salt(key, f"b/{w}", r_)) for r_ in b_ranks}
+
+        b_checks = {"b_root_rebuilt": b_tab.root == root_b,
+                    "b_rows_open": CM.RT.verify_rows(root_b, b_dom.domain_id, c["n"], b_open, witness_b(rows_b)),
+                    "tampered_b_row_refused": not CM.RT.verify_rows(root_b, b_dom.domain_id, c["n"], b_open, witness_b(t_b)),
+                    "b_root_in_weights_root": CM.verify(w_dom, weights["root"], w, root_b, CM.path(w_lv, w))}
         r = {"step": c["step"], "linear": c["linear"], "module": c["module"], "k": c["k"], "unit": u,
              "position": c["base"] + u, "real_rows_in_tile": max(0, min(32, d["m"] - 32 * ri)),
              "receipt_equal_reference": got == want, "receipt_equal_template": got == template,
@@ -704,9 +879,7 @@ def gate(a, calls: list[dict], data: list[dict], levels: list, layers: list, h1,
              "receipt_opens": CM.verify(dom, root_r, u, leaf, sibs),
              "flipped_receipt_refused": not CM.verify(dom, root_r, u, leaf_f, sibs),
              "a_root_rebuilt": a_root == root_a, **cmp38, "tampered_a_row_changes_root": a_tampered != root_a,
-             "tampered_row_was_empty": row >= d["m"], "served_rows_from_scales": useful == d["m"],
-             "b_root_rebuilt": b_roots[c["linear"]][0] == root_b,
-             "tampered_b_row_changes_root": b_roots[c["linear"]][1] != root_b}
+             "tampered_row_was_empty": row >= d["m"], "served_rows_from_scales": useful == d["m"], **b_checks}
         r["ok"] = all(v for k_, v in r.items() if isinstance(v, bool) and k_ not in ("tampered_row_was_empty", "live"))
         ok &= r["ok"]
         units.append(r)
