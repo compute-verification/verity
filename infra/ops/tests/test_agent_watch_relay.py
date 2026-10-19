@@ -2,6 +2,7 @@
 what the watch leaves for a person leads with @top and rings @top's inbox."""
 import importlib.util
 import json
+import subprocess
 from pathlib import Path
 
 import pytest
@@ -41,6 +42,7 @@ def relay(tmp_path, monkeypatch):
     spec = importlib.util.spec_from_file_location("agent_watch_relay", RELAY)
     m = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(m)
+    m.real_bells = m.bells
     log, posts, wrote, api = {"text": ""}, [], [], Api()
     monkeypatch.setattr(m, "OFFSET", tmp_path / "offset")
     monkeypatch.setattr(m, "DRY", False)
@@ -49,7 +51,14 @@ def relay(tmp_path, monkeypatch):
     monkeypatch.setattr(m.slack, "Slack", lambda token: api)
     monkeypatch.setattr(m.slack, "Routes", Routes)
     monkeypatch.setattr(m.slack, "_post", lambda api, ch, handle, text, *a, **k: posts.append(text) or f"1760000{len(posts)}.0")
-    m.log_text, m.posts, m.wrote, m.api = log, posts, wrote, api
+    ring_runs, refuse = [], []
+
+    def call(argv):
+        ring_runs.append(argv[len(m.RING_RUN):])
+        rc = 2 if refuse and "--to" not in argv else 0
+        return subprocess.CompletedProcess(argv, rc, "", "research: no handle holds bc-x: pass --to @LANE" if rc else "")
+    monkeypatch.setattr(m, "call", call)
+    m.log_text, m.posts, m.wrote, m.api, m.ring_runs, m.refuse = log, posts, wrote, api, ring_runs, refuse
     return m
 
 
@@ -232,7 +241,84 @@ def test_a_silent_agent_and_an_ended_run_lead_with_the_records_handle_and_ring_i
         "after 12 min on vy-nebius-2; resume.",
         f"{proofs} *Agent watch:* run r20261019-040000-ef56 (slot --by proofs --) of lane proofs ended rc=0 after 30 s on "
         "vy-nebius-2."]
-    assert [r["thread_ts"] for r in rings(relay)] == [PROOFS_INBOX["inbox_ts"]] * 5
+    assert [r["thread_ts"] for r in rings(relay)] == [PROOFS_INBOX["inbox_ts"]] * 2, "the silent posts; run ends ring-run"
+    permalink = relay.slack.permalink(relay.REG, relay.ALERTS, "17600003.0")
+    assert relay.ring_runs == [
+        ["--run", "r20261019-040000-ab12", "--rc", "0", "--text", f"sweep-a done after 1 h 06 min on vy-nebius-1: {permalink}",
+         "--agent", w, "--to", "@proofs"],
+        ["--run", "r20261019-040000-cd34", "--rc", "1", "--text", "lean build failed after 12 min on vy-nebius-2: "
+         + relay.slack.permalink(relay.REG, relay.ALERTS, "17600004.0"), "--agent", co],
+        ["--run", "r20261019-040000-ef56", "--rc", "0", "--text", "slot --by proofs -- done after 30 s on vy-nebius-2: "
+         + relay.slack.permalink(relay.REG, relay.ALERTS, "17600005.0"), "--to", "@proofs"]], \
+        "a worker's and a lane's run name the handle; a coordinator's own is found by its route"
+
+
+def test_a_former_coordinators_run_refused_by_ring_run_is_rung_again_with_the_watchs_handle(relay):
+    """ring-run finds a coordinator by its open route; one a handover replaced holds none, so it refuses without --to."""
+    relay.refuse.append(True)
+    co = "bc-21f3d3de-28db-5e5d-964b-d357187449aa"
+    relay.log_text["text"] = json.dumps({"kind": "run_ended", "agent": co, "name": "", "run": "r20261019-043737-f6de",
+                                         "handle": "proofs", "role": "coordinator", "node": "vy-nebius-2", "what": "census",
+                                         "rc": 130, "state": "failed", "after": "51 min"}) + "\n"
+    relay.once()
+    assert [("--to" in a, a[a.index("--agent") + 1]) for a in relay.ring_runs] == [(False, co), (True, co)]
+    assert relay.ring_runs[1][-2:] == ["--to", "@proofs"] and len(relay.posts) == 1
+
+
+def test_a_ring_run_that_fails_leaves_the_alert_posted_once(relay):
+    relay.refuse.append(True)
+    relay.log_text["text"] = json.dumps({"kind": "run_ended", "agent": "", "name": "", "run": "r20261019-040000-ef56",
+                                         "handle": "proofs", "role": "lane", "node": "vy-nebius-2", "what": "x", "rc": 0,
+                                         "state": "done", "after": "30 s"}) + "\n"
+    relay.call = lambda argv: subprocess.CompletedProcess(argv, 2, "", "research: @proofs: no open inbox")
+    relay.once()
+    relay.once()
+    assert len(relay.posts) == 1 and relay.OFFSET.read_text() == "1"
+
+
+def test_a_record_the_relay_cant_render_goes_to_infra_as_raw_json_never_a_sentence_of_question_marks(relay):
+    """#agent-alerts 20:14:59Z, 19 Oct: "*Agent watch:* run 6 runs (?) of lane None ended rc=? after ? on ?." was the watch's
+    grouped unknown-sender record through a relay that didn't know it. Now this relay renders it, and anything it doesn't know,
+    or that lacks what its sentence reads, is posted raw to @infra."""
+    infra = relay.slack.tag(relay.slack.entry(relay.REG, "infra"))
+    grouped = {"t": "2026-10-19T20:18:45Z", "kind": "run_ended", "agent": "", "name": "", "run": "r20261019-195914-0b94",
+               "handle": None, "role": "unknown", "count": 1, "runs": [
+                   {"run": "r20261019-195914-0b94", "node": "vy-nebius-cpu-2", "what": "r20261019-195914-0b94", "rc": 0,
+                    "sender": "https://cursor.com/agents/bc-c8838f5a-e10e-54ad-be4f-bbad4534f555", "state": "done",
+                    "after": "11 min", "at": "2026-10-19T20:15:51Z"}],
+               "senders": ["https://cursor.com/agents/bc-c8838f5a-e10e-54ad-be4f-bbad4534f555"]}
+    odd = [{"kind": "brand_new", "agent": "bc-x", "detail": "a kind added to the watch first"},
+           {"kind": "run_ended", "agent": "", "name": "", "run": "6 runs", "handle": None, "role": "unknown", "count": 6},
+           {"kind": "run_ended", "agent": "bc-x", "run": "r1", "handle": "proofs", "role": "lane", "what": "x"},
+           {"kind": "run_ended", "agent": "bc-x", "run": "r2", "handle": "proofs", "role": "mystery", "node": "n", "rc": 0,
+            "after": "1 s", "what": "x"}]
+    relay.log_text["text"] = "\n".join(json.dumps(r) for r in [grouped, *odd]) + "\n{not json\n"
+    relay.once()
+    assert relay.posts[0].startswith(f"{infra} *Agent watch:* 1 research run ended whose sender no handle owns")
+    for post, rec in zip(relay.posts[1:], [*odd, None]):
+        assert post.startswith(f"{infra} *Agent watch:* a record this relay can't render (kind `")
+        assert "?" not in post.split("```")[0] and post.endswith("```")
+        if rec:
+            assert json.loads(post.split("```")[1]) == rec
+    assert "{not json" in relay.posts[-1] and "`garbled`" in relay.posts[-1]
+    assert [r["thread_ts"] for r in rings(relay)] == [INFRA_INBOX["inbox_ts"]] * 6 and relay.ring_runs == []
+
+
+def test_doorbells_count_ring_runs_doorbell_for_ready_to_wake(relay, monkeypatch):
+    """The watch's ready-to-wake rule reads each inbox's latest doorbell: ring-run's `from runs, run ...` is one."""
+    class Bells:
+        local = frozenset({"proofs"})
+
+        def get_route(self, name, fresh=False):
+            return PROOFS_INBOX if name == "proofs" else None
+    monkeypatch.setattr(relay.slack, "Routes", Bells)
+    box = PROOFS_INBOX["inbox_ts"]
+    msgs = [{"ts": box, "text": "inbox"},
+            {"ts": "1760000100.000001", "username": "router", "text": f"from infra, thread {box}: an alert"},
+            {"ts": "1760000200.000001", "username": "router", "text": "from runs, run r20261019-040000-ab12 rc 0 (bc-x): done"},
+            {"ts": "1760000300.000001", "username": "someone", "text": "from runs, run r1 rc 0 (bc-x): typed by hand"}]
+    api = type("A", (), {"paged": lambda self, *a, **k: msgs})()
+    assert relay.real_bells(api, 1760000400.0)["inboxes"] == {"proofs": {"agent": PROOFS_INBOX["holder"], "last": 1760000200.000001}}
 
 
 def test_a_failure_the_watch_acted_on_leads_with_its_owner_and_rings_that_inbox(relay):

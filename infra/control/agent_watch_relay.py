@@ -7,10 +7,14 @@ cancel, held again within the hour, and a run unreadable for an hour; the first 
 own route can't ring it). A cloud worker (a Task subagent) that went idle, or has been ACTIVE for hours, leads with its lane's
 handle and rings that inbox the same way, for its coordinator to resume it with Task (the watch can't start a worker's run;
 the doorbell also counts toward the coordinator's own ready-to-wake rule). A worker alert is never posted unrung: one whose
-lane no handle owns (nor its parent's) leads with @infra and says its lane is unknown. A silent agent (ACTIVE 90 min with no note and no push)
-and a `research run` that ended on a node lead with the record's handle and ring it the same way: a coordinator's own, a worker's
-launcher's, for a run whose sender is a lane, the lane's; the runs of one read whose sender no handle owns are one post that leads
-with @infra, naming each run's sender. A failure the watch acted on (`FAIL`: held, stalled, crashed, idle after
+lane no handle owns (nor its parent's) leads with @infra and says its lane is unknown. A silent agent (ACTIVE 90 min with no note
+and no push) leads with the record's handle and rings it the same way. A `research run` that ended on a node leads with its
+sender's handle (a coordinator's own, a worker's launcher's, for a run whose sender is a lane, the lane's), and its doorbell is
+`research msg ring-run` (INF-140), the one sender of run-end doorbells: `from runs, run R rc N (AGENT): ...`, once per run however
+often it is called, with `--to` the watch's resolved handle for all but a coordinator's own run. The runs of one read whose sender
+no handle owns are one post that leads with @infra, naming each run's sender, rung as an alert. A record this relay can't render
+(a kind it doesn't know, or one missing what its sentence needs) is posted as its raw JSON to @infra, never as a sentence of ?s.
+A failure the watch acted on (`FAIL`: held, stalled, crashed, idle after
 its run ended, relaunched) leads with the record's `owner` and rings its inbox: @top for a coordinator, the launcher's handle for a
 worker. Several workers of one parent that stopped together come as one `workers_failed`, posted and rung once to the lane's handle
 with each worker named, and the wake-up it says it set. A handle renamed in the registry ("renamed from @OLD") is rung by its new
@@ -18,14 +22,17 @@ name. The pod frees held runs whether or not this runs; it stops when infra's VM
 posted.
 
 Each pass also writes /data/agent-watch/doorbells.json, which the watch's ready-to-wake rule reads: each open inbox's holder (the
-notes' routes.d) and its latest doorbell in the last day (a reply in the inbox thread, `from NAME, thread ...`). The watch ignores
-it once 30 minutes old, so a suspended VM silences that half of the rule, never fakes it.
+notes' routes.d) and its latest doorbell in the last day (a reply in the inbox thread, `from NAME, thread ...`, or a run's end,
+`from runs, run ...`). The watch ignores it once 30 minutes old, so a suspended VM silences that half of the rule, never fakes it.
 
-usage (tmux agent-watch-relay, research importable, $SLACK_BOT_TOKEN set, $RESEARCH_SLACK_REGISTRY when not run from a checkout):
+usage (tmux agent-watch-relay, research importable with `research msg ring-run` (main since #2754), $SLACK_BOT_TOKEN set,
+$RESEARCH_SLACK_REGISTRY when not run from a checkout):
   python3 infra/control/agent_watch_relay.py [--once] [--dry-run]"""
 import json
 import os
 import re
+import shlex
+import string
 import subprocess
 import sys
 import time
@@ -73,6 +80,10 @@ HANDLE = WORKER | {"silent", "run_ended", "workers_failed"}       # rung to the 
 FAIL = {"held", "stalled", "crashed", "idle_after_run", "relaunch"}   # rung to the record's owner: whoever must follow it up
 UNROUTED = "infra"      # rung for a worker whose lane no handle owns: a worker alert is never posted unrung
 UNSENT_LISTED = 12      # runs of unknown senders one post names; the rest are counted
+RING_RUN = [sys.executable, "-m", "research", "msg", "ring-run"]
+RUNBELL_RE = re.compile(r"^from runs, run \S+ rc ")      # ring-run's doorbell
+RUN_ROLES = {"coordinator", "worker", "lane", "unknown"}
+RAW_MAX = 2500
 #: a renamed handle's old name -> its new one, from the registry's "renamed from @OLD" (hash -> kernels, 18 Oct): lanes' notes
 #: and workers.d still carry the old name
 RENAMED = {old: h["handle"] for h in REG.get("handles") or []
@@ -94,9 +105,27 @@ def lane_of(rec: dict) -> str | None:
                 None)
 
 
+def renderable(rec: dict) -> bool:
+    """Whether `text` has a sentence for `rec`: a kind it knows, in a shape it knows, with every field that sentence reads."""
+    kind = rec.get("kind")
+    if kind not in SAY:
+        return False
+    if kind == "run_ended":
+        if rec.get("role") not in RUN_ROLES:
+            return False
+        if rec.get("role") == "unknown":
+            return bool(rec.get("runs"))
+    if kind == "workers_failed":
+        return bool(rec.get("members"))
+    need = {f for _, f, _, _ in string.Formatter().parse(SAY[kind]) if f} - {"action"}
+    return need <= {k for k, v in rec.items() if v is not None}
+
+
 def rung(rec: dict) -> str | None:
     """The handle whose inbox the alert rings, if any. A worker's is always someone's: only its coordinator can resume it, and
-    one whose lane is unknown goes to @infra (`UNROUTED`), who finds that coordinator."""
+    one whose lane is unknown goes to @infra (`UNROUTED`), who finds that coordinator; so does a record `text` can't render."""
+    if not renderable(rec):
+        return UNROUTED
     if rec.get("kind") in TOP:
         return "top"
     handles = {h["handle"] for h in REG.get("handles") or []}
@@ -144,6 +173,11 @@ def unsent(u: dict) -> str:
 
 
 def text(rec: dict) -> str:
+    if not renderable(rec):
+        raw = json.dumps(rec, sort_keys=True, ensure_ascii=False)
+        raw = raw if len(raw) <= RAW_MAX else raw[:RAW_MAX] + " …(cut)"
+        return (f"{slack.tag(slack.entry(REG, UNROUTED))} *Agent watch:* a record this relay can't render (kind "
+                f"`{rec.get('kind')}`), as the watch wrote it: ```{raw}```")
     link = f"<https://cursor.com/agents/{rec.get('agent')}|{rec.get('agent')}>"
     line = SAY.get(rec.get("kind"), "{kind}").format(**{"since": "?", "minutes": "?", "action": "recorded it", "restarts": "?",
                                                          "reason": "?", "status": "?", "at": "?", "hours": "?", "rc": "?",
@@ -207,6 +241,31 @@ def ring(api: slack.Slack, ts: str, post: str, name: str = "top") -> None:
     log(f"rang @{to}")
 
 
+def call(argv: list[str]) -> subprocess.CompletedProcess:
+    return subprocess.run(argv, capture_output=True, text=True, timeout=120, check=False)
+
+
+def ring_run(rec: dict, to: str, ts: str) -> None:
+    """A run's end, rung with `research msg ring-run` (one doorbell per run, once however often called), its text the alert's
+    one line and link. `--to` is the watch's handle for all but a coordinator's own run, which ring-run finds by the agent's
+    route; a former coordinator, which no route holds any more, is rung again with `--to`."""
+    one = (f"{rec.get('what')} {rec.get('state') or 'ended'} after {rec.get('after')} on {rec.get('node')}: "
+           f"{slack.permalink(REG, ALERTS, ts)}")
+    argv = [*RING_RUN, "--run", str(rec["run"]), "--rc", str(rec["rc"] if rec.get("rc") is not None else rec.get("state")),
+            "--text", one, *(("--agent", rec["agent"]) if rec.get("agent") else ())]
+    to_arg = ["--to", f"@{to}"]
+    own = rec.get("role") == "coordinator" and rec.get("agent")
+    if DRY:
+        log(f"would run: {shlex.join(argv if own else [*argv, *to_arg])}")
+        return
+    r = call(argv if own else [*argv, *to_arg])
+    if r.returncode and own:
+        r = call([*argv, *to_arg])
+    if r.returncode:
+        raise slack.SlackError(f"ring-run for {rec['run']} exited {r.returncode}: {(r.stderr or '').strip()[-300:]}")
+    log(f"rang @{to} for run {rec['run']} (ring-run)")
+
+
 def bells(api: slack.Slack, now: float) -> dict:
     """doorbells.json: each open inbox's holder and the ts of its latest doorbell in the last BELLS_WINDOW_S (0 for none)."""
     routes, inboxes = slack.Routes(), {}
@@ -217,7 +276,8 @@ def bells(api: slack.Slack, now: float) -> dict:
         msgs = api.paged("conversations.replies", "messages", channel=r.get("channel") or slack.channel_id_for(REG, slack.FRONT_DOOR),
                          ts=r["inbox_ts"], oldest=f"{now - BELLS_WINDOW_S:.6f}")
         rung = [float(m["ts"]) for m in msgs if m.get("ts") != r["inbox_ts"]
-                and (b := slack.DOORBELL_RE.match(m.get("text") or "")) and b[1] != "router"]
+                and ((b := slack.DOORBELL_RE.match(m.get("text") or "")) and b[1] != "router"
+                     or m.get("username") == "router" and RUNBELL_RE.match(m.get("text") or ""))]
         inboxes[name] = {"agent": r["holder"], "last": max(rung, default=0.0)}
     return {"t": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(now)), "inboxes": inboxes}
 
@@ -240,7 +300,7 @@ def once() -> None:
         try:
             rec = json.loads(ln)
         except ValueError:
-            rec = {"kind": "garbled", "agent": "?", "run": "?"}
+            rec = {"kind": "garbled", "line": ln[:RAW_MAX]}
         if rec.get("kind") == "unreadable" and not rec.get("since"):   # a goal run's id, often brief: posted if it lasts
             pass
         elif rec.get("kind") == "ready_to_wake" and "409" in str(rec.get("action", "")):
@@ -252,8 +312,11 @@ def once() -> None:
             ts = slack._post(api, ALERTS, "infra", post := text(rec))
             if to := rung(rec):
                 try:
-                    ring(api, ts, post, to)
-                except slack.SlackError as e:       # the alert is posted: posting it again would post it twice
+                    if rec.get("kind") == "run_ended" and rec.get("role") != "unknown" and renderable(rec):
+                        ring_run(rec, to, ts)
+                    else:
+                        ring(api, ts, post, to)
+                except (slack.SlackError, subprocess.SubprocessError, OSError) as e:   # the alert is posted: never twice
                     log(f"posted, but @{to} not rung: {e}")
         done += 1
         OFFSET.parent.mkdir(parents=True, exist_ok=True)
