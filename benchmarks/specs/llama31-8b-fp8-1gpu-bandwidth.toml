@@ -7,7 +7,10 @@ arms = ["stock-fp8", "bandwidth-plain", "bandwidth-audit"]
 arm_modules = ["benchmarks.vllm_encoded.bench_arm:PLAIN", "benchmarks.vllm_encoded.bench_arm:AUDIT"]
 sweep = "quick"
 reps = 3
-warmups = 3
+# A bandwidth engine's first one to three runs stall on their first prefill step (18 Oct, r20261018-234212-f0ea):
+# each engine warms until two consecutive runs agree.
+warmups = 2
+max_warmups = 8
 eager = false
 # The arms' libraries, built from the dispatched commit.
 setup = "benchmarks/harness/setup/vllm_encoded.sh"
