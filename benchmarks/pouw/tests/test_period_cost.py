@@ -67,7 +67,7 @@ def test_the_period_shortens_with_load_draws_and_nodes():
 def test_amortizing_a_process_cuts_only_its_fixed_part():
     w = PC.window_cost(PC.TODAY)
     lean = PC.window_cost(replace(PC.TODAY, lean_windows_per_process=64))
-    rt = PC.RATES["w2"]
+    rt = PC.RATES[PC.TODAY.rates]
     assert w["lean_s"] - lean["lean_s"] == pytest.approx(w["statements"] * rt.lean_process_s * 63 / 64)
     assert lean["prove_s"] == w["prove_s"]
 
@@ -90,10 +90,32 @@ def test_the_route_leaves_out_spend_and_each_step_shortens_the_period():
 
 
 def test_a_statement_is_capped_by_its_provers_memory():
-    rt = replace(PC.RATES["w2"], name="t", prove_lane_gb=10.0)
+    rt = replace(PC.RATES[PC.TODAY.rates], name="t", prove_lane_gb=10.0)
     assert PC.statement_lanes(rt) == int((PC.NODE_GB - rt.prove_gb) // 10.0) < PC.STATEMENT_LANES
     with pytest.raises(ValueError, match="past a"):
         PC.statement_lanes(replace(rt, prove_lane_gb=float(PC.NODE_GB)))
+
+
+def test_lambda_falls_to_its_many_rounds_limit_without_underflow():
+    lams = [PC.lam(8, PC.R_SERVED, 2 ** e) for e in range(0, 80, 4)]
+    assert lams == sorted(lams, reverse=True)
+    assert lams[-1] == pytest.approx(PC.lam_limit(8, PC.R_SERVED), rel=1e-12) and lams[-1] >= PC.lam_limit(8, PC.R_SERVED)
+
+
+@pytest.mark.parametrize("i", [1, 3, -1])
+def test_one_long_window_is_the_least_rounds_under_one_percent_and_certifies_after_it_is_served(i):
+    base = PC.configurations()[i]
+    k0 = PC.least_one_window_draws(base)
+
+    def ratio(k):
+        return PC.lam_limit(k, base.r) * base.delta_s_log2 * PC.math.log(2) / (base.u * (PC.TARGET - base.eps_flat))
+
+    assert ratio(k0 - 1) >= 1 > ratio(k0)
+    c = PC.long_window(base)
+    assert c.draws >= k0 and PC.windows(c) == 1 < PC.windows(replace(c, rounds=c.rounds - 1))
+    p = PC.period(c)
+    assert p["window_custody_gb"] == pytest.approx(PC.CUSTODY_GB * c.rounds / PC.ROUNDS)
+    assert p["days_to_period"] >= p["serving_days"] + p["cert_days"]
 
 
 def test_no_budget_is_refused():
@@ -105,7 +127,8 @@ def test_main_writes_the_report(tmp_path, capsys):
     out, md = tmp_path / "period.json", tmp_path / "period.md"
     assert PC.main(["--json", str(out), "--md", str(md)]) == 0
     rep = json.loads(out.read_text())
-    assert {"rates", "configurations", "levers", "draws_scan", "rounds_scan", "sensitivity"} <= set(rep)
+    assert {"rates", "configurations", "levers", "draws_scan", "rounds_scan", "long_windows", "sensitivity"} <= set(rep)
+    assert all(p["windows"] == 1 for p in rep["long_windows"])
     assert rep["configurations"][0]["windows"] == 46604
     assert rep["sensitivity"]["delta_s_log2"]["40"] == 4815
     assert "| lever |" in md.read_text() == capsys.readouterr().out

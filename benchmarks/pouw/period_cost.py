@@ -28,8 +28,14 @@ circuit file and its teardown, and Lean's session check) plus a part a lane. `RA
 **Node-days** are memory-packed: a node runs ⌊node GB / process GB⌋ provers (prover and session verifier) or Lean checks
 at once, and a window's node-seconds are its prove seconds over the prove slots plus its Lean seconds over the Lean
 slots. Process-days are the same seconds unpacked (INT-PERIOD's node-days). Windows certify in parallel on N nodes, but
-one stream serves the period (#2722: disjoint periods, one stream each), so the period takes max(serving, certifying on
-N nodes) plus one window's latency.
+one stream serves the period (#2722: disjoint periods, one stream each), and a window's draw comes only once it is
+served, so the period takes max(serving, certifying its first n − 1 windows on N nodes) plus its last window's
+certification: its statements in parallel, but no sooner than one statement's prove and check.
+
+**One window long enough on its own** (`long_window`) is n = 1: Compose's `CircuitWork`, with no period statement and
+no record check. It needs Λ·ln(1/δ_s)/u under the budget, and Λ falls with M only to `lam_limit`, so a K_d below
+r·max(a/(1 − p), b/(1 − p0))·ln(1/δ_s)/(u·budget) never gets there. Its certification starts when its serving ends,
+and it holds custody of M/18 served windows' values until its draw.
 
 **Levers** (`LEVERS`): one change each, with its owner and a work class (1 a parameter, 2 one module, 3 a new path in one
 component, 4 a new circuit or proof form), applied alone to today's configuration and in sequence along `route`. δ_s is
@@ -59,6 +65,7 @@ U_TODAY = 119 / 1152
 U_FULL = SERVED_STEPS / ROUNDS
 T_WINDOW = 439.1
 T_WINDOW_DITHER = ROUNDS * 0.06665
+CUSTODY_GB = 1.05050112
 UNIT_ROWS, UNIT_COLS = 32, 32
 LANE_OUTPUTS, LANE_K = 4 * 8, 4096
 SERVED_UNITS_PER_LAYER = {"qkv": (384, 4096), "o": (256, 4096), "gate_up": (1792, 4096), "down": (256, 14336)}
@@ -97,17 +104,58 @@ class Rates:
     lean_lane_gb: float
 
 
+@dataclass(frozen=True)
+class Pair:
+    """One quantity of the K = 1,024 tile's statement, measured at 8 lanes (one instance, padded) and at 64."""
+    run: str
+    at8: float
+    at64: float
+
+    @property
+    def lane(self) -> float:
+        return (self.at64 - self.at8) / 56
+
+
+ANDS_4096, ANDS_1024 = 46_744_981, 12_904_803
+W2 = "r20261019-000025-2a3b"
+W2_PROVE_LOAD_S, W2_SESSION_S, W2_PROVE_GB = 529.05 - 200.6, 200.6, 136.8 + 136.1
+W2_LEAN_PARSE_S, W2_LEAN_SETUP_S, W2_LEAN_SESSION_S, W2_LEAN_TEARDOWN_S, W2_LEAN_GB = 1865.8, 0.9, 1175.7, 527.2, 110.2
+K1024_SESSION_S = Pair("r20261019-230625-bc89", (41.65 + 31.44) / 2, (71.57 + 51.53) / 2)
+K1024_PROVE_GB = Pair("r20261019-230625-bc89", 36.08 + 28.94, 41.49 + 30.85)
+K1024_LEAN_SESSION_S = Pair("r20261019-224439-a8f6", (222.84 + 222.92) / 2, (224.01 + 222.56) / 2)
+SESSION_SCALE = W2_SESSION_S / K1024_SESSION_S.at8
+LEAN_SCALE = W2_LEAN_SESSION_S / K1024_LEAN_SESSION_S.at8
+
+
+def today_rates() -> Rates:
+    """K = 4,096's statement at 26 threads: W2's fixed parts, and a lane at K = 1,024's slope (today's main) scaled to
+    K = 4,096 by the two sizes' 8-lane sessions (time; 5.49 for the prover, above the ANDs' 3.62) and by their ANDs
+    (memory)."""
+    prove_lane = K1024_SESSION_S.lane * SESSION_SCALE
+    prove_lane_gb = K1024_PROVE_GB.lane * ANDS_4096 / ANDS_1024
+    lean_lane = K1024_LEAN_SESSION_S.lane * LEAN_SCALE
+    return Rates(
+        "today",
+        f"{W2} (vy-nebius-cpu-1, 26 threads, K = 4,096, 8 lanes): prove {W2_PROVE_LOAD_S + W2_SESSION_S:.2f} s = "
+        f"{W2_PROVE_LOAD_S:.1f} s load + {W2_SESSION_S} s session, {W2_PROVE_GB:.1f} GB with its session verifier; Lean "
+        f"{W2_LEAN_PARSE_S:,} s parse + {W2_LEAN_SETUP_S} s setup + {W2_LEAN_SESSION_S:,} s session + "
+        f"{W2_LEAN_TEARDOWN_S} s teardown, {W2_LEAN_GB} GB. A lane: {K1024_SESSION_S.run} (26 threads, K = 1,024: "
+        f"sessions {K1024_SESSION_S.at8:.2f} s at 8 lanes, {K1024_SESSION_S.at64:.2f} s at 64; prover and verifier "
+        f"{K1024_PROVE_GB.at8:.2f} → {K1024_PROVE_GB.at64:.2f} GB) and {K1024_LEAN_SESSION_S.run} (Lean sessions "
+        f"{K1024_LEAN_SESSION_S.at8:.2f} s and {K1024_LEAN_SESSION_S.at64:.2f} s, 23.5 GB at both), so "
+        f"{prove_lane:.2f} s, {prove_lane_gb:.3f} GB and {lean_lane:.3f} s of Lean a lane at K = 4,096",
+        prove_load_s=W2_PROVE_LOAD_S, prove_session_s=W2_SESSION_S - 8 * prove_lane, prove_lane_s=prove_lane,
+        prove_gb=W2_PROVE_GB - 8 * prove_lane_gb, prove_lane_gb=prove_lane_gb,
+        lean_process_s=W2_LEAN_PARSE_S + W2_LEAN_SETUP_S + W2_LEAN_TEARDOWN_S,
+        lean_session_s=W2_LEAN_SESSION_S - 8 * lean_lane, lean_lane_s=lean_lane, lean_gb=W2_LEAN_GB, lean_lane_gb=0.0)
+
+
 RATES = {
     "int-period": Rates(
         "int-period", "INT-PERIOD's per-draw rates (RT-INT-3): W2's statement over its 8 draws, one tile a draw",
-        prove_load_s=0.0, prove_session_s=0.0, prove_lane_s=66.0, prove_gb=272.9, prove_lane_gb=0.0,
-        lean_process_s=0.0, lean_session_s=0.0, lean_lane_s=446.0, lean_gb=110.2, lean_lane_gb=0.0),
-    "w2": Rates(
-        "w2", "r20261019-000025-2a3b (vy-nebius-cpu-1, 26 threads; 8 and 1 instances, both padded to 8): prove 529.05 s "
-        "= 328.4 s load + 200.6 s session, 136.8 + 136.1 GB; Lean 3,569.6 s = 1,865.8 s parse + 0.9 s setup + "
-        "1,175.7 s session + 527.2 s teardown, 110.2 GB; the session over its 8 padded lanes bounds the lane rate",
-        prove_load_s=328.4, prove_session_s=0.0, prove_lane_s=200.6 / 8, prove_gb=272.9, prove_lane_gb=0.0,
-        lean_process_s=1865.8 + 0.9 + 527.2, lean_session_s=1175.7, lean_lane_s=0.0, lean_gb=110.2, lean_lane_gb=0.0),
+        prove_load_s=0.0, prove_session_s=0.0, prove_lane_s=66.0, prove_gb=W2_PROVE_GB, prove_lane_gb=0.0,
+        lean_process_s=0.0, lean_session_s=0.0, lean_lane_s=446.0, lean_gb=W2_LEAN_GB, lean_lane_gb=0.0),
+    "today": today_rates(),
 }
 
 
@@ -123,7 +171,7 @@ class Config:
     t_window_s: float = T_WINDOW
     unit_outputs: int = UNIT_ROWS * UNIT_COLS
     k: float = k_factor()
-    rates: str = "w2"
+    rates: str = "today"
     lean_windows_per_process: int = 1
     prove_windows_per_process: int = 1
     lean_session_s: float | None = None
@@ -135,9 +183,14 @@ class Config:
 def lam(draws: int, r: float, rounds: int) -> float:
     """Λ, the sharp split rate (`SplitRateExp`) at equal rounds (w_max = 1/M) and ρ = 1/r."""
     w, x = 1.0 / rounds, draws / (r * rounds)
-    fixed = -math.log(P + (1 - P) * math.exp(-x))
-    folded = -math.log(P0 + (1 - P0) * math.exp(-x))
+    fixed = -math.log1p((1 - P) * math.expm1(-x))
+    folded = -math.log1p((1 - P0) * math.expm1(-x))
     return max(A * w / fixed, B * w / folded)
+
+
+def lam_limit(draws: int, r: float) -> float:
+    """Λ's many-rounds limit, which it falls to from above: r·max(a/(1 − p), b/(1 − p0))/K_d."""
+    return r * max(A / (1 - P), B / (1 - P0)) / draws
 
 
 def eps(n: int, c: Config) -> float:
@@ -185,6 +238,8 @@ def period(c: Config) -> dict:
     serving_days = n * c.t_window_s * c.rounds / ROUNDS / DAY
     node_days = n * w["node_s"] / DAY
     cert_days = node_days / c.nodes
+    statement_s = (w["prove_s"] + w["lean_s"]) / w["statements"]
+    last_s = max(statement_s, w["node_s"] / c.nodes)
     return dict(
         name=c.name, windows=n, draws=n * c.draws, lanes=n * w["lanes"], rounds=n * c.rounds,
         eps=eps(n, c), lam=lam(c.draws, c.r, c.rounds),
@@ -192,8 +247,9 @@ def period(c: Config) -> dict:
         prove_slots=w["prove_slots"], lean_slots=w["lean_slots"],
         prove_process_days=n * w["prove_s"] / DAY, lean_process_days=n * w["lean_s"] / DAY,
         node_days=node_days, serving_days=serving_days, cert_days=cert_days,
-        days_to_period=max(serving_days, cert_days) + (w["prove_s"] + w["lean_s"]) / DAY,
+        days_to_period=max(serving_days, (n - 1) * w["node_s"] / c.nodes / DAY) + last_s / DAY,
         nodes_to_keep_pace=node_days / serving_days,
+        window_custody_gb=CUSTODY_GB * c.rounds / ROUNDS,
         config=dataclasses.asdict(c),
     )
 
@@ -309,6 +365,33 @@ def single_levers(base: Config = TODAY) -> list[dict]:
     return sorted(rows, key=lambda r: (-max(r["days_factor"], r["node_days_factor"]), r["work"]))
 
 
+LONG_DRAWS = (1.05, 1.1, 1.25, 1.5, 2, 3, 4, 8)
+
+
+def least_one_window_draws(c: Config) -> int:
+    """The least K_d for which some number of rounds brings one window under 1%."""
+    need = lam_limit(1, c.r) * c.delta_s_log2 * math.log(2) / (c.u * (TARGET - c.eps_flat))
+    return math.floor(need) + 1
+
+
+def long_window(base: Config) -> Config:
+    """One window long enough on its own: of K_d at `LONG_DRAWS` times `least_one_window_draws`, each at the least
+    rounds that bring it under 1% (n falls with M), whichever ends soonest."""
+    best, k0 = None, least_one_window_draws(base)
+    for k in sorted({math.ceil(k0 * f) for f in LONG_DRAWS}):
+        hi = 1
+        while windows(replace(base, draws=k, rounds=hi)) > 1:
+            hi *= 2
+        lo = hi // 2 + 1
+        while lo < hi:
+            mid = (lo + hi) // 2
+            lo, hi = (lo, mid) if windows(replace(base, draws=k, rounds=mid)) == 1 else (mid + 1, hi)
+        c = replace(base, draws=k, rounds=hi, name=f"one window: {base.name} (draws = {k:,}, rounds = {hi:,})")
+        if best is None or period(c)["days_to_period"] < period(best)["days_to_period"]:
+            best = c
+    return best
+
+
 def scan(c: Config, field: str, values) -> list[dict]:
     """`c` at each value of one field: windows, days and node-days to the first period."""
     out = []
@@ -359,6 +442,7 @@ def report() -> dict:
         node_gb=NODE_GB, configurations=[period(c) for c in configs],
         levers=single_levers(), route_end=end.name,
         draws_scan=scan(end, "draws", DRAWS), rounds_scan=scan(end, "rounds", ROUNDS_SCAN),
+        long_windows=[period(long_window(c)) for c in (configs[1], configs[3], end)],
         sensitivity=sensitivity(),
     )
 
@@ -373,6 +457,10 @@ def markdown(rep: dict) -> str:
     for key, field in (("draws_scan", "draws"), ("rounds_scan", "rounds")):
         out.append(f"At the route's end, by {field} a window: " + "; ".join(
             f"{r['value']}: {r['windows']:,} windows, {r['days']:,.2f} d, {r['node_days']:,.1f} node-d" for r in rep[key]))
+    out += ["", "One window long enough on its own (no period), with the custody it holds until its draw:", ""]
+    out += [f"- {p['name']}: {p['days_to_period']:,.2f} days ({p['serving_days']:,.2f} serving), "
+            f"{p['node_days']:,.1f} node-days, {p['statements_per_window']:,} statements, "
+            f"{p['window_custody_gb']:,.0f} GB custody" for p in rep["long_windows"]]
     s = rep["sensitivity"]
     out += ["", "Windows to ε < 1% at u = 1, by δ_s: "
             + ", ".join(f"2^-{k}: {v:,}" for k, v in s["delta_s_log2"].items()),
