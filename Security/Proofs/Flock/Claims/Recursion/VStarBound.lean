@@ -153,19 +153,13 @@ theorem LayoutB.held_ofLayout (L : VStar.Layout) (x : Msg) (s : ℕ) (w : Flock.
     (LayoutB.ofLayout L).held x s w i = L.held x s w i := by
   have hm : (LayoutB.ofLayout L).msgAt x s i = (L.msgAt x s i).map segsAt := rfl
   have hf : (LayoutB.ofLayout L).fixedAt x i = L.fixedAt x i := rfl
+  have he : (readSegs w ∘ segsAt) = VStar.readSegs w := funext fun segs => readSegs_segsAt w segs
   unfold LayoutB.held VStar.Layout.held
-  rw [hm, hf]
-  cases L.msgAt x s i <;> simp [readSegs_segsAt]
+  rw [hm, hf, Option.map_map, he]
 
 theorem LayoutB.calls_ofLayout (L : VStar.Layout) (x : Msg) (s : ℕ) (w : Flock.Wit) :
     (LayoutB.ofLayout L).calls x s w = L.calls x s w := by
-  have hs : (LayoutB.ofLayout L).shaAt x s = (L.shaAt x s).map fun p =>
-      (p.1, p.2.1.map _root_.Flock.HmNets.Lin.var, p.2.2.map _root_.Flock.HmNets.Lin.var) := rfl
-  unfold LayoutB.calls VStar.Layout.calls
-  rw [hs, List.map_map]
-  congr 1
-  funext p
-  simp [readForms_pos]
+  simp [LayoutB.calls, VStar.Layout.calls, LayoutB.ofLayout, readForms_pos]
 
 /-- **Part `s`'s pieces of round `i`**, off its witness: each piece it holds, with its byte offset in the round. -/
 def LayoutB.piecesOf (L : LayoutB) (x : Msg) (s : ℕ) (w : Flock.Wit) (i : ℕ) : List (ℕ × Msg) :=
