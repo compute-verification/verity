@@ -26,15 +26,12 @@ ROUTES = [
     ("*", "fpx-c1-", "*", ("C1 is int8 Dither's transcript bit for bit: the device's int8 MMA (IMMA, wgmma s8, kind::i8) "
                           "writes each s32 word with no extraction")),
     ("sm_90", "fpx-2sp-int5-", "*", "the int5 twin's operands lie in [−16, 16] ⊂ s8: wgmma s8 writes the words"),
-    ("sm_120", "fpx-", "dither-c-peel-fx1",
-     ("fx1's entry is t·m with m = key_mul(1, (4J + e)·32) a compile-time odd constant (egemm.cu fx_chain): "
-     "(bits − 0x4B400000)·m = IMAD(bits, m, −0x4B400000·m), one IMAD with a per-position constant addend (a register "
-     "or constant-bank operand) in place of fx1's IMUL")),
 ]
 
-#: why the other variants keep the extraction on every route
-NO_ROUTE = ("its fold's entry is XOR (duo; LI-CP-W's d₀), which can't absorb an add, and its operands (e4m3i ±352, "
-            "g1's ±353) are not s8")
+#: why the other variants keep the extraction, or an op of its size, on every route
+NO_ROUTE = ("its fold's entry is XOR (duo; LI-CP-W's d₀), which can't absorb an add, or fx1's IMAD, which absorbs it only "
+            "with its 32 per-position addends in registers that c_fx1 (128 of 128) doesn't have, else a MOV a word "
+            "(fx1_absorb.py); and its operands (e4m3i ±352, g1's ±353) are not s8")
 
 #: FPX-DESIGN af74482571 pinned the B200 extraction to IMAD; its 5b835f1e60 added the class split itself
 SPLIT = {"device": "sm_100", "name": "fpx-2sp-e4m3i-split", "base": "dither-2s-licpw-redux-heavy-l32", "plain": 1.0,

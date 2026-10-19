@@ -1,4 +1,4 @@
 order = 92
 path = "`rt_fp/`"
 runs_on = "CPU (the machine model's environment; `fx1_absorb.py`: ptxas and cuobjdump, a node's CUDA 13.0)"
-what = "RT-FP's red-team witnesses for the FP8/FP4 designs: FPX-DESIGN's variants' credited floor ♭ against a route that writes the same committed words for less (an int8 MMA, fx1's IMAD absorbing the FP32 word's offset, the extraction's class split), `overcredit.py FPX_EPS OUT`; and `fx1_absorb.py OUT`, ptxas's sm_120a code for fx1's tail on IMMA words, on QMMA words with the extraction, and with it absorbed into fx1's IMAD (lane ops a word, registers, spills)"
+what = "RT-FP's red-team witnesses for the FP8/FP4 designs: FPX-DESIGN's variants' credited floor ♭ against a route that writes the same committed words for less (an int8 MMA, the extraction's class split), `overcredit.py FPX_EPS OUT`; and `fx1_absorb.py OUT`, ptxas's sm_120a code for fx1's tail on IMMA words, on QMMA words with the extraction, and with it absorbed into fx1's IMAD (lane ops a word, registers, spills: absorbing it costs 32 registers or a MOV a word)"
