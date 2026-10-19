@@ -7,8 +7,10 @@
 // case (no delivery). wgli_true (RT-HOPPER-8) is the honest loop folding the wgmma's own accumulators, after each
 // wait, wgli_pp the same loop with its warpgroups ordered (ping-pong: the next warpgroup's barrier is arrived after the
 // wait), wgli_pp2 with the barrier arrived right after the commit, and wgli_db one warpgroup double-buffering two N128
-// accumulators (fold one while the other's wgmma runs). Built and gated by ../opcode_probe/probe.py; rs.sh builds it
-// on a CPU node and times it on the H200, rs.py reads it.
+// accumulators (fold one while the other's wgmma runs). The b1 form (BGMMA m64n256k256 and.popc), which the census
+// also prices on JI90 at the lane default, runs alone, beside the LI fold and at the IMAD and LOP3 points, so its joint
+// coefficients can be fitted as RS's were. Built and gated by ../opcode_probe/probe.py; rs.sh builds it on a CPU node
+// and times it on the H200, rs.py reads it.
 #include "../opcode_probe/probe.cuh"
 #include "../dc/dc.cuh"
 #include "../dc/probes/lanes.cuh"
@@ -37,6 +39,10 @@ struct F_rs {
 };
 struct F_u8 {
   DC_DEV static void mma(int (&d)[128], const Tiles& t, const uint32_t (&)[4], int sd) { wgmma_u8s8_n256(d, t.da, t.db, sd); }
+};
+// m64n256k256 b1 and.popc on the same 32-byte k-major tiles (k256 bits a row is s8's k32 bytes)
+struct F_b1 {
+  DC_DEV static void mma(int (&d)[128], const Tiles& t, const uint32_t (&)[4], int sd) { wgmma_b1_n256(d, t.da, t.db, sd); }
 };
 
 template <class F>
@@ -263,9 +269,14 @@ OP_KERNEL(wgli_pp2_w2, 256) { wg_li_pp<F_ss, 2, true>(a); }
 OP_KERNEL(wgli_pp2_w3, 384) { wg_li_pp<F_ss, 3, true>(a); }
 OP_KERNEL(wgli_db_w1, 128) { wg_li_db(a); }
 OP_KERNEL(wgli_db_w2, 256) { wg_li_db(a); }
+OP_KERNEL(wg_b1_n256_a1, 256) { wg_alone<F_b1>(a); }
+OP_KERNEL(wgli_redux_b1, 256) { wg_li<F_b1>(a); }
+OP_KERNEL(wgmix_imad_r256_b1, 256) { wg_mix<F_b1, L_IMAD, 256>(a); }
+OP_KERNEL(wgmix_lop3_r256_b1, 256) { wg_mix<F_b1, L_LOP3, 256>(a); }
 
 #define S8 "IGMMA.64x256x32.S8.S8*=4"
 #define U8 "IGMMA.64x256x32.U8.S8*=4"
+#define B1 "BGMMA.64x256x256.AND.POPC*=4"
 #define S8H "IGMMA.64x128x32.S8.S8*=8"
 #define LI ",LOP3.LUT=272,IMAD=256,REDUX*=4"
 #define P(NAME, PAT) {.name = #NAME, .kernel = (const void*)NAME, .tpb = 256, .expect = PAT, .iters = 4096}
@@ -288,6 +299,10 @@ static const OpProbe PROBES[] = {
     {.name = "wgli_pp2_w3", .kernel = (const void*)wgli_pp2_w3, .tpb = 384, .expect = S8 LI, .iters = 4096},
     {.name = "wgli_db_w1", .kernel = (const void*)wgli_db_w1, .tpb = 128, .expect = S8H LI, .iters = 4096},
     P(wgli_db_w2, S8H LI),
+    P(wg_b1_n256_a1, B1),
+    P(wgli_redux_b1, B1 LI),
+    P(wgmix_imad_r256_b1, B1 ",IMAD=256"),
+    P(wgmix_lop3_r256_b1, B1 ",LOP3.LUT=256"),
 };
 
 int main(int argc, char** argv) { return op_main(argc, argv, PROBES); }
