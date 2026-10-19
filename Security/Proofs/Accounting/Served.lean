@@ -25,7 +25,7 @@ open Accounting.SecurityProofs.TS.Stages (prob_prod)
 
 theorem prob_eq_pr {α : Type} [Fintype α] (p : α → Prop) : prob p = Claims.Pr p := by
   classical
-  rw [prob_eq_card, Claims.Pr] <;> congr
+  rw [prob_eq_card, Claims.Pr]
 
 theorem card_rest_le {n : ℕ} (B : Finset (Fin (n + 1))) (p : Fin (n + 1)) : (rest B p).card ≤ B.card :=
   Finset.card_le_card_of_injOn (fun z => Equiv.swap 0 p z.succ) (fun z hz => by simpa [rest] using hz)
@@ -56,9 +56,9 @@ theorem miss_ge : ∀ (K N : ℕ) (B : Finset (Fin N)), K ≤ N →
             ∀ v ∈ Pouw.Window.subsetDraw (K + 1) (Equiv.Perm.decomposeFin.symm (p, e)), v ∉ B := by
       intro p
       by_cases hp : p ∈ B
-      · rw [if_pos hp, mul_zero]
+      · rw [ite_eq_left hp, mul_zero]
         exact prob_nonneg _
-      rw [if_neg hp, mul_one]
+      rw [ite_eq_right hp, mul_one]
       have hle : ((n - B.card).choose K : ℝ) / (n.choose K : ℝ) ≤
           ((n - (rest B p).card).choose K : ℝ) / (n.choose K : ℝ) := by
         refine div_le_div_of_nonneg_right ?_ (Nat.cast_nonneg _)
@@ -98,8 +98,10 @@ theorem miss_ge : ∀ (K N : ℕ) (B : Finset (Fin N)), K ≤ N →
       have hm : n + 1 - B.card = a + 1 := by omega
       have hnb : n - B.card = a := by omega
       have hsub : 1 - (B.card : ℝ) / ((n + 1 : ℕ) : ℝ) = ((a + 1 : ℕ) : ℝ) / ((n + 1 : ℕ) : ℝ) := by
-        rw [eq_div_iff hn1.ne', sub_mul, one_mul, div_mul_cancel₀ _ hn1.ne', ha]
-        push_cast
+        rw [eq_div_iff hn1.ne', sub_mul, one_mul, div_mul_cancel₀ _ hn1.ne']
+        have hcast : ((n + 1 : ℕ) : ℝ) = (B.card : ℝ) + ((a + 1 : ℕ) : ℝ) := by
+          exact_mod_cast (show n + 1 = B.card + (a + 1) by omega)
+        rw [hcast]
         ring
       have key : (a + 1).choose (K + 1) * (n.choose K * (n + 1)) =
           a.choose K * (a + 1) * (n + 1).choose (K + 1) := by
