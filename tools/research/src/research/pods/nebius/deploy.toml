@@ -788,6 +788,12 @@ src = "tools/research/src/research/pods/nebius/device_cores.sh"
 nodes = ["vy-nebius-2"]
 owner = "infra"
 
+[[file]]  # `sudo systemctl enable vy-device-cores` once; no `run`: it applies at boot, and a changed script is run by hand
+path = "/etc/systemd/system/vy-device-cores.service"
+src = "tools/research/src/research/pods/nebius/vy-device-cores.service"
+nodes = ["vy-nebius-2"]
+owner = "infra"
+
 [[file]]  # after installing it, `sudo sysctl --system` (or the next boot) applies it
 path = "/etc/sysctl.d/90-vy-device-cores.conf"
 src = "tools/research/src/research/pods/nebius/device-cores-sysctl.conf"

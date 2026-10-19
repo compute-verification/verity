@@ -178,6 +178,40 @@ theorem ksR_expectedCR {W : Type} {Ω : Type} [Fintype Ω] [Nonempty Ω] (H : Ms
   rw [ksR_be_pr]
   exact div_nonneg (Ex_nonneg fun _ => Nat.cast_nonneg _) (by positivity)
 
+omit [Fintype Coin] [Nonempty Coin] [Inhabited Coin] [DecidableEq Col] in
+/-- `ksR`'s setup makes no evaluation. -/
+theorem ksR_setupCalls (H : Msg → Msg) (xs : List Msg) : setupCalls H (ksR Coin) xs = [] := by
+  simp only [setupCalls, List.flatMap_eq_nil_iff, List.map_eq_nil_iff]
+  exact fun _ _ => rfl
+
+omit [DecidableEq Col] in
+/-- `Br` finds nothing at `ksR`: the outer witnesses record no call, and its setup makes no evaluation. -/
+theorem ksR_br_pr {W : Type} {Ω : Type} [Fintype Ω] [Nonempty Ω] (H : Msg → Msg) (I : Recursion.Inner Coin W)
+    (DO : Flock.Deploy Coin Col T) (decO : List (ℕ × Col) → List T) (P : Prover Ω) (x : Msg)
+    (hk : 0 < (ksR Coin).V.k x) : (Br H (ksR Coin) I DO decO P x hk).Pr H = 0 := by
+  unfold Finder.Pr
+  rw [Pr_congr fun s => iff_false_intro ?_]
+  · exact Pr_false
+  · rintro ⟨u, v, h, -⟩
+    simp only [Br, ksR_setupCalls, List.append_nil, findCollIn, reduceCtorEq] at h
+
+omit [DecidableEq Col] in
+theorem ksR_prBr {W : Type} {Ω : Type} [Fintype Ω] [Nonempty Ω] (H : Msg → Msg) (I : Recursion.Inner Coin W)
+    (DO : Flock.Deploy Coin Col T) (decO : List (ℕ × Col) → List T) (P : Prover Ω) (x : Msg) :
+    PrBr H (ksR Coin) I DO decO P x = 0 := by
+  unfold PrBr
+  split_ifs with hk
+  · exact ksR_br_pr H I DO decO P x hk
+  · rfl
+
+omit [DecidableEq Col] in
+theorem ksR_strictBirthday_br {W : Type} {Ω : Type} [Fintype Ω] [Nonempty Ω] (H : Msg → Msg)
+    (I : Recursion.Inner Coin W) (DO : Flock.Deploy Coin Col T) (decO : List (ℕ × Col) → List T) (P : Prover Ω)
+    (x : Msg) (hk : 0 < (ksR Coin).V.k x) : StrictBirthday H (Br H (ksR Coin) I DO decO P x hk) := by
+  intro q _
+  rw [ksR_br_pr]
+  positivity
+
 omit [DecidableEq Col] in
 theorem ksR_prBad {W : Type} (H : Msg → Msg) (R : Rel W) (E : Extractor Coin W (ksR Coin).V) (x : Msg)
     (hR : ∀ w, ¬ R x w) : PrBad H (ksR Coin).V R E x silentP = 1 :=
@@ -478,14 +512,14 @@ variable {Coin : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin]
 theorem KS_fails (H : Msg → Msg) : ¬ Recursion.KS H (ksR Coin) (accI Coin) (Flock.ksD Coin) := by
   intro h
   have h1 := h (fun _ => [()]) (Flock.listWithin_unit _ _ _) [] Unit silentP
-  rw [ksR_prBad H _ _ [] (ksR_noR _ []), ksR_prB, ksR_prBe, ksR_κ] at h1
+  rw [ksR_prBad H _ _ [] (ksR_noR _ []), ksR_prB, ksR_prBe, ksR_prBr, ksR_κ] at h1
   norm_num [accI] at h1
 
 /-- **The recursion's private `KS` fails** at `ksR`, `accI` and `Flock.ksD` outside. -/
 theorem KSPriv_fails (H : Msg → Msg) : ¬ KSPriv H (ksR Coin) (accI Coin) (Flock.ksD Coin) := by
   intro h
   have h1 := h (fun _ => [()]) (Flock.listWithin_unit _ _ _) [] Unit silentP
-  rw [ksR_prBad H _ _ [] (ksR_noRPriv _ []), ksR_prB, ksR_prBe, ksR_κ] at h1
+  rw [ksR_prBad H _ _ [] (ksR_noRPriv _ []), ksR_prB, ksR_prBe, ksR_prBr, ksR_κ] at h1
   norm_num [accI] at h1
 
 /-- **The recursion's `KS` over Flock fails** at `ksR`, `Flock.ksD` inside and outside. -/
@@ -493,7 +527,7 @@ theorem KSFlock_fails (H : Msg → Msg) : ¬ KSFlock H (ksR Coin) (Flock.ksD Coi
   intro h
   have h1 := h (fun _ => [()]) (Flock.listWithin_unit _ _ _) (fun _ => [()]) (Flock.listWithin_unit _ _ _) []
     Unit silentP
-  rw [ksR_prBad H _ _ [] (ksR_noR _ []), ksR_prB, ksR_prBe, ksR_κ] at h1
+  rw [ksR_prBad H _ _ [] (ksR_noR _ []), ksR_prB, ksR_prBe, ksR_prBr, ksR_κ] at h1
   have := Flock.ksD_κ (Coin := Coin) []
   simp only [mul_zero, Real.sqrt_zero, add_zero] at h1
   change 1 ≤ Claims.Flock.κ (Flock.ksD Coin) [] at h1
@@ -511,12 +545,14 @@ theorem Bits_fails (H : Msg → Msg) : ¬ Recursion.Bits H (ksR Coin) (accI Coin
   bits_bound_fails H _ _ _ (ksR_noR _ []) (accI_lam_pos []) <|
     h (fun _ => [()]) (Flock.listWithin_unit _ _ _) [] Unit silentP 1 le_rfl (calls_silentP_accV H [])
       (strictBirthday_B_accV H silentP []) (ksR_expectedCR H _ _ _ silentP [])
+      (ksR_strictBirthday_br H _ _ _ silentP [])
 
 /-- **The recursion's `Bits` over Flock fails** at `ksR`, `Flock.ksD` inside and outside. -/
 theorem BitsFlock_fails (H : Msg → Msg) : ¬ BitsFlock H (ksR Coin) (Flock.ksD Coin) (Flock.ksD Coin) := fun h =>
   bits_bound_fails H _ _ _ (ksR_noR _ []) (ksD_lam_pos _ []) <|
     h (fun _ => [()]) (Flock.listWithin_unit _ _ _) (fun _ => [()]) (Flock.listWithin_unit _ _ _) [] Unit silentP 1
       le_rfl (calls_silentP_accV H []) (strictBirthday_B_accV H silentP []) (ksR_expectedCR H _ _ _ silentP [])
+      (ksR_strictBirthday_br H _ _ _ silentP [])
 
 /-- **The recursion's `Efficient` fails** at `effR`, `accI` and `Flock.ksD` outside: `E*` reruns `3` times on every
 coin, above the expected bound `N_I · (1 + m′·k) = 2`. -/
