@@ -1,5 +1,6 @@
 import Models.Accounting.Guarantees.ComposePeriod
 import Proofs.Accounting.TS.Rounds
+import Proofs.Accounting.ComposePeriod.Covers
 
 /-!
 # PoUW's work over an accounting period: proofs
@@ -112,5 +113,13 @@ theorem PeriodTailMax : Accounting.Guarantees.ComposePeriod.PeriodTailMax := by
   have h := prob_prefix_le (c := 1 / Λ) (by positivity) g
     (Accounting.SecurityProofs.TS.Rounds.expBound_of_budgetAt g hB) (Λ * t)
   rwa [one_div, inv_mul_cancel_left₀ hΛ.ne'] at h
+
+/-- **`CircuitWorkPeriod` from the period layer's covers**: the assembly, reading `PeriodCoversStmt`
+(`ComposePeriod/Covers.lean`, training's worker's to prove) as a hypothesis until its proof lands. `hRest` is the
+assembly's steps not yet proved here. -/
+theorem circuitWorkPeriod_of_covers (hC : PeriodCoversStmt)
+    (hRest : PeriodCoversStmt → Accounting.Guarantees.ComposePeriod.CircuitWorkPeriod) :
+    Accounting.Guarantees.ComposePeriod.CircuitWorkPeriod :=
+  hRest hC
 
 end Accounting.SecurityProofs.ComposePeriod
