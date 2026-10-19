@@ -3482,6 +3482,9 @@
    "assumptions": [],
    "type_hash": "cc57888b57675154812ec32f76c474386b3fc204b01538efbfbb34c10c54c1e7"
   },
+  "Nci.SecurityProofs.FitBound": {
+   "owner": "@lean"
+  },
   "Nci.SecurityProofs.FullPositions": {
    "owner": "@lean",
    "signature": ["Nci.SecurityProofs.FullPositions : Nci.Guarantees.FullPositions"],
@@ -4882,7 +4885,8 @@
    "Definitions.Accounting.Actual",
    "Definitions.Accounting.Physical",
    "Models.Accounting.Assumptions.PouwWork",
-   "Proofs.Flock.Recursive.Premises"
+   "Proofs.Flock.Recursive.Premises",
+   "Models.Nci.Assumptions.Fit"
   ],
   "properties": {
    "Flock.SecurityProofs.PublicAudit": {
@@ -5239,6 +5243,7 @@
    "Nci.SecurityProofs.ThreadedTraining": "frozen (no-function): It is about an arbitrary reference circuit, a threading of it and a declaration that contains it, under the named WeightsIncompressible (Security/Models/Nci/Assumptions/Threads.lean), not about the NCI check's code; joining it to NciCheck.Properties.Witnesses is what would give it an acceptance.",
    "Nci.SecurityProofs.ContainedMatMul": "frozen (no-function): It is about an arbitrary reference circuit, a chain it runs and a declaration that contains it, under the named ActivationsSupport and PartialSumsSupport on the reference circuit (Security/Models/Nci/Assumptions.lean), not about the NCI check's code; joining it to NciCheck.Properties.Witnesses is what would give it an acceptance.",
    "Nci.SecurityProofs.ContainedTraining": "frozen (no-function): It is about an arbitrary reference circuit, a chain it runs and a declaration that contains it, under the named ActivationsSupport and PartialSumsSupport on the reference circuit (Security/Models/Nci/Assumptions.lean), not about the NCI check's code; joining it to NciCheck.Properties.Witnesses is what would give it an acceptance.",
+   "Nci.SecurityProofs.FitBound": "frozen (no-function): It is about an arbitrary reference circuit, a threading of it and its division into windows, under the named empirical premises Reach (F3) and Fits (F1 and F4) (Security/Models/Nci/Assumptions/Fit.lean), not about the NCI check's code; joining it to Accounting's Windows and the wipe certificate is what would give it an acceptance.",
    "Nci.SecurityProofs.Training": "falsified (conjecture,no-function): It rests on ActivationsIncompressible and PartialSumsIncompressible, an analysis simplification, known false (Daniel 7:46 PM PDT (02:46Z)); lean restates it.",
    "Nci.SecurityProofs.UpdatedMatMul": "falsified (conjecture,no-function): It rests on ActivationsIncompressible and PartialSumsIncompressible, an analysis simplification, known false (Daniel 7:46 PM PDT (02:46Z)); lean restates it.",
    "Nci.SecurityProofs.UpdatedMatMulReads": "falsified (conjecture,no-function): It is UpdatedMatMul before its division by alpha, so it rests on ActivationsIncompressible and PartialSumsIncompressible, an analysis simplification, known false (Daniel 7:46 PM PDT (02:46Z)); lean restates it.",
