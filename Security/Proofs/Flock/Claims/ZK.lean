@@ -42,7 +42,9 @@ import Proofs.Flock.Claims.ZK.PrefixLive
 import Proofs.Flock.Claims.ZK.SimSession
 import Proofs.Flock.Claims.ZK.SimInner
 import Proofs.Flock.Claims.ZK.SplitInner
+import Proofs.Flock.Claims.ZK.InnerSlotTriple
 import Proofs.Flock.Claims.ZK.InnerLeaf
+import Proofs.Flock.Claims.ZK.InnerY
 import Proofs.Flock.Claims.ZK.Assemble
 import Proofs.Flock.Claims.ZK.Sent
 import Proofs.Flock.Claims.ZK.Round1
@@ -308,12 +310,16 @@ import Proofs.Flock.Claims.ZK.Stop
   the batched constraint, `τ`'s value and leaf, and `Y` (`Masked.InnerSlot`, `Masked.InnerTriple`,
   `Masked.InnerBatched`, `Masked.InnerTauVal`, `Masked.InnerTauLeaf`, `Masked.InnerY`), and `SimInner` from them
   (`Masked.simInner_of_split`).
+* `InnerSlotTriple`: `Masked.innerSlot_holds` and `Masked.innerTriple_holds`, `InnerSlot` and `InnerTriple` from
+  `SimInner`'s `innerPre_slot` and `innerTripleE`.
 * `InnerLeaf`: `Masked.innerTriple` and `Masked.innerTauLeaf`, the cut's triple openings and `τ` commitment read off
   the tape, and `y_τ`'s bytes as the honest pads' `τ` salt (`Masked.ytau_saltBytes`).
+* `InnerY`: `Masked.innerY`, the cut's `Y` is the session's at the honest pads once `β`'s round is answered.
 * `Assemble`: `Flock.zk_deployZk_masked_exe_split`, Flock's zero knowledge at the deployed masked session from the
-  hybrid `SimLig`, `SplitInner`'s statements, `CausalExe` and `FinExe`: `hstep` from `Masked.prefixLive` and
-  `SimSession` (`Masked.hstep_exe`), `SimSession` from `Masked.simCommit`, `Masked.simPiop` and the other hybrids
-  (`Masked.simSession_of`), `SimInner` from `SplitInner` (`Masked.simInner_of_split`).
+  hybrid `SimLig`, `SplitInner`'s open statements `InnerBatched` and `InnerTauVal`, `CausalExe` and `FinExe`: `hstep`
+  from `Masked.prefixLive` and `SimSession` (`Masked.hstep_exe`), `SimSession` from `Masked.simCommit`,
+  `Masked.simPiop` and the other hybrids (`Masked.simSession_of`), `SimInner` from `SplitInner`
+  (`Masked.simInner_of_split`).
 * `Worker`: Lemma B at any clear values a worker supplies, which never read the pads: the switched prover (`p`'s view
   where its rows hold, else the honest prover's on the pads Lemma A moves) has `S_shvzk`'s distribution on the honest
   `InnerHolds` alone (`sw_shvzk`, `worker_shvzk`), and differs from `p`'s view only in `Y₁`, `C_h` and the pads tree
