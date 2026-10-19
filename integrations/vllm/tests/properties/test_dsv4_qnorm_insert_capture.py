@@ -4,6 +4,8 @@ comparison jobs on twin-made kernel words, the spy on the CuTe dispatch, its ver
 for."""
 from __future__ import annotations
 
+__models__ = ("deepseek-ai/DeepSeek-V4-Pro",)
+
 import contextlib
 import copy
 import functools

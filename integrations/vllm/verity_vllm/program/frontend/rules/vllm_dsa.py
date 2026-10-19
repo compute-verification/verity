@@ -21,6 +21,8 @@ and `output.copy_(rows)` (an allocation written whole).  A role the vocabulary l
 
 from __future__ import annotations
 
+__models__ = ("zai-org/GLM-5.3",)
+
 import numpy as np
 import torch
 
@@ -28,9 +30,9 @@ from verity.ml.circuits.refs import Coll, PartLog, array_of, concat
 from verity.ml.circuits.types import Array, Value
 from verity_vllm.program.frontend.derive import Alloc, StaticIndex, refuse
 from verity_vllm.program.frontend.rules.base import InPlaceRule, OpRule, RuleInfo, StateRule
-from verity_vllm.program.frontend.rules.common import shape
+from verity_vllm.program.frontend.rules.common import refuse_cached_prefix, shape
 from verity_vllm.program.frontend.rules.patterns import Consumed
-from verity_vllm.program.frontend.rules.vllm_bindings.observations import _OBSERVED, active_target_profile
+from verity_vllm.program.frontend.rules.vllm_bindings.observations import _OBSERVED, active_target_profile, launch_keys_of
 from verity_vllm.program.frontend.rules.vllm_iface import iface
 from verity_vllm.program.frontend.torch_frontend import _permute, _tensor_type
 from verity_vllm.program.registry import dsa
@@ -67,11 +69,11 @@ def _args(node, names: tuple[str, ...]) -> dict:
     return d
 
 
-def _missing(ctx, roles) -> str | None:
+def _missing(ctx, roles, kernels: dict = ROLE_KERNELS) -> str | None:
     gone = [r for r in roles if not ctx.vocab.has(r)]
     if not gone:
         return None
-    return "numerics_unregistered: the vocabulary has no " + "; no ".join(f"{r} ({ROLE_KERNELS[r]})" for r in gone)
+    return "numerics_unregistered: the vocabulary has no " + "; no ".join(f"{r} ({kernels[r]})" for r in gone)
 
 
 def _value(ctx, a, dt, shp, what: str) -> str | None:
@@ -101,9 +103,9 @@ def _positions(ctx, a) -> list[int] | str:
     return v.flat()
 
 
-def _table(ctx, a, width: int, positions: list[int], what: str) -> str | None:
-    """None when ``a`` is a bf16 rotary cache [MAX_POS, width] holding every position."""
-    r = _value(ctx, a, BF16, (None, width), what)
+def _table(ctx, a, width: int, positions: list[int], what: str, dt=BF16) -> str | None:
+    """None when ``a`` is a rotary cache [MAX_POS, width] of ``dt`` holding every position."""
+    r = _value(ctx, a, dt, (None, width), what)
     if r:
         return r
     n = shape(ctx, a)[0]
@@ -453,6 +455,7 @@ class DsaIndexerAttnRule(StateRule):
         return True
 
     def emit(self, node, ctx):
+        refuse_cached_prefix(ctx, node, self.rule_id)
         a = _args(node, _ATTN)
         has = a.get("index_q") is not None
         layer, TOPK, scale = a["layer_name"], a["topk"], float(a["scale"])
@@ -477,15 +480,21 @@ class DsaIndexerAttnRule(StateRule):
         for i in range(T):
             hist["latent"].append(Coll(Array(L + R, Value(16)), concat([kvc[i].refs, kpe[i].refs])))
         latent = _log(ctx, (layer, "latent"), hist["latent"])
-        G = FA3_SPARSE_GEOMETRY[(R, L)]
-        obs = (_OBSERVED["attention_impls"] or {}).get(layer) or {}
-        pinned_one = obs.get("num_splits") == 1
-        splits = ([1] * T if pinned_one else
-                  launch_num_splits(keys, int(active_target_profile().num_sms), TOPK, int(obs.get("num_splits") or 0)))
         too_long = [(P, n) for P, n in zip(pos, keys) if n > TOPK]
         if too_long:
             refuse("numerics_unregistered", node, mp, f"{layer!r}: position {too_long[0][0]} has {too_long[0][1]} keys > TOPK {TOPK}: the top-k "
                                                      f"kernels' radix selection has no Definition (DsaTopKShortRow_v1 states rows of at most TOPK)")
+        G = FA3_SPARSE_GEOMETRY[(R, L)]
+        obs = (_OBSERVED["attention_impls"] or {}).get(layer) or {}
+        pinned_one = obs.get("num_splits") == 1
+        if pinned_one:
+            splits = [1] * T
+        else:
+            # one launch over every token of the step, each with its top-k's valid keys: a token's split count is a function of
+            # that count given the launch
+            batch = [min(n, TOPK) for n in launch_keys_of(node, keys)]
+            by_keys = dict(zip(batch, launch_num_splits(batch, int(active_target_profile().num_sms), TOPK, int(obs.get("num_splits") or 0))))
+            splits = [by_keys[n] for n in keys]
         if has:
             H, D = shape(ctx, a["index_q"])[1:3]
             iq, iw = _rows(ctx, a["index_q"], 8), _rows(ctx, a["index_weights"], 32)

@@ -156,7 +156,10 @@ and opens coin `(label, i)` once, after the root the verifier recorded for it. `
 label and index, its form, the path against the root, and `after`); `order_reason` checks a family's openings against the
 roots the verifier recorded, in order: coin i opened after root i, none twice ("a retry never redraws"), none before its
 root is recorded, and every recorded root's coin opened. `LiveRecord` is the verifier's side: it records a root and only
-then asks the challenger for that root's coin.
+then asks the challenger for that root's coin. The commitment those checks read is the challenger's own: before any coin
+opens, the challenger signs it with its LMS key on its host (`LiveChallenger.sign_record`, `write_record`; Lean
+`SampledProofs.ChallengerRecord`), and the verifier reads that record from the challenger's file under its own key
+(`trusted_commitment`), never from the prover's bundle, and fails closed on a missing, malformed or unsigned record.
 
 Timing is a trust assumption, not a check. `after` binds an opening to the root the verifier recorded, but can't show the
 coin was released after it: that rests on the challenger releasing coin i only once it has received root i. The
@@ -1351,9 +1354,10 @@ DotBf16_v1 .. v3        x     w      1 × K × 1    any (bf16 linears, and atten
 ~~~
 
 A Call nested in a Definition is found through it when its operands are that Definition's parameters, at any depth; a
-Program whose root is the matmul is served as one Call of it (`PouwCall_v1{FN}`). Attention is credited like every A·B
-(decision 109), but P·V as `AttnBlock_v3` serves it, tensor-core steps on a P the block computes, is no Call of a registered
-family, so it is refused (`uncovered`) until it is one.
+Program whose root is the matmul is served as one Call of it (`PouwCall_v1{FN}`). Attention is to be credited like every A·B
+(decision 109): its QKᵀ is a `DotBf16` kind like any other, but the one registered scheme, `eps1-sm120-h1fx1`, has no unit
+for it, so its dots are refused (`scheme`) until one is plugged. P·V as `AttnBlock_v3` serves it, tensor-core steps on a P
+the block computes, is no Call of a registered family, so it is refused (`uncovered`) until it is one.
 
 **Tile and replace.** A site is a root node's dots of one kind, and its distinct A rows and B rows, first use first, are its
 operands. Its A rows go in blocks of the scheme's r, each block's B rows in chunks of c (r × c is a scheme parameter, decision

@@ -9,6 +9,8 @@ or `indexer-scored`) and the attention's rows (`decode-tokens`, `prefill-tokens`
 are distinct for every combination, and every committer name is unique over all of them."""
 from __future__ import annotations
 
+__models__ = ("deepseek-ai/DeepSeek-V4-Pro",)
+
 import copy
 import hashlib
 import itertools

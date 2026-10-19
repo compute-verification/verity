@@ -1,6 +1,8 @@
 """CPU checks for the cc 9.0 CUDA RMSNorm capture's models, verdict and orchestration."""
 from __future__ import annotations
 
+__models__ = ("zai-org/GLM-5.3",)
+
 import json
 
 import numpy as np
