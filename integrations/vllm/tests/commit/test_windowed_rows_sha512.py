@@ -87,10 +87,11 @@ class _SlotRunner(WR._Runner):
     """A replayed graph's step: the per-token tensors land in persistent slots (the captured copies) and are staged from them in one
     `stage_slot_plan` call and flushed (the source's drain); the rest are acquired one by one, as the logits and the sampled tokens are."""
 
-    def __init__(self) -> None:
+    def __init__(self, lag: bool = False) -> None:
         super().__init__()
         self.slots: list[torch.Tensor] = []
         self.handle = -1
+        self.lag = lag
 
     def execute_model(self, scheduler_output, *a, **kw):
         com, n = self.committer, scheduler_output.total_num_scheduled_tokens
@@ -101,6 +102,10 @@ class _SlotRunner(WR._Runner):
         for slot, (_nm, t) in zip(self.slots, per_token):
             slot[:n].copy_(t)
         com.stage_slot_plan(self.handle, n, n)
+        side = com._nc.side_stream_for_test()
+        if self.lag and side:
+            with torch.cuda.stream(torch.cuda.ExternalStream(side)):
+                torch.cuda._sleep(20_000_000)                       # the gather queued behind it lags the serving stream by milliseconds
         com._nc.flush()
         for nm, t in self.tensors:
             if all(nm != p for p, _t in per_token):
@@ -110,11 +115,13 @@ class _SlotRunner(WR._Runner):
 def test_side_stream_drain_commits_step_rows_roots(monkeypatch):
     """A replayed step's slots gathered on the side stream (VERITY_DRAIN_SIDE, on by default), the serving stream joining it before its
     next flush, window mark and step end, and the next step rewriting the slots on the serving stream: the same roots as one
-    acquisition per tensor in the same order; with VERITY_DRAIN_SIDE=0, the same roots with every flush on the serving stream."""
-    for side in (False, True):
+    acquisition per tensor in the same order, also with the side stream held back behind a sleep before each step's gather (from the
+    second step, once it exists), so that a missing join would bind stale or rewritten slots; with VERITY_DRAIN_SIDE=0, the same roots
+    with every flush on the serving stream."""
+    for side, lag in ((True, False), (False, False), (True, True)):
         monkeypatch.setenv("VERITY_DRAIN_SIDE", "1" if side else "0")
         com = committer(monkeypatch, retain_levels=False)
-        runner = _SlotRunner()
+        runner = _SlotRunner(lag)
         runner.committer, com.runner = com, runner
         try:
             for run in ("learn", "hit"):
@@ -127,7 +134,7 @@ def test_side_stream_drain_commits_step_rows_roots(monkeypatch):
                     want.append(rows_root(i, first + [(nm, t) for nm, t in ts if all(nm != p for p, _t in first)], keys[i]))
                     plain.append(rows_root(i, ts, keys[i]))
                 st = rc.extra["native_collect"]
-                assert roots == want, (side, run, [i for i in range(len(SCHED)) if roots[i] != want[i]],
+                assert roots == want, (side, lag, run, [i for i in range(len(SCHED)) if roots[i] != want[i]],
                                        [i for i in range(len(SCHED)) if roots[i] == plain[i]], st)
                 assert st["gather_side_flushes"] == (len(SCHED) if side else 0), st
         finally:
