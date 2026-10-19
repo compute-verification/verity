@@ -34,6 +34,7 @@ import Definitions.Accounting.RateAuditSketchLayout
 import Definitions.Accounting.Remote
 import Definitions.Accounting.Remote.Deployed
 import Definitions.Accounting.Requirement
+import Definitions.Accounting.Requirement.Placed
 import Definitions.Accounting.Responder
 import Definitions.Accounting.Tag
 import Definitions.Accounting.TS

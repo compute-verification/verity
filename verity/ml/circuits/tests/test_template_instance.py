@@ -48,7 +48,8 @@ X3 = Array(3, Array(2, V32))
 
 
 def population(template, n: int) -> Program:
-    """`TemplateInstances{N=n}` as one-stage builds it: a batch of the template over arrays of its parameters."""
+    """`TemplateInstances_v0{N=n}`, one-stage's population program at v0 (the pinned vectors'): a batch of the template over
+    arrays of its parameters."""
     params, ret = template.signature()
     return Program(bind(_comp("TemplateInstances", 0, ("N",), lambda S: (tuple((p, Array(S.N, t)) for p, t in params), Array(S.N, ret)),
                               lambda B, S, *a: B.batch(template, *a, axes=(0,) * len(a))), N=n))
