@@ -15,8 +15,8 @@ multiplication, whichever gates hold them (`card_products_le_columns_packed`).
 charge is at most `k (b_w + b_a)`, where `Chain`'s is at most `b_w + b_a` (`card_prods_le_one`, which the support form
 reads). Neither is on the fan-out bound's path.
 
-At `k = 1` the packed chain is the chain (`Chain.toPacked`), the assumption and the guarantee are the per-product ones
-by unfolding, and `ContainedFanOutOn` is the case `k = 1` (`containedFanOutOn_of_packed`).
+At `k = 1` the packed chain is the chain (`Chain.toPacked`), the assumption is the per-product one
+(`packedActivationsIncompressible_toPacked`), and `ContainedFanOutOn` is the case `k = 1` (`containedFanOutOn_of_packed`).
 -/
 
 namespace Nci.SecurityProofs
@@ -275,11 +275,26 @@ theorem PackedContainedFanOutOn : Guarantees.PackedContainedFanOutOn := by
     _ ≤ _ := h
     _ = α * d.D.size d.D.computed := by ring
 
-/-- At `k = 1` the packed assumption is the per-product one, by unfolding. -/
+/-- Under `Chain.toPacked` an input entry is linked to an entry whole in `R` exactly when it is in the chain. -/
+theorem toPacked_linkedWhole {D : Circuit} (c : Chain D) (R : Finset (Fin D.N)) (ℓ : Fin c.L) (t : Fin c.N)
+    (j : Fin (c.d ℓ)) : c.toPacked.LinkedWhole R ℓ t j ↔ c.LinkedWhole R ℓ t j := by
+  obtain ⟨_ | m, hm⟩ := ℓ <;> first | exact Iff.rfl | simp [PackedChain.LinkedWhole, Chain.LinkedWhole]
+
+/-- At `k = 1` the packed assumption is the per-product one. -/
 theorem packedActivationsIncompressible_toPacked {D : Declaration} {c : Chain D.D} {Γ : ℕ} {K b_w b_a : ℝ} :
     Assumptions.PackedActivationsIncompressible D c.toPacked Γ K b_w b_a ↔
-      Assumptions.ActivationsIncompressible D c Γ K b_w b_a :=
-  Iff.rfl
+      Assumptions.ActivationsIncompressible D c Γ K b_w b_a := by
+  first
+  | exact Iff.rfl
+  | classical
+    have hcard : ∀ R : Finset (Fin D.D.N),
+        ((c.toPacked.inputsUsed R).filter fun x => ¬ c.toPacked.LinkedWhole R x.1 x.2.1 x.2.2).card =
+          ((c.inputsUsed R).filter fun x => ¬ c.LinkedWhole R x.1 x.2.1 x.2.2).card := fun R => by
+      show ((c.inputsUsed R).filter fun x => ¬ c.toPacked.LinkedWhole R x.1 x.2.1 x.2.2).card = _
+      rw [Finset.filter_congr fun x _ => not_congr (toPacked_linkedWhole c R x.1 x.2.1 x.2.2)]
+    unfold Assumptions.PackedActivationsIncompressible Assumptions.ActivationsIncompressible
+    simp only [hcard]
+    exact Iff.rfl
 
 /-- **The per-product fan-out bound is the case `k = 1`**: a chain is a packed chain with one product to a gate, and
 the assumption, the products in `S` and the bound are the same under `Chain.toPacked`. -/
