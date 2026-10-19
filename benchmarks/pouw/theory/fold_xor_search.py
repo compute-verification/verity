@@ -704,7 +704,7 @@ def anchored_cegis(ops: tuple, fix: tuple = (), c_star: int = SLICES[0], timeout
 
 
 def window_check(ops: tuple, fix: tuple, c_star: int = SLICES[0], tname: str = "xor", timeout_ms: int = 0,
-                 count: bool = True) -> dict:
+                 count: tuple | None = (3, 2)) -> dict:
     """One two-instruction `splits` case on its x-slice at c*, on a window y = 4m, 4m + 1, 4m + 2 where the last
     product is affine: unsat, window-sat (settles nothing) or unknown.
 
@@ -712,20 +712,21 @@ def window_check(ops: tuple, fix: tuple, c_star: int = SLICES[0], tname: str = "
     high addend word, and at most one of the last's multiplicands varying with y (y, or the first's low result when its
     low addend word is y). At x0 = c* ⊕ K the first's sum is A ± y with A fixed, so its low result is (A_lo ± y) mod
     2^32 and its high result changes at one step of y; each of the last's multiplicands, negated or not and extended, is
-    then constant or steps by ±1, except at at most 3 steps of y in all (the wrap and, sign-extended, the sign boundary
-    of the varying one; the high result's change). The 2^30 windows have disjoint steps, so every program has a window
-    where they step by τ_a and τ_b, one of them 0, and there its product is a_0·b_0 + i·(τ_a·b_0 + τ_b·a_0) (a ring
-    identity mod 2^w): the last sum is affine on the window, and its result steps by q or q + 1 (hi32 of an affine map)
-    or by a constant (IMAD). y ⊕ c* steps by 1 − 2c_0, then by 2c_0 − 1 + 2(1 − 2c_1), 4 apart when c_0 ≠ c_1
+    then constant or steps by ±1, except at one step of y each (the varying one's wrap, zero-extended, or its sign
+    boundary, sign-extended; the high result's change). The 2^30 windows have disjoint steps, so every program has a
+    window where they step by τ_a and τ_b, one of them 0, and there its product is a_0·b_0 + i·(τ_a·b_0 + τ_b·a_0) (a
+    ring identity mod 2^w): the last sum is affine on the window, and its result steps by q or q + 1 (hi32 of an affine
+    map) or by a constant (IMAD). y ⊕ c* steps by 1 − 2c_0, then by 2c_0 − 1 + 2(1 − 2c_1), 4 apart when c_0 ≠ c_1
     (0x55555555: −1, then 3), so no program has the slice.
 
-    z3 checks both halves over every source, modifier and constant, with the first product one free word. The count:
-    no program has 2 steps where a constant multiplicand changes, nor 3 where the varying one doesn't step by +1 and 3
-    where it doesn't step by −1 (else the result is unknown). The window, exactly over every m, with a_0·b_0 a free
-    word too, the premises (each multiplicand's two steps equal, in {0, ±1}, one of them 0) asserted on the forms' own
-    multiplicands: each program at its window is a model, so unsat is the proof. With `tname` add, the slice is
-    y + c*, which programs have (the check isn't vacuous); `count` False checks the window alone, a probe that
-    settles nothing."""
+    z3 checks both halves over every source, modifier and constant, with the first product one free word. The count,
+    looser than the one step each, as any finite count does: no program has 2 steps where a constant multiplicand
+    changes, nor 3 where the varying one doesn't step by +1 and 3 where it doesn't step by −1 (else the result is
+    unknown). The window, exactly over every m, with a_0·b_0 a free word too, the premises (each multiplicand's two
+    steps equal, in {0, ±1}, one of them 0) asserted on the forms' own multiplicands: each program at its window is a
+    model, so unsat is the proof. With `tname` add, the slice is y + c*, which programs have (the check isn't vacuous). `count` is the numbers of off steps refuted for the varying
+    and the constant multiplicands; (1, ·) and (·, 1) are sat on cases with a varying multiplicand and a high result
+    that changes, and None checks the window alone, a probe that settles nothing."""
     name = label(ops) + (f" /{fix_label(fix)}" if fix else "")
     t0 = time.monotonic()
     names = [op_name(op) for op in ops]
@@ -770,7 +771,7 @@ def window_check(ops: tuple, fix: tuple, c_star: int = SLICES[0], tname: str = "
         return out
 
     for j, src in enumerate(ops[1][1] if count else ()):
-        off = off_steps(j, 3, 1) + off_steps(j, 3, -1) if src in varying else off_steps(j, 2, 0)
+        off = off_steps(j, count[0], 1) + off_steps(j, count[0], -1) if src in varying else off_steps(j, count[1], 0)
         r = solver(*off).check()
         if r != z3.unsat:
             return {"ops": name, "result": "unknown", "method": "window", "stage": f"count of multiplicand {j}: {r}",
@@ -790,7 +791,8 @@ def window_check(ops: tuple, fix: tuple, c_star: int = SLICES[0], tname: str = "
     for i, (v, y) in enumerate(zip(vals, ys)):
         sol.add(FORMS[n2](v, m2, P2 + _small(i, step))[-1] == (y ^ bv(c_star) if tname == "xor" else y + bv(c_star)))
     r = sol.check()
-    result = "window-sat" if r == z3.sat else "unknown" if r != z3.unsat else "unsat" if count else "window-unsat"
+    result = ("window-sat" if r == z3.sat else "unknown" if r != z3.unsat else
+              "unsat" if count == (3, 2) else "window-unsat")
     return {"ops": name, "result": result, "method": "window", "c_star": f"{c_star:#010x}",
             "seconds": round(time.monotonic() - t0, 1)}
 

@@ -285,13 +285,17 @@ def test_x_times_y_first_cases_are_unsat_from_the_axes():
 def test_a_window_settles_the_hard_family_and_finds_windows_that_exist():
     """A whole case whose 192 sub-cases stayed unknown at 120 s each (x·C + {C:y}, then its low half times its high)
     is unsat on a window where its last product is affine, its count included (about 46 s, the one thing no cheaper
-    test checks); the same window of y ⊕ 0 (y itself), of y ⊕ 3 (its steps equal) and of y + c* is window-sat; and a
-    case whose first product reads y isn't taken."""
-    seq = (("IMAD.HI", (0, 2)), ("IMAD.HI", (2, 3)))
-    r = S.window_check(seq, ({2: 1, 3: 2},), timeout_ms=10**9)
+    test checks); the same window of y ⊕ 0 (y itself), of y ⊕ 3 (its steps equal) and of y + c* is window-sat; the
+    count is sat one step below the breakpoints its multiplicands have; and a case whose first product reads y isn't
+    taken."""
+    seq, fix = (("IMAD.HI", (0, 2)), ("IMAD.HI", (2, 3))), ({2: 1, 3: 2},)
+    r = S.window_check(seq, fix, timeout_ms=10**9)
     assert r["result"] == "unsat" and r["ops"] == "IMAD.HI[0, 2] IMAD.HI[2, 3] /s2=y,s3=C", r
     for c, t in ((0, "xor"), (3, "xor"), (S.SLICES[0], "add")):
-        assert S.window_check(seq, ({2: 1, 3: 2},), c, t, 10**9, count=False)["result"] == "window-sat", (c, t)
+        assert S.window_check(seq, fix, c, t, 10**9, count=None)["result"] == "window-sat", (c, t)
+    for ops, count in ((seq, (1, 2)), ((("IMAD.HI", (0, 2)), ("IMAD.HI", (3, 4))), (3, 1))):
+        r = S.window_check(ops, fix, timeout_ms=10**9, count=count)
+        assert r["result"] == "unknown" and r["stage"] == "count of multiplicand 0: sat", r
     assert S.window_check((("IMAD", (0, 2)), ("IMAD", (2, 3))), ({2: 1},), tname="add")["result"] == "window-sat"
     with pytest.raises(ValueError):
         S.window_check((("IMAD.HI", (0, 1)), ("IMAD.HI", (3, 4))), ({2: 0, 3: 2},))
