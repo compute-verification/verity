@@ -259,6 +259,8 @@ def rtt(binary: str, key: bytes, scratch: Path, port: int) -> dict:
                                           "total_ns_median": statistics.median(x["total_ns"] for x in sessions)}
         s.sendall(b"Q")
         with open(table, "rb") as f, mmap.mmap(f.fileno(), 0, prot=mmap.PROT_READ) as store:
+            for o in range(0, len(store), mmap.PAGESIZE):  # a fresh mapping faults on every page; the prover's doesn't
+                store[o]
             looks = []
             for _ in range(5):
                 idx = sw.draw_indices(os.urandom(32), SERVER, SESSION, TABLE_LABELS, sw.DEPLOYED_K)
