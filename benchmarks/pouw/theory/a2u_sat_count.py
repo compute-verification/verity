@@ -48,6 +48,19 @@ def device(path: str) -> tuple[str | None, dict[str, list[float]]]:
     return arch, dict(rows)
 
 
+def rates(counts: dict[str, dict], rows: dict[tuple[str, int], list[float]]) -> dict[str, dict]:
+    """Each timed kernel's issue rate at its best repetition, from its loop's counts on the device's arch."""
+    out = {}
+    for (k, w), cyc in rows.items():
+        c = counts.get(k)
+        if not c or not cyc:
+            continue
+        best = min(cyc)
+        out[f"{k}@w{w}"] = {"warps_a_smsp": w, "smsp_cyc_per_warp_loop": cyc, "total_ipc": round(c["body"] / best, 4),
+                            "vector_ipc": round(c["vector"] / best, 4), "a2u_holds": c["body"] / best <= 1.0}
+    return out
+
+
 if __name__ == "__main__":
     ap = argparse.ArgumentParser()
     ap.add_argument("sass")
@@ -56,14 +69,5 @@ if __name__ == "__main__":
     doc: dict = {"sass": count(a.sass)}
     if a.device:
         arch, rows = device(a.device)
-        doc["device"] = {"arch": arch, "rates": {}}
-        for (k, w), cyc in rows.items():
-            c = doc["sass"].get(arch, {}).get(k)
-            if not c or not cyc:
-                continue
-            best = min(cyc)
-            doc["device"]["rates"][f"{k}@w{w}"] = {"warps_a_smsp": w, "smsp_cyc_per_warp_loop": cyc,
-                                                   "total_ipc": round(c["body"] / best, 4),
-                                                   "vector_ipc": round(c["vector"] / best, 4),
-                                                   "a2u_holds": c["body"] / best <= 1.0}
+        doc["device"] = {"arch": arch, "rates": rates(doc["sass"].get(arch, {}), rows)}
     print(json.dumps(doc, indent=1))

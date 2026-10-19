@@ -19,7 +19,8 @@ the Lean floor has this work. Its cost a set-warp on DS-120 (every class 1 on DS
 
 On sm_120a (`cpw_sass.cu`, r20261019-115006-35c0) fx1 is 2 IMAD, 1 LOP3 and 1 LEA.HI a word, REDG.E.XOR.64 and
 STSM.16.M88.4 are one instruction each, and a 64-bit XOR into shared memory is a CAS loop (ATOMS.CAST.SPIN.64), so the
-shared-atomic route is no cheaper.
+shared-atomic route is no cheaper. cpw_sass's pair2 (mode 6, r20261019-121345-6849) is the issue-merged route, 6 LOP3
+and 2 REDG.E.XOR.64 a set-warp, bit-exact.
 
 `main` prints the bound, the routes' slot counts and the floor each implies, and checks on `segment` that the 64-bit
 route (each lane's y XOR and z XOR as one word pair, XORed over lanes) is `warp_checkpoint` set by set.
@@ -79,7 +80,7 @@ def checkpoint() -> dict:
     routes = {
         "redux (8 LOP3, 2 REDUX, 1 STG)": to_one + 2 + 1,
         "shfl butterfly (8 LOP3, 10 SHFL, 10 LOP3, 1 STG)": to_one + 10 + 10 + 1,
-        "red64 (6 LOP3, 2 REDG.E.XOR.64 into one pair)": 6 + 2,
+        "pair2 (6 LOP3, 2 REDG.E.XOR.64 into one pair)": 6 + 2,
         "egress (4 STSM_X4; TMA XOR tree amortized)": lane_words // EGRESS,
     }
     lb_issue = -(-lane_words // max(MERGES.values()))
