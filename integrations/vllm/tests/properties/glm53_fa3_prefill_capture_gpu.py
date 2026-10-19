@@ -9,8 +9,9 @@ The device gate runs first and nothing else runs when it fails (exit 3):
   select   vLLM's `get_flash_attn_version(head_size=256)` on this GPU is 3.
   mufu     `fa2_target_capture_gpu.mufu`: the ex2 / rcp tables (FA3's `--use_fast_math` exp2f and 1/x) on all 2^32 inputs.
   launch   every launch's kernels (torch.profiler): one `FlashAttnFwdSm90` instantiation at TileShape 128x80x256, kHeadDimV 256,
-           causal, varlen, not paged, MmaPV_is_RS, IntraWGOverlap, Split exactly when `fa3_model.split_plan` says the launch splits,
-           and `FlashAttnFwdCombine` with it; each launch run twice, the words equal.
+           causal (not at max_seqlen_q 1, where FA3's `mha_fwd` drops it above head 128: the two agree there), varlen, not paged,
+           MmaPV_is_RS, IntraWGOverlap, Split exactly when `fa3_model.split_plan` says the launch splits, and `FlashAttnFwdCombine`
+           with it; each launch run twice, the words equal.
   rows     each case (one sequence at each of `LENGTHS`, the `VARLEN` batches, a `wide` batch with every operand word scaled by
            2^U(-8, 8)) at `num_splits = 1` (pinned) and at the served `num_splits = 0`.  q and k are contiguous [tokens, 8, 256] (k =
            k_nope ++ k_pe broadcast over heads), v the strided view of kv_b_proj's [tokens, 8, 192 + 256] output, as vLLM passes them.
@@ -26,6 +27,8 @@ models: they are reported apart (`classes.served_split`) and do not count.
     $PY tests/properties/glm53_fa3_prefill_capture_gpu.py --out DIR --scratch /tmp --want-cc 9.0 --want-sms 132 --min-driver 575
 """
 from __future__ import annotations
+
+__models__ = ("zai-org/GLM-5.3",)
 
 import argparse
 import json
@@ -93,13 +96,14 @@ def plan(seqlens: list[int], num_splits: int) -> dict[str, Any]:
     return {"static": static, "dynamic": dyn}
 
 
-def launch_geometry(names: list[str], static: int) -> dict[str, Any]:
+def launch_geometry(names: list[str], static: int, max_seqlen_q: int) -> dict[str, Any]:
     """The `FlashAttnFwdSm90` instantiations among a launch's kernel names, against the 128 x 80 x 256 tile and the flags vLLM's call
-    sets, with `Split` and `FlashAttnFwdCombine` where the plan splits the launch."""
+    sets, as FA3's `mha_fwd` (flash_api.cpp:640-646) keeps them: no `Is_causal` at max_seqlen_q 1, with `Split` and
+    `FlashAttnFwdCombine` where the plan splits the launch."""
     fwd = sorted({(int(m[0]), (int(m[4]), int(m[5]), int(m[6])), int(m[7]), tuple(x.strip() == "true" for x in m[8].split(",")))
                   for n in names for m in _FWD.findall(n)})
     combine = any("FlashAttnFwdCombine" in n for n in names)
-    want = dict(WANT_FLAGS, Split=static > 1)
+    want = dict(WANT_FLAGS, Is_causal=max_seqlen_q > 1, Split=static > 1)
     rec: dict[str, Any] = {"instantiations": [{"stages": s, "tile": list(t), "headdim_v": dv, "flags": dict(zip(FLAGS, f))}
                                               for s, t, dv, f in fwd],
                            "combine": combine, "want": {"tile": [BM, BN, D], "headdim_v": DV, "flags": want, "combine": static > 1},
@@ -188,7 +192,7 @@ def gpu(work: Path, outdir: Path, quick: bool, only: list[str] | None, doc: dict
             del t, out1, out2
     names = C.kernels_by_launch(prof)
     for i, launch in enumerate(doc["launches"]):
-        launch.update(launch_geometry(names.get(i, []), launch["plan"]["static"]))
+        launch.update(launch_geometry(names.get(i, []), launch["plan"]["static"], max(launch["seqlens"])))
         print(f"[glm53-fa3] launch {launch['case']:18s} {launch['mode']:6s} plan={launch['plan']['static']}/{launch['plan']['dynamic']} "
               f"ok={launch['ok']} det={launch['deterministic']} tiles={[x['tile'] for x in launch['instantiations']]} "
               f"combine={launch['combine']}", flush=True)

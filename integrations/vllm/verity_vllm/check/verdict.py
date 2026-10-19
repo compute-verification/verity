@@ -155,14 +155,6 @@ OLD_TO_NEW: list[dict[str, str]] = [
     {"old": "sampled_replay_p*.json", "where": "commit/", "new": "local_replay/* (inputs: file sha256s under verdict.inputs)"},
 ]
 
-#: fields of runs.jsonl's `commit` block that are MEASUREMENTS / EXECUTION LABELS, not verdict facts (listed so the completeness test can
-#: tell "not a decision" from "lost")
-MEASUREMENT_FIELDS = frozenset({
-    "bytes_bound", "finalize_s", "leaves", "persistent_bytes", "root_ready_delay_s", "spans_bytes", "spans_calls", "spans_total_s", "steps",
-    "t_ready_minus_last_step_s", "temporary_bytes_peak", "tensors", "weight_registration", "extra",
-})
-
-
 # ---------------------------------------------------------------------------------------------------------------------- the records
 
 @dataclass
@@ -622,7 +614,7 @@ def execution_of_record(row_dir: str | os.PathLike) -> dict:
     runs' own collector record (runs.jsonl commit.binding.collector: variant, retention, window_mb, window_slots, arena_mb, layout, gpu_tree),
     `collector_variant` / `retention` ('windowed' iff window_mb > 0 else 'whole-block'; retention from the record, else --retain in cmd),
     `engine_settings` = --engine-arg k=v pairs + --max-num-seqs / --openings / --pairs / --open-after-release / --required-manifest /
-    --expect-root from the command line.  [P5] this is what `commit_summary.json` used to carry (F-r19-int-21: that file is no longer
+    --expect-root from the command line (open_after_release also when a run records its openings_after_release: the Commit's default).  [P5] this is what `commit_summary.json` used to carry (F-r19-int-21: that file is no longer
     written; the harness keeps a reader for old records); verdict.json `execution` is the record."""
     d = Path(row_dir)
     out: dict = {}
@@ -667,7 +659,8 @@ def execution_of_record(row_dir: str | os.PathLike) -> dict:
             m = re.search(flag + r"\s+(\d+)", cmd)
             if m:
                 es[key] = int(m.group(1))
-        es["open_after_release"] = "--open-after-release" in cmd
+        es["open_after_release"] = "--open-after-release" in cmd or any(
+            isinstance(r.get("commit"), dict) and r["commit"].get("openings_after_release") is not None for r in trt)
         es["required_manifest"] = bool(re.search(r"--required-manifest\s+\S+", cmd))
         m = re.search(r"--expect-root\s+([0-9a-f]{64})", cmd)
         if m:

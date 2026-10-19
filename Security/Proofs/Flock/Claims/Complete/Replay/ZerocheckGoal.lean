@@ -33,7 +33,7 @@ def _root_.FlockComplete.Run.zcCoins (o : Run H rel) (i r : ℕ) : Zc.Coins :=
 
 theorem _root_.FlockComplete.Run.tab_m (o : Run H rel) {i : ℕ} (hi : i < o.tabs.size) :
     o.tabs[i]!.m = o.sts[i]!.m ∧ 22 ≤ o.tabs[i]!.m ∧ o.tabs[i]!.m ≤ 35 := by
-  obtain ⟨st, hsts, -, h22, h35⟩ := o.table
+  obtain ⟨st, hsts, -, h22, h35, -⟩ := o.table
   unfold Run.tabs tabsOf at hi ⊢
   rw [hsts] at hi ⊢
   simp only [Array.map_singleton, List.size_toArray, List.length_singleton, Nat.lt_one_iff] at hi
