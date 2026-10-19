@@ -1,8 +1,7 @@
 #!/usr/bin/env bash
 # Experiments A and B1 of "Settling F3: routed-mixture experiments" on one node: every model in manifest.json scores
 # $WINDOWS, one model per GPU lane, then analyze writes g, its intervals, D at g and the verdict to $OUT. A finished
-# score file is never redone, so a rerun after a failure scores only what is missing. Not launched: it needs a budget
-# line (see README.md).
+# score file is never redone, so a rerun after a failure scores only what is missing.
 set -euo pipefail
 
 HERE=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)

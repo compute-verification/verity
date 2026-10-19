@@ -48,7 +48,7 @@ The verdict, on 95% intervals of g taken across the Besiroglu, Hoffmann and Kapl
 
 1. Build the evaluation corpus on CPU (the page's section 4) with `corpus.py` (its docstring has the commands): every
  stratum is fetched from documents dated 2026, then `assemble` dedups them, drops any with long n-gram hits in the
- infini-gram indexes of OLMo 2's and Dolma's training data, and splits equal bytes per stratum into `corpus.jsonl`,
+ infini-gram index of OLMo 2's training mix (which holds a Stack subset), and splits equal bytes per stratum into `corpus.jsonl`,
  `calibration.jsonl` and `mixed.jsonl` (each half of a mixed document from a different stratum). Publish the tree with
  `research data put --kind corpus --tree DIR --preserve`, and record its `art:` id on the page before scoring anything.
 2. Cut windows from the corpus (a JSONL of `id`, `stratum` and `text`), and cut calibration windows from its disjoint
