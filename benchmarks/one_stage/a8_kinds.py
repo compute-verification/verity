@@ -17,6 +17,8 @@ forked child of the process that decoded the Program, so lowerings registered fo
 from __future__ import annotations
 
 import argparse
+import contextlib
+import gc
 import json
 import os
 import resource
@@ -139,6 +141,19 @@ def out_rows(n_out: int) -> list[tuple[str, tuple[int]]]:
     return [(V2, (j,)) for j in range(n_out)]
 
 
+@contextlib.contextmanager
+def no_cyclic_gc():
+    """CPython's cyclic collector off while M0 lowers a unit: lowering allocates tens of millions of acyclic objects (GF(2)
+    forms, gate pairs) and every full collection walks them all, about 70% of lowering's CPU at the same peak memory."""
+    was = gc.isenabled()
+    gc.disable()
+    try:
+        yield
+    finally:
+        if was:
+            gc.enable()
+
+
 def try_lower(fn) -> dict:
     """M0's `UnitStager` on fn (rows as `rows_of`, output rows as `out_rows`): the composed circuit's size, or why it was
     refused."""
@@ -151,7 +166,8 @@ def try_lower(fn) -> dict:
     n_out = len(ret.fields) if hasattr(ret, "fields") else 1
     t = time.time()
     try:
-        st = CS.UnitStager(fn, f"a8-probe/{family(fn.id)}", rows, out_rows(n_out))
+        with no_cyclic_gc():
+            st = CS.UnitStager(fn, f"a8-probe/{family(fn.id)}", rows, out_rows(n_out))
     except IL.NoPiece as e:
         return {"outcome": "no-piece", "piece": str(e)[:300], "seconds": round(time.time() - t, 1)}
     except ValueError as e:

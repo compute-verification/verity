@@ -763,8 +763,9 @@ def main() -> int:
         tag = tag if tags[tag] == 1 else f"{tag}-{tags[tag]}"
         sdir = out / f"stage-{tag}"
         kv0 = rows_of_kind[tpl["kinds"][0]]
-        st = CS.UnitStager(tpl["defn"], f"unit/a8-{tag}", kv0["rows_spec"], K.out_rows(len(kv0["outs"])),
-                           circuit=sdir / "circuit.txt", bind=bound)
+        with K.no_cyclic_gc():
+            st = CS.UnitStager(tpl["defn"], f"unit/a8-{tag}", kv0["rows_spec"], K.out_rows(len(kv0["outs"])),
+                               circuit=sdir / "circuit.txt", bind=bound)
         tpl["stager"], t_build = st, round(time.time() - t0, 1)
         cap = a6.chunk_cap(st.meta)
         salt_key = hashlib.sha256(f"verity/one-stage/a8/salts\0{uid}".encode()).digest()
@@ -918,9 +919,10 @@ def main() -> int:
         tdir.mkdir(exist_ok=True)
         (tdir / "partition.json").write_text(json.dumps(tpart, sort_keys=True))
         (tdir / "program.json").write_bytes(canonical_json(encode_program(tprog)))
-        tst = CS.UnitStager(tdef, f"unit/a8-tampered-{tm['kind']}", rows_of_kind[tm["kind"]]["rows_spec"],
-                            K.out_rows(len(rows_of_kind[tm["kind"]]["outs"])), circuit=tdir / "circuit.txt",
-                            bind={"partition": P.digest(tpart), "program": tpart["program"]})
+        with K.no_cyclic_gc():
+            tst = CS.UnitStager(tdef, f"unit/a8-tampered-{tm['kind']}", rows_of_kind[tm["kind"]]["rows_spec"],
+                                K.out_rows(len(rows_of_kind[tm["kind"]]["outs"])), circuit=tdir / "circuit.txt",
+                                bind={"partition": P.digest(tpart), "program": tpart["program"]})
         d, set_name = tdir / "set", f"{tst.iset.name}-tampered"
         stage_tampered(tst, {r: v[:tn] for r, v in tm["rows"].items()}, d, tm["salt_key"], range(tn), set_name)
         (d / "inst.bin").rename(d / f"inst-{tn}.bin")
