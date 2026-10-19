@@ -15,7 +15,8 @@ Efficiency is a sum of four terms, each an upper bound under the model; ``STATUS
 * Declared compute trains at the thread bound, ``rho_T = b_a / (alpha Lambda(K))`` gates per counted multiplication with
   ``Lambda(K) = max(e, 2K / (4 d b_w))``, or at the tighter partial-sum law when no dark compute can sum the declared
   blocks' partial sums. The residual reads them on the server for free; unmonitored compute reads them over links (line
-  rate, or side channels plus readable declared egress under network accounting). A relay op reads ``2 b_p`` bits.
+  rate, or side channels plus readable declared egress under network accounting). A relay op reads ``2 b_p`` bits, and
+  the adversary relays only as many partial sums as buy more declared work than the relay's gates would train directly.
 * With sampled proofs at a budget, the adversary's pool of undetected wrong steps is ``ln(1 / p_evade) / q`` per
   identity, ``q = share / (overhead + replay)``, a lifetime constant. Each injects its 16 bits plus the choice of where,
   worth at most the chord slope of the per-block thread bound per bit.
@@ -221,20 +222,6 @@ def evaluate(p: dict, mech: dict) -> dict:
     def declared_at(B: float) -> float:
         return min(cap_T, share * chain_products(rates, alpha * C, B))
 
-    if declared_at(B_max) < cap_T:
-        B = B_max
-    else:
-        lo, hi = 0.0, B_max
-        for _ in range(60):
-            mid = (lo + hi) / 2
-            lo, hi = (lo, mid) if declared_at(mid) >= cap_T else (mid, hi)
-        B = hi
-    declared = declared_at(B)
-    relay = B / (2 * p["b_p"])
-    relay_res = min(res_ops, relay)
-    res_mults = (res_ops - relay_res) / gpm
-    unmon = max(0.0, U - (relay - relay_res)) / gpm
-
     mem = (p["hbm_gb"] + p["host_gb"]) * GB
     rate_in = ingress(p, mech)
     help_bits = min(1.0, max(0.0, sigma_eff * p["t_read"] - BLOCK_NAME_BITS) / BLOCK_BITS) * mem
@@ -248,6 +235,31 @@ def evaluate(p: dict, mech: dict) -> dict:
     if not (mech["wipes"] or mech["exhaust"]):
         per_server = windows_bound(p, H, mem, rate_in, None)
     region = p["nodes"] * per_server
+
+    def outcome(B: float) -> tuple[float, float, float, float]:
+        declared = declared_at(B)
+        relay = B / (2 * p["b_p"])
+        relay_res = min(res_ops, relay)
+        res_mults = (res_ops - relay_res) / gpm
+        unmon = max(0.0, U - (relay - relay_res)) / gpm
+        return min(declared + res_mults, region) + unmon, declared, res_mults, unmon
+
+    # past the crossing the declared side is flat at the thread bound, so relaying more only costs
+    B_hi = B_max
+    if declared_at(B_max) >= cap_T:
+        lo, hi = 0.0, B_max
+        for _ in range(60):
+            mid = (lo + hi) / 2
+            lo, hi = (lo, mid) if declared_at(mid) >= cap_T else (mid, hi)
+        B_hi = hi
+    # the adversary relays only what pays; PS' is a min of functions affine in the absorbed bits, so its total is
+    # concave in B and a ternary search finds the best B
+    lo, hi = 0.0, B_hi
+    for _ in range(100):
+        m1, m2 = lo + (hi - lo) / 3, hi - (hi - lo) / 3
+        lo, hi = (m1, hi) if outcome(m1)[0] < outcome(m2)[0] else (lo, m2)
+    B = max((0.0, (lo + hi) / 2, B_hi), key=lambda b: outcome(b)[0])
+    _, declared, res_mults, unmon = outcome(B)
 
     monitored = min(declared + res_mults, region)
     declared_part = min(declared, monitored)
