@@ -31,7 +31,7 @@ def build(scratch: Path) -> Path:
     so = scratch / "libshalat.so"
     cmd = [os.environ.get("NVCC", "nvcc"), "-O3", "-std=c++17", "-gencode", f"arch=compute_{arch},code=sm_{arch}",
            "-Xptxas", "-v", "-Xcompiler", "-fPIC", "-shared", "-o", str(so), str(here / "shalat.cu")]
-    r = subprocess.run(cmd, capture_output=True, text=True)
+    r = subprocess.run(cmd, capture_output=True, text=True, check=False)
     (scratch / "build-shalat.log").write_text(r.stdout + r.stderr)
     if r.returncode:
         sys.stderr.write(r.stderr[-4000:])
