@@ -1,0 +1,7 @@
+{
+ "every_s": 300,
+ "nodes": ["vy-nebius-1", "vy-nebius-2"],
+ "ssh": ["ssh", "-i", "/root/.runpod/ssh/runpodctl-ssh-key", "-o", "IdentitiesOnly=yes", "-o", "BatchMode=yes",
+         "-o", "ConnectTimeout=15", "-o", "StrictHostKeyChecking=accept-new",
+         "-o", "UserKnownHostsFile=/data/agent-watch/known_hosts", "-o", "LogLevel=ERROR"]
+}
