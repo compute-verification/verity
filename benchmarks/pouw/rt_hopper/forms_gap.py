@@ -154,12 +154,12 @@ FIT = {
 }
 SIBLINGS = ("IGMMA_S8_N128", "IGMMA_S8_N64", "IMMA16832_S8", "IGMMA_S8_N192", "IGMMA_S8_N32", "IGMMA_S8_N16",
             "IGMMA_S8_N8", "IMMA16816_S8", "BMMA168256_B1")
-# The census's FP tensor kinds (every one into FP32, as DC's probes time them), not timed beside the LI fold: shape, least
-# split (forms.toml's rules: f16, bf16 and tf32 hold every s8 and a 32-step word is exact in FP32, so 1; e4m3 3, by
-# Karatsuba on balanced nibbles; e5m2 3 as well, the cheater's favour, though its 3 significant bits miss the nibbles'
-# odd sums past 8 and schoolbook takes 4), N256-equivalents an instruction by MACs, and by tensor time (IGMMA_S8_N256's
-# M line over the kind's).
-UNTIMED = {
+# The census's FP tensor kinds (every one into FP32, as DC's probes time them): shape, least split (forms.toml's rules:
+# f16, bf16 and tf32 hold every s8 and a 32-step word is exact in FP32, so 1; e4m3 3, by Karatsuba on balanced nibbles;
+# e5m2 3 as well, the cheater's favour, though its 3 significant bits miss the nibbles' odd sums past 8 and schoolbook
+# takes 4), N256-equivalents an instruction by MACs, and by tensor time (IGMMA_S8_N256's M line over the kind's). Those
+# timed beside the LI fold are in FIT too.
+FP = {
     "HGMMA_F16_N256": ([16, 256, 16], 1, 1 / 2, 1.0),
     "HGMMA_BF16_N256": ([16, 256, 16], 1, 1 / 2, 1.0),
     "HGMMA_BF16_N128": ([16, 128, 16], 1, 1 / 4, 0.0312468 / 0.0624906),
@@ -183,7 +183,7 @@ def form_toml(kind: str, shape: list[int], split: int) -> str:
 def offer(root: Path, kinds: dict[str, float | None]) -> Path:
     """sm_90's data with the honest form and each of `kinds` offered, each at IGMMA's joint lines by its MACs times the
     given scale, or at the census's lane default when the scale is None."""
-    spec = {**FIT, **UNTIMED}
+    spec = {**FP, **FIT}
     honest = form_toml("IGMMA_S8_N256", [16, 256, 32], 1)
     d = scratch(root, rs=True, forms=honest + "".join(form_toml(k, spec[k][0], spec[k][1]) for k in kinds))
     for k, scale in kinds.items():
@@ -220,23 +220,27 @@ def menu() -> None:
 
 
 def menu_fp() -> None:
-    """RT-HOPPER-1's untimed forms: each FP kind offered beside the honest form at the lane default, at IGMMA's joint
-    lines by its MACs, and by its tensor time (where the s8 siblings' fits fell, at 0.8-0.9 of it), and at 0.8 of that;
-    then all of them at once beside the 12 fitted forms."""
+    """RT-HOPPER-1's FP forms: each FP kind offered beside the honest form at the lane default, at IGMMA's joint lines
+    by its MACs, by its tensor time (where the s8 siblings' fits fell, at 0.8-1.0 of it) and at 0.8 of that, and at its
+    fit once timed; then the untimed ones at once beside every fitted form, and each kind's break-even."""
+    fitted = {k: "fit" for k, f in FIT.items() if f[4] is not None}
     with tempfile.TemporaryDirectory() as t:
-        for kind, (_, _, n256, tt) in UNTIMED.items():
-            for i, (label, scale) in enumerate((("the census default", None), ("IGMMA's lines by MACs", 1.0),
-                                                ("IGMMA's lines by tensor time", tt / n256),
-                                                ("0.8 of that", 0.8 * tt / n256))):
+        for kind, (_, _, n256, tt) in FP.items():
+            scales = [("the census default", None), ("IGMMA's lines by MACs", 1.0),
+                      ("IGMMA's lines by tensor time", tt / n256), ("0.8 of that", 0.8 * tt / n256)]
+            if kind in fitted:
+                scales.append((f"{FIT[kind][3]}'s fit", "fit"))
+            for i, (label, scale) in enumerate(scales):
                 d = offer(Path(t) / f"{kind}-{i}", {kind: scale})
                 print(line(f"DC-90-ri q*=1.22 +{kind} at {label}", eps(d, "DC-90-ri", 1.22)))
+        untimed = [k for k in FP if k not in fitted]
         for label, f in (("by tensor time", 1.0), ("at 0.8 of tensor time", 0.8)):
-            d = offer(Path(t) / f"all-{f}", {**{k: "fit" for k, s in FIT.items() if s[4] is not None},
-                                             **{k: f * tt / n256 for k, (_, _, n256, tt) in UNTIMED.items()}})
+            d = offer(Path(t) / f"all-{f}", {**fitted, **{k: f * FP[k][3] / FP[k][2] for k in untimed}})
             for vector, q in (("DC-90", 1.22), ("DC-90-ri", 1.22), ("DC-90-ri", 0.5)):
-                print(line(f"{vector} q*={q} 12 fitted forms and {len(UNTIMED)} FP {label}", eps(d, vector, q)))
+                print(line(f"{vector} q*={q} {len(fitted)} fitted forms and {len(untimed)} untimed FP {label}",
+                           eps(d, vector, q)))
         base = eps(scratch(Path(t) / "base", rs=False), "DC-90-ri", 1.22)["core"]
-        for kind, (_, _, n256, tt) in UNTIMED.items():
+        for kind, (_, _, n256, tt) in FP.items():
             lo, hi = 0.0, 1.0
             for i in range(8):
                 mid = (lo + hi) / 2

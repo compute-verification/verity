@@ -119,7 +119,7 @@ DC_DEV void im(const OpArgs& a) {
 
 // The census's FP wgmma kinds at N256, each into FP32 on the same 32-byte k-major tiles (a row's 32 bytes are f16 and
 // bf16's k16, tf32's k8 and e4m3's k32): T 0 f16, 1 bf16, 2 tf32, 3 e4m3, G of them a step for one N256 s8 group's MACs
-// (8, 8, 16, 4). Each is exact for s8 products at split 1 (f16, bf16, tf32) or 3 (e4m3), forms_gap.py's UNTIMED.
+// (8, 8, 16, 4). Each is exact for s8 products at split 1 (f16, bf16, tf32) or 3 (e4m3), forms_gap.py's FP.
 template <int T>
 DC_DEV void mma_fp(float (&d)[128], const Tiles& t, int sd) {
   if constexpr (T == 0) wgmma_f16_n256(d, t.da, t.db, sd);
