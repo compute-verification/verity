@@ -1,11 +1,10 @@
 import Proofs.Flock.Claims.KS.SlotRej
 import Proofs.Flock.Claims.KS.RepDistZ
-import Proofs.Flock.Claims.KS.ZkPadsSched
 import Proofs.Flock.Claims.KS.ZkTauPair
 import Proofs.Flock.Claims.KS.ZkBatchSim
 
 /-!
-# The masked `τ` slot from the schedule, and the `τ` and pads alignments
+# The masked `τ` slot from the schedule, and the `τ` alignment
 
 `ZkTauAlign` asks that the fork at rep `r`'s `τ` node against the simulated strategy after `Commit` be at most the fork
 after the `τ` round's coins. Rep `r`'s `τ` node is its inner proof's table, after the masked phase and two of the inner
@@ -22,8 +21,8 @@ table at its count (`SchedC`, which ZKA1's `schedC_simAtJZ` gives at every budge
   the fork event `0` on two dead runs and on two rejected ones;
 * `zkRdAt_tau`, `ZkSchedAlign`, `zkSchedAlign`: at the deployed tables that count is the `τ` round, and the simulated
   strategy follows `SchedC` at every budget below `2 · repRounds`;
-* `zkTauAlign_of_sched`, `zkTauAlign`, `zkPadsAlign`: so `ZkTauAlign` and `ZkPadsAlign` hold at every message, and with
-  them the `τ` and pads fork bounds (`zkSimForkLeTau`, `zkSimForkLePads`).
+* `zkTauAlign_of_sched`, `zkTauAlign`, `zkSimForkLeTau`: so `ZkTauAlign` holds at every message, and with it the `τ`
+  fork bound.
 -/
 
 namespace FlockSoundness.Discharge.ZkLink
@@ -353,16 +352,8 @@ theorem zkTauAlign_of_sched {x : Claims.Msg} (h : ZkSchedAlign x) : ZkTauAlign x
 theorem zkTauAlign (x : Claims.Msg) : ZkTauAlign x :=
   zkTauAlign_of_sched (zkSchedAlign x)
 
-/-- **`ZkPadsAlign` holds at every message** (`zkPadsAlign_of_batch`, `zkBatchAlign`). -/
-theorem zkPadsAlign (x : Claims.Msg) : ZkPadsAlign x :=
-  zkPadsAlign_of_batch (zkBatchAlign x)
-
 /-- **The fork bound at `τ`, with no hypothesis.** -/
 theorem zkSimForkLeTau (x : Claims.Msg) : ZkSimForkLeOn x fun _ i => ∃ r, i = .inl (.inr (.inr r)) :=
   zkSimForkLeTau_of_align (zkTauAlign x)
-
-/-- **The pads fork bound, with no hypothesis.** -/
-theorem zkSimForkLePads (x : Claims.Msg) : ZkSimForkLeOn x fun _ i => IsPadsEvZ i :=
-  zkSimForkLePads_of (zkPadsAlign x)
 
 end FlockDeploy.KS
