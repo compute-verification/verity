@@ -2,7 +2,7 @@ import Definitions.Accounting.Headline
 import Models.Accounting.Assumptions.Sheet
 
 /-!
-# The families' headline guarantees (trusted)
+# The headline guarantees (trusted)
 
 One statement per family and reading: the family's credited work is at least `1 − ε` of its credit, `ε` the reading's
 headline, on one device's machine, one design's TS model on it and its floor program ♭, all exact data
@@ -43,24 +43,25 @@ The unfolded branch binds on sm_120's sheet (`0.656%`); on sm_120's measured vec
 
 The statements:
 
-* `Sm120SheetHeadline`: sm_120 (RTX PRO 6000) at its data sheet, H1 + fx1 at SCALAR-ROUTE's ½ floors: outside an
-  event of probability at most `2^-40`, every accepted window of 48,000 equal live rounds runs at least `1 − 0.656%`
-  of its credit, through A2u (below).
-* `Sm120MeasuredHeadline`: sm_120 on its measured vector (VF3r-16), H1 + fx1 at SCALAR-ROUTE's `9/8` floors: outside
-  an event of probability at most `2^-40`, every accepted window of 48,000 equal live rounds runs at least
-  `1 − 0.591%` of its credit.
+* `Sm120SheetHeadline`: sm_120 (RTX PRO 6000) at its data sheet, H1 + fx1 at SCALAR-ROUTE's ½ floors: under its
+  premises, A2u among them (below), outside an event of probability at most `2^-40` every accepted window of 48,000
+  equal live rounds runs at least `1 − 0.656%` of its credit.
+* `Sm120MeasuredHeadline`: sm_120 on its measured vector (VF3r-16), H1 + fx1 at SCALAR-ROUTE's `9/8` floors: under its
+  premises, outside an event of probability at most `2^-40` every accepted window of 48,000 equal live rounds runs at
+  least `1 − 0.591%` of its credit.
 
 The window is in the statements' type: `Sm120.checks = 48,000` equal live rounds, one check a round, so neither says
-anything about a window of another shape. The ε needs that many rounds. RT-INT-1's floor (Compose's live line,
-note:20261019T0528Z-draft-rt-int): ε < 1% needs at least 10,552 equal live rounds a window, whatever the draw. The same
-two branches with `S` rounds in place of 48,000 need 9,496 (sheet) and 9,652 (measured), and exceed 100% below 41
-rounds. Today's served windows have 18 rounds.
+anything about a window of another shape. The ε needs that many rounds. The same two branches with `S` rounds in place
+of 48,000 give ε < 1% only from 9,496 rounds (sheet) and 9,652 (measured), and exceed 100% up to 40 rounds (sheet)
+and 49 (measured); these counts are `benchmarks/pouw/lean_headline.py`'s `branches` at `S`, not Lean statements.
+RT-INT-1 (note:20261019T0528Z-draft-rt-int) finds the same kind of floor on Compose's live line: ε < 1% there needs
+at least 10,552 equal live rounds a window, whatever the draw. The windows run so far have at most 18 rounds.
 
-The sheet reading holds only through A2u (`SheetDispatch`: each uniform-datapath instruction takes an issue slot),
-which no vendor document states. DS-120 has no uniform-pipe row, so without A2u the machine model's LP gives 2.79% with
-a measured uniform-pipe row (0.766 a SMSP-cycle) and 100% with none, against its 0.585% with A2u (RT-MACHINE-4,
-note:20261019T0456Z-draft-rt-machine); A2u was measured to hold on sm_120 beside an issue-bound stream
-(r20261019-054518-8cd2).
+The sheet reading's ε rests on A2u (`SheetDispatch`: each uniform-datapath instruction takes an issue slot), which no
+vendor document states. DS-120 has no uniform-pipe row, so without A2u the machine model's LP gives 2.79% with a
+measured uniform-pipe row (0.766 a SMSP-cycle) and 100% with none, against its 0.585% with A2u (RT-MACHINE-4,
+note:20261019T0456Z-draft-rt-machine). RT-MACHINE-4 reads its probe r20261019-054518-8cd2 as A2u holding on sm_120: past
+an issue-bound stream's idle slots, at up to 0.954 of issue, each uniform instruction costs about one issue slot.
 
 sm_80 has no headline: FOLD-OPT is false at its ALU-pipe certificate, which doesn't price duo's `IMAD.HI.U32` rotate
 route on the FMA pipe (RT-LOGIC-10).
@@ -84,10 +85,11 @@ value (`Pins`) and E1(c) holds (`RightFixed`), then outside an event of probabil
 window's time is at least `1 − 656/100000` (`1 − 0.656%`) of the credit `T_cred = B_♭/f_max`. FILL-OPT is not a
 hypothesis: H1 + fx1 has no filler, so it holds at any run. `ε_sample` and the Fiat–Shamir premium are separate lines.
 
-The window's shape is the statement's: 48,000 equal live rounds, one check a round. RT-INT-1's floor: ε < 1% needs at
-least 10,552 live rounds a window (9,496 for its two branches at `S` rounds); today's served windows have 18.
+The window's shape is the statement's: 48,000 equal live rounds, one check a round. With `S` rounds in place of
+48,000 its two branches give ε < 1% only from 9,496 rounds (Compose's live line only from 10,552: RT-INT-1), and the
+windows run so far have at most 18.
 
-A2u holds this ε: A2 (`SheetDispatch`) counts each uniform-datapath instruction in an issue slot, which no vendor
+This ε rests on A2u: A2 (`SheetDispatch`) counts each uniform-datapath instruction in an issue slot, which no vendor
 document states, and DS-120 has no uniform-pipe row. Without A2u the machine model's LP gives 2.79% with a measured
 uniform-pipe row and 100% with none (RT-MACHINE-4). -/
 def Sm120SheetHeadline : Prop :=
@@ -125,8 +127,9 @@ at `9/8` is what `ClassPSlots` gives (`1 + (32 − w)/130` slots a word, FLOORS,
 writers create at most `w = 15` incidences, a cap nothing proves yet; on the table route it is SCALAR-ROUTE's, outside
 `ClassPSlots`. `ε_sample` and the Fiat–Shamir premium are separate lines.
 
-The window's shape is the statement's: 48,000 equal live rounds, one check a round. RT-INT-1's floor: ε < 1% needs at
-least 10,552 live rounds a window (9,652 for its two branches at `S` rounds); today's served windows have 18. -/
+The window's shape is the statement's: 48,000 equal live rounds, one check a round. With `S` rounds in place of
+48,000 its two branches give ε < 1% only from 9,652 rounds (Compose's live line only from 10,552: RT-INT-1), and the
+windows run so far have at most 18. -/
 def Sm120MeasuredHeadline : Prop :=
   ∀ (Ω : Type) [Fintype Ω] (Pl : Play Ω Sm120.checks (Fin 122) (Fin 15) Unit Empty) (G : ReceiptGame Ω Sm120.checks)
     (Uf : Unfolded Ω Sm120.checks) {V : Type} {nπ : ℕ} (pf : ProofLayer Ω Sm120.checks nπ V) (δbind δzk : ℝ),
