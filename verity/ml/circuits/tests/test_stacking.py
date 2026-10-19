@@ -15,9 +15,9 @@ import pytest
 from verity.ml.circuits import stacking as P
 from verity.ml.circuits.census import census
 from verity.ml.circuits.codec import canonical_json
-from verity.ml.circuits.defs import CompositeDefinition, PrimitiveDefinition
+from verity.ml.circuits.defs import CompositeDefinition, PrimitiveDefinition, _Widths
 from verity.ml.circuits.ops import fp32, prims, scalar
-from verity.ml.circuits.ports import In, Leaves, Out, Ports
+from verity.ml.circuits.ports import In, Out, PortError, Ports
 from verity.ml.circuits.program import Program
 from verity.ml.circuits.refs import Coll, Strided, array_of, concat, tuple_of
 from verity.ml.circuits.silicon.integer import BLACKWELL_SM120_S8_M16N8K32, s32_value, s32_word
@@ -188,12 +188,11 @@ def test_an_accumulator_from_a_run_input_is_refused():
 BOUND = (-(1 << 20), 1 << 20)
 
 
-def test_a_run_inputs_declared_bound_is_not_taken():
-    """No declared `In(bound)` is taken on trust (18 Oct): evaluation doesn't enforce a run input's bound, so the accumulator
-    from a run input whose port bounds it far from the s32 edge is no more proven than one without."""
-    program, ends = int8_program(acc0="input", ports=Ports(params={"c": In(bound=BOUND)}))
-    v = judge(program, ends)
-    assert codes(v) == ["s8-window"] and v.reasons[0]["sites"][0]["acc"] == list(P.S32)
+def test_a_run_inputs_declared_bound_is_refused():
+    """No declared `In(bound)` is taken on trust (18 Oct): evaluation doesn't enforce a run input's bound, so a run input whose
+    port bounds it far from the s32 edge is refused when its Program is built (`E_PORT_BOUND`), and never judged as bounded."""
+    with pytest.raises(PortError, match="E_PORT_BOUND: program function TestInt8Program_v1: parameter 'c'"):
+        int8_program(acc0="input", ports=Ports(params={"c": In(bound=BOUND)}))
 
 
 def _rem(a, b):
@@ -208,30 +207,38 @@ DIV = stand_in("I32Div", (("a", S32), ("b", S32)), ports=Ports(ret=Out(interval=
 REM = stand_in("I32Rem", (("a", S32), ("b", S32)), ports=Ports(transfer=_rem))
 FIRST = comp("TestFirst", (("c", Array(2, S32)),), S32, lambda B, _S, c: c[0], ports=Ports(ret=Out(interval=BOUND)))
 SILENT = comp("TestFirstSilent", (("c", Array(2, S32)),), S32, lambda B, _S, c: c[0])
-C0 = Ports(params={"c": Leaves(((0, 1, In(bound=BOUND)),))})
+RANGE = stand_in("TestRangeS32", (("a", S32),), ports=Ports(ret=Out(interval=BOUND)))
 
 
-def _from(name: str, start, ports=None) -> P.Analysis:
+def _from(name: str, start) -> P.Analysis:
     """Two s8 steps from the accumulator `start` makes of the run input c (two s32 words)."""
     fn = comp(name, (("c", Array(2, S32)), ("x", Array(64, S8)), ("w", Array(64, S8))), S32,
-              lambda B, _S, c, x, w: B.call(_step(64), start(B, c), x, w), ports=ports)
+              lambda B, _S, c, x, w: B.call(_step(64), start(B, c), x, w))
     program = Program(fn, registered=("w",))
     return P.analyze(program, census(program, [len(program.root.body.nodes)]))
 
 
-@pytest.mark.parametrize("label,start,ports,proven", [
-    ("declared", lambda B, c: B.call(DIV, c[0], c[1]), None, True),
-    ("undeclared", lambda B, c: B.call(I32DIV, c[0], c[1]), None, False),
-    ("transfer", lambda B, c: B.call(REM, c[0], B.call(prims.const(32, 1000))), None, True),
-    ("transfer-of-any-word", lambda B, c: B.call(REM, c[0], c[1]), None, False),
-    ("input-leaf", lambda B, c: c[0], C0, False),
-    ("composite", lambda B, c: B.call(FIRST, c), C0, True),
-    ("silent-composite", lambda B, c: B.call(SILENT, c), C0, False)])
-def test_a_producers_declared_interval_narrows_its_value(label, start, ports, proven):
-    """A primitive's declared interval, its transfer on its operands' ranges, and a Definition's declared return narrow its
-    value; an input leaf's declared bound doesn't, and a composite that declares nothing gives any word."""
-    a = _from(f"TestFrom{label.title().replace('-', '')}", start, ports)
+@pytest.mark.parametrize("label,start,proven", [
+    ("declared", lambda B, c: B.call(DIV, c[0], c[1]), True),
+    ("undeclared", lambda B, c: B.call(I32DIV, c[0], c[1]), False),
+    ("transfer", lambda B, c: B.call(REM, c[0], B.call(prims.const(32, 1000))), True),
+    ("transfer-of-any-word", lambda B, c: B.call(REM, c[0], c[1]), False),
+    ("input-leaf", lambda B, c: c[0], False),
+    ("composite", lambda B, c: B.call(FIRST, B.batch(RANGE, c, axes=(0,))), True),
+    ("silent-composite", lambda B, c: B.call(SILENT, c), False)])
+def test_a_producers_declared_interval_narrows_its_value(label, start, proven):
+    """A primitive's declared interval, its transfer on its operands' ranges, and a Definition's declared return (held to its
+    body, here a range check's) narrow its value; a run input's leaf spans its width, and so does a composite that declares
+    nothing over it."""
+    a = _from(f"TestFrom{label.title().replace('-', '')}", start)
     assert a.unproven == ({} if proven else {IMMA.id: 2}), label
+
+
+def test_a_declared_return_over_a_run_input_is_refused():
+    """A Definition's declared return holds by its body: over a run input's leaf, which spans its width, it is refused when
+    the Program is built, so a composite's declaration never stands in for a bound on the run input it reads."""
+    with pytest.raises(PortError, match="E_PORT_INTERVAL: TestFirst_v1 declares Out"):
+        _from("TestFromCompositeUnchecked", lambda B, c: B.call(FIRST, c))
 
 
 def test_port_intervals_read_as_signed_ranges():
@@ -284,14 +291,24 @@ def _reinterpreting_program(how: str) -> tuple[Program, list[int]]:
     return program, [len(program.root.body.nodes)]
 
 
-@pytest.mark.parametrize("how,where", [("broadcast", "Root[TestReinterpretBroadcast_v1]_v1"),
-                                       ("affine", "Root[TestReinterpretAffine_v1]_v1"), ("ret", "TestNarrow_v1"), ("mixed", None)])
-def test_a_word_read_at_another_width_is_refused(how, where):
-    program, ends = _reinterpreting_program(how)
-    v = judge(program, ends)
+_IMMA_A = r"node \d+ \(primitive BlackwellS8ImmaDot32_v1\) argument 'a': leaf 0 is typed Value<8> but names leaf 0 of node \d+"
+
+
+@pytest.mark.parametrize("how,where,built", [
+    ("broadcast", "Root[TestReinterpretBroadcast_v1]_v1", _IMMA_A), ("affine", "Root[TestReinterpretAffine_v1]_v1", _IMMA_A),
+    ("ret", "TestNarrow_v1", r"the body's return: leaf 0 is typed Value<8> but names leaf 0 of parameter 'd'"),
+    ("mixed", None, None)])
+def test_a_word_read_at_another_width_is_refused(how, where, built, monkeypatch):
+    """A word read back at another width is refused when its Program is built (`E_REINTERPRET`, as when decoded); past that
+    check (patched out here), the property refuses it too. The s8 field of a mixed tuple, read at its own width, passes both."""
     if where is None:
+        v = judge(*_reinterpreting_program(how))
         assert v.ok and v.numbers["family_steps"] == 2, v.reasons
         return
+    with pytest.raises(TypeError, match=f"E_REINTERPRET: {built}"):
+        _reinterpreting_program(how)
+    monkeypatch.setattr(_Widths, "first", lambda self, c: None)
+    v = judge(*_reinterpreting_program(how))
     assert codes(v) == ["reinterpretation"] and v.reasons[0]["definitions"] == {where: 1}, v.reasons
 
 
