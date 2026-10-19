@@ -11,10 +11,11 @@ Every scenario runs untraced first (its wall time alone), then inside the one CU
 its measured steps (RANGE/<scenario>#<rep>) and one a step.  `--analyse` assigns each kernel to the range whose steps
 launched it (by its launch call's time) and splits a forward's GPU time into PoUW's credited int8 GEMMs
 (`verity_int8::scaled_mm`: exactlin_scaled_mm, or torch._int_mm's kernel with the padding before it and the EPILOGUE
-dequantization kernels after it), the quantizer (exactlin_quant_rows, or the torch kernels before an int8 GEMM back to the
-previous kernel that isn't torch's), lm_head (any other GEMM), attention, norms and elementwise (Inductor's, vLLM's and
-torch's other kernels), sampling (the kernels after lm_head up to the next forward's), other, and the gaps: wall minus
-the GPU's busy time (kernels, memcpy and memset, overlaps counted once).  It also states the FLOPs the forward's calls
+dequantization kernels after it), the quantizer (exactlin_quant_rows, or the QUANT_BODY torch kernels before an int8
+GEMM's padding), lm_head (any other GEMM), attention (with the torch copies right after its kernels), norms and
+elementwise (Inductor's, vLLM's and torch's other kernels), sampling (the kernels after lm_head up to the model runner's
+state update), other (that update and the next step's input prep, memcpy, memset), and the gaps: wall minus the GPU's
+busy time (kernels, memcpy and memset, overlaps counted once).  It also states the FLOPs the forward's calls
 imply: 2MNK per int8 GEMM and lm_head call at the model's shapes, 4 H d L per query token and layer for attention (half
 the square for a causal prefill); elementwise FLOPs are left out.
 
@@ -40,6 +41,7 @@ RANGE = "verity/exactlin/share/"
 B, WARM, STEPS, PAD, PREFILL, REPS = 32, 8, 32, 2000, 2048, 4
 T, MAX_LEN = 8192, 4096
 EPILOGUE = 4    # int8_exact.dequantize's torch kernels: to(f32), * s_a, * s_w, to(bf16)
+QUANT_BODY = 10  # int8_exact.quantize_rows' torch kernels: to(f32), full, abs, amax, clamp, /, /, round, clamp_, to(int8)
 
 
 def build(arm: str, scratch: Path, gpu_mem: float):
@@ -150,24 +152,30 @@ ATTN = re.compile(r"flash|attn|attention|paged|reshape_and_cache|BatchDecode|Bat
 GEMM = re.compile(r"gemm|xmma|nvjet|cutlass|cublas|splitK", re.IGNORECASE)
 TORCH = re.compile(r"at::native|CatArrayBatchedCopy|at::cuda|cub::|elementwise_kernel", re.IGNORECASE)
 VLLM_ELEM = re.compile(r"rms_norm|rotary|act_and_mul|silu|layer_norm", re.IGNORECASE)
-PADDING = re.compile(r"CatArrayBatchedCopy|FillFunctor")
+PADDING = re.compile(r"CatArrayBatchedCopy")
+FILL = re.compile(r"FillFunctor")
+PREP = re.compile(r"_post_update|_apply_write|_prepare_|_combine_sampled_and_draft|_gather_block_tables|_compute_slot_mapping")
 FORWARD = {"quant", "gemm_i8", "attention", "inductor", "vllm_elem"}
 BUCKETS = ["credited int8 GEMM", "quantizer", "lm_head", "attention", "norms and elementwise", "sampling", "other"]
 
 
 def base(name: str) -> str:
-    for kind, rx in (("quant", QUANT), ("gemm_i8", GEMM_I8), ("attention", ATTN), ("lm_head", GEMM), ("vllm_elem", VLLM_ELEM),
-                     ("torch", TORCH)):
+    for kind, rx in (("prep", PREP), ("quant", QUANT), ("gemm_i8", GEMM_I8), ("attention", ATTN), ("lm_head", GEMM),
+                     ("vllm_elem", VLLM_ELEM), ("torch", TORCH)):
         if rx.search(name):
             return kind
     return "inductor" if name.startswith("triton_") else "other"
 
 
 def assign(names: list[str], graph: list[bool]) -> tuple[list[str], dict]:
-    """Each kernel's bucket, the kernels in GPU order; and the run lengths the positional rules saw."""
+    """Each kernel's bucket, the kernels in GPU order; and the run lengths the positional rules saw.
+
+    An int8 GEMM's quantizer is exactlin_quant_rows (exactlin.row_quant copies x first only when stride(1) != 1), or the
+    QUANT_BODY torch kernels before torch._int_mm's padding (a Cat, and the Fill of its zeros, before the GEMM); a torch run
+    right after an attention kernel is attention's (FlashAttention's split-KV decode copies q in and its output out)."""
     b = [base(n) for n in names]
     cat: list[str | None] = [None] * len(b)
-    post, pre = [], []
+    post, pre, left = [], [], []
     for i, k in enumerate(b):
         if k == "gemm_i8":
             cat[i] = "credited int8 GEMM"
@@ -181,25 +189,42 @@ def assign(names: list[str], graph: list[bool]) -> tuple[list[str], dict]:
         for i in range(g + 1, min(j, g + 1 + EPILOGUE)):
             cat[i] = "credited int8 GEMM"
         j = g - 1
+        if j >= 0 and b[j] == "torch" and cat[j] is None and PADDING.search(names[j]):
+            cat[j] = "credited int8 GEMM"
+            j -= 1
+            if j >= 0 and b[j] == "torch" and cat[j] is None and FILL.search(names[j]):
+                cat[j] = "credited int8 GEMM"
+                j -= 1
+        fused = j >= 0 and b[j] == "quant"
         while j >= 0 and b[j] == "quant":
             j -= 1
-        start = j
+        start, n = j, 0
         while j >= 0 and b[j] == "torch" and cat[j] is None:
-            cat[j] = "credited int8 GEMM" if PADDING.search(names[j]) else "quantizer"
+            if not fused and n < QUANT_BODY:
+                cat[j] = "quantizer"
+                n += 1
             j -= 1
         pre.append(start - j)
+        left.append(start - j - n)
+    for a in [i for i, k in enumerate(b) if k == "attention"]:
+        j = a + 1
+        while j < len(b) and b[j] == "torch" and cat[j] is None:
+            cat[j] = "attention"
+            j += 1
     for h in [i for i, k in enumerate(b) if k == "lm_head"]:
         cat[h] = "lm_head"
-        j = h + 1
+        j, bucket = h + 1, "sampling"
         while j < len(b) and not graph[j] and b[j] not in FORWARD and b[j] != "lm_head" and cat[j] is None:
-            cat[j] = "sampling"
+            bucket = "other" if b[j] == "prep" else bucket
+            cat[j] = bucket
             j += 1
     for i, k in enumerate(b):
         if cat[i] is None:
             cat[i] = {"attention": "attention", "inductor": "norms and elementwise", "vllm_elem": "norms and elementwise",
                       "torch": "norms and elementwise"}.get(k, "other")
     hist = lambda xs: {str(v): xs.count(v) for v in sorted(set(xs))}  # noqa: E731
-    return cat, {"after_int8_gemm_torch_run": hist(post), "before_int8_gemm_torch_run": hist(pre)}
+    return cat, {"after_int8_gemm_torch_run": hist(post), "before_int8_gemm_torch_run": hist(pre),
+                 "before_quantizer_unclaimed_torch_run": hist(left)}
 
 
 def _busy(iv: list[tuple[int, int]]) -> int:
