@@ -16,8 +16,8 @@ same transcript and bodies, values related by `R`.
   `sampleP_cut_err`); a squeeze that returned was before round `n` (`squeezeP_cut_inv`, `sampleP_cut_inv`).
 * **The zerocheck** (`zerocheckCut_alike`): where the cut's masked values at the layout's indices are the plain
   prover's messages at the zerocheck's coins (`zcCoins`) plus their pads, the cut's zerocheck sends what the session's
-  sends and returns the session's proof, both at the `z`, `ρ` and `r` of those coins (`ZcAt`; the cut's `v_A`, `v_B`,
-  `v_C` are zeros).
+  sends and returns the session's proof, both at the `z`, `ρ` and `r` of those coins (`ZcOutAt`; the cut's `v_A`,
+  `v_B`, `v_C` are zeros).
 -/
 
 namespace FlockComplete
@@ -183,7 +183,7 @@ def zcCoins (coin : ℕ → ℕ → F128) (L : ℕ) : Zc.Coins :=
   ⟨coin L, coin (L + 1), coin (L + 2), fun i => coin (L + 3 + i)⟩
 
 /-- **A zerocheck's `z`, `ρ` and `r` at the coins `cs`**, those `Zc.out` returns. -/
-abbrev ZcAt (m : ℕ) (cs : Zc.Coins) (o : ZcOut) : Prop :=
+abbrev ZcOutAt (m : ℕ) (cs : Zc.Coins) (o : ZcOut) : Prop :=
   o.z = cs.z ∧ o.rho = pushes cs.ρ (m - 6) ∧ o.rRest = cs.r m
 
 /-- **The cut's zerocheck in lockstep with the session's**: answered by `asksCut` from `l`, where the masked values `mk`
@@ -207,8 +207,8 @@ theorem zerocheckCut_alike (coin : ℕ → ℕ → F128) (n : ℕ) {m : ℕ} (hm
     (hfc : mk lay.fc =
       dot (lagrange nodesL den6Inv (zcCoins coin l.size).z) (Zc.r1c tr (m - 6) ((zcCoins coin l.size).r m)) +
         h[lay.fc]!) :
-    GoAlike (fun (p q : ZerocheckProof × ZcOut) L => p.1 = q.1 ∧ ZcAt m (zcCoins coin l.size) p.2 ∧
-        ZcAt m (zcCoins coin l.size) q.2 ∧ L.size = l.size + 3 + (m - 6))
+    GoAlike (fun (p q : ZerocheckProof × ZcOut) L => p.1 = q.1 ∧ ZcOutAt m (zcCoins coin l.size) p.2 ∧
+        ZcOutAt m (zcCoins coin l.size) q.2 ∧ L.size = l.size + 3 + (m - 6))
       (((zerocheckCut (asksCut coin n) m digest cap root lay mk).run t).go l)
       (((zerocheckPZk (asksCut coin n) m digest cap root lay h tr).run t).go l) := by
   have hA : (Array.range 64).map (fun i => mk (lay.r1ab i)) =
