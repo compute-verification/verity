@@ -845,6 +845,31 @@ def targeted_rt10() -> list[dict]:
     return out
 
 
+#: the uniform datapath, which JI3t_0 prices below every vector class (UNI 0.714566 against 0.963546) and RT-FACET r1 and
+#: r1b timed beside IMMA.16832 only up to unroll 8: alternating with each FMA-pipe lane, with FMUL and the ALU lane, and
+#: alone
+RT11_PAIRS = (("fmuli", "uaxi"), ("faddi", "uaxi"), ("ffmai", "uaxi"))
+
+
+def targeted_rt11() -> list[dict]:
+    """RT3-120 against JI3t_0 a third time: the uniform datapath (UIADD3/ULOP3) at the binding schedule (IMMA.16832 on 2-3
+    accumulators, unroll 12-20, 2 warps a SMSP), where RT-FACET r1 and r1b never took it past unroll 8: alternating with
+    FMUL, FADD and FFMA at 96-176 lane ops a 8 MMAs, with FMUL and the ALU lane at 120 and 144, and alone at 32-96; and
+    RT-FACET's tight program, three copies through the batch."""
+    i = "i16832"
+    rest: list[dict] = []
+    for na in (2, 3):
+        for u in (12, 16, 20):
+            rest += [_jm(i, ls, q, 2, na=na, u=u) for ls in RT11_PAIRS for q in (96, 120, 144, 176)]
+            rest += [_jm(i, ("fmuli", "axi", "uaxi"), q, 2, na=na, u=u) for q in (120, 144)]
+            rest += [_jm(i, "uaxi", q, 2, na=na, u=u) for q in (32, 64, 96)]
+    base = [g for g in targeted_rt4() if name_of(g) == RT9_BASE]
+    out: list[dict] = []
+    for k in range(3):
+        out += [g | {"rep": k + 1} for g in base] + rest[k * len(rest) // 3:(k + 1) * len(rest) // 3]
+    return out
+
+
 def sampled_ji(seed: int, n: int) -> list[dict]:
     rng = random.Random(seed)
     lanes = sorted(set(JI_NEW) | set(JI_OLD))
@@ -878,7 +903,7 @@ def grid(seed: int = 0, n: int = 0, targeted_part: bool = True, family: str = "m
               "rt4": (targeted_rt4, sampled_ji), "rt5": (targeted_rt5, sampled_ji),
               "rt6": (targeted_rt6, sampled_ji), "rt7": (targeted_rt7, sampled_ji),
               "rt8": (targeted_rt8, sampled_ji), "rt9": (targeted_rt9, sampled_ji),
-              "rt10": (targeted_rt10, sampled_ji)}[family]
+              "rt10": (targeted_rt10, sampled_ji), "rt11": (targeted_rt11, sampled_ji)}[family]
     for g in (tg() if targeted_part else []) + sm(seed, n):
         nm = name_of(g)
         if nm not in seen:
@@ -966,7 +991,7 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--n", type=int, default=0, help="sampled programs beside the targeted part")
     p.add_argument("--no-targeted", action="store_true")
     p.add_argument("--family", choices=("mix", "mem", "fine", "l2", "ji", "jifine", "jipair", "r4", "rt", "rt2", "rt3",
-                                             "rt4", "rt5", "rt6", "rt7", "rt8", "rt9", "rt10"),
+                                             "rt4", "rt5", "rt6", "rt7", "rt8", "rt9", "rt10", "rt11"),
                    default="mix",
                    help="mix: MMA forms and lane ops (mix.cuh); mem: the table routes' loads (mem.cuh); fine: the "
                         "near-frontier sweep of the lanes the first batch beat or nearly beat; l2: L2-resident loads "
@@ -979,7 +1004,8 @@ def main(argv: list[str] | None = None) -> int:
                         "grid's edge; rt7: the warp-specialized programs with 64-256 lane ops a trip; rt8: two MMA "
                         "forms in turn in one loop, beside FMUL and alone, and the pipe pairs DS-120 prices together; "
                         "rt9: loads, LDSM, STS, SHFL and the 64-bit lanes at rt4's binding schedule (JI3t_0's pooled "
-                        "classes); rt10: the ALU- and IMAD-pipe lanes there, alone and beside FMUL")
+                        "classes); rt10: the ALU- and IMAD-pipe lanes there, alone and beside FMUL; rt11: the "
+                        "uniform datapath there, alone and beside the FMA-pipe lanes")
     p.add_argument("--forms", help="keep only the programs of these MMA forms (comma-separated, e.g. i16832)")
     p.add_argument("--only", type=Path, help="keep only the programs named in this file (one a line): the gate's passes")
     p.add_argument("--emit", type=Path, help="write the probe source here (default: print the programs as JSON lines)")
