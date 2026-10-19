@@ -6,10 +6,10 @@ import Models.Accounting.Assumptions.Sheet
 # FP8-g1's and W4A8-g1's headlines on sm_120 (trusted)
 
 `Models.Accounting.Guarantees.Headline`'s `Sm120SheetHeadline` (H1 + fx1 on DS-120's sheet, `1 − 0.656%` outside
-`2^-40`) at the windows an FP8-g1 or a W4A8-g1 prover serves on H1: its conclusion and every premise as they are,
-over proof layers whose values carry the round's operand leaves (`Pouw.FpG1.Leaves`), the round's other values in a
-free `W` as the record's `V`, with at least one proof a round, and one premise more, that every leaf the layer commits
-is g1's on H1's grids (`Leaves.Fp8 Grids.h1`, `Leaves.W4a8 Grids.h1`).
+`2^-40`) at H1's windows whose committed leaves are FP8-g1's or W4A8-g1's: its conclusion and every premise as they
+are, over proof layers whose values carry the round's operand leaves (`Pouw.FpG1.Leaves`), the round's other values in
+a free `W` as the record's `V`, with at least one proof a round, and one premise more, that every leaf the layer
+commits is g1's on H1's grids (`Leaves.Fp8 Grids.h1`, `Leaves.W4a8 Grids.h1`).
 
 The credit is the record's, `T_cred = B_♭/f_max` of H1's floor program: it counts the int8 GEMM's MACs, which on a
 g1 window carry the FP8 (or FP4) model's products as integers `R + b`. Whether those MACs are the model's useful work
