@@ -1329,6 +1329,36 @@ def test_a_chat_post_rings_its_leading_names_else_its_thread_s_lanes_else_top_an
     assert deliver(late)[0] == 0 and rung("top")[-1] == private(late["ts"])
 
 
+def test_deliver_rings_explicit_names_in_place_of_the_rule_and_a_reminder_once_per_reason(fake, registry, routes_dirs, people_d,
+                                                                                          capsys, monkeypatch):
+    """The Slack events service rings through `deliver`: `names` replace the rule's (a post in #ask-the-team that names no
+    one rings no one by the rule, and the service sends it to @top), and its watchdog's `reminder` rings a name this post
+    already rang again, once per reason, with the reason leading the doorbell's body."""
+    chat_users(fake)
+    assert run(capsys, "chat", "open", "luke", "--user", LUKE)[0] == 0
+    monkeypatch.setattr(slack, "_now", lambda: datetime.fromtimestamp(1700000100, timezone.utc))
+    boxes = {n: inbox(fake, routes_dirs, n) for n in ("circuits", "top")}
+    rung = lambda n: [b["text"] for b in bells(fake, boxes[n])]  # noqa: E731
+    reg, routes, team = slack.load_registry(registry), slack.Routes(), "C0CA1JZSYNR"
+    api = slack.Slack(TOKEN)
+
+    plain_post = {"ts": "1700000050.000001", "text": "what is the TP8 status?", "user": "UDANIEL"}
+    assert slack.deliver(api, reg, routes, team, plain_post) == [] and rung("top") == []
+    assert slack.deliver(api, reg, routes, team, plain_post, names=["top"]) == ["@top: rang"]
+    assert rung("top") == ["from daniel, #ask-the-team thread 1700000050.000001: what is the TP8 status?"]
+
+    ask = fake.add("CCHAT1", text="@circuits is the TP8 sweep done?", user=LUKE)
+    assert slack.deliver(api, reg, routes, "CCHAT1", ask) == ["@circuits: rang"]
+    for _ in range(2):
+        slack.deliver(api, reg, routes, "CCHAT1", ask, reminder="no 👀 or lane reply in 15 min")
+    slack.deliver(api, reg, routes, "CCHAT1", ask, names=["top"], reminder="no lane reply in 60 min")
+    where = f"from luke, #chat-luke thread {ask['ts']}: "
+    read = f"(a post in a private channel: research msg read --channel chat-luke --thread {ask['ts']})"
+    assert rung("circuits") == [where + read, where + "reminder (no 👀 or lane reply in 15 min): " + read]
+    assert rung("top")[1:] == [where + "reminder (no lane reply in 60 min): " + read]
+    assert all(slack.DOORBELL_RE.match(t) for n in boxes for t in rung(n))
+
+
 def test_groups_sync_plans_by_default_then_creates_updates_enables_and_records_ids(fake, registry, capsys):
     reg = json.loads(registry.read_text())
     reg["bot_id"] = None

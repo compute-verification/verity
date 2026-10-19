@@ -57,8 +57,9 @@ Without $SLACK_BOT_TOKEN (or with RESEARCH_SLACK_VIA=broker) every call goes thr
 `{"method", "args"}` to BROKER with this agent's Cursor OIDC token, answered with Slack's response unchanged. The broker holds the
 bot token and allows only BROKER_METHODS; RESEARCH_SLACK_VIA=direct insists on the token.
 
-The sender rings the doorbells right after posting; there is no server-side router (the website has no events route,
-COMM-32). It routes by origin/main's registry (`routing_registry`) and the published routes (`Routes.refresh`), so an old
+The sender rings the doorbells right after posting. A person's typed post in #ask-the-team or a chat channel is rung by the
+Slack events service (`integrations/slack-events/`, COMM-32), which imports this file and calls `deliver`; until it is
+deployed, @top's watcher hands each post to `deliver --channel KEY --event -`. It routes by origin/main's registry (`routing_registry`) and the published routes (`Routes.refresh`), so an old
 checkout or notes clone still rings a name added, reopened or closed since. Who holds a handle, who else posts as it and
 which branch suffixes its PRs carry is its route's (`names open`), never the registry's. `match` is the older,
 handle-only test of whether a post is addressed to HANDLE."""
@@ -1311,11 +1312,12 @@ def _channel_flag(channel: str) -> str:
 
 
 def doorbell(author: str, thread: str, ts: str, text: str, urgent: bool = False, channel: str | None = None,
-             private: bool = False) -> str:
+             private: bool = False, reminder: str | None = None) -> str:
     """The post itself, so its reader can act without another read: `from infra, thread T[, reply R]: <text>`.  A post in a
     channel other than the front door names it (its registry key, else its id), so its reader answers there: `from daniel,
     #ask-the-team thread T: <text>`.  A `private` post's (a chat's) carries no text, since anyone in the front door reads
-    the inboxes, only where to read it.  Never starts with `@`, so it can't route itself."""
+    the inboxes, only where to read it.  A `reminder` (the Slack events service's watchdog) leads the body with
+    `reminder (WHY): `.  Never starts with `@`, so it can't route itself."""
     body = plain(text)
     if private:
         body = f"(a post in a private channel: research msg read {_channel_flag(channel or '?')} --thread {thread})"
@@ -1323,7 +1325,7 @@ def doorbell(author: str, thread: str, ts: str, text: str, urgent: bool = False,
         read = f"research msg read {_channel_flag(channel)} --thread {thread}" if channel else f"research msg read --thread {thread}"
         body = body[:DOORBELL_MAX].rstrip() + f"\u2026 (the rest: `{read}`)"
     where = (f"#{channel} " if channel else "") + f"thread {thread}" + (f", reply {ts}" if ts and ts != thread else "")
-    return f"from {author}{' (URGENT)' if urgent else ''}, {where}: {body}"
+    return f"from {author}{' (URGENT)' if urgent else ''}, {where}: " + (f"reminder ({reminder}): " if reminder else "") + body
 
 
 def doorbell_channel(text: str) -> str | None:
@@ -1400,13 +1402,16 @@ def watch_context(api: Slack, ch: str, msg: dict, root: dict | None, now: float,
 
 
 def deliver(api: Slack, reg: dict, routes: Routes, ch: str, msg: dict, *, urgent: bool = False,
-            now: float | None = None, log=None) -> list[str]:
+            now: float | None = None, log=None, names: list[str] | None = None, reminder: str | None = None) -> list[str]:
     """Deliver the post `msg`: ring the doorbell of each name it wakes.  One line per name saying
     what happened.  Every handle's published route and every name's the post starts with is read first, so a clone not
     pulled since a name opened, reopened, closed or changed holder rings what the published table says (`_newer`).  A post
     in another channel (#ask-the-team, a chat channel) routes the same way; its doorbells name the channel (`doorbell`), and
     where the bot can't read that channel (UNREADABLE) a reply's thread root counts as unknown.  A post in a chat channel
-    rings by `chat_targets`, and its doorbells, like those of a channel the registry doesn't know, carry no text."""
+    rings by `chat_targets`, and its doorbells, like those of a channel the registry doesn't know, carry no text.
+    `names`, when given, are rung in place of the rule's: the Slack events service's decision for a post that named no one.
+    A `reminder` (its watchdog's) rings again a name this post already rang, once per reason: only a doorbell for this post
+    carrying the same reminder keeps it from ringing."""
     log = log or sys.stderr
     front = channel_id_for(reg, FRONT_DOOR) or ch
     where = None if ch == front else (key_of(reg, ch) or ch)
@@ -1439,7 +1444,9 @@ def deliver(api: Slack, reg: dict, routes: Routes, ch: str, msg: dict, *, urgent
         lines.append("no doorbells: " + ("another app's bot posted it, not Verity's" if reg.get("bot_id") else
                                          "the registry records no bot_id (`research msg groups sync --apply` writes it)"))
     humans = people_names(reg)
-    for name in (chat_targets(msg, replies, reg) if chat else route_targets(msg, root, reg, inboxes, history, branches)):
+    targets = names if names is not None else \
+        chat_targets(msg, replies, reg) if chat else route_targets(msg, root, reg, inboxes, history, branches)
+    for name in targets:
         if name in humans:
             continue                                                 # people read Slack itself
         to, r = routes.resolve(name)
@@ -1463,7 +1470,8 @@ def deliver(api: Slack, reg: dict, routes: Routes, ch: str, msg: dict, *, urgent
                     raise
                 rung = []
             rung = [m for m in rung if m.get("ts") != r["inbox_ts"] and is_doorbell(m, reg)]
-            if any(_rang(m.get("text") or "", msg.get("ts") or "", where) for m in rung):
+            if any(_rang(m.get("text") or "", msg.get("ts") or "", where)
+                   and (not reminder or f": reminder ({reminder}): " in (m.get("text") or "")) for m in rung):
                 continue
             n = sum(_mentions_thread(m.get("text") or "", src, where) and _from(m.get("text") or "", author) for m in rung)
             if n >= CAP_PER_HOUR:                                        # a loop is one author; a roll call is many, once each
@@ -1478,7 +1486,7 @@ def deliver(api: Slack, reg: dict, routes: Routes, ch: str, msg: dict, *, urgent
                 continue
             api.call("chat.postMessage", channel=ch, thread_ts=r["inbox_ts"], username="router", unfurl_links="false",
                      unfurl_media="false", text=doorbell(author, src, msg.get("ts") or src, msg.get("text", ""), urgent, where,
-                                                         private))
+                                                         private, reminder))
             lines.append(f"@{to}: rang" + (f" (for @{name}, finished)" if to != name else ""))
         except SlackError as e:                                      # the others still ring; `deliver` rings this one later
             lines.append(f"@{to}: NOT RUNG ({e})")
