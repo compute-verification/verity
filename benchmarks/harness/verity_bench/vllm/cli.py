@@ -29,7 +29,7 @@ def add_arguments(parser: argparse.ArgumentParser) -> None:
                         help="experimental pkg.mod:NAME exposing install(target); repeatable")
     parser.add_argument("--sweep", choices=("quick", "full"), default=None)
     parser.add_argument("--reps", type=int, default=None)
-    parser.add_argument("--warmups", type=int, default=None, help="discarded runs of a point before an engine's first timed one")
+    parser.add_argument("--warmups", type=int, default=None, help="exactly this many discarded runs of a point before an engine's first timed one")
     parser.add_argument("--out", type=Path, required=True)
     parser.add_argument("--eager", action="store_true",
                         help="run eagerly instead of the preset's default CUDA graphs")
@@ -38,7 +38,7 @@ def add_arguments(parser: argparse.ArgumentParser) -> None:
 def run(a: Any) -> int:
     spec = load_spec(a.preset)
     reps = spec.reps if a.reps is None else a.reps
-    warmups = spec.warmups if a.warmups is None else a.warmups
+    warmups, max_warmups = (spec.warmups, spec.max_warmups) if a.warmups is None else (a.warmups, None)
     sweep = spec.sweep if a.sweep is None else a.sweep
     if reps < 1:
         raise ValueError("--reps must be positive")
@@ -56,6 +56,7 @@ def run(a: Any) -> int:
         sweep=sweep,
         reps=reps,
         warmups=warmups,
+        max_warmups=max_warmups,
         factory=ProcessEngineFactory(eager=eager),
         config_identity={"resolved_spec_sha256": sha256(replace(
             spec,
@@ -63,6 +64,7 @@ def run(a: Any) -> int:
             sweep=sweep,
             reps=reps,
             warmups=warmups,
+            max_warmups=max_warmups,
             eager=eager,
             preset=preset,
             arm_modules=tuple(a.arm_module),

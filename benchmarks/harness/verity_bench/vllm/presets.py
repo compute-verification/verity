@@ -56,6 +56,7 @@ class BenchmarkSpec:
     setup: str | None = None
     admission: Admission = Admission()
     warmups: int = 1
+    max_warmups: int | None = None
 
 
 @dataclass(frozen=True)
@@ -83,6 +84,7 @@ class ResolvedSpec:
     setup: str | None = None
     admission: Admission = Admission()
     warmups: int = 1
+    max_warmups: int | None = None
 
     @property
     def config_sha256(self) -> str:
@@ -112,6 +114,8 @@ def load_spec(spec: str | Path) -> BenchmarkSpec:
         raise ConfigError(f"{path}: gpu_count is outside {doc.preset.gpu_id!r}'s per-node capacity")
     if doc.reps < 1 or doc.warmups < 1 or not doc.arms:
         raise ConfigError(f"{path}: arms must be nonempty and reps and warmups must be positive")
+    if doc.max_warmups is not None and doc.max_warmups < doc.warmups:
+        raise ConfigError(f"{path}: max_warmups must be at least warmups")
     bad = sorted(name for name in doc.env if not ENV_NAME.fullmatch(name) or RESERVED_ENV.fullmatch(name))
     if bad:
         raise ConfigError(f"{path}: env names must be upper-case and not the dispatcher's, queue's or launcher's: {bad}")
@@ -151,6 +155,7 @@ def resolve_spec(spec: str | Path) -> ResolvedSpec:
         setup=doc.setup,
         admission=doc.admission,
         warmups=doc.warmups,
+        max_warmups=doc.max_warmups,
     )
 
 

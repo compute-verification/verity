@@ -237,6 +237,10 @@ def test_a_spec_warmups_count_loads_strictly_and_binds_the_identity(tmp_path):
     assert spec.config_sha256 != replace(spec, warmups=1).config_sha256
     with pytest.raises(ValueError, match="warmups must be positive"):
         load_spec(_spec_with(tmp_path, "warmups = 0"))
+    capped = resolve_spec(_spec_with(tmp_path, "warmups = 2\nmax_warmups = 8"))
+    assert capped.max_warmups == 8 and capped.config_sha256 != replace(capped, max_warmups=None).config_sha256
+    with pytest.raises(ValueError, match="max_warmups must be at least warmups"):
+        load_spec(_spec_with(tmp_path, "warmups = 3\nmax_warmups = 2"))
 
 
 def test_dispatch_forwards_the_spec_env_and_setup_and_the_point_refuses_any_other(tmp_path, monkeypatch):
@@ -548,6 +552,38 @@ def test_every_engine_runs_the_warmups_before_its_first_timed_rep_and_the_schedu
     assert all(s["run"]["wall_s"] == 0.5 for s in warm)
     with pytest.raises(ValueError, match="warm-up"):
         run_benchmark(preset, arms, points, sweep="quick", reps=1, warmups=0, factory=FakeFactory(), git_commit="abc")
+    with pytest.raises(ValueError, match="max_warmups"):
+        run_benchmark(preset, arms, points, sweep="quick", reps=1, warmups=3, max_warmups=2, factory=FakeFactory(),
+                      git_commit="abc")
+
+
+def test_an_engine_warms_past_its_minimum_until_two_runs_agree_and_says_when_it_never_did():
+    """r20261018-234437-5511's plain engines warmed in 7.6 s, 2.3 s, 1.26 s and then ran at 1.26 s: a fixed count that
+    happens to cover one host's stall is luck, so past `warmups` an engine warms until two consecutive runs agree."""
+
+    from verity_bench.vllm.runner import _warm
+
+    class Stalls:
+        def __init__(self, walls):
+            self.walls = list(walls)
+
+        def warmup(self, point):
+            return {"wall_s": self.walls.pop(0)}
+
+    point = expand_sweep("quick")[1]
+    schedule = []
+    _warm(Stalls([7.6, 2.27, 1.26, 1.262, 9.9]), point, 2, 8, schedule, {"arm": "plain"})
+    assert [s["run"]["wall_s"] for s in schedule] == [7.6, 2.27, 1.26, 1.262]
+    assert "settled" not in schedule[-1]
+    schedule = []
+    _warm(Stalls([1.0, 1.01, 9.9]), point, 2, 8, schedule, {"arm": "stock"})
+    assert len(schedule) == 2
+    schedule = []
+    _warm(Stalls([5.0, 4.0, 3.0, 2.0, 1.0]), point, 1, 3, schedule, {"arm": "never"})
+    assert len(schedule) == 3 and schedule[-1]["settled"] is False
+    schedule = []
+    _warm(Stalls([5.0, 4.0]), point, 2, 2, schedule, {"arm": "fixed"})
+    assert len(schedule) == 2 and "settled" not in schedule[-1]
 
 
 def test_a_timed_rep_keeps_its_step_times_request_times_and_host_counters():
@@ -572,13 +608,16 @@ def test_a_timed_rep_keeps_its_step_times_request_times_and_host_counters():
     }
     import gc
 
-    probe = HostProbe()
+    allocations = iter([{"num_device_alloc": 10, "num_alloc_retries": 0}, {"num_device_alloc": 13, "num_alloc_retries": 1}])
+    probe = HostProbe(lambda: next(allocations))
     gc.collect()
     host = probe.close()
+    assert host.pop("device") == {"num_device_alloc": 3, "num_alloc_retries": 1}
     assert set(host) == {"loadavg_1m", "process_cpu_s", "thread_cpu_s", "involuntary_switches", "voluntary_switches",
                          "minor_faults", "major_faults", "gc_s"}
     assert host["gc_s"] > 0 and all(v >= 0 for v in host.values())
     assert probe._on_gc not in gc.callbacks
+    assert "device" not in HostProbe().close()
 
 
 def test_resident_failure_falls_back_to_alternating_blocks():

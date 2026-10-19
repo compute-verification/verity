@@ -10,7 +10,7 @@ import statistics
 import subprocess
 import time
 import traceback
-from collections.abc import Mapping
+from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from types import SimpleNamespace
 from typing import Any, Protocol
@@ -29,6 +29,10 @@ T95 = {1: 12.706, 2: 4.303, 3: 3.182, 4: 2.776, 5: 2.571, 6: 2.447, 7: 2.365, 8:
 # A step's host time may carry device work its own forward didn't enqueue; past this share of the decode time the
 # run's trailing device work is too large to attribute, and the decode metric is dropped.
 DECODE_TAIL_SHARE = 0.01
+# Past a spec's `warmups`, an engine warms until two consecutive runs' wall times differ by at most this share. On a host
+# at load 600-900 (18 Oct) a bandwidth engine's stalled runs were 8% to 8x slower than the next; an extra warm-up costs
+# seconds against an engine's minutes of start-up, so the bar is strict and `max_warmups` bounds it.
+WARMUP_AGREEMENT = 0.05
 
 
 def t95(df: int) -> float:
@@ -256,12 +260,29 @@ def _record(
     schedule.append({"phase": "timed", "mode": mode, "arm": arm, "point": point.id, "rep": rep})
 
 
-def _warm(engine: BenchEngine, point: SweepPoint, warmups: int, schedule: list[dict[str, Any]],
+def _warm(engine: BenchEngine, point: SweepPoint, warmups: int, max_warmups: int, schedule: list[dict[str, Any]],
           entry: Mapping[str, Any]) -> None:
-    for index in range(warmups):
+    """`warmups` discarded runs, then more, up to `max_warmups` in all, until the last two runs' wall times agree within
+    WARMUP_AGREEMENT. An engine whose first runs stall (18 Oct: the bandwidth arms' first prefill step, by seconds,
+    for one to three runs after the engine starts) is timed only once it runs as it will keep running. An engine that
+    reaches `max_warmups` without settling says so in its last warm-up's schedule entry (`settled: false`)."""
+
+    walls: list[float | None] = []
+    for index in range(max_warmups):
         got = engine.warmup(point)
-        schedule.append({"phase": "warmup", **entry, "point": point.id, "warmup": index,
-                         **({"run": dict(got)} if isinstance(got, Mapping) and got else {})})
+        run = dict(got) if isinstance(got, Mapping) else {}
+        walls.append(run.get("wall_s"))
+        schedule.append({"phase": "warmup", **entry, "point": point.id, "warmup": index, **({"run": run} if run else {})})
+        if index + 1 >= warmups and (max_warmups == warmups or _agree(walls[-2:])):
+            return
+    schedule[-1]["settled"] = False
+
+
+def _agree(walls: list[float | None]) -> bool:
+    if len(walls) != 2 or None in walls:
+        return False
+    a, b = walls
+    return abs(a - b) <= WARMUP_AGREEMENT * min(a, b)
 
 
 def decode_time_per_token(
@@ -350,14 +371,17 @@ def run_trace(timing: Mapping[str, Any], start: float, ready: float) -> dict[str
 class HostProbe:
     """The process's CPU time, context switches, page faults and garbage collections over a window, and the host's load
     when it opened: a slow rep with as much CPU time but more involuntary switches waited on a contended host, one with
-    more CPU time ran slower code (or a slower clock), and one with neither waited on the device."""
+    more CPU time ran slower code (or a slower clock), and one with neither waited on the device. `counters`, when
+    given, is read at both ends and its deltas kept under `device`."""
 
-    def __init__(self) -> None:
+    def __init__(self, counters: Callable[[], Mapping[str, float]] | None = None) -> None:
         import gc
         import os
         import resource
 
         self._gc, self._resource = gc, resource
+        self._counters = counters
+        self.counted = dict(counters()) if counters is not None else None
         self.load = os.getloadavg()[0]
         self.gc_s, self._gc_at = 0.0, None
         gc.callbacks.append(self._on_gc)
@@ -377,6 +401,8 @@ class HostProbe:
         if self._on_gc in self._gc.callbacks:
             self._gc.callbacks.remove(self._on_gc)
         b = self.usage
+        counted = ({"device": {k: v - self.counted.get(k, 0) for k, v in self._counters().items()}}
+                   if self._counters is not None else {})
         return {
             "loadavg_1m": round(self.load, 2),
             "process_cpu_s": round(after.ru_utime + after.ru_stime - b.ru_utime - b.ru_stime, 6),
@@ -386,6 +412,7 @@ class HostProbe:
             "minor_faults": after.ru_minflt - b.ru_minflt,
             "major_faults": after.ru_majflt - b.ru_majflt,
             "gc_s": round(self.gc_s, 6),
+            **counted,
         }
 
 
@@ -403,6 +430,7 @@ def _identity(
     *,
     reps: int,
     warmups: int = 1,
+    max_warmups: int = 1,
     interleave: str,
 ) -> dict[str, Any]:
     shared = {}
@@ -434,6 +462,7 @@ def _identity(
         "sweep": sweep,
         "reps": reps,
         "warmups": warmups,
+        "max_warmups": max_warmups,
         "interleave": interleave,
         **({"config": dict(config_identity)} if config_identity is not None else {}),
     }
@@ -450,14 +479,17 @@ def run_benchmark(
     git_commit: str | None = None,
     config_identity: Mapping[str, Any] | None = None,
     warmups: int = 1,
+    max_warmups: int | None = None,
 ) -> dict[str, Any]:
-    """Run every gate before any timing, then use resident interleaving or alternating blocks, with `warmups` discarded
-    runs of a point before an engine's first timed one."""
+    """Run every gate before any timing, then use resident interleaving or alternating blocks, with at least `warmups`
+    discarded runs of a point before an engine's first timed one and, up to `max_warmups`, as many more as it takes two
+    consecutive runs to agree (`_warm`)."""
 
     if reps < 1 or not arms or not points:
         raise ValueError("benchmark needs at least one arm, point, and repetition")
-    if warmups < 1:
-        raise ValueError("benchmark needs at least one warm-up a point")
+    max_warmups = warmups if max_warmups is None else max_warmups
+    if warmups < 1 or max_warmups < warmups:
+        raise ValueError("benchmark needs at least one warm-up a point, and max_warmups no fewer than warmups")
     if any(a.control == a.id for a in arms):
         raise ValueError("an arm cannot be its own control: its greedy gate would compare it with itself")
     baseline = "stock-fp8" if any(a.id == "stock-fp8" for a in arms) else "stock" if any(a.id == "stock" for a in arms) else arms[0].id
@@ -488,7 +520,7 @@ def run_benchmark(
             if all(g["passed"] for g in gates):
                 for point in points:
                     for arm in arms:
-                        _warm(engines[arm.id], point, warmups, schedule, {"mode": "resident", "arm": arm.id})
+                        _warm(engines[arm.id], point, warmups, max_warmups, schedule, {"mode": "resident", "arm": arm.id})
                     for rep in range(reps):
                         for arm_id in interleave_order(arms, baseline, rep):
                             _record(samples, schedule, arm_id, point, rep, engines[arm_id], "resident")
@@ -523,7 +555,7 @@ def run_benchmark(
                         continue
                     try:
                         for point in points:
-                            _warm(engine, point, warmups, schedule, {"mode": "blocks", "cycle": cycle, "arm": arm.id})
+                            _warm(engine, point, warmups, max_warmups, schedule, {"mode": "blocks", "cycle": cycle, "arm": arm.id})
                             for rep in indices:
                                 _record(samples, schedule, arm.id, point, rep, engine, "blocks")
                     finally:
@@ -533,7 +565,7 @@ def run_benchmark(
     if all(g["passed"] for g in gates):
         gates += _timed_token_gates(arms, points, samples)
     identity = _identity(preset, arms, sweep, git_commit or _git_head(), versions, config_identity,
-                         reps=reps, warmups=warmups, interleave=mode)
+                         reps=reps, warmups=warmups, max_warmups=max_warmups, interleave=mode)
     doc = {
         "schema": result_format.SCHEMA,
         "identity": identity,
@@ -541,6 +573,7 @@ def run_benchmark(
         "sweep": [p.to_json() for p in points],
         "gates": gates,
         "execution": {"interleave": mode, "resident_failure": resident_failure, "reps": reps, "warmups": warmups,
+                      "max_warmups": max_warmups,
                       "schedule": schedule},
         "points": _aggregate(arms, points, baseline, samples) if all(g["passed"] for g in gates) else [],
     }
@@ -551,6 +584,17 @@ def run_benchmark(
 def _callback(obj: Any, name: str, target: Target, default: Any) -> Any:
     fn = obj.get(name) if isinstance(obj, Mapping) else getattr(obj, name, None)
     return default if not callable(fn) else fn(target)
+
+
+def _allocator_counts() -> dict[str, float]:
+    """The caching allocator's device allocations and frees, its out-of-memory retries (each frees every cached block)
+    and its synchronizations of every stream: a run that needs any of them waits on the driver."""
+
+    import torch
+
+    stats = torch.cuda.memory_stats()
+    keys = ("num_device_alloc", "num_device_free", "num_alloc_retries", "num_sync_all_streams")
+    return {k: stats.get(k, 0) for k in keys}
 
 
 class _DirectLLM:
@@ -725,7 +769,7 @@ class _VllmEngine:
         self.target.tokens = sum(len(r.prompt_token_ids) + r.max_tokens for r in requests)
         if self.obj is not None:
             _callback(self.obj, "begin_run", self.target, None)
-        probe = HostProbe()
+        probe = HostProbe(_allocator_counts)
         start = time.perf_counter()
         finished, timing = run_requests_arrivals(
             self.llm.vllm,
