@@ -17,7 +17,8 @@ the triple's vanishes there at every coin (`innerP_batched`).
   which the replay's algebra never reads.
 * `innerPre_holds`: the shared phases' constraints (the replay's, the two ring-switch rows and the lanes') vanish at the
   honest pads, at a table and its trace, outer coins that are not `1` and extra claims at points of the table's `m_pts`.
-* `innerPre_cut`: answered by `asksCut`, the shared phases that return are answered by `asksS` at the same coins.
+* `innerPre_cut` (private, as InnerSlot states it too): answered by `asksCut`, the shared phases that return are
+  answered by `asksS` at the same coins.
 * `tableM_mask`: each table and its trace at the mask witness have `TableM` (`maskFree_relation`, `relS_only`).
 * `outer_ne_one`: no refusal seen up to a stop past the rep's `ε` slot means its outer coins are not `1`.
 -/
@@ -283,8 +284,8 @@ namespace Masked
 open FlockComplete Flock.With
 
 /-- **The phases hybrids 2 and 3 share, answered by `asksCut`, that return** are those answered by `asksS` at the same
-coins. -/
-theorem innerPre_cut {coin : ℕ → ℕ → _root_.Flock.F128} {n : ℕ} {resp : ℕ → Msg}
+coins. Private: InnerSlot states the same `innerPre_cut`, and the two files are imported together. -/
+private theorem innerPre_cut {coin : ℕ → ℕ → _root_.Flock.F128} {n : ℕ} {resp : ℕ → Msg}
     (hr : ∀ k, coinOf (resp k) = coin k) (hs : _root_.Flock.Hashes FlockComplete.PS) (st : _root_.Flock.Setup)
     (sch : _root_.Flock.Schedule) (tPad rep : ℕ) (dom : ByteArray) (tr : FlockComplete.Trace)
     (t : Array _root_.Flock.F128) (cm0 : Commit) (extras : Array _root_.Flock.Claim) (pads : PadsZk)
