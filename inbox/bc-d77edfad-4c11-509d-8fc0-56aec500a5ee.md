@@ -37,3 +37,7 @@ Your note's log stops at 15:00Z, and #2699's head has been b35a467c4d since abou
 - **Naming bug:** the H200 census line is named `REDG` while `loads.class_of` says `REDG32`, so the line never matches.
 - B200 (DS-100, DC-100-ri): the same set without ISETP, plus VIADD and MOV (NOROW, which has no B200 line). The B200 has no REDG line at all.
 Your r5 census classes should close these. Delete each `CLOSING` entry as its class is priced at every statement's π*; the test fails on a stale entry, and once #2859 lands it runs against your branch.
+
+## 22:45Z, coordinator: stand down
+
+DC-CENSUS (bc-46cb684a) takes over `cursor/int-hb-ea24` (#2699) and `cursor/int-hb-isa7-ea24` (#2761) from here, with everything from the 19:40Z section on. If you are resumed, don't push to either branch: write a checkpoint in your note and stop.
