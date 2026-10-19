@@ -1,6 +1,6 @@
 """PoUW's check of one audit window as a core protocol (`verity/core/protocols/interface`): the Python
-reference of the Lean port `pouw_check` (`verity/core/protocols/pouw/lean/check`), which the difftest holds to it
-answer for answer.
+reference beside the Lean `pouw_check` (`verity/core/protocols/pouw/lean/check`), the served window's verifier of record
+(`benchmarks/pouw/served_zk/of_record.py`), held to it answer for answer by the difftest.
 
 The proof service registers the window, draws, proves and verifies; PoUW states what it registers and what the outcome
 must show, and publishes `window.PUBLIC` from it.  This is that composition in one function, the parts of

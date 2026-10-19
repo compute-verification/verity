@@ -1,11 +1,15 @@
 """One link-window's network certificates through the proof service (N2): the network `Spec`, the firewall's salted
 commitment to the link-window's certified records, and the check's verifier of record.
 
-**What is committed.** One `Value`, `certificates`: the link-window's two certified records (`CertifiedRecord`), egress
-leaf 0 and ingress leaf 1, under one salted root. Each leaf is `hm96-sha512/row/v2` over the record's bytes (`encode`:
-the record head, then the certificate), salted with a fresh 192-byte salt, in a `frame-v3-sha512` tree under one-stage's
-served domain, whose run is the link and the window. The certificates are witness: the challenger sees the root, never
-a certificate.
+**What is committed.** One `Value`, `certificates`: four leaves under one salted root, the link-window's two certified
+records (`CertifiedRecord`), egress leaf 0 and ingress leaf 1, and their heads, egress leaf 2 and ingress leaf 3
+(`rows`).
+Each leaf is `hm96-sha512/row/v2` over its bytes, salted with its own fresh 192-byte salt, in a `frame-v3-sha512` tree
+under one-stage's served domain, whose run is the link and the window. A record leaf's bytes are `encode`'s (the record
+head, then the certificate), and a head leaf's are the head's alone (`RecordHead.encode`). A proof that reads only the
+head, such as N3's, which holds the window's frames to the head's root, opens a head leaf in the head's two or three
+SHA-512 compressions instead of the certificate's 272. The certificates and heads are witness: the challenger sees the
+root, never a certificate or a head.
 
 **Selection** is `All`: every link-window is checked, so an accepted outcome is the exhaustive fact. A registration is
 one link-window, one proof unit. Its `window` provenance is `{"kind": "served", "window": w}`, and the challenger holds w
@@ -16,11 +20,12 @@ committed value's leaf count and domain, its salted root, the parameters digests
 bound by the spec's context), and the check's two public outputs, `verdict` and `deadline`. A rejected link-window shows
 only the service's `reject`: the violation's kind stays in the verifier.
 
-**The check** is `UNIT`, `NetworkLinkWindow` v0: one opaque primitive over the two leaves' committed digests, returning
+**The check** is `UNIT`, `NetworkLinkWindow` v1: one opaque primitive over the four leaves' committed digests, returning
 the verdict bit. It has no gates. Its Program's digest names the check, so the spec, the stream and each registration
 bind to it, but nothing proves it in a circuit yet. Its verifier of record is `LinkWindows.verify`, which runs on the
-host and reads the opening: the certified records and their salts. It accepts when
-- the opening reproduces the registered root under the link-window's domain;
+host and reads the opening: the certified records and their four salts. It accepts when
+- the opening reproduces the registered root under the link-window's domain, so each head leaf holds its record's
+  head;
 - the audit (`audit.Audit`) accepts the egress record against the Program's grid under the declared syncs, and the
   ingress record on its status and parameters, both under the network certifier's public key in its certifier session
   (`certifier_session`); so each certificate verifies, names the registered link-window and signs its head's digest,
@@ -75,13 +80,18 @@ def _host_only(egress: int, ingress: int) -> int:
     raise NotImplementedError("the link-window check has no gates: its verifier of record is LinkWindows.verify")
 
 
+_LEAVES = (("egress", Bits(512)), ("ingress", Bits(512)), ("egress_head", Bits(512)), ("ingress_head", Bits(512)))
+LEAVES = len(_LEAVES)
+#: the leaf of the head of the record at leaf i (0 egress, 1 ingress) is HEADS + i
+HEADS = 2
 _CHECK = PrimitiveDefinition(
-    "NetworkLinkWindowCheck", 0, (("egress", Bits(512)), ("ingress", Bits(512))), Bits(1), _host_only,
-    doc="one link-window's verdict from its two certified records' committed digests; no gates, checked on the host",
+    "NetworkLinkWindowCheck", 1, _LEAVES, Bits(1), _host_only,
+    doc="one link-window's verdict from its two certified records' and their heads' committed digests; no gates, "
+        "checked on the host",
     register=False)
 UNIT = bind(CompositeDefinition(
-    "NetworkLinkWindow", 0, (), lambda S_: ((("egress", Bits(512)), ("ingress", Bits(512))), Bits(1)),
-    lambda B, S_, egress, ingress: B.call(_CHECK, egress, ingress),
+    "NetworkLinkWindow", 1, (), lambda S_: (_LEAVES, Bits(1)),
+    lambda B, S_, *leaves: B.call(_CHECK, *leaves),
     doc="the proof unit of network accounting: one link-window, both directions", register=False))
 QUERY = P.template_instance_query(UNIT)
 _PROGRAM = P.population_program(UNIT, 1)
@@ -90,7 +100,7 @@ _PARTITION = P.partition(_PROGRAM, QUERY)
 PUBLIC = (
     S.Public("population", "structure", "one proof unit per registration: the link-window"),
     S.Public("window", "structure", "provenance: the link-window's index, held to the registration's order"),
-    S.Public(f"leaves:{VALUE}", "structure", "two leaves, the egress and the ingress certified record"),
+    S.Public(f"leaves:{VALUE}", "structure", "four leaves, the egress and ingress certified records and their heads"),
     S.Public(f"domain:{VALUE}", "structure", "the served domain, which binds the check, the link and the window"),
     S.Public(VALUE, "commitment", "the link-window's certified records under one salted root"),
     S.Public("parameters", "structure", "the parameters digests (W1) the certificates sign, fixed before the run"),
@@ -112,6 +122,11 @@ def encode(record: CertifiedRecord) -> bytes:
                      c.signature])
 
 
+def rows(records: Sequence[CertifiedRecord]) -> list[bytes]:
+    """The four leaves' bytes, in leaf order: each record's `encode`, then each record's head alone."""
+    return [encode(r) for r in records] + [r.head.encode() for r in records]
+
+
 def _sha512(obj: Any) -> str:
     return hashlib.sha512(canonical_json(obj)).hexdigest()
 
@@ -123,11 +138,11 @@ def _accepts(egress: Sequence[Any], ingress: Sequence[Any], window: int) -> bool
 @dataclass(frozen=True)
 class Opening:
     """The firewall's side of one link-window's commitment, all witness: the egress and the ingress certified records,
-    in leaf order, and one salt each."""
+    in leaf order, and one salt per leaf (`rows`'s order: the two records', then the two heads')."""
 
     window: int
     records: tuple[CertifiedRecord, CertifiedRecord]
-    salts: tuple[bytes, bytes]
+    salts: tuple[bytes, bytes, bytes, bytes]
 
 
 @dataclass(frozen=True)
@@ -172,12 +187,12 @@ class LinkWindows:
         """One-stage's served domain (`registration.served_domain`) for the link-window: run `<run>/<link>/<window>`."""
         binding = identity_digest_sha512(R.SERVED_DOMAIN, {
             "program": _PARTITION["program"], "partition": P.digest(_PARTITION), "port": VALUE, "schema": SCHEMA,
-            "leaves": 2, "run": f"{self.run}/{self.link}/{window}"})
-        return CommitmentDomain(binding, -1, RangeIndexedDomain(0, 2), hash="sha512")
+            "leaves": LEAVES, "run": f"{self.run}/{self.link}/{window}"})
+        return CommitmentDomain(binding, -1, RangeIndexedDomain(0, LEAVES), hash="sha512")
 
     def ports(self, window: int) -> dict[str, dict[str, Any]]:
-        """The challenger's own copy of the link-window's port: two leaves, under its domain."""
-        return {VALUE: {"leaves": 2, "domain": self.domain(window).domain_id.hex()}}
+        """The challenger's own copy of the link-window's port: four leaves, under its domain."""
+        return {VALUE: {"leaves": LEAVES, "domain": self.domain(window).domain_id.hex()}}
 
     @staticmethod
     def provenance(window: int) -> dict[str, Any]:
@@ -187,18 +202,18 @@ class LinkWindows:
 
     def commit(self, window: int, egress: CertifiedRecord, ingress: CertifiedRecord,
                salts: Sequence[bytes] | None = None) -> Opening:
-        """The link-window's opening. `salts`: two distinct salts, drawn once (default: fresh from the operating system)."""
-        salts = tuple(salts) if salts is not None else (_INST.fresh_salt(), _INST.fresh_salt())
-        if len(salts) != 2 or salts[0] == salts[1] or any(len(s) != _INST.salt_bytes for s in salts):
-            raise ValueError(f"two distinct {_INST.salt_bytes}-byte salts")
-        return Opening(window, (egress, ingress), (bytes(salts[0]), bytes(salts[1])))
+        """The link-window's opening. `salts`: four distinct salts, one per leaf, drawn once (default: fresh from the
+        operating system)."""
+        salts = tuple(salts) if salts is not None else tuple(_INST.fresh_salt() for _ in range(LEAVES))
+        if len(salts) != LEAVES or len(set(salts)) != LEAVES or any(len(s) != _INST.salt_bytes for s in salts):
+            raise ValueError(f"{LEAVES} distinct {_INST.salt_bytes}-byte salts")
+        return Opening(window, (egress, ingress), tuple(bytes(s) for s in salts))  # type: ignore[arg-type]
 
     def leaves(self, opening: Opening) -> list[bytes]:
-        """The salted leaves, which hide the records: `hm96-sha512/row/v2` over `encode(record)`."""
+        """The salted leaves, which hide the records and their heads: `hm96-sha512/row/v2` over each of `rows`."""
         dom, key = self.domain(opening.window), _INST.default_key
         out = []
-        for i, (rec, salt) in enumerate(zip(opening.records, opening.salts, strict=True)):
-            row = encode(rec)
+        for i, (row, salt) in enumerate(zip(rows(opening.records), opening.salts, strict=True)):
             bc = _INST.commit_string(key, sha512_row_v2_digest(row, 8 * len(row)), salt)
             out.append(row_leaf(dom, i, _INST.tree_leaf(key, bc), SCHEMA))
         return out
@@ -272,4 +287,5 @@ class LinkWindows:
                               session_roots={VALUE: self.root(opening)})
 
 
-__all__ = ["LinkWindows", "OUTPUTS", "Opening", "PUBLIC", "QUERY", "SCHEMA", "UNIT", "VALUE", "encode"]
+__all__ = ["HEADS", "LEAVES", "LinkWindows", "OUTPUTS", "Opening", "PUBLIC", "QUERY", "SCHEMA", "UNIT", "VALUE",
+           "encode", "rows"]
