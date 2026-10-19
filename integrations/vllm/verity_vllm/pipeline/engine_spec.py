@@ -43,6 +43,9 @@ class Engine:
     dtype: str | None = None
     quantization: str | None = None
     compilation_config: Mapping[str, Any] | None = None
+    attention_backend: str | None = None
+    attention_config: Mapping[str, Any] | None = None
+    moe_backend: str | None = None
     seed: int | None = None
     protocols: tuple[str, ...] | None = None
     protocols_config: Mapping[str, Mapping[str, Any]] | None = field(default=None, metadata={"identity": False})

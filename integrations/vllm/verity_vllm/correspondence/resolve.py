@@ -591,11 +591,6 @@ class Attribution:
         c = self.live.requests.get(rid) if self.live is not None else None
         return sorted(c.prefill_steps) if c is not None else []
 
-    def instance_indices(self, legs: dict[str, list[int]] | None = None) -> dict[str, list[int]]:
-        """Node ids -> instance indices (`node - n_input_nodes`, the index into `compare.Prog.inst` when no root node was dropped)."""
-        src = legs if legs is not None else self.per_req
-        return {rid: [k - self.n_input_nodes for k in ks] for rid, ks in src.items()}
-
 
 def attribute_record(record_dir: str, *, programs: dict[str, ComponentProgram] | None = None, validate_each: bool = True,
                      max_fault_examples: int = 24, observations: Iterable[OB.ValueObservation] | None = None,

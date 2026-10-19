@@ -249,19 +249,7 @@ def test_the_ordered_router_commits_its_softmax_once_and_recomputes_nothing(name
 
 
 def test_a_recompute_fails_the_cut():
-    from verity.ml.circuits.defs import CompositeDefinition, bind
-    from verity.ml.circuits.refs import tuple_of
-    from verity.ml.circuits.types import Array, Tuple
-    from verity_vllm.program.registry import prims as P
-    F32 = P.F32
-
-    def body(B, S, x):
-        a = B.call(P.F32Add, x[0], x[1])
-        b = B.call(P.F32Add, x[0], x[1])                              # the same value computed a second time
-        return tuple_of(B.call(P.F32Mul, a, x[2]), B.call(P.F32Mul, b, x[3]))
-
-    f = bind(CompositeDefinition("Twice", 1, (), lambda S: ((("x", Array(4, F32)),), Tuple(F32, F32)), body, register=False))
-    G = W.Graph(f)
+    G = W.Graph(_twice())
     R = W.units(G, 16, 32)
     assert R["cut"].codes == ("gate-recomputed",) and R["cut"].detail["gate-recomputed"]["gates"] == [[1, 0]]
 
@@ -276,9 +264,7 @@ def test_a_value_computed_again_in_its_own_unit_is_redundant_not_a_recompute():
 
 
 def test_the_sampler_computes_its_greedy_flag_twice_inside_its_one_unit():
-    from verity.ml.circuits.defs import bind
-    from verity_vllm.program.registry import sampling as SM
-    G = W.Graph(bind(SM.GumbelTopPTokenSelect, V=16))
+    G = W.Graph(_sampler())
     R = W.units(G, 16, 32)
     (a, b), = G.recomputed                                            # temp == 0, in TemperatureScale and in GumbelSelectF32
     assert {G.prim_names[int(G.prim[a])], G.prim_names[int(G.prim[b])]} == {"F32Eq_v1"} and R["owner"][a] == R["owner"][b]
@@ -299,7 +285,7 @@ def test_a_call_that_only_rearranges_bits_returns_its_inputs():
 
 
 def test_the_graph_is_the_core_reference_and_a_programs_partition_object_verifies_in_core():
-    # word.Graph is verity.ml.circuits.cut.CallGraph with numpy views; a Program's cut, as verity/partition/v1, checks in core
+    # word.Graph is verity.ml.circuits.cut.CallGraph's graph in flat arrays; a Program's cut, as verity/partition/v1, checks in core
     from verity.ml.circuits import cut, partition_object as PO
     from verity.ml.circuits.defs import CompositeDefinition, bind
     from verity.ml.circuits.program import Program
@@ -353,12 +339,165 @@ def test_a_wide_gate_skips_the_calls_parameters_unresolved_and_its_graph_is_unch
                 yield resolve(s, refs[j])
 
     fast = cut.CallGraph(fn)
-    monkeypatch.setattr(cut, "_wide_operands", every_operand)
+    monkeypatch.setattr(cut, "wide_operands", every_operand)
     full = cut.CallGraph(fn)
     assert len(enumerated) > 4 * cut.WIDE_FAN_IN
     for a in ("n", "keep", "width", "prim", "scope", "external", "src", "dst", "input_ids", "input_reads", "outputs", "returned_inputs",
               "recomputed", "total", "free", "free_by_prim"):
         assert getattr(fast, a) == getattr(full, a), a
+
+
+# ------------------------------------------------------------- the graph in flat arrays and its verdict, held to core's reference
+
+def _moe(routed: bool, E: int, K: int, N: int, swap: bool):
+    """GLM-5.3's MoE expert FP8 GEMM (w13; w2 `routed`) on Hopper's tiles (G = KB = 128), scaled down in E, K and N."""
+    from verity.ml.circuits.defs import bind
+    from verity.ml.circuits.ops.prims import HopperE4m3MmaV2Dot32, HopperE4m3QgmmaDot32
+    from verity_vllm.program.registry import fp8_moe_experts as XM
+    return bind(XM.MoeExpertFp8GemmW if routed else XM.MoeExpertFp8Gemm, E=E, K=K, N=N, G=128, KB=128, SWAP=swap,
+                DOT=HopperE4m3QgmmaDot32 if swap else HopperE4m3MmaV2Dot32)
+
+
+def _twice():
+    """The same F32Add computed twice, each copy read by its own output: a value computed in two units."""
+    from verity.ml.circuits.defs import CompositeDefinition, bind
+    from verity.ml.circuits.refs import tuple_of
+    from verity.ml.circuits.types import Array, Tuple
+    from verity_vllm.program.registry import prims as P
+
+    def body(B, S, x):
+        a = B.call(P.F32Add, x[0], x[1])
+        b = B.call(P.F32Add, x[0], x[1])
+        return tuple_of(B.call(P.F32Mul, a, x[2]), B.call(P.F32Mul, b, x[3]))
+    return bind(CompositeDefinition("Twice", 1, (), lambda S: ((("x", Array(4, P.F32)),), Tuple(P.F32, P.F32)), body, register=False))
+
+
+def _sampler():
+    from verity.ml.circuits.defs import bind
+    from verity_vllm.program.registry import sampling as SM
+    return bind(SM.GumbelTopPTokenSelect, V=16)
+
+
+def _dead_input():
+    """A parameter read only by wiring nothing reads (committed, unread), beside one returned through wiring."""
+    from verity.ml.circuits.defs import CompositeDefinition, bind
+    from verity.ml.circuits.refs import tuple_of
+    from verity.ml.circuits.types import Array, Tuple
+    from verity_vllm.program.registry import prims as P
+
+    def body(B, S, x, y):
+        B.call(P.Bf16ToF32, y[0])
+        return tuple_of(B.call(P.F32Add, B.call(P.Bf16ToF32, x[0]), B.call(P.Bf16ToF32, x[1])), B.call(P.Bf16ToF32, y[1]))
+    return bind(CompositeDefinition("DeadInput", 1, (), lambda S: ((("x", Array(2, P.BF16)), ("y", Array(2, P.BF16))), Tuple(P.F32, P.F32)),
+                                    body, register=False))
+
+
+#: Definitions over every branch of the graph and its check: wiring and constants, a wide gate, a value computed twice in one unit
+#: (the sampler's greedy flag) and in two, a parameter returned through wiring and one nobody reads, and the MoE expert FP8 GEMMs
+#: over two K tiles and a partial weight block
+CORPUS = {"norm": lambda: _fn("RMSNormTriton_v1", N=64, EPS=1e-05), "select": lambda: _fn("TokenSelect_v1", V=8),
+          "attention": lambda: _fn("Attention_v3", T=3, NH=2, KVH=1, D=16, BN=128), "gemm": lambda: _fn("Gemm_v1", K=64, N=8),
+          "wide": lambda: _fn("EmbeddingShard_v1", VS=4099, H=4, START=0), "sampler": lambda: _sampler(), "twice": _twice,
+          "dead-input": _dead_input,
+          "moe-w13": lambda: _moe(False, E=4, K=256, N=130, swap=True), "moe-w2": lambda: _moe(True, E=4, K=256, N=48, swap=False)}
+
+
+class _Reference:
+    """main's `word.Graph` before the flat arrays: core's `CallGraph` itself, with numpy views of the arrays the cut computes on."""
+
+    def __new__(cls, fn):
+        from verity.ml.circuits import cut
+        g = cut.CallGraph(fn)
+        for a in ("keep", "width", "prim", "scope", "src", "dst"):
+            setattr(g, a, np.asarray(getattr(g, a), np.int64))
+        g.external = np.frombuffer(g.external, np.uint8).astype(bool) if len(g.external) else np.zeros(0, bool)
+        return g
+
+
+def _reference_verdict(G, owner, head):
+    """main's check of a cut: `validate_unit_cut` over a Python pair per read, the Call's parameters standing for the input unit."""
+    from verity.ml.circuits.partition import INPUT_UNIT, validate_unit_cut
+    k = len(G.input_ids)
+    reads = list(zip(G.src.tolist(), G.dst.tolist())) + [(G.n + i, q) for i, q in G.input_reads]
+    return validate_unit_cut(G.total + k, G.free, np.asarray(owner).tolist() + [INPUT_UNIT] * k, reads,
+                             list(G.outputs) + [G.n + i for i in G.returned_inputs],
+                             np.flatnonzero(np.asarray(head) >= 0).tolist() + list(range(G.n, G.n + k)), range(G.n, G.n + k), G.recomputed)
+
+
+@pytest.mark.parametrize("name", CORPUS)
+def test_the_graph_is_core_references_field_by_field(name):
+    from verity.ml.circuits import cut
+    f = CORPUS[name]()
+    ref, g = cut.CallGraph(f), W.Graph(f)
+    for a in ("n", "total", "free", "outputs", "returned_inputs", "recomputed", "input_reads", "free_by_prim", "prims", "scopes",
+              "prim_names", "scope_names"):
+        assert getattr(g, a) == getattr(ref, a), a
+    for a in ("keep", "width", "prim", "scope", "src", "dst", "input_ids"):
+        assert getattr(g, a).tolist() == list(getattr(ref, a)), a
+    assert g.external.tolist() == [bool(x) for x in ref.external]
+    assert g.input_read.tolist() == [i for i, _q in ref.input_reads] and g.input_reader.tolist() == [q for _i, q in ref.input_reads]
+
+
+@pytest.mark.parametrize("name", CORPUS)
+def test_the_cut_verdict_is_validate_unit_cuts_on_the_cut_and_on_broken_ones(name):
+    """`word.cut_verdict` gives `validate_unit_cut`'s verdict, its codes, counts, listed gates and detail order, on the cut and on cuts
+    broken every way it names: gates in no unit, a committed value dropped (an uncommitted read or output), a value committed that no
+    other unit reads, units merged and split (a recompute across units), and random owners."""
+    import json
+    G = W.Graph(CORPUS[name]())
+    owner, kinds, head = W.partition(G, 16)
+    rng = np.random.default_rng(0)
+    cuts = [(owner, head)]
+    heads = np.flatnonzero(head >= 0)
+    for _ in range(2):
+        o, h = owner.copy(), head.copy()
+        if G.n:
+            o[rng.integers(0, G.n, max(1, G.n // 40))] = -1
+            h[rng.integers(0, G.n, max(1, G.n // 40))] = len(kinds)
+        if len(heads):
+            h[rng.choice(heads, max(1, len(heads) // 3), replace=False)] = -1
+        cuts += [(o, head), (owner, h), (o, h), (rng.integers(0, max(1, len(kinds)), G.n), head), (np.zeros(G.n, np.int64), head),
+                 (np.arange(G.n, dtype=np.int64), np.arange(G.n, dtype=np.int64))]
+    codes = set()
+    for o, h in cuts:
+        got, want = W.cut_verdict(G, o, h), _reference_verdict(G, o, h)
+        assert json.dumps(got.to_json()) == json.dumps(want.to_json())
+        codes |= set(got.codes)
+    if G.n > 8:
+        assert {"gate-not-certified-once", "gate-count", "read-uncommitted", "committed-unread"} <= codes, codes
+
+
+@pytest.mark.parametrize("name", ["moe-w13", "moe-w2", "twice", "dead-input", "sampler", "wide"])
+def test_a_rule_is_the_reference_cuts_byte_for_byte(name, monkeypatch):
+    """The unit rule, as the rule cache writes it, is the one main cut with core's graph and `validate_unit_cut` (`_Reference`,
+    `_reference_verdict`): GLM-5.3's MoE expert FP8 GEMMs scaled down, and a failing cut's violation detail, gate ids and all."""
+    import hashlib
+    import json
+    from verity.ml.circuits.codec import canonical_json
+    f = CORPUS[name]()
+    new = W.unit_rule(f, memo={})
+    monkeypatch.setattr(W, "Graph", _Reference)
+    monkeypatch.setattr(W, "cut_verdict", _reference_verdict)
+    old = W.unit_rule(f, memo={})
+    assert json.dumps(new) == json.dumps(old)
+    assert hashlib.sha256(canonical_json(new)).hexdigest() == hashlib.sha256(canonical_json(old)).hexdigest()
+    assert (name in ("twice", "dead-input")) == bool(new["violations"])
+
+
+def test_the_graph_holds_a_few_bytes_per_operand_read():
+    """A MoE expert FP8 GEMM's gathers read every expert's weight word (E + 1 operands a gate): the graph's peak is a few bytes per
+    read (19 here), where core's reference, a Python object per read, peaks at 435 (GLM-5.3's w13 at E=256: 468 GB)."""
+    import tracemalloc
+    f = _moe(False, E=64, K=256, N=4, swap=True)
+    W.Graph(f)
+    tracemalloc.start()
+    try:
+        g = W.Graph(f)
+        peak = tracemalloc.get_traced_memory()[1]
+    finally:
+        tracemalloc.stop()
+    reads = len(g.src) + len(g.input_read)
+    assert reads > 60 * f.gates and peak < 32 * reads, peak / reads
 
 
 #: forking happens in a fresh interpreter: a pytest-xdist worker has threads, and a fork beside them may deadlock
@@ -387,6 +526,51 @@ def test_prefetch_memos_the_rules_the_check_computes_in_place():
         assert r["n"] == 0 and r["families"] == []
         return
     assert r["families"] == ["AttentionHead_v3", "Attention_v3", "EmbeddingShard_v1", "RMSNormTriton_v1"] and r["n"] == 4 and r["same"], r
+
+
+#: the probe's specs prefetched under a budget no cut fits, each cut counted in its worker while it runs, then without one
+PREFETCH_BUDGET_PROBE = """
+import json, multiprocessing
+from verity_vllm.query import word as W
+specs = ["Attention_v3{T=5,NH=2,KVH=1,D=64,BN=128}", "batch:RMSNormTriton_v1{N=64,EPS=1e-05}", "EmbeddingShard_v1{VS=4099,H=4,START=0}"]
+live, most = multiprocessing.Value("i", 0), multiprocessing.Value("i", 0)
+cut = W._rule_of_pending
+
+
+def counted(i):
+    with live.get_lock():
+        live.value += 1
+        most.value = max(most.value, live.value)
+    try:
+        return cut(i)
+    finally:
+        with live.get_lock():
+            live.value -= 1
+
+
+W._rule_of_pending = counted
+key = tuple(sorted(W.gate_limits(None).items()))
+n = [W.prefetch(specs, jobs=4, budget=1)]
+budgeted, at_once = W._RULES.pop(key, {}), most.value
+n.append(W.prefetch(specs, jobs=4))
+free = W._RULES.get(key, {})
+print(json.dumps({"fork": "fork" in multiprocessing.get_all_start_methods(), "n": n, "at_once": at_once,
+                  "same": list(budgeted.items()) == list(free.items())}))
+"""
+
+
+def test_prefetch_under_a_memory_budget_runs_only_the_cuts_that_fit_and_memos_the_same_rules():
+    """`word.prefetch(budget=...)`: the cuts in flight are those whose estimated peaks fit the budget, and one over it runs alone, so
+    under a budget no cut fits the three bodies cut as a whole run one at a time; the rules memoed, and their order, are those of a
+    prefetch without a budget."""
+    import json
+    import subprocess
+    import sys
+    r = json.loads(subprocess.run([sys.executable, "-c", PREFETCH_BUDGET_PROBE], capture_output=True, text=True, check=True).stdout)
+    if not r["fork"]:
+        assert r["n"] == [0, 0]
+        return
+    assert r["n"] == [4, 4] and r["at_once"] == 1 and r["same"], r
 
 
 @pytest.mark.slow

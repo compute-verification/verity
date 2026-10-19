@@ -99,11 +99,48 @@ def _slot_rows(v: ViewDesc, width: int) -> ViewDesc:
     return ViewDesc(v.alloc, v.offset, (v.shape[0] * v.shape[1], width), (v.strides[1], 1), v.dtype, v.device)
 
 
-def _index_scale_rows(v: ViewDesc) -> ViewDesc:
-    """The f32 word in bytes 128..131 of each 132-byte index-cache row."""
-    if v.rank != 3 or v.dtype != "float32" or v.shape[2] != 33 or v.strides[1:] != (33, 1):
-        raise GeometryError(f"index scale cache is not f32 [blocks, block, 33]: {v!r}")
-    return ViewDesc(v.alloc, v.offset + 32, (v.shape[0] * v.shape[1],), (33,), v.dtype, v.device)
+@dataclass(frozen=True)
+class IndexCache:
+    """The index-K cache as `_fp8_quant_and_cache_write` lays it out (vLLM d9105ea80 deepseek_v32/common/kernels.py:63-87): block b of
+    the [blocks, BS, W] byte cache holds its BS slots' D e4m3 bytes one row after another, then their BS f32 scales, so slot s =
+    BS b + o has its row at byte BS W b + D o and its scale at byte BS W b + BS D + 4 o.  ``rows`` is the cache as [blocks R, D] bytes
+    (R = BS W / D rows a block, the last R - BS of them the scales' bytes) and ``scales`` the f32 words from block 0's first scale;
+    `row` and `scale` are slot s's index in each."""
+
+    rows: ViewDesc
+    scales: ViewDesc
+    BS: int
+    R: int
+    SW: int
+
+    def row(self, s: int) -> int:
+        return self.R * (s // self.BS) + s % self.BS
+
+    def scale(self, s: int) -> int:
+        return self.SW * (s // self.BS) + s % self.BS
+
+    @property
+    def slots(self) -> int:
+        return self.rows.shape[0] // self.R * self.BS
+
+
+def _index_cache(k: ViewDesc, s: ViewDesc, block_size: Any, stride: Any, D: int) -> IndexCache:
+    """`IndexCache` of the kernel's ``indexer_cache_ptr`` (the [blocks, BS, W] cache) and ``indexer_cache_scale_ptr`` (the same bytes
+    as f32 [blocks, BS, W / 4], `fused_norm_rope`'s `view(torch.float32)`), at its ``indexer_cache_block_size`` and
+    ``indexer_cache_stride`` arguments, which the kernel's addressing reads."""
+    if k.rank != 3 or k.itemsize != 1 or k.strides != (k.shape[1] * k.shape[2], k.shape[2], 1):
+        raise GeometryError(f"index-K cache is not a row-major byte [blocks, block, width]: {k!r}")
+    nb, BS, W = k.shape
+    if (block_size, stride) != (BS, W) or W < D + 4 or W % 4 or BS * W % D or BS * D % 4:
+        raise GeometryError(f"index-K cache {k!r} at block size {block_size!r} and stride {stride!r} is not D={D} bytes and a "
+                            "4-byte scale a slot in whole D-byte rows")
+    SW = BS * W // 4
+    if s.alloc != k.alloc or s.dtype != "float32" or 4 * s.offset != k.offset or s.shape != (nb, BS, W // 4) \
+            or s.strides != (SW, W // 4, 1):
+        raise GeometryError(f"index scale cache {s!r} is not the index-K cache {k!r} as f32")
+    return IndexCache(ViewDesc(k.alloc, k.offset, (nb * BS * W // D, D), (D, 1), k.dtype, k.device),
+                      ViewDesc(s.alloc, s.offset + BS * D // 4, (nb * SW - BS * D // 4,), (1,), s.dtype, s.device),
+                      BS, BS * W // D, SW)
 
 
 def _slots(node: TreeNode, ctx: StepContext, rows: int, limit: int) -> tuple[int, ...] | Unsupported:
@@ -204,17 +241,18 @@ class DsaNormRope:
             if ik.shape != (M, 128) or iw.shape != (128,) or ib.shape != (128,) or ics.rank != 2 or ics.shape[1] != 64:
                 return unsupported(node, "index-K inputs have the wrong shape", index_k=repr(ik), weight=repr(iw), bias=repr(ib), cs=repr(ics))
             try:
-                ik_rows, is_rows = _slot_rows(ikc, 128), _index_scale_rows(isc)
+                ix = _index_cache(ikc, isc, a.get("indexer_cache_block_size"), a.get("indexer_cache_stride"), 128)
             except GeometryError as e:
                 return unsupported(node, str(e))
-            if ik_rows.alloc != is_rows.alloc or 4 * is_rows.offset != ik_rows.offset + 128 or ik_rows.shape[0] != is_rows.shape[0]:
-                return unsupported(node, "index-K values and scales are not the two views of one 132-byte slot layout")
+            if any(s >= ix.slots for s in slots):
+                return unsupported(node, "a current-token slot is outside the index-K cache", slots=slots[:8], cache_slots=ix.slots)
             ieps = float(a.get("index_k_layer_norm_eps"))
             parts.append(Compute(bind(dsa.DsaIndexerKRow, D=128, ROPE=64, EPS=ieps), M,
                                  (PerRow(ik), Shared(iw), Shared(ib), Gather(ics, pos)),
-                                 (Gather(ik_rows, slots), Gather(is_rows, slots)), (), hint=f"{_module(node)}/indexer_k",
-                                 pattern=self.name, roots=(None, _root(ctx, iw), _root(ctx, ib), _root(ctx, ics))))
-            ms.update({"index_k": ik_rows, "index_scale": is_rows})
+                                 (Gather(ix.rows, tuple(map(ix.row, slots))), Gather(ix.scales, tuple(map(ix.scale, slots)))), (),
+                                 hint=f"{_module(node)}/indexer_k", pattern=self.name,
+                                 roots=(None, _root(ctx, iw), _root(ctx, ib), _root(ctx, ics))))
+            ms.update({"index_cache": ix})
         else:
             if c.get("INDEX_K_DIM") != 1 or c.get("INDEX_K_BLOCK_SIZE") != 1:
                 return unsupported(node, "IndexShare layer has unexpected dummy index-K dimensions",
@@ -306,8 +344,8 @@ class DsaMqaAllocation:
         M = len(ctx.start.rows)
         if out.dtype != "float32" or out.shape != (M, 512) or not is_row_major(out):
             return None
-        q, w, kc, ks = (ms.get(k) for k in ("index_q", "index_weights", "index_k", "index_scale"))
-        if not all(isinstance(v, ViewDesc) for v in (q, w, kc, ks)):
+        q, w, ix = (ms.get(k) for k in ("index_q", "index_weights", "index_cache"))
+        if not (isinstance(q, ViewDesc) and isinstance(w, ViewDesc) and isinstance(ix, IndexCache)):
             return unsupported(node, "invisible MQA allocation lacks the fused-q or index-cache views", module=_module(node))
         parts: list[Compute] = []
         for i, (req, position) in enumerate(ctx.start.rows):
@@ -316,11 +354,12 @@ class DsaMqaAllocation:
                 slots = kv_slots(ctx, req, n, layer=_module(node))
             except GeometryError as e:
                 return unsupported(node, str(e), request=req, T=n)
-            if n > out.shape[1] or any(s >= kc.shape[0] for s in slots):
-                return unsupported(node, "MQA row or cache does not cover its valid keys", T=n, output_width=out.shape[1], cache_slots=kc.shape[0])
+            if n > out.shape[1] or any(s >= ix.slots for s in slots):
+                return unsupported(node, "MQA row or cache does not cover its valid keys", T=n, output_width=out.shape[1], cache_slots=ix.slots)
             ov = ViewDesc(out.alloc, out.offset + i * out.strides[0], (1, n), (out.strides[0], 1), out.dtype, out.device)
             parts.append(Compute(bind(dsa.DsaMqaLogitsV3, N=n, H=32, D=128), 1,
-                                 (PerRow(_one_row(q, i)), PerRow(_one_row(w, i)), GatherMany(kc, (slots,)), GatherMany(ks, (slots,))),
+                                 (PerRow(_one_row(q, i)), PerRow(_one_row(w, i)), GatherMany(ix.rows, (tuple(map(ix.row, slots)),)),
+                                  GatherMany(ix.scales, (tuple(map(ix.scale, slots)),))),
                                  (PerRow(ov),), (node.id,) if not parts else (), hint=f"{_module(node)}/mqa[t={position}]",
                                  kernels=("fp8_mqa_logits", "fp8_paged_mqa_logits"), attribution=((req, int(position)),), pattern=self.name))
         ms.pop("mqa_after", None)

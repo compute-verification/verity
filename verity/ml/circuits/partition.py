@@ -65,7 +65,7 @@ if TYPE_CHECKING:  # pragma: no cover
 
 PartitionStatus = Literal["exact", "overlap", "outside", "gap", "unsupported"]
 
-_MAX_LISTED = 64  # cap on listed indices / examples inside a verdict (totals are always reported)
+MAX_LISTED = 64  # cap on listed indices / examples inside a verdict (totals are always reported)
 
 
 # ---------------------------------------------------------------------------------------------------------
@@ -580,7 +580,7 @@ def _tiling_verdict(program: "Program", t: CheckedTiling, count: int) -> Partiti
     detail: dict = {"path": "tiling", "gates": program.gates, "sets": count, "bodies": len(t.groups),
                     "plans": len(t.plans), "classes": len(t.classes)}
     if t.problems:
-        detail["problems"] = [{"code": c, **d} for c, d in t.problems[:_MAX_LISTED]]
+        detail["problems"] = [{"code": c, **d} for c, d in t.problems[:MAX_LISTED]]
         detail["problem_count"] = len(t.problems)
     return PartitionVerdict(status, codes, detail)
 
@@ -622,7 +622,7 @@ def _sweep(program: "Program", fam, limits: Limits, within: Intervals | None = N
     for lo, hi, i in ivs:
         if lo < expected:
             n_over += 1
-            if len(overlaps) < _MAX_LISTED:
+            if len(overlaps) < MAX_LISTED:
                 overlaps.append({"gates": [lo, min(hi, expected)], "sets": [prev_set, i]})
         if covered and lo <= covered[-1][1]:
             covered[-1] = (covered[-1][0], max(covered[-1][1], hi))
@@ -634,7 +634,7 @@ def _sweep(program: "Program", fam, limits: Limits, within: Intervals | None = N
     missing = isect(target, tuple(complement(union, size)))
     outside = isect(union, tuple(complement(target, size))) if within is not None else ()
     n_gap, n_out = len(missing), len(outside)
-    gaps = [{"gates": [lo, hi]} for lo, hi in missing[:_MAX_LISTED]]
+    gaps = [{"gates": [lo, hi]} for lo, hi in missing[:MAX_LISTED]]
     codes: list[str] = []
     if n_over:
         codes.append("sweep-overlap")
@@ -652,13 +652,13 @@ def _sweep(program: "Program", fam, limits: Limits, within: Intervals | None = N
         detail["overlaps"] = overlaps
         detail["overlap_count"] = n_over
     if n_out:
-        detail["outside"] = [{"gates": [lo, hi]} for lo, hi in outside[:_MAX_LISTED]]
+        detail["outside"] = [{"gates": [lo, hi]} for lo, hi in outside[:MAX_LISTED]]
         detail["outside_count"] = n_out
     if n_gap:
         detail["gaps"] = gaps
         detail["gap_count"] = n_gap
     if empty:
-        detail["empty_sets"] = empty[:_MAX_LISTED]
+        detail["empty_sets"] = empty[:MAX_LISTED]
         detail["empty_count"] = len(empty)
     return PartitionVerdict(status, tuple(codes), detail)
 
@@ -706,13 +706,13 @@ class _WidthRun:
     def _record(self, kind: str, index: int | None, label: dict, value: Any) -> None:
         if kind == "violation":
             self.n_violators += 1
-            if index is not None and len(self.violators) < _MAX_LISTED and index not in self.violators:
+            if index is not None and len(self.violators) < MAX_LISTED and index not in self.violators:
                 self.violators.append(index)
         else:
             self.n_unsupported += 1
-            if index is not None and len(self.unsupported) < _MAX_LISTED and index not in self.unsupported:
+            if index is not None and len(self.unsupported) < MAX_LISTED and index not in self.unsupported:
                 self.unsupported.append(index)
-        if len(self.examples) < _MAX_LISTED:
+        if len(self.examples) < MAX_LISTED:
             self.examples.append({"kind": kind, "index": index, **label, "value": value})
 
     def bound(self, parts: tuple[Part, ...]) -> int:
@@ -1006,7 +1006,7 @@ def validate_refinement(program: "Program", coarse, fine, limits: Limits = Limit
     if overlaps:
         return RefinementVerdict("violation", ("refine-coarse-overlap",), (),
                                  {"coarse_sets": n_coarse, "overlap_count": len(overlaps),
-                                  "overlaps": [list(o) for o in overlaps[:_MAX_LISTED]]})
+                                  "overlaps": [list(o) for o in overlaps[:MAX_LISTED]]})
     starts = [lo for lo, _, _ in runs]
     counts = [0] * n_coarse
     problems: dict[str, list[int]] = {}
@@ -1044,7 +1044,7 @@ def validate_refinement(program: "Program", coarse, fine, limits: Limits = Limit
     detail: dict = {"coarse_sets": n_coarse, "fine_sets": n_fine}
     if problems:
         for code, sets in problems.items():
-            detail[code] = {"count": len(sets), "sets": sets[:_MAX_LISTED]}
+            detail[code] = {"count": len(sets), "sets": sets[:MAX_LISTED]}
         return RefinementVerdict("violation", tuple(sorted(problems)), (), detail)
     return RefinementVerdict("ok", (), tuple(counts), detail)
 
@@ -1139,10 +1139,10 @@ def validate_unit_cut(total_gates: int, structure_gates: int, owner: Any, reads:
                     "computing_units": len({u for u in owner if isinstance(u, int) and u >= 0}),
                     "redundant_gates": len(again) - len(across)}
     if recompute == "report":
-        detail["recomputed_across"] = {"n": len(across), "gates": [list(x) for x in across[:_MAX_LISTED]]}
+        detail["recomputed_across"] = {"n": len(across), "gates": [list(x) for x in across[:MAX_LISTED]]}
     codes = tuple(k for k, v in problems.items() if v)
     for k in codes:
-        detail[k] = {"n": len(problems[k]), "gates": [list(x) if isinstance(x, tuple) else x for x in problems[k][:_MAX_LISTED]]}
+        detail[k] = {"n": len(problems[k]), "gates": [list(x) if isinstance(x, tuple) else x for x in problems[k][:MAX_LISTED]]}
     return CutVerdict(not codes, codes, detail)
 
 
@@ -1176,5 +1176,5 @@ def validate_vu_partition(program: "Program", query, w_max: int = 32) -> VuVerdi
 
 __all__ = ["PartitionVerdict", "WidthVerdict", "ReadinessViolation", "ReadinessReport", "VuVerdict",
            "validate_partition", "validate_width", "gate_width_readiness", "readiness_32bit", "vu_status",
-           "validate_vu_family", "validate_vu_partition", "CutVerdict", "INPUT_UNIT", "RECOMPUTE_RULES", "validate_unit_cut",
+           "validate_vu_family", "validate_vu_partition", "CutVerdict", "INPUT_UNIT", "MAX_LISTED", "RECOMPUTE_RULES", "validate_unit_cut",
            "Level", "Hierarchy", "RefinementVerdict", "validate_refinement", "members_per_parent"]

@@ -9,7 +9,9 @@ INSUFFICIENT_EVIDENCE, not FAIL: the Match account leg(s) absent beside the Comm
 per-layer uniformity finding is carried as the named difference `fa2_layers_bad` under `program_source_identity/identity_layout`;
 (6) `from_record` over a row dir reads the execution configuration from the Commit's own evidence (`execution_of_record`; a pre-P5
 row's `commit_summary.json` still supplies `rc` / execution when present -- the writer is retired, P5); (7) the by-name tables today's checks
-lean on are marked `structural_leak: <table>` on the verdict, never silently."""
+lean on are marked `structural_leak: <table>` on the verdict, never silently; (8) a TP1 row whose Program binds a Definition only the cuBLAS
+route pin binds is refused by name unless its replay's `engine_of_record.cublas` is the pin's scan's conditions (the TP ranks' gate,
+`check.cublas_route_pin`, stamped at rank 0), a deferred replay decided on the Commit engine's facts."""
 from __future__ import annotations
 
 import copy
@@ -23,7 +25,9 @@ from verity_vllm.check.verdict import commit_verdict
 from verity_vllm.check import verdict as V
 from verity_vllm.pipeline import cli
 from verity_vllm.check.commit_rules import REJECT
+from verity_vllm.check.cublas_route_pin import stamp as route_pin_stamp
 from verity_vllm.check.result import MISSING_INPUT, CheckResult, code_of, outcome_of
+from verity_vllm.program.registry import bf16_gemm_check as BC
 from verity_vllm.properties.record import REGISTRY, PropertyRecord, digest_of, seal
 
 RUN_ROOT = "71f69377" + "ab" * 28
@@ -72,6 +76,24 @@ def _base() -> dict:
             "sampled_replay": sr,
             "boundary_linkage": {"result": True, "pairs": 32, "linked": 32, "unlinked_n": 0},
             "weights_pin": {"result": True, "compared": 163, "mismatched": [], "missing": [], "program_digest": "ab" * 32}}
+
+
+#: the route pin's Definitions a GLM-5.3 TP1 eager Program binds: the MoE router past the cuteDSL tier, a split-K linear
+ROUTED = {"CublasSplitKGemmF32Out_v1": 6, "CublasSplitKGemm_v1": 4}
+#: what `engine_facts_of_record` measures in a process under the pin's scan's conditions
+PIN_FACTS = {**BC.ROUTE_CONDITIONS, "cublaslt_version": 120901, "cublas_library": "/venv/nvidia/cublas/lib/libcublas.so.12"}
+
+
+def _routed(engine: dict | None, *, stamped: bool = True) -> dict:
+    """A TP1 eager row (rank 0) whose Program binds `ROUTED`, its replay's `engine_of_record` `engine` (None: not recorded), stamped as
+    `pipeline.commit` stamps it before its verdict."""
+    c = _base()
+    c["sampled_replay"]["population"]["by_family"] = {"RMSNorm_v1": 8, **ROUTED}
+    if engine is not None:
+        c["sampled_replay"]["engine_of_record"] = engine
+    if stamped:
+        route_pin_stamp(c)
+    return c
 
 
 def _decl(classes: dict) -> dict:
@@ -180,6 +202,7 @@ def _mutations():
     yield "tokens differ", b(), False
     c = b(); c["extra"]["committed_tensors"] = 571; yield "reference integrity", c, True
     c = b(); c["extra"]["errors_n"] = 2; yield "collector errors", c, True
+    c = b(); c["extra"]["collector_failure"] = "worker failed on windowed step 0: transient host budget"; yield "collector failure", c, True
     c = b(); c["openings"] = {"n": 60, "verified": 60}; yield "openings < min", c, True
     c = b(); c["openings"] = {"n": 64, "verified": 63}; yield "an opening failed", c, True
     c = b(); c["binding"]["context"] = {"ok": False, "why": "root differs"}; yield "binding context", c, True
@@ -202,6 +225,7 @@ def _mutations():
     c = b(); c["classes"] = dict(CLASSES, weights={"how": "registered-input", "tensors": 0}); yield "declared leaf class bound 0", c, True
     c = b(); c["openings_after_release"] = {"n": 64, "verified": 60, "source": "host"}; yield "openings after release", c, True
     c = b(); c["oracle_compare"] = {"result": False, "mismatch_n": 3}; yield "oracle mismatch", c, True
+    yield "cuBLAS route pin", _routed(None), True
 
 
 @pytest.mark.parametrize("label,commit,tokens_equal", list(_mutations()), ids=[m[0] for m in _mutations()])
@@ -222,6 +246,58 @@ def test_pass_record_passes_in_both_and_names_its_scope():
     assert by["checkpoint_binding/weights_of_record"].scope["compared"] == 163
     assert by["program_source_identity/identity_layout"].scope["steps_checked"] == 4
     assert by["required_value_coverage/identity_coverage"].inputs["manifest_digest"] == "cd" * 32
+
+
+# ---------------------------------------------------------------------------------------------------------------- (8) cuBLAS route pin
+
+def test_a_tp1_eager_row_that_binds_a_route_pinned_gemm_is_refused_by_name_without_its_cublas_facts():
+    (ok, why), out, checks = _both(_routed(None))
+    assert ok is False and why.startswith("cuBLAS route pin (rank 0): CublasSplitKGemmF32Out_v1 x6, CublasSplitKGemm_v1 x4 bound at the "
+                                          f"routes of {BC.CUBLAS_ROUTES['run']}, served otherwise: no cuBLAS facts recorded"), why
+    rule = {c.name: c for c in checks}["local_replay/cublas_route_pin"]
+    assert out != V.PASS and rule.outcome == V.FAIL and rule.reason == why and rule.code == VC.EXPECTATION_MISMATCH
+    assert rule.differences == [{"name": "served_off_route_pin", "departures": [why.split("served otherwise: ")[1]]}]
+
+
+def test_the_same_row_passes_with_the_pins_facts_of_record():
+    (ok, why), out, checks = _both(_routed({"cublas": PIN_FACTS}))
+    rule = {c.name: c for c in checks}["local_replay/cublas_route_pin"]
+    assert ok is True and out == V.PASS, why
+    assert rule.outcome == V.PASS and rule.scope == {"families": ROUTED, "pin": BC.CUBLAS_ROUTES["run"]}
+
+
+def test_the_same_row_served_under_the_split_k_off_switch_is_refused_naming_each_departure():
+    switched = {**PIN_FACTS, "preferred_blas_library": "_BlasBackend.Cublaslt", "env": {"CUBLAS_WORKSPACE_CONFIG": ":16:8", "CUBLASLT_WORKSPACE_SIZE": "1"}}
+    (ok, why), out, _ = _both(_routed({"cublas": switched}))
+    assert ok is False and out != V.PASS
+    assert why.split("served otherwise: ")[1].split("; ") == ["preferred_blas_library '_BlasBackend.Cublaslt' (pin: '_BlasBackend.Cublas')",
+                                                              "CUBLAS_WORKSPACE_CONFIG ':16:8' (pin: None)", "CUBLASLT_WORKSPACE_SIZE '1' (pin: None)"]
+
+
+def test_a_row_that_binds_no_route_pinned_gemm_is_not_gated():
+    c = _base()
+    assert route_pin_stamp(c) is None and c["cublas_route_pin"] is None
+    (ok, why), _, checks = _both(c)
+    assert ok is True and {c.name: c for c in checks}["local_replay/cublas_route_pin"].outcome == V.NOT_RUN, why
+
+
+@pytest.mark.parametrize("commit_engine,ok", [({"cublas": PIN_FACTS}, True), ({"VLLM_BATCH_INVARIANT": "0"}, False)], ids=["pin-facts", "unrecorded"])
+def test_a_deferred_tp1_replay_is_decided_on_the_commit_engines_facts(tmp_path, commit_engine, ok):
+    """`pipeline.cpu_replay` replays a deferred TP1 run on a CPU node, whose own facts (no CUDA) are no serving process's: `decide`
+    stamps the route pin on the Commit engine's, which `engine_of_record` puts on the replay first."""
+    from verity_vllm.pipeline import cpu_replay
+
+    row = {"tokens_equal_ref": True, "commit": _routed({"cublas": {"device": "unavailable: no CUDA device"}}, stamped=False)}
+    row["commit"]["value_correspondence"]["components"] = {}
+    art = tmp_path / "sampled_replay_p0.json"
+    art.write_text(json.dumps({"sampled_replay": copy.deepcopy(row["commit"]["sampled_replay"])}))
+    ctx = {"engine_of_record": commit_engine, "min_openings": 64, "declaration": _decl(CLASSES), "required_classes": None}
+    cpu_replay.engine_of_record(row, ctx, art)
+    cpu_replay.decide(row, ctx, {"equal": True}, {"manifest_sha256": "ef" * 32}, set(), {}, {})
+    c = row["commit"]
+    assert c["commit_pass"] is ok and c["cublas_route_pin"]["ok"] is ok, c["commit_fail_reason"]
+    assert ok or c["commit_fail_reason"].startswith("cuBLAS route pin (rank 0): ")
+    assert json.loads(art.read_text())["sampled_replay"]["engine_of_record"] == commit_engine
 
 
 # ---------------------------------------------------------------------------------------------------------------- (4) missing input

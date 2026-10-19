@@ -16,7 +16,8 @@ The expert GEMMs are the bf16 path's `acc += tl.dot(a, b)`, one carried k16 chai
 source, which must have launched the kernel at M): Triton lowers the dot to wgmma or to MMA v2's `mma.sync m16n8k16`, and on an H100
 the latter's HMMA.16816 is `silicon.HOPPER_BF16_M16N8K16`, the wgmma k16 step's parameters, not the Ampere step (`_v1`;
 r20261018-062333-f1a7 matched it on 27 of 1,344 rows), the binding the eager Program shares (`frontend.targets.moe_expert_dot`).
-Another compute capability is refused.
+On cc 10.0 Triton lowers it to tcgen05.mma kind::f16 or to `mma.sync m16n8k16`, pinned to the same pipeline (silicon
+`sm100.tcgen05.mma.bf16` and `sm100.mma.m16n8k16.bf16`), so the same Definitions bind.  Another compute capability is refused.
 
 The op takes its layer as an opaque argument: the serving process records the layer each piece's op ran (`moe_pieces`), and that
 layer's facts (`served_match.moe_facts`) give its shapes and confirm it is the block expanded here.  Anything else (a fused or absent
@@ -34,8 +35,8 @@ from verity_vllm.program.registry import act
 from verity_vllm.program.registry import moe as M
 
 PLANES = ("logits", "router_w", "router_ids", "up", "act", "down")
-#: the compute capability whose fused_moe_kernel lowering `expert_definition` models
-CC = (9, 0)
+#: the compute capabilities whose fused_moe_kernel lowering `expert_definition` models
+CC = ((9, 0), (10, 0))
 #: what `served_match.moe_facts` must say of a layer for the expansion to be its computation
 REQUIRED = {"gate_held": True, "fused_gate": False, "shared_experts": False, "routed_scaling": False, "softmax_router": True,
             "triton_experts": True, "bias": False, "clamp": False, "silu": True, "bf16": True}
@@ -104,8 +105,9 @@ def expand(wired: dict[str, Any], moe: dict[str, Any] | None) -> tuple[dict[str,
         return wired, None
     if not moe:
         raise Unmodelled("a piece calls the fused-MoE op, and the Build has no fused-MoE record of the serving process")
-    if tuple(moe.get("cc") or ()) != CC:
-        raise Unmodelled(f"fused_moe_kernel's tl.dot lowering on compute capability {moe.get('cc')}: cc {CC} is modelled")
+    if tuple(moe.get("cc") or ()) not in CC:
+        raise Unmodelled(f"fused_moe_kernel's tl.dot lowering on compute capability {moe.get('cc')}: cc {', '.join(map(str, CC))} "
+                         f"are modelled")
     p, n = Counter(c["piece"] for c in ops).most_common(1)[0]
     if n > 1:
         raise Unmodelled(f"piece {p} calls the fused-MoE op {n} times: its planes are named by piece")
