@@ -12,6 +12,8 @@
 # that one arm's window takes over half a lease (r20261019-000632-a0b8: model load alone took 7 min).  WINDOWS picks the windows: W4's (r20261018-193331-0f54: eager,
 # whole, eager-nsys, whole-nsys; the default whole eager whole-nsys) or STEP-SPLIT's (eager-8192, whole-8192, eager-2560 and
 # their -nsys).  An nsys window's analysis (served-profile.json) is kept; its report and SQLite are deleted.
+# served-profile-pd.json is the same analysis with #2629's decode launches (pd_commit_*, pd_tree_*, pd_tiles_*) classed as
+# hashing: served_profile.py's categories lack pd_*, so in a tree with #2629 its split leaves them in "other".
 set -uo pipefail
 stamp() { echo "time-branch: $* at $(date -u +%H:%M:%SZ)"; }
 
@@ -74,6 +76,21 @@ window() {  # NAME NSYS ARM... -- VAR=VALUE ...
     "$PY" benchmarks/pouw/pearl_c_vllm/served_profile.py --analyze "$P/served.sqlite" --out "$W/served-profile.json" \
       > "$W/analyze.log" 2>&1
     stamp "window $name-$arm analyzed $?"
+    "$PY" - "$P/served.sqlite" "$W/served-profile-pd.json" > "$W/analyze-pd.log" 2>&1 <<'EOF'
+import importlib.util, json, re, sys
+from pathlib import Path
+db, out = map(Path, sys.argv[1:3])
+sys.argv = [sys.argv[0], "--analyze", str(db), "--out", str(out)]  # served_profile.py instruments e2e on import without it
+spec = importlib.util.spec_from_file_location("served_profile", "benchmarks/pouw/pearl_c_vllm/served_profile.py")
+sp = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(sp)
+sp.CATEGORIES = (("pearlc:pd_commit", r"^pd_commit_"), ("pearlc:pd_tree", r"^pd_tree_"),
+                 ("pearlc:tile_hash", r"^pd_tiles_")) + tuple(sp.CATEGORIES)
+sp._CAT = [(c, re.compile(p)) for c, p in sp.CATEGORIES]
+sp.HASH_GROUPS["a_rows"] = tuple(sp.HASH_GROUPS["a_rows"]) + ("pearlc:pd_commit", "pearlc:pd_tree")
+out.write_text(json.dumps(sp.analyze(db), indent=1))
+EOF
+    stamp "window $name-$arm analyzed with pd $?"
     rm -rf "$P"
   done
 }
@@ -112,11 +129,17 @@ for w in sorted(Path(sys.argv[1]).iterdir()):
             xs = [x.get("step_s", x.get("s")) * 1e3 for x in reps]
             if xs:
                 print(f"  {m:14s} {key:22s} median {statistics.median(xs):9.2f} ms  [{min(xs):.2f}, {max(xs):.2f}]  n={len(xs)}")
-    p = w / "served-profile.json"
-    if p.is_file():
-        d = json.loads(p.read_text()).get("phases", {}).get("pearlc", {})
+    for name in ("served-profile.json", "served-profile-pd.json"):
+        p = w / name
+        if not p.is_file():
+            continue
+        doc = json.loads(p.read_text())
+        d = doc.get("phases", {}).get("pearlc", {})
         for ph in ("prefill", "step"):
             if ph in d:
-                print(f"  profile pearlc {ph}: {json.dumps({k: round(v, 3) for k, v in d[ph].get('hash_split_ms', {}).items()})}")
+                print(f"  {name} pearlc {ph}: {json.dumps({k: round(v, 3) for k, v in d[ph].get('hash_split_ms', {}).items()})}")
+        if "prefill" in d:
+            stats = [k["ms_per_rep"] for k in doc.get("top_kernels", {}).get("pearlc", {}).get("prefill", []) if k["kernel"] == "stats_s5"]
+            print(f"  {name} pearlc prefill: memcpy {d['prefill'].get('memcpy_ms')} ms, stats_s5 {stats} ms")
 EOF
 stamp "done"
