@@ -66,7 +66,7 @@ DEFAULTS = {
     "share": 0.01, "overhead": 4.8e12, "replay": 1.1e5, "step_flop": 1.43e4, "p_evade": 2.0 ** -40, "identities": 1.0,
     "luck": 8.0, "step_bits": 16.0, "intake_x": 1.0,
     "floor_steps": 1.0,
-    "K": 2e7, "Gamma": 6.4e16, "d": 2048.0, "e": 4e4, "kappa": 0.667,
+    "K": 2e7, "Gamma": 6.4e16, "d": 2048.0, "e": 4e4, "kappa": 0.655,
     "kappa_chain": 0.075, "d_chain": 1536.0, "e_chain": 12288.0, "b_p": 32.0,
     "nodes": 1e5, "node_flops": 8e15, "years": 1.0,
 }
