@@ -11,7 +11,7 @@ import json
 from pathlib import Path
 from typing import IO, Iterable, Iterator
 
-from .events import Event, StepEnd, StepStart, from_json, to_json
+from .events import Event, RunHeader, StepEnd, StepStart, from_json, to_json
 
 
 def _open(path: str | Path, mode: str) -> IO:
@@ -70,6 +70,14 @@ def dumps(events: Iterable[Event]) -> str:
         buf.write(json.dumps(to_json(ev), separators=(",", ":"), ensure_ascii=True))
         buf.write("\n")
     return buf.getvalue()
+
+
+def header_of(events: Iterable[Event]) -> RunHeader:
+    for ev in events:
+        if isinstance(ev, RunHeader):
+            return ev
+        break
+    raise ValueError("log does not start with a RunHeader")
 
 
 def split_steps(events: Iterable[Event]) -> Iterator[tuple[list[Event], list[Event]]]:
