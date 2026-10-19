@@ -1,13 +1,16 @@
 """PoUW's audit window as one static Program: its units, the positions each reads and writes, the commit phase each
 position is cut at, and the shape check that refuses a layout the padded-credit rule doesn't cover (`problems`).  Every
-unit and position is a function of the public shape (`window.Call`) and the tile template's depth, so the check runs
-once per shape, before any value exists, and reads no value.
+unit and position is a function of the public shape (`window.Call`), its fixed length (`window.Length`) and the tile
+template's depth, so the check runs once per shape, before any value exists, and reads no value.
 
 The rule is PADCREDIT's (`note:compute-accounting/20261018T2200Z-draft-padded-credit-rule`, §8 to §10, its
 implementation spec §10.9), with W5's round-3 findings
 (`note:compute-accounting/20261018T2310Z-finding-padded-credit-r3`).
 Each refusal is ``window-form: <kind>``, by §10.9's names:
 
+- **The fixed length** (Daniel, 19 Oct, CMP-43): the window's rows serve at a public fixed length, ``ignore_eos`` with
+  one ``max_tokens`` per call (`window.length_problem`), so a request's ``done`` masks neither egress nor credit and
+  the window's useful work is public; a layout with no fixed length is an EOS-keyed window's (`eos-keyed`).
 - **The commit order** (`PHASES`).  The registration holds each weight row B_j with ok_B,j, and each call's
   S_B = Σ_j ok_B,j; then the salt; then the epoch's B formings, whose anchors derive from seed_b = H(salt ‖ root_B);
   then the activation commitment, one leaf per slot holding its raw row x_i, ok_A,i and admit_i, which the A side's
@@ -36,7 +39,7 @@ Each refusal is ``window-form: <kind>``, by §10.9's names:
 `CONDITIONS` names the condition of `Accounting.TS.SelectLayer` each refusal checks.  `DEFINITIONS` names every
 Definition a layout may use, by id (the cap's roles are in none), and `TO_BUILD` the ones not on main yet.  The window
 on main is `current`: its tile is `Pc8TileSide` over side rows no proved unit writes, with ok and admit in the side row,
-after the noise, and `problems` refuses it.
+after the noise, with no fixed length, and `problems` refuses it.
 """
 from __future__ import annotations
 
@@ -91,6 +94,7 @@ CONDITIONS = {
     "dense-side": "slot = row (§10.9 A.6)", "weighted-by-value": "DrawnLayer.draw value-free, SelFan at dw",
     "missing-proved": "AlwaysProved, TallyIn", "unknown-definition": "forms (the forming table, §10.9 B)",
     "plan": "a tile is in the uniform draw", "hashing": "the scheme's hashings",
+    "eos-keyed": "the window's public fixed length (CMP-43: ignore_eos, max_tokens per call)",
 }
 
 
@@ -133,13 +137,16 @@ class Unit:
 
 @dataclass(frozen=True)
 class Layout:
-    """A window's Program: its hashing, its positions and units by name, the law of the draw over its tiles, and which
-    tiles credit (every call's; not the filler)."""
+    """A window's Program: its hashing, its positions and units by name, the law of the draw over its tiles, which
+    tiles credit (every call's; not the filler), and the public shape and fixed length it is of (no length: an
+    EOS-keyed window's)."""
     hashing: str
     positions: Mapping[str, Pos]
     units: Mapping[str, Unit]
     draw: str = "uniform"
     filler: str = "filler"
+    shape: tuple[Wd.Call, ...] = ()
+    length: Wd.Length | None = None
 
 
 # ---- the layout ------------------------------------------------------------------------------------------------------
@@ -185,10 +192,11 @@ def _row(pos: dict, units: dict, side: str, row: str, leaf: int, k: int, ks: int
     return f"{row}.p"
 
 
-def layout(shape: Sequence[Wd.Call], k: int, row_k: int = rowk.ROW_K, hashing: str = "h3", b_plan: str = "proved",
-           tile: str | None = None) -> Layout:
-    """The window's Program over `shape` at depth `k` (row cut `row_k`) under `hashing`, its B formings `b_plan`: the
-    layout `problems` holds to the rule.  `tile` is the tile's Definition (by default the hiding tile of `hashing`)."""
+def layout(shape: Sequence[Wd.Call], length: Wd.Length | None, k: int, row_k: int = rowk.ROW_K, hashing: str = "h3",
+           b_plan: str = "proved", tile: str | None = None) -> Layout:
+    """The window's Program over `shape`, served at `length`, at depth `k` (row cut `row_k`) under `hashing`, its B
+    formings `b_plan`: the layout `problems` holds to the rule.  `tile` is the tile's Definition (by default the hiding
+    tile of `hashing`)."""
     if hashing not in HASHINGS or b_plan not in B_PLANS or not (row_k > 0 and k % row_k == 0):
         raise ValueError(f"a layout takes hashing in {HASHINGS}, b_plan in {B_PLANS} and row_k dividing k, not "
                          f"{hashing!r}, {b_plan!r}, {row_k!r} at k = {k!r}")
@@ -239,12 +247,13 @@ def layout(shape: Sequence[Wd.Call], k: int, row_k: int = rowk.ROW_K, hashing: s
     units["filler"] = Unit(tile, "tile", ("filler.a.p", "filler.b.p"), ("filler.leaf",), plan="drawn",
                            gates=(("filler.a.ok", "filler.a.p"), ("filler.b.ok", "filler.b.p")),
                            floor=("filler.a.p", "filler.b.p"))
-    return Layout(hashing, pos, units)
+    return Layout(hashing, pos, units, shape=tuple(shape), length=length)
 
 
 def current(shape: Sequence[Wd.Call], k: int) -> Layout:
     """The window as main has it: each call's side rows (fp8-pi: codes ‖ P ‖ the index field with ok and admit) are the
-    committer's, cut with the tile's noise and written by no unit; the tile is `Pc8TileSide`; nothing tallies."""
+    committer's, cut with the tile's noise and written by no unit; the tile is `Pc8TileSide`; nothing tallies; it
+    registers no fixed length."""
     pos: dict[str, Pos] = {}
     units: dict[str, Unit] = {}
     for c, call in enumerate(shape):
@@ -269,7 +278,7 @@ def current(shape: Sequence[Wd.Call], k: int) -> Layout:
     units["filler"] = Unit(pc8.Pc8TileSideDef.name, "tile", ("filler.a.p", "filler.b.p"), ("filler.leaf",),
                            plan="drawn", gates=(("filler.a.ok", "filler.a.p"), ("filler.b.ok", "filler.b.p")),
                            floor=("filler.a.p", "filler.b.p"))
-    return Layout("h3", pos, units)
+    return Layout("h3", pos, units, shape=tuple(shape))
 
 
 # ---- the shape check -------------------------------------------------------------------------------------------------
@@ -343,6 +352,11 @@ def problems(lay: Layout) -> list[str]:
         bad("hashing", f"{lay.hashing!r} is none of {HASHINGS}")
     if lay.draw != "uniform":
         bad("weighted-by-value", f"the tiles' draw is {lay.draw!r}, not uniform over the N tiles")
+    if lay.length is None:
+        bad("eos-keyed", "the window has no fixed length: its rows stop at end-of-sequence, so its useful work is not "
+                         "public")
+    elif why := Wd.length_problem(lay.length, lay.shape):
+        bad("eos-keyed", why)
     readers = _readers(lay)
     gate_pos = {g for u in lay.units.values() if u.kind == "tile" for g, _ in u.gates}
     raw_rows = {q.certifies for q in lay.positions.values() if q.certifies is not None}

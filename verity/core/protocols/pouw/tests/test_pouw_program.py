@@ -1,5 +1,6 @@
 """The window's static Program (`pouw.program`): the layout the padded-credit rule covers passes the shape check under
-both hashings and both B plans, main's window is refused, each refusal fires on the one change that breaks its clause,
+both hashings and both B plans at its fixed length, main's window is refused, a window with no fixed length is
+EOS-keyed, each refusal fires on the one change that breaks its clause,
 the tally's limb Program is exact and refuses a wrong limb, and the cost of each B plan at W5's window."""
 from __future__ import annotations
 
@@ -13,6 +14,7 @@ from verity.core.protocols.pouw import window as Wd
 
 K = 4096
 SHAPE = Wd.shape_of([{"m": 16, "n": 3, "tile0": 0}, {"m": 16, "n": 2, "tile0": 5}])
+LENGTH = Wd.length_of({"ignore_eos": True, "max_tokens": [4, 4]})
 
 
 def _kinds(lay: Pg.Layout) -> set[str]:
@@ -30,7 +32,7 @@ def _unit(lay: Pg.Layout, name: str, **kw) -> Pg.Layout:
 @pytest.mark.parametrize("hashing", Pg.HASHINGS)
 @pytest.mark.parametrize("plan", Pg.B_PLANS)
 def test_the_rules_layout_passes_the_shape_check(hashing, plan):
-    lay = Pg.layout(SHAPE, K, hashing=hashing, b_plan=plan)
+    lay = Pg.layout(SHAPE, LENGTH, K, hashing=hashing, b_plan=plan)
     assert Pg.problems(lay) == []
     tiles = [u for u in lay.units.values() if u.kind == "tile"]
     assert len(tiles) == Wd.shape_tiles(SHAPE)
@@ -41,15 +43,26 @@ def test_the_rules_layout_passes_the_shape_check(hashing, plan):
 
 
 def test_the_layout_is_the_shapes_alone():
-    a, b = Pg.layout(SHAPE, K), Pg.layout(Wd.shape_of([c.to_json() for c in SHAPE]), K)
+    a, b = Pg.layout(SHAPE, LENGTH, K), Pg.layout(Wd.shape_of([c.to_json() for c in SHAPE]), LENGTH, K)
     assert a == b
-    other = Pg.layout(Wd.shape_of([{"m": 32, "n": 3, "tile0": 0}, {"m": 16, "n": 2, "tile0": 5}]), K)
+    other = Pg.layout(Wd.shape_of([{"m": 32, "n": 3, "tile0": 0}, {"m": 16, "n": 2, "tile0": 5}]), LENGTH, K)
     assert len(other.units) > len(a.units)
 
 
 def test_mains_window_is_refused():
     kinds = _kinds(Pg.current(SHAPE, K))
-    assert {"gate-unsourced", "gate-untallied", "operand-after-certificate", "stale-epoch", "filler"} <= kinds
+    assert {"gate-unsourced", "gate-untallied", "operand-after-certificate", "stale-epoch", "filler", "eos-keyed"} <= kinds
+
+
+@pytest.mark.parametrize("length, why", [
+    (None, "no fixed length"),
+    (Wd.Length(False, (4, 4)), "ignore_eos false"),
+    (Wd.Length(True, (4,)), "1 lengths, not one per call"),
+    (Wd.Length(True, (4, 0)), "call 1: its max_tokens 0"),
+])
+def test_a_window_without_a_fixed_length_is_eos_keyed(length, why):
+    refused = Pg.problems(Pg.layout(SHAPE, length, K))
+    assert len(refused) == 1 and refused[0].startswith("window-form: eos-keyed: ") and why in refused[0]
 
 
 @pytest.mark.parametrize("kind, change", [
@@ -81,15 +94,17 @@ def test_mains_window_is_refused():
     ("uncomputed-certificate", lambda l: _unit(l, "a0.5/ok", reads=())),
     ("uncomputed-certificate", lambda l: _pos(l, "b0.1.ok", record="b0.2")),
     ("forming-input", lambda l: _unit(l, "b0.0/form0", reads=l.units["b0.0/form0"].reads + ("a0.0.ok",))),
+    ("eos-keyed", lambda l: replace(l, length=None)),
+    ("eos-keyed", lambda l: replace(l, length=Wd.Length(False, l.length.max_tokens))),
 ])
 def test_each_refusal(kind, change):
-    lay = change(Pg.layout(SHAPE, K))
+    lay = change(Pg.layout(SHAPE, LENGTH, K))
     assert kind in _kinds(lay)
     assert kind in Pg.CONDITIONS
 
 
 def test_a_registered_gate_needs_no_tally_read():
-    lay = Pg.layout(SHAPE, K)
+    lay = Pg.layout(SHAPE, LENGTH, K)
     assert Pg.problems(_unit(lay, "prod0", reads=("sa0",))) == []
 
 
@@ -99,22 +114,22 @@ def test_every_refusal_names_its_round_4_condition():
 
 
 def test_a_forming_that_reads_a_stray_value_is_refused():
-    lay = Pg.layout(SHAPE, K)
+    lay = Pg.layout(SHAPE, LENGTH, K)
     lay = replace(lay, positions={**lay.positions, "a0.4.stats": Pg.Pos("activation")})
     lay = _unit(lay, "a0.4/form1", reads=lay.units["a0.4/form1"].reads + ("a0.4.stats",))
     assert "forming-input" in _kinds(lay)
 
 
 def test_ea_is_no_anchor_under_h3():
-    lay = Pg.layout(SHAPE, K, hashing="h3")
+    lay = Pg.layout(SHAPE, LENGTH, K, hashing="h3")
     lay = _unit(lay, "a0.0/head", definition=Pg.rowk.Pc8RowAHeadDef.name,
                 anchors=(("e", Pg.rowk.DERIVATIONS8["ea"].rule),))
     assert "anchor-unpinned" in _kinds(lay)
-    assert Pg.problems(Pg.layout(SHAPE, K, hashing="h0")) == []
+    assert Pg.problems(Pg.layout(SHAPE, LENGTH, K, hashing="h0")) == []
 
 
 def test_a_weighted_forming_draws_at_its_static_cone():
-    lay = Pg.layout(SHAPE, K, b_plan="weighted")
+    lay = Pg.layout(SHAPE, LENGTH, K, b_plan="weighted")
     assert {u.fan_out for n, u in lay.units.items() if n.startswith("b0.")} == {SHAPE[0].m + 1}
     assert "weighted-by-value" in _kinds(_unit(lay, "b0.0/tail", fan_out=SHAPE[0].m + 2))
 
