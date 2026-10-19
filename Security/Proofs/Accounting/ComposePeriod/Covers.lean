@@ -71,7 +71,7 @@ theorem late_one {u v : Fin n × Fin Np} (h : (Cd.periodLayer hr hK pr).Late u v
   · rename_i hs
     obtain rfl := Option.some.inj hsrc
     refine ⟨rfl, k, (Accounting.SecurityProofs.Compose.CoversProof.src_eq Cd hr hK
-      (anyRun C (Equiv.Perm (Fin Np) × Ξ) Cd.rounds Kd Np) _).trans (dif_pos hs), ?_⟩
+      (anyRun C (Equiv.Perm (Fin Np) × Ξ) Cd.rounds Kd Np) _).trans (dite_eq_left hs), ?_⟩
     rcases hcut with h0 | h1
     · exact absurd h0 (lt_irrefl _)
     · exact Or.inr ⟨rfl, h1.2⟩
@@ -101,7 +101,7 @@ theorem periodLayer_writerReads : (Cd.periodLayer hr hK pr).WriterReads := by
     obtain rfl := Option.some.inj hu
     obtain ⟨k, hk⟩ := Accounting.SecurityProofs.Compose.WorkProof.writerReads Cd hr hK
       (anyRun C (Equiv.Perm (Fin Np) × Ξ) Cd.rounds Kd Np) ℓ.2 (0, ⟨Cd.unit ℓ.2, h.2.2⟩)
-      ((Accounting.SecurityProofs.Compose.CoversProof.src_eq Cd hr hK _ ℓ.2).trans (dif_pos h))
+      ((Accounting.SecurityProofs.Compose.CoversProof.src_eq Cd hr hK _ ℓ.2).trans (dite_eq_left h))
     exact ⟨k, Prod.ext rfl hk⟩
   · cases hu
 
@@ -125,7 +125,7 @@ theorem sum_reaches_le {ι K : Type} (Sc : Scheme K) (Cd : Declared ι) (Np : �
   rw [Finset.sum_mul]
   refine Finset.sum_le_sum fun t _ => ?_
   by_cases hR : Cd.Reaches u.val t.val
-  · rw [if_pos hR, if_pos hR]
+  · rw [ite_eq_left hR, ite_eq_left hR]
     rcases Nat.eq_zero_or_pos (wordsOf Sc Cd) with h0 | hpos
     · have h00 : liveWords Sc Cd Np live t = 0 := Nat.le_zero.mp (h0 ▸ liveWords_le_wordsOf Sc Cd Np live t)
       simp [h0, h00]
@@ -155,7 +155,7 @@ theorem sum_not_good_le {ι K : Type} (Sc : Scheme K) (Cd : Declared ι) (Np : �
       obtain ⟨u, hu, hR⟩ := h t hg ht
       calc (liveWords Sc Cd Np live t : ℝ) = (if md u = .paid then (0 : ℝ) else
             (if Cd.Reaches u.val t.val then (liveWords Sc Cd Np live t : ℝ) else 0)) := by
-            rw [if_neg hu, if_pos hR]
+            rw [ite_eq_right hu, ite_eq_left hR]
         _ ≤ _ := Finset.single_le_sum (f := fun u => if md u = .paid then (0 : ℝ) else
               (if Cd.Reaches u.val t.val then (liveWords Sc Cd Np live t : ℝ) else 0))
             (fun u _ => by split_ifs <;> simp) (Finset.mem_univ u)
