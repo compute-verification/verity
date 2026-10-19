@@ -44,17 +44,35 @@ Everything else is the protocol's (`audit`), the same for every scheme.
 4. **Transcript.** A tree over every tile's digest, in matmul order then tile order, bound to (salt, weights_root).
    Its root must reach the challenger within the deadline of the salt coin's release: the verifier's rule at the
    deadline in `Security/Definitions/Pouw/Game/Deadline.lean`, which `WorkBetweenSaltAndDeadline` reads. The served
-   window states it as `Check.registration_deadline`, seconds on the
+   window states it as `Check.registration_deadline`, which `served_commit.py params` writes; the challenger refuses
+   parameters without it, and refuses as `late-registration` a window received after the epoch's draw coin was released
+   (each root's receipt comes before the coin's release). The deadline is in seconds on the
    challenger's clock, and the proof service refuses a later registration, or one before the salt, as
    `late-registration`. That ends the epoch, and the window earns no credit (`served_zk`'s challenger,
    `registration_deadline` in its parameters).
-5. **Selection.** Served accounting uses only the sampled audit.
-   - `Sampled(t)`: `derive(source, "verity/pouw/audit/v1", {"transcript": root, "salt": salt})`, the source
-     being the epoch's draw coin, opened after the verifier recorded the transcript's root (`draw_coin`); draw j is
-     `key.uniform(W, j)` mapped to a tile by cumulative work, so t tiles are drawn independently, each with probability
-     W_ref(tile)/W, a tile's work being its cells' share of its matmul's W_ref (Lean `WorkWeightedSampling`).
-   - `Lottery(target)` is Pearl's mining rule, not one of the audit's sampling designs: the tiles whose digest, read
-     little-endian, is at most target·|rows|·|cols|·k. It stays in `audit`, unwired: no served path selects with it.
+5. **Selection.** A served window's draw is one uniform subset of K′ of its N tiles, without replacement, drawn after
+   its registration's receipt (`benchmarks/pouw/served_zk/served_commit.py`, `Challenger.select`).
+   - **N and K′.** A window of N_real real tiles registers the level `window.bucket(N_real)`: it is credited g_ℓ tiles,
+     the largest grid point at most N_real, and pads with filler tiles to N = g_(ℓ+1) = `window.pad(N_real + 1)`, at
+     least one filler. Every tile is the one template's and does w_max = `tile_work`, and filler tiles are drawn like
+     any other but credited nothing. `window.sampling` registers the law `{"law": "subset", "k": K′}`, the registration's
+     `population` being N, with K′ = `window.k_prime(ε, δ, W, N, w_max)` and W = g_ℓ·w_max the credited work: the
+     smallest K >= 1 with (1 − ε·W/(N·w_max))^K <= δ, compared exactly in rationals (`window.miss_at_most`), N if no
+     K <= N has it, and 1 when ε·W/(N·w_max) = 1. A wrong set holding a share ε of W has at least ε·W/w_max tiles, so
+     the draw misses it with probability at most δ.
+   - **The draw.** The challenger opens the epoch's draw coin once, after the registration (its digest), and keys the
+     draw `derive(coin, "verity/pouw/served-zk-draw/v1", {"stream", "registration", "receipt"})` (`draw_key`,
+     `core_check.draw_key_context`). The units are `core_check.stream_subset(K′, N, ·)`, Lean's `Draw.subset`
+     (`flock-verify draw --population N --k K′ --stream`), over the 2·K′·width(N) + 64 bytes of the key's stream
+     `"draw"` (`draw_bytes`, width(N) = ⌈(bitlen(N) + 64)/8⌉ bytes): a sparse partial Fisher–Yates whose step i swaps
+     position i with i + r, r uniform below N − i by rejection over big-endian width(N)-byte words, and the units are
+     the first K′ positions, ascending. So every K′-subset of [0, N) is equally likely. A stream that runs out refuses
+     (`sampler`), and nothing redraws. `core_check.draw` holds the units to the coin's opening.
+   - **Sessions.** The units are proved in ⌈K′/cap⌉ sessions (`window.sessions`) by ascending rank: session σ's instance
+     s is drawn[σ·cap + s], and the filler tile N − 1 after the last (`window.instance_ts`, "The served audit window").
+   - `Sampled(t)` (t independent work-weighted draws, Lean `WorkWeightedSampling`) and `Lottery(target)` (Pearl's mining
+     rule: the tiles whose digest, read little-endian, is at most target·|rows|·|cols|·k) stay in `audit`, unwired: no
+     served path selects with either.
 6. **Check.** For each selected tile the prover opens A's rows, B's rows and the leaf. The verifier checks the openings,
    recomputes the tile through the scheme (`encode`, `admissible`, `checked`, `digest`) and compares the leaf. It refuses
    a tile any of whose opened rows fails the scheme's rules (`encode`'s parse, then `admissible`); Lean's
@@ -1317,16 +1335,25 @@ premium is a constant number of units per group (`Compiled.cover`), and the sche
 cover. By default each site is a group, and a site is one call: a layer's QKᵀ batched over its heads and the step's batch
 is one site, so one seed covers the call, not one head.
 
-GRIND (decision 122) sets the attention kinds' cover in (head, request) pairs (`Scheme.pair_cover`, `Compiled.pair_cover`):
-385 for QKᵀ (`QK_PAIRS`, on `DotBf16_v1 .. v3`) and 791 for P·V (`PV_PAIRS`, for the kind ATTN-NOISE plugs), which hold
-the decode grind term under 0.1% at T = 2^128. At one seed a call that is 8B's decode at batch ≥ 13 for QKᵀ and ≥ 25 for
-P·V. Below it the pass refuses the seed group (`cover`): its noise is the live per-round coin of decision 36, not a seed's.
-A pair is a connected component of the group's dots of the kind, its rows joined through the dots they share: at decode
-one (head, request), a query and its keys. Query heads that read one KV head's keys (GQA) are one pair by this count, so
-for a GQA model it refuses more than GRIND's per-query-head table does (8B: batch ≥ 49 for QKᵀ). A bf16 linear on
-`DotBf16` is one pair a call, so it is refused under a scheme that keeps QKᵀ's cover for its family. A seed group never
-spans calls run one after another (`span`): a seed binds its calls' operand roots, and layer ℓ + 1's operands exist only
-after layer ℓ has run.
+The attention kinds' seed groups are checked by GRIND's bound itself (decision 122; `Scheme.rows`, `Compiled.grind`). A
+kind's `RowNoise` gives the noise bits of one A row and one B row at contraction k: QKᵀ's Q row k + 320 and K row k
+(`QK_ROWS`, on `DotBf16_v1 .. v3`), P·V's P row 224 and V column k (`PV_ROWS`, for the kind ATTN-NOISE plugs). Over the
+group's distinct rows of the kind, each with its bits and its readers among the group's dots, the grind term is
+`grind.visible_premium` (the formula `benchmarks/pouw/grind_price.py`'s table reads) over the group's dots, at
+T = 2^128 and δ = 2^-40. Over 0.1% (`grind.FLAG`) the pass refuses the group (`cover`): its noise is the live per-round coin
+of decision 36, not a seed's. One rule covers both regimes:
+
+- at decode the Q rows bind, so it counts every (query head, request) pair, whatever KV heads they share: one call is 8B's
+  decode at batch ≥ 13 for QKᵀ and ≥ 25 for P·V (70B: 7 and 13), from a context of 64 keys. Over fewer keys a KV head's K
+  rows (k bits) or V columns (L bits), each read by its query heads, bind instead, and the check asks for a larger batch
+  (70B's QKᵀ over 16 keys: 12);
+- at prefill a KV head's K rows and V columns, read by all its query heads, bind, so it counts (KV head, request)
+  components, far fewer the longer the prompt: a 16-token causal prompt needs 166 for QKᵀ (GRIND's table says 171, counting
+  every Q row's readers as the prompt's L keys).
+
+A bf16 linear on `DotBf16` carries QKᵀ's form under a scheme that keeps it for its family. A seed group never spans calls run
+one after another (`span`): a seed binds its calls' operand roots, and layer ℓ + 1's operands exist only after layer ℓ has
+run.
 
 **Check** (`CompileError.code`):
 
@@ -1334,8 +1361,8 @@ after layer ℓ has run.
 - `edited-arm`, `arm`: a Call isn't the registered arm; `scan`, `operand-inside`: a matmul inside a scan, or on an operand
   computed inside its Definition;
 - `uncovered`: a registered Call or a matmul step left outside every unit;
-- `cover`: a seed group covers fewer units than the scheme's `cover`, or fewer (head, request) pairs of a kind than its
-  `pair_cover`;
+- `cover`: a seed group covers fewer units than the scheme's `cover`, or its dots of a kind with a `RowNoise` carry a grind
+  term over 0.1%;
 - `span`: a seed group holds a call and a call that reads its output;
 - `salt-flow`: the salt reaches anything but a unit's seed;
 - `position`: a unit's seed reads a position or roots other than its own parameters, or at the root a unit batch reads slots

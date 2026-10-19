@@ -123,6 +123,15 @@ for _ in $(seq 120); do
   sleep 5
 done
 ids=$(grep -oE 'run r20[0-9]{6}-[0-9]{6}-[0-9a-f]{4} launched' "$log" | cut -d' ' -f2 | awk '!seen[$0]++' | tr '\n' ' ') || true
+# a launcher still running with no run after the wait is stopped, its whole session (setsid): left, it launched runs nobody
+# followed, which held check slots for hours on trees no longer on `next` (18 Oct: r20261018-173205-b114, 3 h, launched past
+# the wait while check.py gathered verdicts)
+if [ -z "${ids// /}" ] && kill -0 "$pid" 2>/dev/null; then
+  kill -TERM -- "-$pid" 2>/dev/null || kill -TERM "$pid" 2>/dev/null || true
+  wait "$pid" 2>/dev/null || true
+  ids=$(grep -oE 'run r20[0-9]{6}-[0-9]{6}-[0-9a-f]{4} launched' "$log" | cut -d' ' -f2 | awk '!seen[$0]++' | tr '\n' ' ') || true
+  [ -n "${ids// /}" ] || die "no run launched in the wait; stopped its launcher (pid $pid), so none launches later; see $log"
+fi
 grep -E "^check:|refused|rror" "$log" | head -5 || true
 if [ -z "${ids// /}" ] && ! kill -0 "$pid" 2>/dev/null; then
   rc=0; wait "$pid" || rc=$?

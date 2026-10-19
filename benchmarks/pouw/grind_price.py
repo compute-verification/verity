@@ -34,7 +34,8 @@ p = ¾'s log₂(4/3).
 **Deployed attention's floor (ATTN-NOISE, note:compute-accounting/20261018T0634Z-draft-attn-noise §5).** H1's QKᵀ and P·V
 (one seed a matmul, a head) lose a unit's floor when one operand row's noise is matched. That is visible after the seed,
 so the cheater picks the matched rows: each of N rows of b bits read by u units has moment 1 − 2^{-b} + 2^{-b}e^{θu},
-and π* = min_θ (ln(T/δ) + Σ N·ln(…))/θ units (`LuckMoment` at κ = 0 with `PrivateMoment`). ATTN-NOISE's own form,
+and π* = min_θ (ln(T/δ) + Σ N·ln(…))/θ units (`LuckMoment` at κ = 0 with `PrivateMoment`; `visible_premium`,
+`verity.core.protocols.pouw.grind`'s, which compile's seed-group check reads too). ATTN-NOISE's own form,
 log₂(T/δ)/(h·N) with h the least row's noise bits over the units reading it, leaves out which rows the cheater picks:
 it sits 0.5–8% below at decode and 10–21% below at prefill's QKᵀ, where the bound is smallest. Both are tabled, with
 the (query head, request) pairs a decode seed must cover. A seed over several query heads draws a KV head's K rows' and
@@ -58,12 +59,12 @@ import sys
 from dataclasses import dataclass
 from pathlib import Path
 
+from verity.core.protocols.pouw.grind import DELTA_BITS, FLAG, LN2, ln_t_over_delta, visible_premium
+
 sys.path.insert(0, str(Path(__file__).parent))
 import budget as BU
 import eps_budget as EB
 
-LN2 = math.log(2)
-DELTA_BITS = 40                      # δ = 2⁻⁴⁰, the grind's own failure probability (outside ε)
 T_BITS = (80, 128)                   # the cheater's hash queries a salt's epoch
 TILE = (32, 32)                      # h1tile's r × c (compile.Scheme.tile)
 SEG = 32                             # a receipt word's products (h1tile's 32-wide segments)
@@ -75,7 +76,6 @@ KAPPA_LIVE = BU.P_PASS / (1 - BU.P_PASS)
 PROVED = (4.0, 1 / 256)
 KAPPAS = tuple(round(3 + 0.05 * i, 2) for i in range(181))   # 3 … 12
 H_BITS = (0.415, 1.44, 6.0, 16.0)    # sensitivities, bits a tile
-FLAG = 1e-3                          # a cell over 0.1% is flagged
 PREFILL = (2048, 32768)
 DECODE_BATCH = (1, 8, 64, 256)
 DECODE_CTX = (2048, 32768)
@@ -109,10 +109,6 @@ def y_star(c: int, kappa: float, q: float = Q_BIT, wmax: int = SEG, p: float = P
             lo, hi = (mid, hi) if _log_f(w, mid, c, kappa, q, p) <= 0 else (lo, mid)
         best = min(best, lo)
     return best
-
-
-def ln_t_over_delta(t_bits: int) -> float:
-    return (t_bits + DELTA_BITS) * LN2
 
 
 @dataclass(frozen=True)
@@ -186,28 +182,6 @@ def best_kappa(ss: list[Site], t_bits: int, eps_luck: float, q: float = Q_BIT) -
         if best is None or extra + g < best[1] + best[2]:
             best = (kappa, extra, g)
     return best
-
-
-def visible_premium(rows: list[tuple[float, int, float]], t_bits: int) -> float:
-    """π* in units for visible matched rows: min over θ of (ln(T/δ) + Σ N ln(1 − 2^{-b} + 2^{-b} e^{θu}))/θ."""
-    lt = ln_t_over_delta(t_bits)
-
-    def obj(theta: float) -> float:
-        s = lt
-        for n, b, u in rows:
-            x, lq = theta * u, -b * LN2
-            a, d = math.log1p(-math.exp(lq)), x + lq
-            m = max(a, d)
-            s += n * (m + math.log(math.exp(a - m) + math.exp(d - m)))
-        return s / theta
-
-    grid = [10 ** (e / 20) for e in range(-160, 41)]
-    i = min(range(len(grid)), key=lambda j: obj(grid[j]))
-    lo, hi = grid[max(i - 1, 0)], grid[min(i + 1, len(grid) - 1)]
-    for _ in range(100):
-        a, b = lo + (hi - lo) / 3, hi - (hi - lo) / 3
-        lo, hi = (lo, b) if obj(a) < obj(b) else (a, hi)
-    return obj((lo + hi) / 2)
 
 
 def _h1_rows(regime: str, L: int, d: int, pairs: float, gq: int) -> dict:
