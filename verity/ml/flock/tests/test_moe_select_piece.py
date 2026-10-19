@@ -1,8 +1,8 @@
 """A static MoE pair unit's select of its expert's word (`MoeSelectBf16x{E}_v1`, circuits' `verity.ml.circuits.ops.moe`) and a
-routed FP8 expert's gather (`GatherE4m3x{E}_v1`, vLLM's `fp8_moe_experts`) lower by C-Flock's gather (`tail_pieces.FAMILIES`) in a
+routed FP8 expert's gather (`GatherE4m3x{E}_v1`, vLLM's `fp8_moe_experts`) lower by their `tail_pieces.FAMILIES` pieces in a
 process that never made their Boolean forms: the word at every id in [0, E) and the fill at the ids outside it (E, the negative
-ids, the widest), on random columns, with no lookup, in the ANDs of circuits' Boolean select at E = 128 and 256 (`MoeSelectBf16x
-{128,256}_v2`'s pins); and a unit that selects its expert's words inside itself lowers under `Q_word` with every unit equal to
+ids, the widest), on random columns, with no lookup, the select in the ANDs of circuits' `MoeSelectBf16x{E}_v2` (its pins at
+E = 3, 128 and 256); and a unit that selects its expert's words inside itself lowers under `Q_word` with every unit equal to
 the reference."""
 from __future__ import annotations
 
@@ -21,9 +21,9 @@ from verity_flock import tail_pieces as TP
 
 I32 = Value(32)
 #: family -> (word bits, the word an id outside [0, E) selects, its piece)
-FAMILY = {"MoeSelectBf16": (16, 0x7FFF, TP.gather_bf16), "GatherE4m3": (8, 0x7F, TP.gather_e4m3)}
-#: the ANDs of circuits' `MoeSelectBf16x{E}_v2` (its circuit-check pins), which C-Flock's gather equals at a power of two
-PINNED_ANDS = {128: 2072, 256: 4119}
+FAMILY = {"MoeSelectBf16": (16, 0x7FFF, TP.moe_select_bf16), "GatherE4m3": (8, 0x7F, TP.gather_e4m3)}
+#: the ANDs of circuits' `MoeSelectBf16x{E}_v2` (its circuit-check pins), whose construction the piece is
+PINNED_ANDS = {3: 93, 128: 2072, 256: 4119}
 _WORDS: dict[tuple[str, int], PrimitiveDefinition] = {}
 
 

@@ -12,6 +12,7 @@ FA2's inverse sum follow ``fa2_model.cpp``.
 """
 from __future__ import annotations
 
+from verity.ml.circuits.boolean.gather import gather as _bits_gather
 from verity.ml.circuits.ops.boolean.scalar import e4m3_to_f32, f32_to_e2m1_sat, f32_to_e4m3_sat, fmaxmin as _fmaxmin
 from verity.ml.circuits.ops.boolean.softmax import (_eq_const, _is_nan, f32_add_ftz, f32_fma_ftz, f32_fma_sub_ftz, f32_gt, f32_max, f32_mul_ftz,
                                        f32_sub, f32_sub_ftz, ftz, guard_neg_inf_zero)
@@ -498,6 +499,16 @@ def gather_e4m3(C, tok, *col):
     return _gather(C, tok, col, 0x7F)
 
 
+def moe_select_bf16(C, e, *column):
+    """``MoeSelectBf16x{E}_v1`` (`verity.ml.circuits.ops.moe`: a static MoE pair unit's select of its expert's word) by the
+    construction of its Boolean form ``MoeSelectBf16x{E}_v2`` (`verity.ml.circuits.ops.boolean.moe`), gate for gate: the
+    multiplexer tree over e's low ceil(log2 E) bits (`boolean.gather`, a word past E standing for 0x7FFF), then 0x7FFF where
+    any higher bit is set. That form is made per E on demand, so `ir_lower._boolean_build` finds it only in a process that made
+    it."""
+    b = (len(column) - 1).bit_length()
+    return mux(C, or_reduce(C, e[b:]), const_bits(0x7FFF, 16), _bits_gather(C, e[:b], list(column), 0x7FFF))
+
+
 # --- gemma-2's tanh family: table reads over |x| between an identity and a saturation region ---------------------------------
 
 def _tanh(C, x, table: str, nan_word: int):
@@ -613,8 +624,6 @@ PIECES = {
     "TanhF32Rn_v1": tanh_rn,
     "GeluTanhMulBf16_v1": gelu_tanh_mul_bf16,
 }
-#: primitive families whose id carries a width: pattern -> piece. ``MoeSelectBf16x{E}_v1`` (`verity.ml.circuits.ops.moe`, a static
-#: MoE pair unit's select of its expert's word) is the bf16 gather over E experts; its Boolean form is made per E, on demand, so
-#: `ir_lower._boolean_build` cannot find it in a process that never made it.
+#: primitive families whose id carries a width: pattern -> piece
 FAMILIES = {r"BitAtx\d+_v1": bit_at, r"GatherBf16x\d+_v1": gather_bf16, r"GatherF32x\d+_v1": gather_f32,
-            r"GatherE4m3x\d+_v1": gather_e4m3, r"MoeSelectBf16x\d+_v1": gather_bf16}
+            r"GatherE4m3x\d+_v1": gather_e4m3, r"MoeSelectBf16x\d+_v1": moe_select_bf16}
