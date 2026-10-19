@@ -14,8 +14,10 @@ The unit of a kind is the Call's coordinate: from the Call, the callee carrying 
 Definition has more than `--unit-gates` word gates. A unit M0 cannot compose for its shape (no input row past one SHA-512
 block, or a row that is not whole u16 words) is replaced by the Definition above it, up to the Call. A kind none of whose
 word units lowers takes its Boolean version's chain (`program.boolean.boolean_version`, descending into Boolean callees) the
-same way; the record then names it (``boolean``) and keeps the word outcome (``word_outcome``). Each kind runs in a forked
-child of the process that decoded the Program, so lowerings registered for one kind never meet another's.
+same way; the record then names it (``boolean``) and keeps the word outcome (``word_outcome``). A ``--boolean`` kind takes
+its Boolean version's chain first (a word Call that lowers whole, TokenSelect_v1's, is then staged in its Boolean form).
+Each kind runs in a forked child of the process that decoded the Program, so lowerings registered for one kind never meet
+another's.
 """
 from __future__ import annotations
 
@@ -196,29 +198,41 @@ def descend(ch: list[tuple[object, int]]) -> tuple[list[dict], list[dict]]:
     return path, attempts
 
 
-def probe_kind(fam: str, fn, unit_gates: int) -> dict:
-    """The kind's unit: the word Call's chain, else (no unit of it lowers) its Boolean version's (`program.boolean`), whose
-    batches of small Boolean Definitions give units that read rows past one SHA-512 block where the word coordinate's do not."""
+def boolean_route(fn, unit_gates: int) -> dict:
+    """`descend` on fn's Boolean version's chain (`program.boolean.boolean_version`, descending into Boolean callees); with the
+    version's id (``boolean``) and its unit when one lowers, empty when fn has no Boolean version."""
     from verity_vllm.program.boolean import boolean_version
+    try:
+        bv = boolean_version(fn)
+    except LookupError:
+        return {}
+    path, attempts = descend(chain(bv, unit_gates, boolean=True))
+    out = {"boolean_path": path, "boolean_attempts": attempts}
+    if attempts and attempts[-1]["outcome"] == "lowers":
+        b = attempts[-1]
+        out.update(boolean=bv.id, unit=b["unit"], unit_gates=b["gates"], units_per_call=b["per_call"])
+    return out
+
+
+def probe_kind(fam: str, fn, unit_gates: int, boolean_first: bool = False) -> dict:
+    """The kind's unit: the word Call's chain, else (no unit of it lowers) its Boolean version's (`boolean_route`), whose
+    batches of small Boolean Definitions give units that read rows past one SHA-512 block where the word coordinate's do not.
+    With ``boolean_first`` the Boolean version's chain is tried first, and the word chain only when no unit of it lowers."""
+    head = {"kind": fam, "call": fn.id, "call_gates": fn.gates}
+    b = boolean_route(fn, unit_gates) if boolean_first else None
+    if b and b.get("boolean"):
+        return {**head, **b, "outcome": "lowers", "word_outcome": "not tried"}
     memo: dict = {}
     ch = chain(fn, unit_gates)
     path, attempts = descend(ch)
     last = attempts[-1] if attempts else {"outcome": "none", "why": "no composite Definition on the chain"}
-    rec = {"kind": fam, "call": fn.id, "call_gates": fn.gates, "path": path, "attempts": attempts, "outcome": last["outcome"],
+    rec = {**head, "path": path, "attempts": attempts, "outcome": last["outcome"],
            "unit": last.get("unit"), "unit_gates": last.get("gates"), "units_per_call": last.get("per_call")}
     if rec["outcome"] != "lowers":
-        try:
-            bv = boolean_version(fn)
-        except LookupError:
-            bv = None
-        if bv is not None:
-            bpath, battempts = descend(chain(bv, unit_gates, boolean=True))
-            rec["boolean_path"], rec["boolean_attempts"] = bpath, battempts
-            if battempts and battempts[-1]["outcome"] == "lowers":
-                b = battempts[-1]
-                rec.update(boolean=bv.id, word_outcome=rec["outcome"], outcome="lowers", unit=b["unit"], unit_gates=b["gates"],
-                           units_per_call=b["per_call"])
-                return rec
+        b = boolean_route(fn, unit_gates) if b is None else b
+        if b.get("boolean"):
+            return {**rec, **b, "word_outcome": rec["outcome"], "outcome": "lowers"}
+        rec.update(b)
     if last["outcome"] == "no-piece" and last.get("unit"):
         u = next(f for f, _m in ch if f.id == last["unit"])
         rec["missing"] = missing_pieces(u, memo)
@@ -291,7 +305,9 @@ def main() -> int:
     ap.add_argument("--timeout-s", type=int, default=2400, help="each child's budget")
     ap.add_argument("--unit-gates", type=int, default=4096)
     ap.add_argument("--only", default=None, help="comma-separated kinds")
+    ap.add_argument("--boolean", default="", help="comma-separated kinds probed through their Boolean version first")
     a = ap.parse_args()
+    boolean_first = set(filter(None, a.boolean.split(",")))
     out = Path(a.out)
     out.parent.mkdir(parents=True, exist_ok=True)
     t0 = time.time()
@@ -328,8 +344,8 @@ def main() -> int:
             f = tmp / f"{fam}.json"
             results[fam] = json.loads(f.read_text()) if f.exists() else {
                 "kind": fam, "outcome": "crashed", "why": f"child exit status {status} after {time.time() - started:.0f} s"}
-            print(f"A8 kind {fam}: {results[fam]['outcome']} {json.dumps(results[fam].get('attempts', [])[-1:], default=str)[:600]}",
-                  flush=True)
+            last = (results[fam].get("boolean_attempts") or results[fam].get("attempts", []))[-1:]
+            print(f"A8 kind {fam}: {results[fam]['outcome']} {json.dumps(last, default=str)[:600]}", flush=True)
             if block:
                 break
 
@@ -347,7 +363,7 @@ def main() -> int:
             try:
                 cap = a.mem_gb << 30
                 resource.setrlimit(resource.RLIMIT_AS, (cap, cap))
-                rec = probe_kind(fam, by_id[kinds[fam]["spec"]], a.unit_gates)
+                rec = probe_kind(fam, by_id[kinds[fam]["spec"]], a.unit_gates, fam in boolean_first)
             except BaseException as e:  # noqa: BLE001
                 rec = {"kind": fam, "outcome": "error", "why": f"{type(e).__name__}: {str(e)[:400]}", "trace": traceback.format_exc()[-2000:]}
             (tmp / f"{fam}.json").write_text(json.dumps(rec, default=str))
