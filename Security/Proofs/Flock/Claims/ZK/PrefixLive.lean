@@ -45,7 +45,7 @@ theorem Agree.bind_ok {n : ℕ} {α β : Type} {x y : PS α} {f g : α → PS β
     | ok a =>
       obtain ⟨bs', h'⟩ := (hfg a (hQ l a l' hx)).1 l'
       refine ⟨bs ++ bs', ?_⟩
-      dsimp only
+      dsimp only at hbs ⊢
       rw [h', hbs, Array.append_assoc]
   · rw [go_bind, go_bind]
     rcases hxy.2 l hl with ⟨he, hs⟩ | ⟨⟨e, he⟩, hs, bs, hbs⟩
@@ -104,32 +104,36 @@ theorem agreeL_bind_ok {n : ℕ} {α β : Type} {x y : LP PS α} {f g : α → L
 
 /-! ## The answerers -/
 
+theorem go_get_bind {β : Type} (k : Array Claims.Msg → PS β) (l : Array Claims.Msg) :
+    ((get : PS (Array Claims.Msg)) >>= k).go l = (k l).go l := rfl
+
+theorem go_set_bind {β : Type} (s : Array Claims.Msg) (k : PUnit → PS β) (l : Array Claims.Msg) :
+    ((set s : PS PUnit) >>= k).go l = (k ⟨⟩).go s := rfl
+
 theorem cut_round_go (coin : ℕ → ℕ → F128) (n : ℕ) (c : ByteArray) (l : Array Claims.Msg) :
     ((asksCut coin n).round c).go l =
       if n ≤ l.size then (.error "past the openings", l.push (Claims.toMsg c))
       else (.ok (coin l.size), l.push (Claims.toMsg c)) := by
+  unfold asksCut
+  dsimp only
+  rw [go_get_bind, go_set_bind]
   by_cases h : n ≤ l.size
   · simp only [h, ↓reduceIte]
-    unfold asksCut
-    simp only [h, ↓reduceIte]
     rfl
   · simp only [h, ↓reduceIte]
-    unfold asksCut
-    simp only [h, ↓reduceIte]
     rfl
 
 theorem cut_link_go (coin : ℕ → ℕ → F128) (n : ℕ) (a b : Array ByteArray) (l : Array Claims.Msg) :
     ((asksCut coin n).link a b).go l =
       if n ≤ l.size then (.error "past the openings", l.push (linkBody a.toList b.toList))
       else (.ok (coin l.size), l.push (linkBody a.toList b.toList)) := by
+  unfold asksCut
+  dsimp only
+  rw [go_get_bind, go_set_bind]
   by_cases h : n ≤ l.size
   · simp only [h, ↓reduceIte]
-    unfold asksCut
-    simp only [h, ↓reduceIte]
     rfl
   · simp only [h, ↓reduceIte]
-    unfold asksCut
-    simp only [h, ↓reduceIte]
     rfl
 
 variable (resp : ℕ → Claims.Msg) (coin : ℕ → ℕ → F128) {n : ℕ}
@@ -234,17 +238,22 @@ theorem queryP_agree_lv (nonce : ℕ → ℕ → UInt64) (ms : MerkleScheme) (sc
 
 omit hc in
 theorem tau_agree (h : ByteArray → ByteArray) (tau : F128) (salt : ByteArray) :
-    ((agreeS n).st Transcript).R (StateT.lift (Zk.tauCommitmentWith (Hashes.ofSha512 h : Hashes PS) tau salt))
-      (StateT.lift (Zk.tauCommitmentWith (Hashes.ofSha512 h : Hashes PS) tau salt)) := by
+    (agreeS n).R (Zk.tauCommitmentWith (Hashes.ofSha512 h : Hashes PS) tau salt)
+      (Zk.tauCommitmentWith (Hashes.ofSha512 h : Hashes PS) tau salt) := by
   rw [Replay.tauCommitmentWith_ofSha512]
-  exact With.Sim.lift_st _ ((agreeS n).pure _)
+  exact (agreeS n).pure _
 
 omit hc in
 theorem commitP_agree (h : ByteArray → ByteArray) (ms : MerkleScheme) (lv : Level) (g : Array F128)
     (salt : ℕ → ByteArray) :
-    ((agreeS n).st Transcript).R (StateT.lift (commitP (Hashes.ofSha512 h : Hashes PS) ms lv g salt))
-      (StateT.lift (commitP (Hashes.ofSha512 h : Hashes PS) ms lv g salt)) :=
-  With.Sim.lift_st _ (agree_still (commitP_quiet h ms lv g salt))
+    (agreeS n).R (commitP (Hashes.ofSha512 h : Hashes PS) ms lv g salt)
+      (commitP (Hashes.ofSha512 h : Hashes PS) ms lv g salt) :=
+  agree_still (commitP_quiet h ms lv g salt)
+
+omit hc in
+theorem agree_pure_st {α σ : Type} (a : α) (s : σ) :
+    (agreeS n).R ((Pure.pure a : StateT σ PS α) s) ((Pure.pure a : StateT σ PS α) s) :=
+  (agreeS n).pure (a, s)
 
 theorem squeezeP_agree_cons (lay : Zk.PadLayout) (cons : Array (String × Zk.Lin)) (hcs : cons.size + 3 ≤ 65536)
     (e r s : F128) :
@@ -306,7 +315,7 @@ theorem ligeritoPZk_agree (h : ByteArray → ByteArray) (ms : MerkleScheme) (sch
   sim_walk [liftT_agree, squeezeP_agree resp coin hc _ (show sch.n ≤ 65536 by omega), sampleP_agree resp coin hc,
     sampleKP_agree resp coin hc, sendMsg_agree, powP_agree, challengeP_agree resp coin hc,
     oodIntroP_agree resp coin hc nonce _ (sch.n - sch.k0 + 1) (by omega),
-    queryP_agree_lv resp coin hc nonce ms sch hq, commitP_agree h,
+    queryP_agree_lv resp coin hc nonce ms sch hq, commitP_agree h, agree_pure_st,
     oodIntroP_agree_loop resp coin hc nonce (sch.n + 1) hn,
     loopR_agree (fun s : ℕ × Commit × Array (Array ByteArray) × Array LevelProof × FinalProof => s.1 ≤ sch.n + 1)]
   all_goals first
@@ -433,8 +442,10 @@ theorem afterLinkPZk_agree (h : ByteArray → ByteArray) (spec : SessionSpec) (s
     have hx : extras.size = spec.points * sts[i].regions.size := by
       rw [FlockDeploy.extraClaims_size (st := sts[i]) he, hpts, Nat.mul_comm]
     refine (agreeS n).bind (agree_still (innerCommitP_quiet h _ _)) fun ic => ?_
-    sim_walk [repPZk_agree resp coin hc h _ _ _ _ _ _ _ _ extras _ _ _ _ _ _ _ _
-      (show sts[i].m - 13 ≤ 65536 by omega) (by rw [hx, hp]; omega) hn hq]
+    extract_lets dom
+    refine (agreeS n).bind (With.Sim.run _ (repPZk_agree resp coin hc h (Setup.ofCircuit sts[i]) schs[i]!.1 _ _ _ _ _
+      _ extras _ _ _ _ _ _ _ _ (show sts[i].m - 13 ≤ 65536 by omega) (by rw [hx, hp]; omega) hn hq) _)
+      fun _ => (agreeS n).pure _
   · sim_walk [agree_still (recordJson_quietZ h _ _ _ _ _)]
 
 omit hc in
@@ -474,7 +485,8 @@ theorem sessionPZk_agree (h : ByteArray → ByteArray) (spec : SessionSpec) (sts
     have hschs : ∀ i (hi : i < sts.size), Zk.schedule sts[i].m = .ok schs[i]! := fun i hi => by
       have := hsf i (by omega) (by omega)
       rw [← getElem!_pos schs i (by omega)] at this
-      simpa [tabsOf] using this
+      simp only [tabsOf, Array.getElem_map] at this
+      exact this
     rw [go_bind, go_bind, commitsPZk_quiet]
     cases hc' : (commitsPZk (Hashes.ofSha512 h) (tabsOf sts) schs (tablesP (tabsOf sts) trs) tape : V _) with
     | error e => exact .inl ⟨rfl, by simp⟩
@@ -612,7 +624,7 @@ theorem live_bounds {x : Msg} (hx : Live x) {s : Ins} {spec : SessionSpec} {sts 
   rw [hpi] at hset
   have hone : ∀ j (hj : j < sts.size), sts[j].regions.size ≤ 1024 ∧ sts[j].mPts ≤ 64 := fun j hj => by
     obtain ⟨d, hd, -⟩ := (HiddenExec.setupTables_setupOne hset).2 j hj
-    rcases Bool.eq_false_or_eq_true (tagsAt p.tags p.I.count j).hiddenOutputs with hh | hh
+    rcases Bool.eq_false_or_eq_true (FlockSoundness.Discharge.Exec.tagsAt p.tags p.I.count j).hiddenOutputs with hh | hh
     · rw [HiddenExec.setupOne_hidden hh] at hd
       have hS := FlockSoundness.Discharge.Hidden.setupHidden_spec' hd
       refine ⟨FlockVBridge.Family.spec_regions_le hS, ?_⟩
