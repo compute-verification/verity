@@ -10,6 +10,7 @@ import Models.Accounting.Guarantees.CoinFlow
 import Models.Accounting.Guarantees.Confidence
 import Models.Accounting.Guarantees.FillerLuck
 import Models.Accounting.Guarantees.HMu
+import Models.Accounting.Guarantees.DeclaredCircuit
 import Models.Accounting.Guarantees.Gates
 import Models.Accounting.Guarantees.Joint
 import Models.Accounting.Guarantees.Localization
@@ -30,6 +31,7 @@ import Models.Accounting.Guarantees.RemoteHeld
 import Models.Accounting.Guarantees.Requirement
 import Models.Accounting.Guarantees.RequirementPouw
 import Models.Accounting.Guarantees.Sketch
+import Models.Accounting.Guarantees.Stacking
 import Models.Accounting.Guarantees.Tag
 import Models.Accounting.Guarantees.TS
 import Models.Accounting.Guarantees.Sheet
@@ -52,4 +54,7 @@ theorem, runtime corollary, localization, composition and fit, the obligations B
 guarantees, Lemma B with (H-μ⁺) derived from fresh coins and Lemma B′ for a persistent pattern, the view independence the Build's coin rules give it, co-location and the link relay for receipts bound to the matmul, what a relay of the deployed bound
 receipt's sketch must exchange, the bandwidth audit's guarantee, their per-run forms, PoUW's work lower bound on an isolated node,
 a declared circuit's live and read bits from the blocks the audit credits, PoUW's credits and help as its placed
-execution's gates, and the grinding premium under hashed seeds and the deployed tile's moment. -/
+execution's gates, the grinding premium under hashed seeds and the deployed tile's moment, stacking's carrier lemma
+with the deployed remote audit for devices that read from carriers, also read against a declared circuit's
+requirement, and the composed guarantee for a declared circuit that passes the stacking property: its credited live
+and read bits from an accepted stacked audit. -/

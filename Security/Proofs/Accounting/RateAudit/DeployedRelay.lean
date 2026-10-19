@@ -425,6 +425,46 @@ theorem ofDeployedWindow_paid_relay (A : DeployedSession n P N b h ρ S L q r s 
   have e : P * (S + (L - ρ) + X + (lam + m * b)) = P * (L - ρ) + P * S + P * X + P * (lam + m * b) := by ring
   omega
 
+/-- `RemoteSessionConservationRelay`'s reading on any store `store ω` drawn before the session's coins, from a bound
+`ε_u` on some window's unpaid words at the slack `S + (L − ρ) + X + (λ + m·b)` a pass: the draws' terms hold at every
+store, and only the unpaid words read the store's distribution. -/
+theorem session_relay_of_unpaid {Ω : Type} [Fintype Ω] (store : Ω → Store N b)
+    (A : DeployedSession n P N b h ρ S L q r s d G) (tier : ℕ → Fin τ) (lam m rounds cRoot F : ℕ) (dbar dw : ℝ)
+    (hn : 0 < n) (hP : 0 < P) (hN : 0 < N) (hb : 0 < b) (hdw : dw ≤ 1) (εu : ℝ≥0∞)
+    (hu : Pous.pr (fun x : Ω × (Fin n → WindowCoins P N b h ρ r s d) =>
+        ∃ w, (A.win w x.2).reads tier (store x.1) (x.2 w).1 +
+            P * (S + (L - ρ) + Deployed.rebuildBits b rounds cRoot F + (lam + m * b)) <
+          ((A.win w x.2).correctAll (store x.1) (x.2 w).1).card * b) ≤ εu) :
+    Pous.pr (fun x : Ω × (Fin n → WindowCoins P N b h ρ r s d) =>
+        (∀ w t, (x.2 w).2 t ∈ (A.win w x.2).correctAll (store x.1) (x.2 w).1) ∧
+          ((((∑ w, (A.win w x.2).reads tier (store x.1) (x.2 w).1 : ℕ)) : ℝ) <
+              (1 - (dbar + Deployed.gammaPass N b ρ S L (lam + m * b) rounds cRoot F)) * (n * P * N * b) ∨
+            ∃ w, (((A.win w x.2).reads tier (store x.1) (x.2 w).1 : ℕ) : ℝ) <
+              (1 - (dw + Deployed.gammaPass N b ρ S L (lam + m * b) rounds cRoot F)) * (P * N * b)))
+      ≤ ENNReal.ofReal (1 - dbar) ^ (d * n) + ENNReal.ofReal (1 - dw / n) ^ (d * n) + εu := by
+  have main := DeployedSession.pr_paid_of_unpaid_map store A tier
+    (S + (L - ρ) + Deployed.rebuildBits b rounds cRoot F + (lam + m * b))
+    ⌊(1 - dbar) * ((n : ℝ) * P * N)⌋₊ ⌊(1 - dw) * ((P : ℝ) * N)⌋₊ εu hu
+  have hγ := Deployed.gammaPass_mul N b ρ S L (lam + m * b) rounds cRoot F hN hb
+  have hb' : (0 : ℝ) < b := by exact_mod_cast hb
+  refine (Bandwidth.pr_mono (fun x hx => ?_)).trans (main.trans ?_)
+  · obtain ⟨hall, hT | ⟨w, hw⟩⟩ := hx
+    · refine ⟨hall, Or.inl ?_⟩
+      have := Deployed.count_lt (c := (n : ℝ) * P) hb' hγ hT
+      rw [← mul_assoc]
+      exact_mod_cast this
+    · refine ⟨hall, Or.inr ⟨w, ?_⟩⟩
+      have := Deployed.count_lt (c := (P : ℝ)) hb' hγ hw
+      exact_mod_cast this
+  · have e1 : ((n : ℝ) * P * N) = ((n * P * N : ℕ) : ℝ) := by push_cast; ring
+    have e2 : ((P : ℝ) * N) = ((P * N : ℕ) : ℝ) := by push_cast; ring
+    rw [e1, e2]
+    refine add_le_add (add_le_add ?_ ?_) le_rfl
+    · rw [show ((n : ℝ≥0∞) * P * N) = ((n * P * N : ℕ) : ℝ≥0∞) by push_cast; ring]
+      exact Deployed.horizon_le dbar (n * P * N) (d * n) (by positivity)
+    · rw [show ((n : ℝ≥0∞) * P * N) = (n : ℝ≥0∞) * ((P * N : ℕ) : ℝ≥0∞) by push_cast; ring]
+      exact Deployed.window_le dw n (P * N) (d * n) hn (by positivity) hdw
+
 end Accounting.Remote
 
 namespace Accounting.SecurityProofs
@@ -438,28 +478,9 @@ open Bandwidth (pr_mono)
 (`Accounting.Guarantees.RemoteSessionConservationRelay`). -/
 theorem RemoteSessionConservationRelay : Accounting.Guarantees.RemoteSessionConservationRelay := by
   intro n P N b h ρ S L q r s d G lam m τ rounds cRoot F cost tier A dbar dw hn hP hN hb hrc hdw hW hF
-  have main := DeployedSession.pr_paid_of_window A tier
-    (S + (L - ρ) + Deployed.rebuildBits b rounds cRoot F + (lam + m * b))
-    ⌊(1 - dbar) * ((n : ℝ) * P * N)⌋₊ ⌊(1 - dw) * ((P : ℝ) * N)⌋₊ _ (window_relay_le A tier hrc hW hF)
-  have hγ := Deployed.gammaPass_mul N b ρ S L (lam + m * b) rounds cRoot F hN hb
-  have hb' : (0 : ℝ) < b := by exact_mod_cast hb
-  refine (pr_mono (fun x hx => ?_)).trans (main.trans ?_)
-  · obtain ⟨hall, hT | ⟨w, hw⟩⟩ := hx
-    · refine ⟨hall, Or.inl ?_⟩
-      have := Deployed.count_lt (c := (n : ℝ) * P) hb' hγ hT
-      rw [← mul_assoc]
-      exact_mod_cast this
-    · refine ⟨hall, Or.inr ⟨w, ?_⟩⟩
-      have := Deployed.count_lt (c := (P : ℝ)) hb' hγ hw
-      exact_mod_cast this
-  · have e1 : ((n : ℝ) * P * N) = ((n * P * N : ℕ) : ℝ) := by push_cast; ring
-    have e2 : ((P : ℝ) * N) = ((P * N : ℕ) : ℝ) := by push_cast; ring
-    rw [e1, e2]
-    refine add_le_add (add_le_add ?_ ?_) (le_of_eq (by ring))
-    · rw [show ((n : ℝ≥0∞) * P * N) = ((n * P * N : ℕ) : ℝ≥0∞) by push_cast; ring]
-      exact Deployed.horizon_le dbar (n * P * N) (d * n) (by positivity)
-    · rw [show ((n : ℝ≥0∞) * P * N) = (n : ℝ≥0∞) * ((P * N : ℕ) : ℝ≥0∞) by push_cast; ring]
-      exact Deployed.window_le dw n (P * N) (d * n) hn (by positivity) hdw
+  refine (session_relay_of_unpaid id A tier lam m rounds cRoot F dbar dw hn hP hN hb hdw _
+    (DeployedSession.pr_unpaid_le A tier _ _ (window_relay_le A tier hrc hW hF))).trans (le_of_eq ?_)
+  ring
 
 /-- **The deployed session with relaying side sources conserves its words as a run of the remote audit**
 (`Accounting.Guarantees.RemoteSessionRunConservationRelay`), from `Accounting.SecurityProofs.Remote.Conservation`. -/
