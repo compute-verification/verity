@@ -65,11 +65,11 @@
  },
  "reads_unlocked": {
   "policy": {"meaning": ["Control.Assumptions"]},
-  "fails": "reads: Control.Small_fails, Control.main_thm read Control.Small, Control.double in Control.Defs, a spec module outside `meaning`"
+  "fails": "reads: Control.Small_fails, Control.Small_meets, Control.main_thm read Control.Small, Control.double in Control.Defs, a spec module outside `meaning`"
  },
  "meaning": {
   "replace": {"Control/Defs.lean": ["2 * n", "n + n"]},
-  "fails": "guarantees: definitions in Control.Defs that Control.Small_fails, Control.main_thm read changed"
+  "fails": "guarantees: definitions in Control.Defs that Control.Small_fails, Control.Small_meets, Control.main_thm read changed"
  },
  "kernel_option": {
   "write": {"Control/Bad.lean": "set_option debug.skipKernelTC true in\ntheorem Control.unchecked : True := trivial\n"},
@@ -160,6 +160,10 @@
   "replace": {"Control/Thms.lean": ["Small_fails : ∃ n, ¬ Small n := ⟨10, by unfold Small; omega⟩",
                                     "Small_fails : ∃ n, Small n := ⟨3, by unfold Small; omega⟩"]},
   "fails": "claims: Control.Small_fails does not state that Control.Small fails"
+ },
+ "claim_meets_true": {
+  "replace": {"Control/Thms.lean": ["Small_meets : double 1 < 10 := by unfold double; omega", "Small_meets : True := trivial"]},
+  "fails": "claims: Control.Small_meets, Control.Small's `meets` witness, has a conjunct (True …) that applies no definition under `meaning`"
  },
  "claim_without_witnesses": {
   "replace": {"Control/Defs.lean": ["def Small (n : Nat) : Prop := n < 10",

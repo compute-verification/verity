@@ -76,7 +76,11 @@ Every declaration of the package's audited modules (not a list of theorems), fro
 - with a `claims` section, every predicate the spec declares under `claims.modules` (a named assumption aside) has its
   witnesses under `claims.witnesses`, or a reason under `claims.not`: a guarantee `fails`, stated `¬ C …` past its `∀`
   and `∃` binders with the claim `C` at the head, and guarantees `meets`, one per deployed record, that state the claim's
-  checkable antecedents there and not `C` itself (`claim_failures`; the `shape` rule doesn't apply to them);
+  checkable antecedents there and not `C` itself (`claim_failures`; the `shape` rule doesn't apply to them). A `meets`
+  witness must say something about the deployment: past its `∀`, `→` and `∃` binders, split at `∧`, each conjunct of its
+  conclusion is headed by a constant other than `C`, applies a definition under `meaning` itself (the deployed record, a
+  predicate or a field of it, so `True` or a fact of Init or Mathlib alone fails), and is neither a reflexivity
+  (`a = a`, `a ↔ a`) nor one of its hypotheses, and no hypothesis is `False` (`vacuous_meets`);
 - every definition a guarantee's statement reads is in the spec (below), or a pinned dependency's;
 - no dependency the `upstream` section scans proves, at the revision `lake-manifest.json` pins, a theorem about a watched
   statement that nobody has acknowledged (below);

@@ -1256,7 +1256,12 @@ def claim_failures(policy: dict, facts: dict) -> list[str]:
     under `claims.witnesses` a theorem `fails`, whose statement past its `∀` and `∃` binders is `¬ C …` with the claim `C`
     itself at the head (the claim is not true of everything), and theorems `meets`, one per deployed record, that state
     the claim's checkable antecedents there and not `C` itself (it is not true at the deployment only because nothing
-    meets its antecedents). Each witness is a guarantee, so its record, and a change to it, shows in the landing DM."""
+    meets its antecedents). Each witness is a guarantee, so its record, and a change to it, shows in the landing DM.
+    A `meets` witness must say something about the deployment (LEAN-32, `vacuous_meets`): its conclusion, past its `∀`,
+    `→` and `∃` binders and split at `∧` (each conjunct again past its own binders), is conjuncts that are each headed by
+    a constant other than `C`, apply a definition under `meaning` themselves (the deployed record, a predicate or a field
+    of it; `True`, or a fact of Init or Mathlib alone, applies none), and are neither a reflexivity (`a = a`, `a ↔ a`,
+    `HEq a a`) nor one of its hypotheses (split at `∧`), and no hypothesis is `False`. Read as written, nothing unfolded."""
     rule = policy.get("claims")
     if not rule:
         return []
@@ -1304,7 +1309,31 @@ def claim_failures(policy: dict, facts: dict) -> list[str]:
                 fails.append(f"claims: {n} states {'¬ ' if body.get('negated') else ''}{c} itself: a `meets` witness states the "
                              f"claim's checkable antecedents at a deployed record (a decoder meeting its bound, a non-empty "
                              f"scope), not the claim")
+            elif role == "meets" and (why := vacuous_meets(body, c)):
+                fails.append(f"claims: {n}, {c}'s `meets` witness, {why}: each conjunct of a `meets` witness's conclusion "
+                             f"applies a definition of the spec (the deployed record, a predicate or a field of it)")
     return fails
+
+
+def vacuous_meets(body: dict, claim: str) -> str | None:
+    """Why a `meets` witness's statement (``body``, `Facts.lean`'s `conclusionOf`) says nothing about the deployment, or None."""
+    if not isinstance(body.get("conclusion"), list) or not body["conclusion"]:
+        return "has no conclusion `Facts.lean` reported; is the audit tool older than the policy?"
+    if body.get("absurd"):
+        return "takes `False` as a hypothesis, so it proves anything"
+    for k in body["conclusion"]:
+        head = k.get("head")
+        if head is None:
+            return "has a conjunct that applies a bound variable, not a constant"
+        if head == claim:
+            return f"has a conjunct that states {claim} itself"
+        if k.get("refl"):
+            return f"has a conjunct that is a reflexivity ({head} of two equal sides)"
+        if k.get("assumed"):
+            return f"has a conjunct ({head} …) that is one of its own hypotheses"
+        if not k.get("defs"):
+            return f"has a conjunct ({head} …) that applies no definition under `meaning` (`True`, or a fact of Init or Mathlib alone)"
+    return None
 
 
 def assumption_records(policy: dict, now_reads: dict, update: bool, owner: str | None,

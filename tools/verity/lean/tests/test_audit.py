@@ -1129,7 +1129,8 @@ def test_every_claim_has_a_witness_that_it_fails_and_witnesses_that_its_antecede
         return {"name": name, "module": "P.Claims", "kind": "def", "statement": False, "predicate": predicate}
 
     def thm(head, negated):
-        return fact() | {"kind": "theorem", "body": {"head": head, "negated": negated}}
+        conclusion = [{"head": head, "defs": [head], "refl": False, "assumed": False}]
+        return fact() | {"kind": "theorem", "body": {"head": head, "negated": negated, "conclusion": conclusion, "absurd": False}}
     defs = [spec("P.KS"), spec("P.Complete"), spec("P.Helper"), spec("P.Hyp"), spec("P.size", predicate=False)]
     pins = {"P.t": fact(), "P.KS_fails": thm("P.KS", True), "P.KS_meets": thm("P.ListWithin", False),
             "P.Complete_fails": thm("P.KS", True), "P.Complete_meets": thm("P.Complete", False)}
@@ -1153,6 +1154,40 @@ def test_every_claim_has_a_witness_that_it_fails_and_witnesses_that_its_antecede
         "claims: P.Gone is listed under `claims` but is no predicate of the spec under P.Claims; remove the entry"]
     assert A.claim_failures(POLICY, f) == []
     assert A.claim_witnesses(policy) == {"P.KS_fails", "P.KS_meets", "P.Complete_fails", "P.Complete_meets", "P.Complete_zk"}
+
+
+def test_a_meets_witness_says_something_about_the_deployment():
+    """LEAN-32: a `meets` witness whose statement is `True`, a conjunction of `True`s, a reflexivity, one of its own
+    hypotheses, a bound variable, a fact of Init alone, or anything under a `False` hypothesis fails; one whose every
+    conjunct applies a definition of the spec (`∃ s w, InScope deploy s ∧ RelS s w`, `deploy.zk = true`) passes."""
+    def k(head, defs=("P.deploy",), refl=False, assumed=False):
+        return {"head": head, "defs": list(defs), "refl": refl, "assumed": assumed}
+
+    def judged(*conclusion, absurd=False):
+        pins = {"P.KS_fails": fact() | {"body": {"head": "P.KS", "negated": True}},
+                "P.KS_meets": fact() | {"body": {"head": conclusion[0]["head"] if len(conclusion) == 1 else "And",
+                                                 "negated": False, "conclusion": list(conclusion), "absurd": absurd}}}
+        rule = {"modules": ["P.Claims"], "witnesses": {"P.KS": {"fails": "P.KS_fails", "meets": ["P.KS_meets"]}}}
+        f = facts(pins=pins, spec_definitions=[{"name": "P.KS", "module": "P.Claims", "kind": "def", "predicate": True}])
+        fails = A.claim_failures({**POLICY, "claims": rule, "guarantees": {n: {"owner": "@lean"} for n in pins}}, f)
+        assert all(x.endswith("applies a definition of the spec (the deployed record, a predicate or a field of it)")
+                   for x in fails)
+        return [x.removeprefix("claims: P.KS_meets, P.KS's `meets` witness, ").partition(":")[0] for x in fails]
+
+    assert judged(k("P.InScope", ["P.InScope", "P.deploy"]), k("P.RelS", ["P.RelS"])) == []
+    assert judged(k("Eq", ["P.Deploy.zk", "P.deploy"])) == []
+    assert judged(k("True", [])) == ["has a conjunct (True …) that applies no definition under `meaning` (`True`, or a "
+                                     "fact of Init or Mathlib alone)"]
+    assert judged(k("True", []), k("True", [])) == judged(k("True", []))
+    assert judged(k("P.InScope"), k("True", [])) == judged(k("True", []))
+    assert judged(k("LT.lt", [])) == ["has a conjunct (LT.lt …) that applies no definition under `meaning` (`True`, or a "
+                                      "fact of Init or Mathlib alone)"]
+    assert judged(k("Eq", refl=True)) == ["has a conjunct that is a reflexivity (Eq of two equal sides)"]
+    assert judged(k("P.Ok", assumed=True)) == ["has a conjunct (P.Ok …) that is one of its own hypotheses"]
+    assert judged(k(None)) == ["has a conjunct that applies a bound variable, not a constant"]
+    assert judged(k("P.Ok"), absurd=True) == ["takes `False` as a hypothesis, so it proves anything"]
+    assert judged(k("P.InScope"), k("P.KS")) == ["has a conjunct that states P.KS itself"]
+    assert A.vacuous_meets({"head": "P.Ok", "negated": False}, "P.KS").startswith("has no conclusion")
 
 
 def test_an_assumption_is_listed_by_name_with_its_record():
