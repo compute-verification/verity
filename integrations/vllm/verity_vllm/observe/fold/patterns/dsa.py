@@ -8,6 +8,8 @@ Definitions used by the export frontend.
 
 from __future__ import annotations
 
+__models__ = ("zai-org/GLM-5.3",)
+
 import math
 from dataclasses import dataclass
 from typing import Any

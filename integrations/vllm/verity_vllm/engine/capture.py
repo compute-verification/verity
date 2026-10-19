@@ -15,7 +15,7 @@ gathered block table) and the sampled ids are copied D2H *asynchronously* into p
 forward / after `sample`, behind a CUDA event, and the step is written out at the start of the next step (or at
 close), when the runner itself has long synchronised on its own output copy.  The observer therefore adds no
 synchronisation of its own, except `torch.cuda.synchronize()` at the end of a step for which snapshots were
-requested.
+requested, and inside one each time its copies fill the pinned arena (the arena's are written out, and it is reused).
 
 Roots: every `named_parameters()` / `named_buffers()` entry (`Root(role=weight|buffer)`, incl. the rotary
 `cos_sin_cache`); the runner's KV caches and input buffers are registered as `StorageAlloc(origin="external")`
@@ -474,9 +474,6 @@ class Capture:
             self.errors.append({"where": "after_sample", "step": st.step, "error": repr(e)[:400]})
         st.wall_s = time.perf_counter() - st.t_wall0
         if st.step in self.cfg.snapshot_steps and self.cfg.mode == "record":
-            t0 = time.perf_counter()
-            torch.cuda.synchronize()
-            self.timing["sync_s"] += time.perf_counter() - t0
             self._flush_snapshots(st)
         # the step is complete; it is written out at the next step start (or at close)
         self._cur = None
@@ -675,8 +672,7 @@ class Capture:
         if view.alloc in self.root_allocs:
             return
         full = self.cfg.snapshot_max_bytes
-        if cap is None:
-            cap = full
+        cap = full if cap is None else cap
         off, nbytes = spanned_bytes(t)
         why = DEVICE_BACKED if device_backed(t) else None
         if why is None and nbytes > cap:
@@ -702,6 +698,8 @@ class Capture:
                                      "skipped": why})
             return
         src = storage_bytes_view(t, off, nbytes)
+        if self._snap_pending and not self._arena.fits(nbytes):
+            self._flush_snapshots(self._cur)
         host = self._arena.take(nbytes)
         host.copy_(src, non_blocking=True)
         entry = {"event": eid, "path": path, "view": view.to_json(), "dtype": view.dtype, "shape": list(view.shape),
@@ -739,7 +737,10 @@ class Capture:
         return self._kv_blocks_in_step
 
     def _flush_snapshots(self, st: _Step) -> None:
+        """Wait for the step's copies and write them out: at a snapshot step's end, and whenever they fill the pinned arena mid-step."""
         t0 = time.perf_counter()
+        torch.cuda.synchronize()
+        self.timing["sync_s"] += (t1 := time.perf_counter()) - t0
         d = Path(self.cfg.snapshot_dir) / "values" / str(st.step)
         d.mkdir(parents=True, exist_ok=True)
         for item in self._snap_pending:
@@ -762,7 +763,7 @@ class Capture:
             self._snap_index.append(entry)
         self._snap_pending = []
         self._arena.reset()
-        self.timing["snapshot_s"] += time.perf_counter() - t0
+        self.timing["snapshot_s"] += time.perf_counter() - t1
 
     def _write_snapshot_index(self) -> None:
         p = Path(self.cfg.snapshot_dir) / "snapshots.json"

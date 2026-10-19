@@ -1,17 +1,21 @@
-"""GLM-5.3's served-default BF16 GEMMs on cc 9.0.
+"""GLM-5.3's and DeepSeek-V4's served-default BF16 GEMMs on cc 9.0.
 
 The unbiased linears use cuBLAS's captured per-shape, per-M route.  The MoE gate leaf is emitted only when vLLM dispatches
 its cuteDSL ``ll_bf16_gemm`` tier; its larger-token fallback is ``aten.mm.dtype`` and uses cuBLAS's captured f32-output
-route.  An absent route is unsupported rather than being interpreted as a non-split launch.
+route, as does a direct ``torch.mm(x, W.T, out_dtype=float32)`` (DeepSeek-V4's compressor GEMMs).  An absent route is
+unsupported rather than being interpreted as a non-split launch.  Every route and tier is read at the launch's token count
+(`launch_tokens_of`), the request's own rows only for a batch of one.
 """
 from __future__ import annotations
+
+__models__ = ("zai-org/GLM-5.3",)
 
 import torch
 
 from verity.ml.circuits.refs import Coll
 from verity_vllm.program.frontend.rules.base import OpRule, RuleInfo
 from verity_vllm.program.frontend.rules.common import from_rows, rows_of, shape
-from verity_vllm.program.frontend.rules.vllm_bindings.observations import active_target_profile
+from verity_vllm.program.frontend.rules.vllm_bindings.observations import active_target_profile, launch_tokens_of
 from verity_vllm.program.frontend.rules.vllm_bindings.operands import _strides, _untransposed
 from verity_vllm.program.frontend.rules.vllm_iface import iface
 from verity_vllm.program.registry import bf16_gemm_check
@@ -59,7 +63,7 @@ class CublasLinearRule(OpRule):
         xs, ws = shape(ctx, x), shape(ctx, w)
         if xs is None or ws is None or not xs or len(ws) != 2 or xs[-1] != ws[1]:
             return f"x {xs} vs W {ws}"
-        M, (N, K) = len(rows_of(ctx.coll(x))[0]), ws
+        M, (N, K) = launch_tokens_of(node, len(rows_of(ctx.coll(x))[0])), ws
         route = bf16_gemm_check.default_cublas_route("linear", M, K, N)
         if route is None:
             return f"no captured vLLM-default cuBLAS linear route for M={M}, K={K}, N={N}"
@@ -74,7 +78,7 @@ class CublasLinearRule(OpRule):
         x, w = node.args[:2]
         N, K = shape(ctx, w)
         rows, lead = rows_of(ctx.coll(x))
-        M = len(rows)
+        M = launch_tokens_of(node, len(rows))
         kernel, statics = bf16_gemm_check.default_cublas_route("linear", M, K, N)
         DOT = targets.tensor_core_dot(active_target_profile())
         role = "cublas_splitk_gemm" if kernel == "splitk" else "gemm_dot"
@@ -89,7 +93,7 @@ class CublasLinearRule(OpRule):
             self,
             node,
             {"M": M, "K": K, "N": N, "kernel": kernel, **statics, "DOT": DOT.name},
-            emitted=f"{fn.id} x{M}",
+            emitted=f"{fn.id} x{len(rows)}",
         )
 
 
@@ -121,7 +125,7 @@ class LlBf16GemmRule(OpRule):
         xs, ws = shape(ctx, x), shape(ctx, w)
         if xs is None or ws is None or len(xs) != 2 or len(ws) != 2 or xs[1] != ws[1]:
             return f"x {xs} vs W {ws}"
-        kernel, _ = bf16_gemm_check.dispatch_sm90(xs[0], xs[1], ws[0])
+        kernel, _ = bf16_gemm_check.dispatch_sm90(launch_tokens_of(node, xs[0]), xs[1], ws[0])
         if kernel not in ("dotprod", "splitk"):
             return f"the leaf unexpectedly names the {kernel} route"
         role = "ll_bf16_dotprod" if kernel == "dotprod" else "ll_bf16_splitk"
@@ -133,8 +137,8 @@ class LlBf16GemmRule(OpRule):
         from verity_vllm.program.frontend import targets
 
         x, w = node.args
-        M, K = shape(ctx, x)
-        N = shape(ctx, w)[0]
+        rows_n, K = shape(ctx, x)
+        M, N = launch_tokens_of(node, rows_n), shape(ctx, w)[0]
         kernel, statics = bf16_gemm_check.dispatch_sm90(M, K, N)
         if kernel == "dotprod":
             fn = ctx.kind(
@@ -159,8 +163,15 @@ class LlBf16GemmRule(OpRule):
             self,
             node,
             {"M": M, "K": K, "N": N, "kernel": kernel, **statics},
-            emitted=f"{fn.id} x{M}",
+            emitted=f"{fn.id} x{rows_n}",
         )
+
+
+def _f32out_phase(K: int, N: int) -> str:
+    """The captured route family of a bf16 -> f32 ``torch.mm(x, W.T, out_dtype=float32)`` at (K, N): ``"f32out"``, a direct call,
+    when the shape has captured routes of its own, else ``"router"``, `GateLinear`'s cuBLAS tier, which vLLM dispatches only past
+    its cuteDSL tiers.  The two families' captured shapes are disjoint, so a shape binds only in the family it was captured in."""
+    return "f32out" if f"f32out {K} {N}" in bf16_gemm_check.CUBLAS_ROUTES["routes"] else "router"
 
 
 class CublasRouterRule(OpRule):
@@ -169,10 +180,11 @@ class CublasRouterRule(OpRule):
         "CublasRouter[vllm-default]",
         1,
         "op-binding",
-        applies_to="aten.mm.dtype(x, W.T, out_dtype=float32), GateLinear's cc 9.0 fallback above 16 tokens",
+        applies_to="aten.mm.dtype(x, W.T, out_dtype=float32): GateLinear's cc 9.0 fallback above 16 tokens, or a direct call",
         preconditions=(
             "x is row-major bf16 [M,K], W.T is the transposed view of row-major bf16 W[N,K], and output is row-major f32 [M,N]",
-            "vLLM dispatches the cuBLAS tier and the shape and M have a captured vLLM-default route",
+            "the shape and M have a captured vLLM-default route (`_f32out_phase`); in the router family, vLLM dispatches the "
+            "cuBLAS tier",
         ),
         evidence_domain="GLM-5.3 BF16 GEMM defaults capture; GO pending its capture-side probe fix",
     )
@@ -193,17 +205,18 @@ class CublasRouterRule(OpRule):
         xs, wts, ys = shape(ctx, x), shape(ctx, wt), shape(ctx, node)
         if xs is None or wts is None or len(xs) != 2 or len(wts) != 2 or xs[1] != wts[0]:
             return f"x {xs} vs W.T {wts}"
-        M, K, N = xs[0], xs[1], wts[1]
-        if ys != (M, N):
-            return f"output {ys}, not {(M, N)}"
+        rows_n, K, N = xs[0], xs[1], wts[1]
+        if ys != (rows_n, N):
+            return f"output {ys}, not {(rows_n, N)}"
         if _strides(x) != (K, 1) or _strides(wt) != (1, K) or _strides(node) != (N, 1):
             return f"noncanonical strides x={_strides(x)}, W.T={_strides(wt)}, output={_strides(node)}"
+        phase, M = _f32out_phase(K, N), launch_tokens_of(node, rows_n)
         kernel, _ = bf16_gemm_check.dispatch_sm90(M, K, N)
-        if kernel != "cublas":
+        if phase == "router" and kernel != "cublas":
             return f"vLLM dispatches the {kernel} tier at M={M}, K={K}, N={N}, not aten.mm.dtype"
-        route = bf16_gemm_check.default_cublas_route("router", M, K, N)
+        route = bf16_gemm_check.default_cublas_route(phase, M, K, N)
         if route is None:
-            return f"no captured vLLM-default cuBLAS router route for M={M}, K={K}, N={N}"
+            return f"no captured vLLM-default cuBLAS {phase} route for M={M}, K={K}, N={N}"
         role = "cublas_splitk_gemm_f32out" if route[0] == "splitk" else "cublas_gemm_f32out"
         if not ctx.vocab.has(role):
             return f"the vocabulary has no {role}"
@@ -213,9 +226,10 @@ class CublasRouterRule(OpRule):
         from verity_vllm.program.frontend import targets
 
         x, wt = node.args[:2]
-        M, K = shape(ctx, x)
-        N = shape(ctx, wt)[1]
-        kernel, statics = bf16_gemm_check.default_cublas_route("router", M, K, N)
+        rows_n, K = shape(ctx, x)
+        M, N = launch_tokens_of(node, rows_n), shape(ctx, wt)[1]
+        phase = _f32out_phase(K, N)
+        kernel, statics = bf16_gemm_check.default_cublas_route(phase, M, K, N)
         DOT = targets.tensor_core_dot(active_target_profile())
         role = "cublas_splitk_gemm_f32out" if kernel == "splitk" else "cublas_gemm_f32out"
         fn = ctx.kind(role, node, K=K, N=N, DOT=DOT, **statics)
@@ -226,12 +240,12 @@ class CublasRouterRule(OpRule):
             for i, row in enumerate(rows)
         ]
         ctx.define(node, from_rows(outs, lead))
-        ctx.bind_weight_role(wt, self, "moe.gate.weight", K=K, N=N)
+        ctx.bind_weight_role(wt, self, "moe.gate.weight" if phase == "router" else "linear.weight", K=K, N=N)
         ctx.record(
             self,
             node,
             {"M": M, "K": K, "N": N, "kernel": kernel, **statics, "DOT": DOT.name},
-            emitted=f"{fn.id} x{M}",
+            emitted=f"{fn.id} x{rows_n}",
         )
 
 

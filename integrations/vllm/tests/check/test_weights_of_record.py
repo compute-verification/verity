@@ -557,6 +557,47 @@ def test_w2_record_is_bound_to_the_program_and_checkpoint_of_record(checkpoint):
     assert rev["result"] is False and "revision" in rev["why"]
 
 
+def test_a_served_build_is_pinned_by_its_weight_reads(checkpoint):
+    """The record of a served Build (acquire.served) covers the weights its Program reads, by their served names: the embedding table
+    read through the ids, the fused GEMM weights, a norm and the tied lm_head; it is bound to the Build's digest and a flipped served
+    element fails by name.  A weight read at two shapes is refused."""
+    d, man, t = checkpoint
+    L = "model.layers.0."
+    qkv = {"weight": L + "self_attn.qkv_proj.weight", "shape": [(HQ + 2 * HKV) * D, H]}
+    program = {"calls": [{"op": "Embedding_v1", "reads": [{"value": "c00.input/ids", "width": 1},
+                                                           {"weight": "model.embed_tokens.weight", "shape": [V, H],
+                                                            "row_of": {"value": "c00.input/ids", "width": 1}}]},
+                         {"op": "mm", "reads": [{"value": "c00.rms_norm/buf1", "width": H}, qkv]},
+                         {"op": "mm", "reads": [{"value": "c02.silu_mul/buf3", "width": I},
+                                                {"weight": L + "mlp.down_proj.weight", "shape": [H, I]}]},
+                         {"op": "mm", "reads": [{"value": "c02.rms_norm/buf1", "width": H},
+                                                {"weight": L + "mlp.gate_up_proj.weight", "shape": [2 * I, H]}]},
+                         {"op": "InductorRMSNorm_v1", "reads": [{"value": "c00.embedding/buf0", "width": H},
+                                                                {"weight": L + "input_layernorm.weight", "shape": [H]}]},
+                         {"op": "mm", "reads": [{"value": "c00.rms_norm/buf1", "width": H}, qkv]}],
+               "logits": {"name": "logits_processor", "w": {"weight": "lm_head.weight", "shape": [V, H]}}}
+    build = {"program": program, "program_digest": "b" * 128}
+    assert [f for f, _s, _b in WR.served_weight_fields(program)] == ["model.embed_tokens.weight", L + "self_attn.qkv_proj.weight",
+                                                                      L + "mlp.down_proj.weight", L + "mlp.gate_up_proj.weight",
+                                                                      L + "input_layernorm.weight", "lm_head.weight"]
+    rec = WR.served_record(build, str(d), checkpoints_manifest=str(man))
+    assert rec["complete"] is True and rec["of_record"] is True and rec["wrapper_prefix"] == "" and rec["n_pinned"] == 6
+    assert rec["program_digest"] == "b" * 128
+    served = _served(t, _program()[1])
+    ok = WR.check(rec, live_digests(served), program_digests_of_record={"b" * 128}, checkpoint_of_record={"repo": "test/tiny", "revision": "abc"})
+    assert ok["result"] is True and ok["compared"] == 6, ok
+    bad = dict(served)
+    bad[L + "mlp.gate_up_proj.weight"] = served[L + "mlp.gate_up_proj.weight"].copy()
+    bad[L + "mlp.gate_up_proj.weight"][1, 2] ^= 0x0001
+    res = WR.check(rec, live_digests(bad), program_digests_of_record={"b" * 128})
+    assert res["result"] is False and [m["served_name"] for m in res["mismatched"]] == [L + "mlp.gate_up_proj.weight"]
+    assert WR.check(rec, live_digests(served), program_digests_of_record={"c" * 128})["result"] is False
+    program["calls"][2]["reads"][1]["shape"] = [I, H]
+    program["calls"].append({"op": "mm", "reads": [{"weight": L + "mlp.down_proj.weight", "shape": [H, I]}]})
+    with pytest.raises(ValueError, match="down_proj.weight is read at"):
+        WR.served_weight_fields(program)
+
+
 def test_gemma_normalizer_is_composed_from_config_and_compared_like_a_weight(checkpoint):
     """dense (MAN-09 preflight on the real Gemma-2-2B Program, 316 fields): `model.model.normalizer` -- vLLM's non-persistent 0-d bf16
     buffer torch.tensor(hidden_size ** 0.5) -- has no checkpoint tensor and was the ONE unresolved field (complete False -> every Gemma

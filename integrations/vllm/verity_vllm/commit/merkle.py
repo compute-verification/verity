@@ -29,13 +29,12 @@ import dataclasses
 import os
 from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass
-from pathlib import Path
 from typing import Any
 
 from verity.ml.commitments.leaves import fold_path
 from verity.errors import InvalidArtifact
 from verity_vllm.commit import hashing, identity, scheme
-from verity_vllm.observe.capture_v1 import COMMITMENTS_FILE, WEIGHTS_TREE_ID, CaptureError, CaptureReader, Value, _write_json, boundary_tree_id, ru_tree_id
+from verity_vllm.observe.capture_v1 import COMMITMENTS_FILE, WEIGHTS_TREE_ID, CaptureReader, Value, _write_json, boundary_tree_id, ru_tree_id
 
 COMMITMENTS_SCHEMA = "verity-vllm/commitments/v1"
 
@@ -235,10 +234,6 @@ class RangeOpening:
             )
         except (KeyError, TypeError, ValueError, IndexError, identity.IdentityError) as error:
             raise CommitError(f"malformed range opening: {error}") from error
-
-
-def opening_from_json(doc: Mapping[str, Any]) -> Opening | RangeOpening:
-    return RangeOpening.from_json(doc) if doc.get("kind") == "range" else Opening.from_json(doc)
 
 
 def leaves_tile_value(
@@ -612,16 +607,6 @@ def build_commitments(
     return doc
 
 
-def load_commitments(run_dir: str | os.PathLike[str] | CaptureReader) -> dict[str, Any]:
-    reader = run_dir if isinstance(run_dir, CaptureReader) else CaptureReader(run_dir)
-    doc = reader.commitments
-    if doc is None:
-        raise CommitError(f"{reader.run_dir / COMMITMENTS_FILE} does not exist")
-    if doc.get("schema") != COMMITMENTS_SCHEMA:
-        raise CommitError(f"unexpected commitments schema {doc.get('schema')!r}")
-    return doc
-
-
 def tree_record(commitments: Mapping[str, Any], tree_id: str) -> dict[str, Any]:
     try:
         return commitments["trees"][tree_id]
@@ -643,69 +628,3 @@ def verify_opening_in(commitments: Mapping[str, Any], opening: Opening | RangeOp
     if isinstance(opening, RangeOpening):
         return verify_range_opening(root, count, opening)
     return verify_opening(root, count, opening)
-
-
-def verify_commitments(reader: CaptureReader, commitments: Mapping[str, Any]) -> list[str]:
-    """Rebuild every tree from the capture's bytes and compare with ``commitments.json``."""
-    problems: list[str] = []
-    if commitments.get("schema") != COMMITMENTS_SCHEMA:
-        problems.append("commitments schema")
-    if commitments.get("profile_id") != reader.profile_id:
-        problems.append("commitments.profile_id != manifest profile id")
-    cache = TreeCache(reader, recompute_leaves=True)
-    recorded = set(commitments.get("trees", {}))
-    actual = set(cache.tree_ids())
-    for tree_id in sorted(actual - recorded):
-        problems.append(f"{tree_id}: present in capture, absent from commitments")
-    for tree_id in sorted(recorded - actual):
-        problems.append(f"{tree_id}: in commitments, absent from capture")
-    for tree_id in sorted(recorded & actual):
-        record = commitments["trees"][tree_id]
-        try:
-            tree = cache.tree(tree_id)
-        except (CommitError, CaptureError) as error:
-            problems.append(f"{tree_id}: {error}")
-            continue
-        if tree.root.hex() != record.get("root"):
-            problems.append(f"{tree_id}: root mismatch")
-        if tree.leaf_count != record.get("leaf_count"):
-            problems.append(f"{tree_id}: leaf_count mismatch")
-        if tree.ids_digest.hex() != record.get("ids_digest"):
-            problems.append(f"{tree_id}: ids_digest mismatch")
-    return problems
-
-
-def verify_source_linkage(reader: CaptureReader, commitments: Mapping[str, Any]) -> list[str]:
-    """N06: the weights tree must be bound to the manifest's ``weights_sha256`` and every stored
-    weight's bytes to its recorded sha256 and leaf."""
-    problems: list[str] = []
-    if not reader.has_weights():
-        return ["weights index missing"]
-    manifest_shas = dict(reader.manifest.get("model", {}).get("weights_sha256", {}))
-    index = reader.weights.index
-    if dict(index.source_sha256) != manifest_shas:
-        problems.append("weights/index.json source_sha256 != manifest.model.weights_sha256")
-    try:
-        record = tree_record(commitments, WEIGHTS_TREE_ID)
-    except CommitError:
-        return problems + ["weights tree missing from commitments"]
-    if dict(record.get("weights_sha256", {})) != manifest_shas:
-        problems.append("commitments weights.weights_sha256 != manifest.model.weights_sha256")
-    if index.store_values:
-        values_path = reader.run_dir / "weights" / "values.bin"
-        if values_path.exists():
-            stored_sha = hashing.sha256_hex(values_path.read_bytes())
-            declared = manifest_shas.get("weights/values.bin")
-            if declared is not None and declared != stored_sha:
-                problems.append("weights/values.bin sha256 != manifest.model.weights_sha256")
-    problems.extend(f"weights: {p}" for p in reader.weights.validate(check_bytes=True))
-    tree = weights_tree(reader)
-    if tree.root.hex() != record.get("root"):
-        problems.append("weights root != tree over weights/index.json leaves")
-    return problems
-
-
-def write_openings(path: str | os.PathLike[str], openings: Iterable[Opening]) -> Path:
-    path = Path(path)
-    _write_json(path, [o.to_json() for o in openings])
-    return path

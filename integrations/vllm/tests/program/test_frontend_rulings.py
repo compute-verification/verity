@@ -330,6 +330,23 @@ def test_r5_permute_fallback_is_explicit_under_a_limit():
         tf._EXPLICIT_LIMIT = old
 
 
+def test_a_permute_of_the_leading_axes_past_the_explicit_limit_is_a_concat_of_rows(monkeypatch):
+    """DeepSeek-V4's `fused_inv_rope_fp8_quant` output [G, T, d] read as [T, G, d]: past the Explicit limit, a permute that keeps the
+    trailing axes in place reorders whole rows (one part each) where the leaf-by-leaf fallback refuses; under the Build's default
+    meta device."""
+    from verity_vllm.program.frontend import torch_frontend as tf
+    monkeypatch.setattr(tf, "_EXPLICIT_LIMIT", 8)
+
+    @function(name="Perm5d")
+    def Perm(x: Arr[2, 3, 4, BF16]) -> Arr[3, 2, 4, BF16]:
+        return torch.cat([x[1:2], x[0:1]]).permute(1, 0, 2)
+
+    with torch.device("meta"):
+        ret = export(Perm, (meta(2, 3, 4),), dead_gates="ignore").fn.body.ret
+    assert isinstance(ret, Concat) and len(ret.parts) == 6
+    assert [ret[j][2] for j in range(24)] == [(1 - a) * 12 + b * 4 + c for b in range(3) for a in range(2) for c in range(4)]
+
+
 def test_r5_three_level_view_is_a_concat_of_strided_pieces():
     @function(name="Perm5c")
     def Perm(x: Arr[2, 3, 4, BF16]) -> Arr[4, 3, 2, BF16]:

@@ -60,6 +60,7 @@ def _patched_save(self, args_to_save, kernel_name, before_launch=True, arg_signa
 
 class CompiledKernelSource:
     short_name = "compiled_kernels"
+    step_rows_at_step_end = True                    # `on_step_end` reads the committer's `step_rows[step]`
 
     def __init__(self, fault: str | None = None) -> None:
         self.fault = fault

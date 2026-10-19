@@ -11,6 +11,8 @@ which of them the H200 runs.  A is widened bf16 and therefore already exact in T
 it is an f32 subnormal, so only such operands tell the three contractions apart."""
 from __future__ import annotations
 
+__models__ = ("deepseek-ai/DeepSeek-V4-Pro",)
+
 import numpy as np
 
 from verity.ml.circuits.ops.scalar import F32Fmaxf, F32_NAN_PTX
