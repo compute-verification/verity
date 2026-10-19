@@ -66,6 +66,8 @@ exactly; ``alpha = 1`` makes ``-f * alpha`` the ``-f`` of `silu_and_mul`.
 """
 from __future__ import annotations
 
+__models__ = ("deepseek-ai/DeepSeek-V4-Pro",)
+
 from verity.ml.circuits.defs import bind, composite, primitive
 from verity.ml.circuits.refs import tuple_of
 from verity.ml.circuits.types import Array, Tuple

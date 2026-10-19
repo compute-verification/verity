@@ -17,6 +17,12 @@ GPUS = gpus()
 ENV_NAME = re.compile(r"[A-Z_][A-Z0-9_]*")
 # What the dispatcher, the queue or the launcher sets: a spec naming one would be overridden or would override them.
 RESERVED_ENV = re.compile(r"VERITY_BENCH_\w*|RESEARCH_\w*|GPU_LEASE_\w*|CUDA_VISIBLE_DEVICES|CUDA_DEVICE_ORDER|PYTHONPATH|PATH")
+#: A sweep point's sampling, as vLLM `SamplingParams` fields. Every request also carries its own seed (its index in the
+#: point), so stochastic tokens are a function of the engine's numerics and an arm is gated against its control on them.
+SAMPLING: Mapping[str, Mapping[str, float]] = {
+    "greedy": {"temperature": 0.0},
+    "stochastic": {"temperature": 0.8, "top_p": 0.95},
+}
 
 
 @dataclass(frozen=True)
@@ -65,6 +71,7 @@ class Sweep:
     prompt_tokens: tuple[int, ...]
     traffic: tuple[str, ...]
     output_tokens: Mapping[str, int]
+    sampling: tuple[str, ...] = ("greedy",)
 
 
 @dataclass(frozen=True)
@@ -125,11 +132,14 @@ def load_sweep(name: str) -> Sweep:
     doc = load(path, Sweep)
     if doc.schema != "verity-bench/vllm-sweep/v0" or doc.id != name:
         raise ConfigError(f"{path}: expected sweep {name!r}")
-    if not doc.batches or not doc.prompt_tokens or not doc.traffic:
+    if not doc.batches or not doc.prompt_tokens or not doc.traffic or not doc.sampling:
         raise ConfigError(f"{path}: sweep axes must be nonempty")
     missing = sorted(set(doc.traffic) - set(doc.output_tokens))
     if missing:
         raise ConfigError(f"{path}: output_tokens has no value for {missing}")
+    unknown = sorted(set(doc.sampling) - set(SAMPLING))
+    if unknown:
+        raise ConfigError(f"{path}: unknown sampling {unknown}; known: {sorted(SAMPLING)}")
     return doc
 
 
@@ -200,20 +210,22 @@ class RequestShape:
 
 @dataclass(frozen=True)
 class SweepPoint:
-    """One batch, prompt envelope, and traffic mix."""
+    """One batch, prompt envelope, traffic mix, and sampling."""
 
     batch: int
     prompt_tokens: int
     traffic: str
     output_tokens: int
+    sampling: str = "greedy"
 
     @property
     def id(self) -> str:
-        return f"b{self.batch}-p{self.prompt_tokens}-{self.traffic}"
+        suffix = "" if self.sampling == "greedy" else f"-{self.sampling}"
+        return f"b{self.batch}-p{self.prompt_tokens}-{self.traffic}{suffix}"
 
     @property
     def headline(self) -> bool:
-        return self.batch == 32 and self.traffic == "mixed"
+        return self.batch == 32 and self.traffic == "mixed" and self.sampling == "greedy"
 
     def requests(self) -> tuple[RequestShape, ...]:
         if self.traffic == "decode-heavy":
@@ -239,6 +251,7 @@ class SweepPoint:
             "prompt_tokens": self.prompt_tokens,
             "traffic": self.traffic,
             "output_tokens": self.output_tokens,
+            "sampling": self.sampling,
             "staggered_arrivals": any(r.arrive_step for r in self.requests()),
         }
 
@@ -248,8 +261,9 @@ def expand_sweep(name: str) -> tuple[SweepPoint, ...]:
 
     sweep = load_sweep(name)
     return tuple(
-        SweepPoint(batch, prompt, traffic, sweep.output_tokens[traffic])
+        SweepPoint(batch, prompt, traffic, sweep.output_tokens[traffic], sampling)
         for batch in sweep.batches
         for prompt in sweep.prompt_tokens
         for traffic in sweep.traffic
+        for sampling in sweep.sampling
     )

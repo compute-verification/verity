@@ -1,15 +1,9 @@
 """Execution profile (CONTRACT.md §2 / §2.1) shared by production and replay.
 
 Everything that decides *what vLLM runs* lives here so that production and replay
-construct the engine from one place. The declared flags are:
-
-* ``VLLM_BATCH_INVARIANT=1`` (contract §2),
-* ``VLLM_USE_V2_MODEL_RUNNER=1`` (trace replay requires Model Runner V2, which is not
-  the default for Llama/Qwen2 architectures in the pinned wheel: see
-  ``vllm/config/vllm.py::DEFAULT_V2_MODEL_RUNNER_ARCHITECTURES``), and
-* ``VLLM_ENABLE_V1_MULTIPROCESSING=0`` (engine core in-process so the recorder can read
-  the scheduler's step trace and the replay adapter can intercept the model runner; it
-  changes process topology, not the executed kernels).
+construct the engine from one place.  The declared flags are ``engine.env.ENGINE``, each with
+its reason in ``engine.env.REASONS``; batch invariance is the row's execution label's
+(``engine.served``), and a served Commit reads every switch back (``engine.served.require``).
 
 Import this module *before* ``vllm`` so the environment is set first.
 """

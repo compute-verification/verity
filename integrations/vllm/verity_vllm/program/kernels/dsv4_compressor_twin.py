@@ -11,6 +11,8 @@ its composites.
 """
 from __future__ import annotations
 
+__models__ = ("deepseek-ai/DeepSeek-V4-Pro",)
+
 import numpy as np
 
 from verity.ml.circuits.ops import mufu as MU

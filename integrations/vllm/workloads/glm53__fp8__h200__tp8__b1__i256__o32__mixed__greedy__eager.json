@@ -22,6 +22,9 @@
    "num_sms": 132,
    "batch_invariant": false,
    "moe_backend": "triton"
+  },
+  "reasons": {
+   "moe_backend": "vLLM's own selection for GLM-5.3's block-FP8 experts on the H200 (every rank's log shows fused_moe_kernel for every routed expert); declared so tp-capture and tp-commit apply it and attest TritonExperts, the experts class the block-FP8 MoE rule (vllm_moe_fp8) binds"
   }
  },
  "seed": 0,

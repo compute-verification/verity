@@ -1,12 +1,14 @@
 """φ — the base context known before execution, from which the predictor builds a Program without tracing.
 
     Phi.model     the pinned checkpoint: repo, revision and its `config.json` (the HF config the model class is built from)
-    Phi.target    the declared `TargetProfile` (capability, SM count, batch invariance, numerics profile, FA version knob)
+    Phi.target    the declared `TargetProfile` (capability, SM count, batch invariance, numerics profile, FA version knob), and the
+                  `device_name` its GPU reports where the row's class names one (`engine.profiles.devices`: vLLM's tuned configs)
     Phi.tp        {"world", "rank"}
     Phi.sampling  the row's declared sampling policy (`pipeline.build.sampling_policy` shape: greedy | stochastic)
-    Phi.engine    scheduler facts (block_size, max_num_seqs, max_num_batched_tokens, chunked prefill, prefix caching)
+    Phi.engine    the engine args (block_size, max_num_seqs, max_num_batched_tokens, chunked prefill, prefix caching,
+                  disable_custom_all_reduce) and the `env` its engines run under (the all-reduce switches)
     Phi.workload  the workload manifest's requests (request_id, prompt length, max_tokens, arrive_step, seed, n)
-    Phi.execution the row's execution label (`bi-eager`)
+    Phi.execution the row's execution label (`bi-eager`, `eager`): the target's batch invariance and execution mode
 
 `score.phi_of(row)` reads φ from a Build row's DECLARED inputs only: the row id, its workload manifest and the pinned
 checkpoint's `config.json`.  It never reads a Build output (descriptor, result, derive report): what the Build derived is the
@@ -60,10 +62,17 @@ class Phi:
         return list(self.workload.get("requests") or [])
 
     def target_profile(self):
+        """The declared `TargetProfile`; where the target block does not declare `batch_invariant`, the one the execution label names
+        (`TargetProfile.execution_label`: a `bi-*` row runs the batch-invariant kernels, an `eager` row vLLM's defaults)."""
+        from dataclasses import fields
         from verity_vllm.program.frontend.target_profile import TargetProfile
+        names = {f.name for f in fields(TargetProfile)}
         tp = TargetProfile.default().with_overrides(**{k: (tuple(v) if k == "compute_capability" else v) for k, v in self.target.items()
-                                                       if k in TargetProfile.default().to_json()})
-        return tp if tp.numerics_profile == self.profile else tp.with_overrides(numerics_profile=self.profile)
+                                                       if k in names})
+        tp = tp if tp.numerics_profile == self.profile else tp.with_overrides(numerics_profile=self.profile)
+        if "batch_invariant" in self.target:
+            return tp
+        return next((t for t in (tp.with_overrides(batch_invariant=b) for b in (True, False)) if t.execution_label == self.execution), tp)
 
     def request_shapes(self) -> list[tuple[int, int]]:
         """The distinct (LP, T) request shapes of the workload in first-occurrence order (T = max_tokens - 1 decode steps)."""

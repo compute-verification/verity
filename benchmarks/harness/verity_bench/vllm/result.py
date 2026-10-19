@@ -30,7 +30,7 @@ def validate(doc: Mapping[str, Any]) -> None:
     for arm in doc["identity"]["arms"]:
         need = [("arm", arm["id"], None)]
         if arm.get("control"):
-            need += [("kv-pool", arm["id"], None), *(("greedy-tokens", arm["id"], p) for p in sweep)]
+            need += [("kv-pool", arm["id"], None), *(("tokens", arm["id"], p) for p in sweep)]
             need += [("timed-tokens", arm["id"], p) for p in sweep] if doc["points"] else []
         if missing := [n for n in need if n not in have]:
             raise ValueError(f"benchmark result lacks gates (kind, arm, point) {missing}")

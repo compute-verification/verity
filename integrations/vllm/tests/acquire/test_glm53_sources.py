@@ -4,6 +4,8 @@ that source, and none is missing.  The vLLM modules are stand-ins installed in `
 are shape-and-dtype stand-ins on a "cuda" device, so nothing here needs vLLM or a GPU."""
 from __future__ import annotations
 
+__models__ = ("zai-org/GLM-5.3",)
+
 import json
 import sys
 import types

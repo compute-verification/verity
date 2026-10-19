@@ -118,3 +118,22 @@ def test_without_mem_gb_a_run_in_a_check_slot_keeps_to_the_slot(monkeypatch):
     assert cli.auto_jobs() == min(2, len(os.sched_getaffinity(0)))
     monkeypatch.delenv(cli.SLOT_MEM_ENV)
     assert cli.budget_gb(None) == 1500
+
+
+def test_a_circuit_check_in_an_xdist_worker_keeps_to_the_worker_s_share(monkeypatch):
+    """r20261018-024149-8607: suites.py sizes the suite's xdist workers at `worker_gb` each from a memory every worker shares, so a
+    circuit-check a test starts budgets that worker's share (conftest.py's `worker_slot_gb`), or the slot's when smaller, never
+    the slot or the cgroup the others share; outside xdist nothing is set.  A worker holding the 25 GiB catalog leaves its
+    targets the rest of its share, one job."""
+    from conftest import WORKER_GB, worker_slot_gb
+
+    worker = {"PYTEST_XDIST_WORKER": "gw3"}
+    assert worker_slot_gb(worker, 32) == 32 and worker_slot_gb({**worker, cli.SLOT_MEM_ENV: "480"}, 32) == 32
+    assert worker_slot_gb({**worker, cli.SLOT_MEM_ENV: "20"}, 32) == 20
+    assert worker_slot_gb({cli.SLOT_MEM_ENV: "480"}, 32) is None and worker_slot_gb({}, 32) is None
+    if os.environ.get("PYTEST_XDIST_WORKER"):
+        assert int(os.environ[cli.SLOT_MEM_ENV]) <= WORKER_GB
+    monkeypatch.setattr(cli, "_rss_gb", lambda: 25.0)
+    monkeypatch.setattr(cli, "memory_gb", lambda root=None: 900)
+    monkeypatch.setenv(cli.SLOT_MEM_ENV, str(worker_slot_gb(worker, 32)))
+    assert cli.budget_gb(None) == 7.0 and cli.auto_jobs() == 1
