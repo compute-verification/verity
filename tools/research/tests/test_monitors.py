@@ -737,8 +737,9 @@ def test_asks_whose_record_cant_be_read_are_one_finding_to_infra_not_an_alert_ea
     lost = [{"ts": f"17910500{i:02d}.000100", "by": "proofs", "to": ["daniel"], "record": "notion", "state": "unreadable (no key)"}
             for i in range(30)]
     linked = {"ts": "1791050100.000100", "by": "ci", "to": ["infra"], "record": "linear", "ref": "INF-1", "state": "in Backlog, no comment but the asker's"}
-    rep = {"inboxes": [], "dropped": [], "unanswered": [linked], "unchecked": lost}
-    ask, unchecked = M.asks(M.Ctx(now=T0, run=Run((has("traffic"), (0, json.dumps(rep), "")))))
+    oom = {"ts": "1791050200.000100", "by": "vy-monitors", "to": ["ci"], "record": "slack", "state": "no reply or reaction"}
+    rep = {"inboxes": [], "dropped": [], "unanswered": [linked, oom], "unchecked": lost}
+    ask, unchecked = M.asks(M.Ctx(now=T0, run=Run((has("traffic"), (0, json.dumps(rep), "")))))   # a machine's notice rings no one
     assert "its Linear issue INF-1: in Backlog" in ask.text and "no 👀" not in ask.text
     assert unchecked.key == "unchecked" and unchecked.owners == ("infra",) and "30 ask(s)" in unchecked.text and "no key" in unchecked.text
 
