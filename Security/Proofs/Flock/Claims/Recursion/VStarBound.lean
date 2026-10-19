@@ -25,10 +25,15 @@ At option (d)'s inner verifier (`Claims.Recursion.Bound.IVStar`) every round is 
 So the restated facts constrain every round:
 
 * `HeldB`: the layout spans exactly the inner verifier's rounds, and each round, round 0 and the last included, is
-  fixed by the statement, held whole by some part, or assembled from parts' pieces. The bound layout has no public
-  round.
+  fixed by the statement (with no pieces), held whole by some part, or assembled from parts' pieces; no part holds the
+  last round whole. The bound layout has no public round.
 * `PartChecksB`: `PartChecks`, where the messages it quantifies over also agree with the part's pieces of the
   assembled rounds, at their offsets. A part's check can read its own pieces of the last message.
+* `PartOpensB`: `PartOpens`, where what a part holds of a round before the last is the commit string itself, so it is
+  the string the part's statement shows.
+* `VstarShowsB`: `VstarShows`, the staging shows the coins and, at each round before the last, the run's commit string.
+  With `RunPairs` it ties `shows` and `cmt` to an accepted run's coins and messages, so `PartChecksB` speaks of the run's
+  coins and every holder of a round holds the run's commit string there.
 * `DecompB`: the inner verifier accepts the readers' messages (`LayoutB.msgs`, every round read off the witnesses)
   wherever every part's check holds on them, or two of the parts' recorded calls collide. Where several parts hold one
   commit string, the readers take the first holder's; a holder that opens it otherwise shows a collision among the
@@ -114,16 +119,22 @@ variable {Coin W Col T : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin]
 option (d)). At a compiled statement of the shape, the layout spans exactly the inner verifier's rounds. Each round,
 round 0 and the last included, is one of three kinds:
 
-* fixed by the statement;
+* fixed by the statement, with no pieces;
 * held whole by some part;
 * assembled from pieces of the parts.
 
-The bound layout has no public round. -/
+No part holds the last round whole: it is assembled (or fixed). The bound layout has no public round.
+
+A fixed round's pieces would be read by the parts' checks (`PartChecksB`) but not by the readers (`LayoutB.msg` takes the
+statement's message), and a holder of the last round has no commit string to agree on (`PartOpensB`). Either would let a
+part's check hold only off the readers' messages, which leaves `DecompB` empty. -/
 def HeldB (D : Deploy Coin) (I : Inner Coin W) (L : LayoutB) (shape : Form → Prop) : Prop :=
   ∀ (x : Msg) (st : Stmt), D.parse x = some st → shape st.form →
-    I.V.k (xI D x) = L.rounds x ∧ ∀ i < I.V.k (xI D x),
-      (L.fixedAt x i).isSome ∨ (∃ s < D.nS x, (L.msgAt x s i).isSome) ∨
-        (L.pieceAt x i ≠ [] ∧ ∀ p ∈ L.pieceAt x i, p.1 < D.nS x)
+    I.V.k (xI D x) = L.rounds x ∧ (∀ i < I.V.k (xI D x),
+      ((L.fixedAt x i).isSome ∨ (∃ s < D.nS x, (L.msgAt x s i).isSome) ∨
+        (L.pieceAt x i ≠ [] ∧ ∀ p ∈ L.pieceAt x i, p.1 < D.nS x)) ∧
+      ((L.fixedAt x i).isSome → L.pieceAt x i = [])) ∧
+    ∀ s, L.msgAt x s (I.V.k (xI D x) - 1) = none
 
 /-- **V\* part `s`'s circuit checks the inner check `chk s` at every round it reads** (restating `PartChecks` for option
 (d)). It is `PartChecks`, except that the messages it quantifies over agree with the part in two ways: with its
@@ -140,6 +151,34 @@ def PartChecksB (H : Msg → Msg) (D : Deploy Coin) (DO : Flock.Deploy Coin Col 
       (∀ i < L.rounds x, ∀ o m, (o, m) ∈ L.piecesOf x s w i → ((ms.getD i []).drop o).take m.length = m) →
       chk s x c ms) ∨
       (findColl (L.calls x s w)).isSome
+
+/-- **V\* part `s` holds the commit strings its statement shows** (restating `PartOpens` for option (d)). A part holds a
+round before the last whole only as the commit string `b ‖ c` its gadgets compute from a row and a salt it holds, so
+where `PartOpens` opens the string the statement shows, here the held message is that string. At a V* statement `xO`
+of a compiled statement `x` of the shape that shows coins for part `s`, wherever the part's outer relation holds and its
+recorded calls are true evaluations, each round before the last that the part holds whole is the commit string `xO`
+shows for it (`cmt x i xO`). Or two of its recorded calls collide. -/
+def PartOpensB (H : Msg → Msg) (D : Deploy Coin) (DO : Flock.Deploy Coin Col T) (L : LayoutB)
+    (shape : Form → Prop) (shows : ℕ → Msg → Msg → (ℕ → Coin) → Prop) (cmt : Msg → ℕ → Msg → Msg) (s : ℕ) : Prop :=
+  ∀ (x : Msg) (st : Stmt), D.parse x = some st → shape st.form → ∀ (xO : Msg) (w : Flock.Wit),
+    Flock.check DO.parse xO w = true → (∀ e ∈ L.calls x s w, H e.1 = e.2) →
+    (∀ (c : ℕ → Coin), shows s x xO c → ∀ i, i + 1 < L.rounds x → ∀ m, L.held x s w i = some m →
+      m = cmt x i xO) ∨
+      (findColl (L.calls x s w)).isSome
+
+/-- **The V\* statements show what they are staged at** (restating `VstarShows` for option (d)): a code fact about the
+staging `D.vstar` alone, with no run. At a compiled statement of the shape, each V* statement staged at `k_I + kS`
+pairs shows (`shows`) every coin sequence that the pairs' verifier messages show (`decC`). It also shows, as the commit
+string of each inner round before the last (`cmt`), the pairs' prover message at that round. The last round's message
+is never sent in the run (`ReadersRunPlayed`), so no commit string is asked of it. With `RunPairs` this ties `shows` and
+`cmt` to the run: at an accepted run each part's statement shows the run's coins and the run's commit strings. -/
+def VstarShowsB (D : Deploy Coin) (I : Inner Coin W) (L : LayoutB) (shape : Form → Prop) (decC : Msg → Msg → Coin)
+    (shows : ℕ → Msg → Msg → (ℕ → Coin) → Prop) (cmt : Msg → ℕ → Msg → Msg) : Prop :=
+  ∀ (x : Msg) (st : Stmt), D.parse x = some st → shape st.form → ∀ ps : List (Msg × Out),
+    ps.length = I.V.k (xI D x) + D.kS x → ∀ c : ℕ → Coin,
+      (∀ i < ps.length, ∃ m, (ps.getD i ([], .rej)).2 = .msg m ∧ decC x m = c i) →
+        ∀ s < D.nS x, shows s x ((D.vstar x ps).getD s []) c ∧
+          ∀ i, i + 1 < L.rounds x → cmt x i ((D.vstar x ps).getD s []) = (ps.map Prod.fst).getD i []
 
 /-- **The parts' inner checks are the inner verifier, at the readers' messages** (restating `Decomp` for option (d)).
 At a compiled statement of the shape, take any witnesses, one a part, whose recorded calls are true evaluations, such
