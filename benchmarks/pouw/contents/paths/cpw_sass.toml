@@ -1,0 +1,4 @@
+order = 345
+path = "`theory/cpw_sass.sh`"
+runs_on = "RTX PRO 6000"
+what = "The sm_120 unit (IMMA.16832 + fx1) with its CP-W checkpoint, one kernel a route (`cpw_sass.cu`: none, REDUX, 64-bit RED and ATOMS XOR, SHFL butterfly, STSM egress): SASS counted a set (`cpw_sass_count.py`), each route bit-exact against the host and timed at 1, 2, 4 warps a SMSP and full occupancy"
