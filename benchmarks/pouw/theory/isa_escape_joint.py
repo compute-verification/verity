@@ -412,6 +412,13 @@ def s14_claims() -> list[tuple[str, bool, object]]:
                 all(packing_gain(d, w, e, Q(0)) <= 1 for d in ("sm_90a", "sm_100a"))
                 and packing_gain("sm_120", w, e, Q(1, 2)) == Q(3, 2), packing_gain("sm_120", w, e, Q(1, 2))))
 
+    smem = {"sm_90a": (64, 256, 32), "sm_100a": (128, 256, 32)}   # wgmma, tcgen05.mma s8: M, N, K
+    per_slot = {d: Q((m + n) * k, m * n) / 32 for d, (m, n, k) in smem.items()}
+    out.append(("S14: the rows left out don't bind the credited route on H200 and B200: Sheet's shared-memory row (A5), "
+                "which wgmma and tcgen05.mma load with their s8 operands, (M + N)·K bytes an instruction read once, over "
+                "32 a slot, is below the step; every pipe row is charged by lane instructions, which a decode only adds",
+                all(per_slot[d] < step(d, "s8") for d in per_slot), {d: str(v) for d, v in per_slot.items()}))
+
     st, folds = step("sm_100a", "s8"), (Q(0), Q(1, 9), Q(1, 2), Q(1), Q(FOLD))
     out.append(("S14 closed on B200 by A6 alone: a packed word's decode, at least 1/2 a lane instruction, is 1/64 "
                 "SMSP-cycle of issue, the step a slot it saves, and more than the MMA's issue share, so no packing gains "
