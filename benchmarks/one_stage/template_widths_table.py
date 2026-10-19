@@ -2,7 +2,7 @@
 
     python benchmarks/one_stage/template_widths_table.py OUT.md ROW.json... [--pouw POUW.json] [--json OUT.json]
 
-One line per (Definition family, committed bits, route) over 16 bits, its specs folded (the statics that vary across them
+One line per (Definition family, route) over 16 bits, its specs folded (the statics that vary across them
 shown as ranges, e.g. an attention head's T): the committed bits (the held rule's count), the rows that offer it, its
 units per rank (every part of a rank summed: request, step, workload; every spec of the line summed), the 16-bit re-cut per
 instance (``units16``: measured where `template_widths.recut` ran, else the lower bound from its returned widths, marked
@@ -23,8 +23,8 @@ SHORT = {"glm53__fp8__h200__tp8__b1__": "GLM B1", "glm53__fp8__h200__tp8__b8__i2
          "glm53__fp8__h200__tp8__b8__i256__o32__mixed-arrivals__stoch": "GLM B8-stoch", "glm53__fp8__h200__tp8__b32": "GLM B32",
          "dsv4-pro": "DSV4-Pro B1", "llama32-1b": "Llama-3.2-1B", "qwen3-06b": "Qwen3-0.6B", "qwen3-14b": "Qwen3-14B"}
 ROUTE = {"row": "row", "cut": "cut", "a11-chain": "a11"}
-#: a workload Program's root: the whole request, not a serving row
-NOT_ROWS = re.compile(r"^Workload")
+#: not a template: a workload Program's root (the whole request) and a root constant (`Q_template_instances` admits none)
+NOT_ROWS = re.compile(r"^(Workload|Const)")
 
 
 def short(row: str) -> str:
@@ -138,10 +138,11 @@ def main() -> int:
     for tid, r in recs.items():
         if (r.get("bits") or 0) > 16 and not NOT_ROWS.match(r["family"]):
             route = "+".join(ROUTE[h] for h in r["hows"])
-            lines_by[(r["family"], r["bits"], route)].append(tid)
+            lines_by[(r["family"], route)].append(tid)
     head = ["| Definition | committed bits | route | rows | units per rank | re-cut: 16-bit units per instance | "
             "ANDs per instance, today → re-cut | class under A | owner |", "|---|---|---|---|---|---|---|---|---|"]
-    order = sorted(lines_by, key=lambda k: ({"cut": 0, "a11": 1}.get(k[2].split("+")[0], 2), -k[1], k[0]))
+    top = {k: max(recs[t]["bits"] for t in v) for k, v in lines_by.items()}
+    order = sorted(lines_by, key=lambda k: ({"cut": 0, "a11": 1}.get(k[1].split("+")[0], 2), -top[k], k[0]))
     lines, jl = [], []
     for key in order:
         ids = lines_by[key]
@@ -160,22 +161,27 @@ def main() -> int:
         ruled = [r for r in rs if "verdict" in r]
         ref = sum(r["verdict"].startswith("refused") for r in ruled)
         rule = f" (rule refused {ref}/{len(ruled)} run)" if ruled else ""
-        lines.append(f"| `{fold(sorted(ids))}` | {key[1]:,}{rule} | {key[2]} | {', '.join(rws)} | {'; '.join(ranks)} | "
-                     f"{'' if measured else '≥'}{u:,} | {ands(rep)} | {klass(key[1])} | @circuits |")
-        jl.append({"definition": fold(sorted(ids)), "specs": sorted(ids), "bits": key[1], "route": key[2], "rows": rws,
+        lo_b, hi_b = min(r["bits"] for r in rs), max(r["bits"] for r in rs)
+        bits = f"{hi_b:,}" if lo_b == hi_b else f"{lo_b:,}–{hi_b:,}"
+        at = "" if len(ids) == 1 else f" (at `{rep['id'][len(key[0]):]}`, {rep['bits']:,} bits)"
+        lines.append(f"| `{fold(sorted(ids))}` | {bits}{rule} | {key[1]} | {', '.join(rws)} | {'; '.join(ranks)} | "
+                     f"{'' if measured else '≥'}{u:,}{at} | {ands(rep)} | {klass(hi_b)} | @circuits |")
+        jl.append({"definition": fold(sorted(ids)), "specs": sorted(ids), "bits": [lo_b, hi_b], "route": key[1], "rows": rws,
                    "units_per_rank": {row: dict(sorted({rk: sum(per_rank[t][row].get(rk, 0) for t in ids)
                                                         for rk in set().union(*(per_rank[t][row] for t in ids))}.items()))
                                       for row in rws},
                    "units16_per_instance": u, "units16_measured": measured, "recut": rep.get("recut"),
-                   "representative": rep["id"], "rule_runs": len(ruled), "rule_refused": ref, "class_A": klass(key[1]),
+                   "representative": rep["id"], "rule_runs": len(ruled), "rule_refused": ref, "class_A": klass(hi_b),
                    "owner": "@circuits"})
-    under = sorted(r["id"] for r in recs.values() if r.get("bits") is not None and r["bits"] <= 16)
+    dropped = sorted(t for t, r in recs.items() if NOT_ROWS.match(r["family"]))
+    under = sorted(r["id"] for r in recs.values() if r.get("bits") is not None and r["bits"] <= 16 and not NOT_ROWS.match(r["family"]))
     unmeasured = sorted(r["id"] for r in recs.values() if r.get("bits") is None)
     dis = sorted(r["id"] for r in recs.values() if r.get("disagree"))
     out = ["## vLLM rows", "", *head, *lines, "",
            f"{sum(len(v) for v in lines_by.values())} template specs over 16 bits in {len(lines)} lines; {len(under)} at or "
            f"under 16 ({', '.join(sorted({recs[t]['family'] for t in under}))}); {len(unmeasured)} not measured; "
-           f"{len(dis)} disagreements between the rule's walk and the descriptor count.", "",
+           f"{len(dis)} disagreements between the rule's walk and the descriptor count; {len(dropped)} root constants and workload "
+           f"roots left out (not templates).", "",
            "Programs read: " + "; ".join(f"{row}: {len(ps)} ({sum(1 for p in ps if p['digest_ok'])} digests match records.json)"
                                          for row, ps in sorted(progs.items())), ""]
     pj = []
