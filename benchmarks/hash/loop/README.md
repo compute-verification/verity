@@ -2,8 +2,8 @@
 
 Each iteration is one commit on the loop branch with a one-line hypothesis, measured the same way on three fixed GPUs (H200 on
 `vy-dc-h200`, B200 on `vy-dc-b200`, RTX PRO 6000 on `vy-nebius-2`), so that a plot of iteration against each measure shows which
-ideas moved the cost of committing every value of served vLLM. The measurement is circuits' `benchmarks/served_commit/prof.sh`,
-unmodified: Qwen3-8B, B32, vLLM compiled, 4 prefill steps of 2,560 tokens and 64 decode steps, `stock`, `stock-prof` and the
+ideas moved the cost of committing every value of served vLLM. The measurement is circuits' served_commit harness (its `prof.sh`, on
+`cursor/commit-speed-21f3` until circuits' next landing), unmodified: Qwen3-8B, B32, vLLM compiled, 4 prefill steps of 2,560 tokens and 64 decode steps, `stock`, `stock-prof` and the
 commit arms interleaved rep by rep (3 reps) under nsys, each commit arm gated token for token against `stock` first. On the H200
 every arm runs under Qwen3-8B's Build of record (`PIN_BUILD`: r20261018-062957-da83's `out/build.json`, artifact digest 3bd5dcb1,
 seeded into one fresh Inductor dir and checked after). The RTX PRO 6000 (cc 12.0) runs pinned under circuits' Qwen3-8B Build once
