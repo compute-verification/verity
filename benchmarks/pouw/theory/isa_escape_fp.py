@@ -19,12 +19,13 @@ It needs only A7 (an MMA's output is a function of its operand registers) and th
 section 5.2.3). The value-level bound (the word depends on codes only through their values: PTX's `D = A*B + C`) is
 reported beside it as strictness; no verdict reads it.
 
-Outcomes: CLOSED (rho / D < 1), TIE (= 1: the route is a menu form, decision 81's LP must list it), WATCH (closed with
+Outcomes: CLOSED (rho / D < 1), TIE (= 1: a menu form when every alphabet value has a code, which decision 81's LP must
+list; else a counting-only tie, with no construction known and no proof that it closes), WATCH (closed with
 data-independent 2:4 metadata, open by counting with data-dependent metadata: its gain is the data's zero patterns, an
 epsilon_skip), OPEN. A JOINT route (elements spread across shared slots) is bounded by counting alone only at
 log2 |S| / (bits a position), without rounding up; `joint_gap` is rho over that bound, and every form where it exceeds 1
-is listed: closing those needs the word's value semantics (a rank lemma), which is measured only on FP kinds, so they
-stay open to a proof. The units with no tensor form (vector, uniform, tables, reductions, movers, side units) keep
+is listed. The rank floor (`rank_lower`: exact products and sums, vendor-stated for the integer kinds and measured only
+for FP) closes those at rho <= 1; those at rho >= 2 stay open until a lemma bounds a joint route's passes. The units with no tensor form (vector, uniform, tables, reductions, movers, side units) keep
 isa_escape.py's classes, re-read for FP words.
 
 It also replays premise (a), the small-grid exactness `Accounting.Assumptions.TS.Fp8GridExact` and `Fp4GridExact`
@@ -654,7 +655,8 @@ def main() -> int:
             menu = sorted({f"{r['alphabet']}/{r['route']}" for r in ties if r["fits"]})
             counting = sorted({f"{r['alphabet']}/{r['route']}" for r in ties if not r["fits"]})
             checks.check(f"{dev} word ({word}): ties, {len(menu)} menu forms (every value has a code: the LP lists "
-                         f"them) and {len(counting)} by counting only (no such code; closed under value semantics)",
+                         f"them) and {len(counting)} by counting only (no such code and no construction known; that "
+                         f"they close needs value semantics and a rank lemma, open)",
                          True, {"menu": menu, "counting_only": counting})
     for dev in DEVICES:
         dense = [r for r in rows if r["device"] == dev and not r["route"].endswith(".sp")]
