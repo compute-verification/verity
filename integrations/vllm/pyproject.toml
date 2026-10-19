@@ -55,6 +55,7 @@ markers = [
 inputs_only = true
 inputs = ["verity", "verity/README.md", "tools/config/verity_config", "benchmarks/specs", "fixtures/artifacts.json", ".gitignore", "archive/sp1/python/verity_sp1",
           "benchmarks/ppl/steps.py", "benchmarks/ppl/matmul.py", "benchmarks/ppl/gates.py", "benchmarks/ppl/spec.py", "benchmarks/ppl/methodology.py", "benchmarks/ppl/model.py",
+          "benchmarks/ppl/windows.py", "benchmarks/ppl/datasets.json", "benchmarks/pouw/edited_gemm/fattn_ref.py",
           "benchmarks/remote_session/prover.py", "benchmarks/remote_session/verifier.py", "benchmarks/remote_session/wire.py",
           "benchmarks/remote_session/checks.py",
           "tools/research/src/research/__init__.py", "tools/research/src/research/cli.py", "tools/research/src/research/clone.py",
@@ -64,6 +65,7 @@ inputs = ["verity", "verity/README.md", "tools/config/verity_config", "benchmark
           "tools/research/src/research/store", "tools/research/src/research/telemetry", "tools/research/tests/fixtures/run_v0.2",
           "tools/research/src/research/__main__.py"]
 parallel = true
+# benchmarks/pouw/edited_gemm/fattn_ref.py is the int8 attention tests' oracle (tests/engine), beside benchmarks/ppl's linears
 # an xdist worker peaked at 6.2 GB, most stayed under 2 GB (19 Oct, vy-nebius-2: the full suite on 14 workers, r20261019-050410-3339;
 # 3.9 GB in the quick tier, r20261019-050331-542f); `--mem-gb`, or a job's memory cgroup, divides by this, so the default 16 GB
 # agent-test job runs 2 workers where the 9 GB default ran 1 and timed out at 60 min
