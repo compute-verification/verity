@@ -33,6 +33,7 @@ usage (the watchers' `agent-watch-relay` loop on the control pod, infra/control/
 $AGENT_WATCH_OFFSET the offset's file, default ~/agent-watch/offset):
   python3 infra/control/agent_watch_relay.py [--once] [--dry-run]"""
 import hashlib
+import http.client
 import json
 import os
 import re
@@ -307,8 +308,8 @@ def once() -> None:
             log(f"would write {BELLS}: {b}")
         else:
             pod(f"cat > {BELLS}.tmp && mv {BELLS}.tmp {BELLS}", b)
-    except slack.SlackError as e:
-        log(f"doorbells not read: {e}")
+    except (slack.SlackError, http.client.HTTPException) as e:   # a page cut short (IncompleteRead) is no OSError
+        log(f"doorbells not read: {type(e).__name__}: {e}")
     done = int(OFFSET.read_text()) if OFFSET.exists() else 0
     sent = {k: v for k, v in load_sent().items() if isinstance(v, (int, float)) and v >= time.time() - SENT_KEEP_S}
     *lines, _ = pod(f"cat {EVENTS} 2>/dev/null || true").split("\n")   # a line still being written waits a pass
@@ -340,7 +341,7 @@ def once() -> None:
                         ring_run(rec, to, ts)
                     else:
                         ring(api, ts, post, to)
-                except (slack.SlackError, subprocess.SubprocessError, OSError) as e:   # the alert is posted: never twice
+                except (slack.SlackError, http.client.HTTPException, subprocess.SubprocessError, OSError) as e:   # posted: never twice
                     log(f"posted, but @{to} not rung: {e}")
         done += 1
         OFFSET.parent.mkdir(parents=True, exist_ok=True)
@@ -372,7 +373,7 @@ def main() -> int:
     while True:
         try:
             once()
-        except (subprocess.SubprocessError, OSError, slack.SlackError) as e:   # a refused post is posted again next pass
+        except (subprocess.SubprocessError, OSError, slack.SlackError, http.client.HTTPException) as e:   # posted again next pass
             log(f"pass failed: {type(e).__name__}: {e}")
         if "--once" in sys.argv:
             return 0

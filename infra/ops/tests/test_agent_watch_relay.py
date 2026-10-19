@@ -443,3 +443,13 @@ def test_a_restart_never_posts_a_line_again_even_with_its_offset_lost(relay):
     relay.once()
     assert [p.split("run ")[1].split(")")[0] for p in relay.posts] == ["run-1", "run-2", "run-3"]
     assert relay.OFFSET.read_text() == "3" and len(json.loads(relay.sent_path().read_text())) == 3
+
+
+def test_a_slack_read_cut_short_skips_the_doorbells_and_still_posts(relay, monkeypatch):
+    """22:21Z 19 Oct: conversations.replies came back short (http.client.IncompleteRead, no OSError) and the relay exited."""
+    def short(api, now):
+        raise relay.http.client.IncompleteRead(b"x" * 10, 5)
+    monkeypatch.setattr(relay, "bells", short)
+    relay.log_text["text"] = line("run-1") + "\n"
+    relay.once()
+    assert len(relay.posts) == 1 and relay.wrote == []
