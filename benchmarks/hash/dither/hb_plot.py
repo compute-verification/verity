@@ -1,7 +1,7 @@
 """The dither-hb kernel rows as one figure: per-layer gamma (1 + receipts / the plain int8 GEMM, over Llama-3.1-8B's four
-linears) against M, a panel a card and a line an arm, from h1ubench.py's h1u.json files (a `research fetch`'s
-out/h1u.json). An arm in several files takes the last file's value; the noise floor (h1noise.so's midstate kernel) is
-dashed.
+linears) against M, a panel a card and a line an arm, from h1ubench.py's h1u.json and h1zbench.py's h1z.json files (a
+`research fetch`'s out/h1u.json or out/h1z.json). An arm in several files takes the last file's value; the noise floor
+(h1noise.so's midstate kernel) is dashed.
 
     python hb_plot.py --panel H200=A/h1u.json,B/h1u.json --panel B200=... [--arms h1u,h1u-ws,h1u-sp4-ws] --out dither-hb.png
 """
@@ -16,6 +16,10 @@ def series(doc: dict) -> dict[str, dict[int, float]]:
     out: dict[str, dict[int, float]] = {}
     for m, d in doc.get("per_layer", {}).items():
         m = int(m)
+        if "arms" in d:
+            for arm, v in d["arms"].items():
+                out.setdefault(arm, {})[m] = v["gamma"]
+            continue
         out.setdefault("h1u", {})[m] = d["gamma"]
         if d.get("floor_us"):
             out.setdefault("floor", {})[m] = d["gamma_floor"]
@@ -51,7 +55,7 @@ def main() -> int:
             ax.plot(ms, [arms[arm][m] for m in ms], "--" if arm == "floor" else "-o", ms=3, label=arm)
         ax.set_xscale("log", base=2)
         ax.set_xlabel("M (rows a call)")
-        ax.set_ylabel("gamma = 1 + receipts / plain int8 GEMM")
+        ax.set_ylabel("gamma: (1 + receipts or one-stream) / plain int8 GEMM")
         ax.set_title(card)
         ax.grid(alpha=0.3)
         ax.legend(fontsize=7)
