@@ -44,8 +44,11 @@ step is the session's own, before each pass, and a block lands in its slot when 
 With a serving trace, the appends a pass's step made go out after the root before it and before the pass is computed,
 each its own message (its tree's root and size, `Session.append`; a pass's are sent together) answered with its
 coin, under which the backend encodes its blocks (`audit.Store.encode`); then the root's message carries the blocks
-released since the last root sent, as runs (`Session.release`), and the pass's plan as a change from the last one
-sent (`Session.receive(..., change=...)`).  A pass's seed binds every append sent before its root (`audit.chained`), so a backend that appends
+released since the last root sent, as runs, with those among them the trace withdrew (`withdrawn`, freed before their
+encode landed, so never written: `Session.release(released, withdrawn)`), and the pass's plan as a change from the
+last one sent (`Session.receive(..., change=...)`).  The hello says whether the backend defers an appended block's
+residency to its encode (`deferred`, a backend's attribute, False if it has none), which the verifier refuses under a
+lifetime of one window.  A pass's seed binds every append sent before its root (`audit.chained`), so a backend that appends
 takes the chain over its appends when the pass is launched (`audit.Store.head`).  A pass whose appends went out is
 sent, never dropped at a boundary, since a coin no root follows rejects the session; one dropped before its appends
 went out sends nothing, and the next pass sends its appends and changes too.
@@ -109,7 +112,7 @@ class _Pass:
     step: int = 0
     discard: bool = False
     plan: rb.Plan | None = None
-    upto: tuple[int, int] = (0, 0)
+    upto: tuple[int, int, int] = (0, 0, 0)
     flushed: bool = False
 
 
@@ -151,9 +154,29 @@ def runs_of(blocks) -> tuple[tuple[int, int], ...]:
 
 
 def plan_change(before: rb.Plan, after: rb.Plan) -> tuple[tuple[tuple[int, int], ...], tuple[tuple[int, int], ...]]:
-    """`after` as `before.changed(added, removed, ...)` takes it: (added, removed) runs."""
-    a, b = set(before), set(after)
-    return runs_of(sorted(b - a)), runs_of(sorted(a - b))
+    """`after` as `before.changed(added, removed, ...)` takes it: (added, removed) runs, from the plans' runs alone
+    (each segment between consecutive run boundaries is wholly in or out of each plan)."""
+    def bounds(plan: rb.Plan) -> tuple[np.ndarray, np.ndarray]:
+        r = np.frombuffer(plan.encode(), dtype=">u8", offset=4).reshape(-1, 2).astype(np.uint64)   # blocks reach 2^64 - 1
+        if len(r) > 1 and (r[1:, 0] < r[:-1, 0]).any():                                             # a plan in read order
+            r = r[np.argsort(r[:, 0], kind="stable")]
+        return r[:, 0], r[:, 0] + r[:, 1]
+
+    (a0, a1), (b0, b1) = bounds(before), bounds(after)
+    cuts = np.unique(np.concatenate([a0, a1, b0, b1]))
+    lo = cuts[:-1]
+
+    def held(s: np.ndarray, e: np.ndarray) -> np.ndarray:
+        k = np.searchsorted(s, lo, side="right") - 1
+        return (k >= 0) & (lo < e[np.maximum(k, 0)]) if len(s) else np.zeros(len(lo), bool)
+
+    def runs(mask: np.ndarray) -> tuple[tuple[int, int], ...]:
+        edge = np.diff(np.concatenate([[False], mask, [False]]).astype(np.int8))
+        starts, ends = cuts[np.flatnonzero(edge == 1)], cuts[np.flatnonzero(edge == -1)]
+        return tuple(zip(starts.tolist(), (ends - starts).tolist()))
+
+    a, b = held(a0, a1), held(b0, b1)
+    return runs(b & ~a), runs(a & ~b)
 
 
 class Ahead:
@@ -306,6 +329,7 @@ class ServingTrace:
         self.held: dict[int, tuple[int, bytes]] = {}
         self.appends: list[audit.Append] = []
         self.released: list[int] = []
+        self.withdrawn: list[int] = []
         self.appended: list[int] = []
 
     def stale(self, window: int) -> list[int]:
@@ -376,6 +400,7 @@ class ServingTrace:
             self.live.update(range(a.first, a.first + a.count))
         gone = [j for f, c in change.released for j in range(f, f + c)]
         self.released.extend(gone)
+        self.withdrawn.extend(j for f, c in change.withdrawn for j in range(f, f + c))
         self.live.difference_update(gone)
         return change
 
@@ -554,47 +579,58 @@ class ProverSide:
             self.inbox.put(({"type": "lost", "why": str(e)}, b"", 0))
 
     def _open(self) -> None:
+        """Each window's openings as its draws arrive.  One the backend can't open (a block it no longer holds as
+        its pass read it) fails the session: the session's thread sees the connection lost, with the reason."""
         while True:
             t, draws = self.jobs.get()
-            # Opening work rereads the store and reconstructs receipt subtrees.  Keep it off the timed pass phase:
-            # the verifier may check after all roots are final, and this also makes the measured pass span contain
-            # passes alone rather than a prover-local choice of when to prepare the already-drawn openings.
-            if self.defer_openings:
-                self.open_enabled.wait()
-            c0 = time.perf_counter_ns()
-            by_pass = defaultdict(list)
-            for k, (i, p) in enumerate(draws):
-                by_pass[i].append((k, p))
-            out: list = [None] * len(draws)
-            passes = sorted(by_pass.items())
-            with self.lock:
-                handles = [self.kept[(t, i)] for i, _ in passes]
-            c1 = time.perf_counter_ns()
-            fields = self.backend.open_window([(h, [p for _, p in items]) for h, (_, items) in zip(handles, passes)])
-            c2 = time.perf_counter_ns()
-            for j, ((i, items), got) in enumerate(zip(passes, fields)):
-                for (k, p), f in zip(items, got):
-                    out[k] = audit.Opening(i, p, f[0], f[1], f[2], tuple(f[3]), f[4], tuple(f[5]), b"",
-                                           f[6] if len(f) > 6 else b"")
-                fields[j] = None
-            del fields
-            parts = [out[k:k + OPENINGS_PART] for k in range(0, len(out), OPENINGS_PART)] or [[]]
-            n = len(out)
-            del out
-            c3, sent = time.perf_counter_ns(), 0
-            for k in range(len(parts)):
-                body = wire.encode_openings(parts[k])
-                self.conn.send({"type": "openings", "t": t, "part": k, "parts": len(parts), "n": len(parts[k])}, body)
-                parts[k] = None
-                sent += len(body)
-                del body
-            with self.lock:
-                for key in [key for key in self.kept if key[0] == t]:
-                    del self.kept[key]
-            self.opened.append({"t": t, "n": n, "bytes": sent, "ns": time.perf_counter_ns() - c0,
-                                "backend_ns": c2 - c1, "send_ns": time.perf_counter_ns() - c3,
-                                "on_dropped": int(hits(self.dropped, [self.block(t, i, p) for i, p in draws]).sum())})
-            self.jobs.task_done()
+            try:
+                # Opening work rereads the store and reconstructs receipt subtrees.  Keep it off the timed pass phase:
+                # the verifier may check after all roots are final, and this also makes the measured pass span contain
+                # passes alone rather than a prover-local choice of when to prepare the already-drawn openings.
+                if self.defer_openings:
+                    self.open_enabled.wait()
+                self._open_window(t, draws)
+            except Exception as e:  # noqa: BLE001  -- handed to the session's thread, which fails with it
+                why = f"openings of window {t}: {type(e).__name__}: {e}"
+                print(f"prover: {why}", file=sys.stderr, flush=True)       # also after the verifier's end, when no session reads it
+                self.inbox.put(({"type": "lost", "why": why}, b"", 0))
+            finally:
+                self.jobs.task_done()
+
+    def _open_window(self, t: int, draws: list) -> None:
+        c0 = time.perf_counter_ns()
+        by_pass = defaultdict(list)
+        for k, (i, p) in enumerate(draws):
+            by_pass[i].append((k, p))
+        out: list = [None] * len(draws)
+        passes = sorted(by_pass.items())
+        with self.lock:
+            handles = [self.kept[(t, i)] for i, _ in passes]
+        c1 = time.perf_counter_ns()
+        fields = self.backend.open_window([(h, [p for _, p in items]) for h, (_, items) in zip(handles, passes)])
+        c2 = time.perf_counter_ns()
+        for j, ((i, items), got) in enumerate(zip(passes, fields)):
+            for (k, p), f in zip(items, got):
+                out[k] = audit.Opening(i, p, f[0], f[1], f[2], tuple(f[3]), f[4], tuple(f[5]), b"",
+                                       f[6] if len(f) > 6 else b"")
+            fields[j] = None
+        del fields
+        parts = [out[k:k + OPENINGS_PART] for k in range(0, len(out), OPENINGS_PART)] or [[]]
+        n = len(out)
+        del out
+        c3, sent = time.perf_counter_ns(), 0
+        for k in range(len(parts)):
+            body = wire.encode_openings(parts[k])
+            self.conn.send({"type": "openings", "t": t, "part": k, "parts": len(parts), "n": len(parts[k])}, body)
+            parts[k] = None
+            sent += len(body)
+            del body
+        with self.lock:
+            for key in [key for key in self.kept if key[0] == t]:
+                del self.kept[key]
+        self.opened.append({"t": t, "n": n, "bytes": sent, "ns": time.perf_counter_ns() - c0,
+                            "backend_ns": c2 - c1, "send_ns": time.perf_counter_ns() - c3,
+                            "on_dropped": int(hits(self.dropped, [self.block(t, i, p) for i, p in draws]).sum())})
 
     def block(self, t: int, i: int, p: int) -> int:
         """The block at position p of pass i of window t: p itself unless the pass's plan was sent."""
@@ -614,7 +650,7 @@ class ProverSide:
         layout = self.backend.layout() if hasattr(self.backend, "layout") else None
         self.conn.send({"type": "hello", "node": self.node.hex(), "blocks": self.backend.blocks,
                         "payload_root": root.hex(), "codec": codec.name, "receipt": receipt, "rows": rows,
-                        "layout": layout})
+                        "layout": layout, "deferred": bool(getattr(self.backend, "deferred", False))})
         head, _, _ = self.expect("registration")
         self.registration = wire.registration_of(head["registration"])
         if self.registration.payload_root != root or self.registration.blocks != self.backend.blocks:
@@ -675,7 +711,7 @@ class ProverSide:
 
         backend, clock = self.backend, self.conn.clock
         step_of = getattr(backend, "step_of", None)
-        launched, sent_plan, sent_released, sent_appends = 0, rb.Plan.whole(N), 0, 0
+        launched, sent_plan, sent_released, sent_withdrawn, sent_appends = 0, rb.Plan.whole(N), 0, 0, 0
         ahead: Ahead | None = getattr(trace, "ahead", None)
         self.misread = {}
 
@@ -705,7 +741,7 @@ class ProverSide:
             ticket = backend.launch(i, after, plan)
             return _Pass(t, i, ticket, clock() if ahead is not None else start,
                          step=step_of(ticket) if step_of is not None and ahead is None else n, plan=plan,
-                         upto=(len(trace.appends), len(trace.released)))
+                         upto=(len(trace.appends), len(trace.released), len(getattr(trace, "withdrawn", ()))))
 
         backend.begin_window(take(wire.coin_of(head["coin"])), self.registration.digest)
         pending: deque = deque()
@@ -714,16 +750,18 @@ class ProverSide:
         misread = getattr(backend, "misread", None)
 
         def send(x: _Pass, root: bytes, handle, seen: int) -> None:
-            nonlocal sent_plan, sent_released
+            nonlocal sent_plan, sent_released, sent_withdrawn
             with self.lock:
                 self.kept[(x.t, x.i)] = handle
             msg = {"type": "root", "t": x.t, "i": x.i, "root": root.hex(), "step": x.step}
             if x.plan is not None:
                 if x.upto[1] > sent_released:
                     msg["released"] = [list(r) for r in runs_of(sorted(trace.released[sent_released:x.upto[1]]))]
+                if x.upto[2] > sent_withdrawn:
+                    msg["withdrawn"] = [list(r) for r in runs_of(sorted(trace.withdrawn[sent_withdrawn:x.upto[2]]))]
                 msg["change"] = [[list(r) for r in side] for side in plan_change(sent_plan, x.plan)]
                 self.plans[(x.t, x.i)] = x.plan
-                sent_plan, sent_released = x.plan, x.upto[1]
+                sent_plan, sent_released, sent_withdrawn = x.plan, x.upto[1], x.upto[2]
             if misread is not None and (got := misread(x.ticket)):
                 self.misread[(x.t, x.i)] = got
             self.conn.send(msg)

@@ -29,6 +29,7 @@ from verity.ml.circuits.ops.boolean import s8 as BS8
 from verity.ml.circuits.program import Program
 from verity.ml.circuits.refs import Coll, array_of, concat
 from verity.ml.circuits.types import Array, Record, Tuple, Value
+from verity.core.protocols.pouw import grind as GR
 from verity.core.protocols.pouw.circuit import compile as C
 from verity.core.protocols.pouw.circuit import hashes as H
 from verity.core.protocols.pouw.circuit import seeds as SD
@@ -42,9 +43,12 @@ REDUCED = ((2048, 3), (8192, 2))
 BOOLEAN = {"DOT": BG.BlackwellS8ImmaDot32, "TDOT": None}
 PORTS = C._ports
 ports = pytest.mark.skipif(PORTS is None, reason="port types (ml.circuits.ports) are not on this tree")
-#: COIN-RULES (`ports._coin_role`) lets a coin reach only a noise primitive's or a receipt fold's coin port, so it refuses the
-#: salt's flow into the seed's gates until it gives the seed a role (`test_coin_rules_refuse_the_seed`)
-COIN_RULES = PORTS is not None and hasattr(PORTS, "_coin_role")
+#: COIN-RULES' seed role (`ports._coin_role`, a coin port beside an `In(kind="position")` one): the salt's flow into the seed
+#: is the seed's, and the Build check refuses some units before compile's own checks do (`UNIT_REFUSED`)
+SEEDS = PORTS is not None and "position" in PORTS.KINDS
+#: COIN-RULES before its seed role lets a coin reach only a noise primitive's or a receipt fold's coin port, so it refuses the
+#: salt's flow into the seed's gates
+COIN_RULES = PORTS is not None and hasattr(PORTS, "_coin_role") and not SEEDS
 compiles = pytest.mark.skipif(COIN_RULES, reason="COIN-RULES refuses the salt's flow into PouwSeed: E_COIN_FLOW")
 SALT = hashlib.sha512(b"salt").digest()
 
@@ -66,7 +70,8 @@ def _def(name, statics, signature, body, ports=None):
 
 COIN = {"params": lambda p: {"e": p.In(kind="coin")}}
 FOLD = {"params": lambda p: {"r": p.In(receipt=True)}, "ret": lambda p: p.Out(sink=True)}
-UNIT_PORTS = {"params": lambda p: {"salt": p.In(kind="coin")}, "ret": lambda p: {"receipt": p.Out(sink=True)}}
+UNIT_PORTS = {"params": lambda p: {"salt": p.In(kind="coin"), **({"position": p.In(kind="position")} if SEEDS else {})},
+              "ret": lambda p: {"receipt": p.Out(sink=True)}}
 
 ADD = {w: _prim(f"CompileTestAdd{w}", (("x", Value(w)), ("e", Value(w))), Value(w), lambda x, e, w=w: (x + e) % (1 << w))
        for w in (8, 16)}
@@ -218,11 +223,11 @@ def _bad(name, body):
 
 UNIT_REFUSED = [
     ("seed", "no-seed", _no_seed),
-    ("seed", "two-seeds", _two_seeds),
-    ("position", "own-position", _own_position),
+    ("E_COIN_REUSE" if SEEDS else "seed", "two-seeds", _two_seeds),
+    ("E_PORT_KIND" if SEEDS else "position", "own-position", _own_position),
     ("position", "own-roots", _own_roots),
-    ("salt-flow", "salt-leak", _salt_leak),
-    ("noise-in-z", "noised-z", _noised_z),
+    ("E_COIN_FLOW" if SEEDS else "salt-flow", "salt-leak", _salt_leak),
+    ("E_COIN_FLOW" if SEEDS else "noise-in-z", "noised-z", _noised_z),
 ]
 UNIT_REFUSED = [pytest.param(code, _bad(name, body), id=name) for code, name, body in UNIT_REFUSED]
 
@@ -235,7 +240,7 @@ def _coord(K):
 
 @lru_cache(maxsize=None)
 def _layer(members):
-    """One Program per population: `TemplatePopulations`' identity is its counts alone, so two of equal counts are one binding."""
+    """One Program per population, built once: `mixed_population_program` makes a new `TemplatePopulations_v1` each call."""
     return OP.mixed_population_program([(_coord(K), n) for K, n in members])
 
 
@@ -276,6 +281,17 @@ def _twice_body(B, S, x, w):
 
 
 TWICE = _def("CompileTestTwice", (), lambda S: ((("x", Array(64, V8)), ("w", Array(64, V8))), Array(2, V32)), _twice_body)
+
+
+def _chained_body(B, S, x, w):
+    y = B.call(_acc(64), x, w)
+    xb = Coll(Array(64, V8), concat([B.call(p, y).refs for p in PIECES[8]] * 16))
+    return Coll(Array(2, V32), concat([y.refs, B.call(_acc(64), xb, w).refs]))
+
+
+#: two calls, the second's operand computed from the first's output (a layer's and the next's)
+CHAINED = _def("CompileTestChained", (), lambda S: ((("x", Array(64, V8)), ("w", Array(64, V8))), Array(2, V32)),
+               _chained_body)
 
 FAMILIES = {
     "s8dot": (lambda: Program(bind(S8.S8Dot, **S8.SMOKE_PLAIN)), [("S8Dot_v1", (1, 64, 1))]),
@@ -507,7 +523,13 @@ REFUSED = {
 @compiles
 @pytest.mark.parametrize("code", sorted(REFUSED))
 def test_refused(code):
-    """Each rule's refusal; ``coin-read``: a served Program that derives a seed itself (the salt enters only through compile)."""
+    """Each rule's refusal; ``coin-read``: a served Program that derives a seed itself (the salt enters only through compile),
+    which COIN-RULES' seed role refuses as it is built: its seed's position is a constant."""
+    if code == "coin-read" and SEEDS:
+        with pytest.raises(PORTS.PortError) as e:
+            Program(bind(REFUSED[code]()))
+        assert e.value.code == "E_PORT_KIND", str(e.value)
+        return
     _refused(code, Program(bind(REFUSED[code]())))
 
 
@@ -563,16 +585,60 @@ ATTN_HEADS = _def("CompileTestAttnHeads", ("H",),
                   lambda S: ((("q", Array(S.H, Array(64, BF))), ("k", Array(S.H, Array(16, Array(64, BF)))),
                               ("v", Array(S.H, P.A16))), Array(S.H, P.F32)),
                   lambda B, S, q, k, v: B.batch(ATTN, q, k, v, axes=(0, 0, 0)))
+GQA = _def("CompileTestGqa", ("H", "N"),
+           lambda S: ((("q", Array(S.H, Array(64, BF))), ("k", Array(S.N, Array(64, BF)))), Array(S.H, P.F32)),
+           lambda B, S, q, k: B.batch(bind(SCORES, N=S.N), q, k, axes=(0, None)))
 KINDS = C.register(C.Scheme("compile-test-kinds", (2, 2), {"GemmAccumulatorS8_v1": _unit(UNIT)}))
 COVER2 = C.register(C.Scheme("compile-test-cover", (2, 2), {C.ANY: _unit(UNIT)}, cover=2)).name
+#: the test scheme with no row form for QKᵀ, so no grind term
+QK_OPEN = C.register(C.Scheme("compile-test-qk-open", (2, 2), {C.ANY: _unit(UNIT)}, rows={})).name
+#: a KV head's query heads × its keys, one tile
+ATTN_TILE = C.register(C.Scheme("compile-test-attn", (4, 16), {C.ANY: _unit(UNIT)})).name
+
+ROW = Array(128, BF)
+QK128 = bind(G.DotBf16, K=128, **G.GEMM_AMPERE)
+#: one query row's scores on its N keys
+KEYS = _def("CompileTestKeys", ("N",), lambda S: ((("q", ROW), ("k", Array(S.N, ROW))), Array(S.N, P.F32)),
+            lambda B, S, q, k: B.batch(QK128, q, k, axes=(None, 0)))
+#: a KV head's G query heads on its N keys (GQA)
+KV_DECODE = _def("CompileTestKvDecode", ("G", "N"),
+                 lambda S: ((("q", Array(S.G, ROW)), ("k", Array(S.N, ROW))), Array(S.G, Array(S.N, P.F32))),
+                 lambda B, S, q, k: B.batch(bind(KEYS, N=S.N), q, k, axes=(0, None)))
+#: decode, one call: C (KV head, request) components
+DECODE = _def("CompileTestDecode", ("C", "G", "N"),
+              lambda S: ((("q", Array(S.C, Array(S.G, ROW))), ("k", Array(S.C, Array(S.N, ROW)))),
+                         Array(S.C, Array(S.G, Array(S.N, P.F32)))),
+              lambda B, S, q, k: B.batch(bind(KV_DECODE, G=S.G, N=S.N), q, k, axes=(0, 0)))
+
+
+def _causal_body(B, S, q, k):
+    parts = [B.batch(QK128, q[i], Coll(Array(i + 1, ROW), k.refs.slice(0, (i + 1) * ROW.leaves)), axes=(None, 0))
+             for i in range(S.L)]
+    return Coll(Array(S.L * (S.L + 1) // 2, P.F32), concat([p.refs for p in parts]))
+
+
+#: one query head's causal scores over an L-token prompt: query i on keys 0 .. i
+CAUSAL = _def("CompileTestCausal", ("L",), lambda S: ((("q", Array(S.L, ROW)), ("k", Array(S.L, ROW))),
+                                                      Array(S.L * (S.L + 1) // 2, P.F32)), _causal_body)
+#: a KV head's G query heads on the prompt's L keys
+KV_PREFILL = _def("CompileTestKvPrefill", ("G", "L"),
+                  lambda S: ((("q", Array(S.G, Array(S.L, ROW))), ("k", Array(S.L, ROW))),
+                             Array(S.G, Array(S.L * (S.L + 1) // 2, P.F32))),
+                  lambda B, S, q, k: B.batch(bind(CAUSAL, L=S.L), q, k, axes=(0, None)))
+#: prefill, one call: C (KV head, request) components
+PREFILL = _def("CompileTestPrefill", ("C", "G", "L"),
+               lambda S: ((("q", Array(S.C, Array(S.G, Array(S.L, ROW)))), ("k", Array(S.C, Array(S.L, ROW)))),
+                          Array(S.C, Array(S.G, Array(S.L * (S.L + 1) // 2, P.F32)))),
+               lambda B, S, q, k: B.batch(bind(KV_PREFILL, G=S.G, L=S.L), q, k, axes=(0, 0)))
 
 
 @compiles
 def test_qk_heads_compile():
     """Attention's QKᵀ is credited (decision 109): each head's scores, `DotBf16` of its query on its keys, are a site's dots,
-    its query meeting only its own keys (a 1 × 2 tile a head), and the softmax max chain is the rest."""
+    its query meeting only its own keys (a 1 × 2 tile a head), and the softmax max chain is the rest (under a scheme with
+    no row form for QKᵀ, so no grind term: `test_qk_grind`)."""
     served = Program(bind(HEADS, H=4, N=2))
-    c = C.compile(served, SCHEME)
+    c = C.compile(served, QK_OPEN)
     (s,) = c.sites
     assert (s.dot.family, s.shape, s.count) == ("DotBf16_v2", (4, 64, 8), 8)
     assert {u.tile for u in c.units} == {C.Tile(1, 2, ((0, 0), (0, 1)))}
@@ -583,11 +649,61 @@ def test_qk_heads_compile():
     assert _run(c, args)[:4] == evaluate(served.fn, *args)
 
 
+def _grind_pct(rows, dots):
+    return f"{100 * GR.visible_premium(rows, GR.T_BITS) / dots:.4g}%"
+
+
+@compiles
+def test_qk_grind():
+    """Decision 122: a seed group's QKᵀ carries GRIND's grind term, `grind.visible_premium` over its distinct rows (a Q row
+    k + 320 bits read by its keys, a K row k bits read by the query heads on it) over its dots, and over 0.1% the group is
+    refused, pointing to decision 36's live coin. Four heads on their own keys are 4 Q rows and 8 K rows; four on shared keys
+    (GQA) are 4 Q rows and 2 K rows read 4 times each, one row however many query heads read it."""
+    e = _refused("cover", Program(bind(HEADS, H=4, N=2)))
+    assert "grind term of its DotBf16_v2 dots is " + _grind_pct([(4, 384, 2), (8, 64, 1)], 8) in str(e)
+    assert "decision 36" in str(e)
+    e = _refused("cover", Program(bind(GQA, H=4, N=2)))
+    assert "grind term of its DotBf16_v2 dots is " + _grind_pct([(4, 384, 2), (2, 64, 4)], 8) in str(e)
+    assert C.compile(Program(bind(HEADS, H=4, N=2)), QK_OPEN).grind == ({},)
+    assert C.SCHEMES[SCHEME].rows == C.ROWS and C.ROWS["DotBf16_v2"] == C.QK_ROWS
+    assert C.QK_ROWS.bits(128) == (448, 128) and C.PV_ROWS.bits(2048) == (224, 2048)
+    plugged = KINDS.plug("CompileTestPv_v1", _unit(UNIT), "compile-test-kinds-pv", rows=C.PV_ROWS)
+    assert plugged.rows == {**C.ROWS, "CompileTestPv_v1": C.PV_ROWS}
+    with pytest.raises(ValueError):
+        C.register(C.Scheme("compile-test-one-sided", (2, 2), {C.ANY: _unit(UNIT)},
+                            rows={"DotBf16_v2": C.RowNoise(a=(320, 0), b=(0, 0))}))
+
+
+@compiles
+def test_decode_grind_counts_every_query_head_pair():
+    """At decode (Llama-3.1-8B: 8 KV heads of 4 query heads each, a head's query on its request's keys), one call's grind
+    term counts every (query head, request) pair, its Q row, not the (KV head, request) components its K rows join: at 16
+    keys a batch of 12 is over 0.1% (0.1002%) and 13 under it (0.0925%), where 13 requests are 104 components. Over few keys
+    a KV head's K rows, read by all its query heads, bind instead: 70B's batch of 7 (8 query heads a KV head) is under 0.1%
+    over 32 keys but not over 16, where GRIND's per-pair table, which assumes the Q rows bind, would pass it."""
+    _refused("cover", Program(bind(DECODE, C=8 * 12, G=4, N=16)), ATTN_TILE)
+    c = C.compile(Program(bind(DECODE, C=8 * 13, G=4, N=16)), ATTN_TILE)
+    assert 9.2e-4 < c.grind[0]["DotBf16_v2"] <= GR.FLAG and len(c.units) == 8 * 13
+    _refused("cover", Program(bind(DECODE, C=8 * 7, G=8, N=16)), ATTN_TILE)
+    assert C.compile(Program(bind(DECODE, C=8 * 7, G=8, N=32)), ATTN_TILE).grind[0]["DotBf16_v2"] <= GR.FLAG
+
+
+@compiles
+def test_prefill_grind_counts_kv_components():
+    """At prefill a KV head's K rows, read by its query heads on every later token, bind, so a call's grind term counts its
+    (KV head, request) components: a 16-token causal prompt of 4 query heads a KV head needs 166 of them (165 is 0.10009%),
+    far more than a decode's batch and far fewer than its rows. GRIND's table (`grind_price.prefill_cover`) says 171, since it
+    counts every Q row's readers as all 16 keys and every K row's as 4 × 16; the rows' readers here are the causal ones."""
+    _refused("cover", Program(bind(PREFILL, C=165, G=4, L=16)), ATTN_TILE)
+    c = C.compile(Program(bind(PREFILL, C=166, G=4, L=16)), ATTN_TILE)
+    assert 9.9e-4 < c.grind[0]["DotBf16_v2"] <= GR.FLAG
+
+
 @compiles
 def test_pv_inside_attention_is_uncovered():
     """P·V as attention serves it today, tensor-core steps on a P the block computes, is no Call of a registered family, so its
     dots can't be units: the pass refuses it rather than leave attention's second product uncredited."""
-    e = _refused("uncovered", Program(bind(ATTN_HEADS, H=2)))
+    e = _refused("uncovered", Program(bind(ATTN_HEADS, H=2)), QK_OPEN)
     assert "AmpereBF16TcDot16" in str(e)
 
 
@@ -648,6 +764,20 @@ def test_cover_is_the_least_seed_group():
 
 
 @compiles
+def test_seed_group_never_spans_a_chain():
+    """A seed binds its calls' operand roots, so one seed group can't hold a call and a call that reads its output (a step's
+    layer ℓ and ℓ + 1, decision 122): each alone compiles, with the served outputs unchanged, and together they are refused."""
+    served = Program(bind(CHAINED))
+    c = C.compile(served, SCHEME)
+    assert c.groups == ((0,), (1,))
+    args = _args(served.fn, random.Random(3))
+    assert _run(c, args)[:2] == evaluate(served.fn, *args)
+    with pytest.raises(C.CompileError) as e:
+        C.compile(served, SCHEME, groups=[0, 0])
+    assert e.value.code == "span" and "node 0" in str(e.value), str(e.value)
+
+
+@compiles
 def test_recompute_across_units_is_found():
     """A unit computing a value another unit computes (here each 1 × 1 unit of a shared row folds a · a) fails the gate-level
     cut's no-recompute rule; the seeds, each reading its own position in every gate, don't."""
@@ -668,7 +798,7 @@ def test_unit_refused(code, scheme):
 @compiles
 def test_shared_position_slots_refused(monkeypatch):
     """Two unit batches given the same slots of `pouw.positions` (here the second batch reading the first's) would seed two
-    units of a site alike: the root-level check refuses it."""
+    units of a site alike: the root-level check refuses it, and COIN-RULES' seed role as the compiled Program is built."""
     real = C._plan
 
     def shared(served, name):
@@ -678,7 +808,7 @@ def test_shared_position_slots_refused(monkeypatch):
         return dataclasses.replace(p, groups=tuple(groups))
 
     monkeypatch.setattr(C, "_plan", shared)
-    _refused("position", Program(bind(SHARED_X, K=64, N=5)))
+    _refused("E_COIN_REUSE" if SEEDS else "position", Program(bind(SHARED_X, K=64, N=5)))
 
 
 def _coin_served_body(B, S, x, w, u):
@@ -692,16 +822,6 @@ def test_served_coin_parameter_refused():
     defn = _def("CompileTestCoin", (), lambda S: ((*XW, ("u", Array(64, V8))), V32), _coin_served_body,
                 ports={"params": lambda p: {"u": p.In(kind="coin")}})
     _refused("coin-read", Program(bind(defn)))
-
-
-@pytest.mark.skipif(not COIN_RULES, reason="COIN-RULES (ports._coin_role) is not on this tree")
-def test_coin_rules_refuse_the_seed():
-    """Under COIN-RULES as it stands a coin reaches only a noise primitive's or a receipt fold's coin port, so the salt's flow
-    into the seed's gates is refused: COIN-RULES needs a seed role (the salt port of `seeds.PouwSeed` the coin's terminal,
-    many seeds reading one salt at distinct positions) before any compiled Program is valid."""
-    with pytest.raises(C.CompileError) as e:
-        C.compile(Program(bind(TWICE)), SCHEME)
-    assert e.value.code in ("E_COIN_FLOW", "E_COIN_REUSE"), str(e.value)
 
 
 # -- seeds and the verifier's rebuild ----------------------------------------------------------------------------------------
@@ -735,16 +855,22 @@ def test_positions_and_inputs():
 
 
 def test_seed_reads_every_field():
+    """seed_j and σ_R each move with every field, and no σ_R is a seed_j (decision 121: σ_R's tag is its own)."""
     d = [hashlib.sha512(bytes([i])).digest() for i in range(6)]
     base = (d[0], 0, d[1], d[2])
-    seeds = {SD.seed(*base)}
-    for i, v in enumerate((d[3], 1, d[4], d[5])):
-        seeds.add(SD.seed(*base[:i], v, *base[i + 1:]))
-    seeds.add(SD.seed(d[0], 0, d[2], d[1]))
-    assert len(seeds) == 6
+    out = []
+    for f in (SD.seed, SD.receipt_seed):
+        got = {f(*base)}
+        for i, v in enumerate((d[3], 1, d[4], d[5])):
+            got.add(f(*base[:i], v, *base[i + 1:]))
+        got.add(f(d[0], 0, d[2], d[1]))
+        assert len(got) == 6
+        out.append(got)
+    assert not out[0] & out[1]
     assert C.seed is SD.seed
-    with pytest.raises(ValueError):
-        SD.seed(b"short", 0, d[1], d[2])
+    for f in (SD.seed, SD.receipt_seed):
+        with pytest.raises(ValueError):
+            f(b"short", 0, d[1], d[2])
 
 
 def _seed_args(boolean, salt, position, roots):
@@ -753,10 +879,13 @@ def _seed_args(boolean, salt, position, roots):
 
 @compiles
 def test_seed_in_gates_is_the_reference():
-    """`PouwSeed_v1` and `PouwNoiseBlock_v1` on words are `seeds.seed` and `seeds.noise_block`."""
+    """`PouwSeed_v1`, `PouwUnitSeeds_v1` and `PouwNoiseBlock_v1` on words are `seeds.seed`, [`seeds.seed`,
+    `seeds.receipt_seed`] and `seeds.noise_block`."""
     roots = (hashlib.sha512(b"ra").digest(), hashlib.sha512(b"rb").digest())
     want = SD.seed(SALT, 5, *roots)
     assert list(evaluate(bind(SD.PouwSeed), *_seed_args(False, SALT, 5, roots))) == SD.halves(want)
+    assert list(evaluate(bind(SD.PouwUnitSeeds), *_seed_args(False, SALT, 5, roots))) == \
+        SD.halves(want) + SD.halves(SD.receipt_seed(SALT, 5, *roots))
     assert list(evaluate(bind(SD.PouwNoiseBlock), SD.halves(want), SD.position_leaves(3, False))) == \
         SD.halves(SD.noise_block(want, 3))
 
@@ -764,13 +893,23 @@ def test_seed_in_gates_is_the_reference():
 @compiles
 @pytest.mark.slow
 def test_seed_on_bits_is_the_reference():
-    """`PouwSeed_v2` and `PouwNoiseBlock_v2` on bits (three SHA-512 compressions, a few seconds) are the reference."""
+    """`PouwSeed_v2` and `PouwNoiseBlock_v2` on bits (three SHA-512 compressions) are the reference."""
     roots = (hashlib.sha512(b"ra").digest(), hashlib.sha512(b"rb").digest())
     want = SD.seed(SALT, 1 << 40, *roots)
     assert list(evaluate(SD.PouwSeedBits, *_seed_args(True, SALT, 1 << 40, roots))) == SD.leaves(want, True)
     assert list(evaluate(SD.PouwNoiseBlockBits, SD.leaves(want, True), SD.position_leaves(2, True))) == \
         SD.leaves(SD.noise_block(want, 2), True)
     assert SD.stream(want, 600) == SD.leaves(SD.noise_block(want, 0), True) + SD.leaves(SD.noise_block(want, 1), True)[:88]
+
+
+@compiles
+@pytest.mark.slow
+def test_unit_seeds_on_bits_is_the_reference():
+    """`PouwUnitSeeds_v2` on bits (four SHA-512 compressions) is [seed_j, σ_R]: the only test of its gates, which share the
+    masked salt and roots between the two hashes."""
+    roots = (hashlib.sha512(b"ra").digest(), hashlib.sha512(b"rb").digest())
+    got = list(evaluate(SD.PouwUnitSeedsBits, *_seed_args(True, SALT, 1 << 40, roots)))
+    assert got == SD.leaves(SD.seed(SALT, 1 << 40, *roots), True) + SD.leaves(SD.receipt_seed(SALT, 1 << 40, *roots), True)
 
 
 @compiles
