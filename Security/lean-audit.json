@@ -2035,6 +2035,9 @@
    "assumptions": [],
    "type_hash": "02bd3db81d5d22dbabc01b1ffa131e1b3e20419216342f5d9b23aae834605aa9"
   },
+  "Accounting.SecurityProofs.TS.CondReceiptLuckMarginal": {
+   "owner": "@compute-accounting"
+  },
   "Accounting.SecurityProofs.TS.DIdeal": {
    "owner": "@compute-accounting",
    "signature": ["Accounting.SecurityProofs.TS.DIdeal : Accounting.Guarantees.TS.DIdeal"],
@@ -2112,6 +2115,15 @@
    "signature": ["Accounting.SecurityProofs.TS.Fx1SegmentsBind : Accounting.Guarantees.TS.Fx1SegmentsBind"],
    "assumptions": [],
    "type_hash": "aad18a7a2fbca41c4809056d4c3457aa70bea4a8d619583a0b843828d9d9f63f"
+  },
+  "Accounting.SecurityProofs.TS.GridLuck": {
+   "owner": "@compute-accounting"
+  },
+  "Accounting.SecurityProofs.TS.GridTemplateCondition": {
+   "owner": "@compute-accounting"
+  },
+  "Accounting.SecurityProofs.TS.GridTemplateMoment": {
+   "owner": "@compute-accounting"
   },
   "Accounting.SecurityProofs.TS.GrindMass": {
    "owner": "@compute-accounting",
@@ -7407,6 +7419,10 @@
    "Accounting.SecurityProofs.TS.SegmentSteer": "lemma: the segment bound, zeroing Z saves at most |Z|/a segments when every noise-active segment holds at least a noise-active coordinates; counting over a definition.",
    "Accounting.SecurityProofs.TS.AdaptSteerFail": "lemma: under E1(b)'s accounting LIN-STEER fails for every segmented consumer with fewer noise-active segments than noise-active coordinates; counting over a definition.",
    "Accounting.SecurityProofs.TS.SteerUnion": "lemma: the steering union bound |K| C(G, n) mu^n over any coins, configurations fixed before sigma and per-segment fresh noise of point mass at most mu (a hypothesis); not a property of a Lean function.",
+   "Accounting.SecurityProofs.TS.CondReceiptLuckMarginal": "lemma: a receipt game's luck at pr over every round, from its luck at pr given the rest over its own part (CondReceiptLuck, a hypothesis) at any split of the coin; not a property of a Lean function.",
+   "Accounting.SecurityProofs.TS.GridLuck": "lemma: the exponential moment at most 1 of a grid's gain at rate theta, rows and columns each with their own coins, a unit dead with probability at most q over its row's coins and otherwise lucky with probability at most p over its column's given the rows and the earlier columns (hypotheses), under each unit's condition q e^{n theta w} + (1 - q)(p e^{r theta w} + (1 - p) e^{-kappa r theta w})^{n/r} <= 1; not a property of a Lean function.",
+   "Accounting.SecurityProofs.TS.GridTemplateCondition": "lemma: h1tile's template (q = 2^{-w}, p = 1/2, kappa = 4, w <= 32) meets GridLuck's condition at r theta = 1/(4 max(64, e)) for every ratio e > 0 of a row's units to a column's; an inequality of reals, not a property of a Lean function.",
+   "Accounting.SecurityProofs.TS.GridTemplateMoment": "lemma: GridLuck at h1tile's template on an r by n grid, its gain's moment at most 1 at theta = 1/(4 max(64 r, n)), the dead and lucky events' probabilities and what they read hypotheses; not a property of a Lean function.",
    "Accounting.SecurityProofs.TS.GrindUnion": "lemma: the grinding bound T C(G, n) mu^n over any coins, T fresh seeds in the random-oracle model and per-segment noise of point mass at most mu, each query's target independent of its own seed (hypotheses); not a property of a Lean function.",
    "Accounting.SecurityProofs.Gates.DeclaredWindow": "frozen (no-function): The soundness of the gate model's interval analysis over every circuit whose declared bounds are earned (Accounting.Gates.Declared: an input at its type, a budgeted gate at an interval its evaluator keeps) and every input that holds words of its inputs' types (Accounting.Gates.Typed), not a property of a Lean function: ProvenWindow with its hypothesis on run inputs' values discharged.",
    "Accounting.SecurityProofs.Gates.Int8LinearWindow": "frozen (no-function): The window of the gate model's circuit Accounting.Gates.int8Linear (vLLM's served int8 linear: its row quantizer into a satfinite s8·s8 IMMA chain) at every K = 32·S ≤ 131,040, not a property of the served code: vLLM's int8 Definitions (int8_exact.py) have no Lean port.",
