@@ -288,16 +288,13 @@ def test_newest_captures_with_no_store_index_refuse_a_property_the_catalog_lacks
     d = _row_dir(tmp_path)
     build = _build_art(store, d, tmp_path / "run")
     kw = dict(tree="cursor/x@1b53f685a", by="circuits", tier="fast", summary=_served(d), newest=True)
-    with pytest.raises(UsageError, match=f"no capture of {PROP} in .*'s catalog, and there is no store index here.*--conformance PROPERTY=art:"):
+    with pytest.raises(UsageError, match=f"no capture of {PROP} in this store's catalog, and there is no store index here.*"
+                                         "--conformance PROPERTY=art:"):
         records.publish(d, ROW, evidence=records.evidence_of(build), **kw)
     assert records.index() == {}
     records.publish(d, ROW, evidence=records.evidence_of(build, gaps={PROP: "no capture of the tree's harness"}), **kw)
-
-    class Index:
-        def close(self) -> None:
-            pass
-
-    monkeypatch.setattr(BI, "reader", lambda root: Index())
+    BI.SqliteIndex(BI.default_path(store.root)).close()
+    assert records.selected_from("--kind", records.PROPERTY_KIND) == "the index"
     with pytest.raises(UsageError, match="which the record neither cites nor names a gap"):
         records.publish(d, ROW, evidence=records.evidence_of(build), **kw)
 

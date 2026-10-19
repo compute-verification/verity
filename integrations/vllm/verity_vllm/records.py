@@ -65,7 +65,7 @@ from typing import Any
 
 from verity_vllm.config import RowId, UsageError, option
 from verity_vllm.pipeline import config_record as CR
-from verity_vllm.pipeline.store_data import data, fetch, listing
+from verity_vllm.pipeline.store_data import data, fetch, listing, selected_from
 
 INDEX = CR.INDEX
 ART = re.compile(r"art:[0-9a-f]{64}")
@@ -240,16 +240,11 @@ def newest_capture(prop: str) -> str | None:
     return max(held)[1] if held else None
 
 
-def unindexed() -> Path | None:
-    """This store's root when `research data select` here has no index to read (`bucket_index.reader`: no $STORE_PRIVATE_READER_URL
-    and no `research data index` build, as in a `research run` job's custody store) and reads only the store's own catalog; else
-    None.  There, a property missing from the catalog says nothing about the store."""
-    from research.store import bucket_index as BI
-    from research.store.local import store_root
-    if (idx := BI.reader(root := store_root())) is None:
-        return root
-    idx.close()
-    return None
+def unindexed(prop: str) -> bool:
+    """Whether `research data select` of `prop`'s captures here read only this store's own catalog, with no index (no
+    $STORE_PRIVATE_READER_URL and no `research data index` build), as in a `research run` job's custody store.  There, a property
+    missing from the catalog says nothing about the store."""
+    return selected_from("--kind", PROPERTY_KIND, "--where", f"meta.property={prop}") == "the catalog"
 
 
 def due(build: str, listed: list[str]) -> dict[str, Any]:
@@ -344,10 +339,10 @@ def publish(d: str | Path, row: str, *, evidence: dict[str, Any], tree: str, by:
     if newest:
         left = [p for p in rec["conformance"]["due"] if p not in cited and p not in gaps]
         found = {p: a for p in left if (a := newest_capture(p))}
-        if (missed := [p for p in left if p not in found]) and (root := unindexed()):
-            raise UsageError(f"{row}: --newest-captures found no capture of {', '.join(missed)} in {root}'s catalog, and there is no store "
-                             f"index here ($STORE_PRIVATE_READER_URL unset, no `research data index` build; a `research run` job has "
-                             f"none), so the store may hold one: resolve each where the index is (the launcher: `research data select "
+        if (missed := [p for p in left if p not in found]) and unindexed(missed[0]):
+            raise UsageError(f"{row}: --newest-captures found no capture of {', '.join(missed)} in this store's catalog, and there is "
+                             f"no store index here ($STORE_PRIVATE_READER_URL unset, no `research data index` build; a `research run` job "
+                             f"has none), so the store may hold one: resolve each where the index is (the launcher: `research data select "
                              f"--kind {PROPERTY_KIND} --where meta.property=PROPERTY`) and pass it as --conformance PROPERTY=art:…")
         cited = dict(sorted({**found, **cited}.items()))
         rec["evidence"] = {**evidence, "conformance": cited}
