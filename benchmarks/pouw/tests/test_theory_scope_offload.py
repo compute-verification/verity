@@ -23,4 +23,4 @@ def test_scope_offload(tmp_path):
     doc = json.loads(verdict.read_text(encoding="utf-8"))
     assert doc["ok"]
     assert doc["counts"]["mutations"] == doc["counts"]["mutations_caught"] >= 3
-    assert doc["counts"]["checks"] == doc["counts"]["checks_ok"] >= 15
+    assert doc["counts"]["checks"] == doc["counts"]["checks_ok"] >= 12

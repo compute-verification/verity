@@ -29,10 +29,12 @@ channel by whether the model charges it:
     is neither credited nor bounded by PoUW today (CMP-49), a datacenter-r finding, not a per-device-eps one.
 
 The checkable arithmetic (verified bit-exact over Z/2^32 and the operand alphabets): the committed word packs exactly 32
-int8*weight products into an s32 with no wrap, so the 8-MACs-a-byte compression is exact; and the per-device ceiling is
-read against `Device.lean`'s stated side channels (the model names PCIe and the network, not NVLink or host RAM).
+int8*weight products into an s32 with no wrap, so the 8-MACs-a-byte compression is exact. With `--device-lean PATH` the
+script also reads a Device.lean and confirms the model names PCIe and the network as its side channels and neither NVLink
+nor a host-RAM channel (the live check behind UNCOUNTED-NVLINK); it is off by default so the run reads only this package.
 
-Run: `python scope_offload.py [--mutations] [--verdict PATH]`. Stdlib + exact_kit only.
+Run: `python scope_offload.py [--mutations] [--device-lean Security/Definitions/Accounting/Device.lean] [--verdict PATH]`.
+Stdlib + exact_kit only.
 Sources: MAC_rate = s8 macs/SM/clk * SMs * f_max (note:20261017T1818Z-draft-axioms sec 2.1); PCIe5 x16 64 GB/s one way;
 ConnectX-7/BlueField-3 400 Gb/s = 50 GB/s a NIC; NVLink4 450 GB/s and NVLink5 900 GB/s one way; RTX PRO 6000 has no
 NVLink; HBM3e 4.8 (H200) / 8 (B200) TB/s, GDDR7 ~1.8 TB/s (sm_120).
@@ -52,8 +54,6 @@ M32 = 0xFFFFFFFF
 # The design's operand alphabets (decisions 29, 44, 51), as isa_escape.py uses: int8 activations, weights |w| <= 63.
 INT8 = range(-128, 128)
 WEIGHT = range(-63, 64)
-
-DEVICE_LEAN = Path(__file__).resolve().parents[3] / "Security" / "Definitions" / "Accounting" / "Device.lean"
 
 # Per device: s8 dense MACs a SM clock, SMs, f_max (Hz). Sheet constants, note:20261017T1818Z-draft-axioms sec 2.1.
 DEVICES = {
@@ -117,9 +117,14 @@ def committed_word_packs_32_macs(rng: random.Random, trials: int = 2000) -> bool
     return True
 
 
-def device_lean_side_channels() -> str:
-    """The side channels Device.lean names, read from its Ingress docstring (the model's `ι`)."""
-    return DEVICE_LEAN.read_text(encoding="utf-8") if DEVICE_LEAN.exists() else ""
+def device_lean_arg(args: list[str]) -> str | None:
+    """The `--device-lean PATH` value, if given (off by default so the run reads only this package)."""
+    for i, a in enumerate(args):
+        if a == "--device-lean" and i + 1 < len(args):
+            return args[i + 1]
+        if a.startswith("--device-lean="):
+            return a.split("=", 1)[1]
+    return None
 
 
 def main() -> int:
@@ -131,14 +136,16 @@ def main() -> int:
                  committed_word_packs_32_macs(rng),
                  f"{MAC_PER_WORD} MACs / {BYTES_PER_WORD} bytes = {MAC_PER_WORD // BYTES_PER_WORD} MACs/byte")
 
-    # 2. Device.lean's modeled side channels are PCIe and the network; NVLink and host RAM are not among them.
-    lean = device_lean_side_channels()
-    checks.check("Device.lean names PCIe and the network as its side channels", "PCIe" in lean and "network" in lean,
-                 "Ingress docstring")
-    checks.check("Device.lean models no NVLink/NVSwitch ingress channel", "NVLink" not in lean and "NVSwitch" not in lean,
-                 "so intra-node peer ingress is unmodeled")
-    checks.check("Device.lean states there is no host-RAM channel (Daniel 3 Oct)", "no host RAM" in lean,
-                 "host offload rides the PCIe channel, which the docstring frames as 'from NVMe'")
+    # 2. With --device-lean PATH, confirm the model's side channels are PCIe and the network, not NVLink or host RAM.
+    lean_path = device_lean_arg(checks.args)
+    if lean_path is not None:
+        lean = Path(lean_path).read_text(encoding="utf-8")
+        checks.check("Device.lean names PCIe and the network as its side channels", "PCIe" in lean and "network" in lean,
+                     "Ingress docstring")
+        checks.check("Device.lean models no NVLink/NVSwitch ingress channel",
+                     "NVLink" not in lean and "NVSwitch" not in lean, "so intra-node peer ingress is unmodeled")
+        checks.check("Device.lean states there is no host-RAM channel (Daniel 3 Oct)", "no host RAM" in lean,
+                     "host offload rides the PCIe channel, which the docstring frames as 'from NVMe'")
 
     # 3. The per-device, per-channel ceiling, and the headline-relevant verdicts.
     rows = []
@@ -182,9 +189,9 @@ def main() -> int:
         checks.mutation("a word mis-sized at 2 bytes doubles the ceiling",
                         inflated > 1.9 * offload_fraction(900 * GB, b200),
                         f"{inflated * 100:.3f}% vs {offload_fraction(900 * GB, b200) * 100:.3f}%")
-        # If Device.lean modeled NVLink, the "models no NVLink" check would read True in the source and fail here.
-        checks.mutation("a source that named NVLink would flip the no-NVLink check",
-                        "NVLink" in (device_lean_side_channels() + "\nover NVLink"))
+        # If a Device.lean named NVLink, the "models no NVLink" check (NVLink not in text) would flip to False.
+        sample_with_nvlink = "side channel i: PCIe from NVMe, the network, and NVLink"
+        checks.mutation("a source that named NVLink would flip the no-NVLink check", "NVLink" in sample_with_nvlink)
         # A value one past the s32 max does not round-trip through 4 bytes: the packing check catches overflow.
         over = 1 << 31
         packed = over & M32
