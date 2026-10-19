@@ -342,7 +342,11 @@ on every rank, the switches that select its kernels (`engine/served.py`: batch i
 the FlashInfer sampler, the model runner, NCCL P2P, the custom all-reduce, eager and compilation modes, the attention backend and
 FlashAttention version, the MoE backend) and fails closed unless each is vLLM's default or declared, with a reason, by the engine
 profile (`engine/env.py`), the row's execution label (only a `bi-*` row is batch invariant) or the row file; `served` in its
-versions.json and summary.json records them.
+versions.json and summary.json records them.  A row of record (one `manifests/records.json` lists) is done only at its public cap:
+its file declares `sampling.ignore_eos` and every request a `max_tokens`, so its served length is public and the EOS a request
+samples decides no step.  The row file (`config.RowConfig`), `row run`'s precheck (`PRECHECK_FAIL_DONE_SOURCE`) and GP-01
+(`reason: done_source`) refuse one that is not, by name, before any GPU time (`config.done_source_refusal`); a research row keeps
+its EOS stops.
 
 The circuit database (`verity_vllm/records.py`) keeps, per row of record, the exact circuit it served and the evidence that it is
 faithful, by row id; committed values are never kept.  A row's entry is a preserved `vllm-config-record/v1` artifact labelled
