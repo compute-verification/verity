@@ -267,6 +267,9 @@ static int run_clock(int load, int iters, int launches) {
 int main(int argc, char** argv) {
   if (argc >= 2 && !strcmp(argv[1], "exact")) return run_exact(argc >= 3 ? atoi(argv[2]) : 64) ? 1 : 0;
   if (argc >= 5 && !strcmp(argv[1], "clock")) return run_clock(atoi(argv[2]), atoi(argv[3]), atoi(argv[4])) ? 1 : 0;
-  fprintf(stderr, "usage: sm90_clock exact [U] | clock LOAD(0 wgmma, 1 wgli, 2 wgli_fill, 3 li) ITERS LAUNCHES\n");
+  // sm90_wgmma.cu's own probes by name (its op_main: --time NAME... [--reps R]), e.g. wgspec_lop3_r256 beside wgU_lop3
+  if (argc >= 2 && !strcmp(argv[1], "probe")) return sm90_wgmma_main(argc - 1, argv + 1);
+  fprintf(stderr, "usage: sm90_clock exact [U] | clock LOAD(0 wgmma, 1 wgli, 2 wgli_fill, 3 li) ITERS LAUNCHES | probe "
+                  "--time NAME...\n");
   return 2;
 }
