@@ -964,3 +964,79 @@ theorem sessionCut_eq (spec : SessionSpec) (tabs : Array Setup) (words : Array (
 end Session
 
 end FlockComplete.CutEq
+
+namespace Claims.ZKMal.Masked
+
+open Claims FlockSoundness.ZK FlockSoundness.Discharge CoinLayer
+open FlockComplete.CutEq
+
+/-- **The cut at the coins `c`** on the simulator's leaves `H(dig ⊕ b, c)` (`RoundPlan.Causal`'s). -/
+noncomputable abbrev cutC (x : Msg) (wt : ∀ j, FlockSoundness.Model.Witness (tabC PE x j).S.m)
+    (ω : ∀ j, ZkView.Base (tabC PE x j).z (tabC PE x j).Hi)
+    (p : ZkView.Leaves (fun j => (tabC PE x j).z) → ZkView.Bits × ByteArray) (c : Fin (refK x) → FlockDeploy.Coin) :
+    ∀ j, ((tabC PE x j).T (czExe PE x c j)).tab.Cut :=
+  cutAt (tabC PE x) (czExe PE x c) wt ω fun l =>
+    ZkView.leafH (digOf (tabC PE x) (czExe PE x c) wt ω l + (p l).1, (p l).2)
+
+/-- What the session reads from `cutC`. -/
+noncomputable abbrev srcC (x : Msg) (wt : ∀ j, FlockSoundness.Model.Witness (tabC PE x j).S.m)
+    (ω : ∀ j, ZkView.Base (tabC PE x j).z (tabC PE x j).Hi)
+    (p : ZkView.Leaves (fun j => (tabC PE x j).z) → ZkView.Bits × ByteArray) (c : Fin (refK x) → FlockDeploy.Coin) :
+    ℕ → FlockComplete.TabSrc :=
+  tabSrcCut PE x (czExe PE x c) (cutC x wt ω p c)
+
+/-- **The sources agree where the session reads them**: at a live statement and coins agreeing before `n ≥ 1`, level 0's
+and the pads' commitments are the same, and each rep stream's source agrees where read from its first body. -/
+def SrcAgree : Prop :=
+  ∀ x, Live x → ∀ wt ω p (c c' : Fin (refK x) → FlockDeploy.Coin) (n : ℕ), (∀ j : Fin (refK x), j.val < n → c j = c' j) →
+    1 ≤ n → ∀ s spec, FlockDeploy.setupOf true x = some (s, spec, stsOf x) →
+      (∀ ms lv i, FlockComplete.commit0Cut hsE ms lv (srcC x wt ω p c i) =
+        FlockComplete.commit0Cut hsE ms lv (srcC x wt ω p c' i)) ∧
+      (∀ N i r, FlockComplete.padsTreeCut hsE N ((srcC x wt ω p c i).rep r) =
+        FlockComplete.padsTreeCut hsE N ((srcC x wt ω p c' i).rep r)) ∧
+      ∃ G : ℕ → ℕ, G 0 = 1 ∧ ∀ schs, ((FlockDeploy.tabsOf (stsOf x)).mapM fun st =>
+          (monadLift (_root_.Flock.Zk.schedule st.m) : _root_.Flock.V (_root_.Flock.Schedule × ℕ))) = .ok schs →
+        ∀ k (hk : k < spec.repStreams.size) i r w, spec.repStreams[k] = (i, r, w) → ∀ extras,
+          (FlockDeploy.tabsOf (stsOf x))[i]!.extra (ptsOf (fun k i => slotAt c k i) spec) = .ok extras →
+          SchOk (FlockDeploy.tabsOf (stsOf x))[i]! schs[i]!.1 ∧
+            G (k + 1) = G k + repSends (FlockDeploy.tabsOf (stsOf x))[i]! schs[i]!.1 extras ∧
+            RepAgree n (G k) (FlockDeploy.tabsOf (stsOf x))[i]! schs[i]!.1 extras ((srcC x wt ω p c i).rep r)
+              ((srcC x wt ω p c' i).rep r)
+
+theorem stsOf_of {x : Msg} {s spec sts} (h : FlockDeploy.setupOf true x = some (s, spec, sts)) : stsOf x = sts := by
+  unfold stsOf
+  rw [h]
+
+theorem srcC_dead {x : Msg} (hx : ¬ Live x) (wt ω p) (c : Fin (refK x) → FlockDeploy.Coin) :
+    srcC x wt ω p c = fun _ => default := by
+  have hj : jOf x = 0 := by
+    unfold jOf
+    simp [hx]
+  funext i
+  unfold srcC tabSrcCut
+  rw [dif_neg (by omega)]
+
+/-- **The deployed plan is causal given the sources agree where read.** -/
+theorem causalExe_of (hB : SrcAgree) : CausalExe := by
+  intro x wt ω p c c' n hcc
+  show encExe PE x c n (cutC x wt ω p c) = encExe PE x c' n (cutC x wt ω p c')
+  unfold encExe
+  by_cases hn : n = 0
+  · simp only [hn, ↓reduceIte]
+    exact enc0_causal PE x _ _ wt ω p
+  rw [if_neg hn, if_neg hn]
+  rcases hsx : FlockDeploy.setupOf true x with _ | ⟨s, spec, sts⟩
+  · rfl
+  dsimp only
+  have hs : stsOf x = sts := stsOf_of hsx
+  have hrun : runCut x c n spec (srcC x wt ω p c) = runCut x c' n spec (srcC x wt ω p c') := by
+    unfold runCut
+    rw [FlockComplete.asksCut_congr (coin := fun k i => slotAt c' k i) (coin' := fun k i => slotAt c k i)
+      (fun k hk => funext fun e => (slotAt_congr hcc hk e).symm)]
+    by_cases hx : Live x
+    · obtain ⟨hcm, hic, G, hG0, hR⟩ := hB x hx wt ω p c c' n hcc (by omega) s spec (by rw [hs]; exact hsx)
+      exact sessionCut_eq _ n spec _ _ _ _ (by omega) hcm hic G hG0 hR
+    · rw [srcC_dead hx, srcC_dead hx]
+  rw [hrun]
+
+end Claims.ZKMal.Masked
