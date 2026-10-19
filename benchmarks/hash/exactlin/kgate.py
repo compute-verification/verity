@@ -1,7 +1,7 @@
 """The fused exact linear's gate, and stock vLLM int8's kernels against the same statement, on one GPU.
 
-Shapes: Llama-3.1-8B's qkv [6144, 4096], o [4096, 4096], gate_up [28672, 4096] and down [4096, 14336] at M = 1, 32, 256,
-2048 and 8192 (`--models` adds Qwen3-8B's gate_up [24576, 4096] and down [4096, 12288]; a shape two models share runs once).  Activations are bf16 with per-channel spread (log-normal channel scales), and from row 0 on (when M allows)
+Shapes: Llama-3.1-8B's qkv [6144, 4096], o [4096, 4096], gate_up [28672, 4096] and down [4096, 14336] at GATE_MS (M = 1,
+7, 16, 32, 33, 64, 256, and with `--shapes all` 2048 and 8192) (`--models` adds Qwen3-8B's gate_up [24576, 4096] and down [4096, 12288]; a shape two models share runs once).  Activations are bf16 with per-channel spread (log-normal channel scales), and from row 0 on (when M allows)
 the rows the statement's edges live on: a zero row (the 1e-30 floor), a row whose every entry is +absmax (X = 127
 everywhere, and with weight column 0 = 127 the largest |Y|, 127 * 127 * K), a row of exact ties (absmax 15.875, so s_a =
 0.125 and x / s_a = j + 1/2), a row below the floor (absmax 5e-31), one nonzero entry, a row near 1e30, and a subnormal
@@ -18,7 +18,9 @@ Per shape, the reference is the exact arm's own code on the same GPU, `int8_exac
     alloc       torch's allocated bytes unchanged by the eager calls and by the capture
     stock       vLLM's ops.scaled_int8_quant and triton_scaled_mm: where they differ from the statement, and that the
                 quantizer is exactly q = cvt.rni.sat(x * RN32(127 / a)) with s = RN32(a / 127) (0 for a zero row); the
-                GEMM against the reference's xq and s_a, and against the reverse order RN(RN(Y s_w) s_a)
+                GEMM against the reference's xq and s_a, and against the reverse order RN(RN(Y s_w) s_a); where M is a
+                multiple of 16 and the build has it, CUTLASS's GEMM as vLLM calls it and on the transposed product
+                (`cutlass_swapped`)
 plus the PTX of both kernels (`exactlin.ptx_check`).  `gate()` returns the document; `ok` is the fused path's verdict
 (stock's differences are findings, not failures).
 
@@ -46,6 +48,8 @@ MODELS = {
 LAYERS = MODELS["llama-3.1-8b"]["linears"]
 MS = (1, 32, 256, 2048, 8192)
 DECODE_MS = (1, 32, 256)
+# the gate's Ms: every exactlin.CONFIGS row (m_max 1, 16, 32, 64, 256) and an M inside two of them, masked tiles
+GATE_MS = {"all": (1, 7, 16, 32, 33, 64, 256, 2048, 8192), "decode": (1, 7, 16, 32, 33, 64, 256)}
 
 
 def shapes_of(models: tuple[str, ...], ms: tuple[int, ...]) -> list[tuple[int, int, int, list[str]]]:
@@ -162,7 +166,26 @@ def stock_doc(x, w, s_w, xq_ref, s_ref, y_ref) -> dict:
     y_chain = triton_scaled_mm(xq_st, w.t(), s_st.reshape(-1, 1), s_w, torch.bfloat16)
     doc["gemm"] = {"triton_scaled_mm_y_diff": diff(y_st, y_ref), "reverse_order_y_diff": diff(y_rev, y_ref),
                    "stock_chain_y_diff": diff(y_chain, y_ref)}
+    if x.shape[0] % 16 == 0:
+        try:
+            y_cu = torch.empty_like(y_ref)
+            torch.ops._C.cutlass_scaled_mm(y_cu, xq_ref, w.t(), s_ref.reshape(-1, 1), s_w, None)
+            doc["gemm"]["cutlass_y_diff"] = diff(y_cu, y_ref)
+            doc["gemm"]["cutlass_swap_y_diff"] = diff(cutlass_swapped(xq_ref, s_ref, w, s_w), y_ref)
+        except RuntimeError as err:
+            doc["gemm"]["cutlass_error"] = str(err).splitlines()[0][:200]
     return doc
+
+
+def cutlass_swapped(xq, s_a, w, s_w) -> torch.Tensor:
+    """y from vLLM's CUTLASS int8 GEMM on the transposed product, y^T = W X^T with scale_a = s_w and scale_b = s_a.
+    CUTLASS's epilogue applies scale_b first, so s_a goes first, the statement's order.  M must be a multiple of 16
+    (CUTLASS's alignment; `ops.cutlass_scaled_mm` would fall back to Triton, whose order is the reverse)."""
+    m, n = xq.shape[0], w.shape[0]
+    assert m % 16 == 0, m
+    yt = torch.empty((n, m), dtype=torch.bfloat16, device=xq.device)
+    torch.ops._C.cutlass_scaled_mm(yt, w, xq.t(), s_w.reshape(-1, 1), s_a.reshape(-1, 1), None)
+    return yt.t().contiguous()
 
 
 _WORK: list = []
@@ -263,7 +286,7 @@ def one(n: int, k: int, m: int, seed: int, with_stock: bool, names: list[str] | 
 def gate(shapes: str = "all", with_stock: bool = True, seed: int = 20261019,
          models: tuple[str, ...] = ("llama-3.1-8b",), dump: Path | None = None) -> dict:
     """`dump` gets each M <= 32 shape's outputs (`one`)."""
-    ms = MS if shapes == "all" else DECODE_MS
+    ms = GATE_MS[shapes]
     rows = []
     for n, k, m, names in shapes_of(models, ms):
         d = one(n, k, m, seed + m, with_stock, names, dump=dump if m <= 32 else None)

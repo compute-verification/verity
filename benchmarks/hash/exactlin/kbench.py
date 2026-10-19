@@ -12,7 +12,8 @@ about ITEM_MS, and the arms alternate item by item (order rotated each rep), wit
 every item.  Reported per shape: median microseconds a call per arm, the ratios, and the clocks; and per model's decode step
 at M = 32 (its layers x qkv, o, gate_up, down) the predicted linear time of each arm.  `--arms` also takes the single
 kernels (PARTS: stock's quant, stock's GEMM with vLLM's default, without and with tensor descriptors, the fused quant and
-GEMM alone).
+GEMM alone, the fused GEMM on vLLM's tiles, stock's CUTLASS linear, and the exact quant with `kgate.cutlass_swapped`, or
+that GEMM alone; the last two time only M a multiple of 16).
 
     python kbench.py --out OUT [--reps 15] [--shapes all|decode] [--models llama-3.1-8b,qwen3-8b] [--arms ...] [--skip-gate]
 """
@@ -35,7 +36,7 @@ import kgate
 ITEM_MS = 10.0
 ARMS = ("exact", "stock", "fused")
 PARTS = ("stock_quant", "stock_mm", "stock_mm_notd", "stock_mm_td", "fused_quant", "fused_mm", "fused_vllm_tiles",
-         "stock_cutlass")
+         "stock_cutlass", "cutlass_swap", "cutlass_swap_mm")
 WORK = X.Workspace("cuda") if torch.cuda.is_available() else None
 
 
@@ -53,6 +54,7 @@ def nvml():
 
 
 def arm_fn(arm: str, x, ws, xq, s, y):
+    """The arm's linear over every weight copy, or None where it doesn't apply to this M."""
     from verity_vllm.engine import int8_exact as E
     if arm == "exact":
         def f():
@@ -76,6 +78,17 @@ def arm_fn(arm: str, x, ws, xq, s, y):
             for w, sw in ws:
                 q, sa, _ = ops.scaled_int8_quant(x)
                 ops.cutlass_scaled_mm(q, w.t(), scale_a=sa, scale_b=sw, out_dtype=torch.bfloat16)
+    elif arm in ("cutlass_swap", "cutlass_swap_mm"):
+        import vllm._custom_ops  # noqa: F401  (loads torch.ops._C)
+        if x.shape[0] % 16:
+            return None
+        X.quant_rows(x, xq, s)
+
+        def f():
+            for w, sw in ws:
+                if arm == "cutlass_swap":
+                    X.quant_rows(x, xq, s)
+                kgate.cutlass_swapped(xq, s, w, sw)
     elif arm in ("fused", "fused_vllm_tiles"):
         m, k = x.shape
         cfg = X.pick(m, ws[0][0].shape[0], k) if arm == "fused" else X.default_cfg(m, ws[0][0].shape[0], k)
@@ -170,7 +183,9 @@ def shape_row(n: int, k: int, m: int, reps: int, clock, arms=ARMS, names: list[s
     xq = torch.empty((m, k), dtype=torch.int8, device="cuda")
     s = torch.empty(m, dtype=torch.float32, device="cuda")
     y = torch.empty((m, n), dtype=torch.bfloat16, device="cuda")
-    med, us, meta = timed({arm: arm_fn(arm, x, ws, xq, s, y) for arm in arms}, reps, clock, copies)
+    fns = {arm: arm_fn(arm, x, ws, xq, s, y) for arm in arms}
+    arms = tuple(arm for arm in arms if fns[arm] is not None)
+    med, us, meta = timed({arm: fns[arm] for arm in arms}, reps, clock, copies)
     clocks, per = meta["clocks"], meta["replays_per_item"]
     row = {"layer": name, "m": m, "n": n, "k": k, "copies": copies, "replays_per_item": per, "us_per_call": med,
            "us_all": {a: [round(v, 3) for v in us[a]] for a in arms}, "sm_clock_mhz": clocks,

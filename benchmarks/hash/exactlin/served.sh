@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # exactlin's served standard number on node 2 (RTX PRO 6000), vy-dc-h200 or vy-dc-b200: dither's sbench.py (the arms stock,
 # stock-cutlass on sm_90, exact and exact-fused, which need none of Dither's libraries) on one leased GPU for at most
-# SERVED_MAX_MIN (25) minutes, with the clocks read before and after.  Extra arguments go to sbench.py; stock first, so its
+# SERVED_MAX_MIN (25) minutes, with the clocks read before and after, and with an exact-fused arm only after kgate.py's
+# bitwise gate (decode shapes, both models) passed in the same lease.  Extra arguments go to sbench.py; stock first, so its
 # overheads are against stock.  DITHER_NSYS=1 runs it under nsys with the prof op's per-step kernels (steps.py).
 #   research run --on vy-dc-h200 --project verity --campaign exactlin --source . --cwd source \
 #     --env GPU_LEASE_WHO=kernels-exactlin -- bash benchmarks/hash/exactlin/served.sh \
@@ -33,6 +34,9 @@ if [ "${DITHER_NSYS:-}" = 1 ]; then
 fi
 cd integrations/vllm
 MAX_MIN=${SERVED_MAX_MIN:-25}
+# an exact-fused arm is timed only after kgate.py's bitwise gate passes on this GPU, in the same lease (OUT/kgate)
+case " $* " in *exact-fused*) KGATE=1 ;; *) KGATE=0 ;; esac
+export KGATE KGATE_PY=$PY KGATE_SCRIPT=$ROOT/benchmarks/hash/exactlin/kgate.py
 echo "served: asking for one GPU at $(date -u +%H:%M:%SZ)"
 gpu-lease 1 --wait --preemptible --max-min "$MAX_MIN" -- bash -c '
   q=clocks.sm,clocks.max.sm,clocks.mem,temperature.gpu,power.draw,name,uuid
@@ -40,7 +44,14 @@ gpu-lease 1 --wait --preemptible --max-min "$MAX_MIN" -- bash -c '
   nvidia-smi -i "$GPU_LEASE_UUID" --query-gpu=index,clocks.sm,clocks.mem,power.draw,temperature.gpu,utilization.gpu \
     --format=csv -l 2 > "$0/smi.csv" 2>/dev/null &
   smi=$!
-  timeout $((60 * '"$MAX_MIN"' - 60)) "$@"
+  if [ "$KGATE" = 1 ]; then
+    timeout 900 "$KGATE_PY" "$KGATE_SCRIPT" --out "$0/kgate" --shapes decode --models llama-3.1-8b,qwen3-8b --no-stock \
+      > "$0/kgate.log" 2>&1
+    g=$?
+    tail -1 "$0/kgate.log"
+    if [ $g -ne 0 ]; then echo "served: kgate rc $g, nothing timed"; kill "$smi" 2>/dev/null; exit 4; fi
+  fi
+  timeout $((60 * '"$MAX_MIN"' - 60 - SECONDS)) "$@"
   r=$?
   kill "$smi" 2>/dev/null
   nvidia-smi -i "$GPU_LEASE_UUID" --query-gpu=$q --format=csv > "$0/clocks.after.csv"
