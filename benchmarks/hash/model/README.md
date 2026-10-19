@@ -6,7 +6,7 @@ GB/s or compressions per second divided by compressions per leaf. The hash lane'
 
 ~~~text
 python3 benchmarks/hash/model/commit_model.py --card               # the recommendation card's tables, one per GPU
-python3 benchmarks/hash/model/commit_model.py --card --hm96 'H200/SHA-512/pre=520,300' --hm96 'H200/SHA-512/step=410,180'
+python3 benchmarks/hash/model/commit_model.py --card --hm96 'H200/SHA-512 sharaw/step=480' --hm96 'H200/SHA-512 sharaw/pre=540'
 python3 benchmarks/hash/model/commit_model.py                      # the card, SHA-512 today, and the GB/s a hash needs for 5%
 python3 benchmarks/hash/model/commit_model.py --gbps 900 --leaf 4096 --hash-name X
 python3 benchmarks/hash/model/commit_model.py --rate 7.13e9 --per-leaf 44 --leaf 4096
@@ -15,17 +15,32 @@ python3 benchmarks/hash/model/commit_model.py --check              # the seeds r
 
 ## The card
 
-`--card` prints one table per GPU (RTX PRO 6000, H200, B200) for Qwen3-8B B32 compiled. Each row is a granularity: today's
-per-Call bytes at 256 B leaves, then per-Call, per-block, per-layer and residual-folded per-layer at 4 KiB. Each column is a
-hash in hm96 format: SHA-512, keyed BLAKE3, SHA-512 r32 and r24. A cell is a whole run's hashing over its stock serve time,
-first with the salts precomputed off the step and then, in brackets, with the salts on the step. A ✓ marks a value under
-`--target`. Under each table, `smallest_change` names the first row where SHA-512 is under the target.
+`--card` prints one table per GPU (RTX PRO 6000, H200, B200) for Qwen3-8B B32 compiled. It covers the served Commit as proofs
+ruled it (PRF-62/64/68, 18 Oct): per-Call units with fused epilogues, 4 KiB row leaves, and salts as bytes read ahead of the
+step. The rows:
 
-- The rates are `HM96`: GB/s at 4 KiB for each mode. Prefill reads the 1 GiB window's rate and decode the 142 MB one.
-  `--hm96 GPU/HASH/MODE=PREFILL[,DECODE]` replaces one; a single number sets both phases.
+- today's per-Call bytes at 256 B leaves;
+- per-Call fused units at 4 KiB;
+- the same with the decode commit on a second stream.
+
+The columns are SHA-512 in hm96 format, SHA-512 with sharaw's prefill rate, and keyed BLAKE3. A cell is a whole run's hashing
+over its stock serve time: first with the salts read ahead (the salt digest is computed off the step), then, in brackets, with
+the salts on the step. A ✓ marks a value under `--target`. Under each table, `verdict` says whether SHA-512 and keyed BLAKE3
+get under the target, and if not, the gap and the prefill rate that would close it.
+
+- Fused units keep 71,680 B of today's 145,180 per token per layer (`QWEN_FUSED`, layout_bytes.py's `all-three` unit on
+  r20261018-031955-d2b3). That is 6.66 GB a prefill step and 73 MB a decode step, 31.33 GB a run.
+- `hm96_rate` reads each phase's rate at its own window. Latency is interpolated linearly in bytes between the measured
+  windows: 5–40 MB (`HM96_SMALL`) and 142 MB and 1 GiB (`HM96`). The sharaw column replaces the prefill rate with
+  `SHARAW_PREFILL`, which includes the salts; its "pre" value takes the salt's 5 of 44 compressions off.
+- The second-stream row multiplies decode hashing by the share a memory-bound stand-in didn't hide (`OVERLAP_75MB`, measured
+  for SHA-512 at 75.6 MB and applied to BLAKE3 too). Prefill isn't overlapped.
+- `--hm96 GPU/COLUMN/MODE=PREFILL[,DECODE]` replaces a fused row's rates. One number replaces the prefill rate; two replace
+  both.
+- `--fused-bytes PREFILL,DECODE` replaces the fused rows' bytes a step (logits included), to price a Commit that keeps fewer
+  values at the same units; the decode rate follows the new window. `benchmarks/hash/bytes/` prices each candidate this way.
 - The 256 B row is served rows-sha512 as measured (`SERVED_256`, hashing GPU ms per step), which runs with the salts on the
-  step. Its "pre" value removes the salt's 5 of 14 compressions. The other hashes are not measured at 256 B ("n.m.").
-- "Pre" only counts if the salt phase runs outside busy GPU time: idle time, ahead of the step, or another device.
+  step. Its "pre" value removes the salt's 5 of 14 compressions. The other columns are not measured at 256 B ("n.m.").
 
 ## The model
 
