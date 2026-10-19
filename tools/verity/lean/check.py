@@ -243,6 +243,9 @@ def cores() -> int:
 #: what auditing a package that pins ArkLib (Security/Proofs, and Security, which audits it beside itself) needs: its build
 #: of C-Flock's soundness peaks at 15–24 GB (the lean-proofs skill); `VERITY_LEAN_MEM_FLOOR_GIB` sets another floor, 0 none
 MEM_FLOOR_GIB = 24
+#: an audit of a spec whose guarantees an ArkLib package proves (Security): its facts of that package held 30–50 GiB between
+#: replays in r20261018-175656-1c85, so with replay threads bounded (`replay_threads`) about this fits
+SPEC_FLOOR_GIB = 64
 #: where a machine below the floor runs it instead
 ON_NODE = ("research run --on vy-nebius-1 --project verity --source . --cwd source --declared-output 'lean-audit/*' -- "
            "python3 tools/verity/lean/lean_changed.py --records {pkg}")
@@ -298,21 +301,41 @@ def build_threads(pkg: Path, env=os.environ, have_gib: float | None = None) -> i
     return max(1, min(cores(), int(gib // BUILD_GIB_PER_JOB)))
 
 
+#: about what one replay thread of a Mathlib or ArkLib package peaks at: the whole-Security `--build --update` of 18 Oct
+#: (r20261018-175656-1c85, 48 threads) peaked at 145 GiB in one replay, about 3 GiB a thread, and was OOM-killed at 64 and
+#: 96 GiB; a heavy replay runs alone (`_HEAVY_REPLAY`), since two side by side took that run to 183 GiB
+REPLAY_GIB_PER_THREAD = 4
+_HEAVY_REPLAY = threading.Semaphore(1)
+
+
+def replay_threads(pkg: Path, env=os.environ, have_gib: float | None = None) -> int | None:
+    """The `LEAN_NUM_THREADS` the kernel replay of ``pkg`` runs with when its memory bounds it (as `build_threads`, at
+    `REPLAY_GIB_PER_THREAD`); else None."""
+    if build_threads(pkg, env, have_gib=1) is None:
+        return None
+    gib = memory_gib() if have_gib is None else have_gib
+    return max(1, min(cores(), int(gib // REPLAY_GIB_PER_THREAD)))
+
+
 def memory_refusal(pkgs: list[Path], have_gib: float, env=os.environ) -> str | None:
-    """Why this machine should not audit ``pkgs``, or None: one pins ArkLib and the memory is below the floor."""
-    try:
-        floor = float(env.get("VERITY_LEAN_MEM_FLOOR_GIB", MEM_FLOOR_GIB))
-    except ValueError:
-        floor = MEM_FLOOR_GIB
+    """Why this machine should not audit ``pkgs``, or None: one pins ArkLib and the memory is below the floor, which is
+    `SPEC_FLOOR_GIB` when a spec beside it reads its build (`proved_in`: the facts of every guarantee it proves)."""
     heavy = [p for p in pkgs if (m := p / "lake-manifest.json").is_file()
              and any(d.get("name") == "Arklib" for d in json.loads(m.read_text()).get("packages", []))]
+    spec = [p for p in pkgs if (p / POLICY).is_file() and json.loads((p / POLICY).read_text()).get("proved_in")]
+    need = SPEC_FLOOR_GIB if heavy and spec else MEM_FLOOR_GIB
+    try:
+        floor = float(env.get("VERITY_LEAN_MEM_FLOOR_GIB", need))
+    except ValueError:
+        floor = need
     if not heavy or have_gib >= floor:
         return None
     rel = lambda p: os.path.relpath(p, ROOT) if p.resolve().is_relative_to(ROOT) else str(p)
-    return (f"{rel(heavy[0])} pins ArkLib, whose build peaks near {MEM_FLOOR_GIB} GiB, and this machine has "
-            f"{have_gib:.0f} GiB (memory and swap, within its cgroup): run it on a node, "
-            f"`{ON_NODE.format(pkg=rel(pkgs[0]))}` (add --update for the record), or set VERITY_LEAN_MEM_FLOOR_GIB=0 to "
-            f"try here anyway")
+    what = (f"{rel(spec[0])}'s audit reads {rel(heavy[0])}'s facts for every guarantee it proves, about 40 GiB beside the "
+            f"replay" if heavy and spec else f"{rel(heavy[0])} pins ArkLib, whose build peaks near {MEM_FLOOR_GIB} GiB")
+    return (f"{what}, and this machine has {have_gib:.0f} GiB (memory and swap, within its cgroup), under the {floor:.0f} "
+            f"GiB floor: run it on a node, `{ON_NODE.format(pkg=rel(pkgs[0]))}` (add --update for the record), or set "
+            f"VERITY_LEAN_MEM_FLOOR_GIB=0 to try here anyway")
 
 
 #: `--artifacts`: the node's Lake artifact cache, which only a passing audit writes (`lean_audit.LakeArtifacts`)
@@ -2062,8 +2085,11 @@ def replay_step(pkg: Path, policy: dict, facts: dict, toolchain: str, work: Path
     keys = replay_keys(facts, toolchain) if replay_cache else {}
     reused = [m for m in facts["modules"] if m in keys and (replay_cache / f"{keys[m]}.json").is_file()]
     checked = [m for m in facts["modules"] if m not in reused]
-    rc, text = run(["lake", "env", "lean", "--run", str(TOOL / "Replay.lean"), str(found), *checked,
-                    *(["--reused", *reused] if reused else [])], pkg, work / "replay.log")
+    n = replay_threads(pkg)
+    with _HEAVY_REPLAY if n is not None else contextlib.nullcontext():
+        rc, text = run([*([] if n is None else ["env", f"LEAN_NUM_THREADS={n}"]), "lake", "env", "lean", "--run",
+                        str(TOOL / "Replay.lean"), str(found), *checked, *(["--reused", *reused] if reused else [])],
+                       pkg, work / "replay.log")
     fails = []
     if killed(rc):
         fails.append(f"replay: killed (exit {rc}; out of memory?), which is not a kernel verdict: rerun it alone\n{text[-1000:]}")
@@ -2255,8 +2281,14 @@ def audit(pkg: Path, out: Path, build: bool = False, update: bool = False, repla
                 return rep
     built()
     files = lean_modules(pkg)
-    background = ThreadPoolExecutor(max_workers=2)
+    background = ThreadPoolExecutor(max_workers=5)
     ran = background.submit(timed, tests, pkg, policy, files, work, repo, update) if runs and policy.get("runs") and not lifts else None
+    # a spec's `proved` waits for its provers' builds; the replay, the dependency scans and digests and the upstream scan
+    # read only the package's own facts, which `proved` leaves as they are, so they fill that wait. Elsewhere they keep
+    # their place: started together, their Python contends for the GIL with the audits on the critical path.
+    early = "proved_in" in policy and not lifts
+    upstream = background.submit(timed, sibling("upstream").pinned, pkg, policy["upstream"]) \
+        if early and "upstream" in policy else None
     current = policy
     if moved:
         renames = {}
@@ -2265,18 +2297,24 @@ def audit(pkg: Path, out: Path, build: bool = False, update: bool = False, repla
                 renames[renamed(n, moved)] = r
         current = policy | {"guarantees": renames}
     s = time.monotonic()
+    replayed = scanned = digested = None
     try:
         facts = facts_of(pkg, current, work, moved)
+        if early:
+            replayed = background.submit(timed, replay_step, pkg, policy, facts, rep["toolchain"], work, replay_cache) \
+                if replay else None
+            scanned = background.submit(timed, dependency_scans, pkg, facts["oleans"], policy)
+            digested = background.submit(timed, dependency_digests, pkg, rep["toolchain"], facts["oleans"])
         cross: list[str] = []
         if "proved_in" in policy:
             cross, facts, rep["proved_in"] = proved(pkg, current, facts, work, moved, ready)
     except RuntimeError as e:
         rep["failures"].append(f"lean: {e}")
-        background.shutdown()
+        background.shutdown(cancel_futures=True)
         return rep
     rep["seconds"]["audit"] = round(time.monotonic() - s, 1)
-    replayed = background.submit(timed, replay_step, pkg, policy, facts, rep["toolchain"], work, replay_cache) \
-        if replay and not lifts else None
+    if replay and not lifts and not early:
+        replayed = background.submit(timed, replay_step, pkg, policy, facts, rep["toolchain"], work, replay_cache)
     if lifts:
         try:
             rep["moved"] = lift(pkg, current, facts, lifts)
@@ -2287,9 +2325,8 @@ def audit(pkg: Path, out: Path, build: bool = False, update: bool = False, repla
     fails = cross + fails + dropped(pkg, files, facts) + spec_reads(current, facts, reads_home(pkg, current)) + \
         shape(current, facts)
     rep["unread_spec"] = unread_spec(facts, read_by_dependents(pkg, repo))
-    s = time.monotonic()
-    missed, rep["dependency_sources"] = dependency_scans(pkg, facts["oleans"], policy)
-    rep["seconds"]["dependency-sources"] = round(time.monotonic() - s, 1)
+    (missed, rep["dependency_sources"]), rep["seconds"]["dependency-sources"] = \
+        scanned.result() if scanned else timed(dependency_scans, pkg, facts["oleans"], policy)
     fails = scans(pkg, files, policy) + missed + fails
     rep["heartbeats"] = heartbeats(pkg, files, build_seconds([work / "build.log", work / "build-roots.log"] if build else []))
     anonymous = anonymous_instances(pkg, files, facts)
@@ -2305,13 +2342,11 @@ def audit(pkg: Path, out: Path, build: bool = False, update: bool = False, repla
               f"with it every record whose definitions use it. Write `instance {i['id']}` there (`check.py --name-instances` "
               f"writes each one)" for i in anonymous]
     if "upstream" in policy:
-        s = time.monotonic()
-        rep["upstream"], missed = sibling("upstream").pinned(pkg, policy["upstream"])
+        (rep["upstream"], missed), rep["seconds"]["upstream"] = \
+            upstream.result() if upstream else timed(sibling("upstream").pinned, pkg, policy["upstream"])
         fails += missed
-        rep["seconds"]["upstream"] = round(time.monotonic() - s, 1)
-    s = time.monotonic()
-    deps = dependency_digests(pkg, rep["toolchain"], facts["oleans"])
-    rep["seconds"]["dependencies"] = round(time.monotonic() - s, 1)
+    deps, rep["seconds"]["dependencies"] = \
+        digested.result() if digested else timed(dependency_digests, pkg, rep["toolchain"], facts["oleans"])
     if update:
         new["dependencies"] = deps
     elif "dependencies" not in policy:

@@ -65,9 +65,10 @@
     exclusive       --exclusive takes <root>/runs/.exclusive.lock (O_EXCL) naming the run; a live holder refuses the launch with the reason.
                     A dead holder (terminal status or vanished pid) is reclaimed.  The runner releases its own lock at exit.
     memory          --mem-gb N: the machine side admits the run only if its memory cgroup's limit - in use - live reservations
-                    (the fleet's /workspace/ramlock/*.json, machines.toml `ramlock`) >= N, and writes the run's reservation there;
-                    else MemoryNotAvailable (refused.json).  --mem-wait S polls up to S seconds instead.  The runner removes the
-                    reservation at exit; job.json run.remote.mem records the reading it was admitted on (research.mem).
+                    (the fleet's /workspace/ramlock/*.json, machines.toml `ramlock`) >= N and no older --mem-wait run is waiting in
+                    line, and writes the run's reservation there; else MemoryNotAvailable (refused.json).  --mem-wait S waits in line
+                    up to S seconds instead, first come first served.  The runner removes the reservation at exit; job.json
+                    run.remote.mem records the reading it was admitted on (research.mem).
     GPUs            on a machine whose GPUs gpu-lease hands out (GPU_LEASE_HOST_FILE), a run sees no GPU (CUDA_VISIBLE_DEVICES='')
                     unless it declares `--gpus N`: its workload then runs under `gpu-lease N --wait`, which queues it first come first
                     served for N of them (the wait counts against --timeout) and names them in CUDA_VISIBLE_DEVICES.  A workload that
@@ -149,6 +150,7 @@ TERMINAL = ("done", "failed", "cancelled")
 FETCHED_FILE = ".fetched"                     # <run>/.fetched on the machine: written by `fetch --all` once every file verified
 FETCHED_SCHEMA = "research/fetched/v0.1"
 CUSTODY_DIR = "custody"                       # <root>/requests/<run-id>/custody/: --custody-r2's minted key + store.toml (store.custody)
+STORE_READ_DIR = "store-read"                 # --store-read's read-only key, put in the workload's environment (store.custody.READ_DIR_NAME)
 LAUNCH_ACK = ".launch-ack"                    # <root>/requests/<run-id>/.launch-ack: the FIFO the runner names its first record on
 LAUNCH_LOCK = ".launch.lock"                  # <root>/requests/<run-id>/.launch.lock: held by a delivery of the request until it answers
 FIRST_RECORD = "job.json"
@@ -1344,6 +1346,13 @@ def _launch_request(request_path: Path) -> dict[str, Any]:
         env = _runner_env(req, runs_root, src_dir, remote)
         if req.get("custody") and not (request_path.parent / CUSTODY_DIR / "cred.json").is_file():
             raise Refused(f"--custody-r2: no staged key under {request_path.parent / CUSTODY_DIR}; the run could not publish its custody")
+        if req.get("store_read"):
+            from .store import custody as CU
+
+            try:
+                env.update(CU.reader_env(request_path.parent / STORE_READ_DIR))
+            except (OSError, ValueError, KeyError):
+                raise Refused(f"--store-read: no staged key under {request_path.parent / STORE_READ_DIR}") from None
         if req.get("job_user"):
             from . import jobuser
 
@@ -1402,6 +1411,8 @@ def _launch_request(request_path: Path) -> dict[str, Any]:
         argv += ["--exclusive-lock", str(runs_root / ".exclusive.lock")]
     if req.get("custody"):
         argv += ["--custody-dir", str(request_path.parent / CUSTODY_DIR)]
+    if req.get("store_read"):
+        argv += ["--store-read-dir", str(request_path.parent / STORE_READ_DIR)]
     if req.get("job_user"):
         argv += ["--job-user", req["job_user"]]
     argv += [*(req.get("harness_args") or []), "--", *(req.get(QUEUE_WORKLOAD_WRAP) or []), *gpu_lease_wrap(req), *req["command"]]
@@ -1698,7 +1709,7 @@ def launch(*, run_id: str, local_dir: Path, machine_name: str, project: str, com
            source: Path | None, sends: list[Path], cwd: str | None, env: dict[str, str], exclusive: bool,
            mem_gb: float | None = None, mem_wait_s: float = 0.0, custody_ttl: str | None = None,
            preflight_tool: str | None = None, queue: dict[str, Any] | None = None, job_user: str | None = None,
-           gpus: int | None = None) -> dict[str, Any]:
+           gpus: int | None = None, store_read: bool = False) -> dict[str, Any]:
     """`custody_ttl` (--custody-r2): mint a delete-free key for that long and stage it for the machine's runner (store.custody).
     `gpus` (--gpus without --queue): the machine runs the workload under `gpu-lease N --wait` (module doc, GPUs).
     `preflight_tool` (--preflight): run that tool's declared preflight on the machine before this run, whatever the run's --tool.
@@ -1728,6 +1739,22 @@ def launch(*, run_id: str, local_dir: Path, machine_name: str, project: str, com
                 raise Refused(f"--custody-r2: cannot mint the machine's key here: {e} (the parent key: the Cursor secrets, or source "
                               f"~/.config/verity/r2.env; --no-custody-r2 launches without run custody)") from None
             rec["custody"] = custody_pub
+        if store_read:
+            from .store import credentials as C
+            from .store import custody as CU
+
+            if not custody_ttl:
+                raise Refused("--store-read needs run custody (the default with --on): without it the runner's own publish would try "
+                              "the workload's read-only key")
+            if not hasattr(CU, "mint_reader") or "store_read" not in (Path(source_tool_package(source)) / "remote.py").read_text():
+                raise Refused(f"--store-read: the research package in {source} predates it; the machine would not pass the key on")
+            try:
+                read_pub, read_files = CU.mint_reader(custody_ttl or CU.DEFAULT_TTL)
+            except C.MintError as e:
+                raise Refused(f"--store-read: cannot mint a read-only key here: {e} (the parent key: the Cursor secrets, or source "
+                              f"~/.config/verity/r2.env)") from None
+            custody_files = [*custody_files, *read_files]
+            rec["store_read"] = read_pub
         tgt = pod_target(m)
         user = tgt.get("user", "root")
         ssh = ssh_argv(tgt["host"], tgt["port"], user=user)
@@ -1783,6 +1810,7 @@ def launch(*, run_id: str, local_dir: Path, machine_name: str, project: str, com
                    "guard": {"idle_min": guard_min} if guard_min else None,
                    "lease_extend_s": lease_extend_s(harness_args),
                    **({"custody": custody_pub} if custody_pub else {}),
+                   **({"store_read": rec["store_read"]} if rec.get("store_read") else {}),
                    **({"submitted_by": by} if (by := sender()) else {}),
                    **({"preflight_tool": preflight_tool} if preflight_tool else {}),
                    **({"job_user": job_user} if job_user else {}),

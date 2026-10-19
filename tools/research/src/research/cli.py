@@ -201,7 +201,9 @@ def _cmd_run(argv: list[str], clones: list[Path]) -> int:
                     help="with --on: admit only if the machine's memory cgroup has N GB free after live reservations (/workspace/ramlock), "
                          "and reserve them for the run; else MemoryNotAvailable (research.mem). With --queue: the job's memory cap "
                          "(its scope's MemoryMax=), required unless --kind names a registered kind, whose shape gives it")
-    ap.add_argument("--mem-wait", type=float, default=0.0, metavar="S", help="with --mem-gb: wait up to S seconds for the memory instead of refusing")
+    ap.add_argument("--mem-wait", type=float, default=0.0, metavar="S",
+                    help="with --mem-gb: wait up to S seconds for the memory instead of refusing, in line behind older waiters "
+                         "(first come first served, research.mem)")
     ap.add_argument("--preflight", default=None, metavar="TOOL",
                     help="with --on --source: run TOOL's declared preflight (Tool.preflight) on the machine before this run, as a --tool TOOL "
                          "run does, and refuse the run when it fails")
@@ -248,6 +250,11 @@ def _cmd_run(argv: list[str], clones: list[Path]) -> int:
     ap.add_argument("--remote-json", default=None, help=argparse.SUPPRESS)
     ap.add_argument("--exclusive-lock", default=None, help=argparse.SUPPRESS)
     ap.add_argument("--custody-dir", default=None, help=argparse.SUPPRESS)   # machine side: the minted key + store.toml (store.custody)
+    ap.add_argument("--store-read-dir", default=None, help=argparse.SUPPRESS)   # machine side: --store-read's key, deleted when the workload ends
+    ap.add_argument("--store-read", action="store_true",
+                    help="with --on: the workload gets a read-only key to the store's remote (RESEARCH_STORE_CONFIG and AWS_* in its "
+                         "environment, minted here like custody's and deleted when it ends), so its `research data fetch` works on a "
+                         "machine whose local store lacks the artifact; needs run custody (the default)")
     ap.add_argument("--custody-r2", dest="custody_r2", action="store_true", default=None,
                     help="with --on (the default there): the machine publishes the attempt and every run file (logs included) to the "
                          "store's remote with a key minted here, so custody does not depend on this machine (store.custody)")
@@ -336,6 +343,10 @@ def _cmd_run(argv: list[str], clones: list[Path]) -> int:
     if ns.preflight and not (ns.on and ns.source):
         print("research run: --preflight runs a tool's preflight on the machine, from the tree --source ships (--on MACHINE --source GITDIR)",
               file=sys.stderr)
+        return 2
+    if ns.store_read and not ns.on:
+        print("research run: --store-read hands a machine's workload a read-only store key (--on MACHINE); here the store's own "
+              "config already applies", file=sys.stderr)
         return 2
     if (ns.custody_r2 or ns.custody_ttl) and not ns.on:
         print("research run: --custody-r2 / --custody-ttl are for --on MACHINE (a local run's records are already on this disk: "
@@ -490,6 +501,10 @@ def _cmd_run(argv: list[str], clones: list[Path]) -> int:
               f"belong to {ns.job_user} ({', '.join(unsafe[:10])}), so nothing here reads the run dir; its records "
               f"stay on this machine", file=sys.stderr)
         return rc or 3
+    if ns.store_read_dir:               # the workload is done with its read-only key
+        from .store.custody import CRED_FILE
+
+        (Path(ns.store_read_dir) / CRED_FILE).unlink(missing_ok=True)
     if not ns.custody_dir:
         _publish_attempt(run_dir, prep, run_record=ns.run_record)
     s = R.summarize(run_dir)
@@ -713,6 +728,8 @@ def _refuse(ns: argparse.Namespace, run_dir: Path, run_id: str, reason: str, fau
     write_json_atomic(run_dir / "refused.json", {"run_id": run_id, "reason": reason, "fault": fault, "at_utc": utc_now_ms()})
     if ns.custody_dir:
         (Path(ns.custody_dir) / CRED_FILE).unlink(missing_ok=True)
+    if ns.store_read_dir:
+        (Path(ns.store_read_dir) / CRED_FILE).unlink(missing_ok=True)
     if ns.exclusive_lock:
         remote.release_exclusive(Path(ns.exclusive_lock).parent, run_id)
     if mem_reservation:
@@ -1069,7 +1086,7 @@ def _run_remote(ns: argparse.Namespace, run_id: str, run_dir: Path, harness_opts
                             source=Path(ns.source).expanduser() if ns.source else None, sends=[Path(s).expanduser() for s in ns.send],
                             cwd=None, env=env, exclusive=ns.exclusive, mem_gb=ns.mem_gb, mem_wait_s=ns.mem_wait,
                             custody_ttl=(ns.custody_ttl or "6h") if custody else None, preflight_tool=ns.preflight, queue=queue,
-                            job_user=ns.job_user, gpus=None if queue else ns.gpus)
+                            job_user=ns.job_user, gpus=None if queue else ns.gpus, store_read=ns.store_read)
     except remote.Refused as e:
         print(f"research run --on {ns.on}: refused: {e}", file=sys.stderr)
         return 3
@@ -1506,7 +1523,6 @@ def cmd_inspect(argv: list[str]) -> int:
         print(f"observed  {json.dumps(s['fingerprint_observed'], sort_keys=True)}")
     if s["measurements"]:
         print("measured  " + "; ".join(f"{m['name']}={m['value']} {m['unit']}" for m in s["measurements"][:12]))
-    tool = s["tool"]
     print(f"tool      {_tool_line(s['tool'])}")
     cost = s["cost"]
     print(f"cost      {('$' + str(cost['usd']) + ' est. (' + cost['basis'] + ')') if cost.get('usd') is not None else 'unknown: ' + str(cost.get('reason'))}")

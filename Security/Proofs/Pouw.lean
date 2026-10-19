@@ -160,6 +160,7 @@ import Proofs.Pouw.TileBound.Fp8Depth
 import Proofs.Pouw.TileBound.Proofs
 import Proofs.Pouw.TileBound.WinogradStrassen
 import Proofs.Pouw.TileBound.Witness
+import Proofs.Pouw.Window
 import Proofs.Pouw.Witness
 
 /-!
