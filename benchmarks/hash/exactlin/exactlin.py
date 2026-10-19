@@ -174,6 +174,20 @@ CONFIGS: dict[str, dict[tuple[int, int], list[tuple[int, str]]]] = {
         (4096, 12288): [(1, "16x32x512:w4:s5:k1"), (16, "16x32x512:w4:s4:k1"), (32, "32x32x512:w4:s4:k1"),
                         (64, "32x64x512:w8:s3:k1"), (256, "128x64x128:w4:s5:k1")],
     },
+    "sm_90": {  # r20261019-175307-6582, H200 (preempted before (4096, 12288) at M 256)
+        (6144, 4096): [(1, "16x64x512:w4:s4:k1"), (16, "16x64x512:w4:s4:k1"), (32, "32x32x512:w4:s3:k1"),
+                       (64, "64x64x256:w4:s5:k1"), (256, "64x64x128:w4:s4:k1")],
+        (4096, 4096): [(1, "16x32x512:w4:s4:k1"), (16, "16x32x512:w4:s4:k1"), (32, "32x32x256:w4:s5:k1"),
+                       (64, "64x32x512:w4:s4:k1"), (256, "64x64x256:w4:s3:k1")],
+        (28672, 4096): [(1, "16x32x256:w4:s3:k1"), (16, "16x32x128:w4:s3:k1"), (32, "32x128x256:w4:s3:k1"),
+                        (64, "64x128x128:w4:s4:k1"), (256, "128x128x128:w8:s3:k1")],
+        (4096, 14336): [(1, "16x64x256:w4:s3:k4"), (16, "16x32x512:w4:s3:k2"), (32, "32x32x512:w4:s5:k1"),
+                        (64, "64x32x512:w4:s4:k1"), (256, "128x64x256:w4:s4:k1")],
+        (24576, 4096): [(1, "16x64x256:w4:s3:k1"), (16, "16x64x256:w4:s3:k1"), (32, "32x64x256:w4:s3:k1"),
+                        (64, "64x64x128:w4:s4:k1"), (256, "128x64x128:w4:s3:k1")],
+        (4096, 12288): [(1, "16x32x256:w4:s3:k4"), (16, "16x32x512:w4:s4:k2"), (32, "32x32x512:w4:s5:k1"),
+                        (64, "64x32x512:w4:s4:k1")],
+    },
 }
 
 
@@ -261,34 +275,43 @@ def ptx_check(compiled) -> dict:
     return doc
 
 
+_WORK: dict[int, Workspace] = {}
+
+
+def row_quant(x: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
+    """`verity_int8::row_quant`'s CUDA body: (xq, s_a) of x [M, K] bf16, allocating only them."""
+    if x.stride(1) != 1:
+        x = x.contiguous()
+    xq = torch.empty(x.shape, dtype=torch.int8, device=x.device)
+    s = torch.empty(x.shape[0], dtype=torch.float32, device=x.device)
+    if x.shape[0]:
+        quant_rows(x, xq, s)
+    return xq, s
+
+
+def product(xq: torch.Tensor, s_a: torch.Tensor, w: torch.Tensor, s_w: torch.Tensor) -> torch.Tensor:
+    """`verity_int8::scaled_mm`'s CUDA body: y [M, N] bf16, allocating only it.  A split-K config uses the device's
+    workspace, made at the device's first split-K call; a capture that would make it runs the config unsplit instead
+    (the same values), since a workspace made inside a capture would live in the graph's pool."""
+    m, n, k = xq.shape[0], w.shape[0], w.shape[1]
+    y = torch.empty((m, n), dtype=torch.bfloat16, device=xq.device)
+    if m:
+        dev = xq.device.index
+        cfg, work = pick(m, n, k, arch(dev)), None
+        if cfg[5] > 1:
+            if dev not in _WORK and not torch.cuda.is_current_stream_capturing():
+                _WORK[dev] = Workspace(xq.device)
+            work = _WORK.get(dev)
+            if work is None:
+                cfg = Cfg(*cfg[:5], 1)
+        scaled_mm(xq, s_a, w, s_w.reshape(-1), y, cfg, work)
+    return y
+
+
 def install() -> None:
-    """Serve `verity_int8::row_quant` and `verity_int8::scaled_mm` on CUDA from these kernels (`register_kernel`), each op
-    allocating only its own results, as the ops' default bodies do."""
+    """Serve `verity_int8::row_quant` and `verity_int8::scaled_mm` on CUDA from these kernels (`register_kernel`):
+    `row_quant` and `product`, each allocating only its own results, as the ops' default bodies do."""
     from verity_vllm.engine import int8_ops
 
-    @int8_ops.row_quant.register_kernel("cuda")
-    def _row_quant(x: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
-        if x.stride(1) != 1:
-            x = x.contiguous()
-        xq = torch.empty(x.shape, dtype=torch.int8, device=x.device)
-        s = torch.empty(x.shape[0], dtype=torch.float32, device=x.device)
-        if x.shape[0]:
-            quant_rows(x, xq, s)
-        return xq, s
-
-    works: dict = {}
-    if torch.cuda.is_available():
-        dev = torch.device("cuda", torch.cuda.current_device())
-        works[dev] = Workspace(dev)
-
-    @int8_ops.scaled_mm.register_kernel("cuda")
-    def _scaled_mm(xq: torch.Tensor, s_a: torch.Tensor, w: torch.Tensor, s_w: torch.Tensor) -> torch.Tensor:
-        m, n, k = xq.shape[0], w.shape[0], w.shape[1]
-        y = torch.empty((m, n), dtype=torch.bfloat16, device=xq.device)
-        if m:
-            cfg = pick(m, n, k, arch(xq.device.index))
-            work = None
-            if cfg[5] > 1:
-                work = works.get(xq.device) or works.setdefault(xq.device, Workspace(xq.device))
-            scaled_mm(xq, s_a, w, s_w.reshape(-1), y, cfg, work)
-        return y
+    int8_ops.row_quant.register_kernel("cuda")(row_quant)
+    int8_ops.scaled_mm.register_kernel("cuda")(product)

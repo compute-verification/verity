@@ -16,5 +16,6 @@ ruling, because the commitment's hash is a design rule ("One hash", AGENTS.md).
 | `sharaw/` | hm96-sha512 at 4 KiB leaves near the raw SHA-512 rate |
 | `structure/` | leaf size, tree arity, salts off the step, and SHA-512 fused into the GEMM |
 | `lattice/` | SIS (Ajtai) hashes on the INT8 tensor cores: parameters and throughput |
+| `exactlin/` | the int8-exact linear as two Triton kernels (`exactlin.py`: the exact quantizer, and the GEMM with the exact epilogue and per-card configs), gated bit-exact against `int8_exact` (`kgate.py`) and the int8 Definitions' replay evaluators (`replay.py`), timed against stock vLLM int8 and the exact path at kernel level (`kbench.py`, `ksweep.py`) and served (`served.sh`, through `dither/sbench.py`'s exact-fused arm), with the per-step kernel table (`steps.py`) |
 
 The campaign's findings and the recommendation to Daniel are in the notes, `lanes/hash/`.

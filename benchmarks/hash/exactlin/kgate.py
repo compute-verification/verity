@@ -12,6 +12,7 @@ Per shape, the reference is the exact arm's own code on the same GPU, `int8_exac
 `dequantize(int_mm(...))`, and:
     fused       quant_rows then scaled_mm into buffers filled with 0xA5 first: xq, s_a and y equal the reference bit for bit
     fused_mm    scaled_mm alone on the reference's xq and s_a: y equal
+    op_bodies   `row_quant` then `product`, the ops' CUDA bodies as `install` serves them: xq, s_a and y equal
     control     the same 0xA5 buffers with no launch: must differ from the reference in every buffer
     graph       both kernels captured in a CUDA graph, its buffers 0xA5 again, one replay: equal
     alloc       torch's allocated bytes unchanged by the eager calls and by the capture
@@ -215,6 +216,11 @@ def one(n: int, k: int, m: int, seed: int, with_stock: bool, names: list[str] | 
     doc["alloc_eager_bytes"] = torch.cuda.memory_allocated() - before
     doc["fused"] = {"xq_diff": diff(xq, xq_ref), "s_diff": diff(s, s_ref), "y_diff": diff(y, y_ref)}
     doc["fused_mm"] = {"y_diff": diff(y2, y_ref)}
+    xq_op, s_op = X.row_quant(x)
+    y_op = X.product(xq_op, s_op, w, s_w)
+    torch.cuda.synchronize()
+    doc["op_bodies"] = {"xq_diff": diff(xq_op, xq_ref), "s_diff": diff(s_op, s_ref), "y_diff": diff(y_op, y_ref)}
+    del xq_op, s_op, y_op
     doc["workspace_zero_after"] = int((wk.ws != 0).sum()) + int((wk.cnt != 0).sum())
     poison(xq, s, y)
     torch.cuda.synchronize()
@@ -243,6 +249,7 @@ def one(n: int, k: int, m: int, seed: int, with_stock: bool, names: list[str] | 
         doc["special"] = sp
     doc["ptx"] = [X.ptx_check(kq), X.ptx_check(km)]
     doc["ok"] = (all(v == 0 for v in doc["fused"].values()) and doc["fused_mm"]["y_diff"] == 0
+                 and all(v == 0 for v in doc["op_bodies"].values())
                  and doc["workspace_zero_after"] == 0
                  and all(v == 0 for v in doc["graph"].values()) and all(v > 0 for v in doc["control"].values())
                  and doc["alloc_eager_bytes"] == 0 and doc["alloc_capture_bytes"] == 0 and all(p["ok"] for p in doc["ptx"]))
