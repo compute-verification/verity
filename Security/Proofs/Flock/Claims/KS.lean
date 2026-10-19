@@ -116,9 +116,9 @@ import Proofs.Flock.Claims.KS.ZkTauPair
 import Proofs.Flock.Claims.KS.ZkLevels
 import Proofs.Flock.Claims.KS.ZkClashL
 import Proofs.Flock.Claims.KS.ZkFork0
-import Proofs.Flock.Claims.KS.TrimBridge
 import Proofs.Flock.Claims.KS.ZkPadsLog
 import Proofs.Flock.Claims.KS.ZkClashPads
+import Proofs.Flock.Claims.KS.TrimBridge
 import Proofs.Flock.Claims.KS.ZkFork
 import Proofs.Flock.Claims.KS.ZkAlign
 import Proofs.Flock.Claims.KS.RepDistZ

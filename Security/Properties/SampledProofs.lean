@@ -11,8 +11,8 @@ decoders produce. It takes no premise: the check is a function of its three inpu
 
 * **the registration** keeps R1–R7 against the verifier's own copies (`Registered`): the record's format, protocol, law
   and window (`R1`); its program, query, partition and population (`R2`); its scheme, ports, roots, leaves and domains
-  (`R3`); its leaf layer (`R4`), anchors (`R5`), previous record and window (`R6`); and for a v2 record its registered
-  values (`R7`);
+  (`R3`); its leaf layer (`R4`), anchors (`R5`), previous record, window and the window's stream and prover (`R6`); and
+  for a v2 record its registered values (`R7`);
 * **the draw** is a draw of the registered law over the registered population (`Drawn`): its shape, its units and, for a
   stratified or work law, its strata and closure;
 * **the units** were proved and served as drawn, under the registered roots, and the verifiers of record opened the
@@ -106,12 +106,15 @@ def R4 (rec : Json) (v : Registration.Verifier) : Prop :=
 def R5 (rec : Json) (v : Registration.Verifier) : Prop := jeq (getD rec "anchors") (.arr v.anchors)
 
 /-- R6: the record names the digest of the prover's last earlier record (null when the log is empty, or when that record
-has no digest), and no earlier record has its window. -/
+has no digest), no earlier record has its window, and a verifier bound to a stream and a prover (`binding`) sees its
+window name both. -/
 def R6 (rec : Json) (v : Registration.Verifier) : Prop :=
   jeq (getD rec "previous") (match v.log.back? with
     | some e => ((Registration.digestHex e).toOption.map Json.str).getD .null
     | none => .null) ∧
-  ∀ e ∈ v.log, jeq (getD e "window") (getD rec "window") = false
+  (∀ e ∈ v.log, jeq (getD e "window") (getD rec "window") = false) ∧
+  ∀ sp, v.binding = some sp → jeq (getD (getD rec "window") "stream") (.str sp.1) = true ∧
+    jeq (getD (getD rec "window") "prover") (.str sp.2) = true
 
 /-- A v2 record's registered values: the string values, each once (`names`), as many as the list's entries and as the
 verifier's own entries, and each one of the verifier's. -/

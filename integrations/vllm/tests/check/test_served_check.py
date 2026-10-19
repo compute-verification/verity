@@ -11,11 +11,12 @@ import numpy as np
 import pytest
 
 from verity_vllm.acquire import served as SV
+from verity_vllm.acquire import served_device as SD
 from verity_vllm.check import c2_rules
 from verity_vllm.check.replay import served_check as SC
-from verity_vllm.program.kernels import inductor_rows as TW
 from verity_vllm.program.kernels.rows import token_select_first_max
 from verity_vllm.program.registry import b1, cublas_bf16
+from verity_vllm.program.registry import bf16_gemm_check as BC
 from verity_vllm.program.registry import fa3_check_inf as F3
 from verity_vllm.program.registry import inductor as IR
 from verity_vllm.query.manifest.format import manifest_digest
@@ -27,6 +28,7 @@ SCHEDULE = [{"request_id": "r0", "arrive": 0, "prompt_tokens": 3, "max_tokens": 
             {"request_id": "r1", "arrive": 1, "prompt_tokens": 2, "max_tokens": 3},
             {"request_id": "r2", "arrive": 2, "prompt_tokens": 200, "max_tokens": 2}]
 STEPS = 4
+H200 = SD.device_of((9, 0), 132)
 
 EMB, N0, QKVV, Q, K, ATT, O, N1, GU, ACT, DOWN, RES, OUT = (
     "c00.embedding/buf0", "c00.rms_norm/buf1", "c00.mm/buf2", "c00.rope/buf3", "c00.rope/buf4", "c01.attention/layers.0.attn",
@@ -75,7 +77,7 @@ def _route(M: int) -> dict:
 def _build() -> dict:
     gemms = sorted({tuple(c["gemm"]) for c in PRE + POST if c["op"] == "mm"})
     args = (SCHEDULE, STEPS, gemms, (H, V), (NH, KVH, D))
-    kw = dict(capture_sizes=[1, 2, 4, 8], max_num_seqs=8, split_cap=SV.SPLIT_CAP, sms=132)
+    kw = dict(capture_sizes=[1, 2, 4, 8], max_num_seqs=8, split_cap=SV.SPLIT_CAP, device=H200)
     _plans, missing = SV.step_plans(*args, {}, **kw)
     plans, missing = SV.step_plans(*args, {f"{M},{K_},{N}": _route(M) for M, K_, N in missing}, **kw)
     assert not missing
@@ -151,8 +153,9 @@ def _serve(build: dict, W: dict) -> tuple[list[SC.Step], dict[str, list[int]]]:
             kc, vc = np.concatenate(kh), np.concatenate(vh)
             for i, d in enumerate(req["attention"]):
                 S = d["statics"]
-                o, _nf = TW.fa3_attention_rows(q[a + i].reshape(NH, D), kc[:S["T"]], vc[:S["T"]], NS=SC.SPLITS[d["base"]](S),
-                                               BN=S["BN"], masked_from=S["MASKED_FROM"], dot_prim=S["DOT"], inv_prim=S["INV"])
+                twin, ns = SC.ATTENTION[d["base"]]
+                o, _nf = twin(q[a + i].reshape(NH, D), kc[:S["T"]], vc[:S["T"]], NS=ns(S), BN=S["BN"], masked_from=S["MASKED_FROM"],
+                              dot_prim=S["DOT"], inv_prim=S["INV"])
                 out[a + i] = o.reshape(-1)
         vals[ATT] = out
         run(POST)
@@ -251,8 +254,19 @@ def test_the_gemm_is_the_plans_cublas_route(served, step):
     build = copy.deepcopy(served[0])
     plan = build["steps_plan"][step]
     other = {"kernel": "nosplit"} if _route(plan["gemm_m"])["kernel"] == "splitk" else {"kernel": "splitk", "SPLIT_K": 2}
-    plan["gemms"][f"{H},{QKV}"] = SV.gemm_definition(other, H, QKV)
+    plan["gemms"][f"{H},{QKV}"] = SV.gemm_definition(other, H, QKV, H200.dot)
     assert (step, QKVV) in _failed(_check(served, steps, build=build, weight=W.__getitem__))
+
+
+@pytest.mark.parametrize("route", [{"kernel": "nosplit"}, {"kernel": "splitk", "SPLIT_K": 2},
+                                   {"kernel": "splitk", "SPLIT_K": 2, "partial": "bf16"}, {"kernel": "serialk", "SPLIT_K": 2},
+                                   {"kernel": "gemv", "LANES": 16}, {"kernel": "gemv", "LANES": 32}])
+def test_each_cublas_route_binds_a_definition_whose_twin_is_the_routes(route):
+    """A device pin's route, the Definition `gemm_definition` binds for it and that Definition's twin here compute one function
+    (`bf16_gemm_check.cublas_route_rows`) on the route probe's spread and cancelling rows."""
+    d = SV.gemm_definition(route, 256, 5, H200.dot)
+    for x, w in BC.route_probe_rows(3, 256, 5, np.random.default_rng(3)):
+        assert np.array_equal(SC.GEMMS[d["base"]](d["statics"], x, w), BC.cublas_route_rows(route, x, w))
 
 
 def test_a_skipped_step_leaves_the_cache_stale(served):

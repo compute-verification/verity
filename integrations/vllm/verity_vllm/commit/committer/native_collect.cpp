@@ -258,6 +258,17 @@ struct Collector {
   std::unordered_map<int64_t, StepWin> step_wins;   // step id -> its windows (erased by the worker's finish_step)
   StepWin* sw = nullptr;                       // current step's windows (serving thread)
   int64_t win_marked = 0;                      // windows [0, win_marked) of the current step have their complete-event recorded
+  // The run failed by name: the worker abandoned a step (abandon_step; the first reason stands).  Every later window request refuses with
+  // the reason (refuse_windows) rather than read the abandoned step's erased windows, a step's end leaves the plans as they were, and the
+  // committer's finalize reports it; end_run clears it.  Written with the GIL and win_mu held; read under either.
+  bool failed = false;
+  std::string fail_reason;
+  int64_t tot_refused = 0;                     // window requests refused since (stats "refused_after_failure")
+  static constexpr const char* kRefused = "windowed staging: the collector failed earlier in this run: ";
+  [[noreturn]] void refuse_windows() {
+    if (failed) { ++tot_refused; throw std::runtime_error(kRefused + fail_reason); }
+    throw std::runtime_error("windowed staging: the current step holds no windows (it began before enable_windows)");
+  }
 
   void enable_windows(const std::vector<int64_t>& ptrs, int64_t W) {
     if (W <= 0 || W % 256 != 0) throw std::runtime_error("enable_windows: W must be a positive multiple of 256");
@@ -306,6 +317,7 @@ struct Collector {
   void ensure_windows(int64_t end_off) {
     if (!windowed) return;
     if (win_dead) throw std::runtime_error("windowed staging: collector dead after a slot-wait timeout earlier in this run");
+    if (failed || !sw) refuse_windows();
     const int64_t k_last = (end_off - 1) / win_bytes;
     while (static_cast<int64_t>(sw->slots.size()) <= k_last) {
       int slot = -1;
@@ -323,7 +335,7 @@ struct Collector {
           // otherwise the worker (GIL held, wants win_mu in release_slot) and this thread (win_mu held, wants the GIL) deadlock
           py::gil_scoped_release nogil;
           std::unique_lock<std::mutex> lk(win_mu);
-          while (win_free.empty()) {
+          while (win_free.empty() && !failed) {
             win_cv.wait_for(lk, std::chrono::milliseconds(200));
             if (win_free.empty() && now_s() - t0 > win_wait_timeout_s) {
               win_dead = true;
@@ -335,10 +347,21 @@ struct Collector {
               throw std::runtime_error("windowed staging: waited " + std::to_string(static_cast<int>(win_wait_timeout_s)) + " s for a free window slot (ring of "
                                        + std::to_string(win_ptrs.size()) + " x " + std::to_string(win_bytes >> 20) + " MiB, all held): the worker is not releasing windows");
           }
-          slot = win_free.back(); win_free.pop_back();
+          if (!failed) { slot = win_free.back(); win_free.pop_back(); }
         }
         win_wait_s += now_s() - t0;
         step_win_wait_s += now_s() - t0;
+        // the worker may abandon the step while this thread waits for a slot or for the GIL back (abandon_step: `sw` erased).  A slot taken
+        // here whose last occupant was one of the step's windows went back with the step's: it must not go back twice (two windows of a
+        // later step would share it)
+        if (failed || !sw) {
+          if (slot >= 0) {
+            std::lock_guard<std::mutex> g(win_mu);
+            if (std::find(win_free.begin(), win_free.end(), slot) == win_free.end()) win_free.push_back(slot);
+            win_cv.notify_all();
+          }
+          refuse_windows();
+        }
       }
       if (win_ready[slot]) {                                        // the worker's reads of the previous occupant precede our writes
         cudaError_t rc = cudaStreamWaitEvent(c10::cuda::getCurrentCUDAStream().stream(), win_ready[slot], 0);
@@ -413,15 +436,31 @@ struct Collector {
     if (rc != cudaSuccess) throw std::runtime_error(std::string("cudaStreamWaitEvent(window): ") + cudaGetErrorString(rc));
     return py::make_tuple(true, used, static_cast<int64_t>(slot));
   }
-  // the worker gave up on `step_id` (exception): hand every slot of the step back (its raw bytes are lost; the step is recorded as failed
-  // and the fail-closed harness sees expected != committed) so the serving thread stops waiting for a release that would never come
-  void abandon_step(int64_t step_id) {
+  // the worker gave up on `step_id` (exception): the run fails by name (`why`; the first stands, printed once), and every slot the step
+  // still holds goes back to the ring, once, after the worker's reads queued on `stream_ptr` (0: none), so the serving thread stops waiting
+  // for a release that would never come.  A slot the worker already released, or that a later step has taken since, stays where it is;
+  // one the serving thread took off the free list and has not recorded yet goes back here if its last occupant was one of this step's
+  // windows (ensure_windows then leaves it).
+  void abandon_step(int64_t step_id, const std::string& why, int64_t stream_ptr) {
     std::lock_guard<std::mutex> g(win_mu);
+    if (!failed) {
+      fail_reason = why.empty() ? "the worker abandoned step " + std::to_string(step_id) : why;
+      failed = true;
+      std::fprintf(stderr, "[collector] %s\n", fail_reason.c_str());
+    }
     auto it = step_wins.find(step_id);
-    if (it == step_wins.end()) return;
-    for (int slot : it->second.slots) win_free.push_back(slot);
-    if (sw == &it->second) sw = nullptr;
-    step_wins.erase(it);
+    if (it != step_wins.end()) {
+      for (int slot : it->second.slots) {
+        if (win_occ_step[slot] != step_id || std::find(win_free.begin(), win_free.end(), slot) != win_free.end()) continue;
+        if (stream_ptr) {
+          if (!win_ready[slot]) cudaEventCreateWithFlags(&win_ready[slot], cudaEventDisableTiming);
+          if (win_ready[slot]) cudaEventRecord(win_ready[slot], reinterpret_cast<cudaStream_t>(stream_ptr));
+        }
+        win_free.push_back(slot);
+      }
+      if (sw == &it->second) sw = nullptr;
+      step_wins.erase(it);
+    }
     win_cv.notify_all();
   }
   // the worker is done reading `slot` once everything it enqueued on `stream` so far has run
@@ -644,7 +683,9 @@ struct Collector {
       win_cv.notify_all();
       sw = nullptr;
     }
-    if (!learning && cursor < plan->entries.size()) {        // fewer acquisitions than planned: the plan is stale
+    if (failed) {                                            // the step's later acquisitions were refused: a plan it followed is not
+      if (changed) plan->entries.clear();                    // stale, and one it was learning is incomplete (its key learns again)
+    } else if (!learning && cursor < plan->entries.size()) {   // fewer acquisitions than planned: the plan is stale
       plan->entries.resize(cursor);
       changed = true;
     }
@@ -699,15 +740,19 @@ struct Collector {
     d["gather_blocks"] = tot_blocks; d["auto_blocks"] = auto_blocks;
     d["expected"] = tot_expected; d["committed"] = tot_committed;
     d["window_waits"] = win_waits; d["window_wait_s"] = win_wait_s; d["windowed"] = windowed;
+    d["refused_after_failure"] = tot_refused;
     return d;
   }
 
-  void reset_stats() { tot_copies = tot_bytes = tot_memsets = tot_misses = tot_learn_steps = tot_strided = tot_fallback = 0; tot_issue_s = 0.0; tot_flushes = 0; tot_staged = 0; tot_blocks = 0; tot_expected = tot_committed = 0; }
+  void reset_stats() { tot_copies = tot_bytes = tot_memsets = tot_misses = tot_learn_steps = tot_strided = tot_fallback = 0; tot_issue_s = 0.0; tot_flushes = 0; tot_staged = 0; tot_blocks = 0; tot_expected = tot_committed = 0; tot_refused = 0; }
   void clear_plans() { plans.clear(); plan = nullptr; }
   void end_run() {             // the committer's reset between runs: the run totals, and the plans the run that ended did not use (freed by
-    reset_stats();             // the next run's steps, native_plans.h)
+    reset_stats();             // the next run's steps, native_plans.h), and the run's failure
     plans.end_run();
     if (!active) plan = nullptr;
+    std::lock_guard<std::mutex> g(win_mu);
+    failed = false;
+    fail_reason.clear();
   }
 
   // ------------------------------------------------------------------ SECONDARY bet: staged gather-copy (native_gather.cu)
@@ -927,7 +972,8 @@ struct Collector {
 
   py::list drain_errors() {
     py::list out;
-    for (auto& e : errors) out.append(e);
+    for (auto& e : errors)
+      if (e.find(kRefused) == std::string::npos) out.append(e);   // a refusal repeats the run's failure, which finalize names once
     errors.clear();
     return out;
   }
@@ -1890,7 +1936,8 @@ PYBIND11_MODULE(TORCH_EXTENSION_NAME, m) {
       .def("enable_windows", &Collector::enable_windows, py::arg("ptrs"), py::arg("window_bytes"))
       .def("disable_windows", &Collector::disable_windows)
       .def("wait_window", &Collector::wait_window, py::arg("step_id"), py::arg("k"), py::arg("stream_ptr"))
-      .def("abandon_step", &Collector::abandon_step, py::arg("step_id"))
+      .def("abandon_step", &Collector::abandon_step, py::arg("step_id"), py::arg("why") = "", py::arg("stream_ptr") = 0)
+      .def_readonly("failure", &Collector::fail_reason)
       .def("release_slot", &Collector::release_slot, py::arg("slot"), py::arg("stream_ptr"))
       .def("step_windows", &Collector::step_windows, py::arg("step_id"))
       .def("finish_step", &Collector::finish_step, py::arg("step_id"))

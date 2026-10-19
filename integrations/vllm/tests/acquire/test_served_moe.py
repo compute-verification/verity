@@ -10,6 +10,7 @@ import pytest
 
 from verity.ml.circuits.ops.prims import HopperBF16WgmmaDot16
 from verity_vllm.acquire import served as SV
+from verity_vllm.acquire import served_device as SD
 from verity_vllm.acquire import served_moe as SM
 from verity_vllm.acquire.inductor_templates import Unmodelled
 from verity_vllm.program.registry import act
@@ -43,7 +44,7 @@ runner = Runner(partitions=[])
 
 
 def _piece(src: str = WRAPPER) -> SV._Piece:
-    return SV._Piece(src, None, "moe.py")
+    return SV._Piece(src, None, "moe.py", (9, 0))
 
 
 def test_the_op_is_one_call_on_its_hidden_states() -> None:
@@ -165,9 +166,13 @@ def test_the_expert_gemms_are_hoppers_k16_chain_at_every_launched_config() -> No
         plan(16)
 
 
+def test_cc_10_binds_the_same_expert_gemms() -> None:
+    assert SM.expand(_wired(), {**RECORD, "cc": [10, 0]})[1](256) == SM.expand(_wired(), RECORD)[1](256)
+
+
 def test_step_plans_carry_the_expert_gemms_only_with_moe() -> None:
     sched = [{"request_id": "r0", "arrive": 0, "prompt_tokens": 3, "max_tokens": 2}]
-    kw = dict(capture_sizes=[1, 2, 4, 8], max_num_seqs=8, split_cap=SV.SPLIT_CAP, sms=132)
+    kw = dict(capture_sizes=[1, 2, 4, 8], max_num_seqs=8, split_cap=SV.SPLIT_CAP, device=SD.device_of((9, 0), 132))
     dense, _ = SV.step_plans(sched, 2, [(H, H)], (H, 64), (2, 1, 64), {}, **kw)
     assert all("moe" not in p for p in dense)
     plan = SM.expand(_wired(), {**RECORD, "configs": {"4": {"False": WIDE, "True": WIDE}, "1": {"False": SMALL, "True": SMALL}}})[1]
@@ -189,7 +194,7 @@ def _flag(k: str, v):
     (_flag("w2", {"weight": f"{LAYER}.w2_weight", "shape": [E, H, 2 * I]}), "w2"),
     (_flag("gate", {"weight": None, "shape": [E, H]}), "gate"),
     (_flag("E", 2 * E), "gate"),
-    (lambda rec: rec.update(cc=[10, 0]), "compute capability"),
+    (lambda rec: rec.update(cc=[12, 0]), "compute capability"),
     (lambda rec: rec.update(pieces={"2": LAYER}), "the serving process ran layer None"),
     (lambda rec: rec.update(layers={"model.layers.1.mlp.experts": FACTS}), "no facts"),
 ])
