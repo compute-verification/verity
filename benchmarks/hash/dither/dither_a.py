@@ -22,7 +22,10 @@ trees, the round and the receipt trees, as dither-1s's: the A table before the c
 step and receipt trees between steps, and nothing waits on the side stream but those.  With z="zy" (the arms' -zy) z
 is committed as CA's leaves instead of the window's row z tables: the epilogue writes one record a 32 x 32 unit (its z,
 then its y = dequant(z), 0 past m) and the side stream builds each call's leaf table after the call's receipts, its root
-the call's leaf of the z-step tree, so the round over it still comes before the draw.
+the call's leaf of the z-step tree, so the round over it still comes before the draw.  With ao=True (the arms' -ao) the
+A tables run on a third stream above the units' priority: A_w waits on its quantizer and the units of call w on
+A_w, so each call's A table still precedes its seeds and units, and A_(w+1) runs beside call w's units (the same
+launches; only the streams they wait on change).
 
     import dither_a as DA
     DA.patch(t=T, h1c="libh1c.so", h1o="libh1o.so", unit="h1r")   # before LLM()
@@ -239,12 +242,17 @@ def _piecewise() -> bool:
 class Side:
     """The serving stream's GEMM state and the side stream's units over a dither_one Window."""
 
-    def __init__(self, win: DO.Window, unit: str, h1u: str | None, z: str = "row"):
+    def __init__(self, win: DO.Window, unit: str, h1u: str | None, z: str = "row", ao: bool = False):
         if unit not in UNITS:
             raise ValueError(f"dither-a's unit: one of {UNITS}, not {unit!r}")
-        self.win, self.unit, self.z, self.zl, dev = win, unit, z, ZMODES[z], win.dev
+        self.win, self.unit, self.z, self.zl, self.ao, dev = win, unit, z, ZMODES[z], ao, win.dev
         self.side = torch.cuda.Stream(device=dev)
         self.fork, self.join = torch.cuda.Event(), torch.cuda.Event()
+        if ao:
+            # the A tables on a stream of their own above the units' priority: a call's table is a chain of dependent
+            # compressions on a few blocks, so it runs beside the previous call's units, which fill the device
+            self.astream = torch.cuda.Stream(device=dev, priority=-1)
+            self.a_done, self.a_join = torch.cuda.Event(), torch.cuda.Event()
         self.work = EL.Workspace(dev)
         self.arch = EL.arch(dev.index)
         self.stage = torch.empty_like(win.plan.out)
@@ -350,10 +358,20 @@ class Side:
         exactlin_quant_rows_dithera[(M,)](x, xq, s_a, win.slot[w], win.scale[w], win.S, k, x.stride(0), xq.stride(0),
                                           BLOCK_K=triton.next_power_of_2(k), num_warps=EL.quant_warps(k), **EL.OPTS)
         self.fork.record(main)
-        self.side.wait_event(self.fork)
-        self.gemm(w, xq, s_a, wt, s_w, y)
         st = self.side.cuda_stream
-        rc = win.a_call(w, win.slot[w], win.scale[w], st) or self.units(w, M, st)
+        if self.ao:
+            # A_w waits only on its quantizer and A_(w-1), and the units of call w on A_w: the A table still comes
+            # before the call's seeds and units, and A_(w+1) overlaps the units of call w
+            self.astream.wait_event(self.fork)
+            rc = win.a_call(w, win.slot[w], win.scale[w], self.astream.cuda_stream)
+            self.a_done.record(self.astream)
+            self.side.wait_event(self.a_done)
+            self.gemm(w, xq, s_a, wt, s_w, y)
+            rc = rc or self.units(w, M, st)
+        else:
+            self.side.wait_event(self.fork)
+            self.gemm(w, xq, s_a, wt, s_w, y)
+            rc = win.a_call(w, win.slot[w], win.scale[w], st) or self.units(w, M, st)
         if not rc and self.z == "zy":
             # the call's z/y leaves and their tree, after its receipts, once its GEMM has written the records
             self.gemm_done.record(main)
@@ -371,6 +389,9 @@ class Side:
                 dithera_fault[(1,)](win.plan.out, win.S, self.at, win.L, 1 << self.shift,
                                     BLOCK=triton.next_power_of_2(win.L))
         if last or (w % 4 == 0 and _piecewise()):
+            if self.ao:
+                self.a_join.record(self.astream)
+                main.wait_event(self.a_join)
             self.join.record(self.side)
             main.wait_event(self.join)
             self.joins += 1
@@ -388,7 +409,7 @@ class Side:
                 "side_reads": recs + 64 * segs, "side_writes": 64 * segs + 64 * 2 * leaves}
 
     def info(self) -> dict:
-        return {"form": FORM, "unit": self.unit, "z": self.z, "leaf_bytes_per_step": self.leaf_bytes(),
+        return {"form": FORM, "unit": self.unit, "z": self.z, "a_overlap": self.ao, "leaf_bytes_per_step": self.leaf_bytes(),
                 "a_form": self.win.c.a_form, "calls": self.calls, "joins": self.joins,
                 "h1r_versions": {DF.SITES[w % 4]: self.versions[w] for w in range(min(4, self.win.L))}
                 if self.unit == "h1r" else None, "gemm_cfgs": {f"{n}x{k}@M{m}": c for (n, k, m), c in self.cfgs.items()}}
@@ -435,7 +456,7 @@ CONF: dict = {}
 def side() -> Side:
     if not SIDE:
         win = DO._window(torch.device("cuda"))
-        SIDE.append(Side(win, CONF["unit"], CONF["h1u"], CONF["z"]))
+        SIDE.append(Side(win, CONF["unit"], CONF["h1u"], CONF["z"], CONF["ao"]))
         before = DO.Window.before
 
         after = DO.Window.after
@@ -480,13 +501,13 @@ def _mm_fake(x, w, s_w, idx):
 
 
 def patch(t: int, h1c: str, h1o: str, unit: str = "h1r", h1u: str | None = None, key: bytes | None = None,
-          z: str = "row") -> None:
+          z: str = "row", ao: bool = False) -> None:
     """dither_one's patch (its weights' registry, the window's libraries), then every int8-exact linear's `apply`
     through ``dithera::mm`` (before the engine is built, in its process)."""
     from verity_vllm.engine import int8_vllm as IV
     if unit not in UNITS or z not in ZMODES:
         raise ValueError(f"dither-a's unit: one of {UNITS}, not {unit!r}; its z: one of {tuple(ZMODES)}, not {z!r}")
-    CONF.update(unit=unit, h1u=h1u, z=z)
+    CONF.update(unit=unit, h1u=h1u, z=z, ao=ao)
     os.environ.setdefault("DITHER_A_FORM", "3")
     DO.patch(t=t, h1c=h1c, h1o=h1o, key=key, gate=True)
 
