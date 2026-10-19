@@ -11,8 +11,8 @@ import tiers as T  # noqa: E402
 
 
 def test_each_tier_gives_the_adversary_no_more_than_the_last():
-    totals = [T.evaluate(T.DEFAULTS, T.TIERS[k])["total"] for k in ("T1", "T2", "T3", "T4")]
-    assert all(b <= a * (1 + 1e-12) for a, b in zip(totals, totals[1:]))
+    effs = [T.evaluate(T.DEFAULTS, T.TIERS[k])["efficiency"] for k in ("T1", "T2", "T3", "T4")]
+    assert all(b <= a * (1 + 1e-12) for a, b in zip(effs, effs[1:]))
 
 
 def test_every_parameter_has_a_slider_and_its_default_is_in_range():
@@ -22,25 +22,32 @@ def test_every_parameter_has_a_slider_and_its_default_is_in_range():
         assert s["min"] <= v <= s["max"] or (v == 0 and s.get("zero")), s["key"]
 
 
-def test_without_mechanisms_headroom_trains_at_its_compute():
-    assert T.evaluate(T.DEFAULTS, T.TIERS["T1"])["binding"] == "headroom compute"
+def test_without_memory_mechanisms_the_residual_trains_at_full_efficiency():
+    r = T.evaluate(T.DEFAULTS, T.TIERS["T1"])
+    assert r["largest"] == "residual" and not r["memory_caps_residual"]
+    assert r["residual"] == pytest.approx(T.DEFAULTS["residual"], rel=1e-3)
 
 
-def test_headroom_voids_the_partial_sum_law():
+def test_unmonitored_compute_trains_at_full_efficiency():
+    r = T.evaluate(T.DEFAULTS | {"residual": 0.0, "unmonitored": 0.3}, T.TIERS["T5"])
+    assert r["unmonitored"] == pytest.approx(0.3, rel=1e-6)
+
+
+def test_the_residual_voids_the_partial_sum_law():
     p = T.DEFAULTS
     r = T.evaluate(p, T.TIERS["T4"])
-    C = p["nodes"] * p["node_flops"] * p["years"] * T.YEAR
-    assert r["declared"] == pytest.approx(C / r["rho_T"])
+    assert r["declared"] == pytest.approx(2 / p["kappa"] / r["rho_T"])
 
 
 def test_without_dark_compute_the_declared_side_is_the_chain_bound():
-    """At h = u = 0 nothing absorbs partial sums, so the slowdown is the calculator's chain bound for pretrain-full."""
-    p = T.DEFAULTS | {"h": 0.0, "u": 0.0}
+    """At zero residual and zero unmonitored compute nothing absorbs partial sums, so efficiency is the inverse of the
+    calculator's chain bound for pretrain-full."""
+    p = T.DEFAULTS | {"residual": 0.0, "unmonitored": 0.0}
     r = T.evaluate(p, T.TIERS["T4"])
     alpha = p["K"] / p["Gamma"]
     chain = p["kappa_chain"] * S.read_factor(p["K"], p["b_w"], p["b_a"], p["d_chain"]) / (2 * alpha)
-    assert r["binding"] == "partial-sum law"
-    assert r["slowdown"] == pytest.approx(chain, rel=1e-3)
+    assert r["largest"] == "declared (partial-sum law)"
+    assert 1 / r["efficiency"] == pytest.approx(chain, rel=1e-3)
 
 
 def test_absorbed_partial_sums_weaken_the_law_as_ps_prime_says():
@@ -51,25 +58,25 @@ def test_absorbed_partial_sums_weaken_the_law_as_ps_prime_says():
 
 
 def test_the_wipe_floor_is_the_closed_form():
-    """With every gate windowed and the wipe period below R / r, the floor is kappa b_a b_w d Phi / (4 R r)."""
-    p = T.DEFAULTS | {"h": 1.0, "slack": 1e-9, "unwipeable_gb": 1.0, "sigma": 0.0, "wipe_s": 1.0}
+    """With every gate windowed and the wipe period below R / r, efficiency is 4 R r / (kappa b_a b_w d Phi)."""
+    p = T.DEFAULTS | {"residual": 1.0, "wipe_left_gb": 1.0, "sigma": 0.0, "wipe_s": 1.0}
     r = T.evaluate(p, T.TIERS["T3"])
     rate = p["tau"] + p["K"] / p["Gamma"] * p["node_flops"]
-    closed = p["kappa"] * p["b_a"] * p["b_w"] * p["d"] * p["node_flops"] / (4 * r["residual_bits"] * rate)
-    assert r["binding"] == "server windows"
-    assert r["slowdown"] == pytest.approx(closed, rel=1e-3)
+    closed = 4 * r["wipe_state_bits"] * rate / (p["kappa"] * p["b_a"] * p["b_w"] * p["d"] * p["node_flops"])
+    assert r["memory_caps_residual"]
+    assert r["efficiency"] == pytest.approx(closed, rel=1e-3)
 
 
-def test_a_small_wipe_residual_binds_headroom():
-    p = T.DEFAULTS | {"unwipeable_gb": 1.0, "slack": 1e-9}
-    r = T.evaluate(p, T.TIERS["T3"])
-    assert r["binding"] == "server windows"
-    assert r["slowdown"] > 10 * T.evaluate(T.DEFAULTS, T.TIERS["T3"])["slowdown"]
+def test_memory_caps_the_residual_below_the_state_threshold():
+    threshold = T.state_threshold(T.DEFAULTS, T.TIERS["T3"]) / T.GB
+    below = T.evaluate(T.DEFAULTS | {"wipe_left_gb": threshold / 2}, T.TIERS["T3"])
+    above = T.evaluate(T.DEFAULTS | {"wipe_left_gb": threshold * 2}, T.TIERS["T3"])
+    assert below["memory_caps_residual"] and not above["memory_caps_residual"]
 
 
-def test_helpers_within_the_read_deadline_refill_the_residual():
-    quiet = T.evaluate(T.DEFAULTS | {"sigma": 1e3}, T.TIERS["T3"])["residual_bits"]
-    loud = T.evaluate(T.DEFAULTS | {"sigma": 1e6}, T.TIERS["T3"])["residual_bits"]
+def test_helpers_within_the_read_deadline_refill_what_a_wipe_leaves():
+    quiet = T.evaluate(T.DEFAULTS | {"sigma": 1e3}, T.TIERS["T3"])["wipe_state_bits"]
+    loud = T.evaluate(T.DEFAULTS | {"sigma": 1e6}, T.TIERS["T3"])["wipe_state_bits"]
     mem = (T.DEFAULTS["hbm_gb"] + T.DEFAULTS["host_gb"]) * T.GB
     assert loud - quiet == pytest.approx((1e6 * 1e-3 - 25) / 524288 * mem)
 
@@ -77,6 +84,7 @@ def test_helpers_within_the_read_deadline_refill_the_residual():
 def test_the_cheating_pool_does_not_grow_with_the_fleet():
     small = T.evaluate(T.DEFAULTS | {"nodes": 1e3}, T.TIERS["T5"])
     large = T.evaluate(T.DEFAULTS, T.TIERS["T5"])
-    assert small["cheat"] == large["cheat"] > 0
+    assert small["cheat_steps"] == large["cheat_steps"] > 0
+    assert small["cheat"] == pytest.approx(100 * large["cheat"])
     q = T.DEFAULTS["share"] / (T.DEFAULTS["overhead"] + T.DEFAULTS["replay"])
     assert large["cheat_steps"] == pytest.approx(math.log(1 / T.DEFAULTS["p_evade"]) / q)

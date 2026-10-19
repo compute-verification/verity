@@ -1,31 +1,26 @@
-"""The verification stack's training throttle by tier: how much of the necessary subcomputation (counted multiplications:
-an updated weight times an activation or activation gradient) an adversary gets out of a monitored fleet over a horizon.
+"""Compute efficiency of frontier pretraining from scratch under the verification stack: the FLOP an unconstrained run
+needs, divided by the FLOP the adversary spends, monitored plus unmonitored. The adversary must still compute the
+necessary subcomputation, the counted multiplications (an updated weight times an activation or activation gradient).
 
-The adversary runs a circuit A, declares D, and has two kinds of dark compute: headroom ``h`` on the known servers (PoUW
-slack, uncovered compute such as host CPUs and in-switch reduction) and hidden hardware ``u`` elsewhere. Four
-contributions, each an upper bound under the model; ``STATUS`` says which steps are proved:
+Efficiency is a sum of four terms, each an upper bound under the model; ``STATUS`` says which steps are proved.
 
-* ``declared``: counted multiplications at declared gates. At most ``C / rho_T`` (the thread bound under partial
-  containment, T1'), with ``rho_T = b_a / (alpha Lambda(K))``, ``Lambda(K) = max(e, 2K / (4 d b_w))``. When dark
-  compute can't sum the declared blocks' partial sums, the partial-sum law (PS') is tighter: the chain's products are at
-  most ``Psi(alpha C, B)``, where ``B`` is the crossing, the bits of declared outputs that reach dark gates. Headroom
-  reads them on the server for free; hidden hardware reads them over links (line rate, or side channels plus readable
-  declared egress under network accounting). A relay op reads at most ``2 b_p`` crossing bits.
-* ``headroom``: dark ops on the known servers, plus work skipped by cheated proof steps. Together with the declared side
-  it is capped by the server-window bound: a window reads its starting state plus what enters during it,
-  ``K_r = state + ingress L``, and contains at most ``K_r Lambda(K_r) / b_a`` counted multiplications (``ThreadedReads``
-  per region); the bound takes the tightest partition into windows. State is all memory; after a wipe, the unwipeable
-  memory plus the proof of space's slack on filled memory plus what helpers can supply within the read deadline; under
-  exhaustion, the HBM the declared workload doesn't hold plus the slack (host memory filled with proof of space).
-  Ingress is line rate, or side channels, certified timing and NCI-bounded declared ingress ``alpha Phi``.
-* ``hidden``: unknown hardware trains at full rate, ``u`` times monitored compute, less what it spends relaying.
-* ``cheat``: with sampled proofs at a budget, steps of at most 16-bit output are drawn at rate
-  ``q = share / (overhead + replay)``. The adversary's pool is ``ln(1 / p_evade) / q`` wrong steps per identity, a
-  lifetime constant that doesn't grow with the fleet; a class of steps sampled at a floor of one draw adds
-  ``ln(1 / p_evade)`` times its size. Each wrong step injects its 16 bits plus the choice of where, worth at most the
-  chord slope of the per-block thread bound in counted multiplications per bit.
+* Unmonitored compute trains at full efficiency.
+* The monitored compute residual (monitored compute that PoUW doesn't attest) trains at full efficiency unless memory
+  caps it. A server-window reads its starting state plus what enters during it, ``K_r = state + ingress L``, and
+  contains at most ``K_r Lambda(K_r) / b_a`` counted multiplications (``ThreadedReads`` per region), counting every gate
+  on the server, declared or not. The state is all memory; after a wipe, what the wipe leaves plus what helpers refill
+  within the read deadline; under exhaustion, the HBM the declared workload doesn't hold plus the proof-of-space slack.
+  Ingress is line rate or, under network accounting, side channels plus certified timing plus the NCI-bounded declared
+  ingress ``alpha Phi``.
+* Declared compute trains at the thread bound, ``rho_T = b_a / (alpha Lambda(K))`` gates per counted multiplication with
+  ``Lambda(K) = max(e, 2K / (4 d b_w))``, or at the tighter partial-sum law when no dark compute can sum the declared
+  blocks' partial sums. The residual reads them on the server for free; unmonitored compute reads them over links (line
+  rate, or side channels plus readable declared egress under network accounting). A relay op reads ``2 b_p`` bits.
+* With sampled proofs at a budget, the adversary's pool of undetected wrong steps is ``ln(1 / p_evade) / q`` per
+  identity, ``q = share / (overhead + replay)``, a lifetime constant. Each injects its 16 bits plus the choice of where,
+  worth at most the chord slope of the per-block thread bound per bit.
 
-The canvas "Training throttle under the verification stack" renders this model with a slider per ``SPEC`` entry.
+The canvas "Compute efficiency under the verification stack" renders this model.
 
     python benchmarks/nci/tiers.py            # the five tiers at the defaults
     python benchmarks/nci/tiers.py --json     # spec, defaults, tiers, status and results, for other renderers
@@ -45,58 +40,58 @@ T_AUDIT = 0.3635
 BLOCK_BITS = 524288
 BLOCK_NAME_BITS = 25
 
-#: defaults: 100,000 eight-GPU servers for a year, the kimi-k2-1m-raw calibration with Kimi K2's forward chain, today's
-#: proved wipe slack (1/19) and main's declared unwipeable memory, today's uncharged declared egress, and the C-Flock CUDA
-#: prover's measured overhead at a 1% budget
+#: defaults: the Kimi K2 calibration and forward chain; 100,000 eight-GPU servers for a year (only the cheating pool, a
+#: lifetime constant, depends on the fleet); what a wipe leaves today (the proved slack of 1/19 on 2.6 TB plus main's
+#: declared 16 GB unwipeable); today's uncharged declared egress; the C-Flock CUDA prover's overhead at a 1% budget
 DEFAULTS = {
-    "nodes": 1e5, "node_flops": 1.58e16, "years": 1.0, "target_flop": 1e26,
-    "K": 2e7, "Gamma": 6.4e16, "b_w": 2.5, "b_a": 4.0, "d": 2048.0, "e": 4e4, "kappa": 0.667,
-    "kappa_chain": 0.075, "d_chain": 1536.0, "e_chain": 12288.0, "b_p": 32.0,
-    "h": 0.01, "u": 0.0,
-    "sigma": 1e3, "tau": 400.0, "egress_decl": 4.4e9, "nic": 3.2e12,
-    "hbm_gb": 640.0, "host_gb": 2000.0, "unwipeable_gb": 16.0, "slack": 1 / 19, "t_read": 1e-3, "wipe_s": 3600.0,
-    "f": 0.95,
+    "unmonitored": 0.0, "residual": 0.01,
+    "wipe_left_gb": 155.0, "sigma": 1e3, "b_w": 2.5, "b_a": 4.0,
+    "f": 0.95, "slack": 1 / 19, "t_read": 1e-3, "wipe_s": 3600.0, "hbm_gb": 640.0, "host_gb": 2000.0,
+    "tau": 400.0, "egress_decl": 4.4e9, "nic": 3.2e12,
     "share": 0.01, "overhead": 1.64e8, "replay": 1.1e5, "step_flop": 1.43e4, "p_evade": 0.01, "identities": 1.0,
     "floor_steps": 1.0,
+    "K": 2e7, "Gamma": 6.4e16, "d": 2048.0, "e": 4e4, "kappa": 0.667,
+    "kappa_chain": 0.075, "d_chain": 1536.0, "e_chain": 12288.0, "b_p": 32.0,
+    "nodes": 1e5, "node_flops": 1.58e16, "years": 1.0,
 }
 
-#: one entry per parameter: label, unit, slider range, log scale, and whether the leftmost position means zero
+#: one entry per parameter: label, unit, slider range, log scale, whether the leftmost position means zero, and whether
+#: it is one of the few shown up front
 SPEC = [
-    {"key": "nodes", "group": "Fleet and target", "label": "Servers (8-GPU nodes)", "unit": "", "min": 1e2, "max": 1e7, "log": True},
-    {"key": "node_flops", "group": "Fleet and target", "label": "Server compute", "unit": "FLOP/s", "min": 1e15, "max": 1e17, "log": True},
-    {"key": "years", "group": "Fleet and target", "label": "Horizon", "unit": "yr", "min": 0.05, "max": 10, "log": True},
-    {"key": "target_flop", "group": "Fleet and target", "label": "Target pretrain", "unit": "FLOP", "min": 1e22, "max": 1e28, "log": True},
-    {"key": "h", "group": "Dark compute", "label": "Headroom on known servers, h (fraction of their compute)", "unit": "", "min": 1e-12, "max": 1, "log": True, "zero": True},
-    {"key": "u", "group": "Dark compute", "label": "Hidden hardware, u (fraction of monitored compute)", "unit": "", "min": 1e-12, "max": 10, "log": True, "zero": True},
-    {"key": "sigma", "group": "Network accounting", "label": "Side channels per server, sigma", "unit": "bit/s", "min": 1, "max": 1e10, "log": True, "zero": True},
-    {"key": "tau", "group": "Network accounting", "label": "Certified timing channel per server", "unit": "bit/s", "min": 1, "max": 1e5, "log": True, "zero": True},
-    {"key": "egress_decl", "group": "Network accounting", "label": "Declared egress dark compute can read (today about 4.4e9; charged about alpha Phi)", "unit": "bit/s", "min": 1, "max": 1e12, "log": True, "zero": True},
-    {"key": "nic", "group": "Network accounting", "label": "Line rate per server, without accounting", "unit": "bit/s", "min": 1e9, "max": 1e13, "log": True},
-    {"key": "unwipeable_gb", "group": "Memory wipes", "label": "Unwipeable memory per server (main declares 16; Amodo's goal 1)", "unit": "GB", "min": 0.01, "max": 1000, "log": True},
-    {"key": "slack", "group": "Memory wipes", "label": "Proof-of-space slack on filled memory (proved: 1/19)", "unit": "", "min": 1e-5, "max": 0.5, "log": True},
-    {"key": "t_read", "group": "Memory wipes", "label": "Read deadline (helpers within it refill blocks)", "unit": "s", "min": 1e-6, "max": 1e-1, "log": True},
-    {"key": "wipe_s", "group": "Memory wipes", "label": "Wipe period", "unit": "s", "min": 1, "max": 1e7, "log": True},
-    {"key": "hbm_gb", "group": "Memory wipes", "label": "HBM per server", "unit": "GB", "min": 80, "max": 4000, "log": True},
-    {"key": "host_gb", "group": "Memory wipes", "label": "Host memory per server (filled with proof of space)", "unit": "GB", "min": 1, "max": 10000, "log": True, "zero": True},
-    {"key": "f", "group": "Memory exhaustion", "label": "Declared share of HBM, f", "unit": "", "min": 0, "max": 0.999, "log": False},
-    {"key": "share", "group": "Sampled proofs", "label": "Compute share for replays and proofs", "unit": "", "min": 1e-4, "max": 0.5, "log": True},
-    {"key": "overhead", "group": "Sampled proofs", "label": "Proof overhead per step (CUDA prover 1.64e8; ZK about 1e10)", "unit": "x", "min": 1, "max": 1e11, "log": True},
-    {"key": "replay", "group": "Sampled proofs", "label": "Replay cost per drawn step (layer-token / step)", "unit": "x", "min": 1, "max": 1e7, "log": True},
-    {"key": "step_flop", "group": "Sampled proofs", "label": "Work per proof step (one 7168-long dot product)", "unit": "FLOP", "min": 1e3, "max": 1e15, "log": True},
-    {"key": "p_evade", "group": "Sampled proofs", "label": "Escape probability the adversary accepts", "unit": "", "min": 1e-4, "max": 0.99, "log": True},
-    {"key": "identities", "group": "Sampled proofs", "label": "Identities a detection doesn't end (re-entries)", "unit": "", "min": 1, "max": 1e6, "log": True},
-    {"key": "floor_steps", "group": "Sampled proofs", "label": "Steps in a class sampled at a floor of one draw", "unit": "", "min": 1, "max": 1e17, "log": True},
-    {"key": "K", "group": "NCI policy and reference circuit", "label": "K: novel bits per NCI block", "unit": "bit", "min": 1e5, "max": 1e10, "log": True},
-    {"key": "Gamma", "group": "NCI policy and reference circuit", "label": "Gamma: gates per NCI block", "unit": "", "min": 1e14, "max": 1e19, "log": True},
-    {"key": "b_w", "group": "NCI policy and reference circuit", "label": "b_w: bits per updated weight", "unit": "bit", "min": 0.1, "max": 16, "log": True},
-    {"key": "b_a", "group": "NCI policy and reference circuit", "label": "b_a: bits per activation", "unit": "bit", "min": 0.1, "max": 16, "log": True},
-    {"key": "d", "group": "NCI policy and reference circuit", "label": "d: entry fee (smallest inner dimension)", "unit": "", "min": 1, "max": 65536, "log": True},
-    {"key": "e", "group": "NCI policy and reference circuit", "label": "e: multiplications per activation value (fan-out)", "unit": "", "min": 1e3, "max": 1e6, "log": True},
-    {"key": "kappa", "group": "NCI policy and reference circuit", "label": "kappa: share of training FLOP that are counted multiplications", "unit": "", "min": 0.05, "max": 1, "log": False},
-    {"key": "kappa_chain", "group": "NCI policy and reference circuit", "label": "kappa_chain: share on the proved chain (one forward path)", "unit": "", "min": 0.01, "max": 1, "log": True},
-    {"key": "d_chain", "group": "NCI policy and reference circuit", "label": "Chain's smallest inner dimension", "unit": "", "min": 64, "max": 65536, "log": True},
-    {"key": "e_chain", "group": "NCI policy and reference circuit", "label": "Chain's largest fan-out", "unit": "", "min": 1e3, "max": 1e6, "log": True},
-    {"key": "b_p", "group": "NCI policy and reference circuit", "label": "Partial-sum width a relay op reads", "unit": "bit", "min": 4, "max": 64, "log": True},
+    {"key": "unmonitored", "main": True, "label": "Unmonitored compute share", "unit": "", "min": 1e-12, "max": 0.5, "log": True, "zero": True},
+    {"key": "residual", "main": True, "label": "Monitored compute residual", "unit": "", "min": 1e-12, "max": 1, "log": True, "zero": True},
+    {"key": "wipe_left_gb", "main": True, "label": "Memory a wipe leaves per server (proved 155, declared 16, goal 1)", "unit": "GB", "min": 0.01, "max": 3000, "log": True},
+    {"key": "sigma", "main": True, "label": "Side channels per server", "unit": "bit/s", "min": 1, "max": 1e10, "log": True, "zero": True},
+    {"key": "b_w", "main": True, "label": "Compression: bits per updated weight", "unit": "bit", "min": 0.1, "max": 16, "log": True},
+    {"key": "b_a", "main": True, "label": "Compression: bits per activation", "unit": "bit", "min": 0.1, "max": 16, "log": True},
+    {"key": "f", "label": "Exhaustion: declared share of HBM", "unit": "", "min": 0, "max": 0.999, "log": False},
+    {"key": "slack", "label": "Proof-of-space slack on filled memory (proved 1/19)", "unit": "", "min": 1e-5, "max": 0.5, "log": True},
+    {"key": "t_read", "label": "Wipe read deadline (helpers within it refill blocks)", "unit": "s", "min": 1e-6, "max": 1e-1, "log": True},
+    {"key": "wipe_s", "label": "Wipe period", "unit": "s", "min": 1, "max": 1e7, "log": True},
+    {"key": "hbm_gb", "label": "HBM per server", "unit": "GB", "min": 80, "max": 4000, "log": True},
+    {"key": "host_gb", "label": "Host memory per server (filled with proof of space)", "unit": "GB", "min": 1, "max": 10000, "log": True, "zero": True},
+    {"key": "tau", "label": "Certified timing channel per server", "unit": "bit/s", "min": 1, "max": 1e5, "log": True, "zero": True},
+    {"key": "egress_decl", "label": "Declared egress dark compute can read (today 4.4e9; charged about 5e6)", "unit": "bit/s", "min": 1, "max": 1e12, "log": True, "zero": True},
+    {"key": "nic", "label": "Line rate per server, without network accounting", "unit": "bit/s", "min": 1e9, "max": 1e13, "log": True},
+    {"key": "share", "label": "Sampled proofs: compute share", "unit": "", "min": 1e-4, "max": 0.5, "log": True},
+    {"key": "overhead", "label": "Sampled proofs: overhead per step (CUDA prover 1.64e8; ZK about 1e10)", "unit": "x", "min": 1, "max": 1e11, "log": True},
+    {"key": "replay", "label": "Sampled proofs: replay cost per drawn step", "unit": "x", "min": 1, "max": 1e7, "log": True},
+    {"key": "step_flop", "label": "Sampled proofs: work per step", "unit": "FLOP", "min": 1e3, "max": 1e15, "log": True},
+    {"key": "p_evade", "label": "Sampled proofs: escape probability accepted", "unit": "", "min": 1e-4, "max": 0.99, "log": True},
+    {"key": "identities", "label": "Sampled proofs: identities a detection doesn't end", "unit": "", "min": 1, "max": 1e6, "log": True},
+    {"key": "floor_steps", "label": "Sampled proofs: steps in a class drawn at a floor of one", "unit": "", "min": 1, "max": 1e17, "log": True},
+    {"key": "K", "label": "NCI: novel bits per block", "unit": "bit", "min": 1e5, "max": 1e10, "log": True},
+    {"key": "Gamma", "label": "NCI: gates per block", "unit": "", "min": 1e14, "max": 1e19, "log": True},
+    {"key": "d", "label": "Model: entry fee (smallest inner dimension)", "unit": "", "min": 1, "max": 65536, "log": True},
+    {"key": "e", "label": "Model: multiplications per activation value", "unit": "", "min": 1e3, "max": 1e6, "log": True},
+    {"key": "kappa", "label": "Model: share of training FLOP that are counted multiplications", "unit": "", "min": 0.05, "max": 1, "log": False},
+    {"key": "kappa_chain", "label": "Model: share on the proved chain (one forward path)", "unit": "", "min": 0.01, "max": 1, "log": True},
+    {"key": "d_chain", "label": "Model: chain's smallest inner dimension", "unit": "", "min": 64, "max": 65536, "log": True},
+    {"key": "e_chain", "label": "Model: chain's largest fan-out", "unit": "", "min": 1e3, "max": 1e6, "log": True},
+    {"key": "b_p", "label": "Model: partial-sum width a relay op reads", "unit": "bit", "min": 4, "max": 64, "log": True},
+    {"key": "nodes", "label": "Fleet: servers", "unit": "", "min": 1e2, "max": 1e7, "log": True},
+    {"key": "node_flops", "label": "Fleet: server compute", "unit": "FLOP/s", "min": 1e15, "max": 1e17, "log": True},
+    {"key": "years", "label": "Fleet: horizon", "unit": "yr", "min": 0.05, "max": 10, "log": True},
 ]
 
 #: the cumulative tiers: which mechanisms each adds
@@ -110,29 +105,20 @@ TIERS = {
 
 #: what each step of the model rests on
 STATUS = [
-    ("Declared side, thread bound (T1')", "ThreadedThrottled is proved in Lean under total containment; T1' (partial containment, dark values "
-     "unregistered) is on paper and ports line for line. Rests on WeightsIncompressible and the Threaded (d, e) premise, "
-     "which nothing proves at Kimi's (2048, 4e4)."),
-    ("Declared side, partial-sum law (PS')", "ContainedTraining is proved in Lean with no dark compute (B = 0); the absorption "
-     "budget is on paper. Needs bounded dark fan-in and a reference circuit with bounded-fan-in additions (PartialSumsSupport "
-     "is false for wide sum gates). Covers one forward chain, kappa_chain of the work."),
-    ("Crossing budget", "Paper: dark gates outside every unit (N-dark) and a relay that splits at cap K (N-relay). Network "
-     "accounting bounds what leaves a unit up to the declared frames' content (B4Covered), so readable declared egress counts "
-     "in full."),
-    ("Server-window bound", "Actual.Windows and ThreadedReads are proved; the composition is on paper and needs reads counted "
-     "by determination rather than width (open), since a wipe bounds information, not width."),
-    ("Wipe residual", "The band scheme's slack of 1/19 is proved (SecureErasureMeetsFamily, ideal primitive, isolation; in "
-     "no lock). Unwipeable memory is declared, not measured. The helper term is an attack, so it is a lower bound on the "
-     "residual; no theorem bounds help during a wipe."),
-    ("Exhaustion", "Lemma M (Memory.Adds) is proved and locked per audit at retention 18/19; the continuous form is proved in "
-     "the ideal-permutation model only; a bound at every instant, which the window bound needs, is not given. The reference "
-     "Pi_2 is refuted (a prover passes from 1.53% of the store)."),
-    ("Ingress", "Per-window ingress content and timing counts are proved (EncardIngressObs...); side channels are outside the "
-     "model and enter as sigma."),
-    ("Cheated proof steps", "Per-round audit bounds are proved (audit_le, audits_seq: a union bound); the cumulative harm "
-     "budget over adaptive rounds, the cut-wire reduction and the per-block-cap thread theorem are on paper. The deployed "
-     "verifier's sampling claims are stated, not proved."),
-    ("Hidden hardware", "No bound: it trains at full rate."),
+    ("Declared compute, thread bound", "ThreadedThrottled is proved in Lean when the declared circuit contains the whole "
+     "reference circuit; the extension to dark gates (T1') is on paper. Rests on WeightsIncompressible and the Threaded "
+     "(d, e) premise, which nothing proves at Kimi's (2048, 4e4)."),
+    ("Declared compute, partial-sum law", "ContainedTraining is proved in Lean with no dark compute; the absorption budget "
+     "is on paper. Needs a reference circuit with bounded-fan-in additions. Covers one forward chain."),
+    ("Memory cap on the residual", "Actual.Windows and ThreadedReads are proved; the composition is on paper and needs "
+     "reads counted by information rather than width (open)."),
+    ("Memory a wipe leaves", "The slack of 1/19 is proved (SecureErasureMeetsFamily, ideal primitive, isolation; in no "
+     "lock). Unwipeable memory is declared, not measured. No theorem bounds help during a wipe; the helper term is an "
+     "attack."),
+    ("Exhaustion", "Lemma M is proved and locked per audit; no bound at every instant, which the memory cap needs."),
+    ("Cheated proof steps", "Per-round audit bounds are proved; the cumulative harm budget and the per-block-cap thread "
+     "theorem are on paper. The deployed verifier's sampling claims are stated, not proved."),
+    ("Unmonitored compute", "No bound: it trains at full efficiency."),
 ]
 
 
@@ -190,10 +176,21 @@ def windows_bound(p: dict, H: float, state: float, ingress: float, period: float
     return best
 
 
+def ingress(p: dict, mech: dict) -> float:
+    return p["sigma"] + p["tau"] + p["K"] / p["Gamma"] * p["node_flops"] if mech["net"] else p["nic"]
+
+
+def state_threshold(p: dict, mech: dict) -> float:
+    """The server state, in bits, below which memory caps the residual (the window bound's quadratic regime)."""
+    return p["residual"] * p["node_flops"] * p["kappa"] * p["d"] * p["b_w"] * p["b_a"] / (4 * ingress(p, mech))
+
+
 def evaluate(p: dict, mech: dict) -> dict:
     gpm = 2 / p["kappa"]
     H = p["years"] * YEAR
     C = p["nodes"] * p["node_flops"] * H
+    s = min(p["unmonitored"], 0.999)
+    U = C * s / (1 - s)
     alpha = p["K"] / p["Gamma"]
     rho_T = p["b_a"] / (alpha * lam(p, p["K"]))
     cap_T = C / rho_T
@@ -212,11 +209,10 @@ def evaluate(p: dict, mech: dict) -> dict:
         slope = (p["kappa"] * p["Gamma"] / 2 - region_cap(p, p["K"])) / (S_full - p["K"]) if S_full > p["K"] else 0.0
         cheat = min(slope * bits, C / gpm)
 
-    head_ops = p["h"] * C + skipped
-    hid_ops = p["u"] * C
+    res_ops = p["residual"] * C + skipped
     sigma_eff = p["sigma"] if mech["net"] else p["nic"]
     link = p["sigma"] + p["tau"] + p["egress_decl"] if mech["net"] else p["nic"]
-    B_max = 2 * p["b_p"] * head_ops + min(2 * p["b_p"] * hid_ops, p["nodes"] * H * link)
+    B_max = 2 * p["b_p"] * res_ops + min(2 * p["b_p"] * U, p["nodes"] * H * link)
 
     rates = chain_rates(p)
     share = p["kappa"] / p["kappa_chain"]
@@ -234,41 +230,38 @@ def evaluate(p: dict, mech: dict) -> dict:
         B = hi
     declared = declared_at(B)
     relay = B / (2 * p["b_p"])
-    relay_head = min(head_ops, relay)
-    head_mults = (head_ops - relay_head) / gpm
-    hidden = max(0.0, hid_ops - (relay - relay_head)) / gpm
+    relay_res = min(res_ops, relay)
+    res_mults = (res_ops - relay_res) / gpm
+    unmon = max(0.0, U - (relay - relay_res)) / gpm
 
     mem = (p["hbm_gb"] + p["host_gb"]) * GB
-    ingress = p["sigma"] + p["tau"] + alpha * p["node_flops"] if mech["net"] else p["nic"]
+    rate_in = ingress(p, mech)
     help_bits = min(1.0, max(0.0, sigma_eff * p["t_read"] - BLOCK_NAME_BITS) / BLOCK_BITS) * mem
-    residual = p["unwipeable_gb"] * GB + p["slack"] * mem + help_bits
+    wipe_state = p["wipe_left_gb"] * GB + help_bits
     envelope = (p["hbm_gb"] * (1 - p["f"] * (1 - p["slack"])) + p["host_gb"] * p["slack"]) * GB + sigma_eff * T_AUDIT
     per_server = math.inf
     if mech["wipes"]:
-        per_server = min(per_server, windows_bound(p, H, min(residual, mem), ingress, p["wipe_s"]))
+        per_server = min(per_server, windows_bound(p, H, min(wipe_state, mem), rate_in, p["wipe_s"]))
     if mech["exhaust"]:
-        per_server = min(per_server, windows_bound(p, H, min(envelope, mem), ingress, None))
+        per_server = min(per_server, windows_bound(p, H, min(envelope, mem), rate_in, None))
     if not (mech["wipes"] or mech["exhaust"]):
-        per_server = windows_bound(p, H, mem, ingress, None)
+        per_server = windows_bound(p, H, mem, rate_in, None)
     region = p["nodes"] * per_server
 
-    monitored = min(declared + head_mults, region)
+    monitored = min(declared + res_mults, region)
     declared_part = min(declared, monitored)
-    head_part = monitored - declared_part
-    total = monitored + hidden + cheat
-    if region < declared + head_mults:
-        binding = "server windows"
-    elif declared >= head_mults:
-        binding = "thread bound" if declared >= cap_T * (1 - 1e-9) else "partial-sum law"
-    else:
-        binding = "headroom compute"
-    if hidden > monitored + cheat:
-        binding = "hidden hardware"
+    res_part = monitored - declared_part
+    spent = C + U
+    terms = {"unmonitored": gpm * unmon / spent, "residual": gpm * res_part / spent,
+             "declared": gpm * declared_part / spent, "cheat": gpm * cheat / spent}
+    capped = region < declared + res_mults
+    largest = max(terms, key=lambda t: terms[t])
+    if largest == "declared":
+        largest = "declared (thread bound)" if declared >= cap_T * (1 - 1e-9) else "declared (partial-sum law)"
     return {
-        "declared": declared_part, "headroom": head_part, "hidden": hidden, "cheat": cheat, "total": total,
-        "runs": total / (p["target_flop"] / gpm), "slowdown": C / (gpm * total) if total > 0 else math.inf,
-        "binding": binding, "rho_T": rho_T, "crossing_bits": B, "residual_bits": residual, "envelope_bits": envelope,
-        "cheat_steps": k, "cheat_bits": bits,
+        "efficiency": sum(terms.values()), **terms, "largest": largest, "memory_caps_residual": capped,
+        "rho_T": rho_T, "crossing_bits": B, "wipe_state_bits": wipe_state, "envelope_bits": envelope,
+        "state_threshold_bits": state_threshold(p, mech), "cheat_steps": k, "cheat_bits": bits,
     }
 
 
@@ -281,10 +274,10 @@ def main(argv: list[str] | None = None) -> int:
         print(json.dumps({"spec": SPEC, "defaults": DEFAULTS, "tiers": TIERS,
                           "status": [{"piece": a, "status": b} for a, b in STATUS], "results": results}, indent=1))
         return 0
-    print(f"{'tier':5} {'declared':>10} {'headroom':>10} {'hidden':>8} {'cheat':>9} {'runs':>8} {'slowdown':>9}  binding")
+    print(f"{'tier':5} {'efficiency':>10} {'unmonitored':>11} {'residual':>9} {'declared':>9} {'cheat':>9}  largest")
     for name, r in results.items():
-        print(f"{name:5} {r['declared']:10.3g} {r['headroom']:10.3g} {r['hidden']:8.2g} {r['cheat']:9.2g} "
-              f"{r['runs']:8.3g} {r['slowdown']:9.3g}  {r['binding']}")
+        print(f"{name:5} {r['efficiency']:10.3g} {r['unmonitored']:11.3g} {r['residual']:9.3g} {r['declared']:9.3g} "
+              f"{r['cheat']:9.2g}  {r['largest']}{' (memory caps it)' if r['memory_caps_residual'] else ''}")
     return 0
 
 
