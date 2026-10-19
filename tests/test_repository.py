@@ -53,6 +53,8 @@ SOURCE_SUFFIXES = frozenset({".py", ".rs", ".toml", ".sh", ".cu", ".c", ".h", ".
 
 MD_SIZE_CAP = 48 * 1024
 PROTOCOL_SIZE_CAP = 256 * 1024
+#: The root DESIGN.md: the architecture and the one Glossary, where every term the repository uses is defined.
+DESIGN_SIZE_CAP = 64 * 1024
 BLOB_LIMIT = 256 * 1024  # a tracked file holds at most this, except source code (CODE_SUFFIXES), ALLOWLIST and audit records
 #: Suffixes of source, exempt from BLOB_LIMIT (a generated module or a pinned Lean file can be larger); markdown has its own caps.
 CODE_SUFFIXES = SOURCE_SUFFIXES | {".lean", ".cuh", ".cpp", ".md"}
@@ -148,7 +150,8 @@ def split_dir(path: str) -> str | None:
 
 def markdown_over_cap(path: str, size: int) -> str | None:
     """Why the markdown file ``path`` of ``size`` bytes is over its cap, and where its detail goes; None within it."""
-    cap = PROTOCOL_SIZE_CAP if os.path.basename(path) == "PROTOCOL.md" else MD_SIZE_CAP
+    cap = (PROTOCOL_SIZE_CAP if os.path.basename(path) == "PROTOCOL.md" else DESIGN_SIZE_CAP if path == "DESIGN.md"
+           else MD_SIZE_CAP)
     if size <= cap:
         return None
     where = f"one file per entry under {d}" if (d := split_dir(path)) else "the notes store (cite it by note:<id>)"
@@ -158,6 +161,8 @@ def markdown_over_cap(path: str, size: int) -> str | None:
 def test_markdown_over_cap_says_by_how_much_and_where_detail_goes() -> None:
     soundness = "Security/Proofs/Flock/Soundness/"
     assert markdown_over_cap("README.md", MD_SIZE_CAP) is None and markdown_over_cap("a/PROTOCOL.md", MD_SIZE_CAP + 1) is None
+    assert markdown_over_cap("DESIGN.md", DESIGN_SIZE_CAP) is None and markdown_over_cap("a/DESIGN.md", MD_SIZE_CAP + 1)
+    assert markdown_over_cap("DESIGN.md", DESIGN_SIZE_CAP + 1).startswith("DESIGN.md: 64 KB > 64 KB, 1 bytes over")
     assert markdown_over_cap("a/README.md", MD_SIZE_CAP + 100) == (
         "a/README.md: 48 KB > 48 KB, 100 bytes over; move detail to the notes store (cite it by note:<id>)")
     for p in (soundness + "ASSUMPTIONS.md", soundness + "assumption-notes/e2e-checklist.md"):
