@@ -121,13 +121,15 @@ def row(name: str) -> str:
     return f"DS_{name}"
 
 
-def lines(s: Sheet) -> dict[str, dict[str, Fraction]]:
-    """Each class's SMSP-cycles a warp instruction on each row it holds (a row it holds not at all has no line)."""
+def lines(s: Sheet, peaks: dict[str, Fraction] | None = None) -> dict[str, dict[str, Fraction]]:
+    """Each class's SMSP-cycles a warp instruction on each row it holds (a row it holds not at all has no line), at the
+    sheet's peaks or at `peaks`."""
+    peaks = peaks or {ty: p.macs for ty, p in s.peaks.items()}
     out = {}
     for k, v in s.kinds.items():
         out[k] = {row("issue"): Fraction(1)}
         if v.form:
-            out[k][row("tensor")] = v.form.macs / (s.peaks[v.form.type].macs / 4)
+            out[k][row("tensor")] = v.form.macs / (peaks[v.form.type] / 4)
         if v.pipe:
             out[k][row(v.pipe)] = 128 / s.pipes[v.pipe].value
     return out
@@ -200,12 +202,11 @@ class Reading:
     fmax: float         # with each tensor line at at_fmax's peaks
 
 
-def _tensor(pi, s: Sheet, peaks: dict[str, Fraction]):
-    c = {k: dict(v) for k, v in pi.c.items()}
-    for k, v in s.kinds.items():
-        if v.form:
-            c[k][row("tensor")] = float(v.form.macs / (peaks[v.form.type] / 4))
-    return replace(pi, c=c)
+def _own(pi, s: Sheet, peaks: dict[str, Fraction] | None = None):
+    """Π with every line the sheet's own (`lines`), none of the census file's."""
+    if set(pi.c) != set(s.kinds):
+        raise SystemExit(f"{s.vector}: Π's classes {sorted(set(pi.c) ^ set(s.kinds))} aren't the sheet's, or only its")
+    return replace(pi, c={k: {r: float(x) for r, x in rs.items()} for k, rs in lines(s, peaks).items()})
 
 
 def _setting(s: Sheet, data: Path):
@@ -214,7 +215,7 @@ def _setting(s: Sheet, data: Path):
     f = t["family"][family]
     if f["sheet"]["vector"] != s.vector:
         raise SystemExit(f"headline.toml's {family} sheet reading is {f['sheet']['vector']}, the sheet's {s.vector}")
-    pi = _tensor(machine(s.vector, data), s, {ty: p.macs for ty, p in s.peaks.items()})
+    pi = _own(machine(s.vector, data), s)
     return family, design(f["design"], data), pi, float(t["reading"]["sheet"]["q"])
 
 
@@ -227,7 +228,7 @@ def reading(s: Sheet, data: Path) -> Reading:
     sheet's own lines, beside headline.py's, and with A3 read per second at f_max."""
     family, d, pi, q = _setting(s, data)
     return Reading(family=family, design=d.name, q=q, sheet=_core(d, pi, q, data),
-                   headline=H.row(family, "sheet").core, fmax=_core(d, _tensor(pi, s, at_fmax(s)), q, data))
+                   headline=H.row(family, "sheet").core, fmax=_core(d, _own(pi, s, at_fmax(s)), q, data))
 
 
 def moves(s: Sheet, data: Path, top: float = 4.0, steps: int = 30) -> float | None:
@@ -235,7 +236,7 @@ def moves(s: Sheet, data: Path, top: float = 4.0, steps: int = 30) -> float | No
     moves, to 1/2^steps of `top`; None if it doesn't move by `top`."""
     _, d, pi, q = _setting(s, data)
     base = _core(d, pi, q, data)
-    at = lambda x: _core(d, _tensor(pi, s, {ty: p.macs / Fraction(x) for ty, p in s.peaks.items()}), q, data)
+    at = lambda x: _core(d, _own(pi, s, {ty: p.macs / Fraction(x) for ty, p in s.peaks.items()}), q, data)
     if abs(at(top) - base) <= 1e-12:
         return None
     lo, hi = 1.0, top
