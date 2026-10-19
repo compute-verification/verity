@@ -34,9 +34,10 @@ roots follow the step's real rows, so this window doesn't use them (the seeded m
   its 32 rows.  Seeds come from the salt, the position and the call's (root(A), root(B)), inside the unit.  A dead unit skips
   the noise and the receipt: its leaf is the canonical empty receipt (zero words), so every receipt tree keeps its shape.
   There is one receipt tree per call.
-* **Coins** (``--coins``): seeded, the option's one salt, opened at install before serving; or live, a round a step from
-  the proof service's challenger (`pouw.window.live_challenger`, `sampled_proofs.challenger.LiveRecord`), whose salt coin
-  opens first, against the registration root over the weights' root and the queue's root.  Step s's round
+* **Coins** (``--coins``): live by default, a round a step from the proof service's challenger; or seeded, the option's
+  one salt, opened at install before serving, and labelled seeded in the record.  Live coins come from the challenger
+  (`pouw.window.live_challenger`, `sampled_proofs.challenger.LiveRecord`), whose salt coin opens first, against the
+  registration root over the weights' root and the queue's root.  Step s's round
   root, over its A root and its admit root, is recorded before round s's coin opens, and the step's units take the round's
   salt (`h1tile.live_salt`: `window.round_key(...).stream(0, 64)`), so every candidate and every selection a round's noise
   reads is committed before that noise's coin.
@@ -62,9 +63,11 @@ In order, into OUT (`record.json` throughout, `manifest.json` at the end, the op
   prover    the prover's data (the table key, each call's real rows, scales and receipts) as SCRATCH/prover.tar, before the
             gate so a gate failure keeps it; `serve.sh` puts it in the store once the GPU is released, else moves it into
             OUT, which the run's custody uploads
-  gate      drawn units, live and dead, of real and empty steps, against the gated `h1tile.reference` (receipt) and the
-            served integer product (z); controls: the unit at the next position, a flipped receipt bit, root(A) rebuilt (and
-            a tampered row, real or empty), the tile's 32 A rows opened against root(A) and the step's A root and A' = -b
+  gate      the epoch's draw coin opened after the window's receipts root (`receipts_root`, `open_draw`): its subset of
+            --gate-draw units over the window's positions (`gate_draw`), then a self-check from the same key, live and
+            dead units of real and empty steps; each against the gated `h1tile.reference` (receipt) and the served
+            integer product (z), with no unit picked from the prover's own entropy; controls: the unit at the next
+            position, a flipped receipt bit, root(A) rebuilt (and a tampered row, real or empty), the tile's 32 A rows opened against root(A) and the step's A root and A' = -b
             (the tile's B rows negated) refused there, its re-commitment moving both roots (CMP-38), root(B) rebuilt, the
             tile's 32 B rows opened against it and a tampered weight row refused, the admit root rebuilt from the queue, a
             dead unit's rows empty and its skipped noise real work, a junk row in a slot the queue leaves unassigned refused
@@ -105,6 +108,69 @@ SITES = ("qkv_proj", "o_proj", "gate_up_proj", "down_proj")
 
 def site_of(name: str) -> tuple[int, str]:
     return int(name.split(".layers.")[1].split(".")[0]), name.rsplit(".", 1)[1]
+
+
+#: the gate's draw key: the challenger's draw coin, opened once after the window's receipts root
+GATE_DRAW_DOMAIN = "verity/pouw/served-h1-gate-draw/v1"
+
+
+def receipts_root(window: str, calls: list[dict]) -> bytes:
+    """The window's receipts root, the tree over its calls' receipt roots in call order ('receipts-window'): what the draw
+    coin opens after, so no unit is drawn before every receipt is committed."""
+    return CM.step_root(CM.domain({"window": window, "calls": len(calls)}, len(calls), "receipts-window"),
+                        [bytes.fromhex(c["receipt_root"]) for c in calls])
+
+
+def open_draw(challenger: Any, after: bytes) -> dict:
+    """The epoch's draw coin, opened once after `after` (live: `window.live_challenger`'s ``pouw/draw`` coin; seeded: the
+    epoch coins' ``draw``, `pouw.coins.Challenger`) and checked against the challenger's commitment as the verifier checks
+    it; a second open raises (a retry never redraws)."""
+    from verity.core.protocols.pouw import coins as Co
+    from verity.core.protocols.pouw import window as Wd
+    from verity.core.protocols.sampled_proofs import challenger as Ch
+    if isinstance(challenger, Ch.LiveChallenger):
+        o = challenger.open(Wd.DRAW, 0, after)
+        why = Ch.live_reason(challenger.commitment, o, Wd.DRAW, 0, after)
+    else:
+        o = challenger.open("draw", after)
+        why = Co.coin_reason(challenger.commitment, o, "draw", after)
+    return {"coin": o.coin, "opening": o.to_json(), "commitment": challenger.commitment.to_json(), "after": after.hex(),
+            "reason": why, "epoch": challenger.commitment.epoch, "coins_root": challenger.commitment.root}
+
+
+def gate_draw(draw: dict, k: int, population: int) -> tuple[list[int], random.Random]:
+    """The gate's units from the draw coin (`open_draw`), never the prover's entropy: subset:k of the window's `population`
+    unit positions on the key's ``draw`` stream (`core_check.stream_subset`, the sampler of W2's draw), and the generator
+    of the self-check's stratified picks, from its ``self-check`` stream.  Raises unless the coin opened as the verifier
+    checks it."""
+    from verity.core.protocols.pouw import core_check as CC
+    from verity.ml.randomness import derive
+    if draw["reason"] is not None:
+        raise ValueError(f"the draw coin: {draw['reason']}")
+    key = derive(draw["coin"], GATE_DRAW_DOMAIN, {"coins": draw["coins_root"], "epoch": draw["epoch"],
+                                                  "receipts": bytes.fromhex(draw["after"])})
+    units = CC.stream_subset(k, population, key.stream("draw", 2 * k * CC.width(population) + 64))
+    if units is None:
+        raise ValueError("the draw's stream ran out")
+    return units, random.Random(key.stream("self-check", 64))
+
+
+def call_units(calls: list[dict], positions: list[int]) -> tuple[int, list[tuple[int, int]]]:
+    """The window's population N and each drawn position as (call index, unit): call i's units are the positions base_i ..
+    base_i + units_i - 1, and the calls must tile [0, N)."""
+    order = sorted(range(len(calls)), key=lambda i: calls[i]["base"])
+    at = 0
+    for i in order:
+        if calls[i]["base"] != at:
+            raise ValueError(f"call {i}'s units start at {calls[i]['base']}, not {at}: the calls do not tile [0, N)")
+        at += calls[i]["units"]
+    out = []
+    for p in positions:
+        i = next((i for i in order if calls[i]["base"] <= p < calls[i]["base"] + calls[i]["units"]), None)
+        if i is None:
+            raise ValueError(f"position {p} is no call's unit")
+        out.append((i, p - calls[i]["base"]))
+    return at, out
 
 
 class Record:
@@ -415,7 +481,8 @@ def run(a: argparse.Namespace) -> dict:
                        "slot_leaves": q_commit["slot_leaves"], "request_leaves": q_commit["request_leaves"]})
 
     option = f"pouw:{PH.SCHEME}"
-    ctx = PO.Context(stage="serve", enabled=(option,), settings={"pouw": {"coins": Challenger(a.epoch), "retain_steps": 0,
+    epoch_coins = Challenger(a.epoch)
+    ctx = PO.Context(stage="serve", enabled=(option,), settings={"pouw": {"coins": epoch_coins, "retain_steps": 0,
                                                                          "transcript_dir": str(out)}})
     t0 = time.perf_counter()
     comp = PO.install(eng.model, ctx)
@@ -737,7 +804,9 @@ def run(a: argparse.Namespace) -> dict:
     (out / "manifest.json").write_text(json.dumps(manifest, indent=1, default=str) + "\n")
     rec.step("prover", prover(a, out, key, calls, data))
     try:
-        rec.step("gate", gate(a, calls, data, levels, layers, public["model"], names, queue, weights, key, E, t_max, done))
+        draw = open_draw(lch if live else epoch_coins, receipts_root(window, calls))
+        rec.step("gate", gate(a, calls, data, levels, layers, public["model"], names, queue, weights, key, E, t_max, done,
+                              draw))
     except Exception as e:  # noqa: BLE001
         rec.step("gate", {"ok": False, "error": f"{type(e).__name__}: {e}"[:4000]})
     s = rec.doc["steps"]["serve"]
@@ -756,14 +825,17 @@ def run(a: argparse.Namespace) -> dict:
 
 
 def gate(a, calls: list[dict], data: list[dict], levels: list, layers: list, model: dict, names: dict, queue: dict,
-         weights: dict, key: bytes, E, t_max: int, done: int) -> dict:
-    """Drawn units against the gated `h1tile.reference`, and the controls: per site a live and a dead unit of real steps'
-    calls, then units of empty steps (dead)."""
+         weights: dict, key: bytes, E, t_max: int, done: int, draw: dict) -> dict:
+    """Units against the gated `h1tile.reference`, and the controls: the draw coin's subset (`gate_draw`, the service's
+    form of the window's draw), then a self-check from the same key: per site a live and a dead unit of real steps' calls,
+    then units of empty steps (dead)."""
     import torch
     import receipts as RC
 
-    rng = random.Random(os.urandom(16))
-    picks = []
+    population, _ = call_units(calls, [])
+    drawn, rng = gate_draw(draw, min(a.gate_draw, population), population)
+    picks = call_units(calls, drawn)[1]
+    n_drawn = len(picks)
     for site in SITES:
         real = [i for i, c in enumerate(calls) if c["site"] == site and c["step"] < done]
         for _ in range(a.gate_per_site if site != "down_proj" else max(1, a.gate_per_site // 2)):
@@ -779,7 +851,7 @@ def gate(a, calls: list[dict], data: list[dict], levels: list, layers: list, mod
     units, ok, b_tabs = [], True, {}
     w_dom = CM.domain(weights["fields"], len(weights["roots"]), "weights")
     w_lv = CM.levels(w_dom, weights["roots"])
-    for i, u in picks:
+    for n, (i, u) in enumerate(picks):
         c, d = calls[i], data[i]
         weight = layers[c["linear"]].weight
         slots = padded(torch.from_numpy(d["xq"]), t_max)
@@ -891,18 +963,23 @@ def gate(a, calls: list[dict], data: list[dict], levels: list, layers: list, mod
                     "tampered_b_row_refused": not CM.RT.verify_rows(root_b, b_dom.domain_id, c["n"], b_open, witness_b(t_b)),
                     "b_root_in_weights_root": CM.verify(w_dom, weights["root"], w, root_b, CM.path(w_lv, w))}
         r = {"step": c["step"], "linear": c["linear"], "module": c["module"], "k": c["k"], "unit": u,
-             "position": c["base"] + u, "real_rows_in_tile": max(0, min(32, d["m"] - 32 * ri)),
+             "position": c["base"] + u, "drawn": n < n_drawn, "real_rows_in_tile": max(0, min(32, d["m"] - 32 * ri)),
              "receipt_equal_reference": got == want, "receipt_equal_template": got == template,
              "z_equal_served_product": z_ok, **sel,
              "receipt_opens": CM.verify(dom, root_r, u, leaf, sibs),
              "flipped_receipt_refused": not CM.verify(dom, root_r, u, leaf_f, sibs),
              "a_root_rebuilt": a_root == root_a, **cmp38, "tampered_a_row_changes_root": a_tampered != root_a,
              "tampered_row_was_empty": row >= d["m"], "served_rows_from_scales": useful == d["m"], **b_checks}
-        r["ok"] = all(v for k_, v in r.items() if isinstance(v, bool) and k_ not in ("tampered_row_was_empty", "live"))
+        r["ok"] = all(v for k_, v in r.items() if isinstance(v, bool)
+                      and k_ not in ("tampered_row_was_empty", "live", "drawn"))
         ok &= r["ok"]
         units.append(r)
         print(f"[served-h1] gate {json.dumps(r)}", flush=True)
-    return {"ok": bool(ok and units), "units": units}
+    law = {"law": f"subset:{len(drawn)} over {population}", "units": drawn, "domain": GATE_DRAW_DOMAIN,
+           "opening": draw["opening"], "after": draw["after"], "commitment": draw["commitment"],
+           "self_check": "the units not drawn: stratified per site (live, partly dead, empty steps) from the draw key's "
+                         "self-check stream, a check of the receipts against the reference, not the window's draw"}
+    return {"ok": bool(ok and units), "draw": law, "units": units}
 
 
 def prover(a, out: Path, key: bytes, calls: list[dict], data: list[dict]) -> dict:
@@ -933,7 +1010,7 @@ def prover(a, out: Path, key: bytes, calls: list[dict], data: list[dict]) -> dic
             "put": "serve.sh, after the lease: OUT/prover-put.txt, else OUT/prover.tar"}
 
 
-def main(argv: list[str] | None = None) -> int:
+def parser() -> argparse.ArgumentParser:
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     ap.add_argument("--out", required=True)
     ap.add_argument("--cubin", help="noise.cu built for this device (else hashlib, and no timing)")
@@ -951,12 +1028,18 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--steps", type=int, default=0, help="S, the public steps (default max tokens + 2)")
     ap.add_argument("--gpu-mem", type=float, default=0.6, help="vLLM's gpu_memory_utilization: the rest is the side computation's")
     ap.add_argument("--epoch", type=int, default=1)
-    ap.add_argument("--gate-per-site", type=int, default=2)
+    ap.add_argument("--gate-per-site", type=int, default=2, help="the gate's self-check units a site")
+    ap.add_argument("--gate-draw", type=int, default=8, help="K, the units the draw coin draws for the gate (W2's 8)")
     ap.add_argument("--workers", type=int, default=0)
     ap.add_argument("--skip-timing", action="store_true")
-    ap.add_argument("--coins", default="seeded", choices=["seeded", "live"],
-                    help="live: a round a step, its coin opened after its A tables' root (the proof service's challenger)")
-    return 0 if run(ap.parse_args(argv))["ok"] else 1
+    ap.add_argument("--coins", default="live", choices=["live", "seeded"],
+                    help="live (the default): a round a step, its coin opened after its A tables' root (the proof "
+                         "service's challenger); seeded: the option's one salt, labelled seeded in the record")
+    return ap
+
+
+def main(argv: list[str] | None = None) -> int:
+    return 0 if run(parser().parse_args(argv))["ok"] else 1
 
 
 if __name__ == "__main__":

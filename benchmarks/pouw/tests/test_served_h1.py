@@ -10,6 +10,7 @@ scheduler's record gives the request queue and its commitment."""
 from __future__ import annotations
 
 import importlib.util
+import random
 import sys
 from pathlib import Path
 
@@ -229,6 +230,56 @@ def test_canonical_empty_rows_in_selected_slots_are_refused_and_credit_nothing()
     bits = CR.queue_admit(queue, 0, honest)
     assert list(bits) == list(chosen) and not CR.junk(honest, bits) and not CR.hollow(honest, chosen)
     assert not CR.scale_only(honest) and CR.live_blocks(bits) == [0]
+
+
+def _entropy(seed: str):
+    g = random.Random(seed)
+    return lambda n: bytes(g.getrandbits(8) for _ in range(n))
+
+
+def test_the_gate_draws_from_the_challengers_draw_coin():
+    """RT-INT-3 (note:20261019T0528Z-draft-rt-int): the gate's units are the epoch's draw coin's, opened once after the
+    window's receipts root and checked as the verifier checks it, never the prover's own entropy: subset:K over the
+    window's unit positions (W2's sampler), the same for the same coin and another for another; a coin opened after
+    another root is refused, a second open never redraws, and the seeded epoch coins' draw coin serves a seeded window."""
+    from verity.core.protocols.pouw import window as Wd
+    from verity.core.protocols.sampled_proofs import challenger as Ch
+
+    SV = _load("serve")
+    calls = [{"base": 0, "units": 4, "receipt_root": "aa" * 64}, {"base": 12, "units": 6, "receipt_root": "cc" * 64},
+             {"base": 4, "units": 8, "receipt_root": "bb" * 64}]
+    root = SV.receipts_root("w", calls)
+    assert root != SV.receipts_root("w", calls[:2]) and root != SV.receipts_root("v", calls)
+    population, at = SV.call_units(calls, [0, 3, 4, 11, 12, 17])
+    assert population == 18 and at == [(0, 0), (0, 3), (2, 0), (2, 7), (1, 0), (1, 5)]
+    with pytest.raises(ValueError, match="tile"):
+        SV.call_units(calls[:2], [])
+    lch = Wd.live_challenger(1, 3, _entropy("a"))
+    draw = SV.open_draw(lch, root)
+    assert draw["reason"] is None and draw["after"] == root.hex() and draw["opening"]["label"] == Wd.DRAW
+    units, rng = SV.gate_draw(draw, 5, population)
+    assert len(units) == 5 and units == sorted(set(units)) and 0 <= units[0] and units[-1] < population
+    again, rng2 = SV.gate_draw(draw, 5, population)
+    assert again == units and rng.random() == rng2.random()
+    assert SV.gate_draw(SV.open_draw(Wd.live_challenger(1, 3, _entropy("b")), root), 5, population)[0] != units
+    with pytest.raises(Ch.CoinError, match="never redraws"):
+        SV.open_draw(lch, root)
+    late = Ch.live_reason(lch.commitment, Ch.LiveOpening.from_json(draw["opening"]), Wd.DRAW, 0,
+                          SV.receipts_root("w", calls[:2]))
+    assert late is not None
+    with pytest.raises(ValueError, match="draw coin"):
+        SV.gate_draw(dict(draw, reason=late), 5, population)
+    from verity.core.protocols.pouw.coins import Challenger
+    seeded = SV.open_draw(Challenger(1, _entropy("c")), root)
+    assert seeded["reason"] is None and len(SV.gate_draw(seeded, 5, population)[0]) == 5
+
+
+def test_coins_default_to_live():
+    """RT-INT-3: SERVE-H1 serves under live coins unless told seeded, and the gate draws W2's 8 units by default."""
+    SV = _load("serve")
+    a = SV.parser().parse_args(["--out", "o", "--at", "2026-10-19T00:00:00Z", "--by", "x"])
+    assert a.coins == "live" and a.gate_draw == 8
+    assert SV.parser().parse_args(["--out", "o", "--at", "t", "--by", "x", "--coins", "seeded"]).coins == "seeded"
 
 
 class _Layer:
