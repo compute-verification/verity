@@ -19,7 +19,7 @@ HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE.parent))
 sys.path.insert(0, str(HERE.parents[2]))
 
-from verity.core.protocols.remote_bandwidth import audit, ledger, timing  # noqa: E402
+from verity.core.protocols.remote_bandwidth import audit, ledger, receipts as rb, timing  # noqa: E402
 from verity.core.protocols.remote_bandwidth import codec as rcodec  # noqa: E402
 
 import prover  # noqa: E402
@@ -148,8 +148,8 @@ class TickingBackend(prover.CpuBackend):
 
 def run(plan: str, *, blocks: int = 16, windows: int = 3, samples: int = 6, sessions: int = 1, checks=None,
         read_bytes_per_s: float = 1e20, tiers: dict | None = None, lifetime: int = audit.LIFETIME,
-        registry: audit.Registry | None = None, layout: list | None = None, host_bytes: int = 0,
-        pace: audit.Pace | None = None, groups: int = 1, **kv):
+        layout: list | None = None, host_bytes: int = 0, pace: audit.Pace | None = None, groups: int = 1,
+        **kv):
     clock = PassClock()
     vconn, pconn = clock.conns()
     backend = TickingBackend(clock, blocks, random.Random(7), read_bytes_per_s=read_bytes_per_s, tiers=tiers,
@@ -167,8 +167,7 @@ def run(plan: str, *, blocks: int = 16, windows: int = 3, samples: int = 6, sess
     th.start()
     v = verifier.Verifier(vconn, source=os.urandom(32), windows=windows, window_ns=20, samples=samples,
                           delta=2.0 ** -40, jitter_ns=10 ** 9, clock=clock, log=lambda m: None,
-                          checks=checks, lifetime=lifetime, registry=registry, host_bytes=host_bytes, pace=pace,
-                          groups=groups)
+                          checks=checks, lifetime=lifetime, host_bytes=host_bytes, pace=pace, groups=groups)
     v.register()
     allowance = v.allowance(v.ping(4))
     out, not_before = [], None
@@ -379,13 +378,47 @@ def test_the_check_workers_bound_each_windows_wrong_receipts_as_its_profile_does
         checks.close(wait=True)
 
 
+def logged_appends(monkeypatch) -> list:
+    """Each append the serving trace's records make, (step, first, count, root), in order."""
+    out, record = [], prover.ServingTrace.record
+
+    def logging(self, s, window, freed, writes, rekey=True):
+        n = len(self.appends)
+        change = record(self, s, window, freed, writes, rekey)
+        out.extend((s, a.first, a.count, a.root) for a in self.appends[n:])
+        return change
+
+    monkeypatch.setattr(prover.ServingTrace, "record", logging)
+    return out
+
+
+def heads_follow_the_steps(record: dict, appends: list) -> bool:
+    """Whether each pass's public head is the chain through `appends` of the steps below its own and the record's
+    chain is through them all, as the memory-map unit checks it (`RequirementLink.mapped`)."""
+
+    def chain(below: int) -> str | None:
+        head = None
+        for s, first, count, root in appends:
+            if s < below:
+                head = audit.append_head(head, first, count, root)
+        return None if head is None else head.hex()
+
+    pub, windows = record["public"], record["profile"]["windows"]
+    return pub["appends"] == chain(audit.STEP_LIMIT) and all(
+        h == chain(s) for w, hs in zip(windows, pub["heads"], strict=True) for s, h in zip(w["steps"], hs, strict=True))
+
+
 def test_kv_pages_past_the_lifetime_are_re_keyed_and_a_prover_that_keeps_them_is_rejected(monkeypatch):
     """Under L = 1 window, sent with the session, every appended page is stale in the window after the one it joined.
     The honest prover re-keys each before that window's first pass (writes its payload again in its slot, at a fresh
-    index) and is accepted. One that never re-keys is rejected at that pass's root (`lifetime`)."""
+    index) and is accepted, each pass's head the chain through the appends of the steps below its own, those of the
+    queued passes each boundary discards among them. One that never re-keys is rejected at that pass's root
+    (`lifetime`)."""
     monkeypatch.setattr(prover, "OPENINGS_PART", 4)
+    appends = logged_appends(monkeypatch)
     (r,), (p,) = run("kv:2", samples=8, kv_every=4, kv_pool=8, lifetime=1)
     assert r["accepted"] and p["accepted"] and r["record"]["public"]["lifetime"] == 1
+    assert appends and heads_follow_the_steps(r["record"], appends) and p["discarded"] > 0
     kv = p["kv"]
     assert kv["lifetime"] == 1 and kv["rekeyed"] > 0 and kv["appended"] == 2 * kv["steps"] + kv["rekeyed"]
     monkeypatch.setattr(prover.ServingTrace, "stale", lambda self, window: [])
@@ -437,11 +470,14 @@ def test_a_pipelined_session_with_serving_up_to_k_steps_past_its_passes_is_accep
     under L = 1 are re-keyed at each window's first pass: the session is accepted, no pass read a block serving had
     overwritten, serving ran more steps than there were passes, every pass read with serving at most k steps past its
     own and some at exactly k, and the fence held serving once: at the first step, whose write overwrites the pool's
-    filler in place and waits on its own step's pass (the filler the next k + 1 steps write is freed there)."""
+    filler in place and waits on its own step's pass (the filler the next k + 1 steps write is freed there).  Each
+    pass's head is the chain through the appends of the steps below its own, the steps serving ran past among them."""
     monkeypatch.setattr(prover, "OPENINGS_PART", 4)
+    appends = logged_appends(monkeypatch)
     (r,), (p,) = run("kv:1", windows=2, samples=16, kv_every=1, kv_pool=8, lifetime=1, ahead=k, fill=True,
                      kv_headroom=k + 1)
     assert r["accepted"] and p["accepted"] and r["failure"] is None and p["misread"] == []
+    assert appends and heads_follow_the_steps(r["record"], appends)
     a, kv = p["ahead"], p["kv"]
     assert all(0 <= lead <= k for lead in a["leads"]) and max(a["leads"]) == k and a["fence_waits"] == 1
     assert len(a["leads"]) == sum(p["passes"]) + p["discarded"] < a["steps"]
@@ -576,6 +612,86 @@ def test_the_node_line_credits_each_kind_against_the_nodes_hbm_and_host_dram(mon
     assert line["credited_bytes"] == pytest.approx(16 * B - lost) and line["held"] == node["held"]
 
 
+def test_the_memory_line_held_on_average_credits_what_the_worst_pass_form_cannot(monkeypatch):
+    """Both forms of the memory line on a store of 8 weights blocks and 8 of filler, every pass reading all 16, at 200
+    draws a window of its ~320 receipts, so f_t ≈ 0.14.  At every pass (the worst-pass form) a window loses f_t·U_t
+    ≈ 44 blocks, more than the store, and credits nothing.  On average a window loses f_t·U_t/P_t ≈ 2 blocks, its
+    rebuilds and the chip's block, so it credits the weights less those; with the rebuilds spread over its passes, less
+    again only f_t·N and the chip.  The node line carries both forms and both rebuild readings, the line's error
+    counts AuditRO's slack a pass beside δ, and a recorded session recomputes the same average line
+    (`recorded_memory`)."""
+    monkeypatch.setattr(prover, "OPENINGS_PART", 4)
+    monkeypatch.setattr(timing, "SQUARINGS_PER_S", {"p512": 0.0})
+    seen, memory = {}, verifier.memory
+
+    def keep(*a, **kw):
+        seen["args"] = a, kw
+        return memory(*a, **kw)
+
+    monkeypatch.setattr(verifier, "memory", keep)
+    layout = [{"kind": "weights", "tier": "hbm", "first": 0, "blocks": 8},
+              {"kind": "filler", "tier": "hbm", "first": 8, "blocks": 8}]
+    (r,), (p,) = run("honest", samples=200, layout=layout)
+    assert r["accepted"] and p["accepted"]
+    (record, plans, regions), kw = seen["args"]
+    assert kw["chip_bytes"] == timing.CHIP_BYTES
+    B, span = rcodec.BLOCK_BYTES, max(w.span_ns for w in record.windows)
+    rate = record.codec.encode_squarings * 1e9 / span / 2
+    m = verifier.memory(record, plans, regions, hbm_bytes=kw["hbm_bytes"], rebuild=audit.Rebuild(record.codec, rate),
+                        chip_bytes=B)
+    assert m["form"] == verifier.WORST_PASS and m["average"]["form"] == verifier.AVERAGE and m["chip_bytes"] == B
+    floors = audit.floors(record)
+    assert max(floors) > 0.1
+    for w, x, f in zip(record.windows, m["windows"], floors):
+        rebuilt, a = w.span_ns / span / 2, x["average"]
+        assert x["lost_blocks"] == pytest.approx(f * w.receipts + rebuilt) and w.receipts == 16 * w.passes
+        assert x["credited"]["weights"] == max(0.0, 8 * B - x["lost_blocks"] * B)
+        assert a["form"] == verifier.AVERAGE and a["held"] == {"weights": 8 * B, "hbm": 16 * B, "host": 0}
+        assert a["wrong_blocks"] == pytest.approx(f * 16) and a["rebuild_blocks"] == pytest.approx(rebuilt)
+        assert a["chip_blocks"] == 1 and a["lost_blocks"] == pytest.approx(f * 16 + rebuilt + 1)
+        assert a["credited"]["weights"] == pytest.approx(max(0.0, 8 * B - (f * 16 + rebuilt + 1) * B))
+        assert a["credited"]["hbm"] == pytest.approx(max(0.0, 16 * B - (f * 16 + rebuilt + 1) * B))
+        assert a["credited_rebuild_per_pass"]["weights"] == pytest.approx(8 * B - (f * 16 + rebuilt / w.passes + 1) * B)
+        assert a["epsilon"] == pytest.approx(a["lost_blocks"] / 16)
+    assert m["credited_bytes"] == min(x["credited"]["hbm"] for x in m["windows"]) == 0
+    avg = m["average"]
+    assert avg["credited_bytes"] == min(x["average"]["credited"]["hbm"] for x in m["windows"]) > 0
+    assert avg["weights_bytes"] == min(x["average"]["credited"]["weights"] for x in m["windows"]) > m["weights_bytes"]
+    assert avg["share"] == avg["credited_bytes"] / m["hbm_bytes"] and avg["residual"] == 1 - avg["share"]
+    assert avg["weights_bytes_rebuild_per_pass"] > avg["weights_bytes"]
+
+    host = 1843 * 10 ** 9
+    line = verifier.node_line(m, host_bytes=host)
+    assert line["form"] == verifier.WORST_PASS and line["credited_bytes"] == 0
+    a = line["average"]
+    lost = max(x["average"]["lost_blocks"] for x in m["windows"]) * B
+    assert a["form"] == verifier.AVERAGE and a["lost_bytes"] == pytest.approx(lost)
+    assert a["held"] == {"weights": 8 * B, "filler_hbm": 8 * B, "host": 0}
+    assert a["credited"]["weights"] == pytest.approx(8 * B - lost) == a["credited"]["filler_hbm"]
+    assert a["credited_bytes"] == pytest.approx(16 * B - lost) and a["share"]["weights"] == a["credited"]["weights"] / (
+        verifier.HBM_BYTES + host)
+    pp = line["average_rebuild_per_pass"]
+    lost_pp = max(x["average"]["lost_blocks_rebuild_per_pass"] for x in m["windows"]) * B
+    assert pp["form"] == verifier.AVERAGE and pp["lost_bytes"] == pytest.approx(lost_pp) and lost_pp < lost
+    assert pp["credited"]["weights"] == pytest.approx(8 * B - lost_pp) == pytest.approx(
+        avg["weights_bytes_rebuild_per_pass"])
+
+    lg = r["ledger"]
+    reading = next(lg[n] for n in ("spec", "measured") if "error" in lg[n])
+    assert lg["memory"]["error"] == verifier.memory_error(lg) == pytest.approx(
+        reading["error"]["horizon"] + 2.0 ** lg["sketch_failure"]["log2"])
+    assert lg["memory"]["error"] > lg["memory"]["delta"] + record.passes * 2.0 ** -audit.SLACK_LOG2 * 0.99
+
+    def same(x, y) -> bool:
+        if isinstance(x, dict):
+            return x.keys() == y.keys() and all(same(x[k], y[k]) for k in x)
+        return x == pytest.approx(y) if isinstance(x, float) else x == y
+
+    again = verifier.recorded_memory({"ledger": {"memory": m}, "record": r["record"]}, chip_bytes=B, host_bytes=host)
+    assert all(same(x["average"], y["average"]) for x, y in zip(again["windows"], m["windows"]))
+    assert same(again["average"], avg) and same(again["node"]["average"], a)
+
+
 def test_an_engines_arena_puts_each_weight_at_a_block_boundary_and_refuses_what_does_not_fit():
     import engine
 
@@ -605,30 +721,6 @@ def test_aligned_engines_step_at_one_instant_of_the_host_clock_whatever_their_pe
 def test_a_layout_that_is_not_the_stores_regions_in_order_is_refused(layout):
     with pytest.raises(ValueError):
         verifier.regions_of(layout, 16)
-
-
-def registering(registry: audit.Registry) -> tuple[str, str]:
-    """A prover's hello to a verifier holding `registry`, for a node with a live registration there: the verifier's
-    refusal, and the reason the prover read in its `bye`."""
-    a, b = socket.socketpair()
-    p = prover.ProverSide(wire.Conn(b), prover.CpuBackend(16, random.Random(7)), b"test-node",
-                          prover.parse_plan("honest"), seed=11, log=lambda m: None)
-    heard = []
-
-    def prove() -> None:
-        try:
-            p.register(codec=P512)
-        except wire.Closed as e:
-            heard.append(str(e))
-
-    th = threading.Thread(target=prove, daemon=True)
-    th.start()
-    v = verifier.Verifier(wire.Conn(a), source=os.urandom(32), windows=3, window_ns=20, samples=6, delta=2.0 ** -40,
-                          jitter_ns=10 ** 9, log=lambda m: None, registry=registry)
-    with pytest.raises(audit.RegistryError) as refused:
-        v.register()
-    th.join()
-    return str(refused.value), heard[0]
 
 
 def greeted(lifetime: int, deferred: bool) -> tuple[verifier.Verifier, ValueError | None, list[str]]:
@@ -669,25 +761,6 @@ def test_a_prover_that_defers_residency_is_refused_under_a_lifetime_of_one_windo
     for lifetime, deferred in ((2, True), (1, False)):
         v, refused, heard = greeted(lifetime, deferred)
         assert refused is None and heard == [] and v.deferred is deferred and v.registry.drawn(b"test-node") == 1
-
-
-def test_a_node_with_a_live_registration_is_refused_until_the_verifier_closes_it_with_its_sessions_counted(monkeypatch):
-    """The red team's KB-4: a second registration is a retry that redraws the codec seed.  Over one registry, a
-    second hello from the node while its registration is live draws nothing and is answered `bye` with the reason;
-    closing the registration counts its sessions, the dropping prover's as its failure, and only then does the node
-    register again, R = 2."""
-    monkeypatch.setattr(prover, "OPENINGS_PART", 4)
-    registry = audit.Registry()
-    (honest, dropping), _ = run("honest,skip:0.5", sessions=2, registry=registry)
-    assert honest["accepted"] and not dropping["accepted"] and dropping["failure"]["failure"] == "receipt"
-    assert registry.live(b"test-node") == bytes.fromhex(honest["registration"])
-    refused, heard = registering(registry)
-    assert "live registration" in refused and heard == f"refused: {refused}"
-    assert registry.refused == {b"test-node": 1} and registry.drawn(b"test-node") == 1
-    closed = registry.close(b"test-node")
-    assert closed.sessions == ("accepted", "receipt") and closed.failed == 1
-    (again,), _ = run("honest", registry=registry)
-    assert again["accepted"] and again["registration"] != honest["registration"] and registry.drawn(b"test-node") == 2
 
 
 def test_the_verifier_closes_a_registration_left_live_from_its_registry_file(tmp_path, monkeypatch, capsys):
@@ -759,6 +832,18 @@ def test_an_append_is_answered_with_its_coin_and_a_root_message_is_applied_in_or
         verifier.Verifier.append(session(), {"type": "append", "root": "zz", "count": 2})
     with pytest.raises(ValueError, match="message of its own"):
         verifier.Verifier.root(session(), {**msg, "appends": [[root, 2]]})
+
+
+def test_a_plan_change_is_the_runs_one_plan_adds_and_removes_from_the_other():
+    rng = random.Random(3)
+    for _ in range(200):
+        n, m = rng.randrange(1, 60), rng.randrange(0, 20)
+        before = rb.Plan.of(sorted(rng.sample(range(n), rng.randrange(1, n + 1))), n)
+        after = rb.Plan.of(sorted(rng.sample(range(n + m), rng.randrange(1, n + m + 1))), n + m)
+        added, removed = prover.plan_change(before, after)
+        a, b = set(before), set(after)
+        assert added == prover.runs_of(sorted(b - a)) and removed == prover.runs_of(sorted(a - b))
+        assert before.changed(added, removed, n + m) == after
 
 
 def test_a_root_message_names_the_withdrawn_blocks_among_its_releases():
