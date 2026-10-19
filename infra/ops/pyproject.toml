@@ -29,5 +29,6 @@ markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
 inputs = ["tools/research/src/research/pods", ".agents/skills/using-slack/registry.json",
           "tools/research/src/research/telemetry/cancel.py", "tools/research/src/research/telemetry/classify.py",
           "tools/research/src/research/telemetry/procs.py", "tools/research/src/research/telemetry/pyspy.py",
-          "tools/research/src/research/telemetry/run.py", "tools/research/src/research/flags.py"]
+          "tools/research/src/research/telemetry/run.py", "tools/research/src/research/telemetry/scope.py",
+          "tools/research/src/research/flags.py"]
 parallel = true
