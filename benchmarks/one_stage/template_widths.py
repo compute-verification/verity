@@ -132,6 +132,8 @@ def literal(fn) -> dict:
         verdict = "accepted"
     except QueryInapplicable as e:
         verdict = f"refused: {e}"
+    except (TypeError, ValueError) as e:
+        verdict = f"no population: {e}"
     (b,) = P._committed_bits(fn, [(0, fn.gates)])
     return {"verdict": verdict, "bits_literal": b, "literal_s": round(time.time() - t, 2)}
 
@@ -207,19 +209,22 @@ def deep(fn, rec: dict, a: argparse.Namespace, *, recut_too: bool) -> None:
     """The ported rule and `_committed_bits` (at most `--literal-max` gates), and the re-cut (over 16 bits, at most
     `--cone-max` gates)."""
     t = time.time()
-    if fn.gates <= a.literal_max and "bits_literal" not in rec:
-        rec.update(literal(fn))
-        if rec["bits_literal"] != rec["bits"]:
-            rec["disagree"] = True
-    if recut_too and rec["bits"] > P.UNIT_BITS and fn.gates <= a.cone_max and "recut" not in rec:
+    if fn.gates <= a.literal_max and "bits_literal" not in rec and "literal_error" not in rec:
+        try:
+            rec.update(literal(fn))
+            if rec["bits_literal"] != rec["bits"]:
+                rec["disagree"] = True
+        except Exception as e:  # noqa: BLE001
+            rec["literal_error"] = repr(e)[:300]
+    if recut_too and (rec.get("bits") or 0) > P.UNIT_BITS and fn.gates <= a.cone_max and "recut" not in rec:
         try:
             rec["descriptor_id"] = descriptor_id(fn)
         except Exception as e:  # noqa: BLE001
             rec["descriptor_id"] = f"error: {e!r}"[:200]
         try:
             rec["recut"] = recut(fn, returned(fn))
-        except MemoryError:
-            rec["recut"] = {"error": "MemoryError"}
+        except Exception as e:  # noqa: BLE001
+            rec["recut"] = {"error": repr(e)[:300]}
     rec["deep_s"] = round(rec.get("deep_s", 0) + time.time() - t, 2)
 
 
@@ -299,7 +304,11 @@ def main() -> int:
                 units[tid][key] += calls * per
                 here.setdefault(tid, f)
                 if tid not in seen:
-                    seen[tid] = describe(f, memo)
+                    try:
+                        seen[tid] = describe(f, memo)
+                    except Exception as e:  # noqa: BLE001
+                        seen[tid] = {"id": tid, "family": K.family(tid), "gates": f.gates, "bits": None,
+                                     "describe_error": repr(e)[:300]}
                     seen[tid]["first_seen"] = key
                 rec = seen[tid]
                 rec["hows"] = sorted(set(rec.get("hows", [])) | set(hows))
@@ -330,10 +339,11 @@ def main() -> int:
         a.out.parent.mkdir(parents=True, exist_ok=True)
         a.out.write_text(json.dumps({"row": a.row, "programs": programs, "templates": seen,
                                      "units": {k: dict(v) for k, v in units.items()}, "partial": True}, indent=1, default=str))
-    refused = sorted((r for r in seen.values() if r["bits"] > P.UNIT_BITS), key=lambda r: -r["bits"])
+    refused = sorted((r for r in seen.values() if (r["bits"] or 0) > P.UNIT_BITS), key=lambda r: -r["bits"])
     doc = {"row": a.row, "rule": "9431e36d39: a template instance commits at most 16 bits (Input + returned gates)",
            "programs": programs, "templates": seen, "units": {k: dict(v) for k, v in units.items()},
            "refused": [r["id"] for r in refused], "disagreements": [r["id"] for r in seen.values() if r.get("disagree")],
+           "errors": [r["id"] for r in seen.values() if r.get("describe_error") or r.get("literal_error")],
            "seconds": round(time.time() - t0, 1)}
     a.out.write_text(json.dumps(doc, indent=1, default=str))
     print(f"[widths] {a.row}: {len(seen)} templates, {len(refused)} over 16 bits, {len(doc['disagreements'])} disagreements, "
