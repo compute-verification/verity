@@ -464,11 +464,14 @@ def test_sensitivity_and_benchmarks_flag_what_moves_the_plan():
 
 
 def test_miss_holds_its_digits_on_huge_populations():
-    """A week of served units is about 10^16: the miss probability against the product it denotes, summed exactly."""
-    for n in (2 ** 25 - 3, 2 ** 25 + 3, 10 ** 12, 10 ** 16):
+    """A week of served units is about 10^16, and a year of 10^5 GPUs about 10^23: the miss probability and its log, whose
+    digits a sparse draw's hit is, against the product it denotes, summed exactly."""
+    for n in (2 ** 25 - 3, 2 ** 25 + 3, 10 ** 12, 10 ** 16, 10 ** 20, 10 ** 23):
         for m, k in ((1, 1), (4096, 27_713), (10 ** 6, 100), (64, 10 ** 6)):
             t, s = min(m, k), max(m, k)
-            assert _miss(n, m, k) == pytest.approx(exp(fsum(log1p(-s / (n - i)) for i in range(t))), rel=1e-6)
+            exact = fsum(log1p(-s / (n - i)) for i in range(t))
+            assert _log_miss(n, m, k) == pytest.approx(exact, rel=1e-6, abs=0)
+            assert _miss(n, m, k) == pytest.approx(exp(exact), rel=1e-6)
 
 
 def test_near_full_draws_past_two_to_the_53_keep_their_digits():

@@ -309,7 +309,8 @@ class Plan:
 def _log_miss(n: int, m: int, k: int) -> float:
     """log C(n - m, k) / C(n, k), that a uniform k-subset of n misses m given units: the product
     prod_{i < t} (1 - s / (n - i)) over t = min(m, k), s = max(m, k), summed when t is small, by `lgamma` up to 2^25 units
-    and past that, where `lgamma`'s differences lose their digits, by its midpoint (either within about 1e-7 relative)."""
+    and past that, where `lgamma`'s differences lose their digits, by its midpoint (either within about 1e-7 relative),
+    its terms doubled to stay integers: past 2^53 units a float's spacing exceeds s."""
     if k > n - m:
         return -inf
     if m == 0 or k == 0:
@@ -319,7 +320,7 @@ def _log_miss(n: int, m: int, k: int) -> float:
         return fsum(_log_rest(n - i - s, n - i) for i in range(t))
     if n <= 1 << 25:
         return lgamma(n - m + 1) - lgamma(n - m - k + 1) - lgamma(n + 1) + lgamma(n - k + 1)
-    return t * _log_rest(n - s - (t - 1) / 2, n - (t - 1) / 2)
+    return t * _log_rest(2 * (n - s) - (t - 1), 2 * n - (t - 1))
 
 
 def _log_rest(rest: float, whole: float) -> float:
