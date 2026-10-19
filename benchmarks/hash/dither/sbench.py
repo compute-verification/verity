@@ -7,7 +7,8 @@ Measures, per arm and rep:
                      of N1 and N2 output tokens, so prefill and the engine's per-call overhead cancel
     tokens_per_s     at saturation: SAT_REQS requests of SAT_TOKENS output tokens each, max_num_seqs MAX_SEQS (requests wait
                      in the scheduler throughout), output tokens over wall time; under --stock-own-batch the stock arms
-                     run at vLLM's own max_num_seqs and max_num_batched_tokens, not --t's (summary's scheduler_by_arm)
+                     run at vLLM's own max_num_seqs and max_num_batched_tokens, not --t's (summary's scheduler_by_arm,
+                     with each engine's KV tokens: --arm-mem gives an arm the memory share its batch needs)
 and the gate: each arm's greedy token ids on the 32 requests equal `stock`'s (an arm that changes no served value must).
 
 Arms:
@@ -150,12 +151,21 @@ def stock_args(gpu_mem: float) -> dict:
 
 
 def scheduler_of(llm) -> dict | None:
-    """The engine's resolved batch: what a stock arm under --stock-own-batch really ran at."""
+    """The engine's resolved batch and its KV cache's tokens: what a stock arm under --stock-own-batch really ran at,
+    and whether its memory share, not its scheduler, bounded its concurrency at saturation."""
     try:
-        sc = llm.llm_engine.vllm_config.scheduler_config
-        return {"max_num_seqs": sc.max_num_seqs, "max_num_batched_tokens": sc.max_num_batched_tokens}
+        vc = llm.llm_engine.vllm_config
+        sc, cc = vc.scheduler_config, vc.cache_config
+        return {"max_num_seqs": sc.max_num_seqs, "max_num_batched_tokens": sc.max_num_batched_tokens,
+                "gpu_memory_utilization": cc.gpu_memory_utilization,
+                "kv_tokens": cc.num_gpu_blocks * cc.block_size if cc.num_gpu_blocks else None}
     except AttributeError:
         return None
+
+
+def arm_mem(spec: str) -> dict[str, float]:
+    """--arm-mem ARM=F,...: those arms' gpu_memory_utilization in place of --gpu-mem."""
+    return {k: float(v) for k, v in (x.split("=") for x in spec.split(",") if x)}
 
 
 DISABLED = {"stock": "CutlassInt8ScaledMMLinearKernel", "stock-percall": "CutlassInt8ScaledMMLinearKernel",
@@ -438,6 +448,8 @@ def main() -> int:
     ap.add_argument("--gate", action="store_true")
     ap.add_argument("--stock-own-batch", action="store_true",
                     help="stock arms at vLLM's own max_num_seqs and max_num_batched_tokens, not --t's")
+    ap.add_argument("--arm-mem", type=arm_mem, default={},
+                    help="ARM=F,...: those arms' gpu_memory_utilization (a stock arm's own batch needs KV room for it)")
     a = ap.parse_args()
     os.environ["SBENCH_T"] = str(a.t)
     if a.stock_own_batch:
@@ -458,7 +470,7 @@ def main() -> int:
     conns, procs, info = {}, {}, {}
     for arm in arms:      # one engine at a time comes up, so their memory profiling doesn't race
         here, there = ctx.Pipe()
-        p = ctx.Process(target=worker, args=(arm, there, str(scratch), a.gpu_mem), daemon=True)
+        p = ctx.Process(target=worker, args=(arm, there, str(scratch), a.arm_mem.get(arm, a.gpu_mem)), daemon=True)
         p.start()
         there.close()   # the worker's end, closed here so a dead worker's pipe reads EOF, not a wait
         msg = recv(arm, here, "build")
