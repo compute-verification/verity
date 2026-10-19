@@ -31,7 +31,9 @@ the head's digest; a certificate that fails, one from another session included, 
 after the verdict deadline is a `no-verdict`. The status is the head's, which the signed digest binds. On egress the
 grid check compares the certified record digest with the digest of the Program's grid, under the parameters digest
 of `params` and Σ_sync, which is exact up to a SHA-512 collision. With an honest certifier every certificate verifies,
-and the verdicts are those of the raw records.
+and the verdicts are those of the raw records. N2 (`service.LinkWindows`) skips that comparison on an egress end with an
+occupancy profile (`check_link(grid=False)`): there the head's check in N2's unit (`head_check`) holds its status, grid
+parameters and counts, and the frames' content is N3's.
 
 An ingress link's rows are the Program's input, which it reads rather than predicts, so `check_ingress_link` checks only
 its statuses: a link-window is accepted if it has exactly one record and its status is complete (Lean `StatusComplete`).
@@ -86,12 +88,17 @@ class Audit:
         params: GridParams,
         key: PublicKey | None = None,
         session: bytes | None = None,
+        grid: bool = True,
     ) -> list[Verdict]:
         """Check one egress link's records for windows 0 … len(syncs) − 1 against the Program's grids under the
         declared syncs. A window whose declared sync differs from the unit's for it, set by an earlier link, is an
-        `advice` violation. Certified records are checked against the certifier's `key` in its `session`."""
-        expected = expected_grids(frames, syncs, params)
+        `advice` violation. Certified records are checked against the certifier's `key` in its `session`. With `grid`
+        False no grid is compared: each certified head's check in N2's unit (`head_check`) holds its status, grid and
+        counts instead, so a raw or committed record, which has none, raises `ValueError`."""
         by_window = _by_window(link, records, Direction.EGRESS, key, session)
+        if not grid and any(not isinstance(r, CertifiedRecord) for rs in by_window.values() for r in rs):
+            raise ValueError("only a certified record's grid is held by its head check: compare the others' (grid=True)")
+        expected = expected_grids(frames, syncs, params) if grid else None
         parameters = parameters_digest(params, sync_set)
         out = []
         for w, sync in enumerate(syncs):
@@ -99,17 +106,9 @@ class Audit:
             found = by_window.get(w, [])
             violation = _status_violation(found, key, session)
             if violation is None:
-                record = found[0]
                 if sync not in sync_set or sync != unit_sync:
                     violation = "advice"
-                elif isinstance(record, CertifiedRecord):
-                    want = record_head(link, Direction.EGRESS, w, expected[w], COMPLETE, params, parameters)
-                    if record.certificate.digest != want.digest():
-                        violation = "mismatch"
-                elif isinstance(record, CommittedRecord):
-                    if record.digest != record_digest(link, w, expected[w], COMPLETE, params):
-                        violation = "mismatch"
-                elif record.grid != expected[w]:
+                elif grid and _mismatch(found[0], link, w, expected[w], params, parameters):
                     violation = "mismatch"
             out.append(Verdict(link, w, violation))
         self.verdicts.extend(out)
@@ -161,6 +160,17 @@ def _by_window(link: str, records: Sequence[Published], direction: Direction, ke
         if r.link == link:
             by_window[r.window].append(r)
     return by_window
+
+
+def _mismatch(record: Published, link: str, window: int, expected, params: GridParams, parameters: bytes) -> bool:
+    """Whether the egress record's grid is other than the Program's `expected`: by the certified head's digest, the
+    committed digest, or the raw grid."""
+    if isinstance(record, CertifiedRecord):
+        want = record_head(link, Direction.EGRESS, window, expected, COMPLETE, params, parameters)
+        return record.certificate.digest != want.digest()
+    if isinstance(record, CommittedRecord):
+        return record.digest != record_digest(link, window, expected, COMPLETE, params)
+    return record.grid != expected
 
 
 def _status_violation(found: Sequence[Published], key: PublicKey | None, session: bytes | None) -> str | None:

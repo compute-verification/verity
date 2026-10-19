@@ -10,7 +10,8 @@ and a call that one answers and the other raises on raises. Each call is one uni
 - `check_link`: egress links `["", link]` (`"clock"` when `link` is empty) over windows 0 … len(syncs) − 1, the first
   link carrying no frames and the spatial unit's clock as its syncs (`Audit.syncs`, each window's set by the first call
   that checked it, as `audit.Audit` sets it), since the Lean check reads the unit's sync from the first egress link; the
-  commitment holds this call's records of `link`, a certified one only if it is egress;
+  commitment holds this call's records of `link`, a certified one only if it is egress. With `grid` False (N2's head
+  check holds the grid) the Lean check's `mismatch` is an accept;
 - `check_ingress_link`: the ingress link `[link]` alone, with this call's records of `link`, a certified one only if it is
   ingress.
 
@@ -270,19 +271,24 @@ class Audit:
 
     def check_link(self, link: str, records: Sequence[Published], frames: Sequence[LogicalFrame],
                    syncs: Sequence[ClockSync], sync_set: SyncSet, params: GridParams,
-                   key: PublicKey | None = None, session: bytes | None = None) -> list[Verdict]:
+                   key: PublicKey | None = None, session: bytes | None = None, grid: bool = True) -> list[Verdict]:
+        """`audit.Audit.check_link`. With `grid` False the Lean check still compares the grid, after every other check
+        of a link-window, so its `mismatch` there is an accept."""
         _need_key(records, key, session)
         frames, syncs = list(frames), list(syncs)
+        mine = _mine(link, records, Direction.EGRESS)
+        if not grid and any(not isinstance(r, CertifiedRecord) for r in mine):
+            raise ValueError("only a certified record's grid is held by its head check: compare the others' (grid=True)")
         lean = []
         if syncs:
-            mine = _mine(link, records, Direction.EGRESS)
             clock = [self.syncs.get(w, s) for w, s in enumerate(syncs)]
             unit = "clock" if link == "" else ""
             out = self.server.verdicts(case([(unit, [], clock), (link, frames, syncs)], [], len(syncs), params, params,
                                             sync_set, *_lean_key(mine, key, session), mine))
-            lean = _verdicts(out, Direction.EGRESS, link, len(syncs))
+            lean = [v if grid or v.violation != "mismatch" else Verdict(v.link, v.window, None)
+                    for v in _verdicts(out, Direction.EGRESS, link, len(syncs))]
         vs = self._beside(lean, lambda: self.python.check_link(link, records, frames, syncs, sync_set, params, key,
-                                                               session))
+                                                               session, grid))
         for w, s in enumerate(syncs):
             self.syncs.setdefault(w, s)
         return vs
