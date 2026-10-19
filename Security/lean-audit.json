@@ -3486,6 +3486,12 @@
    "assumptions": [],
    "type_hash": "91f216306ca6ee0cc41e360ab97dce90f5f7b96d1d82b3f7cfd507424fd3a005"
   },
+  "Nci.SecurityProofs.LayeredTraining": {
+   "owner": "@training",
+   "signature": ["Nci.SecurityProofs.LayeredTraining : Nci.Guarantees.LayeredTraining"],
+   "assumptions": [],
+   "type_hash": "56b3abe4e7f1fbd8138bf65756656359819ef018ae87587a78d8e71fa127ac0c"
+  },
   "Nci.SecurityProofs.LoomisWhitney": {
    "owner": "@lean",
    "signature": ["Nci.SecurityProofs.LoomisWhitney.{u_1, u_2, u_3} : Nci.Guarantees.LoomisWhitney"],
@@ -3505,10 +3511,10 @@
    "type_hash": "5aba3326c25c0abfefc6969e6eac4e93768b23b0600102b7ecbec0504e979548"
   },
   "Nci.SecurityProofs.ThreadedOfLayered": {
-   "owner": "@training"
-  },
-  "Nci.SecurityProofs.LayeredTraining": {
-   "owner": "@training"
+   "owner": "@training",
+   "signature": ["Nci.SecurityProofs.ThreadedOfLayered : Nci.Guarantees.ThreadedOfLayered"],
+   "assumptions": [],
+   "type_hash": "017ad0d2173bb30536bdc8d3867ded723d0680900af60269224798bb1dfc6b6f"
   },
   "Nci.SecurityProofs.ThreadedReads": {
    "owner": "@lean",
@@ -7464,8 +7470,10 @@
     "Nci.SecurityProofs.FullPositions",
     "Nci.SecurityProofs.Inference",
     "Nci.SecurityProofs.IuReads",
+    "Nci.SecurityProofs.LayeredTraining",
     "Nci.SecurityProofs.OtherPositions",
     "Nci.SecurityProofs.ReadBound",
+    "Nci.SecurityProofs.ThreadedOfLayered",
     "Nci.SecurityProofs.ThreadedReads",
     "Nci.SecurityProofs.ThreadedThrottled",
     "Nci.SecurityProofs.ThreadedTraining",
@@ -7492,7 +7500,9 @@
     "Nci.SecurityProofs.ContainedTraining",
     "Nci.SecurityProofs.Inference",
     "Nci.SecurityProofs.IuReads",
+    "Nci.SecurityProofs.LayeredTraining",
     "Nci.SecurityProofs.ReadBound",
+    "Nci.SecurityProofs.ThreadedOfLayered",
     "Nci.SecurityProofs.ThreadedReads",
     "Nci.SecurityProofs.ThreadedThrottled",
     "Nci.SecurityProofs.ThreadedTraining",
@@ -7580,6 +7590,7 @@
     "Nci.SecurityProofs.ContainedMatMul",
     "Nci.SecurityProofs.ContainedTraining",
     "Nci.SecurityProofs.Inference",
+    "Nci.SecurityProofs.LayeredTraining",
     "Nci.SecurityProofs.OtherPositions",
     "Nci.SecurityProofs.ReadBound",
     "Nci.SecurityProofs.ThreadedThrottled",
@@ -7681,8 +7692,10 @@
     "Nci.SecurityProofs.FullPositions",
     "Nci.SecurityProofs.Inference",
     "Nci.SecurityProofs.IuReads",
+    "Nci.SecurityProofs.LayeredTraining",
     "Nci.SecurityProofs.OtherPositions",
     "Nci.SecurityProofs.ReadBound",
+    "Nci.SecurityProofs.ThreadedOfLayered",
     "Nci.SecurityProofs.ThreadedReads",
     "Nci.SecurityProofs.ThreadedThrottled",
     "Nci.SecurityProofs.ThreadedTraining",
@@ -7690,6 +7703,16 @@
     "Nci.SecurityProofs.UpdatedMatMul",
     "Nci.SecurityProofs.UpdatedMatMulReads"
    ]
+  },
+  "Definitions.Nci.Layered": {
+   "digest": "ba4af91ef1c9be797642950ee7c00f2e09da370016ef70c8c1e072da3ab6af92",
+   "definitions": {
+    "Nci.KeyPath": "4d47e95adc5b77eacf032ffd54fe22042c3b219a9a39a1d90d47320478c24322",
+    "Nci.KeyPath.refl": "5b36966080c5a9a294c1973ae679de4154a2d49dd5bc71bd3359471046484396",
+    "Nci.KeyPath.step": "cfd08e6f328028b4f2a68a4f57e7d66affdab85902c50cd4f7e467ba81896efb",
+    "Nci.Layered": "86c89d30454d1ec08c2686712ed181b62c2121b92180737e5503e172b14b19e2"
+   },
+   "guarantees": ["Nci.SecurityProofs.LayeredTraining", "Nci.SecurityProofs.ThreadedOfLayered"]
   },
   "Definitions.Nci.Reads": {
    "digest": "c3c240e59ed9edb472fbe4005f08c7f4b68d4fb7cea86dfa5d35e989587fb439",
@@ -7731,6 +7754,8 @@
     "Nci.Threading.weightsUsed": "6b55dd915ad83320fed02e493fe4dfa6cdc7c037c83c6694d4d55f79ab9f54ec"
    },
    "guarantees": [
+    "Nci.SecurityProofs.LayeredTraining",
+    "Nci.SecurityProofs.ThreadedOfLayered",
     "Nci.SecurityProofs.ThreadedReads",
     "Nci.SecurityProofs.ThreadedThrottled",
     "Nci.SecurityProofs.ThreadedTraining"
@@ -17313,6 +17338,7 @@
     "Nci.Assumptions.WeightsIncompressible": "a9832cc41ed84cd3c55eccc606483e9c83d87fb29e05d1b1f92bb2680d32f8d8"
    },
    "guarantees": [
+    "Nci.SecurityProofs.LayeredTraining",
     "Nci.SecurityProofs.ThreadedReads",
     "Nci.SecurityProofs.ThreadedThrottled",
     "Nci.SecurityProofs.ThreadedTraining"
@@ -17348,6 +17374,14 @@
     "Nci.Guarantees.ContainedTraining": "d11a30af07ea918204d1d57e4f22237b0ffbca149c9bff292dab777d562c2a1f"
    },
    "guarantees": ["Nci.SecurityProofs.ContainedMatMul", "Nci.SecurityProofs.ContainedTraining"]
+  },
+  "Models.Nci.Guarantees.Layered": {
+   "digest": "c60c7e64472b9c92c9e6e9a79c75e205628e9d64a01139d1eaa0c5cc9630feb8",
+   "definitions": {
+    "Nci.Guarantees.LayeredTraining": "a32f0924232512df262b89dafb1c654ebc7dc5d3d59605f26cf1cfbefc2b164e",
+    "Nci.Guarantees.ThreadedOfLayered": "d8b16a2a29b38b05cc9448e33f0b5231a66261706be4dbc1e0011d915566f05e"
+   },
+   "guarantees": ["Nci.SecurityProofs.LayeredTraining", "Nci.SecurityProofs.ThreadedOfLayered"]
   },
   "Models.Nci.Guarantees.Reads": {
    "digest": "016cca93308e9ac6c0ad97c73b18da826f0fc8fbd33eb77535c28f63f61b3f72",
