@@ -62,9 +62,9 @@ open FlockDeploy (Coin)
 def badRecord : ByteArray := ⟨#[255]⟩
 
 theorem badRecord_validate : ByteArray.validateUTF8 badRecord = false := by
-  first
-  | (unfold ByteArray.validateUTF8; rw [ByteArray.validateUTF8.go]; decide +kernel)
-  | decide +kernel
+  unfold ByteArray.validateUTF8
+  rw [ByteArray.validateUTF8.go]
+  decide +kernel
 
 theorem badRecord_utf8 : String.fromUTF8? badRecord = none := by
   have h : ¬ badRecord.IsValidUTF8 := ByteArray.validateUTF8_eq_false_iff.1 badRecord_validate
@@ -75,7 +75,7 @@ theorem badRecord_utf8 : String.fromUTF8? badRecord = none := by
 def badStage : Msg := encStage [] badRecord
 
 theorem decodeStage_badStage : decodeStage badStage = some ([], badRecord) := by
-  first | rfl | decide +kernel
+  rfl
 
 /-- **A V\* statement staged at a record that isn't text doesn't set up**: `sourceOf` reads the inner session's record
 as UTF-8 text (`textOf`) whatever the partition, so the statement's readers refuse it. -/
@@ -129,12 +129,16 @@ theorem vstarShowsB_deployRec_forces {W : Type} {IV : Claims.Verifier Coin} {ivS
       I.V.k (Claims.Recursion.xI (deployRec IV ivScope b) x) + (deployRec IV ivScope b).kS x := by
     intro a
     show _ = I.V.k (xIOf x) + 1
-    simp only [ps, List.length_append, List.length_cons, List.length_replicate, List.length_singleton]
+    simp only [ps, List.length_append, List.length_cons, List.length_replicate, List.length_nil]
     omega
   have hmsg : ∀ a, ∀ p ∈ ps a, p.2 = Out.msg [] := by
     intro a p hp
-    simp only [ps, List.mem_append, List.mem_cons, List.mem_replicate, List.mem_singleton] at hp
-    rcases hp with (rfl | ⟨-, rfl⟩) | rfl <;> rfl
+    simp only [ps, List.mem_append, List.mem_cons, List.mem_replicate] at hp
+    rcases hp with (rfl | ⟨-, rfl⟩) | (rfl | h)
+    · rfl
+    · rfl
+    · rfl
+    · simp at h
   have hc : ∀ a, ∀ i < (ps a).length, ∃ m, ((ps a).getD i ([], .rej)).2 = .msg m ∧ decC x m = decC x [] := by
     intro a i hi
     refine ⟨[], ?_, rfl⟩
