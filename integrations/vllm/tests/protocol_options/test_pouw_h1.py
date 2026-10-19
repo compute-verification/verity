@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import random
 
 import numpy as np
 import pytest
@@ -230,7 +231,7 @@ H1 = {"coins": None, "rows": 64, "steps": 3}
 
 
 def _settings(**kw):
-    return {"pouw": {**H1, "coins": Challenger(0), **kw}}
+    return {"pouw": {**H1, "coins": Challenger(0, random.Random(0).randbytes), **kw}}
 
 
 def test_h1_is_admitted_beside_sampled_proofs_and_executes_nowhere():
@@ -240,7 +241,7 @@ def test_h1_is_admitted_beside_sampled_proofs_and_executes_nowhere():
     assert PO.refusals(commit) == ()
     eager = PO.Context(stage="serve", enabled=(_entry(),), settings=_settings(), enforce_eager=False)
     assert any("graph-capturable" in r for r in PO.refusals(eager))
-    bare = PO.Context(stage="serve", enabled=(_entry(),), settings={"pouw": {"coins": Challenger(0)}})
+    bare = PO.Context(stage="serve", enabled=(_entry(),), settings={"pouw": {"coins": Challenger(0, random.Random(0).randbytes)}})
     assert any("'rows' (T" in r for r in PO.refusals(bare))
     with pytest.raises(ValueError, match="positive multiple of 32"):
         pouw.Settings.of({"rows": 40})

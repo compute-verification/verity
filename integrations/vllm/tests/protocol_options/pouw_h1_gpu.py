@@ -72,7 +72,7 @@ def run(a: argparse.Namespace) -> dict[str, Any]:
 
     plain = serve()
     entry_name = f"pouw:{PH.SCHEME}"
-    ctx = PO.Context(stage="serve", enabled=(entry_name,), settings={"pouw": {"coins": Challenger(0), "retain_steps": a.retain,
+    ctx = PO.Context(stage="serve", enabled=(entry_name,), settings={"pouw": {"coins": Challenger(0, os.urandom), "retain_steps": a.retain,
                                                                               "transcript_dir": str(outdir), "rows": a.rows,
                                                                               "steps": steps_public}})
     t0 = time.monotonic()

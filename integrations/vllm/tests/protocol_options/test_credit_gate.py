@@ -5,6 +5,7 @@ its named reason; a fused kernel, one dispatcher op returning z and y = dequant(
 from __future__ import annotations
 
 import hashlib
+import random
 
 import numpy as np
 import pytest
@@ -107,7 +108,8 @@ def _linear_is_the_stand_in(monkeypatch):
 def _serve(arm, retain=1, m=3):
     """One small call (m rows of K, N = 32) through `arm` with H1 installed; the run closed and its y and run returned."""
     layer = Linear(32, 1, arm)
-    ctx = PO.Context(stage="serve", enabled=(ENTRY,), settings={"pouw": {"coins": Challenger(0), "rows": 32, "steps": 1,
+    coins = Challenger(0, random.Random(0).randbytes)
+    ctx = PO.Context(stage="serve", enabled=(ENTRY,), settings={"pouw": {"coins": coins, "rows": 32, "steps": 1,
                                                                          "retain_steps": retain}})
     comp = PO.install(Model(layer), ctx)
     try:
