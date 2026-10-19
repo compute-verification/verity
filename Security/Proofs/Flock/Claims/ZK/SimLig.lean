@@ -1132,6 +1132,170 @@ theorem simLig_of_fields (hood : LigOodE) (hmsg : LigMsgE) (hsum : LigSumsE) (hy
     (hsalt : LigSaltE) : SimLig :=
   simLig_of (ligSrcE_of (ligHypE_of hood hmsg hsum hy1 hybar hsalt))
 
+/-! ### The out-of-domain sample
+
+The deployed source's masked value at `lgOod 0` is the cut's clear value there plus the tape's pad
+(`srcE_masked_pad_L`). The clear value is `Σ_y eqAt(z, y)·word(y)` at the drawn point `z` (`Composed.honestAt_lgOod`),
+which is the executable's `mleF` of the packed trace at `zS` (`ligOodE`). -/
+
+section Ood
+
+/-- Table `j`'s pad layout at the executable's schedule. -/
+private noncomputable abbrev layL (x : Msg) (j : Fin (jOf x)) : _root_.Flock.Zk.PadLayout :=
+  _root_.Flock.Zk.PadLayout.new (stAt x j).m (stAt x j).c.kLog (zkTab x j).sch.k0
+
+/-- Table `j`'s witness as the cut's view reads it: `w`'s share with the tape's mask words (`Composed.zWith`). -/
+private noncomputable abbrev zwL (x : Msg) (w : Claims.Flock.Wit) (τ : UE.Tape) (j : Fin (jOf x)) :
+    FlockSoundness.Model.Witness (tabC PE x j).S.m :=
+  Composed.zWith (stAt x j) (wtOf PE x w j) ((UE.tape x τ).1 j).1
+
+/-- **The deployed source's masked value at a sent index** `k < n_E` is the clear value the cut's view masks
+(`Composed.honestAt`) plus the tape's pad `k` of table `j`'s rep `r`. -/
+private theorem srcE_masked_L (x : Msg) (c : Fin (refK x) → FlockDeploy.Coin) (w : Claims.Flock.Wit) (τ : UE.Tape)
+    (j : Fin (jOf x)) (r : Fin 2) {k : ℕ} (hk : k < (tabC PE x j).z.nE) :
+    ((srcE x c w τ j.val).rep r.val).masked k =
+      FlockLevel3.GF128.val (Composed.honestAt (zkTab x j).table (stAt x j) (czExe PE x c j) r (zwL x w τ j)
+        (((UE.tape x τ).1 j).2.1.2.1 r) k) + (UE.tapeZk τ).h j.val r.val k := by
+  obtain ⟨t, rfl⟩ : ∃ t' : Fin Claims.Flock.zkTableCap → ExeCell, t' = τ := ⟨τ, rfl⟩
+  have hc : j.val < Claims.Flock.zkTableCap := lt_of_lt_of_le j.isLt (jOf_le_cap x)
+  have hz := fits_zkTab PE (zkTab x j)
+  have hE64 : (tabC PE x j).z.nE ≤ 2 ^ 64 := hz.nE
+  have tH : ∀ q : Fin (2 ^ 64 + 4), FlockLevel3.GF128.of ((UE.tapeZk t).h j.val r.val q.val) =
+      (t ⟨j.val, hc⟩).1.2.2.1 r q := fun q => by
+    show FlockLevel3.GF128.of (fAt 0 (fun r => fAt 0 ((cellAt t j.val).1.2.2.1 r) q.val) r.val) = _
+    rw [cellAt_lt t hc, fAt_lt _ _ r.isLt]
+    exact fAt_lt _ _ q.isLt
+  unfold srcE tabSrcCut
+  rw [dite_eq_left j.isLt]
+  show (if hr : r.val < 2 then repSrcCut PE x (czExe PE x c) (cutE x c w t) j ⟨r.val, hr⟩ else default).masked k = _
+  rw [dite_eq_left r.isLt]
+  show (if h : k < ((tabC PE x j).T (czExe PE x c j)).tab.nE then
+      FlockLevel3.GF128.val ((cutE x c w t j).masked r ⟨k, h⟩) else 0) = _
+  rw [dite_eq_left (show k < ((tabC PE x j).T (czExe PE x c j)).tab.nE from hk)]
+  show FlockLevel3.GF128.val (Composed.honestAt (zkTab x j).table (stAt x j) (czExe PE x c j) r (zwL x w t j)
+      (((UE.tape x t).1 j).2.1.2.1 r) k + (t ⟨j.val, hc⟩).1.2.2.1 r (hEmb hz (.inl ⟨k, hk⟩))) = _
+  rw [FlockLevel3.val_add]
+  congr 1
+  exact (congrArg FlockLevel3.GF128.val (tH ⟨k, by omega⟩)).symm
+
+/-- **The deployed source's masked value below `h_ab`** is the clear value plus the session's pad (`padsOf`). -/
+private theorem srcE_masked_pad_L (x : Msg) (c : Fin (refK x) → FlockDeploy.Coin) (w : Claims.Flock.Wit) (τ : UE.Tape)
+    (j : Fin (jOf x)) (r : Fin 2) {k : ℕ} (hk : k < (layL x j).hab) :
+    ((srcE x c w τ j.val).rep r.val).masked k =
+      FlockLevel3.GF128.val (Composed.honestAt (zkTab x j).table (stAt x j) (czExe PE x c j) r (zwL x w τ j)
+        (((UE.tape x τ).1 j).2.1.2.1 r) k) + (FlockComplete.padsOf (UE.tapeZk τ) j.val r.val (layL x j)).h[k]! := by
+  have hE : (tabC PE x j).z.nE = (layL x j).hab := by
+    show (layL x j).len - 4 = (layL x j).hab
+    simp only [_root_.Flock.Zk.PadLayout.len, _root_.Flock.Zk.PadLayout.tw]
+    omega
+  have hlen : (layL x j).len = (layL x j).tw + 1 := rfl
+  have htw : (layL x j).tw = (layL x j).hab + 3 := rfl
+  rw [srcE_masked_L x c w τ j r (k := k) (by omega),
+    FlockComplete.padsOf_get (UE.tapeZk τ) j.val r.val (layL x j) k (by omega) (by omega) (by omega)]
+
+
+
+/-- An equation in the field read as one between its values. -/
+private theorem val_eq_of {a : FlockLevel3.GF128} {b : _root_.Flock.F128} (h : a = FlockLevel3.GF128.of b) :
+    FlockLevel3.GF128.val a = b := by
+  rw [h]
+  rfl
+
+/-- `eqAt` at points of equal dimension and coordinates. -/
+private theorem eqAt_congr_fin {a b : ℕ} (h : a = b) (p : Fin a → FlockLevel3.GF128) (q : Fin b → FlockLevel3.GF128)
+    (hpq : ∀ i (ha : i < a) (hb : i < b), p ⟨i, ha⟩ = q ⟨i, hb⟩) (y : ℕ) :
+    FlockSoundness.Model.eqAt p y = FlockLevel3.eqAt q y := by
+  subst h
+  have : p = q := funext fun i => hpq i.val i.isLt i.isLt
+  subst this
+  rfl
+
+/-- **The deployed witness's bits are its trace's**: table `j`'s share with the tape's mask words (`zwL`) at address `a`
+is the bit the session's trace holds there. -/
+private theorem zwL_trace {x : Msg} (w : Claims.Flock.Wit) (τ : UE.Tape) (j : Fin (jOf x)) :
+    ∀ a : Fin (2 ^ (zkTab x j).table.S.m),
+      zwL x w τ j a = _root_.Flock.Readable.toZ ((trsE x w (UE.tapeZk τ))[j.val]!).z[a.val]! := by
+  obtain ⟨t, rfl⟩ : ∃ t' : Fin Claims.Flock.zkTableCap → ExeCell, t' = τ := ⟨τ, rfl⟩
+  have hj := lt_of_jOf j
+  have htr : (trsE x w (UE.tapeZk t))[j.val]! = FlockComplete.traceOf (stAt x j)
+      (_root_.Flock.Readable.tableWit (stsOf x).size (FlockComplete.ZkTables.maskWOf x w (UE.tapeZk t).mask)
+        j.val).hid.toArray 0 :=
+    FlockComplete.ZkTables.traces_getElem _ _ hj
+  have hzw : _root_.Flock.Readable.zOf 1 (_root_.Flock.Readable.tableWit (stsOf x).size
+      (FlockComplete.ZkTables.maskWOf x w (UE.tapeZk t).mask) j.val) 0 (stAt x j).m = zwL x w t j :=
+    (_root_.Flock.Readable.zOf_tableWit hj _ _).trans (zOf_ofLayout (TapeLayout.exe PE) exeTape x t w j)
+  intro a
+  rw [← hzw, htr, FlockComplete.Replay.traceOf_z _ _ a.isLt]
+  simp [_root_.Flock.Readable.zOf]
+
+theorem ligOodE : LigOodE := by
+  intro x hx w hw τ c n hn s spec hs j r extras he
+  have hst := tabsOf_stAt x j
+  have hlay : ligLay x j = layL x j := by
+    unfold ligLay layL ligSt
+    rw [hst]
+    rfl
+  obtain ⟨h25, h35, hsm, hk0, -, hdim, -⟩ := FlockSoundness.Discharge.ZkExec.zk_schedule_seams _ _ _ (zkTab x j).hz
+  obtain ⟨hn7, -⟩ := hdim
+  have hm : (zkTab x j).table.S.m = (stAt x j).m := rfl
+  unfold ligSrc ligPad ligTab ligCoin ligP0
+  rw [hlay]
+  have hk : (layL x j).lgOod 0 < (layL x j).hab := by
+    simp only [layL, _root_.Flock.Zk.PadLayout.new, _root_.Flock.Zk.PadLayout.lgOod, _root_.Flock.Zk.PadLayout.hab]
+    omega
+  rw [srcE_masked_pad_L x c w τ j r hk]
+  congr 1
+  have hlo : Composed.layOf (zkTab x j).table (stAt x j) = layL x j := rfl
+  have h0 : 0 < (Composed.layOf (zkTab x j).table (stAt x j)).nOod0 := by
+    rw [hlo]
+    simp [layL, _root_.Flock.Zk.PadLayout.new]
+  have e := Composed.honestAt_lgOod (zkTab x j).table (stAt x j) (czExe PE x c j) r (zwL x w τ j)
+    (((UE.tape x τ).1 j).2.1.2.1 r) 0 h0
+  rw [hlo] at e
+  rw [e]
+  have hM7 : 7 ≤ (stAt x j).m := by omega
+  have hmL : (ligSt x j).m = (stAt x j).m := by
+    unfold ligSt
+    rw [hst]
+    rfl
+  have hsz : (FlockComplete.packed (trsE x w (UE.tapeZk τ))[j.val]! (ligSt x j).m).size =
+      2 ^ ((zkTab x j).table.S.m - 7) := by
+    rw [FlockComplete.JsonRT.packed_size, hmL, hm]
+  apply val_eq_of
+  simp only [FlockComplete.mleF]
+  rw [FlockComplete.Replay.Zc.of_sumF, hsz]
+  refine Finset.sum_congr rfl fun y hy => ?_
+  rw [Finset.mem_range] at hy
+  have hwd : Composed.wordOf (zwL x w τ j) y =
+      FlockSoundness.Refine.fOf (FlockComplete.packed (trsE x w (UE.tapeZk τ))[j.val]! (ligSt x j).m)[y]! := by
+    rw [hmL]
+    exact FlockComplete.wordOf_packed _ _ (zwL_trace w τ j) hy hM7
+  have hzs : (FlockComplete.LigLock.zS (fun k i => slotAt c k i) (repSlot x (2 * j.val + r.val) fun _ => 0)
+      (zkTab x j).sch.n).size = (zkTab x j).table.S.m - 7 := by
+    simp [FlockComplete.LigLock.zS]
+    omega
+  have hea : FlockSoundness.Model.eqAt (Composed.oodPoint (zkTab x j).table (stAt x j) (czExe PE x c j) r 0) y =
+      FlockLevel3.GF128.of (_root_.Flock.eqTable (FlockComplete.LigLock.zS (fun k i => slotAt c k i)
+        (repSlot x (2 * j.val + r.val) fun _ => 0) (zkTab x j).sch.n))[y]! := by
+    rw [FlockLevel3.eqTable_eqAt _ _ (by rw [hzs]; exact hy)]
+    refine eqAt_congr_fin hzs.symm _ _ (fun i ha hb => ?_) y
+    unfold Composed.oodPoint
+    rw [dite_eq_left ⟨h0, by omega⟩]
+    have hi : i < (zkTab x j).sch.n := by omega
+    unfold FlockComplete.LigLock.zS
+    rw [getElem!_pos _ i (by simpa using hi), Array.getElem_map, Array.getElem_range]
+    rfl
+  rw [hea]
+  refine (congrArg (_ * ·) hwd).trans ?_
+  exact (mul_comm _ _).trans (FlockSoundness.Refine.fOf_mul _ _).symm
+
+end Ood
+
+/-- **`SimLig` from the five remaining value statements**: `ligOodE` discharges the out-of-domain field. -/
+theorem simLig_of_rest (hmsg : LigMsgE) (hsum : LigSumsE) (hy1 : LigY1E) (hybar : LigYbarE) (hsalt : LigSaltE) :
+    SimLig :=
+  simLig_of_fields ligOodE hmsg hsum hy1 hybar hsalt
+
 end Masked
 
 end Claims.ZKMal
