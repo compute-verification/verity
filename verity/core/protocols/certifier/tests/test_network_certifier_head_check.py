@@ -62,7 +62,7 @@ def bare(tmp_path_factory):
 def _parts(inst):
     """The fields' and the counts' circuits on the instance, each evaluated alone."""
     sh = HC.Shape(len(inst.link), inst.T)
-    a = dict(zip((n for n, _ in inst.unit.signature()[0]), HC.arguments(inst)))
+    a = {n: np.asarray([bits], dtype=np.uint8) for (n, _), bits in zip(inst.unit.signature()[0], HC.arguments(inst))}
     head = a["head"]
 
     def out(fn, *args):

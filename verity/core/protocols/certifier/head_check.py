@@ -45,8 +45,6 @@ from functools import lru_cache
 from types import SimpleNamespace
 from typing import Callable, Sequence
 
-import numpy as np
-
 from verity.ml.circuits import boolean as BL
 from verity.ml.circuits.boolean import trace as TR
 from verity.ml.circuits.boolean.forms import and_reduce
@@ -366,8 +364,8 @@ def _bytes_bits(data: bytes) -> list[int]:
     return _int_bits(int.from_bytes(data, "little"), 8 * len(data))
 
 
-def arguments(inst: Instance) -> list[np.ndarray]:
-    """The unit's arguments for one instance in its signature's order, each (1, leaves) of 0/1."""
+def arguments(inst: Instance) -> list[list[int]]:
+    """The unit's arguments for one instance in its signature's order, each its leaves' bits, 0 or 1."""
     flat = {"record": _digest_bits(inst.record), "record_domain": _digest_bits(inst.record_domain),
             "link": _bytes_bits(inst.link), "direction": [inst.direction], "window": _int_bits(inst.window, 64),
             "grid": _bytes_bits(inst.grid), "profile": [b for n in inst.profile or () for b in _int_bits(n, 32)],
@@ -378,7 +376,7 @@ def arguments(inst: Instance) -> list[np.ndarray]:
     for name, t in params:
         if len(flat[name]) != t.leaves:
             raise ValueError(f"argument {name} has {len(flat[name])} bits, the unit takes {t.leaves}")
-        out.append(np.asarray(flat[name], dtype=np.uint8).reshape(1, -1))
+        out.append(flat[name])
     return out
 
 
@@ -386,8 +384,8 @@ def evaluate(*insts: Instance) -> list[int]:
     """The unit's output on each instance, all of one unit, in one evaluation."""
     if len({i.key for i in insts}) != 1:
         raise ValueError("the instances are of one unit")
-    args = [np.concatenate(x) for x in zip(*(arguments(i) for i in insts))]
-    return [int(b) for b in np.asarray(evaluate_bits(insts[0].unit, *args)).reshape(-1)]
+    args = [list(rows) for rows in zip(*(arguments(i) for i in insts))]
+    return [int(b) for b in evaluate_bits(insts[0].unit, *args).reshape(-1).tolist()]
 
 
 def _times(nd) -> int:

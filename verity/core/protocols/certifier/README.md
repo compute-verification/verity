@@ -23,8 +23,7 @@ A spec-level reference for network accounting's timing channel:
 
 It is pure Python. It imports only the standard library and `verity`: for the record digests' `tagged_sha256` and
 `tagged_sha512` and `canonical_json_bytes`, in `service` the proof service, the hm96 leaves and the check's
-Definition, and in `head_check` the circuits and the commitment gadgets (with numpy, `verity`'s own dependency, for the
-evaluator's arguments). The certificate's signature scheme is a parameter: the certifier's
+Definition, and in `head_check` the circuits, their evaluator and the commitment gadgets. The certificate's signature scheme is a parameter: the certifier's
 `certificate.Issuer` takes a `Signer`, and the audit a `PublicKey`.
 `PROTOCOL.md` has the semantics and the correspondence to the Lean analysis (`Security/`, area `NetworkCertifier`).
 `lean/` is the certifier program, the Lake package `certifier_program` (Lean core only): List forms of the analysis's
