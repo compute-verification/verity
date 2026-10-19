@@ -413,3 +413,21 @@ def test_a_residual_add_is_a_partial_producer_only_over_partials_of_its_rank_and
     (name,) = RMx.own_producers_from_record(tmp_path / "instances.jsonl")[(0, 0)]
     assert name.startswith(f"ResidualAdd_v1{{N={N}}}<-") and RMx._admitted(name) is admitted, name
     assert not RMx._admitted(f"ResidualAdd_v1{{N={N}}}<-MoeSum_v1|<not-a-node>") and not RMx._admitted("ResidualAdd_v1{N=8}")
+
+
+@pytest.mark.parametrize("own,admitted", [
+    ("MoeSum_v1{TOPK=6,H=8}", True),
+    ("ResidualAdd_v1{N=8}<-DeepGemmFp8Linear_v1{K=384,N=8}|MoeSum_v1{TOPK=6,H=8}", True),   # the routed sum plus the shared expert's down-proj
+    ("ResidualAdd_v1{N=8}<-DeepGemmFp8Linear_v1{K=384,N=8}|Gemm_v1{K=384,N=8}", False),     # two linears and no routed sum
+    ("DeepGemmFp8Linear_v1{K=384,N=8}", False),                                             # the shared expert alone
+])
+def test_a_moe_sites_partial_is_a_routed_sum_to_which_the_shared_experts_partial_may_be_added(own, admitted):
+    """A MoE runner that reduces its shared expert's output with the routed sum (DeepSeek-V4-Pro's `MoERunner` at TP8) issues the
+    all-reduce of their `ResidualAdd_v1`: the links check admits it at the MoE site, and refuses a partial with no routed sum."""
+    from verity_vllm.check.match import rank_match as RMx
+    W, N, site = 3, 8, "model.layers.1.ffn.experts.runner"
+    colls = {r: [dict(c, site=site) for c in _colls(r, W, steps=1) if c["kind"] == "all_reduce"] for r in range(W)}
+    links = {r: [{"k": 0, "peer_collective_k": 0, "peers": [{"rank": p, "collective_k": 0} for p in range(W) if p != r], "kind": "all_reduce",
+                  "shape": [1, N], "module": site, "module_path": f"{site} (MoERunner)"}] for r in range(W)}
+    res = RMx.cross_rank_check(colls, producers={r: {(0, 0): [own]} for r in range(W)}, links=links)
+    assert ("links" not in res["failed"]) is admitted, next(c for c in res["checks"] if c["name"] == "links")["fails"]

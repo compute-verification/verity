@@ -14,8 +14,10 @@ One constructor per ARCHITECTURE class, selected by the family facts table (`fam
   * `dsa-moe`   -- GLM-5.3's sparse-attention MLA and sigmoid shared-expert MoE: the family's MLA parameter names
                    (`FAMILY_FACTS["glm_moe_dsa"]["params"]`), the DSA folds in `observe.fold.patterns.dsa`, and
                    `gen_shared_moe_patterns.MoEFusedSharedExpertsFp8`.
-  * `mhc-moe`   -- DeepSeek-V4's hyper-connected compressed-attention MoE: no constructor; `structural_refusal` states so (the family's
-                   facts serve `predict.dsv4`).
+  * `mhc-moe`   -- DeepSeek-V4's hyper-connected compressed-attention MoE: `C` is the family's facts over the rank's config.json
+                   (`analytic.config_of` states the Llama vocabulary, which this architecture does not have), the weights Record is the
+                   family's `params` in their order at the shapes the model allocates (the Build's weights struct, `gen_mhc_moe.mhc_weights_type`),
+                   and the patterns are the block-FP8 linear and cuBLAS GEMM it shares with GLM-5.3 ahead of the base list.
 `world > 1` is a generic branch of every class (the rank-local shard configuration: heads, kv heads, the MLP / expert width and the vocabulary
 divided by the world; `tp.embedding_shard.EmbeddingShardCuda` and `tp.collective_pattern.TpCollective(world)` registered first; the sampler over the
 all-gathered vocabulary; the header check re-shards the recorded FULL config) -- it replaced the two hand-written `*_tp2rank` modules and the
@@ -41,13 +43,15 @@ from typing import Any, Callable
 
 from verity_vllm.program import model as analytic
 from verity_vllm.observe.events import RunHeader
-from verity_vllm.observe.fold.patterns import TokenSelectArgmax, TokenSelectGumbelTopP, TokenSelectGumbelTwoStage, dsa_patterns
+from verity_vllm.observe.fold.patterns import (Embedding, LogitsGather, TokenSelectArgmax, TokenSelectGumbelTopP, TokenSelectGumbelTwoStage,
+                                               TransparentAten, TransparentTritonMetadata, dsa_patterns, dsv4_patterns)
 from verity_vllm.observe.fold.resolver import Profile
 from verity_vllm.observe.fold.patterns.collectives import TpCollective
 from verity_vllm.collectives.embedding_shard import EmbeddingShardCuda
 from verity_vllm.engine.profiles import dense_generic as _dg
 from verity_vllm.engine.profiles import family_facts as FF
 from verity_vllm.engine.profiles import vllm_d9105ea80_sm89_eager as base
+from verity_vllm.engine.profiles import gen_mhc_moe as MHC
 from verity_vllm.engine.profiles.gen_dense2_patterns import with_dense2_patterns
 from verity_vllm.engine.profiles.gen_dense_gemma2_patterns import with_gemma2_patterns
 from verity_vllm.engine.profiles.gen_dense_softcap_patterns import with_softcap_patterns
@@ -55,6 +59,7 @@ from verity_vllm.engine.profiles.gen_llama_patterns import ADA_TUNED_GEMM, with_
 from verity_vllm.engine.profiles.gen_ln_patterns import ResidualAddPattern, with_ln_patterns
 from verity_vllm.engine.profiles.gen_ov_moe_patterns import (FUSED_MOE_NUM_STAGES, FUSED_MOE_NUM_WARPS, FUSED_MOE_PINS, MOE_CONSTRUCTION_PATTERNS,
                                   MOE_FP8_CONSTRUCTION_PATTERNS, ROUTER_VPT_BY_E, MoEFusedExperts, MoEFusedExpertsFp8)
+from verity_vllm.engine.profiles.gen_marlin_moe_patterns import SCHEDULE, MoEMarlinSharedExperts
 from verity_vllm.engine.profiles.gen_shared_moe_patterns import MoEFusedSharedExpertsFp8
 from verity_vllm.program.frontend.target_profile import TargetProfile
 
@@ -65,6 +70,7 @@ _LAYER_RE_FMT = r"^{prefix}\.(\d+)\.(.+)$"
 _ATTN_SCALES = r"(k_scale|v_scale|q_scale|prob_scale|_k_scale|_v_scale|_q_scale|_prob_scale)"
 _SCALE_INV = "_scale_inv"
 _MOE_ARCHES = frozenset({"moe", "dsa-moe"})
+_MHC = "mhc-moe"
 
 
 # ------------------------------------------------------------------------------------------------------------------------------- names
@@ -165,8 +171,11 @@ def structural_refusal(cfg: dict[str, Any]) -> str | None:
     if fam not in FF.FAMILY_FACTS:
         return f"model_type {fam!r} is not in the family facts table {FF.FAMILIES} (needs its own mechanism record)"
     arch = FF.FAMILY_FACTS[fam]["arch"]
-    if arch == "mhc-moe":
-        return f"{fam}: the mHC MoE architecture has no κ profile constructor (its Programs are the Build's, and predict.dsv4's ahead of time)"
+    if arch == _MHC:
+        if cfg.get("tie_word_embeddings"):
+            return f"{fam}: tied embeddings (the family's params order lm_head as its own parameter)"
+        qc = cfg.get("quantization_config")
+        return analytic.quant_refusal(qc) if qc else f"{fam}: a checkpoint without its block-FP8 quantization_config"
     if arch == "dsa-moe":
         if int(cfg.get("n_group", 1) or 1) != 1 or int(cfg.get("topk_group", 1) or 1) != 1:
             return f"{fam}: n_group={cfg.get('n_group')!r} topk_group={cfg.get('topk_group')!r}: the sigmoid router is stated over one expert group"
@@ -212,6 +221,8 @@ def derive_config(cfg: dict[str, Any], *, repo: str | None, revision: str | None
     if why:
         raise ValueError(why)
     fam = FF.facts_for(cfg)
+    if fam["arch"] == _MHC:
+        return MHC.mhc_config(cfg, rank_hf_config(cfg, world), world)
     rcfg = rank_hf_config(cfg, world)
     analytic_cfg = dict(rcfg)
     analytic_cfg["quantization_config"] = _quant_config_for_profile(rcfg, fam["arch"])
@@ -311,6 +322,13 @@ def make_weight_field(cfg: dict[str, Any], C: dict[str, Any]) -> Callable[[str],
     fam = FF.facts_for(cfg)
     if fam["arch"] == "dsa-moe":
         return _mla_weight_field(cfg, C)
+    if fam["arch"] == _MHC:
+        fields = frozenset(n for n, _ in MHC.mhc_weights_type(cfg, C).fields)
+
+        def mhc_weight_field(name: str) -> tuple[str, ...] | None:
+            return (name,) if name in fields and not MHC.MARLIN_SERVED.match(name) else None
+
+        return mhc_weight_field
     params = fam.get("params") or {}
     layer_type = analytic.weights_type(C).fields[analytic.weights_type(C).index("layers")][1].elem
     layer_fields = frozenset(n for n, _ in layer_type.fields)
@@ -382,6 +400,12 @@ def make_root_class(cfg: dict[str, Any], weight_field: Callable[[str], Any]) -> 
                 return "ignored"
             return "unknown"
         return mla_root_class
+    if fam["arch"] == _MHC:
+        def mhc_root_class(name: str) -> str:
+            if weight_field(name) is not None:
+                return "weight"
+            return "marlin-served" if MHC.MARLIN_SERVED.match(name) else "unknown"
+        return mhc_root_class
     params = fam.get("params") or {}
     prefix = params.get("layer_prefix")
     if prefix:
@@ -424,7 +448,14 @@ def make_check_header(cfg: dict[str, Any], C: dict[str, Any], world: int) -> Cal
     def check_header(header: RunHeader) -> list[str]:
         hcfg = (header.model or {}).get("config") or {}
         out: list[str] = []
-        if hcfg:
+        if hcfg and fam["arch"] == _MHC:
+            try:
+                rk = rank_hf_config(hcfg, world)
+            except (KeyError, ValueError) as e:
+                return [f"recorded config cannot be sharded by {world}: {e}"]
+            out += [f"{hf}={rk[hf]!r} != C[{key}]={C[key]!r}" for hf, key in MHC.MHC_HF_KEYS if hf in rk and rk[hf] != C[key]]
+            out += FF.header_checks(cfg, C, rk)
+        elif hcfg:
             try:
                 rk = rank_hf_config(hcfg, world) if (world > 1 or mk) else dict(hcfg)
             except (KeyError, ValueError) as e:
@@ -508,6 +539,51 @@ def _dsa_patterns(C: dict[str, Any], patterns: list) -> list:
     return dsa_patterns() + out
 
 
+def _mhc_patterns(C: dict[str, Any]) -> list:
+    """The mHC MoE's: the MXFP4 Marlin shared-expert scope, the `shared + routed` add GLM-5.3's folds state, the embedding, the sampler
+    and the transparent handlers of the base list."""
+    V = int(C["V"])
+    return [MoEMarlinSharedExperts(C), ResidualAddPattern(), Embedding(),
+            TokenSelectGumbelTopP(vocab=V, block_size=base.SAMPLER_BLOCK_SIZE),
+            TokenSelectGumbelTwoStage(vocab=V, block_size=base.SAMPLER_BLOCK_SIZE), TokenSelectArgmax(vocab=V), LogitsGather(),
+            TransparentAten(), TransparentTritonMetadata()]
+
+
+def _tp_rank_patterns(patterns: list, cfg: dict[str, Any], world: int) -> list:
+    """One rank of a `world`-way engine: the vocabulary shard's embedding and the collectives first; the sampler sees the all-gathered
+    logits, the full vocabulary."""
+    if world == 1:
+        return patterns
+    out = [EmbeddingShardCuda(), TpCollective(world=world)] + patterns
+    for pt in out:
+        if isinstance(pt, (TokenSelectGumbelTopP, TokenSelectGumbelTwoStage, TokenSelectArgmax)):
+            pt.vocab = int(cfg["vocab_size"])
+    return out
+
+
+def _mhc_profile(role: str, cfg: dict[str, Any], src: dict[str, Any], C: dict[str, Any], prov: dict[str, str], world: int,
+                 repo: str | None, revision: str | None) -> Profile:
+    fam = FF.facts_for(cfg)
+    wtype = MHC.mhc_weights_type(cfg, C)
+    patterns = dsv4_patterns() + _tp_rank_patterns(_mhc_patterns(C), cfg, world)
+    hand = {**({"model": repo} if repo else {}), **({"revision": revision} if revision else {}), **{k: C[k] for k in fam["facts"] if k in C}}
+    notes = {
+        "case": role, "model": {"repo": repo, "note": f"{repo or role} @ {(revision or '')[:8] or '?'} ({fam['vllm_class']}; profiles.generic "
+                                                      f"over config.json + FAMILY_FACTS[{FF.family_of(cfg)!r}])"
+                                                      + (f" ONE RANK of TP{world}" if world > 1 else "")},
+        "derived_by": "profiles.generic: the mHC MoE's facts over config.json; weights Record = mhc_weights_type", "family": FF.family_of(cfg),
+        "arch": _MHC, "vllm_class": fam["vllm_class"], "hand": hand, "hand_fields": sorted(hand),
+        "hand_facts": {k: {"value": C.get(k), "provenance": f["provenance"]} for k, f in fam["facts"].items() if k in C},
+        "provenance": dict(prov), "config_provenance": dict(prov),
+        "hf_config": {"source": src["source"], "path": src["path"], "sha256": src["sha256"], "revision": revision},
+        "root_class": "profiles.generic.make_root_class(cfg, profile.weight_field)(name)", "pattern_names": [p.name for p in patterns],
+        "weights_record": {"fields": len(wtype.fields), "leaves": wtype.leaves, "order": "family_facts params: top, layers' order, tail, layers' buffers",
+                           "marlin_served": MHC.MARLIN_SERVED.pattern},
+    }
+    return Profile(id=profile_id(role, C, world), patterns=patterns, config=C, weight_field=make_weight_field(cfg, C), accepted=False,
+                   kernel_allowlist=base.KERNEL_ALLOWLIST, notes=notes, weights_type=wtype, witnesses=(SCHEDULE,) if world > 1 else ())
+
+
 def build_profile(role: str, world: int = 1, *, moe_construction: str | None = None, fused_moe_pins: dict[str, Any] | None = None,
                   fused_moe_num_warps: int | None = None, fused_moe_num_stages: int | None = None, ov_sampling: bool = False,
                   hf_config: dict[str, Any] | None = None, repo: str | None = None, revision: str | None = None) -> Profile:
@@ -528,6 +604,10 @@ def build_profile(role: str, world: int = 1, *, moe_construction: str | None = N
     C, prov = derive_config(cfg, repo=repo, revision=revision, world=world)
     fam = FF.facts_for(cfg)
     arch = fam["arch"]
+    if arch == _MHC:
+        if ov_sampling:
+            raise ValueError(f"{FF.family_of(cfg)}: the sampled-row variant is stated for the Llama vocabulary")
+        return _mhc_profile(role, cfg, src, C, prov, world, repo, revision)
     facts = fam["facts"]
     hand_note = ", ".join(f"{k}={C[k]!r}" for k in facts if k in C)
     note = (f"{repo or role} @ {(revision or '')[:8] or '?'} ({fam['vllm_class']}; profiles.generic over config.json + FAMILY_FACTS[{FF.family_of(cfg)!r}])"
@@ -546,11 +626,7 @@ def build_profile(role: str, world: int = 1, *, moe_construction: str | None = N
         patterns = _dsa_patterns(C, list(prof.patterns))
     else:
         patterns = _dense_patterns(cfg, C, list(prof.patterns))       # [R15 fp8] the fp8 patterns are the base list's own (make_patterns)
-    if world > 1:
-        patterns = [EmbeddingShardCuda(), TpCollective(world=world)] + patterns
-        for pt in patterns:                                             # the sampler sees the all-gathered logits: the full vocabulary
-            if isinstance(pt, (TokenSelectGumbelTopP, TokenSelectGumbelTwoStage, TokenSelectArgmax)):
-                pt.vocab = int(cfg["vocab_size"])
+    patterns = _tp_rank_patterns(patterns, cfg, world)
     notes = dict(prof.notes)
     notes["pins"] = dict(notes["pins"])
     notes["pins"]["gemm_tuned_ada"] = {f"N={n},K={k}": row for (n, k), row in ADA_TUNED_GEMM.items()}

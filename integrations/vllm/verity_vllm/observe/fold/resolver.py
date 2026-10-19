@@ -22,10 +22,11 @@ resolution's `consumed` set (no silent, unaccounted children) and that no id is 
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Any, Protocol, runtime_checkable
+from typing import Any, Callable, Protocol, runtime_checkable
 
-from verity_vllm.observe.events import Root, RunHeader, SampleEnd, StepLink, StepStart, ViewDesc
+from verity_vllm.observe.events import Note, Root, RunHeader, SampleEnd, StepLink, StepStart, ViewDesc
 from verity_vllm.observe.fold.tree import StepEvents, TreeNode
+from verity_vllm.observe.fold.views import row_view, rows_view
 
 # ---------------------------------------------------------------------------------------------------------
 # operands: how row i of an instance reads / writes physical views
@@ -68,11 +69,23 @@ class Const:
     """[R15 stoch] Every row consumes ONE Program constant: a `Const<width>[0x<bits>]` primitive instance the fold emits (once per
     Compute, immediately before it, in operand order) and wires in -- the derived Program's `ctx.kind("const")` of the same value.
     No device view: the value is a declared fact of the run header (the sampler's temperature / top_p / the row's position), never
-    read from memory.  `name` is the instance-name tail (`gumbel_topp_token_select/top_p`)."""
+    read from memory.  `name` is the instance-name tail (`gumbel_topp_token_select/top_p`).  `shared`: one instance per value for
+    the whole resolution, as a Build rule that caches its constants per call (`vllm_dsv4`'s `i32`).  As a `Pieces` piece it stands
+    for `count` copies of its instance."""
 
     width: int
     bits: int
     name: str = ""
+    shared: bool = False
+    count: int = 1
+
+
+@dataclass(frozen=True)
+class Pieces:
+    """Row i consumes the concatenation of `rows[i]`: each piece a view read whole or a `Const`'s copies.  For reads no one view
+    states: rows of several caches or of blocks at no common stride, a padding row repeated, a masked row's constants."""
+
+    rows: tuple[tuple[ViewDesc | Const, ...], ...]
 
 
 @dataclass(frozen=True)
@@ -120,18 +133,69 @@ class Supplied:
     request: str | None = None
 
 
-Operand = Shared | PerRow | Gather | GatherMany | Const | Param | Collective | Supplied
+@dataclass(frozen=True)
+class WeightField:
+    """Every row consumes the whole field at `path` of the weights Record, read from the parameter, not from memory: a weight served
+    only in a layout none of whose words is a leaf of its field (the Marlin experts' repacked codes and permuted scales), whose Root
+    the profile binds to no field."""
+
+    path: tuple
+
+
+@dataclass(frozen=True)
+class Witness:
+    """Row i consumes the next leaves, as many as its parameter has, of request `keys[i]`'s `name` witness parameter
+    (`Profile.witnesses`), allocated in issue order: a value of the run no input states and the circuit checks rather than computes
+    (the Marlin align's key per pair, the GPU's sorted position).  No device view."""
+
+    name: str
+    keys: tuple[str, ...]
+
+
+Operand = Shared | PerRow | Gather | GatherMany | Pieces | Const | Param | Collective | Supplied | WeightField | Witness
+
+
+def scratch_view(near: ViewDesc, event: int, k: int, n: int) -> ViewDesc:
+    """A row-major i32 [n] view in fold-private storage, the `k`-th (< 8) of event `event`: for a value a kernel keeps in registers or
+    shared memory that a later part of the same scope reads.  Its allocation id is negative, never a log's."""
+    if not 0 <= k < 8:
+        raise ValueError(f"scratch view {k} of event {event}: at most 8 per event")
+    return ViewDesc(-(8 * event + k) - 1, 0, (n,), (1,), "int32", near.device)
 
 
 def operand_rows(op: Operand) -> int | None:
-    if isinstance(op, Param):
+    """How many rows an operand can serve (None for one every row shares)."""
+    if isinstance(op, (Param, Witness)):
         return len(op.keys)
-    if isinstance(op, (PerRow, Collective)):
-        view = op.view if isinstance(op, PerRow) else op.own
-        return view.shape[0] if view.shape else 1
+    if isinstance(op, Pieces):
+        return len(op.rows)
+    if isinstance(op, PerRow):
+        return op.view.shape[0] if op.view.shape else 1
+    if isinstance(op, Collective):          # [R17 D90] one row per own-partial row
+        return 1 if op.flat or not op.own.shape else op.own.shape[0]
     if isinstance(op, (Gather, GatherMany)):
         return len(op.indices)
     return None
+
+
+def operand_view(op: Operand, i: int) -> ViewDesc | None:
+    """Row i's device view of an operand; None for a Program constant, a declared parameter or several pieces."""
+    if isinstance(op, (Const, Param, Supplied, Pieces, WeightField, Witness)):
+        return None
+    if isinstance(op, Shared):
+        return op.view
+    if isinstance(op, PerRow):
+        return row_view(op.view, i)
+    if isinstance(op, Collective):          # [R17 D90] the device view is the OWN partial row; the peer part has none (a parameter)
+        return op.own if op.flat else row_view(op.own, i)
+    if isinstance(op, Gather):
+        return row_view(op.view, op.indices[i])
+    if isinstance(op, GatherMany):   # the gathered rows when they are one ascending run (KV slots of one block range), else the table
+        idxs = list(op.indices[i])
+        if idxs and all(idxs[j + 1] == idxs[j] + 1 for j in range(len(idxs) - 1)):
+            return rows_view(op.view, idxs[0], idxs[-1] + 1)
+        return op.view
+    raise TypeError(f"unknown operand {type(op).__name__}")
 
 
 # ---------------------------------------------------------------------------------------------------------
@@ -235,6 +299,7 @@ class StepContext:
     config: dict                               # the model's static configuration C (H, NH, KVH, D, I, V, NL, EPS, ...)
     profile: Profile
     scratch: dict = field(default_factory=dict)  # pattern-private per-step memory (e.g. pending KV scatter)
+    buffers: dict[str, ViewDesc] = field(default_factory=dict)  # the capture's external buffers by name (`external_buffers`)
 
     def root_named(self, name: str) -> Root | None:
         for rs in self.roots.values():
@@ -245,6 +310,13 @@ class StepContext:
 
     def roots_of(self, view: ViewDesc) -> list[Root]:
         return self.roots.get(view.alloc, [])
+
+
+def external_buffers(note: Note, device: Callable[[int], str]) -> dict[str, ViewDesc]:
+    """The views the capture's external-buffers Note (`engine.capture`) records with an offset and strides, the KV caches as
+    `kv_cache[<module>]`, on the device of their allocation."""
+    return {name: ViewDesc(int(b["alloc"]), int(b["offset"]), tuple(b["shape"]), tuple(b["strides"]), b["dtype"], device(int(b["alloc"])))
+            for name, b in ((note.data or {}).get("buffers") or {}).items() if "offset" in b and "strides" in b}
 
 
 @runtime_checkable
@@ -272,6 +344,10 @@ class Profile:
     # the program's values (eps, the attention scale) and the request's sampling values are inputs (`Supplied` operands of the
     # Definitions that read them as parameters), not constants; off: the legacy Definitions with the values as constants
     registered_values: bool = False
+    # the `weights` Record `weight_field` paths index, when the profile states it (else `analytic.weights_type` over `config`)
+    weights_type: Any = None
+    # the witness parameters `Witness` operands read, one per request and name (the Marlin align's `schedule`)
+    witnesses: tuple[str, ...] = ()
 
 
 class ResolutionError(Exception):

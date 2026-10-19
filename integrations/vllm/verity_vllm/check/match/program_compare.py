@@ -143,6 +143,7 @@ class Prog(PeerReads, PX.PrefixInput):
         # a rank Program's WITNESS inputs (a user input the link table names neither a prompt nor a peer input: the MoE align `schedule`):
         # Input node -> its name; a read canonicalises as ("WIT", name, lo, hi), never as an unnamed weight.  Set by `load_derived`.
         self.witness_fields: dict[int, str] = {}
+        self.witness_index: dict[int, int] = {}    # fold side: witness Input node -> request index (batch_decomp ownership)
         self.supplied_fields: dict[int, list[tuple[int, str, int]]] = {}   # `supplied_inputs`, set by the loaders
         self.supplied_owner: dict[int, int | None] = {}
         self.split_statics = split_selects.as_fold_selects(self.inst)       # a select specialised on S compares as the fold's
@@ -540,6 +541,14 @@ def _finish_oracle(d: str, label: str, pj: dict, desc: dict, rows: list[dict], c
             raise ValueError(f"{d}: peers parameter {ent.get('name')!r} has duplicate field ordinals")
         p.peer_fields[node] = flds
         p.peer_index[node] = int(ent["request_index"])
+    # a witness parameter (`witness_layout`: the Marlin align's `schedule`) is one homogeneous Input node, bound by its name as the rank
+    # Program's witness input of that name is (`load_derived`)
+    for ent in pj.get("witness_layout") or []:
+        node = int(ent["param"])
+        if node not in p.inputs:
+            raise ValueError(f"{d}: witness parameter {ent.get('name')!r} (index {node}) is not an Input node of the Program")
+        p.witness_fields[node] = ent["witness"]
+        p.witness_index[node] = int(ent["request_index"])
     p.tp = pj.get("tp")
     w_nodes = SI.load_oracle_supplied(p, pj, d)   # a `registered_values` fold's supplied parameters
     del pj, desc   # [R16 global] the descriptor JSON (12.5 GB on disk for the 4096/512 fold) is not needed past the decode

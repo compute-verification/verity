@@ -4,7 +4,7 @@
 * the schedule against the template's partition written out here (init_slice / init_part2_slice's segment starts);
 * a split-K coordinate against its fold written out from the primitives: each segment's warp tree, folded from the highest k down;
 * the numpy twin (`kernels.marlin_moe_rows`) the H200 capture compares the kernel with, against the Definitions: the group, the
-  schedule, the coordinates and a whole pair launch over three experts;
+  schedule, the coordinates and a whole pair launch over three experts, which the replay row (`expert_gemm`) reproduces;
 * `auto_config` on the shapes DeepSeek-V4-Pro's TP8 rank launches, `served_config` over the H200 sweep, and the moe block
   `fused_marlin_moe` picks for its batches.
 """
@@ -20,9 +20,11 @@ import pytest
 from verity.ml.circuits.codec import lookup_primitive
 from verity.ml.circuits.defs import REGISTRY, bind
 from verity.ml.circuits.evaluation import evaluate
+from verity.ml.circuits.evaluation.reference import statics_of
 from verity.ml.circuits.ops.prims import F2fpBf16
 from verity_vllm.program.frontend.rules.vllm_marlin_moe import MARLIN_SERVED
 from verity_vllm.program.kernels import marlin_moe_rows as MR
+from verity_vllm.program.kernels import rows as RK
 from verity_vllm.program.registry import flashmla as F
 from verity_vllm.program.registry import marlin_moe as MM
 from verity_vllm.program.registry.prims import Bf16MulBf16, F32Add
@@ -253,7 +255,10 @@ def test_pair_launch_over_three_experts_is_the_twin() -> None:
         x = _bf16_rows(rng, (1, K))
         g = np.array([0.3], dtype=np.float32).view(np.uint32)
         lead = [x[0].tolist(), [e]] + ([[int(g[0])]] if routed else []) + [[blk], [par]]
-        got = evaluate(gemm, *lead, MR.pack_e2m1(wq).ravel().tolist(), ws.ravel().tolist())
+        ops = [*lead, MR.pack_e2m1(wq).ravel().tolist(), ws.ravel().tolist()]
+        got = evaluate(gemm, *ops)
+        row = RK.ROWS[f"{fam.name}_v{fam.version}"].fn(statics_of(gemm), [np.asarray(a) for a in ops])["out"]
+        assert row.tolist() == list(got), ("the replay row is the Definition", routed, e, blk, par)
         if e >= E:
             assert all(v == 0x7FFF for v in got), "an expert outside [0, E) reads NaN weights"
             continue

@@ -10,7 +10,8 @@ A job is a `[[job]]` table:
 - `needs`: optional, the earlier jobs of its group whose output it reads in the checkout, so a shard that runs it runs them.
 - `after`: optional, a job in another group that must end first: this one starts once it has passed or been skipped, and is
   stopped if it fails. The job it names has no `after` of its own;
-- `part`: optional, one of `PARTS`, the part of the check (`check.py PART...`) the job belongs to (`select`).
+- `part`: optional, one of `PARTS`, the part of the check (`check.py PART...`) the job belongs to (`select`); `check.py
+  --deferred JOB,...` names jobs instead (`needed`).
 
 The file also carries `schema = "ci/v0"`. Anything else is refused: an unknown key, a missing field, a wrong type, a
 duplicate name, or an owner the registry doesn't know. Reading the file runs none of the commit's code. Stdlib only.
@@ -175,8 +176,16 @@ def select(jobs: list[Job], parts: list[str]) -> set[str]:
         raise DeclarationError(f"no part {', '.join(bad)}: the parts are {', '.join(PARTS)}")
     if loose := [j.name for j in jobs if j.part is None]:
         raise DeclarationError(f"ci.toml's {', '.join(loose)} declare no part, so a check of parts can't tell whether to run them")
+    return needed(jobs, [j.name for j in jobs if j.part in parts])
+
+
+def needed(jobs: list[Job], names: list[str]) -> set[str]:
+    """The jobs ``names``, and every job they `need` or run `after` (`check.py --deferred`).  DeclarationError for a name no job
+    has."""
     by = {j.name: j for j in jobs}
-    todo, out = [j.name for j in jobs if j.part in parts], set()
+    if bad := [n for n in names if n not in by]:
+        raise DeclarationError(f"no job {', '.join(bad)}: the jobs are {', '.join(by)}")
+    todo, out = list(names), set()
     while todo:
         if (n := todo.pop()) not in out:
             out.add(n)

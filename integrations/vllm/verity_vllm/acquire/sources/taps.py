@@ -5,8 +5,9 @@ the manifest names them: the blockwise FP8 GEMM's scale products (`scale_product
 for the single-rank Commit (`pipeline.commit`: `attach`) and for the rank workers of a TP Commit: `pipeline.tp.commit` hands
 `for_ranks(...)` to `engine.rank_worker.tp2_commit_make` through the RPC, each rank calls it with its own committer and its rows of the
 merged manifest, and `require_on_every_rank` fails the Commit closed unless every rank attached every tap that is on.  Each rank also
-attaches the route source (`route_source`) when a capture map describes its model, and beside it the attention source
-(`attention_source`), which binds the sparse-MLA call boundaries of the rank's rows to its `attn` tap; when the rank's rows name
+attaches the route source (`route_source`) when a capture map describes its model, and beside it the attention sources
+(`attention_source`, which binds the sparse-MLA call boundaries of the rank's rows to its `attn` tap, and `dsv4_attention_source`,
+which binds DeepSeek-V4's attention body); when the rank's rows name
 `DeepGemmFp8Linear_v1` Calls, the block-FP8 linears' input quantization (`linear_quant_source`); when they name the MoE align
 Definitions, the Marlin experts' align schedule (`moe_align_source`); and under tp-commit ``--memory-map`` the KV-slots source
 (`kv_slots_source`, for the rank's memory map, never the record).  The route, linear quant and align sources: once one rank has
@@ -22,8 +23,8 @@ from functools import partial
 from pathlib import Path
 from typing import Any, Mapping, Sequence
 
-from verity_vllm.acquire.sources import (attention_source, call_boundary_source, kv_slots_source, linear_quant_source,
-                                         moe_align_source, norm_scale_source, route_source, router_softmax_source,
+from verity_vllm.acquire.sources import (attention_source, call_boundary_source, dsv4_attention_source, kv_slots_source,
+                                         linear_quant_source, moe_align_source, norm_scale_source, route_source, router_softmax_source,
                                          scale_products_source, vocab_range_source)
 from verity_vllm.acquire.sources.call_boundary_plan import Plan
 from verity_vllm.config import option
@@ -97,16 +98,19 @@ def attached(manifest: Mapping[str, Any] | None) -> list[str]:
     """The `short_name`s of the sources a row's Commit attaches through `attach` for its manifest of record, constructing none: each tap
     whose family the manifest names (the row passes a tap's option exactly then, `pipeline.row_records.applicable_taps`, and rebuilds a
     manifest of other tap policies) and, on one rank, the call-boundary source when the manifest names call boundaries no other source
-    claims and the scale-products source when it names scale products (a TP Commit attaches neither); on several ranks, the attention
-    source when a capture map that binds through it describes the manifest's model at its ranks (`route_source.manifest_map`: every rank
-    attaches it, `attach_rank`), and the MoE align source when the manifest names the align Definitions."""
+    claims and the scale-products source when it names scale products (a TP Commit attaches neither); on several ranks, each attention
+    source (`attention_source`, `dsv4_attention_source`) when a capture map that binds through it describes the manifest's model at its
+    ranks (`route_source.manifest_map`: every rank attaches it, `attach_rank`), and the MoE align source when the manifest names the
+    align Definitions."""
     fams = {r.get("family") for r in (manifest or {}).get("identities") or []}
     one = int((manifest or {}).get("ranks") or 1) == 1
     cmap = None if one else route_source.manifest_map(manifest)
     return [*(cls.short_name for _f, _key, _mod, fam, cls in SOURCES if fam in fams),
             *([call_boundary_source.CallBoundarySource.short_name] if one and call_boundary_source.manifest_sites(manifest) else []),
             *([scale_products_source.ScaleProductsSource.short_name] if one and SP.manifest_sites(manifest) else []),
-            *([attention_source.AttentionSource.short_name] if cmap is not None and attention_source.binds(cmap) else []),
+            *(src.short_name for mod, src in ((attention_source, attention_source.AttentionSource),
+                                              (dsv4_attention_source, dsv4_attention_source.Dsv4AttentionSource))
+              if cmap is not None and mod.binds(cmap)),
             *([moe_align_source.MoeAlignSource.short_name] if not one and moe_align_source.manifest_names_it(manifest) else [])]
 
 

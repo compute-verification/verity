@@ -242,6 +242,8 @@ def in_process(st: dict[str, Any], rc: Any) -> dict[str, Any]:
 
         com = st["com"]
         p = load(cfg, rank, st.get("world"))
+        if cfg.get("workers") is None:      # the world's ranks replay at once on the node
+            cfg = dict(cfg, workers=SR.default_workers(p.world))
         xrank_facts(st, p)
         rd = OC.OpenedReader(com, rc)
         mm = memory_map(st, p, rd)
