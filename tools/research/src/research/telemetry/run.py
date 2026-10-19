@@ -5,7 +5,7 @@ emits span_start, runs CMD in its own process group with RESEARCH_RUN_DIR=D and 
 stdout/stderr tee'd to D/stdout.log / D/stderr.log (or inherited with --inherit-io),
 dumps the workload's Python stacks with py-spy when D has not changed for --stall-dump-s (_StallWatch),
 on timeout writes cancel_intent{actor: timeout} then SIGTERM -> grace -> SIGKILL with cancel_results, records rc/signal/pid/pgid in
-status.json; on a timeout, and on a `research cancel` (D/control/cancel, cancel.CONTROL_CANCEL), ends every process of the run's own
+status.json; on a timeout, and on a `research cancel` (D/control/cancel, scope.CONTROL_CANCEL), ends every process of the run's own
 cgroup scopes and the run's processes outside its group the same way, SIGKILL once the grace is over, and records them in status.json
 `scope_end` and a `scope_ended` mark (scope.Sweep: never the runner or its sampler), stops the sidecar (SIGTERM, waits <= linger + 5 s), emits span_end{outcome}, runs the classifier, exits with CMD's status
 (128+signal when killed).  The sampler is never the reason the workload stops: a sampler start failure is recorded and CMD still runs.
@@ -29,13 +29,13 @@ from pathlib import Path
 from typing import Any
 
 from . import CANCEL_ACTORS, pyspy
-from .cancel import CONTROL_CANCEL, add_args as cancel_args, cancel as cancel_run
-from .scope import Sweep
+from .cancel import cancel as cancel_run
 from .cgroup import Cgroup, session_cap, uncapped
 from .classify import classify, write as write_failure
 from .events import Emitter, append, events_path, utc_now_ms
 from .job import build_job, input_ref, sampler_instruments, set_status, sha256_file, write_json_atomic
 from .procs import live_group, stat_fields
+from .scope import CONTROL_CANCEL, Sweep
 
 
 def _tele_argv() -> list[str]:
@@ -117,7 +117,7 @@ class _TimeoutControl:
 
 
 def _cancel_request(attempt_dir: Path) -> dict[str, Any] | None:
-    """`research cancel`'s request (cancel.CONTROL_CANCEL), once it is there and parses: {"grace_s", "actor", "reason", "scopes"}."""
+    """`research cancel`'s request (scope.CONTROL_CANCEL), once it is there and parses: {"grace_s", "actor", "reason", "scopes"}."""
     try:
         doc = json.loads((attempt_dir / CONTROL_CANCEL).read_text())
         return doc if isinstance(doc, dict) and float(doc.get("grace_s")) >= 0 else None

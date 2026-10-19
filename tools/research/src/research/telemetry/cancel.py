@@ -28,9 +28,7 @@ from . import CANCEL_ACTORS
 from .events import append, events_path, utc_now_ms
 from .job import write_json_atomic
 from .procs import list_pids, stat_fields
-from .scope import Sweep, cgroup_of, cmdline_of, run_dir_of
-
-CONTROL_CANCEL = Path("control") / "cancel"      # attempt-dir relative: the cancel's grace and the run's scopes, read by the runner
+from .scope import CONTROL_CANCEL, Sweep, cgroup_of, cmdline_of, run_dir_of
 
 #: the group members a marker names: a whole group's list can pass the record cap (events.MAX_RECORD_BYTES), and the writer then drops
 #: `target`, pgid included, so the classifier can't match the marker to the job it stopped

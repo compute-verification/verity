@@ -40,6 +40,7 @@ CONFIRM_S = 5.0
 POLL_S = 0.2
 KEPT = 16                     # pids a record lists per field (events.MAX_RECORD_BYTES)
 CGROUP_ROOT = Path("/sys/fs/cgroup")
+CONTROL_CANCEL = Path("control") / "cancel"      # attempt-dir relative: the cancel's grace and the run's scopes, read by the runner
 OWN_SCOPE_RE = re.compile(r"^(?:cluster-(?P<run>r\d{8}-\d{6}-[0-9a-f]{4})|gpu-lease-(?P<pid>\d+))\.scope$")
 #: The time a Sweep waits on; a test replaces both.
 clock = time.monotonic
