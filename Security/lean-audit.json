@@ -3483,13 +3483,22 @@
    "type_hash": "cc57888b57675154812ec32f76c474386b3fc204b01538efbfbb34c10c54c1e7"
   },
   "Nci.SecurityProofs.Dampener": {
-   "owner": "@lean"
+   "owner": "@lean",
+   "signature": ["Nci.SecurityProofs.Dampener : Nci.Guarantees.Dampener"],
+   "assumptions": [],
+   "type_hash": "1edf01c475351d5490d257570d1a73c214ddb9b6375f903838bbe27787147056"
   },
   "Nci.SecurityProofs.DampenerThreaded": {
-   "owner": "@lean"
+   "owner": "@lean",
+   "signature": ["Nci.SecurityProofs.DampenerThreaded : Nci.Guarantees.DampenerThreaded"],
+   "assumptions": [],
+   "type_hash": "4fd21ded7cc9bd15239bbcd454dc5f3d7d590c1923912e1d440f0f531161d980"
   },
   "Nci.SecurityProofs.DampenerWindows": {
-   "owner": "@lean"
+   "owner": "@lean",
+   "signature": ["Nci.SecurityProofs.DampenerWindows : Nci.Guarantees.DampenerWindows"],
+   "assumptions": [],
+   "type_hash": "c714b31cf1728e65cfbbe0a9d2beaf55916ed0f231856ba07ec443f505fde314"
   },
   "Nci.SecurityProofs.FullPositions": {
    "owner": "@lean",
@@ -7487,6 +7496,7 @@
     "Bandwidth.SecurityProofs.MbwCapacity",
     "Nci.SecurityProofs.ContainedMatMul",
     "Nci.SecurityProofs.ContainedTraining",
+    "Nci.SecurityProofs.DampenerThreaded",
     "Nci.SecurityProofs.FullPositions",
     "Nci.SecurityProofs.Inference",
     "Nci.SecurityProofs.IuReads",
@@ -7518,6 +7528,7 @@
     "Accounting.SecurityProofs.Actual.Windows",
     "Nci.SecurityProofs.ContainedMatMul",
     "Nci.SecurityProofs.ContainedTraining",
+    "Nci.SecurityProofs.DampenerThreaded",
     "Nci.SecurityProofs.Inference",
     "Nci.SecurityProofs.IuReads",
     "Nci.SecurityProofs.ReadBound",
@@ -7607,6 +7618,7 @@
     "Accounting.SecurityProofs.Actual.Windows",
     "Nci.SecurityProofs.ContainedMatMul",
     "Nci.SecurityProofs.ContainedTraining",
+    "Nci.SecurityProofs.DampenerThreaded",
     "Nci.SecurityProofs.Inference",
     "Nci.SecurityProofs.OtherPositions",
     "Nci.SecurityProofs.ReadBound",
@@ -7708,6 +7720,7 @@
     "Accounting.SecurityProofs.Actual.Windows",
     "Nci.SecurityProofs.ContainedMatMul",
     "Nci.SecurityProofs.ContainedTraining",
+    "Nci.SecurityProofs.DampenerThreaded",
     "Nci.SecurityProofs.FullPositions",
     "Nci.SecurityProofs.Inference",
     "Nci.SecurityProofs.IuReads",
@@ -7719,6 +7732,23 @@
     "Nci.SecurityProofs.Training",
     "Nci.SecurityProofs.UpdatedMatMul",
     "Nci.SecurityProofs.UpdatedMatMulReads"
+   ]
+  },
+  "Definitions.Nci.Dampener": {
+   "digest": "9e79c6755cea0343785155cd5a462c7ef001290ee919b4ee904728810d59f561",
+   "definitions": {
+    "Nci.Dampener.Lambda": "ef210083107a2919f8c01971c26c750866989c7133c468b4bcdd3808973c5611",
+    "Nci.Dampener.declaredShare": "6dda5611176f3c78724aa5590d0dfe86171e9f8b164801f896ff8b15d9025c4f",
+    "Nci.Dampener.efficiency": "3879d8e8de916a1abbf299adc3cb7f406f4536de3f546f6601c03f59ed803100",
+    "Nci.Dampener.memoryCap": "073461c722e9cae382634cacd0b1a2dbdc13c8b569e1a077a324c7e9c5acda0f",
+    "Nci.Dampener.residualShare": "7d8a763f9d42496bca5c824943d40cee8e9bc9998244ab1b930a38acb2d6869a",
+    "Nci.Dampener.rhoT": "6302d31b765d7595479735cb16765e75561d310e1eb3ae5614ac2a2c861bdefb",
+    "Nci.Dampener.unmonitoredShare": "44e99813f78fd4d8963b37d58aee437551d98e0581915d4f43a0e021509eceb0"
+   },
+   "guarantees": [
+    "Nci.SecurityProofs.Dampener",
+    "Nci.SecurityProofs.DampenerThreaded",
+    "Nci.SecurityProofs.DampenerWindows"
    ]
   },
   "Definitions.Nci.Reads": {
@@ -7763,6 +7793,7 @@
    "guarantees": [
     "Accounting.SecurityProofs.Actual.ThreadedRate",
     "Accounting.SecurityProofs.Actual.ThreadedRuntime",
+    "Nci.SecurityProofs.DampenerThreaded",
     "Nci.SecurityProofs.ThreadedReads",
     "Nci.SecurityProofs.ThreadedThrottled",
     "Nci.SecurityProofs.ThreadedTraining"
@@ -17355,6 +17386,7 @@
    "guarantees": [
     "Accounting.SecurityProofs.Actual.ThreadedRate",
     "Accounting.SecurityProofs.Actual.ThreadedRuntime",
+    "Nci.SecurityProofs.DampenerThreaded",
     "Nci.SecurityProofs.ThreadedReads",
     "Nci.SecurityProofs.ThreadedThrottled",
     "Nci.SecurityProofs.ThreadedTraining"
@@ -17390,6 +17422,19 @@
     "Nci.Guarantees.ContainedTraining": "d11a30af07ea918204d1d57e4f22237b0ffbca149c9bff292dab777d562c2a1f"
    },
    "guarantees": ["Nci.SecurityProofs.ContainedMatMul", "Nci.SecurityProofs.ContainedTraining"]
+  },
+  "Models.Nci.Guarantees.Dampener": {
+   "digest": "2231b9ee9046156580647e17338125420a6dfaf73caf64b7a7615cec979a15c7",
+   "definitions": {
+    "Nci.Guarantees.Dampener": "51be110939f1e2aba3b5fc3a329564570308e79261930de29b31a6d9cf4d5ea9",
+    "Nci.Guarantees.DampenerThreaded": "c03add7a98d1b0c0cea190ae1604ddf8f4a6f9513d289c54c40ebcfe9efece19",
+    "Nci.Guarantees.DampenerWindows": "db15cac768253cf856ee929f5ffc06adac9ed01e62bf51f9fc7d551d654e884c"
+   },
+   "guarantees": [
+    "Nci.SecurityProofs.Dampener",
+    "Nci.SecurityProofs.DampenerThreaded",
+    "Nci.SecurityProofs.DampenerWindows"
+   ]
   },
   "Models.Nci.Guarantees.Reads": {
    "digest": "016cca93308e9ac6c0ad97c73b18da826f0fc8fbd33eb77535c28f63f61b3f72",
