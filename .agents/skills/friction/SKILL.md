@@ -296,9 +296,12 @@ Newest first. Each is Daniel's unless it names the coordinator.
   evidence. Its gap list shows nothing the Python checks that the Lean doesn't, for the record versions in use, and every
   recorded run in the store, replayed through the Lean, gets the verdict the Python gave, negative controls included. The
   Python keeps running beside it as the reference, the switch is a one-line change that can be reversed, and it moves
-  that protocol's properties from `Models/` to `Properties/`. The same day: lanes don't pick up rule changes on their
-  own, so each lane rereads AGENTS.md and the rulings here and in `.agents/skills/lean-proofs/SKILL.md` at the start of
-  every night, and each assignment from the coordinator lists the rules changed since that lane last read them.
+  that protocol's properties from `Models/` to `Properties/`. The same day: each lane rereads the rules every night
+  (`AGENTS.md`, "Lanes"), and each assignment from the coordinator lists the rules changed since that lane last read them.
+  - 2026-10-18 (9:57 AM PDT, in memory accounting's chat), where it leads: Lean is the definition and the verifier of
+    record; Python in `verity.ml` mirrors it for the prover's speed, held to it by difftest; a verifier imports no
+    `verity.ml` code. Until a protocol switches, core's edges into ml and `SOUNDNESS_PATH` only shrink (`AGENTS.md`,
+    "Design rules").
 - 2026-10-08 (5:59 PM PDT, relayed by top): a named conjecture is a premise in a section of its own, with a falsification
   test that runs, and a claim resting on one is listed as conditional. A model of how a device computes, such as
   `TTOutPearlC`, is an assumption about the world, checked by measurement. Claims resting on a falsified premise come off
@@ -428,8 +431,6 @@ Newest first. Each is Daniel's unless it names the coordinator.
   there with empty commits; the inbox is a channel, not a note. A worker silent for 30 minutes gets one inbox message,
   and only if that brings no answer does the launcher start a parallel lane. A worker that is IDLE in
   `list-cloud-agents` with no result delivered was stopped: report it to your coordinator, don't resume it.
-- 2026-10-05 (8:53 AM PDT), superseded: `main` kept `tools/verity/lean/check.py` and each package's `lean-audit.json`
-  under their names (`f507299a4`), so no rename is pending. What stands: the Lean audit is the Lean check.
 - 2026-10-04 (2:21 PM PDT): the repository migration finishes in short serial time. A lead launches workers for every
   piece that doesn't wait on another (Lean ones in separate checkouts), and spends compute wherever it shortens the
   critical path: reruns, check capacity, extra CPU pods. Pods still bound themselves under a `budgets.toml` line, and GPU
