@@ -1012,9 +1012,10 @@ _PACKING = ("import os; open(os.environ['RESEARCH_RUN_DIR'] + '/verdicts.tar.gz'
             + _RESULT % "passed")
 
 
-def _packed(tmp_path: Path, checkout: Path, monkeypatch, pack: str = "a pack", *command: str, program: str = _PACKING) -> tuple[str, str]:
+def _packed(tmp_path: Path, checkout: Path, monkeypatch, pack: str = "a pack", *command: str, program: str = _PACKING,
+            tool: str | None = "mytools.decl_check:T") -> tuple[str, str]:
     """(attempt id, its pack's sha256): a check of ``checkout`` (the declared one, or ``command``) that published a pack among
-    its run files, as a check node's run does (`--run-record`)."""
+    its run files, as a check node's run does (`--run-record`); recorded as no tool with ``tool`` None."""
     import hashlib
 
     from research.store.local import LocalStore
@@ -1023,7 +1024,7 @@ def _packed(tmp_path: Path, checkout: Path, monkeypatch, pack: str = "a pack", *
     monkeypatch.setenv("PACK", pack)
     before = {r for (r,) in LocalStore().index.sql("SELECT id FROM attempts")}
     monkeypatch.chdir(checkout)
-    rc = research_main(["run", "--runs-dir", str(tmp_path / "runs"), "--project", "t", "--no-sampler", "--tool", "mytools.decl_check:T",
+    rc = research_main(["run", "--runs-dir", str(tmp_path / "runs"), "--project", "t", "--no-sampler", *(["--tool", tool] if tool else []),
                         "--run-record", "--cwd", "source", "--", *(command or CHECKED)])
     assert rc in (0, 1)
     [rid] = {r for (r,) in LocalStore().index.sql("SELECT id FROM attempts")} - before
@@ -1156,6 +1157,34 @@ def test_verdicts_cites_a_pass_in_a_checks_reused_pack_as_that_check(tmp_path, m
                             "check", M.declared_command(main, "check"), {}) for s in (reused, "0" * 64)]
     assert judge[0] == ([rid], None)
     assert "no verdicts.tar.gz or verdicts-reused.tar.xz of that sha256" in judge[1][1]
+
+
+def test_verdicts_cites_a_post_landing_runs_pack_though_no_tool_recorded_it_and_no_other_untooled_run(tmp_path, monkeypatch):
+    """Drive cancels a train's check once every step it doesn't defer passed, and runs the deferred ones (pytest, circuit-check)
+    on the `main` it landed: `check.py --record --deferred STEPS`, recorded without `--tool check` so no gate takes it as a
+    check.  Its pack holds passes as a check's does, so `--verdicts` cites them part by part (`post_landing`); a run without the
+    tool of anything but the declared command with `--deferred STEPS` once is still another tool's."""
+    import research.merge as M
+    from research.store.local import LocalStore
+
+    main, feat, tip = _repos(tmp_path)
+    rid, sha = _packed(tmp_path, main, monkeypatch)
+    late, late_sha = _packed(tmp_path, main, monkeypatch, "a late pack", *CHECKED, "--keep-going", "--deferred", "pytest,circuit-check",
+                             tool=None)
+    bare, bare_sha = _packed(tmp_path, main, monkeypatch, "a bare pack", *CHECKED, tool=None)
+    odd, odd_sha = _packed(tmp_path, main, monkeypatch, "an odd pack", *CHECKED, "--deferred", "pytest", "--bogus", tool=None)
+    store, tree = LocalStore(), _git(feat, "rev-parse", f"{tip}^{{tree}}")
+
+    def judge(r, s):
+        return M.plan_refusal(_plan(tip, tree, [_part("lean-audit:pkg", rid, sha), _part("suite:a", r, s)]), store, tip, tree,
+                              "check", M.declared_command(main, "check"), {})
+
+    assert judge(late, late_sha) == (sorted([rid, late]), None)
+    assert "is a `python" in judge(bare, bare_sha)[1] and "not `check`" in judge(bare, bare_sha)[1]
+    assert "not `check`" in judge(odd, odd_sha)[1]
+    assert M.post_landing(["python3", "tools/verity/check/slot.py", "--priority", "--", *CHECKED, "--deferred", "pytest"],
+                          CHECKED) == "pytest"
+    assert M.post_landing([*CHECKED, "--deferred", "Py test"], CHECKED) is None
 
 
 def test_verdicts_admits_a_build_step_only_by_the_cited_passes_of_the_parts_that_read_what_it_builds(tmp_path, monkeypatch):

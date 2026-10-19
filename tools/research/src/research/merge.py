@@ -33,7 +33,8 @@ the diff from its tip either way.  The merge commit carries a `Check: <attempt i
 With --verdicts (opt-in; CI-108) the same refusals hold before any verdict, and in place of a passing attempt of REF, REF is
 admitted when the target's `check.py --plan REF --packs-only --base HEAD` (`PLAN`, `verdict_gate`) shows every part it
 requires passed under its key at REF, each by a pass that a recorded check's verdict pack holds: an attempt of the tool that
-ended, ran the declared command whole or as a shard, and lists that pack, by sha256, among its run files (`pack_refusal`).
+ended, ran the declared command whole or as a shard, and lists that pack, by sha256, among its run files (`pack_refusal`); or a
+post-landing run's (`check.py --deferred`, the declared command with `--deferred STEPS`, recorded as no tool: `post_landing`).
 Every Lake package's audit and every step the change requires (`required_steps`) is among those parts, so a skip passes
 nothing; a part with no key is never passed, a build step (`plan.IMPLIED`) is `implied` only by the cited passes of the parts
 that read what it builds (its `implied_by`), and a pass kept only in a machine's cache is cited by nothing.
@@ -154,6 +155,17 @@ def invocation(argv, command) -> tuple[str, object]:
     if rest and not (rest[0] == "--cores" and len(rest) == 2 and rest[1].isdigit()):
         return "refused", f"its command gives the declared one `{shlex.join(rest)}`, which check.py doesn't take"
     return mode
+
+
+def post_landing(argv, command) -> str | None:
+    """The steps of a post-landing run (`check.py --record --deferred STEP,...`, which drive launches through `train.sh
+    --deferred` and records without `--tool check`) when ``argv`` is the declared ``command`` run whole (`invocation`) but for
+    `--deferred STEPS` once; else None.  No gate takes it as a check of its commit; `--verdicts` cites its packs part by part."""
+    if not (isinstance(argv, list) and argv.count("--deferred") == 1) or (i := argv.index("--deferred")) + 1 >= len(argv):
+        return None
+    steps = argv[i + 1]
+    return steps if re.fullmatch(r"[a-z0-9-]+(,[a-z0-9-]+)*", steps) and invocation(argv[:i] + argv[i + 2:], command)[0] == "check" \
+        else None
 
 
 def unlike(argv, command) -> str | None:
@@ -553,20 +565,23 @@ def run_plan(repo: Path, commit: str, base: str, also: tuple[str, ...] = (), on:
 
 def pack_refusal(store, rid: str, sha256: str, tool: str, command: tuple[str, ...]) -> str | None:
     """Why the verdict pack of sha256 ``sha256`` can't be cited as attempt ``rid``'s, or None: the attempt's record says it is
-    a ``tool`` attempt that ended (`PACK_STATES`), ran the declared ``command`` whole or as a shard (`invocation`), and lists
-    `verdicts.tar.gz` of that sha256 among its run files."""
+    a ``tool`` attempt that ended (`PACK_STATES`), ran the declared ``command`` whole or as a shard (`invocation`), or is a
+    post-landing run of it, whatever tool it was recorded as (`post_landing`), and lists one of `PACKS` of that sha256 among its
+    run files."""
     try:
         doc = store.get_attempt(rid)
     except Exception as e:  # noqa: BLE001  (a guard never fails open)
         return f"its attempt can't be read ({type(e).__name__}: {e})"
     if not isinstance(doc, dict):
         return "its attempt can't be read"
-    if (name := (doc.get("tool") or {}).get("name")) != tool:
+    mode, why = invocation(doc.get("argv"), command)
+    if mode == "refused" and post_landing(doc.get("argv"), command):
+        mode = "deferred"
+    if (name := (doc.get("tool") or {}).get("name")) != tool and mode != "deferred":
         return f"it is a `{name}` attempt, not `{tool}`"
     if (state := (doc.get("status") or {}).get("state")) not in PACK_STATES:
         return f"it is {state}, not ended"
-    mode, why = invocation(doc.get("argv"), command)
-    if mode not in ("check", "shard"):
+    if mode not in ("check", "shard", "deferred"):
         return why if mode == "refused" else "it combines shards, and holds no pack of its own"
     out = doc.get("outputs") or {}
     for art in dict.fromkeys(a for a in (out.get("run_files"), out.get("run_record")) if a):

@@ -57,7 +57,8 @@ answer for each:
 
 The passes are looked up in this machine's caches (`local`: $CHECK_CACHE, $VERITY_TEST_CACHE and every check slot's test
 cache; not with --packs-only), in the verdict pack of each recorded check `gather_verdicts` would take (none with
---no-gather), in both packs of each recorded check of COMMIT (none with --no-gather) and of each RUN given with --from (the
+--no-gather), in both packs of each recorded check of COMMIT and of its post-landing runs (`--deferred`, which drive runs on
+the `main` it landed: none with --no-gather) and of each RUN given with --from (the
 passes it stored, `verdicts.tar.gz`, and those it reused, `verdicts-reused.tar.xz`: `check.Reused`), and in each PACK given
 (which no gate cites).  A pass found in a recorded check's pack names that attempt, the pack's sha256, which `research merge
 --verdicts` cites, the run that earned it, and the files it is (`paths`).
@@ -505,10 +506,19 @@ ENDED = ("done", "failed", "cancelled")
 
 
 def own_checks(store, commit: str) -> list[str]:
-    """The recorded checks of ``commit`` that ended, newest first."""
-    return [rid for (rid,) in store.index.sql(
-        f"SELECT id FROM attempts WHERE tool = 'check' AND source_commit = ? AND state IN ({', '.join('?' * len(ENDED))}) "
-        "ORDER BY start_utc DESC", (commit, *ENDED))]
+    """The recorded checks of ``commit`` that ended, and its post-landing runs (`check.py --deferred`, recorded without `--tool
+    check`, so found by their argv), newest first."""
+    rows = store.index.sql(f"SELECT id, tool FROM attempts WHERE source_commit = ? AND state IN ({', '.join('?' * len(ENDED))}) "
+                           "ORDER BY start_utc DESC", (commit, *ENDED))
+    return [rid for rid, tool in rows if tool == "check" or _post_landing(store, rid)]
+
+
+def _post_landing(store, rid: str) -> bool:
+    try:
+        argv = (store.get_attempt(rid) or {}).get("argv") or []
+    except Exception:  # noqa: BLE001  (an attempt that can't be read is no source)
+        return False
+    return "--deferred" in argv and any(str(x).endswith("tools/verity/check/check.py") for x in argv)
 
 
 def gather(C, d: Path, a, notes: list[str], commit: str | None = None) -> list[tuple[str | None, Path]]:
