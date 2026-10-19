@@ -12,7 +12,9 @@ h1o_ref's v3 z:
     (int8_ops.scaled_mm, the exact arm's) on every call, required; three units on the CPU: the kernel's z = A B^T, the
     receipt = CA's definition's (`dither_one.h1v3_unit`) and CA's own code's (`h1v3_itself`, H1V3's h1tile.reference),
     and CA's z peeled on the CPU from its own noise (`peel_cpu`) = A B^T, where the literal peel z - b B^T - A c^T - b c^T
-    is reported (it misses the wrap term 256 xa (B + c)^T);
+    is reported (it misses the wrap term 256 xa (B + c)^T); and, where hb_served.sh extracted H1V3 with the peel
+    (HB_H1V3_PEEL_TREE, 4733b9ab0c: z = A B^T is v3's definition), the kernel's z and receipt equal that tree's
+    h1tile.reference(stream=True) itself, with no CPU peel;
   * fault: z off A B^T by 2^FAULT_SHIFT at unit 0's cell (0, 0) of every call and nowhere else, that unit's receipt off
     h1r's and no other, y = dequant of that z and moved there;
   * fault_wb: every receipt unmoved, z off A B^T only in column 0 of unit 0, by `dither_one.wb_fault_expected` on
@@ -23,6 +25,11 @@ h1o_ref's v3 z:
 from __future__ import annotations
 
 import ctypes as C
+import json
+import os
+import subprocess
+import sys
+import tempfile
 
 import numpy as np
 import torch
@@ -57,6 +64,25 @@ def xa_fault_expected(a: np.ndarray, b: np.ndarray, salt: bytes, position: int, 
     rows, _ = HT.noise(SD.seed(salt, position, *roots), HT.Layout(32, 32, a.shape[1]))
     d = -1 if int(a[0, 0]) == 127 and int(rows[0][0][0]) == 1 else 1
     return [(256 * d * int(b[j, 0])) & M32 for j in range(32)]
+
+
+def h1v3_peeled(units: list[dict]) -> dict:
+    """`dither_one.h1v3_itself` on the peeled H1V3 tree (HB_H1V3_PEEL_TREE): CA's own h1tile.reference(stream=True), whose
+    z is A B^T; {"tree": None} when hb_served.sh extracted none."""
+    tree = os.environ.get("HB_H1V3_PEEL_TREE")
+    if not tree:
+        return {"tree": None}
+    doc = {"tree": tree, "sha": os.environ.get("HB_H1V3_PEEL_SHA")}
+    with tempfile.TemporaryDirectory() as td:
+        src, dst = os.path.join(td, "in.json"), os.path.join(td, "out.json")
+        with open(src, "w") as f:
+            json.dump(units, f)
+        p = subprocess.run([sys.executable, os.path.join(os.path.dirname(os.path.abspath(DO.__file__)), "h1v3_ref.py"), src, dst],
+                           env={**os.environ, "PYTHONPATH": tree}, capture_output=True, text=True)
+        if p.returncode:
+            return {**doc, "error": p.stderr[-2000:]}
+        with open(dst) as f:
+            return {**doc, **json.load(f)}
 
 
 def _s32(v: np.ndarray) -> np.ndarray:
@@ -255,9 +281,17 @@ def check(win: DO.Window, lib_h1o: str, which: str = "gate", n_cpu_units: int = 
                 x["h1v3_peeled_equal"] = bool((zk == pc["exact"]).all())
                 x["h1v3_receipt_equal"] = rk == hu["receipt"]
         doc["h1v3"] = {k_: v for k_, v in hv.items() if k_ != "units"}
+        hp = h1v3_peeled(h1v3_in)
+        if "units" in hp:
+            for x, (zk, rk, *_), hu in zip(units_doc, kernel_out, hp["units"]):
+                x["h1v3_peel_z_equal"] = bool((zk == np.array(hu["z"], dtype=np.int64)).all())
+                x["h1v3_peel_receipt_equal"] = rk == hu["receipt"]
+        doc["h1v3_peel"] = {k_: v for k_, v in hp.items() if k_ != "units"}
     doc["vs_cpu"] = units_doc
     h1v3_ok = which != "gate" or doc["h1v3"].get("tree") is None or (
         "units" in hv and all(x["h1v3_peeled_equal"] and x["h1v3_receipt_equal"] for x in units_doc))
+    h1v3_ok = h1v3_ok and (which != "gate" or doc["h1v3_peel"].get("tree") is None or (
+        "units" in hp and all(x["h1v3_peel_z_equal"] and x["h1v3_peel_receipt_equal"] for x in units_doc)))
     doc["ok"] = (not rc_bad and not z_bad and (g["y"] is None or not y_bad) and today_ok
                  and all(x["z_equal_today"] and x["receipt_equal"] and x["v3_cells_eq_x_bc"] == 1024
                          and x["v3_peeled_exact_eq_today"] == 1024 for x in units_doc)

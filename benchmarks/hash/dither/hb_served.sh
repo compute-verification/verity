@@ -26,8 +26,9 @@
 # dither-1s with this lane's one-stream kh_one in place of h1o_units (hb_one.py and hb_side.py, the same .so); and
 # dither-1s-hbp, dither-1s-hb peeled (kh_one_peel: z = A B^T, y today's; hb_peel.py's gate, sent too), from the .so
 # HB_H1U_PEEL names if it's set (the fastest peeled build need not be the fastest unpeeled one). The
-# dither-1s arms' gate also runs CA's H1V3 h1tile.reference at H1V3_SHA (default bd702a2c46), from a sent
-# h1v3-SHA.tar.gz (`git archive SHA verity | gzip`; a --cwd source tree has no history), else the source's git.
+# dither-1s arms' gate also runs CA's H1V3 h1tile.reference at H1V3_SHA (default bd702a2c46), and dither-1s-hbp's at
+# H1V3_PEEL_SHA too (default 4733b9ab0c, v3 with the peel), each from a sent h1v3-SHA.tar.gz (`git archive SHA verity |
+# gzip`; a --cwd source tree has no history), else the source's git.
 # Env: DITHER_NSYS=1 (sbench's nsys capture of the gate's kernels; kernels.py counts each dither arm's inside its NVTX
 # range, so the source must be dither-rtx's f2c0071c7c or later), LEASE (default "--max-min 14"), RUN_TIMEOUT (seconds
 # inside the lease, default 820), VERITY_BENCH_VENV (default /workspace/cp/venv312), NVCC (default CUDA 13.0's).
@@ -135,6 +136,23 @@ fi
 [ -f "$S/h1v3/verity/core/protocols/pouw/circuit/h1tile.py" ] \
   && export DITHER_H1V3_TREE=$S/h1v3 DITHER_H1V3_SHA=$H1V3_SHA || echo "hb_served: no H1V3 tree at $H1V3_SHA"
 echo "h1v3 ${DITHER_H1V3_SHA:-none}" >> "$OUT/env/wrapper.txt"
+# H1V3 with the peel (z = A B^T, CA 12:03Z) at H1V3_PEEL_SHA: dither-1s-hbp's gate holds its z and receipts to that tree's
+# h1tile.reference itself; dither-1s-hb, which serves the dithered product, stays on H1V3_SHA's
+H1V3_PEEL_SHA=${H1V3_PEEL_SHA:-4733b9ab0c}
+mkdir -p "$S/h1v3p"
+if [ -f "$INPUTS/h1v3-$H1V3_PEEL_SHA.tar.gz" ]; then
+  tar -xzf "$INPUTS/h1v3-$H1V3_PEEL_SHA.tar.gz" -C "$S/h1v3p"
+else
+  git -C "$ROOT" archive "$H1V3_PEEL_SHA" verity 2>/dev/null | tar -x -C "$S/h1v3p" 2>/dev/null
+fi
+grep -qs "^def peel_seg" "$S/h1v3p/verity/core/protocols/pouw/circuit/h1tile.py" \
+  && export HB_H1V3_PEEL_TREE=$S/h1v3p HB_H1V3_PEEL_SHA=$H1V3_PEEL_SHA
+echo "h1v3_peel ${HB_H1V3_PEEL_SHA:-none}" >> "$OUT/env/wrapper.txt"
+case " $* " in *dither-1s-hbp*)
+  [ -n "${HB_H1V3_PEEL_TREE:-}" ] || {
+    echo "hb_served.sh: dither-1s-hbp needs H1V3 with the peel: --send h1v3-$H1V3_PEEL_SHA.tar.gz (git archive $H1V3_PEEL_SHA verity | gzip)" >&2
+    exit 2; } ;;
+esac
 export PATH=$(dirname "$PY"):$CUDA/bin:$PATH FLASHINFER_CUDA_ARCH_LIST=$FI HF_HOME=${HF_HOME:-/workspace/hf}
 export PYTHONPATH=.:$ROOT:$ROOT/tools/research/src:$ROOT/$DITHER HB_DITHER_DIR=$ROOT/$DITHER
 NSYS=()
