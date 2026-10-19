@@ -64,6 +64,7 @@ import Proofs.Flock.Claims.ZK.PiopSrcSv
 import Proofs.Flock.Claims.ZK.SimPiop
 import Proofs.Flock.Claims.ZK.SimLig
 import Proofs.Flock.Claims.ZK.FinExe
+import Proofs.Flock.Claims.ZK.FinPads
 import Proofs.Flock.Claims.ZK.LiveEnd
 import Proofs.Flock.Claims.ZK.Worker
 import Proofs.Flock.Claims.ZK.Switched
@@ -324,6 +325,8 @@ import Proofs.Flock.Claims.ZK.Stop
 * `SimLig`: `Masked.simLig`, hybrid 1 against hybrid 2: Ligerito from the cut's source is the session's.
 * `FinExe`: `FinExe` from `LiveEnd`, `SimCommit`, the three hybrids and the per-rep statements `RepOpenFinal`,
   `RepExact` and `RepPoints` (`Masked.finExe_of_open`).
+* `FinPads`: `Masked.repOpenRest_pads`, `FinalRest`'s pads half: the pads' opened columns and salts read from the views
+  are the session's.
 * `LiveEnd`: `Masked.liveEnd`, the session answered by the openings ends as the one answered by the opened coins.
 * `Assemble`: `Flock.zk_deployZk_masked_exe_split`, Flock's zero knowledge at the deployed masked session from
   `SplitInner`'s `InnerTauVal`, `CausalExe`, and `FinExe`'s `RepOpenFinal`, `RepExact` and `RepPoints`: `hstep` from
