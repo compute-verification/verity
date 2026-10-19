@@ -34,12 +34,11 @@ __constant__ u32 PW2[32] = {1u << 0,  1u << 1,  1u << 2,  1u << 3,  1u << 4,  1u
                             1u << 24, 1u << 25, 1u << 26, 1u << 27, 1u << 28, 1u << 29, 1u << 30, 1u << 31};
 constexpr bool P_S1 = H1_PIPE & 4, P_S0 = H1_PIPE & 8, P_s0 = H1_PIPE & 16, P_s1 = H1_PIPE & 32;
 
-// the low word of (b:a) >> n, 0 < n < 32, as hi(a 2^(32-n)) + b 2^(32-n) (their bits are disjoint)
+// the low word of (b:a) >> n, 0 < n < 32, as b 2^(32-n) + hi(a 2^(32-n)) (their bits are disjoint): IMAD.HI with a zero
+// addend, then IMAD with a 32-bit one (mad.hi.u32 with an addend costs a 64-bit register pair and two moves)
 __device__ __forceinline__ u32 fsr_imad(u32 a, u32 b, int n) {
   const u32 m = PW2[32 - n];
-  u32 r;
-  asm("mad.hi.u32 %0, %1, %2, %3;" : "=r"(r) : "r"(a), "r"(m), "r"(b * m));
-  return r;
+  return b * m + __umulhi(a, m);
 }
 template <bool F>
 __device__ __forceinline__ u64 rotp(u64 x, int n) {
