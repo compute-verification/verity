@@ -16,8 +16,9 @@ until CA's reference lands. Measured only: nothing here is served or credited.
           verdict over gate, control, fault, fault_wb and fault_xa. For a banded arm check runs with its receipts
           reference at band G (h1r.cu's h1r_launch_band: v1, full compressions, the rows from the leader's seed_j in the
           seeds buffer), its CPU units on j10b_ref's noise (h1v3_ca's word functions: dither_one.h1v3_unit with h1tile's
-          rows taken from the leader), z held to A B^T (peeled), and CA's H1V3 tree's own reference on the same units
-          (j10v3_ref.py: its noise taken twice, the rows from the leader's seed_j). Then the band workspace of the gate
+          rows taken from the leader), z held to A B^T (peeled), and CA's banded reference itself on the same units, which
+          the gate requires (#2866: banded.banded_reference under the tree j10b_ref.ca_tree finds, j10ca_ref.py; send
+          banded-1a4d1de024.tar.gz). Then the band workspace of the gate
           step against j10b_ref.row_block (the first and last live band of each call whole, up to 384 drawn bands 8
           blocks each) and no 0xA5 block left in a live band.
     time  per arm and m, CUDA graphs replayed between events with the arms interleaved: the window's calls (A table and
@@ -35,9 +36,7 @@ import json
 import os
 import random
 import statistics
-import subprocess
 import sys
-import tempfile
 import time
 from pathlib import Path
 
@@ -153,19 +152,14 @@ def band_check(win: BandWindow, lib: str, which: str) -> dict:
         return out
 
     def itself(units: list[dict]) -> dict:
-        tree = os.environ.get("DITHER_H1V3_TREE")
-        if not tree:
-            return {"tree": None}
-        with tempfile.TemporaryDirectory() as td:
-            src, dst = os.path.join(td, "in.json"), os.path.join(td, "out.json")
-            with open(src, "w") as f:
-                json.dump([{**x, "leader_position": lead_of(x["position"])} for x in units], f)
-            p = subprocess.run([sys.executable, str(HERE / "j10v3_ref.py"), src, dst], env={**os.environ, "PYTHONPATH": tree},
-                               capture_output=True, text=True)
-            if p.returncode:
-                return {"tree": tree, "sha": os.environ.get("DITHER_H1V3_SHA"), "error": p.stderr[-2000:]}
-            with open(dst) as f:
-                return {"tree": tree, "sha": os.environ.get("DITHER_H1V3_SHA"), **json.load(f)}
+        cells = []
+        for x in units:
+            rel = x["position"] - s * win.u_step
+            w = max(i for i in range(win.L) if offs[i] <= rel)
+            ncb, base = win.nk[w][0] // 32, s * win.u_step + offs[w]
+            ri, cj = divmod(rel - offs[w], ncb)
+            cells.append({**x, "I": ri, "J": cj, "g": win.g, "row_positions": [base + ri * ncb + j for j in range(ncb)]})
+        return JB.ca_reference(cells)
 
     BandH1R.G = win.g
     DO.H1R, DO.h1v3_unit, DO.h1v3_itself = BandH1R, unit, itself
@@ -173,6 +167,11 @@ def band_check(win: BandWindow, lib: str, which: str) -> dict:
         doc = DO.check(win, lib, which)
     finally:
         DO.H1R, DO.h1v3_unit, DO.h1v3_itself = orig_h1r, orig_unit, orig_itself
+    if which == "gate":
+        cu = doc.get("vs_h1v3_cpu", [])
+        doc["ca_reference_ok"] = bool(doc.get("h1v3", {}).get("tree") and not doc["h1v3"].get("error") and cu
+                                      and all(x.get("h1v3_z_equal") and x.get("h1v3_receipt_equal") for x in cu))
+        doc["ok"] = doc["ok"] and doc["ca_reference_ok"]
     doc["noise"] = JB.NOISE
     doc["band"] = win.g
     doc["cpu_unit_leaders"] = [x.get("unit") for x in doc.get("vs_h1v3_cpu", [])]
@@ -316,8 +315,12 @@ def main() -> int:
     for m in ms:
         t = 64 if m <= 64 else m
         by_t.setdefault(t, []).append(m)
-    doc = {"schema": "kernels-j10/rtx/v1", "gpu": torch.cuda.get_device_name(dev), "label": JB.LABEL,
-           "noise_reference": "j10b_ref.py (kernels' reading); CA's not yet out", "arms": arms, "ms": ms,
+    ca = JB.ca_tree()
+    doc = {"schema": "kernels-j10/rtx/v1", "gpu": torch.cuda.get_device_name(dev), "label": JB.CA_LABEL if ca else JB.LABEL,
+           "noise_reference": (f"CA's banded_reference (#2866 @ {JB.CA_SHA}) on the gate's CPU units, required; every "
+                               "receipt against h1r_launch_band, the band workspace against j10b_ref (equal to CA's on "
+                               "its pinned vectors)") if ca else "none: no CA tree, so no banded arm passes its gate",
+           "arms": arms, "ms": ms,
            "shapes": HG.SHAPES, "sms": torch.cuda.get_device_properties(dev).multi_processor_count,
            "started": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()), "windows": {}}
     print(json.dumps({"j10rtx": {x: doc[x] for x in ("gpu", "label", "arms", "ms")}}), flush=True)

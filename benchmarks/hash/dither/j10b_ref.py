@@ -1,5 +1,8 @@
 """A CPU model of J10's banded noise as the kernels read SharedNoise.lean (CA's §6 shape, a band of g column tiles a row
-block), for this lane's gates until CA's own reference lands: every banded run is labelled `LABEL`.
+block). CA's own reference is out (#2866 at `CA_SHA`: verity/core/protocols/pouw/circuit/banded.py, banded_reference) and
+this model equals it on its pinned vectors and on leader and non-leader receipts; a banded gate holds the kernels to
+CA's code itself (`ca_reference`, j10ca_ref.py under the tree `ca_tree` finds) and is labelled `CA_LABEL`, and a run
+without that tree is labelled `LABEL`.
 
 Unit u = (I, J) of a call, u = I ncb + J, sits at position base + u (as today), its band b = J // g and its band leader
 unit (I, b g). seed_j(v) = seeds.seed(salt, base + v, root_a, root_b) and σ_R(v) = seeds.receipt_seed(...) as today.
@@ -12,6 +15,13 @@ on that noise are v3's (j10r_ca.unit, h1v3_ca's word functions, copied verbatim 
 """
 from __future__ import annotations
 
+import json
+import os
+import subprocess
+import sys
+import tarfile
+import tempfile
+from pathlib import Path
 from typing import Sequence
 
 import numpy as np
@@ -24,6 +34,43 @@ from verity.core.protocols.pouw.circuit import seeds as SD
 
 LABEL = "noise=j10-banded (kernels' reading of SharedNoise.lean; not CA's reference)"
 NOISE = "j10-banded/kernels-reading"
+CA_SHA = "1a4d1de024"
+CA_LABEL = f"noise=j10-banded (CA #2866 @ {CA_SHA})"
+HERE = Path(__file__).resolve().parent
+_CA: dict = {}
+
+
+def ca_tree() -> str | None:
+    """The tree of CA's banded reference (#2866 at CA_SHA): $J10_CA_TREE, else the run's inputs/banded-CA_SHA.tar.gz
+    (`git archive CA_SHA verity | gzip`, sent with `research run --send`) extracted once a process; None without either."""
+    if "tree" not in _CA:
+        tree = os.environ.get("J10_CA_TREE")
+        arc = Path(os.environ.get("RESEARCH_RUN_DIR", ".")) / "inputs" / f"banded-{CA_SHA}.tar.gz"
+        if not tree and arc.is_file():
+            tree = tempfile.mkdtemp(prefix="j10ca-")
+            with tarfile.open(arc) as t:
+                t.extractall(tree, filter="data")
+        ok = tree and (Path(tree) / "verity/core/protocols/pouw/circuit/banded.py").is_file()
+        _CA["tree"] = tree if ok else None
+    return _CA["tree"]
+
+
+def ca_reference(units: list[dict], workers: int = 8) -> dict:
+    """CA's banded_reference on `units` (j10ca_ref.py's IN) under ca_tree(): {"tree", "sha", "units", ...}, or
+    {"tree": None} without the tree, or with "error"."""
+    tree = ca_tree()
+    if not tree:
+        return {"tree": None}
+    with tempfile.TemporaryDirectory() as td:
+        src, dst = os.path.join(td, "in.json"), os.path.join(td, "out.json")
+        with open(src, "w") as f:
+            json.dump(units, f)
+        p = subprocess.run([sys.executable, str(HERE / "j10ca_ref.py"), src, dst, str(workers)],
+                           env={**os.environ, "PYTHONPATH": tree}, capture_output=True, text=True)
+        if p.returncode:
+            return {"tree": tree, "sha": CA_SHA, "error": p.stderr[-2000:]}
+        with open(dst) as f:
+            return {"tree": tree, "sha": CA_SHA, **json.load(f)}
 
 
 def leader(u: int, ncb: int, g: int) -> int:

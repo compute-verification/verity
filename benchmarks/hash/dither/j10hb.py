@@ -2,7 +2,9 @@
 the credited one-stream call (kh_one_peel's two-launch form: h1s_noise into the workspace, then h1u, or h1k in a K-split
 build; z = A B^T) on per-unit noise, against the same call on J10 banded noise at bands of g column tiles
 (kh_one_peel_band: h1j_noise hashes each band's row blocks once, into its leader's workspace region, and every unit's
-columns; the units read their rows from the leader's region), labelled `j10b_ref.LABEL` until CA's reference lands.
+columns; the units read their rows from the leader's region), gated against CA's banded reference (#2866,
+`banded.banded_reference` under the tree `j10b_ref.ca_tree` finds: send banded-1a4d1de024.tar.gz) and labelled
+`j10b_ref.CA_LABEL`.
 
     arms  NAME-osp              per-unit noise (kh_one_peel), the baseline
           NAME-osp-noise        its noise launch alone (kh_one_peel_band, band 1, mode 2), seeds included
@@ -13,10 +15,9 @@ columns; the units read their rows from the leader's region), labelled `j10b_ref
     gate  before any timing, per shape and gated arm: h1zbench.gate_one (0xA5 over receipts, z, zo, y and the workspace;
           z = A B^T on the selected row blocks against float64; y = dequantize(z); the no-write control refused;
           F_FAULT, F_FAULT_WB and F_FAULT_XA conforming on unit 0, a band leader). The per-unit arm's receipts against
-          receipts_ca on its picks. A banded arm's receipts: non-leaders (unit 1, the last unit, one drawn) against
-          j10b_ref.unit on the CPU (h1v3_ca's word functions on the leader's rows and the unit's own columns and keys),
-          and every band leader's equal to the per-unit arm's (a leader's noise is its own), every non-leader's
-          different; its workspace with no 0xA5 block left in a leader's rows or in any unit's columns, and drawn blocks
+          receipts_ca on its picks. A banded arm's receipts and z: unit 0 and non-leaders (the first, the last, one
+          drawn) against CA's banded_reference itself (without CA's tree the gate fails), every band leader's receipt
+          equal to the per-unit arm's (a leader's noise is its own) and every non-leader's different; its workspace with no 0xA5 block left in a leader's rows or in any unit's columns, and drawn blocks
           against seeds.noise_block of their unit's seed_j.
     time  CUDA graphs replayed between events, the arms interleaved (h1zbench.bench's loop).
 
@@ -28,13 +29,11 @@ import argparse
 import copy
 import ctypes
 import json
-import multiprocessing as mp
 import random
 import statistics
 import sys
 import time
 import traceback
-from concurrent.futures import ProcessPoolExecutor
 from pathlib import Path
 
 import numpy as np
@@ -109,45 +108,56 @@ def ws_check(lib: Z.OneLib, c: Call, g: int, rng: random.Random, draws: int = 24
             "ok": pr == 0 and pc == 0 and bad == 0}
 
 
-def band_ref(pool: ProcessPoolExecutor, c: Call, picks: list[int], g: int) -> tuple[torch.Tensor, float]:
+def ca_ref(c: Call, picks: list[int], g: int, workers: int) -> tuple[dict, float]:
+    """CA's banded_reference on the picked units of call c: JB.ca_reference's doc."""
     ncb = c.b.shape[0] // 32
     a8 = c.a.cpu().numpy().astype(np.int64) & 0xFF
     b8 = c.b.cpu().numpy().astype(np.int64) & 0xFF
-    t0 = time.time()
-    futs = []
+    cells = []
     for u in picks:
         ri, cj = divmod(u, ncb)
-        futs.append(pool.submit(JB.unit, a8[32 * ri:32 * ri + 32].tolist(), b8[32 * cj:32 * cj + 32].tolist(), c.salt,
-                                c.base + u, c.base + JB.leader(u, ncb, g), c.roots))
-    want = [f.result()[1] for f in futs]
-    return torch.from_numpy(np.array(want, dtype=np.uint32).view(np.int32)).cuda(), round(time.time() - t0, 2)
+        cells.append({"a": a8[32 * ri:32 * ri + 32].tolist(), "b": b8[32 * cj:32 * cj + 32].tolist(), "salt": c.salt.hex(),
+                      "position": c.base + u, "roots": [c.roots[0].hex(), c.roots[1].hex()], "I": ri, "J": cj, "g": g,
+                      "row_positions": [c.base + ri * ncb + j for j in range(ncb)]})
+    t0 = time.time()
+    return JB.ca_reference(cells, workers), round(time.time() - t0, 2)
 
 
 def gate_band(oc: Z.OneCall, per_out: torch.Tensor, g: int, ref_ab: dict, shift: int, rng: random.Random,
-              pool: ProcessPoolExecutor) -> dict:
+              workers: int) -> dict:
     c = oc.c
     S, ncb = c.units, c.b.shape[0] // 32
     non = [u for u in range(S) if (u % ncb) % g]
     if not non:
         return {"ok": False, "error": f"no non-leader at g = {g} with {ncb} column tiles"}
-    picks = sorted({non[0], non[-1], rng.choice(non)})
-    ref_t, cpu_s = band_ref(pool, c, picks, g)
+    picks = sorted({0, non[0], non[-1], rng.choice(non)})
+    ca, cpu_s = ca_ref(c, picks, g, workers)
+    if "units" not in ca:
+        return {"ok": False, "picks": picks, "ca_reference": {x: v for x, v in ca.items() if x != "units"},
+                "error": "CA's banded reference did not run (send banded-1a4d1de024.tar.gz)"}
+    ref_t = torch.from_numpy(np.array([x["receipt"] for x in ca["units"]], dtype=np.uint32).view(np.int32)).cuda()
     doc = Z.gate_one(oc, picks, ref_t, ref_ab, shift)
-    doc["cpu_s"] = cpu_s
+    doc["ca_reference"] = {"sha": ca["sha"], "banded": ca.get("banded"), "noise": ca.get("noise"), "cpu_s": cpu_s,
+                           "band_starts": [x["band_start"] for x in ca["units"]]}
     g0 = oc.once(0)
+    doc["ca_z_bad_cells"] = 0
+    for u, x in zip(picks, ca["units"]):
+        ri, cj = divmod(u, ncb)
+        want = torch.tensor(x["z"], dtype=torch.int32, device="cuda")
+        doc["ca_z_bad_cells"] += int((g0["z"][32 * ri:32 * ri + 32, 32 * cj:32 * cj + 32] != want).sum())
     ld = torch.tensor(leaders(S, ncb, g), device="cuda")
     nl = torch.tensor(non, device="cuda")
     doc["leaders"] = len(ld)
     doc["leader_receipt_bad_units"] = int((g0["out"][ld] != per_out[ld]).any(dim=1).sum())
     doc["nonleader_equal_per_unit"] = int((g0["out"][nl] == per_out[nl]).all(dim=1).sum())
     doc["ws"] = ws_check(oc.lib, c, g, rng)
-    doc["ok"] = (doc["ok"] and doc["leader_receipt_bad_units"] == 0 and doc["nonleader_equal_per_unit"] == 0
-                 and doc["ws"]["ok"])
+    doc["ok"] = (doc["ok"] and doc["ca_z_bad_cells"] == 0 and doc["leader_receipt_bad_units"] == 0
+                 and doc["nonleader_equal_per_unit"] == 0 and doc["ws"]["ok"])
     return doc
 
 
 def bench(builds: dict, ref: Z.Ref, args, name: str, n: int, k: int, m: int, Xh: np.ndarray, clock: Clock, l2: int,
-          rng: random.Random, shift: int, pool: ProcessPoolExecutor, gs: list[int]) -> dict:
+          rng: random.Random, shift: int, gs: list[int]) -> dict:
     X = torch.from_numpy(Xh[:m]).to("cuda")
     a = X if m >= 32 else torch.cat([X, X.new_zeros(32 - m, k)])
     rows = a.shape[0]
@@ -193,7 +203,7 @@ def bench(builds: dict, ref: Z.Ref, args, name: str, n: int, k: int, m: int, Xh:
             barm = f"{arm}-b{gb}"
             bo = copy.copy(oc)
             bo.lib = BandLib(path, gb, 0)
-            out["gates"][barm] = g = gate_band(bo, per_out, gb, rf_ab, shift, rng, pool)
+            out["gates"][barm] = g = gate_band(bo, per_out, gb, rf_ab, shift, rng, args.workers)
             print(json.dumps({"linear": name, "m": m, "arm": barm, "gate": {x: g[x] for x in g if x != "picks"}}),
                   flush=True)
             if not g["ok"]:
@@ -265,9 +275,6 @@ def main() -> int:
     ap.add_argument("--linears", default=",".join(LINEARS))
     ap.add_argument("--workers", type=int, default=8)
     args = ap.parse_args()
-    # fork's executor starts every worker at its first submit: do it before CUDA initializes in this process
-    pool = ProcessPoolExecutor(args.workers, mp_context=mp.get_context("fork"))
-    pool.submit(int, 0).result()
     out = Path(args.out)
     out.mkdir(parents=True, exist_ok=True)
     builds = {}
@@ -284,32 +291,33 @@ def main() -> int:
     props = torch.cuda.get_device_properties(0)
     l2 = int(getattr(props, "L2_cache_size", 50 << 20))
     rng = random.Random(0x4A3110)
-    doc = {"schema": SCHEMA, "label": JB.LABEL, "noise": JB.NOISE, "device": clock.name,
+    ca = JB.ca_tree()
+    doc = {"schema": SCHEMA, "label": JB.CA_LABEL if ca else JB.LABEL, "ca_tree": ca, "noise": JB.NOISE,
+           "device": clock.name,
            "sms": props.multi_processor_count, "l2_bytes": l2, "torch": torch.__version__,
            "started": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()), "builds": builds, "ref_lib": args.ref_lib,
            "gs": gs, "fault_shift": shift,
-           "reference": "per-unit: receipts_ca.py, h1zref.cu (z = A B^T in float64); banded: j10b_ref.py on h1v3_ca.py's "
-                        "word functions (kernels' reading of SharedNoise.lean; not CA's reference)",
+           "reference": "per-unit: receipts_ca.py, h1zref.cu (z = A B^T in float64); banded: CA's banded_reference "
+                        f"(#2866 @ {JB.CA_SHA}) on 4 units a shape and arm, the leaders against the per-unit arm",
            "timing": "seeds (kh_seeds) included in every arm; -noise and -units arms are the two launches alone",
            "shapes": []}
     xs: dict = {}
     ms = [int(v) for v in args.ms.split(",")]
-    with pool:
-        for name in args.linears.split(","):
-            n, k = LINEARS[name]
-            if k not in xs:
-                xs[k] = inputs(x_seed(k), max(ms), k)
-            for m in ms:
-                t0 = time.time()
-                try:
-                    r = bench(builds, ref, args, name, n, k, m, xs[k], clock, l2, rng, shift, pool, gs)
-                except Exception as e:  # noqa: BLE001
-                    r = {"linear": name, "m": m, "error": "".join(traceback.format_exception(e))[-3000:]}
-                r["wall_s"] = round(time.time() - t0, 2)
-                doc["shapes"].append(r)
-                print(json.dumps({x: r.get(x) for x in ("linear", "m", "units", "plain_us", "over_per_unit",
-                                                         "gate_failed", "error", "wall_s")}), flush=True)
-                (out / "j10hb.json").write_text(json.dumps(doc, indent=1))
+    for name in args.linears.split(","):
+        n, k = LINEARS[name]
+        if k not in xs:
+            xs[k] = inputs(x_seed(k), max(ms), k)
+        for m in ms:
+            t0 = time.time()
+            try:
+                r = bench(builds, ref, args, name, n, k, m, xs[k], clock, l2, rng, shift, gs)
+            except Exception as e:  # noqa: BLE001
+                r = {"linear": name, "m": m, "error": "".join(traceback.format_exception(e))[-3000:]}
+            r["wall_s"] = round(time.time() - t0, 2)
+            doc["shapes"].append(r)
+            print(json.dumps({x: r.get(x) for x in ("linear", "m", "units", "plain_us", "over_per_unit",
+                                                     "gate_failed", "error", "wall_s")}), flush=True)
+            (out / "j10hb.json").write_text(json.dumps(doc, indent=1))
     layer: dict = {}
     for r in doc["shapes"]:
         for arm, v in r.get("arms", {}).items():
