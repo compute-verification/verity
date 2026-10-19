@@ -2402,11 +2402,11 @@ def _reading(x) -> bool:
 def _stream_state(s) -> dict:
     """A stream's state as `Stream.State.ofJson` reads it, a covered draw's order that isn't a natural number as null;
     rejected where it refuses."""
-    _exactly(s, {"ended", "entries", "failures", "opened", "salted_at", "size"}, "a state")
+    _exactly(s, {"ended", "entries", "failures", "halted", "opened", "salted_at", "size"}, "a state")
     if not (_nat(s["size"]) and _nat(s["failures"]) and isinstance(s["opened"], list) and all(map(_nat, s["opened"]))
             and (s["salted_at"] is None or _reading(s["salted_at"])) and (s["ended"] is None or isinstance(s["ended"], dict))
-            and isinstance(s["entries"], list)):
-        raise D.Reject("a state's counts, salt, end or entries are out of form")
+            and (s["halted"] is None or isinstance(s["halted"], dict)) and isinstance(s["entries"], list)):
+        raise D.Reject("a state's counts, salt, end, halt or entries are out of form")
     entries = []
     for e in s["entries"]:
         _exactly(e, {"delivered", "draw", "drawn_at", "final", "interior", "order", "proved", "registration", "session"},
@@ -2448,6 +2448,7 @@ def stream(j):
 
 STREAM_DIGEST = hashlib.sha512(b"stream").hexdigest()
 SESSION_DIGEST = hashlib.sha512(b"session").hexdigest()
+HALT_CAUSE = {"operator": "o", "stream": 1, "at": 4}
 #: Readings, whole seconds (the harness writes no float; the service's own tests read the clock's floats through the
 #: verifier of record), so the deadlines fall on both sides and on the edge.
 READINGS = st.integers(0, 20)
@@ -2495,8 +2496,8 @@ def stream_cases(draw) -> dict:
     """A stream's params, a state of up to 6 registrations holding most of their entries (drawn or not, delivered,
     final, under a session of consecutive rounds, interiors), and one op on it: mostly naming a held entry by its own
     tokens, or another's, or one not received; each field it reads present or not yet (`unchecked`), and sometimes one
-    field out of form. Half the time aimed at the op: the stream open and every entry held, with the target's made
-    ready for the op (`_aim`)."""
+    field out of form; sometimes the stream halted. Half the time aimed at the op: the stream open and every entry held,
+    with the target's made ready for the op (`_aim`)."""
     name = draw(st.sampled_from([*service._OPS, *service._OPS[3:], "other"]))
     aim = draw(st.booleans())
     two = aim and name == "interiors" or not (aim and name in ("session", "deliver_session")) and draw(st.booleans())
@@ -2523,8 +2524,9 @@ def stream_cases(draw) -> dict:
     opened = sorted(draw(st.sets(st.integers(0, max(size - 1, 0)), max_size=rounds - aim + 1))) if size else []
     salted = None if aim and name.startswith("salt") else draw(st.sampled_from([None, None, 0, 1, 4]))
     ended = None if aim else draw(st.sampled_from([None, None, None, {"received_at": 9, "salted_at": salted}]))
+    halted = None if aim else draw(st.sampled_from([None, None, None, HALT_CAUSE]))
     state = {"size": size, "opened": opened, "failures": draw(st.integers(0, budget - aim)), "salted_at": salted,
-             "ended": ended, "entries": entries}
+             "ended": ended, "halted": halted, "entries": entries}
     held = [e for e in entries if e["draw"] is not None] or entries
     target = draw(st.sampled_from(held)) if held and not _one_in(draw, 6) else None
     aimed = _aim(draw, name, target, entries, rounds, two) if aim and target else None
@@ -2556,6 +2558,7 @@ def stream_cases(draw) -> dict:
         "outcome": {"order": o, "registration": tokens[0], "draw": tokens[1], "now": draw(READINGS),
                     "verdicts": draw(st.sampled_from([None, None, None, ["pending"], ["sessions"]])),
                     "accepted": draw(st.booleans())},
+        "halt": {"cause": draw(st.sampled_from([HALT_CAUSE] * 4 + [{}, None, "o"]))},
     }.get(name, {})
     op = {"op": name}
     for k, v in fields.items():
@@ -2576,6 +2579,68 @@ def stream_cases(draw) -> dict:
 
 STREAM = D.Port(PIECES, "stream", stream, st.one_of(*[stream_cases() for _ in range(5)], JSON), package=PACKAGE)
 
+
+def _fleet_state(s) -> dict:
+    """A fleet's state as `Fleet.State.ofJson` reads it; rejected where it refuses."""
+    _exactly(s, {"halted", "size", "streams"}, "a fleet's state")
+    if not (_nat(s["size"]) and isinstance(s["streams"], list) and isinstance(s["halted"], list)):
+        raise D.Reject("a fleet's size, streams or halts are out of form")
+    for a in s["streams"]:
+        _exactly(a, {"budget", "operator"}, "a stream")
+        if not (isinstance(a["operator"], str) and _nat(a["budget"]) and a["budget"] >= 1):
+            raise D.Reject("a stream is an operator and a positive budget")
+    for h in s["halted"]:
+        _exactly(h, {"cause", "operator"}, "a halt")
+        if not (isinstance(h["operator"], str) and isinstance(h["cause"], dict)):
+            raise D.Reject("a halt is an operator and its cause")
+    return s
+
+
+def fleet(j):
+    """The proof service fleet's rules (`service._fleet_step`) on `{"state", "op"}`: the decision without its `detail`
+    and the state after it as `canonical_json` writes it. Rejected where the Lean refuses: the state as `_fleet_state`,
+    and an op `_fleet_step` raises on."""
+    j = _json(j)
+    _exactly(j, {"op", "state"}, "the input")
+    state = _fleet_state(j["state"])
+    try:
+        d, after = service._fleet_step(state, j["op"])
+    except ValueError as e:
+        raise D.Reject(str(e)) from None
+    return {"decision": {k: v for k, v in d.items() if k != "detail"}, "state": codec.canonical_json(after).decode()}
+
+
+OPERATORS = st.sampled_from(["o", "p", "q"])
+
+
+@st.composite
+def fleet_cases(draw) -> dict:
+    """A fleet of up to 5 streams over three operators, some of them halted, and one op on it: mostly naming a stream it
+    holds, its failures below, at or past its budget, and sometimes a field or the state out of form."""
+    streams = draw(st.lists(st.fixed_dictionaries({"operator": OPERATORS, "budget": st.integers(1, 3)}), max_size=5))
+    halted = [{"operator": o, "cause": {"operator": o, "stream": draw(st.integers(0, 4)), "at": draw(st.integers(0, 9))}}
+              for o in draw(st.lists(OPERATORS, unique=True, max_size=2))]
+    state = {"size": draw(st.integers(0, 9)), "streams": streams, "halted": halted}
+    name = draw(st.sampled_from([*service._FLEET_OPS, "failures", "failures", "other"]))
+    i = draw(st.integers(0, len(streams))) if not _one_in(draw, 8) else draw(st.sampled_from([-1, None, "0", True]))
+    budget = streams[i]["budget"] if _nat(i) and i < len(streams) else 1
+    fields = {"attach": {"operator": draw(OPERATORS), "budget": draw(st.integers(1, 3))},
+              "register": {"stream": i},
+              "failures": {"stream": i, "failures": draw(st.sampled_from([budget - 1, budget, budget, budget + 1, 0]))},
+              }.get(name, {})
+    op = {"op": name, **fields}
+    if fields and _one_in(draw, 8):
+        op[draw(st.sampled_from(sorted(fields)))] = draw(MALFORMED)
+    change = draw(st.sampled_from(range(20)))
+    if change == 0:
+        state = {**state, draw(st.sampled_from(sorted(state))): draw(MALFORMED)}
+    elif change == 1 and streams:
+        state = {**state, "streams": [{**streams[0], "budget": 0}, *streams[1:]]}
+    return {"state": state, "op": op}
+
+
+FLEET = D.Port(PIECES, "fleet", fleet, st.one_of(fleet_cases(), fleet_cases(), JSON), package=PACKAGE)
+
 pieces = D.server_fixture(DECODE)
 
 
@@ -2584,7 +2649,7 @@ PIECE_RUNS = [(DECODE, 300), (PARTITION, 500), (REGISTRATION, 700), (REGISTERED_
               (BERNOULLI_BOUND, 500), (VERDICT, 300),
               (MATCHES_PUBLIC, 400), (SESSION_REGISTERED, 400), (RECORD_PORT, 600), (CHECK_PUBLIC, 500), (CHECK_VERDICTS, 400),
               (RUN, 500), (REPLAY_UNITS, 500), (PROOF_UNITS, 400), (TWO_STAGE_PROFILE, 500), (CHECK_PROBABILITY, 400),
-              (HELLO, 500), (STREAM, 800)]
+              (HELLO, 500), (STREAM, 800), (FLEET, 400)]
 
 
 @pytest.mark.parametrize("port, examples", PIECE_RUNS, ids=[p.fn for p, _ in PIECE_RUNS])
