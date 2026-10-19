@@ -45,7 +45,7 @@ def Fmt.float : Fmt → Option (ℕ × ℕ)
   | .tf32 => some (11, 127)
   | .f32 => some (24, 127)
   | .f64 => some (53, 1023)
-  | _ => none
+  | _ => Option.none
 
 /-- An integer format's bits, its sign bit included (`0` for the others). -/
 def Fmt.intBits : Fmt → ℕ
@@ -69,14 +69,14 @@ format (an unsigned one up to the offset 128, which one correction term undoes).
 def Fmt.holdsS8 (f : Fmt) : Bool :=
   match f.float with
   | some (sig, emax) => (List.range 129).all (exactFloat sig emax)
-  | none => decide (8 ≤ f.intBits)
+  | Option.none => decide (8 ≤ f.intBits)
 
 /-- **A committed word is exact in the format**: a 32-step sum of int8 products, below `2^19`, has at most 19
 significant bits, so a float with 19 significand bits and exponents to 18 holds it, and an integer format of 20 bits. -/
 def Fmt.holdsWord (f : Fmt) : Bool :=
   match f.float with
   | some (sig, emax) => decide (19 ≤ sig) && decide (18 ≤ emax)
-  | none => decide (20 ≤ f.intBits)
+  | Option.none => decide (20 ≤ f.intBits)
 
 /-- **What an instruction computes from its data operands**, as its PTX section defines it: `move` copies bits (a
 register move, a load or store, a shuffle, a matrix load); `logic` is bitwise (and shifts and byte selects); `add` adds,
