@@ -40,7 +40,10 @@ def kernels(text: str) -> dict[str, list[tuple[int, str, str]]]:
 
 
 def loop(ins: list[tuple[int, str, str]]) -> list[tuple[int, str, str]]:
+    """The kernel's timed loop: of its backward branches' bodies, the one with the most IGMMA, then the longest (a wgmma
+    loop is shorter than the tile fill's)."""
     best: list[tuple[int, str, str]] = []
+    rank = (-1, -1)
     for addr, op, rest in ins:
         if op.split(".")[0] != "BRA":
             continue
@@ -50,8 +53,9 @@ def loop(ins: list[tuple[int, str, str]]) -> list[tuple[int, str, str]]:
         tgt = int(m.group(1), 16)
         if tgt < addr:
             body = [x for x in ins if tgt <= x[0] <= addr]
-            if len(body) > len(best):
-                best = body
+            r = (sum(1 for _, o, _ in body if o.startswith("IGMMA")), len(body))
+            if r > rank:
+                best, rank = body, r
     return best
 
 
