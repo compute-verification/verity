@@ -692,6 +692,26 @@ extern "C" int verity_rows_leaves_launch(const void* params, const uint8_t* rows
   return 0;
 }
 
+// Once per device: the salt kernel's dynamic shared memory, and the largest shared-memory carveout for every kernel the committer
+// launches.  They run beside the model's GEMMs, which take most of an SM's shared memory, and an SM holds one L1/shared split at a
+// time, so a hash CTA left to the driver's split can keep a GEMM's CTAs off its SM.  rows_leaf_kernel (rows_floor.py's) keeps its own.
+static int rows_kernel_attributes() {
+  static bool done[64] = {};
+  int dev = 0;
+  if (const cudaError_t rc = cudaGetDevice(&dev)) return static_cast<int>(rc);
+  if (dev < 0 || dev >= 64) return static_cast<int>(cudaErrorInvalidDevice);
+  if (done[dev]) return 0;
+  if (const cudaError_t rc = cudaFuncSetAttribute(rows_salt_kernel, cudaFuncAttributeMaxDynamicSharedMemorySize, T8_BYTES))
+    return static_cast<int>(rc);
+  for (const void* f : {reinterpret_cast<const void*>(rows_leaf_sf_kernel), reinterpret_cast<const void*>(rows_salt_kernel),
+                        reinterpret_cast<const void*>(rows_data_kernel), reinterpret_cast<const void*>(rows_level_kernel),
+                        reinterpret_cast<const void*>(rows_levels_kernel)})
+    if (const cudaError_t rc = cudaFuncSetAttribute(f, cudaFuncAttributePreferredSharedMemoryCarveout, cudaSharedmemCarveoutMaxShared))
+      return static_cast<int>(rc);
+  done[dev] = true;
+  return 0;
+}
+
 // The leaf form for the current device: 1 fused (sm_120), 2 split (others), or VERITY_ROWS_FORM=fused|split; -1 for another value.
 extern "C" int verity_rows_leaves_form() {
   if (const char* e = getenv("VERITY_ROWS_FORM"); e && *e) return !strcmp(e, "fused") ? 1 : !strcmp(e, "split") ? 2 : -1;
@@ -708,17 +728,7 @@ extern "C" int verity_rows_leaves_sf_launch(const void* params, const uint8_t* r
   const int form = verity_rows_leaves_form();
   if (form < 0 || (form == 2 && !scratch)) return static_cast<int>(cudaErrorInvalidValue);
   const Params* p = static_cast<const Params*>(params);
-  if (form == 2) {
-    static bool smem_set[64] = {};
-    int dev = 0;
-    if (const cudaError_t rc = cudaGetDevice(&dev)) return static_cast<int>(rc);
-    if (dev < 0 || dev >= 64) return static_cast<int>(cudaErrorInvalidDevice);
-    if (!smem_set[dev]) {
-      if (const cudaError_t rc = cudaFuncSetAttribute(rows_salt_kernel, cudaFuncAttributeMaxDynamicSharedMemorySize, T8_BYTES))
-        return static_cast<int>(rc);
-      smem_set[dev] = true;
-    }
-  }
+  if (const int rc = rows_kernel_attributes()) return rc;
   u64 nd = n_total > first ? n_total - first : 0;
   nd = nd < n_rows ? nd : n_rows;
   nd = nd < m ? nd : m;
@@ -752,6 +762,7 @@ extern "C" int verity_rows_level_launch(const void* params, const uint8_t* in, u
   if (!n_out) return 0;
   if (level < 0 || level + 1 >= LEVELS) return static_cast<int>(cudaErrorInvalidValue);
   const Params* p = static_cast<const Params*>(params);
+  if (const int rc = rows_kernel_attributes()) return rc;
   const u64 chunk = max_blocks ? max_blocks * THREADS : n_out;
   for (u64 c = 0; c < n_out; c += chunk) {
     const u64 nc = n_out - c < chunk ? n_out - c : chunk;
@@ -770,6 +781,7 @@ extern "C" int verity_rows_levels_launch(const void* params, const uint8_t* in, 
   if (n_levels > 10 || level < 0 || level + n_levels >= LEVELS || !n_in || n_in % (1ull << n_levels))
     return static_cast<int>(cudaErrorInvalidValue);
   const Params* p = static_cast<const Params*>(params);
+  if (const int rc = rows_kernel_attributes()) return rc;
   rows_levels_kernel<<<static_cast<unsigned>(n_in >> n_levels), THREADS, 0, st>>>(p->node, in, out, n_in, level, base, n_levels);
   return static_cast<int>(cudaGetLastError());
 }
