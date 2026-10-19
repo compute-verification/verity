@@ -1658,6 +1658,25 @@ def flag_value(args: list[str], flag: str) -> str | None:
     return val
 
 
+def set_flag(args: list[str], flag: str, value: str) -> list[str]:
+    """`args` with every `flag X` / `flag=X` replaced by one `flag value` at the end (the keeper refuses a SET_ONCE flag given twice)."""
+    out, skip = [], False
+    for a in args:
+        if skip:
+            skip = False
+        elif a == flag:
+            skip = True
+        elif not a.startswith(flag + "="):
+            out.append(a)
+    return [*out, flag, value]
+
+
+def shipped_identity(sha: str, ready: dict[str, Any]) -> dict[str, Any]:
+    """The source identity of a shipped tree: `ship_source` ships `git archive` of a clean commit, so it is that commit, clean, whatever
+    the checkout it came from held before or since (a read of the checkout before shipping can name a parent a commit then replaced)."""
+    return {"commit": sha, "tree": ready.get("tree"), "dirty": False, "dirty_digest": None}
+
+
 def lease_extend_s(harness_args: list[str]) -> float | None:
     """How far the machine's lease must reach for this run: its --timeout plus the runner's publish and custody push
     (research.pods.lease.RUN_MARGIN_S); None without a --timeout."""
@@ -1810,6 +1829,7 @@ def launch(*, run_id: str, local_dir: Path, machine_name: str, project: str, com
             remote_cwd = src_dir if cwd is None else str(Path(src_dir) / cwd)
             if "--tree-sha" not in harness_args:
                 harness_args = [*harness_args, "--tree-sha", tree_sha]
+            harness_args = set_flag(harness_args, "--source-identity", json.dumps(shipped_identity(tree_sha, ready), sort_keys=True))
         request = {"schema": REQUEST_SCHEMA, "run_id": run_id, "runs_root": f"{m['root']}/runs", "tool": tool_dir, "python": m["python"],
                    "cwd": remote_cwd, "env": env, "harness_args": harness_args, "command": command, "exclusive": exclusive,
                    "mem_gb": mem_gb, "mem_wait_s": mem_wait_s, "ramlock_dir": m.get("ramlock"),
