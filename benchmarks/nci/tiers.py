@@ -33,7 +33,9 @@ proved.
   bits plus the choice of where, worth at most the chord slope of the per-inference-block thread bound per bit.
 
 The four terms bound counted multiplications relative to the reference recipe. A private recipe g times better in counted
-multiplications per unit of loss is a compute amplifier, multiplying eta by g. The compute dampener D is a hardware
+multiplications per unit of loss is a compute amplifier, multiplying eta by g; it cancels when verification is compared on
+against off. A recipe better at working under the mechanisms, m times more progress per counted multiplication, scales
+only the constrained terms (nu, mu and chi), not the residual or unmonitored compute. The compute dampener D is a hardware
 multiple: how many times more hardware-time the developer needs than an unconstrained developer with the same recipe on
 the same hardware, who reaches model-FLOP utilization mfu. Unmonitored compute trains like the unconstrained developer;
 the other terms are counted at peak, so 1/D <= s + (min(r + nu, mu) + chi) / mfu, and D is at least 1.
@@ -73,7 +75,7 @@ DEFAULTS = {
     "host_gb": 1900.0, "disk_gb": 0.0,
     "tau": 400.0, "export": 4.4e9, "nic": 3.2e12,
     "share": 0.01, "overhead": 4.8e12, "replay": 1.1e5, "step_flop": 1.43e4, "p_evade": 2.0 ** -40, "identities": 1.0,
-    "luck": 8.0, "step_bits": 16.0, "intake_x": 1.0, "lag_s": 3600.0, "g": 1.0, "mfu": 0.4,
+    "luck": 8.0, "step_bits": 16.0, "intake_x": 1.0, "lag_s": 3600.0, "g": 1.0, "mfu": 0.4, "m": 1.0,
     "floor_steps": 1.0,
     "K": 2e7, "Gamma": 6.4e16, "d": 2048.0, "e": 4e4, "kappa": 0.655,
     "kappa_chain": 0.075, "d_chain": 1536.0, "e_chain": 12288.0, "b_p": 32.0,
@@ -111,6 +113,7 @@ SPEC = [
     {"key": "luck", "label": "Sampled proofs: luck factor F/(1-p) (spec sheet 8)", "unit": "x", "min": 1, "max": 100, "log": True},
     {"key": "step_bits", "label": "Sampled proofs: output bits per step (16, or one 32-bit gate)", "unit": "bit", "min": 1, "max": 64, "log": True},
     {"key": "intake_x", "label": "Declared novel intake, as a multiple of alpha F (1 once the count check is in the ZK flow; line rate is about 1.3e6)", "unit": "x", "min": 1, "max": 1e7, "log": True},
+    {"key": "m", "label": "Recipe multiplier m: frontier progress per counted multiplication of the developer's best recipe under the mechanisms, against the unconstrained recipe (central 1, adversarial 3)", "unit": "x", "min": 0.1, "max": 10, "log": True},
     {"key": "mfu", "label": "Model-FLOP utilization of an unconstrained frontier run (Llama 3 405B: 38-43%)", "unit": "", "min": 0.1, "max": 1, "log": False},
     {"key": "lag_s", "label": "Verdict lag: from a first faulty proof block to the halt, a window plus the verdict delay (1 hour assumed)", "unit": "s", "min": 1, "max": 1e7, "log": True, "zero": True},
     {"key": "identities", "label": "Sampled proofs: identities a detection doesn't end", "unit": "", "min": 1, "max": 1e6, "log": True},
@@ -265,7 +268,7 @@ def evaluate(p: dict, mech: dict) -> dict:
         b_bar = max(p["step_bits"], p["step_bits"] + math.log2(math.e * (p["Gamma"] / p["step_flop"]) / per_block))
         bits = k_all * b_bar
         slope = (p["kappa"] * p["Gamma"] / 2 - region_cap(p, p["K"])) / (S_full - p["K"]) if S_full > p["K"] else 0.0
-        cheat = min(slope * bits, C / gpm)
+        cheat = min(p["m"] * slope * bits, C / gpm)
 
     res_ops = residual_share(p) * C + skipped
     sigma_eff = p["sigma"] if mech["net"] else p["nic"]
@@ -301,7 +304,7 @@ def evaluate(p: dict, mech: dict) -> dict:
         relay_res = min(res_ops, relay)
         res_mults = (res_ops - relay_res) / gpm
         unmon = max(0.0, U - (relay - relay_res)) / gpm
-        return min(declared + res_mults, region) + unmon, declared, res_mults, unmon
+        return min(p["m"] * declared + res_mults, p["m"] * region) + unmon, declared, res_mults, unmon
 
     # past the crossing the declared side is flat at the thread bound, so relaying more only costs
     B_hi = B_max
@@ -320,13 +323,13 @@ def evaluate(p: dict, mech: dict) -> dict:
     B = max((0.0, (lo + hi) / 2, B_hi), key=lambda b: outcome(b)[0])
     _, declared, res_mults, unmon = outcome(B)
 
-    monitored = min(declared + res_mults, region)
-    declared_part = min(declared, monitored)
+    monitored = min(p["m"] * declared + res_mults, p["m"] * region)
+    declared_part = min(p["m"] * declared, monitored)
     res_part = monitored - declared_part
     spent = C + U
     amp = p["g"] * gpm / spent
     terms = {"unmonitored": amp * unmon, "residual": amp * res_part, "declared": amp * declared_part, "cheat": amp * cheat}
-    capped = region < declared + res_mults
+    capped = p["m"] * region < p["m"] * declared + res_mults
     largest = max(terms, key=lambda t: terms[t])
     if largest == "declared":
         largest = "declared (thread bound)" if declared >= cap_T * (1 - 1e-9) else "declared (partial-sum law)"

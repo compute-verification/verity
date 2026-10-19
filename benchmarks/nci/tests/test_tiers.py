@@ -154,3 +154,16 @@ def test_the_dampener_is_a_hardware_multiple_against_the_unconstrained_run():
     rest = r["residual"] + r["declared"] + r["cheat"]
     assert r["dampener"] == pytest.approx(1 / (r["unmonitored"] + rest / p["mfu"]), rel=1e-9)
     assert T.evaluate(T.DEFAULTS | {"residual": 1.0}, T.TIERS["T1"])["dampener"] == 1.0
+
+
+def test_the_recipe_multiplier_scales_only_the_constrained_terms():
+    """m scales nu, chi and the memory cap but not the residual or unmonitored compute (C2 dossier)."""
+    p = T.DEFAULTS | {"unmonitored": 0.01}
+    base, amped = T.evaluate(p, T.TIERS["T5"]), T.evaluate(p | {"m": 3.0}, T.TIERS["T5"])
+    assert amped["declared"] == pytest.approx(3 * base["declared"], rel=1e-6)
+    assert amped["cheat"] == pytest.approx(3 * base["cheat"], rel=1e-6)
+    assert amped["residual"] == pytest.approx(base["residual"], rel=1e-6)
+    assert amped["unmonitored"] == pytest.approx(base["unmonitored"], rel=1e-6)
+    capped = p | {"residual": 0.9}
+    assert T.evaluate(capped | {"m": 3.0}, T.TIERS["T3"])["residual"] == pytest.approx(
+        3 * T.evaluate(capped, T.TIERS["T3"])["residual"], rel=0.02)

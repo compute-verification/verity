@@ -53,6 +53,7 @@ RANGES = {
     "intake_x": (1.0, 1.3e6, "1 once the count check is in the ZK flow; line rate until then"),
     "identities": (1.0, 1e3, "guess"),
     "lag_s": (60.0, 86400.0, "guess: a minute's verdict to a day; one hour assumed"),
+    "m": (1.0, 3.0, "C2 dossier: central 1 (NVFP4 0.75 x distillation 1.3), adversarial 3"),
     "mfu": (0.3, 0.6, "Llama 3 405B 38-43%, PaLM 46%; the ends a guess"),
     "g": (1.0, 10.0, "1 against the best known recipe; 10 the yardstick's central algorithmic progress (README)"),
     "floor_steps": (1.0, 1e12, "guess"),
