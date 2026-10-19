@@ -575,6 +575,33 @@ def test_sm90_ffma_filler_has_no_uniform_form():
     assert E.eps(imad, pi, 0.5, d, operands="free", credit="floor").cheat.filler_uniform[0] > 0.0
 
 
+def test_the_fold_routes_are_the_cheaters_and_the_floor_programs():
+    """RT2-HOPPER-1: sm_90a does LI-CP-W's checkpoint XOR in memory (red.global.xor, REDG), and the check reads the
+    checkpoint word, not its program, so the cheater folds by any mix of the design's fold and its `[fold_routes]`. On
+    DS-90 its 3 LOP3 + 2 REDG a segment (134 issue slots a unit, REDUX's 136) beats ♭ at REDUX by 1.47%, and 1.97% on
+    DC-90-ri at q* 1.22; ♭ on the same menu folds as the cheater does and ε_machine is 0 on DS-90. Honest's kernel
+    folds by REDUX, so γ doesn't move."""
+    d = DEVICES / "sm_90"
+    ds = E.design("dither-2s-licpw-redux-p1-l32", d)
+    assert list(ds.fold_routes) == ["cp-red", "cp-red2", "cp-red4", "cp-red6", "cp-red8"] and ds.fold_routes_source
+    assert ds.with_fold_cost(0.5).fold_routes["cp-red2"]["REDG"] == pytest.approx(0.015625 * 0.5 / ds.fold_cost())
+    plain = replace(ds, fold_routes={})
+    for vec, q, attack, eps in (("DS-90", 0.5, 0.014706, 0.0), ("DC-90-ri", 1.22, 0.019724, 0.000473)):
+        pi = E.machine(vec, d)
+        s, s0 = E.setup(ds, pi, d, "free", "floor"), E.setup(plain, pi, d, "free", "floor")
+        assert not s0.baseline.folds and s.baseline.T < s0.baseline.T
+        assert replace(s0, design=ds).machine_eps(q) == pytest.approx(attack, abs=1e-6), vec
+        assert s.machine_eps(q) == pytest.approx(eps, abs=1e-6), vec
+        h = E.setup(ds, pi, d, "free", "H")
+        assert not h.as_built.folds and not h.baseline.folds and h.cheat(q).folds == s.cheat(q).folds
+        e, e0 = (E.eps(x, pi, q, d, operands="free", credit="floor") for x in (ds, plain))
+        assert e.gamma == e0.gamma and e.T_honest == e0.T_honest
+    s = E.setup(ds, E.machine("DS-90", d), d, "free", "floor")
+    assert s.baseline.folds == s.cheat(0.5).folds == pytest.approx({"cp-red2": 1.0})
+    assert s.baseline.T * 128 == pytest.approx(4.1875)
+    assert E.setup(plain, s.machine, d, "free", "floor").baseline.T * 128 == pytest.approx(4.25)
+
+
 HEADLINE_Q = 1.22   # decision 89's reading: the 1.22-slot issue floor (Theorem C, unproved in Lean; CALC r10, #2325)
 HEADLINE = [("sm_80", "dither-2s-l16"), ("sm_89", "dither-2s-l16"),   # A100, L40S
             ("sm_90", "dither-2s-li-l32"), ("sm_100", "dither-2s-li-fill-l32")]   # H200, B200
