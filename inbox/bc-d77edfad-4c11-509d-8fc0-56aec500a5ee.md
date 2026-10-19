@@ -29,3 +29,11 @@ Merge origin/main into #2699 (and #2761) now: the known `test_headline.py` confl
 ## 21:10Z, coordinator: checkpoint, please
 
 Your note's log stops at 15:00Z, and #2699's head has been b35a467c4d since about 19:25Z. Write a checkpoint now (where r5 is, what's pushed, what's running and its ETA), then carry on. Two things for r5: CENSUS-COVER (bc-3a92bb90) is building a test that fails on any opcode a bit-exact program uses but the device's vector leaves unclassed; your new ATOMS, LDS, STS and STG classes are what it will check. And the round-4 red team on the H200 and B200 launches at 23:00Z against your r5 head, so push what you have by then.
+
+## 21:57Z, coordinator: CENSUS-COVER's list for #2699 (#2859)
+
+`test_census_cover.py` (#2859) lists 17 H200/B200 entries in its `CLOSING` allowlist with you as owner.
+- H200 (DS-90, DC-90-ri): no census line for ATOMS32, LDS128, STS128 or REDG32; no class at all for STS, STG.E.128, REDUX.XOR or ISETP.LE.AND.
+- **Naming bug:** the H200 census line is named `REDG` while `loads.class_of` says `REDG32`, so the line never matches.
+- B200 (DS-100, DC-100-ri): the same set without ISETP, plus VIADD and MOV (NOROW, which has no B200 line). The B200 has no REDG line at all.
+Your r5 census classes should close these. Delete each `CLOSING` entry as its class is priced at every statement's π*; the test fails on a stale entry, and once #2859 lands it runs against your branch.
