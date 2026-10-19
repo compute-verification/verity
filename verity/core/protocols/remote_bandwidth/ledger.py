@@ -205,11 +205,15 @@ class Line:
 
 
 def _paced(record: audit.Record) -> str | None:
-    """Why the record has no time-held line, or None: it must be paced, with every root's arrival, in order from its
-    window's challenge to its deadline, every pass reading every registered block (`Covers`: a block a pass leaves out
-    can be absent across it with neither a wrong read nor a rebuild), and a credited span."""
+    """Why the record has no time-held line, or None: it must be paced, with a closing window after the first, every
+    root's arrival, in order from its window's challenge to its deadline, every pass reading every registered block
+    (`Covers`: a block a pass leaves out can be absent across it with neither a wrong read nor a rebuild), and a
+    credited span."""
     if record.pace is None:
         return "an unpaced session has no time-held line: its windows' coins come a stated window apart"
+    if len(record.windows) < 2:
+        return ("a record of one window has no time-held line: the credited span runs from the first window's end to "
+                "the closing window's challenge")
     if any(len(w.arrived_ns) != w.passes for w in record.windows):
         return "the time-held line reads each root's arrival, and this record has none: read a session's own record"
     for w in record.windows:

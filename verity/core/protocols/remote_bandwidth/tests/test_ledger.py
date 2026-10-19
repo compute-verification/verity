@@ -116,6 +116,13 @@ def test_params_refuse_a_pace_without_whole_stretches_and_a_closing_window() -> 
         Pace(0, 1)
 
 
+def test_a_record_of_one_window_has_no_time_held_line(k1) -> None:
+    """No paced session makes one, but a record of one window has the snapshot only, not an IndexError."""
+    r = k1[0]
+    snap, held, links = ledger.memory(dataclasses.replace(r, windows=r.windows[:1]), node())
+    assert "one window" in held.refused and links.refused == held.refused and snap.refused is None
+
+
 def test_arrivals_are_one_a_pass_and_out_of_order_ones_have_no_time_held_line(k1) -> None:
     """A record takes any clock's arrivals, one integer a pass (the session's clock is whatever its verifier's is);
     the time-held line reads them only in order from each window's challenge to its deadline."""
