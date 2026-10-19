@@ -1,9 +1,10 @@
 #!/usr/bin/env python3
-"""Serving's per-step row-table hashing on the GPU, overlapped: what ``row_tables_device.step_roots`` adds to a graphed int8
+r"""Serving's per-step row-table hashing on the GPU, overlapped: what ``row_tables_device.step_roots`` adds to a graphed int8
 decode step of Llama-3.1-8B at batch ``--batch``, on one GPU.
 
-    research run --on auto --gpus 1 --cpus 8 --mem-gb 32 --cwd source -- bash -lc "cd integrations/vllm && PATH=/usr/local/cuda/bin:\$PATH \\
-        PYTHONPATH=.:../..:../../tools/research/src /workspace/jobs/venv312/bin/python3 ../../benchmarks/commitments/step_root_gpu.py"
+    research run --on auto --cpus 8 --mem-gb 32 --cwd source -- bash -lc 'cd integrations/vllm && export PATH=/usr/local/cuda/bin:$PATH \
+        PYTHONPATH=.:../..:../../tools/research/src && GPU_LEASE_WHO=<you> gpu-lease 1 --wait --max-min 20 -- \
+        /workspace/jobs/venv312/bin/python3 ../../benchmarks/commitments/step_root_gpu.py'
 
 The step is a proxy of the ``int8_exact`` profile's decode linears: per layer qkv, o, gate_up and down (K = 4096, 4096, 4096,
 14336; N = 6144, 4096, 28672, 4096), each ``int8_exact.quantize_rows``, ``int_mm`` and ``dequantize`` on random int8 weights, in
@@ -11,18 +12,18 @@ one CUDA graph.  Attention, the norms and the LM head are left out, so each rati
 on the hashing's share of a served step).  Arms, interleaved rep by rep:
 
   plain       the graph alone;
-  arena       the graph with each quantize output also copied into a step arena (two, by step parity): the buffers the hash
-              reads while the next step runs;
-  overlapped  the arena graph, then ``row_tables_device.step_roots`` of the step's tables on the side stream; before writing an
-              arena again the serving stream waits, on the device, for the hash of the step that last wrote it.
+  copied      the graph with each quantize output also copied into a step arena (two, by step parity): 256 copy kernels;
+  kept        the graph keeping each quantize output where it wrote it (two graphs, by step parity, each holding its outputs
+              in its own memory pool): the arenas without a copy;
+  overlapped  the kept graph, then ``row_tables_device.step_roots`` of the step's tables on the side stream; before replaying a
+              graph again the serving stream waits, on the device, for the hash of the step that graph last wrote.
 
 Each step ends with a host sync on the serving stream (a served step's sampled tokens), and the overlapped loop then hands every
 ready step root to its recorder (``record_ready``).  ``step_ms``: per arm, the median over reps of a rep's median step.  Apart,
-on an otherwise idle GPU: ``kernel_ms`` (``rt_step``'s four kernels, CUDA events), ``launch_ms`` (the layout's H2D, the kernels
-and the roots' D2H, CUDA events) and ``host_ms`` (``step_roots``' host time, of which ``plan_ms`` is the layout: domains and rank
-order).  In the overlapped arm, ``latency_ms``: from the end of a step's graph to its root on the host side (CUDA events).
-Validation: the device's roots of a random step (and of the last overlapped step, read back from its arena) are
-``row_tables.step_roots``' on the CPU, and the CPU twin's are too.
+on an otherwise idle GPU: ``kernel_ms`` (``rt_step``'s four kernels, CUDA events) and ``host_ms`` (``step_roots``' host time, of
+which ``plan_ms`` is the layout: domains and rank order).  In the overlapped arm, ``latency_ms``: from the end of a step's graph
+to its root on the host side (CUDA events).  Validation: the device's roots of a random step (and of the last overlapped step,
+read back from its graph's outputs) are ``row_tables.step_roots``' on the CPU, and the CPU twin's are too.
 """
 
 from __future__ import annotations
@@ -50,7 +51,7 @@ RESULT_SCHEMA = "research/result/v0.1"
 #: Llama-3.1-8B's int8 linears: (K, N)
 LINEARS = {"self_attn.qkv_proj": (4096, 6144), "self_attn.o_proj": (4096, 4096), "mlp.gate_up_proj": (4096, 28672),
            "mlp.down_proj": (14336, 4096)}
-ARMS = ("plain", "arena", "overlapped")
+ARMS = ("plain", "copied", "kept", "overlapped")
 
 
 def parse(argv: list[str]) -> argparse.Namespace:
@@ -67,7 +68,8 @@ def parse(argv: list[str]) -> argparse.Namespace:
 
 
 class Model:
-    """The decode linears, their inputs and the two arenas; ``forward(arena)`` is one step's work (captured)."""
+    """The decode linears, their inputs and the two copy arenas; ``forward(arena, keep)`` is one step's work (captured), copying
+    its quantize outputs into ``arena`` or keeping them in ``keep``."""
 
     def __init__(self, ns: argparse.Namespace) -> None:
         g = torch.Generator(device="cuda").manual_seed(1)
@@ -81,28 +83,32 @@ class Model:
         self.arenas = [{self.op(l, lin): (torch.zeros(ns.batch, k, dtype=torch.int8, device="cuda"),
                                           torch.zeros(ns.batch, dtype=torch.float32, device="cuda"))
                         for l in range(ns.layers) for lin, (k, _n) in LINEARS.items()} for _ in range(2)]
+        self.kept: list[dict] = [{}, {}]
         self.ids = [(f"r{b:03d}", 0) for b in range(ns.batch)]
 
     @staticmethod
     def op(layer: int, lin: str) -> str:
         return f"model.layers.{layer}.{lin}"
 
-    def linear(self, x: torch.Tensor, layer: int, lin: str, arena: dict | None) -> torch.Tensor:
+    def linear(self, x: torch.Tensor, layer: int, lin: str, arena: dict | None, keep: dict | None) -> torch.Tensor:
         xq, s = E.quantize_rows(x)
         if arena is not None:
             c, sc = arena[self.op(layer, lin)]
             c.copy_(xq)
             sc.copy_(s)
+        if keep is not None:
+            keep[self.op(layer, lin)] = (xq, s)
         w, s_w = self.w[(layer, lin)]
         return E.dequantize(E.int_mm(xq, w), s, s_w)
 
-    def forward(self, arena: dict | None) -> None:
+    def forward(self, arena: dict | None, keep: dict | None) -> None:
         h = self.x0
         for l in range(self.layers):
-            q = self.linear(h, l, "self_attn.qkv_proj", arena)
-            h = h + self.linear(q[:, :4096].contiguous(), l, "self_attn.o_proj", arena)
-            gu = self.linear(h, l, "mlp.gate_up_proj", arena)
-            h = h + self.linear((torch.nn.functional.silu(gu[:, :14336]) * gu[:, 14336:]).contiguous(), l, "mlp.down_proj", arena)
+            q = self.linear(h, l, "self_attn.qkv_proj", arena, keep)
+            h = h + self.linear(q[:, :4096].contiguous(), l, "self_attn.o_proj", arena, keep)
+            gu = self.linear(h, l, "mlp.gate_up_proj", arena, keep)
+            h = h + self.linear((torch.nn.functional.silu(gu[:, :14336]) * gu[:, 14336:]).contiguous(), l, "mlp.down_proj", arena,
+                                keep)
         self.out.copy_(h)
 
     def outputs(self, arena: dict) -> dict:
@@ -112,16 +118,17 @@ class Model:
         return {op: (self.ids, c.cpu().numpy(), s.cpu().numpy()) for op, (c, s) in arena.items()}
 
 
-def capture(model: Model, arena: dict | None) -> torch.cuda.CUDAGraph:
+def capture(model: Model, arena: dict | None = None, keep: dict | None = None) -> torch.cuda.CUDAGraph:
+    """The step's graph; ``keep`` ends up holding the graph's own quantize outputs, which every replay rewrites in place."""
     warm = torch.cuda.Stream()
     warm.wait_stream(torch.cuda.current_stream())
     with torch.cuda.stream(warm):
         for _ in range(3):
-            model.forward(arena)
+            model.forward(arena, keep)
     torch.cuda.current_stream().wait_stream(warm)
     graph = torch.cuda.CUDAGraph()
     with torch.cuda.graph(graph):
-        model.forward(arena)
+        model.forward(arena, keep)
     return graph
 
 
@@ -143,11 +150,11 @@ def run(arm: str, model: Model, graphs: dict, ctx: bytes, key: bytes, first: int
         else:
             if s - 2 in hashed:
                 serving.wait_event(hashed.pop(s - 2))
-            graphs[s % 2].replay()
+            graphs[("copied" if arm == "copied" else "kept", s % 2)].replay()
             if arm == "overlapped":
                 end = torch.cuda.Event(enable_timing=True)
                 end.record(serving)
-                p = D.step_roots(ctx, s, model.outputs(model.arenas[s % 2]), key)
+                p = D.step_roots(ctx, s, model.outputs(model.kept[s % 2]), key)
                 root = torch.cuda.Event(enable_timing=True)
                 root.record(D.side_stream())
                 marks.append((end, root))
@@ -166,30 +173,23 @@ def run(arm: str, model: Model, graphs: dict, ctx: bytes, key: bytes, first: int
 
 
 def alone(model: Model, ctx: bytes, key: bytes, reps: int) -> dict[str, float]:
-    """``step_roots`` of arena 0's step on an idle GPU: kernel, launch (events) and host times, and the plan's host time."""
-    side = D.side_stream()
-    kernel, total, host, plan = [], [], [], []
-    shapes = {op: (model.ids, int(c.shape[0]), int(c.shape[1])) for op, (c, _s) in model.arenas[0].items()}
+    """``step_roots`` of kept graph 0's step on an idle GPU: the kernels' time (events), and the host's, with the plan's part."""
+    kernel, host, plan = [], [], []
+    shapes = {op: (model.ids, int(c.shape[0]), int(c.shape[1])) for op, (c, _s) in model.kept[0].items()}
     for i in range(1 + reps):
         torch.cuda.synchronize()
         t0 = time.perf_counter()
         D.plan(ctx, 1000 + i, shapes, key)
         t1 = time.perf_counter()
-        a = torch.cuda.Event(enable_timing=True)
-        a.record(side)
+        p = D.step_roots(ctx, 1000 + i, model.outputs(model.kept[0]), key, timing=True)
         t2 = time.perf_counter()
-        p = D.step_roots(ctx, 1000 + i, model.outputs(model.arenas[0]), key, timing=True)
-        t3 = time.perf_counter()
-        b = torch.cuda.Event(enable_timing=True)
-        b.record(side)
         p.result()
         if i:
             kernel.append(p.kernel_ms())
-            total.append(a.elapsed_time(b))
-            host.append(1e3 * (t3 - t2))
+            host.append(1e3 * (t2 - t1))
             plan.append(1e3 * (t1 - t0))
-    return {"kernel_ms": statistics.median(kernel), "launch_ms": statistics.median(total), "host_ms": statistics.median(host),
-            "plan_ms": statistics.median(plan), "kernel_ms_all": kernel}
+    return {"kernel_ms": statistics.median(kernel), "host_ms": statistics.median(host), "plan_ms": statistics.median(plan),
+            "kernel_ms_all": kernel}
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -197,16 +197,20 @@ def main(argv: list[str] | None = None) -> int:
     started = time.perf_counter()
     ctx, key = hashlib.sha512(b"step-root-gpu/context").digest(), hashlib.sha256(b"step-root-gpu/row-key").digest()
     model = Model(ns)
-    graphs = {"plain": capture(model, None), 0: capture(model, model.arenas[0]), 1: capture(model, model.arenas[1])}
+    graphs = {"plain": capture(model), **{("copied", i): capture(model, arena=model.arenas[i]) for i in range(2)},
+              **{("kept", i): capture(model, keep=model.kept[i]) for i in range(2)}}
+    if any(len(k) != len(model.ops) for k in model.kept) or {id(c) for c, _s in model.kept[0].values()} & \
+            {id(c) for c, _s in model.kept[1].values()}:
+        raise SystemExit("each kept graph holds its own quantize output per op")
 
     # Gate: a step of random rows, on the device, on the CPU twin and on the CPU reference.
     g = torch.Generator(device="cuda").manual_seed(2)
-    for c, s in model.arenas[0].values():
+    for c, s in model.kept[0].values():
         c.copy_(torch.randint(-128, 128, c.shape, dtype=torch.int8, device="cuda", generator=g))
         s.copy_(torch.rand(s.shape, device="cuda", generator=g))
-    host = model.host_outputs(model.arenas[0])
+    host = model.host_outputs(model.kept[0])
     want = RTB.step_roots(ctx, 7, host, key)
-    gate = {"device": D.step_roots(ctx, 7, model.outputs(model.arenas[0]), key).result() == want,
+    gate = {"device": D.step_roots(ctx, 7, model.outputs(model.kept[0]), key).result() == want,
             "twin": D.host_step(ctx, 7, host, key) == want}
     cold = alone(model, ctx, key, 3)
     del cold
@@ -229,7 +233,7 @@ def main(argv: list[str] | None = None) -> int:
                 if [x.engine_step for x in r["recorded"]] != list(range(first, first + ns.steps)):
                     raise SystemExit("the overlapped loop did not record every step in order")
                 s_last = first + ns.steps - 1
-                last_check = (s_last, r["recorded"][-1], model.host_outputs(model.arenas[s_last % 2]))
+                last_check = (s_last, r["recorded"][-1], model.host_outputs(model.kept[s_last % 2]))
             first += ns.steps
     s_last, got, outs = last_check
     gate["overlapped_last_step"] = got == RTB.step_roots(ctx, s_last, outs, key)
@@ -243,9 +247,10 @@ def main(argv: list[str] | None = None) -> int:
         "cuda": torch.version.cuda, "nvcc": nvcc_v, "batch": ns.batch, "layers": ns.layers, "tables": len(model.ops),
         "rows": len(model.ops) * ns.batch, "bytes_hashed": nbytes, "steps": ns.steps, "reps": ns.reps, "gate": gate,
         "step_ms": step_ms, "step_ms_reps": {a: [1e3 * v for v in vs] for a, vs in per_arm.items()},
-        "arena_pct": 100 * (step_ms["arena"] / step_ms["plain"] - 1),
+        "copied_pct": 100 * (step_ms["copied"] / step_ms["plain"] - 1),
+        "kept_pct": 100 * (step_ms["kept"] / step_ms["plain"] - 1),
         "overlapped_pct": 100 * (step_ms["overlapped"] / step_ms["plain"] - 1),
-        "overlapped_vs_arena_pct": 100 * (step_ms["overlapped"] / step_ms["arena"] - 1),
+        "overlapped_vs_kept_pct": 100 * (step_ms["overlapped"] / step_ms["kept"] - 1),
         "latency_ms": {"median": statistics.median(latency), "max": max(latency)},
         **{k: v for k, v in solo.items() if k != "kernel_ms_all"},
     }
@@ -267,11 +272,12 @@ def main(argv: list[str] | None = None) -> int:
                                      "cuda": torch.version.cuda, "nvcc": nvcc_v},
             "validation": {"status": "passed" if ok else "failed",
                            "checker": "device and CPU-twin step roots equal row_tables.step_roots on the CPU (a random step, the "
-                                      "last overlapped step from its arena)",
+                                      "last overlapped step from its graph's outputs)",
                            "detail": json.dumps(gate), "evidence": []},
             "measurements": [{"name": f"step_ms.{a}", "value": v, "unit": "ms"} for a, v in step_ms.items()]
-            + [{"name": n, "value": summary[n], "unit": "%"} for n in ("arena_pct", "overlapped_pct", "overlapped_vs_arena_pct")]
-            + [{"name": n, "value": summary[n], "unit": "ms"} for n in ("kernel_ms", "launch_ms", "host_ms", "plan_ms")]
+            + [{"name": n, "value": summary[n], "unit": "%"} for n in ("copied_pct", "kept_pct", "overlapped_pct",
+                                                                        "overlapped_vs_kept_pct")]
+            + [{"name": n, "value": summary[n], "unit": "ms"} for n in ("kernel_ms", "host_ms", "plan_ms")]
             + [{"name": "latency_ms.median", "value": summary["latency_ms"]["median"], "unit": "ms"},
                {"name": "latency_ms.max", "value": summary["latency_ms"]["max"], "unit": "ms"},
                {"name": "bytes_hashed", "value": nbytes, "unit": "bytes"},
