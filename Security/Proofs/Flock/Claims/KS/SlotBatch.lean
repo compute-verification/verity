@@ -560,6 +560,12 @@ section Batch
 
 variable {T D I ζ : Type} {get : I → ℕ → Option (T × D)} {R : I → ζ → ζ → Prop}
 
+/-- **A batch around a lockstep with no table node of the slot has none.** -/
+theorem NoSlot.batchLock {slot : ℕ} (d : ζ) {i : I} {g g' : Game ζ} {L : Lock T D get R i g g'} (hL : NoSlot slot L)
+    (post : List (Game ζ)) : ∀ pre : List (Game ζ), NoSlot slot (Lock.batchLock d L post pre)
+  | [] => NoSlot.map _ _ _ (hL.leftSame _)
+  | h :: pre => NoSlot.map _ _ _ (NoSlot.rightSame h (NoSlot.batchLock d hL post pre))
+
 /-- **A slot of position `pre.length`'s lockstep met after `k` coins where the games in front pause is met after
 `n + k` coins** by a strategy playing them by `PreSched`, after `n` coins. -/
 theorem SlotAtD.batchLock_sched (d : ζ) {i : I} {g g' : Game ζ} (L : Lock T D get R i g g') (post : List (Game ζ))
