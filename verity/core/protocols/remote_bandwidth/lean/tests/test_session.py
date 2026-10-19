@@ -1,12 +1,14 @@
-"""The remote audit's verifier in Lean (`RemoteAudit`, served by `remote-audit-difftest`) against `audit.Session`, a whole
-session at a time: every event's result (the coin released, the append's index and coin, the window's draws, the
-verdict, or the rejection with its failure and draw), the outcome and the record. Recorded sessions (`ra_cases.SCENARIOS`)
-are honest ones and ones that each reach one of `audit.FAILURES`; drawn ones are those with their events, fields and
-parameters edited, which reach the rest of the bookkeeping and the decoders' refusals."""
+"""`audit.Session` held to the remote audit's verifier in Lean (`RemoteAudit.Session`, the definition, served by
+`remote-audit-difftest`), a whole session at a time: every event's result (the coin released, the append's index and
+coin, the window's draws, the verdict, or the rejection with its failure and draw), the outcome and the record.
+Recorded sessions (`ra_cases.SCENARIOS`) are honest ones and ones that each reach one of `audit.FAILURES` in the Lean;
+drawn ones are those with their events, fields and parameters edited, which reach the rest of the bookkeeping and the
+decoders' refusals."""
 
 from __future__ import annotations
 
 import copy
+import json
 import shutil
 
 import pytest
@@ -23,14 +25,14 @@ server = D.server_fixture(PORT)
 
 
 @pytest.mark.parametrize("name", list(M.SCENARIOS))
-def test_a_recorded_session_gives_the_same_results_outcome_and_record(server, name) -> None:
-    case, outcome = M.recorded(name)
-    assert outcome == M.SCENARIOS[name][3]
-    assert D.replay(PORT, case, server)[0] == "output"
+def test_audit_py_gives_a_recorded_session_the_leans_results_outcome_and_record(server, name) -> None:
+    case, _ = M.recorded(name)
+    kind, lean = D.replay(PORT, case, server)
+    assert kind == "output" and json.loads(lean)["outcome"] == M.SCENARIOS[name][3]
 
 
 def test_the_recorded_sessions_reach_every_failure_but_tile() -> None:
-    """`tile` is a registration's that binds PoUW's tiles, which the port refuses."""
+    """`tile` is a registration's that binds PoUW's tiles, which the Lean refuses."""
     reached = {s[3] for s in M.SCENARIOS.values()}
     assert reached == {*audit.FAILURES, "accepted"} - {"tile"}
 
