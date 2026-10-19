@@ -28,18 +28,19 @@ def residual_rows(x, *rs) -> np.ndarray:
 
 def rstd_rows(r, *, N: int, EPS: float, XBLOCK: int, R0_BLOCK: int, NUM_WARPS: int) -> np.ndarray:
     """`registry.inductor._rstd` over rows: r (R, N) f32 words -> (R,) f32 words."""
-    wpr, chunks, vec = I.norm_layout(N, EPS, XBLOCK, R0_BLOCK, NUM_WARPS)
+    tpr, chunks, vec = I.norm_layout(N, EPS, XBLOCK, R0_BLOCK, NUM_WARPS)
     r = np.asarray(r, dtype=U32)
     R = r.shape[0]
     acc = np.zeros((R, R0_BLOCK), dtype=U32)
     for k in range(chunks):
         lo, hi = k * R0_BLOCK, min(N, (k + 1) * R0_BLOCK)
         acc[:, :hi - lo] = DR.fma_rn(r[:, lo:hi], r[:, lo:hi], acc[:, :hi - lo])
-    cols = acc.reshape(R, I.WARP * wpr, vec)
+    cols = acc.reshape(R, tpr, vec)
     s = cols[:, :, 0]
     for i in range(1, vec):
         s = DR.add_rn(s, cols[:, :, i])
-    warps = SMT._lane0(DR.add_rn, s.reshape(R * wpr, I.WARP)).reshape(R, wpr)
+    lanes = min(tpr, I.WARP)
+    warps = SMT._lane0(DR.add_rn, s.reshape(R * (tpr // lanes), lanes)).reshape(R, tpr // lanes)
     total = SMT._lane0(DR.add_rn, warps)
     nf = np.full(R, bits_of(np.float32(N)), dtype=U32)
     mean = DR.mul_rn(DR.div_full_scale_a(total, nf), DR.div_full_rcp(nf))
