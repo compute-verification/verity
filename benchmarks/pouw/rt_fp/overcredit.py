@@ -13,7 +13,8 @@ The cheater against variant V runs a design that writes V's committed words with
 variant's kind): `rt-V-x0`, V with `fold_add` removed, or a variant FPX-DESIGN wrote for that route (its int8-unit g1),
 at the L that writes V's words (an FP4 k64 word is two chained k32 int8 MMAs). The bound is
 ε_machine ≥ 1 − T_cheat / ♭_V a committed word, with T_cheat the lesser of the cheater's LP and its own floor program. A
-variant with no such route is listed with its reason.
+variant with no such route is listed with its reason. Every bound is at the record's convention (credit ♭, operands
+free) on data/headline.toml's readings of the device and on its measured vector at the proved q* = ½.
 """
 import copy
 import importlib.util
@@ -21,6 +22,7 @@ import json
 import shutil
 import subprocess
 import sys
+import tomllib
 from pathlib import Path
 
 #: why an op-free route writes the variant's words, by (device, variant prefix, base design, the cheater's design: None
@@ -71,10 +73,18 @@ def routes(v: dict, names: set[str]) -> list[tuple[str | None, int | None, str]]
             and b in ("*", v["base"]) and (c is None or c in names)]
 
 
-def priced(data: Path, design: str, vector: str) -> dict:
-    cmd = ["machine-model", "--data", str(data), "eps", design, "--credit", "floor", "--operands", "floor", "--json"]
-    return json.loads(subprocess.run(cmd + (["--vector", vector] if vector else []), capture_output=True, text=True,
-                                     check=True).stdout)
+def priced(data: Path, design: str, vector: str, q: float) -> dict:
+    cmd = ["machine-model", "--data", str(data), "eps", design, "--credit", "floor", "--operands", "free", "--q", f"{q:g}",
+           "--vector", vector, "--json"]
+    return json.loads(subprocess.run(cmd, capture_output=True, text=True, check=True).stdout)
+
+
+def readings(fpx, dev: str) -> list[tuple[str, str, float]]:
+    """data/headline.toml's readings of `dev` (the sheet's vector at q* = ½, the measured one at 1.22) and the measured
+    vector at the proved ½, as FPX_EPS (cfd0d59f4c on) prices them."""
+    head = tomllib.loads((Path(fpx.DATA) / "headline.toml").read_text())
+    fam, q = head["family"][dev], {r: x["q"] for r, x in head["reading"].items()}
+    return [(r, fam[r]["vector"], q[r]) for r in q] + [("measured-half", fam["measured"]["vector"], q["sheet"])]
 
 
 def main(fpx_eps: Path, out: Path) -> int:
@@ -85,7 +95,8 @@ def main(fpx_eps: Path, out: Path) -> int:
     for dev, spec in fpx.DEVICES.items():
         data = out / "data" / dev
         shutil.rmtree(data, ignore_errors=True)
-        shutil.copytree(spec["data"], data, ignore=shutil.ignore_patterns("devices") if dev == "sm_120" else None)
+        src = spec["data"] if isinstance(spec, dict) else spec
+        shutil.copytree(src, data, ignore=shutil.ignore_patterns("devices") if dev == "sm_120" else None)
         attacks = []
         mine = [v for v in variants if v["device"] == dev]
         names = {v["name"] for v in mine}
@@ -112,20 +123,21 @@ def main(fpx_eps: Path, out: Path) -> int:
                         f = data / "designs" / f"{c['name']}.toml"
                         f.write_text(f"L = {L}\n" + f.read_text())
                 attacks.append((v["name"], c["name"], why))
-        for vec in spec["vectors"]:
+        for reading, vec, q in readings(fpx, dev):
             for var, cheat, why in attacks:
-                v, c = priced(data, var, vec), priced(data, cheat, vec)
+                v, c = priced(data, var, vec, q), priced(data, cheat, vec, q)
                 credit = v["baseline"]["cycles_per_mma"]
                 # cycles a MMA times L is a committed word's cycles up to the profile's words·depth, which both share
                 t = min(c["cheat"]["cycles_per_mma"], c["baseline"]["cycles_per_mma"]) * c["L"] / v["L"]
-                rows.append({"device": dev, "vector": vec or "VF3r-16", "variant": var, "credit": credit,
+                rows.append({"device": dev, "reading": reading, "vector": vec, "q": q, "variant": var, "credit": credit,
                              "credit_binds": v["baseline"]["binding"], "model_machine": v["terms"]["machine"],
                              "model_core": v["core"], "cheater": cheat, "cheater_L": c["L"], "cheat": t,
                              "cheat_binds": c["cheat"]["binding"], "bound": 1 - t / credit, "why": why})
     (out / "overcredit.json").write_text(json.dumps({"rows": rows, "no_route": skipped}, indent=1) + "\n")
-    lines = [("| device | vector | variant | credited ♭ (binds) | model ε_machine | model core ε | cheater | T_cheat (binds) "
-              "| ε_machine ≥ |"), "|---|---|---|---|---|---|---|---|---|"]
-    lines += [f"| {r['device']} | {r['vector']} | {r['variant']} | {r['credit']:.3f} ({', '.join(r['credit_binds'])}) | "
+    lines = [("| device | reading: vector, q* | variant | credited ♭ (binds) | model ε_machine | model core ε | cheater "
+              "| T_cheat (binds) | ε_machine ≥ |"), "|---|---|---|---|---|---|---|---|---|"]
+    lines += [f"| {r['device']} | {r['reading']}: {r['vector']}, {r['q']:g} | {r['variant']} | {r['credit']:.3f} "
+              f"({', '.join(r['credit_binds'])}) | "
               f"{100 * r['model_machine']:.2f}% | {100 * r['model_core']:.3f}% | {r['cheater']} | {r['cheat']:.3f} "
               f"({', '.join(r['cheat_binds'])}) | **{100 * r['bound']:.1f}%** |" for r in rows]
     lines += ["", ("♭ and T_cheat are cycles for one of the variant's MMAs' words (T_cheat scaled by the cheater's L over "
