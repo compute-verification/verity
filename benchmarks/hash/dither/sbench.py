@@ -61,7 +61,9 @@ Arms:
                  (provisional)): exact-fused's quantizer and GEMM serve y = dequant(z) and commit z, and a side stream runs each
                  call's A table (form 3), seeds and receipts of the noised product only; its tokens must equal exact's.
                  dither-a-h1r takes h1r's block or split receipts per call, dither-a-kh h1u.cu's kh_unit_ws (HB_H1U),
-                 dither-a the second where HB_H1U is set
+                 dither-a the second where HB_H1U is set.  Each with -zu commits z as one hiding leaf a 32 x 32 unit
+                 (the epilogue stores z unit-major), and with -y commits no z at all (y only: the z leaves' cost floor,
+                 never credited; its gate is its tokens)
     ARM-xl       any dither arm with `verity_int8::row_quant`'s CUDA body exactlin's quantizer (`exactlin.install`, which
                  serves `scaled_mm` from exactlin's GEMM too; the dither arms call row_quant only): the same xq and s_a, so
                  ARM's gate and reference arm, and its tokens gated as ARM's are; sbench.sh and hb_served.sh run exactlin's
@@ -311,19 +313,22 @@ def build(arm: str, scratch: Path, gpu_mem: float):
         from verity_vllm.engine import int8_vllm
         int8_vllm.register()
         h1u = os.environ.get("HB_H1U")
-        unit = DITHER_A[arm] or ("kh" if h1u else "h1r")
+        unit, z = DITHER_A[arm]
+        unit = unit or ("kh" if h1u else "h1r")
         a = engine_args(gpu_mem)
         DA.patch(t=a["max_num_batched_tokens"], h1c=os.environ["DITHER_H1C"], h1o=os.environ["DITHER_H1O"], unit=unit,
-                 h1u=h1u)
+                 h1u=h1u, z=z)
         llm = LLM(model=str(DF.int8_checkpoint(PIN, scratch)), **a)
         win = DO.hook(llm)
         win.captures = DA.CAPTURES
-        llm.dither_stats, llm.dither_win, llm.dither_mod = DA.stats(win), win, DA
+        # the y-only floor commits no z, so it has no window gate: its gate is its tokens (TOKENS_ONLY)
+        llm.dither_stats, llm.dither_win, llm.dither_mod = DA.stats(win), (win if z != "none" else None), DA
         return llm
     raise ValueError(arm)
 
 
-DITHER_A = {"dither-a": None, "dither-a-h1r": "h1r", "dither-a-kh": "kh"}
+DITHER_A = {f"dither-a{u}{z}": (unit, zm) for u, unit in (("", None), ("-h1r", "h1r"), ("-kh", "kh"))
+            for z, zm in (("", "row"), ("-zu", "unit"), ("-y", "none"))}
 
 
 REF_OF = {"dither": "exact", "dither-side": "exact", "dither-1s": "exact", "dither-1s-credit": "exact",
@@ -332,7 +337,7 @@ REF_OF = {"dither": "exact", "dither-side": "exact", "dither-1s": "exact", "dith
           "dither-1s-block2-cpeel": "exact", "dither-1s-split2-cpeel": "exact", "dither-1s-mix-cpeel": "exact",
           "exact-fused": "exact", "stock-percall": "stock", **{x: "exact" for x in DITHER_A}}
 # an arm with no window check whose gate is its tokens: equal to its reference arm's or the run times nothing
-TOKENS_ONLY = {"exact-fused", "stock-percall"}
+TOKENS_ONLY = {"exact-fused", "stock-percall", *(x for x, (_, z) in DITHER_A.items() if z == "none")}
 def token_diff(a: list, b: list) -> dict:
     """Two arms' greedy outputs for the same requests: how many are equal, and each other one's first differing position."""
     first = sorted(next((i for i, (x, y) in enumerate(zip(p, q)) if x != y), min(len(p), len(q)))
