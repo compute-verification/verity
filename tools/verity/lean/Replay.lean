@@ -191,11 +191,6 @@ unsafe def main (args : List String) : IO UInt32 := do
   let tLoaded ← IO.monoMsNow
   for h : i in [0:env.header.moduleNames.size] do
     importsOf := importsOf.insert env.header.moduleNames[i] (env.header.moduleData[i]!.imports.map (·.module))
-  let declaredIn (n : Name) : Array Name :=
-    let here := match moduleOf[n]? with
-      | some m => #[m]
-      | none => ((env.getModuleIdxFor? n).bind fun i => env.header.moduleNames[i.toNat]?).toArray
-    here ++ alsoIn.getD n #[]
   -- An equation lemma (`f.eq_1`) is realized in each module that first asks for it, so an import from outside the set
   -- can hold the same theorem: the import's stays in the environment, and the set's is checked under a fresh name.
   for (n, c) in constants do
@@ -215,6 +210,13 @@ unsafe def main (args : List String) : IO UInt32 := do
         dups := dups.push (m, c)
     | some _, _ =>
       throw <| IO.userError s!"{n} is declared by a replayed module and by one it imports from outside the set"
+  -- after the loop above, which moves a theorem an import from outside the set also declares: a closure takes the values
+  -- `moduleOf` and `alsoIn` have where it is defined
+  let declaredIn (n : Name) : Array Name :=
+    let here := match moduleOf[n]? with
+      | some m => #[m]
+      | none => ((env.getModuleIdxFor? n).bind fun i => env.header.moduleNames[i.toNat]?).toArray
+    here ++ alsoIn.getD n #[]
   -- A second declaration of a theorem gets a name no module declares, so the kernel checks its proof too.
   let mut renamed : Std.HashMap Name ConstantInfo := {}
   let mut renamedFrom : Std.HashMap Name (Name × Name) := {}   -- fresh name ↦ (the theorem, its module)
