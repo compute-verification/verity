@@ -23,7 +23,10 @@ export PATH=$HOME/.elan/bin:$PATH
 export PYTHONPATH=$SRC:$SRC/verity/ml/flock/python:$SRC/integrations/vllm:$SRC/tools/verity/circuit_check/src:$SRC/benchmarks/numerical/python
 C=${A10_CACHE:-$HOME/.cache/verity-a10}
 mkdir -p "$C"
-R() { PYTHONPATH=$SRC/tools/research/src python3 -m research "$@"; }   # a node's job has no `research` on its PATH
+# the store CLI from the tree (a node's job has none on its PATH), with the run's custody key in its environment only
+R() { PYTHONPATH=$SRC/benchmarks/proof_throughput python3 -c 'import os, sys
+from verity_proof_throughput.store import store_env
+os.execvpe(sys.executable, [sys.executable, "-m", "research", *sys.argv[1:]], store_env())' "$@"; }
 R keep "$HZ_CACHE" --owner @circuits --expires 4d --priority low --root / \
   --why "A10's builds (flock-circuit, flock-verify, the venv), keyed by their inputs" >> "$OUT/job.log" 2>&1
 
