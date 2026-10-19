@@ -68,10 +68,11 @@ theorem witBeside_derivedZ : DerivedZ witBeside witClsBeside := by
     have h7 : i < 7 := hi
     interval_cases i <;> first | rfl | exact absurd hout (by decide)
   subst h6
-  refine ⟨5, 2, 2, 3, rfl, Relation.ReflTransGen.single (by decide +kernel),
+  refine ⟨5, 2, 2, 3, rfl, Relation.ReflTransGen.single (by unfold Declared.Reads; decide +kernel),
     ⟨witGate (.affine 0 [1]) [2] false, 0, [], [], rfl, rfl, rfl, fun t ht => absurd ht (List.not_mem_nil)⟩,
     rfl, ⟨witGate (.mma .s8 .s8 1 false) [1, 0, 1] false, rfl, trivial⟩, Relation.ReflTransGen.refl,
-    by decide +kernel, by decide +kernel, rfl, rfl, Relation.ReflTransGen.single (by decide +kernel)⟩
+    by decide +kernel, by decide +kernel, rfl, rfl,
+    Relation.ReflTransGen.single (by unfold Declared.Reads; decide +kernel)⟩
 
 theorem witBeside_creditTie : CreditTie witLayout .perCall witBeside witClsBeside :=
   ⟨witTieBeside, rfl, witBeside_derivedZ⟩
