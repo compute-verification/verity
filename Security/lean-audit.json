@@ -9740,7 +9740,7 @@
    ]
   },
   "Definitions.Claims": {
-   "digest": "db4f15f20ea1344f0fb560a9b232b1969d514dd2867b06ec28358b40ef05a2ce",
+   "digest": "888246ecb1f54c817ff95a2af0e6d4784afe42efae3efbb9fd0936e9276ed1c9",
    "definitions": {
     "Claims.B": "fb3801991ccf043f813b846a36059903571dff8141ca0f402abb8a11582fa105",
     "Claims.BCoins": "dfd5aa495abff4c66b0bfe023034e60f7c9119d9087c0c2f068e5fc89defd0e3",
@@ -10241,7 +10241,7 @@
    "guarantees": ["Flock.SecurityProofs.ClaimsStated"]
   },
   "Definitions.Claims.Sampling": {
-   "digest": "70ceacc8d84cf285be89be4f5bc884818cb7f8d2c02a774e28f0831367a0391c",
+   "digest": "96b1fc17816df2716083387f96d289656067e05a829e800104d694d7389f6457",
    "definitions": {
     "Claims.Sampling.BGate": "63a981e57403ae475c097446b58799e6bbc6ebb87e4a1ff8911d63f602542833",
     "Claims.Sampling.BGate.and": "5e97bb022ac07b984f8303744fbc545e8aa6f37c7e6ec025083230906f800909",
