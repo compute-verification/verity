@@ -5,11 +5,12 @@ On the node (job.sh), after the driver:
     python3 benchmarks/hash/maxtput/row.py OUT --bench-rc RC [--pin-rc RC] --to RESULT
 
 writes RESULT (research/result/v0.1, every arm's measures, each with its ``arm``) and OUT/arms/<arm>.json, the same measures per arm
-(no ``arm`` field), for publishing. On the VM, after the run:
+(no ``arm`` field). On the VM, after the run:
 
     python3 benchmarks/hash/maxtput/row.py --publish RUN... --row 11 --hypothesis TEXT [--workload maxtput] [--branch B]
 
-puts each per-arm result into the store (``--kind bench-result/v1``) and labels it campaign=hash-loop, sweep=iteration, row, arm=
+rebuilds each arm's result from the run's custody (out/maxtput.json, and its result's pin state and bench rc), puts it into the
+store (``--kind bench-result/v1``, the result as its meta, as a run's own result) and labels it campaign=hash-loop, sweep=iteration, row, arm=
 <workload>:<arm> (plot.py draws it as workload <workload>, line <arm>), label, source, hardware; the run is labeled the same, with
 arm=<workload>.
 
@@ -28,6 +29,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import re
 import statistics
 import subprocess
 import sys
@@ -101,32 +103,21 @@ def arm_measures(by: dict[str, dict[int, list[dict]]], arm: str) -> list[dict[st
     return out
 
 
-def build(a: argparse.Namespace) -> int:
-    run_dir = Path(os.environ.get("RESEARCH_RUN_DIR", a.out.parent))
-    src = a.out / "maxtput.json"
-    errors: list[str] = []
-    doc: dict[str, Any] = json.loads(src.read_text()) if src.is_file() else {}
-    if not doc:
-        errors.append(f"no {src}")
-    gates = doc.get("gates") or []
-    failed = [g for g in gates if not g.get("passed")]
+def results(doc: dict[str, Any], pin: dict[str, Any], bench_rc: int, run_id: str, clocks: dict[str, str],
+            files: list[str]) -> tuple[dict[str, Any], dict[str, dict[str, Any]]]:
+    """The run's result (every arm's measures, each with its ``arm``) and one result per arm (no ``arm`` field), from maxtput.json."""
+    errors: list[str] = [] if doc else ["no maxtput.json"]
+    failed = [g for g in doc.get("gates") or [] if not g.get("passed")]
     if failed:
         errors.append("gates failed: " + "; ".join(f"{g['arm']}/{g['cycle']} {g['kind']}" for g in failed[:6]))
-    pin: dict[str, Any] = {"state": "unpinned"}
-    if os.environ.get("PIN_BUILD"):
-        rc = a.pin_rc if (a.out / "pin_check.txt").is_file() else None
-        pin = {"state": "pinned" if rc == 0 else "pin-failed", "build": os.environ.get("PIN_BUILD_ART", os.environ["PIN_BUILD"]),
-               "check_rc": rc}
-        if rc != 0:
-            errors.append(f"served-pin check rc {rc}: the kernels are not the Build's")
-    if a.bench_rc:
-        errors.append(f"bench rc {a.bench_rc}")
+    if pin.get("state") == "pin-failed":
+        errors.append(f"served-pin check rc {pin.get('check_rc')}: the kernels are not the Build's")
+    if bench_rc:
+        errors.append(f"bench rc {bench_rc}")
     by = timed(doc) if doc else {}
     ident = next((e["identity"] for e in doc.get("engines", ()) if e.get("identity")), {})
-    clocks = {w: (a.out / f"clocks.{w}.csv").read_text().strip().splitlines()[-1]
-              for w in ("before", "after") if (a.out / f"clocks.{w}.csv").is_file()}
     fp = {"bench": "hash/maxtput", "model": doc.get("model"), "arms": doc.get("arms"), "options": doc.get("options"),
-          "load": doc.get("load"), "clocks": clocks, "pin": pin,
+          "load": doc.get("load"), "clocks": clocks, "pin": pin, "bench_rc": bench_rc,
           "engine": {k: ident.get(k) for k in ("vllm_version", "gpu", "model", "revision", "max_num_seqs", "max_num_batched_tokens",
                                                "max_model_len", "enable_prefix_caching", "async_scheduling", "gpu_memory_utilization",
                                                "kv_cache_tokens", "kv_bytes", "block_size", "attention_backend", "attention_impls")}}
@@ -134,19 +125,37 @@ def build(a: argparse.Namespace) -> int:
     def result(meas: list[dict], arms_failed: list[dict]) -> dict[str, Any]:
         errs = errors if not arms_failed else errors + [f"{g['arm']}/{g['cycle']} {g['kind']}" for g in arms_failed]
         status = "passed" if doc and not errs and meas else "failed"
-        return {"schema": "research/result/v0.1", "run_id": os.environ.get("RESEARCH_RUN_ID", "local"), "workload_fingerprint": fp,
+        return {"schema": "research/result/v0.1", "run_id": run_id, "workload_fingerprint": fp,
                 "validation": {"status": status, "checker": "maxtput gates (each engine's arm gate, one KV pool, tokens equal to stock's)",
                                "detail": "; ".join(errs) or "gates passed", "evidence": []},
-                "measurements": meas, "measurement_files": [str(src.relative_to(run_dir))] if src.is_file() else []}
+                "measurements": meas, "measurement_files": files}
 
-    every = [{**m, "arm": arm} for arm in doc.get("arms", []) for m in arm_measures(by, arm)]
-    whole = result(every, [])
-    (a.out / "arms").mkdir(parents=True, exist_ok=True)
+    whole = result([{**m, "arm": arm} for arm in doc.get("arms", []) for m in arm_measures(by, arm)], [])
+    per = {}
     for arm in doc.get("arms", []):
-        mine = [g for g in failed if g["arm"] in (arm, "stock")]
-        one = result(arm_measures(by, arm), mine)
+        one = result(arm_measures(by, arm), [g for g in failed if g["arm"] in (arm, "stock")])
         one["validation"]["detail"] += " (this arm's and stock's)"
-        (a.out / "arms" / f"{arm}.json").write_text(json.dumps({**one, "arm": arm}, indent=1) + "\n")
+        per[arm] = {**one, "arm": arm}
+    return whole, per
+
+
+def build(a: argparse.Namespace) -> int:
+    run_dir = Path(os.environ.get("RESEARCH_RUN_DIR", a.out.parent))
+    src = a.out / "maxtput.json"
+    doc: dict[str, Any] = json.loads(src.read_text()) if src.is_file() else {}
+    pin: dict[str, Any] = {"state": "unpinned"}
+    if os.environ.get("PIN_BUILD"):
+        rc = a.pin_rc if (a.out / "pin_check.txt").is_file() else None
+        pin = {"state": "pinned" if rc == 0 else "pin-failed", "build": os.environ.get("PIN_BUILD_ART", os.environ["PIN_BUILD"]),
+               "check_rc": rc}
+    clocks = {w: (a.out / f"clocks.{w}.csv").read_text().strip().splitlines()[-1]
+              for w in ("before", "after") if (a.out / f"clocks.{w}.csv").is_file()}
+    whole, per = results(doc, pin, a.bench_rc, os.environ.get("RESEARCH_RUN_ID", "local"), clocks,
+                         [str(src.relative_to(run_dir))] if src.is_file() else [])
+    every = whole["measurements"]
+    (a.out / "arms").mkdir(parents=True, exist_ok=True)
+    for arm, one in per.items():
+        (a.out / "arms" / f"{arm}.json").write_text(json.dumps(one, indent=1) + "\n")
     tmp = a.to.with_name(a.to.name + f".tmp.{os.getpid()}")
     tmp.write_text(json.dumps(whole, indent=1) + "\n")
     os.replace(tmp, a.to)
@@ -165,24 +174,31 @@ def publish(a: argparse.Namespace) -> int:
         att = json.loads(research("data", "show", run, "--json"))
         machine = (att.get("execution") or {}).get("machine")
         commit = (att.get("source") or {}).get("commit")
-        files = (att.get("outputs") or {}).get("run_files")
-        if machine not in HARDWARE or not commit or not files:
-            print(f"{run}: machine {machine!r}, commit {commit!r}, run_files {files!r}: nothing to publish", file=sys.stderr)
+        outs = att.get("outputs") or {}
+        files, res = outs.get("run_files"), outs.get("result")
+        if machine not in HARDWARE or not commit or not files or not res:
+            print(f"{run}: machine {machine!r}, commit {commit!r}, run_files {files!r}, result {res!r}: nothing to publish", file=sys.stderr)
             rc = 1
             continue
         common = [("campaign", "hash-loop"), ("sweep", a.sweep), ("row", str(a.row)), ("label", a.hypothesis),
                   ("source", f"{a.branch}@{commit}"), ("hardware", HARDWARE[machine])]
+        man = json.loads(research("data", "show", res, "--json"))
+        whole = (man.get("manifest") or man).get("meta") or {}
+        wf = whole.get("workload_fingerprint") or {}
+        bench_rc = wf.get("bench_rc")
+        if bench_rc is None:
+            got = re.search(r"bench rc (\d+)", (whole.get("validation") or {}).get("detail", ""))
+            bench_rc = int(got.group(1)) if got else 0
         with tempfile.TemporaryDirectory() as d:
-            research("data", "fetch", files, "--path", "out/arms/*.json", "--to", d)
-            docs = sorted(Path(d).glob("out/arms/*.json"))
-            if not docs:
-                print(f"{run}: no out/arms/*.json in {files}", file=sys.stderr)
-                rc = 1
-            for p in docs:
-                one = json.loads(p.read_text())
-                put = json.loads(research("data", "put", "--kind", "bench-result/v1", "--meta", f"@{p}", "--file", str(p),
-                                          "--preserve", "--json"))
-                art = put.get("id") or put.get("art") or put.get("artifact")
+            research("data", "fetch", files, "--path", "out/maxtput.json", "--to", d)
+            doc = json.loads((Path(d) / "out" / "maxtput.json").read_text())
+            _, per = results(doc, wf.get("pin") or {"state": "unpinned"}, bench_rc, run, wf.get("clocks") or {},
+                             whole.get("measurement_files") or [])
+            for arm, one in per.items():
+                p = Path(d) / f"{arm}.json"
+                p.write_text(json.dumps(one) + "\n")
+                put = json.loads(research("data", "put", "--kind", "bench-result/v1", "--meta", f"@{p}", "--preserve", "--json"))
+                art = put["id"]
                 for k, v in [*common, ("arm", f"{a.workload}:{one['arm']}")]:
                     research("data", "label", art, k, v, "--by", a.by, "--ref", run)
                 head = {m["name"]: m["value"] for m in one["measurements"]}
