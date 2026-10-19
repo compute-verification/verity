@@ -94,13 +94,17 @@ theorem sm100m_lamStar : Sm100Measured.lamStar = onFacet 0 := by
   funext r
   show ((Sparse.coeff [(0, 1, 1)] r.val : ℚ) : ℝ) = if r = 0 then 1 else 0
   by_cases h : r = 0
-  · rw [if_pos h, h]
+  · rw [ite_eq_left h, h]
     exact_mod_cast sm100m_one
-  · rw [if_neg h]
+  · rw [ite_eq_right h]
     have hv : r.val ≠ 0 := fun hv => h (Fin.ext hv)
     have hc : Sparse.coeff [(0, 1, 1)] r.val = 0 := by
       simp [Sparse.coeff, Sparse.ratio, Ne.symm hv]
     rw [hc, Rat.cast_zero]
+
+theorem sm100m_lam0 : Sm100Measured.lamStar 0 = 1 := by
+  rw [sm100m_lamStar]
+  exact ite_eq_left rfl
 
 theorem sm100m_isCert : IsCert Sm100Measured.lamStar := by
   rw [sm100m_lamStar]
@@ -170,13 +174,13 @@ theorem sm100m_demand_issue : ∀ hd, (1 : ℝ) / 32768 ≤ Sm100Measured.model.
 theorem sm100m_wStar : (1 : ℝ) / 32768 ≤ Sm100Measured.model.wStar Sm100Measured.lamStar := by
   have h := wStar_ge Sm100Measured.model Sm100Measured.flat Sm100Measured.lamStar sm100m_isCert sm100m_wf 0 _
     sm100m_demand_issue
-  rwa [sm100m_lamStar, show onFacet (0 : Fin 12) 0 = 1 from if_pos rfl, one_mul] at h
+  rwa [sm100m_lam0, one_mul] at h
 
 /-- `φ* ≥` the lane fold's load on issue. -/
 theorem sm100m_phiStar : (phi100M : ℝ) ≤ Sm100Measured.model.phiStar Sm100Measured.lamStar := by
   refine phiStar_ge_facet Sm100Measured.model Sm100Measured.flat Sm100Measured.lamStar sm100m_isCert sm100m_wf 0 _
     fun φ => ?_
-  rw [sm100m_lamStar, show onFacet (0 : Fin 12) 0 = 1 from if_pos rfl, one_mul]
+  rw [sm100m_lam0, one_mul]
   show (phi100M : ℝ) ≤
     Sm100Measured.model.G.load (Sparse.counts (Sm100Measured.d2s.folds.getD φ.val [])) 0
   rw [load_counts _ vfRow100 sm100m_hG]

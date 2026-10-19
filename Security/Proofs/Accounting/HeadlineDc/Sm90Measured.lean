@@ -191,9 +191,7 @@ theorem sm90m_wStar : (w90M : ℝ) ≤ Sm90Measured.model.wStar Sm90Measured.lam
         ((Sm90Measured.d2s.writers.getD t.val (0, 0)).2 : ℝ)) +
       (lam90 6 : ℝ) * ((vfRow90 6 ((Sm90Measured.d2s.writers.getD t.val (0, 0)).1 % 28) : ℝ) /
         ((Sm90Measured.d2s.writers.getD t.val (0, 0)).2 : ℝ))
-    first
-      | exact_mod_cast hw.2
-      | (have h := (Rat.cast_le (K := ℝ)).mpr hw.2; push_cast at h; linarith)
+    exact_mod_cast hw.2
   | vector =>
     show (w90M : ℝ) ≤ (lam90 0 : ℝ) * (Sm90Measured.model.q / 32 * Sm90Measured.model.vecMin 0) +
       (lam90 5 : ℝ) * (Sm90Measured.model.q / 32 * Sm90Measured.model.vecMin 5) +

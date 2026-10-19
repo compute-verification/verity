@@ -92,11 +92,11 @@ theorem sm90_lamStar : Sm90.lamStar = onFacet .issue := by
   cases r with
   | issue =>
     show (1 / 1 : ℝ) = if (SheetRow.issue : SheetRow Sm90.Pipe) = .issue then 1 else 0
-    rw [if_pos rfl]
+    rw [ite_eq_left rfl]
     norm_num
-  | tensor => exact (if_neg (by simp)).symm
-  | pipe p => exact (if_neg (by simp)).symm
-  | smem => exact (if_neg (by simp)).symm
+  | tensor => exact (ite_eq_right (by simp)).symm
+  | pipe p => exact (ite_eq_right (by simp)).symm
+  | smem => exact (ite_eq_right (by simp)).symm
 
 theorem sm90_isCert : IsCert Sm90.lamStar := by
   rw [sm90_lamStar]
@@ -157,7 +157,7 @@ theorem sm90_demand_issue : ∀ hd, (1 : ℝ) / 4096 ≤ Sm90.model.demand hd .i
 
 theorem sm90_one : Sm90.lamStar .issue = 1 := by
   rw [sm90_lamStar]
-  exact if_pos rfl
+  exact ite_eq_left rfl
 
 /-- `w* ≥ 1/4096` at π*. -/
 theorem sm90_wStar : (1 : ℝ) / 4096 ≤ Sm90.model.wStar Sm90.lamStar := by
