@@ -20,8 +20,8 @@
   The verifier fills all three seed inputs itself, never the prover (one-stage's supplied values,
   `sampled_proofs.one_stage.registered.supplied_root`): `pouw.roots` from the roots the record names for each seed group's
   operands, (root(A), root(B)) (B's registered weights pinned to the root recorded before the salt); `pouw.positions`
-  after every unit of the log's earlier records, unit u reading slot u (`Compiled.positions(base)`); `pouw.salt` its coin
-  bound to the record's window (`registered.window_salt`), one salt a window. A registration naming any other commitment
+  after every unit of the log's earlier records, unit u reading slot u (`Compiled.positions(base)`); `pouw.salt` from
+  its source ``{"window": coin}``, a coin bound to the record's window (`registered.window_salt`), one salt a window. A registration naming any other commitment
   of them is refused (`R7-supplied`). A seed group is the calls committed together (`groups`; by default a site, one
   call: a batched call over a layer's heads and the batch is one site, decision 122): one commitment fixes the noise of
   every unit it covers, so the units a group covers are the grinding premium's divisor (decision 112), at least the

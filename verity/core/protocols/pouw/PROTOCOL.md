@@ -1313,7 +1313,7 @@ a common value.
   the salt: `pinned`);
 - `pouw.positions`: unit u's is slot u after every unit of the log's earlier records (`log_base`,
   `Compiled.positions(base)`), so no two records of one log share a position, and each (salt, position) seeds one unit;
-- `pouw.salt`: SHA-512 of `verity/one-stage/window-salt/v0`, the verifier's coin and the record's canonical window
+- `pouw.salt`: the window's salt, from the source `{"window": coin}`, a coin bound to the record's canonical window
   (`window_salt`); R6 takes one record a window, so it is one salt a window.
 
 A registration that names any other commitment of them is refused (`R7-supplied`;
