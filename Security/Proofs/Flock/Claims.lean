@@ -29,6 +29,13 @@ import Proofs.Flock.Claims.Recursion.DeployMargin
 import Proofs.Flock.Claims.Recursion.DeployPremises
 import Proofs.Flock.Claims.Recursion.DeployHonest
 import Proofs.Flock.Claims.Recursion.DeployZK
+import Proofs.Flock.Claims.Recursion.Seq
+import Proofs.Flock.Claims.Recursion.SeqSim
+import Proofs.Flock.Claims.Recursion.SeqSession
+import Proofs.Flock.Claims.Recursion.SeqPrefix
+import Proofs.Flock.Claims.Recursion.SeqCap
+import Proofs.Flock.Claims.Recursion.SeqKey
+import Proofs.Flock.Claims.Recursion.SeqDeploy
 import Proofs.Flock.Claims.Recursion.DeployStop
 import Proofs.Flock.Claims.Recursion.VStar
 import Proofs.Flock.Claims.Recursion.VStarBound
@@ -56,6 +63,7 @@ import Proofs.Flock.Claims.Scope
 import Proofs.Flock.Claims.DeployOC
 import Proofs.Flock.Claims.DeployInputs
 import Proofs.Flock.Claims.JsonEq
+import Proofs.Flock.Claims.CanonEq
 import Proofs.Flock.Claims.Deploy
 import Proofs.Flock.Claims.DeployPlainCode
 import Proofs.Flock.Claims.DeployCode
@@ -68,8 +76,9 @@ import Proofs.Flock.Claims.DeployRoundsZk
 import Proofs.Flock.Claims.DeployK
 import Proofs.Flock.Claims.DeployEfficient
 import Proofs.Flock.Claims.Assembled
-import Proofs.Flock.Claims.Sampling
 import Proofs.Flock.Claims.ZK
+import Proofs.Flock.Claims.CompleteFails
+import Proofs.Flock.Claims.Sampling
 import Proofs.Flock.Claims.Witnesses
 
 /-! `Flock.SecurityProofs.ClaimsStated : Flock.Guarantees.ClaimsStated`, by reflexivity: the guarantee is there for its

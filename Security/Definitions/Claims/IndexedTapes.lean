@@ -6,8 +6,9 @@ import Definitions.Claims
 Zero knowledge of a protocol of sessions in turn is on statement-indexed tapes (`ZKmalRx`; Daniel, 17 Oct 6:08 PM PDT,
 card cd4d2836): the prover at `x` runs on a nonce and a rest of `x`'s own types, since each session runs on a tape of
 its own and the number of sessions grows with the statement. `ZKmalR` is its case of one tape at every statement. The
-recursion's zero knowledge with the prover's public stop reads it (`Recursion.ZKStop`), at the record's own reference
-prover on the tape each statement's nonce and rest draw.
+recursion's and sampling's claims read it (`Recursion.ZK`, `Recursion.ZKPriv`, `Sampling.ZK`), each masked session with
+its own `Hello` round; Flock's session stays at one tape (`Flock.ZK`), proved on a class of statements of bounded table
+count (`Flock.zk_deployZk_ref_on`).
 -/
 
 namespace Claims

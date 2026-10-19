@@ -2,7 +2,8 @@
 (`verity_flock.rec_live.full_draw`, the stratified law at K = the population, so every unit) and the session record keeps
 it as ``unit_draw``, which `verify` holds to its own law (``--stratified N --program --partition``). `full_draw` is checked
 against Lean's own derivation (``flock-verify draw`` at K = N), and the controls `rec_inner.py forge` makes of a drawn
-record (no draw, a unit dropped) against what they change."""
+record (no draw, a unit dropped) against what they change. `inner_draw` reads a record's draw as the verifier does and
+refuses a record without one, and `rec_vstage stage` refuses to stage V* over such a session."""
 from __future__ import annotations
 
 import json
@@ -95,3 +96,30 @@ def test_the_forged_records_lose_the_draw_or_a_unit(tmp_path):
         assert RI.forge(what, tmp_path / what, record="prover") == {"forged": what, "record": "prover"}
         got = json.loads((d / "session.json").read_text())["unit_draw"]
         assert got == (None if what == "nodraw" else {**DRAW, "units": [0]})
+
+
+def test_the_inner_draw_is_the_records_and_a_record_without_one_is_refused():
+    """`inner_draw` reads the draw the proxy's record keeps, and refuses a record that keeps none, or none readable, with the
+    verifier's reason (`RecSetup.noInnerDraw`; `test_vstar_difftest.test_inner_draw_agrees` holds the two readers alike)."""
+    proxy = _proxy(DRAW)
+    T._session(proxy)
+    assert RL.inner_draw(json.dumps(proxy.session_record())) == DRAW
+    undrawn = _proxy()
+    T._session(undrawn)
+    for record in (json.dumps(undrawn.session_record()), "{}", "[]", "not json"):
+        with pytest.raises(ValueError) as e:
+            RL.inner_draw(record)
+        assert str(e.value) == RL.NO_INNER_DRAW, record
+
+
+def test_vstage_refuses_to_stage_over_an_undrawn_inner_session(tmp_path, capsys):
+    """`rec_vstage stage` over an inner session whose record holds no draw exits 2 before it reads the fold: the verifier
+    refuses every session over it (`RecSetup.innerDrawn`)."""
+    from verity_flock import rec_vstage as S
+
+    undrawn = _proxy()
+    T._session(undrawn)
+    undrawn.write(tmp_path / "inner")
+    assert S.main(["stage", str(tmp_path / "inner"), str(tmp_path / "no-fold.json"), str(tmp_path / "out")]) == 2
+    assert json.loads(capsys.readouterr().out) == {"refused": RL.NO_INNER_DRAW}
+    assert not (tmp_path / "out").exists()
