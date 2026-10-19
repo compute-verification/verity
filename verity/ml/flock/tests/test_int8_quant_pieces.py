@@ -4,22 +4,81 @@ evaluated there, each agrees with its Definition's reference on uniform words an
 finite values, the infinities, quiet and signalling NaNs of both signs, every integer-boundary exponent with the fraction at 0,
 1/2 and 1/2 ± ulp (round to nearest even: Rint, RniSat), the saturation edges (±127, ±128, ±129 for the s8 cast; 2^32 - 1
 ± 1/2 for A), and for the float64 multiply, products whose exponent lands on the subnormal boundary or on overflow, with
-significands short enough for exact ties."""
+significands short enough for exact ties.
+
+The Definitions are this file's copies of `int8_exact`'s and `dsa`'s, id, signature and evaluator (a composite's body over
+core's primitives), unregistered: a backend's test imports no integration (`tests/test_backend_boundaries.py`).
+circuit-check holds each piece to the registered Definition."""
 from __future__ import annotations
 
+import math
 import struct
+from types import SimpleNamespace
 
 import numpy as np
 
 from verity.ml.circuits import evaluation as E
-from verity.ml.circuits.defs import bind
+from verity.ml.circuits.defs import CompositeDefinition, PrimitiveDefinition, bind
+from verity.ml.circuits.ops import prims as CP
+from verity.ml.circuits.ops.fp32 import F32Div, bits_of, f32_of
+from verity.ml.circuits.ops.prims import Bf16ToF32
+from verity.ml.circuits.ops.scalar import F32Fabs, F32Fmaxf
+from verity.ml.circuits.types import Array, Value
 from verity_flock import ir_lower as IL
 from verity_flock import tail_pieces as TP
 from verity_flock.gf2 import Circuit
-from verity_vllm.program.registry import int8_exact as X
-from verity_vllm.program.registry.dsa import I32Sub
 
 U64 = np.uint64
+V8, F32, F64, I32, BF16 = Value(8), Value(32), Value(64), Value(32), Value(16)
+
+
+def _d(bits: int) -> float:
+    return struct.unpack("<d", struct.pack("<Q", bits & 0xFFFFFFFFFFFFFFFF))[0]
+
+
+def _db(x: float) -> int:
+    return struct.unpack("<Q", struct.pack("<d", x))[0]
+
+
+def _to_s8(x: int) -> int:
+    v = float(f32_of(x))
+    if math.isnan(v):
+        return 0
+    return max(-128, min(127, int(v) if math.isfinite(v) else (127 if v > 0 else -128))) & 0xFF
+
+
+def _rni_sat(x: int) -> int:
+    v = _d(x)
+    if math.isnan(v) or v <= 0:
+        return 0
+    return int(min(np.rint(v), float((1 << 32) - 1)))
+
+
+def _prim(name: str, params, ret, fn) -> PrimitiveDefinition:
+    return PrimitiveDefinition(name, 1, tuple(params), ret, fn, register=False)
+
+
+I32Sub = _prim("I32Sub", [("a", I32), ("b", I32)], I32, lambda a, b: (a - b) & 0xFFFFFFFF)
+X = SimpleNamespace(
+    F32Rint=_prim("F32Rint", [("x", F32)], F32, lambda x: bits_of(np.rint(f32_of(x)))),
+    F32ToS8Rzi=_prim("F32ToS8Rzi", [("x", F32)], V8, _to_s8),
+    S8ToF32=_prim("S8ToF32", [("c", V8)], F32, lambda c: bits_of(np.float32(((c & 0xFF) ^ 0x80) - 0x80))),
+    F32MulWide=_prim("F32MulWide", [("a", F32), ("b", F32)], F64, lambda a, b: _db(float(f32_of(a)) * float(f32_of(b)))),
+    F64Mul=_prim("F64Mul", [("a", F64), ("b", F64)], F64, lambda a, b: _db(_d(a) * _d(b))),
+    F64ToU32RniSat=_prim("F64ToU32RniSat", [("x", F64)], I32, _rni_sat),
+)
+C_TOP, C_FLOOR = CP.const(32, bits_of(127.0)), CP.const(32, bits_of(1e-30))
+
+
+def _row_scale(B, S, x):
+    a = B.call(CP.ZERO32)
+    for k in range(S.K):
+        a = B.call(F32Fmaxf, a, B.call(F32Fabs, B.call(Bf16ToF32, x[k])))
+    return B.call(F32Div, B.call(F32Fmaxf, a, B.call(C_FLOOR)), B.call(C_TOP))
+
+
+X.Int8RowScale = CompositeDefinition("Int8RowScale", 1, ("K",), lambda S: ((("x", Array(S.K, BF16)),), F32), _row_scale,
+                                     register=False)
 
 
 def _agree(prim, *inputs: np.ndarray) -> np.ndarray:
