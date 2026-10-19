@@ -1,4 +1,4 @@
-"""kernels-dither-rtx's sbench.py on the H200 and the B200, unchanged but for two more arms:
+"""kernels-dither-rtx's sbench.py on the H200 and the B200, unchanged but for three more arms:
 
     stock-cutlass  sbench's stock arm without its disable, so vLLM keeps its first int8 choice, CutlassInt8ScaledMMLinearKernel.
                    It runs on sm_90a only (it refuses int8 on sm_100a and sm_120). It applies the weight scale before the
@@ -7,6 +7,10 @@
     dither-hb      dither-side with this lane's two-launch unit (hb_side.py, h1u.cu's kh_unit_ws from the .so HB_H1U names)
                    in place of h1r's version 2 on the side stream; gated like every dither arm (its tokens against exact's,
                    `dither_fused.check` on its receipts, the no-write control refused).
+    dither-1s-hb   dither-1s (one stream: the served y from the receipted MMAs) with this lane's one-stream unit (hb_one.py,
+                   h1u.cu's kh_one from the .so HB_H1U names) in place of h1o_units; gated as dither-1s is
+                   (`dither_one.check` with h1o.so's references on its gate, control, fault and fault_wb steps), its
+                   tokens reported against exact's, not gated (it serves the dithered product).
 
 sbench's arms run in spawned worker processes, which import this file as their main module before unpickling
 `sbench.worker`, so the change below applies in every worker too. Run by hb_served.sh with HB_DITHER_DIR, the source tree's
@@ -31,6 +35,10 @@ def build(arm: str, scratch, gpu_mem: float):
         llm = _build("dither-side", scratch, gpu_mem)
         hb_side.install(llm.dither_win, os.environ["HB_H1U"])
         return llm
+    if arm == "dither-1s-hb":
+        import hb_one
+        hb_one.patch(os.environ["HB_H1U"])
+        return _build("dither-1s", scratch, gpu_mem)
     if arm != "stock-cutlass":
         return _build(arm, scratch, gpu_mem)
     from vllm import LLM
@@ -40,6 +48,8 @@ def build(arm: str, scratch, gpu_mem: float):
 
 sbench.build = build
 sbench.REF_OF["dither-hb"] = "exact"
+sbench.REF_OF["dither-1s-hb"] = "exact"
+sbench.TOKENS_GATED["dither-1s-hb"] = False
 
 if __name__ == "__main__":
     sys.exit(sbench.main())

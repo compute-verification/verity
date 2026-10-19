@@ -3,7 +3,7 @@
 # dither_fused.py) and its served bench (sbench.py), run from that lane's pushed commit, not copied. The run's source is a
 # clean worktree of origin/cursor/kernels-dither-rtx-15ad at a pinned commit; this script and hb_sbench.py are sent with
 # --send from this branch's pushed commit, so the run records both. Two modes, so no CPU phase runs on a dc node:
-#   build ARCH[,ARCH]  (vy-nebius-2) libh1c.so and libh1f.so for each arch into $OUT/lib/ARCH, their SASS and resource
+#   build ARCH[,ARCH]  (vy-nebius-2) libh1c.so, libh1f.so and libh1o.so for each arch into $OUT/lib/ARCH, their SASS and resource
 #                      usage, and BUILD.txt: the source commit and arch, and per library the sha256 of the files nvcc -M names
 #   run ARCH [ARGS]    (vy-dc-h200 sm_90a, vy-dc-b200 sm_100a) sbench.py through hb_sbench.py on one leased GPU for at most
 #                      14 minutes, every shipped library checked against the source's files first; ARGS go to sbench.py
@@ -21,8 +21,11 @@
 # order is the int8-exact path's: sbench disables vLLM's first choice, CutlassInt8ScaledMMLinearKernel, which refuses int8
 # on sm_100a ("Int8 not supported on SM100") and sm_120. On sm_90a hb_sbench.py's stock-cutlass arm keeps it (vLLM's
 # default there). Every arm samples without FlashInfer's JIT sampler, as served_h1 and native.sh do.
-# hb_sbench.py adds two arms: stock-cutlass (sm_90a) and dither-hb, dither-side's receipts on this lane's kh_unit_ws
-# (hb_side.py and an h1u .so from job.sh's build on this branch, both sent; HB_H1U names the .so).
+# hb_sbench.py adds three arms: stock-cutlass (sm_90a); dither-hb, dither-side's receipts on this lane's kh_unit_ws
+# (hb_side.py and an h1u .so from job.sh's build on this branch, both sent; HB_H1U names the .so); and dither-1s-hb,
+# dither-1s with this lane's one-stream kh_one in place of h1o_units (hb_one.py and hb_side.py, the same .so). The
+# dither-1s arms' gate also runs CA's H1V3 h1tile.reference, from the source's git at H1V3_SHA (default bd702a2c46), else
+# from a sent h1v3-SHA.tar (git archive SHA verity).
 # Env: DITHER_NSYS=1 (sbench's nsys capture of the gate's kernels; kernels.py counts each dither arm's inside its NVTX
 # range, so the source must be dither-rtx's f2c0071c7c or later), LEASE (default "--max-min 14"), RUN_TIMEOUT (seconds
 # inside the lease, default 820), VERITY_BENCH_VENV (default /workspace/cp/venv312), NVCC (default CUDA 13.0's).
@@ -44,7 +47,7 @@ DITHER=benchmarks/hash/dither
 mkdir -p "$OUT/env"
 srchash() { (cd "$ROOT" && cat "$@" | sha256sum | cut -c1-16); }
 [ -n "${HB_H1U:-}" ] && HB_H1U=$INPUTS/$(basename "$HB_H1U")
-sha256sum "$0" "$INPUTS"/hb_sbench.py "$INPUTS"/hb_side.py ${HB_H1U:+"$HB_H1U"} 2>/dev/null | sed "s#$INPUTS/##" > "$OUT/env/wrapper.txt"
+sha256sum "$0" "$INPUTS"/hb_sbench.py "$INPUTS"/hb_side.py "$INPUTS"/hb_one.py ${HB_H1U:+"$HB_H1U"} 2>/dev/null | sed "s#$INPUTS/##" > "$OUT/env/wrapper.txt"
 echo "source $SHA" >> "$OUT/env/wrapper.txt"
 
 if [ "$MODE" = build ]; then
@@ -63,7 +66,7 @@ if [ "$MODE" = build ]; then
   brc=0
   for arch in ${ARCH//,/ }; do
     mkdir -p "$OUT/lib/$arch"
-    for lib in h1c h1f; do build_one "$arch" "$lib" & done
+    for lib in h1c h1f h1o; do build_one "$arch" "$lib" & done
   done
   while [ "$(jobs -rp | wc -l)" -gt 0 ]; do wait -n || brc=2; done
   wait || brc=2
@@ -72,7 +75,7 @@ if [ "$MODE" = build ]; then
     dir="$OUT/lib/$arch"
     { echo "$SHA $arch"; cat "$dir"/*.line; } > "$dir/BUILD.txt"
     rm "$dir"/*.line
-    grep -h -A1 "h1f_k\|h1r_units_k\|h1c" "$dir"/*.res.txt | grep -o "Function [^:]*\|REG:[0-9]* STACK:[0-9]* SHARED:[0-9]* LOCAL:[0-9]*" | paste - - | cut -c1-150
+    grep -h -A1 "h1f_k\|h1r_units_k\|h1o_units_k\|h1c" "$dir"/*.res.txt | grep -o "Function [^:]*\|REG:[0-9]* STACK:[0-9]* SHARED:[0-9]* LOCAL:[0-9]*" | paste - - | cut -c1-150
   done
   exit 0
 fi
@@ -86,10 +89,16 @@ case " $* " in *dither-hb*)
     exit 2; }
   export HB_H1U ;;
 esac
+case " $* " in *dither-1s-hb*)
+  [ -f "$INPUTS/hb_one.py" ] && [ -f "$INPUTS/hb_side.py" ] && [ -f "${HB_H1U:-/nonexistent}" ] || {
+    echo "hb_served.sh: dither-1s-hb needs --send benchmarks/hash/dither/hb_one.py and hb_side.py, a job.sh build's h1u .so and --env HB_H1U=ITS_NAME" >&2
+    exit 2; }
+  export HB_H1U ;;
+esac
 cp "$INPUTS/BUILD.txt" "$OUT/env/BUILD.txt"
 read -r bsha barch < "$INPUTS/BUILD.txt"
 [ "$barch" = "$ARCH" ] || { echo "hb_served.sh: the libraries are $barch's, not $ARCH's" >&2; exit 2; }
-for lib in libh1c libh1f; do
+for lib in libh1c libh1f libh1o; do
   [ -f "$INPUTS/$lib.so" ] || { echo "hb_served.sh: no inputs/$lib.so: --send the build's lib/$ARCH/$lib.so" >&2; exit 2; }
   read -r _ _ h paths <<< "$(grep "^src $lib " "$INPUTS/BUILD.txt")"
   [ -n "$h" ] && [ "$(srchash $paths)" = "$h" ] || {
@@ -103,7 +112,15 @@ esac
 S=$(mktemp -d "${TMPDIR:-/tmp}/dither-hb-served.XXXXXX")
 export VLLM_CACHE_ROOT=$S/vllm-cache TORCHINDUCTOR_CACHE_DIR=$S/inductor-cache
 trap 'rm -rf "$S"' EXIT
-export DITHER_H1C=$INPUTS/libh1c.so DITHER_H1F=$INPUTS/libh1f.so VLLM_DISABLE_COMPILE_CACHE=1 VLLM_USE_FLASHINFER_SAMPLER=0
+export DITHER_H1C=$INPUTS/libh1c.so DITHER_H1F=$INPUTS/libh1f.so DITHER_H1O=$INPUTS/libh1o.so VLLM_DISABLE_COMPILE_CACHE=1 VLLM_USE_FLASHINFER_SAMPLER=0
+# CA's H1V3 (cursor/h1-v3-1172) at its pinned head, as the source's sbench.sh extracts it: dither_one's gate runs its
+# h1tile.reference(stream=True) on a few units
+H1V3_SHA=${H1V3_SHA:-bd702a2c46}
+mkdir -p "$S/h1v3"
+{ git -C "$ROOT" archive "$H1V3_SHA" verity 2>/dev/null || cat "$INPUTS/h1v3-$H1V3_SHA.tar" 2>/dev/null; } | tar -x -C "$S/h1v3" 2>/dev/null
+[ -f "$S/h1v3/verity/core/protocols/pouw/circuit/h1tile.py" ] \
+  && export DITHER_H1V3_TREE=$S/h1v3 DITHER_H1V3_SHA=$H1V3_SHA || echo "hb_served: no H1V3 tree at $H1V3_SHA"
+echo "h1v3 ${DITHER_H1V3_SHA:-none}" >> "$OUT/env/wrapper.txt"
 export PATH=$(dirname "$PY"):$CUDA/bin:$PATH FLASHINFER_CUDA_ARCH_LIST=$FI HF_HOME=${HF_HOME:-/workspace/hf}
 export PYTHONPATH=.:$ROOT:$ROOT/tools/research/src:$ROOT/$DITHER HB_DITHER_DIR=$ROOT/$DITHER
 NSYS=()
