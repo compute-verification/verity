@@ -110,10 +110,7 @@ those roots to the vllm-v1 roots is the committer's opening, not proof. Rows the
   root's input gates (drawn `all`: the input unit is always checked), each replay unit one proof unit, and the draw's
   checked proof units as `(slot, index)` in class, stratum and replay-unit order.
 - **The challenger** (`challenger`, Lean of record `SampledProofs/Challenger.lean`): every protocol's live coins, by
-  label and index, each opened once, after its root is recorded. Before any coin opens, the challenger signs its coin
-  commitment with its LMS key and writes that record on its own host (`SampledProofs/ChallengerRecord.lean`). The
-  verifier trusts only that commitment, read from the challenger's file under the verifier's key
-  (`trusted_commitment`), never from the prover's bundle, and fails closed on a missing, malformed or unsigned record.
+  label and index, each opened once, after its root is recorded.
 - **The Python.** `verity.core.protocols.sampled_proofs.one_stage` is the one-stage audit's reference: `registration`,
   `draw` (the draw's checks, not a sampler), `partition`, `audit` and `verdict`. `consumers` reads its profile. `service` is the proof service over it, whose `Stream`
   draws from the challenger's own randomness as `two_stage.draw_first` does. `two_stage` is two-stage sampling and the
@@ -490,7 +487,13 @@ PoUW's example runs on a two-stage `Stream` in `tests/test_service_two_stage.py`
 equal tiles, whose boundaries are A's rows, the tile digests and the per-call records, and whose interiors are A′, the
 ok rows, `rowk`'s carries and the cap rows. A `work:K` first stage runs as well, with the challenger's closure, and an
 accepted audit's profile is `two_stage.TwoStageLaw.profile` of `Stage(law)` over the RUs. Pinned by
-`tests/test_service_two_stage.py`: the four steps in order under one record, no retries, a late proof, the budget.
+`tests/test_service_two_stage.py` (`test_the_pouw_example_runs_the_four_steps_and_one_record_binds_them`,
+`test_each_step_waits_for_the_one_before`, `test_the_interiors_are_the_proved_replay_units_held_to_the_rule`,
+`test_a_work_first_stage_draws_with_the_challengers_closure`, `test_a_wrong_interior_or_boundary_rejects_the_audit_once`,
+`test_the_stream_stops_at_its_budgeth_failure`, `test_no_retries_nothing_redraws_and_an_outcome_is_final`,
+`test_a_late_proof_or_missing_interiors_are_late`,
+`test_a_draw_of_no_rus_has_no_interiors_and_its_proof_goes_to_the_boundary`,
+`test_what_a_two_stage_spec_and_stream_refuse`, `test_the_draw_is_the_challengers_own_randomness`).
 
 ### Two-stage sampling
 
