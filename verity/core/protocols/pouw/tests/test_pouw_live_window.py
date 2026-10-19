@@ -97,8 +97,8 @@ def test_core_checks_rounds_reads_the_challengers_json():
 def _params(check: dict) -> dict:
     template, tile = next(iter(CC.TILES.items()))
     return {"check": {"entries": 4, "scheme": CC.SCHEME, "template": template, "tile_work": tile.tile_work, **check},
-            "context": "served-zk/run-1/ab", "delta": "1/100", "eps": "1/10", "grid_bits": 2, "query": tile.query,
-            "range": [1, 64]}
+            "context": "served-zk/run-1/ab", "delta": "1/100", "eps": "1/10", "grid_bits": 2,
+            "length": {"max_tokens": [4], "stop": Wd.STOP_FIXED}, "query": tile.query, "range": [1, 64]}
 
 
 def test_the_check_item_names_the_windows_coin_mode():
