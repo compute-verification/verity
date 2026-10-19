@@ -12,9 +12,13 @@ note:20261019T0457Z-draft-fpx-machine grades every fact's source.
 "with specified precision", that accumulation is "at least single precision" (mma) or "higher than half precision but
 lower than single precision" (wgmma with E4M3/E5M2), and that "the accumulation order, rounding, and handling of
 subnormal inputs are unspecified"; tcgen05.mma states none of it. So decision 96 bars a floor's soundness from reading
-them. None does: completeness and γ read them, through a design's circuit, which checks the committed word against its
-Definition, so a device that breaks one fails the honest proof visibly and no cheater gains. Soundness against
-elementwise routes reads only the code widths, A3 and A7 (`benchmarks/pouw/theory/isa_escape_fp.py`).
+them. Against elementwise routes (each element's product formed in slots of its own) none does: completeness and γ
+read them, through a design's circuit, which checks the committed word against its Definition, so a device that breaks
+one fails the honest proof visibly and no cheater gains; soundness there reads only the code widths, A3 and A7
+(`benchmarks/pouw/theory/isa_escape_fp.py`). Against joint routes (elements spread across shared slots) it is not so.
+Where counting alone doesn't bound such a route on an FP kind, the rank floor that would close it reads exact products
+and sums on every input, which no vendor states and premise (a) doesn't give (it covers the small grid only). Those
+routes are open, as are the joint routes at ρ ≥ 2 on every kind (red team RT-FP-6, note:20261019T0546Z-draft-rt-fp).
 
 - (a) Exact-integer designs read `Fp8GridExact` and `Fp4GridExact`, the weakest form: exactness inside one grid
   `2^g`, nothing about the window, rounding or order outside it. `p = 24` on sm_120 and B200, `p = 14` on H200. H200's
