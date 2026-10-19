@@ -165,19 +165,36 @@ def test_an_active_agent_with_no_handle_rings_top_once():
 
 def test_main_stalled_rings_ci_only_while_next_is_ahead_and_once_per_main_head():
     state, ring = {}, Ring()
-    ahead = {"n": 0}
+    ahead, head = {"n": 0}, {"sha": "abc1234567"}
 
     def read(path):
         if path.endswith("/commits/main"):
-            return {"sha": "abc1234567", "commit": {"committer": {"date": "2026-10-19T18:30:00Z"}}}
+            return {"sha": head["sha"], "commit": {"committer": {"date": "2026-10-19T18:30:00Z"}}}
         return {"ahead_by": ahead["n"]}
 
+    T.main_stalled(state, ring, NOW - 3600, read)
     T.main_stalled(state, ring, NOW, read)
     assert ring.rings == []
     ahead["n"] = 3
     T.main_stalled(state, ring, NOW, read)
     T.main_stalled(state, ring, NOW + 3600, read)
-    assert [to for to, _, _ in ring.rings] == ["ci"] and "90 min" in ring.rings[0][1]
+    assert [to for to, _, _ in ring.rings] == ["ci"] and "60 min" in ring.rings[0][1]
+
+
+def test_a_train_that_just_landed_is_not_a_stall_though_drive_built_its_commit_long_ago():
+    state, ring = {}, Ring()
+    heads = iter(["old", "landed", "landed", "landed"])
+
+    def read(path):
+        if path.endswith("/commits/main"):
+            return {"sha": next(heads), "commit": {"committer": {"date": "2026-10-19T16:00:00Z"}}}
+        return {"ahead_by": 700}
+
+    for t in (NOW - 3600, NOW, NOW + 1800):
+        T.main_stalled(state, ring, t, read)
+    assert ring.rings == []
+    T.main_stalled(state, ring, NOW + 3600, read)
+    assert [body.split(" (")[0] for _, body, _ in ring.rings] == ["ci: main hasn't moved for 60 min"]
 
 
 def test_an_idle_h200_rings_top_once_a_day_after_1500z():

@@ -24,7 +24,7 @@ seen.
 2. An ACTIVE Verity cloud agent (`GET /v1/agents`) that holds no handle: no registry `holder` and no inbox in the routes names it.
    @top.
 3. A new post in #agent-coordination thread RULES_THREAD (deadlocks and rule questions): @top.
-4. Nothing landed on main for STALL_S while `next` is ahead of it (PRs queued): @ci.
+4. main's head unchanged for STALL_S (since the sweep first saw it) while `next` is ahead of it (PRs queued): @ci.
 5. Once a day after 15:00Z: each H200 under H200_BUSY_PCT mean GPU utilization over 24 h, from fleet.py's samples
    ($FLEET_DIR): @top, with the numbers.
 
@@ -304,12 +304,18 @@ def gh(path: str) -> dict:
 
 
 def main_stalled(state, ring, now, read: Callable[[str], dict] = gh) -> None:
+    """main's head unchanged for STALL_S. A landed train's commit carries the time drive built it on `next`, not when main moved
+    to it, so the clock starts at the later of that and the first pass that saw the head."""
     head = read(f"/repos/{REPO}/commits/main")
-    at = datetime.fromisoformat(head["commit"]["committer"]["date"].replace("Z", "+00:00")).timestamp()
+    committed = datetime.fromisoformat(head["commit"]["committer"]["date"].replace("Z", "+00:00")).timestamp()
+    seen = state.get("main_head") or {}
+    if seen.get("sha") != head["sha"]:
+        seen = state["main_head"] = {"sha": head["sha"], "seen": now}
+    at = max(committed, seen["seen"])
     ahead = read(f"/repos/{REPO}/compare/main...next").get("ahead_by", 0)
     if now - at >= STALL_S and ahead > 0:
         once_each(state, f"main:{head['sha']}", ring, "ci",
-                  f"ci: nothing has landed on main for {(now - at) // 60:.0f} min (main at {head['sha'][:10]}, {iso(at)}) while "
+                  f"ci: main hasn't moved for {(now - at) // 60:.0f} min (at {head['sha'][:10]} since {iso(at)}) while "
                   f"next is {ahead} commits ahead of it: check drive (`research queue status`).", None, now)
 
 
