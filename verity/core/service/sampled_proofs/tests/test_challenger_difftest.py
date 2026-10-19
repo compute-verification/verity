@@ -1,15 +1,20 @@
 """The proof service's challenger in Lean (`SampledProofs.Challenger`, the verifier of record) against its Python mirror
-(`verity.core.protocols.sampled_proofs.challenger`), through `sampled-proofs-difftest`'s four challenger pieces: a coin
-commitment and an opening as `from_json` reads them, `live_reason` and `order_reason`.
+(`verity.core.protocols.sampled_proofs.challenger`), through `sampled-proofs-difftest`'s challenger pieces: a coin
+commitment and an opening as `from_json` reads them, `live_reason` and `order_reason`; and the challenger's signed record
+(`SampledProofs.ChallengerRecord`): the verifier's key and a record as `from_json` reads them, with `record_message`, and
+`trusted_reason`.
 
 The cases are a challenger's honest coins over drawn layouts (labels of several clients: PoUW's, vLLM's, memory's), then
 one mutation each (`COMMITMENT`, `OPENING`, `REASON`, `ORDER`): a coin opened twice, one opened before its root was
 recorded, a foreign epoch's or challenger's, a tampered salt or path, a coin the layout doesn't hold, each malformed
-form. Each piece answers ``{"refused": why}`` where the challenger refuses, so the reasons are compared too.
+form. The record's (`KEY`, `RECORD`, `TRUSTED`) are a record the challenger signed with a small LMS key, then a missing
+record, a prover's commitment or a prover's key, a tampered root, epoch, host or signature, another parameter set, each
+malformed form. Each piece answers ``{"refused": why}`` where the challenger refuses, so the reasons are compared too.
 """
 
 from __future__ import annotations
 
+import functools
 import random
 import shutil
 from collections import Counter
@@ -21,6 +26,7 @@ from hypothesis import strategies as st
 
 import verity_difftest as D
 from verity.core.protocols.sampled_proofs import challenger as Ch
+from verity.ml.crypto import lms
 
 PACKAGE = Path(__file__).resolve().parents[1]
 PIECES = "sampled-proofs-difftest"
@@ -326,17 +332,194 @@ def _cases(make, names):
     return st.builds(make, st.randoms(use_true_random=False), st.sampled_from(["honest"] * (len(names) // 3) + names))
 
 
+# ---- the challenger's signed record ---------------------------------------------------------------------------------
+
+#: small LMS parameter sets (W, H), each key made in milliseconds
+PARAMS = [(1, 2), (2, 3), (4, 2), (8, 1)]
+HOSTS = ["vy-nebius-cpu-1", "auditor.example", "h", "A_1"]
+
+
+@functools.cache
+def _key(w: int, h: int, seed: int) -> lms.PrivateKey:
+    return lms.keygen(lms.Params(64, w, h), bytes([seed]) * 64)
+
+
+def lms_verify(key: Ch.ChallengerKey, message: bytes, signature: bytes) -> bool:
+    p = lms.Params(64, key.W, key.H)
+    return lms.verify(p, key.public, message, lms.Signature.decode(p, signature))
+
+
+def _signed(rng: random.Random) -> tuple[Ch.ChallengerKey, Ch.LiveChallenger, Ch.ChallengerRecord]:
+    """A challenger's record, signed at a drawn leaf of a small key, and the verifier's key for it."""
+    w, h = rng.choice(PARAMS)
+    k = _key(w, h, 0)
+    ch = _challenger(rng)
+    pub = lms.public_key(k)
+    q = rng.randrange(2 ** h)
+    ch.sign_record(rng.choice(HOSTS), pub, lambda m: lms.sign_at(k, q, m).encode())
+    return Ch.ChallengerKey(w, h, pub), ch, ch.record
+
+
+def key(j: Any) -> Any:
+    return _refusing(lambda: Ch.ChallengerKey.from_json(j).to_json())
+
+
+def record(j: Any) -> Any:
+    _request(j, ["I", "record"])
+    I = _hex(j["I"]) if type(j["I"]) is str and Ch._HEX.fullmatch(j["I"]) else None
+    if I is None:
+        raise D.Reject("I is not lowercase hex")
+
+    def go():
+        r = Ch.ChallengerRecord.from_json(j["record"])
+        return {"message": Ch.record_message(I, r.host, r.commitment).hex(), "record": r.to_json()}
+    return _refusing(go)
+
+
+def trusted(j: Any) -> Any:
+    _request(j, ["commitment", "key", "record"])
+
+    def go():
+        k, c = Ch.ChallengerKey.from_json(j["key"]), Ch.LiveCommitment.from_json(j["commitment"])
+        return {"reason": Ch.trusted_reason(k, j["record"], c, lms_verify)}
+    return _refusing(go)
+
+
+KEY_NAMES = ["honest", "keys", "extra", "W", "H", "H-type", "public-short", "public-upper", "public-type"]
+
+
+def key_case(rng: random.Random, name: str) -> Any:
+    w, h = rng.choice(PARAMS)
+    d = {"H": h, "W": w, "public": lms.public_key(_key(w, h, 0)).hex()}
+    match name:
+        case "honest":
+            pass
+        case "keys":
+            del d[rng.choice(sorted(d))]
+        case "extra":
+            d["N"] = 64
+        case "W":
+            d["W"] = rng.choice([0, 3, 16, -1])
+        case "H":
+            d["H"] = rng.choice([0, 31, -2])
+        case "H-type":
+            d[rng.choice(["H", "W"])] = rng.choice([True, "2", None, [2]])
+        case "public-short":
+            d["public"] = d["public"][:rng.choice([0, 32, 158])] + rng.choice(["", "00" * 2])
+        case "public-upper":
+            d["public"] = d["public"].upper()
+        case "public-type":
+            d["public"] = rng.choice([None, 5, ["00"]])
+    return d
+
+
+RECORD_NAMES = ["honest", "keys", "extra", "host-empty", "host-chars", "host-type", "signature", "commitment-form", "I-short",
+                "request"]
+
+
+def record_case(rng: random.Random, name: str) -> Any:
+    _, _, r = _signed(rng)
+    d = r.to_json()
+    j = {"I": rng.randbytes(16).hex(), "record": d}
+    match name:
+        case "honest":
+            pass
+        case "keys":
+            del d[rng.choice(sorted(d))]
+        case "extra":
+            d["public"] = "00" * 80
+        case "host-empty":
+            d["host"] = ""
+        case "host-chars":
+            d["host"] = rng.choice(["a b", "a/b", "é", "a:1", "x\n"])
+        case "host-type":
+            d["host"] = rng.choice([None, 1, ["h"]])
+        case "signature":
+            d["signature"] = rng.choice([d["signature"].upper(), d["signature"] + "0", None, 7])
+        case "commitment-form":
+            d["commitment"] = commitment_case(rng, rng.choice(COMMITMENT_NAMES[1:]))
+        case "I-short":
+            j["I"] = rng.randbytes(rng.choice([0, 15, 17, 64])).hex()
+        case "request":
+            k = rng.choice(["I", None])
+            if k is None:
+                del j[rng.choice(sorted(j))]
+            else:
+                j["I"] = rng.choice([None, "AB", 5, "0"])
+    return j
+
+
+TRUSTED_NAMES = ["honest", "missing", "prover-commitment", "prover-key", "root", "epoch", "host", "signature", "signature-short",
+                 "leaf", "params", "record-form", "key-form", "commitment-form", "request"]
+
+
+def _flip_root(c: dict) -> dict:
+    return {**c, "root": _flip(c["root"], 3)}
+
+
+def trusted_case(rng: random.Random, name: str) -> Any:
+    k, ch, r = _signed(rng)
+    d = {"commitment": ch.commitment.to_json(), "key": k.to_json(), "record": r.to_json()}
+    rec = d["record"]
+    match name:
+        case "honest":
+            pass
+        case "missing":
+            d["record"] = None
+        case "prover-commitment":
+            d["commitment"] = _challenger(rng, ch.commitment.families, ch.commitment.epoch, ch.commitment.scheme).commitment.to_json()
+        case "prover-key":
+            other = _key(k.W, k.H, 1)
+            if rng.random() < 0.5:
+                d["key"] = {**d["key"], "public": lms.public_key(other).hex()}
+            else:
+                m = Ch.record_message(other.I, r.host, ch.commitment)
+                d["record"] = {**rec, "signature": lms.sign_at(other, rng.randrange(2 ** k.H), m).encode().hex()}
+        case "root":
+            d["record"] = {**rec, "commitment": _flip_root(rec["commitment"])}
+            d["commitment"] = rng.choice([d["commitment"], d["record"]["commitment"]])
+        case "epoch":
+            d["record"] = {**rec, "commitment": {**rec["commitment"], "epoch": rec["commitment"]["epoch"] + 1}}
+        case "host":
+            d["record"] = {**rec, "host": rng.choice([h for h in HOSTS if h != rec["host"]])}
+        case "signature":
+            d["record"] = {**rec, "signature": _flip(rec["signature"], rng.randrange(len(rec["signature"]) // 2))}
+        case "signature-short":
+            d["record"] = {**rec, "signature": rec["signature"][:rng.choice([0, 8, len(rec["signature"]) - 2])]}
+        case "leaf":
+            d["record"] = {**rec, "signature": (2 ** k.H + rng.randrange(4)).to_bytes(4, "big").hex() + rec["signature"][8:]}
+        case "params":
+            others = [p for p in PARAMS if p != (k.W, k.H)]
+            w, h = rng.choice(others)
+            d["key"] = {**d["key"], "W": w, "H": h}
+        case "record-form":
+            d["record"] = record_case(rng, rng.choice(RECORD_NAMES[1:-3]))["record"]
+        case "key-form":
+            d["key"] = key_case(rng, rng.choice(KEY_NAMES[1:]))
+        case "commitment-form":
+            d["commitment"] = commitment_case(rng, rng.choice(COMMITMENT_NAMES[1:]))
+        case "request":
+            del d[rng.choice(sorted(d))]
+    return d
+
+
 COMMITMENT = D.Port(PIECES, "challenger_commitment", commitment, _cases(commitment_case, COMMITMENT_NAMES),
                     package=PACKAGE, need_rejects=False, of_record="lean")
 OPENING = D.Port(PIECES, "challenger_opening", opening, _cases(opening_case, OPENING_NAMES), package=PACKAGE,
                  need_rejects=False, of_record="lean")
 REASON = D.Port(PIECES, "challenger_reason", reason, _cases(reason_case, REASON_NAMES), package=PACKAGE, of_record="lean")
 ORDER = D.Port(PIECES, "challenger_order", order, _cases(order_case, ORDER_NAMES), package=PACKAGE, of_record="lean")
+KEY = D.Port(PIECES, "challenger_key", key, _cases(key_case, KEY_NAMES), package=PACKAGE, need_rejects=False,
+             of_record="lean")
+RECORD = D.Port(PIECES, "challenger_record", record, _cases(record_case, RECORD_NAMES), package=PACKAGE, of_record="lean")
+TRUSTED = D.Port(PIECES, "challenger_trusted", trusted, _cases(trusted_case, TRUSTED_NAMES), package=PACKAGE,
+                 of_record="lean")
 
 pieces = D.server_fixture(COMMITMENT)
 
 RUNS = [(COMMITMENT, commitment_case, COMMITMENT_NAMES, 300), (OPENING, opening_case, OPENING_NAMES, 300),
-        (REASON, reason_case, REASON_NAMES, 400), (ORDER, order_case, ORDER_NAMES, 400)]
+        (REASON, reason_case, REASON_NAMES, 400), (ORDER, order_case, ORDER_NAMES, 400), (KEY, key_case, KEY_NAMES, 200),
+        (RECORD, record_case, RECORD_NAMES, 200), (TRUSTED, trusted_case, TRUSTED_NAMES, 300)]
 
 
 @pytest.mark.parametrize("port, make, names, examples", RUNS, ids=[r[0].fn for r in RUNS])

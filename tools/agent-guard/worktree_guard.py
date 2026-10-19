@@ -12,6 +12,8 @@ branch it had then is registered to it. The hook then refuses, from any other ag
     (the `research` CLI) follows the switch; checking out files (`git checkout -- PATH`, `git checkout REF -- PATH`) passes;
   - pushing a branch registered to another agent: one it created (`checkout -b`, `switch -c`, `worktree add -b`) or the one its
     worktree had when it claimed it, until that agent hands it over (`hand`). An unregistered branch passes.
+For every agent, whatever it owns, it also refuses a push that would update `main` (only drive and the lander move it; INF-110)
+and a `git config` that prints values, since the checkout's http.*.extraheader carries a GitHub token (INF-105).
 The registry is `$AGENT_GUARD_STATE/branches.json` (default /tmp/agent-guard), one VM's: an agent on a VM of its own is never
 judged. Where a command names no directory (`git -C DIR`, or a `cd DIR` before it in the same command) the hook judges the
 event's cwd, else the workspace root, since the shell's remembered directory never reaches it.
@@ -131,11 +133,40 @@ def push_targets(directory: str, args: list[str]) -> list[str]:
     return out
 
 
+#: `git config` forms that print values, where an installation token sits (http.*.extraheader, url.*.insteadof): INF-105
+CONFIG_DUMPS = {"--list", "-l", "--get-regexp", "--show-origin", "--get-all", "--get-urlmatch"}
+CREDENTIAL_KEYS = ("extraheader", "insteadof", "token", "password", "credential")
+
+
+def main_or_config_reason(invocations_: list[tuple[str, list[str]]]) -> str | None:
+    """Whatever agent runs it: a push that would update `main` (INF-110: a worker whose VM came back from a snapshot reset to
+    `main` pushed onto it, and drive rebuilt every queued PR), or a `git config` that prints credential-bearing values."""
+    for d, args in invocations_:
+        sub = args[0]
+        if sub == "push":
+            opts = {a for a in args[1:] if a.startswith("-")}
+            if opts & {"--all", "--mirror"} or "main" in push_targets(d, args[1:]):
+                return ("this push would update `main`, which only drive and the lander move (AGENTS.md). Push your own "
+                        "branch instead: `git push origin HEAD:refs/heads/<your-branch>` (create it first with "
+                        "`git switch -c <your-branch>` if this checkout is on main).")
+        if sub == "config":
+            rest = args[1:]
+            names = [a for a in rest if not a.startswith("-")]
+            if "--name-only" not in rest and (set(rest) & CONFIG_DUMPS
+                                              or (len(names) == 1 and any(k in names[0].lower() for k in CREDENTIAL_KEYS))):
+                return ("this `git config` would print values, and the checkout's http.*.extraheader carries a GitHub token "
+                        "(INF-105). List names only: `git config --name-only --list`.")
+    return None
+
+
 def reason(commands: list[list[str]], agent: str, cwd: str) -> str | None:
     """Why the agent may not run these git commands here, or None. Registers the branches an allowed command creates."""
+    found = invocations(commands, cwd)
+    if why := main_or_config_reason(found):
+        return why
     if not agent:
         return None
-    for d, args in invocations(commands, cwd):
+    for d, args in found:
         gitdir = git(d, "rev-parse", "--absolute-git-dir")
         if gitdir is None:
             continue
