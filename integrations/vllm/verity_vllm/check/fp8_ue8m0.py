@@ -110,14 +110,17 @@ class Rewrites:
         return self.G > 0 and (field in self.requant or field in self.absorb)
 
     def _requanted(self, weight: str) -> tuple[np.ndarray, np.ndarray, dict]:
-        if weight not in self._pair:
+        # one linear's pair is kept at a time, and threads composing side by side (cpu_replay) may replace it between two reads
+        got = self._pair.get(weight)
+        if got is None:
             (w, nw), (s, ns) = self.raw(weight), self.raw(weight[:-len(".weight")] + SCALE)
             note = {**nw, "sources": nw["sources"] + ns["sources"]}
             if ns.get("cast") == E8M0_UPCAST:
-                self._pair = {weight: (w, s, {**note, "rule": "vLLM keeps the weight and upcasts its e8m0 scales (DeepGEMM linear: no requant)"})}
+                got = (w, s, {**note, "rule": "vLLM keeps the weight and upcasts its e8m0 scales (DeepGEMM linear: no requant)"})
             else:
-                self._pair = {weight: (*requant(w, s, self.G), {**note, "rule": f"vLLM load-time ue8m0 requant (DeepGEMM linear, block {self.G})"})}
-        return self._pair[weight]
+                got = (*requant(w, s, self.G), {**note, "rule": f"vLLM load-time ue8m0 requant (DeepGEMM linear, block {self.G})"})
+            self._pair = {weight: got}
+        return got
 
     def compose(self, field: str, shape: list[int]) -> tuple[np.ndarray, dict]:
         if field in self.absorb:
