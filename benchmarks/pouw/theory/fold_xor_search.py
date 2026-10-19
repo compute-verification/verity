@@ -285,6 +285,54 @@ def mod_splits(ops: tuple, fix: tuple) -> list[tuple]:
     return out
 
 
+def _sw(i: int) -> int:
+    return 1 - i if i < 2 else i
+
+
+def swap(ops: tuple) -> tuple:
+    """`ops` with x and y exchanged, in `sequences`' canonical form. x ⊕ y ⊕ K is symmetric, and a program P of `ops`
+    gives the program of `swap(ops)` that computes P(y, x), so one computes the target if and only if the other does."""
+    return tuple(op if isinstance(op, str) else
+                 (op[0], (_sw(op[1][0]), _sw(op[1][1])) if op[0] == "IDP.2A" else tuple(sorted(map(_sw, op[1]))))
+                 for op in ops)
+
+
+def swap_fix(ops: tuple, fix: tuple) -> tuple:
+    """A case's `fix` under `swap`: x and y exchanged in its sources, and when the swap reorders the first
+    instruction's multiplicands, its per-operand modifiers exchanged with them."""
+    if not fix:
+        return fix
+    a, b = ops[0][1]
+    flip = ops[0][0] != "IDP.2A" and _sw(a) > _sw(b)
+    other = {"sa": "sb", "sb": "sa", "na": "nb", "nb": "na"} if flip else {}
+    return ({other.get(j, j): (_sw(s) if isinstance(j, int) else s) for j, s in fix[0].items()},)
+
+
+def merge(k: int, records: list[dict]) -> dict:
+    """k's verdict from search records (whole sequences, `splits` cases and `mod_splits` sub-cases, from any runs): a
+    sequence is unsat when it or its `swap` image is, or when each of its cases is, a case when it or its image is or
+    when each of its sub-cases is. -> the tally and the cases still open."""
+    res: dict[str, set] = {}
+    for r in records:
+        res.setdefault(r["ops"], set()).add(r["result"])
+    ok = lambda *names: any("unsat" in res.get(n, ()) for n in names)
+    seqs, unsat, still = sequences(k, True), 0, []
+    for s in seqs:
+        t = swap(s)
+        if ok(label(s), label(t)):
+            unsat += 1
+            continue
+        if isinstance(s[0], str):
+            still.append(label(s))
+            continue
+        case = lambda g: (f"{label(s)} /{fix_label(g)}", f"{label(t)} /{fix_label(swap_fix(s, g))}")
+        left = [case(f)[0] for f in splits(s) if not ok(*case(f)) and not all(ok(*case(g)) for g in mod_splits(s, f))]
+        unsat += not left
+        still += left
+    return {"k": k, "sequences": len(seqs), "unsat": unsat, "open": still,
+            "found": sorted(n for n, v in res.items() if "FOUND" in v)}
+
+
 def fix_label(fix: tuple, mods: bool = True) -> str:
     """Slots first (s2=x), then modifiers (np=1); `mods` False leaves the modifiers out (the `splits` case's label)."""
     def part(i, j, s):
@@ -517,7 +565,20 @@ def main() -> int:
                     help="start from the edge pairs and look for counterexamples among CHEAP's words first")
     ap.add_argument("--split-mods", action="store_true",
                     help="with --split, search each case as its first instruction's modifier assignments")
+    ap.add_argument("--merge", nargs="+", metavar="JSONL",
+                    help="search nothing: k's verdict from these runs' records, through x <-> y (`merge`)")
     a = ap.parse_args()
+    if a.merge:
+        recs = [json.loads(line) for p in a.merge for line in open(p, encoding="utf-8") if line.strip()]
+        m = merge(a.k, recs)
+        print(f"k = {a.k}: {m['sequences']} sequences, {m['unsat']} unsat, {len(m['open'])} cases open, "
+              f"FOUND {m['found']}" + ("  -- proved" if m["unsat"] == m["sequences"] else ""))
+        for c in m["open"]:
+            print(f"  open: {c}")
+        if a.json:
+            with open(a.json, "w", encoding="utf-8") as f:
+                json.dump(m, f, indent=1)
+        return 1 if m["found"] else 2 if m["open"] else 0
     out, rc = [], 0
     stream = open(a.stream, "a", encoding="utf-8") if a.stream else None
     for k in range(a.from_k, a.k + 1):
