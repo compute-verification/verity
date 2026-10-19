@@ -211,8 +211,10 @@ def _sheet_check(fam: Family, pi: E.Machine, c: dict, h: E.Honest) -> dict[str, 
     return out
 
 
-def reading(fam: Family, vector: str, full: bool = False) -> Reading:
-    """The family's reading on `vector`; `full` puts every census MMA class on a measured menu `honest_menu` limits."""
+def reading(fam: Family, vector: str, full: bool = False, floor_check: bool = True) -> Reading:
+    """The family's reading on `vector`; `full` puts every census MMA class on a measured menu `honest_menu` limits.
+    `floor_check=False` reads ♭ as honest's program even where `setup`'s floor program mixes word routes (a larger
+    credit than the machine model's, so a bound at least the machine model's), for witnesses only."""
     B_ = LH._eps_budget()
     sheet = vector == fam.sheet
     pi = E.machine(vector, fam.data)
@@ -220,8 +222,8 @@ def reading(fam: Family, vector: str, full: bool = False) -> Reading:
     h = E.honest(d.honest, fam.data)
     if (d.delta, d.p, d.checks) != (2.0 ** -41, float(LH.P_OPERAND), 48000):
         raise SystemExit(f"{fam.design}: the statement takes δ′ = 2^-41, operand luck 3/4 and 48000 checks")
-    if any(f.p != 0 for f in d.filler):
-        raise SystemExit(f"{fam.design}: a filler enters Y whole only at p = 0 (pinned receipts)")
+    if any(f.p not in (0, 1) for f in d.filler):
+        raise SystemExit(f"{fam.design}: a filler enters Y whole at p = 0 (pinned receipts) or not at all at p = 1")
     classes = sorted(pi.c)
     c = _coefs(pi, classes)
     lists = _sheet_check(fam, pi, c, h) if sheet else {}
@@ -233,7 +235,7 @@ def reading(fam: Family, vector: str, full: bool = False) -> Reading:
     nw = {k: exact(v) for k, v in h.tensor("floor", d.floor).items()}
     nf = {k: exact(v) * Nw / E.LANES for k, v in d.fold.items()}
     nx: dict[str, Fraction] = {}
-    for f in d.filler:
+    for f in (f for f in d.filler if f.p == 0):
         tot = sum(exact(v) for v in f.mix.values())
         for k, v in f.mix.items():
             nx[k] = nx.get(k, Fraction(0)) + exact(f.per_word) * Nw * exact(v) / tot / E.LANES
@@ -242,8 +244,8 @@ def reading(fam: Family, vector: str, full: bool = False) -> Reading:
         for k, v in part.items():
             n0[k] = n0.get(k, Fraction(0)) + v
     s = E.setup(d, pi, fam.data, operands="free", credit="floor")
-    if abs(s.baseline.T * Nw - float(max(load(r, n0) for r in pi.rows))) > 1e-6 or any(
-            abs(s.baseline.n.get(k, 0.0) * Nw - float(n0.get(k, 0))) > 1e-6 for k in {*s.baseline.n, *n0}):
+    if floor_check and (abs(s.baseline.T * Nw - float(max(load(r, n0) for r in pi.rows))) > 1e-6 or any(
+            abs(s.baseline.n.get(k, 0.0) * Nw - float(n0.get(k, 0))) > 1e-6 for k in {*s.baseline.n, *n0})):
         raise SystemExit(f"{fam.design} on {vector}: ♭ is not setup's floor program ({s.baseline.n}, T "
                          f"{s.baseline.T})")
     e = E.eps(d, pi, float(Q), fam.data, operands="free", credit="floor")
