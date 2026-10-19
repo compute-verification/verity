@@ -17,8 +17,6 @@ counts sum.
 """
 from __future__ import annotations
 
-from collections import Counter
-
 from verity.ml.circuits.refs import Coll, array_of, coll_concat
 from verity.ml.circuits.types import Array, Value
 
@@ -87,29 +85,15 @@ def launch_params(units) -> list[tuple[str, Array]]:
     return [(f"launch[e{u['e']}.{u['j']}].{name}", Array(u["P"], I32)) for u in units for name in ("ids", "key")]
 
 
-def unit_fns(u: dict) -> tuple[list, object, object]:
-    """The unit's Definitions: a pair index per pair, `MoeAlignRanks{E,P,BM}` and `MoeAlignBlocks{P,BM}`."""
+def unit_blocks(B, u: dict, ids: Coll, key: Coll) -> tuple[Coll, Coll]:
+    """The unit's body nodes: the pair indices, `MoeAlignRanks{E,P,BM}` and `MoeAlignBlocks{P,BM}`; (blk, par)."""
     from verity.ml.circuits.defs import bind
     from verity.ml.circuits.ops.prims import const
     from verity_vllm.program.registry import marlin_moe as MM
-    P = u["P"]
-    return [const(32, p) for p in range(P)], bind(MM.MoeAlignRanks, E=u["E"], P=P, BM=u["BM"]), bind(MM.MoeAlignBlocks, P=P, BM=u["BM"])
-
-
-def unit_specs(u: dict) -> Counter:
-    """The unit's body nodes by descriptor id, as a fold's instances of the launch name them."""
-    from verity.ml.circuits.codec import descriptor_id
-    consts, ranks, blocks = unit_fns(u)
-    return Counter(descriptor_id(fn) for fn in (*consts, ranks, blocks))
-
-
-def unit_blocks(B, u: dict, ids: Coll, key: Coll) -> tuple[Coll, Coll]:
-    """The unit's body nodes: the pair indices, `MoeAlignRanks{E,P,BM}` and `MoeAlignBlocks{P,BM}`; (blk, par)."""
-    consts, ranks, blocks = unit_fns(u)
-    h = f"launch[e{u['e']}.{u['j']}]"
-    ix = array_of([B.call(c, name=f"{h}/i32[{p}]") for p, c in enumerate(consts)])
-    rank, start = B.call(ranks, ids, key, ix, name=f"{h}/rank")
-    blk, par = B.call(blocks, ids, rank, start, name=h)
+    P, h = u["P"], f"launch[e{u['e']}.{u['j']}]"
+    ix = array_of([B.call(const(32, p), name=f"{h}/i32[{p}]") for p in range(P)])
+    rank, start = B.call(bind(MM.MoeAlignRanks, E=u["E"], P=P, BM=u["BM"]), ids, key, ix, name=f"{h}/rank")
+    blk, par = B.call(bind(MM.MoeAlignBlocks, P=P, BM=u["BM"]), ids, rank, start, name=h)
     return blk, par
 
 
@@ -129,5 +113,4 @@ def schedule_arg(words: int, keys: Coll | None, segments, blocks: list[tuple[Col
     return coll_concat(Array(words, I32), parts)
 
 
-__all__ = ["SCHEDULE", "key_words", "launch_params", "launch_units", "linked_segments", "schedule_arg", "unit_blocks", "unit_fns",
-           "unit_specs"]
+__all__ = ["SCHEDULE", "key_words", "launch_params", "launch_units", "linked_segments", "schedule_arg", "unit_blocks"]

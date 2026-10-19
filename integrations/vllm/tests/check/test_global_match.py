@@ -365,7 +365,7 @@ def assemble(reqs, tmp_path, leak=False, tgrouped=False, eos_token_ids=(EOS,), l
     RunHeader.workload.sha256 is the manifest's (the driver records the manifest it ran) [M-0570].  [R17-1] `lag` = the LAG the mock
     Program DECLARES (default 0: the toy engine schedules synchronously and its preamble attests async_scheduling False); None = a
     pre-R17-1 Program that declares no lag.  `witness`: the record's norms read the `schedule` witness (e2e.profile), the components'
-    their own (in the launch form for a "launch" record)."""
+    their own."""
     tmp_path.mkdir(parents=True, exist_ok=True)
     wl = workload(reqs, tmp_path / "workload.json")
     oracle = batched(reqs, tmp_path / "batched", leak, tgrouped, wl_sha=_sha(wl), witness=witness)
@@ -373,7 +373,7 @@ def assemble(reqs, tmp_path, leak=False, tgrouped=False, eos_token_ids=(EOS,), l
     for r in reqs:
         sh = (len(r["prompt"]), _cap(r) - 1)
         if sh not in comps:
-            comps[sh] = component(r, tmp_path / f"comp_LP{sh[0]}_T{sh[1]}", witness=witness and ("launch" if witness.startswith("launch") else "own"))
+            comps[sh] = component(r, tmp_path / f"comp_LP{sh[0]}_T{sh[1]}", witness=witness and "own")
     return gm.mock_global_program(wl, list(comps.values()), eos_token_ids=list(eos_token_ids) if eos_token_ids else None, lag=lag), oracle
 
 
@@ -492,26 +492,6 @@ def test_witness_parameters_are_request_owned_globally(memory, tmp_path):
     res = gm.check(gp, oracle)
     assert res["verdict"] == "FAIL" and _check(res, "G5")["status"] == "FAIL"
     assert any("witness-param" in p for p in _check(res, "G5")["problems"]), _check(res, "G5")["problems"]
-
-
-def test_each_launch_unit_of_the_fold_is_the_programs(memory, tmp_path):
-    """The launches r0 and r1 share run once, as no request's unit: G2 finds each the workload Program's launch unit (its members at
-    their slots, its instances the unit's gates) and the requests' legs read their linked words.  A fold unit the Program does not
-    declare, a declared unit no instance runs, other slots or another moe block fail G2 by name."""
-    gp, oracle = assemble([R0, R1], tmp_path, witness="launch")
-    units = [{"e": 0, "j": 0, "E": C["V"], "BM": 4, "P": 5, "members": [{"request_id": "r0", "slot": 0, "pairs": 3}, {"request_id": "r1", "slot": 3, "pairs": 2}]},
-             {"e": 1, "j": 0, "E": C["V"], "BM": 4, "P": 2, "members": [{"request_id": "r0", "slot": 0, "pairs": 1}, {"request_id": "r1", "slot": 1, "pairs": 1}]}]
-    res = gm.check(dict(gp, launches=units), oracle)
-    assert res["verdict"] == "PASS", res["reasons"]
-    g2 = _check(res, "G2")
-    assert (g2["launch_units"], g2["launch_instances"], g2["unattributed"]) == (2, 5 + 2 + 2 + 2, 0)
-    swapped = dict(units[1], members=[{"request_id": "r0", "slot": 1, "pairs": 1}, {"request_id": "r1", "slot": 0, "pairs": 1}])
-    for declared, problem in ((units[:1], "fold launch unit e1.0: the workload Program has no launch[e1.0]"),
-                              (units + [dict(units[1], e=2)], "launch[e2.0]: no fold instance runs"),
-                              ([units[0], swapped], "launch[e1.0]: the fold's members"),
-                              ([dict(units[0], BM=8), units[1]], "launch[e0.0]: the fold's instances are not the unit's gates")):
-        res = gm.check(dict(gp, launches=declared), oracle)
-        assert res["failed_checks"] == ["G2"] and any(p.startswith(problem) for p in _check(res, "G2")["problems"]), _check(res, "G2")["problems"]
 
 
 def test_staggered_arrivals_pass_with_mixed_step_and_declared_chronology(memory, tmp_path):

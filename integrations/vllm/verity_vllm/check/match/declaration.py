@@ -267,7 +267,6 @@ def from_gprog(artifact_path: str, workload_path: str | None = None) -> dict:
             "workload": {"path": wl_path, "sha256": art.get("manifest_digest"), "n_requests": len(reqs)},
             "shared_inputs": [{"name": "weights", "role": "prescribed", "global_param": f"root parameter {art.get('shared_param_index')} (gprog shared)"}],
             "requests": reqs, "chronology": art.get("chronology"), "address_space": art.get("address_map", {}).get("convention"),
-            "launches": (art.get("address_map") or {}).get("launches") or [],   # the shared align launches' units (G2)
             "applicability": art.get("applicability"),
             "stop_rule": art.get("stop_rule"),   # [F-pm-24] the declared EOS set (None on a pre-fix artifact -> G6 fails closed on early stops)
             "lag": art.get("lag"),               # [R17-1] the declared LAG block (None on a pre-R17-1 artifact -> G6 fails by name on EOS stops)
