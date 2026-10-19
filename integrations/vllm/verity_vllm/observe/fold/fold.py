@@ -92,7 +92,7 @@ from typing import Any
 from verity.ml.circuits.codec import encode_program, program_digest
 from verity.ml.circuits.defs import Builder, CompositeDefinition, bind
 from verity.ml.circuits.program import Program
-from verity.ml.circuits.refs import Affine, Coll, Refs, concat, runs, tuple_of
+from verity.ml.circuits.refs import Affine, Coll, Refs, array_of, concat, runs, tuple_of
 from verity_vllm.program import sampling_event as SE
 from verity_vllm.program.registry import b1
 from verity_vllm.program.replay import replayer
@@ -757,6 +757,11 @@ class _Fold:
 
     def _const(self, op: Const, ptype: Type, c: Compute, pname: str) -> Coll:
         """[R15 stoch] Emit the constant's primitive instance and return its output (typed `Value<W>`)."""
+        if isinstance(op.bits, tuple):
+            if ptype != Array(len(op.bits), Value(int(op.width))):
+                raise FoldError(f"{spec_label(c.spec)}.{pname}: {len(op.bits)} Const{op.width} for a parameter of type {ptype!r}")
+            tail = op.name or pname
+            return array_of([self._const(Const(op.width, int(b), f"{tail}{i}"), Value(int(op.width)), c, pname) for i, b in enumerate(op.bits)])
         if ptype != Value(int(op.width)):
             raise FoldError(f"{spec_label(c.spec)}.{pname}: Const{op.width} for a parameter of type {ptype!r}")
         prim = b1.const(int(op.width), int(op.bits))

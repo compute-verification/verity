@@ -36,6 +36,7 @@ from verity_vllm.program.frontend.rules.vllm_bindings.elementwise import Bf16Sca
 from verity_vllm.program.frontend.rules.vllm_bindings.fp8 import (CutlassScaledMmFp8BlockRule, DynamicDeepGemmFp8LinearRule,
                                                                  PerTokenGroupFp8QuantRule, SameDtypeCastRule)
 from verity_vllm.program.frontend.rules.vllm_bindings.fused_norm import FusedAddRmsNormBIRule
+from verity_vllm.program.frontend.rules.vllm_bindings.int8 import Int8LinearRule, Int8UnifiedAttentionRule
 from verity_vllm.program.frontend.rules.vllm_bindings.layer_norm import LayerNormAtenRule
 from verity_vllm.program.frontend.rules.vllm_bindings.norm_chain import (AddScalarRule, AddWidenedRule, MeanDimBIRule, MulF32Rule,
                                                                          NarrowF32ToBf16Rule, RsqrtRule, SquareRule, WidenBf16ToF32Rule)
@@ -59,7 +60,9 @@ VLLM_BINDING_RULES = [TritonRmsNormRule(), TritonGemmRule(), CublasLinearRule(),
                       AllReduce2Rule(), AllGather2Rule(), AllReduceRule(), FusedAllReduceRmsNormRule(), AllGatherRule(), EmbeddingShardRule(),
                       # [lane vllm-tp-n] WORLD-ary rules after the world-2 ones
                       # [R15 fp8] the block-scaled FP8 linear (Fp8LinearMethod -> CutlassFp8BlockScaledMMKernel) + the same-dtype cast it ends with
-                      DynamicDeepGemmFp8LinearRule(), PerTokenGroupFp8QuantRule(), CutlassScaledMmFp8BlockRule(), SameDtypeCastRule()]
+                      DynamicDeepGemmFp8LinearRule(), PerTokenGroupFp8QuantRule(), CutlassScaledMmFp8BlockRule(), SameDtypeCastRule(),
+                      # the exact-int8 profile's int8 linear and int8 attention (engine.int8_ops)
+                      Int8LinearRule(), Int8UnifiedAttentionRule()]
 
 
 def vllm_ruleset():

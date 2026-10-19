@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from types import SimpleNamespace
+
 import torch
 
 from verity.ml.circuits.refs import Coll, array_of
@@ -97,6 +99,10 @@ class UnifiedAttentionWithOutputRule(StateRule):
         kw = node.kwargs
         return (a[0], a[1], a[2], a[3], a[4], kw.get("output_scale", a[5]), kw.get("output_block_scale", a[6]), kw.get("kv_cache_dummy_dep", a[7]))
 
+    def impl_refusal(self, layer_name: str) -> str | None:
+        """Why the layer's observed implementation is not the one this rule binds (None: it is)."""
+        return _attn_pins_ok((_OBSERVED["attention_impls"] or {}).get(layer_name) if _OBSERVED["attention_impls"] is not None else None, layer_name)
+
     def applies(self, node, ctx):
         q, k, v, out, layer_name, oscale, obscale, dep = self._args(node)
         for nm, a in (("query", q), ("key", k), ("value", v)):
@@ -109,7 +115,7 @@ class UnifiedAttentionWithOutputRule(StateRule):
             return "output is not an allocation/value"
         if not isinstance(layer_name, str):
             return "layer_name is not a static string"
-        r = _attn_pins_ok((_OBSERVED["attention_impls"] or {}).get(layer_name) if _OBSERVED["attention_impls"] is not None else None, layer_name)
+        r = self.impl_refusal(layer_name)
         if r:
             return r
         if oscale is not None or obscale is not None:
@@ -129,7 +135,9 @@ class UnifiedAttentionWithOutputRule(StateRule):
                 return "the pending KV write's rows are not this call's key/value rows"
         return True
 
-    def emit(self, node, ctx):
+    def extend_history(self, node, ctx) -> SimpleNamespace:
+        """Append the call's k, v rows to its layer's history: the query rows `qrows` [T][NH][D] (`qs` q's shape), the history's
+        logs `klog`, `vlog` with the call's rows at positions P0..P0+T-1, and the module path `mp`."""
         q, k, v, out, layer_name, _, _, dep = self._args(node)
         qc, kc, vc = ctx.coll(q), ctx.coll(k), ctx.coll(v)
         D = ctx.config.get("D") or ctx.allowed_dims.get("D")
@@ -169,6 +177,12 @@ class UnifiedAttentionWithOutputRule(StateRule):
         klog, vlog = kv_logs(ctx, layer_name, krow_list, vrow_list)
         ctx.check_dim("T", T, node)
         ctx.check_dim("CONTEXT", P0 + T, node)
+        return SimpleNamespace(qs=qs, T=T, NH=NH, D=D, KVH=KVH, qrows=qrows, klog=klog, vlog=vlog, P0=P0, mp=mp)
+
+    def emit(self, node, ctx):
+        q, k, v, out, layer_name, _, _, dep = self._args(node)
+        h = self.extend_history(node, ctx)
+        qs, T, NH, D, KVH, qrows, klog, vlog, P0, mp = h.qs, h.T, h.NH, h.D, h.KVH, h.qrows, h.klog, h.vlog, h.P0, h.mp
         outs = []
         obs_sel = (_OBSERVED["attention_impls"] or {}).get(layer_name, {})
         role, extra, window = attn_kind_for(obs_sel)
