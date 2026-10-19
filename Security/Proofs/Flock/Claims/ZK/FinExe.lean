@@ -1159,6 +1159,103 @@ theorem repCut_erased (h0 : SimPiop) (h1 : SimLig) (h2 : SimInner) {x : Msg} (hx
   unfold mixE
   rw [FinRep.repMix3_eq]
 
+/-! ## The final-only data -/
+
+/-- **Two rep proofs agree on their final-only data**: level 0's opened rows and salts, `τ` and its salt, and the pads'
+opened columns and salts, the fields `eraseZ` forgets. -/
+def FinalEq (p q : _root_.Flock.Zk.ZkProof) : Prop :=
+  p.proof.ligerito.initialProof.rows = q.proof.ligerito.initialProof.rows ∧
+    p.proof.ligerito.initialProof.salts = q.proof.ligerito.initialProof.salts ∧
+    p.inner.tau = q.inner.tau ∧ p.inner.tauSalt = q.inner.tauSalt ∧ p.inner.opened = q.inner.opened ∧
+    p.inner.salts = q.inner.salts
+
+/-- A rep proof is its erasure and its final-only data. -/
+theorem eq_of_eraseZ {p q : _root_.Flock.Zk.ZkProof} (h : FlockComplete.eraseZ p = FlockComplete.eraseZ q)
+    (hf : FinalEq p q) : p = q := by
+  obtain ⟨⟨cap, pa, zc, lc, rs, ⟨ic, ⟨rw0, sb, sl⟩, rc, rp, fp, ms, qn, ov, cn, csn⟩⟩, l0,
+    ⟨root, rho, sig, tc, ts, tau, y, op, isl, pth⟩⟩ := p
+  obtain ⟨⟨cap', pa', zc', lc', rs', ⟨ic', ⟨rw0', sb', sl'⟩, rc', rp', fp', ms', qn', ov', cn', csn'⟩⟩, l0',
+    ⟨root', rho', sig', tc', ts', tau', y', op', isl', pth'⟩⟩ := q
+  obtain ⟨h1, h2, h3, h4, h5, h6⟩ := hf
+  simp only at h1 h2 h3 h4 h5 h6
+  subst h1 h2 h3 h4 h5 h6
+  simp only [FlockComplete.eraseZ, FlockComplete.eraseL, FlockComplete.eraseLP, FlockComplete.eraseIP,
+    _root_.Flock.Zk.ZkProof.mk.injEq, _root_.Flock.Proof.mk.injEq, _root_.Flock.LigeritoProof.mk.injEq,
+    _root_.Flock.LevelProof.mk.injEq, _root_.Flock.Zk.InnerProof.mk.injEq] at h ⊢
+  simp_all
+
+/-- **A run is fixed by its erasure and its final-only data**: two runs of the rep monad equal once `eraseZ` is applied
+to their proofs, whose final-only data agree wherever both return, are equal. -/
+theorem eq_of_go_eraseZ {A B : Except String (_root_.Flock.Zk.ZkProof × _root_.Flock.Transcript) × Array Msg}
+    (h : (A.1.map (fun p => (FlockComplete.eraseZ p.1, p.2)), A.2) =
+      (B.1.map (fun p => (FlockComplete.eraseZ p.1, p.2)), B.2))
+    (hf : ∀ p q t l', A = (.ok (p, t), l') → B = (.ok (q, t), l') →
+      FlockComplete.eraseZ p = FlockComplete.eraseZ q → FinalEq p q) : A = B := by
+  obtain ⟨a, la⟩ := A
+  obtain ⟨b, lb⟩ := B
+  simp only [Prod.mk.injEq] at h
+  obtain ⟨h, rfl⟩ := h
+  rcases a with e | ⟨p, t⟩ <;> rcases b with e' | ⟨q, t'⟩ <;>
+    simp only [Except.map, Except.error.injEq, Except.ok.injEq, Prod.mk.injEq, reduceCtorEq] at h
+  · rw [h]
+  · obtain ⟨hz, rfl⟩ := h
+    rw [eq_of_eraseZ hz (hf p q t la rfl rfl hz)]
+
+/-- **Table `i`'s rep `r` read from the views**: `repCut` on the views' source, with level 0's and the pads'
+commitments the session's but their rows, columns and salts the views' (`fill0`, `fillP`): `RepFin`'s left side. -/
+noncomputable def repVE (x : Msg) (w : Claims.Flock.Wit) (τ : UE.Tape) (c : Fin (refK x) → FlockDeploy.Coin)
+    (spec : _root_.Flock.SessionSpec) (i : ℕ) (hi : i < jOf x) (r : ℕ) (cm0 : FlockComplete.Commit)
+    (extras : Array _root_.Flock.Claim) (ic : FlockComplete.InnerCommit) :
+    FlockComplete.PS (_root_.Flock.Zk.ZkProof × _root_.Flock.Transcript) :=
+  (FlockComplete.repCut (ioE c (refK x)) hsE (FlockDeploy.tabsOf (stsOf x))[i]! (zkTab x ⟨i, hi⟩).sch r
+    (domE spec i r) (fill0 x c w τ i ((zkTab x ⟨i, hi⟩).sch.levels.getD 0 default) cm0) extras
+    (fillP x c w τ i r (((layE x i hi).len + _root_.Flock.Zk.K_PAD).nextPowerOfTwo *
+      2 ^ _root_.Flock.Zk.INNER_LOG_INV_RATE) ic) ((srcV x c w τ i).rep r) (priorE c i r)
+    (FlockComplete.MaskRank.masksOf (stsOf x))[i]!).run (_root_.Flock.Transcript.init #[] (domE spec i r))
+
+/-- **The final-only data read from the views is the session's**: in a rep's context, where the rep read from the views
+and the session's rep both return, at one transcript and history and with proofs equal up to `eraseZ`, their final-only
+data agree. -/
+def RepFinal : Prop :=
+  ∀ x w τ c spec i hi r cm0 extras ic l, RepCtx x w τ c spec i hi r cm0 extras ic l →
+    ∀ p q t l', (repVE x w τ c spec i hi r cm0 extras ic).go l = (.ok (p, t), l') →
+      (repHE x w τ c spec i hi r cm0 extras ic).go l = (.ok (q, t), l') →
+      FlockComplete.eraseZ p = FlockComplete.eraseZ q → FinalEq p q
+
+/-- **`RepFin` from the hybrids and the final-only data**: the rep read from the views is the cut's rep up to the
+final-only data (`FinRep.repCut_eraseC`, `FinRep.repCut_eraseIS`, `eraseS_srcV`), hence the session's up to it
+(`repCut_erased`), hence the session's (`RepFinal`). -/
+theorem repFin_of (h0 : SimPiop) (h1 : SimLig) (h2 : SimInner) (hFin : RepFinal) : RepFin := by
+  intro x w τ c spec i hi r cm0 extras ic l hC
+  obtain ⟨hx, hw, hA, ⟨s, hsx⟩, hr, hcm, hic, he, hl⟩ := hC
+  have hE := repCut_erased h0 h1 h2 hx hw τ hA hsx ⟨i, hi⟩ ⟨r, hr⟩ (domE spec i r) cm0 ic extras he l hl
+  have hsrc : eraseS ((srcV x c w τ i).rep r) = eraseS ((srcE x c w τ i).rep r) :=
+    (eraseS_srcV hA w τ hi hr).trans (by rw [← eraseS_srcV hA w τ hi hr]; rfl)
+  have hn : (fillP x c w τ i r (((layE x i hi).len + _root_.Flock.Zk.K_PAD).nextPowerOfTwo *
+      2 ^ _root_.Flock.Zk.INNER_LOG_INV_RATE) ic).ch.size = (FlockComplete.eraseIC ic).ch.size := by
+    simp [fillP, FlockComplete.eraseIC, FinRep.innerCommitP_ch hic, FlockComplete.padsOf]
+  have E := (FinRep.repCut_eraseC (ioE c (refK x)) hsE (FlockDeploy.tabsOf (stsOf x))[i]! (zkTab x ⟨i, hi⟩).sch r
+      (domE spec i r) (cm := fill0 x c w τ i ((zkTab x ⟨i, hi⟩).sch.levels.getD 0 default) cm0)
+      (cm' := FlockComplete.eraseC cm0) rfl rfl extras
+      (fillP x c w τ i r (((layE x i hi).len + _root_.Flock.Zk.K_PAD).nextPowerOfTwo *
+        2 ^ _root_.Flock.Zk.INNER_LOG_INV_RATE) ic) ((srcV x c w τ i).rep r) (priorE c i r)
+      (FlockComplete.MaskRank.masksOf (stsOf x))[i]!).trans
+    (FinRep.repCut_eraseIS (ioE c (refK x)) hsE (FlockDeploy.tabsOf (stsOf x))[i]! (zkTab x ⟨i, hi⟩).sch r
+      (domE spec i r) (FlockComplete.eraseC cm0) extras hn rfl rfl hsrc (priorE c i r)
+      (FlockComplete.MaskRank.masksOf (stsOf x))[i]!)
+  have hE' := (congrArg (fun z => (z.run (_root_.Flock.Transcript.init #[] (domE spec i r))).go l) E).trans hE
+  simp only [StateT.run_map, FlockComplete.go_map'] at hE'
+  exact eq_of_go_eraseZ (A := (repVE x w τ c spec i hi r cm0 extras ic).go l)
+    (B := (repHE x w τ c spec i hi r cm0 extras ic).go l) hE'
+    fun p q t l' hp hq hz => hFin x w τ c spec i hi r cm0 extras ic l
+      ⟨hx, hw, hA, ⟨s, hsx⟩, hr, hcm, hic, he, hl⟩ p q t l' hp hq hz
+
+/-- **`FinExe` from the hybrids, the live end and the per-rep facts**: `finExe_of_reps` with `RepFin` from `SimPiop`,
+`SimLig`, `SimInner` and the final-only data (`repFin_of`). -/
+theorem finExe_of_parts (hL : LiveEnd) (hSC : SimCommit) (h0 : SimPiop) (h1 : SimLig) (h2 : SimInner)
+    (hFin : RepFinal) (hE : RepExact) (hP : RepPoints) : FinExe :=
+  finExe_of_reps hL hSC (repFin_of h0 h1 h2 hFin) hE hP
+
 end Masked
 
 end Claims.ZKMal
