@@ -21,6 +21,9 @@
     dither-1s-hbk  dither-1s-hbp on the unit's K split (an h1u.cu build with H1U_KSPLIT, from the .so HB_H1U_KSPLIT names):
                    h1k for the calls a warp-a-unit form underfills, h1u for the rest; gated as dither-1s-hbp is.
 
+sbench's dither-a arms (ASK-71's option A, `dither_a`) run here as they are, their side unit kh_unit_ws from HB_H1U, and
+their tokens must equal exact's at every decode rep too.
+
 Each arm takes sbench's -xl, -a2 and -a3 suffixes (exactlin's quantizer, the paired A table, its messages in registers;
 gated as the arm is).
 
@@ -109,7 +112,7 @@ sbench.REF_OF["dither-1s-hb"] = "exact"
 sbench.TOKENS_GATED["dither-1s-hb"] = False
 sbench.REF_OF["dither-1s-hbp"] = "exact"
 sbench.REF_OF["dither-1s-hbk"] = "exact"
-TOKENS_EVERY_REP = ("dither-1s-hbp", "dither-1s-hbk")
+TOKENS_EVERY_REP = ("dither-1s-hbp", "dither-1s-hbk", *sbench.DITHER_A)
 
 if __name__ == "__main__":
     sys.exit(main())

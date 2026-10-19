@@ -26,6 +26,14 @@ done
 grep -B1 -A2 "h1f_k\|h1r_units" "$OUT/build-h1f.log" | grep -i "registers\|spill" | head -6
 grep -B1 -A2 "h1o_units" "$OUT/build-h1o.log" | grep -i "registers\|spill" | head -8
 grep -B1 -A2 "h1c_a_" "$OUT/build-h1c.log" | grep -i "registers\|spill" | head -6
+# dither-a-kh's side unit: h1u.cu's kh_unit_ws, built here for sm_120a (HB_H1U)
+case " $* " in *dither-a-kh*)
+  nvcc -O3 -std=c++17 --expt-relaxed-constexpr -gencode arch=compute_120a,code=sm_120a -Xptxas -v -Xcompiler -fPIC -shared \
+    -o "$S/h1u.so" benchmarks/hash/dither/h1u.cu > "$OUT/build-h1u.log" 2>&1 \
+    || { echo "sbench: NVCC_FAIL h1u"; grep -v "^ptxas info" "$OUT/build-h1u.log" | tail -30; exit 11; }
+  grep -B1 -A2 "h1u_ws\|h1s_noise" "$OUT/build-h1u.log" | grep -i "registers\|spill" | head -6
+  export HB_H1U=$S/h1u.so ;;
+esac
 [ -n "${BUILD_ONLY:-}" ] && { echo "sbench: built (BUILD_ONLY)"; exit 0; }
 export DITHER_H1C=$S/libh1c.so DITHER_H1F=$S/libh1f.so DITHER_H1O=$S/libh1o.so VLLM_DISABLE_COMPILE_CACHE=1
 # CA's credit gate (#2684) at its pinned head, for the dither-1s-credit arm
