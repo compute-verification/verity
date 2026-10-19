@@ -743,7 +743,7 @@ def main() -> int:
                          big["found"] == 0 and ctl["fx1"]["found"] == 0, seen)
             checks.check("width-4 exhaustive: nor as a last SEL.64's under any predicate",
                          big["sel"] == 0 and ctl["fx1"]["sel"] == 0, seen)
-            if "--mutations" in checks.args:
+            if checks.mutations:
                 # 7.-12. Each part of the search is needed: built without it (-DDROP), fold_wide3.c misses the controls
                 #    only that part reaches.
                 parts = ((1, "a last IADD.64", ("ctl_add64_pre", "ctl_add64_live", "ctl_mnmx_first")),
