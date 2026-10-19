@@ -1767,6 +1767,18 @@
    "assumptions": [],
    "type_hash": "84c0e48cb401d6662d94c2c1f395aeedc6aeeac630cd5e87ee5bb6e6e09009d0"
   },
+  "FlockSoundness.Audit.Adaptive.harm_budget": {
+   "owner": "@proofs"
+  },
+  "FlockSoundness.Audit.Adaptive.harm_count": {
+   "owner": "@proofs"
+  },
+  "FlockSoundness.Audit.Adaptive.harm_count_kstar": {
+   "owner": "@proofs"
+  },
+  "FlockSoundness.Audit.Adaptive.life_harm_budget": {
+   "owner": "@proofs"
+  },
   "FlockSoundness.Audit.Law.closure_escape": {
    "owner": "@proofs",
    "signature": [
@@ -5132,6 +5144,10 @@
    "Flock.SecurityProofs.RecursiveZK": "frozen (obligation,no-function): It takes the outer proof's zero knowledge as an open obligation, and as a simulation statement it has no acceptance of a function to take; stated at the hm96 hiding gap, it takes no premise on the key or on SHA-512.",
    "Flock.SecurityProofs.SamplingClaimsStated": "frozen (no-function): It states no property of the verifier: it reads each claim of Security/Definitions/Claims/Sampling.lean, so the lock records their text, and a claim leaves it when a guarantee states that claim at the deployed sampled verifier.",
    "Flock.SecurityProofs.ZeroKnowledgeHidden": "frozen (scope): It takes avoidsMask (_hdm) as a scope condition that the verifier doesn't refuse; Security/Proofs/Flock/Soundness/Discharge/FailClosed/Mask.lean:9-11 derives it from the setup, so restating on that removes the scope reason.",
+   "FlockSoundness.Audit.Adaptive.harm_budget": "frozen (obligation,no-function): It states the cumulative harm budget over an abstract adaptive play (`Adaptive.Play.prEv`, Security/Proofs/Flock/Soundness/Audit/HarmBudget.lean) under per-round design and drawn-unit hypotheses (`Play.Laws`, `Play.Drawn`), rather than the acceptance of a Lean function.",
+   "FlockSoundness.Audit.Adaptive.harm_count": "frozen (obligation,no-function): It states the cumulative harm budget over an abstract adaptive play (`Adaptive.Play.prEv`, Security/Proofs/Flock/Soundness/Audit/HarmBudget.lean) under per-round design and drawn-unit hypotheses (`Play.Laws`, `Play.Drawn`), rather than the acceptance of a Lean function.",
+   "FlockSoundness.Audit.Adaptive.harm_count_kstar": "frozen (obligation,no-function): It states the cumulative harm budget over an abstract adaptive play (`Adaptive.Play.prEv`, Security/Proofs/Flock/Soundness/Audit/HarmBudget.lean) under per-round design and drawn-unit hypotheses (`Play.Laws`, `Play.Drawn`), rather than the acceptance of a Lean function.",
+   "FlockSoundness.Audit.Adaptive.life_harm_budget": "frozen (obligation,no-function): It takes KnowledgeSound and LinkSound (Security/Proofs/Flock/Soundness/Audit/OneStage.lean:85, :94), open obligations of the backend, as hypotheses, and it is about the abstract lifetime of one-stage audits rather than a Lean function.",
    "FlockSoundness.Audit.Law.closure_escape": "lemma: leaves the list under the 5:11 PM ruling",
    "FlockSoundness.Audit.Law.covers_window": "lemma: leaves the list under the 5:11 PM ruling",
    "FlockSoundness.Audit.Law.harm_le_unsoundWork": "lemma: leaves the list under the 5:11 PM ruling",
