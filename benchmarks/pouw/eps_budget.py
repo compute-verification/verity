@@ -403,6 +403,13 @@ FLOOR_WORDS = {"cohalf": 1.25}
 #: r2's exact ncu counts on sm_120 (checked_strip's APV_TAIL_OPS): its 4 IMMAs (the 4th, 64·S_diag, only the served
 #: output needs), the 256·Y1 combine's 4 IMADs and the other 11.5 (LDGs, NOPs, an LDSM, control), priced as ALU's.
 APV_TAIL = {"IMMA": 4, "IMAD": 4.0, "ALU": 11.5}
+#: The same peel kernels' counts in a device's own SASS, where they exceed sm_120's: the tail by class as APV_TAIL, and
+#: RATES' c_apv_serve and c_vfold, which they replace there. sm_90a's are static counts, not ncu: nvdisasm of apv.cu's
+#: sm_90a build with ncu's rule applied (eps_counts.py; RT-ISA-7, run r20261019-093003-2795,
+#: art:cadf255937a4792d0b347c3540d1c0709a15c7bb697fc0c121153ad4e6f22be4): the tail 27.02 a tile (+39%), the served f
+#: 6.15 a tile (+40%) and vfold's sums 0.760 an entry, the most over shapes. sm_100a's (tail 17.26, served f 4.53,
+#: vfold 0.706) are under sm_120's, so the B200 keeps sm_120's, which overstate its ε_skip.
+SASS = {"sm_90": {"APV_TAIL": {"IMMA": 4, "IMAD": 6.93, "ALU": 16.09}, "c_apv_serve": 6.15 / 128, "c_vfold": 0.760}}
 #: mma.sync m16n8k32's census class: sm_120, sm_80 and sm_89 name it IMMA16832, sm_90 and sm_100 IMMA16832_S8
 IMMA16832 = ("IMMA16832", "IMMA16832_S8")
 #: The TS model's cheater SMSP-cycles a transcript MMA (4096 MACs) of a checked leaf's component (`ts_tile`): co32c
@@ -417,7 +424,8 @@ TS_CHEAT = {"co32c": ts_time(1, 4 * TS_FOLD), "cohalf": ts_time(6, 5 * 4 * TS_FO
 @dataclass(frozen=True)
 class Prices:
     """A design's floor-credit prices on a device's Π, SMSP-cycles: ♭ a 4096-MAC MMA, and adopted P·V's tail a strip
-    product as Π prices BC-KERNEL r2's instruction counts (APV_TAIL), whole and without the 4th IMMA."""
+    product as Π prices BC-KERNEL r2's instruction counts (APV_TAIL, or the device's own in SASS), whole and without
+    the 4th IMMA."""
     vector: str
     mma: float
     tail: float
@@ -434,10 +442,11 @@ def prices(name: str, data: Path = DATA, vector: str = "") -> Prices:
     pi = machine(vector, data)
     imma = next(k for k in IMMA16832 if k in pi.c)
     tile = 128 * 2 * (32 + 1)
-    four = {(imma if k == "IMMA" else k): v for k, v in APV_TAIL.items()}
+    counts = SASS.get(data.name, {}).get("APV_TAIL", APV_TAIL)
+    four = {(imma if k == "IMMA" else k): v for k, v in counts.items()}
     top = lambda n: max(pi.load(n).values())
     return Prices(pi.vector, setup(d, pi, data, "floor", "floor").baseline.T * 4096 / d.L, top(four) / tile,
-                  top({**four, imma: APV_TAIL["IMMA"] - 1}) / tile)
+                  top({**four, imma: counts["IMMA"] - 1}) / tile)
 
 
 def floor_skip(name: str, ctx: int, d: Design, rates: dict = RATES, data: Path = DATA, vector: str = "",
@@ -456,10 +465,11 @@ def floor_skip(name: str, ctx: int, d: Design, rates: dict = RATES, data: Path =
     - a TS leaf's skippable vector work, prefill only: TS_EPS of TS_CHEAT (co32c, cohalf), and pv's gap `pv_ts` at
       16 cycles a plain MMA times its γ.
 
-    Off sm_120 every count is sm_120's for the same kernel source. B_♭ is the words plus the reading's n^s_♭; the
-    non-GEMM kernels are left out of it, as D3's n_♭ leaves them. Decode's ♭ is compute alone (its DRAM-bound time is
-    longer), an upper bound on ε_skip there."""
-    s, r = MODELS[name], rates
+    Off sm_120 every count is sm_120's for the same kernel source, except the peel's where SASS has the device's own.
+    B_♭ is the words plus the reading's n^s_♭; the non-GEMM kernels are left out of it, as D3's n_♭ leaves them.
+    Decode's ♭ is compute alone (its DRAM-bound time is longer), an upper bound on ε_skip there."""
+    s = MODELS[name]
+    r = {**rates, **{k: v for k, v in SASS.get(data.name, {}).items() if k in rates}}
     p = prices(d.name, data, vector)
     L_ = d.L
     keys = (ctx + 1) / 2 if phase == "prefill" else ctx
