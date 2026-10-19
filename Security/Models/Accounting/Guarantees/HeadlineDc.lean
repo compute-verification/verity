@@ -63,8 +63,13 @@ instruction takes an issue slot, which no vendor document states. It is measured
 saturated wgmma, the B200 beside four `tcgen05.mma` in flight. Without it, the uniform route takes the sheet readings
 to about 94% (H200, RT-HOPPER-3) and 100% (B200). FOLD-OPT (`FoldOptFolded`, conjectured) has 5.9% of slack on DS-90:
 the H200's sheet reading holds while LI-CP-W redux's fold costs at least 0.992 lane instructions a word against its
-1.055 (with ffill out of ♭, ♭ on DS_issue is the MMA and the fold alone). On DS-100 it has 53%: the cliff is 0.496 a
-word (RT-HB-HEAD-2). With only the proved fan-in floor in its place each reading is tens of percent (decision 115).
+1.055 (with ffill out of ♭, ♭ on DS_issue is the MMA and the fold alone). On DS-100 it has 53% on count: the cliff is
+0.496 a word (RT-HB-HEAD-2). DS-100's π* also prices the pipes apart, a LOP3 at 1.969 and an IMAD or FFMA at 0.031, so
+there FOLD-OPT also says li's XOR of two words has no IMAD- or FP-pipe program of fewer than 63 instructions (the
+bit-serial one has 193). It is false for a keyed round's XOR with a constant, which takes 1 + 2|B| IMAD-pipe
+instructions (FOLD-MIN, #2751), but plain li has no such round: every half step absorbs a word. With the fold priced at
+its instruction count alone, which needs no pipe premise, the B200's sheet reading is 1.408%. With only the proved
+fan-in floor in its place each reading is tens of percent (decision 115).
 
 The statements:
 
@@ -173,8 +178,9 @@ census MMA class and `UNI` at 2 the writer kinds, `q = q_T = ½`, `b_T = 0`, `N_
 proof layer `pf` whose binding and soundness cost at most `2^-41` over the window, if the labelling splits, (I1)
 `FacetCeilings` holds on DC-100-ri's rows, A6 (`SheetWords`) and (I5) `NoSum` hold on every run and FOLD-OPT per word
 folded prices every run's fold at the words it folds (its unfolded share `Uf`), and the luck and proof premises hold as
-in `Sm90SheetHeadline`, then outside an event of probability at most `2^-40` every accepted window's time is at least `1 − 888/100000`
-(`1 − 0.888%`) of the credit `T_cred = B_♭/f_max`. FILL-OPT is not a hypothesis: the design has no filler. -/
+in `Sm90SheetHeadline`, then outside an event of probability at most `2^-40` every accepted window's time is at least
+`1 − 888/100000` (`1 − 0.888%`) of the credit `T_cred = B_♭/f_max`. FILL-OPT is not a hypothesis: the design has no
+filler. -/
 def Sm100MeasuredHeadline : Prop :=
   ∀ (Ω : Type) [Fintype Ω] (Pl : Play Ω Sm100.checks (Fin 26) (Fin 13) Unit Empty) (G : ReceiptGame Ω Sm100.checks)
     (Uf : Unfolded Ω Sm100.checks) {V : Type} {nπ : ℕ} (pf : ProofLayer Ω Sm100.checks nπ V) (δbind δzk : ℝ),
