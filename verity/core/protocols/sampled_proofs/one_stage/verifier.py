@@ -416,6 +416,26 @@ def check_probability(law: TS.TwoStageLaw, cls: str, n_v: int) -> tuple[Fraction
                    lambda: TS.check_probability(law, cls, n_v), lambda p: {"p": str(p)})
 
 
+def stream(params: Mapping[str, Any], state: Mapping[str, Any], op: Mapping[str, Any], decision: Mapping[str, Any],
+           after: Mapping[str, Any]) -> tuple[dict[str, Any], dict[str, Any], Verdict]:
+    """A proof service stream's rules on `op` (the Lean's `Stream.run` on `state`) against Python's `decision` and the
+    state `after` it (`service._step`'s), compared without Python's `detail`, which the decision of record keeps: the
+    decision and the state of record, and the verdict, `disagree` where the two differ."""
+    got = lean("stream", {"params": dict(params), "state": dict(state), "op": dict(op)})
+    try:
+        theirs = {"decision": got["decision"], "state": json.loads(got["state"])}
+    except (KeyError, TypeError, ValueError):
+        theirs = {"error": got.get("refused")}
+    mine = {"decision": {k: v for k, v in decision.items() if k != "detail"}, "state": dict(after)}
+    verifiers = {"of_record": RECORD_VERDICT, "lean": theirs, "python": mine}
+    if not _same(theirs, mine):
+        return dict(decision), dict(after), Verdict(False, (DISAGREE,), {DISAGREE: {"lean": theirs, "python": mine}},
+                                                    verifiers)
+    rec = theirs if RECORD_VERDICT == "lean" else mine
+    d = {**rec["decision"], **({"detail": decision["detail"]} if "detail" in decision else {})}
+    return d, rec["state"], Verdict(True, (), {}, verifiers)
+
+
 def _record_summary(r: Mapping[str, Any]) -> dict[str, Any]:
     if "refused" in r:
         return {"refused": r["refused"]}

@@ -235,6 +235,32 @@ def test_the_two_stage_profile_is_the_verifiers_of_record(monkeypatch):
     assert V.check_probability(law, "decode", 6)[1].codes == (V.DISAGREE,)
 
 
+def test_a_stream_rules_disagreement_stops_the_stream(monkeypatch):
+    """A stream's own rules decide each op by both, on what they hold of the stream that the op reads: where the Lean
+    decides otherwise, or holds another state after it, the op is refused (`disagree`, naming both), and so is every op
+    after it."""
+    stream, reg, draw = _drawn()
+    assert stream._rule_entries == [{"order": 0, "registration": S._registration_token(reg), "draw": S._draw_token(draw),
+                                     "proved": len(draw.proved), "drawn_at": stream._entries[0].drawn_at,
+                                     "interior": False, "delivered": False, "session": None, "final": False}]
+    _lean_answering(monkeypatch, "stream", lambda got: {**got, "decision": {"ok": "late"}})
+    with pytest.raises(S.Refused) as e:
+        stream.deliver(draw, [SESSION])
+    v = e.value.verdict
+    assert v.codes == (V.DISAGREE,) and v.detail[V.DISAGREE]["lean"]["decision"] == {"ok": "late"}
+    assert v.verifiers["python"]["decision"] == {"unchecked": "now"}
+    monkeypatch.undo()
+    for op in (lambda: stream.deliver(draw, [SESSION]), stream.ready):
+        with pytest.raises(S.Refused) as e:
+            op()
+        assert e.value.verdict is v
+    stream = _stream()
+    _lean_answering(monkeypatch, "stream", lambda got: {**got, "state": got["state"].replace('"failures":0', '"failures":1')})
+    with pytest.raises(S.Refused) as e:
+        stream.register(_record(), _ports(6))
+    assert e.value.verdict.codes == (V.DISAGREE,) and stream.failures == 0 and stream.log == ()
+
+
 def test_the_switch_is_one_line(monkeypatch):
     lines = [line for line in Path(V.__file__).read_text().splitlines() if re.match(r"RECORD_VERDICT\b", line)]
     assert lines == ['RECORD_VERDICT = "lean"'] and V.RECORD_VERDICT == "lean"

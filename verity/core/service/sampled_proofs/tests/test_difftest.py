@@ -2446,6 +2446,188 @@ RUN_HELLOS = st.builds(lambda sel, slots, ses, change, x: HELLO_CHANGES[change](
                        STREAM_NAMES, st.integers(0, len(HELLO_CHANGES) - 1), st.integers(0, 63))
 HELLO = D.Port(PIECES, "hello", hello, st.one_of(RUN_HELLOS, RUN_HELLOS, JSON), package=PACKAGE)
 
+
+def _reading(x) -> bool:
+    return isinstance(x, (int, float)) and not isinstance(x, bool)
+
+
+def _stream_state(s) -> dict:
+    """A stream's state as `Stream.State.ofJson` reads it, a covered draw's order that isn't a natural number as null;
+    rejected where it refuses."""
+    _exactly(s, {"ended", "entries", "failures", "opened", "salted_at", "size"}, "a state")
+    if not (_nat(s["size"]) and _nat(s["failures"]) and isinstance(s["opened"], list) and all(map(_nat, s["opened"]))
+            and (s["salted_at"] is None or _reading(s["salted_at"])) and (s["ended"] is None or isinstance(s["ended"], dict))
+            and isinstance(s["entries"], list)):
+        raise D.Reject("a state's counts, salt, end or entries are out of form")
+    entries = []
+    for e in s["entries"]:
+        _exactly(e, {"delivered", "draw", "drawn_at", "final", "interior", "order", "proved", "registration", "session"},
+                 "an entry")
+        session = e["session"]
+        if not (_nat(e["order"]) and isinstance(e["registration"], str) and (e["draw"] is None or isinstance(e["draw"], str))
+                and _nat(e["proved"]) and (e["drawn_at"] is None or _reading(e["drawn_at"]))
+                and all(isinstance(e[k], bool) for k in ("interior", "delivered", "final"))
+                and (session is None or isinstance(session, list) and all(
+                    isinstance(c, list) and len(c) == 3 and isinstance(c[1], str) and isinstance(c[2], str) for c in session))):
+            raise D.Reject("an entry is out of form")
+        entries.append({**e, "session": None if session is None else [[c[0] if _nat(c[0]) else None, *c[1:]] for c in session]})
+    orders = [e["order"] for e in entries]
+    if not (all(o < s["size"] for o in s["opened"] + orders) and orders == sorted(set(orders))):
+        raise D.Reject("entries and opened orders are registrations', the entries in order, once each")
+    return {**s, "entries": entries}
+
+
+def stream(j):
+    """The proof service stream's rules (`service._step`) on `{"params", "state", "op"}`: the decision without its
+    `detail`, which the Lean doesn't write, and the state after it as `canonical_json` writes it. Rejected where the Lean
+    refuses: the params as `Stream.Params.ofJson` reads them, the state as `_stream_state`, and an op `_step` raises on."""
+    j = _json(j)
+    _exactly(j, {"op", "params", "state"}, "the input")
+    p = j["params"]
+    _exactly(p, {"budget", "proof_deadline", "registration_deadline", "rounds", "stream", "two_stage"}, "params")
+    rd, pd = p["registration_deadline"], p["proof_deadline"]
+    if not (_nat(p["budget"]) and p["budget"] >= 1 and _nat(p["rounds"]) and 1 <= p["rounds"] <= service.ROUNDS
+            and isinstance(p["two_stage"], bool) and _reading(pd) and pd > 0 and (rd is None or _reading(rd) and rd > 0)
+            and isinstance(p["stream"], str)):
+        raise D.Reject("params are out of form")
+    state = _stream_state(j["state"])
+    try:
+        d, after = service._step(p, state, j["op"])
+    except ValueError as e:
+        raise D.Reject(str(e)) from None
+    return {"decision": {k: v for k, v in d.items() if k != "detail"}, "state": codec.canonical_json(after).decode()}
+
+
+STREAM_DIGEST = hashlib.sha512(b"stream").hexdigest()
+SESSION_DIGEST = hashlib.sha512(b"session").hexdigest()
+#: Readings, whole seconds (the harness writes no float; the service's own tests read the clock's floats through the
+#: verifier of record), so the deadlines fall on both sides and on the edge.
+READINGS = st.integers(0, 20)
+#: The fields each op reads only once the rules ask for them (`unchecked` until then).
+STREAM_LAZY = {"salt": {"at"}, "salt_released": {"released_at", "now"}, "register": {"received_at", "checks", "registration"},
+               "select": {"checks", "draw", "proved", "at"}, "interiors": {"checks"}, "deliver": {"now"},
+               "deliver_session": {"now"}, "outcome": {"now", "verdicts", "accepted"}}
+#: Fields an op may carry out of form, with what the Lean errs or decides on.
+MALFORMED = st.sampled_from(["1", True, None, -1, "x", [1], {"a": 1}])
+
+
+def _one_in(draw, n: int) -> bool:
+    """One time in `n`, evenly: `st.integers` draws its bounds more often."""
+    return draw(st.sampled_from(range(n))) == 0
+
+
+def _aim(draw, name: str, target: dict, entries: list, rounds: int, two: bool) -> list | None:
+    """The entries `name` on `target` reads made ready for it: drawn but not yet for `select`, open, under no session
+    but `deliver_session`'s (and then a session of its own over consecutive rounds, all of them drawn and open), with
+    its interiors to register for `interiors`, and delivered or not for `outcome`. A session's covered draws, or None."""
+    def open_(e: dict, drawn: bool = True) -> None:
+        e.update(draw=f"d{e['order']}" if drawn else None, proved=draw(st.integers(1, 3)) if drawn else 0,
+                 drawn_at=draw(READINGS) if drawn else None, final=False, delivered=False, interior=False, session=None)
+    open_(target, name != "select")
+    if name == "outcome":
+        target["delivered"] = draw(st.booleans())
+    if name == "deliver" and two:
+        target["interior"] = not _one_in(draw, 4)
+    if name in ("session", "deliver_session") and not two:
+        o = target["order"]
+        first = draw(st.integers(max(0, o - rounds + 1), o))
+        covered = entries[first:min(len(entries), first + rounds)][:draw(st.integers(o - first + 1, rounds))]
+        for e in covered:
+            open_(e)
+        draws = [[c["order"], f"r{c['order']}", f"d{c['order']}"] for c in covered]
+        if name == "deliver_session":
+            for e in covered:
+                e["session"] = [list(d) for d in draws]
+        return draws
+    return None
+
+
+@st.composite
+def stream_cases(draw) -> dict:
+    """A stream's params, a state of up to 6 registrations holding most of their entries (drawn or not, delivered,
+    final, under a session of consecutive rounds, interiors), and one op on it: mostly naming a held entry by its own
+    tokens, or another's, or one not received; each field it reads present or not yet (`unchecked`), and sometimes one
+    field out of form. Half the time aimed at the op: the stream open and every entry held, with the target's made
+    ready for the op (`_aim`)."""
+    name = draw(st.sampled_from([*service._OPS, *service._OPS[3:], "other"]))
+    aim = draw(st.booleans())
+    two = aim and name == "interiors" or not (aim and name in ("session", "deliver_session")) and draw(st.booleans())
+    rounds = 1 if two else draw(st.integers(1, service.ROUNDS))
+    budget = draw(st.integers(1, 4))
+    params = {"budget": budget, "rounds": rounds, "two_stage": two,
+              "registration_deadline": draw(st.sampled_from([None, 5, 2, 10])),
+              "proof_deadline": draw(st.sampled_from([3, 7, 1])), "stream": STREAM_DIGEST}
+    size = draw(st.integers(1 if aim else 0, 6))
+    entries = []
+    for o in range(size):
+        if not aim and _one_in(draw, 5):
+            continue
+        drawn = not _one_in(draw, 4)
+        e = {"order": o, "registration": f"r{o}", "draw": f"d{o}" if drawn else None,
+             "proved": draw(st.integers(0, 3)) if drawn else 0, "drawn_at": draw(READINGS) if drawn else None,
+             "interior": drawn and two and draw(st.booleans()), "delivered": drawn and _one_in(draw, 4),
+             "final": drawn and _one_in(draw, 4), "session": None}
+        if drawn and not two and draw(st.booleans()):
+            first = draw(st.integers(max(0, o - rounds + 1), o))
+            last = draw(st.integers(o, min(size - 1, first + rounds - 1)))
+            e["session"] = [[k, f"r{k}", f"d{k}"] for k in range(first, last + 1)]
+        entries.append(e)
+    opened = sorted(draw(st.sets(st.integers(0, max(size - 1, 0)), max_size=rounds - aim + 1))) if size else []
+    salted = None if aim and name.startswith("salt") else draw(st.sampled_from([None, None, 0, 1, 4]))
+    ended = None if aim else draw(st.sampled_from([None, None, None, {"received_at": 9, "salted_at": salted}]))
+    state = {"size": size, "opened": opened, "failures": draw(st.integers(0, budget - aim)), "salted_at": salted,
+             "ended": ended, "entries": entries}
+    held = [e for e in entries if e["draw"] is not None] or entries
+    target = draw(st.sampled_from(held)) if held and not _one_in(draw, 6) else None
+    aimed = _aim(draw, name, target, entries, rounds, two) if aim and target else None
+    o = target["order"] if target else draw(st.sampled_from([size, size + 1, None, -1, "0", True]))
+    tokens = (f"r{o}", f"d{o}") if not _one_in(draw, 7) else ("r9", "d9")
+    if aimed is not None and not _one_in(draw, 6):
+        draws = aimed
+    elif target and target["session"] and name in ("session", "deliver_session") and not _one_in(draw, 4):
+        draws = [list(c) for c in target["session"]]
+    else:
+        start = o if _nat(o) else 0
+        draws = [[k, f"r{k}", f"d{k}"] for k in range(start, start + draw(st.integers(0, rounds)))]
+        if draws and _one_in(draw, 6):
+            draws = draws[::-1]
+    sessions = draw(st.sampled_from([[SESSION_DIGEST]] * 6 + [[], [SESSION_DIGEST + "\n"], ["x"], None, [SESSION_DIGEST, 1]]))
+    fields = {
+        "salt": {"at": draw(READINGS)},
+        "salt_released": {"released_at": draw(READINGS), "now": draw(READINGS)},
+        "register": {"received_at": draw(READINGS), "checks": draw(st.sampled_from([None, None, ["R3-roots"], []])),
+                     "registration": f"r{size}"},
+        "select": {"order": o, "registration": tokens[0], "checks": draw(st.sampled_from([None, None, ["draw-law"]])),
+                   "draw": f"d{o}", "proved": draw(st.integers(0, 3)), "at": draw(READINGS)},
+        "interiors": {"order": o, "registration": tokens[0], "draw": tokens[1],
+                      "checks": draw(st.sampled_from([None, None, ["R5-window"]]))},
+        "session": {"draws": draws},
+        "deliver": {"order": o, "registration": tokens[0], "draw": tokens[1], "sessions": sessions, "now": draw(READINGS)},
+        "deliver_session": {"stream": draw(st.sampled_from([STREAM_DIGEST] * 5 + ["other"])), "draws": draws,
+                            "sessions": sessions, "now": draw(READINGS)},
+        "outcome": {"order": o, "registration": tokens[0], "draw": tokens[1], "now": draw(READINGS),
+                    "verdicts": draw(st.sampled_from([None, None, None, ["pending"], ["sessions"]])),
+                    "accepted": draw(st.booleans())},
+    }.get(name, {})
+    op = {"op": name}
+    for k, v in fields.items():
+        if k in STREAM_LAZY.get(name, ()) and _one_in(draw, 8):
+            continue
+        op[k] = v
+    if fields and _one_in(draw, 12):
+        op[draw(st.sampled_from(sorted(fields)))] = draw(MALFORMED)
+    change = draw(st.sampled_from(range(40)))
+    if change == 0:
+        params = {**params, draw(st.sampled_from(sorted(params))): draw(MALFORMED)}
+    elif change == 1 and entries:
+        state = {**state, "entries": entries[::-1] if len(entries) > 1 else [{**entries[0], "proved": -1}]}
+    elif change == 2:
+        state = {**state, draw(st.sampled_from(sorted(state))): draw(MALFORMED)}
+    return {"params": params, "state": state, "op": op}
+
+
+STREAM = D.Port(PIECES, "stream", stream, st.one_of(*[stream_cases() for _ in range(5)], JSON), package=PACKAGE)
+
 pieces = D.server_fixture(DECODE)
 
 
@@ -2454,7 +2636,7 @@ PIECE_RUNS = [(DECODE, 300), (PARTITION, 500), (REGISTRATION, 700), (REGISTERED_
               (BERNOULLI_BOUND, 500), (VERDICT, 300),
               (MATCHES_PUBLIC, 400), (SESSION_REGISTERED, 400), (RECORD_PORT, 600), (CHECK_PUBLIC, 500), (CHECK_VERDICTS, 400),
               (RUN, 500), (REPLAY_UNITS, 500), (PROOF_UNITS, 400), (TWO_STAGE_PROFILE, 500), (CHECK_PROBABILITY, 400),
-              (HELLO, 500)]
+              (HELLO, 500), (STREAM, 800)]
 
 
 @pytest.mark.parametrize("port, examples", PIECE_RUNS, ids=[p.fn for p, _ in PIECE_RUNS])

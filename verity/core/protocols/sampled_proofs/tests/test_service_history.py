@@ -44,19 +44,25 @@ def _refusal(e: S.Refused) -> tuple:
 
 def test_a_registration_reads_the_same_records_whatever_the_history(monkeypatch):
     """Over 30 rounds, accepted and rejected, every registration's check gets one record of the log (the last, which R6's
-    `previous` names), and no round iterates the log or the stream's entries, the failure count included. The whole-log
-    stream, counted the same way, hands its checks a log as long as its history and walks it at every registration."""
-    check, given = V.check, []
+    `previous` names), and no round iterates the log or the stream's entries, the failure count included; the stream's
+    rules decide each op on the one entry it names, or none. The whole-log stream, counted the same way, hands its checks
+    a log as long as its history and walks it at every registration."""
+    check, given, rules, held = V.check, [], V.stream, []
 
     def spy(*a: Any, **kw: Any) -> V.Verdict:
         given.append(len(a[8]))
         return check(*a, **kw)
 
+    def rules_spy(params: Any, state: Any, *a: Any) -> Any:
+        held.append(len(state["entries"]))
+        return rules(params, state, *a)
+
     monkeypatch.setattr(S.V, "check", spy)
+    monkeypatch.setattr(S.V, "stream", rules_spy)
     for cls, rounds in ((S.Stream, 30), (_Whole, 6)):
         given.clear()
         stream = _stream(cls)
-        stream._log, stream._entries = _Counted(), _Counted()
+        stream._log, stream._entries, stream._rule_entries = _Counted(), _Counted(), _Counted()
         prev = None
         for i in range(rounds):
             reg = stream.register(_record(row=i, previous=prev), _ports(6))
@@ -67,7 +73,8 @@ def test_a_registration_reads_the_same_records_whatever_the_history(monkeypatch)
         assert len(stream._log) == rounds and stream.failures == rounds // 3 and not stream.stopped
         if cls is S.Stream:
             assert given == [0] + [1] * (rounds - 1)
-            assert stream._log.walks == stream._entries.walks == 0
+            assert stream._log.walks == stream._entries.walks == stream._rule_entries.walks == 0
+            assert max(held) == 1 and len(held) > 4 * rounds
         else:
             assert given == list(range(rounds)) and stream._log.walks >= rounds
 
@@ -191,9 +198,10 @@ def test_r7_reads_each_values_first_registration():
         return {**R.record(prog, Q, LAW, SCHEME, first["roots"], {**SERVED, "row": row}, previous=previous,
                            registered=[entry] if entry else ()), **change}
 
-    stream._log_record(first, 0)
+    stream._append(stream._registration(first, 0))
     for i in range(1, 24):
-        stream._log_record(at(SERVED["row"] + i, R.digest(stream._log[-1]), reg.entry() if i % 3 else None), i)
+        stream._append(stream._registration(at(SERVED["row"] + i, R.digest(stream._log[-1]),
+                                                reg.entry() if i % 3 else None), i))
     last = R.digest(stream._log[-1])
     row = SERVED["row"] + 24
     for cand, registered, codes in (
@@ -218,7 +226,7 @@ def test_a_supplied_position_reads_the_whole_log():
     stream, log = _stream(), []
     for i in range(6):
         rec, _, _ = _mixed_case(base, log=log, window={**BOUND, "row": SERVED["row"] + i})
-        stream._log_record(rec, i)
+        stream._append(stream._registration(rec, i))
         log.append(rec)
     cand, check, _ = _mixed_case(base, log=log, window={**BOUND, "row": SERVED["row"] + 6})
     assert stream._earlier(cand, MIXED) is stream._log and len(few := stream._earlier(cand)) == 2
