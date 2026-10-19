@@ -11,10 +11,15 @@ CP-W (decision 104) commits, after every set (32 words a lane, 8 units a warp), 
 chains of y and of z (`segment.warp_checkpoint`), and `PouwWarpCheck_v2` reads both words of every set. Neither ♭ nor
 the Lean floor has this work. Its cost a set-warp on DS-120 (every class 1 on DS_issue), by route:
 
-- merged by issued instructions: 2 (256 − 1) = 510 merges, and no class merges more than 64 a warp slot (LOP3: 2 a lane;
-  RED/ATOMS.XOR.64: a lane's 2 words into memory; REDUX: 31), so at least 8 slots;
+- merged by issued instructions: each lane's 16 state words leave its registers, and no merging class takes more than 2
+  a lane a slot (LOP3: 3 inputs to 1; REDG.E.XOR.64: a word pair into memory; REDUX: 1 a lane), so at least 8 slots,
+  which 6 LOP3 (each part 8 to 2 a lane) and 2 REDG.E.XOR.64 into one zeroed pair reach;
 - moved out of the registers and merged off the issue path (STSM_X4 is issue only on DS-120, as are the TMA reductions
-  UTMA*/TMAred512): 512 words, and no class takes more than 4 words a lane out of the registers, so at least 4 slots.
+  UTMA*/TMAred512): no class takes more than 4 words a lane out of the registers, so at least 4 slots.
+
+On sm_120a (`cpw_sass.cu`, r20261019-115006-35c0) fx1 is 2 IMAD, 1 LOP3 and 1 LEA.HI a word, REDG.E.XOR.64 and
+STSM.16.M88.4 are one instruction each, and a 64-bit XOR into shared memory is a CAS loop (ATOMS.CAST.SPIN.64), so the
+shared-atomic route is no cheaper.
 
 `main` prints the bound, the routes' slot counts and the floor each implies, and checks on `segment` that the 64-bit
 route (each lane's y XOR and z XOR as one word pair, XORed over lanes) is `warp_checkpoint` set by set.
@@ -46,10 +51,11 @@ LN_P = Fraction(1, 8)
 
 UNITS_A_SET = 8
 LANES = 32
-#: XOR merges a warp slot: LOP3 (3 inputs, 2 merges a lane), 64-bit RED/ATOMS XOR (a lane's 2 words into memory), REDUX
-MERGES = {"LOP3": 2 * LANES, "RED.XOR.64": 2 * LANES, "REDUX.XOR": LANES - 1}
-#: lane words a warp slot takes out of the registers (STSM_X4, STS.128: 4 a lane)
-EGRESS = 4 * LANES
+#: state words a lane a slot a merging class takes out of the registers: LOP3 (3 inputs to 1), REDG.E.XOR.64 (a word
+#: pair into memory), REDUX.XOR (its lane's word)
+MERGES = {"LOP3": 2, "REDG.E.XOR.64": 2, "REDUX.XOR": 1}
+#: and a storing class (STSM_X4, STS.128: 4 words a lane)
+EGRESS = 4
 
 
 def bound() -> dict:
@@ -68,21 +74,19 @@ def bound() -> dict:
 
 
 def checkpoint() -> dict:
-    words = 2 * SG.NCH * LANES
-    merges = 2 * (SG.NCH * LANES - 1)
-    lane_xor = (2 * SG.NCH - 2) // 2
+    lane_words = 2 * SG.NCH
+    to_one = 2 * -(-(SG.NCH - 1) // 2)
     routes = {
-        "redux (7 LOP3, 2 REDUX, 1 STG)": lane_xor + 2 + 1,
-        "shfl butterfly (7 LOP3, 10 SHFL, 10 LOP3, 1 STG)": lane_xor + 10 + 10 + 1,
-        "red64 (7 LOP3, 1 RED.XOR.64)": lane_xor + 1,
-        "atoms64 (7 LOP3, 1 ATOMS.XOR.64; flush amortized)": lane_xor + 1,
-        "egress (4 STSM_X4; TMA XOR tree amortized)": 4,
+        "redux (8 LOP3, 2 REDUX, 1 STG)": to_one + 2 + 1,
+        "shfl butterfly (8 LOP3, 10 SHFL, 10 LOP3, 1 STG)": to_one + 10 + 10 + 1,
+        "red64 (6 LOP3, 2 REDG.E.XOR.64 into one pair)": 6 + 2,
+        "egress (4 STSM_X4; TMA XOR tree amortized)": lane_words // EGRESS,
     }
-    lb_issue = -(-merges // max(MERGES.values()))
-    lb_egress = -(-words // EGRESS)
+    lb_issue = -(-lane_words // max(MERGES.values()))
+    lb_egress = -(-lane_words // EGRESS)
     b = bound()
-    out = {"set_words_a_lane": 32, "units_a_set_warp": UNITS_A_SET, "state_words_a_set_warp": words,
-           "xor_merges_a_set_warp": merges, "routes_slots_a_set_warp": routes,
+    out = {"set_words_a_lane": 32, "units_a_set_warp": UNITS_A_SET, "state_words_a_lane": lane_words,
+           "xor_merges_a_set_warp": 2 * (SG.NCH * LANES - 1), "routes_slots_a_set_warp": routes,
            "routes_slots_a_unit": {k: v / UNITS_A_SET for k, v in routes.items()},
            "lower_bound_issue_merged": lb_issue, "lower_bound_egress": lb_egress}
     for name, lb in (("issue_merged", lb_issue), ("egress", lb_egress)):
