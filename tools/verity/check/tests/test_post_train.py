@@ -77,6 +77,73 @@ def test_only_a_landing_has_a_check_attempt_to_label(tmp_path):
     assert PT.check_attempt(lane, cwd=tmp_path) is None
 
 
+def test_drive_s_attempt_is_the_landing_s_when_it_ran_on_the_commit_or_on_its_merged_train(tmp_path, monkeypatch, capsys):
+    """CI-81: 1b21bc8f, 9cf072f6, d31c68c0, c13e24d4 and c1e1c288 (18-19 Oct), drive's landings with deferred steps, were refused
+    as no landing of main: their check still ran, or was cancelled at landing, so the store had no passed attempt of them.  Drive
+    names the attempt it landed on; it is taken when it ran on the commit main was fast-forwarded to, or on the train main was
+    merged onto (the merge's second parent), and refused otherwise."""
+    origin, repo = tmp_path / "origin.git", tmp_path / "repo"
+    _git(tmp_path, "init", "-q", "--bare", "-b", "main", str(origin))
+    _git(tmp_path, "clone", "-q", str(origin), str(repo))
+    _git(repo, "commit", "-q", "--allow-empty", "-m", "main")
+    _git(repo, "checkout", "-q", "-b", "pr1")
+    _git(repo, "commit", "-q", "--allow-empty", "-m", "#1's head")
+    head = _git(repo, "rev-parse", "HEAD")
+    _git(repo, "checkout", "-q", "--detach", "HEAD^")
+    _git(repo, "merge", "-q", "--no-ff", "-m", "Queue: #1 a change\n\nPR: #1", head)
+    ff = _git(repo, "rev-parse", "HEAD")
+    _git(repo, "commit", "-q", "--allow-empty", "-m", "Queue: #2 another")
+    train = _git(repo, "rev-parse", "HEAD")
+    _git(repo, "checkout", "-q", "--detach", ff)
+    _git(repo, "commit", "-q", "--allow-empty", "-m", "a pure move, landed alone")
+    moved = _git(repo, "rev-parse", "HEAD")
+    _git(repo, "merge", "-q", "--no-ff", "-m", f"Merge {train[:12]}\n\n#2\n\nChecked: r20261019-020000-0002 (...)", train)
+    merge = _git(repo, "rev-parse", "HEAD")
+    _git(repo, "commit", "-q", "--allow-empty", "-m", "a lane's commit")
+    lane = _git(repo, "rev-parse", "HEAD")
+    _git(repo, "push", "-q", "origin", f"{merge}:refs/heads/main")
+    _git(repo, "fetch", "-q", "origin")
+    ran = {"r20261019-010000-0001": ff, "r20261019-020000-0002": train, "r20261019-020500-0003": moved,
+           "r20261019-030000-0004": lane, "r20261019-005000-0006": head}
+    monkeypatch.setattr(PT, "source_of", ran.get)
+    assert PT.check_attempt(ff, cwd=repo) is None, "no passed attempt in the store: the refusal CI-81 reports"
+    assert PT.check_attempt(ff, cwd=repo, attempt="r20261019-010000-0001") == "r20261019-010000-0001", "fast-forwarded"
+    assert PT.check_attempt(merge, cwd=repo, attempt="r20261019-020000-0002") == "r20261019-020000-0002", "merged onto moved main"
+    capsys.readouterr()
+    for commit, rid in ((merge, "r20261019-020500-0003"), (merge, "r20261019-010000-0001"), (ff, "r20261019-020000-0002"),
+                        (lane, "r20261019-030000-0004"), (ff, "r20261019-040000-0005"), (ff, "r20261019-005000-0006")):
+        assert PT.check_attempt(commit, cwd=repo, attempt=rid) is None, (commit, rid)
+    err = capsys.readouterr().err
+    assert f"r20261019-020500-0003 ran on {moved[:12]}, which is neither {merge[:12]} nor the train it merged" in err
+    assert "r20261019-040000-0005 ran on no commit its attempt or run record names" in err
+    assert f"r20261019-005000-0006 ran on {head[:12]}, which is neither {ff[:12]}" in err, "a train's second parent is a PR head"
+    assert err.count("so it is no check of this landing") == 5, "a commit off main is refused before its attempt is read"
+
+
+def test_a_deferred_landing_labels_the_attempt_drive_names_and_refuses_one_it_did_not_land_on(tmp_path, monkeypatch, capsys):
+    calls, _ = _fake_landing(tmp_path, monkeypatch, None)
+    monkeypatch.setattr(PT, "check_attempt", lambda sha, cwd=PT.ROOT, attempt=None:
+                        attempt if (sha, attempt) == (SHA, "r20261019-010000-0001") else None)
+    assert PT.main([SHA, "--attempt", "r20261019-010000-0001"]) == 1
+    assert calls[-1] == ("data", "label", "r20261019-010000-0001", "note", "regression fail:r39", "--by", "regression",
+                         "--ref", _launched(calls))
+    calls, _ = _fake_landing(tmp_path / "other", monkeypatch, None)
+    monkeypatch.setattr(PT, "check_attempt", lambda sha, cwd=PT.ROOT, attempt=None: None)
+    assert PT.main([SHA, "--attempt", "r20261019-020500-0003"]) == 2 and calls == []
+    assert f"{SHA[:12]} is no landing of main on r20261019-020500-0003; nothing labelled" in capsys.readouterr().err
+
+
+def test_source_of_reads_the_run_record_when_the_store_has_no_attempt(monkeypatch):
+    import research.store.local as L
+
+    monkeypatch.setattr(L, "LocalStore", lambda: (_ for _ in ()).throw(OSError("no store")))
+    monkeypatch.setattr(PT, "research", lambda *a, **_k: subprocess.CompletedProcess(
+        a, 0, json.dumps({"runs": [{"id": a[1], "state": "running", "tree_sha": "a" * 40}]}), ""))
+    assert PT.source_of("r20261019-010000-0001") == "a" * 40
+    monkeypatch.setattr(PT, "research", lambda *a, **_k: subprocess.CompletedProcess(a, 1, "", "research status: no run"))
+    assert PT.source_of("r20261019-010000-0001") is None
+
+
 def test_check_starts_it_after_each_landing():
     spec = importlib.util.spec_from_file_location("check_tool_under_test", ROOT / "tools" / "verity" / "check" / "tool.py")
     mod = importlib.util.module_from_spec(spec)
@@ -127,7 +194,7 @@ def _fake_landing(tmp_path, monkeypatch, attempt, prev_label=None, untouched=Fal
         return subprocess.CompletedProcess(args, 0, "", "")
     monkeypatch.setattr(PT, "research", research)
     monkeypatch.setattr(PT, "git", lambda *a, **k: SHA if a[0] == "rev-parse" else "")
-    monkeypatch.setattr(PT, "check_attempt", lambda sha, cwd=PT.ROOT: {SHA: attempt, f"{SHA}^1": PREV}.get(sha))
+    monkeypatch.setattr(PT, "check_attempt", lambda sha, cwd=PT.ROOT, **_k: {SHA: attempt, f"{SHA}^1": PREV}.get(sha))
     monkeypatch.setattr(PT, "untouched", lambda tree, rev: untouched and rev == f"{SHA}^1")
     import research.runs
     monkeypatch.setattr(research.runs, "runs_root", lambda: runs)
