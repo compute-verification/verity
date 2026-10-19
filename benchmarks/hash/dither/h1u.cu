@@ -24,8 +24,9 @@
 //   h1s_noise  one warp an (unit, chunk) item, J blocks a lane: every block of seed_j's stream the unit reads (the rows'
 //              blocks t = lane RB + c, the columns' 32 RB + lane CB + c), its 16 words to the caller's workspace
 //   h1u<WS>    h1u reading those blocks instead of hashing them
-// Both forms load the next segment's A and B words while the current segment is multiplied and folded (WS always,
-// the fused form with H1U_PF).
+// Both forms load the A and B words H1U_PD segments ahead while the current segment is multiplied and folded (WS always,
+// the fused form with H1U_PF), in a ring of H1U_PD register sets; H1U_L2PF also prefetches into L2 the A and B lines 16
+// segments ahead and (WS) the next chunk's workspace blocks. H1U_WARPS is the warps a CTA (one a unit).
 //
 //   kh_seeds(data, base, U, seeds, stream)   data: SEED_TAG, RECEIPT_TAG (3 words each), salt, root_a, root_b (8 each)
 //   kh_unit(A, B, M, N, K, seeds, live, out, stream)   out: U x kh_words(K) u32 (live may be null: every unit live)
@@ -33,7 +34,10 @@
 //   kh_words(K), kh_digits(K), kh_ws_bytes(M, N, K), kh_noise_blocks(K)
 #include "h1sha.cuh"
 
-constexpr int WARPS = 4;
+#ifndef H1U_WARPS
+#define H1U_WARPS 4
+#endif
+constexpr int WARPS = H1U_WARPS;
 // CTAs an SM the register allocation must leave room for (h1u_b3.so: 3, at most 168 registers a thread)
 #ifndef H1U_MINB
 #define H1U_MINB 1
@@ -41,6 +45,13 @@ constexpr int WARPS = 4;
 #ifndef H1U_PF
 #define H1U_PF 0
 #endif
+#ifndef H1U_PD
+#define H1U_PD 1
+#endif
+#ifndef H1U_L2PF
+#define H1U_L2PF 0
+#endif
+static_assert(16 % H1U_PD == 0, "a chunk's 16 segments are whole rings of H1U_PD");
 
 constexpr u32 mix32c(u32 x) {
   x ^= x >> 16;
@@ -88,6 +99,8 @@ __device__ __forceinline__ u32 addw(u32 b, u32 v) {
   return ((b & 0x7F7F7F7Fu) + (v & 0x7F7F7F7Fu)) ^ (~(b ^ v) & 0x80808080u);
 }
 
+__device__ __forceinline__ void prefetch_l2(const void* p) { asm volatile("prefetch.global.L2 [%0];" ::"l"(p)); }
+
 __device__ __forceinline__ void mma_s8(int (&d)[4], const u32 (&a)[4], const u32 (&b)[2]) {
   asm("mma.sync.aligned.m16n8k32.row.col.s32.s8.s8.s32 {%0,%1,%2,%3}, {%4,%5,%6,%7}, {%8,%9}, {%0,%1,%2,%3};\n"
       : "+r"(d[0]), "+r"(d[1]), "+r"(d[2]), "+r"(d[3])
@@ -104,14 +117,7 @@ __device__ __forceinline__ void fold(const int (&acc)[8][4], u32 (&y)[8], u32 (&
       const u32 p = (u32)acc[t][e] * KEYS.fx1[8 * i + c];
       const u32 uu = y[c] ^ p ^ KEYS.kk[t];
       y[c] = uu * KEYS.ka[t] + z[c];
-#if H1_PIPE & 64
-      // rotl(uu, r) + y as (uu 2^r + y) + hi(uu 2^r), the rotation's halves having disjoint bits: two IMADs and an
-      // IADD3 for a SHF and an IADD3
-      const u32 m = PW2[KEYS.rot[t]];
-      z[c] = (uu * m + y[c]) + __umulhi(uu, m);
-#else
       z[c] = __funnelshift_l(uu, uu, KEYS.rot[t]) + y[c];
-#endif
     }
   }
 }
@@ -180,6 +186,7 @@ __global__ void __launch_bounds__(32 * WARPS, H1U_MINB) h1u(const int8_t* __rest
                                                   u32 K, const u64* __restrict__ seeds, const uint8_t* __restrict__ live,
                                                   u32* __restrict__ out, const u32* __restrict__ ws) {
   constexpr bool PF = WS || H1U_PF;
+  constexpr int PD = H1U_PD;
   __shared__ WarpSmem smem[WARPS];
   const u32 lane = threadIdx.x & 31, wp = threadIdx.x >> 5;
   const u32 g = lane >> 2, q = lane & 3;
@@ -245,17 +252,20 @@ __global__ void __launch_bounds__(32 * WARPS, H1U_MINB) h1u(const int8_t* __rest
 
   const int8_t* Ab = A + (u64)(32 * ri) * K;
   const int8_t* Bb = B + (u64)(32 * cj) * K;
-  // the next segment's A rows 16 mt + g + 8 h and B columns 8 nt + g, 8 bytes each at k = 32 sg + 8 q
-  uint2 pa[4], pb[4];
-  const auto load_seg = [&](u32 sg) {
+  // segment sg's A rows 16 mt + g + 8 h and B columns 8 nt + g, 8 bytes each at k = 32 sg + 8 q, in ring slot sg % PD
+  uint2 pa[PD][4], pb[PD][4];
+  const auto load_seg = [&](u32 sg, uint2(&a)[4], uint2(&b)[4]) {
     const u32 kofs = 32 * sg + 8 * q;
 #pragma unroll
     for (int r = 0; r < 4; ++r) {
-      pa[r] = __ldg(reinterpret_cast<const uint2*>(Ab + (u64)(16 * (r >> 1) + g + 8 * (r & 1)) * K + kofs));
-      pb[r] = __ldg(reinterpret_cast<const uint2*>(Bb + (u64)(8 * r + g) * K + kofs));
+      a[r] = __ldg(reinterpret_cast<const uint2*>(Ab + (u64)(16 * (r >> 1) + g + 8 * (r & 1)) * K + kofs));
+      b[r] = __ldg(reinterpret_cast<const uint2*>(Bb + (u64)(8 * r + g) * K + kofs));
     }
   };
-  if (PF) load_seg(0);
+  if (PF) {
+#pragma unroll
+    for (int d = 0; d < PD; ++d) load_seg(d, pa[d], pb[d]);
+  }
 #pragma unroll 1
   for (u32 it = 0; it <= chunks; ++it) {
     const u32 blk = it == 0 ? chunks : it - 1;
@@ -283,6 +293,10 @@ __global__ void __launch_bounds__(32 * WARPS, H1U_MINB) h1u(const int8_t* __rest
         }
       }
     }
+    if (WS && H1U_L2PF && it < chunks) {
+      prefetch_l2(wsu + 16 * ((u64)lane * rb + it));
+      prefetch_l2(wsu + 16 * (32ull * rb + (u64)lane * cb + it));
+    }
     __syncwarp();
     if (it == 0) {
 #pragma unroll
@@ -309,53 +323,60 @@ __global__ void __launch_bounds__(32 * WARPS, H1U_MINB) h1u(const int8_t* __rest
     const uint8_t* rbits = reinterpret_cast<const uint8_t*>(&S.rowbits[0][0]);
     const uint8_t* cbits = reinterpret_cast<const uint8_t*>(&S.colbits[0][0]);
 #pragma unroll 1
-    for (u32 j = 0; j < 16; ++j) {
-      const u32 sg = 16 * blk + j;
-      uint2 ca[4], cw[4];
-      if (PF) {
+    for (u32 j0 = 0; j0 < 16; j0 += PD) {
 #pragma unroll
-        for (int r = 0; r < 4; ++r) {
-          ca[r] = pa[r];
-          cw[r] = pb[r];
+      for (int jj = 0; jj < PD; ++jj) {
+        const u32 j = j0 + jj, sg = 16 * blk + j;
+        uint2 ca[4], cw[4];
+        if (H1U_L2PF && sg % 4 == 0 && sg + 16 < ks) {
+          prefetch_l2(Ab + (u64)lane * K + 32 * (sg + 16));
+          prefetch_l2(Bb + (u64)lane * K + 32 * (sg + 16));
         }
-        if (sg + 1 < ks) load_seg(sg + 1);
-      } else {
-        const u32 kofs = 32 * sg + 8 * q;
+        if (PF) {
 #pragma unroll
-        for (int r = 0; r < 4; ++r) {
-          ca[r] = __ldg(reinterpret_cast<const uint2*>(Ab + (u64)(16 * (r >> 1) + g + 8 * (r & 1)) * K + kofs));
-          cw[r] = __ldg(reinterpret_cast<const uint2*>(Bb + (u64)(8 * r + g) * K + kofs));
+          for (int r = 0; r < 4; ++r) {
+            ca[r] = pa[jj][r];
+            cw[r] = pb[jj][r];
+          }
+          if (sg + PD < ks) load_seg(sg + PD, pa[jj], pb[jj]);
+        } else {
+          const u32 kofs = 32 * sg + 8 * q;
+#pragma unroll
+          for (int r = 0; r < 4; ++r) {
+            ca[r] = __ldg(reinterpret_cast<const uint2*>(Ab + (u64)(16 * (r >> 1) + g + 8 * (r & 1)) * K + kofs));
+            cw[r] = __ldg(reinterpret_cast<const uint2*>(Bb + (u64)(8 * r + g) * K + kofs));
+          }
         }
-      }
-      u32 af[2][4], bf[4][2];
+        u32 af[2][4], bf[4][2];
 #pragma unroll
-      for (int mt = 0; mt < 2; ++mt) {
+        for (int mt = 0; mt < 2; ++mt) {
 #pragma unroll
-        for (int h = 0; h < 2; ++h) {
-          const u32 row = 16 * mt + g + 8 * h;
-          const uint2 a8 = ca[2 * mt + h];
-          const u32 nb8 = rbits[row * 68 + 4 * j + q];
-          af[mt][h] = add01(a8.x, expand4(nb8 & 15u));
-          af[mt][2 + h] = add01(a8.y, expand4(nb8 >> 4));
+          for (int h = 0; h < 2; ++h) {
+            const u32 row = 16 * mt + g + 8 * h;
+            const uint2 a8 = ca[2 * mt + h];
+            const u32 nb8 = rbits[row * 68 + 4 * j + q];
+            af[mt][h] = add01(a8.x, expand4(nb8 & 15u));
+            af[mt][2 + h] = add01(a8.y, expand4(nb8 >> 4));
+          }
         }
-      }
-#pragma unroll
-      for (int nt = 0; nt < 4; ++nt) {
-        const u32 col = 8 * nt + g;
-        const uint2 b8 = cw[nt];
-        const u32 cb8 = cbits[col * 68 + 4 * j + q];
-        bf[nt][0] = addw(b8.x, ulo[nt] + expand4(cb8 & 15u));
-        bf[nt][1] = addw(b8.y, uhi[nt] + expand4(cb8 >> 4));
-      }
-#pragma unroll
-      for (int mt = 0; mt < 2; ++mt)
 #pragma unroll
         for (int nt = 0; nt < 4; ++nt) {
-          mma_s8(T[4 * mt + nt], af[mt], bf[nt]);
-          mma_s8(Y[4 * mt + nt], af[mt], idr[nt]);
+          const u32 col = 8 * nt + g;
+          const uint2 b8 = cw[nt];
+          const u32 cb8 = cbits[col * 68 + 4 * j + q];
+          bf[nt][0] = addw(b8.x, ulo[nt] + expand4(cb8 & 15u));
+          bf[nt][1] = addw(b8.y, uhi[nt] + expand4(cb8 >> 4));
         }
-      fold(T, y, z);
-      ring_put(S, j, lane, y, z);
+#pragma unroll
+        for (int mt = 0; mt < 2; ++mt)
+#pragma unroll
+          for (int nt = 0; nt < 4; ++nt) {
+            mma_s8(T[4 * mt + nt], af[mt], bf[nt]);
+            mma_s8(Y[4 * mt + nt], af[mt], idr[nt]);
+          }
+        fold(T, y, z);
+        ring_put(S, j, lane, y, z);
+      }
     }
     __syncwarp();
     o[32 * blk + lane] = ring_xor(S, lane);

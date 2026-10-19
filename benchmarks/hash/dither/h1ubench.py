@@ -5,7 +5,7 @@ call and H1's noise floor (h1noise.cu's midstate kernel), at Llama-3.1-8B's line
     python h1ubench.py --lib h1u.so [--variant NAME=h1u_x.so ...] [--noise-lib h1noise.so]
                        [--noise-variant NAME=h1noise_x.so ...] --out OUT [--reps 5] [--ms ...] [--linears ...]
 
-A variant (another build of h1u.cu, e.g. h1u_b3.so with H1U_MINB=3 or h1u_p35.so with H1_PIPE=35) passes every gate
+A variant (another build of h1u.cu, e.g. h1u_b3.so with H1U_MINB=3 or h1u_pd4.so with H1U_PD=4) passes every gate
 below on the same inputs, then is timed as arm h1u-NAME in the same interleaved reps; a noise variant is arm floor-NAME.
 A build whose gate fails is not timed.
 

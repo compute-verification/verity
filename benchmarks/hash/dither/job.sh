@@ -2,9 +2,9 @@
 # The dither-hb benches. Libraries are built on a CPU node and shipped to the dc node, so nothing but the bench runs on
 # vy-dc-h200 / vy-dc-b200 (no CPU phase there):
 #   build    (vy-nebius-2) every library for each ARCH in a comma list: $OUT/lib/ARCH/{kb,kb_pg,h1noise,h1u}.so and the
-#            variants h1u_b3 (H1U_MINB=3), h1u_pf (H1U_PF=1), h1u_pN and h1noise_pN (H1_PIPE=N, N in $PIPES and $NOISE_PIPES), their
-#            SASS and resource usage, and BUILD.txt: the commit and arch, and per library the sha256 of the repository
-#            files nvcc -M names (a bench refuses a library whose sources differ at its own commit)
+#            h1u variants in $VARIANTS (NAME=FLAGS, e.g. pd4=-DH1U_PF=1,-DH1U_PD=4 builds h1u_pd4.so), their SASS and
+#            resource usage, and BUILD.txt: the commit and arch, and per library the sha256 of the repository files
+#            nvcc -M names (a bench refuses a library whose sources differ at its own commit)
 #   kbench   kb.so (and kb_pg.so on sm_100a): kbench.py (the honest GEMMs gated, then timed against the plain int8 GEMMs);
 #            verify.py (CA's numpy twin) runs after a `research fetch`, off the node
 #   h1       h1noise.so: h1bench.py (H1's per-unit noise gated, then timed against the plain int8 GEMMs)
@@ -19,7 +19,7 @@
 #     --send BUILD_RUN/out/lib/sm_90a/h1u.so --send ... --send BUILD_RUN/out/lib/sm_90a/BUILD.txt \
 #     -- bash benchmarks/hash/dither/job.sh sm_90a h1u
 #
-# Env: JOBS (builds at once, default 8), BENCH_ARGS (extra flags for the bench, e.g. "--ms 1,32 --linears o"), LEASE (gpu-lease flags, default
+# Env: VARIANTS (default below), JOBS (builds at once, default 8), BENCH_ARGS (extra flags for the bench, e.g. "--ms 1,32 --linears o"), LEASE (gpu-lease flags, default
 # "--max-min 14"), LIBS (the shipped libraries, default $RESEARCH_RUN_DIR/inputs), VERITY_BENCH_VENV (default
 # /workspace/cp/venv312), NVCC (default CUDA 13.0's).
 # Exit: the bench's (4 a gate failed), 2 a build failed or the shipped libraries are missing or another commit's.
@@ -46,7 +46,7 @@ if [ "$BENCH" = build ]; then
     local flags=(-O3 -std=c++17 -shared -Xcompiler -fPIC --expt-relaxed-constexpr -gencode "arch=compute_${arch#sm_},code=$arch")
     [ "$src" = kb ] && flags+=(-lcublasLt -Xlinker "-rpath=$LIB64")
     file=${file:-$src}
-    [ -n "$def" ] && flags+=("$def")
+    [ -n "$def" ] && flags+=(${def//,/ })
     "$NVCC" "${flags[@]}" "$HERE/$file.cu" -o "$dir/$src.so" 2> "$dir/build-$src.log" || { echo "build $arch $src failed:"; cat "$dir/build-$src.log"; return 2; }
     "$(dirname "$NVCC")/cuobjdump" --dump-resource-usage "$dir/$src.so" > "$dir/$src.res.txt" 2>&1
     "$(dirname "$NVCC")/cuobjdump" -sass "$dir/$src.so" | gzip > "$dir/$src.sass.gz"
@@ -58,11 +58,16 @@ if [ "$BENCH" = build ]; then
   for arch in ${ARCH//,/ }; do
     dir="$OUT/lib/$arch"
     mkdir -p "$dir"
-    builds=(kb h1noise h1u h1u_b3:h1u:-DH1U_MINB=3 h1u_pf:h1u:-DH1U_PF=1)
+    builds=(kb h1noise h1u)
     [ "$arch" = sm_100a ] && builds+=(kb_pg)
-    # H1_PIPE's bits (h1sha.cuh): 4 Sigma1, 8 Sigma0, 16 sigma0, 32 sigma1 and (h1u.cu) 64 the fold's rotations on IMAD
-    for p in ${PIPES:-4 12 36 76 100}; do builds+=("h1u_p$p:h1u:-DH1_PIPE=$p"); done
-    for p in ${NOISE_PIPES:-4 12 36}; do builds+=("h1noise_p$p:h1noise:-DH1_PIPE=$p"); done
+    # h1u.cu's knobs: H1U_MINB (CTAs an SM the registers leave room for), H1U_PF (the fused form prefetches too), H1U_PD
+    # (segments of A and B in flight), H1U_L2PF (L2 prefetch 16 segments ahead and of the next chunk's workspace), H1U_WARPS
+    for v in ${VARIANTS:-b3=-DH1U_MINB=3 pf=-DH1U_PF=1 pd2=-DH1U_PF=1,-DH1U_PD=2 pd4=-DH1U_PF=1,-DH1U_PD=4 \
+             pd8=-DH1U_PF=1,-DH1U_PD=8 l2=-DH1U_PF=1,-DH1U_L2PF=1 pd2l2=-DH1U_PF=1,-DH1U_PD=2,-DH1U_L2PF=1 \
+             pd4l2=-DH1U_PF=1,-DH1U_PD=4,-DH1U_L2PF=1 pd2b3=-DH1U_PF=1,-DH1U_PD=2,-DH1U_MINB=3 \
+             pd4w2=-DH1U_PF=1,-DH1U_PD=4,-DH1U_WARPS=2}; do
+      builds+=("h1u_${v%%=*}:h1u:${v#*=}")
+    done
     for b in "${builds[@]}"; do
       while [ "$(jobs -rp | wc -l)" -ge "${JOBS:-8}" ]; do wait -n || brc=2; done
       build_one "$arch" "$dir" "$b" &
