@@ -13,8 +13,9 @@ branch it had then is registered to it. The hook then refuses, from any other ag
   - pushing a branch registered to another agent: one it created (`checkout -b`, `switch -c`, `worktree add -b`) or the one its
     worktree had when it claimed it, until that agent hands it over (`hand`). An unregistered branch passes.
 For every agent, whatever it owns, it also refuses a push that would update `main` or `next` (only drive and the lander move
-them; INF-110)
-and a `git config` that prints values, since the checkout's http.*.extraheader carries a GitHub token (INF-105).
+them; INF-110), and a `git config` that prints values, since the checkout's http.*.extraheader carries a GitHub token (INF-105).
+A lander's hand repair of `next` under the queue lock names its reason on the push itself (`AGENT_GUARD_PUSH_NEXT_OK='REASON'
+git push ...`), and is logged to `$AGENT_GUARD_STATE/push-next-ok.jsonl`. Nothing lets a push to `main` through.
 The registry is `$AGENT_GUARD_STATE/branches.json` (default /tmp/agent-guard), one VM's: an agent on a VM of its own is never
 judged. Where a command names no directory (`git -C DIR`, or a `cd DIR` before it in the same command) the hook judges the
 event's cwd, else the workspace root, since the shell's remembered directory never reaches it.
@@ -79,8 +80,12 @@ def owner(gitdir: str, agent: str, directory: str) -> str:
 def invocations(commands: list[list[str]], cwd: str) -> list[tuple[str, list[str]]]:
     """(directory, git arguments after its global options) of each `git` among `commands` (unwrapped simple commands), tracking
     `cd DIR` and `git -C DIR`."""
+    return [(d, args) for _, d, args in indexed_invocations(commands, cwd)]
+
+
+def indexed_invocations(commands: list[list[str]], cwd: str) -> list[tuple[int, str, list[str]]]:
     out = []
-    for words in commands:
+    for i, words in enumerate(commands):
         if not words:
             continue
         if words[0] == "cd" and len(words) > 1:
@@ -97,7 +102,7 @@ def invocations(commands: list[list[str]], cwd: str) -> list[tuple[str, list[str
             else:
                 args = args[1:]
         if args:
-            out.append((d, args))
+            out.append((i, d, args))
     return out
 
 
@@ -142,14 +147,20 @@ CONFIG_DUMPS = {"--list", "-l", "--get-regexp", "--show-origin", "--get-all", "-
 CREDENTIAL_KEYS = ("extraheader", "insteadof", "token", "password", "credential")
 
 
-def main_or_config_reason(invocations_: list[tuple[str, list[str]]]) -> str | None:
+def main_or_config_reason(invocations_: list[tuple[int, str, list[str]]], next_ok: list[str], agent: str) -> str | None:
     """Whatever agent runs it: a push that would update `main` or `next` (INF-110: a worker whose VM came back from a snapshot
     reset to `main` pushed onto it, and drive rebuilt every queued PR), or a `git config` that prints credential-bearing values."""
-    for d, args in invocations_:
-        sub = args[0]
+    for i, d, args in invocations_:
+        sub, ok = args[0], next_ok[i] if i < len(next_ok) else ""
         if sub == "push":
             opts = {a for a in args[1:] if a.startswith("-")}
-            if opts & {"--all", "--mirror"} or PROTECTED & set(push_targets(d, args[1:])):
+            targets = PROTECTED & set(push_targets(d, args[1:]))
+            if ok and targets == {"next"} and not opts & {"--all", "--mirror"}:
+                STATE.mkdir(parents=True, exist_ok=True)
+                with open(STATE / "push-next-ok.jsonl", "a") as f:
+                    f.write(json.dumps({"agent": agent, "dir": d, "args": args, "reason": ok}) + "\n")
+                continue
+            if opts & {"--all", "--mirror"} or targets:
                 return ("this push would update `main` or `next`, which only drive and the lander move (AGENTS.md). Push "
                         "your own branch instead: `git push origin HEAD:refs/heads/<your-branch>` (create it first with "
                         "`git switch -c <your-branch>` if this checkout is on main).")
@@ -163,11 +174,13 @@ def main_or_config_reason(invocations_: list[tuple[str, list[str]]]) -> str | No
     return None
 
 
-def reason(commands: list[list[str]], agent: str, cwd: str) -> str | None:
-    """Why the agent may not run these git commands here, or None. Registers the branches an allowed command creates."""
-    found = invocations(commands, cwd)
-    if why := main_or_config_reason(found):
+def reason(commands: list[list[str]], agent: str, cwd: str, next_ok: list[str] | None = None) -> str | None:
+    """Why the agent may not run these git commands here, or None. Registers the branches an allowed command creates.
+    `next_ok[i]` is the AGENT_GUARD_PUSH_NEXT_OK reason `commands[i]` was given, if any."""
+    indexed = indexed_invocations(commands, cwd)
+    if why := main_or_config_reason(indexed, next_ok or [], agent):
         return why
+    found = [(d, args) for _, d, args in indexed]
     if not agent:
         return None
     for d, args in found:

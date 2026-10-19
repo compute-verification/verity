@@ -128,6 +128,14 @@ def unwrap(words: list[str]) -> list[str]:
     return words
 
 
+def assigned(words: list[str], name: str) -> str:
+    """The value `words` assigns to `name` ahead of the command they run (`NAME=VALUE cmd ...`), or ""."""
+    for w in words[:len(words) - len(unwrap(words))]:
+        if w.startswith(name + "="):
+            return w[len(name) + 1:]
+    return ""
+
+
 def one_pid(args: list[str]) -> bool:
     """Whether `ps ARGS` selects exactly one process by pid (`-p PID`, `--pid PID`) and nothing else."""
     sel = [(a, args[i + 1]) for i, a in enumerate(args[:-1]) if a in ("-p", "--pid", "-q", "--quick-pid")]
@@ -316,10 +324,11 @@ def checkout_reason(command: str, conversation: str, cwd: str) -> str | None:
     import worktree_guard
 
     try:
-        commands = [unwrap(strip_redirections(words)) for words, _ in words_of(command)]
+        raw = [strip_redirections(words) for words, _ in words_of(command)]
     except ValueError:
         return None
-    return worktree_guard.reason(commands, conversation, cwd)
+    next_ok = [assigned(w, "AGENT_GUARD_PUSH_NEXT_OK") for w in raw]
+    return worktree_guard.reason([unwrap(w) for w in raw], conversation, cwd, next_ok)
 
 
 def delivery(conversation: str) -> str | None:

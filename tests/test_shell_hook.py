@@ -313,6 +313,13 @@ def test_a_push_that_would_update_main_or_next_and_a_config_that_prints_tokens_a
     assert ask("git push origin main", "")["permission"] == "deny", "whoever runs it"
     for command in ("git push origin HEAD:refs/heads/cursor/mine", "git push -u origin cursor/mine", "git log -1"):
         assert ask(command)["permission"] == "allow", command
+    repair = "AGENT_GUARD_PUSH_NEXT_OK='restore next to abc under the queue lock' git push --force-with-lease=next:bad origin abc:next"
+    assert ask(repair)["permission"] == "allow"
+    assert json.loads((tmp_path / "state" / "push-next-ok.jsonl").read_text())["reason"] == "restore next to abc under the queue lock"
+    for command in ("AGENT_GUARD_PUSH_NEXT_OK=x git push origin main", "AGENT_GUARD_PUSH_NEXT_OK=x git push origin next main",
+                    "AGENT_GUARD_PUSH_NEXT_OK=x git push --all origin", "AGENT_GUARD_PUSH_NEXT_OK= git push origin next",
+                    "AGENT_GUARD_PUSH_NEXT_OK=x true; git push origin next", "export AGENT_GUARD_PUSH_NEXT_OK=x; git push origin next"):
+        assert ask(command)["permission"] == "deny", command
     for command in ("git config --list", "git config -l", "git config --get-regexp http", "git config --show-origin --list",
                     "git config --get http.https://github.com/.extraheader", "git config http.https://github.com/.extraheader"):
         out = ask(command)
