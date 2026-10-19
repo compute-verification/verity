@@ -100,10 +100,7 @@ theorem Bound.ivstar_last (Bd : Bound Coin Col T) (x : Msg) (pre : List Msg) (a 
           else .ret .rej
       else .ret .rej := by
   have hlt : ¬ pre.length + 1 < Bd.DE.V.k x := by omega
-  have hlt' : ¬ (pre ++ [a]).length < Bd.DE.V.k x := by
-    simp only [List.length_append, List.length_singleton]
-    omega
-  simp only [Bound.IVStar, hlt, hlt', ↓reduceIte, List.getLastD_concat, hfin, List.dropLast_concat,
+  simp only [Bound.IVStar, hlt, ↓reduceIte, List.getLastD_concat, hfin, List.dropLast_concat,
     List.length_append, List.length_singleton]
 
 /-- Two last messages `final` reads to the same openings give one `IVStar` decision with the same calls where the
@@ -115,12 +112,12 @@ theorem Bound.ivstar_eval_snoc (Bd : Bound Coin Col T) (H : Msg → Msg) (x : Ms
     (Bd.IVStar.next x (pre ++ [a']) cs).eval H = (Bd.IVStar.next x (pre ++ [a]) cs).eval H := by
   rw [Bd.ivstar_last x pre a' cs hk hfin', Bd.ivstar_last x pre a cs hk hfin]
   by_cases hc : os.length + 1 = pre.length + 1 ∧ ∀ j < os.length, (os.getD j []).length = Bd.nAt x j
-  · rw [if_pos hc, if_pos hc]
+  · rw [ite_eq_left hc, ite_eq_left hc]
     refine eval_bindOC_congr H rfl fun ok => ?_
     cases ok
     · rfl
     · exact eval_bindOC_congr H hag fun _ => rfl
-  · rw [if_neg hc, if_neg hc]
+  · rw [ite_eq_right hc, ite_eq_right hc]
 
 /-- The opened view of an accepted decision is the opened messages, answered as `lastView` answers them. -/
 theorem Bound.openView_viewAt (Bd : Bound Coin Col T) (H : Msg → Msg) (x : Msg) {pre : List Msg} {a : Msg}
@@ -159,7 +156,7 @@ theorem Bound.lastBindsEC_of_lastStep {H : Msg → Msg} {Bd : Bound Coin Col T} 
   rcases as with _ | ⟨a₀, as₀⟩
   · cases as' with
     | cons _ _ => simp at hl
-    | nil => exact hne.elim (fun h => h rfl) fun h => h rfl
+    | nil => exact (hne.elim (fun h => h rfl) fun h => h rfl).elim
   obtain ⟨pre, a, has⟩ : ∃ pre a, a₀ :: as₀ = pre ++ [a] :=
     ⟨(a₀ :: as₀).dropLast, (a₀ :: as₀).getLast (List.cons_ne_nil _ _),
       (List.dropLast_concat_getLast (List.cons_ne_nil _ _)).symm⟩
@@ -212,14 +209,14 @@ theorem Bound.lastBindsEC_of_lastStep {H : Msg → Msg} {Bd : Bound Coin Col T} 
       intro l h
       have h1 := Bd.agrees_true H x h P.length (by simp)
       rw [List.take_of_length_le (show (P ++ [l]).length ≤ P.length + 1 by simp), hcs,
-        if_neg (show ¬ P.length + 1 < (P ++ [l]).length by simp)] at h1
+        ite_eq_right (show ¬ P.length + 1 < (P ++ [l]).length by simp)] at h1
       exact h1
     have hearly : ∀ j < P.length, ((Bd.DE.V.next x (P.take (j + 1)) (cs.take (j + 1))).eval H).1 =
         .msg (Bd.ans (cs.getD j default)) := by
       intro j hj
       have h1 := (Bd.agrees_true H x hag j (by simp only [List.length_append, List.length_singleton]; omega)).1
       rw [List.take_append_of_le_length (show j + 1 ≤ P.length by omega),
-        if_pos (show j + 1 < (P ++ [last]).length by simp only [List.length_append, List.length_singleton]; omega)]
+        ite_eq_left (show j + 1 < (P ++ [last]).length by simp only [List.length_append, List.length_singleton]; omega)]
         at h1
       exact h1
     have hv := Bd.openView_viewAt H x hpc hfin ha
@@ -245,7 +242,7 @@ theorem Bound.lastBindsEC_of_lastStep {H : Msg → Msg} {Bd : Bound Coin Col T} 
     exact ⟨q, mem_fst_append_mono hsub hsub' hq, q', mem_fst_append_mono hsub hsub' hq', hcol⟩
   · obtain ⟨j, hj, hjne⟩ : ∃ j, ∃ hj : j < os.length, os[j] ≠ os'[j]'(by omega) := by
       by_contra hcon
-      push_neg at hcon
+      push Not at hcon
       exact hos (List.ext_getElem (by omega) fun j h1 _ => hcon j h1)
     have hjp : j < pre.length := by omega
     have hj' : j < os'.length := by omega
@@ -262,7 +259,7 @@ theorem Bound.lastBindsEC_of_lastStep {H : Msg → Msg} {Bd : Bound Coin Col T} 
     have hlj : os[j].length = os'[j].length := by omega
     obtain ⟨i, hi, hine⟩ : ∃ i, ∃ hi : i < os[j].length, os[j][i] ≠ os'[j][i]'(by omega) := by
       by_contra hcon
-      push_neg at hcon
+      push Not at hcon
       exact hjne (List.ext_getElem hlj fun i h1 _ => hcon i h1)
     obtain ⟨ho1, ho2⟩ := hro i hi
     obtain ⟨ho1', ho2'⟩ := hro' i (by omega)
@@ -313,14 +310,28 @@ theorem plainTrim_cols_congr (rel : _root_.Flock.Readable.Parsed → _root_.Floc
   unfold FlockDeploy.plainTableCols
   rw [h]
 
+/-- **`LastStepBinds` at every bound record whose `DE` steps as the deployed plain verifier**, answers a round with its
+coin's bytes and reads a view's columns only through table 0's, from `PlainLastBinds`. -/
+theorem lastStepBinds_of_V {T : Type} (H : Msg → Msg) (Bd : Bound Coin (List FlockLevel3.GF128) T)
+    (hV : Bd.DE.V = FlockDeploy.V false) (hans : ∀ c, Bd.ans c = c.bytes)
+    (hcols : ∀ v v' : Claims.Seen, FlockDeploy.cols false v 0 = FlockDeploy.cols false v' 0 →
+      Bd.DE.cols v = Bd.DE.cols v') (h : PlainLastBinds H) : Bd.LastStepBinds H := by
+  intro x ms l l' cs hk hc hearly hacc hacc' hne
+  have hview : ∀ ms' : List Msg, Bd.lastView ms' cs = plainView ms' cs := fun ms' => by
+    unfold Bound.lastView plainView
+    simp only [hans]
+  rw [hV] at hk hacc hacc' hne ⊢
+  simp only [hV, hans] at hearly
+  rw [hview, hview] at hne
+  exact h x ms l l' cs hk hc hearly hacc hacc' (hne.imp_left fun hc0 heq => hc0 (hcols _ _ heq))
+
 /-- **`LastStepBinds` at the deployed bound record**, from `PlainLastBinds`, whatever the code side's other choices. -/
 theorem lastStepBinds_deployed (rel : _root_.Flock.Readable.Parsed → _root_.Flock.Readable.Relation)
     (wE : Msg → ℝ) (join : List Msg → Msg) (rowIn : Msg → Msg)
     (final : Msg → Option (List (List (Msg × Salt)) × Msg)) (w : Msg → ℝ) (H : Msg → Msg) (h : PlainLastBinds H) :
     (bdDeployed rel (FlockDeploy.V false).next (FlockDeploy.deployPlainTrim rel).cols wE join rowIn final
-      w).LastStepBinds H := by
-  intro x ms l l' cs hk hc hearly hacc hacc' hne
-  exact h x ms l l' cs hk hc hearly hacc hacc' (hne.imp_left fun hc0 heq => hc0 (plainTrim_cols_congr rel heq))
+      w).LastStepBinds H :=
+  lastStepBinds_of_V H _ rfl (fun _ => rfl) (fun _ _ heq => plainTrim_cols_congr rel heq) h
 
 /-- **(P4) modulo what `E*` reads, at the deployed bound record** (`Bound.LastBindsEC`), from the deployed plain
 verifier's binding of its last message (`PlainLastBinds`): at the deployed plain verifier's steps and columns and the
