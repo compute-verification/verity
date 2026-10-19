@@ -68,7 +68,14 @@ ESCAPE = {
             "but has no floors.csv kind of its own",
     "LDGMC": "a reducing / multicast global load (NVLS); an add of existing words with no multiply (NoSum); RT-SCOPE owns "
              "the NVLS switch-side reduction",
-    "UTCOMMA": "tcgen05 FP4 (mxf4/nvf4) MMA on the B200; priced via the DC async rows if present, else a tensor gap",
+    "HMMA": "mma.sync FP16/BF16/TF32 on the B200 heads FP16/BF16 committed words; the sm_100 census prices only the "
+            "tcgen05 UTCHMMA peak, not the mma.sync form, so A3 has no peak for HMMA MACs (sm_100 only; sm_90/sm_120 price it)",
+    "QMMA": "mma.sync FP8 on the B200 heads FP8 committed words; the sm_100 census prices only tcgen05 UTCQMMA, not the "
+            "mma.sync form, so A3 has no peak for QMMA MACs (sm_100 only)",
+    "OMMA": "mma.sync FP8/FP6/FP4 (OCP formats) on the B200 heads low-precision words; no mma.sync peak in the sm_100 "
+            "census (sm_100 only; sm_120 prices OMMASF16864)",
+    "UTCOMMA": "tcgen05 FP4 (mxf4/nvf4) MMA on the B200; no UTCOMMA peak in the sm_100 census, so A3 can't price its FP4 "
+               "words (a tensor gap on B200; sm_120 has no tcgen05)",
     "SPARSIFY": "compresses an operand to 2:4; a data reshape with no product (MOVER)",
     "DECOMPRESS": "expands a 2:4 operand; a data reshape with no product (MOVER)",
 }
@@ -95,8 +102,8 @@ def isa_vocab(family: str) -> dict[str, dict]:
 
 #: lane / uniform multiply-accumulate bases: the model prices these on the q* lane route (or on issue), whatever suffix
 #: the SASS carries, so a bare base whose `class_of` is None (no discriminating suffix) is still priced.
-LANE_MAC_BASE = {"IMAD", "IMUL", "IMUL32I", "IDP", "IDP4A", "FFMA", "FFMA32I", "FMUL", "FMUL32I", "DFMA", "DMUL",
-                 "HFMA2", "HMUL2", "UIMAD", "UFFMA", "UFMUL"}
+LANE_MAC_BASE = {"IMAD", "IMUL", "IMUL32I", "IDP", "IDP4A", "FFMA", "FHFMA", "FFMA32I", "FMUL", "FMUL32I", "DFMA",
+                 "DMUL", "HFMA2", "HMUL2", "UIMAD", "UFFMA", "UFMUL"}
 
 
 def bucket(op: str, sem: dict, cls: str | None, priced_toks: set[str]) -> str:
