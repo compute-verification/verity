@@ -11,7 +11,7 @@ from research.drive import CHECK_STEPS
 from test_drive_postland import DEFER, Postland, _registry, _tree
 from test_merge_gate import CHECKED
 from test_queue import World, _git
-from test_queue_drive import Harness, _check, _failed_run, _steps_run, _tip
+from test_queue_drive import Harness, _check, _failed_run, _live_run, _steps_run, _tip
 
 FAILING = {"pkg/tests/test_x.py": "def test_y():\n    assert False\n"}
 
@@ -225,13 +225,11 @@ def test_6_a_landing_the_old_rule_still_follows_is_not_taken_as_verified_by_the_
 def _land_with_locks(h: Postland, monkeypatch, tmp_path, pkg: str = "pkg") -> str:
     """Check `next`'s tip and land it deferred, its check having regenerated ``pkg``'s lock: `main`, the lock commit on top."""
     h.d.regenerate_locks = True
-    rec = tmp_path / "regen.json"
-    rec.write_text('{"records": 2}\n')
-    monkeypatch.setattr(merge, "regenerated_records", lambda store, rid, dest=None: {pkg: ("sha", rec)})
     before = set(h.run_state)
     h.tick()
     (rid,) = [r for r in h.run_state if r not in before and not r.startswith("r-post-")]
     tip = _tip(h.world)
+    _, h.d.fetch, _ = _live_run(tmp_path, rid, tip, {pkg: '{"records": 2}\n'})
     h.evidence = [_steps_run(tmp_path, rid, {x: "passed" for x in CHECK_STEPS if x not in DEFER})]
     assert h.tick().startswith("landed"), h.world.logs
     main = _git(h.world.origin, "rev-parse", "main")

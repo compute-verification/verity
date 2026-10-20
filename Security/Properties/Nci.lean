@@ -6,7 +6,8 @@ import NciCheck.Check
 
 `NciCheck.evaluate` (`verity/core/protocols/network/nci/lean/NciCheck/Check.lean`, package `nci_check`) is
 the verifier's check of a declared division against the NCI policy, `Nci.Complies Γ α` (`Definitions/Nci.lean`), and
-`NciCheck.check` is `evaluate` with a refusal written `{"error": code}`. The difftest holds it to the Python reference on
+`NciCheck.check` is `evaluate` with a refusal written `{"error": code}` (with a `message` giving the fix for some codes).
+θ, the baseline, holds only input gates bound at registration (`IsRegistered`): one bound per run is refused. The difftest holds it to the Python reference on
 random instances; the statements here say what it computes on every instance. Each is a named `Prop`, proved as
 `NciCheck.Properties.SecurityProofs.X : NciCheck.Properties.X` in `Properties.Proofs.Nci`, and a guarantee of this
 package (`lean-audit.json`).
@@ -89,18 +90,26 @@ def GateFault (P : Prog) (g : ℕ) (k : String) : Prop :=
 def IsInput (P : Prog) (g : ℕ) : Prop :=
   ∃ p ops sc, P.gate g = .ok (p, ops, sc) ∧ Flock.Program.isInputId (P.defs[p]!).key = true
 
+/-- Gate `g` is bound at registration: its primitive's binding is `registration` (`RegisteredInput<w>_v1`,
+`Flock.Program.inputId?`), not `run` (`Input<w>_v1`). -/
+def IsRegistered (P : Prog) (g : ℕ) : Prop :=
+  ∃ p ops sc, P.gate g = .ok (p, ops, sc) ∧
+    (Flock.Program.inputId? (P.defs[p]!).key).map (·.1) = some Flock.Program.REGISTRATION
+
 /-! ## θ and the owners -/
 
-/-- Entry `t` of θ names an input gate that no earlier entry names. -/
+/-- Entry `t` of θ names an input gate bound at registration that no earlier entry names. -/
 def ThetaOk (P : Prog) (theta : Array Json) (t : ℕ) : Prop :=
-  ∃ g, natOf? theta[t]! = some g ∧ g < gates P ∧ IsInput P g ∧ ∀ t' < t, natOf? theta[t']! ≠ some g
+  ∃ g, natOf? theta[t]! = some g ∧ g < gates P ∧ IsInput P g ∧ IsRegistered P g ∧ ∀ t' < t, natOf? theta[t']! ≠ some g
 
 /-- Entry `t` of θ's refusal `k`: `theta-unknown` where it is not a gate id, else `theta-not-input` where its gate is
-not an input gate, else `theta-duplicate` where an earlier entry names the same gate. -/
+not an input gate, else `theta-not-registered` where it is one bound per run, else `theta-duplicate` where an earlier
+entry names the same gate. -/
 def ThetaFault (P : Prog) (theta : Array Json) (t : ℕ) (k : String) : Prop :=
   (k = "theta-unknown" ∧ ∀ g, natOf? theta[t]! = some g → gates P ≤ g) ∨
     (k = "theta-not-input" ∧ ∃ g, natOf? theta[t]! = some g ∧ g < gates P ∧ ¬ IsInput P g) ∨
-    (k = "theta-duplicate" ∧ ∃ g, natOf? theta[t]! = some g ∧ g < gates P ∧ IsInput P g ∧
+    (k = "theta-not-registered" ∧ ∃ g, natOf? theta[t]! = some g ∧ g < gates P ∧ IsInput P g ∧ ¬ IsRegistered P g) ∨
+    (k = "theta-duplicate" ∧ ∃ g, natOf? theta[t]! = some g ∧ g < gates P ∧ IsInput P g ∧ IsRegistered P g ∧
       ∃ t' < t, natOf? theta[t']! = some g)
 
 /-- Gate `g`'s owner is `"input"` and `g` an input gate, or an IU and `g` a computed gate. -/

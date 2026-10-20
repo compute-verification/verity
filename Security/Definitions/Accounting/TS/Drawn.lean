@@ -31,7 +31,8 @@ Proofs exist for drawn units only: round `w`'s proof `i` is drawn unit `drawnAt 
   rightness, on its slots' values and the public coins.
 * `Opens`, `committed`, `view`: a path's accepted openings of a position; its committed value; a unit's committed
   slots.
-* `Moved`, `MovedIn`, `Forked`: binding's failure, per position and per round, and its fork form; `Unsound`,
+* `Moved`, `MovedIn`, `BindingAt`, `Forked`: binding's failure, per position and per round, its bound, and its fork
+  form; `Unsound`,
   `JointSound`: proof soundness, jointly over a round's draws; `Pins`: each unit's relation pins its rightness.
 * `WriterReads`: a position's writer has it among its slots, checked for each layer.
 * `Mode`: a unit's mode in the run: paid (computed), folded (skipped, its committed words folded) or whole (skipped
@@ -156,6 +157,10 @@ def Moved [Fintype C] [Fintype B] [Nonempty V] (x : Paths (Paths C m × B) S) (�
 than their committed ones. -/
 def MovedIn [Fintype C] [Fintype B] [Nonempty V] (x : Paths (Paths C m × B) S) (w : Fin S) : Prop :=
   ∃ i, pf.accepted x w i ∧ pf.opened x w i ≠ pf.view x w (pf.drawnAt x w i)
+
+/-- **Binding at `δ_bind`**: in every round, binding fails (`MovedIn`) with probability at most `δ_bind` over the
+window's coins. -/
+def BindingAt [Fintype C] [Fintype B] [Nonempty V] (δbind : ℝ) : Prop := ∀ w, prob (fun x => pf.MovedIn x w) ≤ δbind
 
 /-- **Two runs off one commitment open a position differently** (the fork form): on `x` and on its continuation from
 `ℓ`'s cut on fresh coins `z`, which share every value committed before that cut, accepted proofs of drawn units open

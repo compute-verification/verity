@@ -170,7 +170,8 @@ def session(bin_: str, st: dict, n: int, law: str, port: int, out: Path, draw_fi
                  "--circuit", str(d / "circuit.txt"), "--tables", str(tables), "--runs", "1", "--warm", "0"], out / "prove.log")
         live = next((json.loads(line[5:]) for line in p.stdout.splitlines() if line.startswith("LIVE\t")), None)
         if live is None:
-            live = {"accepted": False, "why": f"prover exited {p.returncode}: {p.stderr[-600:]}"}
+            refused = next((line for line in p.stdout.splitlines() if line.startswith("REFUSED\t")), "")
+            live = {"accepted": False, "why": f"prover exited {p.returncode}: {refused[:600]} {p.stderr[-600:]}".strip()}
         serve.wait(timeout=600)
     finally:
         if serve.poll() is None:

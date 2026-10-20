@@ -25,6 +25,7 @@ from __future__ import annotations
 import gzip
 import itertools
 import json
+import threading
 from dataclasses import dataclass
 
 import pytest
@@ -671,7 +672,7 @@ def test_swapped_rank_header_fails_the_compare(tmp_path):
 # ----------------------------------------------------------------------------------------------------------------------------------
 
 def _e2e(tmp_path, monkeypatch, *, drop_rank1_log=False, rank1_mut=None, provenance=True, links_mut=None, recorder_mut=None, gprog=True,
-         provenance_of_other_run=False, provenance_digest_mismatch=False, rank_workers=0):
+         provenance_of_other_run=False, provenance_digest_mismatch=False, rank_workers=0, fold_workers=0, wrap=None):
     import hashlib
     from verity_vllm.pipeline.tp import fold_match as FM
     from verity_vllm.check.fold_compare import summarize
@@ -740,6 +741,10 @@ def _e2e(tmp_path, monkeypatch, *, drop_rank1_log=False, rank1_mut=None, provena
         argv += ["--gprog-rank0", str(gp[0]), "--gprog-rank1", str(gp[1]), "--workload", str(wl)]
     if rank_workers:
         argv += ["--rank-workers", str(rank_workers)]
+    if fold_workers:
+        argv += ["--fold-workers", str(fold_workers)]
+    for name in ("fold_rank", "global_match_rank") if wrap else ():
+        monkeypatch.setattr(FM, name, wrap(name, getattr(FM, name)))
     rc = cli.main(["tp-fold-match", *argv])
     return rc, json.loads((out / "tp2_fold_match.json").read_text()), out
 
@@ -747,7 +752,7 @@ def _e2e(tmp_path, monkeypatch, *, drop_rank1_log=False, rank1_mut=None, provena
 def _stable(doc):
     """The verdict document without its timings / paths (what must not depend on how the ranks were scheduled)."""
     if isinstance(doc, dict):
-        return {k: _stable(v) for k, v in doc.items() if k not in ("seconds", "wall_seconds", "utc", "capture", "log", "path", "out", "artifact", "rank_workers")}
+        return {k: _stable(v) for k, v in doc.items() if k not in ("seconds", "wall_seconds", "utc", "capture", "log", "path", "out", "artifact", "rank_workers", "fold_workers")}
     if isinstance(doc, list):
         return [_stable(v) for v in doc]
     return doc
@@ -764,6 +769,33 @@ def test_rank_legs_run_concurrently_and_the_document_does_not_depend_on_the_sche
     rc_p, par, _ = _e2e(tmp_path, monkeypatch, links_mut={3: {"peer_collective_k": 4}})
     rc_s, ser, _ = _e2e(tmp_path, monkeypatch, links_mut={3: {"peer_collective_k": 4}}, rank_workers=1)
     assert rc_p == rc_s == 1 and par["pass"] is False and _stable(par) == _stable(ser)
+
+
+def test_the_folds_run_wider_than_the_legs_after_them(tmp_path, monkeypatch):
+    """`--fold-workers` ranks fold at once while `--rank-workers` bounds the compare and GM-01 legs after the fold (a GLM-5.3 B8 rank's
+    fold peaks at 40 GB, its GM-01 near 400 GB): both ranks are inside their fold together, at a barrier neither passes alone, yet never
+    inside GM-01 together, and the document is the serial run's."""
+    barrier, lock, inside, most = threading.Barrier(2), threading.Lock(), [0], [0]
+
+    def wrap(name, fn):
+        def leg(*a, **k):
+            if name == "fold_rank":
+                barrier.wait()
+                return fn(*a, **k)
+            with lock:
+                inside[0] += 1
+                most[0] = max(most[0], inside[0])
+            try:
+                return fn(*a, **k)
+            finally:
+                with lock:
+                    inside[0] -= 1
+        return leg
+
+    rc, wide, _ = _e2e(tmp_path, monkeypatch, rank_workers=1, fold_workers=2, wrap=wrap)
+    rc_s, ser, _ = _e2e(tmp_path, monkeypatch, rank_workers=1)
+    assert rc == rc_s == 0 and (wide["fold_workers"], wide["rank_workers"]) == (2, 1) and ser["fold_workers"] == 1 and most == [1]
+    assert _stable(wide) == _stable(ser)
 
 
 def test_fold_match_entry_point_passes_on_the_fixture(tmp_path, monkeypatch):

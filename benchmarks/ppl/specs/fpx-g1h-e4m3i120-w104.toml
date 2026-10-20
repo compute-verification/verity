@@ -1,0 +1,51 @@
+description = "FPX-G1H FP8-g1 on H1 (co32c-u16-cohalf, decision 82, the RTX PRO 6000's record), served: activations on E4M3's integers up to 120 per token (with their coin inside H1's int8 activations, 126), weights on those up to 104 per output row (with their coin and H1's U on +-16 they stay in s8, 104 + 1 + 16), on every linear and lm_head, each operand the nearest level moved by a fair coin of 1 and centred (q + b - 1/2) (the coin is the record's operand bit, so the one int8 GEMM of the integers q + b is the credited and served one, its rank-one terms taken off in the epilogue), after SmoothQuant 0.5 (kv_shared) and the rotations (lm_head rotated too); H1's attention (co32c-u16-cohalf's: cohalf Q K^T with Q and K dithered within +-111, P V as in adopted)"
+
+[[linear]]
+step = "smooth"
+alpha = 0.5
+kv_shared = true
+
+[[linear]]
+step = "rotate"
+
+[[linear]]
+step = "rotate"
+linears = ["lm_head"]
+
+[[linear]]
+step = "native"
+grid = "e4m3i104"
+act_grid = "e4m3i120"
+scale = "channel"
+act = "g1"
+weight = "g1"
+
+[[linear]]
+step = "native"
+grid = "e4m3i104"
+act_grid = "e4m3i120"
+scale = "channel"
+act = "g1"
+weight = "g1"
+linears = ["lm_head"]
+
+[[attention]]
+step = "rotate"
+
+[[attention]]
+step = "center_keys"
+
+[[attention]]
+step = "int8"
+q = "dither"
+q_top = 111
+k = "dither"
+k_top = 111
+v = "dither"
+p_sink = true
+
+[[attention]]
+step = "peel"
+operand = "p"
+width = 64
+offset = 64

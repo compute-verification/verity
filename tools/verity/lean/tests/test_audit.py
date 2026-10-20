@@ -1084,8 +1084,8 @@ def test_a_premise_the_lock_does_not_list_fails():
     """A statement that takes an assumption applied to its own variables (`h : Premises.Hyp n`, an open hypothesis the
     hypotheses rule never names; `Facts.lean`'s `premises` sees through the abbrev and the `Guarantees` definitions to
     `P.Hyp`) fails while the lock doesn't list it, and an update adds it with the guarantee's owner; on 14 Oct a merge
-    dropped `Flock.Assumptions.RegistrantCovers`' entry this way and the check passed. A premise outside an assumptions
-    module is not an assumption."""
+    dropped `Flock.Assumptions.RegistrantCovers`' entry this way and the check passed. Without an import graph to say
+    which modules the repository builds, a premise outside an assumptions module is not counted (the next test has one)."""
     applied = [{"binder": "h", "type": "P.Premises.Hyp n", "closed": False, "named": None, "module": None}]
     pin = fact(signature="P.t (n : Nat) (h : P.Premises.Hyp n) : P.f n = n", hyps=applied)
     pin["premises"] = [{"binder": "h", "head": "P.Hyp", "module": "P.Assumptions"},
@@ -1097,6 +1097,29 @@ def test_a_premise_the_lock_does_not_list_fails():
     assert A.judge(pol, f, FILES)[0] == []
     assert A.judge({**pol, "assumptions": {}}, f, FILES)[0] == [
         "assumptions: P.Hyp is a premise of P.t, an assumption the lock doesn't list; run `check.py --update` to add it "
+        "with its guarantees' owner and commit the record (Daniel's DM shows it when it lands)"]
+
+
+def test_a_premise_defined_anywhere_the_repository_builds_is_listed_and_a_dependencys_is_not():
+    """LEAN-37 (RT2-LOGIC-2): `ProofLayer.SoundAt`, a premise defined in `Definitions/Accounting/TS`, passed unlisted, since
+    only a head in an assumptions module counted. A head in any module whose `.olean` a package of the repository builds
+    is listed now, in a lifted guarantee too (its premises are read through the `Guarantees` definition); one from the
+    toolchain or a fetched dependency (`Nat.le`, Mathlib's) is not."""
+    pin = fact(signature="P.t (n : Nat) : P.Guarantees.t n", hyps=[])
+    pin["premises"] = [{"binder": "h", "head": "P.Sound", "module": "P.Defs"},
+                       {"binder": "hn", "head": "Nat.le", "module": "Init.Prelude"},
+                       {"binder": "hd", "head": "Disjoint", "module": "Mathlib.Order.Disjoint"}]
+    graph = {"P.Defs": {"imports": ["Init"], "olean": "/r/Security/.lake/build/lib/lean/P/Defs.olean"},
+             "Init.Prelude": {"imports": [], "olean": "/elan/toolchains/v4/lib/lean/Init/Prelude.olean"},
+             "Mathlib.Order.Disjoint": {"imports": [], "olean": "/r/Security/.lake/packages/mathlib/.lake/build/lib/lean/"
+                                                                 "Mathlib/Order/Disjoint.olean"}}
+    f = facts(pins={"P.t": pin}, graph=graph)
+    assert A.own_modules(f) == {"P.Defs"}
+    fails, pol = A.judge({**POLICY, "assumptions": {}}, f, FILES, update=True)
+    assert fails == [] and list(pol["assumptions"]) == ["P.Sound"] and pol["assumptions"]["P.Sound"]["owner"] == "@lean"
+    assert A.judge(pol, f, FILES)[0] == [] and A.judge(pol, f, FILES, update=True)[1]["assumptions"] == pol["assumptions"]
+    assert A.judge({**pol, "assumptions": {}}, f, FILES)[0] == [
+        "assumptions: P.Sound is a premise of P.t, an assumption the lock doesn't list; run `check.py --update` to add it "
         "with its guarantees' owner and commit the record (Daniel's DM shows it when it lands)"]
 
 
@@ -1849,26 +1872,32 @@ def test_a_run_names_paths_outside_its_package_only_through_repo(tmp_path):
         "or another file; write {repo}/a"]
 
 
+def counts(rep: dict) -> tuple[int, int]:
+    """The own modules a replay checked and reused."""
+    return rep["replay"]["checked"], rep["replay"]["reused"]
+
+
 @pytest.mark.slow
 @pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
 def test_a_replay_reuses_only_modules_whose_olean_files_and_imports_passed_it(tmp_path):
     """On a real build: a second audit reuses every module's replay; a change to `Control.Defs` replays it and what imports
-    it; a declaration that skipped the kernel is still rejected beside reused modules, and a failed replay stores nothing."""
+    it; a declaration that skipped the kernel is still rejected beside reused modules, and a failed replay stores the
+    modules the kernel accepted (`Control`, which imports the bad one) and never the rejected one, which fails again."""
     pkg, cache = tmp_path / "control", tmp_path / "replay-cache"
     shutil.copytree(HERE / "fixtures" / "control", pkg, ignore=shutil.ignore_patterns(".lake"))
     build = lambda: subprocess.run(["lake", "build"], cwd=pkg, check=True, capture_output=True, env=A.lake_env())
     audit = lambda: A.audit(pkg, tmp_path / "out", update=True, runs=False, log=lambda *_: None, replay_cache=cache)
     build()
     rep = audit()
-    assert rep["failures"] == [] and rep["replay"] == {"checked": 4, "reused": 0}
+    assert rep["failures"] == [] and counts(rep) == (4, 0)
     assert len(list(cache.glob("*.json"))) == 4
     rep = audit()
-    assert rep["failures"] == [] and rep["replay"] == {"checked": 0, "reused": 4}
+    assert rep["failures"] == [] and counts(rep) == (0, 4)
     defs = pkg / "Control" / "Defs.lean"
     defs.write_text(defs.read_text() + "\ndef Control.extra : Nat := 1\n")
     build()
     rep = audit()
-    assert rep["failures"] == [] and rep["replay"] == {"checked": 3, "reused": 1}, "Defs, Thms and Control; not Assumptions"
+    assert rep["failures"] == [] and counts(rep) == (3, 1), "Defs, Thms and Control; not Assumptions"
     kernel = json.loads((HERE / "fixtures" / "violations.json").read_text())["kernel"]
     for rel, text in kernel["write"].items():
         (pkg / rel).write_text(text)
@@ -1878,9 +1907,131 @@ def test_a_replay_reuses_only_modules_whose_olean_files_and_imports_passed_it(tm
     build()
     stored = set(cache.glob("*.json"))
     rep = audit()
-    assert rep["replay"] == {"checked": 2, "reused": 3}, "Bad and Control"
+    assert counts(rep) == (2, 3), "Bad and Control"
     assert any(f.startswith(kernel["fails"]) for f in rep["failures"]), rep["failures"]
-    assert set(cache.glob("*.json")) == stored
+    assert len(set(cache.glob("*.json")) - stored) == 1
+    rep = audit()
+    assert counts(rep) == (1, 4), "Bad alone"
+    assert any(f.startswith(kernel["fails"]) for f in rep["failures"]), rep["failures"]
+
+
+def test_the_closure_plan_joins_every_module_above_one_that_has_not_passed():
+    """A dependency module that has not passed is checked, and every module importing it joins the replay unchecked, since
+    an import of one would bring it in unchecked; the rest stay imported."""
+    graph = {"Init": [], "Std": ["Init"], "A": ["Init"], "B": ["A", "Std"], "C": ["Std"], "Own": ["B", "C"]}
+    facts = {"graph": {m: {"imports": i} for m, i in graph.items()}, "modules": ["Own"]}
+    assert A.closure_plan(facts, lambda m: m != "A") == (["A"], ["B"])
+    assert A.closure_plan(facts, lambda m: True) == ([], [])
+    assert A.closure_plan(facts, lambda m: False) == (["A", "B", "C", "Init", "Std"], [])
+
+
+def test_a_replay_key_covers_every_module_it_imports_transitively(tmp_path):
+    """A module's key changes with the `.olean` of a module it imports through another, and with nothing else's."""
+    oleans = {m: tmp_path / f"{m}.olean" for m in ("Init", "A", "B", "Other")}
+    for m, p in oleans.items():
+        p.write_text(m)
+    graph = {"Init": [], "A": ["Init"], "B": ["A"], "Other": ["Init"]}
+    facts = {"graph": {m: {"olean": str(oleans[m]), "imports": i} for m, i in graph.items()}, "modules": ["B"]}
+    before = A.replay_keys(facts, "t")
+    oleans["Init"].write_text("changed")
+    after = A.replay_keys(facts, "t")
+    assert all(before[m] != after[m] for m in graph)
+    oleans["Init"].write_text("Init")
+    oleans["Other"].write_text("changed")
+    after = A.replay_keys(facts, "t")
+    assert [m for m in graph if before[m] != after[m]] == ["Other"]
+    assert A.replay_keys(facts, "another toolchain")["Init"] != before["Init"]
+
+
+@pytest.mark.slow
+@pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
+def test_the_closure_replay_checks_each_imported_module_once_and_then_reuses_it(tmp_path):
+    """On a real build: `--closure` sends every module the control imports (the toolchain's `Init`) through the kernel, a
+    second audit checks none of them, and a change to an own module checks only it and what imports it."""
+    pkg, cache = tmp_path / "control", tmp_path / "replay-cache"
+    shutil.copytree(HERE / "fixtures" / "control", pkg, ignore=shutil.ignore_patterns(".lake"))
+    build = lambda: subprocess.run(["lake", "build"], cwd=pkg, check=True, capture_output=True, env=A.lake_env())
+    audit = lambda: A.audit(pkg, tmp_path / "out", update=True, runs=False, log=lambda *_: None, replay_cache=cache,
+                            closure=True)
+    build()
+    rep = audit()
+    c = rep["replay"]["closure"]
+    assert rep["failures"] == [] and counts(rep) == (4, 0) and c["checked"] == c["modules"] > 100 and c["reused"] == 0, rep
+    print(f"closure cold: {c}, {rep['seconds']['replay']} s {rep['replay']['phases']}, peak {rep['replay']['peak_gib']} GiB")
+    rep = audit()
+    assert rep["failures"] == [] and counts(rep) == (0, 4)
+    assert rep["replay"]["closure"] == c | {"checked": 0, "reused": c["modules"]}
+    print(f"closure warm: {rep['replay']['closure']}, {rep['seconds']['replay']} s")
+    defs = pkg / "Control" / "Defs.lean"
+    defs.write_text(defs.read_text() + "\ndef Control.extra : Nat := 1\n")
+    build()
+    rep = audit()
+    assert rep["failures"] == [] and counts(rep) == (3, 1) and rep["replay"]["closure"]["checked"] == 0
+
+
+def test_two_packages_storing_one_replay_key_at_once_both_succeed(tmp_path, monkeypatch):
+    """The gate audits its packages in threads of one process, and two whose closures share a module store its replay key
+    at once; with the temporary file named by the pid alone, the second store renamed the first's away and the first's
+    rename failed (r20261020-021950-2eb0). The store between the first's write and its rename runs on another thread."""
+    real, nested = os.replace, []
+
+    def replace(src, dst):
+        if not nested:
+            nested.append(1)
+            t = threading.Thread(target=A.store_replay, args=(tmp_path, "k", "M"))
+            t.start()
+            t.join()
+        real(src, dst)
+
+    monkeypatch.setattr(A.os, "replace", replace)
+    A.store_replay(tmp_path, "k", "M")
+    assert json.loads((tmp_path / "k.json").read_text())["module"] == "M" and not list(tmp_path.glob(".*.tmp"))
+
+
+@pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
+def test_an_equation_lemma_two_modules_realize_counts_as_declared_by_the_imported_one(tmp_path):
+    """`f.eq_1` is realized in B and in C, which don't import each other; D imports C and uses it. With B replayed and C
+    imported (it passed), D's use of the lemma is declared by C, which D imports (#2626's train: ZkQueryRound's
+    `match_7.eq_2` and the `else_eq` that SimZk and ZkEq both realize). With B and C both imported (E, replayed, imports
+    B), the imported environment names one module for the lemma, B, and D's import of C still declares it (the next
+    train: `Exists.choose.congr_simp`, realized in Init.Control.Lawful.Lemmas and in the UpwardEnumerable that
+    Init.Data.Range.Polymorphic.Instances imports)."""
+    pkg = tmp_path / "realized"
+    (pkg / "R").mkdir(parents=True)
+    shutil.copy(HERE / "fixtures" / "control" / "lean-toolchain", pkg)
+    (pkg / "lakefile.toml").write_text('name = "realized"\ndefaultTargets = ["R"]\n\n[[lean_lib]]\nname = "R"\n')
+    (pkg / "R.lean").write_text("import R.D\nimport R.E\n")
+    (pkg / "R" / "A.lean").write_text("def f : Nat → Nat\n  | 0 => 1\n  | n + 1 => n\n")
+    for m in ("B", "C"):
+        (pkg / "R" / f"{m}.lean").write_text(f"import R.A\ntheorem {m.lower()} : f 0 = 1 := by rw [f]\n")
+    (pkg / "R" / "D.lean").write_text("import R.C\ntheorem d : f 0 = 1 := by rw [f]\n")
+    (pkg / "R" / "E.lean").write_text("import R.B\ntheorem e : True := trivial\n")
+    subprocess.run(["lake", "build"], cwd=pkg, check=True, capture_output=True, env=A.lake_env())
+    for closure in (["R.B"], ["R.E"]):
+        r = subprocess.run(["lake", "env", "lean", "--run", str(A.TOOL / "Replay.lean"), str(tmp_path / "replay.json"),
+                            "R.D", "--closure", *closure], cwd=pkg, capture_output=True, text=True, env=A.lake_env())
+        assert r.returncode == 0, (closure, r.stderr + r.stdout)
+
+
+@pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
+def test_a_checked_declaration_waits_for_what_an_unchecked_one_it_unfolds_needs(tmp_path):
+    """D's `a_t : f = 6 := rfl` makes the kernel unfold `f`, from M, which joins the replay unchecked (it passed, and it
+    imports G, which hasn't), and `f`'s body mentions G's `zz_g`, checked in the same replay. Ordered only by what it
+    mentions itself, `a_t` went to the kernel before `zz_g` was in it: "unknown constant" (#2626's third train,
+    `Flock.sizeOf_lt_of_mem_toArray` and `Std.DTreeMap.Raw.Const.toList`)."""
+    pkg = tmp_path / "behind"
+    (pkg / "R").mkdir(parents=True)
+    shutil.copy(HERE / "fixtures" / "control" / "lean-toolchain", pkg)
+    (pkg / "lakefile.toml").write_text('name = "behind"\ndefaultTargets = ["R"]\n\n[[lean_lib]]\nname = "R"\n')
+    (pkg / "R.lean").write_text("import R.D\n")
+    (pkg / "R" / "G.lean").write_text("def zz_g : Nat := 5\n")
+    (pkg / "R" / "M.lean").write_text("import R.G\ndef f : Nat := zz_g + 1\n")
+    (pkg / "R" / "D.lean").write_text("import R.M\ntheorem a_t : f = 6 := rfl\n")
+    subprocess.run(["lake", "build"], cwd=pkg, check=True, capture_output=True, env=A.lake_env())
+    r = subprocess.run(["lake", "env", "lean", "--run", str(A.TOOL / "Replay.lean"), str(tmp_path / "replay.json"), "R.D",
+                        "--closure", "R.G", "--closure-reused", "R.M"], cwd=pkg, capture_output=True, text=True,
+                       env=A.lake_env())
+    assert r.returncode == 0, r.stderr + r.stdout
 
 
 @pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
