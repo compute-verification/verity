@@ -391,16 +391,23 @@ ENTRIES: dict[str, Entry] = {e.id: e for e in (
           "recompute every word they absorb, and nothing states that the served relations are PIN's", "TS proofs pin",
           "conjectured"),
     Entry("accounting-ts-accepted-live", "assumption",
-          "A proof is credited only after flock-verify --zk --registered accepts its session", "TS accepted live",
-          "standard"),
+          "A proof is credited only after flock-verify --zk --registered accepts its session. Every served path today "
+          "verifies with plain flock-verify --zk and binds its served values through the public file (served_zk's Lean "
+          "checks, served_commit's verdict, h1_prove); of the audit's runners only one_stage/a0.py passes --registered. "
+          "So no served path meets it until the served trees are registered as ports, or a bridge for public-file "
+          "binding is stated", "TS accepted live", "standard"),
     Entry("accounting-ts-window-law", "assumption",
           "The proof service's draws and audit coins are the window's live coins: at each round and proof, given what "
           "the path fixes before the session (its setting and its prover), the session's coins are the path's next "
-          "coins, fresh and uniform. This rests on four facts: a refused session is never rerun on a fresh draw (no "
+          "coins, fresh and uniform. This rests on five facts: a refused session is never rerun on a fresh draw (no "
           "retry or redraw); the draw is revealed only after the session's registration and prover are fixed; the draw "
           "is no coin the setting reads (not σ_w, nothing derived from σ_w or from a prover's salt, not another "
-          "session's draw); and the path carries the draw (a later round's coin, or a draw beside σ_w in each round's "
-          "coin, which the last round needs)", "TS window law", "standard"),
+          "session's draw); the path carries the draw (a later round's coin, or a draw beside σ_w in each round's "
+          "coin, which the last round needs); and the session's audit coins (C-Flock's --zk coin tree) come from the "
+          "auditor's verifier, on a machine the prover doesn't control, fresh for each session (trusted-nebius-host). "
+          "Under full checking the draw is every unit, but the law still holds the audit coins fresh and uniform given "
+          "the prover. served_zk's per-tile sessions today draw their coin tree from a serve --zk --operator loopback "
+          "beside the prover, which doesn't meet the fifth fact", "TS window law", "standard"),
     Entry("accounting-ts-served-checks", "assumption",
           "A proof's relation (its served Definition's check) holds at its C-Flock session's extracted value layer "
           "wherever flock-verify accepts the session and every drawn unit is right at its own owned reads; under a "
