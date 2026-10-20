@@ -148,10 +148,10 @@ statement needs a period record, kept by the service, from which the credit is r
 committed before window 0's first coin; each window's challenger session named in the record before the window's
 first coin, so a window reads only its own session's coins and a session left unclosed is a recorded window, not a
 dropped one (RT4-INT-17; the record is proofs', PRF-108); each window's first coin opened after the previous window's
-draw (the challenger's `order_reason` over one family, below); and the record closed at the first window with a refused proof
-or at the `n`-th window, every window up to its close recorded, none replaced or dropped. A stream's committed periods
-must be disjoint: each window in at most one period, and one period open at a time, the next committed only after the
-last closes. Two periods that share windows count those windows twice, and a prover that commits `P` overlapping
+draw (the challenger's `order_reason` over one family, below); and the record closed at the first window with a
+refused proof or at the `n`-th window, every window up to its close recorded, none replaced or dropped. A stream's
+committed periods must be disjoint: each window in at most one period, and one period open at a time, the next
+committed only after the last closes. Two periods that share windows count those windows twice, and a prover that commits `P` overlapping
 periods and claims whichever is accepted pays `P·δ_s`, not `δ_s`. No check of the record does this today. The served
 path has no period: `Credits` (SALT-WIRE's, #2847) registers a window once when it is received, before its draw coin
 is open or any proof, and nothing closes a stream at its first refused window, so the running ledger credits each
