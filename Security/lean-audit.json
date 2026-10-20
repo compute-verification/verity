@@ -1376,7 +1376,6 @@
    "Claims.Sampling.Partition.Partitions": "a helper the claims read: a partition of a program's gates into proof units",
    "Claims.Sampling.Prog.Correct": "a helper the claims read: a correct gate interval on committed values",
    "Claims.Sampling.Prog.Topological": "a helper the claims read: a topologically ordered program",
-   "Claims.Sampling.RU.Consecutive": "a helper the claims read: a replay unit of consecutive gate intervals",
    "Claims.Sampling.RelS": "a helper the claims read: a statement's sampling relation",
    "Claims.Sampling.Rule.WellFormed": "a helper the claims read: a well-formed rule on its class",
    "Claims.Sampling.Scope": "a helper the claims read: the scope the sampling claims read",
