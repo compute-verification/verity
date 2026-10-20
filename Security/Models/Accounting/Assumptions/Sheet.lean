@@ -42,11 +42,12 @@ unit). **A2u**: the classes `K` include the uniform-datapath instructions, each 
 document states it (decision 84's issue ceiling). **Catch-all**: every warp instruction takes at least one issue slot,
 whether or not its class is listed, so `K` counts every warp instruction the run issues, one no other class names in
 the device's catch-all class, priced at its issue slot alone (`NOROW` on sm_120 and on the H200's and B200's sheets,
-the exporters' `CATCH_ALL`). sm_120's is a vector class, so A6 reads such an instruction as a lane head of at most two
-words a lane; one with a wider destination is assumed to be a memory access (`LDL.128`, `LD.128`), which heads no
-vector word. The DC sheets' is neither a writer nor a vector class, so it heads no word. A reading whose classes have
-none leaves an unlisted instruction free on every row (RT2-HOPPER-2, note:20261019T1140Z-draft-rt2-hopper), as the DC
-measured readings (DC-90-ri, DC-100-ri) do (RT4-SHEET-9). -/
+`UNLISTED` at the measured issue row alone on their measured readings DC-90-ri and DC-100-ri, the exporters'
+`CATCH_ALL`). sm_120's is a vector class, so A6 reads such an instruction as a lane head of at most two words a lane;
+one with a wider destination is assumed to be a memory access (`LDL.128`, `LD.128`), which heads no vector word. The
+DC readings' are neither writers nor vector classes, so they head no word. A reading whose classes have none leaves an
+unlisted instruction free on every row (RT2-HOPPER-2, note:20261019T1140Z-draft-rt2-hopper), as sm_120's measured
+reading does. -/
 def SheetDispatch (Q : Run K) : Prop := ∑ k, Q.n k ≤ Q.cycles
 
 /-- `accounting-sheet-tensor` (data sheets and whitepapers). **A3 TENSOR**: the tensor cores do at most the sheet's
