@@ -17,6 +17,9 @@ One process writes `<out>/pouw_h1_gpu.json` and the option's record (`<out>/pouw
   hook      a listener (`H1Run.listen`) gets every call with the served tensors on the GPU: A int8 [m, k] and s_a f32 [m]
             (the Commit's ``Int8RowQuant_v1`` /0 and /1), the layer's own int8 weight and scales; what it returns is in the
             manifest; steps begin at linear 0, and every step's calls run over the same layers in order.
+  requests  every request the scheduler admits is an entry under the root of its step's round, recorded before the round's
+            live coin (`h1_settings`: the engine's runner and the window's round coins; `requests_check`), one entry a
+            served request.
 
 ``--workload fill`` serves `pouw_h1.FILL` instead (VLLM-52, PERIOD-PATH's ask 1): 64 one-token prompts (`fill_prompts`) under
 VLLM-31's static schedule (``ignore_eos``, every request to its cap, host prefix cache off), with ``max_num_seqs`` 64 and T = 64,
@@ -52,8 +55,29 @@ PROMPTS = ["The capital of France is", "def fibonacci(n):\n    \"\"\"Return the 
            "The chemical symbol for gold is", "A haiku about autumn:", "The square root of 144 is", "Photosynthesis is the process"]
 
 
-def run(a: argparse.Namespace) -> dict[str, Any]:
+def h1_settings(eng: Any, rows: int, steps: int, **kw: Any) -> dict[str, Any]:
+    """The option's settings for one served window: the epoch's salt coin, the engine's model runner (where the scheduler's
+    admissions arrive) and the window's live round coins, one a step."""
+    from verity.core.protocols.pouw import window as Wd
     from verity.core.protocols.pouw.coins import Challenger
+    from verity.core.protocols.sampled_proofs.challenger import LiveRecord
+    rounds = LiveRecord(Wd.live_challenger(0, steps, os.urandom), Wd.ROUND)
+    return {"pouw": {"coins": Challenger(0, os.urandom), "runner": eng.runner, "rounds": rounds, "rows": rows, "steps": steps,
+                     **kw}}
+
+
+def requests_check(h1: Any, requests: int) -> dict[str, Any]:
+    """The window's admitted requests: their count against the ones served, and each entry opened under the root of the
+    round that admitted it, recorded before that round's coin (`pouw_h1.request_reason`, `rounds_reason`)."""
+    from verity_vllm.protocol_options import pouw_h1 as PH
+    why = [w for e in h1.requests if (w := PH.request_reason(h1.round_log, h1.salt, h1.rows, e, h1.open_request(e.index)))]
+    rounds = PH.rounds_reason(h1.round_log, h1.rounds.challenger.commitment)
+    out = {**h1.details["requests"], "served": requests, "entries_refused": why[:20], "rounds": rounds}
+    out["ok"] = bool(out["admitted"] == requests and not out["refused"] and not why and rounds is None)
+    return out
+
+
+def run(a: argparse.Namespace) -> dict[str, Any]:
     from verity_vllm import protocol_options as PO
     from verity_vllm.engine.build import build_engine
     from verity_vllm.program.frontend.kernel_readback import int8_exact_of
@@ -82,9 +106,8 @@ def run(a: argparse.Namespace) -> dict[str, Any]:
 
     plain = serve()
     entry_name = f"pouw:{PH.SCHEME}"
-    ctx = PO.Context(stage="serve", enabled=(entry_name,), settings={"pouw": {"coins": Challenger(0, os.urandom), "retain_steps": a.retain,
-                                                                              "transcript_dir": str(outdir), "rows": a.rows,
-                                                                              "steps": steps_public}})
+    ctx = PO.Context(stage="serve", enabled=(entry_name,),
+                     settings=h1_settings(eng, a.rows, steps_public, retain_steps=a.retain, transcript_dir=str(outdir)))
     t0 = time.monotonic()
     comp = PO.install(eng.model, ctx)
     doc["install_s"] = round(time.monotonic() - t0, 1)
@@ -122,6 +145,8 @@ def run(a: argparse.Namespace) -> dict[str, Any]:
                         "served_rows_per_step": [max((c.m for c in h1.calls if c.step == s), default=0) for s in range(h1.steps)],
                         "credit": h1.credit()}
         print(f"[h1] calls {json.dumps(doc['calls'])}", flush=True)
+        doc["requests"] = requests_check(h1, len(plain))
+        print(f"[h1] requests {json.dumps(doc['requests'])}", flush=True)
 
         zs = []
         for index, xq, _sa, y in h1.retained:
@@ -148,6 +173,7 @@ def run(a: argparse.Namespace) -> dict[str, Any]:
         comp.close()
     doc["commitment"] = comp.installed[0].commitment()
     doc["ok"] = bool(doc["served"]["same_tokens"] and not doc["hook"]["bad"] and doc["hook"]["bound"] and doc["calls"]["static"]
+                     and doc["requests"]["ok"]
                      and doc["hook"]["steps_in_layer_order"] and doc["hook"]["leaves"]
                      and doc["calls"]["count"] > 0 and zs and all(z["y_exact"] and z.get("unit0_z", True) for z in zs)
                      and doc["compile_ok"] is not False and doc["engine"]["enforce_eager"] is not False)
@@ -206,7 +232,6 @@ def tokens_digest(gen: list[dict[str, Any]]) -> str:
 
 
 def fill(a: argparse.Namespace) -> dict[str, Any]:
-    from verity.core.protocols.pouw.coins import Challenger
     from verity_vllm import protocol_options as PO
     from verity_vllm.engine.build import build_engine
     from verity_vllm.program.frontend.kernel_readback import int8_exact_of
@@ -260,9 +285,8 @@ def fill(a: argparse.Namespace) -> dict[str, Any]:
 
     def window(name: str, want: list[dict[str, Any]], tdir: Path) -> dict[str, Any]:
         nonlocal layers
-        ctx = PO.Context(stage="serve", enabled=(entry_name,), settings={"pouw": {
-            "coins": Challenger(0, os.urandom), "retain_steps": a.retain, "transcript_dir": str(tdir), "rows": decl.rows,
-            "steps": decl.steps}})
+        ctx = PO.Context(stage="serve", enabled=(entry_name,),
+                         settings=h1_settings(eng, decl.rows, decl.steps, retain_steps=a.retain, transcript_dir=str(tdir)))
         t0 = time.monotonic()
         comp = PO.install(eng.model, ctx)
         out: dict[str, Any] = {"install_s": round(time.monotonic() - t0, 1)}
@@ -309,12 +333,13 @@ def fill(a: argparse.Namespace) -> dict[str, Any]:
                 "units": sum(c.units for c in h1.calls), "u_step": h1.u_step, "hook_bad": bad[:20],
                 "steps_in_layer_order": all([c.layer for c in h1.calls if c.step == s] == list(range(len(layers)))
                                             for s in range(h1.steps)),
-                "z": zs, "shapes": [list(x) for x in h1.shapes()],
+                "z": zs, "shapes": [list(x) for x in h1.shapes()], "requests": requests_check(h1, len(want)),
                 "credit": {"credited": credit["credited"], "refused": credit["refused"], "padded": credit["padded"],
                            "units": credit["units"], "served_frac_of_macs": credit["served_frac_of_macs"]}})
             out["ok"] = bool(out["same_tokens"] and out["static_schedule"]["ok"] and not out["schedule_problems"]
                              and out["u"] == out["u_declared"] and out["layout_static"] and not bad and out["steps_in_layer_order"]
-                             and zs and all(z["y_exact"] for z in zs))
+                             and zs and all(z["y_exact"] for z in zs) and out["requests"]["ok"]
+                             and out["requests"]["per_round"][0] == len(want))
         finally:
             comp.close()
         out["commitment"] = comp.installed[0].commitment()

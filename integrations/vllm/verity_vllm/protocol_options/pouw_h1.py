@@ -40,6 +40,18 @@ served int8 linear call as its own Program on bits, which `verity.core.protocols
   its z, the only GEMM of the call. Today's arm serves `scaled_mm`'s y with z a second ``_int_mm`` beside it, so every
   call is refused (``credit: served-output-not-credited-kernel: ...``) and the window credits nothing; a call recorded
   outside a traced ``apply`` is refused too (`UNTRACED`).
+* **Requests and rounds** (#2677's `Accounting.Served`, `cursor/int-tie-ea24` at 8f161917ab, not on main: a request entry
+  is an `act` value, a run input under the root of the round that admits it, committed before that round's coin; RT3-INT-9).
+  Round s is step s, one round a step. vLLM's scheduler admits a request in the step that first schedules it
+  (`SchedulerOutput.scheduled_new_reqs`), and the option's wrap of the model runner's ``execute_model`` (`admitting`) hands
+  those to `H1Run.admit` before the step's forward, so each `RequestEntry` (its ordinal, round, cap and prompt tokens) is a
+  hiding leaf of round s's request table (`request_table`: T hm96 leaves, the unused ones `EMPTY_REQUEST`). Round s closes
+  once step s's last linear is recorded: its root (`round_root`) is over the step's calls (`step_digest`, their manifest
+  rows with what the listeners bound) and that table's root, and only then does the round coins' `LiveRecord` (the pouw
+  setting ``rounds``) open round s's coin. The salt is opened at install, before any admission, so no request entry
+  precedes it. `request_reason` refuses an entry opened under another round's root, under none, or under a root recorded
+  after its coin; `rounds_reason` holds the log to the challenger's coins. The round root has no admit root (H1 has no
+  admit unit yet) and no receipt root (receipts aren't committed here).
 * **Salt.** `pouw.salt` is a SHA-512 digest and the epoch's salt (`audit.Epoch.start`, from the challenger's salt coin, opened
   after the weights' root, `weight_root`) is 32 bytes, so the Program's salt is the epoch's under `SALT_TAG`
   (`program_salt`) until the challenger opens a 64-byte one.
@@ -48,6 +60,8 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
+import struct
 from collections import Counter, deque
 from dataclasses import dataclass
 from fractions import Fraction
@@ -56,9 +70,13 @@ from pathlib import Path
 from typing import Any, Callable, Mapping, Sequence
 
 import numpy as np
-from verity.core.protocols.pouw.audit import commit_rows, weight_binding
+from verity.core.protocols.pouw import window as Wd
+from verity.core.protocols.pouw.audit import HM96, HM96_SALT, ROW_SCHEMA, commit_rows, rows_domain, weight_binding
 from verity.core.protocols.pouw.circuit import compile as C
 from verity.core.protocols.pouw.circuit import h1tile as H
+from verity.core.protocols.pouw.protocol import tagged
+from verity.core.protocols.sampled_proofs.challenger import CoinError, LiveCommitment, LiveOpening
+from verity.ml.commitments import Commitment, Opening, VerificationLimits, verify_opening
 from verity.ml.circuits import boolean as BL
 from verity.ml.circuits.defs import CompositeDefinition, bind
 from verity.ml.circuits.ops.boolean import gemm as BG
@@ -253,6 +271,111 @@ FILL = Static((1,) * 64, 16, 64, 18)
 
 
 @dataclass(frozen=True)
+class RequestEntry:
+    """An admitted request's entry (#2677's `Accounting.Served.Cls.act`, "a request entry its round admits"): its ordinal
+    among the window's admitted requests, the round that admitted it (its engine step), its token cap and its prompt's
+    token ids. It is a value, a hiding leaf of its round's request table under that round's root."""
+
+    index: int
+    round: int
+    max_tokens: int
+    prompt: tuple[int, ...]
+
+    def row(self) -> bytes:
+        """The leaf's preimage: index, round, cap and prompt length as u32 LE, then the prompt's token ids as u32 LE."""
+        return struct.pack("<4I", self.index, self.round, self.max_tokens, len(self.prompt)) + \
+            np.asarray(self.prompt, dtype="<u4").tobytes()
+
+
+#: an unused leaf of a round's request table: no admitted request has a cap of 0 or an empty prompt
+EMPTY_REQUEST = bytes(16)
+#: the hm96 salt stream's nonce of round r's request table is REQUESTS_NONCE + r, apart from `audit`'s activation (below
+#: 2^62), weight and transcript trees
+REQUESTS_NONCE = 1 << 61
+ROUND_TAG = "verity/pouw/h1/round/v1"
+STEP_TAG = "verity/pouw/h1/step-calls/v1"
+REQUESTS_TAG = "verity/pouw/h1/requests/v1"
+
+
+def requests_binding(salt: bytes, r: int) -> bytes:
+    return tagged(REQUESTS_TAG, salt, r)
+
+
+def request_table(salt: bytes, r: int, rows: int, entries: Sequence[RequestEntry], key: bytes) -> Any:
+    """Round r's request table: `rows` (T) hiding leaves, the entries the round admits in admission order, then
+    `EMPTY_REQUEST`. Each admitted request schedules a token row in the step that admits it, so a step admits at most T."""
+    if len(entries) > rows:
+        raise ValueError(f"round {r} admits {len(entries)} requests, past its {rows} leaves")
+    values = [e.row() for e in entries] + [EMPTY_REQUEST] * (rows - len(entries))
+    return commit_rows(requests_binding(salt, r), r, values, hash=HM96, salt_key=key, nonce=REQUESTS_NONCE + r)
+
+
+def step_digest(salt: bytes, s: int, rows: Sequence[Mapping[str, Any]]) -> bytes:
+    """Step s's calls: SHA-512 over their manifest rows (`H1Run.manifest`), in order, with what each call's listeners
+    bound (root(A) among it, once AROW binds it)."""
+    return tagged(STEP_TAG, salt, s, *(json.dumps(row, sort_keys=True) for row in rows))
+
+
+def round_root(salt: bytes, r: int, calls: bytes, requests: bytes) -> bytes:
+    """Round r's root, over step r's calls (`step_digest`) and the root of the request table of the entries it admits."""
+    return tagged(ROUND_TAG, salt, r, calls, requests)
+
+
+@dataclass(frozen=True)
+class RequestOpening:
+    """A request entry's leaf opened under round ``round``'s request table: its position, its value (the entry's row and
+    its hm96 salt) and its path."""
+
+    round: int
+    position: int
+    value: bytes
+    path: tuple[bytes, ...]
+
+
+def request_reason(log: Sequence[Mapping[str, Any]], salt: bytes, rows: int, entry: RequestEntry,
+                   opening: RequestOpening) -> str | None:
+    """Why `opening` doesn't show `entry` as a leaf under the root of the round that admitted it, recorded before that
+    round's coin, given the window's round log (`H1Run.round_log`), its salt and T; None when it does."""
+    r, i = opening.round, entry.index
+    row = next((x for x in log if x.get("round") == r), None)
+    if row is None:
+        return f"request {i}: the round log has no round {r}, so its entry is under no round root"
+    if entry.round != r:
+        return f"request {i} was admitted in round {entry.round}, and its entry is opened under round {r}'s root"
+    if opening.value[:-HM96_SALT] != entry.row():
+        return f"request {i}: the leaf opened under round {r} is not its entry"
+    calls, requests, root = (bytes.fromhex(row[k]) for k in ("calls", "requests", "root"))
+    if round_root(salt, r, calls, requests) != root:
+        return f"round {r}'s root is not over its calls and its request table"
+    if not verify_opening(rows_domain(requests_binding(salt, r), r, rows, HM96), Commitment(requests, rows),
+                          Opening(opening.position, opening.value, opening.path), ROW_SCHEMA, VerificationLimits()):
+        return f"request {i}'s entry doesn't open under round {r}'s request table"
+    if row.get("coin") is None:
+        return f"round {r} has no live coin, so nothing shows request {i}'s entry committed before one"
+    try:
+        coin = LiveOpening.from_json(row["coin"])
+    except CoinError as e:
+        return f"round {r}'s coin: {e}"
+    if (coin.label, coin.index) != (Wd.ROUND, r) or coin.after != root:
+        return f"round {r}'s coin was not opened after its root, which holds request {i}'s entry"
+    return None
+
+
+def rounds_reason(log: Sequence[Mapping[str, Any]], commitment: LiveCommitment) -> str | None:
+    """Why the round log isn't the window's rounds in order, each round's coin the challenger's, opened once after its
+    root (`window.rounds_reason`); None when it is."""
+    if [x.get("round") for x in log] != list(range(len(log))):
+        return "the round log is not rounds 0, 1, ... in order"
+    if any(x.get("coin") is None for x in log):
+        return "a round of the log has no live coin"
+    try:
+        openings = [LiveOpening.from_json(x["coin"]) for x in log]
+        return Wd.rounds_reason(commitment, [bytes.fromhex(x["root"]) for x in log], openings)
+    except CoinError as e:
+        return str(e)
+
+
+@dataclass(frozen=True)
 class Call:
     """One (step, linear) call of the window: its index, its engine step, its layer (the linear's ordinal) and module, its
     served rows m (0 for a step past the last served one), its `rows` slots (T), k, n and its first position. Its A table is
@@ -309,10 +432,16 @@ class H1Run:
     calls are recorded as they come (`record`), and `close` adds the steps past the last served one, all empty. A call past
     step S or with more than T rows is refused: recorded in ``refused``, never positioned, and `static` is then False.
     ``retain`` keeps the last calls' A, s_a and exact Y on the host (0: none). Without ``commit`` (a Match capture) nothing
-    is recorded."""
+    is recorded.
+
+    Round s is step s. The engine's admissions (`admit`, from `admitting`) go to the round of the step about to run, and
+    round s closes once step s's last linear is recorded (or at `close`): its root (`round_root`) over the step's calls and
+    its request table is recorded with ``rounds`` (a `LiveRecord` over a live challenger's round family), which opens round
+    s's coin only after it. ``key`` is the prover's hm96 salt key for the request tables."""
 
     def __init__(self, entry: str, salt: bytes, modules: Mapping[int, str], shapes: Sequence[tuple[int, int]], rows: int,
-                 steps: int, retain: int = 0, transcript_dir: str | None = None, commit: bool = True) -> None:
+                 steps: int, retain: int = 0, transcript_dir: str | None = None, commit: bool = True, rounds: Any = None,
+                 key: bytes | None = None) -> None:
         self.entry, self.salt, self.modules, self.commit = entry, salt, dict(modules), commit
         self.shapes_, self.rows, self.steps = [tuple(map(int, s)) for s in shapes], int(rows), int(steps)
         self.offs, self.u_step = layout(self.shapes_, self.rows)
@@ -327,8 +456,17 @@ class H1Run:
         #: each served call's credit verdict (`credit_gate.verdict`), by call index, and the call `record` just made with its z
         self.verdicts: dict[int, dict[str, Any]] = {}
         self._recorded: tuple[Call, Any] | None = None
+        self.rounds, self._key = rounds, key if key is not None else os.urandom(32)
+        #: the admitted requests' entries in admission order, each round's, and the requests refused admission
+        self.requests: list[RequestEntry] = []
+        self.admitted: dict[int, list[RequestEntry]] = {}
+        self.refused_requests: list[dict[str, Any]] = []
+        #: each closed round's record: its root, the parts it is over and its coin's opening (None without ``rounds``)
+        self.round_log: list[dict[str, Any]] = []
+        self._tables: dict[int, Any] = {}
         self.commits: dict[str, Any] = {"scheme": SCHEME, "tile": list(TILE), "rows": self.rows, "steps": self.steps,
-                                        "u_step": self.u_step, "units": self.steps * self.u_step, "calls": 0}
+                                        "u_step": self.u_step, "units": self.steps * self.u_step, "calls": 0,
+                                        "rounds": self.round_log}
         self.details: dict[str, Any] = {"scheme": SCHEME, "calls": 0, "refused": self.refused,
                                         "uncovered": "attention (QK^T and P.V in Int8LutAttentionRow_v1) and lm_head",
                                         "z": "the arm's own when its observe hands one over, else engine.int8_exact.int_mm "
@@ -348,7 +486,48 @@ class H1Run:
             if out is not None:
                 self.bound[call.index] = {**self.bound.get(call.index, {}), **out}
         self.details["calls"] = self.commits["calls"] = len(self.calls)
+        if w == len(self.shapes_) - 1:
+            self._close_rounds(s)
         return call
+
+    def admit(self, requests: Sequence[tuple[Sequence[int], int]]) -> list[RequestEntry]:
+        """The requests the engine admits for the step about to run, each (prompt token ids, token cap): each one's entry
+        goes in that step's round, whose root records it before the round's coin opens. A request past the window's S
+        steps, or with no prompt token or cap, is refused (`refused_requests`): it has no entry."""
+        if not self.commit or not requests:
+            return []
+        r = self.step + 1
+        self._close_rounds(r - 1)
+        out = []
+        for prompt, cap in requests:
+            prompt = tuple(int(t) for t in prompt)
+            why = (f"admitted for step {r}, past the window's {self.steps} steps" if r >= self.steps
+                   else "no prompt token ids or no token cap" if not prompt or int(cap) < 1 else None)
+            if why is not None:
+                self.refused_requests.append({"round": r, "reason": why})
+                continue
+            e = RequestEntry(len(self.requests), r, int(cap), prompt)
+            self.requests.append(e)
+            self.admitted.setdefault(r, []).append(e)
+            out.append(e)
+        return out
+
+    def _close_rounds(self, through: int) -> None:
+        """Close every round up to `through`, in order: its request table, then its root, recorded before its coin opens."""
+        while len(self.round_log) <= min(through, self.steps - 1):
+            r = len(self.round_log)
+            table = self._tables[r] = request_table(self.salt, r, self.rows, self.admitted.get(r, []), self._key)
+            calls = step_digest(self.salt, r, self._rows([c for c in self.calls if c.step == r]))
+            root = round_root(self.salt, r, calls, table.commitment.root)
+            coin = self.rounds.record(root) if self.rounds is not None else None
+            self.round_log.append({"round": r, "root": root.hex(), "calls": calls.hex(),
+                                   "requests": table.commitment.root.hex(), "coin": coin.to_json() if coin else None})
+
+    def open_request(self, index: int) -> RequestOpening:
+        """Request `index`'s entry opened under its round's request table, once that round has closed."""
+        e = self.requests[index]
+        o = self._tables[e.round].open(self.admitted[e.round].index(e))
+        return RequestOpening(e.round, o.position, o.value, o.path)
 
     def record(self, w: int, a: Any, s_a: Any, weight: Any, weight_scale: Any, z: Any = None) -> Call | None:
         """Linear `w`'s served call: its s8 rows a [m, k], their f32 scales s_a [m], its int8 weight [n, k] and scales, and
@@ -398,6 +577,10 @@ class H1Run:
                 weight, scale = self._weights.get(w, (None, None))
                 a = weight.new_zeros((0, k)) if weight is not None else None
                 self._call(s, w, a, scale.reshape(-1).new_zeros(0) if scale is not None else None, weight, scale)
+        self._close_rounds(self.steps - 1)
+        self.details["requests"] = {"admitted": len(self.requests), "refused": self.refused_requests,
+                                    "per_round": [len(self.admitted.get(r, [])) for r in range(self.steps)],
+                                    "coins": "live" if self.rounds is not None else "none"}
         self.details["static"] = self.static()
         self.details["step_rows"] = self.step_rows()
         self.details["u"] = str(self.utilization())
@@ -458,9 +641,12 @@ class H1Run:
                                    "cover": list(c.cover), "tiles": sorted({f"{u.tile.r}x{u.tile.c}" for u in c.units})}
         return out
 
+    def _rows(self, calls: Sequence[Call]) -> list[dict[str, Any]]:
+        return [{**c.summary(), **({"bound": dict(self.bound[c.index])} if c.index in self.bound else {})} for c in calls]
+
     def manifest(self) -> list[dict[str, Any]]:
         """Each call's summary, with what its listeners bound."""
-        return [{**c.summary(), **({"bound": dict(self.bound[c.index])} if c.index in self.bound else {})} for c in self.calls]
+        return self._rows(self.calls)
 
     def calls_root(self) -> bytes:
         """SHA-512 over the manifest, in order: what the install commits to (its positions and what was bound)."""
@@ -528,6 +714,29 @@ def traced(run: H1Run, w: int, orig: Any) -> Any:
     return apply
 
 
+def new_requests(scheduler_output: Any) -> list[tuple[Sequence[int], int]]:
+    """The requests vLLM's scheduler admitted in this step (`SchedulerOutput.scheduled_new_reqs`), each (prompt token ids,
+    token cap)."""
+    out = []
+    for r in getattr(scheduler_output, "scheduled_new_reqs", None) or ():
+        params = getattr(r, "sampling_params", None)
+        out.append((list(getattr(r, "prompt_token_ids", None) or ()), int(getattr(params, "max_tokens", 0) or 0)))
+    return out
+
+
+def admitting(run: H1Run, orig: Any) -> Any:
+    """The model runner's ``execute_model``: the step's admitted requests handed to the run (`H1Run.admit`) before the
+    step's forward, so each entry is in the round of the step that admits it; a dummy run or a step with no scheduled token
+    admits nothing."""
+
+    def execute_model(scheduler_output: Any, *args: Any, **kw: Any) -> Any:
+        dummy = bool(kw.get("dummy_run", False)) or (len(args) >= 2 and bool(args[1]))
+        if not dummy and int(getattr(scheduler_output, "total_num_scheduled_tokens", 0) or 0):
+            run.admit(new_requests(scheduler_output))
+        return orig(scheduler_output, *args, **kw)
+    return execute_model
+
+
 def bind_all(calls: Sequence[Call], bound: Mapping[int, Mapping[str, Any]]) -> list[tuple[bytes, bytes] | None]:
     """Each call's (root(A), root(B)) from what its listeners bound (``root_a``, ``root_b``, hex), None where either is missing."""
     out: list[tuple[bytes, bytes] | None] = []
@@ -537,6 +746,8 @@ def bind_all(calls: Sequence[Call], bound: Mapping[int, Mapping[str, Any]]) -> l
     return out
 
 
-__all__ = ["CALLS_FILE", "Call", "FILL", "H1Run", "Listener", "RECORD", "SALT_TAG", "SCHEME", "Static", "TILE", "VllmInt8LinearH1",
-           "bind_all", "check_tiles", "compiled", "coordinate", "layers", "layout", "numpy_of", "observer", "padded", "program",
-           "program_salt", "slots", "traced", "units", "utilization", "weight_root"]
+__all__ = ["CALLS_FILE", "Call", "EMPTY_REQUEST", "FILL", "H1Run", "Listener", "RECORD", "REQUESTS_NONCE", "RequestEntry",
+           "RequestOpening", "SALT_TAG", "SCHEME", "Static", "TILE", "VllmInt8LinearH1", "admitting", "bind_all", "check_tiles",
+           "compiled", "coordinate", "layers", "layout", "new_requests", "numpy_of", "observer", "padded", "program",
+           "program_salt", "request_reason", "request_table", "requests_binding", "round_root", "rounds_reason", "slots",
+           "step_digest", "traced", "units", "utilization", "weight_root"]

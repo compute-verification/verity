@@ -6,13 +6,16 @@ from __future__ import annotations
 
 import hashlib
 import random
+from types import SimpleNamespace
 
 import numpy as np
 import pytest
 
 torch = pytest.importorskip("torch")
 
+from verity.core.protocols.pouw import window as Wd  # noqa: E402
 from verity.core.protocols.pouw.coins import Challenger  # noqa: E402
+from verity.core.protocols.sampled_proofs.challenger import LiveRecord  # noqa: E402
 from verity_vllm import protocol_options as PO  # noqa: E402
 from verity_vllm.engine import int8_exact as E  # noqa: E402
 from verity_vllm.engine import int8_ops  # noqa: E402
@@ -109,8 +112,11 @@ def _serve(arm, retain=1, m=3):
     """One small call (m rows of K, N = 32) through `arm` with H1 installed; the run closed and its y and run returned."""
     layer = Linear(32, 1, arm)
     coins = Challenger(0, random.Random(0).randbytes)
+    rounds = LiveRecord(Wd.live_challenger(0, 1, random.Random(1).randbytes), Wd.ROUND, clock=lambda: 0.0)
+    runner = SimpleNamespace(execute_model=lambda scheduler_output, *a, **kw: None)
     ctx = PO.Context(stage="serve", enabled=(ENTRY,), settings={"pouw": {"coins": coins, "rows": 32, "steps": 1,
-                                                                         "retain_steps": retain}})
+                                                                         "retain_steps": retain, "runner": runner,
+                                                                         "rounds": rounds}})
     comp = PO.install(Model(layer), ctx)
     try:
         x = (torch.randn(m, K, generator=torch.Generator().manual_seed(9)) * 3).bfloat16()

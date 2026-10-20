@@ -7,18 +7,23 @@ The first compile builds the H1 tile unit (its seeds' and noise blocks' SHA-512 
 every later shape reuses it."""
 from __future__ import annotations
 
+import dataclasses
 import hashlib
+import itertools
 import json
 import random
 from fractions import Fraction
+from types import SimpleNamespace
 
 import numpy as np
 import pytest
 
 torch = pytest.importorskip("torch")
 
+from verity.core.protocols.pouw import window as Wd  # noqa: E402
 from verity.core.protocols.pouw.circuit import seeds as SD  # noqa: E402
 from verity.core.protocols.pouw.coins import Challenger  # noqa: E402
+from verity.core.protocols.sampled_proofs.challenger import LiveRecord  # noqa: E402
 from verity.ml.circuits.refs import runs  # noqa: E402
 from verity_vllm import protocol_options as PO  # noqa: E402
 from verity_vllm.engine import hooks  # noqa: E402
@@ -277,8 +282,30 @@ def test_z_is_the_exact_product_on_each_units_cells():
 H1 = {"coins": None, "rows": 64, "steps": 3}
 
 
+class Runner:
+    """A stand-in for vLLM's model runner: ``execute_model`` gets the step's scheduler output."""
+
+    def __init__(self):
+        self.steps = 0
+
+    def execute_model(self, scheduler_output, intermediate_tensors=None):
+        self.steps += 1
+
+
+def _so(*new, tokens=1):
+    """A scheduler output admitting requests ``new``, each (prompt token ids, cap)."""
+    reqs = [SimpleNamespace(req_id=str(i), prompt_token_ids=p, sampling_params=SimpleNamespace(max_tokens=c))
+            for i, (p, c) in enumerate(new)]
+    return SimpleNamespace(scheduled_new_reqs=reqs, total_num_scheduled_tokens=tokens)
+
+
+def _rounds(n=3, seed=0):
+    clock = itertools.count()
+    return LiveRecord(Wd.live_challenger(0, n, random.Random(seed).randbytes), Wd.ROUND, clock=lambda: float(next(clock)))
+
+
 def _settings(**kw):
-    return {"pouw": {**H1, "coins": Challenger(0, random.Random(0).randbytes), **kw}}
+    return {"pouw": {**H1, "coins": Challenger(0, random.Random(0).randbytes), "runner": Runner(), "rounds": _rounds(), **kw}}
 
 
 def test_h1_is_admitted_beside_sampled_proofs_and_executes_nowhere():
@@ -292,21 +319,39 @@ def test_h1_is_admitted_beside_sampled_proofs_and_executes_nowhere():
     assert any("'rows' (T" in r for r in PO.refusals(bare))
     with pytest.raises(ValueError, match="positive multiple of 32"):
         pouw.Settings.of({"rows": 40})
+    unadmitted = {"pouw": {k: v for k, v in _settings()["pouw"].items() if k != "runner"}}
+    assert any("the pouw settings 'runner'" in r for r in PO.refusals(PO.Context(stage="serve", enabled=(_entry(),),
+                                                                                 settings=unadmitted)))
+    capture = PO.Context(stage="capture", enabled=(_entry(),), settings=unadmitted)
+    assert PO.refusals(capture) == ()
+    short = PO.Context(stage="serve", enabled=(_entry(),), settings=_settings(rounds=_rounds(2)))
+    assert any("2 unopened coins, fewer than the window's 3 rounds" in r for r in PO.refusals(short))
+    other = PO.Context(stage="serve", enabled=("pouw:ncp-v1",), settings={"pouw": {"coins": Challenger(0), "runner": Runner()}})
+    assert any("'runner' and 'rounds' are H1's" in r for r in PO.refusals(other))
+    with pytest.raises(ValueError, match="'rounds' is the window's round coins"):
+        pouw.Settings.of({"rounds": object()})
 
 
 def test_the_option_serves_the_arms_y_and_records_each_call(tmp_path):
     """Installed on int8_exact layers, each apply serves the arm's own y bit for bit and the option's observe records the call
     at its public position, its exact Y retained; closing the window adds the empty step, and the record compiles at T."""
     model = Model(Linear(32, 1), Linear(40, 2))
-    ctx = PO.Context(stage="serve", enabled=(_entry(),), settings=_settings(transcript_dir=str(tmp_path), retain_steps=2))
+    settings = _settings(transcript_dir=str(tmp_path), retain_steps=2)
+    runner = settings["pouw"]["runner"]
+    ctx = PO.Context(stage="serve", enabled=(_entry(),), settings=settings)
     comp = PO.install(model, ctx)
     try:
         g = torch.Generator().manual_seed(9)
-        for m, layer in ((1, model.layers[0]), (5, model.layers[1]), (33, model.layers[0]), (2, model.layers[1])):
-            x = (torch.randn(m, K, generator=g) * 3).bfloat16()
-            y = layer.quant_method.apply(layer, x)
-            assert torch.equal(y.view(torch.int16), E.plain_linear(x, layer.weight, layer.weight_scale).view(torch.int16))
+        steps = [(_so(([5, 6], 4)), ((1, model.layers[0]), (5, model.layers[1]))),
+                 (_so(([7], 2), ([8, 9, 10], 3)), ((33, model.layers[0]), (2, model.layers[1])))]
+        for so, step in steps:
+            runner.execute_model(so)
+            for m, layer in step:
+                x = (torch.randn(m, K, generator=g) * 3).bfloat16()
+                y = layer.quant_method.apply(layer, x)
+                assert torch.equal(y.view(torch.int16), E.plain_linear(x, layer.weight, layer.weight_scale).view(torch.int16))
         run = pouw.h1_run(_entry())
+        assert runner.steps == 2 and [(e.index, e.round) for e in run.requests] == [(0, 0), (1, 1), (2, 1)]
         assert [(c.step, c.layer, c.m, c.base) for c in run.calls] == [(0, 0, 1, 0), (0, 1, 5, 2), (1, 0, 33, 6), (1, 1, 2, 8)]
         assert [layer.quant_method.calls for layer in model.layers] == [2, 2]
         index, xq, _sa, z = run.retained[-1]
@@ -315,10 +360,15 @@ def test_the_option_serves_the_arms_y_and_records_each_call(tmp_path):
         assert set(run.check()) == {"64x64x32", "64x64x40"}
     finally:
         comp.close()
-    assert hooks.live(_entry()) == ()
+    assert hooks.live(_entry()) == () and runner.execute_model.__func__ is Runner.execute_model
     commitment = comp.installed[0].commitment()
     assert commitment["calls"] == 6 and commitment["units"] == 18 and commitment["static"]
-    assert [c["base"] for c in json.loads((tmp_path / PH.CALLS_FILE).read_text())["calls"]] == [0, 2, 6, 8, 12, 14]
+    assert [r["round"] for r in commitment["rounds"]] == [0, 1, 2]
+    assert PH.rounds_reason(commitment["rounds"], settings["pouw"]["rounds"].challenger.commitment) is None
+    assert all(PH.request_reason(commitment["rounds"], run.salt, 64, e, run.open_request(e.index)) is None for e in run.requests)
+    record = json.loads((tmp_path / PH.CALLS_FILE).read_text())
+    assert [c["base"] for c in record["calls"]] == [0, 2, 6, 8, 12, 14]
+    assert record["commitment"]["rounds"] == commitment["rounds"] and record["details"]["requests"]["per_round"] == [1, 2, 0]
 
 
 def test_a_layer_off_the_int8_arm_is_refused_at_install():
@@ -327,3 +377,102 @@ def test_a_layer_off_the_int8_arm_is_refused_at_install():
     with pytest.raises(ValueError, match="not the int8_exact plain arm"):
         PO.install(Model(layer), PO.Context(stage="serve", enabled=(_entry(),), settings=_settings()))
     assert hooks.live(_entry()) == ()
+
+
+def _admitted_run():
+    """A live window of 3 rounds: request 0 admitted in round 0, requests 1 and 2 in round 1, round 2 admitting none."""
+    rng = np.random.default_rng(12)
+    rounds = _rounds()
+    run = PH.H1Run("t", SALT, {0: "q", 1: "o"}, [(32, K), (40, K)], 32, 3, rounds=rounds, key=bytes(range(32)))
+    for new, m in (([([1, 2, 3], 4)], 3), ([([4], 2), ([5, 6], 3)], 3)):
+        run.admit(new)
+        assert run.round_log == [] or run.round_log[-1]["round"] == run.step
+        for w, n in ((0, 32), (1, 40)):
+            run.record(w, *_tap(rng, m, n))
+    run.close()
+    return run, rounds
+
+
+def test_each_admitted_request_is_a_leaf_under_its_rounds_root_recorded_before_its_coin():
+    """Each request is admitted into the round of the step about to run; the round's root, over the step's calls and its T
+    request leaves, is recorded before its coin opens, and each entry opens under its own round's root."""
+    run, rounds = _admitted_run()
+    assert [(e.index, e.round, e.max_tokens, e.prompt) for e in run.requests] == [(0, 0, 4, (1, 2, 3)), (1, 1, 2, (4,)),
+                                                                                 (2, 1, 3, (5, 6))]
+    assert [r["round"] for r in run.round_log] == [0, 1, 2] and run.details["requests"]["per_round"] == [1, 2, 0]
+    assert [ev["event"] for ev in rounds.log] == ["root", "release"] * 3
+    roots = [r["root"] for r in run.round_log]
+    assert [ev["root"] for ev in rounds.log[::2]] == [ev["after"] for ev in rounds.log[1::2]] == roots
+    for row, r in zip(run.round_log, range(3)):
+        table = PH.request_table(SALT, r, 32, run.admitted.get(r, []), bytes(range(32)))
+        calls = PH.step_digest(SALT, r, [m for m in run.manifest() if m["step"] == r])
+        assert row["requests"] == table.commitment.root.hex() and row["calls"] == calls.hex()
+        assert row["root"] == PH.round_root(SALT, r, calls, table.commitment.root).hex()
+    for e in run.requests:
+        assert PH.request_reason(run.round_log, SALT, 32, e, run.open_request(e.index)) is None
+    assert PH.rounds_reason(run.round_log, rounds.challenger.commitment) is None
+
+
+def test_a_request_entry_under_the_wrong_round_or_under_none_is_refused():
+    """The check refuses, by name: round 0's entry opened under round 1's root, or with round 1's leaf; an entry the prover
+    commits into a later round's table than the one that admitted it; an entry opened under a round the log doesn't have,
+    or under no table at all; a round root that isn't over its parts; and a round whose coin opened before its root."""
+    run, rounds = _admitted_run()
+    log, e0, e1 = run.round_log, run.requests[0], run.requests[1]
+    o0, o1 = run.open_request(0), run.open_request(1)
+
+    def why(entry, opening, log=log):
+        return PH.request_reason(log, SALT, 32, entry, opening)
+
+    wrong = "request 0 was admitted in round 0, and its entry is opened under round 1's root"
+    assert why(e0, dataclasses.replace(o0, round=1)) == wrong and why(e0, o1) == wrong
+    assert why(e0, dataclasses.replace(o0, round=5)) == \
+        "request 0: the round log has no round 5, so its entry is under no round root"
+    assert why(e0, dataclasses.replace(o0, round=1), log=log[:1]) == \
+        "request 0: the round log has no round 1, so its entry is under no round root"
+    assert why(e0, dataclasses.replace(o0, value=o1.value)) == "request 0: the leaf opened under round 0 is not its entry"
+    late = dataclasses.replace(e0, round=1)
+    table = PH.request_table(SALT, 1, 32, [late, *run.admitted[1]], bytes(range(32)))
+    moved = [log[0], {**log[1], "requests": table.commitment.root.hex(),
+                      "root": PH.round_root(SALT, 1, bytes.fromhex(log[1]["calls"]), table.commitment.root).hex()}, log[2]]
+    o = table.open(0)
+    assert why(late, PH.RequestOpening(1, o.position, o.value, o.path), log=moved) == \
+        "round 1's coin was not opened after its root, which holds request 0's entry"
+    assert why(e0, PH.RequestOpening(1, o.position, o.value, o.path), log=moved) == wrong
+    forged = PH.RequestEntry(3, 2, 1, (9,))
+    stray = PH.request_table(SALT, 2, 32, [forged], b"\1" * 32).open(0)
+    assert why(forged, PH.RequestOpening(2, 0, stray.value, stray.path)) == \
+        "request 3's entry doesn't open under round 2's request table"
+    bent = [{**log[0], "calls": log[1]["calls"]}, *log[1:]]
+    assert why(e0, o0, log=bent) == "round 0's root is not over its calls and its request table"
+    coinless = [{**log[0], "coin": None}, *log[1:]]
+    assert why(e0, o0, log=coinless) == "round 0 has no live coin, so nothing shows request 0's entry committed before one"
+    early = [{**log[0], "coin": {**log[0]["coin"], "after": "00" * 64}}, *log[1:]]
+    assert why(e0, o0, log=early) == "round 0's coin was not opened after its root, which holds request 0's entry"
+    assert PH.rounds_reason(early, rounds.challenger.commitment) == \
+        f"{Wd.ROUND} coin 0: coin was not opened after what the verifier recorded"
+    assert PH.rounds_reason(log[1:], rounds.challenger.commitment) == "the round log is not rounds 0, 1, ... in order"
+    assert why(e1, o1) is None
+
+
+def test_the_engines_admissions_go_to_the_next_steps_round_and_past_the_window_are_refused():
+    """`admitting` hands the scheduler's new requests to the run before the step's forward, a dummy run or an empty step
+    none; a request admitted past the window's S steps, or with no prompt, gets no entry and is named."""
+    rng = np.random.default_rng(13)
+    run = PH.H1Run("t", SALT, {0: "q"}, [(32, K)], 32, 2, rounds=_rounds(2), key=bytes(32))
+    seen = []
+    step = PH.admitting(run, lambda so, *a, **kw: seen.append(so))
+    step(_so(([1], 1)), None, True)
+    step(_so(([2], 1)), dummy_run=True)
+    step(_so(([3], 1), tokens=0))
+    assert run.requests == [] and len(seen) == 3
+    step(_so(([4, 5], 2), ([], 2)))
+    run.record(0, *_tap(rng, 2, 32))
+    step(_so(([6], 1)))
+    run.record(0, *_tap(rng, 1, 32))
+    step(_so(([7], 1)))
+    run.close()
+    assert [(e.prompt, e.round) for e in run.requests] == [((4, 5), 0), ((6,), 1)]
+    assert run.refused_requests == [{"round": 0, "reason": "no prompt token ids or no token cap"},
+                                    {"round": 2, "reason": "admitted for step 2, past the window's 2 steps"}]
+    assert run.details["requests"] == {"admitted": 2, "refused": run.refused_requests, "per_round": [1, 1], "coins": "live"}
