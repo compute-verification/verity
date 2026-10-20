@@ -1,16 +1,17 @@
 """RT4-INT's witnesses on the certified served window (#2847, `served_commit.Challenger(certifier=…)`) at c50849bb22,
-which merges SALT-BIND (#2912, the opening of record under the certified salt) and NET-50 (#2879, `RemoteCertifier`).
+which merges SALT-BIND (#2912, the opening of record under the certified salt) and NET-50 (#2879, `RemoteCertifier`),
+and at 154aa408ac (the deployment's pinned challenger key, RT4-INT-5).
 
 Every served-zk certified window is still refused: its population is one template, `Pc8TileSide`, which reads no salt.
 RT4-INT-10's two witnesses (rows formed before any salt passing every certified check, and a salted unit proved under a
 salt its prover chose) now refuse at the opening, and `benchmarks/pouw/tests/test_salt_bind.py` holds them as refusals;
 the opening difftest's ``salted-position`` and ``salted-roots`` cases hold the public row's position and roots. Link 8's
-witness refuses too, and is held here as the binding it now has. RT4-INT-5 and RT4-INT-6 stay open.
+witness refuses too, and is held here as the binding it now has; so is RT4-INT-5's at 154aa408ac (the draw
+under the deployment's pinned challenger key). RT4-INT-6 stays open.
 """
 from __future__ import annotations
 
 import hashlib
-import inspect
 import itertools
 import json
 import random
@@ -135,8 +136,9 @@ def _challenger(params, c, prover, path: Path, ledger: PS.Registrations) -> SC.C
     k = lms.keygen(lms.Params(64, 4, 2), hashlib.sha512(str(path).encode()).digest())
     live = Wd.live_challenger(0, 1, random.Random(str(path)).randbytes)
     Ch.write_record(path, live.sign_record("auditor-host", lms.public_key(k), lambda m: lms.sign_at(k, 0, m).encode()))
+    deployment = SC.Deployment(c.certifier_key, c.run_id, Ch.ChallengerKey(4, 2, lms.public_key(k)))
     return SC.Challenger(params, live, clock=lambda: 0.0, record=OR.Record(lean=False), certifier=c, prover=prover,
-                         coin_record=path, coin_key=Ch.ChallengerKey(4, 2, lms.public_key(k)), registrations=ledger)
+                         coin_record=path, deployment=deployment, registrations=ledger)
 
 
 def _window(p: int, reveal: bytes, sid: bytes, prover: bytes, words) -> dict:
@@ -182,12 +184,13 @@ def _prover_record(seed: bytes, coins_seed: str, reg: str, stream: str, receipt:
             "population": n, "units": units}
 
 
-def test_the_draws_check_of_record_verifies_the_record_under_the_key_its_input_carries():
-    """RT4-INT-5, narrowed. The certified challenger reads its commitment itself from the signed record under the
-    `coin_key` its caller gives, but the draw's check of record (`core_check.draw`, Lean `drawCheck`) verifies the record
-    under ``coins["key"]``, which the same input carries, and no parameter pins it. A record a prover signed under its
-    own key over coins it holds passes; holding the coins, the prover sees each candidate registration's draw before it
-    registers and keeps one whose draw misses the unit it can't prove."""
+def test_a_draw_record_the_prover_signs_over_its_own_coins_is_refused_under_the_pinned_key():
+    """RT4-INT-5, closed at #2847 @ 154aa408ac. The draw's check of record (`core_check.draw`, Lean `drawCheck`) takes
+    the challenger key the window's deployment pins (`served_commit.Deployment`) and verifies the record under it, not
+    under ``coins["key"]``: a record the prover signed under its own key over coins it holds, ground so its draw misses
+    the unit it can't prove, is refused ``coin-key``, and so is a live draw with no pin. The pin is an input beside the
+    coins (`of_record.py_draw` reads ``x["key"]``), so a replay that took it from the record would pass the prover's own
+    record: the pin is the deployment's, which its caller gives (NET-50's TODO)."""
     stream, n, k, bad = hashlib.sha512(b"stream").hexdigest(), 26, 3, 0
     for i in itertools.count():
         reg = hashlib.sha512(b"candidate %d" % i).hexdigest()
@@ -196,13 +199,16 @@ def test_the_draws_check_of_record_verifies_the_record_under_the_key_its_input_c
         d = _prover_record(b"the prover's challenger key", "the prover's coins", reg, stream, receipt, n, k)
         if bad not in d["units"]:
             break
-    assert CC.draw(*(d[x] for x in ("coins", "recorded", "opening", "stream", "registration", "receipt", "k",
-                                    "population", "units"))) is None
-    other = _prover_record(b"another key", "the prover's coins", reg, stream, receipt, n, k)
-    assert other["coins"]["key"] != d["coins"]["key"] and other["units"] == d["units"]
-    assert CC.draw(*(other[x] for x in ("coins", "recorded", "opening", "stream", "registration", "receipt", "k",
-                                        "population", "units"))) is None
-    assert "key" not in inspect.signature(CC.draw).parameters
+    args = [d[x] for x in ("coins", "recorded", "opening", "stream", "registration", "receipt", "k", "population",
+                           "units")]
+    auditor = lms.keygen(lms.Params(64, 4, 2), hashlib.sha512(b"the auditor's challenger key").digest())
+    pinned = Ch.ChallengerKey(4, 2, lms.public_key(auditor)).to_json()
+    assert pinned != d["coins"]["key"]
+    assert CC.draw(*args, pinned) == (CC.COIN_KEY, CC.OTHER_KEY)
+    code, why = CC.draw(*args)
+    assert code == CC.COIN_KEY and why.startswith(CC.NO_PINNED_KEY)
+    assert OR.py_draw({**d, "key": pinned}) == {"refused": [CC.COIN_KEY, CC.OTHER_KEY]}
+    assert OR.py_draw({**d, "key": d["coins"]["key"]}) is None
 
 
 def test_a_registered_window_is_admitted_before_its_draw_and_its_failure_closes_nothing(tmp_path, monkeypatch, reveals):
