@@ -16,10 +16,11 @@ proved here is the summaries' arithmetic, each step stated against the function 
 * `sum_copies`: copies of a frame of gates, one period apart and each within its period, have copies times one copy's
   width: `novelWidth`'s count of a batch's whole members that no other read meets.
 
-Not proved: that `analyze`'s reads per root node are the unrolled operands outside it (what `Prog.gate` returns, through
-§7's resolution), and that `novelWidth` and `ivsOf` give the width of the union of what they are given (their sorting
-sweeps: Lean core states nothing about `Array.qsort`). The difftest holds both (`runs` `NciCheck.DescDifftestMain` in
-the package's `lean-audit.json`: 3,658 declarations, the description-sized check against the unrolled one).
+Not proved here: that `analyze`'s reads per root node are the unrolled operands outside it (what `Prog.gate` returns,
+through §7's resolution; open as `Novel.ReadsExact`), and that `gateIvs` gives a piece list's gates as intervals (open as
+`Width.GateIvsExact`, from which `Width.novelWidthExact_of` proves `novelWidth` the width of the union). The difftest
+holds both (`runs` `NciCheck.DescDifftestMain` in the package's `lean-audit.json`: 3,658 declarations, the
+description-sized check against the unrolled one).
 -/
 
 namespace NciCheck.Properties.SecurityProofs.Desc
