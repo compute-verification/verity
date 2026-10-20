@@ -17,10 +17,11 @@ OTHERS = ["pc-int8", "pc-fp8-tensor", "pc-fp8-channel", "pc-mxfp8", "pc-nvfp4", 
           "fpx-2sp-nvfp4x2", "fpx-2sp-nvfp4x2i", "fpx-2sp-nvfp4x2-gptq", "fpx-g1-e4m3i120", "fpx-g1-nvfp4x2-nv9",
           "fpx-g1-nvfp4x2-nv9-gptq", "fpx-g1-nvfp4x2-nvi10", "fpx-g1-nvfp4x2-nvi10-gptq", "fpx-g1-nvfp4x2-nvi-gptq",
           "fpx-g1s-e4m3i120", "fpx-g1s-nvfp4x2-nvi10", "fpx-g1s-nvfp4x2-nvi10-gptq",
-          "fpx-g1s-nvfp4x2-nvi10-lm8", "fpx-g1s-w4a8-nvi10", "fpx-g1s-w4a8-nvi10-gptq", "fpx-g1s-h1-e4m3i120-w60",
-          "fpx-g1s-w4a8-nvi10-lm8", "fpx-g1s-w4a8-nvi10-gptq-lm8", "fpx-g1s-h1-w4a8-nvi5-lm8",
-          "fpx-g1s-h1-w4a8-nvi5-gptq-lm8", "fpx-g1s-e4m3i120-c6", "fpx-g1s-nvfp4x2-nvi10-lm8-c6",
-          "fpx-g1s-w4a8-nvi10-gptq-lm8-c6", "fpx-g1s-h1-w4a8-nvi5-gptq-lm8-c6", "fpx-a1-e4m3i",
+          "fpx-g1s-nvfp4x2-nvi10-lm8", "fpx-g1s-w4a8-nvi10", "fpx-g1s-w4a8-nvi10-gptq", "fpx-g1s-co32c-e4m3i120-w60",
+          "fpx-g1s-w4a8-nvi10-lm8", "fpx-g1s-w4a8-nvi10-gptq-lm8", "fpx-g1s-co32c-w4a8-nvi5-lm8",
+          "fpx-g1s-co32c-w4a8-nvi5-gptq-lm8", "fpx-g1s-e4m3i120-c6", "fpx-g1s-nvfp4x2-nvi10-lm8-c6",
+          "fpx-g1s-w4a8-nvi10-gptq-lm8-c6", "fpx-g1s-co32c-w4a8-nvi5-gptq-lm8-c6", "fpx-a1-e4m3i",
+          "fpx-g1h-e4m3i120-w104", "fpx-g1h-w4a8-nvi9-gptq-lm8-c6",
           *(f"{f}-lin" for f in ("pc-fp8-tensor", "pc-fp8-channel", "pc-mxfp8", "pc-nvfp4", "pc-mxfp4"))]
 
 
@@ -41,6 +42,12 @@ def test_the_int8_subgrids_moved_by_one_stay_in_int8():
     assert steps.LEVELS["e4m3i60"] == tuple(v for v in steps.LEVELS["e4m3i"] if abs(v) <= 60)
     assert steps.LEVELS["e4m3i60"][-1] + 1 <= 63
     assert steps.SCALES["int5"][-1] * steps.LEVELS["e2m1x2"][-1] + 1 <= 63
+    assert steps.LEVELS["e4m3i104"] == tuple(v for v in steps.LEVELS["e4m3i"] if abs(v) <= 104)
+    h1_top, h1_u = 110, 16
+    for top in (steps.LEVELS["e4m3i104"][-1], steps.SCALES["int9"][-1] * steps.LEVELS["e2m1x2"][-1]):
+        assert top <= h1_top and top + 1 + h1_u <= 127
+    assert steps.LEVELS["e4m3i"][steps.LEVELS["e4m3i"].index(104) + 1] + 1 + h1_u > 127
+    assert (steps.SCALES["int9"][-1] + 1) * steps.LEVELS["e2m1x2"][-1] > h1_top
     assert steps.SCALES["odd9"][-1] * (steps.LEVELS["e2m1x2"][-1] + 1) <= 127
     assert steps.SCALES["int10"][-1] * steps.LEVELS["e2m1x2"][-1] + 1 <= 127
 
@@ -90,7 +97,8 @@ def test_fake_quant_is_close_and_blockwise(fmt, scale):
 @pytest.mark.parametrize("grid,scale", [("e4m3i", "channel"), ("e4m3i", "mx"), ("e2m1i", "nv"), ("e2m1i", "mx"),
                                         ("e2m1x2", "nv"), ("e2m1x2", "mx"), ("e4m3i352", "channel"),
                                         ("e2m1x2", "nvi"), ("e4m3i120", "channel"), ("e2m1x2", "nv9"),
-                                        ("e2m1x2", "nvi10"), ("e2m1x2", "nvi5")])
+                                        ("e2m1x2", "nvi10"), ("e2m1x2", "nvi5"), ("e4m3i104", "channel"),
+                                        ("e2m1x2", "nvi9")])
 def test_native_parts_stay_on_the_grid(grid, scale):
     g = torch.Generator().manual_seed(1)
     x = torch.randn(8, 64, generator=g) * torch.logspace(-2, 2, 64)
@@ -138,7 +146,8 @@ def test_native_gptq_stays_on_the_grid_and_beats_rounding(grid, scale):
 
 
 @pytest.mark.parametrize("grid,scale,act_grid", [("e4m3i120", "channel", ""), ("e2m1x2", "nvi10", ""),
-                                                  ("e4m3i60", "channel", "e4m3i120"), ("e2m1x2", "nvi5", "")])
+                                                  ("e4m3i60", "channel", "e4m3i120"), ("e2m1x2", "nvi5", ""),
+                                                  ("e4m3i104", "channel", "e4m3i120"), ("e2m1x2", "nvi9", "")])
 @pytest.mark.parametrize("coin", [0.0, 1.0])
 def test_g1_serves_the_centred_product_of_the_nearest_levels(grid, scale, act_grid, coin, monkeypatch):
     import types

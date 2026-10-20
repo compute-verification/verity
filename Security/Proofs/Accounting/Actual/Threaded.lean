@@ -96,7 +96,7 @@ theorem runtime_of_count {n t ω : ℕ} {b_a x KΛ : ℝ} (hx : 0 ≤ b_a * x)
 
 theorem ThreadedRuntimeSlots : Guarantees.Actual.ThreadedRuntimeSlots := by
   intro L E _ _ A ℓ Φ ends β link n X θ hθ t ω Γ R r b_w b_a c T σ d e hω hX hC hΦ hL hbw hba hd hΓ hr hR hcont hT hW
-  obtain ⟨M, -⟩ := hcont
+  obtain ⟨M⟩ := hcont
   obtain ⟨P, hP⟩ := windows_small A ℓ Φ ends β link n X θ hθ t ω Γ R r (univ.map ⟨M.emb, M.emb_inj⟩) hω hX hC hΦ
     hL hΓ hr hR
   have hΛ : 0 ≤ T.bound (R + r * ω) b_w d e := le_max_of_le_left (Nat.cast_nonneg _)

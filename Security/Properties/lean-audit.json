@@ -10,6 +10,8 @@
   "Properties.Nci.Threads",
   "Properties.Proofs.Nci",
   "Properties.Proofs.Nci.DescAgree",
+  "Properties.Proofs.Nci.Walk",
+  "Properties.Proofs.Nci.Novel",
   "Properties.NciDesc",
   "Properties.CertifierDevice",
   "Properties.Proofs.CertifierDevice",
@@ -41,10 +43,15 @@
   "Properties.Accounting.Requirement",
   "Properties.Proofs.Accounting.Requirement",
   "Properties.RemoteAudit",
-  "Properties.Proofs.RemoteAudit"
+  "Properties.Proofs.RemoteAudit",
+  "Properties.Accounting.Compose"
  ],
  "proved_in": ["../Proofs"],
  "assumptions": {
+  "Nci.Assumptions.BaselineRegistered": {
+   "owner": "@compute-accounting",
+   "digest": "1e726c0b0d96e66c67519b7726cfdb3ca6faf901f7773d1faa4283870690966c"
+  },
   "Nci.Assumptions.WeightsIncompressible": {
    "owner": "@lean",
    "digest": "a9832cc41ed84cd3c55eccc606483e9c83d87fb29e05d1b1f92bb2680d32f8d8"
@@ -91,6 +98,7 @@
   "Definitions.Core",
   "Definitions.Nci",
   "Models.Nci.Assumptions.Threads",
+  "Models.Nci.Assumptions.Baseline",
   "NciCheck.Check",
   "Flock",
   "Properties.CertifierDevice",
@@ -150,6 +158,7 @@
     "Definitions.Core",
     "Definitions.Nci",
     "Models.Nci.Assumptions.Threads",
+    "Models.Nci.Assumptions.Baseline",
     "NciCheck.Check",
     "Properties.Nci"
    ],
@@ -230,13 +239,18 @@
   },
   "Properties.Accounting": {
    "imports": ["Definitions.Accounting", "CircuitRequirement"],
-   "except": [],
+   "except": ["Properties.Accounting.Compose"],
    "why": "the requirement code's equalities are stated against its functions and the `Definitions.Accounting.Requirement` definitions they copy, never a proof"
   },
   "Properties.SampledProofs.Draw": {
    "imports": ["Definitions.Claims", "SampledProofs"],
    "except": [],
    "why": "what the draw misses is stated against `Select.select`'s slots (`SampledProofs.Slots`) and the claims' miss probability `P_a` (`Definitions.Claims`), never a proof"
+  },
+  "Properties.Accounting.Compose": {
+   "imports": ["Definitions.Accounting", "SampledProofs", "Properties.SampledProofs.Draw"],
+   "except": [],
+   "why": "a declared circuit's proof units, commit coins and draw (`Definitions.Accounting.Compose`) are stated against the verifier's own partition of its program (`SampledProofs.Slots.layout`) and the challenger's draw from bytes (`SampledProofs.Select.select`, read as `Properties.SampledProofs.bytesOf` reads them), never a proof"
   }
  },
  "reads_exempt": {
@@ -2507,7 +2521,7 @@
    "Pous.EndToEnd.SecurityProofs.endToEndRingDeployed": "frozen: endToEndRing at one root's depth, D = 16,446, Q = 2^20, L = 2^64; frozen as it is",
    "Pous.EndToEnd.SecurityProofs.honestPassesRing": "completeness: the honest full-state server passes P2's ring audit with probability 1, so P2RingAuditSecure's and EndToEndRing's events are not vacuous",
    "Pous.EndToEnd.SecurityProofs.honestPassesAccepts": "completeness: the honest full-state server passes EndToEndRing's event with probability 1 (the coin tree is always built and the draw never rejects)",
-   "NciCheck.Properties.DescAgrees": "unstated: descAgrees_of proves it from GatesLocated and NovelExact (Properties.Proofs.Nci.DescAgree), which are open: that every gate of a Program Desc.evaluate reads is located, reading earlier gates, and that Desc.novelWidth counts the unrolled novel reads of a division by root node",
+   "NciCheck.Properties.DescAgrees": "unstated: descAgrees_of_open (Properties.Proofs.Nci.Novel) proves it from three open statements: OperandsResolve (Properties.Proofs.Nci.Walk) and BodiesOk (Properties.Proofs.Nci.Resolve: every body resolution reaches names parameters and earlier nodes at a leaf, its indices in range), from which operandsEarlier_of proves OperandsEarlier and gatesLocated_of GatesLocated (every gate of a Program Desc.evaluate reads is located, reading earlier gates), and ReadsExact (Desc.analyze's reads per root node are the unrolled operands outside it), from which novelExact_of proves NovelExact with novelWidthExact (Properties.Proofs.Nci.Width: Desc.novelWidth is the width of the union of the gates it is given)",
    "Pous.EndToEnd.RunCertifies": "unstated: it joins the composed check's runCheckAccepts, proved, with the setup check's AcceptsDecodes and PublishesRoot, which are open; runCertifies_of proves it from those two"
   },
   "conjectures": {
@@ -3287,10 +3301,9 @@
    ]
   },
   "Definitions.Core.Declaration": {
-   "digest": "a6a33e139ff95260abe4581be79c5830e2ae417d8df02fddb9575a9ab381e1fa",
+   "digest": "9f45e1cafa101fb3356541ed3a26ccbc43402b40081776d9f82ccd1141a132a7",
    "definitions": {
     "Verity.Declaration": "38f50370a42a6c7f146e8c556c0a240cde4cc1f8e025e5357cd49a5ae354f56f",
-    "Verity.Declaration.Contains": "2e4651003538493bac63ae90c32a521e95d2e8596bea6b3c85b9cfd150c5647b",
     "Verity.Declaration.D": "4796f04f2ae9193027263ff5a3e82a079e0104c069845088e0b6666b007fc552",
     "Verity.Declaration.θ": "43a3241a0c3f2e225e2f4f79d255976bb8b070b83138bf76635d94cf0505393f"
    },
@@ -3579,15 +3592,19 @@
    ]
   },
   "Definitions.Nci.Dark": {
-   "digest": "907f39dd7ab6bdaad74d0e357c22ec4d9fdb7eccdaa2a0d571267775897c8b48",
+   "digest": "117ba4e9fdc3414c7c817ed587d8bba3460426a791a4bb00c5a742ce96b17bc9",
    "definitions": {
-    "Nci.PartialContainment": "859bb41aaf4d11fba3d7943767deed3d075d6d8ac73a0c85aae5b025ec470858",
+    "Nci.PartialContainment": "53b721ad942ce112991fec5a711d06675bddc9dd3359c04fc7ca8fb8ca2e0b21",
     "Nci.PartialContainment.S": "3f4fadbf8acd2a98dd31215bd90a71100035bc489d75168cb43b65a8d6876086",
-    "Nci.PartialContainment.dark": "b291a4876caed5c07228e2b04e2eed6425f410a83fa3063f9ab1c5fbe5f65b48"
+    "Nci.PartialContainment.dark": "b291a4876caed5c07228e2b04e2eed6425f410a83fa3063f9ab1c5fbe5f65b48",
+    "Nci.PartialContainment.emb": "241a4d4758619aaf9f103bc05b3f03a7d8f94309c0a2d4d971af13dd55fd6a15",
+    "Nci.PartialContainment.ofContainment": "2e91539becc0e328a1a887f73ed5b299cae0961f0cd52600a7cd44117426024a"
    },
    "guarantees": [
+    "NciCheck.Properties.SecurityProofs.Throttles",
     "NciCheck.Properties.SecurityProofs.ThrottlesDark",
-    "NciCheck.Properties.SecurityProofs.ThrottlesDarkSlots"
+    "NciCheck.Properties.SecurityProofs.ThrottlesDarkSlots",
+    "NciCheck.Properties.SecurityProofs.ThrottlesSlots"
    ]
   },
   "Definitions.Nci.Fit": {
@@ -5372,6 +5389,18 @@
     "Pous.EndToEnd.SecurityProofs.runCheckAccepts"
    ]
   },
+  "Models.Nci.Assumptions.Baseline": {
+   "digest": "d2d5c6d68687c0eb5488d83f1dd3b20249a2b176b80b5921cd1adb65f65d49d9",
+   "definitions": {
+    "Nci.Assumptions.BaselineRegistered": "1e726c0b0d96e66c67519b7726cfdb3ca6faf901f7773d1faa4283870690966c"
+   },
+   "guarantees": [
+    "NciCheck.Properties.SecurityProofs.Throttles",
+    "NciCheck.Properties.SecurityProofs.ThrottlesDark",
+    "NciCheck.Properties.SecurityProofs.ThrottlesDarkSlots",
+    "NciCheck.Properties.SecurityProofs.ThrottlesSlots"
+   ]
+  },
   "Models.Nci.Assumptions.Threads": {
    "digest": "e9bcf22a82fceb17e374c1e6af08d94a3f0f2d662a9c92713dffe4504c37b210",
    "definitions": {
@@ -6942,12 +6971,12 @@
    ]
   },
   "Properties.Nci.Threads": {
-   "digest": "3cf5ee9e5f8c864ecd8f3e4d19d69be2123770936ea47c94ca59cbbb4009a99d",
+   "digest": "8e542387a955ab5c0317d66edeb8a454b8549cd5908ef745657d93092bbb4cb5",
    "definitions": {
-    "NciCheck.Properties.Throttled": "b0da3d4a64ec5ec0e3e1376aff729da2a2b39ef79f371cac3655404217e37fa1",
-    "NciCheck.Properties.ThrottledDark": "87d15e9a6e48f70167c54ab9aedcac2a316845a6748e4d2d6d79d224a2d690ff",
-    "NciCheck.Properties.ThrottledDarkSlots": "9aa175084876a4b77d015613d4bea4b229dacfb0432487e158e5963068996e3a",
-    "NciCheck.Properties.ThrottledSlots": "2dc5bece717e7b843bdb9569ec767e44bcefbefa930cc43539cf310dec420896",
+    "NciCheck.Properties.Throttled": "cfd44b4d6c6d29f530edc4764baddbcab6bc1ce9c505538516a1718b306616da",
+    "NciCheck.Properties.ThrottledDark": "ff9c8ee5fe4fba6ee3cb6347fe8878c7c831f9ca2bd176d80007e1499c2bd122",
+    "NciCheck.Properties.ThrottledDarkSlots": "691c4e5c662140630bff6c40eb4aac0b24278e5df05c457de810a30596b07e1f",
+    "NciCheck.Properties.ThrottledSlots": "ea89378838a955e6b91460d86e955886340a3c680f729d032bf288024beb958d",
     "NciCheck.Properties.Throttles": "941527d6f138cd24061409566b5de4f4f5369e1e379679af1c155144166626e9",
     "NciCheck.Properties.ThrottlesDark": "84c35cdd2aee2d620a8702599f07d6985ad4d29fc7cb600f8ef973a0bccecbde",
     "NciCheck.Properties.ThrottlesDarkSlots": "590e5e8a3d803ba6b9e368fe5d000aa606cec5e1dbd5db59177edf19b2483fef",
@@ -7326,7 +7355,7 @@
    ]
   },
   "Properties.SampledProofs": {
-   "digest": "c49e49764cddb7a7ce80be3d11d89589d51d13aa8a1e0f020091ebf26f098d52",
+   "digest": "0666402fa12afb9013dae294cabe4e45b3e758d485fa6f367c4024d59d025d12",
    "definitions": {
     "Properties.SampledProofs.AcceptMeans": "95ddd9c6b9371f1cd10f11f0e71543c64c748c1a0dd841830ebb874f8605b71e",
     "Properties.SampledProofs.Ascending": "04f876a5de5d22c8370686b72b8247c3d51ea5c1cb9d5234cb8033aeebd56d49",
@@ -7335,6 +7364,7 @@
     "Properties.SampledProofs.Drawn": "8f2fe98cd469116b5e7d561ee565c564c6b4315c38f1fb038bc1d50f4612235b",
     "Properties.SampledProofs.EntryIs": "cee40a0a33edafef67c74f4483c0e6d201583686c6842c40b8f08fccadcbef9c",
     "Properties.SampledProofs.ExpectsV2": "b08414bd9dec813a42882d6240f9915f337fdfb0c6d29367cbd7fef7cacfb9a3",
+    "Properties.SampledProofs.OutputPortIs": "9d1367a5d48dd84e8857dacf85788a82ab5bce47c2c89450b5ebadddc204e622",
     "Properties.SampledProofs.R1": "00bd9fb0f83d649aa9e2ef1ea2fdc18692b09149e45d17db1da81e205ad775eb",
     "Properties.SampledProofs.R1._sparseCasesOn_1": "31dcbe2f187cdda10b5f5cefaa5268d0a8febcb2d473220c75333cf915415d2a",
     "Properties.SampledProofs.R2": "b1e571406214e1b7ffd9c0106698c8b734aa8e8d05afda84c1532294b2fa4983",
@@ -7342,7 +7372,7 @@
     "Properties.SampledProofs.R4": "8f78904fc7e1dc0fac2509456a27273e940a5f30b250f80fcd53dcc5226b6a00",
     "Properties.SampledProofs.R5": "1038bfe2965f4e782e1df51f6823d4cc8976ef328f179fca2f010573653dac64",
     "Properties.SampledProofs.R6": "59adcc64d63dc299c734cf0caa07ebc758d38651c47d1caad2943a19623e1e8d",
-    "Properties.SampledProofs.R7": "626d62636077e96b7ac5f2a15be78549dd1934d1ddb7671a558f263f02abc3d1",
+    "Properties.SampledProofs.R7": "e3acfc036dd3ee65121772d0c56d62920eb17e9c274f5957a31a90022467e5d8",
     "Properties.SampledProofs.Receipt": "af5e60eba7cb50fd628de9da65eb9944ece30336a931865750afb89f0596df52",
     "Properties.SampledProofs.Registered": "b958dd4cd4d368024a79c7ac49991155abc7de48e6b8935732c42481822fce1d",
     "Properties.SampledProofs.RootIs": "5b926c2f02775bf89cef16789a40fb494c380348201474441787c43e1ab30524",
@@ -8085,7 +8115,7 @@
    "guarantees": ["Properties.SampledProofs.acceptMeans", "Properties.SampledProofs.bernoulliBounds"]
   },
   "SampledProofs.Registration": {
-   "digest": "abb974134c8e8dceb57bfd7b725c00878c0a163ea122d8c379dc33771cc02522",
+   "digest": "f8152234e07f4240308a672ba100c0ccb2dcaf73c064b5c4c31cc285c6483261",
    "definitions": {
     "SampledProofs.Registration.FORMAT": "96d130178c998bdcdae098b952bff5f02179df2cd945ba252d17caf0baf47abe",
     "SampledProofs.Registration.FORMAT_V2": "f60fa727ec173610cb97c6cb6f06049af0584389c5bafda083852240cf8bfe26",
@@ -8094,12 +8124,13 @@
     "SampledProofs.Registration.KINDS": "85d659abffa72aba2eb3374fc471d41f85a3bf93695418b88723d244be3a5975",
     "SampledProofs.Registration.PROTOCOL": "a43ca1a0f5545cbac8f6ef5e79bc40df5596147ea089b65d724e12672191b0e7",
     "SampledProofs.Registration.ROOT_KEYS": "4e5afaadaadc032c975782e2e1259c22d8e9209b3e1f49007d10a1933693aa3e",
-    "SampledProofs.Registration.Verifier": "37c4cf2cc645b773e93f907211ce9f184d52436c83a6686d29c6631080938f07",
+    "SampledProofs.Registration.Verifier": "39e2882048f1ff4793cf623cb8acfba8e8fab24ecd5a819285183048daecc799",
     "SampledProofs.Registration.Verifier.anchors": "235c4658e510c0218908aefc6c48048826677229d5effab6151229560e3159ed",
-    "SampledProofs.Registration.Verifier.binding": "8f31da0b124387582be370464664881d4978254e70f025318e39cf7c04e6d836",
+    "SampledProofs.Registration.Verifier.binding": "4cd5a3bb6a87fda41ee46f39619e6cefff9b110b29213cca4eb7e09c7b91504a",
     "SampledProofs.Registration.Verifier.law": "e567c7f019ac9a3643e006d39f2e85f4057c1410bc76f62578db10f87af01c97",
     "SampledProofs.Registration.Verifier.leafLayer": "094e645bff9f602e4fb2c2cffdcbebb195eb1c478b671e2db7ab41b8c1ca764e",
     "SampledProofs.Registration.Verifier.log": "187d671248d22767760c20892eba41b10e964bf9c40dcbd94e6fc264506a5e32",
+    "SampledProofs.Registration.Verifier.outputs": "e6fe103775c5d5ebc33d264e36a962d26e8e4387be8df95897cbb9d1024b1049",
     "SampledProofs.Registration.Verifier.params": "2e3c2d3d20eed7fb13e78f89fd329b4df74311335558182a1ec63e0f9589600b",
     "SampledProofs.Registration.Verifier.partition": "0338f0810adec3d3e17216a934ee967f7e2d5744961613b77932b789cba68874",
     "SampledProofs.Registration.Verifier.pinned": "eea244087d3daf518fdf951adeea04142de5136e624a5d9f4521c6f91a5a78c2",
@@ -8110,16 +8141,22 @@
     "SampledProofs.Registration.Verifier.scheme": "4290786d17b16518262005b22fe96a3d1d53604c4a523064eb60d35ec8dfae2d",
     "SampledProofs.Registration.Verifier.supplied": "fbba2739a3f94cee80436258942d22b1a48ce3d048df1f92499a172941304141",
     "SampledProofs.Registration.Verifier.workTable": "13c4b970324573d320a17fdca4bc2eb6da41f22b9e0e8eeaf1c200ea26972848",
-    "SampledProofs.Registration.check": "eac569c3bce10265998abd83584f9babc9362327d1052461344e78b85f9590aa",
-    "SampledProofs.Registration.check._sparseCasesOn_3": "f6434f3e81a41f7da045cef025e514ee9aef8524dd63de2856fa3c3426d550c2",
-    "SampledProofs.Registration.checkRegistered": "7825ede6447f0489487fa5841e829f2a90a7bd117ae88eb5ffda40737eef2313",
-    "SampledProofs.Registration.checkRegistered._sparseCasesOn_14": "4ac6197dd4fe90e331f60d987f63143fad15818d72be5a4a586003a969ad815b",
+    "SampledProofs.Registration.applyOutput": "693c78ec55226dc30874fcba416f05afc1efa501a57a0d6bfe97d27e1fe69081",
+    "SampledProofs.Registration.applyOutputs": "ca1ac1c976b77a1b7ba7ae52d1969d5327f8a623531dfc8ecb72da6c18720c60",
+    "SampledProofs.Registration.check": "09191c55b55e6dada6122c3222eecc18b1d1dd5768ffb5597b375525ac61b67e",
+    "SampledProofs.Registration.checkOutputs": "fefd770489e832546df83959a5b178c33217e9517675533da5ce92b46e721ba6",
+    "SampledProofs.Registration.checkRegistered": "a93366e34ff507902c122dc406f71b904f21ccb0cdf546b941e395d23e2a499e",
+    "SampledProofs.Registration.checkRegistered._sparseCasesOn_12": "d8a80a83ea7a70d1b2180a17fe0789aa2f1c3793662e1c2196a5bb9b2bbdf971",
     "SampledProofs.Registration.checkRegistered._sparseCasesOn_3": "f6210d3921fad0bcb045bd1770a6c5d617ddb15cddee0eb19daf4cb93e61d1ca",
     "SampledProofs.Registration.digest": "04cb2f93506059e0ff153cb1bf534773b382983dda92d0d327f53e54706b495c",
     "SampledProofs.Registration.digestHex": "d7a8627d00a264ed915d26a5ead7f7d30fd1ef6f2eea1361a5c950b2c8338b63",
     "SampledProofs.Registration.heldRoots": "e81f16978f2d58ceb096a604f9c31b916094ac970f6f3eb4e8c1bad98b2b8b12",
     "SampledProofs.Registration.heldRoots._sparseCasesOn_1": "773503839253cbe8f17708c7017afd832360dfccbd9c70f86a5d3559d53aa59b",
     "SampledProofs.Registration.heldRoots._sparseCasesOn_4": "35fdc6df220351dad647150c0f7327b85264d8be679e5f7f13c268ff51dd1194",
+    "SampledProofs.Registration.outputPort": "78484af6aa07d8f0ace0801cfc60db9cb8f27b2c62e15db781077ca55b033078",
+    "SampledProofs.Registration.outputPort._sparseCasesOn_3": "e67ee623358360c816096a43c9bd72b3ab605d1f76af5ca619b206d50c11573a",
+    "SampledProofs.Registration.outputRoot": "cea01fbdb437b689ffcc69d0556f5d664c7dee47fa85d50118e15ae8c93848c6",
+    "SampledProofs.Registration.outputRoot._sparseCasesOn_1": "b820f250c2991aebf57085a48bfc7bfc91bb41464aec83b32033dc61ef3d84f5",
     "SampledProofs.Registration.queryDigest": "e1750f7d4a62e71f2fee3a80af6e3755f13adf5060d9a46566a80713144774de",
     "_private.SampledProofs.Registration.0.SampledProofs.Registration.optStr": "4837cb9435b1e7f97c8ed90cfcdf3b512017ff4b7ae671590ff5fe4dea06bf64"
    },

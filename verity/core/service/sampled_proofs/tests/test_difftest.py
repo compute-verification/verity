@@ -21,7 +21,9 @@ function's `parameters`), and the record (and an earlier one in the log) registe
 the programs with a pair of digests to fill (`SUPPLIED_SETUPS`, 32- and 1-bit leaves) the verifier fills it itself from
 the record, the log's positions and its coin bound to its binding and the record's window (`supplied`,
 `registered.supplied_root`), which the record registers as it fills it, and it may pin a value's root (`pinned`, R7-held)
-and be bound to a stream and a prover (`binding`, which the record's window names: R6-stream, R6-prover).
+or take W as an output of the log's earlier record (`outputs`: W's entry is that record's port `EARLIER_OUT`, its domain
+and root, R7-output), and be bound to a stream and a prover (`binding`, which the record's window names: R6-stream,
+R6-prover).
 The verifier's program is looked up among this file's programs by its descriptor. Inputs
 stay inside what Python reads as Lean does: integers that are not booleans where Python compares with `==`, and integer
 populations in a draw.
@@ -123,6 +125,9 @@ COIN = "c0" * 64
 BINDING = {"stream": "3c" * 64, "prover": "d0" * 32}
 WINDOW = {"kind": "served", "row": 101, "run": "r-test"}
 EARLIER = {"kind": "served", "row": 100, "run": "r-test"}
+#: the earlier record's output port a verifier's `outputs` may name as W's commitment, and its domain
+EARLIER_OUT = "earlier.out"
+EARLIER_OUT_DOMAIN = "dd" * 64
 RECEIVED = "2026-10-07T00:00:00Z"
 
 
@@ -427,6 +432,7 @@ def decode_params(j) -> dict:
     keys = PARAM_KEYS | {"parameters"} if v2 else PARAM_KEYS
     keys = keys | {"supplied"} if isinstance(j, dict) and "supplied" in j else keys
     keys = keys | {"pinned"} if isinstance(j, dict) and "pinned" in j else keys
+    keys = keys | {"outputs"} if isinstance(j, dict) and "outputs" in j else keys
     _exactly(j, keys | {"binding"} if isinstance(j, dict) and "binding" in j else keys, "the parameters")
     desc = _obj(j["program"], "program")
     if not desc:
@@ -470,6 +476,13 @@ def decode_params(j) -> dict:
             raise D.Reject("pinned roots are not an object")
         try:
             R._pins(j["pinned"], j["registered"] or {}, G.sources(j.get("supplied", {})))
+        except ValueError as e:
+            raise D.Reject(str(e)) from None
+    if "outputs" in j:
+        if not isinstance(j["outputs"], dict):
+            raise D.Reject("output values are not an object")
+        try:
+            R._outputs(j["outputs"], j["registered"] or {}, G.sources(j.get("supplied", {})), j.get("pinned") or {})
         except ValueError as e:
             raise D.Reject(str(e)) from None
     if "binding" in j:
@@ -517,7 +530,7 @@ def _registered_reads(verdicts: dict) -> None:
 def _registration(p: dict, rec) -> tuple[str, ...]:
     return R.check(rec, p["program"], p["query"], p["law"], p["scheme"], p["ports"], p["leaf_layer"], p["anchors"], p["log"],
                    p["partition"], p["work_table"], p["registered"], p.get("supplied"), p.get("pinned"),
-                   p.get("binding")).codes
+                   p.get("binding"), p.get("outputs")).codes
 
 
 def check(p: dict, c: tuple[dict, bytes], e: dict) -> tuple:
@@ -1096,12 +1109,14 @@ def _reads_window(supplied: dict) -> bool:
     return any(k == "window" for rows in G.sources(supplied).values() for row in rows for k, _ in row)
 
 
-def _record_of(s: Setup, values, law: dict, window: dict, log=(), binding=None, **kw) -> dict:
-    """`R.record` over `ROOTS` registering `values`: `s`'s commitments, and each value the verifier fills itself as it fills
-    it from that record, `log` and its `binding` (`registered.supplied_value`)."""
+def _record_of(s: Setup, values, law: dict, window: dict, log=(), binding=None, output=None, **kw) -> dict:
+    """`R.record` over `ROOTS` registering `values`: `s`'s commitments (W's under `output`'s root and domain when it is
+    an earlier record's output), and each value the verifier fills itself as it fills it from that record, `log` and its
+    `binding` (`registered.supplied_value`)."""
     roots = [{"port": p, "root": ROOTS[p], **s.ports[p]} for p in s.ports]
     sup = s.supplied(values) if isinstance(s, RegisteredSetup) else {}
     entries = s.entries({v: w for v, w in values.items() if v not in sup}) if values else []
+    entries = [{**e, **output} if output and e["value"] == "W" else e for e in entries]
     rec = R.record(s.program, s.query, law, SCHEME, roots, window, registered=entries, **kw)
     if not sup:
         return rec
@@ -1136,15 +1151,21 @@ def audits(draw, setups=(*SETUPS, *REGISTERED_SETUPS)) -> tuple[dict, dict, dict
     pre = draw(st.booleans())
     part = {"program": s.sha512, "query": s.query} if pre else None
     log = []
+    output = None
     if draw(st.booleans()):
         # the log's commitment of a supplied value is any other: it is the record's own, never held
-        log = [R.record(s.program, s.query, law, SCHEME, [{"port": p, "root": ROOTS[p], **s.ports[p]} for p in s.ports],
-                        EARLIER, leaf_layer=LEAF, partition=part, work_table=table,
+        roots = [{"port": p, "root": ROOTS[p], **s.ports[p]} for p in s.ports]
+        if (values and "W" in values and "W" not in s.supplied(values) and draw(st.booleans())):
+            # W is an output of the earlier run: its port, of W's rows, under a root and domain of its own
+            output = {"root": "c1" * 64, "domain": EARLIER_OUT_DOMAIN}
+            roots.append({"port": EARLIER_OUT, "leaves": s.committed["W", values["W"]].entry()["leaves"], **output})
+        log = [R.record(s.program, s.query, law, SCHEME, roots, EARLIER, leaf_layer=LEAF, partition=part, work_table=table,
                         registered=s.entries(held) if held else ())]
     anchors = draw(st.sampled_from([[], ["weights"]]))
     sup = s.supplied(values) if isinstance(s, RegisteredSetup) else {}
     binding = BINDING if _reads_window(sup) or draw(st.booleans()) else None
-    rec = _record_of(s, values, law, {**WINDOW, **(binding or {})}, log, binding, leaf_layer=LEAF, anchors=anchors,
+    rec = _record_of(s, values, law, {**WINDOW, **(binding or {})}, log, binding, output=output, leaf_layer=LEAF,
+                     anchors=anchors,
                      previous=R.digest(log[-1]) if log else None, partition=part, work_table=table)
     assert rec["law"] == mine
     params = {"anchors": anchors, "delta": draw(st.sampled_from(["1/1000", "1/10", "1/2", "999/1000"])), "law": law,
@@ -1154,7 +1175,9 @@ def audits(draw, setups=(*SETUPS, *REGISTERED_SETUPS)) -> tuple[dict, dict, dict
         params["parameters"] = s.signature
     if isinstance(s, RegisteredSetup) and s.supplied(values):
         params["supplied"] = s.supplied(values)
-    if values and "W" in values and "W" not in params.get("supplied", {}) and draw(st.booleans()):
+    if output:
+        params["outputs"] = {"W": {"port": EARLIER_OUT, "record": R.digest(log[-1])}}
+    elif values and "W" in values and "W" not in params.get("supplied", {}) and draw(st.booleans()):
         params["pinned"] = {"W": next(e["root"] for e in rec["registered"] if e["value"] == "W")}
     if binding:
         params["binding"] = binding
@@ -1353,6 +1376,23 @@ ENTRIES = [
     lambda a, x: a["record"].pop("registered"),
     _held,
 ]
+
+
+def _earlier_out(a: dict, x: int) -> None:
+    """The earlier record's output port changed (its leaves, domain or root of another form or value), with `outputs`
+    naming the changed record, so R7 reads the port itself."""
+    a["params"]["log"] = [{**r, "roots": [
+        {**e, ["leaves", "domain", "root"][x % 3]: [1, 1000, True, None, "x", -1][x // 3 % 6]} if e["port"] == EARLIER_OUT
+        else e for e in r["roots"]]} for r in a["params"]["log"]]
+    if "outputs" in a["params"]:
+        a["params"]["outputs"] = {"W": {"port": EARLIER_OUT, "record": _earlier(a)}}
+
+
+def _earlier(a: dict) -> str:
+    """The digest of the log's last record, or of none."""
+    return R.digest(a["params"]["log"][-1]) if a["params"]["log"] else "ee" * 64
+
+
 REGISTERED_PARAMS = [
     _set("params", "registered", lambda a, x: [{"W": 4}, {"W": 0}, {"E": 1}, {"M": 1}, {"V": 1}, {"nope": 1}, {"T": 3},
                                                {"U": 2}, {"W": -1}, {"W": True}, {"W": "2"}, [], "W", {}, {"T": 2}][x % 15]),
@@ -1365,7 +1405,18 @@ REGISTERED_PARAMS = [
         "x", [5], [{"value": 5, "root": "r"}], [{"value": "W"}], {"W": "r"}, 1, [], 0, "", None, [{"root": 1, "value": "W"}],
         [{"root": "r", "value": "W", "x": 1}]][x % 12]}]),
     _held,
+    _set("params", "outputs", lambda a, x: [
+        {"W": {"port": EARLIER_OUT, "record": "ee" * 64}}, {"W": {"port": "nope", "record": _earlier(a)}},
+        {"W": {"port": "x", "record": _earlier(a)}}, {"W": {"port": EARLIER_OUT, "record": R.digest(a["record"])}},
+        {"W": {"port": EARLIER_OUT, "record": _earlier(a)}}, {"S": {"port": EARLIER_OUT, "record": _earlier(a)}},
+        {"nope": {"port": EARLIER_OUT, "record": _earlier(a)}}, {"W": {"port": EARLIER_OUT, "record": "EE" * 64}},
+        {"W": {"port": EARLIER_OUT}}, {"W": {"port": 1, "record": _earlier(a)}},
+        {"W": {"port": EARLIER_OUT, "record": _earlier(a), "x": 1}}, {"W": EARLIER_OUT}, ["W"], None, {}][x % 15]),
+    lambda a, x: a["params"].pop("outputs"),
+    _earlier_out,
 ]
+
+
 def _other_reads(r: dict, x: int) -> dict:
     """The verdict of record's registered reads, changed: one port's root another (so its value's two ports disagree), every
     root upper case, a value missing or added (one the record names as a root port, or one it doesn't name), only one

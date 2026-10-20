@@ -57,10 +57,11 @@ def test_every_spec_parses_with_its_scope_and_plain_arm():
                  "fpx-g1-nvfp4x2-nv9", "fpx-g1-nvfp4x2-nv9-gptq", "fpx-g1-nvfp4x2-nvi10", "fpx-g1-nvfp4x2-nvi10-gptq",
                  "fpx-g1-nvfp4x2-nvi-gptq", "fpx-g1s-e4m3i120", "fpx-g1s-nvfp4x2-nvi10", "fpx-g1s-nvfp4x2-nvi10-gptq",
                  "fpx-g1s-nvfp4x2-nvi10-lm8", "fpx-g1s-w4a8-nvi10", "fpx-g1s-w4a8-nvi10-gptq",
-                 "fpx-g1s-h1-e4m3i120-w60", "fpx-g1s-w4a8-nvi10-lm8", "fpx-g1s-w4a8-nvi10-gptq-lm8",
-                 "fpx-g1s-h1-w4a8-nvi5-lm8", "fpx-g1s-h1-w4a8-nvi5-gptq-lm8",
+                 "fpx-g1s-co32c-e4m3i120-w60", "fpx-g1s-w4a8-nvi10-lm8", "fpx-g1s-w4a8-nvi10-gptq-lm8",
+                 "fpx-g1s-co32c-w4a8-nvi5-lm8", "fpx-g1s-co32c-w4a8-nvi5-gptq-lm8",
                  "fpx-g1s-e4m3i120-c6", "fpx-g1s-nvfp4x2-nvi10-lm8-c6", "fpx-g1s-w4a8-nvi10-gptq-lm8-c6",
-                 "fpx-g1s-h1-w4a8-nvi5-gptq-lm8-c6", "fpx-a1-e4m3i"):
+                 "fpx-g1s-co32c-w4a8-nvi5-gptq-lm8-c6", "fpx-a1-e4m3i", "fpx-g1h-e4m3i120-w104",
+                 "fpx-g1h-w4a8-nvi9-gptq-lm8-c6"):
         want[name] = ("all", "int8-all", True)
     got = {p.stem: spec.load(str(p)) for p in spec.SPECS.glob("*.toml")}
     assert set(got) == set(want)

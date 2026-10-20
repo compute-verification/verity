@@ -117,6 +117,11 @@ def test_pouw_gamma_per_coin_is_a_conjecture_at_w1_priced() -> None:
     assert (e.kind, e.standing) == ("assumption", "conjectured") and "budget per coin" in e.name and "W1 priced" in e.name
 
 
+def test_option_a_counts_fixed_is_a_conjecture_and_modes_run_standard() -> None:
+    assert (get("accounting-ts-counts-fixed").kind, get("accounting-ts-counts-fixed").standing) == ("assumption", "conjectured")
+    assert (get("accounting-ts-modes-run").kind, get("accounting-ts-modes-run").standing) == ("assumption", "standard")
+
+
 def test_the_sites_nine_assumptions_resolve_and_the_retired_ones_do_not() -> None:
     site = ("cr/sha-256", "cr/sha-512", "cr/blake3", "cr/blake2b", "cr/poseidon2-babybear", "cr/poseidon2-koalabear", "xof/shake-256",
             "random-oracle", "honest-verifier")
@@ -137,3 +142,12 @@ def test_the_trusted_host_keeps_the_devices_persistent_state() -> None:
     assert e.name == ("An auditor-trusted device (a network certifier, the memory challenger) is the auditor's hardware "
                       "on a machine its host provider runs and the prover doesn't control; it runs its stated code on its "
                       "Nebius host, and its host never restores an earlier copy of the state the device keeps there")
+
+
+def test_the_declared_capacity_rests_on_the_nodes_inventory() -> None:
+    """ASK-74 = A: Π's three clauses, per node, trusting the auditor's inventory, with no partition clause."""
+    e = get("accounting-declared-device")
+    assert (e.kind, e.standing, e.label) == ("assumption", "standard", "Declared device")
+    assert all(s in e.name for s in ("every GPU on the node is declared", "the declared board and vBIOS",
+                                     "no SM clock exceeds f_max, the top of that vBIOS's clock table",
+                                     "MIG and MPS need no clause", "the auditor's inventory of the node"))
