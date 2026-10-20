@@ -208,16 +208,20 @@ class Host:
     """`challenger` in session `session` of `window` (`WINDOW` by default), its record and close signed under key
     `seed` at the next of `leaves` (hosts sharing a key share them) and written to `directory`, serving one client; the
     ledger `ledger` (a new one beside `directory` unless given) opens the session before its record and ends it once
-    `ended`."""
+    `ended`. With `period` the ledger opens it only at `open`, the gate's open of the reserved session, for the window
+    ``{commit: root, period}`` the serving side names (an H1 window's open root, `pouw_h1_challenger.Window`)."""
 
     def __init__(self, directory: Path, challenger: LC.LiveChallenger, seed: int, session: str = "s-1",
-                 leaves: Iterator[int] | None = None, ledger: Ledger | None = None, window: dict | None = None) -> None:
-        self.directory, self.challenger, self.session_id = directory, challenger, session
+                 leaves: Iterator[int] | None = None, ledger: Ledger | None = None, window: dict | None = None,
+                 period: str | None = None) -> None:
+        self.directory, self.challenger, self.session_id, self.period = directory, challenger, session, period
         directory.mkdir()
         private, self.key = challenger_key(seed)
         leaves = itertools.count() if leaves is None else leaves
         self.ledger = ledger or Ledger(directory.parent / f"{directory.name}.jsonl", seed, leaves)
-        self.ledger.open(session, WINDOW if window is None else window)
+        self.window = None if period is not None else WINDOW if window is None else window
+        if self.window is not None:
+            self.ledger.open(session, self.window)
         session_ = R.open_session(challenger, self.key, f"{HOST}.{session}",
                                   lambda m: lms.sign_at(private, next(leaves), m).encode(), directory, session)
         ours, theirs = socket.socketpair()
@@ -230,6 +234,14 @@ class Host:
     def _serve(self, sock: socket.socket, session: R.Session) -> None:
         with sock:
             self.reason = R.serve(sock, session, itertools.count().__next__)
+
+    def open(self, session: str, root: str) -> dict:
+        """The gate's open of `session` on `root` (`pouw_h1_challenger.Gate`): the ledger opens it for ``{commit: root,
+        period}``, and the answer names its ledger entry, its root and the challenger's coin commitment."""
+        self.window = {"commit": root, "period": self.period}
+        self.ledger.open(session, self.window)
+        return {"session": session, "seq": len(self.ledger.lines) - 1, "root": root,
+                "commitment": self.challenger.commitment.root.hex()}
 
     def ended(self) -> str | None:
         """Join the session once its client has ended it, and the ledger ends it: None when the client closed it, else

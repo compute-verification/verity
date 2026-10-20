@@ -113,17 +113,19 @@ def _linear_is_the_stand_in(monkeypatch):
 
 
 AUDITOR = "vy-challenger-1:7811"
-SESSION = {"session": "s20261020T000000Z-0001", "seq": 0, "root": "c1" * 64, "commitment": "c0" * 64}
+#: the gate's reserve answer for the window's session, and the gate that opens it on the window's open root
+RESERVED = {"session": "s-1"}
+GATE: dict = {}
 
 
 @pytest.fixture
 def auditor(tmp_path, monkeypatch):
-    """The auditor host's challenger, one session over a one-round live epoch, reached at `AUDITOR`, whose coin
-    commitment `SESSION` names."""
-    host = CH.Host(tmp_path / "auditor", Wd.live_challenger(0, 1, CH.entropy(1)), 1)
+    """The auditor host's challenger, one session over a one-round live epoch, reached at `AUDITOR`, reserved as
+    `RESERVED` and opened by `GATE`'s ``open``."""
+    host = CH.Host(tmp_path / "auditor", Wd.live_challenger(0, 1, CH.entropy(1)), 1, period="p-0")
     monkeypatch.setattr(R.RemoteChallenger, "connect",
                         classmethod(lambda cls, at, secret=None: host.client if at == AUDITOR else None))
-    monkeypatch.setitem(SESSION, "commitment", host.challenger.commitment.root.hex())
+    monkeypatch.setitem(GATE, "open", host.open)
     return host
 
 
@@ -134,7 +136,7 @@ def _serve(arm, retain=1, m=3, prompt=True, remote=False):
     layer = Linear(32, 1, arm)
     runner = SimpleNamespace(execute_model=lambda scheduler_output, *a, **kw: None, decode_query_len=1)
     if remote:
-        coins = {"challenger": AUDITOR, "session": SESSION}
+        coins = {"challenger": AUDITOR, "session": RESERVED, "gate": lambda session, root: GATE["open"](session, root)}
     else:
         coins = {"coins": Challenger(0, random.Random(0).randbytes),
                  "rounds": LiveRecord(Wd.live_challenger(0, 1, random.Random(1).randbytes), Wd.ROUND, clock=lambda: 0.0)}

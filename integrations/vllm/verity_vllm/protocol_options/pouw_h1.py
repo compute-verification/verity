@@ -51,9 +51,11 @@ served int8 linear call as its own Program on bits, which `verity.core.protocols
   (``draw``) opens at `H1Run.finish`, after the manifest, the last round's receipts and every round's root and coin.
 * **Coins.** Credit needs the window's coins from the auditor host's challenger (``coin_source`` ``challenger``,
   `pouw_h1_challenger`); a window whose coins were held in the serving process credits nothing (`IN_PROCESS`).
-* **Salt.** `pouw.salt` is a SHA-512 digest and the epoch's salt (`audit.Epoch.start`, from the challenger's salt coin, opened
-  after the weights' root, `weight_root`) is 32 bytes, so the Program's salt is the epoch's under `SALT_TAG`
-  (`program_salt`) until the challenger opens a 64-byte one.
+* **Salt.** `pouw.salt` is a SHA-512 digest and the epoch's salt (`audit.salt_of` over the weights' root, `weight_root`,
+  from the challenger's salt coin) is 32 bytes, so the Program's salt is the epoch's under `SALT_TAG` (`program_salt`)
+  until the challenger opens a 64-byte one. A challenger's window opens its salt coin after its own open root
+  (`salt.window_open_root` of the weights' root, round 0's request table's root and its session), once round 0 is
+  admitted and before step 0's forward (`H1Run.open_window`).
 """
 from __future__ import annotations
 
@@ -318,6 +320,9 @@ class Call:
 #: and s_a [m], m = 0 for an empty step; `slots` makes the call's T-slot table); it returns None or what it bound for the
 #: call, as JSON (its roots and receipt root, hex)
 Listener = Callable[[Call, Any, Any, Any, Any], Mapping[str, Any] | None]
+#: ``opener(requests_root)``: given round 0's request table's root, the window's Program salt, its round coins and draw
+#: coins (`LiveRecord`s) and what its commitment records of the opening (`H1Run.open_window`)
+Opener = Callable[[bytes], tuple[bytes, Any, Any, Mapping[str, Any]]]
 
 
 def numpy_of(t: Any) -> np.ndarray:
@@ -355,15 +360,20 @@ class H1Run:
     ``key`` is the prover's hm96 salt key for the request, slot and call tables, drawn for the run (`os.urandom`) unless
     given; nothing persists it or the tables, so their leaves open only while the run is held (`open_request`,
     `open_slot`). ``admission`` is `pouw_h1_requests.ROUND0` (admit in round 0 only) or ``PER_ROUND``; ``coin_source`` is
-    `CHALLENGER` only for coins from the auditor host's challenger, and any other credits nothing."""
+    `CHALLENGER` only for coins from the auditor host's challenger, and any other credits nothing.
 
-    def __init__(self, entry: str, salt: bytes, modules: Mapping[int, str], shapes: Sequence[tuple[int, int]], rows: int,
-                 steps: int, retain: int = 0, transcript_dir: str | None = None, commit: bool = True, rounds: Any = None,
-                 key: bytes | None = None, draw: Any = None, admission: str = RQ.ROUND0,
-                 coin_source: str = "in-process") -> None:
+    The Program's ``salt`` is given, or None with ``opener``: then `open_window` opens it once round 0's admissions are in
+    (or at the first use of the salt), after its request table, and ``opener`` sets ``rounds`` and ``draw``."""
+
+    def __init__(self, entry: str, salt: bytes | None, modules: Mapping[int, str], shapes: Sequence[tuple[int, int]],
+                 rows: int, steps: int, retain: int = 0, transcript_dir: str | None = None, commit: bool = True,
+                 rounds: Any = None, key: bytes | None = None, draw: Any = None, admission: str = RQ.ROUND0,
+                 coin_source: str = "in-process", opener: Opener | None = None) -> None:
         if admission not in RQ.ADMISSIONS:
             raise ValueError(f"{entry}: an admission is one of {RQ.ADMISSIONS}, not {admission!r}")
-        self.entry, self.salt, self.modules, self.commit = entry, salt, dict(modules), commit
+        if (salt is None) == (opener is None):
+            raise ValueError(f"{entry}: a window's salt is given or opened by its opener, one of the two")
+        self.entry, self._salt, self._opener, self.modules, self.commit = entry, salt, opener, dict(modules), commit
         self.shapes_, self.rows, self.steps = [tuple(map(int, s)) for s in shapes], int(rows), int(steps)
         self.offs, self.u_step = layout(self.shapes_, self.rows)
         self.calls: list[Call] = []
@@ -409,6 +419,30 @@ class H1Run:
     def listen(self, fn: Listener) -> None:
         """Hand every later call to `fn` (`Listener`)."""
         self.listeners.append(fn)
+
+    @property
+    def salt(self) -> bytes:
+        return self._salt if self._salt is not None else self.open_window()
+
+    def open_window(self) -> bytes:
+        """The Program's salt, opened once: round 0's request table is committed (its binding reads no salt) and its root
+        handed to ``opener``, which opens the window's session and its salt coin after the window's open root over it
+        (`pouw_h1_challenger.Window.open`); the commitment records the root (``requests_root``) and what ``opener``
+        returns of the opening."""
+        if self._salt is None:
+            if "unopened" in self.details:
+                raise RuntimeError(f"{self.entry}: the window's salt was refused ({self.details['unopened']}), and a "
+                                   "window opens it once")
+            table = self._tables[0] = RQ.request_table(None, 0, self.rows, self.admitted.get(0, []), self._key)
+            self.commits["requests_root"] = table.commitment.root.hex()
+            try:
+                salt, self.rounds, self.draw, commits = self._opener(table.commitment.root)
+            except Exception as e:
+                self.details["unopened"] = str(e)
+                raise
+            self.commits.update(commits)
+            self._salt = salt
+        return self._salt
 
     def _table(self, call: Call, name: str, leaves: list[bytes]) -> str:
         j = list(TABLE_TAGS).index(name)
@@ -477,6 +511,8 @@ class H1Run:
             prompt = tuple(int(t) for t in prompt or ())
             why = (f"admitted for step {r}, past the window's {self.steps} steps" if r >= self.steps
                    else RQ.late_admission(r) if r and self.admission == RQ.ROUND0
+                   else "admitted after round 0's request table was committed for the window's salt" if r == 0
+                   and 0 in self._tables
                    else "no prompt token ids or no token cap" if not prompt or int(cap) < 1
                    else "admitted and not in its step's batch" if req_id not in at else None)
             if why is not None:
@@ -494,6 +530,8 @@ class H1Run:
                 self.unadmitted.append({"round": r, "rows": int(rows)})
             owners += [index] * int(rows)
         self.owners[r] = owners
+        if r == 0:
+            self.open_window()
         return out
 
     def _close_rounds(self, through: int) -> None:
@@ -506,7 +544,10 @@ class H1Run:
             if len(owners) != served:
                 self.unbound.append(f"step {r}: {served} rows served and {len(owners)} in the step's batch, so the slot "
                                     "table can't name each served row's request")
-            table = self._tables[r] = RQ.request_table(self.salt, r, self.rows, self.admitted.get(r, []), self._key)
+            salt = self.salt
+            if r not in self._tables:
+                self._tables[r] = RQ.request_table(salt, r, self.rows, self.admitted.get(r, []), self._key)
+            table = self._tables[r]
             slots = self._slot_tables[r] = RQ.slot_table(self.salt, r, self.rows, owners, self._key)
             calls = RQ.step_digest(self.salt, r, self._rows([c for c in self.calls if c.step == r]))
             receipts = self.receipts_of(r - 1) if r else RQ.NO_RECEIPTS
@@ -595,7 +636,7 @@ class H1Run:
         if self.closed:
             return
         self.closed = True
-        if not self.commit:
+        if not self.commit or "unopened" in self.details:
             return
         self.details["steps_served"] = self.step + 1
         self.details["last_step_complete"] = self.last in (None, len(self.shapes_) - 1)
@@ -700,7 +741,7 @@ class H1Run:
         """Close the window, commit its manifest, then open ``draw``'s coin after `pouw_h1_requests.draw_root` over the
         manifest, the last round's receipts and every round's root and coin, so the draw follows all of them."""
         self.close()
-        if not self.commit:
+        if not self.commit or "unopened" in self.details:
             return
         calls_root = self.calls_root()
         self.commits.update(calls_root=calls_root.hex(), static=self.details["static"])
@@ -790,7 +831,8 @@ def bind_all(calls: Sequence[Call], bound: Mapping[int, Mapping[str, Any]]) -> l
     return out
 
 
-__all__ = ["CALLS_FILE", "CHALLENGER", "Call", "FILL", "H1Run", "IN_PROCESS", "Listener", "RECORD", "SALT_TAG", "SCHEME",
+__all__ = ["CALLS_FILE", "CHALLENGER", "Call", "FILL", "H1Run", "IN_PROCESS", "Listener", "Opener", "RECORD", "SALT_TAG",
+           "SCHEME",
            "Static", "TABLE_TAGS", "TILE", "VllmInt8LinearH1", "admitting", "bind_all", "check_tiles", "compiled",
            "coordinate", "layers", "layout", "numpy_of", "observer", "padded", "program", "program_salt", "slots",
            "table_leaves", "traced", "units", "utilization", "weight_root"]
