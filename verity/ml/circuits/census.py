@@ -1004,17 +1004,22 @@ def census(program: Any, ends: list[int] | None = None, digest: str | None = Non
     for j, ivs in out.direct.items():
         spans[j].extend((lo, hi, (2, 0)) for lo, hi in norm(ivs))
     al = _Aliases(an, root.body)
+    # which of a node's own leaves name one gate is its Definition's: the same at every node of one form and length calling it
+    # with the same leaves passed through
+    twins: dict[tuple, list[tuple[int, int]]] = {}
     for j in range(len(nodes) - 1, I - 1, -1):  # a leaf a node passes through is its producer's value: its readers read that
         runs = [(lo, hi, x) for lo, hi, x, _ in al.resolved(j)[1]] if al.node(j) else []
         al.release(j)  # only later nodes name j, and they are done
         if an.repeats(nodes[j].fn):  # and a leaf naming the gate an earlier one names is that one
+            nd = nodes[j]
             passed = norm((lo, hi) for lo, hi, _ in runs)
-            first: dict[int, int] = {}
-            for t in range(nodes[j].out.leaves):
-                if not contains(passed, t):
-                    g = first.setdefault(resolve(program.circuit.root_scope, ("n", j, t)), t)
-                    if g != t:
-                        runs.append((t, t + 1, Affine("n", j, g, 1)))
+            key = (id(nd.fn), nd.form, mult[j], passed)
+            pairs = twins.get(key)
+            if pairs is None:
+                first: dict[int, int] = {}
+                pairs = twins[key] = [(t, g) for t in range(nd.out.leaves) if not contains(passed, t)
+                                      and (g := first.setdefault(resolve(program.circuit.root_scope, ("n", j, t)), t)) != t]
+            runs.extend((t, t + 1, Affine("n", j, g, 1)) for t, g in pairs)
             runs.sort(key=lambda x: x[0])
         if not runs:
             continue

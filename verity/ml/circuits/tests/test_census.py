@@ -138,6 +138,28 @@ def hashed(n: int) -> Program:
     return Program(comp("THashed", [("toks", Array(n, V32)), ("t", T)], Tuple(Array(3 * n + 5, V16), Array(3, V16)), body))
 
 
+def twice(n: int) -> Program:
+    """A cache written n times, by a Call returning the cache with one word its own and that word again, as a KV write returns
+    its row; and two batches, of n and 2 members, of a Definition returning its word twice: every node names gates twice."""
+    C = Array(4, V32)
+    Write = comp("TWrite", [("c", C), ("x", V32)], Tuple(C, V32),
+                 lambda Bd, S, c, x: (lambda y: tuple_of(array_of([c[0], y, c[2], c[3]]), y))(Bd.call(Add32, x, c[1])))
+    Pair = comp("TPair", [("x", V32)], Tuple(V32, V32), lambda Bd, S, x: (lambda y: tuple_of(y, y))(Bd.call(Add32, x, x)))
+
+    def body(Bd, S, c, xs):
+        ys = []
+        for i in range(n):
+            r = Bd.call(Write, c, xs[i])
+            c = r[0]
+            ys.append(r[1])
+        s = Bd.call(Add32, ys[0], c[1])
+        return tuple_of(c, array_of(ys + [s]), Bd.batch(Pair, xs, axes=(0,)), Bd.batch(Pair, array_of(ys[:2]), axes=(0,)))
+
+    P2 = Array(2, Tuple(V32, V32))
+    return Program(comp("TTwice", [("c", C), ("xs", Array(n, V32))],
+                        Tuple(C, Array(n + 1, V32), Array(n, Tuple(V32, V32)), P2), body))
+
+
 def programs():
     yield from liveness_programs()
     yield "request", request()
@@ -145,6 +167,7 @@ def programs():
     yield "relay", relay(5)
     yield "fan", fan(5)
     yield "hashed", hashed(3)
+    yield "twice", twice(4)
     yield "columns", Program(comp("TColumns", [("M", Array(3, Array(4, V32)))], Array(4, V32),
                                   lambda Bd, S, M: Bd.batch(Col, M, axes=(1,))))
 
@@ -373,6 +396,23 @@ def test_the_census_is_linear_in_its_pass_throughs(shape):
     """A pass-through chain 200 Calls deep, and 200 runs read in 200 spans, cost the census at most 4.5 times what a quarter of
     each costs (linear is 4). Walking the chain again from each Call, or every run for each span, costs 11 and 7.7 times."""
     assert _lines(shape(200)) <= 4.5 * _lines(shape(50))
+
+
+def test_which_leaves_name_one_gate_is_resolved_once_per_definition(monkeypatch):
+    """Which of a Call's own leaves name one gate is resolved through the layout once per Definition, form and length, not at
+    every node calling it (DeepSeek-V4-Pro's request Program writes its KV cache in 1952 such Calls): `TWrite`'s two own
+    leaves once, and each batch of `TPair`'s leaves at its length once."""
+    n = 0
+    real = CE.resolve
+
+    def counted(*a):
+        nonlocal n
+        n += 1
+        return real(*a)
+
+    monkeypatch.setattr(CE, "resolve", counted)
+    census(twice(8))
+    assert n == 2 + 2 * 8 + 2 * 2
 
 
 def test_a_column_every_token_selects_in_is_held_once():
