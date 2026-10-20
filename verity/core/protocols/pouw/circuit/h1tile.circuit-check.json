@@ -1,10 +1,16 @@
 {
  "definitions": {
+  "PouwMask32_v2": {
+   "and": 32
+  },
   "PouwOneStream2_v2": {
    "and": 24
   },
   "PouwOneStream3_v2": {
    "and": 41
+  },
+  "PouwOrBit_v2": {
+   "and": 1
   },
   "PouwPeelSeg_v2": {
    "and": 1563

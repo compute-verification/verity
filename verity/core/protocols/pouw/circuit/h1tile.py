@@ -37,6 +37,13 @@ correction 256 X (wb⁺ - wb⁻)ᵀ (`PouwWrapSeg` over each segment of K), minu
   same as - b Bᵀ - A cᵀ - b cᵀ + 256 xa Ŵᵀ), so z is A Bᵀ, the served product, exact in s32 for every int8 A and B, and
   equal to v1's z.
 
+**The gated unit**, `PouwH1Tile_v4`, is v3 with one more input, ``admit``: its r rows' admit bits, the queue's admission
+(`PouwQueueAdmit`'s words, the bits the credit tally counts), a committed input like A and never a function of the rows. A
+dead tile, every admit bit 0, has the canonical empty receipt, zero words: each receipt word is masked by the tile's live
+bit, the OR of the admit bits (`PouwOrBit`, `PouwMask32`). Its z, and a live tile's receipt, are v3's. So a dead tile's
+served values need no noise: its receipt is the constant 0 and its rows, which admission holds to the canonical empty row,
+give z = A Bᵀ = 0; its credit, the tally of its admit bits, is 0.
+
 So z exists only through the MMAs whose words are credited, and A, B and the noise: a kernel serving y = dequant(z)
 serves the receipted words. The compile pass replaces its ``noise-in-z`` rule for a one-stream scheme
 (`compile.Scheme.stream`, here `STREAM`) with ``stream``: every z leaf is made by those Definitions from leaves the
@@ -45,7 +52,8 @@ receipt's cone reads.
 The scheme takes the Boolean s8 kinds (`KINDS`) on whole-lane grid tiles: a full r × c grid with 4 | r and 8 | c, 32 | K
 and KS = K / 32 >= 2; any other dot or tile is `CompileError("scheme")`. `scheme(tile, name)` builds it at another tile;
 `SCHEME` is registered at a warp, 32 × 32, and `PouwH1Tile` as a Definition, when `segment` (E2E-120) is on the tree;
-`SCHEME_V3` (`scheme_v3`) and `PouwH1Tile3` the same. `reference` is the unit on words (``stream=True``: v3's).
+`SCHEME_V3` (`scheme_v3`) and `PouwH1Tile3` the same. `PouwH1Tile4` is a Definition only: the compile pass has no admit
+input to give it. `reference` is the unit on words (``stream=True``: v3's; with ``gated``, the admit bits: v4's).
 """
 from __future__ import annotations
 
@@ -346,6 +354,25 @@ PouwPeelSeg = definition("PouwPeelSeg", 2, _peel_seg_bits,
 STREAM = (PouwOneStream2, PouwOneStream3, PouwWrapSeg, PouwWrapBits, PouwPeelSeg, PouwXWrap)
 
 
+# -- a dead tile -------------------------------------------------------------------------------------------------------------
+
+@primitive("PouwOrBit", 1, [("a", Value(1)), ("b", Value(1))], Value(1), conformance="protocol-defined")
+def PouwOrBitWord(a: int, b: int) -> int:
+    return (a | b) & 1
+
+
+@primitive("PouwMask32", 1, [("w", Value(32)), ("live", Value(1))], Value(32), conformance="protocol-defined")
+def PouwMask32Word(w: int, live: int) -> int:
+    """w where live is 1, else 0."""
+    return w & M32 if live & 1 else 0
+
+
+PouwOrBit = definition("PouwOrBit", 2, lambda C_, a, b: [OR(C_, a[0], b[0])], (("a", BIT), ("b", BIT)), BIT,
+                       word=PouwOrBitWord, conformance="protocol-defined", doc="a OR b on bits: PouwOrBit_v1")
+PouwMask32 = definition("PouwMask32", 2, lambda C_, w, live: [C_.AND(v, live[0]) for v in w], (("w", U32), ("live", BIT)),
+                        U32, word=PouwMask32Word, conformance="protocol-defined", doc="w AND live, on bits: PouwMask32_v1")
+
+
 # -- the reference -----------------------------------------------------------------------------------------------------------
 
 def _stream(seed_j: bytes, block: int, n: int) -> list[int]:
@@ -419,11 +446,20 @@ def stream_cell(op: int, d: Sequence[int], x_i: Sequence[int], wb_j: Sequence[in
 
 def reference(a: Sequence[Sequence[int]], b: Sequence[Sequence[int]], salt: bytes, position: int,
               roots: tuple[bytes, bytes], pairs: Sequence[tuple[int, int]] | None = None,
-              stream: bool = False) -> tuple[list[int], list[int]]:
+              stream: bool = False, gated: Sequence[int] | None = None) -> tuple[list[int], list[int]]:
     """The unit on words: (z, receipt) for A's r rows and B's c rows (int8 encodings), its salt, position and roots, z at
     `pairs` (the full grid in row-major order by default). `stream`: v3's z, each cell's `one_stream` of its lane's O' and
-    D words with its wrap correction and its dither peel (`stream_cell`); else v1's, the exact A Bᵀ cell. Both are A Bᵀ."""
+    D words with its wrap correction and its dither peel (`stream_cell`); else v1's, the exact A Bᵀ cell. Both are A Bᵀ.
+    `gated`: the tile's r admit bits (v4, ``stream=True``): a dead tile, every bit 0, has the zero receipt and its exact
+    z, its noise never derived; a live tile's z and receipt are the ungated ones."""
     lay = Layout(len(a), len(b), len(a[0]))
+    if pairs is None:
+        pairs = [(i, j) for i in range(lay.r) for j in range(lay.c)]
+    if gated is not None:
+        if isinstance(gated, (bool, int)) or len(gated) != lay.r:
+            raise ValueError(f"gated is the tile's {lay.r} admit bits, not {gated!r}")
+        if not any(g & 1 for g in gated):
+            return [SG.seg_dot(0, a[i], b[j]) for i, j in pairs], [0] * (2 * lay.sets)
     rows, cols = noise(SD.seed(salt, position, *roots), lay)
     xs = [[(a[i][t] + rows[i][0][t]) & 0xFF for t in range(lay.k)] for i in range(lay.r)] if stream else None
     wbs = [col_wrap(b[j], cols[j]) for j in range(lay.c)] if stream else None
@@ -445,8 +481,6 @@ def reference(a: Sequence[Sequence[int]], b: Sequence[Sequence[int]], salt: byte
             cell = (lay.rows(ln)[SG.row_slot(e)], lay.cols(ln)[SG.col_slot(e)])
             served[cell] = stream_cell(sets[ks][e], [d[e] for d in sets[ks + 1:]], xs[cell[0]], wbs[cell[1]],
                                        pis[cell[0]], pjs[cell[1]])
-    if pairs is None:
-        pairs = [(i, j) for i in range(lay.r) for j in range(lay.c)]
     z = [served[p] for p in pairs] if stream else [SG.seg_dot(0, a[i], b[j]) for i, j in pairs]
     return z, [w & M32 for s in cp for w in s]
 
@@ -457,11 +491,16 @@ def _layout(S: Any) -> Layout:
     return Layout(S.R, S.C, S.EXACT.signature()[0][0][1].n)
 
 
-def _signature(S: Any) -> tuple:
+def _signature(S: Any, admit: bool = False) -> tuple:
     (_, a), (_, b) = S.EXACT.signature()[0][:2]
     D, P = SD.types(True)
-    return ((("a", Array(S.R, a)), ("b", Array(S.C, b)), ("salt", D), ("position", P), ("roots", Array(2, D))),
+    return ((("a", Array(S.R, a)), ("b", Array(S.C, b)), *((("admit", Array(S.R, BIT)),) if admit else ()), ("salt", D),
+             ("position", P), ("roots", Array(2, D))),
             Record(("z", Array(len(S.PAIRS), S.EXACT.signature()[1])), ("receipt", Array(2 * _layout(S).sets, U32))))
+
+
+def _signature_v4(S: Any) -> tuple:
+    return _signature(S, admit=True)
 
 
 def _digits(B: Any, x: Coll, z: list[Coll], lay: Layout) -> list[Coll]:
@@ -542,6 +581,21 @@ def _body(B: Any, S: Any, a: Coll, b: Coll, salt: Coll, position: Coll, roots: C
 
 
 def _body_v3(B: Any, S: Any, a: Coll, b: Coll, salt: Coll, position: Coll, roots: Coll) -> Coll:
+    z, receipt = _one_stream(B, S, a, b, salt, position, roots)
+    return Coll(_signature(S)[1], concat(z + receipt))
+
+
+def _body_v4(B: Any, S: Any, a: Coll, b: Coll, admit: Coll, salt: Coll, position: Coll, roots: Coll) -> Coll:
+    z, receipt = _one_stream(B, S, a, b, salt, position, roots)
+    live = [admit[i] for i in range(S.R)]
+    while len(live) > 1:
+        live = [B.call(PouwOrBit, live[i], live[i + 1]) if i + 1 < len(live) else live[i] for i in range(0, len(live), 2)]
+    receipt = [B.call(PouwMask32, Coll(U32, w), live[0]).refs for w in receipt]
+    return Coll(_signature_v4(S)[1], concat(z + receipt))
+
+
+def _one_stream(B: Any, S: Any, a: Coll, b: Coll, salt: Coll, position: Coll, roots: Coll) -> tuple[list, list]:
+    """v3's z refs (cell by cell of PAIRS) and receipt refs (word by word)."""
     receipt, words, X, WIN, XIN = _sets(B, S, a, b, salt, position, roots)
     lay = _layout(S)
     f = ONE_STREAM[lay.m]
@@ -556,7 +610,7 @@ def _body_v3(B: Any, S: Any, a: Coll, b: Coll, salt: Coll, position: Coll, roots
             seg = slice(32 * s, 32 * s + 32)
             acc = B.call(PouwPeelSeg, acc, X[i][seg], XIN[i][1][seg], xa[i][seg], WIN[j][0][seg], WIN[j][1][seg])
         z.append(acc.refs)
-    return Coll(_signature(S)[1], concat(z + receipt))
+    return z, receipt
 
 
 def _unit_ports(S: Any) -> Any:
@@ -577,6 +631,13 @@ PouwH1Tile3 = CompositeDefinition(
     doc="The one-stream H1 + fx1 tile (`circuit.h1tile`): v1's noise, sets and receipt, and z on each cell of PAIRS its "
         "lane's O' - sum_d 128^d D_d plus its wrap correction 256 X (wb⁺ - wb⁻)ᵀ, less its dither peel "
         "X cᵀ + (b - 256 xa) Bᵀ, mod 2^32: the served product A Bᵀ for every int8 A and B (EXACT's type, never called).",
+    **({"ports": _unit_ports} if _ports is not None else {}))
+
+PouwH1Tile4 = CompositeDefinition(
+    "PouwH1Tile", 4, ("EXACT", "R", "C", "PAIRS"), _signature_v4, _body_v4, conformance="protocol-defined",
+    register=SG is not None,
+    doc="v3's one-stream H1 + fx1 tile (`circuit.h1tile`) with its R rows' admit bits: a dead tile, every admit bit 0, has "
+        "the zero receipt (each word AND the OR of the bits); z and a live tile's receipt are v3's.",
     **({"ports": _unit_ports} if _ports is not None else {}))
 
 
