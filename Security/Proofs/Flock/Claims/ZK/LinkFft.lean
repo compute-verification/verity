@@ -98,6 +98,14 @@ theorem testBit_two_mul_succ (c i : ℕ) : (2 * c).testBit (i + 1) = c.testBit i
 theorem testBit_two_mul_add_one_succ (c i : ℕ) : (2 * c + 1).testBit (i + 1) = c.testBit i := by
   rw [Nat.testBit_succ, show (2 * c + 1) / 2 = c by omega]
 
+theorem sum_split {M : Type*} [CommSemiring M] (R : Finset ℕ) (a b p0 p1 q : ℕ → M) (w : M)
+    (h0 : ∀ c, p0 c = q c) (h1 : ∀ c, p1 c = w * q c) :
+    ∑ c ∈ R, (a c * p0 c + b c * p1 c) = ∑ c ∈ R, a c * q c + w * ∑ c ∈ R, b c * q c := by
+  rw [Finset.mul_sum, ← Finset.sum_add_distrib]
+  refine Finset.sum_congr rfl fun c _ => ?_
+  rw [h0 c, h1 c]
+  ring
+
 theorem fftSum_succ (s n : ℕ) (u : ℕ → 𝔽) (x : 𝔽) :
     fftSum s (n + 1) u x =
       fftSum (s + 1) n (fun c => u (2 * c)) x + FlockLevel3.What s x * fftSum (s + 1) n (fun c => u (2 * c + 1)) x := by
@@ -107,7 +115,7 @@ theorem fftSum_succ (s n : ℕ) (u : ℕ → 𝔽) (x : 𝔽) :
     intro c
     rw [Fin.prod_univ_succ]
     first
-      | (rw [Fin.val_zero, testBit_two_mul_zero, if_neg Bool.false_ne_true, one_mul]
+      | (rw [Fin.val_zero, testBit_two_mul_zero, ite_eq_right Bool.false_ne_true, one_mul]
          exact Finset.prod_congr rfl fun i _ => by rw [Fin.val_succ, testBit_two_mul_succ, hi])
       | (simp only [Fin.val_zero, Fin.val_succ, testBit_two_mul_zero, testBit_two_mul_succ, hi, Bool.false_eq_true,
           ↓reduceIte, one_mul]; done)
@@ -116,16 +124,19 @@ theorem fftSum_succ (s n : ℕ) (u : ℕ → 𝔽) (x : 𝔽) :
     intro c
     rw [Fin.prod_univ_succ]
     first
-      | (rw [Fin.val_zero, testBit_two_mul_add_one_zero, if_pos rfl, Nat.add_zero]
+      | (rw [Fin.val_zero, testBit_two_mul_add_one_zero, ite_eq_left rfl, Nat.add_zero]
          congr 1
          exact Finset.prod_congr rfl fun i _ => by rw [Fin.val_succ, testBit_two_mul_add_one_succ, hi])
       | (simp only [Fin.val_zero, Fin.val_succ, testBit_two_mul_add_one_zero, testBit_two_mul_add_one_succ, hi,
           eq_self_iff_true, ↓reduceIte, Nat.add_zero]; done)
   simp only [fftSum]
-  rw [pow_succ, mul_comm (2 ^ n) 2, sum_range_two_mul, Finset.mul_sum, ← Finset.sum_add_distrib]
-  refine Finset.sum_congr rfl fun c _ => ?_
-  rw [hp0 c, hp1 c]
-  ring
+  rw [pow_succ, mul_comm (2 ^ n) 2, sum_range_two_mul]
+  first
+    | exact sum_split _ (fun c => u (2 * c)) (fun c => u (2 * c + 1)) _ _ _ _ hp0 hp1
+    | (rw [Finset.mul_sum, ← Finset.sum_add_distrib]
+       exact Finset.sum_congr rfl fun c _ => by rw [hp0 c, hp1 c]; ring)
+    | (simp only [Finset.mul_sum, ← Finset.sum_add_distrib]
+       exact Finset.sum_congr rfl fun c _ => by rw [hp0 c, hp1 c]; ring)
 
 theorem fftSum_congr (s n : ℕ) (u : ℕ → 𝔽) (x y : 𝔽) (h : ∀ i, FlockLevel3.What (s + i) x = FlockLevel3.What (s + i) y) :
     fftSum s n u x = fftSum s n u y := by
@@ -167,14 +178,18 @@ theorem twiddles_get (N d s r : ℕ) (hs : s < N) (hr : r < 2 ^ (d - s)) :
   exact whats_get N (r * 2 ^ s) (s + 1) s (by omega) (by omega)
 
 /-- **The FFT's entry `r`** at level `s` with `n` coefficient bits left is `T_s(n, u)` at `ω_{r·2^s}`. -/
-theorem fft_get (N d : ℕ) (hN : N ≤ d) (hd : d ≤ 64) : ∀ (n s : ℕ) (u : ℕ → F128), s + n ≤ N → ∀ r, r < 2 ^ (d - s) →
+theorem fft_get (N d : ℕ) (hN : N ≤ d) (hd : d ≤ 64) (n : ℕ) : ∀ (s : ℕ) (u : ℕ → F128), s + n ≤ N → ∀ r,
+    r < 2 ^ (d - s) →
     fOf (fft (twiddles (svTable N) d N) d s n u)[r]! =
-      fftSum s n (fun c => fOf (u c)) (FlockLevel3.omega (r * 2 ^ s))
-  | 0, s, u, _, r, hr => by
+      fftSum s n (fun c => fOf (u c)) (FlockLevel3.omega (r * 2 ^ s)) := by
+  induction n with
+  | zero =>
+    intro s u _ r hr
     simp only [fft]
     rw [getElem!_pos _ r (by simpa using hr), Array.getElem_replicate]
     simp [fftSum]
-  | n + 1, s, u, hsn, r, hr => by
+  | succ n ih =>
+    intro s u hsn r hr
     have hs : s < d := by omega
     have hr2 := half_lt r d s hs hr
     have hw := mul_two_pow_lt_word r d s hs.le hd hr
@@ -186,7 +201,7 @@ theorem fft_get (N d : ℕ) (hN : N ≤ d) (hd : d ≤ 64) : ∀ (n s : ℕ) (u 
         (by rw [← split_two r s]; exact hw)).symm
     simp only [fft]
     rw [FlockSoundness.Refine.getElem!_range_map _ hr, fOf_add, fOf_mul,
-      fft_get N d hN hd n (s + 1) _ (by omega) (r / 2) hr2, fft_get N d hN hd n (s + 1) _ (by omega) (r / 2) hr2,
+      ih (s + 1) _ (by omega) (r / 2) hr2, ih (s + 1) _ (by omega) (r / 2) hr2,
       twiddles_get N d s r (by omega) hr, fftSum_succ]
     congr 1
     · exact fftSum_congr _ _ _ _ _ hx
@@ -233,24 +248,13 @@ theorem fOf_muAt (tPad : ℕ) (lp : ℕ → F128) (i : ℕ) :
     fOf (muAt ((Array.range tPad).map lp) i) = if i < tPad then fOf (lp i) else 0 := by
   unfold muAt
   by_cases hi : i < tPad
-  · rw [if_pos (by simpa using hi), if_pos hi, FlockSoundness.Refine.getElem!_range_map _ hi]
-  · rw [if_neg (by simpa using hi), if_neg hi, fOf_zero]
+  · rw [ite_eq_left (by simpa using hi), ite_eq_left hi, FlockSoundness.Refine.getElem!_range_map _ hi]
+  · rw [ite_eq_right (by simpa using hi), ite_eq_right hi, fOf_zero]
 
 theorem prod_What (c L q : ℕ) :
     (∏ i : Fin L, if c.testBit i then FlockLevel3.What i (FlockLevel3.omega q) else 1) =
-      FlockSoundness.execArith.Xhat c L (FlockSoundness.execArith.omega q) := by
-  first
-    | rfl
-    | (unfold FlockSoundness.Model.Arith.Xhat; rfl)
-
-theorem Xhat_succ (c L : ℕ) (hc : c < 2 ^ L) (x : 𝔽) :
-    FlockSoundness.execArith.Xhat c (L + 1) x = FlockSoundness.execArith.Xhat c L x := by
-  unfold FlockSoundness.Model.Arith.Xhat
-  rw [Fin.prod_univ_castSucc]
-  first
-    | (simp only [Fin.val_castSucc, Fin.val_last, Nat.testBit_lt_two_pow hc, Bool.false_eq_true, ↓reduceIte, mul_one]
-       done)
-    | simp [Fin.val_last, Nat.testBit_lt_two_pow hc]
+      FlockSoundness.execArith.Xhat c L (FlockSoundness.execArith.omega q) :=
+  rfl
 
 theorem sum_range_of_zero {M : Type*} [AddCommMonoid M] (f : ℕ → M) (a b : ℕ) (hab : a ≤ b)
     (h : ∀ i, a ≤ i → i < b → f i = 0) : ∑ i ∈ Finset.range b, f i = ∑ i ∈ Finset.range a, f i := by
@@ -279,22 +283,22 @@ theorem fftSum_coeffs (cols q tPad : ℕ) (v lp : ℕ → F128) (ht : tPad ≤ 2
       fOf (muAt ((Array.range tPad).map lp) c) *
         (fOf Zk.PAD_C * FlockSoundness.execArith.Xhat c (cols + 1) (FlockSoundness.execArith.omega q)) := by
     intro c hc
-    rw [coeffs, if_pos (Finset.mem_range.1 hc), fOf_add, fOf_mul]
+    rw [coeffs, ite_eq_left (Finset.mem_range.1 hc), fOf_add, fOf_mul]
     ring
   have h2 : ∀ i ∈ Finset.range (2 ^ cols), fOf (coeffs cols v ((Array.range tPad).map lp) (2 ^ cols + i)) *
       FlockSoundness.execArith.Xhat (2 ^ cols + i) (cols + 1) (FlockSoundness.execArith.omega q) =
       fOf (muAt ((Array.range tPad).map lp) i) *
         FlockSoundness.execArith.Xhat (2 ^ cols + i) (cols + 1) (FlockSoundness.execArith.omega q) := by
     intro i _
-    rw [coeffs, if_neg (by omega), Nat.add_sub_cancel_left]
+    rw [coeffs, ite_eq_right (by omega), Nat.add_sub_cancel_left]
   rw [Finset.sum_congr rfl h1, Finset.sum_congr rfl h2, Finset.sum_add_distrib, add_assoc, ← Finset.sum_add_distrib]
   congr 1
   rw [sum_range_of_zero _ tPad (2 ^ cols) ht ?hz]
   · refine Finset.sum_congr rfl fun i hi => ?_
-    rw [fOf_muAt, if_pos (Finset.mem_range.1 hi)]
+    rw [fOf_muAt, ite_eq_left (Finset.mem_range.1 hi)]
     ring
   · intro i hi _
-    simp only [fOf_muAt, if_neg (show ¬ i < tPad by omega), zero_mul, add_zero]
+    simp only [fOf_muAt, ite_eq_right (show ¬ i < tPad by omega), zero_mul, add_zero]
 
 theorem arr2_ext {α : Type} [Inhabited α] {A B : Array (Array α)} (n m : ℕ) (hA : A.size = n) (hB : B.size = n)
     (hA' : ∀ q < n, (A[q]!).size = m) (hB' : ∀ q < n, (B[q]!).size = m)
@@ -321,20 +325,10 @@ theorem rowsFft_eq (lv : Level) (tPad : ℕ) (g : Array F128) (extra lanePad : �
   apply fOf_injective
   rw [rowsFft_get lv tPad g extra lanePad hc hd hq hl]
   refine Eq.trans hv ?_
-  first
-    | (rw [FlockComplete.encodeRowsZk_entry lv tPad g extra lanePad hq hl ht,
-         Fin.sum_univ_eq_sum_range (fun i => fOf (lanePad l i) * (fOf Zk.PAD_C *
-           FlockSoundness.execArith.Xhat i (lv.cols + 1) (FlockSoundness.execArith.omega q) +
-           FlockSoundness.execArith.Xhat (2 ^ lv.cols + i) (lv.cols + 1) (FlockSoundness.execArith.omega q))) tPad]
-       all_goals rfl)
-    | (apply RingHom.injective FlockLevel3.embed
-       rw [FlockComplete.L0.entry_eq lv tPad g extra lanePad hq hl ht, map_add, map_sum, map_sum]
-       unfold FlockComplete.L0.enc FlockComplete.L0.padv FlockComplete.L0.pe
-       congr 1
-       exact Finset.sum_congr rfl fun c hc => by
-         rw [map_mul, FlockComplete.Replay.Lg.fOf_xhats q lv.cols c (Finset.mem_range.1 hc),
-           Xhat_succ c lv.cols (Finset.mem_range.1 hc)]
-       exact Finset.sum_congr rfl fun i _ => map_mul FlockLevel3.embed _ _)
+  rw [FlockComplete.encodeRowsZk_entry lv tPad g extra lanePad hq hl ht,
+    Fin.sum_univ_eq_sum_range (fun i => fOf (lanePad l i) * (fOf Zk.PAD_C *
+      FlockSoundness.execArith.Xhat i (lv.cols + 1) (FlockSoundness.execArith.omega q) +
+      FlockSoundness.execArith.Xhat (2 ^ lv.cols + i) (lv.cols + 1) (FlockSoundness.execArith.omega q))) tPad]
 
 /-- **The recheck's rows are level 0's padded codeword**: by the FFT (`rowsFft_eq`) or row by row (`rowsDirect`, which
 is `encodeRowsZk` as written). -/
