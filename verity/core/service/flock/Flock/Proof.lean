@@ -78,10 +78,83 @@ structure Shape where
   /-- hidden unit circuits (`rec_algebra.Shape.holo`): the prover absorbs `h`, the hidden part's fold, in a round of its
   own after `z_partial`, and V*'s lincheck reads the comb's operand as `comb[l] + h[l]` -/
   holo : Bool := false
+  /-- the plain file ends with the zk patch's `zk_level0 = None` tag, as every deployed prover writes it (§8.1); false:
+  upstream's form, without it (`Tags.upstreamPlain`) -/
+  plainTag : Bool := true
   deriving Inhabited
 
+/-! ## A plain proof's one file (§8.1)
+
+`Wire.proofFile sh p` is the file a prover writes for `p` at `sh`: `bincode 1.3` of the pair, each `Vec` as its `u64`
+length then its elements, each `F128` as `le64(lo) ‖ le64(hi)`, the vectors the verifier requires empty empty, each ring
+switch's grinding nonce `0`, then `Wire.plainEnd sh`. `decodeProof` accepts a file only if it is this encoding of what it
+decodes to. -/
+
+namespace Wire
+
+/-- A length or a `u64` field, little-endian. -/
+def wLen (n : Nat) : ByteArray := le64 n.toUInt64
+
+/-- A `Vec<T>`: its length, then its elements. -/
+def wVec {α : Type} (f : α → ByteArray) (xs : Array α) : ByteArray := xs.foldl (fun b x => b ++ f x) (wLen xs.size)
+
+/-- A `Vec<u8>`. -/
+def wBytes (b : ByteArray) : ByteArray := wLen b.size ++ b
+
+/-- An `(F128, F128)`. -/
+def wPair (p : F128 × F128) : ByteArray := p.1.toBytes ++ p.2.toBytes
+
+/-- An `F256`: `c0`, then `c1`. -/
+def wF256 (x : F256) : ByteArray := x.c0.toBytes ++ x.c1.toBytes
+
+/-- Each level's `opened_salts`, present when the scheme salts its leaves. -/
+def wSalts (sh : Shape) (xs : Array ByteArray) : ByteArray :=
+  match sh.saltLen with
+  | none => ByteArray.empty
+  | some _ => wVec id xs
+
+/-- A level's openings: its rows, its Merkle siblings, its salts. -/
+def wLevel (sh : Shape) (p : LevelProof) : ByteArray :=
+  wVec (wVec F128.toBytes) p.rows ++ wVec id p.siblings ++ wSalts sh p.salts
+
+/-- The commitment's parameters. -/
+def wParams (p : PcsParams) : ByteArray :=
+  le64 p.m ++ le64 p.logInvRate ++ le64 p.logBatchSize ++ le32 p.profile ++
+    (match p.numLanes with
+     | none => ByteArray.mk #[0]
+     | some x => ByteArray.mk #[1] ++ le64 x) ++
+    le32 p.merkleHash
+
+/-- `R1csProofLigerito`'s Ligerito proof, level 0's hiding messages excluded. -/
+def wLigerito (sh : Shape) (l : LigeritoProof) : ByteArray :=
+  wVec id l.initialCap ++ wLevel sh l.initialProof ++ wVec (wVec id) l.recursiveCaps ++
+    wVec (wLevel sh) l.recursiveProofs ++
+    (wVec F128.toBytes l.finalProof.yr ++ wVec (wVec F128.toBytes) l.finalProof.rows ++ wVec id l.finalProof.siblings ++
+      wSalts sh l.finalProof.salts) ++
+    wLen 0 ++ wVec (fun m : F256 × F256 => wF256 m.1 ++ wF256 m.2) l.messages ++ wVec le64 l.queryNonces ++
+    wVec F128.toBytes l.oodValues ++ wLen 0 ++ wVec le64 l.claimNonces ++ wVec le64 l.consistencyNonces
+
+/-- The commitment and `R1csProofLigerito` (§8's pair, which a `--zk` file's proof also starts with). -/
+def wProof (sh : Shape) (p : Proof) : ByteArray :=
+  wVec id p.cap ++ wParams p.params ++
+    (wVec F128.toBytes p.zerocheck.round1ab ++ wVec F128.toBytes p.zerocheck.round1c ++ wVec wPair p.zerocheck.rounds ++
+      p.zerocheck.finalA.toBytes ++ p.zerocheck.finalB.toBytes ++ p.zerocheck.finalC.toBytes ++ wLen 0) ++
+    (wVec wPair p.lincheck.rounds ++ wVec F128.toBytes p.lincheck.zPartial ++ wLen 0 ++ wLen 0) ++
+    wVec (fun v => wVec F128.toBytes v ++ wLen 0) p.ringSwitches ++ wLen 0 ++
+    wLigerito sh p.ligerito
+
+/-- What follows the pair: the zk patch's `zk_level0 = None` tag, one byte `0`, or nothing (`Shape.plainTag` false). -/
+def plainEnd (sh : Shape) : ByteArray := if sh.plainTag then ByteArray.mk #[0] else ByteArray.empty
+
+/-- **A plain proof's file**: the pair, then `plainEnd`. -/
+def proofFile (sh : Shape) (p : Proof) : ByteArray := wProof sh p ++ plainEnd sh
+
+end Wire
+
 open Reader in
-def decodeProof (sh : Shape) (bytes : ByteArray) : V Proof := do
+/-- The pair's reader (§8.1): every length at its value for the shape, then nothing or the zk patch's `None` tag
+(`Reader.runPlain`). `decodeProof` pins which of the two. -/
+def decodeRead (sh : Shape) (bytes : ByteArray) : V Proof := do
   let s := sh.sched
   let R := s.levels.size - 1
   let lvl := fun (i : Nat) => s.levels.getD i default
@@ -154,5 +227,42 @@ def decodeProof (sh : Shape) (bytes : ByteArray) : V Proof := do
     return { cap, params, zerocheck := ⟨r1ab, r1c, rounds, fa, fb, fc⟩, lincheck := ⟨lr, zp⟩, ringSwitches := rs,
              ligerito := ⟨icap, iproof, rcaps, rproofs, fproof, msgs, qn, ood, cbn, con⟩ }
   runPlain prog bytes "proof"
+
+/-- Why a file that reads as `p` is not `p`'s one file `file`. -/
+def fileMismatch (sh : Shape) (file bytes : ByteArray) : String :=
+  if sh.plainTag && bytes.size + 1 == file.size then
+    "zk_level0: the file ends without the `None` tag every deployed prover writes after a plain proof (upstream's form: --upstream-plain)"
+  else if !sh.plainTag && bytes.size == file.size + 1 then
+    "zk_level0: the file ends with the zk patch's `None` tag, and under --upstream-plain a plain proof is upstream's form, without it"
+  else "proof: the file is not the one encoding of the proof it decodes to"
+
+/-- **The plain proof file** (§8.1): what `decodeRead` reads, if the file is its one encoding at the shape
+(`Wire.proofFile`), so a file's digest is a function of what it decodes to (`decodeProof_canonical`). -/
+def decodeProof (sh : Shape) (bytes : ByteArray) : V Proof :=
+  match decodeRead sh bytes with
+  | .error e => .error e
+  | .ok p => if Wire.proofFile sh p = bytes then .ok p else .error (fileMismatch sh (Wire.proofFile sh p) bytes)
+
+theorem decodeProof_read {sh : Shape} {bytes : ByteArray} {p : Proof} (h : decodeProof sh bytes = .ok p) :
+    decodeRead sh bytes = .ok p ∧ Wire.proofFile sh p = bytes := by
+  unfold decodeProof at h
+  split at h
+  · cases h
+  · rename_i q hq
+    split at h
+    · cases h
+      exact ⟨hq, by assumption⟩
+    · cases h
+
+theorem decodeProof_of_read {sh : Shape} {p : Proof} (h : decodeRead sh (Wire.proofFile sh p) = .ok p) :
+    decodeProof sh (Wire.proofFile sh p) = .ok p := by
+  unfold decodeProof
+  rw [h]
+  simp
+
+/-- **Canonical proof files**: two files `decodeProof` accepts at one shape that decode alike are one file. -/
+theorem decodeProof_canonical {sh : Shape} {b b' : ByteArray} {p : Proof} (h : decodeProof sh b = .ok p)
+    (h' : decodeProof sh b' = .ok p) : b = b' :=
+  (decodeProof_read h).2.symm.trans (decodeProof_read h').2
 
 end Flock

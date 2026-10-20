@@ -27,7 +27,8 @@ local notation "𝔽" => FlockLevel3.GF128
 /-- **A decoded plain proof's level-0 rows have `2^lanes` symbols** (`opened_rows`' `vecExact`). -/
 theorem decodeProof_rows {sh : Shape} {bytes : ByteArray} {p : Proof} (h : decodeProof sh bytes = .ok p) :
     ∀ row ∈ p.ligerito.initialProof.rows, row.size = 2 ^ (sh.sched.levels.getD 0 default).lanes := by
-  unfold decodeProof at h
+  replace h := (Flock.decodeProof_read h).1
+  unfold decodeRead at h
   obtain ⟨r', hrun, -⟩ := Flock.Reader.runPlain_ok h
   refine (?_ : Post _ fun p : Proof => ∀ row ∈ p.ligerito.initialProof.rows,
     row.size = 2 ^ (sh.sched.levels.getD 0 default).lanes) p ⟨_, _, hrun⟩

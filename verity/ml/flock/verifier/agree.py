@@ -86,7 +86,8 @@ def chunks(xs, k):
 
 def lean_cmd(a, public, registered=None):
     """The Lean verifier's command for a public file and the verifier's registered reads: every statement object from the
-    run's archive, by SHA-512."""
+    run's archive, by SHA-512. An upstream binary's sessions are upstream's plain form (`--upstream-plain`: no zk patch,
+    so no `zk_level0` tag after the pair, PROTOCOL.md §8.1)."""
     if a.tables:
         for t in sorted(Path(a.tables).glob("*.u32")):
             archived(a, t)
@@ -102,6 +103,8 @@ def lean_cmd(a, public, registered=None):
         cmd += ["--registered", archived(a, registered)]
     if a.coins:
         cmd += ["--coins", a.coins]
+    if a.upstream != LIVE:
+        cmd += ["--upstream-plain"]
     return cmd + modes(a) + ["--session"]
 
 

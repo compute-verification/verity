@@ -273,7 +273,8 @@ def verifyRepWith (hs : Hashes M) (spec : SessionSpec) (st : Setup) (sch : Sched
   let some stream := sess.streams.find? (·.name == name) | throw s!"S11: no stream {name}"
   let extras ← st.extra sess.points
   let saltLen : Option Nat := if st.merkle.saltBytes = 0 && !st.openedSalts then none else some st.merkle.saltBytes
-  let shape : Shape := { m := st.m, kLog := st.kLog, claims := 2 + extras.size, sched := sch, hashLen := st.merkle.digestLen, saltLen }
+  let shape : Shape := { m := st.m, kLog := st.kLog, claims := 2 + extras.size, sched := sch, hashLen := st.merkle.digestLen, saltLen,
+    plainTag := st.plainTag }
   let p ← decodeProof shape bytes
   if p.params != pcsParams st.merkle sch then throw "R7/F2: the proof's PCS parameters are not the pinned fast100 parameters"
   let prog : TMW M Unit := do

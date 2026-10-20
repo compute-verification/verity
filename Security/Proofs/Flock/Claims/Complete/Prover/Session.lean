@@ -33,7 +33,8 @@ open Lean (Json)
 /-- The shape `verifyRepWith` decodes a rep's proof file at, with `extras` extra claims. -/
 def shapeOf (st : Setup) (sch : Schedule) (extras : Nat) : Shape :=
   let saltLen : Option Nat := if st.merkle.saltBytes = 0 && !st.openedSalts then none else some st.merkle.saltBytes
-  { m := st.m, kLog := st.kLog, claims := 2 + extras, sched := sch, hashLen := st.merkle.digestLen, saltLen }
+  { m := st.m, kLog := st.kLog, claims := 2 + extras, sched := sch, hashLen := st.merkle.digestLen, saltLen,
+    plainTag := st.plainTag }
 
 variable {M : Type → Type} [Monad M] [MonadExceptOf String M] [MonadLiftT V M]
 
