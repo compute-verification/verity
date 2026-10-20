@@ -168,12 +168,12 @@ RUNNER_PREFIX, RUNNER_ENV = "RESEARCH_", ("PYTHONPYCACHEPREFIX",)
 #: step (its `lean-suites`), and on its own this runs that build before them, so they run or skip alike in both
 AFTER_LEAN = ("verity-flock", "verity-lean-audit", "verity-difftest", "pous-check", "core-identity", "verity-core-composition",
               "verity-core-evaluate", "verity-core-firewall",
-              "verity/core/service/vstar", "verity-core-sampled-proofs",
+              "verity/core/service/vstar", "verity/core/service/sigma", "verity-core-sampled-proofs",
               "verity/core/protocols/remote_bandwidth/lean",
               "verity/core/protocols/network", "verity-pouw-window-difftest",
               "verity-pouw-check-difftest", "verity/core/protocols/pouw/lean/commit", "memory-challenger-lean", "benchmarks/pous",
               "verity/core/protocols/sampled_proofs", "verity/core/protocols/certifier", "verity-pouw-benchmarks",
-              "verity/core/primitives/requirement")
+              "verity/core/primitives/requirement", "benchmarks/remote_session")
 #: the toolchain `lean-toolchain` pins, through elan when `lake` is missing (as `ci-pod.sh` does)
 ELAN = ('command -v lake >/dev/null || command -v "$HOME/.elan/bin/lake" >/dev/null || { curl -sSf '
         'https://raw.githubusercontent.com/leanprover/elan/master/elan-init.sh | sh -s -- -y --default-toolchain none >/dev/null; }; '
@@ -212,15 +212,18 @@ def cpus() -> int:
 TEST_PROCESS_GB = 9
 
 
-def default_jobs(meminfo: Path = Path("/proc/meminfo")) -> int:
+def default_jobs(meminfo: Path = Path("/proc/meminfo"), limit_gb: float | None = None) -> int:
     """The default `--jobs`: the CPUs this process may use (`cpus`), or fewer where the memory available holds fewer test
-    processes at `TEST_PROCESS_GB` each."""
+    processes at `TEST_PROCESS_GB` each. The memory is the machine's MemAvailable or this run's own limit (``limit_gb``, by
+    default `slot_mem_gb`: the check slot's, else the cgroup's `memory.max`), whichever is less (19 Oct, r20261019-045749-398f:
+    an `--on auto` agent-test's 16 GiB scope on a node with 1.5 TB free started 32 test processes and was OOM-killed)."""
     n = cpus()
-    try:
+    limit_gb = slot_mem_gb() if limit_gb is None else limit_gb
+    limits = [] if limit_gb is None else [limit_gb]
+    with contextlib.suppress(OSError, StopIteration, ValueError, IndexError):
         kb = next(int(ln.split()[1]) for ln in meminfo.read_text().splitlines() if ln.startswith("MemAvailable:"))
-    except (OSError, StopIteration, ValueError, IndexError):
-        return n
-    return min(n, max(1, kb // (TEST_PROCESS_GB << 20)))
+        limits.append(kb / 2**20)
+    return min(n, max(1, int(min(limits) // TEST_PROCESS_GB))) if limits else n
 
 
 def _git(*args: str, env: dict | None = None, stdin: str | None = None) -> str:

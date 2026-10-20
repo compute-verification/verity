@@ -1,0 +1,4 @@
+order = 45
+path = "`sass_census/`"
+runs_on = "CPU (the toolkit's `cuobjdump`)"
+what = "The full SASS opcode list a device family: every binary with device code under a node's CUDA libraries, NCCL, wheel caches and the repo's kernels, disassembled and counted (`dump.sh`, `sass_count.py`), the census RT-ISA diffs against A7's menu (`diff_menu.py`)"
