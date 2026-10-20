@@ -630,10 +630,10 @@ def after_commit(out_dir: str, *, partition_file: str, programs: dict[str, dict[
     t_read = time.perf_counter()
     c = CS.commit(window, [g[0] for g in got], row_salt_key=rt.get("key"), step_roots=rt.get("step_roots"),
                   workers=workers or min(16, os.cpu_count() or 1))
-    prov = {"commitment": getattr(getattr(committed, "com", None), "commit_scheme", "vllm-v1"), "row": row, "research_run": run,
-            "committer": dict(committer or {}, module=CS.__name__),
+    prov = {"commitment": "vllm-v1", "row": row, "research_run": run, "committer": dict(committer or {}, module=CS.__name__),
             "served_programs": {str(k): str(v) for k, v in sorted((digests or {}).items())}, "scope": pf.get("scope"),
             **({"tp": dict(tp)} if tp else {}), **(stand_in or {})}
+    prov["commitment"] = getattr(getattr(committed, "com", None), "commit_scheme", prov["commitment"])
     c.seconds["read_s"] = round(t_read - t0, 3)
     Path(out_dir).mkdir(parents=True, exist_ok=True)
     (Path(out_dir) / "partition.json").write_text(json.dumps(partition_doc(window, pf), indent=1) + "\n")
