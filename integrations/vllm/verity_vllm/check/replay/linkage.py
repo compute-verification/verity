@@ -22,7 +22,8 @@ def boundary_linkage(bmap: dict[str, Any], committed: Callable[[int, str, int, i
                      eos_of_record: set[int] | list[int] | None = None, eos_lag_rows: int | None = None) -> dict[str, Any]:
     """Exhaustive ordered boundary linkage: for every declared request, committed `input_token_ids` at the arrival step == the declared
     prompt ids; at each later step == the request's committed `sampled_token_ids` of the previous step (i64 slot 0 of its block).
-    `workload_requests`: [{"request_id": r<k>, "arrive_step", "prompt_token_ids", "steps": [engine steps], "seed": declared or None}].
+    `workload_requests`: [{"request_id": r<k>, "arrive_step", "prompt_token_ids", "steps": [engine steps], "seed": declared or None,
+    "cached": C}]: a warm request's arrival step embeds prompt[C:] (its rows 0..C-1 are the producers', which the replay reads).
     [R16 pin, ruling 36] + `prescribed_input_linkage` (seed / splits); `splits_of_record` = {request_id: {"derived": num_SMs} | other}.
     `store`: a CommittedStore-like reader (has/words) in place of (bmap, committed) -- tests.
     [rev M-0485] `eos_of_record`: the Program's declared stop rule (global_program.stop_rule eos_token_ids; None = undeclared): a request
@@ -42,7 +43,7 @@ def boundary_linkage(bmap: dict[str, Any], committed: Callable[[int, str, int, i
     for r in workload_requests:
         rid = str(r["request_id"])
         arrive = int(r.get("arrive_step") or 0)
-        prompt = [int(t) for t in (r.get("prompt_token_ids") or [])]
+        prompt = [int(t) for t in (r.get("prompt_token_ids") or [])][int(r.get("cached") or 0):]
         steps = [int(s) for s in (r.get("steps") or [])]
         if not steps:
             continue
@@ -143,6 +144,7 @@ def boundary_linkage(bmap: dict[str, Any], committed: Callable[[int, str, int, i
     return {"schema": LINKAGE_SCHEMA, "method": method,
             "result": result if pairs > 0 else None, "pairs": pairs, "linked": linked, "unlinked_n": len(unlinked), "unlinked": unlinked[:12],
             "prompt_linked": prompt_ok, "embed_op_path": embed_op_path, "prescribed": presc, **({"horizon": horizon} if horizon else {}),
+            **({"prompt_cached": warm} if (warm := {str(r["request_id"]): int(r["cached"]) for r in workload_requests if r.get("cached")}) else {}),
             "why": None if result else (unlinked[0]["why"] if unlinked else "no (step, request) pairs to link")}
 
 

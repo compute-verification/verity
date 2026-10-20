@@ -68,6 +68,7 @@ def _rows(rng, n, k, lo, hi):
 def test_registered_at_a_warp():
     s = C._scheme(H.SCHEME)
     assert s is C.SCHEMES[H.SCHEME] and s.tile == (32, 32) and set(s.units) == set(H.KINDS)
+    assert s.noise == {k: H.H1_ROWS for k in H.KINDS} and all(s.form(k) == H.H1_ROWS for k in H.KINDS)
     assert "h1tile" in C.BUILTIN
 
 
@@ -104,6 +105,7 @@ def test_noise_is_counter_mode():
     col = SD.noise_block(seed_j, small.col(5))
     assert cols[5][0] == SD.leaves(col, True)[:64]
     assert cols[5][1] == [H.u129(x) for h in SD.halves(col)[2:10] for x in (h & 0xFF, h >> 8 & 0xFF, h >> 16 & 0xFF, h >> 24)]
+    assert H.H1_ROWS.bits(64) == (len(rows[2][0]), len(cols[5][0]) + 8 * len(cols[5][1]))
     assert H.fold_keys(sigma_r, small)[0] == SD.halves(SD.noise_block(sigma_r, small.lane(0)))
 
 
@@ -173,7 +175,8 @@ def test_reference_follows_the_seed():
 @compiles
 @pytest.mark.slow
 def test_h1_tile_is_its_reference():
-    """A 4 × 16 grid at K = 64 compiles to one H1 tile unit of two lanes; on random rows its served outputs are the served
+    """A 4 × 16 grid at K = 64 compiles to one H1 tile unit of two lanes, whose floor is its 64 dots' 4,096 multiply-adds
+    (H1 noises both rows); on random rows its served outputs are the served
     Program's, and its receipt is `reference`'s (E2E-120's `call_words` and fx1 fold from σ_R's keys, then the lanes' XOR a
     set). Slow: the two seeds' and 22 noise blocks' SHA-512 in gates and 64 exact s8 dots on bits; it is the only test of
     the unit's gates."""
@@ -181,6 +184,9 @@ def test_h1_tile_is_its_reference():
     c = C.compile(served, H.SCHEME)
     (u,) = c.units
     assert u.tile.grid and (u.tile.r, u.tile.c) == (4, 16) and u.defn.base_id == "PouwH1Tile_v1"
+    (f,) = c.floor
+    assert (f.kind, f.dots, f.macs) == ("GemmAccumulatorS8_v2", 4 * 16, 4 * 16 * 64)
+    assert c.program.root.body.nodes[f.node].fn is u.defn
     rng = random.Random(9)
     a, b = _rows(rng, 4, 64, -127, 127), _rows(rng, 16, 64, -60, 60)
     args = [[v for row in a for v in _bits(row)], [v for row in b for v in _bits(row)]]

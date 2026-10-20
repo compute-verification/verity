@@ -46,7 +46,8 @@ and strings of a fixed vocabulary, which the decoder checks (§4.6).
 
 A stored descriptor file need not be canonical (builds write it with spaces). The program digest, `program_digest`, is the hex
 SHA-512 of the canonical bytes of the descriptor without `annotations`: the Build's program digest and the `program` field of
-`verity/partition/v1`. `annotations` never enter it and carry no meaning in this format. It carries no domain prefix (the
+`verity/partition/v1`. `annotations` never enter it, and no verdict of this format reads them; one, `theta`, means something
+to the port facts (§12). It carries no domain prefix (the
 partition object's digests do).
 
 Vectors: `canonical_json.in_domain` (value, bytes), `canonical_json.outside` (value, Python's bytes, the JCS bytes, the
@@ -169,6 +170,13 @@ every partition query refuses it (`partition_object.order_violation`, §8). The 
   `(init, xs1..xsk, shared1..sharedm)`: `init` has the carry type, `xsj` is `Array<n, type(xj)>` and `sharedj` has the type of
   `sj`. `n` is the common length of the xs, or any n ≥ 0 when k = 0. `out` = `Tuple(carry, Array<n, Y>)`.
 
+Every leaf a node's argument or the body's `ret` names has the width its type gives that position: a word is read only at the
+width it was committed with. A sequence typed `Array<32, Value<8>>` whose references name an s32 word (a `Value<32>`) is a
+silent reinterpretation, a limb split no gate computes, and is refused (`E_REINTERPRET`, `defs.Builder.finish`). A runtime
+word becomes limbs only through a registered `LimbSplit` Definition that computes them and their carries (§12). The check
+reads the leaves of the parameters and of the nodes before the reading node (for `ret`, every node): a node that names itself
+or a later node is the order violation above, which decodes whatever the widths, so that its checkers name it.
+
 ### 4.5 Flat concatenation and the alias
 
 Readers: a concat part that is itself a concat is spliced in, so a decoded sequence is flat. `{"alias": [k, a]}`, alone or as
@@ -221,6 +229,7 @@ have):
   computes (the decoder rebuilds every node through `defs.Builder`, with the checks a program is built with);
 - a type that is malformed, or whose width or length is a boolean;
 - a body whose `ret` does not have its `ret_type`;
+- a node argument or a `ret` that names a leaf of another width than its type gives that position (`E_REINTERPRET`, §4.4);
 - `ports` that are malformed or not canonical, a primitive's that differ from the registry's, or a Program the port rules
   refuse (§12, `ports.PortError`, a `ValueError`).
 
@@ -556,9 +565,15 @@ a word type (or none). The origins are:
 - `gate`, for a computed value;
 - `static`, for the output of a primitive without parameters (a constant);
 - `input` and `registered`, for an input node's leaf by its binding time;
-- `coin`, for an input leaf whose port is `"kind": "coin"`.
+- `coin`, for an input leaf whose port is `"kind": "coin"`;
+- `theta`, in place of `input` or `registered`, for a leaf of an input node the Program marks as the model's weights.
 
-An input leaf's interval and word are its port's `bound` and `word`. A constant's interval is its value: its encoding, read as
+`Program(fn, theta=names)` names the parameters that are the model's weights, and the annotation `theta` lists the root's
+input nodes they lower to, ascending. It is outside both digests, so it binds nothing: a consumer that treats a leaf
+differently for being a weight checks it against the weights' commitment. The decoder doesn't read it. `ports.facts` does, on
+a built or a decoded Program, and refuses (`E_PORT_DECL`) a list that names anything but the root's input nodes.
+
+An input leaf's interval and word are its port's `bound` (a full one: `E_PORT_BOUND`) and `word`. A constant's interval is its value: its encoding, read as
 signed when its top bit is set and `w > 1` (none for a constant that reads a table). A node's output leaves carry what its
 callee's `ret` ports declare, nothing else, whether the callee is a primitive or a composite; a primitive with a transfer
 gives them the interval its transfer gives from that node's operands (each operand's interval the hull of its leaves', none
@@ -577,26 +592,36 @@ as declared, so a composite over exact steps declares the intervals its operands
 **The rules.** `program.Program` and `decode_program` refuse a Program, with `ports.PortError` and its code, when:
 
 - **`E_PORT_BOUND`**: a node's operand leaf at a port with `bound` `[a, b]` has an interval not within `[a, b]`, or none,
-  unless `[a, b]` is full.
+  unless `[a, b]` is full; or an input node's port has a `bound` that is not full. A bound is never taken on trust: it holds
+  by its operand's width, its producer's interval, or the declared interval of a range-check Definition the input is read
+  through (a primitive whose `interval` circuit-check tests). So an input narrower than its type, whatever its binding time
+  or kind, gets its bound only through such a range check. (A harness, `ports.harness`, gives its inputs the bounds of the
+  Definition it evaluates, as preconditions of the run, and is never decoded.)
 - **`E_PORT_INTERVAL`**: a composite's declared `interval` does not contain the interval of what its body returns there. A
   primitive's is a fact about its evaluator, which circuit-check tests (its `ports` check).
 - **`E_PORT_SINK`**: a primitive node reads a sink at a port without `receipt`, or a composite other than the root returns a
   sink at a leaf it does not declare `"sink": true`. A sink reaches only receipt ports and the Program's outputs.
 - **`E_PORT_KIND`**: a `"kind": "coin"` port reads a leaf whose origin is not exactly `coin`; a `"kind": "static"` port reads
-  one whose origin is not exactly `static`; an input node's port is `"kind": "static"`; or a registered input node's is
-  `"kind": "coin"`. So a noise derivation whose ports are coins and statics reads live verifier coins, passed through
+  one whose origin is not exactly `static`; an input node's port is `"kind": "static"`; a registered input node's is
+  `"kind": "coin"`; or a theta input node's is `"kind": "coin"` (where the marking is read: `Program` and `ports.facts`). So a
+  noise derivation whose ports are coins and statics reads live verifier coins, passed through
   untouched, and constants only. (A one-Call harness that evaluates a Definition on arbitrary operands, `ports.harness`,
   builds a static port's operand from an input, and is never decoded.)
-- **`E_PORT_WORD`**: a port with `word` `t` reads a leaf of origin `gate` whose word type is not `t`; a composite's declared
-  `word` is not the word type its body returns there; or a composite other than the root returns a leaf with a word type it
-  does not declare, or a mixed one. So a runtime word is read only as the type its producer fixed. Only inputs, constants and
-  registered (pre-seed) words are reinterpreted, and a limb split of a runtime word is a Definition of its own that reads the
-  word as its producer's type.
+- **`E_PORT_WORD`**: a port with `word` `t` reads a leaf whose word type is not `t` when that leaf has one or its origin
+  includes `gate`; a composite's declared `word` is not the word type its body returns there; or a composite other than the
+  root returns a leaf with a word type it does not declare, or a mixed one. So every committed word has one type and none is
+  reinterpreted implicitly: a runtime word is read only as the type its producer fixed, a typed input only as its port's, and
+  only an untyped input or constant takes the type its reader's port declares. A limb split of a runtime word is a
+  registered `LimbSplit` Definition of its own, which reads the word as its producer's type and computes the limbs and the
+  carry into each limb past the first (the stacking property budgets those carries at its nodes). Below word types, a leaf
+  read at another width is the Builder's refusal (`E_REINTERPRET`, §4.4).
 - **`E_PORT_DECL`**: the `ports` are malformed or not canonical, or a transfer gives no interval of its return's width.
 
 `ports.facts(root)` gives every leaf's fact to the census and the stacking property. A Program in which no Definition declares
 ports is refused by none of the rules, and nothing is computed for it (`ports.check` returns None).
 
-Vectors: `verity/ml/circuits/tests/test_ports.py`: each rule's acceptance and refusals, built and decoded; a chain of exact
-steps declaring its words' intervals and a limb split's bound on them; tampered descriptors; the canonical form; and a pinned
+Vectors: `verity/ml/circuits/tests/test_ports.py`: each rule's acceptance and refusals, built and decoded; an input's bound
+narrower than its type refused, and narrowed by a range check instead; a chain of exact steps declaring its words' intervals
+and a limb split's bound on them; an explicit limb split with its carries; a word read at
+another width (`E_REINTERPRET`), built and in a tampered descriptor; tampered descriptors; the canonical form; and a pinned
 digest of one typed descriptor.

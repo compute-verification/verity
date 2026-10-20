@@ -2,12 +2,14 @@
   "schema": "verity/slack-registry/v1",
   "workspace": "computeverification.slack.com",
   "bot_id": "B0C5VQ1KKFW",
+  "slack_app_id": "A0C5KPM2LN7",
   "humans": [
     {
       "name": "Daniel Reuter",
       "slack_user": "U0BEN96ES8Y"
     }
   ],
+  "collaborators": [],
   "channels": {
     "agent-coordination": {
       "id": "C0C5RCXL66N",
@@ -41,6 +43,24 @@
         "database": "https://app.notion.com/p/914ab9399fe44f79ae19ff05db87e1fa",
         "data_source": "9c204dab-e175-407f-b18d-bc3b3bddec61"
       }
+    },
+    "ask-the-team": {
+      "id": "C0CA1JZSYNR",
+      "purpose": "Daniel's questions to the team, typed by him or posted by his Claude app through Slack's connector; top routes each one and answers in its thread, and lanes top asks may reply there with --channel-id.",
+      "subscribers": [
+        "top"
+      ]
+    },
+    "resource-accounting": {
+      "id": "C0CABUKBT2S",
+      "purpose": "Collaborators' questions on compute, memory and network accounting and the GPU model they rest on.",
+      "subscribers": [
+        "compute-accounting",
+        "memory-accounting",
+        "network-accounting",
+        "proofs",
+        "kernels"
+      ]
     }
   },
   "handles": [
@@ -87,6 +107,7 @@
         "archive/sp1/benchmarks/ir_call/",
         "benchmarks/latency_compare.py",
         "benchmarks/private_circuit/",
+        "benchmarks/verifier_cost/",
         "benchmarks/proof_throughput/",
         "benchmarks/sampling_plan/",
         "integrations/vllm/verity_vllm/protocol_options/sampled_proofs.py",
@@ -110,6 +131,7 @@
       "owns": [
         "integrations/",
         "benchmarks/served_units/",
+        "benchmarks/served_commit/",
         "tools/verity/circuit_check/",
         "benchmarks/native_peak/",
         "benchmarks/tc_probe/",
@@ -231,16 +253,9 @@
         "Security/Models/Pous/",
         "Security/Proofs/Pous/",
         "benchmarks/bandwidth/",
-        "benchmarks/codec_mix/",
         "benchmarks/codec_tensor/",
-        "benchmarks/ephemeral/",
-        "benchmarks/fill_compute/",
-        "benchmarks/host_tier/",
-        "benchmarks/host_tiles/",
         "benchmarks/kv_filler/",
         "benchmarks/kv_lifetime/",
-        "benchmarks/link_pricing/",
-        "benchmarks/overhead_frontier/",
         "benchmarks/pous/",
         "benchmarks/property_redteam/",
         "benchmarks/rate_redteam/",
@@ -248,9 +263,7 @@
         "benchmarks/remote_session/",
         "benchmarks/resource_accounting/",
         "benchmarks/serve_bandwidth/",
-        "benchmarks/sketch_tag/",
         "benchmarks/stacked_share/",
-        "benchmarks/tag_fast/",
         "benchmarks/vllm_encoded/",
         "benchmarks/word_codec/",
         "integrations/vllm/verity_vllm/protocol_options/pous.py",
@@ -415,7 +428,8 @@
         "tools/research/tests/test_slack.py",
         "tools/research/tests/slack_routing_vectors.json",
         "tools/research/src/research/linear.py",
-        "tools/research/tests/test_linear.py"
+        "tools/research/tests/test_linear.py",
+        "integrations/slack-events/"
       ],
       "branch_suffixes": [
         "b252",

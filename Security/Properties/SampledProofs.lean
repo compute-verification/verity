@@ -28,7 +28,8 @@ evidence is completeness, `Properties.SampledProofs.acceptMeans_complete`.
 
 The digest the receipt is held to is the commitment's own (`Commitment.digest`), which `OneStage.commitmentOf` computes
 as `Registration.digest` of the record it decodes (`DigestIsRecord's`). A Bernoulli law is accepted as the code accepts
-it: its draw is checked as any other, its profile's draw is `bernoulli p`, and it publishes no bound (`BernoulliBoundsNothing`).
+it: its draw is checked as any other, its profile's draw is `bernoulli p`, and it publishes the largest `M` of the
+profile's units with `(1 − p)^M ≥ δ` (`BernoulliBounds`, `Bound.bernoulliBound`).
 -/
 
 open Lean (Json)
@@ -258,12 +259,12 @@ def drawnNats (draw : Json) : Array Nat :=
   | _ => #[]
 
 /-- The public outputs at δ, for the law `law` with its profile's draw `d` over `n` units: the drawn units, the proved
-ones, the exact bound on wrong units (`Bound.countBound` over the draw's strata; none for a Bernoulli draw), and for a
-stratified or work law each template's own (`Bound.stratumBound`). -/
+ones, the exact bound on wrong units (`Bound.boundOf`: `Bound.countBound` over the draw's strata, `Bound.bernoulliBound`
+for a Bernoulli draw), and for a stratified or work law each template's own (`Bound.stratumBound`). -/
 def publicOf (p : Params) (e : Evidence) (law : Json) (d : Core.Draw) (n : Nat) : Public :=
   { drawn := drawnNats e.draw,
     proved := (Draw.proved e.draw).filterMap fun (i : Int) => if 0 ≤ i then some i.toNat else none,
-    bound := (Bound.strataOf n d).map (Bound.countBound · p.delta),
+    bound := Bound.boundOf n d p.delta,
     perTemplate := if jeq (getD law "law") "stratified" || jeq (getD law "law") "work" then
       (Bound.strataOf n d).map (·.map fun s => (s.name, Bound.stratumBound s p.delta)) else none }
 
@@ -293,10 +294,12 @@ def AcceptMeans : Prop :=
 def DigestIsRecord's : Prop :=
   ∀ (b : ByteArray) (c : Commitment), OneStage.commitmentOf b = .ok c → Registration.digest c.record = .ok c.digest
 
-/-- An acceptance whose profile draws by a Bernoulli law publishes no bound on wrong units. -/
-def BernoulliBoundsNothing : Prop :=
+/-- An acceptance whose profile draws a level by a Bernoulli law at `r` bounds wrong units by `Bound.bernoulliBound` over
+the level's units at δ: the largest `M` of them with `(1 − r)^M ≥ δ`. -/
+def BernoulliBounds : Prop :=
   ∀ (p : Params) (c : Commitment) (e : Evidence) (pub : Public) (prof : Core.Integrity),
     OneStage.check p c e = .accept pub prof →
-      ∀ r : Core.Ratio, (∃ l ∈ prof.levels, l.draw = some (.bernoulli r)) → pub.bound = none
+      ∀ (r : Core.Ratio) (l : Core.Level), l ∈ prof.levels → l.draw = some (.bernoulli r) →
+        pub.bound = Bound.bernoulliBound l.size r p.delta
 
 end Properties.SampledProofs
