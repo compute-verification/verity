@@ -42,6 +42,12 @@
   salts). R7 recomputes its root and refuses a record that names another (`R7-supplied`); it is the record's own, so no
   earlier record holds it. The window is otherwise provenance: R6 takes one record a window, so a salt bound to it is
   one salt a window.
+* **Output values**: a registered value that is an output of an earlier run (`outputs`: `{value: {"record": D, "port":
+  P}}`, the NCI baseline's `output` provenance) reuses that output's commitment instead of committing it afresh: its entry
+  takes port P's domain and root from the `roots` of the log's record with digest D, and P's leaf count must be the value's
+  rows (`R7-output` when the log holds no such record or port, or the counts differ). Its rows stay under the earlier
+  run's hiding leaves, so nothing about the value is opened, and the reads open against that root under that domain
+  (`registered.reads_file`'s `domains`).
 """
 from __future__ import annotations
 
@@ -126,12 +132,14 @@ def check(rec: Mapping[str, Any], program: Program, query: Mapping[str, Any], la
           ports: Mapping[str, Mapping[str, Any]], leaf_layer: str | None = None, anchors: Sequence[Any] = (),
           log: Iterable[Mapping[str, Any]] = (), partition: Mapping[str, Any] | None = None,
           work_table: Mapping[str, Any] | None = None, registered: Mapping[str, int] | None = None,
-          supplied: Mapping[str, Any] | None = None, pinned: Mapping[str, str] | None = None) -> Verdict:
+          supplied: Mapping[str, Any] | None = None, pinned: Mapping[str, str] | None = None,
+          outputs: Mapping[str, Mapping[str, str]] | None = None) -> Verdict:
     """R1-R7 against the verifier's own copies: its program and query, its law and scheme, the ports its layout derives
     (`{port: {"leaves", "domain"}}`), the digest of its copy of the leaf layer, its anchors, its log of this prover's
     earlier records, the parameters it expects registered (`registered`: `{parameter: words}`), of those the ones it
     fills itself (`supplied`: `{parameter: [[source, ...], ...]}`, `registered.sources`) and the roots it held before the
-    record for others (`pinned`: `{parameter: root}`, the weights' root recorded before the salt, say); ValueError without
+    record for others (`pinned`: `{parameter: root}`, the weights' root recorded before the salt, say), and of the rest the
+    ones that are outputs of an earlier run (`outputs`: `{parameter: {"record", "port"}}`); ValueError without
     `registered`, or in another form.  `partition`: the
     verifier's own partition object when it isn't the canonical one (a record made before the canonical envelope); its
     program must still be `program`'s, and the population is `query`'s.  R1 holds the registered law to the verifier's own
@@ -139,7 +147,8 @@ def check(rec: Mapping[str, Any], program: Program, query: Mapping[str, Any], la
     each stratum's k by the rule; for `work`, also its own `work_table`.  R7 holds the registered values to the verifier's
     own (`registered_entries`), a pinned value to its pinned root, and a value an earlier record of the log registered to
     that record's root (`held_roots`): a value is committed once; a supplied value's root is the one it recomputes from
-    this record and the log (`registered.supplied_root`) instead.  R3 reads `ports` by name, so
+    this record and the log (`registered.supplied_root`) instead, and an output value's domain and root are its earlier
+    record's port's (`R7-output`, in the values' sorted order before the other R7 codes).  R3 reads `ports` by name, so
     its codes come in the ports' sorted order whatever order the mapping has, as the Lean port reads them."""
     c = _Collect()
     v2 = bool(registered)
@@ -147,6 +156,7 @@ def check(rec: Mapping[str, Any], program: Program, query: Mapping[str, Any], la
     if supplied is not None and not v2:
         raise ValueError("supplied values are registered values: the verifier expects none registered")
     pins = _pins(pinned, registered or {}, sup)
+    outs = _outputs(outputs, registered or {}, sup, pins)
     keys = _KEYS | {"registered"} if v2 else _KEYS
     if not isinstance(rec, Mapping) or set(rec) != keys:
         c.fail("keys", sorted(set(rec) ^ keys) if isinstance(rec, Mapping) else rec)
@@ -216,8 +226,44 @@ def check(rec: Mapping[str, Any], program: Program, query: Mapping[str, Any], la
         c.fail("R6-window", rec["window"])
     # R7
     if v2:
-        _check_registered(c, rec["registered"], program, registered, {**held_roots(earlier), **pins}, rec, sup, earlier)
+        _check_registered(c, rec["registered"], program, registered, {**held_roots(earlier), **pins}, rec, sup, earlier,
+                          outs)
     return c.verdict()
+
+
+def _outputs(outputs: Mapping[str, Mapping[str, str]] | None, registered: Mapping[str, int], supplied: Mapping[str, Any],
+             pinned: Mapping[str, str]) -> dict[str, tuple[str, str]]:
+    """The verifier's output values, `{value: (record digest, port)}`, each of a value it expects registered and neither
+    fills nor pinned, an object of exactly a `record` (lowercase hex of 64 bytes) and a `port` (a string); ValueError
+    otherwise, which the Lean verifier refuses too (`OneStage.paramsOfJson`)."""
+    if outputs is None:
+        return {}
+    if not isinstance(outputs, Mapping) or not registered:
+        raise ValueError(f"output values are an object of registered values' earlier ports: {outputs!r}")
+    out = {}
+    for v, o in outputs.items():
+        if (v not in registered or v in supplied or v in pinned or not isinstance(o, Mapping) or set(o) != {"port", "record"}
+                or not isinstance(o["port"], str)
+                or not (isinstance(o["record"], str) and len(o["record"]) == 128 and _HEX.fullmatch(o["record"]))):
+            raise ValueError(f"output value {v!r}: not a registered value it neither fills nor pinned, with an earlier "
+                             f"record's digest and a port: {o!r}")
+        out[v] = (o["record"], o["port"])
+    return out
+
+
+def _output_port(log: Sequence[Mapping[str, Any]], record: str, port: str) -> Mapping[str, Any] | None:
+    """The `roots` entry for `port` of the log's record with digest `record` (its last, as a dict reads it), or None."""
+    for r in log:
+        try:
+            d = digest(r)
+        except (TypeError, ValueError):
+            continue
+        if d != record:
+            continue
+        roots = r.get("roots")
+        hits = [e for e in roots if isinstance(e, Mapping) and e.get("port") == port] if isinstance(roots, list) else []
+        return hits[-1] if hits else None
+    return None
 
 
 def _pins(pinned: Mapping[str, str] | None, registered: Mapping[str, int], supplied: Mapping[str, Any]) -> dict[str, str]:
@@ -234,12 +280,23 @@ def _pins(pinned: Mapping[str, str] | None, registered: Mapping[str, int], suppl
 
 
 def _check_registered(c: _Collect, got: Any, program: Program, values: Mapping[str, int], held: Mapping[str, str],
-                      rec: Mapping[str, Any], supplied: Mapping[str, Any], log: Sequence[Mapping[str, Any]]) -> None:
+                      rec: Mapping[str, Any], supplied: Mapping[str, Any], log: Sequence[Mapping[str, Any]],
+                      outputs: Mapping[str, tuple[str, str]] | None = None) -> None:
     try:
         mine = G.registered_entries(program, values)
     except ValueError as e:
         c.fail("R7-registered", {"verifier": f"{dict(values)} does not apply: {e}"})
         return
+    held = dict(held)
+    for v, (d, p) in sorted((outputs or {}).items()):
+        port = _output_port(log, d, p)
+        ok = (port is not None and type(port.get("leaves")) is int and port["leaves"] == mine[v]["leaves"]
+              and isinstance(port.get("domain"), str) and isinstance(port.get("root"), str))
+        if not ok:
+            c.fail("R7-output", {"value": v, "record": d, "port": p, "verifier": port})
+            continue
+        mine[v] = {**mine[v], "domain": port["domain"]}
+        held[v] = port["root"]
     keys = set(G.ENTRY_KEYS)
     if not isinstance(got, list) or not all(isinstance(e, Mapping) and keys <= set(e) <= keys | {G.WIDTH_KEY} for e in got):
         c.fail("R7-registered", got)

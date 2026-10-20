@@ -590,6 +590,44 @@ def test_r7_holds_a_pinned_value_to_its_pin():
         R.check(v1, **{**check, "registered": None, "supplied": None}, pinned={})
 
 
+def test_r7_reuses_an_earlier_outputs_commitment():
+    """A value that is an output of an earlier run (`outputs`, the NCI baseline's `output` provenance) takes that run's
+    port: its entry has the port's domain and root, and the port's leaf count is the value's rows, so its rows stay under
+    the earlier run's hiding leaves. The output overrides what the log or nothing would hold it to; a record or port the
+    log doesn't hold, or a port of other leaves, is `R7-output`, and a malformed `outputs` is refused before the record
+    is read."""
+    prog = _program()
+    reg = _registered(prog)
+    first, ports = _record(prog, reg)
+    part = P.partition(prog, Q)
+    dom = R.served_domain(part["program"], P.digest(part), "prev.out", "hm96-sha512/row/v1", len(TABLE), "r-earlier")
+    earlier = R.record(prog, Q, LAW, SCHEME, [*first["roots"], {"port": "prev.out", "root": "cd" * 64, "leaves": len(TABLE),
+                                                               "domain": dom},
+                                              {"port": "short", "root": "cd" * 64, "leaves": 4, "domain": dom}],
+                       {**SERVED, "row": 6}, registered=[reg.entry()])
+    entry = {**reg.entry(), "root": "cd" * 64, "domain": dom}
+    rec = R.record(prog, Q, LAW, SCHEME, first["roots"], {**SERVED, "row": 8}, previous=R.digest(earlier),
+                   registered=[entry])
+    kw = {"law": LAW, "scheme": SCHEME, "ports": ports, "registered": {"W": 2}, "log": [earlier]}
+    out = {"W": {"record": R.digest(earlier), "port": "prev.out"}}
+    assert R.check(rec, prog, Q, **kw, outputs=out).ok
+    assert R.check(rec, prog, Q, **kw).codes == ("R7-domain", "R7-held")
+    assert R.check({**rec, "registered": [{**entry, "root": "ce" * 64}]}, prog, Q, **kw, outputs=out).codes == ("R7-held",)
+    assert R.check({**rec, "registered": [reg.entry()]}, prog, Q, **kw, outputs=out).codes == ("R7-domain", "R7-held")
+    for bad in ({"record": "ee" * 64, "port": "prev.out"}, {"record": R.digest(earlier), "port": "nope"},
+                {"record": R.digest(earlier), "port": "short"}, {"record": R.digest(rec), "port": "prev.out"}):
+        assert R.check(rec, prog, Q, **kw, outputs={"W": bad}).codes[0] == "R7-output", bad
+    for bad in ({"x": out["W"]}, {"W": {**out["W"], "record": "EE" * 64}}, {"W": {**out["W"], "extra": 1}},
+                {"W": {"record": R.digest(earlier)}}, {"W": {**out["W"], "port": 1}}, {"W": "prev.out"}, ["W"]):
+        with pytest.raises(ValueError):
+            R.check(rec, prog, Q, **kw, outputs=bad)
+    with pytest.raises(ValueError):
+        R.check(rec, prog, Q, **kw, outputs=out, pinned={"W": "cd" * 64})
+    reads = G.reads_file(prog, Q, {"W": 2}, {"W": "cd" * 64}, domains={"W": dom})["ports"]
+    assert {e["domain"] for e in reads.values()} == {dom}
+    assert {e["domain"] for e in G.reads_file(prog, Q, {"W": 2}, {"W": "cd" * 64})["ports"].values()} == {reg.entry()["domain"]}
+
+
 #: an AROW row table's port (`verity_vllm.commit.serving_rows.RowTable.port`: `row-table/<engine step>/<op_path>`)
 ROW_TABLE = "row-table/3/model.layers.0.mlp.down_proj"
 
