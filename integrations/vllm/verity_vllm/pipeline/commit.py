@@ -54,7 +54,6 @@ import gc
 import hashlib
 import json
 import os
-import random
 import statistics
 import subprocess
 import sys
@@ -75,6 +74,7 @@ from verity_vllm.pipeline.timeline import Timeline  # noqa: E402  (torch-free; V
 from verity_vllm.commit import challenge as CH, opened as OV, scheme as SCH  # noqa: E402
 from verity_vllm.pipeline import admission_planner as AP, boundary_plan as BP, c2_replay as C2, commit_plan as CP, gpu_lease as GL, group_reuse as GR, replay_bundle as RB  # noqa: E402
 from verity_vllm.pipeline.c2_replay import rss_kb  # noqa: E402
+from verity_vllm.pipeline.report import bootstrap_ci  # noqa: E402
 from verity_vllm.pipeline import remote_session as RS  # noqa: E402
 
 SCHEMA = "verity/commit-integ/delta/v1"
@@ -461,14 +461,6 @@ def make_committer(kind: str, engine: va.Engine, args: Options, run_id: str):
         factory = getattr(importlib.import_module(mod), fn)
         return factory(engine, run_id=run_id)
     raise ValueError(kind)
-
-
-def bootstrap_ci(xs: list[float], n: int = 4000, seed: int = 0) -> tuple[float, float]:
-    if len(xs) < 2:
-        return (float("nan"), float("nan"))
-    rng = random.Random(seed)
-    means = sorted(statistics.fmean(rng.choices(xs, k=len(xs))) for _ in range(n))
-    return means[int(0.025 * n)], means[int(0.975 * n) - 1]
 
 
 from verity_vllm.check.commit_rules import (HIDDEN_CLASS_BY_FA, REQUIRED_CLASSES_DEFAULT, class_coverage, hidden_classes_required,  # noqa: E402
