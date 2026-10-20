@@ -10,6 +10,8 @@
   "Properties.Nci.Threads",
   "Properties.Proofs.Nci",
   "Properties.Proofs.Nci.DescAgree",
+  "Properties.Proofs.Nci.Walk",
+  "Properties.Proofs.Nci.Novel",
   "Properties.NciDesc",
   "Properties.CertifierDevice",
   "Properties.Proofs.CertifierDevice",
@@ -45,6 +47,10 @@
  ],
  "proved_in": ["../Proofs"],
  "assumptions": {
+  "Nci.Assumptions.BaselineRegistered": {
+   "owner": "@compute-accounting",
+   "digest": "1e726c0b0d96e66c67519b7726cfdb3ca6faf901f7773d1faa4283870690966c"
+  },
   "Nci.Assumptions.WeightsIncompressible": {
    "owner": "@lean",
    "digest": "a9832cc41ed84cd3c55eccc606483e9c83d87fb29e05d1b1f92bb2680d32f8d8"
@@ -91,6 +97,7 @@
   "Definitions.Core",
   "Definitions.Nci",
   "Models.Nci.Assumptions.Threads",
+  "Models.Nci.Assumptions.Baseline",
   "NciCheck.Check",
   "Flock",
   "Properties.CertifierDevice",
@@ -150,11 +157,25 @@
     "Definitions.Core",
     "Definitions.Nci",
     "Models.Nci.Assumptions.Threads",
+    "Models.Nci.Assumptions.Baseline",
     "NciCheck.Check",
     "Properties.Nci"
    ],
    "except": [],
    "why": "a property is stated over the definitions and the code it is about, never over a proof"
+  },
+  "Properties.NciDesc": {
+   "imports": [
+    "Mathlib",
+    "Definitions.Core",
+    "Definitions.Nci",
+    "NciCheck.Check",
+    "NciCheck.Desc",
+    "Properties.Nci",
+    "Properties.NciDesc"
+   ],
+   "except": [],
+   "why": "the description-sized check's property is stated over the code it is about (NciCheck.Desc) and the NCI properties it relates it to, never over a proof"
   },
   "Properties.CertifierDevice": {
    "imports": ["CertifierDevice.Device", "CertifierDevice.Issuer"],
@@ -224,19 +245,6 @@
    "imports": ["Definitions.Claims", "SampledProofs"],
    "except": [],
    "why": "what the draw misses is stated against `Select.select`'s slots (`SampledProofs.Slots`) and the claims' miss probability `P_a` (`Definitions.Claims`), never a proof"
-  },
-  "Properties.NciDesc": {
-   "imports": [
-    "Mathlib",
-    "Definitions.Core",
-    "Definitions.Nci",
-    "NciCheck.Check",
-    "NciCheck.Desc",
-    "Properties.Nci",
-    "Properties.NciDesc"
-   ],
-   "except": [],
-   "why": "the description-sized check's property is stated over the code it is about (NciCheck.Desc) and the NCI properties it relates it to, never over a proof"
   }
  },
  "reads_exempt": {
@@ -2279,10 +2287,6 @@
     "function": "SampledProofs.OneStage.check",
     "outcome": "accept"
    },
-   "Properties.SampledProofs.bernoulliBounds": {
-    "function": "SampledProofs.OneStage.check",
-    "outcome": "accept"
-   },
    "Properties.SampledProofs.digestIsRecord's": {
     "function": "SampledProofs.OneStage.commitmentOf",
     "outcome": "accept"
@@ -2463,6 +2467,10 @@
     "function": "CircuitRequirement.Instance.creditedReadBits",
     "outcome": "none"
    },
+   "Properties.SampledProofs.bernoulliBounds": {
+    "function": "SampledProofs.OneStage.check",
+    "outcome": "accept"
+   },
    "Properties.SampledProofs.haltIsFinal": {
     "function": "SampledProofs.Stream.run",
     "outcome": "accept"
@@ -2507,8 +2515,8 @@
    "Pous.EndToEnd.SecurityProofs.endToEndRingDeployed": "frozen: endToEndRing at one root's depth, D = 16,446, Q = 2^20, L = 2^64; frozen as it is",
    "Pous.EndToEnd.SecurityProofs.honestPassesRing": "completeness: the honest full-state server passes P2's ring audit with probability 1, so P2RingAuditSecure's and EndToEndRing's events are not vacuous",
    "Pous.EndToEnd.SecurityProofs.honestPassesAccepts": "completeness: the honest full-state server passes EndToEndRing's event with probability 1 (the coin tree is always built and the draw never rejects)",
-   "Pous.EndToEnd.RunCertifies": "unstated: it joins the composed check's runCheckAccepts, proved, with the setup check's AcceptsDecodes and PublishesRoot, which are open; runCertifies_of proves it from those two",
-   "NciCheck.Properties.DescAgrees": "unstated: descAgrees_of proves it from GatesLocated and NovelExact (Properties.Proofs.Nci.DescAgree), which are open: that every gate of a Program Desc.evaluate reads is located, reading earlier gates, and that Desc.novelWidth counts the unrolled novel reads of a division by root node"
+   "NciCheck.Properties.DescAgrees": "unstated: descAgrees_of_open (Properties.Proofs.Nci.Novel) proves it from three open statements: OperandsResolve (Properties.Proofs.Nci.Walk) and BodiesOk (Properties.Proofs.Nci.Resolve: every body resolution reaches names parameters and earlier nodes at a leaf, its indices in range), from which operandsEarlier_of proves OperandsEarlier and gatesLocated_of GatesLocated (every gate of a Program Desc.evaluate reads is located, reading earlier gates), and ReadsExact (Desc.analyze's reads per root node are the unrolled operands outside it), from which novelExact_of proves NovelExact with novelWidthExact (Properties.Proofs.Nci.Width: Desc.novelWidth is the width of the union of the gates it is given)",
+   "Pous.EndToEnd.RunCertifies": "unstated: it joins the composed check's runCheckAccepts, proved, with the setup check's AcceptsDecodes and PublishesRoot, which are open; runCertifies_of proves it from those two"
   },
   "conjectures": {
    "Pous.P2.Assumptions.P2RingAuditSecure": {
@@ -3287,10 +3295,9 @@
    ]
   },
   "Definitions.Core.Declaration": {
-   "digest": "a6a33e139ff95260abe4581be79c5830e2ae417d8df02fddb9575a9ab381e1fa",
+   "digest": "9f45e1cafa101fb3356541ed3a26ccbc43402b40081776d9f82ccd1141a132a7",
    "definitions": {
     "Verity.Declaration": "38f50370a42a6c7f146e8c556c0a240cde4cc1f8e025e5357cd49a5ae354f56f",
-    "Verity.Declaration.Contains": "2e4651003538493bac63ae90c32a521e95d2e8596bea6b3c85b9cfd150c5647b",
     "Verity.Declaration.D": "4796f04f2ae9193027263ff5a3e82a079e0104c069845088e0b6666b007fc552",
     "Verity.Declaration.θ": "43a3241a0c3f2e225e2f4f79d255976bb8b070b83138bf76635d94cf0505393f"
    },
@@ -3579,15 +3586,19 @@
    ]
   },
   "Definitions.Nci.Dark": {
-   "digest": "907f39dd7ab6bdaad74d0e357c22ec4d9fdb7eccdaa2a0d571267775897c8b48",
+   "digest": "117ba4e9fdc3414c7c817ed587d8bba3460426a791a4bb00c5a742ce96b17bc9",
    "definitions": {
-    "Nci.PartialContainment": "859bb41aaf4d11fba3d7943767deed3d075d6d8ac73a0c85aae5b025ec470858",
+    "Nci.PartialContainment": "53b721ad942ce112991fec5a711d06675bddc9dd3359c04fc7ca8fb8ca2e0b21",
     "Nci.PartialContainment.S": "3f4fadbf8acd2a98dd31215bd90a71100035bc489d75168cb43b65a8d6876086",
-    "Nci.PartialContainment.dark": "b291a4876caed5c07228e2b04e2eed6425f410a83fa3063f9ab1c5fbe5f65b48"
+    "Nci.PartialContainment.dark": "b291a4876caed5c07228e2b04e2eed6425f410a83fa3063f9ab1c5fbe5f65b48",
+    "Nci.PartialContainment.emb": "241a4d4758619aaf9f103bc05b3f03a7d8f94309c0a2d4d971af13dd55fd6a15",
+    "Nci.PartialContainment.ofContainment": "2e91539becc0e328a1a887f73ed5b299cae0961f0cd52600a7cd44117426024a"
    },
    "guarantees": [
+    "NciCheck.Properties.SecurityProofs.Throttles",
     "NciCheck.Properties.SecurityProofs.ThrottlesDark",
-    "NciCheck.Properties.SecurityProofs.ThrottlesDarkSlots"
+    "NciCheck.Properties.SecurityProofs.ThrottlesDarkSlots",
+    "NciCheck.Properties.SecurityProofs.ThrottlesSlots"
    ]
   },
   "Definitions.Nci.Fit": {
@@ -5372,6 +5383,18 @@
     "Pous.EndToEnd.SecurityProofs.runCheckAccepts"
    ]
   },
+  "Models.Nci.Assumptions.Baseline": {
+   "digest": "d2d5c6d68687c0eb5488d83f1dd3b20249a2b176b80b5921cd1adb65f65d49d9",
+   "definitions": {
+    "Nci.Assumptions.BaselineRegistered": "1e726c0b0d96e66c67519b7726cfdb3ca6faf901f7773d1faa4283870690966c"
+   },
+   "guarantees": [
+    "NciCheck.Properties.SecurityProofs.Throttles",
+    "NciCheck.Properties.SecurityProofs.ThrottlesDark",
+    "NciCheck.Properties.SecurityProofs.ThrottlesDarkSlots",
+    "NciCheck.Properties.SecurityProofs.ThrottlesSlots"
+   ]
+  },
   "Models.Nci.Assumptions.Threads": {
    "digest": "e9bcf22a82fceb17e374c1e6af08d94a3f0f2d662a9c92713dffe4504c37b210",
    "definitions": {
@@ -6942,12 +6965,12 @@
    ]
   },
   "Properties.Nci.Threads": {
-   "digest": "3cf5ee9e5f8c864ecd8f3e4d19d69be2123770936ea47c94ca59cbbb4009a99d",
+   "digest": "8e542387a955ab5c0317d66edeb8a454b8549cd5908ef745657d93092bbb4cb5",
    "definitions": {
-    "NciCheck.Properties.Throttled": "b0da3d4a64ec5ec0e3e1376aff729da2a2b39ef79f371cac3655404217e37fa1",
-    "NciCheck.Properties.ThrottledDark": "87d15e9a6e48f70167c54ab9aedcac2a316845a6748e4d2d6d79d224a2d690ff",
-    "NciCheck.Properties.ThrottledDarkSlots": "9aa175084876a4b77d015613d4bea4b229dacfb0432487e158e5963068996e3a",
-    "NciCheck.Properties.ThrottledSlots": "2dc5bece717e7b843bdb9569ec767e44bcefbefa930cc43539cf310dec420896",
+    "NciCheck.Properties.Throttled": "cfd44b4d6c6d29f530edc4764baddbcab6bc1ce9c505538516a1718b306616da",
+    "NciCheck.Properties.ThrottledDark": "ff9c8ee5fe4fba6ee3cb6347fe8878c7c831f9ca2bd176d80007e1499c2bd122",
+    "NciCheck.Properties.ThrottledDarkSlots": "691c4e5c662140630bff6c40eb4aac0b24278e5df05c457de810a30596b07e1f",
+    "NciCheck.Properties.ThrottledSlots": "ea89378838a955e6b91460d86e955886340a3c680f729d032bf288024beb958d",
     "NciCheck.Properties.Throttles": "941527d6f138cd24061409566b5de4f4f5369e1e379679af1c155144166626e9",
     "NciCheck.Properties.ThrottlesDark": "84c35cdd2aee2d620a8702599f07d6985ad4d29fc7cb600f8ef973a0bccecbde",
     "NciCheck.Properties.ThrottlesDarkSlots": "590e5e8a3d803ba6b9e368fe5d000aa606cec5e1dbd5db59177edf19b2483fef",

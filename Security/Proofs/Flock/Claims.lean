@@ -37,6 +37,8 @@ import Proofs.Flock.Claims.Recursion.SeqCap
 import Proofs.Flock.Claims.Recursion.SeqKey
 import Proofs.Flock.Claims.Recursion.SeqDeploy
 import Proofs.Flock.Claims.Recursion.DeployStop
+import Proofs.Flock.Claims.Recursion.SeqStop
+import Proofs.Flock.Claims.Recursion.SeqDeployStop
 import Proofs.Flock.Claims.Recursion.VStar
 import Proofs.Flock.Claims.Recursion.VStarBound
 import Proofs.Flock.Claims.Recursion.BoundDeploy
@@ -85,11 +87,13 @@ import Proofs.Flock.Claims.Recursion.BoundRouteLin
 import Proofs.Flock.Claims.Recursion.VStarPartsSparse
 import Proofs.Flock.Claims.Recursion.VStarPartsSparseDeploy
 import Proofs.Flock.Claims.Recursion.VStarLinks
+import Proofs.Flock.Claims.Recursion.VStarBDeploy
 import Proofs.Flock.Claims.Recursion.VStarCross
 import Proofs.Flock.Claims.Recursion.DeployChecked
 import Proofs.Flock.Claims.Recursion.DeployLayout
 import Proofs.Flock.Claims.Recursion.BoundDeployOuter
 import Proofs.Flock.Claims.Counted
+import Proofs.Flock.Claims.Recursion.BoundReaders
 import Proofs.Flock.Claims.Recursion
 import Proofs.Flock.Claims.Decode
 import Proofs.Flock.Claims.DecodeFlock

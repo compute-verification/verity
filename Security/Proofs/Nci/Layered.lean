@@ -253,8 +253,8 @@ theorem ThreadedOfLayered : Guarantees.ThreadedOfLayered := by
 
 /-- **Training is slowed, for keyed circuits.** -/
 theorem LayeredTraining : Guarantees.LayeredTraining := by
-  intro Γ α b_w b_a κ c dcl T d e eLk b E L hα hbw hba hE hc hd hS hW hκ
-  exact ThreadedTraining Γ α b_w b_a κ c dcl T (d - E) (e + E * eLk) hα hbw hba (Nat.sub_pos_of_lt hE) hc hd
+  intro Γ α b_w b_a κ c dcl T d e eLk b E M L hα hbw hba hE hd hB hS hW hκ
+  exact ThreadedTraining Γ α b_w b_a κ c dcl T (d - E) (e + E * eLk) M hα hbw hba (Nat.sub_pos_of_lt hE) hd hB
     (threaded_of_layered L Γ (α * Γ) E hS) hW hκ
 
 /-- **The reference circuit is threaded, at Kimi K2's shapes.** -/
@@ -266,10 +266,10 @@ theorem ReferenceThreaded : Guarantees.ReferenceThreaded := by
 
 /-- **Training is slowed, at Kimi K2's shapes.** -/
 theorem ReferenceTraining : Guarantees.ReferenceTraining := by
-  intro Γ α b_w b_a κ c dcl T hL hα hbw hba hc hd hS hW hκ
+  intro Γ α b_w b_a κ c dcl T M hL hα hbw hba hd hB hS hW hκ
   unfold Assumptions.ReferenceLayered at hL
   obtain ⟨L⟩ := hL
-  exact LayeredTraining Γ α b_w b_a κ c dcl T _ _ _ _ 7 L hα hbw hba (by norm_num) hc hd
+  exact LayeredTraining Γ α b_w b_a κ c dcl T _ _ _ _ 7 M L hα hbw hba (by norm_num) hd hB
     (hS.trans_lt (by norm_num)) hW hκ
 
 end Nci.SecurityProofs

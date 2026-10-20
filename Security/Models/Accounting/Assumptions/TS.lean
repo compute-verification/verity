@@ -242,13 +242,14 @@ def LinSteer {m : ℕ} (c : Consumer m) : Prop :=
 
 /-- `accounting-ts-right-fixed` (Lemma E1(c), proved on paper; the rounds' equal shares). **With every committed value
 right, what isn't fixed is in the shares**: on every accepted path whose committed values (each round's, read before its
-σ, `ProofLayer.committed`) are right for their derivations, the run's owned right fixed words per unit are at least
-`(1 − Σ_w d_w / S)·N_w`. An adaptive word lies below a committed value wrong for its own derivation (E1(c)), so with none
-wrong every word that isn't fixed is in its round's share, and the rounds carry equal shares of the window's words.
+σ, `ProofLayer.committed`) are right for their derivations on that path's coins, the run's owned right fixed words per
+unit are at least `(1 − Σ_w d_w / S)·N_w`. An adaptive word lies below a committed value wrong for its own derivation
+(E1(c)), so with none wrong every word that isn't fixed is in its round's share, and the rounds carry equal shares of the
+window's words.
 `ProofsSound` held this inside it; it stays an assumption until the adaptive model is in Lean. -/
 def RightFixed {Ω : Type} [Fintype Ω] {S nπ : ℕ} {V : Type} (P : Play Ω S K T L U) (pf : ProofLayer Ω S nπ V)
     (Nw : ℝ) : Prop :=
-  ∀ x, P.accepts x → pf.right (pf.committed x) → (1 - P.game.deficiency x / S) * Nw ≤ (P.run x).fixed
+  ∀ x, P.accepts x → pf.right x (pf.committed x) → (1 - P.game.deficiency x / S) * Nw ≤ (P.run x).fixed
 
 /-- `accounting-ts-proofs-sound` (binding in its fork form, the 8 Oct ruling's; `cr/sha-512` bounds it at a finder that
 runs the window twice from round `w`). **Binding's fork form at `δ_fork`**: at every round `w`, on a run and on its
@@ -261,24 +262,25 @@ def BindingForkAt {Ω : Type} [Fintype Ω] {S nπ : ℕ} {V : Type} (pf : ProofL
   ∀ w, prob (fun p : Paths Ω S × Paths Ω S => pf.Forked w p.1 p.2) ≤ δfork
 
 /-- `accounting-ts-proofs-sound` (proof soundness; C-Flock's `Flock.Guarantees.EndToEndHiddenDrawn` for a session).
-**Proof soundness at `δ_ZK`**: each proof of the window is accepted with an opening that fails its relation with
-probability at most `δ_ZK` over the window's coins (`ProofLayer.SoundAt`). C-Flock's bound is `t·2^-λ` for a prover
-making `t` hash calls, so it gives `δ_ZK` only for a cheater whose hash calls over the window are capped
-(RT2-LOGIC-2). Its "wrong" is against the committed transcript fixed at registration, and its statement leaves out the
-rows link: that the committed inputs and the program's outputs on them are the rows the public file commits "is not
-stated here" (`Proofs/Flock/EndToEndHidden/Statement.lean`). `ProofLayer.rel` reads exactly that link (the
-Definition with the leaves' rows among its outputs), so C-Flock's bound doesn't discharge this premise until it states
-the link (RT3-LOGIC-3). -/
+**Proof soundness at `δ_ZK`**: each proof of the window is accepted with an opening that fails its relation on the path
+(the round's coin and the words keyed by it that its proof gives there) with probability at most `δ_ZK` over the
+window's coins (`ProofLayer.SoundAt`). C-Flock's bound is `t·2^-λ` for a prover making `t` hash calls, so it gives
+`δ_ZK` only for a cheater whose hash calls over the window are capped (RT2-LOGIC-2). Its "wrong" is against the
+committed transcript fixed at registration, and its statement leaves out the rows link: that the committed inputs and
+the program's outputs on them are the rows the public file commits "is not stated here"
+(`Proofs/Flock/EndToEndHidden/Statement.lean`). `ProofLayer.rel` reads exactly that link (the Definition with the
+leaves' rows among its outputs), so C-Flock's bound doesn't discharge this premise until it states the link
+(RT3-LOGIC-3). -/
 def ProofSoundAt {Ω : Type} [Fintype Ω] {S nπ : ℕ} {V : Type} (pf : ProofLayer Ω S nπ V) (δzk : ℝ) : Prop :=
   pf.SoundAt δzk
 
 /-- `accounting-ts-proofs-pin` (the Definitions' pinning; conjectured, and no Lean checks it of the served relations).
-**The relations pin every committed value** (`ProofLayer.Pins`): values that satisfy every proof's relation are right
-for their derivations. It is a property of the Definitions the window's proofs pass, which no Lean here models. As
-`ProofLayer`'s module doc says, `PouwSegCheck_v2` lacks it: it ties only the drawn segment's prefix-word set to the one
-before, so its window's other sets are free witness. PIN (#2417) added checks that recompute every word they absorb
-(`PouwSegCheck_v3`, `PouwCallCheck_v1`, `PouwWarpCheck_v1` and `_v2`), and nothing states that the served relations are
-those (RT3-LOGIC-3). -/
+**The relations pin every committed value** (`ProofLayer.Pins`): values that satisfy every proof's relation on a path
+are right for their derivations on that path's coins. It is a property of the Definitions the window's proofs pass,
+which no Lean here models. As `ProofLayer`'s module doc says, `PouwSegCheck_v2` lacks it: it ties only the drawn
+segment's prefix-word set to the one before, so its window's other sets are free witness. PIN (#2417) added checks that
+recompute every word they absorb (`PouwSegCheck_v3`, `PouwCallCheck_v1`, `PouwWarpCheck_v1` and `_v2`), and nothing
+states that the served relations are those (RT3-LOGIC-3). -/
 def ProofsPin {Ω : Type} {S nπ : ℕ} {V : Type} (pf : ProofLayer Ω S nπ V) : Prop := pf.Pins
 
 open Classical in

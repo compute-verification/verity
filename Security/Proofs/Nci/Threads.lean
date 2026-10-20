@@ -209,11 +209,11 @@ theorem ThreadedReadsSlots : Guarantees.ThreadedReadsSlots := threaded_reads_slo
 
 /-- **Theorem 2 with dark gates, per parameter slot** (the thread draft, Appendix B, through a partial containment). -/
 theorem ThreadedThrottledOnSlots : Guarantees.ThreadedThrottledOnSlots := by
-  intro Γ α b_w b_a c d T σ dd e M hα hbw hba hdd ⟨n, P, hP⟩ hT hW
+  intro Γ α b_w b_a c d T σ dd e M hα hbw hba hdd ⟨n, P, hP⟩ hB hT hW
   set Λ := T.bound (α * Γ) b_w dd e
   have hΛ : 0 ≤ Λ := le_max_of_le_left (Nat.cast_nonneg _)
   have hreads : ∀ u, (novelReads c (piece M P u) : ℝ) ≤ α * d.D.size (P.gates u) := fun u =>
-    (Nat.cast_le.2 (novelReads_piece u)).trans (hP u).2
+    (Nat.cast_le.2 (novelReads_piece hB u)).trans (hP u).2
   have hpiece : ∀ u, Small c Γ (α * Γ) (piece M P u) := fun u =>
     ⟨piece_subset_computed u, (card_piece_le u).trans (hP u).1,
       (hreads u).trans (mul_le_mul_of_nonneg_left (by exact_mod_cast (hP u).1) hα)⟩
@@ -234,27 +234,28 @@ theorem ThreadedThrottledOnSlots : Guarantees.ThreadedThrottledOnSlots := by
 /-- **Theorem 2 with dark gates** (the thread draft, Appendix B, through a partial containment): its `Slots` form at one
 slot per weight gate. -/
 theorem ThreadedThrottledOn : Guarantees.ThreadedThrottledOn := by
-  intro Γ α b_w b_a c d T dd e M hα hbw hba hdd hd hT hW
-  exact ThreadedThrottledOnSlots Γ α b_w b_a c d T (Fit.idSlots T) dd e M hα hbw hba hdd hd hT
+  intro Γ α b_w b_a c d T dd e M hα hbw hba hdd hd hB hT hW
+  exact ThreadedThrottledOnSlots Γ α b_w b_a c d T (Fit.idSlots T) dd e M hα hbw hba hdd hd hB hT
     (weightsIncompressibleSlots_of (Fit.idSlots T) hbw.le hW)
 
 /-- **Theorem 2 per parameter slot** (the thread draft, Appendix B): a total containment is a partial one with no dark
 gates. -/
 theorem ThreadedThrottledSlots : Guarantees.ThreadedThrottledSlots := by
-  intro Γ α b_w b_a c d T σ dd e hα hbw hba hdd ⟨M, hθ⟩ hd hT hW
-  have h := ThreadedThrottledOnSlots Γ α b_w b_a c d T σ dd e (ofContainment M hθ) hα hbw hba hdd hd hT hW
+  intro Γ α b_w b_a c d T σ dd e M hα hbw hba hdd hd hB hT hW
+  have h := ThreadedThrottledOnSlots Γ α b_w b_a c d T σ dd e (PartialContainment.ofContainment M) hα hbw hba hdd hd
+    hB hT hW
   rwa [ofContainment_S, Finset.inter_eq_left.2 T.M_computed] at h
 
 /-- **Theorem 2** (the thread draft, Appendix B): its `Slots` form at one slot per weight gate. -/
 theorem ThreadedThrottled : Guarantees.ThreadedThrottled := by
-  intro Γ α b_w b_a c d T dd e hα hbw hba hdd hc hd hT hW
-  exact ThreadedThrottledSlots Γ α b_w b_a c d T (Fit.idSlots T) dd e hα hbw hba hdd hc hd hT
+  intro Γ α b_w b_a c d T dd e M hα hbw hba hdd hd hB hT hW
+  exact ThreadedThrottledSlots Γ α b_w b_a c d T (Fit.idSlots T) dd e M hα hbw hba hdd hd hB hT
     (weightsIncompressibleSlots_of (Fit.idSlots T) hbw.le hW)
 
 /-- **Counted multiplications off the books are dark gates, per parameter slot.** -/
 theorem ThreadedThrottledDarkSlots : Guarantees.ThreadedThrottledDarkSlots := by
-  intro Γ α b_w b_a c d T σ dd e M hα hbw hba hdd hd hT hW
-  have h := ThreadedThrottledOnSlots Γ α b_w b_a c d T σ dd e M hα hbw hba hdd hd hT hW
+  intro Γ α b_w b_a c d T σ dd e M hα hbw hba hdd hd hB hT hW
+  have h := ThreadedThrottledOnSlots Γ α b_w b_a c d T σ dd e M hα hbw hba hdd hd hB hT hW
   have hS : ((T.M ∩ M.S).card : ℝ) ≤ α * T.bound (α * Γ) b_w dd e * d.D.size d.D.computed / b_a := by
     rw [le_div_iff₀ hba]
     linarith
@@ -264,8 +265,8 @@ theorem ThreadedThrottledDarkSlots : Guarantees.ThreadedThrottledDarkSlots := by
 
 /-- **Counted multiplications off the books are dark gates**: its `Slots` form at one slot per weight gate. -/
 theorem ThreadedThrottledDark : Guarantees.ThreadedThrottledDark := by
-  intro Γ α b_w b_a c d T dd e M hα hbw hba hdd hd hT hW
-  exact ThreadedThrottledDarkSlots Γ α b_w b_a c d T (Fit.idSlots T) dd e M hα hbw hba hdd hd hT
+  intro Γ α b_w b_a c d T dd e M hα hbw hba hdd hd hB hT hW
+  exact ThreadedThrottledDarkSlots Γ α b_w b_a c d T (Fit.idSlots T) dd e M hα hbw hba hdd hd hB hT
     (weightsIncompressibleSlots_of (Fit.idSlots T) hbw.le hW)
 
 /-- Weights are incompressible when each weight is a novel input gate at least `b_w` bits wide and every thread value
@@ -375,14 +376,14 @@ theorem threaded_reads_of_structure {c : Declaration} (T : Threading c) (Γ : �
 
 /-- **Training is slowed** (the thread draft, "Putting the two together"). -/
 theorem ThreadedTraining : Guarantees.ThreadedTraining := by
-  intro Γ α b_w b_a κ c d T dd e hα hbw hba hdd hc hd hT hW hκ
-  have h := ThreadedThrottled Γ α b_w b_a c d T dd e hα hbw hba hdd hc hd hT hW
+  intro Γ α b_w b_a κ c d T dd e M hα hbw hba hdd hd hB hT hW hκ
+  have h := ThreadedThrottled Γ α b_w b_a c d T dd e M hα hbw hba hdd hd hB hT hW
   nlinarith
 
 /-- **Training is slowed, with dark gates.** -/
 theorem ThreadedTrainingOn : Guarantees.ThreadedTrainingOn := by
-  intro Γ α b_w b_a κ c d T dd e M hα hbw hba hdd hd hT hW hκ
-  have h := ThreadedThrottledOn Γ α b_w b_a c d T dd e M hα hbw hba hdd hd hT hW
+  intro Γ α b_w b_a κ c d T dd e M hα hbw hba hdd hd hB hT hW hκ
+  have h := ThreadedThrottledOn Γ α b_w b_a c d T dd e M hα hbw hba hdd hd hB hT hW
   have hs : (T.M.card : ℝ) ≤ M.dark.card + (T.M ∩ M.S).card := by
     exact_mod_cast card_le_dark_add_inter M T.M_computed
   have h1 := mul_le_mul_of_nonneg_left hκ hba.le
