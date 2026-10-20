@@ -58,7 +58,10 @@ import research
 from research.flags import renamed
 
 MANIFEST = Path(research.__file__).resolve().parent / "pods" / "nebius" / "deploy.toml"
-REPO = Path(__file__).resolve().parents[3]
+SRC = Path(__file__).resolve().parents[3]
+# the git repository REF and origin's branches are read from: this checkout, or $RESEARCH_DEPLOY_REPO where the code runs from a
+# tree without history (the control pod's watchers run from /data/watchers/src and read the clone /data/watchers/repo)
+REPO = Path(os.environ.get("RESEARCH_DEPLOY_REPO") or SRC)
 PROJECT = "verity"
 HISTORY = 400                  # REF's commits searched for a stale file's version
 AHEAD_DAYS = 21                # origin's branches searched for an unrecorded file's commit
@@ -276,7 +279,7 @@ def git(*args: str, repo: Path = REPO) -> str:
 
 def manifest_at(ref: str, repo: Path = REPO) -> str | None:
     """REF's own deploy.toml, so a commit deploys what it lists; None when REF has none (then the checkout's is used)."""
-    r = subprocess.run(["git", "-C", str(repo), "show", f"{ref}:{MANIFEST.relative_to(REPO)}"], capture_output=True, text=True)
+    r = subprocess.run(["git", "-C", str(repo), "show", f"{ref}:{MANIFEST.relative_to(SRC)}"], capture_output=True, text=True)
     return r.stdout if r.returncode == 0 else None
 
 
@@ -643,7 +646,12 @@ def main(argv: list[str] | None = None, run: Runner | None = None, manifest: Pat
     if rest:
         ns.paths += rest
     if not ns.no_fetch:
-        subprocess.run(["git", "-C", str(repo), "fetch", "-q", "origin", "main"], capture_output=True)
+        # a clone nobody else fetches ($RESEARCH_DEPLOY_REPO) takes every branch: `ahead` reads origin's recent ones
+        own = repo.resolve() != SRC
+        r = subprocess.run(["git", "-C", str(repo), "fetch", "-q", *(["--prune", "origin"] if own else ["origin", "main"])],
+                           capture_output=True, text=True)
+        if r.returncode:
+            print(f"research deploy: git fetch in {repo} failed, so REF may be stale: {r.stderr.strip()[-300:]}", file=sys.stderr)
     nodes = load(manifest, manifest_at(ns.ref, repo) if manifest == MANIFEST else None)
     run = run or ssh_runner()
     if ns.cmd == "drift":

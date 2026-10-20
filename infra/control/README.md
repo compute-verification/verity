@@ -67,7 +67,7 @@ read-only deploy key; if `watch.log` shows `FETCH-FAILED`, remove `--reap` until
 | `/data/chats` | `/workspace/chats` | the chats archive |
 | `/data/research`, `/data/research-control` | `/workspace/research`, `/workspace/research-control` | `research run` state and control worktrees |
 | `/data/infra` | `/workspace/infra` | infra's pod scripts and their logs; `msg-repo` and `msg-notes`, `msg.sh`'s checkout and notes clone |
-| `/data/watchers` | | the watchers supervisor: `run.sh`, `watchers.toml`, `vm_stop.toml`, `src`, `log/`, `status.json`, each loop's state (`vm_stop.json`, `fleet/`, `monitors/`, `n1-alerts.json`, `agent-watch-offset`, `preflight-probe.json` with `preflight-tree` (its store index is `/root/watchers-preflight-store`, on the pod's own disk), `top-asks.json`, `top-sweep.json`), `extra.d/`, `known_hosts`; `notion.env` (`NOTION_API_KEY`, for `top-asks`) and `nebius-stop.env` (a Nebius account that may stop instances, for `vm-stop`) once placed (root, 0600) |
+| `/data/watchers` | | the watchers supervisor: `run.sh`, `watchers.toml`, `vm_stop.toml`, `src`, `log/`, `status.json`, each loop's state (`vm_stop.json`, `fleet/`, `monitors/`, `n1-alerts.json`, `agent-watch-offset`, `preflight-probe.json` with `preflight-tree` (its store index is `/root/watchers-preflight-store`, on the pod's own disk), `top-asks.json`, `top-sweep.json`), `repo` (a clone without a working tree, for `research deploy drift`'s `RESEARCH_DEPLOY_REPO`; drift fetches it each run), `extra.d/`, `known_hosts`; `notion.env` (`NOTION_API_KEY`, for `top-asks`) and `nebius-stop.env` (a Nebius account that may stop instances, for `vm-stop`) once placed (root, 0600) |
 | `/data/backup`, `/data/tmp` | | backups and transfer bundles |
 
 Secrets stay on the volume and never in git: this README names the files, never their contents.
@@ -96,6 +96,13 @@ $CP "cat > /data/infra/control-disk/run.sh && chmod +x /data/infra/control-disk/
 $CP "cat > /data/infra/control-disk/control_disk_alert.py" < infra/control/control_disk_alert.py
 $CP "/data/infra/control-disk/run.sh --once --dry-run"      # one pass, posting nothing and writing no state
 $CP "cat > /data/infra/msg.sh && chmod +x /data/infra/msg.sh" < infra/control/msg.sh
+~~~
+
+`monitors-relay`'s `drift` reads git history the tree lacks from `/data/watchers/repo`, cloned once with the pod's deploy key:
+
+~~~sh
+$CP 'K="ssh -i /data/state/secrets/verity-deploy -o IdentitiesOnly=yes -o UserKnownHostsFile=/data/state/secrets/known_hosts"; \
+  git clone -q --no-checkout -c core.sshCommand="$K" git@github.com:compute-verification/verity.git /data/watchers/repo'
 ~~~
 
 The watchers run from a pushed commit's tree. Deploy it, keeping the tree it replaces, then restart the supervisor (`run.sh`
