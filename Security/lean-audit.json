@@ -94,6 +94,12 @@
    "owner": "@compute-accounting",
    "digest": "414a164b2927884959719a19f4157ef08125017896884da53459996b1212b5bd"
   },
+  "Accounting.Assumptions.TS.ServedChecksHold": {
+   "owner": "@compute-accounting"
+  },
+  "Accounting.Assumptions.TS.ServedRootsLinked": {
+   "owner": "@proofs"
+  },
   "Accounting.Assumptions.TS.SheetClock": {
    "owner": "@compute-accounting",
    "digest": "c27bc92a531574e652f708a8b56724dee41b9f5ac2ddf6a99041454ba111f4ad"
@@ -137,6 +143,9 @@
   "Accounting.Assumptions.TS.WholeLuckAt": {
    "owner": "@compute-accounting",
    "digest": "1e851edb0f896c3309adb12243fdcf80b215f4b90c1fe171da3489f24dac14bd"
+  },
+  "Accounting.Assumptions.TS.WindowLaw": {
+   "owner": "@compute-accounting"
   },
   "Accounting.Assumptions.TS.WordsWritten": {
    "owner": "@compute-accounting",
@@ -1015,7 +1024,8 @@
   "Proofs.Flock.Claims.Recursion.DeployInputs": "the claims' meets witnesses state antecedents at the recursion's deployed record's inputs (`RecDeploy.RecIns`, `setupO`), still in Proofs; C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT)",
   "Proofs.Flock.Claims.Complete.Ready": "the claims' meets witnesses state antecedents at Flock's deployed records (`deployPlain`, `deployZk`), still in Proofs; C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT)",
   "Proofs.Flock.EndToEndRegisteredRows": "C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT)",
-  "Proofs.Flock.SoundAtBridge": "the bridge from C-Flock's rows link to the proof layer reads C-Flock's definitions, which are still in Proofs; C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT)"
+  "Proofs.Flock.SoundAtBridge": "the bridge from C-Flock's rows link to the proof layer reads C-Flock's definitions, which are still in Proofs; C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT)",
+  "Proofs.Accounting.TS.Session": "the window of C-Flock sessions (Accounting.TS.onSessions), its named premises and its statement read #2909's RowsSession, which is in Proofs; C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT)"
  },
  "four_names": ["Nci", "NetTiming", "Accounting", "Hash"],
  "guarantees": {
@@ -2406,6 +2416,9 @@
    "signature": ["Accounting.SecurityProofs.TS.SegmentSteer : Accounting.Guarantees.TS.SegmentSteer"],
    "assumptions": [],
    "type_hash": "b76a12dec5d8086c6cd1d41fd6f5aee9cbe62cd3ad60f832b8f354701830440e"
+  },
+  "Accounting.SecurityProofs.TS.SessionSoundAt": {
+   "owner": "@compute-accounting"
   },
   "Accounting.SecurityProofs.TS.SheetDIdealFloor": {
    "owner": "@compute-accounting",
@@ -7777,7 +7790,8 @@
    "Accounting.SecurityProofs.TS.Sm120SheetHeadline": "frozen (no-function,world-unlisted): sm_120's headline at 0.656%, under full checking with live coins (epsilon_sample and the Fiat-Shamir premium are separate lines), Whole.sheetDIdealFloor_whole at the exact data of DS-120 and H1 + fx1 (Definitions.Accounting.Headline.Sm120) with pi* the issue facet, p = 7/8, p0 = 1/2, Lambda = max(kappa/ln(8/7), (kappa + f)/ln 2), S = 48,000 and delta = 2^-40, over every play of 48,000 equal live rounds (the window's shape: with S rounds its two branches give epsilon < 1% only from 9,496, Compose's live line only from 10,552, RT-INT-1) and window of proofs on any finite coins and every unfolded share, not a Lean function, the unfolded branch binding (0.656%; the folded one gives 0.599%); A1-A7 (A2 with A2u, a uniform-datapath instruction an issue slot, which no vendor document states and which alone holds this epsilon: RT-MACHINE-4), FOLD-OPT per word folded (FoldOptFolded at the run's unfolded share, ASK-6 = A), so fold skippers are charged, the receipt split (the play's ideal game a ReceiptGame's and Pinned, with two luck premises: OperandHMu at 3/4, H-mu at the deficient words, the first, and ReceiptLuckAt at 1/2, HMU's B' case, the second, which give p = 7/8 by LemmaB at fibre 1 and LuckOfReceipt), WholeLuckAt at 1/2 (B' at a unit whose fold the run skips, ASK-9 = A at p0 = 1/2 for live coins only; the whole-unit guess bound 2^-64 is not granted), binding at delta_bind, proof soundness at delta_ZK, the Definitions' pinning (ProofLayer.Pins, met by main's circuit Definitions since PIN, #2417), the play being its proofs' (ProofLayer.Of) and RightFixed are not on the premises list.",
    "Accounting.SecurityProofs.TS.Sm120MeasuredHeadline": "frozen (no-function,world-unlisted): sm_120's headline on its measured vector at 0.591%, under full checking with live coins (epsilon_sample and the Fiat-Shamir premium are separate lines), Whole.dIdealFloor_whole at the exact data of VF3r-16 and H1 + fx1 (Definitions.Accounting.Headline.Sm120Measured) with pi* JI3s_0, q = q_T = 9/8, p = 7/8, p0 = 1/2, Lambda = max(kappa/ln(8/7), (kappa + f)/ln 2), S = 48,000 and delta = 2^-40, over every play of 48,000 equal live rounds (the window's shape: with S rounds its two branches give epsilon < 1% only from 9,652, Compose's live line only from 10,552, RT-INT-1) and window of proofs on any finite coins and every unfolded share, not a Lean function, the folded branch binding (0.591%; the unfolded one gives 0.573%); FacetCeilings on VF3r-16's rows, WordsWritten at the forms' omega, ScalarRoute at 9/8, NoSum, FOLD-OPT per word folded (FoldOptFolded at the run's unfolded share, ASK-6 = A), so fold skippers are charged, the receipt split (the play's ideal game a ReceiptGame's and Pinned, with two luck premises: OperandHMu at 3/4, H-mu at the deficient words, the first, and ReceiptLuckAt at 1/2, HMU's B' case, the second, which give p = 7/8 by LemmaB at fibre 1 and LuckOfReceipt), WholeLuckAt at 1/2 (B' at a unit whose fold the run skips, ASK-9 = A at p0 = 1/2 for live coins only; the whole-unit guess bound 2^-64 is not granted), binding at delta_bind, proof soundness at delta_ZK, the Definitions' pinning (ProofLayer.Pins, met by main's circuit Definitions since PIN, #2417), the play being its proofs' (ProofLayer.Of) and RightFixed are not on the premises list.",
    "Flock.SecurityProofs.EndToEndRegisteredRowsStated": "frozen (no-function): It states no property of the verifier: it reads Flock.Guarantees.EndToEndRegisteredRows, so the lock records its text, and it leaves the list when that statement's own proof is listed.",
-   "Flock.SecurityProofs.SoundAtBridgeStated": "frozen (no-function): It states no property of the verifier: it reads Flock.Guarantees.SoundAtBridge, so the lock records its text, and it leaves the list when that statement's own proof is listed."
+   "Flock.SecurityProofs.SoundAtBridgeStated": "frozen (no-function): It states no property of the verifier: it reads Flock.Guarantees.SoundAtBridge, so the lock records its text, and it leaves the list when that statement's own proof is listed.",
+   "Accounting.SecurityProofs.TS.SessionSoundAt": "frozen (no-function,world-unlisted): #2909's SoundAt bridge on #2855's proof layer read through its C-Flock sessions (Accounting.TS.onSessions), over every window of sessions, not a Lean function; its premises WindowLaw, ServedChecksHold and ServedRootsLinked (Proofs.Accounting.TS.Session.Assumptions) are not on the premises list, and it takes Flock.Guarantees.EndToEndRegisteredRows, still a statement, as a hypothesis."
   },
   "conjectures": {
    "Nci.Assumptions.ActivationsIncompressible": {
