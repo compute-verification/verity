@@ -119,6 +119,23 @@ def sameKind : QuotKind → QuotKind → Bool
   | .type, .type | .ctor, .ctor | .lift, .lift | .ind, .ind => true
   | _, _ => false
 
+/-- The checked declarations (``checked n``) an unchecked constant of the set reaches through what it mentions, through
+other unchecked ones of the set: the kernel unfolds an unchecked definition when it checks a declaration that mentions
+it, so whatever that definition's body needs has to be in the kernel first. -/
+partial def reachChecked (constants : Std.HashMap Name ConstantInfo) (checked : Name → Option Name)
+    (memo : IO.Ref (Std.HashMap Name NameSet)) (onPath : NameSet) (n : Name) : IO NameSet := do
+  if let some r := (← memo.get)[n]? then return r
+  let some c := constants[n]? | return {}
+  let mut out : NameSet := {}
+  for m in c.getUsedConstantsAsSet do
+    if let some d := checked m then
+      out := out.insert d
+    else if constants.contains m && !onPath.contains m then
+      for d in ← reachChecked constants checked memo (onPath.insert n) m do
+        out := out.insert d
+  memo.modify (·.insert n out)
+  return out
+
 /-- The modules `m` imports, transitively, and `m` itself. -/
 def closureOf (importsOf : Std.HashMap Name (Array Name)) (m : Name) : Std.HashSet Name := Id.run do
   let mut seen : Std.HashSet Name := ({} : Std.HashSet Name).insert m
@@ -244,6 +261,14 @@ unsafe def main (args : List String) : IO UInt32 := do
       members := members.alter (declOf constants c) fun cs => some ((cs.getD #[]).push c)
   for (n, c) in renamed do
     members := members.insert n #[c]
+  -- the checked declaration a constant belongs to, if it is one; any other constant of the set went in unchecked
+  let checkedDecl (n : Name) : Option Name := do
+    let c ← constants[n]?
+    guard !(compiled c)
+    let e := declOf constants c
+    guard (members.contains e)
+    return e
+  let behind ← IO.mkRef ({} : Std.HashMap Name NameSet)
   let moduleOfDecl (d : Name) : Name := match renamedFrom[d]? with
     | some (_, m) => m
     | none => moduleOf[d]!
@@ -276,12 +301,14 @@ unsafe def main (args : List String) : IO UInt32 := do
           IO.eprintln s!"replay: {d} (in {m}) mentions {n}, declared by {", ".intercalate (from_.toList.map toString)}, \
             which {m} does not import"
           return 1
-      deps := deps.insert d <| used.toArray.filterMap fun n => do
-        let c ← constants[n]?
-        guard !(compiled c)
-        let e := declOf constants c
-        guard (e != d && members.contains e)
-        return e
+      let mut ds : NameSet := {}
+      for n in used do
+        if let some e := checkedDecl n then
+          ds := ds.insert e
+        else if constants.contains n then
+          for e in ← reachChecked constants checkedDecl behind {} n do
+            ds := ds.insert e
+      deps := deps.insert d <| (ds.erase d).toArray
   let tPlanned ← IO.monoMsNow
   let order ← match declOrder (members.keys.toArray.qsort Name.lt) deps with
     | .ok order => pure order
