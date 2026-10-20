@@ -7,7 +7,7 @@ WHAT IS v2 HERE: the attribution of every value to a request (`resolve.attribute
 -- the files of record hashed as read), the request projection (`batch_decomp.Projection` over the resolved value ids; weight-only values
 joined by `batch_decomp.shared_legs`), the component comparison and the canonical hash (`compare.compare_steps`: `canonical_sha256.a` =
 the derived component, `.b` = the record's projection), the shape rule (LP from the header, T = sampling events - prefill chunks) and the
-weights / seed / peers input layout (`batch_decomp.weights_input_nodes`, `Prog.seed_index` / `peer_index`).  Nothing here writes into the
+weights / seed / peers / witness input layout (`batch_decomp.request_inputs`).  Nothing here writes into the
 record; the result is returned (a caller may dump it beside its own outputs).
 
 Cost = v1's: the fold is decoded once (`load_oracle`, multi-GB at B>=8: a pod), each request's projection is compared with its component.
@@ -26,22 +26,6 @@ from verity_vllm.observe import contract as OB
 from verity_vllm.correspondence import resolve as RS
 
 SCHEMA = "verity-vllm/resolve-decomp/v1"
-
-
-def _owned_layout(B: "C.Prog", reqs: list[dict]) -> tuple[dict[str, int], dict[str, int], set[int]]:
-    """(seed node of request, peers node of request, weights input nodes) -- BD.decompose's reading of the fold's parameter layout."""
-    seed_node_of: dict[str, int] = {}
-    for k, i in sorted(getattr(B, "seed_index", {}).items()):
-        if i >= len(reqs):
-            raise ValueError(f"program has {len(B.seed_index)} seed input nodes but the header has {len(reqs)} requests")
-        seed_node_of[reqs[i]["request_id"]] = k
-    peer_node_of: dict[str, int] = {}
-    for k, i in sorted(getattr(B, "peer_index", {}).items()):
-        if i >= len(reqs):
-            raise ValueError(f"program has a peers input node for request index {i} but the header has {len(reqs)} requests")
-        peer_node_of[reqs[i]["request_id"]] = k
-    weights = BD.weights_input_nodes(B, len(reqs), len(seed_node_of), len(peer_node_of))
-    return seed_node_of, peer_node_of, weights
 
 
 def decompose(match_dir: str, derived_dirs: list[str], *, oracle: "C.Prog | None" = None, log_path: str | None = None,
@@ -78,7 +62,7 @@ def decompose(match_dir: str, derived_dirs: list[str], *, oracle: "C.Prog | None
     n_in = B.n_input_nodes
     if att.n_input_nodes != n_in:
         raise ValueError(f"{match_dir}: instances header / program.json disagree on n_input_nodes ({att.n_input_nodes} vs {n_in})")
-    seed_node_of, peer_node_of, weights_nodes = _owned_layout(B, reqs)
+    seed_node_of, peer_node_of, _witnesses, weights_nodes = BD.request_inputs(B, reqs)
     k2i = {r["k"]: i for i, r in enumerate(B.inst)}
     meta_of = {o["node"] + n_in: o for o in B.oracle_rows}
 
