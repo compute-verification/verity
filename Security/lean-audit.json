@@ -722,6 +722,18 @@
     "fails": "Claims.Witness.Recursion.KSBoundLin_fails",
     "meets": ["Claims.Witness.Recursion.KSBound_meets"]
    },
+   "Claims.Recursion.KSFlockLin": {
+    "fails": "Claims.Witness.Recursion.KSFlockLin_fails",
+    "meets": ["Claims.Witness.Recursion.Inner.KSAbort_meets", "Claims.Witness.Recursion.Inner.KSAbort_meets_trim"]
+   },
+   "Claims.Recursion.KSLin2": {
+    "fails": "Claims.Witness.Recursion.KSLin2_fails",
+    "meets": ["Claims.Witness.Recursion.KSBound_meets"]
+   },
+   "Claims.Recursion.BitsLin2": {
+    "fails": "Claims.Witness.Recursion.BitsLin2_fails",
+    "meets": ["Claims.Witness.Recursion.KSBound_meets"]
+   },
    "Claims.Recursion.KSPrivBound": {
     "fails": "Claims.Witness.Recursion.KSPrivBound_fails",
     "meets": ["Claims.Witness.Recursion.KSPrivBound_meets"]
@@ -749,6 +761,10 @@
    "Claims.Recursion.Scope": "the recursion's scope, which `ScopeMatches` and `Complete` read, no claim",
    "Claims.Recursion.decOK": "the decoders a claim quantifies over (`Flock.ListWithin` at the deployment), a domain, no claim",
    "Claims.Recursion.linkG": "`Fdev`'s loop condition (does `E_O` give witnesses at a draw), a finder's internal test that `KSLin` and `BitsLin` read through `Fdev`, no claim",
+   "Claims.Recursion.accAt": "`F0`'s loop condition (does a run as it may abort accept), a finder's internal test that `KSFlockLin` reads through `F0`, no claim",
+   "Claims.Recursion.opensAt": "`FC`'s loop condition (does a run as it may abort accept and open a cap position), a finder's internal test that `KSFlockLin` reads through `FC`, no claim",
+   "Claims.Recursion.accAtI": "`F0I`'s loop condition (does a draw's opened inner view accept), a finder's internal test that `KSLin2` and `BitsLin2` read through `F0I`, no claim",
+   "Claims.Recursion.opensAtI": "`FCI`'s loop condition (does a draw's opened inner view accept and open an inner cap position), a finder's internal test that `KSLin2` and `BitsLin2` read through `FCI`, no claim",
    "Claims.Rel.L": "a helper the claims read: a relation's language",
    "Claims.Rel.ext": "a helper the claims read: a relation at an extractor's optional witness",
    "Claims.Sampling.BoundaryFaulty": "a helper the claims read: a faulty unit on the boundary trace, which `FaultyBoundary` reads",
@@ -3398,6 +3414,15 @@
    "owner": "@proofs"
   },
   "Claims.Witness.Recursion.BitsLin_fails": {
+   "owner": "@proofs"
+  },
+  "Claims.Witness.Recursion.KSFlockLin_fails": {
+   "owner": "@proofs"
+  },
+  "Claims.Witness.Recursion.KSLin2_fails": {
+   "owner": "@proofs"
+  },
+  "Claims.Witness.Recursion.BitsLin2_fails": {
    "owner": "@proofs"
   },
   "Claims.Witness.Recursion.KS_fails": {
