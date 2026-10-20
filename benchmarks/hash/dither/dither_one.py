@@ -49,6 +49,11 @@ from dither_fused import CM, CR, SV, H1C, Dom, Tab, unwords, words, H1R, Call
 import h1c as H1CM
 
 F_DUMP, F_NW_TILES, F_NW_UNITS, F_FAULT, F_FAULT_WB, F_FAULT_XA = 1, 2, 4, 8, 16, 32     # h1o.cu's H1OStep.flags
+F_FAULT_Y = 64      # dither_a's ycommit only: bit 0 of the served y[0, 0] flipped, in place, every call
+# the round's leaves past a-step, admit-step and z-step (set before the window is built): "y-step" the calls' served-y
+# roots (an arm's Side fills them in `before_mid`), "receipt-step" the calls' receipt-table roots (RT4-INT-13), both
+# under the round recorded before the next coin
+ROUND_EXTRA: tuple = ()
 CAPTURES = ("gate", "control", "fault", "fault_wb")     # a peeled window's add "fault_xa" (`Window.captures`)
 LIB_ENV = "DITHER_H1O"
 PHASE_RANGE = "verity/dither/phase/"    # `Window.phase`'s NVTX ranges, under DITHER_NSYS=prof only
@@ -198,6 +203,8 @@ class Window:
         # (receipt trees', admit tables') streams: between steps those two builds run beside the z tables and the step
         # trees (they read none of each other's outputs; the round waits on the admit tables, the record on all)
         self.tree_streams: tuple | None = None
+        # called on the serving stream after the z tables and before the step trees (an arm's leaves of its own)
+        self.before_mid: list = []
         self.nvtx = os.environ.get("DITHER_NSYS") == "prof"
         self.phase_open = False
         self._epoch()
@@ -229,11 +236,12 @@ class Window:
     def _pre_sets(self) -> dict:
         c, W, t, L = self.c, self.window, self.t, self.L
         f_step = {"window": W, "step": 0, "linears": L}
-        rnd = c.set([Tab(Dom("round", {"window": W, "step": 0, "leaves": "a-step root, admit-step root, z-step root"}, 3,
-                             {"step": (1, 0)}), 3)])
-        mid = c.set([Tab(Dom("a-step", f_step, L, {"step": (1, 0)}), L, out=rnd.leaves_addr(0)),
-                     Tab(Dom("admit-step", f_step, L, {"step": (1, 0)}), L, out=rnd.leaves_addr(0) + 64),
-                     Tab(Dom("z-step", f_step, L, {"step": (1, 0)}), L, out=rnd.leaves_addr(0) + 128)])
+        self.round_kinds = ("a-step", "admit-step", "z-step") + tuple(ROUND_EXTRA)
+        nr = len(self.round_kinds)
+        rnd = c.set([Tab(Dom("round", {"window": W, "step": 0, "leaves": round_leaves(self.round_kinds)}, nr,
+                             {"step": (1, 0)}), nr)])
+        mid = c.set([Tab(Dom(kd, f_step, L, {"step": (1, 0)}), L, out=rnd.leaves_addr(0) + 64 * i)
+                     for i, kd in enumerate(self.round_kinds)])
         at, st, zt = [], [], []
         for w, (n, k) in enumerate(self.nk):
             fa = {"window": W, "step": 0, "linear": w, "module": self.names[w], "slots": t, "k": k, "schema": CM.SCHEMA}
@@ -306,7 +314,8 @@ class Window:
         if self.arms and m == self.arm_m:
             self.cap = name = self.arms.pop(0)
             self.flags = (F_DUMP | ((F_NW_TILES | F_NW_UNITS) if name == "control" else 0) | (F_FAULT if name == "fault" else 0)
-                          | (F_FAULT_WB if name == "fault_wb" else 0) | (F_FAULT_XA if name == "fault_xa" else 0))
+                          | (F_FAULT_WB if name == "fault_wb" else 0) | (F_FAULT_XA if name == "fault_xa" else 0)
+                          | (F_FAULT_Y if name == "fault_y" else 0))
             self._poison(self.slot + self.scale + self.z + list(self.ydump or [])
                          + [self.plan.out, self.plan.seeds, self.pre["mid"].level, self.pre["a"].level])
             self.caps[name] = {"s": self.s, "m": m, "salt": self.salt_bytes}
@@ -348,17 +357,33 @@ class Window:
         ev[1].record()
         self.phase("z_tables")
         self.c.build(pre["z"], self.stepv[0:1])
+        for f in self.before_mid:
+            f()
         ev[2].record()
         self.phase("step_trees")
+        rleaf = "receipt-step" in self.round_kinds
         if par:
             main.wait_event(ev[7])
+            if rleaf:
+                main.wait_event(ev[6])
+        elif rleaf:
+            self.c.build(self.rset, self.stepv[0:1])
+        if rleaf:
+            # the receipt roots under the round, so the round recorded before the next coin fixes them; "fault_rr"
+            # records the round without them (`check` must refuse it)
+            o = pre["mid"].level_off[self.round_kinds.index("receipt-step")]
+            lv = pre["mid"].level[o:o + 8 * self.L]
+            if self.cap == "fault_rr":
+                lv.view(torch.uint8).fill_(DF.POISON)
+            else:
+                lv.copy_(self.rset.roots)
         self.c.build(pre["mid"], self.stepv[0:1])
         self.c.build(pre["round"], self.stepv[0:1])
         ev[3].record()
         self.phase("receipt_trees")
         if par:
             main.wait_event(ev[6])
-        else:
+        elif not rleaf:
             self.c.build(self.rset, self.stepv[0:1])
         ev[4].record()
         self.phase("root_read")
@@ -384,7 +409,7 @@ class Window:
                 r_roots=self.rset.roots.clone(), a_roots=[unwords(pre["mid"].leaf(0, w)) for w in range(self.L)],
                 admit_roots=[unwords(pre["mid"].leaf(1, w)) for w in range(self.L)],
                 z_roots=[unwords(pre["mid"].leaf(2, w)) for w in range(self.L)],
-                leaves=[unwords(pre["round"].leaf(0, i)) for i in range(3)],
+                leaves=[unwords(pre["round"].leaf(0, i)) for i in range(len(self.round_kinds))],
                 b_roots=[unwords(self.bset.root(w)) for w in range(self.L)])
         self.round_log.append({"s": s, "m": m, "root": root.hex()[:32]})
         self.s += 1
@@ -404,6 +429,11 @@ class Window:
         return {"steps": self.steps, "one_calls_eager": self.calls, "t": self.t, "s": self.s, "epsilon": "seeded",
                 "salt": "step" if self.step_salt else "epoch", "units_form": self.units_form, "peel": self.peel,
                 "percall": pc, "phases_by_m": med, "call_forms": {DF.SITES[w % 4]: self.call_forms[w] for w in range(min(4, self.L))}}
+
+
+def round_leaves(kinds) -> str:
+    """The round domain's "leaves" field: "a-step root, admit-step root, z-step root" and ROUND_EXTRA's."""
+    return ", ".join(f"{k} root" for k in kinds)
 
 
 # -- the op and the patch --------------------------------------------------------------------------------------------------

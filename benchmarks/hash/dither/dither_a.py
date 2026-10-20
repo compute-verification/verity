@@ -63,7 +63,7 @@ import triton.language as tl
 
 import dither_fused as DF
 import dither_one as DO
-from dither_fused import CM, CR, H1R, Call
+from dither_fused import CM, CR, H1R, Call, unwords
 from h1c import Dom, Tab
 from hb_side import auto_j
 
@@ -71,7 +71,9 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "exactlin"))
 import exactlin as EL
 
 FORM = "ASK-71 A (provisional)"
-CAPTURES = ("gate", "control", "fault")
+# "fault_y" (the served y tampered after the GEMM) and "fault_rr" (the round recorded without the receipt roots), set
+# by `patch`: "fault_y" only under z="zy", which has the units' y to compare
+CAPTURES = ("gate", "control", "fault", "fault_rr")
 LIB_ENV = DO.LIB_ENV
 LIB = "dithera"
 UNITS = ("h1r", "kh", "hbk", "hbr"); KONE = ("hbk", "hbr")
@@ -88,6 +90,9 @@ AO = ("", "a", "as", "m", "ms", "mn")
 AO_SEEDS = ("as", "ms", "mn")
 NA_MULTI = 4
 ZY_KIND = "zy-unit-table"
+# a call's y alone, one hiding leaf a unit (its UR x UC bf16, 0 past m): the served y's table and the units' (the -zy
+# records' y halves) in this one domain and label, so their roots are equal exactly when the bytes are
+Y_KIND = "y-unit-table"
 UNIT = (32, 32)     # (UR, UC): the receipts' units; a narrower down_proj unit changes only this
 H1R_BLOCK, H1R_SPLIT = 3, 4     # h1r_launch's versions: a unit a block, a unit six warps
 M32 = DO.M32
@@ -224,6 +229,29 @@ def dithera_mm_tma(a_desc, b_desc, sa_ptr, sb_ptr, c_ptr, z_ptr, y_ptr, d_ptr, S
 
 
 @triton.jit
+def dithera_ycommit(y_ptr, dst_ptr, S_ptr, M, N, T, stride_y, UR: tl.constexpr, UC: tl.constexpr,
+                    BLOCK_M: tl.constexpr, BLOCK_N: tl.constexpr):
+    # the served y (int16 view; the bytes the next layer reads), rows < m, 0 past m, into the call's y records (unit
+    # row block, then column block; Y_KIND); F_NW_TILES = 2: nothing written; F_FAULT_Y = 64: bit 0 of y[0, 0] flipped
+    # in place first, so the next layer and the record read the tampered y
+    m = tl.load(S_ptr + 1)
+    flags = tl.load(S_ptr + 3)
+    if (flags & 2) == 0:
+        offs_m = tl.program_id(0) * BLOCK_M + tl.arange(0, BLOCK_M).to(tl.int64)
+        offs_n = tl.program_id(1) * BLOCK_N + tl.arange(0, BLOCK_N).to(tl.int64)
+        mask_n = (offs_n < N)[None, :]
+        ld = ((offs_m < m) & (offs_m < M))[:, None] & mask_n
+        v = tl.load(y_ptr + offs_m[:, None] * stride_y + offs_n[None, :], mask=ld, other=0)
+        if (flags & 64) != 0:
+            first = (offs_m[:, None] == 0) & (offs_n[None, :] == 0)
+            v = tl.where(first, (v ^ 1).to(tl.int16), v)
+            tl.store(y_ptr + offs_m[:, None] * stride_y + offs_n[None, :], v, mask=ld & first)
+        u = (offs_m[:, None] // UR) * (N // UC) + offs_n[None, :] // UC
+        tl.store(dst_ptr + u * (UR * UC) + (offs_m[:, None] % UR) * UC + offs_n[None, :] % UC, v,
+                 mask=(offs_m < T)[:, None] & mask_n)
+
+
+@triton.jit
 def dithera_commit(src_ptr, dst_ptr, S_ptr, n, BLOCK: tl.constexpr):
     # F_NW_UNITS = 4: the step's receipts stay unwritten
     flags = tl.load(S_ptr + 3)
@@ -294,6 +322,7 @@ class Side:
         self.joins = self.calls = 0
         self.cfgs: dict = {}
         self.zy: list[torch.Tensor] = []
+        self.ysv: list[torch.Tensor] = []
         if z != "row":
             # the window's row z tables are never built: under "zy" its z/y leaf tables are, between steps in their
             # place
@@ -310,6 +339,21 @@ class Side:
                                         length=zy_bytes(self.unit_of[w]), lab=("zy/", f"/{w}"),
                                         out=win.pre["mid"].leaves_addr(2) + 64 * w) for w in range(win.L)])
             win.pre["z"] = self.zyset
+            # RT4-INT-11: the served y committed under the round (its roots the y-step leaves) and the units' y (the
+            # records' y halves, read in place), compared by root between steps
+            yi = win.round_kinds.index("y-step")
+            yb, ub = [y_bytes(u) for u in self.unit_of], [zy_bytes(u) for u in self.unit_of]
+            cnt = [zy_count(win, w, self.unit_of[w]) for w in range(win.L)]
+            self.ysv = [torch.empty(cnt[w] * yb[w], dtype=torch.uint8, device=dev) for w in range(win.L)]
+            self.ysset = win.c.set([Tab(Dom(Y_KIND, y_fields(win, w, 0, self.unit_of[w]), cnt[w], {"step": (1, 0)}), cnt[w],
+                                        data=self.ysv[w], stride=yb[w], body=yb[w], length=yb[w], lab=("y/", f"/{w}"),
+                                        out=win.pre["mid"].leaves_addr(yi) + 64 * w) for w in range(win.L)])
+            self.yuset = win.c.set([Tab(Dom(Y_KIND, y_fields(win, w, 0, self.unit_of[w]), cnt[w], {"step": (1, 0)}), cnt[w],
+                                        data=self.zy[w][ub[w] - yb[w]:], stride=ub[w], body=yb[w], length=yb[w],
+                                        lab=("y/", f"/{w}")) for w in range(win.L)])
+            self.ybad = torch.zeros(win.L, dtype=torch.bool, device=dev)
+            self.y_refused: list[dict] = []
+            win.before_mid.append(self.y_leaves)
         if unit in ("kh",) + KONE:
             if not h1u:
                 raise RuntimeError(f"dither-a's {unit} unit needs h1u.so (HB_H1U; HB_H1U_KSPLIT for hbk, HB_H1U_KRONLY for hbr)")
@@ -378,6 +422,25 @@ class Side:
                                    wt.stride(0), y.stride(0), BLOCK_M=bm, BLOCK_N=bn, BLOCK_K=bk, SPLIT_K=split, ZL=self.zl,
                                    UR=ur, UC=uc, num_warps=warps, num_stages=stages, **EL.OPTS)
 
+    def ycommit(self, w: int, y: torch.Tensor) -> None:
+        """On the serving stream after call w's GEMM: the served y into the call's y records (`dithera_ycommit`)."""
+        if not self.ysv:
+            return
+        n, t = y.shape[1], self.win.t
+        ur, uc = self.unit_of[w]
+        dithera_ycommit[(triton.cdiv(t, 32), triton.cdiv(n, 128))](y.view(torch.int16), self.ysv[w].view(torch.int16),
+                                                                   self.win.S, y.shape[0], n, t, y.stride(0), UR=ur,
+                                                                   UC=uc, BLOCK_M=32, BLOCK_N=128, **EL.OPTS)
+
+    def y_leaves(self) -> None:
+        """Between steps (the window's `before_mid`): the served y's tables, whose roots are the round's y-step leaves,
+        and the units' y tables; `ybad` the calls whose two roots differ (a refused window, RT4-INT-11)."""
+        win = self.win
+        win.c.build(self.ysset, win.stepv[0:1])
+        win.c.build(self.yuset, win.stepv[0:1])
+        o = win.pre["mid"].level_off[win.round_kinds.index("y-step")]
+        self.ybad = (win.pre["mid"].level[o:o + 8 * win.L].view(win.L, 8) != self.yuset.roots.view(win.L, 8)).any(1)
+
     def seeds(self, w: int, st: int) -> int:
         """kh's, hbk's and hbr's seeds of call w (h1r version 0), from the window's salt and the call's A root."""
         win = self.win
@@ -442,6 +505,7 @@ class Side:
             self.side.wait_event(self.a_done[i])
             self.a_used.add(i)
             self.gemm(w, xq, s_a, wt, s_w, y)
+            self.ycommit(w, y)
             rc = rc or self.units(w, M, st, s_w)
             if self.ao == "mn":
                 self.u_done[i].record(self.side)
@@ -449,6 +513,7 @@ class Side:
         else:
             self.side.wait_event(self.fork)
             self.gemm(w, xq, s_a, wt, s_w, y)
+            self.ycommit(w, y)
             rc = win.a_call(w, win.slot[w], win.scale[w], st) or self.units(w, M, st, s_w)
         if rc:
             raise RuntimeError(f"dither-a call {w} (M={M}): a side launch returned {rc}")
@@ -484,7 +549,8 @@ class Side:
 
     def info(self) -> dict:
         return {"form": FORM, "unit": self.unit, "z": self.z, "a_overlap": self.ao, "trees_parallel": self.pt,
-                "leaf_bytes_per_step": self.leaf_bytes(),
+                "leaf_bytes_per_step": self.leaf_bytes(), "round_leaves": list(self.win.round_kinds),
+                "y_root_refused_steps": self.y_refused[:8] if self.zy else None,
                 "a_form": self.win.c.a_form, "calls": self.calls, "joins": self.joins,
                 "h1r_versions": {DF.SITES[w % 4]: self.versions[w] for w in range(min(4, self.win.L))}
                 if self.unit == "h1r" else None, "gemm_cfgs": {f"{n}x{k}@M{m}": c for (n, k, m), c in self.cfgs.items()}}
@@ -504,6 +570,24 @@ def zy_fields_of(window: str, s: int, w: int, module: str, t: int, n: int, unit:
 
 def zy_fields(win: DO.Window, w: int, s: int, unit: tuple[int, int]) -> dict:
     return zy_fields_of(win.window, s, w, win.names[w], win.t, win.nk[w][0], unit)
+
+
+def y_bytes(unit: tuple[int, int]) -> int:
+    """A unit's y record: its UR x UC bf16."""
+    return 2 * unit[0] * unit[1]
+
+
+def y_fields(win: DO.Window, w: int, s: int, unit: tuple[int, int]) -> dict:
+    ur, uc = unit
+    return {"window": win.window, "step": s, "linear": w, "module": win.names[w], "slots": win.t, "n": win.nk[w][0],
+            "unit": [ur, uc], "record": f"y {ur}x{uc} bf16 LE row-major; 0 past m", "order": "unit row block, then column block",
+            "schema": CM.SCHEMA}
+
+
+def y_rows(rec: torch.Tensor, t: int, n: int, unit: tuple[int, int]) -> torch.Tensor:
+    """A call's y records (Y_KIND) as its y (T, N) int16, row-major."""
+    ur, uc = unit
+    return rec.view(torch.int16).reshape(t // ur, n // uc, ur, uc).permute(0, 2, 1, 3).reshape(t, n)
 
 
 def zy_count(win: DO.Window, w: int, unit: tuple[int, int]) -> int:
@@ -543,17 +627,26 @@ def side() -> Side:
                 SIDE[0].s_unit.copy_(torch.tensor([0, m, 0, 0], dtype=torch.int32))
             if self.cap:
                 SIDE[0].stage.view(torch.uint8).fill_(DF.POISON)
-                for x in SIDE[0].zy:
+                for x in SIDE[0].zy + SIDE[0].ysv:
                     x.fill_(DF.POISON)
                 if SIDE[0].zy:
-                    SIDE[0].zyset.level.view(torch.uint8).fill_(DF.POISON)
+                    for st in (SIDE[0].zyset, SIDE[0].ysset, SIDE[0].yuset):
+                        st.level.view(torch.uint8).fill_(DF.POISON)
                 torch.cuda.synchronize()
 
         def after_a(self: DO.Window) -> None:
-            cap = self.cap
+            cap, sd = self.cap, SIDE[0]
             after(self)
-            if cap is not None and SIDE[0].zy:
-                self.caps[cap]["zy"] = [x.clone() for x in SIDE[0].zy]
+            if not sd.zy:
+                return
+            bad = sd.ybad.nonzero().flatten().tolist()
+            if bad:
+                sd.y_refused.append({"s": self.s - 1, "capture": cap, "calls": len(bad)})
+            if cap is not None:
+                yi = self.round_kinds.index("y-step")
+                self.caps[cap].update(zy=[x.clone() for x in sd.zy], ysv=[x.clone() for x in sd.ysv], y_root_bad=bad,
+                                      y_roots=[unwords(self.pre["mid"].leaf(yi, w)) for w in range(self.L)],
+                                      yu_roots=[unwords(sd.yuset.root(w)) for w in range(self.L)])
         DO.Window.before = before_a
         DO.Window.after = after_a
     return SIDE[0]
@@ -587,6 +680,9 @@ def patch(t: int, h1c: str, h1o: str, unit: str = "h1r", h1u: str | None = None,
         raise ValueError(f"dither-a's unit: one of {UNITS}, not {unit!r}; its z: one of {tuple(ZMODES)}, not {z!r}; "
                          f"its ao: one of {AO}, not {ao!r}")
     CONF.update(unit=unit, h1u=h1u, z=z, ao=ao, pt=pt, ls=ls)
+    global CAPTURES
+    DO.ROUND_EXTRA = (("y-step",) if z == "zy" else ()) + ("receipt-step",)
+    CAPTURES = ("gate", "control", "fault") + (("fault_y",) if z == "zy" else ()) + ("fault_rr",)
     os.environ.setdefault("DITHER_A_FORM", "3")
     DO.patch(t=t, h1c=h1c, h1o=h1o, key=key, gate=True)
 
@@ -647,13 +743,57 @@ def check(win: DO.Window, lib_h1o: str, which: str = "gate", n_cpu_units: int = 
     doc["admit_roots_bad"] = [w for w in range(L) if s_cpu[w] != g["admit_roots"][w]]
     doc["z_roots_bad"] = [w for w in range(L) if z_cpu[w] != g["z_roots"][w]]
     f_step = {"window": W, "step": s, "linears": L}
-    a_step = CM.step_root(CM.domain(f_step, L, "a-step"), [a_cpu[w] for w in range(L)])
-    admit_step = CM.step_root(CM.domain(f_step, L, "admit-step"), [s_cpu[w] for w in range(L)])
-    z_step = CM.step_root(CM.domain(f_step, L, "z-step"), [z_cpu[w] for w in range(L)])
-    rnd = CM.step_root(CM.domain({"window": W, "step": s, "leaves": "a-step root, admit-step root, z-step root"}, 3, "round"),
-                       [a_step, admit_step, z_step])
-    doc["round"] = {"a_step": a_step == g["leaves"][0], "admit_step": admit_step == g["leaves"][1],
-                    "z_step": z_step == g["leaves"][2], "root": rnd == g["root"]}
+    step_cpu = {"a-step": CM.step_root(CM.domain(f_step, L, "a-step"), [a_cpu[w] for w in range(L)]),
+                "admit-step": CM.step_root(CM.domain(f_step, L, "admit-step"), [s_cpu[w] for w in range(L)]),
+                "z-step": CM.step_root(CM.domain(f_step, L, "z-step"), [z_cpu[w] for w in range(L)])}
+    kinds = win.round_kinds
+    if zy:
+        # RT4-INT-11: the served y's records (what ycommit read from the served y) hashed here, their step root the
+        # round's y-step leaf; the run-time check (device roots of the served y against the units' y) against the
+        # CPU's byte compare of the two, which under one domain and label is the roots' compare
+        ys_cpu, cpu_bad, dump_bad, fy_bad = {}, [], [], []
+        for w in range(L):
+            u, n = SIDE[0].unit_of[w], win.nk[w][0]
+            cnt = zy_count(win, w, u)
+            yd_ = CM.domain(y_fields(win, w, s, u), cnt, Y_KIND)
+            yrec = g["ysv"][w].cpu().numpy().reshape(cnt, y_bytes(u))
+            urec = g["zy"][w].cpu().numpy().reshape(cnt, zy_bytes(u))[:, zy_bytes(u) - y_bytes(u):]
+            ys_cpu[w] = CM.levels(yd_, [CM.leaf(yd_, key, f"y/{s}/{w}", i, bytes(yrec[i]))[0] for i in range(cnt)])[-1][0]
+            if not np.array_equal(yrec, urec):
+                cpu_bad.append(w)
+            if g["y"] is not None:
+                yr = y_rows(g["ysv"][w], t, n, u)
+                x = yr[:m] ^ g["y"][w].view(torch.int16)
+                if bool(x.any()) or bool(yr[m:].any()):
+                    dump_bad.append(w)
+                    if which == "fault_y" and not (x.nonzero().tolist() == [[0, 0]] and int(x[0, 0]) == 1
+                                                   and not bool(yr[m:].any())):
+                        fy_bad.append(w)
+        step_cpu["y-step"] = CM.step_root(CM.domain(f_step, L, "y-step"), [ys_cpu[w] for w in range(L)])
+        doc["y_served_roots_bad"] = [w for w in range(L) if ys_cpu[w] != g["y_roots"][w]]
+        doc["y_root_check"] = {"cpu_bad": len(cpu_bad), "device_bad": len(g["y_root_bad"]),
+                               "agree": cpu_bad == g["y_root_bad"]}
+        doc["y_served_vs_dump_bad"] = dump_bad if g["y"] is not None else None
+        if which == "fault_y":
+            doc["fault_y_bad"] = fy_bad[:4]
+    if "receipt-step" in kinds:
+        # RT4-INT-13: the receipt roots under the round; three calls' roots rehashed from the captured receipts
+        r_dev = [unwords(g["r_roots"][8 * w:8 * w + 8]) for w in range(L)]
+        step_cpu["receipt-step"] = CM.step_root(CM.domain(f_step, L, "receipt-step"), r_dev)
+        rr_bad = []
+        for w in sorted({0, 2, L - 1}):
+            o_, units, nw = win.plan.offs[w]
+            fr = {"window": W, "step": s, "linear": w, "module": win.names[w], "base": s * win.u_step + win.offs[w],
+                  "units": units, "words": nw, "schema": CM.SCHEMA}
+            rd = CM.domain(fr, units, "receipts")
+            rrows = CM.receipt_rows(g["receipts"][o_:o_ + units * nw].view(units, nw).cpu().numpy().view(np.uint32))
+            if CM.levels(rd, [CM.leaf(rd, key, f"r/{s}/{w}", i, bytes(rrows[i]))[0] for i in range(units)])[-1][0] != r_dev[w]:
+                rr_bad.append(w)
+        doc["receipt_roots_bad"] = rr_bad
+    rnd = CM.step_root(CM.domain({"window": W, "step": s, "leaves": DO.round_leaves(kinds)}, len(kinds), "round"),
+                       [step_cpu[k] for k in kinds])
+    doc["round"] = {**{k.replace("-", "_"): step_cpu[k] == g["leaves"][i] for i, k in enumerate(kinds)},
+                    "root": rnd == g["root"]}
     # z = A B^T by int_mm on the committed A, zero past m; the served y = dequant(z); under "zy" the leaf's y = dequant
     # of the leaf's z (0 past m) = the served y
     z_bad, y_bad, yleaf_bad = [], [], []
@@ -704,8 +844,27 @@ def check(win: DO.Window, lib_h1o: str, which: str = "gate", n_cpu_units: int = 
             rc_bad.append(w)
     doc["receipts_vs_h1r_bad"] = rc_bad
     doc["live_units"] = int(sum((min(m, t) + 31) // 32 * (n // 32) for n, _ in win.nk))
+    y_ok = not zy or (not doc["y_served_roots_bad"] and doc["y_root_check"]["agree"])
+    y_match = not zy or (not doc["y_root_check"]["cpu_bad"] and not doc["y_served_vs_dump_bad"])
     commits_ok = (not doc["a_roots_bad"] and not doc["admit_roots_bad"] and not doc["z_roots_bad"]
-                  and all(doc["round"].values()))
+                  and all(doc["round"].values()) and not doc.get("receipt_roots_bad") and y_ok)
+    if zy:
+        doc["y_refused_steps"] = [x for x in SIDE[0].y_refused if x["capture"] not in ("fault_y", "control")][:4]
+    rest_ok = not rc_bad and not z_bad and not y_bad and not yleaf_bad
+    if which == "fault_y":
+        # refused at run time on every call (the served y's root is not the units'), every commitment else kept
+        every = list(range(L))
+        doc["conforming"] = (not fy_bad and dump_bad == every and cpu_bad == every and commits_ok and rest_ok)
+        doc["ok"] = y_match and doc["conforming"]
+        return doc
+    if which == "fault_rr":
+        # the round recorded without the receipt roots: refused on its receipt-step leaf and root alone
+        others = all(v for k, v in doc["round"].items() if k not in ("receipt_step", "root"))
+        doc["conforming"] = (not doc["round"]["receipt_step"] and not doc["round"]["root"] and others and rest_ok
+                             and y_match and y_ok and not doc["a_roots_bad"] and not doc["admit_roots_bad"]
+                             and not doc["z_roots_bad"] and not doc.get("receipt_roots_bad"))
+        doc["ok"] = commits_ok and doc["conforming"]
+        return doc
     if which == "fault":
         doc["fault_shift"], doc["fault_bad"] = shift, fault_bad
         doc["conforming"] = not fault_bad and not z_bad and not y_bad and not yleaf_bad and commits_ok
@@ -741,18 +900,23 @@ def check(win: DO.Window, lib_h1o: str, which: str = "gate", n_cpu_units: int = 
     h1v3_ok = which != "gate" or doc["h1v3"].get("tree") is None or (
         "units" in hv and all(x["h1v3_receipt_equal"] and x.get("h1v3_z_equal", True) for x in units_doc))
     doc["ok"] = (not rc_bad and not z_bad and (g["y"] is None or not y_bad) and not yleaf_bad and commits_ok and h1v3_ok
+                 and y_match and not (zy and doc["y_refused_steps"])
                  and all(x["receipt_equal"] and x["z_equal_today"] for x in units_doc))
     return doc
 
 
-def gate_verdict(gate: dict, control: dict, fault: dict) -> dict:
+def gate_verdict(gate: dict, control: dict, fault: dict, *more: dict) -> dict:
     """The poisoned gate passes; its no-write control (complete) is refused on z and on the receipts; the fault step is
-    refused on the receipts at exactly the flipped words, with z, y and every commitment but the receipts' kept."""
+    refused on the receipts at exactly the flipped words, with z, y and every commitment but the receipts' kept; then
+    CAPTURES' "fault_y" (under -zy: the served y tampered, refused at run time on every call's y root, every other
+    commitment kept) and "fault_rr" (the round without the receipt roots, refused on that leaf alone)."""
     refused = bool(control.get("complete") and not control.get("ok") and control.get("z_vs_int_mm_bad")
                    and control.get("receipts_vs_h1r_bad"))
     fault_refused = bool(fault.get("complete") and not fault.get("ok") and fault.get("conforming"))
-    return {"ok": bool(gate.get("ok")) and refused and fault_refused, "form": FORM, "gate_ok": bool(gate.get("ok")),
-            "control_refused": refused, "fault_refused": fault_refused,
+    extra = {f"{x.get('which')}_refused": bool(x.get("complete") and not x.get("ok") and x.get("conforming"))
+             for x in more}
+    return {"ok": bool(gate.get("ok")) and refused and fault_refused and all(extra.values()), "form": FORM,
+            "gate_ok": bool(gate.get("ok")), "control_refused": refused, "fault_refused": fault_refused, **extra,
             "control_bad": {k: len(control.get(k) or []) for k in ("z_vs_int_mm_bad", "y_vs_dequant_z_bad",
                                                                     "receipts_vs_h1r_bad", "a_roots_bad", "z_roots_bad")},
             "fault_receipt_calls_off": len(fault.get("receipts_vs_h1r_bad") or [])}
