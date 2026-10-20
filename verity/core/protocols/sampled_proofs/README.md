@@ -92,8 +92,8 @@ SHA-256 leaves.
 - **The verifier of record.** `one_stage.verifier` runs the Lean port of the one-stage audit (the Lake package
   `verity/core/service/sampled_proofs`, its `sampled-proofs-verifier`) and the Python beside it on every check: R1-R7
   (`check`), `matches_public`, the challenger's draw (`select`), `check_draw`, `check_proved`, the whole audit record
-  (`audit_record`), and the service's public-items rule (`check_public`) and hold on an outcome's verdicts
-  (`check_verdicts`). Its one line
+  (`audit_record`), and the service's public-items rule (`check_public`), hold on an outcome's verdicts
+  (`check_verdicts`), stream rules (`stream`) and fleet rules (`fleet`). Its one line
   `RECORD_VERDICT = "lean"` names whose verdict is the record's (`"python"` switches back); both outcomes are recorded
   beside it (`verifiers`), and where they disagree the check is refused naming both. The service's `Stream` and
   `benchmarks/one_stage` call it. Python is held to the Lean by
@@ -155,7 +155,9 @@ from verity.core.protocols.sampled_proofs.costfit import fit
     `verifier.check_verdicts`).
   - `Stream(spec, unit, budget=, delta=, challenger=, rounds=1)` has the calls `register`, `select` (with a work
     sampling design's `closure=`), `register_interiors` (under `TwoStage`), `session`, `deliver` and `outcome`, which
-    raise `Refused` (with its `Verdict`) or `Pending`.
+    raise `Refused` (with its `Verdict`) or `Pending`; `halted` is its halt's cause once its fleet halted it.
+  - `Fleet()` has `attach(stream, operator)`, before the stream's first registration; `halted` maps each halted
+    operator to its halt's cause.
   - `selection_law` is the sampling design a rule names over N units, and `select_draw` the draw object from the
     challenger's coins (or a sampler) under the expanded design, with a work draw's closure.
 - `registration`: `record` builds a `verity/registration/v1` record (v2 with registered values), `check` holds one to
@@ -175,8 +177,8 @@ from verity.core.protocols.sampled_proofs.costfit import fit
   (and `verifiers`: both verifiers' outcomes).
 - `hello`: `check_run`, the run's Hello and its one coin tree over `run_streams`.
 - `verifier`: the verifier of record: `check`, `matches_public`, `check_draw`, `check_proved`, `hello`, `audit_record`,
-  `check_public`, `check_verdicts` (given the service's Python verdict), `two_stage_profile` and `check_probability`,
-  by the Lean and the Python; `RECORD_VERDICT` names whose is the record's.
+  `check_public`, `check_verdicts` (given the service's Python verdict), `two_stage_profile`, `check_probability`,
+  `stream` and `fleet`, by the Lean and the Python; `RECORD_VERDICT` names whose is the record's.
 - `consumers`: `exfiltration_bound`, `compute_bound` and `location_bits`, over any `IntegrityProfile`.
 - `two_stage`: `TwoStageLaw` of `Stage`s and its `profile`; stage 1's draws `select_replay_units` and `draw_first` (a
   one-stage design's draw over the RUs, with `closure_of` for a work design's closure), stage 2's `select_proof_units`,
@@ -239,12 +241,17 @@ only inside a proof (`one_stage.registered`).
   of P), `{"value": V}` (a registered entry's root, never a supplied value's), `{"bytes": hex}`, `{"position": "K"}` (K
   below the record's population, after the log's earlier records' populations, `log_base`, as a big-endian u64, so no
   two records of one log share a position) and `{"window": coin}` (`window_salt`: SHA-512 of the coin bound to the
-  record's window, a salt per window since R6 takes one record a window). The rows are committed under public salts
+  verifier's binding, its stream and its prover, and to the record's window; a salt per prover, stream and window since
+  R6 takes one record a window, and refused without a binding). The rows are committed under public salts
   (`supplied_salts`), and R7 refuses an entry whose root is not the one it recomputes (`R7-supplied`). PoUW's seed
   inputs (`pouw.roots`, `pouw.salt`, `pouw.positions`) are supplied values
   (`verity/core/protocols/pouw/tests/test_pouw_supplied_inputs.py`).
 - Pinned roots (`check(..., pinned={value: root})`): roots of registered values the verifier doesn't fill, held before
   the record (a model's weights recorded before the salt). R7 holds such a value to its pin as to a root the log holds.
+- Binding (`check(..., binding={"stream", "prover"})`, lowercase hex: the verifier's stream digest and the identity it
+  registered the prover under): R6 refuses a record whose window doesn't name both (`R6-stream`, `R6-prover`), and the
+  window salt binds them, so each (prover, stream, window, position) gets its own seed and a tile proved for one stream
+  is refused in another, in the same window or not.
 - Reads at a public position: the verifier derives every unit's reads from its own program (`reads`). A unit's template
   parameter whose leaves are exactly row `r` of a registered value reads row `r`; a parameter that holds part of a row,
   or reads the value in one unit and not in another of its template, is refused. Data-dependent reads are not public
@@ -297,6 +304,8 @@ Code and records call a sampling design a `law`; the name stays until a format v
 - A sampling design's text is `subset:K` or `bernoulli:NUM/DEN` with `NUM ≤ DEN` and `DEN > 0` (M0's `serve --draw`
   syntax), or one of the rules `stratified:K` and `work:K` with `K ≥ 1` (`draw.parse_law`), each number in ASCII digits
   (`draw.digits`, as the Lean reads them; a draw's `p` too).
+- A new Spec states `rate:NUM/DEN[:T]` (`draw.parse_rate`): over N units, `subset:K` at `K = T·⌈NUM·N/(DEN·T)⌉`
+  (`draw.rate_count`), refused (`rate`) unless `1 ≤ K ≤ N`.
 - As objects they are `{"law": "subset", "k": K}`, `{"law": "bernoulli", "p": "NUM/DEN"}`, and the rules expanded by
   `draw.derive`: `{"law": "stratified", "k": K, "strata": [{"template", "units", "k"}, ...]}` and
   `{"law": "work", "k": K, "strata": [{"template", "units", "work", "floor", "k"}, ...]}`. The registration carries the
@@ -395,13 +404,21 @@ Pinned by `tests/test_consumers.py` and `tests/fixtures/exfiltration_lean.json`,
   (`verity/ml/flock/verifier/PROTOCOL.md` §16.12).
 - **The salt and the registration deadline**: one salt an epoch, and a late registration ends the epoch. This is PoUW's
   `Pouw.AcceptsBy` (`Security/Definitions/Pouw/Game/Deadline.lean`).
+- **The stream's rules** (budget, open registrations, salt, deadlines, once-only steps), decided op by op by the verifier
+  of record (`verifier.stream`: `SampledProofs/Stream.lean` beside `service._step`) on the counts and entries the op
+  reads. A disagreement stops the stream.
+- **The fleet's halt (R5-all)** (`service.Fleet`): at the failure that brings any stream of an operator to its budget,
+  every stream of the operator halts, each outcome not yet final ends as `halted`, never `accept`, and nothing of the
+  operator registers again. Decided by the verifier of record (`verifier.fleet`: `SampledProofs/Fleet.lean` beside
+  `service._fleet_step`, and `Stream.lean`'s `halt`), whose properties are `Security/Properties/SampledProofs/Halt.lean`.
 - **No retries**, **the failure budget**, **the log's history** (a check reads a few records, with the whole log's
   verdict), **the records** (`verity/proof-service/stream/v0` and `outcome/v0`) and what a stream refuses until it is
   built.
 
 Each rule, its formats and its refusal codes are in `service`'s module docstring. Pinned by `tests/test_service.py`, the
-log's history by `tests/test_service_history.py`, sessions by `tests/test_service_sessions.py`, and the two-stage
-stream, with PoUW's example from the architecture note, by `tests/test_service_two_stage.py`.
+log's history by `tests/test_service_history.py`, sessions by `tests/test_service_sessions.py`, the fleet's halt by
+`tests/test_service_fleet.py`, the stream's and the fleet's rules by the difftest's `stream` and `fleet` pieces, and the
+two-stage stream, with PoUW's example from the architecture note, by `tests/test_service_two_stage.py`.
 
 ### Two-stage sampling
 
