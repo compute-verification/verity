@@ -1151,6 +1151,31 @@
   "Verity.Declaration.Contains": {
    "owner": "@lean",
    "digest": "2e4651003538493bac63ae90c32a521e95d2e8596bea6b3c85b9cfd150c5647b"
+  },
+  "Flock.SoundAtBridge.AcceptedLive": {
+   "owner": "@proofs"
+  },
+  "Flock.SoundAtBridge.OpenedPlurAt": {
+   "owner": "@proofs"
+  },
+  "Flock.SoundAtBridge.RelOfRows": {
+   "owner": "@proofs"
+  },
+  "Flock.SoundAtBridge.RowsSession.CR": {
+   "owner": "@proofs"
+  },
+  "Flock.SoundAtBridge.RowsSession.RowsAt": {
+   "owner": "@proofs"
+  },
+  "Flock.SoundAtBridge.RowsSession.ServedRegistered": {
+   "owner": "@proofs"
+  },
+  "Flock.SoundAtBridge.WindowLaw": {
+   "owner": "@proofs"
+  },
+  "FlockSoundness.Discharge.ZkReg.LiveAcceptsZKR": {
+   "owner": "@proofs",
+   "digest": "c29b27d7b194c783ad2a91b68e032b214dd164a06bdab08e740dce2f9544d569"
   }
  },
  "meaning": [
