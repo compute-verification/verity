@@ -16,9 +16,11 @@ label of `LABELS`, and every draw over the root is a non-legacy form from its la
 `identity_picker(legacy=False)` (`IDENTITIES`), `replay_key` (`REPLAY`) and `record_kernel_check_seed` (`KERNEL_CHECK`), through
 `positions_of`, `identities_kw` and `kernel_seed_of`, which read a recorded ``vllm-v1`` run with the legacy forms.  The Commit is a
 client of the proof service's challenger (`verity.core.protocols.sampled_proofs.challenger`, scheme `SCHEME`, `layout`): coin i of each
-label opens once, after the Commit's i-th root (`service_challenger`).  Only a challenge whose coins open against a commitment the
-verifier recorded from its own challenger is post-commitment of record (`attested_reason`, `trust`); a key handed in
-(`key_challenger`), the run's own bytes (`own_challenger`) or a challenger the prover's process holds draw measurement samples.
+label opens once, after the Commit's i-th root (`service_challenger`), from the challenger on its auditor host
+(`commit_challenger`'s address, `remote.RemoteChallenger`).  Only a challenge whose coins open against the commitment the verifier's
+own challenger signed, each after the root its log shows it received, is post-commitment of record (`attested_reason`,
+`trust_session`); a key handed in (`key_challenger`), the run's own bytes (`own_challenger`) or a challenger the prover's process holds
+draw measurement samples.
 
 The legacy seeds of the other drivers (replay's tiers, the compiled-kernel check, recompute's reference rows,
 difftest, the relation checkers) are here too (`root_seed` .. `case_seed`), with the only generator constructors
@@ -204,8 +206,11 @@ COIN_BYTES = 64
 #: the one origin whose challenge can be post-commitment of record: an answer of the service's challenger, with its coin openings
 ATTESTED = "challenger"
 
-#: the coin commitments the verifier recorded from its own challenger before their epochs (`trust`; `LiveCommitment.to_json`, by root hex)
-TRUSTED: dict[str, dict[str, Any]] = {}
+#: what the verifier read from its own challenger's directory (`trust_session`), by coin commitment root hex: the commitment the
+#: challenger signed (`LiveCommitment.to_json`) and the roots its release log shows it received, by label in order
+TRUSTED: dict[str, tuple[dict[str, Any], dict[str, tuple[bytes, ...]]]] = {}
+#: why `trust_session` refused a challenger's directory (a missing, malformed or unsigned record, or an unreadable log)
+REFUSED: list[str] = []
 
 
 def layout(runs: int) -> tuple[tuple[str, int], ...]:
@@ -237,7 +242,7 @@ Challenger = Callable[[bytes], LiveChallenge]
 def service_challenger(challenger: Any) -> Challenger:
     """A `Challenger` over the service's challenger (a `challenger.LiveChallenger` holding `layout(runs)` under `SCHEME`): each label's
     `LiveRecord` records the Commit's next root and only then opens that label's next coin after it, once.  Origin `ATTESTED`; whether
-    the commitment is the auditor's is the verifier's check (`attested_reason`)."""
+    the commitment is the auditor's is the verifier's check (`attested_reason`).  Its ``close`` ends a remote challenger's session."""
     from verity.core.protocols.sampled_proofs.challenger import LiveRecord
 
     if challenger.commitment.scheme != SCHEME:
@@ -248,6 +253,7 @@ def service_challenger(challenger: Any) -> Challenger:
         openings = {label: r.record(bytes(root)) for label, r in records.items()}
         return LiveChallenge({label: o.coin for label, o in openings.items()}, bytes(root), ATTESTED,
                              {"commitment": challenger.commitment.to_json(), "openings": {label: o.to_json() for label, o in openings.items()}})
+    ask.close = getattr(challenger, "close", lambda: None)
     return ask
 
 
@@ -266,30 +272,58 @@ def own_challenger(root: bytes) -> LiveChallenge:
     return LiveChallenge({label: os.urandom(COIN_BYTES) for label in LABELS}, bytes(root), "own")
 
 
-def commit_challenger(given: str | bytes | None, runs: int) -> Challenger:
-    """The Commit's challenger: a key handed in (`key_challenger`), else the service's challenger (a `challenger.LiveChallenger` over
-    `layout(runs)`, epoch 0) held by this process.  Its commitment is this process's own, so its draws are measurement samples unless the
-    verifier recorded that commitment from its own challenger (`trust`)."""
+def commit_challenger(given: str | bytes | None, runs: int, address: str | None = None) -> Challenger:
+    """The Commit's challenger: a key handed in (`key_challenger`); else the service's challenger on its auditor host at ``address``
+    (``HOST:PORT``, `remote.RemoteChallenger`); else a `challenger.LiveChallenger` over `layout(runs)`, epoch 0, held by this process,
+    its coins the Lean verifier of record's (`one_stage.verifier.coins`).  Only the auditor host's draws can be of record: the verifier
+    trusts the commitment its own challenger signed and the roots it logged (`trust_session`), never one this process holds."""
     if given:
         return key_challenger(given)
+    if address:
+        from verity.core.protocols.sampled_proofs import remote
+
+        return service_challenger(remote.RemoteChallenger.connect(address))
     from verity.core.protocols.sampled_proofs.challenger import LiveChallenger
+    from verity.core.protocols.sampled_proofs.one_stage import verifier
 
-    return service_challenger(LiveChallenger(SCHEME, 0, layout(runs)))
+    return service_challenger(LiveChallenger(SCHEME, 0, layout(runs), verifier.coins))
 
 
-def trust(*commitments: dict[str, Any]) -> None:
-    """Record coin commitments (`LiveCommitment.to_json`) as the verifier's challenger's, published before their epochs."""
-    from verity.core.protocols.sampled_proofs.challenger import LiveCommitment
+def lms_verify(key: Any, message: bytes, signature: bytes) -> bool:
+    """`challenger.Verify`: LMS over SHA-512 at the verifier's challenger key's (64, W, H)."""
+    from verity.ml.crypto import lms
 
-    for doc in commitments:
-        c = LiveCommitment.from_json(doc)
-        TRUSTED[c.root.hex()] = c.to_json()
+    p = lms.Params(64, key.W, key.H)
+    return lms.verify(p, key.public, message, lms.Signature.decode(p, signature))
+
+
+def trust_session(directory: Any, key: Any, verify: Callable[[Any, bytes, bytes], bool] = lms_verify) -> str | None:
+    """Read the verifier's own challenger's directory (its run's ``out/``, fetched from the auditor host, never the prover's bundle) under
+    the verifier's challenger key ``key`` (a `challenger.ChallengerKey`, or the path of its JSON): `remote.trusted_session`'s signed
+    commitment and logged roots go into `TRUSTED`.  Fails closed: a missing, malformed or unsigned record or an unreadable log trusts
+    nothing, and its reason is returned and kept in `REFUSED`; None when the session is trusted."""
+    import json
+    from pathlib import Path
+
+    from verity.core.protocols.sampled_proofs import remote
+    from verity.core.protocols.sampled_proofs.challenger import ChallengerKey, CoinError
+
+    try:
+        k = key if isinstance(key, ChallengerKey) else ChallengerKey.from_json(json.loads(Path(key).read_text(encoding="utf-8")))
+        com, roots = remote.trusted_session(directory, k, verify)
+    except (CoinError, OSError, ValueError) as e:
+        why = f"the challenger's directory {directory} is not trusted ({e})"
+        REFUSED.append(why)
+        return why
+    TRUSTED[com.root.hex()] = (com.to_json(), roots)
+    return None
 
 
 def attested_reason(challenge: dict[str, Any] | None) -> str | None:
     """Why a recorded challenge (``extra.challenge``) is not the service's challenger's after its root; None when it is: origin
-    `ATTESTED`, a coin commitment the verifier recorded from its own challenger (`trust`), and per label a `COIN_BYTES` coin that opens
-    against it after the recorded root (`challenger.live_reason`) and is the label's key."""
+    `ATTESTED`, the coin commitment the verifier's own challenger signed (`trust_session`), and per label a `COIN_BYTES` coin that opens
+    against it after the recorded root (`challenger.live_reason`), whose root is the one the challenger's log shows it received for that
+    coin (an opening's ``after`` is the prover's to write), and is the label's key."""
     ch = challenge or {}
     if ch.get("origin") != ATTESTED:
         return f"its live keys' origin is {ch.get('origin')!r}, not the service challenger's"
@@ -304,8 +338,10 @@ def attested_reason(challenge: dict[str, Any] | None) -> str | None:
         return f"its coin commitment or openings are malformed ({e})"
     if com.scheme != SCHEME:
         return f"its coins are under scheme {com.scheme!r}, not the Commit's {SCHEME!r}"
-    if TRUSTED.get(com.root.hex()) != com.to_json():
-        return f"its coin commitment {com.root.hex()[:16]} is not one the verifier recorded from its challenger (challenge.trust)"
+    trusted, logged = TRUSTED.get(com.root.hex(), (None, {}))
+    if trusted != com.to_json():
+        refused = f"; {'; '.join(REFUSED)}" if REFUSED else ""
+        return f"its coin commitment {com.root.hex()[:16]} is not one the verifier's challenger signed (challenge.trust_session){refused}"
     if sorted(openings) != sorted(LABELS) or sorted(keys) != sorted(LABELS):
         return f"it does not carry one opened coin and one key per label ({', '.join(LABELS)})"
     for label in LABELS:
@@ -317,6 +353,9 @@ def attested_reason(challenge: dict[str, Any] | None) -> str | None:
         why = LC.live_reason(com, o, label, o.index, after)
         if why is not None:
             return f"its {label} {why}"
+        roots = logged.get(label, ())
+        if o.index >= len(roots) or roots[o.index] != after:
+            return f"its {label} coin {o.index} follows root {after.hex()[:16]}, which the challenger's log never shows it received for that coin"
         if keys[label] != o.coin.hex():
             return f"its {label} key is not the coin the challenger opened"
     return None

@@ -181,26 +181,31 @@ def _live():
                                reason="the service's challenger (compute accounting's #2573 / #2584) is not on this tree")
 
 
-def test_the_commit_is_a_client_of_the_service_challenger_and_its_coins_open_once_after_each_root(monkeypatch):
-    """Coin i of each label opens once, after the Commit's i-th root (`service_challenger`); the challenge is of record only when its
-    commitment is one the verifier recorded from its own challenger (`trust`) and every label's 64-byte coin opens against it after the
-    recorded root and is that label's key."""
+def test_the_commit_is_a_client_of_the_service_challenger_and_its_coins_open_once_after_each_root(monkeypatch, tmp_path):
+    """Coin i of each label opens once, after the Commit's i-th root (`service_challenger` over the auditor host's challenger); the
+    challenge is of record only when its commitment is the one the verifier's challenger signed (`trust_session`) and every label's
+    64-byte coin opens against it after the recorded root and is that label's key."""
     LC = _live()
+    from tests.check.challenger_host import Host, entropy
+
     monkeypatch.setattr(CH, "TRUSTED", {})
-    chal = LC.LiveChallenger(CH.SCHEME, 0, CH.layout(2))
-    ask = CH.service_challenger(chal)
+    monkeypatch.setattr(CH, "REFUSED", [])
+    host = Host(tmp_path, runs=2, seed=7)
+    ask = CH.service_challenger(host.client)
     a, b = _Run(RECORD_ROOT, [6, 6]), _Run(hashlib.sha512(b"second").digest(), [6])
     ca, cb = CH.draw_live(a, ask), CH.draw_live(b, ask)
     assert ca.origin == CH.ATTESTED and all(len(k) == 64 for k in ca.keys.values()) and set(ca.keys.values()).isdisjoint(cb.keys.values())
     prov = a.extra["challenge"]["provenance"]
-    assert prov["commitment"] == chal.commitment.to_json()
+    assert prov["commitment"] == host.challenger.commitment.to_json()
     assert {label: (o["index"], o["after"]) for label, o in prov["openings"].items()} == {label: (0, RECORD_ROOT.hex()) for label in CH.LABELS}
     assert all(o["index"] == 1 for o in b.extra["challenge"]["provenance"]["openings"].values())
-    with pytest.raises(LC.CoinError):
+    with pytest.raises(LC.CoinError, match="every opening-positions coin of the epoch is open"):
         ask(hashlib.sha512(b"third").digest())                    # the layout's coins are spent: a retry never redraws
+    host.client.close()
+    assert host.ended() is None
 
-    assert "not one the verifier recorded" in CH.attested_reason(a.extra["challenge"])
-    CH.trust(chal.commitment.to_json())
+    assert "not one the verifier's challenger signed" in CH.attested_reason(a.extra["challenge"])
+    assert CH.trust_session(host.directory, host.key) is None
     assert CH.attested_reason(a.extra["challenge"]) is None and CH.attested_reason(b.extra["challenge"]) is None
 
     rec = a.extra["challenge"]
@@ -208,17 +213,56 @@ def test_the_commit_is_a_client_of_the_service_challenger_and_its_coins_open_onc
     assert "not opened after what the verifier recorded" in CH.attested_reason({**rec, "after_run_root": b.run_root.hex()})
     swapped = {**prov, "openings": {**prov["openings"], CH.REPLAY: prov["openings"][CH.POSITIONS]}}
     assert "replay" in CH.attested_reason({**rec, "provenance": swapped})
-    other = LC.LiveChallenger(CH.SCHEME, 0, CH.layout(2))
+    other = LC.LiveChallenger(CH.SCHEME, 0, CH.layout(2), entropy(9))
     forged = {**prov, "commitment": other.commitment.to_json()}
-    assert "not one the verifier recorded" in CH.attested_reason({**rec, "provenance": forged})
-    CH.trust(other.commitment.to_json())
-    assert "does not open against" in CH.attested_reason({**rec, "provenance": forged})
+    assert "not one the verifier's challenger signed" in CH.attested_reason({**rec, "provenance": forged})
     with pytest.raises(ValueError, match="scheme"):
-        CH.service_challenger(LC.LiveChallenger("pouw/live", 0, CH.layout(1)))
+        CH.service_challenger(LC.LiveChallenger("pouw/live", 0, CH.layout(1), entropy(11)))
 
 
-def test_the_commits_challenger_is_the_service_challenger_unless_a_key_is_handed_in():
+def test_an_opening_after_a_root_the_challenger_never_logged_is_refused(monkeypatch, tmp_path):
+    """An opening's ``after`` is the prover's to write: a coin the challenger really opened, presented as following a root other than the
+    one its release log shows it received for that coin, is refused against the log, whatever the opening says."""
     LC = _live()
+    from tests.check.challenger_host import Host
+
+    monkeypatch.setattr(CH, "TRUSTED", {})
+    monkeypatch.setattr(CH, "REFUSED", [])
+    host = Host(tmp_path, runs=1, seed=21)
+    honest = _Run(RECORD_ROOT, [4])
+    CH.draw_live(honest, CH.service_challenger(host.client))
+    host.client.close()
+    assert host.ended() is None and CH.trust_session(host.directory, host.key) is None
+    assert CH.attested_reason(honest.extra["challenge"]) is None
+
+    rewritten = hashlib.sha512(b"the root the prover claims").digest()
+    forged = {label: LC.LiveOpening.from_json({**o, "after": rewritten.hex()}).to_json()
+              for label, o in honest.extra["challenge"]["provenance"]["openings"].items()}
+    ch = {**honest.extra["challenge"], "after_run_root": rewritten.hex(),
+          "provenance": {**honest.extra["challenge"]["provenance"], "openings": forged}}
+    why = CH.attested_reason(ch)
+    assert why is not None and "which the challenger's log never shows it received for that coin" in why, why
+
+
+def test_the_commits_challenger_is_the_auditor_hosts_at_its_address_else_one_this_process_holds(monkeypatch, tmp_path):
+    """`commit_challenger`: a key handed in (origin ``unattested``); else the challenger at its address (`remote.RemoteChallenger`);
+    else one held by this process, its coins the Lean verifier's (`verifier.coins`, stubbed here with a seeded source)."""
+    LC = _live()
+    from verity.core.protocols.sampled_proofs import remote as R
+    from verity.core.protocols.sampled_proofs.one_stage import verifier as V
+
+    from tests.check.challenger_host import Host, entropy
+
+    host = Host(tmp_path, runs=1, seed=31)
+    monkeypatch.setattr(R.RemoteChallenger, "connect", classmethod(lambda cls, address: host.client if address == "auditor:7811" else None))
+    run = _Run(RECORD_ROOT, [2])
+    ask = CH.commit_challenger(None, runs=1, address="auditor:7811")
+    assert CH.draw_live(run, ask).origin == CH.ATTESTED
+    assert run.extra["challenge"]["provenance"]["commitment"] == host.challenger.commitment.to_json()
+    ask.close()
+    assert host.ended() is None
+
+    monkeypatch.setattr(V, "coins", entropy(8))
     run = _Run(RECORD_ROOT, [2])
     assert CH.draw_live(run, CH.commit_challenger(None, runs=1)).origin == CH.ATTESTED
     assert LC.LiveCommitment.from_json(run.extra["challenge"]["provenance"]["commitment"]).families == CH.layout(1)

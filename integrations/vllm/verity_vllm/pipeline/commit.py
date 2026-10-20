@@ -1026,7 +1026,10 @@ class Options:
     profile_hooks: bool = option("--profile-hooks", default=False, action="store_true", help="native_collect: time the hook bodies (perf_counter per call) -- profiling run, not a headline timing")
     expect_root: str | None = option("--expect-root", default=None, help="fail if the instrumented run's committer root (hex; the vllm-v1 root, extra.committer_root of a run of record) differs from this reference root (R10 arm2/arm3 equality gate)")
     root_of_record: str | None = option("--root-of-record", default=None, choices=["sha512", "vllm-v1"], help="omitted: sha512 whenever the run keeps every committed byte (--retain device|host, no --retain-exclude), else vllm-v1 (resolve_staging).  sha512: the run root of record is the record's (commit.record: frame-v3-sha512 trees of hm96-sha512 rows, one per committer leaf), hashed on the host after the run, and every challenge is drawn from a live key after it (--challenge-key).  vllm-v1: the committer's own SHA-256 root, NOT of record -- a measurement mode for the retentions the host record cannot serve (--retain none, --retain-exclude) until the committer hashes the record on the GPU")
-    challenge_key: str | None = option("--challenge-key", env="VERITY_CHALLENGE_KEY", default=None, help="a key (hex, at least 16 bytes) every draw over a run of record derives from once its root is fixed (challenge.draw_live, origin 'unattested'); without one the service's challenger, held by this process, opens one coin per label after each root (challenge.commit_challenger, scheme vllm/commit).  Either draws a measurement sample: only coins opening against a commitment the verifier recorded from its own challenger are of record (challenge.attested_reason, challenge.trust)")
+    challenge_key: str | None = option("--challenge-key", env="VERITY_CHALLENGE_KEY", default=None, help="a key (hex, at least 16 bytes) every draw over a run of record derives from once its root is fixed (challenge.draw_live, origin 'unattested'); without one the service's challenger (--challenger, else one held by this process) opens one coin per label after each root (challenge.commit_challenger, scheme vllm/commit).  Only coins opening against the commitment the verifier's own challenger signed, after the roots it logged, are of record (challenge.attested_reason, --challenger-record)")
+    challenger: str | None = option("--challenger", default=None, metavar="HOST:PORT", help="the service's challenger on its auditor host (benchmarks/live_challenger/run.sh, session layout challenge.layout(--pairs x arms)): every run of record's coins open there after its root (remote.RemoteChallenger); omitted, a challenger held by this process draws a measurement sample")
+    challenger_record: str | None = option("--challenger-record", default=None, metavar="DIR", help="the verifier's side: the challenger run's out/ fetched from its auditor host (record.json, releases.jsonl), read under --challenger-key before each verdict (challenge.trust_session); without it no challenge is of record")
+    challenger_key: str | None = option("--challenger-key", default=None, metavar="PATH", help="the verifier's own challenger key ({H, W, public} JSON) that --challenger-record's record must be signed under")
     late_read: str | None = option("--late-read", default=None, help="NEGATIVE TEST (R11 collector-meas): drop this leaf (e.g. qkv_proj) from the gather arm's flush points so the " "staged values are read after the in-place overwriter -> the run root MUST differ from arm 2 (roots_equal_across_arms=false)")
     flip_weight: str | None = option("--flip-weight", default=None, help="NEGATIVE TEST ONLY (MAN-09 / rev-cb M-0610 flipweight; BRIEF R16 4A substituted weight input): " "<served param name>:<flat index>[:<value>] -- ONE element of that live parameter is changed in the instrumented process BEFORE " "register_weights, so the committer serves a model that is not the checkpoint the Program names; the weights pin MUST FAIL naming " "that field (served weight(s) differ from the checkpoint of record) and the Commit is FAIL rc 3.  Needs the pin armed " "(--weights-of-record / --checkpoint-dir + the Program).  Recorded in verdict.json negatives.flip_weight; never a row-procedure flag")
     window_mb: int | None = option("--window-mb", type=int, default=None, help="P0 (R13): windowed staging -- lay the packed step stream over a ring of device windows of this size " "(MiB, multiple of 1) and absorb/release each window as soon as it is filled (sets VERITY_WINDOW_MB); omitted = the collector's " "(native_collect.window_mb_default: 256 on native_collect_v2b unless --retain device, else per-step blocks); 0 = per-step blocks")
@@ -1874,7 +1877,9 @@ def main(args: Options, argv: list[str] | None = None) -> None:
     versions["stop_rule_of_record"] = {k: v for k, v in stop_of_record.items() if k != "srule"} | {"eos_source": (stop_of_record.get("srule") or {}).get("source")}
     (out / "versions.json").write_text(json.dumps(versions, indent=1, default=str) + "\n")
     arms_all = ["control"] + (kinds if multi else ["instrumented"])
-    challenger = CH.commit_challenger(args.challenge_key, runs=args.pairs * (len(arms_all) - 1))
+    if bool(args.challenger_record) != bool(args.challenger_key):
+        raise SystemExit("--challenger-record and --challenger-key go together: the verifier reads its challenger's record under its own key")
+    challenger = CH.commit_challenger(args.challenge_key, runs=args.pairs * (len(arms_all) - 1), address=args.challenger)
     # [revb F-r17b-19] the measured runs start here; verdict.host_peak.printed_before_run = admission_monotonic_s < this (timestamps, not a literal)
     _RUN0 = {"utc": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()), "monotonic_s": round(time.monotonic(), 3)}
     for pair in range(args.pairs):
@@ -2392,6 +2397,8 @@ def main(args: Options, argv: list[str] | None = None) -> None:
                     # WHICH identities differ when run roots disagree (values vs permutation vs schedule)
                     row["commit"]["fa2_zero_rows"] = tensor_digests(com, out, pair, prev_digests)
                 route_pin_stamp(row["commit"])
+                if args.challenger_record:
+                    CH.trust_session(args.challenger_record, args.challenger_key)
                 row["commit"]["commit_pass"], row["commit"]["commit_fail_reason"] = (RB.pending_verdict if pair in deferred else commit_verdict)(
                     row["commit"], row["tokens_equal_ref"], min_openings=min(64, args.openings), declaration=d, required_classes=required_classes)
                 if compiled_kernels is not None and row["commit"]["commit_pass"]:
@@ -2444,6 +2451,7 @@ def main(args: Options, argv: list[str] | None = None) -> None:
             for rw in step_rows:
                 f.write(json.dumps(rw, default=str) + "\n")
 
+    getattr(challenger, "close", lambda: None)()
     # [R16 compiled unit B -- Daniel M-0776 (3): repeated graph replay must be covered, not only compilation/warm-up] re-read the code
     # objects LOADED in this process after the LAST measured run and compare with the build-time snapshot (compile + autotune + capture):
     # the CUDA graphs replay the launchers that existed at capture, so an unchanged executed set (no new module / kernel / binary / config)

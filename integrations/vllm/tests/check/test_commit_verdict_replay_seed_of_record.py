@@ -164,27 +164,85 @@ def test_the_live_key_form_of_a_run_of_record_is_the_service_challengers_replay_
         assert ok is True and "C2 of record by the complete form (B) alone" in why
 
 
-def test_a_commit_of_record_passes_on_the_service_challengers_coins_only_once_the_verifier_trusts_their_commitment(monkeypatch):
-    """End to end through the challenger: a `LiveChallenger` under the Commit's scheme answers the root, the replay draws from its replay
-    coin, and the verdict PASSes only once its commitment is one the verifier recorded (`challenge.trust`)."""
+def _drawn(monkeypatch, tmp_path, seed: int):
+    """A Commit of record whose replay drew from the auditor host's challenger (`challenger_host.Host`), its session closed."""
     from types import SimpleNamespace
 
     import pytest
 
+    pytest.importorskip("verity.core.protocols.sampled_proofs.remote", reason="the challenger's remote service (#2662) is not on this tree")
     from verity_vllm.check.replay import replay_codes as RC
     from verity_vllm.commit import challenge as CH
 
-    LC = pytest.importorskip("verity.core.protocols.sampled_proofs.challenger",
-                             reason="the service's challenger (compute accounting's #2573 / #2584) is not on this tree")
+    from tests.check.challenger_host import Host
+
     monkeypatch.setattr(CH, "TRUSTED", {})
-    chal = LC.LiveChallenger(CH.SCHEME, 0, CH.layout(1))
+    monkeypatch.setattr(CH, "REFUSED", [])
+    host = Host(tmp_path, runs=1, seed=seed)
     run = SimpleNamespace(run_root=bytes.fromhex(ROOT_OF_RECORD), extra={})
-    key = CH.draw_live(run, CH.service_challenger(chal)).keys[CH.REPLAY].hex()
-    rec = {**BASE, "run_root": ROOT_OF_RECORD, "extra": {**BASE["extra"], **run.extra}, "sampled_replay": _sr_chal(0, RC.LIVE_KEY_SOURCE, key)}
+    key = CH.draw_live(run, CH.service_challenger(host.client)).keys[CH.REPLAY].hex()
+    host.client.close()
+    assert host.ended() is None
+    return host, {**BASE, "run_root": ROOT_OF_RECORD, "extra": {**BASE["extra"], **run.extra}, "sampled_replay": _sr_chal(0, RC.LIVE_KEY_SOURCE, key)}
+
+
+def test_a_commit_of_record_passes_on_the_service_challengers_coins_only_once_the_verifier_trusts_their_commitment(monkeypatch, tmp_path):
+    """End to end through the challenger on its auditor host: it answers the root, the replay draws from its replay coin, and the verdict
+    PASSes only once the verifier has read the commitment its challenger signed and the roots it logged (`challenge.trust_session`)."""
+    from verity_vllm.commit import challenge as CH
+
+    host, rec = _drawn(monkeypatch, tmp_path, seed=41)
     ok, why = commit_verdict(rec, True, min_openings=64)
-    assert ok is False and "not one the verifier recorded from its challenger" in why and "form (B) absent" in why
-    CH.trust(chal.commitment.to_json())
+    assert ok is False and "not one the verifier's challenger signed" in why and "form (B) absent" in why
+    assert CH.trust_session(host.directory, host.key) is None
     assert commit_verdict(rec, True, min_openings=64) == (True, "PASS")
+
+
+def test_c2_fails_closed_on_a_prover_supplied_commitment_or_a_missing_malformed_or_unsigned_record(monkeypatch, tmp_path):
+    """The verifier trusts only the record its own challenger signed under the verifier's key (`remote.trusted_session`): a coin
+    commitment the prover supplies (a challenger its own process holds), a missing record, a malformed one and one signed under another
+    key each trust nothing, and C2 fails closed naming why."""
+    import json
+
+    from verity.core.protocols.sampled_proofs import challenger as LC
+    from verity.core.protocols.sampled_proofs import remote as R
+    from verity_vllm.check.replay import replay_codes as RC
+    from verity_vllm.commit import challenge as CH
+
+    from tests.check.challenger_host import challenger_key, entropy
+
+    host, rec = _drawn(monkeypatch, tmp_path, seed=51)
+    assert CH.trust_session(host.directory, host.key) is None
+    from verity.ml.crypto import lms
+
+    own = LC.LiveChallenger(CH.SCHEME, 0, CH.layout(1), entropy(52))      # the prover's own challenger, its record under its own key
+    prover_private, prover_key = challenger_key(53)
+    signed_by_prover = own.sign_record("vy-nebius-2", prover_key.public, lambda m: lms.sign_at(prover_private, 0, m).encode()).to_json()
+    run = type("Run", (), {})()
+    run.run_root, run.extra = bytes.fromhex(ROOT_OF_RECORD), {}
+    key = CH.draw_live(run, CH.service_challenger(own)).keys[CH.REPLAY].hex()
+    supplied = {**rec, "extra": {**rec["extra"], **run.extra}, "sampled_replay": _sr_chal(0, RC.LIVE_KEY_SOURCE, key)}
+    ok, why = commit_verdict(supplied, True, min_openings=64)
+    assert ok is False and f"its coin commitment {own.commitment.root.hex()[:16]} is not one the verifier's challenger signed" in why, why
+
+    monkeypatch.setattr(CH, "TRUSTED", {})
+    record = json.loads((host.directory / R.RECORD).read_text())
+    bad = {"missing": None, "malformed": {**record, "host": "not a host!"}, "signed under another key": signed_by_prover}
+    for name, doc in bad.items():
+        d = tmp_path / name.replace(" ", "-")
+        d.mkdir()
+        (d / R.RELEASES).write_text((host.directory / R.RELEASES).read_text())
+        if doc is not None:
+            (d / R.RECORD).write_text(json.dumps(doc))
+        monkeypatch.setattr(CH, "REFUSED", [])
+        why = CH.trust_session(d, host.key)
+        assert why is not None and CH.TRUSTED == {}, name
+        assert {"missing": "no challenger record", "malformed": "malformed",
+                "signed under another key": "does not verify"}[name] in why, (name, why)
+        ok, fail = commit_verdict(rec, True, min_openings=64)
+        assert ok is False and "not one the verifier's challenger signed" in fail and why in fail, (name, fail)
+    assert "does not verify" in CH.trust_session(host.directory, prover_key)  # the honest record, read under a key that is not its signer's
+    assert CH.TRUSTED == {}
 
 
 def test_the_commit_draws_a_run_of_records_replay_from_its_live_key():

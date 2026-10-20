@@ -97,3 +97,19 @@ def test_tp_commit_reads_the_ranks_ring_as_their_committers_do():
     assert tc.ring_slots("native_collect_v2b", "256", "3", "host") == 3
     assert tc.ring_slots("native_collect_v2b", "0", "8", "host") is None
     assert tc.ring_slots("native_host", None, None, "none") is None
+
+
+@pytest.mark.parametrize("argv,want", [
+    ([], "vllm-v1"),
+    (["--retain", "host"], "sha512"),
+    (["--committer", "native_collect_v2b", "--retain", "device"], "sha512"),
+    (["--retain", "host", "--retain-exclude", "fa3_hidden_m1"], "vllm-v1"),
+    (["--retain", "host", "--root-of-record", "vllm-v1"], "vllm-v1"),
+    (["--root-of-record", "sha512"], "sha512"),
+], ids=["retain-none", "host", "device", "host-excluding", "explicit-vllm-v1", "explicit-sha512"])
+def test_the_root_of_record_is_the_records_whenever_the_run_keeps_every_committed_byte(argv, want):
+    """The record is hashed on the host from every committed byte, so an omitted --root-of-record is sha512 only when the run keeps them
+    all (--retain device|host, no --retain-exclude); an explicit sha512 under --retain none is left for main() to refuse by name."""
+    from verity_vllm.pipeline import commit as cd
+
+    assert cd.resolve_staging(cli.parse("commit", ["--out", "o", *argv], {})).root_of_record == want
