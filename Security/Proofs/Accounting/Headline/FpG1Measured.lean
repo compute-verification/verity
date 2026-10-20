@@ -8,7 +8,9 @@ import Proofs.Accounting.Headline.Sm120Measured
 `δ_bind` (`sm120MeasuredHeadline_bind`, which `Sm120MeasuredHeadline` takes at `√δ_fork`) at `V = Leaves × W` and
 `n_π + 1` proofs a round: the g1 premise is dropped and the argument applies as it stands. The g1 premise does no work
 in the bound. The 0.591% rests on the measured record's premises, (I3) at `9/8` (`ScalarRoute`) among them, which is
-assumed, as it is for the record itself: at A6's proved `½` floor the same bound is 7.791%.
+assumed, as it is for the record itself: at A6's proved `½` floor the same bound is 7.791%. Beside the g1 premise, which
+narrows the windows covered, the statements take no premise the measured record doesn't: binding at `δ_bind` is what
+the record's fork form gives at `√δ_fork`.
 
 The witness is `Proofs.Accounting.Headline.FpG1`'s honest window with its run on the measured data:
 
@@ -38,13 +40,15 @@ open Finset Accounting.TS Accounting.TS.Headline Accounting.Assumptions.TS Pouw.
   Accounting.SecurityProofs.TS.Headline
 
 /-- **FP8-g1's headline on sm_120's measured vector**: `sm120MeasuredHeadline_bind` at `V = Leaves × W` and `n_π + 1`
-proofs a round. -/
+proofs a round. The 0.591% rests on the measured record's premises, `ScalarRoute` at `9/8` among them (assumed; at
+A6's proved `½` floor the same bound is 7.791%). -/
 theorem Sm120FpG1MeasuredHeadline : Accounting.Guarantees.FpG1.Sm120FpG1MeasuredHeadline := by
   intro Ω _ Pl G Uf W nπ pf δbind δzk _
   exact Accounting.SecurityProofs.TS.sm120MeasuredHeadline_bind Pl G Uf pf δbind δzk
 
 /-- **W4A8-g1's headline on sm_120's measured vector**: `sm120MeasuredHeadline_bind` at `V = Leaves × W` and
-`n_π + 1` proofs a round. -/
+`n_π + 1` proofs a round. The 0.591% rests on the measured record's premises, `ScalarRoute` at `9/8` among them
+(assumed; at A6's proved `½` floor the same bound is 7.791%). -/
 theorem Sm120W4a8G1MeasuredHeadline : Accounting.Guarantees.FpG1.Sm120W4a8G1MeasuredHeadline := by
   intro Ω _ Pl G Uf W nπ pf δbind δzk _
   exact Accounting.SecurityProofs.TS.sm120MeasuredHeadline_bind Pl G Uf pf δbind δzk
