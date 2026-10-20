@@ -43,7 +43,8 @@
   "Properties.Accounting.Requirement",
   "Properties.Proofs.Accounting.Requirement",
   "Properties.RemoteAudit",
-  "Properties.Proofs.RemoteAudit"
+  "Properties.Proofs.RemoteAudit",
+  "Properties.Accounting.Compose"
  ],
  "proved_in": ["../Proofs"],
  "assumptions": {
@@ -238,13 +239,18 @@
   },
   "Properties.Accounting": {
    "imports": ["Definitions.Accounting", "CircuitRequirement"],
-   "except": [],
+   "except": ["Properties.Accounting.Compose"],
    "why": "the requirement code's equalities are stated against its functions and the `Definitions.Accounting.Requirement` definitions they copy, never a proof"
   },
   "Properties.SampledProofs.Draw": {
    "imports": ["Definitions.Claims", "SampledProofs"],
    "except": [],
    "why": "what the draw misses is stated against `Select.select`'s slots (`SampledProofs.Slots`) and the claims' miss probability `P_a` (`Definitions.Claims`), never a proof"
+  },
+  "Properties.Accounting.Compose": {
+   "imports": ["Definitions.Accounting", "SampledProofs", "Properties.SampledProofs.Draw"],
+   "except": [],
+   "why": "a declared circuit's proof units, commit coins and draw (`Definitions.Accounting.Compose`) are stated against the verifier's own partition of its program (`SampledProofs.Slots.layout`) and the challenger's draw from bytes (`SampledProofs.Select.select`, read as `Properties.SampledProofs.bytesOf` reads them), never a proof"
   }
  },
  "reads_exempt": {
