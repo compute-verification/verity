@@ -685,6 +685,12 @@ class CommitSession:
 
         self.binder = Binder(self.store, passes=False, weight_blocks=self.weight_blocks, kv=False).install()
 
+    def before_build(self, ekw: dict[str, Any]) -> None:
+        """`engine_args`, `target` and `install` on the Commit's engine build arguments (``engine_args``, ``target``)."""
+        ekw["engine_args"] = self.engine_args(ekw["engine_args"])
+        self.target(ekw["target"])
+        self.install()
+
     def check(self, llm: Any, runner: Any) -> dict[str, Any]:
         vc, why = llm.llm_engine.vllm_config, []
         if getattr(getattr(llm.llm_engine, "engine_core", None), "engine_core", None) is None:
@@ -701,7 +707,9 @@ class CommitSession:
             raise SystemExit("--remote-verifier: the engine is not one the session serves: " + "; ".join(why))
         if self.filler_gib:
             self.binder.register_filler(int(self.filler_gib * (1 << 30)), runner.device)
-        return self.binder.stats()
+        stats = self.binder.stats()
+        self.log(f"[delta] remote session: the store binder on the engine, {stats}")
+        return stats
 
     def begin(self) -> Lockstep:
         if self.lockstep is not None:

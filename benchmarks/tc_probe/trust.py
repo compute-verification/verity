@@ -102,7 +102,7 @@ DOSSIER_SCHEMA = "verity/trust-dossier/v1"
 
 #: SKU string -> family (the same table as ``research.env.SKU_FAMILY``; the anchor is a *family*: any A100 is the A100 anchor).
 SKU_FAMILY: tuple[tuple[str, str], ...] = (
-    (r"\bH100\b", "h100"), (r"\bB200\b", "b200"), (r"\bA100\b", "a100"), (r"\bL40S\b", "l40s"), (r"\bL40\b", "l40"),
+    (r"\bH200\b", "h200"), (r"\bH100\b", "h100"), (r"\bB200\b", "b200"), (r"\bA100\b", "a100"), (r"\bL40S\b", "l40s"), (r"\bL40\b", "l40"),
     (r"\bRTX\s*4090\b", "rtx4090"), (r"\bRTX\s*5090\b", "rtx5090"), (r"\bRTX\s*PRO\s*6000\b", "rtxpro6000"),
 )
 
@@ -547,10 +547,6 @@ class DatasetIdentity:
     @property
     def honest_tiers(self) -> list[str]:
         return [t for t in self.tiers if not t.endswith("-neg")]
-
-    @property
-    def negative_tiers(self) -> list[str]:
-        return [t for t in self.tiers if t.endswith("-neg")]
 
     def corner_families(self, tier: str) -> dict[str, int]:
         comp = (self.tiers.get(tier) or {}).get("composition") or {}

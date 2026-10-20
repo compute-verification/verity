@@ -34,7 +34,8 @@ def attribute_instances(run: MatchRun, hdr_reqs: list[dict]) -> Attribution:
     _peer_index_all = dict(getattr(B, "peer_index", {}))   # [R17 D90] TP rank fold: peers node -> request index (one per request)
     weights_nodes_error = None
     try:
-        weights_nodes = frozenset(BD.weights_input_nodes(B, len(hdr_reqs), len(_seed_index_all), len(_peer_index_all)))
+        weights_nodes = frozenset(BD.weights_input_nodes(B, len(hdr_reqs), len(_seed_index_all), len(_peer_index_all),
+                                                         len(getattr(B, "witness_index", {}))))
     except ValueError as e:
         weights_nodes, weights_nodes_error = frozenset(), str(e)   # G5 fails by name below; every weight read is then a cross-request read
     meta_of = {o["node"] + n_in: o for o in B.oracle_rows}

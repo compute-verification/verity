@@ -576,19 +576,21 @@ class Verdict:
 @dataclass(frozen=True, slots=True)
 class WindowRecord:
     """What an accepted window established: chained passes of `lengths` reads of distinct registered blocks each, made
-    after its challenge left at `released_ns` and committed by `deadline_ns` on the verifier's clock; its openings coin
+    after its challenge left at `released_ns` and committed by `deadline_ns` on the verifier's clock, each pass's root
+    arriving at `arrived_ns` on that clock (one a pass, empty in a record no session made); its openings coin
     released at `opened_ns`; the openings' law (`profile`); of each pass's reads, `post_seed` of blocks appended
     after the codec seed (none if empty), which the ledger credits only on the property's verdict; the step each
     pass covers, `steps`, strictly increasing; each pass's head, `heads`, the chain over every append received
-    before its root (`append_head`, None before the first), which its seed binds (`chained`); each pass's stale
+    before its root (`append_head`, None before the first), which its seed binds (`chained`); and each pass's stale
     bound, `stale`: N, the registered store's size, plus the counts of the session's appends that joined window
     `window` − L or before (L `Params.lifetime`), an append joining the window of the first root received after it,
     which is the window of the first pass whose head chains it.  That is the store index below which every appended
     block is past the cap, which a re-key's old index is below at the cap, and the same for every pass of a window;
     `Session._stale_below` takes it as the first index of the earliest append received before the pass's root that
-    joined a window above `window` − L, or the store's extent at that root if none did; and when each pass's root
-    arrived on the verifier's clock, `arrived_ns`, one a pass.  All four are empty in a record no session made, such
-    as `timing.stated`'s model."""
+    joined a window above `window` − L, or the store's extent at that root if none did.  `stale` is a value: the
+    appends' counts it sums follow the workload, so the verifier keeps it in its own record and never publishes it
+    (`Record.public` has no bound), and the memory-map unit takes it inside its proof, recomputing it from the
+    committed appends.  All three are empty in a record no session made, such as `timing.stated`'s model."""
 
     window: int
     lengths: tuple[int, ...]
@@ -653,14 +655,14 @@ class WindowRecord:
 @dataclass(frozen=True, slots=True)
 class Record:
     """An accepted session: its registration, its coin commitment's root, its store's `blocks`, every window's record,
-    and the receipt kind the registration names, whether its receipts bind z, its codec, its block layout and its sketch
-    rows (its digest binds all five; the record repeats them, since what a receipt rests on depends on the kind, `bind`
-    and the rows, μ_rebuild on the codec, and which bytes a credited block is on the layout), the blocks the
-    session appended after the codec seed and released, the lifetime cap it held them to (`Params.lifetime`, None
+    its pace (`Params.pace`, None unpaced), and the receipt kind the registration names, whether its receipts bind z,
+    its codec, its block layout and its sketch rows (its digest binds all five; the record repeats them, since what a
+    receipt rests on depends on the kind, `bind` and the rows, μ_rebuild on the codec, and which bytes a credited block
+    is on the layout), the blocks the session appended after the codec seed and released, the lifetime cap it held
+    them to (`Params.lifetime`, None
     in a record no session made), and the chain over its appends in the order received (`append_head`, None without
-    one), which, with each pass's head and stale bound (`WindowRecord.heads`, `WindowRecord.stale`), the
-    memory-map unit's verdict is on (`RequirementLink.mapped`), and its pace (`Params.pace`, None unpaced).
-    `public` is what acceptance makes public;
+    one), which, with each pass's head (`WindowRecord.heads`), the memory-map unit's verdict is on
+    (`RequirementLink.mapped`).  `public` is what acceptance makes public;
     `profile` is the protocol's profile, each window's schedule and openings law (the γ terms need the node's
     capacities: `ledger`)."""
 
@@ -704,14 +706,9 @@ class Record:
 
     def public(self) -> dict:
         """What acceptance makes public.  `heads[t][i]`, pass i of window t's head, is a hiding commitment like
-        `appends`.  `stale[t][i]` is protocol structure: `blocks` plus the sum of `count` over the session's appends
-        (first, count, root), in the order received, that joined window t − `lifetime` or before, where an append
-        joined the window of the first pass whose head chains it (`append_head`); the same for every i.  So `stale`
-        adds nothing beyond the appends' extents and the windows they joined, which the verifier sees in the clear (each
-        append's count, the first index it assigns, and the root that follows) and which `appends` commits to.  This
-        record lists neither, only their chain and total (`appended`), so read from it alone `stale` shows the blocks
-        appended L windows back, window by window.  Whether the extents should be public at all is a separate question
-        about `appends` (the counts per window depend on the workload), not about `stale`."""
+        `appends`.  No stale bound is here: `WindowRecord.stale[i]` is `blocks` plus the counts of the appends that
+        joined window t − `lifetime` or before, counts that follow the workload, so it is a value, which the memory-map
+        unit recomputes inside its proof from the committed appends and the verifier never publishes."""
         return {"appended": self.appended, "appends": None if self.appends is None else self.appends.hex(),
                 "bind": self.bind, "block_bytes": self.block_bytes, "blocks": self.blocks,
                 "codec": self.codec.name, "codec_params": self.codec.to_json(), "coins": self.coins.hex(),
@@ -721,7 +718,7 @@ class Record:
                 "post_seed": [sum(w.post_seed) for w in self.windows], "protocol": PROTOCOL_ID,
                 "receipt": self.receipt, "receipts": [w.receipts for w in self.windows],
                 "registration": self.registration.hex(), "released": self.released, "rows": self.rows,
-                "span_ns": self.span_ns, "stale": [list(w.stale) for w in self.windows]}
+                "span_ns": self.span_ns}
 
     def profile(self) -> dict:
         return {"windows": [w.to_json() for w in self.windows]}
@@ -1302,11 +1299,11 @@ class RequirementLink(Protocol):
     in the map's order, at the index the verifier gave it; that each pass's head (`WindowRecord.heads`) is the chain
     through the appends of the steps below the pass's step, so each append was sent after the passes of the steps up to
     its own and before the rest; a re-key only at the lifetime cap, its old index below the stale bound
-    (`WindowRecord.stale`) of the first pass after its step, and of the same payload; and no other (PROTOCOL.md §8,
-    "The memory map's choices").  The units are sampled, so the link holds on what their draw established: `epsilon`,
-    the most share of the linked credit (Σ min(n·D, read_bits(step)) over the passes) that the units it leaves
-    unproved can carry, the passes whose plan unit is wrong and those holding a block a wrong memory-map unit wrote,
-    except with probability `delta`.  Those checks are theirs; the ledger takes the link as given, credits 1 − ε of the
+    (`WindowRecord.stale`, which the unit recomputes from those appends) of the first pass after its step, and of the
+    same payload; and no other (PROTOCOL.md §8, "The memory map's choices").  The units are sampled, so the link
+    holds on what their draw established: `epsilon`, the most share of the linked credit (Σ min(n·D, read_bits(step))
+    over the passes) that the units it leaves unproved can carry, the passes whose plan unit is wrong and those holding
+    a block a wrong memory-map unit wrote, except with probability `delta`.  Those checks are theirs; the ledger takes the link as given, credits 1 − ε of the
     linked credit, adds δ to its error, and refuses a link whose `mapped` isn't True of the record."""
 
     @property
@@ -1511,9 +1508,9 @@ def ledger(record: Record, *, capacity_bytes_per_s: float, chip_bytes: int, rebu
         if requirement.holds is not True:
             raise ValueError("a requirement link whose proofs don't hold caps nothing: pass None, and the credit is "
                              "the node's reads of its store, not the circuit's")
-        if any(len(x) != w.passes for w in record.windows for x in (w.steps, w.heads, w.stale)):
-            raise ValueError("a requirement link reads each pass's step, head and stale bound, and this record's "
-                             "passes name none: link a session's own record")
+        if any(len(x) != w.passes for w in record.windows for x in (w.steps, w.heads)):
+            raise ValueError("a requirement link reads each pass's step and head, and this record's passes name none: "
+                             "link a session's own record")
         if requirement.mapped(record) is not True:
             raise ValueError("a requirement link whose memory-map unit doesn't make this record's appends (its "
                              "`appends` chain, each pass's head through the appends of the steps below its own, each "

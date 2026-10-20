@@ -1,4 +1,4 @@
-"""The commit-cost benchmark runs both schemes, writes a valid result, and its Tool declaration loads by name."""
+"""The commit-cost benchmarks run, write a valid result, and the commit-cost Tool declaration loads by name."""
 
 from __future__ import annotations
 
@@ -6,6 +6,7 @@ import importlib.util
 import json
 from pathlib import Path
 
+import pytest
 from research import result as research_result
 from research.store import tools_registry
 
@@ -68,10 +69,23 @@ def test_hiding_leaf_cost_writes_a_valid_result(tmp_path: Path) -> None:
     assert tool.resolve_params(["--rows", "64"], ROOT)[1] == {"row_bytes": "4,256,1536,3072,4096,8192", "rows": 64}
 
 
+@pytest.mark.slow  # the suite's first import of verity_vllm: 8-9 s on the shared pod, a fraction of a second warm
+def test_step_root_cost_writes_a_valid_result_whose_root_is_the_references(tmp_path: Path) -> None:
+    spec = importlib.util.spec_from_file_location("step_root_cost", ROOT / "benchmarks" / "commitments" / "step_root_cost.py")
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    assert mod.main(["--batch", "3", "--layers", "2", "--k-scale", "256", "--reps", "1", "--out", str(tmp_path)]) == 0
+    check = research_result.check(tmp_path, None)
+    assert check.valid, check.errors
+    assert check.validation_status == "passed"
+    got = json.loads((tmp_path / "step_root_cost.json").read_text())
+    assert got["tables"] == 8 and got["rows"] == 24 and got["reference_root_equal"]
+    assert set(got["by_workers"]) == set(got["sha512_floor_s"]) == set(got["sha512_floor_cpu_s"]) == {"1"}
+    assert {"step_roots.w1.cpu_seconds", "salts.cpu_seconds"} <= {m["name"] for m in check.doc["measurements"]}
+
+
 def test_commit_cost_tool_is_registered() -> None:
     tool = tools_registry.load("commit_cost", ROOT)
     assert tool.name == "commit_cost"
     params, key = tool.resolve_params(["--scheme", "vllm-v1", "--leaves", "1024"], ROOT)
     assert key == {"scheme": "vllm-v1", "leaves": 1024, "leaf_bytes": 256}
-    _, key = tool.resolve_params(["--scheme", "vllm-v1", "--leaves", "1024", "--impl", "gpu"], ROOT)
-    assert key == {"scheme": "vllm-v1", "leaves": 1024, "leaf_bytes": 256, "impl": "gpu"}

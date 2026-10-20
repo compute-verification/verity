@@ -8,7 +8,10 @@ weight is int8 [N, K] with a float32 `weight_scale` [N, 1].
 
 Every linear layer (`LinearBase`) gets an `Int8PlainLinearMethod` with its own prefix; nothing else is quantized (the embedding
 and `lm_head` are vocabulary embeddings, attention keeps its KV cache unquantized).  The method computes
-`engine.int8_exact.plain_linear` as a ``verity_int8::row_quant`` then a ``verity_int8::scaled_mm`` call (`engine.int8_ops.linear`) and counts its calls, so `int8_exact.applied_record` shows which linear ran what.  Loading
+`engine.int8_exact.plain_linear` as a ``verity_int8::row_quant`` then a ``verity_int8::scaled_mm`` call (`engine.int8_ops.linear`) and counts its calls, so `int8_exact.applied_record` shows which linear ran what.  After
+both ops it hands the call's served values to `Int8PlainLinearMethod.observe`, a no-op a protocol option wraps (PoUW's H1,
+`protocol_options.pouw_h1`): the layer it was handed, the s8 rows and per-token scales (what the Commit taps as
+``Int8RowQuant_v1``) and y.  Loading
 refuses a weight outside [-127, 127] and a scale that is not finite and positive; a layer refuses tensor parallelism (a row-parallel
 shard would take each row's activation scale over its own K slice, not the row's), a bias, K or N not a multiple of 8, K > MAX_K, and
 activations that are not bf16.
@@ -72,7 +75,13 @@ class Int8PlainLinearMethod(LinearMethodBase):
         x2 = x.reshape(-1, k)
         if x2.shape[0] == 0:
             return x.new_empty(*lead, layer.weight.shape[0])
-        return int8_ops.linear(x2, layer.weight, layer.weight_scale)[2].reshape(*lead, layer.weight.shape[0])
+        xq, s_a, y = int8_ops.linear(x2, layer.weight, layer.weight_scale)
+        self.observe(layer, xq, s_a, y)
+        return y.reshape(*lead, layer.weight.shape[0])
+
+    def observe(self, layer: torch.nn.Module, xq: torch.Tensor, s_a: torch.Tensor, y: torch.Tensor) -> None:
+        """A served call's values, after both ops: its s8 rows xq [M, K], their f32 scales s_a [M] and y [M, N] bf16. A
+        protocol option wraps it; it must not change them."""
 
 
 class Int8ExactConfig(QuantizationConfig):

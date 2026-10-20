@@ -538,6 +538,8 @@ class DecodedProgram:
         from .layout import Circuit
         self.circuit = Circuit(root)
         self.annotations = dict(desc.get("annotations", {}))
+        theta = self.annotations.get("theta", ())
+        root.theta = tuple(theta) if isinstance(theta, list) else theta  # type: ignore[attr-defined]  # `ports.facts` checks it
         self.program_fn_id = desc["program_fn"]
         self.program_fn_functions = program_fn_functions  # the definitions `program_fn`'s record references
 
@@ -741,9 +743,13 @@ def decode_program(desc: dict, registry: Registry) -> DecodedProgram:
                 raise ValueError(f"definition {fid!r} node {k}: {e}") from e
             _build_node(B, fid, k, nd, fn, args, arg_type(nd["out"]))
         try:
-            sp.set_body(B.finish(Coll(ret_type, _decode_refs(b["ret"], nodes, schema, leaves))))
+            ret = Coll(ret_type, _decode_refs(b["ret"], nodes, schema, leaves))
         except (TypeError, ValueError) as e:
             raise ValueError(f"definition {fid!r} ret: {e}") from e
+        try:
+            sp.set_body(B.finish(ret))
+        except TypeError as e:
+            raise ValueError(f"definition {fid!r}: {e}") from e
         sp.set_port_types(P.PortTypes.from_json(fid, d["ports"], params, ret_type, outs if fid == desc["root"] else None)
                           if "ports" in d else None)
         return sp

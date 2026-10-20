@@ -4,6 +4,14 @@
 //     -gencode arch=compute_90,code=sm_90 -cubin cuda_rmsnorm_sass.cu -o rmsnorm.cubin
 #include <cuda_bf16.h>
 #include <cub/block/block_reduce.cuh>
+// The block reduction's operator as vLLM's csrc/libtorch_stable/cub_helpers.h picks it (CCCL 3 has no cub::Sum).  Not that
+// header's <cub/cub.cuh>: it adds CUB's EmptyKernel to the cubin.
+#if CUB_VERSION >= 200800
+  #include <cuda/std/functional>
+using CubAddOp = cuda::std::plus<>;
+#else
+using CubAddOp = cub::Sum;
+#endif
 
 struct alignas(16) Bf16x8 {
   __nv_bfloat16 v[8];
@@ -24,7 +32,7 @@ extern "C" __global__ void rms_norm_bf16_v8(
   }
   using Reduce = cub::BlockReduce<float, 1024>;
   __shared__ typename Reduce::TempStorage storage;
-  variance = Reduce(storage).Reduce(variance, cub::Sum{}, blockDim.x);
+  variance = Reduce(storage).Reduce(variance, CubAddOp{}, blockDim.x);
   if (threadIdx.x == 0) scale = rsqrtf(variance / hidden_size + epsilon);
   __syncthreads();
   for (int i = threadIdx.x; i < hidden_size / 8; i += blockDim.x) {
@@ -56,7 +64,7 @@ extern "C" __global__ void fused_add_rms_norm_bf16_v8(
   }
   using Reduce = cub::BlockReduce<float, 1024>;
   __shared__ typename Reduce::TempStorage storage;
-  variance = Reduce(storage).Reduce(variance, cub::Sum{}, blockDim.x);
+  variance = Reduce(storage).Reduce(variance, CubAddOp{}, blockDim.x);
   if (threadIdx.x == 0) scale = rsqrtf(variance / hidden_size + epsilon);
   __syncthreads();
   for (int i = threadIdx.x; i < hidden_size / 8; i += blockDim.x) {

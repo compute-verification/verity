@@ -1,5 +1,5 @@
 """The serving rows of an int8 row (`pipeline.serving_rows`): a ``ScaledMmS8_v1`` Program row is cut into its N
-``ScaledMmS8Coordinate_v1`` instances (A6's template id), each template's units are consecutive chunks of at most its chunk cap,
+``ScaledMmS8Coordinate_v1`` instances (A6's template id, the word of the Boolean ``ScaledMmS8Coordinate_v2``), each template's units are consecutive chunks of at most its chunk cap,
 each coordinate's rows are A6's bit rows read off the row's operands, and a word partition is never the window's."""
 
 from __future__ import annotations
@@ -21,6 +21,10 @@ def coord(k: int) -> str:
     return f"ScaledMmS8Coordinate_v1{{K={k},DOT={DOT}}}"
 
 
+def bcoord(k: int) -> str:
+    return f'ScaledMmS8Coordinate_v2{{K={k},DOT={{"fn":"BlackwellS8ImmaDot32_v2"}}}}'
+
+
 def row(i: int, n: int, op: str = "model.model.layers.0.self_attn.qkv_proj", token: int = 0, step: int = 0) -> SRW.Row:
     spec = f"ScaledMmS8_v1{{K={K},N={n},DOT={DOT}}}"
     r = {"i": i, "spec": spec, "args": [[["n", token, 0, K]], [["n", token, K, K + 1]], [["p", 0, 0, n * K]], [["p", 0, n * K, n * K + n]]]}
@@ -30,15 +34,16 @@ def row(i: int, n: int, op: str = "model.model.layers.0.self_attn.qkv_proj", tok
 
 def test_a_scaled_mm_row_is_cut_into_a6s_coordinate_template():
     hits = SRW.unit_templates(f"ScaledMmS8_v1{{K=4096,N=6144,DOT={DOT}}}")
-    assert [(t, n) for t, _fn, n in hits][1:] == [(coord(4096), 6144)]
+    assert hits[1:] == ((coord(4096), 6144),)
     assert coord(4096) == P.template_id(bind(OG.ScaledMmS8Coordinate, K=4096, **OG.GEMM_SM120_S8))
+    assert [(SRW.template(t).word, SRW.template(t).layout) for t in (coord(4096), bcoord(4096))] == [(coord(4096), "s8")] * 2
 
 
 def test_each_template_is_consecutive_chunks_of_at_most_its_cap():
     rows = [[row(0, 6, token=0), row(1, 6, token=1)], [row(2, 3, op="model.model.layers.0.mlp.down_proj")]]
-    ms = SRW.members([coord(K), coord(K) + "x"], rows, [12, 3], {coord(K): 5, coord(K) + "x": 8})
+    ms = SRW.members([coord(K), bcoord(K)], rows, [12, 3], {coord(K): 5, bcoord(K): 8})
     assert [(m.key, m.base, m.n) for m in ms] == [(f"{coord(K)}/c0", 0, 5), (f"{coord(K)}/c1", 5, 5), (f"{coord(K)}/c2", 10, 2),
-                                                  (f"{coord(K)}x/c0", 12, 3)]
+                                                  (f"{bcoord(K)}/c0", 12, 3)]
     assert all(m.rows == (("x", 34), ("w", 34)) and m.outs == (("o0", 1),) and dict(m.schemas)["x"] == CS.SCHEMA_HM96_SHA512_ROW_SEG
                for m in ms)
     with pytest.raises(ValueError, match="chunk_cap"):

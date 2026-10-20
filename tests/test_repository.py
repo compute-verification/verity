@@ -37,10 +37,6 @@ ALLOWED_EXTRA = (
 #: discrepancies (indexed by its ``DISCREPANCIES.md``).
 SPLIT_DOCUMENT_DIRS = {"Security/Proofs/Flock/Soundness/assumption-notes/": "Security/Proofs/Flock/Soundness/ASSUMPTIONS.md",
                        "archive/ligero-verify/discrepancies/": "archive/ligero-verify/DISCREPANCIES.md"}
-#: The one evidence file left in the tree: not read by code, kept with the rest of fixtures/redteam until the red team rules
-#: on it.  The frozen campaign evidence that code reads (the overhead ledger, the run results the frozen backends' report
-#: scripts compare against) is in the evidence store (``verity_numerical.bench.frozen``).
-PINNED_EVIDENCE = ("fixtures/redteam/vu-battery/v1/a/results_r20260922-070024-e7d1.jsonl",)
 #: Generated output, by where it sits or what it is: no tracked path has one of these directories, suffixes or stamps.
 GENERATED_DIRS = frozenset({"reports", "results", "renders", "previews", "plots", "evidence", "assets", "outputs"})
 GENERATED_SUFFIXES = frozenset({".png", ".jpg", ".jpeg", ".gif", ".webp", ".svg", ".pdf", ".html", ".htm"})
@@ -53,17 +49,29 @@ SOURCE_SUFFIXES = frozenset({".py", ".rs", ".toml", ".sh", ".cu", ".c", ".h", ".
 
 MD_SIZE_CAP = 48 * 1024
 PROTOCOL_SIZE_CAP = 256 * 1024
+#: A skill is loaded into an agent's context whole, so it states the current procedure and rules, never their history
+#: (Daniel, 20 Oct: "this shouldn't be like a database of shit that went wrong"; `.agents/skills/authoring-skills/`).
+SKILL_SIZE_CAP = 16 * 1024
+#: Skills over SKILL_SIZE_CAP on 20 Oct, each capped at its size then (the largest at any open PR's head, rounded up, plus
+#: 1 KiB for PRs queued against it). An entry only shrinks, and goes once its skill is under SKILL_SIZE_CAP; its owner
+#: compacts it.
+OVERSIZE_SKILLS = {
+    ".agents/skills/smell-check/SKILL.md": 41 * 1024,
+    ".agents/skills/lean-proofs/SKILL.md": 29 * 1024,
+    ".agents/skills/using-slack/SKILL.md": 29 * 1024,
+}
 BLOB_LIMIT = 256 * 1024  # a tracked file holds at most this, except source code (CODE_SUFFIXES), ALLOWLIST and audit records
 #: Suffixes of source, exempt from BLOB_LIMIT (a generated module or a pinned Lean file can be larger); markdown has its own caps.
 CODE_SUFFIXES = SOURCE_SUFFIXES | {".lean", ".cuh", ".cpp", ".md"}
-#: Data over BLOB_LIMIT that is not a test fixture: runtime tables a module loads, the generated census, three vLLM workload
-#: specs and two vLLM logs. Each is capped at its size rounded up to 64 KiB, so none can grow past that and nothing joins them
-#: silently. A test fixture over BLOB_LIMIT is registered in fixtures/artifacts.json instead and fetched
-#: (`research data fetch-fixtures`).
+#: Data over BLOB_LIMIT that is not a test fixture: runtime tables a module loads, the generated census, the vLLM checkpoint
+#: manifest (append-only; most of its readers don't read the sibling manifests yet), three vLLM workload specs and two vLLM
+#: logs. Each is capped at its size rounded up to 64 KiB, so none can grow past that and nothing joins them silently. A test
+#: fixture over BLOB_LIMIT is registered in fixtures/artifacts.json instead and fetched (`research data fetch-fixtures`).
 ALLOWLIST = {
     "benchmarks/census/workloads.json": 384 * 1024,
     "integrations/vllm/data/logs/m1.jsonl.gz": 576 * 1024,
     "integrations/vllm/data/logs/m6/log.jsonl.gz": 576 * 1024,
+    "integrations/vllm/manifests/checkpoints.json": 320 * 1024,
     "integrations/vllm/verity_vllm/check/tables/B0-divergence-20260907T1604Z/cos_sin_cache.npy": 1088 * 1024,
     "integrations/vllm/workloads/llama32-1b__bf16__l40s__tp1__b128__i1024__o128__mixed__greedy__bi-eager.json": 512 * 1024,
     "integrations/vllm/workloads/olmoe-1b-7b__bf16__l40s__tp1__b128__i1024__o128__mixed__greedy__bi-eager.json": 512 * 1024,
@@ -98,7 +106,7 @@ def test_tracked_markdown_is_maintained_documentation() -> None:
 
 def test_no_report_genre_basenames() -> None:
     offenders = [p for p in _tracked() if REPORT_GENRE.search(os.path.basename(p))
-                 and os.path.splitext(p)[1] not in SOURCE_SUFFIXES and p not in PINNED_EVIDENCE]
+                 and os.path.splitext(p)[1] not in SOURCE_SUFFIXES]
     assert not offenders, "report-genre files belong in ~/.research/notes/lanes/<lane>/:\n" + "\n".join(offenders)
 
 
@@ -127,17 +135,10 @@ def test_generated_output_patterns() -> None:
 def test_no_generated_output() -> None:
     """Rendered tables, reports, plots, evidence copies and run results are regenerated from code plus the evidence store, or
     fetched from it by ``art:`` id (``research data put --preserve``); none is tracked."""
-    offenders = [f"{p} ({why})" for p in _tracked() if p not in PINNED_EVIDENCE and (why := generated_output(p))]
+    offenders = [f"{p} ({why})" for p in _tracked() if (why := generated_output(p))]
     assert not offenders, (
         "generated output belongs in the evidence store, not Git (AGENTS.md \"Where writing goes\"):\n" + "\n".join(offenders)
     )
-
-
-def test_pinned_evidence_still_exists() -> None:
-    """Drop an entry from PINNED_EVIDENCE when its file leaves the tree."""
-    tracked = set(_tracked())
-    missing = [p for p in PINNED_EVIDENCE if p not in tracked]
-    assert not missing, "PINNED_EVIDENCE lists files that are no longer tracked; remove them:\n" + "\n".join(missing)
 
 
 def split_dir(path: str) -> str | None:
@@ -148,6 +149,13 @@ def split_dir(path: str) -> str | None:
 
 def markdown_over_cap(path: str, size: int) -> str | None:
     """Why the markdown file ``path`` of ``size`` bytes is over its cap, and where its detail goes; None within it."""
+    if os.path.basename(path) == "SKILL.md":
+        cap = OVERSIZE_SKILLS.get(path, SKILL_SIZE_CAP)
+        if size <= cap:
+            return None
+        return (f"{path}: {size / 1024:.0f} KB > {cap // 1024} KB, {size - cap} bytes over; compact it: keep the current "
+                "procedure and rules, drop what AGENTS.md or another skill states, and move dates and history to Daniel's "
+                "decisions log or a note (.agents/skills/authoring-skills/SKILL.md)")
     cap = PROTOCOL_SIZE_CAP if os.path.basename(path) == "PROTOCOL.md" else MD_SIZE_CAP
     if size <= cap:
         return None
@@ -164,6 +172,19 @@ def test_markdown_over_cap_says_by_how_much_and_where_detail_goes() -> None:
         assert markdown_over_cap(p, MD_SIZE_CAP + 7).endswith(f", 7 bytes over; move detail to one file per entry under {soundness}assumption-notes/")
     assert markdown_over_cap("archive/ligero-verify/DISCREPANCIES.md", MD_SIZE_CAP + 1).endswith("archive/ligero-verify/discrepancies/")
     assert markdown_over_cap("archive/ligero-verify/README.md", MD_SIZE_CAP + 1).endswith("the notes store (cite it by note:<id>)")
+    assert markdown_over_cap(".agents/skills/x/SKILL.md", SKILL_SIZE_CAP) is None
+    assert markdown_over_cap(".agents/skills/x/SKILL.md", SKILL_SIZE_CAP + 5).startswith(
+        ".agents/skills/x/SKILL.md: 16 KB > 16 KB, 5 bytes over; compact it")
+    big, cap = next(iter(OVERSIZE_SKILLS.items()))
+    assert markdown_over_cap(big, cap) is None and "1 bytes over" in markdown_over_cap(big, cap + 1)
+
+
+def test_oversize_skills_only_shrink() -> None:
+    """An OVERSIZE_SKILLS entry names a skill that exists and is still over SKILL_SIZE_CAP; once it's under, the entry goes,
+    so the list only shrinks."""
+    stale = [f"{p}: {'missing' if not (ROOT / p).exists() else f'{os.path.getsize(ROOT / p)} bytes, under the cap'}"
+             for p in OVERSIZE_SKILLS if not (ROOT / p).exists() or os.path.getsize(ROOT / p) <= SKILL_SIZE_CAP]
+    assert not stale, "delete these OVERSIZE_SKILLS entries in tests/test_repository.py:\n" + "\n".join(stale)
 
 
 def test_markdown_size_caps() -> None:
@@ -181,7 +202,7 @@ def test_markdown_size_caps() -> None:
 
 
 #: Frozen backends whose other test files need torch, a GPU or cargo, and were never part of `check` (archive/README.md).
-UNSUITED_TEST_DIRS = ("archive/direct/", "archive/gkr/", "verity/ml/kernels/")
+UNSUITED_TEST_DIRS = ("archive/direct/", "archive/gkr/", "archive/shared/hash_gpu/", "verity/ml/kernels/")
 
 
 def _testpaths(tracked: list[str]) -> list[str]:

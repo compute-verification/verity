@@ -34,7 +34,7 @@ s_q s_k is exact in float64 (`F32MulWide`), and A is one 32-bit word: a value se
 every row of a KV group reads (K', V', s_v, f32(V'_0)) is computed once, by `Int8KvQuant`.
 
 The primitives here are the ones no registry had: `F32Rint`, `F32ToS8Rzi`, `S8ToF32`, `F32MulWide`, `F64Mul`, `F64ToU32RniSat`,
-`LutIndex`, `Exp2Lut127` (the LUT softmax's 256-entry gather, a u8 index to its 32-bit entry).  Each is total on encodings; the docstrings say where the served path's domain is narrower.
+`LutIndex`, `Exp2Lut127` (the LUT softmax's 256-entry gather, a u8 index to its 32-bit entry), `U8ToU16`.  Each is total on encodings; the docstrings say where the served path's domain is narrower.
 
 The table is a value the program brings (PROTOCOL.md §5.3): `Exp2Lut127_v2`, `Int8LutSoftmax_v2{S}` and
 `Int8LutAttentionRow_v2{D,S,SCALE}` are the v1 forms with LUT read from the registered `exp2_lut127` (`registry.tables`,
@@ -155,6 +155,12 @@ def Exp2Lut127(t: int) -> int:
     return LUT[t & 0xFF]
 
 
+@primitive("U8ToU16", 1, [("t", V8)], Value(16), conformance=_CONF)
+def U8ToU16(t: int) -> int:
+    """The byte t zero-extended to a 16-bit word: `TableRead8x2_v1`'s index."""
+    return t & 0xFF
+
+
 EXP2_LUT127_TABLE = T.table_type("exp2_lut127")
 
 
@@ -166,8 +172,9 @@ def exp2_lut127_words() -> list[int]:
 @composite("Exp2Lut127", 2, [], lambda S: ((("t", V8), ("exp2_lut127", EXP2_LUT127_TABLE)), I32),
            conformance="exact-model-tested: Exp2Lut127_v1 with LUT[t] read from the registered table")
 def Exp2Lut127V2(B, S, t, exp2_lut127):
-    """`Exp2Lut127_v1` with LUT[t] read from the registered `exp2_lut127` (`TableRead8x2_v1`) rather than held by the evaluator."""
-    return B.call(T.table_read(8, 2), t, exp2_lut127)
+    """`Exp2Lut127_v1` with LUT[t] read from the registered `exp2_lut127` (`TableRead8x2_v1` at t zero-extended, `U8ToU16_v1`)
+    rather than held by the evaluator."""
+    return B.call(T.table_read(8, 2), B.call(U8ToU16, t), exp2_lut127)
 
 
 C_TOP = CP.const(32, bits_of(float(TOP)))
@@ -179,7 +186,7 @@ C_16 = CP.const(64, _f64_bits(16.0))
 C_2_32 = CP.const(64, _f64_bits(4294967296.0))
 ZERO8 = CP.const(8, 0)
 
-INT8_PRIMITIVES = [F32Rint, F32ToS8Rzi, S8ToF32, F32MulWide, F64Mul, F64ToU32RniSat, LutIndex, Exp2Lut127]
+INT8_PRIMITIVES = [F32Rint, F32ToS8Rzi, S8ToF32, F32MulWide, F64Mul, F64ToU32RniSat, LutIndex, Exp2Lut127, U8ToU16]
 
 
 def plain_arm(K: int, N: int, A: tuple[int, int] = (-TOP, TOP)) -> dict:

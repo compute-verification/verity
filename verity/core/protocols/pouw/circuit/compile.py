@@ -35,12 +35,15 @@
   the salt reaches only the seed, through the units' salt port (``salt-flow``); each unit's seed reads the unit's own position
   and roots parameters whole, and at the root each unit batch reads its own slots of `pouw.positions` and its site's of
   `pouw.roots` (its group's), so no unit chooses its position and no two units share one (``position``); a unit derives one seed
-  (``seed``) and its z reads none of it (``noise-in-z``); served values reach a unit only through its z (``separator``);
-  every node outside the units meets `cut.WIDTH_RULE` (``width``). `Compiled.check_gates` adds the gate-level cut (no value
+  (``seed``) and its z reads none of it (``noise-in-z``), or under a one-stream scheme (`Scheme.stream`) each z leaf is
+  recombined from words its receipt folds (``stream``: z reads the seed through the recombination, the wrap correction and
+  the dither peel); served values reach a unit only through its z (``separator``); every node outside the units meets
+  `cut.WIDTH_RULE` (``width``). `Compiled.check_gates` adds the gate-level cut (no value
   computed in two units), the separator and the width rule by reachability, for a Program small enough to flatten.
 
 The Program is the verifier's, rebuilt from (served Program, scheme, groups): `rebuild`, `Compiled.check_descriptor`
-(`traced_as` at Program level).
+(`traced_as` at Program level). Each unit's noise-forced work, the floor compute attribution credits to the block it is
+placed at, is `Compiled.floor`.
 """
 from __future__ import annotations
 
@@ -210,9 +213,10 @@ class RowNoise:
         return self.a[0] + self.a[1] * k, self.b[0] + self.b[1] * k
 
 
-#: H1's attention forms (ATTN-NOISE, `benchmarks/pouw/theory/attn_noise.py`'s `h_table`): QKᵀ's Q row carries its c (a bit
-#: an entry) and its U (320 bits), its K row its b (a bit an entry); P·V's P row its U (224 bits), its V column its b. QKᵀ is
-#: `DotBf16`'s; P·V's kind is the one ATTN-NOISE plugs (`Scheme.plug(..., rows=PV_ROWS)`).
+#: The attention forms H1 is to carry (ATTN-NOISE, `benchmarks/pouw/theory/attn_noise.py`'s `h_table`): QKᵀ's Q row carries
+#: its c (a bit an entry) and its U (320 bits), its K row its b (a bit an entry); P·V's P row its U (224 bits), its V column
+#: its b. QKᵀ is `DotBf16`'s; P·V's kind is the one ATTN-NOISE plugs (`Scheme.plug(..., rows=PV_ROWS)`). H1's scheme has no
+#: unit for either yet, so its `rows` are read only once one is plugged: a `DotBf16` dot is refused (`scheme`) first.
 QK_ROWS = RowNoise(a=(320, 1), b=(0, 1))
 PV_ROWS = RowNoise(a=(224, 0), b=(0, 1))
 ROWS = {f"DotBf16_v{v}": QK_ROWS for v in (1, 2, 3)}
@@ -229,7 +233,9 @@ class Scheme:
     distinct A rows and B rows, each row's noise bits from the form and its readers the group's dots that read it, over
     those dots, at `grind.T_BITS`; over `grind.FLAG` (0.1%) the group is refused (decision 122). At decode that is every
     (query head, request) pair a call holds, whatever KV heads they share (8B: batch ≥ 13 for QKᵀ); at prefill, the
-    (KV head, request) components, fewer the longer the prompt.
+    (KV head, request) components, fewer the longer the prompt. `noise`, per kind outside `rows`, its `RowNoise` too, which
+    the grind term doesn't read and only the work floor does (`Compiled.floor`; H1's s8 kinds, `h1tile.H1_ROWS`): a kind's
+    dots are in the floor where its form (`form`) puts noise on both its rows at its k.
 
     A unit, ``units[kind](dot, tile)``, is ``(a: Array(tile.r, dot.a), b: Array(tile.c, dot.b), salt, position, roots:
     Array(2, digest)) -> Record(z: Array(len(tile.pairs), dot.z), receipt: R)``, the digest and position types
@@ -237,13 +243,25 @@ class Scheme:
     (`seeds.seed_call`), or `seeds.PouwUnitSeeds` (`seeds.unit_seeds_call`) where its receipt folds take keys, which come
     from σ_R, never from seed_j (decision 121). It derives its noise from seed_j (`seeds.noise_blocks`), holds the noised
     arm, the receipt fold and the spot check, and returns its cells' exact products as z. A factory may raise
-    `CompileError` ("scheme") for a dot or tile it doesn't take."""
+    `CompileError` ("scheme") for a dot or tile it doesn't take.
+
+    `stream`, for a one-stream scheme (`h1tile.SCHEME_V3`): the Definitions that make a cell's z from the words its receipt
+    folds (`h1tile.STREAM`: the recombinations, the wrap correction and the dither peel). Such a unit's z is made from the
+    noised words, so it reads the seed by design, and the unit check's ``noise-in-z`` rule gives way to ``stream``: every
+    z leaf is the output of a call of one of them, and every leaf such a call reads is either another such call's output or
+    read by the receipt's own cone. That z is the Call's value is the stream Definitions' arithmetic, not this check's."""
 
     name: str
     tile: tuple[int, int]
     units: Mapping[str, Callable[[Dot, Tile], Any]]
+    stream: tuple[Any, ...] = field(default=(), kw_only=True)
     cover: int = 1
     rows: Mapping[str, RowNoise] = field(default_factory=lambda: dict(ROWS))
+    noise: Mapping[str, RowNoise] = field(default_factory=dict)
+
+    def form(self, kind: str) -> RowNoise | None:
+        """kind's noise form, `rows`' or `noise`'s; None where the scheme declares none."""
+        return self.rows.get(kind, self.noise.get(kind))
 
     def unit(self, dot: Dot, tile: Tile) -> Any:
         f = self.units.get(dot.family, self.units.get(ANY))
@@ -256,7 +274,7 @@ class Scheme:
         """This scheme with `unit` as kind's factory (its noise form), under its own name (register it); `rows`, the form's
         `RowNoise` (`PV_ROWS` for P·V), where a matched row is visible."""
         return Scheme(name, self.tile, {**self.units, kind: unit}, self.cover,
-                      {**self.rows, **({kind: rows} if rows is not None else {})})
+                      {**self.rows, **({kind: rows} if rows is not None else {})}, self.noise)
 
 
 #: the schemes the pass compiles to, by name (protocol structure, keyed by silicon target in the registration). Separate from
@@ -291,6 +309,10 @@ def register(scheme: Scheme) -> Scheme:
         if min(*form.a, *form.b) < 0 or min(form.bits(1)) < 1:
             raise ValueError(f"{scheme.name}: {kind}'s rows carry noise on both sides (at least a bit each, {form}): a form "
                              f"with one side clean has no grind bound")
+    for kind, form in scheme.noise.items():
+        if kind in scheme.rows or min(*form.a, *form.b) < 0:
+            raise ValueError(f"{scheme.name}: {kind}'s noise form is in `rows` or in `noise`, not both, and no side carries "
+                             f"negative bits ({form})")
     SCHEMES[scheme.name] = scheme
     return scheme
 
@@ -853,6 +875,19 @@ class Unit:
 
 
 @dataclass(frozen=True)
+class Floor:
+    """One unit's noise-forced work (`Compiled.floor`): its batch's node in the compiled Program's root (`program.root`,
+    where a placement puts it), its dots' kind, the dots its noise forces (all its cells where the kind's form,
+    `Scheme.form`, puts noise on both rows at its k; none where it has a clean side or no form) and their multiply-adds,
+    k each."""
+
+    node: int
+    kind: str
+    dots: int
+    macs: int
+
+
+@dataclass(frozen=True)
 class GateCheck:
     """`Compiled.check_gates`: the gate-level cut (`cut.check_cut`, no width rule: every gate certified once, reads across units
     only of committed values, no value computed in two units), the separator (no unit's gate reached backward from a served
@@ -1004,6 +1039,25 @@ class Compiled:
             sp = self.plan.sites[g.site]
             out += [Unit(g.site, g.first + m, sp.units[u].rows, sp.units[u].cols, g.tile, g.unit, g.receipt)
                     for m, u in enumerate(g.members)]
+        return tuple(out)
+
+    @cached_property
+    def floor(self) -> tuple[Floor, ...]:
+        """Every unit's noise-forced work, by slot: W_b, the floor `Accounting.Guarantees.PouwBlockCredit`
+        (cursor/attrib-ea24) attributes to the block the unit is placed at, as `Wb · Nmin` with `Wb` the least of the
+        block's units' `macs` and `Nmin` the right units PoUW's draw established. Read off the plan and the scheme's forms,
+        as the cover and grind checks are, with no gate walked. It is the attributed floor, not every gate the salt
+        reaches: the seed's and the noise's SHA-512 and the receipt fold read the salt too, and the floor counts none of
+        them (`Accounting.Assumptions.PouwFloorAdvice`'s scope, the committed words' coin × coin products)."""
+        units = {id(g.unit) for g in self.plan.groups}
+        nodes = [k for k, nd in enumerate(self.program.root.body.nodes) if id(nd.fn) in units]
+        assert len(nodes) == len(self.plan.groups)
+        out = []
+        for k, g in zip(nodes, self.plan.groups):
+            dot = self.plan.sites[g.site].dot
+            form = self.scheme.form(dot.family)
+            n = len(g.tile.pairs) if form is not None and min(form.bits(dot.k)) > 0 else 0
+            out += [Floor(k, dot.family, n, n * dot.k)] * len(g.members)
         return tuple(out)
 
     @property
@@ -1162,9 +1216,10 @@ def _reads(r: Refs, space: str, idx: int) -> bool:
 
 
 @lru_cache(maxsize=None)
-def _check_unit(U: Any, boolean: bool) -> None:
+def _check_unit(U: Any, boolean: bool, stream: tuple[Any, ...] = ()) -> None:
     """One unit Definition: one seed, on its salt, position and roots parameters whole; the salt read by nothing else; and its
-    z reached from no node the seed reaches."""
+    z reached from no node the seed reaches, or for a one-stream scheme (`stream`) recombined from words its receipt folds
+    (`_check_stream`)."""
     body = U.body
     at = [k for k, nd in enumerate(body.nodes) if SD.is_seed(nd.fn)]
     if len(at) != 1 or body.nodes[at[0]].form != "call":
@@ -1186,6 +1241,9 @@ def _check_unit(U: Any, boolean: bool) -> None:
                                                 f"the seed")
     if _reads(body.ret, "p", 2):
         raise CompileError("salt-flow", f"{U.id} returns a leaf of the salt")
+    if stream:
+        _check_stream(U, stream)
+        return
     tainted: set[int] = set()
     for k, nd in enumerate(body.nodes):
         if k == ks or any(s == "n" and i in tainted for a in nd.args for s, i, _lo, _hi in runs(a.refs)):
@@ -1195,6 +1253,54 @@ def _check_unit(U: Any, boolean: bool) -> None:
     if hit:
         raise CompileError("noise-in-z", f"{U.id}'s z reads node {hit[0]} ({body.nodes[hit[0]].fn.id}), which the seed reaches: "
                                          f"z is the exact product")
+
+
+def _check_stream(U: Any, stream: tuple[Any, ...]) -> None:
+    """A one-stream unit's z: each leaf an output of a call of a `stream` Definition, and every leaf such a call reads either
+    another such call's output or a leaf a node in the receipt's cone reads (a parameter's included), so z is a function of
+    the words the receipt folds and of what they are made from, and of nothing else."""
+    body = U.body
+    lz = U.signature()[1].fields[0][1].leaves
+    cone, todo = set(), [i for s, i, _lo, _hi in runs(body.ret.slice(lz, body.ret.count)) if s == "n"]
+    while todo:
+        k = todo.pop()
+        if k not in cone:
+            cone.add(k)
+            todo += [i for a in body.nodes[k].args for s, i, _lo, _hi in runs(a.refs) if s == "n"]
+    folded: dict[tuple[str, int], bytearray] = {}
+    for k in cone:
+        for a in body.nodes[k].args:
+            for s, i, lo, hi in runs(a.refs):
+                f = folded.setdefault((s, i), bytearray())
+                if len(f) < hi:
+                    f.extend(bytes(hi - len(f)))
+                f[lo:hi] = b"\x01" * (hi - lo)
+    ids = {id(f) for f in stream}
+    names = ", ".join(f.id for f in stream)
+
+    def made(nd: Any) -> bool:
+        return id(getattr(nd.fn, "defn", nd.fn)) in ids
+
+    for s, i, _lo, _hi in runs(body.ret.slice(0, lz)):
+        nd = body.nodes[i] if s == "n" else None
+        if nd is None or not made(nd):
+            raise CompileError("stream", f"{U.id}'s z reads {s}{i} ({nd.fn.id if nd else 'a parameter'}), not a recombination "
+                                         f"of the words its receipt folds ({names})")
+    seen: set[int] = set()
+    todo = [i for s, i, _lo, _hi in runs(body.ret.slice(0, lz)) if s == "n"]
+    while todo:
+        i = todo.pop()
+        if i in seen:
+            continue
+        seen.add(i)
+        nd = body.nodes[i]
+        for a in nd.args:
+            for s2, j, lo, hi in runs(a.refs):
+                if s2 == "n" and made(body.nodes[j]):
+                    todo.append(j)
+                elif len(f := folded.get((s2, j), b"")) < hi or not all(f[lo:hi]):
+                    raise CompileError("stream", f"{U.id}'s z at node {i} ({nd.fn.id}) reads {s2}{j} [{lo}, {hi}), which the "
+                                                 f"receipt doesn't fold: z is the one stream's served output")
 
 
 def _check(c: Compiled) -> None:
@@ -1251,7 +1357,7 @@ def _check(c: Compiled) -> None:
         if s != "n" or i not in period or lo % period[i][1] < period[i][0]:
             raise CompileError("separator", f"the receipts read {s}{i} [{lo}, {hi}), not a unit's receipt")
     for g in plan.groups:
-        _check_unit(g.unit, plan.boolean)
+        _check_unit(g.unit, plan.boolean, c.scheme.stream)
     read = {k: bytearray(nd.out.leaves) for k, nd in enumerate(body.nodes) if k not in period}
     for r in [a.refs for nd in body.nodes for a in nd.args] + [body.ret]:
         for s, i, lo, hi in runs(r):
@@ -1333,6 +1439,6 @@ def rebuild(served: Program, scheme: str, descriptor: dict,
     return c
 
 
-__all__ = ["ANY", "BUILTIN", "CompileError", "Compiled", "Dot", "GateCheck", "MATMULS", "Matmul", "POSITIONS", "PV_ROWS",
-           "PouwCall", "PouwCompiled", "PouwRest", "QK_ROWS", "ROOTS", "ROWS", "RowNoise", "SALT", "SCHEMES", "STEP", "Scheme",
-           "Site", "Tile", "Unit", "Z", "compile", "rebuild", "register", "seed"]
+__all__ = ["ANY", "BUILTIN", "CompileError", "Compiled", "Dot", "Floor", "GateCheck", "MATMULS", "Matmul", "POSITIONS",
+           "PV_ROWS", "PouwCall", "PouwCompiled", "PouwRest", "QK_ROWS", "ROOTS", "ROWS", "RowNoise", "SALT", "SCHEMES", "STEP",
+           "Scheme", "Site", "Tile", "Unit", "Z", "compile", "rebuild", "register", "seed"]

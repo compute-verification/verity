@@ -155,6 +155,38 @@ def test_a_declared_build_output_keys_the_suite(tmp_path, monkeypatch):
     assert len(set(keys)) == 3 and S.artifact_ids(suite)["pkg/.lake/cache"] == "directory"
 
 
+def test_what_the_lean_verifier_builds_keys_the_suite_by_its_sources(tmp_path, monkeypatch):
+    """verity-flock's tests run the verifier's binaries, which no plan builds (`check.py --plan` left the suite unkeyed): built by
+    check's lean-build, or this runner's `lean_build`, before the suite runs, they are keyed by the verifier's sources, so a
+    plan keys the suite as the check that ran it did, built or not.  A lakefile that requires another package keeps the bytes."""
+    import hashlib
+
+    lean = tmp_path / "verity" / "core" / "service" / "flock"
+    (lean / "Flock").mkdir(parents=True)
+    (lean / "lakefile.toml").write_text('name = "flock_verifier"\n')
+    (lean / "Flock" / "A.lean").write_text("def a := 1\n")
+    (lean / ".gitignore").write_text(".lake\n")
+    (tmp_path / "pkg").mkdir()
+    (tmp_path / "pkg" / "pyproject.toml").write_text('[project]\nname = "pkg"\n\n[tool.pytest.ini_options]\ntestpaths = ["tests"]\n\n'
+                                                     '[tool.verity.tests]\nartifacts = ["verity/core/service/flock/.lake/build/bin/'
+                                                     'flock-verify", "pkg/.lake/build/bin/tool"]\n')
+    _git(tmp_path, "init", "-q")
+    S = _suites(monkeypatch, tmp_path)
+    [suite] = S.discover()
+    absent = S.artifact_ids(suite)
+    assert absent["verity/core/service/flock/.lake/build/bin/flock-verify"].startswith("built from ")
+    assert absent["pkg/.lake/build/bin/tool"] == "absent"
+    (lean / ".lake" / "build" / "bin").mkdir(parents=True)
+    (lean / ".lake" / "build" / "bin" / "flock-verify").write_bytes(b"a build")
+    assert S.artifact_ids(suite) == absent, "built or not, the same sources"
+    (lean / "Flock" / "A.lean").write_text("def a := 2\n")
+    S._SOURCES.clear()
+    assert S.artifact_ids(suite) != absent, "other sources"
+    (lean / "lakefile.toml").write_text('name = "flock_verifier"\n[[require]]\nname = "mathlib"\n')
+    S._SOURCES.clear()
+    assert S.artifact_ids(suite)["verity/core/service/flock/.lake/build/bin/flock-verify"] == hashlib.sha256(b"a build").hexdigest()
+
+
 def test_jobs_default_to_the_cpus_this_process_may_use(tmp_path, monkeypatch):
     S = _suites(monkeypatch, tmp_path)
     assert 1 <= S.cpus() <= (len(os.sched_getaffinity(0)) if hasattr(os, "sched_getaffinity") else os.cpu_count())
@@ -166,8 +198,32 @@ def test_jobs_default_to_no_more_test_processes_than_available_memory_holds(tmp_
     meminfo = tmp_path / "meminfo"
     for gb, want in ((13, 1), (20, 2), (64, 4), (1, 1)):
         meminfo.write_text(f"MemTotal:       99999999 kB\nMemAvailable:   {gb << 20} kB\n")
-        assert S.default_jobs(meminfo) == want
-    assert S.default_jobs(tmp_path / "absent") == 4
+        assert S.default_jobs(meminfo, 1e9) == want
+    assert S.default_jobs(tmp_path / "absent", 1e9) == 4
+
+
+def test_jobs_default_to_no_more_test_processes_than_the_runs_own_memory_limit_holds(tmp_path, monkeypatch):
+    """r20261019-045749-398f: an `--on auto` agent-test's 16 GiB scope on a node with 1.5 TB available started 32 processes."""
+    S = _suites(monkeypatch, tmp_path)
+    monkeypatch.setattr(S, "cpus", lambda: 32)
+    meminfo = tmp_path / "meminfo"
+    meminfo.write_text(f"MemAvailable:   {1500 << 20} kB\n")
+    assert S.default_jobs(meminfo, 16.0) == 1
+    assert S.default_jobs(meminfo, 100.0) == 11
+    assert S.default_jobs(tmp_path / "absent", 40.0) == 4
+    monkeypatch.setattr(S, "slot_mem_gb", lambda: 20.0)
+    assert S.default_jobs(meminfo) == 2
+
+
+def test_a_research_run_reservation_bounds_the_run_where_no_cgroup_caps_it(tmp_path, monkeypatch):
+    """INF-118: on cpu-2 a `research run --mem-gb 32` is a reservation, not a cgroup cap; the quick tier sized itself to the node."""
+    S = _suites(monkeypatch, tmp_path)
+    monkeypatch.setattr(S, "cgroup_mem_gb", lambda: None)
+    monkeypatch.delenv(S.SLOT_MEM_ENV, raising=False)
+    monkeypatch.setenv(S.RUN_MEM_ENV, "32")
+    assert S.slot_mem_gb() == 32.0
+    monkeypatch.setenv(S.SLOT_MEM_ENV, "200")
+    assert S.slot_mem_gb() == 200.0, "a check slot's memory, when it has one, comes first"
 
 
 def _workspace(root: Path) -> None:
@@ -1011,10 +1067,10 @@ def _until_written_or_exited(fifo: Path, p: subprocess.Popen) -> tuple[bool, byt
         os.close(fd)
 
 
-@pytest.mark.parametrize("stop", ["SIGINT", "SIGTERM"])
+@pytest.mark.parametrize("stop", ["SIGINT", "SIGTERM", "SIGTERM SIGTERM"])
 def test_an_interrupted_run_keeps_what_finished(tmp_path, stop):
-    """A stop mid-suite (check.py's SIGINT to the step's processes, or `research cancel`'s SIGTERM to the run's group): the
-    tests that passed before it are kept, and the suite's `--basetemp` is gone."""
+    """A stop mid-suite (check.py's SIGINT to the step's processes, or `research cancel`'s SIGTERM to the run's group, which `uv
+    run` forwards to the runner a second time): the tests that passed before it are kept, and the suite's `--basetemp` is gone."""
     import signal
 
     root, tests = tmp_path / "tree", tmp_path / "tree" / "pkg" / "tests"
@@ -1033,7 +1089,8 @@ def test_an_interrupted_run_keeps_what_finished(tmp_path, stop):
     written, before = _until_written_or_exited(gate, p)    # test_heavy's two tests have passed; test_block is running
     assert written, f"the runner ended before test_block ran:\n{before.decode(errors='replace')}"
     assert len(list(tmp.glob("verity-suite-[0-9]*"))) == 1
-    os.killpg(p.pid, getattr(signal, stop))
+    for s in stop.split():
+        os.killpg(p.pid, getattr(signal, s))
     out = (before + p.communicate()[0]).decode(errors="replace")
     assert p.returncode != 0 and "2 per-test passes kept" in out, out
     assert list(tmp.glob("verity-suite-[0-9]*")) == [], out
@@ -1531,6 +1588,17 @@ def test_the_suites_in_one_process_get_the_fewest_slots_that_finish_them_with_th
     assert S.serial_slots([100.0, 100.0] + [None] * 40, 2, 32) == 10
     assert S.serial_slots([100.0] * 40, 1, 32) == 31, "the parallel suites keep a slot"
     assert S.serial_slots([5.0], 0, 32) == 32 and S.serial_slots([], 3, 32) == 0
+
+
+def test_the_suites_in_one_process_get_no_more_slots_than_the_memory_holds(tmp_path, monkeypatch):
+    """18 Oct: a 16 GiB agent-test job on 48 CPUs started 44 test processes, which only the parallel suites' workers were sized
+    against memory for, and the OOM killer took the whole scope."""
+    S = _suites(monkeypatch, tmp_path)
+    assert S.serial_slots([5.0] * 48, 0, 48, 16) == 1, "16 GiB holds one process at TEST_PROCESS_GB"
+    assert S.serial_slots([5.0] * 48, 0, 48, 64) == 64 // S.TEST_PROCESS_GB
+    assert S.serial_slots([100.0] * 40, 1, 32, 1000) == 31 and S.serial_slots([100.0] * 40, 1, 32, None) == 31
+    assert S.serial_slots([100.0] * 40, 1, 32, 2) == 1, "even a job smaller than one process runs its suites, one at a time"
+    assert S.serial_slots([], 3, 32, 16) == 0
 
 
 def test_a_parallel_suite_runs_beside_the_others_on_the_slots_they_leave(tmp_path):

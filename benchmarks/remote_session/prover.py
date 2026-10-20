@@ -8,9 +8,9 @@ from an earlier pass's ticket) before the one ahead of it is awaited (`wait`), s
 passes. A boundary message (the next window's coin, or the close) is taken at the first root that reaches the host
 after it: that root is sent as its window's last if its pass started (the root before it reached the host) before the
 message arrived, and dropped otherwise, and the pass queued behind it is dropped too; the next window's first pass
-chains from the last root sent. In a paced session (the session message's `pace`, k: `audit.Pace`) the prover runs at
-most k passes under a coin, then waits for the next, and a window's first pass starts at its coin's arrival. Each
-session runs under a mode of the prover's plan, which the verifier never sees:
+chains from the last root sent. A message arrives when the prover's reader, a process of its own (`wire.connect`,
+`wire.Conn.read_apart`), stamps it, so the rule's comparison does not wait on whatever holds this process's GIL.
+Each session runs under a mode of the prover's plan, which the verifier never sees:
 
 ~~~text
 honest          every block held and read
@@ -35,6 +35,9 @@ kvoverwrite:P   kv:P with serving ahead of the passes (--ahead), but its writes 
                 a slot whose block a pass still has to read, that pass's receipt of it is of the new bytes, and an
                 opening of it carries the true block
 ~~~
+
+In a paced session (the session message's `pace`, k: `audit.Pace`) the prover runs at most k passes under a coin, then
+waits for the next, and a window's first pass starts at its coin's arrival.
 
 With serving ahead of the passes (`Ahead`: --ahead K for a kv session, or a serving backend's own), serving runs on
 its own thread, at most K steps past the pass in flight, and each pass takes the newest step it can: s, once serving
@@ -710,7 +713,7 @@ class ProverSide:
         # the first window's clock starts at pass 0's appends and read: the step is not a read, as a moved pass's.
         getattr(trace, "ready", lambda: None)()
         self.conn.send({"type": "armed", "k": k})
-        head, _, first = self.expect("coin")
+        coin0, _, first = self.expect("coin")
         t = 0
 
         def take(coin) -> bytes:
@@ -776,7 +779,7 @@ class ProverSide:
                          step=step_of(ticket) if step_of is not None and ahead is None else n, plan=plan,
                          upto=(len(trace.appends), len(trace.released), len(getattr(trace, "withdrawn", ()))))
 
-        backend.begin_window(take(wire.coin_of(head["coin"])), self.registration.digest)
+        backend.begin_window(take(wire.coin_of(coin0["coin"])), self.registration.digest)
         pending: deque = deque()
         passes, last, nxt, stopping, ended, discarded = [], None, 1, False, None, 0
         pass_steps: list[list[int]] = []
@@ -836,7 +839,7 @@ class ProverSide:
                     t += 1
                     backend.begin_window(take(wire.coin_of(msg["coin"])), None)
                     # From its coin's arrival: the next coin can come before this process reads its clock, and a pass
-                    # under this coin stays this window's whatever comes after the coin.
+                    # under this coin stays this group's whatever comes after the coin.
                     inflight.append(launch(t, 0, last.ticket if last else None, stamp))
                     nxt = 1
                     continue
@@ -956,15 +959,6 @@ class ProverSide:
                 if kind == "end":
                     return item[0]
 
-    def _boundary(self):
-        """The next boundary message, waited for."""
-        while True:
-            item = self.inbox.get()
-            if item[0]["type"] in ("lost", "bye"):
-                raise wire.Closed(item[0].get("why", "bye"))
-            if item[0]["type"] in BOUNDARIES:
-                return item
-
     def _drain(self, pending: deque) -> None:
         """Move the boundary messages that have arrived into `pending`, in order."""
         while True:
@@ -977,6 +971,15 @@ class ProverSide:
                 raise wire.Closed(item[0].get("why", "bye"))
             if kind in BOUNDARIES:
                 pending.append(item)
+
+    def _boundary(self):
+        """The next boundary message, waited for."""
+        while True:
+            item = self.inbox.get()
+            if item[0]["type"] in ("lost", "bye"):
+                raise wire.Closed(item[0].get("why", "bye"))
+            if item[0]["type"] in BOUNDARIES:
+                return item
 
 
 def main() -> int:

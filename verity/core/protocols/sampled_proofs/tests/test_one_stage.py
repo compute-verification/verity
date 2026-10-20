@@ -296,6 +296,21 @@ def test_draw_checks():
         assert D.check_draw(drawn, rec, {"law": "bernoulli", "p": p}).codes == ("p",)
 
 
+def test_the_rate_law_is_its_rate_rounded_up_to_its_tables():
+    """`parse_rate` reads `rate:NUM/DEN[:T]` at 0 < NUM <= DEN and T >= 1 in ASCII digits, and `rate_count` is ⌈q·n⌉ for
+    q = NUM/DEN rounded up to the next multiple of T and no further: q·n <= K < q·n + T (the Lean's `Rate.count_ge`)."""
+    assert [D.parse_rate(t) for t in ("rate:1/3", "rate:1/3:4", "rate:01/02:003", "rate:5/5")] == [
+        (1, 3, 1), (1, 3, 4), (1, 2, 3), (5, 5, 1)]
+    for bad in ("rate:0/3", "rate:4/3", "rate:1/0", "rate:1/2:0", "rate:1/2:", "rate:1/2:3:4", "rate:1/2/3", "rate:\u0661/2",
+                "rate:1/2:\u0663", "Rate:1/2", "rate:/2", "rate", "subset:3", "bernoulli:1/2", 5, None):
+        assert D.parse_rate(bad) is None, bad
+    for num, den, t in ((1, 3, 1), (1, 3, 4), (2, 7, 3), (5, 5, 2), (1, 100, 8)):
+        for n in range(60):
+            k = D.rate_count(num, den, t, n)
+            assert k % t == 0 and num * n <= den * k < num * n + den * t, (num, den, t, n, k)
+    assert (D.rate_count(1, 3, 4, 20), D.rate_count(1, 5, 4, 12), D.rate_count(1, 3, 2, 60)) == (8, 4, 20)
+
+
 def test_proved_units_are_the_draw():
     good = {"law": "subset", "population": 6, "k": 2, "units": [1, 4]}
     assert D.check_proved(good, [1, 4], 2).ok
@@ -314,7 +329,8 @@ def test_profile_counts_wrong_units():
 
 def _v0(registration, draw, delta):
     """The record's `profile` and `wrong_units` as `audit.py` computed them before the profile was one type (`main` at
-    6746f408), kept as the oracle for the bytes recorded runs hold."""
+    6746f408), kept as the oracle for the bytes recorded runs hold, but for a Bernoulli law's bound: then the linear
+    relaxation (`worst_case`), now the exact one the Lean computes (`Bernoulli.count_bound`, `Bound.bernoulliBound`)."""
     from verity.ml.circuits.partition import Level
     from verity.core.protocols.profile import Bernoulli, IntegrityProfile, Stratified, Stratum, Subset
     n, law = registration["population"], D.law_of(draw)
@@ -334,7 +350,7 @@ def _v0(registration, draw, delta):
     out = {"delta": delta, "of": n}
     rule = "except with probability delta, an accepted transcript has at most `bound` wrong units"
     if core is None:
-        out["bound"], out["rule"] = single.worst_case(lambda m: float(m)), rule
+        out["bound"], out["rule"] = Bernoulli(Fraction(draw["p"])).count_bound(n, delta), rule
     else:
         out["bound"], out["rule"] = core.count_bound(delta), rule
         if draw["law"] == "stratified":
