@@ -7,6 +7,28 @@ areas `Definitions/NetworkCertifier`, `Models/NetworkCertifier` and `Proofs/Netw
 tests mirror some of its statements by name; the Tests section lists which. The certifier program (`lean/`, the Lake
 package `certifier_program`, Lean core only) is the code the difftest runs, proved equal to the analysis's definitions.
 
+## Zero knowledge: what ties the checks, and the two named gaps
+
+N2's count check and N3 read the same head leaf of N2's commitment. N3 holds the window's N frames to the head's root,
+and so to the head's Σ n_t, and N2 holds those counts to the occupancy profile. The two are tied only under three
+conditions, each of which holds:
+1. The root is registered before either check's coins or draws (the firewall's registration, `LinkWindows.commit`).
+2. The leaf index, 2 + d, is fixed by the link-window's direction (`service.HEADS`), which is public structure, not
+   something the prover chooses.
+3. SHA-512 is collision resistant, as hm96 rows in frame-v3-sha512 trees already assume.
+
+Two gaps keep the network audit from being zero-knowledge, and nothing may call it that until both are closed (the
+README states them too):
+- **N2 compares the certified egress digest with the Program's grid in the clear**, which reads witness. It goes when
+  N3 runs on every link-window (NET-38) and N2 switches to `check_link(grid=False)`.
+- **The host checks the certificate's signature over an unsalted record digest**, a hash of witness: the record's
+  counts and an unsalted root of its raw frames. It goes when the certifier signs `H("verity/net-cert/v1" ‖ salt_c ‖
+  R)` (NET-42):
+  - `salt_c` is drawn by the certifier, 64 bytes, fresh per record, and handed to the prover as witness only;
+  - the head-check unit proves `R = H(head)` and that `H(salt_c ‖ R)` is the signed digest;
+  - the host's LMS check then reads only the public fields (key id, session, link, direction, window) and that hiding
+    digest.
+
 ## The certifier (`grid`)
 
 Each boundary link has an active certifier with fixed parameters (W1). The protocol programs them from a security
@@ -460,11 +482,21 @@ them.
     A placeholder in the commitment's slot was the smaller of the two changes compute accounting offered (18 Oct): the
     other, the commitment in the record published at t_d, changes the record's format, its digest and certificate,
     and N3's public input, and with the certifier trusted it binds nothing the reveal doesn't.
-  - **The sealed slot.** The certifier's record cells are its grids and one sealed slot per PoUW window, `_salts[p]`,
-    which holds the salt and which only `reveal` opens. So the record's open cells (`Accounting.Attribution.openCells`,
-    the record minus that slot, ATTRIB-R4) are the grids, and what the certifier sends into the block, the salt frame's
-    release included, is a function of its record, the sealed slot included, and its jitter, as
+  - **The sealed slots.** The certifier's record cells are its grids and two sealed slots per PoUW window:
+    `_salts[p]`, which holds the salt and which only `reveal` opens, and `_weights[p]` (next item). So the record's
+    open cells (`Accounting.Attribution.openCells`, the record minus those slots, ATTRIB-R4) are the grids, and what
+    the certifier sends into the block, the salt frame's release included, is a function of its record, the sealed
+    slots included, and its jitter, as
     `Accounting.TrustedUnits` (W2) asks of a certifier's sends, in `Security/Definitions/Accounting/Physical.lean`.
+  - **The weights before the salt.** PoUW's noise seed reads the weights' root, so a credited window needs the
+    weights fixed before its salt. A second sealed record cell per PoUW window, `_weights[p]`, holds that order: the
+    prover's registration path hands `Proxy.commit_weights(p, root)` the 64-byte frame-v3-sha512 root
+    (`WEIGHTS_ROOT_BYTES`) once, and the certifier refuses it (`RuntimeError`) once p's first ingress tick, the salt's
+    draw, has run or was missed (a proxy back from maintenance after it), and refuses a second root for p. Nothing the
+    certifier sends depends on it. `Proxy.committed(p, registration)` gives it to the verifier on `reveal`'s
+    conditions, and refuses a window whose weights weren't recorded. The order is the certifier's word, under
+    `trusted-nebius-host`, like the salt. The call isn't authenticated, so whoever reaches the certifier first fixes
+    p's root: a wrong one only makes p uncredited, and beyond the auditor's hosts it would need the prover's signature.
   - **Revealed on the window's registration, after t_d.** `Proxy.reveal(p, registration)` gives PoUW window p's salt.
     The verifier calls it with the registration the proof service returned for p (`Registration`, from
     `sampled_proofs.service`), and the certifier fails closed (`RuntimeError`) unless the registration's receipt is a

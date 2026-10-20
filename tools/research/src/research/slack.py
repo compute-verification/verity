@@ -2535,6 +2535,8 @@ def replay(api: Slack, reg: dict, routes: Routes, ch: str, since: float, log=Non
 
     out = []
     for m, root in posts:
+        if PIECE_RE.match(m.get("text") or "") and is_quiet(m.get("text") or ""):
+            continue                                                 # a long post's later piece wakes nobody, by design
         t, author = float(m["ts"]), poster(m, reg)
         history, branches = [], {}
         if root and is_announcement(root):
@@ -2548,6 +2550,9 @@ def replay(api: Slack, reg: dict, routes: Routes, ch: str, since: float, log=Non
             out.append({"ts": m["ts"], "by": author, "missed": missed, "extra": extra,
                         "first": " ".join(plain(m.get("text") or "").split())[:80]})
     return out
+
+
+PIECE_RE = re.compile(r"^\(\d+/\d+\) ")                          # `_post`'s later pieces: `(2/3) ...`, quiet
 
 
 def is_ask(m: dict) -> bool:
@@ -2595,18 +2600,19 @@ def ask_latency(api: Slack, reg: dict, routes: Routes, ch: str, since: float, no
     """Each ask posted in (since, now] that rang a lane's inbox, and each #ask-daniel card linking its page, and how long its
     first answer took, as the ask's record shows it (`record`, `ref`):
     - an ask linked to a Linear issue: the issue's first move out of Backlog or first comment by anyone but the asker
-      (`issue_answer`), with who gave it (`answer_by`); the thread doesn't count.  An issue Linear can't read leaves the ask
-      to Slack (`linear_errors`).
+      (`issue_answer`), with who gave it (`answer_by`), or the addressed lane's own reply in the thread, whichever came first.
+      An issue Linear can't read leaves the ask to Slack (`linear_errors`).
     - Daniel's card (lane `daniel`): its page's Status leaving PAGE_WAITING, at the page's last edit (`page_state`); `state`
       is the Status.  A page Notion can't read leaves the card unanswered (`notion_errors`).
     - any other ask: the first reply in its thread under a name of the lane's inbox (its own, or one it was renamed from).
       One with no reply that carries 👀, ✅ or ❌ and rang only this lane counts as answered but untimed: Slack keeps no time
       for a reaction, and every handle reacts as one bot.
-    Answers after `now` don't count.  Per lane: asks, answered (by Slack, Linear, Notion or untimed), the nearest-rank
+    Only a lane or a named person asks: a machine's alert (`vy-monitors`) isn't an ask.  Answers after `now` don't count.  Per lane: asks, answered (by Slack, Linear, Notion or untimed), the nearest-rank
     median and p90 of the timed answers in minutes, the unanswered, and those unanswered for longer than `stale_s`."""
     tops: dict[str, dict[str, dict]] = {}                            # channel -> ts -> top-level post
     replies: dict[tuple[str, str], list[dict]] = {}
     asks, counted, names = [], set(), {}
+    askers = {h["handle"] for h in reg["handles"]} | {poster({"user": p.get("slack_user")}, reg) for p in reg.get("humans", [])}
     for r in routes.all().values():
         names.setdefault(r.get("inbox_ts"), set()).add(r["name"])  # a renamed lane answers under its old name too
     for r in sorted(routes.all().values(), key=lambda r: (bool(r.get("closed")), r["name"])):
@@ -2623,7 +2629,7 @@ def ask_latency(api: Slack, reg: dict, routes: Routes, ch: str, since: float, no
             if not d or (d[4] and d[4] != d[3]) or d[3] in seen:
                 continue                                             # a reply's doorbell, or one `deliver` rang again
             root = tops[rch].get(d[3])
-            if root and is_ask(root) and poster(root, reg) not in names[r["inbox_ts"]]:
+            if root and is_ask(root) and poster(root, reg) in askers and poster(root, reg) not in names[r["inbox_ts"]]:
                 seen.add(d[3])
                 asks.append({"lane": r["name"], "names": names[r["inbox_ts"]], "channel": rch, "root": root})
     rang: dict[tuple[str, str], int] = {}
@@ -2647,11 +2653,10 @@ def ask_latency(api: Slack, reg: dict, routes: Routes, ch: str, since: float, no
             if (read := issues[(link[1], asker)]) is not None:
                 record, ref = "linear", link[1]
                 found = [ans] if (ans := read["answer"]) and ans["at"] <= now else []
-        if found is None:                                            # no record to read: the thread and its reactions
-            if root.get("reply_count") and key not in replies:
-                replies[key] = api.paged("conversations.replies", "messages", channel=a["channel"], ts=root["ts"], oldest=root["ts"])
-            found = [{"at": float(m["ts"]), "how": "slack-reply", "by": poster(m, reg)} for m in replies.get(key, [])
-                     if m.get("ts") != root["ts"] and poster(m, reg) in a["names"] and t0 < float(m["ts"]) <= now]
+        if root.get("reply_count") and key not in replies:          # the addressee's own reply answers too, record or not
+            replies[key] = api.paged("conversations.replies", "messages", channel=a["channel"], ts=root["ts"], oldest=root["ts"])
+        found = (found or []) + [{"at": float(m["ts"]), "how": "slack-reply", "by": poster(m, reg)} for m in replies.get(key, [])
+                                 if m.get("ts") != root["ts"] and poster(m, reg) in a["names"] and t0 < float(m["ts"]) <= now]
         first = min(found, key=lambda x: x["at"], default=None)
         untimed = (record == "slack" and first is None and rang[key] == 1
                    and any(x.get("name") in ANSWER_REACTIONS for x in root.get("reactions", [])))

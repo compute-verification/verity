@@ -697,6 +697,53 @@ def test_reveal_takes_the_windows_registration_and_fails_closed_without_it():
         back.reveal(1, registration(1))
 
 
+def test_the_weights_are_recorded_only_before_the_salt_and_given_on_reveals_conditions():
+    """`commit_weights(p, root)` records PoUW window p's 64-byte weights' root once, while p's first ingress tick, the
+    salt's draw, is still ahead. It refuses a root after that tick, a second root, a root of another length or type, a
+    window the proxy doesn't serve and a proxy without the salt, and a proxy back from maintenance past p's first tick
+    refuses p. `committed(p, registration)` gives the root on `reveal`'s conditions and refuses a window whose weights
+    weren't recorded."""
+    def proxy(**kwargs) -> Proxy:
+        return Proxy(("127.0.0.1", 9), EGRESS, INGRESS, SYNC_SET, SYNCS, origin=0.0,
+                     salt=lambda w, n: bytes([w + 1]) * n, **kwargs)
+
+    T, roots = INGRESS.buckets, [bytes([w]) * active.WEIGHTS_ROOT_BYTES for w in range(WINDOWS)]
+    p = proxy()
+    p.commit_weights(0, roots[0])
+    for bad in (roots[0][:32], roots[0].hex(), None):
+        with pytest.raises(ValueError, match="64 bytes"):
+            p.commit_weights(1, bad)
+    for w in (-1, WINDOWS, True):
+        with pytest.raises(ValueError, match="serves"):
+            p.commit_weights(w, roots[0])
+    with pytest.raises(ValueError, match="salt is off"):
+        Proxy(("127.0.0.1", 9), EGRESS, INGRESS, SYNC_SET, SYNCS, origin=0.0).commit_weights(0, roots[0])
+    p.bucketer.tick()
+    with pytest.raises(RuntimeError, match="drawn"):
+        p.commit_weights(0, roots[1])
+    for _ in range(T - 1):
+        p.bucketer.tick()
+    p.commit_weights(1, roots[1])
+    with pytest.raises(RuntimeError, match="already recorded"):
+        p.commit_weights(1, roots[2])
+    with pytest.raises(RuntimeError, match="published"):
+        p.committed(1, registration(1))
+    for _ in range((WINDOWS - 1) * T):
+        p.bucketer.tick()
+    with pytest.raises(RuntimeError, match="drawn"):
+        p.commit_weights(2, roots[2])
+    assert [p.committed(w, registration(w)) for w in (0, 1)] == roots[:2]
+    with pytest.raises(RuntimeError, match="no weights"):
+        p.committed(2, registration(2))
+    with pytest.raises(RuntimeError, match="no registration"):
+        p.committed(0, registration(1))
+
+    back = proxy(start=1)
+    with pytest.raises(RuntimeError, match="passed"):
+        back.commit_weights(0, roots[0])
+    back.commit_weights(1, roots[1])
+
+
 ENVELOPE = ClockSync(max(SYNC_SET.deltas), min(SYNC_SET.rhos))
 
 
