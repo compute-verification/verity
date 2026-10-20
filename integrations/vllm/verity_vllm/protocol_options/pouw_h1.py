@@ -43,7 +43,14 @@ served int8 linear call as its own Program on bits, which `verity.core.protocols
 * **Requests and rounds** (`pouw_h1_requests`, #2677's `Accounting.Served`): round s is step s. `admitting` hands each
   step's admitted requests and batch order to `H1Run.admit` before its forward, so each request's entry is a hiding leaf
   under the root of the round that admits it, and each served row's slot names its request, before that round's coin; a
-  window serving a row of a request with no entry credits nothing.
+  window serving a row of a request with no entry credits nothing. A window admits only in round 0 unless its
+  ``admission`` is ``per-round`` (`pouw_h1_requests.ADMISSIONS`).
+* **Round values.** Each call's A table (its slots' s8 rows and f32 scales), its served y and its exact z when the run has
+  one are hiding tables of the call (``tables`` in its manifest row), so round s's root commits them before round s's
+  coin; round s's receipt roots (`H1Run.receipt`, after its coin) go under round s + 1's root, and the window's draw coin
+  (``draw``) opens at `H1Run.finish`, after the manifest, the last round's receipts and every round's root and coin.
+* **Coins.** Credit needs the window's coins from the auditor host's challenger (``coin_source`` ``challenger``,
+  `pouw_h1_challenger`); a window whose coins were held in the serving process credits nothing (`IN_PROCESS`).
 * **Salt.** `pouw.salt` is a SHA-512 digest and the epoch's salt (`audit.Epoch.start`, from the challenger's salt coin, opened
   after the weights' root, `weight_root`) is 32 bytes, so the Program's salt is the epoch's under `SALT_TAG`
   (`program_salt`) until the challenger opens a 64-byte one.
@@ -61,9 +68,10 @@ from pathlib import Path
 from typing import Any, Callable, Mapping, Sequence
 
 import numpy as np
-from verity.core.protocols.pouw.audit import commit_rows, weight_binding
+from verity.core.protocols.pouw.audit import HM96, commit_rows, weight_binding
 from verity.core.protocols.pouw.circuit import compile as C
 from verity.core.protocols.pouw.circuit import h1tile as H
+from verity.core.protocols.pouw.protocol import tagged
 from verity.ml.circuits import boolean as BL
 from verity.ml.circuits.defs import CompositeDefinition, bind
 from verity.ml.circuits.ops.boolean import gemm as BG
@@ -81,6 +89,13 @@ I8_BITS, BF16_BITS = 8, 16
 RECORD = "verity-vllm/pouw-h1-calls/v2"
 CALLS_FILE = "pouw-h1-calls.json"
 SALT_TAG = b"verity/pouw/h1/program-salt/v1\0"
+#: a call's hiding tables, each T leaves under the run's salt key (`H1Run`): A's slot rows and scales, y's rows, z's rows
+TABLE_TAGS = {"a": "verity/pouw/h1/a-table/v1", "y": "verity/pouw/h1/y-table/v1", "z": "verity/pouw/h1/z-table/v1"}
+#: the one coin source a credited window's coins come from (`pouw_h1_challenger`)
+CHALLENGER = "challenger"
+#: the credit refusal of every call of a window whose coins the auditor's challenger didn't draw
+IN_PROCESS = ("credit: coins-not-the-auditors: the window's coins were held in the serving process, not drawn by the "
+              "auditor host's challenger (the pouw setting 'challenger'), so it credits nothing")
 
 
 def program_salt(epoch_salt: bytes) -> bytes:
@@ -308,6 +323,20 @@ def numpy_of(t: Any) -> np.ndarray:
     return t.detach().cpu().numpy() if hasattr(t, "detach") else np.asarray(t)
 
 
+def _words(t: Any, m: int, dtype: str) -> np.ndarray:
+    """`t`'s m rows as little-endian `dtype` words, a bf16 tensor by its bits."""
+    if hasattr(t, "detach") and str(t.dtype) == "torch.bfloat16":
+        import torch
+        t = t.detach().contiguous().view(torch.int16)
+    return np.ascontiguousarray(numpy_of(t).reshape(m, -1), dtype=dtype)
+
+
+def table_leaves(rows: int, width: int, m: int, *parts: np.ndarray) -> list[bytes]:
+    """A call's table leaves: slot i < m the bytes of row i of each of `parts` in turn, every later slot `width` zero bytes."""
+    out = [b"".join(p[i].tobytes() for p in parts) for i in range(m)]
+    return out + [bytes(width)] * (rows - m)
+
+
 class H1Run:
     """One install's H1 window on the int8_exact row, in the static form: its calls, rows and positions are a function of the
     public parameters alone, never of a step's tokens, batch or EOS. ``shapes`` are the linears' (n, k) in order, ``rows``
@@ -320,13 +349,19 @@ class H1Run:
     Round s is step s. The engine's admissions and batch order (`admit`, from `admitting`) go to the round of the step about
     to run, and round s closes once step s's last linear is recorded (or at `close`): its root
     (`pouw_h1_requests.round_root`) over the step's calls, its request table and its slot table is recorded with
-    ``rounds`` (a `LiveRecord` over a live challenger's round family), which opens round s's coin only after it. ``key`` is
-    the prover's hm96 salt key for the request and slot tables, drawn for the run (`os.urandom`) unless given; nothing
-    persists it or the tables, so their leaves open only while the run is held (`open_request`, `open_slot`)."""
+    ``rounds`` (a `LiveRecord` over a live challenger's round family), which opens round s's coin only after it, and
+    `finish` opens ``draw``'s coin (a `LiveRecord` of the same challenger's draw family) after the window's `draw_root`.
+    ``key`` is the prover's hm96 salt key for the request, slot and call tables, drawn for the run (`os.urandom`) unless
+    given; nothing persists it or the tables, so their leaves open only while the run is held (`open_request`,
+    `open_slot`). ``admission`` is `pouw_h1_requests.ROUND0` (admit in round 0 only) or ``PER_ROUND``; ``coin_source`` is
+    `CHALLENGER` only for coins from the auditor host's challenger, and any other credits nothing."""
 
     def __init__(self, entry: str, salt: bytes, modules: Mapping[int, str], shapes: Sequence[tuple[int, int]], rows: int,
                  steps: int, retain: int = 0, transcript_dir: str | None = None, commit: bool = True, rounds: Any = None,
-                 key: bytes | None = None) -> None:
+                 key: bytes | None = None, draw: Any = None, admission: str = RQ.ROUND0,
+                 coin_source: str = "in-process") -> None:
+        if admission not in RQ.ADMISSIONS:
+            raise ValueError(f"{entry}: an admission is one of {RQ.ADMISSIONS}, not {admission!r}")
         self.entry, self.salt, self.modules, self.commit = entry, salt, dict(modules), commit
         self.shapes_, self.rows, self.steps = [tuple(map(int, s)) for s in shapes], int(rows), int(steps)
         self.offs, self.u_step = layout(self.shapes_, self.rows)
@@ -342,6 +377,10 @@ class H1Run:
         self.verdicts: dict[int, dict[str, Any]] = {}
         self._recorded: tuple[Call, Any] | None = None
         self.rounds, self._key = rounds, key if key is not None else os.urandom(32)
+        self.draw, self.admission, self.coin_source = draw, admission, coin_source
+        #: each call's table roots (hex; z None when the run has no exact Y for it) and each call's receipt root
+        self.tables: dict[int, dict[str, str | None]] = {}
+        self.receipts: dict[int, bytes] = {}
         #: the admitted requests' entries in admission order, each round's, and the requests refused admission
         self.requests: list[RQ.RequestEntry] = []
         self.admitted: dict[int, list[RQ.RequestEntry]] = {}
@@ -360,7 +399,7 @@ class H1Run:
         self._slot_tables: dict[int, Any] = {}
         self.commits: dict[str, Any] = {"scheme": SCHEME, "tile": list(TILE), "rows": self.rows, "steps": self.steps,
                                         "u_step": self.u_step, "units": self.steps * self.u_step, "calls": 0,
-                                        "rounds": self.round_log}
+                                        "rounds": self.round_log, "admission": self.admission}
         self.details: dict[str, Any] = {"scheme": SCHEME, "calls": 0, "refused": self.refused,
                                         "uncovered": "attention (QK^T and P.V in Int8LutAttentionRow_v1) and lm_head",
                                         "z": "the arm's own when its observe hands one over, else engine.int8_exact.int_mm "
@@ -370,11 +409,33 @@ class H1Run:
         """Hand every later call to `fn` (`Listener`)."""
         self.listeners.append(fn)
 
-    def _call(self, s: int, w: int, a: Any, s_a: Any, weight: Any, weight_scale: Any) -> Call:
+    def _table(self, call: Call, name: str, leaves: list[bytes]) -> str:
+        j = list(TABLE_TAGS).index(name)
+        return commit_rows(tagged(TABLE_TAGS[name], self.salt, call.index), call.index, leaves, hash=HM96,
+                           salt_key=self._key, nonce=RQ.TABLES_NONCE + 3 * call.index + j).commitment.root.hex()
+
+    def _commit_tables(self, call: Call, a: Any, s_a: Any, y: Any, z: Any) -> None:
+        """The call's A, y and z tables (`table_leaves`): y's only when it's handed over or the call is empty, z's only when
+        the run has the call's exact Y."""
+        m, t = call.m, self.rows
+        if a is not None and m:
+            av, sv = _words(a, m, "i1"), _words(s_a, m, "<f4")
+        else:
+            av = sv = np.zeros((0, 1), "i1")
+        out: dict[str, str | None] = {"a": self._table(call, "a", table_leaves(t, call.k + 4, m, av, sv))}
+        out["y"] = None if (y is None and m) else self._table(
+            call, "y", table_leaves(t, 2 * call.n, m, _words(y, m, "<i2") if m else av))
+        out["z"] = None if (z is None and m) else self._table(
+            call, "z", table_leaves(t, 4 * call.n, m, _words(z, m, "<i4") if m else av))
+        self.tables[call.index] = out
+
+    def _call(self, s: int, w: int, a: Any, s_a: Any, weight: Any, weight_scale: Any, y: Any = None, z: Any = None) -> Call:
         n, k = self.shapes_[w]
         call = Call(len(self.calls), s, w, self.modules.get(w, str(w)), int(a.shape[0]) if a is not None else 0, k, n,
                     s * self.u_step + self.offs[w], self.rows)
         self.calls.append(call)
+        if self.commit:
+            self._commit_tables(call, a, s_a, y, z)
         for fn in self.listeners:
             out = fn(call, a, s_a, weight, weight_scale)
             if out is not None:
@@ -414,6 +475,7 @@ class H1Run:
                 continue
             prompt = tuple(int(t) for t in prompt or ())
             why = (f"admitted for step {r}, past the window's {self.steps} steps" if r >= self.steps
+                   else RQ.late_admission(r) if r and self.admission == RQ.ROUND0
                    else "no prompt token ids or no token cap" if not prompt or int(cap) < 1
                    else "admitted and not in its step's batch" if req_id not in at else None)
             if why is not None:
@@ -446,11 +508,29 @@ class H1Run:
             table = self._tables[r] = RQ.request_table(self.salt, r, self.rows, self.admitted.get(r, []), self._key)
             slots = self._slot_tables[r] = RQ.slot_table(self.salt, r, self.rows, owners, self._key)
             calls = RQ.step_digest(self.salt, r, self._rows([c for c in self.calls if c.step == r]))
-            root = RQ.round_root(self.salt, r, calls, table.commitment.root, slots.commitment.root)
+            receipts = self.receipts_of(r - 1) if r else RQ.NO_RECEIPTS
+            root = RQ.round_root(self.salt, r, calls, table.commitment.root, slots.commitment.root, receipts)
             coin = self.rounds.record(root) if self.rounds is not None else None
             self.round_log.append({"round": r, "root": root.hex(), "calls": calls.hex(),
                                    "requests": table.commitment.root.hex(), "slots": slots.commitment.root.hex(),
-                                   "coin": coin.to_json() if coin else None})
+                                   "receipts": receipts.hex(), "coin": coin.to_json() if coin else None})
+
+    def receipts_of(self, r: int) -> bytes:
+        """Round r's receipts (`pouw_h1_requests.receipts_digest`): its calls' receipt roots as handed to `receipt`."""
+        return RQ.receipts_digest(self.salt, r, [(c.index, self.receipts.get(c.index)) for c in self.calls if c.step == r])
+
+    def receipt(self, index: int, root: bytes) -> None:
+        """Call `index`'s receipt root, computed after its round's coin: it goes under the next round's root (the last
+        round's in the draw's root), so it is refused before that coin, once the next round has closed, or twice."""
+        call = self.calls[index]
+        if len(self.round_log) <= call.step:
+            raise RuntimeError(f"{self.entry}: call {index}'s receipt before round {call.step}'s coin")
+        if len(self.round_log) > call.step + 1 or "draw" in self.commits or index in self.receipts:
+            raise RuntimeError(f"{self.entry}: call {index}'s receipt after the root that commits round {call.step}'s "
+                               "receipts, or a second one")
+        if len(root) != 64:
+            raise ValueError(f"{self.entry}: a receipt root is 64 bytes")
+        self.receipts[index] = bytes(root)
 
     def open_request(self, index: int) -> RQ.RoundOpening:
         """Request `index`'s entry opened under its round's request table, once that round has closed."""
@@ -474,9 +554,10 @@ class H1Run:
         return [f"step {u['round']}: {u['rows']} row{'' if u['rows'] == 1 else 's'} of a request with no entry"
                 for u in self.unadmitted] + self.unbound
 
-    def record(self, w: int, a: Any, s_a: Any, weight: Any, weight_scale: Any, z: Any = None) -> Call | None:
-        """Linear `w`'s served call: its s8 rows a [m, k], their f32 scales s_a [m], its int8 weight [n, k] and scales, and
-        its exact s32 Y [m, n] if the arm's kernel wrote one (else `int_mm` computes it beside, only to retain it)."""
+    def record(self, w: int, a: Any, s_a: Any, weight: Any, weight_scale: Any, z: Any = None, y: Any = None) -> Call | None:
+        """Linear `w`'s served call: its s8 rows a [m, k], their f32 scales s_a [m], its int8 weight [n, k] and scales, its
+        exact s32 Y [m, n] if the arm's kernel wrote one (else `int_mm` computes it beside, only to retain it) and its
+        served y [m, n] bf16, each committed in the call's tables."""
         if self.closed:
             raise RuntimeError(f"{self.entry}: a call after the window closed")
         if w == 0:
@@ -489,10 +570,10 @@ class H1Run:
         if not 0 <= self.step < self.steps or m > self.rows or (int(weight.shape[0]), k) != self.shapes_[w]:
             self.refused.append({"step": self.step, "linear": w, "m": m})
             return None
-        call = self._call(self.step, w, a, s_a, weight, weight_scale)
         if z is None and self.retain:
             from verity_vllm.engine.int8_exact import int_mm
             z = int_mm(a, weight)
+        call = self._call(self.step, w, a, s_a, weight, weight_scale, y, z)
         if self.retain:
             self.retained.append((call.index, numpy_of(a), numpy_of(s_a), numpy_of(z)))
         self._recorded = (call, z)
@@ -528,6 +609,7 @@ class H1Run:
                                     "per_round": [len(self.admitted.get(r, [])) for r in range(self.steps)],
                                     "readmitted": len(self.readmitted), "gaps": self.request_gaps(),
                                     "coins": "live" if self.rounds is not None else "none",
+                                    "coin_source": self.coin_source, "admission": self.admission,
                                     "a_roots": "bound" if bound else "unbound: the slot tables name A-table leaves of tables "
                                                                      "no round root commits"}
         self.details["static"] = self.static()
@@ -557,20 +639,24 @@ class H1Run:
 
     def credit(self) -> dict[str, Any]:
         """Credited: the served rows' MACs of the calls the credit gate passes (`credit_gate`), only, and none in a window
-        that served a row it can't name an entry for (`request_gaps`). The padded work (empty slots and pad columns) is
+        that served a row it can't name an entry for (`request_gaps`) or whose coins aren't the challenger's (`IN_PROCESS`).
+        The padded work (empty slots and pad columns) is
         shown beside it, not credited (Daniel, 18 Oct), and so are the refused calls' rows, with each refusal's reason."""
         served = [c for c in self.calls if c.m]
         gaps = self.request_gaps()
         verdicts = {c.index: self.verdict(c) for c in served}
         if gaps:
             verdicts = {i: v if not v["credit"] else {**v, "credit": False, "reason": RQ.UNENTERED} for i, v in verdicts.items()}
+        if self.coin_source != CHALLENGER:
+            verdicts = {i: v if not v["credit"] else {**v, "credit": False, "reason": IN_PROCESS} for i, v in verdicts.items()}
         ok = [c for c in served if verdicts[c.index]["credit"]]
         no = [c for c in served if not verdicts[c.index]["credit"]]
         computed = sum(padded(c.rows, c.n)[0] * padded(c.rows, c.n)[1] * c.k for c in self.calls)
         all_served = sum(c.m * c.n * c.k for c in served)
         return {"rule": "credit the served rows of calls whose served y is the credited kernel's own output only, and none "
-                        "in a window that served a row of a request with no entry; padded work and refused calls are "
-                        "shown, not credited", "requests": gaps,
+                        "in a window that served a row of a request with no entry or whose coins the auditor's challenger "
+                        "didn't draw; padded work and refused calls are shown, not credited", "requests": gaps,
+                "coins": self.coin_source,
                 "credited": {"rows": sum(c.m for c in ok), "macs": sum(c.m * c.n * c.k for c in ok)},
                 "refused": {"calls": len(no), "rows": sum(c.m for c in no), "macs": sum(c.m * c.n * c.k for c in no),
                             "reasons": CG.reasons(verdicts[c.index] for c in no)},
@@ -595,7 +681,8 @@ class H1Run:
         return out
 
     def _rows(self, calls: Sequence[Call]) -> list[dict[str, Any]]:
-        return [{**c.summary(), **({"bound": dict(self.bound[c.index])} if c.index in self.bound else {})} for c in calls]
+        return [{**c.summary(), **({"tables": dict(self.tables[c.index])} if c.index in self.tables else {}),
+                 **({"bound": dict(self.bound[c.index])} if c.index in self.bound else {})} for c in calls]
 
     def manifest(self) -> list[dict[str, Any]]:
         """Each call's summary, with what its listeners bound."""
@@ -609,10 +696,18 @@ class H1Run:
         return h.digest()
 
     def finish(self) -> None:
+        """Close the window, commit its manifest, then open ``draw``'s coin after `pouw_h1_requests.draw_root` over the
+        manifest, the last round's receipts and every round's root and coin, so the draw follows all of them."""
         self.close()
         if not self.commit:
             return
-        self.commits.update(calls_root=self.calls_root().hex(), static=self.details["static"])
+        calls_root = self.calls_root()
+        self.commits.update(calls_root=calls_root.hex(), static=self.details["static"])
+        if "draw" not in self.commits:
+            receipts = self.receipts_of(self.steps - 1)
+            root = RQ.draw_root(calls_root, receipts, self.round_log)
+            coin = self.draw.record(root) if self.draw is not None else None
+            self.commits["draw"] = {"root": root.hex(), "receipts": receipts.hex(), "coin": coin.to_json() if coin else None}
         if self.transcript_dir:
             d = Path(self.transcript_dir)
             d.mkdir(parents=True, exist_ok=True)
@@ -648,7 +743,7 @@ def observer(run: H1Run, w: int, orig: Any) -> Any:
     def observe(layer: Any, xq: Any, s_a: Any, y: Any, z: Any = None) -> None:
         orig(layer, xq, s_a, y) if z is None else orig(layer, xq, s_a, y, z)
         if run.commit:
-            run.record(w, xq, s_a, layer.weight, layer.weight_scale, z)
+            run.record(w, xq, s_a, layer.weight, layer.weight_scale, z, y=y)
     return observe
 
 
@@ -689,7 +784,7 @@ def bind_all(calls: Sequence[Call], bound: Mapping[int, Mapping[str, Any]]) -> l
     return out
 
 
-__all__ = ["CALLS_FILE", "Call", "FILL", "H1Run", "Listener", "RECORD", "SALT_TAG", "SCHEME", "Static", "TILE",
-           "VllmInt8LinearH1", "admitting", "bind_all", "check_tiles", "compiled", "coordinate", "layers", "layout",
-           "numpy_of", "observer", "padded", "program", "program_salt", "slots", "traced", "units", "utilization",
-           "weight_root"]
+__all__ = ["CALLS_FILE", "CHALLENGER", "Call", "FILL", "H1Run", "IN_PROCESS", "Listener", "RECORD", "SALT_TAG", "SCHEME",
+           "Static", "TABLE_TAGS", "TILE", "VllmInt8LinearH1", "admitting", "bind_all", "check_tiles", "compiled",
+           "coordinate", "layers", "layout", "numpy_of", "observer", "padded", "program", "program_salt", "slots",
+           "table_leaves", "traced", "units", "utilization", "weight_root"]
