@@ -29,11 +29,13 @@ first alone in a second (`<out>/solo/`). It records each window's step rows agai
 u (`H1Run.utilization`), the credit gate's verdict, each step's seconds (at linear 0 of the next) and tokens/s, and the
 static schedule's check (`engine.static_schedule.check`) of every request. Compile is `--compile-from` on each record.
 
-``--challenger HOST:PORT --session JSON`` takes the window's salt and round coins from the auditor host's challenger, in
-the session infra's gate opened for the window (the gate's open answer; `pouw_h1_challenger`; on PEER, the port the gate
-forwards), one session a window, so the fill workload serves only the 64's window. ``--check-challenger CALLS_JSON DIR
---key-sha512 HEX --ledger JSONL`` is the verifier's side on no GPU. With ``--window WINDOW_JSON`` (``{commit, period}``)
-the ledger is the auditor's signed v1 ledger and DIR the challenger run's own ``out/``: the window's coins against the
+``--challenger HOST:PORT --session JSON --gate CMD`` takes the window's salt and round coins from the auditor host's
+challenger, in the session infra's gate reserved for the window (``--session``, the gate's reserve answer), which the
+window opens through ``CMD open --session S --root R`` on its window-open root once round 0 is admitted
+(`gate_command`; `pouw_h1_challenger.Window`; on PEER, the port the gate forwards), one session a window, so the fill
+workload serves only the 64's window. ``--check-challenger CALLS_JSON DIR --key-sha512 HEX --ledger JSONL`` is the
+verifier's side on no GPU. With ``--window WINDOW_JSON`` (``{commit, period}``, its commit the window's open root) the
+ledger is the auditor's signed v1 ledger and DIR the challenger run's own ``out/``: the window's coins against the
 session the ledger opens and ends for the window (`pouw_h1_challenger.trusted_rounds_reason`). Without it the ledger is
 infra's v2 one, ``--ledger`` given once per published head, read as the newest that the others extend
 (`pouw_h1_challenger.Ledger.newest`), and DIR the session's tree as the gate's ``fetch`` gives it: the window held to the
@@ -46,6 +48,8 @@ import argparse
 import hashlib
 import json
 import os
+import shlex
+import subprocess
 import sys
 import tempfile
 import time
@@ -66,15 +70,30 @@ PROMPTS = ["The capital of France is", "def fibonacci(n):\n    \"\"\"Return the 
            "The chemical symbol for gold is", "A haiku about autumn:", "The square root of 144 is", "Photosynthesis is the process"]
 
 
-def h1_settings(eng: Any, rows: int, steps: int, challenger: str | None = None, session: Any = None, **kw: Any
-                ) -> dict[str, Any]:
+def gate_command(argv: list[str]) -> Any:
+    """The `pouw_h1_challenger.Gate` that runs the gate's verbs as `argv` + VERB (an ``ssh ... research@HOST``): ``open
+    --session S --root R``, its JSON answer's ``commitment`` (null until serve.py signs its record) then read from ``status
+    S``."""
+    def verb(*args: str) -> dict[str, Any]:
+        return json.loads(subprocess.run([*argv, *args], check=True, capture_output=True, text=True).stdout)
+
+    def gate(session: str, root: str) -> dict[str, Any]:
+        answer = verb("open", "--session", session, "--root", root)
+        if answer.get("commitment") is None:
+            answer["commitment"] = verb("status", session).get("commitment")
+        return answer
+    return gate
+
+
+def h1_settings(eng: Any, rows: int, steps: int, challenger: str | None = None, session: Any = None, gate: Any = None,
+                **kw: Any) -> dict[str, Any]:
     """The option's settings for one served window: the engine's model runner (where the scheduler's admissions arrive) and
     the window's coins, its salt coin and one live round coin a step: the auditor host's at `challenger` (``HOST:PORT``, one
-    session a window, `pouw_h1_challenger`) in the `session` infra's gate opened for it, else held in this process,
-    which no verifier trusts and which credits nothing (a measurement)."""
+    session a window, `pouw_h1_challenger`) in the `session` infra's gate reserved for it, which `gate` opens on the
+    window's open root, else held in this process, which no verifier trusts and which credits nothing (a measurement)."""
     if challenger:
-        return {"pouw": {"challenger": challenger, "session": session, "runner": eng.runner, "rows": rows, "steps": steps,
-                         **kw}}
+        return {"pouw": {"challenger": challenger, "session": session, "gate": gate, "runner": eng.runner, "rows": rows,
+                         "steps": steps, **kw}}
     from verity.core.protocols.pouw import window as Wd
     from verity.core.protocols.pouw.coins import Challenger
     from verity.core.protocols.sampled_proofs.challenger import LiveRecord
@@ -144,7 +163,7 @@ def run(a: argparse.Namespace) -> dict[str, Any]:
     plain = serve()
     entry_name = f"pouw:{PH.SCHEME}"
     ctx = PO.Context(stage="serve", enabled=(entry_name,),
-                     settings=h1_settings(eng, a.rows, steps_public, a.challenger, a.session, retain_steps=a.retain,
+                     settings=h1_settings(eng, a.rows, steps_public, a.challenger, a.session, a.gate, retain_steps=a.retain,
                                           transcript_dir=str(outdir), admission="per-round"))
     t0 = time.monotonic()
     comp = PO.install(eng.model, ctx)
@@ -324,7 +343,7 @@ def fill(a: argparse.Namespace) -> dict[str, Any]:
     def window(name: str, want: list[dict[str, Any]], tdir: Path) -> dict[str, Any]:
         nonlocal layers
         ctx = PO.Context(stage="serve", enabled=(entry_name,),
-                         settings=h1_settings(eng, decl.rows, decl.steps, a.challenger, a.session, retain_steps=a.retain,
+                         settings=h1_settings(eng, decl.rows, decl.steps, a.challenger, a.session, a.gate, retain_steps=a.retain,
                                               transcript_dir=str(tdir), admission="round-0"))
         t0 = time.monotonic()
         comp = PO.install(eng.model, ctx)
@@ -521,10 +540,14 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--ledger", metavar="JSONL", action="append",
                     help="with --check-challenger: the auditor's signed ledger (with --window), or once per published "
                          "head infra's v2 challenger ledger (the gate's ledger), CHALLENGER_DIR then the session's tree")
-    ap.add_argument("--window", metavar="WINDOW_JSON", help="the window's identity, {commit, period}, in a v1 ledger")
+    ap.add_argument("--window", metavar="WINDOW_JSON",
+                    help="the window's identity, {commit, period}, in a v1 ledger, its commit the window's open root")
     ap.add_argument("--session", type=json.loads, metavar="JSON",
-                    help="with --challenger: the challenger gate's open answer, {\"session\", \"seq\", \"root\", "
-                         "\"commitment\"} and its \"secret\"")
+                    help="with --challenger: the challenger gate's reserve answer, {\"session\", \"seq\", \"peer\", "
+                         "\"by\", \"expires_utc\", \"period\"}")
+    ap.add_argument("--gate", type=lambda v: gate_command(shlex.split(v)), metavar="CMD",
+                    help="with --challenger: the command the gate's verbs follow (ssh -i KEY -o BatchMode=yes "
+                         "research@HOST), which opens the reserved session on the window's open root")
     ap.add_argument("--workload", choices=("batch", "fill"), default="batch",
                     help="batch: PROMPTS batched and the first alone (--rows, --steps, --max-tokens); fill: pouw_h1.FILL, 64 in "
                          "flight every served step (VLLM-52; its own T, S and cap)")
