@@ -1545,7 +1545,7 @@ def ledger(record: Record, *, capacity_bytes_per_s: float, chip_bytes: int, rebu
     epsilon, link_delta = 0.0, 0.0
     if requirement is not None:
         if requirement.holds is not True:
-            raise ValueError("a requirement link whose proofs don't hold caps nothing: pass None, and the credit is "
+            raise ValueError("a requirement link whose proofs don't hold credits nothing: pass None, and the credit is "
                              "the node's reads of its store, not the circuit's")
         if any(len(x) != w.passes for w in record.windows for x in (w.steps, w.heads)):
             raise ValueError("a requirement link reads each pass's step and head, and this record's passes name none: "
@@ -1553,7 +1553,7 @@ def ledger(record: Record, *, capacity_bytes_per_s: float, chip_bytes: int, rebu
         if requirement.mapped(record) is not True:
             raise ValueError("a requirement link whose memory-map unit doesn't make this record's appends (its "
                              "`appends` chain, each pass's head through the appends of the steps below its own, each "
-                             "re-key below the next pass's stale bound) caps nothing: frees, re-keys and append order "
+                             "re-key below the next pass's stale bound) credits nothing: frees, re-keys and append order "
                              "chosen after the seed are advice no term charges")
         epsilon, link_delta = requirement.epsilon, requirement.delta
         if type(epsilon) not in (int, float) or not 0 <= epsilon <= 1:
