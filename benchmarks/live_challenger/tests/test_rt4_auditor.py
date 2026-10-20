@@ -16,6 +16,9 @@ finding's witness, and flips to the refusal when the code is fixed.
   makes catches it.
 * RT4-INT-27: a restore of the host's key state and ledger forks the ledger at a reused LMS leaf, and `verify_ledger`
   passes both heads.
+* RT4-INT-30: the gate's validators are `re.match` with `$`, which matches before a trailing newline, so through the
+  forced command's shell words `--commit` and `--period` take one: a Commit gets a second window whose commit
+  `bytes.fromhex` reads as the same root.
 """
 from __future__ import annotations
 
@@ -178,6 +181,26 @@ def test_a_release_log_rewritten_after_its_end_entry_passes_both_checks_and_only
     assert hashlib.sha512(log.read_bytes()).hexdigest() != sealed[R.RELEASES]
     assert "stdout.log" not in sealed and (out / "stdout.log").is_file()
     assert "request.json" not in sealed and (host.sessions / session / "request.json").is_file()
+
+
+def test_a_trailing_newline_in_commit_or_period_passes_the_gate_and_opens_a_second_window_for_one_commit(host, signer):
+    def ssh(words, token):
+        return A.gate(["--ssh", words], host, by="research", now=T0, token=token, own=lambda d: None, start=lambda s: None,
+                      active=lambda s: False,
+                      admit=lambda s: A.admit(host, s, signer=signer, pinned=PIN, now=T0, active=lambda s: False))
+
+    rest = f"--peer vy-nebius-1 --scheme verity/test/coins/v1 --families '{json.dumps(FAMILIES)}'"
+    assert ssh(f"open --period p0 --commit {COMMIT} {rest}", "ab12")[0] == 0
+    assert ssh(f"open --period p0 --commit '{COMMIT}\n' {rest}", "cd34")[0] == 0
+    assert ssh(f"open --period 'p0\n' --commit {COMMIT} {rest}", "ef56")[0] == 0
+    rc, out = ssh(f"open --period p0 --commit '{COMMIT} ' {rest}", "0a0b")
+    assert rc == 3 and "128 lowercase hex" in json.loads(out)["refused"]
+
+    I, verify = verify_under(host)
+    windows = A.verify_ledger(A.read_ledger(host.ledger), I, verify)
+    assert set(windows) == {("p0", COMMIT), ("p0", COMMIT + "\n"), ("p0\n", COMMIT)}
+    assert {bytes.fromhex(c) for _, c in windows} == {bytes.fromhex(COMMIT)}
+    assert {p.strip() for p, _ in windows} == {"p0"}
 
 
 def test_a_restored_key_state_and_ledger_fork_the_chain_at_a_reused_leaf_and_verify_ledger_passes_both_heads(host, signer,
