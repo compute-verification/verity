@@ -13,15 +13,16 @@ case ${ROW:?ROW} in
             V2=glm-v2 REF=${REF:-cursor/glm-v2-21f3} POST_LOAD= DERIVE_GB= CENSUS= ;;
   dsv4-pro__*) ROLE=DSV4_PRO REPO=deepseek-ai/DeepSeek-V4-Pro REV=b5968e9190ef611bbf34a7229255be88a0e937c1 WHAT=DeepSeek-V4-Pro
             FS_CK=/workspace/fs/dsv4/$REV LOCAL_CK=/workspace/cp/dsv4-ckpt
-            V2=dsv4-v2 REF=${REF:-cursor/dsv4-v2-21f3} POST_LOAD=model.layers.0.hc_attn_fn_broadcast DERIVE_GB=60 CENSUS=skip ;;
+            V2=dsv4-v2 REF=${REF:-cursor/dsv4-v2-21f3} POST_LOAD=model.layers.0.hc_attn_fn_broadcast DERIVE_GB=32 CENSUS=skip ;;
   *) echo "row $ROW: no model for it in model.sh"; exit 2 ;;
 esac
 CONFIG=verity_vllm/engine/profiles/hf_configs/$ROLE.config.json SW=${SW:-/workspace/cp/circuits/$V2/rows}
 SNAP=/workspace/cp/circuits/hf/hub/models--${REPO/\//--}/snapshots/$REV
-# DeepSeek-V4-Pro's B1 request derive peaks at 47 GB, then the census the Build writes beside it (`memory_map.census_entry`)
-# runs past 50 min at 161 GB, against `derive_bytes`' 13.5 GB: `--build-jobs auto` ran 8 at once and the cgroup's OOM killer
-# took five (r20261020-071632-1bcf).  The census decides no Build, so CENSUS=skip leaves it out.  With DERIVE_GB, BUILD_JOBS
-# (the env `--build-jobs` reads) is the run's --mem-gb over it.
+# DeepSeek-V4-Pro's B1 request derive peaks at 21.8 GB, but the census the Build writes beside it (`memory_map.census_entry`)
+# ran past 50 min at 161 GB, against `derive_bytes`' 13.5 GB: `--build-jobs auto` ran 8 at once and the cgroup's OOM killer
+# took five (r20261020-071632-1bcf).  The census decides no Build, so CENSUS=skip leaves it out; without it the trace's
+# largest process was 27.6 GB (r20261020-085740-90ff).  With DERIVE_GB, BUILD_JOBS (the env `--build-jobs` reads) is the
+# run's --mem-gb over it.
 [ -z "$CENSUS" ] || export VERITY_BUILD_CENSUS=$CENSUS
 if [ -n "$DERIVE_GB" ] && [ -z "${BUILD_JOBS:-}" ]; then
   _mem=${RESEARCH_RUN_MEM_GB:-0}
