@@ -49,7 +49,9 @@ whether or not its class is listed, so `K` counts every warp instruction the run
 the device's catch-all class, priced at its issue slot alone (sm_120's `NOROW`, the exporter's `CATCH_ALL`). sm_120's
 is a vector class, so A6 reads such an instruction as a lane head of at most two words a lane; one with a wider
 destination is assumed to be a memory access (`LDL.128`, `LD.128`), which heads no vector word. A device whose classes
-have none leaves an unlisted instruction free on every row (RT2-HOPPER-2, note:20261019T1140Z-draft-rt2-hopper). -/
+have none leaves an unlisted instruction free on every row (RT2-HOPPER-2, note:20261019T1140Z-draft-rt2-hopper).
+**Bulk count**: a bulk or TMA instruction (`cp.async.bulk`, `cp.reduce.async.bulk` and their tensor forms) of size `S`
+counts `S/99 KB` in sm_120's UTMABIG (A5b), at most one, so `K` holds it in at most its slot. -/
 def SheetDispatch (Q : Run K) : Prop := ∑ k, Q.n k ≤ Q.cycles
 
 /-- `accounting-sheet-tensor` (data sheets and whitepapers). **A3 TENSOR**: the tensor cores do at most the sheet's
@@ -64,10 +66,16 @@ a warp instruction) per SMSP are at most a quarter of `width p` a cycle. -/
 def SheetPipe (S : Sheet K P) (Q : Run K) : Prop :=
   ∀ p, ∑ k, (if S.pipe k = some p then (32 : ℝ) else 0) * Q.n k ≤ S.width p / 4 * Q.cycles
 
-/-- `accounting-sheet-smem` (CUDA C++ Programming Guide, Shared Memory). **A5 SMEM**: shared memory serves a request's
-distinct banks together, 32 banks × 4 B = 128 B an SM clock, loads and stores together: 32 B an SMSP-cycle. A
-request's distinct bytes can be one word's (a broadcast load, a store to one address), so a shared-memory class holds
-one request's 128 B whatever its width. -/
+/-- `accounting-sheet-smem` (CUDA C++ Programming Guide, Shared Memory; A5b in no vendor document). **A5 SMEM**: shared
+memory serves a request's distinct banks together, 32 banks × 4 B = 128 B an SM clock, loads and stores together: 32 B
+an SMSP-cycle. A request's distinct bytes can be one word's (a broadcast load, a store to one address), so a
+shared-memory class holds one request's 128 B whatever its width. **A5b**: a bulk or TMA instruction holds its size `S`
+of bank bytes at that rate, the bytes it reads or writes on one side of a block's shared memory (a reduction into
+shared memory moves `3S`), so its `S/99 KB` of a UTMABIG count holds `S` (sm_120's UTMABIG holds 99 KB, a block's
+most). No vendor document states what the bulk engine's traffic costs the banks, so it is named, as A2u is: no census
+program exceeds 1 on DS_smem with it, and R6r's measured row already charges TMAred512 its 512 B. Without it DS-120
+charges a bulk reduction one issue slot and no other row, and a fold on the bulk engine costs less than the menu's
+(RT4-SHEET-1, note:20261019T2300Z-draft-rt4-sheet). -/
 def SheetSmem (S : Sheet K P) (Q : Run K) : Prop := ∑ k, S.smem k * Q.n k ≤ 32 * Q.cycles
 
 end Run

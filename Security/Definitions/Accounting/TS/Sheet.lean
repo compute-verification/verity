@@ -14,7 +14,7 @@ is SM-clocked, and each row is in SMSP-cycles a warp instruction (four SMSPs an 
   clock (A4);
 * shared memory: `smem_k / 32`, the bank bytes a class's warp instruction holds over a quarter of the SM's 128 B a
   clock (A5): one request's 128 B for every shared-memory class, since a broadcast load or a store to one address
-  moves fewer distinct bytes than its width.
+  moves fewer distinct bytes than its width, and a bulk or TMA class's bytes (A5b), counted by size.
 
 The machine model's `DS-NN` vectors are these rows at each device's vendor values (status `datasheet`).
 -/
