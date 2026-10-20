@@ -358,6 +358,18 @@ ENTRIES: dict[str, Entry] = {e.id: e for e in (
           "(not skipped and guessed), with every unit writing it a value after the coin its noise reads, so a unit "
           "whose check passes by luck isn't credited; and the folded words per round are at least the words of the "
           "units not skipped whole over the rounds", "TS unit fixed", "proven"),
+    Entry("accounting-ts-window-law", "assumption",
+          "The proof service's draws and audit coins are the window's live coins: at each round and proof, given what "
+          "the path fixes before the session (its setting and its prover), the session's coins are the path's next "
+          "coins, fresh and uniform", "TS window law", "standard"),
+    Entry("accounting-ts-served-checks", "assumption",
+          "A served Definition's check holds at its C-Flock session's extracted value layer wherever flock-verify "
+          "accepts the session and every drawn unit is right at its own owned reads", "TS served checks",
+          "conjectured"),
+    Entry("accounting-ts-served-roots-linked", "assumption",
+          "C-Flock's rows link covers the served roots: outside δ_s, where flock-verify accepts a session and every "
+          "drawn unit is right at its owned reads, the extracted layer's served operand and receipt leaves are those "
+          "of the trees committed before and after the coin", "TS served roots linked", "conjectured"),
 )}
 
 
