@@ -123,25 +123,26 @@ times an honest stream's credit per unit of work (RT4-INT-8). The time credit `(
 
 *Live tiles on the served gate* (RT4-LOGIC-4, RT4-LOGIC-20). `live` must be the tiles live in-circuit, and whether the
 gate's admit bits are those depends on the tile version. SERVE-GATE's `PouwQueueAdmit_v3` (#2731 at 166e5e573d, which
-#2892, open, lifts onto main) admits a slot iff the request queue, committed before the window's first coin, assigns
-it a request live at its step and its row's scale is nonzero. It reads no row byte, so it admits a selected row of
-zero bytes under a nonzero scale (`scale_only`), and nothing on the verifier's side refuses one: the gate checks
-`junk` and `hollow` (RT-ALGO-4) in Python on its picked units, and `scale_only` is only the prover's own flag. #2731
-serves #2639's `PouwH1Tile_v2`, which reads a tile as dead when all its row bytes are zero. There a block of
-`scale_only` rows is dead in-circuit (its masked receipt is the zero words at every coin), so if `live` is the admit
-bits' its tile is named live, its whole skip passes, `GuessLuckAt` fails on it (RT2-INT's `guess_false_dead`), and on
-such a period the premise is false and the statement says nothing. #2902's `PouwH1Tile_v4` instead masks the receipt
-with the OR of the tile's admit bits, the words the tally counts, once the protocol binds its `admit` input to them by
-commitment equality (its precondition). There a `scale_only` block is live and receipted, and the admit bits are the
-tiles live in-circuit: kernels is moving the served credit back to them, which suits `live` under v4 only. Neither
-tile is on main. A `live` that names a live tile dead only loses its words. When the tally credits only rows in live
-tiles (under v4 every admitted row is in one), as a share of its credit the deficit is at most `(d_F + d₀)·N_w/N_adm`,
-with `N_adm/(j·N_w) = u`: `N_adm` the prefix's admitted rows and `j·N_w` its declared rows. `live` is fixed before the
+#2892 lifts onto main) admits a slot iff the request queue, committed before the window's first coin, assigns it a
+request live at its step and its row's scale is nonzero. It reads no row byte, so it admits a selected row of zero
+bytes under a nonzero scale (`scale_only`), and nothing on the verifier's side refuses one: the gate checks `junk` and
+`hollow` (RT-ALGO-4) in Python on its picked units, and `scale_only` is only the prover's own flag. #2731 serves
+#2639's `PouwH1Tile_v2`, which reads a tile as dead when all its row bytes are zero. There a block of `scale_only`
+rows is dead in-circuit (its masked receipt is the zero words at every coin), so if `live` is the admit bits' its tile
+is named live, its whole skip passes, `GuessLuckAt` fails on it (RT2-INT's `guess_false_dead`), and on such a period
+the premise is false and the statement says nothing. #2902's `PouwH1Tile_v4` instead masks the receipt with the OR of
+the tile's admit bits, the words the tally counts, once the protocol binds its `admit` input to them by commitment
+equality (its precondition). There a `scale_only` block is live and receipted, and the admit bits are the tiles live
+in-circuit: kernels is moving the served credit back to them, which suits `live` under v4 only. #2639's v2 is not on
+main. A `live` that names a live tile dead only loses its words. When the tally credits only rows in live tiles (under
+v4 every admitted row is in one), as a share of its credit the deficit is at most `(d_F + d₀)·N_w/N_adm`, with
+`N_adm/(j·N_w) = u`: `N_adm` the prefix's admitted rows and `j·N_w` its declared rows. `live` is fixed before the
 window's first coin (`Period.window`), so the statement covers a window whose gate admits every slot before that coin:
-FILL's, whose 64 entries are all in round 0. H1 admits round by round, each step's slots under its round's root after
-the earlier rounds' coins (#2940's `_admitted_run` admits two in round 1), and a window that admits after round 0 is
-not one this statement speaks of (RT4-INT-22). Covering it would take `live` per round, each round's set fixed before
-its coin.
+FILL's, whose 64 entries are all in round 0. H1 can admit round by round, each step's slots under its round's root
+after the earlier rounds' coins (#2940's `_admitted_run` admits two in round 1). #2941 makes round 0 its default (the
+pouw setting `admission`: `round-0` refuses an entry after round 0, `per-round` admits in every round), and a window
+that admits after round 0 is not one this statement speaks of (RT4-INT-22). Covering it would take `live` per round,
+each round's set fixed before its coin.
 
 *The period's order and its record* (RT2-INT-4, RT3-INT-13, RT4-INT-6). `Period` makes the order the model's. The
 statement needs a period record from which the credit is read: two signed entries in the auditor's ledger, a
@@ -166,13 +167,13 @@ it in the period are not credited, and `period-close` is refused while a reserve
 stream's committed periods must be disjoint: each window in at most one period, and one period open at a time, the
 next committed only after the last closes. Two periods that share windows count those windows twice, and a prover
 that commits `P` overlapping periods and claims whichever is accepted pays `P·δ_s`, not `δ_s`. No check on main does
-this today. The served path has no period: `Credits` (SALT-WIRE's, #2847) registers a window once when it is
-received, before its draw coin is open or any proof, and nothing closes a stream at its first refused window, so
-`Credits` credits each window on its own, which is dropping failed windows (*Liveness*, below). The challenger's
-`order_reason` (`SampledProofs.Challenger.orderReason`, #2731, not on main) checks one family of an epoch's coins:
-coin `i` opened once, after the `i`-th recorded root, and every recorded root's coin opened. That is the order
-within a window. Run over one family holding every window's round coins and draw in order, with `n` and the circuit
-in the epoch's commitment, it would be the period's check.
+this today. The served path has no period: `Credits` (SALT-WIRE's, #2847) registers a window once when it is received,
+before its draw coin is open or any proof, and nothing closes a stream at its first refused window, so `Credits`
+credits each window on its own, which is dropping failed windows (*Liveness*, below). The challenger's `order_reason`
+(`SampledProofs.Challenger.orderReason`, on main since #2573) checks one family of an epoch's coins: coin `i` opened
+once, after the `i`-th recorded root, and every recorded root's coin opened. That is the order within a window. Run
+over one family holding every window's round coins and draw in order, with `n` and the circuit in the epoch's
+commitment, it would be the period's check.
 
 *One stream* (RT3-INT-10). `Period` is a sequence: each window's first coin is opened after the previous window's
 draw. Windows run at once on several GPUs are not one period, so a period's windows are one serving stream's, and a
@@ -188,10 +189,12 @@ of scope.
 *Live coins only* (RT3-INT-2). Every number below is for live windows, and no served path runs one yet. A certified
 window's noise comes from the certifier's salt, which reaches the prover before its operands are committed, so the
 window is seeded, and Compose says every PoUW window it runs is seeded. #2654 (on main) has the live challenger sign
-its coin commitment with an LMS key and the verifier read that record, the mechanism a live served window needs; no
-served path uses it yet (it touches `challenger.py`, not `served_commit.py` or `serve.py`), and SERVE-H1's
-`--coins live` challenger runs in the prover's process, so its coins are seeded too. The seeded pair has no period
-form: its premium is per window, so it would not divide by `j`.
+its coin commitment with an LMS key and the verifier read that record, the mechanism a live served window needs (it
+touches `challenger.py`, not `served_commit.py` or `serve.py`). SERVE-H1's `--coins live` challenger runs in the
+prover's process, so its coins are seeded too. #2940 takes H1's salt and round coins from one live session a window on
+the auditor host's challenger instead, read under the auditor's key (`remote.trusted_session`), but opens the salt
+after the weights' root alone (`audit.salt_of`), before the activations are committed, so its window is still seeded,
+as a certified one is. The seeded pair has no period form: its premium is per window, so it would not divide by `j`.
 
 Its line, with equal rounds (`w_max = 1/M`), `ρ = 1/r` (`F = 1`), `x = K_d/(r·M)`: `Λ` is `SplitRateExp`'s,
 `max(a/(M·−ln(p + (1 − p)e^{−x})), b/(M·−ln(p0 + (1 − p0)e^{−x})))`, and the logical term per credited window is
