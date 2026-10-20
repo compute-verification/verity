@@ -5,7 +5,8 @@ check runs on the process's threads and its verdict comes on a line of its own, 
 
 And the JSON the two verifiers are compared in: each event as the Lean reads it (`Difftest.eventOf`), and what
 `audit.Session` returns for it as the Lean writes its result (`Difftest.resultJ`), as the difftest's
-`ra_cases.apply` writes it."""
+`ra_cases.apply` writes it; an accepted session's record as the Lean writes it (`summary_json`), and that record read
+back as the `audit.Record` the ledger reads (`record_of`)."""
 from __future__ import annotations
 
 import fcntl

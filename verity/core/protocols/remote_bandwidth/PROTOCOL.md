@@ -15,8 +15,9 @@ input from serving) and `timing.py` (the honest schedule, and where the sketch's
 checks are the specification of what each zero-knowledge proof unit proves on the deployed path (§8). The verifier's
 definition is Lean code, `lean/` (`RemoteAudit`: `verifyWindow`, a window's draw and its openings' checks, and
 `RemoteAudit.Session`, the session's bookkeeping call for call), which `audit.py` mirrors and is held to by
-`lean/tests/`' difftest, comparing every event's result, the outcome and the record; `audit.py` is still the verifier
-of record (`README.md`). The Lean refuses a registration that binds PoUW's tiles.
+`lean/tests/`' difftest, comparing every event's result, the outcome and the record. The Lean is the verifier of
+record, and `audit.py` is the reference that runs beside it (`README.md`). Both refuse a registration that binds PoUW's
+tiles.
 
 ## 1. What an accepted session certifies
 
@@ -504,7 +505,9 @@ What each kind rests on:
   the guarantee is conservation over one undifferentiated resource, with no identity to bind). Under it \(z\) enters
   before the sketch, \(e = E_j \oplus \text{spread}(z)\), as §8's third rule requires, and XOR with a fixed \(z\)
   permutes each sector, so each sector's fiber is the same. But #1849's digest is of the tile alone, so that form
-  needs #1849 restated over the block and \(z\) together, and it is not part of the stated guarantee.
+  needs #1849 restated over the block and \(z\) together, and it is not part of the stated guarantee. The verifier's
+  registry (`RemoteAudit.Registry.register`, and `audit.Registry.register` beside it) refuses such a registration
+  until its definition covers it.
 
 **Where sketch-sha512's bound is read** (`timing.sketch_reading`, `timing.sketch_failure`, pinned by
 `tests/test_sketch_reading.py`). The field is \(\mathbb{Q}\). The sketch's sums never wrap (\(|\sigma[c]| \le

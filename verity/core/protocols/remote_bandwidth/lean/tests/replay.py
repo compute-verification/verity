@@ -54,8 +54,8 @@ import ra_cases as M
 import verity_difftest as D
 from verity.core.protocols.remote_bandwidth import audit, receipts
 
-SESSION = D.Port(M.EXE, "session", M.session, None, package=M.PACKAGE)
-REGISTRY = D.Port(M.EXE, "registry", M.registry, None, package=M.PACKAGE, rejects=M.REFUSALS)
+SESSION = D.Port(M.EXE, "session", M.session, None, package=M.PACKAGE, of_record=M.OF_RECORD)
+REGISTRY = D.Port(M.EXE, "registry", M.registry, None, package=M.PACKAGE, of_record=M.OF_RECORD, rejects=M.REFUSALS)
 #: The failures whose cause a `verifier.json` keeps: a window's passes.
 KEPT = frozenset({"few"})
 RUN_ID = re.compile(r"r\d{8}-\d{6}-[0-9a-f]{4}")

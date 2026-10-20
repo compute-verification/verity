@@ -28,7 +28,7 @@ pytestmark = pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean to
 
 
 def port(fn, reference, inputs, **kw) -> D.Port:
-    return D.Port(M.EXE, fn, reference, inputs, package=M.PACKAGE, rejects=M.REFUSALS, **kw)
+    return D.Port(M.EXE, fn, reference, inputs, package=M.PACKAGE, of_record=M.OF_RECORD, rejects=M.REFUSALS, **kw)
 
 
 server = D.server_fixture(port("plan", lambda v: v, st.nothing()))

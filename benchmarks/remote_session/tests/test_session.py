@@ -2,8 +2,9 @@
 a clock that advances by one tick per pass with both sides settled around each tick, so a session runs one schedule:
 an honest session is accepted and its γ terms computed, a prover that dropped blocks is rejected at its openings, a
 second session waits out the first's deadline, and KV pages appended and released mid-session (a memory map's steps)
-are audited, accepted when held and rejected when dropped. Sessions run under the verifier's default verdict, `both`:
-the Lean verifier decides, `audit.Session` runs beside it, and the two must agree at every event and window."""
+are audited, accepted when held and rejected when dropped. Sessions run under the verifier's default verdict, `lean`:
+the Lean verifier decides, `audit.Session` keeps the books beside it, and the two must agree at every event, window
+verdict and record field."""
 from __future__ import annotations
 
 import os
@@ -741,7 +742,7 @@ def test_a_paced_session_whose_openings_come_beside_its_passes_gets_the_same_ver
     so both verifiers take openings between a paced session's roots and coins; the honest session is still accepted
     and the dropper rejected, with no disagreement."""
     pace = verifier.pace_of("1:4:40:2", 1.0)
-    (r, r2), (pr, pr2) = run("honest,skip:0.25", paces=[pace, pace], defer_openings=False)
+    (r, r2), (pr, pr2) = run("honest,skip:0.25", paces=[pace, pace], defer_openings=False, verdict="both")
     assert r["verdict"] == "both" and r["disagreement"] is None and r2["disagreement"] is None
     assert r["accepted"] and pr["accepted"] and len(r["lean_check_ns"]) == r["windows"] == 12
     assert not r2["accepted"] and r2["failure"]["failure"] == "receipt" and pr2["failure_on_dropped"]

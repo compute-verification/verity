@@ -14,22 +14,26 @@ receipts, openings, draws).
 Where the two differ, the Python is what is wrong. The properties of the Lean's verdicts are
 `Security/Properties/RemoteAudit.lean`.
 
-`benchmarks/remote_session/verifier.py` runs both, by its one switch line `VERDICT` (`--verdict`): under `both`, the
-default, the Lean's process `remote-audit-verifier` (`RemoteAudit.Verifier`) decides and `audit.Session` runs beside
-it, checking every window too, and a registration, event, window verdict or record on which they differ refuses the
-session at that window as `disagreement`, so a session is accepted only where both accept it; under `lean`
-`audit.Session` keeps the books and compares every event and record but checks no openings; under `python` there is no
-Lean. The default flips to `lean`, the Lean the verifier of record, under the 8 Oct ruling (the friction skill): the
-gap list is empty for the record versions in use, every recorded run in the store replayed through the Lean gets the
-verdict the Python gave, the Python keeps running beside it as the reference, and the protocol's properties move from
-`Models/` to `Properties/`. What the Lean doesn't check yet that `audit.py` does:
+`benchmarks/remote_session/verifier.py` runs both, by its one switch line `VERDICT` (`--verdict`). Under `lean`, the
+default, the Lean's process `remote-audit-verifier` (`RemoteAudit.Verifier`) is the verifier of record: it decides
+each registration, event and window, an accepted session's record is the one it returns, and the ledger reads that
+record. `audit.Session` keeps the books beside it as the reference, and a registration, event, window verdict or record
+field on which they differ refuses the session at that window as `disagreement`. Under `both` `audit.Session` checks
+every window's openings too; under `python` there is no Lean. The default went to `lean` under the 8 Oct ruling (the
+friction skill), on these grounds:
 
-- a registration that binds PoUW's tiles, which the Lean refuses;
-- pacing (`Params.pace`, `audit.Pace`): a paced window's (k + 1)-th root, which `audit.Session` refuses as `order` and
-  the Lean takes, so under `both` or `lean` such a session is refused as `disagreement` (the honest prover never sends
-  one);
-- the record past the summary `RemoteAudit.Session` returns: the coins' commitment, the integrity profile, each root's
-  arrival (`WindowRecord.arrived_ns`), the pace and the ledger's terms.
+- the gap list is empty. A registration that binds PoUW's tiles is refused by both registries. A paced window's
+  (k + 1)-th root is refused as `order` by both sessions. A transcript carries its session's pace. The Lean's record
+  holds every field the ledger reads, except four. The coins' commitment root is the books'. The block size is a
+  constant. The registration's receipt, bind, codec, layout and rows are bound by its digest, which the Lean's record
+  names. The integrity profile is a function of the Lean's lengths and draws at δ (`audit.window_profile`).
+- every recorded run in the store replays through the Lean to the verdict the Python gave (`lean/tests/replay.py`).
+- the Python keeps running beside the Lean as the reference.
+- the protocol's properties are in `Security/Properties/`.
+
+The driver's scheduling (when a boundary leaves, `Session.next_boundary_ns`), the plans the `memory` diagnostic
+reads, and the window and draw counts `verifier.json` keeps are still read from the books. The Lean checks the same
+plans event by event.
 
 ## Replay
 
@@ -41,8 +45,11 @@ its arrivals, steps, draws and parameters make (the module's docstring says how 
 
 ~~~text
 uv run python verity/core/protocols/remote_bandwidth/lean/tests/replay.py record VERIFIER.json ... --out ROWS.json
-uv run python verity/core/protocols/remote_bandwidth/lean/tests/replay.py transcript CASE.json ...
+uv run python verity/core/protocols/remote_bandwidth/lean/tests/replay.py transcript CASE.json ... [--record VERIFIER.json ...]
 ~~~
+
+A transcript written before it named its session's pace (20 Oct) replays only with the pace its `verifier.json` gives
+(`--record`), matched by the transcript's sha256.
 
 ## Code
 

@@ -40,13 +40,14 @@ process that ended early stays live, refusing the node, until `--close NODE` clo
 the one in flight unended.
 
 The verdicts are the verifier of record's, the Lean process `remote-audit-verifier` (`lean_verifier.py`), under
-`--verdict lean` or `both` (the default, `VERDICT`): it holds the registry and every session, and each registration,
-session, event and window goes to it and to `audit.Session` at one reading of the clock (`Pair`). `audit.Session`
-keeps the driver's books (its coins, its plans, the record the ledger reads), and an event, a window's verdict or a
-record on which the two differ refuses the session at that window as `disagreement`. Under `both` `audit.Session`
-checks every window's openings too, beside the Lean, and a window's two verdicts are set on the two sessions at once;
-under `lean` it checks none and takes the Lean's verdict. Under `python` there is no Lean process and `audit.Session`
-decides. `--close` closes a registration in both registries alike.
+`--verdict lean` (the default, `VERDICT`) or `both`: it holds the registry and every session, and each registration,
+session, event and window goes to it and to `audit.Session` at one reading of the clock (`Pair`). An accepted
+session's record is the Lean's (`Pair.record`), and its ledger reads that record. `audit.Session` keeps the driver's
+books (its coins, its plans, when the next boundary leaves) and is the reference: an event, a window's verdict or a
+record field on which the two differ refuses the session at that window as `disagreement`. Under `lean` it checks no
+openings and takes the Lean's window verdicts; under `both` it checks every window's openings too, beside the Lean,
+and a window's two verdicts are set on the two sessions at once. Under `python` there is no Lean process and
+`audit.Session` decides. `--close` closes a registration in both registries alike.
 
 `--transcript DIR` writes each session's difftest case to DIR as the session runs (`lean_verifier.Transcript`): every
 event as the Lean took it, with the clock it read, the session's coins, and each window's openings where its verdict
@@ -58,9 +59,9 @@ keeps DIR in scratch and preserves what it keeps of it (the writing-runs skill):
 Openings are checked in the clear: zero-knowledge proof units are not in this harness (PROTOCOL.md §8).
 
     python verifier.py --port 7781 --out OUT [--windows 7 --window-ms 1000 --samples 2773 --sessions 1]
-                       [--registry REGISTRY.json] [--verdict both|lean|python] [--lean-exe PATH]
+                       [--registry REGISTRY.json] [--verdict lean|both|python] [--lean-exe PATH]
                        [--paced K:T_MS:DRAWS:WINDOWS ...] [--transcript DIR]
-    python verifier.py --registry REGISTRY.json --close NODE_HEX [--verdict both|lean|python]
+    python verifier.py --registry REGISTRY.json --close NODE_HEX [--verdict lean|both|python]
     python verifier.py --memory-of VERIFIER_JSON [--host-bytes N]
 """
 from __future__ import annotations
@@ -87,7 +88,7 @@ import lean_verifier as lv  # noqa: E402
 import wire  # noqa: E402
 from checks import Checks, check  # noqa: E402
 
-VERDICT = "both"
+VERDICT = "lean"
 """Who decides the verdicts (module docstring): `lean`, `both` or `python`."""
 VERDICTS = ("lean", "both", "python")
 CHECK_BATCH = 1024
@@ -1289,8 +1290,10 @@ def main() -> int:
                     help="close the node's live registration in --registry, its sessions counted as they stood, "
                          "and exit")
     ap.add_argument("--verdict", default=VERDICT, choices=VERDICTS,
-                    help="who decides: the Lean verifier (lean), the Lean with audit.Session checking beside it and "
-                         "a mismatch refused as `disagreement` (both), or audit.Session alone (python)")
+                    help="who decides: the Lean verifier, the verifier of record, with audit.Session as the reference "
+                         "keeping the books (lean, the default), the same with audit.Session checking every window's "
+                         "openings beside it (both; under either a mismatch is refused as `disagreement`), or "
+                         "audit.Session alone (python)")
     ap.add_argument("--lean-exe", type=Path,
                     help="a built remote-audit-verifier (default: `lake build` it in its package)")
     ap.add_argument("--transcript", type=Path, metavar="DIR",

@@ -33,6 +33,8 @@ from verity.core.protocols.remote_bandwidth.receipts import Plan
 HERE = Path(__file__).resolve().parent
 PACKAGE = HERE.parent
 EXE = "remote-audit-difftest"
+#: The ports' side of record (`verity_difftest`): the Lean, as `benchmarks/remote_session/verifier.py`'s `VERDICT`.
+OF_RECORD = "lean"
 #: What the Python raises where the Lean refuses: a decoder's `Reject`, and the Python's own refusals, `ValueError`
 #: (`verity.errors.ProtocolError` and `InvalidArtifact` among them), `TypeError` and `IndexError`.
 REFUSALS = (D.Reject, ValueError, TypeError, IndexError)
