@@ -511,8 +511,8 @@ pub fn lean_frame_exe() -> std::path::PathBuf {
 
 /// Makes the Lean server's `flock-firewall tap` (`Flock.Firewall.Frame.tapCmd`) the OS source of every draw of this process
 /// that is not a rep's own (`zk_hooks::set_os_source`): the mask slot's words, level 0's hiding, every tree's salts but the
-/// pads', the coin tree's nonce. Set it before the first draw. A tap that fails later panics, as an OS generator that fails
-/// does.
+/// pads'. The coin tree's nonce is `LeanHello`'s. Set it before the first draw. A tap that fails later panics, as an OS
+/// generator that fails does.
 #[cfg(feature = "sha512")]
 pub fn lean_tap(exe: &std::path::Path) -> Result<(), String> {
     use std::io::{Read, Write};
@@ -759,6 +759,18 @@ impl Drop for LeanCoins {
     }
 }
 
+/// A table's request bytes to `flock-firewall link` and `flock-firewall finish` (`Flock.Firewall.Link.parse`): `z`, the extra
+/// lanes, every lane's padding, the level-0 salts.
+#[cfg(feature = "sha512")]
+pub fn link_body(z: &[F128], extra: &[Vec<F128>], pads: &[Vec<F128>], salts: &[u8]) -> Vec<u8> {
+    let mut body = f128_wire(z);
+    for v in extra.iter().chain(pads) {
+        body.extend(f128_wire(v));
+    }
+    body.extend_from_slice(salts);
+    body
+}
+
 /// The level-0 recheck of record on a firewalled table: `flock-firewall link` (`Flock.Firewall.Link` in the Lean verifier)
 /// commits level 0 again at `m` from the host's packed witness `z`, the table's level-0 hiding (its four extra lanes and every
 /// lane's padding) and the level-0 salts (192 bytes a leaf), and answers the root: the cap, concatenated. `commit_zk` is its
@@ -767,11 +779,7 @@ impl Drop for LeanCoins {
 pub fn lean_link(exe: &std::path::Path, m: usize, z: &[F128], extra: &[Vec<F128>], pads: &[Vec<F128>], salts: &[u8]) -> Result<Vec<u8>, String> {
     use std::io::{BufRead, Read, Write};
     use std::process::{Command, Stdio};
-    let mut body = f128_wire(z);
-    for v in extra.iter().chain(pads) {
-        body.extend(f128_wire(v));
-    }
-    body.extend_from_slice(salts);
+    let body = link_body(z, extra, pads, salts);
     let mut child = Command::new(exe).arg("link").stdin(Stdio::piped()).stdout(Stdio::piped()).spawn()
         .map_err(|e| refused(format!("the Lean link {} does not start ({e}): `lake build flock-firewall` in verity/core/service/flock, or FC_FIREWALL_LEAN", exe.display())))?;
     let (mut stdin, mut stdout) = (child.stdin.take().expect("piped stdin"), std::io::BufReader::new(child.stdout.take().expect("piped stdout")));
@@ -792,6 +800,61 @@ pub fn lean_link(exe: &std::path::Path, m: usize, z: &[F128], extra: &[Vec<F128>
     let _ = child.kill();
     let _ = child.wait();
     root
+}
+
+/// A firewalled session's `Hello` of record: `flock-firewall hello` (`Flock.Firewall.Hello` in the Lean verifier) sets the
+/// session's statement up from the statement's own files (`args`: `flock-verify verify --zk`'s statement flags, the public
+/// file the verifier's own) at the verifier's draw, and answers its `Hello` at a nonce it draws from the operating system.
+/// One process serves every session; each draw's statement is set up once.
+#[cfg(feature = "sha512")]
+pub struct LeanHello {
+    child: std::process::Child,
+    stdin: std::process::ChildStdin,
+    stdout: std::io::BufReader<std::process::ChildStdout>,
+}
+
+#[cfg(feature = "sha512")]
+impl LeanHello {
+    pub fn start(exe: &std::path::Path, args: &[String]) -> Result<Self, String> {
+        use std::process::{Command, Stdio};
+        let mut child = Command::new(exe).arg("hello").args(args).stdin(Stdio::piped()).stdout(Stdio::piped()).spawn()
+            .map_err(|e| refused(format!("the Lean Hello {} does not start ({e}): `lake build flock-firewall` in verity/core/service/flock, or FC_FIREWALL_LEAN", exe.display())))?;
+        let (stdin, stdout) = (child.stdin.take().expect("piped stdin"), std::io::BufReader::new(child.stdout.take().expect("piped stdout")));
+        Ok(LeanHello { child, stdin, stdout })
+    }
+
+    /// The session's `Hello` at the verifier's draw `draw` (its answer to `Register`, `null` for none): `Ok(Err(why))` where
+    /// the Lean setup refuses the statement. `nonce`: the nonce a simulator's rewind restarts at; `None`, the Lean command's
+    /// own, from the operating system.
+    pub fn hello(&mut self, draw: &str, nonce: Option<&[u8; crate::coin_tree::NONCE_BYTES]>) -> Result<Result<String, String>, String> {
+        use std::io::{BufRead, Read, Write};
+        let head = match nonce {
+            Some(n) => format!("draw {} {}", draw.len(), crate::hex(n)),
+            None => format!("draw {}", draw.len()),
+        };
+        writeln!(self.stdin, "{head}").and_then(|_| self.stdin.write_all(draw.as_bytes())).and_then(|_| self.stdin.flush())
+            .map_err(|e| refused(format!("the Lean Hello's draw: {e}")))?;
+        let mut line = String::new();
+        self.stdout.read_line(&mut line).map_err(|e| refused(format!("the Lean Hello's answer: {e}")))?;
+        let line = line.trim_end();
+        if let Some(why) = line.strip_prefix("refused ") {
+            return Ok(Err(why.to_string()));
+        }
+        let Some(Ok(n)) = line.strip_prefix("ok ").map(str::parse::<usize>) else {
+            return Err(refused(format!("the Lean Hello: {}", line.strip_prefix("err ").unwrap_or(if line.is_empty() { "no answer" } else { line }))));
+        };
+        let mut b = vec![0u8; n];
+        self.stdout.read_exact(&mut b).map_err(|e| refused(format!("the Lean Hello's text: {e}")))?;
+        String::from_utf8(b).map(Ok).map_err(|_| refused("the Lean Hello's text is not UTF-8"))
+    }
+}
+
+#[cfg(feature = "sha512")]
+impl Drop for LeanHello {
+    fn drop(&mut self) {
+        let _ = self.child.kill();
+        let _ = self.child.wait();
+    }
 }
 
 /// The masking challenger's inner challenger under the firewall. While a round's `release` is set (the Lean frame's round for

@@ -94,6 +94,7 @@ import Proofs.Flock.Claims.ZK.Cut
 import Proofs.Flock.Claims.ZK.Stop
 import Proofs.Flock.Claims.ZK.LinkFft
 import Proofs.Flock.Claims.ZK.LinkRecheck
+import Proofs.Flock.Claims.ZK.HelloLean
 
 /-!
 # Flock's zero knowledge against a malicious verifier
@@ -435,11 +436,15 @@ import Proofs.Flock.Claims.ZK.LinkRecheck
   history only through the decoded coins on the histories its check passes (`LeanRelease.ReadsCoins`) gives the rule
   and `StopsAt` (`LeanRelease.rfOf`, `stopsAt_of_readsCoins`). `Flock.zk_server_lean_coinLayer` is it at the deployed
   coin layer (`CoinLayer.session`) at SHA-512 from the transport's trusts alone, each named for its reason:
-  `LeanRelease.HelloEq`, `FinalRoundEq`, `ReqsFollow` and `ReadsCoins` are facts about what Rust computes
-  (`hello_with_nonce`, `Firewall::finish`, `coin_tree::Checked`, `LeanFrame`), `LinkRoundEq` one about what the
-  transport hands `flock-firewall link` (`LinkRecheck`), and `HelloDParses` one about Lean's own `Hello.parse` of
-  `CoinLayer.helloD`, which the kernel cannot evaluate (`Lean.Json.parse` is `partial`); `CheckIs` is proved from them
+  `FinalRoundEq`, `ReqsFollow` and `ReadsCoins` are facts about what Rust computes (`Firewall::finish`,
+  `coin_tree::Checked`, `LeanFrame`), `LeanRelease.HelloIs` one about what the transport hands `flock-firewall hello`
+  (`HelloLean`; `HelloEq` follows, `helloEq_of_helloIs`), `LinkRoundEq` one about what the transport hands
+  `flock-firewall link` (`LinkRecheck`), and `HelloDParses` one about Lean's own `Hello.parse` of `CoinLayer.helloD`,
+  which the kernel cannot evaluate (`Lean.Json.parse` is `partial`); `CheckIs` is proved from them
   (`LeanRelease.checkIs_coinLayer`, `helloParses_of_helloEq`).
+* `HelloLean`: the server's `Hello` at Lean's `flock-firewall hello`. Its `Hello` is the coin layer's
+  (`Flock.Firewall.Hello.json_eq`, `CoinLayer.helloD_eq`, by `rfl`), so `HelloEq` follows from the server's `Hello`
+  being that command's message (`LeanRelease.HelloIs`, **`LeanRelease.helloEq_of_helloIs`**).
 * `LinkRecheck`: the firewall's link at the Lean recheck. `flock-firewall link`'s root (`Flock.Firewall.Link.root`, its
   tree built in tasks) is `layerOf`'s cap over `hm96-sha512/v1`'s leaves of `encodeRowsZk`'s rows
   (`Flock.Firewall.Link.root_eq`, `cap_eq`), the switched prover's level-0 leaves are the honest prover's
