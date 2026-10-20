@@ -402,6 +402,9 @@ def test_record_sends_the_verdicts_it_gathers_with_a_pack_given_added_unless_no_
     launched.clear()
     assert CHECK.record(["--base", "HEAD", "--no-cache"]) == 0 and len(given_to) == 2
     assert not any(x.endswith("verdicts-gathered.tar.gz") for x in launched[0])
+    head = launched[0][:launched[0].index("--")]
+    assert [head[i + 1] for i, x in enumerate(head) if x == "--declared-output"] == list(CHECK.PACK_FILES), \
+        "custody uploads the packs however the run ends, never trimming them as undeclared"
 
 
 def test_record_sends_the_agreement_for_a_file_renamed_out_of_its_paths(tmp_path, monkeypatch, capsys):
@@ -717,8 +720,10 @@ def test_the_agreement_refuses_a_machine_it_cannot_run_on_in_seconds(tmp_path, m
 
 
 def _fake_run(monkeypatch, groups, pre=()):
-    """`run` over the given groups and preflight, with nothing built first and no Lean URLs."""
+    """`run` over the given groups and preflight, with nothing built first, no Lean URLs, and no plan of the real tree for
+    the reused pack (`Reused.plan` reads every file, outside the suite's inputs)."""
     monkeypatch.setattr(CHECK, "PREBUILD", "pass")
+    monkeypatch.setattr(CHECK.Reused, "plan", lambda self: {"parts": []})
     monkeypatch.setattr(CHECK, "preflight", lambda: list(pre))
     monkeypatch.setattr(CHECK, "groups", lambda out, n, cache=True, urls=None: groups)
     monkeypatch.delenv(CHECK.LEAN_DEPS_URLS_ENV, raising=False)
@@ -849,6 +854,84 @@ def test_a_cancelled_recorded_check_still_publishes_the_passes_its_steps_stored(
         assert tar.getnames() == ["tests/pkg/k1.json"]
 
 
+def test_a_runs_pack_is_written_as_each_step_ends_and_on_sigterm_before_any_step_stops(tmp_path, monkeypatch):
+    """A cancel SIGKILLs the run 20 s after its SIGTERM, before a stopped step's grace is out and `main` writes its last pack:
+    drive's cancels after landing (rc 137) left packs without the passes the run had stored.  So the pack holds a step's
+    passes once it ends, and `_terminated` writes what the steps stored since at once, from the pack's own thread."""
+    import queue
+    import signal
+    import tarfile
+    import weakref
+
+    cache = tmp_path / "tests-cache"
+    monkeypatch.setenv("VERITY_TEST_CACHE", str(cache))
+    monkeypatch.setenv("CHECK_CACHE", str(tmp_path / "check-cache"))
+    monkeypatch.setattr(CHECK, "TERMINATED", [])
+    monkeypatch.setattr(CHECK, "_LIVE", weakref.WeakSet())
+    monkeypatch.setattr(CHECK, "_PACKS", weakref.WeakSet())
+    (cache / "pkg").mkdir(parents=True)
+    (cache / "pkg" / "old.json").write_text("{}")
+    wrote: queue.Queue = queue.Queue()
+
+    class Seen(CHECK.Packs):
+        def write(self):
+            wrote.put(n := super().write())
+            return n
+
+    pack = tmp_path / "run" / "verdicts.tar.gz"
+    packs = Seen(pack, CHECK.VERDICTS.snapshot())
+    steps = CHECK.Steps(tmp_path, packs=packs)
+    (cache / "pkg" / "k1.json").write_text("{}")
+    steps.end({"step": "passes", "status": "passed"})
+    assert wrote.get() == 1
+    with tarfile.open(pack) as tar:
+        assert tar.getnames() == ["tests/pkg/k1.json"], "only what the run stored"
+    (cache / "pkg" / "k2.json").write_text("{}")
+    CHECK._terminated(signal.SIGTERM, None)
+    assert wrote.get() == 2
+    with tarfile.open(pack) as tar:
+        assert tar.getnames() == ["tests/pkg/k1.json", "tests/pkg/k2.json"]
+    stamp = pack.stat().st_mtime_ns
+    assert packs.close() == 2 and pack.stat().st_mtime_ns == stamp, "a pack holding what is new already isn't written again"
+    assert not packs.thread.is_alive()
+
+
+def test_a_runs_reused_pack_holds_what_its_own_plan_found_here_before_its_steps_ran(tmp_path, monkeypatch):
+    """A check's `verdicts.tar.gz` holds only what its steps stored, so a check reusing a pass no recent pack holds answered for
+    nothing a later plan could cite (19 Oct: the newest packs held no circuit-check target and no keyed step).  `Reused` packs
+    the passes its plan of its own tree found in its own caches, of those here before its steps ran; with circuit-check's
+    targets unkeyed (no task list yet) it plans again once that step ends."""
+    import tarfile
+
+    cache = tmp_path / "check-cache"
+    monkeypatch.setenv("CHECK_CACHE", str(cache))
+    monkeypatch.setenv("VERITY_TEST_CACHE", str(tmp_path / "tests-cache"))
+    for rel in ("lean-audit/k1.json", "circuit-check/v1/aa/e1.json", "circuit-check/v1/bb/l1.json"):
+        (cache / rel).parent.mkdir(parents=True, exist_ok=True)
+        (cache / rel).write_text("{}")
+    before = CHECK.VERDICTS.snapshot()
+    (cache / "lean-audit" / "k9.json").write_text("{}")                  # stored by this run: verdicts.tar.gz's
+    plans = [
+        {"parts": [{"part": "lean-audit:p", "state": "passed", "found": [{"source": "own", "paths": ["check/lean-audit/k1.json"]},
+                                                                         {"source": "pack:r1", "paths": ["check/lean-audit/k1.json"]}]},
+                   {"part": "lean-audit:q", "state": "passed", "found": [{"source": "own", "paths": ["check/lean-audit/k9.json"]}]},
+                   {"part": "circuit-check", "state": "unkeyed"}]},
+        {"parts": [{"part": "circuit-check:t", "state": "passed", "found": [
+            {"source": "own", "paths": ["check/circuit-check/v1/aa/e1.json", "check/circuit-check/v1/bb/l1.json"]}]}]}]
+    monkeypatch.setattr(CHECK.Reused, "plan", lambda self: plans.pop(0))
+    run_dir = tmp_path / "run"
+    reused = CHECK.Reused(run_dir, before)
+    reused.start()
+    reused.close()
+    assert reused.circuit_unkeyed
+    with tarfile.open(run_dir / CHECK.REUSED_PACK) as tar:
+        assert tar.getnames() == ["check/lean-audit/k1.json"]
+    reused.ended({"step": "circuit-check", "status": "passed"})
+    assert reused.close() == 2 and not plans
+    with tarfile.open(run_dir / CHECK.REUSED_PACK) as tar:
+        assert tar.getnames() == ["check/circuit-check/v1/aa/e1.json", "check/circuit-check/v1/bb/l1.json"]
+
+
 def test_under_keep_going_only_a_halting_step_stops_the_run_and_it_is_named(tmp_path):
     steps = CHECK.Steps(tmp_path, keep_going=True)
     steps.end({"step": "pytest", "status": "failed"})
@@ -922,6 +1005,7 @@ def test_a_failed_preflight_starts_nothing_else_even_under_keep_going(tmp_path, 
     marker = tmp_path / "ran"
     touch = _py("open(__import__('sys').argv[1], 'w')", marker)
     for failing in ("preflight-lock", "preflight-lints"):
+        monkeypatch.setenv("CHECK_CACHE", str(tmp_path / f"cache-{failing}"))     # else the first's lints pass is reused
         pre = [(n, _py("raise SystemExit(1)") if n == failing else _py("pass"), tmp_path) for n in ("preflight-lock", "preflight-lints")]
         _fake_run(monkeypatch, [[("pytest", touch, tmp_path)]], pre=pre)
         ok, done = CHECK.run(tmp_path, 2, keep_going=True)
@@ -1490,6 +1574,30 @@ def test_the_lean_audit_step_regenerates_records_only_where_the_lean_job_takes_i
     assert not CHECK.lean_regenerates()
     (tmp_path / "lean_audit.py").write_text('ap.add_argument("--regenerate", action="store_true")\n')
     assert CHECK.lean_regenerates()
+
+
+def test_the_lints_are_keyed_by_the_committed_tree_and_unkeyed_on_any_change(tmp_path, monkeypatch):
+    """preflight-lints read every file (`LINTS`), so their pass is kept under the commit's tree, and a tree with a change git
+    hasn't committed, an untracked file too, has no key: the lints run."""
+    import subprocess
+
+    def git(*a):
+        subprocess.run(["git", "-c", "user.email=t@t", "-c", "user.name=t", "-c", "commit.gpgsign=false", *a], cwd=tmp_path,
+                       check=True, capture_output=True)
+
+    (tmp_path / "a.md").write_text("a\n")
+    git("init", "-q")
+    git("add", "-A")
+    git("commit", "-q", "-m", "a")
+    monkeypatch.setattr(CHECK, "ROOT", tmp_path)
+    e = {"PATH": "/usr/bin"}
+    one = CHECK.lints_key(e)
+    assert one and CHECK.lints_key(e) == one and CHECK.lints_key({"PATH": "/bin"}) != one
+    (tmp_path / "b.md").write_text("b\n")
+    assert CHECK.lints_key(e) is None
+    git("add", "-A")
+    git("commit", "-q", "-m", "b")
+    assert CHECK.lints_key(e) not in (None, one)
 
 
 def test_custody_store_env_hands_the_fixture_step_the_runs_custody_key_only_where_the_machine_has_no_store_config(tmp_path,
