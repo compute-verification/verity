@@ -71,14 +71,17 @@ a value there other than the registrant's. -/
 noncomputable def psiRowsZC (c : vb.Pos) (ω : L.Ω) (bs : List (List (OutZC F D Sl))) : ℝ :=
   if isRead c ∧ ∃ v ∈ readsAtZC A Hs P planZ tab vb R τ ω bs c, v ≠ vb.val (wo c) then 1 else 0
 
+omit [Fintype K] in
 theorem psiRows_nonnegZC (c : vb.Pos) (ω : L.Ω) (bs : List (List (OutZC F D Sl))) :
     0 ≤ psiRowsZC A Hs P planZ tab vb isRead wo R τ c ω bs := by
   unfold psiRowsZC; split_ifs <;> norm_num
 
+omit [Fintype K] in
 theorem psiRows_le_oneZC (c : vb.Pos) (ω : L.Ω) (bs : List (List (OutZC F D Sl))) :
     psiRowsZC A Hs P planZ tab vb isRead wo R τ c ω bs ≤ 1 := by
   unfold psiRowsZC; split_ifs <;> norm_num
 
+omit [Fintype K] in
 theorem trialVal_psiRowsZC (c : vb.Pos) (e : TrialOutZC F L D Sl) :
     trialValZC planZ R (psiRowsZC A Hs P planZ tab vb isRead wo R τ c) e =
       ind (fun e => isRead c ∧ ∃ v ∈ rdTZC A Hs P planZ tab vb R τ c e, v ≠ vb.val (wo c)) e := by
@@ -94,7 +97,7 @@ theorem trialVal_psiRowsZC (c : vb.Pos) (e : TrialOutZC F L D Sl) :
 value the trial reads at `c` other than the registrant's comes with an opening of `c`'s registered commitment
 (`opOfVZC_spec`), which is the registrant's opening's (`hon`), so the binding's extractor collides on the two. -/
 theorem trial_rows_leZC {t' : ℝ} (ht : 0 ≤ t') (k Rw : ℕ) (c : vb.Pos) [Nonempty (ΩcZ A P planZ tab vb L c)]
-    (hrc : isRead c) (hon : vb.com (wo c) = vb.cs R c)
+    (_hrc : isRead c) (hon : vb.com (wo c) = vb.cs R c)
     (hCR : Assumptions.SHA512CRExpected Hc (trialGZC A Hs P planZ tab vb R τ c k Rw)
       (trialStratZC A Hs P planZ tab vb R τ c k Rw) (rowsOutZC A Hs P planZ tab vb R τ wo c) (cTZC planZ R t')) :
     expect (trialValZC planZ R (psiRowsZC A Hs P planZ tab vb isRead wo R τ c))
@@ -317,8 +320,8 @@ noncomputable def analysisZCRows
           obtain ⟨h1, h2⟩ := vb.opening_spec S R' u hS M hsat g hg
           exact ⟨h1, h2.trans ((hno1 g hg).trans (P.correct_eval (hown u) hcX g hg))⟩
         · obtain ⟨g, hg, hrd, hne⟩ := (mem_rowsWrongZ A P planZ tab vb isRead wo).1 hw
-          apply hne
-          rw [← hno1 g hg, ← (vb.opening_spec S R' u hS M hsat g hg).2, hno2 g hg hrd]⟩
+          exact hne ((hno1 g hg).symm.trans ((vb.opening_spec S R' u hS M hsat g hg).2.symm.trans
+            (congrArg (fun v => vb.bit v g) (hno2 g hg hrd))))⟩
     set ε := accProbZC A Hs (planZ S R') (zcStrat A Hs planZ τ)
     set r := rateZ (planZ S R') (tab S R' u) k
     set a' := a S R' (zcStrat A Hs planZ τ) (tab S R' u)
