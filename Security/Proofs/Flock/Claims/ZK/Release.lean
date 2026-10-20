@@ -57,7 +57,11 @@ device's place (`LeanRelease.scheduled`), and the last round is the stop. That i
   a value that fails.
 
 From that round on, below the last round, the release is the frame's release of the scheduled round as a stopped rep's,
-and at the last round it is the stop (`LeanRelease.nextD_of_fail`), as the fixed firewall does.
+and at the last round it is the stop (`LeanRelease.nextD_of_fail`), as the fixed firewall does. The `Finish` also stops
+where the firewall's own `Finish` does, on workers' values that fail a constraint at the rep's drawn pads
+(`LeanRelease.finStops`, `LeanRelease.refusesFinish`): the server refuses that round, so the session's one stop bit is
+whether a round failed or its `Finish` stopped, `0` for honest workers, and a live run's `Finish` is one the firewall's
+`Finish` takes (`LeanRelease.finStops_of_live`).
 
 The device round and the scheduled round read, by name, the values the firewall fixes by its own computation, as its
 transcript reports them (`computedOf`): its level-0 recheck, its opening, `final_c'` and the inner proof. Five Props
@@ -313,6 +317,10 @@ structure LeanRelease (W R : Type) where
   link : Msg → W → R → List (Msg × Msg) → Msg
   /-- the record and proof files the firewall builds itself at the session's `Finish` (`Firewall::finish`) -/
   files : Msg → W → R → List (Msg × Msg) → String × Array ByteArray
+  /-- whether the firewall's own `Finish` stops (`Firewall::finish`, `flock-firewall finish` answering `err`): where a
+  constraint fails at the rep's drawn pads, a function of the witness and the workers' values, which the server's tape
+  fixes -/
+  finStops : Msg → W → R → List (Msg × Msg) → Bool
   /-- the session's last round, its `Finish` -/
   last : Msg → ℕ
 
@@ -514,12 +522,20 @@ def ownMsg {W R : Type} (L : LeanRelease W R) (x : Msg) (w : W) (ρ : R) (h : Li
   else if h.length = L.last x then FlockDeploy.Final.encode ⟨x, (L.files x w ρ h).1, (L.files x w ρ h).2⟩
   else L.link x w ρ h
 
+/-- **The model's stop at the `Finish`**, its one definition: the server refuses the last round where the firewall's own
+`Finish` stops (`finStops`). With it the session stops at its `Finish` where a round failed or the workers' values fail a
+constraint at the drawn pads, still one bit a session (`ZkServer.zk_deferred`'s factor `2`), `0` for honest workers. A
+premise on the workers' values instead would make this `false`. -/
+def refusesFinish {W R : Type} (L : LeanRelease W R) (x : Msg) (w : W) (ρ : R) (h : List (Msg × Msg)) : Bool :=
+  decide (h.length = L.last x) && L.finStops x w ρ h
+
 /-- **The deployed release as a ZK server**: one slot per round. Round `0` is the server's own `Hello`; the link and
 the `Finish` are the firewall's own (`ownMsg`), which a worker's value passes only where it is the firewall's; at a
 frame round the worker's value is the device round (with whether it is the firewall's stand-in), the mask is the Lean
 frame's release and the check is Rust's checks, the Lean frame's pass decision and the frame's own refusals, refusing a
 worker value that says it is a stand-in. The session ends at its `Finish` (§10.1), so the firewall takes no frame round
-past it: a worker's value there fails. -/
+past it: a worker's value there fails. The server refuses the `Finish` where the firewall's own `Finish` stops
+(`refusesFinish`). -/
 def toSrv {W R : Type} (L : LeanRelease W R) : ZkServer W R where
   Chk := Unit
   Val := Msg × Bool
@@ -536,6 +552,17 @@ def toSrv {W R : Type} (L : LeanRelease W R) : ZkServer W R where
   frame := fun _ _ vs => (vs ⟨0, Nat.zero_lt_one⟩).1
   stop := L.stop
   sched := L.sched
+  refuses := L.refusesFinish
+
+/-- A live run's `Finish` is one the firewall's own `Finish` does not stop. -/
+theorem finStops_of_live {W R : Type} (L : LeanRelease W R) (wk : L.toSrv.Worker) (x : Msg) (w : W) (ρ : R)
+    (κ : L.toSrv.Chk) (h : List (Msg × Msg)) (hl : L.toSrv.live wk x w ρ κ h = true) (he : h.length = L.last x) :
+    L.finStops x w ρ h = false := by
+  have hp := L.toSrv.pass_of_live wk x w ρ κ h hl (le_refl h.length)
+  rw [List.take_length] at hp
+  have hr : L.toSrv.refuses x w ρ h = false := by simpa using ((Bool.and_eq_true _ _).mp hp).1
+  change (decide (h.length = L.last x) && L.finStops x w ρ h) = false at hr
+  simpa [he] using hr
 
 /-- **The server's frame at honest workers is the Lean frame's release** of the honest device round at a frame round. -/
 theorem refMsg_toSrv {W R : Type} (L : LeanRelease W R) (x : Msg) (w : W) (ρ : R) (h : List (Msg × Msg))
@@ -559,8 +586,9 @@ panic or silence. -/
 theorem pass_of_none {W R : Type} (L : LeanRelease W R) (wk : L.toSrv.Worker) (x : Msg) (w : W) (ρ : R)
     (κ : L.toSrv.Chk) (h : List (Msg × Msg)) (hk : L.kindAt x h.length ≠ .own) (hn : wk x w ρ h 0 = none) :
     L.toSrv.pass wk x w ρ κ h = false := by
-  show (List.range 1).all _ = false
+  show (!L.toSrv.refuses x w ρ h && (List.range 1).all _) = false
   simp only [List.range_one, List.all_cons, List.all_nil, Bool.and_true]
+  refine Bool.and_eq_false_iff.mpr (Or.inr ?_)
   unfold ZkServer.check
   rw [hn, show L.toSrv.kind x h.length 0 = L.kindAt x h.length from rfl]
   cases hkk : L.kindAt x h.length with
@@ -578,6 +606,7 @@ theorem live_some_lt {W R : Type} (L : LeanRelease W R) (wk : L.toSrv.Worker) (x
       L.pass x w ρ h v = true ∧ L.takes x ρ h v = true := by
   have hp := L.toSrv.pass_of_live wk x w ρ κ h hl (le_refl h.length)
   rw [List.take_length] at hp
+  replace hp := ZkServer.slots_of_pass hp
   change (List.range 1).all _ = true at hp
   simp only [List.range_one, List.all_cons, List.all_nil, Bool.and_true] at hp
   unfold ZkServer.check at hp
@@ -764,14 +793,17 @@ set_option synthInstance.maxHeartbeats 1000000
 /-- **The ZK server at `flock-circuit --zk`'s reference session, released by the Lean frame at its own draws**: the
 deployed release `L.toSrv`, whose masks are the frames' draws on the server's tape and whose coin stops and pass decision
 are the frames', and which stops a session only at its `Finish` (`ZkServer.nextD` with the stand-in `LeanRelease.fillOf`; every worker
-failure is a failed round, `LeanRelease.nextD_of_fail`), at any worker `wk` and any values `vs` whose round encoding is
+failure is a failed round, `LeanRelease.nextD_of_fail`; the server refuses the `Finish` where the firewall's own `Finish`
+stops, `LeanRelease.refusesFinish`), at any worker `wk` and any values `vs` whose round encoding is
 causal, releases, on every event, at most twice the probability at the simulator that guesses whether the session stops
 (`leaky1`, at `Flock.zk_server_ref`'s simulator, `refP`'s), plus `ε_zk + γ·Fork`, with no term for the firewall's checks.
 It holds under `Claims.Hm96Hiding`, the session's six Props and the item-stream refinement at `swP vs`
 (`LeanRelease.ItemsRefine`: `HelloRefine`, `OwnRefine`, `LiveRefine`, `FillRefine` at the values the firewall's
 transcript reports, and `StopRefine`),
-with no assumption on what the firewall computes. The stop leaks one bit a session; over a stream of `m` sessions with at most `b` stops, `log₂ ∑_{i ≤ b} C(m, i)` bits
-(`stream_leak_deferred`).
+with no assumption on what the firewall computes. The stop leaks one bit a session, the factor `2`:
+`b = 1[a round failed ∨ L.finStops]`, whether the session stopped at its `Finish`, where `L.finStops` is the firewall's
+own `Finish` stopping on workers' values that fail a constraint at the rep's drawn pads; `b = 0` for honest workers.
+Over a stream of `m` sessions with at most `b` stops, `log₂ ∑_{i ≤ b} C(m, i)` bits (`stream_leak_deferred`).
 
 Its rounds are the deployed session's: the server's own `Hello`, the firewall's own link and `Finish`, and the frame
 rounds tagged `0` (`LeanRelease.kindAt`). `Flock.zk_server_lean_stops` proves `ItemsRefine` at the session with the

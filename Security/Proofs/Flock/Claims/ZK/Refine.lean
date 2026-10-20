@@ -586,9 +586,10 @@ def LinkRoundEq (S : RefSession) (vs : S.SwVals) (L : LeanRelease Flock.Wit (S.r
 
 /-- **The `Finish` is the session's**: after every history of `refK x` openings whose rounds all passed, whose
 openings pass and whose last coins the frame takes, `Final.encode` of the record and proof files the firewall builds
-itself is the session's switched last message at the coins the openings open. A named hypothesis, one of the
-transport's trusts: the record and proof files (`files`) are `Firewall::finish`'s in Rust (`flock-circuit`), which no
-Lean code computes; only their encoding, `Final.encode`, is Lean's. -/
+itself is the session's switched last message at the coins the openings open. A live run's `Finish` is one the
+firewall's own `Finish` takes (`LeanRelease.finStops_of_live`), so it says nothing where that stops. A named hypothesis,
+one of the transport's trusts: the record and proof files (`files`) are `Firewall::finish`'s in Rust (`flock-circuit`),
+which no Lean code computes; only their encoding, `Final.encode`, is Lean's. -/
 def FinalRoundEq (S : RefSession) (vs : S.SwVals) (L : LeanRelease Flock.Wit (S.refP.Nonce × S.refP.Rand))
     (H : Msg → Msg) (wk : L.toSrv.Worker) (x : Msg) (w : Flock.Wit) : Prop :=
   ∀ (ν : S.Nonce) (t : S.Tape) (κ : L.toSrv.Chk) (m₀ ρ₀ : Msg) (ops : List (Msg × Msg)),
@@ -819,7 +820,8 @@ the server's `Hello`, the firewall's own link and `Finish` being the session's (
 frame): the item-stream refinement is proved from them
 (`LeanRelease.helloRefine_withStops`, `ownRefine_withStops`, `liveRefine_withStops`, `fillRefine_withStops`,
 `stopRefine_withStops`). A transport that reads the history only through the decoded coins on the histories its check
-passes gives `Rf` and both its Props (`LeanRelease.rfOf`, `stopsCausal_rfOf`, `stopsAt_of_readsCoins`). -/
+passes gives `Rf` and both its Props (`LeanRelease.rfOf`, `stopsCausal_rfOf`, `stopsAt_of_readsCoins`). The stop
+leaks `Flock.zk_server_lean`'s one bit a session, `1[a round failed ∨ L.finStops]`, `0` for honest workers. -/
 theorem Flock.zk_server_lean_stops (H : Msg → Msg)
     (rel : _root_.Flock.Readable.Parsed → _root_.Flock.Readable.Relation) (S : RefSession)
     (Rf : (x : Msg) → (Fin (refK x) → S.Coin) → ℕ → Bool) (hRf : S.StopsCausal Rf) (vs : S.SwVals) (t : ℕ)
@@ -876,7 +878,10 @@ the tables' side. Each premise on the transport is a named trust, a fact about w
 From them the release's coin check is the session's (`LeanRelease.checkIs_coinLayer`, from `CoinOpen.coinLayer_verdict`,
 at `LeanRelease.helloParses_of_helloEq`), the stop rule is the frame's refusal under the transport's reading
 (`LeanRelease.rfOf`), which reads the coins before its round only (`stopsCausal_rfOf`) and is the release's refusals
-(`stopsAt_of_readsCoins`), and a live frame round is below the `Finish` (`LeanRelease.live_lt_last`). -/
+(`stopsAt_of_readsCoins`), and a live frame round is below the `Finish` (`LeanRelease.live_lt_last`). The stop leaks
+`Flock.zk_server_lean`'s one bit a session, `1[a round failed ∨ L.finStops]`: whether the session stopped at its
+`Finish`, where the firewall's own `Finish` stops on workers' values that fail a constraint at the drawn pads; `0` for
+honest workers. -/
 theorem Flock.zk_server_lean_coinLayer
     (rel : _root_.Flock.Readable.Parsed → _root_.Flock.Readable.Relation) (nr : Msg → ℕ → ℕ) (T : CoinLayer.TableData)
     (vs : (CoinLayer.session nr T).SwVals) (t : ℕ) (ht : 0 < t)

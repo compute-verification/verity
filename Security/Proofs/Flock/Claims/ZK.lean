@@ -404,7 +404,9 @@ import Proofs.Flock.Claims.ZK.LinkRecheck
   frame's too (`Flock.Firewall.Frame.check`: `LeanRelease.pass`, `check_release`), the device round against the
   scheduled round in its place; Rust's own checks only fail a round more (`LeanRelease.cross`). Any other stop comes at its
   `Finish`, with its scheduled rounds in a failed device's place
-  (`LeanRelease.fillOf`), and every way a worker fails is a failed round (`LeanRelease.pass_of_none`, `nextD_of_fail`).
+  (`LeanRelease.fillOf`), and every way a worker fails is a failed round (`LeanRelease.pass_of_none`, `nextD_of_fail`);
+  the server refuses the `Finish` where the firewall's own `Finish` stops on values that fail a constraint at the drawn
+  pads (`LeanRelease.finStops`, `refusesFinish`), so the one bit is `1[a round failed ∨ finStops]`.
   Its rounds are the deployed session's (`LeanRelease.kindAt`): the server's own `Hello` at the tape's nonce, the
   firewall's own link (its recheck's level-0 roots) and `Finish` (`Final.encode` of the record and proof files it
   builds, `LeanRelease.ownMsg`), and frame rounds released tagged `0`. Its `RefD` is the item-stream refinement
