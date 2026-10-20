@@ -141,8 +141,8 @@ LOG_FILE = "releases.jsonl"
 LEDGER_SCHEMA = "verity/challenger-auditor/v1"
 LEDGER_ROLE = "verity/challenger-auditor-record/v1"
 LEDGER_TAG = "verity/challenger-auditor/entry/v1"
-#: an auditor's ledger line's most characters
-MAX_LEDGER_LINE = 1 << 16
+#: an auditor's ledger line's most characters: its signature at W = 1, H = 30 is 70928 hex digits
+MAX_LEDGER_LINE = 1 << 18
 _ZERO = "0" * 128
 _PERIOD = frozenset(string.ascii_letters + string.digits + "._:-")
 WINDOW_FORM = ("a window's identity is {commit, period}: the served Commit's root, 64 bytes in lowercase hex, and the "
