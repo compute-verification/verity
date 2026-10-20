@@ -43,7 +43,6 @@ PROMPTS = ["The capital of France is", "def fibonacci(n):\n    \"\"\"Return the 
 
 
 def run(a: argparse.Namespace) -> dict[str, Any]:
-    from verity.core.protocols.pouw import verifier
     from verity.core.protocols.pouw.coins import Challenger
     from verity_vllm import protocol_options as PO
     from verity_vllm.engine.build import build_engine
@@ -73,7 +72,7 @@ def run(a: argparse.Namespace) -> dict[str, Any]:
 
     plain = serve()
     entry_name = f"pouw:{PH.SCHEME}"
-    ctx = PO.Context(stage="serve", enabled=(entry_name,), settings={"pouw": {"coins": Challenger(0, verifier.coins), "retain_steps": a.retain,
+    ctx = PO.Context(stage="serve", enabled=(entry_name,), settings={"pouw": {"coins": Challenger(0, os.urandom), "retain_steps": a.retain,
                                                                               "transcript_dir": str(outdir), "rows": a.rows,
                                                                               "steps": steps_public}})
     t0 = time.monotonic()
