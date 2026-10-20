@@ -21,7 +21,7 @@ tree infra pinned, one session a window, each recorded in a signed append-only l
 - **The ledger** (`/var/lib/vy-challenger/windows.jsonl`, `chattr +a`) is one JSON object a line: `schema`, `seq` (from 0),
   `prev` (SHA-512 of the previous line's bytes, 128 zeros first), `kind`, `session`, `body` and `sig`, an LMS signature under
   the challenger key over `entry_message(I, entry)`. `verify_ledger` is the reference check. Infra publishes the ledger and
-  each ended session to the store (`publish.sh`).
+  each ended session to the store (`publish.sh`, the control pod's watchers loop `challenger-publish`).
 
 Every signature of the key (`admit`'s, `serve.py`'s record, `end`'s) is taken under `sign.lock`, so `lms.LeafState`, which
 refuses a second signer, never sees two.
