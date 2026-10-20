@@ -3,6 +3,7 @@ gates' operands, its classes from the activations), served MACs and family rules
 from __future__ import annotations
 
 import sys
+import tracemalloc
 from collections import Counter, defaultdict
 from types import SimpleNamespace
 
@@ -112,12 +113,38 @@ def fan(n: int) -> Program:
     return Program(comp("TFan", [("xs", A)], A, body))
 
 
+R = 1 << 10  # rows of `hashed`'s table: a column is a strided view large enough that the census holds it once (`census._Shared`)
+Pick = prim("TPick", [("i", V32), ("xs", Array(R, V16))], V16, lambda i, *xs: xs[i % R])
+Pick.evaluate_lazy = lambda get: get(1 + get(0) % R)  # type: ignore[attr-defined]
+Fold = prim("TFold", [("xs", Array(R, V16))], V16, lambda *xs: sum(xs) & 0xFFFF)
+
+
+def hashed(n: int) -> Program:
+    """n tokens each selecting a row of each of a table's three columns, as hash routing does: a selection's candidates are a
+    column, a strided view of the table. A Call selects in two columns, another twice in one, one reads a column whole, and a
+    column of the table passed through a Call is selected in."""
+    T, C = Array(R, Array(3, V16)), Array(R, V16)
+    Keep = comp("TKeepTable", [("t", T)], T, lambda Bd, S, t: t)
+    Two = comp("TTwo", [("i", V32), ("a", C), ("b", C)], V16,
+               lambda Bd, S, i, a, b: Bd.call(Add16, Bd.call(Pick, i, a), Bd.call(Pick, i, b)))
+
+    def body(Bd, S, toks, t):
+        col = lambda t, c: Coll(C, strided_view(t, c, 1, 3, 0, R))
+        out = [Bd.call(Pick, toks[i], col(t, c)) for i in range(n) for c in range(3)]
+        out += [Bd.call(Two, toks[0], col(t, 0), col(t, 2)), Bd.call(Two, toks[1], col(t, 1), col(t, 1)), Bd.call(Fold, col(t, 2)),
+                Bd.call(Pick, toks[0], col(Bd.call(Keep, t), 1)), Bd.call(Add16, t[0][0], t[R - 1][1])]
+        return tuple_of(array_of(out), t[3])
+
+    return Program(comp("THashed", [("toks", Array(n, V32)), ("t", T)], Tuple(Array(3 * n + 5, V16), Array(3, V16)), body))
+
+
 def programs():
     yield from liveness_programs()
     yield "request", request()
     yield "pass-through", Program(comp("TPasses", [("x", Array(2, V32))], V32, _passes))
     yield "relay", relay(5)
     yield "fan", fan(5)
+    yield "hashed", hashed(3)
     yield "columns", Program(comp("TColumns", [("M", Array(3, Array(4, V32)))], Array(4, V32),
                                   lambda Bd, S, M: Bd.batch(Col, M, axes=(1,))))
 
@@ -346,6 +373,19 @@ def test_the_census_is_linear_in_its_pass_throughs(shape):
     """A pass-through chain 200 Calls deep, and 200 runs read in 200 spans, cost the census at most 4.5 times what a quarter of
     each costs (linear is 4). Walking the chain again from each Call, or every run for each span, costs 11 and 7.7 times."""
     assert _lines(shape(200)) <= 4.5 * _lines(shape(50))
+
+
+def test_a_column_every_token_selects_in_is_held_once():
+    """A table's columns 64 tokens each select in cost the census at most 64 bytes of memory per candidate it lists (about 26),
+    not a span per token and leaf held until the table's values are cut (480)."""
+    P = hashed(64)
+    tracemalloc.start()
+    try:
+        c = census(P)
+        peak = tracemalloc.get_traced_memory()[1]
+    finally:
+        tracemalloc.stop()
+    assert peak <= 64 * sum(map(len, c["selects"]["values"]))
 
 
 Wide64 = prim("TWide64", [], V64, lambda: 1 << 60)

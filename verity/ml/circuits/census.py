@@ -117,7 +117,7 @@ from .intervals import Intervals, contains, full, norm, ref_intervals, total
 from .layout import resolve
 from .liveness import _MEMBER_LIMIT
 from .program import input_id, is_input
-from .refs import Affine, Concat, Explicit, Refs, concat
+from .refs import Affine, Concat, Explicit, Refs, Strided, concat
 from .types import Array, Record, Tuple as TupleT, Type, Value
 
 SCHEMA = "verity/census/v1"
@@ -256,11 +256,38 @@ class _Reads:
     approximate: bool
 
 
-class _Marks:
-    """Leaf intervals one body's nodes read, in one space of that body (`p` inside a Definition, `n` at the root)."""
+class _Shared:
+    """The `Intervals` of large strided views, one tuple per view (by its fields), the least recently used dropped past `budget`
+    intervals: a table column every token reads (no interval structure) is enumerated once, and every read of it holds that
+    one tuple, which `_segments` cuts by once however many read it."""
 
-    def __init__(self, space: str) -> None:
-        self.space = space
+    MIN = 1 << 10  # a strided view of fewer leaves is enumerated where it is read
+
+    def __init__(self, budget: int = 1 << 22) -> None:
+        self._ivs: dict[tuple, Intervals] = {}
+        self._size, self._budget = 0, budget
+
+    def get(self, r: Strided) -> Intervals:
+        key = (r.space, r.idx, r.base, r.inner, r.outer_stride, r.inner_stride, r.count)
+        iv = self._ivs.pop(key, None)
+        if iv is None:
+            t: dict = {}
+            ref_intervals(r, t)
+            iv = norm(t[(r.space, r.idx)])
+            self._size += len(iv)
+        self._ivs[key] = iv
+        while self._size > self._budget and len(self._ivs) > 1:
+            self._size -= len(self._ivs.pop(next(iter(self._ivs))))
+        return iv
+
+
+class _Marks:
+    """Leaf intervals one body's nodes read, in one space of that body (`p` inside a Definition, `n` at the root). With `shared`,
+    a node read only through one large strided view is marked with that view's `Intervals` (a tuple, normalised) instead of a
+    list of intervals."""
+
+    def __init__(self, space: str, shared: _Shared | None = None) -> None:
+        self.space, self.shared = space, shared
         self.direct: dict[int, list] = {}
         self.pool: dict[int, list] = {}
         self.select_gates = self.select_bits = 0
@@ -273,11 +300,25 @@ class _Marks:
         elif isinstance(refs, Explicit):
             for s, i, leaf in refs.items:
                 if s == self.space:
-                    into.setdefault(i, []).append((leaf, leaf + 1))
+                    got = into.get(i)
+                    if type(got) is not list:
+                        got = into[i] = list(got or ())
+                    got.append((leaf, leaf + 1))
         elif refs.count and refs.space == self.space:
-            t: dict = {}
-            ref_intervals(refs, t)
-            into.setdefault(refs.idx, []).extend(t[(refs.space, refs.idx)])
+            if self.shared is not None and isinstance(refs, Strided) and refs.count >= _Shared.MIN:
+                iv = self.shared.get(refs)
+                got = into.get(refs.idx)
+                if got is None:
+                    into[refs.idx] = iv
+                    return
+            else:
+                t: dict = {}
+                ref_intervals(refs, t)
+                iv = t[(refs.space, refs.idx)]
+                got = into.get(refs.idx)
+            if type(got) is not list:
+                got = into[refs.idx] = list(got or ())
+            got.extend(iv)
 
     def mark(self, refs: Refs, sub: Intervals | None, into: dict) -> None:
         if sub is None or total(sub) == refs.count:
@@ -839,25 +880,63 @@ def _bits(t: Type, lo: int, hi: int) -> int:
     return out
 
 
-def _segments(L: int, spans: list[tuple[int, int, tuple]]) -> Iterable[tuple[int, int, frozenset]]:
-    """`[0, L)` cut into maximal runs over which the set of tags of the spans covering a leaf is the same."""
-    ev: list[tuple[int, int, tuple]] = []
-    for lo, hi, tag in spans:
-        ev.append((lo, 1, tag))
-        ev.append((hi, 0, tag))
+_UNIONS = 1 << 12  # the joined tag sets `_segments` keeps for one node; past it, it starts again
+
+
+def _spans(spans: list[tuple]) -> Iterable[tuple[int, int, tuple]]:
+    """Each span as `(lo, hi, tag)`: a shared view's `(intervals, tag)` (`_Shared`) as one span per interval."""
+    for s in spans:
+        if len(s) == 3:
+            yield s
+        else:
+            for lo, hi in s[0]:
+                yield lo, hi, s[1]
+
+
+def _segments(L: int, spans: list[tuple]) -> Iterable[tuple[int, int, frozenset]]:
+    """`[0, L)` cut into maximal runs over which the set of tags of the spans covering a leaf is the same. A span is `(lo, hi,
+    tag)`, or `(intervals, tag)` (`_Shared`): the spans of one shared view are cut by its intervals once, their tags joined."""
+    ev: list[tuple[int, int, Any]] = []
+    views: dict[int, tuple[Intervals, set]] = {}
+    for s in spans:
+        if len(s) == 3:
+            lo, hi, tag = s
+            ev.append((lo, 1, tag))
+            ev.append((hi, 0, tag))
+        elif id(s[0]) in views:
+            views[id(s[0])][1].add(s[1])
+        else:
+            views[id(s[0])] = (s[0], {s[1]})
+    joined: dict[int, frozenset] = {}
+    for p, (iv, ts) in views.items():  # a view's key is an int, a tag a tuple
+        joined[p] = frozenset(ts)
+        for lo, hi in iv:
+            ev.append((lo, 1, p))
+            ev.append((hi, 0, p))
     ev.sort(key=lambda e: (e[0], e[1]))
     active: Counter = Counter()
+    on: Counter = Counter()
+    union: dict[tuple[frozenset, frozenset], frozenset] = {}
     pos, i, run = 0, 0, None
     while pos < L:
         while i < len(ev) and ev[i][0] <= pos:
-            _, start, tag = ev[i]
-            active[tag] += 1 if start else -1
-            if not active[tag]:
-                del active[tag]
+            _, start, key = ev[i]
+            c = on if type(key) is int else active
+            c[key] += 1 if start else -1
+            if not c[key]:
+                del c[key]
             i += 1
         nxt = min(ev[i][0] if i < len(ev) else L, L)
-        tags = frozenset(active)
-        if run is not None and run[2] == tags:
+        if on:
+            u = (frozenset(active), frozenset(on))
+            tags = union.get(u)
+            if tags is None:
+                if len(union) >= _UNIONS:
+                    union.clear()
+                tags = union[u] = u[0].union(*(joined[p] for p in u[1]))
+        else:
+            tags = frozenset(active)
+        if run is not None and (run[2] is tags or run[2] == tags):
             run = (run[0], nxt, tags)
         else:
             if run is not None:
@@ -903,16 +982,21 @@ def census(program: Any, ends: list[int] | None = None, digest: str | None = Non
             classes[cid]["boolean_version"] = v
 
     an = _Analysis()
-    spans: list[list[tuple[int, int, tuple]]] = [[] for _ in nodes]
+    spans: list[list[tuple]] = [[] for _ in nodes]  # (lo, hi, tag), or (intervals, tag) for a shared view (`_segments`)
     sel: dict[int, tuple[int, int]] = {}
     approximate = False
+    shared = _Shared()
     for k in range(I, len(nodes)):
-        m = _Marks("n")
+        m = _Marks("n", shared)
         an.node(nodes[k], m)
         approximate |= m.approximate
         for tag, got in ((0, m.direct), (1, m.pool)):
             for j, ivs in got.items():
-                spans[j].extend((lo, hi, (tag, k)) for lo, hi in norm(ivs))
+                tg = (tag, k)
+                if type(ivs) is tuple:
+                    spans[j].append((ivs, tg))
+                else:
+                    spans[j].extend((lo, hi, tg) for lo, hi in norm(ivs))
         if m.select_gates:
             sel[k] = (m.select_gates, m.select_bits)
     out = _Marks("n")
@@ -936,7 +1020,7 @@ def census(program: Any, ends: list[int] | None = None, digest: str | None = Non
             continue
         los = [lo for lo, _, _ in runs]
         kept, moved = [], []
-        for a, b, tag in spans[j]:  # the runs are disjoint and sorted: those a span meets are consecutive
+        for a, b, tag in _spans(spans[j]):  # the runs are disjoint and sorted: those a span meets are consecutive
             i = bisect.bisect_right(los, a) - 1
             if i < 0 or runs[i][1] <= a:
                 i += 1
@@ -952,7 +1036,7 @@ def census(program: Any, ends: list[int] | None = None, digest: str | None = Non
             if cur < b:
                 kept.append((cur, b, tag))
             moved.extend((p, u, v, tag) for p, ivs in m.direct.items() for u, v in norm(ivs))
-        spans[j] = kept + [(lo, hi, (3, 0)) for lo, hi, _ in runs]
+        spans[j] = kept + [(lo, hi, (3, 0)) for lo, hi in norm((lo, hi) for lo, hi, _ in runs)]
         for p, u, v, tag in moved:  # an earlier node's, or this one's own first naming of a gate
             spans[p].append((u, v, tag))
 
@@ -961,20 +1045,27 @@ def census(program: Any, ends: list[int] | None = None, digest: str | None = Non
     values: dict[str, list] = {"producer": [], "lo": [], "hi": [], "bits": [], "reads": [], "output": [], "fact": []}
     pools: dict[int, list[int]] = {k: [] for k in sel}
     for j, nd in enumerate(nodes):
+        seen: dict[frozenset, tuple] = {}  # a tag set -> its reads, output, fact and the pools a value of it joins
         for lo, hi, tags in _segments(nd.out.leaves, spans[j] + [(a, b, (4, f)) for a, b, f in fx.node(j).segments()]):
             if (3, 0) in tags:
                 continue
+            got = seen.get(tags)
+            if got is None:
+                if len(seen) >= _UNIONS:
+                    seen.clear()
+                got = seen[tags] = (sorted(k for t, k in tags if t == 0), (2, 0) in tags, next(f for t, f in tags if t == 4),
+                                    [pools.setdefault(k, []).append for t, k in tags if t == 1])
             v = len(values["producer"])
             values["producer"].append(j)
             values["lo"].append(lo)
             values["hi"].append(hi)
             values["bits"].append(_bits(nd.out, lo, hi))
-            values["reads"].append(sorted(k for t, k in tags if t == 0))
-            values["output"].append((2, 0) in tags)
-            values["fact"].append(facts.setdefault(next(f for t, f in tags if t == 4), len(facts)))
-            for t, k in tags:
-                if t == 1:
-                    pools.setdefault(k, []).append(v)
+            values["reads"].append(list(got[0]))
+            values["output"].append(got[1])
+            values["fact"].append(facts.setdefault(got[2], len(facts)))
+            for join in got[3]:
+                join(v)
+        spans[j] = []
     ks = sorted(pools)
     selects = {"call": ks, "gates": [sel.get(k, (0, 0))[0] for k in ks], "bits": [sel.get(k, (0, 0))[1] for k in ks],
                "values": [pools[k] for k in ks]}
