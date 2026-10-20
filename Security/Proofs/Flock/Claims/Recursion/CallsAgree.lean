@@ -1,4 +1,5 @@
 import Proofs.Flock.Claims.Recursion.VerdictLog
+import Proofs.Flock.Claims.Recursion.LastColsDeployed
 import Proofs.Flock.Claims.Complete.ZkTables.Scope
 import Proofs.Flock.Claims.DeployK
 
@@ -10,6 +11,13 @@ import Proofs.Flock.Claims.DeployK
 * `streams_pinned`: S11's count and names then leave a decoded session no stream but the one it finds at each rep
   stream's name.
 * `decode_publics`: the public words `Record.decode` reads (S7) are `liveOf`'s.
+* `verdict_calls_sub`: every SHA-512 input of an accepting plain verdict (`verdict_calls`: the decoder's, S17's, the
+  reps') is one of another's on the same proof files, where the decoded sessions have the same `root_B`, points, public
+  words and rep rounds. S10 pins `y`, and a public word one record hashes and the other leaves empty is `ε`, which each
+  stream's first round hashes (`eps_mem`).
+* `plain_calls_agree`: two accepted plain decisions on one setup, link, coin and round messages, with the same proof
+  files and the same rep rounds, make one set of calls: a decision logs the setup's calls, then the verdict's
+  (`next_decide_calls`), and custody pins the rest. `plain_decide_shared` gives the shared decision.
 -/
 
 namespace FlockDeploy.KS
@@ -388,5 +396,198 @@ theorem verdict_calls_sub {spec : SessionSpec} {tabs : Array Setup} {record reco
   · exact .inl (.inl (.inr hb))
   · exact .inl (.inr hb)
   · exact .inr hb
+
+/-! ## The decision's calls -/
+
+/-- Every entry of an oracle program's log is a query with `H`'s answer. -/
+theorem eval_log_ans (H : Claims.Msg → Claims.Msg) {α : Type} (x : Claims.OC α) :
+    ∀ p ∈ (x.eval H).2, p.2 = H p.1 := by
+  induction x with
+  | ret a => simp [Claims.OC.eval]
+  | query q k ih =>
+    intro p hp
+    simp only [Claims.OC.eval, List.mem_cons] at hp
+    rcases hp with rfl | hp
+    · rfl
+    · exact ih _ p hp
+
+theorem ofMsg_inj {a b : Claims.Msg} (h : Claims.ofMsg a = Claims.ofMsg b) : a = b := by
+  have := congrArg Claims.toMsg h
+  simpa [Claims.toMsg, Claims.ofMsg] using this
+
+/-- Two logs of `H`'s answers with the same queries are one set. -/
+theorem toFinset_eq_of_queries {H : Claims.Msg → Claims.Msg} {L L' : List (Claims.Msg × Claims.Msg)}
+    (hL : ∀ p ∈ L, p.2 = H p.1) (hL' : ∀ p ∈ L', p.2 = H p.1) (h : ∀ p ∈ L, ∃ p' ∈ L', p'.1 = p.1)
+    (h' : ∀ p ∈ L', ∃ p' ∈ L, p'.1 = p.1) : L.toFinset = L'.toFinset := by
+  have key : ∀ {A B : List (Claims.Msg × Claims.Msg)}, (∀ p ∈ A, p.2 = H p.1) → (∀ p ∈ B, p.2 = H p.1) →
+      (∀ p ∈ A, ∃ p' ∈ B, p'.1 = p.1) → ∀ p ∈ A, p ∈ B := by
+    intro A B hA hB hAB p hp
+    obtain ⟨p', hp', e⟩ := hAB p hp
+    have : p' = p := Prod.ext e (by rw [hB p' hp', hA p hp, e])
+    exact this ▸ hp'
+  ext p
+  simp only [List.mem_toFinset]
+  exact ⟨key hL hL' h p, key hL' hL h' p⟩
+
+/-- The decision at a session logs its verdict's calls: the checks call nothing. -/
+theorem decisionAt_log (H : Claims.Msg → Claims.Msg) (zk : Bool) (s : Ins) (spec : SessionSpec) (sts : Array Stmt)
+    (x : Claims.Msg) (link : List ByteArray × List ByteArray) (c₁ : Coin) (mids : List (Claims.Msg × Coin))
+    (f : Final) :
+    ((decisionAt zk s spec sts x link c₁ mids f).run.eval H).2 =
+      ((verdictM zk Claims.Hashes.oc spec (tabsOf sts) f.record f.proofs).run.eval H).2 := by
+  simp only [decisionAt, ExceptT.run_bind, Claims.OC.bind_eq, Claims.OC.eval_bind]
+  rcases hv : (verdictM zk Claims.Hashes.oc spec (tabsOf sts) f.record f.proofs).run.eval H with ⟨r, l⟩
+  cases r <;> exact List.append_nil l
+
+/-- **A step that decides logs the setup's calls, then the verdict's**, where the setup is `.ok`. -/
+theorem next_decide_calls (H : Claims.Msg → Claims.Msg) {zk : Bool} {x : Claims.Msg} {as : List Claims.Msg}
+    {cs : List Coin} {s : Ins} {spec : SessionSpec} {sts : Array Stmt} {link : List ByteArray × List ByteArray}
+    {c₁ : Coin} {mids : List (Claims.Msg × Coin)} {f : Final}
+    (h : act zk x as cs = .decide s spec sts link c₁ mids f)
+    (hs : ((setupM Claims.Hashes.oc s.read).run.eval H).1 = .ok (spec, sts)) :
+    ((next zk x as cs).eval H).2 = ((setupM Claims.Hashes.oc s.read).run.eval H).2 ++
+      ((verdictM zk Claims.Hashes.oc spec (tabsOf sts) f.record f.proofs).run.eval H).2 := by
+  simp only [next, h, outOf_log, decision, ExceptT.run_bind, Claims.OC.bind_eq, Claims.OC.eval_bind]
+  rcases hv : (setupM Claims.Hashes.oc s.read).run.eval H with ⟨r, l⟩
+  rw [hv] at hs
+  simp only at hs
+  subst hs
+  show l ++ ((decisionAt zk s spec sts x link c₁ mids f).run.eval H).2 = _
+  rw [decisionAt_log]
+
+/-- **An accepting plain step at SHA-512** has a logged verdict that accepts, and its checks pass. -/
+theorem acc_verifyLogged {x : Claims.Msg} {as : List Claims.Msg} {cs : List Coin} {s : Ins} {spec : SessionSpec}
+    {sts : Array Stmt} {link : List ByteArray × List ByteArray} {c₁ : Coin} {mids : List (Claims.Msg × Coin)}
+    {f : Final} (h : act false x as cs = .decide s spec sts link c₁ mids f)
+    (hacc : ((next false x as cs).eval sha512).1 = .acc) :
+    verifyLogged Sha512.hash spec (tabsOf sts) f.record f.proofs =
+        (.ok (), (verifyLogged Sha512.hash spec (tabsOf sts) f.record f.proofs).2) ∧
+      checks false s spec x link c₁ mids f = .ok () := by
+  obtain ⟨spec', sts', he, hv, hc⟩ := (next_decide sha512 h).1 hacc
+  rw [act_decide_setupWith h] at he
+  obtain ⟨rfl, rfl⟩ := Prod.mk.inj (Except.ok.inj he)
+  rw [hOf_sha512] at hv
+  exact ⟨Prod.ext ((verifyLogged_fst _ _ _ _ _ _).trans hv) rfl, hc⟩
+
+/-- **Two plain steps that decide on one setup call SHA-512 on one set**, where each verdict's calls are among the
+other's: the decision's calls are the setup's, then the verdict's. -/
+theorem next_calls_toFinset {x : Claims.Msg} {as as' : List Claims.Msg} {cs cs' : List Coin} {s : Ins}
+    {spec : SessionSpec} {sts : Array Stmt} {link link' : List ByteArray × List ByteArray} {c₁ c₁' : Coin}
+    {mids mids' : List (Claims.Msg × Coin)} {f f' : Final}
+    (h : act false x as cs = .decide s spec sts link c₁ mids f)
+    (h' : act false x as' cs' = .decide s spec sts link' c₁' mids' f')
+    (hsub : ∀ b ∈ (verifyLogged Sha512.hash spec (tabsOf sts) f.record f.proofs).2.toList,
+      b ∈ (verifyLogged Sha512.hash spec (tabsOf sts) f'.record f'.proofs).2.toList)
+    (hsub' : ∀ b ∈ (verifyLogged Sha512.hash spec (tabsOf sts) f'.record f'.proofs).2.toList,
+      b ∈ (verifyLogged Sha512.hash spec (tabsOf sts) f.record f.proofs).2.toList) :
+    ((next false x as cs).eval sha512).2.toFinset = ((next false x as' cs').eval sha512).2.toFinset := by
+  have hs := (setupM_eval sha512 s.read).1.trans (act_decide_setupWith h)
+  rw [next_decide_calls sha512 h hs, next_decide_calls sha512 h' hs, List.toFinset_append, List.toFinset_append]
+  congr 1
+  have hl := Claims.verifyOC_log sha512 spec (tabsOf sts) f.record f.proofs
+  have hl' := Claims.verifyOC_log sha512 spec (tabsOf sts) f'.record f'.proofs
+  rw [hOf_sha512] at hl hl'
+  have hq : ∀ {A B : List (Claims.Msg × Claims.Msg)} {LA LB : Array ByteArray},
+      A.map (fun p => Claims.ofMsg p.1) = LA.toList → B.map (fun p => Claims.ofMsg p.1) = LB.toList →
+      (∀ b ∈ LA.toList, b ∈ LB.toList) → ∀ p ∈ A, ∃ p' ∈ B, p'.1 = p.1 := by
+    intro A B LA LB hA hB hAB p hp
+    have h1 : Claims.ofMsg p.1 ∈ LA.toList := by
+      rw [← hA]
+      exact List.mem_map_of_mem hp
+    have h2 := hAB _ h1
+    rw [← hB] at h2
+    obtain ⟨p', hp', e⟩ := List.mem_map.1 h2
+    exact ⟨p', hp', ofMsg_inj e⟩
+  exact toFinset_eq_of_queries (eval_log_ans _ _) (eval_log_ans _ _) (hq hl hl' hsub) (hq hl' hl hsub')
+
+/-- **Two accepted plain last messages after the same rounds and coins decide on one setup, link, coin and round
+messages.** -/
+theorem plain_decide_shared {x : Claims.Msg} {ms : List Claims.Msg} {l l' : Claims.Msg} {cs : List Coin}
+    {f f' : Final} (hc : cs.length = ms.length + 1)
+    (hacc : ((next false x (ms ++ [l]) cs).eval sha512).1 = .acc)
+    (hacc' : ((next false x (ms ++ [l']) cs).eval sha512).1 = .acc)
+    (hfl : finalOf l = some f) (hfl' : finalOf l' = some f') :
+    ∃ s spec sts link c₁ mids, act false x (ms ++ [l]) cs = .decide s spec sts link c₁ mids f ∧
+      act false x (ms ++ [l']) cs = .decide s spec sts link c₁ mids f' := by
+  obtain ⟨s, spec, sts, link, c₁, mids, f₀, hact, -⟩ := next_acc_decide hacc
+  obtain ⟨s', spec', sts', link', c₁', mids', f₀', hact', -⟩ := next_acc_decide hacc'
+  have hs := act_decide hact
+  have hs' := act_decide hact'
+  rw [hs] at hs'
+  cases hs'
+  have hlen := act_decide_length (by simp [hc]) hact
+  obtain ⟨b, ms'', rfl⟩ : ∃ b ms'', ms = b :: ms'' := by
+    cases ms with
+    | nil =>
+      simp only [List.nil_append, List.length_singleton] at hlen
+      omega
+    | cons b ms'' => exact ⟨b, ms'', rfl⟩
+  obtain ⟨a₁, rest, crest, has, hcs, hlink, hmids⟩ := act_decide_parts hact
+  obtain ⟨a₁', rest', crest', has', hcs', hlink', hmids'⟩ := act_decide_parts hact'
+  simp only [List.cons_append, List.cons.injEq] at has has'
+  obtain ⟨rfl, rfl⟩ := has
+  obtain ⟨rfl, rfl⟩ := has'
+  obtain ⟨rfl, rfl⟩ : c₁' = c₁ ∧ crest' = crest := by
+    rw [hcs] at hcs'
+    simp only [List.cons.injEq] at hcs'
+    exact ⟨hcs'.1.symm, hcs'.2.symm⟩
+  rw [hlink] at hlink'
+  cases hlink'
+  have hm : mids' = mids := by rw [hmids, hmids', List.dropLast_concat, List.dropLast_concat]
+  subst hm
+  have e : finalOf l = some f₀ := by
+    have e := act_decide_final hact
+    rw [List.getLast?_concat] at e
+    exact e
+  have e' : finalOf l' = some f₀' := by
+    have e := act_decide_final hact'
+    rw [List.getLast?_concat] at e
+    exact e
+  obtain rfl := Option.some.inj (e.symm.trans hfl)
+  obtain rfl := Option.some.inj (e'.symm.trans hfl')
+  exact ⟨_, _, _, _, _, _, hact, hact'⟩
+
+/-- **Two accepted plain decisions on one setup, link, coin and round messages, with the same proof files, call
+SHA-512 on one set**, where the sessions their records decode have the same rounds at each rep stream. Custody pins
+both records' `root_B`, points and public words to the link and the first coin; S10 pins `y`; the statement's tables
+are named apart (`tables_nodup`), so S11 leaves no stream but the rep streams (`verdict_calls_sub`). -/
+theorem plain_calls_agree {x : Claims.Msg} {as as' : List Claims.Msg} {cs cs' : List Coin} {s : Ins}
+    {spec : SessionSpec} {sts : Array Stmt} {link : List ByteArray × List ByteArray} {c₁ : Coin}
+    {mids : List (Claims.Msg × Coin)} {f f' : Final}
+    (h : act false x as cs = .decide s spec sts link c₁ mids f)
+    (h' : act false x as' cs' = .decide s spec sts link c₁ mids f')
+    (hacc : ((next false x as cs).eval sha512).1 = .acc) (hacc' : ((next false x as' cs').eval sha512).1 = .acc)
+    (hpf : f.proofs = f'.proofs)
+    (hR : ∀ sess sess', Record.decode spec f.record = .ok sess → Record.decode spec f'.record = .ok sess' →
+      ∀ q (hq : q < spec.repStreams.size) (y y' : StreamRec),
+        sess.streams.find? (·.name == spec.repStreams[q].2.2) = some y →
+          sess'.streams.find? (·.name == spec.repStreams[q].2.2) = some y' → y.rounds = y'.rounds) :
+    ((next false x as cs).eval sha512).2.toFinset = ((next false x as' cs').eval sha512).2.toFinset := by
+  obtain ⟨hV, hck⟩ := acc_verifyLogged h hacc
+  obtain ⟨hV', hck'⟩ := acc_verifyLogged h' hacc'
+  rw [hpf] at hV
+  obtain ⟨sess, -, -, hd₀, -⟩ := verdict_calls hV
+  obtain ⟨sess', -, -, hd₀', -⟩ := verdict_calls hV'
+  have hd : Record.decode spec f.record = .ok sess := (With.decodeWith_std spec f.record).symm.trans hd₀
+  have hd' : Record.decode spec f'.record = .ok sess' := (With.decodeWith_std spec f'.record).symm.trans hd₀'
+  obtain ⟨-, lv, hlv, hcu⟩ := Claims.Bridge.Custody.checks_ok hck
+  obtain ⟨-, lv', hlv', hcu'⟩ := Claims.Bridge.Custody.checks_ok hck'
+  obtain ⟨hrB, hpts, -⟩ := Claims.Bridge.Custody.decode_live hd hlv
+  obtain ⟨hrB', hpts', -⟩ := Claims.Bridge.Custody.decode_live hd' hlv'
+  obtain ⟨hlB, hlU, hlP, -⟩ := Claims.Bridge.Custody.custody_ok hcu
+  obtain ⟨hlB', hlU', hlP', -⟩ := Claims.Bridge.Custody.custody_ok hcu'
+  have hP : sess.points = sess'.points := by rw [hpts, hpts', hlP, hlP']
+  have hB : sess.rootB = sess'.rootB := by
+    rw [hrB, hrB']
+    exact Array.ext' (hlB.trans hlB'.symm)
+  have hU : sess.publics = sess'.publics := by
+    rw [decode_publics hd hlv, decode_publics hd' hlv']
+    exact Array.ext' (hlU.trans hlU'.symm)
+  have hn := tables_nodup (setupOf_some (act_decide h)).2 (Claims.Bridge.Custody.publicInputs_none_of_checks hck)
+  have hR' := hR sess sess' hd hd'
+  refine next_calls_toFinset h h' ?_ ?_ <;> rw [hpf]
+  · exact verdict_calls_sub hV hV' hd hd' hn hB hP hU hR'
+  · exact verdict_calls_sub hV' hV hd' hd hn hB.symm hP.symm hU.symm
+      fun q hq y y' hy hy' => (hR' q hq y' y hy' hy).symm
 
 end FlockDeploy.KS
