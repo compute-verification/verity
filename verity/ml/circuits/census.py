@@ -113,7 +113,7 @@ from . import boolean as BL
 from . import ports
 from .codec import MAX_SAFE_INT, _static_json, canonical_json, descriptor_id, jcs_domain_error
 from .defs import CompositeDefinition, Node, PrimitiveDefinition, bind
-from .intervals import Intervals, complement, contains, full, isect, norm, ref_intervals, total
+from .intervals import Intervals, contains, full, norm, ref_intervals, total
 from .layout import resolve
 from .liveness import _MEMBER_LIMIT
 from .program import input_id, is_input
@@ -327,13 +327,28 @@ def _through(r: Refs, args) -> Refs:
     return concat(parts)
 
 
+def _sources(r: Refs) -> set[int]:
+    """The body nodes `r` names."""
+    out: set[int] = set()
+    for p in _flat(r):
+        if isinstance(p, Explicit):
+            out.update(i for s, i, _leaf in p.items if s == "n")
+        elif p.count and p.space == "n":
+            out.add(p.idx)
+    return out
+
+
 class _Aliases:
     """The output leaves of one body's nodes that are leaves of something else passed through (a callee returning its argument,
-    a scan's carry), and what refs resolve to once every pass-through is followed."""
+    a scan's carry), and what refs resolve to once every pass-through is followed.
+
+    Each node's runs are resolved once (`resolved`), through its sources' resolved runs, so following a pass-through is one
+    step however long the chain of nodes passing it on: the work is the runs' size, never the chains' length times it."""
 
     def __init__(self, an: "_Analysis", body: Any) -> None:
         self.an, self.body = an, body
         self._nodes: dict[int, list[tuple[int, int, Refs]]] = {}
+        self._res: dict[int, tuple[list[int], list[tuple[int, int, Refs, bool]]]] = {}
 
     def node(self, k: int) -> list[tuple[int, int, Refs]]:
         """Runs `[lo, hi)` of node `k`'s output leaves that pass through the refs (in this body's spaces) given with each, by `lo`."""
@@ -371,9 +386,38 @@ class _Aliases:
         self._nodes[k] = runs
         return runs
 
+    def resolved(self, k: int) -> tuple[list[int], list[tuple[int, int, Refs, bool]]]:
+        """Node `k`'s runs (`node`) with every pass-through followed, as runs `[lo, hi)` of its output leaves with what they
+        resolve to and whether that is the body's parameters (`resolve`'s pieces at their leaves), by `lo`, and their `lo`s."""
+        todo = [k]
+        while todo:  # a node's sources are earlier nodes: resolve them first, without recursing down a chain
+            q = todo[-1]
+            if q in self._res:
+                todo.pop()
+                continue
+            need = [p for lo, hi, s in self.node(q) for p in _sources(s) if p not in self._res and self.node(p)]
+            if need:
+                todo.extend(need)
+                continue
+            todo.pop()
+            runs = [(lo + q2, lo + q2 + x.count, x, f) for lo, _hi, s in self.node(q) for q2, x, f in self._hop(s, True)]
+            self._res[q] = ([r[0] for r in runs], runs)
+        return self._res[k]
+
+    def release(self, k: int) -> None:
+        """Forget node `k`'s resolved runs (a caller that resolves nothing naming `k` again)."""
+        self._res.pop(k, None)
+
     def resolve(self, r: Refs, own: bool) -> list[tuple[int, Refs, bool]]:
         """`r` with every pass-through followed, as pieces `(position, refs, passed)`: `passed` pieces are the body's parameters,
         the others leaves its nodes produce (listed only when `own`)."""
+        for p in _sources(r):
+            if self.node(p):
+                self.resolved(p)
+        return self._hop(r, own)
+
+    def _hop(self, r: Refs, own: bool) -> list[tuple[int, Refs, bool]]:
+        """`resolve`, its sources' runs already resolved."""
         out: list[tuple[int, Refs, bool]] = []
         pos = 0
         for p in _flat(r):
@@ -384,19 +428,24 @@ class _Aliases:
             elif p.space == "p":
                 if n:
                     out.append((pos, p, True))
-            elif not (runs := self.node(p.idx)):
+            elif not self.node(p.idx):
                 if own and n:
                     out.append((pos, p, False))
             elif isinstance(p, Affine):
+                los, runs = self._res[p.idx]
                 b, e, cur = p.base, p.base + n, p.base
-                for lo, hi, s in runs:
-                    if hi <= cur or lo >= e:
-                        continue
+                i = bisect.bisect_right(los, b) - 1
+                if i < 0 or runs[i][1] <= b:
+                    i += 1
+                while i < len(runs) and runs[i][0] < e:
+                    lo, hi, x, f = runs[i]
                     if lo > cur and own:
                         out.append((pos + cur - b, Affine("n", p.idx, cur, lo - cur), False))
                     a0, a1 = max(lo, cur), min(hi, e)
-                    out.extend((pos + a0 - b + q, x, f) for q, x, f in self.resolve(s.slice(a0 - lo, a1 - lo), own))
+                    if own or f:
+                        out.append((pos + a0 - b, x if (a0, a1) == (lo, hi) else x.slice(a0 - lo, a1 - lo), f))
                     cur = a1
+                    i += 1
                 if cur < e and own:
                     out.append((pos + cur - b, Affine("n", p.idx, cur, e - cur), False))
             else:
@@ -409,12 +458,15 @@ class _Aliases:
         if s == "p":
             out.append((pos, Affine(s, i, leaf, 1), True))
             return
-        runs = self.node(i)
-        j = bisect.bisect_right(runs, leaf, key=lambda x: x[0]) - 1
-        if j >= 0 and runs[j][0] <= leaf < runs[j][1]:
-            lo, _, r = runs[j]
-            out.extend((pos + q, x, f) for q, x, f in self.resolve(r.slice(leaf - lo, leaf - lo + 1), own))
-        elif own:
+        if self.node(i):
+            los, runs = self._res[i]
+            j = bisect.bisect_right(los, leaf) - 1
+            if j >= 0 and leaf < runs[j][1]:
+                lo, _, x, f = runs[j]
+                if own or f:
+                    out.append((pos, x.slice(leaf - lo, leaf - lo + 1), f))
+                return
+        if own:
             out.append((pos, Affine(s, i, leaf, 1), False))
 
 
@@ -787,11 +839,6 @@ def _bits(t: Type, lo: int, hi: int) -> int:
     return out
 
 
-def _minus(a: Intervals, b: list[tuple[int, int]]) -> Intervals:
-    n = max((hi for _, hi in a), default=0)
-    return isect(a, tuple(complement(norm((max(lo, 0), min(hi, n)) for lo, hi in b), n)))
-
-
 def _segments(L: int, spans: list[tuple[int, int, tuple]]) -> Iterable[tuple[int, int, frozenset]]:
     """`[0, L)` cut into maximal runs over which the set of tags of the spans covering a leaf is the same."""
     ev: list[tuple[int, int, tuple]] = []
@@ -874,7 +921,8 @@ def census(program: Any, ends: list[int] | None = None, digest: str | None = Non
         spans[j].extend((lo, hi, (2, 0)) for lo, hi in norm(ivs))
     al = _Aliases(an, root.body)
     for j in range(len(nodes) - 1, I - 1, -1):  # a leaf a node passes through is its producer's value: its readers read that
-        runs = [(lo + q, lo + q + x.count, x) for lo, _hi, s in al.node(j) for q, x, _ in al.resolve(s, True)]
+        runs = [(lo, hi, x) for lo, hi, x, _ in al.resolved(j)[1]] if al.node(j) else []
+        al.release(j)  # only later nodes name j, and they are done
         if an.repeats(nodes[j].fn):  # and a leaf naming the gate an earlier one names is that one
             passed = norm((lo, hi) for lo, hi, _ in runs)
             first: dict[int, int] = {}
@@ -883,16 +931,27 @@ def census(program: Any, ends: list[int] | None = None, digest: str | None = Non
                     g = first.setdefault(resolve(program.circuit.root_scope, ("n", j, t)), t)
                     if g != t:
                         runs.append((t, t + 1, Affine("n", j, g, 1)))
+            runs.sort(key=lambda x: x[0])
         if not runs:
             continue
+        los = [lo for lo, _, _ in runs]
         kept, moved = [], []
-        for a, b, tag in spans[j]:
-            for lo, hi, x in runs:
-                if lo < b and hi > a:
-                    m = _Marks("n")
-                    m.walk(x.slice(max(a, lo) - lo, min(b, hi) - lo), m.direct)
-                    moved.extend((p, u, v, tag) for p, ivs in m.direct.items() for u, v in norm(ivs))
-            kept.extend((u + a, v + a, tag) for u, v in _minus(((0, b - a),), [(lo - a, hi - a) for lo, hi, _ in runs]))
+        for a, b, tag in spans[j]:  # the runs are disjoint and sorted: those a span meets are consecutive
+            i = bisect.bisect_right(los, a) - 1
+            if i < 0 or runs[i][1] <= a:
+                i += 1
+            m = _Marks("n")
+            cur = a
+            while i < len(runs) and runs[i][0] < b:
+                lo, hi, x = runs[i]
+                if lo > cur:
+                    kept.append((cur, lo, tag))
+                m.walk(x.slice(max(a, lo) - lo, min(b, hi) - lo), m.direct)
+                cur = min(hi, b)
+                i += 1
+            if cur < b:
+                kept.append((cur, b, tag))
+            moved.extend((p, u, v, tag) for p, ivs in m.direct.items() for u, v in norm(ivs))
         spans[j] = kept + [(lo, hi, (3, 0)) for lo, hi, _ in runs]
         for p, u, v, tag in moved:  # an earlier node's, or this one's own first naming of a gate
             spans[p].append((u, v, tag))
