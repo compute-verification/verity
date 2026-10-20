@@ -434,7 +434,7 @@ called PRESERVED without a remote; nothing in the store is ever overwritten.
   lists the `repo` replica when the file still hashes to its id.
 - With `--on`, the flags travel to the machine, which runs the same code in
   the shipped source tree; a `git archive` has no `.git`, so the control side
-  sends the commit/tree it knew as `--source-identity`. The machine publishes
+  sends the commit it shipped (clean) as `--source-identity`. The machine publishes
   to its own `<root>/store`; `research data pull --from MACHINE RUN --project P`
   copies the attempt and its outputs (sha256-verified) into the local store.
 - `research data lookup --tool T [--param k=v]... [--condition k=v]...

@@ -853,6 +853,9 @@ def _prepare_store(ns: argparse.Namespace, a: argparse.Namespace, command: list[
     capture = Path(tempfile.mkdtemp(prefix=f"research-{run_id}-")) / E.DIRTY_CAPTURE   # the run dir is made after this returns
     try:
         hint = json.loads(ns.source_identity) if ns.source_identity else None
+        shipped = getattr(a, "tree_sha", None)
+        if hint and shipped and hint.get("commit") != shipped:   # a launcher that read its checkout before shipping: only the sha is known
+            hint = {"commit": shipped}
         conds = E.conditions(run_dir=run_dir, project=ns.project, campaign=ns.campaign, exclusive=bool(ns.exclusive_lock), source_root=source_root,
                              source_hint=hint, dirty_capture=capture)
         if tool is not None:
@@ -966,15 +969,6 @@ def _publish_attempt(run_dir: Path, prep: dict, *, run_record: bool = False) -> 
     else:
         print(f"research: attempt not published: {out.get('error')}  (store_publish_error.json in the run dir; `research data attempt publish` retries)",
               file=sys.stderr)
-
-
-def _source_identity_hint(git_dir: Path) -> dict | None:
-    from . import env as E
-
-    src = E.source_conditions(git_dir)
-    if not src.get("source.commit"):
-        return None
-    return {"commit": src["source.commit"], "tree": src["source.tree"], "dirty": src["source.dirty"], "dirty_digest": src["source.dirty_digest"]}
 
 
 GPU_WAIT_MIN = 120
@@ -1162,10 +1156,6 @@ def _run_remote(ns: argparse.Namespace, run_id: str, run_dir: Path, harness_opts
         harness_args += ["--scratch", s]
     if ns.campaign:
         harness_args += ["--campaign", ns.campaign]
-    if ns.source:
-        hint = _source_identity_hint(Path(ns.source).expanduser())   # a shipped `git archive` has no .git: the machine gets what git knew here
-        if hint:
-            harness_args += ["--source-identity", json.dumps(hint, sort_keys=True)]
     custody = ns.custody_r2 is not False
     if not custody:
         print(f"research run --on {ns.on}: --no-custody-r2: this run's records stay on the machine until `research fetch --all {run_id}`",
