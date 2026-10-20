@@ -56,6 +56,7 @@ exports = ["tools/research/src/research/__init__.py", "tools/research/src/resear
            "tools/research/src/research/quick_tier.py", "tools/research/src/research/record.py",
            "tools/research/src/research/remote.py", "tools/research/src/research/result.py", "tools/research/src/research/runs.py",
            "tools/research/src/research/secret_hint.py", "tools/research/src/research/timefmt.py",
+           "tools/research/src/research/waitcap.py",
            "tools/research/src/research/pods/__init__.py", "tools/research/src/research/pods/registry.py",
            "tools/research/src/research/pods/runpod.py",
            "tools/research/src/research/store/__init__.py", "tools/research/src/research/store/attempt.py",

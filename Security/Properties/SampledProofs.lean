@@ -124,9 +124,9 @@ def ValuesAre (es : Array Json) (mine : Array Registered.Entry) : Prop :=
   (namesOf es).size = es.size ∧ (namesOf es).toList.eraseDups.length = es.size ∧
   (namesOf es).toList.eraseDups.length = mine.size ∧ ∀ s ∈ (namesOf es).toList.eraseDups, ∃ m ∈ mine, m.value = s
 
-/-- One registered value's entry against the verifier's own (`want`) and the roots the log holds: a 128-digit hex root,
-the verifier's `leaves`, `words` and domain, its width (`word_bits` left out for 16 bits, else written and not 16), and
-the root that value was first registered under in the log, when the log registered it. -/
+/-- One registered value's entry against the verifier's own (`want`) and the roots it is held to (`held`): a 128-digit hex
+root, the verifier's `leaves`, `words` and domain, its width (`word_bits` left out for 16 bits, else written and not 16),
+and the first root `held` names for that value, when it names one. -/
 def EntryIs (e : Json) (want : Registered.Entry) (held : Array (String × String)) : Prop :=
   (∃ s, getD e "root" = .str s ∧ s.length = 128 ∧ isHex s = true) ∧
   int? (getD e "leaves") = some (want.leaves : Int) ∧ int? (getD e "words") = some (want.words : Int) ∧
@@ -136,17 +136,36 @@ def EntryIs (e : Json) (want : Registered.Entry) (held : Array (String × String
     | some j => int? j = some (want.wordBits : Int) ∧ (want.wordBits : Int) ≠ Registered.WORD_BITS) ∧
   ∀ x ∈ held.find? (·.1 == want.value), jeq (getD e "root") (.str x.2)
 
+/-- The roots a registered value's entry is held to: none for a value the verifier fills itself (`supplied`), whose root
+is the one it recomputes (`SuppliedIs`), and `held` for every other. -/
+def heldFor (supplied : Array (String × Supplied.Rows)) (held : Array (String × String)) (value : String) :
+    Array (String × String) :=
+  if supplied.any (·.1 == value) then #[] else held
+
+/-- R7-supplied: each value the verifier fills itself is one of its own entries (`mine`), and the record's entry for it
+(the last naming it) has the root `rootOf` recomputes for it from its rows, which must compute. -/
+def SuppliedIs (es : Array Json) (mine : Array Registered.Entry) (supplied : Array (String × Supplied.Rows))
+    (rootOf : String → Supplied.Rows → Registered.Entry → Flock.V String) : Prop :=
+  ∀ x ∈ supplied, ∃ want, mine.find? (·.value == x.1) = some want ∧
+    ∀ e, es.reverse.find? (fun e => jeq (getD e "value") (.str x.1)) = some e →
+      ∃ r, rootOf x.1 x.2 want = .ok r ∧ jeq (getD e "root") (.str r)
+
 /-- R7, for a v2 record (`Registration.checkRegistered`): the verifier derives its own entries for the values it expects
 registered (`Registered.entries`); the record's `registered` is a list of entries, each exactly `{value, root, leaves,
-words, domain}` with `word_bits` beside them or not; its values are exactly the verifier's (`ValuesAre`); and each of the
-verifier's values has its entry (the last naming it, as Python's dict reads it) as derived and held (`EntryIs`). -/
+words, domain}` with `word_bits` beside them or not; its values are exactly the verifier's (`ValuesAre`); each of the
+verifier's values has its entry (the last naming it, as Python's dict reads it) as derived and held (`EntryIs`), a value
+it doesn't fill held to the root it pinned before the record, else to the log's, and one it fills to neither
+(`heldFor`); and each value it fills has the root it recomputes from the record and the log (`SuppliedIs`,
+`Supplied.root`). -/
 def R7 (rec : Json) (v : Registration.Verifier) : Prop :=
   ∃ mine es, Registered.entries v.program.desc v.params v.registered = .ok mine ∧ getD rec "registered" = .arr es ∧
     (∀ e ∈ es, keys? e = some Registered.ENTRY_KEYS ∨
       keys? e = some (sortStrings (Registered.ENTRY_KEYS.push Registered.WIDTH_KEY))) ∧
     ValuesAre es mine ∧
-    ∀ want ∈ mine, ∀ e, es.reverse.find? (fun e => jeq (getD e "value") (.str want.value)) = some e →
-      EntryIs e want (Registration.heldRoots v.log)
+    (∀ want ∈ mine, ∀ e, es.reverse.find? (fun e => jeq (getD e "value") (.str want.value)) = some e →
+      EntryIs e want (heldFor v.supplied (v.pinned ++ Registration.heldRoots v.log) want.value)) ∧
+    SuppliedIs es mine v.supplied
+      (Supplied.root rec v.log v.params (Flock.hexOf v.program.desc.sha512) (v.supplied.map (·.1)))
 
 /-- The registration keeps R1–R7 against the verifier's own copies, with `law` the agreed law as derived; R7 when the
 verifier expects values registered. -/
