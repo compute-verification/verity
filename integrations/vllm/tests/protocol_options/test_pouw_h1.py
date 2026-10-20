@@ -30,6 +30,7 @@ from verity_vllm.engine import hooks  # noqa: E402
 from verity_vllm.engine import int8_exact as E  # noqa: E402
 from verity_vllm.protocol_options import pouw  # noqa: E402
 from verity_vllm.protocol_options import pouw_h1 as PH  # noqa: E402
+from verity_vllm.protocol_options import pouw_h1_requests as RQ  # noqa: E402
 
 K = 64
 ROW = K * PH.I8_BITS
@@ -283,7 +284,9 @@ H1 = {"coins": None, "rows": 64, "steps": 3}
 
 
 class Runner:
-    """A stand-in for vLLM's model runner: ``execute_model`` gets the step's scheduler output."""
+    """A stand-in for vLLM's Model Runner V2: ``execute_model`` gets the step's scheduler output; one row a decode."""
+
+    decode_query_len = 1
 
     def __init__(self):
         self.steps = 0
@@ -292,11 +295,13 @@ class Runner:
         self.steps += 1
 
 
-def _so(*new, tokens=1):
-    """A scheduler output admitting requests ``new``, each (prompt token ids, cap)."""
-    reqs = [SimpleNamespace(req_id=str(i), prompt_token_ids=p, sampling_params=SimpleNamespace(max_tokens=c))
-            for i, (p, c) in enumerate(new)]
-    return SimpleNamespace(scheduled_new_reqs=reqs, total_num_scheduled_tokens=tokens)
+def _so(*new, running=None, tokens=None):
+    """A scheduler output admitting requests ``new``, each (req_id, prompt token ids, cap) scheduled whole, after the
+    ``running`` requests' {req_id: rows}, in the scheduler's order (running, then new)."""
+    reqs = [SimpleNamespace(req_id=i, prompt_token_ids=p, sampling_params=SimpleNamespace(max_tokens=c)) for i, p, c in new]
+    scheduled = dict(running or {}) | {i: len(p or ()) for i, p, _c in new}
+    total = sum(scheduled.values()) if tokens is None else tokens
+    return SimpleNamespace(scheduled_new_reqs=reqs, num_scheduled_tokens=scheduled, total_num_scheduled_tokens=total)
 
 
 def _rounds(n=3, seed=0):
@@ -330,6 +335,8 @@ def test_h1_is_admitted_beside_sampled_proofs_and_executes_nowhere():
     assert any("'runner' and 'rounds' are H1's" in r for r in PO.refusals(other))
     with pytest.raises(ValueError, match="'rounds' is the window's round coins"):
         pouw.Settings.of({"rounds": object()})
+    with pytest.raises(ValueError, match="loaded Model Runner V2"):
+        pouw.Settings.of({"runner": SimpleNamespace(execute_model=lambda so: None)})
 
 
 def test_the_option_serves_the_arms_y_and_records_each_call(tmp_path):
@@ -342,8 +349,9 @@ def test_the_option_serves_the_arms_y_and_records_each_call(tmp_path):
     comp = PO.install(model, ctx)
     try:
         g = torch.Generator().manual_seed(9)
-        steps = [(_so(([5, 6], 4)), ((1, model.layers[0]), (5, model.layers[1]))),
-                 (_so(([7], 2), ([8, 9, 10], 3)), ((33, model.layers[0]), (2, model.layers[1])))]
+        steps = [(_so(("a", [5], 4)), ((1, model.layers[0]), (5, model.layers[1]))),
+                 (_so(("b", [7], 2), ("c", list(range(8, 39)), 3), running={"a": 1}),
+                  ((33, model.layers[0]), (2, model.layers[1])))]
         for so, step in steps:
             runner.execute_model(so)
             for m, layer in step:
@@ -351,7 +359,8 @@ def test_the_option_serves_the_arms_y_and_records_each_call(tmp_path):
                 y = layer.quant_method.apply(layer, x)
                 assert torch.equal(y.view(torch.int16), E.plain_linear(x, layer.weight, layer.weight_scale).view(torch.int16))
         run = pouw.h1_run(_entry())
-        assert runner.steps == 2 and [(e.index, e.round) for e in run.requests] == [(0, 0), (1, 1), (2, 1)]
+        assert runner.steps == 2 and [(e.index, e.round, e.slot) for e in run.requests] == [(0, 0, 0), (1, 1, 1), (2, 1, 2)]
+        assert run.owners[1] == [0, 1] + [2] * 31
         assert [(c.step, c.layer, c.m, c.base) for c in run.calls] == [(0, 0, 1, 0), (0, 1, 5, 2), (1, 0, 33, 6), (1, 1, 2, 8)]
         assert [layer.quant_method.calls for layer in model.layers] == [2, 2]
         index, xq, _sa, z = run.retained[-1]
@@ -364,11 +373,15 @@ def test_the_option_serves_the_arms_y_and_records_each_call(tmp_path):
     commitment = comp.installed[0].commitment()
     assert commitment["calls"] == 6 and commitment["units"] == 18 and commitment["static"]
     assert [r["round"] for r in commitment["rounds"]] == [0, 1, 2]
-    assert PH.rounds_reason(commitment["rounds"], settings["pouw"]["rounds"].challenger.commitment) is None
-    assert all(PH.request_reason(commitment["rounds"], run.salt, 64, e, run.open_request(e.index)) is None for e in run.requests)
+    coins = settings["pouw"]["rounds"].challenger.commitment
+    assert RQ.rounds_reason(commitment["rounds"], coins) is None
+    assert all(RQ.request_reason(commitment["rounds"], coins, run.salt, 64, e, run.open_request(e.index),
+                                 run.open_first(e.index)) is None for e in run.requests)
+    assert _slot_reasons(run, coins) == []
     record = json.loads((tmp_path / PH.CALLS_FILE).read_text())
     assert [c["base"] for c in record["calls"]] == [0, 2, 6, 8, 12, 14]
     assert record["commitment"]["rounds"] == commitment["rounds"] and record["details"]["requests"]["per_round"] == [1, 2, 0]
+    assert record["details"]["requests"]["gaps"] == [] and record["details"]["requests"]["a_roots"].startswith("unbound")
 
 
 def test_a_layer_off_the_int8_arm_is_refused_at_install():
@@ -379,50 +392,128 @@ def test_a_layer_off_the_int8_arm_is_refused_at_install():
     assert hooks.live(_entry()) == ()
 
 
+KEY = bytes(range(32))
+
+
+def _opening(table, r, p):
+    o = table.open(p)
+    return RQ.RoundOpening(r, o.position, o.value, o.path)
+
+
+def _check_slots(log, coins, rows, manifest, open_slot, entries, open_entry, open_first, salt=SALT):
+    """`slot_reason` on every slot of every round in `log`, each named request's entry opened beside it: the refusals."""
+    out = []
+    for s in range(len(log)):
+        calls = [m for m in manifest if m["step"] == s]
+        for p in range(rows):
+            slot = open_slot(s, p)
+            owner = RQ.slot_owner(slot.value[:-RQ.HM96_SALT])
+            e = entries[owner] if owner is not None else None
+            why = RQ.slot_reason(log, coins, salt, rows, calls, slot, e, e and open_entry(e), e and open_first(e))
+            if why is not None:
+                out.append(why)
+    return out
+
+
+def _slot_reasons(run, coins):
+    return _check_slots(run.round_log, coins, run.rows, run.manifest(), run.open_slot, run.requests,
+                        lambda e: run.open_request(e.index), lambda e: run.open_first(e.index), salt=run.salt)
+
+
 def _admitted_run():
-    """A live window of 3 rounds: request 0 admitted in round 0, requests 1 and 2 in round 1, round 2 admitting none."""
+    """A live window of 3 rounds through `admitting`: request a admitted in round 0 (3 prompt rows), b and c in round 1
+    beside a's decode, and all three decoding in round 2."""
     rng = np.random.default_rng(12)
-    rounds = _rounds()
-    run = PH.H1Run("t", SALT, {0: "q", 1: "o"}, [(32, K), (40, K)], 32, 3, rounds=rounds, key=bytes(range(32)))
-    for new, m in (([([1, 2, 3], 4)], 3), ([([4], 2), ([5, 6], 3)], 3)):
-        run.admit(new)
+    rounds, runner = _rounds(), Runner()
+    run = PH.H1Run("t", SALT, {0: "q", 1: "o"}, [(32, K), (40, K)], 32, 3, rounds=rounds, key=KEY)
+    step = PH.admitting(run, runner.execute_model, runner)
+    for so in (_so(("a", [1, 2, 3], 4)), _so(("b", [4], 2), ("c", [5, 6], 3), running={"a": 1}),
+               _so(running={"a": 1, "b": 1, "c": 1})):
+        step(so)
         assert run.round_log == [] or run.round_log[-1]["round"] == run.step
         for w, n in ((0, 32), (1, 40)):
-            run.record(w, *_tap(rng, m, n))
+            run.record(w, *_tap(rng, so.total_num_scheduled_tokens, n))
     run.close()
     return run, rounds
 
 
 def test_each_admitted_request_is_a_leaf_under_its_rounds_root_recorded_before_its_coin():
-    """Each request is admitted into the round of the step about to run; the round's root, over the step's calls and its T
-    request leaves, is recorded before its coin opens, and each entry opens under its own round's root."""
+    """Each request is admitted into the round of the step about to run, at its first row in that step's batch order
+    (Model Runner V2's: decodes, then prefills by rows); the round's root, over the step's calls, its T request leaves and
+    its T slot leaves, is recorded before its coin opens; each entry opens under its own round's root at a slot naming
+    it, and every slot of every step names the request its row is."""
     run, rounds = _admitted_run()
-    assert [(e.index, e.round, e.max_tokens, e.prompt) for e in run.requests] == [(0, 0, 4, (1, 2, 3)), (1, 1, 2, (4,)),
-                                                                                 (2, 1, 3, (5, 6))]
+    coins = rounds.challenger.commitment
+    assert [(e.index, e.round, e.slot, e.max_tokens, e.prompt) for e in run.requests] == [
+        (0, 0, 0, 4, (1, 2, 3)), (1, 1, 1, 2, (4,)), (2, 1, 2, 3, (5, 6))]
+    assert run.owners == {0: [0, 0, 0], 1: [0, 1, 2, 2], 2: [0, 1, 2]} and run.request_gaps() == []
     assert [r["round"] for r in run.round_log] == [0, 1, 2] and run.details["requests"]["per_round"] == [1, 2, 0]
     assert [ev["event"] for ev in rounds.log] == ["root", "release"] * 3
     roots = [r["root"] for r in run.round_log]
     assert [ev["root"] for ev in rounds.log[::2]] == [ev["after"] for ev in rounds.log[1::2]] == roots
     for row, r in zip(run.round_log, range(3)):
-        table = PH.request_table(SALT, r, 32, run.admitted.get(r, []), bytes(range(32)))
-        calls = PH.step_digest(SALT, r, [m for m in run.manifest() if m["step"] == r])
-        assert row["requests"] == table.commitment.root.hex() and row["calls"] == calls.hex()
-        assert row["root"] == PH.round_root(SALT, r, calls, table.commitment.root).hex()
+        table = RQ.request_table(SALT, r, 32, run.admitted.get(r, []), KEY)
+        slots = RQ.slot_table(SALT, r, 32, run.owners[r], KEY)
+        calls = RQ.step_digest(SALT, r, [m for m in run.manifest() if m["step"] == r])
+        assert (row["requests"], row["slots"], row["calls"]) == (table.commitment.root.hex(), slots.commitment.root.hex(),
+                                                                 calls.hex())
+        assert row["root"] == RQ.round_root(SALT, r, calls, table.commitment.root, slots.commitment.root).hex()
     for e in run.requests:
-        assert PH.request_reason(run.round_log, SALT, 32, e, run.open_request(e.index)) is None
-    assert PH.rounds_reason(run.round_log, rounds.challenger.commitment) is None
+        assert RQ.request_reason(run.round_log, coins, SALT, 32, e, run.open_request(e.index), run.open_first(e.index)) is None
+    assert _slot_reasons(run, coins) == []
+    assert RQ.rounds_reason(run.round_log, coins) is None
+
+
+def _deferred(run, name=True):
+    """A prover that serves each request where the engine schedules it and commits its entry one round late, at its slot
+    there, consistently: every table, root and live coin of its log in order. With `name`, each slot names the request
+    its row is; without, a row of a request whose entry isn't committed yet names none."""
+    late = [dataclasses.replace(e, round=e.round + 1, slot=run.owners[e.round + 1].index(e.index)) for e in run.requests]
+    owners = {s: [o if name or late[o].round <= s else None for o in run.owners[s]] for s in run.owners}
+    rounds, manifest, log, tables, slots = _rounds(seed=1), run.manifest(), [], {}, {}
+    for r in range(run.steps):
+        tables[r] = RQ.request_table(SALT, r, 32, [e for e in late if e.round == r], KEY)
+        slots[r] = RQ.slot_table(SALT, r, 32, owners[r], KEY)
+        calls = RQ.step_digest(SALT, r, [m for m in manifest if m["step"] == r])
+        root = RQ.round_root(SALT, r, calls, tables[r].commitment.root, slots[r].commitment.root)
+        log.append({"round": r, "root": root.hex(), "calls": calls.hex(), "requests": tables[r].commitment.root.hex(),
+                    "slots": slots[r].commitment.root.hex(), "coin": rounds.record(root).to_json()})
+    return (log, rounds.challenger.commitment, late,
+            lambda e: _opening(tables[e.round], e.round, [x for x in late if x.round == e.round].index(e)),
+            lambda s, p: _opening(slots[s], s, p), lambda e: _opening(slots[e.round], e.round, e.slot))
+
+
+def test_a_prover_that_defers_every_entry_a_round_is_refused_at_the_rows_it_served_first():
+    """Review item 1 on #2916: an entry's round was only the prover's claim, so a prover committing every entry a round
+    late, its roots and coins in order, passed. Each deferred entry still opens under its round's root at a slot naming
+    it, but the slot table binds each served row of step s to its request: a row served before the entry's round is
+    refused, and so is a served row that names no request."""
+    run, _rounds_ = _admitted_run()
+    log, coins, late, open_entry, open_slot, open_first = _deferred(run)
+    assert RQ.rounds_reason(log, coins) is None
+    assert all(RQ.request_reason(log, coins, SALT, 32, e, open_entry(e), open_first(e)) is None for e in late)
+    why = _check_slots(log, coins, 32, run.manifest(), open_slot, late, open_entry, open_first)
+    assert why == [f"request {i} is served at slot {p} of step {s}, before round {s + 1}, the round its entry is under"
+                   for i, s, p in ((0, 0, 0), (0, 0, 1), (0, 0, 2), (1, 1, 1), (2, 1, 2), (2, 1, 3))]
+    log, coins, late, open_entry, open_slot, open_first = _deferred(run, name=False)
+    assert all(RQ.request_reason(log, coins, SALT, 32, e, open_entry(e), open_first(e)) is None for e in late)
+    why = _check_slots(log, coins, 32, run.manifest(), open_slot, late, open_entry, open_first)
+    unnamed = "is a served row and names no admitted request: a request served without an entry"
+    assert why == [f"slot {p} of step 0 {unnamed}" for p in range(3)] + [f"slot {p} of step 1 {unnamed}" for p in (1, 2, 3)]
 
 
 def test_a_request_entry_under_the_wrong_round_or_under_none_is_refused():
     """The check refuses, by name: round 0's entry opened under round 1's root, or with round 1's leaf; an entry the prover
     commits into a later round's table than the one that admitted it; an entry opened under a round the log doesn't have,
-    or under no table at all; a round root that isn't over its parts; and a round whose coin opened before its root."""
+    or under no table at all; a first slot other than the entry's; a round root that isn't over its parts; and a round
+    whose coin isn't the challenger's, or opened before its root."""
     run, rounds = _admitted_run()
+    coins = rounds.challenger.commitment
     log, e0, e1 = run.round_log, run.requests[0], run.requests[1]
     o0, o1 = run.open_request(0), run.open_request(1)
 
-    def why(entry, opening, log=log):
-        return PH.request_reason(log, SALT, 32, entry, opening)
+    def why(entry, opening, log=log, first=None):
+        return RQ.request_reason(log, coins, SALT, 32, entry, opening, first or run.open_first(entry.index))
 
     wrong = "request 0 was admitted in round 0, and its entry is opened under round 1's root"
     assert why(e0, dataclasses.replace(o0, round=1)) == wrong and why(e0, o1) == wrong
@@ -432,47 +523,116 @@ def test_a_request_entry_under_the_wrong_round_or_under_none_is_refused():
         "request 0: the round log has no round 1, so its entry is under no round root"
     assert why(e0, dataclasses.replace(o0, value=o1.value)) == "request 0: the leaf opened under round 0 is not its entry"
     late = dataclasses.replace(e0, round=1)
-    table = PH.request_table(SALT, 1, 32, [late, *run.admitted[1]], bytes(range(32)))
-    moved = [log[0], {**log[1], "requests": table.commitment.root.hex(),
-                      "root": PH.round_root(SALT, 1, bytes.fromhex(log[1]["calls"]), table.commitment.root).hex()}, log[2]]
-    o = table.open(0)
-    assert why(late, PH.RequestOpening(1, o.position, o.value, o.path), log=moved) == \
-        "round 1's coin was not opened after its root, which holds request 0's entry"
-    assert why(e0, PH.RequestOpening(1, o.position, o.value, o.path), log=moved) == wrong
-    forged = PH.RequestEntry(3, 2, 1, (9,))
-    stray = PH.request_table(SALT, 2, 32, [forged], b"\1" * 32).open(0)
-    assert why(forged, PH.RequestOpening(2, 0, stray.value, stray.path)) == \
+    table = RQ.request_table(SALT, 1, 32, [late, *run.admitted[1]], KEY)
+    root = RQ.round_root(SALT, 1, bytes.fromhex(log[1]["calls"]), table.commitment.root, bytes.fromhex(log[1]["slots"]))
+    moved = [log[0], {**log[1], "requests": table.commitment.root.hex(), "root": root.hex()}, log[2]]
+    assert why(late, _opening(table, 1, 0), log=moved, first=run.open_slot(1, 0)) == \
+        "request 0: round 1's coin: coin was not opened after what the verifier recorded"
+    assert why(e0, _opening(table, 1, 0), log=moved) == wrong
+    forged = RQ.RequestEntry(3, 2, 0, 1, (9,))
+    stray = RQ.request_table(SALT, 2, 32, [forged], b"\1" * 32).open(0)
+    assert why(forged, RQ.RoundOpening(2, 0, stray.value, stray.path), first=run.open_slot(2, 0)) == \
         "request 3's entry doesn't open under round 2's request table"
+    assert why(e1, o1, first=run.open_slot(1, 0)) == "request 1's first slot is slot 1 of step 1, and slot 0 of step 1 is opened"
     bent = [{**log[0], "calls": log[1]["calls"]}, *log[1:]]
-    assert why(e0, o0, log=bent) == "round 0's root is not over its calls and its request table"
+    assert why(e0, o0, log=bent) == "request 0: round 0's root is not over its calls, its request table and its slot table"
     coinless = [{**log[0], "coin": None}, *log[1:]]
-    assert why(e0, o0, log=coinless) == "round 0 has no live coin, so nothing shows request 0's entry committed before one"
+    assert why(e0, o0, log=coinless) == "request 0: round 0 has no live coin, so nothing shows its root committed before one"
     early = [{**log[0], "coin": {**log[0]["coin"], "after": "00" * 64}}, *log[1:]]
-    assert why(e0, o0, log=early) == "round 0's coin was not opened after its root, which holds request 0's entry"
-    assert PH.rounds_reason(early, rounds.challenger.commitment) == \
-        f"{Wd.ROUND} coin 0: coin was not opened after what the verifier recorded"
-    assert PH.rounds_reason(log[1:], rounds.challenger.commitment) == "the round log is not rounds 0, 1, ... in order"
+    assert why(e0, o0, log=early) == "request 0: round 0's coin: coin was not opened after what the verifier recorded"
+    foreign = [{**log[0], "coin": _rounds(seed=7).record(bytes.fromhex(log[0]["root"])).to_json()}, *log[1:]]
+    assert why(e0, o0, log=foreign) == "request 0: round 0's coin: coin does not open against the epoch's coin commitment"
+    assert RQ.rounds_reason(early, coins) == f"{Wd.ROUND} coin 0: coin was not opened after what the verifier recorded"
+    assert RQ.rounds_reason(log[1:], coins) == "the round log is not rounds 0, 1, ... in order"
     assert why(e1, o1) is None
 
 
+def test_a_request_resumed_after_a_preemption_keeps_its_one_entry():
+    """Review item 2 on #2916: Model Runner V2 puts a request resumed after a preemption back in ``scheduled_new_reqs``
+    (vLLM d9105ea8, scheduler.py:1277-1279). Keyed by req_id, it keeps its one entry and is counted readmitted, and its
+    recomputed rows name that entry."""
+    rng = np.random.default_rng(14)
+    rounds, runner = _rounds(), Runner()
+    run = PH.H1Run("t", SALT, {0: "q"}, [(32, K)], 32, 3, rounds=rounds, key=KEY)
+    step = PH.admitting(run, runner.execute_model, runner)
+    for so in (_so(("a", [1, 2], 4), ("b", [3], 4)), _so(running={"a": 1}), _so(("b", [3, 9], 4), running={"a": 1})):
+        step(so)
+        run.record(0, *_tap(rng, so.total_num_scheduled_tokens, 32))
+    run.close()
+    assert [(e.index, e.round, e.slot, e.prompt) for e in run.requests] == [(0, 0, 1, (1, 2)), (1, 0, 0, (3,))]
+    assert run.readmitted == [{"round": 2, "index": 1}] and run.owners == {0: [1, 0, 0], 1: [0], 2: [0, 1, 1]}
+    assert run.details["requests"]["readmitted"] == 1 and run.request_gaps() == [] and run.refused_requests == []
+    assert _slot_reasons(run, rounds.challenger.commitment) == []
+
+
+def test_a_request_served_without_an_entry_is_a_gap_its_rows_are_refused_and_the_window_credits_nothing():
+    """Review item 3 on #2916: every request the step schedules must have an entry. Prompt embeddings, a pooling request
+    and a request scheduled without being admitted (one running before the install) get none: each one's rows are a gap,
+    the window credits nothing (test_credit_gate has a credited call refused for it), and a slot of theirs is refused. A
+    step whose served rows aren't its batch's is a gap too."""
+    rng = np.random.default_rng(15)
+    rounds, runner = _rounds(2), Runner()
+    run = PH.H1Run("t", SALT, {0: "q"}, [(32, K)], 32, 2, rounds=rounds, key=KEY)
+    step = PH.admitting(run, runner.execute_model, runner)
+    so = _so(("a", [1], 2), running={"e": 3, "p": 1, "x": 1})
+    so.scheduled_new_reqs += [SimpleNamespace(req_id="e", prompt_token_ids=None, prompt_embeds=object(),
+                                              sampling_params=SimpleNamespace(max_tokens=2)),
+                              SimpleNamespace(req_id="p", prompt_token_ids=[4], sampling_params=None, pooling_params=object())]
+    step(so)
+    run.record(0, *_tap(rng, 6, 32))
+    step(_so(running={"a": 1}))
+    run.record(0, *_tap(rng, 2, 32))
+    run.close()
+    assert [(e.index, e.slot) for e in run.requests] == [(0, 2)] and run.owners[0] == [None, None, 0, None, None, None]
+    assert run.refused_requests == [{"round": 0, "reason": "no prompt token ids or no token cap"}] * 2
+    gaps = ["step 0: 1 row of a request with no entry", "step 0: 1 row of a request with no entry",
+            "step 0: 3 rows of a request with no entry",
+            "step 1: 2 rows served and 1 in the step's batch, so the slot table can't name each served row's request"]
+    assert run.request_gaps() == gaps and run.details["requests"]["gaps"] == gaps and run.credit()["requests"] == gaps
+    why = _slot_reasons(run, rounds.challenger.commitment)
+    assert why[:5] == [f"slot {p} of step 0 is a served row and names no admitted request: a request served without an "
+                       "entry" for p in (0, 1, 3, 4, 5)]
+    assert why[5:] == ["slot 1 of step 1 is a served row and names no admitted request: a request served without an entry"]
+
+
 def test_the_engines_admissions_go_to_the_next_steps_round_and_past_the_window_are_refused():
-    """`admitting` hands the scheduler's new requests to the run before the step's forward, a dummy run or an empty step
-    none; a request admitted past the window's S steps, or with no prompt, gets no entry and is named."""
+    """`admitting` hands the scheduler's new requests and batch order to the run before the step's forward, a dummy run or
+    an empty step none; a request admitted past the window's S steps, or with no prompt, gets no entry and is named; an
+    admission after the window closes is refused."""
     rng = np.random.default_rng(13)
     run = PH.H1Run("t", SALT, {0: "q"}, [(32, K)], 32, 2, rounds=_rounds(2), key=bytes(32))
-    seen = []
-    step = PH.admitting(run, lambda so, *a, **kw: seen.append(so))
-    step(_so(([1], 1)), None, True)
-    step(_so(([2], 1)), dummy_run=True)
-    step(_so(([3], 1), tokens=0))
+    seen, runner = [], Runner()
+    step = PH.admitting(run, lambda so, *a, **kw: seen.append(so), runner)
+    step(_so(("p", [1], 1)), None, True)
+    step(_so(("q", [2], 1)), dummy_run=True)
+    step(_so(("r", [3], 1), tokens=0))
     assert run.requests == [] and len(seen) == 3
-    step(_so(([4, 5], 2), ([], 2)))
+    step(_so(("s", [4, 5], 2), ("t", [], 2)))
     run.record(0, *_tap(rng, 2, 32))
-    step(_so(([6], 1)))
-    run.record(0, *_tap(rng, 1, 32))
-    step(_so(([7], 1)))
+    step(_so(("u", [6], 1), running={"s": 1}))
+    run.record(0, *_tap(rng, 2, 32))
+    step(_so(("v", [7], 1), running={"s": 1}))
     run.close()
-    assert [(e.prompt, e.round) for e in run.requests] == [((4, 5), 0), ((6,), 1)]
+    assert [(e.prompt, e.round, e.slot) for e in run.requests] == [((4, 5), 0, 0), ((6,), 1, 1)]
     assert run.refused_requests == [{"round": 0, "reason": "no prompt token ids or no token cap"},
                                     {"round": 2, "reason": "admitted for step 2, past the window's 2 steps"}]
-    assert run.details["requests"] == {"admitted": 2, "refused": run.refused_requests, "per_round": [1, 1], "coins": "live"}
+    assert {k: v for k, v in run.details["requests"].items() if k != "a_roots"} == {
+        "admitted": 2, "refused": run.refused_requests, "per_round": [1, 1], "readmitted": 0,
+        "gaps": ["step 2: 1 row of a request with no entry"], "coins": "live"}
+    with pytest.raises(RuntimeError, match="an admission after the window closed"):
+        step(_so(("w", [8], 1)))
+
+
+def test_the_batch_order_is_model_runner_v2s():
+    """`batch_order` lays a step's requests out as Model Runner V2's `sort_batch_req_ids` does at d9105ea8: verification
+    rows first, then decodes, then the rest by rows, ties in scheduler order; a runner module's own sort is used when it
+    has one."""
+    so = SimpleNamespace(num_scheduled_tokens={"p": 5, "d": 1, "v": 3, "x": 2, "e": 1},
+                         scheduled_spec_decode_tokens={"v": [7, 8]})
+    assert RQ.batch_order(Runner(), so) == [("v", 3), ("d", 1), ("e", 1), ("x", 2), ("p", 5)]
+    own = type("ModelRunner", (), {"__module__": __name__, "decode_query_len": 1})()
+    globals()["sort_batch_req_ids"] = lambda tokens, drafts, q: sorted(tokens)
+    try:
+        assert [r for r, _n in RQ.batch_order(own, so)] == ["d", "e", "p", "v", "x"]
+    finally:
+        del globals()["sort_batch_req_ids"]

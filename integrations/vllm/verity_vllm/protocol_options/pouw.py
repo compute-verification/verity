@@ -149,10 +149,11 @@ class Settings:
     #: and S, the steps of the install's window, public parameters that fix every call's rows and positions
     rows: int | None = None
     steps: int | None = None
-    #: H1's admissions and rounds (`pouw_h1.H1Run.admit`): the engine's model runner, whose ``execute_model`` gets each
-    #: step's scheduler output, the requests it admits among it; and the window's round coins, a `LiveRecord` over a live
-    #: challenger's round family (`verity.core.protocols.pouw.window.live_challenger`), which opens round s's coin after
-    #: round s's root
+    #: H1's admissions and rounds (`pouw_h1.H1Run.admit`): the engine's model runner (Model Runner V2, whose
+    #: ``decode_query_len`` orders a step's rows, `pouw_h1_requests.batch_order`), whose ``execute_model`` gets each step's
+    #: scheduler output, the requests it admits and schedules among it; and the window's round coins, a `LiveRecord` over a
+    #: live challenger's round family (`verity.core.protocols.pouw.window.live_challenger`), which opens round s's coin
+    #: after round s's root
     runner: Any = None
     rounds: Any = None
 
@@ -197,8 +198,10 @@ class Settings:
         if steps is not None and (not isinstance(steps, int) or isinstance(steps, bool) or steps < 1):
             raise ValueError("pouw setting 'steps' is a positive integer (H1's S: the window's engine steps)")
         runner, rounds = raw.get("runner"), raw.get("rounds")
-        if runner is not None and not callable(getattr(runner, "execute_model", None)):
-            raise ValueError("pouw setting 'runner' is the engine's model runner, with its execute_model")
+        if runner is not None and not (callable(getattr(runner, "execute_model", None))
+                                       and isinstance(getattr(runner, "decode_query_len", None), int)):
+            raise ValueError("pouw setting 'runner' is the engine's loaded Model Runner V2 (VLLM_USE_V2_MODEL_RUNNER=1): its "
+                             "execute_model, and its decode_query_len, which orders a step's rows (pouw_h1_requests.batch_order)")
         if rounds is not None:
             from verity.core.protocols.pouw import window as Wd
             commitment = getattr(getattr(rounds, "challenger", None), "commitment", None)
@@ -733,9 +736,9 @@ def _install_h1(entry: str, settings: Settings, target: Target) -> Option:
     """H1 on the int8_exact arm: the epoch's salt from the challenger's salt coin after the weights' root, as every scheme's,
     and each layer's ``observe`` the arm's own with its call recorded and handed to the run's listeners (`pouw_h1.observer`),
     in the static layout of the settings' ``rows`` and ``steps``; each layer's ``apply`` runs under the credit gate's trace
-    (`pouw_h1.traced`), and the ``runner``'s ``execute_model`` hands each step's admitted requests to the run
-    (`pouw_h1.admitting`), each entry under its round's root before the ``rounds`` coin. The served values are the arm's,
-    untouched."""
+    (`pouw_h1.traced`), and the ``runner``'s ``execute_model`` hands each step's admitted requests and its batch order to
+    the run (`pouw_h1.admitting`), each entry and each served row's request under its round's root before the ``rounds``
+    coin. The served values are the arm's, untouched."""
     layers = PH.layers(target.model, linear_types())
     committed = target.weight_commitments.get(entry) or commit_weights(PH.SCHEME, target)
     roots = {int(w): bytes.fromhex(r) for w, r in committed["weight_roots"].items()}
@@ -755,7 +758,7 @@ def _install_h1(entry: str, settings: Settings, target: Target) -> Option:
     _H1_RUNS[entry] = run
     h = target.hooks(entry)
     if settings.runner is not None:
-        h.wrap(settings.runner, "execute_model", lambda orig: PH.admitting(run, orig))
+        h.wrap(settings.runner, "execute_model", lambda orig: PH.admitting(run, orig, settings.runner))
     for w, layer in enumerate(layers):
         h.wrap(layer.quant_method, "observe", lambda orig, w=w: PH.observer(run, w, orig))
         h.wrap(layer.quant_method, "apply", lambda orig, w=w: PH.traced(run, w, orig))

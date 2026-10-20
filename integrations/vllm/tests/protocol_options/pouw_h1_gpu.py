@@ -18,8 +18,8 @@ One process writes `<out>/pouw_h1_gpu.json` and the option's record (`<out>/pouw
             (the Commit's ``Int8RowQuant_v1`` /0 and /1), the layer's own int8 weight and scales; what it returns is in the
             manifest; steps begin at linear 0, and every step's calls run over the same layers in order.
   requests  every request the scheduler admits is an entry under the root of its step's round, recorded before the round's
-            live coin (`h1_settings`: the engine's runner and the window's round coins; `requests_check`), one entry a
-            served request.
+            live coin, and every served row's slot names its request (`h1_settings`: the engine's runner and the window's
+            round coins; `requests_check`), one entry a served request and no served row without one.
 
 ``--workload fill`` serves `pouw_h1.FILL` instead (VLLM-52, PERIOD-PATH's ask 1): 64 one-token prompts (`fill_prompts`) under
 VLLM-31's static schedule (``ignore_eos``, every request to its cap, host prefix cache off), with ``max_num_seqs`` 64 and T = 64,
@@ -67,13 +67,30 @@ def h1_settings(eng: Any, rows: int, steps: int, **kw: Any) -> dict[str, Any]:
 
 
 def requests_check(h1: Any, requests: int) -> dict[str, Any]:
-    """The window's admitted requests: their count against the ones served, and each entry opened under the root of the
-    round that admitted it, recorded before that round's coin (`pouw_h1.request_reason`, `rounds_reason`)."""
-    from verity_vllm.protocol_options import pouw_h1 as PH
-    why = [w for e in h1.requests if (w := PH.request_reason(h1.round_log, h1.salt, h1.rows, e, h1.open_request(e.index)))]
-    rounds = PH.rounds_reason(h1.round_log, h1.rounds.challenger.commitment)
-    out = {**h1.details["requests"], "served": requests, "entries_refused": why[:20], "rounds": rounds}
-    out["ok"] = bool(out["admitted"] == requests and not out["refused"] and not why and rounds is None)
+    """The window's admitted requests: their count against the ones served, each entry opened under the root of the round
+    that admitted it, recorded before that round's coin, at a first slot naming it (`pouw_h1_requests.request_reason`), every slot
+    of every step naming the request its row is, under a round no later than its step (`slot_reason`), the log against the
+    coins (`rounds_reason`), and no served row without an entry (``gaps``)."""
+    from verity_vllm.protocol_options import pouw_h1_requests as RQ
+    coins = h1.rounds.challenger.commitment
+    why = [w for e in h1.requests if (w := RQ.request_reason(h1.round_log, coins, h1.salt, h1.rows, e, h1.open_request(e.index),
+                                                             h1.open_first(e.index)))]
+    manifest, slots = h1.manifest(), []
+    for s in range(len(h1.round_log)):
+        calls = [m for m in manifest if m["step"] == s]
+        for p in range(h1.rows):
+            slot = h1.open_slot(s, p)
+            owner = RQ.slot_owner(slot.value[:-RQ.HM96_SALT])
+            e = h1.requests[owner] if owner is not None else None
+            w = RQ.slot_reason(h1.round_log, coins, h1.salt, h1.rows, calls, slot, e, e and h1.open_request(e.index),
+                               e and h1.open_first(e.index))
+            if w is not None:
+                slots.append(w)
+    rounds = RQ.rounds_reason(h1.round_log, coins)
+    out = {**h1.details["requests"], "served": requests, "entries_refused": why[:20], "slots_refused": slots[:20],
+           "rounds": rounds}
+    out["ok"] = bool(out["admitted"] == requests and not out["refused"] and not out["gaps"] and not why and not slots
+                     and rounds is None)
     return out
 
 
