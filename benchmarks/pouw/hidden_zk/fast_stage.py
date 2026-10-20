@@ -7,10 +7,10 @@ the circuit back.
     - the unit circuit's ANDs keep their operand forms as tuples, not frozensets, and drop them once the unit is laid out:
       nothing reads them after `ir_lower.layout`
     - the unit's netlist (`ir_lower.netlist`'s text) is written once, to a file under ``scratch``, hashed as it is written:
-      `compose` built it three times as one string, twice for `Lowering.sha256` (the expanded text, then the LEAVES and
-      CUT lines) and once expanded. `compose` gets in its place a string of as many newlines, and the circuit text it
-      returns stands for that text with the file in the newlines' place: its digests (`circuit.digest`,
-      `circuit.class_digest`) and circuit.txt are streamed from the parts, both digests in the pass that writes the file
+      `compose` builds it as one string, which `Lowering.sha256_of` hashes with the LEAVES and CUT lines. `compose` gets
+      in its place a string of as many newlines (and `sha256_of` the file's hash), and the circuit text it returns stands
+      for that text with the file in the newlines' place: its digests (`circuit.digest`, `circuit.class_digest`) and
+      circuit.txt are streamed from the parts, both digests in the pass that writes the file
     - any other text's SHA-512 / SHA-256 goes in pieces of 64 Mi characters, each computed once
     - the unit's layout (`ands_layout`) sorts each form's columns in one call, and `ir_lower.evaluate_layout` XORs a row's
       columns with `functools.reduce`: the same rows and values
@@ -165,6 +165,11 @@ def _lowering_sha256(self) -> str:
         h.update(tail.encode())
         d = self.__dict__["_sha256"] = h.hexdigest()
     return d
+
+
+def _lowering_sha256_of(self, expanded: str) -> str:
+    """`ir_lower.Lowering.sha256_of`, whose ``expanded`` is the newlines `compose` got in the unit netlist's place."""
+    return self.sha256
 
 
 def ands_layout(C, in_names, out_names, in_split=None, out_split=None):
@@ -344,7 +349,7 @@ def install(scratch: Path) -> None:
     CS.unit_lowering, IL.lower, IL.layout, FC._expanded, FC.compose = unit_lowering_, lower_, layout_, expanded_, compose_
     Path.write_text = write_text_
     IL.digest, FC.digest, FC.class_digest = sha256, digest, class_digest
-    IL.Lowering.sha256 = property(_lowering_sha256)
+    IL.Lowering.sha256, IL.Lowering.sha256_of = property(_lowering_sha256), _lowering_sha256_of
     IL.evaluate_layout = evaluate_layout
 
 

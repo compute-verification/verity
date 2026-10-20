@@ -51,8 +51,10 @@ def _wait(run_dir: Path) -> dict:
 
 
 def test_two_concurrent_runs_of_one_commit_do_not_share_a_cwd(tmp_path, monkeypatch):
-    # inside a recorded run the outer runner's own prefix would win (`_runner_env` only sets a default)
+    # inside a recorded run the outer runner's own prefix would win (`_runner_env` only sets a default); and with
+    # PYTHONDONTWRITEBYTECODE set no bytecode is written to <root>/cache/pycache, which the test asserts (INF-116)
     monkeypatch.delenv("PYTHONPYCACHEPREFIX", raising=False)
+    monkeypatch.delenv("PYTHONDONTWRITEBYTECODE", raising=False)
     root = tmp_path / "root"
     src = _tree(root)
     before = sorted(p.relative_to(src).as_posix() for p in src.rglob("*"))
