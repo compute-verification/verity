@@ -8,8 +8,7 @@ statement binding, the zerocheck, the lincheck and the ring switch absorb, and h
 (`repFrames_fields`). The zerocheck's `finalC` is in no frame. With `rep_frames_bind` (`RepFramesBind`), two proofs that
 `verifyRep` accepts as one rep on one retained stream agree there (`rep_bind_fields`).
 
-Ligerito's fields, from equal `ligFrames`, are open: the openings, `initialCap`, and the count showing that the frames
-pick every message, nonce and out-of-domain value `ProofSizes` allows.
+Ligerito's fields from equal `ligFrames` are `RepFramesLig`'s; the openings and `initialCap` are in no frame.
 -/
 
 namespace FlockSoundness.Discharge.Exec
