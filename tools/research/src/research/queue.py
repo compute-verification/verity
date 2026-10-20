@@ -629,7 +629,8 @@ class Queue:
         in `first` (`--first`) that are ready go below all of them, in the order given, so the next train starts with them; but
         above the bottom `hold` members, which a running check covers."""
         ready = {n for n, e in entries.items() if e.state == "ready"}
-        kept = [m.pr for m in chain if m.pr in ready and self._same_or_fixed(m, entries) or self._frozen(m, entries)]
+        kept = [m.pr for m in chain
+                if m.pr in ready and self._same_or_fixed(m, entries) or self._frozen(m, entries) or self._pending(m, entries)]
         held: list[int] = []
         for m in chain[:self.hold]:
             if m.pr not in kept:
@@ -659,6 +660,16 @@ class Queue:
         about 100 PRs)."""
         new = entries[m.pr].pr.head
         return new == m.head or not _git(self.workdir, "merge-base", "--is-ancestor", m.head, new, check=False).returncode
+
+    def _pending(self, m: Member, entries: dict[int, Entry]) -> bool:
+        """Whether member ``m`` stays at its admitted head while its PR's new head, a descendant of it, waits for its ready mark:
+        then the mark swaps the head in place (`_same_or_fixed`) instead of the PR rejoining at the back (CI-119, 20 Oct: #2729,
+        at 92, was pushed one commit on, dropped while its preflight ran, and rejoined at 123).  Only while the admitted head is
+        still marked: an ejection withdraws that mark."""
+        e = entries.get(m.pr)
+        if e is None or e.pr.head == m.head or e.state != "waiting" or not e.why.startswith("not marked ready"):
+            return False
+        return bool(self.ready(m.pr, m.head)) and self._same_or_fixed(m, entries)
 
     def _frozen(self, m: Member, entries: dict[int, Entry]) -> bool:
         """Whether member ``m`` stays at its old head: `frozen` names it, its PR is still open, and neither ejected nor held."""
@@ -750,7 +761,7 @@ class Queue:
         entries = self.entries(prs, state)
         entries.update(waiting)
         order = self.order(chain, entries)
-        frozen = {m.pr: m.head for m in chain if self._frozen(m, entries)}
+        frozen = {m.pr: m.head for m in chain if self._frozen(m, entries) or self._pending(m, entries)}
         want = [(n, frozen.get(n, entries[n].pr.head)) for n in order]
         k = next((i for i, (m, w) in enumerate(zip(chain, want)) if (m.pr, m.head) != w), min(len(chain), len(want)))
         members = chain[:k]
