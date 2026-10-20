@@ -21,7 +21,9 @@ this order:
 | #2845 (`cursor/land-dsv4-aot-21f3`) | 67916f1be5 | the row switched to the AOT Build (`aot`: comparison r20261018-222738-a095, trace art:826e06ff60bf5ede2823cc3a859fb5f9e6c9b867ea0ffc47be17634f7362e5a4); `test_predict`'s mHC step pins read from `records.json`. One commit on dec1238773; merged clean |
 | `cursor/glm-v2-21f3` | 5a31cfd737 | V2PREP's runbook since the base: window B on a preemptible node, any vy-glm53-* GPU node |
 
-This tree's own commits change only `../glm_v2_tree/jobs/` and this directory. The jobs now read the row's model from its name
+This tree's own commits change `../glm_v2_tree/jobs/`, this directory, and `verity_vllm/pipeline/memory_map.py`'s
+`census_entry` (with its test), which is none of `build.py`'s construction sources, so no Program digest or artifact
+identity moves. The jobs now read the row's model from its name
 (`jobs/model.sh`: role, repo, revision, config, metadata snapshot, checkpoint paths, row dirs, tree, post-load tensors). GLM-5.3
 keeps every default it had, so V2PREP can merge them into `cursor/glm-v2-21f3` as they are:
 
@@ -34,6 +36,8 @@ keeps every default it had, so V2PREP can merge them into `cursor/glm-v2-21f3` a
 - `match_gpu.sh` refuses a post-load model's legs unless the row dir's Build records `POST_LOAD` on every rank (below).
 - `match_cpu.sh` hashes what the Match CPU phase writes into `match_cpu.sha256`, the list for the copy to window B's node.
 - `gpu_batch.sh` takes `MODEL=dsv4-pro`.
+- `model.sh`'s `DERIVE_GB` sets `BUILD_JOBS` from the run's `--mem-gb`, and its `CENSUS=skip` (`VERITY_BUILD_CENSUS`, read by
+  `census_entry`) leaves the request Build's census out (CPU gates, below).
 - `replay_publish.sh` refuses a non-GLM row: its conformance captures are GLM-5.3's.
 
 ## Not in v2
@@ -46,15 +50,19 @@ keeps every default it had, so V2PREP can merge them into `cursor/glm-v2-21f3` a
 
 The jobs are `../glm_v2_tree/jobs/`, with `REF` and `SW` defaulting to this tree and `/workspace/cp/circuits/dsv4-v2/rows`.
 
-A B1 request derive peaks at 161 GB (`research mem`'s GB, 10^9 B): about 47 GB when its descriptor is written, then the
-census the Build writes beside it (`pipeline.memory_map.census_entry`, which v1 predates) for over 35 min more.
-`row_records.derive_bytes` plans 13.5 GB for it, so `--build-jobs auto` starts all 8 ranks at once, and in r20261020-071632-1bcf
-cpu-3's cgroup OOM killer (its /user.slice caps at 497 GB) took five of them. So `model.sh` sets `DERIVE_GB=170` for this model,
-and every job that derives runs `BUILD_JOBS` = its `--mem-gb` over that: three at once in 510 GB, two in 340 (cpu-3 holds two).
+A B1 request derive takes 35 min and peaks at about 47 GB (`research mem`'s GB, 10^9 B) when its descriptor is written. The
+census the Build then writes beside it (`pipeline.memory_map.census_entry`, which v1 predates) is the Commit's opt-in memory
+map's and decides no Build. On this Program it ran past 50 min at 161 GB without finishing (GLM-5.3's takes 2 min), in
+`census.census`'s pass-through loop, which pairs each node's reader spans with its pass-through runs. In r20261020-071632-1bcf,
+`row_records.derive_bytes` planned 13.5 GB a derive, so `--build-jobs auto` started all 8 ranks at once and cpu-3's cgroup OOM
+killer (its /user.slice caps at 497 GB) took five of them. So `model.sh` sets `CENSUS=skip` (`VERITY_BUILD_CENSUS`: the Build
+writes no census, its `result.json`'s `census` says it skipped, and `records.json` has no census digest) and `DERIVE_GB=60`:
+every job that derives runs `BUILD_JOBS` = its `--mem-gb` over 60. The GPU leg's Commit runs without `MEMORY_MAP`; one with it
+computes the census then (`memory_map.of_build`).
 
 1. `trace_compare.sh` (`SKIP_AOT1=1`): the v2 trace, `predict compare` against it, and the AOT Build against it, on
-   vy-nebius-cpu-3 after `stage_cpu.sh`. r20261020-071632-1bcf is the first run, whose finished derives seed the rerun
-   (`SEED_FROM`).
+   vy-nebius-cpu-3 after `stage_cpu.sh`. r20261020-071632-1bcf is the first run (cancelled in its request derives' census),
+   whose 8 step derives seed the rerun (`SEED_FROM`).
 2. `repin.sh ROW RUN vy-nebius-cpu-3`, committed as "re-pin ROW": the step, request and workload Programs of all 8 ranks from
    the v2 trace, `records.json`'s `aot` switched to its comparison and trace art.
 3. `build_record.sh` at that commit (`AOT_TRACE=<the trace's row dir>` on the same node): the Build of record, with its

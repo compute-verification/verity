@@ -28,6 +28,7 @@ from __future__ import annotations
 
 import gzip
 import json
+import os
 import re
 import time
 import traceback
@@ -140,7 +141,11 @@ def cache(d: str | Path, program: Any, digest: str) -> dict[str, Any]:
 
 def census_entry(d: str | Path, program: Any, digest: str) -> dict[str, Any]:
     """`cache`'s result for the Build's `result.json`, or its error in its place: the census serves the Commit's opt-in
-    memory map, so it decides no Build."""
+    memory map, so it decides no Build.  ``VERITY_BUILD_CENSUS=skip`` writes none, for a Program whose census outlasts its
+    derive (DeepSeek-V4-Pro's B1 request Program: past 50 min at 161 GB, against GLM-5.3's 2 min); `of_build` computes it if a
+    Commit's map asks."""
+    if os.environ.get("VERITY_BUILD_CENSUS") == "skip":
+        return {"skipped": "VERITY_BUILD_CENSUS=skip"}
     try:
         return cache(d, program, digest)
     except Exception as e:  # noqa: BLE001

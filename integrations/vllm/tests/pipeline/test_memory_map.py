@@ -179,6 +179,14 @@ def test_the_census_and_kv_rows_are_computed_once_per_program(tmp_path):
     assert "FileNotFoundError" in PMM.census_entry(tmp_path / "gone", program, digest)["error"], "a census failure decides no Build"
 
 
+def test_a_census_the_build_skips_is_computed_when_a_commits_map_asks(tmp_path, monkeypatch):
+    program, lp = _build_dir(tmp_path, 4, 5)
+    d, digest = tmp_path / "build_request_LP4_T5", lp["instances"]["digest"]
+    monkeypatch.setenv("VERITY_BUILD_CENSUS", "skip")
+    assert PMM.census_entry(d, program, digest) == {"skipped": "VERITY_BUILD_CENSUS=skip"} and not (d / PMM.CENSUS).exists()
+    assert PMM.of_build(d, digest) == MM.rows(program) and (d / PMM.CENSUS).exists()
+
+
 def test_a_requests_cache_dir_leaves_the_build_dir_untouched(tmp_path):
     program, lp = _build_dir(tmp_path, 4, 5)
     d, digest, side = tmp_path / "build_request_LP4_T5", lp["instances"]["digest"], tmp_path / "side"

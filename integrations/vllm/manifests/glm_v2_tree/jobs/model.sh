@@ -3,23 +3,26 @@
 # local_path, which the GPU legs serve), LOCAL_CK (a node's verified local copy), WHAT (for keep reasons), V2 (the name of the
 # model's v2 dirs under /workspace/cp/circuits), POST_LOAD (the Parameters its loader's post-load hook makes, which every rank's
 # Build records and the capture registers: DeepSeek-V4's mHC broadcast), DERIVE_GB (a request derive's measured peak, where
-# `row_records.derive_bytes` plans too little) and the defaults of REF and SW (its v2 tree and row dirs).  `ckpt_bind` serves
+# `row_records.derive_bytes` plans too little), CENSUS (VERITY_BUILD_CENSUS) and the defaults of REF and SW (its v2 tree and
+# row dirs).  `ckpt_bind` serves
 # LOCAL_CK at FS_CK when it is verified; `stage_meta PY` puts the pin's non-shard files at SNAP from the hub, each checked against
 # checkpoints.json's sha256.
 case ${ROW:?ROW} in
   glm53__*) ROLE=GLM53 REPO=zai-org/GLM-5.3 REV=aca966e4e02791568aa6a4ced368624b3d897f42 WHAT=GLM-5.3
             FS_CK=/workspace/fs/glm53/$REV LOCAL_CK=/workspace/cp/glm53-ckpt/$REV
-            V2=glm-v2 REF=${REF:-cursor/glm-v2-21f3} POST_LOAD= DERIVE_GB= ;;
+            V2=glm-v2 REF=${REF:-cursor/glm-v2-21f3} POST_LOAD= DERIVE_GB= CENSUS= ;;
   dsv4-pro__*) ROLE=DSV4_PRO REPO=deepseek-ai/DeepSeek-V4-Pro REV=b5968e9190ef611bbf34a7229255be88a0e937c1 WHAT=DeepSeek-V4-Pro
             FS_CK=/workspace/fs/dsv4/$REV LOCAL_CK=/workspace/cp/dsv4-ckpt
-            V2=dsv4-v2 REF=${REF:-cursor/dsv4-v2-21f3} POST_LOAD=model.layers.0.hc_attn_fn_broadcast DERIVE_GB=170 ;;
+            V2=dsv4-v2 REF=${REF:-cursor/dsv4-v2-21f3} POST_LOAD=model.layers.0.hc_attn_fn_broadcast DERIVE_GB=60 CENSUS=skip ;;
   *) echo "row $ROW: no model for it in model.sh"; exit 2 ;;
 esac
 CONFIG=verity_vllm/engine/profiles/hf_configs/$ROLE.config.json SW=${SW:-/workspace/cp/circuits/$V2/rows}
 SNAP=/workspace/cp/circuits/hf/hub/models--${REPO/\//--}/snapshots/$REV
-# DeepSeek-V4-Pro's B1 request derive peaks at 161 GB with the census the Build writes beside it (`memory_map.census_entry`),
-# against `derive_bytes`' 13.5 GB, so `--build-jobs auto` ran 8 at once and the cgroup's OOM killer took five
-# (r20261020-071632-1bcf).  With DERIVE_GB, BUILD_JOBS (the env `--build-jobs` reads) is the run's --mem-gb over it.
+# DeepSeek-V4-Pro's B1 request derive peaks at 47 GB, then the census the Build writes beside it (`memory_map.census_entry`)
+# runs past 50 min at 161 GB, against `derive_bytes`' 13.5 GB: `--build-jobs auto` ran 8 at once and the cgroup's OOM killer
+# took five (r20261020-071632-1bcf).  The census decides no Build, so CENSUS=skip leaves it out.  With DERIVE_GB, BUILD_JOBS
+# (the env `--build-jobs` reads) is the run's --mem-gb over it.
+[ -z "$CENSUS" ] || export VERITY_BUILD_CENSUS=$CENSUS
 if [ -n "$DERIVE_GB" ] && [ -z "${BUILD_JOBS:-}" ]; then
   _mem=${RESEARCH_RUN_MEM_GB:-0}
   BUILD_JOBS=$(( ${_mem%.*} / DERIVE_GB )) && [ "$BUILD_JOBS" -ge 1 ] || BUILD_JOBS=1
