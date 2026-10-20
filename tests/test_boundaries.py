@@ -102,6 +102,8 @@ ML_IMPORTS_CORE = {
                                              "core imports them from there, and this entry goes",
     "ml/flock/pod/rec_inner.py": "stages the inner statement over sampled proofs' `one_stage.partition`, as V*'s builders "
                                   "do (the rec_* entry), and moves with them in the follow-up to T2",
+    "ml/flock/pod/rec_reprice.py": "builds the inner statement's population program and partition with sampled proofs' "
+                                    "`one_stage.partition`, as rec_inner does, and moves with it in the follow-up to T2",
     "ml/flock/python/verity_flock/inner_registered.py": "registers a staged inner statement's description rows with sampled "
                                                         "proofs' `one_stage.registered`, as V*'s builders do (the rec_* "
                                                         "entry), and moves with them in the follow-up to T2",

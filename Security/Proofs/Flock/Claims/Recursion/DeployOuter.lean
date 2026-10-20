@@ -309,7 +309,7 @@ noncomputable def deployZkRec (rel : Readable.Parsed → Readable.Relation) :
   waits _ := Claims.Flock.Numbers.waits
   cap _ := Claims.Flock.Numbers.cap
   Tape := FlockComplete.TapeZk
-  P := FlockComplete.ZkTables.honestP
+  P := FlockComplete.ZkTables.honestPR
   δc := FlockComplete.ZkTables.δc
 
 /-- **`ScopeMatches` for the outer verifier** (C's `scopeMatches` at its parser and scope check). -/

@@ -30,7 +30,13 @@ negatives.
   host job on vy-nebius-1, or a `--preemptible` one on vy-nebius-2). A6's W8A8 coordinates at K = 4096 and 14336 are
   staged in statements of 1 to 512 units, and sessions of 1 to 512 drawn units are proved by `flock-circuit prove --zk
   --gpu`, with the firewall's send check on and off. The Lean verifier checks them, and the job fits the per-session,
-  per-statement and per-unit costs with their standard errors, writing `costfit` observations.
+  per-statement and per-unit costs with their standard errors, writing `costfit` observations. `ZK_DRAWS=c` proves every
+  staged unit: the cost of c drawn units in one statement, up to a table's 2^(35 − k_log) (2048 at K = 4096). Each point
+  takes its own GPU lease, and a node without CUDA 13.3 gets its packages unpacked under `FLOCK_WORK`.
+- `forged_proofs.sh`: the fixture of C-Flock's forged-proof negatives (`verity/ml/flock/tests/test_lean_forged_proofs.py`),
+  on hidden_zk's cached builds (`forged_proofs.py`). A small A8 unit (`LlBf16DotprodDot_v1` at K = 128) staged bound to its partition,
+  with one honest drawn `--zk` session and two whose committed output word is wrong, proved with the prover's self-check
+  skipped (`FC_ZK_SELF_CHECK=skip`), so the Lean verifier gets a well-formed proof of a false statement.
 - `a11.sh`: run A11's entry point, on A6's builds. A11 is GLM-5.3 TP8 B1's served step, rank 0: `a11_kinds.py` censuses
   the request Program's root Calls by Definition kind and tries one unit of each through M0; `a11_slice.py` cuts the
   capture's values and the checkpoint's tensors for a few layers off the serving node; `a11.py` stages each lowering kind's

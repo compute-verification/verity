@@ -16,8 +16,11 @@ rep's opened rows, row by row:
   accepted table's, level-0 openings are its reps' `zkRepRowsOf` rows (`zk_rep_entries`, `zk_table_opens₀Z`);
   `FlockSoundness.Discharge.ZkExec.zk_rep_rowsL`, `FlockSoundness.Discharge.ZkExec.zk_table_rowsLZ`: their level-`ℓ`
   openings past level 0 are their reps' `zkLevelRowsOf` rows (`zk_rep_reqsL`).
+* `FlockSoundness.Discharge.ZkExec.zk_table_capsZ`: an accepted table's reps record their proof files' recursive caps
+  (`zk_rep_reqs`).
 * `OpensRows`, `runsAtZCJ_live_rows`, `runsAtZCJH_live_rows`: at public and hidden outputs, each accepted output's
-  openings at every level are the reps' rows (`runsAtZCJ_live_entries`, `runsAtZCJH_live_entries` at `OpensRows`).
+  openings at every level are the reps' rows, and its recorded caps their proofs' (`runsAtZCJ_live_entries`,
+  `runsAtZCJH_live_entries` at `OpensRows`).
 * `decodesTableR_zkTabs`, `decodesTableHR_zkTabs`, `decodesTableR_deploy`: the deployed `opnD` and `decD` at `zkTabs`
   are right at `OpensRows` at one live outcome `o₀`, on `o₀` where `verify --zk` accepts what `wrS` writes for it, at
   public and hidden outputs and at a masked statement in scope (`decodesTableW_zkTabs`, `decodesTableHW_zkTabs`,
@@ -373,6 +376,53 @@ theorem zk_table_padsZ {n mPts : ℕ} {Reg : Type} (T : Finset (Fin n) → Reg �
     rw [hq₁ jj hjj, htab.hpos, htab.hN]
     rfl
 
+/-- **At `verify --zk`'s acceptance of a table, its reps record their proof files' recursive caps**: each rep's
+pending's caps are its decoded proof's recursive caps, one per level past level 0, through `capDig`
+(`zk_rep_reqs`). -/
+theorem zk_table_capsZ {n mPts : ℕ} {Reg : Type} (T : Finset (Fin n) → Reg → ZkSession.TabZK 𝔽 mPts)
+    (S : Finset (Fin n)) (R : Reg) (pts : Fin 2 → Fin mPts → 𝔽) (spec : SessionSpec) (st : Setup)
+    (sch : Flock.Schedule) (tPad : ℕ) (sess : Session) (i : ℕ) (b₀ b₁ c : ByteArray) (N : ℕ)
+    (hN : (Model.extraClaims (T S R).S (T S R).ptLocal mPts pts).length = N)
+    (hsch : Zk.schedule st.m = .ok (sch, tPad)) (hseam : ZkTabSeam (T S R) st sch tPad)
+    (hext : ExtraRealizes st (T S R).S sess.points (Model.extraClaims (T S R).S (T S R).ptLocal mPts pts))
+    (hwf : ∀ s ∈ sess.streams.toList, RoundsWF s.rounds)
+    (h0 : Zk.verifyRep spec st sch tPad sess i 0 b₀ = .ok c) (h1 : Zk.verifyRep spec st sch tPad sess i 1 b₁ = .ok c)
+    (s₀ s₁ : StreamRec) (zp₀ zp₁ : Zk.ZkProof)
+    (hs₀ : sess.streams.find? (fun x => x.name == toString spec.tables[i]! ++ toString "/rep" ++ toString 0) =
+      some s₀)
+    (hs₁ : sess.streams.find? (fun x => x.name == toString spec.tables[i]! ++ toString "/rep" ++ toString 1) =
+      some s₁)
+    (hd₀ : Zk.decode (shapeZKn st sch N) b₀ = .ok zp₀) (hd₁ : Zk.decode (shapeZKn st sch N) b₁ = .ok zp₁)
+    (pend : ZkLink.PendZ 𝔽 Dig (List UInt8) × ZkLink.PendZ 𝔽 Dig (List UInt8))
+    (hp₀ : Plays fOf (ZkLink.repZCAt execArith hs512 (T S R) pts 0) (repMsgsZ st sch (2 + N) tPad zp₀)
+      (s₀.rounds.toList.map (·.coins)) pend.1)
+    (hp₁ : Plays fOf (ZkLink.repZCAt execArith hs512 (T S R) pts 1) (repMsgsZ st sch (2 + N) tPad zp₁)
+      (s₁.rounds.toList.map (·.coins)) pend.2) :
+    pend.1.lig.caps = (List.range (sch.levels.size - 1)).map (fun j => capDig zp₀.proof.ligerito.recursiveCaps[j]!) ∧
+      pend.2.lig.caps =
+        (List.range (sch.levels.size - 1)).map (fun j => capDig zp₁.proof.ligerito.recursiveCaps[j]!) := by
+  obtain ⟨s₀', ex, zp₀', tr₀, hs₀', hx₀, hd₀', -, -, hrun₀, hk₀, -, -⟩ :=
+    zk_verifyRep_ok spec st sch tPad sess i 0 b₀ c h0
+  obtain ⟨s₁', ex₁, zp₁', tr₁, hs₁', hx₁, hd₁', -, -, hrun₁, hk₁, -, -⟩ :=
+    zk_verifyRep_ok spec st sch tPad sess i 1 b₁ c h1
+  obtain rfl : ex = ex₁ := Except.ok.inj (hx₀.symm.trans hx₁)
+  obtain ⟨hsz, hrel⟩ := hext ex hx₀
+  have hsh : shapeZK st sch ex = shapeZKn st sch N := by
+    unfold shapeZK shapeZKn; rw [hsz, hN]
+  obtain rfl : s₀' = s₀ := Option.some.inj (hs₀'.symm.trans hs₀)
+  obtain rfl : s₁' = s₁ := Option.some.inj (hs₁'.symm.trans hs₁)
+  rw [hsh] at hd₀' hd₁'
+  obtain rfl : zp₀' = zp₀ := Except.ok.inj (hd₀'.symm.trans hd₀)
+  obtain rfl : zp₁' = zp₁ := Except.ok.inj (hd₁'.symm.trans hd₁)
+  have hn : ex.size = N := hsz.trans hN
+  rw [← hn] at hp₀ hp₁
+  obtain ⟨q₀, hq₀, hc₀, -⟩ := zk_rep_reqs hs512 (T S R) pts 0 st sch tPad ex zp₀' s₀'.rounds _ tr₀ hsch hseam hsz
+    hrel (hwf s₀' (Array.mem_toList_iff.2 (Array.mem_of_find?_eq_some hs₀))) hrun₀ hk₀
+  obtain ⟨q₁, hq₁, hc₁, -⟩ := zk_rep_reqs hs512 (T S R) pts 1 st sch tPad ex zp₁' s₁'.rounds _ tr₁ hsch hseam hsz
+    hrel (hwf s₁' (Array.mem_toList_iff.2 (Array.mem_of_find?_eq_some hs₁))) hrun₁ hk₁
+  rw [plays_det hp₀ hq₀, plays_det hp₁ hq₁]
+  exact ⟨hc₀, hc₁⟩
+
 end FlockSoundness.Discharge.ZkExec
 
 namespace FlockSoundness.Discharge.Composed
@@ -387,8 +437,8 @@ variable {n mPts : ℕ} {Reg : Type}
 
 /-- **An output's openings are its reps' rows at table `j`**: `OpensEntries` with each row whole, at the setup at
 the draw `d`, table `j`'s `Zk.schedule` schedule and the session's two rep streams of table `j`, at `2·|regions|` extra
-claims on the streams' rounds and table `j`'s proof files; and each rep's pads are its proof file's, recorded at its
-stream's query words (`PadsRep`). -/
+claims on the streams' rounds and table `j`'s proof files; each rep's pads are its proof file's, recorded at its
+stream's query words (`PadsRep`); and each rep's recorded caps are its decoded proof file's recursive caps. -/
 def OpensRows (I : Inputs) (d : Lean.Json) (t : Exec.Transcript) (j : ℕ) (T : TabZK 𝔽 mPts)
     (out : OutZC 𝔽 Dig (List UInt8)) : Prop :=
   ∃ (spec : SessionSpec) (sts : Array Flock.Stmt) (sess : Session) (sch : Flock.Schedule) (tPad : ℕ)
@@ -413,7 +463,11 @@ def OpensRows (I : Inputs) (d : Lean.Json) (t : Exec.Transcript) (j : ℕ) (T : 
     PadsRep (Setup.ofCircuit sts[j]) sch (2 * sts[j].regions.size) s₀ t.proofs[2 * j]! (out.opens.inner 0)
       out.pend.1.qpos ∧
     PadsRep (Setup.ofCircuit sts[j]) sch (2 * sts[j].regions.size) s₁ t.proofs[2 * j + 1]! (out.opens.inner 1)
-      out.pend.2.qpos
+      out.pend.2.qpos ∧
+    ∀ r < 2, ∃ zp : Zk.ZkProof,
+      Zk.decode (shapeZKn (Setup.ofCircuit sts[j]) sch (2 * sts[j].regions.size)) t.proofs[2 * j + r]! = .ok zp ∧
+      (if r = 0 then out.pend.1 else out.pend.2).lig.caps =
+        (List.range (sch.levels.size - 1)).map (fun i => capDig zp.proof.ligerito.recursiveCaps[i]!)
 
 /-- **`runsZCJ_live` at the setup at each draw, with the rows**: `runsAtZCJ_live_entries` at `OpensRows`
 (`zk_table_rows₀Z`). -/
@@ -561,7 +615,17 @@ theorem runsAtZCJ_live_rows (I : Inputs) (_ht : I.tags.typed = false) (dj : Fins
         hf₀ hf₁ hdz₀ hdz₁ (p₀, p₁) _ hpl₀ hpl₁ ℓ h1).1.trans ?_,
       (zk_table_rowsLZ (fun (_ : Finset (Fin n)) (_ : Reg) => y.table) (L.draw ω) R o.pts spec
         (Setup.ofCircuit y.x.st) y.sch y.tPad sess j.val _ _ c _ rfl y.hz hseam hExt hwfA hv0 hv1 s₀ s₁ zp₀ zp₁
-        hf₀ hf₁ hdz₀ hdz₁ (p₀, p₁) _ hpl₀ hpl₁ ℓ h1).2.trans ?_⟩, hseam.hq, ?_, ?_⟩
+        hf₀ hf₁ hdz₀ hdz₁ (p₀, p₁) _ hpl₀ hpl₁ ℓ h1).2.trans ?_⟩, hseam.hq, ?_, ?_, ?_⟩
+    rotate_right
+    · have hcaps := zk_table_capsZ (fun (_ : Finset (Fin n)) (_ : Reg) => y.table) (L.draw ω) R o.pts spec
+        (Setup.ofCircuit y.x.st) y.sch y.tPad sess j.val _ _ c _ rfl y.hz hseam hExt hwfA hv0 hv1 s₀ s₁ zp₀ zp₁
+        hf₀ hf₁ hdz₀ hdz₁ (p₀, p₁) hpl₀ hpl₁
+      rw [hN, hyst] at hdz₀ hdz₁
+      intro r hr
+      rcases r with _ | _ | r
+      · exact ⟨zp₀, hdz₀, hcaps.1⟩
+      · exact ⟨zp₁, hdz₁, hcaps.2⟩
+      · omega
     all_goals rw [hN, hyst]
     exacts [(hpads _).1, (hpads _).2]
 
@@ -727,7 +791,17 @@ theorem runsAtZCJH_live_rows (I : Inputs) (ht : I.tags.typed = false) {c : Flock
         hf₀ hf₁ hdz₀ hdz₁ (p₀, p₁) _ hpl₀ hpl₁ ℓ h1).1.trans ?_,
       (zk_table_rowsLZ (fun (_ : Finset (Fin n)) (_ : Reg) => y.table) (L.draw ω) R o.pts spec
         (Setup.ofCircuit y.x.st) y.sch y.tPad sess j.val _ _ cap _ rfl y.hz hseam hExt hwfA hv0 hv1 s₀ s₁ zp₀ zp₁
-        hf₀ hf₁ hdz₀ hdz₁ (p₀, p₁) _ hpl₀ hpl₁ ℓ h1).2.trans ?_⟩, hseam.hq, ?_, ?_⟩
+        hf₀ hf₁ hdz₀ hdz₁ (p₀, p₁) _ hpl₀ hpl₁ ℓ h1).2.trans ?_⟩, hseam.hq, ?_, ?_, ?_⟩
+    rotate_right
+    · have hcaps := zk_table_capsZ (fun (_ : Finset (Fin n)) (_ : Reg) => y.table) (L.draw ω) R o.pts spec
+        (Setup.ofCircuit y.x.st) y.sch y.tPad sess j.val _ _ cap _ rfl y.hz hseam hExt hwfA hv0 hv1 s₀ s₁ zp₀ zp₁
+        hf₀ hf₁ hdz₀ hdz₁ (p₀, p₁) hpl₀ hpl₁
+      rw [hN, hyst] at hdz₀ hdz₁
+      intro r hr
+      rcases r with _ | _ | r
+      · exact ⟨zp₀, hdz₀, hcaps.1⟩
+      · exact ⟨zp₁, hdz₁, hcaps.2⟩
+      · omega
     all_goals rw [hN, hyst]
     exacts [(hpads _).1, (hpads _).2]
 

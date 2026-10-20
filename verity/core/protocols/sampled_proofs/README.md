@@ -81,8 +81,8 @@ SHA-256 leaves.
 - **The verifier of record.** `one_stage.verifier` runs the Lean port of the one-stage audit (the Lake package
   `verity/core/service/sampled_proofs`, its `sampled-proofs-verifier`) and the Python beside it on every check: R1-R7
   (`check`), `matches_public`, the challenger's draw (`select`), `check_draw`, `check_proved`, the whole audit record
-  (`audit_record`), and the service's public-items rule (`check_public`) and hold on an outcome's verdicts
-  (`check_verdicts`). Its one line
+  (`audit_record`), and the service's public-items rule (`check_public`), hold on an outcome's verdicts
+  (`check_verdicts`), stream rules (`stream`) and fleet rules (`fleet`). Its one line
   `RECORD_VERDICT = "lean"` names whose verdict is the record's (`"python"` switches back); both outcomes are recorded
   beside it (`verifiers`), and where they disagree the check is refused naming both. The service's `Stream` and
   `benchmarks/one_stage` call it. Python is held to the Lean by
@@ -99,7 +99,9 @@ SHA-256 leaves.
   root's input gates (drawn `all`: the input unit is always checked), each replay unit one proof unit, and the draw's
   checked proof units as `(slot, index)` in class, stratum and replay-unit order.
 - **The challenger** (`challenger`, Lean of record `SampledProofs/Challenger.lean`): every protocol's live coins, by
-  label and index, each opened once, after its root is recorded.
+  label and index, each opened once, after its root is recorded. Its commitment is signed on its host before any coin
+  opens; the verifier trusts only that record (`trusted_commitment`), not the prover's. `benchmarks/live_challenger`
+  serves it (`remote`) on the Lean's coins.
 - **The Python.** `verity.core.protocols.sampled_proofs.one_stage` is the one-stage audit's reference: `registration`,
   `draw` (the draw's checks, not a sampler), `partition`, `audit` and `verdict`. `consumers` reads its profile. `service` is the proof service over it, whose `Stream`
   draws from the challenger's own randomness as `coins.draw_first` does. `coins` is the verifier's randomness, and
@@ -140,7 +142,9 @@ from verity.core.protocols.sampled_proofs.costfit import fit
     `verifier.check_verdicts`).
   - `Stream(spec, unit, budget=, delta=, challenger=, rounds=1)` has the calls `register`, `select` (with a work
     sampling design's `closure=`), `session`, `deliver` and `outcome`, which
-    raise `Refused` (with its `Verdict`) or `Pending`.
+    raise `Refused` (with its `Verdict`) or `Pending`; `halted` is its halt's cause once its fleet halted it.
+  - `Fleet()` has `attach(stream, operator)`, before the stream's first registration; `halted` maps each halted
+    operator to its halt's cause.
   - `selection_law` is the sampling design a rule names over N units, and `select_draw` the draw object from the
     challenger's coins (or a sampler) under the expanded design, with a work draw's closure.
 - `registration`: `record` builds a `verity/registration/v1` record (v2 with registered values), `check` holds one to
@@ -160,8 +164,8 @@ from verity.core.protocols.sampled_proofs.costfit import fit
   (and `verifiers`: both verifiers' outcomes).
 - `hello`: `check_run`, the run's Hello and its one coin tree over `run_streams`.
 - `verifier`: the verifier of record: `check`, `matches_public`, `check_draw`, `check_proved`, `hello`, `audit_record`,
-  `check_public`, and `check_verdicts` (given the service's Python verdict),
-  by the Lean and the Python; `RECORD_VERDICT` names whose is the record's.
+  `check_public`, `check_verdicts` (given the service's Python verdict), `stream` and `fleet`, by the Lean and the
+  Python; `RECORD_VERDICT` names whose is the record's.
 - `consumers`: `exfiltration_bound`, `compute_bound` and `location_bits`, over any `IntegrityProfile`.
 - `coins`: `OwnRandomness`, the challenger's own randomness; `draw_first`, a one-stage sampling design's draw from it,
   with `closure_of` for a work design's closure.
@@ -383,12 +387,20 @@ Pinned by `tests/test_consumers.py` and `tests/fixtures/exfiltration_lean.json`,
   (`verity/ml/flock/verifier/PROTOCOL.md` §16.12).
 - **The salt and the registration deadline**: one salt an epoch, and a late registration ends the epoch. This is PoUW's
   `Pouw.AcceptsBy` (`Security/Definitions/Pouw/Game/Deadline.lean`).
+- **The stream's rules** (budget, open registrations, salt, deadlines, once-only steps), decided op by op by the verifier
+  of record (`verifier.stream`: `SampledProofs/Stream.lean` beside `service._step`) on the counts and entries the op
+  reads. A disagreement stops the stream.
+- **The fleet's halt (R5-all)** (`service.Fleet`): at the failure that brings any stream of an operator to its budget,
+  every stream of the operator halts, each outcome not yet final ends as `halted`, never `accept`, and nothing of the
+  operator registers again. Decided by the verifier of record (`verifier.fleet`: `SampledProofs/Fleet.lean` beside
+  `service._fleet_step`, and `Stream.lean`'s `halt`), whose properties are `Security/Properties/SampledProofs/Halt.lean`.
 - **No retries**, **the failure budget**, **the log's history** (a check reads a few records, with the whole log's
   verdict), **the records** (`verity/proof-service/stream/v0` and `outcome/v0`) and what a stream refuses until it is
   built.
 
 Each rule, its formats and its refusal codes are in `service`'s module docstring. Pinned by `tests/test_service.py`, the
-log's history by `tests/test_service_history.py`, and sessions by `tests/test_service_sessions.py`.
+log's history by `tests/test_service_history.py`, sessions by `tests/test_service_sessions.py`, the fleet's halt by
+`tests/test_service_fleet.py`, and the stream's and the fleet's rules by the difftest's `stream` and `fleet` pieces.
 
 ### The verifier's randomness
 

@@ -22,6 +22,8 @@ difftest against `one_stage`'s Python, beside the whole protocol (`sampled-proof
 * `check_public`: the proof service's public-items rule on a registration record (`Service.checkPublic`);
 * `check_verdicts`: the verdicts' share of a proof service outcome (`Service.checkVerdicts`);
 * `run`: the stream's run of one registration from its public check through its verdict (`Run.run`);
+* `stream`: the proof service stream's own rules, one op's decision on what they hold of the stream (`Stream.run`);
+* `fleet`: the fleet's rules over its streams' operators, one op's decision on what they hold of the fleet (`Fleet.run`);
 * `hello`: the run's Hello on its record, its coin tree at run scope (`Hello.check`).
 * `challenger_commitment`, `challenger_opening`, `challenger_reason`, `challenger_order`: the challenger's live coins
   (`Challenger`): a coin commitment and an opening as `from_json` reads them, `live_reason` and `order_reason`.
@@ -30,12 +32,15 @@ difftest against `one_stage`'s Python, beside the whole protocol (`sampled-proof
 
 `sampled-proofs-verifier` serves those the verifier of record runs (`verifier`): `registration`, `matches_public`,
 `select` (the draw of record: `Stream.select` hands it the bytes of the challenger's coins), `check_draw`,
-`check_proved`, `record`, `check_public`, `check_verdicts`, `run` (`Stream.outcome` holds its outcome to it) and `hello`.
+`check_proved`, `record`, `check_public`, `check_verdicts`, `run` (`Stream.outcome` holds its outcome to it), `hello`,
+`stream` (each of `service.Stream`'s ops) and `fleet` (each of `service.Fleet`'s).
 -/
 import SampledProofs.OneStage
 import SampledProofs.Slots
 import SampledProofs.Service
 import SampledProofs.Run
+import SampledProofs.Stream
+import SampledProofs.Fleet
 import SampledProofs.Hello
 import SampledProofs.ChallengerRecord
 
@@ -190,6 +195,21 @@ def bernoulliBound (j : Json) : V Json := do
   if δ.num == 0 || δ.den ≤ δ.num then throw "delta is not in (0, 1)"
   return Json.mkObj [("bound", Lean.toJson (Bound.bernoulliBound population p δ))]
 
+/-- `{"params", "state", "op"}` to `{"decision", "state"}`: the op's decision on the state the stream's rules hold of it
+(`Stream.run`), and the state after it as the text Python's `canonical_json` writes. -/
+def stream (j : Json) : V Json := do
+  if keys? j != some #["op", "params", "state"] then throw "exactly {params, state, op}"
+  let p ← Stream.Params.ofJson (getD j "params")
+  let (d, s) ← Stream.run p (← Stream.State.ofJson (getD j "state")) (getD j "op")
+  return Json.mkObj [("decision", d.toJson), ("state", Json.str (← PyJson.canonical s.toJson))]
+
+/-- `{"state", "op"}` to `{"decision", "state"}`: the op's decision on the state the fleet's rules hold of it
+(`Fleet.run`), and the state after it as the text Python's `canonical_json` writes. -/
+def fleet (j : Json) : V Json := do
+  if keys? j != some #["op", "state"] then throw "exactly {state, op}"
+  let (d, s) ← Fleet.run (← Fleet.State.ofJson (getD j "state")) (getD j "op")
+  return Json.mkObj [("decision", d.toJson), ("state", Json.str (← PyJson.canonical s.toJson))]
+
 /-- `{"verdicts": {name: {...}}}` to `{"verdict"}`. -/
 def verdict (j : Json) : V Json := do
   let .obj _ := getD j "verdicts" | throw "verdicts is not an object"
@@ -332,8 +352,9 @@ def table : List (String × (Json → V Json)) :=
    ("domain", domain), ("check_draw", checkDraw), ("draw", draw), ("select", select), ("slots", slots),
    ("check_proved", checkProved),
    ("bound", bound), ("bernoulli_bound", bernoulliBound),
-   ("verdict", verdict), ("matches_public", matchesPublic), ("session_registered", sessionRegistered), ("record", record),
-   ("check_public", checkPublic), ("check_verdicts", checkVerdicts), ("run", run), ("hello", Hello.check),
+   ("stream", stream), ("fleet", fleet), ("verdict", verdict), ("matches_public", matchesPublic),
+   ("session_registered", sessionRegistered), ("record", record), ("check_public", checkPublic),
+   ("check_verdicts", checkVerdicts), ("run", run), ("hello", Hello.check),
    ("challenger_commitment", Challenger.commitmentPiece),
    ("challenger_opening", Challenger.openingPiece), ("challenger_reason", Challenger.reasonPiece),
    ("challenger_order", Challenger.orderPiece), ("challenger_key", Challenger.keyPiece),
@@ -342,6 +363,6 @@ def table : List (String × (Json → V Json)) :=
 def verifier : List (String × (Json → V Json)) :=
   [("registration", registration), ("matches_public", matchesPublic), ("select", select), ("check_draw", checkDraw),
    ("check_proved", checkProved), ("record", record), ("check_public", checkPublic),
-   ("check_verdicts", checkVerdicts), ("run", run), ("hello", Hello.check)]
+   ("check_verdicts", checkVerdicts), ("run", run), ("hello", Hello.check), ("stream", stream), ("fleet", fleet)]
 
 end SampledProofs.Pieces
