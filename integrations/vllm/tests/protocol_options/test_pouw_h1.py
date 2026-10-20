@@ -337,7 +337,7 @@ def test_h1_is_admitted_beside_sampled_proofs_and_executes_nowhere():
     assert PO.refusals(capture) == ()
     short = PO.Context(stage="serve", enabled=(_entry(),), settings=_settings(rounds=_rounds(2)))
     assert any("2 unopened coins, fewer than the window's 3 rounds" in r for r in PO.refusals(short))
-    other = PO.Context(stage="serve", enabled=("pouw:ncp-v1",), settings={"pouw": {"coins": Challenger(0), "runner": Runner()}})
+    other = PO.Context(stage="serve", enabled=("pouw:ncp-v1",), settings={"pouw": {"coins": Challenger(0, CH.entropy(0)), "runner": Runner()}})
     assert any("'runner', 'rounds' and 'admission' are H1's" in r for r in PO.refusals(other))
     with pytest.raises(ValueError, match="'rounds' is the window's round coins"):
         pouw.Settings.of({"rounds": object()})
@@ -760,7 +760,7 @@ def test_the_challenger_setting_is_h1s_one_coin_source(tmp_path, monkeypatch):
 
     def refused(settings, stage="serve", entry=None):
         return PO.refusals(PO.Context(stage=stage, enabled=(entry or _entry(),), settings=settings))
-    assert any("from one source" in r for r in refused(_remote(coins=Challenger(0))))
+    assert any("from one source" in r for r in refused(_remote(coins=Challenger(0, CH.entropy(0)))))
     assert any("from one source" in r for r in refused(_remote(rounds=_rounds())))
     assert any("opens no session" in r for r in refused(_remote(), stage="capture"))
     assert any("'challenger' is eps1-sm120-h1fx1 and ncp-v2's" in r
