@@ -209,7 +209,9 @@ def _check_weights(workload: Workload, weight_roots: Mapping[int, bytes]) -> Non
 
 
 def salt_of(coins: CoinCommitment, coin: bytes, weights_root: bytes) -> bytes:
-    """The epoch's 32-byte salt from its opened salt coin."""
+    """The epoch's 32-byte salt from its opened salt coin.  A live window's salt coin opens after the window's open root
+    (`salt.window_open_root`), and its salt is still keyed by `weights_root`, the weights' root: the coin and `coins` are
+    its own session's."""
     return derive(coin, EPOCH_SALT_DOMAIN, {"epoch": coins.epoch, "coins": coins.root, "weights": weights_root}
                   ).stream("salt", 32)
 

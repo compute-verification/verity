@@ -38,10 +38,26 @@ the served window proves its drawn tiles in zero knowledge, and its verifier of 
 
 1. **Weights.** Each weight's rows are committed in a `verity.ml.commitments.merkle` tree bound to the weight id (owner −2);
    `weights_root` binds every weight root.
-2. **Salt.** The challenger opens the epoch's salt coin after the verifier recorded `weights_root` ("Epoch coins"); the
-   salt is `derive(coin, "verity/pouw/epoch-salt/v1", {"epoch": e, "coins": coins_root, "weights": weights_root})`,
-   32 bytes (`Epoch.start`). An epoch without coins (`Epoch.unverified`, benchmarks and replays of recorded runs) keeps
-   v1, `derive(seed, "verity/pouw/salt/v1", {"weights": weights_root})` over a label it is handed. A certified epoch
+2. **Salt.** The challenger opens the epoch's salt coin after the verifier recorded `weights_root` ("Epoch coins"), or
+   in a live window after the window's open root (below); the salt is
+   `derive(coin, "verity/pouw/epoch-salt/v1", {"epoch": e, "coins": coins_root, "weights": weights_root})`,
+   32 bytes (`Epoch.start`, `salt_of`). The weights' root is the same in every window of a model, so a salt coin opened
+   after it binds no window, and a rule built on it would let one challenger session serve every window. So a live
+   window's salt coin opens after its open root, `salt.window_open_root(weights_root, requests_root, S)` =
+   SHA-512(b"verity/pouw-window-open/v1" ‖ weights_root ‖ requests_root ‖ SHA-512(S)), every part 64 bytes: the
+   weights' root, the root of the window's round-0 request table, committed before the salt, and the SHA-512 of S's
+   ASCII, S the id the auditor's gate assigns when it reserves the window's session (1 to 64 of `[A-Za-z0-9._:-]`,
+   `salt.SESSION`), which the prover can't relabel. The gate opens the session on that root (`open --session S --root
+   R`), and its challenger opens the salt coin only after R (`serve.py --root`). The verifier recomputes R from the
+   window's record and the S of the session's signed reserve entry: `core_check.salt` (Lean `PouwCheck.saltCheck`)
+   refuses a session whose signed open root isn't that R (`salt`: another window's weights, requests or session, or
+   H1's salt opened after the weights' root), a log of the session that doesn't show R alone as what its salt coin
+   followed (`salt`), and a salt coin that isn't the epoch's `pouw/salt` coin 0 opened after R (`coin`). Each session
+   has its own R, and R fixes one window's weights and requests, so one session salts one window. Not yet: the gate's
+   reserve step and the reader of the ledger's reserve and open entries that hands `salt` the session's S and R are
+   infra's and proofs' (PRF-117), and vllm's served window doesn't call `salt` yet. An epoch without coins
+   (`Epoch.unverified`, benchmarks and replays of recorded runs) keeps v1,
+   `derive(seed, "verity/pouw/salt/v1", {"weights": weights_root})` over a label it is handed. A certified epoch
    (`Epoch.certified`, `salt.py`) is one PoUW window p of the network certifier's, its certifier windows p·k … p·k + k − 1
    (k the certifier's `pouw_window`; any other run of windows is refused), registered under a stream (its 64-byte
    digest) and a prover (its 64-byte registered id), and its salt is `pouw_salt(reveal, p, stream, prover)`, 64 bytes,
@@ -191,7 +207,8 @@ root    = MerkleTree over (value_salt, value_draw) at positions 0, 1, binding ta
 `verity.ml.randomness.frame`); every binding and root the protocol hashes itself is one.
 
 An unopened coin is statistically hidden (`hm96/PROTOCOL.md`); binding rests on SHA-512's collision resistance. A coin is
-opened live and once: the salt coin after the verifier recorded `weights_root`, the draw coin after it recorded what the
+opened live and once: the salt coin after the verifier recorded `weights_root` (a live window's after its open root,
+"Live epochs" below), the draw coin after it recorded what the
 draw keys (the transcript's root; Pearl-C's work sampling design adds its records' root, `clear_work.draw_after`). An
 opening is (epoch, label, after, coin, hm96 salt, path); the verifier refuses one whose epoch or label is not the one it
 asked for, that is malformed, that does not open against the epoch's root, or whose `after` is not what it recorded
@@ -230,10 +247,12 @@ challenger is auditor-trusted, the auditor's device on a machine the prover does
 **Live epochs** (`window.live_challenger`, `rounds_reason`, `round_key`; Lean `PouwWindow.Rounds`). A live PoUW epoch's
 coins are the layout `live_families(R)` under `LIVE_SCHEME` (`"verity/pouw/epoch-coins/live/v1"`): its salt coin
 (`"pouw/salt"`), its draw coin (`"pouw/draw"`) and R round coins (`"pouw/round"`, rounds numbered from 0 as Compose's
-`Declared.round` numbers them), R the most rounds a window of the epoch takes, fixed when the challenger commits. Round
-r's coin opens after the verifier recorded round r's root, the root of the values round r commits, and round r's noise
-key is `derive(coin_r, "verity/pouw/round-noise/v1", {coins: root, epoch: e, root: root_r, round: r})`: the deferred
-noised products, keyed by a coin the prover could not see when it committed. `core_check.rounds` (Lean
+`Declared.round` numbers them), R the most rounds a window of the epoch takes, fixed when the challenger commits. The
+salt coin opens once, after the window's open root (`salt.window_open_root`, step 2), and `core_check.salt` (Lean
+`PouwCheck.saltCheck`) is the rule on it. Round r's coin opens after the verifier recorded round r's root, the root of
+the values round r commits, and round r's noise key is
+`derive(coin_r, "verity/pouw/round-noise/v1", {coins: root, epoch: e, root: root_r, round: r})`: the deferred noised
+products, keyed by a coin the prover could not see when it committed. `core_check.rounds` (Lean
 `PouwCheck.roundsCheck`) is the rule on a window's round coins. A seeded epoch's commitment is unchanged (`SCHEME`, salt
 and draw only).
 
