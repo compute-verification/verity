@@ -10,8 +10,9 @@ gates, so it reads at most `αΓ` bits: the draft's `S*` is `αΓ` here.
 
 Theorem 2 also holds when the declaration contains the reference circuit only partly (`PartialContainment`): the
 counted multiplications it computes are throttled as before, and every other one is a dark gate, computed off the books
-(`ThreadedThrottledOn`, `ThreadedThrottledDark`, `ThreadedTrainingOn`). These forms also take `BaselineRegistered`: no
-dark value, and no novel input of the reference circuit, is in the declaration's baseline.
+(`ThreadedThrottledOn`, `ThreadedThrottledDark`, `ThreadedTrainingOn`). Every form through a containment, total or
+partial, takes `BaselineRegistered` for it: no dark value, and no novel input of the reference circuit, is in the
+declaration's baseline.
 
 The `Slots` forms take `WeightsIncompressibleSlots`, weights charged per parameter slot, in place of
 `WeightsIncompressible`, with the same bound: a subcircuit that spans several optimizer steps on a parameter is charged
@@ -34,20 +35,22 @@ def ThreadedReads : Prop :=
     ∀ R, Small c Γ S R → b_a * (T.mults R).card ≤ novelReads c R * T.bound S b_w d e
 
 /-- **Theorem 2 (high NCI means padding)** (the thread draft, Appendix B), for the reference circuits of Theorem 1: a
-declaration `d` that contains `c` and complies at `(Γ, α)` has at least `b_a / (αΛ)` gates per counted multiplication
-of `c`, where `Λ` is Theorem 1's bound at `S = αΓ`. -/
+declaration `d` that contains `c` (`M`) and complies at `(Γ, α)`, with its baseline registered (`BaselineRegistered`),
+has at least `b_a / (αΛ)` gates per counted multiplication of `c`, where `Λ` is Theorem 1's bound at `S = αΓ`. -/
 def ThreadedThrottled : Prop :=
-  ∀ (Γ : ℕ) (α b_w b_a : ℝ) (c d : Declaration) (T : Threading c) (dd e : ℕ),
-    0 ≤ α → 0 < b_w → 0 < b_a → 0 < dd → c.Contains d → Complies Γ α d →
+  ∀ (Γ : ℕ) (α b_w b_a : ℝ) (c d : Declaration) (T : Threading c) (dd e : ℕ) (M : Containment c.D d.D),
+    0 ≤ α → 0 < b_w → 0 < b_a → 0 < dd → Complies Γ α d →
+    Assumptions.BaselineRegistered c d (PartialContainment.ofContainment M) →
     T.Threaded Γ (α * Γ) dd e → Assumptions.WeightsIncompressible c T Γ (α * Γ) b_w b_a →
       b_a * T.M.card ≤ α * T.bound (α * Γ) b_w dd e * d.D.size d.D.computed
 
 /-- **Training is slowed** (the thread draft, "Putting the two together"): when counted multiplications are a fraction
-`κ` of the reference circuit's flops (2 flops each), every declaration that contains it and complies at `(Γ, α)` is
-larger by a factor of at least `κ · b_a / (2αΛ)`. -/
+`κ` of the reference circuit's flops (2 flops each), every declaration that contains it and complies at `(Γ, α)`, with
+its baseline registered (`BaselineRegistered`), is larger by a factor of at least `κ · b_a / (2αΛ)`. -/
 def ThreadedTraining : Prop :=
-  ∀ (Γ : ℕ) (α b_w b_a κ : ℝ) (c d : Declaration) (T : Threading c) (dd e : ℕ),
-    0 ≤ α → 0 < b_w → 0 < b_a → 0 < dd → c.Contains d → Complies Γ α d →
+  ∀ (Γ : ℕ) (α b_w b_a κ : ℝ) (c d : Declaration) (T : Threading c) (dd e : ℕ) (M : Containment c.D d.D),
+    0 ≤ α → 0 < b_w → 0 < b_a → 0 < dd → Complies Γ α d →
+    Assumptions.BaselineRegistered c d (PartialContainment.ofContainment M) →
     T.Threaded Γ (α * Γ) dd e → Assumptions.WeightsIncompressible c T Γ (α * Γ) b_w b_a →
     κ * c.D.size c.D.computed ≤ 2 * T.M.card →
       κ * b_a * c.D.size c.D.computed ≤ 2 * α * T.bound (α * Γ) b_w dd e * d.D.size d.D.computed
@@ -94,8 +97,10 @@ def ThreadedReadsSlots : Prop :=
 
 /-- **Theorem 2 per parameter slot**: `ThreadedThrottled` under `WeightsIncompressibleSlots`. -/
 def ThreadedThrottledSlots : Prop :=
-  ∀ (Γ : ℕ) (α b_w b_a : ℝ) (c d : Declaration) (T : Threading c) (σ : T.Slots) (dd e : ℕ),
-    0 ≤ α → 0 < b_w → 0 < b_a → 0 < dd → c.Contains d → Complies Γ α d →
+  ∀ (Γ : ℕ) (α b_w b_a : ℝ) (c d : Declaration) (T : Threading c) (σ : T.Slots) (dd e : ℕ)
+    (M : Containment c.D d.D),
+    0 ≤ α → 0 < b_w → 0 < b_a → 0 < dd → Complies Γ α d →
+    Assumptions.BaselineRegistered c d (PartialContainment.ofContainment M) →
     T.Threaded Γ (α * Γ) dd e → Assumptions.WeightsIncompressibleSlots c T σ Γ (α * Γ) b_w b_a →
       b_a * T.M.card ≤ α * T.bound (α * Γ) b_w dd e * d.D.size d.D.computed
 

@@ -8,12 +8,13 @@ instead compute some of `c`'s gates outside `d`, off the books, and feed their v
 containment (`PartialContainment c d`) says what `d` still computes: a set `S` of `c`'s computed gates, each with its own
 gate of `d` reading the images of the gates it reads. The rest of `c`'s computed gates are its dark gates (`dark`): `d`
 holds none of them, and a dark value `S` reads enters `d` as an input gate. `d` need not compute any gate the way `c`
-does, only from the same wires, so a total containment is the special case `S = computed`.
+does, only from the same wires, so a total containment is the special case `S = computed`
+(`PartialContainment.ofContainment`).
 
 A partial containment says nothing about `d`'s baseline: a dark value may enter `d` as a baseline input, read for free.
 That it doesn't is a premise about the protocol, which decides what `θ` may hold, and not about the circuit:
-`Nci.Assumptions.BaselineRegistered` (`Models/Nci/Assumptions.lean`), which every guarantee through a partial
-containment takes as a hypothesis.
+`Nci.Assumptions.BaselineRegistered` (`Models/Nci/Assumptions/Baseline.lean`), which every guarantee through a
+containment, total or partial, takes as a hypothesis.
 -/
 
 namespace Nci
@@ -44,5 +45,25 @@ structure PartialContainment (c d : Declaration) where
 /-- The dark gates: the computed gates of `c` that `d` does not compute. -/
 def PartialContainment.dark {c d : Declaration} (M : PartialContainment c d) : Finset (Fin c.D.N) :=
   c.D.computed \ M.S
+
+/-- **A total containment is a partial one** with no dark gates: `S` is every computed gate of `c`, and what `S` reads
+from outside is `c`'s inputs. -/
+def PartialContainment.ofContainment {c d : Declaration} (M : Containment c.D d.D) : PartialContainment c d where
+  S := c.D.computed
+  emb := M.emb
+  S_computed := Finset.Subset.refl _
+  emb_inj _ _ _ _ h := M.emb_inj h
+  emb_w a _ := M.emb_w a
+  computed_emb g hg := by
+    rw [M.isInput_emb]
+    simpa [Circuit.computed] using hg
+  reads_emb g hg := by
+    rw [M.reads_emb g (by simpa [Circuit.computed] using hg)]
+    exact Finset.map_eq_image _ _
+  input_emb a ha := by
+    rw [M.isInput_emb]
+    have h := (Finset.mem_filter.1 ha).2.1
+    by_contra hne
+    exact h (Finset.mem_filter.2 ⟨Finset.mem_univ _, by simpa using hne⟩)
 
 end Nci

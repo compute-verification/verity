@@ -30,7 +30,7 @@ assumption for every IU of at most `Γ` gates and uses it only for IUs that read
 honest training: an IU that runs a transformer's first attention layer and first MLP at many positions reads the
 embeddings and attention weights once, and then computes the MLP's inputs at every position itself.
 
-Every bound through a partial containment (`PartialContainment`) also rests on `BaselineRegistered`
+Every bound through a containment, total or partial (`PartialContainment`), also rests on `BaselineRegistered`
 (`Models/Nci/Assumptions/Baseline.lean`), a premise about what the protocol lets the baseline `θ` hold rather than about
 any circuit.
 -/

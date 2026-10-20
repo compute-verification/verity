@@ -18,9 +18,9 @@ theorem num_div_den_nonneg (i : Instance) : (0 : ℝ) ≤ (i.num : ℝ) / i.den 
 
 /-- **A verdict of compliance throttles every reference circuit the declaration contains.** -/
 theorem Throttles : Properties.Throttles :=
-  fun j out hev i P d hpar hdec hL hθ hc b_w b_a c T dd e hbw hba hdd hcon hT hW =>
-    Nci.SecurityProofs.ThreadedThrottled i.gamma ((i.num : ℝ) / i.den) b_w b_a c d T dd e (num_div_den_nonneg i)
-      hbw hba hdd hcon (Witnesses j out hev i P d hpar hdec hL hθ hc) hT hW
+  fun j out hev i P d hpar hdec hL hθ hc b_w b_a c T dd e M hbw hba hdd hB hT hW =>
+    Nci.SecurityProofs.ThreadedThrottled i.gamma ((i.num : ℝ) / i.den) b_w b_a c d T dd e M (num_div_den_nonneg i)
+      hbw hba hdd (Witnesses j out hev i P d hpar hdec hL hθ hc) hB hT hW
 
 /-- **A verdict of compliance puts counted multiplications off the books in dark gates.** -/
 theorem ThrottlesDark : Properties.ThrottlesDark :=
@@ -30,9 +30,9 @@ theorem ThrottlesDark : Properties.ThrottlesDark :=
 
 /-- **`Throttles` per parameter slot.** -/
 theorem ThrottlesSlots : Properties.ThrottlesSlots :=
-  fun j out hev i P d hpar hdec hL hθ hc b_w b_a c T σ dd e hbw hba hdd hcon hT hW =>
-    Nci.SecurityProofs.ThreadedThrottledSlots i.gamma ((i.num : ℝ) / i.den) b_w b_a c d T σ dd e
-      (num_div_den_nonneg i) hbw hba hdd hcon (Witnesses j out hev i P d hpar hdec hL hθ hc) hT hW
+  fun j out hev i P d hpar hdec hL hθ hc b_w b_a c T σ dd e M hbw hba hdd hB hT hW =>
+    Nci.SecurityProofs.ThreadedThrottledSlots i.gamma ((i.num : ℝ) / i.den) b_w b_a c d T σ dd e M
+      (num_div_den_nonneg i) hbw hba hdd (Witnesses j out hev i P d hpar hdec hL hθ hc) hB hT hW
 
 /-- **`ThrottlesDark` per parameter slot.** -/
 theorem ThrottlesDarkSlots : Properties.ThrottlesDarkSlots :=

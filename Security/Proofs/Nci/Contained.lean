@@ -43,14 +43,14 @@ theorem partialSumsIncompressible_of_support {D : Declaration} {θv : D.D.Transc
 /-- The partial-sum law on a reference circuit, in reads: `UpdatedMatMul` with its assumptions on the contained
 circuit `c`. -/
 theorem containedMatMul_of_reads (Γ : ℕ) (α b_w b_a : ℝ) (c d : Declaration) (ch : Chain c.D) (dd : ℕ)
-    (hα : 0 < α) (hw : 0 < b_w) (ha : 0 < b_a) (hd : ∀ ℓ, dd ≤ ch.d ℓ) (hC : c.Contains d) (hP : Complies Γ α d)
+    (M : Containment c.D d.D) (hα : 0 < α) (hw : 0 < b_w) (ha : 0 < b_a) (hd : ∀ ℓ, dd ≤ ch.d ℓ) (hP : Complies Γ α d)
+    (hB : Assumptions.BaselineRegistered c d (PartialContainment.ofContainment M))
     (hA : Assumptions.ActivationsIncompressible c ch Γ (α * Γ) b_w b_a)
     (hPS : Assumptions.PartialSumsIncompressible c ch Γ (α * Γ) b_w b_a) :
     F α (α * Γ) b_w b_a dd * (2 * ch.G) ≤ d.D.size d.D.computed := by
-  obtain ⟨M, hθ⟩ := hC
   obtain ⟨n, P, hP⟩ := hP
   have hpiece : ∀ u, (novelReads c ((pull M P).gates u) : ℝ) ≤ novelReads d (P.gates u) := fun u => by
-    exact_mod_cast novelReads_pull M hθ P u
+    exact_mod_cast novelReads_pull M hB P u
   have hcap : ∀ u, c.D.size ((pull M P).gates u) ≤ Γ ∧ (novelReads c ((pull M P).gates u) : ℝ) ≤ α * Γ := fun u =>
     ⟨(card_pull_gates_le u).trans (hP u).1,
       ((hpiece u).trans (hP u).2).trans (mul_le_mul_of_nonneg_left (by exact_mod_cast (hP u).1) hα.le)⟩
@@ -70,13 +70,13 @@ theorem containedMatMul_of_reads (Γ : ℕ) (α b_w b_a : ℝ) (c d : Declaratio
     _ = d.D.size d.D.computed := by field_simp
 
 theorem ContainedMatMul : Guarantees.ContainedMatMul := by
-  intro Γ α b_w b_a c d θv ch dd hα hw ha hd hC hP hA hPS
-  exact containedMatMul_of_reads Γ α b_w b_a c d ch dd hα hw ha hd hC hP
+  intro Γ α b_w b_a c d θv ch dd M hα hw ha hd hP hB hA hPS
+  exact containedMatMul_of_reads Γ α b_w b_a c d ch dd M hα hw ha hd hP hB
     (activationsIncompressible_of_support hw.le ha.le hA) (partialSumsIncompressible_of_support hPS)
 
 theorem ContainedTraining : Guarantees.ContainedTraining := by
-  intro Γ α b_w b_a κ c d θv ch dd hα hw ha hd hC hP hA hPS hκ
-  have hF := ContainedMatMul Γ α b_w b_a c d θv ch dd hα hw ha hd hC hP hA hPS
+  intro Γ α b_w b_a κ c d θv ch dd M hα hw ha hd hP hB hA hPS hκ
+  have hF := ContainedMatMul Γ α b_w b_a c d θv ch dd M hα hw ha hd hP hB hA hPS
   have hF0 : 0 ≤ F α (α * Γ) b_w b_a dd := F_nonneg hα.le (by positivity) hw.le ha.le (by positivity)
   calc κ * F α (α * Γ) b_w b_a dd * c.D.size c.D.computed
       = F α (α * Γ) b_w b_a dd * (κ * c.D.size c.D.computed) := by ring

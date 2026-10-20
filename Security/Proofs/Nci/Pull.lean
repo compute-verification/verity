@@ -12,8 +12,8 @@ carries both to novel values its IU reads.
 Through a partial containment the pieces (`piece`) divide only the gates `S` that `d` computes, and the dark gates are in
 none. The same holds of each piece, with one more case for what it reads (`novelReads_piece`): a dark value enters `d` as
 an input gate, which lies in no IU, so the IU reads it too, and it is outside `d`'s baseline by `BaselineRegistered`. A
-total containment is a partial one with no dark gates (`ofContainment`), and its own condition on the baseline gives
-`BaselineRegistered` (`baselineRegistered_ofContainment`).
+total containment is a partial one with no dark gates (`PartialContainment.ofContainment`), and `BaselineRegistered` for
+it keeps the novel inputs of `c` that a piece reads out of `d`'s baseline (`novelReads_pull`).
 -/
 
 namespace Nci.SecurityProofs
@@ -65,17 +65,34 @@ theorem into_pull_map (u : Fin n) :
   rw [M.reads_emb g hgi]
   exact Finset.mem_map_of_mem _ hag
 
+/-- An input gate that a piece reads is read by `C`'s computed gates. -/
+theorem into_pull_into_computed (u : Fin n) {a : Fin C.N} (ha : a ∈ C.into ((pull M P).gates u))
+    (hai : C.isInput a = true) : a ∈ C.into C.computed := by
+  simp only [Circuit.into, Finset.mem_filter, Finset.mem_univ, true_and] at ha ⊢
+  obtain ⟨-, g, hg, hag⟩ := ha
+  have hgi : C.isInput g = false := by
+    rw [mem_pull_gates, Partition.mem_gates] at hg
+    cases h : C.isInput g
+    · rfl
+    · rw [← M.isInput_emb, ← P.input_iff] at h
+      rw [h] at hg
+      cases hg
+  refine ⟨fun h => ?_, g, ?_, hag⟩
+  · simp [Circuit.computed, hai] at h
+  · simp [Circuit.computed, hgi]
+
 end Pull
 
 theorem novelReads_pull {c d : Declaration} (M : Containment c.D d.D)
-    (hθ : ∀ g, c.D.isInput g = true → M.emb g ∈ d.θ → g ∈ c.θ) {n : ℕ} (P : Partition d.D n) (u : Fin n) :
-    novelReads c ((pull M P).gates u) ≤ novelReads d (P.gates u) := by
+    (hB : Assumptions.BaselineRegistered c d (PartialContainment.ofContainment M)) {n : ℕ} (P : Partition d.D n)
+    (u : Fin n) : novelReads c ((pull M P).gates u) ≤ novelReads d (P.gates u) := by
   unfold novelReads
   rw [width_map (M := M)]
   refine Finset.sum_le_sum_of_subset fun b hb => ?_
   obtain ⟨a, ha, rfl⟩ := Finset.mem_map.1 hb
   rw [Finset.mem_sdiff] at ha ⊢
-  refine ⟨into_pull_map u (Finset.mem_map_of_mem _ ha.1), fun hθd => ha.2 (hθ a ?_ hθd)⟩
+  refine ⟨into_pull_map u (Finset.mem_map_of_mem _ ha.1), fun hθd => ha.2 (hB a ?_ hθd)⟩
+  refine into_pull_into_computed u ha.1 ?_
   rw [← M.isInput_emb]
   exact d.θ_input _ hθd
 
@@ -83,38 +100,8 @@ section Piece
 
 open Finset
 
-theorem isInput_of_mem_into_computed {C : Circuit} {a : Fin C.N} (ha : a ∈ C.into C.computed) :
-    C.isInput a = true := by
-  have h := (mem_filter.1 ha).2.1
-  by_contra hne
-  exact h (mem_filter.2 ⟨mem_univ _, by simpa using hne⟩)
-
-/-- **A total containment is a partial one** with no dark gates: `S` is every computed gate of `c`, and what `S` reads
-from outside is `c`'s inputs. -/
-def ofContainment {c d : Declaration} (M : Containment c.D d.D) : PartialContainment c d where
-  S := c.D.computed
-  emb := M.emb
-  S_computed := subset_refl _
-  emb_inj _ _ _ _ h := M.emb_inj h
-  emb_w a _ := M.emb_w a
-  computed_emb g hg := by
-    rw [M.isInput_emb]
-    simpa [Circuit.computed] using hg
-  reads_emb g hg := by
-    rw [M.reads_emb g (by simpa [Circuit.computed] using hg)]
-    exact map_eq_image _ _
-  input_emb a ha := by
-    rw [M.isInput_emb]
-    exact isInput_of_mem_into_computed ha
-
-theorem ofContainment_S {c d : Declaration} (M : Containment c.D d.D) : (ofContainment M).S = c.D.computed := rfl
-
-/-- A total containment that sends no novel input gate of `c` into `d`'s baseline (`Declaration.Contains`) meets
-`BaselineRegistered`: what `S = computed` reads from outside is `c`'s inputs. -/
-theorem baselineRegistered_ofContainment {c d : Declaration} (M : Containment c.D d.D)
-    (hθ : ∀ g, c.D.isInput g = true → M.emb g ∈ d.θ → g ∈ c.θ) :
-    Assumptions.BaselineRegistered c d (ofContainment M) :=
-  fun a ha h => hθ a (isInput_of_mem_into_computed ha) h
+theorem ofContainment_S {c d : Declaration} (M : Containment c.D d.D) :
+    (PartialContainment.ofContainment M).S = c.D.computed := rfl
 
 variable {c d : Declaration} (M : PartialContainment c d) {n : ℕ} (P : Partition d.D n)
 

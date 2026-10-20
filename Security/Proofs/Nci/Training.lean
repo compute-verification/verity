@@ -153,16 +153,16 @@ theorem trainingIncompressible_of_support {θv : c.D.Transcript} (hw : 0 ≤ b_w
 end Training
 
 theorem IncompressibleThreadedThrottled : Guarantees.IncompressibleThreadedThrottled := by
-  intro Γ α b_w b_a c d ch T dd e hα hbw hba hdd hC hP hT h
-  exact ThreadedThrottled Γ α b_w b_a c d T dd e hα hbw hba hdd hC hP hT (weightsIncompressible_of_training h)
+  intro Γ α b_w b_a c d ch T dd e M hα hbw hba hdd hP hB hT h
+  exact ThreadedThrottled Γ α b_w b_a c d T dd e M hα hbw hba hdd hP hB hT (weightsIncompressible_of_training h)
 
 theorem IncompressibleThreadedThrottledOn : Guarantees.IncompressibleThreadedThrottledOn := by
   intro Γ α b_w b_a c d ch T dd e M hα hbw hba hdd hP hB hT h
   exact ThreadedThrottledOn Γ α b_w b_a c d T dd e M hα hbw hba hdd hP hB hT (weightsIncompressible_of_training h)
 
 theorem IncompressibleContainedTraining : Guarantees.IncompressibleContainedTraining := by
-  intro Γ α b_w b_a κ c d ch T dd hα hbw hba hd hC hP h hκ
-  have hF := containedMatMul_of_reads Γ α b_w b_a c d ch dd hα hbw hba hd hC hP
+  intro Γ α b_w b_a κ c d ch T dd M hα hbw hba hd hP hB h hκ
+  have hF := containedMatMul_of_reads Γ α b_w b_a c d ch dd M hα hbw hba hd hP hB
     (activationsIncompressible_of_training hba.le h) (partialSumsIncompressible_of_training hba.le h)
   have hF0 : 0 ≤ F α (α * Γ) b_w b_a dd := F_nonneg hα.le (by positivity) hbw.le hba.le (by positivity)
   calc κ * F α (α * Γ) b_w b_a dd * c.D.size c.D.computed
