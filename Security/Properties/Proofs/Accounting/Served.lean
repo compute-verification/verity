@@ -590,8 +590,8 @@ theorem witZ_valB (x : ℕ → ℤ) (hx : Accounting.Gates.Typed witZ.dag x) {j 
 /-- **The served `z` is the product of the A row and the B column** on every typed input: its 32 products of s8 words
 stay within s32, so its clamp is the identity. -/
 theorem witZ_productOf : ProductOf witLayout witZ witZCls 68 (List.range' 1 32) (List.range' 33 32) := by
-  refine ⟨by decide +kernel, by decide +kernel, by unfold S8; decide +kernel, by unfold S8; decide +kernel,
-    fun x hx => ?_⟩
+  refine ⟨by decide +kernel, by decide +kernel, List.nodup_range', List.nodup_range', by unfold S8; decide +kernel,
+    by unfold S8; decide +kernel, fun x hx => ?_⟩
   have h67 : Accounting.Gates.val witZ.dag x 67 = 0 := witPre_val67 witZRest x
   have hA : ∀ a ∈ (List.range' 1 32).map (Accounting.Gates.val witZ.dag x), -128 ≤ a ∧ a ≤ 128 := by
     intro a ha
@@ -765,8 +765,8 @@ theorem witP_valX (x : ℕ → ℤ) {k : ℕ} (h1 : 1 ≤ k) (h2 : k < 33) :
 /-- **The peeled `z` is the product of the A row and the B column** on every typed input: the noised product is
 `Σ A_k·B_k + coin·ΣB_k`, within s32, and the correction takes the noise back out. -/
 theorem witP_productOf : ProductOf witLayout witP witPCls 103 (List.range' 1 32) (List.range' 33 32) := by
-  refine ⟨by decide +kernel, by decide +kernel, by unfold S8; decide +kernel, by unfold S8; decide +kernel,
-    fun x hx => ?_⟩
+  refine ⟨by decide +kernel, by decide +kernel, List.nodup_range', List.nodup_range', by unfold S8; decide +kernel,
+    by unfold S8; decide +kernel, fun x hx => ?_⟩
   obtain ⟨hc, hc1, hc2⟩ := witP_valCoin x hx
   have h67 : Accounting.Gates.val witP.dag x 67 = 0 := witPre_val67 witPRest x
   have hX : (List.range' 68 32).map (Accounting.Gates.val witP.dag x) =

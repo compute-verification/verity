@@ -359,14 +359,15 @@ def S8 {ι : Type} (Cd : Declared ι) (i : ℕ) : Prop :=
 
 /-- **Gate `z` is the product of its call's committed A row and a registered B column** (ASK-71's value check): its
 operands `as`, run inputs of `z`'s call (`act`), and `bs` (`registered`), each declared an s8 word (`S8`), are as many
-as its linear's `K`, and on every typed input (`Gates.Typed`: each input slot a word of its type) `z`'s value is
-`Σ_k a_k·b_k`, a coordinate of `A_u B_uᵀ`. A function-of statement: it holds of any gates with that value (`h1tile`'s
-dot, cuBLASLt's, or a peel of the noised accumulators if its corrections cancel the noise on every typed input), and of
-no `z` whose value differs from it on some typed input. `S8` keeps the typed inputs the served rows' words: an operand
-declared `[0, 0]` would leave only `a = 0` typed. Which row and column `as` and `bs` are is the call's Program's
-(`Properties.Served.ServedUnits`). -/
+as its linear's `K`, each list without repeats, and on every typed input (`Gates.Typed`: each input slot a word of its
+type) `z`'s value is `Σ_k a_k·b_k`, a coordinate of `A_u B_uᵀ`. A function-of statement: it holds of any gates with
+that value (`h1tile`'s dot, cuBLASLt's, or a peel of the noised accumulators if its corrections cancel the noise on
+every typed input), and of no `z` whose value differs from it on some typed input. `S8` keeps the typed inputs the
+served rows' words: an operand declared `[0, 0]` would leave only `a = 0` typed. `Nodup` (RT4-LOGIC-11) keeps the `K`
+products distinct: an A word read `K` times would give `a·Σ_k b_k`, one product's work credited as `K`. Which row and
+column `as` and `bs` are is the call's Program's (`Properties.Served.ServedUnits`). -/
 def ProductOf {ι : Type} (L : Layout) (Cd : Declared ι) (cls : ℕ → Cls) (z : ℕ) (as bs : List ℕ) : Prop :=
-  as.length = L.kOf (L.linearOf (Cd.call z)) ∧ bs.length = as.length ∧
+  as.length = L.kOf (L.linearOf (Cd.call z)) ∧ bs.length = as.length ∧ as.Nodup ∧ bs.Nodup ∧
     (∀ a ∈ as, a < Cd.dag.length ∧ cls a = .act ∧ Cd.call a = Cd.call z ∧ S8 Cd a) ∧
     (∀ b ∈ bs, b < Cd.dag.length ∧ cls b = .registered ∧ S8 Cd b) ∧
     ∀ x, Gates.Typed Cd.dag x →
