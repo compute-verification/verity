@@ -8,10 +8,11 @@ The workload is Serve_v1 (`benchmarks/network_sim/workload/served.py`) at a ladd
 30 layers), word-level and on bits. On bits it is `lift.on_bits`: every Definition Serve_v1 reaches, lifted to bits all
 the way down (`ir="boolean"` can't derive Serve_v1; `lift.py`'s docstring says why). Two verifiers are measured:
 
-* `measure`, the NCI check: `nci-check` (`NciCheck.Desc`, one summary per Definition) on an instance whose θ is the
-  registered inputs and whose IUs are the root's Calls, one each. Where the unrolled circuit is small enough
-  (`--unrolled-max`), the instance expanded gate by gate also goes through `nci-check --unrolled` (`NciCheck.check`, the
-  gate-by-gate reference), and the two verdicts must agree.
+* `measure`, the NCI check: `nci-check --policy` (`NciCheck.Desc`, one summary per Definition) on an instance whose θ is
+  the registered inputs and whose IUs are the root's Calls, one each. `--policy` leaves out θ's provenance
+  (`NciCheck.Baseline`), which reads the registration log and adds work in θ's length and the log's. Where the unrolled
+  circuit is small enough (`--unrolled-max`), the instance expanded gate by gate also goes through
+  `nci-check --policy --unrolled` (`NciCheck.check`, the gate-by-gate reference), and the two verdicts must agree.
 * `partition`, the one-stage verifier's partition: `sampled-proofs-difftest`'s `partition` (`Partition.units`, `strata`,
   the expanded law and the digest, as the verifier of record computes them) on Serve_v1 under the template query of its
   Calls (`Q_template_instances`), under `Q_word` v1 and `Q_call` v1 at `X = 16` where its Calls' distinct Definitions are

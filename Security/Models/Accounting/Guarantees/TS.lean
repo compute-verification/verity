@@ -11,9 +11,10 @@ note:20261017T0321Z-draft-eps1-tensor), each `def G : Prop`, proved (or a `sorry
 * `DecompositionD`: Theorem D(a), the master inequality from (Π), (RD) and (Lk).
 * `DIdeal`, `DIdealFloor`: Theorem D-ideal, (2.7) and (2.7♭), in 𝒫_full from (I1)–(I8).
 * `CompilerC`: Lemma C, the compiler, in 𝒫_samp: the same bound with `ε_sample` added.
-* `ProofsSoundOfPinned`: (I8) `ProofsSound` from binding at `δ_bind`, proof soundness at `δ_ZK`, the Definitions'
-  pinning and E1(c) (`RightFixed`); `BindingOfFork`: binding's failure squared is at most its fork form's, two runs
-  off one commitment opening it differently, so `δ_bind = √δ_fork`.
+* `ProofsSoundOfPinned`: (I8) `ProofsSound` from binding at `δ_bind` of the leaves each round commits before its σ,
+  proof soundness at `δ_ZK` and the Definitions' pinning, each relation on its path's coins, and E1(c) (`RightFixed`);
+  `BindingOfFork`: binding's failure squared is at most its fork form's, two runs off one commitment opening it
+  differently, so `δ_bind = √δ_fork`.
 * `DrawnRightOff`: a sampled window's drawn units are right at their committed values outside `S·(δ_bind + δ_ks)`,
   from binding at every position's cut, joint proof soundness and pinning; `ProofsSoundOfDrawn`: (I8) at `n_π = 1`,
   `δ_ZK = δ_ks`, from it, the share covering every unit that isn't good (a unit whose late cone the run computed,
@@ -189,16 +190,18 @@ def TensorSlotTight : Prop :=
   ∀ ρH ρT dH L : ℝ, 0 < ρH → ρH ≤ ρT → 0 < dH → dH ≤ L →
     (1 - ρH / ρT * (dH / L) = 0 ↔ L = dH ∧ ρH = ρT)
 
-/-- **(I8) from its pieces.** In 𝒫_full over a window's proofs (`ProofLayer`, `n_π` a round) whose play is theirs (`Of`:
-the window is accepted only if every proof is, and the ideal game's check is the proofs' relations at the committed
-values): if at every round binding fails with probability at most `δ_bind` (`Moved`: an accepted round's proof opens
-its leaves to values other than those committed before σ_w), every proof is unsound with probability at most `δ_ZK`
-(`SoundAt`), the relations pin every committed value (`Pins`, a property of the Definitions the proofs pass), and E1(c)
-holds with the equal shares (`RightFixed`), then (I8) `ProofsSound` holds at `S·(δ_bind + n_π·δ_ZK)`. -/
+/-- **(I8) from its pieces.** In 𝒫_full over a window's proofs (`ProofLayer`, `n_π` a round, each round's leaves those
+it commits before its σ, its relations reading the path's coins and the words keyed by them) whose play is theirs
+(`Of`: the window is accepted only if every proof is, and the ideal game's check is the proofs' relations at the
+committed values on the path): if at every round binding fails with probability at most `δ_bind` (`BindingAt`; `Moved`:
+an accepted round's proof opens its leaves to values other than those committed before σ_w), every proof is unsound
+with probability at most `δ_ZK` (`SoundAt`), the relations pin every committed value on every path (`Pins`, a property
+of the Definitions the proofs pass), and E1(c) holds with the equal shares (`RightFixed`), then (I8) `ProofsSound`
+holds at `S·(δ_bind + n_π·δ_ZK)`. -/
 def ProofsSoundOfPinned : Prop :=
   ∀ {K T L U V : Type} [Fintype K] [Fintype T] [Fintype L] [Fintype U] (Ω : Type) [Fintype Ω] (S nπ : ℕ)
     (P : Play Ω S K T L U) (pf : ProofLayer Ω S nπ V) (Nw δbind δzk : ℝ),
-    pf.Of P → (∀ w, prob (fun x => pf.Moved x w) ≤ δbind) → pf.SoundAt δzk → pf.Pins → RightFixed P pf Nw →
+    pf.Of P → pf.BindingAt δbind → pf.SoundAt δzk → pf.Pins → RightFixed P pf Nw →
     ProofsSound P Nw δbind δzk nπ
 
 /-- **Binding from the fork form.** For a window's proofs and a round `w`, the probability that binding fails at `w`
@@ -213,17 +216,17 @@ def BindingOfFork : Prop :=
 /-- **A sampled window's drawn units are right, outside binding and soundness failures.** Over `S` rounds whose coins
 are `m` coins before the draws and the live draw coin with the proofs' coins, the draw naming `s` units a round, each
 proved alone with its own noise's generation, its slots' values committed per position (`DrawnLayer`): if in every round
-binding fails with probability at most `δ_bind` (`MovedIn`: an accepted proof of a drawn unit opens a slot to a value
-other than its position's committed value, bound before the coin that follows its commitment, so a value opened one way
-for the unit that wrote it and another way for a unit that reads it is a binding failure), the proofs are sound jointly
-over each round's draws at `δ_ks` (`JointSound`) and each unit's relation pins its rightness (`Pins`), then outside an
-event of probability at most `S·(δ_bind + δ_ks)` every drawn unit whose proof is accepted is right at its committed
-values. It reads no play: what it gives is the drawn units' rightness, which the ideal game's check reads
-(`ProofsSoundOfDrawn`) and a composition's folded credit takes as its premise. -/
+binding fails with probability at most `δ_bind` (`BindingAt`; `MovedIn`: an accepted proof of a drawn unit opens a slot
+to a value other than its position's committed value, bound before the coin that follows its commitment, so a value
+opened one way for the unit that wrote it and another way for a unit that reads it is a binding failure), the proofs
+are sound jointly over each round's draws at `δ_ks` (`JointSound`) and each unit's relation pins its rightness
+(`Pins`), then outside an event of probability at most `S·(δ_bind + δ_ks)` every drawn unit whose proof is accepted is
+right at its committed values. It reads no play: what it gives is the drawn units' rightness, which the ideal game's
+check reads (`ProofsSoundOfDrawn`) and a composition's folded credit takes as its premise. -/
 def DrawnRightOff : Prop :=
   ∀ {J Q Pos V : Type} [Nonempty V] (C B : Type) [Fintype C] [Fintype B] (S m s : ℕ)
     (pf : DrawnLayer C B S m s J Q Pos V) (δbind δks : ℝ),
-    (∀ w, prob (fun x => pf.MovedIn x w) ≤ δbind) → pf.JointSound δks → pf.Pins →
+    pf.BindingAt δbind → pf.JointSound δks → pf.Pins →
     ∃ E : Paths (Paths C m × B) S → Prop, prob E ≤ S * (δbind + δks) ∧
       ∀ x, ¬ E x → ∀ w i, pf.accepted x w i → pf.right x w (pf.drawnAt x w i) (pf.view x w (pf.drawnAt x w i))
 
@@ -241,7 +244,7 @@ def ProofsSoundOfDrawn : Prop :=
     (C B : Type) [Fintype C] [Fintype B] (S m s : ℕ) (P : Play (Paths C m × B) S K T L U)
     (pf : DrawnLayer C B S m s J Q Pos V) (mode : Paths (Paths C m × B) S → Fin S × J → Mode)
     (wt : Fin S → J → ℝ) (folded : Paths (Paths C m × B) S → ℝ) (Nw δbind δks : ℝ),
-    0 < S → ∑ w, ∑ j, wt w j = S * Nw → pf.WriterReads → pf.Of P → (∀ w, prob (fun x => pf.MovedIn x w) ≤ δbind) →
+    0 < S → ∑ w, ∑ j, wt w j = S * Nw → pf.WriterReads → pf.Of P → pf.BindingAt δbind →
     pf.JointSound δks → pf.Pins → pf.Covers P mode wt Nw → UnitFixed P pf mode wt folded →
       ProofsSound P Nw δbind δks 1
 

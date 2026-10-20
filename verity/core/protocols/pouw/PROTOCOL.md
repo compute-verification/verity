@@ -93,8 +93,9 @@ and `frame-b3s` that -h1, -h2 and BLAKE3 -h3 named are in `archive/pouw-blake3/`
    `Pouw.Guarantees.WorkWeightedSampling`.
 
 **What is public.** Every protocol is zero-knowledge, and only the minimum is public (Daniel's ruling of 2026-10-05,
-7:48 PM PDT). |W|, the size of the weights, is public (his ruling of 2026-10-06, 8:14 AM PDT). Both rulings are recorded
-in `.agents/skills/friction/SKILL.md`.
+7:48 PM PDT). |W|, the size of the weights, is public (his ruling of 2026-10-06, 8:14 AM PDT). A served window's rows
+serve at a public fixed length, so its useful work is public (his ruling of 19 Oct, ASK-39; "The fixed length" below).
+`AGENTS.md` ("Design rules") states them.
 
 **Randomness.** The protocol owns the outer coins, the salt and the draw, and both are the challenger's epoch coins, never
 a public beacon and never Fiat-Shamir over the prover's roots. A window's check item says its coin mode, its optional
@@ -107,8 +108,11 @@ recorded round r's root (decision 36).
 ## Epoch coins (`coins`)
 
 The challenger is the auditor's service that issues coins. Before epoch e it draws one 32-byte coin per label (`"salt"`,
-`"draw"`, in that order) from its own generator, and publishes the coin commitment, a frame-v3-sha512 tree over hiding
-leaves:
+`"draw"`, in that order) from its entropy, and publishes the coin commitment, a frame-v3-sha512 tree over hiding leaves.
+A served challenger's entropy, every coin and hm96 salt, is the Lean verifier of record's read of the operating system
+(`verifier.coins`: `pouw-check-difftest`'s `coins`, `IO.getRandomBytes`, A3); `coins.Challenger` and
+`window.live_challenger` take it as an argument and have no default, so the Python never reads the operating system for a
+coin:
 
 ~~~text
 x_l     = SHA-512("verity/pouw/epoch-coin/v1" || 0x00 || coin_l)
@@ -227,6 +231,13 @@ A served window is audited by drawing tiles of one fixed template from the windo
 level and K′ are in `window`'s docstring). This section is the window's layout for gates: what its commitment holds, so
 that a drawn tile's reads are a function of public inputs alone. `benchmarks/pouw/served_zk/served_commit.py` commits a
 window this way.
+
+**The fixed length.** Correct tokens served past the honest run's end-of-sequence are not useful work, so a row of record
+serves at a public fixed length, ignore_eos at each slot's public max_tokens, which the window registers (its `length`
+item) and the verifier checks against its own parameters, so W_use is public (Daniel, 19 Oct, ASK-39). PouwCheck refuses
+a row whose stop mode is not `fixed` (`window-form: eos-keyed-row`), a served length or max_tokens other than the
+verifier's (`window-form: length-mismatch`, `window-form: max-tokens`), and a window registered before the rule, with no
+`length` item (`window-form: no-fixed-length`), which is not of record (`window.length_problem`).
 
 **The window root** (port `entries`) is a frame-v3-sha512 tree of P entries (the public bound, 16 for served windows),
 registered before the draw. The calls come first, then exactly one filler, then empty entries up to P. Entry e is an
@@ -1370,9 +1381,20 @@ block_t = SHA-512(NOISE_TAG ‖ seed_j ‖ u64(t))                              
 
 j is the unit's position and (root(A_j), root(B_j)) its seed group's roots. ``⊕ u64(j)*`` XORs every message word after the
 first with the position, an injective encoding that makes every gate of a seed read its own position, so no two units compute
-a common value. Positions (`pouw.positions`, unit u at slot u, `Compiled.positions(base)`) and roots (`pouw.roots`) are inputs
-bound before the draw; a verifier that runs the Program more than once under one salt gives each run its own range of
-positions, so each (salt, position) seeds one unit.
+a common value. Unit u reads position slot u (`Compiled.positions(base)`) and its seed group's roots.
+
+The seed inputs `pouw.roots`, `pouw.positions` and `pouw.salt` are registered values the one-stage verifier fills itself,
+so the prover chooses none of them (`sampled_proofs.one_stage.registered`'s `supplied_rows` and `supplied_root`; the
+sampled_proofs README's "Supplied values"; `Compiled.inputs` gives the leaves it fills):
+
+- `pouw.roots`: each seed group's (root(A), root(B)) from the roots the record names for its operands: a served port's
+  root (A's committed tap, an AROW row table included) and a registered value's (B's weights, which the verifier holds to
+  the root it pinned before the salt, `one_stage.registration.check`'s `pinned`).
+- `pouw.positions`: unit u's position is u after every unit of the log's earlier records (`registered.log_base`), so no
+  two records of one log share a position and each (salt, position) seeds one unit.
+- `pouw.salt`: per window, filled by the verifier.
+
+R7 recomputes each one's root and refuses a record that registers any other (`R7-supplied`).
 
 A unit's receipt keys and chain starts come from σ_R, a hash of its own tag, never from the noise seed (decision 121). A unit
 whose folds take keys calls `PouwUnitSeeds` once for both, [seed_j, σ_R] with the masked salt and roots shared, since two

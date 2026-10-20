@@ -243,6 +243,50 @@ def test_run_queue_places_the_job_then_launches_on_the_placed_machine_with_its_w
     assert len(seen) == 4
 
 
+def test_queue_placement_places_with_each_nodes_live_stop_and_falls_back_to_the_description(monkeypatch, capsys):
+    """INF-113: placement runs this tree's `cluster submit` with the stop each candidate node reports (its /etc/research/deadline),
+    so a node renewed on the machine but not in the description takes a job past the described stop's drain; a node whose
+    deadline can't be read places with the description's stop, and the refusal says so."""
+    import tomllib
+    from datetime import datetime
+
+    from research import remote
+    root = Path(__file__).resolve().parents[3]
+    described = tomllib.loads((root / "infra" / "cluster" / "descriptions" / "nebius.toml").read_text())
+    stop = int(datetime.fromisoformat(described["nodes"]["vy-nebius-2"]["stops_at"].replace("Z", "+00:00")).timestamp())
+    spec = {"project": "verity", "submitter": "lane-x", "kind": "agent-test", "max-s": 600, "mem-gb": 8, "preempt": "requeue",
+            "node": "vy-nebius-2"}
+    asked, live = [], {"vy-nebius-2": (stop + 2 * 86400, remote.NODE_DEADLINE)}
+    monkeypatch.setattr(remote, "live_stop", lambda name, project: asked.append((name, project)) or live.get(name, (None, "no answer")))
+    assert remote.queue_placement(root, "r1", spec, now=stop - 3600)["machine"] == "vy-nebius-2"
+    assert asked == [("vy-nebius-2", "verity")], "a pinned job asks only its node"
+    live.clear()
+    with pytest.raises(remote.Refused, match="admission end .* from the description's stops_at"):
+        remote.queue_placement(root, "r2", spec, now=stop - 3600)
+    assert "vy-nebius-2's live deadline is unread (no answer)" in capsys.readouterr().err
+    asked.clear()
+    remote.queue_placement(root, "r3", {**spec, "node": None}, now=stop - 3 * 86400)
+    assert [name for name, _ in asked] == ["vy-nebius-1", "vy-nebius-2"], "an unpinned job asks every node"
+
+
+def test_live_stop_reads_the_nodes_deadline_file_over_ssh(monkeypatch):
+    from research import remote
+    answer = {"rc": 0, "out": b"1792681200 2026-10-22T15:00:00Z renewal\n"}
+    monkeypatch.setattr(remote, "resolve_machine", lambda name, project: {"provider": "ssh", "host": "10.0.0.2", "name": name})
+    monkeypatch.setattr(remote, "ssh_argv", lambda host, port, user, connect_timeout: ["ssh", f"{user}@{host}"])
+    monkeypatch.setattr(remote, "ssh_run", lambda ssh, argv, timeout: subprocess.CompletedProcess(argv, answer["rc"], answer["out"], b"gone"))
+    assert remote.live_stop("vy-nebius-2", "verity") == (1792681200, "/etc/research/deadline")
+    answer["out"] = b"garbled\n"
+    assert remote.live_stop("vy-nebius-2", "verity") == (0, "/etc/research/deadline"), "as the VM's own deadline check reads it"
+    answer["rc"] = 1
+    assert remote.live_stop("vy-nebius-2", "verity") == (None, "`cat /etc/research/deadline` exited 1: gone")
+
+    def unregistered(name, project):
+        raise remote.Refused(f"machine {name!r} is not in machines.toml")
+    monkeypatch.setattr(remote, "resolve_machine", unregistered)
+    assert remote.live_stop("vy-nebius-2", "verity") == (None, "Refused: machine 'vy-nebius-2' is not in machines.toml")
+
+
 def test_run_queue_needs_a_source_tree_with_the_queue_and_queue_flags_need_queue(tmp_path, capsys):
     base = ["run", "--runs-dir", str(tmp_path / "runs"), "--queue", "--project", "verity"]
     assert main([*base, "--mem-gb", "8", "--max-min", "1", "--", "true"]) == 2
@@ -342,6 +386,11 @@ def test_on_auto_sizes_a_suites_run_of_named_suites_from_their_declared_worker_g
         (repo / path / "pyproject.toml").write_text(body)
     subprocess.run(["git", "init", "-q"], cwd=repo, check=True)
     subprocess.run(["git", "add", "-A"], cwd=repo, check=True)
+    (repo / "tools/verity/check").mkdir(parents=True)
+    (repo / "tools/verity/check/suites.py").write_text(
+        "import sys\nrev = sys.argv[sys.argv.index('--changed') + 1]\nif rev == 'broken':\n    sys.exit(2)\n"
+        "hit = 'none' if rev == 'nothing' else 'verity-vllm, verity/core'\n"
+        "print(f'suites: the change from {rev[:12]} touches {0 if hit == \"none\" else 2}: {hit}')\n")
     monkeypatch.chdir(repo)
     runs = ["run", "--runs-dir", str(tmp_path / "runs"), "--on", "auto"]
     suites = ["uv", "run", "tools/verity/check/suites.py"]
@@ -353,7 +402,12 @@ def test_on_auto_sizes_a_suites_run_of_named_suites_from_their_declared_worker_g
             (["--timeout", "2h"], [*suites, "vllm"], (None, 32, 7200)),
             (["--max-min", "30"], ["python3", "tools/verity/check/suites.py", "vllm"], (None, 32, 1800)),
             ([], [*suites, "verity-core"], (None, None, 3600)),               # 30 min and the sync: the kind's hour
-            ([], [*suites, "--quick"], (None, None, None)),
+            # all 3 suites side by side on 4 jobs: (300 + 14400 + 1800) / 4 + the longest, 14400, + the sync (INF-98)
+            ([], [*suites, "--quick"], (None, 32, 19140)),       # in whole minutes
+            # the 2 the change touches, as the checkout's suites.py --list says: (14400 + 1800) / 8 + 14400 + 600
+            (["--cpus", "8"], [*suites, "--changed", "main", "--quick"], (8, 64, 17040)),
+            ([], [*suites, "--changed=nothing"], (None, None, None)),
+            ([], [*suites, "--changed", "broken"], (None, None, None)),     # suites.py can't say: the kind's size
             ([], [*suites, "repository"], (None, None, None)),
             ([], [*suites, "nosuch"], (None, None, None)),
             ([], [*suites, "verity_vllm"], (None, None, None)),             # suites.py's names are normalized: it matches none

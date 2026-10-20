@@ -226,7 +226,7 @@ def test_a_waiter_names_the_slots_holders_and_the_waiters_ahead_of_it_each_time_
     afd = _hold(ahead)
     real_join = SLOT.join
 
-    def join(d, priority=False, who=None):
+    def join(d, priority=False, who=None, **kw):
         ticket, fd = real_join(d, priority, who)
         later = line / f"{int(ticket.name.split('-')[0]) + 1:020d}-12"
         later.write_text(json.dumps({"pid": 12, "run": "r-later"}))
@@ -477,7 +477,7 @@ def test_the_check_that_takes_a_slot_records_who_asked_for_it(tmp_path, monkeypa
     monkeypatch.chdir(tmp_path)
     real, tickets = SLOT.join, []
 
-    def join(d, priority=False, who=None):
+    def join(d, priority=False, who=None, **kw):
         ticket, fd = real(d, priority, who)
         tickets.append(json.loads(ticket.read_text()))
         return ticket, fd
@@ -584,6 +584,47 @@ def test_a_priority_waiter_goes_ahead_of_waiting_lane_checks_and_behind_older_pr
         os.close(fd)
 
 
+def test_ranked_priority_waiters_go_by_rank_then_arrival_and_ahead_of_unranked_ones(tmp_path):
+    """CI-110, 19 Oct 19:12Z: the lowest train's resent check waited an hour behind the checks of trains above it, which came
+    first, though only it could land next. drive ranks a train's check by its members above `main`."""
+    unranked, u = SLOT.join(tmp_path, priority=True)                        # an older drive's check, with no rank
+    high, h = SLOT.join(tmp_path, priority=True, rank=30)                   # a train above, first to arrive
+    low, lo = SLOT.join(tmp_path, priority=True, rank=15)                   # the lowest train, resent later
+    lane, la = SLOT.join(tmp_path)
+    assert SLOT.ahead(low) == 0 and SLOT.ahead(high) == 1 and SLOT.ahead(unranked) == 2 and SLOT.ahead(lane) == 3
+    post, p = SLOT.join(tmp_path, priority=True, rank=0)                    # the post-landing run of `main`
+    assert SLOT.ahead(post) == 0 and SLOT.ahead(low) == 1
+    waits = SLOT.waiting(tmp_path / SLOT.LINE, datetime(2026, 10, 19, tzinfo=timezone.utc))
+    assert [w["priority"] for w in waits] == [True, True, True, True, False]
+    assert all(w["since"][:4].isdigit() for w in waits)                  # a ranked ticket's arrival still parses
+    for fd in (u, h, lo, la, p):
+        os.close(fd)
+    assert SLOT.options(["--priority", "--rank", "7"])[5] == 7 and SLOT.options(["--priority"])[5] is None
+    for bad in (["--rank", "7"], ["--priority", "--rank", "-1"], ["--priority", "--rank", "x"]):
+        with pytest.raises(SystemExit):
+            SLOT.options(bad)
+
+
+def test_drive_s_rank_reaches_slot_py_from_record(monkeypatch):
+    spec2 = importlib.util.spec_from_file_location("repo_check_rank", ROOT / "tools" / "verity" / "check" / "check.py")
+    check = importlib.util.module_from_spec(spec2)
+    spec2.loader.exec_module(check)
+    monkeypatch.setattr(check, "gather_verdicts", lambda d, given=None: None)
+    calls = []
+    monkeypatch.setattr(check.subprocess, "run", lambda cmd, **kw: calls.append(cmd) or subprocess.CompletedProcess(cmd, 0, "", ""))
+    monkeypatch.setattr(check, "lean_deps_url_file", lambda d: None)
+    monkeypatch.delenv("RESEARCH_AGENT_URL", raising=False)
+    monkeypatch.delenv("RESEARCH_LANE", raising=False)
+    monkeypatch.setenv("CHECK_SLOT_RANK", "15")
+    assert check.record(["--on", "vy-nebius-1", "--priority"]) == 0
+    assert calls[-1][calls[-1].index("--") + 1:][:6] == ["python3", "tools/verity/check/slot.py", "--priority", "--rank", "15", "--"]
+    assert check.record(["--on", "vy-nebius-1"]) == 0                      # a lane check has no rank
+    assert "--rank" not in calls[-1]
+    monkeypatch.setenv("CHECK_SLOT_RANK", "15; true")
+    assert check.record(["--on", "vy-nebius-1", "--priority"]) == 0
+    assert "--rank" not in calls[-1]
+
+
 def test_a_trains_slot_is_taken_only_by_a_priority_waiter(tmp_path, monkeypatch, capsys):
     """Node 2, 6 Oct 02:31Z: the lander's train check waited 36 min with priority while quick tiers held both slots; priority
     orders the line but never frees a slot a lane check is running in."""
@@ -625,6 +666,7 @@ def test_priority_reaches_slot_py_from_record_and_unknown_options_are_refused(mo
     monkeypatch.setattr(check, "lean_deps_url_file", lambda d: None)
     monkeypatch.delenv("RESEARCH_AGENT_URL", raising=False)
     monkeypatch.delenv("RESEARCH_LANE", raising=False)
+    monkeypatch.delenv("CHECK_SLOT_RANK", raising=False)
     assert check.record(["--on", "vy-nebius-1", "--priority"]) == 0
     remote = calls[-1][calls[-1].index("--") + 1:]
     assert remote[:4] == ["python3", "tools/verity/check/slot.py", "--priority", "--"] and "--priority" not in remote[4:]

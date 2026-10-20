@@ -16,7 +16,6 @@ this module is imported):
 
 from __future__ import annotations
 
-import os
 import socket
 import sys
 from contextlib import contextmanager, nullcontext
@@ -28,10 +27,6 @@ engine_env.pin(engine_env.EXPORT)
 
 import torch  # noqa: E402
 from torch import nn  # noqa: E402
-
-from verity_vllm.program.frontend.loader_parity import (fp8_block_weights_as_the_loader_does,  # noqa: E402
-                                                       mla_absorbed_weights_as_the_loader_does,
-                                                       post_load_tensors_as_the_loader_does, retie_lm_head_as_the_loader_does)
 
 PIN = {"model": "HuggingFaceTB/SmolLM2-135M", "revision": "93efa2f097d58c2a74874c7e644dbc9b0cee75a2", "dtype": "bfloat16"}
 
@@ -610,8 +605,7 @@ def op_histogram(ep) -> dict[str, int]:
 
 __all__ = ["PIN", "make_vllm_config", "ensure_distributed", "instantiate_meta", "fake_forward_context", "EngineStep", "GreedyRequest",
            "CachedGreedyRequest", "CachedStochasticRequest", "cached_wrapper", "prefix_input", "PaddedGreedyRequest", "make_wrapper", "export_module", "export_step", "op_histogram", "consulted_facts",
-           "attention_impls", "export_facts", "BI_TRITON_KERNELS", "retie_lm_head_as_the_loader_does",
-           "mla_absorbed_weights_as_the_loader_does", "fp8_block_weights_as_the_loader_does", "post_load_tensors_as_the_loader_does"]
+           "attention_impls", "export_facts", "BI_TRITON_KERNELS"]
 
 
 def attention_impls(model: nn.Module) -> dict:
@@ -620,7 +614,7 @@ def attention_impls(model: nn.Module) -> dict:
     in batch-invariant mode (single-split combine). Keyed by `layer_name` — what the exported `unified_attention_with_output`
     node carries — so the attention rule can select the Definition from the layer that will run, not from an env string.  Each
     `MLAAttention` layer has an entry with `"kind": "mla"`: its impl, backend name, kv dtype, heads, scale, context-parallel sizes,
-    dense-MHA prefill backend, the FA3 split count its impl's module calls `flash_attn_varlen_func` with (`num_splits`: the one
+    dense-MHA prefill backend (with its FA version, whether it pads v to the qk head and its scale), the FA3 split count its impl's module calls `flash_attn_varlen_func` with (`num_splits`: the one
     `engine.sparse_mla`'s pin marks, None for vLLM's heuristic), and from the layer's vLLM config the query heads per rank its
     metadata builder keys the decode threshold on and `sparse_mla_force_mqa`, what `rules/vllm_dsa.py` reads.  Any other attention
     layer (`AttentionLayerBase`: DeepSeek-V4's sparse MLA, its window, indexer and compressor-state caches) has an entry with `"kind":
@@ -641,6 +635,8 @@ def attention_impls(model: nn.Module) -> dict:
                   "dcp_world_size", "pcp_world_size", "num_queries_per_kv", "kv_sharing_target_layer_name"):
             v = getattr(impl, k, "<absent>")
             obs[k] = list(v) if isinstance(v, tuple) else (None if isinstance(v, torch.Tensor) and v.numel() == 0 else ("tensor" if isinstance(v, torch.Tensor) else v))
+        if callable(kb := getattr(impl, "k_scale_bits", None)):      # the int8 backend's K scales (engine.int8_attention_vllm)
+            obs["int8_k_scales"] = [b & 0xFFFFFFFF for b in kb(getattr(mod, "layer_name", name))]
         out[getattr(mod, "layer_name", name)] = obs
     for name, mod in model.named_modules():
         if not isinstance(mod, MLAAttention):
@@ -652,6 +648,8 @@ def attention_impls(model: nn.Module) -> dict:
         vc = mod._vllm_config
         out[getattr(mod, "layer_name", name)] = {
             "prefill_backend": None if pb is None else f"{type(pb).__module__}.{type(pb).__qualname__}",
+            "prefill_fa_version": getattr(pb, "vllm_flash_attn_version", None),
+            "prefill_requires_v_padding": getattr(pb, "requires_v_padding", None), "prefill_scale": getattr(pb, "scale", None),
             "kind": "mla", "impl": f"{type(impl).__module__}.{type(impl).__qualname__}",
             "backend": backend.get_name() if hasattr(backend, "get_name") else str(backend),
             "kv_cache_dtype": getattr(impl, "kv_cache_dtype", None), "layer_kv_cache_dtype": getattr(mod, "kv_cache_dtype", None),

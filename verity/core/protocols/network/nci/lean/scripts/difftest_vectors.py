@@ -3,8 +3,9 @@
 
     python scripts/difftest_vectors.py <verity checkout> --out DIR [--count N]
 
-Writes `DIR/difftest/instances.jsonl`, one instance per line as `NciCheck.check` reads it (`NciCheck.Check`'s docstring:
-`program`, `theta`, `owner`, `gamma`, `alpha`), and `DIR/difftest/python.jsonl`, the same line's results from
+Writes `DIR/difftest/instances.jsonl` (N random instances, then `pinned()`'s), one instance per line as `NciCheck.check`
+reads it (`NciCheck.Check`'s docstring: `program`, `theta`, `owner`, `gamma`, `alpha`), and `DIR/difftest/python.jsonl`,
+the same line's results from
 `scripts/nci_reference.py`. The Lean audit runs `NciCheck/DifftestMain.lean` on both files (`runs` in `lean-audit.json`,
 which pins their SHA-256), and `verity/core/protocols/network/tests/test_nci_lean_difftest.py` checks that this script
 still writes them.
@@ -13,10 +14,12 @@ A declaration is a descriptor v1 Program built with `verity.ml.circuits` in one 
 reduction tree, a chain of matrix-vector products (the NCI draft's updated multiplications: products and their sums),
 and a nested one whose gates sit in calls, batches (of a primitive and of a composite) and a scan. Its parameters are
 values and arrays of widths from 1 to 32 bits, some bound at registration, and its primitives take one to four values
-or an array. θ is empty, every input, the registered inputs, or a random set of inputs. A division is one IU, one IU
-per gate, runs of consecutive gates or a random assignment, numbered in a random order; `Γ` is at, below or above the
-division's largest IU, and `α` at, just below or just above its largest NCI, written reduced or not. About a third of
-the instances are malformed, each in one way the check refuses (every code of `NciCheck.Check`).
+or an array. θ is empty, every input (refused, `theta-not-registered`, where one is bound per run), the registered
+inputs, or a random set of them. A division is one IU, one IU per gate, runs of consecutive gates or a random
+assignment, numbered in a random order; `Γ` is at, below or above the division's largest IU, and `α` at, just below or
+just above its largest NCI, written reduced or not. About a third of the instances are malformed, each in one way the
+check refuses (every code of `NciCheck.Check`). The data ends with `pinned()`'s two instances on the declaration worked
+by hand (`hand()`): θ every input, which the check must refuse, and θ the registered input, which it must accept.
 """
 from __future__ import annotations
 
@@ -30,7 +33,7 @@ from pathlib import Path
 import verity.ml.circuits
 from verity.ml.circuits import codec
 from verity.ml.circuits.defs import CompositeDefinition, PrimitiveDefinition, bind
-from verity.ml.circuits.program import Program, is_registered
+from verity.ml.circuits.program import Program
 from verity.ml.circuits.refs import array_of, tuple_of
 from verity.ml.circuits.types import Array, Tuple, Value
 
@@ -41,8 +44,9 @@ _spec.loader.exec_module(reference)
 COUNT = 4000
 WIDTHS = [1, 2, 3, 8, 16, 32]
 SHAPES = ["dag", "chain", "tree", "matmul", "nested"]
-MALFORMED = ["instance", "params", "program", "not-topological", "theta-unknown", "theta-not-input", "theta-duplicate",
-             "owner-length", "owner-entry", "input-in-iu", "gate-in-no-iu", "empty-iu"]
+MALFORMED = ["instance", "params", "program", "not-topological", "theta-unknown", "theta-not-input",
+             "theta-not-registered", "theta-duplicate", "owner-length", "owner-entry", "input-in-iu", "gate-in-no-iu",
+             "empty-iu"]
 
 _PRIMS: dict[tuple, PrimitiveDefinition] = {}
 
@@ -293,22 +297,22 @@ def _forward(desc: dict) -> bool:
 def instance(seed: int) -> dict:
     """Instance `seed`, with what it was made from (`shape`, `theta_kind`, `division`, `malformed`)."""
     rng = random.Random(seed)
-    text, kind, registered = program(rng, seed)
-    w, inp, _ = reference.circuit(text)
+    text, kind, _ = program(rng, seed)
+    w, inp, reg, _ = reference.circuit(text)
     N = len(w)
     inputs = [g for g in range(N) if inp[g]]
     computed = [g for g in range(N) if not inp[g]]
-    reg_gates = _registered_gates(text, registered)
+    reg_gates = [g for g in range(N) if reg[g]]
     theta_kind = rng.choice(["none", "all", "registered", "random"])
     theta = {"none": [], "all": inputs, "registered": reg_gates,
-             "random": [g for g in inputs if rng.random() < 0.5]}[theta_kind]
+             "random": [g for g in reg_gates if rng.random() < 0.5]}[theta_kind]
     theta = rng.sample(theta, len(theta))
     how, labels = division(rng, computed)
     owner: list = ["input"] * N
     for g, u in zip(computed, labels, strict=True):
         owner[g] = u
     inst = {"program": text, "theta": theta, "owner": owner, "gamma": 0, "alpha": [0, 1]}
-    probe = reference.check(inst | {"gamma": N, "alpha": [sum(w) + 1, 1]})
+    probe = reference.check(inst | {"theta": [g for g in theta if reg[g]], "gamma": N, "alpha": [sum(w) + 1, 1]})
     ius = probe["ius"]
     biggest = max((s for s, _ in ius), default=0)
     crit = max((Fraction(r, s) for s, r in ius), default=Fraction(0))
@@ -316,22 +320,18 @@ def instance(seed: int) -> dict:
     inst["alpha"] = _alpha(rng, crit)
     bad = rng.choice(MALFORMED) if rng.random() < 0.35 else None
     if bad:
-        _break(rng, inst, bad, inp)
+        _break(rng, inst, bad, inp, reg)
     return {"instance": inst, "shape": kind, "theta_kind": theta_kind, "division": how, "malformed": bad}
 
 
-def _registered_gates(text: str, registered: list[str]) -> list[int]:
-    desc = json.loads(text)
-    C = codec.decode_program(desc, reference.declared(desc)).circuit
-    return [g for g in range(C.size) if is_registered(C.gate(g).prim)] if registered else []
-
-
-def _break(rng, inst: dict, bad: str, inp: list[bool]) -> None:
+def _break(rng, inst: dict, bad: str, inp: list[bool], reg: list[bool]) -> None:
     """Make `inst` malformed in the way `bad` names."""
     N = len(inp)
     owner, theta = inst["owner"], inst["theta"]
     computed = [g for g in range(N) if not inp[g]]
     inputs = [g for g in range(N) if inp[g]]
+    registered = [g for g in inputs if reg[g]]
+    per_run = [g for g in inputs if not reg[g]]
     if bad == "instance":
         how = rng.randrange(4)
         if how == 0:
@@ -356,8 +356,10 @@ def _break(rng, inst: dict, bad: str, inp: list[bool]) -> None:
         theta.insert(rng.randint(0, len(theta)), rng.choice([N, N + rng.randint(1, 5), -1, "0", None, 1.5]))
     elif bad == "theta-not-input" and computed:
         theta.insert(rng.randint(0, len(theta)), rng.choice(computed))
-    elif bad == "theta-duplicate" and inputs:
-        g = rng.choice(theta or inputs)
+    elif bad == "theta-not-registered" and per_run:
+        theta.insert(rng.randint(0, len(theta)), rng.choice(per_run))
+    elif bad == "theta-duplicate" and registered:
+        g = rng.choice(theta or registered)
         if not theta:
             theta.append(g)
         theta.insert(rng.randint(0, len(theta)), g)
@@ -377,6 +379,38 @@ def _break(rng, inst: dict, bad: str, inp: list[bool]) -> None:
         owner[rng.choice(computed)] = rng.choice([top + 2, top + 1 + N, 10 ** 15])
 
 
+def hand() -> str:
+    """A declaration worked by hand: a: Value<8> (registered), b: Value<16> (bound per run); c = f(a, b): Value<4>;
+    d = f(c, b): Value<2>; e = f(d, a): Value<1>. Gates, and root nodes, 0 a, 1 b, 2 c, 3 d, 4 e."""
+    f1, f2, f3 = prim((8, 16), 4), prim((4, 16), 2), prim((2, 8), 1)
+
+    def body(B, S, a, b):
+        c = B.call(f1, a, b)
+        d = B.call(f2, c, b)
+        return B.call(f3, d, a)
+    fn = bind(CompositeDefinition("HandDecl", 1, (), lambda S: ((("a", Value(8)), ("b", Value(16))), Value(1)), body,
+                                  register=False))
+    return codec.canonical_json(codec.encode_program(Program(fn, registered=("a",)))).decode()
+
+
+def pinned() -> list[dict]:
+    """The two instances the data ends with, on `hand()` divided as {c}, {d, e}, with the result each must get (`expect`):
+    θ every input (`theta_kind` "all"), which holds b, bound per run, so it is refused; and θ the registered input
+    alone, which saves IU 1 a's 8 bits and gets a verdict. Gate ids are root node ids here, so each is an instance of
+    `NciCheck.Desc` too."""
+    base = {"program": hand(), "owner": ["input", "input", 0, 1, 1], "gamma": 2, "alpha": [16, 1]}
+    return [
+        {"instance": base | {"theta": [0, 1]}, "theta_kind": "all", "expect": {"error": "theta-not-registered"}},
+        {"instance": base | {"theta": [0]}, "theta_kind": "registered",
+         "expect": {"gates": 5, "ius": [[1, 16], [2, 20]], "complies": True, "failure": None}},
+    ]
+
+
+def total(count: int = COUNT) -> int:
+    """How many instances the data has: `count` random ones, then `pinned()`'s."""
+    return count + len(pinned())
+
+
 def python_results(inst: dict) -> dict:
     return reference.check(inst)
 
@@ -386,13 +420,13 @@ def line(obj) -> str:
 
 
 def write(out: Path, count: int = COUNT) -> dict[str, Path]:
-    """Both files for instances 0 … count − 1 under ``out/difftest``."""
+    """Both files for instances 0 … count − 1, then `pinned()`'s, under ``out/difftest``."""
     d = out / "difftest"
     d.mkdir(parents=True, exist_ok=True)
     paths = {"difftest/instances.jsonl": d / "instances.jsonl", "difftest/python.jsonl": d / "python.jsonl"}
+    insts = [*(instance(seed)["instance"] for seed in range(count)), *(p["instance"] for p in pinned())]
     with open(paths["difftest/instances.jsonl"], "w") as fi, open(paths["difftest/python.jsonl"], "w") as fp:
-        for seed in range(count):
-            inst = instance(seed)["instance"]
+        for inst in insts:
             fi.write(line(inst))
             fp.write(line(python_results(inst)))
     return paths

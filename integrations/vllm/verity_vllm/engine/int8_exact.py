@@ -59,8 +59,8 @@ def int_mm(xq: torch.Tensor, w: torch.Tensor) -> torch.Tensor:
 
 
 def dequantize(y: torch.Tensor, s_a: torch.Tensor, s_w: torch.Tensor) -> torch.Tensor:
-    """RN_bf16(RN32(RN32(RN32(Y) * s_a[i]) * s_w[n]))."""
-    return (y.to(torch.float32) * s_a[:, None] * s_w[None, :]).to(torch.bfloat16)
+    """RN_bf16(RN32(RN32(RN32(Y) * s_a[i]) * s_w[n])); s_w [N] or [N, 1]."""
+    return (y.to(torch.float32) * s_a[:, None] * s_w.reshape(1, -1)).to(torch.bfloat16)
 
 
 def plain_linear(x: torch.Tensor, w: torch.Tensor, s_w: torch.Tensor) -> torch.Tensor:
