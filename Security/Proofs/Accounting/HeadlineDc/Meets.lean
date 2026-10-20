@@ -441,7 +441,7 @@ theorem counts_nonneg {n : ℕ} (v : Sparse) (k : Fin n) : 0 ≤ Sparse.counts v
 /-- **`Sm90SheetHeadline`'s hypotheses hold together at an honest play** on one-bit coins: honest's IGMMA s8
 m64n256k32 (writer kind 12) heads every word and the design's li (route 0) folds every one. -/
 theorem sm90Sheet_meets :
-    ∃ (Pl : Play Bool Sm90.checks (Fin 39) (Fin 24) Unit Empty) (G : ReceiptGame Bool Sm90.checks)
+    ∃ (Pl : Play Bool Sm90.checks (Fin 40) (Fin 24) Unit Empty) (G : ReceiptGame Bool Sm90.checks)
       (Uf : Unfolded Bool Sm90.checks) (pf : ProofLayer Bool Sm90.checks 1 Unit) (δfork δzk : ℝ),
       (Sm90.checks : ℝ) * (Real.sqrt δfork + ((1 : ℕ) : ℝ) * δzk) ≤ (1 / 2) ^ 41 ∧ (∀ x, (Pl.run x).Split) ∧
       (∀ x, SheetClock Sm90.sheet (Pl.run x).run) ∧ (∀ x, SheetDispatch (Pl.run x).run) ∧
@@ -459,7 +459,7 @@ theorem sm90Sheet_meets :
 /-- **`Sm90MeasuredHeadline`'s hypotheses hold together at an honest play** on one-bit coins: honest's IGMMA s8
 m64n256k32 (writer kind 0) heads every word and the design's li (route 0) folds every one, within DC-90-ri's rows. -/
 theorem sm90Measured_meets :
-    ∃ (Pl : Play Bool Sm90.checks (Fin 39) (Fin 2) Unit Empty) (G : ReceiptGame Bool Sm90.checks)
+    ∃ (Pl : Play Bool Sm90.checks (Fin 40) (Fin 2) Unit Empty) (G : ReceiptGame Bool Sm90.checks)
       (Uf : Unfolded Bool Sm90.checks) (pf : ProofLayer Bool Sm90.checks 1 Unit) (δfork δzk : ℝ),
       (Sm90.checks : ℝ) * (Real.sqrt δfork + ((1 : ℕ) : ℝ) * δzk) ≤ (1 / 2) ^ 41 ∧ (∀ x, (Pl.run x).Split) ∧
       (∀ x, FacetCeilings Sm90Measured.machine (Pl.run x).run) ∧
@@ -476,7 +476,7 @@ theorem sm90Measured_meets :
 /-- **`Sm100SheetHeadline`'s hypotheses hold together at an honest play** on one-bit coins: honest's UTCIMMA
 m128n256 (writer kind 4) heads every word and the design's li (route 0) folds every one. -/
 theorem sm100Sheet_meets :
-    ∃ (Pl : Play Bool Sm100.checks (Fin 37) (Fin 13) Unit Empty) (G : ReceiptGame Bool Sm100.checks)
+    ∃ (Pl : Play Bool Sm100.checks (Fin 38) (Fin 13) Unit Empty) (G : ReceiptGame Bool Sm100.checks)
       (Uf : Unfolded Bool Sm100.checks) (pf : ProofLayer Bool Sm100.checks 1 Unit) (δfork δzk : ℝ),
       (Sm100.checks : ℝ) * (Real.sqrt δfork + ((1 : ℕ) : ℝ) * δzk) ≤ (1 / 2) ^ 41 ∧ (∀ x, (Pl.run x).Split) ∧
       (∀ x, SheetClock Sm100.sheet (Pl.run x).run) ∧ (∀ x, SheetDispatch (Pl.run x).run) ∧
@@ -495,7 +495,7 @@ theorem sm100Sheet_meets :
 /-- **`Sm100MeasuredHeadline`'s hypotheses hold together at an honest play** on one-bit coins: honest's UTCIMMA
 m128n256 (writer kind 4) heads every word and the design's li (route 0) folds every one, within DC-100-ri's rows. -/
 theorem sm100Measured_meets :
-    ∃ (Pl : Play Bool Sm100.checks (Fin 37) (Fin 13) Unit Empty) (G : ReceiptGame Bool Sm100.checks)
+    ∃ (Pl : Play Bool Sm100.checks (Fin 38) (Fin 13) Unit Empty) (G : ReceiptGame Bool Sm100.checks)
       (Uf : Unfolded Bool Sm100.checks) (pf : ProofLayer Bool Sm100.checks 1 Unit) (δfork δzk : ℝ),
       (Sm100.checks : ℝ) * (Real.sqrt δfork + ((1 : ℕ) : ℝ) * δzk) ≤ (1 / 2) ^ 41 ∧ (∀ x, (Pl.run x).Split) ∧
       (∀ x, FacetCeilings Sm100Measured.machine (Pl.run x).run) ∧

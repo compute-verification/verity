@@ -8,7 +8,8 @@ and checked against it by `benchmarks/pouw/tests/test_lean_headline_dc.py`: edit
 this file. `Accounting.Guarantees.TS.Sm90MeasuredHeadline` reads it.
 
 * `rowNames`, `dc90ri`, `machine`: the measured vector DC-90-ri, 15 rows of SMSP-cycles a warp instruction at its
-  epoch's census, each sparse over `Sm90.classes`; every facet SM-clocked, f_max 1980 MHz.
+  epoch's census, each sparse over `Sm90.classes`; every facet SM-clocked, f_max 1980 MHz. `UNLISTED` is A2's catch-all
+  here: every warp instruction no other class prices on DC-90-ri counts there, at the measured issue slot alone.
 * `d2s`, `model`: `dither-2s-licpw-redux-p1-l32` on that machine, its writer kinds honest's form and the uniform `UNI`
   (2, a UR pair: RT-HOPPER-7): the census prices every other tensor form on the joint rows at the scalar coefficient, a
   lower bound on its issue cost, so they are off the menu and `NoSum` carries them; `Sm90.d2s`'s vector classes, fold
@@ -36,7 +37,7 @@ def dc90ri : List Sparse := [
    (10, 1, 1), (11, 1, 1), (12, 1, 1), (13, 1, 1), (14, 1, 1), (15, 1, 1), (16, 1, 1), (17, 1, 1), (18, 1, 1),
    (19, 1, 1), (20, 1, 1), (21, 1, 1), (22, 1, 1), (23, 1, 1), (24, 1, 1), (25, 1, 1), (26, 1, 1), (27, 1, 1),
    (28, 1, 1), (29, 1, 1), (30, 1, 1), (31, 1, 1), (32, 1, 1), (33, 1, 1), (34, 1, 1), (35, 1, 1), (36, 1, 1),
-   (37, 1, 1), (38, 9837515209999999, 10000000000000000)],
+   (37, 1, 1), (38, 9837515209999999, 10000000000000000), (39, 1, 1)],
   -- 1: M
   [(3, 12550304759050461, 100000000000000), (4, 11952959010285431, 2000000000000000),
    (6, 6275453632147843, 100000000000000), (7, 6275172462133571, 50000000000000),
@@ -126,8 +127,8 @@ def dc90ri : List Sparse := [
   [(31, 145027, 500)]]
 
 /-- The measured machine: DC-90-ri's rows over `Sm90.classes`. -/
-noncomputable def machine : Machine (Fin 39) (Fin 15) :=
-  rowsMachine 39 15 dc90ri 1980
+noncomputable def machine : Machine (Fin 40) (Fin 15) :=
+  rowsMachine 40 15 dc90ri 1980
 
 /-- `dither-2s-licpw-redux-p1-l32`'s design data on DC-90-ri: writer kinds as (class, ω), and `Sm90.d2s`'s routes. -/
 def d2s : DesignData where
@@ -143,8 +144,8 @@ def d2s : DesignData where
   Nw := Sm90.d2s.Nw
 
 /-- `dither-2s-licpw-redux-p1-l32`'s TS model on the measured machine. -/
-noncomputable def model : Model (Fin 39) (Fin 15) (Fin 2) Unit Empty (Fin 14) Unit :=
-  d2s.model 39 2 14 machine
+noncomputable def model : Model (Fin 40) (Fin 15) (Fin 2) Unit Empty (Fin 14) Unit :=
+  d2s.model 40 2 14 machine
 
 /-- ♭'s fold a unit on DC-90-ri: the lane fold for 4096 words, the fold routes' cheapest mix, by share of the words:
 cp-red2-generic 0.6632, cp-red8-generic 0.3368. -/
@@ -154,8 +155,8 @@ def flatFold : Sparse := [(0, 577013, 8744), (1, 17579, 4372), (22, 64, 1)]
 def flatSkip : Sparse := [(0, 125777099033414960567038367679, 216302012937701487883735000000)]
 
 /-- The floor program ♭ on DC-90-ri, labelled. -/
-noncomputable def flat : Labelled (Fin 39) :=
-  labelled 39 Sm90.flatWords flatFold Sm90.flatFill flatSkip
+noncomputable def flat : Labelled (Fin 40) :=
+  labelled 40 Sm90.flatWords flatFold Sm90.flatFill flatSkip
 
 /-- π*: the certificate, its weights exact and summing to 1. -/
 noncomputable def lamStar : Fin 15 → ℝ :=

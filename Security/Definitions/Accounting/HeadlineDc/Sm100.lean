@@ -7,7 +7,7 @@ Written by `benchmarks/pouw/lean_headline_dc.py` from the machine model's data (
 and checked against it by `benchmarks/pouw/tests/test_lean_headline_dc.py`: edit the data and rerun the exporter, never
 this file. `Accounting.Guarantees.TS.Sm100SheetHeadline` reads it.
 
-* `classes`: the 37 instruction classes of the DS-100 census, in the order `Fin 37` indexes them. `NOROW` is A2's
+* `classes`: the 38 instruction classes of the DS-100 census, in the order `Fin 38` indexes them. `NOROW` is A2's
   catch-all: every warp instruction no other class names counts there, at its issue slot alone.
 * `ds100`, `sheet`: the B200's data sheet (DS-100): f_max 1965 MHz (the driver's reported maximum (the data sheet gives
   no clock)); each tensor class's dense MACs a warp instruction (sm_100's tcgen05 MMA whole (`m·n·k`), its mma.sync as
@@ -37,7 +37,7 @@ def classes : List String := [
   "ALU", "ATOME32", "ATOMS32", "FFMA", "IMAD", "IMMA16816_S8", "IMMA16832_S8", "LDS128", "LDTM_16X128B_X8",
   "LDTM_16X256B_X4", "LDTM_16X64B_X16", "LDTM_32X32B_X1", "LDTM_32X32B_X128", "LDTM_32X32B_X16", "LDTM_32X32B_X32",
   "LDTM_32X32B_X4", "LDTM_32X32B_X64", "NOROW", "REDG32", "REDUX", "SHFL", "STG128", "STG32", "STS128", "STS32", "UNI",
-  "UTCHMMA_F16_M128_N256", "UTCIMMA_M128_N128", "UTCIMMA_M128_N256", "UTCIMMA_M128_N32", "UTCIMMA_M128_N64",
+  "UNLISTED", "UTCHMMA_F16_M128_N256", "UTCIMMA_M128_N128", "UTCIMMA_M128_N256", "UTCIMMA_M128_N32", "UTCIMMA_M128_N64",
   "UTCIMMA_M64_N128", "UTCIMMA_M64_N256", "UTCIMMA_M64_N64", "UTCQMMA_E4M3_M128_N128", "UTCQMMA_E4M3_M128_N256",
   "VIADD"]
 
@@ -62,37 +62,37 @@ def Pipe.width : Pipe → ℕ
 def ds100 : SheetData Pipe where
   fmax := 1965
   macs := [
-    0, 0, 0, 0, 0, 2048, 4096, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 524288, 524288, 1048576, 131072,
-    262144, 262144, 524288, 131072, 524288, 1048576, 0]
+    0, 0, 0, 0, 0, 2048, 4096, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 524288, 524288, 1048576,
+    131072, 262144, 262144, 524288, 131072, 524288, 1048576, 0]
   peak := [
-    0, 0, 0, 0, 0, 8192, 8192, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 4096, 8192, 8192, 8192, 8192,
+    0, 0, 0, 0, 0, 8192, 8192, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 4096, 8192, 8192, 8192, 8192,
     8192, 8192, 8192, 8192, 8192, 0]
   pipe := [
     some .alu, none, none, none, some .imad, none, none, none, none, none, none, none, none, none, none, none, none,
     none, none, none, some .shfl, none, none, none, none, none, none, none, none, none, none, none, none, none, none,
-    none, none]
+    none, none, none]
   width := Pipe.width
   smem := [
-    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
 
 /-- The data sheet over the census's classes. -/
-noncomputable def sheet : Sheet (Fin 37) Pipe := ds100.sheet 37
+noncomputable def sheet : Sheet (Fin 38) Pipe := ds100.sheet 38
 
 /-- `dither-2s-licpw-redux-ldtm0-l32`'s design data: writer kinds as (class, ω), vector classes, fold routes. -/
 def d2s : DesignData where
   writers := [
     (5, 128),  -- IMMA16816_S8
     (6, 128),  -- IMMA16832_S8
-    (26, 32768),  -- UTCHMMA_F16_M128_N256
-    (27, 16384),  -- UTCIMMA_M128_N128
-    (28, 32768),  -- UTCIMMA_M128_N256
-    (29, 4096),  -- UTCIMMA_M128_N32
-    (30, 8192),  -- UTCIMMA_M128_N64
-    (31, 8192),  -- UTCIMMA_M64_N128
-    (32, 16384),  -- UTCIMMA_M64_N256
-    (33, 4096),  -- UTCIMMA_M64_N64
-    (34, 16384),  -- UTCQMMA_E4M3_M128_N128
-    (35, 32768),  -- UTCQMMA_E4M3_M128_N256
+    (27, 32768),  -- UTCHMMA_F16_M128_N256
+    (28, 16384),  -- UTCIMMA_M128_N128
+    (29, 32768),  -- UTCIMMA_M128_N256
+    (30, 4096),  -- UTCIMMA_M128_N32
+    (31, 8192),  -- UTCIMMA_M128_N64
+    (32, 8192),  -- UTCIMMA_M64_N128
+    (33, 16384),  -- UTCIMMA_M64_N256
+    (34, 4096),  -- UTCIMMA_M64_N64
+    (35, 16384),  -- UTCQMMA_E4M3_M128_N128
+    (36, 32768),  -- UTCQMMA_E4M3_M128_N256
     (25, 2)  -- UNI
   ]
   vec := [3, 4, 0, 20]  -- FFMA, IMAD, ALU, SHFL
@@ -120,11 +120,11 @@ def d2s : DesignData where
 def flatFill : Sparse := []
 
 /-- `dither-2s-licpw-redux-ldtm0-l32`'s TS model on the data sheet's machine. -/
-noncomputable def model : Model (Fin 37) (SheetRow Pipe) (Fin 13) Unit Empty (Fin 14) Unit :=
-  d2s.model 37 13 14 sheet.machine
+noncomputable def model : Model (Fin 38) (SheetRow Pipe) (Fin 13) Unit Empty (Fin 14) Unit :=
+  d2s.model 38 13 14 sheet.machine
 
 /-- ♭'s word production a unit: the MMA and the operand floor. -/
-def flatWords : Sparse := [(28, 1, 1)]
+def flatWords : Sparse := [(29, 1, 1)]
 
 /-- ♭'s fold a unit: the lane fold for 32768 words, the fold routes' cheapest mix, by share of the words: cp-red2 65/72,
 cp-red8 7/72. -/
@@ -134,7 +134,7 @@ def flatFold : Sparse := [(0, 1601, 3), (4, 512, 1), (18, 62, 3)]
 def flatSkip : Sparse := [(3, 745063066358, 99301939663)]
 
 /-- The floor program ♭, labelled. -/
-noncomputable def flat : Labelled (Fin 37) := labelled 37 flatWords flatFold flatFill flatSkip
+noncomputable def flat : Labelled (Fin 38) := labelled 38 flatWords flatFold flatFill flatSkip
 
 /-- π*: the certificate, its weights exact and summing to 1. -/
 noncomputable def lamStar : SheetRow Pipe → ℝ

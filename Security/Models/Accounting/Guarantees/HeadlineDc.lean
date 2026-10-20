@@ -67,7 +67,9 @@ Per device:
   nobody timed on it (`FacetCeilings` reads every line), so a class's price only falls short of its cost. The H200's
   REDG32 also costs 290 SMSP-cycles on `AT90`, the L2's atomic row (RT2-HOPPER's G5); ATOME32, the same reduction
   through a generic address, has no `AT90` line (AT90 was timed on REDG alone). Each sheet declares A2's catch-all,
-  `NOROW` at its issue slot alone: every warp instruction no other class names counts there (RT4-SHEET-7, -9). Without
+  `NOROW` at its issue slot alone: every warp instruction no other class names counts there (RT4-SHEET-7, -9). Each
+  measured reading declares `UNLISTED`, at one slot on the measured issue row and nothing on another row, since NOROW
+  carries SHFL's joint issue lines there; RT4-SHEET-9's unlisted instructions count in it. Without
   ffill in ♭, `setup`'s floor program on DC-90-ri writes every word on the IGMMA, and `Sm90Measured.flat` is that
   floor, its shares exact (`B_♭` 195.30 a unit; the machine model's reading is 1.348% at `q = ½`). It is over 1%;
   crediting ffill would need a check that reads its chains (RT-HB-HEAD-1). ε_skip prices the P·V peel at sm_90a's own
@@ -79,7 +81,7 @@ Per device:
   `tcgen05.ld` a MMA: the operands-free cheater never pays them, so crediting them was all of DC-100-ri's
   `ε_machine`. Honest still runs them; a lower credit is sound for any program. Its fold menu is the H200's, at the
   same sound price (the same classes but ISETP, which its loops don't issue, with VIADD, at one issue slot, and MOV in
-  the catch-all NOROW; the B200 has no atomic row, so REDG32 and ATOME32 are an issue slot alone there): ♭ folds by
+  NOROW, the sheet's catch-all; the B200 has no atomic row, so REDG32 and ATOME32 are an issue slot alone there): ♭ folds by
   CP_RED2 and CP_RED8 (65/72 and 7/72 of the words) on DS-100 and by CP_RED2 alone on DC-100-ri. DS-100's `f_max`
   (1965 MHz) is the driver's reported maximum: the data sheet gives no clock.
 
@@ -166,7 +168,7 @@ each tensor figure is stated at, the 1830 MHz tensor boost clock, not f_max's 19
 machine model put this reading at 2.253% at #2695's menu (CP_SEG4 and CP_SEG4U its only routes), since its ε first
 moves at tensor lines 1.060× the sheet's. -/
 def Sm90SheetHeadline : Prop :=
-  ∀ (Ω : Type) [Fintype Ω] (Pl : Play Ω Sm90.checks (Fin 39) (Fin 24) Unit Empty) (G : ReceiptGame Ω Sm90.checks)
+  ∀ (Ω : Type) [Fintype Ω] (Pl : Play Ω Sm90.checks (Fin 40) (Fin 24) Unit Empty) (G : ReceiptGame Ω Sm90.checks)
     (Uf : Unfolded Ω Sm90.checks) {V : Type} {nπ : ℕ} (pf : ProofLayer Ω Sm90.checks nπ V) (δfork δzk : ℝ),
     (Sm90.checks : ℝ) * (Real.sqrt δfork + nπ * δzk) ≤ (1 / 2) ^ 41 → (∀ x, (Pl.run x).Split) →
     (∀ x, SheetClock Sm90.sheet (Pl.run x).run) → (∀ x, SheetDispatch (Pl.run x).run) →
@@ -200,7 +202,7 @@ H200's probes gives about 1.64% in the machine model at #2699's earlier design, 
 coefficient heads a word for about 0.0077 against honest's 0.0153 (at its tensor-pipe coefficient, about 0.031, it
 moves nothing). -/
 def Sm90MeasuredHeadline : Prop :=
-  ∀ (Ω : Type) [Fintype Ω] (Pl : Play Ω Sm90.checks (Fin 39) (Fin 2) Unit Empty) (G : ReceiptGame Ω Sm90.checks)
+  ∀ (Ω : Type) [Fintype Ω] (Pl : Play Ω Sm90.checks (Fin 40) (Fin 2) Unit Empty) (G : ReceiptGame Ω Sm90.checks)
     (Uf : Unfolded Ω Sm90.checks) {V : Type} {nπ : ℕ} (pf : ProofLayer Ω Sm90.checks nπ V) (δfork δzk : ℝ),
     (Sm90.checks : ℝ) * (Real.sqrt δfork + nπ * δzk) ≤ (1 / 2) ^ 41 → (∀ x, (Pl.run x).Split) →
     (∀ x, FacetCeilings Sm90Measured.machine (Pl.run x).run) →
@@ -233,7 +235,7 @@ proved over the B200's whole instruction set. FOLD-OPT's premise has no slack (`
 price); the reading's against 1% is 0.219%. FILL-OPT is not a hypothesis: the design has no filler, so it holds at
 any run. -/
 def Sm100SheetHeadline : Prop :=
-  ∀ (Ω : Type) [Fintype Ω] (Pl : Play Ω Sm100.checks (Fin 37) (Fin 13) Unit Empty) (G : ReceiptGame Ω Sm100.checks)
+  ∀ (Ω : Type) [Fintype Ω] (Pl : Play Ω Sm100.checks (Fin 38) (Fin 13) Unit Empty) (G : ReceiptGame Ω Sm100.checks)
     (Uf : Unfolded Ω Sm100.checks) {V : Type} {nπ : ℕ} (pf : ProofLayer Ω Sm100.checks nπ V) (δfork δzk : ℝ),
     (Sm100.checks : ℝ) * (Real.sqrt δfork + nπ * δzk) ≤ (1 / 2) ^ 41 → (∀ x, (Pl.run x).Split) →
     (∀ x, SheetClock Sm100.sheet (Pl.run x).run) → (∀ x, SheetDispatch (Pl.run x).run) →
@@ -263,7 +265,7 @@ and no pipe row (the sound price: no row is asserted that nobody timed), ♭ and
 FOLD-OPT's premise has no slack; the reading's against 1% is 0.102%. FILL-OPT is not a hypothesis: the design has
 no filler. -/
 def Sm100MeasuredHeadline : Prop :=
-  ∀ (Ω : Type) [Fintype Ω] (Pl : Play Ω Sm100.checks (Fin 37) (Fin 13) Unit Empty) (G : ReceiptGame Ω Sm100.checks)
+  ∀ (Ω : Type) [Fintype Ω] (Pl : Play Ω Sm100.checks (Fin 38) (Fin 13) Unit Empty) (G : ReceiptGame Ω Sm100.checks)
     (Uf : Unfolded Ω Sm100.checks) {V : Type} {nπ : ℕ} (pf : ProofLayer Ω Sm100.checks nπ V) (δfork δzk : ℝ),
     (Sm100.checks : ℝ) * (Real.sqrt δfork + nπ * δzk) ≤ (1 / 2) ^ 41 → (∀ x, (Pl.run x).Split) →
     (∀ x, FacetCeilings Sm100Measured.machine (Pl.run x).run) →

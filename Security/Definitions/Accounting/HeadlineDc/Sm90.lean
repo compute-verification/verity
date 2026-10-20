@@ -7,7 +7,7 @@ Written by `benchmarks/pouw/lean_headline_dc.py` from the machine model's data (
 and checked against it by `benchmarks/pouw/tests/test_lean_headline_dc.py`: edit the data and rerun the exporter, never
 this file. `Accounting.Guarantees.TS.Sm90SheetHeadline` reads it.
 
-* `classes`: the 39 instruction classes of the DS-90 census, in the order `Fin 39` indexes them. `NOROW` is A2's
+* `classes`: the 40 instruction classes of the DS-90 census, in the order `Fin 40` indexes them. `NOROW` is A2's
   catch-all: every warp instruction no other class names counts there, at its issue slot alone.
 * `ds90`, `sheet`: the H200's data sheet (DS-90): f_max 1980 MHz (EPS1 DC's measured f_max at default clocks; the
   sheet's TOPS are at 1830 MHz); each tensor class's dense MACs a warp instruction (sm_90's wgmma as one warp's m16
@@ -39,7 +39,8 @@ def classes : List String := [
   "HGMMA_F16_N256", "HGMMA_TF32_N256", "HMMA16816_BF16", "HMMA16816_F16", "HMMA1688_TF32", "IGMMA_S8_N128",
   "IGMMA_S8_N16", "IGMMA_S8_N192", "IGMMA_S8_N256", "IGMMA_S8_N256_RS", "IGMMA_S8_N32", "IGMMA_S8_N64", "IGMMA_S8_N8",
   "IGMMA_U8S8_N256", "IMAD", "IMMA16816_S8", "IMMA16832_S8", "ISETP", "LDS128", "NOROW", "QGMMA_E4M3_N128",
-  "QGMMA_E4M3_N256", "QGMMA_E5M2_N256", "REDG32", "REDUX", "SHFL", "STG128", "STG32", "STS128", "STS32", "UNI"]
+  "QGMMA_E4M3_N256", "QGMMA_E5M2_N256", "REDG32", "REDUX", "SHFL", "STG128", "STG32", "STS128", "STS32", "UNI",
+  "UNLISTED"]
 
 /-- The Nsight Compute pipes the sheet rates (A4). -/
 inductive Pipe
@@ -63,20 +64,21 @@ def ds90 : SheetData Pipe where
   fmax := 1980
   macs := [
     0, 0, 0, 0, 0, 0, 32768, 65536, 65536, 32768, 2048, 2048, 1024, 65536, 8192, 98304, 131072, 131072, 16384, 32768,
-    4096, 131072, 0, 2048, 4096, 0, 0, 0, 65536, 131072, 131072, 0, 0, 0, 0, 0, 0, 0, 0]
+    4096, 131072, 0, 2048, 4096, 0, 0, 0, 65536, 131072, 131072, 0, 0, 0, 0, 0, 0, 0, 0, 0]
   peak := [
     0, 0, 0, 0, 0, 0, 2048, 2048, 2048, 1024, 2048, 2048, 1024, 4096, 4096, 4096, 4096, 4096, 4096, 4096, 4096, 4096, 0,
-    4096, 4096, 0, 0, 0, 4096, 4096, 4096, 0, 0, 0, 0, 0, 0, 0, 0]
+    4096, 4096, 0, 0, 0, 4096, 4096, 4096, 0, 0, 0, 0, 0, 0, 0, 0, 0]
   pipe := [
     some .alu, none, none, none, none, none, none, none, none, none, none, none, none, none, none, none, none, none,
     none, none, none, none, some .imad, none, none, none, none, none, none, none, none, none, none, some .shfl, none,
-    none, none, none, none]
+    none, none, none, none, none]
   width := Pipe.width
   smem := [
-    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    0]
 
 /-- The data sheet over the census's classes. -/
-noncomputable def sheet : Sheet (Fin 39) Pipe := ds90.sheet 39
+noncomputable def sheet : Sheet (Fin 40) Pipe := ds90.sheet 40
 
 /-- `dither-2s-licpw-redux-p1-l32`'s design data: writer kinds as (class, ω), vector classes, fold routes. -/
 def d2s : DesignData where
@@ -131,8 +133,8 @@ def d2s : DesignData where
 def flatFill : Sparse := []
 
 /-- `dither-2s-licpw-redux-p1-l32`'s TS model on the data sheet's machine. -/
-noncomputable def model : Model (Fin 39) (SheetRow Pipe) (Fin 24) Unit Empty (Fin 14) Unit :=
-  d2s.model 39 24 14 sheet.machine
+noncomputable def model : Model (Fin 40) (SheetRow Pipe) (Fin 24) Unit Empty (Fin 14) Unit :=
+  d2s.model 40 24 14 sheet.machine
 
 /-- ♭'s word production a unit: the MMA and the operand floor. -/
 def flatWords : Sparse := [(16, 1, 1)]
@@ -144,7 +146,7 @@ def flatFold : Sparse := [(0, 67, 1), (22, 64, 1), (31, 2, 1)]
 def flatSkip : Sparse := [(5, 17166648254, 14797263819)]
 
 /-- The floor program ♭, labelled. -/
-noncomputable def flat : Labelled (Fin 39) := labelled 39 flatWords flatFold flatFill flatSkip
+noncomputable def flat : Labelled (Fin 40) := labelled 40 flatWords flatFold flatFill flatSkip
 
 /-- π*: the certificate, its weights exact and summing to 1. -/
 noncomputable def lamStar : SheetRow Pipe → ℝ
