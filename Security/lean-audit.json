@@ -206,6 +206,46 @@
    "owner": "@compute-accounting",
    "digest": "1a2e96c393b733ce878dc57aa1871589f041a0f8fd81b97ccb4d45e1526559ed"
   },
+  "Accounting.Compose.Declared.Wf": {
+   "owner": "@compute-accounting",
+   "digest": "2447883de3f6050f8d969bc675f053109b84e74bb3b95c77929ea30eba738b7d"
+  },
+  "Accounting.Compose.Fits": {
+   "owner": "@compute-accounting",
+   "digest": "8da744ce2e27b9f1b11a40cbe064c66a95c475f1885683fd628bd8da291af787"
+  },
+  "Accounting.Compose.LayerCommitted": {
+   "owner": "@compute-accounting",
+   "digest": "0beabd6add4a19ce7d81eb8c0ac601c559f97e8ae11877336c54410bcb1984f5"
+  },
+  "Accounting.Compose.ModelScope": {
+   "owner": "@compute-accounting",
+   "digest": "8deb60f7cd69f270957a1c18997eff222422468c5340df3bdbc036c5c7258850"
+  },
+  "Accounting.Compose.PerTile": {
+   "owner": "@compute-accounting",
+   "digest": "13419da38b56a985a7e9d380082513956a1014123de6551f02858585df159139"
+  },
+  "Accounting.Compose.Scope": {
+   "owner": "@compute-accounting",
+   "digest": "d362c5e79d599c06c664a147eadc88e811b4d3bdcb3d93930ac23b1a7cb19e8c"
+  },
+  "Accounting.Compose.ScopeSeeded": {
+   "owner": "@compute-accounting",
+   "digest": "1ef3b97a2d9511aa91b8652927ef9de9c067fc67fc7e88ed2688a9c2cd4cbd74"
+  },
+  "Accounting.Compose.SplitRate": {
+   "owner": "@compute-accounting",
+   "digest": "c7eabc0812b80f74f761f6534791a40f16695287d8988db89e05f45ffa638500"
+  },
+  "Accounting.Compose.SplitStages.LuckAt": {
+   "owner": "@compute-accounting",
+   "digest": "a3015e37e566a0c7ee1e316f8de97fc5f69cba2ea45f38cada428f9dac1fd92f"
+  },
+  "Accounting.Compose.WorkAt": {
+   "owner": "@compute-accounting",
+   "digest": "c786810e5192b85c62797ddee3bd7abd25776e4bee69ebcc99c11284c3b325f6"
+  },
   "Accounting.Covered": {
    "owner": "@network-accounting",
    "digest": "f96318a12fcb3f487d8805649ff57383d2000740fe3ee9bc6ab3a957bb5b9a5d"
@@ -623,6 +663,9 @@
    "digest": "9f8ca19eb73c6e77085e8079a6efea1872bcd76fdde12c53be7806e797234db1"
   },
   "FlockDeploy.PlainIn": {
+   "owner": "@proofs"
+  },
+  "FlockDeploy.ZkIn": {
    "owner": "@proofs"
   },
   "FlockSoundness.Accounting.Stmt.InRange": {
@@ -1128,49 +1171,6 @@
   "Verity.Declaration.Contains": {
    "owner": "@lean",
    "digest": "2e4651003538493bac63ae90c32a521e95d2e8596bea6b3c85b9cfd150c5647b"
-  },
-  "Accounting.Compose.Declared.Wf": {
-   "owner": "@compute-accounting",
-   "digest": "2447883de3f6050f8d969bc675f053109b84e74bb3b95c77929ea30eba738b7d"
-  },
-  "Accounting.Compose.Fits": {
-   "owner": "@compute-accounting",
-   "digest": "8da744ce2e27b9f1b11a40cbe064c66a95c475f1885683fd628bd8da291af787"
-  },
-  "Accounting.Compose.LayerCommitted": {
-   "owner": "@compute-accounting",
-   "digest": "0beabd6add4a19ce7d81eb8c0ac601c559f97e8ae11877336c54410bcb1984f5"
-  },
-  "Accounting.Compose.ModelScope": {
-   "owner": "@compute-accounting",
-   "digest": "8deb60f7cd69f270957a1c18997eff222422468c5340df3bdbc036c5c7258850"
-  },
-  "Accounting.Compose.PerTile": {
-   "owner": "@compute-accounting",
-   "digest": "13419da38b56a985a7e9d380082513956a1014123de6551f02858585df159139"
-  },
-  "Accounting.Compose.Scope": {
-   "owner": "@compute-accounting",
-   "digest": "d362c5e79d599c06c664a147eadc88e811b4d3bdcb3d93930ac23b1a7cb19e8c"
-  },
-  "Accounting.Compose.ScopeSeeded": {
-   "owner": "@compute-accounting",
-   "digest": "1ef3b97a2d9511aa91b8652927ef9de9c067fc67fc7e88ed2688a9c2cd4cbd74"
-  },
-  "Accounting.Compose.SplitRate": {
-   "owner": "@compute-accounting",
-   "digest": "c7eabc0812b80f74f761f6534791a40f16695287d8988db89e05f45ffa638500"
-  },
-  "Accounting.Compose.SplitStages.LuckAt": {
-   "owner": "@compute-accounting",
-   "digest": "a3015e37e566a0c7ee1e316f8de97fc5f69cba2ea45f38cada428f9dac1fd92f"
-  },
-  "Accounting.Compose.WorkAt": {
-   "owner": "@compute-accounting",
-   "digest": "c786810e5192b85c62797ddee3bd7abd25776e4bee69ebcc99c11284c3b325f6"
-  },
-  "FlockDeploy.ZkIn": {
-   "owner": "@proofs"
   }
  },
  "meaning": [
