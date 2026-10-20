@@ -267,4 +267,4 @@ def test_case_of_reads_the_pace_the_pace_k_driver_wrote(server, tmp_path) -> Non
     path = tmp_path / "verifier.json"
     path.write_text(json.dumps(v))
     row, = R.replay_record(path, server)
-    assert row["agree"] and row["held"] and row["lean"]["outcome"] == "order", row
+    assert row["agree"] and row["held"] and row["lean"]["rejected"]["failure"] == "order", row
