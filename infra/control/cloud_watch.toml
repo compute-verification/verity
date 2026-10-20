@@ -65,7 +65,7 @@ period_s = 300
 
 [[loop]]
 name = "Control disk relay"
-started_by = "/data/infra/control-disk/run.sh, by hand: post_start.sh doesn't start it, so a pod reset stops it"
+started_by = "/data/infra/control-disk/run.sh (control_disk.sh)"
 file = "/data/infra/control-disk/seen.json"
 period_s = 300
 
