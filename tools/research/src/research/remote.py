@@ -941,6 +941,22 @@ def _git_ship_script(root: str, repo: str, partial: str, sha: str) -> str:
             f"cd {q} && find . -path ./.git -prune -o -type f -print0 | LC_ALL=C sort -z | xargs -0 -r sha256sum")
 
 
+def _push_main(ssh: list[str], repo: str, git_dir: Path, man: dict[str, Any]) -> None:
+    """The launcher's `origin/main` onto the bare repository's `main`, fast-forward only and best effort, so a shipped checkout's
+    `origin/main` (its clone's view of that `main`) is no older than its newest launcher's, and `suites.py --changed origin/main` in a
+    run diffs against a current `main`, not the one the repository was created with.  A launcher whose `origin/main` is older is
+    refused by git and changes nothing; no failure here stops the ship."""
+    main = subprocess.run(["git", "rev-parse", "--verify", "-q", "refs/remotes/origin/main^{commit}"], cwd=git_dir,
+                          capture_output=True, text=True).stdout.strip()
+    if not main:
+        return
+    try:
+        subprocess.run(["git", "-c", "protocol.ext.allow=always", "push", "-q", git_push_url(ssh, repo), f"{main}:refs/heads/main"],
+                       cwd=git_dir, capture_output=True, text=True, timeout=ship_timeout(man["size"]))
+    except subprocess.TimeoutExpired:
+        pass
+
+
 def _ship_git(ssh: list[str], root: str, git_dir: Path, sha: str, tree: str | None, man: dict[str, Any], dest: str) -> tuple[str | None, str | None]:
     """Ship commit `sha` as git objects: `git push` into <root>/git/verity.git over `ssh` (only the objects the machine lacks travel),
     then check it out and verify it on the machine (tree hash, per-file sha256 against the launcher's archive manifest).  Returns
@@ -962,6 +978,7 @@ def _ship_git(ssh: list[str], root: str, git_dir: Path, sha: str, tree: str | No
         return None, "git push timed out"
     if push.returncode != 0:
         return None, f"git push failed: {push.stderr.strip()[-200:]}"
+    _push_main(ssh, repo, git_dir, man)
     partial = f"{dest}.partial-{secrets.token_hex(4)}"
     try:
         r = ssh_run(ssh, ["sh", "-c", _git_ship_script(root, repo, partial, sha), "sh", tree], timeout=ship_timeout(man["size"]))
