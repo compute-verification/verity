@@ -21,11 +21,12 @@ import sys
 from pathlib import Path
 
 import numpy as np
+import pytest
 from verity.ml.crypto import lms
 from verity.ml.randomness import derive
 from verity.core.protocols.certifier import active
-from verity.core.protocols.certifier.active import Proxy
-from verity.core.protocols.certifier.certificate import LmsKey
+from verity.core.protocols.certifier.active import RUN_ID_BYTES, Proxy, RemoteCertifier
+from verity.core.protocols.certifier.certificate import LmsKey, LmsSigner
 from verity.core.protocols.certifier.grid import GridParams
 from verity.core.protocols.certifier.schedule import ClockSync, SyncSet
 from verity.core.protocols.pouw import core_check as CC
@@ -308,3 +309,27 @@ def test_a_registered_window_is_admitted_before_its_draw_and_its_failure_closes_
         assert ch.select(f"w{p}").units
         chs.append(ch)
     assert chs[0].sessions == {} and len(ledger) == 2
+
+
+def test_the_network_certifiers_client_is_no_certifier_a_certified_challenger_takes(tmp_path):
+    """RT4-INT-2's link 8, with NET-50 (#2879 @ 1e1ad3967d) merged on SALT-WIRE (#2847 @ a6d6159a4a). NET-50's
+    `RemoteCertifier` is to replace the in-process `Proxy` (`Challenger(certifier=RemoteCertifier(...))`, its PR's
+    text), but the certified challenger names its certifier's run by `certifier_run`, which reads the proxy's
+    `bucketer.certifier.link` and `origin`; the client holds `link` and `run_id` and no origin, so the challenger can't
+    be built on it. And the two name a run apart: NET-50 by the run id each proxy draws, the stream id by link and
+    origin, so two proxies on one link from one origin are two runs to the certifier and one stream to PoUW."""
+    key, sign = _prover(b"the prover")
+    prover, sid = PS.prover_id(key.public), _sid()
+    _, drawn = _certifier(sid, key, sign, PS.pouw_record(weights_root(_pass(RUN)[1]), sid, prover))
+    w = _window(0, drawn[0], sid, prover, PRECOMPUTED)
+    ck = lms.keygen(lms.Params(64, 1, 6), hashlib.sha512(b"the network certifier").digest())
+    challenger = LmsSigner(lms.keygen(lms.Params(64, 1, 6), hashlib.sha512(b"the challenger").digest()), tmp_path / "s")
+    remote = RemoteCertifier("127.0.0.1", 9, LmsKey(ck.params, lms.public_key(ck)), challenger, LINK,
+                             bytes([7]) * RUN_ID_BYTES)
+    assert not hasattr(remote, "bucketer") and not hasattr(remote, "origin")
+    with pytest.raises(AttributeError, match="bucketer"):
+        _challenger(w["params"], remote, prover, tmp_path / "w.json", PS.Registrations())
+
+    runs = [Proxy(("127.0.0.1", 9), EGRESS, INGRESS, SyncSet((0, 1), (1, 2)), [ClockSync(0, 1)] * WINDOWS, origin=0.0,
+                  clock=lambda: 0.0, ingress_link=LINK, run_nonce=lambda n, b=b: bytes([b]) * n) for b in (1, 2)]
+    assert runs[0].run_id != runs[1].run_id and SC.certifier_run(runs[0]) == SC.certifier_run(runs[1])
