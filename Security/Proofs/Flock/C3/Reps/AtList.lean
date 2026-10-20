@@ -110,8 +110,8 @@ theorem getElem?_list {i : RecVStar.Inner} {ss : Array VStar.Stmt} (h : RecVStar
   obtain ⟨-, -, -, -, -, -, A, C, -, -, -, -, -, hA, hC, n, rfl⟩ := list_ok h
   obtain ⟨s, sp, ps, hs, -, -, rfl⟩ := FlockVBridge.Family.statementsOf_eq hA
   refine ⟨s, ps, C, n, by simp [nLev, hs], hC, fun j => ?_⟩
-  rw [show ∀ X : Array VStar.Stmt, X ++ C ++ #[VStar.Stmt.cap n] = X ++ (C ++ #[VStar.Stmt.cap n]) by
-    intro X; rw [Array.append_assoc]]
+  rw [show ∀ xs : Array VStar.Stmt, xs ++ C ++ #[VStar.Stmt.cap n] = xs ++ (C ++ #[VStar.Stmt.cap n]) by
+    intro xs; rw [Array.append_assoc]]
   generalize C ++ #[VStar.Stmt.cap n] = C'
   rw [← Array.getElem?_toList]
   simp only [Array.toList_append, List.append_assoc]
