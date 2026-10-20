@@ -45,6 +45,10 @@
  ],
  "proved_in": ["../Proofs"],
  "assumptions": {
+  "Nci.Assumptions.BaselineRegistered": {
+   "owner": "@compute-accounting",
+   "digest": "1e726c0b0d96e66c67519b7726cfdb3ca6faf901f7773d1faa4283870690966c"
+  },
   "Nci.Assumptions.WeightsIncompressible": {
    "owner": "@lean",
    "digest": "a9832cc41ed84cd3c55eccc606483e9c83d87fb29e05d1b1f92bb2680d32f8d8"
@@ -91,6 +95,7 @@
   "Definitions.Core",
   "Definitions.Nci",
   "Models.Nci.Assumptions.Threads",
+  "Models.Nci.Assumptions.Baseline",
   "NciCheck.Check",
   "Flock",
   "Properties.CertifierDevice",
@@ -150,6 +155,7 @@
     "Definitions.Core",
     "Definitions.Nci",
     "Models.Nci.Assumptions.Threads",
+    "Models.Nci.Assumptions.Baseline",
     "NciCheck.Check",
     "Properties.Nci"
    ],
@@ -3579,11 +3585,12 @@
    ]
   },
   "Definitions.Nci.Dark": {
-   "digest": "907f39dd7ab6bdaad74d0e357c22ec4d9fdb7eccdaa2a0d571267775897c8b48",
+   "digest": "51dbc33e60fdab02c713ed4dae4ed3f0630f7c5a1ebbb034bbeba3cd9933ee14",
    "definitions": {
-    "Nci.PartialContainment": "859bb41aaf4d11fba3d7943767deed3d075d6d8ac73a0c85aae5b025ec470858",
+    "Nci.PartialContainment": "53b721ad942ce112991fec5a711d06675bddc9dd3359c04fc7ca8fb8ca2e0b21",
     "Nci.PartialContainment.S": "3f4fadbf8acd2a98dd31215bd90a71100035bc489d75168cb43b65a8d6876086",
-    "Nci.PartialContainment.dark": "b291a4876caed5c07228e2b04e2eed6425f410a83fa3063f9ab1c5fbe5f65b48"
+    "Nci.PartialContainment.dark": "b291a4876caed5c07228e2b04e2eed6425f410a83fa3063f9ab1c5fbe5f65b48",
+    "Nci.PartialContainment.emb": "241a4d4758619aaf9f103bc05b3f03a7d8f94309c0a2d4d971af13dd55fd6a15"
    },
    "guarantees": [
     "NciCheck.Properties.SecurityProofs.ThrottlesDark",
@@ -5372,6 +5379,16 @@
     "Pous.EndToEnd.SecurityProofs.runCheckAccepts"
    ]
   },
+  "Models.Nci.Assumptions.Baseline": {
+   "digest": "d2d5c6d68687c0eb5488d83f1dd3b20249a2b176b80b5921cd1adb65f65d49d9",
+   "definitions": {
+    "Nci.Assumptions.BaselineRegistered": "1e726c0b0d96e66c67519b7726cfdb3ca6faf901f7773d1faa4283870690966c"
+   },
+   "guarantees": [
+    "NciCheck.Properties.SecurityProofs.ThrottlesDark",
+    "NciCheck.Properties.SecurityProofs.ThrottlesDarkSlots"
+   ]
+  },
   "Models.Nci.Assumptions.Threads": {
    "digest": "e9bcf22a82fceb17e374c1e6af08d94a3f0f2d662a9c92713dffe4504c37b210",
    "definitions": {
@@ -6942,11 +6959,11 @@
    ]
   },
   "Properties.Nci.Threads": {
-   "digest": "3cf5ee9e5f8c864ecd8f3e4d19d69be2123770936ea47c94ca59cbbb4009a99d",
+   "digest": "3cc4bf7023a912155e848422707704e170331b3051fce150d72b93ab7555df85",
    "definitions": {
     "NciCheck.Properties.Throttled": "b0da3d4a64ec5ec0e3e1376aff729da2a2b39ef79f371cac3655404217e37fa1",
-    "NciCheck.Properties.ThrottledDark": "87d15e9a6e48f70167c54ab9aedcac2a316845a6748e4d2d6d79d224a2d690ff",
-    "NciCheck.Properties.ThrottledDarkSlots": "9aa175084876a4b77d015613d4bea4b229dacfb0432487e158e5963068996e3a",
+    "NciCheck.Properties.ThrottledDark": "ff9c8ee5fe4fba6ee3cb6347fe8878c7c831f9ca2bd176d80007e1499c2bd122",
+    "NciCheck.Properties.ThrottledDarkSlots": "691c4e5c662140630bff6c40eb4aac0b24278e5df05c457de810a30596b07e1f",
     "NciCheck.Properties.ThrottledSlots": "2dc5bece717e7b843bdb9569ec767e44bcefbefa930cc43539cf310dec420896",
     "NciCheck.Properties.Throttles": "941527d6f138cd24061409566b5de4f4f5369e1e379679af1c155144166626e9",
     "NciCheck.Properties.ThrottlesDark": "84c35cdd2aee2d620a8702599f07d6985ad4d29fc7cb600f8ef973a0bccecbde",

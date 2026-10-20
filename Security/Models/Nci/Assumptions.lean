@@ -1,4 +1,5 @@
 import Definitions.Nci.Support
+import Models.Nci.Assumptions.Baseline
 import Mathlib.Analysis.SpecialFunctions.Pow.Real
 
 /-!
@@ -28,6 +29,10 @@ Both are assumed only for IUs that read at most `K` bits, which under the policy
 assumption for every IU of at most `Γ` gates and uses it only for IUs that read at most `K`. Without the cap it fails for
 honest training: an IU that runs a transformer's first attention layer and first MLP at many positions reads the
 embeddings and attention weights once, and then computes the MLP's inputs at every position itself.
+
+Every bound through a partial containment (`PartialContainment`) also rests on `BaselineRegistered`
+(`Models/Nci/Assumptions/Baseline.lean`), a premise about what the protocol lets the baseline `θ` hold rather than about
+any circuit.
 -/
 
 namespace Nci.Assumptions

@@ -796,6 +796,10 @@
    "owner": "@lean",
    "digest": "9657b492f110a0188f677b492aec3e46e5eab5834bdfc613b955da6ee949f8ca"
   },
+  "Nci.Assumptions.BaselineRegistered": {
+   "owner": "@compute-accounting",
+   "digest": "1e726c0b0d96e66c67519b7726cfdb3ca6faf901f7773d1faa4283870690966c"
+  },
   "Nci.Assumptions.Fits": {
    "owner": "@lean",
    "digest": "a01008a9dfd298221a497fc46bddfc00be4ca6c55915429dccc9bcd2bdef6864"
@@ -9388,11 +9392,11 @@
    "Nci.SecurityProofs.ThreadedTraining": "frozen (no-function): It is about an arbitrary reference circuit, a threading of it and a declaration that contains it, under the named WeightsIncompressible (Security/Models/Nci/Assumptions/Threads.lean), not about the NCI check's code; joining it to NciCheck.Properties.Witnesses is what would give it an acceptance.",
    "Nci.SecurityProofs.ContainedMatMul": "falsified (no-function): It rests on ActivationsSupport and PartialSumsSupport, both falsified (shape.conjectures, 19 Oct 2026, note:compute-accounting/20261019T0725Z-finding-nci-falsify); it is also about an arbitrary reference circuit, not the NCI check's code.",
    "Nci.SecurityProofs.ContainedTraining": "falsified (no-function): It rests on ActivationsSupport and PartialSumsSupport, both falsified (shape.conjectures, 19 Oct 2026, note:compute-accounting/20261019T0725Z-finding-nci-falsify); it is also about an arbitrary reference circuit, not the NCI check's code.",
-   "Nci.SecurityProofs.ThreadedThrottledOn": "frozen (no-function): It is about an arbitrary reference circuit, a threading of it and a declaration that contains part of it (a PartialContainment, Security/Definitions/Nci/Dark.lean), under the named WeightsIncompressible (Security/Models/Nci/Assumptions/Threads.lean), not about the NCI check's code; joining it to NciCheck.Properties.Witnesses is what would give it an acceptance.",
-   "Nci.SecurityProofs.ThreadedThrottledDark": "frozen (no-function): It is about an arbitrary reference circuit, a threading of it and a declaration that contains part of it (a PartialContainment, Security/Definitions/Nci/Dark.lean), under the named WeightsIncompressible (Security/Models/Nci/Assumptions/Threads.lean), not about the NCI check's code; NciCheck.Properties.SecurityProofs.ThrottlesDark (Security/Properties/Nci/Threads.lean) joins it to NciCheck.Properties.Witnesses, so a verdict of compliance of NciCheck.evaluate carries its bound.",
-   "Nci.SecurityProofs.ThreadedTrainingOn": "frozen (no-function): It is about an arbitrary reference circuit, a threading of it and a declaration that contains part of it (a PartialContainment, Security/Definitions/Nci/Dark.lean), under the named WeightsIncompressible (Security/Models/Nci/Assumptions/Threads.lean), not about the NCI check's code; joining it to NciCheck.Properties.Witnesses is what would give it an acceptance.",
-   "Nci.SecurityProofs.ContainedMatMulOn": "falsified (no-function): It rests on ActivationsSupport and PartialSumsSupport, both falsified (shape.conjectures, 19 Oct 2026, note:compute-accounting/20261019T0725Z-finding-nci-falsify); it is also about an arbitrary reference circuit, a chain it runs and a declaration that contains part of it (a PartialContainment, Security/Definitions/Nci/Dark.lean), not the NCI check's code.",
-   "Nci.SecurityProofs.ContainedTrainingOn": "falsified (no-function): It rests on ActivationsSupport and PartialSumsSupport, both falsified (shape.conjectures, 19 Oct 2026, note:compute-accounting/20261019T0725Z-finding-nci-falsify); it is also about an arbitrary reference circuit, a chain it runs and a declaration that contains part of it (a PartialContainment, Security/Definitions/Nci/Dark.lean), not the NCI check's code.",
+   "Nci.SecurityProofs.ThreadedThrottledOn": "frozen (no-function): It is about an arbitrary reference circuit, a threading of it and a declaration that contains part of it (a PartialContainment, Security/Definitions/Nci/Dark.lean, with its baseline registered: the named BaselineRegistered, Security/Models/Nci/Assumptions/Baseline.lean), under the named WeightsIncompressible (Security/Models/Nci/Assumptions/Threads.lean), not about the NCI check's code; joining it to NciCheck.Properties.Witnesses is what would give it an acceptance.",
+   "Nci.SecurityProofs.ThreadedThrottledDark": "frozen (no-function): It is about an arbitrary reference circuit, a threading of it and a declaration that contains part of it (a PartialContainment, Security/Definitions/Nci/Dark.lean, with its baseline registered: the named BaselineRegistered, Security/Models/Nci/Assumptions/Baseline.lean), under the named WeightsIncompressible (Security/Models/Nci/Assumptions/Threads.lean), not about the NCI check's code; NciCheck.Properties.SecurityProofs.ThrottlesDark (Security/Properties/Nci/Threads.lean) joins it to NciCheck.Properties.Witnesses, so a verdict of compliance of NciCheck.evaluate carries its bound.",
+   "Nci.SecurityProofs.ThreadedTrainingOn": "frozen (no-function): It is about an arbitrary reference circuit, a threading of it and a declaration that contains part of it (a PartialContainment, Security/Definitions/Nci/Dark.lean, with its baseline registered: the named BaselineRegistered, Security/Models/Nci/Assumptions/Baseline.lean), under the named WeightsIncompressible (Security/Models/Nci/Assumptions/Threads.lean), not about the NCI check's code; joining it to NciCheck.Properties.Witnesses is what would give it an acceptance.",
+   "Nci.SecurityProofs.ContainedMatMulOn": "falsified (no-function): It rests on ActivationsSupport and PartialSumsSupport, both falsified (shape.conjectures, 19 Oct 2026, note:compute-accounting/20261019T0725Z-finding-nci-falsify); it is also about an arbitrary reference circuit, a chain it runs and a declaration that contains part of it (a PartialContainment, Security/Definitions/Nci/Dark.lean, with its baseline registered: the named BaselineRegistered, Security/Models/Nci/Assumptions/Baseline.lean), not the NCI check's code.",
+   "Nci.SecurityProofs.ContainedTrainingOn": "falsified (no-function): It rests on ActivationsSupport and PartialSumsSupport, both falsified (shape.conjectures, 19 Oct 2026, note:compute-accounting/20261019T0725Z-finding-nci-falsify); it is also about an arbitrary reference circuit, a chain it runs and a declaration that contains part of it (a PartialContainment, Security/Definitions/Nci/Dark.lean, with its baseline registered: the named BaselineRegistered, Security/Models/Nci/Assumptions/Baseline.lean), not the NCI check's code.",
    "Accounting.SecurityProofs.Actual.ThreadedRuntimeDark": "frozen (no-function,world-unlisted): It is stated over an arbitrary actual circuit (Accounting.Placed) and a threaded reference circuit its developer's declaration contains in part (a PartialContainment, Security/Definitions/Nci/Dark.lean), and takes the physical constraints Causal, ComputeRate and Links, a bound on the state at each window's start, and the named WeightsIncompressible on the reference circuit, per-run hypotheses rather than a function's acceptance.",
    "Nci.SecurityProofs.IncompressibleContainedTraining": "frozen (no-function): It is about an arbitrary reference circuit, a chain and a threading of it and a declaration that contains it, under the named TrainingIncompressible (Security/Models/Nci/Assumptions/Training.lean), not about the NCI check's code; joining it to NciCheck.Properties.Witnesses is what would give it an acceptance.",
    "Nci.SecurityProofs.IncompressibleThreadedThrottled": "frozen (no-function): It is about an arbitrary reference circuit, a chain and a threading of it and a declaration that contains it, under the named TrainingIncompressible (Security/Models/Nci/Assumptions/Training.lean), not about the NCI check's code; joining it to NciCheck.Properties.Witnesses is what would give it an acceptance.",
@@ -9424,18 +9428,18 @@
    "Accounting.SecurityProofs.Actual.ThreadedRuntimeSlots": "frozen (no-function,world-unlisted): It is stated over an arbitrary actual circuit (Accounting.Placed) and a threaded reference circuit its developer's declaration contains, and takes the physical constraints Causal, ComputeRate and Links, a bound on the state at each window's start, and the named WeightsIncompressibleSlots on the reference circuit, weights charged per parameter slot, per-run hypotheses rather than a function's acceptance.",
    "Nci.SecurityProofs.ThreadedReadsSlots": "frozen (no-function): It is about an arbitrary reference circuit, a threading of it and a declaration that contains it, under the named WeightsIncompressibleSlots (Security/Models/Nci/Assumptions/Threads.lean), weights charged per parameter slot, not about the NCI check's code; joining it to NciCheck.Properties.Witnesses is what would give it an acceptance.",
    "Nci.SecurityProofs.ThreadedThrottledSlots": "frozen (no-function): It is about an arbitrary reference circuit, a threading of it and a declaration that contains it, under the named WeightsIncompressibleSlots (Security/Models/Nci/Assumptions/Threads.lean), weights charged per parameter slot, not about the NCI check's code; NciCheck.Properties.SecurityProofs.ThrottlesSlots (Security/Properties/Nci/Threads.lean) joins it to NciCheck.Properties.Witnesses, so a verdict of compliance of NciCheck.evaluate carries its bound.",
-   "Nci.SecurityProofs.ThreadedThrottledOnSlots": "frozen (no-function): It is about an arbitrary reference circuit, a threading of it and a declaration that contains part of it (a PartialContainment, Security/Definitions/Nci/Dark.lean), under the named WeightsIncompressibleSlots (Security/Models/Nci/Assumptions/Threads.lean), weights charged per parameter slot, not about the NCI check's code; joining it to NciCheck.Properties.Witnesses is what would give it an acceptance.",
-   "Nci.SecurityProofs.ThreadedThrottledDarkSlots": "frozen (no-function): It is about an arbitrary reference circuit, a threading of it and a declaration that contains part of it (a PartialContainment, Security/Definitions/Nci/Dark.lean), under the named WeightsIncompressibleSlots (Security/Models/Nci/Assumptions/Threads.lean), weights charged per parameter slot, not about the NCI check's code; NciCheck.Properties.SecurityProofs.ThrottlesDarkSlots (Security/Properties/Nci/Threads.lean) joins it to NciCheck.Properties.Witnesses, so a verdict of compliance of NciCheck.evaluate carries its bound.",
+   "Nci.SecurityProofs.ThreadedThrottledOnSlots": "frozen (no-function): It is about an arbitrary reference circuit, a threading of it and a declaration that contains part of it (a PartialContainment, Security/Definitions/Nci/Dark.lean, with its baseline registered: the named BaselineRegistered, Security/Models/Nci/Assumptions/Baseline.lean), under the named WeightsIncompressibleSlots (Security/Models/Nci/Assumptions/Threads.lean), weights charged per parameter slot, not about the NCI check's code; joining it to NciCheck.Properties.Witnesses is what would give it an acceptance.",
+   "Nci.SecurityProofs.ThreadedThrottledDarkSlots": "frozen (no-function): It is about an arbitrary reference circuit, a threading of it and a declaration that contains part of it (a PartialContainment, Security/Definitions/Nci/Dark.lean, with its baseline registered: the named BaselineRegistered, Security/Models/Nci/Assumptions/Baseline.lean), under the named WeightsIncompressibleSlots (Security/Models/Nci/Assumptions/Threads.lean), weights charged per parameter slot, not about the NCI check's code; NciCheck.Properties.SecurityProofs.ThrottlesDarkSlots (Security/Properties/Nci/Threads.lean) joins it to NciCheck.Properties.Witnesses, so a verdict of compliance of NciCheck.evaluate carries its bound.",
    "Accounting.SecurityProofs.Actual.ThreadedRuntimeDarkSlots": "frozen (no-function,world-unlisted): It is stated over an arbitrary actual circuit (Accounting.Placed) and a threaded reference circuit its developer's declaration contains in part (a PartialContainment, Security/Definitions/Nci/Dark.lean), and takes the physical constraints Causal, ComputeRate and Links, a bound on the state at each window's start, and the named WeightsIncompressibleSlots on the reference circuit, weights charged per parameter slot, per-run hypotheses rather than a function's acceptance.",
    "Nci.SecurityProofs.DampenerThreadedSlots": "frozen (no-function): It composes the compute dampener with ThreadedThrottledSlots discharging the declared source, about an arbitrary reference circuit, a threading of it and a declaration that contains it, under the named WeightsIncompressibleSlots (Security/Models/Nci/Assumptions/Threads.lean), weights charged per parameter slot, with the other sources' bounds as hypotheses, not from a function's acceptance; joining it to NciCheck.Properties.Witnesses and the other sources to their verifiers is what would give it one.",
    "Accounting.SecurityProofs.Actual.DampenerWindowsCapSlots": "frozen (no-function,world-unlisted): It is ThreadedRuntimeSlots's memory cap over an arbitrary actual circuit (Accounting.Placed) and a threaded reference circuit its developer's declaration contains, read as the compute dampener's windows hypothesis (Nci.Guarantees.DampenerWindows) when one threading counts the residual and the declared computation together, under the physical constraints Causal, ComputeRate and Links, a bound on the state at each window's start and the named WeightsIncompressibleSlots, weights charged per parameter slot, per-run hypotheses rather than a function's acceptance.",
-   "Nci.SecurityProofs.IncompressibleThreadedThrottledOn": "frozen (no-function): It is about an arbitrary reference circuit, a chain and a threading of it and a declaration that contains part of it (a PartialContainment, Security/Definitions/Nci/Dark.lean), under the named TrainingIncompressible (Security/Models/Nci/Assumptions/Training.lean), not about the NCI check's code; joining it to NciCheck.Properties.Witnesses is what would give it an acceptance.",
-   "Nci.SecurityProofs.IncompressibleContainedMatMulOn": "frozen (no-function): It is about an arbitrary reference circuit, a chain and a threading of it and a declaration that contains part of it (a PartialContainment, Security/Definitions/Nci/Dark.lean), under the named TrainingIncompressible (Security/Models/Nci/Assumptions/Training.lean), not about the NCI check's code; joining it to NciCheck.Properties.Witnesses is what would give it an acceptance.",
-   "Nci.SecurityProofs.IncompressibleContainedTrainingOn": "frozen (no-function): It is about an arbitrary reference circuit, a chain and a threading of it and a declaration that contains part of it (a PartialContainment, Security/Definitions/Nci/Dark.lean), under the named TrainingIncompressible (Security/Models/Nci/Assumptions/Training.lean), not about the NCI check's code; joining it to NciCheck.Properties.Witnesses is what would give it an acceptance.",
-   "Nci.SecurityProofs.ContainedFanOutOn": "frozen (no-function): It is about an arbitrary reference circuit, a chain it runs and a declaration that contains part of it (a PartialContainment, Security/Definitions/Nci/Dark.lean), under the named ActivationsIncompressible on the reference circuit (Security/Models/Nci/Assumptions.lean), the activations' half of TrainingIncompressible, not about the NCI check's code; joining it to NciCheck.Properties.Witnesses is what would give it an acceptance.",
+   "Nci.SecurityProofs.IncompressibleThreadedThrottledOn": "frozen (no-function): It is about an arbitrary reference circuit, a chain and a threading of it and a declaration that contains part of it (a PartialContainment, Security/Definitions/Nci/Dark.lean, with its baseline registered: the named BaselineRegistered, Security/Models/Nci/Assumptions/Baseline.lean), under the named TrainingIncompressible (Security/Models/Nci/Assumptions/Training.lean), not about the NCI check's code; joining it to NciCheck.Properties.Witnesses is what would give it an acceptance.",
+   "Nci.SecurityProofs.IncompressibleContainedMatMulOn": "frozen (no-function): It is about an arbitrary reference circuit, a chain and a threading of it and a declaration that contains part of it (a PartialContainment, Security/Definitions/Nci/Dark.lean, with its baseline registered: the named BaselineRegistered, Security/Models/Nci/Assumptions/Baseline.lean), under the named TrainingIncompressible (Security/Models/Nci/Assumptions/Training.lean), not about the NCI check's code; joining it to NciCheck.Properties.Witnesses is what would give it an acceptance.",
+   "Nci.SecurityProofs.IncompressibleContainedTrainingOn": "frozen (no-function): It is about an arbitrary reference circuit, a chain and a threading of it and a declaration that contains part of it (a PartialContainment, Security/Definitions/Nci/Dark.lean, with its baseline registered: the named BaselineRegistered, Security/Models/Nci/Assumptions/Baseline.lean), under the named TrainingIncompressible (Security/Models/Nci/Assumptions/Training.lean), not about the NCI check's code; joining it to NciCheck.Properties.Witnesses is what would give it an acceptance.",
+   "Nci.SecurityProofs.ContainedFanOutOn": "frozen (no-function): It is about an arbitrary reference circuit, a chain it runs and a declaration that contains part of it (a PartialContainment, Security/Definitions/Nci/Dark.lean, with its baseline registered: the named BaselineRegistered, Security/Models/Nci/Assumptions/Baseline.lean), under the named ActivationsIncompressible on the reference circuit (Security/Models/Nci/Assumptions.lean), the activations' half of TrainingIncompressible, not about the NCI check's code; joining it to NciCheck.Properties.Witnesses is what would give it an acceptance.",
    "Nci.SecurityProofs.ActivationsReads": "frozen (no-function): It is about an arbitrary reference circuit, a threading of it and links of that threading (Security/Definitions/Nci/Links.lean), under the named ActivationsIncompressibleAll (Security/Models/Nci/Assumptions/Activations.lean), not about the NCI check's code; joining it to NciCheck.Properties.Witnesses is what would give it an acceptance.",
-   "Nci.SecurityProofs.ActivationsBoundOn": "frozen (no-function): It is about an arbitrary reference circuit, a threading of it and links of that threading (Security/Definitions/Nci/Links.lean) and a declaration that contains part of it (a PartialContainment, Security/Definitions/Nci/Dark.lean), under the named ActivationsIncompressibleAll (Security/Models/Nci/Assumptions/Activations.lean), not about the NCI check's code; joining it to NciCheck.Properties.Witnesses is what would give it an acceptance.",
-   "Nci.SecurityProofs.ActivationsTrainingOn": "frozen (no-function): It is about an arbitrary reference circuit, a threading of it and links of that threading (Security/Definitions/Nci/Links.lean) and a declaration that contains part of it (a PartialContainment, Security/Definitions/Nci/Dark.lean), under the named ActivationsIncompressibleAll (Security/Models/Nci/Assumptions/Activations.lean), not about the NCI check's code; joining it to NciCheck.Properties.Witnesses is what would give it an acceptance.",
+   "Nci.SecurityProofs.ActivationsBoundOn": "frozen (no-function): It is about an arbitrary reference circuit, a threading of it and links of that threading (Security/Definitions/Nci/Links.lean) and a declaration that contains part of it (a PartialContainment, Security/Definitions/Nci/Dark.lean, with its baseline registered: the named BaselineRegistered, Security/Models/Nci/Assumptions/Baseline.lean), under the named ActivationsIncompressibleAll (Security/Models/Nci/Assumptions/Activations.lean), not about the NCI check's code; joining it to NciCheck.Properties.Witnesses is what would give it an acceptance.",
+   "Nci.SecurityProofs.ActivationsTrainingOn": "frozen (no-function): It is about an arbitrary reference circuit, a threading of it and links of that threading (Security/Definitions/Nci/Links.lean) and a declaration that contains part of it (a PartialContainment, Security/Definitions/Nci/Dark.lean, with its baseline registered: the named BaselineRegistered, Security/Models/Nci/Assumptions/Baseline.lean), under the named ActivationsIncompressibleAll (Security/Models/Nci/Assumptions/Activations.lean), not about the NCI check's code; joining it to NciCheck.Properties.Witnesses is what would give it an acceptance.",
    "Nci.SecurityProofs.ActivationsChain": "lemma: ActivationsIncompressibleAll gives ActivationsIncompressible for a chain that is part of the threading (ChainIn, Security/Definitions/Nci/Links.lean); it relates two named premises and is about no function.",
    "Nci.SecurityProofs.CertificateSlack": "frozen (no-function): It is Markov's inequality over the windows of an arbitrary distribution on a finite outcome space, under the named PouwSound (Security/Models/Nci/Assumptions/Remote.lean) as a bound on each window's marginal, not from a function's acceptance; joining it to PoUW's verifier, whose rejection of a wrong certificate PouwSound bounds, is what would give it one.",
    "Nci.SecurityProofs.VerdictLag": "frozen (no-function): It bounds the declared work an arbitrary set of faulty proof blocks skips, under the named TerminalDetection (Security/Models/Nci/Assumptions/Remote.lean) and a per-identity capacity bound taken as a hypothesis, not from a function's acceptance; joining it to the halt's verdict and the sampled proofs' verifier is what would give it one.",
@@ -13455,11 +13459,12 @@
    ]
   },
   "Definitions.Nci.Dark": {
-   "digest": "907f39dd7ab6bdaad74d0e357c22ec4d9fdb7eccdaa2a0d571267775897c8b48",
+   "digest": "51dbc33e60fdab02c713ed4dae4ed3f0630f7c5a1ebbb034bbeba3cd9933ee14",
    "definitions": {
-    "Nci.PartialContainment": "859bb41aaf4d11fba3d7943767deed3d075d6d8ac73a0c85aae5b025ec470858",
+    "Nci.PartialContainment": "53b721ad942ce112991fec5a711d06675bddc9dd3359c04fc7ca8fb8ca2e0b21",
     "Nci.PartialContainment.S": "3f4fadbf8acd2a98dd31215bd90a71100035bc489d75168cb43b65a8d6876086",
-    "Nci.PartialContainment.dark": "b291a4876caed5c07228e2b04e2eed6425f410a83fa3063f9ab1c5fbe5f65b48"
+    "Nci.PartialContainment.dark": "b291a4876caed5c07228e2b04e2eed6425f410a83fa3063f9ab1c5fbe5f65b48",
+    "Nci.PartialContainment.emb": "241a4d4758619aaf9f103bc05b3f03a7d8f94309c0a2d4d971af13dd55fd6a15"
    },
    "guarantees": [
     "Accounting.SecurityProofs.Actual.ThreadedRuntimeDark",
@@ -24305,6 +24310,27 @@
     "Nci.SecurityProofs.ActivationsTrainingOn"
    ]
   },
+  "Models.Nci.Assumptions.Baseline": {
+   "digest": "d2d5c6d68687c0eb5488d83f1dd3b20249a2b176b80b5921cd1adb65f65d49d9",
+   "definitions": {
+    "Nci.Assumptions.BaselineRegistered": "1e726c0b0d96e66c67519b7726cfdb3ca6faf901f7773d1faa4283870690966c"
+   },
+   "guarantees": [
+    "Nci.SecurityProofs.ActivationsBoundOn",
+    "Nci.SecurityProofs.ActivationsTrainingOn",
+    "Nci.SecurityProofs.ContainedFanOutOn",
+    "Nci.SecurityProofs.ContainedMatMulOn",
+    "Nci.SecurityProofs.ContainedTrainingOn",
+    "Nci.SecurityProofs.IncompressibleContainedMatMulOn",
+    "Nci.SecurityProofs.IncompressibleContainedTrainingOn",
+    "Nci.SecurityProofs.IncompressibleThreadedThrottledOn",
+    "Nci.SecurityProofs.ThreadedThrottledDark",
+    "Nci.SecurityProofs.ThreadedThrottledDarkSlots",
+    "Nci.SecurityProofs.ThreadedThrottledOn",
+    "Nci.SecurityProofs.ThreadedThrottledOnSlots",
+    "Nci.SecurityProofs.ThreadedTrainingOn"
+   ]
+  },
   "Models.Nci.Assumptions.Fit": {
    "digest": "ae61196a0d5e168b94fb5aebf54519f2cec0fb925e5ce7e396f1f02a82637eaa",
    "definitions": {
@@ -24436,12 +24462,12 @@
    ]
   },
   "Models.Nci.Guarantees.Activations": {
-   "digest": "40330724b8622bf9332bb73cf72b36259eb49d4b6990c35559e446fac45aec66",
+   "digest": "6975b68baf68de9065261506fc0ae695502abd8527b7f04a5de1188af472677d",
    "definitions": {
-    "Nci.Guarantees.ActivationsBoundOn": "0fc9e7fc5eeff0565c5b4fbf64609d9d27789e1b991fc4051ffa83d27cfd10ea",
+    "Nci.Guarantees.ActivationsBoundOn": "40b26ca9421498733b559ef5367367c46e24eee716aec9208cb364298b5b0339",
     "Nci.Guarantees.ActivationsChain": "54558562e469af68b6546e6c8764740a3152dfbb3f71a363503d464c4498f467",
     "Nci.Guarantees.ActivationsReads": "57694e16f5f1e1b72dfa7975c20f9a4bcb275d76610157e9dccccc72f7f2cee4",
-    "Nci.Guarantees.ActivationsTrainingOn": "3cf70f814c14b699daca8e6412b8ea69ac269800c7ef73ddddc58b9f29219f27"
+    "Nci.Guarantees.ActivationsTrainingOn": "222988ace6c635708f1dbdedee28d90ee8e078a7366dbf38eefe1e86a647f64d"
    },
    "guarantees": [
     "Nci.SecurityProofs.ActivationsBoundOn",
@@ -24451,12 +24477,12 @@
    ]
   },
   "Models.Nci.Guarantees.Contained": {
-   "digest": "2dbeea0e928b32b747150af252d351d1d58164530d91a01c613f5e4c3d8eee4f",
+   "digest": "f0540d9696f3090a3e6332b734b78f29edc7c515f04a92de9236931671c42550",
    "definitions": {
     "Nci.Guarantees.ContainedMatMul": "df65fc3626a6f4021d0cb77f93195ea4fcf1a643f59a30626e494b5515053583",
-    "Nci.Guarantees.ContainedMatMulOn": "ab628a935c4b9d9243a9835b21777e39abe9cd71e306194af41fe16d4a27e838",
+    "Nci.Guarantees.ContainedMatMulOn": "f81a9737d43935fcb96a2779eebf3fe1974f972e1471152bb7159cdcc0639957",
     "Nci.Guarantees.ContainedTraining": "d11a30af07ea918204d1d57e4f22237b0ffbca149c9bff292dab777d562c2a1f",
-    "Nci.Guarantees.ContainedTrainingOn": "5f4729e21cff9c78b6d523dca0838c53fc3efe875adff84cd3316d4fc614a7f8"
+    "Nci.Guarantees.ContainedTrainingOn": "ffd65818d3ca720aa425c7e18324027ce58fb5159b8a2afd7c84a208919bbc6f"
    },
    "guarantees": [
     "Nci.SecurityProofs.ContainedMatMul",
@@ -24572,18 +24598,18 @@
    ]
   },
   "Models.Nci.Guarantees.Threads": {
-   "digest": "f3e616958de71413b30ee877f1dc84de0f769462a32f1a2123537021dad27ae6",
+   "digest": "93ae9b109f7c791ddad756f107d09fd9282196d1d940e9c8e4a2cb7a12f8b9c3",
    "definitions": {
     "Nci.Guarantees.ThreadedReads": "a67a68ce475e8f51e9fc68a0c389a9b4de94d49141735c04702c4526c2ec2b98",
     "Nci.Guarantees.ThreadedReadsSlots": "472df542ab1c1b78b52b07706cc6dcbd187c2d389d82eca0833bafd066256138",
     "Nci.Guarantees.ThreadedThrottled": "87cba58bdc2929fbf8bc48f250f03230593193f95d7c453c263078fe0bbf8f8f",
-    "Nci.Guarantees.ThreadedThrottledDark": "f88db3542d8bc56a016f8bec0af300a5f6730f5ed71e24e546ea69f16b745589",
-    "Nci.Guarantees.ThreadedThrottledDarkSlots": "d3bc7048b70262dcfb3b3a87ccddd8b09eaa3bba8663c17b2077b259f23f1b1b",
-    "Nci.Guarantees.ThreadedThrottledOn": "e26fbfc13cecda19384592d02b95746602a1b3bf2392a5ddf21bca5624cad830",
-    "Nci.Guarantees.ThreadedThrottledOnSlots": "a1a4027b7a642f5541adf16c6c614c6e31e33dc92f244a0a383a96394bd3e6eb",
+    "Nci.Guarantees.ThreadedThrottledDark": "42d3edf1a3c87375c8a75dcaefa7ec951557a9281acf5c4f2cdaf484f5a8b851",
+    "Nci.Guarantees.ThreadedThrottledDarkSlots": "65524ec8883fbe95b0dda035169035d2532df781a5e6fcfbe0f52e465fa937b6",
+    "Nci.Guarantees.ThreadedThrottledOn": "64b3956520ff91fdde93024abc01224828964a22d91dcbec5230bfb807fe3f07",
+    "Nci.Guarantees.ThreadedThrottledOnSlots": "9a5b99dcae9605b72d7282b9fb22312a9300bd5a222af12daac1f277324127d5",
     "Nci.Guarantees.ThreadedThrottledSlots": "2bd618bd24478190f1191faf5e508b2060ca20373df5c64ca91a09bb76f46377",
     "Nci.Guarantees.ThreadedTraining": "11117e631a75eb8adb64d1a09eb29eb625d5c993d8eedd0cc38a52c364d9aa66",
-    "Nci.Guarantees.ThreadedTrainingOn": "aa259844a49d7e1801fbf7973e60685b39dcd4a74940dd7d525ebd60d15f2c9f"
+    "Nci.Guarantees.ThreadedTrainingOn": "72cf3755fbdd75268f485b053cf381f6373052d56858f41325ae8287046305c4"
    },
    "guarantees": [
     "Nci.SecurityProofs.ThreadedReads",
@@ -24599,14 +24625,14 @@
    ]
   },
   "Models.Nci.Guarantees.Training": {
-   "digest": "05d9180e48cd370b9deb9adcb2c373554dc9a5a355804638885149a8f2f1fe95",
+   "digest": "4ed31e7704dceddca4af480a08fb8a31a1ae0b9d9fcbcdb1b7f27deaeffa3cf6",
    "definitions": {
-    "Nci.Guarantees.ContainedFanOutOn": "2eb89d49ea32c59f9e761b1d4ca75007314fdaa0bfe6406cb6512fab34c741df",
-    "Nci.Guarantees.IncompressibleContainedMatMulOn": "db216c06d512cf1e428e98e2e209a484d5961ed6648fb53cd8255aa29099c8f3",
+    "Nci.Guarantees.ContainedFanOutOn": "e35cba23f97548348ad68a63a9ce8cf8e7f2f5b024c037c60a9131a37cebb660",
+    "Nci.Guarantees.IncompressibleContainedMatMulOn": "181476ec821207f38e3e4150258f6c0c66d06b7bed65b3aae774d8f6eaa92816",
     "Nci.Guarantees.IncompressibleContainedTraining": "1aa30787eb8e58ffcb1074206389619df415b788d0f120b4272463940a0fed86",
-    "Nci.Guarantees.IncompressibleContainedTrainingOn": "585ef2e10f84f883e7f1ce0d9f92647e0f45740c277b3bae928b436abffc3051",
+    "Nci.Guarantees.IncompressibleContainedTrainingOn": "1671109c35d68c68a599ec2eaeb41c4f4b760150f9311ff4770f71214cc4ded7",
     "Nci.Guarantees.IncompressibleThreadedThrottled": "bd514e3b70ea71b37a3e6338134d81d331f7cf989f7b09081380d77d69ddd1fd",
-    "Nci.Guarantees.IncompressibleThreadedThrottledOn": "68324d849bdd220d02b65c6a72a58ff02e64dbf3e1c76ba34266ddb5761537fe"
+    "Nci.Guarantees.IncompressibleThreadedThrottledOn": "735923625bb87a06915ce194d5dd67f1a7c7f9104d77082e238f83c8c8908d26"
    },
    "guarantees": [
     "Nci.SecurityProofs.ContainedFanOutOn",

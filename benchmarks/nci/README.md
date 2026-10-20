@@ -236,8 +236,10 @@ All values below are from `parameters.json`; render the index for the findings b
 - **Tokens are the auditor's lever.**
   - Raw token ids carry about 17.3 bits. Arithmetic-coded against a committed base model they carry about 2.2
     (`b_tok/entropy-coded`).
-  - Requiring coded prompts shrinks `K` about 8x for the same inference. That multiplies every full-weight bracket by
-    about 5–10, but it also shrinks the free headroom for non-text state.
+  - Requiring coded prompts shrinks `K` about 8x for the same fresh prompt tokens. That multiplies every full-weight
+    bracket by about 5–10, but it also shrinks the free headroom for non-text state.
+  - `K` caps what a block reads, not what it serves: outputs are never charged, so tokens a block generates, and prompts
+    committed in `θ`, cost it nothing. Threads crowd out only fresh inputs read outside `θ`.
 - **Gradient compression does not evade a per-block cap.** DiLoCo-family methods cut traffic 100–3000x between workers
   that each hold a full model (`grad.compression_ratio/frontier`). Their achieved per-step updates, 0.04–0.6 bits per
   parameter, are thousands of times `K` at frontier scale (`update.bits_per_param_step/pretraining`).

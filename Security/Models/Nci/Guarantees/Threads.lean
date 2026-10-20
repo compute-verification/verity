@@ -1,4 +1,5 @@
 import Models.Nci.Assumptions.Threads
+import Models.Nci.Assumptions.Baseline
 import Definitions.Nci.Dark
 
 /-!
@@ -9,7 +10,8 @@ gates, so it reads at most `αΓ` bits: the draft's `S*` is `αΓ` here.
 
 Theorem 2 also holds when the declaration contains the reference circuit only partly (`PartialContainment`): the
 counted multiplications it computes are throttled as before, and every other one is a dark gate, computed off the books
-(`ThreadedThrottledOn`, `ThreadedThrottledDark`, `ThreadedTrainingOn`).
+(`ThreadedThrottledOn`, `ThreadedThrottledDark`, `ThreadedTrainingOn`). These forms also take `BaselineRegistered`: no
+dark value, and no novel input of the reference circuit, is in the declaration's baseline.
 
 The `Slots` forms take `WeightsIncompressibleSlots`, weights charged per parameter slot, in place of
 `WeightsIncompressible`, with the same bound: a subcircuit that spans several optimizer steps on a parameter is charged
@@ -53,11 +55,11 @@ def ThreadedTraining : Prop :=
 /-- **Theorem 2 with dark gates**: a declaration `d` that complies at `(Γ, α)` and contains the reference circuit `c`
 partly, computing the gates `S` of `c` and leaving the rest dark (`PartialContainment`), has at least `b_a / (αΛ)` gates
 per counted multiplication of `c` in `S`, where `Λ` is Theorem 1's bound at read cap `αΓ`. Each IU of `d` computes a piece
-of `S` that reads no more than the IU, since a dark value enters `d` only as a novel input. At `S = computed` it is
-`ThreadedThrottled`. -/
+of `S` that reads no more than the IU, since a dark value enters `d` only as an input, and outside its baseline by
+`BaselineRegistered`. At `S = computed` it is `ThreadedThrottled`. -/
 def ThreadedThrottledOn : Prop :=
   ∀ (Γ : ℕ) (α b_w b_a : ℝ) (c d : Declaration) (T : Threading c) (dd e : ℕ) (M : PartialContainment c d),
-    0 ≤ α → 0 < b_w → 0 < b_a → 0 < dd → Complies Γ α d →
+    0 ≤ α → 0 < b_w → 0 < b_a → 0 < dd → Complies Γ α d → Assumptions.BaselineRegistered c d M →
     T.Threaded Γ (α * Γ) dd e → Assumptions.WeightsIncompressible c T Γ (α * Γ) b_w b_a →
       b_a * (T.M ∩ M.S).card ≤ α * T.bound (α * Γ) b_w dd e * d.D.size d.D.computed
 
@@ -66,16 +68,17 @@ multiplications number at most its dark gates plus `α Λ size(d) / b_a`: `M ≤
 off the books, `C = size(d)` and `ρ = b_a / (αΛ)` the gates per counted multiplication. -/
 def ThreadedThrottledDark : Prop :=
   ∀ (Γ : ℕ) (α b_w b_a : ℝ) (c d : Declaration) (T : Threading c) (dd e : ℕ) (M : PartialContainment c d),
-    0 ≤ α → 0 < b_w → 0 < b_a → 0 < dd → Complies Γ α d →
+    0 ≤ α → 0 < b_w → 0 < b_a → 0 < dd → Complies Γ α d → Assumptions.BaselineRegistered c d M →
     T.Threaded Γ (α * Γ) dd e → Assumptions.WeightsIncompressible c T Γ (α * Γ) b_w b_a →
       (T.M.card : ℝ) ≤ M.dark.card + α * T.bound (α * Γ) b_w dd e * d.D.size d.D.computed / b_a
 
 /-- **Training is slowed, with dark gates**: when counted multiplications are a fraction `κ` of the reference circuit's
-flops, a declaration that complies at `(Γ, α)` and contains it partly is larger by a factor of at least `κ b_a / (2αΛ)`,
-less what its dark gates absorb: `κ b_a size(c) ≤ 2 b_a #dark + 2 α Λ size(d)`. -/
+flops, a declaration that complies at `(Γ, α)` and contains it partly, with its baseline registered
+(`BaselineRegistered`), is larger by a factor of at least `κ b_a / (2αΛ)`, less what its dark gates absorb:
+`κ b_a size(c) ≤ 2 b_a #dark + 2 α Λ size(d)`. -/
 def ThreadedTrainingOn : Prop :=
   ∀ (Γ : ℕ) (α b_w b_a κ : ℝ) (c d : Declaration) (T : Threading c) (dd e : ℕ) (M : PartialContainment c d),
-    0 ≤ α → 0 < b_w → 0 < b_a → 0 < dd → Complies Γ α d →
+    0 ≤ α → 0 < b_w → 0 < b_a → 0 < dd → Complies Γ α d → Assumptions.BaselineRegistered c d M →
     T.Threaded Γ (α * Γ) dd e → Assumptions.WeightsIncompressible c T Γ (α * Γ) b_w b_a →
     κ * c.D.size c.D.computed ≤ 2 * T.M.card →
       κ * b_a * c.D.size c.D.computed ≤
@@ -100,7 +103,7 @@ def ThreadedThrottledSlots : Prop :=
 def ThreadedThrottledOnSlots : Prop :=
   ∀ (Γ : ℕ) (α b_w b_a : ℝ) (c d : Declaration) (T : Threading c) (σ : T.Slots) (dd e : ℕ)
     (M : PartialContainment c d),
-    0 ≤ α → 0 < b_w → 0 < b_a → 0 < dd → Complies Γ α d →
+    0 ≤ α → 0 < b_w → 0 < b_a → 0 < dd → Complies Γ α d → Assumptions.BaselineRegistered c d M →
     T.Threaded Γ (α * Γ) dd e → Assumptions.WeightsIncompressibleSlots c T σ Γ (α * Γ) b_w b_a →
       b_a * (T.M ∩ M.S).card ≤ α * T.bound (α * Γ) b_w dd e * d.D.size d.D.computed
 
@@ -109,7 +112,7 @@ def ThreadedThrottledOnSlots : Prop :=
 def ThreadedThrottledDarkSlots : Prop :=
   ∀ (Γ : ℕ) (α b_w b_a : ℝ) (c d : Declaration) (T : Threading c) (σ : T.Slots) (dd e : ℕ)
     (M : PartialContainment c d),
-    0 ≤ α → 0 < b_w → 0 < b_a → 0 < dd → Complies Γ α d →
+    0 ≤ α → 0 < b_w → 0 < b_a → 0 < dd → Complies Γ α d → Assumptions.BaselineRegistered c d M →
     T.Threaded Γ (α * Γ) dd e → Assumptions.WeightsIncompressibleSlots c T σ Γ (α * Γ) b_w b_a →
       (T.M.card : ℝ) ≤ M.dark.card + α * T.bound (α * Γ) b_w dd e * d.D.size d.D.computed / b_a
 
