@@ -116,6 +116,19 @@ Newest first. Each is Daniel's unless it names the coordinator.
   bound is one constant (`Claims.Sampling.unitClassMax`, mirrored as the verifier's `UNIT_CLASS_MAX` in Lean and
   Python), so setting it back to 16 is a one-line reversal. Rolled out as AGENTS.md "Everything zero-knowledge" and
   DESIGN.md "Proof unit".
+- 2026-10-19 (2:06 PM PDT, ASK-72 and ASK-73 approved): the recursion. (1) The deployed bound record states its inner
+  claim at IVStar at the weight `coverW` of `deployPlainTrim`'s weight, the least at which the knowledge-soundness
+  route's premise P3 (`Bound.WeightCovers`) holds, at about 4 bits of λ. (2) The recursion's security level is below
+  the 100-bit floor under every weight, about 65 bits at the deployed shape (`Claims.Recursion.lam`; its third, the
+  extraction finder's, term is below 128 by construction). Its guarantee keeps its statement, and every table, README or
+  claim that cites it gives its λ and says it is below the floor, while proofs researches a tighter extraction bound.
+- 2026-10-18 (6:00 PM PDT, default applied, recorded by top 19 Oct 12:00 PM PDT; ASK-16, card 9cd57182): PoUW's
+  guarantees, and only PoUW's, may rest on named random-oracle premises for SHA-512: `StraightLineExtraction` (gap 4,
+  the work bound `EndToEndWindow`) and `SeedExtraction` (gap 7, `FiatShamirFloor`'s seeds), and Compose's
+  `SeedExtractedAt` with them. Each is a named `Prop` in `Security/Models/Pouw/Assumptions` (claim id `random-oracle`),
+  taken as a hypothesis and listed by name in the lock with its own record, not a frozen (no-function, hash) entry, so
+  the frozen list doesn't grow. It narrows the 8 Oct 8:25 AM ruling's "no advantage bounds" for PoUW only; C-Flock's
+  KS keeps the collision form. Each use is named so a later ruling can remove it alone.
 - 2026-10-18 (9:59 PM PDT, to compute-accounting): using cloud workers is totally fine, and nobody asks him again;
   he had been asked for 24 hours. Every lead, its cloud workers and its subagents work from one text, AGENTS.md "Use
   cloud workers freely", which is also the explicit request Cursor's Task tool wants before `environment: "cloud"`.
