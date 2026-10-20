@@ -627,7 +627,8 @@ theorem applyOutputs_nil (log : Array Json) (outputs : Array (String × String �
     rcases r with ⟨c', mine', held'⟩
     intro h1 h2
     dsimp only at h1 h2
-    rw [ih, h1]
+    refine (ih c' mine' held').trans ?_
+    rw [h1]
     simp only [List.mem_cons, forall_eq_or_imp, and_assoc]
     exact and_congr Iff.rfl (and_congr Iff.rfl (forall_congr' fun o => forall_congr' fun _ =>
       find_leaves_congr (h2 o.1) (fun n => OutputPortIs log n o.2.1 o.2.2)))
@@ -656,7 +657,7 @@ theorem checkOutputs_nil (c : Array String) (got : Json) (mine : Flock.V (Array 
   · subst h0
     have hc := applyOutputs_nil log outputs #[] mine0 held
     revert hc
-    generalize Registration.applyOutputs #[] mine0 held outputs log = r
+    generalize hr : Registration.applyOutputs #[] mine0 held outputs log = r
     rcases r with ⟨c', mine', held'⟩
     intro hc
     dsimp only at hc ⊢
@@ -664,12 +665,13 @@ theorem checkOutputs_nil (c : Array String) (got : Json) (mine : Flock.V (Array 
     constructor
     · rintro ⟨hc', mine'', es, hm, hg, hk, hv, he, hsu⟩
       cases hm
-      exact ⟨rfl, mine0, es, mine', held', rfl, hg, (hc.1 hc').2, rfl, hk, hv, he, hsu⟩
+      exact ⟨rfl, mine0, es, mine', held', rfl, hg, (hc.1 hc').2, by rw [hr], hk, hv, he, hsu⟩
     · rintro ⟨-, m0, es, m, h, hm0, hg, hf, hmh, hk, hv, he, hsu⟩
       cases hm0
+      rw [hr] at hmh
       simp only [Prod.mk.injEq] at hmh
       obtain ⟨rfl, rfl⟩ := hmh
-      exact ⟨hc.2 ⟨rfl, hf⟩, m, es, rfl, hg, hk, hv, he, hsu⟩
+      exact ⟨hc.2 ⟨rfl, hf⟩, _, es, rfl, hg, hk, hv, he, hsu⟩
   · have hc := applyOutputs_nil log outputs c mine0 held
     revert hc
     generalize Registration.applyOutputs c mine0 held outputs log = r
