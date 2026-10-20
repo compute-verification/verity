@@ -46,8 +46,9 @@ def test_a_models_inventory_joins_its_marked_modules(marks, tmp_path, monkeypatc
     assert "verity_vllm/program/registry/mhc.py" in {f["path"] for f in dsv4["files"]}
     assert "deepseek-v4-eager-hopper-tp8-v0" in {m["id"] for m in dsv4["capture_maps"]}
     assert dsv4["model_type"] == "deepseek_v4"
-    assert dsv4["profile"] == {"refused": "its config.json (package:hf_configs): " + generic.structural_refusal(json.loads(DSV4_CONFIG.read_text()))}
-    assert dsv4["family"]["arch"] == "mhc-moe" and "family facts  deepseek_v4 (mhc-moe)" in G.render(dsv4)
+    assert generic.structural_refusal(json.loads(DSV4_CONFIG.read_text())) is None
+    assert {k: dsv4["profile"][k] for k in ("module", "config")} == {"module": "derived_DSV4_PRO_tp8", "config": "package:hf_configs"}
+    assert "family facts  deepseek_v4 (mhc-moe)" in G.render(dsv4)
 
 
 def test_the_config_is_the_builds_and_a_fetched_one_must_be_the_pinned_bytes(tmp_path, monkeypatch):

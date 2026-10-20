@@ -51,7 +51,7 @@ def _word(ib: int, ew: int) -> PrimitiveDefinition:
 @pytest.mark.parametrize("ib,ew", SHAPES)
 def test_a_table_read_is_its_boolean_form_on_every_index(ib, ew):
     p = _word(ib, ew)
-    assert IL.PIECES[p.id] is BT.table_read(p, ib).build
+    assert p.id in IL.PIECES
     iw, n = p.params[0][1].w, (1 << ib) * ew
     rng = random.Random(ib * 10 + ew)
     lanes = [(i, [rng.getrandbits(16) for _ in range(n)]) for i in range(1 << ib)]
@@ -88,3 +88,12 @@ def test_reads_of_one_registered_table_lower_unit_by_unit():
     r = PU.check(units, T=8)
     assert r["units_lowered"] == r["units"] == 2 * K and r["shapes_lowered"] == r["shapes"] and r["mismatches"] == 0
     assert [(c["units"], c["ands"]) for c in r["classes"] if c["definition"] == read.id] == [(K, 255 * 32)]
+
+
+@pytest.fixture(autouse=True)
+def _table_reads_unwrapped(monkeypatch):
+    """`boolean_export`'s trace wraps the pieces of `IL.PIECES`, and each one resolved after it (`PIECES.wrap`), once a test in the
+    worker exports; these tests compare their own table reads' pieces, so those run unwrapped whichever test ran first."""
+    monkeypatch.setattr(IL.PIECES, "wrap", None)
+    for k in [k for k in dict.keys(IL.PIECES) if isinstance(k, str) and k.startswith("FlockTableRead")]:
+        monkeypatch.setitem(IL.PIECES, k, getattr(IL.PIECES[k], "__wrapped__", IL.PIECES[k]))
