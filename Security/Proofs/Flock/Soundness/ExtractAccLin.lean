@@ -205,7 +205,7 @@ theorem expectAcc_off_le_lin [Fintype P] [DecidableEq V] (op : β → P → Opti
             expect (ind fun ω => acc ω ∧ (op ω p).isSome) g s) := expectAcc_add g s acc k _ _
     _ ≤ _ := by
         rw [← mul_expectAcc_succ g s acc k (ind (PairConflict op)) hpos]
-        exact add_le_add_left (expectAcc_missing_le op g s acc k hk) _
+        linarith [expectAcc_missing_le op g s acc k hk]
 
 open Classical in
 /-- **The product form for accepted reruns, linearly.** If every run list whose table fails leaves an accepted fresh run
