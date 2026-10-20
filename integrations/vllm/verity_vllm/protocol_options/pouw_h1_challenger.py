@@ -9,13 +9,13 @@ verifier's check that a served window's coins are that challenger's.
   the prover doesn't control, and the serving process reaches it through ``ssh -R`` on its own 127.0.0.1.
 * **Checking** (`trusted_rounds_reason`): the verifier reads the challenger's directory from the challenger's own run
   (``research fetch RUN --all``, its ``out/``), never from the prover's bundle, under its own challenger key (`pinned_key`),
-  and the auditor's session record, which names the one session of the window (`remote.auditor_record`): the coin
-  commitment the challenger signed and the roots its signed release log shows it received
-  (`challenger.trusted_session_of`). The window's coins must be that commitment's, its salt coin must have followed the
+  and the auditor's signed ledger, which opens and ends the one session of the window (`remote.trusted_session`): the coin
+  commitment the challenger signed and the roots its signed release log shows it received. The window's coins must be that commitment's, its salt coin must have followed the
   weights' root, and its rounds pass PoUW's round rule of record (`core_check.rounds`, Lean `PouwCheck.roundsCheck`):
   each coin opened after its root, the roots the challenger's log shows in order. A window whose coins came from a
   challenger the prover holds (the in-process ``coins`` and ``rounds`` of tests, or a host of the prover's), whose log
-  no one signed, or whose window the auditor's record names a second session for, is refused.
+  no one signed, or whose ledger is signed under another key, is cut before the session's end or opens a second session
+  for the window, is refused.
 """
 from __future__ import annotations
 
@@ -29,7 +29,7 @@ from verity.core.protocols.pouw import window as Wd
 from verity.core.protocols.pouw.audit import salt_of
 from verity.core.protocols.sampled_proofs import remote
 from verity.core.protocols.sampled_proofs.challenger import (ChallengerKey, CoinError, LiveCommitment, LiveOpening,
-                                                             LiveRecord, live_reason, trusted_session_of)
+                                                             LiveRecord, live_reason)
 
 SCHEME = Wd.LIVE_SCHEME
 
@@ -120,16 +120,17 @@ def pinned_key(path: str | Path, public_sha512: str) -> ChallengerKey:
     return key
 
 
-def trusted_rounds_reason(commits: Mapping[str, Any], directory: str | Path, auditor: str | Path, window: Mapping[str, Any],
+def trusted_rounds_reason(commits: Mapping[str, Any], directory: str | Path, ledger: str | Path, window: Mapping[str, Any],
                           key: ChallengerKey, verify: Any = lms_verify) -> str | None:
     """Why the window's coins (its H1 commitment `commits`: ``coins``, ``round_coins``, ``salt_opening``, ``weights_root``,
     ``steps`` and the round log ``rounds``) aren't the verifier's own challenger's, read from `directory`, the session the
-    auditor's record at `auditor` names for `window` (``{commit, period, pouw_salt, stream}``), under `key`; None when
-    they are. Fails closed: a missing, malformed or unsigned record or log, or a window the record names no one session
-    for, trusts nothing."""
+    auditor's signed ledger at `ledger` (infra's ``windows.jsonl``) opens and ends for `window` (``{commit, period}``),
+    under `key`, the challenger key the deployment pins; None when they are. Fails closed: a missing, malformed or
+    unsigned record, log or ledger, a ledger signed under another key or older than the session's end, or a window it
+    opens no one session for, trusts nothing (`remote.trusted_session`)."""
     try:
-        entries, files = remote.auditor_record(auditor), remote.session_files(directory)
-        trusted, received = trusted_session_of(entries, window, key, files, verify)
+        trusted, received = remote.trusted_session(directory, ledger, window, key, verify)
+        lines, files = remote.ledger_lines(ledger), remote.session_files(directory)
     except CoinError as e:
         return f"the challenger's session is not trusted: {e}"
     for name in ("round_coins", "coins"):
@@ -157,7 +158,7 @@ def trusted_rounds_reason(commits: Mapping[str, Any], directory: str | Path, aud
         return f"the window's round log has {len(log)} rounds, not its {commits.get('steps')} steps"
     if [x.get("round") for x in log] != list(range(len(log))):
         return "the round log is not rounds 0, 1, ... in order"
-    refused = CC.rounds(key.to_json(), entries, window, files, [x.get("root") for x in log], [x.get("coin") for x in log],
+    refused = CC.rounds(key.to_json(), lines, window, files, [x.get("root") for x in log], [x.get("coin") for x in log],
                         verify)
     return None if refused is None else f"the window's rounds: {refused[1]}"
 

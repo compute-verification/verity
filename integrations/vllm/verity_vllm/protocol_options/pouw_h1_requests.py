@@ -21,8 +21,8 @@ an `act` value, a run input under the root of the round that admits it, committe
   isn't the challenger's opened after it (`live_reason`), and an entry whose first slot in its round doesn't name it.
   `slot_reason` refuses a served slot that names no request, or one whose entry is under a later round than the slot's
   step, so an entry deferred past the step that first serves it is refused. `rounds_reason` holds the whole log to the
-  challenger's coins, and `pouw_h1_challenger.trusted_rounds_reason` holds those coins to the session the auditor's record
-  names for the window, its record and log signed by the verifier's own challenger, and the rounds to PoUW's round rule of
+  challenger's coins, and `pouw_h1_challenger.trusted_rounds_reason` holds those coins to the session the auditor's signed
+  ledger opens and ends for the window, its record and log signed by the verifier's own challenger, and the rounds to PoUW's round rule of
   record (`core_check.rounds`).
 * **Not yet.** The slot table names A-table leaves only once the round root commits root(A): the step digest covers what
   the listeners bind, and no served run binds ``root_a`` yet (``details.requests.a_roots``). The round root has no admit
