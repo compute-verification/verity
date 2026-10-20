@@ -40,11 +40,11 @@ theorem sheet_aQ {P : Type} [DecidableEq P] (D : SheetDataQ P) (n : ℕ) (r : Sh
     show (if D.pipe.getD k.val none = some p then (128 : ℝ) / (D.width p : ℝ) else 0) =
       ((if D.pipe.getD k.val none = some p then (128 : ℚ) / D.width p else 0 : ℚ) : ℝ)
     by_cases h : D.pipe.getD k.val none = some p
-    · rw [if_pos h, if_pos h, Rat.cast_div, Rat.cast_ofNat]
-    · rw [if_neg h, if_neg h, Rat.cast_zero]
-  | issue => simp only [Sheet.machine, SheetDataQ.sheet, sheetCoefQ] <;> simp
-  | tensor => simp only [Sheet.machine, SheetDataQ.sheet, sheetCoefQ] <;> simp
-  | smem => simp only [Sheet.machine, SheetDataQ.sheet, sheetCoefQ] <;> simp
+    · rw [ite_eq_left h, ite_eq_left h, Rat.cast_div, Rat.cast_ofNat]
+    · rw [ite_eq_right h, ite_eq_right h, Rat.cast_zero]
+  | issue => simp [Sheet.machine, SheetDataQ.sheet, sheetCoefQ]
+  | tensor => simp [Sheet.machine, SheetDataQ.sheet, sheetCoefQ]
+  | smem => simp [Sheet.machine, SheetDataQ.sheet, sheetCoefQ]
 
 theorem sheetCoefQ_nonneg {P : Type} [DecidableEq P] (D : SheetDataQ P) (hw : ∀ p, 0 ≤ D.width p)
     (r : SheetRow P) (i : ℕ) : 0 ≤ sheetCoefQ D r i := by
