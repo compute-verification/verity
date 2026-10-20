@@ -798,8 +798,8 @@ class ProverSide:
                         break
                     t += 1
                     backend.begin_window(take(wire.coin_of(msg["coin"])), None)
-                    # From its coin's arrival: the next coin can come before this process reads its clock, and a
-                    # pass under this coin stays this group's whatever comes after the coin.
+                    # From its coin's arrival: the next coin can come before this process reads its clock, and a pass
+                    # under this coin stays this group's whatever comes after the coin.
                     inflight.append(launch(t, 0, last.ticket if last else None, stamp))
                     nxt = 1
                     continue
