@@ -158,6 +158,8 @@ class WeightRegion:
     codec: Codec = IDENTITY
     receipt: Receipt | None = None
     encode: bool = False
+    live: Any = None
+    """The object the model holds (its parameter), whose storage the binder checks stays put (`Binder.moved`)."""
 
 
 def model_weights(runner: Any) -> list[WeightRegion]:
@@ -167,8 +169,12 @@ def model_weights(runner: Any) -> list[WeightRegion]:
         if p.numel() == 0 or p.data_ptr() in seen:
             continue
         seen.add(p.data_ptr())
-        out.append(WeightRegion(name, p.data, f"param:{name}"))
+        out.append(WeightRegion(name, p.data, f"param:{name}", live=p))
     return out
+
+
+def _where(t: Any) -> tuple:
+    return t.data_ptr(), tuple(t.shape), tuple(t.stride())
 
 
 def _check_disjoint(starts: list[tuple[int, np.ndarray]], plane_bytes: int) -> None:
@@ -234,18 +240,21 @@ class Binder:
     reference's, every block read on the CPU.  With ``tiles`` (the driver's `audit.Tiles`), each receipt is bound to
     ``tiles.output(seed, j)``, PoUW's tile output before block ``j`` is read, and the default receipt is the driver's
     (`RemoteBandwidthReceipt`); without them, the tag receipt, which binds only the block.  With ``passes=False`` the
-    binder runs no pass: a remote session's backend runs them, and its windows (`verity_vllm.store.remote.serve`)."""
+    binder runs no pass: a remote session's backend runs them, and its windows (`verity_vllm.store.remote.CommitSession`).
+    With ``weight_blocks`` it registers weight tensors in order while their blocks fit that many, and counts the rest
+    unregistered: a store small enough for a remote session's CPU passes (`remote.StoreBackend`)."""
 
     def __init__(self, store: Store, *, block_bytes: int = 4096, kv_codec: Codec = IDENTITY,
                  receipt: Receipt | None = None, weights: Callable[[Any], Sequence[WeightRegion]] = model_weights,
                  reader: Callable[[Sequence[Segment]], dict[int, bytes] | bytes | None] | None = None, fifo: bool = True,
                  messages: Callable[[], Sequence[bytes | None]] | None = None, registration: bytes | None = None,
                  on_window: Callable[[WindowRecord], None] | None = None, tiles: Tiles | None = None,
-                 passes: bool = True) -> None:
+                 passes: bool = True, weight_blocks: int | None = None) -> None:
         self.store, self.block_bytes, self.kv_codec = store, block_bytes, kv_codec
         self.receipt = receipt or (RemoteBandwidthReceipt() if tiles is not None else default_receipt())
         self.weights, self.reader, self.fifo, self.tiles = weights, reader, fifo, tiles
         self.messages, self.registration, self.on_window, self.passes = messages, registration, on_window, passes
+        self.weight_blocks = weight_blocks
         self.hooks: Hooks | None = None
         self.step = 0
         self.windows = 0
@@ -254,20 +263,26 @@ class Binder:
         self._segments: Sequence[Segment] = ()
         self.unregistered: dict[str, int] = {}
         self.slots = 0
+        self.tensors: list[tuple[str, Callable[[], Any], tuple]] = []
+        self.model: Any = None
 
     # --- registration -----------------------------------------------------------------------------------------------
 
     def on_load(self, runner: Any) -> None:
+        room, self.model = self.weight_blocks, _unwrap(runner.model)
         for w in self.weights(runner):
             b = TorchBacking.of_tensor(w.tensor, self.block_bytes)
             nbytes = w.tensor.numel() * w.tensor.element_size()
-            if b is None:
+            if b is None or (room is not None and b.nbytes // self.block_bytes > room):
                 self.unregistered[w.name] = nbytes
                 continue
+            if room is not None:
+                room -= b.nbytes // self.block_bytes
             if b.nbytes < nbytes:
                 self.unregistered[f"{w.name}[tail]"] = nbytes - b.nbytes
             self.store.register(w.name, "hbm", "weights", b, block_bytes=self.block_bytes, codec=w.codec,
                                 receipt=w.receipt or self.receipt, source=w.source, encode=w.encode)
+            self._held(w.name, lambda t=w.tensor if w.live is None else w.live: t)
 
     def on_kv(self, runner: Any, kv_cache_config: Any) -> None:
         """Register the KV pool: each attention layer's pages a region (`PagedBacking`, so layers that share one
@@ -282,7 +297,8 @@ class Binder:
         pages = int(kv_cache_config.num_blocks)
         flats: dict[int, Any] = {}
         backings, starts, layout = [], [], None
-        for t in caches:
+        for i, t in enumerate(caches):
+            self._held(f"kv[{i}]", lambda i=i: runner.kv_caches[i])
             phys = page_layout(t, pages, slots)
             key = t.untyped_storage().data_ptr()
             flat = flats.setdefault(key, storage_bytes(t))
@@ -301,6 +317,14 @@ class Binder:
         self.slots = slots
         self.store.register_kv_pool("kv", backings, layout, block_bytes=self.block_bytes, codec=self.kv_codec,
                                     receipt=self.receipt, encode=False)
+
+    def _held(self, name: str, live: Callable[[], Any]) -> None:
+        self.tensors.append((name, live, _where(live())))
+
+    def moved(self) -> list[str]:
+        """The registered tensors whose storage, size or strides are no longer those at registration: a reader that
+        holds their device addresses (`benchmarks/remote_session/inplace.py`) would read memory the store left."""
+        return [name for name, live, was in self.tensors if _where(live()) != was]
 
     # --- the scheduler's steps --------------------------------------------------------------------------------------
 

@@ -130,6 +130,36 @@ def test_a_forged_statement_is_the_verifiers_file_with_the_wrong_row(tmp_path):
         U.forge_statement(tmp_path / "honest", tmp_path / "f2", pub, 1, "o1", wrong, circuit)
 
 
+def test_vllm_quant_puts_each_rows_absmax_at_127_rounding_to_nearest():
+    spec_l = importlib.util.spec_from_file_location("h1_prove_layer", H1 / "layer.py")
+    L = importlib.util.module_from_spec(spec_l)
+    spec_l.loader.exec_module(L)
+    x = np.array([[0.5, -2.0, 1.1, 0.26, 9.0], [-4.0, 1.0, 0.016, -0.015, 3.0]], np.float32)
+    assert L.quant_vllm(x).tolist() == [[7, -28, 16, 4, 127], [-127, 32, 1, 0, 95]]
+    assert L.quant_vllm(x, 3).tolist() == [[32, -127, 70], [-127, 32, 1]]
+    rng = np.random.default_rng(5)
+    q = L.quant_vllm(rng.standard_normal((64, 4096)).astype(np.float32), K)
+    assert q.shape == (64, K) and q.dtype == np.int8
+    assert (np.abs(q.astype(int)).max(axis=1) == 127).all() and q.min() >= -127
+
+
+def test_v3_serves_a_bt_where_a_is_127_and_an_xa_flip_moves_only_z(tmp_path, monkeypatch):
+    monkeypatch.setenv("H1_TILE", "v3")
+    rng = np.random.default_rng(6)
+    a = rng.integers(-127, 128, (8, K)).astype(np.int8)
+    a[:, ::5] = 127
+    np.savez(tmp_path / "w.npz", tokens=np.arange(8), a=a, **{"b_q_proj": rng.integers(-128, 128, (16, K)).astype(np.int8)})
+    window("commit", str(tmp_path / "w.npz"), "w", str(tmp_path / "w"), str(tmp_path / "com.json"))
+    salt = U.unit_salt(b"\x07" * 32)
+    served = window("serve", str(tmp_path / "w"), salt.hex(), str(tmp_path / "served.json"), "--workers", "2")
+    assert served["z_is_served_product"] == {"cells": 4 * 4 * 8, "equal": 4 * 4 * 8}
+    assert served["xa"]["tile_rows_with_xa"] == served["xa"]["tile_rows"] == 16
+    bad = window("tamper", str(tmp_path / "w"), str(tmp_path / "t"), str(tmp_path / "t.json"), "--xa-flip", "1")
+    assert bad["receipt_root"] == served["receipt_root"] and bad["z_root"] != served["z_root"]
+    flip = bad["tampered"]["xa_flip"]
+    assert flip["xa_set_in_unit"] > 0 and flip["receipt_is_honest"] and flip["z_words_changed"] > 0
+
+
 def test_the_public_row_is_the_parameters_bits():
     from verity.core.protocols.pouw.circuit import seeds as SD
     salt, roots = bytes(range(64)), (bytes(64 * [7]), bytes(range(64, 128)))

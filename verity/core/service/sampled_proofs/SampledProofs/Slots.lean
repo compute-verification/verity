@@ -12,9 +12,8 @@ there.
 * **Slots.** A replay unit's slot is its index in class, stratum and replay-unit order (`Partition.rus`). Where no two
   strata's units interleave, unit `i`'s slot is `i`.
 * **Checked.** `checked` lists the proof units of every replay unit the draw proves (`Select.select`'s proved units: its
-  units and a work draw's closure) and of every input slot, each as `(slot, index)`, in slot order. The one-stage rules and the two-stage
-  rule a stream runs (each replay unit one instance of the check's unit, all of it checked) make every replay unit one
-  proof unit, so each index is `0`.
+  units and a work draw's closure) and of every input slot, each as `(slot, index)`, in slot order. The rules a stream
+  runs make every replay unit one proof unit, so each index is `0`.
 -/
 import SampledProofs.Select
 

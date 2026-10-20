@@ -672,7 +672,10 @@ def check_calls(groups: Iterable[dict[str, Any]], X: int = 16, W: int = 32, extr
     boundaries too.  Each group of such a family reports `acquired_interior_words`, and one whose
     partition commits another number of interior words per Call is an `interior-not-acquired` violation.
 
-    `max_gates` (`gate_limits`): the run's gate limits; the query, and so `res["query"]`, is the same under any."""
+    `max_gates` (`gate_limits`): the run's gate limits; the query, and so `res["query"]`, is the same under any.
+
+    A Boolean Program's group is its word link's (`pipeline.build_instances`): the word Definition's rule, units and boundaries,
+    and its `bits` Definition's size beside, in each group and the totals (`boolean_gates`, `program_view.bits_gates`)."""
     limits = gate_limits(max_gates)
     memo = _RULES.setdefault(tuple(sorted(limits.items())), {})
     out: list[dict[str, Any]] = []
@@ -684,6 +687,7 @@ def check_calls(groups: Iterable[dict[str, Any]], X: int = 16, W: int = 32, extr
         if g.get("where") is not None and len(a["where"]) < 8 and g["where"] not in a["where"]:
             a["where"].append(g["where"])
 
+    from verity_vllm.query.program_view import bits_gates
     for g in groups:
         try:
             rule = unit_rule(specialize(g["family"], g["statics"]), X, W, extras, memo=memo, max_gates=limits)
@@ -691,6 +695,7 @@ def check_calls(groups: Iterable[dict[str, Any]], X: int = 16, W: int = 32, extr
             rule = _finish(g["definition"], 0, [], [], X, W, extras)
             rule["violations"] = [{"definition": g["definition"], "class": "unresolved", "why": f"{type(e).__name__}: {str(e)[:200]}"}]
         v = list(rule["violations"])
+        bgates = bits_gates(g, specialize, v)
         if not g.get("inputs_committed", True):
             v.append({"definition": g["definition"], "class": "input-not-committed",
                       "why": "the Call reads a Value interior to its module body: a unit would cross Calls"})
@@ -707,10 +712,12 @@ def check_calls(groups: Iterable[dict[str, Any]], X: int = 16, W: int = 32, extr
         k = int(g.get("calls") or 0)
         out.append({"where": g.get("where"), "definition": g["definition"], "calls": k, "units": rule["units_per_call"] * k,
                     "gates": rule["gates"] * k, "committed_interior_words": rule["committed_interior_words"] * k, "rule": rule,
-                    "violations": len(v), **({"acquired_interior_words": min(tap, rule["committed_interior_words"]) * k} if acquired is not None else {})})
+                    "violations": len(v), **({"acquired_interior_words": min(tap, rule["committed_interior_words"]) * k} if acquired is not None else {}),
+                    **({"bits": g["bits"], "boolean_gates": bgates * k} if g.get("bits") else {})})
     viol = sorted(agg.values(), key=lambda a: (-a["calls"], a["definition"], a["class"]))
-    totals = ("calls", "units", "gates", "committed_interior_words") + (("acquired_interior_words",) if acquired is not None else ())
-    res = {"query": query_id(X, W, extras), "ok": not viol, "violations": viol, "groups": out, **{k: sum(g[k] for g in out) for k in totals}}
+    totals = ("calls", "units", "gates", "committed_interior_words") + (("acquired_interior_words",) if acquired is not None else ()) \
+        + (("boolean_gates",) if any("bits" in g for g in out) else ())
+    res = {"query": query_id(X, W, extras), "ok": not viol, "violations": viol, "groups": out, **{k: sum(g.get(k, 0) for g in out) for k in totals}}
     if strict and viol:
         raise QueryRuleViolation(f"{query_id(X, W, extras)}: {len(viol)} violation(s): " + "; ".join(_name(x) for x in viol[:12])
                                  + (" ..." if len(viol) > 12 else ""))
@@ -776,7 +783,7 @@ def call_groups(P: Any, Q: Any) -> list[dict[str, Any]]:
         g = groups.get(k)
         if g is None:
             g = groups[k] = {"family": c.family, "statics": c.statics, "definition": c.definition, "where": where, "calls": 0,
-                             "inputs_committed": ins, "outputs_committed": outs}
+                             "inputs_committed": ins, "outputs_committed": outs, **({"bits": c.bits} if c.bits else {})}
         g["calls"] += 1
     return list(groups.values())
 

@@ -31,7 +31,7 @@ LD_REGS = {"ld_32x32b_x32": 32, "ld_32x32b_x16": 16, "ld_16x256b_x4": 16, "ld_16
            "ld_32x32b_x64": 64, "ld_32x32b_x128": 128}
 TENSOR = ("IGMMA", "QGMMA", "HGMMA", "BGMMA", "UTC", "LDTM", "IMMA", "HMMA", "BMMA")
 LANE_ALONE = {"mix": "s_mix", "imad": "s_imad", "lop3": "s_lop3", "shfl": "s_shfl", "duo": "s_duo",
-              "redux": "s_redux", "reduce": "s_reduce"}
+              "redux": "s_redux", "reduce": "s_reduce", "li": "p_imad_lop3"}
 
 
 def load(d: Path) -> tuple[dict[str, dict], dict[str, dict]]:
@@ -106,7 +106,7 @@ def slots_sm100(name: str, row: dict) -> dict | None:
 
 
 def lane_of(name: str) -> str | None:
-    m = re.fullmatch(r"(?:wgspec|wgmix|tclane)_([a-z0-9]+)_r\d+|(?:tclaneU|wgU)_(mix|imad|lop3|duo|redux|reduce)", name)
+    m = re.fullmatch(r"(?:wgspec|wgmix|tclane)_([a-z0-9]+)_r\d+|(?:tclaneU|wgU)_(mix|imad|lop3|duo|redux|reduce|li|lif)(?:_r\d+)?", name)
     return (m.group(1) or m.group(2)) if m else None
 
 
@@ -241,6 +241,13 @@ def analyze(family: str, d: Path) -> dict:
         for name, row in rows.items():
             if lane_of(name) or name.startswith(("ldmma_", "syncmma_")):
                 joints[name] = joint(name, row, rows, verdicts.get(name), t_alone)
+            elif (li := re.fullmatch(r"tcliU_[xp](\d+)f?(?:_t\d+)?", name)) and t_alone and rate_of(row, "LDTM"):
+                # words loaded and folded (one LI op each) a SM a clock; L = 64 commits one slot in two of UTCIMMA's
+                cols = int(li.group(1))
+                words, asked = rate_of(row, "LDTM") * 32 * cols, rate_of(row, "UTC") * 128 * 256 / 2
+                joints[name] = {"tensor_fraction": rate_of(row, "UTC") / t_alone, "exact": True,
+                                "issue": issue_rates(row, verdicts.get(name)), "li_words": words,
+                                "l64_asked": asked, "keeps_up_l64": words / asked}
             elif name.startswith(("ldU_", "mmaU_", "syncU_", "tcliU_", "tcbulk_")) and t_alone:
                 # OP_UNTIL points: both rates exact (neither includes time at the barrier)
                 j = {"tensor_fraction": rate_of(row, "UTC") / t_alone, "exact": True,
@@ -257,6 +264,10 @@ def analyze(family: str, d: Path) -> dict:
                 op = "UBLKCP" if name == "bulkcp" else "UBLKRED"
                 br = rate_of(row, op)
                 joints[name] = {"bulk_words_per_clk": br * 1024 if br else None}
+            elif name.startswith("tcfU_") and "tc_mxf4_m128_n256" in rows:
+                # kind::mxf4 beside lanes: its fraction of mxf4 alone
+                joints[name] = {"tensor_fraction": rate_of(row, "UTC") / rate_of(rows["tc_mxf4_m128_n256"], "UTC"),
+                                "exact": True, "issue": issue_rates(row, verdicts.get(name))}
         rho5 = t5["slots"] if t5 else 256.0
         for name in [n for n in joints if n.startswith("ldmma_")]:
             ld = loop_rate(rows[name], 1, ("LDTM",))

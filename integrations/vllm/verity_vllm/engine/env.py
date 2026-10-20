@@ -54,6 +54,23 @@ COMPILE_FRESH = {"VLLM_DISABLE_COMPILE_CACHE": "1", "TORCHINDUCTOR_FX_GRAPH_CACH
 #: Set by whoever gave this process its own TORCHINDUCTOR_CACHE_DIR (``prepare_compiled_process_cache``,
 #: ``ops/compiled_commit.sh``).
 INDUCTOR_DIR_MARK = "VERITY_INDUCTOR_DIR_PER_PROCESS"
+#: ``MODE:PAGED_SO``: the int8 attention's credited read every engine of this process installs at its build (`engine.int8_credited_env`)
+INT8_CREDITED_READ = "VERITY_INT8_CREDITED_READ"
+
+
+def int8_credited_read() -> str | None:
+    return os.environ.get("VERITY_INT8_CREDITED_READ") or None
+
+
+#: The switches a served engine leaves at vLLM's defaults; a capture of record runs with none of them set, so the kernels it compares
+#: are the ones vLLM selects by default whatever the process inherited.
+SERVED_DEFAULTS = ("VLLM_BATCH_INVARIANT", "VLLM_USE_DEEP_GEMM", "VLLM_USE_DEEP_GEMM_E8M0", "VLLM_MOE_USE_DEEP_GEMM",
+                   "VLLM_BLOCKSCALE_FP8_GEMM_FLASHINFER", "VLLM_USE_FUSED_MOE_GROUPED_TOPK", "VLLM_TUNED_CONFIG_FOLDER", "NCCL_P2P_DISABLE")
+
+
+def served_defaults() -> dict[str, str]:
+    """Clear `SERVED_DEFAULTS` from the process environment (before vLLM is imported); returns the values cleared."""
+    return {k: os.environ.pop(k) for k in SERVED_DEFAULTS if k in os.environ}
 
 
 def pin(pins: Mapping[str, str]) -> dict[str, str]:

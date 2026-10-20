@@ -20,8 +20,8 @@ activations of its earliest complete one, none of which the subcircuit completes
 
 Through a partial containment (`ActivationsBoundOn`) the bound holds for the counted multiplications the declaration
 computes, with no term for the dark gates: a partial sum added outside the declaration, or any other value computed
-off the books, enters it as a novel input and does not make an activation whole in a piece. `ActivationsTrainingOn` is
-the training form, with the counted multiplications off the books as dark gates.
+off the books, enters it as an input, novel by `BaselineRegistered`, and does not make an activation whole in a piece.
+`ActivationsTrainingOn` is the training form, with the counted multiplications off the books as dark gates.
 -/
 
 namespace Nci.Guarantees
@@ -44,12 +44,13 @@ def ActivationsReads : Prop :=
 /-- **The activations bound over all of training, with dark gates** ([ACTIVATIONS-BOUND]): a declaration `d` that
 complies at `(Γ, α)` and contains the reference circuit `c` partly, computing the gates `S` of `c` and leaving the rest
 dark (`PartialContainment`), computes at most `α Λ size(d) / b_a` of `c`'s counted multiplications, with
-`Λ = max(e, c_r · K / (4 dd b_w))` at read cap `K ≥ αΓ`, under `ActivationsIncompressibleAll` on `c` at `K`. There is no
-term for the dark gates, so it holds however much of `c`, the partial sums included, is computed off the books. -/
+`Λ = max(e, c_r · K / (4 dd b_w))` at read cap `K ≥ αΓ`, under `ActivationsIncompressibleAll` on `c` at `K` and
+`BaselineRegistered`. There is no term for the dark gates, so it holds however much of `c`, the partial sums included, is
+computed off the books. -/
 def ActivationsBoundOn : Prop :=
   ∀ (Γ : ℕ) (α K b_w b_a : ℝ) (c d : Declaration) (T : Threading c) (L : T.Links) (dd e : ℕ)
     (M : PartialContainment c d),
-    0 ≤ α → α * Γ ≤ K → 0 < b_w → 0 < b_a → 0 < dd → Complies Γ α d →
+    0 ≤ α → α * Γ ≤ K → 0 < b_w → 0 < b_a → 0 < dd → Complies Γ α d → Assumptions.BaselineRegistered c d M →
     (∀ a, (T.M.filter fun g => T.act g = a).card ≤ e) →
     (∀ a, (L.src a).Nonempty →
       dd ≤ (((L.src a).filter fun g => T.thread (T.act g) = T.thread a).image T.act).card) →
@@ -57,13 +58,14 @@ def ActivationsBoundOn : Prop :=
       b_a * (T.M ∩ M.S).card ≤ α * T.bound K b_w dd e * d.D.size d.D.computed
 
 /-- **Training is slowed, by the activations bound, with dark gates**: when counted multiplications are a fraction `κ`
-of the reference circuit's flops (2 flops each), a declaration that complies at `(Γ, α)` and contains it partly is
-larger by a factor of at least `κ b_a / (2αΛ)`, less what its dark gates absorb:
+of the reference circuit's flops (2 flops each), a declaration that complies at `(Γ, α)` and contains it partly, with its
+baseline registered (`BaselineRegistered`), is larger by a factor of at least `κ b_a / (2αΛ)`, less what its dark gates
+absorb:
 `κ b_a size(c) ≤ 2 b_a #dark + 2 α Λ size(d)`. -/
 def ActivationsTrainingOn : Prop :=
   ∀ (Γ : ℕ) (α K b_w b_a κ : ℝ) (c d : Declaration) (T : Threading c) (L : T.Links) (dd e : ℕ)
     (M : PartialContainment c d),
-    0 ≤ α → α * Γ ≤ K → 0 < b_w → 0 < b_a → 0 < dd → Complies Γ α d →
+    0 ≤ α → α * Γ ≤ K → 0 < b_w → 0 < b_a → 0 < dd → Complies Γ α d → Assumptions.BaselineRegistered c d M →
     (∀ a, (T.M.filter fun g => T.act g = a).card ≤ e) →
     (∀ a, (L.src a).Nonempty →
       dd ≤ (((L.src a).filter fun g => T.thread (T.act g) = T.thread a).image T.act).card) →

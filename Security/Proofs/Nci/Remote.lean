@@ -198,8 +198,8 @@ theorem residualShare_sub {W C ε L : ℝ} (hC : 0 < C) :
   linear_combination (ε + L) * hCi
 
 theorem DampenerRemote : Guarantees.DampenerRemote := by
-  intro Ω _ μ N c wrong p ε β ι _ bad I ident τ w Φ Δ H κ C U W χ mfu M Mu Mr Mx Γ α b_w b_a r d T dd e
-    hp hε hc hcC hsound hH hΔ hΦ hI hT hcap hκ hC hU hmfu hmfu1 hα hbw hba hdd hcd hcomp hthr hW hsize hM0 hM hu hres
+  intro Ω _ μ N c wrong p ε β ι _ bad I ident τ w Φ Δ H κ C U W χ mfu M Mu Mr Mx Γ α b_w b_a r d T dd e Mc
+    hp hε hc hcC hsound hH hΔ hΦ hI hT hcap hκ hC hU hmfu hmfu1 hα hbw hba hdd hcomp hB hthr hW hsize hM0 hM hu hres
     hx
   refine prob_ge_of_not μ ?_ (CertificateSlack Ω μ N c wrong p ε C hp hε hC hc hcC hsound)
   intro ω hbad
@@ -214,7 +214,7 @@ theorem DampenerRemote : Guarantees.DampenerRemote := by
       mul_le_mul_of_nonneg_left (by linarith) hκ.le
     linarith
   obtain ⟨h1, h2⟩ := remote_core hκ hC hU hmfu hmfu1 (Nat.cast_pos.2 (hM0 ω)) (by exact_mod_cast hM ω) (hu ω) hr
-    (declared_le hα hbw hba hdd hcd hcomp hthr hW hsize) (hx ω)
+    (declared_le hα hbw hba hdd hcomp hB hthr hW hsize) (hx ω)
   rw [residualShare_sub hC] at h1 h2
   exact ⟨h1, h2⟩
 

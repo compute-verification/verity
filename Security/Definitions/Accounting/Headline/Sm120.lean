@@ -7,18 +7,22 @@ Written by `benchmarks/pouw/lean_headline.py` from the machine model's data (`be
 checked against it by `benchmarks/pouw/tests/test_lean_headline.py`: edit the data and rerun the exporter, never this
 file. `Accounting.Guarantees.TS.Sm120SheetHeadline` reads it.
 
-* `classes`: the 122 instruction classes of the DS-120 census, in the order `Fin 122` indexes them.
-* `ds120`, `sheet`: the RTX PRO 6000's data sheet (DS-120): f_max 2430 MHz (SPEC's P1); each tensor class's dense MACs a
-  warp instruction (`m·n·k`, a 2:4 sparse form's dense equivalent) and its operand type's dense MACs an SM clock; the
-  Nsight Compute pipes IMAD, LOP, XU and SHFL with their Programming Guide widths; 128 B for every shared-memory class.
-  Its machine reproduces every DS-120 coefficient.
+* `classes`: the 122 instruction classes of the DS-120 census, in the order `Fin 122` indexes them. `NOROW` is A2's
+  catch-all: every warp instruction no other class names counts there, at its issue slot alone.
+* `ds120`, `sheet`: the RTX PRO 6000's data sheet (DS-120): f_max 2430 MHz (the driver's reported maximum, SPEC's P1: no
+  data sheet states it); each tensor class's dense MACs a warp instruction (`m·n·k`, a 2:4 sparse form's dense
+  equivalent) and its operand type's dense MACs an SM clock; the Nsight Compute pipes IMAD, LOP, XU and SHFL with their
+  Programming Guide widths; 128 B for every shared-memory class. Its machine reproduces every DS-120 coefficient.
 * `h1fx1`, `model`: H1 + fx1 (`dither-c-peel-fx1`) as a TS model on the sheet's machine: writer kinds the census's MMA
   classes (ω = m·n), the generic MMA (128) and the uniform `UNI` (1) and `UNI64` (2); the vector classes CUDA's lane
-  classes; fx1's fold on lanes (ALU 2 + IMAD 2 lane instructions a word) and alone on the uniform datapath (4 a word);
-  A6's floors `q = q_T = ½`, `b_T = 0`; 128 committed words a unit of honest work (an IMMA.16832 at L = 32).
+  classes and the 64-bit ones (ALU64, CVT64, DMUL, IMADW, MOV64); fx1's fold on lanes (ALU 2 + IMAD 2 lane instructions
+  a word) and alone on the uniform datapath (4 a word); A6's floors `q = q_T = ½`, `b_T = 0`; 128 committed words a unit
+  of honest work (an IMMA.16832 at L = 32).
 * `flat`: the floor program ♭ a unit: the MMA and the design's operand floor (word production), the fold, no filler, and
   ε_skip's skippable work at NOROW's price, 0.420701% of ♭'s bound (`eps_budget.design_skip` on DS-120).
-* `piStar`: π*, the facet (DS_issue) the machine model's LP certificate sits on at q* = ½.
+* `piStar`: π*, the facet (DS_issue) the machine model's LP certificate sits on at q* = ½, with 197/3761 moved onto
+  DS_smem: the least weight there at which each bulk-reduction floor (the exporter's `BULK_FLOORS`, A5b) costs at least
+  the menu's φ*.
 * `checks`: the checks a window, one a round (Theorem S's S).
 -/
 
@@ -85,8 +89,8 @@ def ds120 : SheetData Pipe where
   smem := [
     0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
     0, 0, 0, 128, 128, 128, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 128, 128, 128, 128, 128, 128, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-    0, 0, 0, 0, 0, 0, 0, 128, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
+    0, 0, 0, 0, 0, 0, 0, 128, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 512, 512, 4096, 0, 0,
+    16, 8208, 528, 1040, 16400, 32784, 2064, 48, 49168, 32, 4112, 101376, 0, 0, 0]
 
 /-- The data sheet over the census's classes. -/
 noncomputable def sheet : Sheet (Fin 122) Pipe := ds120.sheet 122
@@ -112,7 +116,8 @@ def h1fx1 : DesignData where
     (105, 1),  -- UNI
     (106, 2)  -- UNI64
   ]
-  vec := [13, 119, 18, 24, 0, 12, 121, 78, 65, 77]  -- FFMA, VIMNMX, HFMA2, IMAD, ALU, F2FS, XU, SHFL, NOROW, SEL
+  -- FFMA, VIMNMX, HFMA2, IMAD, ALU, F2FS, XU, SHFL, NOROW, SEL, ALU64, CVT64, DMUL, IMADW, MOV64
+  vec := [13, 119, 18, 24, 0, 12, 121, 78, 65, 77, 1, 9, 10, 25, 64]
   folds := [
     [(0, 1, 16), (24, 1, 16)],
     [(105, 4, 1)]]
@@ -137,8 +142,10 @@ def flatSkip : Sparse := [(65, 14325412520309335111003, 199158597757329117000000
 /-- The floor program ♭, labelled. -/
 noncomputable def flat : Labelled (Fin 122) := labelled 122 flatWords flatFold [] flatSkip
 
-/-- π*: the machine model's certificate at q* = ½. -/
-def piStar : SheetRow Pipe := .issue
+/-- π*: the machine model's certificate at q* = ½, priced so that the bulk-reduction floors cost at least φ*. -/
+noncomputable def piStar : SheetRow Pipe → ℝ := fun r =>
+    3564 / 3761 * onFacet (SheetRow.issue : SheetRow Pipe) r +
+    197 / 3761 * onFacet (SheetRow.smem : SheetRow Pipe) r
 
 /-- The checks a window. -/
 def checks : ℕ := 48000
