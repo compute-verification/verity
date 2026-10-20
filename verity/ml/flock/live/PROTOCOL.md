@@ -777,12 +777,17 @@ The session itself goes through Lean: one `flock-firewall session` process (`Flo
 holds the auditor's connection for every session the prover opens to it. It relays the prover's frames, but sends its own
 `Hello` (the Lean `Hello` at the auditor's draw and a nonce it draws from the OS) in place of the prover's, checks
 `Hello`'s answer (20 words, key bit 2047 clear) and every coin opening against the root, and hands the prover only the
-coins, as `coin_tree::Checked` does. It asks for each opening at the schedule's place, not the prover's: the session
-stream's at `Commit`, then every round of each rep stream in table order, rep 0's before rep 1's, at the coin counts
-the verifier's replay draws (`Session.planOf`; `flock-firewall session --schedule` prints them). A `Commit` or `Round`
-anywhere else is refused before it reaches the auditor. A coin it refuses, or one asked for after a refusal, is answered
-`Refused("PROVER-STOPPED: …")`. `FC_FIREWALL_SESSION=0`, or `FC_FIREWALL_TRANSCRIPT`, keeps the prover's own connection
-and Rust's checks. `Proof` and `Finish` are still relayed as the prover sends them.
+coins, as `coin_tree::Checked` does. The tree, link count and nonce it checks them under are the values it set up and
+sent (`Session.helloOf`), never a parse of the `Hello`: the setup's coin tree, whose streams must be the session stream
+then each table's `rep0` and `rep1`, distinct (`Session.streamsOk`), else `Hello`'s answer is refused. It asks for each
+opening at the schedule's place, not the prover's: the session stream's at `Commit`, then every round of each rep
+stream in table order, rep 0's before rep 1's, at the coin counts the verifier's replay draws (`Session.planOf`;
+`flock-firewall session --schedule` prints them). A `Commit` or `Round` anywhere else is refused before it reaches the
+auditor, and so is a `Finish` before the schedule's last opening. A coin it refuses, or one asked for after a refusal,
+is answered `Refused("PROVER-STOPPED: …")`. `FC_FIREWALL_SESSION=0`, or `FC_FIREWALL_TRANSCRIPT`, keeps the prover's own
+connection and Rust's checks. `Proof` and `Finish` leave as the prover sends them. The analysis's release is this loop
+(`Claims.ZKServer.LeanRelease.loop`, `Flock.zk_server_lean_loop`): its `Hello`, requests and last request are proved,
+and its link and frame feeding are still assumed.
 
 The frame's protocol:
 - **start**: one JSON line with the rep's layout (`n_mlv`, `n_lc`, `n_ood0`, `k0`) and the statement's mask slot (`w0`,
