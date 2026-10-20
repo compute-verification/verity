@@ -1,25 +1,23 @@
-import Proofs.Flock.SoundAtBridge
+import Proofs.Accounting.TS.Session.Guarantees
 
 /-!
-# A window's proofs read through their C-Flock sessions
+# A window's proofs read through their C-Flock sessions: the bridge's premises on our side
 
 `Flock.Guarantees.SoundAtBridge` (#2909) takes four premises on the proof layer's side. Two of them say how the layer
-reads its sessions, and a layer built from its sessions meets them by definition. `onSessions pf sess out rows` is `pf`
-with:
+reads its sessions, and `Accounting.TS.onSessions` meets them by definition: `AcceptedLive`
+(`onSessions_acceptedLive`) and `OpenedPlurAt` at `δo = 0` (`onSessions_openedPlur`). Its relation and rightness are
+`pf`'s, so `Pins` and `RelOfRows` are `pf`'s (`onSessions_pins`, `onSessions_relOfRows`).
 
-* acceptance: proof `i` of round `w` is accepted only where flock-verify `--zk --registered` accepts its session's
-  outcome (`LiveAcceptsZKR`), so `AcceptedLive` holds (`onSessions_acceptedLive`);
-* the opening: it is the session's value layer (`XplurZC`, the plurality the rows extraction finds at the registration)
-  read as a layer value, the only value a hiding leaf has, so `OpenedPlurAt` holds at `δo = 0`
-  (`onSessions_openedPlur`).
+`onSessions_soundAt` is the bridge on it, with `WindowLaw` and `RelOfRows` as hypotheses.
+`Accounting.SecurityProofs.TS.SessionSoundAt` takes them from the named premises instead: `WindowLaw` as
+`Accounting.Assumptions.TS.WindowLaw`, and `RelOfRows`, for a relation that is a check at committed served leaves, as
+`ServedChecksHold` and `ServedRootsLinked`. An unsound proof is then either one whose session's drawn units are all
+right, and its served leaves off the committed trees' (`ServedRootsLinked`'s event, at most `δs`), or one that
+`RowsSession.BadU` catches (`EndToEndRegisteredRows`, `n · bound ≤ δ`).
 
-Its relation and rightness are `pf`'s, so `Pins` and `RelOfRows` are `pf`'s (`onSessions_pins`,
-`onSessions_relOfRows`). `onSessions_soundAt` is the bridge on it: `SoundAt δ` from `EndToEndRegisteredRows` (with
-its named assumptions at every session, `RowsSession.CR`), the window's law (`WindowLaw`), the relation's reading of
-the drawn units (`RelOfRows`) and the sessions' bound `n · bound ≤ δ`.
-
-Binding (`ProofLayer.BindingAt`, `ProofLayer.Forked`) reads `opened`, so on this layer it is about the extracted values:
-round `w`'s extracted leaves are the same on the continuations that redraw σ_w.
+This module and `Proofs.Accounting.TS.Session` import `Proofs.Flock.SoundAtBridge`, whose imports make `X` a token
+(ArkLib's `notation3 "X"`), so `Proofs/Accounting.lean` imports this module rather than `Proofs/Accounting/TS.lean`,
+whose theorems bind `X`.
 -/
 
 namespace Accounting.SecurityProofs.TS.SessionLayer
@@ -29,18 +27,6 @@ open Pouw.RelativeSecurity (Paths)
 open scoped ENNReal
 
 variable {Ω : Type} {S nπ : ℕ} {V : Type}
-
-/-- **`pf` read through its sessions**: proof `i` of round `w` on the path `x` is the session `sess x w i` with
-outcome `out x w i`. It is accepted when `pf` accepts it and flock-verify accepts the session's outcome; its opening is
-the session's value layer read as a layer value (`rows`); its relation and rightness are `pf`'s. -/
-noncomputable def onSessions (pf : ProofLayer Ω S nπ V) (sess : Paths Ω S → Fin S → Fin nπ → RowsSession)
-    (out : ∀ x w i, (sess x w i).Out) (rows : ∀ s : RowsSession, (Fin s.Circ.N → Bool) → V) :
-    ProofLayer Ω S nπ V where
-  accepted x w i := pf.accepted x w i ∧ LiveAcceptsZKR (sess x w i).I (sess x w i).own (out x w i)
-  opened x w i := rows (sess x w i) (sess x w i).Xv
-  rel := pf.rel
-  right := pf.right
-
 variable (pf : ProofLayer Ω S nπ V) (sess : Paths Ω S → Fin S → Fin nπ → RowsSession)
   (out : ∀ x w i, (sess x w i).Out) (rows : ∀ s : RowsSession, (Fin s.Circ.N → Bool) → V)
 
@@ -72,3 +58,26 @@ theorem onSessions_soundAt (hE : Flock.Guarantees.EndToEndRegisteredRows) [Finty
   rwa [zero_add] at h
 
 end Accounting.SecurityProofs.TS.SessionLayer
+
+open Accounting.TS Flock.SoundAtBridge FlockSoundness.Discharge.ZkReg in
+/-- **A window read through its C-Flock sessions is sound at `δs + δ`** (`Accounting.Guarantees.TS.SessionSoundAt`):
+`soundAt_of_sessions` with `ServedRootsLinked`'s event as the event off the sessions' bad events. An unsound proof is
+accepted with `pf`'s relation failing at its session's value layer. If every drawn unit is right at its owned reads,
+`ServedChecksHold` gives the check there, so the relation's Definition leaves only the served leaves off the committed
+trees', `ServedRootsLinked`'s event; otherwise some drawn unit is wrong or off, `RowsSession.BadU`, at most
+`n · bound ≤ δ` by `EndToEndRegisteredRows` (`RowsSession.prob_badU_le`). -/
+theorem Accounting.SecurityProofs.TS.SessionSoundAt : Accounting.Guarantees.TS.SessionSoundAt := by
+  intro Ω _ S nπ V pf sess out rows chk served δs δ hE hCR hLaw hChk hLink hRel hδ hδ0
+  refine soundAt_of_sessions (onSessions pf sess out rows) (Out := fun s : RowsSession => s.Out) (fun s => s.G)
+    (fun s => s.τ) (fun s => s.BadU) sess out
+    (fun x w i => LiveAcceptsZKR (sess x w i).I (sess x w i).own (out x w i) ∧
+      (∀ u ∈ (out x w i).2.1, ¬ (sess x w i).WrongAt u ∧ (sess x w i).RowsAt (out x w i) u) ∧
+      ¬ served x w i (rows (sess x w i) (sess x w i).Xv)) δs δ hLaw hLink
+    (fun x w i => (RowsSession.prob_badU_le hE _ (hCR x w i)).trans (hδ x w i)) hδ0 ?_
+  rintro x w i ⟨⟨_, hL⟩, hR⟩
+  by_cases hD : ∀ u ∈ (out x w i).2.1, ¬ (sess x w i).WrongAt u ∧ (sess x w i).RowsAt (out x w i) u
+  · exact Or.inl ⟨hL, hD, fun hs => hR (hRel x w i _ (hChk x w i hL hD) hs)⟩
+  · refine Or.inr ⟨hL, ?_⟩
+    by_contra hno
+    exact hD fun u hu =>
+      ⟨fun hw => hno ⟨u, hu, Or.inl hw⟩, Classical.byContradiction fun hr => hno ⟨u, hu, Or.inr hr⟩⟩
