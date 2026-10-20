@@ -55,7 +55,7 @@ def cases(tmp_path_factory):
 @pytest.fixture(scope="module")
 def bare(tmp_path_factory):
     """The honest heads of a link with no profile: COUNTS = 0."""
-    run = Run(tmp_path_factory.mktemp("bare"))
+    run = Run(tmp_path_factory.mktemp("bare"), occupancy=(None, None))
     return [i for w in range(3) for i in _checks(run.lw, run.honest(w))]
 
 
