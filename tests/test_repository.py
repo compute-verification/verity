@@ -273,7 +273,7 @@ def test_no_tracked_blob_exceeds_limit() -> None:
             offenders.append(f"{p}: {size / 1024:.0f} KiB > {limit // 1024} KiB")
     assert not offenders, (
         f"tracked files over {BLOB_LIMIT // 1024} KiB: register a fixture in {REGISTRY} and gitignore its path "
-        "(`research data put --kind fixture/v1 --preserve`, then `research data export`); evidence and run outputs belong in "
+        "(`research data put --kind fixture/v1 --preserve`; the control pod exports main's registry); evidence and run outputs belong in "
         "artifact storage, not Git:\n" + "\n".join(offenders)
     )
 

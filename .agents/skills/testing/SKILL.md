@@ -141,7 +141,10 @@ a `sys.path` entry another test file added: every suite runs alone.
 - **Small fixtures** sit beside the tests, in a `fixtures/` directory of the suite's own. Shared ones go under the root `fixtures/`, registered in
   `fixtures/artifacts.json`. `tests/test_repository.py` caps a tracked file at 256 KiB (source code aside). A larger
   fixture is registered there and gitignored instead: `research data put --kind fixture/v1 --file|--tree PATH --preserve`,
-  add the id and path to the registry and the path to `.gitignore`, then `research data export`. `suites.py` fetches it
+  add the id and path to the registry and the path to `.gitignore` (`research data refresh-fixtures --preserve` does the put
+  and the registry edit for a changed fixture, keeping the old id under `previous`). The control pod exports `main`'s
+  registry to the public bucket every 5 minutes (`infra/control/fixtures_export.sh`), so nobody runs `research data
+  export` by hand. `suites.py` fetches it
   before the suites that read it (`research data fetch-fixtures` by hand, e.g. before `cargo test`), checks every byte
   against its id, and keys the suite on the id. A verifier's fixtures are the prover's bytes, never regenerated in its test.
   When a test can recompute an expected output, pin its digest rather than the file.
