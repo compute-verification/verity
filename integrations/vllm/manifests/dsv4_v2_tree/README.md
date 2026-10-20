@@ -63,7 +63,9 @@ killer (its /user.slice caps at 497 GB) took five of them. So `model.sh` sets `C
 writes no census, its `result.json`'s `census` says it skipped, and `records.json` has no census digest) and `DERIVE_GB=32`,
 over the census-free trace's largest process (27.6 GB, r20261020-085740-90ff): every job that derives runs `BUILD_JOBS` = its
 `--mem-gb` over 32, so 9 at once in 300 GB. The GPU leg's Commit runs without `MEMORY_MAP`; one with it computes the census
-then (`memory_map.of_build`).
+then (`memory_map.of_build`). `census_entry` reads `VERITY_BUILD_CENSUS` from the environment, which the P7 lint
+(`tests/lint/test_p07_declared_inputs.py`) refuses. Taking it as a `build` option edits `build.py`, one of the construction
+sources whose hash every artifact identity carries, so that waits for the next tree.
 
 The Build's required-value manifest then cuts each Definition's unit rule (`word.prefetch`), and each 384-expert MoE GEMM's
 takes about 45 min. At `build_record.sh`'s 2 processes the first two took the manifest's first 46 min, before the rest of the
@@ -83,7 +85,12 @@ they need a host with at least 755 GB, and run on vy-glm53-cpu-3 in a gap after 
    the v2 trace, `records.json`'s `aot` switched to its comparison and trace art.
 3. `build_record.sh` at that commit, or a descendant changing only this runbook (`tree_guard.sh`), with `AOT_TRACE=<the
    trace's row dir>` on the same node: the Build of record, with its manifest and `rowdir.sha256`. This is the row's first job,
-   so it writes `<row>.tree`.
+   so it writes `<row>.tree`. r20261020-134932-4e9a's Build passed (digest 84c39fac2fc20187, 78 min) and stopped at the
+   call-boundary check (exit 21): 92,928 of its 233,472 call boundaries had no claim, every one at a Marlin block port that
+   `moe_source.PORTS` declares. The MoE source binds them on every TP rank but claimed none, so the call-boundary source, which
+   serves one rank, was left with them. 1bbf831029 adds the claim (`moe_source.claims`, `taps.attached`), and the gate at that
+   tree passes 4e9a's manifest with every call boundary claimed (r20261020-154201-a617). A code change moves the row's tree, so
+   the Build of record is r20261020-154450-ab0f at 1bbf831029, with 4e9a's row dir under `attempts/`.
 
 ## GPU leg
 
