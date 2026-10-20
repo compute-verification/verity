@@ -224,7 +224,7 @@ def main(argv: list[str] | None = None) -> int:
               f"max {float(ld[top]):8.4f} ({top})")
     built = {k: v for k, v in routes.items() if k.split("+")[0] in ("lane", "fbw")}
     pools = {
-        "fold only (FOLD-PROOF's run; rejected)": {k: fold_only[k] for k in ("lane (no checkpoint)", "fbw (no checkpoint)")},
+        "fold only (FOLD-PROOF's run; rejected)": {k: v for k, v in fold_only.items() if k[:4] in ("lane", "fbw ")},
         "built accepted (lane+pair2, fbw+fcp, lane+fcp)": {k: routes[k] for k in ("lane+pair2", "fbw+fcp", "lane+fcp")},
         "fbw and lanes, every checkpoint": on_gpu(built),
         "fbw and lanes, merge off the GPU allowed": built,
