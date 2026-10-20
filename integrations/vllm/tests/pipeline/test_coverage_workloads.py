@@ -242,6 +242,35 @@ def test_arrival_loop_counts_forwards_not_iterations_under_the_output_lag():
     assert rec["r3"]["finish_step"] == rec["r3"]["first_step"] + 9 - 1 == timing["engine_steps"] - 1
 
 
+def test_arrivals_after_idle_gaps_keep_their_declared_forward_under_the_output_lag():
+    """GLM-5.3 TP8 B8 stochastic's schedule: two idle gaps, each closed by a drain iteration that runs no forward.  An iteration
+    clock admitted r3..r7 two forwards early (r3 at 11 beside r2's decode, against its declared 13); the forward clock keeps them,
+    and every realized arrival is `realized_arrive_steps` of the declaration (what the Build's launch batches read)."""
+    va = _load_adapter()
+    decl = [(2, 0), (7, 9), (23, 13), (3, 13), (11, 15), (29, 16), (32, 18), (13, 18)]
+    R = lambda i, n, a: types.SimpleNamespace(request_id=f"r{i}", prompt_token_ids=[1] * 9, max_tokens=n, arrive_step=a, _order=0)  # noqa: E731
+    want = va.realized_arrive_steps([{"max_tokens": n, "arrive_step": a} for n, a in decl])
+    assert want == [0, 2, 9, 13, 15, 16, 18, 18]
+    for engine, source in ((_LaggedStubEngine(), "measured"), (_ChunkedStubEngine(budget=4096, scheduler=False), "measured"),
+                           (_ChunkedStubEngine(budget=4096), "scheduler")):
+        eng = types.SimpleNamespace(llm_engine=engine)
+        _, timing = va.run_requests_arrivals(eng, [R(i, n, a) for i, (n, a) in enumerate(decl)],
+                                             lambda r: types.SimpleNamespace(max_tokens=r.max_tokens))
+        rec = timing["requests"]
+        assert timing["output_lag_source"] == source and timing["engine_steps"] == engine.forwards == 50
+        assert [rec[f"r{i}"]["first_step"] for i in range(8)] == [rec[f"r{i}"]["arrive_step_realized"] for i in range(8)] == want, source
+        assert engine.batches[13] == ["r2", "r3"] and engine.batches[9] == ["r2"], source
+
+
+def test_realized_arrive_steps_brings_only_the_first_of_a_step_forward():
+    from verity_vllm.engine.arrivals import realized_arrive_steps
+    assert realized_arrive_steps([{"max_tokens": 4, "arrive_step": 3}]) == [0]
+    # r1 and r2 both declared at 5 after r0's one forward: r1 is brought to 1 (forwards 1..3), r2 to 4 once r1 is done
+    assert realized_arrive_steps([{"max_tokens": 1, "arrive_step": 0}, {"max_tokens": 3, "arrive_step": 5},
+                                  {"max_tokens": 2, "arrive_step": 5}]) == [0, 1, 4]
+    assert realized_arrive_steps([{"max_tokens": 5, "arrive_step": 0}, {"max_tokens": 3, "arrive_step": 2}]) == [0, 2]
+
+
 class _ChunkedStubEngine(_LaggedStubEngine):
     """V1 with chunked prefill at `budget` tokens per forward: prompts are prefilled in chunks (one per forward, admission order,
     sharing the budget), a chunk that leaves the prompt incomplete produces NO output (the engine discards its sample), the chunk

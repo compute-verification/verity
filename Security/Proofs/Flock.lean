@@ -6,6 +6,7 @@ import Proofs.Flock.EndToEndDrawn
 import Proofs.Flock.EndToEndHidden
 import Proofs.Flock.EndToEndRegistered
 import Proofs.Flock.ZeroKnowledgeHidden
+import Proofs.Flock.Masked
 import Proofs.Flock.Recursive
 import Proofs.Flock.C3
 import Proofs.Flock.Claims.Complete

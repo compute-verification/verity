@@ -122,6 +122,8 @@ import Proofs.Flock.Soundness.Audit.InfluenceWitness
 import Proofs.Flock.Soundness.Audit.Partitioning
 import Proofs.Flock.Soundness.Audit.TwoStageExfil
 import Proofs.Flock.Soundness.Audit.HarmBound
+import Proofs.Flock.Soundness.Audit.HarmBudget
+import Proofs.Flock.Soundness.Audit.HarmBudgetLife
 import Proofs.Flock.Soundness.Refine
 import Proofs.Flock.Soundness.E2E
 import Proofs.Flock.Soundness.Certificate
