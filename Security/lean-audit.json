@@ -58,6 +58,10 @@
    "owner": "@compute-accounting",
    "digest": "4d7e04e16c77829a8aadc6429665b8a54544e18cb7bf2cc66379ac8267b9d23d"
   },
+  "Accounting.Assumptions.TS.CountsFixed": {
+   "owner": "@compute-accounting",
+   "digest": "f70a1fa98f6c8dbc527b0667187fae860c0494ef903c54d0b857f385220270c3"
+  },
   "Accounting.Assumptions.TS.FacetCeilings": {
    "owner": "@compute-accounting",
    "digest": "fa76dfe63e705d955b2dec4c6d8e3b6826c2bf36058b476ef8f1b7a8bb7c0d3b"
@@ -85,6 +89,10 @@
   "Accounting.Assumptions.TS.LuckAt": {
    "owner": "@compute-accounting",
    "digest": "28ff53f429206bbd8f8447d74044812a42bfe9123fb10443321873882cb02cac"
+  },
+  "Accounting.Assumptions.TS.ModesRun": {
+   "owner": "@compute-accounting",
+   "digest": "1dd8096f404cb332474ed4919a8171d4dfe7cf3f2ad76a846dc1283b73e437f3"
   },
   "Accounting.Assumptions.TS.NoSum": {
    "owner": "@compute-accounting",
@@ -557,6 +565,18 @@
   "Accounting.TS.SampledWindow.Priced": {
    "owner": "@compute-accounting",
    "digest": "aaf1906f690ceb54b6b254f36ec36f70785ef87f0f96c28286e7915f402dfbaa"
+  },
+  "Accounting.TS.WordLayer.Bound": {
+   "owner": "@compute-accounting",
+   "digest": "bdc9dd799acc5edd5a087a2d52688b2d85d81af02208c1b2cc329fc7df25b4b1"
+  },
+  "Accounting.TS.WordLayer.Computed": {
+   "owner": "@compute-accounting",
+   "digest": "d949bc47a3075d25d70343f0cc2bcac2097ff2053a65c9294fccb7bd670ab87a"
+  },
+  "Accounting.TS.WordLayer.Fixed": {
+   "owner": "@compute-accounting",
+   "digest": "17120ebb9c1a85cc7a54f1f74a4c882a62b88d54c9e2124107fff7aecb5671ea"
   },
   "Accounting.TicksIn": {
    "owner": "@memory-accounting",
@@ -3079,6 +3099,12 @@
    "assumptions": [],
    "type_hash": "8c161251633179c8186e45cf09ab57240779ad0a8bc04b6c8133aafa977ff743"
   },
+  "Accounting.SecurityProofs.TS.AdditiveFixed": {
+   "owner": "@compute-accounting",
+   "signature": ["Accounting.SecurityProofs.TS.AdditiveFixed : Accounting.Guarantees.TS.AdditiveFixed"],
+   "assumptions": [],
+   "type_hash": "07df6f85c37128f9bb90686a6cd381d38849912acd984c59a901f78fe55828ca"
+  },
   "Accounting.SecurityProofs.TS.BindingFacetD1": {
    "owner": "@compute-accounting",
    "signature": ["Accounting.SecurityProofs.TS.BindingFacetD1 : Accounting.Guarantees.TS.BindingFacetD1"],
@@ -3464,6 +3490,12 @@
    "signature": ["Accounting.SecurityProofs.TS.TimeBound : Accounting.Guarantees.TS.TimeBound"],
    "assumptions": [],
    "type_hash": "c90c867363721f3be047ec0675dcd35abb8cf05a2a17d3b02c05749fb33d6f81"
+  },
+  "Accounting.SecurityProofs.TS.UnitFixedOfWords": {
+   "owner": "@compute-accounting",
+   "signature": ["Accounting.SecurityProofs.TS.UnitFixedOfWords : Accounting.Guarantees.TS.UnitFixedOfWords"],
+   "assumptions": [],
+   "type_hash": "dba83caa3db7c9598fe868bcc71b0b44a916cf392c6f6879d371d46370eb0895"
   },
   "Accounting.SecurityProofs.TS.VectorThresholdD1": {
    "owner": "@compute-accounting",
@@ -9511,7 +9543,9 @@
    "Flock.SecurityProofs.EndToEndRegisteredRows": "frozen (hash,world-unlisted,scope): It takes the table, link and rows finders' collision bounds (TableCRZ, LinkCRZC, RowsCRZC) as hypotheses instead of a collision disjunct tied to the run, and live-verifier custody (RecordCustodyZKJ), a premise that isn't on the list; it also takes hscope (scopeOk), which flock_verify_sound now derives from acceptance.",
    "Flock.SecurityProofs.SoundAtBridge": "frozen (no-function,hash,world-unlisted,scope): A bound on the proof layer's ProofLayer.SoundAt over a window's paths, not a run of a Lean function. It takes EndToEndRegisteredRows' finders' collision bounds at every session (RowsSession.CR: TableCRZ, LinkCRZC, RowsCRZC and the registered reads' cr/sha-512) as hypotheses instead of a collision disjunct tied to the run, live-verifier custody and scope through RowsSession's fields, and compute-accounting's four bridge premises (WindowLaw, AcceptedLive, OpenedPlurAt, RelOfRows), none on the premises list.",
    "Flock.SoundAtBridge.soundAtBridge_nonvacuous": "lemma: SoundAtBridge's witness, as ZkReg.zk_session_soundHJR_nonvacuous is zk_session_soundHJR's; leaves the list under the 5:11 PM ruling",
-   "Flock.SecurityProofs.ServedRowsLinked": "frozen (no-function,world-unlisted): A pointwise implication at one accepted outcome of a C-Flock session, not a bound on a run of a Lean function; it takes the service's registration of its served trees as ports of own (RowsSession.ServedRegistered), a premise that isn't on the list."
+   "Flock.SecurityProofs.ServedRowsLinked": "frozen (no-function,world-unlisted): A pointwise implication at one accepted outcome of a C-Flock session, not a bound on a run of a Lean function; it takes the service's registration of its served trees as ports of own (RowsSession.ServedRegistered), a premise that isn't on the list.",
+   "Accounting.SecurityProofs.TS.UnitFixedOfWords": "lemma: ASK-40's option A, UnitFixed (Accounting.Assumptions.TS.UnitFixed) from a fixed word (Definitions.Accounting.TS.Fixed) under ModesRun and CountsFixed, not a Lean function: a good unit that is fixed has fixed words, since every unit steering it is in its late cone (DrawnLayer.Good), and a unit not skipped whole folds its words; its non-vacuity witness is Accounting.SecurityProofs.TS.FixedMeets.unitFixedOfWords_meets. UnitFixed itself stays an assumption, and its readers are unchanged.",
+   "Accounting.SecurityProofs.TS.AdditiveFixed": "lemma: ASK-40's option A, additive operands don't decide fixedness, not a Lean function: a computed unit whose multiplicative operands are bound before its coin has its work (its words less what its additive operands add) a function of its multiplicative operands and its noise, and those operands the same on every continuation from its coin, whatever its additive operands are; its non-vacuity witness is Accounting.SecurityProofs.TS.FixedMeets.additiveFixed_meets."
   },
   "conjectures": {
    "Pous.P2.Assumptions.P2RingAuditSecure": {
@@ -11490,7 +11524,7 @@
    ]
   },
   "Definitions.Accounting.TS.Drawn": {
-   "digest": "3d7793ba85acad98ca8a976c655e3571f6c8162ed3bf1ef13020c3c3677bc540",
+   "digest": "32e35a1db7d3af15b74e44f1f18f6aff730ab88a5967e84247b1902da1b09e59",
    "definitions": {
     "Accounting.TS.Alone": "11cf7106ffd6e0c97929698cbe594cb1950083fde2928d2b49a941f25934dd85",
     "Accounting.TS.DrawnLayer": "be941232e2f55f8d1c876d87dcf7e073e466b9dec2c206200119de2a589133e5",
@@ -11509,6 +11543,7 @@
     "Accounting.TS.DrawnLayer.accepted": "703a033f9c7814ded1c45b5906e3f365acd007e5b9801e10b7a6a926f056943b",
     "Accounting.TS.DrawnLayer.coin": "a32e51bd53220ebf879facab4d9f5f0ada809290abde0a6a7acd4e6ee8a95dfc",
     "Accounting.TS.DrawnLayer.committed": "c9f74d1f9f64e4f29cf420931167cf9ae5d84a1cfd44c4e223035e3168b64ccd",
+    "Accounting.TS.DrawnLayer.coneWt": "f926bdb8db1007a0cb8d5b10a6ddf2ab1810728debbe8e286282e6cf7d561aed",
     "Accounting.TS.DrawnLayer.cont": "70ac330911f5df5c6d4fe6a903c874087b0b283557450fe222b137bf7d3cf139",
     "Accounting.TS.DrawnLayer.cut": "d181de740b56af8ff38355566704ae22c0e68ce590bf1ae33764d014372ebcd7",
     "Accounting.TS.DrawnLayer.draw": "76af5291a1944f1548972b7e6378dfdaf7831c5246cee02ec73b3256dd6058c2",
@@ -11533,9 +11568,11 @@
     "Accounting.TS.tally": "88d51b96769b547b6475d6dc1e52da49166b7810207df8e56ae9340bd77b26de"
    },
    "guarantees": [
+    "Accounting.SecurityProofs.TS.AdditiveFixed",
     "Accounting.SecurityProofs.TS.DrawnBindingOfFork",
     "Accounting.SecurityProofs.TS.DrawnRightOff",
-    "Accounting.SecurityProofs.TS.ProofsSoundOfDrawn"
+    "Accounting.SecurityProofs.TS.ProofsSoundOfDrawn",
+    "Accounting.SecurityProofs.TS.UnitFixedOfWords"
    ]
   },
   "Definitions.Accounting.TS.FanIn": {
@@ -11562,6 +11599,39 @@
     "Accounting.SecurityProofs.TS.SeesOfInjective",
     "Accounting.SecurityProofs.TS.ThinFoldInjective"
    ]
+  },
+  "Definitions.Accounting.TS.Fixed": {
+   "digest": "99256ddb86d87253e81a5476b34b635e2a8c0f0638f3417109be6918d36b4806",
+   "definitions": {
+    "Accounting.TS.SlotRole": "919d84d7c93becc0df854f34482bf9543f1f9259322478b7c4c2936c51941b77",
+    "Accounting.TS.SlotRole.add": "d17e0f9dc13738a191c71949f99f79015bb22fd5b14e0ffef2660307358ca1a2",
+    "Accounting.TS.SlotRole.mul": "ad288c484ec9183af63f22f406e251a82897f20a00f3b6b07f5b3906742f625e",
+    "Accounting.TS.SlotRole.other": "52bd7377dd7c1e85b97855a22b72080ecd6cbb9203d64f2519075ca526aefc7a",
+    "Accounting.TS.WordLayer": "80373eda515897f5cd8b2214a94e4b2e0f70329d30047ceee350582aa150a9c8",
+    "Accounting.TS.WordLayer.AlwaysProved": "ffbb5aa47537730430754b16a3f64642e9d13e0deb05015a63be09e856b5c9c9",
+    "Accounting.TS.WordLayer.Bound": "bdc9dd799acc5edd5a087a2d52688b2d85d81af02208c1b2cc329fc7df25b4b1",
+    "Accounting.TS.WordLayer.Computed": "d949bc47a3075d25d70343f0cc2bcac2097ff2053a65c9294fccb7bd670ab87a",
+    "Accounting.TS.WordLayer.Fixed": "17120ebb9c1a85cc7a54f1f74a4c882a62b88d54c9e2124107fff7aecb5671ea",
+    "Accounting.TS.WordLayer.FixedWords": "db7f817108eef224f0e0c2cdc24f535934d948891070dc25b27b5d17a28e92f2",
+    "Accounting.TS.WordLayer.Folds": "50fa8ba07d6b96f1e704d3bf147992d0b7ead31885cabd489708ab886c7e3021",
+    "Accounting.TS.WordLayer.MulLate": "f4a6cfe0a5ebf24184610d77e3d6ce11dd6359436cf81f8ad2e1e02aabedc613",
+    "Accounting.TS.WordLayer.Priced": "a389b3cb39c41419b8a7b4211c3f4a49a74084f350870d2939e6620ac4c6133b",
+    "Accounting.TS.WordLayer.Steers": "7010f0e42de1286dccf1394715d4decc9380e9213ca4122401bc0df8911ec495",
+    "Accounting.TS.WordLayer.acc": "0ea2b88e577de25d3e812a44055629a4f45570dd1c55412810e15a63411af2c5",
+    "Accounting.TS.WordLayer.addView": "000c65972b3406b37086374ff0bf81f2c07decafa42643742ea56ecf04c0001e",
+    "Accounting.TS.WordLayer.derive": "636d04fd43373c8b1307f7650f8ae1b970fd1d1864b66a1983230f39fde2a94b",
+    "Accounting.TS.WordLayer.fold": "e869b1ff79188aa06e1671c143517de342fc4b6397ee434c75dfb02be1ce6fd2",
+    "Accounting.TS.WordLayer.mulView": "de35bf2e0e311ea9d74f83e34bd421dfdf347505b99547e5f61ec8bee3ba10cd",
+    "Accounting.TS.WordLayer.noise": "05009218cf7213a2786d3b4d55956916dc9da57c172ee11c9193af38a4c54da4",
+    "Accounting.TS.WordLayer.output": "06fd3fb76089c24a74654005d87d2a2a36d4a632ca4aefce62219077da07698d",
+    "Accounting.TS.WordLayer.prod": "b8ad0fccc60f3061d48146036f624c1a6261380e4d1baf403233873fb1e2a763",
+    "Accounting.TS.WordLayer.receipt": "c20ec51c51370ede8f7c411e6e6d4fd21ed42f37b6783d06978649603b9dd0c3",
+    "Accounting.TS.WordLayer.role": "f0b67d4522360898ab6cb9ed72ed6124f49b7fb48e31e6f2ea3fb8e9f94b1609",
+    "Accounting.TS.WordLayer.toDrawnLayer": "4370a49cf0dc522078852e61c4e51a776234d8521e7254c0248273ebd4aed1e6",
+    "Accounting.TS.WordLayer.words": "8d6a6cea63e1271ebf67f05de9ac11a4985a51b75c875182489a243332691eff",
+    "Accounting.TS.WordLayer.work": "1a87e43cd8fbcd4dbdbf312c2ff75cf7575cd4a3497b69bfc8a67a5280b7ea78"
+   },
+   "guarantees": ["Accounting.SecurityProofs.TS.AdditiveFixed", "Accounting.SecurityProofs.TS.UnitFixedOfWords"]
   },
   "Definitions.Accounting.TS.Fold": {
    "digest": "ee8f2e69343e8ab7ab8bd1da4eceff7f35a46d29377b64a12ff39a3e9ba5a983",
@@ -11610,6 +11680,7 @@
     "Accounting.SecurityProofs.TS.Sm120SheetHeadline",
     "Accounting.SecurityProofs.TS.StageIdeal",
     "Accounting.SecurityProofs.TS.TimeBound",
+    "Accounting.SecurityProofs.TS.UnitFixedOfWords",
     "Accounting.SecurityProofs.TS.VectorThresholdD1"
    ]
   },
@@ -11643,7 +11714,8 @@
     "Accounting.SecurityProofs.TS.Sm120MeasuredHeadline",
     "Accounting.SecurityProofs.TS.Sm120SheetHeadline",
     "Accounting.SecurityProofs.TS.StageBudget",
-    "Accounting.SecurityProofs.TS.StageIdeal"
+    "Accounting.SecurityProofs.TS.StageIdeal",
+    "Accounting.SecurityProofs.TS.UnitFixedOfWords"
    ]
   },
   "Definitions.Accounting.TS.ProofLayer": {
@@ -11669,6 +11741,7 @@
     "Accounting.TS.splice": "23e1874cde3d6a922d163ccc57a9b970e58ca7e88f6898d154d6764a0e24ecc0"
    },
    "guarantees": [
+    "Accounting.SecurityProofs.TS.AdditiveFixed",
     "Accounting.SecurityProofs.TS.BindingOfFork",
     "Accounting.SecurityProofs.TS.DrawnBindingOfFork",
     "Accounting.SecurityProofs.TS.DrawnRightOff",
@@ -11676,6 +11749,7 @@
     "Accounting.SecurityProofs.TS.ProofsSoundOfPinned",
     "Accounting.SecurityProofs.TS.Sm120MeasuredHeadline",
     "Accounting.SecurityProofs.TS.Sm120SheetHeadline",
+    "Accounting.SecurityProofs.TS.UnitFixedOfWords",
     "Flock.SoundAtBridge.soundAtBridge_nonvacuous"
    ]
   },
@@ -11859,6 +11933,7 @@
     "Accounting.SecurityProofs.TS.Sm120MeasuredHeadline",
     "Accounting.SecurityProofs.TS.Sm120SheetHeadline",
     "Accounting.SecurityProofs.TS.StageIdeal",
+    "Accounting.SecurityProofs.TS.UnitFixedOfWords",
     "Accounting.SecurityProofs.TS.VectorThresholdD1"
    ]
   },
@@ -18159,6 +18234,7 @@
     "Accounting.SecurityProofs.HMu.LemmaB",
     "Accounting.SecurityProofs.HMu.ReceiptLuckOfCoin",
     "Accounting.SecurityProofs.HMu.ReceiptLuckOfCoins",
+    "Accounting.SecurityProofs.TS.AdditiveFixed",
     "Accounting.SecurityProofs.TS.BindingOfFork",
     "Accounting.SecurityProofs.TS.CompilerC",
     "Accounting.SecurityProofs.TS.CompilerStage",
@@ -18194,6 +18270,7 @@
     "Accounting.SecurityProofs.TS.SteerUnion",
     "Accounting.SecurityProofs.TS.TemplateMoment",
     "Accounting.SecurityProofs.TS.TileLuck",
+    "Accounting.SecurityProofs.TS.UnitFixedOfWords",
     "Flock.SoundAtBridge.soundAtBridge_nonvacuous",
     "Pouw.SecurityProofs.RelativeSecurity.OverlapFloorK",
     "Pouw.SecurityProofs.RelativeSecurity.OverlapFloorKOneSided",
@@ -23436,8 +23513,17 @@
     "Accounting.SecurityProofs.TS.Sm120MeasuredHeadline",
     "Accounting.SecurityProofs.TS.Sm120SheetHeadline",
     "Accounting.SecurityProofs.TS.StageIdeal",
-    "Accounting.SecurityProofs.TS.TimeBound"
+    "Accounting.SecurityProofs.TS.TimeBound",
+    "Accounting.SecurityProofs.TS.UnitFixedOfWords"
    ]
+  },
+  "Models.Accounting.Assumptions.TS.Fixed": {
+   "digest": "dd247fdc2c7bc0082d1fdf06db6d11def4ffc610ca238799478225b03a327f5e",
+   "definitions": {
+    "Accounting.Assumptions.TS.CountsFixed": "f70a1fa98f6c8dbc527b0667187fae860c0494ef903c54d0b857f385220270c3",
+    "Accounting.Assumptions.TS.ModesRun": "1dd8096f404cb332474ed4919a8171d4dfe7cf3f2ad76a846dc1283b73e437f3"
+   },
+   "guarantees": ["Accounting.SecurityProofs.TS.UnitFixedOfWords"]
   },
   "Models.Accounting.Assumptions.WipePool": {
    "digest": "743792b099ea890e1036fc170abfed8491f859390bb45f03386a486be9c4fc86",
@@ -24151,6 +24237,14 @@
     "Accounting.SecurityProofs.TS.TimeBound",
     "Accounting.SecurityProofs.TS.VectorThresholdD1"
    ]
+  },
+  "Models.Accounting.Guarantees.TS.Fixed": {
+   "digest": "06b3ad04fb6d8e87ad58296a7726456bfc65b5c8a68f95ca39e0425208a3305d",
+   "definitions": {
+    "Accounting.Guarantees.TS.AdditiveFixed": "ba5a5ffe39b1950b994df74c4a186ceb682267e4339becd460fa3ce10f6a9d7e",
+    "Accounting.Guarantees.TS.UnitFixedOfWords": "1a343fbabc9862377cbca7b2c1ae3e215e090fc7992576b2a9acc95818e0ac02"
+   },
+   "guarantees": ["Accounting.SecurityProofs.TS.AdditiveFixed", "Accounting.SecurityProofs.TS.UnitFixedOfWords"]
   },
   "Models.Accounting.Guarantees.TS.FoldFanIn": {
    "digest": "648210a2fa788e461df3e771c20bf7a84ee51c11d6400612ebea2c08437fa00e",

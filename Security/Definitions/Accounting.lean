@@ -41,6 +41,7 @@ import Definitions.Accounting.Requirement.Placed
 import Definitions.Accounting.Responder
 import Definitions.Accounting.Tag
 import Definitions.Accounting.TS
+import Definitions.Accounting.TS.Fixed
 import Definitions.Accounting.Window
 
 /-! Resource accounting's vocabulary: the device model every resource audit is about, a joint audit's run on it, and
