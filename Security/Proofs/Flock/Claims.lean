@@ -59,6 +59,7 @@ import Proofs.Flock.Claims.Recursion.BoundRouteMergedLin
 import Proofs.Flock.Claims.Recursion.KSLin2
 import Proofs.Flock.Claims.Recursion.BoundRouteKSLin2
 import Proofs.Flock.Claims.Recursion.KSLin2Deployed
+import Proofs.Flock.Claims.Recursion.KSLin2Plain
 import Proofs.Flock.Claims.Recursion.FlockKSLin
 import Proofs.Flock.Claims.Recursion.CapLink
 import Proofs.Flock.Claims.Recursion.CapLinkRd
