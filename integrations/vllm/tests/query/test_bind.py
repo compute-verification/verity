@@ -36,6 +36,22 @@ def test_a_declared_port_binds_its_definitions_port_and_slot_0_the_one_left():
     assert Binder(deepgemm()).bind(0, [f"{LIN}/x_q"]) == [(LIN, "x_q", 0, "unbound")], "undeclared, the label is its own extra"
 
 
+def test_a_row_parallel_fp8_linear_binds_its_quant_branch_partial_and_reduced_output_at_either_kernel():
+    """DeepSeek-V4-Pro's `wo_b` on TP rank 3 as its manifest of record spells it: at the prefill DeepGEMM's ports 0 / 1 and its y, the
+    rank's partial (port 2), then the multimem all-reduce; at decode FlashInfer's y (the partial), then the MNNVL all-reduce."""
+    wo_b = "model.layers.0.attn.wo_b"
+    prefill = [row(wo_b, m, spec="DeepGemmFp8Linear_v1", port=p, cid=7560, rank=3) for m, p in (("0", "0"), ("1", "1"), ("part_rank3", "2"))]
+    prefill.append(row(wo_b, "out", spec="AllReduceMultimem_v1", port="out", cid=7816, rank=3))
+    decode = [row(wo_b, "part_rank3", step=1, spec="FlashInferFp8Linear_v1", port="out", cid=971374, rank=3),
+              row(wo_b, "out", step=1, spec="AllReduceMnnvl_v1{WORLD=8,N=7168,SHOT=1}", port="out", cid=971375, rank=3)]
+    b = Binder(prefill + decode, rank=3, ports=QUANT)
+    events = [f"{wo_b}/x_q", f"{wo_b}/x_s", f"{wo_b}/part_rank3", wo_b]
+    assert b.bind(0, events) == [(wo_b, "0", 0, "port"), (wo_b, "1", 0, "port"), (wo_b, "part_rank3", 0, "label"), (wo_b, "out", 0, "slot")]
+    assert b.bind(1, events[2:]) == [(wo_b, "part_rank3", 0, "label"), (wo_b, "out", 0, "slot")]
+    assert b.bind(1, events)[:2] == [(wo_b, "x_q", 0, "unbound"), (wo_b, "x_s", 0, "unbound")], "FlashInfer's GEMM has no DeepGEMM port"
+    assert b.bind(0, events[2:]) == [(wo_b, "part_rank3", 0, "label"), (wo_b, "", 0, "unbound")], "no quant branch: the return binds nothing"
+
+
 def test_a_declared_labels_occurrences_bind_its_rows_in_invocation_order_when_the_counts_agree():
     b = Binder(deepgemm(inv=0, cid=0) + deepgemm(inv=1, cid=5), ports=QUANT)
     names = [f"{LIN}/x_q", f"{LIN}/0", f"{LIN}/x_q", f"{LIN}/0"]

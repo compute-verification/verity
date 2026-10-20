@@ -27,14 +27,18 @@ Which form each takes:
 * (I6) `FoldOpt` and `FillOpt` in the price form D-ideal's proof reads. FOLD-OPT's per-word kernel (the duo step
   `u = y ⊕ d ⊕ k`, `y' = u·a + z`, `z' = rotl(u, r) + y'` needs three instructions over the modeled ISA,
   `benchmarks/pouw/theory/fold_opt.py`, #2240) is a mechanical fact; the multi-round residual, that no program folds
-  below the menu's price across rounds, is what stays assumed. `FanIn`, the ISA's operand counts, gives both at the
-  fan-in menu's price (`Accounting.Guarantees.TS.FoldOptOfFanIn`, `FillOptOfFanIn`): for a fold or filler presented as
-  a straight-line dataflow over the words it absorbs, priced at least the menu's routes of `a_k/m_k` a word.
+  below the menu's price across rounds, is what stays assumed. `FanIn`, the sources the ISA lets an instruction read
+  (every form, guarded), gives both at the fan-in menu's price (`Accounting.Guarantees.TS.FoldOptOfFanIn`,
+  `FillOptOfFanIn`): for a fold or filler presented as a straight-line dataflow over the words it absorbs, priced at
+  least the menu's routes of `a_k/m_k` a word. `FoldOptFolded` is FOLD-OPT per word folded (ASK-6 = A): the fold priced
+  at the words the run folds, `FoldOpt` its case at `N_w`. The headlines take it, so a run that skips folds is charged
+  through `WholeLuckAt`.
 * (I7) `LuckAt`: (L) at `p` with freshness (F1)–(F2), one bet a round. Split at the receipt
   (`Accounting.Guarantees.TS.LuckOfReceipt`), it is two luck premises:
   * the operand luck, which `OperandHMu` gives: (H-μ) at the deficient words (decision 110), through Lemma B at
     fibre 1;
   * `ReceiptLuckAt`, the receipt luck, which is HMU's B′ case.
+  `WholeLuckAt` is B′ at a unit whose fold the run skips, the whole-unit luck at `p₀` (ASK-9 = A: `½`, B′'s value).
   `OperandLuckCube` proves the operand luck at ¾ for degree-2 operands on cube bits. Its hypothesis restricts the
   cheater to affine-operand runs (RT-HEADLINE), so it is a proved route, not a premise.
 * (I8) `ProofsSound`: deterministic computation, the circuit and inputs committed before σ, Theorem S's order, binding
@@ -114,20 +118,42 @@ the run's fold is priced at least `(1 − μ_f)·N_w·φ*(π)`. -/
 def FoldOpt (Z : Model K R T L U F X) (A : Anatomy K T L U) : Prop :=
   ∀ lam : R → ℝ, IsCert lam → (1 - Z.muF) * Z.Nw * Z.phiStar lam ≤ Z.G.price lam A.nfold
 
+/-- `accounting-ts-fold-opt` (assumed; FOLD-OPT per word folded, ASK-6 = A). **FOLD-OPT_μ per word folded**: at every
+certificate, the run's fold is priced at least `(1 − μ_f)·folded·φ*(π)`, `folded` the words it folds a unit. `FoldOpt`
+is its case at `N_w`. -/
+def FoldOptFolded (Z : Model K R T L U F X) (A : Anatomy K T L U) (folded : ℝ) : Prop :=
+  ∀ lam : R → ℝ, IsCert lam → (1 - Z.muF) * folded * Z.phiStar lam ≤ Z.G.price lam A.nfold
+
 /-- `accounting-ts-fill-opt` (assumed). **FILL-OPT_μ**: at every certificate, the run's filler is priced at least
 `(1 − μ_x)·χ*(π)`. -/
 def FillOpt (Z : Model K R T L U F X) (A : Anatomy K T L U) : Prop :=
   ∀ lam : R → ℝ, IsCert lam → (1 - Z.muX) * Z.chiStar lam ≤ Z.G.price lam A.nfill
 
-/-- `accounting-ts-fan-in` (ISA; register operands read from SASS on sm_80, sm_89, sm_90, sm_100 and sm_120). **An
-instruction merges at most `m` components**: the nodes a straight-line dataflow issues as instruction `j` (its lanes,
-or the one node of a warp-wide instruction) merge at most `m_{cls j}` components into one, `Σ (sources − 1)`. A lane
-of LOP3, IADD3, IMAD, IDP.4A or FFMA reads three 32-bit registers (2 a lane, 64 a warp instruction); counted by
-dependence its predicate and 64-bit operands count too (IADD3.X: three registers and two carry-ins, 4 a lane;
-IMAD.WIDE: 3); a warp-wide instruction counts its whole operand set (SHFL 63; IMMA.16832: ten registers a thread, 319).
-Memory is a node each access reads: a load merges its address and that node (1 a lane), a store or atomic its address,
-its value registers and that node (STS.32 and ATOMS 2 a lane; STS.128 and STSM.x4 5 a lane, 160 a warp instruction),
-so the classes that merge most per instruction are the wide stores. -/
+/-- `accounting-ts-fan-in` (ISA; every form nvdisasm decodes on sm_80, sm_89, sm_90, sm_100 and sm_120, counted by
+dependence). **An instruction merges at most `m` components**: the nodes a straight-line dataflow issues as instruction
+`j` (its lanes, or the one node of a warp-wide or uniform instruction) merge at most `m_{cls j}` components into one,
+`Σ (sources − 1)`. A node's sources are every value it depends on: each register or uniform-register word it reads (a
+pair is two), each predicate it reads (an operand, a carry-in, its guard), a constant bank (`c[..][..]`, and
+`cx[UR][..]`'s uniform register besides), the memory node of each access, and, since any instruction can carry a guard
+and keeps what it writes when the guard is false, every word and predicate it writes (its destination, carry-outs and
+predicate destinations). `cls` is the census's class: an MMA form's family and shape; a texture, surface, TMA, bulk or
+tensor-memory access's unit and width; else the opcode's (`loads.class_of`), a memory access the census doesn't name in
+its space's class, and every other form in NOROW. Each class at its widest form, a lane, on sm_100 and sm_120: ALU 8
+(IADD3.X: three registers, two carry-ins, the guard, the kept destination and two kept carry-outs), IMAD 6, IMAD.WIDE 8,
+IADD.64 8, LEA 6, FFMA 4 (sm_100's FFMA2 8), HFMA2, IDP.4A and F2FS 4, VIMNMX 6 (sm_120's IMNMX.U64 10: three pairs,
+two predicate operands, two kept predicate destinations and the guard), SEL 4 (sm_120's SEL.64 7), XU 4 (BAR.RED.POPC,
+the barrier a node), DFMA and DADD 8, DMUL 6, a constant load 5 (LDC.64 from `cx[UR][R]`), NOROW 9 (P2R: two
+registers, P0–P6 and the kept destination). sm_80, sm_89 and sm_90 read a `cx[UR][imm]` operand where the others read a
+register, one source more: ALU 9, IMAD 7, IMAD.WIDE 9, LEA 7, FFMA, HFMA2, IDP.4A, F2FS, SEL and VIMNMX 5 (sm_90's
+VIMNMX.U32 7), NOROW 10 (P2R). Memory, a lane: a shared load or store 7 (LDS.128, STS.128), a global load 15
+(LDG.E.ENL2.256 with its descriptor, address pair, predicate operand and predicate destination), a global or generic
+store 13 (STG.E.ENL2.256), a shared atomic 15 (ATOMS.CAS.128), a global or generic atomic 18 (ATOMG.E.CAS.128), a
+reduction 9 (REDG.E.ADD.F32x4), LDGSTS 9, LDSM and STSM 7, a texture or surface access 20. A warp-wide instruction
+counts its lanes together: SHFL 191; UNI's R2UR 96 and VOTEU 65; an MMA form its A, B and C words, the kept
+D, a guard a lane and its UP operand, with a block-scaled form's two scale registers a lane and uniform register and a
+sparse form's metadata register a lane (IMMA.16832 480, QMMA.SF.16832 545); sm_100's tensor-memory load or store its
+registers on 32 lanes, which it keeps under one uniform guard, with the guard, address and node (LDTM.32x32b.x128
+4098). A uniform one counts once: UNI64's UIADD3.64.X 12, a TMA or bulk copy 15. -/
 def FanIn {ι W J : Type} [DecidableEq J] (D : Dataflow ι W) (ins : Fin D.n → J) (cls : J → K) (m : K → ℝ) :
     Prop :=
   ∀ j, (D.issued ins j : ℝ) ≤ m (cls j)
@@ -150,13 +176,14 @@ given everything the cheater's skip and its values for them are functions of (`R
 * where the cheater computes a word that shares the skipped value's coins, it is computational: the cheater hasn't
   computed the product (`Models.Accounting.Guarantees.HMu`'s module doc).
 A cheater whose view pins the skipped value, one that reads a coin and skips exactly when it is right, falsifies it.
-The game names no view, so the premise is that some view that decides the share has the point mass. It implies the
-operand luck at `μ` on each positive level of the share, and that implies it on levels of at least `1/μ` outcomes,
-with the share itself as the view. -/
+The game names no view, so the premise is that some view that decides the share has the point mass.
+Implied by (H-μ) (decision 110) at the cheater's real view, and weaker: the view and the skipped value are existential.
+It implies the operand luck at `μ` on each positive level of the share, and that implies it on levels of at least
+`1/μ` outcomes, with the share itself as the view. -/
 def OperandHMu {Ω : Type} [Fintype Ω] {S : ℕ} (μ : ℝ) (G : ReceiptGame Ω S) : Prop := G.OperandPointMass μ
 
-/-- `accounting-ts-receipt-luck` (HMU's B′ case; the headlines' second luck premise, beside `OperandHMu`; on card
-8b00536a). **The receipt luck at `pr`**: in the ideal game split at the receipt, at every round, whatever the past, a
+/-- `accounting-ts-receipt-luck` (HMU's B′ case; the headlines' second luck premise, beside `OperandHMu`; ASK-9 = A,
+card 8b00536a: named and conjectured). **The receipt luck at `pr`**: in the ideal game split at the receipt, at every round, whatever the past, a
 deficient round whose deficient words are not all right keeps the honest committed value with probability at most
 `pr` (`ReceiptGame.ReceiptLuck`). The headlines take it at `½`: LEDGER §1.3's case (b), two or more wrong places a set
 (note:20261017T1723Z-draft-ledger), for DUO-CP-W and FX1-CP-W at `KS = 4`. Every real skip is in this case at
@@ -172,6 +199,18 @@ The evidence (PROJ r5): no sure-win cancellation at the served keys when the wro
 places (`Pouw.SecurityProofs.Receipt.DuoPairXorNoKernel` and `Fx1PairXorNoKernel`), and a sweep at places 1–2 with no
 counterexample. A per-state fibre bound for two or more places would retire it. -/
 def ReceiptLuckAt {Ω : Type} [Fintype Ω] {S : ℕ} (pr : ℝ) (G : ReceiptGame Ω S) : Prop := G.ReceiptLuck pr
+
+/-- `accounting-ts-receipt-luck` (HMU's B′ at a unit whose fold the run skips; ASK-9 = A at `p₀ = ½`, B′'s value, for
+live coins only). **The whole-unit luck at `p₀`**: in the ideal game split at the receipt, every round's unfolded share
+(the share of its words whose fold the run skips, fixed before the round's coins) lies in `[0, 1]`, and at every
+round, whatever the past, a round with a positive unfolded share keeps the honest committed value with probability at
+most `p₀` (`ReceiptGame.WholeLuck`). A unit whose fold is skipped commits a value for its receipt that no word it
+folded determines, so its check passes only on a guess. The headlines take it at `½`. The whole-unit guess bound
+`2^-64` for a 64-bit fold state was proposed and isn't granted: no red team has attacked its value (ASK-9's condition).
+It fails if the cheater's view pins the fold state without the fold: a state that a computed word, or a coin read
+before the skip, determines. -/
+def WholeLuckAt {Ω : Type} [Fintype Ω] {S : ℕ} (p0 : ℝ) (G : ReceiptGame Ω S) (Uf : Unfolded Ω S) : Prop :=
+  G.WholeLuck p0 Uf
 
 /-- `accounting-ts-proofs-sound` (binding H-μ⁺, proof soundness, the protocol's order, Lemma E1(c)). **The proofs are
 sound up to `S·(δ_bind + n_π·δ_ZK)`**: outside an event of that probability, an accepted window is accepted by the

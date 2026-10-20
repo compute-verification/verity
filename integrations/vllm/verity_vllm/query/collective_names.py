@@ -27,7 +27,9 @@ def norm_sites(P: ProgramView, corr: Correspondence, record_fields: Mapping[Valu
                trailing: Callable[[str], int], step_of: Callable[[int], int]) -> tuple[dict[int, str], list[int]]:
     """(carried collective -> its norm module, the carried collectives refused): a fused all-reduce + RMSNorm reading one
     `<norm>.weight` among its `trailing` operands, or a one-output all-reduce that Calls of `<norm>` reading `<norm>.weight` read.  A
-    collective with several or no such norm, or a norm two collectives of one step are found for, is refused (never guessed)."""
+    collective with several or no such norm is refused (never guessed), and so are a norm's collectives of one step unless they are one
+    collective or all fused: the fused route's Definition is one token, so an M-row step on it is M Calls, the rows of the norm's
+    identities, where the unfused path is one all-reduce over the M rows."""
     norms: dict[int, set[str]] = defaultdict(set)
     unfused: set[int] = set()
     for cid in carries:
@@ -44,11 +46,15 @@ def norm_sites(P: ProgramView, corr: Correspondence, record_fields: Mapping[Valu
                 for r in c.reads:
                     if r.call in unfused:
                         norms[r.call].add(m)
-    once = Counter((next(iter(ms)), step_of(cid)) for cid, ms in norms.items() if len(ms) == 1)
+    found, flat = Counter(), Counter()
+    for cid, ms in norms.items():
+        if len(ms) == 1:
+            found[key := (next(iter(ms)), step_of(cid))] += 1
+            flat[key] += cid in unfused
     out: dict[int, str] = {}
     refused: list[int] = []
     for cid, ms in sorted(norms.items()):
-        if len(ms) == 1 and once[(next(iter(ms)), step_of(cid))] == 1:
+        if len(ms) == 1 and (found[key := (next(iter(ms)), step_of(cid))] == 1 or not flat[key]):
             out[cid] = next(iter(ms))
         else:
             refused.append(cid)

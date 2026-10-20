@@ -71,6 +71,14 @@ def apply_engine(hf_home: str | None) -> dict[str, str]:
     return got
 
 
+def step_timeout(seconds: float) -> dict[str, str]:
+    """vLLM's multiprocess executor waits ``VLLM_EXECUTE_MODEL_TIMEOUT_SECONDS`` (300 by default) for each engine step's RPC and
+    fails the run past it, while an observed or committed TP step of a long prefill (the observer, its snapshots, the Commit's
+    taps) takes minutes: a stage gives a step its own RPC bound.  A liveness bound, not a served switch: nothing that runs
+    changes, so it stays out of the profile's flags.  A pin: an operator's export wins."""
+    return pin({"VLLM_EXECUTE_MODEL_TIMEOUT_SECONDS": str(int(seconds))})
+
+
 def apply_target(env: Mapping[str, str]) -> dict[str, str]:
     """A ``TargetProfile.env()``: the profile's values replace whatever the process had."""
     os.environ.update(env)
@@ -80,6 +88,20 @@ def apply_target(env: Mapping[str, str]) -> dict[str, str]:
 def apply_compile_fresh() -> dict[str, str]:
     """``COMPILE_FRESH`` as overrides, before vLLM and torch read them."""
     return apply_target(COMPILE_FRESH)
+
+
+def own_compile_dirs(root: str) -> dict[str, str]:
+    """This process's own Inductor output code and vLLM compile dir under ``root``, with ``COMPILE_FRESH``, before vLLM and torch read
+    them: a served Build reads the compile artifact of the process that serves (``pipeline.served_match``)."""
+    return apply_target({"TORCHINDUCTOR_CACHE_DIR": f"{root}/inductor", "VLLM_CACHE_ROOT": f"{root}/vllm_cache", INDUCTOR_DIR_MARK: "1",
+                         **COMPILE_FRESH})
+
+
+def compile_dirs() -> dict[str, str] | None:
+    """The Inductor output-code dir and vLLM cache root this process was given as its own (``own_compile_dirs``, or exported with
+    ``INDUCTOR_DIR_MARK`` by ``ops/served_commit.sh``), else None."""
+    ind, root = os.environ.get("TORCHINDUCTOR_CACHE_DIR"), os.environ.get("VLLM_CACHE_ROOT")
+    return {"inductor": ind, "vllm_cache": root} if os.environ.get(INDUCTOR_DIR_MARK) == "1" and ind and root else None
 
 
 def hide_devices() -> None:

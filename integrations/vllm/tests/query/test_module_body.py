@@ -138,7 +138,8 @@ def test_request_manifest_rows():
     assert rows == MODULE_BODY_ROWS == {
         ("weights", "model.embed.weight", "weight", (0, None)), ("weights", "model.layers.0.self_attn.qkv_proj.weight", "weight", (0, None)),
         ("instance_outputs", "model.embed", "out", (0, 4)),
-        ("instance_outputs", "model", "out", (0, 8)),                                  # h2 + h4: two crossing rows of `model`'s own body
+        ("instance_outputs", "model/add", "out", (0, 4)),                              # h2 and h4 cross `model`'s own body: two producers,
+        ("instance_outputs", "model/add_1", "out", (0, 4)),                            # each spelt at its fx node
         ("instance_outputs", "model.layers.0.input_layernorm", "out", (0, 4)),
         ("instance_outputs", "model.layers.0.self_attn.qkv_proj", "out", (0, 4)),
         ("instance_outputs", "model.layers.0.self_attn.rotary_emb", "query", (0, 4)),  # the Build's hint names the Call
@@ -150,16 +151,17 @@ def test_request_manifest_rows():
     assert man["populations"]["units"] == 7 and man["populations"]["steps"] == 1
     assert man["wrapper_prefix"] == "model."
     assert all(x["step"] == 0 for x in man["identities"] if x["family"] != "weights")
-    assert [x["output_member"] for x in man["identities"] if x["op_path"] == "model"] == ["out"]
-    body = next(x for x in man["identities"] if x["op_path"] == "model")
-    assert body["boundary"] == {"crossing_rows": 2, "returned_rows": 2}   # a crossing Value is a returned tensor too
+    assert not [x for x in man["identities"] if x["op_path"] == "model"]
+    body = next(x for x in man["identities"] if x["op_path"] == "model/add")
+    assert body["boundary"] == {"crossing_rows": 1, "returned_rows": 1}   # a crossing Value is a returned tensor too
     assert (body["spec"], body["port"], body["position"]) == ("Add_v1", "out", [2, 0]), "the first Call of the group, its port and index"
     assert man["query"]["query_id"] == Q_MODULE_BODY_ID and "partition" not in man["query"]
 
 
 MODULE_BODY_ROWS = {
     ("weights", "model.embed.weight", "weight", (0, None)), ("weights", "model.layers.0.self_attn.qkv_proj.weight", "weight", (0, None)),
-    ("instance_outputs", "model.embed", "out", (0, 4)), ("instance_outputs", "model", "out", (0, 8)),
+    ("instance_outputs", "model.embed", "out", (0, 4)),
+    ("instance_outputs", "model/add", "out", (0, 4)), ("instance_outputs", "model/add_1", "out", (0, 4)),
     ("instance_outputs", "model.layers.0.input_layernorm", "out", (0, 4)), ("instance_outputs", "model.layers.0.self_attn.qkv_proj", "out", (0, 4)),
     ("instance_outputs", "model.layers.0.self_attn.rotary_emb", "query", (0, 4)), ("instance_outputs", "model.lm_head", "out", (0, 4)),
     ("sampled_token_ids", "runner.sampler", "sampled_token_ids", (0, 1)), ("input_token_ids", "model.embed", "in", (0, 1)),
@@ -254,6 +256,9 @@ def test_merge_ranks_binds_every_collective_output_to_the_peers_partial_and_keep
     assert g["program_digest_per_rank"] == {"0": m0["program_digest"], "1": m1["program_digest"]}
     assert {x["program_digest"] for x in g["identities"] if x["rank"] == 1} == {m1["program_digest"]}
     assert len(g["identities"]) == len(m0["identities"]) + len(m1["identities"])
+    dead = dict(m1["identities"][-1], output_member="dead")
+    listed = merge_ranks([m0, dict(m1, unreturned=[dead])])
+    assert listed["unreturned"] == [dead] and listed["unreturned_digest"] == fmt.manifest_digest([dead]) != g["unreturned_digest"]
     lost = dict(m1, identities=[x for x in m1["identities"] if x["output_member"] != "shard_rank1"])
     bad = merge_ranks([m0, lost])
     assert not bad["complete"] and bad["tp_peer_binding"]["n_unbound"] == 1 and any(k[:16] == "tp peer binding:" for k in bad["unmodelled"])

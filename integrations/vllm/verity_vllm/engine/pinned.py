@@ -67,11 +67,14 @@ class PinnedArena:
     def reset(self) -> None:
         self.off = 0
 
+    def fits(self, nbytes: int) -> bool:
+        return (self.off + 255) // 256 * 256 + nbytes <= self.buf.numel()
+
     def take(self, nbytes: int) -> torch.Tensor:
-        aligned = (self.off + 255) // 256 * 256
-        if aligned + nbytes > self.buf.numel():
+        if not self.fits(nbytes):
             self.overflow += 1
             return torch.empty(nbytes, dtype=torch.uint8, pin_memory=True)
+        aligned = (self.off + 255) // 256 * 256
         v = self.buf[aligned:aligned + nbytes]
         self.off = aligned + nbytes
         return v

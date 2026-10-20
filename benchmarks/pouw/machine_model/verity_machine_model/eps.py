@@ -18,7 +18,8 @@ of the proof unit and its selection rule, 0 at 100% sampling. Each term is a fra
   program, dp4a, folded on lanes) or `uniform` (q_u uniform instructions a word, folded there too); the cheater may
   have a fifth, `table` (QSTAR's register-indexed lookups, data/table.toml: q_T lane instructions from the lanes' pool
   and 8 B of L2 a word against an L2 facet at the card's bandwidth, honest's L2 uncharged). Honest runs each filler on
-  lanes (its class mix); the cheater may run it on the uniform datapath (one uniform instruction a lane instruction).
+  lanes (its class mix); the cheater may run it on the uniform datapath (one uniform instruction a lane instruction)
+  when every class of its mix has a uniform form there (the device's `uniform_forms`; sm_90's datapath has no FFMA).
   The cheater minimizes
   T at q = q* over every route. Honest is the same LP with its own routes: the tensor route at its own operand cost, the
   baseline program (whose words belong to the baseline, not to ε: the brief §2) and its filler where it runs it.
@@ -449,6 +450,11 @@ class Machine:
     rows: tuple[str, ...]
     c: dict[str, dict[str, float]]
     cuda: tuple[str, ...]        # the CUDA lane classes a word on lanes may use
+    uniform_forms: tuple[str, ...] | None = None   # the lane classes with a uniform-datapath form; None: every one
+
+    def uniform_form(self, f: Filler) -> bool:
+        """Whether every class of the filler's mix has a uniform-datapath form, so its work can run there."""
+        return self.uniform_forms is None or not set(f.mix or {}) - set(self.uniform_forms)
 
     def load(self, n: dict[str, float]) -> dict[str, float]:
         """Each row's SMSP-cycles for n_k warp instructions of each class k."""
@@ -467,12 +473,13 @@ def machine(name: str = "", data: Path = DATA) -> Machine:
     for f in forms(data):
         c[f.kind] = {**c.get(MMA, {}), **c.get(f.kind, {})}
     cuda = tuple(k for k in m.cuda if k in c and any(c[k].values()))
-    return Machine(vector=v.name, rows=v.rows, c=c, cuda=cuda)
+    return Machine(vector=v.name, rows=v.rows, c=c, cuda=cuda, uniform_forms=m.uniform_forms)
 
 
 def uniform_issue_charged(pi: Machine) -> bool:
-    """Whether Π's census already charges a uniform instruction on an issue row (VF3p-16 on, decision 73)."""
-    return any(v > 0 and (r == "issue" or r.startswith("JI")) for r, v in pi.c.get("UNI", {}).items())
+    """Whether Π's census already charges a uniform instruction on an issue row (VF3p-16 on, decision 73; a DS vector's
+    `DS_issue`, A2u)."""
+    return any(v > 0 and (r == "issue" or r.endswith("_issue") or r.startswith("JI")) for r, v in pi.c.get("UNI", {}).items())
 
 
 def uniform_on_issue(pi: Machine, cycles: float) -> Machine:
@@ -482,7 +489,7 @@ def uniform_on_issue(pi: Machine, cycles: float) -> Machine:
     if uniform_issue_charged(pi):
         return pi
     c = {k: dict(v) for k, v in pi.c.items()}
-    rows = [r for r in pi.rows if r == "issue" or (r.startswith("JI") and r.endswith("_0"))]
+    rows = [r for r in pi.rows if r == "issue" or r.endswith("_issue") or (r.startswith("JI") and r.endswith("_0"))]
     for k in ("UNI", "UNI64"):
         for r in rows:
             if k in c and r in c["ALU"]:
@@ -632,7 +639,7 @@ def fastest(d: Design, h: Honest, pi: Machine, *, q: float | None, q_uniform: fl
     for j, (f, _) in enumerate(fillers):
         if not cheat:
             bounds[fu[j] if f.route == "lanes" else fv[j]] = (0, 0)
-        if not uni:
+        if not uni or not pi.uniform_form(f):
             bounds[fu[j]] = (0, 0)
     obj = [0.0] * nv
     obj[iT] = 1.0

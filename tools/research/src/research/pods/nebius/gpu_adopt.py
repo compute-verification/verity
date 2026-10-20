@@ -6,7 +6,8 @@
 
 gpu-lease hands out this VM's GPUs (one flock'd lock per GPU in $GPU_LEASE_DIR, default /run/gpu-lease). A compute process
 (`nvidia-smi --query-compute-apps`) on GPU i is allowed when a lease on i has an owner pid that is the process or one of its
-ancestors. Any other is out of lease: a job that opened CUDA without gpu-lease (a `research run --on` from a tree before the
+ancestors, or an owner line naming the process's run (a run whose lease holder hands its locks over a socket, as circuits'
+sweeps do, so its workers are not the holder's descendants). Any other is out of lease: a job that opened CUDA without gpu-lease (a `research run --on` from a tree before the
 runner hid the GPUs, or a shell). If i's lock is free, this probe takes it with gpu-lease's owner line naming the process's run (its
 runner's `--id`) and `who=adopted:<lane>`, so gpu-lease hands i to nobody else, and drops it when the process exits. If a lease
 holds i already, two jobs share the GPU (`collision`). Each finding is a line in $GPU_ADOPT_LOG (default
@@ -103,6 +104,15 @@ def lane_of(run: str | None) -> str | None:
         return None
 
 
+def lease_run(i: int) -> str | None:
+    """The run id GPU i's owner line names, else None."""
+    try:
+        m = re.search(r"\brun=(r\d{8}-\d{6}-[0-9a-f]{4})\b", (LEASE_DIR / f"{i}.owner").read_text())
+    except OSError:
+        return None
+    return m.group(1) if m else None
+
+
 def lease_owner(i: int) -> int | None:
     """The owner pid of a lease held on GPU i, else None (the lock is free)."""
     lock = LEASE_DIR / f"{i}.lock"
@@ -170,6 +180,8 @@ class Adopter:
             if not Path(f"/proc/{pid}").exists():
                 continue
             run = run_of(chain)
+            if owner is not None and run is not None and run == lease_run(i):
+                continue
             lane = lane_of(run)
             kind = "adopted" if owner is None and self.adopt(i, uuid, pid, run, lane, t) else "collision"
             rec = {"t": iso(t), "kind": kind, "gpu": i, "uuid": uuid, "pid": pid, "comm": comm(pid), "run": run, "lane": lane,

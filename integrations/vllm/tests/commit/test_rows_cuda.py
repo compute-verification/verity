@@ -200,6 +200,32 @@ def test_wide_trees_and_windows_fold_by_the_launch_schedule(ext, hasher, n, leve
         assert [_list(t) for t in levels] == want and root == want[-1][0]
 
 
+@pytest.mark.parametrize("cap", [1, 3])
+def test_capped_launches_hash_the_whole_grids_bytes(ext, hasher, cap):
+    """RowStep.max_blocks > 0 hashes the leaves and each wide level in launches of at most that many blocks: leaves, b || c and h (given
+    and derived salts; 1000 positions from a nonzero first, the 700 rows ending inside a launch, pads after them), a window's levels from
+    2^17 nodes (a wide level) at a nonzero first index, and a whole tree's root are the whole-grid launch's."""
+    rng = random.Random(cap)
+    first, m, n_rows, n = 3 << 10, 1000, 700, 1 << 17
+    dom = R.domain(PD, CTX, GEO, 1 << 20)
+    rs, tn, st = _step(ext, dom, rng.randbytes(R.KEY_BYTES), R.row_prefix(BITS), R.ROW_BYTES), _tn(), _stream()
+    rows = _rows([rng.randbytes(R.ROW_BYTES) for _ in range(n_rows)], R.ROW_BYTES)
+    salts, nodes = _dev(rng.randbytes(R.SALT_BYTES * n_rows)), _dev(rng.randbytes(64 * n)).view(n, 64)
+
+    def run(max_blocks: int) -> list:
+        rs.max_blocks = max_blocks
+        lv, bc, hs = hasher.rows_leaves(rs, rows, R.ROW_BYTES * n_rows, first, m, first + n_rows, tn, st, salts=salts, want_bc=True,
+                                        want_h=True)
+        dlv, _, dhs = hasher.rows_leaves(rs, rows, R.ROW_BYTES * n_rows, first, m, first + n_rows, tn, st, want_h=True)
+        host = [torch.empty(64 * (n >> L), dtype=torch.uint8) for L in range(18)]
+        top = hasher.rows_tree_window(rs, nodes, 18, 5 * n, st, host)
+        _, root, _ = hasher.rows_tree(rs, nodes, 0, st)
+        torch.cuda.synchronize()
+        return [_list(t) for t in (lv, bc, hs, dlv, dhs, top)] + [h.numpy().tobytes() for h in host] + [root]
+
+    assert run(cap) == run(0)
+
+
 def test_refusals(ext, hasher):
     dom = R.domain(PD, CTX, GEO, 4)
     with pytest.raises(RuntimeError, match="64 bytes"):

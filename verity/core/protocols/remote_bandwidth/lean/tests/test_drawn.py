@@ -1,8 +1,8 @@
-"""The remote audit's verifier in Lean against `audit.Session` on drawn sessions: honest ones of a drawn shape (windows,
-passes, appends, releases, plans sent whole or as changes, steps, samples), and recorded ones (`ra_cases.SCENARIOS`) with
-one or two edits, each to an event (dropped, repeated, swapped with the next, or one of its fields changed: a clock
-reading, an index, a step, a run, a root, an opening's byte or path) or to the case (a parameter, a coin, the
-registration). An edit may make an honest session dishonest, a dishonest one fail elsewhere, or the case one that both
+"""`audit.Session` held to the remote audit's verifier in Lean (the definition) on drawn sessions: honest ones of a drawn
+shape (windows, passes, appends, releases, plans sent whole or as changes, steps, samples), and recorded ones
+(`ra_cases.SCENARIOS`) with one or two edits, each to an event (dropped, repeated, swapped with the next, or one of its
+fields changed: a clock reading, an index, a step, a run, a root, an opening's byte or path) or to the case (a
+parameter, a coin, the registration). An edit may make an honest session dishonest, a dishonest one fail elsewhere, or the case one that both
 sides refuse to decode."""
 
 from __future__ import annotations
@@ -101,11 +101,12 @@ def removed(plan: Plan, gone: set) -> tuple:
 
 @st.composite
 def shaped(draw) -> dict:
-    """An honest session of a drawn shape over the default world's six blocks: at most four pages appended."""
+    """An honest session of a drawn shape over the default world's six blocks: at most four pages appended, a page no
+    plan held yet released either way or named withdrawn."""
     windows = draw(st.integers(1, 2))
     r = M.Run(windows=windows, samples=draw(st.integers(1, 40)))
     N = r.store.registration.blocks
-    live, budget = set(range(N)), 4
+    live, held, budget = set(range(N)), set(), 4
     r.start()
     for _t in range(windows):
         for _k in range(draw(st.integers(1, 3))):
@@ -116,9 +117,10 @@ def shaped(draw) -> dict:
                 live |= set(range(a.first, a.first + n))
             if len(live) > 1 and draw(st.integers(0, 3)) == 0:
                 j = draw(st.sampled_from(sorted(live)))
-                r.release(((j, 1),))
+                r.release(((j, 1),), ((j, 1),) if j >= N and j not in held and draw(st.booleans()) else ())
                 live.discard(j)
             blocks = draw(st.sets(st.sampled_from(sorted(live)), min_size=1, max_size=8))
+            held |= blocks
             step = r.step + draw(st.integers(1, 3))
             how = draw(st.integers(0, 2))
             if how == 0 and live >= set(range(N)) and blocks == set(range(N)):
@@ -133,7 +135,8 @@ def shaped(draw) -> dict:
 
 
 BASES = ("honest", "honest-appends", "honest-by-root", "honest-rekey", "honest-subset", "honest-block-sha512",
-         "drop-appended", "stale-append-coin", "lifetime", "refusals", "release-adjacent", "plan-change-removes-missing")
+         "drop-appended", "stale-append-coin", "lifetime", "refusals", "release-adjacent", "plan-change-removes-missing",
+         "honest-withdraw", "honest-deferred-rekey", "withdraw-planned")
 
 
 def test_drawn_honest_sessions_agree(server) -> None:

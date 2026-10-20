@@ -1,0 +1,1 @@
+# gpu-lease hands out this VM's GPUs: a `research run --on` here sees none unless it asks with --gpus N (research.remote, INF-55)

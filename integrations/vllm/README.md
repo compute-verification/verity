@@ -29,6 +29,7 @@ verity_vllm/
   properties/         property harnesses noninterference.py census.py kernel_allowlist.py golden.py holdout.py admission.py ...
   collectives/        collectives        collective_record.py collective_sites.py embedding_shard.py
   config.py target_family.py             run-definition locations; the target-family preflight
+  pins/               measured pins      <DEVICE>.json (cuBLAS routes, SMs) served/<ROLE>.<DEVICE>.json (a served Build's artifact, dispatch, MoE launches)
   ops/                pod operations     pod_bootstrap.sh pod_gate.sh pod_*_tap.sh canary.sh *_negatives.sh known_roots.json
 tests/<subpackage>/   mirrors the package; tests/regression = the R19 reference harness (opt in with VERITY_REGRESSION=1)
 workloads/ manifests/ fixtures/ data/ docs/    records of the qualification table; never rewritten by the tool
@@ -83,8 +84,10 @@ required, name a model.
 
 **`acquire/`** implements *value acquisition*: `plan.py` (required values + correspondence -> acquisition plan), `install.py`,
 `stage.py`, `compiled.py` (the manifest of `Execution=compiled` rows), `sources/` (`hidden_source.py` / `moe_source.py` /
-`compiled_source.py` / `compiled_kernel_source.py` / `partial_source.py` / `norm_scale_source.py` / `router_softmax_source.py` /
-`vocab_range_source.py`, attached by `taps.py`), `fa2_plane_classes.py`, `committer_api.py`, and the shipped tap sources (`fa2_tap_src/`,
+`compiled_source.py` / `compiled_kernel_source.py` / `partial_source.py` / `moe_align_source.py` / `norm_scale_source.py` /
+`router_softmax_source.py` / `vocab_range_source.py`, attached by `taps.py`; `kv_slots_source.py`, each KV layer's slots for the
+memory map, attached by `commit --memory-map`; `oracle_witness.py` judges the TP match oracle, where an MoE align witness that
+differs between the runs fails by name), `fa2_plane_classes.py`, `committer_api.py`, and the shipped tap sources (`fa2_tap_src/`,
 `fa3_tap_src/`, `norm_tap_src/`, `router_tap_src/`).  `gate.py` is the CPU gate (one row's acquisition plan, off-pod).  Four taps are
 on by default; `NORM_TAP=0`, `GUARDED_MAX_TAP=0`, `ROUTER_TAP=0` or `VOCAB_TAP=0` turns one off, for A/B only.  The guarded-max tap
 (`query/guarded_max.py`) runs on every row, whose attention is FA2 or FA3: the tap builds of `pod_fa2_tap.sh FA2_TAP_ROW_GUARD=1` /
@@ -200,7 +203,8 @@ outputs = llm.generate(["The capital of France is"], SamplingParams(temperature=
 
 `model` and `revision` (the full commit sha) must be pinned in `manifests/checkpoints.json` with the snapshot on the host.
 The engine is built by `engine.vllm_adapter.build_engine` from that pin's engine profile, as every `verity-vllm` stage
-builds it: dtype, tokenizer and attention come from the profile unless explicitly overridden, and prefix caching is off.
+builds it: dtype, tokenizer and attention come from the profile unless explicitly overridden, and prefix caching is off
+(a single-GPU row whose `engine.args` turn it on serves with it, each run from an empty cache; `program/prefix_plan.py`).
 `LLM.from_spec(path)` builds the same engine from an engine spec, a config v0 document (`verity_config`) of schema
 `verity-vllm/engine-spec/v0` with `model`, `revision` and an `[engine]` table of exactly the options below
 (`pipeline/engine_spec.py`).  An unknown or missing key, or a value of the wrong type, refuses before any engine is
@@ -220,6 +224,9 @@ Supported keyword options:
 | `dtype` | the profile's | served dtype override |
 | `quantization` | the checkpoint's | vLLM quantization override, such as `"fp8"` |
 | `compilation_config` | vLLM's | compilation and CUDA-graph settings |
+| `attention_backend` | vLLM's choice | the attention backend, such as `"FLASH_ATTN"` |
+| `attention_config` | vLLM's | attention settings, such as `{"flash_attn_version": 2}` |
+| `moe_backend` | vLLM's `"auto"` | the MoE backend, such as `"triton"` |
 | `seed` | 0 | the engine seed |
 | `protocols` | none | protocol options installed on the engine: `"pouw:<scheme>,pous:<scheme>"` or `{name: scheme}` |
 | `protocols_config` | none | each enabled protocol's settings, `{name: {...}}`; never hashed |
@@ -367,9 +374,19 @@ writes the row's record and the descriptors the job needs into one file (`record
 sends it (`research run --send FILE`, which lands it in `$RESEARCH_RUN_DIR/inputs/`), and the job reads them from it
 (`records.programs(row, ..., bundle=PATH)`, or `records programs ROW --bundle PATH`), each digest checked against the record.
 
+A TP row's Build is the trace unless the row is switched.  `verity-vllm predict compare ROW_DIR` predicts every Program of a traced
+Build from the row's declared inputs (`verity_vllm/predict/`) and compares digests rank by rank; `records switch ROW --comparison
+comparison.json --run RUN --trace art:…` records, where every one is equal, the comparison run and that traced Build as the row's
+`aot` in `manifests/records.json`, and pins the predicted Programs.  A switched row's Build (`--build-construction record`, the
+default) derives each Program with `predict emit` (`verity_vllm/predict/aot.py`): the predicted Program, under the trace's annotations (the
+runtime correspondence: per Call, the fx occurrence, module, views and slots, which only the trace yields) and with its other
+files, refused unless the predicted Program and descriptor are the trace's, byte for byte.  `records publish` refuses a switched
+row's Build that traced any Program.  Neutrality's rebuild traces every row (`--build-construction trace`), so it checks a switched
+row's AOT pins against a fresh trace, and a switched row whose pins move loses its `aot`.
+
 A refactor that is meant to leave the circuits alone keeps two sets of pins.  The suite's `tests/program/test_derive_neutrality.py`
 derives GLM-5.3's constructions on vLLM-free stand-ins, in seconds.  `verity-vllm neutrality --tier fast|heavy`
-(`pipeline/neutrality.py`) rebuilds the rows `manifests/records.json` pins (a row may be pinned before it has a record) on a CPU
+(`pipeline/neutrality.py`) traces the rows `manifests/records.json` pins (a row may be pinned before it has a record) on a CPU
 pod and fails when a per-rank Program digest moved: fast is the small TP1/TP2 rows (about 10 minutes with the bootstrap), heavy is
 GLM-5.3's 8 ranks (about 50 minutes on a 256-CPU pod; its Build ends at GP-01, `--build-programs-only 1`, since its manifest takes
 hours).  `--update` re-pins a row from its rebuild and keeps its record, which the same PR re-publishes.

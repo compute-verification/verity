@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import ast
 import hashlib
 import sys
 from pathlib import Path
@@ -51,3 +52,17 @@ def test_plain_install_gate_does_not_require_encoded_receipt_tree():
     assert bench_arm._install_gate_passed(plain, encoded=False)
     assert not bench_arm._install_gate_passed(plain, encoded=True)
     assert bench_arm._install_gate_passed(encoded, encoded=True)
+
+
+def test_lm_head_captures_mid_serve_without_emptying_the_allocator_cache():
+    """The arms' lm_head captures its CUDA graphs lazily, while vLLM serves. torch.cuda.graph (or any empty_cache) there
+    hands vLLM's cached activations back to the driver, and the first timed run after a warm-up cudaMallocs them again
+    beside the filler."""
+    tree = ast.parse((Path(bench_arm.__file__).parent / "stack.py").read_text())
+    lm_head = next(n for n in tree.body if isinstance(n, ast.ClassDef) and n.name == "LmHead")
+    apply = next(n for n in lm_head.body if isinstance(n, ast.FunctionDef) and n.name == "apply")
+    calls = {ast.unparse(n.func) for n in ast.walk(apply) if isinstance(n, ast.Call)}
+    assert not calls & {"torch.cuda.graph", "torch.cuda.empty_cache"}, (
+        "LmHead.apply must capture with CUDAGraph.capture_begin/capture_end under torch.cuda.stream, "
+        "not torch.cuda.graph, which empties the allocator's cache")
+    assert {"graph.capture_begin", "graph.capture_end"} <= calls

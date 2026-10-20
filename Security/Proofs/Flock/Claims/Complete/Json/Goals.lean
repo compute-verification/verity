@@ -1,20 +1,22 @@
 import Proofs.Flock.Claims.Complete.Json.Live
+import Proofs.Flock.Claims.Complete.Json.Stmt
 import Proofs.Flock.Soundness.Discharge.ZkView.Decode
 
 /-!
 # B's record checks at the honest run
 
-The goals of `Goals` on the record, proved at every honest run (`Run`) from four named hypotheses:
+The goals of `Goals` on the record, proved at every honest run (`Run`) from three named hypotheses:
 
-* `JsonSpec`: the JSON library's specification (`Spec`), since `Json.parse`, `compress`, `canon` and `Json`'s `==` are
-  opaque.
-* `Out64 H`: the oracle's outputs are 64 bytes, as SHA-512's. S12 compares each round digest's length with the empty
-  message's, so an oracle with outputs of varying length fails the honest record.
-* `StmtOk`: the statement names no keyed coin tree, a non-empty `Σ`, a printable draw that decodes (`DrawOk`), and its
-  draw is the one it was set up at (`Ins.read.draw`).
+* `Claims.JsonSpec printJ canon`: the JSON library's specification at the honest prover's printer `printJ` (`Spec`),
+  since `Json.parse`, `canon` and `Json`'s `==` are opaque.
+* `Claims.Out64 H`: the oracle's outputs are 64 bytes, as SHA-512's, which `Claims.Complete` reads. S12 compares each
+  round digest's length with the empty message's, so an oracle with outputs of varying length fails the honest record.
 * `ProverOk`: at the case's table, the commitment's cap is non-empty and under `2^64` bytes, and each rep, on the
   table's extra claims, records a round, each of at most `65536` coins (`RepOk`); it holds at `Out64`
   (`Replay.proverOk`).
+
+What they read of the statement, `StmtOk` (no keyed coin tree, a non-empty `Σ`, a printable draw that decodes, and the
+statement's draw), holds at every good case under `JsonSpec` (`stmtOk`, `Stmt`).
 
 `Run.json` is the record at the run: `Record.decodeWith` reads `sessOf` and `liveOf` the live session, its points the
 first coin's (`coinOf_bytes`: a coin's bytes read back are the coin), the first send is the link of its `root_B`, and
@@ -27,17 +29,9 @@ namespace FlockComplete.JsonRT
 open Flock Transcript FlockComplete FlockDeploy
 open Lean (Json JsonNumber)
 
-/-- The oracle's outputs are 64 bytes, as SHA-512's. -/
-def Out64 (H : Claims.Msg → Claims.Msg) : Prop := ∀ m, (H m).length = 64
-
-theorem hOf_size {H : Claims.Msg → Claims.Msg} (h : Out64 H) (b : ByteArray) : (Claims.hOf H b).size = 64 := by
+theorem hOf_size {H : Claims.Msg → Claims.Msg} (h : Claims.Out64 H) (b : ByteArray) : (Claims.hOf H b).size = 64 := by
   simp only [Claims.hOf, Claims.ofMsg, ByteArray.size, List.size_toArray]
   exact h _
-
-/-- **What the record needs of the statement**, at every good case: no keyed coin tree, a non-empty `Σ`, a printable
-draw that decodes to the statement's instances, and the statement's draw the one it was set up at. -/
-def StmtOk (H : Claims.Msg → Claims.Msg) (rel : Readable.Parsed → Readable.Relation) : Prop :=
-  ∀ c : Case H rel, c.spec.coinTree = none ∧ 0 < c.spec.sigma.size ∧ DrawOk c.spec ∧ c.spec.unitDraw = c.s.read.draw
 
 /-- **What the record needs of the prover's pieces**, at every good case's table: the commitment's cap, at the
 schedule's first level, is non-empty and under `2^64` bytes, and each rep, on the table's extra claims at the link's
@@ -111,15 +105,15 @@ variable {H : Claims.Msg → Claims.Msg} {rel : Readable.Parsed → Readable.Rel
 /-- **The honest run's record**, at one table: it is the printed honest record, `Record.decodeWith` reads it as `sessOf`
 and `liveOf` as its live session, its points the first coin's, the link is its `root_B` and no public words, and the
 sends after the link are its streams' rounds. -/
-theorem Run.json (S : JsonSpec) (h64 : Out64 H) (hS : StmtOk H rel) (hP : ProverOk H rel) (o : Run H rel) :
+theorem Run.json (S : Claims.JsonSpec printJ Flock.canon) (h64 : Claims.Out64 H) (hP : ProverOk H rel) (o : Run H rel) :
     ∃ st rb streams, o.sts = #[st] ∧ o.spec.tables = #[st.tags.table] ∧ o.tabs = #[Setup.ofCircuit st] ∧
       streams.size = o.spec.repStreams.size ∧ o.proofs.size = o.spec.repStreams.size ∧
       (∃ e, (Setup.ofCircuit st).extra (pointsOf o.spec (Claims.coinSeq o.r 0)) = .ok e) ∧
       o.link = ([rb], [ByteArray.empty]) ∧
       (∃ bs, o.bodies.toList = linkBody [rb] [ByteArray.empty] :: bs ∧
         Recs o.resp 1 (streams.toList.flatMap Array.toList) bs) ∧
-      o.record = (recordObj o.spec (Claims.hOf H) #[rb] (pointsOf o.spec (Claims.coinSeq o.r 0)) streams
-        o.proofs).compress ∧
+      o.record = printJ (recordObj o.spec (Claims.hOf H) #[rb] (pointsOf o.spec (Claims.coinSeq o.r 0)) streams
+        o.proofs) ∧
       Record.decodeWith o.hs o.spec o.record =
         .ok (sessOf o.spec (Claims.hOf H) #[rb] (pointsOf o.spec (Claims.coinSeq o.r 0)) streams o.proofs) ∧
       o.sess = sessOf o.spec (Claims.hOf H) #[rb] (pointsOf o.spec (Claims.coinSeq o.r 0)) streams o.proofs ∧
@@ -127,7 +121,7 @@ theorem Run.json (S : JsonSpec) (h64 : Out64 H) (hS : StmtOk H rel) (hP : Prover
       o.live = ⟨#[rb], o.spec.tables.map fun _ => ByteArray.empty, pointsOf o.spec (Claims.coinSeq o.r 0),
         streams.map (·.map liveRound)⟩ := by
   obtain ⟨st, hst, hsp, -, -⟩ := o.table
-  obtain ⟨hct, hsig, hdraw, -⟩ := hS o.toCase
+  obtain ⟨hct, hsig, hdraw, -⟩ := stmtOk S o.toCase
   obtain ⟨hC, hR⟩ := hP o.toCase st (by rw [hst]; simp)
   have ht : o.spec.tables = #[st.tags.table] := by rw [hsp]; rfl
   have htabs : tabsOf #[st] = #[Setup.ofCircuit st] := by simp [tabsOf]
@@ -169,18 +163,19 @@ theorem Run.json (S : JsonSpec) (h64 : Out64 H) (hS : StmtOk H rel) (hP : Prover
   rfl
 
 /-- **The record decodes** (S1–S14): the goal `Decodes`. -/
-theorem decodes_goal (S : JsonSpec) (h64 : Out64 H) (hS : StmtOk H rel) (hP : ProverOk H rel) : Decodes H rel := by
+theorem decodes_goal (S : Claims.JsonSpec printJ Flock.canon) (h64 : Claims.Out64 H) (hP : ProverOk H rel) :
+    Decodes H rel := by
   intro o
   obtain ⟨st, rb, streams, hst, ht, htabs, hss, hpf, hex, hlink, -, hrec, hdec, hsess, hlv, hlive⟩ :=
-    Run.json S h64 hS hP o
+    Run.json S h64 hP o
   rw [hdec, ← hsess]
 
 /-- **The record's live session reads**: the goal `LiveReads`. -/
-theorem liveReads_goal (S : JsonSpec) (h64 : Out64 H) (hS : StmtOk H rel) (hP : ProverOk H rel) :
+theorem liveReads_goal (S : Claims.JsonSpec printJ Flock.canon) (h64 : Claims.Out64 H) (hP : ProverOk H rel) :
     LiveReads H rel := by
   intro o
   obtain ⟨st, rb, streams, hst, ht, htabs, hss, hpf, hex, hlink, -, hrec, hdec, hsess, hlv, hlive⟩ :=
-    Run.json S h64 hS hP o
+    Run.json S h64 hP o
   exact hlv
 
 /-- **Alike values are equivalent** (`JsonEquiv`, what `drawEq` decides). -/
@@ -194,12 +189,12 @@ theorem Same.jsonEquiv {a b : Json} (h : Same a b) : JsonEquiv a b := by
   | obj hm hn hk _ ih => exact (jsonEquiv_obj_iff hm hn).2 ⟨hk, ih⟩
 
 /-- **The record's draw is the statement's**: the goal `DrawMatches`. -/
-theorem drawMatches_goal (S : JsonSpec) (h64 : Out64 H) (hS : StmtOk H rel) (hP : ProverOk H rel) :
+theorem drawMatches_goal (S : Claims.JsonSpec printJ Flock.canon) (h64 : Claims.Out64 H) (hP : ProverOk H rel) :
     DrawMatches H rel := by
   intro o
   obtain ⟨st, rb, streams, hst, ht, htabs, hss, hpf, hex, hlink, -, hrec, hdec, hsess, hlv, hlive⟩ :=
-    Run.json S h64 hS hP o
-  obtain ⟨-, -, hdraw, hdr⟩ := hS o.toCase
+    Run.json S h64 hP o
+  obtain ⟨-, -, hdraw, hdr⟩ := stmtOk S o.toCase
   have hd := recordDraw_recordObj S (h := Claims.hOf H) ht hdraw rb (pointsOf o.spec (Claims.coinSeq o.r 0)) streams
     o.proofs
   rw [hrec, ← hdr]
@@ -217,20 +212,20 @@ theorem list_bytes_beq_self (l : List ByteArray) : (l == l) = true := by
   | cons b l ih => simp only [List.cons_beq_cons, bytes_beq_self, ih, Bool.and_self]
 
 /-- **Custody: the record's `root_B` is the link message's**: the goal `CustodyRootB`. -/
-theorem custodyRootB_goal (S : JsonSpec) (h64 : Out64 H) (hS : StmtOk H rel) (hP : ProverOk H rel) :
+theorem custodyRootB_goal (S : Claims.JsonSpec printJ Flock.canon) (h64 : Claims.Out64 H) (hP : ProverOk H rel) :
     CustodyRootB H rel := by
   intro o
   obtain ⟨st, rb, streams, hst, ht, htabs, hss, hpf, hex, hlink, -, hrec, hdec, hsess, hlv, hlive⟩ :=
-    Run.json S h64 hS hP o
+    Run.json S h64 hP o
   rw [hlive, hlink]
   exact list_bytes_beq_self _
 
 /-- **Custody: the record's public words are the link message's**: the goal `CustodyPublics`. -/
-theorem custodyPublics_goal (S : JsonSpec) (h64 : Out64 H) (hS : StmtOk H rel) (hP : ProverOk H rel) :
+theorem custodyPublics_goal (S : Claims.JsonSpec printJ Flock.canon) (h64 : Claims.Out64 H) (hP : ProverOk H rel) :
     CustodyPublics H rel := by
   intro o
   obtain ⟨st, rb, streams, hst, ht, htabs, hss, hpf, hex, hlink, -, hrec, hdec, hsess, hlv, hlive⟩ :=
-    Run.json S h64 hS hP o
+    Run.json S h64 hP o
   rw [hlive, hlink]
   dsimp only
   rw [ht]
@@ -238,19 +233,20 @@ theorem custodyPublics_goal (S : JsonSpec) (h64 : Out64 H) (hS : StmtOk H rel) (
   exact list_bytes_beq_self _
 
 /-- **Custody: the record's link points are the first coin's**: the goal `CustodyPoints`. -/
-theorem custodyPoints_goal (S : JsonSpec) (h64 : Out64 H) (hS : StmtOk H rel) (hP : ProverOk H rel) :
+theorem custodyPoints_goal (S : Claims.JsonSpec printJ Flock.canon) (h64 : Claims.Out64 H) (hP : ProverOk H rel) :
     CustodyPoints H rel := by
   intro o
   obtain ⟨st, rb, streams, hst, ht, htabs, hss, hpf, hex, hlink, -, hrec, hdec, hsess, hlv, hlive⟩ :=
-    Run.json S h64 hS hP o
+    Run.json S h64 hP o
   rw [hlive]
   exact beq_self_eq_true _
 
 /-- **Each table's public words are its statement's**: the goal `Publics`. -/
-theorem publics_goal (S : JsonSpec) (h64 : Out64 H) (hS : StmtOk H rel) (hP : ProverOk H rel) : Publics H rel := by
+theorem publics_goal (S : Claims.JsonSpec printJ Flock.canon) (h64 : Claims.Out64 H) (hP : ProverOk H rel) :
+    Publics H rel := by
   intro o
   obtain ⟨st, rb, streams, hst, ht, htabs, hss, hpf, hex, hlink, -, hrec, hdec, hsess, hlv, hlive⟩ :=
-    Run.json S h64 hS hP o
+    Run.json S h64 hP o
   intro q hq
   rw [htabs, hsess] at hq
   simp only [sessOf, ht, List.map_toArray, List.map_cons, List.map_nil, List.zip_toArray, List.zip_cons_cons,
@@ -264,11 +260,11 @@ theorem two_of {α : Type} {xs : Array α} (h : xs.size = 2) : ∃ a b, xs = #[a
   exact ⟨a, b, rfl⟩
 
 /-- **The record's proof digests list exactly the rep streams** (S17): the goal `ProofList`. -/
-theorem proofList_goal (S : JsonSpec) (h64 : Out64 H) (hS : StmtOk H rel) (hP : ProverOk H rel) :
+theorem proofList_goal (S : Claims.JsonSpec printJ Flock.canon) (h64 : Claims.Out64 H) (hP : ProverOk H rel) :
     ProofList H rel := by
   intro o
   obtain ⟨st, rb, streams, hst, ht, htabs, hss, hpf, hex, hlink, -, hrec, hdec, hsess, hlv, hlive⟩ :=
-    Run.json S h64 hS hP o
+    Run.json S h64 hP o
   have hrs1 := repStreams_one ht
   obtain ⟨p0, p1, hp⟩ := two_of (xs := o.proofs) (by rw [hpf, hrs1]; rfl)
   rw [hsess, hp]
@@ -278,11 +274,11 @@ theorem proofList_goal (S : JsonSpec) (h64 : Out64 H) (hS : StmtOk H rel) (hP : 
   simp
 
 /-- **Each proof file is the one the record's digest names** (S17): the goal `ProofDigests`. -/
-theorem proofDigests_goal (S : JsonSpec) (h64 : Out64 H) (hS : StmtOk H rel) (hP : ProverOk H rel) :
+theorem proofDigests_goal (S : Claims.JsonSpec printJ Flock.canon) (h64 : Claims.Out64 H) (hP : ProverOk H rel) :
     ProofDigests H rel := by
   intro o
   obtain ⟨st, rb, streams, hst, ht, htabs, hss, hpf, hex, hlink, -, hrec, hdec, hsess, hlv, hlive⟩ :=
-    Run.json S h64 hS hP o
+    Run.json S h64 hP o
   have hrs1 := repStreams_one ht
   obtain ⟨p0, p1, hp⟩ := two_of (xs := o.proofs) (by rw [hpf, hrs1]; rfl)
   intro q hq
@@ -297,11 +293,11 @@ theorem proofDigests_goal (S : JsonSpec) (h64 : Out64 H) (hS : StmtOk H rel) (hP
   · simp
 
 /-- **The rep's stream is recorded** (S11): the goal `RepStream`. -/
-theorem repStream_goal (S : JsonSpec) (h64 : Out64 H) (hS : StmtOk H rel) (hP : ProverOk H rel) :
+theorem repStream_goal (S : Claims.JsonSpec printJ Flock.canon) (h64 : Claims.Out64 H) (hP : ProverOk H rel) :
     RepStream H rel := by
   intro o
   obtain ⟨st, rb, streams, hst, ht, htabs, hss, hpf, hex, hlink, -, hrec, hdec, hsess, hlv, hlive⟩ :=
-    Run.json S h64 hS hP o
+    Run.json S h64 hP o
   have hrs1 := repStreams_one ht
   obtain ⟨s0, s1, rfl⟩ := two_of (xs := streams) (by rw [hss, hrs1]; rfl)
   intro i hi r hr
@@ -316,11 +312,11 @@ theorem repStream_goal (S : JsonSpec) (h64 : Out64 H) (hS : StmtOk H rel) (hP : 
   · simp
 
 /-- **The table's extra claims evaluate** at the link's points: the goal `RepExtras`. -/
-theorem repExtras_goal (S : JsonSpec) (h64 : Out64 H) (hS : StmtOk H rel) (hP : ProverOk H rel) :
+theorem repExtras_goal (S : Claims.JsonSpec printJ Flock.canon) (h64 : Claims.Out64 H) (hP : ProverOk H rel) :
     RepExtras H rel := by
   intro o
   obtain ⟨st, rb, streams, hst, ht, htabs, hss, hpf, hex, hlink, -, hrec, hdec, hsess, hlv, hlive⟩ :=
-    Run.json S h64 hS hP o
+    Run.json S h64 hP o
   obtain ⟨e, he⟩ := hex
   intro i hi
   rw [htabs] at hi
@@ -366,11 +362,11 @@ theorem range_succ_dropLast {α : Type} (f : ℕ → α) (n : ℕ) :
   rw [List.range_succ, List.map_append, List.map_singleton, List.dropLast_concat]
 
 /-- **Custody: each recorded round is its message and its coin's first `n` elements**: the goal `CustodyRounds`. -/
-theorem custodyRounds_goal (S : JsonSpec) (h64 : Out64 H) (hS : StmtOk H rel) (hP : ProverOk H rel) :
+theorem custodyRounds_goal (S : Claims.JsonSpec printJ Flock.canon) (h64 : Claims.Out64 H) (hP : ProverOk H rel) :
     CustodyRounds H rel := by
   intro o
   obtain ⟨st, rb, streams, hst, ht, htabs, hss, hpf, hex, hlink, ⟨bs, hbs, hrecs⟩, hrec, hdec, hsess, hlv, hlive⟩ :=
-    Run.json S h64 hS hP o
+    Run.json S h64 hP o
   have hn : o.bodies.size = bs.length + 1 := by
     rw [← Array.length_toList, hbs, List.length_cons]
   have hmids : o.mids = bs.zip ((List.range bs.length).map fun j => Claims.coinSeq o.r (1 + j)) := by
