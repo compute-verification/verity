@@ -23,9 +23,9 @@ classes: ``roundings`` (FP arithmetic, casts and dots, special functions, intege
 reduced mod 2^w (`I32Mul_v1` of two runtime values, the integer dots outside the family), bit operations on words and field
 extractions, limb steps, and an add or subtract that may wrap), ``compare_select`` (comparisons, selections, min, max and clamps,
 `F32Sat_v1` and `S32ClampS8` among them, the 1-bit logic ops, the top-p keep mask, the lifting's tag tests), ``gathers`` (a
-data-dependent read of one of V words, counted in fresh index bits) and ``folds`` (the receipt folds' steps,
-`PouwDuoAbsorb_v1` and fx1's `PouwFx1Absorb`). Only gates with an operand that depends on a run input are budgeted: a gate of constants and registered
-words computes the same function before the seed. A primitive the table doesn't list is refused. The table (`CLASSES`, and
+data-dependent read of one of V words, counted in fresh index bits) and ``folds`` (the receipt folds' steps, `PouwDuoAbsorb_v1`
+and fx1's `PouwFx1Absorb`). Only gates with an operand that depends on a run input are budgeted: a gate of constants and
+registered words computes the same function before the seed. A primitive the table doesn't list is refused. The table (`CLASSES`, and
 the families `class_of` reads) is Lean's `Accounting.Gates.classOf` id for id where Lean lists the id (`Bf16ToF32_v1` affine
 there too, by the 18 Oct ruling), and the red team's closed table (round 2) for the families built on demand that Lean
 doesn't list yet. The exact-int8 profile's
@@ -85,10 +85,8 @@ audit certified as read in it and its duration):
 The sink, coin and limb-split types of the s8 family's companions (the receipt fold, the noise derivation, `LimbSplit`) are
 circuits' Build types; their primitives are budgeted gate by gate, never free (`LimbSplit`'s byte, carry and clamp, and the
 H1 + fx1 tile's noise, digit, one-stream and fold primitives and v4's dead-tile mask, each with its Definition on bits, are
-listed). Bits become bytes
-exactly (bits / 8), and every comparison is exact
-(`fractions.Fraction`): c, R_in and a window's duration are given as an int, a Fraction or a str, and a float, which would be
-read at its binary value, is refused.
+listed). Bits become bytes exactly (bits / 8), and every comparison is exact (`fractions.Fraction`): c, R_in and a window's
+duration are given as an int, a Fraction or a str, and a float, which would be read at its binary value, is refused.
 """
 from __future__ import annotations
 
