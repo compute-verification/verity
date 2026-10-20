@@ -110,13 +110,13 @@ def repCoins (m kLog claims : Nat) : V (Array Nat) := do
 
 /-- **The openings after the session stream's**, in the order the prover asks for them: every round of each rep stream in
 `SessionSpec.repStreams` order (table by table, rep 0's before rep 1's, as `CoinLayer.slot` places them), each with its
-coin count at its table's statement (`repCoins`, with the statement's `2 + points · regions` claims). -/
-def planOf (spec : SessionSpec) (sts : Array Stmt) : V (Array (String × Nat)) := do
-  let mut out := #[]
-  for (i, _, name) in spec.repStreams do
-    let some st := sts[i]? | throw s!"no statement for table {i}"
-    out := out ++ (← repCoins st.m st.c.kLog (2 + spec.points * st.regions.size)).map (name, ·)
-  return out
+coin count at its table's statement (`repCoins`, with the statement's `2 + points · regions` claims). A table with no
+`--zk` schedule has no rounds, as `FlockDeploy.repRounds` counts it, and its proof no verifier accepts. -/
+def planOf (spec : SessionSpec) (sts : Array Stmt) : Array (String × Nat) :=
+  spec.repStreams.flatMap fun (i, _, name) =>
+    match sts[i]? with
+    | some st => ((repCoins st.m st.c.kLog (2 + spec.points * st.regions.size)).toOption.getD #[]).map (name, ·)
+    | none => #[]
 
 /-- **Opening `j`'s stream and coin count**, by the schedule: opening `0` is the session stream's (its count `Hello`'s
 link points'), opening `j + 1` the plan's `j`-th. -/
@@ -199,11 +199,14 @@ def State.sendHello (S : State) (s : V (SessionSpec × Array Stmt)) (nonce : Byt
     Except (State × ByteArray) (State × ByteArray) :=
   match S.stop with
   | some why => .error (S, refused why)
-  | none => match Hello.textAt (s.map (·.1)) nonce, s.bind fun (spec, sts) => planOf spec sts with
-    | .error e, _ => .error (S.refuse s!"{Coins.STOP}the Lean Hello: {e}")
-    | .ok _, .error e => .error (S.refuse s!"{Coins.STOP}the schedule: {e}")
-    | .ok text, .ok p => match Coins.Hello.parse text with
-      | .ok h => .ok ({ S with hello := some h, plan := p }, ⟨(Hello.frame text).toArray⟩)
+  | none => match Hello.textAt (s.map (·.1)) nonce with
+    | .error e => .error (S.refuse s!"{Coins.STOP}the Lean Hello: {e}")
+    | .ok text => match Coins.Hello.parse text with
+      | .ok h =>
+        let p := match s with
+          | .ok (spec, sts) => planOf spec sts
+          | .error _ => #[]
+        .ok ({ S with hello := some h, plan := p }, ⟨(Hello.frame text).toArray⟩)
       | .error e => .error (S.refuse e)
 
 /-- `n` bytes from the socket `c`, or `none` where it closes first. -/
@@ -297,7 +300,7 @@ def cmd (args : List String) : IO UInt32 := do
       let line ← stdin.getLine
       if line.isEmpty then break
       text := text ++ line
-    let p := (Hello.drawOf text).bind fun draw => (S.setup draw).bind fun (spec, sts) => planOf spec sts
+    let p := (Hello.drawOf text).bind fun draw => (S.setup draw).map fun (spec, sts) => planOf spec sts
     match p with
     | .error e => IO.println s!"refused {e}"
     | .ok p =>
