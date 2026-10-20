@@ -1089,6 +1089,33 @@ def test_two_runs_on_one_link_name_neither_take_nor_give_each_others_reveals(tmp
         RemoteCertifier("127.0.0.1", 9, key, challenger, "requests", RUN[1:])
 
 
+def test_a_proxy_and_its_client_name_one_certifier_run_which_its_answers_bind(tmp_path):
+    """`certifier_run`, (key id, run id, link), is one identity on both sides: a proxy's (its signer's key id, `run_id`
+    and the ingress link the reveal messages bind, not the egress one) equals a `RemoteCertifier` client's of it, and
+    a `Revealed` answer's key id and run id, with the link it verifies for, are it. A proxy without a signer has
+    none."""
+    (tmp_path / "challenger").mkdir()
+    certifier = signers.signer(tmp_path)
+    challenger = signers.signer(tmp_path / "challenger", b"challenger")
+    key, reg = certifier.public_key(), registration(0)
+    p = Proxy(("127.0.0.1", 9), EGRESS, INGRESS, SYNC_SET, SYNCS, origin=0.0, clock=lambda: 0.0,
+              salt=lambda w, n: bytes([w + 1]) * n, egress_link="out-3", ingress_link="in-7",
+              challenger_key=challenger.public_key(), signer=certifier)
+    for _ in range(2 * INGRESS.buckets):
+        p.bucketer.tick()
+    client = RemoteCertifier("127.0.0.1", 9, key, challenger, "in-7", p.run_id)
+    assert p.certifier_run == client.certifier_run == (key.key_id, p.run_id, "in-7")
+    assert client.key_id == key.key_id
+    key_id, run_id, link = client.certifier_run
+    answer = p.reveal(0, reg, challenger.sign(active.reveal_request_message(key_id, run_id, link, 0, reg.digest,
+                                                                            active.SALT_KIND)))
+    assert (answer.key_id, answer.run_id, link) == p.certifier_run
+    assert answer.verify(key, run_id, link, reg.digest, active.SALT_KIND)
+    assert not answer.verify(key, run_id, "out-3", reg.digest, active.SALT_KIND)
+    with pytest.raises(ValueError, match="no key id"):
+        Proxy(("127.0.0.1", 9), EGRESS, INGRESS, SYNC_SET, SYNCS, origin=0.0).certifier_run
+
+
 ENVELOPE = ClockSync(max(SYNC_SET.deltas), min(SYNC_SET.rhos))
 
 

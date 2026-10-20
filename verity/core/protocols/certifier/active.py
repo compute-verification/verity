@@ -59,7 +59,8 @@ at construction (`Proxy.run_id`). They refuse one that doesn't verify before rea
 spends p's one reveal, nor does a request for another certifier or another run, and a registration counts only if the
 challenger signed its digest, which binds its record. They answer a `Revealed`: the value, the certifier's key id and
 run id, and its own signature (`signer`, the network certifier's key) over `reveal_response_message`, which binds the
-value too, so a consumer can key p on (key id, run id, p), where two proxies on one link name don't collide. The
+value too, so a consumer can key p on the certifier run, (key id, run id, link) (`Proxy.certifier_run`, the same on a
+`RemoteCertifier`), where two proxies on one link name don't collide. The
 salt needs authenticity, not confidentiality: after t_d the block's server already holds it, and the verifier fills
 `pouw.salt` as a public input, so nothing is encrypted. `serve_reveals(proxy, host, port)` serves both calls beside
 `run`, one JSON line per request and per answer, and `RemoteCertifier` is the challenger's client, which takes the
@@ -219,8 +220,9 @@ def reveal_response_message(key_id: bytes, run_id: bytes, link: str, window: int
 @dataclass(frozen=True, slots=True)
 class Revealed:
     """The certifier's signed answer to a reveal request: PoUW window `window`'s salt or weights' root, `value`, its
-    `signature` over `reveal_response_message`, and the certifier's `key_id` and `run_id` that it binds. Keyed on
-    (key id, run id, window), two proxies on one link name, or two runs of one, don't collide."""
+    `signature` over `reveal_response_message`, and the certifier's `key_id` and `run_id` that it binds. With the link
+    it verifies for, they are the certifier run (`Proxy.certifier_run`, `RemoteCertifier.certifier_run`). Keyed on the
+    certifier run and the window, two proxies on one link name, or two runs of one, don't collide."""
 
     window: int
     value: bytes
@@ -795,6 +797,16 @@ class Proxy:
         finally:
             writer.close()
 
+    @property
+    def certifier_run(self) -> tuple[bytes, bytes, str]:
+        """This certifier run's identity, (key id, run id, link): the signer's key id, `run_id` and the ingress link
+        name, the one the reveal messages bind. Every signed answer binds it, and consumers key PoUW windows on it: a
+        `Revealed`'s `key_id` and `run_id`, with the link it verifies for, are it, and a `RemoteCertifier` of this proxy
+        gives the same. A proxy without a signer has no key id, so it raises `ValueError`."""
+        if self.signer is None:
+            raise ValueError("a proxy without a signer has no key id, so no certifier run")
+        return self.signer.key_id, self.run_id, self.bucketer.certifier.link
+
     def reveal(self, window: int, registration: Registration | None,
                request: bytes | None = None) -> bytes | Revealed:
         """PoUW window `window`'s salt, for the verifier, given the window's registration as the proof service returned
@@ -1036,10 +1048,11 @@ class RemoteCertifier:
     registration)` sign the request for `certifier_key`'s key id and `run_id` with `challenger_signer` (whose key the
     certifier registered as `challenger_key`), send it, and return the value once the answer names that key id and run
     and its signature verifies under `certifier_key` over `reveal_response_message` for ingress link `link` and p, so a
-    consumer can key p on (`certifier_key.key_id`, `run_id`, p). A refusal, an answer of another run, one that doesn't
-    verify or names another window, a signer that refuses and a connection that fails all raise `RuntimeError`, as a
-    `Proxy`'s refusal does, so a caller that fails closed on one fails closed on them. Each call is one connection, one
-    request line (then its end) and one answer line; `timeout` bounds its socket's waits (None: no bound)."""
+    consumer can key p on `certifier_run`, (`key_id`, `run_id`, `link`). A refusal, an answer of another run, one
+    that doesn't verify or names another window, a signer that refuses and a connection that fails all raise
+    `RuntimeError`, as a `Proxy`'s refusal does, so a caller that fails closed on one fails closed on them. Each call
+    is one connection, one request line (then its end) and one answer line; `timeout` bounds its socket's waits
+    (None: no bound)."""
 
     def __init__(self, host: str, port: int, certifier_key: PublicKey, challenger_signer: Signer, link: str,
                  run_id: bytes, *, timeout: float | None = None) -> None:
@@ -1047,6 +1060,17 @@ class RemoteCertifier:
             raise ValueError(f"a certifier's run id is {RUN_ID_BYTES} bytes")
         self.host, self.port, self.certifier_key, self.challenger_signer = host, port, certifier_key, challenger_signer
         self.link, self.run_id, self.timeout = link, run_id, timeout
+
+    @property
+    def key_id(self) -> bytes:
+        """The certifier's key id, `certifier_key`'s."""
+        return self.certifier_key.key_id
+
+    @property
+    def certifier_run(self) -> tuple[bytes, bytes, str]:
+        """The certifier run this client asks, (key id, run id, link): its proxy's `Proxy.certifier_run`, the identity
+        every answer it takes binds and consumers key PoUW windows on."""
+        return self.key_id, self.run_id, self.link
 
     def reveal(self, window: int, registration: Registration | None) -> bytes:
         return self._ask(window, registration, SALT_KIND)
