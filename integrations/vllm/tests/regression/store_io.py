@@ -100,6 +100,8 @@ def _cli(*args: str, check: bool = True) -> subprocess.CompletedProcess:
 #: an id no artifact has: `where` on it names the remote it looked on, or says none is configured
 _NO_ART = "art:" + "0" * 64
 NO_REMOTE = "no remote configured"
+#: `select`'s refusal on a store with no index and an empty catalog: the CLI answered, there is just nothing to select from
+NO_INDEX = "no index to select from"
 
 
 def reachable(*, need_remote: bool = True) -> bool:
@@ -108,7 +110,8 @@ def reachable(*, need_remote: bool = True) -> bool:
     if os.environ.get("VERITY_STORE_REQUIRED") == "1":
         return True
     try:
-        if _cli("select", "--kind", SNAPSHOT_KIND, "--ids", check=False).returncode != 0:
+        p = _cli("select", "--kind", SNAPSHOT_KIND, "--ids", check=False)
+        if p.returncode != 0 and NO_INDEX not in p.stderr:
             return False
         return not need_remote or NO_REMOTE not in _cli("where", _NO_ART, check=False).stderr
     except StoreUnavailable:

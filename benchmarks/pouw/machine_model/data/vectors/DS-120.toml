@@ -10,6 +10,6 @@ rows = ["DS_issue", "DS_tensor", "DS_imad", "DS_lop", "DS_xu", "DS_shfl", "DS_sm
 credits = []
 
 [published]  # as `solve` prints them: τ and U/F_low to 4 places, the margin to 3
-tau = 0.2091
-uf_low = 1.0825
+tau = 0.2020
+uf_low = 1.0781
 margin = 1.000

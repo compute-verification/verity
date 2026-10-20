@@ -1164,6 +1164,9 @@ FAILED_RECENT_S = 6 * 3600
 CLASSIFY_S = 120
 TRAIN_RE = re.compile(r"^Merge #(\d+) \(([0-9a-f]+)\)")
 TRAIN_MAIN_RE = re.compile(r"^Merge main \([0-9a-f]+\)")
+#: drive's reason when it cancels a landed train's check (drive.py, `postland`): its deferred steps run in the post-landing run, so
+#: the step it killed did not fail (INF-144)
+DRIVE_LANDED_CANCEL = "deferred steps run in the post-landing run"
 BC_ID_RE = re.compile(r"bc-[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}")
 LANE_RE = re.compile(r"-([0-9a-f]{4})$")
 # a log's first failing line: the first line matching the first of these that any line matches, else its last line
@@ -1357,7 +1360,7 @@ def _hm(utc: str | None) -> str:
 def failed_check(ctx: Ctx, reg: dict, machine: str, row: dict) -> Finding | None:
     """The post for one failed check run, or None for one nobody needs telling about: cancelled by hand before any step failed
     (whoever cancelled it knows), or neither a train nor sent by the lander (a lane's own check: it reads its own result)."""
-    if row.get("step") is None and row.get("class") == "CANCELLED_MANUAL":
+    if row.get("class") == "CANCELLED_MANUAL" and (row.get("step") is None or DRIVE_LANDED_CANCEL in (row.get("why") or "")):
         return None
     if not train_prs(row.get("subjects") or []) and not any(i in row.get("by", "") for i in agent_ids(reg, LANDER)):
         return None
