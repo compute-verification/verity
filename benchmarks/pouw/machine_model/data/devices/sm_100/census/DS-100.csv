@@ -1,6 +1,8 @@
 kind,row,rate,noise,cycles,u,since,until,runs
 ALU,DS_issue,,,1,,DS-100,DS-100,note:20261017T1818Z-draft-axioms
 ALU,DS_alu,,,2,,DS-100,DS-100,note:20261017T1818Z-draft-axioms
+ATOME32,DS_issue,,,1,,DS-100,DS-100,note:20261017T1818Z-draft-axioms
+ATOMS32,DS_issue,,,1,,DS-100,DS-100,note:20261017T1818Z-draft-axioms
 DMMA16816,DS_issue,,,1,,DS-100,DS-100,note:20261019T0511Z-draft-mm-sheets note:20261019T0520Z-draft-rt-isa
 DMMA16816,DS_tensor,,,128,,DS-100,DS-100,note:20261019T0511Z-draft-mm-sheets note:20261019T0520Z-draft-rt-isa
 DMMA1684,DS_issue,,,1,,DS-100,DS-100,note:20261019T0511Z-draft-mm-sheets note:20261019T0520Z-draft-rt-isa
@@ -16,6 +18,7 @@ IMMA16816_S8,DS_issue,,,1,,DS-100,DS-100,note:20261017T1818Z-draft-axioms
 IMMA16816_S8,DS_tensor,,,1,,DS-100,DS-100,note:20261017T1818Z-draft-axioms
 IMMA16832_S8,DS_issue,,,1,,DS-100,DS-100,note:20261017T1818Z-draft-axioms
 IMMA16832_S8,DS_tensor,,,2,,DS-100,DS-100,note:20261017T1818Z-draft-axioms
+LDS128,DS_issue,,,1,,DS-100,DS-100,note:20261017T1818Z-draft-axioms
 LDTM_16X128B_X8,DS_issue,,,1,,DS-100,DS-100,note:20261017T1818Z-draft-axioms
 LDTM_16X256B_X4,DS_issue,,,1,,DS-100,DS-100,note:20261017T1818Z-draft-axioms
 LDTM_16X64B_X16,DS_issue,,,1,,DS-100,DS-100,note:20261017T1818Z-draft-axioms
@@ -25,10 +28,18 @@ LDTM_32X32B_X16,DS_issue,,,1,,DS-100,DS-100,note:20261017T1818Z-draft-axioms
 LDTM_32X32B_X32,DS_issue,,,1,,DS-100,DS-100,note:20261017T1818Z-draft-axioms
 LDTM_32X32B_X4,DS_issue,,,1,,DS-100,DS-100,note:20261017T1818Z-draft-axioms
 LDTM_32X32B_X64,DS_issue,,,1,,DS-100,DS-100,note:20261017T1818Z-draft-axioms
+NOROW,DS_issue,,,1,,DS-100,DS-100,note:20261017T1818Z-draft-axioms
+REDG32,DS_issue,,,1,,DS-100,DS-100,note:20261017T1818Z-draft-axioms
+REDUX,DS_issue,,,1,,DS-100,DS-100,note:20261017T1818Z-draft-axioms
 SHFL,DS_issue,,,1,,DS-100,DS-100,note:20261017T1818Z-draft-axioms
 SHFL,DS_shfl,,,4,,DS-100,DS-100,note:20261017T1818Z-draft-axioms
+STG128,DS_issue,,,1,,DS-100,DS-100,note:20261017T1818Z-draft-axioms
+STG32,DS_issue,,,1,,DS-100,DS-100,note:20261017T1818Z-draft-axioms
+STS128,DS_issue,,,1,,DS-100,DS-100,note:20261017T1818Z-draft-axioms
+STS32,DS_issue,,,1,,DS-100,DS-100,note:20261017T1818Z-draft-axioms
 UNI,DS_issue,,,1,,DS-100,DS-100,note:20261017T1818Z-draft-axioms
 UNI,DS_uniform,,,1.9572915,,DS-100,DS-100,r20261017-095350-0a80 r20261017-103944-35c5 r20261017-112709-ec87 r20261017-113207-4cb8 r20261017-113541-9d33 note:20261019T0511Z-draft-mm-sheets
+UNLISTED,DS_issue,,,1,,DS-100,DS-100,note:20261017T1818Z-draft-axioms
 UTCHMMA_BF16_M128_N256,DS_issue,,,1,,DS-100,DS-100,note:20261019T0511Z-draft-mm-sheets note:20261019T0520Z-draft-rt-b200-emp
 UTCHMMA_BF16_M128_N256,DS_tensor,,,512,,DS-100,DS-100,note:20261019T0511Z-draft-mm-sheets note:20261019T0520Z-draft-rt-b200-emp
 UTCHMMA_F16_M128_N256,DS_issue,,,1,,DS-100,DS-100,note:20261017T1818Z-draft-axioms
@@ -69,3 +80,4 @@ UTCQMMA_E5M2_M128_N256,DS_issue,,,1,,DS-100,DS-100,note:20261019T0511Z-draft-mm-
 UTCQMMA_E5M2_M128_N256,DS_tensor,,,512,,DS-100,DS-100,note:20261019T0511Z-draft-mm-sheets note:20261019T0520Z-draft-rt-b200-emp
 UTCQMMA_MXF8F6F4_E4M3_M128_N256,DS_issue,,,1,,DS-100,DS-100,note:20261019T0511Z-draft-mm-sheets note:20261019T0520Z-draft-rt-b200-emp
 UTCQMMA_MXF8F6F4_E4M3_M128_N256,DS_tensor,,,512,,DS-100,DS-100,note:20261019T0511Z-draft-mm-sheets note:20261019T0520Z-draft-rt-b200-emp
+VIADD,DS_issue,,,1,,DS-100,DS-100,note:20261017T1818Z-draft-axioms
