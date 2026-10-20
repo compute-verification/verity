@@ -19,7 +19,7 @@
 
 A tile is (call, ti, tj): A rows [R ti, R (ti + 1)) of the slot and B rows [C tj, C (tj + 1)) of the call's; tiles are
 numbered call by call, row block major, and a tile's number is its position, the unit's ``position`` input
-(`h1unit.PouwH1Window`). The window is one seed group, its roots (root(a), root(b)) every unit's ``roots`` input. ``--k``
+(`h1window.PouwH1Window`). The window is one seed group, its roots (root(a), root(b)) every unit's ``roots`` input. ``--k``
 truncates every row to its first K codes (a smoke run's).
 """
 from __future__ import annotations

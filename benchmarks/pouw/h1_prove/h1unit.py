@@ -18,14 +18,14 @@ prover and the verifier of `run.py` share.
   input. `commit_strings` computes a row's ``b || c`` with C-Flock's own function on the port the statement's META
   declares (`stage.py` holds the two equal), so a proof's committed rows are the window's leaves exactly when its rows and
   salts are the committed ones.
-* **The window's public Program** (`PouwH1Window`, `Shape.window`): every tile of the window as one call of the unit, its
-  A rows a slice of the parameter ``a`` (the slot), its B rows a slice of ``b`` (its call's rows), its position one row of
-  ``position``, and ``roots``; unit u is the tile `window.py` numbers u, and its outputs row u of ``z`` and ``receipt``.
-  Its `Q_template_instance` partition derives the units, and the statement binds it (`Shape.stager`'s ``bind``), so the
-  Lean verifier derives each instance's unit from its own copy of the program (``--program``, ``--partition``) and the
-  indices the public file states, and `unit_reads` is the row of each tree each unit reads. The slot is the window's size
-  class and the calls' B rows the model's, so the layout is protocol structure and the real token count stays the
-  prover's. Each circuit port reads one tree in every unit, as a registered port reads one value.
+* **The window's public Program** (`h1window.program`, `Shape.window`): every tile of the window as one call of the unit,
+  every call reading the one A block (the slot); unit u is the tile `window.py` numbers u, and its outputs row u of ``z``
+  and ``receipt``. Its `Q_template_instance` partition derives the units, and the statement binds it (`Shape.stager`'s
+  ``bind``), so the Lean verifier derives each instance's unit from its own copy of the program (``--program``,
+  ``--partition``) and the indices the public file states, and `unit_reads` is the row of each tree each of the unit's
+  ports reads. The slot is the window's size class and the calls' B rows the model's, so the layout is protocol
+  structure and the real token count stays the prover's. Each circuit port reads one tree in every unit, as a registered
+  port reads one value.
 * **The verifier's public file** (`verifier_pub`) is built from the opened leaves and the verifier's own public row alone:
   the statement's header (its circuit pin, its units' global indices, each port's frame-v3 root over those ``b || c``)
   and the ``b || c``. Lean ``verify --zk`` holds a session to that file, so it accepts only a proof whose committed rows
@@ -41,15 +41,12 @@ from pathlib import Path
 
 import numpy as np
 
-from verity.ml.circuits.defs import CompositeDefinition
-from verity.ml.circuits.ports import In, Ports
-from verity.ml.circuits.refs import coll_concat, runs
-from verity.ml.circuits.types import Array
 from verity.ml.commitments import hm96
 from verity.ml.commitments.identity import identity_digest_sha512
 from verity.ml.commitments.indexed import RangeIndexedDomain
 from verity.ml.commitments.merkle import CommitmentDomain, tree_levels
 from verity.ml.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2 as V2, row_leaf
+from verity.core.protocols.pouw.circuit import h1window as HW
 from verity.core.protocols.pouw.circuit import seeds as SD
 
 HM96 = hm96.SHA512
@@ -82,41 +79,7 @@ def pub_salt(window: str, position: int) -> bytes:
     return hashlib.shake_256(PUB_SALT_TAG + window.encode() + b"\0" + int(position).to_bytes(8, "big")).digest(SALT_BYTES)
 
 
-def slot(rows: int, r: int = 4) -> int:
-    """A window's A slot for ``rows`` token rows: the least power of two holding them, at least ``r``. The window pads its
-    A rows with zero rows to it."""
-    if rows < 1:
-        raise ValueError("a window has at least one token row")
-    return max(r, 1 << (rows - 1).bit_length())
-
-
-# -- the window's public Program --------------------------------------------------------------------------------------------
-
-def _window_signature(S):
-    (_, a), (_, b) = S.TILE.signature()[0][:2]
-    D, P = SD.types(True)
-    T = sum((S.M // a.n) * (n // b.n) for _name, n in S.CALLS)
-    return ((("a", Array(S.M, a.elem)), ("b", Array(sum(n for _name, n in S.CALLS), b.elem)), ("salt", D),
-             ("position", Array(T, P)), ("roots", Array(2, D))), Array(T, S.TILE.signature()[1]))
-
-
-def _window_body(B, S, a, b, salt, position, roots):
-    (_, at), (_, bt) = S.TILE.signature()[0][:2]
-    r, c, b0, outs = at.n, bt.n, 0, []
-    for _name, n in S.CALLS:
-        for ti in range(S.M // r):
-            for tj in range(n // c):
-                outs.append(B.call(S.TILE, a[r * ti:r * ti + r], b[b0 + c * tj:b0 + c * tj + c], salt, position[len(outs)], roots))
-        b0 += n
-    return coll_concat(_window_signature(S)[1], outs)
-
-
-PouwH1Window = CompositeDefinition(
-    "PouwH1Window", 1, ("TILE", "CALLS", "M"), _window_signature, _window_body, register=False,
-    ports=lambda S: Ports(params={"salt": In(kind="coin")}),
-    doc="One H1 window's tiles, call by call and row block major: tile (call, ti, tj) is TILE on A rows [R ti, R ti + R) "
-        "of the M-row slot a and B rows [C tj, C tj + C) of the call's rows of b (the calls' B rows in order), the salt, "
-        "the tile's position and the window's roots.")
+slot = HW.slot
 
 
 def window_shape(com: dict) -> tuple[tuple[tuple[str, int], ...], int]:
@@ -129,38 +92,14 @@ def window_roots(com: dict) -> tuple[bytes, bytes]:
     return bytes.fromhex(com["root_a"]), bytes.fromhex(com["root_b"])
 
 
-def _inputs(program) -> dict[int, str]:
-    """Each root Input node's parameter: a parameter's leaves are one Input node's gates, all of them."""
-    from verity.ml.circuits.program import is_input
-    body, got = program.root.body, {}
-    at = {body.offsets[k]: k for k, n in enumerate(body.nodes) if is_input(n.fn)}
-    for pi, (name, t) in enumerate(program.fn.signature()[0]):
-        rs = runs(program.input_coll(pi).refs)
-        if len(rs) != 1 or rs[0][2] not in at or rs[0][3] - rs[0][2] != t.leaves or \
-                body.offsets[at[rs[0][2]] + 1] - rs[0][2] != t.leaves:
-            raise ValueError(f"parameter {name} is not one Input node's leaves")
-        got[at[rs[0][2]]] = name
-    return got
+#: the statement's port of each of the unit's rows (`h1window.unit_reads`' keys): its A and B rows' own, z's and the
+#: receipt's output rows o0 and o1
+PORT = {**{f"a[{i}]": f"a{i}" for i in range(4)}, **{f"b[{j}]": f"b{j}" for j in range(8)}, "z": "o0", "receipt": "o1"}
 
 
 def unit_reads(program, tp, u: int) -> dict[str, tuple[str, int]]:
-    """The rows unit ``u`` reads in the window's Program (``tp`` its template partition): each of the unit's A and B ports
-    (``a{i}``, ``b{j}``) and its ``salt``, ``position`` and ``roots`` the parameter and row of the one whole row it reads,
-    and its outputs ``o0`` and ``o1`` row ``u`` of the window's z and receipt. From the call's references alone (one run
-    per port), so a unit costs its ports at any K."""
-    k, _m = tp.locate(u)
-    node, inputs, out = program.root.body.nodes[k], _inputs(program), {}
-    for (name, t), arg in zip(node.fn.signature()[0], node.args):
-        for port, c in ([(f"{name}{i}", arg[i]) for i in range(t.n)] if name in ("a", "b") else [(name, arg)]):
-            rs = runs(c.refs)
-            if len(rs) != 1 or rs[0][0] != "n" or rs[0][1] not in inputs:
-                raise ValueError(f"unit {u}: port {port} reads no one run of a parameter")
-            _s, node_k, lo, hi = rs[0]
-            param, w = inputs[node_k], hi - lo
-            if lo % w or dict(program.fn.signature()[0])[param].leaves % w:
-                raise ValueError(f"unit {u}: port {port} reads no whole row of {param}")
-            out[port] = (param, lo // w)
-    return {**out, "o0": ("z", u), "o1": ("receipt", u)}
+    """`h1window.unit_reads` by the statement's ports (`PORT`; ``salt``, ``position`` and ``roots`` the public row's)."""
+    return {PORT.get(key, key): read for key, read in HW.unit_reads(program, tp, u).items()}
 
 
 @dataclass(frozen=True)
@@ -203,16 +142,9 @@ class Shape:
                     PAIRS=tuple((i, j) for i in range(self.r) for j in range(self.c)))
 
     def window(self, calls, m: int):
-        """The window's public Program (`PouwH1Window` over this unit, its ``calls`` ``(name, B rows)`` and A slot ``m``) and
-        its `Q_template_instance` query."""
-        from verity.ml.circuits.defs import bind
-        from verity.ml.circuits.program import Program
-        from verity.core.protocols.sampled_proofs.one_stage import partition as P
-        calls = tuple((str(name), int(n)) for name, n in calls)
-        if m != slot(m, self.r) or any(n < self.c or n % self.c for _name, n in calls):
-            raise ValueError(f"a window's A slot is a power of two of at least {self.r} rows and its calls' B rows whole "
-                             f"blocks of {self.c}: slot {m}, calls {calls}")
-        return Program(bind(PouwH1Window, TILE=self.definition(), CALLS=calls, M=m)), P.template_instance_query(self.definition())
+        """The window's public Program (`h1window.program` over this unit, its ``calls`` ``(name, B rows)`` all reading the
+        one A block of slot ``m``) and its `Q_template_instance` query."""
+        return HW.program(self.definition(), [(name, n, 0) for name, n in calls], m), HW.query(self.definition())
 
     def stager(self, name: str, circuit=None, bind: dict | None = None):
         """The unit's `UnitStager`: its circuit, built once (the long step at K = 4096) and written to ``circuit``, bound to
