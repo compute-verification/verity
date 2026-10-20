@@ -204,6 +204,33 @@ def test_the_machines_deployed_slot_rule_decides_not_the_shipped_trees(tmp_path,
     assert remote.node_slot_only().through_slot(["python3", "tools/verity/check/slot.py", "--", "true"])
 
 
+def test_an_auditor_host_starts_only_the_commands_its_marker_lists(tmp_path, monkeypatch):
+    """/etc/vy/auditor (vy-challenger-1's, deploy.toml): the auditor host runs its own service and nothing else (INF-154), so the
+    launcher refuses any other command before anything starts, a listed one with an extra argument or a wrapper among them, and a
+    marker it can't read lets nothing through."""
+    marker = tmp_path / "auditor"
+    monkeypatch.setenv("AUDITOR_FILE", str(marker))
+    marker.write_text("# the challenger only\nbash benchmarks/live_challenger/run.sh\n")
+    for i, command in enumerate(([PY, "-c", "print('no')"], ["bash", "benchmarks/live_challenger/run.sh", "--x"],
+                                 ["nice", "-n", "19", "bash", "benchmarks/live_challenger/run.sh"],
+                                 ["env", "CHECK_SLOTS=/workspace/research/locks/research/slots", "python3", "tools/verity/check/slot.py",
+                                  "--", "bash", "benchmarks/live_challenger/run.sh"])):
+        req, runs_root = _request(tmp_path, f"off{i}", command)
+        out = remote.launch_request(req)
+        assert out["started"] is False and "auditor host" in out["refused"] and str(marker) in out["refused"], command
+        assert "`bash benchmarks/live_challenger/run.sh`" in out["refused"]
+        assert R.summarize(runs_root / f"off{i}")["state"] == "refused" and not (runs_root / f"off{i}" / "job.json").exists()
+    req, runs_root = _request(tmp_path, "challenger", ["bash", "benchmarks/live_challenger/run.sh"])
+    doc = json.loads(req.read_text()); doc["cwd"] = str(tmp_path); req.write_text(json.dumps(doc))   # no run.sh here: the run fails
+    assert remote.launch_request(req)["started"]
+    _wait_terminal(runs_root / "challenger")
+    marker.chmod(0)
+    if not os.access(marker, os.R_OK):                     # root reads it anyway
+        req, _ = _request(tmp_path, "unreadable", ["bash", "benchmarks/live_challenger/run.sh"])
+        out = remote.launch_request(req)
+        assert out["started"] is False and "runs only its own service" in out["refused"]
+
+
 def test_tool_tarball_is_deterministic_and_excludes_caches():
     d1, s1 = remote.tool_tarball()
     d2, s2 = remote.tool_tarball()

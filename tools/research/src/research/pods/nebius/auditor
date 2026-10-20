@@ -1,0 +1,5 @@
+# /etc/vy/auditor: this machine is an auditor host (AGENTS.md's auditor-trusted devices, under trusted-nebius-host): it runs the
+# auditor's own service and nothing else, no pool, lane or prover job. Each line below is one command a `research run` here may
+# be, exactly, as shlex splits it. research.remote's launcher refuses any other, and vy-auditor-only.timer (slot_only.py
+# --auditor) stops one launched from an older tree.
+bash benchmarks/live_challenger/run.sh
