@@ -75,9 +75,16 @@ the served window proves its drawn tiles in zero knowledge, and its verifier of 
      units take it, **Seeds and noise** below). The served-zk window's unit, `Pc8TileSide`, reads two committed fp8-pi
      side rows and no salt, so rows formed under any salt, or before any, would pass in every window and under every
      stream. Its challenger refuses every certified window first (`unsalted`), before the stream receives it and before
-     the certifier is asked for anything. A certified window credits once its units are the compiled Program's, which
-     take `Epoch.certified`'s salt through `Compiled.inputs`, and its opening of record holds the proof's coin input to
-     that salt.
+     the certifier is asked for anything. A certified window credits once its units read its salt and their proofs
+     are held to it. The opening of record (`core_check.opening`, Lean `PouwCheck.opening`) does the second: in a
+     certified window it opens only a salted template's unit (`TILES`' `Salted`: today the H1 tile unit, `PouwH1Tile`
+     at K = 64, R = 4, C = 8), only under the 64-byte salt the verifier holds (`core_check.certified_salt`, the salt
+     `pass_epoch` checked), and only when the proof's public row, the port after its R A rows and C B rows, is
+     `public_bc` of the window's context, that salt, the unit's position and its entry's side roots (`public_row`:
+     salt ‖ u64be(position) ‖ root_a ‖ root_b, bit for bit the leaves `Compiled.inputs` fills for them). It refuses an
+     unsalted template's unit in a certified window whatever salt it is passed, a salted template's unit outside one,
+     and every unit of a certified window it is passed no salt for, as `served_commit.check` passes none yet. The
+     compiled Program is no pinned template, so no window of it opens.
    - **The reveal deadline** (`Proxy(reveal_deadline=…)`, one PoUW window by default) is a parameter: p's registration
      takes the reveal from p's last ingress record until that long past p's end on the certifier's clock (by the end of
      p + 1 at the default), which bounds how long the prover holds p's salt before its work is registered under it. It must be sized against a measured commit pipeline: a deadline shorter than the honest

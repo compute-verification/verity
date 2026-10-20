@@ -17,11 +17,11 @@ Python reference held to it.
 | module | `core_check.py` |
 | --- | --- |
 | `PouwCheck.Json` | `sorted(dict)`, `_nat`, `_canon` |
-| `PouwCheck.Tile` | `TILES`: each tile template the verifier accepts, with its tile work, its check query's SHA-512 and its one circuit's |
+| `PouwCheck.Tile` | `TILES`: each tile template the verifier accepts, with its tile work, its check query's SHA-512 and its one circuit's, and a salted template's rows (`Salted`) |
 | `PouwCheck.Inputs` | `params`, `commitment`, `digest`, `unit_draw`, `evidence`, with their refusals (`answer_of` and `integrity` are the interface's decoders) |
 | `PouwCheck.Check` | `expected_items` and `check` |
 | `PouwCheck.Protocol` | the `Core.Protocol` value |
-| `PouwCheck.Opening` | `opening`, `window_domain`, `verify_path`: one unit's opening beside the check (`served_commit.check`'s rule) |
+| `PouwCheck.Opening` | `opening`, `window_domain`, `verify_path`, `public_bc`: one unit's opening beside the check (`served_commit.check`'s rule), a certified window's under its certified salt |
 | `PouwCheck.Pass` | `pass_epoch` and `draw`, with `coins_of`, `opening_of`, `coin_reason` and `weights_root` under `COIN_VERSIONS`: the window's pass and its draw (`served_commit.Challenger`'s rules) |
 | `PouwCheck.Rounds` | `rounds`: a live window's round coins, each opened once after its recorded round root (`window.rounds_reason`'s rules, `PouwWindow.roundsReason`, over the proof service's challenger, `SampledProofs.Challenger`) |
 | `PouwCheck.Difftest` | the difftest's functions behind `pouw-check-difftest` (`opening`, `pass`, `draw`, `rounds`) |
@@ -30,8 +30,14 @@ Python reference held to it.
 the entries root's domain one-stage's served domain of the registered program and partition, the opening's entry under
 its salt that root's leaf, the unit one of the entry's tiles, the proof one instance over the circuit `PouwCheck.tiles`
 pins for the check's template (its header's `circuit_sha512`, which `flock-verify verify --zk` binds to the circuit it
-verifies against), whose first two rows (in its header's key order, serde's) are an A row and a B row of the fp8-p
-schemas, and each row's b ‖ c its side tree's leaf at the unit's row. So the circuit a window's units are proved over is
+verifies against), and each opened row's b ‖ c its side tree's leaf at the unit's row. An unsalted template's proof's
+first two rows (in its header's key order, serde's) are an A row and a B row of the fp8-p schemas. A salted template's
+(`Salted`: today the H1 tile unit at K = 64, R = 4, C = 8) are its R A rows, its C B rows and its public row `pub`, each
+`hm96-sha512/row/v2`, its entry's side trees holding R rows per tile row and C per tile column, and the public row's
+b ‖ c must be `publicBc` of the window's context, the certified salt the verifier passes (`opening`'s `salt`,
+`core_check.certified_salt`, the salt `passEpoch` checked), the unit's position and the entry's side roots. Only a
+certified window opens a salted template's units, and only under a 64-byte salt; it opens no unsalted template's unit,
+so a certified window passed no salt opens nothing. So the circuit a window's units are proved over is
 the pinned one, not whatever builds it: a change to a template's Definition or to C-Flock's lowering lands its new digest
 in `PouwCheck/Tile.lean` (and `core_check.TILES`), which benchmarks/pouw's staged-unit test enforces at K = 128. A
 template has one circuit, so its units proved under an earlier lowering no longer open (the 9 to 10 Oct served windows,
