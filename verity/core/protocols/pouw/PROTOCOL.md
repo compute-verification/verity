@@ -54,8 +54,10 @@ the served window proves its drawn tiles in zero knowledge, and its verifier of 
    and the served-zk window's units read none (below). p counts the certifier's PoUW windows from its origin
    (`Proxy(origin=…)`), each with a salt drawn once from fresh randomness, so no epoch is bound; a proxy started again,
    or a second link, counts from 0 again, so a served-zk window's stream names the certifier's run:
-   `served_commit.stream_id` reads its ingress link's name (`Proxy(ingress_link=…)`, which has no default) and its
-   origin beside the deployment and the stream's name. That salt binds no weights, and
+   `served_commit.stream_id` reads its `certifier_run`, (key id, run id, ingress link), beside the deployment and the
+   stream's name. Every signed answer of the certifier binds that run, a `Proxy` and its `RemoteCertifier` give it
+   alike, the run id is drawn when a proxy starts (`Proxy.run_id`) and the ingress link has no default
+   (`Proxy(ingress_link=…)`). That salt binds no weights, and
    the prover holds it from p's first ingress tick, so a certified window passes only weights, a stream and a prover
    recorded before p's salt was drawn: the prover hands the certifier `pouw_record` of them, SHA-512(b"verity/pouw-record/v1"
    ‖ weights_root ‖ stream ‖ prover), one 64-byte record for p, signed by the key the certifier registers for it
@@ -83,19 +85,22 @@ the served window proves its drawn tiles in zero knowledge, and its verifier of 
      `public_bc` of the window's context, that salt, the unit's position and its entry's side roots (`public_row`:
      salt ‖ u64be(position) ‖ root_a ‖ root_b, bit for bit the leaves `Compiled.inputs` fills for them). It refuses an
      unsalted template's unit in a certified window whatever salt it is passed, a salted template's unit outside one,
-     and every unit of a certified window it is passed no salt for, as `served_commit.check` passes none yet. The
-     compiled Program is no pinned template, so no window of it opens.
+     and every unit of a certified window it is passed no salt for. The served challenger passes it the salt its
+     pass was checked against (`served_commit.Challenger.check`, from `core_check.certified_salt`). The compiled
+     Program is no pinned template, so no window of it opens.
    - **The reveal deadline** (`Proxy(reveal_deadline=…)`, one PoUW window by default) is a parameter: p's registration
      takes the reveal from p's last ingress record until that long past p's end on the certifier's clock (by the end of
      p + 1 at the default), which bounds how long the prover holds p's salt before its work is registered under it. It must be sized against a measured commit pipeline: a deadline shorter than the honest
      pipeline's time past p's end refuses every honest window, and SERVE-H1's window spends 439 s on receipts
      (r20261018-234409-19cd). No Lean statement covers the certified window's timing yet (`EndToEndWindow`'s t_d is the
      uncertified window's).
-   - **Open: the certifier–challenger link.** The challenger calls the certifier's `reveal` and `committed` on the
-     `Proxy` object it is handed, so in running code the two share a process, and `reveal`'s receipt is unsigned. The
-     certifier runs on the link and the challenger on an auditor host, so the call needs a signed request and a signed
-     answer: network's NET-50, a client with `Proxy`'s `reveal` and `committed` that verifies the certifier's signature
-     over the link, p, the registration's digest and the salt, which `served_commit.Challenger` takes when it lands.
+   - **The certifier–challenger link** (network's NET-50). The certifier runs on the link and the challenger on an
+     auditor host, so the challenger asks through the certifier's client (`certifier.active.RemoteCertifier`, served by
+     `serve_reveals`): each `committed` and `reveal` is a request the challenger signs for the certifier's run and an
+     answer the certifier signs over its run, p, the registration's digest and the value, which the client verifies
+     under the certifier's key. A `Proxy` in process has no signer, so it names no run, and a certified challenger
+     refuses it. Open: the client's certifier key and run id are to come from the auditor's deployment record, which
+     nothing writes yet, so the challenger's caller passes them.
 3. **Units.** For each matmul (a 64-bit index, a shape, a weight id), the activation rows are committed bound to the salt
    and the index. The scheme derives its noise from (salt, matmul, roots); every tile yields checked values and a digest.
    The useful output is assembled from the tiles.

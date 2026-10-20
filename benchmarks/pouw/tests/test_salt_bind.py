@@ -23,7 +23,7 @@ import numpy as np
 from verity.ml.crypto import lms
 from verity.core.protocols.certifier import active
 from verity.core.protocols.certifier.active import Proxy
-from verity.core.protocols.certifier.certificate import LmsKey
+from verity.core.protocols.certifier.certificate import LmsKey, LmsSigner
 from verity.core.protocols.certifier.grid import GridParams
 from verity.core.protocols.certifier.schedule import ClockSync, SyncSet
 from verity.core.protocols.pouw import core_check as CC
@@ -54,6 +54,10 @@ POUW_WINDOW, WINDOWS = 2, 4
 SCHEME = C.PearlC(k_min=K, forming="v1", device=DEVICES["sm120"], hashing="h3")
 MATMUL = Matmul(5, Shape(16, K, N), 2)
 RUN = "r-salt-bind"
+#: the network certifier's LMS key and the challenger's, which the certifier registers, and the certifier run's id
+CERTIFIER, CHALLENGER = (lms.keygen(lms.Params(64, 1, 6), hashlib.sha512(s).digest())
+                         for s in (b"certifier", b"challenger"))
+RUN_ID = bytes(range(32))
 
 
 def _rows(seed: int, n: int) -> list[bytes]:
@@ -93,13 +97,20 @@ def _prover(seed: bytes):
 
 
 def _sid(stream: str = "window") -> bytes:
-    return SC.stream_id({"deployment": f"served-zk/{RUN}"}, stream, {"link": LINK, "origin": (0.0).hex()})
+    return SC.stream_id({"deployment": f"served-zk/{RUN}"}, stream,
+                        {"key_id": CERTIFIER.I.hex(), "link": LINK, "run_id": RUN_ID.hex()})
 
 
-def _certifier(sid: bytes, key, sign, record: bytes) -> tuple[Proxy, dict[int, bytes]]:
-    """The certifier on `LINK` from origin 0 with PoUW windows 0 and 1, the prover's record taken for both before their
-    salts are drawn, both published; and the salts it drew."""
+def _certifier(sid: bytes, key, sign, record: bytes, tmp_path: Path,
+               reveals) -> tuple[active.RemoteCertifier, dict[int, bytes]]:
+    """The certifier's run `RUN_ID` on `LINK` with PoUW windows 0 and 1, the prover's record taken for both before their
+    salts are drawn, both published, served on localhost (`reveals`): the challenger's client of it, and the salts it
+    drew."""
     drawn: dict[int, bytes] = {}
+    signers = []
+    for name, k in (("certifier", CERTIFIER), ("challenger", CHALLENGER)):
+        (tmp_path / name).mkdir()
+        signers.append(LmsSigner.create(k, tmp_path / name / "signer-state.json"))
 
     def source(p: int, n: int) -> bytes:
         drawn[p] = hashlib.shake_256(b"certifier salt %d" % p).digest(n)
@@ -107,12 +118,13 @@ def _certifier(sid: bytes, key, sign, record: bytes) -> tuple[Proxy, dict[int, b
 
     c = Proxy(("127.0.0.1", 9), EGRESS, INGRESS, SyncSet((0, 1), (1, 2)), [ClockSync(0, 1)] * WINDOWS, origin=0.0,
               clock=lambda: 0.0, ingress_link=LINK, salt=source, registered=PS.registered, prover_key=key,
-              prover_context=sid, pouw_window=POUW_WINDOW)
+              prover_context=sid, pouw_window=POUW_WINDOW, challenger_key=signers[1].public_key(), signer=signers[0],
+              run_nonce=lambda n: RUN_ID)
     for p in range(WINDOWS // POUW_WINDOW):
         c.commit_weights(p, record, sign(active.weights_message(LINK, p, record, sid)))
     for _ in range(WINDOWS * INGRESS.buckets):
         c.bucketer.tick()
-    return c, drawn
+    return active.RemoteCertifier(*reveals(c), signers[0].public_key(), signers[1], LINK, RUN_ID), drawn
 
 
 def _challenger(params, c, prover, path: Path, ledger: PS.Registrations) -> SC.Challenger:
@@ -149,17 +161,18 @@ def _pub(priv, advice, t: int) -> bytes:
     return json.dumps(head).encode() + b"\n" + priv[e]["a"]["bcs"][i] + priv[e]["b"]["bcs"][j] + bytes(128)
 
 
-def test_rows_formed_before_any_salt_are_refused_at_a_certified_windows_opening(tmp_path, monkeypatch):
+def test_rows_formed_before_any_salt_are_refused_at_a_certified_windows_opening(tmp_path, monkeypatch, reveals):
     """RT4-INT-10, the served path. RT4-INT's witness: lift `unit_reason` and the prover's rows, formed once under a salt
-    that is neither window's and committed in PoUW windows 0 and 1, pass the certifier's record and reveal, `pass_epoch`
-    of record, the registration ledger and the live draw. They now stop at the opening of record: the window is certified
-    and `Pc8TileSide` reads no salt, so every drawn unit is refused, through `served_commit.check` (which passes no salt)
-    and through `core_check.opening` under the certified salt the verifier holds (`certified_salt`)."""
+    that is neither window's and committed in PoUW windows 0 and 1, pass the certifier's record and reveal (through its
+    client, `RemoteCertifier`), `pass_epoch` of record, the registration ledger and the live draw. They now stop at the
+    opening of record: the window is certified and `Pc8TileSide` reads no salt, so every drawn unit is refused, through
+    `Challenger.check` (under the certified salt its pass was checked against, `certified_salt`) and through
+    `core_check.opening` under that salt and under none."""
     monkeypatch.setattr(PS, "unit_reason", lambda unit: None)
     key, sign = _prover(b"the prover")
     prover, sid = PS.prover_id(key.public), _sid()
     committed = PS.pouw_record(weights_root(_pass(RUN)[1]), sid, prover)
-    c, drawn = _certifier(sid, key, sign, committed)
+    c, drawn = _certifier(sid, key, sign, committed, tmp_path, reveals)
     ledger = PS.Registrations()
     refused = "the window is certified, and its template's unit reads no salt"
     for p in (0, 1):
@@ -170,11 +183,11 @@ def test_rows_formed_before_any_salt_are_refused_at_a_certified_windows_opening(
         d = ch.select(f"w{p}")
         assert d.units
         salt = CC.certified_salt(w["raw"], w["params"]["context"], drawn[p], committed, sid, prover)
-        assert salt == PS.pouw_salt(drawn[p], p, sid, prover)
+        assert salt == PS.pouw_salt(drawn[p], p, sid, prover) == ch.salts[f"w{p}"]
         params, rec = SC.core_params(w["params"]), CC.commitment(bytes.fromhex(OR.hexed(w["rec"])))
         for u in d.units:
             pub, op = _pub(w["priv"], w["advice"], u), SC.opening(w["advice"], w["priv"], w["params"], u)
-            why = SC.check(w["params"], w["rec"], {"units": list(d.units)}, u, pub, op, record=OR.Record(lean=False))
+            why = ch.check(f"w{p}", u, pub, op)
             assert why is not None and why.startswith(refused), why
             for held in (salt, None):
                 assert CC.opening(CC.params(params), rec, list(d.units), u, pub, op, held).startswith(refused)
