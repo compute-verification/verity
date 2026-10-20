@@ -45,7 +45,7 @@
    "digest": "34be1e89abec1ac3c72f02d08dc9ac7c78124e56f609216a1ef9b345746e2edf"
   },
   "Proofs.Flock.Claims.Recursion.LogWalk": {
-   "why": "retl_walk, the tactic that steps through a logged run of the executable (`LogV`) by its head (DecodeLog.lean's decode_log and VerdictLog.lean's verdict_log, the SHA-512 calls of the record decoder and the plain verdict in order): it applies the module's RetL lemmas (retl_bind, retl_lift, retl_dg_bind, retl_ite and the rest) and `split` at a match. It runs only inside the elaborator and does no IO, and the kernel replays every proof it builds.",
+   "why": "retl_walk, the tactic (an elab) that walks RetL goals at elaboration, step by step on the logged computation's head (retlStep, in Recursion/DecodeLog.lean's proofs and the module's own). It reads no files and does no IO, and the kernel replays every proof it builds.",
    "digest": "5dca0cbd5c9510d395564190eaa9597f5352180152be0e3b481a6ceb301f0435"
   },
   "Proofs.Flock.Soundness.Refine.Walk": {
