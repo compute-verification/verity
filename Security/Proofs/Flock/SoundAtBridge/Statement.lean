@@ -92,10 +92,4 @@ def SoundAtBridge : Prop :=
     (∀ x w i, ((sess x w i).n : ℝ≥0∞) * (sess x w i).bound ≤ ENNReal.ofReal δ) → 0 ≤ δ →
     pf.SoundAt (δo + δ)
 
-/-- **The bridge is stated** (`SoundAtBridge`), for its record, until its proof lands: `soundAtBridge_of_rows` at
-`Flock.SecurityProofs.EndToEndRegisteredRows`. -/
-def SoundAtBridgeStated : Prop :=
-  let statements := SoundAtBridge
-  statements = statements
-
 end Flock.Guarantees

@@ -16,10 +16,9 @@ exactly `u`'s rows at the ports `own` names, through `own`'s first port of that 
 `Flock.Guarantees.ServedRowsLinked` says that then, at every accepted outcome, a drawn unit whose rows are right at its
 owned reads (`RowsAt`) has the committed tree's row at each served read.
 
-`RowsSession.xv_eq_of_rowsAt` proves it from `OwnReadsHJ` at the outcome; what is open is `OwnReadsHJ` itself, which
-C3 proves in its own setting (`FlockC3.Compose.ownReads_cover`), from `labelsSelf`, `ZkReg.reads_of_acceptsZKR`,
-`ZkReg.drawn_of_acceptsZKR`, `portOf_spec` and `find_of_names`, with the drawn unit proved by its table's draw from
-`ZkReg.drawOkZKHJ_of_file` at `hCust.2`.
+`RowsSession.xv_eq_of_rowsAt` gives it from `OwnReadsHJ` at the outcome, and `OwnReadsHJ` at `ServedRegistered` is
+C3's `FlockC3.Compose.ownReads_cover` in this setting (`Proofs.Flock.SoundAtBridge.ServedProof`, whose
+`servedRowsLinked` is the proof). `ServedRegistered` is the one premise: the service's registration of its served trees.
 -/
 
 namespace Flock.SoundAtBridge
@@ -93,11 +92,5 @@ def ServedRowsLinked : Prop :=
       LiveAcceptsZKR s.I s.own (R, S, s.wr S R o) → u ∈ S → s.ServedRegistered u →
       s.RowsAt (R, S, s.wr S R o) u →
       ∀ g ∈ s.P.io u, (s.rdU u).isRead (s.vb.pos g) → s.Xv g = s.vb.bit (s.vb.val (s.wo u (s.vb.pos g))) g
-
-/-- **The served-roots link is stated** (`ServedRowsLinked`), for its record, until its proof lands: `OwnReadsHJ` at
-`ServedRegistered` (C3's `ownReads_cover`, in this setting), then `RowsSession.xv_eq_of_rowsAt`. -/
-def ServedRowsLinkedStated : Prop :=
-  let statements := ServedRowsLinked
-  statements = statements
 
 end Flock.Guarantees
