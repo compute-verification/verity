@@ -25,7 +25,7 @@ VERIFIER = Path(__file__).resolve().parents[1] / "verifier"
 BIN = LEAN / ".lake" / "build" / "bin" / "flock-verify"
 #: `pod/89-served-registered.sh`'s fixture: stage/ (circuit.txt, pub-32.bin, program.json, partition.json, served.json,
 #: registered.json, tables/), session/ (the drawn --zk session's record and proofs), live.json (the prover's LIVE record)
-FIXTURE = "art:PENDING"
+FIXTURE = "art:eeb1ed6ad88c683f6dfd3b0ffd2e9941c47f2fcb6f39c097e8f2f20720c6ce4a"
 STATEMENT = "verity/flock-circuit"
 
 pytestmark = [pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain"), pytest.mark.slow]
