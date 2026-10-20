@@ -1,4 +1,4 @@
-import Properties.Proofs.Nci.Walk
+import Properties.Proofs.Nci.Resolve
 import Properties.Proofs.Nci.Width
 
 /-!
@@ -13,7 +13,7 @@ nodes (`intoOf_spec`), and `NciCheck.ius` sums the widths of the gates outside a
 name, as gates with their widths, exactly the gates outside the node that its gates read, each in the root node of its
 segment's first piece.
 
-`descAgrees_of_open` gives `DescAgrees` from it and `Walk`'s two.
+`descAgrees_of_open` gives `DescAgrees` from it, `Walk.OperandsResolve` and `Resolve.BodiesOk`.
 -/
 
 namespace NciCheck.Properties.SecurityProofs.Novel
@@ -326,10 +326,10 @@ theorem novelExact_of (hR : ReadsExact) : NovelExact := by
   refine Finset.sum_congr rfl fun a _ => ?_
   cases dv.theta.contains a <;> simp
 
-/-- **`DescAgrees`, from the three open statements**: `Walk`'s two give `GatesLocated` (`Walk.gatesLocated_of`), and
-`ReadsExact` gives `NovelExact` (`novelExact_of`). -/
-theorem descAgrees_of_open (hO : Walk.OperandsResolve) (hE : Walk.OperandsEarlier) (hR : ReadsExact) :
+/-- **`DescAgrees`, from the three open statements**: `Walk.OperandsResolve` and `Resolve.BodiesOk` give `GatesLocated`
+(`Resolve.operandsEarlier_of`, `Walk.gatesLocated_of`), and `ReadsExact` gives `NovelExact` (`novelExact_of`). -/
+theorem descAgrees_of_open (hO : Walk.OperandsResolve) (hB : Resolve.BodiesOk) (hR : ReadsExact) :
     Properties.DescAgrees :=
-  Walk.descAgrees_of_gaps hO hE (novelExact_of hR)
+  Walk.descAgrees_of_gaps hO (Resolve.operandsEarlier_of hB) (novelExact_of hR)
 
 end NciCheck.Properties.SecurityProofs.Novel
