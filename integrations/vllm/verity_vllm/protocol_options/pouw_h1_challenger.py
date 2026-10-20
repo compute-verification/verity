@@ -368,40 +368,52 @@ def evidence(window: Mapping[str, Any], fetch: Fetch, key: ChallengerKey) -> Pat
     return out
 
 
-def session_reason(commits: Mapping[str, Any], ledger: Ledger, fetch: Fetch, registered: bytes | None = None,
-                   commit: str | None = None, verify: Any = lms_verify) -> str | None:
-    """Why the window (its H1 commitment `commits`) isn't held to the one session the auditor's `ledger` opened for its
-    period and Commit, ended with its client closing it, with that session's coins (`trusted_rounds_reason` over the
-    session's ``out/`` as `fetch` gives it, `evidence`); None when it is. `registered` is the weights' root the period
-    registered and `commit` the window's Commit root as the verifier holds it, which the window's must be. Fails closed."""
-    if commits.get("coin_source") != "challenger":
-        return ("the window's coins were held in the serving process, not drawn by the auditor host's challenger (the pouw "
-                "setting 'challenger'), so no session binds them")
+def held(given: Any, ledger: Ledger, commit: str | None = None) -> tuple[str | None, Mapping[str, Any] | None]:
+    """The window of `ledger` that the session `given` (the gate's reply a window or a Commit carries, `session_of`) is,
+    ended with its client closing it, and None; or why it isn't and None. `commit` is the Commit root the verifier holds
+    for it, which the reply's must be."""
     try:
-        given = session_of(commits.get("session"))
+        given = session_of(given)
     except ValueError as e:
-        return f"the window's challenger session is malformed ({e})"
+        return f"the window's challenger session is malformed ({e})", None
     if given is None:
-        return "the window carries no challenger session (the pouw setting 'session'), so no ledger entry binds its coins"
+        return "the window carries no challenger session (the pouw setting 'session'), so no ledger entry binds its coins", None
     sid, period = given["session"], given["period"]
     if commit is not None and given["commit"] != commit:
-        return f"the window's session is for Commit {given['commit']}, not the window's Commit {commit}"
+        return f"the window's session is for Commit {given['commit']}, not the window's Commit {commit}", None
     window = ledger.window(period, given["commit"])
     if window is None:
         return (f"the auditor's ledger has no session for Commit {given['commit']} in period {period}, so the window's "
-                "coins are no session's of record")
+                "coins are no session's of record"), None
     opened, end = window["open"], window["end"]
     if opened["session"] != sid:
         return (f"the window's session {sid} is not {opened['session']}, the one the auditor's ledger opened for Commit "
-                f"{given['commit']} in period {period}")
+                f"{given['commit']} in period {period}"), None
     if opened["seq"] != given["seq"]:
-        return f"the window's session {sid} is ledger entry {given['seq']} in its reply, but entry {opened['seq']} opened it"
+        return f"the window's session {sid} is ledger entry {given['seq']} in its reply, but entry {opened['seq']} opened it", None
     if end is None:
-        return f"session {sid} never ended (the auditor's ledger has its open entry and no end): a refused window"
+        return f"session {sid} never ended (the auditor's ledger has its open entry and no end): a refused window", None
     if end["body"].get("closed") is not True:
-        return f"session {sid} ended without its client closing it ({end['body'].get('ended')}): a refused window"
+        return f"session {sid} ended without its client closing it ({end['body'].get('ended')}): a refused window", None
+    return None, window
+
+
+def session_reason(commits: Mapping[str, Any], ledger: Ledger, fetch: Fetch, registered: bytes | None = None,
+                   commit: str | None = None, verify: Any = lms_verify) -> str | None:
+    """Why the window (its H1 commitment `commits`) isn't held to the one session the auditor's `ledger` opened for its
+    period and Commit, ended with its client closing it (`held`), with that session's coins (`trusted_rounds_reason`
+    over the session's ``out/`` as `fetch` gives it, `evidence`); None when it is. `registered` is the weights' root the
+    period registered and `commit` the window's Commit root as the verifier holds it, which the window's must be. Fails
+    closed."""
+    if commits.get("coin_source") != "challenger":
+        return ("the window's coins were held in the serving process, not drawn by the auditor host's challenger (the pouw "
+                "setting 'challenger'), so no session binds them")
+    why, window = held(commits.get("session"), ledger, commit)
+    if why is not None:
+        return why
     if registered is not None and commits.get("weights_root") != bytes(registered).hex():
         return "the window's weights' root is not the one the period registered"
+    sid = window["open"]["session"]
     try:
         out = evidence(window, fetch, ledger.key)
     except CoinError as e:
@@ -434,5 +446,6 @@ def period_reason(ledger: Ledger, period: str, accepted: Sequence[str], fetch: F
 
 
 __all__ = ["ENTRY_TAG", "Fetch", "LEDGER_ROLE", "LEDGER_SCHEMA", "Ledger", "REPLY_FIELDS", "SCHEME", "SEALED",
-           "SESSION_FIELDS", "address", "draw_reason", "entry_message", "evidence", "families", "finish", "lms_verify",
-           "pinned_key", "period_reason", "refusals", "session", "session_of", "session_reason", "trusted_rounds_reason"]
+           "SESSION_FIELDS", "address", "draw_reason", "entry_message", "evidence", "families", "finish", "held",
+           "lms_verify", "pinned_key", "period_reason", "refusals", "session", "session_of", "session_reason",
+           "trusted_rounds_reason"]

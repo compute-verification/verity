@@ -454,12 +454,27 @@ def test_ncp_v2s_salt_is_the_auditor_hosts_salt_coin_after_the_weights_root(tmp_
 def test_the_commits_replay_challenge_is_the_auditor_hosts_replay_coin_after_the_run_root(tmp_path, monkeypatch):
     """RT4-INT-21: with ``--replay-challenger`` the C2 replay's challenge is the challenger's replay coin 0, opened after
     the run root, and the verifier holds it to the commitment the challenger signed; another run root, a challenge of
-    this process's or of the flag, and a challenger of another layout are refused."""
+    this process's or of the flag, and a challenger of another layout are refused. RT4-INT-17: the Commit's record
+    carries the gate's reply (``--replay-session``), held to the session the ledger opened for its period and Commit."""
     run_root = hashlib.sha256(b"a run root").digest()
-    host = _Session(tmp_path, monkeypatch, "commit", leaf=0, seed=16,
+    gate = _gate()
+    reply = gate.open("s-c", "c1", COMMIT_A, [(RCN.FAMILY, 1)], scheme=RCN.SCHEME)
+    with pytest.raises(ValueError, match="pouw setting 'session'"):
+        RCN.challenge(T.AUDITOR, run_root, {"id": "s-c"})
+    host = _Session(tmp_path, monkeypatch, "s-c", leaf=0, seed=16,
                     challenger=LC.LiveChallenger(RCN.SCHEME, 0, [(RCN.FAMILY, 1)], CH.entropy(16)))
-    chal, rec = RCN.challenge(T.AUDITOR, run_root)
-    assert host.ended() is None and rec["source"] == "challenger"
+    chal, rec = RCN.challenge(T.AUDITOR, run_root, reply)
+    assert host.ended() is None and rec["source"] == "challenger" and rec["session"] == reply
+    gate.end("s-c", host.directory)
+    ledger, fetch = gate.ledger(), {"s-c": host.tree}.get
+    assert RCN.session_reason(rec, chal, run_root, ledger, fetch, commit=COMMIT_A) is None
+    assert RCN.session_reason({**rec, "session": {**reply, "seq": 4}}, chal, run_root, ledger, fetch) == (
+        "the replay challenge: the window's session s-c is ledger entry 4 in its reply, but entry 0 opened it")
+    assert RCN.session_reason(rec, chal, run_root, ledger, fetch, commit=COMMIT_B).startswith(
+        f"the replay challenge: the window's session is for Commit {COMMIT_A}")
+    assert RCN.session_reason(rec, chal, run_root, ledger, {}.get).startswith(
+        "the replay challenge's session s-c is not trusted: session s-c has no tree")
+    assert RCN.session_reason(rec, "00" * 64, run_root, ledger, fetch) == "the replay challenge is not the replay coin"
     trusted, received = R.trusted_session(host.directory, KEY, PHC.lms_verify)
     assert received[RCN.FAMILY] == (RCN.after(run_root),)
     assert RCN.reason(rec, chal, run_root, trusted) is None
