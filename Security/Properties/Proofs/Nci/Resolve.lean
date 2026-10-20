@@ -22,20 +22,20 @@ namespace NciCheck.Properties.SecurityProofs.Resolve
 
 open Flock.Program
 
-local macro "rs_case" h:ident : tactic =>
-  `(tactic| (delta resolveStep; (conv => lhs; whnf); rw [$h:ident]; rfl))
 
 theorem rs_prim (P : Prog) (sc : Scope) (k j : ℕ)
     (h : ((P.defs[sc.d]!).body.nodes[k]!).form = .prim) :
     resolveStep P (sc, ⟨false, k, j⟩) = .ok (.inl (sc.off + (P.defs[sc.d]!).body.offsets[k]!)) := by
-  rcases sc with ⟨d, off, _ | st⟩ | ⟨parent, d, off, k', m⟩ <;> rs_case h
+  rcases sc with ⟨d, off, _ | st⟩ | ⟨parent, d, off, k', m⟩ <;>
+    (delta resolveStep; (conv => lhs; whnf); rw [h]; rfl)
 
 theorem rs_call (P : Prog) (sc : Scope) (k j : ℕ)
     (h : ((P.defs[sc.d]!).body.nodes[k]!).form = .call) :
     resolveStep P (sc, ⟨false, k, j⟩) = .ok (.inr (.child sc ((P.defs[sc.d]!).body.nodes[k]!).fn
       (sc.off + (P.defs[sc.d]!).body.offsets[k]!) k 0,
       (P.defs[((P.defs[sc.d]!).body.nodes[k]!).fn]!).body.ret.get j)) := by
-  rcases sc with ⟨d, off, _ | st⟩ | ⟨parent, d, off, k', m⟩ <;> rs_case h
+  rcases sc with ⟨d, off, _ | st⟩ | ⟨parent, d, off, k', m⟩ <;>
+    (delta resolveStep; (conv => lhs; whnf); rw [h]; rfl)
 
 theorem rs_batch (P : Prog) (sc : Scope) (k j : ℕ)
     (h : ((P.defs[sc.d]!).body.nodes[k]!).form = .batch) :
@@ -45,7 +45,8 @@ theorem rs_batch (P : Prog) (sc : Scope) (k j : ℕ)
       if c.prim then .ok (.inl (o + j / c.outLeaves))
       else .ok (.inr (.child sc ((P.defs[sc.d]!).body.nodes[k]!).fn (o + j / c.outLeaves * c.gates) k
         (j / c.outLeaves), c.body.ret.get (j % c.outLeaves))) := by
-  rcases sc with ⟨d, off, _ | st⟩ | ⟨parent, d, off, k', m⟩ <;> rs_case h
+  rcases sc with ⟨d, off, _ | st⟩ | ⟨parent, d, off, k', m⟩ <;>
+    (delta resolveStep; (conv => lhs; whnf); rw [h]; rfl)
 
 theorem rs_scan (P : Prog) (sc : Scope) (k j : ℕ) (carry y : Ty)
     (h : ((P.defs[sc.d]!).body.nodes[k]!).form = .scan)
