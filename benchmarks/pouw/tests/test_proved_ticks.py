@@ -1,6 +1,6 @@
 """proved_ticks at the hand-checked point, H1 + fx1 on DS-120: ♭ is an IMMA.16832, 1/39 LDSM_X4 and fx1's 8 ALU and
 8 IMAD warp instructions a unit, B_♭ with ε_skip's work is Lean's 17.097571, and a GPU-second of linears at a cycle a
-unit is (1 − 0.599%) · 17.097571 s; QKᵀ counts at 1.25, and a block divides by its GPUs. A block where the datacenter
+unit is (1 − 5.860%) · 17.097571 s; QKᵀ counts at 1.25, and a block divides by its GPUs. A block where the datacenter
 places PoUW's compiled Program is its tiles' `z` products, a linear's each at the tile's K, of the int8 products census/v1
 and Lean's `h1Rows` count there, r·c·(2K + 32m) a tile (benchmarks/datacenter's test of that Program credits this figure
 as the block's compute)."""
@@ -26,7 +26,7 @@ SECOND = 4096 * 4 * 188 * 2430e6
 
 def test_the_sheet_is_h1_fx1_on_ds120():
     assert (S.family, S.vector, S.design, S.sms, S.fmax_mhz) == ("sm_120", "DS-120", "dither-c-peel-fx1", 188, 2430)
-    assert P.SHEET_EPS == 0.00599
+    assert P.SHEET_EPS == 0.0586
 
 
 def test_b_flat_is_the_floor_programs_issue_bound_with_its_skippable_work():
@@ -36,7 +36,7 @@ def test_b_flat_is_the_floor_programs_issue_bound_with_its_skippable_work():
 
 
 def test_a_gpu_second_of_linears_is_one_minus_eps_of_b_flat_seconds():
-    assert P.proved_block_ticks({"mac:linears": SECOND}, S, P.SHEET_EPS, 1.0) == pytest.approx(0.99401 * 17.097571,
+    assert P.proved_block_ticks({"mac:linears": SECOND}, S, P.SHEET_EPS, 1.0) == pytest.approx(0.9414 * 17.097571,
                                                                                                  abs=1e-6)
     assert P.proved_block_ticks({"mac:linears": SECOND}, S, 0.0, 1.0) == pytest.approx(17.097571, abs=1e-6)
 
@@ -70,7 +70,7 @@ def test_a_block_of_the_compiled_scheme_is_its_tiles_z_products_as_linears_and_o
     block = {"cuda:gate": 9455977, "mac:int8": 4 * 16 * (64 + 64 + 32 * 2)}
     assert P.placed(block, grid) == {"mac:linears": 4096} and P.units(P.placed(block, grid), S) == 1
     assert P.proved_block_ticks(P.placed(block, grid), S, P.SHEET_EPS, 1e-3) == pytest.approx(
-        0.99401 * 17.097571 / (4 * 188 * 2430e3), rel=1e-7)
+        0.9414 * 17.097571 / (4 * 188 * 2430e3), rel=1e-7)
     with pytest.raises(ValueError, match="isn't eps1-sm120-h1fx1's"):
         P.placed({"mac:int8": 1, "mac:bf16": 1}, grid)
     for wrong in ({"mac:int8": 4096}, {"mac:int8": 2 * block["mac:int8"]}, {}):
