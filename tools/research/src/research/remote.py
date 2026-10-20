@@ -131,7 +131,7 @@ import tomllib
 from pathlib import Path, PurePosixPath
 from typing import IO, Any, Callable
 
-from . import clone, withdraw
+from . import clone
 from .telemetry.events import utc_now_ms
 from .telemetry.job import write_json_atomic
 
@@ -2227,20 +2227,26 @@ def cancel(local_dir: Path, *, reason: str, by: str) -> dict[str, Any]:
     A run another VM launched (`adopt`) has no shipped tool in its remote.json; the machine's job.json names it (`run.remote.tool`), and
     it must be a snapshot under the machine's <root>/tool/.  The group is signalled only if one of its members is this run's workload
     (`--expect-run-dir`: RESEARCH_RUN_DIR in its environment), since a runner that died leaves status.json `running` and pids wrap; a
-    run whose shipped tool predates that check is refused, not signalled unchecked.  A run still held ahead of its runner (`disk-hold`,
-    `cpu-hold`: no status.json) is withdrawn instead (research.withdraw): {"withdrawn": True, "pid", "hold", "released"}."""
+    run whose shipped tool predates that check is refused, not signalled unchecked.
+    A run with no status.json yet is withdrawn instead (`withdraw`): its machine's hold ends and refused.json records it Withdrawn,
+    with the same manual-cancel record; one that its hold released as the cancel reached it is cancelled as a running run."""
     rec = fetch(local_dir)
     if err := rec.get("last_fetch_error"):
         raise Refused(f"the machine is unreachable ({err['stderr'].strip() or 'rc ' + str(err['rc'])}); nothing was signalled")
     st = _read_json(local_dir / "status.json") or {}
-    root = rec.get("root")
-    if not st and not (local_dir / "refused.json").exists() and root and withdraw.hold_of(
-            (_read_json(local_dir / "launch.json") or {}).get("argv") or [], f"{root}/requests/{local_dir.name}/{LAUNCH_ACK}"):
-        return _withdraw(local_dir, rec, reason=f"{reason} (research cancel by {by})")
-    if not st and (refused := _read_json(local_dir / "refused.json")):
-        raise Refused(f"{local_dir.name} was refused ({refused.get('fault')}: {refused.get('reason')}), so there is nothing to cancel")
+    if not st:
+        if refused := _read_json(local_dir / "refused.json"):
+            raise Refused(f"{local_dir.name} was refused on its machine ({refused.get('fault') or 'Refused'}: {refused.get('reason')}), "
+                          f"so there is nothing to cancel")
+        if (w := withdraw(local_dir, rec, reason=reason, by=by)) is not None:
+            return w
+        rec = fetch(local_dir)
+        st = _read_json(local_dir / "status.json") or {}
+        if not st:
+            raise Refused(f"{local_dir.name} left its hold as the cancel reached it and its runner hasn't written status.json yet; "
+                          f"nothing was signalled: run `research cancel` again")
     if st.get("state") != "running":
-        raise Refused(f"{local_dir.name} is {st.get('state') or 'not running yet'}, so there is nothing to cancel")
+        raise Refused(f"{local_dir.name} is {st.get('state')}, so there is nothing to cancel")
     pgid = st.get("pgid")
     if not isinstance(pgid, int) or pgid <= 1:
         raise Refused(f"{local_dir.name}'s status.json names no workload process group (pgid {pgid!r})")
@@ -2288,19 +2294,43 @@ def _shipped_tool(local_dir: Path, rec: dict[str, Any]) -> str:
     return tool
 
 
-def _withdraw(local_dir: Path, rec: dict[str, Any], *, reason: str) -> dict[str, Any]:
-    """Run research.withdraw's source on the machine, with the run's shipped tool on PYTHONPATH for the launch's release."""
-    tool = _shipped_tool(local_dir, rec)
-    rd, req_dir = rec["remote_run_dir"], f"{rec['root']}/requests/{local_dir.name}"
-    r = ssh_run(ssh_argv(rec["host"], rec["port"], user=rec.get("user") or "root"),
-                ["env", f"PYTHONPATH={tool}", "python3", "-", rd, req_dir, reason], stdin=Path(withdraw.__file__).read_bytes(), timeout=120)
-    out = next((x for x in map(_json_line, r.stdout.decode(errors="replace").splitlines()) if "withdrawn" in x), None)
-    if out is None:
-        raise Refused(f"the withdrawal gave no answer on the machine (rc {r.returncode}): {r.stderr.decode(errors='replace').strip()[-300:]}")
-    if not out["withdrawn"]:
-        raise Refused(out.get("why") or "not withdrawn")
-    fetch(local_dir)
-    return out
+def withdraw(local_dir: Path, rec: dict[str, Any], *, reason: str, by: str) -> dict[str, Any] | None:
+    """`research cancel` of a run that hasn't started: research.withdraw, sent to its machine as `python3 - ARGS` over fetch's ssh,
+    ends the hold the run waits in and records it Withdrawn.  The cancel's answer `{"withdrawn": True, "holds", "refused",
+    "released"}`, after a fetch of the records it wrote; None when the run left its hold first (the caller cancels it running);
+    Refused when there is nothing to withdraw."""
+    from . import withdraw as W
+    from .store import custody as CU
+
+    args = {"run_dir": rec["remote_run_dir"], "reason": reason, "by": by, "cred_file": CU.CRED_FILE,
+            "cred_dirs": [CUSTODY_DIR, STORE_READ_DIR], "credentials": list(CU.CREDENTIALS)}
+    try:
+        r = ssh_run(ssh_argv(rec["host"], rec["port"], user=rec.get("user") or "root"), ["python3", "-", json.dumps(args)],
+                    stdin=Path(W.__file__).read_bytes(), timeout=W.EXIT_WAIT_S + 90)
+    except subprocess.TimeoutExpired:
+        raise Refused(f"the withdrawal on {rec.get('machine')} gave no answer in {W.EXIT_WAIT_S + 90:g} s; `research fetch "
+                      f"{local_dir.name}` says what it did") from None
+    out = _json_line((r.stdout.decode(errors="replace").strip().splitlines() or [""])[-1]) if r.returncode == 0 else {}
+    name, what = local_dir.name, out.get("outcome")
+    if what == "withdrawn":
+        fetch(local_dir)
+        return {"withdrawn": True, "delivered": True, "holds": out.get("holds") or [], "refused": out.get("refused"),
+                "released": out.get("released") or []}
+    if what == "started":
+        return None
+    why = {"refused": f"was refused on its machine ({out.get('fault')}: {out.get('reason')}), so there is nothing to cancel",
+           "busy": f"is still being launched ({out.get('why')}); nothing was signalled: run `research cancel` again",
+           "absent": f"is not on its machine ({out.get('why')}); nothing was signalled",
+           "unstoppable": f"is held, but {out.get('why')}",
+           "survived": f"is held, and its hold process(es) {out.get('pids')} outlived SIGTERM for {W.EXIT_WAIT_S:g} s; no refused.json "
+                       f"was written",
+           "no-hold": f"has no status.json and no hold process names its request, so nothing was signalled; its runner (pid "
+                      f"{out.get('runner_pid')}) is " + ("alive and starting: run `research cancel` again" if out.get("runner_alive")
+                                                         else "gone (`research fetch` and its launcher.log say why)")}.get(what)
+    if why is None:
+        raise Refused(f"the withdrawal of {name} failed on {rec.get('machine')} (rc {r.returncode}): "
+                      f"{r.stderr.decode(errors='replace').strip()[-300:]}")
+    raise Refused(f"{name} {why}")
 
 
 def _file_sha256(p: Path) -> str:
