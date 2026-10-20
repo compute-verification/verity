@@ -811,6 +811,7 @@ PREFLIGHT_FILES = {
     "tests/test_module_strings.py": _invariant("BROKEN_MODULE_STRING", 1),
     "tests/test_pins.py": _invariant("BROKEN_PIN", 1),
     "tests/test_doc_paths.py": _invariant("BROKEN_DOC_PATH", 1),
+    "tests/test_repository.py": _invariant("REPORT_GENRE_NAME", 1),
     "tools/research/tests/test_pythonpath.py": _invariant("BROKEN_REAL_ROOTS", 3),
     "tools/verity/check/suites.py": (Path(__file__).resolve().parents[2] / "verity" / "check" / "suites.py").read_text(),
     "tools/verity/check/pins.py": ("import sys\nfrom pathlib import Path\nif Path('STALE.txt').exists():\n"
@@ -894,6 +895,9 @@ PREFLIGHT_REFUSALS = {
                       "tests/test_module_strings.py::test_broken_module_string_absent"),
     "pythonpath": ({"BROKEN_REAL_ROOTS": ""}, "the invariant tests in tools/research fail on the merged tree: FAILED "
                    "tests/test_pythonpath.py::test_broken_real_roots_absent"),
+    # 20 Oct's #2818 (a skill over the Markdown cap) and #2827 (a report-genre name) each failed a train's preflight-lints
+    "repository lint": ({"REPORT_GENRE_NAME": ""}, "the invariant tests in . fail on the merged tree: FAILED "
+                        "tests/test_repository.py::test_report_genre_name_absent"),
     # #2213's test read a vector row that #2210, queued before it, refits away: a KeyError at import on the merged tree only
     "collection error": ({"pkg/tests/test_rows.py": "import json\nfrom pathlib import Path\n"
                           "ROW = json.loads((Path(__file__).parents[1] / 'rows.json').read_text())['r7']\n"},
