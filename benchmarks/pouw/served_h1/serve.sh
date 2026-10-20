@@ -3,6 +3,15 @@
 # 28 minutes.  Extra arguments go to serve.py.
 #   research run --on vy-nebius-2 --project verity --campaign hash-loop --source <tree> --cwd source \
 #     --env GPU_LEASE_WHO=<id> -- bash benchmarks/pouw/served_h1/serve.sh
+# Coins off the node: start the window's challenger session first, on its auditor host, with the window's layout
+# (S = --steps, default --max-tokens + 2; EPOCH = serve.py's --epoch, default 1), then run this with
+# POUW_CHALLENGER=127.0.0.1:7811, the port its tunnel opens here.  It waits for that port with `ss -ltn` (never a probe
+# connect: the challenger serves the first connection only).  Without POUW_CHALLENGER the coins are in-process.
+#   research run --on vy-challenger-1 --project verity --source <tree> --cwd source --timeout 1h --declared-output 'out/*' \
+#     --env PEER=vy-nebius-2 --env PORT=7811 --env SCHEME=verity/pouw/epoch-coins/live/v1 --env EPOCH=1 \
+#     --env FAMILIES="$(python3 benchmarks/pouw/served_h1/coins.py families --rounds S)" -- bash benchmarks/live_challenger/run.sh
+#   research fetch CHALLENGER_RUN --all; python3 benchmarks/pouw/served_h1/coins.py check \
+#     --challenger-out ~/.research/runs/CHALLENGER_RUN/out --manifest ~/.research/runs/THIS_RUN/out/manifest.json
 set -uo pipefail
 D=${RESEARCH_RUN_DIR:?}; OUT=$D/out; mkdir -p "$OUT"
 mkdir -p /workspace/pouw
@@ -17,6 +26,17 @@ CUDA=${CUDA:-/usr/local/cuda-13.0}
 command -v lake >/dev/null || export PATH="$HOME/.elan/bin:$PATH"
 (cd verity/core/protocols/pouw/lean/check && lake build pouw-check-difftest) > "$OUT/lean-coins-build.log" 2>&1 \
   || { echo "served-h1: LEAN_BUILD_FAIL"; tail -20 "$OUT/lean-coins-build.log"; exit 12; }
+if [ -n "${POUW_CHALLENGER:-}" ]; then
+  port=${POUW_CHALLENGER##*:}
+  for _ in $(seq "${CHALLENGER_WAIT_S:-900}"); do
+    ss -Hltn "sport = :$port" | grep -q . && break
+    sleep 1
+  done
+  ss -Hltn "sport = :$port" | grep -q . || { echo "served-h1: NO_CHALLENGER: nothing listens on $POUW_CHALLENGER"; exit 13; }
+  echo "served-h1: coins from the challenger at $POUW_CHALLENGER"
+else
+  echo "served-h1: coins=in-process (not certified)"
+fi
 cd integrations/vllm
 PY=${PY:-/workspace/jobs/venv312/bin/python3}
 export PYTHONPATH=.:$ROOT:$ROOT/tools/research/src:$ROOT/benchmarks/pouw/served_h1

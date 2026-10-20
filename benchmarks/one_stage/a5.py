@@ -9,18 +9,27 @@ record is frame-v3-sha512 / hm96-sha512 itself, or once the circuit opens the vl
       python benchmarks/one_stage/a5.py --bundle DIR --row-dir DIR --partition F --window DIR --template-sets DIR \\
       --m0-pythonpath PATH --bin flock-circuit --lean flock-verify --out DIR [--delta 0.5]
 
-* **Serving's files.** `--window DIR` is what `verity-vllm serving-rows` wrote: `registration.json` (core's v1 record, window
-  kind `stand-in`, its run the Commit's run root, its `of` and `link` `deferred_rows.stand_in`'s), `window.json`, and per member
-  k `m<k>-public.bin` and `m<k>-private.bin` (prover only). The prover wraps each member's bodies under the circuit for its
-  template (`serving_rows.flock_input_files`).
+The same run takes the window in its other form, `served` (`a5.sh` with `WINDOW=served`): the in-Commit hook's
+(`commit --serving-rows`, `serving_rows.readers`), serving's own commitment, made before any draw. A5 takes it only over a
+SHA-512 run root of record (64 bytes: serving's record is hm96-sha512 rows in frame-v3-sha512 trees), so a vllm-v1 run's served
+window is refused by name (`source`: `sha512`). The summary reports the form (`source`) and the commitment it names
+(`commitment`).
+
+* **Serving's files.** `--window DIR` is what `verity-vllm serving-rows` wrote (window kind `stand-in`, its run the Commit's
+  run root, its `of` and `link` `deferred_rows.stand_in`'s) or what the in-Commit hook wrote (`served`, its run the Commit's run
+  root, no stand-in link): `registration.json` (core's v1 record), `window.json`, and per member k `m<k>-public.bin` and
+  `m<k>-private.bin` (prover only). The prover wraps each member's bodies under the circuit for its template
+  (`serving_rows.flock_input_files`).
 * **The verifier's own copies.** `--bundle` and `--row-dir` are the deferred Commit's record and its Build's Programs of record;
   the verifier derives its window from them alone (`deferred_rows.window_of_record`): the population program and partition
   over the served Programs, the law, and the run root of record. It composes each member's circuit itself from an input set
   of its template under `--template-sets` (the lowering is all it reads; the values are never used), bound to its partition
   and program. It holds every public file to that circuit, its unit indices and classes, and the registered roots and served
   domains. Then R1-R7 run over the one registration with the leaf layer over the public bodies it holds
-  (`serving_rows.leaf_layer`), and the window is held to its own link (`source`: a stand-in whose run, `of` and `link` are
-  `deferred_rows.stand_in` over the run root of record and the digest of the bundle's manifest it opened).
+  (`serving_rows.leaf_layer`), and the window is held to its own link (`source`, `deferred_rows.source`: a stand-in whose run,
+  `of` and `link` are `deferred_rows.stand_in` over the run root of record and the digest of the bundle's manifest it opened, or
+  a served window whose run is the run root of record, a SHA-512 root, naming the commitment that root names, with no
+  stand-in link).
 * **One draw** by the registered law (the partition file's `subset:k`) over the whole population, made by the verifier's
   Lean `flock-verify draw`. Each member's server
   serves its share (`serve --draw-file`). The sessions are `--zk` (the masked protocol), because Lean accepts a subset draw
@@ -154,12 +163,10 @@ def main() -> int:
     leaf_layer = CS.leaf_layer(publics)
     checks["registration"] = V.check(rec, program, query, law, CS.SCHEME, want, leaf_layer=leaf_layer).to_json()
     w = rec.get("window", {})
-    mine_link = DRW.stand_in(mine.run, hashlib.sha256((Path(a.bundle) / RB.MANIFEST).read_bytes()).hexdigest())
-    src = {"kind": w.get("kind") == "stand-in", "run": w.get("run") == mine.run, "of": w.get("of") == mine_link["of"],
-           "link": w.get("link") == mine_link["link"]}
+    src = DRW.source(w, mine.run, hashlib.sha256((Path(a.bundle) / RB.MANIFEST).read_bytes()).hexdigest())
     checks["source"] = {"ok": all(src.values()), "codes": [c for c, v in src.items() if not v],
-                        "detail": {"kind": w.get("kind"), "run": w.get("run"), "of": w.get("of")}}
-    summary["source"] = w.get("kind")
+                        "detail": {"kind": w.get("kind"), "run": w.get("run"), "commitment": w.get("commitment"), "of": w.get("of")}}
+    summary["source"], summary["commitment"] = w.get("kind"), w.get("commitment")
     receipt = R.receipt(rec, "one-stage-e2e verifier (a5.py)")
     (out / "receipt.json").write_text(json.dumps(receipt, indent=1, sort_keys=True))
     summary.update(registration=R.digest(rec), leaf_layer=leaf_layer, checks_before_draw={c: v["ok"] for c, v in checks.items()},
@@ -243,7 +250,8 @@ def main() -> int:
                    timing=statement, negatives={x: y["refused"] for x, y in neg.items()})
     (out / "summary.json").write_text(json.dumps(summary, indent=1, sort_keys=True, default=str))
     ok = bool(result.get("accepted")) and all(summary["negatives"].values())
-    print("A5 " + json.dumps({x: summary[x] for x in ("source", "audit", "draw", "draw_counts", "negatives")}, sort_keys=True, default=str))
+    print("A5 " + json.dumps({x: summary[x] for x in ("source", "commitment", "audit", "draw", "draw_counts", "negatives")}, sort_keys=True,
+                             default=str))
     return 0 if ok else 1
 
 
