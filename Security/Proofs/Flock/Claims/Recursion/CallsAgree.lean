@@ -235,4 +235,158 @@ theorem decode_publics {spec : SessionSpec} {text : String} {sess : Session} {lv
 
 end Publics
 
+/-! ## The plain verdict's calls at a decoded session -/
+
+theorem forall₂_mem_right {α β : Type} {R : α → β → Prop} :
+    ∀ {l : List α} {l' : List β}, List.Forall₂ R l l' → ∀ b ∈ l', ∃ a ∈ l, R a b
+  | _, _, .nil, _, h => by cases h
+  | _, _, .cons hab hl, b, h => by
+    rcases List.mem_cons.1 h with rfl | h
+    · exact ⟨_, List.mem_cons_self .., hab⟩
+    · obtain ⟨a, ha, hr⟩ := forall₂_mem_right hl b h
+      exact ⟨a, List.mem_cons_of_mem _ ha, hr⟩
+
+theorem f128_zero {c : F128} (h : c.isZero = true) : c = ⟨0, 0⟩ := by
+  obtain ⟨lo, hi⟩ := c
+  simp only [F128.isZero, Bool.and_eq_true, beq_iff_eq] at h
+  rw [h.1, h.2]
+
+/-- S10 pins `y`: zero, of the configured size. -/
+theorem y_pinned {a b : Array F128} (hs : a.size = b.size) (ha : ∀ c ∈ a, c.isZero = true)
+    (hb : ∀ c ∈ b, c.isZero = true) : a = b :=
+  Array.ext hs fun _ h1 h2 => by rw [f128_zero (ha _ (Array.getElem_mem h1)), f128_zero (hb _ (Array.getElem_mem h2))]
+
+theorem lbOf_congr {spec : SessionSpec} {sess sess' : Session} (hy : sess.y = sess'.y)
+    (hP : sess.points = sess'.points) (hB : sess.rootB = sess'.rootB) (hF : sess.rootF = sess'.rootF) :
+    lbOf spec sess = lbOf spec sess' := by
+  unfold lbOf
+  rw [hy, hP, hB, hF]
+
+theorem mem_dgl {spec : SessionSpec} {b p : ByteArray} : b ∈ dgl spec p ↔ spec.sha512Digests = true ∧ b = p := by
+  unfold dgl
+  split <;> simp_all
+
+/-- `H(ε)` is among a session's round calls where the digests are SHA-512 and there is a table. -/
+theorem eps_mem {spec : SessionSpec} {sess : Session} (hd : spec.sha512Digests = true) (hne : 0 < spec.tables.size)
+    (hf : ∀ x ∈ spec.repStreams.toList,
+      ∃ s, sess.streams.find? (·.name == x.2.2) = some s ∧ 0 < s.rounds.size) :
+    ByteArray.empty ∈ sess.streams.toList.flatMap (streamLog spec) := by
+  have hq : 0 < spec.repStreams.size := by
+    rw [FlockDeploy.repStreams_size]
+    omega
+  obtain ⟨s, hs, hr⟩ := hf _ (Array.getElem_mem_toList hq)
+  refine List.mem_flatMap.2 ⟨s, Array.mem_toList_iff.2 (Array.mem_of_find?_eq_some hs), ?_⟩
+  refine List.mem_flatMap.2 ⟨s.rounds[0], Array.getElem_mem_toList hr, ?_⟩
+  simp [roundLog, dgl, hd]
+
+/-- **The plain verdict's SHA-512 calls, where it accepts**, at the session it decodes: the decoder's (`decode_log`),
+S17's digests of the files, and each table's two reps' own. -/
+theorem verdict_calls {h : ByteArray → ByteArray} {spec : SessionSpec} {tabs : Array Setup} {record : String}
+    {proofs : Array ByteArray} {L : Array ByteArray} (hv : verifyLogged h spec tabs record proofs = (.ok (), L)) :
+    ∃ (sess : Session) (schs : Array Schedule) (ds : List (List ByteArray)),
+      Record.decodeWith (M := Flock.V) (Hashes.ofSha512 h) spec record = .ok sess ∧
+      List.Forall₂ (fun st sch => fast100 st.m = some sch) tabs.toList schs.toList ∧
+      tabs.size = spec.tables.size ∧
+      List.Forall₂ (fun p d => d = dgl spec p ∨ d = [] ∧ p.size = 0) sess.publics.toList ds ∧
+      sess.rootF = spec.sigma ∧ sess.y.size = spec.points * spec.tables.size ∧
+      (∀ c ∈ sess.y, c.isZero = true) ∧ sess.streams.size = spec.repStreams.size ∧
+      (∀ x ∈ spec.repStreams.toList,
+        ∃ s, sess.streams.find? (·.name == x.2.2) = some s ∧ 0 < s.rounds.size) ∧
+      L.toList = sess.rootB.toList.flatMap (dgl spec) ++ dgl spec sess.rootF ++ ds.flatten ++
+        sess.streams.toList.flatMap (streamLog spec) ++
+        spec.repStreams.toList.flatMap (fun x => dgl spec sess.rootB[x.1]!) ++ dgl spec (lbOf spec sess) ++
+        (spec.repStreams.zip proofs).toList.flatMap (fun x => dgl spec x.2) ++
+        (List.range tabs.size).flatMap fun i =>
+          repLog h spec tabs[i]! schs[i]! sess i 0 proofs[2 * i]! ++
+            repLog h spec tabs[i]! schs[i]! sess i 1 proofs[2 * i + 1]! := by
+  obtain ⟨sess, schs, l₁, hd, hsch, ht, -, hL⟩ := verdict_log (l₀ := #[]) () L hv
+  obtain ⟨ds, hl₁, hds, -, hF, hy, hy0, hss, hf⟩ := decode_log (l₀ := #[]) sess l₁ hd
+  have hdec := (With.decodeWith_sim (With.Sim.forget _) (With.Sim.forget_logged h) spec record) #[]
+  rw [hd] at hdec
+  refine ⟨sess, schs, ds, hdec.symm, hsch, ht, hds, hF, hy, hy0, hss, hf, ?_⟩
+  rw [hL, hl₁]
+  simp only [List.nil_append, List.append_assoc]
+
+/-- **Two accepting plain verdicts on one set of proof files call SHA-512 on the same inputs**, where the sessions they
+decode have the same `root_B`, points and public words, and the same rounds at each rep stream: every call of the
+first is a call of the second. -/
+theorem verdict_calls_sub {spec : SessionSpec} {tabs : Array Setup} {record record' : String}
+    {proofs : Array ByteArray} {L L' : Array ByteArray} {sess sess' : Session}
+    (hv : verifyLogged Sha512.hash spec tabs record proofs = (.ok (), L))
+    (hv' : verifyLogged Sha512.hash spec tabs record' proofs = (.ok (), L'))
+    (hd : Record.decode spec record = .ok sess) (hd' : Record.decode spec record' = .ok sess')
+    (hn : spec.tables.toList.Nodup) (hB : sess.rootB = sess'.rootB) (hP : sess.points = sess'.points)
+    (hpub : sess.publics = sess'.publics)
+    (hR : ∀ q (hq : q < spec.repStreams.size) (y y' : StreamRec),
+      sess.streams.find? (·.name == spec.repStreams[q].2.2) = some y →
+        sess'.streams.find? (·.name == spec.repStreams[q].2.2) = some y' → y.rounds = y'.rounds) :
+    ∀ b ∈ L.toList, b ∈ L'.toList := by
+  obtain ⟨s₁, schs, ds, hd₁, hsch, ht, hds, hF, hy, hy0, hss, hf, hL⟩ := verdict_calls hv
+  obtain ⟨s₂, schs', ds', hd₂, hsch', -, hds', hF', hy', hy0', -, hf', hL'⟩ := verdict_calls hv'
+  obtain rfl := Except.ok.inj (hd₁.symm.trans ((With.decodeWith_std spec record).trans hd))
+  obtain rfl := Except.ok.inj (hd₂.symm.trans ((With.decodeWith_std spec record').trans hd'))
+  have hsc : schs = schs' := Array.ext' (Claims.Bridge.Custody.forall₂_unique
+    (R := fun (st : Setup) sch => fast100 st.m = some sch) (fun _ _ _ h1 h2 => Option.some.inj (h1.symm.trans h2))
+    hsch hsch')
+  subst hsc
+  have hlb : lbOf spec s₁ = lbOf spec s₂ :=
+    lbOf_congr (y_pinned (hy.trans hy'.symm) hy0 hy0') hP hB (hF.trans hF'.symm)
+  have hrep : ∀ i < tabs.size, ∀ r < 2, ∀ bytes, repLog Sha512.hash spec tabs[i]! schs[i]! s₁ i r bytes =
+      repLog Sha512.hash spec tabs[i]! schs[i]! s₂ i r bytes := by
+    intro i hi r hr bytes
+    obtain ⟨hq, e⟩ := Claims.Bridge.Custody.repStreams_getElem spec (ht ▸ hi) hr
+    obtain ⟨y, hy₁, -⟩ := hf _ (Array.getElem_mem_toList hq)
+    obtain ⟨y', hy₂, -⟩ := hf' _ (Array.getElem_mem_toList hq)
+    have hyr := hR _ hq y y' hy₁ hy₂
+    rw [e] at hy₁ hy₂
+    unfold repLog
+    rw [verifyRepWith_congr (Hashes.logged Sha512.hash) _ hy₁ hy₂ hyr hP (by rw [hB])]
+  have hreps : ((List.range tabs.size).flatMap fun i =>
+      repLog Sha512.hash spec tabs[i]! schs[i]! s₁ i 0 proofs[2 * i]! ++
+        repLog Sha512.hash spec tabs[i]! schs[i]! s₁ i 1 proofs[2 * i + 1]!) =
+      (List.range tabs.size).flatMap fun i =>
+        repLog Sha512.hash spec tabs[i]! schs[i]! s₂ i 0 proofs[2 * i]! ++
+          repLog Sha512.hash spec tabs[i]! schs[i]! s₂ i 1 proofs[2 * i + 1]! := by
+    refine List.flatMap_congr fun i hi => ?_
+    rw [List.mem_range] at hi
+    rw [hrep i hi 0 (by omega), hrep i hi 1 (by omega)]
+  have hstr : ∀ s ∈ s₁.streams.toList, ∃ s' ∈ s₂.streams.toList, streamLog spec s = streamLog spec s' := by
+    intro s hs
+    obtain ⟨q, hq, hsq⟩ := streams_pinned (repNames_nodup hn) hss (fun x hx => (hf x hx).imp fun _ h => h.1) s hs
+    obtain ⟨s', hs', -⟩ := hf' _ (Array.getElem_mem_toList hq)
+    refine ⟨s', Array.mem_toList_iff.2 (Array.mem_of_find?_eq_some hs'), ?_⟩
+    unfold streamLog
+    rw [hR q hq s s' hsq hs']
+  rw [hL, hL', ← hB, ← hlb, ← hreps, hF, hF']
+  intro b hb
+  simp only [List.mem_append] at hb ⊢
+  rcases hb with ((((((hb | hb) | hb) | hb) | hb) | hb) | hb) | hb
+  · exact .inl (.inl (.inl (.inl (.inl (.inl (.inl hb))))))
+  · exact .inl (.inl (.inl (.inl (.inl (.inl (.inr hb))))))
+  · obtain ⟨d, hd, hbd⟩ := List.mem_flatten.1 hb
+    obtain ⟨p, hp, hpd⟩ := forall₂_mem_right hds d hd
+    rcases hpd with rfl | ⟨rfl, -⟩
+    · obtain ⟨hsha, rfl⟩ := mem_dgl.1 hbd
+      rw [hpub] at hp
+      obtain ⟨d', hd'm, hpd'⟩ := Claims.Bridge.Custody.forall₂_mem_left hds' b hp
+      rcases hpd' with rfl | ⟨-, hz⟩
+      · exact .inl (.inl (.inl (.inl (.inl (.inr (List.mem_flatten.2 ⟨_, hd'm, hbd⟩))))))
+      · have he : b = ByteArray.empty := ByteArray.ext (Array.eq_empty_of_size_eq_zero hz)
+        subst he
+        refine .inl (.inl (.inl (.inl (.inr (eps_mem hsha ?_ hf')))))
+        obtain ⟨-, -, pubs, -, -, -, hpf⟩ := decode_pubs hd'
+        have := hpf.length_eq
+        rw [Array.length_toList, Array.length_toList] at this
+        have := List.length_pos_of_mem hp
+        rw [Array.length_toList] at this
+        omega
+    · cases hbd
+  · obtain ⟨s, hs, hbs⟩ := List.mem_flatMap.1 hb
+    obtain ⟨s', hs', e⟩ := hstr s hs
+    exact .inl (.inl (.inl (.inl (.inr (List.mem_flatMap.2 ⟨s', hs', e ▸ hbs⟩)))))
+  · exact .inl (.inl (.inl (.inr hb)))
+  · exact .inl (.inl (.inr hb))
+  · exact .inl (.inr hb)
+  · exact .inr hb
+
 end FlockDeploy.KS
