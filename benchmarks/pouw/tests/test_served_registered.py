@@ -20,7 +20,7 @@ import h1unit as U  # noqa: E402
 import served_registered as SR  # noqa: E402
 
 ROW_FORM = "a registered port's rows are hm96-sha512/row/v1 rows (Registered.checkPort)"
-BOUND = {"partition": {"rule": "template_instance", "digest": "aa" * 64}, "program_sha512": "bb" * 64}
+BOUND = {"partition": {"rule": "verity/partition/v1", "digest": "aa" * 64}, "program_sha512": "bb" * 64}
 SHARED = {"format": "flock-public/v2", "shared_rows": {"a0": 2, "b0": 2}}
 
 
@@ -97,9 +97,10 @@ def test_a_served_tree_not_registered_is_refused(tmp_path):
 
 def test_units_taken_as_stated_or_a_plain_public_file_are_refused():
     meta, served = _honest()
-    loose = {k: v for k, v in meta.items() if k != "partition"}
-    why = SR.plan(loose, SHARED, _reads(*served))["blockers"]
-    assert len(why) == 1 and "binds no partition and program" in why[0]
+    cover = {"rule": "flock-circuit/unit-cover/v0", "query": "flock-circuit/unit-cover:u", "version": 0, "digest": "aa" * 64}
+    for loose in ({k: v for k, v in meta.items() if k != "partition"}, meta | {"partition": cover}):
+        why = SR.plan(loose, SHARED, _reads(*served))["blockers"]
+        assert len(why) == 1 and "binds no verity/partition/v1 partition of its program" in why[0], why
     why = SR.plan(meta, {"format": "flock-public/v2"}, _reads(*served))["blockers"]
     assert why == ["the public file has no shared rows: a registered port is a table of a shared-row file"]
     bad = {**_reads(*served), "format": "verity/registered-reads/v1"}

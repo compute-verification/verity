@@ -12,7 +12,8 @@ registered row (`Registered.check`, `checkPort`):
 - per-port ``hm96-sha512/row/v2`` or ``row-seg/v1`` rows (META ``row_schemas``): a registered port's rows are
   ``hm96-sha512/row/v1`` rows (`checkPort`), and a statement of per-port rows has none (`HmRow.rowPorts`);
 - a served port `F` names no tree for: its rows are committed afresh and open no registered root;
-- units taken as stated: the statement binds no partition and program the verifier derives its units from;
+- units taken as stated: the statement binds no ``verity/partition/v1`` partition of its program (a composed circuit's
+  default is the unit cover, whose units the verifier takes as stated);
 - a public file without shared rows: a registered port is a table of a shared-row file.
 
 With nothing in the way `plan` writes `F`, and `argv` is what the Lean check adds to ``verify --zk``. `claim` decides the
@@ -26,6 +27,7 @@ import json
 from pathlib import Path
 from typing import Any, Mapping, Sequence
 
+from verity.ml.circuits.partition_object import FORMAT as PARTITION
 from verity.core.protocols.sampled_proofs.one_stage import registered as G
 
 CLAIM = "Accounting.Guarantees.TS.SessionSoundAt"
@@ -60,9 +62,9 @@ def blockers(meta: Mapping[str, Any], head: Mapping[str, Any], served: Sequence[
     for p in by:
         if p not in served:
             out.append(f"port {p}: a registered tree no served port reads")
-    if not (meta.get("partition") and meta.get("program_sha512")):
-        out.append("the statement binds no partition and program: its units are taken as stated, and a registered read "
-                   "binds only at units the verifier derives (--partition, --program)")
+    if (meta.get("partition") or {}).get("rule") != PARTITION or not meta.get("program_sha512"):
+        out.append(f"the statement binds no {PARTITION} partition of its program: its units are taken as stated, and a "
+                   "registered read binds only at units the verifier derives (--partition, --program)")
     if "shared_rows" not in head:
         out.append("the public file has no shared rows: a registered port is a table of a shared-row file")
     return out
