@@ -7,10 +7,11 @@
 # same mismatch.  A run still writing (its AOT Build against the trace after the comparison) is read over ssh.  A compare-only run
 # (TRACE_RUN) names the trace's run and tree in trace_run.txt and trace_tree.txt.  Leaves manifests/records.json changed, for the commit "re-pin ROW" that
 # the row's Build of record then runs at.
-#   [TRACE_ART=art:... (a trace preserved by trace_art.sh on its own)] [REF (cursor/glm-v2-21f3)] integrations/vllm/manifests/glm_v2_tree/jobs/repin.sh ROW RUN [NODE (vy-glm53-cpu-2)]
+#   [TRACE_ART=art:... (a trace preserved by trace_art.sh on its own)] [REF (model.sh's)] integrations/vllm/manifests/glm_v2_tree/jobs/repin.sh ROW RUN [NODE (vy-glm53-cpu-2)]
 set -euo pipefail
 ROW=${1:?ROW} RUN=${2:?RUN} NODE=${3:-vy-glm53-cpu-2}
 cd "$(git rev-parse --show-toplevel)"
+TREE=$PWD && source integrations/vllm/manifests/glm_v2_tree/jobs/model.sh
 read -r -a R <<<"${RESEARCH:-uv run --frozen --no-sync research}"
 read -r -a V <<<"${VERITY_VLLM:-uv run --frozen --no-sync verity-vllm}"
 T=$(mktemp -d); trap 'rm -rf "$T"' EXIT
@@ -50,7 +51,7 @@ trun=$(cat "$O/trace_run.txt" 2>/dev/null || echo "$RUN")
   "${V[@]}" records switch "$ROW" --comparison "$O/comparison.json" --run "$RUN" --trace "$art")
 # `neutrality --update` names the Build it re-pinned from by its path here (the trace's art is that Build) and its tree by sha
 # alone, and keeps the old record's id, which none of the new pins are from: the row names no record until its v2 publish
-uv run --frozen --no-sync python - "$ROW" "$art" "${REF:-cursor/glm-v2-21f3}@$src" <<'EOF'
+uv run --frozen --no-sync python - "$ROW" "$art" "$REF@$src" <<'EOF'
 import sys
 from verity_vllm.pipeline import config_record as CR
 doc = CR.load_index(CR.INDEX)

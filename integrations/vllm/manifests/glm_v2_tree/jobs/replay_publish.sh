@@ -13,6 +13,7 @@
 #      [RANKS], [SW=/workspace/cp/circuits/glm-v2/rows], [REF=cursor/glm-v2-21f3], [CK], [REPLAY_WORKERS=24].
 set -uo pipefail
 : "${ROW:?ROW}" "${BUILD_ART:?BUILD_ART}" "${MATCH_RUN:?MATCH_RUN}" "${COMMIT_RUN:?COMMIT_RUN}" "${BF16_ART:?BF16_ART}"
+case $ROW in glm53__*) ;; *) echo "$ROW: replay_publish.sh publishes GLM-5.3 rows (its conformance captures are GLM-5.3's)"; exit 2 ;; esac
 REV=aca966e4e02791568aa6a4ced368624b3d897f42
 REF=${REF:-cursor/glm-v2-21f3}
 SW=${SW:-/workspace/cp/circuits/glm-v2/rows}

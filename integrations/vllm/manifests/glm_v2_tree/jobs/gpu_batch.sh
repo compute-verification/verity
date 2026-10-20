@@ -9,21 +9,30 @@
 #                                        reruns whole with ROW: a new commitment and new draws (commit.sh moves the unfinished
 #                                        commit/ aside), its attempt counted in the row's commit_attempts.jsonl
 #   gpu_batch.sh t1r [NODE]              the bf16 v6 capture (1 GPU) and the G2 rows-4k point (8), only if T1R's runs of them did not hold
-# The legs need no Build on the node (GLM-5.3 has no model-level post-load hook: every rank's v2 trace records post_load_tensors
-# applies False), so nothing is copied to the node before window A.
-# env: [LOG=/tmp/glm-v2-gpu-batch.log], [RESEARCH="uv run --frozen --no-sync research"].
+# MODEL picks the rows and their tree: glm53 (the default; the four rows, cursor/glm-v2-21f3) or dsv4-pro (B1,
+# cursor/dsv4-v2-21f3).  GLM-5.3's legs need no Build on the node (no model-level post-load hook: every rank's v2 trace records
+# post_load_tensors applies False), so nothing is copied to the node before window A.  DeepSeek-V4-Pro's do (its mHC broadcast,
+# model.sh POST_LOAD): its Build of record goes to the node before window A (copy_rowdir.sh with build_record.sh's rowdir.sha256),
+# and match_gpu.sh refuses the legs without it.
+# env: [MODEL=glm53], [LOG=/tmp/$MODEL-v2-gpu-batch.log], [RESEARCH="uv run --frozen --no-sync research"].
 set -euo pipefail
 cd "$(git rev-parse --show-toplevel)"
 read -r -a R <<<"${RESEARCH:-uv run --frozen --no-sync research}"
-EU=vy-glm53-eu LOG=${LOG:-/tmp/glm-v2-gpu-batch.log}
+MODEL=${MODEL:-glm53}
+EU=vy-glm53-eu LOG=${LOG:-/tmp/$MODEL-v2-gpu-batch.log}
 J=integrations/vllm/manifests/glm_v2_tree/jobs
-ROWS=(glm53__fp8__h200__tp8__b1__i256__o32__mixed__greedy__eager
-      glm53__fp8__h200__tp8__b8__i256__o32__mixed-arrivals__greedy__eager
-      glm53__fp8__h200__tp8__b8__i256__o32__mixed-arrivals__stoch-t0.8-p0.95__eager
-      glm53__fp8__h200__tp8__b32__i256__o32__mixed-arrivals__greedy__eager)
-git fetch -q origin cursor/glm-v2-21f3
-git merge-base --is-ancestor HEAD origin/cursor/glm-v2-21f3 && git diff --quiet HEAD ||
-  { echo "HEAD is not a clean, pushed commit of cursor/glm-v2-21f3"; exit 2; }
+case $MODEL in
+  glm53) BRANCH=cursor/glm-v2-21f3
+         ROWS=(glm53__fp8__h200__tp8__b1__i256__o32__mixed__greedy__eager
+               glm53__fp8__h200__tp8__b8__i256__o32__mixed-arrivals__greedy__eager
+               glm53__fp8__h200__tp8__b8__i256__o32__mixed-arrivals__stoch-t0.8-p0.95__eager
+               glm53__fp8__h200__tp8__b32__i256__o32__mixed-arrivals__greedy__eager) ;;
+  dsv4-pro) BRANCH=cursor/dsv4-v2-21f3 ROWS=(dsv4-pro__fp8__h200__tp8__b1__i256__o32__mixed__greedy__eager) ;;
+  *) echo "MODEL $MODEL: glm53 or dsv4-pro"; exit 2 ;;
+esac
+git fetch -q origin "$BRANCH"
+git merge-base --is-ancestor HEAD "origin/$BRANCH" && git diff --quiet HEAD ||
+  { echo "HEAD is not a clean, pushed commit of $BRANCH"; exit 2; }
 sub() {  # sub TAG RESEARCH_RUN_ARGS... -- CMD...: launched and detached (`research run --on` returns once the run starts)
   local tag=$1 out; shift
   echo "[$(date -u +%FT%TZ)] $tag on $ON at $(git rev-parse --short=10 HEAD): $*" >>"$LOG"

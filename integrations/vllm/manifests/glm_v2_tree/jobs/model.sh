@@ -1,16 +1,18 @@
 # Sourced by the row jobs after ROW is set: the row's model from its name.  ROLE, REPO, REV (the pin, checkpoints.json), CONFIG
 # (relative to integrations/vllm), SNAP (the metadata the CPU jobs read, under /workspace/cp/circuits/hf), FS_CK (the pin's
 # local_path, which the GPU legs serve), LOCAL_CK (a node's verified local copy), WHAT (for keep reasons), V2 (the name of the
-# model's v2 dirs under /workspace/cp/circuits) and the defaults of REF and SW (its v2 tree and row dirs).  `ckpt_bind` serves
+# model's v2 dirs under /workspace/cp/circuits), POST_LOAD (the Parameters its loader's post-load hook makes, which every rank's
+# Build records and the capture registers: DeepSeek-V4's mHC broadcast) and the defaults of REF and SW (its v2 tree and row
+# dirs).  `ckpt_bind` serves
 # LOCAL_CK at FS_CK when it is verified; `stage_meta PY` puts the pin's non-shard files at SNAP from the hub, each checked against
 # checkpoints.json's sha256.
 case ${ROW:?ROW} in
   glm53__*) ROLE=GLM53 REPO=zai-org/GLM-5.3 REV=aca966e4e02791568aa6a4ced368624b3d897f42 WHAT=GLM-5.3
             FS_CK=/workspace/fs/glm53/$REV LOCAL_CK=/workspace/cp/glm53-ckpt/$REV
-            V2=glm-v2 REF=${REF:-cursor/glm-v2-21f3} ;;
+            V2=glm-v2 REF=${REF:-cursor/glm-v2-21f3} POST_LOAD= ;;
   dsv4-pro__*) ROLE=DSV4_PRO REPO=deepseek-ai/DeepSeek-V4-Pro REV=b5968e9190ef611bbf34a7229255be88a0e937c1 WHAT=DeepSeek-V4-Pro
             FS_CK=/workspace/fs/dsv4/$REV LOCAL_CK=/workspace/cp/dsv4-ckpt
-            V2=dsv4-v2 REF=${REF:-cursor/dsv4-v2-21f3} ;;
+            V2=dsv4-v2 REF=${REF:-cursor/dsv4-v2-21f3} POST_LOAD=model.layers.0.hc_attn_fn_broadcast ;;
   *) echo "row $ROW: no model for it in model.sh"; exit 2 ;;
 esac
 CONFIG=verity_vllm/engine/profiles/hf_configs/$ROLE.config.json SW=${SW:-/workspace/cp/circuits/$V2/rows}
