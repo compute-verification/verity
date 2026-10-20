@@ -16,8 +16,9 @@ period's budget is its windows', by induction on the period. The window's live t
 conditioning on the first round's coins as `expect_weight_le` does, its probability is at most
 `E[1{pass}·e^{c·d}]·e^{−c·D} ≤ e^{−c·D}`. At `c = 1/Λ` the round bound is `BudgetAt`'s (`expBound_of_budgetAt`).
 
-`CircuitWorkPeriod` is proved from the period layer's covers (`PeriodCoversStmt`, `ComposePeriod/Covers.lean`, which
-`circuitWorkPeriod_of_covers` reads as a hypothesis until its proof lands). It is `CircuitWork`'s proof at `n` rounds
+`CircuitWorkPeriod` is proved here from the period layer's covers (`PeriodCoversStmt`, which
+`circuitWorkPeriod_of_covers` reads as a hypothesis and `ComposePeriod/Covers.lean` proves as `periodCovers`), and
+`CircuitCreditPeriod` from its assembly at `a, b > 0`. It is `CircuitWork`'s proof at `n` rounds
 (note:compute-accounting/20261019T0739Z-draft-int-period), on the accepted prefix's live tiles:
 * per window, `ServiceBudget` at the detected live weights (`liveShare`: `0` on a tile of no live words, else
   `liveCone`), which are at most `shareCone`, so `CircuitWork`'s `ρ`, stage-share and luck premises hold of them, with
@@ -699,9 +700,9 @@ theorem work_step {ι K C Ξ V : Type} (Sc : Scheme K) (Cd : Declared ι) {n Np 
 
 /-! ## `CircuitWorkPeriod` -/
 
-/-- **`CircuitWorkPeriod` from the period layer's covers**: the assembly, reading `PeriodCoversStmt`
-(`ComposePeriod/Covers.lean`, training's worker's to prove) as a hypothesis until its proof lands. Off
-`DrawnRightOff`'s event and the period budget's tail at its accepted prefix, `work_step`. -/
+/-- **`CircuitWorkPeriod` from the period layer's covers**: the assembly, reading `PeriodCoversStmt` as a hypothesis
+(`periodCovers` proves it). Off `DrawnRightOff`'s event and the period budget's tail at its accepted prefix,
+`work_step`. -/
 theorem circuitWorkPeriod_of_covers (hC : PeriodCoversStmt) :
     Accounting.Guarantees.ComposePeriod.CircuitWorkPeriod := by
   intro ι K T L U C Ξ V _ _ _ _ _ _ _ Sc Cd n Np Kd hn _ hr hK Wp Pl pr folded ρ p p0 a b wmax Λ δs δbind δks hS
@@ -798,5 +799,13 @@ theorem circuitCreditPeriod_of_covers (hC : PeriodCoversStmt) :
         exacts [Finset.sum_nonneg fun t _ => Nat.cast_nonneg _, le_rfl]
     exact creditPrefix_le Sc Cd Np _ ha hb hNl (mul_nonneg (Nat.cast_nonneg _) (hfix0 x hacc)) hw
   exact (prob_mono hsub).trans hW
+
+/-- `CircuitWorkPeriod`: the assembly at the period layer's covers (`periodCovers`). -/
+theorem CircuitWorkPeriod : Accounting.Guarantees.ComposePeriod.CircuitWorkPeriod :=
+  circuitWorkPeriod_of_covers periodCovers
+
+/-- `CircuitCreditPeriod`: the assembly at the period layer's covers (`periodCovers`). -/
+theorem CircuitCreditPeriod : Accounting.Guarantees.ComposePeriod.CircuitCreditPeriod :=
+  circuitCreditPeriod_of_covers periodCovers
 
 end Accounting.SecurityProofs.ComposePeriod

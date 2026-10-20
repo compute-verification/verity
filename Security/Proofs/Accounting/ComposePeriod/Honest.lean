@@ -112,13 +112,13 @@ theorem tileKind_eq (t : Fin 1) : tileKind circuit 1 t = some (kindAt circuit 0)
   rfl
 
 theorem tileCone_eq (t : Fin 1) : tileCone scheme circuit 1 t = 1 := by
-  classical
   rw [Fin.fin_one_eq_zero t]
   unfold tileCone tileWeight
-  rw [Fin.sum_univ_one,
-    ite_eq_left (Relation.ReflTransGen.refl : circuit.Reaches (0 : Fin 1).val (0 : Fin 1).val), tileWords_eq,
-    wordsOf_eq]
-  norm_num
+  rw [Fin.sum_univ_one]
+  split_ifs with h
+  · rw [tileWords_eq, wordsOf_eq]
+    norm_num
+  · exact absurd (Relation.ReflTransGen.refl : circuit.Reaches (0 : Fin 1).val (0 : Fin 1).val) h
 
 theorem shareCone_eq (t : Fin 1) : shareCone scheme circuit 1 t = 1 := by
   have h0 : tileWords scheme circuit 1 t ≠ 0 := by
@@ -177,7 +177,7 @@ theorem paid_share (s : Mode) (hs : s ≠ .paid) (t : Fin 1) (c : Bool) :
 
 /-- **A claim of every live credited tile of the honest stages**: each of their tile games has share `0`. -/
 theorem perLiveTile_stages {live : Fin 1 → Bool} {P : Kind → ReceiptGame Bool 1 → ReceiptGame Bool 1 → Prop}
-    (h : ∀ k t, P k (tileGame (fun _ _ => Mode.paid) (fun _ _ => True) (fun _ _ => True) .folded t)
+    (h : ∀ k (t : Fin 1), P k (tileGame (fun _ _ => Mode.paid) (fun _ _ => True) (fun _ _ => True) .folded t)
       (tileGame (fun _ _ => Mode.paid) (fun _ _ => True) (fun _ _ => True) .whole t)) :
     PerLiveTile scheme circuit live stages P :=
   ⟨fun t _ _ k _ _ => h k t, fun _ => trivial⟩
@@ -188,7 +188,7 @@ theorem period_every {P : (Fin 1 → Bool) → SplitStages Bool (Fin 1) 1 → Pr
   | n + 1 => ⟨h, fun _ => period_every h n⟩
 
 theorem every_perLiveTile {P : Kind → ReceiptGame Bool 1 → ReceiptGame Bool 1 → Prop}
-    (h : ∀ k t, P k (tileGame (fun _ _ => Mode.paid) (fun _ _ => True) (fun _ _ => True) .folded t)
+    (h : ∀ k (t : Fin 1), P k (tileGame (fun _ _ => Mode.paid) (fun _ _ => True) (fun _ _ => True) .folded t)
       (tileGame (fun _ _ => Mode.paid) (fun _ _ => True) (fun _ _ => True) .whole t)) (n : ℕ) :
     (period n).EveryWindow (fun live W => PerLiveTile scheme circuit live W P) :=
   period_every (P := fun live W => PerLiveTile scheme circuit live W P) (perLiveTile_stages h) n
@@ -279,28 +279,28 @@ theorem honest_meets (n : ℕ) (hn : 0 < n) {δs : ℝ} (hδs : 0 < δs) :
     rw [Finset.filter_true_of_mem fun w _ => hc x w, Finset.card_univ, Fintype.card_fin]
   · simp [creditedLive, hc, liveAt_period, liveWords, tileWords_eq]
 
-/-- **`CircuitWorkPeriod`'s conclusion at the honest period**, from the period layer's covers: `honest_meets` gives
-`circuitWorkPeriod_of_covers` every premise in its own form. -/
-theorem honest_conclusion (hC : PeriodCoversStmt) (n : ℕ) (hn : 0 < n) {δs : ℝ} (hδs : 0 < δs) :
+/-- **`CircuitWorkPeriod`'s conclusion at the honest period**: `honest_meets` gives `CircuitWorkPeriod` every premise
+in its own form. -/
+theorem honest_conclusion (n : ℕ) (hn : 0 < n) {δs : ℝ} (hδs : 0 < δs) :
     prob (fun x => (play n).accepts x ∧
       ¬ LiveWorkAt (creditedLive scheme circuit (period n) (run n) x) (wordsOf scheme circuit : ℝ) 1 1
         (rOfPrefix scheme circuit 1 ((run n).prefixLen x) 1 1 4 δs) (n * ((play n).run x).fixed) (n * 1)) ≤
       δs + n * (0 + 0) := by
   obtain ⟨hN, hS, hρN, hwmax, hlk, hSR, hG, hDD, hPre, hMoved, hJS, hPins, hMu, hRB, hGs, hUF, -, -, -⟩ :=
     honest_meets n hn hδs
-  exact circuitWorkPeriod_of_covers hC scheme circuit hn hN Nat.one_pos le_rfl (period n) (play n) (run n)
-    (fun _ => 1) 1 (1 / 2) (1 / 2) 1 1 1 4 δs 0 0 hS one_pos hρN hwmax hlk zero_le_one zero_le_one (by norm_num) hSR
-    hG hDD hPre hMoved hJS hPins hMu hRB hGs hUF
+  exact Accounting.SecurityProofs.ComposePeriod.CircuitWorkPeriod scheme circuit hn hN Nat.one_pos le_rfl (period n)
+    (play n) (run n) (fun _ => 1) 1 (1 / 2) (1 / 2) 1 1 1 4 δs 0 0 hS one_pos hρN hwmax hlk zero_le_one zero_le_one
+    (by norm_num) hSR hG hDD hPre hMoved hJS hPins hMu hRB hGs hUF
 
 /-- **`CircuitCreditPeriod`'s conclusion at the honest period**: `honest_meets` again, at `a = b = 1 > 0`. -/
-theorem honest_credit (hC : PeriodCoversStmt) (n : ℕ) (hn : 0 < n) {δs : ℝ} (hδs : 0 < δs) :
+theorem honest_credit (n : ℕ) (hn : 0 < n) {δs : ℝ} (hδs : 0 < δs) :
     prob (fun x => (play n).accepts x ∧ n * ((play n).run x).fixed <
       creditPrefix scheme circuit 1 ((run n).prefixLen x) (creditedLive scheme circuit (period n) (run n) x) 1 1 4
         δs) ≤ δs + n * (0 + 0) := by
   obtain ⟨hN, hS, hρN, hwmax, hlk, hSR, hG, hDD, hPre, hMoved, hJS, hPins, hMu, hRB, hGs, hUF, -, -, -⟩ :=
     honest_meets n hn hδs
-  exact circuitCreditPeriod_of_covers hC scheme circuit hn hN Nat.one_pos le_rfl (period n) (play n) (run n)
-    (fun _ => 1) 1 (1 / 2) (1 / 2) 1 1 1 4 δs 0 0 hS one_pos hρN hwmax hlk one_pos one_pos (by norm_num) hSR
-    hG hDD hPre hMoved hJS hPins hMu hRB hGs hUF
+  exact Accounting.SecurityProofs.ComposePeriod.CircuitCreditPeriod scheme circuit hn hN Nat.one_pos le_rfl (period n)
+    (play n) (run n) (fun _ => 1) 1 (1 / 2) (1 / 2) 1 1 1 4 δs 0 0 hS one_pos hρN hwmax hlk one_pos one_pos
+    (by norm_num) hSR hG hDD hPre hMoved hJS hPins hMu hRB hGs hUF
 
 end Accounting.SecurityProofs.ComposePeriod.Honest

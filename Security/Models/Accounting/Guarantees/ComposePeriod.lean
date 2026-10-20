@@ -38,17 +38,15 @@ probability `(1 − f)^n`, 63% at a per-window failure rate `f = 10^-5`, and dro
   that ends at a stopping time the cheater steers pays `ln(1/δ_s)` once, as a fixed one does. Proved
   (`Proofs.Accounting.ComposePeriod`): by induction on the game, conditioning on the first round's coins as
   `expect_weight_le` does, with the bound for every threshold `D` in the induction.
-* `CircuitWorkPeriod`: (L), the circuit's work on live tiles, over the period's accepted prefix. Proved from the period
-  layer's covers (`Proofs.Accounting.ComposePeriod.circuitWorkPeriod_of_covers`, reading `PeriodCoversStmt`, which
-  training's worker proves in `Proofs.Accounting.ComposePeriod.Covers`): from `CircuitWork`'s lemmas, not from its
-  conclusion (a per-window tail at `δ` can't be averaged into `ε/n`): `ServiceBudget` per window at the window's
-  detected live weights, `PeriodBudget`, `PeriodTailMax` once at `t = ln(1/δ_s)`, `DrawnRightOff` at `n` rounds, the
-  period layer's `Covers` on the credited windows' live tiles and `WriterReads` (`PeriodCoversStmt`: `ServiceCovers`'
-  argument with a window index) and `UnitFixed`'s sums.
+* `CircuitWorkPeriod`: (L), the circuit's work on live tiles, over the period's accepted prefix. Proved
+  (`Proofs.Accounting.ComposePeriod`) from `CircuitWork`'s lemmas, not from its conclusion (a per-window tail at `δ`
+  can't be averaged into `ε/n`): `ServiceBudget` per window at the window's detected live weights, `PeriodBudget`,
+  `PeriodTailMax` once at `t = ln(1/δ_s)`, `DrawnRightOff` at `n` rounds, the period layer's `Covers` on the credited
+  windows' live tiles and `WriterReads` (`PeriodCoversStmt`, `ServiceCovers`' argument with a window index, proved as
+  `periodCovers` in `Proofs.Accounting.ComposePeriod.Covers`) and `UnitFixed`'s sums.
 * `CircuitCreditPeriod`: (L)'s credit in live words, `(1 − ε(j))₊` of the accepted prefix's live words with `ε` at the
-  realized prefix `j` (`creditPrefix`). Proved from `PeriodCoversStmt` as `CircuitWorkPeriod` is
-  (`circuitCreditPeriod_of_covers`). Not the time credit (`CircuitCredit`'s `(1 − ε)·T_cred`), which no statement
-  here gives.
+  realized prefix `j` (`creditPrefix`). Proved (`Proofs.Accounting.ComposePeriod`) from `CircuitWorkPeriod`'s
+  assembly at `a, b > 0`. Not the time credit (`CircuitCredit`'s `(1 − ε)·T_cred`), which no statement here gives.
 -/
 
 namespace Accounting.Guarantees.ComposePeriod
