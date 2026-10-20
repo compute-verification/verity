@@ -226,7 +226,17 @@ def test_the_ports_rows_are_the_registered_rows(staged):
         if want is None:
             assert code == 0, (name, out)
         else:
-            assert code == 1 and f"port cs's rows are 64 u16 words, not {VALUE}'s registered {want}" in out, (name, out)
+            assert code == 1 and f"port cs's rows are 1024 bits (64 u16 words), not {VALUE}'s registered {want}" in out, (name, out)
+
+
+def test_a_row_v1_port_is_refused_a_bit_row_registration(staged):
+    """cs is a `hm96-sha512/row/v1` port: a reads file that names its value's rows in another format (`row_schema`) is
+    refused before any row is opened, since its root's leaves are framed under that format."""
+    public = _stage(staged, "honest-v2")
+    for schema in (G.SCHEMA_V2, G.SCHEMA_SEG):
+        code, out = _statement(staged, public, _own(staged, f"own-{schema[-6:].replace('/', '-')}",
+                                                    lambda ps, schema=schema: ps["cs"].update(row_schema=schema)))
+        assert code == 1 and (f"port cs is a {G.SCHEMA} row, and {VALUE}'s registered rows are {schema} rows") in out, out
 
 
 def test_a_registered_output_row_is_accepted_and_reports_its_root(staged):

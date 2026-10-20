@@ -1418,11 +1418,15 @@ SHA-512, and the unit draw is live (§7.3). `Flock.HmRow` is its statement; the 
   is `as stated`, with the reason in `note`, which an audit reports as a gap.
 - **Registered reads**. A shared-row header may name `registered`, `{port: {value, positions, paths}}`: registered rows.
   The verifier needs its own `--registered F` (`verity/registered-reads/v0`: per port the value, root, leaves, domain,
-  read positions, `words`, `word_bits` 16 or 32, absent for the port's own 16-bit rows); the port's rows must be
-  `sha512/row/v1` rows of their u16 words, padded. A port is any row of the circuit: an input port's, or (§16.13) an
+  read positions, `words`, `word_bits` 16 or 32, absent for the port's own 16-bit rows, and `row_schema`, the rows'
+  format: `hm96-sha512/row/v1`, the default when absent, `hm96-sha512/row/v2` or `hm96-sha512/row-seg/v1`, the last two
+  with `words`). Each port is checked in its own format: the port's row schema must be the one `F` names, a `row/v1`
+  port's rows `sha512/row/v1` rows of their u16 words, padded to whole SHA-512 blocks, and a bit row (`row/v2`,
+  `row-seg/v1`) exactly `words · word_bits` bits. A port is any row of the circuit: an input port's, or (§16.13) an
   output port's row, whose table is the instances' output rows, instance `i`'s ref `i`, so instance `i`'s output is the
-  registered row at `positions[i]`. Each table row's `hm96-sha512/row/v1` leaf must climb its path to the root at its
-  position, each instance's ref name its unit's read position in the verifier's program (units `derived`). A port on
+  registered row at `positions[i]`. Each table row's leaf, the frame-v3-sha512 leaf under the port's row schema, must
+  climb its path to the root at its position, each instance's ref name its unit's read position in the verifier's
+  program (units `derived`). A port on
   one side only refuses; verdicts report `registered`. A recursive statement reads the inner session's round commitments
   as registered values, round `i`'s as `rec-c<i>` and level `l`'s committed tops as `rec-top-L<l>`; a drawn statement
   must draw in full every unit the verifier's reads of such a value name (U4, `Registered.checkFull`, D14), so that no
@@ -1730,8 +1734,8 @@ table rows' position and path (`verity_flock.inner_registered`). The verifier th
 --registered F` on a plain-leaves statement; V*'s native side, `InnerFold.lean --registered F`) refuses the statement
 unless, for each port of `F` (`Registered.checkDescription`):
 
-1. the header's `registered` names exactly `F`'s ports, each a row of the circuit, `hm96-sha512/row/v1` rows of the
-   registered width (`Port.fits`), and a table of a shared-row file;
+1. the header's `registered` names exactly `F`'s ports, each a row of the circuit, rows of the row schema and the width `F`
+   names (`Registered.portSchema`, `Port.fits`), and a table of a shared-row file;
 2. the port's table is the registration in order: as many rows as the registration's leaves, table row `r` at position
    `r`, its `b ‖ c` opening the registered root there through its path;
 3. every instance's ref names a row of the table; and
