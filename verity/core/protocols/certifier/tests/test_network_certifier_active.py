@@ -399,7 +399,7 @@ async def replay(write_buckets: dict[int, int], prover=None, executor=None, salt
     server = server or Server()
     srv = await asyncio.start_server(server.handle, "127.0.0.1", 0)
     proxy = Proxy(srv.sockets[0].getsockname()[:2], EGRESS, INGRESS, SYNC_SET, advice.pop("syncs"), origin=0.0,
-                  clock=clock, sleep=clock.sleep, salt=salt, start=start,
+                  ingress_link="requests", clock=clock, sleep=clock.sleep, salt=salt, start=start,
                   position=sum(anchor < first for _, anchor, *_ in rows), **advice, **salting)
     k = salting.get("pouw_window", 1)
     accepted: asyncio.Future = asyncio.get_running_loop().create_future()
@@ -622,7 +622,7 @@ def test_the_salt_reaches_only_the_blocks_side_and_no_record_depends_on_it(hones
         active.check_salts(Audit(), "requests", [commit(r, INGRESS) for r in ingress], WINDOWS, drawn)
     with pytest.raises(ValueError):
         Proxy(("127.0.0.1", 9), EGRESS, GridParams(6, 2, active.SALT_FRAME_BYTES - 1), SYNC_SET, SYNCS, origin=0.0,
-              salt=active.fresh_salt)
+              ingress_link="requests", salt=active.fresh_salt)
 
 
 def test_one_salt_per_pouw_window_of_its_width(honest_run):
@@ -653,7 +653,8 @@ def test_one_salt_per_pouw_window_of_its_width(honest_run):
         [None, "salt", "salt"]
     for bad in ({"salt_bits": 0}, {"salt_bits": 100}, {"pouw_window": 0}, {"pouw_window": 1.0}):
         with pytest.raises(ValueError):
-            Proxy(("127.0.0.1", 9), EGRESS, INGRESS, SYNC_SET, SYNCS, origin=0.0, salt=active.fresh_salt, **bad)
+            Proxy(("127.0.0.1", 9), EGRESS, INGRESS, SYNC_SET, SYNCS, origin=0.0, ingress_link="requests",
+                  salt=active.fresh_salt, **bad)
 
 
 def test_reveal_takes_the_windows_registration_and_fails_closed_without_it():
@@ -669,8 +670,8 @@ def test_reveal_takes_the_windows_registration_and_fails_closed_without_it():
             drawn.append(w)
             return bytes([w + 1]) * n
 
-        p = Proxy(("127.0.0.1", 9), EGRESS, INGRESS, SYNC_SET, SYNCS, origin=0.0, clock=lambda: 0.0, salt=source,
-                  **kwargs)
+        p = Proxy(("127.0.0.1", 9), EGRESS, INGRESS, SYNC_SET, SYNCS, origin=0.0, ingress_link="requests",
+                  clock=lambda: 0.0, salt=source, **kwargs)
         for _ in range(windows * INGRESS.buckets):
             p.bucketer.tick()
         return p
@@ -723,8 +724,9 @@ def test_the_weights_are_recorded_only_before_the_salt_and_given_on_reveals_cond
     _, forge = prover_signer(b"someone else")
 
     def proxy(**kwargs) -> Proxy:
-        return Proxy(("127.0.0.1", 9), EGRESS, INGRESS, SYNC_SET, SYNCS, origin=0.0, clock=lambda: 0.0,
-                     salt=lambda w, n: bytes([w + 1]) * n, prover_key=key, prover_context=b"epoch 7", **kwargs)
+        return Proxy(("127.0.0.1", 9), EGRESS, INGRESS, SYNC_SET, SYNCS, origin=0.0, ingress_link="requests",
+                     clock=lambda: 0.0, salt=lambda w, n: bytes([w + 1]) * n, prover_key=key, prover_context=b"epoch 7",
+                     **kwargs)
 
     def signed(w: int, root: bytes, link: str = "requests", context: bytes = b"epoch 7") -> bytes:
         return sign(active.weights_message(link, w, root, context))
@@ -744,8 +746,10 @@ def test_the_weights_are_recorded_only_before_the_salt_and_given_on_reveals_cond
         with pytest.raises(ValueError, match="serves"):
             p.commit_weights(w, roots[0], b"")
     with pytest.raises(ValueError, match="salt is off"):
-        Proxy(("127.0.0.1", 9), EGRESS, INGRESS, SYNC_SET, SYNCS, origin=0.0).commit_weights(0, roots[0], b"")
-    keyless = Proxy(("127.0.0.1", 9), EGRESS, INGRESS, SYNC_SET, SYNCS, origin=0.0, salt=active.fresh_salt)
+        Proxy(("127.0.0.1", 9), EGRESS, INGRESS, SYNC_SET, SYNCS, origin=0.0,
+              ingress_link="requests").commit_weights(0, roots[0], b"")
+    keyless = Proxy(("127.0.0.1", 9), EGRESS, INGRESS, SYNC_SET, SYNCS, origin=0.0, ingress_link="requests",
+                    salt=active.fresh_salt)
     with pytest.raises(RuntimeError, match="no prover key"):
         keyless.commit_weights(0, roots[0], signed(0, roots[0]))
     p.bucketer.tick()
@@ -785,8 +789,8 @@ def test_reveal_gives_each_salt_once_and_only_until_its_deadline():
     window_s = T * INGRESS.bucket_ms / 1000
 
     def proxy(**kwargs) -> Proxy:
-        p = Proxy(("127.0.0.1", 9), EGRESS, INGRESS, SYNC_SET, SYNCS, origin=0.0, clock=lambda: now[0],
-                  salt=lambda w, n: bytes([w + 1]) * n, **kwargs)
+        p = Proxy(("127.0.0.1", 9), EGRESS, INGRESS, SYNC_SET, SYNCS, origin=0.0, ingress_link="requests",
+                  clock=lambda: now[0], salt=lambda w, n: bytes([w + 1]) * n, **kwargs)
         for _ in range(WINDOWS * T):
             p.bucketer.tick()
         return p
@@ -808,8 +812,8 @@ def test_reveal_gives_each_salt_once_and_only_until_its_deadline():
         [bytes([w + 1]) * active.SALT_BYTES for w in range(WINDOWS)]
     for bad in (0, -1.0, "1", float("nan")):
         with pytest.raises(ValueError, match="deadline"):
-            Proxy(("127.0.0.1", 9), EGRESS, INGRESS, SYNC_SET, SYNCS, origin=0.0, salt=active.fresh_salt,
-                  reveal_deadline=bad)
+            Proxy(("127.0.0.1", 9), EGRESS, INGRESS, SYNC_SET, SYNCS, origin=0.0, ingress_link="requests",
+                  salt=active.fresh_salt, reveal_deadline=bad)
 
 
 ENVELOPE = ClockSync(max(SYNC_SET.deltas), min(SYNC_SET.rhos))
@@ -841,10 +845,11 @@ def test_a_proxy_back_from_maintenance_publishes_the_full_runs_later_windows():
     window_bytes = EGRESS.buckets * EGRESS.allocation * B
     assert wire == full_wire[2 * window_bytes :] and len(wire) == window_bytes
     with pytest.raises(ValueError, match="starts at one of windows"):
-        Proxy(("127.0.0.1", 1), EGRESS, INGRESS, SYNC_SET, syncs, origin=0.0, start=WINDOWS + 1)
+        Proxy(("127.0.0.1", 1), EGRESS, INGRESS, SYNC_SET, syncs, origin=0.0, ingress_link="requests",
+              start=WINDOWS + 1)
     with pytest.raises(ValueError, match="online prover"):
-        Proxy(("127.0.0.1", 1), EGRESS, INGRESS, SYNC_SET, [], origin=0.0, start=1, windows=WINDOWS,
-              prover=online.Prover(SYNC_SET, EGRESS.buckets, online.rule("last"), ClockSync(4, 1 / 2)))
+        Proxy(("127.0.0.1", 1), EGRESS, INGRESS, SYNC_SET, [], origin=0.0, ingress_link="requests", start=1,
+              windows=WINDOWS, prover=online.Prover(SYNC_SET, EGRESS.buckets, online.rule("last"), ClockSync(4, 1 / 2)))
 
 
 class Held(Executor):
@@ -880,7 +885,7 @@ def test_a_choice_not_ready_at_its_window_declares_the_envelope():
     raw, committed = audit(proxy, FRAMES, ready.syncs)
     assert raw == committed == [(link, w, None) for link in ("responses", "requests") for w in range(WINDOWS)]
     with pytest.raises(ValueError, match="off its tick"):
-        Proxy(("127.0.0.1", 9), EGRESS, INGRESS, SYNC_SET, [], origin=0.0, windows=WINDOWS,
+        Proxy(("127.0.0.1", 9), EGRESS, INGRESS, SYNC_SET, [], origin=0.0, ingress_link="requests", windows=WINDOWS,
               prover=online.Prover(SYNC_SET, EGRESS.buckets, online.rule("last"), ENVELOPE), executor=held)
 
 
@@ -935,8 +940,8 @@ def test_a_late_tick_fails_closed_and_does_not_slip():
 
     async def run():
         clock = VirtualClock(0.0)
-        proxy = Proxy(("127.0.0.1", 9), EGRESS, INGRESS, SYNC_SET, SYNCS, origin=0.0, clock=clock,
-                      sleep=clock.sleep)
+        proxy = Proxy(("127.0.0.1", 9), EGRESS, INGRESS, SYNC_SET, SYNCS, origin=0.0, ingress_link="requests",
+                      clock=clock, sleep=clock.sleep)
         writer = NullWriter()
         running = asyncio.create_task(proxy.run(EmptyReader(), writer))
         for t in range(WINDOWS * EGRESS.buckets):
@@ -971,8 +976,8 @@ def test_an_ingress_tick_read_early_fails_closed_and_the_run_goes_on():
             await clock.sleep(delay - (0.3 * TAU if ingress and abs(clock() + delay - early * TAU) < 1e-9 else 0))
 
         prover = online.Prover(SYNC_SET, EGRESS.buckets, online.rule("last"), ClockSync(1, 1), lag=1)
-        proxy = Proxy(srv.sockets[0].getsockname()[:2], EGRESS, INGRESS, SYNC_SET, [], origin=0.0, clock=clock,
-                      sleep=sleep, prover=prover, windows=WINDOWS, executor=active.InlineExecutor())
+        proxy = Proxy(srv.sockets[0].getsockname()[:2], EGRESS, INGRESS, SYNC_SET, [], origin=0.0,
+                      ingress_link="requests", clock=clock, sleep=sleep, prover=prover, windows=WINDOWS, executor=active.InlineExecutor())
         link, writer = LinkReader(), NullWriter()
         running = asyncio.create_task(proxy.run(link, writer))
 
@@ -1019,8 +1024,8 @@ def test_an_overrun_link_fails_closed():
 
     async def run():
         clock = VirtualClock(0.0)
-        proxy = Proxy(("127.0.0.1", 9), EGRESS, INGRESS, SYNC_SET, SYNCS, origin=0.0, clock=clock,
-                      sleep=clock.sleep)
+        proxy = Proxy(("127.0.0.1", 9), EGRESS, INGRESS, SYNC_SET, SYNCS, origin=0.0, ingress_link="requests",
+                      clock=clock, sleep=clock.sleep)
         writer = NullWriter(backlog={7: EGRESS.allocation * B + 1})
         running = asyncio.create_task(proxy.run(EmptyReader(), writer))
         for t in range(WINDOWS * EGRESS.buckets):
@@ -1043,7 +1048,8 @@ def test_a_server_that_refuses_a_stream_fails_ingress_closed():
         closed.close()
         await closed.wait_closed()
         clock = VirtualClock(0.0)
-        proxy = Proxy(upstream, EGRESS, INGRESS, SYNC_SET, SYNCS, origin=0.0, clock=clock, sleep=clock.sleep)
+        proxy = Proxy(upstream, EGRESS, INGRESS, SYNC_SET, SYNCS, origin=0.0, ingress_link="requests", clock=clock,
+                      sleep=clock.sleep)
         frame = active.encode_frame(LAST, 1, request("a", 1), B)
         running = asyncio.create_task(proxy.run(EmptyReader([frame]), NullWriter()))
         for t in range(WINDOWS * EGRESS.buckets):
@@ -1109,8 +1115,8 @@ async def replay_receipts(sessions, pause_at: int | None = None):
     clock = VirtualClock(-TAU / 2)
     server = ReceiptServer(clock, sessions)
     srv = await asyncio.start_server(server.handle, "127.0.0.1", 0)
-    proxy = Proxy(srv.sockets[0].getsockname()[:2], EGRESS, INGRESS, SYNC_SET, syncs, origin=0.0, clock=clock,
-                  sleep=clock.sleep)
+    proxy = Proxy(srv.sockets[0].getsockname()[:2], EGRESS, INGRESS, SYNC_SET, syncs, origin=0.0,
+                  ingress_link="requests", clock=clock, sleep=clock.sleep)
     accepted: asyncio.Future = asyncio.get_running_loop().create_future()
     link = await asyncio.start_server(lambda r, w: accepted.set_result(asyncio.create_task(proxy.run(r, w))),
                                       "127.0.0.1", 0)

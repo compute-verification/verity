@@ -350,8 +350,13 @@ DRAW_EXPECT = {
     "early": ("coin", "the draw's coin was not opened after what the verifier recorded"),
     "units": ("draw", "the units are not the draw coin's subset:"), "other-key": ("draw", "the units are not the draw coin's"),
     "early-coins-live": ("coin", "the draw's coin does not open"),
-    "live-coins": ("coin", "the verifier's coins are malformed: "),
+    "live-coins": ("coin", "the challenger record is malformed: "),
     "live-not-epoch": ("coin", "the coin commitment's coins are not a live epoch's"),
+    "live-bare": ("coin", CC.SIGNED_LIVE),
+    "live-key": ("coin", "the verifier's challenger key is malformed: a challenger key is {H, W, public}"),
+    "live-no-record": ("coin", "no challenger record: the verifier holds no coin commitment"),
+    "live-unsigned": ("coin", "the challenger record's signature does not verify under the verifier's challenger key"),
+    "live-moved": ("coin", "the challenger record's signature does not verify under the verifier's challenger key"),
     "live-opening-form": ("coin", "the draw's a live coin opening is"),
     "live-label": ("coin", "the draw's coin is the epoch's pouw/salt coin 0, not its pouw/draw coin 0"),
     "live-epoch": ("coin", "the draw's coin is epoch "),
@@ -388,10 +393,11 @@ def test_each_honest_pass_is_had_as_it_was_salted():
 
 
 def test_every_draw_mutation_hits_its_refusal():
-    """`core_check.draw` accepts an honest draw under seeded coins or a live epoch's (a certified window's, whose
-    commitment its verifier reads through `challenger.trusted_commitment`) and refuses each mutation with the refusal
-    it aims at. A live draw's coin is ``pouw/draw`` 0, so a seeded opening under live coins is refused, and so is a
-    live opening under seeded coins."""
+    """`core_check.draw` accepts an honest draw under seeded coins or a live epoch's (a certified window's, held as its
+    challenger's signed record with the verifier's key for it, which the check verifies) and refuses each mutation with
+    the refusal it aims at: a bare live commitment, a malformed key, no record, a record signed under another key, a
+    tampered signature or a record whose commitment was swapped. A live draw's coin is ``pouw/draw`` 0, so a seeded
+    opening under live coins is refused, and so is a live opening under seeded coins."""
     assert set(DRAW_EXPECT) == set(passes.DRAW_NAMES) | {"honest"}
     for name, want in DRAW_EXPECT.items():
         for seed in range(6):
