@@ -1116,6 +1116,9 @@
   "Verity.Declaration.Contains": {
    "owner": "@lean",
    "digest": "2e4651003538493bac63ae90c32a521e95d2e8596bea6b3c85b9cfd150c5647b"
+  },
+  "FlockDeploy.ZkIn": {
+   "owner": "@proofs"
   }
  },
  "meaning": [
