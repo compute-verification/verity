@@ -379,7 +379,9 @@ ROUNDS_EXPECT = {
     "unclosed": ("coin", "not trusted: the challenger's session ended without its client closing it: "),
     "no-ledger": ("coin", "not trusted: no auditor's ledger"),
     "no-session": ("coin", "not trusted: the auditor's ledger opens no challenger session for this window"),
-    "second-session": ("coin", " opens a second session for its window, or session s-"),
+    "second-session": ("coin", " opens a second session for its window's Commit, or session s-"),
+    "second-period": ("coin", " opens a second session for its window's Commit, or session s-"),
+    "reused-leaf": ("coin", ", its predecessor's: the challenger's key signs at increasing leaves"),
     "other-session": ("coin", "not trusted: the challenger's session is s-2, not s-1, the one the auditor's ledger opens"),
     "other-key": ("coin", ", not the window's pinned key "),
     "forged-ledger": ("coin", "'s signature does not verify under the verifier's challenger key"),
@@ -403,9 +405,10 @@ ROUNDS_EXPECT = {
 def test_every_rounds_mutation_hits_its_refusal():
     """`core_check.rounds` accepts an honest live window's round coins, read through the challenger's signed session the
     auditor's signed ledger opens and ends for the window, and refuses each mutation (an in-process challenger's coins,
-    an unsigned or tampered log, a ledger signed under another key or cut before the session's end, a second session for
-    the window, roots the challenger didn't receive, a coin opened twice, one opened before its round's
-    root was recorded, a foreign epoch's, …), over a few cases each, with the refusal it aims at."""
+    an unsigned or tampered log, a ledger signed under another key, cut before the session's end or at a reused leaf, a
+    second session for the window's Commit under any period, roots the challenger didn't receive, a coin opened twice,
+    one opened before its round's root was recorded, a foreign epoch's, …), over a few cases each, with the refusal it
+    aims at."""
     assert set(ROUNDS_EXPECT) == set(rounds_cases.ROUNDS_NAMES) | {"honest"}
     for name, want in ROUNDS_EXPECT.items():
         for seed in range(6):

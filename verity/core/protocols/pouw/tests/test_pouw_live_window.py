@@ -100,7 +100,7 @@ def test_core_checks_rounds_reads_the_challengers_own_session():
     d = rounds_cases.with_ledger(d, s, random.Random("l"))
     assert CC.rounds(*rounds_cases.rounds_args(d)) is None
     prover = Wd.live_challenger(s.ch.commitment.epoch, s.ch.commitment.family(Wd.ROUND), entropy("p"))
-    in_process = rounds_cases.Session(random.Random("p"), prover, [bytes.fromhex(r) for r in d["roots"]], False, seed=1)
+    in_process = rounds_cases.Session(random.Random("p"), prover, [bytes.fromhex(r) for r in d["roots"]], None, seed=1)
     ops = [o.to_json() for o in in_process.rounds.openings]
     assert CC.rounds(*rounds_cases.rounds_args({**d, "session": in_process.files(), "openings": ops})) == \
         ("coin", "the challenger's session is not trusted: the challenger record's signature does not verify under the "
