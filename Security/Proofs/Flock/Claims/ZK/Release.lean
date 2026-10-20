@@ -518,7 +518,8 @@ def ownMsg {W R : Type} (L : LeanRelease W R) (x : Msg) (w : W) (ρ : R) (h : Li
 the `Finish` are the firewall's own (`ownMsg`), which a worker's value passes only where it is the firewall's; at a
 frame round the worker's value is the device round (with whether it is the firewall's stand-in), the mask is the Lean
 frame's release and the check is Rust's checks, the Lean frame's pass decision and the frame's own refusals, refusing a
-worker value that says it is a stand-in. -/
+worker value that says it is a stand-in. The session ends at its `Finish` (§10.1), so the firewall takes no frame round
+past it: a worker's value there fails. -/
 def toSrv {W R : Type} (L : LeanRelease W R) : ZkServer W R where
   Chk := Unit
   Val := Msg × Bool
@@ -528,7 +529,8 @@ def toSrv {W R : Type} (L : LeanRelease W R) : ZkServer W R where
   own := fun x _ _ ρ _ => (L.hello x ρ, false)
   recomp := fun x _ _ w ρ h _ => (L.ownMsg x w ρ h, false)
   mask := fun x _ _ ρ h v => (L.release x ρ h v.2 v.1, v.2)
-  rel := fun x j _ w ρ h _ _ v => !v.2 && L.cross x j w ρ h v.1 && L.pass x w ρ h v.1 && L.takes x ρ h v.1
+  rel := fun x j _ w ρ h _ _ v =>
+    !v.2 && decide (h.length < L.last x) && L.cross x j w ρ h v.1 && L.pass x w ρ h v.1 && L.takes x ρ h v.1
   honest := fun x j _ w ρ h => if L.kindAt x j = .masked then
     (L.device x w ρ h (computedOf (L.computed x w ρ h)), false) else (L.ownMsg x w ρ h, false)
   frame := fun _ _ vs => (vs ⟨0, Nat.zero_lt_one⟩).1
@@ -567,13 +569,13 @@ theorem pass_of_none {W R : Type} (L : LeanRelease W R) (wk : L.toSrv.Worker) (x
   | recomputed => rfl
   | masked => rfl
 
-/-- **While the worker's run is live it sent its own value for each frame round**, which Rust's checks, the frame's pass
-decision and the frame took. -/
-theorem live_some {W R : Type} (L : LeanRelease W R) (wk : L.toSrv.Worker) (x : Msg) (w : W) (ρ : R)
+/-- **While the worker's run is live it sent its own value for each frame round** below the `Finish`, which Rust's
+checks, the frame's pass decision and the frame took. -/
+theorem live_some_lt {W R : Type} (L : LeanRelease W R) (wk : L.toSrv.Worker) (x : Msg) (w : W) (ρ : R)
     (κ : L.toSrv.Chk) (h : List (Msg × Msg)) (hk : L.kindAt x h.length = .masked)
     (hl : L.toSrv.live wk x w ρ κ h = true) :
-    ∃ v, wk x w ρ h 0 = some (v, false) ∧ L.cross x h.length w ρ h v = true ∧ L.pass x w ρ h v = true ∧
-      L.takes x ρ h v = true := by
+    ∃ v, wk x w ρ h 0 = some (v, false) ∧ h.length < L.last x ∧ L.cross x h.length w ρ h v = true ∧
+      L.pass x w ρ h v = true ∧ L.takes x ρ h v = true := by
   have hp := L.toSrv.pass_of_live wk x w ρ κ h hl (le_refl h.length)
   rw [List.take_length] at hp
   change (List.range 1).all _ = true at hp
@@ -588,11 +590,29 @@ theorem live_some {W R : Type} (L : LeanRelease W R) (wk : L.toSrv.Worker) (x : 
   | some u =>
     obtain ⟨v, b⟩ := u
     rw [hw] at hp
-    change (!b && L.cross x h.length w ρ h v && L.pass x w ρ h v && L.takes x ρ h v) = true at hp
-    simp only [Bool.and_eq_true, Bool.not_eq_eq_eq_not, Bool.not_true] at hp
-    obtain ⟨⟨⟨hb, hcv⟩, hpv⟩, htv⟩ := hp
+    change (!b && decide (h.length < L.last x) && L.cross x h.length w ρ h v && L.pass x w ρ h v &&
+      L.takes x ρ h v) = true at hp
+    simp only [Bool.and_eq_true, Bool.not_eq_eq_eq_not, Bool.not_true, decide_eq_true_eq] at hp
+    obtain ⟨⟨⟨⟨hb, hlt⟩, hcv⟩, hpv⟩, htv⟩ := hp
     subst hb
-    exact ⟨v, rfl, hcv, hpv, htv⟩
+    exact ⟨v, rfl, hlt, hcv, hpv, htv⟩
+
+/-- **While the worker's run is live it sent its own value for each frame round**, which Rust's checks, the frame's pass
+decision and the frame took. -/
+theorem live_some {W R : Type} (L : LeanRelease W R) (wk : L.toSrv.Worker) (x : Msg) (w : W) (ρ : R)
+    (κ : L.toSrv.Chk) (h : List (Msg × Msg)) (hk : L.kindAt x h.length = .masked)
+    (hl : L.toSrv.live wk x w ρ κ h = true) :
+    ∃ v, wk x w ρ h 0 = some (v, false) ∧ L.cross x h.length w ρ h v = true ∧ L.pass x w ρ h v = true ∧
+      L.takes x ρ h v = true := by
+  obtain ⟨v, hv, -, hc, hp, ht⟩ := L.live_some_lt wk x w ρ κ h hk hl
+  exact ⟨v, hv, hc, hp, ht⟩
+
+/-- **A live run's frame rounds are below the `Finish`.** -/
+theorem live_lt_last {W R : Type} (L : LeanRelease W R) (wk : L.toSrv.Worker) (x : Msg) (w : W) (ρ : R)
+    (κ : L.toSrv.Chk) (h : List (Msg × Msg)) (hk : L.kindAt x h.length = .masked)
+    (hl : L.toSrv.live wk x w ρ κ h = true) : h.length < L.last x := by
+  obtain ⟨-, -, hlt, -⟩ := L.live_some_lt wk x w ρ κ h hk hl
+  exact hlt
 
 /-- The deferred frame at a frame round is the Lean frame's release of the value `wkD` masks. -/
 theorem frameD_toSrv {W R : Type} (L : LeanRelease W R)

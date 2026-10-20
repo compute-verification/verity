@@ -423,15 +423,19 @@ import Proofs.Flock.Claims.ZK.Stop
   Props; where that rule is the frame's refusals up to the protocol's last coin wherever the openings pass
   (`LeanRelease.StopsAt`),
   its `StopRefine` is proved (`LeanRelease.stopRefine_withStops`), and its `LiveRefine` and `FillRefine` follow from the
-  check being the session's, the frame's end past the last coin (`LeanRelease.EndsAt`) and the per-round
-  byte equality at the worker's and the stand-in rounds (`LeanRelease.liveRefine_withStops`, `fillRefine_withStops`),
-  its `HelloRefine` and `OwnRefine` from the server's `Hello`, the firewall's link and its `Finish` being the session's
-  (`HelloEq`, `LinkRoundEq`, `FinalRoundEq`: `helloRefine_withStops`, `ownRefine_withStops`), so
-  `Flock.zk_server_lean_stops` assumes no part of `ItemsRefine`; `Flock.zk_server_lean_coinLayer` is it at the deployed
-  coin layer (`CoinLayer.session`) at SHA-512, with `CheckIs` proved from two transport trusts, `flock-firewall coins`
-  reading the server's `Hello` with the tape's nonce (`LeanRelease.HelloParses`) and the requests following the
-  schedule (`LeanRelease.ReqsFollow`). A transport that reads the history only through the decoded coins on the
-  histories its check passes (`LeanRelease.ReadsCoins`) gives the rule and `StopsAt` (`LeanRelease.stopsAt_of_readsCoins`).
+  check being the session's and the per-round byte equality at the worker's and the stand-in rounds
+  (`LeanRelease.liveRefine_withStops`, `fillRefine_withStops`; the deferred server takes no worker value past the
+  `Finish`, `LeanRelease.live_lt_last`), its `HelloRefine` and `OwnRefine` from the server's `Hello`, the firewall's
+  link and its `Finish` being the session's (`HelloEq`, `LinkRoundEq`, `FinalRoundEq`: `helloRefine_withStops`,
+  `ownRefine_withStops`), so `Flock.zk_server_lean_stops` assumes no part of `ItemsRefine`. A transport that reads the
+  history only through the decoded coins on the histories its check passes (`LeanRelease.ReadsCoins`) gives the rule
+  and `StopsAt` (`LeanRelease.rfOf`, `stopsAt_of_readsCoins`). `Flock.zk_server_lean_coinLayer` is it at the deployed
+  coin layer (`CoinLayer.session`) at SHA-512 from the transport's trusts alone, each named for its reason:
+  `LeanRelease.HelloEq`, `LinkRoundEq`, `FinalRoundEq`, `ReqsFollow` and `ReadsCoins` are facts about what Rust
+  computes (`hello_with_nonce`, `Firewall::root`, `Firewall::finish`, `coin_tree::Checked`, `LeanFrame`), and
+  `HelloDParses` one about Lean's own `Hello.parse` of `CoinLayer.helloD`, which the kernel cannot evaluate
+  (`Lean.Json.parse` is `partial`); `CheckIs` is proved from them (`LeanRelease.checkIs_coinLayer`,
+  `helloParses_of_helloEq`).
 * `CoinPass`: those premises leave a history to be live at. At every tape, past `Hello` and the link, the check passes
   `Hello`'s answer whose root the first opening walks to under the tape's nonce, and that opening, at every key with bit
   2047 clear and every opening that reads back (`LeanRelease.opens_coinPass`; the all-zero one,
