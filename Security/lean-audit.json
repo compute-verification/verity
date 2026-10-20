@@ -79,7 +79,8 @@
    "digest": "9191da3bbab04e2c655d21d45cd15f7b317e9cc5cfe9b93627e1b050b7203aec"
   },
   "Accounting.Placed.LatencyAtMost": {
-   "owner": "@memory-accounting"
+   "owner": "@memory-accounting",
+   "digest": "4a835db3935ea4ef4c6278765c992ee1ffbca80874a7ba6d848b5ce45d455eb1"
   },
   "Claims.ExpectedCR": {
    "owner": "@proofs",
@@ -388,6 +389,26 @@
   "Pouw.PearlC.pearlCTilesDevChainCap": {
    "owner": "@compute-accounting",
    "digest": "2170dd5823cfd9a6272b9ce11cf29f7de11dce337c0926e307ab60d0f8dd34b6"
+  },
+  "Accounting.Assumptions.LateAnswers": {
+   "owner": "@memory-accounting",
+   "digest": "72307f0620e23e5d5f32d4344c14092e57d847c16efb9d7c9ecdb3d013f22f65"
+  },
+  "Accounting.Assumptions.LiveReads": {
+   "owner": "@memory-accounting",
+   "digest": "fe631f101be2748e869a59f9a122a639f83cd5b6c7fc8e51e971f4b7f9595f18"
+  },
+  "Accounting.Assumptions.LiveVerdicts": {
+   "owner": "@memory-accounting",
+   "digest": "930f3b00f63507822ce5d1efb42692c8e75bb0cdfce7adc553e70faaf5305d9d"
+  },
+  "Accounting.Assumptions.QuietReads": {
+   "owner": "@memory-accounting",
+   "digest": "9385275735b41b7287ba8c27a322a720f6562eb20d427aaa58e6173ede376108"
+  },
+  "Accounting.Assumptions.UniformLabels": {
+   "owner": "@memory-accounting",
+   "digest": "8a5606786b3b26b8e965277006ad1272a3769f44ae8512e98c60ecd6430e4672"
   }
  },
  "meaning": [
@@ -680,7 +701,12 @@
  "four_names": ["Nci", "NetTiming", "Accounting"],
  "guarantees": {
   "Accounting.SecurityProofs.Actual.AnsweredOfQuiet": {
-   "owner": "@memory-accounting"
+   "owner": "@memory-accounting",
+   "signature": [
+    "Accounting.SecurityProofs.Actual.AnsweredOfQuiet.{u_5, u_6, u_7, u_8} : Accounting.Guarantees.Actual.AnsweredOfQuiet"
+   ],
+   "assumptions": [],
+   "type_hash": "ac96692d388b7e4959ed9180772202cd52228015ebff10809551390c99c4f997"
   },
   "Accounting.SecurityProofs.Actual.Runtime": {
    "owner": "@lean",
@@ -715,7 +741,10 @@
    "type_hash": "374296d8334aa13abbb145fd7f4dc2b4bd0879828f6d5863bb10306b610fadce"
   },
   "Accounting.SecurityProofs.Actual.WipeLag": {
-   "owner": "@memory-accounting"
+   "owner": "@memory-accounting",
+   "signature": ["Accounting.SecurityProofs.Actual.WipeLag.{u_2, u_3, u_4} : Accounting.Guarantees.Actual.WipeLag"],
+   "assumptions": [],
+   "type_hash": "5a9a4110735b1fb7b83cc6f52ec2804eba21087324d3903036976e07ba856dc9"
   },
   "Accounting.SecurityProofs.Actual.WipePool": {
    "owner": "@lean",
@@ -730,10 +759,18 @@
    "type_hash": "6d1788cd897b115bad02b6978826ceae7b7be7b32e0b3b26abe4736b4f3277a7"
   },
   "Accounting.SecurityProofs.Actual.WipeReadHeld": {
-   "owner": "@memory-accounting"
+   "owner": "@memory-accounting",
+   "signature": [
+    "Accounting.SecurityProofs.Actual.WipeReadHeld.{u_5, u_6, u_7, u_8} : Accounting.Guarantees.Actual.WipeReadHeld"
+   ],
+   "assumptions": [],
+   "type_hash": "2b3c90af401a23241ab54f737beed2c849e13e173bd7a698d7a680454242557f"
   },
   "Accounting.SecurityProofs.Actual.WipeReadPool": {
-   "owner": "@memory-accounting"
+   "owner": "@memory-accounting",
+   "signature": ["Accounting.SecurityProofs.Actual.WipeReadPool.{u_3, u_4} : Accounting.Guarantees.Actual.WipeReadPool"],
+   "assumptions": [],
+   "type_hash": "53ded1fd00f3bc75c312a97dfdc886aa7b9a42f6dc170b487509cc63dd73d350"
   },
   "Accounting.SecurityProofs.B2": {
    "owner": "@memory-accounting",
@@ -5579,11 +5616,14 @@
     "Accounting.Placed.x": "994440becd8445d653a65b364659a7498c1ea20fa4c58dc13c6780b6bf12fef7"
    },
    "guarantees": [
+    "Accounting.SecurityProofs.Actual.AnsweredOfQuiet",
     "Accounting.SecurityProofs.Actual.Runtime",
     "Accounting.SecurityProofs.Actual.ThreadedRate",
     "Accounting.SecurityProofs.Actual.ThreadedRuntime",
     "Accounting.SecurityProofs.Actual.Windows",
     "Accounting.SecurityProofs.Actual.WindowsAt",
+    "Accounting.SecurityProofs.Actual.WipeLag",
+    "Accounting.SecurityProofs.Actual.WipeReadHeld",
     "Accounting.SecurityProofs.B2",
     "Accounting.SecurityProofs.B2Adds",
     "Accounting.SecurityProofs.B2AddsP2Ring",
@@ -5604,6 +5644,19 @@
     "Bandwidth.SecurityProofs.B3RO",
     "Bandwidth.SecurityProofs.Mbw",
     "Bandwidth.SecurityProofs.MbwCapacity"
+   ]
+  },
+  "Definitions.Accounting.Actual.WipeHeld": {
+   "digest": "d10182107aa699d46e6951392f4b620db032fa27e47950e96a88a65f18fa1a77",
+   "definitions": {
+    "Accounting.Actual.answered": "82f30dee710bd4f4f4c3f8e8b1ee6f29a131b11e09e29c3c15e228674116ba88",
+    "Accounting.Actual.contents": "c59367b779f35f3ea3fa1454dee9bb299988eec9fade90eb0b8ad0066e19e80c",
+    "Accounting.Actual.unanswered": "a104943d3d4d233095e8a2613aad83c1fb8c5084971587797915d2db759d146c"
+   },
+   "guarantees": [
+    "Accounting.SecurityProofs.Actual.AnsweredOfQuiet",
+    "Accounting.SecurityProofs.Actual.WipeLag",
+    "Accounting.SecurityProofs.Actual.WipeReadPool"
    ]
   },
   "Definitions.Accounting.Actual.WipePool": {
@@ -5877,7 +5930,10 @@
     "Accounting.req": "961f514b6304465dc1e7e4fa55e51c523c147c776780150b65c6454bdaed6fea"
    },
    "guarantees": [
+    "Accounting.SecurityProofs.Actual.AnsweredOfQuiet",
     "Accounting.SecurityProofs.Actual.Runtime",
+    "Accounting.SecurityProofs.Actual.WipeLag",
+    "Accounting.SecurityProofs.Actual.WipeReadHeld",
     "Accounting.SecurityProofs.B2",
     "Accounting.SecurityProofs.B2Adds",
     "Accounting.SecurityProofs.B2AddsP2Ring",
@@ -6076,7 +6132,7 @@
    ]
   },
   "Definitions.Accounting.Physical": {
-   "digest": "0b94e407f8c752218c33d2a60fdc2348da2be15e8b2b39cb38ad25d2b43ade60",
+   "digest": "73dd130ac4c8d39fdaa54c6ae860941a1b15809c866c332556a7e3f495d502f3",
    "definitions": {
     "Accounting.Actual.Run.record": "cef12634f1151508a108f7cc4f75fa0152800cf5a567b253af90bfd921aefccd",
     "Accounting.CausalStrategy": "c925dc397dff2c7afd95eeafa0c098ada1ed84ad87f7acaec4069157ab2d4083",
@@ -6084,6 +6140,7 @@
     "Accounting.DeclaredLinks": "1d42c317ec6a1bf9a8840fe0946906a0218f8f32ec847718d03f1ee6f1af1a60",
     "Accounting.Placed.Causal": "2f04d6a4fe23b7a63aebd7193ea1d651866d0c4924150d9e15f1c357f33321f6",
     "Accounting.Placed.ComputeRate": "96822ce429b2fa6114048640d01228d12b1cfb6ff66fbb3af883ef7fc773eb15",
+    "Accounting.Placed.LatencyAtMost": "4a835db3935ea4ef4c6278765c992ee1ffbca80874a7ba6d848b5ce45d455eb1",
     "Accounting.Placed.Links": "21289f1d8100bbc4b24f3fb015950d0d11f515aeb18b02f70d65a6b68f2f813b",
     "Accounting.Placed.Memory": "f12294cc702724cca24f7a1192e560840420a9a1ab87d3eff59ab7a9f53edd15",
     "Accounting.Placed.Spec": "b1bacd8a93bd348e554d654f301218d19023c6018637e1667d2984b36593eda6",
@@ -6097,11 +6154,14 @@
     "Accounting.uncertifiedCapacity": "50c8f9c62d90bc1ad68df65c869ad6c4257dd4b1dd3e44b9255753d6c33e503c"
    },
    "guarantees": [
+    "Accounting.SecurityProofs.Actual.AnsweredOfQuiet",
     "Accounting.SecurityProofs.Actual.Runtime",
     "Accounting.SecurityProofs.Actual.ThreadedRate",
     "Accounting.SecurityProofs.Actual.ThreadedRuntime",
     "Accounting.SecurityProofs.Actual.Windows",
     "Accounting.SecurityProofs.Actual.WindowsAt",
+    "Accounting.SecurityProofs.Actual.WipeLag",
+    "Accounting.SecurityProofs.Actual.WipeReadHeld",
     "Accounting.SecurityProofs.B4",
     "Accounting.SecurityProofs.B4Covered"
    ]
@@ -7517,11 +7577,14 @@
     "Verity.Implementation.inp": "997e0ba3c6cf816c20ad7aecf22ecb9aef93d68ebcf8cec1ed8c071b89d64202"
    },
    "guarantees": [
+    "Accounting.SecurityProofs.Actual.AnsweredOfQuiet",
     "Accounting.SecurityProofs.Actual.Runtime",
     "Accounting.SecurityProofs.Actual.ThreadedRate",
     "Accounting.SecurityProofs.Actual.ThreadedRuntime",
     "Accounting.SecurityProofs.Actual.Windows",
     "Accounting.SecurityProofs.Actual.WindowsAt",
+    "Accounting.SecurityProofs.Actual.WipeLag",
+    "Accounting.SecurityProofs.Actual.WipeReadHeld",
     "Accounting.SecurityProofs.B2",
     "Accounting.SecurityProofs.B2Adds",
     "Accounting.SecurityProofs.B2AddsP2Ring",
@@ -16895,6 +16958,21 @@
    },
    "guarantees": ["Accounting.SecurityProofs.Actual.WipePool", "Accounting.SecurityProofs.Actual.WipePoolDelta"]
   },
+  "Models.Accounting.Assumptions.WipeRead": {
+   "digest": "a054e60327c69db6035cee8f0741c06fe41d3ae1d234e1de03db3c1e00fb7ac9",
+   "definitions": {
+    "Accounting.Assumptions.LateAnswers": "72307f0620e23e5d5f32d4344c14092e57d847c16efb9d7c9ecdb3d013f22f65",
+    "Accounting.Assumptions.LiveReads": "fe631f101be2748e869a59f9a122a639f83cd5b6c7fc8e51e971f4b7f9595f18",
+    "Accounting.Assumptions.LiveVerdicts": "930f3b00f63507822ce5d1efb42692c8e75bb0cdfce7adc553e70faaf5305d9d",
+    "Accounting.Assumptions.QuietReads": "9385275735b41b7287ba8c27a322a720f6562eb20d427aaa58e6173ede376108",
+    "Accounting.Assumptions.UniformLabels": "8a5606786b3b26b8e965277006ad1272a3769f44ae8512e98c60ecd6430e4672"
+   },
+   "guarantees": [
+    "Accounting.SecurityProofs.Actual.AnsweredOfQuiet",
+    "Accounting.SecurityProofs.Actual.WipeReadHeld",
+    "Accounting.SecurityProofs.Actual.WipeReadPool"
+   ]
+  },
   "Models.Accounting.Guarantees.Actual": {
    "digest": "1beac18716c243f84629c7971bed42665b32b318c9c4de68668daaea23880891",
    "definitions": {
@@ -16915,6 +16993,21 @@
     "Accounting.Guarantees.Actual.ThreadedRuntime": "0957634d1e3be4bb98d90dfae3044ac393c5fbb66218c58c2bc6be8d52fd6954"
    },
    "guarantees": ["Accounting.SecurityProofs.Actual.ThreadedRate", "Accounting.SecurityProofs.Actual.ThreadedRuntime"]
+  },
+  "Models.Accounting.Guarantees.Actual.WipeBridge": {
+   "digest": "1f3ad22556027fbf8d790e9433a90c70f149e9f3b4e3b790ff68a4d35f1b2e9e",
+   "definitions": {
+    "Accounting.Guarantees.Actual.AnsweredOfQuiet": "d995b35ad0509b18b5aa458adb938c9000e2ef0d29eef133e5c278297f1a077c",
+    "Accounting.Guarantees.Actual.WipeLag": "1b1da8aaaf848b32b285ccef37e813543ddf9d74d0b1e150d21186798350033d",
+    "Accounting.Guarantees.Actual.WipeReadHeld": "20826dd48cdcc354946c9c7c0b54f1925eeeee22321e7e22d976b9c3284943f1",
+    "Accounting.Guarantees.Actual.WipeReadPool": "5ab5cc66a0a0e029bb9c3242fdf674c65d836aef0f8aabd41bcbb1836776283b"
+   },
+   "guarantees": [
+    "Accounting.SecurityProofs.Actual.AnsweredOfQuiet",
+    "Accounting.SecurityProofs.Actual.WipeLag",
+    "Accounting.SecurityProofs.Actual.WipeReadHeld",
+    "Accounting.SecurityProofs.Actual.WipeReadPool"
+   ]
   },
   "Models.Accounting.Guarantees.Actual.WipePool": {
    "digest": "d6b5e0a238a2125d1ac93438fd778241c60f37ea570db222abb216230290847a",
