@@ -15,6 +15,7 @@ Merkle scheme), and custody makes those bytes `P`'s message `r · R + j + 1`, `R
 * `plain_acc_mids`: an accepted plain run decides on `P`'s messages along its coins.
 * `plain_capChunk`: an accepted plain rep's frames, chunk by chunk, are `P`'s round messages.
 * `plain_capPrefix`: two accepted plain runs sharing the coins before `forkRound` absorb one cap there.
+* `plain_levelTie`: so two different rows they open at one level-`(ℓ + 1)` position tie a collision among their calls.
 -/
 
 namespace FlockDeploy.KS
@@ -226,5 +227,38 @@ theorem plain_capPrefix {Ω : Type} {P : Claims.Prover Ω} {x : Claims.Msg} {ω 
   · simp only [Claims.coinSeq, hk, ↓reduceDIte]
     exact hc ⟨i, hk⟩ hi'
   · simp only [Claims.coinSeq, hk, ↓reduceDIte]
+
+/-- **Two accepted plain runs sharing the coins before the plain fork round, opening one later-level position to two
+rows, tie a collision among their verifier calls**: each row is an `Opening` of the position in its run's log against
+the run's rep-`r` flattened `ℓ`-th recursive cap (`plain_levelOpening` at level `ℓ + 1`), the two caps are one
+(`plain_capPrefix`), and two openings of one position against one root to different rows tie a collision
+(`tiedColl_of_openings`). -/
+theorem plain_levelTie {Ω : Type} {P : Claims.Prover Ω} {x : Claims.Msg} {ω : Ω}
+    {c₁ c₂ : Fin ((V false).k x) → Coin} (h₁ : (Claims.run sha512 P (V false) x ω c₁).out = .acc)
+    (h₂ : (Claims.run sha512 P (V false) x ω c₂).out = .acc) {s : Ins} {spec : SessionSpec} {sts : Array Stmt}
+    {st : Stmt} {sch : Flock.Schedule} {r ℓ : ℕ} (hs : setupOf false x = some (s, spec, sts))
+    (hst : sts[0]? = some st) (hsch : fast100 st.m = some sch) (hr : r < 2) (hℓ : ℓ + 1 < sch.levels.size)
+    (hc : ∀ i : Fin ((V false).k x), i.val < forkRound spec st sch.k0 r ℓ → c₁ i = c₂ i) {q : ℕ}
+    {a b : List FlockLevel3.GF128}
+    (ha : (q, a) ∈ plainRawLevelCols (Claims.run sha512 P (V false) x ω c₁).seen r (ℓ + 1))
+    (hb : (q, b) ∈ plainRawLevelCols (Claims.run sha512 P (V false) x ω c₂).seen r (ℓ + 1)) (hab : a ≠ b) :
+    Claims.TiedColl sha512
+      ((Claims.run sha512 P (V false) x ω c₁).vLog ++ (Claims.run sha512 P (V false) x ω c₂).vLog) := by
+  obtain ⟨s₁, spec₁, sts₁, f₁, st₁, sch₁, p₁, row₁, hs₁, hf₁, hst₁, hsch₁, hp₁, hra, -, -, hop₁⟩ :=
+    plain_levelOpening h₁ ha
+  obtain ⟨s₂, spec₂, sts₂, f₂, st₂, sch₂, p₂, row₂, hs₂, hf₂, hst₂, hsch₂, hp₂, hrb, -, -, hop₂⟩ :=
+    plain_levelOpening h₂ hb
+  obtain ⟨rfl, e₁⟩ := Prod.mk.inj (Option.some.inj (hs₁.symm.trans hs))
+  obtain ⟨rfl, rfl⟩ := Prod.mk.inj e₁
+  obtain ⟨rfl, e₂⟩ := Prod.mk.inj (Option.some.inj (hs₂.symm.trans hs))
+  obtain ⟨rfl, rfl⟩ := Prod.mk.inj e₂
+  obtain rfl := Option.some.inj (hst₁.symm.trans hst)
+  obtain rfl := Option.some.inj (hst₂.symm.trans hst)
+  obtain rfl := Option.some.inj (hsch₁.symm.trans hsch)
+  obtain rfl := Option.some.inj (hsch₂.symm.trans hsch)
+  have hcap := plain_capPrefix h₁ h₂ hs hst hsch hr hℓ hc hf₁ hf₂ hp₁ hp₂
+  rw [Nat.add_sub_cancel] at hop₁ hop₂
+  rw [hcap] at hop₁
+  exact tiedColl_of_openings hop₁ hop₂ fun he => hab (by rw [hra, hrb, he])
 
 end FlockDeploy.KS
