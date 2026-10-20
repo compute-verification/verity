@@ -82,8 +82,10 @@ worktree at a commit the guard accepts (`git worktree add /tmp/glm-v2-SHA SHA`).
 4. Window B, eu (`gpu_batch.sh b ROWS.env`): each row's Commit (`commit.sh`: rows-sha512 under `verity/tp-run-root/v2`,
    PENDING by design), its bundles and row records preserved in the store. Stop eu. It commits against the Build of record in
    the same row dir, since publish refuses a Commit whose required manifest or per-rank Programs are not that Build's. Its modes
-   are the records': RETAIN=host as B1's Commit r20261016-213336-6c35 (not the G2 curve's `--retain none`), REPLAY_DEFERRED=1
-   and PAIRS=1 as B8's r20261019-091846-1452 (the config's default is 3 pairs, which B1's v1 Commit ran in-process).
+   are B1's Commit r20261019-074856-7c3a's and B8's r20261019-091846-1452's: REPLAY_DEFERRED=1, RETAIN=host (the default, not
+   the G2 curve's `--retain none`) and PAIRS=1. Deferred, each rank's bundle `store/` holds its retained bytes, so the committed
+   values are on disk for the replay and the audits; v1's B1 Commit r20261016-213336-6c35 was not deferred and kept none. The
+   config's default is 3 pairs, which that v1 Commit ran.
 5. CPU, vy-nebius-cpu-3 (the verified checkpoint): the Build of record copied in, then `replay_publish.sh` per row (`--send
    bundles.json`): `tp-commit-replay` of every rank, then `records publish --tier heavy` with the nine captures of record cited
    by id (#2838's eight served-default captures, which this tree's `check_capture` accepts, and `BF16_ART`), the Commit's run
