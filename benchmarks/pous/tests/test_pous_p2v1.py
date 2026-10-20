@@ -737,6 +737,30 @@ def test_the_signed_sessions_are_on_disk_before_any_verdict_runs(tmp_path, monke
         assert v.accepted, v.reasons
 
 
+def test_a_test_signed_audit_leaves_nothing_in_tmpdir(tmp_path_factory, monkeypatch):
+    """`--signer test`'s leaf state and session log are in a temporary directory the audit removes, whether it ends or
+    fails: nothing removes one left in `$TMPDIR` (`pous-session-log-*` and `pous-test-signer-*` held 82% of vy-nebius-2's
+    /workspace inodes, 19 Oct)."""
+    import tempfile
+
+    from verity.core.protocols.pous.schemes import p2
+
+    live = _live()
+    tmp = tmp_path_factory.mktemp("tmpdir")
+    monkeypatch.setattr(tempfile, "tempdir", str(tmp))
+    doc, _ = _mc_at_the_p2_point(500_000 + p2.RTT_ALLOWANCE_CAP_NS, audits=1)
+    assert doc["audits_accepted_under_signer"] == 1 and Path(doc["signer"]["session_log"]).is_relative_to(tmp)
+    assert list(tmp.iterdir()) == []
+
+    def gone(*_a):
+        raise ConnectionError("the responder went away")
+
+    monkeypatch.setattr(live, "calibrate", gone)
+    with pytest.raises(ConnectionError, match="went away"):
+        _mc_at_the_p2_point(500_000 + p2.RTT_ALLOWANCE_CAP_NS, audits=1)
+    assert list(tmp.iterdir()) == []
+
+
 def test_a_lean_verdict_that_cannot_load_stops_the_audit_before_any_signer_opens(tmp_path, monkeypatch):
     """The Lean verdict is loaded, built and serving before the first session signs: where it can't be, the audit raises
     before the signer's key, and so its leaf state, is opened, and no session file is written."""

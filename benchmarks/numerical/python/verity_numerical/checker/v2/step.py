@@ -34,8 +34,8 @@ from .gadgets import (
 )
 
 __all__ = ["accepts_step", "accepts_vu", "check_step", "check_step_expr", "check_unit_expr", "check_vu",
-           "check_vu_expr", "check_vu_words_expr", "contracts", "gen_step", "gen_unit", "gen_vu", "hint_widths",
-           "step_output", "vu_output"]
+           "check_vu_expr", "check_vu_words_expr", "contracts", "gen_step", "gen_unit", "gen_vu", "step_output",
+           "vu_output"]
 
 def _k(p: Params) -> int:
     return sum(p.groups)
@@ -238,11 +238,3 @@ def contracts(p: Params = REAL) -> list:
     return [StateDecode.contract(p), OpDecode.contract(p), Product.contract(p), GroupMax.contract(p),
             StateShift.contract(p), ProductShift.contract(p), SignedSum.contract(p), Normalise.contract(p),
             Pack.contract(p), Epilogue.contract(p)]
-
-
-def hint_widths(p: Params) -> dict[str, dict[str, tuple[int, int]]]:
-    """Hint ranges by hint-tree section: ``acc`` (StateDecode), ``groups[].E`` (GroupMax), ``acc_split``
-    (StateShift), ``sum`` (SignedSum), ``epilogue``."""
-    return {"acc": StateDecode.contract(p).hints, "E": GroupMax.contract(p).hints,
-            "acc_split": StateShift.contract(p).hints, "sum": SignedSum.contract(p).hints,
-            "epilogue": Epilogue.contract(p).hints}

@@ -10,7 +10,9 @@ import json
 import pytest
 
 from verity_vllm.commit import binding as B
-from verity_vllm.query.manifest.format import canonical_identity, coverage_check, manifest_digest, spec_statics, split_name
+from verity_vllm.query.manifest import format as MF
+from verity_vllm.query.manifest.bind import coverage_check
+from verity_vllm.query.manifest.format import canonical_identity, manifest_digest, spec_statics, split_name
 from tests.check.test_sampled_replay import _program, v2_manifest
 
 EPS = 'EPS={"f64":"0x1.4f8b588e368f1p-17"}'
@@ -69,15 +71,17 @@ def test_coverage_positive_and_negatives():
     r2 = coverage_check(man, {s: ms for s, ms in lay.items() if s != last})
     assert not r2["ok"] and r2["steps_with_missing"] == [last] and r2["missing_n"] == sum(1 for r in checked if r["step"] == last)
 
-    # (3) drop one output member of a two-member module and bind the other twice: same count, same module set -> coverage failure on it
+    # (3) drop one output member of a two-member module and commit the other twice: same count, same module set -> coverage failure on
+    # it.  The members are the fused norm's ports `0` / `1`, committed as tuple slots: one slot for two members places neither
+    # (`verity_vllm.query.manifest.bind`), so both are missing and both tensors are extras
     two = next((s, op, sorted(ms)) for (s, op), ms in _members_by_step_op(checked).items() if len(ms) >= 2)
     s3, op3, (keep, drop) = two[0], two[1], two[2][:2]
     lay3 = copy.deepcopy(lay)
     k = next(i for i, m in enumerate(lay3[s3]) if m["name"] == f"{op3}/{drop}")
     lay3[s3][k] = dict(lay3[s3][k], name=f"{op3}/{keep}")
     r3 = coverage_check(man, lay3)
-    assert not r3["ok"] and r3["missing_n"] == 1 and r3["missing"][0]["output_member"] == drop and r3["missing"][0]["step"] == s3
-    assert r3["committed_unmatched_n"] == 1                               # the duplicate binds nothing required (invocation 1 is not expected)
+    assert not r3["ok"] and r3["missing_n"] == 2 and {(m["output_member"], m["step"]) for m in r3["missing"]} == {(keep, s3), (drop, s3)}
+    assert r3["committed_extras_n"] == 2 and r3["committed_unmatched_n"] == 0
 
     # (4) a member committed SHORT (wrong element range: one row fewer) -> coverage failure (containment)
     tall = next(r for r in checked if r["family"] == "instance_outputs" and int(r.get("rows") or 1) > 1)
@@ -86,6 +90,60 @@ def test_coverage_positive_and_negatives():
     m["numel"] -= m["numel"] // int(tall["rows"])
     r4 = coverage_check(man, lay4)
     assert not r4["ok"] and r4["missing"][0]["op_path"] == tall["op_path"]
+
+
+def test_a_batch_hidden_row_is_covered_by_the_planes_no_manifest_row_spells():
+    """A B>1 batch-level hidden row (request `*`, one FA2 launch per layer per engine step) names the padded whole-step geometry.  The
+    tap commits per-sequence planes at a segmented prefill and one whole launch at decode, under spellings no row has, so the binder
+    binds none of them; coverage holds them to the launch's whole stream (the R19 reference rows 23, 60, 67, 68, 73 and 74; red-team
+    claim 3): one plane set per executing sequence at its scheduled rows, every tensor the words its name's geometry declares."""
+    rows_of = {0: {"r0": 64, "r1": 48}, 1: {"r0": 1, "r1": 1}}
+    geo = {0: (8, 64, 1, 128, 64), 1: (8, 1, 1, 128, 64)}                     # fa2_geometry: (HB, M, NB, BN, D), 4 heads a sequence
+    rows = [{"family": "fa2_hidden_m1_stream", "request_id": "*", "requests": ["r0", "r1"], "rank": 0, "step": "*", "engine_step": s,
+             "op_path": "fa2.m1/L0", "output_member": f"g{geo[s][0]}x{geo[s][1]}x1", "invocation": 0, "element_range": [0, MF.mat_total_words(*geo[s])],
+             "geometry": dict(zip(("HB", "M", "NB", "BN", "D"), geo[s]), seqlen_k=64 + s, rows=geo[s][1] * 2, n_seq=2)} for s in (0, 1)]
+    man = {"complete": True, "manifest_digest": "m" * 64, "identities": rows,
+           "engine_steps": [{"engine_step": s, "members": [{"request_id": q, "rows": n} for q, n in rows_of[s].items()], "rows": sum(rows_of[s].values()),
+                             "n_seq": 2} for s in (0, 1)]}
+    widths = MF.hidden_stream_widths(1, 128, 64)
+    lay = {0: [{"name": f"fa2.m1/L0/s{i}/g4x{sl}x1/{c}", "numel": 4 * sl * w} for i, sl in enumerate(rows_of[0].values()) for c, w in widths.items()],
+           1: [{"name": "fa2.m1/L0/g8x1x1", "numel": MF.mat_total_words(*geo[1])}]}
+    cov = coverage_check(man, lay)
+    assert cov["ok"] and cov["missing_n"] == 0, cov["missing"]
+    assert cov["committed_extras_n"] == 0 and cov["committed_unmatched_n"] == 0
+    dropped = coverage_check(man, {0: [m for m in lay[0] if "/s1/" not in m["name"]], 1: lay[1]})
+    assert not dropped["ok"] and dropped["missing_by_family"] == {"fa2_hidden_m1_stream": 1} and dropped["missing"][0]["engine_step"] == 0
+    assert "the planes of sequences ['s0'] committed, 2 sequence(s) executing" in dropped["missing"][0]["why"]
+    one_short = copy.deepcopy(lay)
+    one_short[1][0]["numel"] -= 1
+    short = coverage_check(man, one_short)
+    assert not short["ok"] and short["missing"][0]["engine_step"] == 1 and "words committed, its geometry declares" in short["missing"][0]["why"]
+
+
+def _seq_planes(rows: list[int], *, h: int = 4, nb: int = 2, ms: bool = False) -> list[tuple[str, int]]:
+    return [(f"s{i}/g{h}x{sl}x{nb}/{c}", h * sl * w) for i, sl in enumerate(rows) for c, w in MF.hidden_stream_widths(nb, 128, 64, ms).items()]
+
+
+@pytest.mark.parametrize("active, members, why", [
+    ([3, 1], _seq_planes([3, 1]), None),
+    ([3, 1], _seq_planes([3, 1], ms=True), "s0 carries"),                                   # MS without the guarded-max policy
+    ([3], _seq_planes([3], nb=1), None),                                                     # one of two executing: its key blocks may be fewer
+    ([3], _seq_planes([3], nb=3), "NB 3"),                                                   # ... never more than the launch declares
+    ([3, 1], _seq_planes([3, 1], nb=1), "NB 1"),                                             # every declared sequence executing: the launch's NB
+    ([3, 1], _seq_planes([3, 1]) + [("g8x3x2", MF.mat_total_words(8, 3, 2, 128, 64))], "beside the per-sequence planes"),
+    ([3, 1], _seq_planes([3, 1]) + _seq_planes([3])[:1], "s0/g4x3x2/S committed twice"),
+    ([3, 1], _seq_planes([3, 1]) + [("s0/g4x3x2/bot", 1)], None),                           # a ⊥ padding plane is not the launch's stream
+    ([3, 1], [("g8x3x2", MF.mat_total_words(8, 3, 2, 128, 64))], None),
+    ([3, 1], [("g8x12x2", MF.mat_total_words(8, 12, 2, 128, 64))], None),                # FA3's rows with its KV group's heads, an old manifest's M without
+    ([3, 1], [("g8x2x2", MF.mat_total_words(8, 2, 2, 128, 64))], "2 executing sequence(s) of this launch stage g8x>=3x2"),
+    ([3], [("g4x3x2", MF.mat_total_words(4, 3, 2, 128, 64))], None),
+    ([3], [("g8x3x2", MF.mat_total_words(8, 3, 2, 128, 64))], "1 executing sequence(s) of this launch stage g4x>=3x<=2")])
+def test_batch_launch_shortfall_names_what_the_committed_stream_lacks(active, members, why):
+    """`format.batch_launch_shortfall` over a two-sequence FA2 launch (4 heads a sequence, NB 2, the legacy tile): None when the committed
+    tensors are its whole stream at the executing sequences' rows, else the shortfall named."""
+    geometry = {"HB": 8, "M": 3, "NB": 2, "BN": 128, "D": 64, "n_seq": 2}
+    got = MF.batch_launch_shortfall(geometry, active, members)
+    assert (got is None) if why is None else (why in (got or "")), got
 
 
 def _members_by_step_op(ids: list[dict]) -> dict[tuple[int, str], set[str]]:

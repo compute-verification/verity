@@ -4,7 +4,6 @@ Every other file of this harness reaches the evidence store through these three 
 API touches this file only:
 
     fetch(artifact_id) -> Path                 materialise an artifact's payload (tree dir or file) and return its local path
-    resolve_snapshot(name) -> list[artifact_id]  the member artifact ids of the dataset-snapshot/v1 artifact named `name`
     put_fixture(path, meta) -> artifact_id      store a dir (tree payload) or a file as a `fixture/v1` artifact, return its `art:` id
     attempt(run_id) -> dict                    an attempt manifest (`r2026…` id); attempt_outputs(run_id, kinds) its outputs by kind
     fetch_attempt(run_ids, to) -> Path         the union of the attempts' row-dir account trees (vllm-build/v1, vllm-match-record/v1,
@@ -133,21 +132,6 @@ def show(artifact_id: str) -> dict:
     p = _cli("show", artifact_id, "--json")
     doc = json.loads(p.stdout)
     return doc.get("manifest", doc) if isinstance(doc, dict) else doc
-
-
-def resolve_snapshot(name: str) -> list[str]:
-    """The member artifact ids of the `dataset-snapshot/v1` named `name` (`refs.members`).  Several snapshots with one name (frozen from
-    different member sets) are a mistake this harness names rather than merges: the LAST id by the CLI's order is used and the others
-    reported on stderr.  Empty list when no snapshot has that name."""
-    p = _cli("select", "--kind", SNAPSHOT_KIND, "--where", f"meta.name={name}", "--ids")
-    ids = ART_RE.findall(p.stdout)
-    if not ids:
-        return []
-    if len(ids) > 1:
-        print(f"[store_io] {len(ids)} snapshots named {name!r}: using {ids[-1]} (others: {ids[:-1]})", file=sys.stderr)
-    doc = show(ids[-1])
-    members = (doc.get("refs") or {}).get("members") or []
-    return list(members) if isinstance(members, list) else [members]
 
 
 def put_fixture(path: Path, meta: dict, *, preserve: bool = False, refs: dict[str, str] | None = None) -> str:

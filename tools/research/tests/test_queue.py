@@ -129,6 +129,24 @@ def test_ready_prs_merge_onto_next_in_number_order_drafts_too_and_held_ownerless
     assert [n for n, e in sorted(status.items()) if e.state == "queued"] == [1, 2, 3, 6] and status[3].position == 3
 
 
+def test_a_new_head_on_top_of_the_admitted_one_keeps_its_place_and_any_other_goes_to_the_back(world):
+    """CI-113, 19 Oct: #2738 and #2729 were re-merged five times as the stacked PRs below them took fixes, and each re-mark sent
+    them behind about 100 PRs. A head that descends from the one `next` holds keeps its place; a rewritten one doesn't."""
+    world.gh.put(1, h1 := world.change({"a.txt": "a1\n"}))
+    world.gh.put(2, world.change({"b.txt": "b2\n"}))
+    world.gh.put(3, h3 := world.change({"c.txt": "c3\n"}))
+    q = world.queue()
+    q.sync()
+    assert world.on_next(q) == [1, 2, 3]
+    world.gh.put(1, world.change({"a.txt": "a1 fixed\n"}, base=h1))           # a fix on top of #1's admitted head
+    members, _ = q.sync()
+    assert [m.pr for m in members] == [1, 2, 3] and members[0].head == world.gh.prs[1].head
+    world.gh.put(3, world.change({"c.txt": "c3 again\n"}, base=h3))          # #3 fixed too: it keeps its place
+    world.gh.put(2, world.change({"b.txt": "b2 rewritten\n"}))               # #2 rewritten from main: to the back
+    members, _ = q.sync()
+    assert [m.pr for m in members] == [1, 3, 2]
+
+
 def test_the_queues_merges_carry_the_time_they_are_made_whatever_date_the_caller_pins(world, monkeypatch):
     """12 Oct: the hand-landing recipe pinned 2026-09-28T23:00Z for reproducible merge ids, a merge on `next` built under it
     (ba87196a8) landed with that date, and `git log --since` over `main` stopped early there."""
@@ -793,6 +811,7 @@ PREFLIGHT_FILES = {
     "tests/test_module_strings.py": _invariant("BROKEN_MODULE_STRING", 1),
     "tests/test_pins.py": _invariant("BROKEN_PIN", 1),
     "tests/test_doc_paths.py": _invariant("BROKEN_DOC_PATH", 1),
+    "tests/test_repository.py": _invariant("REPORT_GENRE_NAME", 1),
     "tools/research/tests/test_pythonpath.py": _invariant("BROKEN_REAL_ROOTS", 3),
     "tools/verity/check/suites.py": (Path(__file__).resolve().parents[2] / "verity" / "check" / "suites.py").read_text(),
     "tools/verity/check/pins.py": ("import sys\nfrom pathlib import Path\nif Path('STALE.txt').exists():\n"
@@ -876,6 +895,9 @@ PREFLIGHT_REFUSALS = {
                       "tests/test_module_strings.py::test_broken_module_string_absent"),
     "pythonpath": ({"BROKEN_REAL_ROOTS": ""}, "the invariant tests in tools/research fail on the merged tree: FAILED "
                    "tests/test_pythonpath.py::test_broken_real_roots_absent"),
+    # 20 Oct's #2818 (a skill over the Markdown cap) and #2827 (a report-genre name) each failed a train's preflight-lints
+    "repository lint": ({"REPORT_GENRE_NAME": ""}, "the invariant tests in . fail on the merged tree: FAILED "
+                        "tests/test_repository.py::test_report_genre_name_absent"),
     # #2213's test read a vector row that #2210, queued before it, refits away: a KeyError at import on the merged tree only
     "collection error": ({"pkg/tests/test_rows.py": "import json\nfrom pathlib import Path\n"
                           "ROW = json.loads((Path(__file__).parents[1] / 'rows.json').read_text())['r7']\n"},
@@ -1443,13 +1465,39 @@ def test_a_remote_quick_tiers_wait_is_bounded_in_time_however_long_each_fetch_ta
         clock[0] += 900
         return {}
 
-    tier = Q.RemoteQuickTier(tmp_path, "origin", "vy-test", timeout_s=3600, wait_s=1800, poll_s=30, fetch=hung_fetch, sleep=advance,
-                             clock=lambda: clock[0])
+    bound = 1800 + 3600 + Q.REMOTE_GRACE_S
+    tier = Q.RemoteQuickTier(tmp_path, "origin", "vy-test", timeout_s=3600, wait_s=1800, max_wait_s=bound + 1, poll_s=30,
+                             fetch=hung_fetch, sleep=advance, clock=lambda: clock[0])
     (d := tmp_path / "runs" / "r1").mkdir(parents=True)
     _, why = tier._wait(d, "vy-test")
-    bound = 1800 + 3600 + Q.REMOTE_GRACE_S
     assert why == f"run r1 on vy-test didn't end within {bound:g} s (last seen without a status): `research inspect r1`"
     assert bound <= clock[0] <= bound + 30 + 900, "it ends with the poll under way at the deadline"
+    clock[0] = 0.0
+    tier.max_wait_s = Q.waitcap.WAIT_CAP_S
+    _, why = tier._wait(d, "vy-test")
+    assert isinstance(why, Q.StillGoing) and Q.waitcap.WAIT_CAP_S <= clock[0] <= Q.waitcap.WAIT_CAP_S + 900
+
+
+def test_ready_on_stops_waiting_at_twenty_minutes_and_judge_marks_the_pr_once_the_run_ends(world, monkeypatch, capsys):
+    """No tool call may block more than 20 minutes (Daniel, 19 Oct), and a quick tier may wait hours for a check slot: `ready --on`
+    leaves its run going, marks nothing, names `judge RUN`, and exits STILL_GOING; `judge` marks the PR once the run passed."""
+    from research import queue as Q
+
+    machine = Machine(world.tmp, outcome=_reports())
+    tier, sleeps = _remote_tier(world, monkeypatch, machine, max_wait_s=60)
+    world.gh.put(1, h1 := world.change({"a.txt": "a1\n"}), ready=False)
+    fetched = []
+    tier.fetch = lambda d: fetched.append(d) or {}
+    capsys.readouterr()
+    assert Q.ready(world.gh, world.store, 1, "lane-1", tier) == Q.waitcap.STILL_GOING
+    assert sum(sleeps) == 60 and len(fetched) == 2
+    assert Q.StoreLabels(world.store, log=world.logs.append).ready(1, h1) is False
+    rid = (flags := machine.launched[-1])[flags.index("--id") + 1]
+    err = capsys.readouterr().err
+    assert f"#1 is not marked ready at {h1[:12]} yet" in err and f"the quick tier's run {rid} on vy-test" in err
+    assert f"Check back with `research queue judge {rid} --by lane-1`" in err and "Nothing was cancelled" in err
+    assert Q.judge(world.gh, world.store, rid, "lane-1", fetch=machine.fetch) == 0
+    assert Q.StoreLabels(world.store, log=world.logs.append).ready(1, h1) is True
 
 
 def test_a_remote_quick_tier_gives_its_suites_the_store_as_a_recorded_check_does(world, monkeypatch):

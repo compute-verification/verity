@@ -26,8 +26,8 @@ first descriptor: the port's index times the port's capacity, plus the frames th
 (less their salt frames), all public occupancy. `record` is the root of N2's commitment to the link-window's certified
 records (`LinkWindows`, `verity.core.protocols.certifier.service`), `record_domain` its domain id (one-stage's served
 domain of the run, the link and the window) and `direction` the port's end of the link (0 egress, 1 ingress). `roots`
-and `domains` are the units' outbox commitments and domain ids, `salt` the window number (u64, big-endian) and the
-revealed salt commitment.
+and `domains` are the units' outbox commitments and domain ids, `salt` the salt frame's payload: the window number
+(u64, big-endian) and the 64 bytes after it, which the live certifier fills with `active.PLACEHOLDER`.
 
 **Witness.** The frames, the n descriptors (the layout's rows at at, at + 1, ...) with their hiding salts and paths, for
 each descriptor's segment g < G the outbox row it reads with its salt and path, the record head's bytes before its
@@ -41,7 +41,10 @@ i puts on its segments' rows (`N3Frame`, `assemble`). (4) The salt frame, when S
 The head's bytes and N2's frames root of the N frames (`certificate.frames_root`, depth D = bitlen(T r - 1)) are a
 head whose status byte is 0 (complete), and that head opens at leaf 2 + direction of N2's commitment (`N3HidingRead`,
 depth 2), the leaf N2 commits beside each certified record (`service.HEADS`). The head's other fields are N2's to
-check: N2's accepted outcome on the same root says that leaf holds the certified head of (link, direction, window).
+check: N2's accepted outcome on the same root says that leaf holds the certified head of (link, direction, window),
+and, where the link declares its occupancy profile, that the head's counts are the profile's (N2's head check,
+`head_check.NetworkHeadCheck_v1`, which opens the same leaf).
+The frames root holds N to the head's Σ n_t (leaf k is frame k for k < Σ n_t and E_0 after), so to the profile's total.
 
 **A descriptor** (`Descriptor`, LW bits, `encode`): a mode (RAW 1, BASE64 2; 0 and 3 are invalid, and `NONE` pads the
 tree), the text's byte offset p, its data length r, the suffix offset s, the prefix (P bytes) and suffix (Q bytes), and
@@ -89,6 +92,7 @@ from typing import Callable, NamedTuple, Sequence
 import numpy as np
 
 from verity.core.protocols.certifier import certificate as CT
+from verity.core.protocols.certifier import head_check as HC
 from verity.core.protocols.certifier import service as N2
 from verity.core.protocols.certifier.active import DATA, HEADER, LAST, encode_frame
 from verity.core.protocols.certifier.grid import COMPLETE, GridParams, Reason, Status, fill
@@ -133,10 +137,10 @@ SALT, SALT_STREAM = 3, 0xFFFF_FFFF
 SALT_PAYLOAD = 72
 
 
-def salt_frame(window: int, commitment: bytes, frame_bytes: int) -> bytes:
+def salt_frame(window: int, value: bytes, frame_bytes: int) -> bytes:
     """Window `window`'s salt frame as the ingress certifier records it: kind `SALT` on `SALT_STREAM`, its payload the
-    window (u64, big-endian) and the salt's 64-byte commitment, which is public once the salt is revealed."""
-    return encode_frame(SALT, SALT_STREAM, window.to_bytes(8, "big") + commitment, frame_bytes)
+    window (u64, big-endian) and 64 public bytes, the live certifier's `active.PLACEHOLDER`."""
+    return encode_frame(SALT, SALT_STREAM, window.to_bytes(8, "big") + value, frame_bytes)
 
 
 def _is_salt(frame: bytes) -> bool:
@@ -776,7 +780,7 @@ def _build_salteq(C, S, frame, *salt):
 
 
 N3SaltEq = _part("N3SaltEq", ("B",), _sig_salteq, _build_salteq,
-                 "1 iff the frame is the salt frame of the payload salt (the window and the salt's commitment)")
+                 "1 iff the frame is the salt frame of the payload salt (the window and its 64 public bytes)")
 
 
 N3IsZero = _part("N3IsZero", ("W",), lambda S: ((("x", Array(S.W, BIT)),), BIT),
@@ -1338,8 +1342,9 @@ class Certifier:
                                                        signature))
 
     def commit(self, link: str, window: int, heads: Sequence[CT.RecordHead], egress: GridParams, ingress: GridParams,
-               sync_set: SyncSet) -> Committed:
-        lw = N2.LinkWindows(link, egress, sync_set, self.public, self.run, self.session, ingress=ingress)
+               sync_set: SyncSet, occupancy: tuple = (None, None)) -> Committed:
+        lw = N2.LinkWindows(link, egress, sync_set, self.public, self.run, self.session, ingress=ingress,
+                            occupancy=occupancy)
         salts = _salts(self.seed + b"/n2/" + link.encode() + b"\0" + window.to_bytes(8, "big"), N2.LEAVES)
         return Committed(lw, lw.commit(window, *(self.certify(h) for h in heads), salts))
 
@@ -1563,7 +1568,7 @@ EMPTY = "nothing recorded"
 
 @dataclass
 class Window:
-    """One port-window: the frames the record holds, its public counts and status, the revealed salt commitment of a
+    """One port-window: the frames the record holds, its public counts and status, the salt frame's payload of a
     salted window, the record's grid (when not the frames filled by the counts), and the unit's instance; `why` says
     why no unit runs (refused from public data alone, or `EMPTY`)."""
 
@@ -1598,7 +1603,8 @@ class Window:
 class Setup:
     """A run's statement, units, registered layout, the ports' links (the link-window commitment each records into,
     and its end), each port's grid, Σ_sync, each port's link as its certifier names it in its heads (when not its
-    commitment's), the certifier, and every link-window's commitment: what every window's instance is built from."""
+    commitment's), the certifier, every link-window's commitment, and each port's occupancy profile where it declares
+    one (N2's `LinkWindows.occupancy`): what every window's instance is built from."""
 
     S: Statement
     units: UnitTable
@@ -1610,6 +1616,7 @@ class Setup:
     named: dict[str, str] = field(default_factory=dict)
     certifier: Certifier | None = None
     committed: dict[tuple[str, int], Committed] = field(default_factory=dict)
+    occupancy: dict[str, tuple[tuple[int, ...], ...]] = field(default_factory=dict)
 
     @classmethod
     def build(cls, S: Statement, declared: dict[str, list[list[tuple]]], ports: list[str],
@@ -1647,8 +1654,15 @@ class Setup:
             ports = {v: k for k, v in self.links.items()}
             heads = [self.head(ports[(link, d)], window, recorded.get((link, d, window))) for d in (0, 1)]
             self.committed[(link, window)] = self.certifier.commit(  # type: ignore[union-attr]
-                link, window, heads, self.grids[ports[(link, 0)]], self.grids[ports[(link, 1)]], self.sync_set)
+                link, window, heads, self.grids[ports[(link, 0)]], self.grids[ports[(link, 1)]], self.sync_set,
+                tuple(self.occupancy.get(ports[(link, d)]) for d in (0, 1)))
         return self.committed[(link, window)]
+
+    def head_checks(self, link: str, window: int, recorded: dict[tuple[str, int, int], Window]) -> bool:
+        """N2's head checks on the link-window's commitment (`LinkWindows.head_checks`, each `head_check.reference`):
+        each head complete under its end's grid and, on an end with a profile, its counts the profile's row."""
+        c = self.commit(link, window, recorded)
+        return all(i is not None and HC.reference(i) for i in c.lw.head_checks(c.opening, c.root))
 
     def attach(self, windows: list[Window]) -> list[Window]:
         """Each window's instance, its port's earlier frames giving its first descriptor's position; or why none
@@ -1709,18 +1723,23 @@ def sim_windows(public: dict, witness: dict, records: dict[str, list[tuple[int, 
                 seed: bytes = b"n3-unit") -> tuple[Setup, list[Window]]:
     """The simulator's windows: per certified link direction, `buckets` buckets a window, the recorded frames in grid
     order (stably by bucket), against the layout of φ's declared frames, registered before the run. Every port's grid
-    is `buckets` buckets of r slots, r the most frames any port declared or recorded in one bucket."""
+    is `buckets` buckets of r slots, r the most frames any port declared or recorded in one bucket. φ fixes every
+    frame's bucket, so each port's declared counts are its occupancy profile, through the last window any port
+    declares, and every port has a window for each of them and for each window it recorded past them."""
     S = statement(public, witness)
     links = sim_ports(S.hw)
     declared = sim_declared(S)
     per_bucket = [n for v in (*declared.values(), *records.values()) for n in Counter(b for b, _ in v).values()]
     grid = GridParams(buckets, max([1] + per_bucket), S.phi.frame_bytes)
+    W = max([b for v in declared.values() for b, _ in v] + [-1]) // buckets + 1
+    occupancy = {key: tuple(tuple(sum(1 for b, _ in declared.get(key, []) if b == t)
+                                  for t in range(w * buckets, (w + 1) * buckets)) for w in range(W)) for key in links}
     setup = Setup.build(S, {k: [p for _, p in v] for k, v in declared.items()}, list(links), links,
-                        dict.fromkeys(links, grid), seed)
+                        dict.fromkeys(links, grid), seed, occupancy=occupancy)
     windows = []
     for key in links:
         rec = sorted(records.get(key, []), key=lambda x: x[0])
-        last = max([b for b, _ in rec] + [-1])
+        last = max([b for b, _ in rec] + [W * buckets - 1])
         for w in range(last // buckets + 1):
             lo, hi = w * buckets, (w + 1) * buckets
             frames = [f for b, f in rec if lo <= b < hi]
@@ -1733,9 +1752,9 @@ def lab_windows(public: dict, witness: dict, published: dict[str, Sequence],
                 grids: tuple[GridParams, GridParams] | None = None,
                 sync_set: SyncSet | None = None) -> tuple[Setup, list[Window]]:
     """The lab's windows: per block and link (`lab.EGRESS`, `lab.INGRESS`), each record's released frames, against the
-    layout of the declared frames. With `salts`, each salted ingress window's revealed salt commitment by (block,
-    window): one of its frames is then the certifier's salt frame, and the rest are the port's next declared frames.
-    `grids` are the egress and ingress grids (default: each link's first record's shape) and `sync_set` the egress
+    layout of the declared frames. With `salts`, each salted ingress window's 64 public bytes of its salt frame by
+    (block, window): one of its frames is then the certifier's salt frame, and the rest are the port's next declared
+    frames. `grids` are the egress and ingress grids (default: each link's first record's shape) and `sync_set` the egress
     Σ_sync, as the calibration report gives them. A block's two links share one N2 commitment a window, named for the
     block, its egress record at leaf 0 and its ingress record at leaf 1."""
     from verity.core.protocols.certifier.grid import occupancy
@@ -1829,6 +1848,22 @@ def _sized(windows: list[Window], circuit: bool) -> list[dict]:
     return out
 
 
+def link_checks(setup: Setup, windows: list[Window], checked: Sequence[dict] = ()) -> list[dict]:
+    """Every link-window N2 commits, in order: N2's head checks' bit (`Setup.head_checks`), the N3 ok bit of each of
+    its port-windows (`checked`'s, else the window's reference or its public data), and their conjunction. N2 compares
+    no grid in the clear, so the link-window is ok only with both."""
+    recorded = {(*setup.links[w.port], w.window): w for w in windows}
+    known = {(r["port"], r["window"]): r["ok"] for r in checked}
+    out = []
+    for link, window in sorted({(link, w) for link, _, w in recorded}):
+        ports = [recorded[(link, d, window)] for d in (0, 1) if (link, d, window) in recorded]
+        n3 = {w.port: known.get((w.port, w.window), None) for w in ports}
+        n3 = {p: w.check(circuit=False)["ok"] if n3[p] is None else n3[p] for p, w in zip(n3, ports)}
+        n2 = setup.head_checks(link, window, recorded)
+        out.append({"link": link, "window": window, "n2": n2, "n3": n3, "ok": n2 and all(n3.values())})
+    return out
+
+
 def _sim(args) -> dict:
     from .block import Context
     from .n3 import merge
@@ -1846,8 +1881,11 @@ def _sim(args) -> dict:
     records, _ = merge(results)
     setup, windows = sim_windows(public, witness, records, args.buckets)
     checked = _sized(windows, not args.reference_only)
-    return {"config": config, "buckets": args.buckets, "format": setup.fmt._asdict(), "summary": summarize(checked),
-            "windows": checked}
+    links = link_checks(setup, windows, checked)
+    summary = summarize(checked) | {"link_windows": len(links), "link_windows_ok": sum(r["ok"] for r in links),
+                                    "n2_not_ok": [f"{r['link']}[{r['window']}]" for r in links if not r["n2"]]}
+    return {"config": config, "buckets": args.buckets, "format": setup.fmt._asdict(), "summary": summary,
+            "windows": checked, "link_windows": links}
 
 
 def _lab(args) -> dict:

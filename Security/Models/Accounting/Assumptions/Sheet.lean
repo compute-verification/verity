@@ -49,7 +49,8 @@ counts `S/99 KB` in sm_120's UTMABIG (A5b), at most one, so `K` holds it in at m
 def SheetDispatch (Q : Run K) : Prop := ∑ k, Q.n k ≤ Q.cycles
 
 /-- `accounting-sheet-tensor` (data sheets and whitepapers). **A3 TENSOR**: the tensor cores do at most the sheet's
-dense MACs an SM clock for each operand type (dense TOPS over 2 · SMs · boost clock), a quarter of them an SMSP, the
+dense MACs an SM clock for each operand type (dense TOPS over 2 · SMs · the clock the figure is quoted at, which need
+not be `fmax`: the H200's tensor boost clock, 1830 MHz, against its f_max of 1980 MHz), a quarter of them an SMSP, the
 types sharing the pipe's time: the run's tensor MACs over a quarter of their type's peak are at most its cycles. -/
 def SheetTensor (S : Sheet K P) (Q : Run K) : Prop := ∑ k, S.macs k / (S.peak k / 4) * Q.n k ≤ Q.cycles
 
@@ -78,9 +79,14 @@ variable {K R T L U F X : Type} [Fintype K] [Fintype R] [Fintype T] [Fintype L] 
 
 /-- `accounting-sheet-words` (PTX ISA). **A6 WORDS**: an instruction writes at most its destination registers' 32-bit
 words. Writer kind `t`'s `ω_t` is its fragment's words (mma.sync m16n8k32 s32: 128 a warp instruction, m8n8k16: 64;
-wgmma m64n256k32: 4096 a warp; tcgen05.mma 128 × 256: 32768; a uniform instruction: 1), and a lane instruction's
-destination is at most 64 bits, so the vector- and table-headed words are at most two a lane of the vector
-instructions the labelling gives them. -/
+wgmma m64n256k32: 4096 a warp; tcgen05.mma 128 × 256: 32768; a uniform instruction: 2, since `UIMAD.WIDE.U32` writes a
+uniform register pair; DMMA, `mma.sync .f64`: two
+registers an element, 128 at m8n8k4 and 256 at m16n8k16). A vector or table word's head computes it on a lane, at most
+64 bits a lane (IMAD.WIDE, IADD.64, DFMA, sm_100's FFMA2), so the vector- and table-headed words are at most two a lane
+of the vector instructions the labelling gives them. The wider lane destinations head no such word: a load, LDSM, a
+texture fetch, a 128-bit atomic or a tensor-memory load (LDS.128 and LDSM.x4: 4 words a lane; LDG.E.ENL2.256: 8;
+LDTM.32x32b.x128: 128) writes memory's content, a copy that keeps its writer's head or a table entry that its word's
+lane head combines. -/
 def SheetWords (Z : Model K R T L U F X) (A : Anatomy K T L U) : Prop :=
   (∀ t, A.words (.writer t) ≤ Z.omega t * A.nword (.writer t) (Z.cls t)) ∧
     A.words .vector ≤ 2 * (32 * ∑ k ∈ Z.vec, A.nword .vector k) ∧

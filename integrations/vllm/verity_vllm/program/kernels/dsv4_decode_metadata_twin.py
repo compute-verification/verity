@@ -13,6 +13,8 @@ kernel reads 0, or another request's row, there.  `registry.dsv4_decode_metadata
 """
 from __future__ import annotations
 
+__models__ = ("deepseek-ai/DeepSeek-V4-Pro",)
+
 import numpy as np
 
 from verity_vllm.program.kernels.dsv4_indices_twin import s32

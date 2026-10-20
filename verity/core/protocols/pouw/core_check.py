@@ -6,10 +6,12 @@ The proof service registers the window, draws, proves and verifies; PoUW states 
 must show, and publishes `window.PUBLIC` from it.  This is that composition in one function, the parts of
 `benchmarks/pouw/served_zk/served_commit.py` (`public_problem`, `register` and `Challenger.outcome`) that are PoUW's.
 
-* **Params**, canonical JSON: the check item (`check`: the tile template, its work per tile w, the commitment scheme and
-  the public bound on entries), ε and δ as ratio strings, the grid's bits, the declared range of tile counts, the
-  window's context and the check query's SHA-512 (one-stage's `query_digest` of the tile template's instance query).  The
-  template is one the verifier pins (`TILES`, Lean's `PouwCheck.tiles`), with that template's tile work and query.
+* **Params**, canonical JSON: the check item (`check`: the tile template, its work per tile w, the commitment scheme,
+  the public bound on entries and optionally its coin mode, ``coins``, live or seeded: `window.mode`), ε and δ as ratio
+  strings, the grid's bits, the declared range of tile counts, the window's context, the check query's SHA-512
+  (one-stage's `query_digest` of the tile template's instance query) and the rows' fixed length
+  ``{"stop": "fixed", "max_tokens": [...]}``, each slot's max_tokens.  The template is one the verifier pins (`TILES`,
+  Lean's `PouwCheck.tiles`), with that template's tile work and query.
 * **Commitment**: the window's registration, one-stage's record (`registration.record`) as canonical JSON, its window
   ``{"kind": "served", "context", "public"}`` holding exactly `window.REGISTERED`.  Its digest is the record's own,
   `registration.digest`, the one the service's receipt, draw and outcome cite.
@@ -17,8 +19,9 @@ must show, and publishes `window.PUBLIC` from it.  This is that composition in o
   read it (only what `toJson` writes, in the shapes `answer` returns): its verdict, the registration digest it is for,
   and on acceptance the integrity profile and the public outputs ``{"draw": d}``, `d` the verifier's draw as one-stage's
   `draw.py` writes it (any of its laws; PoUW's rule then holds it to subset:K′).
-* **The check** accepts when the registration is PoUW's (`window.REGISTERED`, each item the verifier's own at the
-  registered level, N = point(level + 1) in the declared range, the law subset:K′ with K′ = `window.k_prime`, the check's
+* **The check** accepts when the registration is PoUW's (`window.REGISTERED`, its `length` item a fixed-length
+  window's at the verifier's max_tokens (`window.length_problem`; Daniel, 19 Oct, ASK-39), each item the verifier's own
+  at the registered level, N = point(level + 1) in the declared range, the law subset:K′ with K′ = `window.k_prime`, the check's
   query and scheme), the service accepted this registration, and its profile and draw are of the registered partition's N
   units drawn subset:K′ at the window's δ.  It publishes exactly `window.PUBLIC` and the service's profile.  The service's
   reject is a reject and its undecided (the verifier of record hasn't run) is undecided.
@@ -30,7 +33,9 @@ file opens the unit's rows under the registered window root, through its entry a
 its manifest re-starts its epoch under the challenger's own coin commitment, and the window's context names it.
 `draw` is the rule on the window's draw (`Challenger.select`'s): the epoch's draw coin opens after the registration,
 and the drawn units are Lean's ``Draw.subset`` of the key it derives.  Both read the coin versions in `COIN_VERSIONS`,
-and a replay of a recorded draw `COIN_EARLY` too.
+and a replay of a recorded draw `COIN_EARLY` too.  `rounds` is the rule on a live window's round coins
+(`window.rounds_reason`, over the proof service's challenger `sampled_proofs.challenger`): under the challenger's live
+coin commitment, round r's coin opened once, after the r-th round root the verifier recorded.
 
 Every refusal has one reason, the first rule it breaks in the order below; the Lean port writes the same strings.
 """
@@ -45,6 +50,7 @@ from typing import Any, NamedTuple
 
 from verity.core.protocols.pouw import coins as Co
 from verity.core.protocols.pouw import window as Wd
+from verity.core.protocols.sampled_proofs import challenger as Ch
 from verity.core.protocols.pouw.audit import EPOCH_SALT_DOMAIN, SALT_DOMAIN
 from verity.core.protocols.pouw.protocol import U64, tagged
 from verity.ml.commitments import Commitment, Opening, VerificationLimits, verify_opening
@@ -59,7 +65,8 @@ ONE_STAGE = "verity/sampled-proofs/one-stage/v1"
 SCHEME = "frame-v3-sha512/hm96-sha512"
 FORMATS = ("verity/registration/v1", "verity/registration/v2")
 LEVEL = "unit"
-PARAMS_KEYS = ("check", "context", "delta", "eps", "grid_bits", "query", "range")
+PARAMS_KEYS = ("check", "context", "delta", "eps", "grid_bits", "length", "query", "range")
+LENGTH_PARAM_KEYS = ("max_tokens", "stop")
 CHECK_KEYS = ("entries", "scheme", "template", "tile_work")
 ANSWER_KEYS = ("commitment", "profile", "protocol", "public", "reason", "verdict")
 VERDICTS = ("accept", "reject", "undecided")
@@ -174,8 +181,10 @@ def params(j: Any) -> dict:
     if not isinstance(j, dict) or sorted(j) != list(PARAMS_KEYS):
         raise Refused(f"keys are not {', '.join(PARAMS_KEYS)}")
     c = j["check"]
-    if not isinstance(c, dict) or sorted(c) != list(CHECK_KEYS):
-        raise Refused(f"check's keys are not {', '.join(CHECK_KEYS)}")
+    if not isinstance(c, dict) or sorted(set(c) - {Wd.COINS}) != list(CHECK_KEYS):
+        raise Refused(f"check's keys are not {', '.join(CHECK_KEYS)}, and optionally {Wd.COINS}")
+    if Wd.COINS in c and c[Wd.COINS] not in Wd.MODES:
+        raise Refused(f"check.{Wd.COINS} is not {' or '.join(Wd.MODES)}")
     if not (_nat(c["entries"]) and c["entries"] >= 2):
         raise Refused("check.entries is not a natural number of at least 2")
     if c["scheme"] != SCHEME:
@@ -208,7 +217,13 @@ def params(j: Any) -> dict:
         raise Refused("check.tile_work is not its pinned template's tile work")
     if j["query"] != t.query:
         raise Refused("query is not its pinned template's query digest")
-    return {**out, "grid_bits": j["grid_bits"], "query": j["query"], "range": tuple(rg)}
+    ln = j["length"]
+    m = ln.get("max_tokens") if isinstance(ln, dict) else None
+    if not (isinstance(ln, dict) and sorted(ln) == list(LENGTH_PARAM_KEYS) and ln["stop"] == Wd.STOP_FIXED
+            and isinstance(m, list) and m and all(_nat(x) and x >= 1 for x in m)):
+        raise Refused("length is not {max_tokens, stop} with stop fixed and max_tokens a non-empty list of positive natural "
+                      "numbers")
+    return {**out, "grid_bits": j["grid_bits"], "query": j["query"], "range": tuple(rg), "max_tokens": list(m)}
 
 
 def _root(r: Any) -> dict | None:
@@ -474,7 +489,12 @@ def _registered(p: dict, c: dict) -> tuple[str | None, Any]:
         return (f"window: registered kind {win['kind']} in context {win['context']}, the verifier's served in "
                 f"{p['context']}"), None
     if sorted(items) != sorted(Wd.REGISTERED):
+        if sorted(items) == sorted(Wd.LEGACY_REGISTERED):
+            return "window-form: no-fixed-length: registered before the fixed-length rule (19 Oct), so not of record", None
         return f"public-items: registered {', '.join(sorted(items))}, declared {', '.join(sorted(Wd.REGISTERED))}", None
+    why = Wd.length_problem(items["length"], p["max_tokens"])
+    if why is not None:
+        return why, None
     work = items["work"]
     ell = work.get("level") if isinstance(work, dict) else None
     if not _nat(ell):
@@ -950,6 +970,31 @@ def draw(coins: Any, recorded: bool, opening: Any, stream: Any, registration: An
     return None
 
 
+# ---- a live window's round coins ---------------------------------------------------------------------------------------
+
+def rounds(coins: Any, roots: Any, openings: Any) -> tuple[str, str] | None:
+    """None when `openings` are a live window's round coins (`window.rounds_reason`): under `coins`, the challenger's live
+    coin commitment (its JSON, `challenger.LiveCommitment`), round r's coin opened once, after `roots[r]`, the r-th round
+    root the verifier recorded (hex), and every recorded round's coin opened; else the refusal (``coin`` or ``rounds``,
+    and why)."""
+    try:
+        c = Ch.LiveCommitment.from_json(coins)
+    except Ch.CoinError as e:
+        return "coin", f"the verifier's coins are malformed: {e}"
+    if not (isinstance(roots, list) and all(_str(r) and _DIGEST.fullmatch(r) for r in roots)):
+        return "rounds", "the round roots are not a list of SHA-512 digests"
+    if not isinstance(openings, list):
+        return "rounds", "the round coins are not a list"
+    os_ = []
+    for i, o in enumerate(openings):
+        try:
+            os_.append(Ch.LiveOpening.from_json(o))
+        except Ch.CoinError as e:
+            return "coin", f"round coin {i}: {e}"
+    why = Wd.rounds_reason(c, [bytes.fromhex(r) for r in roots], os_)
+    return None if why is None else ("coin", why)
+
+
 def answer(params_b: bytes, commitment_b: bytes, evidence_b: bytes) -> dict:
     """`Core.Protocol.answer`: every input gets a verdict, a decoding failure being a rejection naming its input."""
     def out(verdict: str, reason: str | None, d: bytes | None, pub: Any = None, prof: Any = None) -> dict:
@@ -993,4 +1038,4 @@ def line(a: dict) -> str:
 
 __all__ = ["ANSWER_KEYS", "FORMATS", "ID", "LEVEL", "ONE_STAGE", "Refused", "SCHEME", "answer", "answer_of", "canonical",
            "case", "check", "commitment", "digest", "draw", "evidence", "integrity", "integrity_json", "law_name", "line",
-           "opening", "params", "pass_epoch", "ratio", "registered", "unit_draw", "verify_path", "window_domain"]
+           "opening", "params", "pass_epoch", "ratio", "registered", "rounds", "unit_draw", "verify_path", "window_domain"]

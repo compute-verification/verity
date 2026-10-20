@@ -31,7 +31,10 @@ lock is not in the line: it takes that slot whenever it frees.
 
 `python3 tools/verity/check/slot.py --priority -- CMD...`: the lander's train checks (`train.sh`). A priority waiter's ticket sorts
 before every lane waiter's, so it takes the next slot that frees ahead of the lanes' checks already waiting; it never stops a
-running check, and priority waiters keep their own arrival order. Merges unblock everyone (root, 2 Oct).
+running check, and priority waiters keep their own arrival order. Merges unblock everyone (root, 2 Oct). With `--rank N`
+(drive's train checks: the train's members above `main`, so 1 for the lowest train and 0 for the post-landing run), priority
+waiters go by rank, then arrival: the train that lands next takes the next slot, ahead of trains above it that came first (19 Oct
+19:12Z: a lowest train's resent check waited an hour behind them; CI-110). A priority waiter without a rank goes after the ranked.
 
 `--wait-max SECONDS`: a waiter that has no slot after SECONDS leaves the line and exits NOT_STARTED (75) without running CMD, so
 its caller can tell a check that never started from one that failed. `--run-max SECONDS`: CMD's time limit, counted from the slot
@@ -83,7 +86,7 @@ RUN_TIMEOUT = Path("control") / "timeout_s"
 RUN_SLOT = "slot.json"
 #: a slot's mem= as CMD sees it: the GiB its check may take, which check.py gives circuit-check as its --mem-gb
 SLOT_MEM_ENV = "CHECK_SLOT_MEM_GB"
-USAGE = "usage: slot.py [--priority] [--by NAME] [--twin PAIR[@HOME]] [--wait-max SECONDS] [--run-max SECONDS] -- CMD..."
+USAGE = "usage: slot.py [--priority [--rank N]] [--by NAME] [--twin PAIR[@HOME]] [--wait-max SECONDS] [--run-max SECONDS] -- CMD..."
 #: the claims of twins (`--twin`), one directory per pair, beside SLOTS on the machine that holds them; a week old, removed
 TWINS = "twins"
 #: machine name, then the ssh destination and options with which this machine's research user reaches it (`--twin PAIR@HOME`)
@@ -224,6 +227,21 @@ def take(slots: list[dict], lock_dir: Path, now: datetime) -> tuple[dict, int] |
     return None
 
 
+def locked(lock: Path) -> bool:
+    """Whether some descriptor, this process's inherited one included, holds `lock`'s flock."""
+    try:
+        fd = os.open(lock, os.O_RDONLY)
+    except OSError:
+        return False
+    try:
+        fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+    except BlockingIOError:
+        return True
+    finally:
+        os.close(fd)
+    return False
+
+
 def holder(lock: Path, proc: Path = Path("/proc")) -> int | None:
     """The pid whose flock holds `lock`, from /proc/locks (a waiter's line has `->` before FLOCK), or None while it's free."""
     try:
@@ -271,14 +289,14 @@ def _read(p: Path) -> dict:
         return {}
 
 
-def options(opts: list[str]) -> tuple[bool, str | None, float | None, float | None, str | None]:
-    """--priority, --by NAME, --wait-max SECONDS and --run-max SECONDS (each > 0) and --twin PAIR[@HOME] from the arguments
-    before `--`; SystemExit with the usage on anything else."""
+def options(opts: list[str]) -> tuple[bool, str | None, float | None, float | None, str | None, int | None]:
+    """--priority, --by NAME, --wait-max SECONDS and --run-max SECONDS (each > 0), --twin PAIR[@HOME] and --rank N (with
+    --priority) from the arguments before `--`; SystemExit with the usage on anything else."""
     priority, vals, i = False, {}, 0
     while i < len(opts):
         if opts[i] == "--priority":
             priority, i = True, i + 1
-        elif opts[i] in ("--by", "--wait-max", "--run-max", "--twin") and i + 1 < len(opts):
+        elif opts[i] in ("--by", "--wait-max", "--run-max", "--twin", "--rank") and i + 1 < len(opts):
             vals[opts[i]], i = opts[i + 1], i + 2
         else:
             sys.exit(USAGE)
@@ -293,7 +311,10 @@ def options(opts: list[str]) -> tuple[bool, str | None, float | None, float | No
     twin = vals.get("--twin")
     if twin is not None and not re.fullmatch(r"[A-Za-z0-9._-]+(@[A-Za-z0-9._-]+)?", twin):
         sys.exit(f"slot: --twin {twin!r} is not PAIR or PAIR@HOME (letters, digits, '.', '_', '-'); {USAGE}")
-    return priority, vals.get("--by"), secs["--wait-max"], secs["--run-max"], twin
+    rank = vals.get("--rank")
+    if rank is not None and not (priority and re.fullmatch(r"\d{1,6}", rank)):
+        sys.exit(f"slot: --rank {rank!r} needs --priority and a whole number below 1,000,000; {USAGE}")
+    return priority, vals.get("--by"), secs["--wait-max"], secs["--run-max"], twin, None if rank is None else int(rank)
 
 
 def limit_run(run_max: float, slot: str, run_dir: str | None, mono=time.monotonic) -> str:
@@ -414,7 +435,7 @@ def waiting(line: Path, now: datetime, before: str | None = None) -> list[dict]:
             pass
         finally:
             os.close(fd)
-        t = datetime.fromtimestamp(int(p.name.lstrip(PRIORITY).split("-")[0]) / 1e9, timezone.utc)
+        t = datetime.fromtimestamp(int(p.name.lstrip(PRIORITY).split("-")[0].split(RANKED)[-1]) / 1e9, timezone.utc)
         who = _read(p)
         out.append({"since": f"{t:%Y-%m-%dT%H:%MZ}", "minutes": round((now - t).total_seconds() / 60),
                     "priority": p.name.startswith(PRIORITY), "pid": who.get("pid", int(p.name.split("-")[-1])),
@@ -424,14 +445,18 @@ def waiting(line: Path, now: datetime, before: str | None = None) -> list[dict]:
 
 #: a priority waiter's ticket starts with this, which sorts before every digit (and before "." of a ticket being made)
 PRIORITY = "!"
+#: a ranked priority ticket is `!RRRRRR~TIME-PID`: its zero-padded rank sorts before an unranked `!TIME-PID` (times begin 1...)
+RANKED = "~"
 
 
-def join(lock_dir: Path, priority: bool = False, who: dict | None = None, line: str = LINE) -> tuple[Path, int]:
+def join(lock_dir: Path, priority: bool = False, who: dict | None = None, line: str = LINE,
+         rank: int | None = None) -> tuple[Path, int]:
     """This waiter's ticket in the line and the descriptor holding its lock; named by arrival (after every priority ticket
-    unless it is one), and locked before it is visible."""
+    unless it is one; a ranked priority one by rank, then arrival), and locked before it is visible."""
     d = lock_dir / line
     d.mkdir(exist_ok=True)
-    name = f"{PRIORITY if priority else ''}{time.time_ns():020d}-{os.getpid()}"
+    order = f"{rank:06d}{RANKED}" if priority and rank is not None else ""
+    name = f"{PRIORITY if priority else ''}{order}{time.time_ns():020d}-{os.getpid()}"
     fd = os.open(d / f".{name}", os.O_RDWR | os.O_CREAT, 0o664)
     fcntl.flock(fd, fcntl.LOCK_EX)
     if who:
@@ -573,7 +598,7 @@ def main(argv: list[str], now=lambda: datetime.now(timezone.utc), sleep=time.sle
             print("\n".join(status(parse(SLOTS.read_text()), SLOTS.parent, now())))
         return 0
     opts, cmd = (argv[:argv.index("--")], argv[argv.index("--") + 1:]) if "--" in argv else ([], argv)
-    priority, by, wait_max, run_max, pair = options(opts)
+    priority, by, wait_max, run_max, pair, rank = options(opts)
     if not cmd:
         sys.exit(USAGE)
     if not SLOTS.exists():
@@ -582,6 +607,11 @@ def main(argv: list[str], now=lambda: datetime.now(timezone.utc), sleep=time.sle
     listed = parse(SLOTS.read_text())
     if not listed:
         sys.exit(f"slot: {SLOTS} lists no slots")
+    # already inside a slot this machine's lock still holds (a `research run --pool` job that wraps its own command in slot.py,
+    # 19 Oct: the inner waiter queued behind its own outer lock and stopped cpu-1's research pool): run CMD in that slot
+    if (held := os.environ.get("CHECK_SLOT")) and any(s["name"] == held for s in listed) and locked(SLOTS.parent / f"check-{held}.lock"):
+        print(f"slot: already in check slot {held}; running CMD in it", file=sys.stderr, flush=True)
+        os.execvp(cmd[0], cmd)
     slots = usable(listed)
     if len(slots) < len(listed):
         out = ", ".join(f"{s['name']} ({s['cpus']})" for s in listed if s not in slots)
@@ -591,10 +621,11 @@ def main(argv: list[str], now=lambda: datetime.now(timezone.utc), sleep=time.sle
     if not priority and all(s["trains"] for s in slots):
         sys.exit(f"slot: every slot in {SLOTS} is for train checks (only=trains); a lane check runs on another machine")
     me = asker(by, pair)
-    ticket, tfd = join(SLOTS.parent, priority=priority, who=me)
+    ticket, tfd = join(SLOTS.parent, priority=priority, who=me, rank=rank)
     told, joined, peeked = None, now(), None
     run_dir = os.environ.get("RESEARCH_RUN_DIR")
-    since = {"since": f"{joined:%Y-%m-%dT%H:%M:%SZ}", **({"priority": True} if priority else {}), **({"twin": pair} if pair else {})}
+    since = {"since": f"{joined:%Y-%m-%dT%H:%M:%SZ}", **({"priority": True} if priority else {}), **({"twin": pair} if pair else {}),
+             **({"rank": rank} if rank is not None else {})}
     record_slot(run_dir, {"state": "waiting", **since})
 
     def gone(why: str) -> int:

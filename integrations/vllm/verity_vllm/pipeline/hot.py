@@ -23,7 +23,8 @@ State between jobs (the worker, after every job): every committer built in the j
 thread stopped, pool shut down) and dropped; gc + torch.cuda.synchronize + empty_cache; no unfinished engine requests; forward hooks / wrapped
 forwards / sampler hooks == the baseline taken right after the engine build (commit_delta.assert_pristine).  A failed check STOPS the worker
 (recorded as the next worker's restart reason) -- it never serves another job on a dirty engine.  KV/prefix cache: the engine is built with
-enable_prefix_caching=False (vllm_adapter.build_engine), so no request reads another's blocks; RNG: greedy rows are RNG-free, seeded rows carry
+enable_prefix_caching=False (engine.build.engine_kwargs_for) unless the row's engine args turn it on, and then every workload run starts from
+an empty cache (vllm_adapter.fresh_prefix_cache), so a job's hits are its own requests'; RNG: greedy rows are RNG-free, seeded rows carry
 per-request seeds (vllm_adapter.sampling_params), so the process RNG state does not enter the result -- the fresh-process comparison
 (cold vs hot roots) is the check of record, not this paragraph.
 

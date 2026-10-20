@@ -8,10 +8,17 @@ The premises of `Accounting.Guarantees.Remote.Held` and its time-held forms, eac
 
 * `Identity` (statement C): no block comes back into the node over its boundary links. The link-charged forms take
   `Links` instead, the links' ceiling.
-* `SquaringCeiling s E`: the node's compute re-encodes at most `s / E` blocks a tick: `s` squarings a tick at the
-  codec's width over every GPU and the host (`Accounting.Assumptions.SquaringCeiling`, `timing.SQUARINGS_PER_S`), and a
-  block costs at least `E` of them (`Codec.encode_squarings`, `WorkHardness(p, k)`).
-* `Disks β`: the node's disks bring back at most `β` blocks a tick, their measured read ceiling.
+* `SquaringCeiling s E B`: the node's compute re-encodes at most `s / E` blocks a tick and a burst of `B`: `s` squarings
+  a tick at the codec's width over every GPU and the host (`Accounting.Assumptions.SquaringCeiling`,
+  `timing.SQUARINGS_PER_S`), a block costing at least `E` of them (`Codec.encode_squarings`, `WorkHardness(p, k)`), and
+  `B` one maximal rebuild batch, the blocks whose re-encodes can finish together.
+* `Disks β B`: the node's disks bring back at most `β` blocks a tick, their measured read ceiling, and a burst of `B`,
+  one maximal disk read.
+
+The three rate ceilings are token buckets: over every interval `[u, v)`, at most `rate · (v − u) + B`. A bare rate over
+every interval would hold down to one tick, where each rate is below a block, so it would allow no rebuild, disk read
+or link block at all; the burst is what a device moves at once, a kernel's blocks finishing together or a read
+completing.
 * `ChipCeiling S`: the node's chips hold at most `S` registered blocks at once (`S_chip / b`, the Memory row).
 * `Routed`: a block comes into node memory or onto a chip from neither only by a rebuild, a disk read or a link.
 * `Causal s₀ e`: the credited passes run in order inside `[s₀, e]` on the verifier's clock: no pass starts before the
@@ -35,18 +42,19 @@ variable {Ω : Type}
 /-- **Identity** (statement C): on every outcome, no block comes into the node over its boundary links. -/
 def Identity (T : Trace Ω) : Prop := ∀ ω t, T.link ω t = 0
 
-/-- **The links' ceiling**: on every outcome, the node's boundary links bring in at most `β` blocks a tick, over every
-interval. -/
-def Links (T : Trace Ω) (β : ℝ) : Prop := ∀ ω u v, u ≤ v → (over T.link ω u v : ℝ) ≤ β * (v - u : ℕ)
+/-- **The links' ceiling**: on every outcome, over every interval `[u, v)`, the node's boundary links bring in at most
+`β · (v − u) + B` blocks: `β` a tick and a burst of `B`, one link window. -/
+def Links (T : Trace Ω) (β B : ℝ) : Prop := ∀ ω u v, u ≤ v → (over T.link ω u v : ℝ) ≤ β * (v - u : ℕ) + B
 
-/-- **The squaring ceiling**: on every outcome, the node's compute re-encodes at most `s / E` blocks a tick over every
-interval: at most `s` squarings a tick at the codec's width, at least `E` a block. -/
-def SquaringCeiling (T : Trace Ω) (s E : ℝ) : Prop :=
-  ∀ ω u v, u ≤ v → E * (over T.rebuilt ω u v : ℝ) ≤ s * (v - u : ℕ)
+/-- **The squaring ceiling**: on every outcome, over every interval `[u, v)`, the node's compute re-encodes at most
+`s / E · (v − u) + B` blocks: at most `s` squarings a tick at the codec's width, at least `E` a block, and a burst of
+`B`, one maximal rebuild batch. -/
+def SquaringCeiling (T : Trace Ω) (s E B : ℝ) : Prop :=
+  ∀ ω u v, u ≤ v → (over T.rebuilt ω u v : ℝ) ≤ s / E * (v - u : ℕ) + B
 
-/-- **The disks' ceiling**: on every outcome, the node's disks bring back at most `β` blocks a tick over every
-interval. -/
-def Disks (T : Trace Ω) (β : ℝ) : Prop := ∀ ω u v, u ≤ v → (over T.disk ω u v : ℝ) ≤ β * (v - u : ℕ)
+/-- **The disks' ceiling**: on every outcome, over every interval `[u, v)`, the node's disks bring back at most
+`β · (v − u) + B` blocks: `β` a tick and a burst of `B`, one maximal disk read. -/
+def Disks (T : Trace Ω) (β B : ℝ) : Prop := ∀ ω u v, u ≤ v → (over T.disk ω u v : ℝ) ≤ β * (v - u : ℕ) + B
 
 /-- **The chips' ceiling** (the Memory row): on every outcome, at most `S` registered blocks are on the node's chips at
 any tick. -/

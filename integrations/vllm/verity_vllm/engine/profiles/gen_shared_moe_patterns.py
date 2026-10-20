@@ -37,6 +37,8 @@ next layer's fused all-reduce and RMSNorm reduce the sum).
 
 from __future__ import annotations
 
+__models__ = ("zai-org/GLM-5.3",)
+
 import dataclasses
 from dataclasses import dataclass
 from typing import Any, Callable
@@ -101,6 +103,118 @@ def _glue(node: TreeNode, ctx: StepContext, keep: set[int], pattern: str) -> tup
     return out, None
 
 
+def scope_group(node: TreeNode, ctx: StepContext, kernels: list[TreeNode], parts: list[tuple[int, Any]], hint: str, pattern: str) -> Resolution:
+    """The scope's Group: its `parts` (keyed by event id) and the glue around them in log order, every event outside `kernels`' subtrees
+    and the parts' own events a move or alloc."""
+    keep = set().union(*(set(n.ids()) for n in kernels)) | {i for i, p in parts if isinstance(p, Compute)}
+    glue, bad = _glue(node, ctx, keep, pattern)
+    if bad is not None:
+        return bad
+    return Group(tuple(p for _, p in sorted(glue + parts, key=lambda x: x[0])), tuple(sorted(node.ids())), hint=hint, pattern=pattern)
+
+
+def scope_hidden(node: TreeNode, ctx: StepContext, H: int) -> tuple[ViewDesc, list[ViewDesc]] | Unsupported:
+    """`moe_forward_shared`'s hidden states, which are also its router logits and shared-expert input (the runner holds the gate): a
+    row-major bf16 [M,H] view over exactly the step's token rows; and its (shared, routed) outputs."""
+    sa = bound_args(node)
+    hidden, logits, sx = sa.get("hidden_states"), sa.get("router_logits"), sa.get("shared_experts_input")
+    if not all(isinstance(v, ViewDesc) for v in (hidden, logits, sx)) or not (_same(logits, hidden) and _same(sx, hidden)):
+        return unsupported(node, "moe_forward_shared does not take the hidden states as router_logits and shared_experts_input (the runner "
+                                 "holds the gate)", args={k: repr(v) for k, v in sa.items()})
+    M = hidden.shape[0]
+    if hidden.rank != 2 or hidden.shape[1] != H or hidden.dtype != "bfloat16" or not is_row_major(hidden):
+        return unsupported(node, "moe_forward_shared hidden_states is not a row-major bf16 [M,H] view", hidden=repr(hidden), H=H)
+    if M != len(ctx.start.rows) or ctx.start.num_tokens != ctx.start.num_tokens_padded:
+        return unsupported(node, "MoE rows are not exactly the step's token rows (padding rows would reach the router)",
+                           M=M, rows=len(ctx.start.rows), num_tokens=ctx.start.num_tokens, num_tokens_padded=ctx.start.num_tokens_padded)
+    outs = node.output_views()
+    if len(outs) != 2:
+        return unsupported(node, "moe_forward_shared does not return (shared, routed)", outs=[repr(v) for v in outs])
+    return hidden, outs
+
+
+def shared_expert(node: TreeNode, ctx: StepContext, mms: tuple[TreeNode, TreeNode], act: TreeNode, act_pattern: Any, want: dict[str, Any],
+                  hidden: ViewDesc, out0: ViewDesc, hint: str, H: int, pattern: str, spec: Any = None) -> list[tuple[int, Any]] | Unsupported:
+    """The shared expert: two dynamic block-FP8 linears (`fp8.DynamicDeepGemmFp8Linear`) around its activation `act`, which
+    `act_pattern` resolves on the token rows at the statics `want` (I the shared intermediate), as `spec` when given; the down linear
+    writes the op's first output `out0`."""
+    from verity_vllm.observe.fold.patterns.fp8 import DynamicDeepGemmFp8Linear  # noqa: PLC0415  (registry.deepgemm on use)
+    SI = want["I"]
+    out: list[tuple[int, Any]] = []
+    prev = hidden
+    for mm, K, N, what in ((mms[0], H, 2 * SI, "gate_up"), (mms[1], SI, H, "down")):
+        if what == "down":
+            sr, aop = act_pattern.match(act, ctx), op_name(act.op)
+            if not isinstance(sr, Compute) or sr.rows != len(ctx.start.rows) or any(sr.spec.bindings.get(k) != v for k, v in want.items()):
+                return unsupported(node, f"the shared expert's {aop} did not resolve as {act_pattern.kind}{want} on the token rows",
+                                   child_id=act.id, child_reason=getattr(sr, "reason", None), want=want)
+            if not _same(sr.operands[0].view, prev):
+                return unsupported(node, f"the shared expert's {aop} does not read the gate_up GEMM's output",
+                                   act_input=repr(sr.operands[0].view), gate_up=repr(prev))
+            out.append((act.id, dataclasses.replace(sr, spec=spec or sr.spec, hint=f"{hint}/shared/{aop}", pattern=pattern)))
+            prev = sr.outputs[0].view
+        mr = DynamicDeepGemmFp8Linear().match(mm, ctx)
+        if not isinstance(mr, Compute):
+            return unsupported(node, f"the shared expert's {what} {K_DYN_MM} did not resolve", child_id=mm.id,
+                               child_reason=getattr(mr, "reason", None), child_detail=getattr(mr, "detail", None))
+        if not _same(mr.operands[0].view, prev):
+            return unsupported(node, f"the shared expert's {what} GEMM does not read its input", gemm_input=repr(mr.operands[0].view),
+                               expected=repr(prev))
+        if mr.spec.bindings.get("K") != K or mr.spec.bindings.get("N") != N:
+            return unsupported(node, f"the shared expert's {what} GEMM is not [K={K}, N={N}]", bindings=dict(mr.spec.bindings))
+        out.append((mm.id, dataclasses.replace(mr, hint=f"{hint}/shared/{what}", pattern=pattern)))
+        prev = next(o for o in mr.outputs if o is not None).view
+    if prev.alloc != out0.alloc:
+        return unsupported(node, "the shared expert's down GEMM does not write the op's first output", down=repr(prev), shared=repr(out0))
+    return out
+
+
+def scope_gate(node: TreeNode, ctx: StepContext, gate: TreeNode | None, before: TreeNode, router: str, scores: Any, beside: str | None,
+               hidden: ViewDesc, hint: str, E: int, H: int, gate_spec: Callable | None, pattern: str) -> tuple[int, Compute] | Unsupported:
+    """The router gate writing the f32 [M,E] `scores` the `router` reads: the in-scope `aten.mm.dtype` `gate` (cuBLAS), or, with no mm,
+    the cuteDSL kernel bound by the `aten.empty` it fills ahead of `before` (the shared expert's first GEMM), over `<gate>.weight` of the
+    module whose weight `beside` the router reads.  `gate_spec(K, N, M, tier)` overrides the Build's Definition (`served_gate_spec`)."""
+    M = hidden.shape[0]
+    if not isinstance(scores, ViewDesc):
+        return unsupported(node, f"{router}'s scores are not a view", scores=repr(scores))
+    if gate is not None:
+        tier, at = GATE_CUBLAS, gate
+        a = bound_args(gate)
+        x, wt, y = a.get("self", a.get("arg0")), a.get("mat2", a.get("arg1")), (gate.output_views() or [None])[0]
+        if not (isinstance(x, ViewDesc) and isinstance(wt, ViewDesc) and isinstance(y, ViewDesc)) or not _same(x, hidden):
+            return unsupported(node, "the in-scope mm is not the gate over hidden_states", args={k: repr(v) for k, v in a.items()})
+        try:
+            w = as_weight_view(wt, H, E)
+        except GeometryError as e:
+            return unsupported(node, f"the gate mm's mat2 is not W.T of a bf16 [E,H] weight: {e}")
+        if y.shape != (M, E) or y.dtype != "float32" or not is_row_major(y) or not _same(scores, y):
+            return unsupported(node, f"the gate mm does not write the f32 [M,E] scores {router} reads", out=repr(y), scores=repr(scores))
+        wname = _weight_root(ctx, w)
+    else:
+        tier = GATE_CUTEDSL
+        if not header_gate_ll_bf16(ctx) or M > CUTEDSL_MAX_TOKENS:
+            return unsupported(node, f"{SHARED_OP} has no gate mm, and the record does not attest the cuteDSL ll_bf16_gemm tier at "
+                                     f"M <= {CUTEDSL_MAX_TOKENS} (RunHeader.profile.backends.moe_gate_ll_bf16_gemm)", M=M)
+        made = [n for n in node.walk() if n is not node and not n.is_triton and any(v.alloc == scores.alloc for v in n.output_views())]
+        if len(made) != 1 or base_op(made[0].op) != "aten.empty" or not made[0].id < before.id:
+            return unsupported(node, f"the scores {router} reads are not one in-scope aten.empty ahead of the shared expert (the cuteDSL "
+                                     "gate's output)", writers=[(n.id, n.op) for n in made])
+        at = made[0]
+        root = ctx.root_named(f"{beside.rsplit('.', 1)[0]}.weight") if beside else None
+        w = root.view if root is not None else None
+        wname = root.name if root is not None and root.role == "weight" else None
+    if wname is None or w is None or w.shape != (E, H) or w.dtype != "bfloat16" or not is_row_major(w):
+        return unsupported(node, f"the gate weight is not a bf16 [E,H] weight Root (<gate>.weight beside the {router} weight)", w=repr(w),
+                           beside=beside)
+    got = gate_spec(H, E, M, tier) if gate_spec is not None else served_gate_spec(target_of(ctx)[0], H, E, M, tier)
+    if got is None:
+        return unsupported(node, f"no registered bf16 x bf16 -> f32 gate Definition for the {tier} tier at K={H}, N={E}, M={M} "
+                                 f"(the Build's vllm_bindings.bf16_gemm route, or the profile's gate_spec)", tier=tier, K=H, N=E, M=M)
+    spec, kernels = got
+    return at.id, Compute(spec, M, (PerRow(hidden), Shared(w)), (PerRow(scores),), (at.id,), hint=f"{hint}/gate", kernels=tuple(kernels),
+                          attribution=tuple(ctx.start.rows), pattern=pattern, roots=(None, wname))
+
+
 @dataclass(frozen=True)
 class _Scope:
     """The scope's events by role, once the census holds."""
@@ -143,21 +257,10 @@ class MoEFusedSharedExpertsFp8(MoEFusedExpertsFp8):
         if not all(isinstance(C.get(k), int) for k in keys) or as_float(C.get("ROUTED_SCALING_FACTOR")) is None or G <= 0:
             return unsupported(node, "profile config lacks NUM_EXPERTS / TOPK / H / I / SHARED_I / ROUTED_SCALING_FACTOR or the block G",
                                config={k: C.get(k) for k in (*keys, "ROUTED_SCALING_FACTOR")}, group=G)
-        H = C["H"]
-        sa = bound_args(node)
-        hidden, logits, sx = sa.get("hidden_states"), sa.get("router_logits"), sa.get("shared_experts_input")
-        if not all(isinstance(v, ViewDesc) for v in (hidden, logits, sx)) or not (_same(logits, hidden) and _same(sx, hidden)):
-            return unsupported(node, "moe_forward_shared does not take the hidden states as router_logits and shared_experts_input (the runner "
-                                     "holds the gate)", args={k: repr(v) for k, v in sa.items()})
-        M = hidden.shape[0]
-        if hidden.rank != 2 or hidden.shape[1] != H or hidden.dtype != "bfloat16" or not is_row_major(hidden):
-            return unsupported(node, "moe_forward_shared hidden_states is not a row-major bf16 [M,H] view", hidden=repr(hidden), H=H)
-        if M != len(ctx.start.rows) or ctx.start.num_tokens != ctx.start.num_tokens_padded:
-            return unsupported(node, "MoE rows are not exactly the step's token rows (padding rows would reach the router)",
-                               M=M, rows=len(ctx.start.rows), num_tokens=ctx.start.num_tokens, num_tokens_padded=ctx.start.num_tokens_padded)
-        outs = node.output_views()
-        if len(outs) != 2:
-            return unsupported(node, "moe_forward_shared does not return (shared, routed)", outs=[repr(v) for v in outs])
+        io = scope_hidden(node, ctx, C["H"])
+        if isinstance(io, Unsupported):
+            return io
+        hidden, outs = io
         sc = self._census(node)
         if isinstance(sc, Unsupported):
             return sc
@@ -176,13 +279,9 @@ class MoEFusedSharedExpertsFp8(MoEFusedExpertsFp8):
         if len(at) != len(set(at)) or not {q.id for q in sc.quants} <= set(at):
             return unsupported(node, f"the scope's two {K_QUANT} calls are not one each for the routed w13 and w2 inputs",
                                quants=[q.id for q in sc.quants], resolved=sorted(at))
-        keep = set().union(*(set(n.ids()) for n in (*sc.quants, *sc.mms, sc.silu, sc.router, *sc.aligns, sc.up, sc.rsilu, sc.down, sc.msum)))
-        keep |= set().union(*(set(n.ids()) for n in ([sc.gate] if sc.gate is not None else [])))
-        keep |= {i for i, p in parts if isinstance(p, Compute)}
-        glue, bad = _glue(node, ctx, keep, self.name)
-        if bad is not None:
-            return bad
-        return Group(tuple(p for _, p in sorted(glue + parts, key=lambda x: x[0])), tuple(sorted(node.ids())), hint=hint, pattern=self.name)
+        kernels = [*sc.quants, *sc.mms, sc.silu, sc.router, *sc.aligns, sc.up, sc.rsilu, sc.down, sc.msum]
+        kernels += [sc.gate] if sc.gate is not None else []
+        return scope_group(node, ctx, kernels, parts, hint, self.name)
 
     def _census(self, node: TreeNode) -> _Scope | Unsupported:
         def ops(name: str) -> list[TreeNode]:
@@ -209,37 +308,10 @@ class MoEFusedSharedExpertsFp8(MoEFusedExpertsFp8):
 
     def _shared(self, node, ctx, sc: _Scope, hidden: ViewDesc, outs, hint) -> list[tuple[int, Any]] | Unsupported:
         """The shared expert: two dynamic block-FP8 linears around `_C.silu_and_mul`, resolved by the dense FP8 pattern."""
-        from verity_vllm.observe.fold.patterns.fp8 import DynamicDeepGemmFp8Linear  # noqa: PLC0415  (registry.deepgemm on use)
         C = self.config
-        H, SI = C["H"], C["SHARED_I"]
-        out: list[tuple[int, Any]] = []
-        prev = hidden
-        for mm, K, N, what in ((sc.mms[0], H, 2 * SI, "gate_up"), (sc.mms[1], SI, H, "down")):
-            if what == "down":
-                sr = SiluAndMul().match(sc.silu, ctx)
-                if not isinstance(sr, Compute) or sr.rows != len(ctx.start.rows) or sr.spec.bindings.get("I") != SI:
-                    return unsupported(node, "the shared expert's silu_and_mul did not resolve as SiluMul{SHARED_I} on the token rows",
-                                       child_id=sc.silu.id, child_reason=getattr(sr, "reason", None), SHARED_I=SI)
-                if not _same(sr.operands[0].view, prev):
-                    return unsupported(node, "the shared expert's silu_and_mul does not read the gate_up GEMM's output",
-                                       silu_input=repr(sr.operands[0].view), gate_up=repr(prev))
-                out.append((sc.silu.id, dataclasses.replace(sr, spec=bind(_ACT.SiluMul, I=SI), hint=f"{hint}/shared/silu_and_mul",
-                                                            pattern=self.name)))
-                prev = sr.outputs[0].view
-            mr = DynamicDeepGemmFp8Linear().match(mm, ctx)
-            if not isinstance(mr, Compute):
-                return unsupported(node, f"the shared expert's {what} {K_DYN_MM} did not resolve", child_id=mm.id,
-                                   child_reason=getattr(mr, "reason", None), child_detail=getattr(mr, "detail", None))
-            if not _same(mr.operands[0].view, prev):
-                return unsupported(node, f"the shared expert's {what} GEMM does not read its input", gemm_input=repr(mr.operands[0].view),
-                                   expected=repr(prev))
-            if mr.spec.bindings.get("K") != K or mr.spec.bindings.get("N") != N:
-                return unsupported(node, f"the shared expert's {what} GEMM is not [K={K}, N={N}]", bindings=dict(mr.spec.bindings))
-            out.append((mm.id, dataclasses.replace(mr, hint=f"{hint}/shared/{what}", pattern=self.name)))
-            prev = next(o for o in mr.outputs if o is not None).view
-        if prev.alloc != outs[0].alloc:
-            return unsupported(node, "the shared expert's down GEMM does not write the op's first output", down=repr(prev), shared=repr(outs[0]))
-        return out
+        SI = C["SHARED_I"]
+        return shared_expert(node, ctx, sc.mms, sc.silu, SiluAndMul(), {"I": SI}, hidden, outs[0], hint, C["H"], self.name,
+                             spec=bind(_ACT.SiluMul, I=SI))
 
     def _router(self, node, ctx, sc: _Scope, hidden: ViewDesc, outs, hint) -> list[tuple[int, Any]] | Unsupported:
         C = self.config
@@ -275,46 +347,9 @@ class MoEFusedSharedExpertsFp8(MoEFusedExpertsFp8):
 
     def _gate(self, node, ctx, sc: _Scope, hidden: ViewDesc, hint) -> tuple[int, Compute] | Unsupported:
         """The router gate: the in-scope `aten.mm.dtype` (cuBLAS), or, with no mm, the cuteDSL kernel bound by the empty it fills."""
-        C = self.config
-        E, H, M = C["NUM_EXPERTS"], C["H"], hidden.shape[0]
-        scores = bound_args(sc.router).get("scores")
-        bias_name = _weight_root(ctx, bound_args(sc.router).get("bias"))
-        if sc.gate is not None:
-            tier, at = GATE_CUBLAS, sc.gate
-            a = bound_args(sc.gate)
-            x, wt, y = a.get("self", a.get("arg0")), a.get("mat2", a.get("arg1")), (sc.gate.output_views() or [None])[0]
-            if not (isinstance(x, ViewDesc) and isinstance(wt, ViewDesc) and isinstance(y, ViewDesc)) or not _same(x, hidden):
-                return unsupported(node, "the in-scope mm is not the gate over hidden_states", args={k: repr(v) for k, v in a.items()})
-            try:
-                w = as_weight_view(wt, H, E)
-            except GeometryError as e:
-                return unsupported(node, f"the gate mm's mat2 is not W.T of a bf16 [E,H] weight: {e}")
-            if y.shape != (M, E) or y.dtype != "float32" or not is_row_major(y) or not _same(scores, y):
-                return unsupported(node, "the gate mm does not write the f32 [M,E] scores grouped_topk reads", out=repr(y), scores=repr(scores))
-            wname = _weight_root(ctx, w)
-        else:
-            tier = GATE_CUTEDSL
-            if not header_gate_ll_bf16(ctx) or M > CUTEDSL_MAX_TOKENS:
-                return unsupported(node, f"{SHARED_OP} has no gate mm, and the record does not attest the cuteDSL ll_bf16_gemm tier at "
-                                         f"M <= {CUTEDSL_MAX_TOKENS} (RunHeader.profile.backends.moe_gate_ll_bf16_gemm)", M=M)
-            made = [n for n in node.walk() if n is not node and not n.is_triton and any(v.alloc == scores.alloc for v in n.output_views())]
-            if len(made) != 1 or base_op(made[0].op) != "aten.empty" or not made[0].id < sc.mms[0].id:
-                return unsupported(node, "the scores grouped_topk reads are not one in-scope aten.empty ahead of the shared expert (the "
-                                         "cuteDSL gate's output)", writers=[(n.id, n.op) for n in made])
-            at = made[0]
-            root = ctx.root_named(f"{bias_name.rsplit('.', 1)[0]}.weight") if bias_name else None
-            w = root.view if root is not None else None
-            wname = root.name if root is not None and root.role == "weight" else None
-        if wname is None or w is None or w.shape != (E, H) or w.dtype != "bfloat16" or not is_row_major(w):
-            return unsupported(node, "the gate weight is not a bf16 [E,H] weight Root (<gate>.weight beside e_score_correction_bias)",
-                               w=repr(w), bias=bias_name)
-        got = self.gate_spec(H, E, M, tier) if self.gate_spec is not None else served_gate_spec(target_of(ctx)[0], H, E, M, tier)
-        if got is None:
-            return unsupported(node, f"no registered bf16 x bf16 -> f32 gate Definition for the {tier} tier at K={H}, N={E}, M={M} "
-                                     f"(the Build's vllm_bindings.bf16_gemm route, or the profile's gate_spec)", tier=tier, K=H, N=E, M=M)
-        spec, kernels = got
-        return at.id, Compute(spec, M, (PerRow(hidden), Shared(w)), (PerRow(scores),), (at.id,), hint=f"{hint}/gate", kernels=tuple(kernels),
-                              attribution=tuple(ctx.start.rows), pattern=self.name, roots=(None, wname))
+        C, ra = self.config, bound_args(sc.router)
+        return scope_gate(node, ctx, sc.gate, sc.mms[0], K_ROUTER_OP, ra.get("scores"), _weight_root(ctx, ra.get("bias")), hidden, hint,
+                          C["NUM_EXPERTS"], C["H"], self.gate_spec, self.name)
 
     def _routed(self, node, ctx, sc: _Scope, hidden: ViewDesc, outs, hint) -> list[tuple[int, Any]] | Unsupported:
         """The input quant, the alignment schedule, w13, the SiLU and its quant, w2 and moe_sum over the (token, slot) pairs."""
@@ -433,4 +468,4 @@ def served_gate_spec(tp, K: int, N: int, M: int, tier: str) -> tuple[Any, tuple[
 
 
 __all__ = ["CUTEDSL_MAX_TOKENS", "GATE_CUBLAS", "GATE_CUTEDSL", "MoEFusedSharedExpertsFp8", "SHARED_OP", "header_gate_ll_bf16",
-           "served_gate_spec"]
+           "scope_gate", "scope_group", "scope_hidden", "served_gate_spec", "shared_expert"]

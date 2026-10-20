@@ -39,15 +39,18 @@ managed = ["/usr/local/bin/vy-*", "/usr/local/lib/vy-monitoring/*", "/etc/system
 # circuits' H200 VMs (INF-54/55/58): only the GPU-lease files are infra's to manage there
 [nodes.vy-glm53-eu]
 record = "/workspace/research/deploy/record.jsonl"
-managed = ["/workspace/verity-guest/bin/gpu_adopt.py", "/etc/systemd/system/vy-gpu-adopt.service", "/etc/vy/gpu-lease-host"]
+managed = ["/workspace/verity-guest/bin/gpu_adopt.py", "/etc/systemd/system/vy-gpu-adopt.service", "/etc/vy/gpu-lease-host",
+  "/usr/local/bin/gpu-lease"]
 
 [nodes.vy-glm53-eu2]
 record = "/workspace/research/deploy/record.jsonl"
-managed = ["/workspace/verity-guest/bin/gpu_adopt.py", "/etc/systemd/system/vy-gpu-adopt.service", "/etc/vy/gpu-lease-host"]
+managed = ["/workspace/verity-guest/bin/gpu_adopt.py", "/etc/systemd/system/vy-gpu-adopt.service", "/etc/vy/gpu-lease-host",
+  "/usr/local/bin/gpu-lease"]
 
 [nodes.vy-glm53-s1]
 record = "/workspace/research/deploy/record.jsonl"
-managed = ["/workspace/verity-guest/bin/gpu_adopt.py", "/etc/systemd/system/vy-gpu-adopt.service", "/etc/vy/gpu-lease-host"]
+managed = ["/workspace/verity-guest/bin/gpu_adopt.py", "/etc/systemd/system/vy-gpu-adopt.service", "/etc/vy/gpu-lease-host",
+  "/usr/local/bin/gpu-lease"]
 
 # ---- every node: the VM itself (pods/nebius/launch.sh installs these at first boot)
 
@@ -336,7 +339,7 @@ owner = "infra"
 [[file]]
 path = "/usr/local/bin/gpu-lease"
 src = "tools/research/src/research/pods/sh/gpu_lease.sh"
-nodes = ["vy-nebius-1", "vy-nebius-2"]
+nodes = ["vy-nebius-1", "vy-nebius-2", "vy-glm53-eu", "vy-glm53-eu2", "vy-glm53-s1"]
 owner = "infra"
 
 [[file]]
@@ -395,6 +398,20 @@ path = "/etc/systemd/system/vy-store-evict-research.timer"
 src = "tools/research/src/research/pods/nebius/sky/store_evict_research.timer"
 nodes = ["vy-nebius-1", "vy-nebius-2", "vy-nebius-cpu-1"]
 run = ["systemd:vy-store-evict-research.timer"]
+owner = "infra"
+
+[[file]]  # hourly `research retention gc --apply` while /workspace is over 80% (n2 sat at 80% with 3.5 TiB collectable, 19 Oct)
+path = "/etc/systemd/system/vy-retention-gc.service"
+src = "tools/research/src/research/pods/nebius/sky/retention_gc.service"
+nodes = ["vy-nebius-1", "vy-nebius-2"]
+run = ["systemd:vy-retention-gc.timer"]
+owner = "infra"
+
+[[file]]
+path = "/etc/systemd/system/vy-retention-gc.timer"
+src = "tools/research/src/research/pods/nebius/sky/retention_gc.timer"
+nodes = ["vy-nebius-1", "vy-nebius-2"]
+run = ["systemd:vy-retention-gc.timer"]
 owner = "infra"
 
 [[file]]

@@ -1,6 +1,7 @@
 """[GLM-5.3 fp8] The block-scaled FP8 expert GEMMs of vLLM's fused MoE on Hopper: `fused_moe_kernel` (Triton) with `block_shape`
 [128, 128], as the H200 runs GLM-5.3-FP8 (`quant_method` fp8, `fmt` e4m3, `weight_block_size` [128, 128], `activation_scheme`
-dynamic, no `scale_fmt`) at TP without EP, eager, `VLLM_USE_DEEP_GEMM=0`; GLM-5.3's engine refuses `VLLM_BATCH_INVARIANT` on sm_90
+dynamic, no `scale_fmt`) at TP without EP, eager, at vLLM's sm_90 defaults (DeepGEMM on: the row's target declares no
+`fp8_block_gemm`); GLM-5.3's engine refuses `VLLM_BATCH_INVARIANT` on sm_90
 (no sparse-MLA backend supports it), so its experts launch the tuned configs.  Pinned vLLM 0.28.1rc1.dev472 (d9105ea80), Triton
 3.7.1; line numbers are at that commit.
 
@@ -10,7 +11,8 @@ The path, read from the source:
    activations) and `ep_size == 1`, `_get_priority_backends` moves TRITON to the front (fused_moe/oracle/fp8.py:113-123), so the
    experts are `TritonExperts` (batch invariant: `_supports_batch_invariance`; fused_moe/experts/triton_moe.py).
 2. The block's input is `per_token_group_quant_fp8(x, 128)` (`moe_kernel_quantize_input` -> `_fp8_quantize`, fused_moe/utils.py:239-243;
-   `use_ue8m0` = `is_deep_gemm_e8m0_used()`, False with DeepGEMM off): the kernel `fp8.Fp8GroupQuant_v1` already states.
+   `use_ue8m0` defaults to `is_deep_gemm_e8m0_used()`, True with DeepGEMM and `VLLM_USE_DEEP_GEMM_E8M0` on): the kernel
+   `deepgemm.Fp8GroupQuantUe8m0_v1` already states (`fp8.Fp8GroupQuant_v1` with DeepGEMM off).
 3. `invoke_fused_moe_triton_kernel` (fused_moe/fused_moe.py:763-910) launches `fused_moe_kernel` (fused_moe.py:299-610) twice, w13
    (`mul_routed_weight` False) then w2 (`not apply_router_weight_on_input`, top_k 1; triton_moe.py:505-527), with the config of
    `try_get_optimal_moe_config` (fused_moe.py:1422-1451), `BLOCK_SIZE_K = min(BLOCK_SIZE_K, 128)` (fused_moe.py:844-846) and
@@ -22,9 +24,10 @@ The path, read from the source:
    fixed tile BLOCK_SIZE_M 64, N 64, K 32 (fused_moe.py:1308-1315): KB 32, SWAP_AB False.  The tuned file's M <= 6 entries,
    BLOCK_SIZE_M 8 x BLOCK_SIZE_N 32 (M <= 3, no SWAP_AB: BLOCK_SIZE_N < 64) and 8 x 64 under SWAP_AB (M 4 to 6, the dot's N 8), are
    no wgmma tile, and Triton runs their dot on mma.sync (`sm90_dot`).
-4. Between them, `ops.silu_and_mul_per_block_quant(group_size=128)` (triton_moe.py:471-485), the fused branch every GLM-5.3 layer
-   takes (SiLU, fp8_w8a8, block [128, 128], no LoRA, no e8m0): `SiluMulFp8BlockQuant_v1` below.  Its (q, scale) is the w2 launch's
-   (A, A_scale); no bf16 intermediate exists.
+4. Between them (triton_moe.py:474-498), at the defaults `silu_and_mul` into a bf16 intermediate (`SiluMul_v2`) and step 2's ue8m0
+   quant of it (`Fp8GroupQuantUe8m0_v1{I,128}`), whose (q, scale) is the w2 launch's (A, A_scale).  Without e8m0 (DeepGEMM off) the
+   fused branch `ops.silu_and_mul_per_block_quant(group_size=128)` (SiLU, fp8_w8a8, block [128, 128], no LoRA) runs instead,
+   `SiluMulFp8BlockQuant_v1` below, with no bf16 intermediate.  `moe_sum` then adds each token's TOPK w2 rows (`MoeSum_v1`).
 
 `fused_moe_kernel`'s block-wise branch (fused_moe.py:542-552), per K tile k of BLOCK_SIZE_K = KB:
 
@@ -79,6 +82,8 @@ function.  `scales` is [pairs, I/G] row-major (`is_scale_transposed` False, _cus
 """
 from __future__ import annotations
 
+__models__ = ("zai-org/GLM-5.3",)
+
 from verity.ml.circuits.defs import bind, composite
 from verity.ml.circuits.refs import Coll, concat, tuple_of
 from verity.ml.circuits.types import Array, Tuple
@@ -91,8 +96,10 @@ from verity_vllm.program.registry.moe import ONE32, NvExpf
 from verity_vllm.program.registry.prims import BF16, F32
 
 
-_CONF = ("model-untested: read from vLLM d9105ea80 fused_moe_kernel and Triton 3.7.1; tests/properties/glm53_block_fp8_capture_gpu.py "
-         "is its hardware check")
+_CONF = ("exact-model-tested as the `_v3` forms at DOT = HopperE4m3QgmmaDot32_v1, of which these are the function "
+         "(tests/program/test_fp8_moe_dot.py): vLLM d9105ea80's fused_moe_kernel (Triton 3.7.1) on cc 9.0 (132 SMs) at vLLM's defaults, "
+         "GLM-5.3's wgmma tiles 16x64x128 and 16x128x128 under SWAP_AB, 18,432,000 w13 and w2 words, 0 mismatches (property "
+         "glm53_block_fp8_capture/v4, run r20261017-125608-3071, art:41943522)")
 
 
 def check_statics(K: int, G: int, KB: int) -> None:
@@ -181,8 +188,11 @@ DOT_CONF = ("exact-model-tested at cc 12.0's DOT (GemmTarget.fp8_moe_dot), Black
              "moe/prefill: fused_experts (E 128, top 8, hidden 4096, I 192) under TritonExperts, every block-[64, 64] fused_moe_kernel "
              "launch at 64x64x32, 11,791,360 w13 and w2 words, 0 mismatches; Hopper's step, the swapped and CUTLASS scale orders and an "
              "unfused mul + add each refuted (3,942, 577, 568 and 575 words); read from vLLM d9105ea80 fused_moe_kernel and Triton 3.7.1 "
-             "(each 32-wide tile one QMMA.16832.F32.E4M3.E4M3 from RZ); at DOT = HopperE4m3QgmmaDot32_v1 (cc 9.0's) the function of "
-             "the `_v1` forms (tests/program/test_fp8_moe_dot.py), which are model-untested")
+             "(each 32-wide tile one QMMA.16832.F32.E4M3.E4M3 from RZ); and at cc 9.0's DOTs (as this module's dot picks them), G = 128, KB = 128, SWAP "
+             "both: property glm53_block_fp8_capture/v4 on cc 9.0 (132 SMs) at vLLM's defaults, run r20261017-125608-3071, art:41943522: "
+             "GLM-5.3's served chain under vLLM's FusedMoEKernel / TritonExperts (E 256, top 8, hidden 6144, I 256 and 2048), "
+             "every launch at its tuned tile, HopperE4m3MmaV2Dot32_v1 at 8x32x128 and 8x64x128/SWAP_AB (638,976 words) and "
+             "HopperE4m3QgmmaDot32_v1 at 16x64x128 and 16x128x128/SWAP_AB (18,432,000 words), 0 mismatches")
 
 
 def coordinate_sig(routed: bool, e4m3=E4M3, f32=F32, bf16=BF16):
@@ -234,8 +244,9 @@ def MoeExpertFp8BlockGemmWV3(B, S, xq, sx, g, w, ws):
     return rows(B, coord, S.N, S.G, w, ws, (xq, sx, g))
 
 
-_ACT_CONF = ("model-untested: read from vLLM d9105ea80 fused_silu_mul_block_quant.cu and its build flags; "
-             "tests/properties/glm53_block_fp8_capture_gpu.py is its hardware check")
+_ACT_CONF = ("model-untested: read from vLLM d9105ea80 fused_silu_mul_block_quant.cu and its build flags; not on the served cc 9.0 "
+             "path (vLLM's defaults run silu_and_mul and the ue8m0 quant instead); glm53_block_fp8_capture/v3 compared it on cc 9.0 "
+             "at VLLM_USE_DEEP_GEMM=0 (GO, run r20261014-092222-e32d)")
 
 
 def check_act_statics(I: int, G: int) -> None:

@@ -94,3 +94,10 @@ def test_step_timing_splits_each_steps_scheduled_tokens_into_prefill_and_decode(
 def test_a_recomputed_request_counts_from_zero():
     from verity_vllm.engine.arrivals import scheduled_tokens
     assert scheduled_tokens([{"a": 5}, {"a": 6}, {"a": 3}, {"a": 7}], {"a": 4}) == [(4, 1), (0, 1), (3, 0), (1, 3)]
+
+
+def test_scheduler_suffixed_ids_read_the_prompt_length(): # VLLM-32
+    # vLLM renames each request to `<id>-<8 hex>` in the scheduler, while prompt_len is keyed by the workload id.
+    # Without the external_id strip every prompt token mis-counts as decode (prompt length read as 0).
+    from verity_vllm.engine.arrivals import scheduled_tokens
+    assert scheduled_tokens([{"a-0f9c43c1": 5}, {"a-0f9c43c1": 6}], {"a": 4}) == [(4, 1), (0, 1)]

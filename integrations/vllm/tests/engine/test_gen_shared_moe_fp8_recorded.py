@@ -15,6 +15,8 @@ quant and `moe_sum`, every event of the scope claimed, and the add after it is `
 """
 from __future__ import annotations
 
+__models__ = ("zai-org/GLM-5.3",)
+
 import dataclasses
 import functools
 import gzip

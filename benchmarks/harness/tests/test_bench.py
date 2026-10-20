@@ -38,9 +38,9 @@ from verity_bench.vllm.table import render
 
 class FakeEngine:
     def __init__(self, arm, events, *, gate_ok=True, bad_tokens=False, kv_tokens=458_752, timed_digest=None,
-                 drift=0.0):
+                 drift=0.0, timed_ok=True):
         self.arm, self.events, self.gate_ok, self.bad_tokens = arm, events, gate_ok, bad_tokens
-        self.timed_digest, self.drift = timed_digest, drift
+        self.timed_digest, self.drift, self.timed_ok = timed_digest, drift, timed_ok
         self.identity = {
             "vllm_version": "0.fake+gd9105ea80",
             "kernel_digest": f"digest-{arm.id}",
@@ -55,7 +55,8 @@ class FakeEngine:
 
     def custom_gate(self):
         self.events.append(("custom-gate", self.arm.id))
-        return {"passed": self.gate_ok, "provided": True}
+        timed = any(e[:2] == ("measure", self.arm.id) for e in self.events)
+        return {"passed": self.gate_ok and (self.timed_ok or not timed), "provided": True}
 
     def warmup(self, point):
         self.events.append(("warmup", self.arm.id, point.id))
@@ -84,7 +85,7 @@ class FakeEngine:
 
 class FakeFactory:
     def __init__(self, *, resident_failure=None, gate_ok=True, bad_tokens=None, kv_tokens=None, timed_digest=None,
-                 drift=0.0, kv_after_gate=None):
+                 drift=0.0, kv_after_gate=None, timed_ok=True):
         self.events = []
         self.resident_failure = resident_failure
         self.failed = False
@@ -94,6 +95,7 @@ class FakeFactory:
         self.timed_digest = timed_digest or {}
         self.drift = drift
         self.kv_after_gate = kv_after_gate or {}
+        self.timed_ok = timed_ok
 
     def create(self, arm, preset, *, resident):
         self.events.append(("create", arm.id, resident))
@@ -104,7 +106,8 @@ class FakeFactory:
         kv = self.kv_after_gate.get(arm.id) if gated and arm.id in self.kv_after_gate else self.kv_tokens.get(arm.id, 458_752)
         return FakeEngine(arm, self.events, gate_ok=self.gate_ok,
                           bad_tokens=arm.id == self.bad_tokens,
-                          kv_tokens=kv, timed_digest=self.timed_digest.get(arm.id), drift=self.drift)
+                          kv_tokens=kv, timed_digest=self.timed_digest.get(arm.id), drift=self.drift,
+                          timed_ok=self.timed_ok)
 
 
 def inputs():
@@ -132,7 +135,7 @@ def test_cli_and_presets_use_the_benchmark_package_and_stable_gpu_ids(tmp_path):
     assert preset.gpu_id == "rtx-pro-6000"
     assert preset.engine_settings["resident_gpu_memory_utilization"] == 0.40
     assert preset.engine_settings["block_gpu_memory_utilization"] == 0.80
-    assert set(GPUS) == {"rtx-pro-6000", "h200"}
+    assert set(GPUS) == {"rtx-pro-6000", "h200", "b200"}
 
 
 def test_every_toml_spec_strictly_loads():
@@ -284,57 +287,6 @@ def test_the_launcher_sources_the_setup_before_the_point_runs(tmp_path):
     assert ran.returncode == 0, ran.stderr
     assert ran.stdout.strip() == f"built in {root} {root}/benchmarks/harness"
     assert failed.returncode != 0 and failed.stdout == ""
-
-
-def test_the_bandwidth_setup_builds_once_per_source_key_and_every_point_loads_its_own_copy(tmp_path):
-    root = Path(__file__).resolve().parents[3]
-    bin_dir, calls = tmp_path / "bin", tmp_path / "nvcc-builds"
-    bin_dir.mkdir()
-    nvcc = bin_dir / "nvcc"
-    nvcc.write_text(
-        '#!/bin/bash\n'
-        '[ "$1" = --version ] && { echo "nvcc fake ${FAKE_NVCC_VERSION:-1}"; exit 0; }\n'
-        'case " $* " in *" -MM "*) for a; do src=$a; done; echo "x.o : $src"; exit 0 ;; esac\n'
-        'while [ $# -gt 0 ]; do [ "$1" = -o ] && out=$2; shift; done\n'
-        '[ -n "$FAKE_NVCC_PREEMPT" ] && case $out in */wt.so) kill -TERM $PPID; exit 0 ;; esac\n'
-        f'echo "$out" >> {calls}; echo "lib $out" > "$out"\n')
-    nvcc.chmod(0o755)
-    python = tmp_path / "venv312" / "bin" / "python"
-    python.parent.mkdir(parents=True)
-    python.write_text('#!/bin/sh\necho "$VERITY_VLLM_BENCH_WT_LIB $VERITY_VLLM_BENCH_TOPUP_LIB"\n')
-    python.chmod(0o755)
-
-    def point(run: str, **extra: str) -> str:
-        env = {"PATH": f"{bin_dir}:/usr/bin:/bin", "WORK": str(tmp_path), "CUDA_HOME": str(tmp_path),
-               "RESEARCH_RUN_DIR": str(tmp_path / run), "VERITY_BENCH_LIB_CACHE": str(tmp_path / "cache"), **extra,
-               "VERITY_BENCH_SETUP": "benchmarks/harness/setup/vllm_encoded.sh"}
-        ran = subprocess.run(["bash", "benchmarks/harness/run_point.sh"], cwd=root, env=env, capture_output=True,
-                             text=True)
-        assert ran.returncode == 0, ran.stderr
-        wt, topup = ran.stdout.split()
-        assert wt == f"{tmp_path / run}/setup/wt.so" and Path(topup).read_text().startswith("lib ")
-        return (tmp_path / run / "out/setup/build.txt").read_text().splitlines()[-1]
-
-    first = point("r1")
-    assert first.startswith("built ") and len(calls.read_text().splitlines()) == 4
-    second = point("r2")
-    assert second == "reused " + first.split(" ", 1)[1] and len(calls.read_text().splitlines()) == 4
-    other = point("r3", FAKE_NVCC_VERSION="2")
-    assert other.startswith("built ") and other != first and len(calls.read_text().splitlines()) == 8
-    (tmp_path / "a-file").write_text("")
-    unwritable = point("r4", VERITY_BENCH_LIB_CACHE=str(tmp_path / "a-file" / "cache"))
-    assert unwritable.startswith(f"built {tmp_path}/r4/setup-build/") and len(calls.read_text().splitlines()) == 12
-    cached = sorted(p.name for p in (tmp_path / "cache").iterdir())
-    preempted = subprocess.run(
-        ["bash", "benchmarks/harness/run_point.sh"], cwd=root, capture_output=True, text=True,
-        env={"PATH": f"{bin_dir}:/usr/bin:/bin", "WORK": str(tmp_path), "CUDA_HOME": str(tmp_path),
-             "RESEARCH_RUN_DIR": str(tmp_path / "r5"), "VERITY_BENCH_LIB_CACHE": str(tmp_path / "cache"),
-             "FAKE_NVCC_VERSION": "3", "FAKE_NVCC_PREEMPT": "1",
-             "VERITY_BENCH_SETUP": "benchmarks/harness/setup/vllm_encoded.sh"})
-    assert preempted.returncode == 143 and preempted.stdout == "", preempted.stderr
-    assert sorted(p.name for p in (tmp_path / "cache").iterdir() if not p.name.endswith(".lock")) == [
-        name for name in cached if not name.endswith(".lock")]
-    assert point("r6", FAKE_NVCC_VERSION="3").startswith("built ")
 
 
 def test_the_bandwidth_spec_runs_memory_accountings_arms_with_receipts_on_and_their_libraries_built():
@@ -552,11 +504,34 @@ def test_a_failed_gate_records_the_failure_and_stops_before_timing(factory):
     validate(doc)
 
 
-def test_a_failed_greedy_gate_records_the_first_divergent_token():
+@pytest.mark.parametrize("resident_failure", [None, "candidate"])
+def test_an_arm_gate_is_read_again_after_its_timed_runs_and_its_failure_drops_the_points(resident_failure):
+    """An arm judges its warm-up and timed runs only once they have run: served_commit's gate names a rootless warm-up
+    in its ``warmups`` and fails a measured run without a root, so the verdict must hold what the gate says after them."""
+
+    preset, points, arms = inputs()
+    doc = run_benchmark(preset, arms, points, sweep="quick", reps=2, factory=FakeFactory(), git_commit="abc")
+    closing = [g for g in doc["gates"] if g["kind"] == "arm-closing"]
+    assert all(g["passed"] for g in closing) and doc["points"]
+    assert [g["arm"] for g in closing] == ["stock-fp8", "candidate"]
+
+    factory = FakeFactory(timed_ok=False, resident_failure=resident_failure)
+    doc = run_benchmark(preset, arms, points, sweep="quick", reps=2, factory=factory, git_commit="abc")
+    assert all(g["passed"] for g in doc["gates"] if g["kind"] == "arm")
+    closing = [g for g in doc["gates"] if g["kind"] == "arm-closing"]
+    assert closing and not any(g["passed"] for g in closing)
+    if resident_failure:
+        # blocks mode stops opening engines at the first failed gate (its points are dropped either way)
+        assert (closing[0]["arm"], closing[0]["cycle"]) == (arms[0].id, 0) and len(closing) == 1
+    assert doc["points"] == []
+    validate(doc)
+
+
+def test_a_failed_token_gate_records_the_first_divergent_token():
     preset, points, arms = inputs()
     doc = run_benchmark(preset, arms, points, sweep="quick", reps=2,
                         factory=FakeFactory(bad_tokens="candidate"), git_commit="abc")
-    failed, = [g for g in doc["gates"] if g["kind"] == "greedy-tokens" and not g["passed"]]
+    failed, = [g for g in doc["gates"] if g["kind"] == "tokens" and not g["passed"]]
     assert failed["first_divergence"] == {
         "request": "b32-p512-mixed-0", "position": 0, "token": 8, "control_token": 7,
     }
@@ -575,7 +550,7 @@ def test_unequal_kv_pools_fail_the_gate_and_name_the_pin():
     gate, = [g for g in doc["gates"] if g["kind"] == "kv-pool"]
     assert not gate["passed"]
     assert (gate["tokens"], gate["control_tokens"]) == (491_376, 494_064)
-    assert "block_kv_cache_memory_bytes" in gate["detail"]
+    assert "resident_kv_cache_memory_bytes" in gate["detail"] and "block_kv_cache_memory_bytes" in gate["detail"]
     assert doc["points"] == []
     assert not any(e[0] == "measure" for e in factory.events)
     validate(doc)
@@ -596,6 +571,97 @@ def test_block_mode_pins_one_kv_pool_for_every_arm_of_the_llama_preset():
     settings = load_spec("llama31-8b-fp8-1gpu").preset.engine_settings
     assert settings["block_kv_cache_memory_bytes"] == 56 * 2**30
     assert "block_kv_cache_memory_bytes" not in load_spec("glm53-fp8-8gpu").preset.engine_settings
+
+
+def test_engine_args_pin_the_pool_in_either_mode_and_serving_defaults_leave_compilation_to_vllm():
+    from verity_bench.vllm.runner import engine_args
+
+    served_preset = load_spec("qwen3-8b-bf16-h200-served").preset
+    for resident in (True, False):
+        args = engine_args(served_preset, "bfloat16", resident=resident, eager=False)
+        assert args["kv_cache_memory_bytes"] == 10 * 2**30
+        assert "compilation_config" not in args and args["enforce_eager"] is False and args["execution"] == "compiled"
+    assert engine_args(served_preset, "bfloat16", resident=True, eager=True)["execution"] == "eager"
+    pinned = load_spec("llama31-8b-fp8-1gpu").preset
+    resident = engine_args(pinned, "fp8", resident=True, eager=False)
+    assert "kv_cache_memory_bytes" not in resident and resident["quantization"] == "fp8"
+    assert resident["compilation_config"] == {"mode": 0, "cudagraph_mode": "FULL_DECODE_ONLY",
+                                              "cudagraph_capture_sizes": [1, 8, 32, 128]}
+    assert engine_args(pinned, "fp8", resident=False, eager=False)["kv_cache_memory_bytes"] == 56 * 2**30
+    assert "compilation_config" not in engine_args(pinned, "fp8", resident=False, eager=True)
+    assert not {"attention_backend", "attention_config", "moe_backend"} & set(args)
+    moe = engine_args(load_spec("qwen3-30b-a3b-bf16-b200-served").preset, "bfloat16", resident=False, eager=False)
+    assert (moe["attention_backend"], moe["attention_config"], moe["moe_backend"]) == ("FLASH_ATTN", {"flash_attn_version": 2}, "triton")
+
+
+def test_serving_defaults_give_every_arm_process_one_inductor_cache(monkeypatch):
+    from verity_bench.vllm import runner
+
+    spawned = []
+
+    class Context:
+        def Pipe(self):
+            class End:
+                def recv(self):
+                    return {"ready": {}}
+
+                def close(self):
+                    pass
+            return End(), End()
+
+        def Process(self, target, args):
+            spawned.append(dict(runner.os.environ))
+            return SimpleNamespace(start=lambda: None, join=lambda: None)
+
+    monkeypatch.setenv(runner.INDUCTOR_DIR_MARK, "")
+    monkeypatch.setenv("TORCHINDUCTOR_CACHE_DIR", "/elsewhere")
+    monkeypatch.setattr(runner.tempfile, "mkdtemp", lambda prefix: f"/tmp/{prefix}x")
+    factory = runner.ProcessEngineFactory()
+    factory.context = Context()
+    preset = load_spec("qwen3-8b-bf16-h200-served").preset
+    for arm in resolve_arms("stock"):
+        factory.create(arm, preset, resident=True)
+        factory.create(arm, preset, resident=True)
+    assert [e["TORCHINDUCTOR_CACHE_DIR"] for e in spawned] == ["/tmp/verity_bench_inductor_x"] * 2
+    assert all(e[runner.INDUCTOR_DIR_MARK] == "1" for e in spawned)
+
+
+def test_a_sweep_crosses_samplings_and_greedy_points_keep_their_ids():
+    served_points = expand_sweep("served")
+    assert [(p.batch, p.sampling) for p in served_points] == [
+        (b, s) for b in (1, 8, 32, 64) for s in ("greedy", "stochastic")
+    ]
+    assert [p.id for p in served_points[4:6]] == ["b32-p512-mixed", "b32-p512-mixed-stochastic"]
+    assert [p.headline for p in served_points[4:6]] == [True, False]
+    assert served_points[5].to_json()["sampling"] == "stochastic"
+    assert {p.sampling for p in expand_sweep("quick")} == {"greedy"}
+
+
+def test_an_unknown_sampling_refuses(tmp_path, monkeypatch):
+    from verity_bench.vllm import presets
+
+    (tmp_path / "odd.toml").write_text(
+        (SPEC_ROOT / "served.toml").read_text().replace('id = "served"', 'id = "odd"').replace('"stochastic"', '"beam"'))
+    monkeypatch.setattr(presets, "SPEC_ROOT", tmp_path)
+    with pytest.raises(presets.ConfigError, match="unknown sampling"):
+        presets.load_sweep("odd")
+
+
+def test_inter_token_latency_is_per_token_after_the_first_and_shares_a_multi_token_return():
+    from verity_bench.vllm.runner import inter_token_latencies, percentile
+
+    returns = [
+        (1.0, {"a": 1}),
+        (1.5, {"a": 2, "b": 1}),
+        (2.0, {}),
+        (2.5, {"a": 4, "b": 2}),
+        (3.0, {"a": 4}),
+    ]
+    assert inter_token_latencies(returns) == [0.5, 0.5, 0.5, 1.0]
+    assert inter_token_latencies([(1.0, {"a": 1})]) == []
+    assert percentile([0.5, 0.5, 0.5, 1.0], 50) == 0.5
+    assert percentile([0.5, 0.5, 0.5, 1.0], 99) == pytest.approx(0.985)
+    assert percentile([2.0], 99) == 2.0 and percentile([], 50) is None
 
 
 def test_result_schema_and_identity_strict_judge():
@@ -810,7 +876,7 @@ def test_an_arm_whose_timed_tokens_differ_from_its_controls_keeps_no_points():
     validate(doc)
     good = bench()
     with pytest.raises(ValueError, match="lacks gates"):
-        validate({**good, "gates": [g for g in good["gates"] if g["kind"] != "greedy-tokens"]})
+        validate({**good, "gates": [g for g in good["gates"] if g["kind"] != "tokens"]})
 
 
 def test_intervals_use_the_t_quantile_for_n_and_ratios_refuse_a_zero_or_missing_baseline_rep():

@@ -23,7 +23,6 @@ evaluated, mismatched.  ``OUT/boolean/rows.jsonl`` is one line per row the Boole
 from __future__ import annotations
 
 import dataclasses
-import gzip
 import hashlib
 import json
 import os
@@ -42,6 +41,7 @@ from verity_vllm.check.replay import evaluate as EV
 from verity_vllm.config import option
 from verity_vllm.pipeline import cpu_replay as CR
 from verity_vllm.program.kernels.kernel_registry import Declined
+from verity_vllm.program.instances_file import read_instances
 from verity_vllm.query.program_view import ports_of_type
 
 SCHEMA = "verity-vllm/boolean-replay/v1"
@@ -260,7 +260,7 @@ def run(o: Options) -> dict[str, Any]:
     dec, digest = load_program(Path(o.row_dir) / "build_request" / "descriptor.json.gz")
     if digest != ctx["args"].get("program_digest"):
         raise CR.Refused(f"the row dir's request Program {digest[:16]} is not the Commit's {str(ctx['args'].get('program_digest'))[:16]}")
-    rows = json.loads(gzip.open(Path(o.row_dir) / "build_request" / "instances.json.gz").read())["rows"]
+    rows = read_instances(str(Path(o.row_dir) / "build_request" / "instances.json.gz"), expand=False)["rows"]
     nodes = dec.root.body.nodes
     K = len(nodes) - len(rows)
     bad = [r["i"] for r in rows if descriptor_id(nodes[K + int(r["i"])].fn) != r["spec"]]
