@@ -8,12 +8,14 @@ verifier's check that a served window's coins are that challenger's.
   session once the window has finished. The challenger is auditor-trusted (`trusted-nebius-host`): it runs on a machine
   the prover doesn't control, and the serving process reaches it through ``ssh -R`` on its own 127.0.0.1.
 * **Checking** (`trusted_rounds_reason`): the verifier reads the challenger's directory from the challenger's own run
-  (``research fetch RUN --all``, its ``out/``), never from the prover's bundle, under its own challenger key (`pinned_key`):
-  the coin commitment the challenger signed and the roots its release log shows it received (`remote.trusted_session`).
-  The window's coins must be that commitment's, its salt coin must have followed the weights' root and its rounds must be
-  the challenger's logged roots in order, each coin opened after its root (`pouw_h1_requests.rounds_reason`). A window
-  whose coins came from a challenger the prover holds (the in-process ``coins`` and ``rounds`` of tests, or a host of
-  the prover's) is refused, since the verifier's key signed no record of it.
+  (``research fetch RUN --all``, its ``out/``), never from the prover's bundle, under its own challenger key (`pinned_key`),
+  and the auditor's session record, which names the one session of the window (`remote.auditor_record`): the coin
+  commitment the challenger signed and the roots its signed release log shows it received
+  (`challenger.trusted_session_of`). The window's coins must be that commitment's, its salt coin must have followed the
+  weights' root, and its rounds pass PoUW's round rule of record (`core_check.rounds`, Lean `PouwCheck.roundsCheck`):
+  each coin opened after its root, the roots the challenger's log shows in order. A window whose coins came from a
+  challenger the prover holds (the in-process ``coins`` and ``rounds`` of tests, or a host of the prover's), whose log
+  no one signed, or whose window the auditor's record names a second session for, is refused.
 """
 from __future__ import annotations
 
@@ -22,13 +24,12 @@ import json
 from pathlib import Path
 from typing import Any, Mapping
 
+from verity.core.protocols.pouw import core_check as CC
 from verity.core.protocols.pouw import window as Wd
 from verity.core.protocols.pouw.audit import salt_of
 from verity.core.protocols.sampled_proofs import remote
 from verity.core.protocols.sampled_proofs.challenger import (ChallengerKey, CoinError, LiveCommitment, LiveOpening,
-                                                             LiveRecord, live_reason)
-
-from verity_vllm.protocol_options import pouw_h1_requests as RQ
+                                                             LiveRecord, live_reason, trusted_session_of)
 
 SCHEME = Wd.LIVE_SCHEME
 
@@ -119,13 +120,16 @@ def pinned_key(path: str | Path, public_sha512: str) -> ChallengerKey:
     return key
 
 
-def trusted_rounds_reason(commits: Mapping[str, Any], directory: str | Path, key: ChallengerKey,
-                          verify: Any = lms_verify) -> str | None:
+def trusted_rounds_reason(commits: Mapping[str, Any], directory: str | Path, auditor: str | Path, window: Mapping[str, Any],
+                          key: ChallengerKey, verify: Any = lms_verify) -> str | None:
     """Why the window's coins (its H1 commitment `commits`: ``coins``, ``round_coins``, ``salt_opening``, ``weights_root``,
-    ``steps`` and the round log ``rounds``) aren't the verifier's own challenger's, read from `directory` under `key`; None
-    when they are. Fails closed: a missing, malformed or unsigned record or an unreadable release log trusts nothing."""
+    ``steps`` and the round log ``rounds``) aren't the verifier's own challenger's, read from `directory`, the session the
+    auditor's record at `auditor` names for `window` (``{commit, period, pouw_salt, stream}``), under `key`; None when
+    they are. Fails closed: a missing, malformed or unsigned record or log, or a window the record names no one session
+    for, trusts nothing."""
     try:
-        trusted, received = remote.trusted_session(directory, key, verify)
+        entries, files = remote.auditor_record(auditor), remote.session_files(directory)
+        trusted, received = trusted_session_of(entries, window, key, files, verify)
     except CoinError as e:
         return f"the challenger's session is not trusted: {e}"
     for name in ("round_coins", "coins"):
@@ -151,12 +155,11 @@ def trusted_rounds_reason(commits: Mapping[str, Any], directory: str | Path, key
     log = list(commits.get("rounds") or ())
     if len(log) != commits.get("steps"):
         return f"the window's round log has {len(log)} rounds, not its {commits.get('steps')} steps"
-    why = RQ.rounds_reason(log, trusted)
-    if why is not None:
-        return why
-    if received.get(Wd.ROUND) != tuple(bytes.fromhex(x["root"]) for x in log):
-        return "the window's round roots are not the roots the challenger's log shows it received, in order"
-    return None
+    if [x.get("round") for x in log] != list(range(len(log))):
+        return "the round log is not rounds 0, 1, ... in order"
+    refused = CC.rounds(key.to_json(), entries, window, files, [x.get("root") for x in log], [x.get("coin") for x in log],
+                        verify)
+    return None if refused is None else f"the window's rounds: {refused[1]}"
 
 
 __all__ = ["SCHEME", "address", "families", "finish", "lms_verify", "pinned_key", "refusals", "session",
