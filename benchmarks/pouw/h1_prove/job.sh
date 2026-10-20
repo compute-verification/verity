@@ -8,11 +8,12 @@
 #      window from other tokens) and run.py prepare commits, serves, draws, opens, checks the openings and has the drawn
 #      units staged, while stage.py builds the unit's circuit (the long step at K = 4096), bound to the window's Program
 #      once the commitment gives its shape
-#   3. one loopback --zk session per statement (the drawn units; the other window's unit; the in-proof negatives, each also
-#      as <tag>-skip, proved with FC_ZK_SELF_CHECK=skip), every instance drawn
-#   4. the Lean checks of run.py's plan, each with the verifier's own window Program and partition (--program, --partition:
-#      honest ACCEPT with its units derived; flipped-z, wrong-receipt, other-window REJECT; other-window-own
-#      ACCEPT; in-receipt, in-z and their -skip runs REFUSED by some layer), as many at a time as 90% of H1_MEM_GB holds at 6x the circuit text each (two at K = 4096 and
+#   3. one loopback --zk session per statement (the drawn units; the other window's unit; the drawn units on a tampered A
+#      row; the in-proof negatives, each also as <tag>-skip, proved with FC_ZK_SELF_CHECK=skip), every instance drawn
+#   4. the Lean checks of run.py's plan, each with the verifier's own window Program, partition and registered reads
+#      (--program, --partition, --registered: honest ACCEPT with its units derived; flipped-z, wrong-receipt, other-window
+#      REJECT; other-window-own ACCEPT; tampered-a REJECT by its registered reads; in-receipt, in-z and their -skip runs
+#      REFUSED by some layer), as many at a time as 90% of H1_MEM_GB holds at 6x the circuit text each (two at K = 4096 and
 #      H1_MEM_GB=500), and the selftest build's controls on
 #      the drawn units' statement (H1_CONTROLS; at K = 4096 a selftest, prover and verifier in one process, peaks past
 #      170 GB)
@@ -76,7 +77,7 @@ cp "$SW/circuit.json" "$OUT/" 2>/dev/null
 grep -E '^(BUILT|STAGED|FAILED)' "$OUT/stage.out" | cut -c1-600 | tee -a "$OUT/job.log"
 cp "$WK/record.json" "$WK/plan.json" "$OUT/" 2>/dev/null
 [ $rc = 0 ] || { log "prepare FAILED (exit $rc): $(tail -3 "$OUT/stage.err")"; exit 1; }
-mkdir -p "$OUT/verifier" && cp "$WK"/verifier/*.pub.bin "$WK/verifier/partition.json" "$OUT/verifier/"   # program.json: record.json's program_sha512, rebuilt from the shape
+mkdir -p "$OUT/verifier" && cp "$WK"/verifier/*.pub.bin "$WK"/verifier/*.registered.json "$WK/verifier/partition.json" "$OUT/verifier/"   # program.json: record.json's program_sha512, rebuilt from the shape
 
 # ---- proofs: one --zk session per statement ------------------------------------------------------------------------------
 while IFS=$'\t' read -r kind tag D n; do
@@ -97,17 +98,17 @@ par=$(( STAGE_GB / each )); [ $par -lt 1 ] && par=1; [ $par -gt 6 ] && par=6
 cap=$(( STAGE_GB / par ))
 # the verifier's own window Program and partition (run.py's), from which Lean derives each instance's unit
 BOUND="--partition $WK/verifier/partition.json --program $WK/verifier/program.json"
-lean_check() {   # lean_check TAG D PUB STATEMENT_ID
-  local tag=$1 D=$2 pub=$3 sid=$4 s
+lean_check() {   # lean_check TAG D PUB STATEMENT_ID REGISTERED: the verifier's own registered reads of the window (run.py's)
+  local tag=$1 D=$2 pub=$3 sid=$4 reg=$5 s
   s=$(ls -d "$D"/sessions/*/ 2>/dev/null | tr '\n' ' ')
   [ -n "$s" ] || { echo "no session under $D" > "$OUT/lean/$tag.err"; return; }
   while [ "$(jobs -rp | wc -l)" -ge "$par" ]; do wait -n; done
   $TIME "$OUT/lean/$tag.time" bash -c "$(vlimit $cap) exec $LEAN verify --zk --circuit $D/circuit.txt --statement $sid \
-    --public $pub $BOUND --session $s" > "$OUT/lean/$tag.out" 2> "$OUT/lean/$tag.err" &
+    --public $pub $BOUND --registered $reg --session $s" > "$OUT/lean/$tag.out" 2> "$OUT/lean/$tag.err" &
 }
 log "lean: $par at a time, cap $cap GB each"
-while IFS=$'\t' read -r kind tag D pub; do
-  [ "$kind" = C ] && lean_check "$tag" "$D" "$pub" verity/flock-circuit
+while IFS=$'\t' read -r kind tag D pub reg; do
+  [ "$kind" = C ] && lean_check "$tag" "$D" "$pub" verity/flock-circuit "$reg"
 done < "$WK/plan.tsv"
 wait
 HD=$(awk -F'\t' '$1 == "S" && $2 == "honest" {print $3}' "$WK/plan.tsv")
@@ -120,7 +121,8 @@ if [ -n "$CONTROLS" ] && [ -e "$HD/inst.bin" ]; then
     c=$(basename "$s"); pub=$HD/pub.bin; [ -e "$s/pub.bin" ] && pub=$s/pub.bin
     while [ "$(jobs -rp | wc -l)" -ge "$par" ]; do wait -n; done
     $TIME "$OUT/lean/st-$c.time" bash -c "$(vlimit $cap) exec $LEAN verify --zk --circuit $HD/circuit.txt \
-      --statement verity/flock-circuit+seed-injection --public $pub $BOUND --session $s" > "$OUT/lean/st-$c.out" 2> "$OUT/lean/st-$c.err" &
+      --statement verity/flock-circuit+seed-injection --public $pub $BOUND --registered $WK/verifier/w1.registered.json \
+      --session $s" > "$OUT/lean/st-$c.out" 2> "$OUT/lean/st-$c.err" &
   done
 fi
 wait
