@@ -24,9 +24,9 @@ Base `origin/main` @ c0ebeb8b93, then, in this order:
 | #2852 | ba1aa4b2d2 | TP served windows refused unless the run root is SHA-512; #2842 9ef0bf1d46 |
 | #2824 | 5b5840cf7f | the committer's rows-sha512 iterations |
 | `cursor/tp-sha512-21f3` (CIR-63 part 1, no PR yet) | d86c42a576 | TP Commits at rows-sha512 under the SHA-512 TP run root (`verity/tp-run-root/v2`); #2852 ba1aa4b2d2, #2824 5b5840cf7f |
-| `cursor/boolv-21f3` (CIR-47, no PR yet) | a326a9ce23 | main c0ebeb8b93 merged with #2729's head: CIR-47's Boolean versions are #2729's σ-lifts and on-demand constants, so it changes nothing past #2729 |
-| `cursor/rows64-land-21f3` (no PR yet) | 1d8869d1e4 | `MoeSum_v3` (`MoeSum_v1` on bits as a batch of `MoeSum_v2{TOPK,64}`), A11's Boolean-first probes |
-| `cursor/multimem-land-21f3` (no PR yet) | 7338aa92c8 | `AllReduceMultimem_v1` as a batch of 16-byte vectors (`AllReduceMultimemVector_v2`) |
+| `cursor/boolv-21f3` (CIR-47, no PR yet) | 73287c5eb1 | CIR-47's Boolean versions are #2729's σ-lifts and on-demand constants; past #2729 it adds tests of GLM-5.3 TP8's constants, residual add, embedding shard and fused norm through them, circuit-check of a Definition without parameters, and the pins of `Const32[0x00000001]_v2` and `Const32[0x0000011f]_v2` (no op or predictor code) |
+| #2883 (`cursor/rows64-land-21f3`) | 1d8869d1e4 | `MoeSum_v3` (`MoeSum_v1` on bits as a batch of `MoeSum_v2{TOPK,64}`), A11's Boolean-first probes |
+| `cursor/multimem-land-21f3` (no PR yet) | fd34e6dac0 | `AllReduceMultimem_v1` as a batch of 16-byte vectors (`AllReduceMultimemVector_v2`); its merge of #2836 and its `test_predict` pin are this tree's already |
 
 ROWS64 and the multimem batch joined when ASK-61 was provisionally accepted (Daniel, 19 Oct 21:59Z, option A: public
 power-of-two output classes up to 262,144 bits). Two conflicts, both sides kept:
