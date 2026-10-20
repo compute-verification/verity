@@ -304,7 +304,7 @@ CLOSING: dict[tuple[str, str], tuple[str, str]] = {
     ("sm_120", "LDC"): (UNOWNED, "the constant-bank loads of cpw_routes modes 0-8 and 10"),
     ("sm_120", "LDC.64"): (UNOWNED, "cpw_routes modes 2, 3, 5 and 7's 64-bit constant-bank loads"),
     ("sm_120", "REDUX.XOR"): (UNOWNED, "cpw_routes modes 2 and 7's warp XOR (LI-CP-W's honest route)"),
-    # sm_120, classed, no line on the measured reading's π* row (VF3s-16's JI3t_0); 1 at DS_issue
+    # sm_120, classed, no line on the measured reading's π* row (JI3s_0 on main, JI3t_0 on #2791); 1 at DS_issue
     ("sm_120", "UNI64"): (UNOWNED, "228 bit-slice attack variants' XU on UNI64, which is on UP alone (#2791's OFF_MENU)"),
     ("sm_120", "TMA512"): (UNOWNED, "attack (ii)'s TMA gather and dither-duo-l32's [per_mma]"),
     ("sm_120", "TMAred512"): (UNOWNED, "attack (ii)'s TMA reduce-add"),
