@@ -774,11 +774,13 @@ def n2_parts(names: set[str] | frozenset[str]) -> dict[str, list]:
 
 def deploy_drift(ctx: Ctx) -> list[Finding]:
     """Files on the nodes that aren't main's, still run old code, or stray (`research deploy drift --json`; it fetches origin,
-    which the nodes can't): one incident per node and kind."""
+    which the nodes can't): one incident per node and kind.  A node ssh can't connect to (a stopped VM) is skipped; any other
+    read that fails, or every node unreachable, is the monitor's error."""
     from .pods.nebius.preflight_probe import findings
 
     reps = json.loads(ctx.sh([*ctx.research, "deploy", "drift", "--json"], ok=(0, 1), timeout=900))
-    if bad := sorted(n for n, r in reps.items() if "error" in r):
+    none_read = all("error" in r for r in reps.values())
+    if bad := sorted(n for n, r in reps.items() if "error" in r and (none_read or not r.get("unreachable"))):
         raise RuntimeError(f"deploy drift can't read {', '.join(bad)}: {str(reps[bad[0]]['error'])[:200]}")
     groups: dict[tuple[str, str], list[str]] = {}
     for line in findings(reps):

@@ -347,11 +347,17 @@ def ssh_runner(project: str = PROJECT) -> Runner:
     return run
 
 
+class Unreachable(RuntimeError):
+    """ssh couldn't connect to the node at all (a stopped VM): its files can't be read, which is no drift of theirs."""
+
+
 def probe(node: Node, paths: list[str], run: Runner) -> dict:
     req = {"paths": paths, "globs": node.managed, "trees": [e.path for e in node.entries if e.tree], "record": node.record}
     r = run(node.name, ["python3", "-c", PROBE, json.dumps(req)], None)
     if r.returncode != 0:
-        raise RuntimeError(f"{node.name}: probe failed (exit {r.returncode}): {r.stderr.decode(errors='replace').strip()[-400:]}")
+        err = r.stderr.decode(errors="replace").strip()
+        raise (Unreachable if r.returncode == 255 and "ssh: connect to host" in err else RuntimeError)(
+            f"{node.name}: probe failed (exit {r.returncode}): {err[-400:]}")
     return json.loads(r.stdout)
 
 
@@ -663,7 +669,7 @@ def main(argv: list[str] | None = None, run: Runner | None = None, manifest: Pat
             try:
                 reps[name] = drift(nodes[name], ns.ref, run, repo)
             except (RuntimeError, subprocess.CalledProcessError, ValueError) as e:
-                reps[name] = {"error": str(e)}
+                reps[name] = {"error": str(e), **({"unreachable": True} if isinstance(e, Unreachable) else {})}
             rc |= 0 if "error" not in reps[name] and clean(reps[name]) else 1
         if ns.json:
             print(json.dumps(reps, indent=1))

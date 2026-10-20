@@ -704,7 +704,7 @@ def test_failed_login_session_scopes_are_one_incident_spanning_them():
 
 # ---- relay-side ----------------------------------------------------------------------------------------------------------------
 
-def test_drift_is_one_incident_per_node_and_kind_and_an_unreadable_node_fails_the_check():
+def test_drift_is_one_incident_per_node_and_kind_and_an_unreadable_node_fails_the_check_but_a_stopped_one_is_skipped():
     rep = {"vy-nebius-1": {"commit": "c", "strays": ["/usr/local/bin/vy-old.bak-1"], "entries": [
         {"path": "/a", "state": "stale", "restart": None}, {"path": "/b", "state": "stale", "restart": None},
         {"path": "/c", "state": "ok", "restart": "a process started before"}, {"path": "/t/x", "state": "missing", "tree": "/t", "restart": None}]}}
@@ -713,6 +713,11 @@ def test_drift_is_one_incident_per_node_and_kind_and_an_unreadable_node_fails_th
     assert set(got) == {"vy-nebius-1:stale", "vy-nebius-1:restart", "vy-nebius-1:stray"} and "2 stale" in got["vy-nebius-1:stale"]
     with pytest.raises(RuntimeError, match="vy-nebius-2"):
         M.deploy_drift(M.Ctx(now=T0, run=Run((has("drift"), (1, json.dumps({**rep, "vy-nebius-2": {"error": "ssh"}}), "")))))
+    stopped = {"vy-glm53-eu": {"error": "probe failed (exit 255): ssh: connect to host h port 22: timed out", "unreachable": True}}
+    run = Run((has("drift"), (1, json.dumps({**rep, **stopped}), "")))
+    assert {f.key for f in M.deploy_drift(M.Ctx(now=T0, run=run))} == set(got)
+    with pytest.raises(RuntimeError, match="vy-glm53-eu"):
+        M.deploy_drift(M.Ctx(now=T0, run=Run((has("drift"), (1, json.dumps(stopped), "")))))
 
 
 def test_unpreserved_asks_for_runs_over_30_minutes_old_and_says_when_the_flag_is_missing():

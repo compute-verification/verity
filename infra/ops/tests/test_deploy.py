@@ -339,6 +339,16 @@ def test_drift_is_clean_once_everything_is_mains_and_nothing_strays(world, capsy
     assert "no node 'zz'" in err and err.count("research deploy: --node is now --on") == 1
 
 
+def test_a_node_ssh_cannot_connect_to_is_unreachable_and_any_other_failed_probe_is_an_error(world, capsys):
+    def down(stderr: bytes):
+        return lambda node, argv, stdin: subprocess.CompletedProcess(argv, 255, b"", stderr)
+    for stderr, unreachable in ((b"ssh: connect to host 10.0.0.1 port 22: Connection timed out\n", True),
+                                (b"research@10.0.0.1: Permission denied (publickey).\n", False)):
+        assert deploy.main(["drift", "--json", "--no-fetch"], run=down(stderr), manifest=world["manifest"], repo=world["repo"]) == 1
+        rep = json.loads(capsys.readouterr().out)["n"]
+        assert "probe failed (exit 255)" in rep["error"] and rep.get("unreachable", False) is unreachable
+
+
 def test_code_running_from_a_tree_without_history_reads_and_fetches_every_branch_of_the_clone_it_is_given(world, tmp_path, capsys):
     """The control pod's watchers run from a `git archive` tree; drift reads $RESEARCH_DEPLOY_REPO's clone, fetched each run."""
     repo, origin, clone = world["repo"], tmp_path / "origin.git", tmp_path / "clone"
