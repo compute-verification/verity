@@ -59,6 +59,8 @@ import Proofs.Flock.Claims.Recursion.RepFramesLig
 import Proofs.Flock.Claims.Recursion.RepOpenings
 import Proofs.Flock.Claims.Recursion.RepBindProof
 import Proofs.Flock.Claims.Recursion.CallsBridge
+import Proofs.Flock.Claims.Recursion.LogWalk
+import Proofs.Flock.Claims.Recursion.DecodeLog
 import Proofs.Flock.Claims.Recursion.VStarParts
 import Proofs.Flock.Claims.Recursion.VStarPartsHolo
 import Proofs.Flock.Claims.Recursion.VStarPartsDense
