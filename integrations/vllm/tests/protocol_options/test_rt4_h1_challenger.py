@@ -8,6 +8,8 @@ finding's witness, and flips to the refusal when the code is fixed.
 * RT4-INT-19: a draw coin opened after a root of the prover's, before the window's first round, passes the trusted
   check, which reads only the salt and round families.
 * RT4-INT-20: round s's root, the one round s's coin follows, is the same whatever A the window serves.
+* RT4-INT-23: the release log, the only evidence that a round's coin followed its root, is an unsigned file; roots
+  chosen after every coin are refused against the honest log and pass once the log is rewritten to name them.
 * The round rule of record (`rounds_reason`) passes in-process coins; only `trusted_rounds_reason`, which no verifier of
   record calls, refuses them.
 """
@@ -130,6 +132,29 @@ def test_round_roots_and_the_coins_after_them_are_the_same_whatever_a_the_window
     assert _coins(served[0]) == _coins(served[1])
     other_request = [r["root"] for r in _serve(T._settings(), 9, prompt=6)["rounds"]]
     assert other_request[0] != roots[0][0]
+
+
+def test_the_order_of_roots_and_coins_is_an_unsigned_file_and_a_rewrite_of_it_passes(tmp_path, monkeypatch):
+    host = _Session(tmp_path, monkeypatch, "auditor", leaf=0, seed=15)
+    weights = hashlib.sha512(b"the weights' root").digest()
+    salt = host.client.open(Wd.SALT, 0, weights)
+    early = [hashlib.sha512(b"before any round, %d" % s).digest() for s in range(3)]
+    coins = [host.client.open(Wd.ROUND, s, early[s]) for s in range(3)]
+    host.client.close()
+    assert host.ended() is None
+    late = [hashlib.sha512(b"a root chosen after every coin, %d" % s + c.coin).digest() for s, c in enumerate(coins)]
+    c = host.challenger.commitment.to_json()
+    commits = {"coins": c, "round_coins": c, "weights_root": weights.hex(), "salt_opening": salt.to_json(), "steps": 3,
+               "rounds": [{"round": s, "root": late[s].hex(), "coin": {**coins[s].to_json(), "after": late[s].hex()}}
+                          for s in range(3)]}
+    assert PHC.trusted_rounds_reason(commits, host.directory, KEY) == (
+        "the window's round roots are not the roots the challenger's log shows it received, in order")
+    log = host.directory / R.RELEASES
+    text = log.read_text()
+    for e, x in zip(early, late):
+        text = text.replace(e.hex(), x.hex())
+    log.write_text(text)
+    assert PHC.trusted_rounds_reason(commits, host.directory, KEY) is None
 
 
 def test_the_round_rule_of_record_passes_in_process_coins(tmp_path, monkeypatch):
