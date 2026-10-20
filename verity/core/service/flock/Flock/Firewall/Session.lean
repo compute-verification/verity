@@ -108,7 +108,7 @@ def State.answer (S : State) (k : Kind) (a : ByteArray) : State × ByteArray :=
     | some (d, _) => match String.fromUTF8? d with
       | some text => match Hello.drawOf text with
         | .ok draw => ({ S with draw }, a)
-        | .error e => S.refuse s!"{Coins.STOP}the auditor's {e}"
+        | .error e => S.refuse s!"{Coins.STOP}{e}"
       | none => S.refuse s!"{Coins.STOP}the auditor's draw is not UTF-8"
     | none => S.refuse s!"{Coins.STOP}the auditor's draw is not a string"
   | .hello, _ => match S.stop, S.hello with
@@ -228,6 +228,6 @@ def cmd (args : List String) : IO UInt32 := do
   let stdin ← IO.getStdin
   repeat
     if (← stdin.getLine).isEmpty then break
-  return 0
+  IO.Process.exit 0
 
 end Flock.Firewall.Session

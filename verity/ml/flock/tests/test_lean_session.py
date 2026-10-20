@@ -1,0 +1,269 @@
+"""The firewall's session loop in Lean (`Flock/Firewall/Session.lean`, `flock-firewall session`), which owns the auditor's
+connection: a prover connects to it as it would to the auditor, and each connection is one session it relays on its own
+connection to the auditor. Here a scripted auditor stands on the far side. What crosses is held to the loop's rules:
+`Register` and other frames relayed as they are, the `Hello` that leaves the Lean one at the auditor's draw (at the
+fixture's statement, `test_lean_hello.py`'s recorded `Hello` at the loop's nonce) and never the prover's, `Hello`'s
+answer and every coin checked, and every coin after a refusal refused. `flock-circuit`'s firewalled sessions through it
+are the end-to-end check (live PROTOCOL.md §10.4)."""
+from __future__ import annotations
+
+import socket
+import struct
+import subprocess
+import sys
+import threading
+
+import pytest
+from test_lean_hello import (  # noqa: F401
+    BIN,
+    FIXTURE,
+    NONCE,
+    STATEMENT,
+    VERIFIER,
+    _args,
+    _record,
+    built,
+)
+
+STOP = "PROVER-STOPPED: "
+
+
+def _bytes(b: bytes) -> bytes:
+    """`u32le(len) ‖ b`: a field's bytes, and a frame on the wire (`write_frame`)."""
+    return struct.pack("<I", len(b)) + b
+
+
+def _recv(s: socket.socket, n: int) -> bytes | None:
+    out = b""
+    while len(out) < n:
+        b = s.recv(n - len(out))
+        if not b:
+            return None
+        out += b
+    return out
+
+
+def _read(s: socket.socket) -> bytes | None:
+    h = _recv(s, 4)
+    return None if h is None else _recv(s, struct.unpack("<I", h)[0])
+
+
+REGISTER = b"\x0a"
+COMMIT = b"\x07" + _bytes(b"") + struct.pack("<I", 0) + struct.pack("<I", 0)
+
+
+def hello(text: str) -> bytes:
+    return b"\x01" + _bytes(text.encode())
+
+
+def ping(b: bytes) -> bytes:
+    return b"\x09" + _bytes(b)
+
+
+def round_(stream: str, content: bytes, n: int) -> bytes:
+    return b"\x04" + _bytes(stream.encode()) + _bytes(content) + struct.pack("<I", n)
+
+
+def draw(text: str) -> bytes:
+    return b"\x06" + _bytes(text.encode())
+
+
+def coins(words: list[bytes]) -> bytes:
+    return b"\x02" + struct.pack("<I", len(words)) + b"".join(words)
+
+
+def reason(resp: bytes) -> str:
+    assert resp[:1] == b"\x03", resp[:40]
+    return resp[5:].decode()
+
+
+class Auditor:
+    """A scripted auditor: each connection's frames, answered in turn by `answer(frame)`."""
+
+    def __init__(self, answer):
+        self.answer, self.got, self.lock = answer, [], threading.Lock()
+        self.srv = socket.socket()
+        self.srv.bind(("127.0.0.1", 0))
+        self.srv.listen(8)
+        self.addr = f"127.0.0.1:{self.srv.getsockname()[1]}"
+        threading.Thread(target=self._serve, daemon=True).start()
+
+    def _serve(self):
+        while True:
+            try:
+                c, _ = self.srv.accept()
+            except OSError:
+                return
+            threading.Thread(target=self._conn, args=(c,), daemon=True).start()
+
+    def _conn(self, c):
+        mine = []
+        with self.lock:
+            self.got.append(mine)
+        while (f := _read(c)) is not None:
+            mine.append(f)
+            c.sendall(_bytes(self.answer(f)))
+        c.close()
+
+
+class Loop:
+    """A running `flock-firewall session` against `auditor`, on the statement flags `args`."""
+
+    def __init__(self, auditor: Auditor, args: list[str]):
+        self.p = subprocess.Popen([str(BIN), "session", "--verifier", auditor.addr, *args], stdin=subprocess.PIPE,
+                                  stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        line = self.p.stdout.readline().decode()
+        assert line.startswith("LISTENING "), (line, self.p.stderr.read().decode() if self.p.poll() is not None else "")
+        host, port = line.split()[1].split(":")
+        self.addr = (host, int(port))
+
+    def connect(self) -> socket.socket:
+        return socket.create_connection(self.addr)
+
+    def close(self):
+        self.p.stdin.close()
+        assert self.p.wait() == 0
+
+
+def call(s: socket.socket, f: bytes) -> bytes | None:
+    s.sendall(_bytes(f))
+    return _read(s)
+
+
+def plain(f: bytes) -> bytes:
+    """The auditor's answers: Register a draw of none, Ping `Ok`, anything else 4 zero words."""
+    return {10: draw("null"), 9: b"\x01"}.get(f[0], coins([b"\0" * 16] * 4))
+
+
+@pytest.fixture
+def junk(tmp_path):
+    """Files no statement sets up from: the loop starts, and a session's Hello is refused at the setup."""
+    (tmp_path / "c").write_bytes(b"x")
+    (tmp_path / "p").write_bytes(b"x")
+    return ["--circuit", str(tmp_path / "c"), "--public", str(tmp_path / "p")]
+
+
+@pytest.fixture
+def loop(junk):
+    auditor = Auditor(plain)
+    lp = Loop(auditor, junk)
+    yield auditor, lp
+    lp.close()
+
+
+def test_usage(junk):
+    p = subprocess.run([str(BIN), "session", *junk], input=b"", capture_output=True, check=False)
+    assert p.returncode == 2 and p.stderr.decode().startswith("usage: flock-firewall session")
+
+
+def test_register_and_other_frames_are_relayed(loop):
+    auditor, lp = loop
+    s = lp.connect()
+    assert call(s, REGISTER) == draw("null")
+    assert call(s, ping(b"abc")) == b"\x01"
+    s.close()
+    assert auditor.got[0] == [REGISTER, ping(b"abc")]
+
+
+def test_the_provers_hello_never_leaves(loop):
+    """A statement the setup refuses: the prover is refused at its `Hello`, which does not reach the auditor, and every coin
+    after is refused for the same reason."""
+    auditor, lp = loop
+    s = lp.connect()
+    call(s, REGISTER)
+    why = reason(call(s, hello('{"the": "prover\'s"}')))
+    assert why.startswith(STOP + "the Lean Hello: setup: "), why
+    assert reason(call(s, round_("rep0", b"r", 2))) == why
+    s.close()
+    assert auditor.got[0] == [REGISTER, round_("rep0", b"r", 2)]
+
+
+def test_coins_before_the_commitment(loop):
+    _, lp = loop
+    s = lp.connect()
+    assert reason(call(s, round_("rep0", b"r", 2))) == STOP + "coins before the step-0 coin commitment"
+
+
+def test_a_draw_that_is_not_json(junk):
+    lp = Loop(Auditor(lambda f: draw("{")), junk)
+    s = lp.connect()
+    assert reason(call(s, REGISTER)).startswith(STOP + "the draw is not JSON")
+    lp.close()
+
+
+def test_a_request_it_cannot_read_ends_the_session(loop):
+    _, lp = loop
+    s = lp.connect()
+    assert reason(call(s, b"")) == STOP + "an empty request frame"
+    assert _read(s) is None
+    assert reason(call(lp.connect(), round_("rep0", b"", 0))) == STOP + "coins before the step-0 coin commitment"
+
+
+def test_sessions_at_once(loop):
+    """Each connection is a session of its own, on its own connection to the auditor, served at once."""
+    auditor, lp = loop
+    a, b = lp.connect(), lp.connect()
+    assert call(b, REGISTER) == draw("null") and call(a, REGISTER) == draw("null")
+    assert call(a, ping(b"a")) == b"\x01" and call(b, ping(b"b")) == b"\x01"
+    a.close()
+    b.close()
+    assert sorted(auditor.got, key=len) == sorted([[REGISTER, ping(b"a")], [REGISTER, ping(b"b")]], key=len)
+
+
+@pytest.fixture(scope="module")
+def zk(tmp_path_factory):
+    sys.path.insert(0, str(VERIFIER))
+    import ci
+
+    try:
+        return ci.fetch(FIXTURE, tmp_path_factory.mktemp("store"))
+    except (subprocess.CalledProcessError, OSError) as e:
+        pytest.skip(f"the evidence store is not reachable: {e}")
+
+
+def _answer(key_top: int = 0) -> bytes:
+    """`Hello`'s answer: a root and a session key, 20 words, the key's last byte `key_top`."""
+    return coins([b"\x11" * 16] * 4 + [b"\x22" * 16] * 15 + [b"\x22" * 15 + bytes([key_top])])
+
+
+@pytest.mark.slow
+@pytest.mark.parametrize("key_top, why", [(0x00, None), (0x80, STOP + "the verifier's session key has bit 2047 set")])
+def test_the_lean_hello_leaves_and_its_answer_is_checked(zk, key_top, why):
+    """At the fixture's statement and a draw of none, the `Hello` that leaves is the recorded one at the loop's own nonce,
+    whatever the prover sent; its answer passes through when it is a root and a key, else is refused. Either way the
+    session's first opening is checked: zero words refused, never handed on."""
+    recorded, nonce, _ = _record(zk, "selftest/honest")
+    answers = {10: draw("null"), 1: _answer(key_top), 7: coins([])}
+    auditor = Auditor(lambda f: answers[f[0]])
+    lp = Loop(auditor, _args(zk, "pub-16.bin"))
+    s = lp.connect()
+    call(s, REGISTER)
+    r = call(s, hello("anything"))
+    sent = auditor.got[0][1]
+    assert sent[:1] == b"\x01"
+    text = sent[5:].decode()
+    got = NONCE.search(text)[1]
+    assert text == recorded.replace(nonce, got)
+    if why is None:
+        assert r == _answer(key_top)
+        assert reason(call(s, COMMIT)).startswith(STOP + "coin opening of session round 0: 0 words")
+    else:
+        assert reason(r) == why
+        assert reason(call(s, COMMIT)) == why
+    lp.close()
+
+
+@pytest.mark.slow
+def test_each_session_its_own_nonce(zk):
+    recorded, nonce, _ = _record(zk, "selftest/honest")
+    auditor = Auditor(lambda f: {10: draw("null"), 1: _answer()}[f[0]])
+    lp = Loop(auditor, _args(zk, "pub-16.bin"))
+    for _ in range(2):
+        s = lp.connect()
+        call(s, REGISTER)
+        call(s, hello(""))
+        s.close()
+    texts = [c[1][5:].decode() for c in auditor.got]
+    got = [NONCE.search(t)[1] for t in texts]
+    assert got[0] != got[1] and texts == [recorded.replace(nonce, g) for g in got]
+    lp.close()
