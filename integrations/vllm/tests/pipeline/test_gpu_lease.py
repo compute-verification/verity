@@ -1,6 +1,6 @@
 """A leased Commit (`pipeline.gpu_lease`): only the Commit process holds the GPU, from right before its engine to the end of its last
-run (or its exit, when it still needs the device), under the lease tool; the row and every other child see no CUDA device; an unleased
-row is unchanged."""
+run (or its exit, when it still needs the device), under the lease tool; the row and every other child see no CUDA device; a
+single-GPU row's Match holds the lease for its GPU phase only; an unleased row is unchanged."""
 from __future__ import annotations
 
 import ast
@@ -155,6 +155,36 @@ def test_a_commit_that_exits_holding_its_lease_keeps_it_until_its_gpu_is_empty(t
     assert rc == 0 and rec["released_at"] == "process.end" and released(tmp_path / "5.lock")
     assert (tmp_path / "smi.calls").read_text().split() == ["held", "held", "held"]
     assert "nothing is left on the leased GPU" in log.read_text() and "(2 look(s) occupied)" in log.read_text()
+
+
+@pytest.mark.parametrize("looks,n,waited,left", [
+    ([[]], 3, 0, []),                                                     # nothing else on the leased GPUs
+    ([["GPU-5"], ["GPU-5"], []], 3, 2, []),                               # a cancelled Commit's engine workers leave after two looks
+    ([None], 3, 0, []),                                                   # nvidia-smi can't say: the engine's own check stands
+    ([["GPU-5"]] * 5, 3, 3, ["GPU-5"]),                                   # still there after the last look
+])
+def test_a_new_lease_waits_for_another_process_to_leave_its_gpus(monkeypatch, looks, n, waited, left):
+    seq, slept = iter(looks), []
+    monkeypatch.setattr(GL, "on_gpus", lambda uuids: next(seq))
+    assert GL._foreign(["GPU-5"], slept.append, n) == (waited, left) and slept == [GL.CLEAR_EVERY_S] * waited
+
+
+def test_a_commit_whose_leased_gpu_stays_occupied_ends_by_name_and_gives_the_lease_back(tmp_path):
+    """r20261019-001854-76c1: a cancelled Commit's engine workers outlived its lease, and the next Commit's engine found its GPUs full."""
+    fake_smi(tmp_path, ["GPU-5"] * 4)
+    env = {"PATH": f"{tmp_path / 'bin'}:{os.environ['PATH']}", "GPU_LEASE": fake_lease(tmp_path)}
+    GL.hide_devices(env)
+    cmd = commit("raise AssertionError('acquired')\n")
+    cmd[2] = cmd[2].replace("GL.acquire()", "GL.CLEAR_LOOKS, GL.CLEAR_EVERY_S = 2, 0\nGL.acquire()")
+    log = tmp_path / "commit.log"
+
+    def run_tl(to: int, argv: list[str]) -> int:
+        with open(log, "a") as f:
+            return subprocess.run(argv, env=env, stdout=f, stderr=subprocess.STDOUT).returncode
+
+    rc, _ = GL.run(str(tmp_path), str(log), cmd, 600, env, run_tl)
+    assert rc == 1 and "still lists another process on the leased GPU(s) ['GPU-5'] after 2 look(s)" in log.read_text(), log.read_text()
+    assert "acquired" not in log.read_text() and released(tmp_path / "5.lock")
 
 
 def test_a_commit_that_touched_cuda_before_its_lease_takes_none(tmp_path, monkeypatch):
@@ -466,3 +496,53 @@ def test_after_the_release_torch_sees_no_device():
     finally:
         p.uninstall()
     assert torch.cuda.is_available is was
+
+
+#: A stand-in `match`: a GPU phase takes the lease as `match.main` does, and each run notes its phase, its devices and the lease
+#: locks it holds in ``legs.jsonl``.
+MATCH_LEG = '''import json, os, sys
+from verity_vllm.pipeline import cli, gpu_lease as GL
+args = sys.argv[1:]
+phase = args[args.index("--phase") + 1]
+if phase in ("gpu", "all"):
+    cli.process_settings(os.environ)
+    GL.acquire()
+locks = sum(os.path.realpath("/proc/self/fd/" + f) == {lock!r} for f in os.listdir("/proc/self/fd"))
+with open({legs!r}, "a") as f:
+    f.write(json.dumps({{"phase": phase, "devices": os.environ.get("CUDA_VISIBLE_DEVICES"), "locks": locks}}) + "\\n")
+'''
+
+
+@pytest.mark.parametrize("leased, legs", [
+    (True, [{"phase": "gpu", "devices": "5", "locks": 1}, {"phase": "cpu", "devices": "", "locks": 0}]),
+    (False, [{"phase": "all", "devices": "5", "locks": 0}]),
+])
+def test_a_single_gpu_match_holds_its_lease_for_its_gpu_phase_only(tmp_path, leased, legs):
+    """A leased row's Match runs `match` as its GPU phase under the lease, holding it to the phase's exit (its record in
+    ``match/lease/``), then its CPU phase with no device and no lease; an unleased row's runs both phases in one process, as before."""
+    from tests.pipeline.test_row import _row
+    t = _row(tmp_path / "sweep")
+    t.B, t.I, t.O, t.snap_def, t.snap_steps, t.ck = 1, 256, 32, "all", None, str(tmp_path / "ck")
+    (tmp_path / "leg.py").write_text(MATCH_LEG.format(lock=str(tmp_path / "5.lock"), legs=str(tmp_path / "legs.jsonl")))
+    t.cli = lambda *a, py=None: [sys.executable, str(tmp_path / "leg.py"), *a]
+    env = {k: v for k, v in t.child_env.items() if not k.startswith(("GPU_LEASE", "VERITY_LEASE"))}
+    env["CUDA_VISIBLE_DEVICES"] = "5"
+    if leased:
+        env["GPU_LEASE"] = fake_lease(tmp_path)
+        GL.hide_devices(env)
+    t.child_env = env
+    with pytest.raises(RD.Stop):              # the stand-in folds nothing, so the Match fails after its legs
+        t.match()
+    assert [json.loads(ln) for ln in (tmp_path / "legs.jsonl").read_text().splitlines()] == legs
+    rec = Path(t.d, "match", "lease", GL.RECORD)
+    assert rec.exists() is leased
+    if leased:
+        assert json.loads(rec.read_text())["kept"] == GL.MATCH_LEG_KEPT and released(tmp_path / "5.lock")
+
+
+def test_the_match_takes_its_lease_in_a_gpu_phase_before_its_first_stage():
+    from verity_vllm.pipeline import match as M
+    src = Path(M.__file__).read_text()
+    main = ast.get_source_segment(src, next(n for n in ast.parse(src).body if isinstance(n, ast.FunctionDef) and n.name == "main"))
+    assert main.count("GL.acquire()") == 1 and main.index("GL.acquire()") < main.index("run_stage(")
+    assert re.search(r'if a\.phase in \("gpu", "all"\):\n\s+GL\.acquire\(\)', main)

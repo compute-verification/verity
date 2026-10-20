@@ -12,6 +12,10 @@ from verity_vllm.config import row_target
 
 #: Row-id target tokens whose TP boxes are SYS.
 P2P_SYS_TARGETS: frozenset[str] = frozenset({"l40s", "rtxpro6000"})
+#: Why a TP row runs with what `row_p2p_env` and `row_custom_all_reduce_off` give it (a served Commit's record: `engine.served`).
+REASON = ("NCCL's P2P transport hangs vLLM's all-reduce on a box whose GPUs reach each other only across PCIe and the CPU "
+          "interconnect (SYS), so its TP rows run with NCCL_P2P_DISABLE=1 and the custom all-reduce off (#70 / #75); every other "
+          "box runs vLLM's own transport (Daniel, 13 Oct)")
 
 
 def row_p2p_env(row: str) -> dict[str, str]:

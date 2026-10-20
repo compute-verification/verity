@@ -70,13 +70,20 @@ Every declaration of the package's audited modules (not a list of theorems), fro
   record whose definitions use it changes. `--name-instances` writes each current name into its declaration;
 - the guarantees say what their records say, and each names its owner (below);
 - with a `verifier` section, nothing the verifier's `entries` reach is `@[implemented_by]` or `@[extern]` outside `allow`,
-  and they reach the `hash` namespace only through `stop` (`verifier_failures`). The walk follows definitions' values,
+  and they reach the `hash` namespace only through `stop` (`verifier_failures`). `allow` is a record: `--update` writes
+  each such constant on the path into it by name, so the review and the landing DM show one added, and a name that admits
+  nothing on the path fails; a `module:M` entry, which admits every constant of the modules under `M`, is kept as
+  written (Flock's lock lists names only). The walk follows definitions' values,
   `implemented_by` targets and `@[csimp]` replacements, the code compiled in place of a constant; a csimp rewrite itself
   is a theorem the replay checks, so it is listed (`csimp` in the facts) and not refused;
 - with a `claims` section, every predicate the spec declares under `claims.modules` (a named assumption aside) has its
   witnesses under `claims.witnesses`, or a reason under `claims.not`: a guarantee `fails`, stated `¬ C …` past its `∀`
   and `∃` binders with the claim `C` at the head, and guarantees `meets`, one per deployed record, that state the claim's
-  checkable antecedents there and not `C` itself (`claim_failures`; the `shape` rule doesn't apply to them);
+  checkable antecedents there and not `C` itself (`claim_failures`; the `shape` rule doesn't apply to them). A `meets`
+  witness must say something about the deployment: past its `∀`, `→` and `∃` binders, split at `∧`, each conjunct of its
+  conclusion is headed by a constant other than `C`, applies a definition under `meaning` itself (the deployed record, a
+  predicate or a field of it, so `True` or a fact of Init or Mathlib alone fails), and is neither a reflexivity
+  (`a = a`, `a ↔ a`) nor one of its hypotheses, and no hypothesis is `False` (`vacuous_meets`);
 - every definition a guarantee's statement reads is in the spec (below), or a pinned dependency's;
 - no dependency the `upstream` section scans proves, at the revision `lake-manifest.json` pins, a theorem about a watched
   statement that nobody has acknowledged (below);
@@ -105,7 +112,8 @@ or ArkLib runs at most one per `BUILD_GIB_PER_JOB` (8 GiB) of the memory its cgr
 `/proc/self/cgroup` puts the process, so a queued run's scope counts); a `LEAN_NUM_THREADS` already set wins. Its kernel
 replay runs at most one thread per `REPLAY_GIB_PER_THREAD` (4 GiB), one such replay at a time (`replay_threads`): 48 threads
 of Security's replay peaked at 145 GiB. An audit of a spec beside the ArkLib package that proves its guarantees (`Security`)
-is refused below `SPEC_FLOOR_GIB` (64 GiB), for that package's facts.
+is refused below `SPEC_FLOOR_GIB` (160 GiB): the replay's resident base is about 120 GiB whatever its threads (it died
+at 128 GiB with 16), and the refusal names `--kind lean-audit`, a 280 GiB shape.
 
 **The replay cache and the import closure.** Without `--closure` the replay trusts the package's dependencies (the
 toolchain's library, Mathlib, ArkLib) as their `.olean` files state them: a dependency module holding a theorem that

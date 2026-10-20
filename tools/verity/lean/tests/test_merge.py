@@ -75,7 +75,8 @@ def test_a_hand_written_section_one_side_extends_is_kept():
     theirs = record(t=thm([F]), v=thm([H], "P.h n = n", "00000000000000cc"))
     merged, why = M.merge(base, ours, theirs)
     assert why == [] and merged["meaning"] == ["P", "P.More"] and "P.v" in merged["guarantees"]
-    assert M.merge(base, ours, base | {"meaning": ["P", "P.Other"]})[1] == ["meaning: changed on both sides, differently"]
+    both, why = M.merge(base, ours, base | {"meaning": ["P", "P.Other"]})
+    assert why == [] and set(both["meaning"]) == {"P", "P.More", "P.Other"}, "two sides that each extend it merge (#2600)"
 
 
 def test_a_key_both_sides_changed_refuses():
@@ -370,3 +371,20 @@ def test_git_merges_two_branches_that_each_require_a_package_with_the_installed_
     subprocess.run([sys.executable, "tools/verity/lean/merge.py", "--install"], cwd=repo, check=True, capture_output=True)
     git(repo, "merge", "--no-edit", "b")
     assert 'name = "x"\npath = "x"\n\n[[require]]\nname = "y"\npath = "y"\n' in lf.read_text()
+
+
+def test_lists_of_names_merge_where_both_sides_append_one():
+    """#2600 against next (18 Oct, proofs): each side appended a module to `meaning`, which merged as one value and refused
+    the merge; every list of names (`meaning`, `claims.modules`, `shape.premises`...) merges as a list, as `roots` did."""
+    base = {"meaning": ["A"], "claims": {"modules": ["C"], "witnesses": {}}, "shape": {"premises": ["P"]}}
+    ours = {"meaning": ["A", "B"], "claims": {"modules": ["C", "D"], "witnesses": {}}, "shape": {"premises": ["P", "Q"]}}
+    theirs = {"meaning": ["A", "C"], "claims": {"modules": ["C", "E"], "witnesses": {}}, "shape": {"premises": ["P", "R"]}}
+    merged, why = M.merge(base, ours, theirs)
+    assert why == []
+    assert merged["meaning"] == ["A", "C", "B"] or merged["meaning"] == ["A", "B", "C"]
+    assert set(merged["meaning"]) == {"A", "B", "C"} and set(merged["claims"]["modules"]) == {"C", "D", "E"}
+    assert set(merged["shape"]["premises"]) == {"P", "Q", "R"}
+    merged, why = M.merge(base, {**ours, "meaning": []}, theirs)
+    assert why == [] and merged["meaning"] == ["C"], "what one side removed stays removed"
+    _, why = M.merge({"roots": ["X"], "x": 1}, {"roots": ["X"], "x": 2}, {"roots": ["X"], "x": 3})
+    assert why and "x" in why[0], "a value both sides changed still refuses"

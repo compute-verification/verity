@@ -5,7 +5,8 @@ first call's tiles tampered.
 
 The engine is `verity_vllm.LLM` on the workload's pinned model, with ``pouw:ncp-v2`` installed. Every linear call is
 committed natively as it is served (`protocol_options.pouw_native`), under an epoch whose salt is the salt coin of the
-command's own challenger (`verity.core.protocols.pouw.coins.Challenger`, epoch 0): the command is its run's
+command's own challenger (`verity.core.protocols.pouw.coins.Challenger`, epoch 0, its coins the Lean verifier of record's,
+`pouw.verifier.coins`): the command is its run's
 auditor. Once the engine closes, the circuit replay
 (`check.replay.pouw_circuit.replay`) runs twice, the run's calls as one window under the work law at a budget of K =
 ``--draws``:
@@ -93,8 +94,10 @@ def main(a: Options) -> int:
     out = Path(a.out)
     out.mkdir(parents=True, exist_ok=True)
     t0 = time.monotonic()
+    from verity.core.protocols.pouw import verifier
     from verity.core.protocols.pouw.coins import Challenger
-    llm = LLM(wl["model"], revision=rev, protocols=ENTRY, protocols_config={"pouw": {"coins": Challenger(0), "draws": a.draws}})
+    coins = Challenger(0, verifier.coins)
+    llm = LLM(wl["model"], revision=rev, protocols=ENTRY, protocols_config={"pouw": {"coins": coins, "draws": a.draws}})
     built = time.monotonic() - t0
     prompts = [{"prompt_token_ids": r["prompt_token_ids"]} for r in wl["requests"]]
     params = [SamplingParams(temperature=0.0, max_tokens=int(r["max_tokens"])) for r in wl["requests"]]

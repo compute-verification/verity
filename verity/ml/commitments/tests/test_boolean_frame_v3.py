@@ -18,7 +18,9 @@ from verity.ml.circuits.evaluation.bits import evaluate_bits
 from verity.ml.commitments.frame_v3.vectors_sha512 import domain
 from verity.ml.commitments.gates import frame_v3 as F
 from verity.ml.commitments.gates.sha512 import words_be
-from verity.ml.commitments.merkle import MerkleTree, merkle_depth
+from verity.ml.commitments.indexed import RangeIndexedDomain
+from verity.ml.commitments.limits import VerificationLimits
+from verity.ml.commitments.merkle import CommitmentDomain, MerkleTree, Opening, merkle_depth, verify_opening
 
 V = json.loads((Path(F.__file__).parents[1] / "frame_v3" / "vectors_sha512.json").read_text())
 ROW, SEG = "hm96-sha512/row/v2", "hm96-sha512/row-seg/v1"
@@ -197,6 +199,64 @@ def test_a_read_at_d_b_opens_the_library_tree_and_refuses_wrong_positions() -> N
             rows.append(F.arguments(tree.commitment.root, d.domain_id, values[p], q, o.path))
             want.append(int(q == p))
     assert evaluate_bits(F.read(17, ROW), *_columns(rows)).reshape(-1).tolist() == want
+
+
+def _append_tree(rng: random.Random, first: int, count: int) -> tuple[CommitmentDomain, dict[int, bytes], MerkleTree]:
+    """A tree over store positions first ... first + count - 1 (an append's, `RangeIndexedDomain(first, ...)`)."""
+    d = CommitmentDomain(rng.randbytes(64), 0, RangeIndexedDomain(first, first + count), hash="sha512")
+    values = {first + u: rng.randbytes(64) for u in range(count)}
+    return d, values, MerkleTree(d, values, lambda _p: ROW)
+
+
+def test_the_read_at_reference_is_the_library_at_any_first_position_and_depth() -> None:
+    """`opens_at` is `verify_opening` on trees whose positions start past 0 (rank = position - first), at depths 0 ... 3, on
+    paths padded past the tree's depth with anything; it refuses another rank, position or depth, and a depth past the path."""
+    rng = random.Random("frame-v3-read-at")
+    for first, count in ((0, 1), (7, 2), (1000, 5), (70000, 8)):
+        d, values, tree = _append_tree(rng, first, count)
+        depth = merkle_depth(count)
+        for rank in range(count):
+            p, o = first + rank, tree.open(first + rank)
+            assert verify_opening(d, tree.commitment, Opening(p, values[p], o.path), ROW, VerificationLimits())
+            path = list(o.path) + [rng.randbytes(64) for _ in range(3 - depth)]
+            root = tree.commitment.root
+            assert F.root_at_ref(d.domain_id, ROW, values[p], rank, p, o.path) == root
+            assert F.opens_at(ROW, root, d.domain_id, values[p], rank, p, depth, path) == 1
+            assert F.opens_at(ROW, root, d.domain_id, values[p], rank, p + 1, depth, path) == 0
+            assert F.opens_at(ROW, root, d.domain_id, values[p], rank ^ 1, p, depth, path) == 0
+            assert F.opens_at(ROW, root, d.domain_id, values[p], rank, p, depth + 1, path) == 0
+            assert F.opens_at(ROW, root, d.domain_id, values[p], rank, p, 4, path) == 0
+            if depth:
+                assert F.opens_at(ROW, root, d.domain_id, values[p], rank, p, depth - 1, path) == 0
+
+
+def test_a_read_at_is_typed_by_its_shape() -> None:
+    target = F.read_at(3, 4, ROW)
+    assert [t.leaves for _, t in target.signature()[0]] == [512, 512, 512, 3, 32, 16, 512 * 3]
+    assert target.signature()[1] == BL.BIT
+    with pytest.raises(ValueError, match="one block count per binding"):
+        F.read_at(3, 4, "x" * 26).signature()
+    with pytest.raises(ValueError, match="below 2"):
+        F.arguments_at(4, bytes(64), bytes(64), bytes(64), 8, 0, 0, [bytes(64)] * 3)
+
+
+@pytest.mark.slow
+def test_a_read_at_opens_append_trees_at_their_depth_and_refuses_wrong_reads() -> None:
+    """A minute or two (the leaf's and pick's traces): the only evaluation of the leaf at a rank and a position whose uint
+    lengths differ, of each level's index from the rank, and of the pick at the tree's depth, at depths 0 ... 3 under D = 3."""
+    rng = random.Random("frame-v3-read-at-eval")
+    rows, want = [], []
+    for first, count in ((0, 1), (7, 2), (1000, 5), (70000, 8)):
+        d, values, tree = _append_tree(rng, first, count)
+        depth, root = merkle_depth(count), tree.commitment.root
+        for rank in sorted({0, count - 1}):
+            p = first + rank
+            path = list(tree.open(p).path) + [rng.randbytes(64) for _ in range(3 - depth)]
+            for args in ((rank, p, depth), (rank, p ^ 1, depth), (rank ^ 1, p, depth), (rank, p, depth + 1), (rank, p, 9)):
+                rows.append(F.arguments_at(4, root, d.domain_id, values[p], *args, path))
+                want.append(F.opens_at(ROW, root, d.domain_id, values[p], *args, path))
+    assert want.count(1) == 7
+    assert evaluate_bits(F.read_at(3, 4, ROW), *_columns(rows)).reshape(-1).tolist() == want
 
 
 def _x_bits(x: int, B: int) -> list[int]:

@@ -15,7 +15,8 @@ The run (research store ``docs/pouw/mvp-e2e.md``, "RTX PRO 6000"):
   (`CYCLE`: fp8, pearlc, fp8, pearlc-nohash, fp8, bf16), each rep on the same prompts in every mode.  If the second engine
   can't start beside the first, the run falls back to ABAB blocks (`BLOCKS` engine lifetimes, alternating), and records it.
 - **Prefill** (the panel's m = 8,192): one prompt of 8,192 random tokens with max_tokens 1 and a batch budget of 8,192 tokens,
-  so each linear call has m = 8,192.
+  so each linear call has m = 8,192.  ``--prefill P`` sets the prompt's tokens and the batch budget (`configure`); off 8,192
+  its key is ``prefill_<P>``, so `panel_rows.py` (``prefill_8192``) never reads it as the panel's prefill row.
 - **Decode** (the panel's m = 32): 32 prompts of 64 tokens.  The step is (t(1 + D tokens) − t(1 token)) / D over D = 64
   decode steps, whose linear calls have m = 32.  ``--batch B`` and ``--prompt P`` set the decode batch and its prompts'
   length (a sweep's point; `configure`): its key is ``decode_b<B>_step``, with ``_p<P>`` before ``_step`` off 64 tokens.
@@ -90,7 +91,7 @@ CYCLE = ("fp8", "pearlc", "fp8", "pearlc-nohash", "fp8", "bf16")
 BLOCKS = 4
 #: the decode batch and its prompts' length are ``--batch`` and ``--prompt`` (`configure`); these are their defaults, the panel's
 PREFILL, BATCH, PROMPT, STEPS = 8192, 32, 64, 64
-BATCH_DEFAULT, PROMPT_DEFAULT = BATCH, PROMPT
+PREFILL_DEFAULT, BATCH_DEFAULT, PROMPT_DEFAULT = PREFILL, BATCH, PROMPT
 #: the served y's bound against the float product (the scheme's tested bound, verity/core/protocols/pouw's sm120 useful-output test)
 ERR = 0.08
 #: the negative control's omitted steps: every write of the commitment (A's row digests and row tree, the tile leaves)
@@ -99,8 +100,11 @@ CONTROL_OMITS = frozenset({"pad_a", "rowdig_a", "hash_rows_a", "tree_a", "hash_l
 #: ``--graphs``, whose leaves reach the pass through a copy) the tile leaves alone
 CONTROLS = {"control": CONTROL_OMITS, "control-leaves": frozenset({"hash_leaf"})}
 #: ``--smoke --retain``'s served requests, each one chat prompt (vllm_bench's PROMPTS, by index) as a retained pass: the
-#: request whose calls a ZK proof opens (served_zk), and another request, whose commitment is that proof's foreign control
+#: request whose calls a ZK proof opens (served_zk), and another request, whose commitment is that proof's foreign control.
+#: Each is served at the fixed length SERVED_TOKENS under ignore_eos (Daniel, 19 Oct, ASK-39), and how it was served goes
+#: beside its pass as SERVED_RECORD (``{"ignore_eos", "max_tokens", "served"}``), which served_zk's committer registers
 SERVED, SERVED_TOKENS = {"request": 0, "other": 1}, 4
+SERVED_RECORD = "served.json"
 #: the quality run's schemes: Pearl-C v1 (G = 4) and v2 (no promotion), each in an arm engine of its own
 QUALITY = {"pearlc-v1": "pearl-c-sm120-v1-h3", "pearlc-v2": "pearl-c-sm120-unpromoted-v1-h3"}
 #: WikiText-2 (raw), its test split, at the revision cached on node 2
@@ -112,14 +116,22 @@ SHAPES = {"prefill_8192": "e2e-llama31-8b-vllm-m8192", "decode_b32_step": "e2e-l
 
 
 def configure(args) -> None:
-    """``--batch`` and ``--prompt`` in this process (the controller's, and each engine's: spawn re-imports this module).  Off
-    the defaults, the decode key names both, ``decode_b<B>_step`` with ``_p<P>`` before ``_step`` when the prompt isn't 64
-    tokens, so `panel_rows.py` (``decode_b32_step``) never reads a sweep point as the panel's decode row."""
-    global BATCH, PROMPT, CAPTURE_SIZES
+    """``--batch``, ``--prompt`` and ``--prefill`` in this process (the controller's, and each engine's: spawn re-imports this
+    module).  Off the defaults, the decode key names both, ``decode_b<B>_step`` with ``_p<P>`` before ``_step`` when the prompt
+    isn't 64 tokens, and the prefill key its length, ``prefill_<P>``, so `panel_rows.py` (``decode_b32_step``,
+    ``prefill_8192``) never reads a sweep point as the panel's row."""
+    global BATCH, PROMPT, PREFILL, CAPTURE_SIZES
     BATCH, PROMPT = getattr(args, "batch", BATCH_DEFAULT), getattr(args, "prompt", PROMPT_DEFAULT)
+    PREFILL = getattr(args, "prefill", PREFILL_DEFAULT)
     CAPTURE_SIZES = [s for s in CAPTURE_32 if s < BATCH] + [BATCH]
-    SHAPES.pop(next((k for k in SHAPES if k.startswith("decode_")), None), None)
+    for phase in ("prefill_", "decode_"):
+        SHAPES.pop(next((k for k in SHAPES if k.startswith(phase)), None), None)
+    SHAPES[prefill_key()] = f"e2e-llama31-8b-vllm-m{PREFILL}"
     SHAPES[decode_key() + "_step"] = f"e2e-llama31-8b-vllm-m{BATCH}" + (f"-p{PROMPT}" if PROMPT != PROMPT_DEFAULT else "")
+
+
+def prefill_key() -> str:
+    return f"prefill_{PREFILL}"
 
 
 def decode_key() -> str:
@@ -596,7 +608,10 @@ def serve(conn, args, group: str, coins: dict) -> None:
                 out = {}
                 for name, i in SERVED.items():
                     _, _, got, outs = timed([chat[i]], sp, retain=str(Path(args.retain) / name))
-                    out[name] = {"prompt": PROMPTS[i], "tokens": list(outs[0].outputs[0].token_ids),
+                    tokens = list(outs[0].outputs[0].token_ids)
+                    length = {"ignore_eos": sp.ignore_eos, "max_tokens": [sp.max_tokens], "served": [len(tokens)]}
+                    (Path(args.retain) / name / SERVED_RECORD).write_text(json.dumps(length, sort_keys=True) + "\n")
+                    out[name] = {"prompt": PROMPTS[i], "tokens": tokens, "length": length,
                                  "text": outs[0].outputs[0].text, "manifest": got.get("manifest"), "commitment": got}
                 conn.send(out)
             else:
@@ -624,12 +639,14 @@ def prompt_logprobs(llm, sampling_params, timed, windows: list[list[int]]) -> di
 
 class Coins:
     """The challenger's side of one epoch in the controller: its coins (`coins.Challenger`), committed before any engine
-    starts.  A coin opens once; an engine started again in the same epoch (the ABAB blocks) asking for it after the same
-    record gets the one opening again, and after any other record a refusal, so nothing redraws."""
+    starts, drawn from `entropy` (by default the Lean verifier of record's, `pouw.verifier.coins`, `IO.getRandomBytes`).
+    A coin opens once; an engine started again in the same epoch (the ABAB blocks) asking for it after the same record
+    gets the one opening again, and after any other record a refusal, so nothing redraws."""
 
     def __init__(self, epoch: int, entropy=None):
+        from verity.core.protocols.pouw import verifier
         from verity.core.protocols.pouw.coins import Challenger
-        self.challenger, self.opened = (Challenger(epoch, entropy) if entropy else Challenger(epoch)), {}
+        self.challenger, self.opened = Challenger(epoch, entropy or verifier.coins), {}
         self.commitment = self.challenger.commitment
 
     def open(self, label: str, after: bytes):
@@ -743,17 +760,17 @@ def schedule(reps: int, interleave: str, graphed: bool = False, zk: bool = False
 
 def timing(records: list[dict]) -> dict:
     """Each mode's medians over its reps, and its reps, from the controller's records."""
-    out, d = {}, decode_key()
+    out, p, d = {}, prefill_key(), decode_key()
     for mode in MODES + GRAPHED + ZK:
         pre = [r for r in records if r["mode"] == mode and r["phase"] == "prefill"]
         dec = [r for r in records if r["mode"] == mode and r["phase"] == "decode"]
         if not pre or not dec:
             continue
-        out[mode] = {"timing": {"prefill_8192_s": statistics.median(r["s"] for r in pre),
-                                "prefill_8192_gemm_s": statistics.median(r["gemm_s"] for r in pre),
+        out[mode] = {"timing": {f"{p}_s": statistics.median(r["s"] for r in pre),
+                                f"{p}_gemm_s": statistics.median(r["gemm_s"] for r in pre),
                                 f"{d}_step_s": statistics.median(r["step_s"] for r in dec),
                                 f"{d}_step_gemm_s": statistics.median(r["gemm_step_s"] for r in dec)},
-                     "reps": {"prefill_8192": pre, d: dec}}
+                     "reps": {p: pre, d: dec}}
     return out
 
 
@@ -775,7 +792,7 @@ def split(results: dict) -> dict:
     kernel), hashing and records (``pearlc`` less the no-hash mode) and everything else."""
     t = {m: r["timing"] for m, r in results.items() if "timing" in r}
     out = {}
-    for key in ("prefill_8192", decode_key() + "_step"):
+    for key in (prefill_key(), decode_key() + "_step"):
         if not all(m in t for m in MODES):
             continue
         full, nohash, gemm = t["pearlc"][f"{key}_s"], t["pearlc-nohash"][f"{key}_s"], t["pearlc-nohash"][f"{key}_gemm_s"]
@@ -796,16 +813,18 @@ def split(results: dict) -> dict:
 
 
 def state_entropy(path: str):
-    """The challenger's entropy held in the file `path` (created from os.urandom when absent, readable only by its owner):
-    the same coins for the controller here and for the challenger process that later draws the window's units
-    (`served_commit.py challenger --state`)."""
+    """The challenger's entropy held in the file `path` (readable only by its owner; when absent, created from the Lean
+    verifier of record's coins, `pouw.verifier.coins`, before any engine starts): the same coins for the controller here
+    and for the challenger process that later draws the window's units (`served_commit.py challenger --state`)."""
+    from verity.core.protocols.pouw import verifier
     from verity.core.protocols.pouw.coins import COIN_BYTES, HM96, LABELS
     p = Path(path)
     if not p.exists():
+        entropy = verifier.coins(len(LABELS) * (COIN_BYTES + HM96.salt_bytes))
         p.parent.mkdir(parents=True, exist_ok=True)
         fd = os.open(p, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
         with os.fdopen(fd, "wb") as f:
-            f.write(os.urandom(len(LABELS) * (COIN_BYTES + HM96.salt_bytes)))
+            f.write(entropy)
     data, at = p.read_bytes(), [0]
 
     def take(n: int) -> bytes:
@@ -979,6 +998,7 @@ def main() -> None:
     ap.add_argument("--reps", type=int, default=3)
     ap.add_argument("--batch", type=int, default=BATCH_DEFAULT, help="the decode batch: its prompts, and each decode call's m")
     ap.add_argument("--prompt", type=int, default=PROMPT_DEFAULT, help="each decode prompt's tokens (the context decode starts at)")
+    ap.add_argument("--prefill", type=int, default=PREFILL_DEFAULT, help="the prefill prompt's tokens, and the engines' batch budget")
     ap.add_argument("--mem-base", type=float, default=0.2, help="the FP8 engine's gpu_memory_utilization (weights about 8 GB)")
     ap.add_argument("--mem-arm", type=float, default=0.3, help="the BF16 engine's; Pearl-C's buffers (about 13 GB) sit outside it")
     ap.add_argument("--interleave", choices=["rep", "blocks"], default="rep", help="blocks: skip co-residency, go straight to ABAB")
@@ -1003,8 +1023,8 @@ def main() -> None:
     ap.add_argument("--ppl-windows", type=int, help="the quality run's first N windows (default all)")
     ap.add_argument("--chunk-min", type=float, default=7.0, help="the quality run starts no group after this many minutes")
     args = ap.parse_args()
-    if args.batch < 1 or args.prompt < 1:
-        ap.error("--batch and --prompt are positive")
+    if args.batch < 1 or args.prompt < 1 or args.prefill < 1:
+        ap.error("--batch, --prompt and --prefill are positive")
     if args.whole_step and -(-args.batch // PPD.ROW_ALIGN) * PPD.ROW_ALIGN > PPD.GRAPH_ROWS:
         ap.error(f"--whole-step captures the decode batch whole: --batch {args.batch}'s calls, filler rows to a multiple of "
                  f"{PPD.ROW_ALIGN} included, are over {PPD.GRAPH_ROWS} rows (pouw_pearl_c_whole)")

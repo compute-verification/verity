@@ -686,9 +686,9 @@ def test_a_mathlib_build_runs_no_more_lean_at_once_than_its_scope_s_memory_holds
 
 
 def test_a_spec_whose_guarantees_an_arklib_package_proves_needs_the_spec_floor(tmp_path):
-    """A whole-Security audit holds the proving package's facts beside the replay (30–50 GiB in r20261018-175656-1c85), so
-    auditing a spec with `proved_in` beside an ArkLib package needs `SPEC_FLOOR_GIB`, and the package alone the build's
-    floor."""
+    """A whole-Security replay holds about 120 GiB whatever its threads (killed at 128 GiB with 16 in r20261019-084601-01a0),
+    so auditing a spec with `proved_in` beside an ArkLib package needs `SPEC_FLOOR_GIB`, and is sent to the shape that has
+    it; the package alone needs the build's floor."""
     proofs, spec = tmp_path / "Proofs", tmp_path / "Spec"
     for p in (proofs, spec):
         p.mkdir()
@@ -697,6 +697,7 @@ def test_a_spec_whose_guarantees_an_arklib_package_proves_needs_the_spec_floor(t
     assert A.memory_refusal([proofs], 32) is None
     why = A.memory_refusal([spec, proofs], 32)
     assert why and f"under the {A.SPEC_FLOOR_GIB} GiB floor" in why and "facts for every guarantee it proves" in why
+    assert "--kind lean-audit" in (A.memory_refusal([spec, proofs], 128) or "")
     assert A.memory_refusal([spec, proofs], A.SPEC_FLOOR_GIB) is None
 
 
@@ -1083,8 +1084,8 @@ def test_a_premise_the_lock_does_not_list_fails():
     """A statement that takes an assumption applied to its own variables (`h : Premises.Hyp n`, an open hypothesis the
     hypotheses rule never names; `Facts.lean`'s `premises` sees through the abbrev and the `Guarantees` definitions to
     `P.Hyp`) fails while the lock doesn't list it, and an update adds it with the guarantee's owner; on 14 Oct a merge
-    dropped `Flock.Assumptions.RegistrantCovers`' entry this way and the check passed. A premise outside an assumptions
-    module is not an assumption."""
+    dropped `Flock.Assumptions.RegistrantCovers`' entry this way and the check passed. Without an import graph to say
+    which modules the repository builds, a premise outside an assumptions module is not counted (the next test has one)."""
     applied = [{"binder": "h", "type": "P.Premises.Hyp n", "closed": False, "named": None, "module": None}]
     pin = fact(signature="P.t (n : Nat) (h : P.Premises.Hyp n) : P.f n = n", hyps=applied)
     pin["premises"] = [{"binder": "h", "head": "P.Hyp", "module": "P.Assumptions"},
@@ -1096,6 +1097,29 @@ def test_a_premise_the_lock_does_not_list_fails():
     assert A.judge(pol, f, FILES)[0] == []
     assert A.judge({**pol, "assumptions": {}}, f, FILES)[0] == [
         "assumptions: P.Hyp is a premise of P.t, an assumption the lock doesn't list; run `check.py --update` to add it "
+        "with its guarantees' owner and commit the record (Daniel's DM shows it when it lands)"]
+
+
+def test_a_premise_defined_anywhere_the_repository_builds_is_listed_and_a_dependencys_is_not():
+    """LEAN-37 (RT2-LOGIC-2): `ProofLayer.SoundAt`, a premise defined in `Definitions/Accounting/TS`, passed unlisted, since
+    only a head in an assumptions module counted. A head in any module whose `.olean` a package of the repository builds
+    is listed now, in a lifted guarantee too (its premises are read through the `Guarantees` definition); one from the
+    toolchain or a fetched dependency (`Nat.le`, Mathlib's) is not."""
+    pin = fact(signature="P.t (n : Nat) : P.Guarantees.t n", hyps=[])
+    pin["premises"] = [{"binder": "h", "head": "P.Sound", "module": "P.Defs"},
+                       {"binder": "hn", "head": "Nat.le", "module": "Init.Prelude"},
+                       {"binder": "hd", "head": "Disjoint", "module": "Mathlib.Order.Disjoint"}]
+    graph = {"P.Defs": {"imports": ["Init"], "olean": "/r/Security/.lake/build/lib/lean/P/Defs.olean"},
+             "Init.Prelude": {"imports": [], "olean": "/elan/toolchains/v4/lib/lean/Init/Prelude.olean"},
+             "Mathlib.Order.Disjoint": {"imports": [], "olean": "/r/Security/.lake/packages/mathlib/.lake/build/lib/lean/"
+                                                                 "Mathlib/Order/Disjoint.olean"}}
+    f = facts(pins={"P.t": pin}, graph=graph)
+    assert A.own_modules(f) == {"P.Defs"}
+    fails, pol = A.judge({**POLICY, "assumptions": {}}, f, FILES, update=True)
+    assert fails == [] and list(pol["assumptions"]) == ["P.Sound"] and pol["assumptions"]["P.Sound"]["owner"] == "@lean"
+    assert A.judge(pol, f, FILES)[0] == [] and A.judge(pol, f, FILES, update=True)[1]["assumptions"] == pol["assumptions"]
+    assert A.judge({**pol, "assumptions": {}}, f, FILES)[0] == [
+        "assumptions: P.Sound is a premise of P.t, an assumption the lock doesn't list; run `check.py --update` to add it "
         "with its guarantees' owner and commit the record (Daniel's DM shows it when it lands)"]
 
 
@@ -1112,13 +1136,42 @@ def test_the_verifiers_path_has_no_unlisted_compiled_code_and_hashes_through_its
     assert fails == [
         "verifier: entry P.gone is not a constant of the build; fix `verifier.entries`",
         "verifier: P.fast (@[implemented_by], in P.Defs) is on the path from P.verify, P.gone: compiled code no proof sees; "
-        "add it to `verifier.allow` only if it is a core primitive",
+        "if it is a core primitive, run `check.py --update`, which lists it under `verifier.allow` (the landing DM shows "
+        "it), else take it off the path",
         "verifier: P.verify, P.gone reach P.Sha512.hash outside the hash parameter, by P.verify -> P.tag -> P.Sha512.hash; "
         "route it through the parameter, or add the public constant it serves to `verifier.stop`"]
     assert A.verifier_failures(None, path) == []
     assert A.verifier_failures(rule, None)[0].startswith("verifier: `Facts.lean` reported no verifier path")
     f = facts(); f["verifier"] = {**path, "missing": [], "implemented_by": [], "hash": []}
     assert A.judge({**POLICY, "verifier": rule}, f, FILES, update=True)[0] == []
+
+
+def test_verifier_allow_is_a_record_of_the_compiled_code_on_the_path_by_name():
+    """LEAN-33: `verifier.allow` lists by name each `@[extern]` and `@[implemented_by]` constant the verifier reaches, as
+    `--update` writes it, so the landing DM shows one added: an Init extern the list doesn't name fails (no `module:Init`
+    admitting all of Init), a name that admits nothing on the path fails, and a `module:` entry still admits its modules."""
+    path = {"missing": [], "reached": 40, "hash": [], "csimp": [],
+            "implemented_by": [{"name": "Array.foldlM", "module": "Init.Data.Array.Basic", "by": "Array.foldlMUnsafe"}],
+            "extern": [{"name": "Nat.add", "module": "Init.Prelude"}, {"name": "ByteArray.push", "module": "Init.Data.ByteArray.Basic"}]}
+    rule = {"entries": ["P.verify"], "stop": [], "hash": "P.Sha512", "allow": ["Array.foldlM", "Nat.add"]}
+    assert A.verifier_failures(rule, path) == [
+        "verifier: ByteArray.push (@[extern], in Init.Data.ByteArray.Basic) is on the path from P.verify: compiled code no "
+        "proof sees; if it is a core primitive, run `check.py --update`, which lists it under `verifier.allow` (the landing "
+        "DM shows it), else take it off the path"]
+    assert A.verifier_failures({**rule, "allow": [*rule["allow"], "ByteArray.push", "UInt64.add"]}, path) == [
+        "verifier: `verifier.allow` lists UInt64.add, which admits nothing on the path from P.verify; run `check.py --update`"]
+    assert A.verifier_failures({**rule, "allow": ["module:Init"]}, path) == []
+    assert A.verifier_failures({**rule, "allow": ["module:Init.Data"]}, path)[0].startswith("verifier: Nat.add (@[extern]")
+    f = facts(); f["verifier"] = path
+    fails, pol = A.judge({**POLICY, "verifier": rule}, f, FILES, update=True)
+    assert fails == [] and pol["verifier"] == {**rule, "allow": ["Array.foldlM", "ByteArray.push", "Nat.add"]}
+    assert A.verifier_failures(pol["verifier"], path) == []
+    kept = A.judge({**POLICY, "verifier": {**rule, "allow": ["module:Init.Data"]}}, f, FILES, update=True)[1]["verifier"]
+    assert kept["allow"] == ["module:Init.Data", "Nat.add"]
+    notes = A.review({"verifier": rule}, {"verifier": pol["verifier"]}, {"pins": {}, "verifier": path}, {})
+    assert notes == ["verifier: allowed ByteArray.push (@[extern], in Init.Data.ByteArray.Basic): compiled code no proof "
+                     "sees, now on the verifier's path"]
+    assert A.statement_changes(notes) == notes
 
 
 def test_every_claim_has_a_witness_that_it_fails_and_witnesses_that_its_antecedents_are_met():
@@ -1129,7 +1182,8 @@ def test_every_claim_has_a_witness_that_it_fails_and_witnesses_that_its_antecede
         return {"name": name, "module": "P.Claims", "kind": "def", "statement": False, "predicate": predicate}
 
     def thm(head, negated):
-        return fact() | {"kind": "theorem", "body": {"head": head, "negated": negated}}
+        conclusion = [{"head": head, "defs": [head], "refl": False, "assumed": False}]
+        return fact() | {"kind": "theorem", "body": {"head": head, "negated": negated, "conclusion": conclusion, "absurd": False}}
     defs = [spec("P.KS"), spec("P.Complete"), spec("P.Helper"), spec("P.Hyp"), spec("P.size", predicate=False)]
     pins = {"P.t": fact(), "P.KS_fails": thm("P.KS", True), "P.KS_meets": thm("P.ListWithin", False),
             "P.Complete_fails": thm("P.KS", True), "P.Complete_meets": thm("P.Complete", False)}
@@ -1153,6 +1207,40 @@ def test_every_claim_has_a_witness_that_it_fails_and_witnesses_that_its_antecede
         "claims: P.Gone is listed under `claims` but is no predicate of the spec under P.Claims; remove the entry"]
     assert A.claim_failures(POLICY, f) == []
     assert A.claim_witnesses(policy) == {"P.KS_fails", "P.KS_meets", "P.Complete_fails", "P.Complete_meets", "P.Complete_zk"}
+
+
+def test_a_meets_witness_says_something_about_the_deployment():
+    """LEAN-32: a `meets` witness whose statement is `True`, a conjunction of `True`s, a reflexivity, one of its own
+    hypotheses, a bound variable, a fact of Init alone, or anything under a `False` hypothesis fails; one whose every
+    conjunct applies a definition of the spec (`∃ s w, InScope deploy s ∧ RelS s w`, `deploy.zk = true`) passes."""
+    def k(head, defs=("P.deploy",), refl=False, assumed=False):
+        return {"head": head, "defs": list(defs), "refl": refl, "assumed": assumed}
+
+    def judged(*conclusion, absurd=False):
+        pins = {"P.KS_fails": fact() | {"body": {"head": "P.KS", "negated": True}},
+                "P.KS_meets": fact() | {"body": {"head": conclusion[0]["head"] if len(conclusion) == 1 else "And",
+                                                 "negated": False, "conclusion": list(conclusion), "absurd": absurd}}}
+        rule = {"modules": ["P.Claims"], "witnesses": {"P.KS": {"fails": "P.KS_fails", "meets": ["P.KS_meets"]}}}
+        f = facts(pins=pins, spec_definitions=[{"name": "P.KS", "module": "P.Claims", "kind": "def", "predicate": True}])
+        fails = A.claim_failures({**POLICY, "claims": rule, "guarantees": {n: {"owner": "@lean"} for n in pins}}, f)
+        assert all(x.endswith("applies a definition of the spec (the deployed record, a predicate or a field of it)")
+                   for x in fails)
+        return [x.removeprefix("claims: P.KS_meets, P.KS's `meets` witness, ").partition(":")[0] for x in fails]
+
+    assert judged(k("P.InScope", ["P.InScope", "P.deploy"]), k("P.RelS", ["P.RelS"])) == []
+    assert judged(k("Eq", ["P.Deploy.zk", "P.deploy"])) == []
+    assert judged(k("True", [])) == ["has a conjunct (True …) that applies no definition under `meaning` (`True`, or a "
+                                     "fact of Init or Mathlib alone)"]
+    assert judged(k("True", []), k("True", [])) == judged(k("True", []))
+    assert judged(k("P.InScope"), k("True", [])) == judged(k("True", []))
+    assert judged(k("LT.lt", [])) == ["has a conjunct (LT.lt …) that applies no definition under `meaning` (`True`, or a "
+                                      "fact of Init or Mathlib alone)"]
+    assert judged(k("Eq", refl=True)) == ["has a conjunct that is a reflexivity (Eq of two equal sides)"]
+    assert judged(k("P.Ok", assumed=True)) == ["has a conjunct (P.Ok …) that is one of its own hypotheses"]
+    assert judged(k(None)) == ["has a conjunct that applies a bound variable, not a constant"]
+    assert judged(k("P.Ok"), absurd=True) == ["takes `False` as a hypothesis, so it proves anything"]
+    assert judged(k("P.InScope"), k("P.KS")) == ["has a conjunct that states P.KS itself"]
+    assert A.vacuous_meets({"head": "P.Ok", "negated": False}, "P.KS").startswith("has no conclusion")
 
 
 def test_an_assumption_is_listed_by_name_with_its_record():

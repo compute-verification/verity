@@ -1,0 +1,7 @@
+{
+ "definitions": {
+  "MoeSelectBf16x128_v2": {
+   "and": 2072
+  }
+ }
+}

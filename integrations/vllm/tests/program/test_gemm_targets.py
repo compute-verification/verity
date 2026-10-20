@@ -12,9 +12,9 @@ HOPPER_TP = TargetProfile(compute_capability=(9, 0), num_sms=132)
 PRO6000_TP = TargetProfile(compute_capability=(12, 0), num_sms=188)
 
 
-def test_registered_targets_are_ada_ampere_hopper_and_blackwell_consumer():
+def test_registered_targets_are_ada_ampere_hopper_and_the_two_blackwells():
     """ada + ampere share the Ampere-family k16 step (Gemm_v1); hopper [R13 hopper, HOP-01] is the wgmma step (Gemm_v2{K,N,DOT})."""
-    assert set(GT.REGISTERED) == {"ada", "ampere", "hopper", "blackwell_consumer"}
+    assert set(GT.REGISTERED) == {"ada", "ampere", "hopper", "blackwell_consumer", "blackwell"}
     assert GT.REGISTERED["ada"].compute_capabilities == ((8, 9),) and GT.REGISTERED["ada"].vllm_arch_family == "ada"
     assert GT.REGISTERED["ampere"].compute_capabilities == ((8, 0),) and GT.REGISTERED["ampere"].vllm_arch_family is None
     assert {GT.REGISTERED[k].dot for k in ("ada", "ampere")} == {"AmpereBF16TcDot16"} and {GT.REGISTERED[k].kind for k in ("ada", "ampere")} == {"Gemm_v1{K,N}"}
@@ -102,7 +102,22 @@ def test_sm120_binds_the_hopper_gemm_and_hopper_step_fa2():
     assert d["evidence"]["gemm"] == list(GT.REGISTERED["blackwell_consumer"].evidence) and d["evidence"]["attention_fa2"]
 
 
-@pytest.mark.parametrize("cc, fam", [((10, 0), "blackwell"), ((8, 6), None), ((7, 5), None), ((12, 1), None)])
+def test_cc100_is_registered_for_served_builds_only():
+    """The B200: its served Builds' cuBLAS k16 step (tcgen05.mma kind::f16) is Hopper's, but vLLM's tuned 'blackwell' table of the
+    batch-invariant kernel is not pinned, so every batch-invariant consumer is refused, with the unregistered target's refusal."""
+    gt = GT.gemm_target_for((10, 0), batch_invariant=False)
+    assert gt.key == "blackwell" and gt.dot == "HopperBF16WgmmaDot16" and gt.vllm_arch_family == "blackwell" and gt.evidence
+    with pytest.raises(GT.UnregisteredGemmTarget, match="no registered GEMM specialization for target cc 10.0 "
+                       r"\(tuned_gemm_arch_family='blackwell'\) for a batch-invariant launch: 'blackwell' is registered for served Builds only"):
+        GT.gemm_target_for((10, 0))
+    gt, refusal = GT.try_gemm_target_for((10, 0))
+    assert gt is None and refusal.startswith("numerics_unregistered")
+    with pytest.raises(GT.UnregisteredGemmTarget):
+        TargetProfile(compute_capability=(10, 0)).gemm_target()
+    assert all(t.batch_invariant_refusal is None for k, t in GT.REGISTERED.items() if k != "blackwell")
+
+
+@pytest.mark.parametrize("cc, fam", [((8, 6), None), ((7, 5), None), ((12, 1), None)])
 def test_unregistered_targets_are_refused_fail_closed(cc, fam):
     with pytest.raises(GT.UnregisteredGemmTarget, match="numerics_unregistered") as e:
         GT.gemm_target_for(cc)
