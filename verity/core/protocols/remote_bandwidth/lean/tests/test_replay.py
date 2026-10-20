@@ -85,7 +85,7 @@ def test_a_transcript_replays_to_the_definitions_verdict(server, tmp_path, name)
 def test_a_transcript_that_names_no_pace_replays_only_with_the_pace_its_verifier_json_gives(server, tmp_path) -> None:
     """A transcript written before it named its session's pace: replayed unpaced, a paced session's windows would be
     held to no cap on their roots, so it replays only with the pace its `verifier.json` recorded, and its bytes the
-    ones recorded there."""
+    ones recorded there; and its outcome is held to the one recorded there."""
     case, _ = M.recorded("order-past-pace")
     del case["params"]["pace"]
     path = tmp_path / "case.json"
@@ -93,9 +93,12 @@ def test_a_transcript_that_names_no_pace_replays_only_with_the_pace_its_verifier
     row, = R.replay_transcript(path, server)
     assert row["agree"] is None and row["held"] is False and "pace" in row["why"], row
     digest = hashlib.sha256(path.read_bytes()).hexdigest()
-    row, = R.replay_transcript(path, server, {path.name: ({"k": 2, "window_ns": 10}, digest)})
+    paced = {"pace": {"k": 2, "window_ns": 10}, "sha256": digest, "outcome": "order"}
+    row, = R.replay_transcript(path, server, {path.name: paced})
     assert row["agree"] and row["held"] and row["lean"]["rejected"]["failure"] == "order", row
-    row, = R.replay_transcript(path, server, {path.name: (None, "00" * 32)})
+    row, = R.replay_transcript(path, server, {path.name: paced | {"outcome": "accepted"}})
+    assert row["agree"] and row["held"] is False and row["why"] == "replayed order, the record accepted", row
+    row, = R.replay_transcript(path, server, {path.name: paced | {"sha256": "00" * 32}})
     assert row["held"] is False and "sha256" in row["why"], row
 
 

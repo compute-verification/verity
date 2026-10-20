@@ -5,10 +5,11 @@ A record is one of two kinds:
 
 * A transcript: the difftest's case, every event the verifier's `Session` saw with the clock it read, its 2W coins and
   its append coins. Both verifiers replay all of it and must give every event the same result, and the session the same
-  outcome and record. The outcome is the verdict, and a rejection's failure, window and draw are its reason. A
-  transcript written before it named its session's pace (20 Oct) replays only with the pace its `verifier.json` gives
-  (`--record`), and only if its bytes are the ones whose sha256 that record keeps: replayed unpaced, a paced session's
-  windows would be held to no cap on their roots.
+  outcome and record. The outcome is the verdict, and a rejection's failure, window and draw are its reason. Given
+  the `verifier.json` that recorded it (`--record`), the outcome must be the recorded one. A transcript written before
+  it named its session's pace (20 Oct) replays only with the pace its `verifier.json` gives, and only if its bytes are
+  the ones whose sha256 that record keeps: replayed unpaced, a paced session's windows would be held to no cap on their
+  roots.
 * A remote session's `verifier.json` (`verity/remote-session/verifier/v0`). Per session it keeps the registration,
   the parameters, each window's challenge release, boundary and pass arrivals on the verifier's clock, its draws, and
   for an accepted session each pass's length and step. It keeps no roots, plans, coins or openings, and of appends and
@@ -324,36 +325,46 @@ def replay_record(path: Path, s: D.Server) -> list[dict]:
                      "registry": registry, "why": "the registration ran no session"}]
 
 
-def paces_of(records: list[Path]) -> dict[str, tuple[dict | None, str]]:
-    """Each transcript's file name, from the `verifier.json`s that recorded it, to its session's pace (`pace_json`)
-    and the sha256 of its bytes."""
-    paces = {}
+def recorded_transcripts(records: list[Path]) -> dict[str, dict]:
+    """Each transcript's file name, from the `verifier.json`s that recorded it, to its session's pace (`pace_json`),
+    the sha256 of its bytes and the outcome recorded for it (accepted, a failure, or None for an unended session)."""
+    known = {}
     for path in records:
         for session in json.loads(path.read_text()).get("sessions", []):
             t = session.get("transcript") or {}
             if "sha256" in t:
-                paces[Path(t["path"]).name] = (pace_json(session), t["sha256"])
-    return paces
+                f = session.get("failure") or {}
+                known[Path(t["path"]).name] = {"pace": pace_json(session), "sha256": t["sha256"],
+                                               "outcome": "accepted" if session.get("accepted") else f.get("failure")}
+    return known
 
 
-def replay_transcript(path: Path, s: D.Server, paces: dict[str, tuple[dict | None, str]] | None = None) -> list[dict]:
-    """A transcript replayed through both verifiers. One that names no pace takes it from `paces` (`paces_of`), and
-    only if its bytes are the recorded ones."""
+def replay_transcript(path: Path, s: D.Server, records: dict[str, dict] | None = None) -> list[dict]:
+    """A transcript replayed through both verifiers, held to the outcome its `verifier.json` recorded when `records`
+    (`recorded_transcripts`) has it. One that names no pace takes it from there, and only if its bytes are the
+    recorded ones."""
     data = path.read_bytes()
     case, row = json.loads(data), {"file": str(path)}
-    if "pace" not in case.get("params", {}):
-        if path.name not in (paces or {}):
+    named = "pace" in case.get("params", {})
+    sha256 = None if named else hashlib.sha256(data).hexdigest()
+    del data
+    known = (records or {}).get(path.name)
+    if not named:
+        if known is None:
             return [row | {"agree": None, "held": False, "why": "the transcript names no pace and no verifier.json "
                            "given records its session's: replayed unpaced, a paced session's windows would be held to "
                            "no cap on their roots"}]
-        pace, digest = paces[path.name]
-        if hashlib.sha256(data).hexdigest() != digest:
+        if sha256 != known["sha256"]:
             return [row | {"agree": None, "held": False,
                            "why": "not the recorded transcript: sha256 differs from its verifier.json's"}]
-        case["params"]["pace"] = pace
-        row["pace"] = f"{D.canonical(pace)}, from its verifier.json"
+        case["params"]["pace"] = known["pace"]
+        row["pace"] = f"{D.canonical(known['pace'])}, from its verifier.json"
     row |= replay(case, s)
     row["held"] = row["agree"] and "outcome" in row["lean"]
+    if known is not None:
+        row["recorded"] = known["outcome"]
+        if row["held"] and row["lean"]["outcome"] != known["outcome"]:
+            row["held"], row["why"] = False, f"replayed {row['lean']['outcome']}, the record {known['outcome']}"
     return [row]
 
 
@@ -363,7 +374,8 @@ def line(row: dict) -> str:
     got = ("nothing" if not v else "accepted" if v.get("outcome") == "accepted" else
            f"{v['rejected']['failure']} at window {v['rejected']['window']}" if v.get("rejected") else
            f"drew {len(v['drawn'])} windows" if "drawn" in v else next(iter(v.items()), ("?", ""))[0])
-    head = f"{who} #{row['session']}: recorded {row['recorded']}; " if "session" in row else f"{who}: "
+    head = (f"{who} #{row['session']}: " if "session" in row else f"{who}: ") + (
+        f"recorded {row['recorded']}; " if "recorded" in row else "")
     return (f"{head}replayed {got}; agree {row['agree']}, held {row['held']}"
             + (f", digest {row['digest']}" if "digest" in row else "")
             + (f", registry {row['registry']}" if row.get("registry") is not None else "")
@@ -379,12 +391,12 @@ def main(argv: list[str] | None = None) -> int:
                     help="the verifier.json records of the transcripts, for the pace of one that names none")
     ap.add_argument("--out", type=Path)
     ns = ap.parse_args(argv)
-    paces = paces_of(ns.record)
+    records = recorded_transcripts(ns.record)
     rows: list[dict] = []
     with server() as s:
         for path in ns.files:
             try:
-                got = replay_transcript(path, s, paces) if ns.kind == "transcript" else replay_record(path, s)
+                got = replay_transcript(path, s, records) if ns.kind == "transcript" else replay_record(path, s)
             except (ValueError, KeyError, TypeError) as e:
                 got = [{"run": run_of(path), "agree": None, "held": False, "why": f"unreadable: {type(e).__name__}: {e}"}]
             for row in got:
