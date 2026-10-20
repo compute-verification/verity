@@ -627,7 +627,7 @@ class CommitSession:
 
     A store serves one session, so ``plan`` is one mode, ``serve`` (``servedrop:K`` withholds blocks appended, and
     this store appends none), and the session audits one run: with more than one pair, the later instrumented runs are
-    committed and unaudited.  The control arm is never audited.  A verifier that paces the session (``--pace 1``: a
+    committed and unaudited.  The control arm is never audited.  A verifier that paces the session (``--paced 1:…``: a
     live coin a pass) has each pass's engine step run inside its coin's window, so ``step_ms``, the step's time, goes
     into the calibration's pass times (`StoreBackend.with_step`) and the allowance covers it."""
 

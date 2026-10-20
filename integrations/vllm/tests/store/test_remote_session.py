@@ -367,12 +367,13 @@ def served_engine(s: Store):
 
 
 def lockstep(tmp_path, monkeypatch, run_steps: int, windows: int = 2, setup: Callable[[], None] | None = None,
-             each: Callable[[int], None] | None = None, pace: audit.Pace | None = None, groups: int = 1,
-             step_ms: float = 0.0, served: bool = False):
+             each: Callable[[int], None] | None = None, pace: dict | None = None, step_ms: float = 0.0,
+             served: bool = False):
     """The Commit's session (`CommitSession.begin` … `end`) over a CPU store, its verifier on a thread at L = 2
-    windows (paced at ``pace``, ``groups`` windows for each of ``windows``), the run ``run_steps`` steps of the scripted engine, each through the session's `Lockstep` and
-    after ``each(k)``, after ``setup()``, the run's work between `begin` and its first step.  ``served``: the
-    Commit's store and steps (`served_store`, `served_engine`), else a KV pool written as `engine` writes it."""
+    windows (paced at ``pace``, `verifier.pace_of`'s), the run ``run_steps`` steps of the scripted engine, each
+    through the session's `Lockstep` and after ``each(k)``, after ``setup()``, the run's work between `begin` and its
+    first step.  ``served``: the Commit's store and steps (`served_store`, `served_engine`), else a KV pool written as
+    `engine` writes it."""
     clock = PassClock()
     monkeypatch.setattr(remote, "StoreBackend", lambda *a, **kw: TickingBackend(clock, *a, **kw))
     lsock = wire.listen("127.0.0.1", 0)
@@ -386,10 +387,10 @@ def lockstep(tmp_path, monkeypatch, run_steps: int, windows: int = 2, setup: Cal
         lsock.close()
         v = verifier.Verifier(wire.Conn(sock, clock=clock.now), source=os.urandom(32), windows=windows, window_ns=5,
                               samples=4096, delta=2.0 ** -40, jitter_ns=10 ** 9, clock=clock, log=lambda m: None,
-                              lifetime=2, pace=pace, groups=groups)
+                              lifetime=2)
         v.register()
         try:
-            seen.append(v.session(0, v.allowance(v.ping(4)), None))
+            seen.append(v.session(0, v.allowance(v.ping(4)), None, pace=pace))
         except Exception as e:  # noqa: BLE001  -- a prover that stops mid-session drops the connection
             seen.append(e)
         sock.close()
@@ -447,16 +448,17 @@ def test_the_commits_session_arms_its_first_window_once_its_runs_first_step_has_
 
 
 def test_a_paced_commits_session_runs_a_step_a_coin_and_tags_each_pass_with_its_step(tmp_path, monkeypatch):
-    """At ``--pace 1`` each window is one pass under a coin of its own, its engine step inside it (no pass moves into
+    """At ``--paced 1:…`` each window is one pass under a coin of its own, its engine step inside it (no pass moves into
     the next window); the session's record tags each pass with the step the verifier's record has for it, a step of
     the map; the calibration's pass times carry ``step_ms``, so the allowance covers the step.  The Commit's store is
     the weights and filler (the KV outside it), so its steps write no registered block, every pass reads all N, and the
     memory line is declared in its time-held form as well as its snapshot."""
-    rec, r, cs, _ = lockstep(tmp_path, monkeypatch, 40, windows=2, pace=audit.Pace(1, 10**9), groups=3, step_ms=2.5,
-                             served=True)
+    pace = verifier.pace_of("1:1000:4096:2", 1000 / 3)
+    assert pace["groups"] == 3
+    rec, r, cs, _ = lockstep(tmp_path, monkeypatch, 40, pace=pace, step_ms=2.5, served=True)
     assert r["accepted"] and rec["accepted"] and r["record"]["public"]["pace"] == {"k": 1, "window_ns": 10**9}
     wins = r["record"]["profile"]["windows"]
-    assert len(wins) == 7 and all(len(w["steps"]) == 1 for w in wins) and rec["prover"]["discarded"] == 0
+    assert len(wins) == 9 and all(len(w["steps"]) == 1 for w in wins) and rec["prover"]["discarded"] == 0
     mm = rec["memory_map"]
     assert mm["pass_steps"] == [[w["window"], 0, w["steps"][0]] for w in wins] and mm["pass_steps_mapped"]
     assert mm["agrees"] and mm["recorded"] == 0 and mm["deferral"]["appends"] == 0
