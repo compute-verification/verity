@@ -20,8 +20,8 @@ activations of its earliest complete one, none of which the subcircuit completes
 
 Through a partial containment (`ActivationsBoundOn`) the bound holds for the counted multiplications the declaration
 computes, with no term for the dark gates: a partial sum added outside the declaration, or any other value computed
-off the books, enters it as a novel input and does not make an activation whole in a piece. `ActivationsTrainingOn` is
-the training form, with the counted multiplications off the books as dark gates.
+off the books, enters it as an input, novel by `BaselineRegistered`, and does not make an activation whole in a piece.
+`ActivationsTrainingOn` is the training form, with the counted multiplications off the books as dark gates.
 -/
 
 namespace Nci.Guarantees
@@ -49,7 +49,7 @@ term for the dark gates, so it holds however much of `c`, the partial sums inclu
 def ActivationsBoundOn : Prop :=
   ∀ (Γ : ℕ) (α K b_w b_a : ℝ) (c d : Declaration) (T : Threading c) (L : T.Links) (dd e : ℕ)
     (M : PartialContainment c d),
-    0 ≤ α → α * Γ ≤ K → 0 < b_w → 0 < b_a → 0 < dd → Complies Γ α d →
+    0 ≤ α → α * Γ ≤ K → 0 < b_w → 0 < b_a → 0 < dd → Complies Γ α d → Assumptions.BaselineRegistered c d M →
     (∀ a, (T.M.filter fun g => T.act g = a).card ≤ e) →
     (∀ a, (L.src a).Nonempty →
       dd ≤ (((L.src a).filter fun g => T.thread (T.act g) = T.thread a).image T.act).card) →
@@ -63,7 +63,7 @@ larger by a factor of at least `κ b_a / (2αΛ)`, less what its dark gates abso
 def ActivationsTrainingOn : Prop :=
   ∀ (Γ : ℕ) (α K b_w b_a κ : ℝ) (c d : Declaration) (T : Threading c) (L : T.Links) (dd e : ℕ)
     (M : PartialContainment c d),
-    0 ≤ α → α * Γ ≤ K → 0 < b_w → 0 < b_a → 0 < dd → Complies Γ α d →
+    0 ≤ α → α * Γ ≤ K → 0 < b_w → 0 < b_a → 0 < dd → Complies Γ α d → Assumptions.BaselineRegistered c d M →
     (∀ a, (T.M.filter fun g => T.act g = a).card ≤ e) →
     (∀ a, (L.src a).Nonempty →
       dd ≤ (((L.src a).filter fun g => T.thread (T.act g) = T.thread a).image T.act).card) →

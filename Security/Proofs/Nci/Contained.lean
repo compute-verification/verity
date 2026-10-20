@@ -185,21 +185,23 @@ end Dark
 no more novel information. -/
 theorem piece_caps {Γ : ℕ} {α K : ℝ} {c d : Declaration} {M : PartialContainment c d} {n : ℕ} {P : Partition d.D n}
     (hα : 0 ≤ α) (hαK : α * Γ ≤ K)
-    (hP : ∀ u, d.D.size (P.gates u) ≤ Γ ∧ (novelReads d (P.gates u) : ℝ) ≤ α * d.D.size (P.gates u)) (u : Fin n) :
+    (hP : ∀ u, d.D.size (P.gates u) ≤ Γ ∧ (novelReads d (P.gates u) : ℝ) ≤ α * d.D.size (P.gates u))
+    (hB : Assumptions.BaselineRegistered c d M) (u : Fin n) :
     c.D.size (piece M P u) ≤ Γ ∧ (novelReads c (piece M P u) : ℝ) ≤ K :=
-  ⟨(card_piece_le u).trans (hP u).1, ((Nat.cast_le.2 (novelReads_piece u)).trans (hP u).2).trans
+  ⟨(card_piece_le u).trans (hP u).1, ((Nat.cast_le.2 (novelReads_piece hB u)).trans (hP u).2).trans
     ((mul_le_mul_of_nonneg_left (by exact_mod_cast (hP u).1) hα).trans hαK)⟩
 
 /-- The pieces with the dark gates are within the caps, when each dark gate reads at most `K` itself. -/
 theorem withDark_caps {Γ : ℕ} {α K : ℝ} {c d : Declaration} {M : PartialContainment c d} {n : ℕ}
     {P : Partition d.D n} (hα : 0 ≤ α) (hαK : α * Γ ≤ K) (hΓ : 1 ≤ Γ)
     (hP : ∀ u, d.D.size (P.gates u) ≤ Γ ∧ (novelReads d (P.gates u) : ℝ) ≤ α * d.D.size (P.gates u))
-    (hX : ∀ v ∈ M.dark, (novelReads c {v} : ℝ) ≤ K) (i : Fin (Fintype.card (Fin n ⊕ {v // v ∈ M.dark}))) :
+    (hB : Assumptions.BaselineRegistered c d M) (hX : ∀ v ∈ M.dark, (novelReads c {v} : ℝ) ≤ K)
+    (i : Fin (Fintype.card (Fin n ⊕ {v // v ∈ M.dark}))) :
     c.D.size ((withDark M P).gates i) ≤ Γ ∧ (novelReads c ((withDark M P).gates i) : ℝ) ≤ K := by
   obtain ⟨j, rfl⟩ := (Fintype.equivFin (Fin n ⊕ {v // v ∈ M.dark})).surjective i
   rcases j with u | v
   · rw [withDark_gates_inl]
-    exact piece_caps hα hαK hP u
+    exact piece_caps hα hαK hP hB u
   · rw [withDark_gates_inr]
     exact ⟨(card_singleton v.1).le.trans hΓ, hX v.1 v.2⟩
 
@@ -248,7 +250,7 @@ theorem matMulOn_of_counts {Γ : ℕ} {α K b_w b_a μ B : ℝ} {c d : Declarati
     (ha : 0 < b_a) (hdd : 0 < dd) (hαK : α * Γ ≤ K) (hμ₀ : 0 ≤ μ) (hμ₁ : μ ≤ 1) (hd : ∀ ℓ, dd ≤ ch.d ℓ)
     (he : ∀ ℓ, ch.e ℓ ≤ emax)
     (hP : ∀ u, d.D.size (P.gates u) ≤ Γ ∧ (novelReads d (P.gates u) : ℝ) ≤ α * d.D.size (P.gates u))
-    (hA : Assumptions.ActivationsIncompressible c ch Γ K b_w b_a)
+    (hB : Assumptions.BaselineRegistered c d M) (hA : Assumptions.ActivationsIncompressible c ch Γ K b_w b_a)
     (h₂ : ∑ u, (b_w * ((ch.weightsUsed (piece M P u)).card : ℝ) + b_a / 2 * (outputsOther ch (piece M P u)).card) ≤
       ∑ u, (novelReads d (P.gates u) : ℝ) + B) :
     max (min ((1 + √μ) ^ 2 * (b_w * b_a * dd / K)) (√2 * (1 + √μ) * √(1 - μ) * (b_a * √(b_w / K))))
@@ -257,9 +259,9 @@ theorem matMulOn_of_counts {Γ : ℕ} {α K b_w b_a μ B : ℝ} {c d : Declarati
         ch.prod p.1 p.2.1 p.2.2.1 p.2.2.2 ∈ M.S).card ≤
     α * d.D.size d.D.computed + (1 - μ) * B := by
   have hdpos : (0 : ℝ) < dd := by exact_mod_cast hdd
-  have hcapP := piece_caps (M := M) hα hαK hP
+  have hcapP := piece_caps (M := M) hα hαK hP hB
   have hr : ∀ u, (novelReads c (piece M P u) : ℝ) ≤ novelReads d (P.gates u) := fun u => by
-    exact_mod_cast novelReads_piece u
+    exact_mod_cast novelReads_piece hB u
   have hiu := fun u => iu_reads c ch Γ K b_w b_a dd hd ha.le hA (piece M P u) (piece_subset_computed u)
     (hcapP u).1 (hcapP u).2
   have h₁ : ∑ u, (b_w * ((ch.weightsUsed (piece M P u)).card : ℝ) +
@@ -292,15 +294,15 @@ theorem matMulOn_of_counts {Γ : ℕ} {α K b_w b_a μ B : ℝ} {c d : Declarati
 open Classical in
 /-- **The partial-sum law with dark gates.** -/
 theorem ContainedMatMulOn : Guarantees.ContainedMatMulOn := by
-  intro Γ α K b_w b_a μ c d θv ch dd emax M hα hK hw ha hdd hΓ hαK hμ₀ hμ₁ hd he ⟨n, P, hP⟩ hX hA hPS
-  obtain ⟨s, hsum, hs⟩ := hPS _ (withDark M P) (withDark_caps hα hαK hΓ hP hX)
+  intro Γ α K b_w b_a μ c d θv ch dd emax M hα hK hw ha hdd hΓ hαK hμ₀ hμ₁ hd he ⟨n, P, hP⟩ hB hX hA hPS
+  obtain ⟨s, hsum, hs⟩ := hPS _ (withDark M P) (withDark_caps hα hαK hΓ hP hB hX)
   -- the charge of each piece, within its IU's reads, and of each dark gate, within its width
   have hsP : ∀ u, b_w * ((ch.weightsUsed (piece M P u)).card : ℝ) +
       b_a * s (Fintype.equivFin (Fin n ⊕ {v // v ∈ M.dark}) (Sum.inl u)) ≤ novelReads d (P.gates u) := fun u => by
     have h := le_novelReads_of_support ((withDark M P).gates_subset_computed _)
       (hs (Fintype.equivFin (Fin n ⊕ {v // v ∈ M.dark}) (Sum.inl u)))
     rw [withDark_gates_inl] at h
-    exact h.trans (by exact_mod_cast novelReads_piece u)
+    exact h.trans (by exact_mod_cast novelReads_piece hB u)
   have hsZ : ∀ v : {v // v ∈ M.dark},
       b_a * (s (Fintype.equivFin (Fin n ⊕ {v // v ∈ M.dark}) (Sum.inr v)) : ℝ) ≤ c.D.w v.1 := fun v => by
     have h := le_width_of_support (hs (Fintype.equivFin (Fin n ⊕ {v // v ∈ M.dark}) (Sum.inr v)))
@@ -316,7 +318,7 @@ theorem ContainedMatMulOn : Guarantees.ContainedMatMulOn := by
       _ = c.D.width M.dark := by
           rw [Circuit.width, Nat.cast_sum]
           exact sum_coe_sort M.dark fun g => (c.D.w g : ℝ)
-  have h := matMulOn_of_counts hα hK hw ha hdd hαK hμ₀ hμ₁ hd he hP
+  have h := matMulOn_of_counts hα hK hw ha hdd hαK hμ₀ hμ₁ hd he hP hB
     (activationsIncompressible_of_support (Γ := Γ) hw.le ha.le hA) (partialSums_count ha.le hsum hsP)
   exact h.trans (by linarith [mul_le_mul_of_nonneg_left hZ (by linarith : (0 : ℝ) ≤ 1 - μ)])
 
@@ -328,9 +330,9 @@ theorem training_of_counts {m G X G' S κ R : ℝ} (hm : 0 ≤ m) (h : m * G ≤
 /-- **Training is slowed, by the partial-sum law, with dark gates**: the chain's products off the books are dark gates
 (`card_products_le_dark`). -/
 theorem ContainedTrainingOn : Guarantees.ContainedTrainingOn := by
-  intro Γ α K b_w b_a μ κ c d θv ch dd emax M hα hK hw ha hdd hΓ hαK hμ₀ hμ₁ hd he hP hX hA hPS hκ
+  intro Γ α K b_w b_a μ κ c d θv ch dd emax M hα hK hw ha hdd hΓ hαK hμ₀ hμ₁ hd he hP hB hX hA hPS hκ
   exact training_of_counts (le_max_of_le_right (by positivity))
-    (ContainedMatMulOn Γ α K b_w b_a μ c d θv ch dd emax M hα hK hw ha hdd hΓ hαK hμ₀ hμ₁ hd he hP hX hA hPS) hκ
+    (ContainedMatMulOn Γ α K b_w b_a μ c d θv ch dd emax M hα hK hw ha hdd hΓ hαK hμ₀ hμ₁ hd he hP hB hX hA hPS) hκ
     (by exact_mod_cast card_products_le_dark M ch)
 
 end Nci.SecurityProofs

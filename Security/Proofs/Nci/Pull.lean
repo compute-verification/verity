@@ -1,4 +1,4 @@
-import Definitions.Nci.Dark
+import Models.Nci.Assumptions
 import Proofs.Core.Circuit
 
 /-!
@@ -11,8 +11,9 @@ carries both to novel values its IU reads.
 
 Through a partial containment the pieces (`piece`) divide only the gates `S` that `d` computes, and the dark gates are in
 none. The same holds of each piece, with one more case for what it reads (`novelReads_piece`): a dark value enters `d` as
-an input gate outside its baseline, which lies in no IU, so the IU reads it too. A total containment is a partial one with
-no dark gates (`ofContainment`).
+an input gate, which lies in no IU, so the IU reads it too, and it is outside `d`'s baseline by `BaselineRegistered`. A
+total containment is a partial one with no dark gates (`ofContainment`), and its own condition on the baseline gives
+`BaselineRegistered` (`baselineRegistered_ofContainment`).
 -/
 
 namespace Nci.SecurityProofs
@@ -90,8 +91,7 @@ theorem isInput_of_mem_into_computed {C : Circuit} {a : Fin C.N} (ha : a ∈ C.i
 
 /-- **A total containment is a partial one** with no dark gates: `S` is every computed gate of `c`, and what `S` reads
 from outside is `c`'s inputs. -/
-def ofContainment {c d : Declaration} (M : Containment c.D d.D)
-    (hθ : ∀ g, c.D.isInput g = true → M.emb g ∈ d.θ → g ∈ c.θ) : PartialContainment c d where
+def ofContainment {c d : Declaration} (M : Containment c.D d.D) : PartialContainment c d where
   S := c.D.computed
   emb := M.emb
   S_computed := subset_refl _
@@ -106,10 +106,15 @@ def ofContainment {c d : Declaration} (M : Containment c.D d.D)
   input_emb a ha := by
     rw [M.isInput_emb]
     exact isInput_of_mem_into_computed ha
-  θ_emb a ha h := hθ a (isInput_of_mem_into_computed ha) h
 
-theorem ofContainment_S {c d : Declaration} (M : Containment c.D d.D)
-    (hθ : ∀ g, c.D.isInput g = true → M.emb g ∈ d.θ → g ∈ c.θ) : (ofContainment M hθ).S = c.D.computed := rfl
+theorem ofContainment_S {c d : Declaration} (M : Containment c.D d.D) : (ofContainment M).S = c.D.computed := rfl
+
+/-- A total containment that sends no novel input gate of `c` into `d`'s baseline (`Declaration.Contains`) meets
+`BaselineRegistered`: what `S = computed` reads from outside is `c`'s inputs. -/
+theorem baselineRegistered_ofContainment {c d : Declaration} (M : Containment c.D d.D)
+    (hθ : ∀ g, c.D.isInput g = true → M.emb g ∈ d.θ → g ∈ c.θ) :
+    Assumptions.BaselineRegistered c d (ofContainment M) :=
+  fun a ha h => hθ a (isInput_of_mem_into_computed ha) h
 
 variable {c d : Declaration} (M : PartialContainment c d) {n : ℕ} (P : Partition d.D n)
 
@@ -152,8 +157,9 @@ theorem card_piece_le (u : Fin n) : (piece M P u).card ≤ (P.gates u).card :=
 
 /-- **A piece reads no more novel information than its IU.** A novel value the piece reads is a gate of `S` outside the
 piece, whose image is a computed gate outside the IU, or a gate outside `S`, whose image is an input gate of `d` outside
-its baseline and so in no IU; either way the IU reads the image, which is as wide. -/
-theorem novelReads_piece (u : Fin n) : novelReads c (piece M P u) ≤ novelReads d (P.gates u) := by
+its baseline (`BaselineRegistered`) and so in no IU; either way the IU reads the image, which is as wide. -/
+theorem novelReads_piece (hB : Assumptions.BaselineRegistered c d M) (u : Fin n) :
+    novelReads c (piece M P u) ≤ novelReads d (P.gates u) := by
   have hA : ∀ a ∈ c.D.into (piece M P u) \ c.θ, a ∈ M.S ∪ c.D.into M.S := fun a ha =>
     into_piece_subset u (mem_sdiff.1 ha).1
   have hmaps : ∀ a ∈ c.D.into (piece M P u) \ c.θ, M.emb a ∈ d.D.into (P.gates u) \ d.θ := by
@@ -178,7 +184,7 @@ theorem novelReads_piece (u : Fin n) : novelReads c (piece M P u) ≤ novelReads
       · have hi := d.θ_input _ hθ
         rw [M.computed_emb a haS] at hi
         exact Bool.false_ne_true hi
-      · exact haθ (M.θ_emb a ((mem_union.1 (hA a ha)).resolve_left haS) hθ)
+      · exact haθ (hB a ((mem_union.1 (hA a ha)).resolve_left haS) hθ)
   unfold novelReads Circuit.width
   calc ∑ a ∈ c.D.into (piece M P u) \ c.θ, c.D.w a
       = ∑ b ∈ (c.D.into (piece M P u) \ c.θ).image M.emb, d.D.w b := by

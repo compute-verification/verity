@@ -250,6 +250,9 @@
    "owner": "@lean",
    "digest": "9657b492f110a0188f677b492aec3e46e5eab5834bdfc613b955da6ee949f8ca"
   },
+  "Nci.Assumptions.BaselineRegistered": {
+   "owner": "@compute-accounting"
+  },
   "Nci.Assumptions.Fits": {
    "owner": "@lean",
    "digest": "a01008a9dfd298221a497fc46bddfc00be4ca6c55915429dccc9bcd2bdef6864"

@@ -59,7 +59,7 @@ def ContainedMatMulOn : Prop :=
   ∀ (Γ : ℕ) (α K b_w b_a μ : ℝ) (c d : Declaration) (θv : c.D.Transcript) (ch : Chain c.D) (dd emax : ℕ)
     (M : PartialContainment c d),
     0 ≤ α → 0 < K → 0 < b_w → 0 < b_a → 0 < dd → 1 ≤ Γ → α * Γ ≤ K → 0 ≤ μ → μ ≤ 1 →
-    (∀ ℓ, dd ≤ ch.d ℓ) → (∀ ℓ, ch.e ℓ ≤ emax) → Complies Γ α d →
+    (∀ ℓ, dd ≤ ch.d ℓ) → (∀ ℓ, ch.e ℓ ≤ emax) → Complies Γ α d → Assumptions.BaselineRegistered c d M →
     (∀ v ∈ M.dark, (novelReads c {v} : ℝ) ≤ K) →
     Assumptions.ActivationsSupport c θv ch (K + b_w + b_a) b_w b_a →
     Assumptions.PartialSumsSupport c θv ch Γ K b_w b_a →
@@ -76,7 +76,7 @@ def ContainedTrainingOn : Prop :=
   ∀ (Γ : ℕ) (α K b_w b_a μ κ : ℝ) (c d : Declaration) (θv : c.D.Transcript) (ch : Chain c.D) (dd emax : ℕ)
     (M : PartialContainment c d),
     0 ≤ α → 0 < K → 0 < b_w → 0 < b_a → 0 < dd → 1 ≤ Γ → α * Γ ≤ K → 0 ≤ μ → μ ≤ 1 →
-    (∀ ℓ, dd ≤ ch.d ℓ) → (∀ ℓ, ch.e ℓ ≤ emax) → Complies Γ α d →
+    (∀ ℓ, dd ≤ ch.d ℓ) → (∀ ℓ, ch.e ℓ ≤ emax) → Complies Γ α d → Assumptions.BaselineRegistered c d M →
     (∀ v ∈ M.dark, (novelReads c {v} : ℝ) ≤ K) →
     Assumptions.ActivationsSupport c θv ch (K + b_w + b_a) b_w b_a →
     Assumptions.PartialSumsSupport c θv ch Γ K b_w b_a →

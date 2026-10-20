@@ -37,7 +37,7 @@ multiplication of `c` in `S`, forward and activation-gradient alike, with no ter
 def IncompressibleThreadedThrottledOn : Prop :=
   ∀ (Γ : ℕ) (α b_w b_a : ℝ) (c d : Declaration) (ch : Chain c.D) (T : Threading c) (dd e : ℕ)
     (M : PartialContainment c d),
-    0 ≤ α → 0 < b_w → 0 < b_a → 0 < dd → Complies Γ α d →
+    0 ≤ α → 0 < b_w → 0 < b_a → 0 < dd → Complies Γ α d → Assumptions.BaselineRegistered c d M →
     T.Threaded Γ (α * Γ) dd e → Assumptions.TrainingIncompressible c ch T Γ (α * Γ) b_w b_a →
       b_a * (T.M ∩ M.S).card ≤ α * T.bound (α * Γ) b_w dd e * d.D.size d.D.computed
 
@@ -63,7 +63,7 @@ def IncompressibleContainedMatMulOn : Prop :=
   ∀ (Γ : ℕ) (α K b_w b_a μ : ℝ) (c d : Declaration) (ch : Chain c.D) (T : Threading c) (dd emax : ℕ)
     (M : PartialContainment c d),
     0 ≤ α → 0 < K → 0 < b_w → 0 < b_a → 0 < dd → 1 ≤ Γ → α * Γ ≤ K → 0 ≤ μ → μ ≤ 1 →
-    (∀ ℓ, dd ≤ ch.d ℓ) → (∀ ℓ, ch.e ℓ ≤ emax) → Complies Γ α d →
+    (∀ ℓ, dd ≤ ch.d ℓ) → (∀ ℓ, ch.e ℓ ≤ emax) → Complies Γ α d → Assumptions.BaselineRegistered c d M →
     (∀ v ∈ M.dark, (novelReads c {v} : ℝ) ≤ K) →
     Assumptions.TrainingIncompressible c ch T Γ K b_w b_a →
       max (min ((1 + √μ) ^ 2 * (b_w * b_a * dd / K)) (√2 * (1 + √μ) * √(1 - μ) * (b_a * √(b_w / K))))
@@ -80,7 +80,7 @@ def IncompressibleContainedTrainingOn : Prop :=
   ∀ (Γ : ℕ) (α K b_w b_a μ κ : ℝ) (c d : Declaration) (ch : Chain c.D) (T : Threading c) (dd emax : ℕ)
     (M : PartialContainment c d),
     0 ≤ α → 0 < K → 0 < b_w → 0 < b_a → 0 < dd → 1 ≤ Γ → α * Γ ≤ K → 0 ≤ μ → μ ≤ 1 →
-    (∀ ℓ, dd ≤ ch.d ℓ) → (∀ ℓ, ch.e ℓ ≤ emax) → Complies Γ α d →
+    (∀ ℓ, dd ≤ ch.d ℓ) → (∀ ℓ, ch.e ℓ ≤ emax) → Complies Γ α d → Assumptions.BaselineRegistered c d M →
     (∀ v ∈ M.dark, (novelReads c {v} : ℝ) ≤ K) →
     Assumptions.TrainingIncompressible c ch T Γ K b_w b_a →
     κ * c.D.size c.D.computed ≤ 2 * ch.G →
@@ -99,7 +99,7 @@ activations' half of training's incompressibility, `ActivationsIncompressible` o
 def ContainedFanOutOn : Prop :=
   ∀ (Γ : ℕ) (α K b_w b_a : ℝ) (c d : Declaration) (ch : Chain c.D) (dd emax : ℕ) (M : PartialContainment c d),
     0 ≤ α → 0 < K → 0 < b_w → 0 < b_a → 0 < dd → α * Γ ≤ K →
-    (∀ ℓ, dd ≤ ch.d ℓ) → (∀ ℓ, ch.e ℓ ≤ emax) → Complies Γ α d →
+    (∀ ℓ, dd ≤ ch.d ℓ) → (∀ ℓ, ch.e ℓ ≤ emax) → Complies Γ α d → Assumptions.BaselineRegistered c d M →
     Assumptions.ActivationsIncompressible c ch Γ K b_w b_a →
       b_a / max (emax : ℝ) (K / (4 * b_w * dd)) *
         (Finset.univ.filter fun p : (ℓ : Fin ch.L) × Fin ch.N × Fin (ch.e ℓ) × Fin (ch.d ℓ) =>
