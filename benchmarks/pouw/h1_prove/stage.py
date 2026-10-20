@@ -1,10 +1,13 @@
 """stage.py K WORK: the H1 tile unit's statement circuit, built once, and each requested round staged on it (the prover's).
 
 The circuit (`h1unit.Shape(K).stager`, written once to WORK/circuit.txt) is the long step at K = 4096, so it is built while
-the window is committed, served and drawn: `run.py` then drops a request in WORK/requests/ for each statement, ``NAME.json``
-``{"rows": rows.npz, "set": SET, "out": DIR}`` (`window.py open`'s rows, the drawn units' instances in order), and this
-stages it with C-Flock's `UnitStager.stage` under the window's own salts, so the statement's committed rows are the
-window's leaves. DIR gets inst.bin, pub.bin (the prover's) and stage.json, the last one written. WORK/requests/END stops it.
+the window is served and drawn: once `run.py` writes the window's public shape (WORK/window.json, ``{"k", "slot",
+"calls"}``), the statement is bound to the window's Program and template-instance partition (`h1unit.Shape.window`), so
+the Lean verifier derives each instance's unit from its own copy of them. `run.py` then drops a request in WORK/requests/
+for each statement, ``NAME.json`` ``{"rows": rows.npz, "set": SET, "out": DIR, "indices": [...]}`` (`window.py open`'s
+rows, the drawn units' instances in order, and their indices in the Program), and this stages it with C-Flock's
+`UnitStager.stage` under the window's own salts, so the statement's committed rows are the window's leaves. DIR gets
+inst.bin, pub.bin (the prover's) and stage.json, the last one written. WORK/requests/END stops it.
 
 The stager's check of the outputs against the IR reference (`UnitStager.reference_check`, the Boolean Definition's
 bit-sliced evaluation, hours at K = 4096) is replaced by `h1tile.reference`, the word reference, on each instance's codes,
@@ -27,6 +30,7 @@ sys.path.insert(0, str(HERE))
 sys.path.insert(0, str(HERE.parent / "hidden_zk"))
 
 import h1unit as U  # noqa: E402
+from verity.core.protocols.sampled_proofs.one_stage import partition as P  # noqa: E402
 
 NAME = "unit/pouw-h1-tile"
 
@@ -60,7 +64,18 @@ def main() -> None:
         import fast_stage
         fast_stage.install(work / "scratch")
     shape = U.Shape(k)
-    stager = shape.stager(NAME, circuit=work / "circuit.txt")
+    while not (work / "window.json").exists():
+        if (work / "requests" / "END").exists():
+            print("END before the window's shape", flush=True)
+            return
+        time.sleep(2)
+    win = json.loads((work / "window.json").read_text())
+    if win["k"] != k:
+        raise SystemExit(f"the window's K is {win['k']}, the stager's {k}")
+    program, query = shape.window([tuple(c) for c in win["calls"]], win["slot"])
+    part = P.partition(program, query)
+    t_bind = time.time()
+    stager = shape.stager(NAME, circuit=work / "circuit.txt", bind={"partition": P.digest(part), "program": part["program"]})
     if _ports(stager.ports) != _ports(shape.ports()):
         raise SystemExit(f"the statement's ports {_ports(stager.ports)} are not h1unit.Shape's {_ports(shape.ports())}")
     counts = stager.low.layout.counts
@@ -68,7 +83,8 @@ def main() -> None:
             "meta": stager.meta, "pin": stager.pin, "class": stager.class_sha512, "ands": counts["ands"],
             "k_log": stager.meta["k_log"], "vus_per_block": stager.meta["vus_per_block"],
             "circuit_bytes": (work / "circuit.txt").stat().st_size, "staging": stage,
-            "build_seconds": round(time.time() - t0, 1), "maxrss_gb": _rss_gb()}
+            "build_seconds": round(time.time() - t_bind, 1), "waited_for_window_seconds": round(t_bind - t0, 1),
+            "maxrss_gb": _rss_gb()}
     (work / "pin.txt").write_text(stager.pin)
     (work / "circuit.json").write_text(json.dumps(head, indent=1))
     print("BUILT " + json.dumps({x: head[x] for x in head if x != "meta"}), flush=True)
@@ -90,7 +106,9 @@ def main() -> None:
         salts = {p.name: [bytes(s) for s in z[f"s_{p.name}"]] for p in stager.ports}
         stager.reference_check = lambda _rows, outs, z=z: check_against_reference(z, outs)
         try:
-            got = stager.stage(rows, out, os.urandom(32), salts=salts, set_name=r["set"])
+            if [int(u) for u in r["indices"]] != [int(u) for u in z["units"]]:
+                raise ValueError(f"the request's indices {r['indices']} are not its rows' units {z['units'].tolist()}")
+            got = stager.stage(rows, out, os.urandom(32), salts=salts, indices=r["indices"], set_name=r["set"])
         except Exception as e:  # noqa: BLE001 - a refused round is reported in its stage.json, and the next one staged
             (out / "stage.json").write_text(json.dumps({"request": req.stem, "error": f"{type(e).__name__}: {e}"}))
             print(f"FAILED {req.stem}: {type(e).__name__}: {e}", flush=True)
