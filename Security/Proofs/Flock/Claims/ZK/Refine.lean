@@ -56,7 +56,9 @@ opening that fails (`strat_eval_cons`).
   whose `Hello`, opening check and coin reading are `coin-tree/hm96-sha512/v2`'s and whose tables are `T`'s. Its
   premises on the transport are the transport's trusts alone, each a named hypothesis for a stated reason: the
   server's `Hello` is the coin layer's (`LeanRelease.HelloEq`, Rust's `hello_with_nonce`), the firewall's own link and
-  `Finish` are `T`'s (`LinkRoundEq`, `FinalRoundEq`, Rust's `Firewall::root` and `Firewall::finish`), the transport
+  `Finish` are `T`'s (`LinkRoundEq`, `FinalRoundEq`; the link's roots are `flock-firewall link`'s, and at the
+  deployed tables `LinkRoundEq` follows from the transport handing it the tape's tables, `LinkRecheck`; the `Finish`
+  is Rust's `Firewall::finish`), the transport
   requests each opening at the committed schedule's place (`ReqsFollow`, `CoinOpen.Follows`, Rust's
   `coin_tree::Checked`) and hands the frame a rep state and coins read from the coins the openings open (`ReadsCoins`,
   Rust's `LeanFrame`), the `Finish` is one past the last coin, and `flock-firewall coins` reads the coin layer's `Hello`
@@ -573,9 +575,10 @@ theorem helloRefine_withStops (S : RefSession) (Rf : (x : Msg) → (Fin (refK x)
 
 /-- **The link is the session's**: after `Hello`'s answer, where the protocol has coins and the frame takes the
 answer's, the firewall's own link (its recheck's roots) is the session's switched link at the tape. A named hypothesis,
-one of the transport's trusts: the link (`link`) is the recheck's in Rust, the level-0 roots `Firewall::new` commits
-from the leaves under the salts on its tape and `Firewall::root` sends (`flock-circuit`), which no Lean code computes:
-`flock-firewall`'s commands are `coins`, `contract`, `frame` and `tap`. -/
+one of the transport's trusts: the link (`link`) is the recheck's, the level-0 roots `flock-firewall link` commits from
+the leaves under the salts on the firewall's tape (`Flock.Firewall.Link.root`), which `Firewall::new` runs and
+`Firewall::root` sends (`flock-circuit`). At the deployed tables it follows from the transport handing that command the
+tape's tables and framing its roots (`LeanRelease.LinkIs`, `LeanRelease.linkRoundEq_of_linkIs` in `LinkRecheck`). -/
 def LinkRoundEq (S : RefSession) (vs : S.SwVals) (L : LeanRelease Flock.Wit (S.refP.Nonce × S.refP.Rand))
     (x : Msg) (w : Flock.Wit) : Prop :=
   ∀ (ν : S.Nonce) (t : S.Tape) (m₀ ρ₀ : Msg), 0 < refK x → L.refusesCoins x (ν, t) [(m₀, ρ₀)] = false →
@@ -865,8 +868,8 @@ the tables' side. Each premise on the transport is a named trust, a fact about w
   `SessionConfig::hello_with_nonce`), and `flock-firewall coins` reads that one with its nonce
   (`LeanRelease.HelloDParses`: `Lean.Json.parse` is `partial`);
 * the transport requests each opening at the schedule's place (`LeanRelease.ReqsFollow`: Rust's `coin_tree::Checked`);
-* the firewall's own link and `Finish` are `T`'s (`LeanRelease.LinkRoundEq`, `FinalRoundEq`: Rust's `Firewall::root`
-  and `Firewall::finish`);
+* the firewall's own link and `Finish` are `T`'s (`LeanRelease.LinkRoundEq`: `flock-firewall link`'s roots, which
+  `Firewall::root` sends, from `LeanRelease.LinkIs` at the deployed tables; `FinalRoundEq`: Rust's `Firewall::finish`);
 * the transport hands the frame a rep state and coins that are functions `pc`, `cc` of the coins the openings open, on
   the histories its check passes (`LeanRelease.ReadsCoins`: Rust's `LeanFrame`);
 * the `Finish` is one past the last coin (`L.last`, the transport's schedule).
