@@ -23,7 +23,7 @@
   "K": 2200000.0,
   "Gamma": 6.4e+16,
   "b_tok": 2.2,
-  "description": "The same sessions with prompts arithmetic-coded against the committed base model (b_tok = 2.2, b_tok/entropy-coded central): K shrinks 9x for the same inference allowance. The auditor's lever. Assumes a public cap on the committed parameters' size, a few times the largest permitted model, proved inside the zero-knowledge proof, so no noise tables or corpora of that size can be committed.",
+  "description": "The same sessions with prompts arithmetic-coded against the committed base model (b_tok = 2.2, b_tok/entropy-coded central): K shrinks 9x for the same fresh prompt tokens per block (K caps a block's novel reads; the tokens it generates are never charged). The auditor's lever. Assumes a public cap on the committed parameters' size, a few times the largest permitted model, proved inside the zero-knowledge proof, so no noise tables or corpora of that size can be committed.",
   "theta_cap": true
  },
  {
