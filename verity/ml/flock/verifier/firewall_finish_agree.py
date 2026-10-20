@@ -7,12 +7,15 @@ firewalled `flock-circuit prove --zk` session dumped (`FC_FINISH_DUMP`), each an
 root the Lean link answered), and per rep `R`, `table{T}-rep{R}.req` (`Finish.parseRep`'s request) and
 `table{T}-rep{R}.proof` (`zk_finish`'s proof file). One `flock-firewall finish FINISH_ARG...` process (the session's
 statement: `--circuit`, `--public`, `--draw` its `session.json`, ...) gets every table's request, then its reps'; each answer
-must be the root or the proof file Rust has. Writes DIR/result.json; exits 1 on any disagreement.
+must be the root or the proof file Rust has. Then each rep's request with its passed values moved (`table{T}-rep{R}.vals`
+says where they sit) must stop `finish` with no file: a constraint fails on the rep's pads (`stopped`). Writes
+DIR/result.json; exits 1 on any disagreement.
 """
 from __future__ import annotations
 
 import argparse
 import json
+import random
 import re
 import subprocess
 import sys
@@ -29,6 +32,27 @@ def ask(p: subprocess.Popen, line: str, body: bytes) -> tuple[bytes | None, str]
     if not m:
         return None, head or f"no answer (exit {p.poll()})"
     return p.stdout.read(int(m.group(1))), head
+
+
+STOPPED = "stopped on perturbed values"
+
+
+def stopped(lean: str, args: list[str], dump: Path, t: int, r: int) -> dict:
+    """Rep `r` of table `t` again in a process of its own (a refusal ends one), every passed value moved by a random word: a
+    constraint then fails on the rep's pads, and `finish` must stop with no file (Rust's `constraints_failing_on_pads`)."""
+    off, n = map(int, (dump / f"table{t}-rep{r}.vals").read_text().split())
+    req = bytearray((dump / f"table{t}-rep{r}.req").read_bytes())
+    rng = random.Random(f"firewall-finish-agree/{t}/{r}")
+    for k in range(16 * n):
+        req[off + k] ^= rng.randrange(256)
+    p = subprocess.Popen([lean, "finish", *args], stdin=subprocess.PIPE, stdout=subprocess.PIPE)
+    got, head = ask(p, f"table {t}", (dump / f"table{t}.req").read_bytes())
+    if got is not None:
+        got, head = ask(p, f"rep {t} {r}", bytes(req))
+    p.stdin.close()
+    p.wait()
+    ok = got is None and head.startswith("err PROVER-STOPPED: the constraints ") and head.endswith(" fail on the rep's pads")
+    return {"what": f"table {t} rep {r} {STOPPED}", "ok": ok, "lean": head}
 
 
 def first_diff(a: bytes, b: bytes) -> int | None:
@@ -77,9 +101,17 @@ def main(argv=None) -> int:
                 break
     p.stdin.close()
     p.wait()
-    reps = [r for r in rows if "rep" in r["what"]]
-    ok &= bool(reps)
-    summary = {"ok": ok, "tables": len(tables), "reps": len(reps), "agree": sum(r["ok"] for r in rows), "rows": rows}
+    for t in tables:
+        for f in sorted(a.dump.glob(f"table{t}-rep*.vals")):
+            r = int(re.fullmatch(rf"table{t}-rep(\d+)\.vals", f.name).group(1))
+            row = stopped(a.lean, args, a.dump, t, r)
+            rows.append(row)
+            ok &= row["ok"]
+    reps = [r for r in rows if r["what"].endswith("proof file")]
+    stops = [r for r in rows if r["what"].endswith(STOPPED)]
+    ok &= bool(reps) and bool(stops)
+    summary = {"ok": ok, "tables": len(tables), "reps": len(reps), "stops": len(stops), "agree": sum(r["ok"] for r in rows),
+               "rows": rows}
     (a.out / "result.json").write_text(json.dumps(summary, indent=1))
     for r in rows:
         print(("AGREE " if r["ok"] else "DIFFER ") + json.dumps(r))

@@ -1143,8 +1143,9 @@ struct FirewallDraws {
 
 /// `FC_FINISH_DUMP=DIR`: each firewalled table's request to `flock-firewall finish` and the root the Lean link answered
 /// (`table{T}.req`, `table{T}.root`, tables numbered as their firewalls start), and each rep's request
-/// (`Flock.Firewall.Finish.parseRep`) beside the proof file Rust's `zk_finish` computed (`table{T}-rep{R}.req`, `.proof`): the
-/// difftest of `flock-firewall finish` against `zk_finish`.
+/// (`Flock.Firewall.Finish.parseRep`) beside the proof file Rust's `zk_finish` computed (`table{T}-rep{R}.req`, `.proof`), and
+/// where the request's passed values sit (`.vals`: their byte offset and word count): the difftest of `flock-firewall finish`
+/// against `zk_finish`.
 fn finish_dump() -> Option<std::path::PathBuf> {
     std::env::var_os("FC_FINISH_DUMP").map(Into::into)
 }
@@ -1171,6 +1172,7 @@ impl RepDump {
         }
         b.extend_from_slice(&pads.tau_salt);
         b.extend_from_slice(salts);
+        let vals_at = format!("{} {}\n", b.len(), self.vals.len());
         b.extend(f128_bytes(&self.vals));
         b.extend((self.extras.len() as u64).to_le_bytes());
         for x in &self.extras {
@@ -1184,7 +1186,7 @@ impl RepDump {
             b.extend(f128_bytes(c));
         }
         let stem = format!("table{}-rep{}", self.table, self.rep);
-        for (ext, bytes) in [("req", b.as_slice()), ("proof", proof)] {
+        for (ext, bytes) in [("req", b.as_slice()), ("proof", proof), ("vals", vals_at.as_bytes())] {
             let p = self.dir.join(format!("{stem}.{ext}"));
             std::fs::write(&p, bytes).unwrap_or_else(|e| panic!("FC_FINISH_DUMP: {}: {e}", p.display()));
         }
