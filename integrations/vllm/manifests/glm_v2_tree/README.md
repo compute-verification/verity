@@ -142,7 +142,9 @@ worktree at a commit the guard accepts (`git worktree add /tmp/glm-v2-SHA SHA`).
 2. Window A (`gpu_batch.sh a [NODE] [ROW]`, NODE vy-glm53-eu by default, vy-glm53-h8 or any vy-glm53-* 8x H200 node): the four
    rows' Match GPU legs (`match_gpu.sh`), in value order (B1 greedy, B8 greedy, B8 stochastic, B32) so a short window lands the
    most. On a preemptible node an evicted leg reruns with `gpu_batch.sh a NODE ROW`, which moves the evicted `match/` aside (a
-   `match/` whose legs ended is refused). Each leg's
+   `match/` whose legs ended is refused). A row's capture also waits for its room on `/workspace` (`DISK_NEED_GIB`, from the v1
+   captures: B1 104 GiB, B8 greedy 312, B8 stochastic 341, B32 about 1100 scaled), checked once the GPUs are free; eu had 477
+   GiB free at window A's start, which holds B1's and B8 greedy's, so the later rows' legs start once room is made. Each leg's
    engines read `gpu_memory_utilization` back from their `vllm_config`, the driver and each rank (the no-observer control: the
    driver alone; `$OUT/gpu_memory_utilization.json`: 0.92, vLLM's default, exit 12 otherwise). They need no Build, so nothing
    is copied to the node first: the capture's `--build-rank` registers a Build's

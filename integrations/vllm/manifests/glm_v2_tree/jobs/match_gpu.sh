@@ -4,13 +4,14 @@
 # the Build of record in the row dir (copy_rowdir.sh), every rank's request Programs recording POST_LOAD, which the capture
 # registers as the rank's roots (`--build-rank`, `component_programs.post_load_tensors`): refused (exit 2) otherwise.  The legs
 # take the node's lease themselves (gpu-lease 8 --wait, around each leg) once every GPU reads 0 MiB and no preemptible lease is
-# held: queued behind the batch's other GPU jobs, never preempting.  A match/ with no gpu_legs.json is an
+# held, the first also once /workspace has the capture's room (DISK_NEED_GIB): queued behind the batch's other GPU jobs, never
+# preempting.  A match/ with no gpu_legs.json is an
 # evicted job's and is moved aside (match.evicted-*); one whose legs ended is refused.  After the legs, with no lease, the job
 # records each engine's gpu_memory_utilization read back from its vllm_config, the driver's and each rank's (the control, with no
 # observer, the driver's alone; $OUT/gpu_memory_utilization.json; exit 12 unless every one is GPU_UTIL), and hashes match/ and $SW/$ROW.tree (REF@SHA: every job of the row refuses another tree) into
 # $OUT/match.sha256 (paths relative to $SW) for the copy to the CPU node that runs the Match's CPU phase (README "GPU batch").
 #   research run --on vy-glm53-eu --mem-gb 400 --timeout 3h --source . --cwd source --project verity -- env ROW=... bash integrations/vllm/manifests/glm_v2_tree/jobs/match_gpu.sh
-# env: ROW, [SW], [REF] (model.sh's defaults).
+# env: ROW, [SW], [REF] (model.sh's defaults), [DISK_NEED_GIB: by row, below].
 set -uo pipefail
 : "${ROW:?ROW}"
 TREE=$PWD
@@ -31,10 +32,17 @@ unset NCCL_P2P_DISABLE VLLM_USE_DEEP_GEMM
 export MATCH_PHASE=gpu PY=/workspace/cp/venv312/bin/python HF_HOME=/workspace/cp/hf GPU_UTIL=0.92 COMMIT_GPU_UTIL=0.92
 export VLLM_EXECUTE_MODEL_TIMEOUT_SECONDS=3600
 W=$(mktemp -d /tmp/$V2-match.XXXXXX); trap 'rm -rf "$W"' EXIT
+# The capture's room on /workspace, from the v1 legs' match/capture (B1 104 GiB, B8 greedy 312, B8 stochastic 341; B32's
+# unmeasured, scaled from B8): the first leg also waits for it, read once the GPUs are free, so after the leg before it wrote.
+case $ROW in *__b1__*) need=110 ;; *__b8__*__greedy__*) need=330 ;; *__b8__*) need=360 ;; *__b32__*) need=1100 ;; *) need=110 ;; esac
+export DISK_NEED_GIB=${DISK_NEED_GIB:-$need}
+echo "the capture waits for $DISK_NEED_GIB GiB free on /workspace ($(df -B1G --output=avail /workspace | tail -1 | tr -d ' ') GiB now)"
 cat >"$W/gpu-lease" <<'EOF'
 #!/usr/bin/env bash
 while nvidia-smi --query-gpu=memory.used --format=csv,noheader,nounits | awk '$1 != 0 {b = 1} END {exit !b}' \
-  || /usr/local/bin/gpu-lease status | grep -q ' held .*preempt=1 '; do sleep 30; done
+  || /usr/local/bin/gpu-lease status | grep -q ' held .*preempt=1 ' \
+  || { [ ! -e "$(dirname "$0")/disk-ok" ] && [ "$(df -B1G --output=avail /workspace | tail -1)" -lt "$DISK_NEED_GIB" ]; }; do sleep 30; done
+touch "$(dirname "$0")/disk-ok"
 exec /usr/local/bin/gpu-lease "$@"
 EOF
 chmod +x "$W/gpu-lease"
