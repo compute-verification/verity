@@ -1333,6 +1333,11 @@ def cmd_cancel(argv: list[str]) -> int:
     if scope.get("runner_kills_after_s") is not None:
         print(f"research cancel: {run_dir.name}: the runner SIGKILLs what is left of the run {scope['runner_kills_after_s']:g} s after the "
               f"SIGTERM and records it in status.json (`scope_end`)")
+    elif scope.get("cancel_killed_after_s") is not None:
+        left = scope.get("left") or []
+        print(f"research cancel: {run_dir.name}: {scope.get('why')}, so the cancel SIGKILLed what was left of the run "
+              f"{scope['cancel_killed_after_s']:g} s after the SIGTERM ({(scope.get('SIGKILL') or {}).get('n', 0)} process(es)); "
+              + (f"still there: {', '.join(left)}" if left else "none is left") + f"; status.json `scope_end` {scope.get('status_json')}")
     if ran := _ran_text(R.summarize(run_dir), datetime.now(timezone.utc)):
         print(f"research cancel: {run_dir.name} {ran}")
     return 0
