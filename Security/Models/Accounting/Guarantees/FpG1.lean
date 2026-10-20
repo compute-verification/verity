@@ -19,12 +19,15 @@ The g1 premise reads what the layer commits (`ProofLayer.committed`) at a value 
 empty reading nor an empty proof layer meets it: a layer that commits an H1 weight off E4M3's grid fails it
 (`Proofs.Pouw.FpG1.H1`'s `offGrid_not_fp8`), while it meets every premise the record states
 (`Proofs.Accounting.Headline.FpG1`'s `offGrid_record_applies`). It narrows the windows the statement covers, and no
-more: the conclusion reads no operand value, so the bound is the record's, and a layer may carry on-grid leaves that
-no relation reads, which is why this statement is the record's at g1's windows (RT2-FP-13 found the same of #2770's
-first g1 statements). What is g1's is
-that the premises hold at an honest g1 window: `Proofs.Accounting.Headline.FpG1`'s `sm120FpG1_honest_applies` and
-`sm120W4a8G1_honest_applies` discharge every premise at an honest window whose layer checks H1's committed ranges,
-which g1's leaves meet (`Leaves.fp8_inH1`, `Leaves.w4a8_inH1`).
+more: the g1 premise does no work in the bound. The conclusion reads no operand value, so the bound is the record's,
+and a layer may carry on-grid leaves that no relation reads, which is why this statement is the record's at g1's
+windows (RT2-FP-13 found the same of #2770's first g1 statements).
+
+What is g1's is that the premises hold at an honest g1 window: `Proofs.Accounting.Headline.FpG1`'s
+`sm120FpG1_honest_applies` and `sm120W4a8G1_honest_applies` discharge every premise at an honest window whose layer
+checks H1's committed ranges, which g1's leaves meet (`Leaves.fp8_inH1`, `Leaves.w4a8_inH1`). The witness isn't a
+served window: its relation is H1's ranges, not a served Program's, its receipt game is the honest one, and its time
+is exactly the credit, so it shows only that every premise can hold at once.
 
 The statements:
 
@@ -43,6 +46,7 @@ window whose proofs, at least one a round (`n_π + 1`), open the round's operand
 activations and to 104 for weights): under the record's premises, outside an event of probability at most `2^-40`
 every accepted window's time is at least `1 − 656/100000` (`1 − 0.656%`) of the credit `T_cred = B_♭/f_max`. The
 credit counts the int8 GEMM's MACs that carry the FP8 model's products; whether they are its useful work is open.
+The g1 premise does no work in the bound: it narrows the windows covered, and the bound is the record's.
 `ε_sample` and the Fiat–Shamir premium are separate lines, as in the record. -/
 def Sm120FpG1SheetHeadline : Prop :=
   ∀ (Ω : Type) [Fintype Ω] (Pl : Play Ω Sm120.checks (Fin 122) (Fin 17) Unit Empty) (G : ReceiptGame Ω Sm120.checks)
@@ -66,7 +70,8 @@ window whose proofs, at least one a round, open the round's operand leaves besid
 leaf W4A8-g1's on H1's grids (`Leaves.W4a8 Grids.h1`: the record's int8 activations in `[−126, 126]`, weights a doubled
 E2M1 level under an integer block scale in `[1, 9]`): under the record's premises, outside an event of probability at
 most `2^-40` every accepted window's time is at least `1 − 656/100000` of the credit `T_cred = B_♭/f_max`. The credit
-counts the int8 GEMM's MACs that carry the FP4 weights' products; whether they are the model's useful work is open. -/
+counts the int8 GEMM's MACs that carry the FP4 weights' products; whether they are the model's useful work is open.
+The g1 premise does no work in the bound: it narrows the windows covered, and the bound is the record's. -/
 def Sm120W4a8G1SheetHeadline : Prop :=
   ∀ (Ω : Type) [Fintype Ω] (Pl : Play Ω Sm120.checks (Fin 122) (Fin 17) Unit Empty) (G : ReceiptGame Ω Sm120.checks)
     (Uf : Unfolded Ω Sm120.checks) {W : Type} {nπ : ℕ} (pf : ProofLayer Ω Sm120.checks (nπ + 1) (Leaves × W))

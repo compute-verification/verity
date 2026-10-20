@@ -6,7 +6,8 @@ import Models.Accounting.Guarantees.FpG1
 # FP8-g1's and W4A8-g1's headlines on sm_120, and an honest g1 window that meets every premise
 
 `Sm120FpG1SheetHeadline` and `Sm120W4a8G1SheetHeadline` are `Sm120SheetHeadline` at `V = Leaves × W` and
-`n_π + 1` proofs a round: the g1 premise is dropped and the record's applies as it stands.
+`n_π + 1` proofs a round: the g1 premise is dropped and the record's applies as it stands. The g1 premise does no work
+in the bound.
 
 The witness is an honest window on any finite coins `Ω`, generic in the rounds `n` and taken at `S = 48,000`:
 
@@ -30,8 +31,9 @@ on every path, its time exactly the credit (`honest_accepted`, `honestRun_time`)
 `offGrid_record_applies`: at `Pouw.FpG1.offGrid`'s leaves, in H1's ranges but off E4M3's grid, the record's premises
 all hold and FP8-g1's fails (`offGrid_not_fp8`), so the record's premises don't imply the g1 premise.
 
-The witness's relation checks H1's ranges; it is no model of the served Programs, which no Lean here models
-(`ProofsPin`'s docstring). Its receipt game is the honest one, so it doesn't exercise H1's coin-keyed receipt check.
+The witness isn't a served window. Its relation checks H1's ranges; it is no model of the served Programs, which no
+Lean here models (`ProofsPin`'s docstring). Its receipt game is the honest one, so it doesn't exercise H1's coin-keyed
+receipt check, and its time is exactly the credit, so it shows only that every premise can hold at once.
 -/
 
 namespace Accounting.SecurityProofs.FpG1
@@ -394,7 +396,7 @@ theorem record_of_premises {Ω : Type} [Fintype Ω] {Pl : Play Ω Sm120.checks (
 
 /-- **Every premise the record states holds at the honest window**, for any leaves `v` in H1's ranges: the honest
 play, receipt game and unfolded share over `S = 48,000` rounds, the honest proof layer at `v`, and
-`δ_fork = δ_ZK = 0`. -/
+`δ_fork = δ_ZK = 0`. The witness isn't a served window: its relation is H1's ranges, not a served Program's. -/
 theorem honest_premises (Ω : Type) [Fintype Ω] {v : Leaves} (hv : v.InH1) :
     RecordPremises (honestPlay Ω Sm120.checks honestRun) (honestGame Ω Sm120.checks) (honestUnfolded Ω Sm120.checks)
       (honestLayer Ω Sm120.checks v) 0 0 :=
@@ -414,7 +416,8 @@ theorem honest_accepted (Ω : Type) (x : Paths Ω Sm120.checks) :
   ⟨trivial, honestRun_time⟩
 
 /-- **Every premise of FP8-g1's statement holds at an honest FP8-g1 window**: the honest encoder's leaves on H1's
-grids, at any scales and model values, committed at every round, with the record's premises. -/
+grids, at any scales and model values, committed at every round, with the record's premises. The witness isn't a
+served window (`honest_premises`). -/
 theorem sm120FpG1_honest (Ω : Type) [Fintype Ω] (sa sw : ℕ → ℚ) (x y : ℕ → ℕ → ℚ) :
     (∀ p w i, ((honestLayer Ω Sm120.checks (encodeFp8 Grids.h1 sa sw x y)).committed p w i).1.Fp8 Grids.h1) ∧
       RecordPremises (honestPlay Ω Sm120.checks honestRun) (honestGame Ω Sm120.checks)
@@ -422,7 +425,8 @@ theorem sm120FpG1_honest (Ω : Type) [Fintype Ω] (sa sw : ℕ → ℚ) (x y : �
   ⟨fun _ _ _ => encodeFp8_fp8 Grids.h1 sa sw x y, honest_premises Ω (Leaves.fp8_inH1 (encodeFp8_fp8 _ sa sw x y))⟩
 
 /-- **Every premise of W4A8-g1's statement holds at an honest W4A8-g1 window**: the honest encoder's leaves on H1's
-grids, at any scales, block scales and model values, committed at every round, with the record's premises. -/
+grids, at any scales, block scales and model values, committed at every round, with the record's premises. The
+witness isn't a served window (`honest_premises`). -/
 theorem sm120W4a8G1_honest (Ω : Type) [Fintype Ω] (sa sw : ℕ → ℚ) (m : ℕ → ℕ → ℕ) (x y : ℕ → ℕ → ℚ) :
     (∀ p w i, ((honestLayer Ω Sm120.checks (encodeW4a8 Grids.h1 sa sw m x y)).committed p w i).1.W4a8 Grids.h1) ∧
       RecordPremises (honestPlay Ω Sm120.checks honestRun) (honestGame Ω Sm120.checks)
