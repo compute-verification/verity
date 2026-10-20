@@ -9,14 +9,17 @@ commitment (`FlockComplete.commitPZk` in the analysis), here as the code the fir
 * `rows`: level 0's padded codeword. Row `q` holds the table's `2^lanes` witness lanes, lane `l` the words
   `g[c·2^lanes + l]`, then the four extra lanes `extra e`; each entry is the lane's encoding at `ω_q`,
   `Σ_c v(c)·X̂_c(ω_q)`, plus its padding `(c + Ŵ_cols(ω_q))·Σ_i μ_l[i]·X̂_i(ω_q)` (`padF`, lane `l`'s coefficients
-  `lanePad l`, `t_pad` of them).
+  `lanePad l`, `t_pad` of them). `rowsDirect` evaluates each entry so; `rowsFft` takes each lane's entry as one polynomial
+  in the novel basis over `cols + 1` bits (`coeffs`) and evaluates it on all `2^d` points by the additive FFT (`fft`),
+  `d·2^d` products a lane where `rowsDirect` takes `2^(d + cols)`. `rows` is `rowsFft` where the padding fits below
+  `2^cols` and the domain in a word, as at `m` = 25, 26 and 27.
 * `leaves`: row `q`'s `hm96-sha512/v1` leaf under the salt `salt q` fitted to 192 bytes, computed in tasks of `2^5` rows
   (`parRange`).
 * `cap`: the Merkle nodes `SHA-512(l ‖ r)` `d − cap` levels up from the leaves (`layer`), and `root` their concatenation,
   at level 0 of the table's `--zk` schedule (`Zk.schedule m`, which also fixes `t_pad`).
 
-`flock-firewall link` serves it to the firewall (`cmd`). Rust's `commit_zk` (its additive FFT) is the speed reference: the
-firewall holds its own root to this one and sends this one.
+`flock-firewall link` serves it to the firewall (`cmd`). Rust's `commit_zk` is the speed reference: the firewall holds its
+own root to this one and sends this one.
 -/
 import Flock.Firewall.Coins
 import Flock.Ligerito
@@ -50,9 +53,50 @@ def row (lv : Level) (g : Array F128) (extra : Nat → Nat → F128) (sv : Array
     let v : Nat → F128 := if l < lanes then fun c => g[c * lanes + l]! else extra (l - lanes)
     sumF (2 ^ lv.cols) (fun c => v c * xh[c]!) + padF ws lv.cols mus[l]!
 
-/-- **Level 0's padded codeword** of the packed table `g`, with the extra lanes `extra` and the paddings `lanePad`. -/
-def rows (lv : Level) (tPad : Nat) (g : Array F128) (extra lanePad : Nat → Nat → F128) : Array (Array F128) :=
+/-- **Level 0's padded codeword**, row by row: each entry evaluated on its own (`row`). -/
+def rowsDirect (lv : Level) (tPad : Nat) (g : Array F128) (extra lanePad : Nat → Nat → F128) : Array (Array F128) :=
   (Array.range (2 ^ lv.d)).map (row lv g extra (svTable (lv.cols + 1)) (musOf lv tPad lanePad))
+
+/-- Level `s`'s twiddles `Ŵ_s(ω_{r·2^s})`, `r < 2^(d − s)`, for each `s < n`. -/
+def twiddles (sv : Array F128) (d n : Nat) : Array (Array F128) :=
+  (Array.range n).map fun s => (Array.range (2 ^ (d - s))).map fun r => (whats sv (r * 2 ^ s) (s + 1))[s]!
+
+/-- **The additive FFT** in the novel basis: entry `r < 2^(d − s)` of `fft tw d s n u` is
+`Σ_{c < 2^n} u(c)·Π_{i ∈ bits(c)} Ŵ_{s+i}(ω_{r·2^s})`, at the twiddles `tw = twiddles sv d n'` (`s + n ≤ n'`). Its halves
+on `u`'s even and odd coefficients read `Ŵ_j` for `j > s` only, which is the same at `ω_{r·2^s}` and `ω_{⌊r/2⌋·2^(s+1)}`. -/
+def fft (tw : Array (Array F128)) (d : Nat) : (s n : Nat) → (Nat → F128) → Array F128
+  | s, 0, u => Array.replicate (2 ^ (d - s)) (u 0)
+  | s, n + 1, u =>
+    let e := fft tw d (s + 1) n (fun c => u (2 * c))
+    let o := fft tw d (s + 1) n (fun c => u (2 * c + 1))
+    let t := tw[s]!
+    (Array.range (2 ^ (d - s))).map fun r => e[r / 2]! + t[r]! * o[r / 2]!
+
+/-- Entry `i` of `mu`, 0 past its end. -/
+def muAt (mu : Array F128) (i : Nat) : F128 := if i < mu.size then mu[i]! else 0
+
+/-- A lane's entry as one polynomial in the novel basis over `cols + 1` bits: its words `v c` plus its padding
+`(c + Ŵ_cols)·Σ_i μ_i·X̂_i`, which is `c·μ_i` at `X̂_i` and `μ_i` at `X̂_{2^cols + i} = X̂_i·Ŵ_cols` (`μ` below `2^cols`). -/
+def coeffs (cols : Nat) (v : Nat → F128) (mu : Array F128) (c : Nat) : F128 :=
+  if c < 2 ^ cols then v c + Zk.PAD_C * muAt mu c else muAt mu (c - 2 ^ cols)
+
+/-- Lane `l`'s coefficients (`coeffs`): its words in `g` or its extra lane, and its padding. -/
+def laneCoeffs (lv : Level) (tPad : Nat) (g : Array F128) (extra lanePad : Nat → Nat → F128) (l : Nat) : Nat → F128 :=
+  let lanes := 2 ^ lv.lanes
+  coeffs lv.cols (if l < lanes then fun c => g[c * lanes + l]! else extra (l - lanes)) ((Array.range tPad).map (lanePad l))
+
+/-- **Level 0's padded codeword** by the FFT, one task to a lane. -/
+def rowsFft (lv : Level) (tPad : Nat) (g : Array F128) (extra lanePad : Nat → Nat → F128) : Array (Array F128) :=
+  let nL := 2 ^ lv.lanes + Zk.EXTRA_LANES
+  let tw := twiddles (svTable (lv.cols + 1)) lv.d (lv.cols + 1)
+  let es := ((Array.range nL).map fun l =>
+    Task.spawn fun _ => fft tw lv.d 0 (lv.cols + 1) (laneCoeffs lv tPad g extra lanePad l)).map Task.get
+  (Array.range (2 ^ lv.d)).map fun q => (Array.range nL).map fun l => es[l]![q]!
+
+/-- **Level 0's padded codeword** of the packed table `g`, with the extra lanes `extra` and the paddings `lanePad`: by the
+FFT where the padding fits below `2^cols` and the domain in a word, else row by row. -/
+def rows (lv : Level) (tPad : Nat) (g : Array F128) (extra lanePad : Nat → Nat → F128) : Array (Array F128) :=
+  if tPad ≤ 2 ^ lv.cols ∧ lv.d ≤ 64 then rowsFft lv tPad g extra lanePad else rowsDirect lv tPad g extra lanePad
 
 /-- The first `n` bytes of `b`, zero-padded to `n`. -/
 def fitBytes (n : Nat) (b : ByteArray) : ByteArray :=
@@ -91,10 +135,9 @@ def CHUNK : Nat := 5
 
 /-- **The leaves** of level `lv`'s padded codeword under the table's salts, `2^CHUNK` rows to a task. -/
 def leaves (lv : Level) (tPad : Nat) (i : In) : Array ByteArray :=
-  let sv := svTable (lv.cols + 1)
-  let mus := musOf lv tPad i.lanePad
+  let rs := rows lv tPad i.g i.extra i.lanePad
   let k := min lv.d CHUNK
-  parRange (fun q => leaf (row lv i.g i.extra sv mus q) (i.salt q)) (2 ^ (lv.d - k)) (2 ^ k)
+  parRange (fun q => leaf rs[q]! (i.salt q)) (2 ^ (lv.d - k)) (2 ^ k)
 
 /-- **The cap** at level `lv`: the nodes `d − cap` levels up from the leaves. -/
 def cap (lv : Level) (tPad : Nat) (i : In) : Array ByteArray :=
