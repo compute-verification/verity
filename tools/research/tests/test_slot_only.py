@@ -179,20 +179,25 @@ def test_an_auditor_host_stops_every_live_run_but_the_commands_its_marker_lists(
     assert S.auditor_commands(tmp_path / "absent") == []
 
 
-def test_deploy_makes_vy_challenger_1_an_auditor_host_of_the_challenger_alone():
-    """The deployed marker lists the challenger's run.sh alone and goes, with the timer that enforces it, to vy-challenger-1 only;
-    the nodes' shared peers file and the cluster's description don't name the host."""
+def test_deploy_makes_vy_challenger_1_an_auditor_host_that_takes_no_research_run():
+    """The deployed marker lists no command (the challenger runs only through vy-challenger-gate) and goes, with the timer that
+    enforces it, to vy-challenger-1 only; the nodes' shared peers file and the cluster's description don't name the host."""
     import tomllib
     from pathlib import Path
 
     nebius = Path(S.__file__).resolve().parent
-    assert S.auditor_commands(nebius / "auditor") == [["bash", "benchmarks/live_challenger/run.sh"]]
+    assert (nebius / "auditor").read_text().startswith("#") and S.auditor_commands(nebius / "auditor") == []
     rows = tomllib.loads((nebius / "deploy.toml").read_text())["file"]
     on = {e["path"]: e["nodes"] for e in rows if e.get("src", "").endswith(("/auditor", "/vy-auditor-only.service",
                                                                             "/vy-auditor-only.timer", "/peers-challenger"))}
     assert on == {p: ["vy-challenger-1"] for p in ("/etc/vy/auditor", "/etc/systemd/system/vy-auditor-only.service",
                                                    "/etc/systemd/system/vy-auditor-only.timer", "/etc/vy/peers")}
     assert "--auditor --marker /etc/vy/auditor" in (nebius / "vy-auditor-only.service").read_text()
+    gate = {e["path"]: e["nodes"] for e in rows if "/pods/nebius/challenger/" in e.get("src", "")}
+    assert gate == {p: ["vy-challenger-1"] for p in ("/usr/local/sbin/vy-challenger-gate", "/usr/local/sbin/vy-challenger-setup",
+                                                     "/usr/local/sbin/vy-challenger-pin", "/etc/systemd/system/vy-challenger@.service",
+                                                     "/etc/ssh/sshd_config.d/11-vy-admin.conf")}
+    assert "User=auditor" in (nebius / "challenger" / "vy-challenger@.service").read_text()
     assert not [e["path"] for e in rows if e.get("src", "").endswith("/peers") and "vy-challenger-1" in e["nodes"]]
     assert "vy-challenger" not in (nebius / "peers").read_text()
     assert "vy-challenger" not in (nebius.parents[5] / "infra/cluster/descriptions/nebius.toml").read_text()

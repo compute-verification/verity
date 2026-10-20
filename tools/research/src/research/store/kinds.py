@@ -106,6 +106,12 @@ KINDS: dict[str, str] = {
                         "{program.json, units.jsonl} + values/<sha256>.<dtype>; the flat vllm-vu-set/v1 sets are its extractions",
     "vllm-vu-export/v1": "one row's VU export: payload = export.json (draw, per-family counts, sets); meta {row, model, run, run_root}; "
                          "refs.sets = the vllm-vu-set/v1 artifacts, refs.run_record",
+    "challenger-ledger/v1": "the auditor host's challenger ledger (benchmarks/live_challenger/auditor.py, publish.sh): payload "
+                            "windows.jsonl, one signed open entry a window and one end entry a session; meta {host, entries, sha512, "
+                            "key_sha512}",
+    "challenger-session/v1": "one session of the auditor host's challenger: payload tree = request.json + out/ (record.json, key.json, "
+                             "releases.jsonl, challenger.json, ...); meta {session, host}; refs.ledger, the challenger-ledger/v1 "
+                             "whose end entry seals out/",
 }
 
 
