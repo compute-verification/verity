@@ -1,8 +1,9 @@
 """The challenger's host process (`serve.py`) over loopback with a test key and the Lean verifier's coins stubbed
 (`stub_serve.py`): it draws every coin and salt from those coins, signs and writes its record before it listens, serves one
 session and publishes nothing secret; the verifier checks the session from the process's `out/` alone.  A Lean that can't
-answer starts no session, a second session signs at the key's next leaf, a key inside `out/` is refused, a broken sequence
-ends the session with exit 1, and with `--peer` the tunnel opens once the challenger listens and a tunnel that ends first
+answer starts no session, a second session signs at the key's next leaf, a key inside `out/` is refused, a refused hello
+is logged and the next connection taken, a broken sequence after the hello ends the session with exit 1, a salt opens only
+after `--root`, and with `--peer` the tunnel opens once the challenger listens and a tunnel that ends first
 ends it."""
 
 from __future__ import annotations
@@ -109,11 +110,14 @@ def test_a_key_inside_out_is_refused(tmp_path):
     assert not (tmp_path / "out" / "key").exists()
 
 
-def test_a_broken_sequence_ends_the_session_with_exit_1(tmp_path):
+def test_a_broken_sequence_after_the_hello_ends_the_session_with_exit_1(tmp_path):
     proc, out, first = start(tmp_path)
     host, port = first.split()[1].split(":")
-    head = json.dumps({"type": "open", "label": "positions", "index": 0, "after": "00" * 64}).encode()
+    hello = json.dumps({"type": "hello"}).encode()
+    head = json.dumps({"type": "close", "extra": 1}).encode()
     with socket.create_connection((host, int(port))) as s:
+        s.sendall(R.HEADER.pack(len(hello), 0) + hello)
+        assert s.recv(1 << 16)
         s.sendall(R.HEADER.pack(len(head), 0) + head)
         assert s.recv(1 << 16)
     code, _ = finish(proc)
@@ -121,27 +125,60 @@ def test_a_broken_sequence_ends_the_session_with_exit_1(tmp_path):
     assert json.loads((out / "challenger.json").read_text())["ended"].startswith("a client's frames are hello")
 
 
-def test_a_session_with_a_secret_file_serves_only_the_hello_that_carries_it_and_names_its_window_root(tmp_path):
+def test_refused_hellos_are_logged_and_the_next_connection_is_taken_until_one_is_accepted_then_none(tmp_path):
+    """A refused hello releases nothing, so it can't spend the window (proofs, on the thread): the session takes the next
+    connection, and once a hello is accepted it stops listening."""
     secret = bytes(range(32))
     (tmp_path / "secret").write_text(secret.hex() + "\n")
     root = "ab" * 64
-    proc, out, first = start(tmp_path, "denied", None, "--secret-file", str(tmp_path / "secret"), "--root", root)
+    proc, out, first = start(tmp_path, "out", None, "--secret-file", str(tmp_path / "secret"), "--root", root)
+    address = first.split()[1]
+    host, port = address.split(":")
     with pytest.raises(C.CoinError, match="the session's secret"):
-        R.RemoteChallenger.connect(first.split()[1])
-    code, _ = finish(proc)
-    summary = json.loads((out / "challenger.json").read_text())
-    assert code == 1 and "secret" in summary["ended"] and summary["released"] == {"positions": 0, "replay": 0}
-
-    proc, out, first = start(tmp_path, "served", None, "--secret-file", str(tmp_path / "secret"), "--root", root)
-    with R.RemoteChallenger.connect(first.split()[1], secret) as client:
+        R.RemoteChallenger.connect(address)
+    with pytest.raises(C.CoinError, match="not the session's"):
+        R.RemoteChallenger.connect(address, bytes(32))
+    socket.create_connection((host, int(port))).close()
+    with R.RemoteChallenger.connect(address, secret) as client:
+        with pytest.raises(ConnectionRefusedError):
+            socket.create_connection((host, int(port)))
         C.LiveRecord(client, "positions", itertools.count().__next__).record(bytes(64))
     assert finish(proc)[0] == 0
     summary = json.loads((out / "challenger.json").read_text())
     assert summary["window_root"] == root and summary["released"] == {"positions": 1, "replay": 0}
+    assert summary["ended"] == "closed by the client" and summary["refused_hellos"] == 3
+    logged = [json.loads(ln) for ln in (out / "hellos.jsonl").read_text().splitlines()]
+    assert [h["n"] for h in logged] == [0, 1, 2] and "secret" in logged[0]["reason"] and "closed" in logged[2]["reason"]
 
     for bad in (["--root", root.upper()], ["--root", root + "\n"]):
         proc, out, first = start(tmp_path, "bad", None, *bad)
         assert finish(proc)[0] == 2 and first == ""
+
+
+SALTED = ["--families", json.dumps([["pouw/salt", 1], ["pouw/round", 1]])]
+
+
+@pytest.mark.parametrize("after, served", [("ab", True), ("cd", False)])
+def test_with_a_root_a_salt_opens_only_after_it(tmp_path, after, served):
+    """RT4-INT-24's witness: a session's salt followed a root unrelated to its window's Commit."""
+    proc, out, first = start(tmp_path, "out", None, "--root", "ab" * 64, *SALTED)
+    with R.RemoteChallenger.connect(first.split()[1]) as client:
+        record = C.LiveRecord(client, "pouw/salt", itertools.count().__next__)
+        if served:
+            record.record(bytes.fromhex(after * 64))
+        else:
+            with pytest.raises(C.CoinError, match="only after the window's Commit root"):
+                record.record(bytes.fromhex(after * 64))
+    code, _ = finish(proc)
+    summary = json.loads((out / "challenger.json").read_text())
+    assert (code, summary["released"]["pouw/salt"]) == ((0, 1) if served else (1, 0))
+
+
+def test_without_a_root_a_salt_opens_after_any_root(tmp_path):
+    proc, out, first = start(tmp_path, "out", None, *SALTED)
+    with R.RemoteChallenger.connect(first.split()[1]) as client:
+        C.LiveRecord(client, "pouw/salt", itertools.count().__next__).record(bytes(64))
+    assert finish(proc)[0] == 0
 
 
 def fake_ssh(tmp_path: Path, body: str) -> dict:
@@ -176,7 +213,7 @@ def test_a_tunnel_that_ends_before_a_client_connects_ends_the_session(tmp_path):
     code, _ = finish(proc)
     assert code == 1
     assert json.loads((out / "challenger.json").read_text())["ended"] == (
-        "the tunnel to vy-nebius-2 ended before a client connected")
+        "the tunnel to vy-nebius-2 ended before a client's hello was accepted")
 
 
 def test_a_peer_missing_from_the_peers_file_is_refused(tmp_path):

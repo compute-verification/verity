@@ -18,11 +18,14 @@ one client session, its record signed with the host's LMS key and written before
   signs and writes `record.json`, `key.json` and the head of `releases.jsonl` to `--out` (`remote.open_session`), and only
   then listens on 127.0.0.1:PORT and prints `listening 127.0.0.1:PORT` (PORT 0: one the system picks).  With `--peer` it
   then opens `ssh -R PORT` to that machine of `--peers` (`/etc/vy/peers`, as `benchmarks/remote_session/run.sh` does for
-  its verifier), whose own 127.0.0.1:PORT the client connects to.  It serves the one client that connects
-  (`remote.serve`), and writes `challenger.json`: the commitment, the host, the coins released by family and how the
-  session ended.  On the auditor host (`auditor.py`) the session has a secret, `--secret-file` (64 hex digits, given to
-  the window's opener by the gate), which the client's hello must carry, and `--root`, the window's Commit root, which
-  `challenger.json` names as `window_root`.
+  its verifier), whose own 127.0.0.1:PORT the client connects to.  It serves the first client whose hello it accepts
+  (`remote.greet`, then `remote.serve`): a refused hello releases nothing, so it is logged in `hellos.jsonl` (`{"n",
+  "reason"}`, fsynced) and the next connection is taken, each hello read within 10 s; once one is accepted it stops
+  listening, so every later connection is refused.  It writes `challenger.json`: the commitment, the host, the coins
+  released by family, the refused hellos and how the session ended.  On the auditor host (`auditor.py`) the session has
+  a secret, `--secret-file` (64 hex digits, given to the window's opener by the gate), which the client's hello must
+  carry, and `--root`, the window's Commit root, which `challenger.json` names as `window_root`: a salt family's coin
+  (label `salt` or `.../salt`) opens only after that root (RT4-INT-24), and any other is refused, which ends the session.
 
 Exit 0 when the client closed the session, 1 when it ended otherwise (a refusal, a broken stream, a tunnel that ended
 first), 2 on arguments or a key it refuses.
@@ -49,6 +52,8 @@ from verity.core.protocols.sampled_proofs.one_stage import verifier as V  # noqa
 from verity.ml.crypto import lms  # noqa: E402
 
 KEY = Path.home() / ".local" / "state" / "live-challenger" / "key"
+HELLOS = "hellos.jsonl"
+HELLO_SECONDS = 10.0
 SSH = ["ssh", "-tt", "-o", "ObscureKeystrokeTiming=no", "-o", "BatchMode=yes", "-o", "ExitOnForwardFailure=yes",
        "-o", "ServerAliveInterval=15"]
 
@@ -112,6 +117,33 @@ def parse(argv: list[str] | None) -> argparse.Namespace:
     return p.parse_args(argv)
 
 
+def is_salt(label: str) -> bool:
+    return label == "salt" or label.endswith("/salt")
+
+
+class WindowChallenger:
+    """The challenger as one window's session serves it: a salt family's coin opens only after the window's Commit root."""
+
+    def __init__(self, challenger: LiveChallenger, root: bytes) -> None:
+        self._challenger, self._root = challenger, root
+
+    def __getattr__(self, name: str):
+        return getattr(self._challenger, name)
+
+    def open(self, label: str, index: int, after: bytes):
+        if is_salt(label) and bytes(after) != self._root:
+            raise CoinError(f"a {label} coin opens only after the window's Commit root {self._root.hex()[:16]}…, not "
+                            f"{bytes(after).hex()[:16]}…")
+        return self._challenger.open(label, index, after)
+
+
+def log_hello(out: Path, n: int, why: str) -> None:
+    with open(out / HELLOS, "a", encoding="utf-8") as f:
+        f.write(json.dumps({"n": n, "reason": why}, sort_keys=True) + "\n")
+        f.flush()
+        os.fsync(f.fileno())
+
+
 def read_secret(path: Path | None) -> bytes | None:
     if path is None:
         return None
@@ -160,14 +192,27 @@ def main(argv: list[str] | None = None) -> int:
         sel.register(os.pidfd_open(tunnel.pid), selectors.EVENT_READ)
     (out / "address.json").write_text(json.dumps({"challenger": args.host, "listen": address, "peer": args.peer,
                                                   "address": address}) + "\n")
+    served = challenger if args.root is None else WindowChallenger(challenger, bytes.fromhex(args.root))
+    refused = 0
     try:
-        if any(k.fileobj is not listener for k, _ in sel.select()):
-            ended = f"the tunnel to {args.peer} ended before a client connected"
-        else:
+        while True:
+            if any(k.fileobj is not listener for k, _ in sel.select()):
+                ended = f"the tunnel to {args.peer} ended before a client's hello was accepted"
+                break
             conn, _ = listener.accept()
+            conn.settimeout(HELLO_SECONDS)
+            why = remote.greet(conn, secret)
+            if why is not None:
+                conn.close()
+                log_hello(out, refused, why)
+                refused += 1
+                continue
+            conn.settimeout(None)
+            sel.unregister(listener)
             listener.close()
             with conn:
-                ended = remote.serve(conn, challenger, out, secret=secret)
+                ended = remote.serve(conn, served, out, secret=secret, greeted=True)
+            break
     finally:
         if tunnel is not None:
             tunnel.terminate()
@@ -175,6 +220,7 @@ def main(argv: list[str] | None = None) -> int:
     released = {label: len(r) for label, r in remote.released_roots(out / remote.RELEASES, challenger.commitment).items()}
     (out / "challenger.json").write_text(json.dumps({
         "commitment": challenger.commitment.to_json(), "host": args.host, "released": released, "window_root": args.root,
+        "refused_hellos": refused,
         "ended": "closed by the client" if ended is None else ended}, indent=1) + "\n")
     print("ended:", "closed by the client" if ended is None else ended, file=sys.stderr)
     return 0 if ended is None else 1

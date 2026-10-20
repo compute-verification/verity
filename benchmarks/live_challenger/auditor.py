@@ -28,7 +28,8 @@ first coin.
 - **An `end` entry** follows when `serve.py` exits: its exit code, whether its client closed it, the SHA-512 of each file of
   `out/` (which seals the release log), how many coins each family released (`released`, counted from the release log under
   the signed record's commitment; `complete` when every family released all its coins, so a period can refuse a short
-  release), the leaf the challenger's record was signed at (`record_leaf`) and its commitment root (`commitment`). A session with an `open` and no `end` never
+  release), the leaf the challenger's record was signed at (`record_leaf`), its commitment root (`commitment`) and how
+  many hellos serve.py refused before it accepted one (`refused_hellos`, each in `out/hellos.jsonl`, which `files` seals). A session with an `open` and no `end` never
   ended (its host stopped): a refused window to the verifier, like one whose `closed` or `complete` is false.
 - **The ledger** (`/var/lib/vy-challenger/windows.jsonl`, `chattr +a`) is one JSON object a line: `schema`, `seq` (from 0),
   `prev` (SHA-512 of the previous line's bytes, 128 zeros first), `kind`, `session`, `body` and `sig`, an LMS signature under
@@ -84,7 +85,8 @@ SCHEME = re.compile(r"[a-z0-9][a-z0-9/._-]{0,127}")
 SESSION = re.compile(r"s\d{8}T\d{6}Z-[0-9a-f]{4}")
 READ_ONLY = "-"
 SECRET = "secret"
-OUT_FILES = ("record.json", "key.json", "releases.jsonl", "challenger.json", "address.json", "tunnel.log", "serve.log")
+OUT_FILES = ("record.json", "key.json", "releases.jsonl", "hellos.jsonl", "challenger.json", "address.json", "tunnel.log",
+             "serve.log")
 
 
 class Refused(Exception):
@@ -591,10 +593,12 @@ def run(host: Host, session: str, *, signer, pinned: str, now: Callable[[], date
         pass
     files = {n: hashlib.sha512((out / n).read_bytes()).hexdigest() for n in OUT_FILES if (out / n).is_file()}
     released, record_leaf = released_of(out)
+    hellos = (out / "hellos.jsonl").read_text().count("\n") if (out / "hellos.jsonl").is_file() else 0
     complete = released is not None and all(released.get(label) == n for label, n in body["families"])
     end = {"rc": rc, "closed": rc == 0 and summary.get("ended") == "closed by the client",
            "ended": why or summary.get("ended") or f"serve.py exited {rc}", "files": files, "released": released,
-           "complete": complete, "record_leaf": record_leaf, "commitment": commitment_of(out), "ended_utc": utc(now())}
+           "complete": complete, "record_leaf": record_leaf, "commitment": commitment_of(out), "refused_hellos": hellos,
+           "ended_utc": utc(now())}
     return append(host, "end", session, lambda lines: end, I, sign)
 
 

@@ -112,10 +112,12 @@ def test_a_session_serves_from_the_pinned_tree_and_its_end_entry_seals_its_out(h
         address = (out / "stdout.log").read_text().split()[1]
         with pytest.raises(C.CoinError, match="the session's secret"):
             R.RemoteChallenger.connect(address)
+        R.RemoteChallenger.connect(address, SECRET).close()
         return proc.wait()
 
     end = A.run(host, session, signer=signer, pinned=PIN, now=lambda: T1, argv=argv, wait=client)
-    assert end["body"]["rc"] == 1 and not end["body"]["closed"] and end["body"]["released"] == {"positions": 0, "replay": 0}
+    assert end["body"]["rc"] == 0 and end["body"]["closed"] and end["body"]["released"] == {"positions": 0, "replay": 0}
+    assert end["body"]["refused_hellos"] == 1 and "hellos.jsonl" in end["body"]["files"]
 
     session = json.loads(open_window(host, signer, token="cd34", commit="cd" * 64)[1])["session"]
     body = A.sessions_of(A.read_ledger(host.ledger))[session]["open"]["body"]
