@@ -1885,20 +1885,25 @@ def test_the_closure_replay_checks_each_imported_module_once_and_then_reuses_it(
 def test_an_equation_lemma_two_modules_realize_counts_as_declared_by_the_imported_one(tmp_path):
     """`f.eq_1` is realized in B and in C, which don't import each other; D imports C and uses it. With B replayed and C
     imported (it passed), D's use of the lemma is declared by C, which D imports (#2626's train: ZkQueryRound's
-    `match_7.eq_2` and the `else_eq` that SimZk and ZkEq both realize)."""
+    `match_7.eq_2` and the `else_eq` that SimZk and ZkEq both realize). With B and C both imported (E, replayed, imports
+    B), the imported environment names one module for the lemma, B, and D's import of C still declares it (the next
+    train: `Exists.choose.congr_simp`, realized in Init.Control.Lawful.Lemmas and in the UpwardEnumerable that
+    Init.Data.Range.Polymorphic.Instances imports)."""
     pkg = tmp_path / "realized"
     (pkg / "R").mkdir(parents=True)
     shutil.copy(HERE / "fixtures" / "control" / "lean-toolchain", pkg)
     (pkg / "lakefile.toml").write_text('name = "realized"\ndefaultTargets = ["R"]\n\n[[lean_lib]]\nname = "R"\n')
-    (pkg / "R.lean").write_text("import R.B\nimport R.D\n")
+    (pkg / "R.lean").write_text("import R.D\nimport R.E\n")
     (pkg / "R" / "A.lean").write_text("def f : Nat → Nat\n  | 0 => 1\n  | n + 1 => n\n")
     for m in ("B", "C"):
         (pkg / "R" / f"{m}.lean").write_text(f"import R.A\ntheorem {m.lower()} : f 0 = 1 := by rw [f]\n")
     (pkg / "R" / "D.lean").write_text("import R.C\ntheorem d : f 0 = 1 := by rw [f]\n")
+    (pkg / "R" / "E.lean").write_text("import R.B\ntheorem e : True := trivial\n")
     subprocess.run(["lake", "build"], cwd=pkg, check=True, capture_output=True, env=A.lake_env())
-    r = subprocess.run(["lake", "env", "lean", "--run", str(A.TOOL / "Replay.lean"), str(tmp_path / "replay.json"), "R.D",
-                        "--closure", "R.B"], cwd=pkg, capture_output=True, text=True, env=A.lake_env())
-    assert r.returncode == 0, r.stderr + r.stdout
+    for closure in (["R.B"], ["R.E"]):
+        r = subprocess.run(["lake", "env", "lean", "--run", str(A.TOOL / "Replay.lean"), str(tmp_path / "replay.json"),
+                            "R.D", "--closure", *closure], cwd=pkg, capture_output=True, text=True, env=A.lake_env())
+        assert r.returncode == 0, (closure, r.stderr + r.stdout)
 
 
 @pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")

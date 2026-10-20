@@ -247,7 +247,20 @@ unsafe def main (args : List String) : IO UInt32 := do
   let moduleOfDecl (d : Name) : Name := match renamedFrom[d]? with
     | some (_, m) => m
     | none => moduleOf[d]!
-  -- each constant a checked declaration mentions is declared by its module or by one that module imports
+  -- each constant a checked declaration mentions is declared by its module or by one that module imports. Two imported
+  -- modules that each realize one theorem leave the environment naming one of them, so a module that imports only the
+  -- other is looked up in what each imported module of its closure declares, with the environment's statement.
+  let importedIdx : Std.HashMap Name Nat :=
+    (List.range env.header.moduleNames.size).foldl (fun h i => h.insert env.header.moduleNames[i]! i) {}
+  let alsoImported (reach : Std.HashSet Name) (n : Name) : Bool := Id.run do
+    let some (.thmInfo e) := env.find? n | return false
+    for r in reach do
+      if let some i := importedIdx[r]? then
+        for c in env.header.moduleData[i]!.constants do
+          if c.name == n then
+            if let .thmInfo v := c then
+              if v.type == e.type && v.levelParams == e.levelParams then return true
+    return false
   let mut byModule : Std.HashMap Name (Array Name) := {}
   for (d, _) in members do
     byModule := byModule.alter (moduleOfDecl d) fun ds => some ((ds.getD #[]).push d)
@@ -259,7 +272,7 @@ unsafe def main (args : List String) : IO UInt32 := do
       let used := cs.foldl (fun s c => s ++ c.getUsedConstantsAsSet) ({} : NameSet)
       for n in used do
         let from_ := declaredIn n
-        unless from_.isEmpty || from_.any reach.contains do
+        unless from_.isEmpty || from_.any reach.contains || alsoImported reach n do
           IO.eprintln s!"replay: {d} (in {m}) mentions {n}, declared by {", ".intercalate (from_.toList.map toString)}, \
             which {m} does not import"
           return 1
