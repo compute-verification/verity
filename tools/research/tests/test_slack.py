@@ -2386,8 +2386,38 @@ def test_a_long_post_goes_out_whole_with_its_rest_as_quiet_replies(fake, registr
 
 def test_send_refuses_a_post_that_names_only_its_author(registry, capsys):
     rc, _, err = run(capsys, "send", "--as", "infra", "--dry-run", "--text", "<!subteam^SINFRA|@infra> steward: is exit 1 harmless?")
-    assert rc == 2 and "never wakes its author" in err
+    assert rc == 2 and "never wakes its own inbox's holder" in err
     assert run(capsys, "send", "--as", "infra", "--dry-run", "--text", "@infra @ci is exit 1 harmless?")[0] == 0
+
+
+def test_a_handover_s_outgoing_generation_rings_the_holder_and_the_holder_never_rings_itself(fake, registry, routes_dirs,
+                                                                                           capsys, monkeypatch):
+    """20 Oct 00:12Z: proofs gen 3, kept as a poster after gen 4 took the inbox, posted 7 asks for gen 4 as @proofs, and
+    none rang gen 4, since a post never rang its author's handle (COMM-54).  What counts is the agent: a post by an agent
+    other than the inbox's holder rings it."""
+    monkeypatch.setattr(slack, "acting_as", ACTING_AS)
+    gen3, gen4 = "bc-8f4b652b-17bc-5055-a120-b56940b7c7a9", "bc-a26cefd0-1111-2222-3333-444444444444"
+    box = inbox(fake, routes_dirs, "proofs", holder=gen4, posters=[gen3])
+    top = inbox(fake, routes_dirs, "top")
+    monkeypatch.setenv("RESEARCH_AGENT_URL", f"https://cursor.com/agents/{gen3}")
+    assert run(capsys, "send", "--as", "proofs", "--text", "@proofs (gen 4) a new code item for you")[0] == 0
+    assert len(bells(fake, box)) == 1
+    assert run(capsys, "send", "--as", "proofs", "--to", "@proofs", "--text", "INT7 is yours from 05:00Z")[0] == 0
+    assert len(bells(fake, box)) == 2
+    root = fake.add(COORD, text="@proofs gen 3, hand your workers over", username="top", bot_id=BOT)
+    assert run(capsys, "reply", "--as", "proofs", "--thread", root["ts"], "--text", "@proofs (gen 4) INT7 is idle")[0] == 0
+    assert len(bells(fake, box)) == 3 and bells(fake, top) == []                       # it names gen 4's handle, so it's for gen 4
+    assert run(capsys, "reply", "--as", "proofs", "--thread", root["ts"], "--text", "done: all five are listed")[0] == 0
+    assert len(bells(fake, top)) == 1 and len(bells(fake, box)) == 3                   # naming no one, it's still for the asker
+    monkeypatch.setenv("RESEARCH_AGENT_URL", f"https://cursor.com/agents/{gen4[:11]}")  # the holder, under its short id
+    rc, _, err = run(capsys, "send", "--as", "proofs", "--text", "@proofs (gen 3) taken")
+    assert rc == 2 and "never wakes its own inbox's holder" in err
+    assert run(capsys, "send", "--as", "proofs", "--to", "@proofs", "--text", "x")[0] == 2
+    assert run(capsys, "reply", "--as", "proofs", "--thread", root["ts"], "--text", "@proofs (gen 3) taken")[0] == 0
+    assert len(bells(fake, box)) == 3                                                  # the holder is never its own target
+    assert not slack.rings_own_inbox(slack.Routes(), "proofs", None) and slack.rings_own_inbox(slack.Routes(), "proofs", gen3)
+    assert not slack.route_targets({"text": "@proofs x", "ts": "1.1", "bot_id": BOT, "username": "proofs"}, None,
+                                   json.loads(registry.read_text()))
 
 
 def test_an_announcement_to_every_handle_refuses_leading_names(registry, capsys):
