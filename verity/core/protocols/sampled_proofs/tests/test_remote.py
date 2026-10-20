@@ -305,7 +305,7 @@ def _set(i: int, key: str, value) -> object:
     def f(lines):
         doc = json.loads(lines[i])
         doc[key] = value
-        return lines[:i] + [json.dumps(doc, sort_keys=True)] + lines[i + 1:]
+        return lines[:i] + [json.dumps(doc, sort_keys=True, separators=(",", ":"))] + lines[i + 1:]
     return f
 
 
@@ -386,6 +386,11 @@ STRUCTURE = {
     "a rewritten root": (_set(1, "root", root(7).hex()), "malformed"),
     "a skipped index": (_set(1, "index", 1), "malformed"),
     "a torn line": (lambda lines: lines[:-1] + [lines[-1][:9]], "malformed"),
+    "a line not in canonical form": (lambda lines: lines[:1] + [json.dumps(json.loads(lines[1]))] + lines[2:],
+                                     "malformed"),
+    "a time not an integer": (_set(2, "released_at", 0.5), "malformed"),
+    "an index of another form": (lambda lines: lines[:1] + [lines[1].replace('"index":0', '"index":0e0')] + lines[2:],
+                                 "malformed"),
 }
 
 

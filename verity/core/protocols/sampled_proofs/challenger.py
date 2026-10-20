@@ -45,7 +45,8 @@ its frozen edges): the caller hands in `verify`, LMS at the key's parameters, an
 
 **The session's close** is the only evidence that each coin followed its root: an opening's `after` is the client's to
 write, and a coin opened before its root still opens against the commitment.  The challenger logs each root it receives
-and each release after it, a line each (`remote`'s `releases.jsonl`, its head the commitment), and when its session ends,
+and each release after it, a line each in canonical JSON (`remote`'s `releases.jsonl`, its head the commitment, its times
+integer nanoseconds on the challenger's monotonic clock), and when its session ends,
 however it ends, it signs the log at its key's next leaf and writes the close record (`remote`'s `challenger.json`):
 
     close   = {chain, ended, lines, session, signature}       ended: null when the client closed the session, else why not
@@ -86,7 +87,7 @@ from typing import Any
 from verity.ml.commitments import (Commitment, CommitmentDomain, MerkleTree, Opening, RangeIndexedDomain,
                                    VerificationLimits, verify_opening)
 from verity.ml.commitments import hm96
-from verity.ml.commitments.identity import identity_digest_sha512
+from verity.ml.commitments.identity import canonical_json_text, identity_digest_sha512
 
 BINDING = "verity/challenger/coins/v1"
 COIN_BYTES = 64
@@ -467,10 +468,15 @@ _RELEASE_EVENT = ["after", "event", "index", "label", "released_at"]
 
 
 def _event(line: str) -> Any:
+    """A release log line's event: the line is canonical JSON (`canonical_json_text`, integers only), so no two readers
+    of it can read one line two ways."""
     try:
-        return json.loads(line)
-    except ValueError:
-        raise CoinError(LOG_MALFORMED) from None
+        doc = json.loads(line)
+        if canonical_json_text(doc) == line:
+            return doc
+    except (ValueError, TypeError, RecursionError):
+        pass
+    raise CoinError(LOG_MALFORMED)
 
 
 def released_roots_of(commitment: LiveCommitment, log: Sequence[str]) -> dict[str, tuple[bytes, ...]]:

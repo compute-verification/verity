@@ -19,7 +19,8 @@ challenger  {"type": "commitment", "commitment"}, {"type": "opening", "opening"}
 Every message is fail-closed.  The challenger refuses a frame that isn't the next of that sequence in exactly that form,
 a coin other than its family's next (coin i after the family's i-th root, once: `LiveRecord`) and a root that isn't 64
 bytes; a refusal or a broken stream ends the session, and no coin opens twice (a retry never redraws).  It appends each
-release to `releases.jsonl` (`LiveRecord.log`'s two events), fsynced, before the opening leaves its host, and answers
+release to `releases.jsonl` (`LiveRecord.log`'s two events, a line each in canonical JSON, integer nanoseconds on its
+monotonic clock), fsynced, before the opening leaves its host, and answers
 the client's close only once its signed close is written.
 
 `RemoteChallenger` is the client's `LiveChallenger`, its `commitment` and `open(label, index, after)`, so `LiveRecord`
@@ -47,6 +48,7 @@ from verity.core.protocols.sampled_proofs import challenger as Ch
 from verity.core.protocols.sampled_proofs.challenger import (ChallengerClose, ChallengerKey, CoinError, LiveChallenger,
                                                              LiveCommitment, LiveOpening, LiveRecord, Verify, live_reason,
                                                              write_record)
+from verity.ml.commitments.identity import canonical_json_text
 
 RECORD, KEY, RELEASES, CLOSE = "record.json", "key.json", "releases.jsonl", "challenger.json"
 ROOT_BYTES = 64
@@ -97,7 +99,7 @@ class _Wire:
 
 
 def _line(doc: dict) -> str:
-    return json.dumps(doc, sort_keys=True)
+    return canonical_json_text(doc)
 
 
 def _write_new(path: Path, doc: dict) -> None:
@@ -169,7 +171,11 @@ def _release(head: dict, records: dict[str, LiveRecord], log: Any, lines: list[s
         raise CoinError(f"the next {label} coin is {len(record.roots)}, not {index!r}")
     n = len(record.log)
     opening = record.record(after)
-    new = [_line(e) for e in record.log[n:]]
+    try:
+        new = [_line(e) for e in record.log[n:]]
+    except TypeError as e:
+        raise CoinError(f"the release log's clock reads other than integers, so {label} coin {index} stays on the host "
+                        f"({e})") from e
     try:
         log.write("".join(line + "\n" for line in new))
         log.flush()
@@ -198,9 +204,9 @@ def _closed(session: Session, ended: str | None) -> str | None:
     return ended
 
 
-def serve(sock: socket.socket, session: Session, clock: Callable[[], float] = time.monotonic) -> str | None:
-    """Serve one client's session on the connected stream `sock` (`open_session`), on the release log's clock `clock`:
-    None when the client closed it, else why it ended.  However it ends, the session's close is signed and written
+def serve(sock: socket.socket, session: Session, clock: Callable[[], int] = time.monotonic_ns) -> str | None:
+    """Serve one client's session on the connected stream `sock` (`open_session`), on the release log's clock `clock`
+    (integers, the log being canonical JSON): None when the client closed it, else why it ended.  However it ends, the session's close is signed and written
     (`close_session`), before the client's close is answered.  After its last frame it ends its side of the stream and
     returns only once the client ends its own, so a tunnel torn down after `serve` returns never cuts that frame."""
     d, challenger = session.directory, session.challenger
