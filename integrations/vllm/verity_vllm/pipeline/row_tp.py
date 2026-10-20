@@ -278,10 +278,11 @@ class TpRow(Row):
                     self.cli("global-program", "--workload", self.wl, *der, "--out", f"{self.rank(r)}/build_workload", "--checkpoint-dir", self.ck))
 
     def compose_all(self, ranks: list[int]) -> None:
-        """GP-01 of each of `ranks`, as many at once as the memory holds at `row_records.COMPOSE_PEAK_RATIO` x the largest shape's
-        derive peak (``--build-ram-budget-gb`` when smaller than the headroom), marked ``build.compose_jobs``."""
-        n = R.build_jobs_auto(self.shapes, R.model_layers(self.ck), derives=len(ranks), peak_ratio=R.COMPOSE_PEAK_RATIO,
-                              budget_gb=self.cb.build_ram_budget_gb)
+        """GP-01 of each of `ranks`, as many at once as the memory holds at `row_records.compose_bytes` a compose
+        (``--build-ram-budget-gb`` when smaller than the headroom), marked ``build.compose_jobs``."""
+        layers = R.model_layers(self.ck)
+        n = R.build_jobs_auto(self.shapes, layers, derives=len(ranks), peak_ratio=R.COMPOSE_PEAK_RATIO, budget_gb=self.cb.build_ram_budget_gb,
+                              job_bytes=R.compose_bytes(self.shapes, layers) if self.shapes and layers else None)
         self.tl("build.compose_jobs", "mark", ("jobs", n), ("ranks", len(ranks)))
         with ThreadPoolExecutor(max_workers=n) as pool:
             for f in [pool.submit(self.compose, r) for r in ranks]:
@@ -329,7 +330,10 @@ class TpRow(Row):
         for r in range(self.W):
             for f in sorted(glob.glob(f"{self.rank(r)}/*.rc")):
                 self.log(f"derive {os.path.basename(f[:-3])} rank{r} rc={open(f).read().strip()} {_tail_bytes(f[:-3] + '.log')}")
-        self.compose_all([r for r in range(self.W) if R.derived_ok(f"{self.rank(r)}/build_step")])
+        kept = [r for r in range(self.W) if R.composed_ok(self.rank(r))]
+        if kept:
+            self.log(f"compose: ranks {kept} keep their workload Programs on disk (composed after their request Programs)")
+        self.compose_all([r for r in range(self.W) if R.derived_ok(f"{self.rank(r)}/build_step") and r not in kept])
         ok, rc, programs_only = self.guarded_summary(), None, self.cb.build_programs_only == "1"
         if ok == "PASS" and not programs_only:   # the Build's manifest, as SingleRow's: an incomplete one (rc 4) fails the Build its Commit would refuse
             rc = self.manifest_global("build.required_manifest", self.to_b)
@@ -437,7 +441,7 @@ class TpRow(Row):
             rc_fold = self.run_tl("match.fold_match", 4 * to_f, f"{M}/fold_match.log",
                                   self.cli("tp-fold-match", "--capture", f"{M}/capture", "--profile", fp, *fargs, "--workload", self.wl,
                                            "--tp2-match", f"{M}/tp2_match.json", "--within-step", "dag", "--rank-workers", str(cm.fold_rank_workers),
-                                           "--python", self.py, "--timeout", str(to_f), "--out", f"{M}/fold_match"))
+                                           "--fold-workers", str(cm.fold_workers), "--python", self.py, "--timeout", str(to_f), "--out", f"{M}/fold_match"))
             fold = f"fold_match rc={rc_fold} {R.tp_fold_line(M)}"
             self.log(f"match fold ({fp}): {fold}")
         wall = int(time.time()) - t0

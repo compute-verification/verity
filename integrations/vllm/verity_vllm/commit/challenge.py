@@ -45,6 +45,23 @@ def _source(legacy: bool, source: bytes | None) -> None:
         raise ValueError("a non-legacy challenge needs a source: an auditor key")
 
 
+class NoRunRoot(ValueError):
+    """A run whose committer left a step uncommitted has no run root to draw from."""
+
+
+def run_root_of(run: Any) -> bytes:
+    """``run``'s root (a `committer_api.RunCommitment`), the one its challenge derives from.  A run with a step its committer
+    did not commit (a placeholder root, the step's error in ``run.extra["errors"]``) has none: `NoRunRoot`, naming those
+    steps and the first error."""
+    root = bytes(run.run_root)
+    if len(root) == 32:
+        return root
+    bad = [s.step for s in run.steps if len(s.root) != 32]
+    errors = list((run.extra or {}).get("errors") or [])
+    raise NoRunRoot(f"no run root: {len(bad)} of {len(run.steps)} steps not committed (steps {bad[:8]}"
+                    f"{' ...' if len(bad) > 8 else ''}); first error: {errors[0] if errors else 'none recorded'}")
+
+
 def challenge_positions(run_root: bytes, leaves_per_step: list[int], k: int, salt: bytes = b"", *, legacy: bool = LEGACY,
                         source: bytes | None = None) -> list[tuple[int, int]]:
     """`k` committed leaves as (step, leaf within the step), uniform over all leaves with replacement.  Deterministic, so
