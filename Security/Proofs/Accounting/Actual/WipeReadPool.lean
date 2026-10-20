@@ -23,12 +23,15 @@ variable {Ω₀ B : Type*} [Fintype Ω₀] [Fintype B] {n : ℕ}
 
 /-- **Averaging read `j`'s index**: each coin `r` is `update r j i` for one coin per index `i`. -/
 theorem sum_update_mul (j : Fin n) (φ : Ω₀ × (Fin n → B) → ℝ) :
-    (∑ r, φ r) * Fintype.card B = ∑ r, ∑ i : B, φ (r.1, Function.update r.2 j i) := by
+    (∑ r : Ω₀ × (Fin n → B), φ r) * Fintype.card B =
+      ∑ r : Ω₀ × (Fin n → B), ∑ i : B, φ (r.1, Function.update r.2 j i) := by
   let f : (Ω₀ × (Fin n → B)) × B → (Ω₀ × (Fin n → B)) × B :=
     fun q => ((q.1.1, Function.update q.1.2 j q.2), q.1.2 j)
   have hf : Function.Involutive f := fun q => by simp [f]
-  have h : ∑ q, φ (hf.toPerm q).1 = ∑ q, φ q.1 := Equiv.sum_comp hf.toPerm (fun q => φ q.1)
-  have h1 : ∑ q : (Ω₀ × (Fin n → B)) × B, φ (hf.toPerm q).1 =
+  have h : ∑ q : (Ω₀ × (Fin n → B)) × B, φ (Function.Involutive.toPerm f hf q).1 =
+      ∑ q : (Ω₀ × (Fin n → B)) × B, φ q.1 :=
+    Equiv.sum_comp (Function.Involutive.toPerm f hf) (fun q => φ q.1)
+  have h1 : ∑ q : (Ω₀ × (Fin n → B)) × B, φ (Function.Involutive.toPerm f hf q).1 =
       ∑ r : Ω₀ × (Fin n → B), ∑ i : B, φ (r.1, Function.update r.2 j i) := Fintype.sum_prod_type _
   have h2 : ∑ q : (Ω₀ × (Fin n → B)) × B, φ q.1 = ∑ r : Ω₀ × (Fin n → B), ∑ _i : B, φ r :=
     Fintype.sum_prod_type _
@@ -38,6 +41,7 @@ theorem sum_update_mul (j : Fin n) (φ : Ω₀ × (Fin n → B) → ℝ) :
 
 variable {acc : Ω₀ × (Fin n → B) → Fin n → Prop}
 
+omit [Fintype Ω₀] in
 /-- Read `j`'s answered blocks are fixed by `ω₀` and the indices before `j`. -/
 theorem answered_congr (hlive : Assumptions.LiveVerdicts acc) {j : Fin n} {r r' : Ω₀ × (Fin n → B)}
     (h1 : r.1 = r'.1) (h2 : ∀ i < j, r.2 i = r'.2 i) : Actual.answered acc j r = Actual.answered acc j r' := by
@@ -49,6 +53,7 @@ theorem answered_congr (hlive : Assumptions.LiveVerdicts acc) {j : Fin n} {r r' 
   · simp only [Function.update_of_ne hne]
     exact h2 i (lt_of_le_of_ne hi hne)
 
+omit [Fintype Ω₀] in
 theorem unanswered_congr (hlive : Assumptions.LiveVerdicts acc) {j : Fin n} {r r' : Ω₀ × (Fin n → B)}
     (h1 : r.1 = r'.1) (h2 : ∀ i < j, r.2 i = r'.2 i) :
     Actual.unanswered acc j r = Actual.unanswered acc j r' := by
@@ -79,6 +84,7 @@ noncomputable def ville (acc : Ω₀ × (Fin n → B) → Fin n → Prop) (m : �
   ∏ j ∈ univ.filter (fun j : Fin n => (j : ℕ) < m),
     if acc r j then Real.exp (Actual.unanswered acc j r) else 0
 
+omit [Fintype Ω₀] in
 theorem ville_nonneg (m : ℕ) (r : Ω₀ × (Fin n → B)) : 0 ≤ ville acc m r :=
   prod_nonneg fun j _ => by
     split_ifs
@@ -113,7 +119,7 @@ theorem ville_succ_le (hlive : Assumptions.LiveVerdicts acc) (m : ℕ) :
     rw [hfilt, prod_insert (by simp)]
     exact mul_comm _ _
   rcases isEmpty_or_nonempty B with hB | hB
-  · haveI : IsEmpty (Fin n → B) := ⟨fun c => hB.false (c j0)⟩
+  · have : IsEmpty (Fin n → B) := ⟨fun c => hB.false (c j0)⟩
     simp
   have hN : (0 : ℝ) < Fintype.card B := by exact_mod_cast Fintype.card_pos
   refine le_of_mul_le_mul_right ?_ hN
@@ -160,7 +166,7 @@ theorem card_mul_exp_le (hlive : Assumptions.LiveVerdicts acc) (H : ℝ) (s : Fi
     have hf : (univ.filter fun j : Fin n => (j : ℕ) < n) = univ := filter_true_of_mem fun j _ => j.isLt
     have : ville acc n r = Real.exp (∑ j, Actual.unanswered acc j r) := by
       rw [ville, hf, Real.exp_sum]
-      exact prod_congr rfl fun j _ => if_pos (hall j)
+      exact prod_congr rfl fun j _ => by simp [hall j]
     rw [this]
     exact Real.exp_le_exp.2 hH
   calc (s.card : ℝ) * Real.exp H = ∑ r ∈ s, Real.exp H := by rw [sum_const, nsmul_eq_mul]
@@ -169,9 +175,11 @@ theorem card_mul_exp_le (hlive : Assumptions.LiveVerdicts acc) (H : ℝ) (s : Fi
         sum_le_sum_of_subset_of_nonneg (subset_univ _) fun r _ _ => ville_nonneg n r
     _ ≤ _ := hsum n
 
+open Classical in
 theorem WipeReadPool : Guarantees.Actual.WipeReadPool := by
   intro Ω₀ B _ _ n acc H hlive
   rw [Real.exp_neg, inv_mul_eq_div, le_div_iff₀ (Real.exp_pos H)]
-  exact card_mul_exp_le hlive H _ fun r hr => (mem_filter.1 hr).2
+  refine card_mul_exp_le hlive H _ fun r hr => ?_
+  exact (mem_filter.1 hr).2
 
 end Accounting.SecurityProofs.Actual
