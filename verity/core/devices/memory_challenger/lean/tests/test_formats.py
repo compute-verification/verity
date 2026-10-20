@@ -286,4 +286,4 @@ def test_wipe_egress_units(server):
     inputs = with_malformed(st.fixed_dictionaries({"egress_bits": bits}))
     stats = D.run(port("wipe_egress_units", lambda v: sw.egress_units(W.int_(v, "egress_bits")), inputs), examples=300,
                   server=server)
-    assert stats.outputs > 200, stats
+    assert stats.outputs > 150 and stats.rejects > 30, stats
