@@ -342,8 +342,8 @@ theorem sheetPipe_of (S : Sheet K P) (hw : ∀ p, 0 < S.width p) (n : K → ℝ)
     show (if S.pipe k = some p then (32 : ℝ) else 0) * n k =
       S.width p / 4 * ((if S.pipe k = some p then 128 / S.width p else 0) * n k)
     split_ifs
-    · field_simp
-      ring
+    · rw [← mul_assoc, div_mul_div_comm, mul_comm (S.width p) 128, mul_div_mul_right _ _ hwp]
+      norm_num
     · simp
   show ∑ k, (if S.pipe k = some p then (32 : ℝ) else 0) * n k ≤ S.width p / 4 * (runOf n S.machine).cycles
   rw [e]
