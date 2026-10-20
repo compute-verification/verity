@@ -57,9 +57,19 @@ def row (lv : Level) (g : Array F128) (extra : Nat → Nat → F128) (sv : Array
 def rowsDirect (lv : Level) (tPad : Nat) (g : Array F128) (extra lanePad : Nat → Nat → F128) : Array (Array F128) :=
   (Array.range (2 ^ lv.d)).map (row lv g extra (svTable (lv.cols + 1)) (musOf lv tPad lanePad))
 
-/-- Level `s`'s twiddles `Ŵ_s(ω_{r·2^s})`, `r < 2^(d − s)`, for each `s < n`. -/
-def twiddles (sv : Array F128) (d n : Nat) : Array (Array F128) :=
-  (Array.range n).map fun s => (Array.range (2 ^ (d - s))).map fun r => (whats sv (r * 2 ^ s) (s + 1))[s]!
+/-- `whatsGo` with the inverses `svi[i] = sv[i]⁻¹` given, so that a twiddle costs no inversion. -/
+def whatsInvGo (sv svi : Array F128) : Nat → Nat → F128 → Array F128 → Array F128
+  | 0, _, _, out => out
+  | fuel + 1, i, s, out => whatsInvGo sv svi fuel (i + 1) (s * s + sv[i]! * s) (out.push (s * svi[i]!))
+
+/-- Level `s`'s twiddles `Ŵ_s(ω_{r·2^s})`, `r < 2^(d − s)`, for each `s < n`, at the inverses `svi` of `sv`. -/
+def twiddlesWith (sv svi : Array F128) (d n : Nat) : Array (Array F128) :=
+  (Array.range n).map fun s => (Array.range (2 ^ (d - s))).map fun r =>
+    (whatsInvGo sv svi (s + 1) 0 ⟨(r * 2 ^ s).toUInt64, 0⟩ #[])[s]!
+
+/-- Level `s`'s twiddles `Ŵ_s(ω_{r·2^s})`, `r < 2^(d − s)`, for each `s < n`: `sv`'s `n` inverses once, not one for
+each twiddle's every `Ŵ_i`. -/
+def twiddles (sv : Array F128) (d n : Nat) : Array (Array F128) := twiddlesWith sv (sv.map F128.inv) d n
 
 /-- **The additive FFT** in the novel basis: entry `r < 2^(d − s)` of `fft tw d s n u` is
 `Σ_{c < 2^n} u(c)·Π_{i ∈ bits(c)} Ŵ_{s+i}(ω_{r·2^s})`, at the twiddles `tw = twiddles sv d n'` (`s + n ≤ n'`). Its halves

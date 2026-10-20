@@ -170,11 +170,25 @@ theorem mul_two_pow_lt_word (r d s : ℕ) (hs : s ≤ d) (hd : d ≤ 64) (hr : r
   rw [← Nat.pow_add, Nat.sub_add_cancel hs] at h1
   exact Nat.lt_of_lt_of_le h1 (Nat.pow_le_pow_right (by omega) hd)
 
+/-- At `sv`'s inverses, `whatsInvGo` is `whatsGo`. -/
+theorem whatsInvGo_eq (sv : Array F128) (fuel : ℕ) : ∀ (i : ℕ) (s : F128) (out : Array F128), i + fuel ≤ sv.size →
+    whatsInvGo sv (sv.map F128.inv) fuel i s out = whatsGo sv fuel i s out := by
+  induction fuel with
+  | zero => intro i s out _; rfl
+  | succ fuel ih =>
+    intro i s out h
+    have hi : i < sv.size := by omega
+    have hm : (sv.map F128.inv)[i]! = (sv[i]!).inv := by
+      rw [getElem!_pos _ i (by simpa using hi), getElem!_pos sv i hi, Array.getElem_map]
+    simp only [whatsInvGo, whatsGo, hm]
+    exact ih (i + 1) _ _ (by omega)
+
 /-- **Level `s`'s twiddle** at `r` is `Ŵ_s(ω_{r·2^s})`. -/
 theorem twiddles_get (N d s r : ℕ) (hs : s < N) (hr : r < 2 ^ (d - s)) :
     fOf ((twiddles (svTable N) d N)[s]!)[r]! = FlockLevel3.What s (FlockLevel3.omega (r * 2 ^ s)) := by
-  unfold twiddles
-  rw [FlockSoundness.Refine.getElem!_range_map _ hs, FlockSoundness.Refine.getElem!_range_map _ hr]
+  unfold twiddles twiddlesWith
+  rw [FlockSoundness.Refine.getElem!_range_map _ hs, FlockSoundness.Refine.getElem!_range_map _ hr,
+    whatsInvGo_eq _ _ _ _ _ (by rw [FlockLevel3.svTable_size]; omega)]
   exact whats_get N (r * 2 ^ s) (s + 1) s (by omega) (by omega)
 
 /-- **The FFT's entry `r`** at level `s` with `n` coefficient bits left is `T_s(n, u)` at `ω_{r·2^s}`. -/
