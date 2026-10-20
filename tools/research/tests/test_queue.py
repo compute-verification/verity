@@ -754,6 +754,33 @@ def test_ready_mark_writes_the_mark_with_no_quick_tier(world, capsys):
     assert StoreLabels(world.store, log=world.logs.append).ready(3, h) is True
 
 
+def test_ready_sha_waits_for_github_to_show_the_pushed_head_and_never_marks_another(world, capsys):
+    """20 Oct: `git push && research queue ready 2848 --mark` marked the old head, since GitHub's headRefOid lagged the push."""
+    from research.queue import SHA_READS, MarkOnly, StoreLabels, ready
+
+    world.with_store_remote()
+    old, new = world.change({"s.txt": "old\n"}), world.change({"s.txt": "new\n"})
+    world.gh.put(5, old, ready=False)
+    reads = []
+
+    def sleep(s):
+        reads.append(s)
+        if len(reads) == 2:
+            world.gh.put(5, new, ready=False)
+
+    assert ready(world.gh, world.store, 5, "lane-5", MarkOnly(), sha=new[:12], sleep=sleep) == 0
+    labels = StoreLabels(world.store, log=world.logs.append)
+    assert len(reads) == 2 and labels.ready(5, new) is True and labels.ready(5, old) is False
+
+    other = world.change({"s.txt": "other\n"})
+    capsys.readouterr()
+    assert ready(world.gh, world.store, 5, "lane-5", MarkOnly(), sha=other, sleep=reads.append) == 1
+    assert len(reads) == 2 + SHA_READS - 1
+    err = capsys.readouterr().err
+    assert f"GitHub has its head at {new[:12]}, not {other[:12]}" in err and "run this again" in err
+    assert StoreLabels(world.store, log=world.logs.append).ready(5, other) is False
+
+
 def test_ready_refuses_a_head_that_was_ejected_and_says_why_unless_again(world, capsys):
     """16 Oct: #2174, ejected at 24a9b5e635 for a lean-audit failure, was marked ready again at that head and failed a second train
     on the same line, holding up the PRs without Lean in it."""
