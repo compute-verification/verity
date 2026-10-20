@@ -49,7 +49,8 @@ class Host:
     """The challenger on its host: a challenger over `FAMILIES` whose record `open_session` signed with the test key and
     wrote to `directory`, serving one session on a loopback port; `reason` is how `serve` ended it."""
 
-    def __init__(self, tmp_path, signed: bool = True) -> None:
+    def __init__(self, tmp_path, signed: bool = True, secret: bytes | None = None) -> None:
+        self.secret = secret
         self.directory = tmp_path / "challenger"
         self.directory.mkdir()
         self.challenger = C.LiveChallenger(SCHEME, 0, FAMILIES, entropy("host"))
@@ -73,7 +74,7 @@ class Host:
         self.listener.close()
         with conn:
             try:
-                self.reason = R.serve(conn, self.challenger, self.directory, itertools.count().__next__)
+                self.reason = R.serve(conn, self.challenger, self.directory, itertools.count().__next__, self.secret)
             except Exception as e:
                 self.error = e
 
@@ -165,6 +166,34 @@ def test_every_malformed_or_out_of_order_frame_is_refused_and_ends_the_session(t
     assert host.error is None
     commitment, roots = R.trusted_session(host.directory, verifier_key(), lms_verify)
     assert sum(len(r) for r in roots.values()) == opened
+
+
+SECRET = bytes(range(32))
+
+
+def test_a_session_with_a_secret_serves_only_the_client_whose_hello_carries_it(tmp_path):
+    host = Host(tmp_path, secret=SECRET)
+    with R.RemoteChallenger.connect(host.address, SECRET) as client:
+        C.LiveRecord(client, "positions", itertools.count().__next__).record(root(0))
+    assert host.ended() is None
+    assert R.trusted_session(host.directory, verifier_key(), lms_verify)[1]["positions"] == (root(0),)
+
+
+@pytest.mark.parametrize("hello, why", [
+    ({"type": "hello"}, "with the session's secret"),
+    ({"type": "hello", "secret": bytes(32).hex()}, "not the session's"),
+    ({"type": "hello", "secret": SECRET.hex().upper()}, "not the session's"),
+    ({"type": "hello", "secret": SECRET.hex(), "extra": 1}, "with the session's secret"),
+    ({"type": "hello", "secret": 7}, "not the session's"),
+])
+def test_a_session_with_a_secret_refuses_a_hello_without_it_before_any_coin(tmp_path, hello, why):
+    host = Host(tmp_path, secret=SECRET)
+    with socket.create_connection(host.listener.getsockname()) as s:
+        s.sendall(frame(hello))
+        answer = reply(s)
+        assert answer["type"] == "refused" and why in answer["reason"]
+    assert why in host.ended()
+    assert R.trusted_session(host.directory, verifier_key(), lms_verify)[1] == {"positions": (), "replay": ()}
 
 
 class Liar:

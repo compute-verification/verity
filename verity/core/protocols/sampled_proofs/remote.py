@@ -9,7 +9,8 @@ whose record isn't written there, so no coin opens before it.
 
 ~~~text
 frame       u32be len(head) ‖ u32be len(body) ‖ head ‖ body: head a JSON object with its "type", body empty
-client      {"type": "hello"}, then {"type": "open", "label", "index", "after"} per coin, then {"type": "close"}
+client      {"type": "hello"} (with "secret" when the session has one), then {"type": "open", "label", "index", "after"}
+            per coin, then {"type": "close"}
 challenger  {"type": "commitment", "commitment"}, {"type": "opening", "opening"} and {"type": "closed"}, each answering
             the client's frame, or {"type": "refused", "reason"}, which ends the session
 ~~~
@@ -17,7 +18,9 @@ challenger  {"type": "commitment", "commitment"}, {"type": "opening", "opening"}
 Every message is fail-closed.  The challenger refuses a frame that isn't the next of that sequence in exactly that form,
 a coin other than its family's next (coin i after the family's i-th root, once: `LiveRecord`) and a root that isn't 64
 bytes; a refusal or a broken stream ends the session, and no coin opens twice (a retry never redraws).  It appends each
-release to `releases.jsonl` (`LiveRecord.log`'s two events), fsynced, before the opening leaves its host.
+release to `releases.jsonl` (`LiveRecord.log`'s two events), fsynced, before the opening leaves its host.  A session
+served with a `secret` (the auditor host's gate gives one to the window's opener, RT4-INT-29) refuses a hello that doesn't
+carry it, so no other process that reaches the port takes the session's coins first.
 
 `RemoteChallenger` is the client's `LiveChallenger`, its `commitment` and `open(label, index, after)`, so `LiveRecord`
 (and a client's seam over it) runs on it unchanged.  It raises `CoinError` on a refusal, a broken stream, or an opening
@@ -31,6 +34,7 @@ followed.
 """
 from __future__ import annotations
 
+import hmac
 import json
 import os
 import socket
@@ -148,12 +152,23 @@ def _hang_up(sock: socket.socket) -> None:
         pass
 
 
+def _hello_reason(head: dict, secret: bytes | None) -> str | None:
+    if secret is None:
+        return None if head == {"type": "hello"} else SEQUENCE
+    if head.get("type") != "hello" or sorted(head) != ["secret", "type"]:
+        return "a client's first frame is hello with the session's secret"
+    given = head["secret"]
+    if type(given) is not str or not hmac.compare_digest(given.encode(), secret.hex().encode()):
+        return "the hello's secret is not the session's"
+    return None
+
+
 def serve(sock: socket.socket, challenger: LiveChallenger, directory: str | os.PathLike,
-          clock: Callable[[], float] = time.monotonic) -> str | None:
+          clock: Callable[[], float] = time.monotonic, secret: bytes | None = None) -> str | None:
     """Serve one client's session on the connected stream `sock`, the challenger's record and release log in `directory`
-    (`open_session`), on the release log's clock `clock`: None when the client closed it, else why it ended.  After its
-    last frame it ends its side of the stream and returns only once the client ends its own, so a tunnel torn down after
-    `serve` returns never cuts that frame."""
+    (`open_session`), on the release log's clock `clock`: None when the client closed it, else why it ended.  With
+    `secret`, the hello must carry it (lowercase hex).  After its last frame it ends its side of the stream and returns only
+    once the client ends its own, so a tunnel torn down after `serve` returns never cuts that frame."""
     d = Path(directory)
     if challenger.record is None or not (d / RECORD).is_file() or not (d / RELEASES).is_file():
         raise CoinError("the challenger serves only once its record is signed and written (open_session)")
@@ -161,8 +176,9 @@ def serve(sock: socket.socket, challenger: LiveChallenger, directory: str | os.P
     records = {label: LiveRecord(challenger, label, clock) for label, _ in challenger.commitment.families}
     try:
         with open(d / RELEASES, "a", encoding="utf-8") as log:
-            if wire.recv() != {"type": "hello"}:
-                raise CoinError(SEQUENCE)
+            why = _hello_reason(wire.recv(), secret)
+            if why is not None:
+                raise CoinError(why)
             wire.send({"type": "commitment", "commitment": challenger.commitment.to_json()})
             while True:
                 head = wire.recv()
@@ -187,17 +203,18 @@ class RemoteChallenger:
     """The client of a challenger on its own host over the connected stream `sock`: `LiveChallenger`'s `commitment` (the
     challenger's answer to hello) and `open`.  After a refusal, a broken stream or a bad opening it refuses every coin."""
 
-    def __init__(self, sock: socket.socket) -> None:
+    def __init__(self, sock: socket.socket, secret: bytes | None = None) -> None:
         self._wire, self._ended = _Wire(sock), None
-        self.commitment = self._ask({"type": "hello"}, "commitment", LiveCommitment.from_json)
+        hello = {"type": "hello"} if secret is None else {"type": "hello", "secret": bytes(secret).hex()}
+        self.commitment = self._ask(hello, "commitment", LiveCommitment.from_json)
 
     @classmethod
-    def connect(cls, address: str) -> RemoteChallenger:
-        """The challenger at ``HOST:PORT``."""
+    def connect(cls, address: str, secret: bytes | None = None) -> RemoteChallenger:
+        """The challenger at ``HOST:PORT``, its session's `secret` in the hello when it has one."""
         host, sep, port = address.rpartition(":")
         if not sep or not host or not port.isdigit():
             raise ValueError(f"a challenger's address is HOST:PORT, not {address!r}")
-        return cls(socket.create_connection((host, int(port))))
+        return cls(socket.create_connection((host, int(port))), secret)
 
     def _end(self, why: str) -> CoinError:
         self._ended = why
