@@ -31,8 +31,9 @@ structure Tile where
   salted : Option Salted := none
   deriving DecidableEq, Repr
 
-/-- The served window's template (`served_commit.template`) at K = 4096 and at the test window's K = 128, and the two
-templates of the windows recorded before it, which the replay of those windows reads. -/
+/-- The served window's template (`served_commit.template`) at K = 4096 and at the test window's K = 128, the two
+templates of the windows recorded before it, which the replay of those windows reads, and the salted H1 tile unit at
+K = 64 (R = 4, C = 8: 32 dot products of K per tile). -/
 def tiles : List Tile := [
   ⟨"Pc8TileSide_v1{K=4096,TM=1,TN=1,DEV='sm120'}", 4096,
     "491c9160f3c0d0c95ef14575e0966bfa9958de58886c3cc46e8008c767118926582acc2199a49dae85a32656cd2b11f90bffc1105aa9d660e98f66f75ccac4af",
@@ -45,7 +46,14 @@ def tiles : List Tile := [
     "5ec6002f654337db2051fd6a98b7ec122a9f33e2d06180012177195674233d7c811c2ffd8ef49bc9a586dcf8e61ee1b16914b9f36e1bd378f9e53d0d40f4926d", none⟩,
   ⟨"Pc8TileLeafH3_v1{K=4096,DEV='sm120'}", 4096,
     "0f93d0dce725a5269061b91a1eb39ad294a1369c6f47814880acc74cef30aad734b0067d1cc7f5347bf9db4279a6519eb0abfa000c581759b14fd0ed5a7f9647",
-    "c4fb8b6c5ce91ad0bc750f315700491911f678ad219cd370baf4359dc751954c9955590eb50304a166e1cc103ffd0d431de31f03c29ad5b6d119a33502b004af", none⟩]
+    "c4fb8b6c5ce91ad0bc750f315700491911f678ad219cd370baf4359dc751954c9955590eb50304a166e1cc103ffd0d431de31f03c29ad5b6d119a33502b004af", none⟩,
+  { template := "PouwH1Tile_v1{EXACT=GemmAccumulatorS8_v2{K=64,DOT=BlackwellS8ImmaDot32_v2},R=4,C=8,PAIRS=((0,0),(0,1)," ++
+      "(0,2),(0,3),(0,4),(0,5),(0,6),(0,7),(1,0),(1,1),(1,2),(1,3),(1,4),(1,5),(1,6),(1,7),(2,0),(2,1),(2,2),(2,3)," ++
+      "(2,4),(2,5),(2,6),(2,7),(3,0),(3,1),(3,2),(3,3),(3,4),(3,5),(3,6),(3,7))}"
+    tileWork := 64 * 32
+    query := "1083a2eb9d13f77afdb936ecac9e780aa63b7f993795a8ff59d9d05ca7259c455c1220a833979cd975f907e97d9045033c5427950b7953dd33ac26cfdef44631"
+    circuit := "571e56a77368c64505e46a2affd6360d869cf17d272f86926bbb6d8974f2c39177b351e15c20bbf8fd78cbb87a4951f9e3a1062edab8e4a57905eb99e6074b2f"
+    salted := some ⟨4, 8⟩ }]
 
 /-- The pinned tile of `template`, if any. -/
 def tile? (template : String) : Option Tile := tiles.find? (·.template == template)

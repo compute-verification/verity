@@ -73,7 +73,7 @@ registered program and partition over the check's P entries in the window's cont
 def windowDomain? (p : Params) (c : Registration) : Except String Domain := do
   let n := p.check.entries
   let binding ← Identity.identityDigestSha512 SERVED_DOMAIN (Json.mkObj [("program", c.program),
-    ("partition", c.partition), ("port", port), ("schema", entrySchema), ("leaves", n), ("run", p.context)])
+    ("partition", c.partition), ("port", PouwWindow.port), ("schema", entrySchema), ("leaves", n), ("run", p.context)])
   Domain.mk? .sha512 binding owner n
 
 /-- `verify_path`: leaf `index` with siblings `sibs`, leaf level first, hashes up to `root`. -/
@@ -143,7 +143,7 @@ def opening (p : Params) (c : Registration) (units : Option (List Int)) (unit : 
   if let some why := saltReason p t salt then return some why
   let lay := t.bind (·.salted)
   let dom ← windowDomain? p c
-  let entries := c.roots.toList.reverse.find? (·.port == port)
+  let entries := c.roots.toList.reverse.find? (·.port == PouwWindow.port)
   if (entries.map (·.domain)) != some (Flock.hexOf dom.id) then
     return some "the registered window domain is not the window's served domain"
   let some root := entries.bind (fun r => fromHex? 64 (.str r.root))
@@ -182,7 +182,7 @@ def opening (p : Params) (c : Registration) (units : Option (List Int)) (unit : 
     if body.size < 2 * bcBytes then return some "the proof's body holds no A row and B row"
   | some l =>
     let names := (List.range l.r).map (s!"a{·}") ++ (List.range l.c).map (s!"b{·}") ++ ["pub"]
-    let bad := match fv with
+    let bad : Bool := match fv with
       | some s@(.obj _) => names.any fun x => pyGet? s x != some (.str Flock.HmRow.ROW_SCHEMA_V2)
       | _ => true
     if bad then return some s!"the proof's rows {", ".intercalate names} are not {Flock.HmRow.ROW_SCHEMA_V2} rows"
