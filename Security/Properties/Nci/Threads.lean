@@ -1,5 +1,5 @@
 import Properties.Nci
-import Models.Nci.Assumptions
+import Models.Nci.Assumptions.Baseline
 import Models.Nci.Assumptions.Threads
 
 /-!

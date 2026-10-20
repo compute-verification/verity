@@ -1,5 +1,5 @@
 import Definitions.Nci.Support
-import Definitions.Nci.Dark
+import Models.Nci.Assumptions.Baseline
 import Mathlib.Analysis.SpecialFunctions.Pow.Real
 
 /-!
@@ -30,33 +30,14 @@ assumption for every IU of at most `Γ` gates and uses it only for IUs that read
 honest training: an IU that runs a transformer's first attention layer and first MLP at many positions reads the
 embeddings and attention weights once, and then computes the MLP's inputs at every position itself.
 
-Every bound through a partial containment (`PartialContainment`) also rests on `BaselineRegistered`, a premise about
-what the protocol lets the baseline `θ` hold rather than about any circuit.
+Every bound through a partial containment (`PartialContainment`) also rests on `BaselineRegistered`
+(`Models/Nci/Assumptions/Baseline.lean`), a premise about what the protocol lets the baseline `θ` hold rather than about
+any circuit.
 -/
 
 namespace Nci.Assumptions
 
 open Verity
-
-/-- **The baseline is registered** ([BASELINE-REGISTERED]; CMP-66). The protocol's baseline rule: every entry of a
-declaration's baseline `θ` holds a value that, before the run's commitment, was either an output of an earlier certified
-declared computation or registered public data, and the reference circuit `c` takes as its own baseline `c.θ` exactly
-the inputs it reads of those two kinds. So no value computed off the books, before the run or during it, is ever
-registered as baseline, and neither is any novel input of `c`.
-
-What the bounds use is the rule's consequence for a partial containment `M` of `c` in `d`: a gate that `M`'s computed
-gates `S` read from outside `S` (`c.D.into M.S`: a dark gate of `c`, or an input gate of `c`) goes into `d`'s baseline
-only when it is in `c`'s baseline. A dark value, or a novel input of `c`, that `d` listed in `θ` would be read for free,
-and an IU could then thread `c`'s counted multiplications on it without paying for the read.
-
-The NCI check does not enforce the rule: it takes `θ` from the instance and checks only that each entry is an input gate,
-with no duplicates. Commitments are hiding, so it cannot tell a registered value from one computed beforehand on
-unmonitored hardware (gradients, partial sums, updated weights). Until it checks each entry's provenance, this is a
-premise of every guarantee through a partial containment. A total containment from `Declaration.Contains` carries the
-same condition on `c`'s inputs inside its definition, and gives this one
-(`Nci.SecurityProofs.baselineRegistered_ofContainment`). -/
-def BaselineRegistered (c d : Declaration) (M : PartialContainment c d) : Prop :=
-  ∀ a ∈ c.D.into M.S, M.emb a ∈ d.θ → a ∈ c.θ
 
 open Classical in
 /-- **Incompressibility of weights and activations** (the draft's weight and activation incompressibility, applied

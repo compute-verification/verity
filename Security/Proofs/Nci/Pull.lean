@@ -1,4 +1,4 @@
-import Models.Nci.Assumptions
+import Models.Nci.Assumptions.Baseline
 import Proofs.Core.Circuit
 
 /-!

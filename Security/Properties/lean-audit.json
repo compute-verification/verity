@@ -89,6 +89,7 @@
   "Definitions.Core",
   "Definitions.Nci",
   "Models.Nci.Assumptions.Threads",
+  "Models.Nci.Assumptions.Baseline",
   "NciCheck.Check",
   "Flock",
   "Properties.CertifierDevice",
@@ -148,6 +149,7 @@
     "Definitions.Core",
     "Definitions.Nci",
     "Models.Nci.Assumptions.Threads",
+    "Models.Nci.Assumptions.Baseline",
     "NciCheck.Check",
     "Properties.Nci"
    ],

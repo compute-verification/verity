@@ -1,5 +1,5 @@
 import Models.Nci.Assumptions.Threads
-import Models.Nci.Assumptions
+import Models.Nci.Assumptions.Baseline
 import Definitions.Nci.Dark
 
 /-!
