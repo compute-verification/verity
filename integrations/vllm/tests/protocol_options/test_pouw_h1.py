@@ -341,7 +341,7 @@ def test_h1_is_admitted_beside_sampled_proofs_and_executes_nowhere():
     short = PO.Context(stage="serve", enabled=(_entry(),), settings=_settings(rounds=_rounds(2)))
     assert any("2 unopened coins, fewer than the window's 3 rounds" in r for r in PO.refusals(short))
     other = PO.Context(stage="serve", enabled=("pouw:ncp-v1",), settings={"pouw": {"coins": Challenger(0, CH.entropy(0)), "runner": Runner()}})
-    assert any("'runner', 'rounds' and 'admission' are H1's" in r for r in PO.refusals(other))
+    assert any("'runner', 'rounds', 'admission' and 'served' are H1's" in r for r in PO.refusals(other))
     with pytest.raises(ValueError, match="'rounds' is the window's round coins"):
         pouw.Settings.of({"rounds": object()})
     with pytest.raises(ValueError, match="loaded Model Runner V2"):
@@ -391,6 +391,26 @@ def test_the_option_serves_the_arms_y_and_records_each_call(tmp_path):
     assert [c["base"] for c in record["calls"]] == [0, 2, 6, 8, 12, 14]
     assert record["commitment"]["rounds"] == commitment["rounds"] and record["details"]["requests"]["per_round"] == [1, 2, 0]
     assert record["details"]["requests"]["gaps"] == [] and record["details"]["requests"]["a_roots"].startswith("unbound")
+
+
+def test_the_served_setting_reaches_the_run_and_its_entries_the_commitment():
+    """The pouw setting ``served`` is the window's `pouw_h1_served.Served`: the install hands it to the run, which commits
+    its trees at its close and carries their entries and refusals in the commitment (here refused: n = 40 is no whole
+    block of the tile's 32 B rows)."""
+    from verity_vllm.protocol_options import pouw_h1_served as SV
+    with pytest.raises(ValueError, match="a fresh pouw_h1_served.Served"):
+        pouw.Settings.of({"served": object()})
+    served = SV.Served(window=bytes(64))
+    commitment, run = _serve_window(_settings(served=served))
+    assert run.served is served and any("whole blocks" in r for r in served.refused)
+    assert commitment["served"] == {"entries": [], "refused": served.refused}
+
+
+def test_the_window_connects_on_the_port_the_gate_answers():
+    from verity_vllm.protocol_options import pouw_h1_window as PHW
+    assert PHW.at_port("127.0.0.1:7811", 7812) == "127.0.0.1:7812" and PHW.at_port("h:1", None) == "h:1"
+    with pytest.raises(ValueError, match="not a TCP port"):
+        PHW.at_port("h:1", "7811")
 
 
 def test_a_layer_off_the_int8_arm_is_refused_at_install():
@@ -738,6 +758,27 @@ def test_h1_takes_its_salt_and_round_coins_from_the_auditor_hosts_challenger(tmp
     assert PHC.pinned_key(host.directory / R.KEY, pin) == host.key
     with pytest.raises(CoinError, match="not the auditor's pinned"):
         PHC.pinned_key(host.directory / R.KEY, "00" * 64)
+
+
+def test_the_record_is_one_manifest_under_its_coins(tmp_path, monkeypatch):
+    """`pouw_h1.manifest_reason` holds a served window's record to its coins: the honest record passes, and one with a
+    call's table root, a served tree's entry or a round's root changed is refused."""
+    from verity_vllm.protocol_options import pouw_h1_served as SV
+    _host(tmp_path, monkeypatch)
+    _serve_window(_remote(transcript_dir=str(tmp_path / "w"), served=SV.Served(window=bytes(64))))
+    record = json.loads((tmp_path / "w" / PH.CALLS_FILE).read_text())
+    assert PH.manifest_reason(record) is None and record["commitment"]["served"]["refused"]
+
+    def edited(edit):
+        doc = json.loads(json.dumps(record))
+        edit(doc)
+        return PH.manifest_reason(doc)
+    first = next(i for i, c in enumerate(record["calls"]) if c.get("tables"))
+    step = record["calls"][first]["step"]
+    assert f"step {step}'s calls in the record" in edited(lambda d: d["calls"][first]["tables"].update(a="00" * 64))
+    assert "calls_root is not over" in edited(lambda d: d["commitment"]["served"].update(refused=[]))
+    assert "round 1's root is not over" in edited(lambda d: d["commitment"]["rounds"][1].update(root="00" * 64))
+    assert "salt can't be derived" in edited(lambda d: d["commitment"].pop("salt_opening"))
 
 
 def _salted(tmp_path, monkeypatch, name, seed, honest, opened_on, salt_after):

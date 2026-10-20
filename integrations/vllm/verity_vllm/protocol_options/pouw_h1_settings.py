@@ -17,8 +17,8 @@ CHALLENGED = (PH.SCHEME, "ncp-v2")
 
 
 def of(raw: Mapping[str, Any]) -> tuple[Any, ...]:
-    """The settings ``rows``, ``steps``, ``runner``, ``rounds``, ``challenger``, ``session``, ``admission`` and ``gate`` of
-    `raw`, in that order; ValueError names the first bad one."""
+    """The settings ``rows``, ``steps``, ``runner``, ``rounds``, ``challenger``, ``session``, ``admission``, ``gate`` and
+    ``served`` of `raw`, in that order; ValueError names the first bad one."""
     rows, steps = raw.get("rows"), raw.get("steps")
     if rows is not None and (not isinstance(rows, int) or isinstance(rows, bool) or rows < 32 or rows % 32):
         raise ValueError("pouw setting 'rows' is a positive multiple of 32 (H1's T: vLLM's max_num_batched_tokens)")
@@ -45,7 +45,13 @@ def of(raw: Mapping[str, Any]) -> tuple[Any, ...]:
     if gate is not None and not callable(gate):
         raise ValueError("pouw setting 'gate' is gate(session, root): the challenger gate's open of the reserved "
                          "session on the window's open root (pouw_h1_window.Gate)")
-    return rows, steps, runner, rounds, challenger, session, admission, gate
+    served = raw.get("served")
+    if served is not None:
+        from verity_vllm.protocol_options import pouw_h1_served as SV
+        if not isinstance(served, SV.Served) or served.registered or served.refused:
+            raise ValueError("pouw setting 'served' is a fresh pouw_h1_served.Served: the window's A codes and B rows "
+                             "committed as the window Program's registered values")
+    return rows, steps, runner, rounds, challenger, session, admission, gate, served
 
 
 def refusals(scheme: str, settings: Any, stage: str) -> list[str]:
@@ -63,8 +69,8 @@ def refusals(scheme: str, settings: Any, stage: str) -> list[str]:
                    "admissions arrive) and 'challenger' (the auditor host's, HOST:PORT) or, in tests, 'rounds' (the "
                    "window's round coins, a LiveRecord)")
     elif scheme != PH.SCHEME and (settings.runner is not None or settings.rounds is not None
-                                  or settings.admission is not None):
-        out.append(f"{scheme}: the pouw settings 'runner', 'rounds' and 'admission' are H1's ({PH.SCHEME})")
+                                  or settings.admission is not None or settings.served is not None):
+        out.append(f"{scheme}: the pouw settings 'runner', 'rounds', 'admission' and 'served' are H1's ({PH.SCHEME})")
     if scheme not in CHALLENGED and settings.challenger is not None:
         out.append(f"{scheme}: the pouw setting 'challenger' is {' and '.join(CHALLENGED)}'s")
     if (settings.session is not None or settings.gate is not None) and settings.challenger is None:

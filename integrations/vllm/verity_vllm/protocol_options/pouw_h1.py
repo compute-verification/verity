@@ -362,7 +362,7 @@ class H1Run:
     `open_slot`). ``admission`` is `pouw_h1_requests.ROUND0` (admit in round 0 only) or ``PER_ROUND``; ``coin_source`` is
     `CHALLENGER` only for coins from the auditor host's challenger, and any other credits nothing. With ``served``
     (`pouw_h1_served.Served`) the window's A codes and B rows are also committed as the window Program's registered
-    values, at `close`, and `calls_root` binds them.
+    values, at `close`, and `calls_root` binds them; the commitment carries their entries (``served``).
 
     The Program's ``salt`` is given, or None with ``opener``: then `open_window` opens it once round 0's admissions are in
     (or at the first use of the salt), after its request table, and ``opener`` sets ``rounds`` and ``draw``."""
@@ -741,10 +741,7 @@ class H1Run:
     def calls_root(self) -> bytes:
         """SHA-512 over the manifest, in order: what the install commits to (its positions and what was bound), and with
         ``served`` its registered trees' entries."""
-        h = hashlib.sha512(b"verity/pouw/h1/calls/v2\0" + self.salt)
-        for row in self.manifest():
-            h.update(json.dumps(row, sort_keys=True).encode() + b"\n")
-        return h.digest() if self.served is None else hashlib.sha512(h.digest() + self.served.digest()).digest()
+        return calls_root(self.salt, self.manifest(), None if self.served is None else self.served.digest())
 
     def finish(self) -> None:
         """Close the window, commit its manifest, then open ``draw``'s coin after `pouw_h1_requests.draw_root` over the
@@ -754,6 +751,8 @@ class H1Run:
             return
         calls_root = self.calls_root()
         self.commits.update(calls_root=calls_root.hex(), static=self.details["static"])
+        if self.served is not None:
+            self.commits["served"] = {"entries": self.served.entries(), "refused": list(self.served.refused)}
         if "draw" not in self.commits:
             receipts = self.receipts_of(self.steps - 1)
             root = RQ.draw_root(calls_root, receipts, self.round_log)
@@ -774,6 +773,50 @@ class H1Run:
                                                     "refused": self.refused, "calls": self.manifest()}) + "\n")
 
 
+def calls_root(salt: bytes, manifest: Sequence[Mapping[str, Any]], served: bytes | None = None) -> bytes:
+    """`H1Run.calls_root` over the manifest rows `manifest`, and the served trees' digest `served` when the window has them."""
+    h = hashlib.sha512(b"verity/pouw/h1/calls/v2\0" + salt)
+    for row in manifest:
+        h.update(json.dumps(row, sort_keys=True).encode() + b"\n")
+    return h.digest() if served is None else hashlib.sha512(h.digest() + served).digest()
+
+
+def manifest_reason(record: Mapping[str, Any]) -> str | None:
+    """Why a window's record (`CALLS_FILE`) isn't one manifest under its coins: the Program salt from its salt coin over its
+    weights' root, each round's root over its parts, step s's calls digest over the record's rows of step s (their
+    tables' roots among them), and ``calls_root`` over every row and, with ``served``, the served trees' entries
+    (`pouw_h1_served.digest_of`); None when it is. The coins themselves are `pouw_h1_challenger`'s to check."""
+    from verity.core.protocols.pouw.audit import salt_of
+    from verity.core.protocols.sampled_proofs.challenger import LiveCommitment, LiveOpening
+
+    c, rows = record.get("commitment") or {}, list(record.get("calls") or ())
+    try:
+        opening = LiveOpening.from_json(c.get("salt_opening"))
+        salt = program_salt(salt_of(LiveCommitment.from_json(c.get("coins")), opening.coin, bytes.fromhex(c["weights_root"])))
+    except (CoinError, KeyError, TypeError, ValueError) as e:
+        return f"the window's salt can't be derived from its record ({e})"
+    for row in c.get("rounds") or ():
+        try:
+            r = row["round"]
+            parts = [bytes.fromhex(row[k]) for k in ("calls", "requests", "slots", "receipts")]
+        except (KeyError, TypeError, ValueError) as e:
+            return f"a round of the log is malformed ({e})"
+        if RQ.step_digest(salt, r, [m for m in rows if m.get("step") == r]) != parts[0]:
+            return f"step {r}'s calls in the record (their tables' roots among them) are not the ones under round {r}'s root"
+        if RQ.round_root(salt, r, *parts).hex() != row.get("root"):
+            return f"round {r}'s root is not over its calls, its request table, its slot table and the receipts before it"
+    served = c.get("served")
+    if served is not None:
+        from verity_vllm.protocol_options import pouw_h1_served as SV
+        try:
+            served = SV.digest_of(served["entries"], served["refused"])
+        except (KeyError, TypeError, ValueError) as e:
+            return f"the window's served trees are malformed ({e})"
+    if calls_root(salt, rows, served).hex() != c.get("calls_root"):
+        return "the window's calls_root is not over its record's calls" + (" and its served trees" if served else "")
+    return None
+
+
 def bind_all(calls: Sequence[Call], bound: Mapping[int, Mapping[str, Any]]) -> list[tuple[bytes, bytes] | None]:
     """Each call's (root(A), root(B)) from what its listeners bound (``root_a``, ``root_b``, hex), None where either is missing."""
     out: list[tuple[bytes, bytes] | None] = []
@@ -784,6 +827,6 @@ def bind_all(calls: Sequence[Call], bound: Mapping[int, Mapping[str, Any]]) -> l
 
 
 __all__ = ["CALLS_FILE", "CHALLENGER", "Call", "FILL", "H1Run", "IN_PROCESS", "Listener", "Opener", "RECORD", "SALT_TAG",
-           "SCHEME", "Static", "TABLE_TAGS", "TILE", "VllmInt8LinearH1", "bind_all", "check_tiles", "compiled",
-           "coordinate", "layout", "numpy_of", "padded", "program", "program_salt", "slots", "table_leaves", "units",
-           "utilization", "weight_root"]
+           "SCHEME", "Static", "TABLE_TAGS", "TILE", "VllmInt8LinearH1", "bind_all", "calls_root", "check_tiles", "compiled",
+           "coordinate", "layout", "manifest_reason", "numpy_of", "padded", "program", "program_salt", "slots",
+           "table_leaves", "units", "utilization", "weight_root"]

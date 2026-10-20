@@ -228,11 +228,16 @@ class Served:
 
     def digest(self) -> bytes:
         """SHA-512 over the trees' entries and what `close` refused, canonical JSON: what `calls_root` binds."""
-        return hashlib.sha512(DIGEST_TAG + canonical_json({"entries": self.entries(), "refused": self.refused})).digest()
+        return digest_of(self.entries(), self.refused)
 
     def query(self) -> dict[str, Any]:
         """The window Program's partition query: every tile of each K's template one unit (`h1window.query`)."""
         return HW.query(self.program)
+
+
+def digest_of(entries: Sequence[Mapping[str, Any]], refused: Sequence[str]) -> bytes:
+    """`Served.digest` of the trees' `entries` and `refused`, as a record carries them (the commitment's ``served``)."""
+    return hashlib.sha512(DIGEST_TAG + canonical_json({"entries": list(entries), "refused": list(refused)})).digest()
 
 
 def trees(run: Any) -> list[ServedTree]:
@@ -278,5 +283,5 @@ def register(run: Any, log: Sequence[Mapping[str, Any]] = (), directory: str | P
     return out
 
 
-__all__ = ["FILE", "NONCE", "PREFIX", "Served", "V2", "file", "held", "nonce", "ports", "prefix", "register", "row_words",
-           "served_tree", "trees"]
+__all__ = ["FILE", "NONCE", "PREFIX", "Served", "V2", "digest_of", "file", "held", "nonce", "ports", "prefix", "register",
+           "row_words", "served_tree", "trees"]

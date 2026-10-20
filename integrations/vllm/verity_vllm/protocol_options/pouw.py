@@ -95,7 +95,7 @@ QUANT_PARAMS = ("weight_scale", "weight_scale_inv", "input_scale", "weight_zero_
 #: The pinned int7 quantizer of the FP8 lane's reference (docs/pouw-fp8/reference.md), applied without a basis rotation.
 QUANTIZER = "verity.pouw.symmetric-int7-rowmax-rne-f32/v1"
 KEYS = ("coins", "retain_steps", "transcript_dir", "draws", "tamper", "device", "kernel", "cubin", "schedule", "start_forward",
-        "rows", "steps", "runner", "rounds", "challenger", "session", "admission", "gate")
+        "rows", "steps", "runner", "rounds", "challenger", "session", "admission", "gate", "served")
 #: ``ncp-v2``'s negative controls (`Settings.tamper`): a prover that commits and opens one value wrong
 TAMPERS = ("tile", "bias")
 #: where the Commit computes `ncp-v2`'s values: the host (`pouw_native`, the default) or ``cuda``, the serving kernel
@@ -178,6 +178,9 @@ class Settings:
     #: H1's ``gate(session, root)``: the challenger gate's open of the reserved session on the window's open root
     #: (`pouw_h1_window.Gate`, `pouw_h1_window.Window`)
     gate: Any = None
+    #: H1's served trees (`pouw_h1_served.Served`): the window's A codes and B rows committed as the window Program's
+    #: registered values at its close, which `calls_root` binds
+    served: Any = None
 
     @classmethod
     def of(cls, raw: Mapping[str, Any]) -> Settings:
@@ -768,7 +771,7 @@ def _install_h1(entry: str, settings: Settings, target: Target) -> Option:
                    [tuple(int(d) for d in m.weight.shape) for m in layers], settings.rows, settings.steps,
                    retain=settings.retain_steps, transcript_dir=settings.transcript_dir,
                    commit=target.context.stage != "capture", rounds=rounds, draw=draw,
-                   admission=settings.admission or RQ.ROUND0, coin_source=source, opener=opener)
+                   admission=settings.admission or RQ.ROUND0, coin_source=source, opener=opener, served=settings.served)
     run.commits.update(weights_root=weights_root(roots).hex(), coin_source=source)
     if session is None:
         run.commits.update(coins=commitment.to_json(), salt_opening=opening.to_json())
