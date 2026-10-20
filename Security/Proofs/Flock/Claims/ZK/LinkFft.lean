@@ -217,10 +217,12 @@ theorem fft_get (N d : ℕ) (hN : N ≤ d) (hd : d ≤ 64) (n : ℕ) : ∀ (s : 
     rw [FlockSoundness.Refine.getElem!_range_map _ hr, fOf_add, fOf_mul,
       ih (s + 1) _ (by omega) (r / 2) hr2, ih (s + 1) _ (by omega) (r / 2) hr2,
       twiddles_get N d s r (by omega) hr, fftSum_succ]
-    congr 1
-    · exact fftSum_congr _ _ _ _ _ hx
-    · congr 1
-      exact fftSum_congr _ _ _ _ _ hx
+    first
+      | (rw [fftSum_congr (s + 1) n (fun c => fOf (u (2 * c))) _ _ hx,
+          fftSum_congr (s + 1) n (fun c => fOf (u (2 * c + 1))) _ _ hx]
+         done)
+      | exact congrArg₂ (· + ·) (fftSum_congr _ _ _ _ _ hx)
+          (congrArg (FlockLevel3.What s (FlockLevel3.omega (r * 2 ^ s)) * ·) (fftSum_congr _ _ _ _ _ hx))
 
 /-! ## Level 0's rows -/
 
