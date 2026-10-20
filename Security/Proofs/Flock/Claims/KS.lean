@@ -77,6 +77,7 @@ import Proofs.Flock.Claims.KS.PlainClashLater
 import Proofs.Flock.Claims.KS.ForkSim
 import Proofs.Flock.Claims.KS.PlainFork
 import Proofs.Flock.Claims.KS.PlainForkClash
+import Proofs.Flock.Claims.KS.PlainCapsDep
 import Proofs.Flock.Claims.KS.ForkAlign
 import Proofs.Flock.Claims.KS.SlotDist
 import Proofs.Flock.Claims.KS.RepDist
