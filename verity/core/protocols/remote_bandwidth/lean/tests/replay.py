@@ -151,13 +151,16 @@ def _synthetic(label: bytes, n: int) -> str:
 
 
 def pace_json(session: dict) -> dict | None:
-    """The pace a `verifier.json` session ran under (`audit.Pace`, as `params_json` writes it): its record's, else
-    `pace_of`'s k and T (which `verifier.session` makes its `Pace`), else None."""
+    """The pace a `verifier.json` session ran under (`audit.Pace`, as `params_json` writes it): its record's, else the
+    session's own, either the `audit.Pace` the `--pace K` driver wrote or `pace_of`'s k and T (which
+    `verifier.session` makes its `Pace`), else None."""
     public = ((session.get("record") or {}).get("public") or {}).get("pace")
     if public is not None:
         return {"k": public["k"], "window_ns": public["window_ns"]}
     p = session.get("pace")
-    return None if p is None else {"k": p["k"], "window_ns": round(p["t_ms"] * 1e6)}
+    if p is None:
+        return None
+    return {"k": p["k"], "window_ns": p["window_ns"] if "window_ns" in p else round(p["t_ms"] * 1e6)}
 
 
 def case_of(reg: dict, session: dict) -> tuple[dict, dict]:
