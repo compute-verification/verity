@@ -230,6 +230,20 @@ def test_the_stated_node_has_a_burst_for_each_way_back() -> None:
         dataclasses.replace(n, link_burst_bytes=-1.0)
 
 
+def test_the_node_carries_a_write_ceiling_per_tier() -> None:
+    """Beside its read ceilings a node has one GPU's and the host DRAM's write ceilings, `timing`'s in `Node.stated`
+    and by default, each a positive finite rate, and no DPU's (MEM-45)."""
+    for n in (ledger.Node.stated(), ledger.Node.stated(reported_read_bytes_per_s=2e13), node()):
+        assert (n.gpu_write_bytes_per_s, n.host_write_bytes_per_s) == (
+            timing.GPU_WRITE_BYTES_PER_S, timing.HOST_WRITE_BYTES_PER_S) == (1.597e12, 819.2e9)
+        assert (n.to_json()["gpu_write_bytes_per_s"], n.to_json()["host_write_bytes_per_s"]) == (1.597e12, 819.2e9)
+    assert not [f.name for f in dataclasses.fields(ledger.Node) if "dpu" in f.name]
+    for name in ("gpu_write_bytes_per_s", "host_write_bytes_per_s"):
+        for bad in (0.0, -1.0, math.inf):
+            with pytest.raises(ValueError, match=name):
+                dataclasses.replace(ledger.Node.stated(), **{name: bad})
+
+
 def test_wrong_receipts_fill_the_groups_at_their_rates(store) -> None:
     """With 7 of 20 receipts drawn a window, the pooled wrong receipts W are spread over the groups at
     v = (1, 349, 300, 300, L) a wrong read, highest first, at most N a group of one pass."""
