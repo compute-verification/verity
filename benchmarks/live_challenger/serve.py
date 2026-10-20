@@ -14,8 +14,8 @@ log signed when the session ends.
 - **The coins** are the operating system's bytes as the Lean verifier of record reads them (`one_stage.verifier.coins`:
   `IO.getRandomBytes`, A3), its `sampled-proofs-verifier` built with `lake` on first use; a host where the Lean can't
   answer starts no session.
-- **The session.**  `--session` is the id the auditor launched it under, which the auditor's session record names for its
-  window; the key's leaf state records it, so the key signs no id twice.  It commits to the layout's coins (`--scheme`,
+- **The session.**  `--session` is the id the auditor launched it under, which the auditor's signed ledger opens for
+  its window; the key's leaf state records it, so the key signs no id twice.  It commits to the layout's coins (`--scheme`,
   `--epoch`, `--families` as `[[label, count], ...]`), signs and writes `record.json`, `key.json` and the head of
   `releases.jsonl` to `--out` (`remote.open_session`), and only then listens on 127.0.0.1:PORT and prints `listening
   127.0.0.1:PORT` (PORT 0: one the system picks).  With `--peer` it then opens `ssh -R PORT` to that machine of `--peers`

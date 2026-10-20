@@ -11,7 +11,7 @@
 #     -- bash benchmarks/live_challenger/run.sh
 #
 # Node 1, as remote_session's verifier: a session waits on its client for the whole Commit, and vy-nebius-cpu-1 stops a
-# run that holds no check slot (slot_only.py). SESSION is the session's id, the one the auditor's session record names
+# run that holds no check slot (slot_only.py). SESSION is the session's id, the one the auditor's signed ledger opens
 # for its window (the key signs each id once). FAMILIES is the session's coin layout, [[label, count], ...] (the vLLM
 # Commit's is `challenge.layout(runs)`); EPOCH its epoch (default 0); KEY the challenger's LMS key directory on this
 # machine (default ~/.local/state/live-challenger/key, made on first use over KEYGEN_WORKERS cores, never under out/);
@@ -20,7 +20,7 @@
 # standard library and this tree). Its coins are the Lean verifier of record's (`one_stage.verifier.coins`), built with
 # this machine's lake (~/.elan/bin) on first use. The verifier reads out/record.json, out/releases.jsonl and
 # out/challenger.json (the release log's signed close) from this run (`research fetch RUN`, then `remote.trusted_session`
-# with the auditor's session record), never from the prover's.
+# with the auditor's signed ledger, infra's windows.jsonl), never from the prover's.
 #   research fetch RUN --all   # the run's out/ lands in ~/.research/runs/RUN/out
 set -euo pipefail
 O=${RESEARCH_RUN_DIR:?}/out

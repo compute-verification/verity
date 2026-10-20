@@ -1,7 +1,7 @@
 """The challenger's host process (`serve.py`) over loopback with a test key and the Lean verifier's coins stubbed
 (`stub_serve.py`): it draws every coin and salt from those coins, signs and writes its record before it listens, serves one
 session, signs its release log when it ends and publishes nothing secret; the verifier checks the session from the
-process's `out/` and the auditor's session record alone.  A Lean that can't answer starts no session, a second session
+process's `out/` and the auditor's signed ledger alone.  A Lean that can't answer starts no session, a second session
 signs at the key's next leaves, a session id the key has signed for is refused, a key inside `out/` is refused, a broken
 sequence ends the session with exit 1, signed as such, and with `--peer` the tunnel opens once the challenger listens and
 a tunnel that ends first ends it."""
@@ -27,7 +27,7 @@ SERVE = Path(__file__).resolve().parents[1] / "serve.py"
 STUB = Path(__file__).resolve().parent / "stub_serve.py"
 FAMILIES = [["positions", 2], ["replay", 1]]
 HOST = "vy-nebius-cpu-1"
-WINDOW = {"commit": "11" * 64, "period": 0, "pouw_salt": "22" * 64, "stream": "33" * 64}
+WINDOW = {"commit": "11" * 64, "period": "p-0"}
 
 
 def lms_verify(key: C.ChallengerKey, message: bytes, signature: bytes) -> bool:
@@ -52,13 +52,23 @@ def finish(proc: subprocess.Popen) -> tuple[int, str]:
     return proc.returncode, err
 
 
-def trusted(out: Path, session: str = "s-out"):
-    """The verifier's read of `out`, the auditor's record naming `session` for `WINDOW` under the key the run wrote."""
+def trusted(out: Path, session: str = "s-out", closed: bool = True):
+    """The verifier's read of `out`, the auditor's ledger opening `session` for `WINDOW` on `HOST` under the key the run
+    wrote (pinned from the key's own directory, outside `out`) and ending it as `closed` says, sealing `out`'s files,
+    each entry signed with that key (at leaves the run doesn't reach)."""
     key = C.ChallengerKey.from_json(json.loads((out / R.KEY).read_text()))
-    auditor = out.parent / f"auditor-{session}.jsonl"
-    auditor.write_text(json.dumps({**WINDOW, "code": "ab" * 20, "key": hashlib.sha512(key.public).hexdigest(),
-                                   "session": session}) + "\n")
-    return R.trusted_session(out, auditor, WINDOW, key, lms_verify)
+    assert key.public == (out.parent / "key" / "public").read_bytes()
+    private = lms.keygen(lms.Params(64, key.W, key.H), (out.parent / "key" / "seed").read_bytes())
+    files = {p.name: hashlib.sha512(p.read_bytes()).hexdigest() for p in sorted(out.iterdir()) if p.is_file()}
+    lines: list[str] = []
+    for kind, body in (("open", {"window": WINDOW, "host": HOST, "pinned": "ab" * 20,
+                                 "key_sha512": hashlib.sha512(key.public).hexdigest()}),
+                       ("end", {"closed": closed, "files": files, "rc": 0})):
+        lines.append(C.ledger_line(lines, kind, session, body, key.public[:16],
+                                   lambda m: lms.sign_at(private, 2 ** key.H - 1, m).encode()))
+    ledger = out.parent / f"windows-{session}.jsonl"
+    ledger.write_text("".join(line + "\n" for line in lines))
+    return R.trusted_session(out, ledger, WINDOW, key, lms_verify)
 
 
 def close(out: Path) -> dict:
