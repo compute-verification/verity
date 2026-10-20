@@ -90,3 +90,11 @@ argv = ["python3.12", "-s", "{src}/infra/control/top_watch.py", "sweep", "--stat
 env_files = ["/root/.config/verity/relay.env", "/data/agent-watch/cursor.env"]
 needs = ["{dir}/top-sweep.json"]
 env = { FLEET_DIR = "{dir}/fleet" }
+
+# the challenger host's ledger and each ended session put in the store every 5 min (publish.sh, as the challenger-host lane wrote
+# it: it is installed on the pod at {dir}/challenger/publish.sh, not part of {src})
+[[loop]]
+name = "challenger-publish"
+argv = ["bash", "{dir}/challenger/publish.sh", "--every", "300"]
+env_files = ["/root/.config/verity/r2.env"]
+env = { VY_CHALLENGER_STATE = "{dir}/challenger/state", RESEARCH_STORE = "/root/watchers-challenger-store" }
