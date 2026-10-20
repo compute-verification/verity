@@ -33,7 +33,9 @@ LANE = {"ALU": 1, "IMAD": 1, "FFMA": 1, "HFMA2": 1, "VIMNMX": 1, "F2FS": 1, "XU"
         "IDP4A": 1, "LEA": 1, "FLO": 1, "VIADD": 1,
         "ALU64": 2, "IMADW": 2, "DMUL": 2, "W2": 2, "MOV64": 2, "CVT64": 2,
         # a predicate, charged a whole word
-        "ISETP": 1}
+        "ISETP": 1,
+        # the DC measured readings' catch-all (A2's): an instruction no class names, one word as NOROW on sm_120
+        "UNLISTED": 1}
 # REDUX writes a uniform register, ahead of NO_DEST's RED (a reduction into memory)
 UNIFORM = {"UNI": 1, "UNI64": 2, "REDUX": 1}
 LOADS = {"LDG32": 1, "LDG64": 2, "LDG128": 4, "LDG128CG": 4, "LDG128NA": 4, "LDG256": 8, "LDG256CG": 8,
