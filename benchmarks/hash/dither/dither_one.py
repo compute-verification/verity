@@ -16,7 +16,8 @@ forward's stream, is two launches: its A slot and table (`h1c_a_call`, the root 
 (each unit's seeds, receipt, z and y; DITHER_UNITS picks the form, `block` (`h1o_unitsb`, a unit a block, the default),
 `split` (`h1o_unitss`, a unit a block of six warps) or `warp` (`h1o_units`, a unit a warp)).  After step s's forward: its
 admit and z tables, the a-step,
-admit-step and z-step trees, the round over them, and the receipt trees, then the round root recorded
+admit-step and z-step trees, the round over them, and the receipt trees (with `Window.tree_streams` set, the receipt
+trees and the admit tables on streams of their own beside the rest), then the round root recorded
 (`sampled_proofs.challenger.LiveRecord`; its coin is not read: no seed waits on it).
 
 The served value is the dithered product z = X (B + c)^T, exact for every int8 B, with X the int8 A + b the MMA reads (it
@@ -189,7 +190,10 @@ class Window:
         self.round_log: list[dict] = []
         self.phases: list[dict] = []
         self.t_before = 0.0
-        self.ev = [torch.cuda.Event(enable_timing=True) for _ in range(5)]
+        self.ev = [torch.cuda.Event(enable_timing=True) for _ in range(8)]
+        # (receipt trees', admit tables') streams: between steps those two builds run beside the z tables and the step
+        # trees (they read none of each other's outputs; the round waits on the admit tables, the record on all)
+        self.tree_streams: tuple | None = None
         self.nvtx = os.environ.get("DITHER_NSYS") == "prof"
         self.phase_open = False
         self._epoch()
@@ -320,19 +324,38 @@ class Window:
         torch.cuda.synchronize()
         t_fwd = time.perf_counter()
         s, m, pre, ev = self.s, self.m, self.pre, self.ev
+        par = self.tree_streams is not None
+        main = torch.cuda.current_stream()
         self.phase("admit_tables")
         ev[0].record()
-        self.c.build(pre["admit"], self.stepv[0:1])
+        if par:
+            rs, ads = self.tree_streams
+            for x in (rs, ads):
+                x.wait_event(ev[0])
+            with torch.cuda.stream(rs):
+                ev[5].record(rs)
+                self.c.build(self.rset, self.stepv[0:1])
+                ev[6].record(rs)
+            with torch.cuda.stream(ads):
+                self.c.build(pre["admit"], self.stepv[0:1])
+                ev[7].record(ads)
+        else:
+            self.c.build(pre["admit"], self.stepv[0:1])
         ev[1].record()
         self.phase("z_tables")
         self.c.build(pre["z"], self.stepv[0:1])
         ev[2].record()
         self.phase("step_trees")
+        if par:
+            main.wait_event(ev[7])
         self.c.build(pre["mid"], self.stepv[0:1])
         self.c.build(pre["round"], self.stepv[0:1])
         ev[3].record()
         self.phase("receipt_trees")
-        self.c.build(self.rset, self.stepv[0:1])
+        if par:
+            main.wait_event(ev[6])
+        else:
+            self.c.build(self.rset, self.stepv[0:1])
         ev[4].record()
         self.phase("root_read")
         root = unwords(pre["round"].root(0))
@@ -341,9 +364,11 @@ class Window:
         self.rounds.record(root)
         t_end = time.perf_counter()
         self.phase(None)
-        self.phases.append({"m": m, "forward_ms": 1e3 * (t_fwd - self.t_before), "admit_tables_ms": ev[0].elapsed_time(ev[1]),
+        self.phases.append({"m": m, "forward_ms": 1e3 * (t_fwd - self.t_before),
+                            "admit_tables_ms": ev[0].elapsed_time(ev[7] if par else ev[1]),
                             "z_tables_ms": ev[1].elapsed_time(ev[2]), "step_trees_ms": ev[2].elapsed_time(ev[3]),
-                            "receipt_trees_ms": ev[3].elapsed_time(ev[4]), "record_host_ms": 1e3 * (t_end - t_root),
+                            "receipt_trees_ms": ev[5].elapsed_time(ev[6]) if par else ev[3].elapsed_time(ev[4]),
+                            "trees_ms": ev[0].elapsed_time(ev[4]), "record_host_ms": 1e3 * (t_end - t_root),
                             "between_ms": 1e3 * (t_end - t_fwd)})
         if self.cap is not None:
             self.caps[self.cap].update(

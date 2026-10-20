@@ -25,10 +25,12 @@ is committed as CA's leaves instead of the window's row z tables: the epilogue w
 then its y = dequant(z), 0 past m) and the window builds every call's leaf table between steps in the row z tables'
 place, beside the receipt trees, each root the call's leaf of the z-step tree, so the round over them still comes before
 the draw; with z="zyc" (-zyc) the side stream builds each call's table instead, after the call's receipts (one build a
-call: about 0.7 ms each on the RTX against 2.9 ms for all 128 batched, zleaf.py).  With ao=True (the arms' -ao) the
+call: about 0.7 ms each on the RTX against 2.9 ms for all 128 batched, zleaf.py).  With ao="a" (the arms' -ao) the
 A tables run on a third stream above the units' priority: A_w waits on its quantizer and the units of call w on
 A_w, so each call's A table still precedes its seeds and units, and A_(w+1) runs beside call w's units (the same
-launches; only the streams they wait on change).
+launches; only the streams they wait on change); with ao="as" (-aos; kh and hbk, whose seeds are a launch of their own)
+each call's seeds follow its A table on that stream, and its units wait on both.  With pt=True (-pt) the window builds
+the receipt trees and the admit tables between steps on streams of their own (`Window.tree_streams`).
 
     import dither_a as DA
     DA.patch(t=T, h1c="libh1c.so", h1o="libh1o.so", unit="h1r")   # before LLM()
@@ -76,6 +78,7 @@ UNITS = ("h1r", "kh", "hbk")
 # and no z table, y only: the leaves'
 # cost floor, never credited
 ZMODES = {"none": 0, "row": 1, "zy": 2, "zyc": 2}
+AO = ("", "a", "as")   # nothing, the A tables, or the A tables and (kh, hbk) the seeds on the A stream
 ZY_KIND = "zy-unit-table"
 UNIT = (32, 32)     # (UR, UC): the receipts' units; a narrower down_proj unit changes only this
 H1R_BLOCK, H1R_SPLIT = 3, 4     # h1r_launch's versions: a unit a block, a unit six warps
@@ -246,12 +249,17 @@ def _piecewise() -> bool:
 class Side:
     """The serving stream's GEMM state and the side stream's units over a dither_one Window."""
 
-    def __init__(self, win: DO.Window, unit: str, h1u: str | None, z: str = "row", ao: bool = False):
+    def __init__(self, win: DO.Window, unit: str, h1u: str | None, z: str = "row", ao: str = "", pt: bool = False):
         if unit not in UNITS:
             raise ValueError(f"dither-a's unit: one of {UNITS}, not {unit!r}")
-        self.win, self.unit, self.z, self.zl, self.ao, dev = win, unit, z, ZMODES[z], ao, win.dev
+        if ao not in AO or (ao == "as" and unit == "h1r"):
+            raise ValueError(f"dither-a's ao: one of {AO} ('as' for kh and hbk, whose seeds are a launch of their own), "
+                             f"not {ao!r} with unit {unit!r}")
+        self.win, self.unit, self.z, self.zl, self.ao, self.pt, dev = win, unit, z, ZMODES[z], ao, pt, win.dev
         self.side = torch.cuda.Stream(device=dev)
         self.fork, self.join = torch.cuda.Event(), torch.cuda.Event()
+        if pt:
+            win.tree_streams = (torch.cuda.Stream(device=dev), torch.cuda.Stream(device=dev))
         if ao:
             # the A tables on a stream of their own above the units' priority: a call's table is a chain of dependent
             # compressions on a few blocks, so it runs beside the previous call's units, which fill the device
@@ -352,6 +360,13 @@ class Side:
                                    wt.stride(0), y.stride(0), BLOCK_M=bm, BLOCK_N=bn, BLOCK_K=bk, SPLIT_K=split, ZL=self.zl,
                                    UR=ur, UC=uc, num_warps=warps, num_stages=stages, **EL.OPTS)
 
+    def seeds(self, w: int, st: int) -> int:
+        """kh's and hbk's seeds of call w (h1r version 0), from the window's salt and the call's A root."""
+        win = self.win
+        return win.r.lib.h1r_launch(win.plan.table.data_ptr() + win.call_bytes * w, 1, win.units[w], self.ks1[w],
+                                    win.salt.data_ptr(), win.step_base.data_ptr(), win.plan.seeds.data_ptr(),
+                                    self.stage.data_ptr(), 0, 0, st)
+
     def units(self, w: int, M: int, st: int, s_w: torch.Tensor) -> int:
         win = self.win
         n, k = win.nk[w]
@@ -359,8 +374,7 @@ class Side:
         if self.unit == "h1r":
             return win.r.lib.h1r_launch(tab, 1, win.units[w], self.ks1[w], win.salt.data_ptr(), win.step_base.data_ptr(),
                                         win.plan.seeds.data_ptr(), self.stage.data_ptr(), 0, self.versions[w], st)
-        rc = win.r.lib.h1r_launch(tab, 1, win.units[w], self.ks1[w], win.salt.data_ptr(), win.step_base.data_ptr(),
-                                  win.plan.seeds.data_ptr(), self.stage.data_ptr(), 0, 0, st)
+        rc = 0 if self.ao == "as" else self.seeds(w, st)
         live = -(-min(M, win.t) // 32)
         if self.unit == "hbk":
             return rc or self.h.kh_one(win.slot[w].data_ptr(), win.wt[w].data_ptr(), win.t, n, k,
@@ -389,6 +403,8 @@ class Side:
             # before the call's seeds and units, and A_(w+1) overlaps the units of call w
             self.astream.wait_event(self.fork)
             rc = win.a_call(w, win.slot[w], win.scale[w], self.astream.cuda_stream)
+            if self.ao == "as":
+                rc = rc or self.seeds(w, self.astream.cuda_stream)
             self.a_done.record(self.astream)
             self.side.wait_event(self.a_done)
             self.gemm(w, xq, s_a, wt, s_w, y)
@@ -434,7 +450,8 @@ class Side:
                 "build_reads": recs + 64 * segs, "build_writes": 64 * segs + 64 * 2 * leaves}
 
     def info(self) -> dict:
-        return {"form": FORM, "unit": self.unit, "z": self.z, "a_overlap": self.ao, "leaf_bytes_per_step": self.leaf_bytes(),
+        return {"form": FORM, "unit": self.unit, "z": self.z, "a_overlap": self.ao, "trees_parallel": self.pt,
+                "leaf_bytes_per_step": self.leaf_bytes(),
                 "a_form": self.win.c.a_form, "calls": self.calls, "joins": self.joins,
                 "h1r_versions": {DF.SITES[w % 4]: self.versions[w] for w in range(min(4, self.win.L))}
                 if self.unit == "h1r" else None, "gemm_cfgs": {f"{n}x{k}@M{m}": c for (n, k, m), c in self.cfgs.items()}}
@@ -481,7 +498,7 @@ CONF: dict = {}
 def side() -> Side:
     if not SIDE:
         win = DO._window(torch.device("cuda"))
-        SIDE.append(Side(win, CONF["unit"], CONF["h1u"], CONF["z"], CONF["ao"]))
+        SIDE.append(Side(win, CONF["unit"], CONF["h1u"], CONF["z"], CONF["ao"], CONF["pt"]))
         before = DO.Window.before
 
         after = DO.Window.after
@@ -528,13 +545,14 @@ def _mm_fake(x, w, s_w, idx):
 
 
 def patch(t: int, h1c: str, h1o: str, unit: str = "h1r", h1u: str | None = None, key: bytes | None = None,
-          z: str = "row", ao: bool = False) -> None:
+          z: str = "row", ao: str = "", pt: bool = False) -> None:
     """dither_one's patch (its weights' registry, the window's libraries), then every int8-exact linear's `apply`
     through ``dithera::mm`` (before the engine is built, in its process)."""
     from verity_vllm.engine import int8_vllm as IV
-    if unit not in UNITS or z not in ZMODES:
-        raise ValueError(f"dither-a's unit: one of {UNITS}, not {unit!r}; its z: one of {tuple(ZMODES)}, not {z!r}")
-    CONF.update(unit=unit, h1u=h1u, z=z, ao=ao)
+    if unit not in UNITS or z not in ZMODES or ao not in AO:
+        raise ValueError(f"dither-a's unit: one of {UNITS}, not {unit!r}; its z: one of {tuple(ZMODES)}, not {z!r}; "
+                         f"its ao: one of {AO}, not {ao!r}")
+    CONF.update(unit=unit, h1u=h1u, z=z, ao=ao, pt=pt)
     os.environ.setdefault("DITHER_A_FORM", "3")
     DO.patch(t=t, h1c=h1c, h1o=h1o, key=key, gate=True)
 
