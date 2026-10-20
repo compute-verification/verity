@@ -22,6 +22,7 @@ T0 = datetime(2026, 10, 20, 9, 30, 0, tzinfo=timezone.utc)
 PIN = "c" * 40
 FAMILIES = [["pouw/salt", 1], ["pouw/round", 3]]
 SECRET = bytes(range(32))
+CIRCUIT = "9f" * 64
 
 
 @pytest.fixture
@@ -85,7 +86,7 @@ def checked(host):
 
 def test_a_lanes_period_holds_exactly_its_windows_between_open_and_close_each_with_its_outcome(host, signer):
     before = ok(ssh(host, signer, open_words("01" * 64), "hash", token="0001"))["session"]
-    opened = ok(ssh(host, signer, "period-open --name hash-p1", "hash"))
+    opened = ok(ssh(host, signer, f"period-open --name hash-p1 --cap 8 --circuit {CIRCUIT}", "hash"))
     assert opened["kind"] == "period-open" and opened["body"]["lane"] == "hash" and opened["body"]["by"] == "hash"
     done = ok(ssh(host, signer, open_words("02" * 64), "hash", token="0002"))["session"]
     other = ok(ssh(host, signer, open_words("03" * 64), "vllm", token="0003"))["session"]
@@ -103,7 +104,7 @@ def test_a_lanes_period_holds_exactly_its_windows_between_open_and_close_each_wi
     assert list(periods) == ["hash-p1"] and periods["hash-p1"]["windows"] == ["02" * 64, "04" * 64]
     assert before not in {w["session"] for w in closed["body"]["windows"]}
 
-    ok(ssh(host, signer, "period-open --name hash-p2", "hash"))
+    ok(ssh(host, signer, f"period-open --name hash-p2 --cap 8 --circuit {CIRCUIT}", "hash"))
     full = ok(ssh(host, signer, open_words("06" * 64), "hash", token="0006"))["session"]
     end(host, signer, full, True)
     assert ok(ssh(host, signer, "period-close --name hash-p2", "hash"))["body"]["complete"] is True
@@ -111,31 +112,33 @@ def test_a_lanes_period_holds_exactly_its_windows_between_open_and_close_each_wi
 
 
 def test_periods_never_overlap_in_a_lane_a_name_is_used_once_and_only_its_lane_or_vy_admin_closes_one(host, signer):
-    ok(ssh(host, signer, "period-open --name p1", "hash"))
-    refused(ssh(host, signer, "period-open --name p2", "hash"), "lane hash has period p1 open")
-    refused(ssh(host, signer, "period-open --name p1", "vllm"), "a period's name is used once")
+    ok(ssh(host, signer, f"period-open --name p1 --cap 8 --circuit {CIRCUIT}", "hash"))
+    refused(ssh(host, signer, f"period-open --name p2 --cap 8 --circuit {CIRCUIT}", "hash"), "lane hash has period p1 open")
+    refused(ssh(host, signer, f"period-open --name p1 --cap 8 --circuit {CIRCUIT}", "vllm"), "a period's name is used once")
     refused(ssh(host, signer, "period-close --name p1", "vllm"), "period p1 is lane hash's")
     refused(ssh(host, signer, "period-close --name nope", "hash"), "no open period nope")
-    ok(ssh(host, signer, "period-open --name v1", "vllm"))
+    ok(ssh(host, signer, f"period-open --name v1 --cap 8 --circuit {CIRCUIT}", "vllm"))
     ok(admin(host, signer, "period-close --name p1"))
     refused(ssh(host, signer, "period-close --name p1", "hash"), "no open period p1")
-    refused(ssh(host, signer, "period-open --name p1", "hash"), "a period's name is used once")
+    refused(ssh(host, signer, f"period-open --name p1 --cap 8 --circuit {CIRCUIT}", "hash"), "a period's name is used once")
     assert [p["close"] is None for p in checked(host).values()] == [False, True]
 
 
 def test_who_writes_a_period(host, signer):
-    rc, out = A.gate(["--ssh", "period-open --name p1"], host, **hooks(host, signer))
+    rc, out = A.gate(["--ssh", f"period-open --name p1 --cap 8 --circuit {CIRCUIT}"], host, **hooks(host, signer))
     assert rc == 3 and "reads only" in json.loads(out)["refused"]
-    refused(ssh(host, signer, "period-open --name p1 --lane vllm", "hash"), "unrecognized arguments: --lane vllm")
-    refused(admin(host, signer, "period-open --name p1"), "--lane")
-    refused(admin(host, signer, "period-open --name p1 --lane vy-admin"), "--lane 'vy-admin'")
-    refused(admin(host, signer, "period-open --name 'p 1' --lane kernels"), "--name 'p 1'")
+    refused(ssh(host, signer, f"period-open --name p1 --cap 8 --circuit {CIRCUIT} --lane vllm", "hash"),
+            "unrecognized arguments: --lane vllm")
+    refused(admin(host, signer, f"period-open --name p1 --cap 8 --circuit {CIRCUIT}"), "--lane")
+    refused(admin(host, signer, f"period-open --name p1 --cap 8 --circuit {CIRCUIT} --lane vy-admin"), "--lane 'vy-admin'")
+    refused(admin(host, signer, f"period-open --name 'p 1' --cap 8 --circuit {CIRCUIT} --lane kernels"), "--name 'p 1'")
     assert A.read_ledger(host.ledger) == []
-    assert ok(admin(host, signer, "period-open --name k1 --lane kernels"))["body"]["by"] == "vy-admin"
+    opened = ok(admin(host, signer, f"period-open --name k1 --cap 8 --circuit {CIRCUIT} --lane kernels"))
+    assert opened["body"]["by"] == "vy-admin"
 
 
 def test_vy_admins_window_for_a_lane_counts_in_that_lanes_period_and_no_lane_key_opens_one_for_another(host, signer):
-    ok(admin(host, signer, "period-open --name k1 --lane kernels"))
+    ok(admin(host, signer, f"period-open --name k1 --cap 8 --circuit {CIRCUIT} --lane kernels"))
     refused(ssh(host, signer, open_words("01" * 64, "--for kernels"), "hash"), "unrecognized arguments: --for kernels")
     refused(admin(host, signer, open_words("01" * 64, "--for auditor")), "--for 'auditor'")
     mine = ok(admin(host, signer, open_words("02" * 64), token="0002"))
@@ -152,13 +155,13 @@ def test_vy_admins_window_for_a_lane_counts_in_that_lanes_period_and_no_lane_key
 
 
 def test_a_period_closes_only_once_its_windows_have_ended_and_an_empty_one_is_incomplete(host, signer):
-    ok(ssh(host, signer, "period-open --name p1", "hash"))
+    ok(ssh(host, signer, f"period-open --name p1 --cap 8 --circuit {CIRCUIT}", "hash"))
     s = ok(ssh(host, signer, open_words("01" * 64), "hash", token="0001"))["session"]
     refused(ssh(host, signer, "period-close --name p1", "hash", active=lambda _: True), f"window {s} still runs")
     stopped = ok(ssh(host, signer, "period-close --name p1", "hash"))
     assert stopped["body"]["windows"] == [{"root": "01" * 64, "session": s, "complete": False}]
 
-    ok(ssh(host, signer, "period-open --name p2", "hash"))
+    ok(ssh(host, signer, f"period-open --name p2 --cap 8 --circuit {CIRCUIT}", "hash"))
     empty = ok(ssh(host, signer, "period-close --name p2", "hash"))
     assert empty["body"]["windows"] == [] and empty["body"]["complete"] is False
     checked(host)
@@ -177,7 +180,7 @@ WHY = {"drops a window": LISTS, "claims complete": LISTS, "lists another lane's"
 
 @pytest.mark.parametrize("case", list(WHY))
 def test_the_check_refuses_a_signed_period_entry_the_gate_would_not_write(host, signer, case):
-    ok(ssh(host, signer, "period-open --name p1", "hash"))
+    ok(ssh(host, signer, f"period-open --name p1 --cap 8 --circuit {CIRCUIT}", "hash"))
     s = ok(ssh(host, signer, open_words("01" * 64), "hash", token="0001"))["session"]
     o = ok(ssh(host, signer, open_words("02" * 64), "vllm", token="0002"))["session"]
     end(host, signer, s, False)
@@ -192,7 +195,7 @@ def test_the_check_refuses_a_signed_period_entry_the_gate_would_not_write(host, 
               {**close, "windows": [w, {"root": "02" * 64, "session": o, "complete": False}], "complete": False})
     elif case == "empty but complete":
         ok(ssh(host, signer, "period-close --name p1", "hash"))
-        ok(ssh(host, signer, "period-open --name p2", "hash"))
+        ok(ssh(host, signer, f"period-open --name p2 --cap 8 --circuit {CIRCUIT}", "hash"))
         forge(host, signer, "period-close", None, {**close, "period": "p2", "windows": [], "complete": True})
     elif case == "overlaps":
         forge(host, signer, "period-open", None, {"period": "p2", "lane": "hash", "by": "hash"})
@@ -207,8 +210,64 @@ def test_the_check_refuses_a_signed_period_entry_the_gate_would_not_write(host, 
 
 
 def test_an_end_after_its_periods_close_leaves_the_close_and_the_ledger_standing(host, signer):
-    ok(ssh(host, signer, "period-open --name p1", "hash"))
+    ok(ssh(host, signer, f"period-open --name p1 --cap 8 --circuit {CIRCUIT}", "hash"))
     s = ok(ssh(host, signer, open_words("01" * 64), "hash", token="0001"))["session"]
     ok(ssh(host, signer, "period-close --name p1", "hash"))
     end(host, signer, s, True)
     assert checked(host)["p1"]["close"]["body"]["windows"] == [{"root": "01" * 64, "session": s, "complete": False}]
+
+
+def test_a_period_open_commits_its_cap_and_circuit_and_the_gate_admits_no_window_past_the_cap(host, signer):
+    """compute-accounting's CircuitWorkPeriod (#2722) reads both, committed before window 0's first coin."""
+    opened = ok(admin(host, signer, "period-open --name k1 --lane kernels --cap 2 --circuit pouw/pearl-c@v3"))
+    assert (opened["body"]["cap"], opened["body"]["circuit"]) == (2, "pouw/pearl-c@v3")
+    ok(admin(host, signer, open_words("01" * 64, "--for kernels"), token="0001"))
+    ok(ssh(host, signer, open_words("02" * 64), "hash", token="0002"))
+    ok(admin(host, signer, open_words("03" * 64, "--for kernels"), token="0003"))
+    n = len(A.read_ledger(host.ledger))
+    refused(admin(host, signer, open_words("04" * 64, "--for kernels"), token="0004"), "period k1 holds its cap of 2")
+    assert len(A.read_ledger(host.ledger)) == n
+    ok(admin(host, signer, "period-close --name k1"))
+    ok(admin(host, signer, f"period-open --name k2 --lane kernels --cap 1 --circuit {CIRCUIT.upper()}"))
+    ok(admin(host, signer, open_words("04" * 64, "--for kernels"), token="0005"))
+    periods = checked(host)
+    assert {k: (p["cap"], p["circuit"], p["windows"]) for k, p in periods.items()} == {
+        "k1": (2, "pouw/pearl-c@v3", ["01" * 64, "03" * 64]), "k2": (1, CIRCUIT, ["04" * 64])}
+
+
+@pytest.mark.parametrize("args, why", [
+    ("--name p1", "the following arguments are required: --cap, --circuit"),
+    (f"--name p1 --circuit {CIRCUIT}", "required: --cap"),
+    ("--name p1 --cap 2", "required: --circuit"),
+    (f"--name p1 --cap 0 --circuit {CIRCUIT}", "--cap '0'"),
+    (f"--name p1 --cap -1 --circuit {CIRCUIT}", "--cap '-1'"),
+    (f"--name p1 --cap 02 --circuit {CIRCUIT}", "--cap '02'"),
+    (f"--name p1 --cap two --circuit {CIRCUIT}", "--cap 'two'"),
+    (f"--name p1 --cap {2 ** 24 + 1} --circuit {CIRCUIT}", f"--cap {2 ** 24 + 1}"),
+    ("--name p1 --cap 2 --circuit ''", "--circuit ''"),
+    ("--name p1 --cap 2 --circuit 'a b'", "--circuit 'a b'"),
+    (f"--name p1 --cap 2 --circuit {'x' * 257}", "the registered Program's id"),
+])
+def test_a_period_open_without_a_valid_cap_and_circuit_is_refused(host, signer, args, why):
+    refused(ssh(host, signer, f"period-open {args}", "hash"), why)
+    assert A.read_ledger(host.ledger) == []
+
+
+@pytest.mark.parametrize("body, why", [
+    ({}, None),
+    ({"cap": 1, "circuit": CIRCUIT}, "past its cap 1"),
+    ({"cap": 0, "circuit": CIRCUIT}, "cap is a positive integer"),
+    ({"cap": True, "circuit": CIRCUIT}, "cap is a positive integer"),
+    ({"cap": 3}, "cap is a positive integer"),
+    ({"circuit": CIRCUIT}, "cap is a positive integer"),
+    ({"cap": 3, "circuit": CIRCUIT.upper()}, "cap is a positive integer"),
+])
+def test_the_check_reads_a_periods_cap_and_keeps_a_period_opened_before_caps_verifiable(host, signer, body, why):
+    forge(host, signer, "period-open", None, {"period": "p1", "lane": "hash", "by": "hash", **body})
+    for i in (1, 2):
+        forge(host, signer, "open", f"s20261020T093000Z-000{i}", {"window": {"root": f"0{i}" * 64}, "by": "hash"})
+    if why is None:
+        assert (p := checked(host)["p1"])["cap"] is None and p["windows"] == ["01" * 64, "02" * 64]
+    else:
+        with pytest.raises(ValueError, match=why):
+            checked(host)
