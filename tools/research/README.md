@@ -279,6 +279,8 @@ recorded first as a manual cancel (`CANCELLED_MANUAL`). 20 s later the runner SI
 `scope_end`; so does a stage timeout (`telemetry.scope`). Never SIGKILL the runner: one killed during
 its custody upload leaves the run without custody and its minted key on disk. `--exclusive` refuses if any run is live, and
 any launch refuses if an exclusive holder is live.
+Cancelling a run still in `disk-hold` or `cpu-hold` ends the hold; refused.json records fault `Withdrawn`
+(`research.withdraw`).
 
 The shipped tree is extracted with extraction mtimes (`tar -m`), not the commit time `git archive` stamps: a build dir shared
 across commits (Cargo's `/workspace/sp1-target`) judges freshness by mtime, and with commit times an older commit shipped after a
