@@ -680,8 +680,8 @@ def _serve_window(settings):
     return comp.installed[0].commitment(), run
 
 
-#: the session infra gave the window (RT4-INT-17's request-a-session), and the auditor's record of it
-SESSION = {"id": "session-a", "commit": "commit-a", "period": 7}
+#: the challenger gate's reply for the window (RT4-INT-17), with the period and Commit root its open named
+SESSION = {"session": "s20261020T000000Z-000a", "seq": 0, "period": "7", "commit": "ca" * 64}
 
 
 def _remote(**kw):

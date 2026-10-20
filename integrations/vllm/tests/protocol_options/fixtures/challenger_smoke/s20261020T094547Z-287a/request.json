@@ -1,0 +1,20 @@
+{
+ "by": "research",
+ "epoch": 0,
+ "families": [
+  [
+   "replay",
+   2
+  ]
+ ],
+ "lane": "infra",
+ "minutes": 10,
+ "peer": "vy-nebius-1",
+ "requested_utc": "2026-10-20T09:45:47Z",
+ "scheme": "verity/smoke/coins/v1",
+ "session": "s20261020T094547Z-287a",
+ "window": {
+  "commit": "96278d36587262f84b2b66d848b8b52f339e88ebd5a7d8573e19ad5765bdbb2a1c7f33c29f46e86e87c984557d430b1754d582232dd692bd0ed425f684057ada",
+  "period": "smoke-20261020"
+ }
+}

@@ -1,9 +1,10 @@
 """RT4-INT's findings on H1's coins from the auditor host's challenger (#2940 @ 79c0a054b1, VLLM-55), from the witnesses at
-367b7e552b, each now the refusal its fix intends; RT4-INT-23 is infra's (a signed close) and stays a witness.
+367b7e552b, each now the refusal its fix intends; RT4-INT-23 is infra's (a signed close), sealed under its ledger.
 
-* RT4-INT-17: a window is held to the one session the auditor's record names for its Commit and period
-  (`pouw_h1_challenger.session_reason`); a second session, two sessions for one window, a reused session and a session
-  abandoned after its coins (`period_reason`) are refused.
+* RT4-INT-17: a window is held to the one session infra's challenger gate opened for its period and Commit, in the
+  gate's signed ledger (`pouw_h1_challenger.session_reason`, `Ledger`), its tree read through the gate's ``fetch`` and
+  sealed by its end entry; two sessions for one window, a reused session, a key off the ledger's pin and a session
+  abandoned after its coins (`period_reason`) are refused, and so is a tampered byte of infra's own smoke ledger.
 * RT4-INT-19: the window's draw coin opens once, after a root over the manifest, the last receipts and every round's root
   and coin; an early draw, a draw from another family and a session closed with no draw are refused.
 * RT4-INT-20: round s's root commits the A, y and z tables of its calls and round s - 1's receipts.
@@ -11,15 +12,17 @@
   the Commit's C2 replay challenge take the auditor host's challenger.
 * RT4-INT-22: a window admits in round 0 only unless its ``admission`` is ``per-round``.
 * RT4-INT-23: the release log, the only evidence that a round's coin followed its root, is an unsigned file; roots
-  chosen after every coin pass once the log is rewritten to name them.
+  chosen after every coin pass once the log is rewritten to name them. Infra's end entry now seals it (a rewritten log
+  is refused under the ledger, `test_a_window_is_held_to_the_one_session...`); read without a ledger it stays a witness.
 """
 from __future__ import annotations
 
-import dataclasses
 import hashlib
 import json
+import shutil
 import socket
 import threading
+from pathlib import Path
 from types import SimpleNamespace
 
 import numpy as np
@@ -42,9 +45,15 @@ from verity_vllm.protocol_options import pouw_h1_requests as RQ  # noqa: E402
 from tests.protocol_options import challenger_host as CH  # noqa: E402
 from tests.protocol_options import test_pouw_h1 as T  # noqa: E402
 
-PRIVATE, KEY = CH.challenger_key(1)
-#: tonight's pin is the record's, never code's: here the SHA-512 of this test's key
-PIN = hashlib.sha512(KEY.public).hexdigest()
+PRIVATE, KEY = CH.challenger_key(1, H=5)
+#: the one-time keys of `PRIVATE` a test's gate signs its ledger with, apart from those its sessions' records take
+GATE_LEAVES = range(8, 32)
+COMMIT_A, COMMIT_B = "ca" * 64, "cb" * 64
+SMOKE = Path(__file__).parent / "fixtures" / "challenger_smoke"
+#: the SHA-512 of the challenger key infra's gate signed tonight's smoke ledger with (its 09:55Z note); a verifier reads
+#: its pin from config, never from code
+SMOKE_PIN = ("27271eaf917d1a817198cbcfe7684debd9bdb11b9e386460948bb981642fab3a"
+             "e065c0a877330a0da68ae76969550eb786dc172319876aaca21fd116e5a193bc")
 
 
 @pytest.fixture(autouse=True)
@@ -53,14 +62,16 @@ def _linear_is_the_stand_in(monkeypatch):
 
 
 class _Session:
-    """One session of the auditor's challenger under its one key `KEY`, its record signed at LMS leaf `leaf`, with its own
-    coins (`seed`), reached at `T.AUDITOR` until the next session is made."""
+    """One session `name` of the auditor's challenger under its one key `KEY`, its record signed at LMS leaf `leaf` for
+    the gate's host ``vy-challenger-1.<name>``, with its own coins (`seed`), reached at `T.AUDITOR` until the next
+    session is made; its tree (the gate's ``fetch``) is `tree`, and `directory` its ``out/``."""
 
     def __init__(self, tmp_path, monkeypatch, name: str, leaf: int, seed: int, challenger=None) -> None:
-        self.directory = tmp_path / name
+        self.tree, self.directory = tmp_path / name, tmp_path / name / "out"
         self.challenger = challenger or Wd.live_challenger(0, 3, CH.entropy(seed))
-        self.directory.mkdir()
-        R.open_session(self.challenger, KEY, CH.HOST, lambda m: lms.sign_at(PRIVATE, leaf, m).encode(), self.directory)
+        self.directory.mkdir(parents=True)
+        R.open_session(self.challenger, KEY, f"{CH.HOST}.{name}", lambda m: lms.sign_at(PRIVATE, leaf, m).encode(),
+                       self.directory)
         ours, theirs = socket.socketpair()
         self.reason: str | None = None
         self._thread = threading.Thread(target=self._serve, args=(ours,))
@@ -100,98 +111,188 @@ def _coins(commitment):
     return [r["coin"]["coin"] for r in commitment["rounds"]]
 
 
-def _entry(session, commit="commit-a", period=7, run=None, **kw):
-    return {"session": session, "commit": commit, "period": period, "run": run or f"run-{session}", "key_sha512": PIN,
-            "source_commit": "79c0a054b1", **kw}
+def _window(gate, tmp_path, monkeypatch, name: str, leaf: int, seed: int, commit: str = COMMIT_A, period: str = "7"):
+    """A window served in session `name`, which `gate` opened for (`period`, `commit`) and ended over its ``out/``: its
+    commitment and its session."""
+    reply = gate.open(name, period, commit, Wd.live_families(3))
+    session = _Session(tmp_path, monkeypatch, name, leaf, seed)
+    served = _serve(T._remote(session=reply))
+    assert session.ended() is None
+    gate.end(name, session.directory)
+    return served, session
 
 
-def _record(*entries):
-    return PHC.Record.of({"schema": PHC.RECORD_SCHEMA, "sessions": list(entries)})
+def _gate():
+    return CH.Gate(PRIVATE, KEY, GATE_LEAVES)
 
 
-def test_a_window_is_held_to_the_one_session_the_auditors_record_names_for_its_commit_and_period(tmp_path, monkeypatch):
-    """RT4-INT-17: two sessions under the auditor's one key both pass `trusted_rounds_reason` for one window, but the
-    window carries its session's id and the auditor's record names one session for its Commit and period: the other is
-    refused, and so are two sessions for one window, a session named for two windows, a window with no session or another
-    session's coin commitment, a key off the record's pin, and weights other than the period's registered ones."""
-    a = _Session(tmp_path, monkeypatch, "a", leaf=0, seed=11)
-    first = _serve(T._remote(session={"id": "s-a", "commit": "commit-a", "period": 7}))
-    b = _Session(tmp_path, monkeypatch, "b", leaf=1, seed=12)
-    second = _serve(T._remote(session={"id": "s-b", "commit": "commit-a", "period": 7}))
-    assert a.ended() is None and b.ended() is None
+def test_a_window_is_held_to_the_one_session_the_auditors_ledger_opened_for_its_period_and_commit(tmp_path, monkeypatch):
+    """RT4-INT-17: two sessions under the auditor's one key both pass `trusted_rounds_reason`, but the window carries the
+    gate's reply and the ledger opened one session for its period and Commit: another session's window claiming it is
+    refused, and so are a reply's seq off the ledger's, a window with no session or another Commit, weights other than the
+    period's registered ones, a session tree off its end entry's seals (another session's, a rewritten release log, a
+    missing tree), a key or a host other than the open entry pins, and a session that never ended or ended unclosed."""
+    gate = _gate()
+    first, a = _window(gate, tmp_path, monkeypatch, "s-a", 0, 11)
+    second, b = _window(gate, tmp_path, monkeypatch, "s-b", 1, 12, commit=COMMIT_B)
     assert PHC.trusted_rounds_reason(first, a.directory, KEY) is None
     assert PHC.trusted_rounds_reason(second, b.directory, KEY) is None
-    assert _coins(first) != _coins(second) and first["session"]["id"] == "s-a"
-    fetch = {"run-s-a": a.directory, "run-s-b": b.directory}.get
-    record = _record(_entry("s-a"))
-    assert PHC.session_reason(first, record, fetch) is None
-    assert PHC.session_reason(second, record, fetch) == (
-        "the window's session s-b is not s-a, the one the auditor's record names for Commit commit-a in period 7")
-    assert PHC.session_reason(first, _record(_entry("s-a"), _entry("s-b")), fetch) == (
-        "the auditor's record has 2 sessions for Commit commit-a in period 7: one window, one session")
-    assert PHC.session_reason(first, _record(_entry("s-a"), _entry("s-a", commit="commit-b")), fetch) == (
-        "the auditor's record names session s-a for more than one window")
-    assert PHC.session_reason(first, _record(_entry("s-a", period=8)), fetch) == (
-        "the auditor's record has no session for Commit commit-a in period 7, so the window's coins are no session's of "
+    assert _coins(first) != _coins(second) and first["session"]["session"] == "s-a" and first["session"]["seq"] == 0
+    ledger, fetch = gate.ledger(), {"s-a": a.tree, "s-b": b.tree}.get
+    assert PHC.session_reason(first, ledger, fetch) is None and PHC.session_reason(second, ledger, fetch) is None
+    claims_a = {**second, "session": {**second["session"], "commit": COMMIT_A}}
+    assert PHC.session_reason(claims_a, ledger, fetch) == (
+        f"the window's session s-b is not s-a, the one the auditor's ledger opened for Commit {COMMIT_A} in period 7")
+    assert PHC.session_reason({**first, "session": {**first["session"], "seq": 3}}, ledger, fetch) == (
+        "the window's session s-a is ledger entry 3 in its reply, but entry 0 opened it")
+    assert PHC.session_reason({**first, "session": {**first["session"], "period": "8"}}, ledger, fetch) == (
+        f"the auditor's ledger has no session for Commit {COMMIT_A} in period 8, so the window's coins are no session's of "
         "record")
-    assert PHC.session_reason({k: v for k, v in first.items() if k != "session"}, record, fetch).startswith(
+    assert PHC.session_reason({k: v for k, v in first.items() if k != "session"}, ledger, fetch).startswith(
         "the window carries no challenger session")
-    assert "not the coin commitment the verifier's challenger signed" in \
-        PHC.session_reason(first, _record(_entry("s-a", run="run-s-b")), fetch)
-    other = b.challenger.commitment.root.hex()
-    assert PHC.session_reason(first, _record(_entry("s-a", root=other)), fetch) == (
-        "the window's coin commitment is not session s-a's in the auditor's record")
-    assert PHC.session_reason(first, _record(_entry("s-a", key_sha512="00" * 64)), fetch).startswith(
-        "session s-a's evidence is not trusted: the challenger key at")
-    assert PHC.session_reason(first, _record(_entry("s-a", run="gone")), fetch) == (
-        "session s-a's evidence is not trusted: session s-a's challenger run gone has no directory on the auditor's side")
-    assert PHC.session_reason(first, record, fetch, registered=bytes(64)) == (
+    assert PHC.session_reason({**first, "session": {"id": "s-a"}}, ledger, fetch).startswith(
+        "the window's challenger session is malformed")
+    assert PHC.session_reason(first, ledger, fetch, commit=COMMIT_B) == (
+        f"the window's session is for Commit {COMMIT_A}, not the window's Commit {COMMIT_B}")
+    assert PHC.session_reason(first, ledger, fetch, registered=bytes(64)) == (
         "the window's weights' root is not the one the period registered")
-    assert PHC.session_reason(first, record, fetch, registered=bytes.fromhex(first["weights_root"])) is None
-    with pytest.raises(LC.CoinError, match="not a verity/challenger-sessions/stub-v0 record"):
-        PHC.Record.of({"sessions": [_entry("s-a")]})
-    with pytest.raises(LC.CoinError, match="malformed session"):
-        _record({k: v for k, v in _entry("s-a").items() if k != "key_sha512"})
+    assert PHC.session_reason(first, ledger, fetch, registered=bytes.fromhex(first["weights_root"])) is None
+    assert PHC.session_reason(first, ledger, {"s-a": b.tree}.get) == (
+        "session s-a's evidence is not trusted: session s-a's record.json is not the one its end entry sealed")
+    assert PHC.session_reason(first, ledger, {}.get) == (
+        "session s-a's evidence is not trusted: session s-a has no tree on the auditor's side (the gate's fetch)")
+    rewritten = tmp_path / "rewritten"
+    shutil.copytree(a.tree, rewritten)
+    (rewritten / "out" / R.RELEASES).write_text((a.directory / R.RELEASES).read_text().replace(
+        first["rounds"][0]["root"], "ee" * 64))
+    assert PHC.session_reason(first, ledger, {"s-a": rewritten}.get) == (
+        "session s-a's evidence is not trusted: session s-a's releases.jsonl is not the one its end entry sealed")
+
+    def ended_over(out, closed=True, end=True):
+        g = _gate()
+        g.open("s-a", "7", COMMIT_A, Wd.live_families(3))
+        if end:
+            g.end("s-a", out, closed)
+        return g.ledger()
+    assert PHC.session_reason(first, ended_over(b.directory), {"s-a": b.tree}.get) == (
+        "session s-a's evidence is not trusted: session s-a's challenger record is signed for host vy-challenger-1.s-b, "
+        "not vy-challenger-1.s-a, the one its open entry names")
+    _p, other = CH.challenger_key(2)
+    keyed = tmp_path / "keyed"
+    shutil.copytree(a.tree, keyed)
+    (keyed / "out" / R.KEY).write_text(json.dumps(other.to_json()))
+    assert PHC.session_reason(first, ended_over(keyed / "out"), {"s-a": keyed}.get) == (
+        "session s-a's evidence is not trusted: session s-a's key is not the verifier's challenger key, the one its open "
+        "entry pins")
+    assert PHC.session_reason(first, ended_over(a.directory, end=False), fetch) == (
+        "session s-a never ended (the auditor's ledger has its open entry and no end): a refused window")
+    assert PHC.session_reason(first, ended_over(a.directory, closed=False), fetch) == (
+        "session s-a ended without its client closing it (serve.py exited 1): a refused window")
+
+
+def test_the_ledger_refuses_two_sessions_for_one_window_a_reused_session_another_key_and_a_broken_chain():
+    """RT4-INT-17: `Ledger.verify` (infra's ``verify_ledger``) refuses a whole ledger with a second session for one window,
+    one session for two windows, an open under another key's pin, an end with no open or a second end, an entry signed
+    under another key or edited after signing, a line dropped, and an entry of another kind."""
+    families = Wd.live_families(3)
+
+    def refused(build, match):
+        g = _gate()
+        build(g)
+        with pytest.raises(LC.CoinError, match=match):
+            g.ledger()
+    refused(lambda g: (g.open("s-a", "7", COMMIT_A, families), g.open("s-b", "7", COMMIT_A, families)),
+            r"entry 1 opens a second session \(s-b, after s-a\) for Commit (ca)+ in period 7: one window, one session")
+    refused(lambda g: (g.open("s-a", "7", COMMIT_A, families), g.open("s-a", "7", COMMIT_B, families)),
+            "entry 1 opens session s-a for a second window")
+    refused(lambda g: g.open("s-a", "7", COMMIT_A, families, key_sha512="00" * 64),
+            "entry 0 opens session s-a under the key pin 0+, not the verifier's")
+    refused(lambda g: g.append("end", "s-a", {"files": {}}), "entry 0 ends session s-a, which has no open entry")
+    refused(lambda g: (g.open("s-a", "7", COMMIT_A, families), g.append("end", "s-a", {}), g.append("end", "s-a", {})),
+            "entry 2 ends session s-a, which has no open entry or has ended")
+    refused(lambda g: g.append("close", "s-a", {}), "entry 0 is of kind 'close', not open or end")
+    g = _gate()
+    g.open("s-a", "7", COMMIT_A, families)
+    g.open("s-b", "7", COMMIT_B, families)
+    assert set(g.ledger().windows) == {("7", COMMIT_A), ("7", COMMIT_B)}
+    with pytest.raises(LC.CoinError, match="entry 0's signature doesn't verify"):
+        PHC.Ledger.verify(g.lines, CH.challenger_key(2)[1])
+    with pytest.raises(LC.CoinError, match="entry 0's signature doesn't verify"):
+        PHC.Ledger.verify([g.lines[0].replace(b'"port":7811', b'"port":7812'), g.lines[1]], KEY)
+    with pytest.raises(LC.CoinError, match="entry 0 is not entry 0 of a verity/challenger-auditor/v1 ledger"):
+        PHC.Ledger.verify(g.lines[1:], KEY)
+    with pytest.raises(LC.CoinError, match="entry 0 is malformed"):
+        PHC.Ledger.verify([b"not json"], KEY)
 
 
 def test_a_session_that_released_coins_with_no_accepted_window_refuses_its_period(tmp_path, monkeypatch):
     """RT4-INT-17: a window abandoned after its coins (its session released coins and no window of it was accepted) is
-    refused; so is a session whose evidence the verifier can't read; a session that released nothing is not."""
-    a = _Session(tmp_path, monkeypatch, "a", leaf=0, seed=11)
-    kept = _serve(T._remote(session={"id": "s-a", "commit": "commit-a", "period": 7}))
-    b = _Session(tmp_path, monkeypatch, "b", leaf=1, seed=12)
-    _serve(T._remote(session={"id": "s-b", "commit": "commit-b", "period": 7}))
-    idle = _Session(tmp_path, monkeypatch, "idle", leaf=2, seed=13)
+    refused; so are a session that never ended and one whose evidence the verifier can't read; a session that released
+    nothing is not."""
+    gate = _gate()
+    kept, a = _window(gate, tmp_path, monkeypatch, "s-a", 0, 11)
+    _dropped, b = _window(gate, tmp_path, monkeypatch, "s-b", 1, 12, commit=COMMIT_B)
+    gate.open("s-i", "7", "cc" * 64, Wd.live_families(3))
+    idle = _Session(tmp_path, monkeypatch, "s-i", leaf=2, seed=13)
     idle.client.close()
-    assert a.ended() is None and b.ended() is None and idle.ended() is None
-    fetch = {"run-s-a": a.directory, "run-s-b": b.directory, "run-s-i": idle.directory}.get
-    record = _record(_entry("s-a"), _entry("s-b", commit="commit-b"), _entry("s-i", commit="commit-i"))
-    assert PHC.session_reason(kept, record, fetch) is None
-    assert PHC.period_reason(record, 7, ["s-a"], fetch) == [
-        "session s-b (Commit commit-b) released 5 coins and has no accepted window: a window abandoned after its coins"]
-    assert PHC.period_reason(record, 7, ["s-a", "s-b"], fetch) == []
-    assert PHC.period_reason(record, 8, [], fetch) == []
-    lost = _record(_entry("s-a"), _entry("s-b", commit="commit-b", run="gone"))
-    assert PHC.period_reason(lost, 7, ["s-a"], fetch) == [
-        "session s-b (Commit commit-b): its evidence is not trusted (session s-b's challenger run gone has no directory on "
-        "the auditor's side), so nothing shows it released no coin"]
+    assert idle.ended() is None
+    gate.end("s-i", idle.directory)
+    gate.open("s-n", "7", "cd" * 64, Wd.live_families(3))
+    ledger, fetch = gate.ledger(), {"s-a": a.tree, "s-b": b.tree, "s-i": idle.tree}.get
+    assert PHC.session_reason(kept, ledger, fetch) is None
+    abandoned = (f"session s-b (Commit {COMMIT_B}) released 5 coins and has no accepted window: a window abandoned after "
+                 "its coins")
+    never = (f"session s-n (Commit {'cd' * 64}): its evidence is not trusted (session s-n never ended: the ledger has its "
+             "open entry and no end, so nothing seals its out/), so nothing shows it released no coin")
+    assert PHC.period_reason(ledger, "7", ["s-a"], fetch) == [abandoned, never]
+    assert PHC.period_reason(ledger, "7", ["s-a", "s-b", "s-n"], fetch) == []
+    assert PHC.period_reason(ledger, "8", [], fetch) == []
+    assert PHC.period_reason(ledger, "7", ["s-a", "s-n"], {"s-a": a.tree, "s-i": idle.tree}.get) == [
+        f"session s-b (Commit {COMMIT_B}): its evidence is not trusted (session s-b has no tree on the auditor's side (the "
+        "gate's fetch)), so nothing shows it released no coin"]
 
 
-def test_the_session_infra_gave_is_the_challenger_the_window_reaches(tmp_path, monkeypatch):
-    """RT4-INT-17's serving half: a session setting naming its coin commitment's root refuses a challenger with another
-    commitment at install, its session closed; a malformed session setting is refused."""
-    host = _Session(tmp_path, monkeypatch, "auditor", leaf=0, seed=11)
-    with pytest.raises(ValueError, match="is not session s-a's"):
-        _serve(T._remote(session={"id": "s-a", "commit": "commit-a", "period": 7, "root": "ab" * 64}))
-    assert host.ended() is None
-    host = _Session(tmp_path, monkeypatch, "auditor-2", leaf=1, seed=12)
-    root = host.challenger.commitment.root.hex()
-    served = _serve(T._remote(session={"id": "s-a", "commit": "commit-a", "period": 7, "root": root}))
-    assert host.ended() is None and served["session"]["root"] == root
-    for bad in ({"id": "", "commit": "c", "period": 1}, {"id": "s", "commit": "c", "period": True},
-                {"id": "s", "commit": "c", "period": 1, "root": "ab"}, {"id": "s", "commit": "c", "period": 1, "x": 1}):
+def test_the_session_setting_is_the_gates_reply_for_the_window():
+    """RT4-INT-17's serving half: the window carries the gate's reply (session and seq) with the period and Commit root its
+    open named; any other form is refused."""
+    reply = {"session": "s20261020T094547Z-287a", "seq": 0, "period": "p", "commit": COMMIT_A}
+    assert PHC.session_of({**reply, "host": "vy-challenger-1.s", "port": 7811, "peer": "vy-nebius-1"})["seq"] == 0
+    for bad in ({**reply, "session": ""}, {**reply, "seq": True}, {**reply, "seq": -1}, {**reply, "period": 7},
+                {**reply, "commit": "ab"}, {**reply, "commit": COMMIT_A.upper()}, {**reply, "root": "ab" * 64},
+                {k: v for k, v in reply.items() if k != "seq"}, {"id": "s", "commit": "c", "period": 1}):
         with pytest.raises(ValueError, match="pouw setting 'session'"):
             PHC.session_of(bad)
+
+
+def test_infras_smoke_ledger_and_session_bind_under_the_gates_key():
+    """RT4-INT-17 on the gate's own bytes (vy-challenger-1's smoke at 09:45Z, art:822a00ad and art:42d947fc): the
+    ledger verifies under the key its session's key.json holds and tonight's pin, its one window is session
+    s20261020T094547Z-287a, ended and closed, every file of its out/ is the one its end entry sealed, its record is signed
+    for the open entry's host and layout, and the period refuses it as abandoned (it released 2 coins and no window was
+    accepted); one edited byte of the ledger or the tree is refused."""
+    sid, period = "s20261020T094547Z-287a", "smoke-20261020"
+    commit = ("96278d36587262f84b2b66d848b8b52f339e88ebd5a7d8573e19ad5765bdbb2a1c7f33c29f46e86e87c984557d430b1754d58223"
+              "2dd692bd0ed425f684057ada")
+    key = PHC.pinned_key(SMOKE / sid / "out" / R.KEY, SMOKE_PIN)
+    assert (key.W, key.H) == (1, 20)
+    ledger = PHC.Ledger.load(SMOKE / "ledger" / "windows.jsonl", key)
+    window = ledger.window(period, commit)
+    assert list(ledger.windows) == [(period, commit)] and window["open"]["session"] == sid
+    assert window["open"]["body"]["host"] == f"vy-challenger-1.{sid}" and window["end"]["body"]["closed"] is True
+    fetch = {sid: SMOKE / sid}.get
+    out = PHC.evidence(window, fetch, key)
+    trusted, received = R.trusted_session(out, key, PHC.lms_verify)
+    assert trusted.scheme == "verity/smoke/coins/v1" and len(received["replay"]) == 2
+    assert PHC.period_reason(ledger, period, [], fetch) == [
+        f"session {sid} (Commit {commit}) released 2 coins and has no accepted window: a window abandoned after its coins"]
+    assert PHC.period_reason(ledger, period, [sid], fetch) == []
+    smoke = {"coin_source": "challenger", "session": {"session": sid, "seq": 0, "period": period, "commit": commit}}
+    assert PHC.session_reason(smoke, ledger, fetch).startswith("the window's round_coins are not a live coin commitment")
+    lines = (SMOKE / "ledger" / "windows.jsonl").read_bytes().split(b"\n")[:2]
+    with pytest.raises(LC.CoinError, match="entry 0's signature doesn't verify"):
+        PHC.Ledger.verify([lines[0].replace(b'"port":7811', b'"port":7812'), lines[1]], key)
+    with pytest.raises(LC.CoinError, match="not the auditor's pinned"):
+        PHC.pinned_key(SMOKE / sid / "out" / R.KEY, "00" * 64)
 
 
 def test_an_early_draw_is_refused_and_the_windows_own_draw_fails_visibly(tmp_path, monkeypatch):
@@ -292,7 +393,7 @@ def test_coins_held_in_the_serving_process_are_no_session_and_credit_nothing(tmp
     local, run = _serve(T._settings(), run=True)
     assert local["coin_source"] == "in-process"
     assert RQ.rounds_reason(local["rounds"], LiveCommitment.from_json(local["round_coins"])) is None
-    assert PHC.session_reason(local, _record(_entry("s-a")), {}.get).startswith(
+    assert PHC.session_reason(local, _gate().ledger(), {}.get).startswith(
         "the window's coins were held in the serving process")
     assert run.credit()["coins"] == "in-process" and run.credit()["credited"] == {"rows": 0, "macs": 0}
     auditor = _Session(tmp_path, monkeypatch, "auditor", leaf=0, seed=14)
@@ -426,14 +527,17 @@ def test_the_order_of_roots_and_coins_is_an_unsigned_file_and_a_rewrite_of_it_pa
     assert PHC.trusted_rounds_reason(commits, host.directory, KEY) is None
 
 
-def test_the_auditors_record_message_names_no_session(tmp_path, monkeypatch):
+def test_the_challengers_record_names_its_session_only_through_the_gates_host_string(tmp_path, monkeypatch):
     """What infra must add for RT4-INT-17: the challenger's signed record names its host and coin commitment, not the
-    session, Commit or period, so the binding rests on the auditor's record (`Record`) until the challenger signs it."""
-    a = _Session(tmp_path, monkeypatch, "a", leaf=0, seed=11)
+    session, Commit or period; the gate's host string ``vy-challenger-1.<session>`` ties it to its session's open entry,
+    and the coin commitment's root is in no ledger entry, only in the record its end entry seals."""
+    gate = _gate()
+    reply = gate.open("s-a", "7", COMMIT_A, Wd.live_families(3))
+    a = _Session(tmp_path, monkeypatch, "s-a", leaf=0, seed=11)
     a.client.close()
     assert a.ended() is None
     record = json.loads((a.directory / R.RECORD).read_text())
-    assert sorted(record) == ["commitment", "host", "signature"]
+    assert sorted(record) == ["commitment", "host", "signature"] and record["host"] == reply["host"]
     c = LiveCommitment.from_json(record["commitment"])
     assert PHC.lms_verify(KEY, record_message(KEY.public[:16], record["host"], c), bytes.fromhex(record["signature"]))
-    assert dataclasses.fields(PHC.Record)[0].name == "sessions"
+    assert c.root.hex() not in b"".join(gate.lines).decode() and "root" not in reply

@@ -3,14 +3,20 @@ with an LMS key (`remote.open_session`), and `remote.serve` on one end of a sock
 on the other. The verifier reads `directory` under `key`. #2643's `tests/check/challenger_host.py`, over any challenger."""
 from __future__ import annotations
 
+import hashlib
 import itertools
+import json
+import os
 import random
 import socket
 import threading
+from pathlib import Path
 
+from verity.core.protocols.pouw import window as Wd
 from verity.core.protocols.sampled_proofs import challenger as LC
 from verity.core.protocols.sampled_proofs import remote as R
 from verity.ml.crypto import lms
+from verity_vllm.protocol_options import pouw_h1_challenger as PHC
 
 HOST = "vy-challenger-1"
 
@@ -20,9 +26,48 @@ def entropy(seed: int):
     return random.Random(seed).randbytes
 
 
-def challenger_key(seed: int) -> tuple[lms.PrivateKey, LC.ChallengerKey]:
-    k = lms.keygen(lms.Params(64, 4, 2), bytes([seed]) * 64)
+def challenger_key(seed: int, H: int = 2) -> tuple[lms.PrivateKey, LC.ChallengerKey]:
+    k = lms.keygen(lms.Params(64, 4, H), bytes([seed]) * 64)
     return k, LC.ChallengerKey(k.params.W, k.params.H, lms.public_key(k))
+
+
+class Gate:
+    """Infra's challenger gate (`benchmarks/live_challenger/auditor.py`) in this process, its ledger's entries written
+    as the gate's `append` writes them and signed under `private` at the one-time keys `leaves`: `open` appends a
+    window's open entry and returns the gate's reply with the window, `end` a session's end entry sealing the files of
+    its ``out/``, and `lines` is the ledger as infra publishes it. Unlike the gate it appends whatever it is asked, so a
+    test writes the ledgers the verifier must refuse."""
+
+    def __init__(self, private: lms.PrivateKey, key: LC.ChallengerKey, leaves) -> None:
+        self.private, self.key, self._leaves, self.lines = private, key, iter(leaves), []
+
+    def append(self, kind: str, session: str, body: dict) -> dict:
+        prev = hashlib.sha512(self.lines[-1]).hexdigest() if self.lines else "0" * 128
+        entry = {"schema": PHC.LEDGER_SCHEMA, "seq": len(self.lines), "prev": prev, "kind": kind, "session": session,
+                 "body": body}
+        message = PHC.entry_message(self.key.public[:16], entry)
+        entry["sig"] = lms.sign_at(self.private, next(self._leaves), message).encode().hex()
+        self.lines.append(json.dumps(entry, sort_keys=True, separators=(",", ":")).encode())
+        return entry
+
+    def open(self, session: str, period: str, commit: str, families, *, scheme: str = Wd.LIVE_SCHEME, epoch: int = 0,
+             key_sha512: str | None = None) -> dict:
+        body = {"window": {"commit": commit, "period": period}, "pinned": "0" * 40, "host": f"{HOST}.{session}",
+                "key_sha512": key_sha512 or hashlib.sha512(self.key.public).hexdigest(), "peer": "vy-nebius-1",
+                "port": 7811, "scheme": scheme, "epoch": epoch, "families": [list(f) for f in families], "minutes": 10,
+                "lane": "vllm", "by": "research", "started_utc": "2026-10-20T09:45:48Z"}
+        e = self.append("open", session, body)
+        return {"session": session, "seq": e["seq"], "period": period, "commit": commit, "host": body["host"],
+                "port": body["port"], "peer": body["peer"]}
+
+    def end(self, session: str, out: Path, closed: bool = True) -> dict:
+        files = {n: hashlib.sha512((out / n).read_bytes()).hexdigest() for n in sorted(os.listdir(out))}
+        return self.append("end", session, {"rc": 0 if closed else 1, "closed": closed, "files": files,
+                                            "ended": "closed by the client" if closed else "serve.py exited 1",
+                                            "ended_utc": "2026-10-20T09:46:13Z"})
+
+    def ledger(self) -> PHC.Ledger:
+        return PHC.Ledger.verify(self.lines, self.key)
 
 
 class Host:

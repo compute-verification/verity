@@ -113,7 +113,7 @@ def _linear_is_the_stand_in(monkeypatch):
 
 
 AUDITOR = "vy-challenger-1:7811"
-SESSION = {"id": "session-1", "commit": "commit-1", "period": 0}
+SESSION = {"session": "s20261020T000000Z-0001", "seq": 0, "period": "0", "commit": "c1" * 64}
 
 
 @pytest.fixture

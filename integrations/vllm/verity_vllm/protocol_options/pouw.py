@@ -165,7 +165,8 @@ class Settings:
     rounds: Any = None
     #: H1's salt and round coins (``ncp-v2``'s salt) from the auditor host's challenger, ``HOST:PORT``
     #: (`pouw_h1_challenger`); ``coins`` and ``rounds`` held in this process in its place are for tests, and credit
-    #: nothing; ``session`` is the session infra gave the window for its Commit and period (`pouw_h1_challenger.session_of`)
+    #: nothing; ``session`` is the challenger gate's reply for the window's period and Commit
+    #: (`pouw_h1_challenger.session_of`)
     challenger: str | None = None
     session: Mapping[str, Any] | None = None
     #: H1's admissions (`pouw_h1_requests.ADMISSIONS`): None or ``round-0``, admit in round 0 only (#2722's live tiles
@@ -735,8 +736,7 @@ def install(scheme: str, target: Target) -> Option:
     declared = Workload(tuple(Matmul(w, Shape(16, k, n), w) for w, (n, k) in shapes.items()))
     session = None
     if settings.challenger is not None:
-        session, commitment, opening, _rounds, salt = PHC.session(entry, settings.challenger, 0, weights_root(roots),
-                                                                  settings.session)
+        session, commitment, opening, _rounds, salt = PHC.session(entry, settings.challenger, 0, weights_root(roots))
     else:
         commitment, opening = settings.coins.commitment, settings.coins.open("salt", weights_root(roots))
         salt = Epoch.start(declared, roots, commitment, opening).salt
@@ -769,16 +769,17 @@ def h1_run(entry: str) -> PH.H1Run | None:
 
 
 def _install_h1(entry: str, settings: Settings, target: Target) -> Option:
-    """H1 on the int8_exact arm: the epoch's salt from the challenger's salt coin after the weights' root, as every scheme's,
-    and each layer's ``observe`` the arm's own with its call recorded and handed to the run's listeners (`pouw_h1.observer`),
-    in the static layout of the settings' ``rows`` and ``steps``; each layer's ``apply`` runs under the credit gate's trace
-    (`pouw_h1.traced`), and the ``runner``'s ``execute_model`` hands each step's admitted requests and its batch order to
-    the run (`pouw_h1.admitting`), each entry and each served row's request under its round's root before the ``rounds``
-    coin, and the window's draw coin opens at release after its manifest. With the setting ``challenger`` the salt, round
-    and draw coins are the auditor host's, from the one session infra gave the window (``session``, which the commitment
-    carries; `pouw_h1_challenger.session`), closed once the window has finished; without it the coins are this process's
-    and the window credits nothing (`pouw_h1.IN_PROCESS`). ``admission`` is the run's (`pouw_h1_requests.ADMISSIONS`,
-    round 0 only by default). The served values are the arm's, untouched."""
+    """H1 on the int8_exact arm: the epoch's salt from the challenger's salt coin after the weights' root, as every
+    scheme's, and each layer's ``observe`` the arm's own with its call recorded and handed to the run's listeners
+    (`pouw_h1.observer`), in the static layout of the settings' ``rows`` and ``steps``; each layer's ``apply`` runs
+    under the credit gate's trace (`pouw_h1.traced`), and the ``runner``'s ``execute_model`` hands each step's admitted
+    requests and its batch order to the run (`pouw_h1.admitting`), each entry and each served row's request under its
+    round's root before the ``rounds`` coin, and the window's draw coin opens at release after its manifest. With the
+    setting ``challenger`` the salt, round and draw coins are the auditor host's, from the one session infra's gate
+    opened for the window (``session``, the gate's reply, which the commitment carries; `pouw_h1_challenger.session`),
+    closed once the window has finished; without it the coins are this process's and the window credits nothing
+    (`pouw_h1.IN_PROCESS`). ``admission`` is the run's (`pouw_h1_requests.ADMISSIONS`, round 0 only by default). The
+    served values are the arm's, untouched."""
     layers = PH.layers(target.model, linear_types())
     committed = target.weight_commitments.get(entry) or commit_weights(PH.SCHEME, target)
     roots = {int(w): bytes.fromhex(r) for w, r in committed["weight_roots"].items()}
@@ -789,7 +790,7 @@ def _install_h1(entry: str, settings: Settings, target: Target) -> Option:
     session, rounds = None, settings.rounds
     if settings.challenger is not None:
         session, commitment, opening, rounds, salt = PHC.session(entry, settings.challenger, settings.steps,
-                                                                 weights_root(roots), settings.session)
+                                                                 weights_root(roots))
     else:
         commitment, opening = settings.coins.commitment, settings.coins.open("salt", weights_root(roots))
         salt = Epoch.start(declared, roots, commitment, opening).salt

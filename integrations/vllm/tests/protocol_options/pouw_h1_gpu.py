@@ -30,12 +30,13 @@ u (`H1Run.utilization`), the credit gate's verdict, each step's seconds (at line
 static schedule's check (`engine.static_schedule.check`) of every request. Compile is `--compile-from` on each record.
 
 ``--challenger HOST:PORT --session JSON`` takes the window's salt and round coins from the auditor host's challenger, in
-the session infra gave the window (`pouw_h1_challenger`), one session a window, so the fill workload serves only the 64's
-window. ``--check-challenger CALLS_JSON CHALLENGER_DIR --record JSON`` is the verifier's side on no GPU: the window held to
-the session the auditor's record names, its coins against the challenger run's own ``out/``
-(`pouw_h1_challenger.session_reason`); with ``--key-sha512 HEX`` in place of ``--record``, the coins alone
-(`trusted_rounds_reason`). The batch workload admits the first prompt alone after the batch, so it admits per round; the
-fill workload admits in round 0 only.
+the session infra's gate opened for the window (the gate's reply; `pouw_h1_challenger`), one session a window, so the
+fill workload serves only the 64's window. ``--check-challenger CALLS_JSON SESSION_TREE --key-sha512 HEX --ledger
+JSONL`` is the verifier's side on no GPU: the window held to the session infra's ledger opened for its period and
+Commit, its coins against that session's tree as the gate's ``fetch`` gives it (`pouw_h1_challenger.session_reason`);
+without ``--ledger`` the directory is the challenger's ``out/`` and the coins alone are checked
+(`trusted_rounds_reason`). The batch workload admits the first prompt alone after the batch, so it admits per round;
+the fill workload admits in round 0 only.
 """
 from __future__ import annotations
 
@@ -67,8 +68,8 @@ def h1_settings(eng: Any, rows: int, steps: int, challenger: str | None = None, 
                 ) -> dict[str, Any]:
     """The option's settings for one served window: the engine's model runner (where the scheduler's admissions arrive) and
     the window's coins, its salt coin and one live round coin a step: the auditor host's at `challenger` (``HOST:PORT``, one
-    session a window, `pouw_h1_challenger`) in the `session` infra gave the window, else held in this process, which no
-    verifier trusts and which credits nothing (a measurement)."""
+    session a window, `pouw_h1_challenger`) in the `session` infra's gate opened for it, else held in this process,
+    which no verifier trusts and which credits nothing (a measurement)."""
     if challenger:
         return {"pouw": {"challenger": challenger, "session": session, "runner": eng.runner, "rows": rows, "steps": steps,
                          **kw}}
@@ -446,26 +447,28 @@ def compile_from(calls_file: str, out: str) -> dict[str, Any]:
     return doc
 
 
-def check_challenger(calls_file: str, directory: str, public_sha512: str | None, out: str, record: str | None = None
+def check_challenger(calls_file: str, directory: str, public_sha512: str, out: str, ledger: str | None = None
                      ) -> dict[str, Any]:
     """The verifier's side, on no GPU: the served window's coins (`calls_file`'s commitment) against the challenger's own
-    directory (its run's ``out/``, fetched with ``research fetch RUN --all``) under the auditor's key, pinned by the SHA-512
-    of its public key (`pouw_h1_challenger.pinned_key`, `trusted_rounds_reason`). With `record` (the auditor's session
-    record, `pouw_h1_challenger.Record`) the window is held to the session it names, under the record's pin
-    (`session_reason`), `directory` being what the verifier fetched for that session's run."""
+    directory under the auditor's key, pinned by the SHA-512 of its public key (`pouw_h1_challenger.pinned_key`,
+    `trusted_rounds_reason`). With `ledger` (infra's challenger ledger, the gate's ``ledger``) the window is held to the
+    session the ledger opened for its period and Commit (`session_reason`), `directory` being that session's tree as the
+    gate's ``fetch SESSION`` gives it (its ``out/`` within); without it `directory` is the challenger's ``out/``."""
     from verity.core.protocols.sampled_proofs import remote
     from verity_vllm.protocol_options import pouw_h1_challenger as PHC
 
-    rec, d = json.loads(Path(calls_file).read_text()), Path(directory)
+    rec, tree = json.loads(Path(calls_file).read_text()), Path(directory)
+    d = tree / "out" if ledger is not None else tree
     doc: dict[str, Any] = {"schema": SCHEMA + "/challenger", "argv": sys.argv, "calls_file": calls_file, "directory": directory,
                            "pinned_public_sha512": public_sha512, "coin_source": rec["commitment"].get("coin_source")}
     try:
-        if record is not None:
-            doc["record"] = record
-            doc["reason"] = PHC.session_reason(rec["commitment"], PHC.Record.load(record), lambda run: d)
+        key = PHC.pinned_key(d / remote.KEY, public_sha512)
+        doc["key"] = {"W": key.W, "H": key.H, "public_sha512": hashlib.sha512(key.public).hexdigest()}
+        if ledger is not None:
+            doc["ledger"], sid = ledger, (rec["commitment"].get("session") or {}).get("session")
+            doc["reason"] = PHC.session_reason(rec["commitment"], PHC.Ledger.load(ledger, key),
+                                               lambda s: tree if s == sid else None)
         else:
-            key = PHC.pinned_key(d / remote.KEY, public_sha512)
-            doc["key"] = {"W": key.W, "H": key.H, "public_sha512": hashlib.sha512(key.public).hexdigest()}
             doc["reason"] = PHC.trusted_rounds_reason(rec["commitment"], d, key)
     except Exception as e:  # noqa: BLE001
         doc["reason"] = f"{type(e).__name__}: {e}"
@@ -507,10 +510,10 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--check-challenger", nargs=2, metavar=("CALLS_JSON", "CHALLENGER_DIR"),
                     help="no GPU: a served window's coins against the challenger run's out/ (needs --key-sha512)")
     ap.add_argument("--key-sha512", help="the SHA-512 of the auditor's challenger public key, in hex")
-    ap.add_argument("--record", metavar="JSON", help="with --check-challenger: the auditor's session record "
-                                                     "(pouw_h1_challenger.Record), whose pin replaces --key-sha512")
-    ap.add_argument("--session", type=json.loads, metavar="JSON", help="with --challenger: the session infra gave the "
-                                                                        "window, {\"id\", \"commit\", \"period\"}")
+    ap.add_argument("--ledger", metavar="JSONL", help="with --check-challenger: infra's challenger ledger (the "
+                                                      "gate's ledger), CHALLENGER_DIR then the session's tree")
+    ap.add_argument("--session", type=json.loads, metavar="JSON",
+                    help="with --challenger: the challenger gate's reply, {\"session\", \"seq\", \"period\", \"commit\"}")
     ap.add_argument("--workload", choices=("batch", "fill"), default="batch",
                     help="batch: PROMPTS batched and the first alone (--rows, --steps, --max-tokens); fill: pouw_h1.FILL, 64 in "
                          "flight every served step (VLLM-52; its own T, S and cap)")
@@ -518,9 +521,9 @@ def main(argv: list[str] | None = None) -> int:
     if a.compile_from:
         return 0 if compile_from(a.compile_from, a.out)["ok"] else 1
     if a.check_challenger:
-        if not (a.key_sha512 or a.record):
-            ap.error("--check-challenger needs --record (or --key-sha512, the coins alone)")
-        return 0 if check_challenger(*a.check_challenger, a.key_sha512, a.out, a.record)["ok"] else 1
+        if not a.key_sha512:
+            ap.error("--check-challenger needs --key-sha512, the auditor's pin from config")
+        return 0 if check_challenger(*a.check_challenger, a.key_sha512, a.out, a.ledger)["ok"] else 1
     if not (a.at and a.by):
         ap.error("serving needs --at and --by (the pin entry's, if one is made)")
     return 0 if (fill if a.workload == "fill" else run)(a)["ok"] else 1
