@@ -10,11 +10,16 @@ digest, and R1–R7 against the verifier's own copies (`check`).
 
 A v2 record (`verity/registration/v2`) adds `"registered": [{"value", "root", "leaves", "words", "domain"}, ...]` (with
 `"word_bits"` for a value whose leaves are not 16 bits), and R7 holds it to the verifier's own entries
-(`Registered.entries`) and each value an earlier record of the log registered to that record's root (`heldRoots`). The
-verifier expects a v2 record exactly when it expects values registered.
+(`Registered.entries`), a value the verifier pinned before the record to its root (`pinned`: the weights' root recorded
+before the salt), and each value an earlier record of the log registered to that record's root (`heldRoots`). The
+verifier expects a v2 record exactly when it expects values registered. A value it fills itself (`supplied`,
+`Supplied.root`: rows of the record's roots, positions after the log's, its coin bound to the record's window and its own
+bytes, under public salts) is held to the root it recomputes from this record and the log instead (`R7-supplied`), never
+to the log's.
 -/
 import SampledProofs.Draw
 import SampledProofs.Registered
+import SampledProofs.Supplied
 
 namespace SampledProofs.Registration
 
@@ -62,6 +67,10 @@ structure Verifier where
   registered : Array (String × Nat) := #[]
   /-- its program function's parameters, which `registered` names -/
   params : Array Registered.Param := #[]
+  /-- of `registered`, the values it fills itself, each one's rows of sources (`Supplied.sources`) -/
+  supplied : Array (String × Supplied.Rows) := #[]
+  /-- of `registered`, values it doesn't fill whose roots it held before the record, `(value, root)` each -/
+  pinned : Array (String × String) := #[]
 
 private def optStr : Option String → Json
   | some s => Json.str s
@@ -77,9 +86,11 @@ def heldRoots (log : Array Json) : Array (String × String) :=
     | _ => held) #[]
 
 /-- `registration._check_registered`, R7: the record's `registered` against the verifier's own entries (`mine`, an error
-where `registered_entries` raises) and the roots the log holds. -/
+where `registered_entries` raises), the roots the log holds, and each supplied value's root to the one `rootOf` recomputes
+(an error where `supplied_root` raises). -/
 def checkRegistered (c : Array String) (got : Json) (mine : V (Array Registered.Entry))
-    (held : Array (String × String)) : Array String := Id.run do
+    (held : Array (String × String)) (supplied : Array (String × Supplied.Rows))
+    (rootOf : String → Supplied.Rows → Registered.Entry → V String) : Array String := Id.run do
   let .ok mine := mine | return addCode c "R7-registered"
   let widthKeys := sortStrings (Registered.ENTRY_KEYS.push Registered.WIDTH_KEY)
   let .arr got := got | return addCode c "R7-registered"
@@ -108,8 +119,17 @@ def checkRegistered (c : Array String) (got : Json) (mine : V (Array Registered.
         | some w => w != want.wordBits || w == Registered.WORD_BITS
         | none => true
     if badWidth then c := addCode c "R7-word_bits"
-    if let some (_, r) := held.find? (·.1 == want.value) then
-      if !jeq (getD e "root") (Json.str r) then c := addCode c "R7-held"
+    if !supplied.any (·.1 == want.value) then
+      if let some (_, r) := held.find? (·.1 == want.value) then
+        if !jeq (getD e "root") (Json.str r) then c := addCode c "R7-held"
+  for (v, rs) in supplied do
+    match mine.find? (·.value == v) with
+    | none => c := addCode c "R7-supplied"
+    | some want =>
+      if let some e := got.reverse.find? (fun e => jeq (getD e "value") (Json.str v)) then
+        match rootOf v rs want with
+        | .error _ => c := addCode c "R7-supplied"
+        | .ok r => if !jeq (getD e "root") (Json.str r) then c := addCode c "R7-supplied"
   return c
 
 /-- `registration.check`'s failure codes, R1–R7 in order: empty when the record holds. -/
@@ -169,7 +189,9 @@ def check (rec : Json) (v : Verifier) : Array String := Id.run do
   if v.log.any (fun e => jeq (getD e "window") (get "window")) then c := addCode c "R6-window"
   -- R7
   if v2 then
-    c := checkRegistered c (get "registered") (Registered.entries v.program.desc v.params v.registered) (heldRoots v.log)
+    c := checkRegistered c (get "registered") (Registered.entries v.program.desc v.params v.registered)
+      (v.pinned ++ heldRoots v.log) v.supplied
+      (Supplied.root rec v.log v.params (Flock.hexOf v.program.desc.sha512) (v.supplied.map (·.1)))
   return c
 
 end SampledProofs.Registration
