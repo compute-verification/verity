@@ -264,6 +264,21 @@ def test_source_tree_research_package_is_the_tool_that_ships(tmp_path, monkeypat
     assert rc == 3 and "launcher research package does not know tool 'nope.tool'" in err and "--source with tools/research" in err
 
 
+def test_a_machine_registered_as_an_auditor_host_takes_no_research_run(tmp_path, monkeypatch, capsys):
+    """vy-challenger-1's registry entry carries `auditor` (RT4-INT-18): `research run --on` refuses it at once, naming its gate,
+    where a lane's key would otherwise fail at ssh and leave the launcher waking a running VM for 15 minutes."""
+    f = tmp_path / "m.toml"
+    f.write_text('[machines.c]\nprovider="ssh"\nhost="203.0.113.7"\nuser="vy-admin"\nproject="verity"\n'
+                 'auditor="benchmarks/live_challenger/auditor.py"\n')
+    monkeypatch.setenv("RESEARCH_MACHINES", str(f))
+    monkeypatch.setenv("RESEARCH_MACHINES_D", "off")
+    monkeypatch.setattr(remote, "ssh_run", lambda *a, **k: pytest.fail("ssh to an auditor host"), raising=False)
+    from research import cli
+    rc = cli.main(["run", "--on", "c", "--project", "verity", "--no-custody-r2", "--", "true"])
+    err = capsys.readouterr().err
+    assert rc == 3 and "auditor host" in err and "benchmarks/live_challenger/auditor.py" in err
+
+
 def test_machines_resolution(tmp_path, monkeypatch):
     f = tmp_path / "m.toml"
     f.write_text('[machines.a]\nprovider="runpod"\npod_id="p"\nprojects=["verity","x"]\n[machines.b]\nprovider="runpod"\npod_id="q"\nproject="veritor"\n')

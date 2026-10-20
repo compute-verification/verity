@@ -1764,6 +1764,9 @@ def launch(*, run_id: str, local_dir: Path, machine_name: str, project: str, com
     write_json_atomic(local_dir / "remote.json", rec)
     try:
         m = resolve_machine(machine_name, project)
+        if m.get("auditor"):
+            raise Refused(f"machine {machine_name!r} is an auditor host: it takes no research run, from anyone. Its service is "
+                          f"reached only through its gate: {m['auditor']}")
         guard_min = guard_idle_min(m)
         custody_pub: dict[str, Any] | None = None
         custody_files: list[tuple[str, bytes]] = []
