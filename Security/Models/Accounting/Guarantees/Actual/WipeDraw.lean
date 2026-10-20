@@ -14,8 +14,9 @@ distinguisher that runs the system once, beside the labels' advantage. Proof: `P
   keyed function of the coin secret `s'`, and the sampler on it is the deployed one, exactly (`Actual.wordIndex`).
   `rest s' j` is what the deployed sampler draws from the later words when it rejects the first, and the guarantee
   holds for every `rest`. For the deployed code, `coins s' j` is the first `w` bits of
-  `SHA-512(stream tag ‖ derive(s'_w, COIN_DOMAIN, {server, session, n: N}) ‖ frame(("u", j)) ‖ u64 0)`, with `s'` the
-  challenger's coin secrets, one a wipe, concatenated, and `w = 8 ⌈(bitlen N + 64) / 8⌉`.
+  `SHA-512(stream tag ‖ derive(s'_v, COIN_DOMAIN, {server, session, n: N}) ‖ frames("u", i) ‖ u64 0)`, with `s'` the
+  challenger's coin secrets, one a wipe, concatenated, `v = wipe j`, `i` read `j`'s place among its wipe's reads, and
+  `w = 8 ⌈(bitlen N + 64) / 8⌉`.
 * **The secrets.** `s'` is uniform and independent of the label secrets `s` and the other coins `ω`: the challenger
   draws it from the OS on its own machine when the fill completes (`Challenger.challenge`, with no `coin_secret` given).
 * **What the server sees.** The system is `S ((ω, F), c)` as in `WipeReadHeldPrf`, a function of the indices and not of
