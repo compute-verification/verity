@@ -9,7 +9,11 @@ one mutation each (`COMMITMENT`, `OPENING`, `REASON`, `ORDER`): a coin opened tw
 recorded, a foreign epoch's or challenger's, a tampered salt or path, a coin the layout doesn't hold, each malformed
 form. The record's (`KEY`, `RECORD`, `TRUSTED`) are a record the challenger signed with a small LMS key, then a missing
 record, a prover's commitment or a prover's key, a tampered root, epoch, host or signature, another parameter set, each
-malformed form. Each piece answers ``{"refused": why}`` where the challenger refuses, so the reasons are compared too.
+malformed form. The session's (`CLOSE`, `RELEASED`, `LEDGER`, `SESSION`) are a session a small key signed and the
+auditor's ledger opening and ending it among others, then a close, log or ledger entry edited, dropped, re-chained or
+signed under another key, a ledger signed under its own key, one cut before the session's end, a second session for the
+window, a record on another host, a log the ledger didn't seal, each malformed form. Each piece answers
+``{"refused": why}`` where the challenger refuses, so the reasons are compared too.
 """
 
 from __future__ import annotations
@@ -541,11 +545,20 @@ def released(j: Any) -> Any:
     return _refusing(go)
 
 
-def session(j: Any) -> Any:
-    _request(j, ["auditor", "key", "session", "window"])
+def ledger(j: Any) -> Any:
+    _request(j, ["key", "ledger", "window"])
 
     def go():
-        c, roots = Ch.trusted_session_of(j["auditor"], j["window"], Ch.ChallengerKey.from_json(j["key"]), j["session"],
+        a = Ch.audited_session(j["ledger"], j["window"], Ch.ChallengerKey.from_json(j["key"]), lms_verify)
+        return {"files": a.files, "host": a.host, "session": a.session}
+    return _refusing(go)
+
+
+def session(j: Any) -> Any:
+    _request(j, ["key", "ledger", "session", "window"])
+
+    def go():
+        c, roots = Ch.trusted_session_of(j["ledger"], j["window"], Ch.ChallengerKey.from_json(j["key"]), j["session"],
                                          lms_verify)
         return {"commitment": c.to_json(), "roots": _roots(roots)}
     return _refusing(go)
@@ -588,13 +601,57 @@ class Session:
         return {"close": self.close, "log": list(self.lines), "record": self.ch.record.to_json()}
 
 
+PERIODS = ["p-0", "smoke-20261020", "2026-10-20T09:00Z", "a", "x" * 64, "0.1_b"]
+
+
 def _window(rng: random.Random) -> dict:
-    return {"commit": rng.randbytes(64).hex(), "period": rng.choice([0, 1, 7, 1 << 40]),
-            "pouw_salt": rng.randbytes(64).hex(), "stream": rng.randbytes(64).hex()}
+    return {"commit": rng.randbytes(64).hex(), "period": rng.choice(PERIODS)}
 
 
-def _entry(rng: random.Random, window: dict, session: str, public: bytes) -> dict:
-    return {**window, "code": rng.randbytes(20).hex(), "key": hashlib.sha512(public).hexdigest(), "session": session}
+class Ledger:
+    """The auditor's ledger of session `s`'s window and up to two others' sessions, each opened, then ended, interleaved:
+    `events` its entries' (kind, session, body), `lines` them chained and signed, each at a drawn leaf of `s`'s key (or
+    `signer`'s, an `edit(i, entry)` applied to each entry before it is signed)."""
+
+    def __init__(self, rng: random.Random, s: Session, closed: bool = True) -> None:
+        self.rng, self.s, self.window = rng, s, _window(rng)
+        files = {Ch.LOG_FILE: Ch.log_digest(s.lines), "record.json": rng.randbytes(64).hex()}
+        if rng.random() < 0.5:
+            files["serve.log"] = rng.randbytes(64).hex()
+        named = [("open", s.id, self.open_body(self.window, s.host)),
+                 ("end", s.id, {"closed": closed, "files": files, "rc": 0 if closed else 1})]
+        others = [[("open", sid, self.open_body(_window(rng), f"vy-challenger-1.{sid}")),
+                   ("end", sid, {"closed": rng.random() < 0.8, "files": {}, "rc": 0})]
+                  for sid in ("o-1", "o-2")[:rng.randint(0, 2)]]
+        queues = [named] + others
+        self.events = []
+        while any(queues):
+            q = rng.choice([q for q in queues if q])
+            self.events.append(q.pop(0))
+
+    def open_body(self, window: dict, host: str, public: bytes | None = None) -> dict:
+        body = {"window": window, "host": host, "pinned": self.rng.randbytes(20).hex(),
+                "key_sha512": hashlib.sha512(self.s.pub if public is None else public).hexdigest(),
+                "port": self.rng.choice([7811, 7812])}
+        if self.rng.random() < 0.3:
+            body["started_utc"] = "2026-10-20T09:45:48Z"
+        return body
+
+    def index(self, kind: str, session: str) -> int:
+        return next(i for i, (k, sid, _) in enumerate(self.events) if (k, sid) == (kind, session))
+
+    def lines(self, events=None, edit=None, signer: lms.PrivateKey | None = None) -> list[str]:
+        k = self.s.k if signer is None else signer
+        out: list[str] = []
+        for i, (kind, sid, body) in enumerate(self.events if events is None else events):
+            entry = {"body": body, "kind": kind, "prev": hashlib.sha512(out[-1].encode()).hexdigest() if out else "0" * 128,
+                     "schema": Ch.LEDGER_SCHEMA, "seq": i, "session": sid}
+            if edit is not None:
+                edit(i, entry)
+            m = Ch.ledger_message(lms.public_key(k)[:16], entry)
+            out.append(canonical_json_text({**entry, "sig": lms.sign_at(k, self.rng.randrange(2 ** k.params.H), m)
+                                            .encode().hex()}))
+        return out
 
 
 CLOSE_NAMES = ["honest", "keys", "extra", "chain-short", "chain-upper", "signature-type", "lines-zero", "lines-big",
@@ -710,50 +767,162 @@ def released_case(rng: random.Random, name: str) -> Any:
     return j
 
 
-SESSION_NAMES = ["honest", "no-auditor", "auditor-form", "auditor-type", "window-form", "no-session", "two-sessions",
-                 "session-twice", "other-key", "wrong-session", "session-form", "no-record", "record-signature",
-                 "no-close", "close-form", "close-signature", "close-renamed", "rechained", "log-tampered",
-                 "log-dropped", "log-form", "unclosed", "key-form", "params", "request"]
+LEDGER_NAMES = ["honest", "no-ledger", "ledger-type", "line-type", "non-canonical", "torn", "long", "keys", "kind",
+                "schema", "seq", "prev", "dropped", "swapped", "signature", "signature-form", "other-signer",
+                "self-keyed", "other-key", "open-form", "end-form", "second-open", "reopen", "end-unopened",
+                "end-twice", "no-open", "truncated", "unclosed", "window-form", "key-form", "params", "request"]
+
+
+def _entry_edit(target: int, f):
+    def edit(i, entry):
+        if i == target:
+            f(entry)
+    return edit
+
+
+def ledger_case(rng: random.Random, name: str) -> Any:
+    s = Session(rng)
+    lg = Ledger(rng, s, closed=name != "unclosed")
+    j = {"key": s.key.to_json(), "ledger": None, "window": lg.window}
+    i = rng.randrange(len(lg.events))
+    other = _key(s.w, s.h, 1)
+    match name:
+        case "no-ledger":
+            pass
+        case "ledger-type":
+            j["ledger"] = rng.choice(["x", 5, {"lines": []}])
+        case "line-type":
+            lines = lg.lines()
+            j["ledger"] = lines[:i] + [rng.choice([None, 5, ["x"], {"a": 1}])] + lines[i + 1:]
+        case "non-canonical":
+            lines = lg.lines()
+            j["ledger"] = lines[:i] + [json.dumps(json.loads(lines[i]))] + lines[i + 1:]
+        case "torn":
+            lines = lg.lines()
+            j["ledger"] = lines[:i] + [lines[i][:rng.randrange(1, len(lines[i]))]] + lines[i + 1:]
+        case "long":
+            j["ledger"] = lg.lines(edit=_entry_edit(i, lambda e: e["body"].update(pad="x" * Ch.MAX_LEDGER_LINE)))
+        case "keys":
+            j["ledger"] = lg.lines(edit=_entry_edit(i, lambda e: e.update(rng.choice([{"extra": 1}, {"seq": None}]))))
+        case "kind":
+            j["ledger"] = lg.lines(edit=_entry_edit(i, lambda e: e.update(kind=rng.choice(["close", "", 1, None]))))
+        case "schema":
+            j["ledger"] = lg.lines(edit=_entry_edit(i, lambda e: e.update(
+                schema=rng.choice(["verity/challenger-auditor/v2", ""]))))
+        case "seq":
+            j["ledger"] = lg.lines(edit=_entry_edit(i, lambda e: e.update(seq=e["seq"] + rng.choice([1, 2, 1 << 40]))))
+        case "prev":
+            j["ledger"] = lg.lines(edit=_entry_edit(i, lambda e: e.update(prev=_flip(e["prev"], rng.randrange(64)))))
+        case "dropped":
+            lines = lg.lines()
+            k = rng.randrange(len(lines) - 1)
+            j["ledger"] = lines[:k] + lines[k + 1:]
+        case "swapped":
+            lines = lg.lines()
+            j["ledger"] = [lines[1], lines[0]] + lines[2:]
+        case "signature":
+            lines = lg.lines()
+            e = json.loads(lines[i])
+            j["ledger"] = lines[:i] + [canonical_json_text({**e, "sig": _flip(e["sig"], rng.randrange(len(e["sig"]) // 2))})] \
+                + lines[i + 1:]
+        case "signature-form":
+            lines = lg.lines()
+            e = json.loads(lines[i])
+            sig = rng.choice([e["sig"].upper(), e["sig"] + "0", e["sig"][:8], None, 5])
+            j["ledger"] = lines[:i] + [canonical_json_text({**e, "sig": sig})] + lines[i + 1:]
+        case "other-signer":
+            j["ledger"] = lg.lines(signer=other)
+        case "self-keyed":
+            events = [(k, sid, {**b, "key_sha512": hashlib.sha512(lms.public_key(other)).hexdigest()} if k == "open" else b)
+                      for k, sid, b in lg.events]
+            j["ledger"] = lg.lines(events, signer=other)
+        case "other-key":
+            j["ledger"] = lg.lines()
+            j["key"] = {**j["key"], "public": lms.public_key(other).hex()}
+        case "open-form":
+            o = lg.index("open", s.id)
+            bad = rng.choice([{"window": {**lg.window, "period": rng.choice(["", ".p", "a b", 1, "é"])}},
+                              {"window": {**lg.window, "commit": lg.window["commit"][:-2]}},
+                              {"window": {**lg.window, "stream": "00"}}, {"host": rng.choice(["", "a b", None])},
+                              {"pinned": rng.choice(["ab" * 19, "AB" * 20, None])},
+                              {"key_sha512": rng.choice([None, "00"])}])
+            j["ledger"] = lg.lines(edit=_entry_edit(o, lambda e: e.update(body={**e["body"], **bad})))
+        case "end-form":
+            o = lg.index("end", s.id)
+            bad = rng.choice([{"closed": rng.choice([None, 1, "true"])}, {"files": rng.choice([None, [], "x"])},
+                              {"files": {Ch.LOG_FILE: rng.choice(["00", None, "AB" * 64])}}])
+            j["ledger"] = lg.lines(edit=_entry_edit(o, lambda e: e.update(body={**e["body"], **bad})))
+        case "second-open":
+            events = list(lg.events)
+            events.insert(rng.randint(0, len(events)), ("open", "s-other", lg.open_body(lg.window, "vy-challenger-1.x")))
+            j["ledger"] = lg.lines(events)
+        case "reopen":
+            events = list(lg.events)
+            events.append(("open", s.id, lg.open_body(_window(rng), s.host)))
+            j["ledger"] = lg.lines(events)
+        case "end-unopened":
+            events = list(lg.events)
+            events.insert(rng.randint(0, len(events)), ("end", "never", {"closed": True, "files": {}, "rc": 0}))
+            j["ledger"] = lg.lines(events)
+        case "end-twice":
+            events = list(lg.events)
+            events.append(lg.events[lg.index("end", s.id)])
+            j["ledger"] = lg.lines(events)
+        case "no-open":
+            j["ledger"] = lg.lines()
+            j["window"] = rng.choice([{**lg.window, "period": "p-other"}, {**lg.window, "commit": rng.randbytes(64).hex()}])
+        case "truncated":
+            j["ledger"] = lg.lines()[:lg.index(rng.choice(["open", "end"]), s.id)]
+        case "window-form":
+            j["ledger"] = lg.lines()
+            j["window"] = rng.choice([{**lg.window, "period": rng.choice([0, "", "-p", "x" * 65])},
+                                      {**lg.window, "stream": "00"}, {"commit": lg.window["commit"]}, None])
+        case "key-form":
+            j["ledger"] = lg.lines()
+            j["key"] = key_case(rng, rng.choice(KEY_NAMES[1:]))
+        case "params":
+            j["ledger"] = lg.lines()
+            w, h = rng.choice([p for p in PARAMS if p != (s.w, s.h)])
+            j["key"] = {**j["key"], "W": w, "H": h}
+        case "request":
+            j["ledger"] = lg.lines()
+            del j[rng.choice(sorted(j))]
+        case _:
+            j["ledger"] = lg.lines()
+    return j
+
+
+SESSION_NAMES = ["honest", "no-ledger", "no-open", "unclosed-ledger", "other-host", "unsealed-log", "unlisted-log",
+                 "wrong-session", "session-form", "no-record", "record-signature", "no-close", "close-form",
+                 "close-signature", "close-renamed", "rechained", "log-tampered", "log-dropped", "log-form", "unclosed",
+                 "key-form", "request"]
 
 
 def session_case(rng: random.Random, name: str) -> Any:
     s = Session(rng)
-    window = _window(rng)
-    others = [_entry(rng, _window(rng), sid, s.pub) for sid in ("o-1", "o-2")[:rng.randint(0, 2)]]
-    named = _entry(rng, window, s.id, s.pub)
-    auditor = others + [named]
-    rng.shuffle(auditor)
+    lg = Ledger(rng, s, closed=name != "unclosed-ledger")
     files = s.files()
-    j = {"auditor": auditor, "key": s.key.to_json(), "session": files, "window": window}
+    j = {"key": s.key.to_json(), "ledger": None, "session": files, "window": lg.window}
     lines = files["log"]
+    end = lg.index("end", s.id)
     match name:
-        case "honest":
+        case "no-ledger":
             pass
-        case "no-auditor":
-            j["auditor"] = None
-        case "auditor-form":
-            bad = rng.choice([{k: v for k, v in named.items() if k != "code"}, {**named, "key": named["key"].upper()},
-                              {**named, "code": named["code"][:38]}, {**named, "period": -1}, {**named, "session": ""},
-                              {**named, "extra": 1}, "entry"])
-            j["auditor"] = [bad if e is named else e for e in auditor]
-        case "auditor-type":
-            j["auditor"] = rng.choice([{"entries": auditor}, "x", 5])
-        case "window-form":
-            j["window"] = rng.choice([{**window, "period": rng.choice([-1, True, "0"])},
-                                      {**window, "stream": window["stream"][:-2]}, {**window, "code": "00"},
-                                      {k: v for k, v in window.items() if k != "commit"}, None])
-        case "no-session":
-            j["window"] = {**window, rng.choice(["commit", "pouw_salt", "stream"]): rng.randbytes(64).hex()}
-        case "two-sessions":
-            j["auditor"] = auditor + [_entry(rng, window, "s-other", s.pub)]
-        case "session-twice":
-            j["auditor"] = auditor + [_entry(rng, {**window, "period": window["period"] + 1}, s.id, s.pub)]
-        case "other-key":
-            j["auditor"] = [_entry(rng, window, s.id, lms.public_key(_key(s.w, s.h, 1))) if e is named else e
-                            for e in auditor]
+        case "no-open":
+            j["ledger"] = lg.lines()
+            j["window"] = {**lg.window, "period": "p-other"}
+        case "other-host":
+            o = lg.index("open", s.id)
+            host = rng.choice([h for h in HOSTS if h != s.host] + [f"vy-challenger-1.{s.id}"])
+            j["ledger"] = lg.lines(edit=_entry_edit(o, lambda e: e["body"].update(host=host)))
+        case "unsealed-log":
+            j["ledger"] = lg.lines(edit=_entry_edit(end, lambda e: e["body"]["files"].update(
+                {Ch.LOG_FILE: _flip(e["body"]["files"][Ch.LOG_FILE], 5)})))
+        case "unlisted-log":
+            j["ledger"] = lg.lines(edit=_entry_edit(end, lambda e: e["body"]["files"].pop(Ch.LOG_FILE)))
         case "wrong-session":
-            j["auditor"] = [{**named, "session": rng.choice([x for x in SESSIONS + ["o-3"] if x != s.id])} if e is named
-                            else e for e in auditor]
+            sid = rng.choice([x for x in SESSIONS + ["o-3"] if x != s.id])
+            j["ledger"] = lg.lines([(k, sid if x == s.id else x, b) for k, x, b in lg.events])
         case "session-form":
             j["session"] = rng.choice([{k: v for k, v in files.items() if k != "log"}, {**files, "extra": 1}, None])
         case "no-record":
@@ -768,7 +937,7 @@ def session_case(rng: random.Random, name: str) -> Any:
             files["close"] = {**files["close"], "signature": _flip(files["close"]["signature"], 9)}
         case "close-renamed":
             files["close"] = {**files["close"], "session": "renamed"}
-            j["auditor"] = [{**named, "session": "renamed"} if e is named else e for e in auditor]
+            j["ledger"] = lg.lines([(k, "renamed" if x == s.id else x, b) for k, x, b in lg.events])
         case "rechained":
             files["log"] = _set(lines, 1, root=_flip(json.loads(lines[1])["root"]))
             files["close"] = {**files["close"], "chain": Ch.log_chain(files["log"]).hex()}
@@ -782,11 +951,10 @@ def session_case(rng: random.Random, name: str) -> Any:
             files["close"] = s.signed(rng.choice(["the stream closed", "a client's frames are hello", ""]))
         case "key-form":
             j["key"] = key_case(rng, rng.choice(KEY_NAMES[1:]))
-        case "params":
-            w, h = rng.choice([p for p in PARAMS if p != (s.w, s.h)])
-            j["key"] = {**j["key"], "W": w, "H": h}
         case "request":
             del j[rng.choice(sorted(j))]
+    if j.get("ledger", 0) is None and name != "no-ledger":
+        j["ledger"] = lg.lines()
     return j
 
 
@@ -805,6 +973,8 @@ CLOSE = D.Port(PIECES, "challenger_close", close, _cases(close_case, CLOSE_NAMES
                of_record="lean")
 RELEASED = D.Port(PIECES, "challenger_released", released, _cases(released_case, RELEASED_NAMES), package=PACKAGE,
                   of_record="lean")
+LEDGER = D.Port(PIECES, "challenger_ledger", ledger, _cases(ledger_case, LEDGER_NAMES), package=PACKAGE,
+                need_rejects=False, of_record="lean")
 SESSION = D.Port(PIECES, "challenger_session", session, _cases(session_case, SESSION_NAMES), package=PACKAGE,
                  need_rejects=False, of_record="lean")
 
@@ -814,7 +984,7 @@ RUNS = [(COMMITMENT, commitment_case, COMMITMENT_NAMES, 300), (OPENING, opening_
         (REASON, reason_case, REASON_NAMES, 400), (ORDER, order_case, ORDER_NAMES, 400), (KEY, key_case, KEY_NAMES, 200),
         (RECORD, record_case, RECORD_NAMES, 200), (TRUSTED, trusted_case, TRUSTED_NAMES, 300),
         (CLOSE, close_case, CLOSE_NAMES, 200), (RELEASED, released_case, RELEASED_NAMES, 300),
-        (SESSION, session_case, SESSION_NAMES, 300)]
+        (LEDGER, ledger_case, LEDGER_NAMES, 300), (SESSION, session_case, SESSION_NAMES, 300)]
 
 
 @pytest.mark.parametrize("port, make, names, examples", RUNS, ids=[r[0].fn for r in RUNS])

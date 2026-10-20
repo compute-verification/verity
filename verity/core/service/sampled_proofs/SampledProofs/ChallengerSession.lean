@@ -1,6 +1,6 @@
 /-
-The challenger's session: its signed close over the release log, and the auditor's record of which session is a
-window's (`challenger.py`'s "The session's close" and "The auditor's record", which `tests/test_challenger_difftest.py`
+The challenger's session: its signed close over the release log, and the auditor's signed ledger of which session is a
+window's (`challenger.py`'s "The session's close" and "The auditor's ledger", which `tests/test_challenger_difftest.py`
 holds to this, the verifier of record).
 
 The challenger logs each root it receives and each release after it, a line each in canonical JSON (`releases.jsonl`, its
@@ -16,15 +16,24 @@ the key (`recordReason`), the close signed under it, the log the one the close s
 client closed, and the roots it received (`releasedRootsOf`). A line is refused unless it is its own canonical JSON
 (`Flock.canon`) in at most `MAX_LOG_LINE` characters, so Lean's parser and Python's read every accepted line alike.
 
-The auditor's record names one session per window (`auditedSession`, `audited_session`): entries
-`{code, commit, key, period, pouw_salt, session, stream}`, the window `{commit, period, pouw_salt, stream}`. The verifier
-refuses a window it names no session for, or several; a session it names for two windows; a key other than the window's
-pinned one; and a session whose signed close names another id (`trustedSessionOf`, `trusted_session_of`). Each refusal
-throws Python's `CoinError` text.
+The auditor's ledger names the one session each window's coins come from (`auditedSession`, `audited_session`): infra's
+`windows.jsonl`, a canonical JSON line per entry `{body, kind, prev, schema, seq, session, sig}`, an open naming the
+window `{commit, period}`, the challenger's host and the SHA-512 of its key's public key, an end whether the session
+closed and the SHA-512 of each file it left, each entry signed under the challenger's key:
+
+    message = SHA-512([LEDGER_ROLE] ‖ I ‖ [identity_digest_sha512(LEDGER_TAG, entry without sig)])
+
+The key is the one the window's deployment pins, from outside the ledger: an open naming another key's SHA-512 is
+refused before any signature is read, so a ledger signed under its own key can't pin itself. Then each entry is
+chained (`seq` from 0, `prev` the SHA-512 of the previous line) and signed, a window and a session opened once, a session
+ended once after its open; the window's session must be opened and ended closed, so a ledger older than its end is
+refused. The session's files must be that session's (`sessionNamed`): its signed close names the ledger's session id,
+its record the open's host, and its release log is the one the end sealed. Each refusal throws Python's `CoinError`
+text.
 
 The difftest's pieces: `challenger_close` (`ChallengerClose.from_json` and `close_message`), `challenger_released`
-(`log_chain` and `released_roots_of`) and `challenger_session` (`trusted_session_of`), each `{"refused": why}` where
-Python refuses.
+(`log_chain` and `released_roots_of`), `challenger_ledger` (`audited_session`) and `challenger_session`
+(`trusted_session_of`), each `{"refused": why}` where Python refuses.
 -/
 import SampledProofs.ChallengerRecord
 
@@ -49,12 +58,23 @@ def LOG_FORM : String := "the challenger's release log is a list of its lines"
 def LOG_MALFORMED : String := "the challenger's release log is malformed"
 def SESSION_FORM : String :=
   "a challenger session is {close, log, record}: its close record, its release log's lines and its record"
+def LOG_FILE : String := "releases.jsonl"
+def LEDGER_SCHEMA : String := "verity/challenger-auditor/v1"
+def LEDGER_ROLE : String := "verity/challenger-auditor-record/v1"
+def LEDGER_TAG : String := "verity/challenger-auditor/entry/v1"
+/-- An auditor's ledger line's most characters: its signature at W = 1, H = 30 is 70928 hex digits. -/
+def MAX_LEDGER_LINE : Nat := 262144
+def ZERO : String := String.mk (List.replicate 128 '0')
 def WINDOW_FORM : String :=
-  "a window's identity is {commit, period, pouw_salt, stream}: the Commit, the PoUW salt and the stream, 64 bytes each in lowercase hex, and the period, a nonnegative integer"
-def AUDIT_FORM : String :=
-  "an auditor's session record is a list of {code, commit, key, period, pouw_salt, session, stream}: a window's identity, the challenger's pinned source commit (40 lowercase hex), the SHA-512 of its public key (lowercase hex) and the session's id"
+  "a window's identity is {commit, period}: the served Commit's root, 64 bytes in lowercase hex, and the " ++
+  "period, 1 to 64 ASCII letters, digits, '.', '_', ':' and '-', the first a letter or digit"
+def LEDGER_FORM : String :=
+  "an auditor's ledger line is canonical JSON {body, kind, prev, schema, seq, session, sig}: kind open, its " ++
+  "body naming the window, the challenger's host, the pinned source commit (40 lowercase hex) and the SHA-512 " ++
+  "of the challenger key's public key (key_sha512), or kind end, its body whether its client closed the " ++
+  "session (closed) and the SHA-512 of each file the session left (files)"
 def NO_AUDIT : String :=
-  "no auditor's session record: the verifier trusts a challenger session only as the auditor's record names it"
+  "no auditor's ledger: the verifier trusts a challenger session only as the auditor's signed ledger names it"
 
 /-- A session id: a host's characters, at most `MAX_SESSION_ID` of them. -/
 def isSessionId (s : String) : Bool := s.length ≤ MAX_SESSION_ID && isHost s
@@ -178,48 +198,140 @@ private def isDigest (j : Json) (n : Nat := 128) : Bool :=
   | .str s => s.length == n && (Flock.unhex s).toOption.isSome
   | _ => false
 
-def WINDOW_KEYS : List String := ["commit", "period", "pouw_salt", "stream"]
+private def isPeriod (s : String) : Bool :=
+  1 ≤ s.length && s.length ≤ 64 && !"._:-".contains s.front &&
+    s.all fun c => c.isAlphanum && c.toNat < 128 || c == '.' || c == '_' || c == ':' || c == '-'
 
-private def isWindowIn (j : Json) : Bool :=
-  isDigest (getD j "commit") && isDigest (getD j "pouw_salt") && isDigest (getD j "stream") &&
-    (nat? (getD j "period")).isSome
+/-- `_window`: a window's identity `{commit, period}`. -/
+def isWindow (j : Json) : Bool :=
+  keys? j == some #["commit", "period"] && isDigest (getD j "commit") &&
+    (match getD j "period" with | .str s => isPeriod s | _ => false)
 
-def isWindow (j : Json) : Bool := keys? j == some #["commit", "period", "pouw_salt", "stream"] && isWindowIn j
+/-- `ledger_message(I, entry)`: what an auditor's ledger entry's `sig` signs, `entry` without its `sig`. -/
+def ledgerMessage (I : ByteArray) (entry : Json) : V ByteArray := do
+  unless I.size == 16 do throw s!"an LMS identifier is 16 bytes, not {I.size}"
+  let d ← taggedSha512 LEDGER_TAG (Json.mkObj ((entries entry).toList.filter (·.1 != "sig")))
+  return Flock.Sha512.hash (field LEDGER_ROLE.toUTF8 ++ I ++ field d)
 
-def isAuditEntry (j : Json) : Bool :=
-  keys? j == some #["code", "commit", "key", "period", "pouw_salt", "session", "stream"] && isWindowIn j &&
-    isDigest (getD j "code") 40 && isDigest (getD j "key") &&
-    (match getD j "session" with | .str s => isSessionId s | _ => false)
+/-- An auditor's ledger entry as its line holds it. -/
+structure LedgerEntry where
+  entry : Json
+  kind : String
+  session : String
+  sig : ByteArray
+  body : Json
 
-/-- `audited_session` (module docstring): the id of the one session the auditor's record `auditor` (`null` when the
-verifier has none) names for `window`, under the window's pinned key `key`. -/
-def auditedSession (auditor window : Json) (key : ChallengerKey) : V String := do
-  if auditor == Json.null then throw NO_AUDIT
-  let .arr entries := auditor | throw s!"the auditor's session record is malformed: {AUDIT_FORM}"
-  unless entries.all isAuditEntry do throw s!"the auditor's session record is malformed: {AUDIT_FORM}"
+private def isOpenBody (b : Json) : Bool :=
+  isWindow (getD b "window") && (match getD b "host" with | .str h => isHost h | _ => false) &&
+    isDigest (getD b "pinned") 40 && isDigest (getD b "key_sha512")
+
+private def isEndBody (b : Json) : Bool :=
+  (match getD b "closed" with | .bool _ => true | _ => false) &&
+    (match getD b "files" with | .obj _ => (entries (getD b "files")).all (isDigest ·.2) | _ => false)
+
+/-- `_ledger_entry`: a ledger line's entry when it is its own canonical JSON of the ledger's form, in at most
+`MAX_LEDGER_LINE` characters. -/
+def ledgerEntry? (line : Json) : Option LedgerEntry := do
+  let .str text := line | none
+  guard (text.length ≤ MAX_LEDGER_LINE)
+  let e ← (Json.parse text).toOption
+  guard ((Flock.canon e).toOption == some text)
+  guard (keys? e == some #["body", "kind", "prev", "schema", "seq", "session", "sig"])
+  let .str _ := getD e "schema" | none
+  let _ ← nat? (getD e "seq")
+  guard (isDigest (getD e "prev"))
+  let .str session := getD e "session" | none
+  guard (isSessionId session)
+  let .str sig := getD e "sig" | none
+  let sig ← (Flock.unhex sig).toOption
+  let body := getD e "body"
+  let .obj _ := body | none
+  let .str kind := getD e "kind" | none
+  guard (kind == "open" && isOpenBody body || kind == "end" && isEndBody body)
+  pure ⟨e, kind, session, sig, body⟩
+
+private def verifies (key : ChallengerKey) (m sig : ByteArray) : Bool :=
+  match Lms.Signature.decode key.params sig with
+  | .ok s => (Lms.verify key.params key.pub m s).toOption == some true
+  | .error _ => false
+
+/-- The window's session as the auditor's ledger names it: its id, the host its open names, and the SHA-512 of each
+file its end sealed (`Audited`). -/
+structure Audited where
+  session : String
+  host : String
+  files : Json
+
+/-- `audited_session` (module docstring): the one challenger session the auditor's ledger `ledger` (its lines, `null`
+when the verifier has none) opens for `window` under the window's pinned key `key`, and ends closed. -/
+def auditedSession (ledger window : Json) (key : ChallengerKey) : V Audited := do
+  if ledger == Json.null then throw NO_AUDIT
+  let .arr lines := ledger | throw s!"the auditor's ledger is malformed: {LEDGER_FORM}"
   unless isWindow window do throw s!"the window's identity is malformed: {WINDOW_FORM}"
-  let named := entries.filter fun e => WINDOW_KEYS.all fun k => jeq (getD e k) (getD window k)
-  let some first := named[0]? | throw "the auditor's record names no challenger session for this window"
-  if named.size > 1 then
-    throw s!"the auditor's record names {named.size} challenger sessions for this window, and a window has one"
-  let .str session := getD first "session" | throw s!"the auditor's session record is malformed: {AUDIT_FORM}"
-  if (entries.filter (getD · "session" == Json.str session)).size > 1 then
-    throw s!"the auditor's record names challenger session {session} for more than one window"
   let pinned := Flock.hexOf (Flock.Sha512.hash key.pub)
-  let .str k := getD first "key" | throw s!"the auditor's session record is malformed: {AUDIT_FORM}"
-  unless k == pinned do
-    throw s!"the auditor's record names challenger key {k.take 16}... for this window's session, not the window's pinned key {pinned.take 16}..."
-  return session
+  let mut es : Array LedgerEntry := #[]
+  for (line, i) in lines.zipIdx do
+    let some e := ledgerEntry? line | throw s!"the auditor's ledger entry {i} is malformed: {LEDGER_FORM}"
+    if e.kind == "open" then
+      let .str k := getD e.body "key_sha512" | throw s!"the auditor's ledger entry {i} is malformed: {LEDGER_FORM}"
+      unless k == pinned do
+        throw s!"the auditor's ledger entry {i} opens session {e.session} under challenger key {k.take 16}..., not the window's pinned key {pinned.take 16}..."
+    es := es.push e
+  let mut opens : Array LedgerEntry := #[]
+  let mut ends : Array LedgerEntry := #[]
+  let mut prev := ZERO
+  for ((line, e), i) in (lines.zip es).zipIdx do
+    unless getD e.entry "schema" == Json.str LEDGER_SCHEMA && nat? (getD e.entry "seq") == some i &&
+        getD e.entry "prev" == Json.str prev do
+      throw s!"the auditor's ledger entry {i} is not entry {i} of a {LEDGER_SCHEMA} ledger chained to its predecessor"
+    unless verifies key (← ledgerMessage (key.pub.extract 0 16) e.entry) e.sig do
+      throw s!"the auditor's ledger entry {i}'s signature does not verify under the verifier's challenger key"
+    let s := e.session
+    if e.kind == "open" then
+      if opens.any (fun o => o.session == s || jeq (getD o.body "window") (getD e.body "window")) then
+        throw s!"the auditor's ledger entry {i} opens a second session for its window, or session {s} again: a window has one session"
+      opens := opens.push e
+    else
+      if !opens.any (·.session == s) || ends.any (·.session == s) then
+        throw s!"the auditor's ledger entry {i} ends session {s}, which it has not opened or has ended"
+      ends := ends.push e
+    let .str text := line | throw s!"the auditor's ledger entry {i} is malformed: {LEDGER_FORM}"
+    prev := Flock.hexOf (Flock.Sha512.hash text.toUTF8)
+  let some o := opens.find? (jeq (getD ·.body "window") window)
+    | throw "the auditor's ledger opens no challenger session for this window"
+  let s := o.session
+  let some e := ends.find? (·.session == s)
+    | throw s!"the auditor's ledger has no end for session {s}: the session never ended, or the ledger is older than its end"
+  unless getD e.body "closed" == Json.bool true do
+    throw s!"the auditor's ledger ends session {s} unclosed: its client didn't close it"
+  let .str host := getD o.body "host" | throw s!"the auditor's ledger is malformed: {LEDGER_FORM}"
+  return ⟨s, host, getD e.body "files"⟩
 
-/-- `trusted_session_of` (module docstring): the coin commitment and the roots of the one session the auditor's record
-names for `window`, from that session's files `{close, log, record}`. -/
-def trustedSessionOf (auditor window : Json) (key : ChallengerKey) (session : Json) : V (LiveCommitment × Roots) := do
-  let named ← auditedSession auditor window key
+/-- `log_digest`: the SHA-512 of the release log file whose lines are `lines`, each ended by a newline. -/
+def logDigest (lines : List String) : String :=
+  Flock.hexOf (Flock.Sha512.hash (String.join (lines.map (· ++ "\n"))).toUTF8)
+
+/-- `session_named` (module docstring): the coin commitment and the roots of session `a`, from its files
+`{close, log, record}`, when its close names the ledger's session, its record the open's host and its release log is the
+one the ledger's end sealed. -/
+def sessionNamed (a : Audited) (key : ChallengerKey) (session : Json) : V (LiveCommitment × Roots) := do
   unless keys? session == some #["close", "log", "record"] do throw SESSION_FORM
   let (c, roots, sid) ← sessionOf key (getD session "record") (getD session "log") (getD session "close")
-  unless sid == named do
-    throw s!"the challenger's session is {sid}, not {named}, the one the auditor's record names for this window"
+  unless sid == a.session do
+    throw s!"the challenger's session is {sid}, not {a.session}, the one the auditor's ledger opens for this window"
+  let r ← ChallengerRecord.ofJson (getD session "record")
+  unless r.host == a.host do
+    throw s!"the challenger's record names host {r.host}, not {a.host}, the one the auditor's ledger opened its session on"
+  let .arr ls := getD session "log" | throw LOG_FORM
+  let lines ← ls.toList.mapM fun | .str s => pure s | _ => throw LOG_FORM
+  unless getD a.files LOG_FILE == Json.str (logDigest lines) do
+    throw "the challenger's release log is not the one the auditor's ledger sealed at its session's end"
   return (c, roots)
+
+/-- `trusted_session_of` (module docstring): the coin commitment and the roots of the one session the auditor's ledger
+opens for `window` under `key`, from that session's files `{close, log, record}`. -/
+def trustedSessionOf (ledger window : Json) (key : ChallengerKey) (session : Json) : V (LiveCommitment × Roots) := do
+  sessionNamed (← auditedSession ledger window key) key session
 
 /-! The difftest's pieces. -/
 
@@ -250,11 +362,18 @@ def releasedPiece (j : Json) : V Json := do
     let roots ← releasedRootsOf (← LiveCommitment.ofJson (getD j "commitment")) lines
     return Json.mkObj [("chain", Json.str (Flock.hexOf (logChain lines))), ("roots", rootsJson roots)]
 
-/-- `{"auditor", "key", "session", "window"}` to `trusted_session_of`'s. -/
-def sessionPiece (j : Json) : V Json := do
-  request j #["auditor", "key", "session", "window"]
+/-- `{"key", "ledger", "window"}` to `audited_session`'s: the session, its host and the files its end sealed. -/
+def ledgerPiece (j : Json) : V Json := do
+  request j #["key", "ledger", "window"]
   pure <| refusing do
-    let (c, roots) ← trustedSessionOf (getD j "auditor") (getD j "window") (← ChallengerKey.ofJson (getD j "key"))
+    let a ← auditedSession (getD j "ledger") (getD j "window") (← ChallengerKey.ofJson (getD j "key"))
+    return Json.mkObj [("files", a.files), ("host", Json.str a.host), ("session", Json.str a.session)]
+
+/-- `{"key", "ledger", "session", "window"}` to `trusted_session_of`'s. -/
+def sessionPiece (j : Json) : V Json := do
+  request j #["key", "ledger", "session", "window"]
+  pure <| refusing do
+    let (c, roots) ← trustedSessionOf (getD j "ledger") (getD j "window") (← ChallengerKey.ofJson (getD j "key"))
       (getD j "session")
     return Json.mkObj [("commitment", c.toJson), ("roots", rootsJson roots)]
 
