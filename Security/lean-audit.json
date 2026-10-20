@@ -4471,13 +4471,12 @@
     "  (nextE : Claims.Msg → List Claims.Msg → List FlockDeploy.Coin → Claims.OC Claims.Out)",
     "  (colsE : Claims.Seen → Nat → List (Prod Nat (List FlockLevel3.GF128))) (wE : Claims.Msg → Real)",
     "  (join : List Claims.Msg → Claims.Msg) (rowIn : Claims.Msg → Claims.Msg)",
-    "  (final : Claims.Msg → Option (Prod (List (List (Prod Claims.Msg RecDeploy.Salt))) Claims.Msg))",
-    "  (w : Claims.Msg → Real) :",
-    "  And (Claims.Recursion.decOK (RecDeploy.bdDeployed rel nextE colsE wE join rowIn final w).DE Claims.GS.plainDecodeRD)",
+    "  (final : Claims.Msg → Option (Prod (List (List (Prod Claims.Msg RecDeploy.Salt))) Claims.Msg)) :",
+    "  And (Claims.Recursion.decOK (RecDeploy.bdCover rel nextE colsE wE join rowIn final).DE Claims.GS.plainDecodeRD)",
     "    (Claims.Recursion.decOK (FlockDeploy.deployZk rel) Claims.GS.zkDecodeRD)"
    ],
    "assumptions": [],
-   "type_hash": "e491da8d825d68d476c75d93db9a92d275f2b0a5885af0b07b5c3b4086e002b7"
+   "type_hash": "3148cfc406b5330ec93bbff99936a2107f1e10a0b1049c43142bf5f9e4953f84"
   },
   "Claims.Witness.Recursion.KSFlockLin_fails": {
    "owner": "@proofs",
@@ -4564,13 +4563,12 @@
     "  (nextE : Claims.Msg → List Claims.Msg → List FlockDeploy.Coin → Claims.OC Claims.Out)",
     "  (colsE : Claims.Seen → Nat → List (Prod Nat (List FlockLevel3.GF128))) (wE : Claims.Msg → Real)",
     "  (join : List Claims.Msg → Claims.Msg) (rowIn : Claims.Msg → Claims.Msg)",
-    "  (final : Claims.Msg → Option (Prod (List (List (Prod Claims.Msg RecDeploy.Salt))) Claims.Msg))",
-    "  (w : Claims.Msg → Real) :",
-    "  And (Claims.Recursion.decOK (RecDeploy.bdDeployed rel nextE colsE wE join rowIn final w).DE Claims.GS.plainDecodeRD)",
+    "  (final : Claims.Msg → Option (Prod (List (List (Prod Claims.Msg RecDeploy.Salt))) Claims.Msg)) :",
+    "  And (Claims.Recursion.decOK (RecDeploy.bdCover rel nextE colsE wE join rowIn final).DE Claims.GS.plainDecodeRD)",
     "    (Claims.Recursion.decOK (FlockDeploy.deployZk rel) Claims.GS.zkDecodeRD)"
    ],
    "assumptions": [],
-   "type_hash": "e491da8d825d68d476c75d93db9a92d275f2b0a5885af0b07b5c3b4086e002b7"
+   "type_hash": "3148cfc406b5330ec93bbff99936a2107f1e10a0b1049c43142bf5f9e4953f84"
   },
   "Claims.Witness.Recursion.KSPriv_fails": {
    "owner": "@proofs",
