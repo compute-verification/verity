@@ -35,7 +35,7 @@ import importlib.util
 import math
 import re
 import sys
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from fractions import Fraction
 from pathlib import Path
 
@@ -92,7 +92,7 @@ SM120 = Family(
     "Sm120", "RTX PRO 6000", device("sm_120"), "DS-120", "dither-c-peel-fx1", "h1fx1", "H1 + fx1",
     {"DS_imad": ("imad", 64), "DS_lop": ("lop", 64), "DS_xu": ("xu", 16), "DS_shfl": ("shfl", 32)},
     (256, 512, 1024, 2048), 2430, "the driver's reported maximum, SPEC's P1: no data sheet states it",
-    {"UNI": 1, "UNI64": 2}, "LDG32", "NOROW", Fraction(656, 100000),
+    {"UNI": 1, "UNI64": 2}, "LDG32", "NOROW", Fraction(5860, 100000),
     "an IMMA.16832 at L = 32",
     "fx1's fold on lanes (ALU 2 + IMAD 2 lane instructions a word) and alone on the uniform datapath (4 a word)")
 FAMILIES = (SM120,)
@@ -105,6 +105,21 @@ Q_M = Fraction(9, 8)               # scalar floors: q*₀ 1.120 (operands free),
 EPS_M = Fraction(591, 100000)      # the measured reading: 0.591%
 OFF_MENU = ("MMA", "UNI64")        # census lines no writer kind is: the forms' fallback line, and UNI64 (on UP alone)
 STAR = {"DS_issue": "issue", "DS_tensor": "tensor", "DS_smem": "smem"}
+#: A5b's unit: a bulk or TMA instruction counts its shared-memory bytes over 99 KB in UTMABIG (`loads.bulk_counts`)
+BULK = Fraction(1, 101376)
+#: The bulk-reduction floors (RT4-SHEET-1), counts a unit of N_w = 128 words. fx1's step u = y ⊕ d′ ⊕ k on the bulk
+#: engine's two-input reductions takes two a word, 8 B of shared-memory source; the lanes keep d′ = w·m1, y′ and the
+#: rotate-add (IMAD 8 + ALU 4) and move d′, y and u at the widest forms, STS.128 (one a unit), STG.256 (NOROW, A2's
+#: catch-all) and LDG.256 (half a unit each); a bulk copy moves 4 B a word. DS-120's π* must price each at least
+#: N_w·φ* (FOLD-OPT's stated menu).
+BULK_FLOORS = {
+    "d′ by STS.128": {"IMAD": Fraction(8), "ALU": Fraction(4), "STS128": Fraction(1), "NOROW": Fraction(1, 2),
+                      "LDG256": Fraction(1, 2), "UTMABIG": 1024 * BULK},
+    "d′ by STG.256 and a bulk copy in": {"IMAD": Fraction(8), "ALU": Fraction(4), "NOROW": Fraction(1),
+                                        "LDG256": Fraction(1, 2), "UTMABIG": 1536 * BULK},
+    "into shared memory, u by a bulk copy out": {"IMAD": Fraction(8), "ALU": Fraction(4), "NOROW": Fraction(1),
+                                                 "LDG256": Fraction(1, 2), "UTMABIG": 1536 * BULK},
+}
 
 
 def _eps_budget():
@@ -143,6 +158,7 @@ class Instance:
     folded: Fraction = Fraction(0)
     unfolded: Fraction = Fraction(0)
     ln_p: Fraction = LN_P
+    cert: dict[str, Fraction] = field(default_factory=dict)  # π*: the LP's facet, moved onto DS_smem by `bulk_cert`
 
 
 def branches(Nw: int, w: Fraction, phi: Fraction, B: Fraction, checks: int,
@@ -173,6 +189,21 @@ def coef(i: Instance, row: str, k: str) -> Fraction:
 
 def load(i: Instance, row: str, n: dict[str, Fraction]) -> Fraction:
     return sum((coef(i, row, k) * v for k, v in n.items()), Fraction(0))
+
+
+def price(i: Instance, cert: dict[str, Fraction], n: dict[str, Fraction]) -> Fraction:
+    """`Machine.price`: the certificate's weighted load."""
+    return sum((w * load(i, r, n) for r, w in cert.items()), Fraction(0))
+
+
+def bulk_cert(i: Instance, facet: str, fold: dict[str, Fraction]) -> dict[str, Fraction]:
+    """π*: the LP's facet with the least weight t on DS_smem at which every bulk floor (`BULK_FLOORS`) costs at least
+    the honest fold `fold`, both a unit: `t = (I_h − I_f)/((I_h − I_f) + (S_f − S_h))` for a floor `f` cheaper on the
+    facet, `I` its facet load and `S` its DS_smem load (A5b)."""
+    ih, sh = load(i, facet, fold), load(i, "DS_smem", fold)
+    t = max([(ih - load(i, facet, f)) / (ih - load(i, facet, f) + load(i, "DS_smem", f) - sh)
+             for f in BULK_FLOORS.values() if load(i, facet, f) < ih] + [Fraction(0)])
+    return {facet: 1 - t, "DS_smem": t} if t else {facet: Fraction(1)}
 
 
 def shape(k: str, fms: dict[str, E.Form], h: E.Honest) -> tuple[int, int] | None:
@@ -266,20 +297,32 @@ def instance(fam: Family = SM120) -> Instance:
             abs(s.baseline.n.get(k, 0.0) * Nw - float(n0.get(k, 0))) > 1e-9 for k in {*s.baseline.n, *n0}):
         raise SystemExit(f"{fam.design} on {fam.device}: ♭ is not setup's floor program ({s.baseline.n}, T "
                          f"{s.baseline.T})")
-    vmin = min(coef(i, pistar, k) for k in i.vec)
-    w = min([coef(i, pistar, k) / om for k, om in writers] + [Q / E.LANES * vmin])
-    phi = min(load(i, pistar, f) for f in folds)
+    w0, phi0 = stars(i, {pistar: Fraction(1)}, writers, folds)
+    if abs(float(1 - (Nw * w0 + Nw * phi0) / B) - (e.machine_eps * (1 - float(eps_skip)) + float(eps_skip))) > 1e-9:
+        raise SystemExit(f"{fam.design} on {fam.device}: the terms at the LP's facet are not ε_machine and ε_skip over "
+                         f"♭ with its skip")
+    cert = bulk_cert(i, pistar, nf)
+    w, phi = stars(i, cert, writers, folds)
+    low = {name: price(i, cert, f) for name, f in BULK_FLOORS.items() if price(i, cert, f) < Nw * phi}
+    if low:
+        raise SystemExit(f"{fam.design} on {fam.device}: bulk floors below N_w φ* = {float(Nw * phi)} at π*: {low}")
     kappa = Nw * w / B
     folded, unfolded = branches(Nw, w, phi, B, i.checks, LN_P)
     bound = max(folded, unfolded)
     if bound > fam.eps:
         raise SystemExit(f"{fam.design} on {fam.device}: the Lean bound {float(bound):.6%} is above "
                          f"{float(fam.eps):.4%}")
-    if abs(float(1 - (Nw * w + Nw * phi) / B) - (e.machine_eps * (1 - float(eps_skip)) + float(eps_skip))) > 1e-9:
-        raise SystemExit(f"{fam.design} on {fam.device}: the terms at π* are not ε_machine and ε_skip over ♭ with its "
-                         f"skip")
     return Instance(fam, classes, macs, peak, pipe, smem, writers, vec, folds, nw, nf, ns, Nw, i.checks,
-                    pistar, eps_skip, B, kappa, bound, folded, unfolded, LN_P)
+                    pistar, eps_skip, B, kappa, bound, folded, unfolded, LN_P, cert)
+
+
+def stars(i: Instance, cert: dict[str, Fraction], writers: list[tuple[str, int]],
+          folds: list[dict[str, Fraction]]) -> tuple[Fraction, Fraction]:
+    """w* and φ* at a certificate, as `Model.wStar` and `Model.phiStar` price them: a writer kind's class over its ω,
+    the vector route's `q/32` times each row's cheapest vector class, each fold route's counts."""
+    vec = Q / E.LANES * sum((wt * min(coef(i, r, k) for k in i.vec) for r, wt in cert.items()), Fraction(0))
+    w = min([price(i, cert, {k: Fraction(1)}) / om for k, om in writers] + [vec])
+    return w, min(price(i, cert, f) for f in folds)
 
 
 @dataclass(frozen=True)
@@ -401,7 +444,11 @@ def _sparse(i: Instance, n: dict[str, Fraction]) -> str:
 def render(i: Instance) -> str:
     f = i.fam
     ix = i.classes.index
-    star = STAR.get(i.pistar) or f"pipe .{f.pipes[i.pistar][0]}"
+    def facet(r: str) -> str:
+        return f"SheetRow.{STAR[r]}" if r in STAR else f"SheetRow.pipe .{f.pipes[r][0]}"
+    star = " +\n    ".join(f"{w.numerator} / {w.denominator} * onFacet ({facet(r)} : SheetRow Pipe) r"
+                           for r, w in i.cert.items())
+    moved = [r for r in i.cert if r != i.pistar]
     lane = [p for p, _ in f.pipes.values()]
     pipes = [f"some .{p}" if p else "none" for p in i.pipe]
     writer_lines = "\n".join(f"    ({ix(k)}, {om}){',' if j + 1 < len(i.writers) else ''}  -- {k}"
@@ -429,7 +476,10 @@ def render(i: Instance) -> str:
         f"`flat`: the floor program ♭ a unit: the MMA and the design's operand floor (word production), the fold, no "
         f"filler, and ε_skip's skippable work at {f.skip}'s price, {float(i.eps_skip):.6%} of ♭'s bound "
         f"(`eps_budget.design_skip` on {f.device}).",
-        f"`piStar`: π*, the facet ({i.pistar}) the machine model's LP certificate sits on at q* = ½.",
+        f"`piStar`: π*, the facet ({i.pistar}) the machine model's LP certificate sits on at q* = ½" + (
+            f", with {', '.join(f'{i.cert[r].numerator}/{i.cert[r].denominator} moved onto {r}' for r in moved)}: the "
+            f"least weight there at which each bulk-reduction floor (the exporter's `BULK_FLOORS`, A5b) costs at least "
+            f"the menu's φ*." if moved else "."),
         "`checks`: the checks a window, one a round (Theorem S's S).",
     ]
     doc = "\n".join(_words(b, "* ", "  ") for b in bullets)
@@ -513,8 +563,9 @@ def flatSkip : Sparse := {_sparse(i, i.ns)}
 /-- The floor program ♭, labelled. -/
 noncomputable def flat : Labelled (Fin {len(i.classes)}) := labelled {len(i.classes)} flatWords flatFold [] flatSkip
 
-/-- π*: the machine model's certificate at q* = ½. -/
-def piStar : SheetRow Pipe := .{star}
+/-- π*: the machine model's certificate at q* = ½, priced so that the bulk-reduction floors cost at least φ*. -/
+noncomputable def piStar : SheetRow Pipe → ℝ := fun r =>
+    {star}
 
 /-- The checks a window. -/
 def checks : ℕ := {i.checks}
@@ -613,7 +664,8 @@ def main(argv: list[str] | None = None) -> int:
     out = {}
     for fam in FAMILIES:
         i = instance(fam)
-        print(f"{fam.design} on {fam.device}: π* {i.pistar}, ♭'s bound {float(i.B):.6f} a unit, ε_skip "
+        cert = " + ".join(f"{w} {r}" for r, w in i.cert.items())
+        print(f"{fam.design} on {fam.device}: π* {cert}, ♭'s bound {float(i.B):.6f} a unit, ε_skip "
               f"{float(i.eps_skip):.6%}; the Lean bound {float(i.bound):.5%} (exact logs {exact_logs(i):.5%}) ≤ "
               f"{float(fam.eps):.4%}")
         out[fam.out] = render(i)

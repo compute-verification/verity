@@ -308,6 +308,7 @@ CLOSING: dict[tuple[str, str], tuple[str, str]] = {
     ("sm_120", "UNI64"): (UNOWNED, "228 bit-slice attack variants' XU on UNI64, which is on UP alone (#2791's OFF_MENU)"),
     ("sm_120", "TMA512"): (UNOWNED, "attack (ii)'s TMA gather and dither-duo-l32's [per_mma]"),
     ("sm_120", "TMAred512"): (UNOWNED, "attack (ii)'s TMA reduce-add"),
+    ("sm_120", "UBLKRED.G.S.XOR"): (UNOWNED, "cpw_routes modes 8-10's bulk reduce-xor (1 to 16 KB): TMAred512"),
     ("sm_120", "UTMA16K"): (UNOWNED, "the TMA loads of twelve honest profiles' [per_mma] (c-fx1, the l7qs kernels, fattn)"),
     # sm_90 and sm_100, on #2699's DS-90 at DS_issue + DS_alu and DC-90-ri at its three rows, DS-100 and DC-100-ri at
     # issue: rt3_dc's bit-exact lane loops (RT3-DC-1/-4), none of whose memory and control instructions has a line
