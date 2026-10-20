@@ -115,6 +115,62 @@ def test_the_quantizers_results_are_committed_under_the_manifests_names_as_the_o
     assert decl["call_boundaries"]["tensors"] == 2 and decl[I8.KV_CLASS]["tensors"] == 4
 
 
+class _Read(nn.Module):
+    """A batch's int8 attention as the served layer runs it: through the paged caches (`paged_attention`), or over the windows
+    a credited read put in a step's K and V rows (`window_attention`, `engine.int8_window`)."""
+
+    def __init__(self, credited: bool) -> None:
+        super().__init__()
+        self.credited = credited
+
+    def forward(self, q, caches, rows, block_table, qsl, lens, ks):
+        out = torch.empty_like(q)
+        if self.credited:
+            int8_ops.window_attention(q, *rows, qsl, lens, ks, D ** -0.5, out)
+        else:
+            int8_ops.paged_attention(q, *caches, qsl, lens, block_table, ks, D ** -0.5, out)
+        return out
+
+
+def test_a_credited_read_commits_the_attentions_kv_quantization_as_the_paged_read_does():
+    """Under a credited read the layer quantizes with `kv_quant_window`, not `kv_quant`: its results are the same
+    `<attention>/0..3`, bit for bit, so a Commit whose warm-up read the pages and whose run reads through the store's
+    session lays out the same steps (a source that saw only `kv_quant` left every step of such a run uncommitted)."""
+    g = torch.Generator().manual_seed(5)
+    lens = [S, 3]                                                        # a prefill of S tokens and a decode row over 3
+    ks, block_table = torch.tensor([0.03, 0.05]), torch.tensor([[1, 0], [2, 3]], dtype=torch.int32)
+    kc, vc = torch.zeros(4, BS, G, D, dtype=torch.bfloat16), torch.zeros(4, BS, G, D, dtype=torch.bfloat16)
+    windows = []
+    for r, s in enumerate(lens):
+        k, v = ((torch.randn(s, G, D, generator=g) * 2).bfloat16() for _ in range(2))
+        for t in range(s):
+            kc[block_table[r, t // BS], t % BS], vc[block_table[r, t // BS], t % BS] = k[t], v[t]
+        windows.append((k, v))
+    rows = (torch.cat([k for k, _ in windows]), torch.cat([v for _, v in windows]), [0, lens[0], lens[0] + lens[1]])
+    q = (torch.randn(S + 1, 2 * G, D, generator=g) * 2).bfloat16()
+    qsl, seq = torch.tensor([0, S, S + 1], dtype=torch.int32), torch.tensor(lens, dtype=torch.int32)
+    got, outs = [], []
+    for credited in (False, True):
+        com, model, man = _Committer(), _Model(), _manifest(steps=(1,))
+        model.model.layers[0].self_attn.attn = _Read(credited)
+        _classes, src = I8.attach(com, True, man, (), explicit_classes=True, model=model)
+        src.install()
+        try:
+            com._cur = types.SimpleNamespace(step=1)
+            src.on_step_begin()
+            outs.append(model.model.layers[0].self_attn.attn(q, (kc, vc), rows, block_table, qsl, seq, ks))
+        finally:
+            src.uninstall()
+        assert not com.errors and src.stats["kv_tensors"] == 4
+        got.append(com.got)
+    assert sorted(got[1]) == sorted(f"{ATTN}/{m}" for m in I8.KV_MEMBERS)
+    want = [torch.cat([t.reshape(-1) for t in ts]) for ts in zip(*(A.kv_quant(k, v, ks) for k, v in windows))]
+    for m, t in zip(I8.KV_MEMBERS, want):
+        assert torch.equal(got[0][f"{ATTN}/{m}"], t) and torch.equal(got[1][f"{ATTN}/{m}"], t), m
+    assert torch.equal(outs[0].view(torch.int16), outs[1].view(torch.int16))
+    assert not isinstance(int8_ops.kv_quant_window, types.FunctionType)                 # the op is back
+
+
 def test_nothing_is_committed_outside_a_committed_step_or_a_site():
     com, model, man = _Committer(), _Model(), _manifest(steps=(0,))
     _classes, src = I8.attach(com, True, man, (), explicit_classes=True, model=model)

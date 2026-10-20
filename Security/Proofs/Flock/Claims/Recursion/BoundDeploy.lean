@@ -121,7 +121,9 @@ noncomputable def recBoundAt (rel : _root_.Flock.Readable.Parsed → _root_.Floc
 
 /-- **`KSBound` at the deployment**, the guarantee option (d) states: at SHA-512, the compiled record `deployRec` whose
 inner view runs `IVStar` at V*'s bound layout (`recBoundAt`), the deployed bound record (`bdDeployed`) and the deployed
-outer `--zk` record (`deployZkRec`). -/
+outer `--zk` record (`deployZkRec`). At `γ`'s weight `wCover` at `IVStar` (ASK-72) it is `KSBoundCover`. Its level
+(`Claims.Recursion.lam`) is about 65 bits per SHA-512 call at the deployed shape (one inner table at `m = 35`, `γ`'s
+weight at `IVStar` at `coverW`), below the 100-bit floor and the `2^-128` target under every weight (ASK-73). -/
 def KSBoundDeployed (rel relO : _root_.Flock.Readable.Parsed → _root_.Flock.Readable.Relation) (b : Brings)
     (L : Claims.Recursion.VStarB.LayoutB) (nextE : Msg → List Msg → List Coin → Claims.OC Out)
     (colsE : Claims.Seen → ℕ → List (ℕ × List FlockLevel3.GF128)) (wE : Msg → ℝ) (join : List Msg → Msg)
@@ -224,7 +226,10 @@ deployed bound record `Bd` meets `KSBoundDeployed` given:
 extracts (note:proofs/20261019T0540Z-report-rec1-ksboundroute-counterexample). `PartOpensB` makes every holder of a
 round hold the run's commit string there, which the readers read, so each part's check reaches the readers' messages.
 
-`Bridge` is a lemma on the way, not a premise. -/
+`Bridge` is a lemma on the way, not a premise. At the deployed bound record (`bdCover`, `γ`'s weight `wCover` at
+`IVStar`, ASK-72) (P3) holds and the route is `ksBoundRoute_cover`. Its level (`Claims.Recursion.lam`) is about 65 bits
+per SHA-512 call at the deployed shape (one inner table at `m = 35`, `γ`'s weight at `IVStar` at `coverW`), below the
+100-bit floor and the `2^-128` target under every weight (ASK-73). -/
 def KSBoundRoute (rel relO : _root_.Flock.Readable.Parsed → _root_.Flock.Readable.Relation) (b : Brings)
     (L : Claims.Recursion.VStarB.LayoutB) : Prop :=
   ∀ (nextE : Msg → List Msg → List Coin → Claims.OC Out)

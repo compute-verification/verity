@@ -872,7 +872,7 @@ def _post(api: Slack, ch: str, handle: str, text: str, thread: str | None = None
     if route and route[1] is not None and not api.dry_run:
         msg = {"text": text, "ts": ts, "thread_ts": thread, "bot_id": route[0].get("bot_id"), "username": handle}
         try:
-            deliver(api, route[0], route[1], ch, msg)
+            deliver(api, route[0], route[1], ch, msg, sender=self_agent_id)
         except SlackError as e:
             print(f"route: posted, but delivery stopped ({e}); the post itself stands: `research msg deliver --ts {ts}"
                   + (f" --thread {thread}" if thread else "") + "` rings what it missed", file=sys.stderr)
@@ -1136,14 +1136,17 @@ def pr_watchers(msg: dict, reg: dict, history: list[dict] | tuple = (), branches
 
 
 def route_targets(msg: dict, root: dict | None, reg: dict, inboxes: set[str] | frozenset = frozenset(),
-                  history: list[dict] | tuple = (), branches: dict[str, str] | None = None) -> list[str]:
+                  history: list[dict] | tuple = (), branches: dict[str, str] | None = None,
+                  author_rings: bool = False) -> list[str]:
     """The names a post in #agent-coordination wakes, in order.  `msg` and `root` (its thread's root, None for a top-level
     post) are Slack messages; `inboxes` is every inbox thread's ts.  Nothing in an inbox thread routes; a status line wakes
     only the root's poster; otherwise the names at the start, an announcement's audience (every handle when it names
     none), and on a reply that names no one the root's poster or, when the poster replies, the names the root addressed.
     A quiet post wakes only the names at its start.  A reply under an announcement that names no one but its author, quiet
     or not, also wakes its `pr_watchers` that are handles (with `history` and `branches`, as there); one that names
-    someone wakes only them, whatever PRs and runs its body mentions.  The author is never a target."""
+    someone wakes only them, whatever PRs and runs its body mentions.  The author is never a target, unless
+    `author_rings` (`rings_own_inbox`: another agent posting as the author's handle, such as the outgoing generation of a
+    handover), when a post naming the author's handle is for it like a post naming anyone else."""
     text, ts, thread = msg.get("text") or "", msg.get("ts"), msg.get("thread_ts")
     reply = bool(thread) and thread != ts
     if (thread or ts) in inboxes or text.startswith(INBOX_HEAD) or \
@@ -1152,6 +1155,7 @@ def route_targets(msg: dict, root: dict | None, reg: dict, inboxes: set[str] | f
     author, by = poster(msg, reg), poster(root, reg) if reply else None
     if author is None:
         return []                                                    # only our bot and the named people route
+    me = set() if author_rings else {author}
     if is_quiet(text):
         out = [] if is_status(text) else lead_names(text, reg)       # people write (quiet) for "no reply needed"
     elif reply and is_status(text):
@@ -1160,19 +1164,19 @@ def route_targets(msg: dict, root: dict | None, reg: dict, inboxes: set[str] | f
         out = lead_names(text, reg)
         if not reply and is_announcement(msg):
             out += [h["handle"] for h in reg["handles"]] if to_every_handle(text) else header_names(text, reg)
-        if reply and set(out) - {author}:
+        if reply and set(out) - me:
             pass                                                     # a reply that names someone else is for them alone
         elif reply and by and by != author:
             out.append(by)
         elif reply and by:
             rt = (root or {}).get("text") or ""
             out += lead_names(rt, reg) + (header_names(rt, reg) if is_announcement(root) else [])
-    if reply and is_announcement(root) and not is_status(text) and not set(lead_names(text, reg)) - {author}:
+    if reply and is_announcement(root) and not is_status(text) and not set(lead_names(text, reg)) - me:
         handles = {h["handle"] for h in reg["handles"]}
         out += [n for n in pr_watchers(msg, reg, history, branches) if n in handles]
     seen: list[str] = []
     for n in out:
-        if n and n != author and n not in seen:
+        if n and n not in me and n not in seen:
             seen.append(n)
     return seen
 
@@ -1376,6 +1380,20 @@ def self_agent_id() -> str | None:
     return m[0] if m else None
 
 
+def same_agent(a: str, b: str) -> bool:
+    """Two agent ids name one agent: equal, or one the short form (`bc-8ece7cde`) of the other."""
+    short, full = sorted((a, b), key=len)
+    return bool(short) and full.startswith(short)
+
+
+def rings_own_inbox(routes: Routes | None, handle: str, sender: str | None) -> bool:
+    """Whether a post as `handle` by the agent `sender` may ring `handle`'s own inbox: only when its open route's holder is
+    another agent.  So the outgoing generation of a handover (`names open --succeeds`, which keeps it as a poster) or any
+    other poster reaches the holder, and the holder is never woken by its own posts.  No sender, no route: never."""
+    r = routes.current(handle) if routes is not None and sender else None
+    return bool(r and not r.get("closed") and r.get("holder")) and not same_agent(r["holder"], sender or "")
+
+
 _CHANNEL = r"#[A-Za-z0-9][A-Za-z0-9._-]*"
 #: groups: author, urgent, thread, reply; a post outside the front door names its channel before `thread` (`doorbell_channel`)
 DOORBELL_RE = re.compile(rf"^from ([a-z0-9][a-z0-9._-]*)( \(URGENT\))?, (?:{_CHANNEL} )?thread (\d+\.\d+)(?:, reply (\d+\.\d+))?: ")
@@ -1478,7 +1496,8 @@ def watch_context(api: Slack, ch: str, msg: dict, root: dict | None, now: float,
 
 
 def deliver(api: Slack, reg: dict, routes: Routes, ch: str, msg: dict, *, urgent: bool = False,
-            now: float | None = None, log=None, names: list[str] | None = None, reminder: str | None = None) -> list[str]:
+            now: float | None = None, log=None, names: list[str] | None = None, reminder: str | None = None,
+            sender: Callable[[], str | None] | None = None) -> list[str]:
     """Deliver the post `msg`: ring the doorbell of each name it wakes.  One line per name saying
     what happened.  Every handle's published route and every name's the post starts with is read first, so a clone not
     pulled since a name opened, reopened, closed or changed holder rings what the published table says (`_newer`).  A post
@@ -1487,7 +1506,9 @@ def deliver(api: Slack, reg: dict, routes: Routes, ch: str, msg: dict, *, urgent
     rings by `chat_targets`, and its doorbells, like those of a channel the registry doesn't know, carry no text.
     `names`, when given, are rung in place of the rule's: the Slack events service's decision for a post that named no one.
     A `reminder` (its watchdog's) rings again a name this post already rang, once per reason: only a doorbell for this post
-    carrying the same reminder keeps it from ringing."""
+    carrying the same reminder keeps it from ringing.  `sender` tells the agent that posted `msg` (`_post` passes
+    `self_agent_id`), asked only for a post that would ring its author's own inbox, which it does when another agent
+    holds it (`rings_own_inbox`)."""
     log = log or sys.stderr
     front = channel_id_for(reg, FRONT_DOOR) or ch
     where = None if ch == front else (key_of(reg, ch) or ch)
@@ -1520,8 +1541,15 @@ def deliver(api: Slack, reg: dict, routes: Routes, ch: str, msg: dict, *, urgent
         lines.append("no doorbells: " + ("another app's bot posted it, not Verity's" if reg.get("bot_id") else
                                          "the registry records no bot_id (`research msg groups sync --apply` writes it)"))
     humans = people_names(reg)
-    targets = names if names is not None else \
-        chat_targets(msg, replies, reg) if chat else route_targets(msg, root, reg, inboxes, history, branches)
+    own = False
+    if names is not None:
+        targets = names
+    elif chat:
+        targets = chat_targets(msg, replies, reg)
+    else:
+        targets = route_targets(msg, root, reg, inboxes, history, branches, author_rings=True)
+        own = author in targets and sender is not None and ours(msg, reg) and rings_own_inbox(routes, author, sender())
+        targets = targets if own else route_targets(msg, root, reg, inboxes, history, branches)
     for name in targets:
         if name in humans:
             continue                                                 # people read Slack itself
@@ -1536,7 +1564,7 @@ def deliver(api: Slack, reg: dict, routes: Routes, ch: str, msg: dict, *, urgent
                          " -- nobody will see this; check the name (`research msg names list`)") if not r and to == name
                          else f"@{name}: {why}")
             continue
-        if to == author:
+        if to == author and not own:
             continue
         try:
             try:
@@ -1706,7 +1734,7 @@ def acting_as(ns: argparse.Namespace, reg: dict, name: str) -> dict:
     short id such as `bc-8ece7cde` matches the full one) may use it, and an agent that can't tell its own id may not."""
     h = name_entry(ns, reg, name)
     ids, me = holder_ids(ns, reg, h["handle"]), self_agent_id()
-    if me and any(me == a or (len(a) < len(me) and me.startswith(a)) for a in ids):
+    if me and any(same_agent(a, me) for a in ids):
         return h
     if not me and ns.dry_run:
         print(f"dry-run: no agent id (set RESEARCH_AGENT_URL), so a real --as {h['handle']} would be refused", file=sys.stderr)
@@ -1890,16 +1918,19 @@ def cmd_send(ns: argparse.Namespace, reg: dict) -> int:
     kind = (ns.kind or ("ask" if to and not ns.thread else "")).strip().lower()
     if kind and not NAME_RE.match(kind) or kind in FLAGS:
         raise SlackError(f"--kind {ns.kind!r}: one lower-case word")
-    if any(t["handle"] == h["handle"] for t in to):
-        raise SlackError("--to names someone else")
+    def own() -> bool:
+        return rings_own_inbox(routes_of(ns), h["handle"], self_agent_id())
+    if any(t["handle"] == h["handle"] for t in to) and not own():
+        raise SlackError(f"--to names someone else (@{h['handle']}'s inbox is this agent's own)")
     body = _body(ns)
     if kind != "announce" and not ns.thread and not to and is_announcement({"text": body}):
         raise SlackError(f"it starts with {ANNOUNCE}, which makes a top-level post an announcement to every handle: send it "
                          "with --kind announce (which checks its pins), or start it with something else")
     if to or kind != "announce":                                     # an announcement with no --to reaches every handle
         refuse_unrouted(body, reg, h["handle"], tuple(t["handle"] for t in to))
-    if not to and (lead := lead_names(body, reg)) and set(lead) == {h["handle"]}:
-        raise SlackError(f"it starts with @{h['handle']} only, and a post never wakes its author: name its addressee with --to")
+    if not to and (lead := lead_names(body, reg)) and set(lead) == {h["handle"]} and not own():
+        raise SlackError(f"it starts with @{h['handle']} only, and a post never wakes its own inbox's holder: name its "
+                         "addressee with --to")
     if kind == "announce":
         if ns.thread:
             raise SlackError("an announcement starts its own thread: drop --thread")
