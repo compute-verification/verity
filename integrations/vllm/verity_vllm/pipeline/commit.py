@@ -989,6 +989,12 @@ def resolve_staging(args: Options) -> Options:
         slots = WINDOW_SLOTS
     bounded = args.bounded_staging if args.bounded_staging is not None else window > 0
     root = args.root_of_record or ("sha512" if args.retain != "none" and not args.retain_exclude else "vllm-v1")
+    if root == "sha512" and (args.retain == "none" or args.retain_exclude):
+        raise SystemExit("--retain none / --retain-exclude keep only part of the committed bytes, and the root of record (commit.record) is hashed "
+                         "on the host from all of them before any challenge: run with --retain device|host, or --root-of-record vllm-v1 (not of "
+                         "record) until the committer hashes the record on the GPU")
+    if bool(args.challenger_record) != bool(args.challenger_key):
+        raise SystemExit("--challenger-record and --challenger-key go together: the verifier reads its challenger's record under its own key")
     return dataclasses.replace(args, window_mb=window, window_slots=slots, bounded_staging=bounded, root_of_record=root)
 
 
@@ -1189,10 +1195,6 @@ def main(args: Options, argv: list[str] | None = None) -> None:
         if not args.bounded_staging or args.retain != "host" or not args.open_after_release:
             raise SystemExit("--retain-exclude needs --bounded-staging --retain host --open-after-release (the excluded families open by replay)")
         os.environ["VERITY_RETAIN_EXCLUDE"] = args.retain_exclude
-    if args.root_of_record == "sha512" and (args.retain == "none" or args.retain_exclude):
-        raise SystemExit("--retain none / --retain-exclude keep only part of the committed bytes, and the root of record (commit.record) is hashed "
-                         "on the host from all of them before any challenge: run with --retain device|host, or --root-of-record vllm-v1 (not of "
-                         "record) until the committer hashes the record on the GPU")
     if args.footprint:
         os.environ["VERITY_FOOTPRINT"] = args.footprint
         Path(args.footprint).parent.mkdir(parents=True, exist_ok=True)
@@ -1877,8 +1879,6 @@ def main(args: Options, argv: list[str] | None = None) -> None:
     versions["stop_rule_of_record"] = {k: v for k, v in stop_of_record.items() if k != "srule"} | {"eos_source": (stop_of_record.get("srule") or {}).get("source")}
     (out / "versions.json").write_text(json.dumps(versions, indent=1, default=str) + "\n")
     arms_all = ["control"] + (kinds if multi else ["instrumented"])
-    if bool(args.challenger_record) != bool(args.challenger_key):
-        raise SystemExit("--challenger-record and --challenger-key go together: the verifier reads its challenger's record under its own key")
     challenger = CH.commit_challenger(args.challenge_key, runs=args.pairs * (len(arms_all) - 1), address=args.challenger)
     # [revb F-r17b-19] the measured runs start here; verdict.host_peak.printed_before_run = admission_monotonic_s < this (timestamps, not a literal)
     _RUN0 = {"utc": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()), "monotonic_s": round(time.monotonic(), 3)}

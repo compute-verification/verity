@@ -105,11 +105,16 @@ def test_tp_commit_reads_the_ranks_ring_as_their_committers_do():
     (["--committer", "native_collect_v2b", "--retain", "device"], "sha512"),
     (["--retain", "host", "--retain-exclude", "fa3_hidden_m1"], "vllm-v1"),
     (["--retain", "host", "--root-of-record", "vllm-v1"], "vllm-v1"),
-    (["--root-of-record", "sha512"], "sha512"),
-], ids=["retain-none", "host", "device", "host-excluding", "explicit-vllm-v1", "explicit-sha512"])
+], ids=["retain-none", "host", "device", "host-excluding", "explicit-vllm-v1"])
 def test_the_root_of_record_is_the_records_whenever_the_run_keeps_every_committed_byte(argv, want):
     """The record is hashed on the host from every committed byte, so an omitted --root-of-record is sha512 only when the run keeps them
-    all (--retain device|host, no --retain-exclude); an explicit sha512 under --retain none is left for main() to refuse by name."""
+    all (--retain device|host, no --retain-exclude); an explicit sha512 that keeps less, and a challenger record without the verifier's
+    key, are refused by name."""
     from verity_vllm.pipeline import commit as cd
 
     assert cd.resolve_staging(cli.parse("commit", ["--out", "o", *argv], {})).root_of_record == want
+    for bad, why in ((["--root-of-record", "sha512"], "--retain none / --retain-exclude keep only part"),
+                     (["--retain", "host", "--retain-exclude", "x", "--root-of-record", "sha512"], "--retain none / --retain-exclude keep only part"),
+                     (["--retain", "host", "--challenger-record", "out"], "--challenger-record and --challenger-key go together")):
+        with pytest.raises(SystemExit, match=why):
+            cd.resolve_staging(cli.parse("commit", ["--out", "o", *bad], {}))
