@@ -766,8 +766,10 @@ per session's table count, on the statement's files (`--statement`, `--circuit`,
 the session's `SessionConfig` as canonical JSON with a 32-byte coin nonce the command draws from the OS, the Lean
 `CoinLayer.helloJson`. A setup it refuses is answered `refused WHY`, and the session stops before it sends anything.
 `draw LEN NONCE` (the simulator's rewinds, `plan.coin_nonce`) fixes the nonce. `FC_FIREWALL_STATEMENT` names the Lean
-statement (by default the build's, `+seed-injection` under that feature), and `FC_FIREWALL_HELLO_ARGS` adds arguments
-(`--partition F --program F` for a statement whose setup reads them).
+statement (by default the build's, `+seed-injection` under that feature), and `FC_FIREWALL_HELLO_ARGS` adds arguments:
+`--partition F --program F` for a statement whose setup reads them, and the verifier's own draw-law inputs as
+`flock-verify verify` takes them, which a stratified, work or closure draw sets up only on (U2, U3): `--stratified K`,
+`--work K --work-table F`, `--closure F`.
 
 The frame's protocol:
 - **start**: one JSON line with the rep's layout (`n_mlv`, `n_lc`, `n_ood0`, `k0`) and the statement's mask slot (`w0`,

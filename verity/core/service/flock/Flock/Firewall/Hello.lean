@@ -54,16 +54,41 @@ def nonceOf (hex : String) : Except String ByteArray :=
   if CoinTree.isHex (2 * NONCE_BYTES) hex then unhex hex
   else .error s!"a nonce `{hex}` that is not {2 * NONCE_BYTES} lowercase hex digits"
 
+/-- The verifier's own draw-law inputs, as `flock-verify verify` reads them: `--work K` with `--work-table F`
+(`Draw.workTableOfJson`), `--stratified K` and `--closure F` (`Draw.closureMapOfJson`), each optional. A stratified or work
+draw sets up only on them (`Stmt.setupTables`, U2), so they are the session's statement's as much as its files are. -/
+def lawOf (args : List String) :
+    IO (Except String (Option (Nat × Array (String × Nat × Nat)) × Option Nat × Option (Std.HashMap Nat (Array Nat)))) := do
+  let nat : String → Except String (Option Nat) := fun flag => match Witness.argOf args flag with
+    | none => .ok none
+    | some k => match k.toNat? with
+      | some k => .ok (some k)
+      | none => .error s!"{flag} K: K is a natural number"
+  let table : Except String (Option (Array (String × Nat × Nat))) ← match Witness.argOf args "--work-table" with
+    | none => pure (.ok none)
+    | some f => do pure ((← Witness.readJson f) >>= fun j => (Draw.workTableOfJson j).map some)
+  let closure : Except String (Option (Std.HashMap Nat (Array Nat))) ← match Witness.argOf args "--closure" with
+    | none => pure (.ok none)
+    | some f => do pure ((← Witness.readJson f) >>= fun j => (Draw.closureMapOfJson j).map some)
+  return do
+    let work ← match ← nat "--work", ← table with
+      | some k, some t => pure (some (k, t))
+      | none, none => pure none
+      | some _, none => throw "--work needs --work-table (the verifier's own work per template)"
+      | none, some _ => throw "--work-table needs --work"
+    pure (work, ← nat "--stratified", ← closure)
+
 /-- `flock-firewall hello [--statement ID] --circuit F --public F [--tables DIR] [--session-tables J] [--partition F]
-[--program F]`: each session's `Hello`, served on stdin and stdout, at `flock-verify verify --zk`'s statement of those
-files (`Witness.zkTags`, `zkCoins`, `Stmt.setupTables`; the public file the verifier's own, without rows).
+[--program F] [--stratified K] [--work K --work-table F] [--closure F]`: each session's `Hello`, served on stdin and stdout,
+at `flock-verify verify --zk`'s statement of those files (`Witness.zkTags`, `zkCoins`, `Stmt.setupTables`, with the draw
+law's inputs `lawOf`; the public file the verifier's own, without rows).
 `draw LEN` followed by the `LEN` bytes of the session's draw (`drawOf`) is answered `ok N` followed by the `N` bytes of
 the session's `Hello` (`json`), at a nonce of 32 bytes this command draws from the operating system; `draw LEN NONCE`
 takes the nonce's 64 hex digits instead, for a simulator's rewinds, which restart a session after its `Hello`. Each
 draw's statement is set up once. A statement the setup refuses, or one without a coin tree, is answered `refused WHY`,
 and the session goes on; anything else (a malformed line, a draw that is not JSON) is answered `err WHY` and ends it. -/
 def cmd (args : List String) : IO UInt32 := do
-  let usage := "usage: flock-firewall hello [--statement ID] --circuit F --public F [--tables DIR] [--session-tables J] [--partition F] [--program F]"
+  let usage := "usage: flock-firewall hello [--statement ID] --circuit F --public F [--tables DIR] [--session-tables J] [--partition F] [--program F] [--stratified K] [--work K --work-table F] [--closure F]"
   let (some cf, some pf) := (Witness.argOf args "--circuit", Witness.argOf args "--public") | IO.eprintln usage; return 2
   let some tags := Tags.find? ((Witness.argOf args "--statement").getD Tags.circuit.name)
     | IO.eprintln s!"unknown statement; known: {Tags.all.map (·.name)}"; return 2
@@ -73,6 +98,9 @@ def cmd (args : List String) : IO UInt32 := do
   let (partition, program) ← match ← Witness.bindingsOf args with
     | .ok b => pure b
     | .error e => IO.eprintln e; return 2
+  let (work, stratified, closure) ← match ← lawOf args with
+    | .ok l => pure l
+    | .error e => IO.eprintln s!"hello: {e}"; return 2
   let circuitFile ← IO.FS.readBinFile cf
   let publicFile ← IO.FS.readBinFile pf
   let tables ← Witness.readTables args
@@ -106,7 +134,7 @@ def cmd (args : List String) : IO UInt32 := do
       | some (_, s) => pure s
       | none => do
         let s := (Stmt.setupTables (Witness.zkTags I) I.circuitFile I.publicFile (Witness.zkCoins I) I.count I.tables draw
-          I.partition I.program).map (·.1)
+          I.partition I.program work stratified closure).map (·.1)
         specs := specs.push (key, s)
         pure s
     match spec with
