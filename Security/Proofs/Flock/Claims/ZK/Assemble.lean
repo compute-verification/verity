@@ -1,19 +1,36 @@
 import Proofs.Flock.Claims.ZK.Sent
 import Proofs.Flock.Claims.ZK.Split
 import Proofs.Flock.Claims.ZK.SimCommit
+import Proofs.Flock.Claims.ZK.PrefixLive
+import Proofs.Flock.Claims.ZK.SimSession
+import Proofs.Flock.Claims.ZK.SplitInner
+import Proofs.Flock.Claims.ZK.SimPiop
+import Proofs.Flock.Claims.ZK.InnerSlotTriple
+import Proofs.Flock.Claims.ZK.InnerLeaf
+import Proofs.Flock.Claims.ZK.InnerY
+import Proofs.Flock.Claims.ZK.InnerBatched
+import Proofs.Flock.Claims.ZK.SimLig
+import Proofs.Flock.Claims.ZK.LiveEnd
+import Proofs.Flock.Claims.ZK.InnerTauLig
+import Proofs.Flock.Claims.ZK.FinInner
+import Proofs.Flock.Claims.ZK.CausalExe
 
 /-!
-# The deployed masked session's zero knowledge from Split's statements
+# The deployed masked session's zero knowledge
 
-`Flock.zk_deployZk_masked_exe_sent_gap` at the deployed plan (`Split`: `PE`, `czExe`, `encExe`, `finExe`, `UE`). Its
-round `0`, `OuterReads`, `CoinReads` and `PointReads` hold by construction (`ExePlan`), and `SimCommit` is proved
-(`simCommit`); the rest are `Split`'s statements.
+`Flock.zk_deployZk_masked_exe_sent_gap` at the deployed plan (`Split`: `PE`, `czExe`, `encExe`, `finExe`, `UE`), with
+every premise discharged. Its round `0`, `OuterReads`, `CoinReads` and `PointReads` hold by construction (`ExePlan`);
+`PrefixLive`, `SimCommit`, `SimPiop`, `SimLig`, `SimSession` and `CausalExe` are proved (`prefixLive`, `simCommit`,
+`simPiop`, `simLig`, `simSession_of`, `causalExe`); `SimInner` from `SplitInner`'s statements, all proved
+(`simInner_of_split`: `innerSlot_holds`, `innerTriple_holds`, `innerBatched`, `innerTauVal`, `innerTauLeaf`, `innerY`);
+and `FinExe` from `liveEnd`, `simCommit`, the hybrids and `innerTauVal` (`finExe_of_inner`, through `repTau_of` and
+`repOpenRest`).
 
 * `hstep_exe`: the gap's `hstep` at the deployed plan, from `PrefixLive` and `SimSession`. Past the first round, the
   deployed encoding is `sessionCut`'s body on the cut, which `SimSession` makes the masked session's stopped right after
   the round, and `PrefixLive` that answered by the openings.
-* `Flock.zk_deployZk_masked_exe_split`: Flock's zero knowledge at the deployed masked session from Split's statements
-  but `SimCommit`, `SimSession` from `simCommit` and the three hybrids.
+* `Flock.zk_deployZk_masked_exe_split`: Flock's zero knowledge at the deployed masked session, given only that `H` is
+  SHA-512 and `0 < t`.
 -/
 
 namespace Claims.ZKMal
@@ -81,20 +98,23 @@ end Masked
 open Masked
 
 open Classical in
-/-- **Flock's zero knowledge at the deployed masked session, from Split's statements**:
-`Flock.zk_deployZk_masked_exe_sent_gap` at the deployed plan (`Split`), its round `0` and coin reads by construction,
-`hstep` from `PrefixLive` and `SimSession` (`hstep_exe`), `SimSession` from `simCommit` and the hybrids `SimPiop`,
-`SimLig`, `SimInner`, its `Causal` `CausalExe` and its last round `FinExe`. -/
+/-- **Flock's zero knowledge at the deployed masked session**: `Flock.zk_deployZk_masked_exe_sent_gap` at the deployed
+plan (`Split`), its round `0` and coin reads by construction, `hstep` from `prefixLive` and `SimSession` (`hstep_exe`),
+`SimSession` from `simCommit` and the hybrids `simPiop`, `simLig`, `SimInner` (`simSession_of`), `SimInner` from its
+statements (`simInner_of_split`, `innerTau_of`), its `Causal` `causalExe` and its last round from `liveEnd` and
+`innerTauVal` (`finExe_of_inner`). -/
 theorem Flock.zk_deployZk_masked_exe_split (H : Msg → Msg) (hH : Claims.hOf H = _root_.Flock.Sha512.hash)
-    (nr : Msg → ℕ → ℕ) (t : ℕ) (ht : 0 < t) (hpl : PrefixLive) (hpi : SimPiop) (hlg : SimLig) (hin : SimInner)
-    (hss : SimCommit → SimPiop → SimLig → SimInner → SimSession) (hc : CausalExe) (hfin : FinExe) :
+    (nr : Msg → ℕ → ℕ) (t : ℕ) (ht : 0 < t) :
     Claims.Flock.ZK H (zkDeployed _root_.Flock.Readable.relation nr
         (tableData PE (RoundPlan.stop (czExe PE) (encStop (encExe PE)) (finExe PE)) UE) t)
       (fun x => if Claims.Flock.Scope (FlockDeploy.deployZk _root_.Flock.Readable.relation) x then
         8 * nL PE x * FlockSoundness.CROnly.hidingGap ZkView.My ZkView.saltHash +
           8 * t * nL PE x * FlockSoundness.CROnly.hidingGap ZkView.My ZkView.saltHash + 2 * (1 / 3) ^ t else 1)
       fun _ => 4 * t * 3 ^ t :=
-  Flock.zk_deployZk_masked_exe_sent_gap H hH nr PE (encExe_zero PE) t ht hc (outerReads_czExe PE)
-    (coinReads_czExe PE) (pointReads_czExe PE) (hstep_exe hpl (hss simCommit hpi hlg hin) nr) (hfin H hH nr)
+  have hin : SimInner :=
+    simInner_of_split innerSlot_holds innerTriple_holds innerBatched (innerTau_of innerTauVal innerTauLeaf) innerY
+  Flock.zk_deployZk_masked_exe_sent_gap H hH nr PE (encExe_zero PE) t ht causalExe (outerReads_czExe PE)
+    (coinReads_czExe PE) (pointReads_czExe PE) (hstep_exe prefixLive (simSession_of simCommit simPiop simLig hin) nr)
+    (finExe_of_inner liveEnd simCommit simPiop simLig hin innerTauVal H hH nr)
 
 end Claims.ZKMal
