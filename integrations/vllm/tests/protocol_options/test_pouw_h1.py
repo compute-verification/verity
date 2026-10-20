@@ -285,7 +285,8 @@ def test_z_is_the_exact_product_on_each_units_cells():
         assert not z[pad].any()
 
 
-H1 = {"coins": None, "rows": 64, "steps": 3}
+#: two-step windows that admit b and c in round 1, so they admit in every round
+H1 = {"coins": None, "rows": 64, "steps": 3, "admission": "per-round"}
 
 
 class Runner:
@@ -337,7 +338,7 @@ def test_h1_is_admitted_beside_sampled_proofs_and_executes_nowhere():
     short = PO.Context(stage="serve", enabled=(_entry(),), settings=_settings(rounds=_rounds(2)))
     assert any("2 unopened coins, fewer than the window's 3 rounds" in r for r in PO.refusals(short))
     other = PO.Context(stage="serve", enabled=("pouw:ncp-v1",), settings={"pouw": {"coins": Challenger(0), "runner": Runner()}})
-    assert any("'runner', 'rounds' and 'challenger' are H1's" in r for r in PO.refusals(other))
+    assert any("'runner', 'rounds' and 'admission' are H1's" in r for r in PO.refusals(other))
     with pytest.raises(ValueError, match="'rounds' is the window's round coins"):
         pouw.Settings.of({"rounds": object()})
     with pytest.raises(ValueError, match="loaded Model Runner V2"):
@@ -381,7 +382,7 @@ def test_the_option_serves_the_arms_y_and_records_each_call(tmp_path):
     coins = settings["pouw"]["rounds"].challenger.commitment
     assert RQ.rounds_reason(commitment["rounds"], coins) is None
     assert all(RQ.request_reason(commitment["rounds"], coins, run.salt, 64, e, run.open_request(e.index),
-                                 run.open_first(e.index)) is None for e in run.requests)
+                                 run.open_first(e.index), admission=RQ.PER_ROUND) is None for e in run.requests)
     assert _slot_reasons(run, coins) == []
     record = json.loads((tmp_path / PH.CALLS_FILE).read_text())
     assert [c["base"] for c in record["calls"]] == [0, 2, 6, 8, 12, 14]
@@ -414,7 +415,8 @@ def _check_slots(log, coins, rows, manifest, open_slot, entries, open_entry, ope
             slot = open_slot(s, p)
             owner = RQ.slot_owner(slot.value[:-RQ.HM96_SALT])
             e = entries[owner] if owner is not None else None
-            why = RQ.slot_reason(log, coins, salt, rows, calls, slot, e, e and open_entry(e), e and open_first(e))
+            why = RQ.slot_reason(log, coins, salt, rows, calls, slot, e, e and open_entry(e), e and open_first(e),
+                                 admission=RQ.PER_ROUND)
             if why is not None:
                 out.append(why)
     return out
@@ -430,7 +432,7 @@ def _admitted_run():
     beside a's decode, and all three decoding in round 2."""
     rng = np.random.default_rng(12)
     rounds, runner = _rounds(), Runner()
-    run = PH.H1Run("t", SALT, {0: "q", 1: "o"}, [(32, K), (40, K)], 32, 3, rounds=rounds, key=KEY)
+    run = PH.H1Run("t", SALT, {0: "q", 1: "o"}, [(32, K), (40, K)], 32, 3, rounds=rounds, key=KEY, admission=RQ.PER_ROUND)
     step = PH.admitting(run, runner.execute_model, runner)
     for so in (_so(("a", [1, 2, 3], 4)), _so(("b", [4], 2), ("c", [5, 6], 3), running={"a": 1}),
                _so(running={"a": 1, "b": 1, "c": 1})):
@@ -462,9 +464,12 @@ def test_each_admitted_request_is_a_leaf_under_its_rounds_root_recorded_before_i
         calls = RQ.step_digest(SALT, r, [m for m in run.manifest() if m["step"] == r])
         assert (row["requests"], row["slots"], row["calls"]) == (table.commitment.root.hex(), slots.commitment.root.hex(),
                                                                  calls.hex())
-        assert row["root"] == RQ.round_root(SALT, r, calls, table.commitment.root, slots.commitment.root).hex()
+        assert row["receipts"] == (run.receipts_of(r - 1) if r else RQ.NO_RECEIPTS).hex()
+        assert row["root"] == RQ.round_root(SALT, r, calls, table.commitment.root, slots.commitment.root,
+                                            bytes.fromhex(row["receipts"])).hex()
     for e in run.requests:
-        assert RQ.request_reason(run.round_log, coins, SALT, 32, e, run.open_request(e.index), run.open_first(e.index)) is None
+        assert RQ.request_reason(run.round_log, coins, SALT, 32, e, run.open_request(e.index), run.open_first(e.index),
+                                 admission=RQ.PER_ROUND) is None
     assert _slot_reasons(run, coins) == []
     assert RQ.rounds_reason(run.round_log, coins) is None
 
@@ -480,9 +485,10 @@ def _deferred(run, name=True):
         tables[r] = RQ.request_table(SALT, r, 32, [e for e in late if e.round == r], KEY)
         slots[r] = RQ.slot_table(SALT, r, 32, owners[r], KEY)
         calls = RQ.step_digest(SALT, r, [m for m in manifest if m["step"] == r])
-        root = RQ.round_root(SALT, r, calls, tables[r].commitment.root, slots[r].commitment.root)
+        receipts = bytes.fromhex(run.round_log[r]["receipts"])
+        root = RQ.round_root(SALT, r, calls, tables[r].commitment.root, slots[r].commitment.root, receipts)
         log.append({"round": r, "root": root.hex(), "calls": calls.hex(), "requests": tables[r].commitment.root.hex(),
-                    "slots": slots[r].commitment.root.hex(), "coin": rounds.record(root).to_json()})
+                    "slots": slots[r].commitment.root.hex(), "receipts": receipts.hex(), "coin": rounds.record(root).to_json()})
     return (log, rounds.challenger.commitment, late,
             lambda e: _opening(tables[e.round], e.round, [x for x in late if x.round == e.round].index(e)),
             lambda s, p: _opening(slots[s], s, p), lambda e: _opening(slots[e.round], e.round, e.slot))
@@ -496,12 +502,12 @@ def test_a_prover_that_defers_every_entry_a_round_is_refused_at_the_rows_it_serv
     run, _rounds_ = _admitted_run()
     log, coins, late, open_entry, open_slot, open_first = _deferred(run)
     assert RQ.rounds_reason(log, coins) is None
-    assert all(RQ.request_reason(log, coins, SALT, 32, e, open_entry(e), open_first(e)) is None for e in late)
+    assert all(RQ.request_reason(log, coins, SALT, 32, e, open_entry(e), open_first(e), RQ.PER_ROUND) is None for e in late)
     why = _check_slots(log, coins, 32, run.manifest(), open_slot, late, open_entry, open_first)
     assert why == [f"request {i} is served at slot {p} of step {s}, before round {s + 1}, the round its entry is under"
                    for i, s, p in ((0, 0, 0), (0, 0, 1), (0, 0, 2), (1, 1, 1), (2, 1, 2), (2, 1, 3))]
     log, coins, late, open_entry, open_slot, open_first = _deferred(run, name=False)
-    assert all(RQ.request_reason(log, coins, SALT, 32, e, open_entry(e), open_first(e)) is None for e in late)
+    assert all(RQ.request_reason(log, coins, SALT, 32, e, open_entry(e), open_first(e), RQ.PER_ROUND) is None for e in late)
     why = _check_slots(log, coins, 32, run.manifest(), open_slot, late, open_entry, open_first)
     unnamed = "is a served row and names no admitted request: a request served without an entry"
     assert why == [f"slot {p} of step 0 {unnamed}" for p in range(3)] + [f"slot {p} of step 1 {unnamed}" for p in (1, 2, 3)]
@@ -518,7 +524,8 @@ def test_a_request_entry_under_the_wrong_round_or_under_none_is_refused():
     o0, o1 = run.open_request(0), run.open_request(1)
 
     def why(entry, opening, log=log, first=None):
-        return RQ.request_reason(log, coins, SALT, 32, entry, opening, first or run.open_first(entry.index))
+        return RQ.request_reason(log, coins, SALT, 32, entry, opening, first or run.open_first(entry.index),
+                                 RQ.PER_ROUND)
 
     wrong = "request 0 was admitted in round 0, and its entry is opened under round 1's root"
     assert why(e0, dataclasses.replace(o0, round=1)) == wrong and why(e0, o1) == wrong
@@ -529,7 +536,8 @@ def test_a_request_entry_under_the_wrong_round_or_under_none_is_refused():
     assert why(e0, dataclasses.replace(o0, value=o1.value)) == "request 0: the leaf opened under round 0 is not its entry"
     late = dataclasses.replace(e0, round=1)
     table = RQ.request_table(SALT, 1, 32, [late, *run.admitted[1]], KEY)
-    root = RQ.round_root(SALT, 1, bytes.fromhex(log[1]["calls"]), table.commitment.root, bytes.fromhex(log[1]["slots"]))
+    root = RQ.round_root(SALT, 1, bytes.fromhex(log[1]["calls"]), table.commitment.root, bytes.fromhex(log[1]["slots"]),
+                         bytes.fromhex(log[1]["receipts"]))
     moved = [log[0], {**log[1], "requests": table.commitment.root.hex(), "root": root.hex()}, log[2]]
     assert why(late, _opening(table, 1, 0), log=moved, first=run.open_slot(1, 0)) == \
         "request 0: round 1's coin: coin was not opened after what the verifier recorded"
@@ -540,7 +548,7 @@ def test_a_request_entry_under_the_wrong_round_or_under_none_is_refused():
         "request 3's entry doesn't open under round 2's request table"
     assert why(e1, o1, first=run.open_slot(1, 0)) == "request 1's first slot is slot 1 of step 1, and slot 0 of step 1 is opened"
     bent = [{**log[0], "calls": log[1]["calls"]}, *log[1:]]
-    assert why(e0, o0, log=bent) == "request 0: round 0's root is not over its calls, its request table and its slot table"
+    assert why(e0, o0, log=bent) == "request 0: round 0's root is not over its calls, its request table, its slot table and the receipts before it"
     coinless = [{**log[0], "coin": None}, *log[1:]]
     assert why(e0, o0, log=coinless) == "request 0: round 0 has no live coin, so nothing shows its root committed before one"
     early = [{**log[0], "coin": {**log[0]["coin"], "after": "00" * 64}}, *log[1:]]
@@ -605,7 +613,7 @@ def test_the_engines_admissions_go_to_the_next_steps_round_and_past_the_window_a
     an empty step none; a request admitted past the window's S steps, or with no prompt, gets no entry and is named; an
     admission after the window closes is refused."""
     rng = np.random.default_rng(13)
-    run = PH.H1Run("t", SALT, {0: "q"}, [(32, K)], 32, 2, rounds=_rounds(2), key=bytes(32))
+    run = PH.H1Run("t", SALT, {0: "q"}, [(32, K)], 32, 2, rounds=_rounds(2), key=bytes(32), admission=RQ.PER_ROUND)
     seen, runner = [], Runner()
     step = PH.admitting(run, lambda so, *a, **kw: seen.append(so), runner)
     step(_so(("p", [1], 1)), None, True)
@@ -623,7 +631,8 @@ def test_the_engines_admissions_go_to_the_next_steps_round_and_past_the_window_a
                                     {"round": 2, "reason": "admitted for step 2, past the window's 2 steps"}]
     assert {k: v for k, v in run.details["requests"].items() if k != "a_roots"} == {
         "admitted": 2, "refused": run.refused_requests, "per_round": [1, 1], "readmitted": 0,
-        "gaps": ["step 2: 1 row of a request with no entry"], "coins": "live"}
+        "gaps": ["step 2: 1 row of a request with no entry"], "coins": "live", "coin_source": "in-process",
+        "admission": RQ.PER_ROUND}
     with pytest.raises(RuntimeError, match="an admission after the window closed"):
         step(_so(("w", [8], 1)))
 
@@ -671,8 +680,13 @@ def _serve_window(settings):
     return comp.installed[0].commitment(), run
 
 
+#: the session infra gave the window (RT4-INT-17's request-a-session), and the auditor's record of it
+SESSION = {"id": "session-a", "commit": "commit-a", "period": 7}
+
+
 def _remote(**kw):
-    return {"pouw": {"rows": 64, "steps": 3, "runner": Runner(), "challenger": AUDITOR, **kw}}
+    return {"pouw": {"rows": 64, "steps": 3, "runner": Runner(), "challenger": AUDITOR, "session": SESSION,
+                     "admission": "per-round", **kw}}
 
 
 def test_h1_takes_its_salt_and_round_coins_from_the_auditor_hosts_challenger(tmp_path, monkeypatch):
@@ -688,10 +702,11 @@ def test_h1_takes_its_salt_and_round_coins_from_the_auditor_hosts_challenger(tmp
     assert commitment["coin_source"] == "challenger" and commitment["coins"] == commitment["round_coins"] == coins.to_json()
     assert PHC.trusted_rounds_reason(commitment, host.directory, host.key) is None
     received = R.released_roots(host.directory / R.RELEASES, coins)
-    assert received[Wd.SALT] == (bytes.fromhex(commitment["weights_root"]),) and received[Wd.DRAW] == ()
+    assert received[Wd.SALT] == (bytes.fromhex(commitment["weights_root"]),)
+    assert received[Wd.DRAW] == (bytes.fromhex(commitment["draw"]["root"]),) and commitment["session"] == SESSION
     assert received[Wd.ROUND] == tuple(bytes.fromhex(r["root"]) for r in commitment["rounds"]) and len(received[Wd.ROUND]) == 3
     assert all(RQ.request_reason(commitment["rounds"], coins, run.salt, 64, e, run.open_request(e.index),
-                                 run.open_first(e.index)) is None for e in run.requests)
+                                 run.open_first(e.index), admission=RQ.PER_ROUND) is None for e in run.requests)
     assert len(run.requests) == 3 and _slot_reasons(run, coins) == [] and run.request_gaps() == []
     pin = hashlib.sha512(host.key.public).hexdigest()
     assert PHC.pinned_key(host.directory / R.KEY, pin) == host.key
@@ -745,8 +760,12 @@ def test_the_challenger_setting_is_h1s_one_coin_source(tmp_path, monkeypatch):
     assert any("from one source" in r for r in refused(_remote(coins=Challenger(0))))
     assert any("from one source" in r for r in refused(_remote(rounds=_rounds())))
     assert any("opens no session" in r for r in refused(_remote(), stage="capture"))
-    assert any("'challenger' are H1's" in r for r in refused({"pouw": {"coins": Challenger(0), "challenger": AUDITOR}},
-                                                             entry="pouw:ncp-v1"))
+    assert any("'challenger' is eps1-sm120-h1fx1 and ncp-v2's" in r
+               for r in refused({"pouw": {"challenger": AUDITOR, "session": SESSION}}, entry="pouw:ncp-v1"))
+    assert any("needs 'session'" in r for r in refused(_remote(session=None)))
+    assert any("'session' is the session of the challenger" in r for r in refused(_settings(session=SESSION)))
+    with pytest.raises(ValueError, match="pouw setting 'session'"):
+        pouw.Settings.of({"challenger": AUDITOR, "session": {"id": "s"}})
     assert "coins" not in PO.own_auditor({"pouw": {"challenger": AUDITOR}}, SimpleNamespace(protocols=(_entry(),)))["pouw"]
     assert "coins" in PO.own_auditor({"pouw": {}}, SimpleNamespace(protocols=(_entry(),)))["pouw"]
     short = _host(tmp_path, monkeypatch, rounds=2)

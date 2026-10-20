@@ -72,6 +72,7 @@ from verity.core.protocols.pouw.audit import HM96, commit_rows, weight_binding
 from verity.core.protocols.pouw.circuit import compile as C
 from verity.core.protocols.pouw.circuit import h1tile as H
 from verity.core.protocols.pouw.protocol import tagged
+from verity.core.protocols.sampled_proofs.challenger import CoinError
 from verity.ml.circuits import boolean as BL
 from verity.ml.circuits.defs import CompositeDefinition, bind
 from verity.ml.circuits.ops.boolean import gemm as BG
@@ -706,8 +707,13 @@ class H1Run:
         if "draw" not in self.commits:
             receipts = self.receipts_of(self.steps - 1)
             root = RQ.draw_root(calls_root, receipts, self.round_log)
-            coin = self.draw.record(root) if self.draw is not None else None
-            self.commits["draw"] = {"root": root.hex(), "receipts": receipts.hex(), "coin": coin.to_json() if coin else None}
+            self.commits["draw"] = {"root": root.hex(), "receipts": receipts.hex(), "coin": None}
+            try:
+                coin = self.draw.record(root) if self.draw is not None else None
+            except CoinError as e:
+                self.commits["draw"]["refused"] = str(e)
+            else:
+                self.commits["draw"]["coin"] = coin.to_json() if coin else None
         if self.transcript_dir:
             d = Path(self.transcript_dir)
             d.mkdir(parents=True, exist_ok=True)

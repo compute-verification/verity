@@ -61,11 +61,14 @@ from verity.core.protocols.pouw.coins import Challenger, CoinCommitment
 from verity.core.protocols.pouw.protocol import Context as UnitContext
 from verity.core.protocols.pouw.protocol import DomainError, Matmul, Shape
 from verity.core.protocols.pouw.schemes import ncp
+from verity.core.protocols.pouw import window as Wd
+from verity.core.protocols.sampled_proofs.challenger import LiveRecord
 
 from verity_vllm.protocol_options import pouw_circuit as PC
 from verity_vllm.protocol_options import pouw_device as PD
 from verity_vllm.protocol_options import pouw_h1 as PH
 from verity_vllm.protocol_options import pouw_h1_challenger as PHC
+from verity_vllm.protocol_options import pouw_h1_requests as RQ
 from verity_vllm.protocol_options import pouw_native as PN
 from verity_vllm.protocol_options import pouw_pearl_c_device as PPD
 from verity_vllm.protocol_options.interface import Context, Option, Target
@@ -79,6 +82,9 @@ EXECUTES = ("LinearBase.quant_method.apply",)
 #: (`pouw_pearl_c_device.SCHEMES`) runs on the device only, through GPU 1's kernel pipeline (settings ``kernel``, ``cubin``).
 #: H1 + fx1 (`pouw_h1.SCHEME`) runs beside the int8_exact arm, which serves y itself.
 EXECUTED = ("ncp-v1", "ncp-v1-shift24", "ncp-v2", *PPD.SCHEMES, PH.SCHEME)
+#: The schemes whose coins the auditor host's challenger can draw (the setting ``challenger``): H1's salt and rounds,
+#: ncp-v2's salt
+CHALLENGED = (PH.SCHEME, "ncp-v2")
 #: The weight dtypes the executor reads (it quantizes them itself); any other, an FP8 checkpoint's float8 above all, is refused
 UNQUANTIZED = ("bfloat16", "float16", "float32")
 #: A quantized linear's parameters beside (or instead of) its weight: a layer carrying one is refused whatever its weight's
@@ -87,7 +93,7 @@ QUANT_PARAMS = ("weight_scale", "weight_scale_inv", "input_scale", "weight_zero_
 #: The pinned int7 quantizer of the FP8 lane's reference (docs/pouw-fp8/reference.md), applied without a basis rotation.
 QUANTIZER = "verity.pouw.symmetric-int7-rowmax-rne-f32/v1"
 KEYS = ("coins", "retain_steps", "transcript_dir", "draws", "tamper", "device", "kernel", "cubin", "schedule", "start_forward",
-        "rows", "steps", "runner", "rounds", "challenger")
+        "rows", "steps", "runner", "rounds", "challenger", "session", "admission")
 #: ``ncp-v2``'s negative controls (`Settings.tamper`): a prover that commits and opens one value wrong
 TAMPERS = ("tile", "bias")
 #: where the Commit computes `ncp-v2`'s values: the host (`pouw_native`, the default) or ``cuda``, the serving kernel
@@ -157,9 +163,14 @@ class Settings:
     #: after round s's root
     runner: Any = None
     rounds: Any = None
-    #: H1's salt and round coins from the auditor host's challenger, ``HOST:PORT`` (`pouw_h1_challenger`); ``coins`` and
-    #: ``rounds`` held in this process in its place are for tests, and no verifier trusts them
+    #: H1's salt and round coins (``ncp-v2``'s salt) from the auditor host's challenger, ``HOST:PORT``
+    #: (`pouw_h1_challenger`); ``coins`` and ``rounds`` held in this process in its place are for tests, and credit
+    #: nothing; ``session`` is the session infra gave the window for its Commit and period (`pouw_h1_challenger.session_of`)
     challenger: str | None = None
+    session: Mapping[str, Any] | None = None
+    #: H1's admissions (`pouw_h1_requests.ADMISSIONS`): None or ``round-0``, admit in round 0 only (#2722's live tiles
+    #: are fixed before the first coin), or ``per-round``
+    admission: str | None = None
 
     @classmethod
     def of(cls, raw: Mapping[str, Any]) -> Settings:
@@ -207,7 +218,6 @@ class Settings:
             raise ValueError("pouw setting 'runner' is the engine's loaded Model Runner V2 (VLLM_USE_V2_MODEL_RUNNER=1): its "
                              "execute_model, and its decode_query_len, which orders a step's rows (pouw_h1_requests.batch_order)")
         if rounds is not None:
-            from verity.core.protocols.pouw import window as Wd
             commitment = getattr(getattr(rounds, "challenger", None), "commitment", None)
             if not callable(getattr(rounds, "record", None)) or commitment is None:
                 raise ValueError("pouw setting 'rounds' is the window's round coins: a LiveRecord over a live challenger")
@@ -215,9 +225,12 @@ class Settings:
             if why is not None or getattr(rounds, "label", None) != Wd.ROUND:
                 raise ValueError(f"pouw setting 'rounds' is a LiveRecord of a live epoch's {Wd.ROUND} coins"
                                  + (f": {why}" if why else ""))
-        challenger = PHC.address(raw.get("challenger"))
+        challenger, session = PHC.address(raw.get("challenger")), PHC.session_of(raw.get("session"))
+        admission = raw.get("admission")
+        if admission is not None and admission not in RQ.ADMISSIONS:
+            raise ValueError(f"pouw setting 'admission' is one of {', '.join(RQ.ADMISSIONS)}")
         return cls(coins, retain, tdir, draws, tamper, device, *paths, schedule, start, rows, steps, runner, rounds,
-                   challenger)
+                   challenger, session, admission)
 
 
 def refusals(scheme: str, ctx: Context) -> tuple[str, ...]:
@@ -254,9 +267,13 @@ def refusals(scheme: str, ctx: Context) -> tuple[str, ...]:
                        "admissions arrive) and 'challenger' (the auditor host's, HOST:PORT) or, in tests, 'rounds' (the "
                        "window's round coins, a LiveRecord)")
         elif scheme != PH.SCHEME and (settings.runner is not None or settings.rounds is not None
-                                      or settings.challenger is not None):
-            out.append(f"{scheme}: the pouw settings 'runner', 'rounds' and 'challenger' are H1's ({PH.SCHEME})")
-        if scheme == PH.SCHEME and settings.challenger is not None:
+                                      or settings.admission is not None):
+            out.append(f"{scheme}: the pouw settings 'runner', 'rounds' and 'admission' are H1's ({PH.SCHEME})")
+        if scheme not in CHALLENGED and settings.challenger is not None:
+            out.append(f"{scheme}: the pouw setting 'challenger' is {' and '.join(CHALLENGED)}'s")
+        if settings.session is not None and settings.challenger is None:
+            out.append(f"{scheme}: the pouw setting 'session' is the session of the challenger at 'challenger'")
+        if scheme in CHALLENGED and settings.challenger is not None:
             out += PHC.refusals(scheme, settings, ctx.stage)
         if scheme == PH.SCHEME and settings.rounds is not None and settings.steps is not None:
             have = settings.rounds.challenger.commitment.family(settings.rounds.label) - len(settings.rounds.roots)
@@ -707,7 +724,7 @@ def challenged(settings: Mapping[str, Mapping[str, Any]], enabled: Any, epoch: i
 def install(scheme: str, target: Target) -> Option:
     entry = f"{NAME}:{scheme}"
     settings = Settings.of(target.context.settings_of(NAME))
-    if settings.coins is None and not (scheme == PH.SCHEME and settings.challenger is not None):
+    if settings.coins is None and not (scheme in CHALLENGED and settings.challenger is not None):
         raise ValueError(f"{entry}: no 'coins' setting: the epoch's salt is its challenger's salt coin, opened after the "
                          "weights' root, and there is no beacon")
     if scheme == PH.SCHEME:
@@ -716,8 +733,13 @@ def install(scheme: str, target: Target) -> Option:
     committed = target.weight_commitments.get(entry) or commit_weights(scheme, target)
     roots = {int(w): bytes.fromhex(r) for w, r in committed["weight_roots"].items()}
     declared = Workload(tuple(Matmul(w, Shape(16, k, n), w) for w, (n, k) in shapes.items()))
-    commitment, opening = settings.coins.commitment, settings.coins.open("salt", weights_root(roots))
-    salt = Epoch.start(declared, roots, commitment, opening).salt
+    session = None
+    if settings.challenger is not None:
+        session, commitment, opening, _rounds, salt = PHC.session(entry, settings.challenger, 0, weights_root(roots),
+                                                                  settings.session)
+    else:
+        commitment, opening = settings.coins.commitment, settings.coins.open("salt", weights_root(roots))
+        salt = Epoch.start(declared, roots, commitment, opening).salt
     if scheme in PPD.SCHEMES:
         run = PPD.PearlCDeviceRun(s, entry, PPD.Kernel.load(settings.kernel, settings.cubin),
                                   {w: m.weight for w, m in enumerate(layers)}, roots, commitment, opening,
@@ -727,12 +749,15 @@ def install(scheme: str, target: Target) -> Option:
         run = (_CircuitRun(scheme, entry, settings, roots, salt, commit=target.context.stage != "capture") if s is None
                else _Run(s, entry, settings, roots, salt))
         run.commits.update(coins=commitment.to_json(), salt_opening=opening.to_json())
+    if session is not None:
+        run.commits.update(coin_source=PH.CHALLENGER, session=dict(settings.session))
     if isinstance(run, _CircuitRun):
         _CIRCUIT_RUNS[entry] = (run, _sites(target.model, layers))
     h = target.hooks(entry)
     for w, layer in enumerate(layers):
         h.wrap(layer.quant_method, "apply", lambda orig, w=w: _executor(run, w))
-    return Option(name=entry, hooks=h, commits=run.commits, details=run.details, release=run.finish)
+    return Option(name=entry, hooks=h, commits=run.commits, details=run.details,
+                  release=run.finish if session is None else lambda: PHC.finish(run, session))
 
 
 #: The live H1 runs by entry, for the Commit and its checks before the composition closes.
@@ -760,16 +785,22 @@ def _install_h1(entry: str, settings: Settings, target: Target) -> Option:
         raise ValueError(f"{entry}: the static layout needs the pouw settings 'rows' (T) and 'steps' (S)")
     session, rounds = None, settings.rounds
     if settings.challenger is not None:
-        session, commitment, opening, rounds, salt = PHC.session(entry, settings.challenger, settings.steps, weights_root(roots))
+        session, commitment, opening, rounds, salt = PHC.session(entry, settings.challenger, settings.steps,
+                                                                 weights_root(roots), settings.session)
     else:
         commitment, opening = settings.coins.commitment, settings.coins.open("salt", weights_root(roots))
         salt = Epoch.start(declared, roots, commitment, opening).salt
+    draw = LiveRecord(rounds.challenger, Wd.DRAW) if rounds is not None else None
+    source = PH.CHALLENGER if session is not None else "in-process"
     run = PH.H1Run(entry, PH.program_salt(salt), {w: f"linear {w}" for w in roots} | _named(target.model, layers),
                    [tuple(int(d) for d in m.weight.shape) for m in layers], settings.rows, settings.steps,
                    retain=settings.retain_steps, transcript_dir=settings.transcript_dir,
-                   commit=target.context.stage != "capture", rounds=rounds)
+                   commit=target.context.stage != "capture", rounds=rounds, draw=draw,
+                   admission=settings.admission or RQ.ROUND0, coin_source=source)
     run.commits.update(weights_root=weights_root(roots).hex(), coins=commitment.to_json(), salt_opening=opening.to_json(),
-                       coin_source="challenger" if session is not None else "in-process")
+                       coin_source=source)
+    if session is not None:
+        run.commits["session"] = dict(settings.session)
     if rounds is not None:
         run.commits["round_coins"] = rounds.challenger.commitment.to_json()
     _H1_RUNS[entry] = run

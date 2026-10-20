@@ -15,6 +15,7 @@ torch = pytest.importorskip("torch")
 
 from verity.core.protocols.pouw import window as Wd  # noqa: E402
 from verity.core.protocols.pouw.coins import Challenger  # noqa: E402
+from verity.core.protocols.sampled_proofs import remote as R  # noqa: E402
 from verity.core.protocols.sampled_proofs.challenger import LiveRecord  # noqa: E402
 from verity_vllm import protocol_options as PO  # noqa: E402
 from verity_vllm.engine import int8_exact as E  # noqa: E402
@@ -23,6 +24,8 @@ from verity_vllm.protocol_options import credit_gate as CG  # noqa: E402
 from verity_vllm.protocol_options import pouw  # noqa: E402
 from verity_vllm.protocol_options import pouw_h1 as PH  # noqa: E402
 from verity_vllm.protocol_options import pouw_h1_requests as RQ  # noqa: E402
+
+from tests.protocol_options import challenger_host as CH  # noqa: E402
 
 K = 64
 ENTRY = f"pouw:{PH.SCHEME}"
@@ -109,16 +112,31 @@ def _linear_is_the_stand_in(monkeypatch):
     monkeypatch.setattr(pouw, "linear_types", lambda: (Linear,))
 
 
-def _serve(arm, retain=1, m=3, prompt=True):
+AUDITOR = "vy-challenger-1:7811"
+SESSION = {"id": "session-1", "commit": "commit-1", "period": 0}
+
+
+@pytest.fixture
+def auditor(tmp_path, monkeypatch):
+    """The auditor host's challenger, one session over a one-round live epoch, reached at `AUDITOR`."""
+    host = CH.Host(tmp_path / "auditor", Wd.live_challenger(0, 1, CH.entropy(1)), 1)
+    monkeypatch.setattr(R.RemoteChallenger, "connect", classmethod(lambda cls, at: host.client if at == AUDITOR else None))
+    return host
+
+
+def _serve(arm, retain=1, m=3, prompt=True, remote=False):
     """One small call (m rows of K, N = 32) through `arm` with H1 installed, its request admitted with an m-token prompt
-    (with none: prompt embeddings, so no entry); the run closed and its y and run returned."""
+    (with none: prompt embeddings, so no entry); the run closed and its y and run returned. Its coins are the auditor
+    host's challenger's with `remote` (the `auditor` fixture), else held in this process."""
     layer = Linear(32, 1, arm)
-    coins = Challenger(0, random.Random(0).randbytes)
-    rounds = LiveRecord(Wd.live_challenger(0, 1, random.Random(1).randbytes), Wd.ROUND, clock=lambda: 0.0)
     runner = SimpleNamespace(execute_model=lambda scheduler_output, *a, **kw: None, decode_query_len=1)
-    ctx = PO.Context(stage="serve", enabled=(ENTRY,), settings={"pouw": {"coins": coins, "rows": 32, "steps": 1,
-                                                                         "retain_steps": retain, "runner": runner,
-                                                                         "rounds": rounds}})
+    if remote:
+        coins = {"challenger": AUDITOR, "session": SESSION}
+    else:
+        coins = {"coins": Challenger(0, random.Random(0).randbytes),
+                 "rounds": LiveRecord(Wd.live_challenger(0, 1, random.Random(1).randbytes), Wd.ROUND, clock=lambda: 0.0)}
+    ctx = PO.Context(stage="serve", enabled=(ENTRY,), settings={"pouw": {"rows": 32, "steps": 1, "retain_steps": retain,
+                                                                         "runner": runner, **coins}})
     comp = PO.install(Model(layer), ctx)
     try:
         req = SimpleNamespace(req_id="r", prompt_token_ids=list(range(m)) if prompt else None,
@@ -166,10 +184,11 @@ def test_serve_h1s_wrapper_is_refused_too():
     assert v["reason"] == TODAY and len(v["gemms"]) == 2
 
 
-def test_a_fused_kernel_writing_z_and_y_is_credited():
+def test_a_fused_kernel_writing_z_and_y_is_credited(auditor):
     """The fused stand-in, one op returning z and y = dequant(z): the served y is that op's output, its one GEMM the call's
-    only one, so the call is credited and the window credits its served rows."""
-    y, run = _serve(FusedArm())
+    only one, so the call is credited and the window, its coins the auditor host's challenger's, credits its served rows."""
+    y, run = _serve(FusedArm(), remote=True)
+    assert auditor.ended() is None and run.coin_source == PH.CHALLENGER
     (v,) = run.verdicts.values()
     assert v["credit"] and "reason" not in v
     assert (v["kernel"], v["y_from"], v["z_from"]) == ("verity_credit_test::fused_linear",) * 3
@@ -179,6 +198,17 @@ def test_a_fused_kernel_writing_z_and_y_is_credited():
     _index, xq, _sa, z = run.retained[-1]
     assert np.array_equal(z, xq.astype(np.int64) @ Linear(32, 1, None).weight.numpy().astype(np.int64).T)
     assert c["requests"] == [] and run.details["requests"]["admitted"] == 1
+
+
+def test_a_credited_call_in_a_window_whose_coins_were_held_in_process_credits_nothing():
+    """RT4-INT-21: the fused call passes the gate, but the window's coins were held in the serving process (no pouw setting
+    'challenger'), so no verifier trusts them and the window credits nothing, naming why."""
+    _y, run = _serve(FusedArm())
+    (v,) = run.verdicts.values()
+    assert v["credit"] and run.coin_source == "in-process"
+    c = run.credit()
+    assert c["credited"] == {"rows": 0, "macs": 0} and c["coins"] == "in-process"
+    assert c["refused"] == {"calls": 1, "rows": 3, "macs": 3 * 32 * K, "reasons": {PH.IN_PROCESS: 1}}
 
 
 def test_a_credited_call_in_a_window_serving_a_request_without_an_entry_credits_nothing():
