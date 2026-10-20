@@ -167,9 +167,8 @@ theorem plural_of_val {X V : Type} [Fintype X] [Nonempty V] (sp : X → X → X)
 /-- Each position is cut at its round's start (an input) or after the coin (an output). -/
 theorem cut2 : ∀ ℓ : Fin 10, (cutF ℓ).2 = 0 ∨ (cutF ℓ).2 = 1 := by decide
 
-/-- An input's honest value doesn't read the noise. -/
-theorem hval_input (ℓ : Fin 10) (h : (cutF ℓ).2 = 0) (n n' : ℤ) : hval ℓ n = hval ℓ n' := by
-  fin_cases ℓ <;> first | rfl | exact absurd h (by decide)
+/-- An input's honest value doesn't read the noise bit. -/
+theorem hval_input : ∀ ℓ : Fin 10, (cutF ℓ).2 = 0 → ∀ b b' : Bool, hval ℓ (nzb b) = hval ℓ (nzb b') := by decide
 
 /-- A continuation from an output's cut, after the coin, keeps the coin bit. -/
 theorem nz_cont (x z : FCoins) (ℓ : Fin 10) (h : (cutF ℓ).2 = 1) : nz (fdl.cont ℓ x z) = nz x := by
@@ -180,7 +179,7 @@ theorem nz_cont (x z : FCoins) (ℓ : Fin 10) (h : (cutF ℓ).2 = 1) : nz (fdl.c
 /-- A position's honest value is the same on every continuation from its cut. -/
 theorem cont_val (x z : FCoins) (ℓ : Fin 10) : hval ℓ (nz (fdl.cont ℓ x z)) = hval ℓ (nz x) := by
   rcases cut2 ℓ with h | h
-  · exact hval_input ℓ h _ _
+  · exact hval_input ℓ h (fbit (fdl.cont ℓ x z)) (fbit x)
   · rw [nz_cont x z ℓ h]
 
 theorem committed_eq (x : FCoins) (ℓ : Fin 10) : fpf.committed x ℓ = hval ℓ (nz x) :=
