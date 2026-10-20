@@ -305,8 +305,11 @@ theorem simStop_eval (H : Claims.Msg → Claims.Msg) (I : Claims.Recursion.Inner
       rw [dif_pos h0, hs]
       refine (stageRound_eval IV ivScope b VM iv T₀ NB ΩB pre wit PS SO H ask x (asRounds h) _).trans ?_
       unfold pmZ
-      rw [dif_neg hn, List.map_map]
-      try rfl
+      rw [dif_neg hn]
+      first
+        | exact congrArg (stageMsg b.hs x (asRounds h)) (List.map_map ..)
+        | (rw [List.map_map]; try rfl)
+        | rfl
   case tl =>
     rw [hK]
     refine tail_eval IV ivScope b VM iv T₀ NB ΩB pre wit PS SO H SO' x hk ask cs _ fun hg => ?_

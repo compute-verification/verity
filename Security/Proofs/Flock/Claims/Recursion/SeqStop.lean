@@ -186,6 +186,7 @@ theorem simPre_pm {W : Type} (ivScope : Claims.Msg → Bool) (I : Claims.Recursi
     refine (zeroCommit_eval IV b ivScope H ask _).trans ?_
     unfold pmZ
     rw [dif_pos (show (asRounds h).length < I.V.k (xIOf x) from h₁)]
+    try rfl
   case hg =>
     intro h hh
     try beta_reduce
@@ -200,8 +201,11 @@ theorem simPre_pm {W : Type} (ivScope : Claims.Msg → Bool) (I : Claims.Recursi
     rw [dif_pos h0, hs]
     simp only [Claims.ZKMal.recSpBind_eq, Claims.ZKMal.spBind_eval, zeroCommits_eval, stage_eval]
     unfold pmZ
-    rw [dif_neg hn, List.map_map]
-    rfl
+    rw [dif_neg hn]
+    first
+      | exact congrArg (stageMsg b.hs x (asRounds h)) (List.map_map ..)
+      | (simp only [List.map_map]; try rfl)
+      | rfl
 
 /-! ## The composed simulator with the stop -/
 
