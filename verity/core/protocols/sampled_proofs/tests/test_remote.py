@@ -196,6 +196,39 @@ def test_a_session_with_a_secret_refuses_a_hello_without_it_before_any_coin(tmp_
     assert R.trusted_session(host.directory, verifier_key(), lms_verify)[1] == {"positions": (), "replay": ()}
 
 
+def test_greet_refuses_a_bad_hello_alone_so_the_next_connection_is_served(tmp_path):
+    host = Host(tmp_path, secret=SECRET)
+    socket.create_connection(host.listener.getsockname()).close()
+    assert "stream closed" in host.ended()
+    listener = socket.create_server(("127.0.0.1", 0))
+    whys: list[str | None] = []
+
+    def run() -> None:
+        while True:
+            conn, _ = listener.accept()
+            why = R.greet(conn, SECRET)
+            whys.append(why)
+            if why is None:
+                with conn:
+                    host.reason = R.serve(conn, host.challenger, host.directory, itertools.count().__next__, SECRET,
+                                          greeted=True)
+                return
+            conn.close()
+
+    t = threading.Thread(target=run)
+    t.start()
+    for hello in ({"type": "hello"}, {"type": "hello", "secret": bytes(32).hex()}):
+        with socket.create_connection(listener.getsockname()) as s:
+            s.sendall(frame(hello))
+            assert reply(s)["type"] == "refused" and s.recv(1) == b""
+    with R.RemoteChallenger.connect("127.0.0.1:%d" % listener.getsockname()[1], SECRET) as client:
+        C.LiveRecord(client, "positions", itertools.count().__next__).record(root(0))
+    t.join()
+    listener.close()
+    assert [w is None for w in whys] == [False, False, True] and host.reason is None
+    assert R.trusted_session(host.directory, verifier_key(), lms_verify)[1]["positions"] == (root(0),)
+
+
 class Liar:
     """A server that answers hello with the challenger's commitment and each open with `answer(opening)`."""
 

@@ -20,7 +20,8 @@ a coin other than its family's next (coin i after the family's i-th root, once: 
 bytes; a refusal or a broken stream ends the session, and no coin opens twice (a retry never redraws).  It appends each
 release to `releases.jsonl` (`LiveRecord.log`'s two events), fsynced, before the opening leaves its host.  A session
 served with a `secret` (the auditor host's gate gives one to the window's opener, RT4-INT-29) refuses a hello that doesn't
-carry it, so no other process that reaches the port takes the session's coins first.
+carry it, so no other process that reaches the port takes the session's coins first.  `greet` reads the hello alone,
+so a server can refuse a bad one and take the next connection: a refused hello releases nothing.
 
 `RemoteChallenger` is the client's `LiveChallenger`, its `commitment` and `open(label, index, after)`, so `LiveRecord`
 (and a client's seam over it) runs on it unchanged.  It raises `CoinError` on a refusal, a broken stream, or an opening
@@ -163,12 +164,32 @@ def _hello_reason(head: dict, secret: bytes | None) -> str | None:
     return None
 
 
+def greet(sock: socket.socket, secret: bytes | None = None) -> str | None:
+    """Read the client's hello on `sock`: None when it is the session's (`serve(..., greeted=True)` then serves the
+    stream), else why it is refused, which is sent before the stream is hung up.  It releases nothing, so a server may
+    take another connection after a refused hello without redrawing anything."""
+    try:
+        why = _hello_reason(_Wire(sock).recv(), secret)
+    except CoinError as e:
+        why = str(e)
+    except OSError as e:
+        return f"the stream broke ({e})"
+    if why is not None:
+        try:
+            _Wire(sock).send({"type": "refused", "reason": why})
+        except OSError:
+            pass
+        _hang_up(sock)
+    return why
+
+
 def serve(sock: socket.socket, challenger: LiveChallenger, directory: str | os.PathLike,
-          clock: Callable[[], float] = time.monotonic, secret: bytes | None = None) -> str | None:
+          clock: Callable[[], float] = time.monotonic, secret: bytes | None = None, greeted: bool = False) -> str | None:
     """Serve one client's session on the connected stream `sock`, the challenger's record and release log in `directory`
     (`open_session`), on the release log's clock `clock`: None when the client closed it, else why it ended.  With
-    `secret`, the hello must carry it (lowercase hex).  After its last frame it ends its side of the stream and returns only
-    once the client ends its own, so a tunnel torn down after `serve` returns never cuts that frame."""
+    `secret`, the hello must carry it (lowercase hex); `greeted` when `greet` has already accepted it on `sock`.  After its
+    last frame it ends its side of the stream and returns only once the client ends its own, so a tunnel torn down after
+    `serve` returns never cuts that frame."""
     d = Path(directory)
     if challenger.record is None or not (d / RECORD).is_file() or not (d / RELEASES).is_file():
         raise CoinError("the challenger serves only once its record is signed and written (open_session)")
@@ -176,7 +197,7 @@ def serve(sock: socket.socket, challenger: LiveChallenger, directory: str | os.P
     records = {label: LiveRecord(challenger, label, clock) for label, _ in challenger.commitment.families}
     try:
         with open(d / RELEASES, "a", encoding="utf-8") as log:
-            why = _hello_reason(wire.recv(), secret)
+            why = None if greeted else _hello_reason(wire.recv(), secret)
             if why is not None:
                 raise CoinError(why)
             wire.send({"type": "commitment", "commitment": challenger.commitment.to_json()})
