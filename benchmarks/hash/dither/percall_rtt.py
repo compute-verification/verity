@@ -4,9 +4,10 @@ round a step (PERIOD-PATH ask 11).
 The challenger is one session on its auditor host from infra's gate (`served_h1/coins.py open`: reserved in the lane's
 open development period and opened on the session's stand-in root, `coins.stand_in_root`, never a window's), its layout
 a PoUW live window of ROUNDS rounds (`window.LIVE_SCHEME`, epoch 1); the gate gives the session's id, the port its
-challenger listens on at this machine's 127.0.0.1, the serving node, and the secret its hello carries (`coins.Session`,
-``--secret-file``).  This client is served_h1's coin source (`coins.open_coins` over `remote.RemoteChallenger`): it
-refuses another layout, opens the salt coin after the session's stand-in root (the challenger opens it after no
+challenger listens on at this machine's 127.0.0.1, the serving node, the secret its hello carries and the root of the
+coin commitment its challenger signed (`coins.Session`, ``--secret-file``, ``--commitment``).  This client is served_h1's
+coin source (`coins.open_coins` over `remote.RemoteChallenger`): it refuses another layout or another commitment than
+the gate's open answered, opens the salt coin after the session's stand-in root (the challenger opens it after no
 other), then round s's coin after step s's stand-in root, sha512(s || coin s-1), so no step's root exists before the
 previous step's coin, and times each round from the root's send to its opening checked against the commitment
 (`live_reason`, inside `RemoteChallenger.open`); then the draw coin, and the close.  Rounds go back to back unless
@@ -24,8 +25,8 @@ entries are the client's session, its open binding its reserve, on its stand-in 
 verifier's period when it names one; and the challenger's log holds this client's commitment, its salt after that
 root and its round roots in order; it adds the challenger's own per-round times from that log (its monotonic clock).
 
-    python3 percall_rtt.py run --challenger 127.0.0.1:PORT --session ID --secret-file F --rounds 32768 --max-s 1800 \\
-        --out out/percall-rtt.json
+    python3 percall_rtt.py run --challenger 127.0.0.1:PORT --session ID --secret-file F --commitment HEX --rounds 32768 \\
+        --max-s 1800 --out out/percall-rtt.json
     python3 percall_rtt.py check --challenger-out SESSION_DIR --ledger LEDGER \\
         --client ~/.research/runs/CLIENT/out/percall-rtt.json --key-record KEY_RECORD [--period P]
 """
@@ -171,6 +172,8 @@ def main(argv: list[str] | None = None) -> int:
     r.add_argument("--session", default=None, metavar="ID", help=f"the session's id from infra (default ${CO.SESSION_ENV})")
     r.add_argument("--secret-file", default=None, metavar="F",
                    help=f"the session's secret, which the hello carries (default ${CO.SECRET_ENV})")
+    r.add_argument("--commitment", default=None, metavar="HEX",
+                   help=f"the coin commitment's root the gate's open answered, the hello's (default ${CO.COMMITMENT_ENV})")
     r.add_argument("--rounds", type=int, default=WINDOW, help="the session's layout: at most this many rounds")
     r.add_argument("--max-s", type=float, default=0.0,
                    help="stop opening rounds after this many seconds, then draw and close (inside the session's timeout)")
@@ -186,7 +189,7 @@ def main(argv: list[str] | None = None) -> int:
     c.add_argument("--out", default=None)
     a = ap.parse_args(argv)
     if a.cmd == "run":
-        a.challenger = CO.session(a.challenger, a.session, a.secret_file)
+        a.challenger = CO.session(a.challenger, a.session, a.secret_file, a.commitment)
         if a.challenger is None:
             ap.error("run measures the challenger off the node: --challenger HOST:PORT and --session ID (with "
                      f"--secret-file), or ${CO.CHALLENGER_ENV} and ${CO.SESSION_ENV} (with ${CO.SECRET_ENV})")
