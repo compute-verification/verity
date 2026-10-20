@@ -211,6 +211,7 @@ theorem price_smul {R' : Type} [Fintype R'] (M : Machine K R') (lam : R' → ℝ
   rw [load_smul]
   ring
 
+omit [Fintype K] [Fintype R] [Fintype T] [Fintype L] [Fintype U] [Fintype F] [Fintype X] in
 theorem hNword_nonneg (Z : Model K R T L U F X) (t0 : T) (hNw : 0 ≤ Z.Nw) (hω : 0 < Z.omega t0)
     (h : Head T L U) (k : K) : 0 ≤ hNword Z t0 h k := by
   cases h with
@@ -223,6 +224,7 @@ theorem hNword_nonneg (Z : Model K R T L U F X) (t0 : T) (hNw : 0 ≤ Z.Nw) (hω
   | table _ => exact le_rfl
   | side _ => exact le_rfl
 
+omit [Fintype K] [Fintype R] [Fintype T] [Fintype L] [Fintype U] [Fintype F] [Fintype X] in
 theorem hWords_nonneg (Z : Model K R T L U F X) (t0 : T) (hNw : 0 ≤ Z.Nw) (h : Head T L U) :
     0 ≤ hWords Z t0 h := by
   cases h with
@@ -247,6 +249,7 @@ theorem hAnat_split {R' : Type} [Fintype R'] (Z : Model K R T L U F X) (t0 : T) 
   And.intro (fun h k => hNword_nonneg Z t0 hNw hω h k) (And.intro (fun k => mul_nonneg hNw (hc k))
     (And.intro (fun _ => le_rfl) (And.intro (fun h => hWords_nonneg Z t0 hNw h) (fun _ => le_rfl))))
 
+omit [Fintype R] [Fintype F] [Fintype X] in
 theorem hAnat_sheetWords {R' : Type} [Fintype R'] (Z : Model K R T L U F X) (t0 : T) (c : K → ℝ)
     (M : Machine K R') (hω : 0 < Z.omega t0) : SheetWords Z (hAnat Z t0 c M) := by
   refine And.intro (fun t => ?_) (And.intro ?_ (fun l => ?_))
@@ -272,6 +275,7 @@ theorem hAnat_noSum {R' : Type} [Fintype R'] (Z : Model K R T L U F X) (t0 : T) 
     _ ≤ ∑ h, hWords Z t0 h :=
       Finset.single_le_sum (f := hWords Z t0) (fun h _ => hWords_nonneg Z t0 hNw h) (Finset.mem_univ _)
 
+omit [Fintype R] [Fintype F] [Fintype X] in
 theorem hAnat_sideUnits {R' : Type} [Fintype R'] (Z : Model K R T L U F X) (t0 : T) (c : K → ℝ)
     (M : Machine K R') : SideUnits Z (hAnat Z t0 c M) := by
   intro u k
@@ -282,6 +286,7 @@ theorem hAnat_semantics {R' : Type} [Fintype R'] (Z : Model K R T L U F X) (t0 :
     (M : Machine K R') (hNw : 0 ≤ Z.Nw) : SheetSemantics Z (hAnat Z t0 c M) :=
   And.intro (hAnat_noSum Z t0 c M hNw) (hAnat_sideUnits Z t0 c M)
 
+omit [Fintype X] in
 /-- **FOLD-OPT at any certificate**: the run folds every word by route `φ0`, which `φ*` prices at most. -/
 theorem hAnat_foldOpt {R' : Type} [Fintype R'] (Z : Model K R T L U F X) (t0 : T) (c : K → ℝ) (M : Machine K R')
     (hNw : 0 ≤ Z.Nw) (hmu : Z.muF = 0) (φ0 : F) (hφ : Z.fold φ0 = Z.G.load c) (lam : R → ℝ) :
@@ -298,10 +303,12 @@ theorem honest_foldOpt {R' : Type} [Fintype R'] (Ω : Type) (n : ℕ) (Z : Model
   rw [honest_share, zero_div, sub_zero, one_mul]
   exact hAnat_foldOpt Z t0 c M hNw hmu φ0 hφ lam
 
+omit [Fintype K] [Fintype T] [Fintype L] [Fintype U] in
 theorem honestLayer_of (Ω : Type) [Fintype Ω] (n : ℕ) (P : Play Ω n K T L U) (hg : ∀ x, P.game.accepts x) :
     (honestLayer Ω n).Of P :=
   And.intro (fun _ _ _ _ => trivial) (fun x _ => hg x)
 
+omit [Fintype K] [Fintype T] [Fintype L] [Fintype U] in
 theorem honest_rightFixed (Ω : Type) [Fintype Ω] (n : ℕ) (A : Anatomy K T L U) {nπ : ℕ} {V : Type}
     (pf : ProofLayer Ω n nπ V) (Nw : ℝ) (hA : Nw ≤ A.fixed) : RightFixed (honestPlay Ω n A) pf Nw := by
   intro x _ _
