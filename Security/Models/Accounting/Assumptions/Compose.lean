@@ -51,8 +51,10 @@ operands and skips after querying later rounds' seeds):
 
 The physical layer's (`CreditOfWork`):
 
-* `Accounting.Assumptions.TS.FoldOptFolded`: FOLD-OPT per word folded (B1, ASK-6 = A), the headlines' premise.
-  `FoldOpt` is it at `N_w` words, which a sampled cheater that skips whole units falsifies.
+* `Accounting.Assumptions.TS.FoldOptFoldedAt`: FOLD-OPT per word folded at one certificate (B1, ASK-6 = A), the
+  headlines' premise, asked at the certificate `lam` each credit statement prices at. `FoldOptFolded` is it at every
+  certificate, which a bit-exact fold falsifies (RT2-LOGIC-1), and `FoldOpt` is it at `N_w` words, which a sampled
+  cheater that skips whole units falsifies.
 -/
 
 namespace Accounting.Assumptions.Compose

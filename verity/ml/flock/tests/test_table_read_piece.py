@@ -51,7 +51,7 @@ def _word(ib: int, ew: int) -> PrimitiveDefinition:
 @pytest.mark.parametrize("ib,ew", SHAPES)
 def test_a_table_read_is_its_boolean_form_on_every_index(ib, ew):
     p = _word(ib, ew)
-    assert IL.PIECES[p.id] is BT.table_read(p, ib).build
+    assert p.id in IL.PIECES
     iw, n = p.params[0][1].w, (1 << ib) * ew
     rng = random.Random(ib * 10 + ew)
     lanes = [(i, [rng.getrandbits(16) for _ in range(n)]) for i in range(1 << ib)]

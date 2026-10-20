@@ -21,11 +21,9 @@ among them; `--all-pairs` runs every one (timing studies).
 from __future__ import annotations
 
 import gc
-import hashlib
 import json
 import os
 import statistics
-import struct
 import sys
 import time
 from dataclasses import dataclass
@@ -35,6 +33,7 @@ from pathlib import Path
 from verity_vllm.acquire import as_loaded as AL
 from verity_vllm.acquire.sources import taps as TAPS
 from verity_vllm.check import weights_of_record as WR
+from verity_vllm.check.component_programs import post_load_tensors
 from verity_vllm.config import group, option
 from verity_vllm.engine import served as SV
 from verity_vllm.pipeline import replay_bundle as RB
@@ -44,40 +43,10 @@ from verity_vllm.pipeline.tp import phases as PH
 from verity_vllm.pipeline.tp import serving_rows as SRT
 from verity_vllm.pipeline.tp import warmup as WU
 from verity_vllm.pipeline.tp.import_path import write_import_path_runtime
+from verity_vllm.pipeline.tp.negatives import negatives_applied, parse_serve_shard_from
+from verity_vllm.pipeline.tp.run_root import TP_ROOT_TAG, tp_run_root
 
-TP_ROOT_TAG = b"verity/tp-run-root/v1"
 SCHEMA = "verity/commit-integ/delta-tp/v1"
-
-
-def tp_run_root(world: int, roots: dict[int, bytes]) -> bytes:
-    if sorted(roots) != list(range(world)):
-        raise ValueError(f"roots for ranks {sorted(roots)} != 0..{world - 1} (fail-closed: missing rank)")
-    h = hashlib.sha256(TP_ROOT_TAG + struct.pack(">I", world))
-    for r in range(world):
-        if len(roots[r]) != 32:
-            raise ValueError(f"rank {r} root is not 32 bytes")
-        h.update(struct.pack(">I", r) + roots[r])
-    return h.digest()
-
-
-def negatives_applied(flip_partial: str | None, swap_requests: str | None, omit_partial_site: str | None, xrank_pairs: list[dict], made: list[dict]) -> dict[str, dict]:
-    """Per requested negative: did the target rank actually inject it?  flip_partial -> the rank's flipped_collective_inputs over the pairs (from
-    the cross-rank dumps; None when the pass did not run); swap_requests -> the rank's swap_requests_applied (committer make); omit_partial_site
-    -> the rank's tp_partial_source.omit_site.  `applied` is True / False / None(unknown); anything but True is 'NOT APPLIED' (an error run)."""
-    applied: dict[str, dict] = {}
-    if flip_partial:
-        tgt = str(flip_partial.split(":", 1)[0])
-        fl = [d_.get("flipped_collective_inputs") for xr_ in xrank_pairs for d_ in (xr_.get("dumps") or []) if str(d_.get("rank")) == tgt]
-        applied["flip_partial"] = {"rank": tgt, "flipped_collective_inputs_per_pair": fl, "applied": (any(int(f_ or 0) > 0 for f_ in fl) if fl else None)}
-    if swap_requests:
-        tgt = str(int(swap_requests.split(":")[0]))
-        sw = [m_.get("swap_requests_applied") for m_ in made if str(m_.get("rank")) == tgt]
-        applied["swap_requests"] = {"rank": tgt, "swap_requests_applied": sw, "applied": (any(bool(x_) for x_ in sw) if sw else None)}
-    if omit_partial_site:
-        tgt = str(omit_partial_site.split(":", 1)[0])
-        om = [((m_.get("tp_partial_source") or {}).get("omit_site")) for m_ in made if str(m_.get("rank")) == tgt]
-        applied["omit_partial_site"] = {"rank": tgt, "omit_site_per_rank": om, "applied": (any(bool(x_) for x_ in om) if om else None)}
-    return applied
 
 
 def tree_of_record(root: str | os.PathLike | None = None) -> dict:
@@ -96,23 +65,6 @@ def weights_as_loaded(pin: dict | None) -> partial | None:
         return None
     return partial(AL.attach_rank, composer=partial(WR.rank_composer, checkpoint_dir=pin["checkpoint_dir"],
                                                     checkpoints_manifest=pin["checkpoints_manifest"], model=pin["model"]))
-
-
-def parse_serve_shard_from(specs: list[str] | None, world: int) -> dict[str, list[dict]] | None:
-    """NEGATIVE (R16 tp TP-10): `<rank>:<served param name>:<from_rank>` specs -> {rank: [{"param", "from_rank"}]}; `0:X:1 1:X:0` = the two
-    ranks swap their shards of X.  from_rank must be ANOTHER rank of the world (a rank serving its own shard is the positive, refused here)."""
-    if not specs:
-        return None
-    out: dict[str, list[dict]] = {}
-    for spec in specs:
-        parts_ = str(spec).split(":")
-        if len(parts_) != 3 or not parts_[1]:
-            raise SystemExit(f"--serve-shard-from <rank>:<served param name>:<from_rank> (got {spec!r})")
-        rank, frm = int(parts_[0]), int(parts_[2])
-        if not (0 <= rank < world) or not (0 <= frm < world) or frm == rank:
-            raise SystemExit(f"--serve-shard-from {spec!r}: rank {rank} must serve ANOTHER rank's shard of a world of {world}")
-        out.setdefault(str(rank), []).append({"param": parts_[1], "from_rank": frm})
-    return out
 
 
 def schedule(pairs: int, only_arm: str | None) -> list[tuple[int, str]]:
@@ -229,6 +181,7 @@ class Options:
                                    "runs.jsonl and the summary's timing (verity_vllm.pipeline.tp.trace)")
     trace_ranks: str = option("--trace-ranks", default="0", help="with --trace-dir: the ranks whose Kineto trace is kept")
     serving_rows: str | None = option("--serving-rows", default=None, metavar="REQUEST_JSON", help="opt-in, not on the record: in the first instrumented run, once every rank's root is final and the TP run root fixed and before the challenge, each rank commits its units of the verifier's partition in M0's serving row format (verity_vllm.pipeline.tp.serving_rows; the row stage writes the request); needs --required-manifest and --replay-deferred")
+    memory_map: str | None = option("--memory-map", default=None, metavar="REQUEST_JSON", help="opt-in, not on the record: each rank commits its KV layers' `<layer>/slot_mapping` (acquire.sources.kv_slots_source) and, in its replay (in process or before its deferred bundle), writes memory-map/v1 of its KV to the request's path at `.rank<r>` (or the path `ranks[r]` names), its blocks from its request Programs of record at the pages those slots name, its digests from its committed KV words (verity_vllm.pipeline.memory_map, pipeline.tp.rank_replay.memory_map); the prover's witness, never published; needs --required-manifest with a --build-rank per rank")
 
 
 def main(args: Options) -> int:
@@ -365,6 +318,11 @@ def main(args: Options) -> int:
         if args.replay_k:
             replay_cfg["k_per_rank"] = versions["sampled_replay"]["k_per_rank"] = TPC.replay_k_per_rank(args.replay_k, world)
     SRT.require(args, replay_cfg)
+    if args.memory_map:
+        if replay_cfg is None or not Path(args.memory_map).is_file():
+            raise SystemExit("--memory-map on a TP Commit needs its request file and --required-manifest with a --build-rank per rank (each rank "
+                             "writes its map from its Programs of record, in its replay)")
+        replay_cfg["memory_map"] = str(Path(args.memory_map).resolve())
     # [MAN-09 per rank] the weights of record: each rank composes its record from ITS rank Program + the pinned checkpoint shards
     weights_pin_cfg = None
     if args.checkpoint_dir:
@@ -397,8 +355,8 @@ def main(args: Options) -> int:
                                           "required_manifest": args.required_manifest, "request_order": request_order, "request_ids": request_ids, "arrivals": arrivals, "caps": caps,
                                           "tp_relabel": relabel, "tp_partials_omit_rank": args.omit_rank_partials,
                                           "match_tokens": match_tokens, "tp_swap_requests": swap_requests, "match_capture_dir": match_capture_dir, "replay": replay_cfg,
-                                          "weights_pin": weights_pin_cfg, "flip_weight": flip_weight, "serve_shard_from": serve_shard_from, "tap_sources": TAPS.for_ranks(args.tap_sources),
-                                          "weights_as_loaded": weights_as_loaded(weights_pin_cfg),
+                                          "weights_pin": weights_pin_cfg, "flip_weight": flip_weight, "serve_shard_from": serve_shard_from, "tap_sources": TAPS.for_ranks(args.tap_sources, kv_slots=bool(args.memory_map)),
+                                          "weights_as_loaded": weights_as_loaded(weights_pin_cfg), "post_load_tensors": post_load_tensors(builds),
                                           "tp_partials_flip_site": ({args.flip_partial.split(":", 1)[0]: args.flip_partial.split(":", 1)[1]} if args.flip_partial else None),
                                           "tp_partials_omit_site": ({args.omit_partial_site.split(":", 1)[0]: args.omit_partial_site.split(":", 1)[1]} if args.omit_partial_site else None),
                                           "engine_kwargs": {k: v for k, v in kw.items() if k not in ("model", "tokenizer", "worker_extension_cls")}})

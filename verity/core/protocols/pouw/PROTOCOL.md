@@ -95,7 +95,7 @@ and `frame-b3s` that -h1, -h2 and BLAKE3 -h3 named are in `archive/pouw-blake3/`
 **What is public.** Every protocol is zero-knowledge, and only the minimum is public (Daniel's ruling of 2026-10-05,
 7:48 PM PDT). |W|, the size of the weights, is public (his ruling of 2026-10-06, 8:14 AM PDT). A served window's rows
 serve at a public fixed length, so its useful work is public (his ruling of 19 Oct, ASK-39; "The fixed length" below).
-The rulings are recorded in `.agents/skills/friction/SKILL.md`.
+`AGENTS.md` ("Design rules") states them.
 
 **Randomness.** The protocol owns the outer coins, the salt and the draw, and both are the challenger's epoch coins, never
 a public beacon and never Fiat-Shamir over the prover's roots. A window's check item says its coin mode, its optional

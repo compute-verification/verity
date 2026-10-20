@@ -40,7 +40,8 @@ Decision 113 splits the credit in two, and `CircuitCredit` is their composition:
   event of probability `δ_bind + δ_ks` off which every drawn tile is right (RT-I8's `compose_sampled` shape).
 * (P) `CreditOfWork`, the physical layer's step: on the tensor–scalar model of a data sheet, a run with that work takes
   at least `(1 − ε)·T_cred`. Its premises are exactly the machine model's: the model the circuit's on the sheet
-  (`Fits`, `ModelScope`), the data sheet's A1–A7, FOLD-OPT per word folded (`FoldOptFolded`) and FILL-OPT.
+  (`Fits`, `ModelScope`), the data sheet's A1–A7, FOLD-OPT per word folded at the certificate it prices at
+  (`FoldOptFoldedAt`) and FILL-OPT.
 
 The seeded pair is (L) and its composition with (P) under seeded coins, stated in the random-oracle model: the window's
 seeds are uniform answers to the prover's queries naming its operands' roots, and `SeedExtractedAt` (`random-oracle`)
@@ -361,10 +362,10 @@ def CircuitWorkSeeded : Prop :=
 /-- **(P) Credit of the work, on a data sheet** (decision 113's physical layer: the tensor–scalar model and its
 vendor axioms, attribution's unit grade). For a declared circuit `Cd` and scheme `Sc` whose model `Z` is the circuit's
 on sheet `Sh` (`Fits`, `ModelScope`), every run `A` that meets the data sheet's A1–A7, FOLD-OPT per word folded at
-its `folded` words and FILL-OPT, and has the work `WorkAt` states at the circuit's costs `aOf`, `bOf` and bound `r`,
-takes at least `(1 − ε)·T_cred`, `ε = ε_♭ + ε_μ + r` (`epsOf`) and `T_cred = B(♭)/f_max` at the circuit's floor
-`♭ = Σ_words ♭_{kind}`. It reads no coin: it is `SheetDIdealFloor`'s chain on one run, with the fold priced at the
-words folded. -/
+its `folded` words and the certificate `lam`, and FILL-OPT, and has the work `WorkAt` states at the circuit's costs
+`aOf`, `bOf` and bound `r`, takes at least `(1 − ε)·T_cred`, `ε = ε_♭ + ε_μ + r` (`epsOf`) and `T_cred = B(♭)/f_max`
+at the circuit's floor `♭ = Σ_words ♭_{kind}`. It reads no coin: it is `SheetDIdealFloor`'s chain on one run, with
+the fold priced at the words folded. -/
 def CreditOfWork : Prop :=
   ∀ {ι K P T L U F X : Type} [Fintype K] [Fintype P] [DecidableEq P] [Fintype T] [Fintype L] [Fintype U]
     [Fintype F] [Fintype X] [Nonempty F] [Nonempty X]
@@ -372,7 +373,7 @@ def CreditOfWork : Prop :=
     (A : Anatomy K T L U) (folded : ℝ) (lam : SheetRow P → ℝ) (r : ℝ),
     Fits Sc Cd Sh Z → ModelScope Sc Cd Z lam → A.Split →
     SheetClock Sh A.run → SheetDispatch A.run → SheetTensor Sh A.run → SheetPipe Sh A.run → SheetSmem Sh A.run →
-    SheetWords Z A → SheetSemantics Z A → FoldOptFolded Z A folded → FillOpt Z A →
+    SheetWords Z A → SheetSemantics Z A → FoldOptFoldedAt Z A folded lam → FillOpt Z A →
     WorkAt (wordsOf Sc Cd : ℝ) (aOf Sc Cd Z lam) (bOf Sc Cd Z lam) r A.fixed folded →
     (1 - epsOf Sc Cd Z lam r) * creditOf Sc Cd Z ≤ A.run.time
 
@@ -420,7 +421,7 @@ def CircuitCredit : Prop :=
     (∀ x, SheetClock Sh (Pl.run x).run) → (∀ x, SheetDispatch (Pl.run x).run) →
     (∀ x, SheetTensor Sh (Pl.run x).run) → (∀ x, SheetPipe Sh (Pl.run x).run) →
     (∀ x, SheetSmem Sh (Pl.run x).run) → (∀ x, SheetWords Z (Pl.run x)) → (∀ x, SheetSemantics Z (Pl.run x)) →
-    (∀ x, FoldOptFolded Z (Pl.run x) (folded x)) → (∀ x, FillOpt Z (Pl.run x)) →
+    (∀ x, FoldOptFoldedAt Z (Pl.run x) (folded x) lam) → (∀ x, FillOpt Z (Pl.run x)) →
     (certOf Sc Cd Z H lam (rOf Sc Cd Np (aOf Sc Cd Z lam) (bOf Sc Cd Z lam) Λ δs) (δs + (δbind + δks)) win
       CoinMode.live).Holds Pl
 
@@ -470,7 +471,7 @@ def CircuitCreditSeeded : Prop :=
     (∀ x, SheetClock Sh (Pl.run x).run) → (∀ x, SheetDispatch (Pl.run x).run) →
     (∀ x, SheetTensor Sh (Pl.run x).run) → (∀ x, SheetPipe Sh (Pl.run x).run) →
     (∀ x, SheetSmem Sh (Pl.run x).run) → (∀ x, SheetWords Z (Pl.run x)) → (∀ x, SheetSemantics Z (Pl.run x)) →
-    (∀ x, FoldOptFolded Z (Pl.run x) (folded x)) → (∀ x, FillOpt Z (Pl.run x)) →
+    (∀ x, FoldOptFoldedAt Z (Pl.run x) (folded x) lam) → (∀ x, FillOpt Z (Pl.run x)) →
     (certOf Sc Cd Z H lam (rOfSeeded Sc Cd Np Kd Tq (aOf Sc Cd Z lam) (bOf Sc Cd Z lam) κ0 ρ δs δg)
       (δs + (δbind + δks) + εid T J + 2 * (Cd.rounds : ℝ) * (δg + δb)) win .seeded).Holds Pl
 

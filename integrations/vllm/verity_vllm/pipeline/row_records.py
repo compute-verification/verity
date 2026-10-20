@@ -156,6 +156,12 @@ def build_jobs_auto(shapes: list[tuple[int, int]] | None = None, layers: int | N
     return max(1, min(_cpus() if cpus is None else cpus, n, int(0.8 * head) // per))
 
 
+def census_digest(result: dict[str, Any]) -> str | None:
+    """A request Build's census/v1 digest, a function of its Program alone (``result.json``'s ``census``: the census the Build
+    cached beside its descriptor, `pipeline.memory_map.cache`); None for a Build without one."""
+    return (result.get("census") or {}).get("census")
+
+
 def _ir(r: dict) -> dict:
     """``{"ir": ...}`` for a Build whose Program isn't the word IR (its word root and digest, ``boolean.derived``'s provenance), else ``{}``."""
     return {"ir": i} if (i := (r.get("program") or {}).get("ir")) else {}
@@ -170,13 +176,14 @@ def build_summary(d: str) -> str:
         art = f"{d}/build_{w}/artifact.json"
         a = json.load(open(art)) if os.path.exists(art) else {}
         out[w] = {"ok": bool(r.get("ok")), "unsupported": r.get("unsupported"), "exception": r.get("exception"), "message": (r.get("message") or "")[:300],
-                  "program_digest": (r.get("program") or {}).get("digest") or a.get("program_digest"), "identity": a.get("identity"),
+                  "program_digest": (r.get("program") or {}).get("digest") or a.get("program_digest"), "census_digest": census_digest(r),
+                  "identity": a.get("identity"),
                   "correspondence_digest": (r.get("program") or {}).get("correspondence_digest") or a.get("correspondence_digest"),
                   "target": (a.get("target_profile") or {}), "applicability": a.get("applicability"), **_ir(r)}
     for p in sorted(glob.glob(f"{d}/build_request_LP*_T*/result.json")):
         r = json.load(open(p)); w = os.path.basename(os.path.dirname(p))
         out[w] = {"ok": bool(r.get("ok")), "unsupported": r.get("unsupported"), "message": (r.get("message") or "")[:300], "program_digest": (r.get("program") or {}).get("digest"),
-                  "correspondence_digest": (r.get("program") or {}).get("correspondence_digest"), **_ir(r)}
+                  "census_digest": census_digest(r), "correspondence_digest": (r.get("program") or {}).get("correspondence_digest"), **_ir(r)}
     json.dump(out, open(f"{d}/build_summary.json", "w"), indent=1, default=str)
     return "PASS" if all(v["ok"] for v in out.values()) else "FAIL"
 
@@ -609,7 +616,8 @@ def tp_build_summary(b: str, world: int) -> str:
         for p in [f"{rd}/build_step"] + sorted(p for p in glob.glob(f"{rd}/build_request_LP*_T*") if os.path.isdir(p)):   # not the .log/.rc beside each dir
             res = json.load(open(f"{p}/result.json")) if os.path.exists(f"{p}/result.json") else {"ok": False, "message": "no result.json"}
             rk[os.path.basename(p)] = {"ok": bool(res.get("ok")), "unsupported": res.get("unsupported"), "message": (res.get("message") or "")[:300],
-                                       "program_digest": (res.get("program") or {}).get("digest"), "construction": "aot" if res.get("aot") else "trace"}
+                                       "program_digest": (res.get("program") or {}).get("digest"), "census_digest": census_digest(res),
+                                       "construction": "aot" if res.get("aot") else "trace"}
             ok &= bool(res.get("ok"))
         wp = f"{rd}/build_workload/workload_program.json"; W = json.load(open(wp)) if os.path.exists(wp) else {}
         rk["workload"] = {"ok": bool(W.get("workload_digest")), "workload_digest": W.get("workload_digest"), "reason": W.get("reason"), "message": W.get("message"), "mechanism": "GP-01 cb_a.global_program"}

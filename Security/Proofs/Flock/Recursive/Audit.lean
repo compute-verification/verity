@@ -62,7 +62,7 @@ theorem RecursiveAudit : Flock.Guarantees.RecursiveAudit := by
   swap
   · exact RecursiveFirewallPrivate
   intro nT r T CT _ _ n Ω _ _ draw Reg Cm Reg' Reg₂ st Vs zr hCust ish bind rows hob hF dg N σ wmsg Sk cmt msg rt
-    stmt hA3 p path₀ hreg k Rw M hk hRw hM ρ hρ hr hbr
+    stmt _hA3 p path₀ hreg k Rw M hk hRw hM ρ hρ hr hbr
   replace hob := vstarParsesScoped_of hob
   by_cases hT : Typed zr
   swap
@@ -96,7 +96,7 @@ theorem RecursiveAudit : Flock.Guarantees.RecursiveAudit := by
       exact hr R ω t R₂ j _ _ hx'.y₀ S' R'
     · rw [zsOf_neg zr _ hT R ω t R₂ j hx']
       exact hr _ _ _ _ j _ _ _ S' R'
-  rcases zk_sessions_recursive_fork_innerC hA3 (Flock.Guarantees.custodied zr hCust hT) dg N hk hRw hM hρ hr'
+  rcases zk_sessions_recursive_fork_innerC (Flock.Guarantees.custodied zr hCust hT) dg N hk hRw hM hρ hr'
     (Flock.Guarantees.transported zr hCust hT σ) (Flock.Guarantees.hiddenAt st rt stmt) wmsg Sk cmt msg (hbr hT)
     Refine.H512 (clashPickCL T CT execArith Refine.H512 Refine.enc512 Refine.leafPlain (execClassAt st).cls
       (execClassAt st).regs (execClassAt st).sch) hin (Nat.succ_pos r) (schedInner_lastFree T CT _ _ _ _)
