@@ -1908,7 +1908,7 @@ def test_the_steps_reading_only_the_packages_own_facts_start_before_its_proved_i
     monkeypatch.setattr(A, "facts_of", lambda *a: own)
     monkeypatch.setattr(A, "proved", proved)
     monkeypatch.setattr(A, "replay_step", stub("replay_step", ([], {"checked": 1, "reused": 0})))
-    monkeypatch.setattr(A, "dependency_scans", stub("dependency_scans", (["unchecked: a hit"], 7)))
+    monkeypatch.setattr(A, "dependency_scans", stub("dependency_scans", ([A.Failure("unchecked.dependency", None, "unchecked: a hit")], 7)))
     monkeypatch.setattr(A, "dependency_digests", stub("dependency_digests", {"mathlib": "d1"}))
     monkeypatch.setattr(A, "sibling", lambda name: type("U", (), {"pinned": staticmethod(stub("pinned", ({"x": 1}, [])))}))
     for name, value in (("judge", ([], {})), ("dropped", []), ("spec_reads", []), ("shape", []), ("unread_spec", {}),
