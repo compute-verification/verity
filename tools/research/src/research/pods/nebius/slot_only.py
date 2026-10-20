@@ -36,19 +36,20 @@ POOL = re.compile(r"CHECK_SLOTS=/workspace/research/locks/[A-Za-z0-9_-]+/slots")
 #: `research run --pool NAME`'s pools: `research` is any lane's research runs on cores the train slot holds, at nice 19 (INF-27,
 #: cpu-1's /workspace/research/locks/research/slots), `proofs` is proofs' Lean pool
 POOLS = {"research": "/workspace/research/locks/research/slots", "proofs": "/workspace/research/locks/proofs/slots"}
-#: how long a timed `research run --pool` waits in its pool's line for a slot (slot.py --wait-max)
-POOL_WAIT_S = 3600
+#: how long a timed `research run --pool` waits in its pool's line for a slot by default (slot.py --wait-max; `--pool-wait`): an
+#: hour lost proofs' runs their place in a saturated pool each hour (INF-153)
+POOL_WAIT_S = 14400
 
 
-def in_pool(pool: str, lane: str, command: list[str], run_max: float | None = None) -> list[str]:
+def in_pool(pool: str, lane: str, command: list[str], run_max: float | None = None, wait_s: float = POOL_WAIT_S) -> list[str]:
     """CMD as a run in `pool`, the one way a lane's run takes it: `env CHECK_SLOTS=POOL python3 tools/verity/check/slot.py --by
     LANE [--wait-max POOL_WAIT_S --run-max S] -- nice -n 19 CMD...`, with slot.py from the run's own shipped tree (so the run's
     cwd is its source).  `run_max` is the run's --timeout: slot.py counts it from taking the slot, so the wait in the pool's line
-    isn't spent from it (INF-106), and a run with no slot in POOL_WAIT_S exits NOT_STARTED (75) without running CMD.  The
-    runner's own timeout must then cover both (`research run --pool` makes it POOL_WAIT_S + S)."""
+    isn't spent from it (INF-106), and a run with no slot in `wait_s` exits NOT_STARTED (75) without running CMD.  The
+    runner's own timeout must then cover both (`research run --pool` makes it wait_s + S)."""
     if pool not in POOLS:
         raise ValueError(f"no pool {pool!r}: the pools are {', '.join(sorted(POOLS))}")
-    limit = ["--wait-max", f"{POOL_WAIT_S:g}", "--run-max", f"{run_max:g}"] if run_max else []
+    limit = ["--wait-max", f"{wait_s:g}", "--run-max", f"{run_max:g}"] if run_max else []
     return ["env", f"CHECK_SLOTS={POOLS[pool]}", "python3", SLOT_PATHS[0], "--by", lane, *limit, "--", "nice", "-n", "19", *command]
 
 

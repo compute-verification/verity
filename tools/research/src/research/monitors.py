@@ -808,15 +808,26 @@ def unpreserved(ctx: Ctx) -> list[Finding]:
 
 
 def asks(ctx: Ctx) -> list[Finding]:
-    """An ask in #agent-coordination with no 👀, reply, ✅ or ❌ after 2 hours (`research msg traffic --json`), to its owner."""
+    """An ask in #agent-coordination its record doesn't show answered after 2 hours (`research msg traffic --json`), to its owner,
+    naming the record; the asks whose record can't be read (no Linear or Notion credentials), as one finding to infra.  A
+    machine's notice (`vy-*`, the router) isn't an ask anyone answers: vy-monitors' OOM notices naming @ci and @lean would ring
+    them for ever (as top_watch.py's sweep skips them)."""
     rep = json.loads(ctx.sh([*ctx.research, "slack", "traffic", "--json", "--hours", "24", "--stale-h", "2"], timeout=300))
     out = []
     for a in rep.get("unanswered") or []:
+        if str(a.get("by") or "").startswith("vy-") or a.get("by") == "router":
+            continue
         to = tuple(a.get("to") or ())
-        out.append(Finding(str(a["ts"]), f"*An ask by @{a.get('by') or '?'} to {' '.join('@' + t for t in to) or 'nobody'} has "
-                           f"had no 👀, reply, ✅ or ❌ for over 2 hours* (ts {a['ts']} in #agent-coordination, from "
+        record = {"linear": f"its Linear issue {a.get('ref')}: {a.get('state')}", "notion": f"its page: {a.get('state')}"}.get(
+            a.get("record"), "no 👀, reply, ✅ or ❌")
+        out.append(Finding(str(a["ts"]), f"*An ask by @{a.get('by') or '?'} to {' '.join('@' + t for t in to) or 'nobody'} is "
+                           f"unanswered after 2 hours* ({record}; ts {a['ts']} in #agent-coordination, from "
                            f"{iso(float(a['ts']))}).", owners=to or ("infra",),
                            cleared="*Cleared:* that ask was answered, or is now over 24 hours old."))
+    if unchecked := rep.get("unchecked") or []:
+        out.append(Finding("unchecked", f"*{len(unchecked)} ask(s) over 2 hours old can't be checked*: their record can't be read "
+                           f"({unchecked[0].get('state')}), so they are neither cleared nor rung.", owners=("infra",),
+                           cleared="*Cleared:* every ask's record can be read again."))
     return out
 
 
