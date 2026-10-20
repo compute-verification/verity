@@ -64,7 +64,7 @@ def LEDGER_ROLE : String := "verity/challenger-auditor-record/v1"
 def LEDGER_TAG : String := "verity/challenger-auditor/entry/v1"
 /-- An auditor's ledger line's most characters: its signature at W = 1, H = 30 is 70928 hex digits. -/
 def MAX_LEDGER_LINE : Nat := 262144
-def ZERO : String := String.mk (List.replicate 128 '0')
+def ZERO : String := String.ofList (List.replicate 128 '0')
 def WINDOW_FORM : String :=
   "a window's identity is {commit, period}: the served Commit's root, 64 bytes in lowercase hex, and the " ++
   "period, 1 to 64 ASCII letters, digits, '.', '_', ':' and '-', the first a letter or digit"
@@ -297,7 +297,7 @@ def auditedSession (ledger window : Json) (key : ChallengerKey) : V Audited := d
       ends := ends.push e
     let .str text := line | throw s!"the auditor's ledger entry {i} is malformed: {LEDGER_FORM}"
     prev := Flock.hexOf (Flock.Sha512.hash text.toUTF8)
-  let some o := opens.find? (jeq (getD ·.body "window") window)
+  let some o := opens.find? fun o => jeq (getD o.body "window") window
     | throw "the auditor's ledger opens no challenger session for this window"
   let s := o.session
   let some e := ends.find? (·.session == s)
