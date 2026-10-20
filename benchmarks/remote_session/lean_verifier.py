@@ -107,15 +107,16 @@ def registration_json(r: audit.Registration) -> dict:
 
 
 def register_request(node: bytes, blocks: int, payload_root: bytes, c: codec.Codec, receipt: str, rows: int | None,
-                     nonce: bytes) -> dict:
+                     nonce: bytes, bind: bool = False) -> dict:
     return {"op": "register", "node": node.hex(), "blocks": blocks, "payload_root": payload_root.hex(),
-            "codec": codec_json(c), "receipt": receipt, "rows": receipts.sketch_rows(receipt, rows),
+            "codec": codec_json(c), "receipt": receipt, "bind": bind, "rows": receipts.sketch_rows(receipt, rows),
             "layout": receipts.LAYOUT, "nonce": nonce.hex()}
 
 
 def params_json(p: audit.Params) -> dict:
     return {"deadline_ns": p.deadline_ns, "windows": p.windows, "samples": p.samples, "min_passes": p.min_passes,
-            "window_ns": p.window_ns, "lifetime": p.lifetime, "deferred": p.deferred}
+            "window_ns": p.window_ns, "lifetime": p.lifetime, "deferred": p.deferred,
+            "pace": None if p.pace is None else p.pace.to_json()}
 
 
 def _ints(xs: Any, what: str) -> list[list[int]]:
@@ -172,12 +173,36 @@ def drew_json(out) -> dict:
 
 
 def summary_json(rec: audit.Record) -> dict:
-    """An accepted session's record as the Lean writes it (`Difftest.summaryJ`, `ra_cases.summary`)."""
+    """An accepted session's record as the Lean writes it (`Difftest.summaryJ`, `ra_cases.summary`): all of it but the
+    coin commitment's root, the block size, the registration's fields its digest binds, and of each window's profile
+    more than its draws."""
     return {"appended": rec.appended, "appends": None if rec.appends is None else rec.appends.hex(),
+            "blocks": rec.blocks, "lifetime": rec.lifetime, "pace": None if rec.pace is None else rec.pace.to_json(),
             "registration": rec.registration.hex(), "released": rec.released,
-            "windows": [{"deadline_ns": w.deadline_ns, "drawn": w.profile.drawn["receipt"], "lengths": list(w.lengths),
-                         "opened_ns": w.opened_ns, "post_seed": list(w.post_seed), "released_ns": w.released_ns,
-                         "steps": list(w.steps)} for w in rec.windows]}
+            "windows": [{"arrived_ns": list(w.arrived_ns), "deadline_ns": w.deadline_ns,
+                         "drawn": w.profile.drawn["receipt"], "heads": [None if h is None else h.hex() for h in w.heads],
+                         "lengths": list(w.lengths), "opened_ns": w.opened_ns, "post_seed": list(w.post_seed),
+                         "released_ns": w.released_ns, "stale": list(w.stale), "steps": list(w.steps)}
+                        for w in rec.windows]}
+
+
+def record_of(j: dict, registration: audit.Registration, coins: bytes, delta: float) -> audit.Record:
+    """The record the Lean gave an accepted session (`summary_json`'s form) as `audit.Record`: the rest from the
+    registration its digest names, the coin commitment's root `coins`, and each window's openings law at `delta` over
+    the Lean's lengths and draws (`audit.window_profile`)."""
+    if j["registration"] != registration.digest.hex():
+        raise ValueError(f"the Lean's record is of registration {j['registration'][:16]}…, not "
+                         f"{registration.digest.hex()[:16]}…")
+    pace = j["pace"]
+    return audit.Record(
+        registration.digest, coins, j["blocks"], audit.BLOCK_BYTES,
+        tuple(audit.WindowRecord(t, tuple(w["lengths"]), w["released_ns"], w["deadline_ns"], w["opened_ns"],
+                                 audit.window_profile(w["lengths"], w["drawn"], delta), tuple(w["post_seed"]),
+                                 tuple(w["steps"]), tuple(None if h is None else bytes.fromhex(h) for h in w["heads"]),
+                                 tuple(w["stale"]), tuple(w["arrived_ns"])) for t, w in enumerate(j["windows"])),
+        registration.receipt, registration.bind, registration.codec, registration.layout, registration.rows,
+        j["appended"], j["released"], j["lifetime"], None if j["appends"] is None else bytes.fromhex(j["appends"]),
+        None if pace is None else audit.Pace(pace["k"], pace["window_ns"]))
 
 
 class Tape:

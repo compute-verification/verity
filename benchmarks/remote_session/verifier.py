@@ -501,7 +501,7 @@ class Pair:
 
     def __init__(self, v: Verifier, s: audit.Session, k: int, tape: lv.Tape, case: lv.Transcript | None = None) -> None:
         self.v, self.s, self.k, self.lean, self.case = v, s, k, v.lean, case
-        self.node, self.disagreement = s.registration.node.hex(), None
+        self.node, self.disagreement, self.outcome_json = s.registration.node.hex(), None, None
         self.frames: dict[int, list[bytes]] = {}
         if self.lean is not None:
             got = self._lean({"op": "session", "node": self.node, "params": lv.params_json(s.params),
@@ -646,12 +646,13 @@ class Pair:
 
     def end(self, failure: dict | None) -> None:
         """The session ended with the driver's `failure` where neither verifier gives it one (a message it couldn't
-        read): set on both. And an accepted session's record held to the Lean's: one that differs is `disagreement`."""
+        read): set on both. And an accepted session's record, the Lean's (`record`), held to the books': one that
+        differs in any field is `disagreement`."""
         if self.lean is None:
             if failure is not None and self.s.outcome is None:
                 self._fail_books(failure)
             return
-        got = self._lean({"op": "outcome", "node": self.node, "session": self.k})
+        got = self.outcome_json = self._lean({"op": "outcome", "node": self.node, "session": self.k})
         if failure is not None:
             if self.s.outcome is None:
                 self._fail_books(failure)
@@ -662,6 +663,14 @@ class Pair:
                 else None}
         if got != mine and self.disagreement is None:
             self._disagree(len(self.s.windows) - 1, "record", got, mine)
+
+    def record(self) -> audit.Record:
+        """The accepted session's record: the Lean's (its `outcome` at `end`, as `lv.record_of` reads it), or under
+        `python` the books'."""
+        if self.lean is None:
+            return self.s.record()
+        return lv.record_of(self.outcome_json["record"], self.s.registration, self.s.commitment.root,
+                            self.s.params.delta)
 
     def _fail_books(self, failure: dict) -> None:
         t = failure["t"]
@@ -765,8 +774,9 @@ class Verifier:
 
     def register(self) -> tuple[audit.Registration, dict]:
         """The hello's registration, drawn through the registry: refused, with `bye` and the reason, for a node with a
-        live registration (`audit.RegistryError`, raised), with a malformed layout (`regions_of`'s ValueError), or
-        deferring residency under a lifetime of one window (`audit.Params`'s ValueError). Both registries draw it
+        live registration (`audit.RegistryError`, raised), with a malformed layout (`regions_of`'s ValueError),
+        deferring residency under a lifetime of one window (`audit.Params`'s ValueError), or asking for receipts that
+        bind PoUW's tile outputs (`bind`, which the Lean covers none of: ValueError). Both registries draw it
         under one nonce: one on which they differ is refused as `disagreement` (`audit.RegistryError`), and closed
         where it went live."""
         hello, _, _ = self.expect("hello")
@@ -778,16 +788,17 @@ class Verifier:
             raise
         node, blocks, root = bytes.fromhex(hello["node"]), hello["blocks"], bytes.fromhex(hello["payload_root"])
         c, receipt, rows = wire.codec_named(hello["codec"]), hello["receipt"], hello.get("rows")
+        bind = hello.get("bind", False)
         nonce = secrets.token_bytes(audit.NONCE_BYTES)
         try:
-            self.registration = self.registry.register(self.source, node, blocks, root, c, receipt, rows=rows,
-                                                       nonce=nonce)
+            self.registration = self.registry.register(self.source, node, blocks, root, c, receipt, bind=bind,
+                                                       rows=rows, nonce=nonce)
             mine, why = {"codec_seed": self.registration.codec_seed.hex(), "digest": self.registration.digest.hex()}, None
         except (audit.RegistryError, ValueError) as e:
             mine, why = (lv.REFUSED if isinstance(e, audit.RegistryError) else {"error": True}), e
         if self.lean is not None:
             try:
-                got = self.lean.call(lv.register_request(node, blocks, root, c, receipt, rows, nonce))
+                got = self.lean.call(lv.register_request(node, blocks, root, c, receipt, rows, nonce, bind))
             except (lv.LeanError, ValueError):
                 got = {"error": True}
             if got != mine:
@@ -1100,7 +1111,8 @@ class Verifier:
             record = session.record()
             out["record"] = {"public": record.public(), "profile": record.profile(), "end_ns": record.end_ns}
             out["end_ns"] = record.end_ns
-            out["ledger"] = self.ledgers(record, arrivals, [w.plans for w in session.windows])
+            out["ledger"] = self.ledgers(record, [list(w.arrived_ns) for w in record.windows],
+                                         [w.plans for w in session.windows])
             if pace is not None:
                 rebuild = audit.Rebuild(record.codec, timing.SQUARINGS_PER_S[record.codec.field.name])
                 try:
