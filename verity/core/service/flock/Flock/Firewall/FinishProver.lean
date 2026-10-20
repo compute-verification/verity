@@ -334,7 +334,11 @@ def ligeritoPZk (io : Asks M) (commit : Level → Array F128 → (Nat → ByteAr
       let last := i + 1 == R
       let mut f : Array F256 := #[]
       for j in [0:4] do
-        if j + 1 == 4 then
+        if j + 1 == 4 && last then
+          -- upstream's final level sends the plain fold's message here, the unsplit table's round polynomial
+          let _ ← challengeP io false
+          f := (← get).tab
+        else if j + 1 == 4 then
           let r ← liftT (sampleKP io)
           modify fun st => { st with tab := foldK r st.tab, w := foldK r st.w }
           f := (← get).tab

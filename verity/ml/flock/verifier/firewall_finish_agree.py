@@ -68,7 +68,9 @@ def main(argv=None) -> int:
                    "seconds": round(time.monotonic() - t0, 3)}
             if got is not None and got != want:
                 row["first_diff"] = first_diff(got, want)
+                row["bytes_differing"] = sum(x != y for x, y in zip(got, want)) + abs(len(got) - len(want))
                 (a.out / f"table{t}-rep{r}.lean").write_bytes(got)
+                (a.out / f"table{t}-rep{r}.rust").write_bytes(want)
             rows.append(row)
             ok &= row["ok"]
             if got is None:
