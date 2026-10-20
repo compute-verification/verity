@@ -43,6 +43,7 @@ from __future__ import annotations
 import random
 from collections import Counter
 from dataclasses import dataclass, field
+from itertools import pairwise
 from pathlib import Path
 from typing import Any, Callable, Iterable, Sequence
 
@@ -373,10 +374,15 @@ def word_view(t: Any, opts: Options, F: Findings) -> dict | None:
         return None
     pw, rw = signature_of(word)
     arrays = vectors(pw, 16 * opts.vectors, opts.seed + 2)
-    n = arrays[0].shape[0]
+    n = arrays[0].shape[0] if arrays else 1
     pb, rb = signature_of(t)
     single_bits = [BL.word_type(p) for p in (*pb, rb)] != [*pw, rw] and [BL.bit_type(p) for p in (*pw, rw)] == [*pb, rb]
-    if single_bits or max(w for p in (*pb, rb) for w in BL.elements(p)) > 64:
+    if not pw:
+        # a batch evaluator sizes its batch by its arguments, so one without any (a constant) is evaluated as its one instance
+        bits, at = evaluate(t), np.cumsum([0, *rw.leaf_widths()])
+        boolean = np.array([[sum(int(b) << j for j, b in enumerate(bits[a:z])) for a, z in pairwise(at)]], dtype=object)
+        got = np.asarray([evaluate(word)], dtype=object)
+    elif single_bits or max(w for p in (*pb, rb) for w in BL.elements(p)) > 64:
         boolean = _wide_words(t, pw, rw, pb, arrays, n)
         got = np.asarray(evaluate_batch(word, *arrays), dtype=object).reshape(n, -1)
     else:
@@ -562,7 +568,7 @@ def whole_lowering(t: Any, params: Sequence, arrays: Sequence[np.ndarray], ref: 
         C.output(f"out{k}", o)
     counts = C.counts()
     rows = [i for i, r in enumerate(ref) if r is not None]
-    fin = flat(arrays)[rows]
+    fin = (flat(arrays) if arrays else np.zeros((len(ref), 0), np.uint64))[rows]
     T = len(rows)
     rec: dict[str, Any] = {"lowered": True, "via": "c-flock:ir_lower", "ands": counts["ands"], "compared": T}
     if T:
