@@ -38,6 +38,7 @@ import Proofs.Accounting.TS.Grind
 import Proofs.Accounting.TS.Fixed
 import Proofs.Accounting.TS.FixedMeets
 import Proofs.Accounting.TS.SharedNoise
+import Proofs.Accounting.TS.SessionSound
 import Proofs.Accounting.Actual
 import Proofs.Accounting.Responder
 import Proofs.Accounting.Responder.Latency

@@ -390,6 +390,25 @@ ENTRIES: dict[str, Entry] = {e.id: e for e in (
           "are free witness), PIN's checks (PouwSegCheck_v3, PouwCallCheck_v1, PouwWarpCheck_v1 and _v2, #2417) "
           "recompute every word they absorb, and nothing states that the served relations are PIN's", "TS proofs pin",
           "conjectured"),
+    Entry("accounting-ts-accepted-live", "assumption",
+          "A proof is credited only after flock-verify --zk --registered accepts its session", "TS accepted live",
+          "standard"),
+    Entry("accounting-ts-window-law", "assumption",
+          "The proof service's draws and audit coins are the window's live coins: at each round and proof, given what "
+          "the path fixes before the session (its setting and its prover), the session's coins are the path's next "
+          "coins, fresh and uniform. This rests on four facts: a refused session is never rerun on a fresh draw (no "
+          "retry or redraw); the draw is revealed only after the session's registration and prover are fixed; the draw "
+          "is no coin the setting reads (not σ_w, nothing derived from σ_w or from a prover's salt, not another "
+          "session's draw); and the path carries the draw (a later round's coin, or a draw beside σ_w in each round's "
+          "coin, which the last round needs)", "TS window law", "standard"),
+    Entry("accounting-ts-served-checks", "assumption",
+          "A proof's relation (its served Definition's check) holds at its C-Flock session's extracted value layer "
+          "wherever flock-verify accepts the session and every drawn unit is right at its own owned reads; under a "
+          "sampled draw, only for a relation that reads the drawn units alone", "TS served checks", "conjectured"),
+    Entry("accounting-ts-served-roots-linked", "assumption",
+          "C-Flock's rows link covers the served roots: outside δ_s, where flock-verify accepts a session and every "
+          "drawn unit is right at its owned reads, the session's extracted value layer is the served layer's opening "
+          "(the round's served leaves, committed before σ_w)", "TS served roots linked", "conjectured"),
     Entry("accounting-ts-lin-steer", "assumption",
           "LIN-STEER, false for a segmented consumer whose noise-active segments carry unequal counts: zeroing a "
           "fraction φ of a row's noise-active coordinates saves at most φ of the consumer's work",
