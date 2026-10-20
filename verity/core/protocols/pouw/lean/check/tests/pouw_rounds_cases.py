@@ -1,7 +1,8 @@
-"""The rounds difftest's cases: `core_check.rounds`'s arguments, ``{"key", "ledger", "window", "session", "roots",
-"openings"}``.
+"""The rounds and salt difftests' cases: `core_check.rounds`'s arguments, ``{"key", "ledger", "window", "session",
+"roots", "openings"}``, and `core_check.salt`'s, ``{"coins", "session", "root", "weights", "requests", "received",
+"opening"}``.
 
-A case is an honest live window read through its challenger's session: a live epoch's coins (`window.live_challenger`),
+A rounds case is an honest live window read through its challenger's session: a live epoch's coins (`window.live_challenger`),
 the challenger's record of them signed at leaf 0 of a small LMS key (the window's pinned key), its release log (the
 salt coin opened after a root, sometimes, then each round root recorded in order and its coin opened after it, the
 challenger's `LiveRecord`, in canonical JSON on an integer clock), the session's close signed at leaf 1 over the log's
@@ -9,8 +10,10 @@ chain, and the auditor's signed ledger opening that session for the window under
 ending it closed, sealing the log the session's challenger left, its entries at leaves 2, 3, ….  Then one mutation
 (`ROUNDS_NAMES`) aimed at one refusal of `rounds`: the session's (an in-process challenger's coins, an unsigned or
 tampered log, a ledger signed under another key or cut before the session's end or at a reused leaf, a second session
-for the window's Commit under its period or another, …) or the coin rule's.  `tests/test_difftest.py` draws them for
-the harness, and
+for the window's Commit under its period or another, …) or the coin rule's.  A salt case is an honest live window's salt coin (its session's
+open root, `salt.window_open_root` of its weights' root, its round-0 request table's root and the session, recorded, and
+the salt coin opened after it), then one mutation (`SALT_NAMES`) aimed at one refusal of `salt`.
+`tests/test_difftest.py` draws them for the harness, and
 `verity/core/protocols/pouw/tests/test_pouw_core_check.py` holds each mutation to the refusal it aims at.
 """
 from __future__ import annotations
@@ -22,6 +25,7 @@ import json
 import random
 
 from verity.core.protocols.pouw import coins as Co
+from verity.core.protocols.pouw import salt as PS
 from verity.core.protocols.pouw import window as Wd
 from verity.core.protocols.sampled_proofs import challenger as Ch
 from verity.ml.commitments.identity import canonical_json_text
@@ -289,3 +293,93 @@ def rounds_instance(rng: random.Random, name: str = "honest") -> dict:
 def rounds_args(d: dict) -> tuple:
     """`core_check.rounds`'s arguments for case `d`, the challenger's signatures checked with `lms_verify`."""
     return d["key"], d["ledger"], d["window"], d["session"], d["roots"], d["openings"], lms_verify
+
+
+
+def session_id(rng: random.Random) -> str:
+    """A session id of the auditor's gate's form, ``s<date>T<time>Z-<4 hex>``."""
+    return f"s{rng.randrange(10 ** 8):08d}T{rng.randrange(10 ** 6):06d}Z-{rng.randbytes(2).hex()}"
+
+
+def honest_salt(rng: random.Random) -> tuple[dict, Ch.LiveChallenger]:
+    """An honest live window's salt coin: its session's open root recorded, and the salt coin opened after it."""
+    ch = Wd.live_challenger(rng.randrange(4), rng.choice([1, 2, 4]), rng.randbytes)
+    weights, requests, session = rng.randbytes(64), rng.randbytes(64), session_id(rng)
+    root = PS.window_open_root(weights, requests, session)
+    opening = Ch.LiveRecord(ch, Wd.SALT).record(root).to_json()
+    return {"coins": ch.commitment.to_json(), "session": session, "root": root.hex(), "weights": weights.hex(),
+            "requests": requests.hex(), "received": [root.hex()], "opening": opening}, ch
+
+
+def _fresh(c: Ch.LiveCommitment, rng: random.Random) -> Ch.LiveChallenger:
+    """Another challenger of `c`'s epoch and layout, whose salt coin is still unopened."""
+    return Wd.live_challenger(c.epoch, c.family(Wd.ROUND), rng.randbytes)
+
+
+def _mutate_salt(d: dict, ch: Ch.LiveChallenger, name: str, rng: random.Random) -> None:
+    c, root = ch.commitment, bytes.fromhex(d["root"])
+    match name:
+        case "verifier-coins":
+            d["coins"] = rng.choice([None, {**d["coins"], "root": "00"}, {**d["coins"], "epoch": -1},
+                                     Co.Challenger(c.epoch, rng.randbytes).commitment.to_json()])
+        case "not-live":
+            scheme, layout = rng.choice([("verity/vllm/commit-coins/v1", Wd.live_families(1)),
+                                         (Wd.LIVE_SCHEME, ((Wd.DRAW, 1), (Wd.SALT, 1), (Wd.ROUND, 1)))])
+            d["coins"] = Ch.LiveChallenger(scheme, c.epoch, layout, rng.randbytes).commitment.to_json()
+        case "form":
+            k = rng.choice(["root", "weights", "requests", "session"])
+            d[k] = rng.choice([None, "", "-s1", "s 1", "s" * 65, "s/1", 7] if k == "session"
+                              else [None, d[k].upper(), d[k][:-2], 5])
+        case "weights":
+            d["weights"] = rng.randbytes(64).hex()
+        case "requests":
+            d["requests"] = rng.randbytes(64).hex()
+        case "session":
+            d["session"] = session_id(rng)
+        case "weights-root":
+            # H1's salt before the window-open root: the session opened on the weights' root, its salt coin after it
+            w, fresh = bytes.fromhex(d["weights"]), _fresh(c, rng)
+            d.update(coins=fresh.commitment.to_json(), root=w.hex(), received=[w.hex()],
+                     opening=Ch.LiveRecord(fresh, Wd.SALT).record(w).to_json())
+        case "received":
+            d["received"] = rng.choice([[], [d["weights"]], [d["root"], d["root"]], [rng.randbytes(64).hex()], None,
+                                        d["root"], [d["root"].upper()]])
+        case "opening-form":
+            k = rng.choice(["coin", "path", "label", "index", "epoch", "after"])
+            bad = {"coin": ["zz", None], "path": [None, 4, [rng.randbytes(33).hex()]], "label": [5, None],
+                   "index": ["0", None, True, 1.5], "epoch": [str(c.epoch), None], "after": ["zz", 3]}[k]
+            d["opening"] = rng.choice([{**d["opening"], k: rng.choice(bad)}, None, [d["opening"]]])
+        case "after":
+            fresh = _fresh(c, rng)
+            d["coins"] = fresh.commitment.to_json()
+            d["opening"] = Ch.LiveRecord(fresh, Wd.SALT).record(rng.choice([bytes.fromhex(d["weights"]),
+                                                                            rng.randbytes(64)])).to_json()
+        case "label":
+            d["opening"] = ch.open(rng.choice([Wd.DRAW, Wd.ROUND]), 0, root).to_json()
+        case "foreign":
+            d["opening"] = Ch.LiveRecord(_fresh(c, rng), Wd.SALT).record(root).to_json()
+        case "foreign-epoch":
+            d["opening"] = Ch.LiveRecord(Wd.live_challenger(c.epoch + 1, c.family(Wd.ROUND), rng.randbytes),
+                                         Wd.SALT).record(root).to_json()
+        case "tampered":
+            d["opening"] = {**d["opening"], "salt": _flip(d["opening"]["salt"])}
+        case "malformed":
+            d["opening"] = {**d["opening"], "coin": d["opening"]["coin"][:-2]}
+        case _:
+            raise ValueError(name)
+
+
+SALT_NAMES = ["verifier-coins", "not-live", "form", "weights", "requests", "session", "weights-root", "received",
+              "opening-form", "after", "label", "foreign", "foreign-epoch", "tampered", "malformed"]
+
+
+def salt_instance(rng: random.Random, name: str = "honest") -> dict:
+    """One `salt` case: an honest live window's salt coin, then mutation `name`."""
+    d, ch = honest_salt(rng)
+    if name != "honest":
+        _mutate_salt(d, ch, name, rng)
+    return d
+
+
+def salt_args(d: dict) -> tuple:
+    return d["coins"], d["session"], d["root"], d["weights"], d["requests"], d["received"], d["opening"]
