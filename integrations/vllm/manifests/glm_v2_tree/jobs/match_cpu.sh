@@ -6,6 +6,8 @@
 # served-shape derive's Programs) is hashed into $OUT/match_cpu.sha256 (paths relative to $SW), the list copy_rowdir.sh takes
 # to window B's node, which holds the legs already when it ran window A.
 #   research run --on vy-glm53-cpu-2 --mem-gb 450 --mem-wait 28800 --timeout 30h --custody-ttl 24h --cwd source --project verity --send match.sha256 -- env ROW=... BUILD_RUN=... bash integrations/vllm/manifests/glm_v2_tree/jobs/match_cpu.sh
+# A B8 row: one GM-01 at a time at --mem-gb 450 (vy-glm53-cpu-2, vy-nebius-cpu-3), two at 1000 with FOLD_WORKERS=4 (vy-glm53-cpu-3,
+# 1 TiB, readied by stage_cpu.sh), three at 1300 (vy-nebius-1).
 # env: ROW, BUILD_RUN, [SW], [REF] (model.sh's defaults), [FOLD_WORKERS=2], [FOLD_RANK_WORKERS: the ranks whose compare and GM-01
 # legs run at once, as many as the run's --mem-gb holds at GM_GB a rank beside FOLD_WORKERS folds at 40 GB], [GM_GB: a GM-01 leg's
 # peak, by batch: B8 370 (339 GiB, WSBSTOCH's r20261019-162751-9b01), B1 60 and B32 1500 scaled from it, unmeasured],

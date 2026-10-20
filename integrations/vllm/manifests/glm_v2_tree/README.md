@@ -86,8 +86,11 @@ One runbook for both models: each window runs GLM-5.3's four rows in value order
 `cursor/dsv4-v2-21f3`, whose MANIFEST has that row's CPU gates and what its GPU leg stages on the node. The jobs read the row's
 model from its name (`jobs/model.sh`), and `gpu_batch.sh` refuses a HEAD that is not a pushed commit of the model's tree.
 Submitted in that order, the jobs take the node's lease in that order. A fresh CPU node is readied by `stage_cpu.sh` (the venv,
-`libcuda.so.1`, the pin's metadata); GLM-5.3's pin names only `config.json` and `tokenizer.json`, so on a node other than
-vy-glm53-cpu-2 its `model.safetensors.index.json`, which `build_record.sh` requires, is not staged.
+`libcuda.so.1` from `CUDA_DRIVER_ART`, the model's metadata): `CUDA_DRIVER_ART=art:b56ac0392465cf8e67426eaf2794ebec3aaada861e9a4309061eb3828c3ccec7`
+is `libcuda.so.580.173.02`, the driver vy-glm53-cpu-2 and vy-nebius-cpu-3 load. GLM-5.3's `checkpoints.json` pin names only
+`config.json` and `tokenizer.json`, so `model.sh`'s `META_EXTRA` names its other non-shard files (`model.safetensors.index.json`,
+which `build_record.sh` requires, `tokenizer_config.json`, `generation_config.json`, `chat_template.jinja`) at the sha256
+vy-glm53-cpu-2's snapshot held for the B1 and B8 Builds of record; `stage_meta` downloads each at `REV` and refuses any other.
 
 A row is built, served and judged by one code tree (`records publish --tree` is not checked against the stage runs):
 its first job writes `<row>.tree` (`cursor/glm-v2-21f3@SHA`) beside the row dir, and every later job (`jobs/tree_guard.sh`)
@@ -98,8 +101,11 @@ Only the Build and publish read a row's pins, so a moved row's re-pin may land b
 record. A PR head merged after a row's first job reaches that row only by rerunning it; its later jobs are launched from a
 worktree at a commit the guard accepts (`git worktree add /tmp/glm-v2-SHA SHA`).
 
-1. CPU, before window B (any order, overlapping window A): `build_record.sh` per row on vy-glm53-cpu-2 (the AOT Build of record:
-   predict emit refused unless equal to the row's `aot.trace` Build, with its manifest). A row this tree moves is re-pinned
+1. CPU, before window B (any order, overlapping window A): `build_record.sh` per row (the AOT Build of record: predict emit
+   refused unless equal to the row's `aot.trace` Build, with its manifest), B1's and the B8 rows' on vy-glm53-cpu-2 ("Builds of
+   record" below), B32's on vy-glm53-cpu-3 (cpu-d3: 256 vCPU, 1 TiB, 3 TB disk) as that node's first job once B32 is re-pinned,
+   after `stage_cpu.sh` and with its trace's row dir copied from cpu-2 (`copy_rowdir.sh vy-glm53-cpu-2 vy-glm53-cpu-3 LIST.sha256
+   /workspace/cp/circuits/glm-v2`, then `AOT_TRACE=` that dir). A row this tree moves is re-pinned
    first, since its AOT Build reads its trace and comparison from `records.json`: `trace_compare.sh` (`SKIP_AOT1=1` once the row
    is known to move) traces it, preserves the trace (`trace_art.sh`), and compares this tree's predictor with it beside an AOT
    Build against it (`SKIP_AOT2=1` leaves that out: the Build of record refuses the same mismatch); `repin.sh ROW RUN` then
@@ -136,9 +142,11 @@ worktree at a commit the guard accepts (`git worktree add /tmp/glm-v2-SHA SHA`).
    per-rank GM-01 (with its shared X-09): 339 GiB and about 1.5 h a B8 rank, beside folds of about 40 GB and 2 h two at a time
    (WSBSTOCH's B8 stochastic rehearsal r20261019-162751-9b01: 17 h, one GM-01 at a time). `match_cpu.sh` runs as many ranks'
    GM-01 at once as the run's `--mem-gb` holds: one B8 rank at 450 on vy-glm53-cpu-2 (755 GiB) or vy-nebius-cpu-3 (497 GB
-   cap), three at 1300 on vy-nebius-1 (1690 GiB). B1's 60 GB and B32's 1500 GB a rank are B8's scaled by batch, unmeasured: B32's
-   runs only on an otherwise empty vy-nebius-1, one rank at a time, and refuses a `--mem-gb` that cannot hold one. A row dir
-   after the phase is about 580 GiB (B8) and 1.19M inodes.
+   cap), two at 1000 with `FOLD_WORKERS=4` on vy-glm53-cpu-3 (1 TiB, 1099 GB: three need 1110 GB with no fold beside them),
+   three at 1300 on vy-nebius-1 (1690 GiB). Scaled from the 17 h at one, two take about 9 h and three about 7 h (unmeasured). B8 greedy's runs on vy-glm53-cpu-3, after B32's Build of record, and B8 stochastic's on vy-nebius-1 or
+   vy-glm53-cpu-2. B1's 60 GB and B32's 1500 GB a rank are B8's scaled by batch, unmeasured: B32's runs only on an otherwise
+   empty vy-nebius-1, one rank at a time, and refuses a `--mem-gb` that cannot hold one. A row dir after the phase is about
+   580 GiB (B8) and 1.19M inodes.
 4. Window B (`gpu_batch.sh b ROWS.env [NODE] [ROW]`, NODE vy-glm53-eu by default, or a preemptible 8x H200 node: vy-glm53-h8 or
    another): each row's Commit (`commit.sh`: rows-sha512 under `verity/tp-run-root/v2`, PENDING by design), in value order
    whatever ROWS.env's order, its bundles and row records preserved in the store. Stop the node. An eviction fails the
