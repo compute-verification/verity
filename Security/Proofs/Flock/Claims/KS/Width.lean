@@ -28,11 +28,9 @@ local notation "𝔽" => FlockLevel3.GF128
 theorem decodeProof_rows {sh : Shape} {bytes : ByteArray} {p : Proof} (h : decodeProof sh bytes = .ok p) :
     ∀ row ∈ p.ligerito.initialProof.rows, row.size = 2 ^ (sh.sched.levels.getD 0 default).lanes := by
   unfold decodeProof at h
-  obtain ⟨⟨p', r'⟩, hrun, hp⟩ := ebind_ok h
-  have hp' : p' = p := Except.ok.inj hp
-  rw [← hp']
+  obtain ⟨r', hrun, -⟩ := Flock.Reader.runPlain_ok h
   refine (?_ : Post _ fun p : Proof => ∀ row ∈ p.ligerito.initialProof.rows,
-    row.size = 2 ^ (sh.sched.levels.getD 0 default).lanes) p' ⟨_, _, hrun⟩
+    row.size = 2 ^ (sh.sched.levels.getD 0 default).lanes) p ⟨_, _, hrun⟩
   dsimp only
   refine post_bind fun _ _ => ?_
   refine post_bind fun _ _ => post_bind fun _ _ => post_bind fun _ _ => post_bind fun _ _ => ?_
@@ -61,11 +59,9 @@ theorem zkDecode_rows {sh : Shape} {bytes : ByteArray} {p : Zk.ZkProof} (h : Zk.
     ∀ row ∈ p.proof.ligerito.initialProof.rows,
       row.size = 2 ^ (sh.sched.levels.getD 0 default).lanes + Zk.EXTRA_LANES := by
   unfold Zk.decode at h
-  obtain ⟨⟨p', r'⟩, hrun, hp⟩ := ebind_ok h
-  have hp' : p' = p := Except.ok.inj hp
-  rw [← hp']
+  obtain ⟨r', hrun, -⟩ := Flock.Reader.runAll_ok h
   refine (?_ : Post _ fun p : Zk.ZkProof => ∀ row ∈ p.proof.ligerito.initialProof.rows,
-    row.size = 2 ^ (sh.sched.levels.getD 0 default).lanes + Zk.EXTRA_LANES) p' ⟨_, _, hrun⟩
+    row.size = 2 ^ (sh.sched.levels.getD 0 default).lanes + Zk.EXTRA_LANES) p ⟨_, _, hrun⟩
   unfold Zk.reader
   dsimp only
   refine post_bind fun _ _ => ?_

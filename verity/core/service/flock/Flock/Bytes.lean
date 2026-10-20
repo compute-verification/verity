@@ -132,6 +132,66 @@ def vecAny {α} (minSize : Nat) (elem : M α) (what : String) : M (Array α) := 
     out := out.push (← elem)
   return out
 
+/-- `m` read from the first byte of `bytes`, refused unless it stops after the last (§8.1): a file is the one encoding of
+what it decodes to, so every byte the record's digest binds (S17) is one the verifier reads. -/
+def runAll {α} (m : M α) (bytes : ByteArray) (what : String) : V α :=
+  match m.run ⟨bytes, 0⟩ with
+  | .error e => .error e
+  | .ok (a, r) =>
+    if r.pos = bytes.size then .ok a
+    else .error s!"{what}: the file has {bytes.size} bytes and its encoding ends at byte {r.pos}"
+
+theorem runAll_ok {α} {m : M α} {bytes : ByteArray} {what : String} {a : α} (h : runAll m bytes what = .ok a) :
+    ∃ r : Reader, m.run ⟨bytes, 0⟩ = .ok (a, r) ∧ r.pos = bytes.size := by
+  unfold runAll at h
+  split at h
+  · cases h
+  · rename_i a' r hm
+    split at h
+    · cases h
+      exact ⟨r, hm, by assumption⟩
+    · cases h
+
+theorem runAll_of_run {α} {m : M α} {bytes : ByteArray} {what : String} {a : α} {r : Reader}
+    (h : m.run ⟨bytes, 0⟩ = .ok (a, r)) (hr : r.pos = bytes.size) : runAll m bytes what = .ok a := by
+  unfold runAll
+  rw [h]
+  simp only [hr, ite_true]
+
+/-- `runAll` for §8's plain pair, which takes one byte more: `zk_level0`'s `Option` tag, `None` (0). The zk patch puts the
+field at the end of upstream's `LigeritoProof` and writes it as `None` on every plain proof, and upstream's builds don't write it,
+so a file ends after `consistency_batch_grinding_nonces` or after one 0 after it (D17). -/
+def runPlain {α} (m : M α) (bytes : ByteArray) (what : String) : V α :=
+  match m.run ⟨bytes, 0⟩ with
+  | .error e => .error e
+  | .ok (a, r) =>
+    if r.pos = bytes.size then .ok a
+    else if bytes[r.pos]! ≠ 0 then .error s!"zk_level0: tag {bytes[r.pos]!}, want 0: a plain proof carries no hiding messages"
+    else if r.pos + 1 = bytes.size then .ok a
+    else .error s!"{what}: the file has {bytes.size} bytes and its encoding ends at byte {r.pos + 1}"
+
+theorem runPlain_ok {α} {m : M α} {bytes : ByteArray} {what : String} {a : α} (h : runPlain m bytes what = .ok a) :
+    ∃ r : Reader, m.run ⟨bytes, 0⟩ = .ok (a, r) ∧ (r.pos = bytes.size ∨ r.pos + 1 = bytes.size) := by
+  unfold runPlain at h
+  split at h
+  · cases h
+  · rename_i a' r hm
+    split at h
+    · cases h
+      exact ⟨r, hm, .inl (by assumption)⟩
+    · split at h
+      · cases h
+      · split at h
+        · cases h
+          exact ⟨r, hm, .inr (by assumption)⟩
+        · cases h
+
+theorem runPlain_of_run {α} {m : M α} {bytes : ByteArray} {what : String} {a : α} {r : Reader}
+    (h : m.run ⟨bytes, 0⟩ = .ok (a, r)) (hr : r.pos = bytes.size) : runPlain m bytes what = .ok a := by
+  unfold runPlain
+  rw [h]
+  simp only [hr, ite_true]
+
 end Reader
 
 end Flock

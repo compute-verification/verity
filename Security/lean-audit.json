@@ -18836,7 +18836,7 @@
    ]
   },
   "Flock.Bytes": {
-   "digest": "17bfc438c87c7dbf7e70dc178820dce2665ce56a43f246fcb5627ef4c06788c2",
+   "digest": "f7bb04ac1c8cd3e677732acb3d8915b2991225e88ce6cb27bc35ca66ea3676df",
    "definitions": {
     "Flock.Reader": "142f35b54fe69b55679f16638948d896389ff3941c3138e9919737ee271632b6",
     "Flock.Reader.M": "886955667f2c71471a290310539e053a122285f1ba3d9be4bdad51afb1c83376",
@@ -18846,6 +18846,8 @@
     "Flock.Reader.f256": "2e59b8ff7466f65b0e80dbe836cc26e728d38db1d8b9d58a7ec28c5e7fb566de",
     "Flock.Reader.need": "92d6848268a151c0f67ec7450885024f237a1f5a71113135cf82254450136e0f",
     "Flock.Reader.pos": "ed6a4a8ae0b16caf7dedcc9ceb0e827c8dfc63e83c1f4dadeedd2b5c5088e5aa",
+    "Flock.Reader.runAll": "8064923639197f55f5003d06437831dcd4da417a7f2d6cfdd9cb5131d46d6262",
+    "Flock.Reader.runPlain": "4a3d7d7c6be7190c32cfb28e056e9ee9de298c3b4600b104d8883ebe3f85ccf6",
     "Flock.Reader.u32": "cdb2b8a0ea9eeb8f4375744e042ea2788be36cfac924942108b0d116b8a2c70c",
     "Flock.Reader.u64": "c6e4ed755ed28b473ae7772666b15bdb4964078e0dc400dc8a820200f8670895",
     "Flock.Reader.u8": "5efdc0cb5709468577e171baae9b9f57b1299ee43b023f728642bc41b727fdc5",
@@ -21553,7 +21555,7 @@
    ]
   },
   "Flock.Proof": {
-   "digest": "906995cb2d69317d3a2f58238d45e569d971ed7b640e319236b7a27689730033",
+   "digest": "1f03554a32e2b6d8caab5d89901ccb03f98b0b64b6ada7f8f48e24b14ad8aa39",
    "definitions": {
     "Flock.FinalProof": "5ec92b6c5d11500fc360636c7eca4148335c1cb2ff438ee228b01c8002e45887",
     "Flock.FinalProof.rows": "5a813b7afdefc006e6cc02012240ad1943e7a1961c6413ae633a70bc44439ff9",
@@ -21603,7 +21605,7 @@
     "Flock.ZerocheckProof.round1ab": "3bc907a6931c1f81227b651d9b9d35be0884496bcea2b3f940ba87b104f56ecf",
     "Flock.ZerocheckProof.round1c": "21e24d7f56418e843b5480c705b6c13f31c9de7a4b1358e4123f9f13b5a0545c",
     "Flock.ZerocheckProof.rounds": "724a7a6e379fc10600c37d990df3b6f203b874e89dbf8739a8f881f7e7888a9b",
-    "Flock.decodeProof": "afff09c5e1699a132966b863b92c3b01120cfa37cd87076bea2dcc53bcc12a25",
+    "Flock.decodeProof": "0b5893b18022969cda13602d9c87a06f0b7f3337096fe041729a8064042219fb",
     "Flock.instBEqPcsParams": "edd323eafea996e51feea90b1ea225ddba5cb7c9c377d8f085973ea609396021",
     "Flock.instBEqPcsParams.beq": "e3e6044f304c55c3edf5670d5861a5bbd3f2b30bb84c57b0bbe873116ae6b5c4",
     "Flock.instInhabitedFinalProof": "d6b6302840a7346a75736cf651090bacb434f982c57e80cd54ec85e401ebcf69",
@@ -23868,7 +23870,7 @@
    ]
   },
   "Flock.ZkProof": {
-   "digest": "86ceb0fb859780e92ea3205b73d148a6954e91a1cc2c93ba2d5780d691a0f933",
+   "digest": "26e98b2119ee8b6d790cb0726b83737e9f5052f2876541c43ab7ef81732a76ef",
    "definitions": {
     "Flock.Zk.EXTRA_LANES": "b02f45f723f2e4a38d69ad47c279720c2b74878bebaff7fff24b9a7e9191f35f",
     "Flock.Zk.InnerProof": "3e01fb19a80673af1ff8d16f1779628167b2507f87472af877e1ce7c0f91cc7a",
@@ -23892,7 +23894,7 @@
     "Flock.Zk.ZkProof.level0": "1fcc43e0791e502d6a2e19f3af7a5004b1e1ffe97e40ee5251186ab4ab748efc",
     "Flock.Zk.ZkProof.proof": "73cc996a1af9e80fda76cf08563a9585fed4981fd7f870f0ad35239e61b20c7d",
     "Flock.Zk.byteVec": "8c309deacd633b76d5ac9346e146105427dfc0fd1316d3efa99bd5f816b51f51",
-    "Flock.Zk.decode": "d74baa7489f99ca2959f5a7e54a207d158adee9918e5c5fc9fdbab676e512286",
+    "Flock.Zk.decode": "af6203a60733dbf61908cf551e2dc636c9e6f4c84a65bbd7405d4ab1c2465513",
     "Flock.Zk.innerReader": "31800785b5718693bde6b7c732ffc7e288d253e44283328258e124faadf428b3",
     "Flock.Zk.instInhabitedInnerProof": "dd73c98caf28a2ce2885d7a04632691de4c21edd1218f32bcf915ccc87120724",
     "Flock.Zk.instInhabitedInnerProof.default": "dc6237557f8e28ade89f24e6fae34fdb26e7030679797ba0fc1549b310209a56",

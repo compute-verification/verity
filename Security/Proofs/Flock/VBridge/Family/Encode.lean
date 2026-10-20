@@ -9,8 +9,8 @@ import Proofs.Flock.Soundness.Discharge.ZkView.Decode
 `encodeProof sh p` is the file the prover writes for the proof `p` at shape `sh`: `bincode 1.3` of the commitment and
 `R1csProofLigerito` (PROTOCOL.md §8), each `Vec` as its `u64` length then its elements, each `F128` as
 `le64(lo) ‖ le64(hi)`, the vectors the verifier requires empty (`matrix_evals`, the grinding nonces but the query, claim
-and consistency nonces, `sumcheck_transcript`) empty, each ring switch's grinding nonce `0`. It is `--zk`'s `wProof`
-(ZkView/Wire.lean), the pair that file's proof starts with.
+and consistency nonces, `sumcheck_transcript`) empty, each ring switch's grinding nonce `0`, and nothing after the pair,
+upstream's form of it (`Reader.runPlain`). It is `--zk`'s `wProof` (ZkView/Wire.lean), the pair that file's proof starts with.
 
 * `decodeProof_encodeProof`: `decodeProof sh (encodeProof sh p) = .ok p` for every `p` of the shape (`ProofShaped`):
   every length `decodeProof` checks (Proof.lean:81-158) at its value, a schedule of at least two levels (at one level
@@ -60,19 +60,11 @@ width, and a file whose length fits a `u64`. -/
 def ProofShaped (sh : Shape) (p : Proof) : Prop :=
   0 < sh.hashLen ∧ 1 ≤ sh.sched.levels.size - 1 ∧ (encodeProof sh p).size < 2 ^ 64 ∧ Lengths sh p
 
-theorem ok_of_reads {m : Reader.M Proof} {b : ByteArray} {x : Proof} (h : ZkView.Reads m b x)
-    (hb : b.size < 2 ^ 64) : (do let (p, _) ← m.run ⟨b, 0⟩; return p : V Proof) = .ok x := by
+theorem ok_of_reads {m : Reader.M Proof} {b : ByteArray} {x : Proof} {what : String} (h : ZkView.Reads m b x)
+    (hb : b.size < 2 ^ 64) : Reader.runPlain m b what = .ok x := by
   have e := h ByteArray.empty ByteArray.empty (by rw [ByteArray.empty_append, ByteArray.append_empty]; exact hb)
   rw [ByteArray.empty_append, ByteArray.append_empty] at e
-  rw [show (⟨b, 0⟩ : Reader) = ⟨b, ByteArray.empty.size⟩ from rfl, e]
-  rfl
-
-/-- `matrix_evals`, written empty, read by `vecAny` (Proof.lean:111). -/
-theorem reads_matrixEvals :
-    ZkView.Reads (Reader.vecAny 32 (do let _ ← Reader.f128; let _ ← Reader.f128; pure ()) "matrix_evals")
-      (ZkView.wLen 0) #[] :=
-  ZkView.Reads.congr (ZkView.Reads.vecAny (f := fun _ => ByteArray.empty) (#[] : Array Unit) _ (by omega) (by simp)
-    (by simp)) (by simp [ZkView.wVec]) rfl
+  exact Reader.runPlain_of_run e (Nat.zero_add b.size)
 
 /-- **`decodeProof` inverts `encodeProof`** at every proof of the shape. -/
 theorem decodeProof_encodeProof (sh : Shape) (p : Proof) (hp : ProofShaped sh p) :
@@ -115,7 +107,7 @@ theorem decodeProof_encodeProof (sh : Shape) (p : Proof) (hp : ProofShaped sh p)
       (fun x _ => by rw [ZkView.wPair, ByteArray.size_append, ZkView.toBytes_size, ZkView.toBytes_size]; omega)
       fun x _ => ZkView.Reads.pair x) ?_
     refine ZkView.Reads.bind (ZkView.Reads.f128s zp _ hzp) ?_
-    refine ZkView.Reads.bind reads_matrixEvals ?_
+    refine ZkView.Reads.bind (ZkView.Reads.vec0 _ _) ?_
     refine ZkView.Reads.bind (ZkView.Reads.vec0 _ _) ?_
     refine ZkView.Reads.bind (ZkView.Reads.vecExact rs _ hrs
       (fun v _ => by have := ZkView.wVec_size_ge F128.toBytes v; rw [ByteArray.size_append]; omega)
