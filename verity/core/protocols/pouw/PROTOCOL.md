@@ -134,7 +134,8 @@ the served window proves its drawn tiles in zero knowledge, and its verifier of 
    its registration's receipt (`benchmarks/pouw/served_zk/served_commit.py`, `Challenger.select`). A certified window's
    draw coin is a live epoch's `pouw/draw` coin 0 (`window.live_challenger`), under the commitment the challenger reads
    itself from the record its challenger signed (`challenger.trusted_commitment` of `Challenger(coin_record=…,
-   deployment=…)`), under the challenger key the window's deployment pins (`Deployment.challenger_key`). The draw's
+   deployment=…)`), under the challenger key the window's deployment pins (`Deployment.challenger_key`; `Deployment.pinned`
+   reads it from infra's published key record and refuses a key whose SHA-512 isn't the one stated in code). The draw's
    check of record (`core_check.draw`, Lean `drawCheck`) takes that record and the key it names, `{key, record}`, and
    the pinned key (`key`): it refuses a record whose key isn't the pinned one, no pin, or seeded coins under a pin
    (`coin-key`), so a record the prover signs over coins it holds is refused; it verifies the record's LMS signature
