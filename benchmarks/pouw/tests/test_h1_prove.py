@@ -15,6 +15,8 @@ from types import SimpleNamespace
 import numpy as np
 import pytest
 
+from verity.core.protocols.sampled_proofs.one_stage import partition as P
+
 H1 = Path(__file__).resolve().parents[1] / "h1_prove"
 sys.path.insert(0, str(H1))
 import h1unit as U  # noqa: E402
@@ -83,7 +85,9 @@ def test_the_windows_partition_derives_exactly_the_tiles_h1_prove_proves(tmp_pat
     win = programs(com)
     T = com["tiles"]
     assert T == 2 * (8 // 4) * (16 // 8) == win.tp.population
-    assert [(t, first, n) for _k, t, first, n in win.tp.ranges] == [(win.query["params"]["template"], u, 1) for u in range(T)]
+    assert win.query["params"]["templates"] == [P.template_instance_query(U.Shape(K).definition())["params"]["template"]]
+    assert [(t, first, n) for _k, t, first, n in win.tp.ranges] == [(win.query["params"]["templates"][0], u, 1) for u in range(T)]
+    assert [n for n, _t in win.program.fn.signature()[0]] == [f"a/{K}", f"b/{K}", "salt", "position", "roots"]
     W = importlib.util.module_from_spec(spec_w := importlib.util.spec_from_file_location("h1_prove_window", H1 / "window.py"))
     spec_w.loader.exec_module(W)
     for u in range(T):
