@@ -1663,6 +1663,8 @@ def step(state: dict, monitors: list[Monitor], ctx_for: Callable[[dict], Ctx], n
         gone = Monitor(o["monitor"], (o.get("owners") or ["infra"])[0], o.get("severity") or "warn", "", lambda _: [], "")
         if emit(gone, "clear", key, None, {**o, "cleared": f"*Cleared:* monitor `{o['monitor']}` is retired: {RETIRED[o['monitor']]}."}):
             del state["open"][key]
+    for gone_id in [k for k in state["monitors"] if k in RETIRED and not any(o["monitor"] == k for o in state["open"].values())]:
+        del state["monitors"][gone_id]
     for k in [k for k, t in seen.items() if now - t > EVENTS_KEEP_S]:
         del seen[k]
     if webhook:

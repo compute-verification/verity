@@ -726,10 +726,12 @@ def test_a_retired_monitors_open_incident_is_cleared_once_with_why_it_retired(tm
     state["open"]["unpreserved|unreadable"] = {"monitor": "unpreserved", "since": "2026-10-19T22:00:00Z", "owners": ["infra"],
                                                "severity": "warn", "text": "*Monitor `unpreserved` can't read its input*",
                                                "cleared": "*Cleared:* monitor `unpreserved` reads its input again."}
+    state["monitors"]["unpreserved"] = {"since": T0 - 9000, "error": "RuntimeError: exited 2"}
     m = mon(lambda ctx: [])
     (ev,) = M.step(state, [m], lambda memo: M.Ctx(now=T0, memo=memo), T0, M.AlertDir(tmp_path), by="test")
     assert (ev["event"], ev["key"], ev["since"]) == ("clear", "unpreserved|unreadable", "2026-10-19T22:00:00Z")
     assert "is retired" in ev["text"] and "disk-n1" in ev["text"] and state["open"] == {}
+    assert "unpreserved" not in state["monitors"], "a retired monitor's error isn't reported as failing"
     assert M.step(state, [m], lambda memo: M.Ctx(now=T0 + 60, memo=memo), T0 + 60, M.AlertDir(tmp_path), by="test") == []
 
 
