@@ -42,10 +42,18 @@ checks every window's openings too, beside the Lean, and a window's two verdicts
 under `lean` it checks none and takes the Lean's verdict. Under `python` there is no Lean process and `audit.Session`
 decides. `--close` closes a registration in both registries alike.
 
+`--transcript DIR` writes each session's difftest case to DIR as the session runs (`lean_verifier.Transcript`): every
+event as the Lean took it, with the clock it read, the session's coins, and each window's openings where its verdict
+was set, which `replay.py transcript` (verity/core/protocols/remote_bandwidth/lean/tests) replays through both
+verifiers, rejections included. A message the driver couldn't read is in no event: the case ends before it. A run
+keeps DIR in scratch and preserves what it keeps of it (the writing-runs skill): a 60 s window's openings are about
+0.6 GB of JSON.
+
 Openings are checked in the clear: zero-knowledge proof units are not in this harness (PROTOCOL.md §8).
 
     python verifier.py --port 7781 --out OUT [--windows 7 --window-ms 1000 --samples 2773 --sessions 1]
                        [--registry REGISTRY.json] [--verdict both|lean|python] [--lean-exe PATH]
+                       [--transcript DIR]
     python verifier.py --registry REGISTRY.json --close NODE_HEX [--verdict both|lean|python]
     python verifier.py --memory-of VERIFIER_JSON [--host-bytes N]
 """
@@ -485,9 +493,10 @@ class Pair:
     verifiers), returned as that rejection, or raised as `audit.SessionError` where `audit.Session` returns no verdict.
     Everything else is read from `s`."""
 
-    def __init__(self, v: Verifier, s: audit.Session, k: int, tape: lv.Tape) -> None:
-        self.v, self.s, self.k, self.lean = v, s, k, v.lean
+    def __init__(self, v: Verifier, s: audit.Session, k: int, tape: lv.Tape, case: lv.Transcript | None = None) -> None:
+        self.v, self.s, self.k, self.lean, self.case = v, s, k, v.lean, case
         self.node, self.disagreement = s.registration.node.hex(), None
+        self.frames: dict[int, list[bytes]] = {}
         if self.lean is not None:
             got = self._lean({"op": "session", "node": self.node, "params": lv.params_json(s.params),
                               "coins": [c.hex() for c in tape.coins], "append_coins": [],
@@ -518,9 +527,13 @@ class Pair:
         rejection (None as the second value)."""
         if self.disagreement is not None:
             raise audit.SessionError("the session ended: the verifiers disagree")
-        ev = event() if self.lean is not None else None
+        ev = event() if self.lean is not None or self.case is not None else None
         held = self.v._stamp
         now = self.v._stamp = self.v._now()
+        if clocked and ev is not None:
+            ev["now"] = now
+        if self.case is not None:
+            self.case.event(ev)
         try:
             try:
                 out = python()
@@ -533,8 +546,6 @@ class Pair:
             self.v._stamp = held
         if self.lean is None:
             return out, True
-        if clocked:
-            ev["now"] = now
         c = coin(out) if coin is not None else None
         lean = self._lean({"op": "event", "node": self.node, "session": self.k, "event": ev,
                            "coin": None if c is None else c.hex()})
@@ -582,6 +593,16 @@ class Pair:
             self.lean.call({"op": "openings", "node": self.node, "session": self.k, "t": t, "bytes": len(body)}, body)
         except lv.LeanError as e:
             self.v.log(f"verifier: the Lean refused window {t}'s openings frame: {e}")
+
+    def keep(self, t: int, body: bytes) -> None:
+        """One frame of window t's openings, kept for the transcript until the window's verdict is set."""
+        if self.case is not None:
+            self.frames.setdefault(t, []).append(body)
+
+    def transcribe(self, t: int) -> None:
+        """Window t's openings into the transcript, as a `verify` event where its verdict was set."""
+        if self.case is not None:
+            self.case.verify(t, self.frames.pop(t, []))
 
     def verify(self, t: int, check: int) -> bool:
         """Window t's frames checked on the Lean's threads as check `check`: False where it refuses to."""
@@ -646,10 +667,12 @@ class Verifier:
     def __init__(self, conn: wire.Conn, *, source: bytes, windows: int, window_ns: int, samples: int, delta: float,
                  jitter_ns: int, clock=None, log=print, checks=None, lifetime: int = audit.LIFETIME,
                  registry: audit.Registry | None = None, hbm_bytes: int = HBM_BYTES, host_bytes: int = 0,
-                 ingress_bytes_per_s: float = 0.0, verdict: str = VERDICT, lean_exe: Path | None = None) -> None:
+                 ingress_bytes_per_s: float = 0.0, verdict: str = VERDICT, lean_exe: Path | None = None,
+                 transcript: Path | None = None) -> None:
         if verdict not in VERDICTS:
             raise ValueError(f"the verdict is one of {VERDICTS}")
         self.conn, self.source, self.W, self.T, self.lifetime = conn, source, windows, window_ns, lifetime
+        self.transcript = transcript
         self.hbm_bytes, self.host_bytes, self.regions, self.deferred = hbm_bytes, host_bytes, None, False
         self.ingress_bytes_per_s = ingress_bytes_per_s
         self.verdict, self.checks = verdict, checks
@@ -810,7 +833,9 @@ class Verifier:
         tape = lv.Tape(params.coins, os.urandom)
         books = self.registry.session(params, reg, None, clock=self._now, not_before_ns=not_before_ns, index=k,
                                       entropy=tape)
-        session = Pair(self, books, k, tape)
+        case = None if self.transcript is None else lv.Transcript(
+            self.transcript / f"{reg.digest.hex()[:16]}-session-{k}.json", reg, params, tape.coins, not_before_ns)
+        session = Pair(self, books, k, tape, case)
         self.conn.send({"type": "session", "k": k, "windows": W, "lifetime": params.lifetime,
                         "commitment": session.commitment.to_json(), "pace": K})
         self.expect("armed")
@@ -865,6 +890,7 @@ class Verifier:
                                "checked_ns": max(latency, py["checked_ns"]) if py else latency,
                                "python_checked_ns": py["checked_ns"] if py else None,
                                "lean_ns": res.get("ns"), "lean_checked_ns": latency}
+            session.transcribe(t)
             if not verdicts[t]["accepted"]:
                 failure = {"t": t, "failure": verdicts[t]["failure"], "at": verdicts[t]["at"]}
 
@@ -975,6 +1001,7 @@ class Verifier:
                 if not (type(t) is int and 0 <= t < len(session.windows)) or session.windows[t].draws is None:
                     failure = {"t": t, "failure": "malformed", "at": None}
                     break
+                session.keep(t, body)
                 if self.lean is not None:
                     session.openings(t, body)
                     frames[t] = frames.get(t, 0) + 1
@@ -1054,6 +1081,7 @@ class Verifier:
                "registration": reg.digest.hex(), "coins": session.commitment.root.hex(),
                "appended": session.extent - reg.blocks, "released": session.released,
                "verdict": self.verdict, "disagreement": session.disagreement,
+               "transcript": None if case is None else case.close(tape.appends),
                "verify_cpu_ns": {t: v["cpu_ns"] for t, v in sorted(verdicts.items())},
                "verify_latency_ns": {t: v.get("checked_ns") for t, v in sorted(verdicts.items())},
                "lean_check_ns": {t: v.get("lean_ns") for t, v in sorted(verdicts.items())},
@@ -1233,6 +1261,9 @@ def main() -> int:
                          "a mismatch refused as `disagreement` (both), or audit.Session alone (python)")
     ap.add_argument("--lean-exe", type=Path,
                     help="a built remote-audit-verifier (default: `lake build` it in its package)")
+    ap.add_argument("--transcript", type=Path, metavar="DIR",
+                    help="write each session's difftest case to DIR (`lean_verifier.Transcript`: about 0.6 GB a "
+                         "window at 33,273 openings), its path, bytes and sha256 in verifier.json")
     ap.add_argument("--paced", nargs="+", metavar="K:T_MS:DRAWS:WINDOWS",
                     help="pace each session's passes, one spec a session (`pace_of`; replaces --sessions, --windows, "
                          "--window-ms and --samples): groups of K passes under a live coin each")
@@ -1290,7 +1321,7 @@ def main() -> int:
                  delta=2.0 ** a.delta_log2, jitter_ns=round(a.jitter_ms * 1e6),
                  log=lambda m: print(m, flush=True), checks=checks, lifetime=a.lifetime, registry=registry,
                  hbm_bytes=a.hbm_bytes, host_bytes=a.host_bytes, ingress_bytes_per_s=a.ingress_bytes_per_s,
-                 verdict=a.verdict, lean_exe=a.lean_exe)
+                 verdict=a.verdict, lean_exe=a.lean_exe, transcript=a.transcript)
     c0 = time.process_time_ns()
     try:
         reg, cal = v.register()
