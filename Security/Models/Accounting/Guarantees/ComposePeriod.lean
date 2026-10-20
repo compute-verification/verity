@@ -148,26 +148,31 @@ statement needs a period record from which the credit is read: two signed entrie
 `period-open` and a `period-close`, cited by their `seq` within a published ledger head (the record is proofs',
 PRF-108). A period is never a label a requester names (one Commit could then open sessions under two labels and keep
 the one whose coins it likes, RT4-INT-24), nor a range written afterwards, whose writer could choose its boundaries
-and leave a failed window off the edge. Its windows are exactly those opened in the ledger between its two entries,
-at most `n`, each named by its root (fixed before its first coin, unique across all opens) and placed by the
-ledger's order, not the requester's, and every one counts: no window inside the pair may be skipped. The cap `n` and
-the circuit are `period-open`'s, committed before window 0's first coin (asked of infra as `cap` and `circuit`; its
-entry carries neither yet). Each window's challenger session is its own open, so a window reads only its own
-session's coins and a session that never ends is a recorded window, not a dropped one (RT4-INT-17). Each window's
-first coin is opened after the previous window's draw (the challenger's `order_reason` over one family, below). The
-credit is the prefix, in ledger order, before the first refused window: the first whose proof is refused or whose
-`complete` in `period-close` is false (its session has no `end`, or one that didn't release every family's coins: a
-client that closes after a round coin ends closed but not complete, RT4-INT-25). The windows after it in the period
-are not credited. A stream's committed periods must be disjoint: each window in at most one period, and one period
-open at a time, the next committed only after the last closes. Two periods that share windows count those windows
-twice, and a prover that commits `P` overlapping periods and claims whichever is accepted pays `P·δ_s`, not `δ_s`.
-No check on main does this today. The served path has no period: `Credits` (SALT-WIRE's, #2847) registers a window
-once when it is received, before its draw coin is open or any proof, and nothing closes a stream at its first
-refused window, so `Credits` credits each window on its own, which is dropping failed windows (*Liveness*, below).
-The challenger's `order_reason` (`SampledProofs.Challenger.orderReason`, #2731, not on main) checks one family of an
-epoch's coins: coin `i` opened once, after the `i`-th recorded root, and every recorded root's coin opened. That is
-the order within a window. Run over one family holding every window's round coins and draw in order, with `n` and
-the circuit in the epoch's commitment, it would be the period's check.
+and leave a failed window off the edge. Its windows are exactly its lane's reserves between the two entries, in
+ledger order, at most `n`, and every one counts: no window inside the pair may be skipped. A window is its reserve
+from that entry on: the reserve assigns the window's challenger session and counts toward the cap, and has at most
+one open and one end. Its open names the window's root before its first coin (`pouw.salt.window_open_root` of the
+weights' root, the round-0 request table's root and the session, #2950, not on main; one session a root, ever), and
+the window's place is the ledger's order, not the requester's. The cap `n` (1 to 2^24) and the circuit are
+`period-open`'s, signed in its body before window 0's first coin, the circuit as the declared circuit's lowercase
+SHA-512: the verifier of record (proofs' #2953, not on main) refuses a Program's id there. A window reads only its
+own session's coins, and a session that never ends is a recorded window, not a dropped one (RT4-INT-17). Each
+window's first coin is opened after the previous window's draw (the challenger's `order_reason` over one family,
+below). The credit is the prefix, in ledger order, before the first refused window: the first whose proof is
+refused, whose reserve expired before its open (`period-close` lists it as `{root: null, complete: false}`), or
+whose `complete` in `period-close` is otherwise false (its session has no `end`, or one that didn't release every
+family's coins: a client that closes after a round coin ends closed but not complete, RT4-INT-25). The windows after
+it in the period are not credited, and `period-close` is refused while a reserve is unexpired or a window runs. A
+stream's committed periods must be disjoint: each window in at most one period, and one period open at a time, the
+next committed only after the last closes. Two periods that share windows count those windows twice, and a prover
+that commits `P` overlapping periods and claims whichever is accepted pays `P·δ_s`, not `δ_s`. No check on main does
+this today. The served path has no period: `Credits` (SALT-WIRE's, #2847) registers a window once when it is
+received, before its draw coin is open or any proof, and nothing closes a stream at its first refused window, so
+`Credits` credits each window on its own, which is dropping failed windows (*Liveness*, below). The challenger's
+`order_reason` (`SampledProofs.Challenger.orderReason`, #2731, not on main) checks one family of an epoch's coins:
+coin `i` opened once, after the `i`-th recorded root, and every recorded root's coin opened. That is the order
+within a window. Run over one family holding every window's round coins and draw in order, with `n` and the circuit
+in the epoch's commitment, it would be the period's check.
 
 *One stream* (RT3-INT-10). `Period` is a sequence: each window's first coin is opened after the previous window's
 draw. Windows run at once on several GPUs are not one period, so a period's windows are one serving stream's, and a
