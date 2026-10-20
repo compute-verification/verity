@@ -16,7 +16,7 @@ scales.
     tile      a unit (32 slot rows by 32 weight rows) is `PouwH1Tile_v4`, whose `admit` input is its 32 rows' admit bits,
               bound by commitment equality to the two admit-tree leaves the tally reads: its live bit is their OR, so
               the tiles the circuit treats as live are exactly the tiles the tally credits, and an admitted tile of
-              zero-byte rows is live, noised and receipted (RT4-LOGIC-4)
+              zero-byte rows is live, noised, receipted and credited (RT4-LOGIC-4, RT4-LOGIC-20)
     dead      a unit is dead iff its 32 slots' admit bits are all 0: its rows are the canonical empty row (the admit unit
               refuses any other), it skips the H1 noise and receipt, and its receipt leaf is the canonical empty receipt
               (2 (KS + m) zero words), so the receipt trees keep their shape
@@ -25,8 +25,9 @@ scales.
               sum_site count_site N_site K_site, a public weighting of four 16-bit limbs; the level is
               window.level(window.floor_point(Cr)) and the published credit Pub = window.point(level) <= Cr
 
-Every admit unit and every tally unit is proved in every window (`proof_plan`); the draw is uniform over every unit position
-of the window, dead ones included, never weighted by an annotation.  Numpy and `pouw.circuit.admit`'s word.
+Every admit unit is proved in every window (`proof_plan`); the tally is no proof unit until a tally Definition exists.  The
+draw is uniform over every unit position of the window, dead ones included, never weighted by an annotation.  Numpy and
+`pouw.circuit.admit`'s word.
 """
 from __future__ import annotations
 
@@ -118,7 +119,7 @@ def hollow(rows: np.ndarray, selected: np.ndarray) -> list[int]:
 
 def scale_only(rows: np.ndarray) -> list[int]:
     """The slots whose rows hold zero s8 bytes under a nonzero scale.  The admit unit reads no byte, so it admits such a
-    row when selected, and its tile is live under its admit bit (`PouwH1Tile_v4`)."""
+    row when selected, and its tile is live under its admit bit (`PouwH1Tile_v4`): computed and credited."""
     r = np.asarray(rows, dtype=np.uint8).reshape(rows.shape[0], -1)
     return [int(i) for i in np.flatnonzero(~r[:, :-4].any(axis=1) & r[:, -4:].any(axis=1))]
 
@@ -188,11 +189,10 @@ def published(macs: int) -> dict:
 def proof_plan(n_calls: int, t: int, steps: int, sites: Sequence[str], population: int) -> dict:
     """What every window proves, beside the uniform draw over its units."""
     admit_units = n_calls * (t // WORD)
-    tally_units = steps * len(sites) + len(sites) + 1
     return {"population": population,
             "draw": "uniform over every unit position of the window, live or dead, by the window's draw coin: public "
                     "structure, never weighted by an annotation",
-            "always_proved": {"admit": admit_units, "tally": tally_units, "total": admit_units + tally_units},
+            "always_proved": {"admit": admit_units},
             "admit_unit": "PouwQueueAdmit on the step, 16 slots' queue entries (the slot map's leaf and each slot's "
                           "request entry, opened from the queue committed before the first coin) and their rows' scales, "
                           "outputs their 16 admit bits, the leaf of the call's admit tree it writes; it opens the 16 slots' "
@@ -201,10 +201,11 @@ def proof_plan(n_calls: int, t: int, steps: int, sites: Sequence[str], populatio
                           "bytes under a nonzero scale is admitted",
             "tile_unit": "PouwH1Tile_v4 on the tile's 32 A rows, 32 B rows and 32 admit bits; its admit input is bound "
                          "by commitment equality to the two leaves of the call's admit tree that the tally reads, so its "
-                         "live bit (their OR) is the tally's liveness: credit counts exactly the tiles live in-circuit "
-                         "(RT4-LOGIC-4)",
-            "tally_units": f"{steps * len(sites)} per (step, site) popcount sums (<= 2^11), {len(sites)} per-site sums over "
-                           "the steps (< 2^16), and one level unit (window.level(floor_point(sum_site count N K)), <= 9 bits)",
+                         "live bit (their OR) is the tally's liveness: credit counts exactly the tiles live in-circuit, "
+                         "an admitted tile of zero-byte rows included (RT4-LOGIC-4, RT4-LOGIC-20)",
+            "tally": f"no proof unit until a tally Definition exists; the harness computes and commits {steps * len(sites)} "
+                     f"per (step, site) popcount sums (<= 2^11), {len(sites)} per-site sums over the steps (< 2^16), and "
+                     "the level (window.level(floor_point(sum_site count N K)), <= 9 bits)",
             "dead_unit": "a drawn dead unit proves, with the live tile's template (PouwH1Tile_v4), that its 32 bound "
                          "admit bits are 0 and so its receipt is the canonical empty receipt; no noise is computed when "
                          "serving. Its rows are the canonical empty row because the admit unit refuses a slot not "

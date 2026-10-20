@@ -44,9 +44,11 @@ roots follow the step's real rows, so this window doesn't use them (the seeded m
   is recorded before round s's coin opens, and the step's units take the round's salt (`h1tile.live_salt`:
   `window.round_key(...).stream(0, 64)`), so every candidate and every selection a round's noise reads is committed before
   that noise's coin.
-* **Credit**: only the admitted slots (`credit.tally`, in 16-bit limbs, every tally unit always proved): Cr = Σ admitted
-  rows · N · K, and the published credit point(level(floor_point(Cr))) <= Cr.  The padded compute (the non-admitted rows of
-  live units, noised) is shown and not credited; dead units cost only their emptiness check.
+* **Credit**: only the admitted slots, a tile's iff `PouwH1Tile_v4`'s live bit (the OR of its admit bits) is set, an
+  admitted tile of zero-byte rows included (RT4-LOGIC-20) (`credit.tally`, in 16-bit limbs, committed and not proved until
+  a tally Definition exists): Cr = Σ admitted rows · N · K, and the published credit point(level(floor_point(Cr))) <= Cr.
+  The padded compute (the non-admitted rows of live units, noised) is shown and not credited; dead units cost only their
+  emptiness check.
 * **Not covered**: attention (QKᵀ, P·V) and lm_head.
 
 In order, into OUT (`record.json` throughout, `manifest.json` at the end, the option's `pouw-h1-calls.json`):
@@ -731,15 +733,16 @@ def run(a: argparse.Namespace) -> dict:
                            "salts": "SHA-512(SALT_TAG || key || u32be len(label) || label || u64be i || u8 c), c = 0..2, "
                                     "labels a/<s>/<w>, s/<s>/<w>, r/<s>/<w>, t, b/<w>, q and qr; the key is the prover's"},
                 "credit": {**{k: v for k, v in credit.items() if k != "tally"},
-                           "rule": "PADCREDIT round 2 with RT10's fixes: only admitted slots are credited; slot i of step "
+                           "rule": "PADCREDIT round 2 with RT10's fixes: only admitted slots are credited, a tile's iff "
+                                   "PouwH1Tile_v4's live bit (the OR of its 32 admit bits) is set; slot i of step "
                                    "t is admitted iff the request queue (committed before the first coin) assigns it a "
                                    "request live at t and its row's scale is nonzero (pouw.circuit.admit.PouwQueueAdmit: "
                                    "the row can withhold admission, never grant it; RT-ALGO-4), written by an "
                                    "always-proved admit unit into its own leaf, which refuses a slot not admitted whose row "
                                    "is not the canonical empty row and a slot the queue selects whose row is; the admit "
                                    "leaves are committed (live) in the round "
-                                   "root before the round's coin; the tally is 16-bit limbs, every tally unit always "
-                                   "proved; Pub = point(level(floor_point(Cr)))"},
+                                   "root before the round's coin; the tally is 16-bit limbs, committed and not proved "
+                                   "until a tally Definition exists; Pub = point(level(floor_point(Cr)))"},
                 "calls": calls, "tokens_equal": all(equal)}
     (out / "manifest.json").write_text(json.dumps(manifest, indent=1, default=str) + "\n")
     rec.step("prover", prover(a, out, key, calls, data))
