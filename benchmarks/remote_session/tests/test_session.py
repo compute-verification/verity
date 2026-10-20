@@ -842,13 +842,16 @@ def test_a_layout_that_is_not_the_stores_regions_in_order_is_refused(layout):
         verifier.regions_of(layout, 16)
 
 
-def greeted(lifetime: int, deferred: bool) -> tuple[verifier.Verifier, ValueError | None, list[str]]:
-    """A prover whose backend says `deferred` greeting a verifier of lifetime cap `lifetime`: the verifier, its refusal
-    if it refused, and the reason the prover read in its `bye`."""
+def greeted(lifetime: int, deferred: bool, *, hello: dict | None = None,
+            verdict: str = verifier.VERDICT) -> tuple[verifier.Verifier, ValueError | None, list[str]]:
+    """A prover whose backend says `deferred` greeting a verifier of lifetime cap `lifetime`, its hello with `hello`'s
+    fields too: the verifier, its refusal if it refused, and the reason the prover read in its `bye`."""
     a, b = socket.socketpair()
     backend = prover.CpuBackend(16, random.Random(7))
     backend.deferred = deferred
     p = prover.ProverSide(wire.Conn(b), backend, b"test-node", prover.parse_plan("honest"), seed=11, log=lambda m: None)
+    send = p.conn.send
+    p.conn.send = lambda head, body=b"": send(head | (hello or {}) if head["type"] == "hello" else head, body)
     heard = []
 
     def prove() -> None:
@@ -860,7 +863,7 @@ def greeted(lifetime: int, deferred: bool) -> tuple[verifier.Verifier, ValueErro
     th = threading.Thread(target=prove, daemon=True)
     th.start()
     v = verifier.Verifier(wire.Conn(a), source=os.urandom(32), windows=3, window_ns=20, samples=6, delta=2.0 ** -40,
-                          jitter_ns=10 ** 9, log=lambda m: None, lifetime=lifetime)
+                          jitter_ns=10 ** 9, log=lambda m: None, lifetime=lifetime, verdict=verdict)
     refused = None
     try:
         v.register()
@@ -881,6 +884,16 @@ def test_a_prover_that_defers_residency_is_refused_under_a_lifetime_of_one_windo
     for lifetime, deferred in ((2, True), (1, False)):
         v, refused, heard = greeted(lifetime, deferred)
         assert refused is None and heard == [] and v.deferred is deferred and v.registry.drawn(b"test-node") == 1
+
+
+@pytest.mark.parametrize("verdict", verifier.VERDICTS)
+def test_a_hello_asking_for_receipts_that_bind_tiles_is_refused_under_each_verdict(verdict):
+    """A hello asking that its receipts bind PoUW's tile outputs (`bind`): the Lean covers receipts of blocks alone, so
+    both registries refuse it before drawing a registration (`audit.Registry.register` as `Registry.register` does),
+    and the prover reads why in its `bye`."""
+    v, refused, heard = greeted(audit.LIFETIME, False, hello={"bind": True}, verdict=verdict)
+    assert refused is not None and "tile outputs" in str(refused)
+    assert heard == [f"refused: {refused}"] and v.registry.drawn(b"test-node") == 0
 
 
 def test_the_verifier_closes_a_registration_left_live_from_its_registry_file(tmp_path, monkeypatch, capsys):
@@ -973,6 +986,42 @@ def test_a_transcript_replays_each_session_to_its_verdict_through_both_verifiers
     assert sorted(verified[0]) == [0, 1, 2] and verified[1][-1] == f["t"]
     assert rows[0]["lean"]["outcome"] == "accepted" and rows[0]["lean"]["rejected"] is None
     assert rows[1]["lean"]["rejected"] == {"failure": "receipt", "window": f["t"], "at": list(f["at"])}
+
+
+def test_a_paced_sessions_transcript_names_its_pace_and_replays_paced(tmp_path, monkeypatch):
+    """A paced session's transcript names its pace (`audit.Pace`'s k and T), which both verifiers hold each window's
+    roots to, so its replay is the paced session's: accepted, with its record's pace."""
+    monkeypatch.syspath_prepend(str(HERE.parents[2] / "verity/core/protocols/remote_bandwidth/lean/tests"))
+    import json
+
+    import replay
+
+    (r,), _ = run("honest", paces=[verifier.pace_of("2:8:40:2", 1.0)], transcript=tmp_path)
+    assert r["accepted"] and [w["passes"] for w in r["windows_seen"]] == [2] * 12
+    case = json.loads(Path(r["transcript"]["path"]).read_bytes())
+    assert case["params"]["pace"] == {"k": 2, "window_ns": 8_000_000} == r["record"]["public"]["pace"]
+    with replay.server() as s:
+        row = replay.replay(case, s)
+    assert row["agree"] and row["lean"]["outcome"] == "accepted" and row["lean"]["refused"] == 0, row
+
+
+def test_books_whose_record_is_not_the_leans_refuse_the_session_as_disagreement(monkeypatch):
+    """An accepted session's record is held to the Lean's whole, each pass's arrival, head and stale bound among what
+    the ledger reads: books whose record has another stale bound refuse the session at its end as `disagreement`."""
+    import dataclasses
+
+    record = audit.Session.record
+
+    def stale(self):
+        rec = record(self)
+        w = rec.windows[0]
+        return dataclasses.replace(rec, windows=(dataclasses.replace(w, stale=tuple(b + 1 for b in w.stale)),
+                                                 *rec.windows[1:]))
+
+    monkeypatch.setattr(audit.Session, "record", stale)
+    (r,), _ = run("honest", verdict="both")
+    assert not r["accepted"] and r["failure"]["failure"] == "disagreement", r["failure"]
+    assert r["disagreement"]["event"] == "record"
 
 
 def test_an_event_the_verifiers_answer_differently_is_refused_as_disagreement(monkeypatch):
