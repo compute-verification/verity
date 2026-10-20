@@ -26,6 +26,8 @@ difftest against `one_stage`'s Python, beside the whole protocol (`sampled-proof
   (`TwoStage.selectReplayUnits`, `TwoStage.selectProofUnits`);
 * `two_stage_profile`, `check_probability`: the two-stage law's profile over a class's RUs and one proof unit's marginal
   probability of being checked (`TwoStage.profile`, `TwoStage.checkProbability`);
+* `stream`: the proof service stream's own rules, one op's decision on what they hold of the stream (`Stream.run`);
+* `fleet`: the fleet's rules over its streams' operators, one op's decision on what they hold of the fleet (`Fleet.run`);
 * `hello`: the run's Hello on its record, its coin tree at run scope (`Hello.check`).
 * `challenger_commitment`, `challenger_opening`, `challenger_reason`, `challenger_order`: the challenger's live coins
   (`Challenger`): a coin commitment and an opening as `from_json` reads them, `live_reason` and `order_reason`.
@@ -35,13 +37,16 @@ difftest against `one_stage`'s Python, beside the whole protocol (`sampled-proof
 `sampled-proofs-verifier` serves those the verifier of record runs (`verifier`): `registration`, `matches_public`,
 `select` (the draw of record: `Stream.select` hands it the bytes of the challenger's coins), `check_draw`,
 `check_proved`, `record`, `check_public`, `check_verdicts`, `run` (`Stream.outcome` holds its outcome to it),
-`two_stage_profile`, `check_probability` and `hello`.
+`two_stage_profile`, `check_probability`, `hello`, `stream` (each of `service.Stream`'s ops) and `fleet` (each of
+`service.Fleet`'s).
 -/
 import SampledProofs.OneStage
 import SampledProofs.Slots
 import SampledProofs.Service
 import SampledProofs.Run
 import SampledProofs.TwoStage
+import SampledProofs.Stream
+import SampledProofs.Fleet
 import SampledProofs.Hello
 import SampledProofs.ChallengerRecord
 
@@ -117,7 +122,8 @@ def draw (j : Json) : V Json := do
   Draw.drawFirst (getD j "law") n (← Flock.unhex (← Flock.J.str j "source" "the draw"))
 
 /-- `{"rule", "program", "query", "work_table", "closure", "source"}` to `{"draw", "read"}`: the challenger's draw
-(`Select.select`) under a Spec's selection rule over the units of the program under the query, from the source's bytes,
+(`Select.select`) under a Spec's selection rule over the units of the program under the query (`Select.resolve`, a rate
+law's `subset:k`), from the source's bytes,
 and how many of them it read. The program and the query are objects, the work table and the closure map
 (`Select.closureMap?`) null when absent, the source hex; refused where the Python raises. -/
 def select (j : Json) : V Json := do
@@ -131,6 +137,7 @@ def select (j : Json) : V Json := do
   let cm ← match getD j "closure" with
     | .null => pure none
     | c => some <$> Select.closureMap? c
+  let rule ← Select.resolve rule p (getD j "query")
   let (draw, _, read) ← Select.select rule p (getD j "query") table cm (← Flock.unhex (← Flock.J.str j "source" "the select"))
   return Json.mkObj [("draw", draw), ("read", Lean.toJson read)]
 
@@ -148,6 +155,7 @@ def slots (j : Json) : V Json := do
   let cm ← match getD j "closure" with
     | .null => pure none
     | c => some <$> Select.closureMap? c
+  let rule ← Select.resolve rule p (getD j "query")
   let (l, checked) ← Slots.select rule p (getD j "query") table cm (← Flock.unhex (← Flock.J.str j "source" "the slots"))
   return Json.mkObj [("classes", l.toJson),
     ("checked", Json.arr (checked.map fun (v, i) => Json.arr #[Lean.toJson v, Lean.toJson i]))]
@@ -238,6 +246,21 @@ def checkProbability (j : Json) : V Json := do
   let .str cls := getD j "class" | throw "class is a string"
   let some nv := nat? (getD j "n_v") | throw "n_v is a natural number"
   return Json.mkObj [("p", Json.str (← TwoStage.checkProbability law cls nv).toString)]
+
+/-- `{"params", "state", "op"}` to `{"decision", "state"}`: the op's decision on the state the stream's rules hold of it
+(`Stream.run`), and the state after it as the text Python's `canonical_json` writes. -/
+def stream (j : Json) : V Json := do
+  if keys? j != some #["op", "params", "state"] then throw "exactly {params, state, op}"
+  let p ← Stream.Params.ofJson (getD j "params")
+  let (d, s) ← Stream.run p (← Stream.State.ofJson (getD j "state")) (getD j "op")
+  return Json.mkObj [("decision", d.toJson), ("state", Json.str (← PyJson.canonical s.toJson))]
+
+/-- `{"state", "op"}` to `{"decision", "state"}`: the op's decision on the state the fleet's rules hold of it
+(`Fleet.run`), and the state after it as the text Python's `canonical_json` writes. -/
+def fleet (j : Json) : V Json := do
+  if keys? j != some #["op", "state"] then throw "exactly {state, op}"
+  let (d, s) ← Fleet.run (← Fleet.State.ofJson (getD j "state")) (getD j "op")
+  return Json.mkObj [("decision", d.toJson), ("state", Json.str (← PyJson.canonical s.toJson))]
 
 /-- `{"verdicts": {name: {...}}}` to `{"verdict"}`. -/
 def verdict (j : Json) : V Json := do
@@ -406,8 +429,8 @@ def table : List (String × (Json → V Json)) :=
    ("domain", domain), ("check_draw", checkDraw), ("draw", draw), ("select", select), ("slots", slots),
    ("check_proved", checkProved),
    ("bound", bound), ("bernoulli_bound", bernoulliBound),
-   ("two_stage_profile", twoStageProfile), ("check_probability", checkProbability),
-   ("verdict", verdict), ("matches_public", matchesPublic), ("session_registered", sessionRegistered), ("record", record),
+   ("two_stage_profile", twoStageProfile), ("check_probability", checkProbability), ("stream", stream),
+   ("fleet", fleet), ("verdict", verdict), ("matches_public", matchesPublic), ("session_registered", sessionRegistered), ("record", record),
    ("check_public", checkPublic), ("check_verdicts", checkVerdicts), ("run", run), ("replay_units", replayUnits),
    ("proof_units", proofUnits), ("hello", Hello.check), ("challenger_commitment", Challenger.commitmentPiece),
    ("challenger_opening", Challenger.openingPiece), ("challenger_reason", Challenger.reasonPiece),
@@ -418,6 +441,6 @@ def verifier : List (String × (Json → V Json)) :=
   [("registration", registration), ("matches_public", matchesPublic), ("select", select), ("check_draw", checkDraw),
    ("check_proved", checkProved), ("record", record), ("check_public", checkPublic),
    ("check_verdicts", checkVerdicts), ("run", run), ("two_stage_profile", twoStageProfile),
-   ("check_probability", checkProbability), ("hello", Hello.check)]
+   ("check_probability", checkProbability), ("hello", Hello.check), ("stream", stream), ("fleet", fleet)]
 
 end SampledProofs.Pieces

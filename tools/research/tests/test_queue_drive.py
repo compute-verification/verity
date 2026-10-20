@@ -62,6 +62,22 @@ def world(tmp_path):
     return World(tmp_path)
 
 
+def test_a_train_s_check_is_launched_with_its_rank_for_the_slot_queue(world, monkeypatch):
+    """CI-110: the train that lands next takes a node's next free slot (`slot.py --rank`), so drive launches each train's check with
+    CHECK_SLOT_RANK set to its members above `main`, and leaves the variable as it was."""
+    monkeypatch.delenv("CHECK_SLOT_RANK", raising=False)
+    h = Harness(world, monkeypatch)
+    h.d.train_size, h.d.max_running = 1, 2
+    ranks = []
+    plain = h.launch
+    h.d.launch = lambda repo, commit, machine, agreement: ranks.append(os.environ.get("CHECK_SLOT_RANK")) or plain(
+        repo, commit, machine, agreement)
+    world.gh.put(1, world.change({"a.txt": "1\n"}))
+    world.gh.put(2, world.change({"b.txt": "2\n"}))
+    h.tick()
+    assert ranks == ["1", "2"] and "CHECK_SLOT_RANK" not in os.environ
+
+
 def test_an_unchecked_tip_is_checked_once_with_agreement_only_for_a_guarantee_change(world, monkeypatch):
     h = Harness(world, monkeypatch)
     world.gh.put(1, world.change({"a.txt": "1\n"}))
