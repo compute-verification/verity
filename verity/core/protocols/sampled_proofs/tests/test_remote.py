@@ -196,6 +196,25 @@ def test_a_session_with_a_secret_refuses_a_hello_without_it_before_any_coin(tmp_
     assert R.trusted_session(host.directory, verifier_key(), lms_verify)[1] == {"positions": (), "replay": ()}
 
 
+def test_greet_reads_the_hello_alone_so_frames_pipelined_behind_it_reach_serve(tmp_path):
+    """`greet` and `serve` each build their own `_Wire`; that's sound because `_Wire` reads exactly one frame and buffers
+    nothing past it."""
+    host = Host(tmp_path, secret=SECRET)
+    socket.create_connection(host.listener.getsockname()).close()
+    assert "stream closed" in host.ended()
+    a, b = socket.socketpair()
+    with a, b:
+        b.sendall(frame({"type": "hello", "secret": SECRET.hex()}) + frame(OPEN) + frame({"type": "close"}))
+        b.shutdown(socket.SHUT_WR)
+        assert R.greet(a, SECRET) is None
+        reason = R.serve(a, host.challenger, host.directory, itertools.count().__next__, SECRET, greeted=True)
+        answers = []
+        while (head := b.recv(R.HEADER.size, socket.MSG_WAITALL)):
+            answers.append(json.loads(b.recv(R.HEADER.unpack(head)[0], socket.MSG_WAITALL))["type"])
+    assert (reason, answers) == (None, ["commitment", "opening", "closed"])
+    assert R.trusted_session(host.directory, verifier_key(), lms_verify)[1]["positions"] == (root(0),)
+
+
 def test_greet_refuses_a_bad_hello_alone_so_the_next_connection_is_served(tmp_path):
     host = Host(tmp_path, secret=SECRET)
     socket.create_connection(host.listener.getsockname()).close()
