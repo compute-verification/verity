@@ -4,10 +4,11 @@
 # checkout, as lane ci (RESEARCH_LANE), with its flags from tools/verity/check/drive.toml at main (`--config`, read fresh each
 # tick) plus whatever /data/drive/args holds (flags that override the file's, `#` lines skipped), then sleeps 120 s.
 # The queue's clone and its state are root's ~/.research/queue/ (verity, verity.state.json), on the volume.
-# GitHub: the checkout's origin is https and its local credential helper reads $GH_TOKEN (relay.env's) when git
+# GitHub: the checkout's origin is https and its local credential helper reads $GH_TOKEN when git
 # asks, so the token is never in git's config or arguments; drive gives its own clone the same helper (`credential_args`), and
-# gh (/data/drive/bin/gh) reads GH_TOKEN itself. r2.env (the store's parent key, which train.sh needs) and relay.env
-# (SLACK_BOT_TOKEN for drive's posts) are sourced. The nodes are reached as `research run --on` reaches them: the notes clone's
+# gh (/data/drive/bin/gh) reads GH_TOKEN itself. GH_TOKEN is the verity-drive App's, minted each tick by gh_app_token.sh from
+# /data/state/secrets/verity-drive.pem (an installation token, 1 h, contents and pull requests write on verity; INF-133).
+# r2.env (the store's parent key, which train.sh needs) and relay.env (SLACK_BOT_TOKEN for drive's posts) are sourced. The nodes are reached as `research run --on` reaches them: the notes clone's
 # machines.d (RESEARCH_NOTES, the steward's clone) and ~/.runpod/ssh/runpodctl-ssh-key. The store is a cache of the bucket on the
 # container disk (/root/drive-store, as the store index keeps its own): its SQLite catalog on the volume took minutes a pull.
 # While /data/drive/stopped exists no tick starts (a running one finishes): `drive.sh stop` writes it and waits for the tick in
@@ -26,15 +27,17 @@ export PATH=$DIR/bin:/root/.local/bin:$PATH GH_CONFIG_DIR=$DIR/gh-config GIT_TER
 tick() {
   exec 8> "$TICK"; flock 8
   set -a; . $CONF/r2.env; . $CONF/relay.env; set +a
+  GH_TOKEN=$(/data/infra/gh_app_token.sh) || exit 1; export GH_TOKEN
   git -C "$REPO" fetch -q origin main && git -C "$REPO" checkout -q -f --detach FETCH_HEAD || exit 1
   cd "$REPO" && PYTHONPATH=$REPO/tools/research/src exec python3.12 -m research queue drive \
     --config tools/verity/check/drive.toml $(grep -v '^#' $DIR/args 2>/dev/null) "$@"
 }
 case ${1:-} in
-  start) (set -a; . $CONF/relay.env; set +a; git -C "$REPO" fetch -q origin +refs/heads/next:refs/remotes/origin/next \
+  start) (GH_TOKEN=$(/data/infra/gh_app_token.sh) || exit 1; export GH_TOKEN
+          git -C "$REPO" fetch -q origin +refs/heads/next:refs/remotes/origin/next \
             && git -C "$REPO" push -q --dry-run origin refs/remotes/origin/next:refs/heads/next) > /dev/null 2>&1 \
-          || { echo "drive: not started: a dry-run push of next with relay.env's GH_TOKEN was refused; drive pushes next and main" \
-                    "and edits and closes PRs, so the token needs Contents and Pull requests read and write on" \
+          || { echo "drive: not started: gh_app_token.sh failed or a dry-run push of next with its token was refused;" \
+                    "drive pushes next and main and edits and closes PRs, so the token needs Contents and Pull requests write on" \
                     "compute-verification/verity" >&2; exit 1; }
          rm -f "$STOP"; echo "drive: started; the loop's next pass (within 30 s) ticks"; exit 0 ;;
   stop) : > "$STOP"; echo "drive: stopped; waiting for a tick in progress to end"; flock "$TICK" true
