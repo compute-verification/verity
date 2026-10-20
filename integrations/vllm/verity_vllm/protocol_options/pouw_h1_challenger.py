@@ -6,14 +6,11 @@ verifier's check that a served window's coins are that challenger's.
   `families` (S) as ``FAMILIES`` (`benchmarks/live_challenger/run.sh`). The epoch's salt is its salt coin, opened after the
   weights' root (`audit.salt_of`), and round s's coin opens after round s's root (`pouw_h1.H1Run`); `finish` closes the
   session once the window has finished. The challenger is auditor-trusted (`trusted-nebius-host`): it runs on a machine
-  the prover doesn't control, and the serving process reaches it through ``ssh -R`` on its own 127.0.0.1. On the auditor
-  host a session opens a salt coin only after its window's root (serve.py's ``--root``, the gate's ``open --commit``), so
-  H1's salt, which follows the weights' root, is served there only for a window opened at the weights' root, once a
-  weights root, until the salt is bound to its window.
+  the prover doesn't control, and the serving process reaches it through ``ssh -R`` on its own 127.0.0.1. The host opens
+  a salt coin only after its window's root (serve.py's ``--root``), so H1's salt waits on its window binding (#2950).
 * **Checking** (`trusted_rounds_reason`): the verifier reads the challenger's directory from the challenger's own run
   (``research fetch RUN --all``, its ``out/``), never from the prover's bundle, under its own challenger key (`pinned_key`),
-  and the auditor's signed ledger (the longest of infra's published heads, each extending the others), which opens and
-  ends the one session of the window (`remote.trusted_session`): the coin
+  and the auditor's signed ledger, which opens and ends the one session of the window (`remote.trusted_session`): the coin
   commitment the challenger signed and the roots its signed release log shows it received. The window's coins must be
   that commitment's, its salt coin must have followed the weights' root, and its rounds pass PoUW's round rule of record
   (`core_check.rounds`, Lean `PouwCheck.roundsCheck`): each coin opened after its root, the roots the challenger's log
@@ -421,10 +418,8 @@ def _period(i: int, kind: str, schema: Any, e: Mapping[str, Any], periods: dict[
         del current[lane]
 
 
-# TODO(#2953): core's `challenger.ledger_head` and `audited_session` read infra's v1-then-v2 ledger and its signed close
-# there, so this mirror of infra's verify_ledger and verify_periods (the period kinds, the two-step reserve and open,
-# `period_reason`), `evidence` and `released_sealed` go once #2953 is on main; this module then keeps only vllm's checks (a
-# session a window, the commitment before the first coin, the slot tables).
+# TODO(#2953, VLLM-61): with core's `ledger_head` and `audited_session` on main, this ledger mirror, `evidence` and
+# `released_sealed` go; the module keeps vllm's checks (a session a window, the commitment first, the slot tables).
 @dataclass(frozen=True)
 class Ledger:
     """Infra's challenger ledger (`LEDGER_SCHEMA`, after the host's `LEDGER_V1` entries), verified under the verifier's
