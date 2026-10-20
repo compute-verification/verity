@@ -1480,6 +1480,18 @@
    "Claims.Recursion.KSBoundLin": {
     "fails": "Claims.Witness.Recursion.KSBoundLin_fails",
     "meets": ["Claims.Witness.Recursion.KSBound_meets"]
+   },
+   "Claims.Recursion.KSFlockLin": {
+    "fails": "Claims.Witness.Recursion.KSFlockLin_fails",
+    "meets": ["Claims.Witness.Recursion.Inner.KSAbort_meets", "Claims.Witness.Recursion.Inner.KSAbort_meets_trim"]
+   },
+   "Claims.Recursion.KSLin2": {
+    "fails": "Claims.Witness.Recursion.KSLin2_fails",
+    "meets": ["Claims.Witness.Recursion.KSBound_meets"]
+   },
+   "Claims.Recursion.BitsLin2": {
+    "fails": "Claims.Witness.Recursion.BitsLin2_fails",
+    "meets": ["Claims.Witness.Recursion.KSBound_meets"]
    }
   },
   "not": {
@@ -1525,7 +1537,11 @@
    "Claims.Recursion.Bridge": "option (d)'s inner claim (`KSBound` rests on it), a statement over every bound record, proved from Flock's KS at `DE`, `Bound.Binds` and `Bound.WeightCovers` wherever a decoder inverts the record's answers (`Bound.bridge_of_dec`), the deployed record among them (`RecDeploy.bridge_bdDeployed`); it reads no deployed record, so it has no antecedent there to witness, no claim",
    "Claims.Recursion.Bound.LastBindsEC": "P4, a premise of `KSBound`'s route on the bound record (`RecDeploy.KSBoundRouteCols`): two accepted decisions after the same rounds and coins that differ in `DE`'s columns of their opened views or in the set of `IVStar`'s calls give a collision among those calls (the calls compared as sets, ASK-76: the record's stream order changes their list, not their set); at the deployed bound record it follows from `Bound.Binds` and the plain verifier's binding of its last message (`RecDeploy.lastBindsEC_deployed_sha512`, from `RecDeploy.CanonicalProofFiles` and the calls half `RecDeploy.PlainCallsBindOrSlack`, both open; the columns half is proved at SHA-512), a premise, no claim",
    "Claims.Recursion.Bound.LastCoinFree": "a premise of `KSBound`'s route with `Bound.LastBindsEC` (`IVStar`'s last step reads no last coin), a condition on the record, proved at the deployed bound record (`RecDeploy.lastCoinFree_deployed`), no claim",
-   "Claims.Recursion.linkG": "`Fdev`'s loop condition (does `E_O` give witnesses at a draw), a finder's internal test that `KSLin` and `BitsLin` read through `Fdev`, no claim"
+   "Claims.Recursion.linkG": "`Fdev`'s loop condition (does `E_O` give witnesses at a draw), a finder's internal test that `KSLin` and `BitsLin` read through `Fdev`, no claim",
+   "Claims.Recursion.accAt": "`F0`'s loop condition (does a run as it may abort accept), a finder's internal test that `KSFlockLin` reads through `F0`, no claim",
+   "Claims.Recursion.opensAt": "`FC`'s loop condition (does a run as it may abort accept and open a cap position), a finder's internal test that `KSFlockLin` reads through `FC`, no claim",
+   "Claims.Recursion.accAtI": "`F0I`'s loop condition (does a draw's opened inner view accept), a finder's internal test that `KSLin2` and `BitsLin2` read through `F0I`, no claim",
+   "Claims.Recursion.opensAtI": "`FCI`'s loop condition (does a draw's opened inner view accept and open an inner cap position), a finder's internal test that `KSLin2` and `BitsLin2` read through `FCI`, no claim"
   }
  },
  "layers": {
@@ -4014,6 +4030,18 @@
    "assumptions": [],
    "type_hash": "6afb69b897bceb3bdd88e1855ba6c429314dcecb98e84ae3ea2f6f590deb740c"
   },
+  "Claims.Witness.Recursion.BitsLin2_fails": {
+   "owner": "@proofs",
+   "signature": [
+    "Claims.Witness.Recursion.BitsLin2_fails {Coin : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin]",
+    "  (H : Claims.Msg → Claims.Msg) :",
+    "  Not",
+    "    (Claims.Recursion.BitsLin2 H (Claims.Witness.Recursion.ksRAt Coin) (Claims.Witness.Recursion.ksB Coin)",
+    "      (Claims.Witness.Flock.ksD Coin) Claims.Witness.Recursion.noCaps)"
+   ],
+   "assumptions": [],
+   "type_hash": "b4b904962d9bacfab0916601149bbaf24b7709b5092e68a7c9eee809adde853d"
+  },
   "Claims.Witness.Recursion.BitsLin_fails": {
    "owner": "@proofs",
    "signature": [
@@ -4208,6 +4236,16 @@
    "assumptions": [],
    "type_hash": "e491da8d825d68d476c75d93db9a92d275f2b0a5885af0b07b5c3b4086e002b7"
   },
+  "Claims.Witness.Recursion.KSFlockLin_fails": {
+   "owner": "@proofs",
+   "signature": [
+    "Claims.Witness.Recursion.KSFlockLin_fails {Coin : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin]",
+    "  (H : Claims.Msg → Claims.Msg) :",
+    "  Not (Claims.Recursion.KSFlockLin H (Claims.Witness.Flock.ksD Coin) Claims.Witness.Recursion.noCaps)"
+   ],
+   "assumptions": [],
+   "type_hash": "0564a5d0493b1de2b0b173ac5f61bbfdefe4a3b519eb258d3dc4962d4ef8677c"
+  },
   "Claims.Witness.Recursion.KSFlock_fails": {
    "owner": "@proofs",
    "signature": [
@@ -4239,6 +4277,18 @@
    ],
    "assumptions": [],
    "type_hash": "1f2e0eca9b75a5703db156348b8c0831e09abd80aa789e0b6b3bd42f4e0567eb"
+  },
+  "Claims.Witness.Recursion.KSLin2_fails": {
+   "owner": "@proofs",
+   "signature": [
+    "Claims.Witness.Recursion.KSLin2_fails {Coin : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin]",
+    "  (H : Claims.Msg → Claims.Msg) :",
+    "  Not",
+    "    (Claims.Recursion.KSLin2 H (Claims.Witness.Recursion.ksRAt Coin) (Claims.Witness.Recursion.ksB Coin)",
+    "      (Claims.Witness.Flock.ksD Coin) Claims.Witness.Recursion.noCaps)"
+   ],
+   "assumptions": [],
+   "type_hash": "f72f21f7dd4b9c32fdc0fe048698639a711b402a22d171d94c69b21b94172b4a"
   },
   "Claims.Witness.Recursion.KSLin_fails": {
    "owner": "@proofs",
@@ -12226,6 +12276,7 @@
     "Claims.Witness.Flock.ZK_meets",
     "Claims.Witness.Recursion.BitsFlock_fails",
     "Claims.Witness.Recursion.BitsFlock_meets",
+    "Claims.Witness.Recursion.BitsLin2_fails",
     "Claims.Witness.Recursion.BitsLin_fails",
     "Claims.Witness.Recursion.Bits_fails",
     "Claims.Witness.Recursion.Bits_meets",
@@ -12243,9 +12294,11 @@
     "Claims.Witness.Recursion.KSBoundLin_fails",
     "Claims.Witness.Recursion.KSBound_fails",
     "Claims.Witness.Recursion.KSBound_meets",
+    "Claims.Witness.Recursion.KSFlockLin_fails",
     "Claims.Witness.Recursion.KSFlock_fails",
     "Claims.Witness.Recursion.KSFlock_meets",
     "Claims.Witness.Recursion.KSFlock_meets_trim",
+    "Claims.Witness.Recursion.KSLin2_fails",
     "Claims.Witness.Recursion.KSLin_fails",
     "Claims.Witness.Recursion.KSPrivBound_fails",
     "Claims.Witness.Recursion.KSPrivBound_meets",
@@ -12524,6 +12577,7 @@
    "guarantees": [
     "Claims.Witness.Recursion.BitsFlock_fails",
     "Claims.Witness.Recursion.BitsFlock_meets",
+    "Claims.Witness.Recursion.BitsLin2_fails",
     "Claims.Witness.Recursion.BitsLin_fails",
     "Claims.Witness.Recursion.Bits_fails",
     "Claims.Witness.Recursion.Bits_meets",
@@ -12541,9 +12595,11 @@
     "Claims.Witness.Recursion.KSBoundLin_fails",
     "Claims.Witness.Recursion.KSBound_fails",
     "Claims.Witness.Recursion.KSBound_meets",
+    "Claims.Witness.Recursion.KSFlockLin_fails",
     "Claims.Witness.Recursion.KSFlock_fails",
     "Claims.Witness.Recursion.KSFlock_meets",
     "Claims.Witness.Recursion.KSFlock_meets_trim",
+    "Claims.Witness.Recursion.KSLin2_fails",
     "Claims.Witness.Recursion.KSLin_fails",
     "Claims.Witness.Recursion.KSPrivBound_fails",
     "Claims.Witness.Recursion.KSPrivBound_meets",
@@ -12563,29 +12619,61 @@
    ]
   },
   "Definitions.Claims.RecursionLin": {
-   "digest": "5d4872ffc3ee6ae365271e27faff2d4c5ef9f0e50b21106cf2370dd2656707f9",
+   "digest": "9ec1b440dc99d4a030cfa65fa9ef921acbbcd727bf08dbe04abdfdbddbe6541d",
    "definitions": {
     "Claims.Recursion.Binner": "ad7341666ce704d82850bcaf6b291c9ee0d717a6731981b02410da80148d18b6",
     "Claims.Recursion.BitsLin": "c2ee2829eb6367dab29fc7ab5e61694176b7ee0e54013484c77d3dd1bced291d",
+    "Claims.Recursion.BitsLin2": "7f69bd2d2bdac197488f02457b5a8be7335c25dc6bbe9659eb931bf3f23259a4",
+    "Claims.Recursion.CapCoins": "77e1bda794c354ec7934c94d48416d5a93c8de378fcc4a21dc91b913fcc841f0",
+    "Claims.Recursion.CapCoinsI": "ab96050427a092066ac86f2f7472365e69645e2a0e24bd83434b873dd9a6fa21",
+    "Claims.Recursion.Caps": "ab92d4a200b302cffb764d7d98687491f376d592802c2f2d21d6edd3aea18693",
+    "Claims.Recursion.Caps.opens": "7f46b7cb56ee9a4dbba72c46da55333b2fb33a66b7a36dad1404bf9e7dbab74f",
+    "Claims.Recursion.Caps.round": "7bd0469587521ef96263ecde895926878650e322aa44e31dcadf115e5f412c88",
+    "Claims.Recursion.Caps.width": "9f00d93cf55e2e059b0b65e29bc67ae347303f31eb7b3357331e374358a12686",
+    "Claims.Recursion.ConflictCoins": "7ceeeb409d517f829ebaa4038d8fa165b2ea094ff7a3abcf955a5da0696fa64a",
+    "Claims.Recursion.ConflictCoinsI": "d437942bf25134763fc584fd7912eb9de731041855cc1b97e1d4d582df353f34",
+    "Claims.Recursion.F0": "6367407b1c58ea865a2f6100fe3bdd320fc757eb357ab8c9bd4dca2ae98b0624",
+    "Claims.Recursion.F0I": "83dc524c2d639d650cf08d1b3b116f8cc02a784fba04bc232b1d0a609911e246",
+    "Claims.Recursion.FC": "74dba22b507979c7361b04099acbcb44c0f33a3b1547e8e74958b1a65c41e4a3",
+    "Claims.Recursion.FCI": "23661254cf7aa4201a7a4b0b21715e8b6d42f307db40b77ac70c10b3706fdc79",
     "Claims.Recursion.Fdev": "86590ce041bfe13c2bccfbd166999b0dc8089dd8141106c910418789a37c2347",
     "Claims.Recursion.KSBoundLin": "ba8c43c2dd60c75b75f0925ab780d0c915fd31cc1725722e4fc922951aa0f699",
+    "Claims.Recursion.KSFlockLin": "5469fbf3e861c14097273678e1407fc43ea90d372ad6b623372605365ffbb1bc",
     "Claims.Recursion.KSLin": "5fcc11e70c2bb9317cc3bf0d82203645259ca7f278aa8be078a8884d494ae872",
+    "Claims.Recursion.KSLin2": "6466fca1d141aa7feceb526dee76f8539b610c8d0b8c1f5156c45e38fbb59689",
     "Claims.Recursion.LinCoins": "4f8d8524775a696250eae8497233d4dcc0c92c2e813f7fde5d3a4927c4969f21",
     "Claims.Recursion.PrBinner": "d92b6cb6ac7ca877f6df33434558308c6af1edc88d076bea2d4b64bd6eccc22a",
+    "Claims.Recursion.PrF0": "c98dfb3c6594be4699679d07755e369a53f72f380a16bbcafe81baca40694dd8",
+    "Claims.Recursion.PrF0I": "03451fa1278d0f6c9d2c4b2f0f6bdf584628ea46e54c8307cf972abbca644cca",
+    "Claims.Recursion.PrFC": "00ea061607f61262753a18feb71d731a3912c68c80af5cefff8a166fecbd5600",
+    "Claims.Recursion.PrFCI": "617bdf4574d63c15f1281b2e51508818642c3cca5a2a91f8204403fe013d12f3",
     "Claims.Recursion.PrFdev": "0b7051031fb068cc1b367a21180e1d957a6b7b20fc93e78cef7a3a029cdabcdc",
+    "Claims.Recursion.abortCost": "e1020ab0e9edbd96d6fd1d82a374b44263892e127faa5a816516b49bea32dfe1",
+    "Claims.Recursion.accAt": "8551b79561bde03a37a00b40eb004028dee2564ea8be37a3d18d1b1b65f8df6c",
+    "Claims.Recursion.accAtI": "a0ee7a76f377d459986ac8e5710bb30fe3b6c74465c61733a4f9cb20383a67af",
+    "Claims.Recursion.capFork": "ec8d4b6e87a4510776c26f642b7a3b57050fa9fc81ea6c643ad92b07fa788f1a",
+    "Claims.Recursion.capForkI": "74902de5e6e11ad32842325b05fbe6e2cbaadfe09246082758e67a6e168235a4",
     "Claims.Recursion.drawCost": "ae61f4fa408a967cb5fd7ab1b77626f4c03c343f78c6fbbe78619ca0deeca440",
+    "Claims.Recursion.drawWits": "844ced633a1ae487185d3f57d5c39c67e3820eca4592ab1bb34deb947e9ee959",
     "Claims.Recursion.firstPick": "81731d69e1fbdc7bde48a65d8ded115bac146967cd44b36d3c079946f1af0746",
     "Claims.Recursion.lamLin": "98a2107f01eb21527004353959dfa21a21ec878d83c10975524c8ba6a9932b46",
+    "Claims.Recursion.lamLin2": "228a65b627361d11d010c8aacb9f7fbd35d6dafdc0d403a87bada4c4c5c3baaa",
     "Claims.Recursion.linkCost": "1213ade8b03735d07bf6fa5a42e9f5a275e4c94c166f835fa554cad1677ce710",
     "Claims.Recursion.linkG": "7512b32fea8715301f023165ecbb094250f55017e91ec305b782006f3671e371",
     "Claims.Recursion.linkOut": "999cfa87b23d14396adb05933175d6c1f3ea0c855f7a23fcb789b6f6785a79f4",
     "Claims.Recursion.loopCost": "1125b1d55172f791b46ce8280adca3bcc4acc4e29d500952dd249dde92fdacb4",
+    "Claims.Recursion.opensAt": "84355385683631842c5fd674030082ebe2d196b9601b06267922610e5461ad83",
+    "Claims.Recursion.opensAtI": "9e21227173732a258d9cbc08d48c2c5795d7adac142b1b28f5ae06206eebb920",
     "Claims.Recursion.βdev": "d0c73dc54b270c1a1b7e330dde2c646fff5c0240d4566e523ae5817086a47f5b",
+    "Claims.Recursion.βdev2": "27416d5bfeec2a58a5dd0e090e1f18daf050ffc96f590f7e7f79c03ad82ca613",
     "Claims.Recursion.γBI": "bf48f0c134f2d2dc3bec705874c92e03780cbd7c5e7790eaecf43a29fa33b65e"
    },
    "guarantees": [
+    "Claims.Witness.Recursion.BitsLin2_fails",
     "Claims.Witness.Recursion.BitsLin_fails",
     "Claims.Witness.Recursion.KSBoundLin_fails",
+    "Claims.Witness.Recursion.KSFlockLin_fails",
+    "Claims.Witness.Recursion.KSLin2_fails",
     "Claims.Witness.Recursion.KSLin_fails"
    ]
   },
