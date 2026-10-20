@@ -4,7 +4,7 @@
 # switched again to the AOT Build on that trace (`verity-vllm records switch`: the comparison of this tree's predictor with the
 # trace, equal on every rank, and the trace's art).  Refused unless the run's AOT Build against the trace equalled it.  Leaves
 # manifests/records.json changed, for the commit "re-pin ROW" that the row's Build of record then runs at.
-#   [TRACE_ART=art:... (a trace preserved by trace_art.sh on its own)] integrations/vllm/manifests/glm_v2_tree/jobs/repin.sh ROW RUN [NODE (vy-glm53-cpu-2)]
+#   [TRACE_ART=art:... (a trace preserved by trace_art.sh on its own)] [REF (cursor/glm-v2-21f3)] integrations/vllm/manifests/glm_v2_tree/jobs/repin.sh ROW RUN [NODE (vy-glm53-cpu-2)]
 set -euo pipefail
 ROW=${1:?ROW} RUN=${2:?RUN} NODE=${3:-vy-glm53-cpu-2}
 cd "$(git rev-parse --show-toplevel)"
@@ -35,12 +35,15 @@ src=$(cat "$O/tree.txt")
 (cd integrations/vllm &&
   "${V[@]}" neutrality "$ROW" --tier heavy --compare --update --out "$T" --run-id "$RUN" --source-sha "$src" &&
   "${V[@]}" records switch "$ROW" --comparison "$O/comparison.json" --run "$RUN" --trace "$art")
-# `neutrality --update` names the Build it re-pinned from by its path here; the trace's art is that Build
-uv run --frozen --no-sync python - "$ROW" "$art" <<'EOF'
+# `neutrality --update` names the Build it re-pinned from by its path here (the trace's art is that Build) and its tree by sha
+# alone, and keeps the old record's id, which none of the new pins are from: the row names no record until its v2 publish
+uv run --frozen --no-sync python - "$ROW" "$art" "${REF:-cursor/glm-v2-21f3}@$src" <<'EOF'
 import sys
 from verity_vllm.pipeline import config_record as CR
 doc = CR.load_index(CR.INDEX)
-doc["rows"][sys.argv[1]]["pinned_from"]["build"] = sys.argv[2]
+e = doc["rows"][sys.argv[1]]
+e["pinned_from"].update(build=sys.argv[2], tree=sys.argv[3])
+e["record"] = None
 CR.write_index(doc, CR.INDEX)
 EOF
 git diff --stat -- integrations/vllm/manifests/records.json
