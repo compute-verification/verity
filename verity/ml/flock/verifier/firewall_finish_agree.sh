@@ -12,6 +12,7 @@ set -uo pipefail
 SRC=$(pwd)
 CFG=${FF_CONFIG:-tile:256}
 export HZ_CONFIGS=$CFG HZ_N=${FF_N:-1} HZ_MEM_GB=${HZ_MEM_GB:-48}
+export HZ_CACHE=${HZ_CACHE:-/workspace/research/cache/pouw-hidden-zk}
 # shellcheck source=../../../../benchmarks/pouw/hidden_zk/job.sh
 source "$SRC/benchmarks/pouw/hidden_zk/job.sh"
 setup
