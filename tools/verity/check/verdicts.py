@@ -225,7 +225,8 @@ def import_(pack: Path) -> tuple[int, int]:
                 kept += 1
                 continue
             dst.parent.mkdir(parents=True, exist_ok=True)
-            tmp = dst.with_name(f".{dst.name}.import")
+            # this process's own name: two checks on one machine can import the same entry at once
+            tmp = dst.with_name(f".{dst.name}.{os.getpid()}.import")
             tmp.write_bytes(tar.extractfile(m).read())
             os.replace(tmp, dst)
             added += 1
