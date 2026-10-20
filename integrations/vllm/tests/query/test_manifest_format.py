@@ -91,6 +91,22 @@ def test_coverage_positive_and_negatives():
     assert not r4["ok"] and r4["missing"][0]["op_path"] == tall["op_path"]
 
 
+def test_a_batch_hidden_row_is_covered_by_the_planes_no_manifest_row_spells():
+    """A B>1 batch-level hidden row (request `*`, one FA2 launch per layer per engine step) names the padded whole-step geometry.  The
+    tap commits per-sequence planes at a segmented prefill and one whole launch at decode, under spellings no row has, so the binder
+    binds none of them, and coverage counts them op-level (the R19 reference rows 23, 60, 67, 68, 73 and 74)."""
+    rows = [{"family": "fa2_hidden_m1_stream", "request_id": "*", "requests": ["r0", "r1"], "rank": 0, "step": "*", "engine_step": s,
+             "op_path": "fa2.m1/L0", "output_member": "g8x64x128/m1", "invocation": 0, "element_range": [0, 64]} for s in (0, 1)]
+    man = {"complete": True, "manifest_digest": "m" * 64, "identities": rows}
+    lay = {0: [{"name": f"fa2.m1/L0/s{i}/g4x64x128/m1", "numel": 32} for i in range(2)], 1: [{"name": "fa2.m1/L0/g8x1x128/m1", "numel": 8}]}
+    cov = coverage_check(man, lay)
+    assert cov["ok"] and cov["missing_n"] == 0, cov["missing"]
+    assert cov["committed_extras_n"] == 0 and cov["committed_unmatched_n"] == 0
+    short = coverage_check(man, {0: lay[0][:1], 1: lay[1]})
+    assert not short["ok"] and short["missing_by_family"] == {"fa2_hidden_m1_stream": 1} and short["missing"][0]["engine_step"] == 0
+    assert "1 sequence plane sets committed, 2 co-scheduled sequences declared" in short["missing"][0]["why"]
+
+
 def _members_by_step_op(ids: list[dict]) -> dict[tuple[int, str], set[str]]:
     out: dict[tuple[int, str], set[str]] = {}
     for r in ids:

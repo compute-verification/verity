@@ -10,7 +10,9 @@ stated under:
 
 - the floor it needs: the ½-slot floor where ε_machine is at its floor by q* = ½, else the 1.22-slot issue floor;
 - each filler's credit, the theorem its check meets (decision 99), and the family's p = 1 sibling's ε where it has one;
-- the reading's and the family's stated conditions, from data/headline.toml.
+- the reading's and the family's stated conditions, from data/headline.toml;
+- A2u, the reading's `a2u`, wherever Π charges a uniform instruction on an issue row: no data sheet gives a uniform
+  rate, so there the uniform route is priced by A2u alone (without it the sheet rows' ε is unbounded).
 
 `TERMS` holds the terms' names, the one place they are spelled; the JSON's keys are TERMS' keys.
 """
@@ -21,7 +23,7 @@ import tomllib
 from dataclasses import asdict, dataclass, replace
 from pathlib import Path
 
-from verity_machine_model.eps import Design, design, eps, machine, setup, threshold
+from verity_machine_model.eps import Design, design, eps, machine, setup, threshold, uniform_issue_charged
 from verity_machine_model.model import DATA, device, model
 
 TERMS = {"skip": "ε_skip", "mand": "ε_mand", "machine": "ε_machine", "luck": "ε_luck", "core": "ε", "gamma": "γ",
@@ -101,10 +103,11 @@ def row(family: str, reading: str, data: Path = DATA) -> Row:
               "core": e1.core(), "gamma": e1.gamma}
     computed = (t["floor"][floor], *fillers,
                 *([f"at p = 1 ({p1['design']}): {TERMS['core']} {100 * p1['core']:.3f}%"] if p1 else []))
+    a2u = (r["a2u"],) if r.get("a2u") and uniform_issue_charged(pi) else ()
     return Row(family=family, gpu=f["gpu"], design=d.name, reading=reading, vector=pi.vector, q=q, skip=e.skip,
                mand=e.mand, machine=e.machine_eps, luck=e.luck, core=e.core(), gamma=e.gamma, threshold=thr,
                binding=e.cheat.binding, floor=floor, fillers=fillers, p1=p1,
-               conditions=(*computed, *f.get("conditions", ()), *f[reading].get("conditions", ())))
+               conditions=(*computed, *f.get("conditions", ()), *f[reading].get("conditions", ()), *a2u))
 
 
 def rows(reading: str, data: Path = DATA) -> list[Row]:

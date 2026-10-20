@@ -1,14 +1,15 @@
 import Proofs.Accounting.TS.FanIn
 import Proofs.Accounting.TS.FoldFanIn
+import Proofs.Accounting.TS.LowBit
 import Proofs.Accounting.TS.Price
 import Proofs.Accounting.TS.Rounds
 import Proofs.Accounting.TS.Facets
 import Proofs.Accounting.TS.Receipt
 import Proofs.Accounting.TS.Tensor
+import Proofs.Accounting.TS.Sheet
 import Proofs.Accounting.TS.ProofsSound
 import Proofs.Accounting.TS.Fork
 import Proofs.Accounting.TS.Drawn
-import Proofs.Accounting.TS.Sheet
 import Proofs.Pouw.RelativeSecurity
 
 /-!
@@ -18,7 +19,7 @@ Each guarantee of `Models.Accounting.Guarantees.TS` as `Accounting.SecurityProof
 note:20261017T0801Z-draft-lean-stmt). One file per prover group: the price lemmas (`TS/Price.lean`), the round lemmas
 (`TS/Rounds.lean`), Lemma 1 with Corollaries D1 and D2 (`TS/Facets.lean`), T1 and Lemma 2 (`TS/Tensor.lean`), the
 fan-in count with FOLD-OPT and FILL-OPT from it (`TS/FanIn.lean`), the fan-in floor of a fold of binding steps and
-of duo's and fx1's runs (`TS/FoldFanIn.lean`); this file keeps the theorems built from them
+of duo's and fx1's runs (`TS/FoldFanIn.lean`), the low bit of a one-register fold and of li (`TS/LowBit.lean`); this file keeps the theorems built from them
 (EPS1-SPEC §2.2, §2.4, §2.7).
 
 All five run one chain: a price lower bound `Φ(π) ≤ π·n(M)` (from (RD), `price_of_rd`, or from the parts,

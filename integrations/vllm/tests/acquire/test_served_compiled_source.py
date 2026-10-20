@@ -4,12 +4,13 @@ bytes) sequence an uncaptured step of the same values does.
 A small simulator drives the source the way vLLM's V2 runner does: a capture (warm-up pass, then the captured pass) per
 (mode, padded size), then steps that replay (FULL: everything in the graph; PIECEWISE: pieces in the graph, attention and piece 0's
 inputs live) or run uncaptured.  A replay re-executes the copies its capture recorded; the simulator re-runs the in-graph work under
-a scratch capture key, which issues exactly those copies into the same slots.  CPU only, except the last test, which compiles a
-function with the Inductor hooks and replays a real CUDA graph.
+a scratch capture key, which issues exactly those copies into the same slots.  CPU only, except the last two tests, which compile a
+function with the Inductor hooks (immediate and batched copies), compare the generated wrappers and replay a real CUDA graph.
 """
 from __future__ import annotations
 
 import contextlib
+import re
 from types import SimpleNamespace
 
 import pytest
@@ -85,6 +86,7 @@ class _Sim:
                 h = (ids.float()[:, None] * torch.arange(1, WIDTH + 1) + pos.float()[:, None]) if p == 0 else h * 2 + 1
                 self.src._hook(f"verity|mm|buf{p}", h)
                 self.src._hook(f"verity|row0|buf{p}r", h[0].clone())
+                self.src._hook(S.FLUSH, None)                     # a batching wrapper's last line
             if p < 2:
                 with self.region("attention" in inside):
                     out = torch.empty_like(h)
@@ -130,8 +132,9 @@ def _inputs(n: int, pad: int, seed: int) -> tuple[torch.Tensor, torch.Tensor]:
     return torch.cat([ids, junk]), torch.cat([pos, junk])
 
 
-def _setup(monkeypatch, fault=None, sizes=(8, WIDTH), modes=("FULL", "PIECEWISE")):
+def _setup(monkeypatch, fault=None, sizes=(8, WIDTH), modes=("FULL", "PIECEWISE"), batch=False):
     src = S.ServedCompiledSource(fault=fault)
+    src.codegen = {"batch": batch}
     sim = _Sim(src, monkeypatch)
     src._begin_capture(max(sizes))
     for mode in modes:
@@ -148,10 +151,11 @@ def _same(a, b) -> None:
         assert x.shape == y.shape and x.dtype == y.dtype and torch.equal(x, y), name
 
 
+@pytest.mark.parametrize("batch", [False, True])
 @pytest.mark.parametrize("mode", ["FULL", "PIECEWISE"])
 @pytest.mark.parametrize(("n", "pad"), [(5, 8), (3, WIDTH), (8, 8)])
-def test_replayed_step_commits_the_uncaptured_steps_values(monkeypatch, mode, n, pad):
-    src, sim, c = _setup(monkeypatch)
+def test_replayed_step_commits_the_uncaptured_steps_values(monkeypatch, mode, n, pad, batch):
+    src, sim, c = _setup(monkeypatch, batch=batch)
     ids, pos = _inputs(n, pad, seed=n)
     replayed = sim.step(c, mode, pad, n, ids, pos)
     eager = sim.step(c, "NONE", n, n, ids[:n], pos[:n])
@@ -162,6 +166,71 @@ def test_replayed_step_commits_the_uncaptured_steps_values(monkeypatch, mode, n,
     assert len(names) == 2 + 3 * 2 + 2 and all(t.shape[0] == n for name, t in eager if "row0" not in name)
     assert src.errors == []
     assert src.stats["replayed_steps"] == 1 and src.stats["eager_steps"] == 1
+
+
+def test_batched_captured_copies_are_issued_together_at_each_flush(monkeypatch):
+    calls: list[int] = []
+    real = torch._foreach_copy_
+    monkeypatch.setattr(torch, "_foreach_copy_", lambda d, s: calls.append(len(d)) or real(d, s))
+    src, _sim, _c = _setup(monkeypatch, sizes=(8,), modes=("FULL",), batch=True)
+    # piece 0: its two inputs and two buffers; pieces 1, 2: the attention before them and two buffers (the warm-up pass copies at once)
+    assert calls == [4, 3, 3] and src.stats["capture_flushes"] == 3 and src.pending == [] and src.errors == []
+
+
+def test_a_strided_recorded_copy_is_copied_alone_with_the_same_bytes():
+    src = S.ServedCompiledSource()
+    src.max_rows = 4
+    val = torch.arange(12.0).reshape(3, 4).t()
+    _o, _n, slot, rows = src._stage((0, 0, 0), "c00.t/buf0", val, 4, defer=True)
+    assert rows and len(src.pending) == 1
+    src._flush()
+    assert torch.equal(slot, val) and src.stats["strided_copies"] == 1 and src.pending == []
+
+
+def test_a_flush_copies_by_the_widest_word_each_copy_allows(monkeypatch):
+    calls: list[tuple[torch.dtype, int]] = []
+    real = torch._foreach_copy_
+    monkeypatch.setattr(torch, "_foreach_copy_", lambda d, s: calls.append((d[0].dtype, len(d))) or real(d, s))
+    src = S.ServedCompiledSource()
+    vals = [torch.arange(8, dtype=torch.int64), torch.arange(3, dtype=torch.int8), torch.arange(6, dtype=torch.int16)[1:],
+            torch.arange(4, dtype=torch.float32)]
+    slots = [src._stage((0, 0, i), f"c00.v/buf{i}", v, -1, defer=True)[2] for i, v in enumerate(vals)]
+    src._flush()
+    assert sorted(calls, key=str) == sorted([(torch.int64, 2), (torch.uint8, 1), (torch.int16, 1)], key=str)
+    assert all(torch.equal(s, v) for s, v in zip(slots, vals, strict=True))
+
+
+def test_a_captured_copy_left_unflushed_is_an_error(monkeypatch):
+    src = S.ServedCompiledSource()
+    src.codegen = {"batch": True}
+    monkeypatch.setattr(S, "_capturing", lambda val: True)
+    src._begin_capture(4)
+    key = ("FULL", 4)
+    src.plans[key], src.capturing = [], key
+    src._hook("verity|mm|buf0", torch.ones(4, 2))
+    src.capturing = None
+    src._end_capture(key)
+    assert src.pending == [] and src.errors == ["capture FULL:4: 1 captured copies never flushed"]
+
+
+def test_a_captured_fused_moe_tap_copies_at_once_when_batching(monkeypatch):
+    """The fused-MoE op's taps fire inside the op, where no flush line runs, and its `up` and `down` share one workspace."""
+    src = S.ServedCompiledSource()
+    src.codegen = {"batch": True}
+    monkeypatch.setattr(S, "_capturing", lambda val: True)
+    src._begin_capture(4)
+    key = ("FULL", 4)
+    src.plans[key], src.capturing, src.piece = [], key, 1
+    workspace = torch.arange(16.0)
+    up = workspace.clone().view(4, 4)
+    src._moe_tap("up", workspace.view(4, 1, 4), 4)
+    workspace.neg_()
+    src._moe_tap("down", workspace.view(4, 1, 4), 4)
+    src.capturing = None
+    src._end_capture(key)
+    slots = {name: slot for _order, name, slot, _rows in src.plans[key]}
+    assert src.pending == [] and src.errors == []
+    assert torch.equal(slots["c01.moe/up"], up) and torch.equal(slots["c01.moe/down"], -up)
 
 
 def test_fixed_shape_tensor_whose_length_is_a_capture_size_is_never_cut(monkeypatch):
@@ -228,6 +297,74 @@ def test_extra_step_bytes_reads_the_captured_slots(monkeypatch):
     assert got == {"per_token_bytes": row, "per_step_bytes": 3 * WIDTH * 4, "tensors_per_step": 2 + 3 * 2 + 2}
 
 
+def test_the_builds_modules_are_the_expected_identities():
+    src = S.ServedCompiledSource()
+    assert src.expected_modules() == []
+    src.use_build({"program": {"values": {"c00.input/ids": {}, "c00.input/positions": {}, "c00.mm/buf2": {}, "c00.mm/buf3": {},
+                                          "c01.attention/layers.0.attn": {}},
+                               "logits": {"name": "logits_processor"}, "sampled": {"name": "runner.sampler/sampled_token_ids"}}})
+    assert src.expected_modules() == ["c00.input", "c00.mm", "c01.attention", "logits_processor", "runner.sampler"]
+
+
+def _tuner(path, compiled: list[int], launched: list[int], cached: int | None = None):
+    from torch._inductor.runtime.triton_heuristics import CachingAutotuner
+
+    def cfg(r0):
+        return SimpleNamespace(kwargs={"XBLOCK": 2, "R0_BLOCK": r0}, num_warps=2, num_stages=1)
+
+    t = object.__new__(CachingAutotuner)
+    t.filename, t.compile_results = str(path), [SimpleNamespace(config=cfg(r)) for r in compiled]
+    t.launchers = [SimpleNamespace(config=cfg(r)) for r in launched]
+    t._cached_launcher = None if cached is None else SimpleNamespace(config=cfg(cached))
+    return t
+
+
+def test_launch_configs_are_the_configs_steps_and_captures_launched(tmp_path, monkeypatch):
+    """A live autotuner's state is no record of a launch (Qwen3-8B's combo kernels each had one live autotuner, never run): `executed`
+    is what served steps and captures launched, once per autotuner; a compile-time run launches outside both and does not count; two
+    autotuners of one kernel text launched with two configs are both recorded (the Build refuses the kernel).  A launch through
+    `run`'s fast path runs the launcher it cached, though the autotuner holds two since (Qwen3-8B's reductions after an rblock rescale:
+    r20261018-045838-4e9c).  Every live autotuner gives its candidates, the heap frozen or not, and it is frozen again afterwards."""
+    import gc
+    import hashlib
+
+    from torch._inductor.runtime.triton_heuristics import CachingAutotuner
+
+    monkeypatch.setattr(CachingAutotuner, "run", lambda self, *a, **kw: None)
+    src = S.ServedCompiledSource()
+    src._install_launch_record(src._hooks)
+    one, two, three = tmp_path / "one.py", tmp_path / "two.py", tmp_path / "three.py"
+    one.write_text("def KERNEL(): pass\n")
+    two.write_text("def OTHER(): pass\n")
+    three.write_text("def REDUCTION(): pass\n")
+    idle, compile_time, served = _tuner(one, [128, 64], [128, 64]), _tuner(one, [128, 64], [64]), _tuner(one, [128], [128])
+    first, second = _tuner(two, [128], [128]), _tuner(two, [64], [64])
+    rescaled = _tuner(three, [128, 64], [128, 64], cached=128)
+    compile_time.run(stream=0)
+    src.capturing = ("FULL", 8)
+    served.run(stream=0)
+    first.run(stream=0)
+    src.capturing, src.c = None, SimpleNamespace(_cur=object())
+    served.run(stream=0)
+    second.run(stream=0)
+    rescaled.run(stream=0)
+    gc.freeze()
+    try:
+        got = src.launch_configs()
+        assert gc.get_freeze_count() > 0
+    finally:
+        gc.unfreeze()
+        src.remove_hooks()
+    a, b, c = (got[hashlib.sha256(p.read_bytes()).hexdigest()] for p in (one, two, three))
+    r128 = {"kwargs": {"XBLOCK": 2, "R0_BLOCK": 128}, "num_warps": 2, "num_stages": 1}
+    r64 = {**r128, "kwargs": {"XBLOCK": 2, "R0_BLOCK": 64}}
+    assert a == {"candidates": [r128, r64], "executed": [r128], "autotuners": 3, "launched": 1}
+    assert b == {"candidates": [r128, r64], "executed": [r128, r64], "autotuners": 2, "launched": 2}
+    assert c == {"candidates": [r128, r64], "executed": [r128], "autotuners": 1, "launched": 1}
+    assert src.errors == []
+    del idle, compile_time, served, first, second, rescaled
+
+
 class _Meta(SimpleNamespace):
     pass
 
@@ -249,8 +386,48 @@ def test_linkage_follows_requests_across_reordered_rows():
     assert bad["mismatches"] == 2 and not bad["passed"]
 
 
+def _chain(w: torch.Tensor):
+    """Matmuls with pointwise work between them: Inductor reuses the dead buffers' storage, in place and through its planner."""
+    def f(x):
+        a = torch.relu(x @ w) * 2 + 1
+        b = torch.tanh(a @ w) - 1
+        c = torch.sigmoid(b @ w) * a
+        return (lambda z: z.sum(-1, keepdim=True) + z)(c @ w)
+    return f
+
+
 @cuda
-def test_inductor_hooks_replayed_from_a_cuda_graph_equal_the_uncaptured_call(monkeypatch):
+def test_batched_hooks_change_only_the_wrappers_allocation_lines(monkeypatch):
+    """Batching adds flush lines and keeps hooked buffers out of reuse; every kernel and kernel call is what it was."""
+    import torch._dynamo
+    from torch._inductor import config as icfg
+    from torch._inductor.utils import run_and_get_code
+
+    monkeypatch.setattr(icfg, "fx_graph_cache", False)
+    w, x = torch.randn(64, 64, device="cuda"), torch.randn(8, 64, device="cuda")
+    codes, stats = {}, {}
+    for batch in (False, True):
+        torch._dynamo.reset()
+        hooks = Hooks(tag="test")
+        src = S.ServedCompiledSource(into=hooks)
+        stats[batch] = S.install_codegen_hooks(src._hook, hooks, batch=batch)
+        try:
+            _out, (codes[batch],) = run_and_get_code(torch.compile(_chain(w)), x)
+        finally:
+            hooks.uninstall()
+    torch._dynamo.reset()
+
+    def kernels(code: str) -> list[str]:
+        return [ln for ln in code.splitlines() if not re.match(r"\s*(#|del |buf\d+ = |run_intermediate_hooks\()", ln)]
+
+    assert "# reuse" in codes[False] and S.FLUSH not in codes[False]
+    assert codes[True].count(S.FLUSH) == stats[True]["flushes"] >= 1 and stats[True]["kept"] >= 1
+    assert stats[True]["hooks"] == stats[False]["hooks"] and kernels(codes[True]) == kernels(codes[False])
+
+
+@cuda
+@pytest.mark.parametrize("batch", [False, True])
+def test_inductor_hooks_replayed_from_a_cuda_graph_equal_the_uncaptured_call(monkeypatch, batch):
     """The real seam: Inductor-generated wrapper lines under `torch.cuda.graph`, replayed, against the same call uncaptured."""
     import torch._dynamo
     from torch._inductor import config as icfg
@@ -259,14 +436,14 @@ def test_inductor_hooks_replayed_from_a_cuda_graph_equal_the_uncaptured_call(mon
     torch._dynamo.reset()
     hooks = Hooks(tag="test")
     src = S.ServedCompiledSource(into=hooks)
-    stats = S.install_codegen_hooks(src._hook, hooks)
+    stats = src.codegen = S.install_codegen_hooks(src._hook, hooks, batch=batch)
     try:
         w = torch.randn(64, 64, device="cuda")
-        f = torch.compile(lambda x: (lambda z: z.sum(-1, keepdim=True) + z)(torch.relu(x @ w) * 2 + 1))
+        f = torch.compile(_chain(w))
         x = torch.randn(8, 64, device="cuda")
         src.piece = 0
         f(x)
-        assert stats["hooks"] >= 2, stats
+        assert stats["hooks"] >= 4, stats
         c = _Committer()
         src.attach(c)
 
@@ -294,6 +471,8 @@ def test_inductor_hooks_replayed_from_a_cuda_graph_equal_the_uncaptured_call(mon
         with torch.cuda.graph(graph):
             call()
         src.capturing = None
+        src._end_capture(key)
+        assert src.stats["capture_flushes"] >= int(batch)
         c._cur = SimpleNamespace(step=1)
         src.on_step_begin()
         src._note_dispatch(_desc("FULL", 8), 8)

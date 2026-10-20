@@ -1,5 +1,5 @@
 """`SiluMul_v2{I}` — vLLM `_C.silu_and_mul` on one row: `SiluMul_v1`'s shape (gate = gu[:I], up = gu[I:]) over the element
-`SiluMulBf16_v2` (see `silu_mul_bf16.py`).
+`SiluMulBf16_v2` (`verity_vllm.program.registry.act.SiluMulBf16`).
 
 PROMOTED: the Definition now lives in the accepted registry (`verity_vllm.program.registry.act.SiluMul`, bound by the
 `b1-eager-v3` vocabulary; the X-08 pattern) — this module re-exports the same object so the quarantine's difftest adapter,

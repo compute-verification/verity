@@ -1,6 +1,6 @@
-"""The tables a program brings as registered inputs (`registry.tables`): the read takes the table as an operand, the Definitions
-that read it compute what their twins, whose primitive evaluator holds the table, compute, and a `registered_values` derivation
-registers the table instead."""
+"""The tables a program brings as registered inputs (`registry.tables`): the read takes the table as an operand, and the Definitions
+that read it compute what their twins, whose primitive evaluator holds the table, compute. A `registered_values` derivation of
+Gemma-2's GeGLU registers no table: its Boolean version computes the activation (`registry.boolean_tanh`)."""
 
 from __future__ import annotations
 
@@ -9,7 +9,7 @@ import pytest
 
 from verity.ml.circuits.evaluation import RegisteredTable, evaluate
 from verity.ml.circuits.codec import encode_program, program_digest
-from verity.ml.circuits.constants import REGISTRATION, inputs, program_data
+from verity.ml.circuits.constants import REGISTRATION, inputs
 from verity.ml.circuits.defs import bind
 from verity.ml.circuits.program import Program
 from verity.ml.circuits.types import Array, Value
@@ -34,6 +34,19 @@ def test_the_read_takes_the_entry_at_the_index_low_bits_its_words_low_first():
         assert r27.evaluate_lazy(lambda j: idx if j == 0 else word(j - 1)) == word(2 * e) | word(2 * e + 1) << 16
     with pytest.raises(ValueError, match="do not fill rows"):
         T.table_read(4, 1)
+
+
+def test_a_read_has_its_boolean_form_up_to_max_words():
+    """`table_read` makes `TableRead{IB}x{EW}_v2` with the read (`verity.ml.circuits.boolean.table`, by which C-Flock lowers it) up
+    to `BT.MAX_WORDS` table words, and `gelu_tanh_bf16`'s and `tanh_rn`'s reads, past it, have none."""
+    from verity.ml.circuits.boolean import table as BT
+    from verity.ml.circuits.defs import REGISTRY
+
+    r = T.table_read(6, 1)
+    assert REGISTRY.defs["TableRead6x1_v2"] is BT.table_read(r, 6) and REGISTRY.defs["TableRead6x1_v2"].word is r
+    for name in ("gelu_tanh_bf16", "tanh_rn"):
+        p = T.table_read(*T.TABLES[name])
+        assert f"{p.name}_v2" not in REGISTRY.defs
 
 
 def test_a_program_reading_a_table_decodes_where_it_was_not_built(tmp_path):
@@ -117,9 +130,10 @@ def test_gelu_tanh_mul_v3_is_v1_on_every_gate_word():
         assert evaluate(T.GeluTanhMulBf16V3, g, u, table) == (D.GeluTanhMulBf16.evaluate(g, u),)
 
 
-def test_a_registered_values_derivation_registers_the_gelu_table():
-    """`_C.gelu_tanh_and_mul` under `registered_values`: `GeluTanhMul_v3` reads the registered `gelu_tanh_bf16` (a parameter after
-    the `values`), no Call reads a table its evaluator holds, and the Program computes what the constants derivation computes."""
+def test_a_registered_values_derivation_registers_no_gelu_table():
+    """`_C.gelu_tanh_and_mul` under `registered_values`: `GeluTanhMul_v1`, as the constants derivation binds it, with no table
+    parameter (its Boolean version, `boolean_tanh.GeluTanhMul_v4`, computes the activation), and the Program computes what the
+    constants derivation computes."""
     import torch
 
     from verity_vllm.program.frontend.derive import derive_report
@@ -145,19 +159,18 @@ def test_a_registered_values_derivation_registers_the_gelu_table():
     const, reg = derive_report(m, x, **kw), derive_report(m, x, registered_values=True, **kw)
     assert const.ok and reg.ok, reg.unsupported
     prog, twin = reg.program, Program(const.flat_definition)
-    assert [n for n, _ in prog.fn.body.params] == ["x", "values", "gelu_tanh_bf16", "weights"]
-    assert prog.bindings == ("run", "registration", "registration", "run")
-    assert reg.provenance["supplied"]["tables"] == [{"param": 2, "name": "gelu_tanh_bf16"}]
+    assert [n for n, _ in prog.fn.body.params] == ["x", "values", "weights"]
+    assert prog.bindings == ("run", "registration", "run")
+    assert not reg.provenance["supplied"].get("tables")
     calls = {n.fn.id for n in reg.flat_definition.body.nodes}
-    assert calls == {"GeluTanhMul_v3{I=8}", "RMSNormTriton_v3{N=16}"}
+    assert calls == {"GeluTanhMul_v1{I=8}", "RMSNormTriton_v3{N=16}"}
     assert {n.fn.id for n in const.flat_definition.body.nodes} >= {"GeluTanhMul_v1{I=8}"}
-    assert len(inputs(prog.circuit)[REGISTRATION]) == 1 + (1 << 16)
-    assert {cid for _g, cid in program_data(prog.root).get("GeluTanhMulBf16_v3", [])} <= {"Const32[0x00000000]_v1"}
+    assert len(inputs(prog.circuit)[REGISTRATION]) == 1
     rng = np.random.default_rng(14)
     xs = [int(v) >> 16 for v in (rng.standard_normal(32).astype(np.float32) * 2).view(np.uint32)]
     w = [int(v) >> 16 for v in (rng.standard_normal(16).astype(np.float32)).view(np.uint32)]
     eps = int(np.float32(1e-6).view(np.uint32))
     a = materialize(twin, [xs, w])
-    b = materialize(prog, [xs, [eps], T.table_words("gelu_tanh_bf16"), w])
+    b = materialize(prog, [xs, [eps], w])
     assert [b[g] for g in prog.circuit.root_outputs()] == [a[g] for g in twin.circuit.root_outputs()]
 

@@ -575,6 +575,26 @@ def test_a_profile_drawn_by_strata_reads_its_bounds_off_the_law():
         TOY.harm_bound({"check": 4.0})
 
 
+def test_a_lone_bernoulli_draw_of_the_checked_level_bounds_exactly():
+    """One Bernoulli(p) draw of the checked level: M wrong members escape with probability exactly (1 - p)^M, so the
+    profile's bound is the largest M <= members with (1 - p)^M >= delta (`Bernoulli.count_bound`, by search), each of the
+    search's shortcuts the scan's answer, and never above the linear relaxation it replaces."""
+    def scan(n: int, p: Fraction, delta: float) -> int:
+        return max(m for m in range(n + 1) if (1 - p) ** m >= Fraction(delta))
+    for n in (0, 1, 7, 100, 1000):
+        for p in (Fraction(0), Fraction(1, 1000), Fraction(1, 100), Fraction(1, 3), Fraction(1, 2), Fraction(999, 1000), Fraction(1)):
+            for delta in (0.5, 0.1, 2.0 ** -10, 2.0 ** -40):
+                law = Bernoulli(p)
+                assert law.count_bound(n, delta) == scan(n, p, delta), (n, p, delta)
+                for levels, sizes in ((("unit",), (n,)), (("group", "unit"), (n, 1))):
+                    a = IntegrityProfile(levels, sizes, {"unit": law}, delta)
+                    assert a.bound() == law.count_bound(n, delta) and a.bound() <= a.worst_case(lambda m: m)
+    assert Bernoulli(Fraction(1, 2)).count_bound(1000, 2.0 ** -10) == 10
+    for delta in (0.0, 1.0):
+        with pytest.raises(ValueError):
+            Bernoulli(Fraction(1, 2)).count_bound(10, delta)
+
+
 @pytest.mark.parametrize("levels, sizes, draws", [
     (("group", "unit"), (2, 5), {"group": Bernoulli(Fraction(1, 2)), "unit": SMALL[1]}),   # not the only draw
     (("unit", "sub"), (10, 1), {"unit": SMALL[1], "sub": Subset(1)}),                     # not the checked level

@@ -1,6 +1,7 @@
-"""`manifest.build_components` takes the machine's pool lock only when its headroom is the host's, shared: a `budget_gb` or a
-cgroup `memory.max` below the host's RAM is the process's own budget, which it sizes the pool from without waiting on other runs.
-The lock is one file per machine that every user opens read-only and never with O_CREAT once it exists (`_open_shared_lock`)."""
+"""`manifest.build_components` and the word check's prefetch (`prefetch_word_rules`) take the machine's pool lock only when their
+headroom is the host's, shared: a `budget_gb` or a cgroup `memory.max` below the host's RAM is the process's own budget, which they
+size their pools from without waiting on other runs.  The lock is one file per machine that every user opens read-only and never
+with O_CREAT once it exists (`_open_shared_lock`)."""
 
 from __future__ import annotations
 
@@ -68,6 +69,32 @@ def test_build_components_takes_the_lock_only_without_a_budget_of_its_own(host, 
     host("max", head=70 * GiB)
     M.build_components(tasks, jobs=2)
     assert (locks, heads) == ([1], [90 * GiB, 70 * GiB])
+
+
+def test_the_word_rules_prefetch_budgets_its_share_of_that_headroom(host, monkeypatch):
+    """`word.prefetch` gets `HEADROOM_SHARE` of the headroom `build_components` would budget, taking the lock where it would; an
+    unreadable headroom is no budget, and a Build without a histogram prefetches nothing and takes no lock."""
+    from verity_vllm.pipeline import global_program
+    locks, budgets = [], []
+
+    @contextmanager
+    def lock():
+        locks.append(1)
+        yield
+
+    monkeypatch.setattr(M, "_pool_lock", lock)
+    monkeypatch.setattr(global_program, "component_spec_histogram", lambda d: {} if d == "bare" else {"Gemm_v1{K=4,N=4}": 1})
+    monkeypatch.setattr(M.word_query, "prefetch", lambda specs, X, W, extras, *, max_gates, jobs, budget: budgets.append(budget) or 0)
+    host(str(96 * GiB), head=90 * GiB)
+    M.prefetch_word_rules(["row"], "16/32", jobs=2)
+    host("max", head=70 * GiB)
+    M.prefetch_word_rules(["row"], "16/32", jobs=2)
+    M.prefetch_word_rules(["row"], "16/32", jobs=2, budget_gb=40)
+    M.prefetch_word_rules(["bare"], "16/32", jobs=2)
+    host("max", head=None)
+    M.prefetch_word_rules(["row"], "16/32", jobs=2)
+    share = M.HEADROOM_SHARE
+    assert locks == [1, 1] and budgets == [int(90 * GiB * share), int(70 * GiB * share), int(40 * GiB * share), None]
 
 
 # --- the lock file: one per machine, whichever user made it -------------------------------------------------------------------------

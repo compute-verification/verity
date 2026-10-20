@@ -4,11 +4,12 @@ hook inside graph replay.
 
 What one engine step commits, in one canonical order (piece, sub, index):
   * piece 0's token inputs, `c00.input/ids` and `c00.input/positions` (sub -1), named from the compiled piece's placeholders;
-  * every buffer Inductor materializes (sub 0): after each scheduled node's codegen the generated wrapper calls
+  * every buffer Inductor materializes (sub 0): after each scheduled node's codegen the generated wrapper (`inductor_hooks`) calls
     `run_intermediate_hooks('verity|<op>|<buf>', <buf>)` for each of the node's outputs that is allocated and still live (fused-away,
     freed, mutation-only, tuple and non-CUDA outputs are not values of the wrapper), so Triton, extern (cuBLAS `out=`), template,
     combo and fallback kernels are all covered -> `c<piece>.<op>/<buf>`;
   * each attention layer's output between pieces (sub 1), from its impl's `forward` -> `c<piece>.attention/<layer>`;
+  * the fused-MoE block's values inside the opaque `vllm.moe_forward` op (sub 2), from its launch sites -> `c<piece>.moe/<plane>`;
   * the logits, outside the compiled model, under the LogitsProcessor's module name (the committer adds the sampled ids).
 
 Three execution paths give the committer the same sequence of (name, bytes):
@@ -16,7 +17,10 @@ Three execution paths give the committer the same sequence of (name, bytes):
     the tensor into a static slot (one per (piece, sub, index, name), as many rows as the largest capture size), and the capture
     records the slots its (mode, padded size) writes.  The graph replays the copies every step.  Slots are allocated in the
     uncaptured warm-up pass vLLM runs before each capture, outside the graph pool; vLLM's memory-profiling captures are discarded
-    with their slots.
+    with their slots.  With `batch_copies` (the default) a captured hook records its copy and the wrapper's flush lines issue the
+    recorded copies together, a multi-tensor copy per flush (one per word width) instead of one graph node per tensor; the flushes sit wherever
+    a recorded buffer's bytes could next change (`install_codegen_hooks`), so each copy reads what the immediate copy would.  The
+    fused-MoE taps copy at once: they fire inside the op, past every flush line.
   * a replayed step: nothing Python runs for captured work.  Live work inside the step (attention between PIECEWISE pieces, piece 0's
     inputs at its wrapper) copies into its slot the same way.  When the forward is complete (the logits) the step's slots are
     acquired in canonical order: `slot[:n]` for token-row tensors (n = the step's tokens; rows n.. are CUDA-graph padding, never a
@@ -34,124 +38,32 @@ Faults (negatives): `compiled_omit:<substring>` -- tensors whose name contains i
 """
 from __future__ import annotations
 
-import re
+import json
+import os
 import time
 from typing import Any
 
 import torch
 
+from verity_vllm.acquire.sources.inductor_hooks import FLUSH, PREFIX, install_codegen_hooks
 from verity_vllm.engine import hooks
 
-PREFIX = "verity|"
 GRAPH_MODES = ("FULL", "PIECEWISE")
-#: The combined CUDA scheduler's per-node codegen entry points (`Scheduler._codegen` dispatches each node to one of them; extern
-#: nodes go to `Scheduler.codegen_extern_call`).  The hooks are emitted after the call, for `scheduler.current_node`.
-CODEGEN_METHODS = ("codegen_node", "codegen_template", "codegen_combo_kernel", "codegen_nested_reduction", "codegen_mix_order_reduction")
 INPUT_NAMES = (("input_ids", "ids"), ("positions", "positions"))
+WORDS = ((8, torch.int64), (4, torch.int32), (2, torch.int16), (1, torch.uint8))
 
 
 def _capturing(val: torch.Tensor) -> bool:
     return val.is_cuda and torch.cuda.is_current_stream_capturing()
 
 
-def _label(text: str) -> str:
-    return re.sub(r"[^A-Za-z0-9_]", "_", text).strip("_") or "op"
-
-
-def op_label(node: Any) -> str:
-    """A kernel label for a scheduler node: an extern kernel's name (`mm`, `moe_forward`), else the origin op of its first output."""
-    from torch._inductor import ir
-
-    inner = getattr(node, "node", None)
-    if isinstance(inner, ir.ExternKernel):
-        name = getattr(inner, "python_kernel_name", None) or ""
-        parts = [p for p in name.split(".") if p and p != "default"]
-        return _label(parts[-1]) if parts else "extern"
-    for buf in node.get_outputs():
-        origin = buf.node.get_origin_node() if hasattr(buf.node, "get_origin_node") else None
-        target = getattr(origin, "target", None)
-        if target is not None:
-            return _label(str(getattr(target, "_opname", None) or getattr(target, "__name__", target)))
-    return "fused"
-
-
-def hookable_outputs(node: Any, wrapper: Any, graph: Any) -> tuple[list[str], dict[str, int]]:
-    """The output buffers of `node` that exist as CUDA tensors in the generated wrapper right after the node's code, and why the
-    others don't."""
-    from torch._inductor import ir
-
-    mutation = getattr(ir, "MutationOutput", ())
-    keep: list[str] = []
-    skipped: dict[str, int] = {}
-    for buf in node.get_outputs():
-        name = buf.get_name()
-        layout = getattr(buf.node, "layout", None)
-        device = buf.node.get_device() if hasattr(buf.node, "get_device") else None
-        why = ("removed" if name in graph.removed_buffers or name in graph.inplaced_to_remove else
-               "freed" if name in wrapper.freed else
-               "mutation" if isinstance(buf.node, mutation) else
-               "no_tensor" if isinstance(layout, (ir.NoneLayout, ir.MultiOutputLayout)) else
-               "not_cuda" if device is None or device.type != "cuda" else None)
-        if why is None:
-            keep.append(name)
-        else:
-            skipped[why] = skipped.get(why, 0) + 1
-    return keep, skipped
-
-
-def install_codegen_hooks(hook: Any, into: hooks.Hooks) -> dict[str, Any]:
-    """Patch Inductor so every generated wrapper calls `hook(name, tensor)` on each materialized buffer right after the node that
-    writes it.  Must run before the engine compiles; returns the live codegen counters."""
-    from torch._functorch import config as fcfg
-    from torch._inductor import config as icfg
-    from torch._inductor import hooks as ih
-    from torch._inductor import scheduler as isched
-    from torch._inductor.codegen.cuda_combined_scheduling import CUDACombinedScheduling
-    from torch._inductor.virtualized import V
-
-    into.patch(icfg, "fx_graph_cache", False)
-    into.patch(fcfg, "enable_autograd_cache", False)
-    stats: dict[str, Any] = {"nodes": 0, "hooks": 0, "skipped": {}}
-
-    def emit() -> None:
-        sched, wrapper = V.graph.scheduler, V.graph.wrapper_code
-        node = getattr(sched, "current_node", None)
-        if node is None or not getattr(wrapper, "supports_intermediate_hooks", False):
-            return
-        seen = wrapper.__dict__.setdefault("_verity_hooked", set())
-        if node.get_name() in seen:
-            return
-        seen.add(node.get_name())
-        names, skipped = hookable_outputs(node, wrapper, V.graph)
-        op = op_label(node)
-        stats["nodes"] += 1
-        for why, k in skipped.items():
-            stats["skipped"][why] = stats["skipped"].get(why, 0) + k
-        for name in names:
-            wrapper.writeline(f"run_intermediate_hooks({PREFIX + op + '|' + name!r}, {name})")
-            stats["hooks"] += 1
-
-    def after(orig: Any) -> Any:
-        def run(self: Any, *a: Any, **kw: Any) -> Any:
-            out = orig(self, *a, **kw)
-            emit()
-            return out
-        return run
-
-    for name in CODEGEN_METHODS:
-        if hasattr(CUDACombinedScheduling, name):
-            into.wrap(CUDACombinedScheduling, name, after)
-    into.wrap(isched.Scheduler, "codegen_extern_call", after)
-    if hook not in ih.INTERMEDIATE_HOOKS:
-        into.append(ih.INTERMEDIATE_HOOKS, hook)
-    return stats
-
-
 class ServedCompiledSource:
     short_name = "served_compiled"
 
-    def __init__(self, fault: str | None = None, into: hooks.Hooks | None = None) -> None:
+    def __init__(self, fault: str | None = None, into: hooks.Hooks | None = None, batch_copies: bool = True) -> None:
         self.fault = fault
+        self.batch_copies = batch_copies                                # captured copies issued at the wrapper's flushes, as one copy each
+        self.pending: list[tuple[torch.Tensor, torch.Tensor]] = []
         self.omit = fault.split(":", 1)[1] if fault and fault.startswith("compiled_omit:") else None
         self.c: Any = None
         self._hooks = into if into is not None else hooks.Hooks()
@@ -174,10 +86,15 @@ class ServedCompiledSource:
         self.stale: dict[int, torch.Tensor] = {}
         self.inputs: dict[int, list[tuple[int, str]]] = {}
         self.logits_name = "logits_processor"
+        self.modules: list[str] = []
+        self.moe_configs: dict[str, dict[str, dict[str, Any]]] = {}     # token rows -> w13 ("False") / w2 ("True") -> Triton config
+        self.moe_pieces: dict[str, str] = {}                            # piece -> the MoE layer its op ran
+        self._moe_rows: int | None = None                               # the token rows of the running MoE block's router
+        self.launched: dict[int, tuple[Any, Any]] = {}                  # id -> (autotuner, the config it launched in a step or a capture)
         self.errors: list[str] = []
         self.stats: dict[str, Any] = {}
         self.stats_reset_step_counters()
-        self.stats.update(capture_copies=0, slot_bytes=0, slot_resets=0, profiling_captures=0)
+        self.stats.update(capture_copies=0, slot_bytes=0, slot_resets=0, profiling_captures=0, capture_flushes=0, strided_copies=0)
 
     # ------------------------------------------------------------------ installation (before the engine compiles and captures)
 
@@ -190,7 +107,7 @@ class ServedCompiledSource:
         from vllm.v1.worker.gpu import model_runner as mr
 
         src, into = self, self._hooks
-        self.codegen = install_codegen_hooks(self._hook, into)
+        self.codegen = install_codegen_hooks(self._hook, into, batch=self.batch_copies)
 
         def pb_call(orig):
             def call(self_pb, *args):
@@ -228,6 +145,7 @@ class ServedCompiledSource:
                             return fn(cg_mode)
                         finally:
                             src.capturing = None
+                            src._end_capture(key)
                     return forward_fn
                 try:
                     return orig(self_m, create, *a, **kw)
@@ -267,6 +185,99 @@ class ServedCompiledSource:
         into.wrap(mr, "dispatch_cg_and_sync_dp", dispatch)
         into.wrap(attn.Attention, "__init__", attention_init)
         into.wrap(LogitsProcessor, "forward", logits)
+        self._install_launch_record(into)
+        self._install_moe(into)
+
+    def _install_launch_record(self, into: hooks.Hooks) -> None:
+        """The config each Inductor autotuner launches with in a served step or a capture (`launch_configs`), once per autotuner: the
+        launcher `run`'s fast path cached at its first launch when that path is taken (whatever `launchers` holds since: a later
+        precompile's rblock rescale re-makes two), else the one launcher its run settled on.  Compile-time tuning runs and Inductor's
+        benchmark modules launch outside both."""
+        from torch._inductor.runtime import triton_heuristics as th
+
+        src = self
+
+        def tuner_run(orig):
+            def run(self_t, *a, **kw):
+                fast = getattr(self_t, "_cached_launcher", None)
+                out = orig(self_t, *a, **kw)
+                if id(self_t) not in src.launched and (src.capturing is not None or src._job() is not None):
+                    launchers = getattr(self_t, "launchers", None) or []
+                    if (fast is not None and set(kw) <= {"stream", "benchmark_run"} and not kw.get("benchmark_run")
+                            and not th.autograd_profiler._is_profiler_enabled and not th.get_active_debug_mode()):
+                        src.launched[id(self_t)] = (self_t, fast.config)
+                    elif len(launchers) == 1:
+                        src.launched[id(self_t)] = (self_t, launchers[0].config)
+                    else:
+                        src.errors.append(f"{getattr(self_t, 'filename', None)}: launched holding {len(launchers)} launchers")
+                return out
+            return run
+
+        into.wrap(th.CachingAutotuner, "run", tuner_run)
+
+    def _install_moe(self, into: hooks.Hooks) -> None:
+        """The fused-MoE block's values, which the opaque `vllm.moe_forward` op computes out of Inductor's sight: its launch sites
+        (`MoeBlockSource`'s) tap their outputs as `c<piece>.moe/<plane>` (sub 2), token rows: the router's input logits (the gate's
+        output inside the op), weights and ids at `topk_softmax`, `up` at the w13 launch, `act` (its A) and `down` at the w2 launch.
+        `moe_sum` writes the op's return, which the wrapper's own hook commits.  Also recorded for the Build: the MoE layer each
+        piece's op ran (`moe_pieces`, at the runner's `_forward_impl`: the compiled op takes its layer as an opaque argument) and the
+        Triton config of each launch by its token rows and MUL_ROUTED_WEIGHT (`moe_configs`: the expert GEMMs' tensor-core step
+        follows it).  A launch of other rows than its router's (a chunked block) is an error."""
+        import vllm._custom_ops as ops
+        from vllm.model_executor.layers.fused_moe import fused_moe as fm
+        from vllm.model_executor.layers.fused_moe.experts import triton_moe
+        from vllm.model_executor.layers.fused_moe.runner.moe_runner import MoERunner
+
+        src = self
+
+        def forward_impl(orig):
+            def run(self_r, *a, **kw):
+                name = str(self_r.layer_name)
+                if (was := src.moe_pieces.setdefault(str(src.piece), name)) != name:
+                    src.errors.append(f"c{src.piece:02d}: fused-MoE layers {was} and {name}")
+                src._moe_rows = None
+                return orig(self_r, *a, **kw)
+            return run
+
+        def router(orig):
+            def topk_softmax(topk_weights, topk_ids, token_expert_indices, gating_output, *a, **kw):
+                out = orig(topk_weights, topk_ids, token_expert_indices, gating_output, *a, **kw)
+                src._moe_rows = rows = int(gating_output.shape[0])
+                for plane, t in (("logits", gating_output), ("router_w", topk_weights), ("router_ids", topk_ids)):
+                    src._moe_tap(plane, t, rows)
+                return out
+            return topk_softmax
+
+        def expert(orig):
+            def launch(A, B, C, *a, **kw):
+                out = orig(A, B, C, *a, **kw)
+                routed = kw["mul_routed_weight"] if "mul_routed_weight" in kw else (a[6] if len(a) > 6 else None)
+                config = kw["config"] if "config" in kw else (a[8] if len(a) > 8 else None)
+                rows = int(C.shape[0])
+                if rows != src._moe_rows or routed not in (False, True) or not isinstance(config, dict):
+                    src.errors.append(f"c{src.piece:02d}: a fused-MoE launch of {rows} rows (its router's {src._moe_rows}), "
+                                      f"MUL_ROUTED_WEIGHT {routed!r}, config {config!r}")
+                    return out
+                cfg = dict(sorted(config.items()))
+                if src.moe_configs.setdefault(str(rows), {}).setdefault(str(routed), cfg) != cfg:
+                    src.errors.append(f"c{src.piece:02d}: two fused-MoE configs at {rows} rows, MUL_ROUTED_WEIGHT {routed}")
+                if routed:
+                    src._moe_tap("act", A, rows)
+                    src._moe_tap("down", C, rows)
+                else:
+                    src._moe_tap("up", C, rows)
+                return out
+            return launch
+
+        into.wrap(MoERunner, "_forward_impl", forward_impl)
+        into.wrap(ops, "topk_softmax", router)
+        for mod in (fm, triton_moe):
+            into.wrap(mod, "invoke_fused_moe_triton_kernel", expert)
+
+    def _moe_tap(self, plane: str, val: torch.Tensor, rows: int) -> None:
+        # Copied at once, batch_copies or not: the op reuses its workspace within one call, past every flush line (TritonExperts'
+        # `up` and `down` are both views of workspace2).
+        self._tap(2, f"c{self.piece:02d}.moe/{plane}", val.reshape(rows, -1), defer=False)
 
     def remove_hooks(self) -> None:
         """Undo `install_hooks`.  Code Inductor generated while they were installed keeps its hook lines."""
@@ -320,13 +331,18 @@ class ServedCompiledSource:
             self._drop_slots()
             self.max_rows = rows
 
+    def _end_capture(self, key: tuple[str, int]) -> None:
+        if self.pending:
+            self.errors.append(f"capture {key[0]}:{key[1]}: {len(self.pending)} captured copies never flushed")
+            self.pending = []
+
     def _end_profiling_capture(self) -> None:
         self._drop_slots()
         self.max_rows = 0
         self.stats["profiling_captures"] += 1
 
     def _drop_slots(self) -> None:
-        self.slots, self.plans, self.static = {}, {}, set()
+        self.slots, self.plans, self.static, self.pending = {}, {}, set(), []
         self.stats["slot_bytes"] = 0
         if self.native_plans and self.c is not None:
             self.c.clear_slot_plans()
@@ -345,11 +361,15 @@ class ServedCompiledSource:
         return getattr(self.c, "_cur", None) if self.c is not None else None
 
     def _hook(self, name: str, val: Any) -> None:
+        if name == FLUSH:
+            if self.pending:
+                self._flush()
+            return
         if name.startswith(PREFIX) and isinstance(val, torch.Tensor):
             _, op, buf = name.split("|", 2)
             self._tap(0, f"c{self.piece:02d}.{op}/{buf}", val)
 
-    def _tap(self, sub: int, name: str, val: torch.Tensor) -> None:
+    def _tap(self, sub: int, name: str, val: torch.Tensor, defer: bool = True) -> None:
         if val.numel() == 0:
             return
         index = self.index.get(sub, 0)
@@ -359,7 +379,8 @@ class ServedCompiledSource:
             if self.capturing is None:
                 self.errors.append(f"{name}: captured outside a CudaGraphManager capture")
                 return
-            self.plans[self.capturing].append(self._stage(order, name, val, self.capturing[1]))
+            defer = defer and bool(self.codegen.get("batch"))
+            self.plans[self.capturing].append(self._stage(order, name, val, self.capturing[1], defer=defer))
             self.stats["capture_copies"] += 1
             return
         if self.capturing is not None:
@@ -380,7 +401,7 @@ class ServedCompiledSource:
         if getattr(self.c, "gather", False):
             self.c._nc.flush()
 
-    def _stage(self, order: tuple, name: str, val: torch.Tensor, n_pad: int) -> tuple:
+    def _stage(self, order: tuple, name: str, val: torch.Tensor, n_pad: int, defer: bool = False) -> tuple:
         rows = val.dim() > 0 and int(val.shape[0]) == n_pad and n_pad <= self.max_rows
         if not rows:
             self.static.add((order, name))
@@ -393,8 +414,31 @@ class ServedCompiledSource:
             slot = torch.empty(shape, dtype=val.dtype, device=val.device)
             self.slots[key] = slot
             self.stats["slot_bytes"] += slot.numel() * slot.element_size()
-        (slot[: val.shape[0]] if rows else slot).copy_(val)
+        dst = slot[: val.shape[0]] if rows else slot
+        if defer:
+            self.pending.append((dst, val))                             # holds `val`, so its storage outlives the wrapper's `del`
+        else:
+            dst.copy_(val)
         return order, name, slot, rows
+
+    def _flush(self) -> None:
+        """Issue the recorded captured copies: the dense ones as one multi-tensor copy per word width (the widest that divides a copy's
+        length and both its addresses), the strided ones one by one."""
+        groups: dict[torch.dtype, tuple[list, list]] = {}
+        for d, v in self.pending:
+            if not (d.is_contiguous() and v.is_contiguous()):
+                d.copy_(v)
+                self.stats["strided_copies"] += 1
+                continue
+            nb = v.numel() * v.element_size()
+            word = next(dt for w, dt in WORDS if nb % w == 0 and d.data_ptr() % w == 0 and v.data_ptr() % w == 0)
+            dst, src = groups.setdefault(word, ([], []))
+            dst.append(d.reshape(-1).view(word))
+            src.append(v.reshape(-1).view(word))
+        for dst, src in groups.values():
+            torch._foreach_copy_(dst, src)
+        self.stats["capture_flushes"] += 1
+        self.pending = []
 
     def _acquire(self, name: str, val: torch.Tensor, job: Any) -> None:
         if self.omit and self.omit in name:
@@ -453,8 +497,14 @@ class ServedCompiledSource:
         committer.attach_source(self)
         committer.external_acquisition = True
 
+    def use_build(self, build: dict[str, Any]) -> None:
+        """The served Build of record (`acquire.served`): the modules of the values it names are the identities every committed step
+        must cover (X-03, `identity_check`)."""
+        p = build["program"]
+        self.modules = sorted({n.split("/", 1)[0] for n in [*p["values"], p["logits"]["name"], p["sampled"]["name"]]})
+
     def expected_modules(self) -> list[str]:
-        return []
+        return list(self.modules)
 
     def extra_step_bytes(self, envelope: dict[str, Any], model: Any) -> dict[str, int]:  # noqa: ARG002
         """What a step adds to the committer's staging bound (`size_arena`), read from the slots the captures allocated: bytes per token
@@ -494,12 +544,69 @@ class ServedCompiledSource:
 
     begin_run = stats_reset_step_counters
 
+    def launch_configs(self) -> dict[str, Any]:
+        """Each Triton kernel this process holds or launched an autotuner of, by the sha256 of its kernel module's text (the wrapper's
+        `async_compile.triton` block, `inductor_templates.source_sha256`): the configs its autotuners compiled (``candidates``), the
+        configs served steps and captures launched it with (``executed``, `_install_launch_record`), its live autotuners and the ones
+        that launched.  A live autotuner's state is no record of a launch: the one a wrapper's call() runs need not be any module's
+        global, nor even the live one of its kernel text (Qwen3-8B's combo kernels: one live autotuner each, never run).  The served
+        Build binds each launch to its one executed config (`acquire.served`) and refuses a kernel launched with two."""
+        import gc
+        import hashlib
+
+        from torch._inductor.runtime.triton_heuristics import CachingAutotuner
+
+        def cfg(c: Any) -> dict[str, Any]:
+            return {"kwargs": {str(k): v for k, v in (getattr(c, "kwargs", None) or {}).items()},
+                    "num_warps": getattr(c, "num_warps", None), "num_stages": getattr(c, "num_stages", None)}
+
+        frozen = gc.get_freeze_count()
+        if frozen:                      # vLLM freezes the heap after capture, and get_objects skips what is frozen
+            gc.unfreeze()
+        try:
+            live = [o for o in gc.get_objects() if issubclass(type(o), CachingAutotuner)]
+        finally:
+            if frozen:
+                gc.freeze()
+        out: dict[str, Any] = {}
+        sha: dict[str, str] = {}
+
+        def record(t: Any) -> dict[str, Any] | None:
+            path = getattr(t, "filename", None)
+            if not path or not os.path.isfile(path):
+                return None
+            if path not in sha:
+                with open(path, "rb") as f:
+                    sha[path] = hashlib.sha256(f.read()).hexdigest()
+            rec = out.setdefault(sha[path], {"candidates": [], "executed": [], "autotuners": 0, "launched": 0})
+            for c in [cfg(r.config) for r in getattr(t, "compile_results", None) or []]:
+                if c not in rec["candidates"]:
+                    rec["candidates"].append(c)
+            return rec
+
+        for t in live:
+            if (rec := record(t)) is not None:
+                rec["autotuners"] += 1
+        for t, config in self.launched.values():
+            rec = record(t)
+            if rec is None:
+                self.errors.append(f"an autotuner of {getattr(t, 'filename', None)!r} launched with no kernel module on disk")
+                continue
+            rec["launched"] += 1
+            if (c := cfg(config)) not in rec["executed"]:
+                rec["executed"].append(c)
+        for rec in out.values():
+            for k in ("candidates", "executed"):
+                rec[k].sort(key=lambda c: json.dumps(c, sort_keys=True))
+        return dict(sorted(out.items()))
+
     def summary(self) -> dict[str, Any]:
         fixed = sorted({(k[1], k[2]) for k in self.slots if len(k) == 3})
         return {"short_name": self.short_name, "fault": self.fault, "max_rows": self.max_rows, "slots": len(self.slots),
                 "plans": {f"{m}:{n}": len(p) for (m, n), p in sorted(self.plans.items())}, "codegen": dict(self.codegen),
                 "fixed_shape": {"count": len(fixed), "sample": [f"{n}{list(s)}" for n, s in fixed[:12]]},
-                "stats": dict(self.stats), "errors": list(self.errors)[:20]}
+                "stats": dict(self.stats), "errors": list(self.errors)[:20],
+                **({"moe": {"pieces": dict(self.moe_pieces), "configs": self.moe_configs}} if self.moe_pieces else {})}
 
 
 # ---------------------------------------------------------------------- the linkage check over committed bytes

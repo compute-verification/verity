@@ -42,16 +42,31 @@ def test_margin_moves_only_the_lane_coefficient() -> None:
     assert moved.c[tensor]["JPA90_0"] == pi.c[tensor]["JPA90_0"], "the tensor-pipe coefficient must be left alone"
 
 
-def test_h200_margin_driver_is_the_alu_tensor_joint() -> None:
-    """On the H200 the single facet that drives decision 76's margin is JPA90_0 (the ALU pipe beside the tensor), not
-    the razor-thin generic row JI90_0: moving JI90_0's lane coefficient 2% does not raise the core. This is the round-1
-    retraction (note:20261017T2016Z-draft-rt-dc): the earlier JI90_0 'flips at 0.5%' was whole-column scaling."""
+def test_h200_margin_driver_is_the_lane_issue_joint() -> None:
+    """On the H200 the single facet that drives decision 76's margin on the LI design is JI90_0, the joint issue row,
+    once its lane coefficient is the one the CUDA lane classes share there (0.9805), not UNI's own measured 0.965: the
+    cheater runs no uniform instruction on that facet, so moving UNI's coefficient (the round-2 reading) moved nothing.
+    JPA90_0 (the ALU pipe beside the tensor) still raises the core on its own, less."""
+    pi = E.machine("", device("sm_90"))
+    small, hit = RT._lane_coef(pi, "JI90_0")
+    assert small == pytest.approx(pi.c["ALU"]["JI90_0"]) and small > pi.c["UNI"]["JI90_0"]
+    assert set(hit) == set(pi.cuda) | {"UNI"}, "the lane classes move, and the uniform class with them"
     mg = RT.margin_audit("dither-2s-li-l32", device("sm_90"))
-    assert mg.driver == "JPA90_0"
+    assert mg.driver == "JI90_0"
     singles = dict(mg.rows)
-    assert "JI90_0" in singles and singles["JI90_0"] == pytest.approx(mg.base, abs=1e-6)
-    assert singles["JPA90_0"] > mg.base + 1e-3
+    assert singles["JI90_0"] > singles["JPA90_0"] > mg.base + 1e-3
     assert mg.worst >= max(s for _, s in mg.rows) - 1e-9, "the joint margin is at least as bad as any single row"
+
+
+def test_margin_reads_the_named_vector() -> None:
+    """`vector` selects Π: DC-90-ri (UNI on JI90_0 at its cost beside the async wgmma) prices the H200 redux design
+    above DC-90, and the 2% margin opens on it, where on DC-90 the move only shifts the cheater to JI90_1 (ε_luck)."""
+    data = device("sm_90")
+    cur = RT.margin_audit("dither-2s-licpw-redux-l32", data)
+    ri = RT.margin_audit("dither-2s-licpw-redux-l32", data, vector="DC-90-ri")
+    assert cur.device == "DC-90" and ri.device == "DC-90-ri"
+    assert cur.worst - cur.base < 1e-4
+    assert ri.base > cur.base + 1e-4 and ri.worst > ri.base + 5e-4
 
 
 def test_b200_issue_bound_is_robust() -> None:

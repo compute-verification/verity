@@ -44,6 +44,25 @@ def test_a_target_profile_replaces_the_pin(clean) -> None:
     assert env.apply_engine(None)["VLLM_USE_FLASHINFER_SAMPLER"] == "0"
 
 
+def test_a_step_gets_the_stage_rpc_bound_unless_the_operator_set_one(monkeypatch) -> None:
+    monkeypatch.delenv("VLLM_EXECUTE_MODEL_TIMEOUT_SECONDS", raising=False)
+    assert env.step_timeout(1800.0) == {"VLLM_EXECUTE_MODEL_TIMEOUT_SECONDS": "1800"}
+    monkeypatch.setenv("VLLM_EXECUTE_MODEL_TIMEOUT_SECONDS", "60")
+    assert env.step_timeout(1800.0) == {"VLLM_EXECUTE_MODEL_TIMEOUT_SECONDS": "60"}
+
+
+@pytest.mark.parametrize("module, fn", [("verity_vllm.pipeline.tp.capture", "main"), ("verity_vllm.pipeline.tp.commit", "main"),
+                                        ("verity_vllm.pipeline.tp.match", "_engine_main")])
+def test_every_tp_engine_bounds_a_step_by_its_rpc_timeout_before_it_is_built(module, fn) -> None:
+    """vLLM's own 300 s stopped a GLM-5.3 B8 capture in its first observed step, a 256-token prefill; the greedy row's first one
+    took 147 s on an idle host."""
+    import importlib
+    import inspect
+
+    src = inspect.getsource(getattr(importlib.import_module(module), fn))
+    assert src.index("engine_env.step_timeout(args.rpc_timeout)") < src.index("LLM(**kw)")
+
+
 def test_hidden_devices_override_what_the_process_inherited(monkeypatch) -> None:
     monkeypatch.setenv("CUDA_VISIBLE_DEVICES", "0,1")
     env.hide_devices()

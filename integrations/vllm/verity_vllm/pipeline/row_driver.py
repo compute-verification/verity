@@ -29,6 +29,7 @@ from typing import Any
 from verity_vllm.config import ROOT, TARGETS, RowConfig, RunEnv, row_execution, row_target
 from verity_vllm.engine import served
 from verity_vllm.pipeline import gpu_lease as GL
+from verity_vllm.program import prefix_plan as PP
 
 CLI = ("-m", "verity_vllm.pipeline.cli")
 SIGNUM = {"TERM": 15, "INT": 2, "HUP": 1}
@@ -168,6 +169,15 @@ class Row:
     def config(self) -> RowConfig:
         """The row's config, its file in the tree that runs."""
         return RowConfig.load(self.path(self.wl))
+
+    def refuse_unserved_engine(self) -> None:
+        """Refuse a tensor-parallel row whose file declares prefix caching: its capture, Match and Commit engines run with it off and a
+        rank Program (`vllm_meta.with_peers`) takes no cached prefix, so the row's record would name a serve it never ran.  A
+        single-GPU row serves it: a warm request's Program reads its cached rows as its `prefix` input (`program.prefix_plan`)."""
+        if self.config().engine.args.get("enable_prefix_caching") is True:
+            self.verdict("precheck", "FAIL", "engine.args.enable_prefix_caching is true on a tensor-parallel row: its stages serve with prefix "
+                                             "caching off and a rank Program takes no cached prefix, so the record would name a serve it never ran")
+            raise Stop(3)
 
     def execution(self) -> str | None:
         """The row's execution label: its workload's ``execution`` (or ``sweep.execution``), else its id's last token; None without
@@ -363,6 +373,23 @@ class Row:
         with open(f"{self.d}/row.log", "a") as f:
             f.write(line + "\n")
         return rc, line
+
+    def launch_args(self, lp: int, t: int, C: int = 0) -> list[str] | None:
+        """A B >= 2 request Program is built under its launch context (``launch-context``; `C` a warm request's cached rows); None =
+        the context did not read, which FAILS that shape's Build (it is not "no context")."""
+        if self.B <= 1:
+            return []
+        name = PP.shape_name(PP.shape(lp, t, C))
+        err = f"{self.d}/launch_context_{name}.err"
+        with open(err, "w") as f:
+            r = subprocess.run(self.cli("launch-context", self.wl, str(lp), str(t), *([str(C)] if C else [])), stdout=subprocess.PIPE,
+                               stderr=f, text=True, cwd=self.tree, env=self.child_env)
+        if r.returncode != 0:
+            self.log(f"Build FAIL shape {name}: launch_context rc={r.returncode} -- {open(err, errors='replace').read().replace(chr(10), ' ')[-300:]}")
+            return None
+        os.remove(err)
+        lc = r.stdout.rstrip("\n")
+        return ["--launch-context", *lc.split("\n")] if lc else []
 
     def call_boundaries(self, to: int | str, cmd: list[str] | None = None) -> None:
         """After a PASS Build: the row stops (exit 21, no Match, no Commit) unless every `call_boundaries` identity of its manifest has
