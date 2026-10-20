@@ -174,6 +174,15 @@ def test_a_malformed_tree_is_refused(change, why):
         register_served(prog, Q, [dataclasses.replace(tree, **change)])
 
 
+def test_the_row_formats_are_the_commitment_layers():
+    """`row_schema`'s values are the frame-v3-sha512 leaf schemas C-Flock's ports name (`Flock.HmRow.ROW_SCHEMA*`)."""
+    from verity.ml.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW, SCHEMA_HM96_SHA512_ROW_SEG, SCHEMA_HM96_SHA512_ROW_V2
+    from verity.core.protocols.sampled_proofs.one_stage.served import READ, SCHEMAS
+
+    assert SCHEMAS == (SCHEMA_HM96_SHA512_ROW, SCHEMA_HM96_SHA512_ROW_V2, SCHEMA_HM96_SHA512_ROW_SEG)
+    assert READ == (SCHEMA_HM96_SHA512_ROW,)
+
+
 def test_a_value_twice_no_tree_or_one_no_unit_reads_is_refused():
     prog = _program()
     _, tree = _tree(prog)
