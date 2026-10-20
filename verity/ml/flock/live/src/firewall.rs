@@ -759,6 +759,18 @@ impl Drop for LeanCoins {
     }
 }
 
+/// A table's request bytes to `flock-firewall link` and `flock-firewall finish` (`Flock.Firewall.Link.parse`): `z`, the extra
+/// lanes, every lane's padding, the level-0 salts.
+#[cfg(feature = "sha512")]
+pub fn link_body(z: &[F128], extra: &[Vec<F128>], pads: &[Vec<F128>], salts: &[u8]) -> Vec<u8> {
+    let mut body = f128_wire(z);
+    for v in extra.iter().chain(pads) {
+        body.extend(f128_wire(v));
+    }
+    body.extend_from_slice(salts);
+    body
+}
+
 /// The level-0 recheck of record on a firewalled table: `flock-firewall link` (`Flock.Firewall.Link` in the Lean verifier)
 /// commits level 0 again at `m` from the host's packed witness `z`, the table's level-0 hiding (its four extra lanes and every
 /// lane's padding) and the level-0 salts (192 bytes a leaf), and answers the root: the cap, concatenated. `commit_zk` is its
@@ -767,11 +779,7 @@ impl Drop for LeanCoins {
 pub fn lean_link(exe: &std::path::Path, m: usize, z: &[F128], extra: &[Vec<F128>], pads: &[Vec<F128>], salts: &[u8]) -> Result<Vec<u8>, String> {
     use std::io::{BufRead, Read, Write};
     use std::process::{Command, Stdio};
-    let mut body = f128_wire(z);
-    for v in extra.iter().chain(pads) {
-        body.extend(f128_wire(v));
-    }
-    body.extend_from_slice(salts);
+    let body = link_body(z, extra, pads, salts);
     let mut child = Command::new(exe).arg("link").stdin(Stdio::piped()).stdout(Stdio::piped()).spawn()
         .map_err(|e| refused(format!("the Lean link {} does not start ({e}): `lake build flock-firewall` in verity/core/service/flock, or FC_FIREWALL_LEAN", exe.display())))?;
     let (mut stdin, mut stdout) = (child.stdin.take().expect("piped stdin"), std::io::BufReader::new(child.stdout.take().expect("piped stdout")));
