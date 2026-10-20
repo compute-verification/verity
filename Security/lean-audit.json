@@ -1171,6 +1171,14 @@
   "Verity.Declaration.Contains": {
    "owner": "@lean",
    "digest": "2e4651003538493bac63ae90c32a521e95d2e8596bea6b3c85b9cfd150c5647b"
+  },
+  "Accounting.Compose.Period.EveryWindow": {
+   "owner": "@compute-accounting",
+   "digest": "a00f71bbadbe548d58bba0efff580398689ade608d039a289391b1534b9f265c"
+  },
+  "Accounting.Compose.PrefixOf": {
+   "owner": "@compute-accounting",
+   "digest": "5f6db3d832a87a822b240b84797299efacb6c607ff175b79678767e4593e846a"
   }
  },
  "meaning": [
