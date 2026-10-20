@@ -3,17 +3,18 @@
 # local_path, which the GPU legs serve), LOCAL_CK (a node's verified local copy), WHAT (for keep reasons), V2 (the name of the
 # model's v2 dirs under /workspace/cp/circuits), POST_LOAD (the Parameters its loader's post-load hook makes, which every rank's
 # Build records and the capture registers: DeepSeek-V4's mHC broadcast), DERIVE_GB (a request derive's measured peak, where
-# `row_records.derive_bytes` plans too little), CENSUS (VERITY_BUILD_CENSUS) and the defaults of REF and SW (its v2 tree and
-# row dirs).  `ckpt_bind` serves
+# `row_records.derive_bytes` plans too little), CENSUS (VERITY_BUILD_CENSUS), MANIFEST_JOBS and BUILD_TO (the Build's manifest
+# processes and timeout) and the defaults of REF and SW (its v2 tree and row dirs).  `ckpt_bind` serves
 # LOCAL_CK at FS_CK when it is verified; `stage_meta PY` puts the pin's non-shard files at SNAP from the hub, each checked against
 # checkpoints.json's sha256.
 case ${ROW:?ROW} in
   glm53__*) ROLE=GLM53 REPO=zai-org/GLM-5.3 REV=aca966e4e02791568aa6a4ced368624b3d897f42 WHAT=GLM-5.3
             FS_CK=/workspace/fs/glm53/$REV LOCAL_CK=/workspace/cp/glm53-ckpt/$REV
-            V2=glm-v2 REF=${REF:-cursor/glm-v2-21f3} POST_LOAD= DERIVE_GB= CENSUS= ;;
+            V2=glm-v2 REF=${REF:-cursor/glm-v2-21f3} POST_LOAD= DERIVE_GB= CENSUS= MANIFEST_JOBS= BUILD_TO= ;;
   dsv4-pro__*) ROLE=DSV4_PRO REPO=deepseek-ai/DeepSeek-V4-Pro REV=b5968e9190ef611bbf34a7229255be88a0e937c1 WHAT=DeepSeek-V4-Pro
             FS_CK=/workspace/fs/dsv4/$REV LOCAL_CK=/workspace/cp/dsv4-ckpt
-            V2=dsv4-v2 REF=${REF:-cursor/dsv4-v2-21f3} POST_LOAD=model.layers.0.hc_attn_fn_broadcast DERIVE_GB=32 CENSUS=skip ;;
+            V2=dsv4-v2 REF=${REF:-cursor/dsv4-v2-21f3} POST_LOAD=model.layers.0.hc_attn_fn_broadcast DERIVE_GB=32 CENSUS=skip
+            MANIFEST_JOBS=8 BUILD_TO=14400 ;;
   *) echo "row $ROW: no model for it in model.sh"; exit 2 ;;
 esac
 CONFIG=verity_vllm/engine/profiles/hf_configs/$ROLE.config.json SW=${SW:-/workspace/cp/circuits/$V2/rows}
@@ -29,6 +30,16 @@ if [ -n "$DERIVE_GB" ] && [ -z "${BUILD_JOBS:-}" ]; then
   BUILD_JOBS=$(( ${_mem%.*} / DERIVE_GB )) && [ "$BUILD_JOBS" -ge 1 ] || BUILD_JOBS=1
   export BUILD_JOBS
 fi
+# Its required-value manifest's word check cuts each 384-expert MoE GEMM's unit rule in about 45 min.  At build_record.sh's 2
+# processes the first two took the manifest's first 46 min, before the rest of the word check and the component builds (GLM-5.3:
+# 56 and 29 min), against the Build's 2 h timeout (r20261020-121943-5683, cancelled).  MANIFEST_JOBS (VERITY_MANIFEST_JOBS) cuts
+# them together, within the host's headroom (`word.prefetch`'s budget); BUILD_TO is the Build's timeout (BUILD_TIMEOUT), and the
+# rules are kept beside the row dirs for a rerun (VERITY_UNIT_RULE_CACHE, `word.use_rule_cache`).
+if [ -n "$MANIFEST_JOBS" ]; then
+  export VERITY_MANIFEST_JOBS=${VERITY_MANIFEST_JOBS:-$MANIFEST_JOBS}
+  export VERITY_UNIT_RULE_CACHE=${VERITY_UNIT_RULE_CACHE:-$(dirname "$SW")/unit-rule-cache}
+fi
+[ -z "$BUILD_TO" ] || export BUILD_TIMEOUT=${BUILD_TIMEOUT:-$BUILD_TO}
 
 ckpt_bind() {
   if [ -e "$LOCAL_CK/.verified" ] && ! mountpoint -q "$FS_CK" && [ ! -L "$FS_CK" ]; then

@@ -37,7 +37,9 @@ keeps every default it had, so V2PREP can merge them into `cursor/glm-v2-21f3` a
 - `match_cpu.sh` hashes what the Match CPU phase writes into `match_cpu.sha256`, the list for the copy to window B's node.
 - `gpu_batch.sh` takes `MODEL=dsv4-pro`.
 - `model.sh`'s `DERIVE_GB` sets `BUILD_JOBS` from the run's `--mem-gb`, and its `CENSUS=skip` (`VERITY_BUILD_CENSUS`, read by
-  `census_entry`) leaves the request Build's census out (CPU gates, below).
+  `census_entry`) leaves the request Build's census out (CPU gates, below). Its `MANIFEST_JOBS=8` and `BUILD_TO=14400` run the
+  Build's required-value manifest in 8 processes under a 4 h timeout, with the unit rules kept in
+  `/workspace/cp/circuits/dsv4-v2/unit-rule-cache`.
 - `replay_publish.sh` refuses a non-GLM row: its conformance captures are GLM-5.3's.
 
 ## Not in v2
@@ -61,14 +63,20 @@ over the census-free trace's largest process (27.6 GB, r20261020-085740-90ff): e
 `--mem-gb` over 32, so 9 at once in 300 GB. The GPU leg's Commit runs without `MEMORY_MAP`; one with it computes the census
 then (`memory_map.of_build`).
 
+The Build's required-value manifest then cuts each Definition's unit rule (`word.prefetch`), and each 384-expert MoE GEMM's
+takes about 45 min. At `build_record.sh`'s 2 processes the first two took the manifest's first 46 min, before the rest of the
+word check and the component builds (GLM-5.3's took 56 and 29 min), against the Build's 2 h timeout. So r20261020-121943-5683
+was cancelled in its manifest, and `model.sh` sets `MANIFEST_JOBS=8` and `BUILD_TO=14400`.
+
 1. `trace_compare.sh` (`SKIP_AOT1=1`): the v2 trace, `predict compare` against it, and the AOT Build against it, on
    vy-nebius-cpu-3 after `stage_cpu.sh`. r20261020-071632-1bcf is the first run (cancelled in its request derives' census),
    whose 8 step derives seed r20261020-085740-90ff (`SEED_FROM`, `SKIP_AOT2=1`): its predict compare is EQUAL on all 24
    Programs, and its trace is art:b889027e16ceef9c2c8d625008f3360ca7b86dcf7d22b9f7d8ee2153dbf6e52b.
 2. `repin.sh ROW RUN vy-nebius-cpu-3`, committed as "re-pin ROW": the step, request and workload Programs of all 8 ranks from
    the v2 trace, `records.json`'s `aot` switched to its comparison and trace art.
-3. `build_record.sh` at that commit (`AOT_TRACE=<the trace's row dir>` on the same node): the Build of record, with its
-   manifest and `rowdir.sha256`. This is the row's first job, so it writes `<row>.tree`.
+3. `build_record.sh` at that commit, or a descendant changing only this runbook (`tree_guard.sh`), with `AOT_TRACE=<the
+   trace's row dir>` on the same node: the Build of record, with its manifest and `rowdir.sha256`. This is the row's first job,
+   so it writes `<row>.tree`.
 
 ## GPU leg
 
