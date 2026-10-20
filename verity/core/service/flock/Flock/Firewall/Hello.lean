@@ -109,11 +109,14 @@ def Setup.ofArgs (usage : String) (args : List String) : IO (Except String Setup
   let tables ← Witness.readTables args
   return .ok { I := { tags, circuitFile, publicFile, count, tables, partition, program }, work, stratified, closure }
 
-/-- The session's spec at the verifier's draw `draw` (`Stmt.setupTables`; the public file the verifier's own, without
-rows). -/
-def Setup.spec (S : Setup) (draw : Option Json) : V SessionSpec :=
-  (Stmt.setupTables (Witness.zkTags S.I) S.I.circuitFile S.I.publicFile (Witness.zkCoins S.I) S.I.count S.I.tables draw
-    S.I.partition S.I.program S.work S.stratified S.closure).map (·.1)
+/-- The session's spec and its tables' statements at the verifier's draw `draw` (`Stmt.setupTables`; the public file the
+verifier's own, without rows). -/
+def Setup.setup (S : Setup) (draw : Option Json) : V (SessionSpec × Array Stmt) :=
+  Stmt.setupTables (Witness.zkTags S.I) S.I.circuitFile S.I.publicFile (Witness.zkCoins S.I) S.I.count S.I.tables draw
+    S.I.partition S.I.program S.work S.stratified S.closure
+
+/-- The session's spec at `draw`. -/
+def Setup.spec (S : Setup) (draw : Option Json) : V SessionSpec := (S.setup draw).map (·.1)
 
 /-- The key a draw's statement is set up once under: its canonical text, `null` without one. -/
 def drawKey (draw : Option Json) : String := (draw.map fun d => (canon d).toOption.getD "").getD "null"
@@ -127,18 +130,22 @@ def textAt (spec : V SessionSpec) (nonce : ByteArray) : Except String String :=
     if spec.coinTree.isNone then .error "the session has no coin tree"
     else json spec (hexOf nonce)
 
-/-- The specs set up so far, by `drawKey`: one process sets each draw's statement up once. -/
-abbrev Specs := IO.Ref (Array (String × V SessionSpec))
+/-- The statements set up so far, by `drawKey`: one process sets each draw's statement up once. -/
+abbrev Specs := IO.Ref (Array (String × V (SessionSpec × Array Stmt)))
 
-/-- The spec at `draw`, set up on first use. -/
-def Setup.specAt (S : Setup) (specs : Specs) (draw : Option Json) : IO (V SessionSpec) := do
+/-- The spec and statements at `draw` (`Setup.setup`), set up on first use. -/
+def Setup.setupAt (S : Setup) (specs : Specs) (draw : Option Json) : IO (V (SessionSpec × Array Stmt)) := do
   let key := drawKey draw
   match (← specs.get).find? (·.1 == key) with
   | some (_, s) => pure s
   | none =>
-    let s := S.spec draw
+    let s := S.setup draw
     specs.modify (·.push (key, s))
     pure s
+
+/-- The spec at `draw`, set up on first use. -/
+def Setup.specAt (S : Setup) (specs : Specs) (draw : Option Json) : IO (V SessionSpec) :=
+  return (← S.setupAt specs draw).map (·.1)
 
 /-- `flock-firewall hello [--statement ID] --circuit F --public F [--tables DIR] [--session-tables J] [--partition F]
 [--program F] [--stratified K] [--work K --work-table F] [--closure F]`: each session's `Hello`, served on stdin and stdout,

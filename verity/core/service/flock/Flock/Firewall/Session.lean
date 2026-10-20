@@ -9,13 +9,15 @@ each connection is one session, relayed on a connection of its own to the audito
 * `Hello`: the prover's text is dropped, and what leaves is the Lean `Hello` at that draw (`Hello.textAt`), at a nonce
   this process draws from the operating system (`State.sendHello`).
 * `Hello`'s answer must be the coin tree's root and session key (`Coins.Session.start`), and it is relayed as it is.
-* `Commit` and `Round`: the coins answered must open the committed tree (`Coins.Session.open`; the link points' count is
-  `Hello`'s), and only the coins, stripped of their opening, reach the prover (`Coins.frame`).
+* `Commit` and `Round` leave only as the schedule's next opening (`State.request`, `reqAt`: the session stream's at
+  `Commit`, its count `Hello`'s link points', then each rep stream's rounds in order at the counts `Zk.verifyRep` draws,
+  `plan`), never at a place the prover names. The coins answered must open the committed tree there
+  (`Coins.Session.open`), and only the coins, stripped of their opening, reach the prover (`Coins.frame`).
 * Every other frame is relayed as it is. For now those are the rounds and roots the firewall's own Lean processes
   released (`frame`, `link`), and `Proof` and `Finish`, which `Firewall::finish` decides (ZKFIN's).
 
-A refusal answers the prover `Resp::Refused(WHY)`, and every coin after it is refused too, as `coin_tree::Checked` does
-with the Lean check's verdict: no coin after a refused one reaches the prover. `kind` and `State` are pure; `cmd` only
+A refusal answers the prover `Resp::Refused(WHY)`, and every coin after it is refused too, without asking the auditor: no
+coin after a refused one reaches the prover. `kind` and `State` are pure; `cmd` only
 moves frames.
 -/
 import Flock.Firewall.Hello
@@ -78,11 +80,55 @@ def kind (f : ByteArray) : Except String Kind :=
       | _, none => .error "a Round frame without its content"
   | some _ => .ok .other
 
-/-- A session as the loop has seen it: the auditor's draw, the `Hello` that left, the coin tree once `Hello`'s answer
-checked, and the refusal that stopped it. -/
+/-! ## The schedule's openings -/
+
+/-- The constraints `Zk.verifyInner` batches, one coin each: the zerocheck's two and the lincheck's (`Zk.replay`), the ring
+switch's two, level 0's lane phase's two (`Zk.ligeritoConstraints`) and the triple's three. -/
+def INNER_CONS : Nat := 3 + 2 + 2 + 3
+
+/-- **A `--zk` rep's rounds**, as `Zk.verifyRep` squeezes them: each round's coin count, in order, for a table of `2^m`
+packed elements, `2^kLog` a block, with `claims` claims. The zerocheck's and the lincheck's (`Zk.replay`), each claim's
+ring switch and their batching (`ringSwitch`), Ligerito with level 0's hiding (`Zk.ligerito`: the OOD sample, the lane
+rounds and the pair's `ρ`, two intro samples a level, each level's queries and their `α`, four challenges a fold), and
+the inner proof's `ε`, `γ`, `β` and queries (`Zk.verifyInner`). A squeeze of no coins is no round. -/
+def repCoins (m kLog claims : Nat) : V (Array Nat) := do
+  let (sch, _) ← Zk.schedule m
+  let R := sch.levels.size - 1
+  let query := fun (i : Nat) => let q := (sch.levels.getD i default).q; #[q, Nat.log2 (q - 1) + 1, 1]
+  let mut out : Array Nat := #[6, m - 13, 1] ++ Array.replicate (m - 6) 1 ++ #[1, 1] ++ Array.replicate (kLog - 6) 1 ++ #[1]
+  out := out ++ Array.replicate claims 7 ++ #[claims]
+  let mut split := sch.n - sch.k0 + 1
+  out := out ++ #[sch.n, 1] ++ Array.replicate sch.k0 2 ++ #[2, 2, split, 1, split, 1] ++ query 0
+  for i in [0:R] do
+    out := out ++ Array.replicate 4 2
+    if i + 1 < R then
+      split := split - 4 + 1
+      out := out ++ #[split, 1, split, 1] ++ query (i + 1)
+    else
+      out := out ++ query R
+  return (out ++ #[1, INNER_CONS, 1, Zk.Q]).filter (· != 0)
+
+/-- **The openings after the session stream's**, in the order the prover asks for them: every round of each rep stream in
+`SessionSpec.repStreams` order (table by table, rep 0's before rep 1's, as `CoinLayer.slot` places them), each with its
+coin count at its table's statement (`repCoins`, with the statement's `2 + points · regions` claims). -/
+def plan (spec : SessionSpec) (sts : Array Stmt) : V (Array (String × Nat)) := do
+  let mut out := #[]
+  for (i, _, name) in spec.repStreams do
+    let some st := sts[i]? | throw s!"no statement for table {i}"
+    out := out ++ (← repCoins st.m st.c.kLog (2 + spec.points * st.regions.size)).map (name, ·)
+  return out
+
+/-- **Opening `j`'s stream and coin count**, by the schedule: opening `0` is the session stream's (its count `Hello`'s
+link points'), opening `j + 1` the plan's `j`-th. -/
+def reqAt (plan : Array (String × Nat)) (links j : Nat) : String × Nat :=
+  if j = 0 then (Coins.SESSION, links) else plan.getD (j - 1) ("", 0)
+
+/-- A session as the loop has seen it: the auditor's draw, the `Hello` that left and its statement's openings (`plan`),
+the coin tree once `Hello`'s answer checked, and the refusal that stopped it. -/
 structure State where
   draw : Option Json := none
   hello : Option Coins.Hello := none
+  plan : Array (String × Nat) := #[]
   session : Option Coins.Session := none
   stop : Option String := none
 
@@ -90,13 +136,38 @@ structure State where
 def State.refuse (S : State) (why : String) : State × ByteArray :=
   ({ S with stop := some why }, refused why)
 
-/-- The coins the auditor answered `a`, of `n` coins of `stream`'s next round, once they open the committed tree; the
+/-- **Whether a request of kind `k` leaves**: `none` where it does, else the refusal the prover receives in its place and
+the session after. A `Commit` or `Round` leaves only as the schedule's next opening (`reqAt`): no coin is asked for after
+a refusal, before `Hello`'s answer, or at a place the prover picks. -/
+def State.request (S : State) (k : Kind) : Option (State × ByteArray) :=
+  let opening : Option (String × Nat) := match k with
+    | .commit => some (Coins.SESSION, 0)
+    | .round stream n => some (stream, n)
+    | _ => none
+  match opening, S.stop, S.session with
+  | none, _, _ => none
+  | some _, some why, _ => some (S, refused why)
+  | some _, none, none => some (S.refuse s!"{Coins.STOP}coins before the step-0 coin commitment")
+  | some (stream, n), none, some C =>
+    let j := C.opened.length
+    let (st, want) := reqAt S.plan C.hello.links j
+    if j = 0 then
+      if k == .commit then none
+      else some (S.refuse s!"{Coins.STOP}a round of {stream} before the step-0 coin commitment")
+    else if k == .commit then some (S.refuse s!"{Coins.STOP}a second step-0 coin commitment")
+    else if j > S.plan.size then some (S.refuse s!"{Coins.STOP}a round of {stream} past the schedule's {S.plan.size}")
+    else if stream == st && n == want then none
+    else some (S.refuse s!"{Coins.STOP}opening {j}: {n} coins of {stream}, where the schedule's are {want} of {st}")
+
+/-- The coins the auditor answered `a` to the schedule's next opening (`reqAt`), once they open the committed tree; the
 session with the round counted. -/
-def State.coins (S : State) (stream : String) (n : Nat) (a : ByteArray) : State × ByteArray :=
+def State.coins (S : State) (a : ByteArray) : State × ByteArray :=
   match S.stop, S.session with
   | some why, _ => (S, refused why)
   | none, none => S.refuse s!"{Coins.STOP}coins before the step-0 coin commitment"
-  | none, some C => match C.open stream n a.data.toList with
+  | none, some C =>
+    let (stream, n) := reqAt S.plan C.hello.links C.opened.length
+    match C.open stream n a.data.toList with
     | .ok (C', c) => ({ S with session := some C' }, ⟨(Coins.frame (c.length / 16) c).toArray⟩)
     | .error e => S.refuse e
 
@@ -117,19 +188,22 @@ def State.answer (S : State) (k : Kind) (a : ByteArray) : State × ByteArray :=
     | none, some h => match Coins.Session.start h a.data.toList with
       | .ok C => ({ S with session := some C }, a)
       | .error e => S.refuse e
-  | .commit, some 2 => S.coins Coins.SESSION 0 a
-  | .round stream n, some 2 => S.coins stream n a
+  | .commit, some 2 => S.coins a
+  | .round _ _, some 2 => S.coins a
   | _, _ => (S, a)
 
-/-- **The `Hello` that leaves** at the set-up statement `spec` and the nonce `nonce` (`Hello.textAt`), and the session
-after, which the coin tree's checks read; or the refusal the prover receives in its place. -/
-def State.sendHello (S : State) (spec : V SessionSpec) (nonce : ByteArray) : Except (State × ByteArray) (State × ByteArray) :=
+/-- **The `Hello` that leaves** at the set-up statement `s` and the nonce `nonce` (`Hello.textAt`), and the session after,
+which the coin tree's checks and the schedule's openings (`plan`) read; or the refusal the prover receives in its
+place. -/
+def State.sendHello (S : State) (s : V (SessionSpec × Array Stmt)) (nonce : ByteArray) :
+    Except (State × ByteArray) (State × ByteArray) :=
   match S.stop with
   | some why => .error (S, refused why)
-  | none => match Hello.textAt spec nonce with
-    | .error e => .error (S.refuse s!"{Coins.STOP}the Lean Hello: {e}")
-    | .ok text => match Coins.Hello.parse text with
-      | .ok h => .ok ({ S with hello := some h }, ⟨(Hello.frame text).toArray⟩)
+  | none => match Hello.textAt (s.map (·.1)) nonce, s.bind fun (spec, sts) => plan spec sts with
+    | .error e, _ => .error (S.refuse s!"{Coins.STOP}the Lean Hello: {e}")
+    | .ok _, .error e => .error (S.refuse s!"{Coins.STOP}the schedule: {e}")
+    | .ok text, .ok p => match Coins.Hello.parse text with
+      | .ok h => .ok ({ S with hello := some h, plan := p }, ⟨(Hello.frame text).toArray⟩)
       | .error e => .error (S.refuse e)
 
 /-- `n` bytes from the socket `c`, or `none` where it closes first. -/
@@ -180,7 +254,7 @@ def serve (S : Hello.Setup) (specs : Hello.Specs) (auditor : SocketAddress) (p :
       break
     | .ok .hello =>
       let nonce ← IO.getRandomBytes Hello.NONCE_BYTES.toUSize
-      match st.sendHello (← S.specAt specs st.draw) nonce with
+      match st.sendHello (← S.setupAt specs st.draw) nonce with
       | .error (st', out) =>
         st := st'
         sendFrame p out
@@ -192,6 +266,10 @@ def serve (S : Hello.Setup) (specs : Hello.Specs) (auditor : SocketAddress) (p :
         st := st'
         sendFrame p out
     | .ok k =>
+      if let some (st', out) := st.request k then
+        st := st'
+        sendFrame p out
+        continue
       sendFrame a f
       let some r ← recvFrame a | break
       let (st', out) := st.answer k r
@@ -204,14 +282,30 @@ def serve (S : Hello.Setup) (specs : Hello.Specs) (auditor : SocketAddress) (p :
 flags `Hello.FLAGS`): the firewall's session loop. It listens on `127.0.0.1:PORT` (by default a port the system picks),
 prints `LISTENING 127.0.0.1:PORT` once it does, and serves each connection as one session (`serve`), each on its own
 thread, every session's `Hello` at one statement set up once a draw (`Hello.Setup.specAt`). It runs until its standard
-input closes. -/
+input closes. `flock-firewall session --schedule …` instead reads a draw's JSON (`null` for none) on its standard input
+and prints the openings after the session stream's at it (`plan`), `ok N` and a line `STREAM COINS` each, or
+`refused WHY`. -/
 def cmd (args : List String) : IO UInt32 := do
-  let usage := s!"usage: flock-firewall session --verifier HOST:PORT [--listen PORT] {Hello.FLAGS}"
-  let some verifier := Witness.argOf args "--verifier" | IO.eprintln usage; return 2
-  let some listen := ((Witness.argOf args "--listen").getD "0").toNat? | IO.eprintln usage; return 2
+  let usage := s!"usage: flock-firewall session (--verifier HOST:PORT [--listen PORT] | --schedule) {Hello.FLAGS}"
   let S ← match ← Hello.Setup.ofArgs usage args with
     | .ok S => pure S
     | .error e => IO.eprintln e; return 2
+  if args.contains "--schedule" then
+    let stdin ← IO.getStdin
+    let mut text := ""
+    repeat
+      let line ← stdin.getLine
+      if line.isEmpty then break
+      text := text ++ line
+    let p := (Hello.drawOf text).bind fun draw => (S.setup draw).bind fun (spec, sts) => plan spec sts
+    match p with
+    | .error e => IO.println s!"refused {e}"
+    | .ok p =>
+      IO.println s!"ok {p.size}"
+      for (stream, n) in p do IO.println s!"{stream} {n}"
+    return 0
+  let some verifier := Witness.argOf args "--verifier" | IO.eprintln usage; return 2
+  let some listen := ((Witness.argOf args "--listen").getD "0").toNat? | IO.eprintln usage; return 2
   let auditor ← resolve verifier
   let specs : Hello.Specs ← IO.mkRef #[]
   let srv ← Socket.Server.mk

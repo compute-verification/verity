@@ -7,6 +7,7 @@ answer and every coin checked, and every coin after a refusal refused. `flock-ci
 are the end-to-end check (live PROTOCOL.md §10.4)."""
 from __future__ import annotations
 
+import json
 import socket
 import struct
 import subprocess
@@ -167,15 +168,17 @@ def test_register_and_other_frames_are_relayed(loop):
 
 def test_the_provers_hello_never_leaves(loop):
     """A statement the setup refuses: the prover is refused at its `Hello`, which does not reach the auditor, and every coin
-    after is refused for the same reason."""
+    after is refused for the same reason, without asking the auditor."""
     auditor, lp = loop
     s = lp.connect()
     call(s, REGISTER)
     why = reason(call(s, hello('{"the": "prover\'s"}')))
     assert why.startswith(STOP + "the Lean Hello: setup: "), why
     assert reason(call(s, round_("rep0", b"r", 2))) == why
+    assert reason(call(s, COMMIT)) == why
+    assert call(s, ping(b"p")) == b"\x01"
     s.close()
-    assert auditor.got[0] == [REGISTER, round_("rep0", b"r", 2)]
+    assert auditor.got[0] == [REGISTER, ping(b"p")]
 
 
 def test_coins_before_the_commitment(loop):
@@ -251,6 +254,54 @@ def test_the_lean_hello_leaves_and_its_answer_is_checked(zk, key_top, why):
         assert reason(r) == why
         assert reason(call(s, COMMIT)) == why
     lp.close()
+
+
+@pytest.mark.slow
+def test_a_round_before_the_commitment_never_leaves(zk):
+    """Past `Hello`'s answer the first opening is the session stream's, at `Commit`: a `Round` in its place is refused
+    without reaching the auditor, and so is every coin after it."""
+    auditor = Auditor(lambda f: {10: draw("null"), 1: _answer()}[f[0]])
+    lp = Loop(auditor, _args(zk, "pub-16.bin"))
+    s = lp.connect()
+    call(s, REGISTER)
+    assert call(s, hello("")) == _answer()
+    why = reason(call(s, round_("t/rep0", b"r", 6)))
+    assert why == STOP + "a round of t/rep0 before the step-0 coin commitment", why
+    assert reason(call(s, COMMIT)) == why
+    s.close()
+    lp.close()
+    assert [f[0] for f in auditor.got[0]] == [10, 1]
+
+
+def _schedule(args: list[str], draw: str) -> list[str]:
+    p = subprocess.run([str(BIN), "session", "--schedule", *args], input=draw.encode(), capture_output=True, check=True)
+    return p.stdout.decode().splitlines()
+
+
+def test_a_schedule_the_setup_refuses(junk):
+    [line] = _schedule(junk, "null")
+    assert line.startswith("refused "), line
+
+
+@pytest.mark.slow
+@pytest.mark.parametrize("name, public, tables", [("selftest/honest", "pub-16.bin", 1), ("m26", "pub-32.bin", 1),
+                                                   ("j2", "pub-32.bin", 2), ("drawn", "pub-32.bin", 1)])
+def test_the_schedule_is_the_recorded_rounds(zk, name, public, tables):
+    """At a recorded session's statement and draw, the openings the loop asks for after the session stream's are the record's
+    rounds: each rep stream's coin counts in order, the streams one after another in table order, rep 0 before rep 1."""
+    _, _, draw_ = _record(zk, name)
+    d = zk / "sessions" / name
+    if "/" not in name:
+        [d] = [p for p in d.iterdir() if p.is_dir()]
+    rec = json.loads((d / "session.json").read_text())
+    lines = _schedule(_args(zk, public, tables), draw_)
+    assert lines[0] == f"ok {len(lines) - 1}", lines[:2]
+    plan = [(s, int(n)) for s, n in (line.rsplit(" ", 1) for line in lines[1:])]
+    order = [s for i, (s, _) in enumerate(plan) if i == 0 or plan[i - 1][0] != s]
+    tabs = list(dict.fromkeys(s.rsplit("/", 1)[0] for s in order))
+    assert len(tabs) == tables and order == [f"{t}/rep{r}" for t in tabs for r in (0, 1)], order
+    got = {s: [n for t, n in plan if t == s] for s in order}
+    assert got == {s["stream"]: [r["n"] for r in s["rounds"]] for s in rec["streams"]}
 
 
 @pytest.mark.slow
