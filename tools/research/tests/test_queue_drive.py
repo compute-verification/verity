@@ -7,7 +7,7 @@ import os
 import pytest
 
 from research import merge
-from research.drive import PUBLISH_GRACE_S, Driver
+from research.drive import CHECK_STEPS, PUBLISH_GRACE_S, Driver
 from research.cli import main as research_main
 from test_merge_gate import CHECKED
 from test_queue import World, _git
@@ -970,21 +970,117 @@ def test_a_train_that_passed_by_regenerating_locks_lands_with_them_committed_on_
     """CI-64 (Daniel through top, 18 Oct): lean-audit failed 9 trains in 36 h on lock records each PR had regenerated on its
     own base.  A train's Lean check now passes by regenerating them, and drive commits those locks onto the train it lands,
     naming them in a `Regenerated:` trailer that `research merge`'s gate reads (`regenerated_parent`)."""
+    from test_merge_gate import _REGENERATING
+
     h = Harness(world, monkeypatch)
     h.d.regenerate_locks = True
     world.gh.put(1, world.change({"pkg/A.lean": "theorem a : True := trivial\n", "pkg/lean-audit.json": '{"records": 1}\n'}))
     h.tick()
     tip = _tip(world)
+    monkeypatch.setenv("FAKE_CHECK", _REGENERATING)                                 # its record reaches the store
     _check(world, monkeypatch, tip)
-    rec = tmp_path / "regen.json"
-    rec.write_text('{"records": 2}\n')
-    monkeypatch.setattr(merge, "regenerated_records", lambda store, rid, dest=None: {"pkg": ("sha", rec)})
     assert h.tick().startswith("landed #1")
     main = _git(world.origin, "rev-parse", "main")
     assert _git(world.origin, "rev-parse", f"{main}^") == tip                       # the checked train, then its locks
     assert _git(world.origin, "show", f"{main}:pkg/lean-audit.json") == '{"records": 2}'
     assert "Regenerated: pkg/lean-audit.json" in _git(world.origin, "log", "-1", "--format=%B", main)
     assert any("with the locks it regenerated for pkg" in x for x in world.logs)
+
+
+#: the steps a deferred landing's check runs on after it lands (`test_drive_postland.DEFER`)
+_DEFER = frozenset({"circuit-check", "flock-rust-tests"})
+
+
+def _live_run(tmp_path, rid: str, commit: str, records: dict[str, str | None]):
+    """A check still running, as `merge.fetch_run` reads its run dir from its node: (that dir, a fetch of it, the fetches made).
+    Its Lean report names a regenerated lock for each package of ``records``, holding its text (None: the report names it, and
+    the file isn't there)."""
+    import json
+
+    d = tmp_path / "live" / rid
+    (d / "lean-audit").mkdir(parents=True)
+    regen = {}
+    for pkg, text in records.items():
+        rel = f"lean-audit/audit-{pkg.replace('/', '-')}/lean-audit.json"
+        regen[pkg] = f"/workspace/research/runs/{rid}/{rel}"
+        if text is not None:
+            (d / rel).parent.mkdir(parents=True, exist_ok=True)
+            (d / rel).write_text(text)
+    (d / "lean-audit" / "audit.json").write_text(json.dumps({"passed": True, "regenerated": regen}))
+    fetched: list[tuple[str, list[str]]] = []
+
+    def fetch(r, names):
+        fetched.append((r, names))
+        return (d, {"dir": str(d), "tree_sha": commit}) if r == rid else None
+    return d, fetch, fetched
+
+
+def _deferred(h: Harness, tmp_path, n: int, files: dict[str, str]) -> tuple[str, str]:
+    """PR ``n`` checked on `next`, its check running with every step but the deferred ones passed: (its run id, the tip)."""
+    h.d.defer, h.d.regenerate_locks = _DEFER, True
+    h.world.gh.put(n, h.world.change(files))
+    before = set(h.run_state)
+    h.tick()
+    (rid,) = [r for r in h.run_state if r not in before]
+    h.evidence = [_steps_run(tmp_path / "steps", rid, {x: "passed" for x in CHECK_STEPS if x not in _DEFER})]
+    return rid, _tip(h.world)
+
+
+def test_a_deferred_landing_commits_the_locks_its_running_check_regenerated_and_the_gate_vouches_for_them(world, monkeypatch, tmp_path):
+    """CI-122: drive lands a train with `--defer` while its check still runs, so the check's files aren't in the store yet, and
+    train 7c3809278800 (20 Oct 02:10Z) landed without the Security lock its check had regenerated: `main` then failed its Lean
+    check.  Drive now reads the records from the running check's run dir on its node, commits them on top, and the merge gate,
+    hashing what it fetches itself, vouches for that commit."""
+    h = Harness(world, monkeypatch)
+    rid, tip = _deferred(h, tmp_path, 1, {"pkg/A.lean": "theorem a : True := trivial\n", "pkg/lean-audit.json": '{"records": 1}\n'})
+    _, h.d.fetch, fetched = _live_run(tmp_path, rid, tip, {"pkg": '{"records": 2}\n'})
+    assert h.tick().startswith("landed #1"), world.logs
+    main = _git(world.origin, "rev-parse", "main")
+    assert _git(world.origin, "rev-parse", f"{main}^") == tip
+    assert _git(world.origin, "show", f"{main}:pkg/lean-audit.json") == '{"records": 2}'
+    body = _git(world.origin, "log", "-1", "--format=%B", main)
+    assert f"Checked: {rid} " in body and "Regenerated: pkg/lean-audit.json" in body
+    assert rid in h.cancelled and any(names == ["lean-audit/audit.json"] for _, names in fetched)
+    kw = {"tool": "check", "kinds": merge.produced(h.q.workdir, "check"), "command": merge.declared_command(h.q.workdir, "check")}
+    assert merge.regenerated_parent(world.origin, main, h.q.store, deferred=rid, fetch=h.d.fetch, **kw) == rid
+    assert merge.regenerated_parent(world.origin, main, h.q.store, **kw) is None    # no passing attempt: only drive's verdict
+
+
+def test_a_deferred_landing_whose_regenerated_records_cant_be_read_is_held_and_told(world, monkeypatch, tmp_path):
+    """CI-122: a check whose Lean report names a regenerated lock drive can't read, from the store or its node, never lands
+    without it; nor does one whose report can't be read at all once its lean-audit step passed."""
+    h = Harness(world, monkeypatch)
+    base = _git(world.origin, "rev-parse", "main")
+    rid, tip = _deferred(h, tmp_path, 1, {"Security/A.lean": "theorem a : True := trivial\n"})
+    _, h.d.fetch, _ = _live_run(tmp_path, rid, tip, {"Security": None})
+    assert not h.tick().startswith("landed")
+    assert _git(world.origin, "rev-parse", "main") == base and rid not in h.cancelled
+    (post,) = [p for p in h.posts if "held, not landed" in p]
+    assert rid in post and "Security's lock" in post and "#1" in post, post
+    h.d.fetch = lambda r, names: None                                     # its node can't be reached
+    h.d._seen.clear()
+    h.tick()
+    assert _git(world.origin, "rev-parse", "main") == base
+    assert any("lean-audit/audit.json, which says whether it regenerated" in x for x in world.logs), world.logs
+
+
+def test_a_deferred_landing_whose_lock_commit_the_gate_refuses_is_held(world, monkeypatch, tmp_path):
+    """The gate reads the run's records again itself: bytes that changed between drive's read and the gate's, which drive would
+    otherwise commit as the check's, hold the train."""
+    h = Harness(world, monkeypatch)
+    base = _git(world.origin, "rev-parse", "main")
+    rid, tip = _deferred(h, tmp_path, 1, {"pkg/A.lean": "theorem a : True := trivial\n"})
+    d, live, _ = _live_run(tmp_path, rid, tip, {"pkg": '{"records": 2}\n'})
+    calls = []
+
+    def fetch(r, names):
+        if calls.append(names) or len(calls) == 3:                        # the gate's read of the records
+            (d / "lean-audit" / "audit-pkg" / "lean-audit.json").write_text('{"records": 3}\n')
+        return live(r, names)
+    h.d.fetch = fetch
+    assert not h.tick().startswith("landed")
+    assert _git(world.origin, "rev-parse", "main") == base
+    assert any("the merge gate refuses its lock commit" in p and rid in p for p in h.posts), h.posts
 
 
 def test_a_train_that_regenerated_locks_waits_for_a_new_check_when_main_moved(world, monkeypatch, tmp_path):

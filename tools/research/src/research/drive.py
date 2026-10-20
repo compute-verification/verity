@@ -306,12 +306,10 @@ def touched_report(run_dir: Path) -> list[dict] | None:
 
 
 def _fetch(repo: Path, rid: str, names: list[str]) -> Path | None:
-    also = [x for n in names for x in ("--also", n)]
-    r = subprocess.run([sys.executable, "-m", "research", "status", rid, "--json", *also], cwd=repo, capture_output=True, text=True)
-    try:
-        return Path(json.loads(r.stdout)["runs"][0]["dir"])
-    except (ValueError, KeyError, IndexError, TypeError):
-        return None
+    from .merge import fetch_run
+
+    got = fetch_run(rid, names, repo)
+    return got[0] if got else None
 
 
 def evidence(repo: Path, ids: list[str]) -> list[Path]:
@@ -968,28 +966,73 @@ class Driver:
                 shutil.rmtree(scratch, ignore_errors=True)
         return None
 
-    def _locks(self, v: Verdict, scratch: Path) -> tuple[str, dict[str, Path]]:
-        """(the check that regenerated them, {package: its regenerated lock fetched under ``scratch``}) of a passed train, when
-        drive commits regenerated locks; ("", {}) otherwise."""
+    def _locks(self, v: Verdict, scratch: Path) -> tuple[str, dict[str, Path], str | None]:
+        """(the check that regenerated them, {package: its regenerated lock, fetched under ``scratch`` or from its node}, why the
+        train is held instead) of a passed train, when drive commits regenerated locks; ("", {}, None) when its check regenerated
+        none.  Read from the check's files in the store, else, for a check still running (`--defer`), from its run dir on its
+        node (`merge.live_records`).  Held, never landed without them (CI-122), when its Lean report names records neither
+        holds, or can't be read at all though its lean-audit step passed (the step passes only on a readable report)."""
         if not self.regenerate_locks:
-            return "", {}
-        from .merge import regenerated_records
+            return "", {}, None
+        from .merge import AUDIT, live_records, regenerated_records
 
         for rid in v.attempt.split():
             try:
                 recs = regenerated_records(self.q.store, rid, scratch / rid)
-            except Exception as e:  # noqa: BLE001  (the train still lands; its locks stay as its PRs left them)
-                self.q.log(f"research queue drive: {rid}'s regenerated locks couldn't be read ({type(e).__name__}: {e})")
-                continue
+                if recs is None:
+                    recs = live_records(rid, self.fetch)
+            except Exception as e:  # noqa: BLE001  (a guard never fails open: `merge.Unreadable`, or the store failing)
+                return rid, {}, f"its regenerated lock records can't be read: {type(e).__name__}: {e}"
+            if recs is None and self._lean_audited(rid):
+                return rid, {}, (f"its lean-audit step passed, but its {AUDIT}, which says whether it regenerated lock "
+                                 "records, can't be read from the store or from its run dir on its node")
             if recs:
-                return rid, {pkg: path for pkg, (_, path) in recs.items() if path is not None}
-        return "", {}
+                return rid, {pkg: path for pkg, (_, path) in recs.items() if path is not None}, None
+        return "", {}, None
+
+    def _unvouched(self, v: Verdict, rid: str) -> str | None:
+        """Why the merge gate refuses the lock commit at HEAD (`merge.regenerated_parent`, reading the records itself: from the
+        store, else, for a landing with `--defer`, from ``rid``'s run dir on its node), or None when it vouches for it."""
+        from .merge import declared_command, produced, regenerated_parent
+
+        deferred = rid if v.why.startswith(DEFERRED) else None
+        if regenerated_parent(self.repo, "HEAD", self.q.store, tool="check", kinds=produced(self.repo, "check"),
+                              command=declared_command(self.repo, "check"), deferred=deferred, fetch=self.fetch):
+            return None
+        return (f"the merge gate refuses its lock commit: its records aren't byte for byte the ones {rid} regenerated "
+                f"(`merge.regenerated_parent`{', on the live run' if deferred else ''})")
+
+    def fetch(self, rid: str, names: list[str]) -> tuple[Path, dict] | None:
+        """Run ``rid``'s local dir and status row with ``names`` fetched from its node (`merge.fetch_run`)."""
+        from .merge import fetch_run
+
+        return fetch_run(rid, names, self.repo)
+
+    def _lean_audited(self, rid: str) -> bool:
+        """Whether run ``rid``'s lean-audit step passed: in its result in the store, else in its steps.jsonl (`evidence`)."""
+        from .merge import step_status
+
+        if step_status(self.q.store, rid, "lean-audit") == "passed":
+            return True
+        for d in self.evidence(self.repo, [rid]):
+            with contextlib.suppress(OSError):
+                for line in (d / PROGRESS[0]).read_text().splitlines():
+                    with contextlib.suppress(ValueError):
+                        if (rec := json.loads(line)).get("step") == "lean-audit" and rec.get("status") == "passed":
+                            return True
+        return False
 
     def _land(self, drive: dict, m: Member, members: list[Member], prs: str, v: Verdict, base: str, main: str,
               moved: list[str], scratch: Path) -> Member | None:
         """Land ``m``'s train (`land`), with the locks its check regenerated committed on top (`regenerate_locks`)."""
         q = self.q
-        rid, locks = self._locks(v, scratch)
+        rid, locks, held = self._locks(v, scratch)
+        if held:
+            self.refuse(drive, f"locks:{m.commit}", f"{prs} passed ({v.attempt}) but is held, not landed: {held}. Find why; "
+                                                     "drive lands it once they can be read (the store has them when the check "
+                                                     "ends)", *(self._owner(x) for x in members))
+            q.log(f"research queue drive: {prs} held: {rid} {held}")
+            return None
         if locks and moved:
             q.log(f"research queue drive: {prs} passed ({v.attempt}) by regenerating {', '.join(sorted(locks))}'s locks on "
                   f"{base[:12]}, but `main` moved to {main[:12]}: the next sync rebuilds `{q.branch}` for a new check")
@@ -1020,6 +1063,10 @@ class Driver:
             _git(self.repo, "commit", "-q", "-m", f"Lock records regenerated for {prs}\n\nChecked: {rid} (the Lean check of "
                                                   f"{m.commit[:12]}, passed by regenerating them)\nRegenerated: {', '.join(files)}\n",
                  env=IDENTITY)
+            if why := self._unvouched(v, rid):
+                _git(self.repo, "reset", "-q", "--hard", "refs/remotes/origin/main")
+                self.refuse(drive, f"locks:{m.commit}", f"{prs} passed ({v.attempt}) but is held, not landed: {why}")
+                return None
         p = q._remote(self.repo, "push", "-q", "--no-verify", "origin", "main:refs/heads/main", ok=None)
         if p.returncode:
             _git(self.repo, "reset", "-q", "--hard", "refs/remotes/origin/main")
