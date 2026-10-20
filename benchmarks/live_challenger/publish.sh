@@ -20,7 +20,7 @@ if [ "${1:-}" = --every ]; then
   every=$2
   shift 2
   while :; do
-    bash "$0" "$@" || echo "$(date -u +%FT%TZ) pass failed (rc=$?); next in ${every}s"
+    bash "$0" "$@" || { rc=$?; echo "$(date -u +%FT%TZ) pass failed (rc=$rc); next in ${every}s"; }
     sleep "$every"
   done
 fi
