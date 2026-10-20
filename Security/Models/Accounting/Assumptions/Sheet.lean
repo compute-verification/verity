@@ -7,8 +7,9 @@ import Models.Accounting.Assumptions.TS
 Seven physical assumptions (note:20261017T1818Z-draft-axioms §2), each a `Prop` taken as a hypothesis, never an
 `axiom`, and each a vendor statement (decision 96: data-sheet constants, no GPU self-attestation). Each docstring opens
 with its claim id (`verity.core.claims`) and names its document. A1–A5 are claimed for a run of the stated device
-against its sheet (`Accounting.TS.Sheet`). A6 and A7 are claimed for a cheater's labelled run (`Anatomy`) at §0.4's
-and §1.3's labelling, as `Models.Accounting.Assumptions.TS`'s are.
+against its sheet (`Accounting.TS.Sheet`), the node's devices the stated ones by `accounting-declared-device` (`Run`'s
+section, below). A6 and A7 are claimed for a cheater's labelled run (`Anatomy`) at §0.4's and §1.3's labelling, as
+`Models.Accounting.Assumptions.TS`'s are.
 
 What they give (`Models.Accounting.Guarantees.Sheet`): A1–A5 give (I1) `FacetCeilings` on the data-sheet machine; A6
 gives (I2)/(I4) `WordsWritten` and, with the labelling's split, (I3) `ScalarRoute` at `q, q_T ≤ ½`, `b_T ≤ 0`; A7 is
@@ -22,6 +23,11 @@ namespace Accounting.Assumptions.TS
 open Accounting.TS
 
 section Run
+
+/-! A1–A5 are claimed for a run of the stated device, and which device a run is on is the auditor's to know, not the
+run's: `accounting-declared-device` (ASK-74 = A), per node and per window, says every GPU on the node is declared, each
+is the declared board and vBIOS, and no SM clock exceeds `fmax`, the top of that vBIOS's clock table. A1's clock rests
+on it: nothing checks a clock, an offset or a lock at run time but the prover's own driver. -/
 
 variable {K P : Type} [Fintype K] [DecidableEq P]
 
