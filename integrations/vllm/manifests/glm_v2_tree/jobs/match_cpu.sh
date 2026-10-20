@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # A v2 row's Match CPU phase (MATCH_PHASE=cpu: the tp2 check, the per-rank fold Match, compare, GM-01, the cross-rank leg) on a CPU
 # node, over the Build of record and the GPU legs, both in the row dir: the legs copied from eu and checked against match_gpu.sh's
-# match.sha256 (inputs/match.sha256, README "GPU batch").  No GPU.
+# match.sha256 (inputs/match.sha256, README "GPU batch"), all but its `<row>.tree` line: copy_rowdir.sh settled the row's tree, and
+# tree_guard checks this job against it.  No GPU.
 #   research run --on vy-glm53-cpu-2 --mem-gb 450 --mem-wait 28800 --timeout 20h --custody-ttl 24h --cwd source --project verity --send match.sha256 -- env ROW=... BUILD_RUN=... bash integrations/vllm/manifests/glm_v2_tree/jobs/match_cpu.sh
 # env: ROW, BUILD_RUN, [SW=/workspace/cp/circuits/glm-v2/rows], [REF=cursor/glm-v2-21f3], [FOLD_RANK_WORKERS=3], [BUDGET_GB=150].
 set -uo pipefail
@@ -15,7 +16,8 @@ D=$SW/$ROW
 [ -f "$D/build_summary.json" ] && [ -s "$D/manifest.json" ] || { echo "no Build of record (build_summary.json, manifest.json) in $D"; exit 3; }
 [ ! -e "$D/match/tp2_match.json" ] || { echo "$D/match already ran its check"; exit 3; }
 if [ -s "$RESEARCH_RUN_DIR/inputs/match.sha256" ]; then
-  (cd "$SW" && sha256sum --quiet -c "$RESEARCH_RUN_DIR/inputs/match.sha256") || { echo "the GPU legs in $D/match (or $ROW.tree) are not eu's"; exit 3; }
+  grep -vF "  $ROW.tree" "$RESEARCH_RUN_DIR/inputs/match.sha256" | (cd "$SW" && sha256sum --quiet -c -) ||
+    { echo "the GPU legs in $D/match are not eu's"; exit 3; }
 fi
 source "$TREE/integrations/vllm/manifests/glm_v2_tree/jobs/tree_guard.sh" && tree_guard "$ROW" "$SW" "$REF" || exit 2
 C=$(dirname "$(dirname "$RESEARCH_RUN_DIR")")/requests/$RESEARCH_RUN_ID/custody

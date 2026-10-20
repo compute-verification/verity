@@ -63,8 +63,10 @@ each waits for its GPUs on its node's lease, so a window runs back to back. eu i
 released where a CPU phase sits between (CIR-51).
 
 A row is built, served and judged by one code tree (`records publish --tree` is not checked against the stage runs):
-its first job writes `<row>.tree` (`cursor/glm-v2-21f3@SHA`) beside the row dir, the copies carry it, and every later job
-(`jobs/tree_guard.sh`) runs at that commit or at a descendant that changes only `manifests/records.json` and this directory.
+its first job writes `<row>.tree` (`cursor/glm-v2-21f3@SHA`) beside the row dir, and every later job (`jobs/tree_guard.sh`)
+runs at that commit or at a descendant that changes only `manifests/records.json` and this directory. The Build of record and
+the Match GPU legs are each their node's first job, so a copy settles the tree: the destination ends with the older of the two,
+and `copy_rowdir.sh` copies nothing (exit 2) unless the newer changes only those since.
 Only the Build and publish read a row's pins, so a moved row's re-pin may land between its Match GPU legs and its Build of
 record. A PR head merged after a row's first job reaches that row only by rerunning it; its later jobs are launched from a
 worktree at a commit the guard accepts (`git worktree add /tmp/glm-v2-SHA SHA`).
