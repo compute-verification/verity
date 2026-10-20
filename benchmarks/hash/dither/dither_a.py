@@ -32,7 +32,9 @@ A_w, so each call's A table still precedes its seeds and units, and A_(w+1) runs
 launches; only the streams they wait on change); with ao="as" (-aos; kh and hbk, whose seeds are a launch of their own)
 each call's seeds follow its A table on that stream, and its units wait on both; ao="m" and "ms" (-aom, -aoms) are the
 same on NA_MULTI A streams, call w's on stream w % NA_MULTI, since no call's table reads another's (each call's
-counter is in its own prefix words), and a join waits on every A stream used since the last.  With pt=True (-pt) the
+counter is in its own prefix words), and a join waits on every A stream used since the last; ao="mn" (-aomn; hbk
+and hbr) is "ms" with each call's noise there too, after its seeds (kh_one_noise into a ring of NA_MULTI workspaces,
+the side stream's kh_one_units reading it), so the side stream runs the units alone.  With pt=True (-pt) the
 window builds the receipt trees and the admit tables between steps on streams of their own (`Window.tree_streams`).
 With ls=True (-ls) each step's seeds read the live salt of the round before it (`Window.step_salt`).
 
@@ -84,8 +86,8 @@ UNITS = ("h1r", "kh", "hbk", "hbr"); KONE = ("hbk", "hbr")
 ZMODES = {"none": 0, "row": 1, "zy": 2, "zyc": 2}
 # nothing, the A tables, or the A tables and (kh, hbk) the seeds on the A stream; "m" and "ms" the same on NA_MULTI
 # A streams, call w's on stream w % NA_MULTI
-AO = ("", "a", "as", "m", "ms")
-AO_SEEDS = ("as", "ms")
+AO = ("", "a", "as", "m", "ms", "mn")
+AO_SEEDS = ("as", "ms", "mn")
 NA_MULTI = 4
 ZY_KIND = "zy-unit-table"
 UNIT = (32, 32)     # (UR, UC): the receipts' units; a narrower down_proj unit changes only this
@@ -260,7 +262,7 @@ class Side:
     def __init__(self, win: DO.Window, unit: str, h1u: str | None, z: str = "row", ao: str = "", pt: bool = False):
         if unit not in UNITS:
             raise ValueError(f"dither-a's unit: one of {UNITS}, not {unit!r}")
-        if ao not in AO or (ao in AO_SEEDS and unit == "h1r"):
+        if ao not in AO or (ao in AO_SEEDS and unit == "h1r") or (ao == "mn" and unit not in KONE):
             raise ValueError(f"dither-a's ao: one of {AO} ({AO_SEEDS} for kh and hbk, whose seeds are a launch of their "
                              f"own), not {ao!r} with unit {unit!r}")
         self.win, self.unit, self.z, self.zl, self.ao, self.pt, dev = win, unit, z, ZMODES[z], ao, pt, win.dev
@@ -272,12 +274,17 @@ class Side:
             # the A tables on a stream of their own above the units' priority: a call's table is a chain of dependent
             # compressions on a few blocks, so it runs beside the previous call's units, which fill the device; under
             # "m" and "ms" on NA_MULTI such streams, since no call's table reads another's
-            na = NA_MULTI if ao in ("m", "ms") else 1
+            na = NA_MULTI if ao in ("m", "ms", "mn") else 1
             self.astreams = [torch.cuda.Stream(device=dev, priority=-1) for _ in range(na)]
             self.a_done = [torch.cuda.Event() for _ in range(na)]
             self.a_join = [torch.cuda.Event() for _ in range(na)]
             # the A streams with work since the last join: a capture may wait only on events recorded inside it
             self.a_used: set[int] = set()
+            # under "mn" A stream i writes call w's noise into ws_ring[i] (w = i mod NA_MULTI) and the side stream's units
+            # read it, so the noise of call w + NA_MULTI waits on the units of call w (u_done[i], when recorded since
+            # the last join; a join orders every earlier unit before the next fork)
+            self.u_done = [torch.cuda.Event() for _ in range(na)]
+            self.u_rec: set[int] = set()
         self.work = EL.Workspace(dev)
         self.arch = EL.arch(dev.index)
         self.stage = torch.empty_like(win.plan.out)
@@ -314,7 +321,8 @@ class Side:
             h = self.h = C.CDLL(h1u)
             vp, u32 = C.c_void_p, C.c_uint
             h.kh_unit_ws.argtypes = [vp, vp, u32, u32, u32, vp, vp, vp, vp, u32, vp]
-            h.kh_one.argtypes = [vp, vp, u32, u32, u32, vp, vp, vp, vp, u32, vp, vp, vp, vp, vp, vp, vp, u32, vp]
+            for f in (h.kh_one, h.kh_one_noise, h.kh_one_units) if unit in KONE else (h.kh_one,):
+                f.argtypes = [vp, vp, u32, u32, u32, vp, vp, vp, vp, u32, vp, vp, vp, vp, vp, vp, vp, u32, vp]
             h.kh_ws_bytes.restype = C.c_ulonglong
             h.kh_ws_bytes.argtypes = [u32, u32, u32]
             h.kh_noise_blocks.restype = u32
@@ -334,6 +342,8 @@ class Side:
                 need = max(need, int(h.kh_ws_bytes(win.t, n, k)))
                 s0 += units
             self.ws = torch.empty((max(need, 64),), dtype=torch.uint8, device=dev)
+            if ao == "mn":
+                self.ws_ring = [self.ws] + [torch.empty_like(self.ws) for _ in range(NA_MULTI - 1)]
         if unit in KONE:
             # kh_one (the K split's h1k where the call's live units fit) for its receipts only: its z and y go to
             # scratch, and it reads a copy of the step with no flags, since dithera_commit and dithera_fault apply the
@@ -390,16 +400,25 @@ class Side:
         rc = 0 if self.ao in AO_SEEDS else self.seeds(w, st)
         live = -(-min(M, win.t) // 32)
         if self.unit in KONE:
-            return rc or self.h.kh_one(win.slot[w].data_ptr(), win.wt[w].data_ptr(), win.t, n, k,
-                                       win.plan.seeds.data_ptr() + 8 * 16 * self.seed0[w], win.live.data_ptr(),
-                                       self.stage.data_ptr() + 4 * win.plan.offs[w][0], self.ws.data_ptr(),
-                                       auto_j(live * (n // 32), self.nb[w], self.sms), self.zs[0].data_ptr(),
-                                       self.zs[1].data_ptr(), self.ys.data_ptr(), None, win.scale[w].data_ptr(),
-                                       s_w.data_ptr(), self.s_unit.data_ptr(), min(M, win.t), st)
+            f = self.h.kh_one_units if self.ao == "mn" else self.h.kh_one
+            return rc or f(*self.one_args(w, M, s_w), st)
         return rc or self.h.kh_unit_ws(win.slot[w].data_ptr(), win.wt[w].data_ptr(), win.t, n, k,
                                        win.plan.seeds.data_ptr() + 8 * 16 * self.seed0[w], win.live.data_ptr(),
                                        self.stage.data_ptr() + 4 * win.plan.offs[w][0], self.ws.data_ptr(),
                                        auto_j(live * (n // 32), self.nb[w], self.sms), st)
+
+    def one_args(self, w: int, M: int, s_w: torch.Tensor) -> tuple:
+        """kh_one's arguments for call w but its stream (the same to kh_one_noise and kh_one_units)."""
+        win = self.win
+        n, k = win.nk[w]
+        live = -(-min(M, win.t) // 32)
+        ws = self.ws_ring[w % NA_MULTI] if self.ao == "mn" else self.ws
+        return (win.slot[w].data_ptr(), win.wt[w].data_ptr(), win.t, n, k,
+                win.plan.seeds.data_ptr() + 8 * 16 * self.seed0[w], win.live.data_ptr(),
+                self.stage.data_ptr() + 4 * win.plan.offs[w][0], ws.data_ptr(),
+                auto_j(live * (n // 32), self.nb[w], self.sms), self.zs[0].data_ptr(), self.zs[1].data_ptr(),
+                self.ys.data_ptr(), None, win.scale[w].data_ptr(), s_w.data_ptr(), self.s_unit.data_ptr(),
+                min(M, win.t))
 
     def call(self, w: int, x: torch.Tensor, wt: torch.Tensor, s_w: torch.Tensor, y: torch.Tensor) -> None:
         win = self.win
@@ -420,11 +439,18 @@ class Side:
             rc = win.a_call(w, win.slot[w], win.scale[w], ast.cuda_stream)
             if self.ao in AO_SEEDS:
                 rc = rc or self.seeds(w, ast.cuda_stream)
+            if self.ao == "mn":
+                if i in self.u_rec:
+                    ast.wait_event(self.u_done[i])
+                rc = rc or self.h.kh_one_noise(*self.one_args(w, M, s_w), ast.cuda_stream)
             self.a_done[i].record(ast)
             self.side.wait_event(self.a_done[i])
             self.a_used.add(i)
             self.gemm(w, xq, s_a, wt, s_w, y)
             rc = rc or self.units(w, M, st, s_w)
+            if self.ao == "mn":
+                self.u_done[i].record(self.side)
+                self.u_rec.add(i)
         else:
             self.side.wait_event(self.fork)
             self.gemm(w, xq, s_a, wt, s_w, y)
@@ -451,6 +477,7 @@ class Side:
                     self.a_join[i].record(self.astreams[i])
                     main.wait_event(self.a_join[i])
                 self.a_used.clear()
+                self.u_rec.clear()
             self.join.record(self.side)
             main.wait_event(self.join)
             self.joins += 1

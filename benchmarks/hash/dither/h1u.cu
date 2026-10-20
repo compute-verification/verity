@@ -46,6 +46,7 @@
 //   kh_one(A, B, rows, N, K, seeds, live, out, ws, J, z, zo, y, ydump, sa, sw, step, M, stream)   the one-stream form
 //              (OneOut, below): kh_unit_ws' receipts (kh_unit's if ws is null) and the served z and y from the same MMAs
 //   kh_one_peel(the same)   kh_one peeled (PL, below): z = A B^T, so y is today's
+//   kh_one_noise(the same), kh_one_units(the same)   kh_one's noise launch and its units launch, apart
 //   kh_one_j10(A, B, rows, N, K, seeds, cseed, live, out, ws, J, z, zo, y, ydump, sa, sw, step, M, stream)   kh_one's
 //              two-launch form on J10-R's call-scale noise (measured only; at the end of this file)
 //   kh_words(K), kh_digits(K), kh_ws_bytes(M, N, K), kh_j10_ws_bytes(rows, N, K), kh_noise_blocks(K), kh_fault_shift()
@@ -1565,14 +1566,15 @@ extern "C" int kh_unit_ws(const void* A, const void* B, unsigned M, unsigned N, 
 
 // the one-stream call: kh_unit's (or with ws, kh_unit_ws') receipts of A [rows, K] and B [N, K], and the cells' z and
 // y (OneOut) from the same MMAs; step on the device ({parity, m, pad, flags}), M the y rows. ws null: the fused form.
-template <bool PL>
+// PART: 0 both launches, 1 the noise only (h1s_noise into ws), 2 the units only (on a ws the noise already wrote)
+template <bool PL, int PART = 0>
 static int one_call(const void* A, const void* B, unsigned rows, unsigned N, unsigned K, const void* seeds,
                     const void* live, void* out, void* ws, unsigned J, int* z, int* zo, void* y, void* ydump,
                     const float* sa, const float* sw, const int* step, unsigned M, void* stream) {
 #if H1U_SPLIT
   return 2;
 #endif
-  if (K % 512 || rows % 32 || N % 32 || !z || !y || !step || (ws && !J) || (H1K_RONLY && PL)) return 2;
+  if (K % 512 || rows % 32 || N % 32 || !z || !y || !step || (ws && !J) || (H1K_RONLY && PL) || (PART && !ws)) return 2;
   const int m = n_digits((int)(K / 32));
   if (m != 2 && m != 3) return 2;
   const unsigned units = (rows / 32) * (N / 32);
@@ -1580,13 +1582,15 @@ static int one_call(const void* A, const void* B, unsigned rows, unsigned N, uns
   cudaStream_t s = (cudaStream_t)stream;
   const OneOut oo{z, zo, (__nv_bfloat16*)y, (__nv_bfloat16*)ydump, sa, sw, step, M};
   if (ws) {
-    const unsigned nb = kh_noise_blocks(K);
-    const unsigned long long items = (unsigned long long)units * ((nb + 32 * J - 1) / (32 * J));
-    h1s_noise<<<(unsigned)((items * 32 + 255) / 256), 256, 0, s>>>((const u64*)seeds, units, N / 32, nb, J,
-                                                                    (const uint8_t*)live, (u32*)ws);
-    if (m == 2)
+    if (PART != 2) {
+      const unsigned nb = kh_noise_blocks(K);
+      const unsigned long long items = (unsigned long long)units * ((nb + 32 * J - 1) / (32 * J));
+      h1s_noise<<<(unsigned)((items * 32 + 255) / 256), 256, 0, s>>>((const u64*)seeds, units, N / 32, nb, J,
+                                                                      (const uint8_t*)live, (u32*)ws);
+    }
+    if (PART != 1 && m == 2)
       launch_one<2, true, false, PL>(units, s, A, B, rows, N, K, seeds, live, out, ws, oo);
-    else
+    else if (PART != 1)
       launch_one<3, true, false, PL>(units, s, A, B, rows, N, K, seeds, live, out, ws, oo);
   } else if (m == 2) {
     launch_one<2, false, false, PL>(units, s, A, B, rows, N, K, seeds, live, out, nullptr, oo);
@@ -1600,6 +1604,20 @@ extern "C" int kh_one(const void* A, const void* B, unsigned rows, unsigned N, u
                       const void* live, void* out, void* ws, unsigned J, int* z, int* zo, void* y, void* ydump,
                       const float* sa, const float* sw, const int* step, unsigned M, void* stream) {
   return one_call<false>(A, B, rows, N, K, seeds, live, out, ws, J, z, zo, y, ydump, sa, sw, step, M, stream);
+}
+
+// kh_one's two launches apart, for a caller that runs the noise on another stream (dither-a -aomn): kh_one_noise is
+// its h1s_noise into ws, kh_one_units its units on that ws once written; kh_one's arguments, the same to both
+extern "C" int kh_one_noise(const void* A, const void* B, unsigned rows, unsigned N, unsigned K, const void* seeds,
+                            const void* live, void* out, void* ws, unsigned J, int* z, int* zo, void* y, void* ydump,
+                            const float* sa, const float* sw, const int* step, unsigned M, void* stream) {
+  return one_call<false, 1>(A, B, rows, N, K, seeds, live, out, ws, J, z, zo, y, ydump, sa, sw, step, M, stream);
+}
+
+extern "C" int kh_one_units(const void* A, const void* B, unsigned rows, unsigned N, unsigned K, const void* seeds,
+                            const void* live, void* out, void* ws, unsigned J, int* z, int* zo, void* y, void* ydump,
+                            const float* sa, const float* sw, const int* step, unsigned M, void* stream) {
+  return one_call<false, 2>(A, B, rows, N, K, seeds, live, out, ws, J, z, zo, y, ydump, sa, sw, step, M, stream);
 }
 
 // kh_one with the peel (PL): z = A B^T and y = dequant(z), today's y, the receipts unchanged
