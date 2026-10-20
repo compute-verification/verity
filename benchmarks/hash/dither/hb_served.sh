@@ -141,9 +141,9 @@ S=$(mktemp -d "${TMPDIR:-/tmp}/dither-hb-served.XXXXXX")
 export VLLM_CACHE_ROOT=$S/vllm-cache TORCHINDUCTOR_CACHE_DIR=$S/inductor-cache
 trap 'rm -rf "$S"' EXIT
 export DITHER_H1C=$INPUTS/libh1c.so DITHER_H1F=$INPUTS/libh1f.so DITHER_H1O=$INPUTS/libh1o.so VLLM_DISABLE_COMPILE_CACHE=1 VLLM_USE_FLASHINFER_SAMPLER=0
-# CA's H1V3: dither_one's gate runs its h1tile.reference(stream=True) on a few units (DITHER_H1V3_TREE), and hb_peel's
-# gate (dither-1s-hbp, -hbk and the dither-a arms on them) the tree with the peel's too (HB_H1V3_PEEL_TREE). Both are this
-# source's own (PouwH1Tile_v4, ungated) unless H1V3_SHA or H1V3_PEEL_SHA names a commit
+# CA's H1V3: the dither gates run its h1tile.reference(stream=True) on a few units (DITHER_H1V3_TREE), and hb_peel's
+# (dither-1s-hbp and -hbk) the tree with the peel's too (HB_H1V3_PEEL_TREE); a -bG arm's gate reads CA's banded reference
+# in their place. Both trees are this source's own (PouwH1Tile_v4, ungated) unless H1V3_SHA or H1V3_PEEL_SHA names a commit
 h1v3_tree() {  # SHA DIR: DIR/verity from the sent h1v3-SHA.tar.gz, else this repository's git; exit 14 without one
   mkdir -p "$2"
   if [ -f "$INPUTS/h1v3-$1.tar.gz" ]; then tar -xzf "$INPUTS/h1v3-$1.tar.gz" -C "$2"
