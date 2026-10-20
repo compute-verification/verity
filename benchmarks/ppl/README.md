@@ -164,6 +164,8 @@ times 2^b), with s_q = f32(2^b)/f32(L) and P = e as before, so keys whose e roun
 The arms:
 - `vllm-int8` is vLLM's plain step as VLLM-18 serves it: int8 everywhere, rounded, unrotated, lm_head bf16, float
   softmax.
+- `vllm-int8-lm` and `vllm-int8-lut-cal-lm` are `vllm-int8` and `vllm-int8-lut-cal` with lm_head on the same int8 grid,
+  as recipe `verity-int8-channel127/v2` serves it (VLLM-49).
 - `vllm-int8-khead` changes only the K scale, to one per (layer, KV head).
 - `-khead-sink` is `-lut-sink`'s float twin: the same K scales, float softmax, and key 0 in a P block of its own
   (`p_sink`).
