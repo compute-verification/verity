@@ -12,9 +12,9 @@ h1o_ref's v3 z:
     (int8_ops.scaled_mm's body, the exact arm's) on every call, required; three units on the CPU: the kernel's z = A B^T, the
     receipt = CA's definition's (`dither_one.h1v3_unit`) and CA's own code's (`h1v3_itself`, H1V3's h1tile.reference),
     and CA's z peeled on the CPU from its own noise (`peel_cpu`) = A B^T, where the literal peel z - b B^T - A c^T - b c^T
-    is reported (it misses the wrap term 256 xa (B + c)^T); and, where hb_served.sh extracted H1V3 with the peel
-    (HB_H1V3_PEEL_TREE, f56cbc3a04: z = A B^T is v3's definition), the kernel's z and receipt equal that tree's
-    h1tile.reference(stream=True) itself, with no CPU peel;
+    is reported (it misses the wrap term 256 xa (B + c)^T); and the kernel's z and receipt equal H1V3 with the peel's
+    h1tile.reference(stream=True) itself (this source's, PouwH1Tile_v4 ungated, unless HB_H1V3_PEEL_TREE names another:
+    z = A B^T is v3's definition), with no CPU peel; both CA checks are required;
   * fault: z off A B^T by 2^FAULT_SHIFT at unit 0's cell (0, 0) of every call and nowhere else, that unit's receipt off
     h1r's and no other, y = dequant of that z and moved there;
   * fault_wb: every receipt unmoved, z off A B^T only in column 0 of unit 0, by `dither_one.wb_fault_expected` on
@@ -67,12 +67,11 @@ def xa_fault_expected(a: np.ndarray, b: np.ndarray, salt: bytes, position: int, 
 
 
 def h1v3_peeled(units: list[dict]) -> dict:
-    """`dither_one.h1v3_itself` on the peeled H1V3 tree (HB_H1V3_PEEL_TREE): CA's own h1tile.reference(stream=True), whose
-    z is A B^T; {"tree": None} when hb_served.sh extracted none."""
-    tree = os.environ.get("HB_H1V3_PEEL_TREE")
-    if not tree:
-        return {"tree": None}
-    doc = {"tree": tree, "sha": os.environ.get("HB_H1V3_PEEL_SHA")}
+    """`dither_one.h1v3_itself` on the peeled H1V3 tree: CA's own h1tile.reference(stream=True), whose z is A B^T. The tree
+    is this source's own (PouwH1Tile_v4, ungated) unless HB_H1V3_PEEL_TREE names another (hb_served.sh's H1V3_PEEL_SHA)."""
+    tree = os.environ.get("HB_H1V3_PEEL_TREE") or os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(
+        os.path.abspath(__file__)))))
+    doc = {"tree": tree, "sha": os.environ.get("HB_H1V3_PEEL_SHA") or os.environ.get("RESEARCH_SOURCE_SHA") or "source"}
     with tempfile.TemporaryDirectory() as td:
         src, dst = os.path.join(td, "in.json"), os.path.join(td, "out.json")
         with open(src, "w") as f:
@@ -281,8 +280,10 @@ def check(win: DO.Window, lib_h1o: str, which: str = "gate", n_cpu_units: int = 
         hv = DO.h1v3_itself(h1v3_in)
         if "units" in hv:
             for x, (zk, rk, a32, b32, salt_, pos, rts), hu in zip(units_doc, kernel_out, hv["units"]):
-                pc = peel_cpu(np.array(hu["z"], dtype=np.int64), a32, b32, salt_, pos, rts)
-                x["h1v3_peeled_equal"] = bool((zk == pc["exact"]).all())
+                hz = np.array(hu["z"], dtype=np.int64)
+                # a tree with the peel (its peel_seg) states z = A B^T itself; v3 before it, X (B + c)^T, is peeled here
+                pz = hz if hv.get("peeled") else peel_cpu(hz, a32, b32, salt_, pos, rts)["exact"]
+                x["h1v3_peeled_equal"] = bool((zk == pz).all())
                 x["h1v3_receipt_equal"] = rk == hu["receipt"]
         doc["h1v3"] = {k_: v for k_, v in hv.items() if k_ != "units"}
         hp = h1v3_peeled(h1v3_in)
@@ -292,10 +293,9 @@ def check(win: DO.Window, lib_h1o: str, which: str = "gate", n_cpu_units: int = 
                 x["h1v3_peel_receipt_equal"] = rk == hu["receipt"]
         doc["h1v3_peel"] = {k_: v for k_, v in hp.items() if k_ != "units"}
     doc["vs_cpu"] = units_doc
-    h1v3_ok = which != "gate" or doc["h1v3"].get("tree") is None or (
-        "units" in hv and all(x["h1v3_peeled_equal"] and x["h1v3_receipt_equal"] for x in units_doc))
-    h1v3_ok = h1v3_ok and (which != "gate" or doc["h1v3_peel"].get("tree") is None or (
-        "units" in hp and all(x["h1v3_peel_z_equal"] and x["h1v3_peel_receipt_equal"] for x in units_doc)))
+    h1v3_ok = which != "gate" or (
+        "units" in hv and all(x["h1v3_peeled_equal"] and x["h1v3_receipt_equal"] for x in units_doc)
+        and "units" in hp and all(x["h1v3_peel_z_equal"] and x["h1v3_peel_receipt_equal"] for x in units_doc))
     doc["ok"] = (not rc_bad and not z_bad and (g["y"] is None or not y_bad) and today_ok
                  and all(x["z_equal_today"] and x["receipt_equal"] and x["v3_cells_eq_x_bc"] == 1024
                          and x["v3_peeled_exact_eq_today"] == 1024 for x in units_doc)

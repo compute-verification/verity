@@ -674,15 +674,16 @@ def a_bad_diag(g: dict, bad: list[int]) -> list[dict]:
 
 
 def h1v3_itself(units: list[dict]) -> dict:
-    """`h1v3_ref.py` under the H1V3 tree sbench.sh extracted (DITHER_H1V3_TREE): z and receipt of each unit by CA's own
-    `h1tile.reference(stream=True)`; {"tree": None} when there is none."""
+    """`h1v3_ref.py` under CA's tree: z and receipt of each unit by CA's own `h1tile.reference(stream=True)`. The tree is
+    this source's own (PouwH1Tile_v4, ungated: v3's z, receipts and wrap bits with the peel) unless DITHER_H1V3_TREE
+    names another (a launcher's H1V3_SHA)."""
     import json
     import subprocess
     import sys
     import tempfile
-    tree = os.environ.get("DITHER_H1V3_TREE")
-    if not tree:
-        return {"tree": None}
+    tree = os.environ.get("DITHER_H1V3_TREE") or os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(
+        os.path.abspath(__file__)))))
+    sha = os.environ.get("DITHER_H1V3_SHA") or os.environ.get("RESEARCH_SOURCE_SHA") or "source"
     with tempfile.TemporaryDirectory() as td:
         src, dst = os.path.join(td, "in.json"), os.path.join(td, "out.json")
         with open(src, "w") as f:
@@ -691,10 +692,10 @@ def h1v3_itself(units: list[dict]) -> dict:
         p = subprocess.run([sys.executable, os.path.join(os.path.dirname(os.path.abspath(__file__)), "h1v3_ref.py"), src, dst],
                            env=env, capture_output=True, text=True)
         if p.returncode:
-            return {"tree": tree, "sha": os.environ.get("DITHER_H1V3_SHA"), "error": p.stderr[-2000:]}
+            return {"tree": tree, "sha": sha, "error": p.stderr[-2000:]}
         with open(dst) as f:
             doc = json.load(f)
-    return {"tree": tree, "sha": os.environ.get("DITHER_H1V3_SHA"), **doc}
+    return {"tree": tree, "sha": sha, **doc}
 
 
 def check(win: Window, lib_h1o: str, which: str = "gate", n_cpu_units: int = 3,
@@ -909,8 +910,7 @@ def check(win: Window, lib_h1o: str, which: str = "gate", n_cpu_units: int = 3,
                 x["h1v3_receipt_equal"] = rk == hu["receipt"]
         doc["h1v3"] = {k_: v for k_, v in hv.items() if k_ != "units"}
     doc["vs_h1v3_cpu"] = units_doc
-    h1v3_ok = which != "gate" or doc["h1v3"].get("tree") is None or (
-        "units" in hv and all(x["h1v3_z_equal"] and x["h1v3_receipt_equal"] for x in units_doc))
+    h1v3_ok = which != "gate" or ("units" in hv and all(x["h1v3_z_equal"] and x["h1v3_receipt_equal"] for x in units_doc))
     today_ok = not (win.peel and which == "gate") or doc.get("y_vs_today", {}).get("calls_equal") == L
     doc["ok"] = (not rc_bad and not z_bad and (g["y"] is None or not y_bad) and today_ok
                  and all(x["z_equal"] and x["receipt_equal"] and x["cells_z_ne_x_bc"] == 0

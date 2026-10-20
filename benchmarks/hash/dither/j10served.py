@@ -119,7 +119,7 @@ class HBBand:
 
         BandH1R.G = self.g
         hb_peel.H1R, DO.h1v3_unit, hb_peel.peel_cpu = BandH1R, unit, peel
-        DO.h1v3_itself, hb_peel.h1v3_peeled = (lambda units: {"tree": None}), ca
+        DO.h1v3_itself, hb_peel.h1v3_peeled = ca, ca
         try:
             doc = hb_peel.check(win, lib, which)
         finally:

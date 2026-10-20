@@ -1,23 +1,29 @@
-"""CA's H1V3 itself on a few units: `h1tile.reference(..., stream=True)` from the tree on PYTHONPATH (sbench.sh extracts
-cursor/h1-v3-1172's `verity/` at DITHER_H1V3_SHA), so the gate holds the served kernel's z and receipts to the Definition's
-own code, not only to this lane's CPU twin.
+"""CA's H1V3 itself on a few units: `h1tile.reference(..., stream=True)` from the tree on PYTHONPATH (this source's own,
+PouwH1Tile_v4 ungated, unless a launcher's H1V3_SHA extracted another commit's `verity/`), so the gate holds the served
+kernel's z and receipts to the Definition's own code, not only to this lane's CPU twin.
 
     PYTHONPATH=TREE python h1v3_ref.py IN.json OUT.json
 
 IN: a list of units {a, b (32 rows of K int8 encodings each), salt (hex), position, roots ([hex root_a, hex root_b])};
 OUT: {"h1tile": the module's file, "peeled": whether its z is A B^T (its `peel_seg`, 4733b9ab0c on) rather than
 X (B + c)^T, "units": [{z (32 x 32 row-major, s32), receipt}]}.  IN {"wrap_table": true}: OUT {"h1tile", "peeled",
-"wrap": `wrap_bits(b, c, u)` at index (256 c + u) * 256 + b for every byte b, u and bit c}.
+"wrap": `wrap_bits(b, c, u)` at index (256 c + u) * 256 + b for every byte b, u and bit c}.  Exit 3 when the h1tile
+imported is not under TREE (a TREE without `verity/` would fall back to the environment's installed verity).
 """
 from __future__ import annotations
 
 import json
+import os
 import sys
 
 from verity.core.protocols.pouw.circuit import h1tile as HT
 
 
 def main() -> int:
+    tree = os.path.realpath(os.environ.get("PYTHONPATH", "").split(os.pathsep)[0] or ".")
+    if not os.path.realpath(HT.__file__).startswith(tree + os.sep):
+        sys.stderr.write(f"h1v3_ref: h1tile is {HT.__file__}, not under the tree {tree} (PYTHONPATH)\n")
+        return 3
     units = json.loads(open(sys.argv[1]).read())
     peeled = hasattr(HT, "peel_seg")
     if isinstance(units, dict) and units.get("wrap_table"):

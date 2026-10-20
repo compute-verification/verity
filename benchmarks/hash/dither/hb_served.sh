@@ -31,9 +31,10 @@
 # dither-1s-hbp, dither-1s-hb peeled (kh_one_peel: z = A B^T, y today's; hb_peel.py's gate, sent too), from the .so
 # HB_H1U_PEEL names if it's set (the fastest peeled build need not be the fastest unpeeled one); and dither-1s-hbk,
 # dither-1s-hbp on the unit's K split (an H1U_KSPLIT build, the .so HB_H1U_KSPLIT names). The
-# dither-1s arms' gate also runs CA's H1V3 h1tile.reference at H1V3_SHA (default bd702a2c46), and dither-1s-hbp's at
-# H1V3_PEEL_SHA too (default f56cbc3a04, v3 with the peel as PR #2776), each from a sent h1v3-SHA.tar.gz (`git archive SHA verity |
-# gzip`; a --cwd source tree has no history), else the source's git.
+# dither-1s arms' gate also runs CA's H1V3 h1tile.reference, this source's own (PouwH1Tile_v4, ungated) unless H1V3_SHA
+# names a commit, and dither-1s-hbp's the tree with the peel's too, the source's unless H1V3_PEEL_SHA names one (v3 before
+# the peel, bd702a2c46, is peeled on the CPU), each from a sent h1v3-SHA.tar.gz (`git archive SHA verity | gzip`; a --cwd
+# source tree has no history), else the source's git.
 # Env: HB_WHO (the lease owner, default kernels-dither-hb), DITHER_NSYS=1 (sbench's nsys capture of the gate's kernels; kernels.py counts each dither arm's inside its NVTX
 # range, so the source must be dither-rtx's f2c0071c7c or later), LEASE (default "--max-min 14"), RUN_TIMEOUT (seconds
 # inside the lease, default 820), VERITY_BENCH_VENV (default /workspace/cp/venv312), NVCC (default CUDA 13.0's).
@@ -140,34 +141,30 @@ S=$(mktemp -d "${TMPDIR:-/tmp}/dither-hb-served.XXXXXX")
 export VLLM_CACHE_ROOT=$S/vllm-cache TORCHINDUCTOR_CACHE_DIR=$S/inductor-cache
 trap 'rm -rf "$S"' EXIT
 export DITHER_H1C=$INPUTS/libh1c.so DITHER_H1F=$INPUTS/libh1f.so DITHER_H1O=$INPUTS/libh1o.so VLLM_DISABLE_COMPILE_CACHE=1 VLLM_USE_FLASHINFER_SAMPLER=0
-# CA's H1V3 (cursor/h1-v3-1172) at its pinned head, as the source's sbench.sh extracts it: dither_one's gate runs its
-# h1tile.reference(stream=True) on a few units
-H1V3_SHA=${H1V3_SHA:-bd702a2c46}
-mkdir -p "$S/h1v3"
-if [ -f "$INPUTS/h1v3-$H1V3_SHA.tar.gz" ]; then
-  tar -xzf "$INPUTS/h1v3-$H1V3_SHA.tar.gz" -C "$S/h1v3"
+# CA's H1V3: dither_one's gate runs its h1tile.reference(stream=True) on a few units (DITHER_H1V3_TREE), and hb_peel's
+# gate (dither-1s-hbp, -hbk and the dither-a arms on them) the tree with the peel's too (HB_H1V3_PEEL_TREE). Both are this
+# source's own (PouwH1Tile_v4, ungated) unless H1V3_SHA or H1V3_PEEL_SHA names a commit
+h1v3_tree() {  # SHA DIR: DIR/verity from the sent h1v3-SHA.tar.gz, else this repository's git; exit 14 without one
+  mkdir -p "$2"
+  if [ -f "$INPUTS/h1v3-$1.tar.gz" ]; then tar -xzf "$INPUTS/h1v3-$1.tar.gz" -C "$2"
+  else git -C "$ROOT" archive "$1" verity 2>/dev/null | tar -x -C "$2" 2>/dev/null; fi
+  [ -f "$2/verity/core/protocols/pouw/circuit/h1tile.py" ] || { echo "hb_served: H1V3_NO_TREE at $1" >&2; exit 14; }
+}
+if [ -n "${H1V3_SHA:-}" ]; then
+  h1v3_tree "$H1V3_SHA" "$S/h1v3"; export DITHER_H1V3_TREE=$S/h1v3 DITHER_H1V3_SHA=$H1V3_SHA
 else
-  git -C "$ROOT" archive "$H1V3_SHA" verity 2>/dev/null | tar -x -C "$S/h1v3" 2>/dev/null
+  export DITHER_H1V3_TREE=$ROOT DITHER_H1V3_SHA=${RESEARCH_SOURCE_SHA:-source}
 fi
-[ -f "$S/h1v3/verity/core/protocols/pouw/circuit/h1tile.py" ] \
-  && export DITHER_H1V3_TREE=$S/h1v3 DITHER_H1V3_SHA=$H1V3_SHA || echo "hb_served: no H1V3 tree at $H1V3_SHA"
-echo "h1v3 ${DITHER_H1V3_SHA:-none}" >> "$OUT/env/wrapper.txt"
-# H1V3 with the peel (z = A B^T, CA 12:03Z; #2776 at f56cbc3a04, CA 13:31Z, its reference 4733b9ab0c's) at H1V3_PEEL_SHA:
-# dither-1s-hbp's and dither-1s-hbk's gate holds z and receipts to that tree's h1tile.reference itself; dither-1s-hb, which
-# serves the dithered product, stays on H1V3_SHA's
-H1V3_PEEL_SHA=${H1V3_PEEL_SHA:-f56cbc3a04}
-mkdir -p "$S/h1v3p"
-if [ -f "$INPUTS/h1v3-$H1V3_PEEL_SHA.tar.gz" ]; then
-  tar -xzf "$INPUTS/h1v3-$H1V3_PEEL_SHA.tar.gz" -C "$S/h1v3p"
+echo "h1v3 $DITHER_H1V3_SHA" >> "$OUT/env/wrapper.txt"
+if [ -n "${H1V3_PEEL_SHA:-}" ]; then
+  h1v3_tree "$H1V3_PEEL_SHA" "$S/h1v3p"; export HB_H1V3_PEEL_TREE=$S/h1v3p HB_H1V3_PEEL_SHA=$H1V3_PEEL_SHA
 else
-  git -C "$ROOT" archive "$H1V3_PEEL_SHA" verity 2>/dev/null | tar -x -C "$S/h1v3p" 2>/dev/null
+  export HB_H1V3_PEEL_TREE=$ROOT HB_H1V3_PEEL_SHA=${RESEARCH_SOURCE_SHA:-source}
 fi
-grep -qs "^def peel_seg" "$S/h1v3p/verity/core/protocols/pouw/circuit/h1tile.py" \
-  && export HB_H1V3_PEEL_TREE=$S/h1v3p HB_H1V3_PEEL_SHA=$H1V3_PEEL_SHA
-echo "h1v3_peel ${HB_H1V3_PEEL_SHA:-none}" >> "$OUT/env/wrapper.txt"
+echo "h1v3_peel $HB_H1V3_PEEL_SHA" >> "$OUT/env/wrapper.txt"
 case " $* " in *dither-1s-hbp*|*dither-1s-hbk*)
-  [ -n "${HB_H1V3_PEEL_TREE:-}" ] || {
-    echo "hb_served.sh: dither-1s-hbp needs H1V3 with the peel: --send h1v3-$H1V3_PEEL_SHA.tar.gz (git archive $H1V3_PEEL_SHA verity | gzip)" >&2
+  grep -qs "^def peel_seg" "$HB_H1V3_PEEL_TREE/verity/core/protocols/pouw/circuit/h1tile.py" || {
+    echo "hb_served.sh: dither-1s-hbp needs H1V3 with the peel (peel_seg) at $HB_H1V3_PEEL_SHA" >&2
     exit 2; } ;;
 esac
 # the dither windows' coins are the Lean verifier of record's (pouw.verifier.coins): built before the lease, not inside it

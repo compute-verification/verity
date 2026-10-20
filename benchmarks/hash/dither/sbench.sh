@@ -63,18 +63,22 @@ export DITHER_H1C=$S/libh1c.so DITHER_H1F=$S/libh1f.so DITHER_H1O=$S/libh1o.so V
 CREDIT_GATE_SHA=${CREDIT_GATE_SHA:-b25b34d96e}
 git show "$CREDIT_GATE_SHA:integrations/vllm/verity_vllm/protocol_options/credit_gate.py" > "$S/credit_gate.py" 2>/dev/null \
   && export DITHER_CREDIT_GATE=$S/credit_gate.py || echo "sbench: no credit_gate.py at $CREDIT_GATE_SHA"
-# CA's H1V3 (#2776, cursor/h1-v3-1172, with the wrap correction and the peel, z = A B^T) at its pinned head: dither_one's
-# gate runs its h1tile.reference.  From this repository, else (the node's lacks the commit) the archive sent with the run:
-# `git archive --format=tar.gz $H1V3_SHA verity > h1v3-$H1V3_SHA.tar.gz`, `research run --send` it
-H1V3_SHA=${H1V3_SHA:-f56cbc3a04}
-mkdir -p "$S/h1v3"
-if git cat-file -e "$H1V3_SHA^{commit}" 2>/dev/null; then
-  git archive "$H1V3_SHA" verity | tar -x -C "$S/h1v3"
-elif [ -f "$D/inputs/h1v3-$H1V3_SHA.tar.gz" ]; then
-  tar -xzf "$D/inputs/h1v3-$H1V3_SHA.tar.gz" -C "$S/h1v3"
+# CA's H1V3 (with the wrap correction and the peel, z = A B^T): dither_one's gate runs its h1tile.reference.  By default
+# this source's own (PouwH1Tile_v4, ungated); H1V3_SHA names another commit, from this repository, else (the node's lacks
+# the commit) the archive sent with the run: `git archive --format=tar.gz $H1V3_SHA verity > h1v3-$H1V3_SHA.tar.gz`,
+# `research run --send` it
+if [ -n "${H1V3_SHA:-}" ]; then
+  mkdir -p "$S/h1v3"
+  if git cat-file -e "$H1V3_SHA^{commit}" 2>/dev/null; then
+    git archive "$H1V3_SHA" verity | tar -x -C "$S/h1v3"
+  elif [ -f "$D/inputs/h1v3-$H1V3_SHA.tar.gz" ]; then
+    tar -xzf "$D/inputs/h1v3-$H1V3_SHA.tar.gz" -C "$S/h1v3"
+  fi
+  [ -f "$S/h1v3/verity/core/protocols/pouw/circuit/h1tile.py" ] || { echo "sbench: H1V3_NO_TREE at $H1V3_SHA"; exit 14; }
+  export DITHER_H1V3_TREE=$S/h1v3 DITHER_H1V3_SHA=$H1V3_SHA
+else
+  export DITHER_H1V3_TREE=$ROOT DITHER_H1V3_SHA=${RESEARCH_SOURCE_SHA:-source}
 fi
-[ -f "$S/h1v3/verity/core/protocols/pouw/circuit/h1tile.py" ] \
-  && export DITHER_H1V3_TREE=$S/h1v3 DITHER_H1V3_SHA=$H1V3_SHA || echo "sbench: no H1V3 tree at $H1V3_SHA"
 # ASK-64's measured round trips (percall_rtt.py's percall-wait-ns.txt, sent with the run) for the dither-1s-percall-rtt arm
 [ -f "$D/inputs/percall-wait-ns.txt" ] && export DITHER_PERCALL_WAITS=$D/inputs/percall-wait-ns.txt
 cd integrations/vllm
@@ -84,7 +88,7 @@ export PYTHONPATH=.:$ROOT:$ROOT/tools/research/src:$ROOT/benchmarks/pouw/served_
 export HF_HOME=${HF_HOME:-/workspace/hf} FLASHINFER_CUDA_ARCH_LIST=12.0f
 # the wrap correction's pieces against H1V3 on the CPU, before the lease
 "$PY" "$ROOT/benchmarks/hash/dither/wrapcheck.py" | tee "$OUT/wrapcheck.json"
-case ${PIPESTATUS[0]} in 0) ;; 2) echo "sbench: wrapcheck skipped (no H1V3 tree)" ;; *) echo "sbench: WRAPCHECK_FAIL"; exit 12 ;; esac
+[ "${PIPESTATUS[0]}" = 0 ] || { echo "sbench: WRAPCHECK_FAIL"; exit 12; }
 NSYS=()
 if [ "${DITHER_NSYS:-}" = 1 ] || [ "${DITHER_NSYS:-}" = prof ]; then
   NSYS=("$CUDA/bin/nsys" profile -t cuda,nvtx --cuda-graph-trace=node --sample=none --cpuctxsw=none

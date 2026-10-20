@@ -52,8 +52,9 @@ the coin the step's noise read (RT4-INT-12, which needs the units after their ro
 `check` on the gate, control and fault captures (each step's buffers 0xA5 before its kernels wrote them): every call's
 A, admit and z roots and the round against commit.py; z = A B^T (int_mm, the A the A table committed) on every call and
 zero past m; the served y (dumped) = dequant(z); every receipt = h1r v1's on the saved slots under the window's salt and
-the CPU's roots (another unit implementation); three units' receipts by CA's definition on the CPU (`h1v3_unit`) and by
-H1V3's own code.  The control (nothing written: the A slot, z, receipts) must be refused on z and on the receipts; the
+the CPU's roots (another unit implementation); three units' receipts by CA's definition on the CPU (`h1v3_unit`), and
+their receipts and z by H1V3's own code with the peel (`h1v3_itself`: this source's h1tile unless DITHER_H1V3_TREE names a
+tree; one without the peel is refused).  The control (nothing written: the A slot, z, receipts) must be refused on z and on the receipts; the
 fault must be refused on the receipts at exactly the flipped words, z and y untouched; "fault_y" (bit 0 of every call's
 served y[0, 0] flipped in place) must be refused at run time on every call's y root, every other commitment kept; and
 "fault_rr" (the round recorded without the receipt roots) must be refused on the receipt-step leaf and the round alone.
@@ -906,8 +907,8 @@ def check(win: DO.Window, lib_h1o: str, which: str = "gate", n_cpu_units: int = 
             del x["_zk"], x["_rk"]
         doc["h1v3"] = {k_: v for k_, v in hv.items() if k_ != "units"}
     doc["vs_h1v3_cpu"] = units_doc
-    h1v3_ok = which != "gate" or doc["h1v3"].get("tree") is None or (
-        "units" in hv and all(x["h1v3_receipt_equal"] and x.get("h1v3_z_equal", True) for x in units_doc))
+    h1v3_ok = which != "gate" or ("units" in hv and bool(hv.get("peeled")) and all(
+        x["h1v3_receipt_equal"] and x["h1v3_z_equal"] for x in units_doc))
     doc["ok"] = (not rc_bad and not z_bad and (g["y"] is None or not y_bad) and not yleaf_bad and commits_ok and h1v3_ok
                  and y_match and not (zy and doc["y_refused_steps"])
                  and all(x["receipt_equal"] and x["z_equal_today"] for x in units_doc))
