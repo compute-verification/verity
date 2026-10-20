@@ -182,8 +182,14 @@ source = "Nsight Compute §2.3.6 defines the uniform pipe ('a scalar unit') with
 # block-scaled kinds' FP4 figure, which would put it at 256. RT-ISA timed kind::mxf4, kind::mxf4nvf4 and kind::f8f6f4
 # E2M1 alone at those lines (r20261019-090041-1ef5). Each `mma.sync .f64` shape is a DMMA class at the f64 peak
 # (RT-ISA-1): DMMA.8x8x4 runs at it, and the m16n8 shapes are untimed.
+# The census's memory, atomic and control classes (ATOMS32, ATOME32, LDS128, STS32, STS128, STG32, STG128, REDUX,
+# REDG32, VIADD, NOROW and the catch-all UNLISTED) are issue only: no document gives them a line on a row of the
+# sheet, so A2 prices each at its issue slot alone, as the measured catch-all is (DC-CENSUS-1,
+# note:20261019T2245Z-draft-dc-census).
 [kinds]
 ALU = { pipe = "alu" }
+ATOME32 = {}
+ATOMS32 = {}
 DMMA1684 = { type = "f64", m = 16, n = 8, k = 4, warps = 1 }
 DMMA1688 = { type = "f64", m = 16, n = 8, k = 8, warps = 1 }
 DMMA16816 = { type = "f64", m = 16, n = 8, k = 16, warps = 1 }
@@ -192,6 +198,7 @@ FFMA = {}
 IMAD = { pipe = "imad" }
 IMMA16816_S8 = { type = "s8", m = 16, n = 8, k = 16, warps = 1 }
 IMMA16832_S8 = { type = "s8", m = 16, n = 8, k = 32, warps = 1 }
+LDS128 = {}
 LDTM_16X128B_X8 = {}
 LDTM_16X256B_X4 = {}
 LDTM_16X64B_X16 = {}
@@ -201,8 +208,16 @@ LDTM_32X32B_X16 = {}
 LDTM_32X32B_X32 = {}
 LDTM_32X32B_X4 = {}
 LDTM_32X32B_X64 = {}
+NOROW = {}
+REDG32 = {}
+REDUX = {}
 SHFL = { pipe = "shfl" }
+STG128 = {}
+STG32 = {}
+STS128 = {}
+STS32 = {}
 UNI = { pipe = "uniform" }
+UNLISTED = {}
 UTCHMMA_BF16_M128_N256 = { type = "bf16", m = 128, n = 256, k = 16, warps = 1 }
 UTCHMMA_F16_M128_N256 = { type = "f16", m = 128, n = 256, k = 16, warps = 1 }
 UTCHMMA_TF32_M128_N256 = { type = "tf32", m = 128, n = 256, k = 8, warps = 1 }
@@ -223,3 +238,4 @@ UTCQMMA_E4M3_M128_N128 = { type = "e4m3", m = 128, n = 128, k = 32, warps = 1 }
 UTCQMMA_E4M3_M128_N256 = { type = "e4m3", m = 128, n = 256, k = 32, warps = 1 }
 UTCQMMA_E5M2_M128_N256 = { type = "e5m2", m = 128, n = 256, k = 32, warps = 1 }
 UTCQMMA_MXF8F6F4_E4M3_M128_N256 = { type = "e4m3", m = 128, n = 256, k = 32, warps = 1 }
+VIADD = {}

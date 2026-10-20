@@ -212,12 +212,9 @@ theorem vstarShowsB_deployed_rejects (rel : _root_.Flock.Readable.Parsed → _ro
 
 /-! ## `HeldB` at V\*'s registered ports -/
 
-/-- **V\*'s registered ports as a bound layout**: `layoutOf`'s rounds, holdings and fixed rounds, with no pieces. -/
-def layoutBOf : Claims.Recursion.VStarB.LayoutB where
-  rounds := layoutOf.rounds
-  msgAt := layoutOf.msgAt
-  shaAt := layoutOf.shaAt
-  fixedAt := layoutOf.fixedAt
+/-- **V\*'s registered ports as a bound layout**: `layoutOf`'s rounds, holdings and fixed rounds, each position its
+one-wire form, with no pieces. -/
+def layoutBOf : Claims.Recursion.VStarB.LayoutB := Claims.Recursion.VStarB.LayoutB.ofLayout layoutOf
 
 /-- **`HeldB` at the registered ports holds only where nothing of the shape parses**: `layoutOf` spans at least one
 round (`layoutOf_rounds_pos`), and round 0, the link message, is neither fixed nor held by any part
@@ -233,8 +230,12 @@ theorem heldB_layoutBOf_iff {W : Type} (D : Claims.Recursion.Deploy Coin) (I : C
       rw [hK]
       exact layoutOf_rounds_pos x
     rcases (hcl 0 hpos).1 with h0 | ⟨s, -, h0⟩ | ⟨h0, -⟩
-    · simp [layoutBOf, layoutOf] at h0
-    · simp [layoutBOf, layoutOf] at h0
+    · have h' : layoutBOf.fixedAt x 0 = none := rfl
+      rw [h'] at h0
+      simp at h0
+    · have h' : layoutBOf.msgAt x s 0 = none := rfl
+      rw [h'] at h0
+      simp at h0
     · exact h0 rfl
   · intro h x st hst hf
     exact absurd hf (h x st hst)
@@ -355,7 +356,8 @@ theorem stagedB_deployRec {W : Type} (H : Msg → Msg) (I : Claims.Recursion.Inn
     (htr : ∀ x st, parse x = some st → shape st.form → Function.Injective (b.tr x))
     (hHeld : Claims.Recursion.VStarB.HeldB (deployRec I.V ivScope b) I L shape) :
     Claims.Recursion.VStarB.StagedB H (deployRec I.V ivScope b) I L shape (showsTr b) (cmtTr b) := by
-  have h := staged_deployRec H I ivScope b { rounds := L.rounds, msgAt := L.msgAt, shaAt := L.shaAt } shape htr
+  have h := staged_deployRec H I ivScope b
+    { rounds := L.rounds, msgAt := fun _ _ _ => none, shaAt := fun _ _ => [] } shape htr
     (fun x st hst hf => ((hHeld x st hst hf).1).symm.le)
   intro x st hst hf Ω P ω r hacc s hs
   obtain ⟨h1, h2⟩ := h x st hst hf Ω P ω r hacc s hs

@@ -3,8 +3,10 @@
 These are not assumptions of the theorem, but the verdict still depends on them.
 
 - **Lean's kernel.**
-  - **Mitigation:** the Lean audit sends every declaration to the kernel again (`tools/verity/lean/Replay.lean`), and
-    `check.py --fresh` re-checks each root's whole import closure, Mathlib and ArkLib included (`leanchecker --fresh`).
+  - **Mitigation:** the Lean audit `check` runs sends every declaration of the package and of its whole import closure,
+    Mathlib, ArkLib and core included, to the kernel again (`tools/verity/lean/Replay.lean`, `check.py --closure`; a
+    dependency module once per change of its `.olean` files), and the nightly `check.py --fresh` re-checks each root's
+    closure into an empty environment (`leanchecker --fresh`).
     Both use Lean's own kernel; an independent one (nanoda, lean4lean) would remove this trust.
   - Numeric checks use `decide +kernel`, which is kernel evaluation. The development never uses `native_decide`.
 - **Lean's compiler, runtime and the C compiler, for the running binary.** Only the Lean verifier runs in production;

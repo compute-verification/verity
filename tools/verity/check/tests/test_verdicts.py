@@ -437,3 +437,18 @@ def test_a_pack_given_is_added_to_the_gathered_ones_and_survives_a_store_that_ca
     assert V.import_(got) == (2, 0)
     with pytest.raises(SystemExit, match="no such pack"):
         check.gather_verdicts(tmp_path / "x", _Store(tmp_path, {}), given=tmp_path / "absent.tar.gz")
+
+
+def test_two_imports_on_one_machine_never_share_a_temporary_file(tmp_path, monkeypatch):
+    """Two checks on one machine import the same pack at once: each writes its entries through a file of its own, so neither
+    renames the other's away (20 Oct: r20261020-144906-20cb died in `verdicts_in` with FileNotFoundError on the shared name)."""
+    _fill(_machine(tmp_path, monkeypatch, "a"))
+    pack = tmp_path / "pack.tar.gz"
+    assert V.export(pack) == 4
+    b = _machine(tmp_path, monkeypatch, "b")
+    other = b["check"] / "lean-agreement" / f".k3.json.{os.getpid() + 1}.import"
+    _write(other, "another import, half written")
+    assert V.import_(pack) == (4, 0)
+    assert other.read_text() == "another import, half written"
+    assert (b["check"] / "lean-agreement" / "k3.json").read_text() == '{"key": "k3"}'
+    assert not list((b["check"] / "lean-agreement").glob(f".k3.json.{os.getpid()}.import"))
