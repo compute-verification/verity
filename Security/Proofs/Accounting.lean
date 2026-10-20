@@ -45,5 +45,7 @@ import Proofs.Accounting.HMu
 import Proofs.Accounting.CoinFlow
 import Proofs.Accounting.Layers
 import Proofs.Accounting.Compose
+import Proofs.Accounting.ComposePeriod
+import Proofs.Accounting.ComposePeriod.Honest
 
 /-! `Proofs.Accounting`: the proofs of resource accounting's guarantees. -/

@@ -250,6 +250,14 @@
    "owner": "@compute-accounting",
    "digest": "13419da38b56a985a7e9d380082513956a1014123de6551f02858585df159139"
   },
+  "Accounting.Compose.Period.EveryWindow": {
+   "owner": "@compute-accounting",
+   "digest": "a00f71bbadbe548d58bba0efff580398689ade608d039a289391b1534b9f265c"
+  },
+  "Accounting.Compose.PrefixOf": {
+   "owner": "@compute-accounting",
+   "digest": "5f6db3d832a87a822b240b84797299efacb6c607ff175b79678767e4593e846a"
+  },
   "Accounting.Compose.Scope": {
    "owner": "@compute-accounting",
    "digest": "d362c5e79d599c06c664a147eadc88e811b4d3bdcb3d93930ac23b1a7cb19e8c"
@@ -2267,6 +2275,38 @@
    ],
    "assumptions": [],
    "type_hash": "cae0f4a7c8d7947278f093644521a565b3ac25621c8de725cb74dba8197d5f18"
+  },
+  "Accounting.SecurityProofs.ComposePeriod.CircuitCreditPeriod": {
+   "owner": "@compute-accounting",
+   "signature": [
+    "Accounting.SecurityProofs.ComposePeriod.CircuitCreditPeriod : Accounting.Guarantees.ComposePeriod.CircuitCreditPeriod"
+   ],
+   "assumptions": [],
+   "type_hash": "0f6b6a90c59a2b0b24b4991916a29d70afbd83aa91ecc1d9076f4613e50227c5"
+  },
+  "Accounting.SecurityProofs.ComposePeriod.CircuitWorkPeriod": {
+   "owner": "@compute-accounting",
+   "signature": [
+    "Accounting.SecurityProofs.ComposePeriod.CircuitWorkPeriod : Accounting.Guarantees.ComposePeriod.CircuitWorkPeriod"
+   ],
+   "assumptions": [],
+   "type_hash": "f2bcfd105160196a4db11721f89125748d124099c9dc1f752048e231cd5f9aae"
+  },
+  "Accounting.SecurityProofs.ComposePeriod.PeriodBudget": {
+   "owner": "@compute-accounting",
+   "signature": [
+    "Accounting.SecurityProofs.ComposePeriod.PeriodBudget : Accounting.Guarantees.ComposePeriod.PeriodBudget"
+   ],
+   "assumptions": [],
+   "type_hash": "5178cb51049d4fc076696646c8d3b1136dbf27dff64a5e9dc8dcf655da2afd2f"
+  },
+  "Accounting.SecurityProofs.ComposePeriod.PeriodTailMax": {
+   "owner": "@compute-accounting",
+   "signature": [
+    "Accounting.SecurityProofs.ComposePeriod.PeriodTailMax : Accounting.Guarantees.ComposePeriod.PeriodTailMax"
+   ],
+   "assumptions": [],
+   "type_hash": "b170f79f6698ef2d144aa9d0b7c874c75b9d88540ad24ab12f75d289c6de86b7"
   },
   "Accounting.SecurityProofs.Composition": {
    "owner": "@memory-accounting",
@@ -9690,7 +9730,11 @@
    "Accounting.SecurityProofs.Compose.WholeLuckOfEntropy": "lemma: SeedLuckAt for whole tiles at kappa0 and rate theta (Accounting.Assumptions.Compose.SeedLuckAt) from Accounting.Assumptions.Compose.WholeEntropyAt at entropy h (each round's whole tiles fixed before the query's own answer, and all of a set S of them lucky on at most a share e^(-sum_S h) of its answers), wherever every tile's moment e^(-h) e^(theta w) + (1 - e^(-h)) e^(-kappa0 theta w) is at most 1: the gain's exponential expands over the subsets of the whole tiles with nonnegative coefficients; real arithmetic over finite sums, not a property of a Lean function.",
    "Accounting.SecurityProofs.Compose.SplitRateExp": "lemma: Accounting.Compose.SplitRateAt at the sharp Lambda = max(a w_max/-ln(p + (1 - p) e^(-K rho w_max)), b w_max/-ln(p0 + (1 - p0) e^(-K rho w_max))) with nu = (e^(a w_max/Lambda) - 1)/((1 - p) w_max) and nu0 the same at b, p0 (RT-COMPOSE r4's check 3), so a rate quoted at the sharp Lambda is proved with its witness as a term; real arithmetic, not a Lean function.",
    "Accounting.SecurityProofs.Compose.CircuitWorkSeeded": "frozen (no-function,world-unlisted): decision 113's logical layer under seeded coins (decision 122's one seed a call), stated in the random-oracle model, over every declared circuit with every round holding a credited tile seeded, one call site a round and every value a seeded round reads by its IR cut named by the round's seed preimage or registered (Accounting.Compose.ScopeSeeded: H1's attention uncredited by Scheme.SeedPriced, and Accounting.Compose.SeedNamed, a protocol fact of the declared circuit that today's code doesn't meet, so on today's code ScopeSeeded fails and nothing is credited), its rounds' coins the oracle's answers to T_q queries a round and its run any joint run of every round's answers (Accounting.Compose.JointRun, jointGame, jointMode: no stage order), its binding pieces (Of, MovedIn at delta_bind, JointSound, Pins) on the proofs' layer cut at the draw (Accounting.Compose.Declared.atDraw: a seeded coin is a hash the cheater can evaluate before it commits, so operands and receipts are bound only at the draw) and UnitFixed on the layer cut at the IR (Declared.atIR, which reads no committed value): an accepted run has its committed words fixed right but for a share at cost max(5a, (1 + kappa0) b) ln(1/delta_s)/(rho K_d) + a Pi_F + b Pi_0 + min(a, b) D0 (WorkAt at rOfSeeded, Pi_F and Pi_0 the seed groups' premiums ln(T_q/delta_g)/theta from the IR at the folded rate, seedTheta, and at the whole skips' own rate, wholeTheta, premiumOf), except with probability delta_s + delta_bind + delta_ks + eps_id(T, |J|) + 2 rounds (delta_g + delta_b), T the window's SHA-512 calls and |J| the seeds the proofs name, eps_id, delta_b and delta_bind per prover at one prover budget; not a Lean function, an Accounting.TS.prob event that shape.events does not list, and the random-oracle premise (Accounting.Assumptions.Compose.SeedExtractedAt, once a window, over the seed answers only, card 9cd57182), GRIND's premise per round (Accounting.Assumptions.Compose.SeedLuckAt, at kappa = 4 and the folded rate for folded tiles and at kappa0 and the whole rate for whole ones, each query's moment over its own answer with the window's other answers fixed, off a binding event at delta_b read through ecr/sha-512) and UnitFixed at the run's modes are not on the premises list. No ruling grants a whole-tile luck per seed query (ASK-9 decides 1/2 for the live line only), so its luck line at T_q = 2^128 and delta_g = 2^-40/(2 rounds), r = 1, Llama-3.1-8B decode at batch up to 32, is conditional on the premise wholeTheta reads: at 1/2 a query (kappa0 > 1, x0 < ln 2, about 177 tiles a seed group) 56.1%, so with only granted premises it is vacuous at small-batch decode; under GuessLuckAt at 2^-64 (not granted) 1.120% (0.168% at batch 256, 0.048% at prefill); under Accounting.Assumptions.Compose.WholeEntropyAt at K/8 nats a tile (not granted) 0.101%, below the live pair's 0.173% closed. The declared circuit is the served Program's only through Properties.Compose.UnitsOfLayout (unproved: its units, commit coins, seed preimages and draw) and an extractor that doesn't exist yet: until both exist, the guarantee speaks of the declared circuit, not of a served workload.",
-   "Accounting.SecurityProofs.Compose.CircuitCreditSeeded": "frozen (no-function,world-unlisted): the composed credit CreditOfWork after CircuitWorkSeeded (decision 113) under seeded coins, in the random-oracle model, Accounting.Compose.Certificate.Holds for every declared circuit's sampled window on a data sheet, in a device window the physical layer's ledger consumes, issued at coins = seeded with its grinding premiums (folded and whole, each at its own rate), the oracle's eps_id(T, |J|) once a window and 2 rounds (delta_g + delta_b), on a joint run with its binding at the draw (Declared.atDraw) and its cones at the IR (Declared.atIR), in ScopeSeeded with Accounting.Compose.SeedNamed (a protocol fact today's code doesn't meet), an Accounting.TS.prob event that shape.events does not list, not a Lean function; SeedExtractedAt (random-oracle), SeedLuckAt per round, UnitFixed at the run's modes, A1-A7, FoldOptFolded and FillOpt are not on the premises list. Its eps at r = 1, eps_flat = 0.571% and eps_mu = 0 is conditional on the whole-tile luck a query its wholeTheta reads, which no ruling grants: at 1/2 a query 56.6% for Llama-3.1-8B decode at batch up to 32 and 1.85% at prefill; under GuessLuckAt at 2^-64 1.691% (0.738% at batch 256, about 0.62% at prefill); under WholeEntropyAt at K/8 nats at most 0.672%; against EPS1's 1% and the live pair's 0.744%. The declared circuit is the served Program's only through Properties.Compose.UnitsOfLayout (unproved: its units, commit coins, seed preimages and draw) and an extractor that doesn't exist yet: until both exist, the guarantee speaks of the declared circuit, not of a served workload."
+   "Accounting.SecurityProofs.Compose.CircuitCreditSeeded": "frozen (no-function,world-unlisted): the composed credit CreditOfWork after CircuitWorkSeeded (decision 113) under seeded coins, in the random-oracle model, Accounting.Compose.Certificate.Holds for every declared circuit's sampled window on a data sheet, in a device window the physical layer's ledger consumes, issued at coins = seeded with its grinding premiums (folded and whole, each at its own rate), the oracle's eps_id(T, |J|) once a window and 2 rounds (delta_g + delta_b), on a joint run with its binding at the draw (Declared.atDraw) and its cones at the IR (Declared.atIR), in ScopeSeeded with Accounting.Compose.SeedNamed (a protocol fact today's code doesn't meet), an Accounting.TS.prob event that shape.events does not list, not a Lean function; SeedExtractedAt (random-oracle), SeedLuckAt per round, UnitFixed at the run's modes, A1-A7, FoldOptFolded and FillOpt are not on the premises list. Its eps at r = 1, eps_flat = 0.571% and eps_mu = 0 is conditional on the whole-tile luck a query its wholeTheta reads, which no ruling grants: at 1/2 a query 56.6% for Llama-3.1-8B decode at batch up to 32 and 1.85% at prefill; under GuessLuckAt at 2^-64 1.691% (0.738% at batch 256, about 0.62% at prefill); under WholeEntropyAt at K/8 nats at most 0.672%; against EPS1's 1% and the live pair's 0.744%. The declared circuit is the served Program's only through Properties.Compose.UnitsOfLayout (unproved: its units, commit coins, seed preimages and draw) and an extractor that doesn't exist yet: until both exist, the guarantee speaks of the declared circuit, not of a served workload.",
+   "Accounting.SecurityProofs.ComposePeriod.PeriodBudget": "lemma: the composition of resource accounting's window budgets over an accounting period: if every window's Accounting.Compose.serviceGame has RoundGame.BudgetAt Lambda whatever the earlier windows did, so has the period's game (Accounting.Compose.periodGame, each window one round, its play any function of the earlier windows' coins, Accounting.Compose.Period); by induction on the period, not a Lean function.",
+   "Accounting.SecurityProofs.ComposePeriod.PeriodTailMax": "lemma: budget_tail at every prefix at once (Ville's inequality, finite form): when RoundGame.BudgetAt Lambda bounds a play, some prefix of its rounds passes (Accounting.Compose.RoundGame.acceptsUpTo) with share at least Lambda t (Accounting.Compose.RoundGame.deficiencyUpTo) with probability at most e^(-t), so a period credited up to its first failed window, a stopping time the cheater may steer, pays ln(1/delta_s) once; by induction on the play for every threshold, conditioning on the first round's coins, not a Lean function.",
+   "Accounting.SecurityProofs.ComposePeriod.CircuitWorkPeriod": "frozen (no-function,world-unlisted): INT-PERIOD's restatement of CircuitWork over an accounting period of at most n windows of one declared circuit (Accounting.Compose.Period, each window with its own live coins and draw), credited up to its first window with a refused proof (Accounting.Compose.PeriodRun.Credited, RT3-INT-7) and its words counted on each credited window's live tiles only (RT-INT's fix (c) with RT2-INT-1's), which Daniel took (ASK-64 = A, 19 Oct): an accepted period has its accepted prefix's live words fixed right but for a share at cost Lambda ln(1/delta_s) + j min(a, b) D0 at the realized prefix j (LiveWorkAt at rOfPrefix), except with probability delta_s + n (delta_bind + delta_ks); not a Lean function, an Accounting.TS.prob event that shape.events does not list, and its claims (OperandHMu, ReceiptLuckAt and GuessLuckAt per live tile under PerLiveTile, UnitFixed at the period's modes) are not on the premises list. Proved from CircuitWork's lemmas at n rounds: ServiceBudget per window at the live weights, PeriodBudget, PeriodTailMax once at the accepted prefix, DrawnRightOff at n rounds with PrefixOf, the period layer's covers (Accounting.SecurityProofs.ComposePeriod.periodCovers: Declared.periodLayer's writers are in their own window by its definition) and UnitFixed's sums. Its Scope holds LayerCommitted (each value the prover writes committed by its IR cut, on which a late edge's cone lying in the IR's rests), which today's code doesn't meet, so a live window it serves is out of scope; and the period's record (cap and circuit committed before window 0's first coin, each window's first coin after the previous window's draw, closed at the first refused window) is protocol structure today's code doesn't meet either: the served Credits registers a window when it is received. Its live tiles are the ones live in-circuit: under #2731's tile (#2639's PouwH1Tile_v2) the served gate's admit bits admit a scale_only row block whose tile is dead (RT4-LOGIC-4), and under #2902's PouwH1Tile_v4 a tile's live bit is its admit bits' OR (RT4-LOGIC-20). Its quoted numbers take D0 = 0, which nothing computes for the served circuit, and at D0 > 0 DeadConeDead can fail, so that the statement says nothing (RT4-LOGIC-18). Its numbers are for live windows, which no served path runs yet, and the declared circuit is the served Program's only through Properties.Compose.UnitsOfLayout and an extractor that doesn't exist yet.",
+   "Accounting.SecurityProofs.ComposePeriod.CircuitCreditPeriod": "frozen (no-function,world-unlisted): CircuitWorkPeriod's credit in live words (RT4-INT-8): under its premises at a, b > 0, an accepted period has at least (1 - eps(j))+ of its accepted prefix's live words fixed right (Accounting.Compose.creditPrefix), eps(j) = r(j) N_w/(min(a, b) N_live) at the realized prefix j = PeriodRun.prefixLen (Accounting.Compose.epsPrefix), never at the cap n, except with probability delta_s + n (delta_bind + delta_ks), so a prefix whose eps is at least 1 earns nothing; not a Lean function, an Accounting.TS.prob event that shape.events does not list, with CircuitWorkPeriod's claims off the premises list. Proved from CircuitWorkPeriod's assembly (creditPrefix_le, with UnitFixed keeping an accepted run's fixed words nonnegative). A credit of words, not of time: the headline's time credit needs CreditOfWork on each credited window's run and is not stated."
   },
   "conjectures": {
    "Pous.P2.Assumptions.P2RingAuditSecure": {
@@ -10310,7 +10354,55 @@
     "Accounting.SecurityProofs.Compose.SplitRateClosed",
     "Accounting.SecurityProofs.Compose.SplitRateExp",
     "Accounting.SecurityProofs.Compose.SplitRateMerged",
-    "Accounting.SecurityProofs.Compose.WholeLuckOfEntropy"
+    "Accounting.SecurityProofs.Compose.WholeLuckOfEntropy",
+    "Accounting.SecurityProofs.ComposePeriod.CircuitCreditPeriod",
+    "Accounting.SecurityProofs.ComposePeriod.CircuitWorkPeriod",
+    "Accounting.SecurityProofs.ComposePeriod.PeriodBudget"
+   ]
+  },
+  "Definitions.Accounting.ComposePeriod": {
+   "digest": "4fe4aba3e9b0b99755f9c91a89e24a211baa7e811ed7f893c64e99d7d9aa8dcc",
+   "definitions": {
+    "Accounting.Compose.DeadConeDead": "ca2183fb0f093df1f54d1a511bac3482a6808e51a6b37b292fc94e8fc2c96bc7",
+    "Accounting.Compose.Declared.periodLayer": "3bea3cfb5bdfc333f301a62ce08bc3e56fefc7698c5e5a0f1d76938f8f42e8bb",
+    "Accounting.Compose.LiveWorkAt": "203edab3102362aec64440656abdcf8f3054d98a5a0d76734148dd122bdbe273",
+    "Accounting.Compose.PerLiveTile": "91895d8096bf1965ed5103916813e0624047592ef6933af8da4ed2cbc9c923a0",
+    "Accounting.Compose.Period": "13d14cade7896245c98de63e7b9b333a94bde2f918d0c4c727f58b320b0596bc",
+    "Accounting.Compose.Period.EveryWindow": "a00f71bbadbe548d58bba0efff580398689ade608d039a289391b1534b9f265c",
+    "Accounting.Compose.Period.below": "6a5df8cd5668063823056d9273443e04f47cbc0065be2aa3941cd36674d97a9a",
+    "Accounting.Compose.Period.brecOn": "a8477feee591807b5f8a3646a71d2585daa83333907ea7ee14a878358871011f",
+    "Accounting.Compose.Period.brecOn.go": "35474b4f43e61aa4770ba972ce972eb818beb51f83346d8ea416bb5c8612e9f3",
+    "Accounting.Compose.Period.casesOn": "131de49507ac32ec06839871b47ab28a589ce0eb776fb41e670c39f07825ff46",
+    "Accounting.Compose.Period.done": "7d16ae838104b949137991d7652c34c2cf15c04446846cd71d7787d99b2330d5",
+    "Accounting.Compose.Period.liveAt": "fd7d537da3c88aa8bb018e3abdc90f5fb86171dc9c19e4de3aea4e3f7555b120",
+    "Accounting.Compose.Period.rec": "0adacc7d014142c938755d3cae5f6bd5e3d72fb4ea3a9bd8aaf22de7600610a4",
+    "Accounting.Compose.Period.window": "f39dcb3af3972c3864f161ba68c3322dab3be434611c25337dd93763f73a8216",
+    "Accounting.Compose.Period.windowAt": "371c0de8887af6adb233d1aee7802dffa4dcf89290b3344fd57fe0829ecd9765",
+    "Accounting.Compose.PeriodRun": "c84af28d1f24ad6a4991a9897228ed9961f41759113f46d4bc58632a7ce0a0ae",
+    "Accounting.Compose.PeriodRun.Credited": "32c64989de2e811fcb52f8a2127116230b0fd9cfe0a84d1205eee0e4fa9a1833",
+    "Accounting.Compose.PeriodRun.accepted": "cd159c8bc46429bd1f11185501b00f3b480d77c79fdb437f2f6a2d3d43bb9fdf",
+    "Accounting.Compose.PeriodRun.opened": "b427688c902ed0f1543589c5e8532fe018af081f15d3a21504ce9a5c55bdd918",
+    "Accounting.Compose.PeriodRun.prefixLen": "e39d42667d1345a005b61a9ee22bfa2c08194e3f36f75f55d214ab5894cd9db6",
+    "Accounting.Compose.PeriodRun.rel": "271f1eeb9d4eaf8cc31c8d860ebabf1bf96572e129993a75bafd3f73b0134f72",
+    "Accounting.Compose.PeriodRun.right": "ff77b0e2393ad8e99bf3d5921c78366e3273e216a78d7c41b7976aba4301aaa0",
+    "Accounting.Compose.PrefixOf": "5f6db3d832a87a822b240b84797299efacb6c607ff175b79678767e4593e846a",
+    "Accounting.Compose.RoundGame.acceptsUpTo": "7f24c520abbb1dae862a06cf3eeadacf1f0d8ffcbf0d8aa37c2c5ff9bfdc9db1",
+    "Accounting.Compose.RoundGame.deficiencyUpTo": "ec618fe1e854b9e09bee48e05dd7fcbf16e09ff910f6a155de253f780864cf3a",
+    "Accounting.Compose.consGame": "c2028e515abf2a609322d707f397836d556d0ee509301d3ea18d80d0dadd2f26",
+    "Accounting.Compose.creditPrefix": "0cf51a60ce843ddf1b28ec3ba0a5e1f1bfd1823877dbcf833f6074f4830be3e5",
+    "Accounting.Compose.creditedLive": "f564854a51235a7aad0dfcf519f80a37bf114020a75b365485e3ae5ae4f9e0b8",
+    "Accounting.Compose.epsPrefix": "326c39d4dd24cd93e1a7fa6d13d8784177b0a069dd48c7baa6a9ec56c68a5c62",
+    "Accounting.Compose.liveCone": "fc1a07b9904b18a8d083652f260526228ad818a5cc1a1e314d3e7be4a07d7daf",
+    "Accounting.Compose.liveWords": "0a60576d88cab5b6bc1024f19524c7b48d52b16e2c43faf43a10af4bb7379bdf",
+    "Accounting.Compose.periodGame": "76b742254a2efa587efbd4559c05ffb95b6365ab78ce00e53287b4ffda0ae169",
+    "Accounting.Compose.periodMode": "5bc1ab332d53755d0551624d8949e7a97f7a9aa0aaebaa9a675172975733f755",
+    "Accounting.Compose.rOfPrefix": "1166975ed785ba47325b1d4600a1cc953f9dcbbd8d561d612307cf64bb1afb83"
+   },
+   "guarantees": [
+    "Accounting.SecurityProofs.ComposePeriod.CircuitCreditPeriod",
+    "Accounting.SecurityProofs.ComposePeriod.CircuitWorkPeriod",
+    "Accounting.SecurityProofs.ComposePeriod.PeriodBudget",
+    "Accounting.SecurityProofs.ComposePeriod.PeriodTailMax"
    ]
   },
   "Definitions.Accounting.Confidence": {
@@ -10723,6 +10815,8 @@
     "Accounting.SecurityProofs.Compose.CircuitWorkSeeded",
     "Accounting.SecurityProofs.Compose.CreditOfWork",
     "Accounting.SecurityProofs.Compose.ServiceCovers",
+    "Accounting.SecurityProofs.ComposePeriod.CircuitCreditPeriod",
+    "Accounting.SecurityProofs.ComposePeriod.CircuitWorkPeriod",
     "Accounting.SecurityProofs.Gates.Bf16ToF32Affine",
     "Accounting.SecurityProofs.Gates.ClampOrWrap",
     "Accounting.SecurityProofs.Gates.DeclaredWindow",
@@ -10853,6 +10947,8 @@
     "Accounting.SecurityProofs.CoinFlow.PointMass",
     "Accounting.SecurityProofs.Compose.CircuitCredit",
     "Accounting.SecurityProofs.Compose.CircuitWork",
+    "Accounting.SecurityProofs.ComposePeriod.CircuitCreditPeriod",
+    "Accounting.SecurityProofs.ComposePeriod.CircuitWorkPeriod",
     "Accounting.SecurityProofs.HMu.CoinPointMass",
     "Accounting.SecurityProofs.HMu.CoinPointMassHalf",
     "Accounting.SecurityProofs.HMu.LemmaB",
@@ -11906,6 +12002,9 @@
     "Accounting.SecurityProofs.Compose.ServiceBudget",
     "Accounting.SecurityProofs.Compose.ServiceCovers",
     "Accounting.SecurityProofs.Compose.WholeLuckOfEntropy",
+    "Accounting.SecurityProofs.ComposePeriod.CircuitCreditPeriod",
+    "Accounting.SecurityProofs.ComposePeriod.CircuitWorkPeriod",
+    "Accounting.SecurityProofs.ComposePeriod.PeriodBudget",
     "Accounting.SecurityProofs.TS.AdditiveFixed",
     "Accounting.SecurityProofs.TS.DrawnBindingOfFork",
     "Accounting.SecurityProofs.TS.DrawnRightOff",
@@ -12005,6 +12104,8 @@
     "Accounting.SecurityProofs.Compose.CircuitWorkSeeded",
     "Accounting.SecurityProofs.Compose.CreditOfWork",
     "Accounting.SecurityProofs.Compose.ServiceCovers",
+    "Accounting.SecurityProofs.ComposePeriod.CircuitCreditPeriod",
+    "Accounting.SecurityProofs.ComposePeriod.CircuitWorkPeriod",
     "Accounting.SecurityProofs.TS.BindingFacetD1",
     "Accounting.SecurityProofs.TS.CompilerC",
     "Accounting.SecurityProofs.TS.CompilerStage",
@@ -12045,6 +12146,10 @@
     "Accounting.SecurityProofs.Compose.CircuitWorkSeeded",
     "Accounting.SecurityProofs.Compose.ServiceBudget",
     "Accounting.SecurityProofs.Compose.ServiceCovers",
+    "Accounting.SecurityProofs.ComposePeriod.CircuitCreditPeriod",
+    "Accounting.SecurityProofs.ComposePeriod.CircuitWorkPeriod",
+    "Accounting.SecurityProofs.ComposePeriod.PeriodBudget",
+    "Accounting.SecurityProofs.ComposePeriod.PeriodTailMax",
     "Accounting.SecurityProofs.FillerLuck.FillerBudget",
     "Accounting.SecurityProofs.FillerLuck.FillerLuckAt",
     "Accounting.SecurityProofs.FillerLuck.PinnedFillBudget",
@@ -12096,6 +12201,8 @@
     "Accounting.SecurityProofs.Compose.CircuitCreditSeeded",
     "Accounting.SecurityProofs.Compose.CircuitWork",
     "Accounting.SecurityProofs.Compose.CircuitWorkSeeded",
+    "Accounting.SecurityProofs.ComposePeriod.CircuitCreditPeriod",
+    "Accounting.SecurityProofs.ComposePeriod.CircuitWorkPeriod",
     "Accounting.SecurityProofs.TS.AdditiveFixed",
     "Accounting.SecurityProofs.TS.BindingOfFork",
     "Accounting.SecurityProofs.TS.DrawnBindingOfFork",
@@ -12180,6 +12287,8 @@
    "guarantees": [
     "Accounting.SecurityProofs.Compose.CircuitCredit",
     "Accounting.SecurityProofs.Compose.CircuitWork",
+    "Accounting.SecurityProofs.ComposePeriod.CircuitCreditPeriod",
+    "Accounting.SecurityProofs.ComposePeriod.CircuitWorkPeriod",
     "Accounting.SecurityProofs.TS.CondReceiptLuckMarginal",
     "Accounting.SecurityProofs.TS.DuoSegmentsBind",
     "Accounting.SecurityProofs.TS.Fx1SegmentsBind",
@@ -12203,6 +12312,8 @@
    "guarantees": [
     "Accounting.SecurityProofs.Compose.CircuitCredit",
     "Accounting.SecurityProofs.Compose.CircuitWork",
+    "Accounting.SecurityProofs.ComposePeriod.CircuitCreditPeriod",
+    "Accounting.SecurityProofs.ComposePeriod.CircuitWorkPeriod",
     "Accounting.SecurityProofs.TS.Sm120MeasuredHeadline",
     "Accounting.SecurityProofs.TS.Sm120SheetHeadline"
    ]
@@ -12285,6 +12396,8 @@
     "Accounting.SecurityProofs.Compose.CircuitWorkSeeded",
     "Accounting.SecurityProofs.Compose.CreditOfWork",
     "Accounting.SecurityProofs.Compose.ServiceCovers",
+    "Accounting.SecurityProofs.ComposePeriod.CircuitCreditPeriod",
+    "Accounting.SecurityProofs.ComposePeriod.CircuitWorkPeriod",
     "Accounting.SecurityProofs.TS.BindingFacetD1",
     "Accounting.SecurityProofs.TS.CompilerC",
     "Accounting.SecurityProofs.TS.CompilerStage",
@@ -18614,6 +18727,10 @@
     "Accounting.SecurityProofs.Compose.ServiceBudget",
     "Accounting.SecurityProofs.Compose.ServiceCovers",
     "Accounting.SecurityProofs.Compose.WholeLuckOfEntropy",
+    "Accounting.SecurityProofs.ComposePeriod.CircuitCreditPeriod",
+    "Accounting.SecurityProofs.ComposePeriod.CircuitWorkPeriod",
+    "Accounting.SecurityProofs.ComposePeriod.PeriodBudget",
+    "Accounting.SecurityProofs.ComposePeriod.PeriodTailMax",
     "Accounting.SecurityProofs.FillerLuck.FillerBlocksDeficit",
     "Accounting.SecurityProofs.FillerLuck.FillerBudget",
     "Accounting.SecurityProofs.FillerLuck.FillerCellLuck",
@@ -18685,7 +18802,10 @@
     "Accounting.SecurityProofs.Compose.CircuitWork",
     "Accounting.SecurityProofs.Compose.CircuitWorkSeeded",
     "Accounting.SecurityProofs.Compose.ServiceBudget",
-    "Accounting.SecurityProofs.Compose.ServiceCovers"
+    "Accounting.SecurityProofs.Compose.ServiceCovers",
+    "Accounting.SecurityProofs.ComposePeriod.CircuitCreditPeriod",
+    "Accounting.SecurityProofs.ComposePeriod.CircuitWorkPeriod",
+    "Accounting.SecurityProofs.ComposePeriod.PeriodBudget"
    ]
   },
   "Flock.Bytes": {
@@ -23752,7 +23872,9 @@
     "Accounting.SecurityProofs.Compose.CircuitCreditSeeded",
     "Accounting.SecurityProofs.Compose.CircuitWork",
     "Accounting.SecurityProofs.Compose.CircuitWorkSeeded",
-    "Accounting.SecurityProofs.Compose.WholeLuckOfEntropy"
+    "Accounting.SecurityProofs.Compose.WholeLuckOfEntropy",
+    "Accounting.SecurityProofs.ComposePeriod.CircuitCreditPeriod",
+    "Accounting.SecurityProofs.ComposePeriod.CircuitWorkPeriod"
    ]
   },
   "Models.Accounting.Assumptions.EncodeChain": {
@@ -23920,6 +24042,8 @@
     "Accounting.SecurityProofs.Compose.CircuitWork",
     "Accounting.SecurityProofs.Compose.CircuitWorkSeeded",
     "Accounting.SecurityProofs.Compose.CreditOfWork",
+    "Accounting.SecurityProofs.ComposePeriod.CircuitCreditPeriod",
+    "Accounting.SecurityProofs.ComposePeriod.CircuitWorkPeriod",
     "Accounting.SecurityProofs.FillerLuck.FillerLuckAt",
     "Accounting.SecurityProofs.FillerLuck.PinnedFillLuckAt",
     "Accounting.SecurityProofs.TS.AdaptSteerFail",
@@ -24159,6 +24283,21 @@
     "Accounting.SecurityProofs.Compose.SplitRateExp",
     "Accounting.SecurityProofs.Compose.SplitRateMerged",
     "Accounting.SecurityProofs.Compose.WholeLuckOfEntropy"
+   ]
+  },
+  "Models.Accounting.Guarantees.ComposePeriod": {
+   "digest": "3e7bd8491e81d37b51ee233d58ef5bd729e8d6a5b6cfb64c1921f88abae21f6a",
+   "definitions": {
+    "Accounting.Guarantees.ComposePeriod.CircuitCreditPeriod": "e83363bccfedfda7a95fabf60b705c4a33be7ae38ebbf08fd98f94f89e1f569d",
+    "Accounting.Guarantees.ComposePeriod.CircuitWorkPeriod": "f3f968dca0abdede6575ec32076cb3546cc96bc034982ac7e1a68bee758e064d",
+    "Accounting.Guarantees.ComposePeriod.PeriodBudget": "854184f4b0a891ea10efec5a1619e331e2f77fd82bea4c5e4c2c5f575afee155",
+    "Accounting.Guarantees.ComposePeriod.PeriodTailMax": "9ab8417f568e72412d8aabc831652ed12f28fb7995c20b016baee7d88410743e"
+   },
+   "guarantees": [
+    "Accounting.SecurityProofs.ComposePeriod.CircuitCreditPeriod",
+    "Accounting.SecurityProofs.ComposePeriod.CircuitWorkPeriod",
+    "Accounting.SecurityProofs.ComposePeriod.PeriodBudget",
+    "Accounting.SecurityProofs.ComposePeriod.PeriodTailMax"
    ]
   },
   "Models.Accounting.Guarantees.Confidence": {

@@ -10,6 +10,7 @@ import Definitions.Accounting.Capacity
 import Definitions.Accounting.CoinFlow
 import Definitions.Accounting.Carrier
 import Definitions.Accounting.Compose
+import Definitions.Accounting.ComposePeriod
 import Definitions.Accounting.Confidence
 import Definitions.Accounting.CostModel
 import Definitions.Accounting.Device
