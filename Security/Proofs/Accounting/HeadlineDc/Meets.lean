@@ -50,7 +50,7 @@ noncomputable def honestUf (Ω : Type) : (n : ℕ) → Unfolded Ω n
   | n + 1 => .round 0 (fun _ => honestUf Ω n)
 
 /-- The honest round at its receipt: nothing skipped, nothing deficient. -/
-noncomputable def noSkip (Ω : Type) : SkipRound Ω Unit Unit Unit where
+noncomputable def noSkip (Ω : Type) : Accounting.HMu.SkipRound Ω Unit Unit Unit where
   view _ := ()
   skipped _ := ()
   d _ := 0
