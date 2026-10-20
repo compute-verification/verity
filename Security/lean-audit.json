@@ -1131,6 +1131,18 @@
   "Verity.Declaration.Contains": {
    "owner": "@lean",
    "digest": "2e4651003538493bac63ae90c32a521e95d2e8596bea6b3c85b9cfd150c5647b"
+  },
+  "FlockSoundness.Audit.Adaptive.Play.Drawn": {
+   "owner": "@proofs",
+   "digest": "95df2a145c2096b29904657d9fc2cc155f202589e100fda5a4522518423ca878"
+  },
+  "FlockSoundness.Audit.Adaptive.Play.Laws": {
+   "owner": "@proofs",
+   "digest": "9264db5098c104ab446d60b84c5fed6d3b6ba28b5e0041fec1785f2755e6176f"
+  },
+  "FlockSoundness.Audit.Law.Design": {
+   "owner": "@proofs",
+   "digest": "75c9749a2c2e0c07cc3a043b9b78b491e4f64eea1fe11eb4aaaf2697467456cb"
   }
  },
  "meaning": [
