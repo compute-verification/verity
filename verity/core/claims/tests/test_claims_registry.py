@@ -100,3 +100,12 @@ def test_the_trusted_host_keeps_the_devices_persistent_state() -> None:
     assert e.name == ("An auditor-trusted device (a network certifier, the memory challenger) is the auditor's hardware "
                       "on a machine its host provider runs and the prover doesn't control; it runs its stated code on its "
                       "Nebius host, and its host never restores an earlier copy of the state the device keeps there")
+
+
+def test_the_declared_capacity_rests_on_the_nodes_inventory() -> None:
+    """ASK-74 = A: Π's three clauses, per node, trusting the auditor's inventory, with no partition clause."""
+    e = get("accounting-declared-device")
+    assert (e.kind, e.standing, e.label) == ("assumption", "standard", "Declared device")
+    assert all(s in e.name for s in ("every GPU on the node is declared", "the declared board and vBIOS",
+                                     "no SM clock exceeds f_max, the top of that vBIOS's clock table",
+                                     "MIG and MPS need no clause", "the auditor's inventory of the node"))

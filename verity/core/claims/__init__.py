@@ -284,6 +284,16 @@ ENTRIES: dict[str, Entry] = {e.id: e for e in (
     Entry("accounting-ts-nosum", "assumption",
           "NOSUM: on the stated device no unit outside the route menu heads a fresh committed word", "NOSUM",
           "measured"),
+    # What the declared capacity Π rests on, per node and per window (ASK-74 = A; note:20261019T0455Z-draft-rt-scope,
+    # "Device identity and clock"): ε is relative to Π (decision 100), and ASK-65 = A made the floor the node's. Its
+    # trust is the auditor's inventory of the node, as certifier-coverage's is the auditor's placement; nothing checks
+    # it at run time but the prover's own driver, and NVIDIA's attestation states no clock and can't rule out an
+    # undeclared GPU
+    Entry("accounting-declared-device", "assumption",
+          "The node's declared devices are its devices for the window: every GPU on the node is declared, each is the "
+          "declared board and vBIOS, and no SM clock exceeds f_max, the top of that vBIOS's clock table (MIG and MPS "
+          "need no clause: they can't raise the node's capacity). Trust: the auditor's inventory of the node, onsite "
+          "or the host provider's instance record", "Declared device", "standard"),
     # The data-sheet axioms A1–A7 (Security/Models/Accounting/Assumptions/Sheet.lean, note:20261017T1818Z-draft-axioms):
     # vendor statements that build the data-sheet machine and give (I1)–(I5) at the ½ floor
     Entry("accounting-sheet-clock", "assumption",
