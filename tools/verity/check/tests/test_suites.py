@@ -198,8 +198,32 @@ def test_jobs_default_to_no_more_test_processes_than_available_memory_holds(tmp_
     meminfo = tmp_path / "meminfo"
     for gb, want in ((13, 1), (20, 2), (64, 4), (1, 1)):
         meminfo.write_text(f"MemTotal:       99999999 kB\nMemAvailable:   {gb << 20} kB\n")
-        assert S.default_jobs(meminfo) == want
-    assert S.default_jobs(tmp_path / "absent") == 4
+        assert S.default_jobs(meminfo, 1e9) == want
+    assert S.default_jobs(tmp_path / "absent", 1e9) == 4
+
+
+def test_jobs_default_to_no_more_test_processes_than_the_runs_own_memory_limit_holds(tmp_path, monkeypatch):
+    """r20261019-045749-398f: an `--on auto` agent-test's 16 GiB scope on a node with 1.5 TB available started 32 processes."""
+    S = _suites(monkeypatch, tmp_path)
+    monkeypatch.setattr(S, "cpus", lambda: 32)
+    meminfo = tmp_path / "meminfo"
+    meminfo.write_text(f"MemAvailable:   {1500 << 20} kB\n")
+    assert S.default_jobs(meminfo, 16.0) == 1
+    assert S.default_jobs(meminfo, 100.0) == 11
+    assert S.default_jobs(tmp_path / "absent", 40.0) == 4
+    monkeypatch.setattr(S, "slot_mem_gb", lambda: 20.0)
+    assert S.default_jobs(meminfo) == 2
+
+
+def test_a_research_run_reservation_bounds_the_run_where_no_cgroup_caps_it(tmp_path, monkeypatch):
+    """INF-118: on cpu-2 a `research run --mem-gb 32` is a reservation, not a cgroup cap; the quick tier sized itself to the node."""
+    S = _suites(monkeypatch, tmp_path)
+    monkeypatch.setattr(S, "cgroup_mem_gb", lambda: None)
+    monkeypatch.delenv(S.SLOT_MEM_ENV, raising=False)
+    monkeypatch.setenv(S.RUN_MEM_ENV, "32")
+    assert S.slot_mem_gb() == 32.0
+    monkeypatch.setenv(S.SLOT_MEM_ENV, "200")
+    assert S.slot_mem_gb() == 200.0, "a check slot's memory, when it has one, comes first"
 
 
 def _workspace(root: Path) -> None:

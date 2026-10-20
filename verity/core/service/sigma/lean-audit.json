@@ -1,0 +1,13 @@
+{
+ "roots": ["SigmaDifftest"],
+ "layers": {
+  "SigmaDifftest": {
+   "imports": ["Lean", "Flock", "Difftest"],
+   "except": [],
+   "why": "the difftest port reaches the σ-lift check (Flock.Sigma) only through the harness, as a port does"
+  }
+ },
+ "dependencies": {
+  "toolchain": "27511a72ecc19f2a3ce5d7dc8dd5400d2c5ba32555d12a4f390d1806b92e6e15"
+ }
+}

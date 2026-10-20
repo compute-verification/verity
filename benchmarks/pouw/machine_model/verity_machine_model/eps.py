@@ -489,7 +489,7 @@ def uniform_on_issue(pi: Machine, cycles: float) -> Machine:
     if uniform_issue_charged(pi):
         return pi
     c = {k: dict(v) for k, v in pi.c.items()}
-    rows = [r for r in pi.rows if r == "issue" or (r.startswith("JI") and r.endswith("_0"))]
+    rows = [r for r in pi.rows if r == "issue" or r.endswith("_issue") or (r.startswith("JI") and r.endswith("_0"))]
     for k in ("UNI", "UNI64"):
         for r in rows:
             if k in c and r in c["ALU"]:

@@ -13,6 +13,8 @@ or run, or that refuses an input (a form its decoders don't read), disagrees wit
   an outcome's verdicts (`check_verdicts`), whose Python verdict the service passes in: compared whole, details included;
 * `select`: the challenger's draw (`service.select_draw`, which the service passes in with the bytes of its coins that
   draw read), compared whole with the number of bytes read; the draw of record is the Lean's;
+* `coins`: those bytes themselves, the challenger's coins, which only the Lean reads from the operating system
+  (`IO.getRandomBytes`, A3); there is no Python twin to compare, and a Lean that can't answer leaves no coins;
 * `run`: the stream's run of one registration from its public check through its verdict (`Run.run`), which `Stream.outcome`
   passes in with everything it read on the way: compared whole;
 * `two_stage_profile`, `check_probability`: the two-stage law's profile over a class's RUs (`TwoStageLaw.profile`) and
@@ -166,6 +168,25 @@ def lean(fn: str, value: Any) -> dict[str, Any]:
     return body if kind == "output" else {"refused": body}
 
 
+#: The most bytes one `coins` request takes (the Lean's `COINS_MAX`).
+COINS_MAX = 1 << 24
+
+
+def coins(n: int) -> bytes:
+    """`n` bytes of the operating system's randomness, read by the Lean verifier of record (`IO.getRandomBytes`, A3's
+    `uniform/io-getrandombytes`): the challenger's coins (`service.Stream`'s default), which the Python never reads from
+    the operating system itself. Raises `LeanError` where the Lean can't run, refuses or answers other than `n` bytes:
+    no coins, so no draw and no salt."""
+    if not (type(n) is int and 0 <= n <= COINS_MAX):
+        raise ValueError(f"coins are 0 to {COINS_MAX} bytes a request, not {n!r}")
+    kind, body = _server.call("coins", n)
+    if kind != "output":
+        raise LeanError(f"{EXE} refused {n} coin bytes: {body}")
+    if not (isinstance(body, str) and len(body) == 2 * n and all(c in "0123456789abcdef" for c in body)):
+        raise LeanError(f"{EXE} answered other than {n} coin bytes in hex")
+    return bytes.fromhex(body)
+
+
 def _canon(x: Any) -> str | None:
     """`x` under `canonical_json`, or None where it isn't JSON (which then equals nothing)."""
     try:
@@ -200,7 +221,8 @@ def _decide(got: Mapping[str, Any], py: Verdict, whole: bool) -> Verdict:
 def _params(program: Program, query: Mapping[str, Any], law: Mapping[str, Any], scheme: str,
             ports: Mapping[str, Mapping[str, Any]], leaf_layer: str | None, anchors: Sequence[Any],
             log: Iterable[Mapping[str, Any]], partition: Mapping[str, Any] | None, work_table: Mapping[str, Any] | None,
-            registered: Mapping[str, int] | None) -> dict[str, Any]:
+            registered: Mapping[str, int] | None, supplied: Mapping[str, Any] | None = None,
+            pinned: Mapping[str, str] | None = None) -> dict[str, Any]:
     """`registration.check`'s copies as the Lean's parameters (`OneStage.paramsOfJson`)."""
     p = {"anchors": list(anchors), "delta": REGISTRATION_DELTA, "law": dict(law), "leaf_layer": leaf_layer,
          "log": [dict(r) for r in log], "partition": None if partition is None else dict(partition),
@@ -209,18 +231,24 @@ def _params(program: Program, query: Mapping[str, Any], law: Mapping[str, Any], 
          "work_table": None if work_table is None else dict(work_table)}
     if registered is not None:
         p["parameters"] = [[name, t.to_json()] for name, t in program.fn.signature()[0]]
+    if supplied:
+        p["supplied"] = {v: [[dict(s) for s in row] for row in rows] for v, rows in supplied.items()}
+    if pinned:
+        p["pinned"] = dict(pinned)
     return p
 
 
 def check(rec: Mapping[str, Any], program: Program, query: Mapping[str, Any], law: Mapping[str, Any], scheme: str,
           ports: Mapping[str, Mapping[str, Any]], leaf_layer: str | None = None, anchors: Sequence[Any] = (),
           log: Iterable[Mapping[str, Any]] = (), partition: Mapping[str, Any] | None = None,
-          work_table: Mapping[str, Any] | None = None, registered: Mapping[str, int] | None = None) -> Verdict:
+          work_table: Mapping[str, Any] | None = None, registered: Mapping[str, int] | None = None,
+          supplied: Mapping[str, Any] | None = None, pinned: Mapping[str, str] | None = None) -> Verdict:
     """`registration.check` (R1-R7) by the verifier of record."""
     log = list(log)
-    py = R.check(rec, program, query, law, scheme, ports, leaf_layer, anchors, log, partition, work_table, registered)
+    py = R.check(rec, program, query, law, scheme, ports, leaf_layer, anchors, log, partition, work_table, registered,
+                 supplied, pinned)
     got = lean("registration", {"params": _params(program, query, law, scheme, ports, leaf_layer, anchors, log, partition,
-                                                  work_table, registered), "record": dict(rec)})
+                                                  work_table, registered, supplied, pinned), "record": dict(rec)})
     if "codes" in got:
         got = {"ok": not got["codes"], "codes": got["codes"]}
     return _decide(got, py, whole=False)
@@ -293,7 +321,8 @@ def run(python: Mapping[str, Any], rec: Mapping[str, Any], program: Program, que
         outputs: Sequence[str], statement: Mapping[str, Any], delta: float, proved_units: Sequence[int] | None = None,
         instances: int | None = None, served: Sequence[int] | None = None,
         session_roots: Mapping[str, str] | None = None, *, interior_values: Iterable[tuple[str, bool]] = (),
-        interior: Mapping[str, Any] | None = None) -> Verdict:
+        interior: Mapping[str, Any] | None = None, supplied: Mapping[str, Any] | None = None,
+        pinned: Mapping[str, str] | None = None) -> Verdict:
     """The stream's run of one registration, from its public check through its verdict, by the Lean (`Run.run`), held whole to
     `python`, the stream's own (`{"receipt", "draw", "read", "interior", "symbol", "public", "audit"}`, each audit record
     without its `verifiers`, `interior` null or the interiors' `{"receipt", "audit"}`): on `check`'s copies,
@@ -308,7 +337,7 @@ def run(python: Mapping[str, Any], rec: Mapping[str, Any], program: Program, que
                           interior["anchors"], interior["log"], None, None, None),
         "record": dict(interior["record"]), "received": interior["received"]}
     got = lean("run", {"params": _params(program, query, law, scheme, ports, leaf_layer, anchors, log, None, work_table,
-                                         registered),
+                                         registered, supplied, pinned),
                        "record": dict(rec), "rule": dict(rule), "values": [{"name": n, "registered": r} for n, r in values],
                        "interior_values": [{"name": n, "registered": r} for n, r in interior_values],
                        "public": list(declared), "challenger": challenger, "received": received, "source": read.hex(),
@@ -447,5 +476,6 @@ def audit_record(registration: Mapping[str, Any], receipt: Mapping[str, Any], dr
     return rec
 
 
-__all__ = ["BUILD_LOCK", "DISAGREE", "EXE", "LeanError", "PACKAGE", "RECORD_VERDICT", "audit_record", "check", "check_draw",
-           "check_proved", "check_public", "check_verdicts", "executable", "lean", "matches_public", "run", "select"]
+__all__ = ["BUILD_LOCK", "COINS_MAX", "DISAGREE", "EXE", "LeanError", "PACKAGE", "RECORD_VERDICT", "audit_record",
+           "check", "check_draw", "check_proved", "check_public", "check_verdicts", "coins", "executable", "lean",
+           "matches_public", "run", "select"]

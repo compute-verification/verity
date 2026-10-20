@@ -1,17 +1,22 @@
-"""`research run --on auto`'s size for a suites.py run of named suites, from what each declares in its pyproject.toml's
+"""`research run --on auto`'s size for a suites.py run, from what each suite it runs declares in its pyproject.toml's
 `[tool.verity.tests]`: `worker_gb`, one xdist worker's peak, and `timeout_s`, the bound `--timeouts` puts on its run.
 
 The run's memory is its test processes at the largest worker_gb, one per CPU (suites.py's `--jobs` is the CPUs it may use) or
-its `--jobs`; its time is the suites' timeouts one after another (an undeclared one's SUITE_TIMEOUT_S) plus SYNC_S for the
-environment's `uv sync`. Neither drops below the kind's own (AUTO_*). Only what a suite declares is used, so a run of suites
-that declare neither keeps the kind's size, as does a run that names no suite (all of them) or a name that matches none or
-several (suites.py refuses it). Reads only the checkout's tracked pyproject.toml files; imports nothing from Verity.
+its `--jobs`. Its time, for named suites, is their timeouts one after another (an undeclared one's SUITE_TIMEOUT_S) plus SYNC_S
+for the environment's `uv sync`. A run of many suites, `--changed REV` (the suites the change touches, as suites.py's `--list`
+names them) or none named (all of them; a change that deletes a pyproject.toml reruns every suite, INF-98), runs them side by side
+on its jobs: its time is the list-scheduling bound, their times summed over the jobs plus the longest, with an undeclared suite at
+UNDECLARED_S, since at SUITE_TIMEOUT_S each the tree's 79 would ask for a day. Neither drops below the kind's own (AUTO_*). Only
+what a suite declares is used, so named suites that declare neither keep the kind's size, as does a name that matches none or
+several (suites.py refuses it). Reads the checkout's tracked pyproject.toml files, and for `--changed` runs its suites.py
+`--list`; imports nothing from Verity.
 """
 from __future__ import annotations
 
 import math
 import re
 import subprocess
+import sys
 import tomllib
 from pathlib import Path
 
@@ -21,25 +26,45 @@ VALUED = {"--changed", "--skip", "--jobs", "-j", "--mem-gb", "--logs", "--json",
 #: suites.py's SUITE_TIMEOUT_S: an undeclared suite's bound
 SUITE_TIMEOUT_S = 3600
 SYNC_S = 600
+#: an undeclared suite's time in a run of many: vy-nebius-cpu-1's suites.py durations.json (8 Oct), 32 suites run whole, had a
+#: median of 45 s and a mean of 181 s; the slow ones (circuit-check's 63 min) declare their timeout_s
+UNDECLARED_S = 300
 #: kind agent-test's shape (infra/cluster/src/cluster/kinds.py, phase cpu-test, and kinds/infra.toml's max_wall_min)
 AUTO_CPUS, AUTO_MEM_GB, AUTO_MAX_S = 4, 16, 3600
 
 
-def named(command: list[str]) -> tuple[list[str], int | None] | None:
-    """The suites a suites.py command names and its `--jobs`, or None when it isn't one or names none."""
+def selection(command: list[str]) -> tuple[list[str], int | None, str | None] | None:
+    """The suites a suites.py command names, its `--jobs` and its `--changed` REV, or None when it isn't one."""
     at = next((i for i, a in enumerate(command) if a == SUITES_PY or a.endswith("/" + SUITES_PY)), None)
     if at is None:
         return None
-    names, jobs, rest = [], None, iter(command[at + 1:])
+    names, jobs, rev, rest = [], None, None, iter(command[at + 1:])
     for a in rest:
         if a == "--":
             break
-        if a in VALUED:
+        if a.startswith("--changed="):
+            rev = a.split("=", 1)[1]
+        elif a in VALUED:
             v = next(rest, "")
             jobs = int(v) if a in ("--jobs", "-j") and v.isdigit() else jobs
+            rev = v if a == "--changed" else rev
         elif not a.startswith("-"):
             names.append(a)
-    return (names, jobs) if names else None
+    return names, jobs, rev
+
+
+def touched(source: Path, names: list[str], rev: str) -> list[str] | None:
+    """The suites (of `names`, or all) the change from `rev` touches, as the checkout's suites.py says; None where it can't say."""
+    try:
+        r = subprocess.run([sys.executable, SUITES_PY, *names, "--changed", rev, "--list"], cwd=source, capture_output=True, text=True,
+                           timeout=120)
+    except (OSError, subprocess.TimeoutExpired):
+        return None
+    line = next((x for x in r.stdout.splitlines() if x.startswith("suites: the change from ") and " touches " in x), None)
+    if r.returncode != 0 or line is None:
+        return None
+    listed = line.split(": ", 2)[2] if line.count(": ") >= 2 else ""
+    return [] if listed == "none" else [n.strip() for n in listed.split(",") if n.strip()]
 
 
 def _norm(name: str) -> str:
@@ -79,17 +104,29 @@ def pick(suites: list[dict], names: list[str]) -> list[dict] | None:
 
 
 def size(source: Path, command: list[str], cpus: int | None) -> dict | None:
-    """`{suites, mem_gb?, max_s?}` for a suites.py run of named suites whose declarations say more than the kind's size."""
-    got = named(command)
-    chosen = pick(declared(source), got[0]) if got else None
+    """`{suites, mem_gb?, max_s?}` for a suites.py run whose suites' declarations, or number, say more than the kind's size."""
+    if not (got := selection(command)):
+        return None
+    names, jobs, rev = got
+    suites = declared(source)
+    if rev is not None:
+        hit = touched(source, names, rev)
+        chosen = None if hit is None else [s for s in suites if s["name"] in hit or s["path"] in hit]
+    else:
+        chosen = pick(suites, names) if names else suites
     if not chosen:
         return None
     out: dict = {"suites": [s["name"] for s in chosen]}
+    workers = jobs or cpus or AUTO_CPUS
     if gb := max(s["worker_gb"] for s in chosen):
-        out["mem_gb"] = max(AUTO_MEM_GB, math.ceil((got[1] or cpus or AUTO_CPUS) * gb))
-    if any(s["timeout_s"] for s in chosen):
+        out["mem_gb"] = max(AUTO_MEM_GB, math.ceil(workers * gb))
+    if rev is not None or not names:
+        ts = [s["timeout_s"] or UNDECLARED_S for s in chosen]
+        if (t := math.ceil(sum(ts) / workers + max(ts)) + SYNC_S) > AUTO_MAX_S:
+            out["max_s"] = t
+    elif any(s["timeout_s"] for s in chosen):
         out["max_s"] = max(AUTO_MAX_S, int(sum(s["timeout_s"] or SUITE_TIMEOUT_S for s in chosen)) + SYNC_S)
     return out if len(out) > 1 else None
 
 
-__all__ = ["named", "declared", "pick", "size"]
+__all__ = ["selection", "touched", "declared", "pick", "size"]

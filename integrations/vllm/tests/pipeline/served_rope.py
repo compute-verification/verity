@@ -3,10 +3,10 @@ a Program with RoPE_v1 rows (D=64) executed honestly by the sampled replay's wor
 committed by the production CPU committer and sealed into a replay bundle with its registered weights, beside the Commit's record
 (``runs.jsonl``, ``verdict.json``, the binding map) and the row dir of its Program of record.
 
-    python -m tests.pipeline.served_rope OUT        (from integrations/vllm)
+    python -m tests.pipeline.served_rope OUT [--served]        (from integrations/vllm)
 
 writes ``OUT/commit``, ``OUT/row`` and ``OUT/partition.json`` (every RoPE head, ``subset:1``) and prints them with the run root as
-one JSON line."""
+one JSON line.  ``--served`` also writes ``OUT/hook``, the in-Commit hook's window over the same members (`hook`)."""
 from __future__ import annotations
 
 import gzip
@@ -88,12 +88,31 @@ def commit(root: Path) -> dict:
     return {"out": out, "row_dir": row_dir, "partition": pf, "world": world, "run_root": rc.run_root.hex(), "inst": inst}
 
 
+def hook(c: dict, out_dir: Path, run: str = "served-rope") -> Path:
+    """The in-Commit hook's window over the Commit's members (`serving_rows.readers`, its request as the row stage writes it) in
+    ``out_dir``: ``served``.  The hook reads the bundle's store opened against the record where a Commit's reads its committer."""
+    from verity_vllm.pipeline import deferred_rows as DRW
+    from verity_vllm.pipeline import serving_rows as SRW
+
+    r = DRW.of_record(RB.path(c["out"], 1), str(c["row_dir"]))
+    bmap = json.loads((r.out / f"binding_map_p{r.pair}.json").read_text())
+    req = out_dir.with_name(out_dir.name + ".request.json")
+    req.write_text(json.dumps({"dir": str(out_dir), "partition": str(c["partition"]), "run": run, "committer": {"source": "served_rope"}}))
+    SRW.readers(str(req), r.store, r.run, DRW.opened_weights(r), r.programs, bmap, r.arrivals, r.loaded, r.manifest, "rope-d64-cpu", r.digests)
+    if (out_dir / "error.txt").exists():
+        raise RuntimeError(f"the in-Commit hook failed: {(out_dir / 'error.txt').read_text()[-2000:]}")
+    return out_dir
+
+
 def main(argv: list[str]) -> int:
     root = Path(argv[0])
     root.mkdir(parents=True, exist_ok=True)
     c = commit(root)
-    print(json.dumps({"commit": str(c["out"]), "bundle": str(RB.path(c["out"], 1)), "row_dir": str(c["row_dir"]),
-                      "partition": str(c["partition"]), "run_root": c["run_root"], "program_digest": c["inst"]["digest"]}))
+    out = {"commit": str(c["out"]), "bundle": str(RB.path(c["out"], 1)), "row_dir": str(c["row_dir"]),
+           "partition": str(c["partition"]), "run_root": c["run_root"], "program_digest": c["inst"]["digest"]}
+    if "--served" in argv[1:]:
+        out["hook"] = str(hook(c, root / "hook"))
+    print(json.dumps(out))
     return 0
 
 
