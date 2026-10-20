@@ -161,7 +161,7 @@ class Gate:
         doc = json.loads((out / R.RECORD).read_text())
         record = LC.ChallengerRecord.from_json(doc)
         try:
-            released = {k: len(r) for k, r in PHC.released_v2(out / R.RELEASES, record.commitment).items()}
+            released = {k: len(r) for k, r in PHC.released_sealed(out / R.RELEASES, record.commitment).items()}
         except LC.CoinError:
             released = None
         families = self._opens[session]["families"]
