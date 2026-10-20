@@ -35,9 +35,12 @@ for it), the proxy writes the salt frame with the salt in place of the placehold
 on a server connection of its own, which it never reads: nothing the server writes there reaches egress. The egress
 side never sees the salt.
 
-The certifier's record cells are its grids and one sealed slot per PoUW window, `_salts[p]`, which holds the salt and
-is opened only by `reveal`. So the record's open cells (`Accounting.Attribution.openCells`) are the grids, a function
-of the traffic, and what the certifier sends into the block is a function of its record. `reveal(p, registration)`
+The certifier's record cells are its grids and two sealed slots per PoUW window: `_salts[p]`, which holds the salt and
+is opened only by `reveal`, and `_weights[p]`, the 64-byte root of the weights PoUW's noise seed reads, which the
+prover hands once (`commit_weights(p, root)`) while p's first ingress tick, the salt's draw, is still ahead, and which
+`committed(p, registration)` opens on `reveal`'s conditions. So the certifier's word orders the weights before the
+salt. The record's open cells (`Accounting.Attribution.openCells`) are the grids, a function of the traffic, and what
+the certifier sends into the block is a function of its record. `reveal(p, registration)`
 takes the PoUW window's registration as the proof service returned it (`sampled_proofs.service.Registration`) and fails
 closed without it: it refuses unless the receipt is that registration's (`one_stage.registration.receipt`) and
 `registered` reads p off the registration, while p's last ingress record is unpublished (t_d), and for a window whose
@@ -97,6 +100,7 @@ import os
 import resource
 import secrets
 import struct
+import threading
 import time
 from collections import defaultdict, deque
 from collections.abc import Awaitable, Callable, Mapping, Sequence
@@ -125,6 +129,7 @@ SALT_BITS = 512
 SALT_BYTES = SALT_BITS // 8
 PLACEHOLDER = bytes(64)
 SALT_FRAME_BYTES = HEADER.size + 8 + len(PLACEHOLDER)
+WEIGHTS_ROOT_BYTES = 64  # a frame-v3-sha512 root
 
 
 def encode_frame(kind: int, stream: int, payload: bytes, frame_bytes: int) -> bytes:
@@ -454,7 +459,9 @@ class Proxy:
       `fresh_salt`, the ingress grid carries each PoUW window's salt frame at its first bucket, the server receives
       the salt on its own connection (`salts_released` and `salts_delivered` count them), and `reveal(p,
       registration)` gives the verifier PoUW window p's salt once p is registered (`registered` reads the window off
-      a registration, by default `served_window`) and its last ingress record is published;
+      a registration, by default `served_window`) and its last ingress record is published; `commit_weights(p, root)`
+      records the weights' root before p's salt is drawn, and `committed(p, registration)` gives it on `reveal`'s
+      conditions;
     - with `start` and `position`, it is back from maintenance: it serves windows `start` … `windows` − 1, its first
       egress frame the Program's at `position`;
     - `until(predicate)` waits until the proxy's state satisfies it, for a caller that drives a `VirtualClock`."""
@@ -493,6 +500,8 @@ class Proxy:
                              position)
         self.salt, self.salt_bits, self.pouw_window, self.registered = salt, salt_bits, pouw_window, registered
         self._salts: dict[int, bytes] = {}
+        self._weights: dict[int, bytes] = {}
+        self._seal = threading.Lock()  # `commit_weights` may run off the loop: the draw and the commit never interleave
         self._salt_out: asyncio.Queue | None = None
         self._salt_task: asyncio.Task | None = None
         self.salts_released = self.salts_delivered = 0
@@ -620,7 +629,8 @@ class Proxy:
         salt = self.salt(p, n)
         if len(salt) != n:
             raise ValueError(f"the salt source gave {len(salt)} bytes, not {n}")
-        self._salts[p] = salt
+        with self._seal:
+            self._salts[p] = salt
         return salt_frame(p, PLACEHOLDER, self.ingress.frame_bytes)
 
     def _release_salt(self, p: int) -> None:
@@ -664,6 +674,33 @@ class Proxy:
         if window not in self._salts:
             raise RuntimeError(f"window {window}'s salt wasn't drawn")
         return self._salts[window]
+
+    def commit_weights(self, window: int, root: bytes) -> None:
+        """Record PoUW window `window`'s weights' root, `WEIGHTS_ROOT_BYTES` bytes, in its sealed slot, so that the
+        certifier's word orders it before the window's salt. It refuses (`RuntimeError`) once the window's first ingress
+        tick, the salt's draw, has run or was missed (a proxy back from maintenance after it), and a second root for
+        the window."""
+        if self.salt is None:
+            raise ValueError("the salt is off")
+        if not isinstance(root, bytes) or len(root) != WEIGHTS_ROOT_BYTES:
+            raise ValueError(f"a weights' root is {WEIGHTS_ROOT_BYTES} bytes")
+        if not (type(window) is int and 0 <= window and window * self.pouw_window < self.windows):
+            raise ValueError(f"PoUW window {window!r} isn't one this proxy serves")
+        with self._seal:
+            if window in self._salts or self.bucketer.t > window * self.pouw_window * self.ingress.buckets:
+                raise RuntimeError(f"PoUW window {window}'s salt is drawn or its draw has passed, so its weights "
+                                   "can't be recorded before it")
+            if window in self._weights:
+                raise RuntimeError(f"PoUW window {window}'s weights are already recorded")
+            self._weights[window] = root
+
+    def committed(self, window: int, registration: Registration | None) -> bytes:
+        """PoUW window `window`'s weights' root, recorded before its salt, on `reveal`'s conditions; it fails closed
+        (`RuntimeError`) for a window whose weights weren't recorded."""
+        self.reveal(window, registration)
+        if window not in self._weights:
+            raise RuntimeError(f"no weights were recorded before PoUW window {window}'s salt")
+        return self._weights[window]
 
     def _registers(self, window: int, registration: Registration | None) -> bool:
         if not isinstance(registration, Registration) or not isinstance(registration.receipt, Mapping):

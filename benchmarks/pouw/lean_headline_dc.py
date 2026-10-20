@@ -21,13 +21,17 @@ one, `1 − Y·(1 − 41/S)`, where `Y = (N_w w* + N_w φ* + χ*)/B_♭`. Three 
   gap at ♭. The machine model's own certificate doesn't serve: its cheater folds a tensor word on lanes only, where
   the Lean menu prices the fold alone on any route (the uniform datapath's among them, which DS-100's ALU-heavy
   certificate leaves nearly free), so `1 − Y` is at least the LP's ε_machine and ε_skip over ♭, and more;
-- neither device has a forms.toml, so a tensor class's shape is read from its census name: sm_90's wgmma as a warp's
-  m16 slice of the m64 warpgroup instruction, sm_100's tcgen05 whole, and the mma.sync forms as m16n8. ω is the
-  destination's 32-bit words (A6's count), and each class's MACs must give one of the sheet's peaks.
+- the sheet is `sheet.toml` read by `verity_machine_model.sheet` (`Security/Definitions/Accounting/Sheets/`
+  states it): each tensor class's MACs and its type's peak are the sheet's integers, a pipe's width its results an SM
+  clock (the uniform pipe's the census's measured UP line, a rational), and ω the sheet's `omega`, the destination's
+  32-bit words (A6's count). An MMA the sheet rates on no peak (b1) takes its ω from its census name (`shape`: sm_90's
+  wgmma as a warp's m16 slice of the m64 warpgroup instruction, sm_100's tcgen05 whole, the mma.sync forms as m16n8),
+  and a class the sheet rates on nothing is its issue slot alone (A2).
 
 Each family is read on its data sheet (DS-90, DS-100) and on its measured vector (DC-90-ri, DC-100-ri), both at A6's
 floors `q = q_T = ½`, `b_T = 0` (`SheetScalarRouteHalf` proves (I3) there from A6, on any machine). The menu's writer
-kinds are every census MMA class, except on DC-90-ri: its joint rows price every tensor form but honest's at the scalar
+kinds are every MMA class the reading prices (on a measured vector, the forms it times: an untimed form is its measured
+issue slot alone and off the menu, where NoSum carries its words), and on DC-90-ri fewer still: its joint rows price every tensor form but honest's at the scalar
 coefficient, a lower bound on its issue cost, and no certificate prices them above it, so its menu is honest's form
 and the uniform class, the machine model's, and NoSum carries the rest; the full menu's bound is printed for the
 record. The checks are `lean_headline.instance()`'s: the sheet reproduces every DS coefficient, ♭ is `setup`'s floor
@@ -75,6 +79,7 @@ LH = _lean_headline()
 E = LH.E
 exact, branches, Q = LH.exact, LH.branches, LH.Q
 
+from verity_machine_model import sheet as S  # noqa: E402
 from verity_machine_model.model import device  # noqa: E402
 
 DEPTH = {"S8": 32, "U8S8": 32, "E4M3": 32, "E5M2": 32, "BF16": 16, "F16": 16, "TF32": 8, "B1": 256}
@@ -91,8 +96,6 @@ class Family:
     design: str
     sheet: str                           # its data-sheet vector
     measured: str                        # its measured vector
-    pipes: dict[str, tuple[str, int]]    # DS row: (Lean pipe, the Programming Guide's results an SM clock)
-    peaks: tuple[int, ...]               # the sheet's dense MACs an SM clock, by operand type
     fmax: int
     fmax_src: str
     uniform: dict[str, int]              # the uniform writer kinds and ω
@@ -105,6 +108,17 @@ class Family:
     def data(self) -> Path:
         return device(self.key)
 
+    @property
+    def sh(self) -> S.Sheet:
+        """The device's data sheet (`sheet.toml`), which `Sheets/H200.lean` and `B200.lean` state too."""
+        return S.sheet(self.data)
+
+    @property
+    def pipes(self) -> dict[str, tuple[str, Fraction]]:
+        """Each DS pipe row: its Lean pipe and the sheet's width, results an SM clock (A4; the uniform datapath's the
+        census's measured UP line, which no document states)."""
+        return {S.row(q): (q, w.value) for q, w in self.sh.pipes.items()}
+
 
 # DC-90-ri's joint rows price every tensor form but honest's IGMMA_S8_N256 at the scalar coefficient (rows.csv: "a
 # lower bound on their issue cost"), and no certificate prices them otherwise (M gives a GMMA 32 SMSP-cycles to
@@ -113,15 +127,12 @@ class Family:
 # the issue row alone (RT4-SHEET-12), `setup`'s floor on DC-90-ri folds by CP_ATS8 and the generic CP_RED8 and heads
 # 0.047% of the words on the design's lane baseline (dp4a), the rest on the IGMMA; `_flat_shares` makes the split exact.
 # A uniform instruction heads up to 2 words (UIMAD.WIDE.U32 writes a UR pair, RT-HOPPER-7), so UNI's ω is 2.
-SM90 = Family("Sm90", "H200", "sm_90", "dither-2s-licpw-redux-p1-l32", "DS-90", "DC-90-ri",
-              {"DS_alu": ("alu", 64), "DS_imad": ("imad", 64), "DS_shfl": ("shfl", 32)},
-              (1024, 2048, 4096, 16384), 1980,
+SM90 = Family("Sm90", "H200", "sm_90", "dither-2s-licpw-redux-p1-l32", "DS-90", "DC-90-ri", 1980,
               "EPS1 DC's measured f_max at default clocks; the sheet's TOPS are at 1830 MHz", {"UNI": 2},
               Fraction(1, 100), Fraction(3, 100), honest_menu=True)
-SM100 = Family("Sm100", "B200", "sm_100", "dither-2s-licpw-redux-ldtm0-l32", "DS-100", "DC-100-ri",
-               {"DS_alu": ("alu", 64), "DS_imad": ("imad", 64), "DS_shfl": ("shfl", 32)},
-               (2048, 4096, 8192, 32768), 1965, "the driver's reported maximum (the data sheet gives no clock)",
-               {"UNI": 2}, Fraction(1, 100), Fraction(1, 100))
+SM100 = Family("Sm100", "B200", "sm_100", "dither-2s-licpw-redux-ldtm0-l32", "DS-100", "DC-100-ri", 1965,
+               "the driver's reported maximum (the data sheet gives no clock)", {"UNI": 2}, Fraction(1, 100),
+               Fraction(1, 100))
 FAMILIES = (SM90, SM100)
 # A2's catch-all by device on its sheet (DS_issue alone) and by vector on its measured reading (the measured issue row
 # alone): NOROW is a class on the measured vectors, at SHFL's joint issue rows, so UNLISTED carries the measured one
@@ -141,6 +152,19 @@ def shape(k: str, h: E.Honest) -> tuple[int, int] | None:
     if m := SYNC.fullmatch(k):
         return 16 * 8 * int(m.group(1)), 16 * 8
     return None
+
+
+def omega(fam: Family, k: str, h: E.Honest) -> int | None:
+    """A writer class's ω, its destination's 32-bit words a warp instruction (A6): the sheet's (`sheet.omega`) for a
+    tensor form, and for an MMA the sheet rates on no peak (b1, issue only) the count its census name gives (`shape`);
+    None for no MMA."""
+    om, named = S.omega(fam.sh).get(k), shape(k, h)
+    if om is not None and named is not None and named[1] != om:
+        raise SystemExit(f"{fam.key}: {k}'s ω is {om} on the sheet and {named[1]} by its census name")
+    om = om if om is not None else (named[1] if named else None)
+    if om is not None and Fraction(om).denominator != 1:
+        raise SystemExit(f"{fam.key}: {k}'s ω {om} is no whole number of words")
+    return None if om is None else int(om)
 
 
 @dataclass(frozen=True)
@@ -169,6 +193,7 @@ class _Exact:
     fold_names: list[str]                # the design's `fold_routes`, `folds`' entries after its fold
     fold_mix: str                        # ♭'s fold in words (`_fold_mix`)
     words_mix: str                       # ♭'s word production in words (`_words_mix`)
+    untimed: list[str]                   # the sheet's classes the vector has no line for, read at its issue slot alone
 
 
 @dataclass
@@ -265,25 +290,27 @@ def _fold_mix(d: E.Design, z: dict[str, Fraction]) -> str:
     return "the fold routes' cheapest mix, by share of the words: " + ", ".join(parts)
 
 
-def _sheet_check(fam: Family, pi: E.Machine, c: dict, h: E.Honest) -> dict[str, list]:
-    """The data sheet by class (`macs`, `peak`, `pipe`, `smem`), checked to reproduce every DS coefficient on
-    `Accounting.TS.Sheet.machine`'s rows: issue 1, tensor `macs/(peak/4)`, a pipe `128/width`, shared memory
-    `smem/32`."""
+def _sheet_check(fam: Family, pi: E.Machine, c: dict) -> dict[str, list]:
+    """The data sheet by class (`macs`, `peak`, `pipe`, `smem`), each class's form, peak and pipe the device's
+    sheet.toml, checked to reproduce every DS coefficient on `Accounting.TS.Sheet.machine`'s rows: issue 1, tensor
+    `macs/(peak/4)`, a pipe `128/width`, shared memory `smem/32`. A class with no form and no pipe (b1, the memory,
+    atomic and control classes, the catch-all) is its issue slot alone (A2)."""
+    sh = fam.sh
+    want = S.lines(sh)
     out: dict[str, list] = {"macs": [], "peak": [], "pipe": [], "smem": []}
     for k, row in c.items():
-        if row.get("DS_issue") != 1 or set(row) - set(pi.rows) or set(row) - {"DS_issue", "DS_tensor", "DS_smem",
-                                                                                 *fam.pipes}:
-            raise SystemExit(f"{fam.sheet}: {k} is not 1 on DS_issue, or has a row outside {pi.rows}")
-        macs = peak = 0
-        if "DS_tensor" in row:
-            s = shape(k, h)
-            pk = 4 * Fraction(s[0]) / row["DS_tensor"] if s else None
-            if pk is None or pk.denominator != 1 or pk not in fam.peaks:
-                raise SystemExit(f"{fam.sheet}: {k}'s {s} MACs at {row['DS_tensor']} SMSP-cycles is no sheet peak")
-            macs, peak = s[0], int(pk)
+        if set(row) - set(pi.rows) or set(row) - {"DS_issue", "DS_tensor", "DS_smem", *fam.pipes}:
+            raise SystemExit(f"{fam.sheet}: {k} has a row outside {pi.rows}")
+        if k not in sh.kinds or row != want[k]:
+            raise SystemExit(f"{fam.sheet}: {k}'s lines {row} aren't its sheet.toml kind's, {want.get(k)} "
+                             f"(`machine-model --device {fam.key} sheet`)")
+        f, macs, peak = sh.kinds[k].form, 0, 0
+        if f:
+            macs, peak = f.macs, sh.peaks[f.type].macs
+            if macs.denominator != 1 or peak.denominator != 1:
+                raise SystemExit(f"{fam.sheet}: {k}'s {macs} MACs or its {f.type} peak {peak} is not whole")
+            macs, peak = int(macs), int(peak)
         on = [r for r in fam.pipes if r in row]
-        if len(on) > 1 or (on and row[on[0]] != Fraction(128, fam.pipes[on[0]][1])):
-            raise SystemExit(f"{fam.sheet}: {k} is on pipes {on} at {row}, not one pipe at 128/width")
         smem = row.get("DS_smem", Fraction(0)) * 32
         if smem.denominator != 1:
             raise SystemExit(f"{fam.sheet}: {k}'s DS_smem {row['DS_smem']} is no whole number of bytes over 32")
@@ -309,9 +336,26 @@ def reading(fam: Family, vector: str, full: bool = False) -> Reading:
         raise SystemExit(f"{fam.design}: the statement takes δ′ = 2^-41, operand luck 3/4 and 48000 checks")
     if any(f.p not in (0, 1) for f in d.filler):
         raise SystemExit(f"{fam.design}: a filler enters Y whole at p = 0 (pinned receipts) or not at all at p = 1")
-    classes = sorted(pi.c)
-    c = _coefs(pi, classes)
-    lists = _sheet_check(fam, pi, c, h) if sheet else {}
+    # Both readings index the sheet's classes. A measured vector times fewer: a sheet class it has no line for
+    # (DMMA, the sparse and fp4 forms, which no run beside the census timed) is read as its catch-all is, at the
+    # measured issue slot alone, and off its writer menu, as it was when the catch-all counted it (NoSum carries it).
+    classes = sorted(fam.sh.kinds)
+    if set(pi.c) - set(classes) or (sheet and set(pi.c) != set(classes)):
+        raise SystemExit(f"{vector}: classes {sorted(set(pi.c) ^ set(classes))} are not {fam.key}'s sheet.toml's")
+    c = {**_coefs(pi, [k for k in classes if k in pi.c]),
+         **{k: {"issue": Fraction(1)} for k in classes if k not in pi.c}}
+    c = {k: c[k] for k in classes}
+    if sheet:
+        # The census reads a line as a float (the uniform pipe's 1.96110716); the sheet states it exactly.
+        want = S.lines(fam.sh)
+        for k in classes:
+            if set(c[k]) == set(want.get(k, {})) and all(abs(c[k][r] - v) < Fraction(1, 10 ** 12)
+                                                          for r, v in want[k].items()):
+                c[k] = dict(want[k])
+    untimed = [k for k in classes if k not in pi.c]
+    if untimed and "issue" not in pi.rows:
+        raise SystemExit(f"{vector}: no measured issue row to read {untimed} at")
+    lists = _sheet_check(fam, pi, c) if sheet else {}
     k = CATCH_ALL.get(vector)
     if not sheet and k is not None and c.get(k) != {"issue": 1}:
         raise SystemExit(f"{vector}: the catch-all {k} is priced at {c.get(k)}, not at the measured issue slot alone: "
@@ -380,7 +424,7 @@ def reading(fam: Family, vector: str, full: bool = False) -> Reading:
     if max(load(r, n) for r in pi.rows) != B:
         raise SystemExit(f"{fam.design} on {vector}: ♭'s bound with its skip ({skip}) is not on {flat}")
     menu = "honest" if fam.honest_menu and not sheet and not full else "all"
-    writers = [(k, shape(k, h)[1]) for k in classes if shape(k, h) and (menu == "all" or k == h.form)]
+    writers = [(k, om) for k in classes if k in pi.c and (om := omega(fam, k, h)) and (menu == "all" or k == h.form)]
     writers += [(k, om) for k, om in fam.uniform.items() if k in pi.c]
     folds = [{k: exact(v) / E.LANES for k, v in f.items()} for f in (d.fold, *d.fold_routes.values())]
     if d.uniform and E.UNI in pi.c:
@@ -415,7 +459,7 @@ def reading(fam: Family, vector: str, full: bool = False) -> Reading:
                    {"B": fr(B), "w": fr(w), "phi": fr(phi), "chi": fr(chi), "bound": fr(bound)},
                    _Exact(classes, c, list(pi.rows), list(pi.cuda), lists, writers, folds, nwb, nf, nx, ns, skip, lam,
                           flat, B, bound, Nw, int(d.checks), d.L, h.form, list(d.fold_routes), _fold_mix(d, z),
-                          _words_mix(d, wb)))
+                          _words_mix(d, wb), untimed))
 
 
 def _best(rows: list[str], Nw: int, B: Fraction, checks: int, words: dict, folds: list, fills: list) -> dict[str, float]:
@@ -467,9 +511,10 @@ def certificate(cert: dict[str, float], digits: int = 9) -> dict[str, Fraction]:
 
 OUT = LH.ROOT / "Security" / "Definitions" / "Accounting" / "HeadlineDc"
 SHEET_ROW = {"DS_issue": ".issue", "DS_tensor": ".tensor", "DS_smem": ".smem"}
-SHAPES = {"Sm90": "sm_90's wgmma as one warp's m16 slice of its m64 warpgroup instruction (`16·n·k`), its mma.sync as "
-                  "m16n8",
-          "Sm100": "sm_100's tcgen05 MMA whole (`m·n·k`), its mma.sync as m16n8"}
+SHAPES = {"Sm90": "sm_90's wgmma as one warp's quarter of its warpgroup instruction (`m·n·k/4`), a 2:4 sparse form at "
+                  "its dense twin's, its mma.sync whole, DMMA's at the f64 peak",
+          "Sm100": "sm_100's tcgen05 MMA whole (`m·n·k`), a 2:4 sparse form at its dense twin's, its mma.sync whole, "
+                   "DMMA's at the f64 peak"}
 
 
 def _entries(x: _Exact, n: dict[str, Fraction]) -> list[str]:
@@ -539,13 +584,17 @@ def render_sheet(fam: Family, r: Reading) -> str:
         f"`classes`: the {nk} instruction classes of the {fam.sheet} census, in the order `Fin {nk}` indexes them."
         + (f" `{CATCH_ALL[fam.key]}` is A2's catch-all: every warp instruction no other class names counts there, at its "
            f"issue slot alone." if fam.key in CATCH_ALL else ""),
-        f"`{sv}`, `sheet`: the {fam.gpu}'s data sheet ({fam.sheet}): f_max {fam.fmax} MHz ({fam.fmax_src}); each tensor "
-        f"class's dense MACs a warp instruction ({SHAPES[fam.ns]}) and its operand type's dense MACs an SM clock; the "
-        f"Nsight Compute pipes {', '.join(p.upper() for p in lane[:-1])} and {lane[-1].upper()} with their Programming "
-        f"Guide widths; no shared-memory row ({fam.sheet} prices none). Its machine reproduces every {fam.sheet} "
+        f"`{sv}`, `sheet`: the {fam.gpu}'s data sheet ({fam.sheet}), `{S._rel(fam.sh)}` as "
+        f"`{fam.sh.lean}` states it: f_max {fam.fmax} MHz ({fam.fmax_src}); each tensor class's dense MACs a warp "
+        f"instruction ({SHAPES[fam.ns]}) and its operand type's dense MACs an SM clock; the Nsight Compute pipes "
+        f"{', '.join(p.upper() for p in lane[:-1])} and {lane[-1].upper()}, each at its width (the Programming "
+        f"Guide's, and the uniform datapath's the census's measured UP line, which no document states); no "
+        f"shared-memory row ({fam.sheet} prices none). An MMA class the sheet rates on no peak (b1) and the memory, "
+        f"atomic and control classes are their issue slot alone (A2). Its machine reproduces every {fam.sheet} "
         f"coefficient.",
-        f"`d2s`, `model`: `{fam.design}` as a TS model on the sheet's machine: writer kinds every census MMA class "
-        f"(ω = m·n, its destination's 32-bit words a warp)" + _uniform_words(fam)
+        f"`d2s`, `model`: `{fam.design}` as a TS model on the sheet's machine: writer kinds every MMA class of the "
+        f"census (ω its destination's 32-bit words a warp instruction, A6, sheet.toml's `omega`: an f64 element two)"
+        + _uniform_words(fam)
         + "; the vector classes CUDA's lane classes; the fold routes the design's fold"
         + (f" and its {len(x.fold_names)} other bit-exact programs ({', '.join(x.fold_names)}: the checkpoint's "
            "bit-exact loops, RT2-HOPPER-9, -11, RT3-DC-1, -4 and RT4-SHEET-7) on lanes, and alone on the uniform datapath at "
@@ -564,7 +613,7 @@ def render_sheet(fam: Family, r: Reading) -> str:
     pipes = [f"some .{p}" if p else "none" for p in x.sheet["pipe"]]
     fold_lines = ",\n".join(f"    {_sparse(x, f)}" for f in x.folds)
     pipe_ctors = "\n".join(f"  | {p}" for p in lane)
-    width_lines = "\n".join(f"  | .{p} => {w}" for p, w in fam.pipes.values())
+    width_lines = "\n".join(f"  | .{p} => {S._num(w)}" for p, w in fam.pipes.values())
     return _header(fam, f"headline instance: {fam.sheet} and `{fam.design}`", "Definitions.Accounting.HeadlineDc.Encoding",
                    f"{fam.ns}SheetHeadline") + f'''
 {_bullets(bullets)}
@@ -586,12 +635,12 @@ instance instFintypePipe : Fintype Pipe where
   elems := {{{", ".join(f"Pipe.{p}" for p in lane)}}}
   complete x := by cases x <;> simp
 
-/-- Each pipe's Programming Guide results an SM clock. -/
-def Pipe.width : Pipe → ℕ
+/-- Each pipe's results an SM clock: the Programming Guide's, the uniform datapath's the census's UP line. -/
+def Pipe.width : Pipe → ℚ
 {width_lines}
 
 /-- The {fam.gpu}'s data sheet, by class index. -/
-def {sv} : SheetData Pipe where
+def {sv} : SheetDataQ Pipe where
   fmax := {fam.fmax}
   macs := {LH._list([str(m) for m in x.sheet["macs"]], "    ")}
   peak := {LH._list([str(p) for p in x.sheet["peak"]], "    ")}
@@ -668,14 +717,17 @@ def render_measured(fam: Family, r: Reading, s: Reading) -> str:
         rows.append(f"  -- {j}: {row}\n  [{body}]{',' if j + 1 < m else ''}")
     menu = (f"honest's form{_uniform_words(fam)}: the census prices every other tensor form on the joint rows at "
             "the scalar coefficient, a lower bound on its issue cost, so they are off the menu and `NoSum` carries "
-            "them" if r.menu == "honest" else "every census MMA class (ω = m·n)")
+            "them" if r.menu == "honest" else "every MMA class it times (ω its destination's words, A6)")
     lam = LH._wrap([f"({x.rows.index(k)}, {v.numerator}, {v.denominator})" for k, v in x.lam.items()],
                    " " * (len(f"  cert {m} ["))).lstrip()
     bullets = [
         f"`rowNames`, `{sv}`, `machine`: the measured vector {fam.measured}, {m} rows of SMSP-cycles a warp instruction "
         f"at its epoch's census, each sparse over `{fam.ns}.classes`; every facet SM-clocked, f_max {fam.fmax} MHz."
         + (f" `{CATCH_ALL[fam.measured]}` is A2's catch-all here: every warp instruction no other class prices on "
-           f"{fam.measured} counts there, at the measured issue slot alone." if fam.measured in CATCH_ALL else ""),
+           f"{fam.measured} counts there, at the measured issue slot alone." if fam.measured in CATCH_ALL else "")
+        + (f" The sheet's classes no run beside {fam.measured}'s census timed ({', '.join(x.untimed)}) are read the "
+           "same way, at the measured issue slot alone, and are off the writer menu, as they were when the catch-all "
+           "counted them: `NoSum` carries their words." if x.untimed else ""),
         f"`d2s`, `model`: `{fam.design}` on that machine, its writer kinds {menu}; `{fam.ns}.d2s`'s vector classes, "
         f"fold routes, floors and `N_w`" + ("; ♭'s filler `" + fam.ns + ".flatFill` its filler route." if x.nx else "."),
         "".join(f"`{n}`, " for n, o in (("flatWords", own_w), ("flatFold", own)) if o)

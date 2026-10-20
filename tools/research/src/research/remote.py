@@ -131,7 +131,7 @@ import tomllib
 from pathlib import Path, PurePosixPath
 from typing import IO, Any, Callable
 
-from . import clone
+from . import clone, withdraw
 from .telemetry.events import utc_now_ms
 from .telemetry.job import write_json_atomic
 
@@ -1964,15 +1964,18 @@ def adopt(runs_root: Path, run_id: str, *, on: str | None = None, machines: dict
     raise Refused(f"no machine holds run {run_id}" + (f" ({'; '.join(answers)})" if answers else " (no ssh machine is registered)"))
 
 
-def _runner_gone(ssh: list[str], local_dir: Path, pid: int) -> str | None:
+def _runner_gone(ssh: list[str], local_dir: Path, pid: int, *, timeout: float = 120) -> str | None:
     """Why a run whose status isn't terminal has no runner on its machine, or None while it may have one: the machine rebooted
     since the runner started (job.json's boot id), or the pid is gone where the runner ran in the machine's own pid namespace
     (job.json's hostname is the machine's; a Kubernetes pod's runner isn't visible from the host). Unreadable is None."""
     env = (_read_json(local_dir / "job.json") or {}).get("environment") or {}
     if not env.get("boot_id"):
         return None
-    probe = ssh_run(ssh, ["sh", "-c", f"cat /proc/sys/kernel/random/boot_id; hostname; kill -0 {pid} 2>/dev/null && echo alive "
-                                      "|| echo gone"], timeout=120)
+    try:
+        probe = ssh_run(ssh, ["sh", "-c", f"cat /proc/sys/kernel/random/boot_id; hostname; kill -0 {pid} 2>/dev/null && echo alive "
+                                          "|| echo gone"], timeout=timeout)
+    except subprocess.TimeoutExpired:
+        return None
     lines = probe.stdout.decode(errors="replace").split() if probe.returncode == 0 else []
     if len(lines) != 3:
         return None
@@ -1984,10 +1987,15 @@ def _runner_gone(ssh: list[str], local_dir: Path, pid: int) -> str | None:
     return None
 
 
-def fetch(local_dir: Path, *, everything: bool = False, also: tuple[str, ...] = ()) -> dict[str, Any]:
+def fetch(local_dir: Path, *, everything: bool = False, also: tuple[str, ...] = (), timeout: float | None = None) -> dict[str, Any]:
     """Copy records (or everything) from the machine into the local run dir, with the run dir's files ``also`` names beside the
     records (paths under the run dir: the workload's own small progress files and logs).  Unreachable -> observed_utc
-    unchanged, reason recorded."""
+    unchanged, reason recorded.  ``timeout`` lowers each ssh call's own (900 s for the records, 120 s for a probe): a waiter's
+    time left under its cap (research.waitcap)."""
+
+    def within(s: float) -> float:
+        return s if timeout is None else max(1.0, min(s, timeout))
+
     if bad := [n for n in also if not n or n.startswith("/") or any(p in ("", "..") or p.startswith(".") for p in n.split("/"))]:
         raise Refused(f"--also takes paths of files under the run dir, not {', '.join(map(repr, bad))}")
     rec = _read_json(local_dir / "remote.json")
@@ -2010,7 +2018,7 @@ def fetch(local_dir: Path, *, everything: bool = False, also: tuple[str, ...] = 
                 tf.extract(m, local_dir, **({"filter": "data"} if hasattr(tarfile, "data_filter") else {}))
 
     try:
-        r = ssh_read(ssh, remote_cmd, extract, timeout=900)
+        r = ssh_read(ssh, remote_cmd, extract, timeout=within(900))
     except (tarfile.TarError, OSError) as e:
         r = subprocess.CompletedProcess(remote_cmd, -1, b"", f"reading the run's tar stream: {type(e).__name__}: {e}".encode())
     if r.returncode != 0:
@@ -2025,14 +2033,17 @@ def fetch(local_dir: Path, *, everything: bool = False, also: tuple[str, ...] = 
     rec.pop("launcher_exited", None)
     rec.pop("runner_gone", None)
     if st.get("state") not in TERMINAL and isinstance(st.get("pid"), int):
-        if why := _runner_gone(ssh, local_dir, st["pid"]):
+        if why := _runner_gone(ssh, local_dir, st["pid"], timeout=within(120)):
             rec["runner_gone"] = {"at_utc": rec["observed_utc"], "runner_pid": st["pid"], "why": why}
     pid = (_read_json(local_dir / "launch.json") or {}).get("runner_pid")
     if not st and isinstance(pid, int):
         # launched, no status.json: the runner either has not written it yet or exited before it could (an argv it rejected)
-        probe = ssh_run(ssh, ["sh", "-c", f"cd {shlex.quote(rd)} && if kill -0 {pid} 2>/dev/null; then echo alive; "
-                                          f"else echo exited; tail -n 1 launcher.log 2>/dev/null; fi"], timeout=120)
-        lines = probe.stdout.decode(errors="replace").splitlines() if probe.returncode == 0 else []
+        try:
+            probe = ssh_run(ssh, ["sh", "-c", f"cd {shlex.quote(rd)} && if kill -0 {pid} 2>/dev/null; then echo alive; "
+                                              f"else echo exited; tail -n 1 launcher.log 2>/dev/null; fi"], timeout=within(120))
+        except subprocess.TimeoutExpired:
+            probe = None
+        lines = probe.stdout.decode(errors="replace").splitlines() if probe and probe.returncode == 0 else []
         if lines and lines[0] == "exited":
             rec["launcher_exited"] = {"at_utc": rec["observed_utc"], "runner_pid": pid, "last_line": (lines[1] if len(lines) > 1 else "")[-300:]}
     if everything:
@@ -2148,22 +2159,24 @@ def cancel(local_dir: Path, *, reason: str, by: str) -> dict[str, Any]:
     A run another VM launched (`adopt`) has no shipped tool in its remote.json; the machine's job.json names it (`run.remote.tool`), and
     it must be a snapshot under the machine's <root>/tool/.  The group is signalled only if one of its members is this run's workload
     (`--expect-run-dir`: RESEARCH_RUN_DIR in its environment), since a runner that died leaves status.json `running` and pids wrap; a
-    run whose shipped tool predates that check is refused, not signalled unchecked."""
+    run whose shipped tool predates that check is refused, not signalled unchecked.  A run still held ahead of its runner (`disk-hold`,
+    `cpu-hold`: no status.json) is withdrawn instead (research.withdraw): {"withdrawn": True, "pid", "hold", "released"}."""
     rec = fetch(local_dir)
     if err := rec.get("last_fetch_error"):
         raise Refused(f"the machine is unreachable ({err['stderr'].strip() or 'rc ' + str(err['rc'])}); nothing was signalled")
     st = _read_json(local_dir / "status.json") or {}
+    root = rec.get("root")
+    if not st and not (local_dir / "refused.json").exists() and root and withdraw.hold_of(
+            (_read_json(local_dir / "launch.json") or {}).get("argv") or [], f"{root}/requests/{local_dir.name}/{LAUNCH_ACK}"):
+        return _withdraw(local_dir, rec, reason=f"{reason} (research cancel by {by})")
+    if not st and (refused := _read_json(local_dir / "refused.json")):
+        raise Refused(f"{local_dir.name} was refused ({refused.get('fault')}: {refused.get('reason')}), so there is nothing to cancel")
     if st.get("state") != "running":
         raise Refused(f"{local_dir.name} is {st.get('state') or 'not running yet'}, so there is nothing to cancel")
     pgid = st.get("pgid")
     if not isinstance(pgid, int) or pgid <= 1:
         raise Refused(f"{local_dir.name}'s status.json names no workload process group (pgid {pgid!r})")
-    tool = rec.get("tool") or ((((_read_json(local_dir / "job.json") or {}).get("run") or {}).get("remote") or {}).get("tool"))
-    if not tool:
-        raise Refused(f"neither {local_dir.name}'s remote.json nor its job.json names a shipped tool to record the cancel with")
-    snap, root = PurePosixPath(tool), rec.get("root")
-    if not root or snap.parent != PurePosixPath(root) / "tool" or ":" in tool or snap.name in ("", ".", ".."):
-        raise Refused(f"{local_dir.name}'s tool {tool!r} is not a snapshot under {root}/tool/; nothing was signalled")
+    tool = _shipped_tool(local_dir, rec)
     rd = rec["remote_run_dir"]
     tele = ["env", f"PYTHONPATH={tool}", "python3", "-m", "research.telemetry", "cancel-intent", "--actor", "manual",
             "--reason", f"{reason} (research cancel by {by})", "--target-pgid", str(pgid), "--expect-run-dir", rd, "--attempt-dir", rd,
@@ -2194,6 +2207,32 @@ def cancel(local_dir: Path, *, reason: str, by: str) -> dict[str, Any]:
                              f"naming its run dir only, and nothing SIGKILLs what ignores it", "runner_kills_after_s": None}
     return {"pgid": pgid, "processes": tgt.get("members_total", len(tgt.get("members") or [])), "delivered": bool(res.get("delivered")),
             "why": res.get("reason"), "scope": scope}
+
+
+def _shipped_tool(local_dir: Path, rec: dict[str, Any]) -> str:
+    """The run's shipped tool, a snapshot under the machine's <root>/tool/ (it becomes PYTHONPATH there)."""
+    tool = rec.get("tool") or ((((_read_json(local_dir / "job.json") or {}).get("run") or {}).get("remote") or {}).get("tool"))
+    if not tool:
+        raise Refused(f"neither {local_dir.name}'s remote.json nor its job.json names a shipped tool to record the cancel with")
+    snap, root = PurePosixPath(tool), rec.get("root")
+    if not root or snap.parent != PurePosixPath(root) / "tool" or ":" in tool or snap.name in ("", ".", ".."):
+        raise Refused(f"{local_dir.name}'s tool {tool!r} is not a snapshot under {root}/tool/; nothing was signalled")
+    return tool
+
+
+def _withdraw(local_dir: Path, rec: dict[str, Any], *, reason: str) -> dict[str, Any]:
+    """Run research.withdraw's source on the machine, with the run's shipped tool on PYTHONPATH for the launch's release."""
+    tool = _shipped_tool(local_dir, rec)
+    rd, req_dir = rec["remote_run_dir"], f"{rec['root']}/requests/{local_dir.name}"
+    r = ssh_run(ssh_argv(rec["host"], rec["port"], user=rec.get("user") or "root"),
+                ["env", f"PYTHONPATH={tool}", "python3", "-", rd, req_dir, reason], stdin=Path(withdraw.__file__).read_bytes(), timeout=120)
+    out = next((x for x in map(_json_line, r.stdout.decode(errors="replace").splitlines()) if "withdrawn" in x), None)
+    if out is None:
+        raise Refused(f"the withdrawal gave no answer on the machine (rc {r.returncode}): {r.stderr.decode(errors='replace').strip()[-300:]}")
+    if not out["withdrawn"]:
+        raise Refused(out.get("why") or "not withdrawn")
+    fetch(local_dir)
+    return out
 
 
 def _file_sha256(p: Path) -> str:

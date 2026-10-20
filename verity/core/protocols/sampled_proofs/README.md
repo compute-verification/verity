@@ -231,6 +231,17 @@ only inside a proof (`one_stage.registered`).
   from its own program), and a value an earlier record of the log registered keeps that record's root (`held_roots`):
   the log is the only place the verifier holds roots, so a value is committed once whatever the caller passes. 16 is the
   default, so a 16-bit value's domain, entry and root are what they were before `word_bits`.
+- Supplied values (`check(..., supplied=)`, `supplied_root`, the Lean's `Supplied`): a registered value the verifier fills
+  itself, so the prover never chooses it. Each row is the bytes of its sources: `{"port": P}` (the record's `roots` entry
+  of P), `{"value": V}` (a registered entry's root, never a supplied value's), `{"bytes": hex}`, `{"position": "K"}` (K
+  below the record's population, after the log's earlier records' populations, `log_base`, as a big-endian u64, so no
+  two records of one log share a position) and `{"window": coin}` (`window_salt`: SHA-512 of the coin bound to the
+  record's window, a salt per window since R6 takes one record a window). The rows are committed under public salts
+  (`supplied_salts`), and R7 refuses an entry whose root is not the one it recomputes (`R7-supplied`). PoUW's seed
+  inputs (`pouw.roots`, `pouw.salt`, `pouw.positions`) are supplied values
+  (`verity/core/protocols/pouw/tests/test_pouw_supplied_inputs.py`).
+- Pinned roots (`check(..., pinned={value: root})`): roots of registered values the verifier doesn't fill, held before
+  the record (a model's weights recorded before the salt). R7 holds such a value to its pin as to a root the log holds.
 - Reads at a public position: the verifier derives every unit's reads from its own program (`reads`). A unit's template
   parameter whose leaves are exactly row `r` of a registered value reads row `r`; a parameter that holds part of a row,
   or reads the value in one unit and not in another of its template, is refused. Data-dependent reads are not public
@@ -407,13 +418,13 @@ unchecked. Pinned by `tests/test_two_stage.py`.
 
 ### The verifier's randomness
 
-The draw of record is `two_stage.OwnRandomness`: the operating system's generator read directly with the Lean verifier's
-samplers (`Flock.Draw`), with no hash, no derivation and no beacon, the RU draw after the boundary is registered and the
-proof-unit draw after the interiors are. Stage 1 (`draw_first`) reads the bytes as `Flock.Draw.drawWith` does, and
-`select_replay_units` and `select_proof_units` are the sampled verifier's `TwoStage.selectReplayUnits` and
-`TwoStage.selectProofUnits`, held to the Python by the difftest. Nothing derives a draw, the proof service's included,
-except vLLM's legacy replay challenge until its re-baseline; `two_stage`'s docstring has the byte layout. Pinned by
-`tests/test_two_stage.py`.
+The draw of record is `two_stage.OwnRandomness` on the Lean verifier of record's coins (`one_stage.verifier.coins`:
+`IO.getRandomBytes`, A3; `service.Stream`'s default), read with the Lean verifier's samplers (`Flock.Draw`), with no
+hash, no derivation and no beacon, the RU draw after the boundary is registered and the proof-unit draw after the
+interiors are. Stage 1 (`draw_first`) reads the bytes as `Flock.Draw.drawWith` does, and `select_replay_units` and
+`select_proof_units` are the sampled verifier's `TwoStage.selectReplayUnits` and `TwoStage.selectProofUnits`, held to
+the Python by the difftest. Nothing derives a draw, the proof service's included, except vLLM's legacy replay challenge
+until its re-baseline; `two_stage`'s docstring has the byte layout. Pinned by `tests/test_two_stage.py`.
 
 ### Verification plans
 

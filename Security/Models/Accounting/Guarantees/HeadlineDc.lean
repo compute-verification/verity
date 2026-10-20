@@ -46,13 +46,21 @@ honest still runs it), and the B200's credits plain LI-CP-W redux with no extra 
 (its unfolded branch has no `χ*`), and FILL-OPT is a hypothesis of none. A uniform writer heads 2 words
 (`UIMAD.WIDE.U32` writes a UR pair, RT-HOPPER-7), so `UNI`'s ω is 2 on both devices' menus; it moves no bound.
 
+The sheets are `sheet.toml` as `Definitions.Accounting.Sheets.H200` and `B200` state it, over the census's classes:
+every MMA form it rates (the DMMA, 2:4 sparse and fp4 forms among them) is a writer kind at its sheet price, the uniform
+pipe is at the census's measured UP line (`DS_uniform`, 128 over 1.96110716 SMSP-cycles an instruction), and the
+memory, atomic and control classes the fold loops issue are their issue slot alone. None of those forms moves a
+bound: at each `π*` the sparse and m128n256 forms head a word at honest's price and DMMA above it, and the four
+certificates and ♭'s `B` are the same with or without them. On a measured vector an MMA form the reading doesn't time
+is at the measured issue slot alone and off the menu, and `NoSum` carries its words.
+
 Per device:
 
 * The H200 (sm_90) runs `dither-2s-licpw-redux-p1-l32` (Dither-2S, LI-CP-W redux, ffill at p = 1). On DC-90-ri the
   joint rows price every tensor form but honest's IGMMA s8 m64n256k32 at the scalar coefficient (IGMMA_S8_N256 at 62.7
   on JI90_0, the bf16, binary and fp8 forms at about 1), a lower bound on their issue cost that no certificate prices
   above it, so the measured menu is honest's form and the uniform `UNI`, and `NoSum` carries every other form. Over
-  the census's full menu the same certificate search gives `31.3%`. ♭ and the cheater fold by the cheapest mix of
+  the census's full menu the same certificate search gives `30.0%`. ♭ and the cheater fold by the cheapest mix of
   LI-CP-W redux and every bit-exact checkpoint loop the tree carries (the design's `[fold_routes]`): CP_SEG4 (four
   segments' checkpoint words in one STG.128) and CP_SEG4U (one XOR a checkpoint on the uniform datapath; RT2-HOPPER-9,
   -11), and rt3_dc's CP_ATS, CP_ATS2 and CP_ATS8 (the checkpoint's XOR into shared memory by 1, 2 or 8 ATOMS), CP_RED,
@@ -173,7 +181,7 @@ each tensor figure is stated at, the 1830 MHz tensor boost clock, not f_max's 19
 machine model put this reading at 2.253% at #2695's menu (CP_SEG4 and CP_SEG4U its only routes), since its ε first
 moves at tensor lines 1.060× the sheet's. -/
 def Sm90SheetHeadline : Prop :=
-  ∀ (Ω : Type) [Fintype Ω] (Pl : Play Ω Sm90.checks (Fin 40) (Fin 24) Unit Empty) (G : ReceiptGame Ω Sm90.checks)
+  ∀ (Ω : Type) [Fintype Ω] (Pl : Play Ω Sm90.checks (Fin 50) (Fin 34) Unit Empty) (G : ReceiptGame Ω Sm90.checks)
     (Uf : Unfolded Ω Sm90.checks) {V : Type} {nπ : ℕ} (pf : ProofLayer Ω Sm90.checks nπ V) (δfork δzk : ℝ),
     (Sm90.checks : ℝ) * (Real.sqrt δfork + nπ * δzk) ≤ (1 / 2) ^ 41 → (∀ x, (Pl.run x).Split) →
     (∀ x, SheetClock Sm90.sheet (Pl.run x).run) → (∀ x, SheetDispatch (Pl.run x).run) →
@@ -209,7 +217,7 @@ H200's probes gives about 1.64% in the machine model at #2699's earlier design, 
 coefficient heads a word for about 0.0077 against honest's 0.0153 (at its tensor-pipe coefficient, about 0.031, it
 moves nothing). -/
 def Sm90MeasuredHeadline : Prop :=
-  ∀ (Ω : Type) [Fintype Ω] (Pl : Play Ω Sm90.checks (Fin 40) (Fin 2) Unit Empty) (G : ReceiptGame Ω Sm90.checks)
+  ∀ (Ω : Type) [Fintype Ω] (Pl : Play Ω Sm90.checks (Fin 50) (Fin 2) Unit Empty) (G : ReceiptGame Ω Sm90.checks)
     (Uf : Unfolded Ω Sm90.checks) {V : Type} {nπ : ℕ} (pf : ProofLayer Ω Sm90.checks nπ V) (δfork δzk : ℝ),
     (Sm90.checks : ℝ) * (Real.sqrt δfork + nπ * δzk) ≤ (1 / 2) ^ 41 → (∀ x, (Pl.run x).Split) →
     (∀ x, FacetCeilings Sm90Measured.machine (Pl.run x).run) →
@@ -242,7 +250,7 @@ proved over the B200's whole instruction set. FOLD-OPT's premise has no slack (`
 price); the reading's against 1% is 0.219%. FILL-OPT is not a hypothesis: the design has no filler, so it holds at
 any run. -/
 def Sm100SheetHeadline : Prop :=
-  ∀ (Ω : Type) [Fintype Ω] (Pl : Play Ω Sm100.checks (Fin 38) (Fin 13) Unit Empty) (G : ReceiptGame Ω Sm100.checks)
+  ∀ (Ω : Type) [Fintype Ω] (Pl : Play Ω Sm100.checks (Fin 52) (Fin 27) Unit Empty) (G : ReceiptGame Ω Sm100.checks)
     (Uf : Unfolded Ω Sm100.checks) {V : Type} {nπ : ℕ} (pf : ProofLayer Ω Sm100.checks nπ V) (δfork δzk : ℝ),
     (Sm100.checks : ℝ) * (Real.sqrt δfork + nπ * δzk) ≤ (1 / 2) ^ 41 → (∀ x, (Pl.run x).Split) →
     (∀ x, SheetClock Sm100.sheet (Pl.run x).run) → (∀ x, SheetDispatch (Pl.run x).run) →
@@ -258,7 +266,7 @@ def Sm100SheetHeadline : Prop :=
 
 /-- **The B200's headline on its measured vector**, under full checking with live coins. On DC-100-ri's machine
 (`Sm100Measured.machine`), `dither-2s-licpw-redux-ldtm0-l32`'s TS model on it (`Sm100Measured.model`: every
-census MMA class and `UNI` at 2 the writer kinds, `q = q_T = ½`, `b_T = 0`, `N_w = 32768`) and its floor program
+MMA class DC-100-ri times and `UNI` at 2 the writer kinds, the forms it doesn't time off the menu, `q = q_T = ½`, `b_T = 0`, `N_w = 32768`) and its floor program
 (`Sm100Measured.flat`), over `Sm100.checks = 48,000` rounds on any finite coins `Ω`: for any window's play `Pl` and
 proof layer `pf` whose binding and soundness cost at most `2^-41` over the window, if the labelling splits, (I1)
 `FacetCeilings` holds on DC-100-ri's rows, A6 (`SheetWords`) and (I5) `NoSum` hold on every run and FOLD-OPT per word
@@ -272,7 +280,7 @@ price of CP_RED2, the cheater's cheapest, so `1 − Y` is ε_skip alone (0.8145%
 FOLD-OPT's premise has no slack; the reading's against 1% is 0.102%. FILL-OPT is not a hypothesis: the design has
 no filler. -/
 def Sm100MeasuredHeadline : Prop :=
-  ∀ (Ω : Type) [Fintype Ω] (Pl : Play Ω Sm100.checks (Fin 38) (Fin 13) Unit Empty) (G : ReceiptGame Ω Sm100.checks)
+  ∀ (Ω : Type) [Fintype Ω] (Pl : Play Ω Sm100.checks (Fin 52) (Fin 13) Unit Empty) (G : ReceiptGame Ω Sm100.checks)
     (Uf : Unfolded Ω Sm100.checks) {V : Type} {nπ : ℕ} (pf : ProofLayer Ω Sm100.checks nπ V) (δfork δzk : ℝ),
     (Sm100.checks : ℝ) * (Real.sqrt δfork + nπ * δzk) ≤ (1 / 2) ^ 41 → (∀ x, (Pl.run x).Split) →
     (∀ x, FacetCeilings Sm100Measured.machine (Pl.run x).run) →
