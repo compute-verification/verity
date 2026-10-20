@@ -165,6 +165,23 @@ def walk_bound(program) -> int:
     return (acts + 1) * (depth + 2)
 
 
+def scans_without_iterations(program) -> bool:
+    """The refusal of `NciCheck.Desc.refsInRange` the decoder doesn't give: a body the root reaches holds a scan of no
+    iterations."""
+    seen: set[int] = set()
+    todo = [program.root]
+    while todo:
+        fn = todo.pop()
+        if id(fn) in seen or not hasattr(fn, "body"):
+            continue
+        seen.add(id(fn))
+        for n in fn.body.nodes:
+            if n.form == "scan" and n.n == 0:
+                return True
+            todo.append(n.fn)
+    return False
+
+
 def expand(inst) -> dict:
     """An instance of `NciCheck.Desc` (θ and the owners per root node) as `check` reads one: θ every gate of its nodes,
     and each gate the owner of its root node. The instance is well-formed as `NciCheck.Desc` reads it."""
@@ -190,7 +207,7 @@ def evaluate_desc(inst) -> dict:
     from verity.ml.circuits.partition_object import order_violation
     if order_violation(program) is not None:
         raise Malformed("not-topological")
-    if walk_bound(program) > FUEL // 2:
+    if walk_bound(program) > FUEL // 2 or scans_without_iterations(program):
         raise Malformed("program")
     inp, reg, spans = root_nodes(inst["program"])
     K = len(inp)

@@ -854,11 +854,18 @@ theorem gate_ok_of (P : Prog) (hc : Desc.calleesFirst P = true) (hlo : ∀ d < P
   simp only [Flock.Program.Prog.gate, hng, ite_false, bind, Except.bind]
   exact hb
 
+/-- What `Desc.walkable` checks. -/
+theorem walkable_spec (P : Prog) (h : Desc.walkable P = true) :
+    Desc.calleesFirst P = true ∧ Desc.bodiesLaidOut P = true ∧ Desc.walkBound P ≤ Flock.Steps.FUEL / 2 ∧
+      Desc.refsInRange P = true := by
+  unfold Desc.walkable at h
+  simp only [Bool.and_eq_true, decide_eq_true_eq] at h
+  exact ⟨h.1.1.1, h.1.1.2, h.1.2, h.2⟩
+
 /-- **`Desc.walkable` leaves the descent its fuel.** -/
 theorem depth_lt_fuel (P : Prog) (h : Desc.walkable P = true) : (Desc.depths P)[P.root]! < Flock.Steps.FUEL := by
-  unfold Desc.walkable Desc.walkBound at h
-  simp only [Bool.and_eq_true, decide_eq_true_eq] at h
-  have h2 := h.2
+  have h2 := (walkable_spec P h).2.2.1
+  unfold Desc.walkBound at h2
   have : (Desc.depths P)[P.root]! + 2 ≤
       ((Desc.activations P)[P.root]! + 1) * ((Desc.depths P)[P.root]! + 2) := by
     exact Nat.le_mul_of_pos_left _ (by omega)
@@ -994,11 +1001,8 @@ def OperandsEarlier : Prop :=
 (`gate_ok_of`), which returns one value and, for an input, reads nothing (`gate_reads_of`). -/
 theorem gatesLocated_of (hO : OperandsResolve) (hE : OperandsEarlier) : GatesLocated := by
   intro bytes P hdec hov hlo hin hwk han g hg
-  have hwk' := hwk
-  unfold Desc.walkable at hwk'
-  simp only [Bool.and_eq_true] at hwk'
-  have hc : Desc.calleesFirst P = true := hwk'.1.1
-  have hb : Desc.bodiesLaidOut P = true := hwk'.1.2
+  have hc : Desc.calleesFirst P = true := (walkable_spec P hwk).1
+  have hb : Desc.bodiesLaidOut P = true := (walkable_spec P hwk).2.1
   obtain ⟨hrp, hlay, -, -⟩ := bodiesLaidOut_spec P hb
   have hr : P.root < P.defs.size := by
     refine (Nat.lt_or_ge P.root P.defs.size).elim id fun hn => ?_

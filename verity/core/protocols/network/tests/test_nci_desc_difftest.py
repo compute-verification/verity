@@ -1,8 +1,8 @@
 """The difftest of the description-sized NCI check (`NciCheck.Desc`) against the unrolled one: the Python half.
 
-`verity/core/protocols/network/nci/lean/scripts/desc_difftest_vectors.py` writes 3,658 declarations divided into IUs of
+`verity/core/protocols/network/nci/lean/scripts/desc_difftest_vectors.py` writes 3,659 declarations divided into IUs of
 root nodes (six on a composite keyed with an input id, which is no input node, two on a gate reading a nested scan's
-carry, one past `NciCheck.Desc.walkBound`'s limit, then two pinned: θ with an input bound per run, refused, and θ the
+carry, one past `NciCheck.Desc.walkBound`'s limit, one beside a scan of no iterations, then two pinned: θ with an input bound per run, refused, and θ the
 registered one, accepted), each expanded gate by gate where it is well-formed, and `scripts/nci_reference.py`'s
 `check_desc` on each.
 `check` runs the Lean half in its Lean audit (`runs` in that package's `lean-audit.json`): `NciCheck/DescDifftestMain.lean`
@@ -12,7 +12,8 @@ package's files alone, so this test is what says the data is still what the gene
 other test checks that the generator reaches what its docstring says, on the first 400 instances and the first on each
 fixture's descriptor, the third that the data holds the decoys: a root Call or batch of a composite keyed with an input
 id, whose gates are computed, which `NciCheck.Desc` once took for an input node, and the fourth that it holds the walks: a
-gate reading a nested scan's carry, past `NciCheck.Desc.walkBound`'s limit, where `Prog.gate` runs out of steps.
+gate reading a nested scan's carry, past `NciCheck.Desc.walkBound`'s limit, where `Prog.gate` runs out of steps, and a
+scan of no iterations, which `NciCheck.Desc` refuses though nothing reads it.
 """
 
 from __future__ import annotations
@@ -41,7 +42,7 @@ RUN = json.loads((LEAN / "lean-audit.json").read_text())["runs"]["NciCheck.DescD
 
 @pytest.mark.slow
 def test_the_data_is_what_the_audit_pins(tmp_path):
-    """All 3,658 instances, their expansions and the reference's results, byte for byte as the record pins them."""
+    """All 3,659 instances, their expansions and the reference's results, byte for byte as the record pins them."""
     made = {n: hashlib.sha256(p.read_bytes()).hexdigest() for n, p in vectors.write(tmp_path).items()}
     assert made == RUN["data"]
     assert RUN["args"] == ["{desc_difftest/instances.jsonl}", "{desc_difftest/expanded.jsonl}",
@@ -83,16 +84,19 @@ def test_the_decoys_are_no_input_nodes():
 def test_the_walk_past_the_bound_is_refused():
     """The walks come just before the pinned instances: the reference gives the unrolled check's verdict on the small
     one, and refuses (`program`) the one of about 2^64 activations, whose gate `Prog.gate` can't locate in `Steps.FUEL`
-    steps."""
+    steps, and the one beside a scan of no iterations, on which the unrolled check, never reading the scan, gives a
+    verdict."""
     first = vectors.total() - len(vectors.vectors.pinned()) - len(vectors.walks())
     made = [vectors.instance(s)["instance"] for s in range(first, first + len(vectors.walks()))]
     assert made == vectors.walks()
-    small, big = made
+    small, big, idle = made
     assert reference.check_desc(small) == reference.check(reference.expand(small))
     assert "error" not in reference.check_desc(small)
     assert reference.check_desc(big) == {"error": "program"}
+    assert reference.check_desc(idle) == {"error": "program"}
+    assert "error" not in reference.check(reference.expand(idle))
     bound = []
-    for m in made:
+    for m in (small, big):
         desc = json.loads(m["program"])
         bound.append(reference.walk_bound(reference.codec.decode_program(desc, reference.declared(desc))))
     assert bound[0] == (1 + 3 * (1 + 3) + 1) * (3 + 2)

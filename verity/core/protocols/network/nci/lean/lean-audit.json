@@ -7,17 +7,17 @@
  },
  "runs": {
   "NciCheck.DescDifftestMain": {
-   "why": "3,658 declarations divided into IUs of root nodes (3,000 random, a quarter of them read across their arrays' rows, 24 on each distinct descriptor of the circuits fixtures, 6 on a composite keyed with an input id, which is no input node, and 2 on a gate reading a nested scan's carry, one of them past NciCheck.Desc.walkBound's limit, then the unrolled difftest's two pinned ones) on which NciCheck.Desc.check gives what scripts/nci_reference.py's check_desc computes, and, on each one it gives a verdict on, what NciCheck.check gives on the instance expanded gate by gate: the description-sized check against the unrolled one",
+   "why": "3,659 declarations divided into IUs of root nodes (3,000 random, a quarter of them read across their arrays' rows, 24 on each distinct descriptor of the circuits fixtures, 6 on a composite keyed with an input id, which is no input node, and 2 on a gate reading a nested scan's carry, one of them past NciCheck.Desc.walkBound's limit, and 1 beside a scan of no iterations, which NciCheck.Desc refuses though nothing reads it, then the unrolled difftest's two pinned ones) on which NciCheck.Desc.check gives what scripts/nci_reference.py's check_desc computes, and, on each one it gives a verdict on, what NciCheck.check gives on the instance expanded gate by gate: the description-sized check against the unrolled one",
    "args": [
     "{desc_difftest/instances.jsonl}",
     "{desc_difftest/expanded.jsonl}",
     "{desc_difftest/python.jsonl}",
-    "3658"
+    "3659"
    ],
    "data": {
-    "desc_difftest/expanded.jsonl": "2c7095c72510098d6500cfddb2b344408d9f1b1a8a49bc003b3c470126ce1102",
-    "desc_difftest/instances.jsonl": "a74e847c5496abd9acd931bc9f6e6bdf44dd745dfe8ff86d71a82357dfc715aa",
-    "desc_difftest/python.jsonl": "2905caf60da672551533de861ae83f5e116b0c3ff8d6ce7ba98e3847c0e24eeb"
+    "desc_difftest/expanded.jsonl": "47a74d61092b0a6e9f5e8b90d374fa79bd41615bf80f32fe4f620cbba88c7b89",
+    "desc_difftest/instances.jsonl": "da056d83712dd1c15574c3355af3861dd1ce800310da8d4baea4d2097843267f",
+    "desc_difftest/python.jsonl": "5d2f15657407ef134d8f0fdf02da6ea6ba6b572201d5ed96d2dcd92cd4379b5c"
    },
    "generate": ["python3", "scripts/desc_difftest_vectors.py", "{repo}", "--out", "{out}"]
   },

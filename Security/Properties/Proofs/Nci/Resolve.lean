@@ -568,10 +568,7 @@ def BodiesOk : Prop :=
 (`Walk.bodiesLaidOut_spec`), so every operand the walk locates is an earlier gate (`gate_operands_lt`). -/
 theorem operandsEarlier_of (hB : BodiesOk) : Walk.OperandsEarlier := by
   intro bytes P hdec hov hlo hin hwk han g hg p ops sc hx a ha
-  have hwk' := hwk
-  unfold Desc.walkable at hwk'
-  simp only [Bool.and_eq_true] at hwk'
-  obtain ⟨hrp, hlay, -, -⟩ := Walk.bodiesLaidOut_spec P hwk'.1.2
+  obtain ⟨hrp, hlay, -, -⟩ := Walk.bodiesLaidOut_spec P (Walk.walkable_spec P hwk).2.1
   have hr : P.root < P.defs.size := by
     refine (Nat.lt_or_ge P.root P.defs.size).elim id fun hn => ?_
     have hg' : g < (P.defs[P.root]!).gates := hg

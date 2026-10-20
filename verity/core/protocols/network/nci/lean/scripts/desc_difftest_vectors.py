@@ -15,7 +15,7 @@ across its arrays' rows (`transposed`), then each distinct descriptor
 the circuits fixtures hold (`verity/ml/circuits/tests/*_vectors.json`: pass-throughs, scans with carries, batches of
 composites, root batches and scans) for `PER_FIXTURE` instances each, then six on a composite keyed with an input id
 (`decoys`), which is no input node, then two on a gate reading a nested scan's carry (`walks`), one past
-`NciCheck.Desc.walkBound`'s limit, then `difftest_vectors.pinned()`'s two (θ every
+`NciCheck.Desc.walkBound`'s limit, and one beside a scan of no iterations (`idle`), then `difftest_vectors.pinned()`'s two (θ every
 input, refused, and θ the registered one, accepted). θ is no input node, every one (refused, `theta-not-registered`,
 where one is bound per run), the registered ones or a random set of them. A division puts every Call in one IU, each in
 its own, runs of consecutive Calls or a random assignment, and a Call without gates in any IU or none. `Γ` and `α` are
@@ -212,12 +212,26 @@ def walk(n: int) -> str:
 WALKS = (3, 2 ** 32)
 
 
+def idle() -> str:
+    """A declaration with a scan of no iterations that nothing reads, beside a gate reading the input. `NciCheck.Desc`
+    refuses it (`refsInRange`: the output of a scan of no iterations is no value), as `nci_reference.check_desc` does."""
+    w = 8
+    op = vectors.prim((w,), w)
+    Step = bind(CompositeDefinition("NciIdleStep", 1, (), lambda S: ((("c", Value(w)),), Tuple(Value(w), Tuple())),
+                                    lambda B, S, c: tuple_of(B.call(op, c), tuple_of()), register=False))
+
+    def body(B, S, x):
+        B.scan(Step, x, n=0)
+        return B.call(op, x)
+    fn = bind(CompositeDefinition("NciIdle", 1, (), lambda S: ((("x", Value(w)),), Value(w)), body, register=False))
+    return codec.canonical_json(codec.encode_program(Program(fn, registered=()))).decode()
+
+
 def walks() -> list[dict]:
-    """Instances on `walk`'s declarations, θ their registered inputs (none) and the Call in IU 0: one `NciCheck.Desc`
-    gives a verdict on, and one past `walkBound`'s limit, which it refuses."""
+    """Instances on `walk`'s declarations and `idle`'s, θ their registered inputs (none) and the Calls in IU 0: one
+    `NciCheck.Desc` gives a verdict on, one past `walkBound`'s limit and the scan of no iterations, which it refuses."""
     out = []
-    for n in WALKS:
-        text = walk(n)
+    for text in (*map(walk, WALKS), idle()):
         inp, reg, spans = reference.root_nodes(text)
         out.append({"program": text, "theta": [k for k in range(len(inp)) if inp[k] and reg[k]],
                     "owner": ["input" if inp[k] else 0 for k in range(len(inp))], "gamma": spans[-1][1],

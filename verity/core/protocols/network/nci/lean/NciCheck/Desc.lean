@@ -51,9 +51,9 @@ copy). Serve_v1 meets none of them, at word level or on bits.
 In the order checked: `instance` and `params` (`NciCheck.parse`), `program` (the decoder refuses it), `not-topological`
 (a body names a later node, `Prog.orderViolation`), `program` (the root's offsets are not its layout, a body calls the
 root or holds an input node outside the root's: `rootLaidOut`, `inputsAtRoot`, which the decoder never gives), `program`
-(a `walkBound` past half of `Flock.Steps.FUEL`, past which `Prog.gate`'s walk can run out of steps; or a body calling a
-Definition decoded after it, or a Definition not as the decoder gives it, which the decoder never gives: `walkable`), `program` (a reference the layout can't resolve:
-the output of a scan of no iterations), then θ entry by entry (`theta-unknown`: not a root node, `theta-not-input`,
+(a `walkBound` past half of `Flock.Steps.FUEL`, past which `Prog.gate`'s walk can run out of steps; a scan of no
+iterations, whose output is no value; or a body calling a Definition decoded after it, a Definition not as the decoder
+gives it, or a reference outside its body's leaves, which the decoder never gives: `walkable`), then θ entry by entry (`theta-unknown`: not a root node, `theta-not-input`,
 `theta-not-registered`: an input node bound per run, `theta-duplicate`), then the owners (`owner-length`: not one per root
 node; node by node `owner-entry`, `input-in-iu`, `gate-in-no-iu`), then
 `empty-iu`. `NciCheck.evaluate` checks the order gate by gate, so it gives a verdict on a program in which a node reads
@@ -707,12 +707,94 @@ depth `H`: each step goes down into an activation, up out of one, or to the scan
 where an earlier one was. -/
 def walkBound (P : Prog) : Nat := ((activations P)[P.root]! + 1) * ((depths P)[P.root]! + 2)
 
+/-- Part `q` of a sequence of a body with parameters `params` and nodes `nodes`, read at node `k` (the node count for the
+body's return), names only leaves of a parameter or of a node before `k`: an affine part by its last reference, a strided
+one by the corners `Flock.Program.parsePartsIn` checks, an explicit one reference by reference. -/
+def partInRange (params : Array (String × Ty)) (nodes : Array Node) (k : Nat) (q : Part) : Bool :=
+  let inRange (p : Bool) (i : Nat) (lo hi : Int) : Bool :=
+    0 ≤ lo && if p then i < params.size && hi < (((params[i]!).2.leaves : Nat) : Int)
+      else i < k && hi < (((nodes[i]!).out.leaves : Nat) : Int)
+  match q with
+  | .affine p i b c => c == 0 || inRange p i b ((b + c : Nat) - 1)
+  | .strided p i b inner os is c =>
+    c == 0 || (inner != 0 &&
+      let q := (c - 1) / inner
+      let last := (c - 1) % inner
+      let corners : List (Nat × Nat) := [(0, 0), (0, min inner c - 1), (q, 0), (q, last)] ++
+        (if q > 0 then [(q - 1, inner - 1)] else [])
+      let vals := corners.map fun (x, y) => b + (x : Int) * os + (y : Int) * is
+      inRange p i (vals.foldl min vals.head!) (vals.foldl max vals.head!))
+  | .explicit it => it.all fun r => inRange r.p r.i r.j r.j
+
+/-- `s`'s starts and count are its parts' (`Seq.ofParts`), and every part names leaves as `partInRange` reads them. -/
+def seqInRange (params : Array (String × Ty)) (nodes : Array Node) (k : Nat) (s : Seq) : Bool :=
+  s.starts == (Seq.ofParts s.parts).starts && s.count == (Seq.ofParts s.parts).count &&
+    s.parts.all (partInRange params nodes k)
+
+/-- `Flock.Program.Arg.memberRef`'s index of a member's leaf, `((j / L) · d + m) · L + j % L` for a mapped argument
+(`dims = (d, L)`) and `j` itself for a shared one, below `n` for every leaf `j < J` of every member `m < M`: its largest
+value is. -/
+def memberIdxBelow (dims : Option (Nat × Nat)) (J M n : Nat) : Bool :=
+  J == 0 || M == 0 || match dims with
+    | some (d, L) => if L == 0 then J ≤ n else ((J - 1) / L * d + M) * L ≤ n
+    | none => J ≤ n
+
+/-- Node `nd`'s arguments hold every leaf of callee `c`'s parameters that resolution reads up through them: a member's
+slice of a mapped argument, a scan's `xs` slice of its iteration, and a scan's carry from its `init` or the iteration
+before's return. -/
+def upInRange (nd : Node) (c : Defn) : Bool :=
+  (List.range c.body.params.size).all fun i =>
+    let J := (c.body.params[i]!).2.leaves
+    let a := nd.args[i]!
+    match nd.form with
+    | .scan =>
+      if i == 0 then J ≤ a.seq.count && J ≤ c.body.ret.count
+      else if i ≤ nd.nxs then (nd.n - 1) * (a.dims.map (·.2)).getD 0 + J ≤ a.seq.count
+      else J ≤ a.seq.count
+    | .batch => memberIdxBelow a.dims J nd.n a.seq.count
+    | _ => J ≤ a.seq.count
+
+/-- Every leaf of node `nd`'s output names a member of it and a leaf of callee `c`'s return, as resolution reads it down
+through the node: a primitive's one gate, a batch's member, a scan's last iteration for the carry. -/
+def downInRange (nd : Node) (c : Defn) : Bool :=
+  nd.out.leaves == 0 || match nd.form with
+    | .prim => c.prim && c.gates == 1
+    | .call => !c.prim && nd.out.leaves ≤ c.body.ret.count
+    | .batch => c.outLeaves != 0 && (nd.out.leaves - 1) / c.outLeaves < nd.n &&
+        (if c.prim then c.gates == 1 else c.outLeaves ≤ c.body.ret.count)
+    | .scan => !c.prim && nd.n != 0 && match c.ret with
+      | .tuple fs => fs.size == 2 && nd.out.leaves ≤ (fs[0]!).leaves + nd.n * (fs[1]!).leaves &&
+          (fs[0]!).leaves + (fs[1]!).leaves ≤ c.body.ret.count
+      | _ => false
+
+/-- A batch node's mapped arguments hold every member's leaves `Flock.Program.operands` reads. -/
+def opsInRange (nd : Node) (c : Defn) : Bool :=
+  nd.form != .batch || (List.range nd.args.size).all fun i =>
+    (nd.args[i]!).dims.isNone || memberIdxBelow (nd.args[i]!).dims (c.params[i]!).2.leaves nd.n (nd.args[i]!).seq.count
+
+/-- Every body the root reaches names, in each reference, a leaf of a parameter or of an earlier node (any node, in its
+return), and reads through each node only indices in range, so scope resolution never leaves the descriptor; the root
+has no parameters, and no scan runs no iterations. The decoder and `Prog.orderViolation` give all of it but the last
+(the output of a scan of no iterations is no value, and `Prog.gate` refuses a gate that reads it); it is checked here, at
+the cost of the descriptor's references, because the agreement with `NciCheck.evaluate` rests on it. -/
+def refsInRange (P : Prog) : Bool :=
+  let seen := reached P
+  P.root < P.defs.size && (P.defs[P.root]!).body.params.isEmpty && (List.range P.defs.size).all fun d =>
+    !seen[d]! || (P.defs[d]!).prim ||
+      let b := (P.defs[d]!).body
+      seqInRange b.params b.nodes b.nodes.size b.ret && (List.range b.nodes.size).all fun k =>
+        let nd := b.nodes[k]!
+        let c := P.defs[nd.fn]!
+        nd.args.all (fun a => seqInRange b.params b.nodes k a.seq) && upInRange nd c && downInRange nd c &&
+          opsInRange nd c && (nd.form != .scan || nd.n != 0)
+
 /-- The walk is within `Flock.Steps.FUEL`, with room for `Prog.gate`'s descent. Past it a Program of a few hundred bytes
 can need more steps than `Prog.gate` takes: a gate reading the carry of a scan of `2^32` iterations, each a scan of
 `2^32` identity steps, needs `2^64`. There `NciCheck.evaluate` refuses the gate (`program`), and this check, which
 summarizes each Definition once, would give a verdict. The walk also reads every body as the decoder lays it out
-(`bodiesLaidOut`). -/
-def walkable (P : Prog) : Bool := calleesFirst P && bodiesLaidOut P && walkBound P ≤ Flock.Steps.FUEL / 2
+(`bodiesLaidOut`), and resolves every reference in range (`refsInRange`). -/
+def walkable (P : Prog) : Bool :=
+  calleesFirst P && bodiesLaidOut P && walkBound P ≤ Flock.Steps.FUEL / 2 && refsInRange P
 
 /-- Per IU `u < n`, its number of gates: those of its root nodes, root node `k` (in IU `own[k]`) holding gates
 `[offs[k], offs[k + 1])`. -/
