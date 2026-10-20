@@ -23,6 +23,7 @@ import Definitions.Pouw.Fp8Atom.Vectors.Ada
 import Definitions.Pouw.Fp8Atom.Vectors.Add
 import Definitions.Pouw.Fp8Atom.Vectors.C00
 import Definitions.Pouw.Fp8Atom.Vectors.C01
+import Definitions.Pouw.FpNative.RowFloor
 import Definitions.Pouw.Game.Deadline
 import Definitions.Pouw.Game.Defs
 import Definitions.Pouw.Game.Params
