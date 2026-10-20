@@ -241,15 +241,15 @@ theorem ThreadedThrottledOn : Guarantees.ThreadedThrottledOn := by
 /-- **Theorem 2 per parameter slot** (the thread draft, Appendix B): a total containment is a partial one with no dark
 gates. -/
 theorem ThreadedThrottledSlots : Guarantees.ThreadedThrottledSlots := by
-  intro Γ α b_w b_a c d T σ dd e hα hbw hba hdd ⟨M, hθ⟩ hd hT hW
-  have h := ThreadedThrottledOnSlots Γ α b_w b_a c d T σ dd e (ofContainment M) hα hbw hba hdd hd
-    (baselineRegistered_ofContainment M hθ) hT hW
+  intro Γ α b_w b_a c d T σ dd e M hα hbw hba hdd hd hB hT hW
+  have h := ThreadedThrottledOnSlots Γ α b_w b_a c d T σ dd e (PartialContainment.ofContainment M) hα hbw hba hdd hd
+    hB hT hW
   rwa [ofContainment_S, Finset.inter_eq_left.2 T.M_computed] at h
 
 /-- **Theorem 2** (the thread draft, Appendix B): its `Slots` form at one slot per weight gate. -/
 theorem ThreadedThrottled : Guarantees.ThreadedThrottled := by
-  intro Γ α b_w b_a c d T dd e hα hbw hba hdd hc hd hT hW
-  exact ThreadedThrottledSlots Γ α b_w b_a c d T (Fit.idSlots T) dd e hα hbw hba hdd hc hd hT
+  intro Γ α b_w b_a c d T dd e M hα hbw hba hdd hd hB hT hW
+  exact ThreadedThrottledSlots Γ α b_w b_a c d T (Fit.idSlots T) dd e M hα hbw hba hdd hd hB hT
     (weightsIncompressibleSlots_of (Fit.idSlots T) hbw.le hW)
 
 /-- **Counted multiplications off the books are dark gates, per parameter slot.** -/
@@ -376,8 +376,8 @@ theorem threaded_reads_of_structure {c : Declaration} (T : Threading c) (Γ : �
 
 /-- **Training is slowed** (the thread draft, "Putting the two together"). -/
 theorem ThreadedTraining : Guarantees.ThreadedTraining := by
-  intro Γ α b_w b_a κ c d T dd e hα hbw hba hdd hc hd hT hW hκ
-  have h := ThreadedThrottled Γ α b_w b_a c d T dd e hα hbw hba hdd hc hd hT hW
+  intro Γ α b_w b_a κ c d T dd e M hα hbw hba hdd hd hB hT hW hκ
+  have h := ThreadedThrottled Γ α b_w b_a c d T dd e M hα hbw hba hdd hd hB hT hW
   nlinarith
 
 /-- **Training is slowed, with dark gates.** -/

@@ -4,7 +4,7 @@ import Definitions.Nci.Dark
 # NCI's baseline rule: the named premise
 
 What the protocol lets a declaration's baseline `θ` hold, a premise about the protocol rather than about any circuit.
-Every bound through a partial containment (`PartialContainment`) rests on it.
+Every bound through a containment, total or partial (`PartialContainment`), rests on it.
 -/
 
 namespace Nci.Assumptions
@@ -25,9 +25,9 @@ and an IU could then thread `c`'s counted multiplications on it without paying f
 The NCI check does not enforce the rule: it takes `θ` from the instance and checks only that each entry is an input gate,
 with no duplicates. Commitments are hiding, so it cannot tell a registered value from one computed beforehand on
 unmonitored hardware (gradients, partial sums, updated weights). Until it checks each entry's provenance, this is a
-premise of every guarantee through a partial containment. A total containment from `Declaration.Contains` carries the
-same condition on `c`'s inputs inside its definition, and gives this one
-(`Nci.SecurityProofs.baselineRegistered_ofContainment`). -/
+premise of every guarantee through a containment: a partial one, or a total one `M : Containment c.D d.D` as the partial
+containment with no dark gates, `PartialContainment.ofContainment M`, for which it says that no novel input of `c` that
+`c` reads is in `d`'s baseline. -/
 def BaselineRegistered (c d : Declaration) (M : PartialContainment c d) : Prop :=
   ∀ a ∈ c.D.into M.S, M.emb a ∈ d.θ → a ∈ c.θ
 
