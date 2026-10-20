@@ -22,6 +22,7 @@ import Proofs.Flock.Claims.KS.SessionRaw
 import Proofs.Flock.Claims.KS.OffAlign
 import Proofs.Flock.Claims.KS.PlainOff
 import Proofs.Flock.Claims.KS.OffSim
+import Proofs.Flock.Claims.KS.PlainOffLive
 import Proofs.Flock.Claims.KS.PlainBound
 import Proofs.Flock.Claims.KS.Trim
 import Proofs.Flock.Claims.KS.PlainKS
