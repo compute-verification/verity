@@ -37,7 +37,7 @@ import numpy as np
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import h1unit as U  # noqa: E402
 
-R, C = 4, 8
+R, C = U.TILE
 
 
 def _salts(n: int) -> np.ndarray:
@@ -74,7 +74,7 @@ def cmd_commit(a) -> int:
     rows, k = A.shape
     shape = U.Shape(k, R, C)
     port = shape.ports()[0]
-    m = U.slot(rows, R)
+    m = U.slot(rows)
     A = np.concatenate([A, np.zeros((m - rows, k), A.dtype)])
     out_calls, Bs, tile0, b0 = [], [], 0, 0
     for name in calls:

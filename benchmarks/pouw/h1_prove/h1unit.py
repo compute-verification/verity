@@ -18,14 +18,15 @@ prover and the verifier of `run.py` share.
   input. `commit_strings` computes a row's ``b || c`` with C-Flock's own function on the port the statement's META
   declares (`stage.py` holds the two equal), so a proof's committed rows are the window's leaves exactly when its rows and
   salts are the committed ones.
-* **The window's public Program** (`h1window.program`, `Shape.window`): every tile of the window as one call of the unit,
-  every call reading the one A block (the slot); unit u is the tile `window.py` numbers u, and its outputs row u of ``z``
-  and ``receipt``. Its `Q_template_instance` partition derives the units, and the statement binds it (`Shape.stager`'s
-  ``bind``), so the Lean verifier derives each instance's unit from its own copy of the program (``--program``,
-  ``--partition``) and the indices the public file states, and `unit_reads` is the row of each tree each of the unit's
-  ports reads. The slot is the window's size class and the calls' B rows the model's, so the layout is protocol
-  structure and the real token count stays the prover's. Each circuit port reads one tree in every unit, as a registered
-  port reads one value.
+* **The window's public Program** (`h1window.program`, `Shape.window`): every tile of the window as one call of the unit
+  (the smoke's `TILE`, 4 × 8), each call its own linear at K, every call reading the one A block (the slot), its
+  parameters ``a/<K>`` and ``b/<K>`` the trees ``a`` and ``b``; unit u is the tile `window.py` numbers u, and its outputs
+  row u of ``z`` and ``receipt``. Its `Q_template_instances` partition derives the units, and the statement binds it
+  (`Shape.stager`'s ``bind``), so the Lean verifier derives each instance's unit from its own copy of the program
+  (``--program``, ``--partition``) and the indices the public file states, and `unit_reads` is the row of each tree each
+  of the unit's ports reads. The slot is the window's size class and the calls' B rows the model's, so the layout is
+  protocol structure and the real token count stays the prover's. Each circuit port reads one tree in every unit, as a
+  registered port reads one value.
 * **The verifier's public file** (`verifier_pub`) is built from the opened leaves and the verifier's own public row alone:
   the statement's header (its circuit pin, its units' global indices, each port's frame-v3 root over those ``b || c``)
   and the ``b || c``. Lean ``verify --zk`` holds a session to that file, so it accepts only a proof whose committed rows
@@ -79,7 +80,12 @@ def pub_salt(window: str, position: int) -> bytes:
     return hashlib.shake_256(PUB_SALT_TAG + window.encode() + b"\0" + int(position).to_bytes(8, "big")).digest(SALT_BYTES)
 
 
-slot = HW.slot
+#: the smoke's R × C tile (the served path's is 32 × 32, `pouw_h1.TILE`)
+TILE = (4, 8)
+
+
+def slot(rows: int, tile: tuple[int, int] = TILE) -> int:
+    return HW.slot(rows, tile)
 
 
 def window_shape(com: dict) -> tuple[tuple[tuple[str, int], ...], int]:
@@ -94,12 +100,14 @@ def window_roots(com: dict) -> tuple[bytes, bytes]:
 
 #: the statement's port of each of the unit's rows (`h1window.unit_reads`' keys): its A and B rows' own, z's and the
 #: receipt's output rows o0 and o1
-PORT = {**{f"a[{i}]": f"a{i}" for i in range(4)}, **{f"b[{j}]": f"b{j}" for j in range(8)}, "z": "o0", "receipt": "o1"}
+PORT = {**{f"a[{i}]": f"a{i}" for i in range(TILE[0])}, **{f"b[{j}]": f"b{j}" for j in range(TILE[1])}, "z": "o0",
+        "receipt": "o1"}
 
 
 def unit_reads(program, tp, u: int) -> dict[str, tuple[str, int]]:
-    """`h1window.unit_reads` by the statement's ports (`PORT`; ``salt``, ``position`` and ``roots`` the public row's)."""
-    return {PORT.get(key, key): read for key, read in HW.unit_reads(program, tp, u).items()}
+    """`h1window.unit_reads` by the statement's ports (`PORT`; ``salt``, ``position`` and ``roots`` the public row's), each
+    read's parameter by the tree that commits it (``a/<K>`` the tree ``a``, ``b/<K>`` the tree ``b``)."""
+    return {PORT.get(key, key): (param.split("/")[0], row) for key, (param, row) in HW.unit_reads(program, tp, u).items()}
 
 
 @dataclass(frozen=True)
@@ -107,8 +115,8 @@ class Shape:
     """One H1 tile unit's shape: R A rows and C B rows at contraction K."""
 
     k: int
-    r: int = 4
-    c: int = 8
+    r: int = TILE[0]
+    c: int = TILE[1]
 
     @cached_property
     def layout(self):
@@ -134,17 +142,15 @@ class Shape:
                 + [FC._port("o0", self.z_words, 16 * self.z_words), FC._port("o1", self.receipt_words, 16 * self.receipt_words)])
 
     def definition(self):
-        from verity.ml.circuits.defs import bind
-        from verity.ml.circuits.ops.boolean import gemm as BG
         from verity.core.protocols.pouw.circuit import h1tile as H
-        exact = bind(BG.GemmAccumulatorS8, K=self.k, **BG.GEMM_SM120_S8)
-        return bind(H.PouwH1Tile3 if tile() == "v3" else H.PouwH1Tile, EXACT=exact, R=self.r, C=self.c,
-                    PAIRS=tuple((i, j) for i in range(self.r) for j in range(self.c)))
+        return HW.tile_unit(self.k, (self.r, self.c), H.PouwH1Tile3 if tile() == "v3" else None)
 
     def window(self, calls, m: int):
-        """The window's public Program (`h1window.program` over this unit, its ``calls`` ``(name, B rows)`` all reading the
-        one A block of slot ``m``) and its `Q_template_instance` query."""
-        return HW.program(self.definition(), [(name, n, 0) for name, n in calls], m), HW.query(self.definition())
+        """The window's public Program (`h1window.program` over this unit: its ``calls`` ``(name, B rows)``, each its own
+        linear at K, all reading the one A block of slot ``m``) and its `Q_template_instances` query."""
+        program = HW.program([(name, self.k, n) for name, n in calls], [(name, 0) for name, _n in calls], m,
+                             (self.r, self.c), unit=lambda _k: self.definition())
+        return program, HW.query(program)
 
     def stager(self, name: str, circuit=None, bind: dict | None = None):
         """The unit's `UnitStager`: its circuit, built once (the long step at K = 4096) and written to ``circuit``, bound to

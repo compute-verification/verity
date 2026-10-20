@@ -82,7 +82,7 @@ from verity.core.protocols.pouw import verifier  # noqa: E402
 from verity.core.protocols.pouw.coins import Challenger, coin_reason  # noqa: E402
 
 DRAW_DOMAIN = "verity/pouw/h1-prove-draw/v0"
-R, C = 4, 8
+R, C = U.TILE
 #: the in-proof negatives: the tampered window's flag, and the output row whose committed words its statement carries
 IN_PROOF = {"in-receipt": ("--receipt-word", ("o1",)), "in-z": ("--z-cell", ("o0",)), "in-d": ("--d-word", ("o0", "o1")),
             **({"in-xa": ("--xa-flip", ("o0",))} if U.tile() == "v3" else {})}
