@@ -238,6 +238,37 @@ __global__ void __launch_bounds__(256) h1s_noise(const u64* __restrict__ seeds, 
   }
 }
 
+// J10 banded (kh_one_band; measured only): h1s_noise's blocks with each band's row blocks hashed by its leader alone, unit
+// u = ri ncb + cj a leader where cj % band == 0 (rows_nb = 32 RB: a unit's row blocks come first)
+__global__ void __launch_bounds__(256) h1j_noise(const u64* __restrict__ seeds, u32 units, u32 ncb, u32 nb, u32 rows_nb,
+                                                 u32 J, u32 band, const uint8_t* __restrict__ live, u32* __restrict__ ws) {
+  const u32 lane = threadIdx.x & 31;
+  const u32 per = 32 * J, chunks = (nb + per - 1) / per;
+  const u64 item = ((u64)blockIdx.x * blockDim.x + threadIdx.x) >> 5;
+  if (item >= (u64)units * chunks) return;
+  const u32 u = (u32)(item / chunks), chunk = (u32)(item % chunks);
+  if (live && !live[u / ncb]) return;
+  const u32 t0 = (u % ncb) % band ? rows_nb : 0;
+  if ((chunk + 1) * per <= t0) return;
+  u64 seed[8];
+#pragma unroll
+  for (int j = 0; j < 8; ++j) seed[j] = __ldg(seeds + 16 * (u64)u + j);
+  NoiseMid nm;
+  noise_mid(seed, nm);
+#pragma unroll 1
+  for (u32 j = 0; j < J; ++j) {
+    const u32 t = chunk * per + 32 * j + lane;
+    if (t >= nb) break;
+    if (t < t0) continue;
+    u64 s[8];
+    noise_block(nm, t, s);
+    uint4* o = reinterpret_cast<uint4*>(ws + 16 * ((u64)u * nb + t));
+#pragma unroll
+    for (int q = 0; q < 4; ++q)
+      o[q] = make_uint4((u32)(s[2 * q] >> 32), (u32)s[2 * q], (u32)(s[2 * q + 1] >> 32), (u32)s[2 * q + 1]);
+  }
+}
+
 // The one-stream form (kh_one; CA's PouwH1Tile_v3): the same walk and receipts, plus each cell's served z =
 // O' - sum_d 128^d D_d + 256 X WB^T mod 2^32, WB = wb+ - wb- (wrapw) from B and the noise, carried by a third MMA set a
 // segment into its own accumulator; then y = RN_bf16(RN32(RN32(z) s_a[row]) s_w[col]) (int8_exact.dequantize), s_a = 0
@@ -258,6 +289,8 @@ struct OneOut {
   const float* sw;      // s_w [N]
   const int* step;      // {parity, m, pad, flags}
   u32 M;
+  u32 band = 1;         // J10 banded (kh_one_band; measured only): unit (ri, cj)'s rows from its band leader
+                        // (ri, (cj / band) band)'s workspace region, its columns from its own
 };
 
 // PL (kh_one_peel; CA's peel, 11:02Z): z = A B^T, the served model's own product, from the same stream: with xa = [A = 127
@@ -348,6 +381,7 @@ __global__ void __launch_bounds__(32 * WARPS, H1U_MINB) h1u(const int8_t* __rest
   }
   __syncwarp();
   const u32* wsu = WS ? (J10 ? ws : ws + 16ull * 32 * (rb + cb) * u) : nullptr;
+  const u32* wsr = WS && !J10 ? ws + 16ull * 32 * (rb + cb) * (ri * ncb + cj / oo.band * oo.band) : wsu;
 
   // P: column n of n-tile nt is rho = 8 nt + n; fragment k = 4 q' + i is segment byte 8 q' + i, k = 16 + 4 q' + i is
   // 8 q' + 4 + i
@@ -401,7 +435,7 @@ __global__ void __launch_bounds__(32 * WARPS, H1U_MINB) h1u(const int8_t* __rest
                         : (jb == 0 ? (u64)lane * rb + blk : 32ull * rb + (u64)lane * cb + blk);
       u32* dst = jb == 0 ? S.rowbits[lane] : S.colbits[lane];
       if (WS) {
-        const uint4* src = reinterpret_cast<const uint4*>(wsu + 16 * t);
+        const uint4* src = reinterpret_cast<const uint4*>((jb == 0 ? wsr : wsu) + 16 * t);
 #pragma unroll
         for (int w = 0; w < 4; ++w) {
           const uint4 v = __ldg(src + w);
@@ -425,7 +459,7 @@ __global__ void __launch_bounds__(32 * WARPS, H1U_MINB) h1u(const int8_t* __rest
         prefetch_l2(wsu + 16 * ((u64)(32 * ri + lane) * rb + it));
         prefetch_l2(wsu + 16 * ((u64)M * rb + (u64)(32 * cj + lane) * cb + it));
       } else {
-        prefetch_l2(wsu + 16 * ((u64)lane * rb + it));
+        prefetch_l2(wsr + 16 * ((u64)lane * rb + it));
         prefetch_l2(wsu + 16 * (32ull * rb + (u64)lane * cb + it));
       }
     }
@@ -731,6 +765,7 @@ __global__ void __launch_bounds__(32 * (KP + 1), 1) h1k(const int8_t* __restrict
     return;
   }
   const u32* wsu = ws + 16ull * 32 * (rb + cb) * u;
+  const u32* wsr = ws + 16ull * 32 * (rb + cb) * (ri * ncb + cj / oo.band * oo.band);
   const u32 pp = wp - 1, pi = 32 * pp + lane;
   // chunk blk's 64 blocks (rows' t = i RB + blk, columns' 32 RB + i CB + blk), uint4 w of block kb a load
   const auto load_noise = [&](u32 blk, uint4(&v)[KNI]) {
@@ -738,7 +773,7 @@ __global__ void __launch_bounds__(32 * (KP + 1), 1) h1k(const int8_t* __restrict
     for (int m = 0; m < KNI; ++m) {
       const u32 k = pi + 32 * KP * m, kb = k >> 2, w = k & 3;
       const u64 t = kb < 32 ? (u64)kb * rb + blk : 32ull * rb + (u64)(kb - 32) * cb + blk;
-      v[m] = __ldg(reinterpret_cast<const uint4*>(wsu + 16 * t) + w);
+      v[m] = __ldg(reinterpret_cast<const uint4*>((kb < 32 ? wsr : wsu) + 16 * t) + w);
     }
   };
   const auto store_noise = [&](u32 bf, const uint4(&v)[KNI]) {
@@ -1567,30 +1602,37 @@ extern "C" int kh_unit_ws(const void* A, const void* B, unsigned M, unsigned N, 
 // the one-stream call: kh_unit's (or with ws, kh_unit_ws') receipts of A [rows, K] and B [N, K], and the cells' z and
 // y (OneOut) from the same MMAs; step on the device ({parity, m, pad, flags}), M the y rows. ws null: the fused form.
 // PART: 0 both launches, 1 the noise only (h1s_noise into ws), 2 the units only (on a ws the noise already wrote)
+// band > 1 (kh_one_band; ws only): J10 banded noise (h1j_noise, OneOut::band); mode 1 the units alone (the workspace
+// the last mode 0 or 2 call wrote), 2 the noise alone
 template <bool PL, int PART = 0>
 static int one_call(const void* A, const void* B, unsigned rows, unsigned N, unsigned K, const void* seeds,
                     const void* live, void* out, void* ws, unsigned J, int* z, int* zo, void* y, void* ydump,
-                    const float* sa, const float* sw, const int* step, unsigned M, void* stream) {
+                    const float* sa, const float* sw, const int* step, unsigned M, void* stream, unsigned band = 1,
+                    int mode = 0) {
 #if H1U_SPLIT
   return 2;
 #endif
   if (K % 512 || rows % 32 || N % 32 || !z || !y || !step || (ws && !J) || (H1K_RONLY && PL) || (PART && !ws)) return 2;
+  if (!band || mode < 0 || mode > 2 || (band > 1 || mode) && !ws) return 2;
   const int m = n_digits((int)(K / 32));
   if (m != 2 && m != 3) return 2;
   const unsigned units = (rows / 32) * (N / 32);
   if (!units) return 0;
   cudaStream_t s = (cudaStream_t)stream;
-  const OneOut oo{z, zo, (__nv_bfloat16*)y, (__nv_bfloat16*)ydump, sa, sw, step, M};
+  const OneOut oo{z, zo, (__nv_bfloat16*)y, (__nv_bfloat16*)ydump, sa, sw, step, M, band};
   if (ws) {
-    if (PART != 2) {
-      const unsigned nb = kh_noise_blocks(K);
-      const unsigned long long items = (unsigned long long)units * ((nb + 32 * J - 1) / (32 * J));
-      h1s_noise<<<(unsigned)((items * 32 + 255) / 256), 256, 0, s>>>((const u64*)seeds, units, N / 32, nb, J,
-                                                                      (const uint8_t*)live, (u32*)ws);
-    }
-    if (PART != 1 && m == 2)
+    const bool noise = PART != 2 && mode != 1, run_units = PART != 1 && mode != 2;
+    const unsigned nb = kh_noise_blocks(K);
+    const unsigned long long items = (unsigned long long)units * ((nb + 32 * J - 1) / (32 * J));
+    const unsigned grid = (unsigned)((items * 32 + 255) / 256);
+    if (noise && band > 1)
+      h1j_noise<<<grid, 256, 0, s>>>((const u64*)seeds, units, N / 32, nb, 32 * (K / 512 + 1), J, band,
+                                     (const uint8_t*)live, (u32*)ws);
+    else if (noise)
+      h1s_noise<<<grid, 256, 0, s>>>((const u64*)seeds, units, N / 32, nb, J, (const uint8_t*)live, (u32*)ws);
+    if (run_units && m == 2)
       launch_one<2, true, false, PL>(units, s, A, B, rows, N, K, seeds, live, out, ws, oo);
-    else if (PART != 1)
+    else if (run_units)
       launch_one<3, true, false, PL>(units, s, A, B, rows, N, K, seeds, live, out, ws, oo);
   } else if (m == 2) {
     launch_one<2, false, false, PL>(units, s, A, B, rows, N, K, seeds, live, out, nullptr, oo);
@@ -1625,6 +1667,22 @@ extern "C" int kh_one_peel(const void* A, const void* B, unsigned rows, unsigned
                            const void* live, void* out, void* ws, unsigned J, int* z, int* zo, void* y, void* ydump,
                            const float* sa, const float* sw, const int* step, unsigned M, void* stream) {
   return one_call<true>(A, B, rows, N, K, seeds, live, out, ws, J, z, zo, y, ydump, sa, sw, step, M, stream);
+}
+
+// J10 banded (measured only; noise=j10-banded, kernels' reading of SharedNoise.lean, j10b_ref.py): kh_one and
+// kh_one_peel on band-leader rows, band column tiles a band; mode 0 noise then units, 1 the units alone, 2 the noise alone
+extern "C" int kh_one_band(const void* A, const void* B, unsigned rows, unsigned N, unsigned K, const void* seeds,
+                           const void* live, void* out, void* ws, unsigned J, int* z, int* zo, void* y, void* ydump,
+                           const float* sa, const float* sw, const int* step, unsigned M, unsigned band, int mode,
+                           void* stream) {
+  return one_call<false>(A, B, rows, N, K, seeds, live, out, ws, J, z, zo, y, ydump, sa, sw, step, M, stream, band, mode);
+}
+
+extern "C" int kh_one_peel_band(const void* A, const void* B, unsigned rows, unsigned N, unsigned K, const void* seeds,
+                                const void* live, void* out, void* ws, unsigned J, int* z, int* zo, void* y, void* ydump,
+                                const float* sa, const float* sw, const int* step, unsigned M, unsigned band, int mode,
+                                void* stream) {
+  return one_call<true>(A, B, rows, N, K, seeds, live, out, ws, J, z, zo, y, ydump, sa, sw, step, M, stream, band, mode);
 }
 
 // J10-R (CA's RT-ALGO r3 at 3dc80591df; measured only, never served or credited until CA adopts J10 and the verifier
