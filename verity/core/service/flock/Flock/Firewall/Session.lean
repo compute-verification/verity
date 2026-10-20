@@ -11,7 +11,7 @@ each connection is one session, relayed on a connection of its own to the audito
 * `Hello`'s answer must be the coin tree's root and session key (`Coins.Session.start`), and it is relayed as it is.
 * `Commit` and `Round` leave only as the schedule's next opening (`State.request`, `reqAt`: the session stream's at
   `Commit`, its count `Hello`'s link points', then each rep stream's rounds in order at the counts `Zk.verifyRep` draws,
-  `plan`), never at a place the prover names. The coins answered must open the committed tree there
+  `planOf`), never at a place the prover names. The coins answered must open the committed tree there
   (`Coins.Session.open`), and only the coins, stripped of their opening, reach the prover (`Coins.frame`).
 * Every other frame is relayed as it is. For now those are the rounds and roots the firewall's own Lean processes
   released (`frame`, `link`), and `Proof` and `Finish`, which `Firewall::finish` decides (ZKFIN's).
@@ -111,7 +111,7 @@ def repCoins (m kLog claims : Nat) : V (Array Nat) := do
 /-- **The openings after the session stream's**, in the order the prover asks for them: every round of each rep stream in
 `SessionSpec.repStreams` order (table by table, rep 0's before rep 1's, as `CoinLayer.slot` places them), each with its
 coin count at its table's statement (`repCoins`, with the statement's `2 + points · regions` claims). -/
-def plan (spec : SessionSpec) (sts : Array Stmt) : V (Array (String × Nat)) := do
+def planOf (spec : SessionSpec) (sts : Array Stmt) : V (Array (String × Nat)) := do
   let mut out := #[]
   for (i, _, name) in spec.repStreams do
     let some st := sts[i]? | throw s!"no statement for table {i}"
@@ -123,7 +123,7 @@ link points'), opening `j + 1` the plan's `j`-th. -/
 def reqAt (plan : Array (String × Nat)) (links j : Nat) : String × Nat :=
   if j = 0 then (Coins.SESSION, links) else plan.getD (j - 1) ("", 0)
 
-/-- A session as the loop has seen it: the auditor's draw, the `Hello` that left and its statement's openings (`plan`),
+/-- A session as the loop has seen it: the auditor's draw, the `Hello` that left and its statement's openings (`planOf`),
 the coin tree once `Hello`'s answer checked, and the refusal that stopped it. -/
 structure State where
   draw : Option Json := none
@@ -193,13 +193,13 @@ def State.answer (S : State) (k : Kind) (a : ByteArray) : State × ByteArray :=
   | _, _ => (S, a)
 
 /-- **The `Hello` that leaves** at the set-up statement `s` and the nonce `nonce` (`Hello.textAt`), and the session after,
-which the coin tree's checks and the schedule's openings (`plan`) read; or the refusal the prover receives in its
+which the coin tree's checks and the schedule's openings (`planOf`) read; or the refusal the prover receives in its
 place. -/
 def State.sendHello (S : State) (s : V (SessionSpec × Array Stmt)) (nonce : ByteArray) :
     Except (State × ByteArray) (State × ByteArray) :=
   match S.stop with
   | some why => .error (S, refused why)
-  | none => match Hello.textAt (s.map (·.1)) nonce, s.bind fun (spec, sts) => plan spec sts with
+  | none => match Hello.textAt (s.map (·.1)) nonce, s.bind fun (spec, sts) => planOf spec sts with
     | .error e, _ => .error (S.refuse s!"{Coins.STOP}the Lean Hello: {e}")
     | .ok _, .error e => .error (S.refuse s!"{Coins.STOP}the schedule: {e}")
     | .ok text, .ok p => match Coins.Hello.parse text with
@@ -283,7 +283,7 @@ flags `Hello.FLAGS`): the firewall's session loop. It listens on `127.0.0.1:PORT
 prints `LISTENING 127.0.0.1:PORT` once it does, and serves each connection as one session (`serve`), each on its own
 thread, every session's `Hello` at one statement set up once a draw (`Hello.Setup.specAt`). It runs until its standard
 input closes. `flock-firewall session --schedule …` instead reads a draw's JSON (`null` for none) on its standard input
-and prints the openings after the session stream's at it (`plan`), `ok N` and a line `STREAM COINS` each, or
+and prints the openings after the session stream's at it (`planOf`), `ok N` and a line `STREAM COINS` each, or
 `refused WHY`. -/
 def cmd (args : List String) : IO UInt32 := do
   let usage := s!"usage: flock-firewall session (--verifier HOST:PORT [--listen PORT] | --schedule) {Hello.FLAGS}"
@@ -297,7 +297,7 @@ def cmd (args : List String) : IO UInt32 := do
       let line ← stdin.getLine
       if line.isEmpty then break
       text := text ++ line
-    let p := (Hello.drawOf text).bind fun draw => (S.setup draw).bind fun (spec, sts) => plan spec sts
+    let p := (Hello.drawOf text).bind fun draw => (S.setup draw).bind fun (spec, sts) => planOf spec sts
     match p with
     | .error e => IO.println s!"refused {e}"
     | .ok p =>
