@@ -8,6 +8,7 @@ import Proofs.Flock.Claims.GS.RadiusDeploy
 import Proofs.Flock.Claims.Complete.Honest
 import Proofs.Flock.Claims.Complete.Zk.Honest
 import Proofs.Flock.Claims.Complete.Ready
+import Proofs.Flock.Claims.Complete.ZkTables.Faithful
 
 /-!
 # Flock's deployed instances of `Claims.Flock.Deploy`
@@ -47,9 +48,10 @@ of trailing zeros (`FlockDeploy.deployPlainTrim`, `FlockDeploy.deployZkTrim`):
   `Numbers.padDomain` under `--zk`). `waits`, `cap`: `Numbers.waits` (`210`) and `Numbers.cap` (`2^256`). A statement
   that does not set up has no tables: `εtable`, `N₀` and `weight` are `0` there, where the verifier refuses every run.
 * `Tape`, `P`: the reference prover, each verifier's honest prover on its tapes: `FlockComplete.honestP` on
-  `FlockComplete.Tape` (`Complete.Honest`), and `FlockComplete.ZkTables.honestP` on `FlockComplete.TapeZk`
-  (`Complete.ZkTables.Honest`), which runs each table on its share of the witness (the bits the relation reads,
-  `Readable.tableWit`) and at one table sends `FlockComplete.honestPZk`'s messages.
+  `FlockComplete.Tape` (`Complete.Honest`), and `FlockComplete.ZkTables.honestPR` on `FlockComplete.TapeZk`
+  (`Complete.ZkTables.Faithful`), `flock-circuit --zk`'s: it runs each table on its share of the witness (the bits the
+  relation reads, `Readable.tableWit`) with the tape's words in the mask slot (`ZkTables.maskWOf`), as
+  `FlockComplete.ZkTables.honestP` does on that witness, and stops once a zerocheck outer coin is `1`.
 * `δc`: the reference prover's completeness error at each hash `H`, `ε` (`εZk`), the bad coins' count over `2^128`, on
   the statements the verifier can accept against `H` (`FlockComplete.ready H`, `ZkTables.ready H`, at any number of
   tables), and `1` elsewhere (`FlockComplete.δc`, `ZkTables.δc`, in `Complete.Ready`, which states that set).
@@ -473,7 +475,7 @@ noncomputable def deployZk (rel : Readable.Parsed → Readable.Relation) :
   waits _ := Claims.Flock.Numbers.waits
   cap _ := Claims.Flock.Numbers.cap
   Tape := FlockComplete.TapeZk
-  P := FlockComplete.ZkTables.honestP
+  P := FlockComplete.ZkTables.honestPR
   δc := FlockComplete.ZkTables.δc
 
 /-! ## The records Flock's claims read: columns trimmed of trailing zeros

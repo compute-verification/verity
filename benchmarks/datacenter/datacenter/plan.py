@@ -3,12 +3,14 @@
 A `Plan` says which epoch is audited, which devices the challenger wipes and when, which stores it challenges, which
 read windows it opens, how its stores change (`changes`: blocks appended, released and re-keyed under the verifier's
 coins, with their `lifetime` in read windows and whether residency is `deferred`), which blocks are out for maintenance,
-and how many occupancy profiles the developer registered (so the choice among them is advice worth log2 of that, once).
+and how many occupancy profiles the developer registered, which it reads from the registration that commits them (so
+the choice among them is advice worth log2 of that, once).
 """
 from __future__ import annotations
 
 from dataclasses import dataclass
 
+from .logical import Registration
 from .memory import BLOCK_BITS, Append, Challenge, ReadWindow, Rekey, Release, Store, Wipe
 from .time import Interval
 
@@ -30,6 +32,7 @@ class Plan:
     challenges: tuple[Challenge, ...] = ()
     reads: tuple[ReadWindow, ...] = ()
     maintenance: tuple[Maintenance, ...] = ()
+    #: the number of occupancy profiles the developer may choose from: the registration's (`profiles`), else one
     profiles: int = 1
     changes: tuple[Append | Release | Rekey, ...] = ()
     lifetime: int | None = None
@@ -37,10 +40,15 @@ class Plan:
     #: the tick the prover's registration is due by; the verifier publishes the blocks' salts only after it
     registration: int | None = None
 
-    def __init__(self, epoch: Interval, wipes=(), challenges=(), reads=(), maintenance=(), profiles: int = 1,
-                 changes=(), lifetime: int | None = None, deferred: bool = False, registration: int | None = None):
+    def __init__(self, epoch: Interval, wipes=(), challenges=(), reads=(), maintenance=(),
+                 profiles: Registration | None = None, changes=(), lifetime: int | None = None, deferred: bool = False,
+                 registration: int | None = None):
+        if not (profiles is None or isinstance(profiles, Registration)):
+            raise TypeError("a Plan reads its number of occupancy profiles from the registration that commits them: "
+                            "register them, register(program, values, profiles=[...]), and pass that registration")
         for name, value in (("epoch", epoch), ("wipes", tuple(wipes)), ("challenges", tuple(challenges)),
-                            ("reads", tuple(reads)), ("maintenance", tuple(maintenance)), ("profiles", profiles),
+                            ("reads", tuple(reads)), ("maintenance", tuple(maintenance)),
+                            ("profiles", 1 if profiles is None else max(len(profiles.profiles), 1)),
                             ("changes", tuple(changes)), ("lifetime", lifetime), ("deferred", deferred),
                             ("registration", epoch.end if registration is None else registration)):
             object.__setattr__(self, name, value)

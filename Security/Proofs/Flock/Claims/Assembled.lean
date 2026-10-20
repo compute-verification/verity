@@ -1,6 +1,7 @@
 import Proofs.Flock.Claims.Bits
 import Proofs.Flock.Claims.ERepCost
 import Proofs.Flock.Claims.KS.PlainAcc
+import Proofs.Flock.Claims.KS.ZkTauSlot
 import Proofs.Flock.Claims.DeployEfficient
 import Proofs.Flock.Claims.Complete.WalkPacked
 import Proofs.Flock.Claims.Complete.ZkTables.StmtOne
@@ -22,13 +23,13 @@ relation's fields `rel` and every hash `H`, the conjunction of Flock's claims:
   `κ ≤ 2^{−a}`, `γ ≤ 2^b`, from `KS` alone (`bits_plain`, `bits_zk`, `bits_ge_plain`, `bits_ge_zk`: `Flock.Bits_of_KS`
   and `Flock.Bits_ge` with `ε_table ≥ 0` and `γ > 0`, `εtable_nonneg`, `γ_pos`);
 * `ZK`, at the masked record of the protocol model `G` (`ZKMal.zkOf`: the record's reference prover
-  `ZkTables.honestP` behind `G`'s `Hello` and opening checks, and `G`'s simulator), from the premises of
+  `ZkTables.honestPR` behind `G`'s `Hello` and opening checks, and `G`'s simulator), from the premises of
   `Flock.zk_deployZk_of_models`;
 * `Efficient` at the record's own counted decoder (`Deploy.dec`): `E^rep`'s reruns at every deployment (`ERep_cost`),
   the decoder's `ListWithin`, and its count and lists at most `plainStepPoly` (`zkStepPoly`) at the opened word's
   encoded length, which bounds `assemble`'s checks (`efficient_plain`, `efficient_zk`);
 * `Complete` at the record's reference prover and its error, on the prover's tape: of `FlockComplete.honestP` on
-  `Tape` at `FlockComplete.δc H` at the plain record, of `FlockComplete.ZkTables.honestP` on `TapeZk` (each table run
+  `Tape` at `FlockComplete.δc H` at the plain record, of `FlockComplete.ZkTables.honestPR` on `TapeZk` (each table run
   on its share of the witness) at `FlockComplete.ZkTables.δc H` at the masked one: a hypothesis, which at the deployed
   relation follows from the record's JSON at the plain record (`flock_plain_assembled_relation`), and at the masked
   record from it and three premises on the honest masked run (`flock_zk_assembled_relation`).
@@ -59,8 +60,10 @@ prover: as an argument, or from the record. `Claims.Complete` stays folded: with
 `flock_zk_assembled`:
 * `hKS : Flock.KS H (deployZkTrim rel)`. At SHA-512 it follows from the fixed-table bound at the untrimmed instance at
   statements of one table (`FlockDeploy.KS.zk_KS_trim`); at the untrimmed record, from one wait's bound
-  (`FlockDeploy.KS.zk_of_oneWait`, as at the plain record).
-* `hComplete`: `Flock.Complete` at the masked record, unfolded, of `ZkTables.honestP` at `ZkTables.δc H`, at any
+  (`FlockDeploy.KS.zk_of_oneWait`, as at the plain record). At SHA-512 and the deployed relation it holds with no
+  premise (`FlockDeploy.KS.zk_KS`), so `flock_zk_assembled_trim` drops it; so does KS at the untrimmed instance, which
+  the sampling claims read (`FlockDeploy.KS.zk_KS_untrim`).
+* `hComplete`: `Flock.Complete` at the masked record, unfolded, of `ZkTables.honestPR` at `ZkTables.δc H`, at any
   number of tables, the untrimmed record's (`Flock.complete_mapCols`). At the deployed relation it follows from the
   record's JSON and three premises on the honest masked run, each at every good case or run and every table of it
   (`FlockComplete.ZkTables.complete_json`), so `flock_zk_assembled_relation` takes those in its place: the masked
@@ -76,11 +79,11 @@ prover: as an argument, or from the record. `Claims.Complete` stays folded: with
     `hnL : card (Mp x ν).L ≤ nL x` and `hnB : (Mc x ν c).size ≤ nB x`; the repetitions `t`, `ht : 0 < t`;
   * the five premises `hL : G.MsgLink`, `hS : G.SimLink`, `hN : G.NonDegenerate`, `hI : G.InnerHolds` and
     `hC : G.CoinCheck`;
-  * `hG : G.Honest`: `G`'s messages are `ZkTables.honestP`'s, at the coin each opening reads as (`coinOf`) and the
+  * `hG : G.Honest`: `G`'s messages are `ZkTables.honestPR`'s, at the coin each opening reads as (`coinOf`) and the
     reference prover's tape (`tapeOf`).
 
 `δc H` and `ZkTables.δc H` are `1`, so `Complete` asks nothing, where `ready H` and `ZkTables.ready H` fail. ZK and
-`Complete` read one reference prover, `ZkTables.honestP`.
+`Complete` read one reference prover, `ZkTables.honestPR`.
 -/
 
 namespace FlockDeploy.Assembled
@@ -218,12 +221,12 @@ theorem flock_plain_assembled_trim (S : Claims.JsonSpec FlockComplete.printJ Flo
 /-- **Flock's claims at the deployed masked (`--zk`) verifier**, at every relation's fields and every hash: the
 readable scope is the verifier's; KS at `E^rep`; bits at every decoder meeting `ListWithin`, and at the record's
 decoder at every bound on `κ` and `γ`; zero knowledge at `G`'s masked record (`ZKMal.zkOf`); efficiency at the
-record's decoder with its count; and completeness at the record's reference prover `ZkTables.honestP` with error
+record's decoder with its count; and completeness at the record's reference prover `ZkTables.honestPR` with error
 `ZkTables.δc H`. What remains is exactly `hKS`, `hComplete` and `Flock.zk_deployZk_of_models`' hypotheses, `hT1` its
 named assumption. -/
 theorem flock_zk_assembled (rel : Readable.Parsed → Readable.Relation) (H : Claims.Msg → Claims.Msg)
     (hKS : Claims.Flock.KS H (deployZkTrim rel))
-    (hComplete : Claims.Complete H (deployZkTrim rel).V FlockComplete.ZkTables.honestP
+    (hComplete : Claims.Complete H (deployZkTrim rel).V FlockComplete.ZkTables.honestPR
       (Claims.Flock.R (deployZkTrim rel).parse) (Claims.Flock.Scope (deployZkTrim rel)) (FlockComplete.ZkTables.δc H))
     (G : Claims.ZKMal.Proto Claims.Flock.Wit) (t : ℕ) (ht : 0 < t) (hK : ∀ x, G.K x = (V true).k x - 1)
     {Salt B Cc : Type} [AddCommGroup Salt] [AddCommGroup B] [Fintype Salt] [DecidableEq Salt] [Fintype B]
@@ -233,7 +236,7 @@ theorem flock_zk_assembled (rel : Readable.Parsed → Readable.Relation) (H : Cl
     (hL : G.MsgLink H (Claims.Flock.R (deployZkTrim rel).parse) My cs Mp Mc) (hS : G.SimLink H Mc)
     (hN : G.NonDegenerate Mc) (hI : G.InnerHolds (Claims.Flock.R (deployZkTrim rel).parse) Mc) (hC : G.CoinCheck)
     (coinOf : Claims.Msg → Claims.Msg) (tapeOf : G.Nonce × G.Rand → FlockComplete.TapeZk)
-    (hG : G.Honest H FlockComplete.ZkTables.honestP coinOf tapeOf) :
+    (hG : G.Honest H FlockComplete.ZkTables.honestPR coinOf tapeOf) :
     Claims.Flock.ScopeMatches (deployZkTrim rel) ∧
       Claims.Flock.KS H (deployZkTrim rel) ∧
       Claims.Flock.Bits H (deployZkTrim rel) ∧
@@ -244,7 +247,7 @@ theorem flock_zk_assembled (rel : Readable.Parsed → Readable.Relation) (H : Cl
       Claims.Flock.ZK H (Claims.ZKMal.zkOf rel G coinOf tapeOf (G.simulatorE t (t * 3 ^ t)))
         (fun x => 8 * nL x * δ₁.toReal + 8 * t * nB x * δ₁.toReal + 2 * (1 / 3) ^ t) (fun _ => 4 * t * 3 ^ t) ∧
       Claims.Flock.Efficient H (deployZkTrim rel) zkStepPoly ∧
-      Claims.Complete H (deployZkTrim rel).V FlockComplete.ZkTables.honestP (Claims.Flock.R (deployZkTrim rel).parse)
+      Claims.Complete H (deployZkTrim rel).V FlockComplete.ZkTables.honestPR (Claims.Flock.R (deployZkTrim rel).parse)
         (Claims.Flock.Scope (deployZkTrim rel)) (FlockComplete.ZkTables.δc H) :=
   ⟨scopeMatches_zk rel, hKS, bits_zk rel H hKS, bits_ge_zk rel H hKS,
     Claims.ZKMal.Flock.zk_deployZk_of_models H rel G t ht hK My cs hT1 hδ₁ Mp Mc nL nB hnL hnB hL hS hN hI hC coinOf
@@ -272,7 +275,7 @@ theorem flock_zk_assembled_relation (H : Claims.Msg → Claims.Msg)
     (hL : G.MsgLink H (Claims.Flock.R (deployZkTrim Readable.relation).parse) My cs Mp Mc) (hS : G.SimLink H Mc)
     (hN : G.NonDegenerate Mc) (hI : G.InnerHolds (Claims.Flock.R (deployZkTrim Readable.relation).parse) Mc)
     (hC : G.CoinCheck) (coinOf : Claims.Msg → Claims.Msg) (tapeOf : G.Nonce × G.Rand → FlockComplete.TapeZk)
-    (hG : G.Honest H FlockComplete.ZkTables.honestP coinOf tapeOf) :
+    (hG : G.Honest H FlockComplete.ZkTables.honestPR coinOf tapeOf) :
     Claims.Flock.ScopeMatches (deployZkTrim Readable.relation) ∧
       Claims.Flock.KS H (deployZkTrim Readable.relation) ∧
       Claims.Flock.Bits H (deployZkTrim Readable.relation) ∧
@@ -289,5 +292,40 @@ theorem flock_zk_assembled_relation (H : Claims.Msg → Claims.Msg)
     ((Claims.Flock.complete_mapCols H (deployZk Readable.relation) trimCol).2
       (FlockComplete.ZkTables.complete_json H S hPR hR hLI hMR))
     G t ht hK My cs hT1 hδ₁ Mp Mc nL nB hnL hnB hL hS hN hI hC coinOf tapeOf hG
+
+/-- **Flock's claims at the deployed masked verifier at the deployed relation, at SHA-512**:
+`flock_zk_assembled_relation` with KS, which holds with no premise (`FlockDeploy.KS.zk_KS`). The record's JSON
+(`JsonSpec`), the honest masked run's premises, the mask slots' rank bound and `Flock.zk_deployZk_of_models`'
+hypotheses, `hT1` its named assumption, are what remain. -/
+theorem flock_zk_assembled_trim (S : Claims.JsonSpec FlockComplete.printJ Flock.canon)
+    (hPR : ∀ c : FlockComplete.ZkTables.Case sha512 Readable.relation, FlockComplete.ZkTables.ProverRunsAt c)
+    (hR : ∀ c : FlockComplete.ZkTables.Case sha512 Readable.relation, FlockComplete.ZkTables.RepShapedAt c)
+    (hLI : ∀ o : FlockComplete.ZkTables.Run sha512 Readable.relation,
+      FlockComplete.ZkTables.LgInnerAt sha512 Readable.relation o)
+    (hMR : FlockComplete.MaskRank.MaskRankBound)
+    (G : Claims.ZKMal.Proto Claims.Flock.Wit) (t : ℕ) (ht : 0 < t) (hK : ∀ x, G.K x = (V true).k x - 1)
+    {Salt B Cc : Type} [AddCommGroup Salt] [AddCommGroup B] [Fintype Salt] [DecidableEq Salt] [Fintype B]
+    [DecidableEq B] (My : Salt → B) (cs : Salt → Cc) {δ₁ : ENNReal} (hT1 : Claims.Hm96Hiding My cs δ₁) (hδ₁ : δ₁ ≠ ⊤)
+    (Mp : ∀ x, G.Nonce → G.PreModel x Salt B Cc) (Mc : ∀ x, G.Nonce → (Fin (G.K x) → G.Coin) → G.CoinModel x Salt B Cc)
+    (nL nB : Claims.Msg → ℕ) (hnL : ∀ x ν, Fintype.card (Mp x ν).L ≤ nL x) (hnB : ∀ x ν c, (Mc x ν c).size ≤ nB x)
+    (hL : G.MsgLink sha512 (Claims.Flock.R (deployZkTrim Readable.relation).parse) My cs Mp Mc)
+    (hS : G.SimLink sha512 Mc) (hN : G.NonDegenerate Mc)
+    (hI : G.InnerHolds (Claims.Flock.R (deployZkTrim Readable.relation).parse) Mc)
+    (hC : G.CoinCheck) (coinOf : Claims.Msg → Claims.Msg) (tapeOf : G.Nonce × G.Rand → FlockComplete.TapeZk)
+    (hG : G.Honest sha512 FlockComplete.ZkTables.honestPR coinOf tapeOf) :
+    Claims.Flock.ScopeMatches (deployZkTrim Readable.relation) ∧
+      Claims.Flock.KS sha512 (deployZkTrim Readable.relation) ∧
+      Claims.Flock.Bits sha512 (deployZkTrim Readable.relation) ∧
+      (∀ a b : Claims.Msg → ℝ, (∀ x, Claims.Flock.κ (deployZkTrim Readable.relation) x ≤ 2 ^ (-a x)) →
+        (∀ x, Claims.Flock.γ (deployZkTrim Readable.relation) x ≤ 2 ^ b x) →
+        Claims.Bits sha512 (deployZkTrim Readable.relation).V (Claims.Flock.R (deployZkTrim Readable.relation).parse)
+          (Claims.Flock.E (deployZkTrim Readable.relation) (deployZkTrim Readable.relation).decode)
+          fun x => min (a x) (255.5 - b x / 2) - 1) ∧
+      Claims.Flock.ZK sha512 (Claims.ZKMal.zkOf Readable.relation G coinOf tapeOf (G.simulatorE t (t * 3 ^ t)))
+        (fun x => 8 * nL x * δ₁.toReal + 8 * t * nB x * δ₁.toReal + 2 * (1 / 3) ^ t) (fun _ => 4 * t * 3 ^ t) ∧
+      Claims.Flock.Efficient sha512 (deployZkTrim Readable.relation) zkStepPoly ∧
+      Claims.Flock.Complete sha512 (deployZkTrim Readable.relation) :=
+  flock_zk_assembled_relation sha512 FlockDeploy.KS.zk_KS S hPR hR hLI hMR G t ht hK My cs hT1 hδ₁ Mp Mc nL nB hnL hnB
+    hL hS hN hI hC coinOf tapeOf hG
 
 end FlockDeploy.Assembled

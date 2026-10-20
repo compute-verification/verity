@@ -134,6 +134,28 @@ def auth_env(auth: tuple[str, ...]) -> dict[str, str]:
     return env if pairs else {}
 
 
+#: what train.sh's check.py passes on as `slot.py --rank`: a train's members above `main` (1 for the lowest), 0 for the post-landing
+#: run, so the train that lands next takes a node's next free check slot (CI-110)
+SLOT_RANK = "CHECK_SLOT_RANK"
+
+
+@contextlib.contextmanager
+def slot_rank(rank: int | None):
+    """os.environ with SLOT_RANK set to ``rank`` (unset when None) for a launch's train.sh."""
+    was = os.environ.get(SLOT_RANK)
+    if rank is None:
+        os.environ.pop(SLOT_RANK, None)
+    else:
+        os.environ[SLOT_RANK] = str(rank)
+    try:
+        yield
+    finally:
+        if was is None:
+            os.environ.pop(SLOT_RANK, None)
+        else:
+            os.environ[SLOT_RANK] = was
+
+
 @contextlib.contextmanager
 def authed(auth: tuple[str, ...]):
     """os.environ with the queue's credentials (`auth_env`) and git never prompting, for the steps after a landing
@@ -888,7 +910,8 @@ class Driver:
         if self.dry_run or q.shadow:
             q.log(f"research queue drive: would launch train.sh {main[:12]} {self.on} --deferred {steps}")
             return
-        ids, tail = self.launch_postland(self.repo, main, self.on, steps)
+        with slot_rank(0):
+            ids, tail = self.launch_postland(self.repo, main, self.on, steps)
         if not ids:
             self.refuse(drive, f"launch:postland:{main}", f"train.sh {main[:12]} {self.on} --deferred {steps} registered no run: {tail}")
             return
@@ -1401,7 +1424,9 @@ class Driver:
         """Check ``m``'s commit (`train.sh`), with the suites its change reaches beside it when pytest is deferred, and record
         the launch: (the check's run ids, train.sh's output's tail)."""
         agreement = needs_agreement(self.repo, main, m.commit)
-        ids, tail = self.launch(self.repo, m.commit, self.on, agreement)
+        rank = next((i + 1 for i, x in enumerate(self.q.chain()) if x.commit == m.commit), None)
+        with slot_rank(rank):
+            ids, tail = self.launch(self.repo, m.commit, self.on, agreement)
         if not ids:
             return ids, tail
         drive["launched"][m.commit] = {"ids": ids, "at": self.now(), "agreement": agreement}

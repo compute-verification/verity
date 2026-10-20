@@ -41,6 +41,7 @@ Notes are records, never messages.
                           --default V --deadline '3:00 PM'|ISO (--page FILE.md --area AREA | --link NOTION_URL) [--wait]
                           # the ask's page in the Asks for Daniel database, and a card in #ask-daniel linking it; prints `<id> <ts> <permalink>`
   research msg ask-daniel status ID [--wait] [--json] | resolve ID --choice V [--note T]
+                          # --wait polls for at most 20 min: a card still pending then exits 79 with the status command (research/waitcap.py)
   research msg ask-daniel pages [--as HANDLE] [--hours H] [--json]  # asks' pages edited lately: Status, Decision, newest comment
 
 An ask lives in one record, by its target: a handle's ask is an issue in its Linear team, and Daniel's is a page in the Asks
@@ -95,6 +96,7 @@ from typing import Any, Callable
 from zoneinfo import ZoneInfo
 
 try:
+    from . import waitcap
     from .timefmt import both, slack_dates
 except ImportError:                                                 # run as a single file: `python3 slack.py ...`
     def both(t: Any) -> str:
@@ -102,6 +104,14 @@ except ImportError:                                                 # run as a s
 
     def slack_dates(text: str, now: Any = None) -> str:
         return text
+
+    class waitcap:  # noqa: N801  research/waitcap.py's cap, which a single file carries itself
+        WAIT_CAP_S, STILL_GOING = 1200, 79
+
+        @staticmethod
+        def still_going(what: str, check: str, waited_s: float, end: str) -> str:
+            return (f"research: {what} is still going; stopped waiting after {waited_s:g} s (no tool call may block more than 20 "
+                    f"minutes, Daniel, 19 Oct). Nothing was cancelled. Check back with `{check}`. {end}")
 
 SCHEMA = "verity/slack-registry/v1"
 REGISTRY_REL = Path(".agents/skills/using-slack/registry.json")
@@ -244,12 +254,20 @@ def origin_registry(path: Path, fetch: bool = True) -> dict | None:
     return reg if isinstance(reg, dict) else None
 
 
+GROUP_ID_RE = re.compile(r"^S[0-9A-Z]{8,}$")
+
+
+def group_ids(h: dict) -> set[str]:
+    """A handle's user-group ids: its current group and the ones it retired (a retired group still names it in old posts)."""
+    return ({h["usergroup"]} if h.get("usergroup") else set()) | set(h.get("retired_usergroups", []))
+
+
 def origin_groups(path: Path) -> set[str]:
     """The user-group ids in origin/main's registry: an analysis checkout older than a sender's must not report the
     sender's group mentions as dropped (three false DROPPED lines on 14 Oct). Empty when git can't answer, which keeps
     `traffic`'s old behavior."""
     try:
-        return {h["usergroup"] for h in (origin_registry(path) or {}).get("handles", []) if h.get("usergroup")}
+        return {g for h in (origin_registry(path) or {}).get("handles", []) for g in group_ids(h)}
     except (AttributeError, KeyError, TypeError):
         return set()
 
@@ -326,6 +344,12 @@ def check_registry(reg: dict, path: str) -> dict:
         if not isinstance(ex, list) or len(ex) > EXAMPLES_MAX or not all(isinstance(q, str) and 0 < len(q) <= EXAMPLE_CHARS for q in ex):
             raise SlackError(f"registry {path}: @{name}'s examples: at most {EXAMPLES_MAX} questions, each one line of at most "
                              f"{EXAMPLE_CHARS} characters, in a newcomer's words (what the chat router matches a post against)")
+        old = h.get("retired_usergroups", [])
+        current = {o.get("usergroup") for o in reg["handles"]}
+        if not isinstance(old, list) or any(not isinstance(g, str) or not GROUP_ID_RE.match(g) or g in current
+                                            or any(g in o.get("retired_usergroups", []) for o in reg["handles"] if o is not h) for g in old):
+            raise SlackError(f"registry {path}: @{name}'s retired_usergroups: Slack group ids (S...) that no handle has now and "
+                             f"no other handle retired; mentions of them still route to @{name}, and groups sync never re-enables them")
     chans = reg.get("channels") or {}
     if FRONT_DOOR not in chans:
         raise SlackError(f"registry {path}: no #{FRONT_DOOR}")
@@ -884,9 +908,9 @@ def mentions(text: str, h: dict, reg: dict) -> str | None:
     """Why `text` names the registry entry `h`, or None.  A user-group mention names its id's group, which Slack shows and
     notifies whatever the label says; the label counts only for an id no handle has (`lead_names` reads it so too)."""
     for gid, label in SUBTEAM_RE.findall(text or ""):
-        if h.get("usergroup") and gid == h["usergroup"]:
+        if gid in group_ids(h):
             return f"user-group mention <!subteam^{gid}>"
-        if label.lstrip("@") == h["handle"] and not any(o.get("usergroup") == gid for o in reg["handles"]):
+        if label.lstrip("@") == h["handle"] and not any(gid in group_ids(o) for o in reg["handles"]):
             return f"user-group mention labelled @{h['handle']}"
     if re.search(rf"(?<![\w@./-])@{re.escape(h['handle'])}(?![\w-])", SUBTEAM_RE.sub(" ", text or "")):
         return f"plain-text @{h['handle']}"
@@ -981,7 +1005,7 @@ def lead_names(text: str, reg: dict) -> list[str]:
         return [bare[1]]
     names: list[str] = []
     for at, gid, label in NAME_TOKEN_RE.findall(m.group(1) if m else ""):
-        known = next((h["handle"] for h in reg["handles"] if gid and h.get("usergroup") == gid), "")
+        known = next((h["handle"] for h in reg["handles"] if gid and gid in group_ids(h)), "")
         n = at.rstrip("._-") if at else known or (label or "").lstrip("@")     # Slack shows and notifies the id's group
         if n and n not in names:
             names.append(n)
@@ -2511,6 +2535,8 @@ def replay(api: Slack, reg: dict, routes: Routes, ch: str, since: float, log=Non
 
     out = []
     for m, root in posts:
+        if PIECE_RE.match(m.get("text") or "") and is_quiet(m.get("text") or ""):
+            continue                                                 # a long post's later piece wakes nobody, by design
         t, author = float(m["ts"]), poster(m, reg)
         history, branches = [], {}
         if root and is_announcement(root):
@@ -2524,6 +2550,9 @@ def replay(api: Slack, reg: dict, routes: Routes, ch: str, since: float, log=Non
             out.append({"ts": m["ts"], "by": author, "missed": missed, "extra": extra,
                         "first": " ".join(plain(m.get("text") or "").split())[:80]})
     return out
+
+
+PIECE_RE = re.compile(r"^\(\d+/\d+\) ")                          # `_post`'s later pieces: `(2/3) ...`, quiet
 
 
 def is_ask(m: dict) -> bool:
@@ -2571,18 +2600,19 @@ def ask_latency(api: Slack, reg: dict, routes: Routes, ch: str, since: float, no
     """Each ask posted in (since, now] that rang a lane's inbox, and each #ask-daniel card linking its page, and how long its
     first answer took, as the ask's record shows it (`record`, `ref`):
     - an ask linked to a Linear issue: the issue's first move out of Backlog or first comment by anyone but the asker
-      (`issue_answer`), with who gave it (`answer_by`); the thread doesn't count.  An issue Linear can't read leaves the ask
-      to Slack (`linear_errors`).
+      (`issue_answer`), with who gave it (`answer_by`), or the addressed lane's own reply in the thread, whichever came first.
+      An issue Linear can't read leaves the ask to Slack (`linear_errors`).
     - Daniel's card (lane `daniel`): its page's Status leaving PAGE_WAITING, at the page's last edit (`page_state`); `state`
       is the Status.  A page Notion can't read leaves the card unanswered (`notion_errors`).
     - any other ask: the first reply in its thread under a name of the lane's inbox (its own, or one it was renamed from).
       One with no reply that carries 👀, ✅ or ❌ and rang only this lane counts as answered but untimed: Slack keeps no time
       for a reaction, and every handle reacts as one bot.
-    Answers after `now` don't count.  Per lane: asks, answered (by Slack, Linear, Notion or untimed), the nearest-rank
+    Only a lane or a named person asks: a machine's alert (`vy-monitors`) isn't an ask.  Answers after `now` don't count.  Per lane: asks, answered (by Slack, Linear, Notion or untimed), the nearest-rank
     median and p90 of the timed answers in minutes, the unanswered, and those unanswered for longer than `stale_s`."""
     tops: dict[str, dict[str, dict]] = {}                            # channel -> ts -> top-level post
     replies: dict[tuple[str, str], list[dict]] = {}
     asks, counted, names = [], set(), {}
+    askers = {h["handle"] for h in reg["handles"]} | {poster({"user": p.get("slack_user")}, reg) for p in reg.get("humans", [])}
     for r in routes.all().values():
         names.setdefault(r.get("inbox_ts"), set()).add(r["name"])  # a renamed lane answers under its old name too
     for r in sorted(routes.all().values(), key=lambda r: (bool(r.get("closed")), r["name"])):
@@ -2599,7 +2629,7 @@ def ask_latency(api: Slack, reg: dict, routes: Routes, ch: str, since: float, no
             if not d or (d[4] and d[4] != d[3]) or d[3] in seen:
                 continue                                             # a reply's doorbell, or one `deliver` rang again
             root = tops[rch].get(d[3])
-            if root and is_ask(root) and poster(root, reg) not in names[r["inbox_ts"]]:
+            if root and is_ask(root) and poster(root, reg) in askers and poster(root, reg) not in names[r["inbox_ts"]]:
                 seen.add(d[3])
                 asks.append({"lane": r["name"], "names": names[r["inbox_ts"]], "channel": rch, "root": root})
     rang: dict[tuple[str, str], int] = {}
@@ -2623,11 +2653,10 @@ def ask_latency(api: Slack, reg: dict, routes: Routes, ch: str, since: float, no
             if (read := issues[(link[1], asker)]) is not None:
                 record, ref = "linear", link[1]
                 found = [ans] if (ans := read["answer"]) and ans["at"] <= now else []
-        if found is None:                                            # no record to read: the thread and its reactions
-            if root.get("reply_count") and key not in replies:
-                replies[key] = api.paged("conversations.replies", "messages", channel=a["channel"], ts=root["ts"], oldest=root["ts"])
-            found = [{"at": float(m["ts"]), "how": "slack-reply", "by": poster(m, reg)} for m in replies.get(key, [])
-                     if m.get("ts") != root["ts"] and poster(m, reg) in a["names"] and t0 < float(m["ts"]) <= now]
+        if root.get("reply_count") and key not in replies:          # the addressee's own reply answers too, record or not
+            replies[key] = api.paged("conversations.replies", "messages", channel=a["channel"], ts=root["ts"], oldest=root["ts"])
+        found = (found or []) + [{"at": float(m["ts"]), "how": "slack-reply", "by": poster(m, reg)} for m in replies.get(key, [])
+                                 if m.get("ts") != root["ts"] and poster(m, reg) in a["names"] and t0 < float(m["ts"]) <= now]
         first = min(found, key=lambda x: x["at"], default=None)
         untimed = (record == "slack" and first is None and rang[key] == 1
                    and any(x.get("name") in ANSWER_REACTIONS for x in root.get("reactions", [])))
@@ -2700,7 +2729,7 @@ def cmd_traffic(ns: argparse.Namespace, reg: dict) -> int:
                      "paused": sum(_from(m.get("text") or "", "router") for m in bells)})
     posts = api.paged("conversations.history", "messages", channel=ch, oldest=f"{since:.6f}")
     handles = {h["handle"] for h in reg["handles"]} | {poster({"user": p.get("slack_user")}, reg) for p in reg.get("humans", [])}
-    dropped, asks, groups = [], [], {h.get("usergroup") for h in reg["handles"]}
+    dropped, asks, groups = [], [], {g for h in reg["handles"] for g in group_ids(h)}
     fresh: set[str] | None = None                                    # origin/main's group ids, fetched on the first unknown
     taken: dict[str, tuple[bool, str]] = {}                          # Linear issue -> (taken, its state)
     for m in posts:
@@ -2772,7 +2801,9 @@ def cmd_groups_sync(ns: argparse.Namespace, reg: dict, path: Path) -> int:
     if bot and reg.get("bot_id") != bot:
         print(f"record  bot {bot} in {path}")
         reg["bot_id"], changed = bot, True
-    groups = api.call("usergroups.list", include_disabled="true").get("usergroups", [])
+    groups = api.call("usergroups.list", include_disabled="true", include_users="true").get("usergroups", [])
+    retired = {g for h in reg["handles"] for g in h.get("retired_usergroups", [])}
+    groups = [g for g in groups if g.get("id") not in retired]         # a retired group is never matched or touched again
     live, by_id = {g.get("handle"): g for g in groups}, {g.get("id"): g for g in groups}
     for h in reg["handles"]:
         name, desc = h["handle"], h["remit"][:250]
@@ -2782,6 +2813,10 @@ def cmd_groups_sync(ns: argparse.Namespace, reg: dict, path: Path) -> int:
             gid = (api.call("usergroups.create", name=name, handle=name, description=desc).get("usergroup") or {}).get("id") if write else None
         else:
             gid = g["id"]
+            if g.get("date_delete") and g.get("users"):                 # enabling it would notify its members again
+                print(f"refuse  @{name} ({gid}): disabled with {len(g['users'])} member(s); a tag would notify them. Create an "
+                      "empty group instead: rename this one aside and add it to the handle's retired_usergroups")
+                continue
             if g.get("date_delete"):
                 print(f"enable  @{name} ({gid})")
                 if write:
@@ -3243,6 +3278,10 @@ def _sleep(seconds: float) -> None:
     time.sleep(seconds)
 
 
+def _clock() -> float:
+    return time.monotonic()
+
+
 def pacific(t: datetime) -> str:
     """How a person reads a time: `3:00 PM PDT, Wed 30 Sep`."""
     return t.astimezone(PACIFIC).strftime("%I:%M %p %Z, %a %d %b").lstrip("0")
@@ -3547,14 +3586,34 @@ class AskDaniel:
         return out
 
 
-def wait_for(get: Callable[[], dict], *, sleep: Callable[[float], None], every: float, polls: int) -> dict:
-    """GET a card until it leaves `pending` (decided, or a blocking card overdue), at most `polls` times, `every` s apart."""
+def wait_for(get: Callable[[], dict], *, sleep: Callable[[float], None], every: float, polls: int,
+             max_s: float = math.inf, clock: Callable[[], float] = time.monotonic) -> tuple[dict, bool]:
+    """GET a card until it leaves `pending` (decided, or a blocking card overdue), at most `polls` times, `every` s apart, for at
+    most `max_s` of `clock` time; and whether it stopped at `max_s` with the card still pending."""
+    start = clock()
     for i in range(max(1, polls)):
         out = get()
         if out.get("status") != "pending" or i == polls - 1:
-            return out
-        sleep(every)
-    return out
+            return out, False
+        if (left := max_s - (clock() - start)) <= 0:
+            return out, True
+        sleep(min(every, left))
+    return out, False
+
+
+def _await_card(ns: argparse.Namespace, reg: dict, route: "AskDaniel", cid: str, polls: int) -> int:
+    """`ask-daniel ... --wait`: poll card `cid` until it is decided, `polls` polls or WAIT_CAP_S run out; a card still pending at
+    the cap exits STILL_GOING with the command that reads it later (research.waitcap)."""
+    out, capped = wait_for(lambda: route.call("GET", "/" + urllib.parse.quote(cid, safe="")), sleep=_sleep, every=ns.every,
+                           polls=polls, max_s=waitcap.WAIT_CAP_S, clock=_clock)
+    ring_decision(ns, reg, cid, out)
+    rc = _show(out, ns.json)
+    if not capped:
+        return rc
+    print(waitcap.still_going(f"card {cid} (pending)", f"research msg ask-daniel status {cid}", waitcap.WAIT_CAP_S,
+                              end="End your turn now; a subscription to the card's thread (subscribe_slack_thread) wakes you "
+                                  "when Daniel answers."), file=sys.stderr)
+    return waitcap.STILL_GOING
 
 
 def ring_decision(ns: argparse.Namespace, reg: dict, cid: str, out: dict) -> None:
@@ -3633,12 +3692,9 @@ def cmd_ask_daniel(ns: argparse.Namespace, reg: dict) -> int:
         if ns.dry_run:
             print(f"dry-run: GET {ASK_DANIEL}{path}", file=sys.stderr)
             return 0
-        route = AskDaniel()
         polls = math.ceil((DEADLINE_MAX + WAIT_GRACE).total_seconds() / ns.every) if ns.wait else 1
         try:
-            out = wait_for(lambda: route.call("GET", path), sleep=_sleep, every=ns.every, polls=polls)
-            ring_decision(ns, reg, str(ns.id), out)
-            return _show(out, ns.json)
+            return _await_card(ns, reg, AskDaniel(), str(ns.id), polls)
         except RouteError as e:
             if e.status == 404:
                 raise SlackError(no_such_card("status", ns.id)) from None
@@ -3707,9 +3763,7 @@ def cmd_ask_daniel(ns: argparse.Namespace, reg: dict) -> int:
     if not ns.wait:
         return 0
     polls = math.ceil((datetime.fromisoformat(body["deadline"]) - now + WAIT_GRACE).total_seconds() / ns.every)
-    out = wait_for(lambda: route.call("GET", f"/{urllib.parse.quote(str(cid), safe='')}"), sleep=_sleep, every=ns.every, polls=polls)
-    ring_decision(ns, reg, str(cid), out)
-    return _show(out, ns.json)
+    return _await_card(ns, reg, route, str(cid), polls)
 
 
 def main(argv: list[str], prog: str = "research msg") -> int:
@@ -3868,7 +3922,10 @@ def main(argv: list[str], prog: str = "research msg") -> int:
     card_flags(p)
     p.add_argument("--link", default=None, metavar="NOTION_URL", help="the ask's page, made with the Notion MCP, in place of --page")
     p.add_argument("--hours", type=float, default=24, metavar="H", help="pages: edited in the last H hours (default 24)")
-    p.add_argument("--wait", action="store_true", help="poll until the card is decided (or overdue); exit 0 once decided")
+    p.add_argument("--wait", action="store_true",
+                   help=f"poll until the card is decided (or overdue); exit 0 once decided, for at most {waitcap.WAIT_CAP_S} s (no tool "
+                        f"call blocks longer than 20 minutes, Daniel, 19 Oct): a card still pending then exits {waitcap.STILL_GOING}, "
+                        "naming `ask-daniel status ID` to check back")
     p.add_argument("--every", type=float, default=WAIT_EVERY_S, metavar="S", help=f"seconds between polls (default {WAIT_EVERY_S})")
     p.add_argument("--choice", default=None, metavar="VALUE", help="resolve: the option Daniel chose in the thread")
     p.add_argument("--note", default=None, help="resolve: his words, or a link to them")
