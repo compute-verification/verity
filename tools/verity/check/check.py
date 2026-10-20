@@ -202,6 +202,19 @@ def custody_dir() -> Path | None:
     return d if (d / "store.toml").is_file() and (d / "cred.json").is_file() else None
 
 
+def custody_store_env() -> dict[str, str]:
+    """The store config and credentials of `$CHECK_STORE_CUSTODY`'s key, as `store_io` hands them to its store CLI, for a step that
+    reads the private store itself; empty where this machine has a store config of its own or the step was given no custody dir."""
+    if os.environ.get("RESEARCH_STORE_CONFIG") or (Path.home() / ".research" / "store.toml").is_file():
+        return {}
+    d = Path(os.environ[CUSTODY_ENV]) if os.environ.get(CUSTODY_ENV) else None
+    if d is None or not ((d / "store.toml").is_file() and (d / "cred.json").is_file()):
+        return {}
+    cred = json.loads((d / "cred.json").read_text())
+    return {"RESEARCH_STORE_CONFIG": str(d / "store.toml"),
+            **{k: cred[k] for k in ("AWS_ACCESS_KEY_ID", "AWS_SECRET_ACCESS_KEY", "AWS_SESSION_TOKEN") if cred.get(k)}}
+
+
 def _load(name: str, d: Path | None = None):
     spec = importlib.util.spec_from_file_location(f"check_{name}", (d or Path(__file__).resolve().parent) / f"{name}.py")
     m = importlib.util.module_from_spec(spec)
@@ -1300,10 +1313,14 @@ def preflight() -> list[tuple[str, list[str] | str, Path]]:
 ON_NODE = ("preflight-fixtures",)
 
 
-def fetchable_fixtures(root: Path = ROOT, url: str | None = None, head=None, store=None) -> tuple[dict[str, str], list[str]]:
+def fetchable_fixtures(root: Path = ROOT, url: str | None = None, head=None, store=None,
+                       pull: bool = False) -> tuple[dict[str, str], list[str]]:
     """({id: where}, [id]): where each fetched fixture (a `fixtures/artifacts.json` entry whose path git doesn't hold) can come
     from on this machine, and those that can come from nowhere: the public export, asked for its manifest only (one HEAD, no
-    blob), else the tree already holding its bytes, else this machine's store holding its manifest and every blob.  The closing
+    blob), else the tree already holding its bytes, else this machine's store holding its manifest and every blob, else the
+    private remote this machine's store reaches, which `research data fetch-fixtures` reads too (20 Oct, INF-165: a PR's newly
+    registered fixture is preserved privately, and the control pod exports only main's), which with ``pull`` copies each such
+    fixture into this machine's store, where the suites' `fetch-fixtures` finds it with no credentials of its own.  The closing
     train's check (cb20, 10 Oct) failed `lean-suites` after its launch on #1716's rec-coins fixture, preserved privately and
     never exported: node 1 fetches from the public export and its own store, and had it in neither.  A copy put in the node's
     store keeps a train moving before the export (top, 10 Oct).  Raises when the public export is needed and there is none."""
@@ -1334,6 +1351,24 @@ def fetchable_fixtures(root: Path = ROOT, url: str | None = None, head=None, sto
             where |= {a: "this machine's store" for a in rest if store.has_local(a)}
     except Exception as e:                              # noqa: BLE001: a store that can't be read holds nothing
         print(f"check: fixtures: this machine's store can't be read ({type(e).__name__}: {e})", file=sys.stderr)
+    if left := [a for a in rest if a not in where]:
+        try:
+            if (private := store.remote) is not None:
+                with ThreadPoolExecutor(max_workers=16) as ex:
+                    got = list(ex.map(lambda a: private.head(manifest_key(a.removeprefix("art:"))), left))
+                held = [a for a, h in zip(left, got) if h is not None]
+                for a in held:
+                    if not pull:
+                        where[a] = "the private store"
+                        continue
+                    try:
+                        store.fetch(a)
+                        where[a] = "the private store, copied to this machine's store"
+                    except Exception as e:              # noqa: BLE001: a copy that fails leaves it missing, named
+                        print(f"check: fixtures: {a} couldn't be copied from the private store ({type(e).__name__}: {e})",
+                              file=sys.stderr)
+        except Exception as e:                          # noqa: BLE001: a remote that can't be asked holds nothing
+            print(f"check: fixtures: the private store can't be asked ({type(e).__name__}: {e})", file=sys.stderr)
     return where, [a for a in rest if a not in where]
 
 
@@ -1342,8 +1377,9 @@ def fixtures_only() -> int:
     where; else 1 naming the ids that can't."""
     from collections import Counter
 
+    os.environ.update(custody_store_env())               # this step's own process: the key reaches only its LocalStore
     try:
-        where, missing = fetchable_fixtures()
+        where, missing = fetchable_fixtures(pull=True)
     except Exception as e:                              # noqa: BLE001: a source that can't be asked shows nothing
         print(f"check: fixtures: could not ask the public export ({type(e).__name__}: {e})", file=sys.stderr)
         return 1
@@ -1353,9 +1389,10 @@ def fixtures_only() -> int:
         if w != "the public export":
             print(f"check: fixtures: {a} from {w}, not the public export")
     if missing:
-        print(f"check: fixtures: {len(missing)} fetched fixture(s) registered in fixtures/artifacts.json are in neither this "
-              f"machine's store nor the public export ({found or 'none found'}): {' '.join(missing)}; run `research data "
-              f"export` for each, or put it in this machine's store", file=sys.stderr)
+        print(f"check: fixtures: {len(missing)} fetched fixture(s) registered in fixtures/artifacts.json are in none of the "
+              f"public export, this machine's store and the private store it reaches ({found or 'none found'}): "
+              f"{' '.join(missing)}; preserve each (`research data put --preserve`), or put it in this machine's store",
+              file=sys.stderr)
         return 1
     print(f"check: fixtures: every fetched fixture fixtures/artifacts.json registers can be fetched here ({found or 'none'})")
     return 0

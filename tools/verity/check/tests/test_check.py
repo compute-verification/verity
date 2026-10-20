@@ -991,11 +991,44 @@ def test_the_preflight_refuses_a_fetched_fixture_that_neither_this_machine_nor_t
 
     assert CHECK.fetchable_fixtures(tmp_path, "https://public.example/store", head, Broken())[1] == [gone, local]
 
-    monkeypatch.setattr(CHECK, "fetchable_fixtures", lambda: ({local: "this machine's store"}, [gone]))
+    class Private:                                     # 20 Oct, INF-165: a PR's new fixture, preserved privately, not exported
+        def __init__(self, held):
+            self.held, self.asked = held, []
+
+        def head(self, key):
+            self.asked.append(key)
+            return {"bytes": 1} if key in self.held else None
+
+    class Reaching(Store):
+        remote = Private({f"manifests/{'b' * 64}.json"})
+
+    where, missing = CHECK.fetchable_fixtures(tmp_path, "https://public.example/store", head, Reaching())
+    assert missing == [] and where[gone] == "the private store" and where[local] == "this machine's store"
+    assert Reaching.remote.asked == [f"manifests/{'b' * 64}.json"]
+    Reaching.remote = Private(set())
+    assert CHECK.fetchable_fixtures(tmp_path, "https://public.example/store", head, Reaching())[1] == [gone]
+
+    class Copying(Reaching):
+        remote = Private({f"manifests/{'b' * 64}.json"})
+        fetched: list = []
+
+        def fetch(self, art):
+            self.fetched.append(art)
+
+    where, missing = CHECK.fetchable_fixtures(tmp_path, "https://public.example/store", head, Copying(), pull=True)
+    assert missing == [] and where[gone] == "the private store, copied to this machine's store" and Copying.fetched == [gone]
+
+    class Failing(Copying):
+        def fetch(self, art):
+            raise OSError("403")
+
+    assert CHECK.fetchable_fixtures(tmp_path, "https://public.example/store", head, Failing(), pull=True)[1] == [gone]
+
+    monkeypatch.setattr(CHECK, "fetchable_fixtures", lambda **kw: ({local: "this machine's store"}, [gone]))
     assert CHECK.main(["--fixtures"]) == 1
     out = capsys.readouterr()
     assert gone in out.err and "1 from this machine's store" in out.err and f"{local} from this machine's store" in out.out
-    monkeypatch.setattr(CHECK, "fetchable_fixtures", lambda: ({local: "this machine's store"}, []))
+    monkeypatch.setattr(CHECK, "fetchable_fixtures", lambda **kw: ({local: "this machine's store"}, []))
     assert CHECK.main(["--fixtures"]) == 0 and "1 from this machine's store" in capsys.readouterr().out
 
 
@@ -1457,3 +1490,26 @@ def test_the_lean_audit_step_regenerates_records_only_where_the_lean_job_takes_i
     assert not CHECK.lean_regenerates()
     (tmp_path / "lean_audit.py").write_text('ap.add_argument("--regenerate", action="store_true")\n')
     assert CHECK.lean_regenerates()
+
+
+def test_custody_store_env_hands_the_fixture_step_the_runs_custody_key_only_where_the_machine_has_no_store_config(tmp_path,
+                                                                                                                   monkeypatch):
+    """20 Oct, INF-165: check nodes have no store config, so the fixture step reads the private store with the run's custody key,
+    as `store_io` does; a machine with a store config of its own keeps it."""
+    import json
+
+    d = tmp_path / "custody"
+    d.mkdir()
+    (d / "store.toml").write_text("[remote]\n")
+    (d / "cred.json").write_text(json.dumps({"AWS_ACCESS_KEY_ID": "dummy", "AWS_SECRET_ACCESS_KEY": "not-to-be-copied",
+                                             "AWS_SESSION_TOKEN": ""}))
+    monkeypatch.setenv("HOME", str(tmp_path / "home"))
+    monkeypatch.delenv("RESEARCH_STORE_CONFIG", raising=False)
+    monkeypatch.delenv(CHECK.CUSTODY_ENV, raising=False)
+    assert CHECK.custody_store_env() == {}
+    monkeypatch.setenv(CHECK.CUSTODY_ENV, str(d))
+    assert CHECK.custody_store_env() == {"RESEARCH_STORE_CONFIG": str(d / "store.toml"), "AWS_ACCESS_KEY_ID": "dummy",
+                                         "AWS_SECRET_ACCESS_KEY": "not-to-be-copied"}
+    (tmp_path / "home" / ".research").mkdir(parents=True)
+    (tmp_path / "home" / ".research" / "store.toml").write_text("[remote]\n")
+    assert CHECK.custody_store_env() == {}
