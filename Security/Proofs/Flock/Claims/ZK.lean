@@ -74,6 +74,7 @@ import Proofs.Flock.Claims.ZK.LiveEnd
 import Proofs.Flock.Claims.ZK.FinTau
 import Proofs.Flock.Claims.ZK.FinInner
 import Proofs.Flock.Claims.ZK.Worker
+import Proofs.Flock.Claims.ZK.PadFree
 import Proofs.Flock.Claims.ZK.Switched
 import Proofs.Flock.Claims.ZK.Server
 import Proofs.Flock.Claims.ZK.Blind
@@ -373,6 +374,10 @@ import Proofs.Flock.Claims.ZK.HelloLean
   (`swView_outer`). It is the honest prover at the worker's values rectified, which pass the inner constraint at every
   pad, on a tape moved by a bijection (`swView_sameDist_rect`, `rect_innerHolds`), and Lemma B at such row-satisfying
   values is `table_shvzk`'s (`vals_shvzk`); each also with real hm96 leaves (`worker_shvzk_hm96`, `vals_shvzk_hm96`).
+* `PadFree`: the inner constraint at a worker's values reads no pad: each row's value at the masked values and the
+  drawn pads is its value at the clear values and the zero pads (`rows_padFree`), so the drawn pads' check passes iff
+  `RowsAt` holds (`rowsAt_iff_pass`), and the Finish's stop bit is `1[¬RowsAt (w, v)]`, a function of the witness and
+  the values alone.
 * `Switched`: the switched prover at the session's `J` tables: Lemma B at the workers' values there (`zkViewAtJ_sw`),
   and `SHVZK` against the honest prover's simulator where the prover goes on (`Proto.TabModel.shvzk_sw`).
 * `Server`: the ZK server (`ZkServer`) that releases untrusted workers' values in four kinds (`fixed`, `own`,
