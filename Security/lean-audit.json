@@ -42,6 +42,10 @@
    "owner": "@memory-accounting",
    "digest": "4bd7f6457fb6df920661b769a3ad9517f6e4f0e7a2fd0d36a43e376a2deeaca9"
   },
+  "Accounting.Assumptions.TS.CountsFixed": {
+   "owner": "@compute-accounting",
+   "digest": "f70a1fa98f6c8dbc527b0667187fae860c0494ef903c54d0b857f385220270c3"
+  },
   "Accounting.Assumptions.TS.FacetCeilings": {
    "owner": "@compute-accounting",
    "digest": "fa76dfe63e705d955b2dec4c6d8e3b6826c2bf36058b476ef8f1b7a8bb7c0d3b"
@@ -69,6 +73,10 @@
   "Accounting.Assumptions.TS.LuckAt": {
    "owner": "@compute-accounting",
    "digest": "28ff53f429206bbd8f8447d74044812a42bfe9123fb10443321873882cb02cac"
+  },
+  "Accounting.Assumptions.TS.ModesRun": {
+   "owner": "@compute-accounting",
+   "digest": "1dd8096f404cb332474ed4919a8171d4dfe7cf3f2ad76a846dc1283b73e437f3"
   },
   "Accounting.Assumptions.TS.NoSum": {
    "owner": "@compute-accounting",
@@ -481,14 +489,6 @@
   "Pouw.PearlC.pearlCTilesDevChainCap": {
    "owner": "@compute-accounting",
    "digest": "2170dd5823cfd9a6272b9ce11cf29f7de11dce337c0926e307ab60d0f8dd34b6"
-  },
-  "Accounting.Assumptions.TS.CountsFixed": {
-   "owner": "@compute-accounting",
-   "digest": "f70a1fa98f6c8dbc527b0667187fae860c0494ef903c54d0b857f385220270c3"
-  },
-  "Accounting.Assumptions.TS.ModesRun": {
-   "owner": "@compute-accounting",
-   "digest": "1dd8096f404cb332474ed4919a8171d4dfe7cf3f2ad76a846dc1283b73e437f3"
   }
  },
  "meaning": [
@@ -9769,7 +9769,7 @@
    ]
   },
   "Definitions.Accounting.TS.Fixed": {
-   "digest": "a1b46cb573d0d9bb21fed6b7824045208790c941117424ef0af1a526a43de80d",
+   "digest": "99256ddb86d87253e81a5476b34b635e2a8c0f0638f3417109be6918d36b4806",
    "definitions": {
     "Accounting.TS.SlotRole": "919d84d7c93becc0df854f34482bf9543f1f9259322478b7c4c2936c51941b77",
     "Accounting.TS.SlotRole.add": "d17e0f9dc13738a191c71949f99f79015bb22fd5b14e0ffef2660307358ca1a2",
@@ -9783,7 +9783,7 @@
     "Accounting.TS.WordLayer.FixedWords": "db7f817108eef224f0e0c2cdc24f535934d948891070dc25b27b5d17a28e92f2",
     "Accounting.TS.WordLayer.Folds": "50fa8ba07d6b96f1e704d3bf147992d0b7ead31885cabd489708ab886c7e3021",
     "Accounting.TS.WordLayer.MulLate": "f4a6cfe0a5ebf24184610d77e3d6ce11dd6359436cf81f8ad2e1e02aabedc613",
-    "Accounting.TS.WordLayer.Priced": "7a1ccfbcef7b470439729346700fab02085190862d9c94ecc4ef0172ec1d43f0",
+    "Accounting.TS.WordLayer.Priced": "a389b3cb39c41419b8a7b4211c3f4a49a74084f350870d2939e6620ac4c6133b",
     "Accounting.TS.WordLayer.Steers": "7010f0e42de1286dccf1394715d4decc9380e9213ca4122401bc0df8911ec495",
     "Accounting.TS.WordLayer.acc": "0ea2b88e577de25d3e812a44055629a4f45570dd1c55412810e15a63411af2c5",
     "Accounting.TS.WordLayer.addView": "000c65972b3406b37086374ff0bf81f2c07decafa42643742ea56ecf04c0001e",
