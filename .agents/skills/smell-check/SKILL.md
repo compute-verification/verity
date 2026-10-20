@@ -257,6 +257,12 @@ Under each question, newest first; the lane that found or reported it is in brac
 
 ### 7. Checks that pass for the wrong reason, or can't fail
 
+- **A word view that compared no instances** (20 Oct) [circuits]. circuit-check crashed on a Boolean constant
+  (`Const32[..]_v2`, no parameters), and the first fix, one instance where there are no vectors, reported
+  `{"compared": 1, "mismatches": 0}`: `evaluate_words` and `evaluate_batch` size a batch by their arguments, so with none
+  they returned empty arrays and nothing was compared, and a constant one bit off its word constant passed. Fix: such a
+  Definition is evaluated as its one instance, with a negative test (`test_a_boolean_constant_is_checked_on_its_one_instance`,
+  CIR-47), before landing.
 - **A gate killed at its cap read as "never ran", and the train landed** (18 Oct) [ci]. "touched suites passed;
   it lands" after a gate run exited 143 at its 90-min cap. Fix: a capped gate reruns once, then holds the train
   (#2583).
