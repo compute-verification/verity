@@ -1149,6 +1149,7 @@
   "Proofs.Flock.EndToEndHidden",
   "Proofs.Flock.EndToEndRegistered",
   "Proofs.Flock.ZeroKnowledgeHidden",
+  "Proofs.Flock.Masked",
   "Proofs.Pouw.PearlC.FlockTile",
   "Definitions.Accounting",
   "Models.Accounting.Assumptions",
@@ -1672,7 +1673,8 @@
   "Proofs.Flock.Claims.NumbersDeploy": "the claims' meets witnesses state antecedents at Flock's deployed records (`deployPlain`, `deployZk`), still in Proofs; C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT)",
   "Proofs.Flock.Claims.Recursion.Deploy": "the claims' meets witnesses state antecedents at the recursion's deployed record (`RecDeploy.deployRec`, `Brings`), still in Proofs; C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT)",
   "Proofs.Flock.Claims.Recursion.DeployInputs": "the claims' meets witnesses state antecedents at the recursion's deployed record's inputs (`RecDeploy.RecIns`, `setupO`), still in Proofs; C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT)",
-  "Proofs.Flock.Claims.Complete.Ready": "the claims' meets witnesses state antecedents at Flock's deployed records (`deployPlain`, `deployZk`), still in Proofs; C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT)"
+  "Proofs.Flock.Claims.Complete.Ready": "the claims' meets witnesses state antecedents at Flock's deployed records (`deployPlain`, `deployZk`), still in Proofs; C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT)",
+  "Proofs.Flock.Masked": "the masked guarantees state Flock's claims at its deployed masked records (`deployZk`, `zkDeployed`), still in Proofs; C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT)"
  },
  "four_names": ["Nci", "NetTiming", "Accounting", "Hash"],
  "guarantees": {
@@ -4307,6 +4309,18 @@
    ],
    "assumptions": [],
    "type_hash": "8c16cab1cb3a82846dac85a5de468d2758e66e0a407507d41a0c262fa17efc20"
+  },
+  "Flock.SecurityProofs.MaskedKS": {
+   "owner": "@proofs",
+   "signature": ["Flock.SecurityProofs.MaskedKS : Flock.Guarantees.MaskedKS"],
+   "assumptions": [],
+   "type_hash": "8ae2fd10ac92d291c2283d26141b3c31e7f06f2fdb2e5d212280951b15876d7b"
+  },
+  "Flock.SecurityProofs.MaskedZK": {
+   "owner": "@proofs",
+   "signature": ["Flock.SecurityProofs.MaskedZK : Flock.Guarantees.MaskedZK"],
+   "assumptions": [],
+   "type_hash": "af08708a1578b1ef3007ae701f1a819f3da31d67b642f12780733ac9db9bc738"
   },
   "Flock.SecurityProofs.PublicAudit": {
    "owner": "@proofs",
@@ -8640,7 +8654,9 @@
    "Pous.SecurityProofs.StreamedWipeMeets2600GB": "frozen (no-function): A bound in the streamed-label wipe's game (Security/Definitions/Pous/Model/StreamedWipe.lean), whose acceptance is the model's Accepts over an arbitrary prover, not a run of streamed_wipe.verdict or any Lean function; it fits once the memory challenger's check has a Lean function to state it against.",
    "Accounting.SecurityProofs.TS.Sm120SheetHeadline": "frozen (no-function,world-unlisted): sm_120's headline at 0.656%, under full checking with live coins (epsilon_sample and the Fiat-Shamir premium are separate lines), Whole.sheetDIdealFloor_whole at the exact data of DS-120 and H1 + fx1 (Definitions.Accounting.Headline.Sm120) with pi* the issue facet, p = 7/8, p0 = 1/2, Lambda = max(kappa/ln(8/7), (kappa + f)/ln 2), S = 48,000 and delta = 2^-40, over every play of 48,000 equal live rounds (the window's shape: with S rounds its two branches give epsilon < 1% only from 9,496, Compose's live line only from 10,552, RT-INT-1) and window of proofs on any finite coins and every unfolded share, not a Lean function, the unfolded branch binding (0.656%; the folded one gives 0.599%); A1-A7 (A2 with A2u, a uniform-datapath instruction an issue slot, which no vendor document states and which alone holds this epsilon: RT-MACHINE-4), FOLD-OPT per word folded (FoldOptFolded at the run's unfolded share, ASK-6 = A), so fold skippers are charged, the receipt split (the play's ideal game a ReceiptGame's and Pinned, with two luck premises: OperandHMu at 3/4, H-mu at the deficient words, the first, and ReceiptLuckAt at 1/2, HMU's B' case, the second, which give p = 7/8 by LemmaB at fibre 1 and LuckOfReceipt), WholeLuckAt at 1/2 (B' at a unit whose fold the run skips, ASK-9 = A at p0 = 1/2 for live coins only; the whole-unit guess bound 2^-64 is not granted), binding at delta_bind, proof soundness at delta_ZK, the Definitions' pinning (ProofLayer.Pins, met by main's circuit Definitions since PIN, #2417), the play being its proofs' (ProofLayer.Of) and RightFixed are not on the premises list.",
    "Accounting.SecurityProofs.TS.Sm120MeasuredHeadline": "frozen (no-function,world-unlisted): sm_120's headline on its measured vector at 0.591%, under full checking with live coins (epsilon_sample and the Fiat-Shamir premium are separate lines), Whole.dIdealFloor_whole at the exact data of VF3r-16 and H1 + fx1 (Definitions.Accounting.Headline.Sm120Measured) with pi* JI3s_0, q = q_T = 9/8, p = 7/8, p0 = 1/2, Lambda = max(kappa/ln(8/7), (kappa + f)/ln 2), S = 48,000 and delta = 2^-40, over every play of 48,000 equal live rounds (the window's shape: with S rounds its two branches give epsilon < 1% only from 9,652, Compose's live line only from 10,552, RT-INT-1) and window of proofs on any finite coins and every unfolded share, not a Lean function, the folded branch binding (0.591%; the unfolded one gives 0.573%); FacetCeilings on VF3r-16's rows, WordsWritten at the forms' omega, ScalarRoute at 9/8, NoSum, FOLD-OPT per word folded (FoldOptFolded at the run's unfolded share, ASK-6 = A), so fold skippers are charged, the receipt split (the play's ideal game a ReceiptGame's and Pinned, with two luck premises: OperandHMu at 3/4, H-mu at the deficient words, the first, and ReceiptLuckAt at 1/2, HMU's B' case, the second, which give p = 7/8 by LemmaB at fibre 1 and LuckOfReceipt), WholeLuckAt at 1/2 (B' at a unit whose fold the run skips, ASK-9 = A at p0 = 1/2 for live coins only; the whole-unit guess bound 2^-64 is not granted), binding at delta_bind, proof soundness at delta_ZK, the Definitions' pinning (ProofLayer.Pins, met by main's circuit Definitions since PIN, #2417), the play being its proofs' (ProofLayer.Of) and RightFixed are not on the premises list.",
-   "Flock.SecurityProofs.recursiveZK_os_gap": "frozen (obligation,no-function,world-unlisted): RecursiveZK at the operating system's salts. It takes the outer proof's zero knowledge as an open obligation, as a simulation statement it has no acceptance of a function to take, and it takes A3 per test (UniformRandomBytesTest, slack eta) at the one event it bounds, a premise that isn't on the list."
+   "Flock.SecurityProofs.recursiveZK_os_gap": "frozen (obligation,no-function,world-unlisted): RecursiveZK at the operating system's salts. It takes the outer proof's zero knowledge as an open obligation, as a simulation statement it has no acceptance of a function to take, and it takes A3 per test (UniformRandomBytesTest, slack eta) at the one event it bounds, a premise that isn't on the list.",
+   "Flock.SecurityProofs.MaskedKS": "frozen (no-function): Claims.Flock.KS at the deployed masked record (deployZk at the deployed relation, SHA-512): a knowledge-soundness bound for every prover against the record's interaction, with no acceptance of a Lean function to take; it takes no premise, since the claim's collision finder is in its bound.",
+   "Flock.SecurityProofs.MaskedZK": "frozen (no-function): Claims.Flock.ZK at the deployed masked record (zkDeployed at the deployed plan, SHA-512): as a simulation statement against every malicious verifier it has no acceptance of a function to take; stated at the hm96 hiding gap, it takes no premise beyond 0 < t."
   },
   "conjectures": {
    "Nci.Assumptions.ActivationsIncompressible": {
@@ -11444,6 +11460,8 @@
     "Claims.ZKmalR_fails",
     "Claims.ZKmalRx_fails",
     "Flock.SecurityProofs.ClaimsStated",
+    "Flock.SecurityProofs.MaskedKS",
+    "Flock.SecurityProofs.MaskedZK",
     "Flock.SecurityProofs.RecursionClaimsStated",
     "Flock.SecurityProofs.SamplingClaimsStated",
     "Hash.SecurityProofs.Stated"
@@ -16775,6 +16793,7 @@
     "Flock.SecurityProofs.EndToEndRegistered",
     "Flock.SecurityProofs.EndToEndRegisteredDrawn",
     "Flock.SecurityProofs.EndToEnd_refSetup",
+    "Flock.SecurityProofs.MaskedZK",
     "Flock.SecurityProofs.PublicAudit",
     "Flock.SecurityProofs.RecursiveAuditC3",
     "Flock.SecurityProofs.RecursiveCircuitIndist",
@@ -17810,6 +17829,8 @@
     "Flock.SecurityProofs.EndToEndRegistered",
     "Flock.SecurityProofs.EndToEndRegisteredDrawn",
     "Flock.SecurityProofs.EndToEnd_refSetup",
+    "Flock.SecurityProofs.MaskedKS",
+    "Flock.SecurityProofs.MaskedZK",
     "Flock.SecurityProofs.PublicAudit",
     "Flock.SecurityProofs.RecursiveAuditC3",
     "Flock.SecurityProofs.RecursiveRanRegistered",
@@ -17971,6 +17992,7 @@
     "Flock.SecurityProofs.EndToEndRegistered",
     "Flock.SecurityProofs.EndToEndRegisteredDrawn",
     "Flock.SecurityProofs.EndToEnd_refSetup",
+    "Flock.SecurityProofs.MaskedZK",
     "Flock.SecurityProofs.PublicAudit",
     "Flock.SecurityProofs.RanRegisteredRun",
     "Flock.SecurityProofs.RecursiveAuditC3",
@@ -18059,6 +18081,7 @@
     "Flock.SecurityProofs.EndToEndRegistered",
     "Flock.SecurityProofs.EndToEndRegisteredDrawn",
     "Flock.SecurityProofs.EndToEnd_refSetup",
+    "Flock.SecurityProofs.MaskedZK",
     "Flock.SecurityProofs.PublicAudit",
     "Flock.SecurityProofs.RecursiveAuditC3",
     "Flock.SecurityProofs.RecursiveCircuitIndist",
@@ -23903,6 +23926,7 @@
     "Flock.SecurityProofs.EndToEndRegistered",
     "Flock.SecurityProofs.EndToEndRegisteredDrawn",
     "Flock.SecurityProofs.EndToEnd_refSetup",
+    "Flock.SecurityProofs.MaskedKS",
     "Flock.SecurityProofs.PublicAudit",
     "Flock.SecurityProofs.RecursiveAuditC3",
     "Flock.SecurityProofs.RecursiveRanRegistered",
@@ -24053,6 +24077,8 @@
     "Flock.SecurityProofs.EndToEndRegistered",
     "Flock.SecurityProofs.EndToEndRegisteredDrawn",
     "Flock.SecurityProofs.EndToEnd_refSetup",
+    "Flock.SecurityProofs.MaskedKS",
+    "Flock.SecurityProofs.MaskedZK",
     "Flock.SecurityProofs.PublicAudit",
     "Flock.SecurityProofs.RecursiveAuditC3",
     "Flock.SecurityProofs.RecursiveRanRegistered",
@@ -24252,6 +24278,14 @@
     "FlockSoundness.Discharge.ZkReg.zk_session_soundHJR_custody_nonvacuous",
     "FlockSoundness.Discharge.ZkReg.zk_session_soundHJR_nonvacuous"
    ]
+  },
+  "Proofs.Flock.Masked.Statement": {
+   "digest": "4cd3aed79621bcaad2af8ea10f5e55cc6f55b1d453cad21d7681ebde2306149f",
+   "definitions": {
+    "Flock.Guarantees.MaskedKS": "c8908fff7f287ba2818e37cbdd4f1eecf190c499ce27072921adfa7dd7ac137d",
+    "Flock.Guarantees.MaskedZK": "c8a898414f36474cfcae48405916f29495aeefe54a6a33a911932be613069f19"
+   },
+   "guarantees": ["Flock.SecurityProofs.MaskedKS", "Flock.SecurityProofs.MaskedZK"]
   },
   "Proofs.Flock.Recursive.AuditC3": {
    "digest": "2a6e35dc8ff965052b68fb6443b0c47f1c0e4cccc1e37c104f102458f63e3abe",
@@ -25919,6 +25953,7 @@
     "FlockSoundness.CROnly.hidingGap": "6d876b6561ae5359deb9ec30fdc987c69ab53fb2f2559231552780d04f0d4a08"
    },
    "guarantees": [
+    "Flock.SecurityProofs.MaskedZK",
     "Flock.SecurityProofs.PublicAudit",
     "Flock.SecurityProofs.RecursiveAuditC3",
     "Flock.SecurityProofs.RecursiveCircuitIndist",
@@ -29396,6 +29431,7 @@
     "FlockSoundness.Discharge.ZkView.κ₀": "10423c5791e22861f69c16e6633a27b13654e8b8c4fb3cbc943aa6583a4059d2"
    },
    "guarantees": [
+    "Flock.SecurityProofs.MaskedZK",
     "Flock.SecurityProofs.PublicAudit",
     "Flock.SecurityProofs.RecursiveAuditC3",
     "Flock.SecurityProofs.RecursiveCircuitIndist",
