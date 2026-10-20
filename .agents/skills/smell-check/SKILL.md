@@ -84,6 +84,14 @@ Under each question, newest first; the lane that found or reported it is in brac
 
 ### 1. Credited or proved isn't what was served
 
+- **A "free" peel that was a fresh A Bᵀ** (19 Oct) [compute-accounting's red team RT2-INT-7]. kernels' RTX peel
+  computed z = A Bᵀ as its own MMA per fragment and read no noised word, so the served product was again computed beside
+  the receipted one; kernels told compute-accounting "the peel costs nothing", which was the tell. Fix: z derived from the
+  noised accumulators with the corrections as extra MMAs (DerivedZ, #2677; H1V3 #2776), and a gate that perturbs a
+  noised accumulator word and requires z to move.
+- **The wrap correction fixed the wrap, not the dither** (19 Oct) [kernels-dither-hb]. compute-accounting: "the
+  model and today's y are unchanged"; the one-stream form served dequant((A + b)(B + c)ᵀ), 0 of 128 calls equal to today's,
+  tokens degenerate. Fix: peel b and c too, so the served model is the registered one (compute-accounting, 11:02Z).
 - **Two products in one launch, called fused** (19 Oct) [kernels]. kernels-dither-rtx2's h1f gate passed: one kernel
   a linear, everything bit-exact. But that kernel computed step s's plain z and step s−1's noised receipts, so the
   credited work was still beside the served product; #2684 credited it, since it checks ops, not kernels. The lag came
@@ -134,6 +142,9 @@ Under each question, newest first; the lane that found or reported it is in brac
 
 ### 2. "Served", "end to end" or "measured" means a harness, a model or a label
 
+- **A live process taken as proof that a degrading service was healthy** (18 Oct) [console]. "store-panels is
+  active, not stopped … a legitimate active pass", while a refresh grew from about 1,300 s to 4,879 s and raced its
+  timeout. Fix: read the maintained index (3.8 s a pass); infra tells long calls from dead ones.
 - **"Native compiled vLLM" never cross-checked against vLLM's own entry point** (19 Oct) [kernels-maxtput]. The
   baseline is verity_vllm's offline wrapper; if it costs anything, every loss is against a slower baseline. Fix: one
   `vllm bench throughput` per card at the same settings.
@@ -216,6 +227,12 @@ Under each question, newest first; the lane that found or reported it is in brac
 
 ### 5. Numbers that don't compare
 
+- **"Same lease" read as the same conditions** (19 Oct) [kernels-abind2]. "so both arms see the same GPU within
+  minutes", on a node at load 340–580: the identical FP8 control ran 287.15 ms in one arm's window and 291.66 in the
+  other's, so a bare prefill wall delta mixed in drift. Fix: cite paired or kernel-time deltas, with each arm's control
+  printed beside its wall.
+- **One cycle read as interleaved** (19 Oct) [kernels-maxtput]. "interleaved with stock" for Llama rows that ran
+  one cycle; the RTX per-layer cost varied 2.2–4.1% between cycles. Fix: two cycles before citing a per-layer cost.
 - **"Negligible at a 1% budget", at a draw cost about 10⁴ times too low** (19 Oct) [proofs]. "q = s/(r + rho/w)
   = 6.1e-11" priced batched throughput against one-unit statements and left out serve-time commitments, which are 6–159
   times the budget. Fix: the register corrected (q about 1e-14), and training reissued.
@@ -223,10 +240,11 @@ Under each question, newest first; the lane that found or reported it is in brac
   but circuit-check is deferred and never gated landing. Fix: report time to land separately from slot time.
 - **Losses quoted against a baseline that isn't native** (19 Oct) [kernels-maxtput]. The pinned B200 stock runs
   the build's FLASH_ATTN, 13.4% under native FlashInfer (per-layer −7.0% reads −19.5% against native), and the RTX
-  stock ran on the Commit's shrunk 58 GB KV pool. Fix: relabeled, and the table quotes true native.
+  stock ran on the Commit's shrunk 58 GB KV pool. Fix: every result carries native_loss_pct, and the plot's throughput panels show it (#2712).
 - **TTFT read as latency when it is queue wait** (19 Oct) [kernels-maxtput]. Under an all-at-once burst, TTFT
   (47–131 s) scales with the request count. Fix: labeled; latency needs paced arrivals.
-- **A plot that takes pin state per row and GPU, not per line** (19 Oct) [kernels-maxtput]. Fix: per line.
+- **A plot that averaged pinned and unpinned builds into one line** (19 Oct) [kernels-maxtput]. Fix: separate lines,
+  filled for pinned and hollow for unpinned (#2658).
 - **A decode metric that measured the whole run, "verified" against itself** (16 Oct) [benchmarks; caught by
   compute-accounting's W4]. "#2136: decode-only ratios match time per output token", but vLLM renames request ids, so
   every prompt token counted as decode, and the "match" compared one quantity with itself; the same renaming made
@@ -240,6 +258,15 @@ Under each question, newest first; the lane that found or reported it is in brac
   the Lean's numbers and premises.
 - **−5% quoted as the dedup's value** (19 Oct) [compute-accounting]. Kernels' row 2, "71.31 → 67.66 ms (−5.1%)", came from
   a harness with no circuit Commit; the dedup's value (about 40 ms a step) shows only on the full path. Fix: labeled.
+- **A run's GPU read from its preset, not from the device** (19 Oct) [circuits]. Runs r20261019-022648-e1f5 and
+  r20261018-083421-b6d4 served H200 presets on a B200, and their measures read as H200 because the GPU came from
+  `preset.gpu_id`. Fix: `benchmarks/g2/curve.py` takes the device the harness saw, else the attempt's hardware, and a
+  compiled preset for another GPU doesn't count.
+- **A "best achievable" minimum over dropped iterations and what-if rows** (19 Oct) [circuits]. Labeling the hash
+  loop's runs onto G2's curve put its what-if row (r20261018-231625-fccf, cap66, ITL 1.21x) and a dropped iteration
+  (r20261019-012032-de65, per-layer TTFT 1.04x) into the minimum: the winner's curse. Fix: only the loop's line counts
+  (its row from the job's ROW, its verdict from the loop's results); the SHA-256 column takes only pinned runs on their
+  own GPU (unpinned r20261017-234343-c4c4 read 1.14x where pinned r20261018-094733-983c reads 2.76x).
 - **Quoted numbers from a retired scheme** (18 Oct) [kernels]. Two Pearl-C windows (3.097x, 1.630x) were the retired
   BLAKE3 -h2, and three overhead metrics disagreed. Fix: the scheme in every label; one metric against pinned stock.
 - **Published overheads no spec reproduces** [benchmarks]. "All five quoted overheads reproduced inside the rerun's 95%
@@ -257,6 +284,19 @@ Under each question, newest first; the lane that found or reported it is in brac
 
 ### 7. Checks that pass for the wrong reason, or can't fail
 
+- **A literal peel that served data breaks, and a prove that never exercised it** (19 Oct) [kernels-dither-hb,
+  kernels-dither-rtx2]. "z − b Bᵀ − A cᵀ − b cᵀ" was off on 433–1,024 of 1,024 cells, because vLLM's per-token quant puts
+  ±127 at each row's absmax, so X wraps where A = 127 and b = 1; the K = 64 prove's windows held no A = 127. Fix: the exact
+  peel adds +256·xa·(B + c)ᵀ (H1V3 #2776), and the served gates count xa entries per call.
+- **A screen whose PASS ignores its verifier** (19 Oct) [kernels-abind2]. "REJECT … the pass's salt coin opens
+  against the epoch's published coin commitment", then "h3 screen PASS": `ok` never reads verify_run. Fix (compute-
+  accounting): a coin commitment for the screen's captures and ACCEPT required, or no verify_run in the screen.
+- **"Passes every gate" over an empty set of verify passes** (19 Oct) [kernels-abind2]. all() over an empty
+  verify_pass was true, so no reference verifier ran on the A-BIND timing runs. Fix: e2e fails a retained run with no
+  verify pass (compute-accounting, 378e595769).
+- **"Complete state set" without the producer and consumer sharing the contract** (18 Oct) [console]. "Console
+  accepts its complete state set", until infra emitted states with an empty run id and real attention rows vanished.
+  Fix: shared test vectors before "complete" (c483c6a).
 - **A gate killed at its cap read as "never ran", and the train landed** (18 Oct) [ci]. "touched suites passed;
   it lands" after a gate run exited 143 at its 90-min cap. Fix: a capped gate reruns once, then holds the train
   (#2583).
@@ -303,6 +343,12 @@ Under each question, newest first; the lane that found or reported it is in brac
 
 ### 8. Theorems and bounds that say less than they read
 
+- **A premise false on one circuit, unmarked once it is true on another** (19 Oct) [lean]. `ActivationsIncompressible`
+  and `PartialSumsIncompressible` are false on a declared circuit and stand on a reference one (card 7d82eba8), but
+  `shape.conjectures` holds one status per constant, so they left it, and a new guarantee that applies them to a
+  declared circuit would pass `check` without the `falsified` category. Only their docstrings and the frozen reasons of
+  `UpdatedMatMul`, `UpdatedMatMulReads`, `Training` and `Actual.Runtime` say so. Fix: a reference-circuit form the
+  Lean can tell from a declared one (lean, not started).
 - **A recursion soundness statement only a SHA-512 collision could prove** (19 Oct) [proofs]. "Claim it, (d).
   Every change RT5 and RT9 named is applied", on `RecDeploy.KSBoundRoute` (#2546). Fix: REC1 restates it with staging
   and holder-agreement facts, then proves it.
@@ -352,6 +398,9 @@ Under each question, newest first; the lane that found or reported it is in brac
 
 ### 9. Deferred, or only marked, but stated as done
 
+- **A Preview-only dashboard called live, and every workstream called done** (18 Oct) [console]. "Command Center
+  v0 live-data join is ready" and "W1 done … W6 done", while Production still ran main. Fix: the result corrected to NOT
+  MET; "live" needs the Production route reading its real source, "done" names each done-condition's evidence.
 - **A post-landing regression that refused every deferred landing, silently** (17–19 Oct) [ci]. "research merge:
   after the landing, started post_train.py" read as if it ran; about a day of landings had no regression verdict. Fix:
   pass drive's landed attempt to post_train (CI-81).
@@ -369,6 +418,9 @@ Under each question, newest first; the lane that found or reported it is in brac
 
 ### 10. Relayed unread
 
+- **A modelled per-unit number relayed as shared noise's gain** (19 Oct) [kernels; compute-accounting's RT-ALGO-13].
+  "That models γ about 4.6 at decode" was kernels-dither-hb's per-unit iteration 2, not J10; J10-R halves decode noise
+  at best (612 → 322 compressions a unit). Fix: corrected in the thread and to Daniel.
 - **A grep relayed as "can't reproduce"** (19 Oct) [ci]. "I can't reproduce either on next's current tip"; vllm
   then found a real NameError. Fix: "reproduced" only from a test run, otherwise "not seen in the code".
 - **"main is stuck", read from a commit time** (17 Oct) [proofs]. "origin/main tip c1e1c28838 (committer 18 Oct

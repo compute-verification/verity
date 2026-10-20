@@ -105,6 +105,7 @@ research merge --mirror [SHA]                                           # main o
 research merge --canary [--tool check] [--json]                    # the gates' daily self-test, in scratch stores
 research queue status|sync|land|eject|drive|ready|open [--dry-run]  # the merge queue on `next` (queue.py)
 research queue judge RUN [--by LANE]      # the mark `queue ready --on` writes, from its quick-tier run that ended after its caller died
+research queue stats --log FILE [--hours 24] [--until T] [--json]  # where landed PRs' time went (queue_stats.py)
 research git old2new|remap|check|build ...                              # after a history rewrite (commitmap.py, below)
 research msg send|close|read|list|names|traffic|owners|handles|subscriptions|ask-daniel|groups sync [--dry-run]   # Slack (slack.py, below)
 ~~~
@@ -279,6 +280,8 @@ recorded first as a manual cancel (`CANCELLED_MANUAL`). 20 s later the runner SI
 `scope_end`; so does a stage timeout (`telemetry.scope`). Never SIGKILL the runner: one killed during
 its custody upload leaves the run without custody and its minted key on disk. `--exclusive` refuses if any run is live, and
 any launch refuses if an exclusive holder is live.
+Cancelling a run still in `disk-hold` or `cpu-hold` ends the hold; refused.json records fault `Withdrawn`
+(`research.withdraw`).
 
 The shipped tree is extracted with extraction mtimes (`tar -m`), not the commit time `git archive` stamps: a build dir shared
 across commits (Cargo's `/workspace/sp1-target`) judges freshness by mtime, and with commit times an older commit shipped after a

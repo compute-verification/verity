@@ -17,88 +17,8 @@
 #include "../../opcode_probe/probe.cuh"
 #include "../dc.cuh"
 #include "lanes.cuh"
-#include "../wgmma.cuh"
+#include "wg_common.cuh"
 #include "../ffill.cuh"
-
-constexpr int KB = 32;  // every form's K tile is 32 bytes of a row: s8/e4m3 k32, bf16 k16, tf32 k8
-constexpr int AROWS = 64, BROWS = 256;
-
-// Operand bytes: random codes valid for the type (mode 0), or zeros (mode 1).
-template <int TY>
-DC_DEV uint32_t operand_word(uint32_t i, int mode) {
-  if (mode == 1) return 0u;
-  const uint32_t x = dc_mix32(i * 0x9E3779B9u + 0x1234567u);
-  if constexpr (TY == 0) return x;                                   // s8/u8: every code
-  if constexpr (TY == 1) return x & 0x77777777u;                     // e4m3/e5m2: no NaN or inf code
-  if constexpr (TY == 2) return (x & 0x807F807Fu) | 0x3F003F00u;     // bf16 in ±[0.5, 1)
-  if constexpr (TY == 4) return (x & 0x83FF83FFu) | 0x38003800u;     // f16 in ±[0.5, 1)
-  return (x & 0x007FFFFFu) | 0x3F800000u;                            // tf32 in [1, 2)
-}
-
-struct Tiles {
-  uint64_t da, db;
-};
-// Fills A (64 rows) and B (256 rows) in the K-major layout; returns the descriptors. All threads call it.
-template <int TY>
-DC_DEV Tiles fill_tiles(unsigned char* sm, int mode) {
-  uint32_t* w = reinterpret_cast<uint32_t*>(sm);
-  for (uint32_t i = threadIdx.x; i < (AROWS + BROWS) * KB / 4; i += blockDim.x) w[i] = operand_word<TY>(i, mode);
-  fence_async_smem();
-  __syncthreads();
-  const uint32_t base = smem_u32(sm);
-  return {wgmma_desc(base, kmaj_lbo(), kmaj_sbo(KB)), wgmma_desc(base + AROWS * KB, kmaj_lbo(), kmaj_sbo(KB))};
-}
-
-#define FORM(NAME, ACC, NACC, TY)                                                                  \
-  struct F_##NAME {                                                                               \
-    using Acc = ACC;                                                                              \
-    static constexpr int NA = NACC, TYPE = TY;                                                    \
-    DC_DEV static void mma(Acc (&d)[NACC], const Tiles& t, int sd) { wgmma_##NAME(d, t.da, t.db, sd); } \
-  };
-FORM(s8_n8, int, 4, 0)
-FORM(s8_n16, int, 8, 0)
-FORM(s8_n32, int, 16, 0)
-FORM(s8_n64, int, 32, 0)
-FORM(s8_n128, int, 64, 0)
-FORM(s8_n192, int, 96, 0)
-FORM(s8_n256, int, 128, 0)
-FORM(u8s8_n256, int, 128, 0)
-FORM(e4m3_n128, float, 64, 1)
-FORM(e4m3_n256, float, 128, 1)
-FORM(e5m2_n256, float, 128, 1)
-FORM(f16_n256, float, 128, 4)
-FORM(bf16_n256, float, 128, 2)
-FORM(bf16_n128, float, 64, 2)
-FORM(tf32_n256, float, 128, 3)
-FORM(b1_n256, int, 128, 0)
-#undef FORM
-struct F_s8_n256_rs {  // A from registers: each thread's 4 words of the 64 x 32 A fragment
-  using Acc = int;
-  static constexpr int NA = 128, TYPE = 0;
-  DC_DEV static void mma(int (&d)[128], const Tiles& t, int sd) {
-    const uint32_t a[4] = {(uint32_t)t.da ^ threadIdx.x, (uint32_t)(t.da >> 32), (uint32_t)t.db, 0x01020304u};
-    wgmma_s8_n256_rs(d, a, t.db, sd);
-  }
-};
-
-template <class Acc, int N>
-DC_DEV uint32_t fold_acc(const Acc (&d)[N]) {
-  uint32_t x = 0;
-#pragma unroll
-  for (int i = 0; i < N; i++) x ^= *reinterpret_cast<const uint32_t*>(&d[i]);
-  return x;
-}
-
-// Four wgmma into one accumulator: the first overwrites, the rest accumulate.
-template <class F>
-DC_DEV void group4(typename F::Acc (&d)[F::NA], const Tiles& t) {
-  wgmma_fence();
-  F::mma(d, t, 0);
-  F::mma(d, t, 1);
-  F::mma(d, t, 1);
-  F::mma(d, t, 1);
-  wgmma_commit();
-}
 
 // ---- kernels ----------------------------------------------------------------------------------------------------------
 template <class F, int W>
@@ -140,18 +60,18 @@ DC_DEV void wg_spec(const OpArgs& a) {
 }
 
 // wg_spec exact on both sides: the two wgmma warpgroups fixed, each SMSP's lane warp running only while they do
-// (OP_UNTIL), so neither rate counts time at the barrier.
-template <int X, int R>
+// (OP_UNTIL), so neither rate counts time at the barrier. F: the wgmma form (a deeper kind's coupling).
+template <int X, int R, class F = F_s8_n256>
 DC_DEV void wg_until(const OpArgs& a) {
   __shared__ __align__(1024) unsigned char sm[(AROWS + BROWS) * KB];
-  const Tiles t = fill_tiles<0>(sm, a.mode);
+  const Tiles t = fill_tiles<F::TYPE>(sm, a.mode);
   const bool mma_role = threadIdx.x < 256;
-  int d[128] = {};
+  typename F::Acc d[F::NA] = {};
   Lane l(threadIdx.x);
   OP_BEGIN_STOP
   if (mma_role) {
     OP_LOOP(it) {
-      group4<F_s8_n256>(d, t);
+      group4<F>(d, t);
       wgmma_wait<1>();
     }
     wgmma_wait<0>();
@@ -165,15 +85,15 @@ DC_DEV void wg_until(const OpArgs& a) {
   OP_SINK((mma_role ? fold_acc(d) : l.fold()) ^ threadIdx.x)
 }
 
-template <int X, int R>
+template <int X, int R, class F = F_s8_n256>
 DC_DEV void wg_mix(const OpArgs& a) {
   __shared__ __align__(1024) unsigned char sm[(AROWS + BROWS) * KB];
-  const Tiles t = fill_tiles<0>(sm, a.mode);
-  int d[128] = {};
+  const Tiles t = fill_tiles<F::TYPE>(sm, a.mode);
+  typename F::Acc d[F::NA] = {};
   Lane l(threadIdx.x);
   OP_BEGIN
   OP_LOOP(it) {
-    group4<F_s8_n256>(d, t);
+    group4<F>(d, t);
     lane_ops<X, R>(l);
     wgmma_wait<0>();
   }
@@ -483,6 +403,20 @@ OP_KERNEL(wgU_mix, 384) { wg_until<L_MIX, 64>(a); }
 OP_KERNEL(wgU_imad, 384) { wg_until<L_IMAD, 64>(a); }
 OP_KERNEL(wgU_lop3, 384) { wg_until<L_LOP3, 64>(a); }
 OP_KERNEL(wgU_duo, 384) { wg_until<L_DUO, 48>(a); }
+OP_KERNEL(wgU_li, 384) { wg_until<L_LI, 64>(a); }
+OP_KERNEL(wgU_lif, 384) { wg_until<L_LIF, 64>(a); }
+OP_KERNEL(wgU_li_r512, 384) { wg_until<L_LI, 512>(a); }
+OP_KERNEL(wgU_mix_r512, 384) { wg_until<L_MIX, 512>(a); }
+OP_KERNEL(wgU_lop3_r256, 384) { wg_until<L_LOP3, 256>(a); }
+OP_KERNEL(wgU_lif_r256, 384) { wg_until<L_LIF, 256>(a); }
+OP_KERNEL(wgU_lif_r512, 384) { wg_until<L_LIF, 512>(a); }
+OP_KERNEL(wgUb1_lif_r256, 384) { wg_until<L_LIF, 256, F_b1_n256>(a); }
+OP_KERNEL(wgUb1_lif_r512, 384) { wg_until<L_LIF, 512, F_b1_n256>(a); }
+OP_KERNEL(wgUe4_lif_r512, 384) { wg_until<L_LIF, 512, F_e4m3_n256>(a); }
+OP_KERNEL(wgmixb1_mix_r256, 256) { wg_mix<L_MIX, 256, F_b1_n256>(a); }
+OP_KERNEL(wgmixb1_mix_r512, 256) { wg_mix<L_MIX, 512, F_b1_n256>(a); }
+OP_KERNEL(wgmixe4_mix_r256, 256) { wg_mix<L_MIX, 256, F_e4m3_n256>(a); }
+OP_KERNEL(wgmixe4_mix_r512, 256) { wg_mix<L_MIX, 512, F_e4m3_n256>(a); }
 OP_KERNEL(wgU_sync_k16, 384) { wg_sync_until<16>(a); }
 OP_KERNEL(wgU_sync_k32, 384) { wg_sync_until<32>(a); }
 OP_KERNEL(imma_s8_k32, 512) { imma_alone<32>(a); }
@@ -559,9 +493,28 @@ static const OpProbe PROBES[] = {
     P_UNTIL(wgU_imad, "IMAD=64"),
     P_UNTIL(wgU_lop3, "LOP3.LUT=64"),
     P_UNTIL(wgU_duo, "LOP3.LUT=16,IMAD=16"),
+    P_UNTIL(wgU_li, "LOP3.LUT=32,IMAD=32"),
+    P_UNTIL(wgU_lif, "LOP3.LUT=28,IMAD=28,FFMA=8"),
+    P_UNTIL(wgU_li_r512, "LOP3.LUT=256,IMAD=256"),
+    P_UNTIL(wgU_mix_r512, "I*ADD*=256,FFMA=256"),
+    P_UNTIL(wgU_lop3_r256, "LOP3.LUT=256"),
     P_UNTIL(wgU_sync_k16, "IMMA.16816.S8.S8=8"),
     P_UNTIL(wgU_sync_k32, "IMMA.16832.S8.S8=8"),
+    P_UNTIL(wgU_lif_r256, "LOP3.LUT=112,IMAD=112,FFMA=32"),
+    P_UNTIL(wgU_lif_r512, "LOP3.LUT=224,IMAD=224,FFMA=64"),
 #undef P_UNTIL
+#define P_UNTILF(NAME, WPAT, LPAT) \
+  {.name = #NAME, .kernel = (const void*)NAME, .tpb = 384, .expect = WPAT ";" LPAT, .warps = "8;4", .iters = 4096, .until = 2}
+    P_UNTILF(wgUb1_lif_r256, "BGMMA.64x256x256.AND.POPC*=4", "LOP3.LUT=112,IMAD=112,FFMA=32"),
+    P_UNTILF(wgUb1_lif_r512, "BGMMA.64x256x256.AND.POPC*=4", "LOP3.LUT=224,IMAD=224,FFMA=64"),
+    P_UNTILF(wgUe4_lif_r512, "QGMMA.64x256x32.F32.E4M3.E4M3*=4", "LOP3.LUT=224,IMAD=224,FFMA=64"),
+#undef P_UNTILF
+#define P_MIXF(NAME, WPAT, LPAT) {.name = #NAME, .kernel = (const void*)NAME, .tpb = 256, .expect = WPAT "," LPAT, .iters = 4096}
+    P_MIXF(wgmixb1_mix_r256, "BGMMA.64x256x256.AND.POPC*=4", "I*ADD*=128,FFMA=128"),
+    P_MIXF(wgmixb1_mix_r512, "BGMMA.64x256x256.AND.POPC*=4", "I*ADD*=256,FFMA=256"),
+    P_MIXF(wgmixe4_mix_r256, "QGMMA.64x256x32.F32.E4M3.E4M3*=4", "I*ADD*=128,FFMA=128"),
+    P_MIXF(wgmixe4_mix_r512, "QGMMA.64x256x32.F32.E4M3.E4M3*=4", "I*ADD*=256,FFMA=256"),
+#undef P_MIXF
 #undef WGI
     {.name = "wgbulk_cp", .kernel = (const void*)wgbulk_cp, .tpb = 384,
      .expect = "IGMMA.64x256x32.S8.S8*=4;UBLKCP*=8", .counted = "UBLKCP*", .warps = "8;1", .words = 1024,

@@ -58,7 +58,8 @@ What is shown, and how:
   or 3 instructions, while the same search finds the 2-instruction 2-bit one. With a chunk costing 2 extractions, its
   combine c and a shift, 3-bit chunks total about 30 + 11c, so they'd need c ≤ 2 to get under 63. This rules out
   only that family. It is no bound on all programs.
-- Not shown: any bound N ≥ 63, or N ≥ 4, over all programs.
+- Not shown: any bound N ≥ 63, or N ≥ 4, over all programs. `fold_xor_search.py` searches all programs of k
+  instructions on this menu (the forms `class_of` routes to IMAD and FFMA) for x ⊕ y ⊕ K, with every constant symbolic.
 
 Run: `python fold_xor.py [--mutations] [--verdict PATH]`. Stdlib, numpy, exact_kit, `facet_break.loads` (the class
 map) and the machine model. The device check is `fold_xor.sh` (fold_xor.cu on sm_100a), and

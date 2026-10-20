@@ -232,7 +232,7 @@ CHANGES = (
            saves=Q_ROPE + K_ROPE + V_STORE, kv=2_048, fmt=PROPOSED, kv_fmt=KV_FMT),
     Change("two-stage-block", "protocol", "two-stage sampling (decision 43) with a block per replay unit: serve commits the "
            "residual stream, the post-attention residual and KV; interiors only for drawn RUs, after the draw",
-           "proofs (RUs, service.TwoStage); Daniel (the rule and what the profile states)",
+           "proofs; Daniel (retired: ASK-25, 18 Oct, commits everything at serve time)",
            "every value committed: an undrawn RU's interiors never are; the profile is over RUs, each charged at its "
            "class's largest", saves=TODAY_BYTES - RU_BLOCK, logits=True),
     Change("two-stage-layer", "protocol", "two-stage sampling with a decoder layer per replay unit: serve commits the residual "

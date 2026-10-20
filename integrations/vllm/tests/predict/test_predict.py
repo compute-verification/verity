@@ -142,12 +142,14 @@ def test_dsa_launch_batch_equals_the_traced_build(wrapper, shape, digest, tmp_pa
     (GLM53_S8, "step", {"M": 8, "pos0": 8},
      "a26c43faa02a1efcdfdbf6ed346afaf2d6552bea975592369da898827fe34399d1c4a4e2ea87cf3806f292204d8c805c0481c4ef948d1d7aad5cadf51df96e01"),
     (GLM53_S8, "request", {"LP": 25, "T": 6},
-     "187d76b491f1dcc9ecdeb87d1e807721ab910d353c2875d2b467a2f43be0af9fd977ab42313d13e1568b115ad1ed7e6fca1b4c66175e70c1bc4afee5e956c35c"),
+     "b632583a7461789d2ceec592e052a45743406dfa29427a640779ef6aab1410573f65ae6073ff810d63e016e70ba4efaf1609220d21195becd2dc21add70fdf62"),
 ])
 def test_dsa_stochastic_equals_the_traced_build(row, wrapper, shape, digest, tmp_path):
-    """GLM-5.3's seeded top-p rows (t0.8 p0.95) at rank 0, as the Build traced them in r20261017-224230-de2d: the B1 step at the single
-    request's constant split count, and the B8 step and second request (under its launch batch) over the derived `splits` Input,
-    the select after the vocabulary's all-gather."""
+    """GLM-5.3's seeded top-p rows (t0.8 p0.95) at rank 0, as the Build traced them: the B1 step at the single request's constant split
+    count (r20261017-224230-de2d), and the B8 step and second request (r20261018-105843-33c0) over the derived `splits` Input, the
+    select after the vocabulary's all-gather.  The second request's launch batch is its realized arrival
+    (`engine.arrivals.realized_arrive_steps`): the first request ends at forward 1, so the idle engine prefills it alone at forward 2
+    and it decodes alone, not beside the step-13 prefills its declared arrive_step 9 would put it with."""
     r = build_program(_row_phi(row, "GLM53", tmp_path), wrapper, **shape)
     assert r.digest == digest
 
@@ -176,19 +178,17 @@ def test_the_execution_label_names_the_batch_invariance(tmp_path):
 
 
 @pytest.mark.slow
-@pytest.mark.parametrize("rank,digest", [
-    (0, "84c39fac2fc2018712751846d53b12b077c6ba8f22b53e95ca24f4c9f541d4724264893b6a8f8b29aa917a46305c740a330f6a9779fa25938c542cc9d2027beb"),
-    (7, "f7b56f581431ed6ff565dd7be13f7cf24d3d12156fbb1b7011188d194be552f82bc3c536cb694b4103e1b9f41a831946d460fe89a00163152e1bfd6cf2765dff"),
-])
-def test_mhc_rank_step_equals_the_traced_build(rank, digest, tmp_path):
+@pytest.mark.parametrize("rank", [0, 7])
+def test_mhc_rank_step_equals_the_record(rank, tmp_path):
     """DeepSeek-V4-Pro at TP8 on H200 (block FP8, MXFP4 experts, cc 9.0): the first and last rank's step through the hyper-connected
-    decoder (`predict.dsv4`) is the Program the Build traced at 98c10539e (`records.json` has no row for it yet): the mHC pre and
-    post-pre between sublayers, the compressed-attention decode over each layer's opened window, the table and sqrtsoftplus routers,
-    the Marlin experts over the schedule's align keys.  About 25 s a rank, nearly all of it encoding the mHC Definitions' bodies for
-    the digest; no cheaper test reaches this decoder, and the ranks between differ only in the peer order GLM-5.3's ranks pin."""
+    decoder (`predict.dsv4`) is the rank's step Program `records.json` pins for the switched row (its traced Build art:826e06ff):
+    the mHC pre and post-pre between sublayers, the compressed-attention decode over each layer's opened window, the table and
+    sqrtsoftplus routers, the Marlin experts over the schedule's align keys.  About 25 s a rank, nearly all of it encoding the mHC
+    Definitions' bodies for the digest; no cheaper test reaches this decoder, and the ranks between differ only in the peer order
+    GLM-5.3's ranks pin."""
     r = build_program(_row_phi(DSV4, "DSV4_PRO", tmp_path, rank), "step", M=1, pos0=8)
     assert r.function.startswith("Derived[vLLMStep[DeepseekV4ForCausalLM]]_v1")
-    assert r.digest == digest
+    assert r.digest == json.loads((MANIFESTS / "records.json").read_text())["rows"][DSV4]["programs"][str(rank)]["step"]
 
 
 def test_mhc_refuses_outside_its_domain(tmp_path):

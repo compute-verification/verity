@@ -7,8 +7,9 @@ import Models.Accounting.Assumptions.TS
 Seven physical assumptions (note:20261017T1818Z-draft-axioms §2), each a `Prop` taken as a hypothesis, never an
 `axiom`, and each a vendor statement (decision 96: data-sheet constants, no GPU self-attestation). Each docstring opens
 with its claim id (`verity.core.claims`) and names its document. A1–A5 are claimed for a run of the stated device
-against its sheet (`Accounting.TS.Sheet`). A6 and A7 are claimed for a cheater's labelled run (`Anatomy`) at §0.4's
-and §1.3's labelling, as `Models.Accounting.Assumptions.TS`'s are.
+against its sheet (`Accounting.TS.Sheet`), the node's devices the stated ones by `accounting-declared-device` (`Run`'s
+section, below). A6 and A7 are claimed for a cheater's labelled run (`Anatomy`) at §0.4's and §1.3's labelling, as
+`Models.Accounting.Assumptions.TS`'s are.
 
 What they give (`Models.Accounting.Guarantees.Sheet`): A1–A5 give (I1) `FacetCeilings` on the data-sheet machine; A6
 gives (I2)/(I4) `WordsWritten` and, with the labelling's split, (I3) `ScalarRoute` at `q, q_T ≤ ½`, `b_T ≤ 0`; A7 is
@@ -23,18 +24,32 @@ open Accounting.TS
 
 section Run
 
+/-! A1–A5 are claimed for a run of the stated device, and which device a run is on is the auditor's to know, not the
+run's: `accounting-declared-device` (ASK-74 = A), per node and per window, says every GPU on the node is declared, each
+is the declared board and vBIOS, and no SM clock exceeds `fmax`, the top of that vBIOS's clock table. A1's clock rests
+on it: nothing checks a clock, an offset or a lock at run time but the prover's own driver. -/
+
 variable {K P : Type} [Fintype K] [DecidableEq P]
 
-/-- `accounting-sheet-clock` (data sheet). **A1 CLOCK**: the run's SM clock is positive and at most `fmax`, the data
-sheet's maximum boost clock (the B200's sheet gives none: its driver's reported maximum). A clock offset applied at run
-time is a configuration, checked at run time, and outside this statement. -/
+/-- `accounting-sheet-clock` (assumed; `fmax` from each device's source). **A1 CLOCK**: the run's SM clock is positive
+and at most `fmax`. sm_120's 2430 MHz is the maximum SM clock its driver reports (nvidia-smi on the RTX PRO 6000
+Server Edition, SPEC's P1), not a data sheet's, and the same die boosts to 2617 MHz as the Workstation Edition; the
+B200's sheet gives none either, so its `fmax` is its driver's reported maximum too. A driver's report is the device's
+own, which decision 96 doesn't take as a source, so A1 is assumed there. So is the absence of a clock offset: nothing
+checks it at run time, and the clock is the prover's configuration. Our nodes' driver allows none (NVML's allowed
+offset range `[0, 0]`, r20261019-121222-faa3), but a prover picks its own VBIOS and driver (RT2-LOGIC-7). -/
 def SheetClock (S : Sheet K P) (Q : Run K) : Prop := 0 < Q.clock ∧ Q.clock ≤ S.fmax
 
 /-- `accounting-sheet-dispatch` (architecture whitepapers; A2u in no vendor document). **A2 DISPATCH**: an SMSP issues
 at most one warp instruction a cycle, whatever its pipe, so the run's warp instructions per SMSP are at most its cycles
 per SMSP (whitepapers Volta through Blackwell: four partitions an SM, each with one warp scheduler and one dispatch
 unit). **A2u**: the classes `K` include the uniform-datapath instructions, each taking an issue slot; no vendor
-document states it (decision 84's issue ceiling). -/
+document states it (decision 84's issue ceiling). **Catch-all**: every warp instruction takes at least one issue slot,
+whether or not its class is listed, so `K` counts every warp instruction the run issues, one no other class names in
+the device's catch-all class, priced at its issue slot alone (sm_120's `NOROW`, the exporter's `CATCH_ALL`). sm_120's
+is a vector class, so A6 reads such an instruction as a lane head of at most two words a lane; one with a wider
+destination is assumed to be a memory access (`LDL.128`, `LD.128`), which heads no vector word. A device whose classes
+have none leaves an unlisted instruction free on every row (RT2-HOPPER-2, note:20261019T1140Z-draft-rt2-hopper). -/
 def SheetDispatch (Q : Run K) : Prop := ∑ k, Q.n k ≤ Q.cycles
 
 /-- `accounting-sheet-tensor` (data sheets and whitepapers). **A3 TENSOR**: the tensor cores do at most the sheet's

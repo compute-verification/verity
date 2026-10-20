@@ -197,11 +197,11 @@ def persist(result, events, d, reqs):
     return str(d)
 
 
-def component(req, d):
+def component(req, d, witness=None):
     """The request served alone to its CAP (the bounded request-wrapper component): a B=1 fold record stands in for derive_step."""
     full = dict(req, arrive=0, sampled=list(req["sampled"]) + [1] * (_cap(req) - len(req["sampled"])))
     evs = batched_log([full])
-    r = fold(evs, profile(), strict=True)
+    r = fold(evs, profile(witness=witness), strict=True)
     p = persist(r, evs, d, [full])
     json.dump({"structural_inputs": {"LP": len(req["prompt"]), "T": _cap(req) - 1}}, open(f"{p}/construction_manifest.json", "w"))
     return p
@@ -241,9 +241,9 @@ def profile_tgrouped(leak=False):
     return Profile("toy", pats, dict(C), toy.weight_field, False)
 
 
-def batched(reqs, d, leak=False, tgrouped=False, wl_sha=None):
+def batched(reqs, d, leak=False, tgrouped=False, wl_sha=None, witness=None):
     evs = batched_log(reqs, wl_sha)
-    r = fold(evs, profile_tgrouped(leak) if tgrouped else profile(leak), strict=True)
+    r = fold(evs, profile_tgrouped(leak) if tgrouped else profile(leak, witness), strict=True)
     assert r.report.unsupported == 0 and not r.errors
     return persist(r, evs, d, reqs)
 
@@ -360,19 +360,20 @@ def _sha(path):
 EOS = 11   # the fixture model's EOS id (R1_EOS stops on it); the Program declares it as its stop rule (F-pm-24)
 
 
-def assemble(reqs, tmp_path, leak=False, tgrouped=False, eos_token_ids=(EOS,), lag=0):
+def assemble(reqs, tmp_path, leak=False, tgrouped=False, eos_token_ids=(EOS,), lag=0, witness=None):
     """workload manifest + one bounded component per distinct shape + the batched record -> (global Program, oracle dir).  The record's
     RunHeader.workload.sha256 is the manifest's (the driver records the manifest it ran) [M-0570].  [R17-1] `lag` = the LAG the mock
     Program DECLARES (default 0: the toy engine schedules synchronously and its preamble attests async_scheduling False); None = a
-    pre-R17-1 Program that declares no lag."""
+    pre-R17-1 Program that declares no lag.  `witness`: the record's norms read the `schedule` witness (e2e.profile), the components'
+    their own."""
     tmp_path.mkdir(parents=True, exist_ok=True)
     wl = workload(reqs, tmp_path / "workload.json")
-    oracle = batched(reqs, tmp_path / "batched", leak, tgrouped, wl_sha=_sha(wl))
+    oracle = batched(reqs, tmp_path / "batched", leak, tgrouped, wl_sha=_sha(wl), witness=witness)
     comps = {}
     for r in reqs:
         sh = (len(r["prompt"]), _cap(r) - 1)
         if sh not in comps:
-            comps[sh] = component(r, tmp_path / f"comp_LP{sh[0]}_T{sh[1]}")
+            comps[sh] = component(r, tmp_path / f"comp_LP{sh[0]}_T{sh[1]}", witness=witness and "own")
     return gm.mock_global_program(wl, list(comps.values()), eos_token_ids=list(eos_token_ids) if eos_token_ids else None, lag=lag), oracle
 
 
@@ -477,6 +478,20 @@ def test_fast_path_passes_its_operations_and_rebinds_nothing(memory, tmp_path, m
         return [strip(v) for v in o] if isinstance(o, list) else o
     assert json.dumps(strip(fast), sort_keys=True, default=str) == json.dumps(strip(ref), sort_keys=True, default=str) \
         == json.dumps(strip(again), sort_keys=True, default=str)
+
+
+def test_witness_parameters_are_request_owned_globally(memory, tmp_path):
+    """A profile witness (the Marlin align's `schedule`, one parameter per request after the peers) is its request's input: G2 attributes
+    every instance, G5 finds the weights after the witnesses, and each request reads its own witness as its component's input of that
+    name; a request reading another's witness is a cross-request read."""
+    gp, oracle = assemble([R0, R1_LATE], tmp_path / "own", witness="own")
+    res = gm.check(gp, oracle)
+    assert res["verdict"] == "PASS", res["reasons"]
+    assert res["x09"]["verdict"] == "PASS" and _check(res, "G2")["unattributed"] == 0
+    gp, oracle = assemble([R0, R1_LATE], tmp_path / "borrow", witness="borrow")
+    res = gm.check(gp, oracle)
+    assert res["verdict"] == "FAIL" and _check(res, "G5")["status"] == "FAIL"
+    assert any("witness-param" in p for p in _check(res, "G5")["problems"]), _check(res, "G5")["problems"]
 
 
 def test_staggered_arrivals_pass_with_mixed_step_and_declared_chronology(memory, tmp_path):
