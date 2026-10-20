@@ -20,7 +20,8 @@ The indexer's per-token work (`deepseek_v32/attention.py`, `model_executor/layer
 5. The top-2048 selection: prefill `ops.top_k_per_row_prefill` (`topKPerRowPrefill<512, false>`, sampler.cu:846-878), decode
    `cooperative_topk` on H200 (num_rows <= 64, sparse_attn_indexer.py:615-642; else `persistent_topk`).  A row of at most 2048 keys
    takes each kernel's shortcut (sampler.cu:388-412, cooperative_topk.cuh:494-501): `DsaTopKShortRow_v1`.  A longer row is a radix
-   selection whose output order (ties included) the kernels leave to their atomics; no Definition here states it.
+   selection whose output order the kernels leave to their atomics: the order is a value and `dsa_topk.DsaTopKOrder` checks in
+   gates that it is a permutation of the top-2048 set under its tie rule (decode past 2048 keys, circuits' ruling of 18 Oct).
 
 The ue8m0 quantisation (`_fp8_ue8m0_quantize`, kernels.py:50-60), in the PTX of both Triton kernels:
 
@@ -59,6 +60,8 @@ Registered functions (`Name_v1` but where a version is written):
 dtype, rotary_embedding/base.py:59-63).  `ks` is the key's f32 scale from its cache slot.
 """
 from __future__ import annotations
+
+__models__ = ("zai-org/GLM-5.3",)
 
 import numpy as np
 
@@ -415,7 +418,7 @@ def DsaTopKShortRow(B, S, n):
     """The selection of a row of at most TOPK keys: slot i holds i when i < len, else -1 (signed; a length of 0 or less is all -1).
     Prefill (`topKPerRowPrefill`, sampler.cu:388-412) has len = rowEnd - rowStart and writes indices from the row's start; decode
     (`cooperative_topk`, cooperative_topk.cuh:494-501) clamps a negative length at 0.  A row of more than TOPK keys is the radix
-    selection, which this function does not state."""
+    selection, whose order is a value `dsa_topk.DsaTopKOrder` checks."""
     return Coll(Array(S.TOPK, I32), concat([w.refs for w in topk_short(word_ops(B), S.TOPK, n)]))
 
 

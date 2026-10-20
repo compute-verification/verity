@@ -40,7 +40,7 @@ from pathlib import Path
 from typing import Any
 
 from verity_vllm.config import option
-from verity_vllm.engine import engine_profile as prof
+from verity_vllm.engine import engine_profile as prof, env as engine_env
 
 prof.apply_env()
 
@@ -93,6 +93,8 @@ class Options:
     no_warmup: bool = option("--no-warmup", default=False, action="store_true")
     max_num_seqs: int = option("--max-num-seqs", type=int, default=8)
     verify_weights: bool = option("--verify-weights", default=False, action="store_true")
+    build_rank: list[str] = option("--build-rank", action="append", default=[],
+                                   help="rank r's Build dir, repeated in rank order: the post-load tensors it registered become the rank's roots")
     inventory_out: str | None = option("--inventory-out", default=None,
                                        help="every rank's live module inventory, before the warm-up -> PATH (`capture-map check --inventory`)")
     param_hashes: bool = option("--param-hashes", default=False, action="store_true",
@@ -112,12 +114,17 @@ def main(args: Options) -> None:
 
     from verity_vllm.pipeline.tp import lease as TPL
 
+    from verity_vllm.check.component_programs import post_load_tensors
+
+    if args.build_rank and len(args.build_rank) != args.tp:
+        raise SystemExit(f"--build-rank given {len(args.build_rank)} time(s) for a world of {args.tp}: one Build dir per rank, in rank order")
+    post_load = post_load_tensors(dict(enumerate(args.build_rank)))
     out = Path(args.out)
     out.mkdir(parents=True, exist_ok=True)
     wl = va.load_workload(args.workload, args.max_tokens)
     TPL.acquire()        # a leased row's Match leg: every GPU of the task from here to the exit (`row_tp.TpRow.match`); nothing reads the device before
     target = va.target_of_workload(wl)
-    target_env, target_kw = TT.apply(target)       # its env knobs before vLLM reads them; its engine args under the CLI's
+    target_env, target_kw = TT.apply(target, wl["execution"])       # its env knobs before vLLM reads them; its engine args under the CLI's
     case = va.case_of(wl, args.case)
     revision = args.adapter_revision
     if revision is None:
@@ -126,6 +133,7 @@ def main(args: Options) -> None:
         except Exception:  # noqa: BLE001
             revision = "unknown"
     env_flags = {**prof.apply_env(), **target_env}
+    engine_env.step_timeout(args.rpc_timeout)
     cp = prof.checkpoint_for(case, args.checkpoints)
     if args.verify_weights:
         prof.verify_local_weights(cp)
@@ -187,7 +195,7 @@ def main(args: Options) -> None:
             "env_flags": env_flags, "snapshot_steps": steps, "snapshot_max_bytes": args.snapshot_max_bytes, "adapter_revision": revision,
             "wheel_sha256": args.wheel_sha256, "vllm_commit": args.vllm_commit, "reenter": not args.no_reenter, "triton": not args.no_triton,
             "module_hooks": not args.no_module_hooks, "weights_verified": bool(args.verify_weights), "argv": sys.argv,
-            "target": target})
+            "target": target, "post_load_tensors": post_load})
         ranks_doc["install"] = inst
         print(f"[tp2] observer installed on {len(inst)} ranks: " + "; ".join(f"rank {r['rank']} pid {r['pid']} roots {r['roots']} pid={r['profile_id']}" for r in inst), flush=True)
         if args.param_hashes:

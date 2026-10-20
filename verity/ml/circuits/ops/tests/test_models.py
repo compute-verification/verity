@@ -21,7 +21,11 @@ from verity.ml.circuits.silicon.models import (
     ADA_E4M3_M16N8K32,
     ADA_E5M2_M16N8K32,
     AMPERE_BF16_M16N8K16,
+    BLACKWELL_SM100_E4M3,
+    BLACKWELL_SM100_E5M2,
     BLACKWELL_SM120_E2M1_M16N8K32,
+    BLACKWELL_SM120_E4M3_M16N8K32,
+    BLACKWELL_SM120_E5M2_M16N8K32,
     BLACKWELL_SM120_MXF4,
     BLACKWELL_SM120_MXF4_UNDERFLOW_SIGNED,
     BLACKWELL_SM120_NVF4,
@@ -42,6 +46,7 @@ from verity.ml.circuits.silicon.term import Term, e2m1_product, e5m2_product
 ROOT = next(p for p in Path(__file__).resolve().parents if (p / "uv.lock").exists())
 VECTORS = ROOT / "verity" / "ml" / "circuits" / "silicon" / "captures" / "autoproof-probe-vectors.json"
 K32_E2M1_CAPTURE = Path(__file__).parent / "fixtures" / "tc-sm120-k32-e2m1-2026-09-30" / "records.json"
+SM100_F8_CAPTURE = Path(__file__).parent / "fixtures" / "tc-sm100-f8-2026-10-19" / "records.json"
 
 
 def _f32(word: int) -> float:
@@ -244,6 +249,46 @@ def test_sm120_k32_e2m1_is_a_group_sum_on_the_rtx_pro_6000(vectors: dict) -> Non
     # block-scaled adder alike: they are consistent with this capture but do not discriminate.
     for c in vectors["fp4_unscaled_m16n8k32"]["cases"]:
         assert tc_dot_chain(m, 0, _nibbles(c["a"]), _nibbles(c["b"])) == int(c["d"], 16), c
+
+
+@pytest.mark.parametrize("kind,model", [("f8_e4m3", BLACKWELL_SM100_E4M3), ("f8_e5m2", BLACKWELL_SM100_E5M2)])
+def test_sm100_tcgen05_fp8_is_sm120s_group_sum_on_the_b200(kind: str, model: GroupSum) -> None:
+    """The B200's captured tcgen05.mma kind::f8f6f4 words (K = 32..256 chains included) are this GroupSum's; the selection
+    refutes every other width and grouping and both Hopper's and Ada's 14-bit FP8 adders."""
+    assert MODELS[model.name] is model
+    doc = json.loads(SM100_F8_CAPTURE.read_text())
+    records = doc["kinds"][kind]
+    alternatives = {
+        f"w{w}": GroupSum(name=f"t_w{w}", arch="sm_100", dtype=model.dtype, operand_bits=8, groups=(32,), width=w,
+                          zero_exponent=-133, validated="test only")
+        for w in (24, 25, 27, 28, 30)
+    }
+    alternatives["two groups of 16"] = GroupSum(name="t_gs16x2", arch="sm_100", dtype=model.dtype, operand_bits=8,
+                                                groups=(16, 16), width=26, zero_exponent=-133, validated="test only")
+    alternatives["hopper"] = {"e4m3": HOPPER_E4M3_K32, "e5m2": HOPPER_E5M2_K32}[model.dtype]
+    alternatives["ada"] = {"e4m3": ADA_E4M3_M16N8K32, "e5m2": ADA_E5M2_M16N8K32}[model.dtype]
+    misses = dict.fromkeys(alternatives, 0)
+    for r in records:
+        c, a, b, d = int(r["c"], 16), list(bytes.fromhex(r["a"])), list(bytes.fromhex(r["b"])), int(r["d"], 16)
+        assert tc_dot_chain(model, c, a, b) == d, r
+        for name, alt in alternatives.items():
+            misses[name] += tc_dot_chain(alt, c, a, b) != d
+    assert len(records) >= 30 and all(misses.values()), misses
+
+
+def test_sm100_fp8_models_are_the_sm120_parameters_under_their_own_name() -> None:
+    """Lane B200-FP8's finding: the B200's tcgen05.mma kind::f8f6f4 computes the RTX PRO 6000's FP8 words.  The B200's model
+    objects are kept separate (named for the architecture they were measured on); this pins that their numerics are sm_120's
+    field by field."""
+    from dataclasses import fields
+
+    for sm100, sm120 in ((BLACKWELL_SM100_E4M3, BLACKWELL_SM120_E4M3_M16N8K32), (BLACKWELL_SM100_E5M2, BLACKWELL_SM120_E5M2_M16N8K32)):
+        assert type(sm100) is type(sm120)
+        for f in fields(sm100):
+            if f.name in ("name", "arch", "validated"):
+                continue
+            assert getattr(sm100, f.name) == getattr(sm120, f.name), f.name
+        assert sm100.arch == "sm_100" and sm120.arch == "sm_120"
 
 
 def test_single_window_w26_hypothesis_is_refuted_by_the_fixture(vectors: dict) -> None:

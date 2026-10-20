@@ -5,6 +5,9 @@
     ... PART...                                             only those parts (`tests`, `circuits`, `lean`: each job's `part` in
                                                             ci.toml) and what their jobs need, after the preflight; outside a
                                                             recorded run, since no gate takes part of a check
+    ... --deferred STEP,...                                 only those ci.toml jobs and what they need, after the preflight: the
+                                                            post-landing run drive launches on `main`'s tip (`train.sh
+                                                            --deferred`), recorded as `DEFERRED_KIND`, which no gate takes
     uv run python tools/verity/check/check.py --record [--on M]    the same through `research run --tool check` (on machine M, a
                                                             multi-core CPU pod): an Attempt of the clean commit checked out, the
                                                             record `research merge` reads; with the pinned upstream build and
@@ -27,6 +30,11 @@
                                                             windows), check line, and Lean audit slots and their waiters, read
                                                             over ssh by this tree's slot.py and lean_slot.py (`--status --json`);
                                                             then the machine --on auto would take; --json, the documents
+    uv run python tools/verity/check/check.py --plan [COMMIT] [--json] [--on MACHINE]
+                                                            each part's key at COMMIT (default HEAD) and whether a recorded
+                                                            pass under it is here or in a pack `gather_verdicts` would take;
+                                                            runs nothing (`plan.py`), read by `research merge --verdicts`;
+                                                            --on: planned on that check node, a short `research run`
     uv run python tools/verity/check/check.py --lean-deps-files    the `--send` for those URLs, for `research merge --train`
     python tools/verity/check/check.py --preflight                 the preflight alone, for `research merge --train --prepare`
     ... [--verdicts-in PACK]                                import the passes another machine stored (`verdicts.py`) before
@@ -81,7 +89,9 @@ doesn't name:
                     cached under $FLOCK_CHECKOUT), so a merge that breaks the Rust build ends the run in minutes; then
                     `circuit-check --all --jobs` the other half, whose workers start only while their measured peaks
                     (`circuit_check/heavy.json`) fit the memory the run has, at most its check slot's mem= (`--mem-gb`, from
-                    slot.py's CHECK_SLOT_MEM_GB) less `SIBLINGS_GB` when pytest or Lean runs beside it: every registered Definition and template
+                    slot.py's CHECK_SLOT_MEM_GB) less `SIBLINGS_GB` when pytest or Lean runs beside it, less pytest's share
+                    alone when no Lean step does (`cc_mem_gb`), and all of it once every step beside it has ended
+                    (`grant_when_alone`): every registered Definition and template
                     (`tools/verity/circuit_check`),
                     its report beside the run's result; then flock-rust-tests, `check_build.sh test` on that checkout:
                     `cargo test --release` of flock-live's unit tests and of the five upstream crates the patches change
@@ -126,10 +136,15 @@ Caches (``$CHECK_CACHE``, default ``~/.cache/verity-check``; ``--no-cache`` for 
     flock-rust-tests  likewise (`rust_tests_key`: the script, which pins the Flock commit and the Rust toolchain, the patches,
                     the live crate, that toolchain's `rustc -vV`, the environment), so only a change to those pays for the Rust
                     tests
+    preflight-lints likewise (`lints_key`: the commit's tree, which they read whole, the interpreter, the environment); a tree
+                    with uncommitted changes has no key, and runs them
 
 Inside a recorded run it writes `$RESEARCH_RUN_DIR/result.json` (kind `check/v1`): each step's status, seconds and cache use,
 with each step's log beside it, and `verdicts.tar.gz`: the passes this run stored, which another machine imports with
-`--verdicts-in`.  `--record` without `--no-cache` sends one pack of the newest recorded checks' packs, failed and cancelled
+`--verdicts-in`, written again as each step ends, every few minutes and on SIGTERM (`Packs`), so a cancelled check's pack holds
+what its steps had passed.  `--record` declares it an output, so custody uploads it however the run ends: a cancel's SIGKILL
+leaves no result.json, and the pack is then in the attempt's run record alone (`attempt_pack` reads either).  Custody misses it only
+where it uploads nothing: `--no-custody-r2` and a run without `--on`, and a run whose runner is killed or whose machine is lost.  `--record` without `--no-cache` sends one pack of the newest recorded checks' packs, failed and cancelled
 ones' too, since a pack holds only passes (`gather_verdicts`), with a
 `--verdicts-in` pack added to them, never in their place, so every machine reuses every pass a recorded check earned; the pack
 imported is named in the result's `verdicts`.
@@ -259,9 +274,12 @@ SLOT_WRAP = ["python3", "tools/verity/check/slot.py", "--"]
 
 def slot_wrap(priority: bool = False, twin: str | None = None) -> list[str]:
     """SLOT_WRAP naming who asked (RESEARCH_LANE, else RESEARCH_AGENT_URL), which `slot.py --status` on the machine shows, and
-    with --priority for the lander's train checks and --twin for one of a check's twins."""
+    with --priority for the lander's train checks, --rank from CHECK_SLOT_RANK (drive's train position, so the train that lands
+    next takes the next slot; CI-110) and --twin for one of a check's twins."""
     by = os.environ.get("RESEARCH_LANE") or os.environ.get("RESEARCH_AGENT_URL")
-    return [*SLOT_WRAP[:-1], *(["--priority"] if priority else []), *(["--by", by] if by else []),
+    rank = os.environ.get("CHECK_SLOT_RANK", "")
+    return [*SLOT_WRAP[:-1], *(["--priority"] if priority else []),
+            *(["--rank", rank] if priority and re.fullmatch(r"\d{1,6}", rank) else []), *(["--by", by] if by else []),
             *(["--twin", twin] if twin else []), SLOT_WRAP[-1]]
 
 
@@ -796,7 +814,9 @@ def record(argv: list[str]) -> int:
     (`gather_verdicts`) unless it is given a pack or --no-cache. A commit that can't land on REF as it is
     (`landable`) gets a warning and is checked anyway. `--on auto` or a list takes the machine `choose` picks, first of all, or
     launches `twins` there and on the others (one `research run` each, waited on together: 0 when one passed, the exit of the
-    one that ran otherwise, and slot.py's NOT_STARTED (75) when none ran, say with HOME unreachable: rerun it)."""
+    one that ran otherwise, and slot.py's NOT_STARTED (75) when none ran, say with HOME unreachable: rerun it).  With
+    `--deferred STEP,...` it is a `research run` without `--tool check` of those steps alone (no gate reads it), with the
+    gathered verdicts and no upstream build or Lean dependencies."""
     on = base = None
     agreement = priority = False
     rest = []
@@ -833,12 +853,15 @@ def record(argv: list[str]) -> int:
     spec.loader.exec_module(tool)
     combining = rest[:1] == ["--combine"]
     parts = None
-    if "--shard" in rest[:-1]:
-        try:
+    deferred = rest[rest.index("--deferred") + 1] if "--deferred" in rest[:-1] else None
+    try:
+        if "--shard" in rest[:-1]:
             parts = shard(rest[rest.index("--shard") + 1])["parts"]
-        except DECLARATION.DeclarationError as e:
-            print(f"check: {e}", file=sys.stderr)
-            return 2
+        elif deferred is not None:
+            parts = deferred_parts(deferred)
+    except DECLARATION.DeclarationError as e:
+        print(f"check: {e}", file=sys.stderr)
+        return 2
     if base is None:
         subprocess.run(["git", "fetch", "-q", "origin", "+refs/heads/main:refs/remotes/origin/main"], cwd=ROOT, capture_output=True)
         base = "origin/main"
@@ -852,7 +875,9 @@ def record(argv: list[str]) -> int:
     need = [s for s, rule in tool.CHECK.merge_requires.items() if rule_touches(rule, changed)] + ["lean-agreement"] * agreement
     if combining or parts is not None:                 # a shard gets what its own steps read; a combine runs none
         need = [s for s in need if parts is not None and s in parts]
-    cmd = [sys.executable, "-m", "research", "run", "--tool", "check", "--project", "verity", "--cwd", "source"]
+    # a post-landing run is no check of the commit: recorded without the tool, so `research merge` never reads it
+    cmd = [sys.executable, "-m", "research", "run", *(["--tool", "check"] if deferred is None else []), "--project", "verity",
+           "--cwd", "source", *(x for p in PACK_FILES for x in ("--declared-output", p))]
     env = dict(os.environ)
     if "lean-agreement" in need:
         from research.store.local import LocalStore
@@ -932,22 +957,7 @@ def gather_verdicts(d: Path, store=None, limit: int = GATHER, given: Path | None
         raise SystemExit(f"check: --verdicts-in {given}: refused ({why})")
     packs = [given] if given is not None else []
     try:
-        store = store or LocalStore()
-        if store.remote is not None:
-            store.refresh(attempts_only=True)
-        rows = store.index.sql("SELECT id FROM attempts WHERE tool = 'check' AND state IN ('done', 'failed', 'cancelled') ORDER BY julianday(start_utc) + COALESCE(wall_s, 0) / 86400.0 DESC LIMIT ?",
-                               (4 * limit,))
-        for (rid,) in rows:
-            art = ((store.get_attempt(rid) or {}).get("outputs") or {}).get("run_files")
-            if art and any(f["path"] == "verdicts.tar.gz" for f in store.listing(art)):
-                pack = store.fetch(art, d / "verdicts" / rid, paths=["verdicts.tar.gz"]) / "verdicts.tar.gz"
-                if why := VERDICTS.refusal(pack):
-                    print(f"check: verdicts: skipping {rid}'s pack, which import refuses ({why}); its verdicts are recomputed",
-                          flush=True)
-                    continue
-                packs.append(pack)
-                if len(packs) == limit + (given is not None):
-                    break
+        packs += [p for _, p in gathered_packs(d, store or LocalStore(), limit)]
     except Exception as e:  # noqa: BLE001  (no pack: the check reuses only this machine's passes and the one given)
         print(f"check: no verdicts gathered from the store ({type(e).__name__}: {e})", flush=True)
         del packs[given is not None:]
@@ -958,6 +968,42 @@ def gather_verdicts(d: Path, store=None, limit: int = GATHER, given: Path | None
     print(f"check: verdicts: {n} entries gathered from {len(packs) - (given is not None)} recorded checks"
           f"{' and the pack given' if given is not None else ''} ({', '.join(names)})", flush=True)
     return d / "verdicts-gathered.tar.gz"
+
+
+#: the packs a recorded check writes in its run dir, which `record` declares outputs: the passes its steps stored (`Packs`), and
+#: those it found before they ran (`Reused`)
+REUSED_PACK = "verdicts-reused.tar.xz"
+PACK_FILES = ("verdicts.tar.gz", REUSED_PACK)
+
+
+def attempt_pack(store, rid: str, d: Path, name: str = "verdicts.tar.gz") -> Path | None:
+    """The verdict pack the attempt ``rid`` published (``name`` among its run files, or in its run record when a SIGKILL left it
+    no result.json to list them), fetched under ``d``, or None."""
+    out = (store.get_attempt(rid) or {}).get("outputs") or {}
+    for art in dict.fromkeys(a for a in (out.get("run_files"), out.get("run_record")) if a):
+        if any(f["path"] == name for f in store.listing(art)):
+            return store.fetch(art, d / name.split(".", 1)[0] / rid, paths=[name]) / name
+    return None
+
+
+def gathered_packs(d: Path, store, limit: int = GATHER) -> list[tuple[str, Path]]:
+    """(attempt, pack) of the ``limit`` recorded checks that ended last and published a pack `combine` takes, newest first
+    (`gather_verdicts`); one it refuses is passed over by name.  The store's attempts are refreshed first when it has a remote."""
+    if store.remote is not None:
+        store.refresh(attempts_only=True)
+    rows = store.index.sql("SELECT id FROM attempts WHERE tool = 'check' AND state IN ('done', 'failed', 'cancelled') ORDER BY julianday(start_utc) + COALESCE(wall_s, 0) / 86400.0 DESC LIMIT ?",
+                           (4 * limit,))
+    packs = []
+    for (rid,) in rows:
+        if (pack := attempt_pack(store, rid, d)) is None:
+            continue
+        if why := VERDICTS.refusal(pack):
+            print(f"check: verdicts: skipping {rid}'s pack, which import refuses ({why}); its verdicts are recomputed", flush=True)
+            continue
+        packs.append((rid, pack))
+        if len(packs) == limit:
+            break
+    return packs
 
 
 def verdicts_in(pack: Path, run_dir: Path | None) -> dict:
@@ -982,10 +1028,32 @@ AFTER_LEAN = SUITES.AFTER_LEAN
 SIBLINGS_GB = 350
 
 
-def cc_mem_gb(slot_gb: int, beside: bool) -> int:
+def cc_mem_gb(slot_gb: int, beside: bool, lean: bool = True) -> int:
     """circuit-check's --mem-gb in a slot of ``slot_gb``: all of it alone (a shard without pytest or Lean), else what
-    `SIBLINGS_GB` leaves, but never under a quarter of the slot."""
-    return max(slot_gb - SIBLINGS_GB, slot_gb // 4) if beside else slot_gb
+    `SIBLINGS_GB` leaves, but never under a quarter of the slot; beside pytest without ``lean`` (a post-landing run of
+    circuit-check and pytest), what pytest's share of that (`tests_gb`, half, the other half lean-suites') leaves."""
+    if not beside:
+        return slot_gb
+    shared = max(slot_gb - SIBLINGS_GB, slot_gb // 4)
+    return shared if lean else slot_gb - (slot_gb - shared) // 2
+
+
+#: where circuit-check finds the memory it is granted once it runs alone in the slot (its ``--mem-gb-file``, `grant_when_alone`)
+CC_GRANT = "circuit-check.mem-gb"
+
+
+def slot_mem_gb() -> int | None:
+    return int(m) if (m := os.environ.get(SLOT.SLOT_MEM_ENV, "")).isdigit() else None
+
+
+def grant_when_alone(path: Path, beside: list[threading.Event], gb: int) -> None:
+    """Write ``gb`` (the slot's mem=) to ``path`` once every step beside circuit-check has ended: from then on it runs alone in
+    the slot, and the targets it has not started may take all of it (b103: pytest ended 83 minutes into its 125)."""
+    for e in beside:
+        e.wait()
+    tmp = path.with_name(path.name + ".tmp")
+    tmp.write_text(f"{gb}\n")
+    os.replace(tmp, path)
 
 
 def groups(out: Path, n: int, cache: bool = True, urls: Path | None = None,
@@ -999,11 +1067,12 @@ def groups(out: Path, n: int, cache: bool = True, urls: Path | None = None,
     if only is not None:
         names = {p.partition(":")[0] for p in only}
         a, b = (n if not names & {"flock-circuit-build", "circuit-check", "flock-rust-tests"} else a), (n if "pytest" not in names else b)
-    beside = only is None or any(x == "pytest" or x.startswith("lean") for x in names)
+    with_lean = only is None or any(x.startswith("lean") for x in names)
+    beside = with_lean or "pytest" in names
     suites = [py, str(ROOT / "tools" / "verity" / "check" / "suites.py")]
-    slot_gb = int(m) if (m := os.environ.get(SLOT.SLOT_MEM_ENV, "")).isdigit() else None
+    slot_gb = slot_mem_gb()
     with_cc = only is None or "circuit-check" in names
-    # pytest and lean-suites run at once, each with this share: what circuit-check leaves, halved
+    # pytest and lean-suites run at once, each with this share: what circuit-check beside them both leaves, halved
     tests_gb = None if slot_gb is None else (slot_gb - cc_mem_gb(slot_gb, beside) if with_cc else slot_gb) // 2
     tail = ["--jobs", str(a), *([] if cache else ["--fresh"]), *(["--mem-gb", str(tests_gb)] if tests_gb is not None else []),
             *(["--run", os.environ["RESEARCH_RUN_ID"]] if os.environ.get("RESEARCH_RUN_ID") else [])]
@@ -1016,7 +1085,8 @@ def groups(out: Path, n: int, cache: bool = True, urls: Path | None = None,
     pytest = [*suites, "--json", str(out / "suites.json"), "--logs", str(out / "suites"), *after_lean, *tail]
     cc = [py, "-m", "circuit_check", "--all", "-q", "--jobs", str(b), "--out", str(out / "circuit-check.json"),
           *(["--cache", str(cache_dir() / "circuit-check")] if cache else []),
-          *(["--mem-gb", str(cc_mem_gb(slot_gb, beside))] if slot_gb is not None else [])]
+          *(["--mem-gb", str(cc_mem_gb(slot_gb, beside, with_lean))] if slot_gb is not None else []),
+          *(["--mem-gb-file", str(out / CC_GRANT)] if slot_gb is not None and beside else [])]
     build = ["bash", str(ROOT / "verity" / "ml" / "flock" / "check_build.sh")]
     rust = ["env", f"CARGO_BUILD_JOBS={b}", f"RUST_TEST_THREADS={b}", *build, "test"]
     built = {"pytest": ("pytest", pytest, ROOT), "flock-circuit-build": ("flock-circuit-build", build, ROOT),
@@ -1052,6 +1122,15 @@ def steps(out: Path, n: int = 1) -> list[tuple[str, list[str] | str, Path]]:
 
 #: a shard's result kind, which the tool doesn't produce: no gate takes a shard alone, only a `--combine` check of its set
 SHARD_KIND = "check-shard/v1"
+#: a post-landing run's result kind (`--deferred`), which no gate takes: drive reads its steps and suites to revert a landing
+DEFERRED_KIND = "check-deferred/v1"
+
+
+def deferred_parts(steps: str) -> list[str]:
+    """`--deferred STEP,...`: every part an unsharded check covers that is one of those ci.toml jobs or a job they need or run
+    after (`declaration.needed`).  DeclarationError for a name no job has."""
+    chosen = DECLARATION.needed(JOBS, [s for s in steps.split(",") if s])
+    return [p for p in shard_parts() if p.partition(":")[0] in chosen]
 
 
 def shard(spec: str) -> dict:
@@ -1212,8 +1291,19 @@ def rust_tests_key(e: dict[str, str]) -> str | None:
     return h.hexdigest()
 
 
+def lints_key(e: dict[str, str]) -> str | None:
+    """What preflight-lints reads: the whole tree (`LINTS` read every file the repository holds), so the commit's tree, with the
+    interpreter, the platform and the environment.  None when the tree differs from its commit (untracked files included), or
+    git can't say."""
+    st = subprocess.run(["git", "status", "--porcelain", "--untracked-files=normal"], cwd=ROOT, capture_output=True, text=True)
+    tree = subprocess.run(["git", "rev-parse", "HEAD^{tree}"], cwd=ROOT, capture_output=True, text=True)
+    if st.returncode or st.stdout.strip() or tree.returncode:
+        return None
+    return hashlib.sha256(json.dumps([tree.stdout.strip(), list(LINTS), sys.version, platform.platform(), _env_key(e)]).encode()).hexdigest()
+
+
 #: the steps whose pass is kept under a key of everything they read, and reused while it holds
-STEP_KEYS = {"lean-agreement": agreement_key, "flock-rust-tests": rust_tests_key}
+STEP_KEYS = {"lean-agreement": agreement_key, "flock-rust-tests": rust_tests_key, "preflight-lints": lints_key}
 
 
 def agreement_closure(files: list[str]) -> list[str]:
@@ -1373,17 +1463,149 @@ HALTS_ON = {j.name: j.halts_on for j in JOBS if j.halts_on}
 AFTER = {j.name: j.after for j in JOBS if j.after}
 
 
-#: the signal that stopped this check (`_terminated`), and the runs' steps it stops
+#: the signal that stopped this check (`_terminated`), and the runs' steps it stops and the packs it has written now
 TERMINATED: list[str] = []
 _LIVE: "weakref.WeakSet[Steps]" = weakref.WeakSet()
+_PACKS: "weakref.WeakSet[Packs]" = weakref.WeakSet()
 
 
 def _terminated(signum: int, _frame) -> None:
-    """SIGTERM's handler: stop every run's steps from a thread of its own (one may hold their lock), so the run ends as stopped
-    and `main` still writes its result and its passes' pack."""
+    """SIGTERM's handler: write the run's pack now and stop every run's steps, each from a thread of its own (one may hold
+    their lock), so the run ends as stopped and `main` still writes its result and its passes' pack.  A cancel SIGKILLs what is
+    left 20 s after its SIGTERM (`research cancel`), which a step's own grace outlasts, so the pack written here is the one its
+    custody uploads."""
     TERMINATED.append(name := signal.Signals(signum).name)
+    for packs in list(_PACKS):
+        threading.Thread(target=packs.request, daemon=True).start()
     for steps in list(_LIVE):
         threading.Thread(target=steps.stop, args=(f"check got {name}", signal.SIGTERM), daemon=True).start()
+
+
+#: how often a run's pack is written again while its steps run, beside each step's end: pytest's suites store their passes one by
+#: one through a step of an hour, and a SIGTERM's write then reads only what they stored since
+PACK_EVERY_S = 300
+
+
+class Packs:
+    """A recorded run's verdict pack, `verdicts.tar.gz` in its run dir: what the run's steps stored (`verdicts.export` of what
+    changed since ``before``), written again by one thread of its own whenever a step ends, every `PACK_EVERY_S` and on
+    SIGTERM (`_terminated`), each time in place of the last (`os.replace`), so a check stopped at any moment leaves the passes it
+    had stored by then.  Custody uploads it whatever way the run ends: `record` declares it an output."""
+
+    def __init__(self, out: Path, before: dict[str, str]):
+        self.out, self.before = out, before
+        self.lock = threading.Lock()
+        self.want = threading.Event()
+        self.closed = False
+        self.written: dict[str, str] | None = None
+        self.entries = 0
+        self.thread = threading.Thread(target=self._loop, daemon=True, name="verdict-packs")
+        self.thread.start()
+        _PACKS.add(self)
+
+    def request(self) -> None:
+        self.want.set()
+
+    def _loop(self) -> None:
+        while not self.closed:
+            self.want.wait(PACK_EVERY_S)
+            self.want.clear()
+            if not self.closed:
+                self.write()
+
+    def write(self) -> int:
+        """Write the pack unless it holds what is new already; the number of entries it holds."""
+        with self.lock:
+            try:
+                new = VERDICTS.changed(self.before)
+                if {k: d for k, (d, _) in new.items()} != self.written:
+                    self.entries = VERDICTS.export(self.out, self.before, new)
+                    self.written = {k: d for k, (d, _) in new.items()}
+            except OSError as e:
+                print(f"check: verdicts: writing {self.out.name} failed ({type(e).__name__}: {e}); the last one written stands",
+                      flush=True)
+            return self.entries
+
+    def close(self) -> int:
+        """Stop the thread and write the pack a last time; the number of entries it holds."""
+        self.closed = True
+        self.want.set()
+        self.thread.join()
+        return self.write()
+
+
+#: the reused pack is left out above this, in bytes (custody's line for undeclared files; it is declared, but a pack this big would
+#: hold far more than one tree's passes)
+REUSED_CAP = 256 << 20
+#: the longest its plan may take, in seconds: the check's end waits for it (`Reused.close`), so a plan that hangs packs nothing
+REUSED_PLAN_S = 1200
+
+
+class Reused:
+    """The passes a recorded check reuses, packed as `REUSED_PACK` beside `verdicts.tar.gz` (which holds only those its steps
+    stored), so one recent check's two packs answer for every part it passed, each entry still naming the run that earned it.
+    They are what its plan of its own tree (`plan.py --own`: this run's caches, the gathered pack imported) finds passed, of the
+    entries here before its steps ran (``before``).  The plan runs once the twins are built (`run`'s `PREBUILD`, which no other
+    process may import while it compiles them), beside the steps; it runs again once circuit-check ends when it found no task
+    list to read circuit-check's targets from.  xz with a dictionary spanning many entries (`verdicts.XZ_FILTERS`): one tree's
+    circuit-check entries run past a GB, and pack to a few MB.  `gather_verdicts` never takes it; `plan.py` does, for a check
+    of the commit it plans and each `--from`."""
+
+    def __init__(self, run_dir: Path, before: dict[str, str]):
+        self.out, self.before = run_dir / REUSED_PACK, before
+        self.lock = threading.Lock()
+        self.circuit_unkeyed = self.circuit_ended = False
+        self.entries: int | None = None
+        self.threads: list[threading.Thread] = []
+
+    def start(self) -> None:
+        t = threading.Thread(target=self.write, daemon=True, name="reused-pack")
+        self.threads.append(t)
+        t.start()
+
+    def ended(self, rec: dict) -> None:
+        if rec["step"] == "circuit-check":
+            self.circuit_ended = True
+            if self.circuit_unkeyed:
+                self.start()
+
+    def plan(self) -> dict:
+        """`plan.py --tree ROOT --own` in a process of its own (it sets its environment as each step's), under this one's."""
+        with tempfile.TemporaryDirectory(prefix="check-reused-") as d:
+            r = subprocess.run([sys.executable, str(Path(__file__).resolve().parent / "plan.py"), "--tree", str(ROOT), "--own",
+                                "--out", str(Path(d) / "plan.json")], cwd=ROOT, capture_output=True, text=True,
+                               timeout=REUSED_PLAN_S)
+            try:
+                return json.loads((Path(d) / "plan.json").read_text())
+            except (OSError, ValueError):
+                raise RuntimeError(f"plan.py --own exited {r.returncode}: {(r.stderr or r.stdout).strip()[-300:]}") from None
+
+    def write(self) -> None:
+        with self.lock:
+            try:
+                late = self.circuit_ended
+                doc = self.plan()
+                self.circuit_unkeyed = any(p["part"] == "circuit-check" and p["state"] == "unkeyed" for p in doc["parts"])
+                if self.circuit_unkeyed and self.circuit_ended and not late:
+                    self.start()                     # circuit-check ended while this plan ran: its targets are keyed now
+                paths = {x for p in doc["parts"] for f in p.get("found") or [] if f.get("source") == "own"
+                         for x in f.get("paths") or [] if x in self.before}
+                n = VERDICTS.export_paths(self.out, paths, xz=True)
+                size = self.out.stat().st_size
+                if size > REUSED_CAP:
+                    self.out.unlink()
+                    print(f"check: verdicts: {REUSED_PACK} left out: {n} entries packed to {size >> 20} MiB, past {REUSED_CAP >> 20} MiB",
+                          flush=True)
+                    return
+                self.entries = n
+                print(f"check: verdicts: {n} entries this check reused -> {REUSED_PACK} ({size >> 10} KiB)", flush=True)
+            except Exception as e:  # noqa: BLE001  (no reused pack: the passes it reused are cited by their own runs' packs alone)
+                print(f"check: verdicts: no {REUSED_PACK} ({type(e).__name__}: {e})", flush=True)
+
+    def close(self) -> int | None:
+        while alive := [t for t in self.threads if t.is_alive()]:
+            alive[0].join()
+        return self.entries
 
 
 class Steps:
@@ -1391,8 +1613,8 @@ class Steps:
     and a step in `HALTS`, or one `HALTS_ON` marks `halts`, stops them even then), and each step's record appended to `STEPS_LOG`
     as it ends."""
 
-    def __init__(self, out: Path, keep_going: bool = False):
-        self.log, self.keep_going = out / STEPS_LOG, keep_going
+    def __init__(self, out: Path, keep_going: bool = False, packs: Packs | None = None, reused: Reused | None = None):
+        self.log, self.keep_going, self.packs, self.reused = out / STEPS_LOG, keep_going, packs, reused
         self.lock = threading.RLock()
         self.running: dict[str, subprocess.Popen] = {}
         self.stopped: set[str] = set()
@@ -1434,6 +1656,10 @@ class Steps:
             with open(self.log, "a") as f:
                 f.write(json.dumps(rec) + "\n")
             self.spans.step(rec)
+            if self.packs is not None:
+                self.packs.request()
+            if self.reused is not None:
+                self.reused.ended(rec)
             if rec["status"] == "failed" and not self.stopping and (not self.keep_going or rec["step"] in HALTS or rec.get("halts")):
                 self.halted = rec["step"]
                 self.stop(f"{rec['step']} failed")
@@ -1493,10 +1719,10 @@ PREBUILD = ("try:\n    from verity_vllm.program.kernels import twins\nexcept Imp
 
 
 def run(out: Path, n: int | None = None, cache: bool = True, keep_going: bool = False,
-        only: list[str] | None = None) -> tuple[bool, list[dict]]:
+        only: list[str] | None = None, packs: Packs | None = None, reused: Reused | None = None) -> tuple[bool, list[dict]]:
     n = n or cores()
     urls = take_lean_deps_urls(out)
-    steps = Steps(out, keep_going)
+    steps = Steps(out, keep_going, packs, reused)
 
     ended: dict[str, threading.Event] = {}
     status: dict[str, str] = {}
@@ -1525,10 +1751,20 @@ def run(out: Path, n: int | None = None, cache: bool = True, keep_going: bool = 
         results = [_step(name, argv, cwd, out, cache, steps) for name, argv, cwd in preflight()]
         if not steps.stopping and all(r["status"] == "passed" for r in results):
             subprocess.run([sys.executable, "-c", PREBUILD], cwd=ROOT, env=env(), capture_output=True)
+            if reused is not None:
+                reused.start()
             gs = groups(out, n, cache, urls) if only is None else groups(out, n, cache, urls, only)
             ended.update({name: threading.Event() for g in gs for name, _, _ in g})
+            beside = [ended[name] for g in gs if all(s[0] != "circuit-check" for s in g) for name, _, _ in g]
+            grant = None
+            (out / CC_GRANT).unlink(missing_ok=True)
+            if (gb := slot_mem_gb()) is not None and beside and len(beside) < len(ended):
+                grant = threading.Thread(target=grant_when_alone, args=(out / CC_GRANT, beside, gb), daemon=True)
+                grant.start()
             with ThreadPoolExecutor(max_workers=max(1, len(gs))) as ex:
                 results += [r for rs in ex.map(group, gs) for r in rs]
+            if grant is not None:
+                grant.join()
     finally:
         if urls and urls.name.startswith("lean-deps-urls-"):
             urls.unlink(missing_ok=True)
@@ -1608,24 +1844,27 @@ def reuse_lines(r: dict) -> list[str]:
 def write_result(run_dir: Path, ok: bool, done: list[dict], verdicts: dict | None = None, contradicted: list[dict] = (),
                  nondeterministic: list[dict] = (), shard: dict | None = None, stopped_by: str | None = None) -> None:
     """``result.json``: `check/v1`; for a shard (``shard``, from `shard`), `SHARD_KIND`, with the shard's plan, commit and
-    config (the tree of `tools/verity/check/` at HEAD) and each of its steps' parts (the plan's names that step ran).  A run
+    config (the tree of `tools/verity/check/` at HEAD) and each of its steps' parts (the plan's names that step ran); for a
+    post-landing run (`--deferred`), `DEFERRED_KIND`, the same under `deferred`.  A run
     ``stopped_by`` a signal is `not_run`: no verdict, so a job queue runs it again."""
     if shard is not None:
         done = [{**s, "parts": got} if (got := [p for p in shard["parts"] if p.partition(":")[0] == s["step"]]) else s
                 for s in done]
         shard = {**shard, "commit": _rev("HEAD"), "config": _rev("HEAD:tools/verity/check")}
-    doc = {"schema": "research/result/v0.1", "kind": SHARD_KIND if shard else "check/v1", "run_id": os.environ["RESEARCH_RUN_ID"],
+    deferred = bool(shard and shard.get("deferred"))
+    kind = DEFERRED_KIND if deferred else SHARD_KIND if shard else "check/v1"
+    doc = {"schema": "research/result/v0.1", "kind": kind, "run_id": os.environ["RESEARCH_RUN_ID"],
            "reuse": reuse(run_dir, done), "workload_fingerprint": {"steps": [s["step"] for s in done]},
            "validation": {"status": "not_run" if stopped_by else "passed" if ok else "failed", "checker": "tools/verity/check/check.py",
                           "detail": (f"stopped by {stopped_by}: " if stopped_by else "")
                                     + "; ".join(f"{s['step']} {s['status']}" for s in done)},
            "measurements": [{"name": f"{s['step']}_wall", "value": s["seconds"], "unit": "s"} for s in done],
            "steps": done, "artifacts": [p for p in ("suites.json", "suites-lean.json", "suites/", "circuit-check.json", "lean-audit/",
-                                                    "verdicts.tar.gz", STEPS_LOG, SPANS.SPANS_LOG,
+                                                    *PACK_FILES, STEPS_LOG, SPANS.SPANS_LOG,
                                                     *(s.get("log") for s in done), *agreement_verdicts(run_dir))
                                         if p and (run_dir / p).exists()]}
     if shard:
-        doc["shard"] = shard
+        doc["deferred" if deferred else "shard"] = shard
     if verdicts:
         doc["verdicts"] = verdicts
     if contradicted:
@@ -1659,6 +1898,8 @@ def main(argv: list[str]) -> int:
         return fixtures_only()
     if argv[:1] == ["--slots"]:
         return slots_view(argv[1:])
+    if argv[:1] == ["--plan"]:
+        return _load("plan").main(argv[1:], sys.modules[__name__])
     if "--record" in argv:
         if os.environ.get("RESEARCH_RUN_ID"):
             print("check: --record inside a recorded run", file=sys.stderr)
@@ -1687,8 +1928,22 @@ def main(argv: list[str]) -> int:
             return 2
         rest = rest[:i] + rest[i + 2:]
         print(f"check: shard {sharded['k']}/{sharded['n']}: {', '.join(sharded['parts'])}", flush=True)
+    deferred = None
+    if "--deferred" in rest and rest.index("--deferred") + 1 < len(rest):
+        i = rest.index("--deferred")
+        deferred, rest = rest[i + 1], rest[:i] + rest[i + 2:]
     picked = [a for a in rest if a in DECLARATION.PARTS]
     rest = [a for a in rest if a not in DECLARATION.PARTS]
+    if deferred is not None:
+        if sharded or picked:
+            print("check: --deferred runs the post-landing steps alone, without --shard or a part", file=sys.stderr)
+            return 2
+        try:
+            sharded = {"parts": deferred_parts(deferred), "deferred": deferred.split(",")}
+        except DECLARATION.DeclarationError as e:
+            print(f"check: {e}", file=sys.stderr)
+            return 2
+        print(f"check: deferred {deferred}: {', '.join(sorted({p.partition(':')[0] for p in sharded['parts']}))}", flush=True)
     if picked:
         if sharded or os.environ.get("RESEARCH_RUN_ID"):
             print("check: a check of parts runs outside a recorded run and without --shard: no gate takes part of a check",
@@ -1719,8 +1974,10 @@ def main(argv: list[str]) -> int:
     TERMINATED.clear()
     main_thread = threading.current_thread() is threading.main_thread()
     prior = signal.signal(signal.SIGTERM, _terminated) if main_thread else None
+    packs = Packs(run_dir / "verdicts.tar.gz", before) if before is not None else None
+    reused = Reused(run_dir, before) if before is not None else None
     try:
-        ok, done = run(out, n, cache, keep_going, sharded["parts"] if sharded else None)
+        ok, done = run(out, n, cache, keep_going, sharded["parts"] if sharded else None, packs, reused)
     finally:
         if main_thread:
             signal.signal(signal.SIGTERM, prior)
@@ -1735,8 +1992,10 @@ def main(argv: list[str]) -> int:
         print(f"check: NONDETERMINISTIC in {c['suite']}: {', '.join(c['nondeterministic'][:5])} passed and failed under one key: "
               "delete each (a flaky test is deleted, not rerun or fixed)", flush=True)
     if run_dir is not None:
-        if before is not None:
-            verdicts["out"] = {"file": "verdicts.tar.gz", "entries": VERDICTS.export(run_dir / "verdicts.tar.gz", before)}
+        if packs is not None:
+            verdicts["out"] = {"file": "verdicts.tar.gz", "entries": packs.close()}
+            if (got := reused.close()) is not None:
+                verdicts["reused"] = {"file": REUSED_PACK, "entries": got}
         write_result(run_dir, ok, done, verdicts, bad, flaky, sharded, stopped_by)
     print("\n".join(reuse_lines(reuse(out, done))), flush=True)
     if stopped_by:

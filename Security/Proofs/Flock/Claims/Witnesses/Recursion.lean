@@ -1,6 +1,8 @@
 import Proofs.Flock.Claims.Witnesses.Flock
 import Proofs.Flock.Claims.ZK.Rewind
+import Proofs.Flock.Claims.ZK.Indexed
 import Definitions.Claims.Recursion
+import Proofs.Flock.Claims.ZK.Indexed
 
 /-!
 # Refutation witnesses: the ZK-recursion compiler's claims
@@ -10,7 +12,9 @@ Each of the recursion's claims (`Definitions.Claims.Recursion`) fails at a toy r
 * `ksR`: the compiled verifier accepts after one round, nothing parses (so no statement has a witness, in either
   variant), there is no V* session, and the outer witnesses record no call. So `Pr[acc ∧ ¬R] = 1`, `B` and `Be` find
   nothing, and at an inner error of `1/8` (`accI`) the bound is `κ = 1/8`, with `λ = 1`. `KS_fails`, `KSPriv_fails`,
-  `Bits_fails`; over Flock (`Flock.ksD` inside, `κ_I < 1/4`), `KSFlock_fails` and `BitsFlock_fails`.
+  `Bits_fails`; over Flock (`Flock.ksD` inside, `κ_I < 1/4`), `KSFlock_fails` and `BitsFlock_fails`; at the
+  representation V* binds (`ksB`, `Flock.ksD` element-level, whose bound record has `Flock.ksD`'s `κ`, with `ksR` the
+  compiled record at every inner verifier), `KSBound_fails` and `KSPrivBound_fails`.
   `ScopeMatches_fails`: its scope is empty and its check takes everything.
 * `compR`: the compiled verifier rejects after one round, and every statement parses as `recStmt`, in scope, under an
   inner protocol whose relation and scope hold everywhere. `Complete_fails`: its reference prover fails at its
@@ -20,19 +24,21 @@ Each of the recursion's claims (`Definitions.Claims.Recursion`) fails at a toy r
   every coin, above the expected bound `N_I · (1 + m′·k) = 2`. The worst-case conjunct holds at every record (each
   wait reruns at most `K`); the expected one also needs a session's view to accept wherever the run does, which the
   record's `session` doesn't promise.
-* `zkR` (`zkPR` with a circuit commitment): the compiled verifier takes one round, and every statement parses, under
-  an inner protocol of no rounds (`zeroI`), with no staging rounds and no V* session, so `Sim` outputs the empty
-  transcript. `ZK_fails`, `ZKPriv_fails`: at a masked outer Flock, every outer simulator and every hiding level (all
-  masks hide up to `δ₁ = 1`), the quiet prover's one message is never simulated, at an error of `0`.
+* `zkZR` (`zkZPR` with a circuit commitment): the compiled verifier takes one round, and every statement parses,
+  under an inner protocol of no rounds (`zeroI`), with no staging rounds and no V* session, so `Sim` outputs the empty
+  transcript; its reference prover, `ksR`'s `silentP`, is the quiet prover on the masked record's one nonce and one
+  rest. `ZK_fails`, `ZKPriv_fails`: at a masked outer Flock, every record's outer simulators and every hiding level
+  (all masks hide up to `δ₁ = 1`), that prover's one message is never simulated, at an error of `0`. `zkSR` is
+  `zkZR` with a stop that never fires and no inner commit strings, where `SimStop` runs as `Sim` does:
+  `ZKStop_fails`, at `zkSR`'s own reference prover, the quiet one, as `ZK` fails.
 * `Inner.KS_fails`, `Inner.KSAbort_fails`: at `noI`, an inner protocol that accepts and whose relation is empty, with
   no abort.
 
-Two of the claims are still met by a trivial instance, because they read the honest prover as a parameter, not the
-record's reference prover `Deploy.P` that `Complete` reads:
-
-* `ZK_vacuous`, `ZKPriv_vacuous`: at `zvR`, a record of one inner round with a one-byte salt, a masked outer Flock,
-  every outer simulator and every hiding level, the prover that ignores its witness and sends `Sim`'s commit string to
-  the zero digest (`zeroP`) meets the claim at an error of `0` (`zkmalR_zeroP`).
+`ZK` and `ZKPriv` read the masked record's own reference prover (`ZkDeploy.prover`: `Deploy.P`, which `Complete`
+reads, on the record's tape) and its outer simulators (`ZkDeploy.SO`), so a prover that ignores its witness meets them
+only at a record whose own reference prover does: `ZK_zeroRecord`, `ZKPriv_zeroRecord`, at `zvZR`, a record of one
+inner round with a one-byte salt whose reference prover sends `Sim`'s commit string to the zero digest (`zeroP`), where
+every witness is in the relation (`accI`), at an error of `0` (`zkmalR_zeroP`).
 -/
 
 namespace Claims.Witness.Recursion
@@ -131,6 +137,56 @@ carries: `Sim`'s inner round. -/
 def zeroP (Coin : Type) : Prover ((Fin 1 → Fin 1 → UInt8) × Unit) :=
   ⟨fun _ _ ω => (zvR Coin none).zeroCommit (ω.1 0)⟩
 
+/-- The toy bound record of `KSBound` and `KSPrivBound`: `Flock.ksD` element-level, no commit string at any round, a
+last message that reads as nothing (`final`), and weight `0`. -/
+noncomputable def ksB (Coin : Type) : Bound Coin Unit Unit where
+  DE := Flock.ksD Coin
+  ans _ := []
+  join _ := []
+  nAt _ _ := 0
+  saltLen := 0
+  saltPrefix := []
+  mask _ _ := 0
+  rowIn r := r
+  final _ := none
+  weight _ := 0
+
+/-- `ksR` at an inner verifier `IV`: its inner view runs `IV` on no messages at the statement itself. -/
+def ksRV (Coin : Type) [Inhabited Coin] (IV : Verifier Coin) : Recursion.Deploy Coin :=
+  { ksR Coin with innerView := fun H x r _ => (run H (replay []) IV x () fun i => coinSeq r i.val).seen }
+
+/-- The toy compiled record of `KSBound` and `KSPrivBound` at each inner verifier (`ksRV`), its inner view running the
+verifier it is given. -/
+def ksRAt (Coin : Type) [Inhabited Coin] : RecAt Coin where
+  record := ksRV Coin
+  msgs _ _ := []
+  xI x := x
+  runs _ _ _ _ _ := rfl
+
+/-- The masked toy record of `ZK`: `zkR` with one nonce, one rest, the tape `()` and the outer simulators `SO`. -/
+def zkZR (Coin : Type) (SO : ℕ → Msg → ℕ → OSim) : Recursion.ZkDeploy Coin :=
+  { zkR Coin with Nonce := fun _ => Unit, Rest := fun _ => Unit, tapeOf := fun _ _ => (), SO := SO }
+
+/-- `zkPR` masked as `zkZR` is. -/
+def zkZPR (Coin : Type) (SO : ℕ → Msg → ℕ → OSim) : Recursion.ZkDeploy Coin :=
+  { zkPR Coin with Nonce := fun _ => Unit, Rest := fun _ => Unit, tapeOf := fun _ _ => (), SO := SO }
+
+/-- `zkZR` with a stop that never fires and no commit string at an inner round. -/
+def zkSR (Coin : Type) (SO : ℕ → Msg → ℕ → OSim) : Recursion.StopDeploy Coin :=
+  { zkZR Coin SO with nAt := fun _ _ => 0, innerMsg := fun _ _ _ => .ret [], stops := fun _ _ _ => false }
+
+/-- `zvR` at the circuit commitment `circ`, whose reference prover is `zeroP`, masked with the nonce `zeroP` reads, one
+rest and the outer simulators `SO`. -/
+def zvZR (Coin : Type) (circ : Option Msg) (SO : ℕ → Msg → ℕ → OSim) : Recursion.ZkDeploy Coin :=
+  { zvR Coin circ with
+    Tape := (Fin 1 → Fin 1 → UInt8) × Unit
+    tapeNonempty := inferInstance
+    P := fun _ => zeroP Coin
+    Nonce := fun _ => Fin 1 → Fin 1 → UInt8
+    Rest := fun _ => Unit
+    tapeOf := fun _ ω => ω
+    SO := SO }
+
 theorem recStmt_inScope : Recursion.InScope recStmt :=
   ⟨rfl, le_rfl, by decide, le_rfl, rfl, Or.inl ⟨rfl, rfl⟩, fun _ h => absurd h List.not_mem_nil⟩
 
@@ -178,6 +234,40 @@ theorem ksR_expectedCR {W : Type} {Ω : Type} [Fintype Ω] [Nonempty Ω] (H : Ms
   rw [ksR_be_pr]
   exact div_nonneg (Ex_nonneg fun _ => Nat.cast_nonneg _) (by positivity)
 
+omit [Fintype Coin] [Nonempty Coin] [Inhabited Coin] [DecidableEq Col] in
+/-- `ksR`'s setup makes no evaluation. -/
+theorem ksR_setupCalls (H : Msg → Msg) (xs : List Msg) : setupCalls H (ksR Coin) xs = [] := by
+  simp only [setupCalls, List.flatMap_eq_nil_iff, List.map_eq_nil_iff]
+  exact fun _ _ => rfl
+
+omit [DecidableEq Col] in
+/-- `Br` finds nothing at `ksR`: the outer witnesses record no call, and its setup makes no evaluation. -/
+theorem ksR_br_pr {W : Type} {Ω : Type} [Fintype Ω] [Nonempty Ω] (H : Msg → Msg) (I : Recursion.Inner Coin W)
+    (DO : Flock.Deploy Coin Col T) (decO : List (ℕ × Col) → List T) (P : Prover Ω) (x : Msg)
+    (hk : 0 < (ksR Coin).V.k x) : (Br H (ksR Coin) I DO decO P x hk).Pr H = 0 := by
+  unfold Finder.Pr
+  rw [Pr_congr fun s => iff_false_intro ?_]
+  · exact Pr_false
+  · rintro ⟨u, v, h, -⟩
+    simp only [Br, ksR_setupCalls, List.append_nil, findCollIn, reduceCtorEq] at h
+
+omit [DecidableEq Col] in
+theorem ksR_prBr {W : Type} {Ω : Type} [Fintype Ω] [Nonempty Ω] (H : Msg → Msg) (I : Recursion.Inner Coin W)
+    (DO : Flock.Deploy Coin Col T) (decO : List (ℕ × Col) → List T) (P : Prover Ω) (x : Msg) :
+    PrBr H (ksR Coin) I DO decO P x = 0 := by
+  unfold PrBr
+  split_ifs with hk
+  · exact ksR_br_pr H I DO decO P x hk
+  · rfl
+
+omit [DecidableEq Col] in
+theorem ksR_strictBirthday_br {W : Type} {Ω : Type} [Fintype Ω] [Nonempty Ω] (H : Msg → Msg)
+    (I : Recursion.Inner Coin W) (DO : Flock.Deploy Coin Col T) (decO : List (ℕ × Col) → List T) (P : Prover Ω)
+    (x : Msg) (hk : 0 < (ksR Coin).V.k x) : StrictBirthday H (Br H (ksR Coin) I DO decO P x hk) := by
+  intro q _
+  rw [ksR_br_pr]
+  positivity
+
 omit [DecidableEq Col] in
 theorem ksR_prBad {W : Type} (H : Msg → Msg) (R : Rel W) (E : Extractor Coin W (ksR Coin).V) (x : Msg)
     (hR : ∀ w, ¬ R x w) : PrBad H (ksR Coin).V R E x silentP = 1 :=
@@ -189,6 +279,87 @@ theorem ksR_prB (H : Msg → Msg) (x : Msg) : PrB H (ksR Coin).V silentP x = 0 :
 omit [Fintype Coin] [Nonempty Coin] [Inhabited Coin] [DecidableEq Col] in
 theorem ksR_κ {W : Type} (I : Recursion.Inner Coin W) (x : Msg) : Recursion.κ (ksR Coin) I x = I.κ [] := by
   have : IsEmpty (Fin ((ksR Coin).nS x)) := Fin.isEmpty'
+  unfold Recursion.κ
+  rw [Finset.univ_eq_empty, Finset.sum_empty, mul_zero, add_zero]
+  rfl
+
+/-! `ksRV`, `ksR` at an inner verifier, has `ksR`'s numbers: only its inner view differs. -/
+
+omit [Fintype Coin] [Nonempty Coin] [DecidableEq Col] in
+theorem ksRAt_record (IV : Verifier Coin) : (ksRAt Coin).record IV = ksRV Coin IV := rfl
+
+omit [Fintype Coin] [Nonempty Coin] [DecidableEq Col] in
+theorem ksRV_noR {W : Type} (IV : Verifier Coin) (I : Recursion.Inner Coin W) (x : Msg) (w : W) :
+    ¬ Recursion.R (ksRV Coin IV) I x w := by
+  rintro ⟨s, hs, -⟩
+  simp [ksRV, ksR] at hs
+
+omit [Fintype Coin] [Nonempty Coin] [DecidableEq Col] in
+theorem ksRV_noRPriv {W : Type} (IV : Verifier Coin) (I : Recursion.Inner Coin W) (x : Msg) (w : W) :
+    ¬ RPriv (ksRV Coin IV) I x w := by
+  rintro ⟨s, hs, -⟩
+  simp [ksRV, ksR] at hs
+
+omit [DecidableEq Col] in
+theorem ksRV_be_pr {W : Type} {Ω : Type} [Fintype Ω] [Nonempty Ω] (H : Msg → Msg) (IV : Verifier Coin)
+    (I : Recursion.Inner Coin W) (DO : Flock.Deploy Coin Col T) (decO : List (ℕ × Col) → List T) (P : Prover Ω)
+    (x : Msg) (hk : 0 < (ksRV Coin IV).V.k x) : (Be H (ksRV Coin IV) I DO decO P x hk).Pr H = 0 := by
+  unfold Finder.Pr
+  rw [Pr_congr fun s => iff_false_intro ?_]
+  · exact Pr_false
+  · rintro ⟨u, v, h, -⟩
+    simp only [Be, ksRV, ksR, List.append_nil, findColl, reduceCtorEq] at h
+
+omit [DecidableEq Col] in
+theorem ksRV_prBe {W : Type} {Ω : Type} [Fintype Ω] [Nonempty Ω] (H : Msg → Msg) (IV : Verifier Coin)
+    (I : Recursion.Inner Coin W) (DO : Flock.Deploy Coin Col T) (decO : List (ℕ × Col) → List T) (P : Prover Ω)
+    (x : Msg) : PrBe H (ksRV Coin IV) I DO decO P x = 0 := by
+  unfold PrBe
+  split_ifs with hk
+  · exact ksRV_be_pr H IV I DO decO P x hk
+  · rfl
+
+omit [Fintype Coin] [Nonempty Coin] [DecidableEq Col] in
+/-- `ksRV`'s setup makes no evaluation. -/
+theorem ksRV_setupCalls (H : Msg → Msg) (IV : Verifier Coin) (xs : List Msg) :
+    setupCalls H (ksRV Coin IV) xs = [] := by
+  simp only [setupCalls, List.flatMap_eq_nil_iff, List.map_eq_nil_iff]
+  exact fun _ _ => rfl
+
+omit [DecidableEq Col] in
+/-- `Br` finds nothing at `ksRV`: its setup makes no evaluation. -/
+theorem ksRV_br_pr {W : Type} {Ω : Type} [Fintype Ω] [Nonempty Ω] (H : Msg → Msg) (IV : Verifier Coin)
+    (I : Recursion.Inner Coin W) (DO : Flock.Deploy Coin Col T) (decO : List (ℕ × Col) → List T) (P : Prover Ω)
+    (x : Msg) (hk : 0 < (ksRV Coin IV).V.k x) : (Br H (ksRV Coin IV) I DO decO P x hk).Pr H = 0 := by
+  unfold Finder.Pr
+  rw [Pr_congr fun s => iff_false_intro ?_]
+  · exact Pr_false
+  · rintro ⟨u, v, h, -⟩
+    simp only [Br, ksRV_setupCalls, List.append_nil, findCollIn, reduceCtorEq] at h
+
+omit [DecidableEq Col] in
+theorem ksRV_prBr {W : Type} {Ω : Type} [Fintype Ω] [Nonempty Ω] (H : Msg → Msg) (IV : Verifier Coin)
+    (I : Recursion.Inner Coin W) (DO : Flock.Deploy Coin Col T) (decO : List (ℕ × Col) → List T) (P : Prover Ω)
+    (x : Msg) : PrBr H (ksRV Coin IV) I DO decO P x = 0 := by
+  unfold PrBr
+  split_ifs with hk
+  · exact ksRV_br_pr H IV I DO decO P x hk
+  · rfl
+
+omit [DecidableEq Col] in
+theorem ksRV_prBad {W : Type} (H : Msg → Msg) (IV : Verifier Coin) (R : Rel W)
+    (E : Extractor Coin W (ksRV Coin IV).V) (x : Msg) (hR : ∀ w, ¬ R x w) :
+    PrBad H (ksRV Coin IV).V R E x silentP = 1 :=
+  prBad_accV H R E x silentP hR
+
+omit [DecidableEq Col] in
+theorem ksRV_prB (H : Msg → Msg) (IV : Verifier Coin) (x : Msg) : PrB H (ksRV Coin IV).V silentP x = 0 :=
+  prB_accV H silentP x
+
+omit [Fintype Coin] [Nonempty Coin] [DecidableEq Col] in
+theorem ksRV_κ {W : Type} (IV : Verifier Coin) (I : Recursion.Inner Coin W) (x : Msg) :
+    Recursion.κ (ksRV Coin IV) I x = I.κ [] := by
+  have : IsEmpty (Fin ((ksRV Coin IV).nS x)) := Fin.isEmpty'
   unfold Recursion.κ
   rw [Finset.univ_eq_empty, Finset.sum_empty, mul_zero, add_zero]
   rfl
@@ -409,6 +580,24 @@ theorem sim_out_nil (D : Recursion.Deploy Coin) (hk : D.kS [] = 0) (hn : D.nS []
   rw [simOuter_zero SO [] _ [] _ c.2.2 hn]
   rfl
 
+/-- `SimStop` outputs the empty transcript where `Sim` does, at a stop that never fires. -/
+theorem simStop_out_nil (D : Recursion.StopDeploy Coin) (hk : D.kS [] = 0) (hn : D.nS [] = 0)
+    (hs : ∀ H' ms, D.stops H' [] ms = false) (SO : Msg → ℕ → OSim) {Θ : Type} (H' H : Msg → Msg) (Vs : VStar Θ)
+    (θ : Θ) (c : (SimStop D (zeroI Coin) SO H').C []) :
+    (SimStop D (zeroI Coin) SO H').out H Vs θ [] c = [] := by
+  have hh : ∀ n ms, D.halted H' n [] ms = false := fun n ms => by simp [StopDeploy.halted, hs]
+  unfold Simulator.out SimStop
+  simp only [zeroI, accI, simRounds, spBind, hk, hh, Nat.add_zero, Bool.false_eq_true, ↓reduceIte]
+  rw [simOuter_zero SO [] _ [] _ c.2.2 hn]
+  rfl
+
+theorem zkStop_εzk (D : Recursion.StopDeploy Coin) (hk : D.kS [] = 0) (hn : D.nS [] = 0)
+    (hz : ∀ i, D.nAt [] i = 0) (t : ℕ) (δ₁ : ℝ) : Recursion.εzkStop D (zeroI Coin) t δ₁ [] = 0 := by
+  have : IsEmpty (Fin (D.nS [])) := by rw [hn]; exact Fin.isEmpty'
+  unfold Recursion.εzkStop
+  rw [Finset.univ_eq_empty, Finset.sum_empty]
+  simp [zeroI, hk, hz]
+
 theorem zk_εzk (D : Recursion.Deploy Coin) (hk : D.kS [] = 0) (hn : D.nS [] = 0) (t : ℕ) (δ₁ : ℝ) :
     Recursion.εzk D (zeroI Coin) t δ₁ [] = 0 := by
   have : IsEmpty (Fin (D.nS [])) := by rw [hn]; exact Fin.isEmpty'
@@ -478,14 +667,14 @@ variable {Coin : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin]
 theorem KS_fails (H : Msg → Msg) : ¬ Recursion.KS H (ksR Coin) (accI Coin) (Flock.ksD Coin) := by
   intro h
   have h1 := h (fun _ => [()]) (Flock.listWithin_unit _ _ _) [] Unit silentP
-  rw [ksR_prBad H _ _ [] (ksR_noR _ []), ksR_prB, ksR_prBe, ksR_κ] at h1
+  rw [ksR_prBad H _ _ [] (ksR_noR _ []), ksR_prB, ksR_prBe, ksR_prBr, ksR_κ] at h1
   norm_num [accI] at h1
 
 /-- **The recursion's private `KS` fails** at `ksR`, `accI` and `Flock.ksD` outside. -/
 theorem KSPriv_fails (H : Msg → Msg) : ¬ KSPriv H (ksR Coin) (accI Coin) (Flock.ksD Coin) := by
   intro h
   have h1 := h (fun _ => [()]) (Flock.listWithin_unit _ _ _) [] Unit silentP
-  rw [ksR_prBad H _ _ [] (ksR_noRPriv _ []), ksR_prB, ksR_prBe, ksR_κ] at h1
+  rw [ksR_prBad H _ _ [] (ksR_noRPriv _ []), ksR_prB, ksR_prBe, ksR_prBr, ksR_κ] at h1
   norm_num [accI] at h1
 
 /-- **The recursion's `KS` over Flock fails** at `ksR`, `Flock.ksD` inside and outside. -/
@@ -493,7 +682,33 @@ theorem KSFlock_fails (H : Msg → Msg) : ¬ KSFlock H (ksR Coin) (Flock.ksD Coi
   intro h
   have h1 := h (fun _ => [()]) (Flock.listWithin_unit _ _ _) (fun _ => [()]) (Flock.listWithin_unit _ _ _) []
     Unit silentP
-  rw [ksR_prBad H _ _ [] (ksR_noR _ []), ksR_prB, ksR_prBe, ksR_κ] at h1
+  rw [ksR_prBad H _ _ [] (ksR_noR _ []), ksR_prB, ksR_prBe, ksR_prBr, ksR_κ] at h1
+  have := Flock.ksD_κ (Coin := Coin) []
+  simp only [mul_zero, Real.sqrt_zero, add_zero] at h1
+  change 1 ≤ Claims.Flock.κ (Flock.ksD Coin) [] at h1
+  linarith
+
+/-- **The recursion's `KS` at the representation V\* binds fails** at `ksRAt` (`ksR`, its inner view running the
+verifier it is given), `ksB` inside and `Flock.ksD` outside: the bound record's `κ` is `Flock.ksD`'s. -/
+theorem KSBound_fails (H : Msg → Msg) : ¬ KSBound H (ksRAt Coin) (ksB Coin) (Flock.ksD Coin) := by
+  intro h
+  have h1 := h (fun _ => [()]) (Flock.listWithin_unit _ _ _) (fun _ => [()]) (Flock.listWithin_unit _ _ _) []
+    Unit silentP
+  try beta_reduce at h1
+  rw [ksRAt_record, ksRV_prBad H _ _ _ [] (ksRV_noR _ _ []), ksRV_prB, ksRV_prBe, ksRV_prBr, ksRV_κ] at h1
+  have := Flock.ksD_κ (Coin := Coin) []
+  simp only [mul_zero, Real.sqrt_zero, add_zero] at h1
+  change 1 ≤ Claims.Flock.κ (Flock.ksD Coin) [] at h1
+  linarith
+
+/-- **The recursion's private `KS` at the representation V\* binds fails** at `ksRAt`, `ksB` inside and `Flock.ksD`
+outside. -/
+theorem KSPrivBound_fails (H : Msg → Msg) : ¬ KSPrivBound H (ksRAt Coin) (ksB Coin) (Flock.ksD Coin) := by
+  intro h
+  have h1 := h (fun _ => [()]) (Flock.listWithin_unit _ _ _) (fun _ => [()]) (Flock.listWithin_unit _ _ _) []
+    Unit silentP
+  try beta_reduce at h1
+  rw [ksRAt_record, ksRV_prBad H _ _ _ [] (ksRV_noRPriv _ _ []), ksRV_prB, ksRV_prBe, ksRV_prBr, ksRV_κ] at h1
   have := Flock.ksD_κ (Coin := Coin) []
   simp only [mul_zero, Real.sqrt_zero, add_zero] at h1
   change 1 ≤ Claims.Flock.κ (Flock.ksD Coin) [] at h1
@@ -511,12 +726,14 @@ theorem Bits_fails (H : Msg → Msg) : ¬ Recursion.Bits H (ksR Coin) (accI Coin
   bits_bound_fails H _ _ _ (ksR_noR _ []) (accI_lam_pos []) <|
     h (fun _ => [()]) (Flock.listWithin_unit _ _ _) [] Unit silentP 1 le_rfl (calls_silentP_accV H [])
       (strictBirthday_B_accV H silentP []) (ksR_expectedCR H _ _ _ silentP [])
+      (ksR_strictBirthday_br H _ _ _ silentP [])
 
 /-- **The recursion's `Bits` over Flock fails** at `ksR`, `Flock.ksD` inside and outside. -/
 theorem BitsFlock_fails (H : Msg → Msg) : ¬ BitsFlock H (ksR Coin) (Flock.ksD Coin) (Flock.ksD Coin) := fun h =>
   bits_bound_fails H _ _ _ (ksR_noR _ []) (ksD_lam_pos _ []) <|
     h (fun _ => [()]) (Flock.listWithin_unit _ _ _) (fun _ => [()]) (Flock.listWithin_unit _ _ _) [] Unit silentP 1
       le_rfl (calls_silentP_accV H []) (strictBirthday_B_accV H silentP []) (ksR_expectedCR H _ _ _ silentP [])
+      (ksR_strictBirthday_br H _ _ _ silentP [])
 
 /-- **The recursion's `Efficient` fails** at `effR`, `accI` and `Flock.ksD` outside: `E*` reruns `3` times on every
 coin, above the expected bound `N_I · (1 + m′·k) = 2`. -/
@@ -557,39 +774,57 @@ theorem Nontrivial_fails (H : Msg → Msg) : ¬ Recursion.Nontrivial H (compR Co
   fun h => Witness.Nontrivial_fails H h.1
 
 omit [Fintype Coin] [Nonempty Coin] [Inhabited Coin] in
-/-- **The recursion's `ZK` fails** at a masked outer Flock, at the quiet prover and every outer simulator, whatever
-hm96 hides: `zkR`'s compiled verifier takes a round that `Sim` doesn't simulate, as the inner protocol, the staging and
-the V* sessions take none, so the real transcript is never the simulated one, at an error of `0`. -/
-theorem ZK_fails {N Ω : Type} [Fintype N] [Nonempty N] [Fintype Ω] [Nonempty Ω] (H : Msg → Msg)
-    (SO : ℕ → Msg → ℕ → OSim) :
-    ¬ Recursion.ZK H (zkR Coin) (zeroI Coin) (zkO Coin) (fun _ => ZKMal.quietP N Ω []) SO := fun h =>
-  ZKMal.not_zkmalR_of_out H _ _ [] _ _ _ [] ⟨[]⟩ ⟨recStmt, rfl, rfl, trivial⟩ Nat.one_pos
+/-- **The recursion's `ZK` fails** at a masked outer Flock, at `zkZR`, whose reference prover is quiet, at every
+record's outer simulators, whatever hm96 hides: `zkR`'s compiled verifier takes a round that `Sim` doesn't simulate,
+as the inner protocol, the staging and the V* sessions take none, so the real transcript is never the simulated one,
+at an error of `0`. -/
+theorem ZK_fails (H : Msg → Msg) (SO : ℕ → Msg → ℕ → OSim) :
+    ¬ Recursion.ZK H (zkZR Coin SO) (zeroI Coin) (zkO Coin) := fun h =>
+  ZKMal.not_zkmalR_of_out (N := Unit) (Ω := Unit) H _ _ [] _ _ _ [] ⟨[]⟩ ⟨recStmt, rfl, rfl, trivial⟩ Nat.one_pos
     (by rw [zk_εzk _ rfl rfl]; norm_num) (fun c => by rw [sim_out_nil _ rfl rfl]; nofun)
-    (h.2 1 Nat.one_pos 1 (hm96Hiding_one _ _))
+    ((ZKMal.zkmalRx_const_of H _ (zkZR Coin SO).prover [] (fun _ _ => rfl) _ _ _ _).1
+      (h.2 1 Nat.one_pos 1 (hm96Hiding_one _ _)))
 
 omit [Fintype Coin] [Nonempty Coin] [Inhabited Coin] in
-/-- **The recursion's private `ZK` fails** at a masked outer Flock, at the quiet prover and every outer simulator,
-whatever hm96 hides, as `ZK` does, at `zkPR`. -/
-theorem ZKPriv_fails {N Ω : Type} [Fintype N] [Nonempty N] [Fintype Ω] [Nonempty Ω] (H : Msg → Msg)
-    (SO : ℕ → Msg → ℕ → OSim) :
-    ¬ ZKPriv H (zkPR Coin) (zeroI Coin) (zkO Coin) (fun _ => ZKMal.quietP N Ω []) SO := fun h =>
-  ZKMal.not_zkmalR_of_out H _ _ [] _ _ _ [] ⟨[]⟩ ⟨{ recStmt with circ := some [] }, rfl, rfl, trivial⟩
+/-- **The recursion's private `ZK` fails** at a masked outer Flock, at `zkZPR`, whose reference prover is quiet, at
+every record's outer simulators, whatever hm96 hides, as `ZK` does. -/
+theorem ZKPriv_fails (H : Msg → Msg) (SO : ℕ → Msg → ℕ → OSim) :
+    ¬ ZKPriv H (zkZPR Coin SO) (zeroI Coin) (zkO Coin) := fun h =>
+  ZKMal.not_zkmalR_of_out (N := Unit) (Ω := Unit) H _ _ [] _ _ _ [] ⟨[]⟩
+    ⟨{ recStmt with circ := some [] }, rfl, rfl, trivial⟩
     Nat.one_pos
     (by rw [zk_εzk _ rfl rfl]; norm_num) (fun c => by rw [sim_out_nil _ rfl rfl]; nofun)
-    (h.2 1 Nat.one_pos 1 (hm96Hiding_one _ _))
+    ((ZKMal.zkmalRx_const_of H _ (zkZPR Coin SO).prover [] (fun _ _ => rfl) _ _ _ _).1
+      (h.2 1 Nat.one_pos 1 (hm96Hiding_one _ _)))
 
 omit [Fintype Coin] [Nonempty Coin] [Inhabited Coin] in
-/-- **The recursion's `ZK` is met by a prover that ignores its witness**, at a masked outer Flock, every outer
-simulator and every hiding level (`zkmalR_zeroP`). -/
-theorem ZK_vacuous (H : Msg → Msg) (SO : ℕ → Msg → ℕ → OSim) :
-    Recursion.ZK H (zvR Coin none) (accI Coin) (zkO Coin) (fun _ => zeroP Coin) SO :=
-  ⟨rfl, fun t _ δ₁ _ => zkmalR_zeroP none _ H (SO t) t δ₁⟩
+/-- **The recursion's `ZK` with the prover's stop fails** at a masked outer Flock, at `zkSR`, whose stop never fires
+and whose own reference prover is quiet, at every record's outer simulators, whatever hm96 hides, as `ZK` does:
+`SimStop` runs as `Sim` does. -/
+theorem ZKStop_fails (H : Msg → Msg) (SO : ℕ → Msg → ℕ → OSim) :
+    ¬ ZKStop H (zkSR Coin SO) (zeroI Coin) (zkO Coin) := fun h =>
+  ZKMal.not_zkmalR_of_out (N := Unit) (Ω := Unit) H _ _ [] _ _ _ [] ⟨[]⟩ ⟨recStmt, rfl, rfl, trivial⟩ Nat.one_pos
+    (by rw [zkStop_εzk (zkSR Coin SO) rfl rfl fun _ => rfl]; norm_num)
+    (fun c => by rw [simStop_out_nil (zkSR Coin SO) rfl rfl (fun _ _ => rfl)]; nofun)
+    ((ZKMal.zkmalRx_const_of H _ (zkSR Coin SO).prover [] (fun _ _ => rfl) _ _ _ _).1
+      (h.2 1 Nat.one_pos 1 (hm96Hiding_one _ _)))
 
 omit [Fintype Coin] [Nonempty Coin] [Inhabited Coin] in
-/-- **The recursion's private `ZK` is met by a prover that ignores its witness**, as `ZK` is (`zkmalR_zeroP`). -/
-theorem ZKPriv_vacuous (H : Msg → Msg) (SO : ℕ → Msg → ℕ → OSim) :
-    ZKPriv H (zvR Coin (some [])) (accI Coin) (zkO Coin) (fun _ => zeroP Coin) SO :=
-  ⟨rfl, fun t _ δ₁ _ => zkmalR_zeroP (some []) _ H (SO t) t δ₁⟩
+/-- **The recursion's `ZK` holds at a record whose own reference prover ignores its witness**: at `zvZR`, where every
+witness is in the relation, at a masked outer Flock, every record's outer simulators and every hiding level
+(`zkmalR_zeroP`). -/
+theorem ZK_zeroRecord (H : Msg → Msg) (SO : ℕ → Msg → ℕ → OSim) :
+    Recursion.ZK H (zvZR Coin none SO) (accI Coin) (zkO Coin) :=
+  ⟨rfl, fun t _ δ₁ _ => (ZKMal.zkmalRx_const_of H _ (zvZR Coin none SO).prover [] (fun _ _ => rfl) _ _ _ _).2
+    (zkmalR_zeroP (Coin := Coin) none _ H (SO t) t δ₁)⟩
+
+omit [Fintype Coin] [Nonempty Coin] [Inhabited Coin] in
+/-- **The recursion's private `ZK` holds at a record whose own reference prover ignores its witness**, as `ZK` does
+(`zkmalR_zeroP`). -/
+theorem ZKPriv_zeroRecord (H : Msg → Msg) (SO : ℕ → Msg → ℕ → OSim) :
+    ZKPriv H (zvZR Coin (some []) SO) (accI Coin) (zkO Coin) :=
+  ⟨rfl, fun t _ δ₁ _ => (ZKMal.zkmalRx_const_of H _ (zvZR Coin (some []) SO).prover [] (fun _ _ => rfl) _ _ _ _).2
+    (zkmalR_zeroP (Coin := Coin) (some []) _ H (SO t) t δ₁)⟩
 
 /-- **The inner protocol's `KS` fails** at `noI`, which accepts and whose relation is empty. -/
 theorem Inner.KS_fails (H : Msg → Msg) : ¬ (noI Coin).KS H :=

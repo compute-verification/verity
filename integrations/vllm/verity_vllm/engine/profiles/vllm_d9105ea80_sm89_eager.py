@@ -76,8 +76,7 @@ RMS_NUM_WARPS = 4
 
 #: FA2 (`vllm-project/flash-attention 506341a`, `_vllm_fa2_C.varlen_fwd`): under `VLLM_BATCH_INVARIANT=1`
 #: `num_splits = 1` selects `run_mha_fwd_splitkv_align` → `Flash_fwd_kernel_traits<64, 64, 128, 4>`: kBlockM 64,
-#: kBlockN 128 (measured on the 4090, `out/curve/e10/KERNEL-GEOMETRY.md` §A).  The `Attention_v3` static `BN`.
-ATTN_BN = C["BN"]
+#: kBlockN 128 (measured on the 4090, `out/curve/e10/KERNEL-GEOMETRY.md` §A).  `C["BN"]` is the `Attention_v3` static `BN`.
 ATTN_NUM_SPLITS = 1
 
 #: KV cache of the FlashAttention backend in κ (M1 log): the per-layer cache is one bf16 buffer
@@ -135,6 +134,10 @@ def make_weight_field(C: dict[str, Any]) -> Callable[[str], tuple[str | int, ...
     if C.get("FP8_BLOCK"):
         layer_fields.update({"self_attn.qkv_proj.weight_scale_inv": "qkv_ws", "self_attn.o_proj.weight_scale_inv": "o_ws",
                              "mlp.gate_up_proj.weight_scale_inv": "gate_up_ws", "mlp.down_proj.weight_scale_inv": "down_ws"})
+    if C.get("INT8_EXACT"):
+        # the exact-int8 linears' f32 per-row scales (`program.model._int8_fields`)
+        layer_fields.update({"self_attn.qkv_proj.weight_scale": "qkv_ws", "self_attn.o_proj.weight_scale": "o_ws",
+                             "mlp.gate_up_proj.weight_scale": "gate_up_ws", "mlp.down_proj.weight_scale": "down_ws"})
 
     def weight_field(name: str) -> tuple[str | int, ...] | None:
         if name == "model.embed_tokens.weight":
@@ -227,6 +230,11 @@ def make_patterns(C: dict[str, Any]) -> list:
         # dynamic per-token-group activation quant and the blockwise CUTLASS scaled GEMM, each ONE registered family (registry.fp8)
         from verity_vllm.observe.fold.patterns.fp8 import CutlassScaledMmFp8Block, PerTokenGroupFp8Quant
         fp8 = [PerTokenGroupFp8Quant(group=int(C["FP8_BLOCK"])), CutlassScaledMmFp8Block(group=int(C["FP8_BLOCK"]))]
+    if C.get("INT8_EXACT"):
+        # the exact-int8 profile's named ops (engine.int8_ops), each one registered Definition (registry.int8_exact); the attention
+        # scope first, so a layer on the int8 backend never reaches the FA2 scope
+        from verity_vllm.observe.fold.patterns.int8 import Int8AttentionScope, Int8RowQuant, Int8ScaledMm
+        fp8 = [Int8RowQuant(), Int8ScaledMm(), Int8AttentionScope()]
     return [
         *fp8,
         GemmLaunch(GEMM_CONSTEXPRS, num_warps=GEMM_NUM_WARPS, num_stages=GEMM_NUM_STAGES, num_sms=GEMM_NUM_SMS),

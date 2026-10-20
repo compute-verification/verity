@@ -8,7 +8,9 @@ from an earlier pass's ticket) before the one ahead of it is awaited (`wait`), s
 passes. A boundary message (the next window's coin, or the close) is taken at the first root that reaches the host
 after it: that root is sent as its window's last if its pass started (the root before it reached the host) before the
 message arrived, and dropped otherwise, and the pass queued behind it is dropped too; the next window's first pass
-chains from the last root sent. Each session runs under a mode of the prover's plan, which the verifier never sees:
+chains from the last root sent. A message arrives when the prover's reader, a process of its own (`wire.connect`,
+`wire.Conn.read_apart`), stamps it, so the rule's comparison does not wait on whatever holds this process's GIL.
+Each session runs under a mode of the prover's plan, which the verifier never sees:
 
 ~~~text
 honest          every block held and read
@@ -23,12 +25,17 @@ kvdrop:P        kv:P, but the appended pages are not held: each pass's receipts 
                 opening of one carries the true page, as skip's do
 serve           honest, beside the backend's own serving (`backend.serving`: a node's `Store`, whose engine steps
                 write, free and re-key its KV, `verity_vllm.store.remote`): before each pass the backend's engine runs
-                its next step, and the pass reads every live block at it
+                its next step (pass 0's before the first window, `ready`), and the pass reads every live block at it;
+                one pass in flight, since a launch waits on its step, and a pass whose step ran past a boundary of a
+                window with a root is the next window's first, so the allowance covers a read, not a step
 servedrop:K     serve, but the first K blocks appended (1 by default) are not held, as kvdrop's
 kvoverwrite:P   kv:P with serving ahead of the passes (--ahead), but its writes skip the free fence: a write lands in
                 a slot whose block a pass still has to read, that pass's receipt of it is of the new bytes, and an
                 opening of it carries the true block
 ~~~
+
+In a paced session (the session message's `pace`, k: `audit.Pace`) the prover runs at most k passes under a coin, then
+waits for the next, and a window's first pass starts at its coin's arrival.
 
 With serving ahead of the passes (`Ahead`: --ahead K for a kv session, or a serving backend's own), serving runs on
 its own thread, at most K steps past the pass in flight, and each pass takes the newest step it can: s, once serving
@@ -71,6 +78,7 @@ import argparse
 import gc
 import hashlib
 import json
+import math
 import os
 import queue
 import random
@@ -154,9 +162,29 @@ def runs_of(blocks) -> tuple[tuple[int, int], ...]:
 
 
 def plan_change(before: rb.Plan, after: rb.Plan) -> tuple[tuple[tuple[int, int], ...], tuple[tuple[int, int], ...]]:
-    """`after` as `before.changed(added, removed, ...)` takes it: (added, removed) runs."""
-    a, b = set(before), set(after)
-    return runs_of(sorted(b - a)), runs_of(sorted(a - b))
+    """`after` as `before.changed(added, removed, ...)` takes it: (added, removed) runs, from the plans' runs alone
+    (each segment between consecutive run boundaries is wholly in or out of each plan)."""
+    def bounds(plan: rb.Plan) -> tuple[np.ndarray, np.ndarray]:
+        r = np.frombuffer(plan.encode(), dtype=">u8", offset=4).reshape(-1, 2).astype(np.uint64)   # blocks reach 2^64 - 1
+        if len(r) > 1 and (r[1:, 0] < r[:-1, 0]).any():                                             # a plan in read order
+            r = r[np.argsort(r[:, 0], kind="stable")]
+        return r[:, 0], r[:, 0] + r[:, 1]
+
+    (a0, a1), (b0, b1) = bounds(before), bounds(after)
+    cuts = np.unique(np.concatenate([a0, a1, b0, b1]))
+    lo = cuts[:-1]
+
+    def held(s: np.ndarray, e: np.ndarray) -> np.ndarray:
+        k = np.searchsorted(s, lo, side="right") - 1
+        return (k >= 0) & (lo < e[np.maximum(k, 0)]) if len(s) else np.zeros(len(lo), bool)
+
+    def runs(mask: np.ndarray) -> tuple[tuple[int, int], ...]:
+        edge = np.diff(np.concatenate([[False], mask, [False]]).astype(np.int8))
+        starts, ends = cuts[np.flatnonzero(edge == 1)], cuts[np.flatnonzero(edge == -1)]
+        return tuple(zip(starts.tolist(), (ends - starts).tolist()))
+
+    a, b = held(a0, a1), held(b0, b1)
+    return runs(b & ~a), runs(a & ~b)
 
 
 class Ahead:
@@ -559,47 +587,58 @@ class ProverSide:
             self.inbox.put(({"type": "lost", "why": str(e)}, b"", 0))
 
     def _open(self) -> None:
+        """Each window's openings as its draws arrive.  One the backend can't open (a block it no longer holds as
+        its pass read it) fails the session: the session's thread sees the connection lost, with the reason."""
         while True:
             t, draws = self.jobs.get()
-            # Opening work rereads the store and reconstructs receipt subtrees.  Keep it off the timed pass phase:
-            # the verifier may check after all roots are final, and this also makes the measured pass span contain
-            # passes alone rather than a prover-local choice of when to prepare the already-drawn openings.
-            if self.defer_openings:
-                self.open_enabled.wait()
-            c0 = time.perf_counter_ns()
-            by_pass = defaultdict(list)
-            for k, (i, p) in enumerate(draws):
-                by_pass[i].append((k, p))
-            out: list = [None] * len(draws)
-            passes = sorted(by_pass.items())
-            with self.lock:
-                handles = [self.kept[(t, i)] for i, _ in passes]
-            c1 = time.perf_counter_ns()
-            fields = self.backend.open_window([(h, [p for _, p in items]) for h, (_, items) in zip(handles, passes)])
-            c2 = time.perf_counter_ns()
-            for j, ((i, items), got) in enumerate(zip(passes, fields)):
-                for (k, p), f in zip(items, got):
-                    out[k] = audit.Opening(i, p, f[0], f[1], f[2], tuple(f[3]), f[4], tuple(f[5]), b"",
-                                           f[6] if len(f) > 6 else b"")
-                fields[j] = None
-            del fields
-            parts = [out[k:k + OPENINGS_PART] for k in range(0, len(out), OPENINGS_PART)] or [[]]
-            n = len(out)
-            del out
-            c3, sent = time.perf_counter_ns(), 0
-            for k in range(len(parts)):
-                body = wire.encode_openings(parts[k])
-                self.conn.send({"type": "openings", "t": t, "part": k, "parts": len(parts), "n": len(parts[k])}, body)
-                parts[k] = None
-                sent += len(body)
-                del body
-            with self.lock:
-                for key in [key for key in self.kept if key[0] == t]:
-                    del self.kept[key]
-            self.opened.append({"t": t, "n": n, "bytes": sent, "ns": time.perf_counter_ns() - c0,
-                                "backend_ns": c2 - c1, "send_ns": time.perf_counter_ns() - c3,
-                                "on_dropped": int(hits(self.dropped, [self.block(t, i, p) for i, p in draws]).sum())})
-            self.jobs.task_done()
+            try:
+                # Opening work rereads the store and reconstructs receipt subtrees.  Keep it off the timed pass phase:
+                # the verifier may check after all roots are final, and this also makes the measured pass span contain
+                # passes alone rather than a prover-local choice of when to prepare the already-drawn openings.
+                if self.defer_openings:
+                    self.open_enabled.wait()
+                self._open_window(t, draws)
+            except Exception as e:  # noqa: BLE001  -- handed to the session's thread, which fails with it
+                why = f"openings of window {t}: {type(e).__name__}: {e}"
+                print(f"prover: {why}", file=sys.stderr, flush=True)       # also after the verifier's end, when no session reads it
+                self.inbox.put(({"type": "lost", "why": why}, b"", 0))
+            finally:
+                self.jobs.task_done()
+
+    def _open_window(self, t: int, draws: list) -> None:
+        c0 = time.perf_counter_ns()
+        by_pass = defaultdict(list)
+        for k, (i, p) in enumerate(draws):
+            by_pass[i].append((k, p))
+        out: list = [None] * len(draws)
+        passes = sorted(by_pass.items())
+        with self.lock:
+            handles = [self.kept[(t, i)] for i, _ in passes]
+        c1 = time.perf_counter_ns()
+        fields = self.backend.open_window([(h, [p for _, p in items]) for h, (_, items) in zip(handles, passes)])
+        c2 = time.perf_counter_ns()
+        for j, ((i, items), got) in enumerate(zip(passes, fields)):
+            for (k, p), f in zip(items, got):
+                out[k] = audit.Opening(i, p, f[0], f[1], f[2], tuple(f[3]), f[4], tuple(f[5]), b"",
+                                       f[6] if len(f) > 6 else b"")
+            fields[j] = None
+        del fields
+        parts = [out[k:k + OPENINGS_PART] for k in range(0, len(out), OPENINGS_PART)] or [[]]
+        n = len(out)
+        del out
+        c3, sent = time.perf_counter_ns(), 0
+        for k in range(len(parts)):
+            body = wire.encode_openings(parts[k])
+            self.conn.send({"type": "openings", "t": t, "part": k, "parts": len(parts), "n": len(parts[k])}, body)
+            parts[k] = None
+            sent += len(body)
+            del body
+        with self.lock:
+            for key in [key for key in self.kept if key[0] == t]:
+                del self.kept[key]
+        self.opened.append({"t": t, "n": n, "bytes": sent, "ns": time.perf_counter_ns() - c0,
+                            "backend_ns": c2 - c1, "send_ns": time.perf_counter_ns() - c3,
+                            "on_dropped": int(hits(self.dropped, [self.block(t, i, p) for i, p in draws]).sum())})
 
     def block(self, t: int, i: int, p: int) -> int:
         """The block at position p of pass i of window t: p itself unless the pass's plan was sent."""
@@ -630,7 +669,7 @@ class ProverSide:
         return out
 
     def session(self, head: dict, mode: str, fraction: float) -> dict:
-        k, W = head["k"], head["windows"]
+        k, W, cap = head["k"], head["windows"], head.get("pace") or math.inf
         commitment = wire.commitment_of(head["commitment"])
         if commitment.registration != self.registration.digest or commitment.count != 2 * W:
             raise ValueError("the session's coins are not for this registration")
@@ -668,8 +707,11 @@ class ProverSide:
         self.dropped, self.opened = dropped, []
         if self.defer_openings:
             self.open_enabled.clear()
+        # A serving trace runs pass 0's engine step here (after waiting for the run whose steps it takes, if any), so
+        # the first window's clock starts at pass 0's appends and read: the step is not a read, as a moved pass's.
+        getattr(trace, "ready", lambda: None)()
         self.conn.send({"type": "armed", "k": k})
-        head, _, _ = self.expect("coin")
+        coin0, _, first = self.expect("coin")
         t = 0
 
         def take(coin) -> bytes:
@@ -682,13 +724,33 @@ class ProverSide:
         step_of = getattr(backend, "step_of", None)
         launched, sent_plan, sent_released, sent_withdrawn, sent_appends = 0, rb.Plan.whole(N), 0, 0, 0
         ahead: Ahead | None = getattr(trace, "ahead", None)
+        serve = mode in ("serve", "servedrop")
         self.misread = {}
+
+        def moved(t_: int, i: int, after, start: int):
+            """A serving pass whose engine step ran past a boundary, in a window that has a root sent already: its
+            read has not begun, so it is the next window's first pass, chained from the last root sent, or, past the
+            close, it starts after the close and is dropped.  The step is not a read, so the allowance covers the
+            pass's read and not the step before it."""
+            nonlocal t
+            if not getattr(trace, "moves", False):
+                return t_, i, after, start
+            self._drain(pending)
+            if not pending or pending[0][0]["type"] == "end" or last is None or last.t != t_:
+                return t_, i, after, start
+            if pending[0][0]["type"] == "close":
+                return t_, i, after, clock()
+            msg, _, _ = pending.popleft()
+            t = t_ + 1
+            backend.begin_window(take(wire.coin_of(msg["coin"])), None)
+            return t, 0, last.ticket, clock()
 
         def launch(t: int, i: int, after, start: int | None) -> _Pass:
             """Pass i of window t; with a serving trace, after the trace's step if one falls due (the backend's next
             engine step, serving), over every live block; with serving ahead, at the step it takes from serving, and
             started once it has.  Then one pass is in flight at a time: the next one's step waits on serving, whose
-            write may wait on this one's read."""
+            write may wait on this one's read.  A serving backend's pass is also one at a time, started before its
+            engine step, and taken into the next window when its step runs past a boundary (`moved`)."""
             nonlocal launched
             n, launched = launched, launched + 1
             if trace is None:
@@ -696,8 +758,10 @@ class ProverSide:
                 return _Pass(t, i, ticket, start, step=step_of(ticket) if step_of is not None else n)
             if ahead is not None:
                 n = trace.take(t)
-            elif mode in ("serve", "servedrop"):
+            elif serve:
+                start = clock()
                 trace.advance(t)
+                t, i, after, start = moved(t, i, after, start)
             else:
                 due = n > 0 and n % self.kv_every == 0
                 if due or (n > 0 and trace.stale(t)):
@@ -712,10 +776,10 @@ class ProverSide:
                          step=step_of(ticket) if step_of is not None and ahead is None else n, plan=plan,
                          upto=(len(trace.appends), len(trace.released), len(getattr(trace, "withdrawn", ()))))
 
-        backend.begin_window(take(wire.coin_of(head["coin"])), self.registration.digest)
+        backend.begin_window(take(wire.coin_of(coin0["coin"])), self.registration.digest)
         pending: deque = deque()
         passes, last, nxt, stopping, ended, discarded = [], None, 1, False, None, 0
-        depth = 1 if ahead is not None else 2
+        depth = 1 if ahead is not None or serve else 2
         misread = getattr(backend, "misread", None)
 
         def send(x: _Pass, root: bytes, handle, seen: int) -> None:
@@ -757,9 +821,22 @@ class ProverSide:
         if serving is not None:
             serving.start()
         try:
-            inflight = deque([launch(0, 0, None, clock())])
-            while inflight:
-                if not stopping and len(inflight) < depth:
+            inflight = deque([launch(0, 0, None, first if cap < math.inf else clock())])
+            while inflight or (cap < math.inf and not stopping):
+                if not inflight:
+                    # Paced: this window's k passes are done, and the next pass waits on the next coin.
+                    msg, _, stamp = pending.popleft() if pending else self._boundary()
+                    if msg["type"] != "coin":
+                        ended, stopping = (msg, True) if msg["type"] == "end" else (ended, True)
+                        break
+                    t += 1
+                    backend.begin_window(take(wire.coin_of(msg["coin"])), None)
+                    # From its coin's arrival: the next coin can come before this process reads its clock, and a pass
+                    # under this coin stays this group's whatever comes after the coin.
+                    inflight.append(launch(t, 0, last.ticket if last else None, stamp))
+                    nxt = 1
+                    continue
+                if not stopping and len(inflight) < depth and nxt < cap:
                     inflight.append(launch(t, nxt, inflight[-1].ticket, None))
                     nxt += 1
                 x = inflight.popleft()
@@ -789,9 +866,9 @@ class ProverSide:
                 if not pending:
                     send(x, root, handle, seen)
                     last = x
-                    if depth == 1 and not stopping:
+                    if depth == 1 and not stopping and nxt < cap:
                         inflight.append(launch(t, nxt, x.ticket, None))
-                        nxt += 1
+                        nxt = inflight[-1].i + 1
                     continue
                 msg, _, stamp = pending.popleft()
                 for p in inflight:
@@ -810,8 +887,9 @@ class ProverSide:
                     continue
                 t += 1
                 backend.begin_window(take(wire.coin_of(msg["coin"])), None)
-                inflight.append(launch(t, 0, last.ticket if last else None, None if inflight else clock()))
-                nxt = 1
+                inflight.append(launch(t, 0, last.ticket if last else None,
+                                       stamp if cap < math.inf else None if inflight else clock()))
+                nxt = inflight[-1].i + 1
         finally:
             if ahead is not None:
                 ahead.end()
@@ -886,6 +964,15 @@ class ProverSide:
                 raise wire.Closed(item[0].get("why", "bye"))
             if kind in BOUNDARIES:
                 pending.append(item)
+
+    def _boundary(self):
+        """The next boundary message, waited for."""
+        while True:
+            item = self.inbox.get()
+            if item[0]["type"] in ("lost", "bye"):
+                raise wire.Closed(item[0].get("why", "bye"))
+            if item[0]["type"] in BOUNDARIES:
+                return item
 
 
 def main() -> int:

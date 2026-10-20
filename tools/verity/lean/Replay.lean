@@ -33,7 +33,8 @@ kernel makes.
 
 It then writes to `OUT` the axioms the package's own constants (the `Mᵢ` and `Rᵢ`) use, found by walking their bodies
 (the ones the kernel accepted, not the axiom sets each `.olean` recorded when it was built), so `check.py` can compare the
-two. Exit 0 when every constant is accepted, 1 when the kernel rejects one.
+two. Exit 0 when every constant is accepted, 1 when the kernel rejects one, after writing to `OUT` the modules of the
+rejected declarations.
 -/
 
 open Lean Elab Term
@@ -118,6 +119,23 @@ def sameKind : QuotKind → QuotKind → Bool
   | .type, .type | .ctor, .ctor | .lift, .lift | .ind, .ind => true
   | _, _ => false
 
+/-- The checked declarations (``checked n``) an unchecked constant of the set reaches through what it mentions, through
+other unchecked ones of the set: the kernel unfolds an unchecked definition when it checks a declaration that mentions
+it, so whatever that definition's body needs has to be in the kernel first. -/
+partial def reachChecked (constants : Std.HashMap Name ConstantInfo) (checked : Name → Option Name)
+    (memo : IO.Ref (Std.HashMap Name NameSet)) (onPath : NameSet) (n : Name) : IO NameSet := do
+  if let some r := (← memo.get)[n]? then return r
+  let some c := constants[n]? | return {}
+  let mut out : NameSet := {}
+  for m in c.getUsedConstantsAsSet do
+    if let some d := checked m then
+      out := out.insert d
+    else if constants.contains m && !onPath.contains m then
+      for d in ← reachChecked constants checked memo (onPath.insert n) m do
+        out := out.insert d
+  memo.modify (·.insert n out)
+  return out
+
 /-- The modules `m` imports, transitively, and `m` itself. -/
 def closureOf (importsOf : Std.HashMap Name (Array Name)) (m : Name) : Std.HashSet Name := Id.run do
   let mut seen : Std.HashSet Name := ({} : Std.HashSet Name).insert m
@@ -144,6 +162,7 @@ def sections (args : List String) : Std.HashMap String (Array Name) := Id.run do
 
 unsafe def main (args : List String) : IO UInt32 := do
   initSearchPath (← findSysroot)
+  let t0 ← IO.monoMsNow
   let some out := args.head? |
     throw <| IO.userError "usage: Replay.lean OUT MODULE... [--reused MODULE...] [--closure MODULE...] [--closure-reused MODULE...]"
   let parts := sections args.tail
@@ -186,13 +205,9 @@ unsafe def main (args : List String) : IO UInt32 := do
       if !modSet.contains i.module && !imports.any (·.module == i.module) then
         imports := imports.push i
   let env ← if imports.isEmpty then mkEmptyEnvironment else importModules imports {}
+  let tLoaded ← IO.monoMsNow
   for h : i in [0:env.header.moduleNames.size] do
     importsOf := importsOf.insert env.header.moduleNames[i] (env.header.moduleData[i]!.imports.map (·.module))
-  let declaredIn (n : Name) : Array Name :=
-    let here := match moduleOf[n]? with
-      | some m => #[m]
-      | none => ((env.getModuleIdxFor? n).bind fun i => env.header.moduleNames[i.toNat]?).toArray
-    here ++ alsoIn.getD n #[]
   -- An equation lemma (`f.eq_1`) is realized in each module that first asks for it, so an import from outside the set
   -- can hold the same theorem: the import's stays in the environment, and the set's is checked under a fresh name.
   for (n, c) in constants do
@@ -212,6 +227,13 @@ unsafe def main (args : List String) : IO UInt32 := do
         dups := dups.push (m, c)
     | some _, _ =>
       throw <| IO.userError s!"{n} is declared by a replayed module and by one it imports from outside the set"
+  -- after the loop above, which moves a theorem an import from outside the set also declares: a closure takes the values
+  -- `moduleOf` and `alsoIn` have where it is defined
+  let declaredIn (n : Name) : Array Name :=
+    let here := match moduleOf[n]? with
+      | some m => #[m]
+      | none => ((env.getModuleIdxFor? n).bind fun i => env.header.moduleNames[i.toNat]?).toArray
+    here ++ alsoIn.getD n #[]
   -- A second declaration of a theorem gets a name no module declares, so the kernel checks its proof too.
   let mut renamed : Std.HashMap Name ConstantInfo := {}
   let mut renamedFrom : Std.HashMap Name (Name × Name) := {}   -- fresh name ↦ (the theorem, its module)
@@ -239,10 +261,31 @@ unsafe def main (args : List String) : IO UInt32 := do
       members := members.alter (declOf constants c) fun cs => some ((cs.getD #[]).push c)
   for (n, c) in renamed do
     members := members.insert n #[c]
+  -- the checked declaration a constant belongs to, if it is one; any other constant of the set went in unchecked
+  let checkedDecl (n : Name) : Option Name := do
+    let c ← constants[n]?
+    guard !(compiled c)
+    let e := declOf constants c
+    guard (members.contains e)
+    return e
+  let behind ← IO.mkRef ({} : Std.HashMap Name NameSet)
   let moduleOfDecl (d : Name) : Name := match renamedFrom[d]? with
     | some (_, m) => m
     | none => moduleOf[d]!
-  -- each constant a checked declaration mentions is declared by its module or by one that module imports
+  -- each constant a checked declaration mentions is declared by its module or by one that module imports. Two imported
+  -- modules that each realize one theorem leave the environment naming one of them, so a module that imports only the
+  -- other is looked up in what each imported module of its closure declares, with the environment's statement.
+  let importedIdx : Std.HashMap Name Nat :=
+    (List.range env.header.moduleNames.size).foldl (fun h i => h.insert env.header.moduleNames[i]! i) {}
+  let alsoImported (reach : Std.HashSet Name) (n : Name) : Bool := Id.run do
+    let some (.thmInfo e) := env.find? n | return false
+    for r in reach do
+      if let some i := importedIdx[r]? then
+        for c in env.header.moduleData[i]!.constants do
+          if c.name == n then
+            if let .thmInfo v := c then
+              if v.type == e.type && v.levelParams == e.levelParams then return true
+    return false
   let mut byModule : Std.HashMap Name (Array Name) := {}
   for (d, _) in members do
     byModule := byModule.alter (moduleOfDecl d) fun ds => some ((ds.getD #[]).push d)
@@ -254,16 +297,19 @@ unsafe def main (args : List String) : IO UInt32 := do
       let used := cs.foldl (fun s c => s ++ c.getUsedConstantsAsSet) ({} : NameSet)
       for n in used do
         let from_ := declaredIn n
-        unless from_.isEmpty || from_.any reach.contains do
+        unless from_.isEmpty || from_.any reach.contains || alsoImported reach n do
           IO.eprintln s!"replay: {d} (in {m}) mentions {n}, declared by {", ".intercalate (from_.toList.map toString)}, \
             which {m} does not import"
           return 1
-      deps := deps.insert d <| used.toArray.filterMap fun n => do
-        let c ← constants[n]?
-        guard !(compiled c)
-        let e := declOf constants c
-        guard (e != d && members.contains e)
-        return e
+      let mut ds : NameSet := {}
+      for n in used do
+        if let some e := checkedDecl n then
+          ds := ds.insert e
+        else if constants.contains n then
+          for e in ← reachChecked constants checkedDecl behind {} n do
+            ds := ds.insert e
+      deps := deps.insert d <| (ds.erase d).toArray
+  let tPlanned ← IO.monoMsNow
   let order ← match declOrder (members.keys.toArray.qsort Name.lt) deps with
     | .ok order => pure order
     | .error d =>
@@ -271,7 +317,7 @@ unsafe def main (args : List String) : IO UInt32 := do
       return 1
   let mut tasks : Array (Name × Task (Except IO.Error Nat)) := #[]
   let mut took : Array (Nat × Name) := #[]
-  let mut rejected := false
+  let mut rejected : NameSet := {}
   let mut waited := 0
   let mut checkedModules : NameSet := {}
   for d in order do
@@ -309,29 +355,42 @@ unsafe def main (args : List String) : IO UInt32 := do
       | .ok ms => took := took.push (ms, d')
       | .error e =>
         IO.eprintln s!"replay: the kernel rejects {d'} (in {moduleOfDecl d'}):\n{e}"
-        rejected := true
+        rejected := rejected.insert (moduleOfDecl d')
       waited := waited + 1
   for (d, t) in tasks.extract waited tasks.size do
     match ← IO.wait t with
     | .ok ms => took := took.push (ms, d)
     | .error e =>
       IO.eprintln s!"replay: the kernel rejects {d} (in {moduleOfDecl d}):\n{e}"
-      rejected := true
-  if rejected then
+      rejected := rejected.insert (moduleOfDecl d)
+  if !rejected.isEmpty then
+    -- every other module's declarations passed with its imports present, which is what a module's cache entry says
+    IO.FS.writeFile out <| (Json.mkObj [("rejected", toJson (rejected.toArray.qsort Name.lt |>.map toString))]).compress
     return 1
+  let tChecked ← IO.monoMsNow
   let ownConstants := (constants.toArray.filter fun (n, _) => ownSet.contains moduleOf[n]!).map (·.1)
   let names := axiomsIn kenv ownConstants |>.map toString
   let sent := members.fold (fun a _ cs => a + cs.size) 0
-  let closureChecked := (get "--closure").size
-  let closureReused := (get "--closure-reused").size
-  IO.FS.writeFile out <| (Json.mkObj [("replayed", toJson sent), ("skipped", toJson skipped), ("reused", toJson kept),
-    ("second_copies", toJson renamed.size), ("closure_checked", toJson closureChecked),
-    ("closure_reused", toJson closureReused), ("imported", toJson env.header.moduleNames.size),
-    ("axioms", toJson names)]).compress
-  let slowest := took.qsort (fun a b => a.1 > b.1) |>.extract 0 3 |>.map fun (ms, d) => s!"{d} {ms / 1000}.{ms % 1000 / 100} s"
+  -- three passes, not `qsort`, which is quadratic on the many declarations that take 0 ms
+  let top := (List.range 3).foldl (init := (#[] : Array (Nat × Name))) fun top _ =>
+    match took.foldl (init := none) fun (best : Option (Nat × Name)) x =>
+        if top.any (·.2 == x.2) then best else match best with
+          | some b => if x.1 > b.1 then some x else best
+          | none => some x with
+    | some b => top.push b
+    | none => top
+  let slowest := top.map fun (ms, d) => s!"{d} {ms / 1000}.{ms % 1000 / 100} s"
   IO.println s!"replay: {sent} constants of {checkedModules.size} modules accepted by the kernel ({renamed.size} of them \
     a theorem another module declares too, checked under a fresh name; {skipped} more are unsafe or partial: compiled code, \
     which the kernel does not check; {kept} more, of {reusedSet.size} modules that passed before, added unchecked; \
     {env.header.moduleNames.size} modules imported unchecked), as {tasks.size} declarations side by side \
     (slowest: {", ".intercalate slowest.toList}); axioms of the own modules' bodies: {", ".intercalate names.toList}"
+  let tEnd ← IO.monoMsNow
+  let seconds := [("load", tLoaded - t0), ("plan", tPlanned - tLoaded), ("check", tChecked - tPlanned),
+    ("axioms", tEnd - tChecked)].map fun (k, ms) => (k, toJson (ms / 1000))
+  IO.println s!"replay: seconds {Json.mkObj seconds |>.compress}"
+  IO.FS.writeFile out <| (Json.mkObj [("replayed", toJson sent), ("skipped", toJson skipped), ("reused", toJson kept),
+    ("second_copies", toJson renamed.size), ("closure_checked", toJson (get "--closure").size),
+    ("closure_reused", toJson (get "--closure-reused").size), ("imported", toJson env.header.moduleNames.size),
+    ("axioms", toJson names), ("seconds", Json.mkObj seconds)]).compress
   return 0

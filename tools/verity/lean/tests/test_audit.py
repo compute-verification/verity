@@ -806,9 +806,9 @@ def test_a_mathlib_build_runs_no_more_lean_at_once_than_its_scope_s_memory_holds
 
 
 def test_a_spec_whose_guarantees_an_arklib_package_proves_needs_the_spec_floor(tmp_path):
-    """A whole-Security audit holds the proving package's facts beside the replay (30–50 GiB in r20261018-175656-1c85), so
-    auditing a spec with `proved_in` beside an ArkLib package needs `SPEC_FLOOR_GIB`, and the package alone the build's
-    floor."""
+    """A whole-Security replay holds about 120 GiB whatever its threads (killed at 128 GiB with 16 in r20261019-084601-01a0),
+    so auditing a spec with `proved_in` beside an ArkLib package needs `SPEC_FLOOR_GIB`, and is sent to the shape that has
+    it; the package alone needs the build's floor."""
     proofs, spec = tmp_path / "Proofs", tmp_path / "Spec"
     for p in (proofs, spec):
         p.mkdir()
@@ -817,6 +817,7 @@ def test_a_spec_whose_guarantees_an_arklib_package_proves_needs_the_spec_floor(t
     assert A.memory_refusal([proofs], 32) is None
     why = A.memory_refusal([spec, proofs], 32)
     assert why and f"under the {A.SPEC_FLOOR_GIB} GiB floor" in why and "facts for every guarantee it proves" in why
+    assert "--kind lean-audit" in (A.memory_refusal([spec, proofs], 128) or "")
     assert A.memory_refusal([spec, proofs], A.SPEC_FLOOR_GIB) is None
 
 
@@ -1203,8 +1204,8 @@ def test_a_premise_the_lock_does_not_list_fails():
     """A statement that takes an assumption applied to its own variables (`h : Premises.Hyp n`, an open hypothesis the
     hypotheses rule never names; `Facts.lean`'s `premises` sees through the abbrev and the `Guarantees` definitions to
     `P.Hyp`) fails while the lock doesn't list it, and an update adds it with the guarantee's owner; on 14 Oct a merge
-    dropped `Flock.Assumptions.RegistrantCovers`' entry this way and the check passed. A premise outside an assumptions
-    module is not an assumption."""
+    dropped `Flock.Assumptions.RegistrantCovers`' entry this way and the check passed. Without an import graph to say
+    which modules the repository builds, a premise outside an assumptions module is not counted (the next test has one)."""
     applied = [{"binder": "h", "type": "P.Premises.Hyp n", "closed": False, "named": None, "module": None}]
     pin = fact(signature="P.t (n : Nat) (h : P.Premises.Hyp n) : P.f n = n", hyps=applied)
     pin["premises"] = [{"binder": "h", "head": "P.Hyp", "module": "P.Assumptions"},
@@ -1216,6 +1217,29 @@ def test_a_premise_the_lock_does_not_list_fails():
     assert A.judge(pol, f, FILES)[0] == []
     assert A.judge({**pol, "assumptions": {}}, f, FILES)[0] == [
         "assumptions: P.Hyp is a premise of P.t, an assumption the lock doesn't list; run `check.py --update` to add it "
+        "with its guarantees' owner and commit the record (Daniel's DM shows it when it lands)"]
+
+
+def test_a_premise_defined_anywhere_the_repository_builds_is_listed_and_a_dependencys_is_not():
+    """LEAN-37 (RT2-LOGIC-2): `ProofLayer.SoundAt`, a premise defined in `Definitions/Accounting/TS`, passed unlisted, since
+    only a head in an assumptions module counted. A head in any module whose `.olean` a package of the repository builds
+    is listed now, in a lifted guarantee too (its premises are read through the `Guarantees` definition); one from the
+    toolchain or a fetched dependency (`Nat.le`, Mathlib's) is not."""
+    pin = fact(signature="P.t (n : Nat) : P.Guarantees.t n", hyps=[])
+    pin["premises"] = [{"binder": "h", "head": "P.Sound", "module": "P.Defs"},
+                       {"binder": "hn", "head": "Nat.le", "module": "Init.Prelude"},
+                       {"binder": "hd", "head": "Disjoint", "module": "Mathlib.Order.Disjoint"}]
+    graph = {"P.Defs": {"imports": ["Init"], "olean": "/r/Security/.lake/build/lib/lean/P/Defs.olean"},
+             "Init.Prelude": {"imports": [], "olean": "/elan/toolchains/v4/lib/lean/Init/Prelude.olean"},
+             "Mathlib.Order.Disjoint": {"imports": [], "olean": "/r/Security/.lake/packages/mathlib/.lake/build/lib/lean/"
+                                                                 "Mathlib/Order/Disjoint.olean"}}
+    f = facts(pins={"P.t": pin}, graph=graph)
+    assert A.own_modules(f) == {"P.Defs"}
+    fails, pol = A.judge({**POLICY, "assumptions": {}}, f, FILES, update=True)
+    assert fails == [] and list(pol["assumptions"]) == ["P.Sound"] and pol["assumptions"]["P.Sound"]["owner"] == "@lean"
+    assert A.judge(pol, f, FILES)[0] == [] and A.judge(pol, f, FILES, update=True)[1]["assumptions"] == pol["assumptions"]
+    assert A.judge({**pol, "assumptions": {}}, f, FILES)[0] == [
+        "assumptions: P.Sound is a premise of P.t, an assumption the lock doesn't list; run `check.py --update` to add it "
         "with its guarantees' owner and commit the record (Daniel's DM shows it when it lands)"]
 
 
@@ -1232,13 +1256,42 @@ def test_the_verifiers_path_has_no_unlisted_compiled_code_and_hashes_through_its
     assert fails == [
         "verifier: entry P.gone is not a constant of the build; fix `verifier.entries`",
         "verifier: P.fast (@[implemented_by], in P.Defs) is on the path from P.verify, P.gone: compiled code no proof sees; "
-        "add it to `verifier.allow` only if it is a core primitive",
+        "if it is a core primitive, run `check.py --update`, which lists it under `verifier.allow` (the landing DM shows "
+        "it), else take it off the path",
         "verifier: P.verify, P.gone reach P.Sha512.hash outside the hash parameter, by P.verify -> P.tag -> P.Sha512.hash; "
         "route it through the parameter, or add the public constant it serves to `verifier.stop`"]
     assert A.verifier_failures(None, path) == []
     assert A.verifier_failures(rule, None)[0].startswith("verifier: `Facts.lean` reported no verifier path")
     f = facts(); f["verifier"] = {**path, "missing": [], "implemented_by": [], "hash": []}
     assert A.judge({**POLICY, "verifier": rule}, f, FILES, update=True)[0] == []
+
+
+def test_verifier_allow_is_a_record_of_the_compiled_code_on_the_path_by_name():
+    """LEAN-33: `verifier.allow` lists by name each `@[extern]` and `@[implemented_by]` constant the verifier reaches, as
+    `--update` writes it, so the landing DM shows one added: an Init extern the list doesn't name fails (no `module:Init`
+    admitting all of Init), a name that admits nothing on the path fails, and a `module:` entry still admits its modules."""
+    path = {"missing": [], "reached": 40, "hash": [], "csimp": [],
+            "implemented_by": [{"name": "Array.foldlM", "module": "Init.Data.Array.Basic", "by": "Array.foldlMUnsafe"}],
+            "extern": [{"name": "Nat.add", "module": "Init.Prelude"}, {"name": "ByteArray.push", "module": "Init.Data.ByteArray.Basic"}]}
+    rule = {"entries": ["P.verify"], "stop": [], "hash": "P.Sha512", "allow": ["Array.foldlM", "Nat.add"]}
+    assert A.verifier_failures(rule, path) == [
+        "verifier: ByteArray.push (@[extern], in Init.Data.ByteArray.Basic) is on the path from P.verify: compiled code no "
+        "proof sees; if it is a core primitive, run `check.py --update`, which lists it under `verifier.allow` (the landing "
+        "DM shows it), else take it off the path"]
+    assert A.verifier_failures({**rule, "allow": [*rule["allow"], "ByteArray.push", "UInt64.add"]}, path) == [
+        "verifier: `verifier.allow` lists UInt64.add, which admits nothing on the path from P.verify; run `check.py --update`"]
+    assert A.verifier_failures({**rule, "allow": ["module:Init"]}, path) == []
+    assert A.verifier_failures({**rule, "allow": ["module:Init.Data"]}, path)[0].startswith("verifier: Nat.add (@[extern]")
+    f = facts(); f["verifier"] = path
+    fails, pol = A.judge({**POLICY, "verifier": rule}, f, FILES, update=True)
+    assert fails == [] and pol["verifier"] == {**rule, "allow": ["Array.foldlM", "ByteArray.push", "Nat.add"]}
+    assert A.verifier_failures(pol["verifier"], path) == []
+    kept = A.judge({**POLICY, "verifier": {**rule, "allow": ["module:Init.Data"]}}, f, FILES, update=True)[1]["verifier"]
+    assert kept["allow"] == ["module:Init.Data", "Nat.add"]
+    notes = A.review({"verifier": rule}, {"verifier": pol["verifier"]}, {"pins": {}, "verifier": path}, {})
+    assert notes == ["verifier: allowed ByteArray.push (@[extern], in Init.Data.ByteArray.Basic): compiled code no proof "
+                     "sees, now on the verifier's path"]
+    assert A.statement_changes(notes) == notes
 
 
 def test_every_claim_has_a_witness_that_it_fails_and_witnesses_that_its_antecedents_are_met():
@@ -1249,7 +1302,8 @@ def test_every_claim_has_a_witness_that_it_fails_and_witnesses_that_its_antecede
         return {"name": name, "module": "P.Claims", "kind": "def", "statement": False, "predicate": predicate}
 
     def thm(head, negated):
-        return fact() | {"kind": "theorem", "body": {"head": head, "negated": negated}}
+        conclusion = [{"head": head, "defs": [head], "refl": False, "assumed": False}]
+        return fact() | {"kind": "theorem", "body": {"head": head, "negated": negated, "conclusion": conclusion, "absurd": False}}
     defs = [spec("P.KS"), spec("P.Complete"), spec("P.Helper"), spec("P.Hyp"), spec("P.size", predicate=False)]
     pins = {"P.t": fact(), "P.KS_fails": thm("P.KS", True), "P.KS_meets": thm("P.ListWithin", False),
             "P.Complete_fails": thm("P.KS", True), "P.Complete_meets": thm("P.Complete", False)}
@@ -1273,6 +1327,40 @@ def test_every_claim_has_a_witness_that_it_fails_and_witnesses_that_its_antecede
         "claims: P.Gone is listed under `claims` but is no predicate of the spec under P.Claims; remove the entry"]
     assert A.claim_failures(POLICY, f) == []
     assert A.claim_witnesses(policy) == {"P.KS_fails", "P.KS_meets", "P.Complete_fails", "P.Complete_meets", "P.Complete_zk"}
+
+
+def test_a_meets_witness_says_something_about_the_deployment():
+    """LEAN-32: a `meets` witness whose statement is `True`, a conjunction of `True`s, a reflexivity, one of its own
+    hypotheses, a bound variable, a fact of Init alone, or anything under a `False` hypothesis fails; one whose every
+    conjunct applies a definition of the spec (`∃ s w, InScope deploy s ∧ RelS s w`, `deploy.zk = true`) passes."""
+    def k(head, defs=("P.deploy",), refl=False, assumed=False):
+        return {"head": head, "defs": list(defs), "refl": refl, "assumed": assumed}
+
+    def judged(*conclusion, absurd=False):
+        pins = {"P.KS_fails": fact() | {"body": {"head": "P.KS", "negated": True}},
+                "P.KS_meets": fact() | {"body": {"head": conclusion[0]["head"] if len(conclusion) == 1 else "And",
+                                                 "negated": False, "conclusion": list(conclusion), "absurd": absurd}}}
+        rule = {"modules": ["P.Claims"], "witnesses": {"P.KS": {"fails": "P.KS_fails", "meets": ["P.KS_meets"]}}}
+        f = facts(pins=pins, spec_definitions=[{"name": "P.KS", "module": "P.Claims", "kind": "def", "predicate": True}])
+        fails = A.claim_failures({**POLICY, "claims": rule, "guarantees": {n: {"owner": "@lean"} for n in pins}}, f)
+        assert all(x.endswith("applies a definition of the spec (the deployed record, a predicate or a field of it)")
+                   for x in fails)
+        return [x.removeprefix("claims: P.KS_meets, P.KS's `meets` witness, ").partition(":")[0] for x in fails]
+
+    assert judged(k("P.InScope", ["P.InScope", "P.deploy"]), k("P.RelS", ["P.RelS"])) == []
+    assert judged(k("Eq", ["P.Deploy.zk", "P.deploy"])) == []
+    assert judged(k("True", [])) == ["has a conjunct (True …) that applies no definition under `meaning` (`True`, or a "
+                                     "fact of Init or Mathlib alone)"]
+    assert judged(k("True", []), k("True", [])) == judged(k("True", []))
+    assert judged(k("P.InScope"), k("True", [])) == judged(k("True", []))
+    assert judged(k("LT.lt", [])) == ["has a conjunct (LT.lt …) that applies no definition under `meaning` (`True`, or a "
+                                      "fact of Init or Mathlib alone)"]
+    assert judged(k("Eq", refl=True)) == ["has a conjunct that is a reflexivity (Eq of two equal sides)"]
+    assert judged(k("P.Ok", assumed=True)) == ["has a conjunct (P.Ok …) that is one of its own hypotheses"]
+    assert judged(k(None)) == ["has a conjunct that applies a bound variable, not a constant"]
+    assert judged(k("P.Ok"), absurd=True) == ["takes `False` as a hypothesis, so it proves anything"]
+    assert judged(k("P.InScope"), k("P.KS")) == ["has a conjunct that states P.KS itself"]
+    assert A.vacuous_meets({"head": "P.Ok", "negated": False}, "P.KS").startswith("has no conclusion")
 
 
 def test_an_assumption_is_listed_by_name_with_its_record():
@@ -1783,6 +1871,58 @@ def test_moving_the_proofs_into_another_package_leaves_the_spec_record_as_it_was
         "a statement reading a proof package's definition fails: that package requires the spec, so it is no spec of it"
 
 
+@pytest.mark.parametrize("spec", [True, False])
+def test_the_steps_reading_only_the_packages_own_facts_start_before_its_proved_in_reading(tmp_path, monkeypatch, spec):
+    """A spec's `proved_in` reading (`proved`) waits for its provers' builds and reads them, and the kernel replay, the
+    dependency scans and digests and the upstream scan read only the package's own facts, which `proved` returns unchanged
+    beside its pins: each starts before `proved`, is given the package's own facts, and its result is judged as before (a
+    recorded dependency digest that differs still fails). A package without `proved_in` has no wait to fill: its replay
+    starts after its facts and the rest run in turn, as their Python would contend with the audits on the critical path."""
+    pkg = tmp_path / "spec"
+    pkg.mkdir()
+    (pkg / "lean-toolchain").write_text("leanprover/lean4:v0\n")
+    A.dump(pkg, {"roots": ["P"], "upstream": {"scan": {}}, "dependencies": {"mathlib": "d0"}} |
+           ({"proved_in": ["../proofs"]} if spec else {}))
+    own = {"lean": "v0", "modules": ["P"], "declarations": 1, "axioms": [], "escapes": [], "oleans": ["own.olean"],
+           "pins": {}}
+    order, given = [], {}
+
+    class Recording(A.ThreadPoolExecutor):
+        def submit(self, fn, *args, **kw):
+            if fn is A.timed:
+                order.append(getattr(args[0], "__name__", str(args[0])))
+            return super().submit(fn, *args, **kw)
+
+    def proved(pkg, policy, facts, work, moved, ready):
+        order.append("proved")
+        return [], facts | {"pins": {"P.g": {"kind": "theorem"}}, "oleans": ["prover.olean"]}, {"../proofs": ["P.g"]}
+
+    def stub(name, result):
+        def f(*args):
+            given[name] = args
+            return result
+        f.__name__ = name
+        return f
+
+    monkeypatch.setattr(A, "ThreadPoolExecutor", Recording)
+    monkeypatch.setattr(A, "facts_of", lambda *a: own)
+    monkeypatch.setattr(A, "proved", proved)
+    monkeypatch.setattr(A, "replay_step", stub("replay_step", ([], {"checked": 1, "reused": 0})))
+    monkeypatch.setattr(A, "dependency_scans", stub("dependency_scans", (["unchecked: a hit"], 7)))
+    monkeypatch.setattr(A, "dependency_digests", stub("dependency_digests", {"mathlib": "d1"}))
+    monkeypatch.setattr(A, "sibling", lambda name: type("U", (), {"pinned": staticmethod(stub("pinned", ({"x": 1}, [])))}))
+    for name, value in (("judge", ([], {})), ("dropped", []), ("spec_reads", []), ("shape", []), ("unread_spec", {}),
+                        ("read_by_dependents", set()), ("reads_home", {}), ("scans", []), ("heartbeats", []),
+                        ("anonymous_instances", []), ("run_paths", []), ("listings", ([], {}, [])), ("regenerated", None)):
+        monkeypatch.setattr(A, name, lambda *a, value=value, **k: value)
+    rep = A.audit(pkg, tmp_path / "out", runs=False, log=lambda *_: None)
+    assert order == (["pinned", "replay_step", "dependency_scans", "dependency_digests", "proved"] if spec else ["replay_step"])
+    assert given["replay_step"][2] is own and given["dependency_scans"][1] == own["oleans"] == given["dependency_digests"][2]
+    assert rep["failures"][0] == "unchecked: a hit" and rep["failures"][1].startswith("dependencies: the .olean files of the")
+    assert rep["dependency_sources"] == 7 and rep["upstream"] == {"x": 1} and rep["replay"] == {"checked": 1, "reused": 0}
+    assert {"audit", "dependency-sources", "upstream", "dependencies", "replay"} <= set(rep["seconds"])
+
+
 def _runs(tmp_path, monkeypatch, entry, exit=0):
     """A package whose exempt module `T` is a test under `runs`, the commands it would run (`lake` faked to exit ``exit``; a
     `generate` runs for real), and a function auditing it: (failures, the `runs` section as found)."""
@@ -1861,7 +2001,8 @@ def counts(rep: dict) -> tuple[int, int]:
 @pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
 def test_a_replay_reuses_only_modules_whose_olean_files_and_imports_passed_it(tmp_path):
     """On a real build: a second audit reuses every module's replay; a change to `Control.Defs` replays it and what imports
-    it; a declaration that skipped the kernel is still rejected beside reused modules, and a failed replay stores nothing."""
+    it; a declaration that skipped the kernel is still rejected beside reused modules, and a failed replay stores the
+    modules the kernel accepted (`Control`, which imports the bad one) and never the rejected one, which fails again."""
     pkg, cache = tmp_path / "control", tmp_path / "replay-cache"
     shutil.copytree(HERE / "fixtures" / "control", pkg, ignore=shutil.ignore_patterns(".lake"))
     build = lambda: subprocess.run(["lake", "build"], cwd=pkg, check=True, capture_output=True, env=A.lake_env())
@@ -1888,7 +2029,10 @@ def test_a_replay_reuses_only_modules_whose_olean_files_and_imports_passed_it(tm
     rep = audit()
     assert counts(rep) == (2, 3), "Bad and Control"
     assert any(f.startswith(kernel["fails"]) for f in rep["failures"]), rep["failures"]
-    assert set(cache.glob("*.json")) == stored
+    assert len(set(cache.glob("*.json")) - stored) == 1
+    rep = audit()
+    assert counts(rep) == (1, 4), "Bad alone"
+    assert any(f.startswith(kernel["fails"]) for f in rep["failures"]), rep["failures"]
 
 
 def test_the_closure_plan_joins_every_module_above_one_that_has_not_passed():
@@ -1933,7 +2077,7 @@ def test_the_closure_replay_checks_each_imported_module_once_and_then_reuses_it(
     rep = audit()
     c = rep["replay"]["closure"]
     assert rep["failures"] == [] and counts(rep) == (4, 0) and c["checked"] == c["modules"] > 100 and c["reused"] == 0, rep
-    print(f"closure cold: {c}, {rep['seconds']['replay']} s, peak {rep['replay']['peak_gib']} GiB")
+    print(f"closure cold: {c}, {rep['seconds']['replay']} s {rep['replay']['phases']}, peak {rep['replay']['peak_gib']} GiB")
     rep = audit()
     assert rep["failures"] == [] and counts(rep) == (0, 4)
     assert rep["replay"]["closure"] == c | {"checked": 0, "reused": c["modules"]}
@@ -1943,6 +2087,71 @@ def test_the_closure_replay_checks_each_imported_module_once_and_then_reuses_it(
     build()
     rep = audit()
     assert rep["failures"] == [] and counts(rep) == (3, 1) and rep["replay"]["closure"]["checked"] == 0
+
+
+def test_two_packages_storing_one_replay_key_at_once_both_succeed(tmp_path, monkeypatch):
+    """The gate audits its packages in threads of one process, and two whose closures share a module store its replay key
+    at once; with the temporary file named by the pid alone, the second store renamed the first's away and the first's
+    rename failed (r20261020-021950-2eb0). The store between the first's write and its rename runs on another thread."""
+    real, nested = os.replace, []
+
+    def replace(src, dst):
+        if not nested:
+            nested.append(1)
+            t = threading.Thread(target=A.store_replay, args=(tmp_path, "k", "M"))
+            t.start()
+            t.join()
+        real(src, dst)
+
+    monkeypatch.setattr(A.os, "replace", replace)
+    A.store_replay(tmp_path, "k", "M")
+    assert json.loads((tmp_path / "k.json").read_text())["module"] == "M" and not list(tmp_path.glob(".*.tmp"))
+
+
+@pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
+def test_an_equation_lemma_two_modules_realize_counts_as_declared_by_the_imported_one(tmp_path):
+    """`f.eq_1` is realized in B and in C, which don't import each other; D imports C and uses it. With B replayed and C
+    imported (it passed), D's use of the lemma is declared by C, which D imports (#2626's train: ZkQueryRound's
+    `match_7.eq_2` and the `else_eq` that SimZk and ZkEq both realize). With B and C both imported (E, replayed, imports
+    B), the imported environment names one module for the lemma, B, and D's import of C still declares it (the next
+    train: `Exists.choose.congr_simp`, realized in Init.Control.Lawful.Lemmas and in the UpwardEnumerable that
+    Init.Data.Range.Polymorphic.Instances imports)."""
+    pkg = tmp_path / "realized"
+    (pkg / "R").mkdir(parents=True)
+    shutil.copy(HERE / "fixtures" / "control" / "lean-toolchain", pkg)
+    (pkg / "lakefile.toml").write_text('name = "realized"\ndefaultTargets = ["R"]\n\n[[lean_lib]]\nname = "R"\n')
+    (pkg / "R.lean").write_text("import R.D\nimport R.E\n")
+    (pkg / "R" / "A.lean").write_text("def f : Nat → Nat\n  | 0 => 1\n  | n + 1 => n\n")
+    for m in ("B", "C"):
+        (pkg / "R" / f"{m}.lean").write_text(f"import R.A\ntheorem {m.lower()} : f 0 = 1 := by rw [f]\n")
+    (pkg / "R" / "D.lean").write_text("import R.C\ntheorem d : f 0 = 1 := by rw [f]\n")
+    (pkg / "R" / "E.lean").write_text("import R.B\ntheorem e : True := trivial\n")
+    subprocess.run(["lake", "build"], cwd=pkg, check=True, capture_output=True, env=A.lake_env())
+    for closure in (["R.B"], ["R.E"]):
+        r = subprocess.run(["lake", "env", "lean", "--run", str(A.TOOL / "Replay.lean"), str(tmp_path / "replay.json"),
+                            "R.D", "--closure", *closure], cwd=pkg, capture_output=True, text=True, env=A.lake_env())
+        assert r.returncode == 0, (closure, r.stderr + r.stdout)
+
+
+@pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
+def test_a_checked_declaration_waits_for_what_an_unchecked_one_it_unfolds_needs(tmp_path):
+    """D's `a_t : f = 6 := rfl` makes the kernel unfold `f`, from M, which joins the replay unchecked (it passed, and it
+    imports G, which hasn't), and `f`'s body mentions G's `zz_g`, checked in the same replay. Ordered only by what it
+    mentions itself, `a_t` went to the kernel before `zz_g` was in it: "unknown constant" (#2626's third train,
+    `Flock.sizeOf_lt_of_mem_toArray` and `Std.DTreeMap.Raw.Const.toList`)."""
+    pkg = tmp_path / "behind"
+    (pkg / "R").mkdir(parents=True)
+    shutil.copy(HERE / "fixtures" / "control" / "lean-toolchain", pkg)
+    (pkg / "lakefile.toml").write_text('name = "behind"\ndefaultTargets = ["R"]\n\n[[lean_lib]]\nname = "R"\n')
+    (pkg / "R.lean").write_text("import R.D\n")
+    (pkg / "R" / "G.lean").write_text("def zz_g : Nat := 5\n")
+    (pkg / "R" / "M.lean").write_text("import R.G\ndef f : Nat := zz_g + 1\n")
+    (pkg / "R" / "D.lean").write_text("import R.M\ntheorem a_t : f = 6 := rfl\n")
+    subprocess.run(["lake", "build"], cwd=pkg, check=True, capture_output=True, env=A.lake_env())
+    r = subprocess.run(["lake", "env", "lean", "--run", str(A.TOOL / "Replay.lean"), str(tmp_path / "replay.json"), "R.D",
+                        "--closure", "R.G", "--closure-reused", "R.M"], cwd=pkg, capture_output=True, text=True,
+                       env=A.lake_env())
+    assert r.returncode == 0, r.stderr + r.stdout
 
 
 @pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")

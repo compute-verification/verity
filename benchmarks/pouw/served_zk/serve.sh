@@ -20,6 +20,12 @@ CUDA=/usr/local/cuda-13.0 bash benchmarks/pouw/pearl_c_sm120/build.sh "$S/ship-$
   || { stamp "BUILD_FAIL rc=$?"; tail -20 "$OUT/build.log"; exit 11; }
 tar -cf "$S/ship.tar" -C "$S" "ship-${HEAD:0:8}"
 
+# the challenger's coins are the Lean verifier of record's (pouw.verifier.coins): built before the lease, not inside it
+command -v lake >/dev/null || export PATH="$HOME/.elan/bin:$PATH"
+stamp "pouw-check-difftest build"
+(cd verity/core/protocols/pouw/lean/check && lake build pouw-check-difftest) > "$OUT/lean-coins-build.log" 2>&1 \
+  || { stamp "LEAN_BUILD_FAIL rc=$?"; tail -20 "$OUT/lean-coins-build.log"; exit 12; }
+
 export SCHEME=pearl-c-sm120-v1-h3 MODE=smoke RETAIN=1
 # the epoch's challenger entropy, which job.sh's challenger (--state) holds too: the pass's salt coin is the one it opens
 export POUW_COIN_STATE=$WORK/coin-state/$ID

@@ -90,8 +90,9 @@ theorem schedulesZk_goal (H : Claims.Msg → Claims.Msg) (rel : Readable.Parsed 
 
 /-- **The masked session returns one proof file per rep stream.** -/
 theorem sessionPZk_proofs (h : ByteArray → ByteArray) (resp : ℕ → Claims.Msg) (spec : SessionSpec)
-    (tabs : Array Setup) (trs : Array Trace) (tape : TapeZk) :
-    Ret (sessionPZk (asksS resp) (Hashes.ofSha512 h) spec tabs trs tape) fun r => r.2.size = spec.repStreams.size := by
+    (tabs : Array Setup) (words : Array (List ℕ)) (trs : Array Trace) (tape : TapeZk) :
+    Ret (sessionPZk (asksS resp) (Hashes.ofSha512 h) spec tabs words trs tape) fun r =>
+      r.2.size = spec.repStreams.size := by
   unfold sessionPZk
   refine Ret.bind (Ret.true _) fun _ _ => ?_
   refine Ret.bind (Ret.true _) fun _ _ => ?_
@@ -111,7 +112,7 @@ theorem proofCountZk_goal (H : Claims.Msg → Claims.Msg) (rel : Readable.Parsed
     ProofCountZk H rel := by
   intro o
   have := sessionPZk_proofs (Claims.hOf H) (fun j => (Claims.coinSeq o.r j).bytes) o.spec (tabsOf o.sts)
-    (tracesOf o.sts o.w) o.ω #[] _ _ o.ran
+    (MaskRank.masksOf o.sts) (tracesOf o.sts o.w) o.ω #[] _ _ o.ran
   simp [this]
 
 end FlockComplete

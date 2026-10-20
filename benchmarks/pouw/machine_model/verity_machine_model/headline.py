@@ -3,14 +3,18 @@ reading, operands free and credit ♭ (decision 89), with every number computed 
 
 A reading is a vector per family and a q*: `sheet`, the data sheet's vectors at q* = ½, and `measured`, decision 89's
 q* = 1.22 (the 1.22-slot issue floor, Theorem C, unproved in Lean) on the measured vectors, the -ri ones where they
-exist (decision 98). ε is relative to the declared capacity, the reading's Π (decision 100). A row is ε_skip at that
-vector (the design's `[skip.served]` there, which must be recorded: ♭ moves with Π), ε_mand, ε_machine and ε_luck,
-their sum (the core ε, Corollary D3's with ε_sched = ε_clock = 0 under ♭) and γ. Beside them are the conditions it is
-stated under:
+exist (decision 98). ε is relative to the declared capacity, the reading's Π (decision 100), and per node (ASK-65 = A,
+data/headline.toml's `scope`): an accepted window's node, its GPUs, host CPU and peer GPUs together, performed at
+least 1 − ε of the credited work, and a per-GPU reading is the attribution layer's (README, "The headline is per
+node"). A row is ε_skip at that vector (the design's `[skip.served]` there, which must be recorded: ♭ moves with Π),
+ε_mand, ε_machine and ε_luck, their sum (the core ε, Corollary D3's with ε_sched = ε_clock = 0 under ♭) and γ. Beside
+them are the conditions it is stated under:
 
 - the floor it needs: the ½-slot floor where ε_machine is at its floor by q* = ½, else the 1.22-slot issue floor;
 - each filler's credit, the theorem its check meets (decision 99), and the family's p = 1 sibling's ε where it has one;
-- the reading's and the family's stated conditions, from data/headline.toml.
+- the reading's and the family's stated conditions, from data/headline.toml;
+- A2u, the reading's `a2u`, wherever Π charges a uniform instruction on an issue row: no data sheet gives a uniform
+  rate, so there the uniform route is priced by A2u alone (without it the sheet rows' ε is unbounded).
 
 `TERMS` holds the terms' names, the one place they are spelled; the JSON's keys are TERMS' keys.
 """
@@ -21,7 +25,7 @@ import tomllib
 from dataclasses import asdict, dataclass, replace
 from pathlib import Path
 
-from verity_machine_model.eps import Design, design, eps, machine, setup, threshold
+from verity_machine_model.eps import Design, design, eps, machine, setup, threshold, uniform_issue_charged
 from verity_machine_model.model import DATA, device, model
 
 TERMS = {"skip": "ε_skip", "mand": "ε_mand", "machine": "ε_machine", "luck": "ε_luck", "core": "ε", "gamma": "γ",
@@ -101,10 +105,11 @@ def row(family: str, reading: str, data: Path = DATA) -> Row:
               "core": e1.core(), "gamma": e1.gamma}
     computed = (t["floor"][floor], *fillers,
                 *([f"at p = 1 ({p1['design']}): {TERMS['core']} {100 * p1['core']:.3f}%"] if p1 else []))
+    a2u = (r["a2u"],) if r.get("a2u") and uniform_issue_charged(pi) else ()
     return Row(family=family, gpu=f["gpu"], design=d.name, reading=reading, vector=pi.vector, q=q, skip=e.skip,
                mand=e.mand, machine=e.machine_eps, luck=e.luck, core=e.core(), gamma=e.gamma, threshold=thr,
                binding=e.cheat.binding, floor=floor, fillers=fillers, p1=p1,
-               conditions=(*computed, *f.get("conditions", ()), *f[reading].get("conditions", ())))
+               conditions=(*computed, *f.get("conditions", ()), *f[reading].get("conditions", ()), *a2u))
 
 
 def rows(reading: str, data: Path = DATA) -> list[Row]:
@@ -113,7 +118,7 @@ def rows(reading: str, data: Path = DATA) -> list[Row]:
 
 def record(readings: tuple[str, ...] = READINGS, data: Path = DATA) -> dict:
     t = spec(data)
-    return {"terms": TERMS, "operands": OPERANDS, "credit": CREDIT, "capacity": t["capacity"],
+    return {"terms": TERMS, "operands": OPERANDS, "credit": CREDIT, "capacity": t["capacity"], "scope": t["scope"],
             "readings": {r: {"title": t["reading"][r]["title"], "q": t["reading"][r]["q"],
                              "conditions": t["reading"][r]["conditions"],
                              "rows": [asdict(x) for x in rows(r, data)]} for r in readings}}
@@ -131,7 +136,7 @@ def text(readings: tuple[str, ...] = READINGS, data: Path = DATA) -> str:
         rd = t["reading"][r]
         rs = rows(r, data)
         out += [f"## {rd['title']} (`{r}`): q* = {rd['q']:g}, operands {OPERANDS}, credit ♭", "",
-                *(f"- {c}" for c in (t["capacity"], *rd["conditions"])), "",
+                *(f"- {c}" for c in (t["scope"], t["capacity"], *rd["conditions"])), "",
                 f"| GPU | design | Π | {T['skip']} | {T['mand']} | {T['machine']} | {T['luck']} | "
                 f"{T['core']} = their sum | {T['gamma']} | {T['threshold']} | cheater binds |",
                 "|---|---|---|---:|---:|---:|---:|---:|---:|---:|---|"]

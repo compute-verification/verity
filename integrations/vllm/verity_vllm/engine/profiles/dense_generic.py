@@ -33,13 +33,12 @@ Where the config comes from (`find_hf_config(role)`, first hit wins; the source 
 from __future__ import annotations
 
 import hashlib
-import json
 import os
 import types
 from pathlib import Path
 from typing import Any
 
-from verity_vllm.config import CHECKPOINTS as MANIFEST
+from verity_vllm.config import CHECKPOINTS as MANIFEST, checkpoint_entries
 from verity_vllm.program import model as analytic
 from verity_vllm.observe.fold.resolver import Profile
 from verity_vllm.engine.profiles.vllm_d9105ea80_sm89_eager import with_geometry
@@ -69,8 +68,8 @@ def checkpoint_entry(role: str) -> dict[str, Any] | None:
     entry of the repo `verity_vllm.engine.engine_profile.CASES[case]` names."""
     if not MANIFEST.exists():
         return None
-    m = json.loads(MANIFEST.read_text())
-    for e in m.get("checkpoints", []):
+    entries = checkpoint_entries(MANIFEST)
+    for e in entries:
         if e.get("role") == role:
             return e
     try:
@@ -79,7 +78,7 @@ def checkpoint_entry(role: str) -> dict[str, Any] | None:
         return None
     repo = (CASES.get(role) or {}).get("repo")
     if repo:
-        for e in m.get("checkpoints", []):
+        for e in entries:
             if e.get("repo") == repo:
                 return e
     return None
@@ -87,6 +86,13 @@ def checkpoint_entry(role: str) -> dict[str, Any] | None:
 
 def _sha256(p: Path) -> str:
     return hashlib.sha256(p.read_bytes()).hexdigest()
+
+
+def hf_snapshot(repo: str, revision: str) -> Path:
+    """The hub cache's snapshot of `repo` at `revision`: `$HF_HOME/hub/models--<repo>/snapshots/<revision>`, where vLLM's config
+    load reads it (HF_HUB_OFFLINE)."""
+    hf_home = os.environ.get("HF_HOME") or str(Path.home() / ".cache" / "huggingface")
+    return Path(hf_home) / "hub" / f"models--{repo.replace('/', '--')}" / "snapshots" / revision
 
 
 def find_hf_config(role: str) -> tuple[Path, str, dict[str, Any] | None] | None:
@@ -103,10 +109,9 @@ def find_hf_config(role: str) -> tuple[Path, str, dict[str, Any] | None] | None:
         lp = Path(entry.get("local_path") or "") / "config.json"
         if entry.get("local_path") and lp.exists():
             return lp, "manifest:local_path", entry
-        hf_home = os.environ.get("HF_HOME") or str(Path.home() / ".cache" / "huggingface")
         repo, rev = entry.get("repo"), entry.get("revision")
         if repo and rev:
-            snap = Path(hf_home) / "hub" / f"models--{repo.replace('/', '--')}" / "snapshots" / rev / "config.json"
+            snap = hf_snapshot(repo, rev) / "config.json"
             if snap.exists():
                 return snap, "hf_home:snapshot", entry
     return None
