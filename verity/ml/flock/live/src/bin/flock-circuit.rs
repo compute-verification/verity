@@ -1337,11 +1337,13 @@ impl Firewall {
             use std::sync::atomic::Ordering::SeqCst;
             let mut g = d.lock().unwrap_or_else(PoisonError::into_inner);
             let d = &mut *g;
-            if !d.two || IN_FIREWALL.with(|g| g.get()) {
+            let own = IN_FIREWALL.with(|g| g.get());
+            if !d.two || own {
                 let f = d.fork.as_mut().expect("the firewall's salts for a rep");
                 let id = f.next_id();
                 let b = f.expand(id, n);
-                if let Some(h) = d.hi_salts.as_mut() {
+                // the shadow opening's trees: the Lean finish commits levels ≥ 1 under these
+                if let Some(h) = d.hi_salts.as_mut().filter(|_| own) {
                     h.extend_from_slice(&b);
                 }
                 return b;
