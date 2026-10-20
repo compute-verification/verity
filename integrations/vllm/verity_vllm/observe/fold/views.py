@@ -11,6 +11,7 @@ Implemented by lane L2 (memory).  Contract used by `memory.py`, `resolver.py` pa
                                  allocation start (i.e. including v.offset)
     is_contiguous(v)          -> bool
     same_storage(a, b)        -> bool            same allocation id
+    same_element(a, b)        -> bool            one element each, at the same storage offset of one allocation
     byte_extent(v)            -> (lo_byte, hi_byte)   the half-open byte range of the allocation `v` touches
 
 Views never carry values; all functions are total on well-formed descriptors and raise ValueError otherwise.
@@ -131,6 +132,11 @@ def element_runs(v: ViewDesc) -> list[tuple[int, int]]:
 
 def same_storage(a: ViewDesc, b: ViewDesc) -> bool:
     return a.alloc == b.alloc
+
+
+def same_element(a: ViewDesc, b: ViewDesc) -> bool:
+    """Both views are one element of the same allocation at the same storage offset (same element width)."""
+    return a.alloc == b.alloc and a.numel == 1 and b.numel == 1 and a.offset == b.offset and a.itemsize == b.itemsize
 
 
 def byte_extent(v: ViewDesc) -> tuple[int, int]:

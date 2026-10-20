@@ -221,13 +221,42 @@ def carried(sha: str, tree: Path) -> dict | None:
     return {**lab, "from": prev}
 
 
+def queued_path() -> Path:
+    """Beside LOCK: each job's landing and the check drive landed it on (`--attempt`), so a job that waited finds the tip's."""
+    return LOCK.with_name(LOCK.stem + ".attempts.json")
+
+
+def note_attempt(sha: str, attempt: str, keep: int = 200) -> None:
+    """Record ``sha``'s attempt for `later_landing`: drive's landings carry no `Check:` line, and drive cancels a train's check
+    once it lands, so `check_attempt` finds no attempt for main's tip (19 Oct: five post-train jobs queued, none superseded,
+    each a 200 GB regression of about an hour on node 1)."""
+    p = queued_path()
+    with open(p.with_suffix(".lock"), "a") as guard:
+        fcntl.flock(guard, fcntl.LOCK_EX)
+        try:
+            got = json.loads(p.read_text())
+        except (OSError, ValueError):
+            got = {}
+        got = {k: v for k, v in got.items() if k != sha}
+        got[sha] = attempt
+        p.write_text(json.dumps(dict(list(got.items())[-keep:])))
+
+
+def queued_attempt(sha: str) -> str | None:
+    try:
+        return json.loads(queued_path().read_text()).get(sha)
+    except (OSError, ValueError, AttributeError):
+        return None
+
+
 def later_landing(sha: str, cwd: Path = ROOT) -> str | None:
-    """The attempt of origin/main's tip when that tip is a landing after ``sha``, else None."""
+    """The attempt of origin/main's tip when that tip is a landing after ``sha`` (its `Check:` line or passed check, else the
+    attempt its own post-train job recorded, `note_attempt`), else None."""
     git("fetch", "-q", "origin", "main", cwd=cwd)
     tip = git("rev-parse", "origin/main", cwd=cwd)
     if tip == sha or subprocess.run(["git", "merge-base", "--is-ancestor", sha, tip], cwd=cwd, capture_output=True).returncode:
         return None
-    return check_attempt(tip, cwd=cwd)
+    return check_attempt(tip, cwd=cwd) or queued_attempt(tip)
 
 
 def _status(p: Path) -> dict:
@@ -265,6 +294,8 @@ def main(argv: list[str] | None = None) -> int:
                "has no `Check:` trailer and is no checked commit of origin/main, so it is no landing of main")
         print(f"post-train: {sha[:12]} {why}", file=sys.stderr)
         return 2
+    if attempt and not a.dry_run:
+        note_attempt(sha, attempt)
     with open(LOCK, "a") as lock:
         try:
             fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)

@@ -168,6 +168,10 @@ def ZkLive (x : Claims.Msg) : Prop :=
     (hlay : (L.model (Refine.regionsOf st)).LinkLayout PT_LOCAL spec.mPts),
     ZkLiveAt execArith Discharge.ZkExec.hs512 (wide true) x (zkTab L hz hk hlay)
 
+namespace Gen
+
+variable [S : ZkSetup]
+
 /-- The readable statement's `k_log` is table 0's. -/
 theorem parse_kLog {zk : Bool} {x : Claims.Msg} {s : Claims.Flock.Stmt} (hs : parse zk Readable.relation x = some s)
     {ins : Ins} {spec : SessionSpec} {sts : Array Stmt} (hset : setupOf zk x = some (ins, spec, sts))
@@ -176,6 +180,15 @@ theorem parse_kLog {zk : Bool} {x : Claims.Msg} {s : Claims.Flock.Stmt} (hs : pa
   obtain ⟨hpst, -, -⟩ := parseBytes_setup hp hset
   subst hpst
   simp only [Readable.toReadable, Array.getElem?_eq_getElem h0, Option.map_some, Option.getD_some]
+
+end Gen
+
+/-- The readable statement's `k_log` is table 0's. -/
+theorem parse_kLog {zk : Bool} {x : Claims.Msg} {s : Claims.Flock.Stmt} (hs : parse zk Readable.relation x = some s)
+    {ins : Ins} {spec : SessionSpec} {sts : Array Stmt} (hset : setupOf zk x = some (ins, spec, sts))
+    (h0 : 0 < sts.size) : s.kLog = sts[0].c.kLog :=
+  Gen.parse_kLog (S := S₀) (zk := zk) (x := x) (s := s) (hs := hs) (ins := ins) (spec := spec) (sts := sts)
+    (hset := hset) (h0 := h0)
 
 /-- **Table 0 of a masked statement in scope**: its layout and its link layout at `PT_LOCAL` (`plain_table0`). -/
 theorem zk_table0 {x : Claims.Msg} {s : Claims.Flock.Stmt} (hs : parse true Readable.relation x = some s)

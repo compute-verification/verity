@@ -67,6 +67,9 @@ import Proofs.Flock.Soundness.SessionBatchAcc
 import Proofs.Flock.Soundness.Game.Seq
 import Proofs.Flock.Soundness.ExtractWait
 import Proofs.Flock.Soundness.LinkFinder
+import Proofs.Flock.Soundness.Game.LockLin
+import Proofs.Flock.Soundness.Game.LockOff
+import Proofs.Flock.Soundness.ExtractAccLin
 import Proofs.Flock.Soundness.Lowering
 import Proofs.Flock.Soundness.ExecRows
 import Proofs.Flock.Soundness.ExecDelta
@@ -122,6 +125,8 @@ import Proofs.Flock.Soundness.Audit.InfluenceWitness
 import Proofs.Flock.Soundness.Audit.Partitioning
 import Proofs.Flock.Soundness.Audit.TwoStageExfil
 import Proofs.Flock.Soundness.Audit.HarmBound
+import Proofs.Flock.Soundness.Audit.HarmBudget
+import Proofs.Flock.Soundness.Audit.HarmBudgetLife
 import Proofs.Flock.Soundness.Refine
 import Proofs.Flock.Soundness.E2E
 import Proofs.Flock.Soundness.Certificate

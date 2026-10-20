@@ -224,7 +224,6 @@ theorem sendCountZk_goal (H : Claims.Msg → Claims.Msg) (rel : Readable.Parsed 
     simp only [hsts, rounds, repRounds, hv, List.foldl_toArray', List.foldl_cons, List.foldl_nil, ↓reduceIte]
     simp only at hk0 hL ⊢
     omega
-  have := hP #[] _ _ o.ran
-  simpa using this
+  exact sendsC_ran hP o.ran
 
 end FlockComplete

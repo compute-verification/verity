@@ -22,7 +22,8 @@ E, H and Q, 5 instructions, and chunk 0 is 3, which makes 3 + 15·5 = 78. XOR wi
 (u ⊕ κ = σu + c with σ = ±1), so σ and c fold into E's and H's constants: k costs nothing.
 
 The certificates (ldtm0 rebuilt from the heavy design, its fold li's and its LDTM floor 0, which reproduces #2706's
-certificate bit for bit; checked against the real design when it is present):
+certificate bit for bit; checked against the real design with its `[fold_routes]` off when it is present. With them on,
+the real design's certificate is DS_issue ⅔ + DS_alu ⅓, the Lean form's π*, where the break-even is 2 instructions):
 - The plain cheater's π* is DS_issue 0.02135 + DS_alu 0.97865, so a LOP3 is 1.9786 and an IMAD 0.02135. The
   break-even is 92.66 instructions, and 78 is under it: the design's sentence is false.
 - The lucky cheater's (Theorem S's shortfall open) is DS_issue 0.03147 + DS_alu 0.96853, break-even 62.54. INT-HB's
@@ -58,7 +59,8 @@ What is shown, and how:
   or 3 instructions, while the same search finds the 2-instruction 2-bit one. With a chunk costing 2 extractions, its
   combine c and a shift, 3-bit chunks total about 30 + 11c, so they'd need c ≤ 2 to get under 63. This rules out
   only that family. It is no bound on all programs.
-- Not shown: any bound N ≥ 63, or N ≥ 4, over all programs.
+- Not shown: any bound N ≥ 63, or N ≥ 4, over all programs. `fold_xor_search.py` searches all programs of k
+  instructions on this menu (the forms `class_of` routes to IMAD and FFMA) for x ⊕ y ⊕ K, with every constant symbolic.
 
 Run: `python fold_xor.py [--mutations] [--verdict PATH]`. Stdlib, numpy, exact_kit, `facet_break.loads` (the class
 map) and the machine model. The device check is `fold_xor.sh` (fold_xor.cu on sm_100a), and
@@ -426,9 +428,13 @@ def main() -> int:
              and abs(la / lm - 62.545) < 1e-2, {"pi": lucky.pi, "breakeven": round(la / lm, 4)})
     real = E.design(LDTM0, data) if LDTM0 in E.designs(data) else None   # #2706's, once it lands
     if real is not None:
-        rp = E.setup(real, pi, data, "free", "floor").cheat(Q)
-        ck.check("the rebuild's certificate is the real design's (#2706), bit for bit", rp.pi == plain.pi
-                 and real.fold == d.fold, rp.pi)
+        bare = replace(real, fold_routes={}, fold_routes_source="")
+        rp, r0 = E.setup(real, pi, data, "free", "floor").cheat(Q), E.setup(bare, pi, data, "free", "floor").cheat(Q)
+        ra, rm = price(pi, rp.pi, "ALU"), price(pi, rp.pi, "IMAD")
+        ck.check("the rebuild's certificate is the real design's with its fold routes off (#2706's menu), bit for bit; "
+                 "with them on it is DS_issue 2/3 + DS_alu 1/3, break-even 2", r0.pi == plain.pi
+                 and real.fold == d.fold and abs(rp.pi["DS_issue"] - 2 / 3) < 1e-9 and abs(ra / rm - 2) < 1e-9,
+                 {"routes off": r0.pi, "routes on": rp.pi, "breakeven": round(ra / rm, 4)})
     ck.check("78 is under the plain break-even (the design's 'no IMAD- or FP-pipe program under 93' is false) and over "
              "the lucky one", 78 * pm < pa and 78 * lm > la,
              f"plain: 78 x {pm:.5f} = {78 * pm:.4f} < {pa:.4f}; lucky: 78 x {lm:.5f} = {78 * lm:.4f} > {la:.4f}")
@@ -439,10 +445,11 @@ def main() -> int:
     base = 1 - plain.T / T0
     rest = LDTM0_SKIP_DS100
     if real is not None:
-        e0 = E.eps(real, pi, Q, data, operands="free", credit="floor")
-        ck.check("the real design's skip and mand are the constant's, and its headline is skip + mand + ε_machine + "
-                 "ε_luck", abs(e0.skip - rest) < 1e-12 and e0.mand == 0.0
-                 and abs(e0.core() - (rest + base + lu0)) < 1e-9, f"core {e0.core():.5%}")
+        e0 = E.eps(bare, pi, Q, data, operands="free", credit="floor")
+        ck.check("the real design's mand is 0 and, with its fold routes off, its headline is its skip + ε_machine + "
+                 "ε_luck (its [skip.served], re-measured with the routes, is not #2706's constant)", e0.mand == 0.0
+                 and abs(e0.core() - (e0.skip + base + lu0)) < 1e-9,
+                 f"skip {e0.skip:.4%} (#2706's {rest:.4%}), core {e0.core():.5%}")
     h78, m78, l78, x78, mix78, lk78 = headline(s, rest, 78)
     ck.check("re-solved with the 78 route open, the plain cheater moves a share of li's XORs and ε_machine rises; "
              "ε_luck falls by as much and the lucky cheater doesn't move, so ε_machine + ε_luck is unchanged",
