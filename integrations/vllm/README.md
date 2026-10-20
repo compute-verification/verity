@@ -402,6 +402,7 @@ also backfills one from other evidence).  A new model's module carries the marke
 `verity-vllm rejudge RUN` (`pipeline/tp/rejudge.py`) recomputes a finished TP Commit's gates that need no GPU from what it saved
 (its runs in the row's `runs.jsonl`, each run's verdict from its ranks', manifest agreement, the cross-rank check, `summary.pass`),
 so a fix to gate code can be judged against a failed Commit without rerunning it; it names the gates that need the live values.
+A Commit whose rank verdict is still pending (a deferred replay not yet run) rejudges PENDING, exit 3, rather than FAIL.
 
 The pod runtime (Python 3.12, torch cu129, vLLM `d9105ea80`, native taps, `hidden_gpu`) is built by `verity_vllm/ops/pod_bootstrap.sh`
 and exercised through `research run --source <sha> --on <machine>`.  On a pod without a GPU (`nvidia-smi` absent, or `--cpu`)
