@@ -1105,11 +1105,8 @@ fn lean_hello(st: &Stmt, inst: &Instances, tables: usize, draw: &str, nonce: Opt
     static HELLO: Mutex<Option<Hello>> = Mutex::new(None);
     let mut g = HELLO.lock().unwrap_or_else(PoisonError::into_inner);
     if !matches!(&*g, Some((j, ..)) if *j == tables) {
-        let public = std::env::temp_dir().join(format!("flock-hello-{}-{tables}.pub", std::process::id()));
-        std::fs::write(&public, inst.public_file()?).map_err(|e| format!("the Lean Hello's public file {}: {e}", public.display()))?;
-        let mut args: Vec<String> = vec!["--statement".into(), lean_statement(st), "--circuit".into(), arg("--circuit", "circuit.txt"),
-            "--public".into(), public.display().to_string(), "--tables".into(), arg("--tables", "tables"), "--session-tables".into(), tables.to_string()];
-        args.extend(std::env::var("FC_FIREWALL_HELLO_ARGS").unwrap_or_default().split_whitespace().map(String::from));
+        let public = lean_public(inst, "hello", tables)?;
+        let args = lean_statement_args(st, &public, tables);
         *g = Some((tables, flock_live::firewall::LeanHello::start(&flock_live::firewall::lean_frame_exe(), &args)?, Some(public)));
     }
     let (_, lean, public) = g.as_mut().expect("the Lean Hello started");
@@ -1118,6 +1115,44 @@ fn lean_hello(st: &Stmt, inst: &Instances, tables: usize, draw: &str, nonce: Opt
         let _ = std::fs::remove_file(p);
     }
     h
+}
+
+/// The verifier's own public file of `inst` (`Instances::public_file`), written where a Lean process `what` reads it.
+fn lean_public(inst: &Instances, what: &str, tables: usize) -> Result<std::path::PathBuf, String> {
+    let public = std::env::temp_dir().join(format!("flock-{what}-{}-{tables}.pub", std::process::id()));
+    std::fs::write(&public, inst.public_file()?).map_err(|e| format!("the Lean {what}'s public file {}: {e}", public.display()))?;
+    Ok(public)
+}
+
+/// The statement flags a firewalled session's Lean `Hello` is set up on (`Flock.Firewall.Hello.Setup`): the statement, the
+/// circuit, the public file `public`, the lookup tables and `tables`, then `FC_FIREWALL_HELLO_ARGS`' flags.
+fn lean_statement_args(st: &Stmt, public: &std::path::Path, tables: usize) -> Vec<String> {
+    let mut args: Vec<String> = vec!["--statement".into(), lean_statement(st), "--circuit".into(), arg("--circuit", "circuit.txt"),
+        "--public".into(), public.display().to_string(), "--tables".into(), arg("--tables", "tables"), "--session-tables".into(), tables.to_string()];
+    args.extend(std::env::var("FC_FIREWALL_HELLO_ARGS").unwrap_or_default().split_whitespace().map(String::from));
+    args
+}
+
+/// Where a session of `tables` tables against the auditor at `verifier` connects, and whether that is the firewall's Lean
+/// session loop (`firewall::LeanSession`, one process for every such session), which then owns the auditor's connection: a
+/// firewalled statement's, unless `FC_FIREWALL_SESSION=0` or `FC_FIREWALL_TRANSCRIPT` (whose recording is the prover's
+/// side of the wire) keep the Rust checks (`coin_tree::Checked` with `LeanCoins`, `lean_hello`) on the auditor's own address.
+fn session_addr(st: &Stmt, inst: &Instances, tables: usize, verifier: &str) -> Result<(String, bool), String> {
+    if !firewall_on(st) || std::env::var("FC_FIREWALL_SESSION").as_deref() == Ok("0") || std::env::var_os("FC_FIREWALL_TRANSCRIPT").is_some() {
+        return Ok((verifier.to_string(), false));
+    }
+    static SESSIONS: Mutex<Vec<(String, usize, flock_live::firewall::LeanSession)>> = Mutex::new(Vec::new());
+    let mut g = SESSIONS.lock().unwrap_or_else(PoisonError::into_inner);
+    if let Some((.., s)) = g.iter().find(|(v, j, _)| v == verifier && *j == tables) {
+        return Ok((s.addr().to_string(), true));
+    }
+    let public = lean_public(inst, "session", tables)?;
+    let s = flock_live::firewall::LeanSession::start(&flock_live::firewall::lean_frame_exe(), verifier, &lean_statement_args(st, &public, tables));
+    let _ = std::fs::remove_file(&public);
+    let s = s?;
+    let addr = s.addr().to_string();
+    g.push((verifier.to_string(), tables, s));
+    Ok((addr, true))
 }
 
 thread_local! {
@@ -3182,6 +3217,8 @@ struct Plan {
     /// verifier accepts them; the barrier's order check must not). A test harness's only: a proving build has no such prover
     #[cfg(feature = "seed-injection")]
     early_proofs: bool,
+    /// the transport is the firewall's Lean session loop ([`session_addr`]), which sends its own `Hello` and checks every coin
+    lean_session: bool,
 }
 
 fn call(t: &SharedTransport, r: Req) -> Result<Resp, String> {
@@ -3373,8 +3410,9 @@ fn session_proved(st: &Arc<Stmt>, inst: &Arc<Instances>, t: SharedTransport, pla
     let log = Arc::new(Mutex::new(Vec::new()));
     let names = table_names(plan.tables);
     // M2: every coin the verifier sends is checked against its step-0 commitment before the prover uses it; under the
-    // firewall the Lean check's verdict decides (`flock-firewall coins`)
-    let t: SharedTransport = if is_zk(st) {
+    // firewall the Lean check's verdict decides: the Lean session loop's own (`flock-firewall session`), else
+    // `flock-firewall coins`'
+    let t: SharedTransport = if is_zk(st) && !plan.lean_session {
         let c = flock_live::coin_tree::Checked::new(SharedCall(t), coin_spec_of(&names));
         if firewall_on(st) {
             let lean = flock_live::firewall::LeanCoins::start(&flock_live::firewall::lean_frame_exe()).unwrap_or_else(|e| refuse(e));
@@ -3418,8 +3456,11 @@ fn session_proved(st: &Arc<Stmt>, inst: &Arc<Instances>, t: SharedTransport, pla
     };
     let st = &tabs.list[0].st;
     let sig = session_sigma(&tabs.parts());
-    // under the firewall the Hello is Lean's, at a nonce it draws (a simulator's rewind restarts at the plan's)
-    let hello = if firewalled {
+    // under the firewall the Hello is Lean's, at a nonce it draws (a simulator's rewind restarts at the plan's); the Lean
+    // session loop sends its own in place of whatever the prover sends
+    let hello = if plan.lean_session {
+        String::new()
+    } else if firewalled {
         match lean_hello(st, inst, names.len(), &draw, plan.coin_nonce.as_ref()) {
             Ok(Ok(h)) => h,
             Ok(Err(e)) | Err(e) => {
@@ -5248,8 +5289,10 @@ fn prove_sessions(st: &Arc<Stmt>, inst: &Arc<Instances>, base: &Plan, seeds: &[P
                 emit_one(r, join(h), rtt);
             }
         }
+        let (addr, lean) = session_addr(st, inst, table_names(plan.tables).len(), addrs[run % addrs.len()]).unwrap_or_else(|e| refuse(e));
+        plan.lean_session = lean;
+        let addr = addr.as_str();
         if let Some(fw) = fw {
-            let addr = addrs[run % addrs.len()];
             let mut rtt = (0.0, 0.0, 0);
             let out = flock_live::release::outer_session(&fw.rec, &fw.session, &fw.part, &flock_live::release::SystemClock,
                 || eprintln!("firewall: {} at {} waits for the outer slot", fw.session, fw.part),
@@ -5271,7 +5314,7 @@ fn prove_sessions(st: &Arc<Stmt>, inst: &Arc<Instances>, base: &Plan, seeds: &[P
             emit_one(run, (v, proofs), rtt);
             continue;
         }
-        let mut tcp = TcpTransport::connect(addrs[run % addrs.len()]).unwrap();
+        let mut tcp = TcpTransport::connect(addr).unwrap();
         let rtt = tcp.ping_rtt(30);
         let proved = session_proved(st, inst, shared(tcp), &plan, seeds[run]);
         let finish = move || match proved {
