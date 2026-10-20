@@ -73,8 +73,8 @@ def test_the_fold_menu_is_every_bit_exact_checkpoint_loop():
     """RT3-DC-1, -4: on both devices the fold menu is the design's fold and every bit-exact checkpoint loop rt3_dc times
     (r20261019-183610-89bd on the H200, r20261019-192247-8771 on the B200), with RT4-SHEET-7's L2 XORs through a generic
     address (ATOM.E, bit-exact on the RTX PRO 6000, r20261020-001850-def6), and π* prices each class each of them issues
-    above 0, so no route folds for free at the certificate FOLD-OPT is asked at. Each sheet's catch-all is priced at its
-    issue slot alone."""
+    above 0, so no route folds for free at the certificate FOLD-OPT is asked at. Each reading's catch-all is priced at
+    its issue slot alone: the sheet's at DS_issue, the measured reading's on the measured issue row (DC-CENSUS-13)."""
     for fam in H.FAMILIES:
         for v in (fam.sheet, fam.measured):
             x = H.reading(fam, v).data
@@ -83,6 +83,8 @@ def test_the_fold_menu_is_every_bit_exact_checkpoint_loop():
             assert not free, (fam.ns, v, free)
         k = H.CATCH_ALL[fam.key]
         assert H.reading(fam, fam.sheet).data.c[k] == {"DS_issue": 1}, (fam.ns, k)
+        k = H.CATCH_ALL[fam.measured]
+        assert H.reading(fam, fam.measured).data.c[k] == {"issue": 1}, (fam.ns, k)
 
 
 def test_the_h200_measured_menu_is_honests_form():

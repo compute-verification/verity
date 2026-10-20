@@ -8,7 +8,8 @@ and checked against it by `benchmarks/pouw/tests/test_lean_headline_dc.py`: edit
 this file. `Accounting.Guarantees.TS.Sm100MeasuredHeadline` reads it.
 
 * `rowNames`, `dc100ri`, `machine`: the measured vector DC-100-ri, 11 rows of SMSP-cycles a warp instruction at its
-  epoch's census, each sparse over `Sm100.classes`; every facet SM-clocked, f_max 1965 MHz.
+  epoch's census, each sparse over `Sm100.classes`; every facet SM-clocked, f_max 1965 MHz. `UNLISTED` is A2's catch-all
+  here: every warp instruction no other class prices on DC-100-ri counts there, at the measured issue slot alone.
 * `d2s`, `model`: `dither-2s-licpw-redux-ldtm0-l32` on that machine, its writer kinds every census MMA class (ω = m·n);
   `Sm100.d2s`'s vector classes, fold routes, floors and `N_w`.
 * `flatFold`, `flatSkip`, `flat`: ♭ is `Sm100.flat`'s word production and filler, its fold DC-100-ri's (the fold routes'
@@ -32,14 +33,14 @@ def dc100ri : List Sparse := [
    (10, 1, 1), (11, 1, 1), (12, 1, 1), (13, 1, 1), (14, 1, 1), (15, 1, 1), (16, 1, 1), (17, 1, 1), (18, 1, 1),
    (19, 1, 1), (20, 1, 1), (21, 1, 1), (22, 1, 1), (23, 1, 1), (24, 1, 1), (25, 4621557459999999, 5000000000000000),
    (26, 1, 1), (27, 1, 1), (28, 1, 1), (29, 1, 1), (30, 1, 1), (31, 1, 1), (32, 1, 1), (33, 1, 1), (34, 1, 1),
-   (35, 1, 1), (36, 1, 1)],
+   (35, 1, 1), (36, 1, 1), (37, 1, 1)],
   -- 1: M
   [(5, 7845459510917193, 1000000000000000), (6, 3923192829282303, 500000000000000),
-   (26, 5018695645016817, 10000000000000), (27, 25097075487987533, 100000000000000),
-   (28, 5018695645016817, 10000000000000), (29, 490239219482687, 3125000000000),
-   (30, 18824101664455307, 100000000000000), (31, 12547895316422789, 50000000000000),
-   (32, 627327321630517, 1250000000000), (33, 12550786758618753, 100000000000000),
-   (34, 25097075487987533, 100000000000000), (35, 5018695645016817, 10000000000000)],
+   (27, 5018695645016817, 10000000000000), (28, 25097075487987533, 100000000000000),
+   (29, 5018695645016817, 10000000000000), (30, 490239219482687, 3125000000000),
+   (31, 18824101664455307, 100000000000000), (32, 12547895316422789, 50000000000000),
+   (33, 627327321630517, 1250000000000), (34, 12550786758618753, 100000000000000),
+   (35, 25097075487987533, 100000000000000), (36, 5018695645016817, 10000000000000)],
   -- 2: A
   [(0, 3922117723932331, 2000000000000000)],
   -- 3: I
@@ -53,7 +54,7 @@ def dc100ri : List Sparse := [
    (14, 1654593511461907, 100000000000000), (15, 17773123589147233, 5000000000000000),
    (16, 3333703374407893, 100000000000000)],
   -- 6: TM100_0
-  [(14, 10337059, 625000), (28, 19911599, 1000000)],
+  [(14, 10337059, 625000), (29, 19911599, 1000000)],
   -- 7: JI100_0
   [(0, 122510713, 125000000), (1, 122510713, 125000000), (2, 122510713, 125000000), (3, 122510713, 125000000),
    (4, 122510713, 125000000), (5, 122510713, 125000000), (6, 122510713, 125000000), (7, 122510713, 125000000),
@@ -61,20 +62,20 @@ def dc100ri : List Sparse := [
    (12, 122510713, 125000000), (13, 122510713, 125000000), (14, 122510713, 125000000), (15, 122510713, 125000000),
    (16, 122510713, 125000000), (17, 122510713, 125000000), (18, 122510713, 125000000), (19, 122510713, 125000000),
    (20, 122510713, 125000000), (21, 122510713, 125000000), (22, 122510713, 125000000), (23, 122510713, 125000000),
-   (24, 122510713, 125000000), (25, 539, 625000), (26, 122510713, 125000000), (27, 122510713, 125000000),
-   (28, 108760423, 100000000), (29, 122510713, 125000000), (30, 122510713, 125000000), (31, 122510713, 125000000),
-   (32, 122510713, 125000000), (33, 122510713, 125000000), (34, 122510713, 125000000), (35, 122510713, 125000000),
-   (36, 122510713, 125000000)],
+   (24, 122510713, 125000000), (25, 539, 625000), (27, 122510713, 125000000), (28, 122510713, 125000000),
+   (29, 108760423, 100000000), (30, 122510713, 125000000), (31, 122510713, 125000000), (32, 122510713, 125000000),
+   (33, 122510713, 125000000), (34, 122510713, 125000000), (35, 122510713, 125000000), (36, 122510713, 125000000),
+   (37, 122510713, 125000000)],
   -- 8: JPA100_0
-  [(0, 3920543, 2000000), (28, 27417101, 2500000)],
+  [(0, 3920543, 2000000), (29, 27417101, 2500000)],
   -- 9: JPA100_1
-  [(0, 682401081, 1000000000), (28, 250834541, 500000)],
+  [(0, 682401081, 1000000000), (29, 250834541, 500000)],
   -- 10: UP
   [(25, 9786457500000001, 5000000000000000)]]
 
 /-- The measured machine: DC-100-ri's rows over `Sm100.classes`. -/
-noncomputable def machine : Machine (Fin 37) (Fin 11) :=
-  rowsMachine 37 11 dc100ri 1965
+noncomputable def machine : Machine (Fin 38) (Fin 11) :=
+  rowsMachine 38 11 dc100ri 1965
 
 /-- `dither-2s-licpw-redux-ldtm0-l32`'s design data on DC-100-ri: writer kinds as (class, ω), and `Sm100.d2s`'s routes.
 -/
@@ -82,16 +83,16 @@ def d2s : DesignData where
   writers := [
     (5, 128),  -- IMMA16816_S8
     (6, 128),  -- IMMA16832_S8
-    (26, 32768),  -- UTCHMMA_F16_M128_N256
-    (27, 16384),  -- UTCIMMA_M128_N128
-    (28, 32768),  -- UTCIMMA_M128_N256
-    (29, 4096),  -- UTCIMMA_M128_N32
-    (30, 8192),  -- UTCIMMA_M128_N64
-    (31, 8192),  -- UTCIMMA_M64_N128
-    (32, 16384),  -- UTCIMMA_M64_N256
-    (33, 4096),  -- UTCIMMA_M64_N64
-    (34, 16384),  -- UTCQMMA_E4M3_M128_N128
-    (35, 32768),  -- UTCQMMA_E4M3_M128_N256
+    (27, 32768),  -- UTCHMMA_F16_M128_N256
+    (28, 16384),  -- UTCIMMA_M128_N128
+    (29, 32768),  -- UTCIMMA_M128_N256
+    (30, 4096),  -- UTCIMMA_M128_N32
+    (31, 8192),  -- UTCIMMA_M128_N64
+    (32, 8192),  -- UTCIMMA_M64_N128
+    (33, 16384),  -- UTCIMMA_M64_N256
+    (34, 4096),  -- UTCIMMA_M64_N64
+    (35, 16384),  -- UTCQMMA_E4M3_M128_N128
+    (36, 32768),  -- UTCQMMA_E4M3_M128_N256
     (25, 2)  -- UNI
   ]
   vec := Sm100.d2s.vec
@@ -102,8 +103,8 @@ def d2s : DesignData where
   Nw := Sm100.d2s.Nw
 
 /-- `dither-2s-licpw-redux-ldtm0-l32`'s TS model on the measured machine. -/
-noncomputable def model : Model (Fin 37) (Fin 11) (Fin 13) Unit Empty (Fin 14) Unit :=
-  d2s.model 37 13 14 machine
+noncomputable def model : Model (Fin 38) (Fin 11) (Fin 13) Unit Empty (Fin 14) Unit :=
+  d2s.model 38 13 14 machine
 
 /-- ♭'s fold a unit on DC-100-ri: the lane fold for 32768 words, the fold routes' cheapest, cp-red2 on every word. -/
 def flatFold : Sparse := [(0, 536, 1), (4, 512, 1), (18, 16, 1)]
@@ -112,8 +113,8 @@ def flatFold : Sparse := [(0, 536, 1), (4, 512, 1), (18, 16, 1)]
 def flatSkip : Sparse := [(3, 1445669286395, 165309230717)]
 
 /-- The floor program ♭ on DC-100-ri, labelled. -/
-noncomputable def flat : Labelled (Fin 37) :=
-  labelled 37 Sm100.flatWords flatFold Sm100.flatFill flatSkip
+noncomputable def flat : Labelled (Fin 38) :=
+  labelled 38 Sm100.flatWords flatFold Sm100.flatFill flatSkip
 
 /-- π*: the certificate, its weights exact and summing to 1. -/
 noncomputable def lamStar : Fin 11 → ℝ :=

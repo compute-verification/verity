@@ -35,8 +35,14 @@ program, and the bound is at most the family's target. A uniform writer heads 2 
 pair, RT-HOPPER-7). The fold menu is the design's fold and its `fold_routes`, every bit-exact checkpoint loop
 (CP_SEG4 and CP_SEG4U, RT2-HOPPER-9, -11; CP_ATS, CP_ATS2, CP_ATS8, CP_RED, CP_RED2, CP_RED8 and CP_XT, RT3-DC-1, -4;
 CP_RED, CP_RED2 and CP_RED8 through a generic address, ATOM.E, RT4-SHEET-7) on lanes, and alone on the uniform datapath
-at the least of their counts. Each sheet declares A2's catch-all (`CATCH_ALL`), as sm_120's does: every warp
-instruction no class of the sheet names counts there, at its issue slot alone. ♭ folds by `setup`'s mix of them on each vector
+at the least of their counts. Each reading declares A2's catch-all (`CATCH_ALL`), as sm_120's sheet does: every warp
+instruction no class of the reading prices counts there, at its issue slot alone, NOROW's DS_issue on a sheet and
+UNLISTED's measured issue line on DC-90-ri and DC-100-ri. A class no run has measured on a pipe is read the same way
+(A2's reading, the coordinator's ruling of 20 Oct 03:12Z): ATOME32, the generic-address red's ATOM.E, carries SHFL's
+issue and joint issue lines and no pipe row. Charging it SHFL's every row (RT3-DC's reading) would charge pipes
+nobody measured it on, which inflates ♭'s credit and, where a cheater uses the class, can overstate the floor. Measured
+rows replace it once a device batch prices them (r20261020-031119-3113 on the H200, r20261020-031119-013a on the
+B200, or a later one). ♭ folds by `setup`'s mix of them on each vector
 and writes by its split of the words between the tensor route and the design's baseline program (`_flat_shares`), so
 a measured file states its own `flatFold` or `flatWords` where that mix or split is not the sheet's.
 """
@@ -116,7 +122,9 @@ SM100 = Family("Sm100", "B200", "sm_100", "dither-2s-licpw-redux-ldtm0-l32", "DS
                (2048, 4096, 8192, 32768), 1965, "the driver's reported maximum (the data sheet gives no clock)",
                {"UNI": 2}, Fraction(1, 100), Fraction(1, 100))
 FAMILIES = (SM90, SM100)
-CATCH_ALL = {"sm_90": "NOROW", "sm_100": "NOROW"}    # A2's catch-all by device, on its sheet: issue alone
+# A2's catch-all by device on its sheet (DS_issue alone) and by vector on its measured reading (the measured issue row
+# alone): NOROW is a class on the measured vectors, at SHFL's joint issue rows, so UNLISTED carries the measured one
+CATCH_ALL = {"sm_90": "NOROW", "sm_100": "NOROW", "DC-90-ri": "UNLISTED", "DC-100-ri": "UNLISTED"}
 
 
 def shape(k: str, h: E.Honest) -> tuple[int, int] | None:
@@ -303,6 +311,10 @@ def reading(fam: Family, vector: str, full: bool = False) -> Reading:
     classes = sorted(pi.c)
     c = _coefs(pi, classes)
     lists = _sheet_check(fam, pi, c, h) if sheet else {}
+    k = CATCH_ALL.get(vector)
+    if not sheet and k is not None and c.get(k) != {"issue": 1}:
+        raise SystemExit(f"{vector}: the catch-all {k} is priced at {c.get(k)}, not at the measured issue slot alone: "
+                         f"give it one issue line in {fam.key}'s census.csv and none on another of {vector}'s rows")
     load = lambda r, n: sum((c[k].get(r, Fraction(0)) * v for k, v in n.items()), Fraction(0))
     per_mma = Fraction(h.words * h.depth, d.L)
     if per_mma.denominator != 1:
@@ -651,7 +663,9 @@ def render_measured(fam: Family, r: Reading, s: Reading) -> str:
                    " " * (len(f"  cert {m} ["))).lstrip()
     bullets = [
         f"`rowNames`, `{sv}`, `machine`: the measured vector {fam.measured}, {m} rows of SMSP-cycles a warp instruction "
-        f"at its epoch's census, each sparse over `{fam.ns}.classes`; every facet SM-clocked, f_max {fam.fmax} MHz.",
+        f"at its epoch's census, each sparse over `{fam.ns}.classes`; every facet SM-clocked, f_max {fam.fmax} MHz."
+        + (f" `{CATCH_ALL[fam.measured]}` is A2's catch-all here: every warp instruction no other class prices on "
+           f"{fam.measured} counts there, at the measured issue slot alone." if fam.measured in CATCH_ALL else ""),
         f"`d2s`, `model`: `{fam.design}` on that machine, its writer kinds {menu}; `{fam.ns}.d2s`'s vector classes, "
         f"fold routes, floors and `N_w`" + ("; ♭'s filler `" + fam.ns + ".flatFill` its filler route." if x.nx else "."),
         "".join(f"`{n}`, " for n, o in (("flatWords", own_w), ("flatFold", own)) if o)

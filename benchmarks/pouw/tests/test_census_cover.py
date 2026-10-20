@@ -316,10 +316,6 @@ CLOSING: dict[tuple[str, str], tuple[str, str]] = {
     ("sm_120", "TMA512"): (UNOWNED, "attack (ii)'s TMA gather and dither-duo-l32's [per_mma]"),
     ("sm_120", "TMAred512"): (UNOWNED, "attack (ii)'s TMA reduce-add"),
     ("sm_120", "UTMA16K"): (UNOWNED, "the TMA loads of twelve honest profiles' [per_mma] (c-fx1, the l7qs kernels, fattn)"),
-    # sm_90 and sm_100, unclassed. Each DC sheet's CATCH_ALL (NOROW, 1 at DS_issue) covers it; the measured reading
-    # (DC-90-ri, DC-100-ri) has neither a class nor a catch-all
-    ("sm_90", "BRA"): (UNOWNED, "red_generic's loop branch (RT4-SHEET-7); rt3_dc's gate loops leave theirs out"),
-    ("sm_100", "BRA.U"): (UNOWNED, "red_generic's loop branch (RT4-SHEET-7); rt3_dc's gate loops leave theirs out"),
 }
 
 

@@ -302,8 +302,9 @@ ENTRIES: dict[str, Entry] = {e.id: e for e in (
           "A2 DISPATCH: each SMSP issues at most one warp instruction a cycle, whatever its pipe, uniform-datapath "
           "instructions included (A2u, which no vendor document states), and every warp instruction takes at least one "
           "issue slot whether or not its class is listed: one no other class names counts in the device's catch-all "
-          "class at its issue slot alone (NOROW on sm_120 and on the H200's and B200's sheets); a reading whose "
-          "classes have none (the H200's and B200's measured readings) leaves it free",
+          "class at its issue slot alone (NOROW on sm_120 and on the H200's and B200's sheets, UNLISTED at the "
+          "measured issue row alone on their measured readings); a reading whose classes have none (sm_120's measured "
+          "reading) leaves it free",
           "A2 dispatch (whitepapers)", "measured"),
     Entry("accounting-sheet-tensor", "assumption",
           "A3 TENSOR: the tensor cores do at most the data sheet's dense MACs per SM clock for each operand type",
