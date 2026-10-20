@@ -65,6 +65,11 @@ structure Tags where
   `--zk` identity's `hooks` name (`Flock.Zk.hooks`); before, the pads and every table's draws were ChaCha20 streams of the
   prover's seed -/
   osMasks : Bool := false
+  /-- the plain proof files are upstream's form, which end after `consistency_batch_grinding_nonces` (`flock-verify
+  --upstream-plain`: the agreement corpus's sessions, from upstream's builds); by default they are the deployed prover's,
+  the zk patch's build (`pod/60-circuit.sh`), with its `zk_level0 = None` tag after, the one form `decodeProof` accepts;
+  `verify` reads upstream's as the file then that tag (`plainBytes`; PROTOCOL.md §8.1, D17) -/
+  upstreamPlain : Bool := false
   deriving Inhabited
 
 namespace Tags

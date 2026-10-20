@@ -61,11 +61,9 @@ theorem post_inner_paths :
 theorem zk_decode_paths {sh : Shape} {bytes : ByteArray} {zp : Zk.ZkProof} (h : Zk.decode sh bytes = .ok zp) :
     ∀ k < zp.inner.paths.size, ∀ b ∈ (zp.inner.paths[k]!).toList, b.size = 64 := by
   unfold Zk.decode at h
-  obtain ⟨⟨p', r'⟩, hrun, hp⟩ := ebind_ok h
-  have hp' : p' = zp := Except.ok.inj hp
-  rw [← hp']
+  obtain ⟨r', hrun, -⟩ := Flock.Reader.runAll_ok h
   refine (?_ : Post (Zk.reader sh)
-    (fun z => ∀ k < z.inner.paths.size, ∀ b ∈ (z.inner.paths[k]!).toList, b.size = 64)) p' ⟨_, _, hrun⟩
+    (fun z => ∀ k < z.inner.paths.size, ∀ b ∈ (z.inner.paths[k]!).toList, b.size = 64)) zp ⟨_, _, hrun⟩
   unfold Zk.reader
   dsimp only
   refine post_bind_vecBytes fun cap hcap hcapE => ?_
