@@ -27,7 +27,7 @@ inputs = ["verity", "integrations/vllm/verity_vllm/__init__.py", "integrations/v
           "integrations/vllm/verity_vllm/program/registry", "Security/Definitions/Pouw/PearlC/RowPrimVectors.lean",
           "integrations/vllm/tests/regression/store_io.py",
           "tools/research/src/research/__init__.py", "tools/research/src/research/__main__.py",
-          "tools/research/src/research/cli.py", "tools/research/src/research/clone.py", "tools/research/src/research/compare.py",
+          "tools/research/src/research/cli.py", "tools/research/src/research/waitcap.py", "tools/research/src/research/clone.py", "tools/research/src/research/compare.py",
           "tools/research/src/research/env.py", "tools/research/src/research/record.py", "tools/research/src/research/remote.py",
           "tools/research/src/research/result.py", "tools/research/src/research/runs.py",
           "tools/research/src/research/secret_hint.py", "tools/research/src/research/timefmt.py",
