@@ -49,6 +49,8 @@ the selection, the PTX and the bindings.
 """
 from __future__ import annotations
 
+__models__ = ("deepseek-ai/DeepSeek-V4-Pro",)
+
 import argparse
 import hashlib
 import json

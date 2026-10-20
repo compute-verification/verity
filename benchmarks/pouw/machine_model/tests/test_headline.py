@@ -3,31 +3,32 @@
 from __future__ import annotations
 
 import json
+from dataclasses import replace
 
 import pytest
 from verity_machine_model import headline as H
 from verity_machine_model.cli import main
-from verity_machine_model.eps import design
+from verity_machine_model.eps import design, eps, machine, uniform_issue_charged
 from verity_machine_model.model import DATA, device
 
 # (ε_skip, ε_machine, ε_luck, ε, γ, the floor it needs, ε at p = 1): credit ♭, operands free, ε_mand 0 everywhere
 PINS = {
     "sheet": {
         "sm_120": (0.004207, 0.001506, 0.000139, 0.005852, 2.2831, "half", None),
-        "sm_90": (0.008481, 0.0, 0.000009, 0.008490, 2.4063, "half", None),
-        "sm_100": (0.006890, 0.0, 0.000001, 0.006891, 2.6251, "half", None),
+        "sm_90": (0.008583, 0.0, 0.000012, 0.008595, 2.4063, "half", None),
+        "sm_100": (0.006981, 0.0, 0.000001, 0.006982, 2.6251, "half", None),
         "sm_89": (0.001463, 0.006652, 0.000336, 0.008451, 2.9795, "half", None),
         "sm_80": (0.001463, 0.0, 0.0, 0.001463, 5.9347, "half", None),
     },
     "measured": {
         "sm_120": (0.003628, 0.001251, 0.000517, 0.005396, 2.1357, "issue", None),
-        "sm_90": (0.005868, 0.001792, 0.000939, 0.008598, 2.3435, "issue", None),
-        "sm_100": (0.008061, 0.0, 0.000013, 0.008074, 2.5611, "half", None),
+        "sm_90": (0.005921, 0.000473, 0.000990, 0.007385, 2.3435, "issue", None),
+        "sm_100": (0.008145, 0.0, 0.000002, 0.008147, 2.5611, "half", None),
         "sm_89": (0.001470, 0.001126, 0.000468, 0.003065, 3.0144, "issue", None),
         "sm_80": (0.001470, 0.0, 0.0, 0.001470, 4.2263, "half", None),
     },
 }
-#: rows at or over 1%, each with its reason (the H200's measured row left at 0.860%: ♭ folds by CP_SEG4U)
+#: rows at or over 1%, each with its reason
 OVER_ONE: dict[tuple[str, str], str] = {}
 
 
@@ -62,9 +63,31 @@ def test_conditions_name_the_floor_the_fillers_credit_and_the_checked_fold():
     assert h.fillers == ("0.0703125 FFMA+IMAD a word uncredited, p = 1 (decision 99)",)
     assert any("RT-LOGIC-12" in c for c in h.conditions) and any("RT-LOGIC-12" in c for c in m["sm_100"].conditions)
     s = {x.family: x for x in H.rows("sheet")}
-    assert all(x.floor == "half" for x in s.values()) and any(c.startswith("A2u") for c in s["sm_89"].conditions)
+    assert all(x.floor == "half" for x in s.values())
     assert any(c.startswith("A3 per SM clock") and "1830 MHz" in c and "f_max (1980 MHz" in c
                for c in s["sm_90"].conditions)
+
+
+def test_a_sheet_row_that_prices_the_uniform_route_by_a2u_states_it():
+    """No data sheet gives a uniform rate, so a DS vector that charges a uniform instruction on `DS_issue` prices the
+    uniform route by A2u alone (in no vendor document): its row says so, computed, not hand-written per family."""
+    a2u = H.spec()["reading"]["sheet"]["a2u"]
+    s = {x.family: x for x in H.rows("sheet")}
+    assert {f for f, x in s.items() if a2u in x.conditions} == {"sm_120", "sm_100", "sm_90", "sm_89"}
+    assert not any(c.startswith("A2u") for c in s["sm_80"].conditions)   # DS-80 has no uniform line: route closed
+    assert not any(c.startswith("A2u") for x in H.rows("measured") for c in x.conditions)
+
+
+def test_without_a2u_the_sheet_uniform_route_is_free():
+    """Why the row states A2u: DS-120 with the uniform classes off `DS_issue` prices the uniform route at nothing, and
+    the cheater writes every word there."""
+    dd = device("sm_120")
+    d, pi = design(H.spec()["family"]["sm_120"]["design"], dd), machine("DS-120", dd)
+    c = {k: ({r: (0.0 if r == "DS_issue" else v) for r, v in rs.items()} if k.startswith("UNI") else rs)
+         for k, rs in pi.c.items()}
+    free = eps(d, replace(pi, c=c), 0.5, dd, operands=H.OPERANDS, credit=H.CREDIT)
+    assert uniform_issue_charged(pi) and not uniform_issue_charged(replace(pi, c=c))
+    assert free.machine_eps == pytest.approx(1.0) and free.cheat.words["uniform"] == pytest.approx(1.0)
 
 
 def test_cli(capsys):
@@ -73,7 +96,7 @@ def test_cli(capsys):
     assert out[0] == "## decision 89's measured reading (`measured`): q* = 1.22, operands free, credit ♭"
     head = next(x for x in out if x.startswith("| GPU"))
     assert all(H.TERMS[k] in head for k in ("skip", "mand", "machine", "luck", "gamma", "threshold"))
-    assert any(x.startswith("| H200 | dither-2s-licpw-redux-p1-l32 | DC-90-ri | 0.587% |") for x in out)
+    assert any(x.startswith("| H200 | dither-2s-licpw-redux-p1-l32 | DC-90-ri | 0.592% |") for x in out)
     assert any(x.startswith("- H200: the 1.22-slot issue floor") for x in out)
     assert main(["headline", "--json"]) == 0
     d = json.loads(capsys.readouterr().out)
@@ -99,3 +122,10 @@ def test_a_p1_sibling_is_its_design_with_every_filler_at_p_1():
     assert [f.p for f in p1.filler] == [1.0] and p1.skip["served"].eps > d.skip["served"].eps   # ♭ drops the filler
     with pytest.raises(SystemExit, match="every filler at p = 1"):
         H._sibling(d, design("dither-2s-li-l32", sm90))
+
+
+def test_sm120s_measured_row_names_how_it_differs_from_its_lean_statement():
+    """The row reads VF3r-16 at the reading's 1.22 while `Sm120MeasuredHeadline` reads VF3s-16 at 9/8 (RT3-LOGIC-4)."""
+    x = next(x for x in H.rows("measured") if x.family == "sm_120")
+    assert x.vector == "VF3r-16" and x.q == 1.22
+    assert any("Sm120MeasuredHeadline reads VF3s-16 at q = q_T = 9/8" in c for c in x.conditions)

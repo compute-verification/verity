@@ -20,6 +20,8 @@ and `-x` one NOT gate on x's sign bit.  No table or lookup gate.  Each composite
 """
 from __future__ import annotations
 
+__models__ = ("deepseek-ai/DeepSeek-V4-Pro",)
+
 from verity.ml.circuits import boolean as BL
 from verity.ml.circuits.boolean.forms import NOT, ONE, OR, ZERO, and_reduce, or_reduce, sub
 from verity.ml.circuits.boolean.trace import definition, trace

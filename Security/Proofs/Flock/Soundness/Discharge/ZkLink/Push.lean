@@ -84,7 +84,7 @@ end Push
 /-- **The inner proof, compiled, with `τ`'s commitment a cap** read at entry `0`. -/
 def innerGameCP (H : List UInt8 → D) (Ep : Merkle.Enc (F × F) D) (Lp : Merkle.Leaf (F × F) Sl D H)
     (Lτ : Merkle.Leaf F Sl D H) {N : ℕ} (dom : Fin N ↪ F) (s nP q : ℕ) (pos : F → Fin N) {nA : ℕ}
-    (rows : Fin nA → Lin F s) (tr : Triple s) (root : D) : Game (InnerOpens F D Sl → Prop) := do
+    (rows : Fin nA → Lin F s) (tr : Triple s) (root : D) : Game ((InnerOpens F D Sl → Prop) × (ℕ → ℕ)) := do
   let ε ← draw F
   let ρσ ← recv (F × F)
   let γ ← draw (Fin (nA + 3) → F)
@@ -92,7 +92,7 @@ def innerGameCP (H : List UInt8 → D) (Ep : Merkle.Enc (F × F) D) (Lp : Merkle
   let β ← draw F
   let y ← recv (Fin (s + nP) → F)
   let w ← draw (Fin q → F)
-  pure (innerCheckC H Ep Lp Lτ dom pos rows tr root (cτ 0) ε ρσ γ β y w)
+  pure (innerCheckC H Ep Lp Lτ dom pos rows tr root (cτ 0) ε ρσ γ β y w, qposOf pos w)
 
 /-- **A compiled `--zk` rep with its digests caps**: the pads root a cap read at entry `0`, and `innerGameCP`. -/
 noncomputable def repZCP (A : Arith F K) (Hs : Hashes F D Sl) (T : TabZK F mPts) (r : ℕ)
@@ -100,7 +100,7 @@ noncomputable def repZCP (A : Arith F K) (Hs : Hashes F D Sl) (T : TabZK F mPts)
   let c ← recv (Cap D)
   let o ← repMaskedZC (D := D) A T.pads T.padsA T.tr T.S T.sch T.hm T.t T.c₀ r extra
   let v ← innerGameCP Hs.H Hs.Ep Hs.Lp Hs.Lτ T.dom T.np T.nP T.q T.pos o.1 T.tr (c 0)
-  pure ⟨o.2, v⟩
+  pure ⟨o.2, v.1, v.2⟩
 
 /-- **The primed compiled `--zk` table** after its witness cap and the link points: `tabAfterZC` with `repZCP`. -/
 noncomputable def tabAfterZCP (A : Arith F K) (Hs : Hashes F D Sl) (T : TabZK F mPts) (cap₀ : Cap D)

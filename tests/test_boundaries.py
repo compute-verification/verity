@@ -64,8 +64,8 @@ ALLOWED = {
     # 2026-10-03 (Daniel, `.agents/skills/friction/SKILL.md`): PoUW's tile check is a sampled proof.  Its schemes and
     # circuits are stated over the catalog's silicon models and Definitions (the tensor-core steps, FP32 and the casts its
     # verifier recomputes): the one edge into the catalog.
-    "core.protocols.pouw": {"ml.circuits", "ml.circuits.ops", "ml.circuits.silicon", "ml.circuits.targets", "ml.commitments",
-                            "ml.crypto", "ml.randomness", "core.protocols.profile", "core.protocols.sampled_proofs"},
+    "core.protocols.pouw": {"ml.circuits", "ml.circuits.ops", "ml.circuits.silicon", "ml.commitments", "ml.crypto",
+                            "ml.randomness", "core.protocols.profile", "core.protocols.sampled_proofs"},
     # N2 of the proof-service plan: a link-window's network certificates are registered through the proof service; they
     # are LMS signatures (`ml.crypto.lms`).
     "core.protocols.certifier": {"ml.circuits", "ml.commitments", "ml.crypto", "core.protocols.sampled_proofs"},
@@ -116,16 +116,16 @@ CORE_ML_EDGES = {
     "core.protocols.pous": {"ml.circuits", "ml.commitments", "ml.crypto", "ml.randomness"},
     "core.protocols.bandwidth": {"ml.crypto", "ml.randomness"},
     "core.protocols.remote_bandwidth": {"ml.commitments", "ml.kernels", "ml.randomness"},
-    "core.protocols.pouw": {"ml.circuits", "ml.circuits.ops", "ml.circuits.silicon", "ml.circuits.targets", "ml.commitments",
-                            "ml.crypto", "ml.randomness"},
+    "core.protocols.pouw": {"ml.circuits", "ml.circuits.ops", "ml.circuits.silicon", "ml.commitments", "ml.crypto",
+                            "ml.randomness"},
     "core.protocols.certifier": {"ml.circuits", "ml.commitments", "ml.crypto"},
 }
 #: The units of ``verity.ml`` core's Python verifiers read, directly or through one another (what ``ALLOWED`` lets core
 #: reach): their verdicts rest on them, so they are on the soundness path, and AGENTS.md names each.  Frozen on 18 Oct
 #: with ``CORE_ML_EDGES``: it only shrinks, as each protocol's verifier of record becomes its Lean.  The rest of ml
 #: (C-Flock's prover, the private circuits) is not on it.
-SOUNDNESS_PATH = {"ml.circuits", "ml.circuits.ops", "ml.circuits.silicon", "ml.circuits.targets", "ml.commitments", "ml.crypto",
-                  "ml.kernels", "ml.randomness"}
+SOUNDNESS_PATH = {"ml.circuits", "ml.circuits.ops", "ml.circuits.silicon", "ml.commitments", "ml.crypto", "ml.kernels",
+                  "ml.randomness"}
 #: What a test that refuses a new core -> ml edge says.
 LEAN_OF_RECORD = ("a verifier imports no verity.ml code (Daniel, 18 Oct; AGENTS.md \"Design rules\", \"Lean is the definition "
                   "and the verifier of record\"): state it in Lean and import nothing from verity.ml")

@@ -7,15 +7,21 @@ from __future__ import annotations
 import dataclasses
 import json
 import random
+import sys
+from pathlib import Path
 
 import pytest
 
 import epoch_coins as E
 import epoch_coins_vectors as V
 from verity.core.protocols.pouw import coins as EC
-from verity.core.protocols.pouw.audit import Epoch, Prover, Sampled, Verifier, Workload, salt_of, weights_root
+from verity.core.protocols.pouw.audit import Epoch, Workload, salt_of, weights_root
 from verity.core.protocols.pouw.protocol import DomainError, Matmul, Shape
 from verity.core.protocols.pouw.schemes import ncp
+
+# the clear audit is a reference tool (benchmarks/pouw/clear), imported by name
+sys.path.insert(0, str(Path(__file__).resolve().parents[5] / "benchmarks" / "pouw" / "clear"))
+from clear_audit import Prover, Sampled, Verifier  # noqa: E402
 
 PINNED = json.loads(V.OUT.read_text())
 

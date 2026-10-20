@@ -39,15 +39,18 @@ managed = ["/usr/local/bin/vy-*", "/usr/local/lib/vy-monitoring/*", "/etc/system
 # circuits' H200 VMs (INF-54/55/58): only the GPU-lease files are infra's to manage there
 [nodes.vy-glm53-eu]
 record = "/workspace/research/deploy/record.jsonl"
-managed = ["/workspace/verity-guest/bin/gpu_adopt.py", "/etc/systemd/system/vy-gpu-adopt.service", "/etc/vy/gpu-lease-host"]
+managed = ["/workspace/verity-guest/bin/gpu_adopt.py", "/etc/systemd/system/vy-gpu-adopt.service", "/etc/vy/gpu-lease-host",
+  "/usr/local/bin/gpu-lease"]
 
 [nodes.vy-glm53-eu2]
 record = "/workspace/research/deploy/record.jsonl"
-managed = ["/workspace/verity-guest/bin/gpu_adopt.py", "/etc/systemd/system/vy-gpu-adopt.service", "/etc/vy/gpu-lease-host"]
+managed = ["/workspace/verity-guest/bin/gpu_adopt.py", "/etc/systemd/system/vy-gpu-adopt.service", "/etc/vy/gpu-lease-host",
+  "/usr/local/bin/gpu-lease"]
 
 [nodes.vy-glm53-s1]
 record = "/workspace/research/deploy/record.jsonl"
-managed = ["/workspace/verity-guest/bin/gpu_adopt.py", "/etc/systemd/system/vy-gpu-adopt.service", "/etc/vy/gpu-lease-host"]
+managed = ["/workspace/verity-guest/bin/gpu_adopt.py", "/etc/systemd/system/vy-gpu-adopt.service", "/etc/vy/gpu-lease-host",
+  "/usr/local/bin/gpu-lease"]
 
 # ---- every node: the VM itself (pods/nebius/launch.sh installs these at first boot)
 
@@ -336,7 +339,7 @@ owner = "infra"
 [[file]]
 path = "/usr/local/bin/gpu-lease"
 src = "tools/research/src/research/pods/sh/gpu_lease.sh"
-nodes = ["vy-nebius-1", "vy-nebius-2"]
+nodes = ["vy-nebius-1", "vy-nebius-2", "vy-glm53-eu", "vy-glm53-eu2", "vy-glm53-s1"]
 owner = "infra"
 
 [[file]]
@@ -395,6 +398,20 @@ path = "/etc/systemd/system/vy-store-evict-research.timer"
 src = "tools/research/src/research/pods/nebius/sky/store_evict_research.timer"
 nodes = ["vy-nebius-1", "vy-nebius-2", "vy-nebius-cpu-1"]
 run = ["systemd:vy-store-evict-research.timer"]
+owner = "infra"
+
+[[file]]  # hourly `research retention gc --apply` while /workspace is over 80% (n2 sat at 80% with 3.5 TiB collectable, 19 Oct)
+path = "/etc/systemd/system/vy-retention-gc.service"
+src = "tools/research/src/research/pods/nebius/sky/retention_gc.service"
+nodes = ["vy-nebius-1", "vy-nebius-2"]
+run = ["systemd:vy-retention-gc.timer"]
+owner = "infra"
+
+[[file]]
+path = "/etc/systemd/system/vy-retention-gc.timer"
+src = "tools/research/src/research/pods/nebius/sky/retention_gc.timer"
+nodes = ["vy-nebius-1", "vy-nebius-2"]
+run = ["systemd:vy-retention-gc.timer"]
 owner = "infra"
 
 [[file]]
@@ -672,21 +689,21 @@ owner = "lean"
 
 # ---- node 2: PoUW's node, Verity's guest (/workspace/pouw/infra, infra/cluster's agent)
 
-[[file]]  # in tmux pouw-infra-fill until its unit, held below, is deployed
+[[file]]  # run by its user unit pouw-infra-fill, below
 path = "/workspace/pouw/infra/bin/fill_runner.py"
 src = "tools/research/src/research/pods/nebius/fill_runner.py"
 nodes = ["vy-nebius-2"]
 run = ["user-systemd:pouw-infra-fill"]
 owner = "compute-accounting"
 
-[[file]]  # in tmux pouw-infra-ops until its unit, held below, is deployed
+[[file]]  # run by its user unit pouw-infra-ops, below
 path = "/workspace/pouw/infra/bin/node_ops.py"
 src = "tools/research/src/research/pods/nebius/node_ops.py"
 nodes = ["vy-nebius-2"]
 run = ["user-systemd:pouw-infra-ops"]
 owner = "compute-accounting"
 
-[[file]]  # in tmux pouw-infra-util until its unit, held below, is deployed
+[[file]]  # run by its user unit pouw-infra-util, below
 path = "/workspace/pouw/infra/bin/gpu_util_sampler.py"
 src = "tools/research/src/research/pods/nebius/gpu_util_sampler.py"
 nodes = ["vy-nebius-2"]
@@ -962,7 +979,6 @@ src = "tools/research/src/research/pods/nebius/units/pouw-infra-fill.service"
 nodes = ["vy-nebius-2"]
 run = ["user-systemd:pouw-infra-fill"]
 owner = "compute-accounting"
-hold = "compute accounting's yes pending: node 2's freeze list"
 
 [[file]]
 path = "/etc/vy/env/pouw-infra-fill.env"
@@ -970,7 +986,6 @@ src = "tools/research/src/research/pods/nebius/env/pouw-infra-fill.env"
 nodes = ["vy-nebius-2"]
 run = ["user-systemd:pouw-infra-fill"]
 owner = "compute-accounting"
-hold = "compute accounting's yes pending: node 2's freeze list"
 
 [[file]]
 path = "/home/research/.config/systemd/user/pouw-infra-ops.service"
@@ -978,7 +993,6 @@ src = "tools/research/src/research/pods/nebius/units/pouw-infra-ops.service"
 nodes = ["vy-nebius-2"]
 run = ["user-systemd:pouw-infra-ops"]
 owner = "compute-accounting"
-hold = "compute accounting's yes pending: node 2's freeze list"
 
 [[file]]
 path = "/etc/vy/env/pouw-infra-ops.env"
@@ -986,7 +1000,6 @@ src = "tools/research/src/research/pods/nebius/env/pouw-infra-ops.env"
 nodes = ["vy-nebius-2"]
 run = ["user-systemd:pouw-infra-ops"]
 owner = "compute-accounting"
-hold = "compute accounting's yes pending: node 2's freeze list"
 
 [[file]]
 path = "/home/research/.config/systemd/user/pouw-infra-util.service"
@@ -994,7 +1007,6 @@ src = "tools/research/src/research/pods/nebius/units/pouw-infra-util.service"
 nodes = ["vy-nebius-2"]
 run = ["user-systemd:pouw-infra-util"]
 owner = "compute-accounting"
-hold = "compute accounting's yes pending: node 2's freeze list"
 
 [[file]]
 path = "/etc/vy/env/pouw-infra-util.env"
@@ -1002,7 +1014,6 @@ src = "tools/research/src/research/pods/nebius/env/pouw-infra-util.env"
 nodes = ["vy-nebius-2"]
 run = ["user-systemd:pouw-infra-util"]
 owner = "compute-accounting"
-hold = "compute accounting's yes pending: node 2's freeze list"
 
 # ---- both nodes: what the resource stewards ran from agent VMs (the node 1 watch, node-sweep), now node timers; after
 # installing, `sudo systemctl enable --now vy-node-sweep.timer` (and on node 1 vy-steward-watch.timer)

@@ -42,13 +42,56 @@ def test_the_credit_is_what_the_checks_read():
         assert all(f.p == 1 for f in d.filler), fam.design
 
 
+def _price(x, lam: dict, n: dict) -> Fraction:
+    return sum((w * x.c[k].get(r, Fraction(0)) * q for r, w in lam.items() for k, q in n.items()), Fraction(0))
+
+
+def test_folds_meet_fold_opt_at_pi_star():
+    """FOLD-OPT at each statement's π* (`FoldOptFoldedAt`, an open conjecture under Security/lean-audit.json's
+    `shape.conjectures`), which a fold priced below N_w·φ* at π* falsifies: ♭'s fold meets it, and so does ♭'s fold
+    with each IMAD (its one IMAD-pipe class) replaced by 32 ALU shift-adds, at over ten times N_w·φ*. That fold is why
+    FOLD-OPT at every certificate (`FoldOptFolded`) is not asked (RT3-LOGIC-6): at 1/20 issue + 19/20 IMAD on the
+    sheets and 1/20 I + 19/20 UP on the measured rows it prices below N_w·φ* on all four readings."""
+    for fam in H.FAMILIES:
+        s = H.reading(fam, fam.sheet).data
+        pipe = dict(zip(s.classes, s.sheet["pipe"]))
+        for x, rt3 in ((s, {"DS_issue": Fraction(1, 20), "DS_imad": Fraction(19, 20)}),
+                       (H.reading(fam, fam.measured).data, {"I": Fraction(1, 20), "UP": Fraction(19, 20)})):
+            assert [k for k in x.nf if pipe.get(k) == "imad"] == ["IMAD"]
+            alu = {**x.nf, "IMAD": Fraction(0), "ALU": x.nf["ALU"] + 32 * x.nf["IMAD"]}
+            at = {"pi*": x.lam, "rt3": rt3}
+            nphi = {c: x.Nw * min(_price(x, lam, f) for f in x.folds) for c, lam in at.items()}
+            assert _price(x, x.lam, x.nf) >= nphi["pi*"] and _price(x, x.lam, alu) > 10 * nphi["pi*"], fam.ns
+            assert _price(x, rt3, alu) < nphi["rt3"], fam.ns
+
+
+ROUTES = ["cp-seg4", "cp-seg4u", "cp-ats", "cp-ats2", "cp-ats8", "cp-red", "cp-red2", "cp-red8", "cp-red-generic",
+          "cp-red2-generic", "cp-red8-generic", "cp-xt"]
+
+
+def test_the_fold_menu_is_every_bit_exact_checkpoint_loop():
+    """RT3-DC-1, -4: on both devices the fold menu is the design's fold and every bit-exact checkpoint loop rt3_dc times
+    (r20261019-183610-89bd on the H200, r20261019-192247-8771 on the B200), with RT4-SHEET-7's L2 XORs through a generic
+    address (ATOM.E, bit-exact on the RTX PRO 6000, r20261020-001850-def6), and π* prices each class each of them issues
+    above 0, so no route folds for free at the certificate FOLD-OPT is asked at. Each sheet's catch-all is priced at its
+    issue slot alone."""
+    for fam in H.FAMILIES:
+        for v in (fam.sheet, fam.measured):
+            x = H.reading(fam, v).data
+            assert x.fold_names == ROUTES, (fam.ns, v)
+            free = {k for f in x.folds for k, n in f.items() if n and _price(x, x.lam, {k: Fraction(1)}) <= 0}
+            assert not free, (fam.ns, v, free)
+        k = H.CATCH_ALL[fam.key]
+        assert H.reading(fam, fam.sheet).data.c[k] == {"DS_issue": 1}, (fam.ns, k)
+
+
 def test_the_h200_measured_menu_is_honests_form():
     """On DC-90-ri the writer kinds are honest's IGMMA_S8_N256 and UNI: every other tensor form carries the scalar
-    coefficient there, which leaves the full menu's bound far above 1%. Its ♭ is `setup`'s floor, which heads a share
-    of its words on honest's lane baseline (dp4a) once ffill is out of it, so the measured file states its own word
-    production; the reading is over 1% (RT-HB-HEAD-1)."""
+    coefficient there, which leaves the full menu's bound far above 1%. Its ♭ is `setup`'s floor, which folds by the
+    generic-address L2 XORs (no AT90 line) and so writes every word on the IGMMA, as on DS-90 (the measured file states
+    no word production of its own); the reading is over 1% (RT-HB-HEAD-1)."""
     r, s = H.reading(H.SM90, "DC-90-ri"), H.reading(H.SM90, "DS-90")
     assert [k for k, _ in r.data.writers] == ["IGMMA_S8_N256", "UNI"] and r.menu == "honest"
     assert 0.01 < r.machine_core <= r.bound
     assert H.reading(H.SM90, "DC-90-ri", full=True).bound > 0.1
-    assert "dp4a" in r.data.words_mix and r.data.nw != s.data.nw and "def flatWords" in H.render_measured(H.SM90, r, s)
+    assert "dp4a" not in r.data.words_mix and "def flatWords" not in H.render_measured(H.SM90, r, s)

@@ -4,6 +4,8 @@
 //! `FIREWALL-REFUSED: <what>` reason, and nothing of the refused round leaves: the rep goes on releasing the statement's
 //! schedule in the device's place ([`Checker::scheduled`], the shadow's rounds) and the session stops at its `Finish`. So does
 //! a worker that fails ([`run_worker`]: an error, a panic, silence past the deadline): a rep's end never depends on its worker.
+//! These checks can only fail a round more: the pass decision of record is the rep's Lean frame's ([`LeanFrame::check`]), on
+//! each round they pass, against the statement's scheduled round in its place (`pass_vectors.json` holds the two to each other).
 
 use std::sync::mpsc::{Receiver, Sender, channel};
 
@@ -292,30 +294,35 @@ impl ShadowLink {
     }
 
     /// The device's opening round against the shadow's next one: refused unless the two are byte for byte the same, the
-    /// shadow's round then kept in `last`.
-    pub fn check(&mut self, content: &[u8], n: usize) -> Result<(), String> {
+    /// shadow's round then kept in `last`. Returns the shadow's round, the scheduled one the Lean frame's pass decision reads.
+    pub fn check(&mut self, content: &[u8], n: usize) -> Result<Vec<u8>, String> {
         let r = self.round;
         self.round += 1;
         let (want, k) = self.rx.recv().map_err(|_| refused(format!("opening round {r}: the firewall's opening ended before the device's")))?;
         #[cfg(feature = "sha512")]
         crate::firewall_transcript::with(|t| t.shadow_round(&want, k));
         if want == content && k == n {
-            return Ok(());
+            return Ok(want);
         }
-        let res = Self::differ(r, content, n, &want, k);
+        let why = Self::differ(r, content, n, &want, k);
         self.last = Some((want, k));
-        res
+        Err(why)
     }
 
-    fn differ(r: usize, content: &[u8], n: usize, want: &[u8], k: usize) -> Result<(), String> {
-        let (g, w) = (parse(content)?, parse(&want).map_err(|e| format!("the shadow's round: {e}"))?);
+    /// Why the device's opening round `r` is not the shadow's.
+    fn differ(r: usize, content: &[u8], n: usize, want: &[u8], k: usize) -> String {
+        let (g, w) = match (parse(content), parse(want)) {
+            (Ok(g), Ok(w)) => (g, w),
+            (Err(e), _) => return e,
+            (_, Err(e)) => return format!("the shadow's round: {e}"),
+        };
         let show = |x: Option<&Item>| x.map_or("nothing".into(), |x| x.to_string());
         match (0..g.len().max(w.len())).find(|&i| g.get(i) != w.get(i)) {
             Some(i) if show(g.get(i)) == show(w.get(i)) => {
-                Err(refused(format!("opening round {r}, frame {i}: the device's {} differs from the firewall's in its payload", show(g.get(i)))))
+                refused(format!("opening round {r}, frame {i}: the device's {} differs from the firewall's in its payload", show(g.get(i))))
             }
-            Some(i) => Err(refused(format!("opening round {r}, frame {i}: the device's {} is not the firewall's {}", show(g.get(i)), show(w.get(i))))),
-            None => Err(refused(format!("opening round {r}: the device squeezes {n} coins, the firewall {k}"))),
+            Some(i) => refused(format!("opening round {r}, frame {i}: the device's {} is not the firewall's {}", show(g.get(i)), show(w.get(i)))),
+            None => refused(format!("opening round {r}: the device squeezes {n} coins, the firewall {k}")),
         }
     }
 
@@ -594,9 +601,11 @@ impl LeanFrame {
     }
 
     /// The round that leaves for the round `content` (which squeezes `n` coins), or the Lean frame's refusal, after which the
-    /// rep is stopped. `fail`: `content` is the statement's scheduled round in place of a device round that failed the
-    /// firewall's check, and the rep stops before it. A round the frame's rank check stops (`stop WHY`) panics with its
-    /// reason, before anything of it leaves.
+    /// rep is stopped. `fail`: `content` is the statement's scheduled round in place of a device round that never passed the
+    /// firewall's own checks (a worker that failed, or a round Rust's checks fail), and the rep stops before it; without it,
+    /// `content` is one of the inner proof's rounds, the firewall's own. A device round comes with the scheduled round in its
+    /// place ([`LeanFrame::check`]). A round the frame's refusals stop (`stop WHY`: the rank check) panics with its reason,
+    /// before anything of it leaves.
     pub fn round(&mut self, content: &[u8], n: usize, fail: bool) -> Result<Vec<u8>, String> {
         use std::io::{Read, Write};
         write!(self.stdin, "round {n} {}{}\n", content.len(), if fail { " fail" } else { "" })
@@ -612,8 +621,36 @@ impl LeanFrame {
         Ok(out)
     }
 
+    /// The pass decision (`Flock.Firewall.Frame.check`) on the device round `content`, which Rust's checks passed, against the
+    /// statement's scheduled round `sched` in its place (which squeezes `n` coins): the round that leaves, and why the frame
+    /// failed the device round, if it did, the rep then stopped and the scheduled round leaving in its place. The frame's
+    /// refusal of the scheduled round itself is an error, and a round its refusals stop panics with its reason, as in
+    /// [`LeanFrame::round`].
+    pub fn check(&mut self, content: &[u8], sched: &[u8], n: usize) -> Result<(Vec<u8>, Option<String>), String> {
+        use std::io::{Read, Write};
+        write!(self.stdin, "round {n} {} {}\n", content.len(), sched.len())
+            .and_then(|_| self.stdin.write_all(content)).and_then(|_| self.stdin.write_all(sched)).and_then(|_| self.stdin.flush())
+            .map_err(|e| refused(format!("the Lean frame's round: {e}")))?;
+        let line = self.line()?;
+        if let Some(why) = line.strip_prefix("stop ") {
+            panic!("{why}");
+        }
+        let (len, why) = match line.strip_prefix("ok ").map(|r| r.split_once(' ').unwrap_or((r, ""))) {
+            Some((len, "pass")) => (len, None),
+            Some((len, v)) if v.starts_with("fail ") => (len, Some(v["fail ".len()..].to_string())),
+            _ => {
+                Self::parse(&line)?;
+                return Err(refused(format!("the Lean frame's answer {line:?} to a device round")));
+            }
+        };
+        let len = len.parse().map_err(|_| refused(format!("the Lean frame's answer {line:?}")))?;
+        let mut out = vec![0u8; len];
+        self.stdout.read_exact(&mut out).map_err(|e| refused(format!("the Lean frame's round: {e}")))?;
+        Ok((out, why))
+    }
+
     /// The coins the stream answered the round last released: `Ok(Some(why))` when the frame's refusals stop the rep on them
-    /// (a zerocheck outer coin `r_j = 1`).
+    /// (a zerocheck outer coin `r_j = 1`, level 0's `ρ_0, ρ_1` dependent over F128, the inner proof's `β = 0`).
     pub fn coins(&mut self, coins: &[F128]) -> Result<Option<String>, String> {
         use std::io::Write;
         write!(self.stdin, "coins {}\n", coins.len()).and_then(|_| self.stdin.write_all(&f128_wire(coins))).and_then(|_| self.stdin.flush())
@@ -625,7 +662,8 @@ impl LeanFrame {
         Self::parse(&line).map(|_| None)
     }
 
-    /// Whether the rep ended with every masked phase closed and every pad of the layout used, and if so whether it is stopped.
+    /// Whether the rep ended with every masked phase closed, every pad of the layout used and the inner proof's rounds
+    /// released, and if so whether it is stopped.
     pub fn finish(&mut self) -> Result<bool, String> {
         use std::io::{BufRead, Write};
         writeln!(self.stdin, "finish").and_then(|_| self.stdin.flush()).map_err(|e| refused(format!("the Lean frame's finish: {e}")))?;
@@ -650,8 +688,8 @@ impl Drop for LeanFrame {
 /// The masking challenger's inner challenger under the firewall. While a round's `release` is set (the Lean frame's round for
 /// the device round the firewall passed), it frames what the masking challenger hands it, as the device's challenger frames,
 /// and at the round's squeeze holds that (the speed reference) to the release byte for byte, then hands the release, and
-/// only the release, to the stream. With no release set it passes every call through: unfirewalled reps, and the rep's
-/// inner phase, which is the firewall's own.
+/// only the release, to the stream. With no release set it passes every call through: unfirewalled reps. A firewalled rep's
+/// inner proof, the firewall's own, leaves through the Lean frame too (`flock-circuit`'s `zk_finish`).
 pub struct Gate<C: Challenger> {
     pub inner: C,
     pub release: Option<Vec<u8>>,
@@ -894,7 +932,7 @@ mod tests {
             f.observe_f128(F128::new(5, 0));
             f.sample_f128();
         });
-        link.check(&dev[0].0, dev[0].1).unwrap();
+        assert_eq!(link.check(&dev[0].0, dev[0].1).unwrap(), shadow[0].0, "a round that passes is the shadow's, the scheduled one");
         assert_eq!(link.last, None);
         link.answer(&[F128::ONE]);
         let e = link.check(&dev[1].0, dev[1].1).unwrap_err();
@@ -986,5 +1024,46 @@ mod tests {
             Ok(())
         }, &mut served);
         assert_eq!((r.unwrap_err().as_str(), log.len()), ("silent past the firewall's deadline", 1));
+    }
+
+    /// `pass_vectors.json`, which `test_firewall_frame.py` holds the Lean frame's pass decision (`Flock.Firewall.Frame.check`)
+    /// to: Rust's checks pass exactly the device rounds the frame passes, [`Checker`] in the algebraic phase against the
+    /// skeleton the scheduled rounds stand for (each observed value an exposed one), [`ShadowLink::check`] after it against
+    /// the scheduled round.
+    #[test]
+    fn rusts_checks_pass_the_device_rounds_the_lean_frame_passes() {
+        let v: serde_json::Value = serde_json::from_str(include_str!("pass_vectors.json")).unwrap();
+        let bytes = |s: &serde_json::Value| -> Vec<u8> {
+            let s = s.as_str().unwrap();
+            (0..s.len()).step_by(2).map(|i| u8::from_str_radix(&s[i..i + 2], 16).unwrap()).collect()
+        };
+        let rep: Vec<(Vec<u8>, usize)> = v["rep"].as_array().unwrap().iter().zip(v["coins"].as_array().unwrap())
+            .map(|(r, n)| (bytes(r), n.as_u64().unwrap() as usize)).collect();
+        let alg = v["algebraic"].as_u64().unwrap() as usize;
+        let mut items = Vec::new();
+        let mut nv = 0u64;
+        for (r, _) in &rep[..alg] {
+            for it in parse(r).unwrap() {
+                items.push(match it {
+                    Item::Obs { kind, vals } => Item::Obs { kind, vals: vals.iter().map(|_| { nv += 1; F128::new(nv - 1, TAG) }).collect() },
+                    x => x,
+                });
+            }
+        }
+        for c in v["cases"].as_array().unwrap() {
+            let (at, device) = (c["at"].as_u64().unwrap() as usize, bytes(&c["device"]));
+            let got = if at < alg {
+                let mut ch = Checker::new(items.clone(), nv as usize);
+                for (r, n) in &rep[..at] {
+                    ch.round(r, *n).unwrap();
+                }
+                ch.round(&device, rep[at].1).is_ok()
+            } else {
+                let (mut link, end) = shadow_pair();
+                end.tx.send(rep[at].clone()).unwrap();
+                link.check(&device, rep[at].1).is_ok()
+            };
+            assert_eq!(got, c["pass"].as_bool().unwrap(), "{}", c["case"]);
+        }
     }
 }
