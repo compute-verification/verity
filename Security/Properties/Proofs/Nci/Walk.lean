@@ -808,7 +808,7 @@ theorem gateStep_holds (P : Prog) (hc : Desc.calleesFirst P = true) (hlo : ∀ d
         rw [getElem!_pos _ k hkK]
         exact Array.getElem_mem hkK
       have hfn := calleesFirst_spec P hc sc.d hd _ hmem
-      simp only [Holds, Flock.Program.Prog.child, Flock.Program.Scope.d, Flock.Program.Scope.off]
+      simp only [Holds, Flock.Program.Prog.child, Flock.Program.Scope.d.eq_2, Flock.Program.Scope.off.eq_2]
       refine ⟨⟨by omega, by simpa using hpc, by omega, by omega⟩, depths_child P hc hd hp hmem⟩
   · exfalso
     first
