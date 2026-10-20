@@ -138,12 +138,17 @@ def hashed(n: int) -> Program:
     return Program(comp("THashed", [("toks", Array(n, V32)), ("t", T)], Tuple(Array(3 * n + 5, V16), Array(3, V16)), body))
 
 
+def _write(Bd, S, c, x):
+    y = [Bd.call(Add32, x, c[1]), Bd.call(Add32, x, c[2])]
+    return tuple_of(array_of([c[0], *y, c[3]]), array_of(y))
+
+
 def twice(n: int) -> Program:
-    """A cache written n times, by a Call returning the cache with one word its own and that word again, as a KV write returns
-    its row; and two batches, of n and 2 members, of a Definition returning its word twice: every node names gates twice."""
+    """A cache written n times, by a Call returning the cache with two words its own and those words again, as a KV write
+    returns its row; and two batches, of n and 2 members, of a Definition returning its word twice: every node names gates
+    twice."""
     C = Array(4, V32)
-    Write = comp("TWrite", [("c", C), ("x", V32)], Tuple(C, V32),
-                 lambda Bd, S, c, x: (lambda y: tuple_of(array_of([c[0], y, c[2], c[3]]), y))(Bd.call(Add32, x, c[1])))
+    Write = comp("TWrite", [("c", C), ("x", V32)], Tuple(C, Array(2, V32)), _write)
     Pair = comp("TPair", [("x", V32)], Tuple(V32, V32), lambda Bd, S, x: (lambda y: tuple_of(y, y))(Bd.call(Add32, x, x)))
 
     def body(Bd, S, c, xs):
@@ -151,7 +156,7 @@ def twice(n: int) -> Program:
         for i in range(n):
             r = Bd.call(Write, c, xs[i])
             c = r[0]
-            ys.append(r[1])
+            ys.append(r[1][i % 2])
         s = Bd.call(Add32, ys[0], c[1])
         return tuple_of(c, array_of(ys + [s]), Bd.batch(Pair, xs, axes=(0,)), Bd.batch(Pair, array_of(ys[:2]), axes=(0,)))
 
@@ -400,7 +405,7 @@ def test_the_census_is_linear_in_its_pass_throughs(shape):
 
 def test_which_leaves_name_one_gate_is_resolved_once_per_definition(monkeypatch):
     """Which of a Call's own leaves name one gate is resolved through the layout once per Definition, form and length, not at
-    every node calling it (DeepSeek-V4-Pro's request Program writes its KV cache in 1952 such Calls): `TWrite`'s two own
+    every node calling it (DeepSeek-V4-Pro's request Program writes its KV cache in 1952 such Calls): `TWrite`'s four own
     leaves once, and each batch of `TPair`'s leaves at its length once."""
     n = 0
     real = CE.resolve
@@ -412,7 +417,7 @@ def test_which_leaves_name_one_gate_is_resolved_once_per_definition(monkeypatch)
 
     monkeypatch.setattr(CE, "resolve", counted)
     census(twice(8))
-    assert n == 2 + 2 * 8 + 2 * 2
+    assert n == 4 + 2 * 8 + 2 * 2
 
 
 def test_a_column_every_token_selects_in_is_held_once():
