@@ -73,8 +73,9 @@ def ThreadedThrottledDark : Prop :=
       (T.M.card : ℝ) ≤ M.dark.card + α * T.bound (α * Γ) b_w dd e * d.D.size d.D.computed / b_a
 
 /-- **Training is slowed, with dark gates**: when counted multiplications are a fraction `κ` of the reference circuit's
-flops, a declaration that complies at `(Γ, α)` and contains it partly is larger by a factor of at least `κ b_a / (2αΛ)`,
-less what its dark gates absorb: `κ b_a size(c) ≤ 2 b_a #dark + 2 α Λ size(d)`. -/
+flops, a declaration that complies at `(Γ, α)` and contains it partly, with its baseline registered
+(`BaselineRegistered`), is larger by a factor of at least `κ b_a / (2αΛ)`, less what its dark gates absorb:
+`κ b_a size(c) ≤ 2 b_a #dark + 2 α Λ size(d)`. -/
 def ThreadedTrainingOn : Prop :=
   ∀ (Γ : ℕ) (α b_w b_a κ : ℝ) (c d : Declaration) (T : Threading c) (dd e : ℕ) (M : PartialContainment c d),
     0 ≤ α → 0 < b_w → 0 < b_a → 0 < dd → Complies Γ α d → Assumptions.BaselineRegistered c d M →

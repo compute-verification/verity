@@ -32,8 +32,9 @@ def IncompressibleThreadedThrottled : Prop :=
 
 /-- **High NCI means padding, with dark gates, under training's incompressibility** (`ThreadedThrottledOn` with
 `TrainingIncompressible`): a declaration `d` that complies at `(Γ, α)` and contains a `(dd, e)`-threaded reference circuit
-`c` partly, computing the gates `S` of `c` and leaving the rest dark, has at least `b_a / (αΛ)` gates per counted
-multiplication of `c` in `S`, forward and activation-gradient alike, with no term for the dark gates. -/
+`c` partly, computing the gates `S` of `c` and leaving the rest dark, with its baseline registered (`BaselineRegistered`),
+has at least `b_a / (αΛ)` gates per counted multiplication of `c` in `S`, forward and activation-gradient alike, with no
+term for the dark gates. -/
 def IncompressibleThreadedThrottledOn : Prop :=
   ∀ (Γ : ℕ) (α b_w b_a : ℝ) (c d : Declaration) (ch : Chain c.D) (T : Threading c) (dd e : ℕ)
     (M : PartialContainment c d),
@@ -57,8 +58,9 @@ def IncompressibleContainedTraining : Prop :=
 computing the gates `S` of `c` and leaving the rest dark) computes the chain's products in `S`, `G_S` of them, with
 `max (min c₁ c₂) (μ b_a / Λ) · G_S ≤ α size(d) + (1 − μ) ∑_{v dark} novelReads(v)` for each `μ ∈ [0, 1]`,
 where `min c₁ c₂` is `F`'s minimum at read cap `K` and smallest inner dimension `dd`, and `Λ = max e_max (K / (4 b_w dd))`
-with `e_max` the largest output dimension. The assumption is on `c` at read cap `K ≥ αΓ`, and each dark gate reads at
-most `K` itself, so that it is an IU of its own: the dark gates absorb at most their reads of the partial sums. -/
+with `e_max` the largest output dimension. The assumption is on `c` at read cap `K ≥ αΓ`, beside the baseline premise
+`BaselineRegistered`, and each dark gate reads at most `K` itself, so that it is an IU of its own: the dark gates absorb
+at most their reads of the partial sums. -/
 def IncompressibleContainedMatMulOn : Prop :=
   ∀ (Γ : ℕ) (α K b_w b_a μ : ℝ) (c d : Declaration) (ch : Chain c.D) (T : Threading c) (dd emax : ℕ)
     (M : PartialContainment c d),
@@ -94,8 +96,9 @@ declaration `d` that complies at `(Γ, α)` and contains `c` partly computes the
 with `b_a / Λ · G_S ≤ α size(d)`, `Λ = max e_max (K / (4 b_w dd))`, and no term for the dark gates, so it holds even when
 every partial sum is added off the books. Each IU makes at most `Λ` products per `b_a` bits it reads: `e_max` per input
 entry it uses at a position it completes no entry of, one for each row of the multiplication, and, at positions it
-completes entries of, `K / (4 b_w dd)` per `b_a` bits by AM–GM on its weight and input reads. It needs only the
-activations' half of training's incompressibility, `ActivationsIncompressible` on `c` at read cap `K ≥ αΓ`. -/
+completes entries of, `K / (4 b_w dd)` per `b_a` bits by AM–GM on its weight and input reads. Of training's
+incompressibility it needs only the activations' half, `ActivationsIncompressible` on `c` at read cap `K ≥ αΓ`, besides
+the baseline premise `BaselineRegistered`. -/
 def ContainedFanOutOn : Prop :=
   ∀ (Γ : ℕ) (α K b_w b_a : ℝ) (c d : Declaration) (ch : Chain c.D) (dd emax : ℕ) (M : PartialContainment c d),
     0 ≤ α → 0 < K → 0 < b_w → 0 < b_a → 0 < dd → α * Γ ≤ K →
