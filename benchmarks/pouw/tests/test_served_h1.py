@@ -1,10 +1,12 @@
 """served_h1's side computation (`served_h1/receipts.py`) is `h1tile.reference`'s receipt, unit by unit: on random s8 calls at
 K = 64 and 128 (a partial row block left uncovered), and saturated operands at K = 64; and each receipt reads the unit's
 position, salt and roots and every operand byte of its tile.  A call's receipt tree (`served_h1/commit.py`) is the same built in
-pool tasks or leaf by leaf, opens a unit's leaf, and refuses a flipped bit or another call's salt label.  Under a call's admit
-bits (`served_h1/credit.py`), from the committed request queue, a dead unit's receipt is the canonical empty receipt and a live
-unit's the reference's, a junk row in a slot the queue leaves unassigned is refused and credits nothing, so is the canonical
-empty row in a slot the queue selects (RT-ALGO-4), and the tally's limbs are 16-bit.  A call's A table is AROW's row table, a tile's rows open against it and the step's A root, and
+pool tasks or leaf by leaf, opens a unit's leaf, and refuses a flipped bit or another call's salt label.  By each tile's live
+bit (its A bytes, `PouwH1Tile._live`) a dead unit's receipt is the canonical empty receipt and a live unit's the reference's.
+Under a call's admit bits (`served_h1/credit.py`), from the committed request queue, a junk row in a slot the queue leaves
+unassigned is refused and credits nothing, so is the canonical empty row in a slot the queue selects (RT-ALGO-4), a block of
+zero-byte rows under nonzero scales is admitted and credits nothing (RT4-LOGIC-4), and the tally's limbs are 16-bit.  A
+call's A table is AROW's row table, a tile's rows open against it and the step's A root, and
 A' = -b is refused (CMP-38).  A linear's B table is the same format over its weight rows, under the weights' root; the
 scheduler's record gives the request queue and its commitment."""
 from __future__ import annotations
@@ -88,7 +90,7 @@ def _padded_call(m: int, t: int, n: int, k: int, seed: int) -> "RC.Call":
 
 
 def test_dead_units_skip_noise_and_receipt():
-    """Under its admit bits a call's live units (an admitted slot among their 32 rows) are `h1tile`'s receipts and its dead
+    """A call's live units (their tile's live bit: a nonzero byte among their 32 A rows) are `h1tile`'s receipts and its dead
     units the canonical empty receipt; the gated reference agrees, and a dead unit's ungated receipt is not empty, so the
     skip is visible."""
     call = _padded_call(5, 64, 64, 64, 11)
@@ -99,12 +101,11 @@ def test_dead_units_skip_noise_and_receipt():
     bits = CR.queue_admit(queue, 0, rows)
     assert list(bits) == list(CR.queue_select(queue, 0)) == [True] * 5 + [False] * 59
     assert not CR.junk(rows, bits) and not CR.hollow(rows, CR.queue_select(queue, 0))
-    got, live = RC.gated_receipts(call, bits, SALT, 9, RA, RB)
-    assert live == CR.live_units(bits, 64) == [0, 1]
+    got, live = RC.gated_receipts(call, SALT, 9, RA, RB)
+    assert live == CR.live_units(rows, 64) == [0, 1]
     for u in range(len(call.units)):
-        want = RC.gated_reference(call, bits, SALT, 9, RA, RB, u)
+        want = RC.reference(call, SALT, 9, RA, RB, u)[1]
         assert list(got[u]) == want
-        assert want == RC.reference(call, SALT, 9, RA, RB, u)[1]
         ungated = RC.reference(call, SALT, 9, RA, RB, u, gated=False)[1]
         assert (want == ungated) if u in live else (not any(want) and any(ungated))
 
@@ -152,7 +153,9 @@ def test_admit_words_and_tally():
     ws = CR.words(bits)
     assert ws == [0b1001, 0b10, 0, 1 << 15] and list(CR.bits_of(ws)) == list(bits)
     assert CR.word_rows(ws)[3] == (1 << 15).to_bytes(2, "little")
-    assert CR.live_blocks(bits) == [0, 1] and CR.live_units(bits, 96) == [0, 1, 2, 3, 4, 5]
+    a = np.zeros((64, 8 + 4), dtype=np.uint8)
+    a[[0, 3, 17, 63], 0] = 1
+    assert CR.live_blocks(a) == [0, 1] and CR.live_units(a, 96) == [0, 1, 2, 3, 4, 5]
     rows = np.zeros((3, 8 + 4), dtype=np.uint8)
     rows[0, 2], rows[1, -1], rows[2, [1, -2]] = 1, 0x3F, (5, 0x40)
     assert list(CR.nonempty(rows)) == [True, True, True] and CR.scale_only(rows) == [1]
@@ -200,23 +203,23 @@ def test_junk_row_in_an_unassigned_slot_is_refused_and_credits_nothing():
 def test_canonical_empty_rows_in_selected_slots_are_refused_and_credit_nothing():
     """RT-ALGO-4 (note:20261019T0618Z-draft-rt-algo-r2): a block whose 32 slots the queue selects but whose rows are all the
     canonical empty row is dead to the tile, which zeroes its receipt.  The admit unit admits none of its slots, so the
-    block is dead to credit too and the tally counts none of its rows, and it refuses every one of them (`hollow`).  A row
-    of zero bytes under a nonzero scale is refused (`scale_only`), and a selected row of nonzero bytes under scale 0 is
-    not admitted and so refused as junk: in a window none of these refuse, a selected slot is admitted iff its bytes are
-    nonzero."""
+    block is dead to credit too and the tally counts none of its rows, and the window's check refuses every one of them
+    (`hollow`).  The window's check also refuses a row of zero bytes under a nonzero scale (`scale_only`), which the admit
+    unit admits (RT4-LOGIC-4, the next test), and a selected row of nonzero bytes under scale 0, which it doesn't admit, as
+    junk."""
     t, k = 64, 64
     queue = CR.queue_of([[("a", 32)]], 1, t)
     chosen = CR.queue_select(queue, 0)
     assert list(chosen) == [True] * 32 + [False] * 32
     empty = np.zeros((t, k + 4), dtype=np.uint8)
     bits = CR.queue_admit(queue, 0, empty)
-    assert not bits.any() and CR.live_blocks(bits) == [] and CR.hollow(empty, chosen) == list(range(32))
+    assert not bits.any() and CR.live_blocks(empty) == [] and CR.hollow(empty, chosen) == list(range(32))
     assert not CR.junk(empty, bits) and not CR.scale_only(empty)
     call = RC.Call(torch.zeros(t, k, dtype=torch.int8), _call(32, 32, k, 3).b)
-    got, live = RC.gated_receipts(call, bits, SALT, 9, RA, RB)
+    got, live = RC.gated_receipts(call, SALT, 9, RA, RB)
     assert live == [] and not got.any()
     calls = [{"step": 0, "site": "x", "n": 32, "k": k}]
-    assert CR.tally(calls, [int(bits.sum())], 1, ("x",))["rows"] == 0
+    assert CR.tally(calls, [int(CR.credited(bits, empty).sum())], 1, ("x",))["rows"] == 0
     scale_only = empty.copy()
     scale_only[:32, -1] = 0x3F
     assert CR.queue_admit(queue, 0, scale_only).sum() == 32 and CR.scale_only(scale_only) == list(range(32))
@@ -228,7 +231,32 @@ def test_canonical_empty_rows_in_selected_slots_are_refused_and_credit_nothing()
     honest[:32, -1] = 0x3F
     bits = CR.queue_admit(queue, 0, honest)
     assert list(bits) == list(chosen) and not CR.junk(honest, bits) and not CR.hollow(honest, chosen)
-    assert not CR.scale_only(honest) and CR.live_blocks(bits) == [0]
+    assert not CR.scale_only(honest) and CR.live_blocks(honest) == [0]
+
+
+def test_a_block_of_zero_byte_rows_under_nonzero_scales_is_admitted_and_not_credited():
+    """RT4-LOGIC-4 (note:20261019T2300Z-draft-rt4-logic): the admit unit reads a row's scale and none of its bytes, so a
+    selected block of zero-byte rows under nonzero scales (`scale_only`) is admitted, while its tile, which reads A's bytes,
+    is dead (`PouwH1Tile._live`: zero receipt, no noise).  Counting admit bits would credit it at full MACs; credit counts
+    the admitted slots of live tiles only (`credited`), so the block credits nothing, its unit gets the canonical empty
+    receipt, and the window's check refuses its rows."""
+    t, k = 64, 64
+    queue = CR.queue_of([[("a", 64)]], 1, t)
+    rows = np.zeros((t, k + 4), dtype=np.uint8)
+    rows[:, -4:] = np.frombuffer(np.float32(0.5).tobytes(), dtype=np.uint8)
+    rows[:32, :k] = np.arange(1, 33, dtype=np.uint8)[:, None]
+    bits = CR.queue_admit(queue, 0, rows)
+    assert bits.all() and CR.scale_only(rows) == list(range(32, 64))
+    assert list(CR.live(rows)) == [True, False] and CR.live_blocks(rows) == [0]
+    credited = CR.credited(bits, rows)
+    assert list(credited) == [True] * 32 + [False] * 32
+    calls = [{"step": 0, "site": "x", "n": 32, "k": k}]
+    assert CR.tally(calls, [int(bits.sum())], 1, ("x",))["rows"] == 64
+    assert CR.tally(calls, [int(credited.sum())], 1, ("x",))["rows"] == 32
+    call = RC.Call(torch.from_numpy(np.ascontiguousarray(rows[:, :k]).view(np.int8)), _call(32, 32, k, 5).b)
+    got, live = RC.gated_receipts(call, SALT, 9, RA, RB)
+    assert live == CR.live_units(rows, 32) == [0] and not got[1].any()
+    assert list(got[0]) == RC.reference(call, SALT, 9, RA, RB, 0)[1]
 
 
 class _Layer:
