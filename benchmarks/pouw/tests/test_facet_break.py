@@ -10,6 +10,7 @@ from __future__ import annotations
 import importlib.util
 import json
 import sys
+from fractions import Fraction
 from pathlib import Path
 
 import pytest
@@ -73,15 +74,30 @@ def test_class_of():
             "ATOMS.CAST.SPIN.64": "ATOMS64", "ATOM.E.ADD.STRONG.GPU": "ATOME32", "ATOM.E.EXCH.64.STRONG.GPU": "ATOME64",
             "STS.128": "STS128", "STS": None, "LDGSTS.E.BYPASS.128": "LDGSTS16", "LDSM.16.M88": "LDSM_X1",
             "LDSM.16.MT88.4": "LDSM_X4T", "LDSM.8.MT1616.2": "LDSM8T_X2", "STSM.16.M88.2": "STSM_X2",
-            "STSM.8.MT1616.4": "STSM8T_X4"}
+            "STSM.8.MT1616.4": "STSM8T_X4", "UBLKRED.G.S.XOR": None, "UBLKCP.S.G": None, "UTMALDG.2D": None,
+            "UBLKRED*": None, "UBLKPF.L2": "UNI"}
     assert {op: loads.class_of(op) for op in want} == want
+
+
+def test_a_bulk_instruction_counts_its_shared_memory_bytes():
+    """A5b (RT4-SHEET-1): a bulk or TMA instruction counts `S/99 KB` in UTMABIG, `S` its size, which it reads or writes
+    in a block's shared memory on at least one side, so DS-120 charges it `S` on DS_smem and at most its one issue slot.
+    fold_bulk.cu's fbw trip reduces 32 KB and twice 16 KB into global memory."""
+    big = loads.BULK_BYTES
+    assert loads.bulk_counts("UBLKRED.G.S.XOR", 32768) == {"UTMABIG": Fraction(32768, big)}
+    for op in ("UBLKRED.S.S.XOR", "UBLKCP.S.S", "UBLKCP.S.G", "UTMALDG.2D", "UTMASTG.3D"):
+        assert loads.bulk_counts(op, 512) == {"UTMABIG": Fraction(512, big)}, op
+    assert loads.bulk_counts("UBLKCP.S.G", big) == {"UTMABIG": Fraction(1)} and big == 99 * 1024
+    for op, n in (("UBLKCP.S.G", big + 16), ("UBLKRED.G.S.ADD", 0), ("UBLKPF.L2", 512)):
+        with pytest.raises(ValueError):
+            loads.bulk_counts(op, n)
 
 
 def test_a_side_unit_counted_by_wildcard_takes_its_class_from_its_name():
     row = {"probe": "hs_red64", "rates": {"0:IMMA.16832.S8.S8": 0.4, "1:REDG*": 0.08}}
     assert loads.rates_by_class(row) == pytest.approx({"IMMA16832": 0.1, "RED64": 0.02})
     assert loads.rates_by_class({"probe": "sa_blkred512", "rates": {"0:UBLKRED*": 0.04}}) == {"TMAred512": 0.01}
-    assert loads.rates_by_class({"probe": "sa_blkred4k", "rates": {"0:UBLKRED*": 0.04}}) == {"UNI": 0.01}
+    assert loads.rates_by_class({"probe": "sa_blkred4k", "rates": {"0:UBLKRED*": 0.04}}) == {}
 
 
 def test_a_tld_takes_its_width_from_the_program_and_unpriced_loads_are_listed(census):

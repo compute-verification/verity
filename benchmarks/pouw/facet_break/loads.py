@@ -34,6 +34,7 @@ import json
 import re
 import sys
 from fnmatch import fnmatchcase
+from fractions import Fraction
 from itertools import combinations
 from pathlib import Path
 
@@ -102,12 +103,37 @@ _ALU = re.compile(r"\bIADD3\b|\bIADD\b|\bLOP3\b|\bLOP\b|\bSHF\b|\bPRMT\b|\bLEA\b
 #: their suffix
 UNIFORM = re.compile(r"U[A-Z].*|LDCU|R2UR|S2UR|CS2UR|VOTEU")
 UR_PAIR = re.compile(r"\.(64|WIDE)\b")
+#: the bulk-copy and TMA units' shared-memory instructions (`cp.async.bulk`, `cp.reduce.async.bulk`, their `.tensor`
+#: forms): one costs its shared-memory bytes on DS_smem (A5b), which its opcode doesn't show, so `class_of` leaves it
+#: unclassed, ahead of the uniform rule that would call it UNI (RT4-SHEET-6), and `bulk_counts` classes it by its bytes
+BULK = re.compile(r"UBLK(CP|RED)|UTMA(LDG|STG|REDG)")
+#: UTMABIG's bytes on DS-120: 99 KB, the most shared memory a block holds on sm_120 (CUDA C++ Programming Guide,
+#: compute capability 12.0), so a bulk instruction's count `S/99 KB` is at most one and a box is never one UTMABIG there
+BULK_BYTES = 101376
+
+
+def bulk_counts(opcode: str, nbytes: int) -> dict[str, Fraction]:
+    """A bulk or TMA instruction's census counts (A5b): `S/99 KB` in UTMABIG, `S` its size, so DS-120 charges DS_smem
+    exactly `S` and DS_issue at most its one slot.
+
+    `nbytes` is its size in bytes (the SASS size register holds bytes/16: fold_bulk.cu's `0x8000` bytes load as
+    `0x800`). Each of these instructions reads or writes `S` bytes of a block's shared memory on at least one side, so
+    `S` is a lower bound on its bank bytes (a reduction into shared memory moves `3S`) and at most 99 KB."""
+    op = opcode.split("@")[-1].strip()
+    if not BULK.match(op.split(".")[0]):
+        raise ValueError(f"{opcode} is no bulk or TMA instruction")
+    if not 0 < nbytes <= BULK_BYTES:
+        raise ValueError(f"{opcode} of {nbytes} B: a bulk instruction moves 1 B to a block's 99 KB of shared memory")
+    return {"UTMABIG": Fraction(nbytes, BULK_BYTES)}
 
 
 def class_of(opcode: str) -> str | None:
-    """The census class of a dotted SASS opcode (`IMMA.16832.S8.S8`, `LOP3.LUT`, `SHFL.BFLY`), or None when not certain."""
+    """The census class of a dotted SASS opcode (`IMMA.16832.S8.S8`, `LOP3.LUT`, `SHFL.BFLY`), or None when not certain:
+    a bulk or TMA instruction's class is its bytes' (`bulk_counts`)."""
     op = opcode.split("@")[-1].strip()
     base = op.split(".")[0]
+    if BULK.match(base):
+        return None
     if UNIFORM.fullmatch(base):
         return "UNI64" if UR_PAIR.search(op) else "UNI"
     for pat, kind in CLASS_RULES:
