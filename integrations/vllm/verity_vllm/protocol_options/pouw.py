@@ -774,8 +774,11 @@ def _install_h1(entry: str, settings: Settings, target: Target) -> Option:
     in the static layout of the settings' ``rows`` and ``steps``; each layer's ``apply`` runs under the credit gate's trace
     (`pouw_h1.traced`), and the ``runner``'s ``execute_model`` hands each step's admitted requests and its batch order to
     the run (`pouw_h1.admitting`), each entry and each served row's request under its round's root before the ``rounds``
-    coin. With the setting ``challenger`` both the salt coin and the round coins are the auditor host's, from one session
-    (`pouw_h1_challenger.session`) that closes once the window has finished. The served values are the arm's, untouched."""
+    coin, and the window's draw coin opens at release after its manifest. With the setting ``challenger`` the salt, round
+    and draw coins are the auditor host's, from the one session infra gave the window (``session``, which the commitment
+    carries; `pouw_h1_challenger.session`), closed once the window has finished; without it the coins are this process's
+    and the window credits nothing (`pouw_h1.IN_PROCESS`). ``admission`` is the run's (`pouw_h1_requests.ADMISSIONS`,
+    round 0 only by default). The served values are the arm's, untouched."""
     layers = PH.layers(target.model, linear_types())
     committed = target.weight_commitments.get(entry) or commit_weights(PH.SCHEME, target)
     roots = {int(w): bytes.fromhex(r) for w, r in committed["weight_roots"].items()}
