@@ -43,17 +43,16 @@ roots follow the step's real rows, so this window doesn't use them (the seeded m
   s's coin opens (`sampled_proofs.challenger.LiveRecord`), and the step's units take the round's salt (`h1tile.live_salt`:
   `window.round_key(...).stream(0, 64)`), so every candidate and every selection a round's noise reads is committed before
   that noise's coin.  The gate's units come from the draw coin, opened after the window's receipts root (`receipts_root`).
-  With ``--gate USER@HOST``, ``--period P`` and ``--peer NODE`` (or ``$POUW_CHALLENGER_GATE``, ``$POUW_WINDOW_PERIOD``
-  and ``$POUW_PEER``) the challenger is off the node: one session a window on its auditor host (`coins.Session`,
-  `remote.RemoteChallenger`), requested from infra's gate (`coins.request`) once the registration root, the window's
-  Commit, is fixed and before the salt coin, so the session's Commit is the window's and no argument names it; the run
-  connects the moment the challenger listens (`coins.wait_listening`). ``--challenger HOST:PORT`` and ``--session ID``
-  (or ``$POUW_CHALLENGER`` and ``$POUW_CHALLENGER_SESSION``) take a session requested before the run instead, opened
-  before anything else runs: its Commit can't be this window's registration root, so it is for development only. Either
-  way the layout is the window's (`coins.layout`), the manifest records the session, the period and the Commit, and the
-  verifier checks the coins from the session as the gate publishes it (`coins.py check`).  Without either the
-  challenger is `window.live_challenger` in this process, and the run is labelled ``coins=in-process (not certified)``,
-  as is every seeded run.
+  A window's own session off the node, ``--gate USER@HOST`` (or ``$POUW_CHALLENGER_GATE``), is reserved at infra's gate
+  when the window starts (`coins.reserve`) and opened (`coins.open_window`) on its root R =
+  `salt.window_open_root(weights' root, round-0 request table's root, session)` once both roots are committed, its
+  salt coin after R: that waits on #2950 (cursor/ca-salt-window-ea24, 8a26707261), so ``--gate`` is refused until it
+  lands.  ``--challenger HOST:PORT`` and ``--session ID`` (or ``$POUW_CHALLENGER`` and ``$POUW_CHALLENGER_SESSION``,
+  with ``$POUW_CHALLENGER_SECRET_FILE`` for a session that has a secret) take a session opened before the run, for
+  development only: its salt coin opens after the registration root, so a gate session's challenger, which opens it only
+  after the session's root, refuses it.  The layout is the window's (`coins.layout`) and the manifest records the
+  session.  Without a session the challenger is `window.live_challenger` in this process, and the run is labelled
+  ``coins=in-process (not certified)``, as is every seeded run.
 * **Credit**: only the admitted slots, a tile's iff `PouwH1Tile_v4`'s live bit (the OR of its admit bits) is set, an
   admitted tile of zero-byte rows included (RT4-LOGIC-20) (`credit.tally`, in 16-bit limbs, committed and not proved until
   a tally Definition exists): Cr = Σ admitted rows · N · K, and the published credit point(level(floor_point(Cr))) <= Cr.
@@ -409,25 +408,21 @@ def run(a: argparse.Namespace) -> dict:
     out = Path(a.out)
     out.mkdir(parents=True, exist_ok=True)
     rec = Record(out)
+    if a.gate:
+        raise ValueError(f"--gate {a.gate}: a window's session opens on its root, salt.window_open_root(the weights' "
+                         "root, the round-0 request table's root, the session), and its salt coin after it, which wait "
+                         "on #2950 (cursor/ca-salt-window-ea24, 8a26707261); until it lands a window's coins are "
+                         "in-process, or a development session's (--challenger, --session)")
     at = CO.session(a.challenger, a.session)
-    if at is not None and a.gate:
-        raise ValueError(f"a window's session is requested from --gate {a.gate} or given ({at.id}), not both")
-    a.coins = a.coins or ("live" if at is not None or a.gate else "seeded")
+    a.coins = a.coins or ("live" if at is not None else "seeded")
     live = a.coins == "live"
-    if (at is not None or a.gate) and not live:
-        raise ValueError(f"challenger session {at.id if at else 'from ' + a.gate} serves live coins, not --coins {a.coins}")
-    if a.gate and not (a.period and a.peer):
-        raise ValueError("a session from --gate is for the window's --period, its challenger on --peer")
+    if at is not None and not live:
+        raise ValueError(f"challenger session {at.id} serves live coins, not --coins {a.coins}")
     n_rounds = a.steps or a.max_tokens + 2
-
-    def coin_source(cs) -> None:
-        rec.doc["coins"] = cs.label if live else CO.IN_PROCESS
-        rec.step("coin_source", {"mode": a.coins, **(cs.record() if live else {"source": "in-process", "label": CO.IN_PROCESS}),
-                                 **({"commitment": cs.commitment.to_json(), "period": a.period} if live else {})})
-
-    cs = CO.open_coins(at, a.epoch, n_rounds) if live and not a.gate else None
-    if not a.gate:
-        coin_source(cs)
+    cs = CO.open_coins(at, a.epoch, n_rounds) if live else None
+    rec.doc["coins"] = cs.label if live else CO.IN_PROCESS
+    rec.step("coin_source", {"mode": a.coins, **(cs.record() if live else {"source": "in-process", "label": CO.IN_PROCESS}),
+                             **({"commitment": cs.commitment.to_json()} if live else {})})
     workers = a.workers or max(2, min(48, len(os.sched_getaffinity(0)) - 2))
     pool = mp.get_context("spawn").Pool(workers)
     import receipts as RC
@@ -508,12 +503,6 @@ def run(a: argparse.Namespace) -> dict:
     rec.step("weights", {"s": round(time.perf_counter() - t0, 1), "weights_root": weights["root"].hex(),
                          "b_roots": {names[w]: r.hex() for w, r in enumerate(weights["roots"])},
                          "registration": registration.hex(), "registration_fields": reg_fields})
-    if a.gate:
-        at, _ = CO.request(a.gate, a.period, registration, a.peer, a.epoch, n_rounds, lane=a.lane,
-                           ssh=CO.ssh_args(a.ssh_key))
-        CO.wait_listening(at)
-        cs = CO.open_coins(at, a.epoch, n_rounds)
-        coin_source(cs)
     dev = layers[0].weight.device
     st = {"on": True, "step": -1, "last": None, "order_ok": True, "refused": []}
     stash: dict[int, tuple] = {}
@@ -730,8 +719,7 @@ def run(a: argparse.Namespace) -> dict:
     a_window = CM.step_root(CM.domain(w_fields, len(steps), "a-window"), [st["a_step"] for st in steps])
     a_roots = {"a_step": [st["a_step"].hex() for st in steps], "admit_step": [st["admit_step"].hex() for st in steps],
                "a_window": a_window.hex(), "a_window_fields": w_fields}
-    coins = {"mode": a.coins, "ok": True, **(cs.record() if live else {"source": "in-process", "label": CO.IN_PROCESS}),
-             **({"window": {"commit": registration.hex(), "period": a.period}} if live else {})}
+    coins = {"mode": a.coins, "ok": True, **(cs.record() if live else {"source": "in-process", "label": CO.IN_PROCESS})}
     gate_picks = {"from": "the prover's entropy (os.urandom): seeded, not certified"}
     rng = random.Random(os.urandom(16))
     if live:
@@ -766,8 +754,9 @@ def run(a: argparse.Namespace) -> dict:
         coins["ok"] = bool(coins["rounds_reason"] is None and coins["draw_reason"] is None and coins["rounds_cover_steps"]
                            and all(recomputed))
         coins["verify"] = ("the verifier's check: coins.py check --challenger-out <the session as the gate publishes it> "
-                           "--manifest manifest.json --key-record <the challenger's challenger-key/v1 record> --period "
-                           "<the window's period>, from the challenger's own record, never this one" if cs.source == "off-node"
+                           "--ledger <the gate's ledger> --manifest manifest.json --key-record <the challenger's "
+                           "challenger-key/v1 record> --period <the window's period> --root <the window's root>, from the "
+                           "challenger's own record, never this one" if cs.source == "off-node"
                            else "none: the challenger ran in the prover's process")
         rec.step("coins", {k: v for k, v in coins.items() if k not in ("rounds", "release_log")})
 
@@ -1081,15 +1070,11 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--challenger", default=None, metavar="HOST:PORT",
                     help=f"live: the challenger off the node (default ${CO.CHALLENGER_ENV}); none: in-process, not certified")
     ap.add_argument("--session", default=None, metavar="ID",
-                    help=f"the challenger session's id from infra's gate (default ${CO.SESSION_ENV}); development only, "
-                         "since its Commit was named before the window fixed its registration root")
+                    help=f"the challenger session's id (default ${CO.SESSION_ENV}, its secret ${CO.SECRET_ENV}); "
+                         "development only, since its salt coin opens after the registration root, not a window's root")
     ap.add_argument("--gate", default=os.environ.get(CO.GATE_ENV), metavar="USER@HOST",
-                    help=f"live: request the window's session from infra's gate once the registration root (the window's "
-                         f"Commit) is fixed, before the salt coin (default ${CO.GATE_ENV})")
-    ap.add_argument("--period", default=os.environ.get(CO.PERIOD_ENV), help=f"the window's period (default ${CO.PERIOD_ENV})")
-    ap.add_argument("--peer", default=os.environ.get(CO.PEER_ENV), help=f"this node as the gate names it (default ${CO.PEER_ENV})")
-    ap.add_argument("--lane", default=None, help="the lane the gate's ledger names")
-    ap.add_argument("--ssh-key", default=None, help="the ssh key the gate takes (default: ssh's own)")
+                    help=f"live: the window's own session from infra's gate (default ${CO.GATE_ENV}); refused until "
+                         "#2950 gives the root it opens on (salt.window_open_root)")
     return 0 if run(ap.parse_args(argv))["ok"] else 1
 
 
