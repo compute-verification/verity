@@ -4,6 +4,7 @@ import Proofs.Pouw.Barrier.Proofs
 import Proofs.Pouw.BudgetAbort
 import Proofs.Pouw.Copy
 import Proofs.Pouw.Deadline
+import Proofs.Pouw.EndToEndWindow.Statement
 import Proofs.Pouw.Eps1
 import Proofs.Pouw.Dimension
 import Proofs.Pouw.Dimension.A2WordsProofs
@@ -160,6 +161,7 @@ import Proofs.Pouw.TileBound.Fp8Depth
 import Proofs.Pouw.TileBound.Proofs
 import Proofs.Pouw.TileBound.WinogradStrassen
 import Proofs.Pouw.TileBound.Witness
+import Proofs.Pouw.Window
 import Proofs.Pouw.Witness
 
 /-!

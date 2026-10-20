@@ -17,12 +17,18 @@ from verity_vllm.program.frontend.rules.vllm_bindings.operands import aten
 class AllocViewRule(ViewRule):
     """`aten.view/reshape(alloc, shape)` of an UNWRITTEN allocation (vLLM's `Attention.forward`: `output = torch.empty(...)` then
     `output.view(-1, NH, D)` before the kernel writes it): the view is the same uninitialised allocation with the viewed type;
-    the in-place rule that writes the view rebinds it. Reading either before the write stays refused (Alloc semantics)."""
-    info = RuleInfo("AllocView", 2, "view", applies_to="aten.view / reshape / flatten / unit-step slice / permute / t / transpose of an unwritten allocation",
+    the in-place rule that writes the view rebinds it. Reading either before the write stays refused (Alloc semantics).
+
+    The in-place rule rebinds only the view it wrote, so the base stays an Alloc; a later view of the base over exactly that
+    region (vLLM's `DeepseekV4Attention.forward`: the kernel writes `o_padded[:, :NH]`, the layer re-slices `o_padded[:, :NH]`)
+    is the written value. Only when that one write went through the base: with two, either may have overwritten the other."""
+    info = RuleInfo("AllocView", 3, "view", applies_to="aten.view / reshape / flatten / unit-step slice / permute / t / transpose of an unwritten allocation",
                     preconditions=("operand is an unwritten Alloc", "view/reshape/flatten: leaf count is preserved; slice: step 1 (a sub-allocation "
                                    "of the same storage -- vLLM's MoE workspace carving `buf[:n].view(...)`); permute/t/transpose: the viewed "
                                    "type is the node's (an axis order over the same leaves -- vLLM's column-major FP8 group scales "
-                                   "`torch.empty(K/G, M).permute(-1, -2)`)"), evidence_domain="structural (no gates)")
+                                   "`torch.empty(K/G, M).permute(-1, -2)`)",
+                                   "the written value: exactly one in-place write went through the operand's storage, its view's storage offset, "
+                                   "shape, stride and dtype are the node's, and it is not stale"), evidence_domain="structural (no gates)")
 
     def targets(self):
         # [R15 fp8] v2: + permute / t / transpose (the in-place rule that writes the view rebinds the VIEW node; the base stays an unread Alloc)
@@ -39,7 +45,29 @@ class AllocViewRule(ViewRule):
 
     def emit(self, node, ctx):
         from verity_vllm.program.frontend.torch_frontend import type_of_tensor
-        ctx.define(node, Alloc(type_of_tensor(node.meta["val"]), node), view_of=node.args[0])
+        written = _written_region(node, ctx)
+        if written is None:
+            ctx.define(node, Alloc(type_of_tensor(node.meta["val"]), node), view_of=node.args[0])
+            return
+        ctx.define(node, ctx.env[written], view_of=written)
+        ctx.record(self, node, {"written": written.name, "region": _region(node)}, emitted="(the written value; no gates)")
+
+
+def _region(node):
+    t = node.meta.get("val")
+    return None if t is None else [int(t.storage_offset()), [int(s) for s in t.shape], [int(s) for s in t.stride()], str(t.dtype)]
+
+
+def _written_region(node, ctx):
+    """The node an in-place rule wrote through `node`'s storage if it is the only such write and covers exactly `node`'s region."""
+    base = ctx.storage_base(node.args[0])
+    writes = [w for w, b in ctx.written_allocs.items() if b is base]
+    if len(writes) != 1:
+        return None
+    w = writes[0]
+    if w in ctx.stale or not isinstance(ctx.env.get(w), Coll) or _region(node) is None or _region(w) != _region(node):
+        return None
+    return w
 
 
 # -- token-id widening ------------------------------------------------------------------------------------------------------

@@ -242,6 +242,8 @@ def test_after_a_landing_the_declarations_command_starts_detached_on_the_commit(
     assert "started `python post.py --x abc123def4567`" in lines[0]
     assert M.after_land(tmp_path, "mytools.decl:U", "abc", spawn=spawn) is None
     assert M.after_land(tmp_path, "nothere.decl:T", "abc", spawn=spawn) is None and len(started) == 1
+    assert M.after_land(tmp_path, "mytools.decl:T", "abc", spawn=spawn, attempt="r20261019-010000-0001") == [
+        "python", "post.py", "--x", "abc", "--attempt", "r20261019-010000-0001"], "drive's landing names the check it landed on"
 
 
 def test_the_after_landing_command_runs_in_a_worktree_of_the_landed_commit_that_goes_when_it_ends(tmp_path):
@@ -336,6 +338,26 @@ def test_a_landing_pushed_another_way_gets_its_after_landing_steps_on_the_next_m
     assert _marker(repo) == tip
     assert f"last ran for {merge[:12]}; catching up 2 commit(s) of main to {tip[:12]}" in capsys.readouterr().out
     assert M.main(["--sweep"]) == 0 and len(ran) == 5, "caught up once"
+
+
+def test_the_after_landing_command_gets_the_attempt_drive_landed_the_tip_on(tmp_path, monkeypatch):
+    """CI-81: `post_train.py` refused every landing drive made with deferred steps, since none had a passed check in the store
+    yet; drive's `runs` names the attempt of the tip it pushed, and `after_land` gets it.  A tip it doesn't name gets none."""
+    origin, repo = tmp_path / "origin.git", tmp_path / "repo"
+    _git(tmp_path, "init", "-q", "--bare", "-b", "main", str(origin))
+    _git(tmp_path, "clone", "-q", str(origin), str(repo))
+    _git(repo, "commit", "-q", "--allow-empty", "-m", "a")
+    _git(repo, "push", "-q", "origin", "HEAD:main", f"HEAD:{M.AFTER_LAND_REF}", f"HEAD:{M.SPEC_ALERTED_REF}")
+    _steps(monkeypatch)
+    got: list[tuple] = []
+    monkeypatch.setattr(M, "after_land", lambda _repo, _tool, sha, **k: got.append((sha, k.get("attempt"))))
+    for rid in ("r20261019-010000-0001", None):
+        _git(repo, "commit", "-q", "--allow-empty", "-m", "Merge #1 into next")
+        tip = _git(repo, "rev-parse", "HEAD")
+        _git(repo, "push", "-q", "origin", "HEAD:main")
+        assert M.caught_up(repo, "origin", "check", log=lambda *_: None, runs={"0" * 40: "r20261019-000000-0000"} |
+                           ({tip: rid} if rid else {})) == tip
+        assert got[-1] == (tip, rid or ""), rid
 
 
 def test_a_merge_with_push_runs_the_steps_from_the_marker_over_what_it_and_the_landings_it_missed_brought(tmp_path, monkeypatch,

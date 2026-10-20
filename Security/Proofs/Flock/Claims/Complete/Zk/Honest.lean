@@ -4,9 +4,11 @@ import Proofs.Flock.Claims.Complete.Honest
 /-!
 # Flock's honest prover at the deployed masked verifier (`honestPZk`)
 
-The prover of `Claims.Flock.Complete H (deployZk rel) honestPZk (δcZk H)`, against B's masked record
+The prover of `CompleteWith H (deployZk rel) honestPZk (δcZk H)`, against B's masked record
 (`FlockDeploy.V true`): `honestP`'s program (`PI`, the sends `asks`, SHA-512 the oracle `Hashes.pi`, `feed`) on the
-masked session (`sessionPZk`), with its tape `TapeZk`.
+masked session (`sessionPZk`), with its tape `TapeZk`. It reads table `i`'s bit `a` at `i·2^m + a` (`tracesOf`), the
+relation's only at one table; the masked record's reference prover (`(deployZk rel).P`) is `ZkTables.honestPR`, which
+runs `ZkTables.honestP` (each table on its share, `honestPZk` at one table) at the tape's mask words.
 
 * **Its program on a statement** (`progZk`): on the session `setupOf true x` sets up, each table's trace from the
   witness (`tracesOf`, the mask slot's words the witness's), the honest masked session, and the last message
@@ -24,7 +26,7 @@ def progZk (x : Claims.Msg) (w : Claims.Flock.Wit) (ω : TapeZk) : PI Claims.Msg
   match setupOf true x with
   | none => .ret []
   | some (_, spec, sts) => do
-    match ← (sessionPZk asks Hashes.pi spec (tabsOf sts) (tracesOf sts w) ω).run with
+    match ← (sessionPZk asks Hashes.pi spec (tabsOf sts) (MaskRank.masksOf sts) (tracesOf sts w) ω).run with
     | .ok (record, proofs) => pure (Final.encode ⟨x, record, proofs⟩)
     | .error _ => pure []
 

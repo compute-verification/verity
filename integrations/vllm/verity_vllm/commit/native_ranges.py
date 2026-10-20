@@ -73,9 +73,12 @@ def level_sizes(leaf_count: int, levels: int) -> list[int]:
 class NativeRangeOpenings:
     """Range openings over the committer's retained copies (`_gpu_blocks`, `_streams`, per-tensor `host`, padding streams) and levels."""
 
-    def _run_root(self, run: Any) -> bytes | None:
-        roots = [s.root for s in run.steps]                     # None over a placeholder step root (b""): equal to no run root, the empty one included
+    def _fold_run_root(self, roots: list[bytes]) -> bytes | None:
+        """The run root over the step roots; None over a placeholder step root (b""): equal to no run root, the empty one included."""
         return scheme.run_root(self.program_digest, self._geo_digest, roots) if all(len(r) == 32 for r in roots) else None
+
+    def _run_root(self, run: Any) -> bytes | None:
+        return self._fold_run_root([s.root for s in run.steps])
 
     def leaf_span(self, step: int, m: Any, lo: int, hi: int) -> tuple[int, int, int]:
         """The leaves [a, b) of `step` that hold bytes [lo, hi) of tensor `m`, and the offset of byte `lo` in their concatenated bytes."""
@@ -131,6 +134,8 @@ class NativeRangeOpenings:
             blk = self._gpu_blocks[step][0]
             if not self._block_holds(blk, lo * C, hi * C):
                 return None
+            if step not in self._gpu_levels:
+                raise RuntimeError(f"open_range({step}, {lo}, {hi}): this run kept no tree levels (retain_levels=False)")
             seg = blk[lo * C:hi * C]
             value = bytes((seg.cpu() if getattr(seg, "is_cuda", False) else seg).numpy().tobytes())
             levels = self._gpu_levels[step]

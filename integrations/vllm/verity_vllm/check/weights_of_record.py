@@ -41,14 +41,16 @@ import os
 import re
 import sys
 import time
+from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
 import numpy as np
 from dataclasses import dataclass
 
-from verity_vllm.check import fp8_moe_scales, fp8_ue8m0
+from verity_vllm.check import derived_weights, fp8_moe_scales, fp8_ue8m0
 from verity_vllm.check.checkpoint_index import CheckpointIndex, sha256_file  # noqa: F401  (sha256_file: the record's shard hash)
+from verity_vllm.check.component_programs import component_program_dirs, load_program_head
 from verity_vllm.config import UsageError, option
 from verity_vllm.check.tp_shards import kv_heads_replicated, replicated_qkv, rows_of, shard_dim as _shard_dim, shard_dim0 as _shard_dim0
 
@@ -58,10 +60,13 @@ FULL_DIGEST_RE = re.compile(r"[0-9a-f]{128}")       # a Program digest (sha512 h
 
 #: fused (stacked along dim 0) fields of the served model <- the checkpoint's parts, in stacking order; `{s}` = the field suffix
 #: (`weight`, `bias`, `weight_scale_inv`, ...).  The rule applies only when the checkpoint has no tensor of the fused name itself
-#: (Phi-3 checkpoints store `qkv_proj` / `gate_up_proj` already fused).
+#: (Phi-3 checkpoints store `qkv_proj` / `gate_up_proj` already fused).  DeepSeek-V4's (`stacked_params_mapping`) are `attn.fused_wqa_wkv`,
+#: `compressor.fused_wkv_wgate`, and its shared experts' gate|up from their w1|w3 (`FUSED_W13`).
 FUSED = {"self_attn.qkv_proj": ("self_attn.q_proj", "self_attn.k_proj", "self_attn.v_proj"), "mlp.gate_up_proj": ("mlp.gate_proj", "mlp.up_proj"),
          "self_attn.wqkv": ("self_attn.wq", "self_attn.wk", "self_attn.wv"), "shared_experts.gate_up_proj": ("shared_experts.gate_proj", "shared_experts.up_proj"),
-         "self_attn.fused_qkv_a_proj": ("self_attn.q_a_proj", "self_attn.kv_a_proj_with_mqa"), "indexer.wk_weights_proj": ("indexer.wk", "indexer.weights_proj")}
+         "self_attn.fused_qkv_a_proj": ("self_attn.q_a_proj", "self_attn.kv_a_proj_with_mqa"), "indexer.wk_weights_proj": ("indexer.wk", "indexer.weights_proj"),
+         "attn.fused_wqa_wkv": ("attn.wq_a", "attn.wkv"), "compressor.fused_wkv_wgate": ("compressor.wkv", "compressor.wgate")}
+FUSED_W13 = {"shared_experts.gate_up_proj": ("shared_experts.w1", "shared_experts.w3")}
 #: fused-MoE experts: `experts.w13_weight[e] = gate|up of expert e`, `experts.w2_weight[e] = down of expert e` (vLLM FusedMoE: RoutedExperts
 #: _load_w13 puts shard w1 = gate in the first half, w3 = up in the second; _load_w2 puts w2 = down).  The checkpoint's per-expert part
 #: names are HF's gate_proj|up_proj|down_proj (OLMoE, Qwen3-MoE, DeepSeek) or Mixtral's w1|w3|w2 (`ckpt_names=("w1","w2","w3")`):
@@ -124,7 +129,11 @@ def to_served(arr: np.ndarray, src_dtype: str, bits: int) -> tuple[np.ndarray, s
             return (arr.view(np.uint16).astype(np.uint32) << 16), "bf16->f32 (exact)"
         if src_dtype in ("F16", "F64"):
             return arr.astype(np.float32).view(np.uint32), f"{src_dtype}->f32"
-    if bits == 8 and src_dtype in ("F8_E4M3", "F8_E5M2", "I8", "U8", "BOOL"):
+    if bits == 32 and src_dtype == "I64":
+        if arr.size and (arr.min() < -(1 << 31) or arr.max() >= 1 << 31):
+            raise ValueError("an I64 checkpoint tensor served as i32 holds a value outside int32")
+        return arr.astype(np.int32).view(np.uint32), "i64->i32 (every value in range)"
+    if bits == 8 and src_dtype in ("F8_E4M3", "F8_E5M2", "F8_E8M0", "I8", "U8", "BOOL"):
         return arr.view(np.uint8), None
     if bits == 64 and src_dtype in ("I64", "F64"):
         return arr.view(np.uint64), None
@@ -245,22 +254,22 @@ def compose(name: str, shape: list[int], bits: int, ck: CheckpointIndex, *, worl
         m = EXPERTS_RE.match(name)
         if m:
             return _compose_experts(name, m, shape, ck, world, rank, note, served)
-        for fused, srcs in FUSED.items():
+        for fused, srcs in (*FUSED.items(), *FUSED_W13.items()):
             m2 = re.match(r"^(.*)\." + re.escape(fused) + r"\.(\w+)$", name)
-            if m2:
-                base, suffix = m2.group(1), m2.group(2)
-                names = [f"{base}.{s}.{suffix}" for s in srcs]
-                if all(ck.has(s) for s in names):
-                    note["rule"] = f"fused {fused} <- " + "|".join(srcs) + " (dim 0)"
-                    whole = names
+            names = [f"{m2.group(1)}.{s}.{m2.group(2)}" for s in srcs] if m2 else []
+            if names and all(ck.has(s) for s in names):
+                note["rule"] = f"fused {fused} <- " + "|".join(srcs) + " (dim 0)"
+                whole = names
                 break
     shapes = [ck.tensors[s][2] for s in whole]
     full = [int(sum(s[0] for s in shapes))] + list(shapes[0][1:]) if shapes and all(shapes) else None
-    if world > 1 and full and not kv_heads_replicated(name, shape, shapes, ck.config, world) and list(shape) != full and len(shape) >= 1 and shape[0] * world == full[0] \
-            and list(shape[1:]) == full[1:]:
+    # a DeepGEMM grouped einsum weight (`is_bmm`: DeepSeek-V4's wo_a and its scales) is the rank's g*r rows viewed as [g, r, ...]
+    rows = [shape[0] * shape[1], *shape[2:]] if full and len(shape) == len(full) + 1 else list(shape)
+    if world > 1 and full and not kv_heads_replicated(name, rows, shapes, ck.config, world) and rows != full and len(rows) >= 1 and rows[0] * world == full[0] \
+            and rows[1:] == full[1:]:
         ps = _rank_rows(whole, served, ck, world, rank)
-        out = np.concatenate(ps, axis=0) if len(ps) > 1 else ps[0]
-        note["shard"] = f"rank {rank}/{world}: per-part dim-0 slice"
+        out = (np.concatenate(ps, axis=0) if len(ps) > 1 else ps[0]).reshape(shape)
+        note["shard"] = f"rank {rank}/{world}: per-part dim-0 slice" + (f" viewed as {list(shape)}" if rows != list(shape) else "")
         if list(out.shape) != list(shape):
             raise ValueError(f"{name}: composed shape {list(out.shape)} != Program shape {shape}")
         return np.ascontiguousarray(out), note
@@ -283,9 +292,19 @@ def compose(name: str, shape: list[int], bits: int, ck: CheckpointIndex, *, worl
         else:
             raise ValueError(f"{name}: Program shape {shape} is not a rank {rank}/{world} shard of the composed {full}")
     out = np.concatenate(parts, axis=0) if len(parts) > 1 else parts[0]
+    if list(out.shape) == rows != list(shape):
+        out = out.reshape(shape)
     if list(out.shape) != list(shape):
         raise ValueError(f"{name}: composed shape {list(out.shape)} != Program shape {shape}")
     return np.ascontiguousarray(out), note
+
+
+def rank_composer(*, checkpoint_dir: str, checkpoints_manifest: str | None = None, model: str | None = None, world: int = 1,
+                  rank: int = 0) -> Callable[[str, list[int], int], np.ndarray]:
+    """`compose` at a TP rank over the checkpoint at `checkpoint_dir`: (served name, shape, bits) -> raw words.  Its shards are not hashed
+    again here: the rank's weights pin checks them."""
+    ck = CheckpointIndex(checkpoint_dir, checkpoints_manifest=checkpoints_manifest or _default_manifest(), model=model, verify_shards=False)
+    return lambda name, shape, bits: compose(name, shape, bits, ck, world=world, rank=rank)[0]
 
 
 def program_weight_fields(inst: dict[str, Any]) -> list[tuple[str, list[int], int]]:
@@ -465,13 +484,15 @@ def diff_records(a: dict[str, Any], b: dict[str, Any]) -> dict[str, Any]:
             "equal_fields": len(set(fa) & set(fb)) - len(differ), "reroot": [ra, rb], "same_weights_of_record": same and ra == rb}
 
 
-def weights_of_record(program: dict[str, Any], ck: CheckpointIndex, *, prefix: str | None = None, kv_cache_dtype: str = "auto") -> dict[str, Any]:
-    """The record: per Program weight field the digest of the checkpoint-composed served tensor; root over the ordered list."""
+def weights_of_record(program: dict[str, Any], ck: CheckpointIndex, *, prefix: str | None = None, kv_cache_dtype: str = "auto",
+                      fields: list[tuple[str, list[int], int]] | None = None) -> dict[str, Any]:
+    """The record: per Program weight field the digest of the checkpoint-composed served tensor; root over the ordered list.
+    `fields` (field, shape, bits) replaces the Program's `weights` struct parameter (`served_record`)."""
     t0 = time.perf_counter()
     inst, res = program["instances"], program.get("result") or {}
     tp = res.get("tp") if isinstance(res.get("tp"), dict) else {}
     world, rank = int(tp.get("world") or 1), int(tp.get("rank") or 0)
-    fields = program_weight_fields(inst)
+    fields = program_weight_fields(inst) if fields is None else fields
     if prefix is None:
         from verity_vllm.query.manifest import format as MF
         named = MF.wrapper_prefix_of(inst.get("rows", []), res.get("attention_impls_observed") or [])
@@ -487,7 +508,8 @@ def weights_of_record(program: dict[str, Any], ck: CheckpointIndex, *, prefix: s
     n_bytes = 0
     analytic_fields: list[str] = []
     dims = {f: (s, b) for f, s, b in fields}       # DeepGEMM linears and MLA's absorbed kv_b: vLLM's load-time ue8m0 rewrite (fp8_ue8m0)
-    rw = fp8_ue8m0.Rewrites(list(dims), fp8_ue8m0.build_roles(program.get("dir")), lambda f: compose(strip_prefix(f, prefix), *dims[f], ck, world=world, rank=rank), ck.config)
+    roles = fp8_ue8m0.build_roles(program.get("dir"))
+    rw = fp8_ue8m0.Rewrites(list(dims), roles, lambda f: compose(strip_prefix(f, prefix), *dims[f], ck, world=world, rank=rank), ck.config)
     for field, shape, bits in fields:
         live = strip_prefix(field, prefix)
         if ENGINE_CONSTANT_RE.search(field) and not ck.has(live):
@@ -507,7 +529,8 @@ def weights_of_record(program: dict[str, Any], ck: CheckpointIndex, *, prefix: s
                 out_fields.append(ent)
             continue
         try:
-            arr, note = rw.compose(field, shape) if rw.covers(field) else compose(live, shape, bits, ck, world=world, rank=rank)
+            arr, note = (rw.compose(field, shape) if rw.covers(field) else derived_weights.compose(live, shape, bits, roles.get(field), ck, world, rank)
+                         or compose(live, shape, bits, ck, world=world, rank=rank))
         except (KeyError, ValueError) as e:
             unresolved.append({"field": field, "why": str(e)[:300]})
             out_fields.append({"field": field, "served_name": live, "shape": shape, "bits": bits, "digest": None, "pinned": False, "why": str(e)[:300]})
@@ -723,35 +746,6 @@ def record_shard_pin(checkpoint_dir: str, *, checkpoints_manifest: str | None = 
         return None
 
 
-class StoredRows:
-    """The rows of an `instances.json.gz`, decoded from the file on each iteration in the form it stores them (a v2 row's argument
-    progressions are not expanded): for readers of row names and specs, never of per-leaf argument runs."""
-
-    def __init__(self, path: str):
-        self.path = path
-
-    def __iter__(self):
-        from verity_vllm.query.program_view import iter_instance_rows
-        return iter_instance_rows(self.path, expand=False)
-
-
-def load_program_head(program_dir: str) -> dict[str, Any]:
-    """`format.load_program` with the instance file's header (schema, digest, params) in memory and its rows `StoredRows`.  A document
-    whose params or digest follow its rows (not `derive_step`'s order) is read whole, its rows as stored."""
-    import gzip
-    from verity_vllm.query.program_view import _read_instance_header
-    path = os.path.join(program_dir, "instances.json.gz")
-    inst = _read_instance_header(path)
-    if {"params", "digest"} <= inst.keys():
-        inst["rows"] = StoredRows(path)
-    else:
-        with gzip.open(path, "rt") as f:
-            inst = json.load(f)
-    p = os.path.join(program_dir, "artifact.json")
-    return {"instances": inst, "result": json.load(open(os.path.join(program_dir, "result.json"))),
-            "artifact": json.load(open(p)) if os.path.exists(p) else None, "dir": program_dir}
-
-
 def build_record(program_dir: str, checkpoint_dir: str, *, checkpoints_manifest: str | None = None, model: str | None = None,
                  revision: str | None = None, verify_shards: bool = True, kv_cache_dtype: str = "auto",
                  shard_pin: dict[str, Any] | None = None) -> dict[str, Any]:
@@ -763,19 +757,37 @@ def build_record(program_dir: str, checkpoint_dir: str, *, checkpoints_manifest:
     return weights_of_record(prog, ck, kv_cache_dtype=kv_cache_dtype)
 
 
+def served_weight_fields(program: dict[str, Any]) -> list[tuple[str, list[int], int]]:
+    """(field, shape, 16) for every weight a served Build's Program reads (`acquire.served`: a served parameter or buffer by name, read
+    as bf16 words by the Definition bound to it), in first-read order.  A weight read at two shapes is refused."""
+    seen: dict[str, list[int]] = {}
+
+    def walk(x: Any) -> None:
+        if isinstance(x, dict):
+            if "weight" in x and seen.setdefault(x["weight"], list(x["shape"])) != list(x["shape"]):
+                raise ValueError(f"{x['weight']} is read at {seen[x['weight']]} and at {list(x['shape'])}")
+            for v in x.values():
+                walk(v)
+        elif isinstance(x, list):
+            for v in x:
+                walk(v)
+    walk(program)
+    return [(n, s, 16) for n, s in seen.items()]
+
+
+def served_record(build: dict[str, Any], checkpoint_dir: str, *, checkpoints_manifest: str | None = None, model: str | None = None,
+                  revision: str | None = None, kv_cache_dtype: str = "auto") -> dict[str, Any]:
+    """The record of a served Build: its Program's weight reads (`served_weight_fields`, by the served names: no wrapper prefix),
+    bound to the Build's program digest."""
+    ck = CheckpointIndex(checkpoint_dir, checkpoints_manifest=checkpoints_manifest or _default_manifest(), model=model, revision=revision)
+    return weights_of_record({"instances": {}, "result": {"program_digest": build["program_digest"]}, "dir": None}, ck, prefix="",
+                             kv_cache_dtype=kv_cache_dtype, fields=served_weight_fields(build["program"]))
+
+
 def weights_struct(program: dict[str, Any]) -> list[list[Any]]:
     """The weights STRUCT of a Program -- [field, shape, bits] in declaration order -- the model-level object the record is a function of
     (no checkpoint read).  Two Programs of one model at different sequence shapes have the same struct."""
     return [[f, list(shape), int(bits)] for f, shape, bits in program_weight_fields(program["instances"])]
-
-
-def component_program_dirs(programs_root: str) -> list[str]:
-    """Every component Program dir under a row dir: build_request_LP*_T* + the default-shape build_request (with an instances.json.gz)."""
-    root = Path(programs_root)
-    out = sorted(str(p) for p in root.glob("build_request_LP*_T*") if (p / "instances.json.gz").exists())
-    if (root / "build_request" / "instances.json.gz").exists():
-        out.append(str(root / "build_request"))
-    return out
 
 
 def stamp_of_record_set(record: dict[str, Any], programs_root: str, *, manifest: str | None = None) -> dict[str, Any]:

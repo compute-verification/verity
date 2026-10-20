@@ -127,7 +127,7 @@ def test_request_manifest_requires_no_literal():
         assert man["complete"] and man["unmodelled"] == {}
         rows = sorted((x["family"], x["step"], x["op_path"], x["output_member"], tuple(x["element_range"])) for x in man["identities"])
         per_step = lambda s: [("input_token_ids", s, f"{W}.embed", "in", (0, 1)), ("instance_outputs", s, f"{W}.embed", "out", (0, 4)),  # noqa: E731
-                              ("instance_outputs", s, f"{W}.lm_head", "0", (0, 4)), ("sampled_token_ids", s, "runner.sampler", "sampled_token_ids", (0, 1)),
+                              ("instance_outputs", s, f"{W}.lm_head", "out", (0, 4)), ("sampled_token_ids", s, "runner.sampler", "sampled_token_ids", (0, 1)),
                               ("sampler_seed", s, "runner.sampler", "seed", (0, 1)), ("sampler_splits", s, "runner.sampler", "splits", (0, 1))]
         assert rows == sorted([("weights", "*", EMBED_W, "weight", (0, None)), ("weights", "*", HEAD_W, "weight", (0, None))] + per_step(0) + per_step(1))
         assert man["populations"]["literal_calls"] == 6 and man["populations"]["steps"] == 2
