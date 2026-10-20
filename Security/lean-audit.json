@@ -3488,9 +3488,6 @@
    "assumptions": [],
    "type_hash": "a008a3ec7f8b876753df956eefa170b2d58e4029da0d65e6e857ba60a2c3489b"
   },
-  "Flock.SecurityProofs.SoundAtBridgeStated": {
-   "owner": "@proofs"
-  },
   "Flock.SecurityProofs.EndToEnd_refSetup": {
    "owner": "@proofs",
    "signature": [
@@ -3575,6 +3572,12 @@
    "signature": ["Flock.SecurityProofs.SamplingClaimsStated : Flock.Guarantees.SamplingClaimsStated"],
    "assumptions": [],
    "type_hash": "12704b348a183d81be9329792dcc639f4deafa21e0fc0227ff7b0b23ccb3bf9b"
+  },
+  "Flock.SecurityProofs.SoundAtBridgeStated": {
+   "owner": "@proofs",
+   "signature": ["Flock.SecurityProofs.SoundAtBridgeStated : Flock.Guarantees.SoundAtBridgeStated"],
+   "assumptions": [],
+   "type_hash": "98071786c4f75d8108782638006751c4515242027c6e546e0d9897582f079342"
   },
   "Flock.SecurityProofs.ZeroKnowledgeHidden": {
    "owner": "@proofs",
