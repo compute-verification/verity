@@ -11,7 +11,7 @@ if [ "${1:-}" != --leased ]; then
   TMP=/workspace/pouw; mkdir -p "$TMP" 2>/dev/null && [ -w "$TMP" ] || TMP=${TMPDIR:-/tmp}
   S=$(mktemp -d "$TMP/exactlin-share.XXXXXX"); trap 'rm -rf "$S"' EXIT
   git rev-parse HEAD > "$OUT/commit.txt" 2>/dev/null || echo "${RESEARCH_SOURCE_SHA:-unknown}" > "$OUT/commit.txt"
-  [ -f "$ROOT/benchmarks/hash/dither/sbench.py" ] || { echo "share.sh: no benchmarks/hash/dither/sbench.py; it is PR #2790's harness: run from #2811's branch" >&2; exit 2; }
+  [ -f "$ROOT/benchmarks/hash/dither/sbench.py" ] || { echo "share.sh: no benchmarks/hash/dither/sbench.py under $ROOT (SHARE_ROOT)" >&2; exit 2; }
   NSYS=${NSYS:-/usr/local/cuda-13.0/bin/nsys}
   [ -x "$NSYS" ] || NSYS=$(command -v nsys || ls -d /opt/nvidia/nsight-systems/*/bin/nsys /usr/local/cuda*/bin/nsys 2>/dev/null | tail -1)
   [ -x "$NSYS" ] || { echo "share.sh: no nsys on $(hostname) (looked for NSYS, \$CUDA/bin, PATH, /opt/nvidia/nsight-systems)" >&2; exit 3; }
