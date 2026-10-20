@@ -73,8 +73,10 @@ def cmd (args : List String) : IO UInt32 := do
   let (partition, program) ← match ← Witness.bindingsOf args with
     | .ok b => pure b
     | .error e => IO.eprintln e; return 2
-  let I : Witness.Inputs := { tags, circuitFile := ← IO.FS.readBinFile cf, publicFile := ← IO.FS.readBinFile pf, count,
-    tables := ← Witness.readTables args, partition, program }
+  let circuitFile ← IO.FS.readBinFile cf
+  let publicFile ← IO.FS.readBinFile pf
+  let tables ← Witness.readTables args
+  let I : Witness.Inputs := { tags, circuitFile, publicFile, count, tables, partition, program }
   let stdin ← IO.getStdin
   let stdout ← IO.getStdout
   let say := fun (line : String) => do
