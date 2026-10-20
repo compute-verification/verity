@@ -18,9 +18,12 @@ session accepts (`Accepts`), and the decoded witness is each session's value lay
 * `ZkOuter.Good`: a layer with no wrong unit whose every unit reads, at each of its registered reads, the registrant's
   value (`RegAgree`). `rd` records those values, the hidden circuit's rows as registered and the values the verifier
   registers itself (its coins, the comb `coef`).
+* `execOS_subset_full_mem`, `execOS_subset_full_escape`: V*'s live law, the full draw, draws every unit at every value
+  of the source's bytes, so it escapes no nonempty set of units, with no assumption on those bytes (A3).
 * `ZkOuter.accepts_le`: an accepted session whose layer is not `Good` is at most `bound` likely: the draw misses every
-  bad unit (`miss 1`); or a drawn unit computes wrongly or reads a registered value other than the registrant's at a
-  leaf that is the registrant's (`zk_session_regDrawnR`: `ksAvgStrictZ + linkBoundZC + regTermZC`); or a drawn row's
+  bad unit (`miss 1`, which the full draw never does); or a drawn unit computes wrongly or reads a registered value
+  other than the registrant's at a leaf that is the registrant's (`zk_session_regDrawnR`:
+  `ksAvgStrictZ + linkBoundZC + regTermZC`); or a drawn row's
   registered leaf is not the registrant's while the verifier's registered check passes (`ReadsX.prob_offOn_le`:
   `qR²/2^513`). The units are bad at the strategy alone, so one sampling step covers all three.
 * `sessions`: the `S` sessions in a row, each played by a strategy the prover names at its start (`seqC`, `ofBase`);
@@ -137,6 +140,61 @@ theorem outcome_auditLive_liveOfZJ {n : ℕ} {L : Law n} {Reg : Type} {mPts : �
   obtain ⟨x, -, rfl⟩ := Game.Outcome.of_map (wr (L.draw ω) τ.1)
     (liveSession dg (planZ (L.draw ω) τ.1).length mPts N) _ ht
   exact ⟨ω, x, rfl⟩
+
+/-- **A live subset draw that succeeds is `Flock.Draw.subset` on the source's one stream.** -/
+theorem runOS_subset {L : Fin 1 → ℕ} (f : (i : Fin 1) → Fin (L i) → Fin 256) (k n : ℕ) {d : Flock.Draw.UnitDraw}
+    (hd : Law.runOS f (.subset k) n = some d) : Flock.Draw.subset k n (Law.streamOf (f 0)) = some d.units := by
+  unfold Law.runOS at hd
+  rw [Law.drawWith_subset_run] at hd
+  cases ho : (Flock.Draw.onWith (Law.tapeGet (Law.tapesOf f) 0) (2 * k * Flock.Draw.width n + 64)
+      (Flock.Draw.subset k n)).run (fun _ => 0) with
+  | none => rw [ho] at hd; exact absurd hd (by simp)
+  | some p =>
+    obtain ⟨u, pos'⟩ := p
+    rw [ho] at hd
+    cases u with
+    | none => exact absurd hd (by simp)
+    | some D =>
+      have hD : D = d.units := by rw [← Option.some.inj hd]
+      have h1 := (Law.onWith_tape (Law.tapesOf f) 0 _ (by omega) _ (fun a b u h => Law.subset_append _ _ a b u h) _
+        pos' _ rfl ho).2 D rfl
+      have h2 : Law.tapesOf f 0 = Law.streamOf (f 0) := by simp [Law.tapesOf, Array.getD_eq_getD_getElem?]
+      rw [h2] at h1
+      rw [← hD]; exact h1
+
+/-- **The full draw draws every unit**: a run of `subset n` over `[0, n)` that succeeds is a permutation's values on
+all of `[0, n)`, and a run that reads past the source's bytes draws every unit. -/
+theorem execOS_subset_full_mem {n : ℕ} {Ω : Type} [Fintype Ω] [Nonempty Ω] {L : Fin 1 → ℕ}
+    (t : Ω → (i : Fin 1) → Fin (L i) → Fin 256) (ω : Ω) (u : Fin n) :
+    u ∈ (Law.execOS (n := n) t (.subset n) n).draw ω := by
+  show u ∈ (match Law.runOS (t ω) (.subset n) n with
+    | some d => Finset.univ.filter fun u : Fin n => u.val ∈ d.units
+    | none => Finset.univ)
+  cases h : Law.runOS (t ω) (.subset n) n with
+  | none => exact Finset.mem_univ _
+  | some d =>
+    simp only [Finset.mem_filter, Finset.mem_univ, true_and]
+    obtain ⟨π, -, hπ, hmem⟩ := FlockSoundness.Discharge.Exec.subset_spec (runOS_subset (t ω) n n h)
+    have himg : (Finset.range n).image π = Finset.range n :=
+      Finset.eq_of_subset_of_card_le
+        (fun x hx => by
+          obtain ⟨i, hi, rfl⟩ := Finset.mem_image.1 hx
+          exact Finset.mem_range.2 (hπ i (Finset.mem_range.1 hi)))
+        (Finset.card_image_of_injective _ π.injective).ge
+    obtain ⟨i, hi, hiu⟩ :=
+      Finset.mem_image.1 (by rw [himg]; exact Finset.mem_range.2 u.isLt : u.val ∈ (Finset.range n).image π)
+    exact (hmem u.val).2 ⟨i, Finset.mem_range.1 hi, hiu⟩
+
+/-- **The full draw escapes no nonempty set of units**: every draw holds every unit (`execOS_subset_full_mem`), with
+no assumption on the source's bytes. -/
+theorem execOS_subset_full_escape {n : ℕ} {Ω : Type} [Fintype Ω] [Nonempty Ω] {L : Fin 1 → ℕ}
+    (t : Ω → (i : Fin 1) → Fin (L i) → Fin 256) {B : Finset (Fin n)} (hB : B.Nonempty) :
+    (Law.execOS (n := n) t (.subset n) n).escape B = 0 := by
+  obtain ⟨u, hu⟩ := hB
+  refine le_antisymm ?_ zero_le
+  refine (FlockSoundness.Game.prCoin_mono (q := fun _ => False) fun ω h => ?_).trans
+    FlockSoundness.Game.prCoin_false.le
+  exact Finset.disjoint_left.1 h (execOS_subset_full_mem t ω u) hu
 
 namespace ZkOuterD
 
@@ -373,11 +431,10 @@ theorem off_le {qR : ℝ} (τ : Strategy (zo.game dg N))
     _ hacc _ (zo.hown ω R' o' hacc)
 
 /-- **V*'s session at one history, at one strategy**: an accepted outcome at which V*'s value layer is not `Good` is at
-most `bound` likely. The bad units are fixed by the strategy: the draw misses them all (`Law.execOS_subset_escape_le`
-under A3, then `miss 1`), or meets a wrong unit or a registered-value disagreement at the registrant's leaf
-(`zk_session_regDrawnR`), or an off-leaf registered read (`off_le`). -/
+most `bound` likely. The bad units are fixed by the strategy: the draw misses them all, which the full draw never does
+(`execOS_subset_full_escape`, no assumption on the source's bytes), or meets a wrong unit or a registered-value
+disagreement at the registrant's leaf (`zk_session_regDrawnR`), or an off-leaf registered read (`off_le`). -/
 theorem accepts_le {Ω : Type} [Fintype Ω] [Nonempty Ω] (Lb : Fin 1 → ℕ) (src : Ω → (i : Fin 1) → Fin (Lb i) → Fin 256)
-    (hA3 : Assumptions.UniformRandomBytes Lb src)
     (zo : ZkOuter mPts nv J Reg' c hU hscope (Law.execOS (n := nv) src (.subset nv) nv))
     (dg : ByteArray → ByteArray) (N : ℕ)
     {k Rw M : ℕ} (hk : 1 ≤ k) (hRw : 1 ≤ Rw) (hM : 1 ≤ M) {ρ : ℝ} (hρ : ρ < 1)
@@ -391,8 +448,7 @@ theorem accepts_le {Ω : Type} [Fintype Ω] [Nonempty Ω] (Lb : Fin 1 → ℕ) (
   have h1 : prob (fun o => Disjoint o.2.1 (zo.badUnits dg N k Rw τ)) (zo.game dg N) τ ≤
       (Law.subset nv nv le_rfl).miss 1 :=
     (prob_auditLive_draw _ τ fun S => Disjoint S (zo.badUnits dg N k Rw τ)).trans_le
-      ((Law.execOS_subset_escape_le nv nv le_rfl Lb src hA3 _).trans
-        (Law.escape_le_miss _ (Finset.card_pos.2 (zo.badUnits_nonempty dg N k Rw τ hG))))
+      ((execOS_subset_full_escape src (zo.badUnits_nonempty dg N k Rw τ hG)).trans_le zero_le)
   have h2 := zk_session_regDrawnR zo.I zo.ht zo.own zo.dj zo.y₀ zo.wr dg N zo.hcH hU zo.hpub
     (Layout.scopeOkH_of_scopeOk hscope) _ zo.hDraw zo.hTags zo.hRec hk hRw hM hρ hr ht' zo.rd τ hCR.1 hCR.2.1
   have h3 := zo.off_le dg N τ hCR.2.2
@@ -498,7 +554,6 @@ noncomputable def sumS (zs : (j : Fin S) → (Vs j).Outer Reg') (dg : ByteArray 
 satisfies `Q` of the layers, the sessions accept with `Q` failing at most the expected sum of the sessions' `boundIf`
 (`accepts_le`, `prob_seqC_exists_le`). -/
 theorem sessions_le
-    (hA3 : ∀ j, Assumptions.UniformRandomBytes (Vs j).law.Lb (Vs j).law.src)
     (zs : (j : Fin S) → (Vs j).Outer Reg') (dg : ByteArray → ByteArray) (N : ℕ)
     {k Rw M : ℕ} (hk : 1 ≤ k) (hRw : 1 ≤ Rw) (hM : 1 ≤ M) {ρ : ℝ} (hρ : ρ < 1)
     (hr : ∀ j S' R' i, rateZ (planZHJ (Reg := Reg') (zs j).dj (zs j).y₀ S' R') i k ≤ ρ) {t' : ℝ} (ht' : 0 ≤ t')
@@ -528,7 +583,7 @@ theorem sessions_le
     intro j τ₀
     unfold ZkOuter.boundIf
     split_ifs with hc
-    · exact ZkOuter.accepts_le (Vs j).law.Lb (Vs j).law.src (hA3 j) (zs j) dg N hk hRw hM hρ (hr j) ht' _ hc
+    · exact ZkOuter.accepts_le (Vs j).law.Lb (Vs j).law.src (zs j) dg N hk hRw hM hρ (hr j) ht' _ hc
     · exact prob_le_one _ _ _
   exact (Game.prob_mono_outcome _ s hmono).trans
     (prob_seqC_exists_le S _ _ (fun j r => LiveAcceptsZKR (zs j).I (zs j).own r.2 ∧
@@ -569,7 +624,6 @@ theorem prob_outerV (zs : Reg₂ → (j : Fin S) → (Vs j).Outer Reg') (dg : By
 
 /-- **V*'s outer proof at one history**: `sessions_le` at the registration the prover sends. -/
 theorem outerV_le
-    (hA3 : ∀ j, Assumptions.UniformRandomBytes (Vs j).law.Lb (Vs j).law.src)
     (zs : Reg₂ → (j : Fin S) → (Vs j).Outer Reg') (dg : ByteArray → ByteArray) (N : ℕ)
     {k Rw M : ℕ} (hk : 1 ≤ k) (hRw : 1 ≤ Rw) (hM : 1 ≤ M) {ρ : ℝ} (hρ : ρ < 1)
     (hr : ∀ R₂ j S' R' i, rateZ (planZHJ (Reg := Reg') (zs R₂ j).dj (zs R₂ j).y₀ S' R') i k ≤ ρ) {t' : ℝ}
@@ -583,7 +637,7 @@ theorem outerV_le
     prob (fun o => AcceptsV zs o ∧ ¬ Q (layers (zs o.1) dg N k Rw o.2)) (outerV zs dg N) s ≤
       sumV zs dg N (fun R₂ j τ => (zs R₂ j).boundIf dg N (Vs j).law.model k Rw M ρ t' qF qS qW qR τ) s := by
   rw [prob_outerV]
-  exact sessions_le hA3 (zs s.1) dg N hk hRw hM hρ (hr s.1) ht' qF qS qW qR Q (hQ s.1) (sessOf zs dg N s)
+  exact sessions_le (zs s.1) dg N hk hRw hM hρ (hr s.1) ht' qF qS qW qR Q (hQ s.1) (sessOf zs dg N s)
 
 variable {n : ℕ} {L : Law n} {Reg : Type} {I : Inner} {Cm : Type}
 
@@ -604,8 +658,6 @@ def VBridge (zs : Reg → L.Ω → List (Cm × I.Coin) → Reg₂ → (j : Fin S
 verifier reads**: `recursive_sound_upto` at V*'s outer proof (`outerV_le` at every leaf, on `VBridge`). Stage `i` opens
 to `msg i v`, and its transfer bounds the messages V*'s layers hold for round `i` not being `same i` as that. -/
 theorem zk_sessions_recursive_upto
-    -- V*'s laws: A3
-    (hA3 : ∀ j, Assumptions.UniformRandomBytes (Vs j).law.Lb (Vs j).law.src)
     -- V*'s sessions at each history and registration
     (zs : Reg → L.Ω → List (Cm × I.Coin) → Reg₂ → (j : Fin S) → (Vs j).Outer Reg')
     (dg : ByteArray → ByteArray) (N : ℕ)
@@ -648,7 +700,7 @@ theorem zk_sessions_recursive_upto
       (fun R₂ j τ => (zs σ.1 ω t R₂ j).boundIf dg N (Vs j).law.model k Rw M ρ t' qF qS qW qR τ) s) (εP := 0)
     ?_ ?_ htr hCR hin
   · rwa [add_zero] at h
-  · exact avg_mono fun ω => leafAvg_mono (fun t s => outerV_le hA3 (zs σ.1 ω t) dg N hk hRw hM hρ (hr σ.1 ω t) ht'
+  · exact avg_mono fun ω => leafAvg_mono (fun t s => outerV_le (zs σ.1 ω t) dg N hk hRw hM hρ (hr σ.1 ω t) ht'
       qF qS qW qR (fun Xs => I.accepts (x σ.1 ω) ((wmsg Xs).zip (t.map Prod.snd)))
       (fun R₂ τ o _ => hbr σ.1 ω t R₂ τ o) _) _
   · refine le_of_eq ((congrArg avg (funext fun ω => ?_)).trans (avg_const 0))
