@@ -64,7 +64,8 @@ __all__ = ["ADAPTERS", "RECORD_SCHEMA", "SITES", "Composition", "Context", "Inst
 
 #: protocol -> its adapter module in this package
 ADAPTERS = {"pouw": "pouw", "pous": "pous", "sampled-proofs": "sampled_proofs"}
-#: Each hook site and who is at it, outermost first; the last may execute there (``EXECUTES``), the others wrap.  At a
+#: Each hook site and who is at it, outermost first; the last may execute there (``EXECUTES``, or per scheme the adapter's
+#: ``executes(scheme)``: PoUW's H1 executes nowhere, since the int8_exact arm serves its own y), the others wrap.  At a
 #: linear layer's ``apply`` POUS hands the decoded weight inward and PoUW replaces the GEMM.  Sampled proofs commits at the
 #: module boundary, outside every site, and its replay evaluates Definitions, never an executor.  `config.PROTOCOLS`, the
 #: install order, is innermost first at every site.
@@ -168,7 +169,8 @@ def refusals(ctx: Context) -> tuple[str, ...]:
             out.append(f"{entry}: {name} registers no scheme {scheme!r} (registered: {', '.join(known) or 'none'})")
             continue
         out.extend(f"{entry}: {r}" for r in mod.refusals(scheme, ctx))
-        sites = tuple(getattr(mod, "EXECUTES", ()))
+        executes = getattr(mod, "executes", None)
+        sites = tuple(executes(scheme) if callable(executes) else getattr(mod, "EXECUTES", ()))
         for site in sites:
             if site in executors:
                 out.append(f"{entry}: {site} already has an executor, {executors[site]}; a site has one")

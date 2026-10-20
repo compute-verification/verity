@@ -12,6 +12,8 @@ import Definitions.Accounting.Bridge
 import Definitions.Accounting.Capacity
 import Definitions.Accounting.CoinFlow
 import Definitions.Accounting.Carrier
+import Definitions.Accounting.Compose
+import Definitions.Accounting.ComposePeriod
 import Definitions.Accounting.Confidence
 import Definitions.Accounting.CostModel
 import Definitions.Accounting.Device
@@ -44,6 +46,7 @@ import Definitions.Accounting.Requirement.Placed
 import Definitions.Accounting.Responder
 import Definitions.Accounting.Tag
 import Definitions.Accounting.TS
+import Definitions.Accounting.TS.Fixed
 import Definitions.Accounting.Window
 
 /-! Resource accounting's vocabulary: the device model every resource audit is about, a joint audit's run on it, and
