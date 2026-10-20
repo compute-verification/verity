@@ -348,7 +348,13 @@ on every rank, the switches that select its kernels (`engine/served.py`: batch i
 the FlashInfer sampler, the model runner, NCCL P2P, the custom all-reduce, eager and compilation modes, the attention backend and
 FlashAttention version, the MoE backend) and fails closed unless each is vLLM's default or declared, with a reason, by the engine
 profile (`engine/env.py`), the row's execution label (only a `bi-*` row is batch invariant) or the row file; `served` in its
-versions.json and summary.json records them.
+versions.json and summary.json records them.  A row of record (one `manifests/records.json` lists) is done only at its public cap:
+its file declares `sampling.ignore_eos` and every request a `max_tokens`, so its served length is public and the EOS a request
+samples decides no step.  The row file (`config.RowConfig`), `row run`'s precheck (`PRECHECK_FAIL_DONE_SOURCE`) and GP-01
+(`reason: done_source`) refuse one that is not, by name, before any GPU time (`config.done_source_refusal`).  Whatever indexes a
+row makes it one, so `records publish`, `records pull` and `records switch` refuse such a row before they write anything, and `row
+chain` refuses it before any stage when it would publish (`config_record.index_refusal`; `--no-publish` still runs it); a research
+row keeps its EOS stops.
 
 The circuit database (`verity_vllm/records.py`) keeps, per row of record, the exact circuit it served and the evidence that it is
 faithful, by row id; committed values are never kept.  A row's entry is a preserved `vllm-config-record/v1` artifact labelled
@@ -366,11 +372,13 @@ last verdict in `stages.txt`; a Build whose Programs passed while its in-stage m
 passes superseded by the manifest of record.  `records.programs(row)` returns `{rank: {part: DecodedProgram}}` (the workload
 Program the Commit binds, and the step and request Programs it composes; `ranks=` and `part=` select), fetched by row id and
 checked against the record's digests, ready for `verity.ml.circuits.evaluation` on synthetic inputs.  `verity-vllm records
-publish` adds a row (a FAIL record, a Commit that committed against another manifest or other Programs than the Build's, a Build
-artifact that lacks a Program the record names, or a needed property neither cited nor a gap, is refused).  `row chain` publishes
+publish` adds a row (a row file not done only at its public cap, a FAIL record, a Commit that committed against another manifest or
+other Programs than the Build's, a Build artifact that lacks a Program the record names, or a needed property neither cited nor a
+gap, is refused).  `row chain` publishes
 it itself once the row's Build, Match and Commit Attempts pass (their artifacts, the Commit's summary.json and each needed
-property's newest capture of record, `--newest-captures`); a row that did not pass publishes nothing, and `records pull ART`
-indexes in a checkout the record a pod's job tree published.  `records show` prints
+property's newest capture of record, `--newest-captures`); a row that did not pass publishes nothing, a chain that would publish a
+row not done only at its public cap is refused before any stage, and `records pull ART` indexes in a checkout the record a pod's
+job tree published.  `records show` prints
 the rows and their records' ids or a record, and `records programs` decodes a row one rank at a time.  A `research run` job has no store: the launcher
 writes the row's record and the descriptors the job needs into one file (`records fetch ROW --to FILE [--rank R] [--part P]`),
 sends it (`research run --send FILE`, which lands it in `$RESEARCH_RUN_DIR/inputs/`), and the job reads them from it
@@ -379,7 +387,8 @@ sends it (`research run --send FILE`, which lands it in `$RESEARCH_RUN_DIR/input
 A TP row's Build is the trace unless the row is switched.  `verity-vllm predict compare ROW_DIR` predicts every Program of a traced
 Build from the row's declared inputs (`verity_vllm/predict/`) and compares digests rank by rank; `records switch ROW --comparison
 comparison.json --run RUN --trace art:…` records, where every one is equal, the comparison run and that traced Build as the row's
-`aot` in `manifests/records.json`, and pins the predicted Programs.  A switched row's Build (`--build-construction record`, the
+`aot` in `manifests/records.json`, and pins the predicted Programs (a row whose file is not done only at its public cap is
+refused).  A switched row's Build (`--build-construction record`, the
 default) derives each Program with `predict emit` (`verity_vllm/predict/aot.py`): the predicted Program, under the trace's annotations (the
 runtime correspondence: per Call, the fx occurrence, module, views and slots, which only the trace yields) and with its other
 files, refused unless the predicted Program and descriptor are the trace's, byte for byte.  `records publish` refuses a switched

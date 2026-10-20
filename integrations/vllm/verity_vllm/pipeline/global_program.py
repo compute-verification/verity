@@ -29,7 +29,7 @@ from dataclasses import dataclass
 
 from verity.ml.circuits.codec import canonical_json, descriptor_size
 from verity.ml.circuits.defs import REGISTRY
-from verity_vllm.config import RowEngine, option
+from verity_vllm.config import RowEngine, done_source_refusal, option
 from verity_vllm.pipeline import layout as build_paths
 from verity_vllm.program import prefix_plan as PP, workload as W
 from verity_vllm.program.registry.catalog import load as _load_registry
@@ -627,10 +627,11 @@ def build(workload_path: str, derived_dirs: list[str], out: str, checkpoint_dir:
     need = sorted({shape_of(r) for r in reqs})
     missing = [s for s in need if s not in shapes]
     os.makedirs(out, exist_ok=True)
+    if why := done_source_refusal(m):
+        return _refused(out, {"schema": W.SCHEMA + "/result", "ok": False, "reason": "done_source", "message": why, "manifest_sha256": mdigest})
     if missing:
-        res = {"schema": W.SCHEMA + "/result", "ok": False, "reason": "missing_derived", "missing_derived": missing,
-               "hint": "derive_step --wrapper request --LP <lp> --T <t> --workload <manifest> for each"}
-        return _refused(out, res)
+        return _refused(out, {"schema": W.SCHEMA + "/result", "ok": False, "reason": "missing_derived", "missing_derived": missing,
+                              "hint": "derive_step --wrapper request --LP <lp> --T <t> --workload <manifest> for each"})
     # [COORD M-0063 (1)] the Program declares the execution profile + engine conditions it models and REFUSES a row it does not model
     app = workload_applicability(m, {s: component_applicability(shapes[s]) for s in need})
     if app["refusal"]:
@@ -727,8 +728,7 @@ def build(workload_path: str, derived_dirs: list[str], out: str, checkpoint_dir:
     # [R17-1 / DP-pad-02 (b)] the rows the declared scheduler computes AFTER an EOS stop are the Program's `lag` static (above); the stop
     # rule carries the same value under both names (eos_lag_rows: the ruling-21 reader's key; lag: R17-1's) -- one source, and GM-01 G6
     # consumes THIS declaration (never the record's attestation as the rule; G1 checks the record attests the same resolved value)
-    art["stop_rule"]["eos_lag_rows"] = wl.lag
-    art["stop_rule"]["lag"] = wl.lag
+    art["stop_rule"]["eos_lag_rows"] = art["stop_rule"]["lag"] = wl.lag
     art["stop_rule"]["eos_lag_source"] = ("Workload_v1 static `lag` = TargetProfile.lag() of the row's declared target (" + lag["source"] + "); "
                                           "applicability.engine.async_scheduling carries the resolved value the record must attest (G1/G6)")
     assert eos_lag_rows_declared(app.get("engine")) == wl.lag, "applicability.engine.async_scheduling and the lag static disagree"
