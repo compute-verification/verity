@@ -75,7 +75,7 @@ instance instDecidableTopological (P : Program m C V) : Decidable P.Topological 
 instance instDecidableCoinFlowRule (P : Program m C V) : Decidable P.CoinFlowRule := by
   unfold CoinFlowRule; infer_instance
 
-instance instDecidableOneUseOfDecidableEq [DecidableEq C] (P : Program m C V) : Decidable P.OneUse := by
+instance instDecidableOneUse [DecidableEq C] (P : Program m C V) : Decidable P.OneUse := by
   unfold OneUse; infer_instance
 
 instance instDecidableSinkConfined (P : Program m C V) : Decidable P.SinkConfined := by

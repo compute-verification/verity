@@ -1,7 +1,8 @@
-"""``native_rows.cu`` (the ``rows-sha512`` kernels, through ``StepHasher.rows_leaves`` / ``rows_tree_window`` / ``rows_tree``) hashes
-what ``verity_vllm.commit.step_rows`` does, bit for bit: frame-v3-sha512's hiding-leaf vectors and hm96-sha512's ``sha512/row/v1``
-leaf vectors (given salts), both hm96 keys' masks, the derived salts, leaves and pads at every position width, nodes at large indices
-and high levels, and whole trees and windowed subtrees against ``step_rows.levels``."""
+"""``native_rows.cu`` (the ``rows-sha512`` kernels, through ``StepHasher.rows_leaves`` / ``rows_h`` + ``rows_frame`` / ``rows_tree_window``
+/ ``rows_tree``) hashes what ``verity_vllm.commit.step_rows`` does, bit for bit: frame-v3-sha512's hiding-leaf vectors and hm96-sha512's
+``sha512/row/v1`` leaf vectors (given salts), both hm96 keys' masks, the derived salts, leaves and pads at every position width, the
+leaves in two halves (h, then the frame once the step's length is known) as ``rows_leaves``' bytes, nodes at large indices and high
+levels, and whole trees and windowed subtrees against ``step_rows.levels``."""
 from __future__ import annotations
 
 import hashlib
@@ -123,6 +124,37 @@ def test_derived_salts_leaves_and_pads_at_every_position_width(ext, hasher, firs
     assert _list(lv) == [R.leaf(dom, first + i, h) for i, h in enumerate(want_h)] + [dom.pad(p) for p in range(first + n_rows, first + m)]
 
 
+@pytest.mark.parametrize("first,m,n_total,given,cap", [(0, 300, 290, False, 0), (0, 300, 290, True, 0), (250, 12, 258, False, 0),
+                                                       (65530, 12, 65538, True, 0), ((1 << 24) - 6, 12, (1 << 24) + 2, False, 0),
+                                                       (512, 1024, 1536, False, 1), (512, 1024, 1300, True, 1)])
+def test_h_then_frame_is_rows_leaves(ext, hasher, first, m, n_total, given, cap):
+    """The two halves a learning step that keeps no bytes takes (rows_h on each window before the step's length is known, rows_frame
+    after) are rows_leaves' bytes: h and b || c from a RowStep of another domain under the same salt key, the leaves and pads from the
+    step's own, with derived and given salts, across position widths, past one thread block and in capped launches."""
+    rng = random.Random(first ^ m)
+    ks = rng.randbytes(R.KEY_BYTES)
+    n_rows = min(m, n_total - first)
+    rows = _dev(rng.randbytes(R.ROW_BYTES * n_rows))
+    salts = _dev(rng.randbytes(R.SALT_BYTES * n_rows)) if given else None
+    tn, st = _tn(), _stream()
+    rs = _step(ext, R.domain(PD, CTX, GEO, n_total), ks, R.row_prefix(BITS), R.ROW_BYTES)
+    rs_any = _step(ext, R.domain(PD, CTX, GEO, 1), ks, R.row_prefix(BITS), R.ROW_BYTES)
+    rs.max_blocks = rs_any.max_blocks = cap
+    lv, bc, hs = hasher.rows_leaves(rs, rows, R.ROW_BYTES * n_rows, first, m, n_total, tn, st, salts=salts, want_bc=True, want_h=True)
+    h, bc2 = hasher.rows_h(rs_any, rows, R.ROW_BYTES * n_rows, first, tn, st, salts=salts, want_bc=True)
+    lv2 = hasher.rows_frame(rs, h, first, m, n_total, st)
+    torch.cuda.synchronize()
+    assert torch.equal(h, hs[:n_rows]) and torch.equal(bc2, bc[:n_rows])
+    assert torch.equal(lv2, lv)
+
+
+def test_rows_frame_from_no_h_is_all_pads(ext, hasher):
+    rs = _step(ext, R.domain(PD, CTX, GEO, 3), bytes(64), R.row_prefix(BITS), R.ROW_BYTES)
+    lv, _, _ = hasher.rows_leaves(rs, _dev(b""), 0, 3, 5, 3, _tn(), _stream())
+    lv2 = hasher.rows_frame(rs, torch.empty(0, 64, dtype=torch.uint8, device="cuda"), 3, 5, 3, _stream())
+    assert torch.equal(lv2, lv)
+
+
 def test_nodes_at_large_indices_and_high_levels(ext, hasher):
     rng = random.Random(7)
     dom = R.domain(PD, CTX, GEO, 1 << 32)
@@ -198,6 +230,32 @@ def test_wide_trees_and_windows_fold_by_the_launch_schedule(ext, hasher, n, leve
     else:
         levels, root, _ = hasher.rows_tree(rs, _dev(b"".join(nodes)).view(n, 64), level0, st, levels_host=True)
         assert [_list(t) for t in levels] == want and root == want[-1][0]
+
+
+@pytest.mark.parametrize("cap", [1, 3])
+def test_capped_launches_hash_the_whole_grids_bytes(ext, hasher, cap):
+    """RowStep.max_blocks > 0 hashes the leaves and each wide level in launches of at most that many blocks: leaves, b || c and h (given
+    and derived salts; 1000 positions from a nonzero first, the 700 rows ending inside a launch, pads after them), a window's levels from
+    2^17 nodes (a wide level) at a nonzero first index, and a whole tree's root are the whole-grid launch's."""
+    rng = random.Random(cap)
+    first, m, n_rows, n = 3 << 10, 1000, 700, 1 << 17
+    dom = R.domain(PD, CTX, GEO, 1 << 20)
+    rs, tn, st = _step(ext, dom, rng.randbytes(R.KEY_BYTES), R.row_prefix(BITS), R.ROW_BYTES), _tn(), _stream()
+    rows = _rows([rng.randbytes(R.ROW_BYTES) for _ in range(n_rows)], R.ROW_BYTES)
+    salts, nodes = _dev(rng.randbytes(R.SALT_BYTES * n_rows)), _dev(rng.randbytes(64 * n)).view(n, 64)
+
+    def run(max_blocks: int) -> list:
+        rs.max_blocks = max_blocks
+        lv, bc, hs = hasher.rows_leaves(rs, rows, R.ROW_BYTES * n_rows, first, m, first + n_rows, tn, st, salts=salts, want_bc=True,
+                                        want_h=True)
+        dlv, _, dhs = hasher.rows_leaves(rs, rows, R.ROW_BYTES * n_rows, first, m, first + n_rows, tn, st, want_h=True)
+        host = [torch.empty(64 * (n >> L), dtype=torch.uint8) for L in range(18)]
+        top = hasher.rows_tree_window(rs, nodes, 18, 5 * n, st, host)
+        _, root, _ = hasher.rows_tree(rs, nodes, 0, st)
+        torch.cuda.synchronize()
+        return [_list(t) for t in (lv, bc, hs, dlv, dhs, top)] + [h.numpy().tobytes() for h in host] + [root]
+
+    assert run(cap) == run(0)
 
 
 def test_refusals(ext, hasher):

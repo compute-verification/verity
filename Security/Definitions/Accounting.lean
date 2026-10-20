@@ -1,5 +1,6 @@
 import Definitions.Accounting.Actual
 import Definitions.Accounting.Actual.Source
+import Definitions.Accounting.Actual.WipePool
 import Definitions.Accounting.Bandwidth
 import Definitions.Accounting.BandwidthAudit
 import Definitions.Accounting.BoundReceipt
@@ -7,7 +8,9 @@ import Definitions.Accounting.BoundSketch
 import Definitions.Accounting.Bridge
 import Definitions.Accounting.Capacity
 import Definitions.Accounting.CoinFlow
+import Definitions.Accounting.Carrier
 import Definitions.Accounting.Compose
+import Definitions.Accounting.ComposePeriod
 import Definitions.Accounting.Confidence
 import Definitions.Accounting.CostModel
 import Definitions.Accounting.Device
@@ -36,10 +39,12 @@ import Definitions.Accounting.RateAuditSketchLayout
 import Definitions.Accounting.Remote
 import Definitions.Accounting.Remote.Deployed
 import Definitions.Accounting.Requirement
+import Definitions.Accounting.Requirement.Placed
 import Definitions.Accounting.Responder
 import Definitions.Accounting.Served
 import Definitions.Accounting.Tag
 import Definitions.Accounting.TS
+import Definitions.Accounting.TS.Fixed
 import Definitions.Accounting.Window
 
 /-! Resource accounting's vocabulary: the device model every resource audit is about, a joint audit's run on it, and
@@ -52,10 +57,12 @@ side sources too and for a prover whose memory holds any function of the store, 
 (partial completion, interactive side sources, tiers, ground chained passes and a session of pooled draws), the remote
 bandwidth audit's node and run, the actual circuit, its physical assumptions, a challenge's reach and the device's
 schedule it induces, the actual circuit's runs, strategies, soundness and the confidence set, a location's window with
-the ring's oracle locations, its provers' cost model, the tags and sketches the audits read, a receipt's skipped values
+the ring's oracle locations, its provers' cost model, the tags and sketches the audits read, the headline instances as
+exact data (a device's sheet, a design's TS model and its floor program), a receipt's skipped values
 and the coin rounds that give (H-μ⁺), a Program's coin flow under the Build's two coin rules, the generic-mix game of
 receipts bound to the matmul on two locations, the deployed bound receipt's sketch as a two-party protocol, what a
-run's guarantee per run is, PoUW's verdict, credits and help on one node of the actual circuit, a declared circuit's
-requirement: the values its schedule keeps live and reads, by block, and when the audit's store and plans are its,
-the gate model the lower bounds on a declared circuit are proved over (`Gates`), and the families' headline
-instances as exact data (a device's sheet, a design's TS model and its floor program). -/
+run's guarantee per run is, PoUW's verdict, credits and help on one node of the actual circuit, stacking's carriers:
+device memory whose post-seed contents are a circuit's values, seen through its inputs and encodes, a declared
+circuit's requirement: the values its schedule keeps live and reads, by block, and when the audit's store and plans are
+its, the run tree of a prover's wipes that the memory cap's lifetime pool is over, and the gate model the lower bounds
+on a declared circuit are proved over (`Gates`). -/

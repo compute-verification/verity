@@ -2,9 +2,10 @@
 
 * **Run definitions.**  ``manifests/`` (checkpoint pins, semantic profiles) and ``workloads/`` (row workloads) sit beside
   the package in the source tree; they are run definitions, not package data.  Library code locates them, and the source
-  tree itself, through ``ROOT``, ``MANIFESTS``, ``WORKLOADS`` and ``CHECKPOINTS``.
+  tree itself, through ``ROOT``, ``MANIFESTS``, ``WORKLOADS``, ``CHECKPOINTS`` and ``RECORDS``.
 * **What runs.**  :class:`RowConfig`, a row's one config (its file ``workloads/<row>.json``: the workload and the pinned
-  :class:`RowEngine`), the row-id grammar (:class:`RowId`), the dtype vocabulary (``DTYPES``), the target table
+  :class:`RowEngine`), the done source a row of record must declare (``DONE_SOURCES``, :func:`done_source_refusal`: its public
+  cap), the row-id grammar (:class:`RowId`), the dtype vocabulary (``DTYPES``), the target table
   (``TARGETS``), the protocol-set grammar (``PROTOCOLS``, :func:`parse_protocols`), and :class:`EnginePin`, the pinned
   engine record every engine is built from: model, full revision and checkpoint role, checked against
   ``manifests/checkpoints.json``.
@@ -33,8 +34,12 @@ ROOT = Path(str(resources.files("verity_vllm"))).resolve().parent
 MANIFESTS = ROOT / "manifests"
 WORKLOADS = ROOT / "workloads"
 CHECKPOINTS = MANIFESTS / "checkpoints.json"
+#: The circuit database's index (`pipeline.config_record`, `verity-vllm records`); the rows it lists are the rows of record.
+RECORDS = MANIFESTS / "records.json"
 #: The remote bandwidth session's processes (not a package), whose prover runs in the Commit's (`store.remote`).
 REMOTE_SESSION = ROOT.parent.parent / "benchmarks" / "remote_session"
+#: kv.cu's launchers over torch (``paged.py``, with ``word_codec/kv_bench.py``), the remote session's device encode.
+VLLM_ENCODED = ROOT.parent.parent / "benchmarks" / "vllm_encoded"
 
 
 def checkpoints_hf_home() -> str | None:
@@ -82,7 +87,7 @@ def environ_snapshot() -> Any:
 # ---------------------------------------------------------------------------------------------------------------- what runs
 
 #: Row-id dtype token -> the checkpoint weight format the row serves.
-DTYPES: dict[str, str] = {"bf16": "bfloat16", "fp8": "float8_e4m3fn"}
+DTYPES: dict[str, str] = {"bf16": "bfloat16", "fp8": "float8_e4m3fn", "int8": "int8"}
 
 #: Row-id target token -> the device class's compute capability.  Extend by name; an unknown token is a refusal, not a guess.
 TARGETS: dict[str, tuple[int, int]] = {
@@ -281,6 +286,46 @@ VLLM = "d9105ea80"
 #: A row file (``workloads/<row>.json``): the workload and its pinned ``engine`` block (:class:`RowConfig`).
 WORKLOAD_SCHEMA = "verity-vllm/workload/v2"
 
+#: How a row's requests are done: at their public cap (``sampling.ignore_eos``: every request runs its ``max_tokens`` steps), or at an
+#: EOS the model samples before it.  A row of record is done only at its public cap (Daniel, ASK-39, 18 Oct), so its served length is
+#: public; the EOS a request samples there is a value, which decides no step.
+DONE_SOURCES = ("public-cap", "eos-token")
+
+
+def rows_of_record() -> frozenset[str]:
+    """The row ids ``RECORDS`` lists (none without the file)."""
+    return frozenset(json.loads(RECORDS.read_text()).get("rows") or {}) if RECORDS.is_file() else frozenset()
+
+
+def done_source(workload: Mapping[str, Any]) -> str:
+    """The done source (``DONE_SOURCES``) a workload doc declares."""
+    s = workload.get("sampling")
+    return "public-cap" if isinstance(s, Mapping) and s.get("ignore_eos") is True else "eos-token"
+
+
+def done_source_refusal(workload: Mapping[str, Any], *, of_record: bool = False) -> str | None:
+    """Why a row of record (its ``sweep.row_id`` in ``RECORDS``, or any row with ``of_record``: one about to be indexed) is not done
+    only at its public cap; None for a row that is, and for every research row (its EOS stops are its own).  Row files
+    (:meth:`RowConfig.of`), the row precheck and GP-01 refuse with it, and so does whatever indexes a row
+    (``pipeline.config_record.index_refusal``: ``records publish``, ``pull`` and ``switch``, and ``row chain`` when it publishes)."""
+    sw = workload.get("sweep")
+    row = sw.get("row_id") if isinstance(sw, Mapping) else None
+    if not of_record and row not in rows_of_record():
+        return None
+    s = workload.get("sampling") if isinstance(workload.get("sampling"), Mapping) else {}
+    if done_source(workload) != "public-cap":
+        why = (f"its done source is 'eos-token' (sampling.ignore_eos is {s.get('ignore_eos')!r}): declare sampling.ignore_eos: true, "
+               f"so every request runs its public max_tokens")
+    elif stops := [k for k in ("stop_token_ids", "stop") if s.get(k)]:
+        why = f"sampling.{stops[0]} {s[stops[0]]!r} stops a request before its cap: drop it"
+    elif uncapped := [str(r.get("request_id", i)) for i, r in enumerate(workload.get("requests") or [])
+                      if isinstance(r.get("max_tokens"), bool) or not isinstance(r.get("max_tokens"), int) or r["max_tokens"] < 1]:
+        why = f"request(s) {', '.join(uncapped[:4])} declare no public cap (a positive integer max_tokens)"
+    else:
+        return None
+    return f"{row}: a row of record ({RECORDS.name}) is done only at its public cap, and {why}"
+
+
 _SHA = re.compile(r"[0-9a-f]{40}")
 #: The flat v1 keys the ``engine`` block replaced, by their place in it.
 _V1_KEYS = {"engine_args_required": "args", "env_required": "env", "target": "target", "tokenizer_revision": "revision",
@@ -357,6 +402,8 @@ class RowConfig:
         if cfg.row and row_world(cfg.row) > 1 and not isinstance(cfg.engine.args.get("disable_custom_all_reduce"), bool):
             raise ValueError(f"{cfg.row}: a tensor-parallel row states engine.args.disable_custom_all_reduce (true on a SYS box, "
                              f"`engine.profiles.transport.row_custom_all_reduce_off`)")
+        if why := done_source_refusal(doc):
+            raise ValueError(why)
         return cfg
 
     @classmethod
@@ -408,6 +455,13 @@ class BuildConfig:
     build_programs_only: str = option("--build-programs-only", env="BUILD_PROGRAMS_ONLY", default="0",
                                       help="TP: 1 = the Build ends at the rank Programs and GP-01: no required-value manifest, no call-boundary "
                                            "check (the Commit builds the manifest it runs over); `verity-vllm neutrality`'s heavy tier")
+    build_construction: str = option("--build-construction", env="BUILD_CONSTRUCTION", default="record", choices=("record", "trace"),
+                                     help="TP: record = the row's construction of record, the AOT Build for a switched row (its `aot` in "
+                                          "manifests/records.json, verity_vllm.predict.aot) and the trace for any other; trace = the trace "
+                                          "(`verity-vllm neutrality`'s heavy tier)")
+    aot_trace: str | None = option("--aot-trace", env="AOT_TRACE", default=None,
+                                   help="TP, a switched row: the dir holding its `aot.trace` Build (build/rank<r>/build_*), e.g. a job's "
+                                        "--send of it; default fetched from the store into <row dir>/aot_trace")
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -416,9 +470,10 @@ class MatchConfig:
 
     match_impl: str = option("--match-impl", env="MATCH_IMPL", default="fast", help="global match checker: fast or record (the audit)")
     match_pipeline: str = option("--match-pipeline", env="MATCH_PIPELINE", default="shared",
-                                 help="shared = one batch decomposition inside the global match")
-    match_phase: str = option("--match-phase", env="MATCH_PHASE", default="all", choices=("all", "cpu"),
-                              help="cpu = resume the CPU half over the capture already on disk")
+                                 help="shared = one batch decomposition inside the global match (a TP row's: per rank)")
+    match_phase: str = option("--match-phase", env="MATCH_PHASE", default="all", choices=("all", "gpu", "cpu"),
+                              help="cpu = resume the CPU half over the capture already on disk; gpu (TP) = the capture and control alone, "
+                                   "which need no Build, then the row stops")
     snapshot_steps: str | None = option("--snapshot-steps", env="MATCH_SNAP_STEPS", default=None,
                                         help="0,1 | all; default 0,1 greedy, all stochastic or when form (B) must be complete")
     snapshot_max_bytes: str | None = option("--snapshot-max-bytes", env="MATCH_SNAP_MAX_BYTES", default=None,
@@ -433,7 +488,18 @@ class MatchConfig:
     compare_timeout: int | None = option("--compare-timeout", env="COMPARE_TIMEOUT", type=int, default=None,
                                          help="seconds per comparator (default scales with B and the envelope)")
     fold_timeout: int | None = option("--fold-timeout", env="FOLD_TIMEOUT", type=int, default=None,
-                                      help="TP: seconds for the per-rank fold Match (default 7200)")
+                                      help="TP: seconds for each leg of the per-rank fold Match (fold, compare, GM-01; default 7200); "
+                                           "tp-fold-match as a whole gets four legs' worth, the cross-rank leg included")
+    fold_rank_workers: int = option("--fold-rank-workers", env="FOLD_RANK_WORKERS", type=int, default=0,
+                                    help="TP: ranks whose fold Match legs run at once (0 = every rank; a GLM-5.3 B8 rank's X-09 compare "
+                                         "passes 200 GB, so 8 at once overfill a 1.5 TB host)")
+    fold_workers: int = option("--fold-workers", env="FOLD_WORKERS", type=int, default=0,
+                               help="TP: ranks whose fold leg runs at once (0 = as --fold-rank-workers, which then bounds only their compare "
+                                    "and GM-01 legs; a GLM-5.3 B8 I256 rank's fold peaks at 40 GB, its GM-01 with the shared X-09 near 400 GB)")
+    match_reuse: str = option("--match-reuse", env="MATCH_REUSE", default="off", choices=("off", "fold", "legs"),
+                              help="TP, --match-phase cpu, rerunning a CPU half that stopped part way under the same code: fold = keep each "
+                                   "rank's persisted fold of the capture in place; legs = also each rank's written compare and GM-01 "
+                                   "documents, so only the missing legs and the cross-rank leg run")
     fold_profile: str | None = option("--fold-profile", env="FOLD_PROFILE", env_empty=True, default=None,
                                       help="TP: rank profile module (default derived_<ROLE>_tp<W>; empty = collective-level Match only)")
 
@@ -493,8 +559,8 @@ class CommitConfig:
                                            "deferred Commit's come from its bundle (verity-vllm serving-rows); a TP row's, one window per "
                                            "rank, from tp-commit itself (verity_vllm.pipeline.tp.serving_rows; needs REPLAY_DEFERRED=1)")
     remote_verifier: str | None = option("--remote-verifier", env="REMOTE_VERIFIER", default=None, metavar="HOST:PORT",
-                                         help="the remote bandwidth session's verifier: the Commit proves its store to it while "
-                                              "serving (verity_vllm.store.remote; single-GPU rows)")
+                                         help="the remote bandwidth session's verifier: the Commit proves its store to it in lockstep "
+                                              "with its first instrumented run (verity_vllm.store.remote; single-GPU rows)")
     norm_tap: str = option("--norm-tap", env="NORM_TAP", default="1",
                            help="0 opts out, for A/B only: by default the row commits one scale per norm Call row (verity_vllm.query."
                                 "norm_scales) through the norm-scale tap (acquire.sources.norm_scale_source) when its manifest names norm scales")

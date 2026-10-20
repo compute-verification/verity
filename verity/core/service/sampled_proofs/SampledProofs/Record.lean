@@ -7,13 +7,13 @@ The one-stage audit record (`audit.audit_record`), whole, and what the drivers c
 * `sessionRegistered`: `audit.session_registered`, the `{value: root}` the verifiers of record that accepted report opening
   the sessions' registered reads against (a verdict's `registered`, `{port: {"value", "root"}}`), a value reported under
   two roots mapped to null; none when no such verdict reports any; `ownRegistered` keeps a registration's own values (its
-  roots' ports and registered values), as the service splits the sessions' roots between a boundary and its interiors;
+  roots' ports and registered values);
 * `checks`: `audit_record`'s checks, each with Python's detail: the draw's and the proved units' always, and the receipt's,
   the served draw's, the sessions' roots' and the registered roots' when they fail;
 * `record`: the record, every field as `audit_record` writes it, the registered roots its checks read derived here from
   the verdicts (`sessionRegistered`, `ownRegistered`), never taken as input. Python writes `delta` as a float: here it is the double nearest
-  the exact δ given, which `PyJson` writes as Python's `repr` does. One field is not computed: `wrong_units.bound` under a
-  Bernoulli law, which Python bounds by a float relaxation (`IntegrityProfile.worst_case`, through `math.log`), is null.
+  the exact δ given, which `PyJson` writes as Python's `repr` does. `wrong_units.bound` is exact under every law
+  (`Bound.boundOf`).
 -/
 import SampledProofs.Bound
 import SampledProofs.Draw
@@ -293,7 +293,7 @@ def record (i : Input) : V Json := do
     let strata := Bound.strataOf population draw
     let rule := "except with probability delta, an accepted transcript has at most `bound` wrong units"
     wrongUnits := obj ([("delta", delta), ("of", get "population"),
-        ("bound", match strata with | some ss => Lean.toJson (Bound.countBound ss i.delta) | none => Json.null),
+        ("bound", Lean.toJson (Bound.boundOf population draw i.delta)),
         ("rule", Json.str (if stratified then rule ++ ", and at most `per_template[t]` of them in template t" else rule))] ++
       if stratified then
         [("per_template", obj ((strata.getD #[]).toList.map fun s => (s.name, Lean.toJson (Bound.stratumBound s i.delta))))]

@@ -112,7 +112,8 @@ def _log(profile, crossed: bool = False) -> list:
                 "kv_ptr": col(2048, 512), "kv_rms_norm_w_ptr": W[i]["kv_a"], "kv_rms_eps": 1e-6, "kpe_ptr": col(2560, 64),
                 "kpe_rope_cos_sin_cache_ptr": cs, "mla_cache_ptr": lat, "index_k_ptr": col(2624, 128),
                 "index_k_layer_norm_w_ptr": W[i]["k_w"], "index_k_layer_norm_bias_ptr": W[i]["k_b"], "index_k_layer_norm_eps": 1e-6,
-                "index_k_rope_cos_sin_cache_ptr": cs, "indexer_cache_ptr": ikc, "indexer_cache_scale_ptr": isc, "topk_indices_ptr": topk}
+                "index_k_rope_cos_sin_cache_ptr": cs, "indexer_cache_ptr": ikc, "indexer_cache_scale_ptr": isc,
+                "indexer_cache_block_size": 64, "indexer_cache_stride": 132, "topk_indices_ptr": topk}
         ev.append(TritonLaunch(next(eid), None, 0, "forward", f"vllm.v1.attention.ops.glm.{DSA.NORM_KERNEL}", DSA.NORM_SRC_SHA,
                                {**args, **NORM_ROPE_PINS}, NORM_ROPE_PINS, [M, 1, 1], 4, 3, 7, None))
         w = W[0 if crossed else i]["w_uv"]

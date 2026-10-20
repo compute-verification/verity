@@ -1,19 +1,20 @@
 """C-Flock's cost model, fitted from measurements, for the sampling planner (`optimize.CostModel`).
 
-Three regressions on a template's features, each a least squares in relative error with non-negative coefficients over
-the observations that measure it:
+Three regressions on a template's features (`FEATURES`: one, ands, ands staged, ands drawn), each a least squares in
+relative error with non-negative coefficients over the observations that measure it:
 
-    prove   GPU-s a session      = f0 + f1 ands + b ands drawn
-    verify  CPU-s a statement    = v0 + v1 ands staged
-    stage   CPU-s a statement    = s0 + s1 ands staged
+    prove   GPU-s a session      = f0 + f1 ands + f2 ands staged + b ands drawn
+    verify  CPU-s a statement    = v0 + v1 ands + v2 ands staged + v3 ands drawn
+    stage   CPU-s a statement    = s0 + s1 ands + s2 ands staged
 
-`ands` is one unit's in-circuit ANDs, its rows' openings included (`optimize.row_ands`), `staged` the statement's units and
-`drawn` the session's.  A coefficient another fit measures better is pinned (`fixed`), and its source says so.  `model`
-puts the three in the planner's currency, GPU-seconds, at `cpu` GPU-seconds a CPU-second (the price ratio): per touched
-statement f0 + (v0 + s0) cpu + f1 ands and per staged unit (v1 + s1) cpu ands, per proved unit b ands.  A fit's `sigma` is
-its relative residual, at least `floor` when it has no spare observation; the model's is the largest.  `record` is the
-cost-model/v1 payload (`research data put --kind cost-model/v1`), keyed by the prover's build, the verifier's and the
-hardware, so a plan reads the fit of the builds it will run.
+each on the features its caller gives.  `ands` is one unit's in-circuit ANDs, its rows' openings included
+(`optimize.row_ands`), `staged` the statement's units and `drawn` the session's.  A coefficient another fit measures
+better is pinned (`fixed`), and its source says so.  `model` puts the three in the planner's currency, GPU-seconds, at
+`cpu` GPU-seconds a CPU-second (the price ratio): each feature's rate is its prove coefficient plus its verify and stage
+coefficients at `cpu`, `one` and `ands` per touched statement, `ands*staged` per staged unit and `ands*drawn` per proved
+unit.  A fit's `sigma` is its relative residual, at least `floor` when it has no spare observation; the model's is the
+largest.  `record` is the cost-model/v1 payload (`research data put --kind cost-model/v1`), keyed by the prover's build,
+the verifier's and the hardware, so a plan reads the fit of the builds it will run.
 """
 from __future__ import annotations
 
@@ -130,10 +131,12 @@ class Fitted:
 
     def model(self, *, source: str = "") -> CostModel:
         p, v, s = self.prove.coef, self.verify.coef, self.stage.coef
-        return CostModel(per_and=p.get("ands*drawn", 0.0),
-                         statement_fixed=p.get("one", 0.0) + (v.get("one", 0.0) + s.get("one", 0.0)) * self.cpu,
-                         statement_per_and=p.get("ands", 0.0),
-                         staged_per_and=(v.get("ands*staged", 0.0) + s.get("ands*staged", 0.0)) * self.cpu,
+
+        def rate(f: str) -> float:
+            return p.get(f, 0.0) + (v.get(f, 0.0) + s.get(f, 0.0)) * self.cpu
+
+        return CostModel(per_and=rate("ands*drawn"), statement_fixed=rate("one"), statement_per_and=rate("ands"),
+                         staged_per_and=rate("ands*staged"),
                          sigma=max(self.prove.sigma, self.verify.sigma, self.stage.sigma), source=source)
 
     def record(self, observations: Sequence[Observation]) -> dict:

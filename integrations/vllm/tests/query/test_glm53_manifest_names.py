@@ -37,8 +37,8 @@ FUSED = f"AllReduceRmsNormMnnvl_v1{{WORLD=8,N={N},SHOT=1,CLUSTER=8,EPS=1e-05,FMA
 class _Build:
     """A rank Program built Call by Call under v1 names (`<module>/<fx node>[/<hint>][row]`)."""
 
-    def __init__(self, rank: int):
-        self.rank, self.calls, self.weights, self.peers, self.coll = rank, [], [], [], 0
+    def __init__(self, rank: int, fused=lambda step, norm: step > 0):
+        self.rank, self.calls, self.weights, self.peers, self.coll, self.fused = rank, [], [], [], 0, fused
 
     def w(self, path: str) -> R:
         if path not in self.weights:
@@ -73,19 +73,20 @@ class _Build:
                 for i, r in enumerate(x)]
 
     def norm_site(self, site: str, norm: str, own: list[R], residual: list[R], step: int) -> tuple[list[R], list[R]]:
-        """`fused_allreduce_rms_norm(own, residual, norm)` called from `site`: flat at prefill (one all-reduce, then the norm's rows),
-        fused at decode (one Call reading the residual and the norm weight)."""
+        """`fused_allreduce_rms_norm(own, residual, norm)` called from `site`: flat (one all-reduce over the M rows, then the norm's rows),
+        or fused (`self.fused`, by default at decode: one Call per row reading its residual and the norm weight, the route's
+        Definition being one token)."""
         M, nw = len(own), self.w(f"{norm}.weight")
-        if step == 0:
+        if not self.fused(step, norm):
             ar = self.call("AllReduceMultimem_v1", f"{site}.all_reduce_{self.coll}/all_reduce[0]/all_reduce", self.parts(own, M * N),
                            (("out", M * N, 16),))
             rows = [self.call("RMSNormFusedCudaVector8_v1", f"{norm}/fused_add_rms_norm[{i}]", [R(ar, "out"), residual[i], nw],
                               (("0", N, 16), ("1", N, 16))) for i in range(M)]
             return [R(c, "0") for c in rows], [R(c, "1") for c in rows]
-        assert M == 1
-        f = self.call(FUSED, f"{site}.fused_allreduce_rms_norm_{self.coll}/fused_allreduce_rms_norm[0]/fused_all_reduce_rmsnorm",
-                      [*self.parts(own, N), residual[0], nw], (("0", N, 16), ("1", N, 16)))
-        return [R(f, "0")], [R(f, "1")]
+        k = self.coll
+        rows = [self.call(FUSED, f"{site}.fused_allreduce_rms_norm_{k}/fused_allreduce_rms_norm[{i}]/fused_all_reduce_rmsnorm",
+                          [*self.parts([r], N), residual[i], nw], (("0", N, 16), ("1", N, 16))) for i, r in enumerate(own)]
+        return [R(c, "0") for c in rows], [R(c, "1") for c in rows]
 
     def step(self, step: int, M: int) -> None:
         emb = [self.call("EmbeddingShard_v1", f"model.embed_tokens/embedding_shard[{i}]/shard", [R(-2, "ids"), self.w("model.embed_tokens.weight")])
@@ -127,15 +128,15 @@ class _Build:
         return ProgramView(tuple(self.calls), (weights, ids, *self.peers), (R(len(self.calls) - 1, "out"),), "synthetic", "synthetic")
 
 
-def rank_program(rank: int, M: int = 2) -> ProgramView:
-    b = _Build(rank)
+def rank_program(rank: int, M: int = 2, **kw) -> ProgramView:
+    b = _Build(rank, **kw)
     b.step(0, M)
     b.step(1, 1)
     return b.program()
 
 
-def _manifest(rank: int) -> dict:
-    P = rank_program(rank)
+def _manifest(rank: int, **kw) -> dict:
+    P = rank_program(rank, **kw)
     res = {"program": {"digest": f"d{rank}", "function": "f"}, "target": {"declared": {"compute_capability": [9, 0]}},
            "tp": {"world": WORLD, "rank": rank}}
     return request_manifest(P, Correspondence(P), res, request_id="r0", rank=rank, ranks=WORLD).manifest
@@ -248,8 +249,8 @@ def test_a_held_path_resolves_only_from_its_own_weights_or_producers():
     assert held == {"resolved": 1, "unresolved": {f"{HELD}.act_fn": 1}}
 
 
-def _mutated(edit) -> Population:
-    b = _Build(0)
+def _mutated(edit, **kw) -> Population:
+    b = _Build(0, **kw)
     b.step(0, 1)
     b.step(1, 1)
     edit(b)
@@ -257,8 +258,17 @@ def _mutated(edit) -> Population:
     return Population(P, Correspondence(P), tp={"world": WORLD, "rank": 0})
 
 
-def _with_reads(b: _Build, c: CallView, reads) -> None:
-    b.calls[c.id] = CallView(c.id, c.definition, c.family, c.form, c.name, c.port_table, tuple(reads))
+def _with_reads(b: _Build, c: CallView, reads, name: str | None = None) -> None:
+    b.calls[c.id] = CallView(c.id, c.definition, c.family, c.form, name or c.name, c.port_table, tuple(reads))
+
+
+def _respelt(b: _Build, step: int, src: str, dst: str) -> None:
+    """`src`'s collective of `step` re-spelt as norm `dst`'s: its Calls read `dst.weight`, and the flat route's rows sit under `dst`."""
+    cut = next(c.id for c in b.calls if c.family == "ArgmaxTokenSelect_v1")
+    for c in list(b.calls):
+        if (c.id > cut) == bool(step) and R(-1, f"{src}.weight") in c.reads:
+            _with_reads(b, c, [R(-1, f"{dst}.weight") if r == R(-1, f"{src}.weight") else r for r in c.reads],
+                        c.name.replace(f"{src}/fused_add_rms_norm", f"{dst}/fused_add_rms_norm_of_{src.replace('.', '_')}"))
 
 
 def test_a_collective_that_is_not_one_norms_is_refused_by_name():
@@ -278,3 +288,29 @@ def test_a_collective_that_is_not_one_norms_is_refused_by_name():
         pop = _mutated(edit)
         assert len(pop.tp_faults) == 1 and "not one norm's collective" in pop.tp_faults[0], (edit.__name__, pop.tp_faults)
         assert len(pop.norm_site) == 2 * len(NORMS) - 1, edit.__name__
+
+
+def test_a_short_prefill_on_the_fused_route_is_the_rows_of_the_norms_identities():
+    """A step of at most 42 rows takes FlashInfer's fused route (the GLM B8 mixed-arrivals row's two 11-token prefills), whose
+    Definition is one token: M `AllReduceRmsNormMnnvl_v1` Calls per norm in the step, the M rows of `<norm>/0`, `/1` and
+    `/part_rank<r>` -- the whole [M, N] tensors `allreduce_norm` commits -- with every peer bound."""
+    ms = [_manifest(rank, fused=lambda step, norm: True) for rank in range(WORLD)]
+    assert all(m["complete"] for m in ms), [m["unmodelled"] for m in ms]
+    rank = 6
+    pre = {r["output_member"]: r for r in ms[rank]["identities"] if r["step"] == 0 and r["op_path"] == "model.layers.3.input_layernorm"}
+    assert {k: (r["spec"], r["rows"], r["element_range"]) for k, r in pre.items()} == \
+        dict.fromkeys(("0", "1", f"part_rank{rank}"), ("AllReduceRmsNormMnnvl_v1", 2, [0, 2 * N]))
+    b = merge_ranks(ms)["tp_peer_binding"]
+    assert b["n_unbound"] == 0 and b["bound"] == b["collective_outputs"] * (WORLD - 1), b
+
+
+def test_a_norms_collectives_of_one_step_are_one_or_all_fused():
+    """Two fused Calls of one norm in a step are its rows; two flat all-reduces, or a fused Call beside a flat one, are refused by
+    name, each of them."""
+    norm, other = "model.layers.3.post_attention_layernorm", "model.layers.4.input_layernorm"
+    pop = _mutated(lambda b: _respelt(b, 1, other, norm))
+    assert not pop.tp_faults and len(pop.norm_site) == 2 * len(NORMS), pop.tp_faults
+    for fused in (lambda step, n: step > 0, lambda step, n: step > 0 or n == norm):
+        pop = _mutated(lambda b: _respelt(b, 0, other, norm), fused=fused)
+        assert len(pop.tp_faults) == 2 and all("not one norm's collective" in f for f in pop.tp_faults), pop.tp_faults
+        assert len(pop.norm_site) == 2 * len(NORMS) - 2

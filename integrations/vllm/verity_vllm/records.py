@@ -16,7 +16,8 @@ manifest's `spec_histogram` holds), the record's `conformance.due`.  The record 
 `evidence.conformance` (a `property-record/v1`: one run's `<property>.json`, validated and holding, referring to the run's record;
 `capture` preserves them) or names it a gap with its reason under `evidence.gaps`; `publish` refuses a record that leaves one silent.
 With `newest`, each one the caller leaves out cites its newest holding capture in the store (`newest_capture`): what the row pipeline
-publishes with (`pipeline.research.chain`, once a row's Build, Match and Commit pass).  A record published from another tree (a
+publishes with (`pipeline.research.chain`, once a row's Build, Match and Commit pass).  Where the store has no index (`unindexed`: a
+`research run` job's), one its catalog lacks is refused, not read as no capture.  A record published from another tree (a
 pod's job tree) reaches this tree's index with `pull`: the entry is rebuilt from the record alone (`entry`).
 
 A checkpoint's staging is the label `staged` on `ckpt:<repo>@<revision>`: when a host finished staging its weights and checking every
@@ -45,14 +46,16 @@ bundle=...)`), each digest checked against the record as from the store.
     verity-vllm records programs <row> [--rank R] [--part P] [--bundle FILE]   # fetch, decode and check a row's Programs
     verity-vllm records fetch <row> --to FILE [--rank R] [--part P]   # a job's bundle: research run --send FILE
     verity-vllm records staged <repo> <revision> --at UTC --ref EVIDENCE --by LANE   # a checkpoint's staging event
+    verity-vllm records switch <row> --comparison comparison.json --run R --trace art:… [--tier T]   # the row's Build becomes AOT
+
+A switched row (`switch`: its `aot` in the index, `config_record.aot_of`) has the AOT Build on its record path
+(`verity_vllm.predict.aot`): its pins are the predicted Programs, equal on every rank to the traced Build its comparison checked.
 """
 from __future__ import annotations
 
 import io
 import json
 import re
-import subprocess
-import sys
 import tarfile
 import tempfile
 from dataclasses import dataclass, field
@@ -60,8 +63,9 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any
 
-from verity_vllm.config import UsageError, option
+from verity_vllm.config import RowId, UsageError, option
 from verity_vllm.pipeline import config_record as CR
+from verity_vllm.pipeline.store_data import data, fetch, listing, selected_from
 
 INDEX = CR.INDEX
 ART = re.compile(r"art:[0-9a-f]{64}")
@@ -70,34 +74,6 @@ TREE = re.compile(r"\S+@[0-9a-f]{7,40}")
 REFS = ("build", "manifest", "match", "commit")
 PROPERTY_KIND = "property-record/v1"
 CONSTRUCTION = "construction_manifest.json"
-
-
-def data(*args: str) -> str:
-    """`research data ARGS`'s stdout (this interpreter's research, in this process's environment); a refusal raises with what the CLI
-    said."""
-    p = subprocess.run([sys.executable, "-m", "research", "data", *args], capture_output=True, text=True)
-    if p.returncode != 0:
-        raise RuntimeError(f"research data {' '.join(args[:2])}: rc={p.returncode}: {p.stderr.strip()[-1500:]}")
-    return p.stdout
-
-
-def fetch(art: str, to: Path | None = None, paths: list[str] = ()) -> Path:
-    """Materialise `art`'s payload (only `paths` of a tree, when given) and return its path.  A store with no remote (a `research
-    run` job's) that lacks it names the bundle that serves a job instead."""
-    try:
-        out = data("fetch", art, *(["--to", str(to)] if to else []), *(f"--path={p}" for p in paths))
-    except RuntimeError as e:
-        if "no remote configured" not in str(e):
-            raise
-        raise RuntimeError(f"{e}: a research run job has no store; the launcher writes the row's bundle (`verity-vllm records fetch "
-                           f"ROW --to FILE`), sends it (`research run --send FILE`) and the job reads it (`records programs ROW --bundle "
-                           f"$RESEARCH_RUN_DIR/inputs/FILE`, `programs(row, bundle=...)`)") from None
-    return Path(out.strip().splitlines()[-1])
-
-
-def listing(art: str) -> list[str]:
-    """The paths of a tree artifact's files."""
-    return [f["path"] for f in json.loads(data("fetch", art, "--list", "--json"))]
 
 
 def index() -> dict[str, dict[str, Any]]:
@@ -264,6 +240,13 @@ def newest_capture(prop: str) -> str | None:
     return max(held)[1] if held else None
 
 
+def unindexed(prop: str) -> bool:
+    """Whether `research data select` of `prop`'s captures here read only this store's own catalog, with no index (no
+    $STORE_PRIVATE_READER_URL and no `research data index` build), as in a `research run` job's custody store.  There, a property
+    missing from the catalog says nothing about the store."""
+    return selected_from("--kind", PROPERTY_KIND, "--where", f"meta.property={prop}") == "the catalog"
+
+
 def due(build: str, listed: list[str]) -> dict[str, Any]:
     """The record's `conformance`: the capture map (`map`, its id) of the Build's checkpoint and world (its construction manifests'
     `model.pin.model` and `tp.world`) and `due`, each property its `captures` name for a map Program the Build uses (one of whose
@@ -330,9 +313,13 @@ def publish(d: str | Path, row: str, *, evidence: dict[str, Any], tree: str, by:
     holds every Program it names, and every conformance property its Programs need (`due`) is cited by a holding capture of
     record (with `newest`, one `evidence` leaves out cites `newest_capture`) or named a gap, then label it `row=<id>`, preserve it
     with its label and index it with its Programs as the row's pins (`tier`: its neutrality rebuild's, by default the index's).
-    Returns its art: id."""
+    A switched row's (`config_record.aot_of`) are its AOT Build's predicted Programs: a Build that traced one is refused, and the
+    row keeps its `aot`.  The row it indexes is a row of record, so a row file not done only at its public cap
+    (`config_record.index_refusal`) is refused before anything is written.  Returns its art: id."""
     if not TREE.fullmatch(tree):
         raise UsageError(f"--tree {tree!r}: REF@SHA, the code the row was built and served from")
+    if why := CR.index_refusal(row):
+        raise UsageError(f"{why}; publish would index it as one, so it publishes nothing")
     tier = _tier(row, tier)
     rec = CR.record(d, row, tree=tree, summary=summary, evidence=evidence)
     if rec["outcome"] != "PASS":
@@ -346,11 +333,21 @@ def publish(d: str | Path, row: str, *, evidence: dict[str, Any], tree: str, by:
     listed = listing(evidence["build"])
     if missing := [p for r, ps in parts(rec).items() for p in (descriptor(rec, r, q) for q in ps) if p not in listed]:
         raise UsageError(f"{row}: the Build {evidence['build']} lacks {len(missing)} Program descriptor(s): {', '.join(missing[:4])}")
+    traced = sorted(f"rank{r} {p}" for r, ps in constructions(Path(d)).items() for p, c in ps.items() if c != "aot")
+    if (aot := CR.aot_of(row, INDEX)) and traced:
+        raise UsageError(f"{row}: a switched row's pins are its AOT Build's Programs (`aot` in {INDEX.name}), and this Build traced "
+                         f"{len(traced)} of them ({', '.join(traced[:4])}): run its Build with --build-construction record")
     rec["conformance"] = due(evidence["build"], listed)
     cited, gaps = evidence.get("conformance") or {}, evidence.get("gaps") or {}
     if newest:
-        cited = dict(sorted({**{p: a for p in rec["conformance"]["due"] if p not in cited and p not in gaps and (a := newest_capture(p))},
-                             **cited}.items()))
+        left = [p for p in rec["conformance"]["due"] if p not in cited and p not in gaps]
+        found = {p: a for p in left if (a := newest_capture(p))}
+        if (missed := [p for p in left if p not in found]) and unindexed(missed[0]):
+            raise UsageError(f"{row}: --newest-captures found no capture of {', '.join(missed)} in this store's catalog, and there is "
+                             f"no store index here ($STORE_PRIVATE_READER_URL unset, no `research data index` build; a `research run` job "
+                             f"has none), so the store may hold one: resolve each where the index is (the launcher: `research data select "
+                             f"--kind {PROPERTY_KIND} --where meta.property=PROPERTY`) and pass it as --conformance PROPERTY=art:…")
+        cited = dict(sorted({**found, **cited}.items()))
         rec["evidence"] = {**evidence, "conformance": cited}
     if silent := sorted(set(rec["conformance"]["due"]) - set(cited) - set(gaps)):
         raise UsageError(f"{row}: its Programs need {', '.join(silent)} ({rec['conformance']['map']}), which the record neither cites nor "
@@ -367,22 +364,26 @@ def publish(d: str | Path, row: str, *, evidence: dict[str, Any], tree: str, by:
     data("label", art, "row", row, "--by", by)
     data("push", art)
     doc = CR.load_index(INDEX)
-    doc["rows"][row] = entry(rec, art, tier)
+    doc["rows"][row] = {**entry(rec, art, tier), **({"aot": aot} if aot else {})}
     CR.write_index(doc, INDEX)
     return art
 
 
 def pull(art: str, tier: str | None = None) -> str:
     """Index `art`, a record `publish` preserved from another tree (a pod's `row chain`), in this tree's records.json, with the tier
-    it was published with (`tier` overrides it); returns its row."""
+    it was published with (`tier` overrides it), a switched row keeping its `aot`; returns its row.  A row whose file in this tree is
+    not done only at its public cap (`config_record.index_refusal`) is refused before the index is touched."""
     m = json.loads(data("show", art, "--json"))["manifest"]
     meta = m.get("meta") or {}
     if m.get("kind") != CR.KIND or meta.get("outcome") != "PASS":
         raise UsageError(f"{art}: a {m.get('kind')} ({meta.get('outcome')}), not a PASS {CR.KIND}")
     rec = json.loads(fetch(art).read_text())
     row = rec["config"]["row"]
+    if why := CR.index_refusal(row):
+        raise UsageError(f"{why}; pull would index it as one, so it indexes nothing")
     doc = CR.load_index(INDEX)
-    doc["rows"][row] = entry(rec, art, _tier(row, tier or meta.get("tier")))
+    aot = (doc["rows"].get(row) or {}).get("aot")
+    doc["rows"][row] = {**entry(rec, art, _tier(row, tier or meta.get("tier"))), **({"aot": aot} if aot else {})}
     CR.write_index(doc, INDEX)
     return row
 
@@ -403,6 +404,55 @@ def staged(repo: str, revision: str, *, at: str, ref: str, by: str) -> str:
     except ValueError:
         raise UsageError(f"--at {at!r}: a UTC time, YYYY-MM-DDTHH:MM:SSZ") from None
     return data("label", checkpoint(repo, revision), STAGED, at, "--by", by, "--ref", ref)
+
+
+def constructions(d: Path) -> dict[str, dict[str, str]]:
+    """Per rank of a row dir's Build (`build_summary.json`), each derived Program's construction: `aot` or `trace`."""
+    s = json.loads((d / "build_summary.json").read_text()) if (d / "build_summary.json").is_file() else {}
+    return {k.removeprefix("rank"): {p: v.get("construction", "trace") for p, v in rk.items() if p.startswith("build_")}
+            for k, rk in (s.get("ranks") or {}).items()}
+
+
+def switch(row: str, comparison: dict[str, Any], *, run: str, trace: str, tier: str | None = None) -> dict[str, Any]:
+    """Switch `row` to the AOT Build: its index entry's `aot` names the comparison `run` (`verity-vllm predict compare`, its
+    `comparison.json`) and the traced Build `trace` it compared, and its pins are the comparison's Programs.  Refused unless the
+    comparison is of `row` and equal on every rank, or where a row already pinned would move: re-pinning is `verity-vllm neutrality
+    --update`'s, or where the row's file is not done only at its public cap (`config_record.index_refusal`).  A row new to the index
+    is pinned with no record, at `tier`."""
+    if not RUN.fullmatch(run) or not ART.fullmatch(trace):
+        raise UsageError(f"--run {run!r} --trace {trace!r}: the comparison's run id and the traced Build's art: id")
+    if RowId.parse(row).world < 2:
+        raise UsageError(f"{row}: the AOT Build is a TP row's (`row_tp.TpRow.build`); a single-GPU row's Build traces")
+    if comparison.get("row") != row or comparison.get("equal") is not True:
+        raise UsageError(f"{row}: the comparison is of {comparison.get('row')} and {'equal' if comparison.get('equal') else 'NOT equal'}: "
+                         f"a row is switched only where its predicted Programs equal its traced Build's on every rank")
+    if why := CR.index_refusal(row):
+        raise UsageError(f"{why}; switch would index it as one, so it switches nothing")
+    parts = lambda p: {n: v["predicted"] for n, v in p.items() if isinstance(v, dict) and "predicted" in v}   # noqa: E731
+    programs = {r: {"step": ps.pop("step"), "workload": ps.pop("workload"), "requests": ps}
+                for r, ps in ((r, parts(p)) for r, p in sorted(comparison["ranks"].items(), key=lambda kv: int(kv[0])))}
+    doc = CR.load_index(INDEX)
+    cur = doc["rows"].get(row)
+    if cur is not None and cur.get("programs") != programs:
+        raise UsageError(f"{row}: its pins are not the comparison's Programs: re-pin it first (`verity-vllm neutrality {row} --update`)")
+    if cur is None and tier not in CR.TIERS:
+        raise UsageError(f"{row}: a row new to {INDEX.name} needs --tier {'|'.join(CR.TIERS)}, the tier of its rebuild")
+    doc["rows"][row] = {**(cur or {"record": None, "tier": tier, "pinned_from": {"build": trace, "run": run}, "manifest_digest": None,
+                                     "programs": programs}), "aot": {"comparison": run, "trace": trace}}
+    CR.write_index(doc, INDEX)
+    return doc["rows"][row]
+
+
+@dataclass(frozen=True, kw_only=True)
+class SwitchOptions:
+    """Switch a row to the AOT Build from a comparison equal on every rank (`verity-vllm predict compare`'s comparison.json)."""
+
+    row: str = option("row")
+    comparison: str = option("--comparison", help="the comparison run's comparison.json")
+    run: str = option("--run", help="the comparison's run id")
+    trace: str = option("--trace", help="the traced Build it compared, a vllm-build/v1 art: id holding every rank's derive dirs")
+    tier: str | None = option("--tier", choices=CR.TIERS, default=None, help="a row new to the index: the tier of its rebuild")
+    cmd: str = field(default="switch", init=False)
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -428,7 +478,8 @@ class PublishOptions:
                             help="a property the Programs need with no capture of record for the tree, and why")
     newest_captures: bool = option("--newest-captures", action="store_true", default=False,
                                    help="cite, for each property the Programs need that --conformance and --gap leave out, its newest "
-                                        "holding capture of record in the store")
+                                        "holding capture of record in the store (where the store has no index, as in a job, one its "
+                                        "catalog lacks is refused)")
     cmd: str = field(default="publish", init=False)
 
 
@@ -493,7 +544,7 @@ class StagedOptions:
 
 
 COMMANDS = {"publish": PublishOptions, "pull": PullOptions, "capture": CaptureOptions, "show": ShowOptions, "programs": ProgramsOptions, "fetch": FetchOptions,
-            "staged": StagedOptions}
+            "staged": StagedOptions, "switch": SwitchOptions}
 
 
 def _pairs(flag: str, items: list[str], form: str) -> dict[str, str]:
@@ -503,7 +554,11 @@ def _pairs(flag: str, items: list[str], form: str) -> dict[str, str]:
     return out
 
 
-def main(a: PublishOptions | PullOptions | CaptureOptions | ShowOptions | ProgramsOptions | FetchOptions | StagedOptions) -> int:
+def main(a: PublishOptions | PullOptions | CaptureOptions | ShowOptions | ProgramsOptions | FetchOptions | StagedOptions
+         | SwitchOptions) -> int:
+    if a.cmd == "switch":
+        print(json.dumps(switch(a.row, json.loads(Path(a.comparison).read_text()), run=a.run, trace=a.trace, tier=a.tier)["aot"]))
+        return 0
     if a.cmd == "publish":
         ev = evidence_of(a.build, manifest=a.manifest, match=a.match, match_run=a.match_run, commit=a.commit, commit_run=a.commit_run,
                          conformance=_pairs("--conformance", a.conformance, "PROPERTY=art:..."),

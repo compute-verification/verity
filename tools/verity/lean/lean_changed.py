@@ -310,6 +310,31 @@ LEAN_SLOT = _module(ROOT / "tools" / "verity" / "check" / "lean_slot.py", "lean_
 FAST_POOL = "build"
 #: the kind of `--records`' result: an audit without the kernel replay or the tests, which no merge check accepts
 FAST_KIND = "lean-fast/v1"
+#: how long `--records` waits for another run's hold on its tree (a node with no SLOTS shares `local` among every run;
+#: vy-nebius-cpu-2, 19 Oct: three lanes' runs refused in 0 s behind a 53-minute one), and how often it looks
+TREE_WAIT_S, TREE_POLL_S = 3 * 3600, 20
+_sleep, _clock = time.sleep, time.monotonic
+
+
+def hold_tree(held, tree: Path, log=print) -> bool:
+    """Take ``held``'s lock (the tree's `.lock`), waiting up to `TREE_WAIT_S` for the run that holds it, whose id `.who`
+    beside it names; False when it is still held then."""
+    who, start, told = tree / ".who", _clock(), None
+    while True:
+        try:
+            fcntl.flock(held, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            break
+        except BlockingIOError:
+            holder = who.read_text().strip() if who.is_file() else "unknown"
+            if _clock() - start >= TREE_WAIT_S:
+                log(f"lean-records: another run holds {tree} ({holder}), still after {TREE_WAIT_S} s: nothing ran")
+                return False
+            if holder != told:
+                log(f"lean-records: another run holds {tree} ({holder}); waiting, retrying every {TREE_POLL_S} s")
+                told = holder
+            _sleep(TREE_POLL_S)
+    who.write_text(f"{os.environ.get('RESEARCH_RUN_ID') or 'a run'} (pid {os.getpid()})\n")
+    return True
 
 
 def records_tree() -> Path:
@@ -347,7 +372,7 @@ def audit_records(name: str, deps: Path, tree: Path | None = None, update: bool 
                   out: Path | None = None, log=print) -> int:
     """`--records`: `check.py --build --no-replay --no-runs` on the package ``name`` names, in ``tree`` (default: the tree of the
     `build` slot it takes; any other must be under `RECORDS`); check.py's exit status, or 2 when ``tree`` is not under
-    `RECORDS`, ``name`` matches no single package, the node's Lean slots refuse it or another run holds the tree."""
+    `RECORDS`, ``name`` matches no single package, the node's Lean slots refuse it or another run holds the tree past `TREE_WAIT_S`."""
     base = (LA.COMMON.cache_dir() / RECORDS).resolve()
     if tree is not None and base not in tree.resolve().parents:
         log(f"lean-records: {tree} is not under {base}: the fast path builds only on its own trees, never on check's "
@@ -378,10 +403,7 @@ def audit_records(name: str, deps: Path, tree: Path | None = None, update: bool 
         tree = tree or records_tree()
         tree.mkdir(parents=True, exist_ok=True)
         with open(tree / ".lock", "w") as held:
-            try:
-                fcntl.flock(held, fcntl.LOCK_EX | fcntl.LOCK_NB)
-            except BlockingIOError:
-                log(f"lean-records: another run holds {tree}")
+            if not hold_tree(held, tree, log):
                 return 2
             links = read_links(tree)
             run_dir, run_id = os.environ.get("RESEARCH_RUN_DIR"), os.environ.get("RESEARCH_RUN_ID")

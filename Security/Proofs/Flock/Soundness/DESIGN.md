@@ -374,7 +374,7 @@ twice (1–2 MB, 20–50 ms) exceeds them, which would matter only for a non-int
 ## 8. Fiat–Shamir is out
 
 Every proof is interactive, on live coins from the challenger; Fiat–Shamir is out (ruling of 5 Oct, "Live coins only;
-Fiat–Shamir is out", `.agents/skills/friction/SKILL.md`). A non-interactive variant would have needed round-by-round
+Fiat–Shamir is out", `AGENTS.md`). A non-interactive variant would have needed round-by-round
 soundness and a Fiat–Shamir theorem in the random-oracle model, a new parameter set against state restoration (flock-128
 found `fast100` run twice at best 2^-75.6 under Fiat–Shamir), and, for small proofs, recursion with its caveat. None of
 that is planned. The per-coin lemmas of `rep_sound` and the separate round-by-round term of the out-of-domain samples

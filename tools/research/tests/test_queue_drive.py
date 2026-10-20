@@ -2,11 +2,12 @@
 goes to the lander once.  On `test_queue`'s throwaway origin, with the launch, the runs' states and the merge-thread post injected."""
 from __future__ import annotations
 
+import itertools
 import os
 import pytest
 
 from research import merge
-from research.drive import PUBLISH_GRACE_S, Driver
+from research.drive import CHECK_STEPS, PUBLISH_GRACE_S, Driver
 from research.cli import main as research_main
 from test_merge_gate import CHECKED
 from test_queue import World, _git
@@ -26,6 +27,7 @@ class Harness:
                         post=lambda text, to=(): self.posts.append(text) or True, now=lambda: self.clock,
                         cancel=lambda repo, ids, reason: self.cancelled.extend(ids), evidence=lambda repo, ids: self.evidence)
         self.evidence: list = []
+        self.d.launch_touched = lambda repo, commit, machine, base: ([], "")      # a test that wants one sets its own
 
     def launch(self, repo, commit, machine, agreement):
         rid = f"r20261012-0000{len(self.launched):02d}-abcd"
@@ -37,10 +39,13 @@ class Harness:
         return self.d.tick(**kw)
 
 
+_checks = itertools.count()
+
+
 def _check(world: World, monkeypatch, commit: str, command=CHECKED) -> None:
-    """A recorded `check` attempt of `commit` that runs `command` (CHECKED passes)."""
+    """A recorded `check` attempt of `commit` that runs `command` (CHECKED passes), as often as `commit` is checked."""
     monkeypatch.setenv("RESEARCH_STORE", str(world.tmp / "store"))
-    tree = world.tmp / f"check-{commit[:12]}"
+    tree = world.tmp / f"check-{commit[:12]}-{next(_checks)}"
     _git(world.dev, "fetch", "-q", "origin")
     _git(world.dev, "worktree", "add", "-q", "--detach", str(tree), commit)
     monkeypatch.chdir(tree)
@@ -55,6 +60,22 @@ def _tip(world: World) -> str:
 @pytest.fixture
 def world(tmp_path):
     return World(tmp_path)
+
+
+def test_a_train_s_check_is_launched_with_its_rank_for_the_slot_queue(world, monkeypatch):
+    """CI-110: the train that lands next takes a node's next free slot (`slot.py --rank`), so drive launches each train's check with
+    CHECK_SLOT_RANK set to its members above `main`, and leaves the variable as it was."""
+    monkeypatch.delenv("CHECK_SLOT_RANK", raising=False)
+    h = Harness(world, monkeypatch)
+    h.d.train_size, h.d.max_running = 1, 2
+    ranks = []
+    plain = h.launch
+    h.d.launch = lambda repo, commit, machine, agreement: ranks.append(os.environ.get("CHECK_SLOT_RANK")) or plain(
+        repo, commit, machine, agreement)
+    world.gh.put(1, world.change({"a.txt": "1\n"}))
+    world.gh.put(2, world.change({"b.txt": "2\n"}))
+    h.tick()
+    assert ranks == ["1", "2"] and "CHECK_SLOT_RANK" not in os.environ
 
 
 def test_an_unchecked_tip_is_checked_once_with_agreement_only_for_a_guarantee_change(world, monkeypatch):
@@ -298,20 +319,6 @@ def test_a_lean_audit_failure_ejects_the_pr_that_changed_the_failing_file(world,
     assert [m.pr for m in h.q.chain()] == [1]
 
 
-def test_a_suite_failure_whose_files_no_pr_touches_ejects_the_pr_that_changed_the_suites_inputs(world, monkeypatch, tmp_path):
-    """16 Oct: #2164's train failed in benchmarks/pouw's suite (its test in tests/), and the cause was its own change to that
-    suite's pyproject.toml inputs."""
-    h = Harness(world, monkeypatch)
-    h.d.train_size = 2
-    world.gh.put(1, world.change({"a.txt": "1\n"}))
-    world.gh.put(2, world.change({"pkg/pyproject.toml": "[tool.verity.tests]\ninputs = ['data/x.json']\n"}))
-    h.tick()
-    _check(world, monkeypatch, _tip(world), ("false",))
-    h.evidence = [_failed_run(tmp_path, "tests/test_x.py::test_y", "tests/test_x.py:2")]
-    h.tick()
-    assert len(h.posts) == 1 and "Ejected #2" in h.posts[0] and "suite pkg's inputs" in h.posts[0], h.posts
-
-
 def test_a_failure_nothing_in_the_train_reaches_is_resent_as_a_machines_fault(world, monkeypatch, tmp_path):
     h = Harness(world, monkeypatch)
     h.d.train_size = 2
@@ -323,6 +330,32 @@ def test_a_failure_nothing_in_the_train_reaches_is_resent_as_a_machines_fault(wo
     h.evidence = [_failed_run(tmp_path, "tests/test_x.py::test_y", "tests/test_x.py:2")]
     h.tick()
     assert not h.posts and len(h.launched) == launched + 1 and any("resent" in x for x in world.logs)
+
+
+def test_a_resent_check_cancels_its_failed_attempt_and_keeps_its_touched_suites(world, monkeypatch, tmp_path):
+    """18 Oct: 37cda23's check failed under `--keep-going` at 16:07Z and was resent; the failed attempt kept slot b on cpu-1
+    for 4 h, until the OOM killer took it, and the resend's record lost the train's touched-suites run, the gate a deferred
+    pytest lands on.  The resend runs the touched suites again beside its check, and the run it replaces is cancelled."""
+    h = Harness(world, monkeypatch)
+    h.d.defer, h.d.train_size = frozenset({"pytest"}), 2
+    touched = itertools.count(1)
+
+    def launch_touched(repo, commit, machine, base):
+        h.run_state[rid := f"r-touched-{next(touched)}"] = ("running", None, None)
+        return [rid], ""
+
+    h.d.launch_touched = launch_touched
+    world.gh.put(1, world.change({"a.txt": "1\n"}))
+    world.gh.put(2, world.change({"b.txt": "2\n"}))
+    h.tick()
+    tip = _tip(world)
+    (rid,) = [r for r in h.run_state if not r.startswith("r-touched")]
+    h.run_state[rid] = ("running", None, None, "suite pkg (tests/test_x.py::test_y)")
+    h.evidence = [_failed_run(tmp_path, "tests/test_x.py::test_y", "tests/test_x.py:2")]
+    h.tick()
+    assert not h.posts and any("resent" in x for x in world.logs) and h.cancelled == [rid, "r-touched-1"]
+    rec = h.d.q.load_state()["drive"]["launched"][tip]
+    assert rid not in rec["ids"] and rec["touched"] == ["r-touched-2"]
 
 
 def _killed_run(tmp_path, name: str):
@@ -781,27 +814,6 @@ def _steps_run(tmp_path, name: str, steps: dict[str, str]):
     return d
 
 
-def test_defer_lands_a_train_whose_other_steps_passed_and_reverts_it_when_a_deferred_step_fails(world, monkeypatch, tmp_path):
-    """17 Oct (CI-30's interim, Daniel through top): a train lands on the Lean check and the fast steps, with circuit-check
-    running on after landing; a deferred step that fails reverts the landing."""
-    from research.drive import CHECK_STEPS
-
-    h = Harness(world, monkeypatch)
-    h.d.defer = frozenset({"circuit-check"})
-    base = _git(world.origin, "rev-parse", "main")
-    world.gh.put(1, world.change({"a.txt": "1\n"}))
-    h.tick()
-    tip = _tip(world)
-    (rid,) = h.run_state
-    h.evidence = [_steps_run(tmp_path, rid, {x: "passed" for x in CHECK_STEPS if x != "circuit-check"})]
-    h.tick()
-    assert _git(world.origin, "rev-parse", "main") == tip and h.cancelled == []      # landed; its check runs on
-    h.run_state[rid] = ("done", 1, None)
-    h.evidence = [_steps_run(tmp_path, rid + "-end", {"circuit-check": "failed"})]
-    h.tick()
-    assert _git(world.origin, "diff", "--stat", base, "main") == "" and any("reverted on `main`" in x for x in h.posts), h.posts
-
-
 def test_the_lean_check_is_never_deferred(world, monkeypatch):
     h = Harness(world, monkeypatch)
     from research.drive import Driver
@@ -902,6 +914,29 @@ def test_a_lean_check_whose_replay_was_killed_is_a_machines_fault(tmp_path):
     (d / "lean-audit.log").write_text("AUDIT /x/lean-audit-scratch-1/Security/Proofs: FAIL\n    error: build failed\n")
     assert not killed(d)
 
+
+def test_a_circuit_check_whose_only_failures_are_killed_targets_is_a_machines_fault(tmp_path):
+    """19 Oct, r20261019-102541-78d1 on cpu-1: three PoUS SHA-512 targets were OOM-killed at 149-164 GiB, circuit-check failed
+    with rc 1, and drive blamed circuit-check's inputs and tried to revert all 19 landings since 6c4f254d."""
+    from research.drive import killed
+
+    d = tmp_path / "run"
+    d.mkdir()
+    step = '{"step": "circuit-check", "status": "failed", "rc": 1, "log": "circuit-check.log"}\n'
+    (d / "steps.jsonl").write_text(step)
+    died = ("FAIL circuit-check/killed PousSha512Head_v1: its process died (signal 9: the OOM killer?) at a peak of 164.16 GiB\n"
+            "FAIL circuit-check/killed PousSha512Mid_v1{M=1}: its process died (signal 9: the OOM killer?) at a peak of 164.16 GiB\n")
+    tail = "circuit-check: 5211 target(s), 2 new failure(s), 3 known\nwarn dead-gates/ir: 258100 over 309 target(s)\n"
+    (d / "circuit-check.log").write_text(died + tail)
+    assert killed(d)
+    (d / "circuit-check.log").write_text(died + "FAIL partition/unchecked PousSha512Ctr_v1: an output bit is free\n" + tail)
+    assert not killed(d), "a real failure beside the killed ones is the code's"
+    (d / "circuit-check.log").write_text(died + "FAIL circuit_check.known lists Foo, which no longer fails: drop it\n" + tail)
+    assert not killed(d)
+    (d / "circuit-check.log").write_text(died + tail)
+    (d / "steps.jsonl").write_text(step + '{"step": "pytest", "status": "failed", "rc": 1, "log": "pytest.log"}\n')
+    assert not killed(d), "another failed step is judged on its own"
+
 def test_drive_sweeps_the_repositorys_branches_once_a_day(world, monkeypatch):
     """CI-48: nothing deleted a landed PR's branch or an idle one, and the repository reached 3,543 branches."""
     from research.drive import BRANCH_SWEEP_S
@@ -915,26 +950,6 @@ def test_drive_sweeps_the_repositorys_branches_once_a_day(world, monkeypatch):
     h.clock += BRANCH_SWEEP_S + 1
     h.tick()
     assert len(calls) == 2
-
-
-def test_a_failure_ejects_no_pr_that_a_running_train_below_it_still_checks(world, monkeypatch, tmp_path):
-    """18 Oct 01:55Z: 2671bd's test_dc failure fell back to the suite's inputs and ejected 13 PRs, #2348 and others among them
-    from the 15-PR train below it, which was 11 steps in and lands only if none of its PRs leaves: its check was cancelled.  A
-    PR the lower train covers is left to that train's own check."""
-    h = Harness(world, monkeypatch)
-    h.d.train_size, h.d.max_running = 1, 2
-    world.gh.put(1, world.change({"pkg/data.json": "1\n"}))
-    world.gh.put(2, world.change({"pkg/other.py": "2\n"}))
-    h.tick()
-    low, tip = h.q.chain()[0].commit, _tip(world)
-    assert [c for c, *_ in h.launched] == [low, tip]
-    _check(world, monkeypatch, tip, ("false",))
-    h.evidence = [_failed_run(tmp_path, "tests/test_x.py::test_y", "tests/test_x.py:2")]
-    h.tick()
-    assert len(h.posts) == 1 and "Ejected #2" in h.posts[0] and "#1" not in h.posts[0].split("Ejected")[1], h.posts
-    h.tick()
-    (kept,) = h.d.q.load_state()["drive"]["launched"][low]["ids"]
-    assert [m.pr for m in h.q.chain()] == [1] and h.q.chain()[0].commit == low and kept not in h.cancelled
 
 
 def test_pre_warms_run_one_at_a_time_and_count_against_the_running_checks(world, monkeypatch):
@@ -951,41 +966,140 @@ def test_pre_warms_run_one_at_a_time_and_count_against_the_running_checks(world,
     assert len(h.launched) == 2 and sum("pre-warming #" in x for x in world.logs) == 1, world.logs
 
 
-def test_a_lean_audit_record_failure_ejects_only_the_prs_that_touch_the_failing_package(world, monkeypatch, tmp_path):
-    """18 Oct 03:30Z: two trains failed lean-audit on verity/core/primitives/requirement's stale record (#2386's); no error line
-    names a file, and the fallback on every Lean source ejected #2341, #2370 and #2371 too, whose changes are in other packages."""
-    h = Harness(world, monkeypatch)
-    h.d.train_size = 2
-    world.gh.put(1, world.change({"pkgA/A.lean": "theorem a : True := trivial\n"}))
-    world.gh.put(2, world.change({"pkgB/B.lean": "theorem b : True := trivial\n"}))
-    h.tick()
-    _check(world, monkeypatch, _tip(world), ("false",))
-    h.evidence = [_lean_run(tmp_path, "AUDIT /w/lean-audit-scratch-1-x/pkgA: FAIL\n  dependencies: the .olean files of the "
-                                      "modules the package imports from toolchain differ from the record\n"
-                                      "AUDIT /w/lean-audit-scratch-1-x/pkgB: PASS\n")]
-    h.tick()
-    assert len(h.posts) == 1 and "Ejected #1:" in h.posts[0] and "Lean package pkgA" in h.posts[0], h.posts
-
-
 def test_a_train_that_passed_by_regenerating_locks_lands_with_them_committed_on_top(world, monkeypatch, tmp_path):
     """CI-64 (Daniel through top, 18 Oct): lean-audit failed 9 trains in 36 h on lock records each PR had regenerated on its
     own base.  A train's Lean check now passes by regenerating them, and drive commits those locks onto the train it lands,
     naming them in a `Regenerated:` trailer that `research merge`'s gate reads (`regenerated_parent`)."""
+    from test_merge_gate import _REGENERATING
+
     h = Harness(world, monkeypatch)
     h.d.regenerate_locks = True
     world.gh.put(1, world.change({"pkg/A.lean": "theorem a : True := trivial\n", "pkg/lean-audit.json": '{"records": 1}\n'}))
     h.tick()
     tip = _tip(world)
+    monkeypatch.setenv("FAKE_CHECK", _REGENERATING)                                 # its record reaches the store
     _check(world, monkeypatch, tip)
-    rec = tmp_path / "regen.json"
-    rec.write_text('{"records": 2}\n')
-    monkeypatch.setattr(merge, "regenerated_records", lambda store, rid, dest=None: {"pkg": ("sha", rec)})
     assert h.tick().startswith("landed #1")
     main = _git(world.origin, "rev-parse", "main")
     assert _git(world.origin, "rev-parse", f"{main}^") == tip                       # the checked train, then its locks
     assert _git(world.origin, "show", f"{main}:pkg/lean-audit.json") == '{"records": 2}'
     assert "Regenerated: pkg/lean-audit.json" in _git(world.origin, "log", "-1", "--format=%B", main)
     assert any("with the locks it regenerated for pkg" in x for x in world.logs)
+
+
+#: the steps a deferred landing's check runs on after it lands (`test_drive_postland.DEFER`)
+_DEFER = frozenset({"circuit-check", "flock-rust-tests"})
+
+
+def _live_run(tmp_path, rid: str, commit: str, records: dict[str, str | None]):
+    """A check still running, as `merge.fetch_run` reads its run dir from its node: (that dir, a fetch of it, the fetches made).
+    Its Lean report names a regenerated lock for each package of ``records``, holding its text (None: the report names it, and
+    the file isn't there)."""
+    import json
+
+    d = tmp_path / "live" / rid
+    (d / "lean-audit").mkdir(parents=True)
+    regen = {}
+    for pkg, text in records.items():
+        rel = f"lean-audit/audit-{pkg.replace('/', '-')}/lean-audit.json"
+        regen[pkg] = f"/workspace/research/runs/{rid}/{rel}"
+        if text is not None:
+            (d / rel).parent.mkdir(parents=True, exist_ok=True)
+            (d / rel).write_text(text)
+    (d / "lean-audit" / "audit.json").write_text(json.dumps({"passed": True, "regenerated": regen}))
+    fetched: list[tuple[str, list[str]]] = []
+
+    def fetch(r, names):
+        fetched.append((r, names))
+        return (d, {"dir": str(d), "tree_sha": commit}) if r == rid else None
+    return d, fetch, fetched
+
+
+def _deferred(h: Harness, tmp_path, n: int, files: dict[str, str]) -> tuple[str, str]:
+    """PR ``n`` checked on `next`, its check running with every step but the deferred ones passed: (its run id, the tip)."""
+    h.d.defer, h.d.regenerate_locks = _DEFER, True
+    h.world.gh.put(n, h.world.change(files))
+    before = set(h.run_state)
+    h.tick()
+    (rid,) = [r for r in h.run_state if r not in before]
+    h.evidence = [_steps_run(tmp_path / "steps", rid, {x: "passed" for x in CHECK_STEPS if x not in _DEFER})]
+    return rid, _tip(h.world)
+
+
+def test_a_deferred_landing_commits_the_locks_its_running_check_regenerated_and_the_gate_vouches_for_them(world, monkeypatch, tmp_path):
+    """CI-122: drive lands a train with `--defer` while its check still runs, so the check's files aren't in the store yet, and
+    train 7c3809278800 (20 Oct 02:10Z) landed without the Security lock its check had regenerated: `main` then failed its Lean
+    check.  Drive now reads the records from the running check's run dir on its node, commits them on top, and the merge gate,
+    hashing what it fetches itself, vouches for that commit."""
+    h = Harness(world, monkeypatch)
+    rid, tip = _deferred(h, tmp_path, 1, {"pkg/A.lean": "theorem a : True := trivial\n", "pkg/lean-audit.json": '{"records": 1}\n'})
+    _, h.d.fetch, fetched = _live_run(tmp_path, rid, tip, {"pkg": '{"records": 2}\n'})
+    assert h.tick().startswith("landed #1"), world.logs
+    main = _git(world.origin, "rev-parse", "main")
+    assert _git(world.origin, "rev-parse", f"{main}^") == tip
+    assert _git(world.origin, "show", f"{main}:pkg/lean-audit.json") == '{"records": 2}'
+    body = _git(world.origin, "log", "-1", "--format=%B", main)
+    assert f"Checked: {rid} " in body and "Regenerated: pkg/lean-audit.json" in body
+    assert rid in h.cancelled and any(names == ["lean-audit/audit.json"] for _, names in fetched)
+    kw = {"tool": "check", "kinds": merge.produced(h.q.workdir, "check"), "command": merge.declared_command(h.q.workdir, "check")}
+    assert merge.regenerated_parent(world.origin, main, h.q.store, deferred=rid, fetch=h.d.fetch, **kw) == rid
+    assert merge.regenerated_parent(world.origin, main, h.q.store, **kw) is None    # no passing attempt: only drive's verdict
+
+
+def test_a_deferred_landing_whose_regenerated_records_cant_be_read_is_held_and_told(world, monkeypatch, tmp_path):
+    """CI-122: a check whose Lean report names a regenerated lock drive can't read, from the store or its node, never lands
+    without it; nor does one whose report can't be read at all, its lean-audit step having passed or its node being out of
+    reach."""
+    h = Harness(world, monkeypatch)
+    base = _git(world.origin, "rev-parse", "main")
+    rid, tip = _deferred(h, tmp_path, 1, {"Security/A.lean": "theorem a : True := trivial\n"})
+    _, h.d.fetch, _ = _live_run(tmp_path, rid, tip, {"Security": None})
+    assert not h.tick().startswith("landed")
+    assert _git(world.origin, "rev-parse", "main") == base and rid not in h.cancelled
+    (post,) = [p for p in h.posts if "held, not landed" in p]
+    assert rid in post and "Security's lock" in post and "#1" in post, post
+    h.d.fetch = lambda r, names: None                                     # its report can't be fetched
+    h.tick()
+    assert _git(world.origin, "rev-parse", "main") == base
+    assert any("lean-audit/audit.json, which says whether its Lean check regenerated" in x for x in world.logs), world.logs
+    logged = len(world.logs)
+    h.d._passed_but_deferred = lambda ids: rid                            # its node can't be reached at all: no steps.jsonl
+    h.evidence = []
+    h.tick()
+    assert _git(world.origin, "rev-parse", "main") == base
+    assert any("which says whether its Lean check regenerated" in x for x in world.logs[logged:]), world.logs[logged:]
+
+
+def test_a_train_whose_check_ran_no_lean_audit_lands_without_a_lock_commit(world, monkeypatch):
+    """A result without the lean-audit step, which no report goes with, regenerated nothing: the train lands as it is."""
+    h = Harness(world, monkeypatch)
+    h.d.regenerate_locks = True
+    h.d.fetch = lambda r, names: None
+    world.gh.put(1, world.change({"a.txt": "1\n"}))
+    h.tick()
+    tip = _tip(world)
+    _check(world, monkeypatch, tip)
+    assert h.tick().startswith("landed #1")
+    assert _git(world.origin, "rev-parse", "main") == tip
+
+
+def test_a_deferred_landing_whose_lock_commit_the_gate_refuses_is_held(world, monkeypatch, tmp_path):
+    """The gate reads the run's records again itself: bytes that changed between drive's read and the gate's, which drive would
+    otherwise commit as the check's, hold the train."""
+    h = Harness(world, monkeypatch)
+    base = _git(world.origin, "rev-parse", "main")
+    rid, tip = _deferred(h, tmp_path, 1, {"pkg/A.lean": "theorem a : True := trivial\n"})
+    d, live, _ = _live_run(tmp_path, rid, tip, {"pkg": '{"records": 2}\n'})
+    calls = []
+
+    def fetch(r, names):
+        if calls.append(names) or len(calls) == 3:                        # the gate's read of the records
+            (d / "lean-audit" / "audit-pkg" / "lean-audit.json").write_text('{"records": 3}\n')
+        return live(r, names)
+    h.d.fetch = fetch
+    assert not h.tick().startswith("landed")
+    assert _git(world.origin, "rev-parse", "main") == base
+    assert any("the merge gate refuses its lock commit" in p and rid in p for p in h.posts), h.posts
 
 
 def test_a_train_that_regenerated_locks_waits_for_a_new_check_when_main_moved(world, monkeypatch, tmp_path):
@@ -1000,3 +1114,127 @@ def test_a_train_that_regenerated_locks_waits_for_a_new_check_when_main_moved(wo
     monkeypatch.setattr(merge, "regenerated_records", lambda store, rid, dest=None: {"pkg": ("sha", rec)})
     assert not h.tick().startswith("landed")
     assert any("by regenerating pkg's locks" in x for x in world.logs)
+
+
+def _touched_run(tmp_path, test: str, trace: str):
+    """A touched-suites run's dir (the quick tier's job): its report and log under out/."""
+    import json
+
+    d = tmp_path / "touched"
+    (d / "out" / "logs").mkdir(parents=True)
+    (d / "out" / "suites.json").write_text(json.dumps([{"name": "pkg", "suite": "pkg", "status": "failed", "failed_tests": [test],
+                                                        "log": "/workspace/research/runs/r/out/logs/pkg.log"}]))
+    (d / "out" / "logs" / "pkg.log").write_text(f"E       AssertionError\n\n{trace}: AssertionError\n")
+    return d
+
+
+def test_a_train_whose_own_check_passed_pytest_lands_without_waiting_on_its_touched_suites(world, monkeypatch, tmp_path):
+    """19 Oct: a5b2d8dc's own check passed pytest at the train's commit in 6,566 s while its touched-suites run, a subset of the same
+    suites, crawled on vy-nebius-2's disk for 100 min and held the landing."""
+    from research.drive import CHECK_STEPS
+
+    h = Harness(world, monkeypatch)
+    h.d.defer = frozenset({"pytest"})
+    h.d.launch_touched = lambda repo, commit, machine, base: (["r-touched"], "")
+    h.run_state["r-touched"] = ("running", None, None)
+    world.gh.put(1, world.change({"a.txt": "1\n"}))
+    h.tick()
+    tip = _tip(world)
+    (rid,) = [r for r in h.run_state if r != "r-touched"]
+    h.evidence = [_steps_run(tmp_path, rid, {x: "passed" for x in CHECK_STEPS if x != "pytest"})]
+    h.tick()
+    assert _git(world.origin, "rev-parse", "main") != tip                         # pytest not passed yet: the gate holds
+    h.evidence = [_steps_run(tmp_path / "b", rid, {x: "passed" for x in CHECK_STEPS})]
+    h.tick()
+    assert _git(world.origin, "rev-parse", "main") == tip                         # its own pytest passed: it lands
+
+
+def test_with_pytest_deferred_a_train_lands_only_once_its_touched_suites_pass(world, monkeypatch, tmp_path):
+    """CI-57: #2271 (17 Oct) and #2382 (18 Oct) each landed with pytest deferred and reverted a landing that a 2-minute run of
+    the one suite they touched would have stopped. With pytest deferred, drive runs the suites a train's change reaches
+    (`touched_launch`) beside its check, and lands it once both have passed."""
+    from research.drive import CHECK_STEPS
+
+    h = Harness(world, monkeypatch)
+    h.d.defer = frozenset({"pytest"})
+    touched = []
+    h.d.launch_touched = lambda repo, commit, machine, base: touched.append((commit, base)) or (["r-touched"], "")
+    h.run_state["r-touched"] = ("running", None, None)
+    world.gh.put(1, world.change({"a.txt": "1\n"}))
+    h.tick()
+    tip = _tip(world)
+    assert touched == [(tip, _git(world.origin, "rev-parse", "main"))]
+    (rid,) = [r for r in h.run_state if r != "r-touched"]
+    h.evidence = [_steps_run(tmp_path, rid, {x: "passed" for x in CHECK_STEPS if x != "pytest"})]
+    h.tick()
+    assert _git(world.origin, "rev-parse", "main") != tip                         # its touched suites still run
+    h.run_state["r-touched"] = ("done", 0, None)
+    (h.evidence[0] / "out").mkdir()
+    (h.evidence[0] / "out" / "suites.json").write_text("[]")                     # their report, with no failed row
+    h.tick()
+    assert _git(world.origin, "rev-parse", "main") == tip
+
+
+def test_a_failed_touched_suites_run_ejects_the_pr_that_changed_the_failing_test(world, monkeypatch, tmp_path):
+    from research.drive import CHECK_STEPS
+
+    h = Harness(world, monkeypatch)
+    h.d.defer, h.d.train_size = frozenset({"pytest"}), 2
+    h.d.launch_touched = lambda repo, commit, machine, base: (["r-touched"], "")
+    h.run_state["r-touched"] = ("running", None, None)
+    world.gh.put(1, world.change({"a.txt": "1\n"}))
+    world.gh.put(2, world.change({"pkg/tests/test_x.py": "def test_y():\n    assert False\n"}))
+    h.tick()
+    (rid,) = [r for r in h.run_state if r != "r-touched"]
+    h.evidence = [_steps_run(tmp_path, rid, {x: "passed" for x in CHECK_STEPS if x != "pytest"})]
+    h.tick()
+    h.run_state["r-touched"] = ("done", 1, None)
+    steps, report = h.evidence, [_touched_run(tmp_path, "tests/test_x.py::test_y", "tests/test_x.py:2")]
+    h.d.evidence = lambda repo, ids: report if ids == ["r-touched"] else steps
+    h.tick()
+    assert any("Ejected #2" in x and "touched suites failed" in x for x in h.posts), h.posts
+
+
+def test_of_several_failed_trains_drive_acts_on_the_lowest_only(world, monkeypatch, tmp_path):
+    """18 Oct 10:30Z: c93469 (#2478 #2479 #2480 #2484) failed lean-audit on #2484's Security change, and 5c00b3 above it failed
+    too. In one tick drive ejected #2484 for the lower and, for the upper, whose lower train was by then failed rather than
+    running, #2478 and #2486 as well. A train above a failed one holds its failure; its own check runs again once `next` is
+    rebuilt."""
+    h = Harness(world, monkeypatch)
+    h.d.train_size, h.d.max_running = 1, 2
+    world.gh.put(1, world.change({"pkgA/A.lean": "theorem a : True := trivial\n"}))
+    world.gh.put(2, world.change({"pkgB/B.lean": "theorem b : True := trivial\n"}))
+    h.tick()
+    low, tip = h.q.chain()[0].commit, _tip(world)
+    _check(world, monkeypatch, low, ("false",))
+    _check(world, monkeypatch, tip, ("false",))
+    lower = [_lean_run(tmp_path / "low", "AUDIT /w/lean-audit-scratch-1-x/pkgA: FAIL\n  dependencies: differ\n")]
+    upper = [_lean_run(tmp_path / "up", "AUDIT /w/lean-audit-scratch-1-x/pkgA: FAIL\nAUDIT /w/lean-audit-scratch-1-x/pkgB: FAIL\n")]
+    ids = {c: v["ids"] for c, v in h.d.q.load_state()["drive"]["launched"].items()}
+    h.d.evidence = lambda repo, rids: lower if rids == ids[low] else upper
+    h.tick()
+    assert not h.posts and h.launched[-1][0] == low                      # bisection alone names #1: its check runs again
+    _check(world, monkeypatch, low, ("false",))
+    h.tick()
+    main = _git(world.origin, "rev-parse", "main")
+    assert not h.posts and h.launched[-1][0] == main                     # then `main` itself, before the bottom PR's ejection
+    _check(world, monkeypatch, main)
+    h.tick()
+    assert len(h.posts) == 1 and "Ejected #1:" in h.posts[0], h.posts
+    assert [m.pr for m in h.q.chain()] == [2]
+
+
+def test_a_train_off_next_has_its_touched_suites_run_cancelled_too(world, monkeypatch):
+    """18 Oct 16:05Z: three touched-suites runs of trains a rebuild had dropped held check slots for 60-140 min, while drive
+    cancelled only those trains' checks."""
+    h = Harness(world, monkeypatch)
+    h.d.defer = frozenset({"pytest"})
+    h.d.launch_touched = lambda repo, commit, machine, base: (["r-touched"], "")
+    h.run_state["r-touched"] = ("running", None, None)
+    old = world.change({"a.txt": "1\n"})
+    world.gh.put(1, old)
+    h.tick()
+    (rid,) = [r for r in h.run_state if r != "r-touched"]
+    h.q.eject(1, "a test", "ci")
+    h.tick()
+    assert set(h.cancelled) == {rid, "r-touched"}

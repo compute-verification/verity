@@ -7,17 +7,44 @@ A spec-level reference for network accounting's timing channel:
   certificates (`certificate`: the network certifier's signature over the record's SHA-512 digest, with the window's
   frames in a fixed-depth SHA-512 tree), and the ingress links' status check;
 - one link-window's certificates through the proof service (`service`): the network `Spec`, a salted root over the
-  certified records, and a host-side verifier of record (no circuit proves the check yet);
+  certified records, and the check, whose Boolean part is each head's check (`head_check`: the head's hiding opening,
+  its fields and its counts against the public occupancy profile), with a host-side verifier of record (no proof of the
+  check yet) that compares no grid in the clear. Its claim is counts only: on every link-window the head check holds
+  the egress head's counts to the profile (and the ingress head's, where that end declares one), so the link's timing
+  is at the profile. Holding the frames, the rest of the egress grid, is N3's, which is a design and the simulator's
+  behaviour (`benchmarks/network_sim`), not a protocol: a prototype in the clear, in no proof-service Spec, so the claim
+  stays counts only until N3 is a proof-service unit with Selection `All`. It covers no lab or served link yet: an
+  egress end without an occupancy profile gets no verdict (`ValueError`, failing closed). The network verdict of
+  record is `LinkWindows.network_verdict`, the AND over the link's link-windows with no ε or share credit: every window
+  of the egress profile registered in order with an accepted outcome, and a rejected, late, missing or out-of-order
+  window rejects the link;
 - the capacity counts;
 - the calibration of honest runs;
 - the online prover (`online`): each window's clock sync declared at its first bucket from what it had seen `lag`
   buckets before;
 - the active certifier (`active`): an asyncio TCP proxy that runs the certifiers on a live link and publishes their records.
+  With its salt on (`Proxy(salt=active.fresh_salt)`, off by default), each PoUW window (`pouw_window` certifier
+  windows) gets one salt of `salt_bits` bits (512 by default), carried into the block only. The ingress record holds a
+  salt frame with a salt-free placeholder, so every record is a function of the traffic alone; the salt sits in the
+  certifier's sealed record cell `_salts[p]` until `Proxy.reveal(p, registration)` opens it on the PoUW window's
+  registration after its last ingress record is published, once and only within `reveal_deadline` of the window's
+  end on the certifier's clock, and `active.check_salts` reads the salt frames. The weights' root PoUW's noise seed
+  reads is recorded before the salt's draw, signed by the registered prover (`Proxy.commit_weights(p, root,
+  signature)` under `prover_key`, the sealed cell `_weights[p]`), and given on the same conditions
+  (`Proxy.committed(p, registration)`). With `Proxy(challenger_key=…, signer=…)`, both or neither, the challenger's key
+  from the auditor's deployment record, the two calls take only a request the auditor's challenger signed under LMS
+  for the certifier's key id and run (`Proxy.run_id`, 32 bytes drawn at construction) and answer an `active.Revealed`
+  the certifier signed, which names both; `active.serve_reveals` serves them over the network, one JSON line each way,
+  to the challenger's `active.RemoteCertifier`, given the run id by the deployment record, which returns the value
+  once it verifies for that run. Without the keys they are the in-process calls, for the auditor's side only. A proxy
+  back from maintenance (`Proxy(start=k, position=p)`, off by default) serves from window k on, its first egress frame
+  the Program's at position p, and carries nothing from before: a window it was down for has no record.
 
 It is pure Python. It imports only the standard library and `verity`: for the record digests' `tagged_sha256` and
-`tagged_sha512` and `canonical_json_bytes`, and in `service` the proof service, the hm96 leaves and the check's
-Definition. The certificate's signature scheme is a parameter: the certifier's
+`tagged_sha512` and `canonical_json_bytes`, in `service` the proof service, the hm96 leaves and the check's
+Definition, and in `active` the proof service's registration and receipt, which `reveal` reads. The certificate's signature scheme is a parameter: the certifier's
 `certificate.Issuer` takes a `Signer`, and the audit a `PublicKey`.
+From `verity`, `head_check` takes the circuits, their evaluator and the commitment gadgets.
 `PROTOCOL.md` has the semantics and the correspondence to the Lean analysis (`Security/`, area `NetworkCertifier`).
 `lean/` is the certifier program, the Lake package `certifier_program` (Lean core only): List forms of the analysis's
 definitions, proved equal to them in `Security/Proofs/NetworkCertifier/Code.lean`, and the difftest that holds this
@@ -52,5 +79,20 @@ Calibration, from a JSON trace of honest runs:
 ~~~text
 uv run network-certifier-calibrate trace.json --ingress-bucket-ms 100
 ~~~
+
+## Not yet zero-knowledge
+
+Every protocol is to be zero-knowledge, and the network audit isn't yet. Nothing may call it zero-knowledge until both
+of these gaps are closed:
+- **N2's grid comparison.** `service.LinkWindows.verify` compares each certified egress digest with the Program's grid
+  in the clear (`check_link` with `grid` on), and that reads witness. It goes once N3 runs on every link-window
+  (NET-38): N2 then switches to `check_link(grid=False)`.
+- **The certificate's signature check.** The certificate signs an unsalted digest of the record head, which holds its
+  counts and an unsalted root of the raw frames. The host checks that signature, so it reads a hash of witness. The fix
+  is NET-42:
+  - the certifier signs `H("verity/net-cert/v1" ‖ salt_c ‖ R)`, with `salt_c` drawn by the certifier, 64 bytes, fresh
+    per record and handed to the prover as witness only;
+  - the head-check unit proves `R = H(head)` and that `H(salt_c ‖ R)` is the signed digest;
+  - the host's LMS check then reads only public fields and that hiding digest.
 
 Tests: `uv run tools/verity/check/suites.py verity/core/protocols/certifier`.

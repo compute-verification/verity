@@ -61,15 +61,7 @@ from verity_vllm.commit import step_rows
 from verity_vllm.commit.committer.flush_points import GATHER_FLUSH_LEAVES, PRE_FLUSH_LEAVES
 from verity_vllm.commit.committer.host_retention import (HIDDEN_M1_FAMILIES, RETAIN_EXCLUDE_ALIASES, _excluded_chunk_ranges,  # noqa: F401
                                                          _HostRanges, _HostWindows, outside, retain_exclude_families)
-from verity_vllm.acquire.sources.hidden_source import (
-    HiddenM1Source,
-    HiddenM1SourceFA3,
-    fa2_kblock_n,
-    fa2_swapped,
-    fa2_tap_buffer_words,
-    fa2_tap_words_per_seq,
-    plan_fa2_tap_groups,
-)
+from verity_vllm.commit.committer.native_hidden import NativeHiddenM1Source, NativeHiddenM1SourceFA3
 from verity_vllm.commit.committer.native_host import (
     GPU_CHUNK_BYTES,
     NativeHostCommitter,
@@ -168,248 +160,6 @@ def ext(build_dir: str | None = None, verbose: bool = False):
 MOE_FLUSH_PLANES = frozenset({"up"})
 
 
-class NativeHiddenM1Source(HiddenM1Source):
-    """R11 collector v2: the FA2 M1 tap glue as ONE C++ callable (`Fa2Wrap`, native_collect.cpp) in place of the Python `varlen_fwd`
-    wrapper.  Same tapped kernel, same per-geometry buffer rule, same names/order into the same collector; stats synced at uninstall."""
-
-    #: [R18 tap, F-r17-23] default cap on the FA2 tap's device residency (MiB); VERITY_FA2_TAP_CAP_MB=0 restores the unbounded buffers
-    DEFAULT_TAP_CAP_MB = 2048
-
-    def __init__(self, committer: "NativeCollectCommitter", so_path: str, ns: str = "verity_fa2_matAll") -> None:
-        super().__init__(committer, so_path, ns)
-        self._w = ext().Fa2Wrap(committer._nc, self.orig_op, self.tapped_op, committer._intern, ns)
-        # R13 P0 (p0b): per-sequence compaction of multi-sequence launches (only the rows the kernel wrote are staged; B=1 unchanged)
-        self._w.compact = os.environ.get("VERITY_FA2_COMPACT", "1").strip() not in ("0", "false", "no")
-        self._w.zero_after = os.environ.get("VERITY_FA2_ZERO", "1").strip() not in ("0", "false", "no")
-        self.short_name, self._w.ms = "hidden_m1", self.ms              # the MS class sizes every buffer and is a seventh compacted plane
-        # [R18 tap, F-r17-23] bounded tap: one device buffer of <= cap bytes; a multi-sequence launch whose padded tap buffer exceeds it is
-        # split into consecutive sequence groups (hidden_source.plan_fa2_tap_groups) tapped one after another into that buffer (C++ Fa2Wrap
-        # seq_base / hold_launch / bound_words).  Names and bytes of the staged compacted rectangles are those of the unsplit launch.
-        cap_mb = int(os.environ.get("VERITY_FA2_TAP_CAP_MB", str(self.DEFAULT_TAP_CAP_MB)).strip() or 0)
-        self.tap_cap_bytes = max(0, cap_mb) << 20
-        self._w.bound_words = self.tap_cap_bytes // 4
-        self.telemetry_path: str | None = None           # commit_delta: <out>/fa2_tap_windows.jsonl (one line per tapped window / group)
-        self._groups_cache: dict[tuple, Any] = {}         # per step: (cu_seqlens_q ptr, b, max_q, max_k) -> group plan (keeps the group tensors alive)
-        self._tel = {"windows": 0, "split_launches": 0, "split_steps": set(), "peak_group_bytes": 0, "peak_unsplit_bytes": 0,
-                     "torch_max_alloc": 0, "torch_alloc_peak_in_tap": 0, "largest_unbounded_bytes": 0, "cap_exceeded_seqs": 0}
-        self._tel_fh = None
-
-    def _wrapper(self):
-        if self.tap_cap_bytes <= 0:
-            return self._w
-        return self._split_wrapper()
-
-    def on_step_begin(self) -> None:
-        self._w.on_step_begin()
-        self._groups_cache.clear()
-
-    # ------------------------------------------------------------------ [R18 tap] the split driver
-    def _tel_line(self, rec: dict) -> None:
-        if not self.telemetry_path:
-            return
-        try:
-            if self._tel_fh is None:
-                self._tel_fh = open(self.telemetry_path, "a", buffering=1)
-            self._tel_fh.write(__import__("json").dumps(rec, separators=(",", ":")) + "\n")
-        except Exception as e:  # noqa: BLE001
-            self.c.errors.append(f"fa2 tap telemetry: {e!r}"[:200])
-            self.telemetry_path = None
-
-    def _split_wrapper(self):
-        me, w, torch = self, self._w, self.torch
-
-        def varlen_fwd(*args, **kwargs):
-            c = me.c
-            if len(args) < 21 or not bool(getattr(c._nc, "active", False)):
-                return w(*args, **kwargs)                         # warm-up / dummy run: the installed kernel (C++ takes the same exit)
-            q, k, out, cu_q = args[0], args[1], args[3], args[4]
-            block_table = args[8]
-            b = int(cu_q.numel()) - 1
-            max_q, max_k, num_splits = int(args[10]), int(args[11]), int(args[20])
-            H, Hk, D = int(q.shape[1]), int(k.shape[-2]), int(q.shape[-1])
-            swapped = fa2_swapped(max_q, H, Hk, D, int(args[16]), int(args[17]), float(args[12]), args[9])
-            if b < 2 or swapped or not w.compact or block_table is None:
-                return w(*args, **kwargs)                         # unsplit paths: b == 1 whole-buffer identity, swapped decode, non-paged KV
-            try:
-                BN = fa2_kblock_n(D, num_splits)
-            except RuntimeError:
-                return w(*args, **kwargs)                         # the C++ wrapper refuses it by name (X-03)
-            h, M = H, max_q
-            NB = (max_k + BN - 1) // BN
-            per_seq = fa2_tap_words_per_seq(h, M, NB, BN, D, me.ms)
-            total_bytes = fa2_tap_buffer_words(b, h, M, NB, BN, D, me.ms) * 4
-            if total_bytes > me._tel["largest_unbounded_bytes"]:
-                me._tel["largest_unbounded_bytes"] = total_bytes  # what the unbounded path would have allocated for this launch
-            if total_bytes <= me.tap_cap_bytes:
-                me._tel["peak_unsplit_bytes"] = max(me._tel["peak_unsplit_bytes"], total_bytes)
-                return w(*args, **kwargs)                         # fits: ONE group in the bounded buffer (C++ split_path), counters inline
-            key = (int(cu_q.data_ptr()), b, max_q, max_k)
-            plan = me._groups_cache.get(key)
-            if plan is None:
-                cu_host = cu_q.to("cpu")                          # one D2H per step (all layers share cu_seqlens_q)
-                cu = [int(x) for x in cu_host.tolist()]
-                groups = plan_fa2_tap_groups(b, per_seq, me.tap_cap_bytes // 4)
-                plan = []
-                for (g0, g1) in groups:
-                    gw = fa2_tap_buffer_words(g1 - g0, h, M, NB, BN, D, me.ms) * 4
-                    if gw > me.tap_cap_bytes:
-                        me._tel["cap_exceeded_seqs"] += 1
-                    plan.append({"g0": g0, "g1": g1, "t0": cu[g0], "t1": cu[g1], "bytes": gw,
-                                 "cu_q": (cu_q[g0:g1 + 1] - cu_q[g0]).contiguous()})   # stays alive for the step (C++ seqlens cache keyed by ptr)
-                me._groups_cache[key] = plan
-                me._tel["split_steps"].add(int(getattr(c._cur, "step", -1)))
-            if out is None:
-                out = torch.empty_like(q)
-            cu_k, seqused_k, leftpad_k, alibi = args[5], args[6], args[7], args[9]
-            step = int(getattr(c._cur, "step", -1))
-            layer = int(w.launches_in_step)
-            results = []
-            w.hold_launch = True
-            try:
-                for gi, g in enumerate(plan):
-                    g0, g1, t0, t1 = g["g0"], g["g1"], g["t0"], g["t1"]
-                    a = list(args)
-                    a[0] = q[t0:t1]
-                    a[3] = out[t0:t1]
-                    a[4] = g["cu_q"]
-                    if isinstance(cu_k, torch.Tensor) and cu_k.numel() == b + 1:
-                        a[5] = (cu_k[g0:g1 + 1] - cu_k[g0]).contiguous()
-                    if isinstance(seqused_k, torch.Tensor) and seqused_k.numel() == b:
-                        a[6] = seqused_k[g0:g1]
-                    if isinstance(leftpad_k, torch.Tensor) and leftpad_k.numel() == b:
-                        a[7] = leftpad_k[g0:g1]
-                    a[8] = block_table[g0:g1]
-                    if isinstance(alibi, torch.Tensor) and alibi.dim() == 2 and alibi.shape[0] == b:
-                        a[9] = alibi[g0:g1]
-                    w.seq_base = g0
-                    results.append(w(*a, **kwargs))
-                    me._tel["windows"] += 1
-                    me._tel["peak_group_bytes"] = max(me._tel["peak_group_bytes"], g["bytes"])
-                    alloc = int(torch.cuda.memory_allocated())
-                    mx = int(torch.cuda.max_memory_allocated())
-                    me._tel["torch_alloc_peak_in_tap"] = max(me._tel["torch_alloc_peak_in_tap"], alloc)
-                    me._tel["torch_max_alloc"] = max(me._tel["torch_max_alloc"], mx)
-                    me._tel_line({"t": round(time.time(), 3), "step": step, "layer": layer, "group": gi, "groups": len(plan), "seqs": [g0, g1],
-                                  "tokens": t1 - t0, "group_bytes": g["bytes"], "bound_bytes": me.tap_cap_bytes, "unbounded_launch_bytes": total_bytes,
-                                  "windows": me._tel["windows"], "torch_alloc": alloc, "torch_max_alloc": mx})
-            finally:
-                w.hold_launch = False
-                w.seq_base = 0
-            w.end_launch()
-            me._tel["split_launches"] += 1
-            return me._merge_results(results, out, plan, H)
-
-        return varlen_fwd
-
-    @staticmethod
-    def _merge_results(results: list, out: Any, plan: list, H: int):
-        """The tapped op's return for the whole launch from the per-group returns: `out` was written in place (row ranges of the one
-        tensor); softmax_lse is concatenated along its token dim ([H, total_q]) or batch dim ([b, H, M]); anything else (rng state, None)
-        is taken from the first group.  Container type preserved."""
-        import torch
-
-        first = results[0]
-        if isinstance(first, torch.Tensor):
-            return out
-        merged = []
-        for j, t in enumerate(first):
-            if j == 0 or not isinstance(t, torch.Tensor):
-                merged.append(out if j == 0 else t)
-                continue
-            parts = [r[j] for r in results]
-            if t.dim() == 2 and t.shape[0] == H and all(p.shape[1] == (g["t1"] - g["t0"]) for p, g in zip(parts, plan)):
-                merged.append(torch.cat(parts, dim=1))
-            elif t.dim() == 3 and all(p.shape[0] == (g["g1"] - g["g0"]) for p, g in zip(parts, plan)):
-                merged.append(torch.cat(parts, dim=0))
-            else:
-                merged.append(t)
-        return type(first)(merged) if isinstance(first, (list, tuple)) else merged
-
-    def sync_stats(self) -> None:
-        st = self._w.stats()
-        self.stats["launches"] = int(st["launches"])
-        self.stats["bytes"] = int(st["bytes"])
-        self.stats["set_tap_s"] = float(st["wrap_s"])          # whole native wrapper wall (geometry + tap set + tapped op + stage), measured
-        self.stats["geometries"] = {str(k): int(v) for k, v in dict(st["geometries"]).items()}
-        self.stats["compacted_launches"] = int(st.get("compacted_launches", 0))
-        self.stats["compact"] = bool(st.get("compact", False))
-        self.stats["refused"] = int(st.get("refused", 0))       # R13 fa2: launches expected but not bound (uncovered tile / kernel skip) -> errors
-        self.stats["tap_layout"] = int(st.get("tap_layout", 7))
-        # [R18 tap, F-r17-23] the bounded-tap record: cap, the one bounded allocation, peaks, split counts (all bytes, all measured)
-        self.stats["bounded_tap"] = {
-            "cap_bytes": int(self.tap_cap_bytes), "bound_alloc_bytes": int(st.get("bound_alloc_bytes", 0)),
-            "bound_used_peak_bytes": int(st.get("bound_used_peak_bytes", 0)), "geometry_buffers_bytes": int(st.get("geometry_buffers_bytes", 0)),
-            "tap_resident_bytes": int(st.get("tap_resident_bytes", 0)), "split_launches": int(st.get("split_launches", 0)),
-            "split_groups": int(st.get("split_groups", 0)), "cap_exceeded_launches": int(st.get("cap_exceeded_launches", 0)),
-            "cap_exceeded_peak_bytes": int(st.get("cap_exceeded_peak_bytes", 0)), "windows": int(self._tel["windows"]),
-            "split_steps": sorted(self._tel["split_steps"]), "peak_group_bytes": int(self._tel["peak_group_bytes"]),
-            "largest_unbounded_launch_bytes": int(self._tel["largest_unbounded_bytes"]),
-            "torch_alloc_peak_in_tap": int(self._tel["torch_alloc_peak_in_tap"]), "torch_max_memory_allocated": int(self._tel["torch_max_alloc"]),
-            "bounded": bool(self.tap_cap_bytes > 0 and int(st.get("cap_exceeded_launches", 0)) == 0),
-        }
-
-    def declaration_classes(self) -> list[dict]:
-        try:
-            self.sync_stats()
-        except Exception as e:  # noqa: BLE001
-            self.c.errors.append(f"fa2 tap stats: {e!r}"[:200])
-        cls = super().declaration_classes()
-        if cls and "bounded_tap" in self.stats:
-            cls[0]["bounded_tap"] = self.stats["bounded_tap"]
-        return cls
-
-    def uninstall(self) -> None:
-        super().uninstall()
-        self.sync_stats()
-        if self.telemetry_path:
-            try:
-                import json as _json
-                from pathlib import Path as _P
-                _P(self.telemetry_path).with_name("fa2_tap_bound.json").write_text(_json.dumps(self.stats["bounded_tap"], indent=1) + "\n")
-            except Exception as e:  # noqa: BLE001
-                self.c.errors.append(f"fa2 tap summary: {e!r}"[:200])
-        if self._tel_fh is not None:
-            try:
-                self._tel_fh.close()
-            except Exception:  # noqa: BLE001
-                pass
-            self._tel_fh = None
-
-
-class NativeHiddenM1SourceFA3(HiddenM1SourceFA3):
-    """R13 hopper: the FA3 M1 tap glue as ONE C++ callable (`Fa3Wrap`, native_collect.cpp) in place of the Python `fwd` wrapper of
-    `hidden_source.HiddenM1SourceFA3` -- same tapped kernel (`verity_fa3_matReq.so`), same geometry / tile rule, same names into the same
-    collector; stats synced at uninstall."""
-
-    def __init__(self, committer: "NativeCollectCommitter", so_path: str, ns: str = "verity_fa3_matReq") -> None:
-        super().__init__(committer, so_path, ns)
-        self._w = ext().Fa3Wrap(committer._nc, self.orig_op, self.tapped_op, committer._intern, ns)
-        # P0-03's rule for the FA3 tap: zero the staged whole buffer after staging on multi-sequence launches (B=1 unchanged)
-        self._w.zero_after = os.environ.get("VERITY_FA3_ZERO", os.environ.get("VERITY_FA2_ZERO", "1")).strip() not in ("0", "false", "no")
-        self.short_name, self._w.ms = "hidden_m1_fa3", self.ms
-
-    def _wrapper(self):
-        return self._w
-
-    def on_step_begin(self) -> None:
-        self._w.on_step_begin()
-
-    def sync_stats(self) -> None:
-        st = self._w.stats()
-        self.stats["launches"] = int(st["launches"])
-        self.stats["bytes"] = int(st["bytes"])
-        self.stats["set_tap_s"] = float(st["wrap_s"])
-        self.stats["geometries"] = {str(k): int(v) for k, v in dict(st["geometries"]).items()}
-        self.stats["tiles"] = {str(k): int(v) for k, v in dict(st["tiles"]).items()}
-        self.stats["refused"] = int(st["refused"])
-        self.stats["tap_layout"] = int(st["tap_layout"])
-        self.stats["zero_after"] = bool(st.get("zero_after", True))
-
-    def uninstall(self) -> None:
-        super().uninstall()
-        self.sync_stats()
-
-
 WINDOW_MB, WINDOW_SLOTS = 256, 8
 
 
@@ -428,7 +178,8 @@ class NativeCollectCommitter(NativeHostCommitter):
 
     def __init__(self, engine: Any, *, wrap: bool = True, profile: bool = False, build_dir: str | None = None, check_sizes: bool = True,
                  gather: bool = False, native_hooks: bool = False, auto_blocks: bool = False, native_worker: bool = False,
-                 layout: str = "chunk-leaf-v1", retain_levels: bool | None = None, commit_scheme: str | None = None, **kw: Any) -> None:
+                 layout: str = "chunk-leaf-v1", retain_levels: bool | None = None, commit_scheme: str | None = None,
+                 rows_cap_blocks: int = 0, rows_cap_free: int = 2, **kw: Any) -> None:
         kw.setdefault("fast_copy", True)
         kw.setdefault("gpu_tree", True)
         super().__init__(engine, **kw)
@@ -451,6 +202,10 @@ class NativeCollectCommitter(NativeHostCommitter):
         win_mb = os.environ.get("VERITY_WINDOW_MB", "").strip() or window_mb_default(self.native_worker and self.gather, self.retain)
         self.win_bytes = int(float(win_mb) * (1 << 20)) // 256 * 256
         self.win_slots_req = int(os.environ.get("VERITY_WINDOW_SLOTS", WINDOW_SLOTS))
+        # rows-sha512: rows_cap_blocks=<n> (0 = off) hashes a window in launches of at most n blocks while at least rows_cap_free ring
+        # slots are free (the serving thread is not waiting for one), leaving the other SMs to serving
+        self.rows_cap_blocks = int(rows_cap_blocks)
+        self.rows_cap_free = int(rows_cap_free)
         self.windowed = self.win_bytes > 0 and self.native_worker and self.gather
         if self.win_bytes > 0 and not self.windowed:
             raise ValueError("windowed staging needs native_collect_v2b (native worker + gather)")
@@ -470,16 +225,18 @@ class NativeCollectCommitter(NativeHostCommitter):
         if not self.retain_levels and not self.windowed:
             raise ValueError("retain_levels=False is implemented on the windowed path only (--window-mb > 0)")
         # the commitment scheme (`commit_scheme`, unset = vllm-v1): vllm-v1 (the record), or rows-sha512 (`step_rows`: every
-        # 256 B chunk an hm96-sha512 hiding leaf in a frame-v3-sha512 tree, 64-byte roots), on the windowed worker under chunk-leaf-v1.
+        # step_rows.ROW_BYTES (4 KiB) chunk an hm96-sha512 hiding leaf in a frame-v3-sha512 tree, 64-byte roots), on the windowed worker under chunk-leaf-v1.
         # Each step's salt key is fresh (`row_keys`); a replay that must reproduce a run's trees takes that run's keys
         # (`replay_row_keys`, set before the run and dropped by its finalize)
         self.commit_scheme = commit_scheme or "vllm-v1"
         if self.commit_scheme not in ("vllm-v1", step_rows.NAME):
             raise ValueError(f"unknown commit scheme {self.commit_scheme!r} (vllm-v1 | {step_rows.NAME})")
         self.rows = self.commit_scheme == step_rows.NAME
-        if self.rows and (not self.windowed or self.layout_v2 or self.hiding is not None or GPU_CHUNK_BYTES != step_rows.ROW_BYTES):
+        if self.rows and (not self.windowed or self.layout_v2 or self.hiding is not None):
             raise ValueError(f"{step_rows.NAME} is implemented on the windowed worker (native worker + gather + --window-mb > 0) under "
                              "chunk-leaf-v1 position leaves only")
+        if self.rows:
+            self.chunk = step_rows.ROW_BYTES      # a row is a chunk of the step's stream: the layout's leaves, the windows' and the tree's
         self.row_keys: dict[int, bytes] = {}
         self.replay_row_keys: dict[int, bytes] | None = None
         self._row_tn: Any | None = None
@@ -512,11 +269,17 @@ class NativeCollectCommitter(NativeHostCommitter):
         self.transient_peak_bytes = 0                            # largest learning-step transient host copy (given back after the re-hash)
         self.excluded_bytes = 0                                  # retain=host + exclude: bytes NOT copied to host over the run
         self.plan_mismatches = 0
-        # execution-environment knob (candidate B variant, labelled): run the model step on a HIGH-priority CUDA stream so the worker's SHA
-        # kernels (side stream, default priority) yield SM slots to the serving kernels; fenced both ways with wait_stream at the step
-        # boundary (the FA2 tap, the gather flushes and the step event all follow the current stream, so nothing else changes)
-        self.hi_prio = bool(native_hooks) and os.environ.get("VERITY_HI_PRIO", "0") == "1"
+        # the model step runs on a HIGH-priority CUDA stream (VERITY_HI_PRIO, default on; 0 keeps the caller's) so the worker's SHA kernels
+        # (side stream, default priority) yield SM slots to the serving kernels and the gather; fenced both ways with wait_stream at the
+        # step boundary (the FA2 tap, the gather flushes and the step event all follow the current stream, so nothing else changes)
+        self.hi_prio = bool(native_hooks) and os.environ.get("VERITY_HI_PRIO", "1") == "1"
         self._hi = torch.cuda.Stream(priority=-1) if self.hi_prio else None
+        # the serving thread's step end as one native call (`end_step_full`; no step event on the windowed path, whose worker waits on the
+        # windows' own), and on the windowed path a snapshot of the step's row order that the worker expands into `step_rows` unless a
+        # source reads them at the step's end (`step_rows_at_step_end`); both leave the bytes and roots as they were
+        self.native_end = True
+        self.rows_off_thread = True
+        self._rows_at_step_end = False
         if self.native_hooks:
             self.name = ("native_collect_v2" + ("" if self.gather else "_memcpy") + ("_auto" if self.auto_blocks else "") + ("_nw" if self.native_worker else "")
                          + ("_hp" if self.hi_prio else ""))
@@ -553,6 +316,10 @@ class NativeCollectCommitter(NativeHostCommitter):
             self.name = f"{self.name}+{step_rows.NAME}"
         self.extra_stats: dict[str, Any] = {}
 
+    def native_ext(self) -> Any:
+        """The collector's extension (`ext`), which the native hidden taps (`native_hidden`) build their C++ wrappers from."""
+        return ext()
+
     # ------------------------------------------------------------------ names
 
     def _intern(self, name: str) -> int:
@@ -571,6 +338,7 @@ class NativeCollectCommitter(NativeHostCommitter):
         self._check_skip()
         self._start_worker()
         self.gc_pauses.install()
+        self._rows_at_step_end = any(getattr(src, "step_rows_at_step_end", False) for src in self.sources)
         for src in self.sources:
             src.install()
         if getattr(self, "external_acquisition", False):
@@ -871,13 +639,17 @@ class NativeCollectCommitter(NativeHostCommitter):
             nid = self._intern(name)
         self._nc.note_expected(1)                                  # X-03: attempted acquisition (committed is counted by put)
         fn = self._nc.stage if self.gather else self._nc.collect
-        if self.profile:
-            t0 = time.perf_counter()
-            fn(nid, t)
-            self._prof_s += time.perf_counter() - t0
-        else:
-            fn(nid, t)
-        self._py_committed += 1
+        try:
+            if self.profile:
+                t0 = time.perf_counter()
+                fn(nid, t)
+                self._prof_s += time.perf_counter() - t0
+            else:
+                fn(nid, t)
+            self._py_committed += 1
+        except RuntimeError:
+            if not getattr(self._nc, "failure", ""):   # the run failed by name (abandon_step): refused, not committed, never raised into the forward
+                raise
 
     def slot_plan(self, names: list[str], slots: list[Any], kinds: list[int]) -> int:
         """Register a replayed graph's slots once (kind 0: the whole slot, 1: its first n rows, 2: its first pad rows); the handle's
@@ -886,17 +658,23 @@ class NativeCollectCommitter(NativeHostCommitter):
         return int(self._nc.add_slot_plan([self._intern(nm) for nm in names], list(slots), [int(k) for k in kinds]))
 
     def stage_slot_plan(self, handle: int, n: int, pad: int) -> int:
-        return int(self._nc.stage_slot_plan(int(handle), int(n), int(pad)))
+        try:
+            return int(self._nc.stage_slot_plan(int(handle), int(n), int(pad)))
+        except RuntimeError:
+            if not getattr(self._nc, "failure", ""):
+                raise
+            return 0                     # refused after the run failed by name, as `_acquire`
 
     def clear_slot_plans(self) -> None:
         self._nc.clear_slot_plans()
 
     # ------------------------------------------------------------------ step boundaries (serving thread)
 
-    def _record_step_rows(self, job: _StepJob) -> None:
+    def _record_step_rows(self, job: _StepJob, defer: bool = False) -> None:
         """R14 BIND-01 (B>1 binding): the engine's row order of this step -- `InputBatch.req_ids` (the persistent batch after the step's
         `_update_states`) x `scheduler_output.num_scheduled_tokens` -> [(request_id, token_row_lo, token_row_hi)] in the flattened token
-        order every per-token member uses; request-indexed members (logits, sampled ids) use the list index.  -> `self.step_rows[step]`."""
+        order every per-token member uses; request-indexed members (logits, sampled ids) use the list index.  -> `self.step_rows[step]`.
+        `defer`: only copy what the expansion reads (the batch's lists are reused by the next step) into `job.rows_snapshot`."""
         so = getattr(self, "_cur_sched", None)
         # Row-order source, in preference order: (a) the BatchReqState the new `vllm.v1.worker.gpu` runner builds per step
         # (`gather_batch_req_state`, captured by our wrapper -- rows sorted by the runner, NOT scheduler order); (b) the runner's
@@ -918,6 +696,20 @@ class NativeCollectCommitter(NativeHostCommitter):
         req_ids = list(getattr(ib, "req_ids", []) or [])
         n = int(getattr(ib, "num_reqs", len(req_ids)) or len(req_ids))
         per_row = getattr(ib, "num_scheduled_tokens", None)
+        self.step_rows_src = src
+        if not hasattr(self, "step_rows"):
+            self.step_rows = {}
+        if defer:
+            if per_row is not None and not isinstance(per_row, dict):
+                try:
+                    per_row = per_row.tolist() if hasattr(per_row, "tolist") else list(per_row)
+                except TypeError:
+                    per_row = None
+            job.rows_snapshot = (req_ids, n, per_row, nst)                  # type: ignore[attr-defined]
+            return
+        self._expand_step_rows(int(job.step), req_ids, n, per_row, nst)
+
+    def _expand_step_rows(self, step: int, req_ids: list, n: int, per_row: Any, nst: dict) -> None:
         try:
             per_row = [int(x) for x in per_row] if per_row is not None and not isinstance(per_row, dict) else None
         except TypeError:
@@ -931,10 +723,7 @@ class NativeCollectCommitter(NativeHostCommitter):
                 continue
             rows.append((str(rid), lo, lo + k))
             lo += k
-        self.step_rows_src = src
-        if not hasattr(self, "step_rows"):
-            self.step_rows = {}
-        self.step_rows[int(job.step)] = rows
+        self.step_rows[step] = rows
 
     def _begin_step(self) -> None:
         job = _StepJob(self._step_index, [], None)
@@ -976,8 +765,10 @@ class NativeCollectCommitter(NativeHostCommitter):
         if job is None:
             return
         self._cur = None
+        windowed = getattr(job, "windowed", False)
         try:
-            self._record_step_rows(job)      # R14 BIND-01: the step's request row order (InputBatch after this step's _update_states; before the next)
+            # R14 BIND-01: the step's request row order (InputBatch after this step's _update_states; before the next)
+            self._record_step_rows(job, defer=windowed and self.rows_off_thread and not self._rows_at_step_end)
         except Exception as e:  # noqa: BLE001
             self.errors.append(f"step rows: {e!r}"[:200])
         t0 = time.perf_counter()
@@ -988,31 +779,39 @@ class NativeCollectCommitter(NativeHostCommitter):
                     fn(job)                  # R15 `compiled`: drain the graph-written staging ring into this step (before the final flush)
                 except Exception as e:  # noqa: BLE001
                     self.errors.append(f"{getattr(src, 'short_name', type(src).__name__)} on_step_end: {e!r}"[:300])
-        if self.gather:
-            self._nc.flush()                 # P3 (step end): final norm outputs, logits, sampled ids -- before the step event is recorded
-        used, n, changed, version = self._nc.end_step()
-        if getattr(self._nc, "win_dead", False):
-            self._nc.progress()                 # F-stoch-03 dead-watchdog liveness: the serving thread still ends steps (fail-closed run in flight)
-        if self.native_hooks:
-            errs = self._nc.drain_errors()
+        if self.native_end:
+            # P3 (step end) flush of the final norm outputs, logits and sampled ids, end_step, the dead-watchdog's progress, the hook errors
+            used, n, changed, version, nbytes, issue_s, waits, wait_s, errs = self._nc.end_step_full(self.gather, self.native_hooks)
             if errs:
                 self.errors.extend(str(e)[:300] for e in errs)
+        else:
+            if self.gather:
+                self._nc.flush()                 # P3 (step end): final norm outputs, logits, sampled ids -- before the step event is recorded
+            used, n, changed, version = self._nc.end_step()
+            if getattr(self._nc, "win_dead", False):
+                self._nc.progress()                 # F-stoch-03 dead-watchdog liveness: the serving thread still ends steps (fail-closed run in flight)
+            if self.native_hooks:
+                errs = self._nc.drain_errors()
+                if errs:
+                    self.errors.extend(str(e)[:300] for e in errs)
+            st = self._nc.step_stats()
+            nbytes, issue_s, waits, wait_s = st["bytes"], st["issue_s"], st.get("window_waits"), st.get("window_wait_s")
         job.cursor = int(used)
         key = self._plan_key
         # a learning step, or a hit on a plan the worker does not hold (not yet absorbed, or its step failed: plan_cache)
         entries = self._nc.export_plan(key) if changed or (key, int(version)) not in self._metas_cache else None
         job.plan = (key, int(version), entries)                         # type: ignore[attr-defined]
-        st = self._nc.step_stats()
-        job.acq_bytes = int(st["bytes"])
-        job.event = torch.cuda.Event()
-        job.event.record(torch.cuda.current_stream())
+        job.acq_bytes = int(nbytes)
+        if not (windowed and self.native_end):
+            job.event = torch.cuda.Event()
+            job.event.record(torch.cuda.current_stream())
         job.t_step_end = time.perf_counter()
         job.backlog = self._q.qsize()
-        self.spans.add("movement", float(st["issue_s"]), step=job.step, nbytes=job.acq_bytes)   # native issue time (memcpy/memset calls) -- measured
-        if st.get("window_waits"):
-            self.spans.add("wait", float(st["window_wait_s"]), step=job.step)   # blocked for a free window slot (the ring was full)
+        self.spans.add("movement", float(issue_s), step=job.step, nbytes=job.acq_bytes)   # native issue time (memcpy/memset calls) -- measured
+        if waits:
+            self.spans.add("wait", float(wait_s), step=job.step)   # blocked for a free window slot (the ring was full)
         if self.profile:
-            self.spans.add("acquisition", self._prof_s - float(st["issue_s"]), step=job.step)  # Python wrapper + pybind overhead above the issue
+            self.spans.add("acquisition", self._prof_s - float(issue_s), step=job.step)  # Python wrapper + pybind overhead above the issue
         self.spans.add("acquisition", time.perf_counter() - t0, step=job.step)
         if self.footprint is not None:
             # [coord R17-16 (i)] the host side of the curve beside the device side: the pinned pool (total / in use) and this process's RSS
@@ -1027,7 +826,7 @@ class NativeCollectCommitter(NativeHostCommitter):
             self.footprint.event("end_step", step=job.step, used=int(job.cursor), staged_bytes=job.acq_bytes, backlog=job.backlog, tensors=int(n),
                                  pinned_pool_bytes=(int(_pool.bytes_total) if _pool is not None else None),
                                  pinned_pool_in_use=(int(_pool.bytes_in_use) if _pool is not None else None), rss_bytes=_rss)
-        if getattr(job, "windowed", False):
+        if windowed:
             job.done_evt.set()                                                  # type: ignore[attr-defined]  (queued at step begin)
         else:
             self._q.put(job)
@@ -1056,11 +855,12 @@ class NativeCollectCommitter(NativeHostCommitter):
             time.sleep(self.consumer_delay_s)                      # STRESS: delayed commitment consumer
         if getattr(job, "windowed", False):                # queued at step BEGIN: plan / metas exist only after the step ended (inside)
             try:
+                if self._nc.failure:                       # an earlier step was abandoned: this one fails by the run's name, uncommitted
+                    raise RuntimeError(f"windowed staging: the collector failed earlier in this run ({self._nc.failure[:200]}) -- step {job.step} not committed")
                 return self._commit_step_windowed(job)
             except Exception as e:  # noqa: BLE001
-                self._nc.abandon_step(job.step)            # free the step's slots: the serving thread must not wait forever for this step
-                print(f"[collector] worker failed on windowed step {job.step}: {e!r}"[:400], file=sys.stderr, flush=True)
-                raise
+                self._nc.abandon_step(job.step, f"worker failed on windowed step {job.step}: {e!r}"[:400], self._side.cuda_stream if self._side is not None else 0)
+                raise           # the run failed by its first such name, and the step's slots went back after the side stream's reads of them
             finally:
                 if getattr(self._nc, "win_dead", False):
                     self._nc.progress()                    # F-stoch-03 dead-watchdog liveness: the worker finished (or failed by name) a step
@@ -1082,11 +882,12 @@ class NativeCollectCommitter(NativeHostCommitter):
         the FA2-02 geometry bound that made B=32 a 52-slot / 14 GB ring and let the engine run 32 decode steps ahead of the worker.)  The
         largest-tensor bound (prefill hidden bound / layers) is still reported for the record."""
         W = self.win_bytes
-        if W % GPU_CHUNK_BYTES or (W // GPU_CHUNK_BYTES) & (W // GPU_CHUNK_BYTES - 1):
-            raise ValueError(f"--window-mb: the window must hold a power of two of {GPU_CHUNK_BYTES}-byte chunks (per-window subtrees == whole-step tree)")
+        C = self.chunk
+        if W % C or (W // C) & (W // C - 1):
+            raise ValueError(f"--window-mb: the window must hold a power of two of {C}-byte chunks (per-window subtrees == whole-step tree)")
         if self.retain == "device":
             raise ValueError("windowed staging retains on host or not at all (--retain host|none|sample); device retention is the footprint")
-        self.win_log2_chunks = (W // GPU_CHUNK_BYTES).bit_length() - 1
+        self.win_log2_chunks = (W // C).bit_length() - 1
         largest = 0
         if rec:
             layers = int((rec.get("model") or {}).get("layers") or 1)
@@ -1123,7 +924,9 @@ class NativeCollectCommitter(NativeHostCommitter):
                 "backpressure": "block-until-slot-free (no drop)", "slot_wait_timeout_s": float(self._nc.win_wait_timeout_s),
                 "dead_watchdog": {"grace_s": grace, "marker": marker or None, "rc": 3},
                 "layout": "chunk-leaf-v2" if self.layout_v2 else "chunk-leaf-v1",
-                "in_place_hashing": "all steps (v2)" if self.layout_v2 else "hit-plan steps only (v1 binds the step length into every leaf); learning steps re-upload from host"}
+                "in_place_hashing": "all steps (v2)" if self.layout_v2 else
+                ("hit-plan steps whole; learning steps keeping no bytes to each row's h in place, leaves from h at step end; others re-upload from host"
+                 if self.rows else "hit-plan steps only (v1 binds the step length into every leaf); learning steps re-upload from host")}
         memtrace("window ring allocated")
         self.window_info = info
         return info
@@ -1225,7 +1028,14 @@ class NativeCollectCommitter(NativeHostCommitter):
             return H.tree(lv_all, side.cuda_stream, True, torch.empty(0, dtype=torch.uint8))
         top_span = 1 << (state["n_levels"] - 1)
         n_tops = state["width"] // top_span if rows else -(-state["n_total"] // top_span)
-        if len(state["tops"]) != n_tops:
+        if rows and state.get("leaves"):
+            # the step's leaves, kept on the device by absorb: its window levels in one pass of wide launches, not one subtree a window
+            with torch.inference_mode(), torch.cuda.stream(side):
+                lv = torch.cat(state["leaves"]) if len(state["leaves"]) > 1 else state["leaves"][0]
+                state["tops"] = [H.rows_tree_window(state["rs"], lv, state["n_levels"], 0, side.cuda_stream, [])]
+            del lv
+            state["leaves"] = []
+        if sum(int(t.shape[0]) for t in state["tops"]) != n_tops:
             raise RuntimeError(f"windowed absorb: {len(state['tops'])} window subtrees for {state['n_total']} leaves (expected {n_tops})")
         with torch.inference_mode(), torch.cuda.stream(side):
             tops = torch.cat(state["tops"]) if len(state["tops"]) > 1 else state["tops"][0]
@@ -1251,6 +1061,44 @@ class NativeCollectCommitter(NativeHostCommitter):
         state.clear()
         return levels, mr, tree_ms
 
+    def _retain_from_transient(self, job: _StepJob, tblocks: list[tuple[int, Any, Any, int]], keep_set: Any, chunk_parts: Any,
+                               ranges: list[tuple[int, int, Any]], side: Any) -> int:
+        """Retention of a bounded LEARNING step, carved out of its transient copies (`tblocks`) now that the metas are known (retain=host:
+        every chunk outside the excluded families' interiors; retain=sample: the challenged windows, or with `chunk_parts` only their
+        challenged chunks), pinned -> pinned into `ranges`; then the transient blocks go back to the pool, so the step's host footprint
+        returns to its retained bytes.  -> the bytes the exclusions kept off host"""
+        W, C = self.win_bytes, self.chunk
+        excl_bytes = 0
+        with torch.inference_mode(), torch.cuda.stream(side):
+            if self.retain == "host":
+                excl = _excluded_chunk_ranges(job.metas, self.retain_exclude, C) if self.retain_exclude else []
+                for kk, _hb, hv, n in tblocks:
+                    base = kk * W
+                    kept_b = 0
+                    for a, b in outside(excl, base, base + n):
+                        rv = self.pool.take(b - a)
+                        rv.copy_(hv[a - base:b - base], non_blocking=True)
+                        ranges.append((a, b, rv))
+                        kept_b += b - a
+                    excl_bytes += n - kept_b
+            elif keep_set is not None:
+                for kk, _hb, hv, n in tblocks:
+                    if (job.step, kk) in keep_set:
+                        if chunk_parts is not None:
+                            base = kk * W
+                            for a, b in chunk_parts(job.step, base, base + n):
+                                rv = self.pool.take(b - a)
+                                rv.copy_(hv[a - base:b - base], non_blocking=True)
+                                ranges.append((a, b, rv))
+                        else:
+                            rv = self.pool.take(n)
+                            rv.copy_(hv[:n], non_blocking=True)
+                            ranges.append((kk * W, kk * W + n, rv))
+            side.synchronize()
+        for _kk, hb, _hv, _n in tblocks:
+            self.pool.give_back(hb)
+        return excl_bytes
+
     def _commit_step_windowed(self, job: _StepJob) -> None:
         """Worker: absorb the step WINDOW BY WINDOW while the serving thread is still filling later windows.  Per window: wait for the
         serving thread's complete-event, D2H the raw bytes to pinned host (retention / re-upload source), hash its leaves in place when the
@@ -1262,7 +1110,7 @@ class NativeCollectCommitter(NativeHostCommitter):
 
         self._gpu_ext_load()
         side = self._side_stream()
-        nc, H, W, C = self._nc, self._hasher, self.win_bytes, GPU_CHUNK_BYTES
+        nc, H, W, C = self._nc, self._hasher, self.win_bytes, self.chunk
         if getattr(nc, "win_dead", False):
             # [R15 capacity] the serving thread's slot wait timed out earlier in this run: every stage() since was refused by name, so this step
             # has nothing staged -- fail it by the SAME name instead of tripping over an empty tree ("cudaMemcpyAsync(root): invalid argument").
@@ -1288,7 +1136,7 @@ class NativeCollectCommitter(NativeHostCommitter):
             sizes, dig = self._window_levels(n_total, j)
             n_levels = len(sizes)
             if rows:
-                state.update(rs=self._row_step(job.step, n_total, ks), width=sizes[0], absorbed=[])
+                state.update(rs=self._row_step(job.step, n_total, ks), width=sizes[0], absorbed=[], leaves=[])
             if not self.retain_levels:
                 state.update(n_total=n_total, n_levels=n_levels, views=None, tops=[])
                 return
@@ -1301,18 +1149,25 @@ class NativeCollectCommitter(NativeHostCommitter):
             state.update(n_total=n_total, n_levels=n_levels, views=views, tops=[])
 
         def row_leaves(src: Any, nbytes: int, k: int) -> Any:
-            """rows-sha512: window k's leaves, its nbytes / 256 rows at src and then pads to the window's end (or the tree's width)."""
-            first = k << j
-            return H.rows_leaves(state["rs"], src, nbytes, first, min(1 << j, state["width"] - first), state["n_total"], tn, side.cuda_stream)[0]
+            """rows-sha512: window k's leaves, its nbytes / ROW_BYTES rows at src and then pads to the window's end (or the tree's width); capped
+            launches for the window (its leaves and subtree) while the ring has room."""
+            first, rs = k << j, state["rs"]
+            rs.max_blocks = self.rows_cap_blocks if self.rows_cap_blocks and nc.free_slots() >= self.rows_cap_free else 0
+            return H.rows_leaves(rs, src, nbytes, first, min(1 << j, state["width"] - first), state["n_total"], tn, side.cuda_stream)[0]
 
         def absorb(k: int, lv_k: Any) -> None:
             """Subtree of window k (lv_k = its leaves, device) -> host level slices + top node kept on device."""
             n_k = int(lv_k.shape[0])
             views, n_levels = state["views"], state["n_levels"]
             if rows:
-                dsts = [] if views is None else [views[L][k << (j - L):(k << (j - L)) + (n_k >> L)] for L in range(n_levels)]
-                state["tops"].append(H.rows_tree_window(state["rs"], lv_k, n_levels, k << j, side.cuda_stream, dsts))
                 state["absorbed"].append(k)
+                if views is None:
+                    # no levels kept: the window's leaves (1/64 of its bytes) wait on the device for the step's tree (_window_root); a
+                    # window's own subtree is two launches of a few blocks each, bound by latency and by waiting for SMs
+                    state["leaves"].append(lv_k)
+                    return
+                dsts = [views[L][k << (j - L):(k << (j - L)) + (n_k >> L)] for L in range(n_levels)]
+                state["tops"].append(H.rows_tree_window(state["rs"], lv_k, n_levels, k << j, side.cuda_stream, dsts))
                 return
             if views is None:
                 state["tops"].append(H.tree_window_top(lv_k, n_levels, side.cuda_stream))
@@ -1331,6 +1186,13 @@ class NativeCollectCommitter(NativeHostCommitter):
         bounded = self.bounded and not self.layout_v2
         learning = plan_used < 0
         learn_only = bounded and learning and self.learn_only
+        # rows on a learning step that keeps no bytes: a leaf's h needs only the step's salt key, so each window is hashed in place to its
+        # h (1/64 of its bytes, kept on the device) and released with no host copy; its leaves follow from them once the step's length,
+        # and so its frame domain, is known (rows_frame) -- the same leaves as the re-upload below, which only the other steps take.  With
+        # no host copy there is no transient budget to exceed, so a bounded learn-only pass commits such a step instead of discarding it
+        hfirst = rows and learning and self.retain == "none"
+        hwins: list[tuple[int, Any]] = []
+        rs_h = self._row_step(job.step, 1, ks) if hfirst else None
         tblocks: list[tuple[int, Any, Any, int]] = []                           # bounded learning: (k, block, view, bytes) re-hash source
         tbytes = 0
         discard = False
@@ -1347,7 +1209,7 @@ class NativeCollectCommitter(NativeHostCommitter):
             excl = _excluded_chunk_ranges(hint, self.retain_exclude, C)
 
         # bounded retain=sample with the picks known by chunk (`retain_chunks`, set by openings_after_release for a replay): the retained
-        # bytes of a window are the challenged 256 B chunks inside it, sorted, as absolute step-stream ranges
+        # bytes of a window are the challenged chunks inside it, sorted, as absolute step-stream ranges
         chunk_picks: dict[int, list[int]] | None = None
         if bounded and self.retain == "sample" and getattr(self, "retain_chunks", None):
             chunk_picks = {}
@@ -1387,7 +1249,11 @@ class NativeCollectCommitter(NativeHostCommitter):
                     st[used_k:padded_k].zero_()
                 hv = None
                 keep_win = self.retain == "host" or (keep_set is not None and (job.step, k) in keep_set)
-                if bounded and not fault_lifetime:
+                if hfirst:
+                    if padded_k:
+                        rs_h.max_blocks = self.rows_cap_blocks if self.rows_cap_blocks and nc.free_slots() >= self.rows_cap_free else 0
+                        hwins.append((k, H.rows_h(rs_h, st, padded_k, k << j, tn, side.cuda_stream)[0]))
+                elif bounded and not fault_lifetime:
                     if learning:
                         # learning step: the window is copied to a TRANSIENT block (re-hash source; given back after) while the budget
                         # holds; over budget a learn-only pass drops everything copied so far and just consumes the ring (the plan is
@@ -1421,7 +1287,7 @@ class NativeCollectCommitter(NativeHostCommitter):
                         excl_bytes += padded_k - kept_b
                     elif padded_k and keep_set is not None and (job.step, k) in keep_set:
                         if chunk_picks is not None:
-                            # replay-to-open (R17-5): keep ONLY the challenged chunks of this window (256 B each) as byte ranges -- not the
+                            # replay-to-open (R17-5): keep ONLY the challenged chunks of this window (`chunk` bytes each) as byte ranges -- not the
                             # 256 MiB window; the replay's authentication paths come from its levels, so this is all a replay retains
                             base = k * W
                             for a, b in chunk_parts(job.step, base, base + padded_k):
@@ -1478,6 +1344,12 @@ class NativeCollectCommitter(NativeHostCommitter):
         tw = time.perf_counter()
         job.done_evt.wait()                                                     # type: ignore[attr-defined]  plan / cursor / metas known
         idle += time.perf_counter() - tw
+        snap = getattr(job, "rows_snapshot", None)
+        if snap is not None:
+            try:
+                self._expand_step_rows(int(job.step), *snap)
+            except Exception as e:  # noqa: BLE001
+                self.errors.append(f"step rows: {e!r}"[:200])
         job.metas = self._metas_for(job)
         used = int(job.cursor)
         padded = -(-used // C) * C
@@ -1550,7 +1422,16 @@ class NativeCollectCommitter(NativeHostCommitter):
                     state["views"][L][:n_copy].copy_(old["views"][L][:n_copy])
             state["tops"] = old["tops"]
             self._win_relayouts = getattr(self, "_win_relayouts", 0) + 1
-        if rehash:
+        if rehash and hfirst:
+            state.clear()
+            begin_tree(padded // C)
+            with torch.inference_mode(), torch.cuda.stream(side):
+                for kk, hs_k in hwins:
+                    first = kk << j
+                    absorb(kk, H.rows_frame(state["rs"], hs_k, first, min(1 << j, state["width"] - first), state["n_total"], side.cuda_stream))
+            hwins = []
+            self._win_hfirst_steps = getattr(self, "_win_hfirst_steps", 0) + 1
+        elif rehash:
             # v1: the step length was unknown (learning step) or the plan changed mid-step -> hash from the host windows with the real length
             if not host_wins:
                 raise RuntimeError("windowed absorb (layout v1): the plan changed mid-step and no host copy exists to re-hash from")
@@ -1595,52 +1476,22 @@ class NativeCollectCommitter(NativeHostCommitter):
         levels, mr, tree_ms = self._window_root(job.step, state, padded, side)
         nc.finish_step(job.step)
         if bounded and learning:
-            # retention of a bounded LEARNING step is carved out of the transient copies now that the metas are known (retain=host:
-            # every chunk outside the excluded families' interiors; retain=sample: the challenged windows), pinned -> pinned; then the
-            # transient blocks go back to the pool -- the step's host footprint returns to its retained bytes
-            with torch.inference_mode(), torch.cuda.stream(side):
-                if self.retain == "host":
-                    excl = _excluded_chunk_ranges(job.metas, self.retain_exclude, C) if self.retain_exclude else []
-                    for kk, _hb, hv, n in tblocks:
-                        base = kk * W
-                        kept_b = 0
-                        for a, b in outside(excl, base, base + n):
-                            rv = self.pool.take(b - a)
-                            rv.copy_(hv[a - base:b - base], non_blocking=True)
-                            ranges.append((a, b, rv))
-                            kept_b += b - a
-                        excl_bytes += n - kept_b
-                elif keep_set is not None:
-                    for kk, _hb, hv, n in tblocks:
-                        if (job.step, kk) in keep_set:
-                            if chunk_picks is not None:
-                                base = kk * W
-                                for a, b in chunk_parts(job.step, base, base + n):
-                                    rv = self.pool.take(b - a)
-                                    rv.copy_(hv[a - base:b - base], non_blocking=True)
-                                    ranges.append((a, b, rv))
-                            else:
-                                rv = self.pool.take(n)
-                                rv.copy_(hv[:n], non_blocking=True)
-                                ranges.append((kk * W, kk * W + n, rv))
-                side.synchronize()
-            for _kk, hb, _hv, _n in tblocks:
-                self.pool.give_back(hb)
+            excl_bytes += self._retain_from_transient(job, tblocks, keep_set, chunk_parts if chunk_picks is not None else None, ranges, side)
             tblocks = []
             host_wins = []
         if bounded and self.retain in ("host", "sample"):
             if self.retain == "sample" and not learning and chunk_picks is None:
                 kept = [(kk, hv, n) for kk, hv, n in host_wins if kk not in transient]
-                keep = _HostWindows(kept, used, W) if kept else None
+                keep = _HostWindows(kept, used, W, C) if kept else None
             else:
                 ex_fams: dict[str, int] = {}
                 for elo, ehi, fam in excl:
                     ex_fams[fam] = ex_fams.get(fam, 0) + (min(ehi, padded) - elo if elo < padded else 0)
-                keep = _HostRanges(ranges, used, ex_fams) if ranges else None
+                keep = _HostRanges(ranges, used, ex_fams, C) if ranges else None
             self.excluded_bytes += excl_bytes
         else:
             kept = [(kk, hv, n) for kk, hv, n in host_wins if kk not in transient] if self.retain in ("host", "sample") else []
-            keep = _HostWindows(kept, used, W) if kept else None
+            keep = _HostWindows(kept, used, W, C) if kept else None
         self._footprint_absorbed(job, padded, levels, keep)
         self._gpu_t["leaf_ms"] += leaf_ms
         self._gpu_t["tree_ms"] += tree_ms
@@ -1789,6 +1640,9 @@ class NativeCollectCommitter(NativeHostCommitter):
             self.replay_row_keys = None
         if dead:
             self._nc.ack_dead()
+        if failure := getattr(self._nc, "failure", ""):     # read after the worker drained: a step it abandoned failed the run by this name
+            self.errors.insert(0, f"collector failed: {failure}"[:300])
+            rc.extra.update(errors=self.errors[:10], errors_n=len(self.errors), collector_failure=failure)
         st = dict(self._nc.stats())
         # X-03 reference integrity: what the manifest attempted vs what was bound (the Python `_acquire` path puts through stage/collect
         # directly, so its successes are added here); commit_delta refuses PASS unless they are equal and no error was recorded
@@ -1796,6 +1650,7 @@ class NativeCollectCommitter(NativeHostCommitter):
         rc.extra["committed_tensors"] = int(st.get("committed", 0)) + int(self._py_committed)
         rc.extra["windows"] = {**dict(self._nc.window_stats()), **getattr(self, "window_info", {}),
                                "reupload_bytes": getattr(self, "_win_reupload_bytes", 0),
+                               "hfirst_steps": getattr(self, "_win_hfirst_steps", 0),
                                "relayouts": getattr(self, "_win_relayouts", 0),
                                "fault_lifetime_windows": getattr(self, "_fault_lifetime_windows", 0)}    # >0 only under VERITY_FAULT=release_before_keep
         # [R17 fp8] bounded staging record: what the flag did this run (a learned-only step = a warm-up-only outcome; on a record run the
@@ -1833,6 +1688,7 @@ class NativeCollectCommitter(NativeHostCommitter):
         self.excluded_bytes = 0
         self.plan_mismatches = 0
         self._win_reupload_bytes = 0    # windowed: per-run counters of finalize's extra["windows"]
+        self._win_hfirst_steps = 0
         self._win_relayouts = 0
         self._oar_deferred = []         # picks the in-run stages could not open from host (excluded families) -> openings_after_release
         for src in self.sources:

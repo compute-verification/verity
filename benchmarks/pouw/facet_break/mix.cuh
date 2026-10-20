@@ -159,11 +159,11 @@ struct Mma {
 // The register-light lanes (ji.cuh's search) read one register: FMULI, FADDI, SHFI (a rotate), PRMTI (a byte rotate),
 // IMADWI and DP4AI by an immediate; AXI adds and xors an immediate in turn on each chain (one alone would fold into one
 // op); UAXI adds the next chain and xors an immediate in turn on chains derived from a.mode only, which ptxas 13.0.88
-// puts on the uniform datapath beside a MMA.
+// puts on the uniform datapath beside a MMA. SHFL is a butterfly by 1 (the MIO crossbar's lane class).
 enum Lane {
   L_NONE, L_IADD3, L_LOP3, L_SHF, L_PRMT, L_IMAD, L_IMADI, L_IMADW, L_IADD64, L_SEL, L_FFMA, L_FFMAI,
   L_HFMA2, L_MNMX, L_DMUL, L_DFMA, L_MUFU, L_POPC, L_FMUL, L_FADD,
-  L_FMULI, L_FADDI, L_AXI, L_SHFI, L_PRMTI, L_IMADWI, L_DP4A, L_DP4AI, L_UAXI
+  L_FMULI, L_FADDI, L_AXI, L_SHFI, L_PRMTI, L_IMADWI, L_DP4A, L_DP4AI, L_UAXI, L_SHFL
 };
 
 struct Lanes {
@@ -237,6 +237,7 @@ struct Lanes {
       if ((q >> 3) & 1) asm volatile("xor.b32 %0, %0, 0x5A5A5A5A;" : "+r"(u[s]));
       else asm volatile("add.u32 %0, %0, %1;" : "+r"(u[s]) : "r"(u[(s + 1) & 7]));
     }
+    if constexpr (L == L_SHFL) asm volatile("shfl.sync.bfly.b32 %0, %0, 1, 31, 0xffffffff;" : "+r"(v[s]));
   }
   // q-th op of a stream that alternates L1 and L2 (L2 == L_NONE: L1 only); each lane takes its own chains in turn
   template <int L1, int L2>

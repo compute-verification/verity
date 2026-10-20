@@ -101,6 +101,7 @@ from __future__ import annotations
 
 import argparse
 import ctypes
+import dataclasses
 import hashlib
 import json
 import multiprocessing as mp
@@ -462,11 +463,6 @@ def e2m1_encode_ints(v: np.ndarray) -> np.ndarray:
         out[v == val] = code
         out[v == -val] = code | 8 if val else 0
     return out
-
-
-def ue4m3_pow2(e_field: int) -> int:
-    """UE4M3 code for 2^(e_field-7) (mantissa field 0): the exact power-of-two scales of the layout check."""
-    return e_field << 3
 
 
 def to_bf16_bits(x: np.ndarray) -> np.ndarray:
@@ -1204,7 +1200,10 @@ def verity_models(instr: str) -> dict:
     if instr in ("nvf4", "tcgen05_nvf4"):
         return {"verity": M.BLACKWELL_SM120_NVF4}
     if instr in ("mxf4", "tcgen05_mxf4", "tcgen05_mxf4kind"):
-        return {"verity": M.BLACKWELL_SM120_MXF4, "verity_underflow_signed": M.BLACKWELL_SM120_MXF4_UNDERFLOW_SIGNED}
+        # sm_120's floor is sharp (D19); on sm_100 its neighbours are scored beside it, so the B200's floor is measured too
+        floors = {f"verity_floor{-f}": dataclasses.replace(M.BLACKWELL_SM120_MXF4, name=f"probe_mxf4_floor{-f}", grid_floor=f)
+                  for f in (-170, -173, -175, -178)} if instr.startswith("tcgen05") else {}
+        return {"verity": M.BLACKWELL_SM120_MXF4, "verity_underflow_signed": M.BLACKWELL_SM120_MXF4_UNDERFLOW_SIGNED, **floors}
     if instr in k32.ROWS:
         return k32.candidates(instr)
     return {}

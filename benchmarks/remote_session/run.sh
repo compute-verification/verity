@@ -42,7 +42,9 @@
 # is refused), and leaves out/verifier.json, out/registry.json (REGISTRY when it ends) and out/address.json, the address
 # the prover connects to: PEER's 127.0.0.1:PORT, a Commit's REMOTE_VERIFIER. VERIFIER_ARGS go to verifier.py as they
 # are. A registration left live by a run that ended early refuses the node until CLOSE=NODE_HEX closes it (the same
-# ROLE=verifier run, which closes it in REGISTRY and exits).
+# ROLE=verifier run, which closes it in REGISTRY and exits). VERDICT (lean, both or python; default verifier.py's,
+# both) is who decides (`verifier.py --verdict`): under lean and both the verifier builds the Lean verifier with elan's
+# `lake` ($HOME/.elan/bin, `tools/verity/lean/setup.sh`).
 #
 # CPU=BLOCKS makes the prover the driver's reference over a store of BLOCKS blocks under CODEC (default p512/k2): no
 # GPU, no lease, no build, and kv:P and kvdrop:P sessions (KV pages appended and released mid-session, `prover.py`)
@@ -54,13 +56,31 @@
 # against ROLE=verifier with SESSIONS=1 (one session a store). SERVE=tiny runs `serve.py --connect` (the vLLM tests'
 # tiny Llama, PLAN serve or servedrop:K). SERVE=row runs row ROW, `verity-vllm row run ROW CHECKPOINT REPO REV` with
 # the checkpoint `verity-vllm epoch resolve ROW` names, ROW_ARGS (such as --stages commit) and REMOTE_VERIFIER at the
-# tunnel; its Commit refuses --remote-verifier until it puts the store binder on its engine. Milestone 3's thin slice,
+# tunnel; its Commit puts the store binder on its engine and proves the store in lockstep with its first instrumented
+# run, a pass an engine step (`verity_vllm.store.remote.CommitSession`: one GPU, synchronous scheduling declared in the
+# row's target, bf16 KV). Milestone 3's thin slice,
 # int8 Llama-3.1-8B:
 #
 #   research run --on vy-nebius-1 --phase cpu ... --env ROLE=verifier --env PEER=vy-nebius-2 --env PORT=7797 \
 #     --env SESSIONS=1 --env WINDOWS=7 --env WINDOW_MS=100 --env LIFETIME=4 -- bash benchmarks/remote_session/run.sh
 #   research run --on vy-nebius-2 --preemptible --gpus 1 ... --env ROLE=prover --env PORT=7797 --env SERVE=row \
 #     --env ROW=<the int8 Llama-3.1-8B row> -- bash benchmarks/remote_session/run.sh
+#
+# SERVE=node serves the whole node: a vLLM engine a leased GPU (`engine.py`), and the prover (`node.py`) registers
+# their weights arenas as the store, where they are served, the engines decoding each weight as they use it
+# (`node.sh` starts them; MODEL, ENGINE_ARGS, ENGINE_CPUS, NODE_ARGS). VERIFIER_ARGS=--host-bytes N puts the serving
+# node's host DRAM (its MemTotal) in the memory line. The north-star run, the verifier on vy-nebius-1:
+#
+#   research run --queue --on vy-nebius-1 --phase cpu --cpus 16 ... --env ROLE=verifier --env PEER=vy-nebius-2 \
+#     --env PORT=7799 --env SESSIONS=2 --env WINDOWS=7 --env WINDOW_MS=60000 --env SAMPLES=33273 --env QUANTILE=max \
+#     --env JITTER_MS=50 --env VERIFIER_ARGS='--host-bytes 1843153879040' -- bash benchmarks/remote_session/run.sh
+#   research run --queue --on vy-nebius-2 --gpus 8 --preemptible --mem-gb 200 --max-min 60 --timeout 5h ... \
+#     --env ROLE=prover --env PORT=7799 --env SERVE=node --env PLAN=honest,skip:0.0625 --env ENGINE_CPUS=0-23 \
+#     --env PROVER_CPUS=24-47 --env ENGINE_ARGS='--step-hz 2 --align-steps' \
+#     --env NODE_ARGS='--decode-s 60 --warm-openings 33273' -- bash benchmarks/remote_session/run.sh
+#
+# Queue the prover first: its lease waits for all 8 GPUs (--timeout covers that wait, --max-min the lease), and once it
+# holds them it waits for the verifier's tunnel; start the verifier then.
 set -uxo pipefail
 export O=${RESEARCH_RUN_DIR:?}/out; mkdir -p "$O"
 ENV_DIR=${ENV_DIR:-/workspace/pouw/fill-out/pous/work/pous-bench}
@@ -68,6 +88,7 @@ export PY=${PY:-$ENV_DIR/gpu312-torch2.14.0-cu130/bin/python}
 [ -x "$PY" ] || { echo "no torch venv at $PY"; exit 3; }
 export PYTORCH_CUDA_ALLOC_CONF=${PYTORCH_CUDA_ALLOC_CONF:-expandable_segments:True}
 export CUDA_HOME=${CUDA_HOME:-/usr/local/cuda-13.0} PATH=/usr/local/cuda-13.0/bin:$(dirname "$PY"):$PATH
+[ -x "$HOME/.elan/bin/lake" ] && export PATH="$HOME/.elan/bin:$PATH"
 B=$(mktemp -d /tmp/remote-session.XXXXXX); trap 'rm -rf "$B"' EXIT
 export B RS=benchmarks/remote_session PLAN=${PLAN:-honest} GIB=${GIB:-16} WINDOWS=${WINDOWS:-7}
 export WINDOW_MS=${WINDOW_MS:-1000} SAMPLES=${SAMPLES:-2773} JITTER_MS=${JITTER_MS:-2}
@@ -75,12 +96,13 @@ export VERIFIER_CPUS=${VERIFIER_CPUS:-88-95} PROVER_CPUS=${PROVER_CPUS:-48-87} P
 export SESSIONS=${SESSIONS:-$(($(tr -cd , <<< "$PLAN" | wc -c) + 1))} ROLE=${ROLE:-both}
 VERIFY=(--port "$PORT" --out "$O" --windows "$WINDOWS" --window-ms "$WINDOW_MS" --samples "$SAMPLES"
   --jitter-ms "$JITTER_MS" --sessions "$SESSIONS" ${QUANTILE:+--quantile "$QUANTILE"}
-  ${CHECK_WORKERS:+--check-workers "$CHECK_WORKERS"} ${LIFETIME:+--lifetime "$LIFETIME"})
+  ${CHECK_WORKERS:+--check-workers "$CHECK_WORKERS"} ${LIFETIME:+--lifetime "$LIFETIME"} ${VERDICT:+--verdict "$VERDICT"})
 if [ "$ROLE" = verifier ]; then
   REGISTRY=${REGISTRY:-$HOME/.local/state/remote-session/registry.json}
   mkdir -p "$(dirname "$REGISTRY")" || exit 3
   if [ -n "${CLOSE:-}" ]; then
-    "$PY" $RS/verifier.py --registry "$REGISTRY" --close "$CLOSE" > "$O/verifier.log" 2>&1; W=$?
+    "$PY" $RS/verifier.py --registry "$REGISTRY" --close "$CLOSE" ${VERDICT:+--verdict "$VERDICT"} \
+      > "$O/verifier.log" 2>&1; W=$?
     cat "$O/verifier.log"
     cp "$REGISTRY" "$O/registry.json"
     exit $W
@@ -131,7 +153,10 @@ if [ -n "${SERVE:-}" ]; then
       read -r CK REPO REV _ < <("$VV" epoch resolve "${ROW:?}")
       # shellcheck disable=SC2086
       RUN=(env "REMOTE_VERIFIER=127.0.0.1:$PORT" "$VV" row run "$ROW" "${CK:?}" "$REPO" "$REV" ${ROW_ARGS:-}) ;;
-    *) echo "SERVE is tiny or row, not $SERVE"; exit 3 ;;
+    node)
+      export VPY
+      RUN=(bash $RS/node.sh) ;;
+    *) echo "SERVE is tiny, row or node, not $SERVE"; exit 3 ;;
   esac
   "${LEASE[@]}" "${RUN[@]}" > "$O/prover.log" 2>&1; P=$?
   tail -20 "$O/prover.log"

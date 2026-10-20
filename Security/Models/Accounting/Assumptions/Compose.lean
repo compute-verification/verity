@@ -51,8 +51,10 @@ operands and skips after querying later rounds' seeds):
 
 The physical layer's (`CreditOfWork`):
 
-* `FoldOptFolded`: FOLD-OPT per word folded (B1). `FoldOpt` is it at `N_w` words, which a sampled cheater that skips
-  whole units falsifies.
+* `Accounting.Assumptions.TS.FoldOptFoldedAt`: FOLD-OPT per word folded at one certificate (B1, ASK-6 = A), the
+  headlines' premise, asked at the certificate `lam` each credit statement prices at. `FoldOptFolded` is it at every
+  certificate, which a bit-exact fold falsifies (RT2-LOGIC-1), and `FoldOpt` is it at `N_w` words, which a sampled
+  cheater that skips whole units falsifies.
 -/
 
 namespace Accounting.Assumptions.Compose
@@ -214,12 +216,5 @@ def WholeEntropyAt {B V : Type} [Fintype B] [Fintype V] {Tq M : ℕ} (rd : V →
     prob Break ≤ δb ∧
     ∀ a q, ¬ Break a → sq a r = some q → ∀ v, rd v = r.val →
       ((R.mode a v = .whole ↔ v ∈ Wh q a) ∧ (R.mode a v = .whole → R.same a v → v ∈ Lk q a))
-
-/-- `accounting-compose-fold-opt` (assumed; FOLD-OPT(fx1)'s mechanical fact, at least 4 issue slots a word folded).
-**FOLD-OPT_μ per word folded**: at every certificate, a run that folds `folded` committed words has its fold priced at
-least `(1 − μ_f)·φ*(π)` a word, `(1 − μ_f)·folded·φ*(π)`. -/
-def FoldOptFolded {K R T L U F X : Type} [Fintype K] [Fintype R] [Fintype T] [Fintype L] [Fintype U] [Fintype F]
-    [Fintype X] (Z : Model K R T L U F X) (A : Anatomy K T L U) (folded : ℝ) : Prop :=
-  ∀ lam : R → ℝ, IsCert lam → (1 - Z.muF) * folded * Z.phiStar lam ≤ Z.G.price lam A.nfold
 
 end Accounting.Assumptions.Compose

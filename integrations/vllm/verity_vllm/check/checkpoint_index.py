@@ -9,6 +9,7 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import re
 import struct
 from concurrent.futures import ThreadPoolExecutor
 from typing import Any
@@ -18,7 +19,7 @@ import numpy as np
 #: safetensors dtype -> (numpy view dtype, element bytes)
 _ST_DTYPE = {"BF16": (np.uint16, 2), "F16": (np.float16, 2), "F32": (np.float32, 4), "F64": (np.float64, 8),
              "I64": (np.int64, 8), "I32": (np.int32, 4), "I16": (np.int16, 2), "I8": (np.int8, 1), "U8": (np.uint8, 1),
-             "BOOL": (np.uint8, 1), "F8_E4M3": (np.uint8, 1), "F8_E5M2": (np.uint8, 1)}
+             "BOOL": (np.uint8, 1), "F8_E4M3": (np.uint8, 1), "F8_E5M2": (np.uint8, 1), "F8_E8M0": (np.uint8, 1)}
 
 #: shards hashed at once by `shard_pin` (hashlib releases the GIL, so threads hash in parallel; the bound is the file system)
 PIN_WORKERS = 16
@@ -46,11 +47,51 @@ def shard_names(ckpt_dir: str) -> list[str]:
     return sorted(fn for fn in os.listdir(ckpt_dir) if fn.endswith(".safetensors"))
 
 
+CHECKPOINT_NAMES = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "engine", "profiles", "checkpoint_names.json")
+
+
+def renames(config: dict[str, Any]) -> dict[str, tuple] | None:
+    """vLLM's rename (`hf_to_vllm_mapper`) of a checkpoint whose tensor names are not the served model's, by config.json's ``model_type``
+    (model facts, kept as data in the engine profiles' `checkpoint_names.json`): the `regex`, `substr`, `prefix` and `suffix` steps
+    `WeightsMapper._map_name` applies in that order, a replacement chosen by a config key where it names one (``by``); None for a
+    checkpoint named as served."""
+    with open(CHECKPOINT_NAMES) as f:
+        entry = json.load(f).get(config.get("model_type"))
+    if entry is None:
+        return None
+
+    def pick(new: Any) -> str | None:
+        return new.get(str(config.get(new["by"])), new["else"]) if isinstance(new, dict) else new
+
+    return {"regex": tuple((re.compile(p), pick(n)) for p, n in entry["regex"]),
+            **{step: tuple((old, pick(new)) for old, new in entry[step]) for step in ("substr", "prefix", "suffix")}}
+
+
+def renamed(name: str, rules: dict[str, tuple]) -> str | None:
+    for pattern, new in rules["regex"]:
+        if pattern.search(name):
+            name = pattern.sub(new, name)
+    for substr, new in rules["substr"]:
+        if substr in name:
+            if new is None:
+                return None
+            name = name.replace(substr, new, 1)
+    for prefix, new in rules["prefix"]:
+        if name.startswith(prefix):
+            name = name.replace(prefix, new, 1)
+    for suffix, new in rules["suffix"]:
+        if name.endswith(suffix):
+            name = new.join(name.rsplit(suffix, 1))
+    return name
+
+
 def manifest_entry(manifest: str | None, ckpt_dir: str, model: str | None, revision: str | None) -> dict[str, Any] | None:
-    """The checkpoints.json entry of `ckpt_dir`: the one whose local_path is the dir, else the one of `model` at `revision`."""
+    """The checkpoints.json entry of `ckpt_dir` (it and its siblings, `config.checkpoint_entries`): the one whose local_path is the dir, else the one of `model` at `revision`."""
     if not (manifest and os.path.exists(manifest)):
         return None
-    for c in json.load(open(manifest)).get("checkpoints", []):
+    from verity_vllm.config import checkpoint_entries
+
+    for c in checkpoint_entries(manifest):
         lp = str(c.get("local_path") or "")
         if (lp and os.path.realpath(lp) == os.path.realpath(ckpt_dir)) or \
                 (model and c.get("repo") == model and (not revision or str(c.get("revision", "")).startswith(revision[:10]))):
@@ -70,13 +111,15 @@ def shard_pin(ckpt_dir: str, *, checkpoints_manifest: str | None, model: str | N
     pin: dict[str, Any] = {"manifest": checkpoints_manifest, "entry": None if entry is None else {"repo": entry.get("repo"), "revision": entry.get("revision")},
                            "shards": {}}
     for fn, sha in zip(shards, shas):
-        pinned = ((entry or {}).get("files") or {}).get(fn, {}).get("sha256") if entry else None
+        files = (entry or {}).get("files")
+        pinned = ((files.get(fn) or {}).get("sha256") if isinstance(files, dict) else None) or ((entry or {}).get("safetensors_sha256") or {}).get(fn)
         pin["shards"][fn] = {"sha256": sha, "pinned_sha256": pinned, "pinned": (sha == pinned) if pinned else None}
     return pin
 
 
 class CheckpointIndex:
-    """Every tensor of every safetensors shard under `ckpt_dir`: name -> (shard, dtype, shape, byte range).  With `checkpoints_manifest`
+    """Every tensor of every safetensors shard under `ckpt_dir`: name -> (shard, dtype, shape, byte range), named as the served model
+    names it (`renames`).  With `checkpoints_manifest`
     (manifests/checkpoints.json) the shard sha256s are verified against the pinned entry by name; `pin` is that verification taken by
     another process on the same files and manifest (`shard_pin`), adopted instead of hashing again."""
 
@@ -89,11 +132,12 @@ class CheckpointIndex:
         cfg = os.path.join(ckpt_dir, "config.json")
         if os.path.exists(cfg):
             self.config = json.load(open(cfg))
+        rules = renames(self.config)
         for fn in shard_names(ckpt_dir):
             hdr, base = read_safetensors_header(os.path.join(ckpt_dir, fn))
             self.shards.append(fn)
             for name, meta in hdr.items():
-                if name == "__metadata__":
+                if name == "__metadata__" or (rules and (name := renamed(name, rules)) is None):
                     continue
                 lo, hi = meta["data_offsets"]
                 self.tensors[name] = (fn, meta["dtype"], [int(x) for x in meta["shape"]], base + int(lo), base + int(hi))

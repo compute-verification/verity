@@ -79,14 +79,15 @@ variable {H : Claims.Msg → Claims.Msg} {rel : Readable.Parsed → Readable.Rel
 case's table, on the table's extra claims at the link's points. -/
 def RepRoundsZk (H : Claims.Msg → Claims.Msg) (rel : Readable.Parsed → Readable.Relation) : Prop :=
   ∀ c : CaseZk H rel, ∀ st ∈ c.sts,
-    ∀ v, Zk.schedule (Setup.ofCircuit st).m = .ok v → ∀ rep dom tr tb cm₀ extras pads ic extra lanePad salt nonce,
+    ∀ v, Zk.schedule (Setup.ofCircuit st).m = .ok v →
+      ∀ rep dom tr tb cm₀ extras pads ic extra lanePad salt nonce prior ws,
       (Setup.ofCircuit st).extra (ptsOf c.spec (coinOf (c.resp 0))) = .ok extras →
       Ret ((repPZk (asksS c.resp) (Hashes.ofSha512 (Claims.hOf H)) (Setup.ofCircuit st) v.1 v.2 rep dom tr tb cm₀
-        extras pads ic extra lanePad salt nonce).run (Transcript.init #[] dom)) fun pt => RepOk pt.2.rounds
+        extras pads ic extra lanePad salt nonce prior ws).run (Transcript.init #[] dom)) fun pt => RepOk pt.2.rounds
 
 /-- **What the record needs of the masked prover's pieces** (`ProverOkZk`), at an oracle of 64-byte outputs, from its
 rep half (`RepRoundsZk`). -/
-theorem proverOkZk (h64 : Out64 H) (hR : RepRoundsZk H rel) : ProverOkZk H rel := by
+theorem proverOkZk (h64 : Claims.Out64 H) (hR : RepRoundsZk H rel) : ProverOkZk H rel := by
   intro c st hst
   obtain ⟨st', hst', -, hm1, hm2⟩ := c.table
   obtain ⟨st'', hst'', hms⟩ := c.hm96

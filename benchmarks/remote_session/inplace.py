@@ -130,11 +130,13 @@ class InPlace:
         self.side = torch.cuda.Stream(self.device)
         self.regions: tuple[Region, ...] = ()
         self.blocks = 0
+        self._firsts: list[int] = []
+        self._rows = np.zeros((0, 7), dtype=np.uint64)
         self.extend(regions)
 
     def extend(self, regions: Sequence[Region]) -> None:
         """Regions from the store's end on, in store order: its registered regions, or blocks appended (`append`)."""
-        at, out = self.blocks, list(self.regions)
+        at, out = self.blocks, []
         for r in regions:
             if r.first != at or r.blocks < 1:
                 raise ValueError(f"regions are the store's blocks in order, one or more each: one starts at block "
@@ -147,13 +149,14 @@ class InPlace:
                                  f"planes of {r.plane_blocks} blocks")
             at += r.blocks
             out.append(r)
-        if not out:
+        if not out and not self.regions:
             raise ValueError("a store is one or more regions")
         rows = np.array([[r.first, r.blocks, r.addr, r.plane_blocks, r.planes, r.page_stride, r.plane_stride]
-                         for r in out], dtype=np.uint64)
-        self.table = self.torch.from_numpy(rows.view(np.int64)).to(self.device)
-        self.regions, self.blocks = tuple(out), at
-        self._firsts = [r.first for r in out]
+                         for r in out], dtype=np.uint64).reshape(-1, 7)
+        self._rows = np.concatenate([self._rows, rows])
+        self.table = self.torch.from_numpy(self._rows.view(np.int64)).to(self.device)
+        self.regions, self.blocks = self.regions + tuple(out), at
+        self._firsts.extend(r.first for r in out)
 
     def append(self, slots: Sequence[int]) -> int:
         """The store's next indices, the k-th at the bytes of store block slots[k] (an appended block's j at its slot,

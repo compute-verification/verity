@@ -29,9 +29,24 @@ without a root fails it. The harness reads the gate before timing (``arm``) and 
 from __future__ import annotations
 
 import os
+from types import SimpleNamespace
 from typing import Any
 
 WARMUPS = ("gate", "warmup")
+
+
+def committer_engine(llm: Any) -> SimpleNamespace:
+    """The engine `NativeCollectCommitter` takes (as `verity_vllm.engine.build.Engine`), from the public surface of the
+    harness's ``target.engine``: ``verity_vllm.LLM``, or for a local checkpoint the harness's stand-in, which has no pin.
+    The committer reads four things of it: the ``vllm.LLM``, its in-process model runner, the served model, and the
+    checkpoint's repo and revision (into its geometry digest), which are the pin's, or for a local checkpoint vLLM's model
+    path with no revision."""
+    from verity_vllm.engine.engine_profile import get_model_runner
+
+    pin = getattr(llm, "pin", None)
+    mc = llm.vllm.llm_engine.vllm_config.model_config
+    cp = {"repo": pin.model, "revision": pin.revision} if pin is not None else {"repo": mc.model, "revision": mc.revision}
+    return SimpleNamespace(llm=llm.vllm, runner=get_model_runner(llm.vllm), model=llm.model, cp=cp)
 
 
 class ServedCommitArm:
@@ -40,6 +55,7 @@ class ServedCommitArm:
     control = "stock"
     resident = True
     commit_scheme: str | None = None
+    batch_copies = True
 
     def __init__(self, id: str, retain: str) -> None:
         self.id, self.retain = id, retain
@@ -53,7 +69,7 @@ class ServedCommitArm:
     def install(self, target: Any) -> ServedCommitArm:
         from verity_vllm.acquire.sources.served_compiled_source import ServedCompiledSource
 
-        self.source = ServedCompiledSource(into=target.hooks)
+        self.source = ServedCompiledSource(into=target.hooks, batch_copies=self.batch_copies)
         self.source.install_hooks()
         return self
 
@@ -61,12 +77,12 @@ class ServedCommitArm:
         from verity_vllm.commit.committer.native_collect import NativeCollectCommitter
 
         os.environ["VERITY_RETAIN"] = self.retain
-        engine = target.engine._engine
-        self.source.note_engine(engine.model)
-        com = NativeCollectCommitter(engine, run_id=f"bench:{self.id}", arena_bytes=None, wrap=True, gather=True,
+        llm = target.engine
+        self.source.note_engine(llm.model)
+        com = NativeCollectCommitter(committer_engine(llm), run_id=f"bench:{self.id}", arena_bytes=None, wrap=True, gather=True,
                                      native_hooks=True, auto_blocks=True, native_worker=True, commit_scheme=self.commit_scheme)
         self.source.attach(com)
-        vc = engine.llm.llm_engine.vllm_config
+        vc = llm.vllm.llm_engine.vllm_config
         tokens = int(vc.scheduler_config.max_num_batched_tokens)
         sizing = com.size_arena({"batch": int(vc.scheduler_config.max_num_seqs), "max_prompt": tokens, "max_new": 1,
                                  "max_num_batched_tokens": tokens, "max_model_len": int(vc.model_config.max_model_len)})

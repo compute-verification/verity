@@ -311,15 +311,34 @@ def test_without_lean_slots_its_tree_is_local(repo, tmp_path):
     assert _calls(tmp_path)[0]["argv"][-1] == str(tmp_path / "cache" / "lean-records" / "local" / "p")
 
 
-def test_it_names_one_package_and_one_run_holds_a_tree(repo, tmp_path, capsys):
+def test_it_names_one_package_and_one_run_holds_a_tree(repo, tmp_path, capsys, monkeypatch):
     tree, deps = tmp_path / "cache" / "lean-records" / "tree", tmp_path / "deps"
     assert LC.audit_records("q", deps, tree) == 2
     assert "lean-records: 'q' matches 0 packages: a, c, p" in capsys.readouterr().out
     assert LC.audit_records("p/", deps, tree) == 0 and _calls(tmp_path)[0]["argv"][-1] == str(tree / "p")
+    now = [0.0]
+    monkeypatch.setattr(LC, "_clock", lambda: now[0])
+    monkeypatch.setattr(LC, "_sleep", lambda s: now.__setitem__(0, now[0] + s))
+    (tree / ".who").write_text("r-holder (pid 1)\n")
     with open(tree / ".lock", "w") as held:
         fcntl.flock(held, fcntl.LOCK_EX)
         assert LC.audit_records("a", deps, tree) == 2
-    assert f"lean-records: another run holds {tree}" in capsys.readouterr().out and _calls(tmp_path) == []
+    out = capsys.readouterr().out
+    assert f"lean-records: another run holds {tree} (r-holder (pid 1)); waiting" in out and _calls(tmp_path) == []
+    assert f"still after {LC.TREE_WAIT_S} s: nothing ran" in out and now[0] >= LC.TREE_WAIT_S
+
+
+def test_a_run_waits_for_the_one_that_holds_its_tree_and_then_runs(repo, tmp_path, monkeypatch, capsys):
+    """A node without SLOTS gives every `--records` run the one `local` tree; a second run waits for the first instead of
+    refusing in 0 s (vy-nebius-cpu-2, 19 Oct), and then runs, naming itself as the holder."""
+    tree, deps = tmp_path / "cache" / "lean-records" / "tree", tmp_path / "deps"
+    tree.mkdir(parents=True)
+    held = open(tree / ".lock", "w")
+    fcntl.flock(held, fcntl.LOCK_EX)
+    monkeypatch.setattr(LC, "_sleep", lambda s: held.close())
+    monkeypatch.setenv("RESEARCH_RUN_ID", "r-second")
+    assert LC.audit_records("p", deps, tree) == 0 and _calls(tmp_path)[0]["argv"][-1] == str(tree / "p")
+    assert "another run holds" in capsys.readouterr().out and (tree / ".who").read_text().startswith("r-second ")
 
 
 def test_it_refuses_a_tree_outside_its_own(repo, tmp_path, capsys):

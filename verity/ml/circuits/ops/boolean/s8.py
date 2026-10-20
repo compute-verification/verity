@@ -5,13 +5,16 @@ step, the same function on bits.  The s8 step on bits is `ops.boolean.gemm`'s `B
                                                                                   word view: BlackwellU8S8ImmaDot32_v1
     S8Dot_v2{K, L, T0, C, DOT, A, B, TAIL, TDOT, NOISE, LIMBS, COMMIT}
                               S8Dot_v1's signature on bits                         word view: S8Dot_v1{..., DOT', TDOT'}
+    S8Matmul_v2{N, K, L, T0, C, DOT, A, B, TAIL, TDOT, NOISE, LIMBS, COMMIT}
+                              S8Matmul_v1's signature on bits                      word view: S8Matmul_v1{..., DOT', TDOT'}
     LimbSplit_v2{FORM, N, Y}  (y: Array<32, Value<1>>) -> Array<N, Array<8, Value<1>>>  word view: LimbSplit_v1{FORM, N, Y}
     S32LowByte_v2, S32ByteCarry_v2, S32ClampS8_v2, S32ClampRest_v2                 word view: each one's _v1
 
 The u8 x s8 step is `silicon.integer.step_s8_bits`'s array with a's codes unsigned: the 32·64 bit products, those of b's sign
 bit negated (NOT(p)·2^(i+7) and a constant), and the accumulator's bits, reduced once modulo 2^32, where the step wraps, and
 committed.  `S8Dot_v2` is `S8Dot_v1`'s body on bits over Boolean steps, with the same statics, bind-time checks and census
-rule; ``DOT'`` is `DOT`'s word Definition (`trace.word_of`).  The limb steps compute
+rule, and `S8Matmul_v2` is it batched over b's N rows as `S8Matmul_v1` batches `S8Dot_v1`; ``DOT'`` is `DOT`'s word Definition
+(`trace.word_of`).  The limb steps compute
 the carry as y[8:] sign-extended plus y[7], and the clamp and its rest select on (h > 127, h < -127), read from h's sign
 and bits 0..30.  `LimbSplit_v2` is one circuit traced from their builders (`elementwise.specialized`), so a carry whose
 limb reads only its low byte keeps only those gates, and byteclamp's clamp and rest share h's comparisons.
@@ -23,6 +26,7 @@ from typing import Any
 from verity.ml.circuits import boolean as BL
 from verity.ml.circuits.boolean.forms import NOT, ONE, add, and_reduce, compress_columns, const_bits, mux, or_reduce
 from verity.ml.circuits.boolean.trace import definition, word_of
+from verity.ml.circuits.census import FAMILY_COUNTS, silicon_step
 from verity.ml.circuits.defs import bind, composite
 from verity.ml.circuits.refs import Coll, broadcast
 from verity.ml.circuits.types import Array
@@ -31,7 +35,7 @@ from .. import prims as P
 from .. import s8 as S8
 from .elementwise import specialized
 
-__all__ = ["BlackwellU8S8ImmaDot32", "LimbSplit", "S32ByteCarry", "S32ClampRest", "S32ClampS8", "S32LowByte", "S8Dot"]
+__all__ = ["BlackwellU8S8ImmaDot32", "LimbSplit", "S32ByteCarry", "S32ClampRest", "S32ClampS8", "S32LowByte", "S8Dot", "S8Matmul"]
 
 BIT = BL.BIT
 S32 = Array(32, BIT)
@@ -56,10 +60,11 @@ def _u8s8_step(C, acc, a, b):
     return C.commit(compress_columns(C, cols)[:32])
 
 
-BlackwellU8S8ImmaDot32 = definition(
+BlackwellU8S8ImmaDot32 = silicon_step(definition(
     "BlackwellU8S8ImmaDot32", 2, lambda C, acc, *ab: _u8s8_step(C, acc, ab[:32], ab[32:]),
     (("acc", S32), ("a", A32_8), ("b", A32_8)), S32, word=P.BlackwellU8S8ImmaDot32,
-    doc="mma.sync.m16n8k32 s32.u8.s8.s32 on sm_120, one accumulator coordinate, on bits: BlackwellU8S8ImmaDot32_v1")
+    doc="mma.sync.m16n8k32 s32.u8.s8.s32 on sm_120, one accumulator coordinate, on bits: BlackwellU8S8ImmaDot32_v1"),
+    P.BlackwellU8S8ImmaDot32.silicon)
 
 
 def _zero(B) -> Coll:
@@ -73,12 +78,24 @@ def S8Dot(B, S, *args):
     return S8._dot_body(B, S, args, _zero, S32, CODE)
 
 
-def _word(b: dict) -> Any:
-    return bind(S8.S8Dot, **b | {"DOT": word_of(b["DOT"]), "TDOT": None if b["TDOT"] is None else word_of(b["TDOT"])})
+@composite("S8Matmul", 2, ["N"] + list(S8._DOT_STATICS), lambda S: S8._matmul_signature(S, S8._coordinate(S, S8Dot)),
+           conformance="exact-model-tested")
+def S8Matmul(B, S, *args):
+    """`S8Matmul_v1` on bits: `S8Dot_v2` batched over the rows, one incoming accumulator a row."""
+    return S8._matmul_body(B, S, args, S8Dot)
 
 
-S8Dot.word = _word  # type: ignore[attr-defined]
+def _word(word: Any) -> Any:
+    def of(b: dict) -> Any:
+        return bind(word, **b | {"DOT": word_of(b["DOT"]), "TDOT": None if b["TDOT"] is None else word_of(b["TDOT"])})
+    return of
+
+
+S8Matmul.word = _word(S8.S8Matmul)  # type: ignore[attr-defined]
+S8Matmul.counts = S8.counts  # type: ignore[attr-defined]
+S8Dot.word = _word(S8.S8Dot)  # type: ignore[attr-defined]
 S8Dot.counts = S8.counts  # type: ignore[attr-defined]
+FAMILY_COUNTS["S8Dot_v2"] = FAMILY_COUNTS["S8Matmul_v2"] = S8.counts
 
 
 # -- limb splits ---------------------------------------------------------------------------------------------------------

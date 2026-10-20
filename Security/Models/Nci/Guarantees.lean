@@ -16,10 +16,12 @@ namespace Nci.Guarantees
 open Verity
 open scoped ENNReal
 
-/-- **The read bound**: a declaration that contains `c` and complies at `(Γ, α)` has at least `Reads_Γ(c) / α` gates.
-Lower bounds on NCI become lower bounds on size when the declared circuit computes `c` the way `c` does. -/
+/-- **The read bound**: a declaration that contains `c` (`M`) and complies at `(Γ, α)`, with its baseline registered
+(`BaselineRegistered`), has at least `Reads_Γ(c) / α` gates. Lower bounds on NCI become lower bounds on size when the
+declared circuit computes `c` the way `c` does. -/
 def ReadBound : Prop :=
-  ∀ (Γ : ℕ) (α : ℝ) (c d : Declaration), c.Contains d → Complies Γ α d →
+  ∀ (Γ : ℕ) (α : ℝ) (c d : Declaration) (M : Containment c.D d.D), Complies Γ α d →
+    Assumptions.BaselineRegistered c d (PartialContainment.ofContainment M) →
     (Reads Γ c : ℝ) ≤ α * d.D.size d.D.computed
 
 /-- **Inference complies as declared**: a declaration divided into sessions of at most `Γ` gates, each reading from

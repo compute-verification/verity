@@ -1,7 +1,7 @@
 """The honest debit of a served pass at its scheme's cap ρ: a seeded, stratified sample of a retained pass's tiles (the
 transcript `verify_run.py` reads), each opened from the pass's files and held to `Verifier.check_tile` and the tile rule
-(`pearl_c_work.check_opened`) as `verify_run.check` holds it, with the replayed debit and the cap that rule compares it to
-(`pearl_c_work._debit_cap`: ρ times the credited cells' credit) recorded.  CPU only.
+(`clear_work.check_opened`) as `verify_run.check` holds it, with the replayed debit and the cap that rule compares it to
+(`clear_work._debit_cap`: ρ times the credited cells' credit) recorded.  CPU only.
 
   python benchmarks/pouw/pearl_c_vllm/served_debit.py RUN_DIR/prefill/manifest.json RUN_DIR/decode/manifest.json \\
       --tiles 128 64 [--seed S] [--jobs J] [--out DIR]
@@ -14,7 +14,7 @@ transcript `verify_run.py` reads), each opened from the pass's files and held to
   (`creditDevRev1`, the first promotion add of every word out); and the debit's two counts, its flagged atoms and its
   later promotions into a +0 total (``atoms`` and ``later_zero_promotions``: `pearl_c_debit.chain_debit`, rev1's
   `laterZeroPromos`), whose adds the debit already holds.  Under a format with the row cap (-h3) the rule also caps each
-  credited A row (`pearl_c_work.row_cap`), and ``row_ratio_max`` is the largest row's debit over its cap (the tile rule
+  credited A row (`clear_work.row_cap`), and ``row_ratio_max`` is the largest row's debit over its cap (the tile rule
   checked as far as it ran: the rows up to the first one over).
 - **The estimates** weight each stratum by its share of the pass's tiles and of its credited MACs (credited rows × credited
   columns × kept k, from the records), with the share over each cap within the stratum taken from its sample.
@@ -74,17 +74,20 @@ import numpy as np
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
 sys.path.insert(0, str(HERE.parent))
+sys.path.insert(0, str(HERE.parent / "clear"))
 import fast_tile as FT  # noqa: E402
 import run_result  # noqa: E402
 import verify_run as VR  # noqa: E402
 from verity.ml.commitments import Commitment  # noqa: E402
 from verity.ml.commitments import verify_opening  # noqa: E402
 from verity.ml.randomness import derive  # noqa: E402
-from verity.core.protocols.pouw.audit import (ROW_SCHEMA, Transcript, Verifier, activation_binding, commitment_hash,  # noqa: E402
-                               opened_value, rows_domain, weight_binding)
+from verity.core.protocols.pouw.audit import (ROW_SCHEMA, activation_binding, opened_value, rows_domain,  # noqa: E402
+                                              weight_binding)
+from clear_audit import Transcript, Verifier, commitment_hash  # noqa: E402
 from verity.core.protocols.pouw.coins import CoinCommitment  # noqa: E402
 from verity.core.protocols.pouw.protocol import Context, Matmul, Shape  # noqa: E402
 from verity.core.protocols.pouw.schemes import pearl_c_work as PW  # noqa: E402
+import clear_work as CW  # noqa: E402
 from verity_vllm.protocol_options import pouw_pearl_c_device as PD  # noqa: E402
 
 CAPS = {"1/400": Fraction(1, 400), "1/600": Fraction(1, 600), "1/1000": Fraction(1, 1000)}
@@ -92,7 +95,7 @@ SEED = 20261002
 FRESH = "verity/pouw/fp8-served-table-fresh-trials/v1"
 
 
-class _Kept(PW._TileRuleView):
+class _Kept(CW._TileRuleView):
     """`verify_run`'s view of the scheme, keeping the operands `check_tile`'s encode made so the tile rule reads the same
     ones without encoding twice."""
 
@@ -105,7 +108,7 @@ class _Kept(PW._TileRuleView):
 
 
 _SEEN: list = []
-_DEBIT_CAP = PW._debit_cap
+_DEBIT_CAP = CW._debit_cap
 
 
 def _recorded(*args, **kwargs):
@@ -115,7 +118,7 @@ def _recorded(*args, **kwargs):
 
 
 _CHAINS: list = []
-_CHAIN_DEBIT = PW.D.chain_debit
+_CHAIN_DEBIT = CW.D.chain_debit
 #: the debit's implementation `_chain_recorded` calls: the scalar reference, or `fast_tile`'s batch form
 _IMPL = {"chain_debit": _CHAIN_DEBIT}
 
@@ -162,7 +165,7 @@ def load(path: Path, light: bool = False, coins: CoinCommitment | None = None) -
     records = [PW.UnitRecord(mm, u["real_rows"], u["k_kept"], tuple(u["excluded_a"]),
                              tuple(man["weights"][str(mm.weight)]["excluded_b"])) for mm, u in zip(matmuls, man["matmuls"])]
     splits = {w: PW.Split(man["weights"][str(w)]["k"]) for w in epoch.workload.weights()}
-    reason = PW.check_records(epoch, splits, records)
+    reason = CW.check_records(epoch, splits, records)
     if reason is None and PW.records_root(epoch.salt, epoch.weights_root, splits, records).hex() != man["records_root"]:
         reason = "the records are not the ones whose root the pass published"
     if reason is not None:
@@ -293,7 +296,7 @@ def _measure(item) -> dict:
         ops = kept[4] if kept is not None and kept[:4] == (ctx, tuple(a), tuple(b), ref.tile) else scheme.encode(ctx, scheme.noise(ctx), a, b, ref.tile)
     _SEEN.clear()
     _CHAINS.clear()
-    reason = PW.check_opened(scheme, rec, ref.tile, a, b, ops)
+    reason = CW.check_opened(scheme, rec, ref.tile, a, b, ops)
     rows, cols = rec.credited(ref.tile)
     out.update(ok=reason is None, reason=reason, credited_rows=len(rows), credited_cols=len(cols), macs=len(rows) * len(cols) * rec.k_kept)
     if rows and cols:
@@ -310,7 +313,7 @@ def _measure(item) -> dict:
 
 def tile_numbers(scheme, debit: Fraction, cap: Fraction) -> dict:
     """The tile rule's (debit, cap) as a tile's line records them: their ratio, and the debit's share of the credited cells'
-    credit, the cap over ρ.  That credit is `pearl_c_work.tile_cap`'s `creditDevRev1` share, so the first promotion add is
+    credit, the cap over ρ.  That credit is `clear_work.tile_cap`'s `creditDevRev1` share, so the first promotion add is
     out of it once; taking it out again would overstate every share."""
     credit = cap / scheme.cap
     return {"debit": float(debit), "cap": float(cap), "ratio": float(debit / cap), "share": float(debit / credit),
@@ -487,7 +490,7 @@ def fresh_trials(job: dict, row: dict, draws: int, source: bytes) -> list[tuple[
     """An input's fresh trials, (tile id, matmul, draw, salt): `draws` work-weighted draws of its tiles with replacement,
     each under a salt of its own, both derived from `source` (recorded OS randomness drawn after the pass, so independent
     of its activations) under a domain naming the table and a context naming the input.  Draw d is `key.uniform(W, d)`
-    over the tiles' cumulative credited cells, as `pearl_c_work.draw` maps it: within one input every cell weighs the
+    over the tiles' cumulative credited cells, as `clear_work.draw` maps it: within one input every cell weighs the
     same `W_ref`, so the draw is exactly proportional to `TR.Wref`, as `HonestTileCapRate`'s tickets are."""
     ctx = {"manifest": job["sha256"], "matmul": row["matmul"]}
     ids = list(row["area"])
@@ -685,18 +688,18 @@ def main(argv: list[str] | None = None) -> int:
         print(f"fresh draws: {a.fresh_draws} an input from source {source.hex()}", flush=True)
     labels = labels_of(a.manifests)
     if a.per_input is not None:
-        PW._debit_cap, PW.D.chain_debit = _recorded, _chain_recorded
+        CW._debit_cap, CW.D.chain_debit = _recorded, _chain_recorded
         try:
             rows = [r for path, label in zip(a.manifests, labels)
                     for r in measure_inputs(path, a.per_input, a.census_max, a.draws, a.seed, a.jobs, out_dir, opts, label)]
         finally:
-            PW._debit_cap, PW.D.chain_debit = _DEBIT_CAP, _CHAIN_DEBIT
+            CW._debit_cap, CW.D.chain_debit = _DEBIT_CAP, _CHAIN_DEBIT
         return write_inputs(rows, a.seed, a.census_max, a.draws, out_dir, fresh)
-    PW._debit_cap, PW.D.chain_debit = _recorded, _chain_recorded
+    CW._debit_cap, CW.D.chain_debit = _recorded, _chain_recorded
     try:
         passes = [measure(path, per, a.seed, a.jobs, out_dir, opts, label) for path, per, label in zip(a.manifests, a.tiles, labels)]
     finally:
-        PW._debit_cap, PW.D.chain_debit = _DEBIT_CAP, _CHAIN_DEBIT
+        CW._debit_cap, CW.D.chain_debit = _DEBIT_CAP, _CHAIN_DEBIT
     summary = {"tool": "pouw_pearl_c_served_debit", "seed": a.seed, "caps": {c: str(r) for c, r in CAPS.items()}, "passes": passes}
     path = out_dir / "summary.json"
     path.write_text(json.dumps(summary, indent=1) + "\n")

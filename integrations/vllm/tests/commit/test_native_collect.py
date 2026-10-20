@@ -98,11 +98,12 @@ def test_gather_writes_the_reference_layout_at_every_alignment_and_grid(mod, bpd
         assert torch.equal(arena[off:off + nb], _as_bytes(t)), f"tensor {k} (src offset {t.data_ptr() % 16}, dst offset {off % 16}, {nb} B)"
 
 
-@pytest.mark.parametrize("gather", [False, True])
-def test_slot_plan_stages_what_one_acquisition_per_view_stages(mod, gather):
+@pytest.mark.parametrize(("gather", "fast"), [(False, True), (True, False), (True, True)], ids=["memcpy", "gather", "gather-fast"])
+def test_slot_plan_stages_what_one_acquisition_per_view_stages(mod, gather, fast):
     """`stage_slot_plan` (a replayed graph's slots in one call: whole, first n rows, first pad rows, a row count past the slot clamped
-    as `slot[:n]` is) writes the bytes and plan entries, and counts the expected tensors, of one acquisition per view in the same order,
-    on plan misses and hits alike; it refuses an unknown handle and an unknown kind."""
+    as `slot[:n]` is, no rows at all) writes the bytes and plan entries, and counts the expected tensors, of one acquisition per view in
+    the same order, on plan misses and hits alike, with the slots staged from their pointers (`slot_fast`) or as views; it refuses an
+    unknown handle and an unknown kind."""
     g = torch.Generator(device="cuda").manual_seed(11)
     rows_max = 64
 
@@ -117,10 +118,12 @@ def test_slot_plan_stages_what_one_acquisition_per_view_stages(mod, gather):
         if gather:
             c.enable_gather(256)
         c.use_gather = gather
+    batch.slot_fast = fast
     h = batch.add_slot_plan(list(range(len(slots))), slots, kinds)
     a_one = torch.full((1 << 20,), 0xAB, dtype=torch.uint8, device="cuda")
     a_batch = a_one.clone()
-    for n, pad in ((37, 40), (37, 40), (12, 16)):
+    steps = ((37, 40), (37, 40), (12, 16), (0, 8))
+    for n, pad in steps:
         views = [s if k == 0 else s[:n] if k == 1 else s[:pad] for s, k in zip(slots, kinds)]
         one.begin_step(1, a_one.data_ptr(), a_one.numel(), True)
         for i, v in enumerate(views):
@@ -135,6 +138,7 @@ def test_slot_plan_stages_what_one_acquisition_per_view_stages(mod, gather):
             batch.flush()
         r_batch = batch.end_step()
         torch.cuda.synchronize()
+        views = [v for v in views if v.numel()]
         ref, total = _reference_layout(views)
         assert r_batch == r_one and r_one[:2] == (total, len(views))
         assert torch.equal(a_batch, a_one)
@@ -142,7 +146,7 @@ def test_slot_plan_stages_what_one_acquisition_per_view_stages(mod, gather):
             assert torch.equal(a_batch[off:off + nb], _as_bytes(v))
         assert batch.export_plan(1) == one.export_plan(1)
     st_one, st_batch = one.stats(), batch.stats()
-    assert st_batch["expected"] == st_one["expected"] == 3 * len(slots) and st_batch["committed"] == 3 * len(slots)
+    assert st_batch["expected"] == st_one["expected"] == len(steps) * len(slots) and st_batch["committed"] == len(steps) * len(slots)
     with pytest.raises(RuntimeError, match="unknown handle"):
         batch.stage_slot_plan(h + 1, 1, 1)
     with pytest.raises(RuntimeError, match="kind must be"):

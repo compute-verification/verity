@@ -1,5 +1,6 @@
-"""The window's Lean against `verity.core.protocols.pouw.window`, on the shared harness (`verity_difftest`): one
-`Port` per ported function of `window.py`, served by `pouw-window-difftest` (`PouwWindow/Difftest.lean`).
+"""`verity.core.protocols.pouw.window` held to the window's Lean, PoUW's verifier of record (`pouw.verifier`), on the
+shared harness (`verity_difftest`, `of_record="lean"`): one `Port` per function of `window.py` the Lean states, served by
+`pouw-window-difftest` (`PouwWindow/Difftest.lean`).
 
 The inputs are drawn by the generators below from a Hypothesis-controlled `random.Random` (`st.randoms`), so a run is
 deterministic and shrinks. The grid's numbers run over bits 0 … 6, n up to 2^60 and the integers at or below 0; K′'s
@@ -28,7 +29,9 @@ import pytest
 import verity_difftest as D
 from hypothesis import strategies as st
 
+from verity.core.protocols.pouw import verifier as V
 from verity.core.protocols.pouw import window as Wd
+from verity.core.protocols.sampled_proofs import challenger as Ch
 from verity.ml.commitments.indexed import RangeIndexedDomain
 from verity.ml.commitments.merkle import CommitmentDomain
 
@@ -587,6 +590,54 @@ def public_inputs_in(rng: random.Random) -> dict:
 
 # ---- the references ------------------------------------------------------------------------------------------------------
 
+# ---- the fixed length ------------------------------------------------------------------------------------------------------
+
+def _slots(rng: random.Random) -> list[int]:
+    return [rng.choice((1, 4, 64, 1024, rng.randint(1, 1 << 20))) for _ in range(rng.randint(1, 6))]
+
+
+def length_item_in(rng: random.Random) -> dict:
+    return {"max_tokens": _slots(rng)}
+
+
+def length_problem_in(rng: random.Random) -> dict:
+    m = _slots(rng)
+    item: Any = Wd.length_item(m)
+    bad = rng.choice(("none",) * 4 + ("keys", "extra", "notobj", "stoptype", "eos", "stopcase", "notlist",
+                                      "neg", "bool", "max", "count", "short", "long", "slot"))
+    if bad == "keys":
+        del item[rng.choice(Wd.LENGTH_KEYS)]
+    elif bad == "extra":
+        item["ignore_eos"] = True
+    elif bad == "notobj":
+        item = rng.choice(([m], "fixed", None, 4))
+    elif bad == "stoptype":
+        item["stop"] = rng.choice((True, 1, None, ["fixed"]))
+    elif bad == "eos":
+        item["stop"] = "eos"
+    elif bad == "stopcase":
+        item["stop"] = rng.choice(("Fixed", "fixed ", "ignore_eos", ""))
+    elif bad == "notlist":
+        item[rng.choice(("max_tokens", "served"))] = rng.choice((4, "4", None, {"0": 4}))
+    elif bad == "neg":
+        item["served"] = [-1] + m[1:]
+    elif bad == "bool":
+        item["max_tokens"] = [True] * len(m)
+    elif bad == "max":
+        item["max_tokens"] = [x + 1 for x in m]
+        item["served"] = list(item["max_tokens"])
+    elif bad == "count":
+        item["max_tokens"] = item["served"] = m + [m[-1]]
+    elif bad == "short":
+        item["served"] = m[:-1]
+    elif bad == "long":
+        item["served"] = m + [rng.randint(0, 9)]
+    elif bad == "slot":
+        i = rng.randrange(len(m))
+        item["served"] = m[:i] + [rng.choice((m[i] - 1, m[i] + 1, 0))] + m[i + 1:]
+    return {"item": item, "max_tokens": m}
+
+
 def _entry_row(v: dict) -> Wd.Entry:
     return Wd.Entry.from_row(bytes.fromhex(v["row"]))
 
@@ -606,6 +657,8 @@ WINDOW = {"bound": "entries, not the bound", "row": "not an entry row", "layout"
           "overlap": "before the last call's end", "fillerbig": "the filler's range is", "end": "the ranges end at",
           "level": "real tiles are level", "records": "records, not one per call", "indices": "rows' indices are not",
           "record": "record"}
+LENGTH = {"keys": "length is not {", "stoptype": "stop is not a string", "eos": "eos-keyed-row", "lists": "not lists of",
+          "max": "max-tokens: registered", "count": "slots served, not", "slot": "tokens, not its max_tokens"}
 
 
 def layout_problem(v: dict) -> str | None:
@@ -617,6 +670,12 @@ def layout_problem(v: dict) -> str | None:
 def record_problem(v: dict) -> str | None:
     why = Wd.record_problem(_entry_row(v), v["record"])
     _reason("record_problem", why, RECORD)
+    return why
+
+
+def length_problem(v: dict) -> str | None:
+    why = Wd.length_problem(v["item"], v["max_tokens"])
+    _reason("length_problem", why, LENGTH)
     return why
 
 
@@ -644,6 +703,37 @@ def public_inputs(v: dict) -> str:
     return Wd.public_inputs(v["registration"], v["drawn"], v["sigma"], v["cap"], bytes.fromhex(v["domain_h3"])).hex()
 
 
+#: layouts a live window's coin commitment may have, PoUW's and ones it isn't
+_LIVE_LAYOUTS = [None, None, None, ((Wd.DRAW, 1), (Wd.SALT, 1), (Wd.ROUND, 2)), ((Wd.SALT, 1), (Wd.ROUND, 3)),
+                 ((Wd.SALT, 1), (Wd.DRAW, 1), ("pouw/rounds", 2)), ((Wd.SALT, 2), (Wd.DRAW, 1), (Wd.ROUND, 2)),
+                 ((Wd.SALT, 1), (Wd.DRAW, 1), (Wd.ROUND, 2), ("x", 1))]
+
+
+def live_commitment_in(rng: random.Random) -> dict:
+    layout = rng.choice(_LIVE_LAYOUTS) or Wd.live_families(rng.randint(1, 9))
+    scheme = rng.choice([Wd.LIVE_SCHEME] * 3 + ["verity/vllm/commit-coins/v1"])
+    c = Ch.LiveCommitment(scheme, rng.choice([0, 1, 7, 1 << 40]), layout, rng.randbytes(64)).to_json()
+    if rng.random() < 0.1:
+        c[rng.choice(["root", "epoch", "families"])] = rng.choice(["zz", -1, None])
+    return {"commitment": c}
+
+
+def live_epoch_reason(v: dict) -> str | None:
+    why = Wd.live_epoch_reason(Ch.LiveCommitment.from_json(v["commitment"]))
+    SEEN["live_epoch_reason"].add("accept" if why is None else "scheme" if "scheme" in why else "coins")
+    return why
+
+
+def round_key_in(rng: random.Random) -> dict:
+    return {**live_commitment_in(rng), "coin": rng.randbytes(rng.choice([0, 5, 32, 64, 64, 64])).hex(),
+            "round": rng.randrange(9), "root": rng.randbytes(rng.choice([0, 64, 64])).hex()}
+
+
+def round_key(v: dict) -> str:
+    c = Ch.LiveCommitment.from_json(v["commitment"])
+    return Wd.round_key(c, bytes.fromhex(v["coin"]), v["round"], bytes.fromhex(v["root"])).value.hex()
+
+
 def layout_constants(_: dict) -> dict:
     return {"T_BITS": Wd.T_BITS, "DEPTHS": Wd.DEPTHS, "PORT": Wd.PORT, "ENTRY_SCHEMA": Wd.ENTRY_SCHEMA,
             "ENTRY_BYTES": Wd.ENTRY_BYTES, "TILE": Wd.TILE, "ROW_STEP": Wd.ROW_STEP, "SIDE_DOMAIN": Wd.SIDE_DOMAIN,
@@ -657,7 +747,8 @@ def layout_constants(_: dict) -> dict:
 #: of each function that returns one, and its accept.
 REACHES = {"k_prime": {"refused", "capped", "k > 10,000", "n > 2^50", "exact"},
            "layout_problem": {"accept", *LAYOUT}, "record_problem": {"accept", *RECORD},
-           "window_problem": {"accept", "refused", *WINDOW}}
+           "length_problem": {"accept", *LENGTH},
+           "window_problem": {"accept", "refused", *WINDOW}, "live_epoch_reason": {"accept", "scheme", "coins"}}
 SEEN: dict[str, set[str]] = {fn: set() for fn in REACHES}
 
 
@@ -676,8 +767,9 @@ def k_prime(v: dict) -> int:
 
 
 def _port(fn: str, reference: Callable[[dict], Any], gen: Callable[[random.Random], dict], **kw) -> D.Port:
+    kw.setdefault("rejects", (ValueError,))
     return D.Port(EXE, fn, reference=reference, inputs=st.randoms(use_true_random=False).map(gen), package=LEAN,
-                  rejects=(ValueError,), **kw)
+                  of_record=V.RECORD_VERDICT, **kw)
 
 
 PORTS = {
@@ -722,16 +814,22 @@ PORTS = {
     "side_levels": (_port("side_levels", side_levels, side_levels_in), 300),
     "side_path": (_port("side_path", side_path, side_path_in), 300),
     "window_problem": (_port("window_problem", window_problem, window_in), 3000),
+    "length_item": (_port("length_item", lambda v: Wd.length_item(v["max_tokens"]), length_item_in, need_rejects=False), 200),
+    "length_problem": (_port("length_problem", length_problem, length_problem_in, need_rejects=False), 1500),
     "session_cap": (_port("session_cap", lambda v: Wd.session_cap(v["k_log"], v["per_block"]), session_cap_in), 300),
     "sessions": (_port("sessions", lambda v: Wd.sessions(v["k"], v["cap"]), sessions_in), 300),
     "instance_ts": (_port("instance_ts", lambda v: Wd.instance_ts(v["registration"], v["drawn"], v["sigma"], v["cap"]),
                           instance_ts_in), 1000),
     "public_inputs": (_port("public_inputs", public_inputs, public_inputs_in), 500),
+    "live_epoch_reason": (_port("live_epoch_reason", live_epoch_reason, live_commitment_in), 300),
+    "round_key": (_port("round_key", round_key, round_key_in, rejects=(ValueError, TypeError)), 300),
     "layout_constants": (D.Port(EXE, "layout_constants", reference=layout_constants, inputs=st.just({}), package=LEAN,
-                                need_rejects=False), 1),
+                                need_rejects=False, of_record=V.RECORD_VERDICT), 1),
     "constants": (D.Port(EXE, "constants", reference=lambda _: {
-        "PUBLIC": [list(p) for p in Wd.PUBLIC], "REGISTERED": list(Wd.REGISTERED), "KINDS": list(Wd.KINDS),
-        "GRID_BITS": Wd.GRID_BITS}, inputs=st.just({}), package=LEAN, need_rejects=False), 1),
+        "PUBLIC": [list(p) for p in Wd.PUBLIC], "REGISTERED": list(Wd.REGISTERED),
+        "LEGACY_REGISTERED": list(Wd.LEGACY_REGISTERED), "KINDS": list(Wd.KINDS), "GRID_BITS": Wd.GRID_BITS,
+        "STOP_FIXED": Wd.STOP_FIXED}, inputs=st.just({}), package=LEAN, need_rejects=False,
+        of_record=V.RECORD_VERDICT), 1),
 }
 
 server = D.server_fixture(PORTS["constants"][0])
@@ -773,7 +871,7 @@ def test_the_served_windows(run: str, work: dict, k: int, domain: str, server) -
 
 
 @pytest.mark.parametrize("fn", sorted(PORTS))
-def test_the_lean_is_the_python(fn: str, server) -> None:
+def test_the_python_is_the_lean(fn: str, server) -> None:
     port, examples = PORTS[fn]
     SEEN.get(fn, set()).clear()
     D.run(port, examples=examples, server=server)

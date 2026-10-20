@@ -70,13 +70,20 @@ Every declaration of the package's audited modules (not a list of theorems), fro
   record whose definitions use it changes. `--name-instances` writes each current name into its declaration;
 - the guarantees say what their records say, and each names its owner (below);
 - with a `verifier` section, nothing the verifier's `entries` reach is `@[implemented_by]` or `@[extern]` outside `allow`,
-  and they reach the `hash` namespace only through `stop` (`verifier_failures`). The walk follows definitions' values,
+  and they reach the `hash` namespace only through `stop` (`verifier_failures`). `allow` is a record: `--update` writes
+  each such constant on the path into it by name, so the review and the landing DM show one added, and a name that admits
+  nothing on the path fails; a `module:M` entry, which admits every constant of the modules under `M`, is kept as
+  written (Flock's lock lists names only). The walk follows definitions' values,
   `implemented_by` targets and `@[csimp]` replacements, the code compiled in place of a constant; a csimp rewrite itself
   is a theorem the replay checks, so it is listed (`csimp` in the facts) and not refused;
 - with a `claims` section, every predicate the spec declares under `claims.modules` (a named assumption aside) has its
   witnesses under `claims.witnesses`, or a reason under `claims.not`: a guarantee `fails`, stated `¬ C …` past its `∀`
   and `∃` binders with the claim `C` at the head, and guarantees `meets`, one per deployed record, that state the claim's
-  checkable antecedents there and not `C` itself (`claim_failures`; the `shape` rule doesn't apply to them);
+  checkable antecedents there and not `C` itself (`claim_failures`; the `shape` rule doesn't apply to them). A `meets`
+  witness must say something about the deployment: past its `∀`, `→` and `∃` binders, split at `∧`, each conjunct of its
+  conclusion is headed by a constant other than `C`, applies a definition under `meaning` itself (the deployed record, a
+  predicate or a field of it, so `True` or a fact of Init or Mathlib alone fails), and is neither a reflexivity
+  (`a = a`, `a ↔ a`) nor one of its hypotheses, and no hypothesis is `False` (`vacuous_meets`);
 - every definition a guarantee's statement reads is in the spec (below), or a pinned dependency's;
 - no dependency the `upstream` section scans proves, at the revision `lake-manifest.json` pins, a theorem about a watched
   statement that nobody has acknowledged (below);
@@ -86,7 +93,8 @@ Every declaration of the package's audited modules (not a list of theorems), fro
   declarations it comes after): a declaration that skipped the kernel shows no axiom, and only the replay catches it.
   The replay also walks the environment it checked for the axioms the package uses, and the audit fails if they differ
   from the sets the `.olean` files recorded. No `#print axioms` output is parsed anywhere. A replay killed by a signal
-  (out of memory) is reported as a kill, not as a verdict;
+  (out of memory) is reported as a kill, not as a verdict. With `--closure` it checks the whole import closure the
+  same way (below);
 - each test under `runs` passes on the data whose SHA-256 the record holds (below);
 - nothing changes this directory, the toolchain's `lean`, `lake` and `leanchecker`, or the `.olean` files of a package
   audited earlier while the audit runs: the Lean files run from a copy taken before the first build, and everything is
@@ -101,12 +109,41 @@ machine with less than `MEM_FLOOR_GIB` (24 GiB, memory and swap within the cgrou
 alike; the refusal prints the fast path's `research run --on vy-nebius-1 …` line. `VERITY_LEAN_MEM_FLOOR_GIB` sets
 another floor (0: none). Lake runs as many `lean` at once as `LEAN_NUM_THREADS`, so the build of a package that pins Mathlib
 or ArkLib runs at most one per `BUILD_GIB_PER_JOB` (8 GiB) of the memory its cgroup allows (`build_threads`, read where
-`/proc/self/cgroup` puts the process, so a queued run's scope counts); a `LEAN_NUM_THREADS` already set wins.
+`/proc/self/cgroup` puts the process, so a queued run's scope counts); a `LEAN_NUM_THREADS` already set wins. Its kernel
+replay runs at most one thread per `REPLAY_GIB_PER_THREAD` (4 GiB), one such replay at a time (`replay_threads`): 48 threads
+of Security's replay peaked at 145 GiB. An audit of a spec beside the ArkLib package that proves its guarantees (`Security`)
+is refused below `SPEC_FLOOR_GIB` (160 GiB): the replay's resident base is about 120 GiB whatever its threads (it died
+at 128 GiB with 16), and the refusal names `--kind lean-audit`, a 280 GiB shape.
+
+**The replay cache and the import closure.** Without `--closure` the replay trusts the package's dependencies (the
+toolchain's library, Mathlib, ArkLib) as their `.olean` files state them: a dependency module holding a theorem that
+skipped the kernel passes it. `--closure` closes that gap module by module. Every module of the closure gets a key
+(`replay_keys`): the toolchain, `Replay.lean`, the module's `.olean` files, and the name and key of each module it imports,
+so it covers every `.olean` file under it. With `--replay-cache DIR`, a module whose key `DIR` holds passed the replay
+before, with its imports in the environment, and a module checked is stored there once the replay passes. The replay of
+a package then sends to the kernel each own module and each module of the closure that has not passed (`closure_plan`),
+loads unchecked the modules that passed and import one of those (an import of them would bring the unpassed one in
+unchecked), and imports the rest. By induction over the import DAG every declaration of the closure has been through
+the kernel, with its imports present, under a key that covers them: cold, the whole closure goes through the kernel in
+one process, `leanchecker --fresh`'s check of every root at once; warm, nothing outside the package does, and a change to
+an own module replays it and what imports it, as without `--closure`. The cache is shared between packages, so
+`Security` reuses the Mathlib modules `Security/Proofs` checked. For a module's verdict to be a function of its key,
+`Replay.lean` refuses a declaration that mentions a constant its module neither declares nor imports, checks a theorem
+that two modules each declare (an equation lemma realized in both) once per module, and requires the quotient's
+constants to be the ones the kernel makes. A change to `Replay.lean` changes every key, so the next run is cold.
+The audit prints `closure: N modules checked, M reused` under each package's line. `check`'s lean-audit step runs
+`--closure` against the node's kept cache (`lean_audit.FLAGS`, `lean-replay/`), so a dependency module that skipped the
+kernel fails the merge check, and the `closure_dependency` control fails without `--fresh`. Cold, after a bump of the
+toolchain, Mathlib or ArkLib, or a change to `Replay.lean`, the first audit on each node checks the closure once; warm, the
+closure adds nothing to the kernel's work. `lean_audit.py --fresh` (the uncached nightly check) gives its packages one cache in
+its scratch tree, so `Security` reuses what `Security/Proofs` checked in the same run.
 
 `--fresh` also runs `leanchecker --fresh` on each root: the root's whole import closure, Mathlib and core included,
-through the kernel into an empty environment. It needs one module per root and a lot of memory, so it is not part of
-every run: the steward runs `check.py --all --build --fresh` nightly on `main`, and `upstream.py --fetch` against
-ArkLib's head weekly, each as a recorded run on a pod (`tool.py`; `[[run]]` in `tools/research/README.md`).
+through the kernel into an empty environment. It needs one module per root and a lot of memory, and checks the closure
+again on every run, so it is not part of every run: the steward runs `check.py --all --build --fresh` nightly on `main`,
+and `upstream.py --fetch` against ArkLib's head weekly, each as a recorded run on a pod (`tool.py`; `[[run]]` in
+`tools/research/README.md`). `--closure` with a kept cache, which `check` runs, checks the same closure once per change of its
+`.olean` files.
 
 `--all` first runs the controls (`--no-controls` skips them; `check`'s audit does, and the `tools/verity/lean` suite runs them, only
 when `tools/verity/lean/` changes): `tests/fixtures/control`, built with each audited package's toolchain (`--build`
@@ -120,7 +157,10 @@ installs it first, so a machine without elan works), must pass clean and fail on
   blocks;
 - a docstring that names `debug.skipKernelTC`, which must pass;
 - a fetched dependency (a package at `.lake/packages/dep`) whose module sets `debug.skipKernelTC`, which must fail, and
-  one whose docstring and comments name it, which must pass.
+  one whose docstring and comments name it, which must pass;
+- a dependency that adds a false theorem through `debug.skipKernelTC`, spelled so that no scan finds it, which must pass
+  every check, the replay of the package's own modules included, and fail the replay of the import closure
+  (`--closure`).
 
 ## The policy: `lean-audit.json`, beside the lakefile
 

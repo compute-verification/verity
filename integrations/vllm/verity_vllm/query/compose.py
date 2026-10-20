@@ -26,6 +26,9 @@ def compose_global(fixture: Mapping[str, Any], parts: Mapping[str, dict[str, Any
             by_engine.setdefault(int(r.get("arrive_step", 0)) + s, []).append((r["request_id"], s))
     hidden_family = parts[reqs[0]["request_id"]]["query"]["attention_hidden_family"]
     ids: list[dict[str, Any]] = []
+    engine_of = {(rid, s): e for e, members in by_engine.items() for rid, s in members}
+    unreturned = [dict(row, program_digest=pdig, component_digest=row["program_digest"], engine_step=engine_of.get((rid, row["step"]), row.get("engine_step")))
+                  for rid, p in parts.items() for row in p.get("unreturned") or ()]
     seen_w: set = set()
     for rid, p in parts.items():
         for row in p["identities"]:
@@ -58,8 +61,12 @@ def compose_global(fixture: Mapping[str, Any], parts: Mapping[str, dict[str, Any
             pre = next(x for x in comp["identities"] if x["family"] == hidden_family and x["op_path"] == op and x["step"] == 0)
             dec = next((x for x in comp["identities"] if x["family"] == hidden_family and x["op_path"] == op and x["step"] == 1), None)
             D = int(pre["geometry"]["D"])
-            NH = int(pre["geometry"]["HB"])
-            KVH = int(dec["geometry"]["HB"]) if dec is not None and int(dec["geometry"]["M"]) > 1 else NH
+            if hidden_family[:3] == "fa3":       # FA3 packs a KV group's query heads into its rows: HB = KVH, M = rows * NH / KVH
+                KVH = int(pre["geometry"]["HB"])
+                NH = KVH * (int(pre["geometry"]["M"]) // max(1, int(pre["geometry"]["rows"])))
+            else:                                # FA2: a prefill's slabs are its query heads, a swapped decode's its KV heads
+                NH = int(pre["geometry"]["HB"])
+                KVH = int(dec["geometry"]["HB"]) if dec is not None and int(dec["geometry"]["M"]) > 1 else NH
             fn = fmt.fa3_geometry if hidden_family[:3] == "fa3" else fmt.fa2_geometry
             HB, M, NB, BN, gname = fn(a["T_max"], a["max_rows"] * a["n_seq"], NH, KVH, D, a["n_seq"])
             ids.append({"family": hidden_family, "program_digest": pdig, "request_id": "*", "requests": a["requests"], "step": "*", "engine_step": e, "invocation": 0,
@@ -93,7 +100,7 @@ def compose_global(fixture: Mapping[str, Any], parts: Mapping[str, dict[str, Any
             "ranks": ranks, "rank": rank,
             "engine_steps": engine_steps_out, "steps": sorted(by_engine), "requests": [r["request_id"] for r in reqs],
             "populations": {"identities": len(ids), "by_family": dict(fam), "engine_steps": len(by_engine), "requests": len(reqs)},
-            "manifest_digest": fmt.manifest_digest(ids), "identities": ids}
+            "manifest_digest": fmt.manifest_digest(ids), "identities": ids, **fmt.unreturned_block(unreturned)}
 
 
 def _with_partitions(q: dict[str, Any], key: str, queries: Mapping[str, Mapping[str, Any]]) -> dict[str, Any]:
@@ -150,4 +157,5 @@ def merge_ranks(parts: list[dict[str, Any]]) -> dict[str, Any]:
             "steps": sorted({s for p in parts for s in p["steps"]}), "requests": list(dict.fromkeys(rq for p in parts for rq in p["requests"])),
             "complete": all(p.get("complete", True) for p in parts) and not binding["unbound"], "unmodelled": unmodelled,
             "populations": {"identities": len(ids), "by_family": dict(Counter(r["family"] for r in ids))},
-            "manifest_digest": fmt.manifest_digest(ids), "identities": ids, "tp_peer_binding": binding}
+            "manifest_digest": fmt.manifest_digest(ids), "identities": ids, "tp_peer_binding": binding,
+            **fmt.unreturned_block([r for p in parts for r in p.get("unreturned") or ()])}

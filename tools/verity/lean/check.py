@@ -68,7 +68,9 @@ environment extension loaded, so none of the package's code runs), and replays t
                  environment differ from those the `.olean` files recorded; a replay killed by a signal is reported as a
                  kill. With `--replay-cache DIR`, a module that passed the replay with the same `.olean` files, every
                  module it imports transitively included, on the same toolchain and `Replay.lean` (`replay_keys`) joins it
-                 unchecked, and its constants are still walked for axioms
+                 unchecked, and its constants are still walked for axioms. With `--closure`, the kernel also rejects a
+                 declaration of a module of the import closure (the toolchain's, Mathlib's, ArkLib's) that has not passed
+                 the replay under its key, each checked with its imports present (`replay_step`, `closure_plan`)
     upstream     a dependency that the policy's `upstream` section scans proves, at the revision `lake-manifest.json` pins,
                  a theorem about a watched assumption or hand proof that the entry's `ack` does not hold (`upstream.py`):
                  a bump that brings such a proof fails until someone has looked at it
@@ -243,9 +245,16 @@ def cores() -> int:
 #: what auditing a package that pins ArkLib (Security/Proofs, and Security, which audits it beside itself) needs: its build
 #: of C-Flock's soundness peaks at 15–24 GB (the lean-proofs skill); `VERITY_LEAN_MEM_FLOOR_GIB` sets another floor, 0 none
 MEM_FLOOR_GIB = 24
+#: an audit of a spec whose guarantees an ArkLib package proves (Security): its whole replay peaked at 145 GiB at 48 threads
+#: (r20261018-175656-1c85) and was killed at a 128 GiB cap at 16 (r20261019-084601-01a0), so the replay's resident base is
+#: about 120 GiB and a thread adds under 1: fewer threads don't make it fit, only the floor does
+SPEC_FLOOR_GIB = 160
 #: where a machine below the floor runs it instead
 ON_NODE = ("research run --on vy-nebius-1 --project verity --source . --cwd source --declared-output 'lean-audit/*' -- "
            "python3 tools/verity/lean/lean_changed.py --records {pkg}")
+#: the same for a spec beside its ArkLib package, on a cluster shape above SPEC_FLOOR_GIB (`cpu-xl`, 280 GiB)
+ON_NODE_SPEC = ("research run --on auto --kind lean-audit --project verity --source . --cwd source "
+                "--declared-output 'lean-audit/*' -- python3 tools/verity/lean/check.py --build {pkg}")
 
 
 def memory_gib(proc: Path = Path("/proc"), cgroup: Path = Path("/sys/fs/cgroup")) -> float:
@@ -298,21 +307,42 @@ def build_threads(pkg: Path, env=os.environ, have_gib: float | None = None) -> i
     return max(1, min(cores(), int(gib // BUILD_GIB_PER_JOB)))
 
 
+#: memory per replay thread of a Mathlib or ArkLib package, a cap on its threads: the whole-Security replay's peak is mostly
+#: its resident base (`SPEC_FLOOR_GIB`), with 145 GiB at 48 threads and over 128 at 16; a heavy replay runs alone
+#: (`_HEAVY_REPLAY`), since two side by side took that run to 183 GiB
+REPLAY_GIB_PER_THREAD = 4
+_HEAVY_REPLAY = threading.Semaphore(1)
+
+
+def replay_threads(pkg: Path, env=os.environ, have_gib: float | None = None) -> int | None:
+    """The `LEAN_NUM_THREADS` the kernel replay of ``pkg`` runs with when its memory bounds it (as `build_threads`, at
+    `REPLAY_GIB_PER_THREAD`); else None."""
+    if build_threads(pkg, env, have_gib=1) is None:
+        return None
+    gib = memory_gib() if have_gib is None else have_gib
+    return max(1, min(cores(), int(gib // REPLAY_GIB_PER_THREAD)))
+
+
 def memory_refusal(pkgs: list[Path], have_gib: float, env=os.environ) -> str | None:
-    """Why this machine should not audit ``pkgs``, or None: one pins ArkLib and the memory is below the floor."""
-    try:
-        floor = float(env.get("VERITY_LEAN_MEM_FLOOR_GIB", MEM_FLOOR_GIB))
-    except ValueError:
-        floor = MEM_FLOOR_GIB
+    """Why this machine should not audit ``pkgs``, or None: one pins ArkLib and the memory is below the floor, which is
+    `SPEC_FLOOR_GIB` when a spec beside it reads its build (`proved_in`: the facts of every guarantee it proves)."""
     heavy = [p for p in pkgs if (m := p / "lake-manifest.json").is_file()
              and any(d.get("name") == "Arklib" for d in json.loads(m.read_text()).get("packages", []))]
+    spec = [p for p in pkgs if (p / POLICY).is_file() and json.loads((p / POLICY).read_text()).get("proved_in")]
+    need = SPEC_FLOOR_GIB if heavy and spec else MEM_FLOOR_GIB
+    try:
+        floor = float(env.get("VERITY_LEAN_MEM_FLOOR_GIB", need))
+    except ValueError:
+        floor = need
     if not heavy or have_gib >= floor:
         return None
     rel = lambda p: os.path.relpath(p, ROOT) if p.resolve().is_relative_to(ROOT) else str(p)
-    return (f"{rel(heavy[0])} pins ArkLib, whose build peaks near {MEM_FLOOR_GIB} GiB, and this machine has "
-            f"{have_gib:.0f} GiB (memory and swap, within its cgroup): run it on a node, "
-            f"`{ON_NODE.format(pkg=rel(pkgs[0]))}` (add --update for the record), or set VERITY_LEAN_MEM_FLOOR_GIB=0 to "
-            f"try here anyway")
+    what = (f"{rel(spec[0])}'s audit reads {rel(heavy[0])}'s facts for every guarantee it proves, about 40 GiB beside the "
+            f"replay" if heavy and spec else f"{rel(heavy[0])} pins ArkLib, whose build peaks near {MEM_FLOOR_GIB} GiB")
+    return (f"{what}, and this machine has {have_gib:.0f} GiB (memory and swap, within its cgroup), under the {floor:.0f} "
+            f"GiB floor: run it on a node, `{(ON_NODE_SPEC if heavy and spec else ON_NODE).format(pkg=rel(pkgs[0]))}` "
+            f"(add --update for the record), or set "
+            f"VERITY_LEAN_MEM_FLOOR_GIB=0 to try here anyway")
 
 
 #: `--artifacts`: the node's Lake artifact cache, which only a passing audit writes (`lean_audit.LakeArtifacts`)
@@ -1044,6 +1074,14 @@ def dropped(pkg: Path, files: dict[str, str], facts: dict, where: str = "") -> l
             f"a local notation over section variables can make Lean drop every declaration after it; so does `#exit`)"]
 
 
+def own_modules(facts: dict) -> set[str]:
+    """The modules of ``facts``' import graph that a package of this repository builds (an `.olean` in its own
+    `.lake/build`), not the toolchain's or a fetched dependency's (under `.lake/packages`): a premise headed by one of
+    their constants is one the lock lists, whatever its module (`assumption_records`)."""
+    return {m for m, g in (facts.get("graph") or {}).items()
+            if "/.lake/build/" in (o := str(g.get("olean", ""))) and "/.lake/packages/" not in o}
+
+
 def judge(policy: dict, facts: dict, files: dict[str, str], update: bool = False, owner: str | None = None
           ) -> tuple[list[str], dict]:
     """(failures, the policy with guarantees and reads as the build has them).  A pure function of the facts: the tests run
@@ -1051,6 +1089,7 @@ def judge(policy: dict, facts: dict, files: dict[str, str], update: bool = False
     record for a guarantee that has none."""
     fails = []
     allowed = set(policy.get("axioms", STANDARD))
+    own = set(facts["own_modules"]) if "own_modules" in facts else own_modules(facts)
     by_axiom: dict[str, list[str]] = {}
     for o in facts["offenders"]:
         for a in o["axioms"]:
@@ -1073,7 +1112,7 @@ def judge(policy: dict, facts: dict, files: dict[str, str], update: bool = False
                          f"`escapes` with the reason, or remove it")
     for n in sorted(set(listed_escapes) - set(found)):
         fails.append(f"escape: {n} is listed under `escapes` but is not one; remove the entry")
-    fails += verifier_failures(policy.get("verifier"), facts.get("verifier"))
+    fails += verifier_failures(policy.get("verifier"), facts.get("verifier"), update)
     fails += claim_failures(policy, facts)
     modules = set(facts["modules"])
     exempt = policy.get("exempt", {})
@@ -1126,7 +1165,7 @@ def judge(policy: dict, facts: dict, files: dict[str, str], update: bool = False
         if not set(f["axioms"]) <= allowed:
             fails.append(f"guarantees: {name} uses {', '.join(sorted(set(f['axioms']) - allowed))}")
         for pr in f.get("premises") or []:
-            if "Assumptions" in (pr.get("module") or "").split("."):
+            if "Assumptions" in (m := pr.get("module") or "").split(".") or m in own:
                 premised.setdefault(pr["head"], set()).add(name)
         named = []
         for h in f["hypotheses"]:
@@ -1185,35 +1224,57 @@ def judge(policy: dict, facts: dict, files: dict[str, str], update: bool = False
         out["guarantees"], out["reads"] = kept, now_reads
     if update and (records or "assumptions" in policy):
         out["assumptions"] = records
+    if update and policy.get("verifier") and facts.get("verifier") is not None:
+        out["verifier"] = policy["verifier"] | {"allow": verifier_allow(policy["verifier"], facts["verifier"])}
     return fails, out
 
 
-def verifier_failures(rule: dict | None, found: dict | None) -> list[str]:
+def compiled(found: dict) -> list[tuple[str, dict]]:
+    """(kind, constant) for each `@[implemented_by]` and `@[extern]` constant on the verifier's path (`Facts.lean`)."""
+    return [(kind, e) for kind in ("implemented_by", "extern") for e in found.get(kind, [])]
+
+
+def allowed_by(allow: list[str], e: dict) -> str | None:
+    """The `verifier.allow` entry that admits the constant ``e``: its name, a name prefix, or `module:M` for every constant
+    of a module under `M`."""
+    n = e["name"]
+    return next((a for a in allow if (under([a[len("module:"):]], e.get("module") or "") if a.startswith("module:")
+                                      else n == a or n.startswith(a + "."))), None)
+
+
+def verifier_allow(rule: dict, found: dict) -> list[str]:
+    """The `verifier.allow` that `--update` writes: the `module:` entries as they are, and by name each compiled constant on
+    the path that none of them admits, so the record lists it and the landing DM shows one added."""
+    modules = [a for a in rule.get("allow", []) if a.startswith("module:")]
+    return modules + sorted({e["name"] for _, e in compiled(found) if not allowed_by(modules, e)})
+
+
+def verifier_failures(rule: dict | None, found: dict | None, update: bool = False) -> list[str]:
     """The verifier's path (`verifier` in the policy: its `entries`, the constants it may reach without being expanded,
     `stop`, and the `hash` namespace): every `@[implemented_by]` or `@[extern]` constant the entries reach is compiled code
-    no proof sees, so one fails unless `allow` names it (a name, or a name prefix; `module:M` for every constant of a module
-    under `M`), and the entries reach the `hash` namespace only through `stop`, so the verifier hashes through its
-    parameter (Daniel's checks (a) and (b), LEAN-18). The walk follows `@[csimp]` replacements, so the code compiled in
-    place of a constant is on the path; the rewrite itself is a theorem the replay checks, listed and never refused."""
+    no proof sees, so one fails unless `allow` admits it (`allowed_by`), and the entries reach the `hash` namespace only
+    through `stop`, so the verifier hashes through its parameter (Daniel's checks (a) and (b), LEAN-18). `allow` is a
+    record: `--update` writes each such constant into it by name (`verifier_allow`), a `module:` entry aside, and a name
+    that admits nothing on the path fails. The walk follows `@[csimp]` replacements, so the code compiled in place of a
+    constant is on the path; the rewrite itself is a theorem the replay checks, listed and never refused."""
     if not rule:
         return []
     if found is None:
         return ["verifier: `Facts.lean` reported no verifier path; is the audit tool older than the policy?"]
     allow = rule.get("allow", [])
-    names = [a for a in allow if not a.startswith("module:")]
-    modules = [a[len("module:"):] for a in allow if a.startswith("module:")]
-
-    def allowed(e: dict) -> bool:
-        n = e["name"]
-        return any(n == a or n.startswith(a + ".") for a in names) or under(modules, e.get("module") or "")
-
     entries = ", ".join(rule.get("entries", []))
     fails = [f"verifier: entry {m} is not a constant of the build; fix `verifier.entries`" for m in found.get("missing", [])]
-    for kind in ("implemented_by", "extern"):
-        for e in found.get(kind, []):
-            if not allowed(e):
+    if not update:
+        used = set()
+        for kind, e in compiled(found):
+            if a := allowed_by(allow, e):
+                used.add(a)
+            else:
                 fails.append(f"verifier: {e['name']} (@[{kind}], in {e.get('module')}) is on the path from {entries}: compiled "
-                             f"code no proof sees; add it to `verifier.allow` only if it is a core primitive")
+                             f"code no proof sees; if it is a core primitive, run `check.py --update`, which lists it under "
+                             f"`verifier.allow` (the landing DM shows it), else take it off the path")
+        fails += [f"verifier: `verifier.allow` lists {a}, which admits nothing on the path from {entries}; run `check.py "
+                  f"--update`" for a in allow if not a.startswith("module:") and a not in used]
     for h in found.get("hash", []):
         fails.append(f"verifier: {entries} reach {h['name']} outside the hash parameter, by {' -> '.join(h['path'])}; route "
                      f"it through the parameter, or add the public constant it serves to `verifier.stop`")
@@ -1233,7 +1294,12 @@ def claim_failures(policy: dict, facts: dict) -> list[str]:
     under `claims.witnesses` a theorem `fails`, whose statement past its `∀` and `∃` binders is `¬ C …` with the claim `C`
     itself at the head (the claim is not true of everything), and theorems `meets`, one per deployed record, that state
     the claim's checkable antecedents there and not `C` itself (it is not true at the deployment only because nothing
-    meets its antecedents). Each witness is a guarantee, so its record, and a change to it, shows in the landing DM."""
+    meets its antecedents). Each witness is a guarantee, so its record, and a change to it, shows in the landing DM.
+    A `meets` witness must say something about the deployment (LEAN-32, `vacuous_meets`): its conclusion, past its `∀`,
+    `→` and `∃` binders and split at `∧` (each conjunct again past its own binders), is conjuncts that are each headed by
+    a constant other than `C`, apply a definition under `meaning` themselves (the deployed record, a predicate or a field
+    of it; `True`, or a fact of Init or Mathlib alone, applies none), and are neither a reflexivity (`a = a`, `a ↔ a`,
+    `HEq a a`) nor one of its hypotheses (split at `∧`), and no hypothesis is `False`. Read as written, nothing unfolded."""
     rule = policy.get("claims")
     if not rule:
         return []
@@ -1281,7 +1347,31 @@ def claim_failures(policy: dict, facts: dict) -> list[str]:
                 fails.append(f"claims: {n} states {'¬ ' if body.get('negated') else ''}{c} itself: a `meets` witness states the "
                              f"claim's checkable antecedents at a deployed record (a decoder meeting its bound, a non-empty "
                              f"scope), not the claim")
+            elif role == "meets" and (why := vacuous_meets(body, c)):
+                fails.append(f"claims: {n}, {c}'s `meets` witness, {why}: each conjunct of a `meets` witness's conclusion "
+                             f"applies a definition of the spec (the deployed record, a predicate or a field of it)")
     return fails
+
+
+def vacuous_meets(body: dict, claim: str) -> str | None:
+    """Why a `meets` witness's statement (``body``, `Facts.lean`'s `conclusionOf`) says nothing about the deployment, or None."""
+    if not isinstance(body.get("conclusion"), list) or not body["conclusion"]:
+        return "has no conclusion `Facts.lean` reported; is the audit tool older than the policy?"
+    if body.get("absurd"):
+        return "takes `False` as a hypothesis, so it proves anything"
+    for k in body["conclusion"]:
+        head = k.get("head")
+        if head is None:
+            return "has a conjunct that applies a bound variable, not a constant"
+        if head == claim:
+            return f"has a conjunct that states {claim} itself"
+        if k.get("refl"):
+            return f"has a conjunct that is a reflexivity ({head} of two equal sides)"
+        if k.get("assumed"):
+            return f"has a conjunct ({head} …) that is one of its own hypotheses"
+        if not k.get("defs"):
+            return f"has a conjunct ({head} …) that applies no definition under `meaning` (`True`, or a fact of Init or Mathlib alone)"
+    return None
 
 
 def assumption_records(policy: dict, now_reads: dict, update: bool, owner: str | None,
@@ -1292,7 +1382,9 @@ def assumption_records(policy: dict, now_reads: dict, update: bool, owner: str |
     update writes the digests, drops an entry no guarantee reads, and converts a list of assumption modules into the
     definitions the guarantees read there, each owned by the one owner of the guarantees that read it (or ``owner``).
     ``premised`` ({definition: the guarantees whose statements take it}, from `Facts.lean`'s `premises`) names the premises
-    a statement takes in an assumptions module, its `Guarantees` definitions unfolded and a `Premises` abbrev seen through:
+    a statement takes, headed by a constant of an assumptions module or of any module this repository builds
+    (`own_modules`: a premise defined in `Definitions` carries what it assumes as much as one in `Models`), its `Guarantees`
+    definitions unfolded and a `Premises` abbrev seen through:
     one the lock doesn't list fails, and an update adds it the same way, so an entry lost in a merge is never silent."""
     assumed, fails, out = policy.get("assumptions", {}), [], {}
     read = {d: (m, h, g["guarantees"]) for m, g in now_reads.items() for d, h in g["definitions"].items()}
@@ -1307,6 +1399,10 @@ def assumption_records(policy: dict, now_reads: dict, update: bool, owner: str |
                 assumed[d] = {"owner": who.pop()} if len(who) == 1 else {}
     for a, rec in sorted(assumed.items()):
         who = (rec or {}).get("owner") or owner
+        if a not in read and a in (premised or {}):
+            # a premise only unfolding reaches (a reducible definition the statement reads stands for it): no read record
+            out[a] = {"owner": who} if who else {}
+            continue
         if a not in read:
             if not update:
                 fails.append(f"assumptions: {a} is listed, but no guarantee reads it; remove the entry")
@@ -1767,7 +1863,8 @@ def proved(pkg: Path, policy: dict, facts: dict, work: Path, moved: dict[str, st
         sources.append((entry, qf, files))
         conflicts += qf.get("moved_conflicts", [])
     pins, more, by = assign(policy.get("guarantees", {}), sources)
-    return fails + more, facts | {"pins": pins, "moved_conflicts": conflicts}, by
+    own = sorted(set().union(*(own_modules(f) for _, f, _ in sources)))
+    return fails + more, facts | {"pins": pins, "moved_conflicts": conflicts, "own_modules": own}, by
 
 
 REPRINTED = "printed differently: the same statement (type hash and named assumptions unchanged)"
@@ -1825,7 +1922,8 @@ def review(old: dict, new: dict, facts: dict, sources: dict[str, Path], renames:
     reading of its own.  After `--moved` (``renames``, `facts_of`), a guarantee and a definition are compared with the
     record of their old names, by their texts under the old names: a guarantee that says what its record says gets one line
     (moved from its old name, lifted), and the definitions that are the same are counted on one line.  One the base already
-    records under its new name (a lock re-recorded after the move) is compared with that record."""
+    records under its new name (a lock re-recorded after the move) is compared with that record.  Each entry added to
+    or dropped from `verifier.allow` gets a line."""
     out = []
     op, np = old.get("guarantees", {}), new.get("guarantees", {})
     moves = not facts.get("moved_conflicts")
@@ -1917,6 +2015,11 @@ def review(old: dict, new: dict, facts: dict, sources: dict[str, Path], renames:
         out.append(f"reads: {regrouped} {REGROUPED}")
     if regrouped_own:
         out.append(f"reads: {regrouped_own} {REGROUPED_OWN}")
+    before, after = ((d.get("verifier") or {}).get("allow", []) for d in (old, new))
+    where = {e["name"]: f" (@[{kind}], in {e.get('module')})" for kind, e in compiled(facts.get("verifier") or {})}
+    out += [f"verifier: allowed {a}{where.get(a, '')}: compiled code no proof sees, now on the verifier's path"
+            for a in after if a not in before]
+    out += [f"verifier: no longer allowed {a}: off the verifier's path" for a in before if a not in after]
     return out
 
 
@@ -2024,62 +2127,119 @@ def olean_digest(lib: Path, files: list[Path]) -> str:
     return h.hexdigest()
 
 
-REPLAY_SCHEMA = "lean-replay/v1"
+REPLAY_SCHEMA = "lean-replay/v2"
+#: how long a replay may run before it is killed; the import closure's, cold, checks all of Mathlib and core
+REPLAY_TIMEOUT = 4 * 3600
+CLOSURE_TIMEOUT = 24 * 3600
 
 
 def replay_keys(facts: dict, toolchain: str) -> dict[str, str]:
-    """{module: key} for each audited module: what its kernel replay's verdict is a function of. The key hashes the
-    toolchain, `Replay.lean`, and the `.olean` files (every part) of the module and of each module it imports, transitively,
-    each under its module's name (``facts``' `graph`), never a path: a module whose bytes and imports' bytes are unchanged
-    keeps its key wherever the package is built."""
+    """{module: key} for every module of the import closure (``facts``' `graph`): what its kernel replay's verdict is a
+    function of. A module's key hashes the toolchain, `Replay.lean`, its `.olean` files (every part), and the name and key of
+    each module it imports, so it covers the `.olean` files of everything it imports, transitively, each under its module's
+    name, never a path: a module whose bytes and imports' bytes are unchanged keeps its key wherever the package is built."""
     graph = facts["graph"]
     files = {m: [p for p in (Path(g["olean"]), Path(g["olean"] + ".server"), Path(g["olean"] + ".private")) if p.is_file()]
              for m, g in graph.items()}
     with ThreadPoolExecutor(max_workers=min(8, cores())) as ex:
         digests = dict(zip(files, ex.map(lambda ps: ",".join(sha256(p) for p in ps), files.values())))
     head = f"{REPLAY_SCHEMA}\0{toolchain}\0{sha256(TOOL / 'Replay.lean')}\0"
-    keys = {}
-    for m in facts["modules"]:
-        seen, stack = {m}, [m]
+    keys: dict[str, str] = {}
+    for root in graph:
+        stack = [(root, False)]
         while stack:
-            for i in graph[stack.pop()]["imports"]:
-                if i not in seen:
-                    seen.add(i)
-                    stack.append(i)
-        h = hashlib.sha256(f"{head}{m}\0".encode())
-        for n in sorted(seen):
-            h.update(f"{n}\0{digests[n]}\n".encode())
-        keys[m] = h.hexdigest()
+            m, expanded = stack.pop()
+            if m in keys:
+                continue
+            imports = sorted(graph[m]["imports"])
+            if not expanded:
+                stack.append((m, True))
+                stack.extend((i, False) for i in imports if i not in keys)
+                continue
+            h = hashlib.sha256(f"{head}{m}\0{digests[m]}\n".encode())
+            for i in imports:
+                h.update(f"{i}\0{keys[i]}\n".encode())
+            keys[m] = h.hexdigest()
     return keys
 
 
-def replay_step(pkg: Path, policy: dict, facts: dict, toolchain: str, work: Path, replay_cache: Path | None) -> tuple[list[str], dict]:
+def closure_plan(facts: dict, passed) -> tuple[list[str], list[str]]:
+    """(the dependency modules to check, those to add unchecked) for the replay of the import closure: each module of the
+    closure outside the package's own (``facts``' `graph` less its `modules`) that has not ``passed``, and every one that
+    imports one of those, transitively, which must join the replay because an import of it would bring the modules it
+    imports unchecked. The rest are imported, as each passed with the same `.olean` files and imports."""
+    graph, own = facts["graph"], set(facts["modules"])
+    deps = [m for m in graph if m not in own]
+    missing = {m for m in deps if not passed(m)}
+    importers: dict[str, list[str]] = {}
+    for m in deps:
+        for i in graph[m]["imports"]:
+            importers.setdefault(i, []).append(m)
+    above, stack = set(missing), list(missing)
+    while stack:
+        for j in importers.get(stack.pop(), []):
+            if j not in above:
+                above.add(j)
+                stack.append(j)
+    return sorted(missing), sorted(above - missing)
+
+
+def store_replay(replay_cache: Path, key: str, module: str) -> None:
+    """Record that ``module`` passed the replay under ``key``. The packages of one audit replay in threads of one process, and
+    two whose closures share a module store its key at once, so the temporary name is the thread's."""
+    tmp = replay_cache / f".{key}.{os.getpid()}.{threading.get_ident()}.tmp"
+    tmp.write_text(json.dumps({"schema": REPLAY_SCHEMA, "module": module, "key": key}))
+    os.replace(tmp, replay_cache / f"{key}.json")
+
+
+def replay_step(pkg: Path, policy: dict, facts: dict, toolchain: str, work: Path, replay_cache: Path | None,
+                closure: bool = False) -> tuple[list[str], dict]:
     """(failures, how many modules were checked and reused): the kernel replay of the package's audited modules
     (`Replay.lean`), each module whose `replay_keys` key ``replay_cache`` holds joining it unchecked, and each module checked
-    stored there when the replay passes."""
+    stored there when the replay passes. With ``closure``, the replay also checks every module of the import closure, the
+    toolchain's, Mathlib's and ArkLib's included, that has not passed it with its key (`closure_plan`), so each
+    declaration the package rests on goes through the kernel once and a warm cache checks none of them again."""
     found = work / "replay.json"
     found.unlink(missing_ok=True)
     keys = replay_keys(facts, toolchain) if replay_cache else {}
-    reused = [m for m in facts["modules"] if m in keys and (replay_cache / f"{keys[m]}.json").is_file()]
-    checked = [m for m in facts["modules"] if m not in reused]
-    rc, text = run(["lake", "env", "lean", "--run", str(TOOL / "Replay.lean"), str(found), *checked,
-                    *(["--reused", *reused] if reused else [])], pkg, work / "replay.log")
+    passed = lambda m: m in keys and (replay_cache / f"{keys[m]}.json").is_file()
+    n = replay_threads(pkg)
+    _peak.bytes = 0
+    # what passed is read once the replay may start, so a package audited beside one that shares its closure reuses it
+    with _HEAVY_REPLAY if n is not None else contextlib.nullcontext():
+        reused = [m for m in facts["modules"] if passed(m)]
+        checked = [m for m in facts["modules"] if m not in reused]
+        deps_checked, deps_reused = closure_plan(facts, passed) if closure else ([], [])
+        rc, text = run([*([] if n is None else ["env", f"LEAN_NUM_THREADS={n}"]), "lake", "env", "lean", "--run",
+                        str(TOOL / "Replay.lean"), str(found), *checked, *(["--reused", *reused] if reused else []),
+                        *(["--closure", *deps_checked] if deps_checked else []),
+                        *(["--closure-reused", *deps_reused] if deps_reused else [])],
+                       pkg, work / "replay.log", timeout=CLOSURE_TIMEOUT if closure else REPLAY_TIMEOUT)
+        doc = json.loads(found.read_text()) if found.exists() and not killed(rc) else {}
+        # a module's entry says its declarations passed with its imports present: one rejected elsewhere takes nothing from it
+        accepted = [m for m in checked + deps_checked if m not in set(doc.get("rejected", []))] \
+            if keys and (rc == 0 or (rc == 1 and "rejected" in doc)) else []
+        if accepted:
+            replay_cache.mkdir(parents=True, exist_ok=True)
+            for m in accepted:
+                store_replay(replay_cache, keys[m], m)
+    stats = {"checked": len(checked), "reused": len(reused), "peak_gib": round(_peak.bytes / 2**30, 1),
+             "phases": doc.get("seconds", {})}
+    if closure:
+        stats["closure"] = {"modules": len(facts["graph"]) - len(facts["modules"]), "checked": len(deps_checked),
+                            "reused": len(facts["graph"]) - len(facts["modules"]) - len(deps_checked),
+                            "loaded_unchecked": len(deps_reused)}
     fails = []
+    where = f"in the import closure of {', '.join(policy['roots'])}" if closure else f"under {', '.join(policy['roots'])}"
     if killed(rc):
         fails.append(f"replay: killed (exit {rc}; out of memory?), which is not a kernel verdict: rerun it alone\n{text[-1000:]}")
-    elif rc or not found.exists():
-        fails.append(f"replay: the kernel rejected a declaration under {', '.join(policy['roots'])} (exit {rc}):\n"
-                     f"{text[-2000:]}")
-    elif (walked := sorted(json.loads(found.read_text())["axioms"])) != sorted(facts["axioms"]):
+    elif rc or "axioms" not in doc:
+        fails.append(f"replay: the kernel rejected a declaration {where}"
+                     f"{', in ' + ', '.join(doc['rejected']) if doc.get('rejected') else ''} (exit {rc}):\n{text[-2000:]}")
+    elif (walked := sorted(doc["axioms"])) != sorted(facts["axioms"]):
         fails.append(f"replay: the replayed environment uses the axioms {', '.join(walked) or 'none'}, the .olean files "
                      f"record {', '.join(sorted(facts['axioms'])) or 'none'}")
-    elif keys:
-        replay_cache.mkdir(parents=True, exist_ok=True)
-        for m in checked:
-            tmp = replay_cache / f".{keys[m]}.{os.getpid()}.tmp"
-            tmp.write_text(json.dumps({"schema": REPLAY_SCHEMA, "module": m, "key": keys[m]}))
-            os.replace(tmp, replay_cache / f"{keys[m]}.json")
-    return fails, {"checked": len(checked), "reused": len(reused)}
+    return fails, stats
 
 
 def timed(f, *args):
@@ -2201,7 +2361,7 @@ def template(pkg: Path) -> dict:
 def audit(pkg: Path, out: Path, build: bool = False, update: bool = False, replay: bool = True, fresh: bool = False,
           log=print, built=lambda: None, runs: bool = True, repo: Path = ROOT, moved: dict[str, str] | None = None,
           ready=lambda q: None, owner: str | None = None, name: bool = False, lifts: dict | None = None,
-          replay_cache: Path | None = None) -> dict:
+          replay_cache: Path | None = None, closure: bool = False) -> dict:
     """Audit one package; returns its report (`failures` empty when it passes). ``built`` is called once its build has
     passed, before anything reads it; ``ready`` (a package its `proved_in` names) returns once that package's build has
     ended (`proved`). ``runs`` runs the package's tests (`tests`), ``repo`` the checkout their data's
@@ -2213,7 +2373,7 @@ def audit(pkg: Path, out: Path, build: bool = False, update: bool = False, repla
     instead of auditing, and the report's `moved` holds their moves.  The report lists the spec's definitions
     that no guarantee reads (`unread_spec`).  ``replay_cache`` (a directory) holds each module whose replay passed, under
     its `replay_keys` key: such a module's constants join the replay unchecked, and each module checked is stored there
-    when the replay passes."""
+    when the replay passes.  ``closure`` replays the import closure too (`replay_step`)."""
     rep = {"package": str(pkg), "seconds": {}, "failures": []}
     if not (pkg / POLICY).exists():
         rep["failures"].append(f"policy: {pkg} has no {POLICY}. Start from this one, list the theorems your documents cite "
@@ -2255,8 +2415,14 @@ def audit(pkg: Path, out: Path, build: bool = False, update: bool = False, repla
                 return rep
     built()
     files = lean_modules(pkg)
-    background = ThreadPoolExecutor(max_workers=2)
+    background = ThreadPoolExecutor(max_workers=5)
     ran = background.submit(timed, tests, pkg, policy, files, work, repo, update) if runs and policy.get("runs") and not lifts else None
+    # a spec's `proved` waits for its provers' builds; the replay, the dependency scans and digests and the upstream scan
+    # read only the package's own facts, which `proved` leaves as they are, so they fill that wait. Elsewhere they keep
+    # their place: started together, their Python contends for the GIL with the audits on the critical path.
+    early = "proved_in" in policy and not lifts
+    upstream = background.submit(timed, sibling("upstream").pinned, pkg, policy["upstream"]) \
+        if early and "upstream" in policy else None
     current = policy
     if moved:
         renames = {}
@@ -2265,18 +2431,24 @@ def audit(pkg: Path, out: Path, build: bool = False, update: bool = False, repla
                 renames[renamed(n, moved)] = r
         current = policy | {"guarantees": renames}
     s = time.monotonic()
+    replayed = scanned = digested = None
     try:
         facts = facts_of(pkg, current, work, moved)
+        if early:
+            replayed = background.submit(timed, replay_step, pkg, policy, facts, rep["toolchain"], work, replay_cache,
+                                         closure) if replay else None
+            scanned = background.submit(timed, dependency_scans, pkg, facts["oleans"], policy)
+            digested = background.submit(timed, dependency_digests, pkg, rep["toolchain"], facts["oleans"])
         cross: list[str] = []
         if "proved_in" in policy:
             cross, facts, rep["proved_in"] = proved(pkg, current, facts, work, moved, ready)
     except RuntimeError as e:
         rep["failures"].append(f"lean: {e}")
-        background.shutdown()
+        background.shutdown(cancel_futures=True)
         return rep
     rep["seconds"]["audit"] = round(time.monotonic() - s, 1)
-    replayed = background.submit(timed, replay_step, pkg, policy, facts, rep["toolchain"], work, replay_cache) \
-        if replay and not lifts else None
+    if replay and not lifts and not early:
+        replayed = background.submit(timed, replay_step, pkg, policy, facts, rep["toolchain"], work, replay_cache, closure)
     if lifts:
         try:
             rep["moved"] = lift(pkg, current, facts, lifts)
@@ -2287,9 +2459,8 @@ def audit(pkg: Path, out: Path, build: bool = False, update: bool = False, repla
     fails = cross + fails + dropped(pkg, files, facts) + spec_reads(current, facts, reads_home(pkg, current)) + \
         shape(current, facts)
     rep["unread_spec"] = unread_spec(facts, read_by_dependents(pkg, repo))
-    s = time.monotonic()
-    missed, rep["dependency_sources"] = dependency_scans(pkg, facts["oleans"], policy)
-    rep["seconds"]["dependency-sources"] = round(time.monotonic() - s, 1)
+    (missed, rep["dependency_sources"]), rep["seconds"]["dependency-sources"] = \
+        scanned.result() if scanned else timed(dependency_scans, pkg, facts["oleans"], policy)
     fails = scans(pkg, files, policy) + missed + fails
     rep["heartbeats"] = heartbeats(pkg, files, build_seconds([work / "build.log", work / "build-roots.log"] if build else []))
     anonymous = anonymous_instances(pkg, files, facts)
@@ -2305,13 +2476,11 @@ def audit(pkg: Path, out: Path, build: bool = False, update: bool = False, repla
               f"with it every record whose definitions use it. Write `instance {i['id']}` there (`check.py --name-instances` "
               f"writes each one)" for i in anonymous]
     if "upstream" in policy:
-        s = time.monotonic()
-        rep["upstream"], missed = sibling("upstream").pinned(pkg, policy["upstream"])
+        (rep["upstream"], missed), rep["seconds"]["upstream"] = \
+            upstream.result() if upstream else timed(sibling("upstream").pinned, pkg, policy["upstream"])
         fails += missed
-        rep["seconds"]["upstream"] = round(time.monotonic() - s, 1)
-    s = time.monotonic()
-    deps = dependency_digests(pkg, rep["toolchain"], facts["oleans"])
-    rep["seconds"]["dependencies"] = round(time.monotonic() - s, 1)
+    deps, rep["seconds"]["dependencies"] = \
+        digested.result() if digested else timed(dependency_digests, pkg, rep["toolchain"], facts["oleans"])
     if update:
         new["dependencies"] = deps
     elif "dependencies" not in policy:
@@ -2458,7 +2627,12 @@ def controls(toolchain: str, out: Path, install: bool = False, log=print) -> lis
         if v.get("replay_only"):
             if missed := beside(audit(bad, reports, replay=False)["failures"]):
                 fails.append(f"controls: `{name}` should pass every check but the replay; it failed:\n" + "\n".join(missed))
-        got = audit(bad, reports, replay=v.get("replay", False) or v.get("replay_only", False))["failures"]
+        if v.get("closure_only"):
+            if missed := beside(audit(bad, reports)["failures"]):
+                fails.append(f"controls: `{name}` should pass every check but the import closure's replay; it failed:\n" +
+                             "\n".join(missed))
+        got = audit(bad, reports, replay=v.get("replay", False) or v.get("replay_only", False) or v.get("closure_only", False),
+                    closure=v.get("closure_only", False))["failures"]
         for rel in v.get("not_written", []):
             if (bad / rel).exists():
                 fails.append(f"controls: `{name}` wrote {rel} while the audit read the package: its code ran there")
@@ -2517,6 +2691,9 @@ def main(argv: list[str]) -> int:
                     "checked here")
     ap.add_argument("--artifacts", type=Path, metavar="DIR", help="Lake's artifact cache, which the builds read and never write "
                     "(`lake_env`)")
+    ap.add_argument("--closure", action="store_true", help="the replay also checks every module of the import closure, the "
+                    "toolchain's, Mathlib's and ArkLib's included, that has not passed it under its key (with --replay-cache, "
+                    "a warm run checks only what changed; `replay_step`)")
     ap.add_argument("--fresh", action="store_true", help="also `leanchecker --fresh` each root: its whole closure, Mathlib and core "
                     "included, through the kernel (slow: see README)")
     ap.add_argument("--no-runs", action="store_true", help="skip the packages' tests (`runs`)")
@@ -2614,7 +2791,8 @@ def main(argv: list[str]) -> int:
             rep = audit(pkg, out, a.build, a.update and mine, not a.no_replay, a.fresh, built=lambda: seal(pkg),
                         runs=not a.no_runs, repo=a.repo.resolve(), moved=moved if mine else None,
                         ready=lambda q: built[q].wait() if q in built else None, owner=a.owner,
-                        name=a.name_instances and mine, lifts=lifts if mine else None, replay_cache=a.replay_cache)
+                        name=a.name_instances and mine, lifts=lifts if mine else None, replay_cache=a.replay_cache,
+                        closure=a.closure)
         finally:
             if not built[pkg].is_set():
                 seal(pkg)
@@ -2635,6 +2813,12 @@ def main(argv: list[str]) -> int:
             if "sandbox" in rep:
                 head += "; built in the sandbox" if rep["sandbox"] else "; built WITHOUT a sandbox (unshare unavailable here)"
             print(head, flush=True)
+            if c := rep.get("replay", {}).get("closure"):
+                print(f"  closure: {c['checked']} modules checked, {c['reused']} reused, of the {c['modules']} the package "
+                      f"imports ({c['loaded_unchecked']} of those reused loaded beside them, the rest imported); its own: "
+                      f"{rep['replay']['checked']} checked, {rep['replay']['reused']} reused; replay "
+                      f"{rep['seconds'].get('replay')} s ({rep['replay']['phases']}), peak {rep['replay']['peak_gib']} GiB",
+                      flush=True)
             for f in rep["failures"]:
                 print("  " + f.replace("\n", "\n    "), flush=True)
             for n in rep.get("notes", []):

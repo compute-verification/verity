@@ -8,6 +8,7 @@ checks and there are as many openings as draws.
     snap = checks.snapshot(session, t)    once a window's draws are out
     future = checks.submit(snap, t, draws, bodies)   a batch of the wire's openings frames, checked in a worker
     checks.settle(session, t, results, count)        the window's verdict, set on the session as `verify` sets it
+    checks.bounds(profiles)               each window's bound on wrong receipts (`IntegrityProfile.bound`), one a worker
 """
 from __future__ import annotations
 
@@ -103,8 +104,21 @@ class Checks:
         w.verdict = audit.Verdict(t, True)
         return w.verdict
 
+    def bounds(self, profiles) -> list[int | float]:
+        """Each profile's `bound()`, exact, its stratified law's `count_bound` computed in the workers side by side (a
+        60 s window's 33273 draws from ~6e10 receipts take 25–75 s each in exact arithmetic); a law without strata in
+        this process."""
+        laws = [p.strata() for p in profiles]
+        futures = [None if law is None else self.pool.submit(_count_bound, law, p.delta)
+                   for p, law in zip(profiles, laws)]
+        return [p.bound() if f is None else f.result() for p, f in zip(profiles, futures)]
+
     def close(self, wait: bool = False) -> None:
         self.pool.shutdown(wait=wait, cancel_futures=True)
+
+
+def _count_bound(law, delta: float) -> int:
+    return law.count_bound(delta)
 
 
 def _warm() -> int:

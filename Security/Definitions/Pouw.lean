@@ -8,6 +8,7 @@ import Definitions.Pouw.Eps1.M3
 import Definitions.Pouw.Dimension.Causal
 import Definitions.Pouw.Dimension.Defs
 import Definitions.Pouw.Dimension.Lift
+import Definitions.Pouw.FiatShamir
 import Definitions.Pouw.Fp8Atom.Atom
 import Definitions.Pouw.Fp8Atom.E4M3
 import Definitions.Pouw.Fp8Atom.Fp32
@@ -23,6 +24,7 @@ import Definitions.Pouw.Fp8Atom.Vectors.Ada
 import Definitions.Pouw.Fp8Atom.Vectors.Add
 import Definitions.Pouw.Fp8Atom.Vectors.C00
 import Definitions.Pouw.Fp8Atom.Vectors.C01
+import Definitions.Pouw.FpG1
 import Definitions.Pouw.Game.Deadline
 import Definitions.Pouw.Game.Defs
 import Definitions.Pouw.Game.Params
@@ -136,6 +138,13 @@ them by the rounding margin outright, unpinned.
 H-1T's per-tile count statement: the tiles, their domain `Tiling.AtLeast` and the output slots (`H1TTile`), the named
 assumption `TTH1T` (`H1TTileAssumptions`), and its two form checks (`H1TTileProofs`).
 
+## `FpG1`: FP8-g1 and W4A8-g1's operands (FPX-DESIGN, PR #2710)
+
+The encodings (`Encoding`): E4M3's integer grid to a bound, the doubled E2M1 grid, round to nearest onto a grid, the
+coin, an operand entry and a device's g1 grids. The int8 GEMM, the coin's rank-one terms and the epilogue (`Gemm`).
+`Proofs.Pouw.FpG1` proves the arithmetic. The record's headlines cover g1's windows by their own quantifier over
+committed values.
+
 ## `PearlC`: Pearl-C's Π and the statements about it
 
 Π's shared definitions (`Defs`): the parameters, the E4M3 encoder, the BF16 conversion and the FP32 encoder, the row
@@ -170,8 +179,13 @@ One draw that depends on the registration (C1), then the calls' sessions in orde
 audit: the game, the laws and their product (M1), the units' statements (self-contained tiles whose seed's position and
 roots are read at their place in the committed transcript, decision 106) and PoUW's harm family (`harmSets`), each
 call's analysis, the premises of the window's composition in the compiled tables' shape (a constant plus a term of the
-prover's state) and the window's collision term (`coll`), and the deployed draw, sampled proofs' service's uniform
-subset in rank-ordered sessions (`serviceLaw`, `sessionLaw`, `CopyClosed`).
+prover's state) and the window's collision term (`coll`, bounded at the sessions' counted queries by `CollCounted`),
+what the served pass committed (`ServedPass`) and the transcripts that are its (`Anchored`, `Served`), the tie to what's
+served (`ServedTie`, open on main), and the deployed draw, sampled proofs' service's uniform subset in rank-ordered
+sessions (`serviceLaw`, `sessionLaw`, `CopyClosed`) with its units' statements, the tiles' read in every session
+(`UnitStmts.copies`, `WrongCopyClosed`).
 The window's ε from its calls' (M2) and the service's draw at `η = 0` are `Models.Pouw.Guarantees.Window`, stated and
-not yet proved.
+not yet proved. `Proofs.Pouw.Window`: the deployed wrong sets are copy-closed, PoUW's reading with the served tie, the
+collision term on average over the oracle, and the bridge from the window's game to C-Flock's, with C-Flock's knowledge
+bound at main's `--zk` sessions.
 -/
