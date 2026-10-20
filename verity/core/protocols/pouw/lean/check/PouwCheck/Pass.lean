@@ -297,12 +297,22 @@ def SIGNED_LIVE : String :=
   "a live window's coins are its challenger's signed record and the verifier's key for it, {key, record} " ++
     "(`challenger.trusted_commitment`), not a bare commitment"
 
+/-- `core_check.NO_PINNED_KEY`, `OTHER_KEY` and `SEEDED_PINNED`: the reasons of a `coin-key` refusal. -/
+def NO_PINNED_KEY : String := "the window's parameters pin no challenger key for its draw's record"
+def OTHER_KEY : String :=
+  "the challenger record is signed under a key other than the challenger key the window's parameters pin"
+def SEEDED_PINNED : String :=
+  "the window's parameters pin a challenger key, so its draw's coins are that challenger's signed record, " ++
+    "not seeded coins"
+
 /-- `core_check.draw`: none when `units` are the window's draw, else the refusal. Seeded coins (`coinsOf`) have their
-`draw` coin; live ones (`PouwWindow.LIVE_SCHEME`, a certified window's) are read only from the challenger's signed
-record with the verifier's key for it, `{key, record}`, which this check verifies
-(`SampledProofs.Challenger.recordReason`; a bare live commitment is refused, `SIGNED_LIVE`), and have their `pouw/draw`
-coin 0 (`SampledProofs.Challenger.liveReason`). -/
-def drawCheck (coins : Json) (recorded : Bool) (opening stream registration receipt k population units : Json) :
+`draw` coin, and are refused (`coin-key`) when the window's parameters pin a challenger key; live ones
+(`PouwWindow.LIVE_SCHEME`, a certified window's) are read only from the challenger's signed record with the key it is
+signed under, `{key, record}`: that key must be `key`, the challenger key the window's parameters pin (`coin-key`, so a
+record the prover signed under a key of its own, over coins it holds, is refused), this check verifies the record under
+it (`SampledProofs.Challenger.recordReason`; a bare live commitment is refused, `SIGNED_LIVE`), and they have their
+`pouw/draw` coin 0 (`SampledProofs.Challenger.liveReason`). -/
+def drawCheck (coins : Json) (recorded : Bool) (opening stream registration receipt k population units key : Json) :
     R Unit := do
   let liveScheme := match PouwWindow.field? coins "scheme" with
     | some (.str s) => s == PouwWindow.LIVE_SCHEME
@@ -311,14 +321,19 @@ def drawCheck (coins : Json) (recorded : Bool) (opening stream registration rece
   let malformed := fun (e : String) => ("coin", s!"the verifier's coins are malformed: {e}")
   let c : Coins ⊕ LiveCommitment ← if live then do
       unless SampledProofs.keys? coins == some #["key", "record"] do coin SIGNED_LIVE
-      let key ← (SampledProofs.Challenger.ChallengerKey.ofJson (SampledProofs.getD coins "key")).mapError
+      let want ← (SampledProofs.Challenger.ChallengerKey.ofJson key).mapError
+        fun e => ("coin-key", s!"{NO_PINNED_KEY}: {e}")
+      let got ← (SampledProofs.Challenger.ChallengerKey.ofJson (SampledProofs.getD coins "key")).mapError
         fun e => ("coin", s!"the verifier's challenger key is malformed: {e}")
+      unless got.toJson.compress == want.toJson.compress do throw ("coin-key", OTHER_KEY)
       let record := SampledProofs.getD coins "record"
-      if let some why ← port (SampledProofs.Challenger.recordReason key record) then coin why
+      if let some why ← port (SampledProofs.Challenger.recordReason want record) then coin why
       let c := (← port (SampledProofs.Challenger.ChallengerRecord.ofJson record)).commitment
       if let some why := PouwWindow.liveEpochReason c then coin why
       pure (.inr c)
-    else .inl <$> (coinsOf coins recorded).mapError malformed
+    else match key with
+      | .null => .inl <$> (coinsOf coins recorded).mapError malformed
+      | _ => throw ("coin-key", SEEDED_PINNED)
   let (.str reg, .str st) := (registration, stream)
     | throw ("draw", "the registration is not a SHA-512 digest, or the stream's digest not a string")
   if !isHexDigest reg then throw ("draw", "the registration is not a SHA-512 digest, or the stream's digest not a string")

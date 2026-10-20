@@ -346,7 +346,8 @@ def honest_draw(rng: random.Random, scheme: str | None = None, many: bool = Fals
         derive(coin, CC.DRAW_DOMAIN, ctx).stream("draw", size)
     units = CC.stream_subset(k, n, src)
     return {"coins": ch.commitment, "recorded": ch.scheme != Co.SCHEME or ch.early or rng.random() < 0.3, "opening": opening,
-            "stream": stream, "registration": reg, "receipt": receipt, "k": k, "population": n, "units": units}, ch
+            "stream": stream, "registration": reg, "receipt": receipt, "k": k, "population": n, "units": units,
+            "key": None}, ch
 
 
 def _mutate_draw(d: dict, ch: Coins, name: str, rng: random.Random) -> None:
@@ -394,6 +395,9 @@ def _mutate_draw(d: dict, ch: Coins, name: str, rng: random.Random) -> None:
             else:
                 reg = rng.randbytes(64).hex()
                 d.update(registration=reg, opening=ch.open("draw", bytes.fromhex(reg)))
+        case "seeded-pinned":
+            sk = _challenger_key(rng.randrange(2))
+            d["key"] = Ch.ChallengerKey(sk.params.W, sk.params.H, lms.public_key(sk)).to_json()
         case _:
             raise ValueError(name)
 
@@ -414,9 +418,14 @@ def signed(commitment: Ch.LiveCommitment, rng: random.Random, signer: int | None
     return {"key": Ch.ChallengerKey(vk.params.W, vk.params.H, lms.public_key(vk)).to_json(), "record": record.to_json()}
 
 
+#: the challenger key of a prover's own, which no window's parameters pin (`signed`'s keys 0 and 1 are the verifier's)
+PROVERS_KEY = 2
+
+
 def honest_live_draw(rng: random.Random, many: bool = False) -> tuple[dict, Ch.LiveChallenger]:
     """An honest draw under a live epoch's coins (`window.live_challenger`, a certified window's), held as their signed
-    record (`signed`): its ``pouw/draw`` coin 0 opened after the registration's digest."""
+    record (`signed`), under the challenger key the window's parameters pin (``key``, the record's): its ``pouw/draw``
+    coin 0 opened after the registration's digest."""
     ch = Wd.live_challenger(rng.randrange(4), rng.choice([1, 2, 3]), rng.randbytes)
     reg, stream = rng.randbytes(64).hex(), rng.randbytes(64).hex()
     receipt = _receipt(rng, reg)
@@ -425,8 +434,9 @@ def honest_live_draw(rng: random.Random, many: bool = False) -> tuple[dict, Ch.L
     o = ch.open(Wd.DRAW, 0, bytes.fromhex(reg))
     ctx, size = CC.draw_key_context(stream, reg, receipt), 2 * k * CC.width(n) + 64
     units = CC.stream_subset(k, n, derive(o.coin, CC.DRAW_DOMAIN, ctx).stream("draw", size))
-    return {"coins": signed(ch.commitment, rng), "recorded": rng.random() < 0.3, "opening": o.to_json(), "stream": stream,
-            "registration": reg, "receipt": receipt, "k": k, "population": n, "units": units}, ch
+    coins = signed(ch.commitment, rng)
+    return {"coins": coins, "recorded": rng.random() < 0.3, "opening": o.to_json(), "stream": stream,
+            "registration": reg, "receipt": receipt, "k": k, "population": n, "units": units, "key": coins["key"]}, ch
 
 
 def _mutate_live_draw(d: dict, ch: Ch.LiveChallenger, name: str, rng: random.Random) -> None:
@@ -441,6 +451,7 @@ def _mutate_live_draw(d: dict, ch: Ch.LiveChallenger, name: str, rng: random.Ran
             layout = rng.choice([((Wd.DRAW, 1), (Wd.SALT, 1), (Wd.ROUND, 1)), ((Wd.SALT, 1), (Wd.ROUND, 2)),
                                  ((Wd.SALT, 1), (Wd.DRAW, 2), (Wd.ROUND, 1))])
             d["coins"] = signed(Ch.LiveChallenger(Wd.LIVE_SCHEME, c.epoch, layout, rng.randbytes).commitment, rng)
+            d["key"] = d["coins"]["key"]
         case "live-bare":
             d["coins"] = rng.choice([c.to_json(), {**coins, "commitment": c.to_json()}, {"record": rec}])
         case "live-key":
@@ -453,6 +464,17 @@ def _mutate_live_draw(d: dict, ch: Ch.LiveChallenger, name: str, rng: random.Ran
             signer = rng.randrange(2)
             d["coins"] = rng.choice([signed(c, rng, signer, 1 - signer),
                                      {**coins, "record": {**rec, "signature": _flip(rec["signature"])}}])
+            d["key"] = d["coins"]["key"]
+        case "live-own-key":
+            d["coins"] = signed(c, rng, PROVERS_KEY)
+        case "live-pinned-other":
+            pinned = Ch.ChallengerKey.from_json(d["key"])
+            d["key"] = rng.choice([signed(c, rng, PROVERS_KEY)["key"], {**d["key"], "H": pinned.H + 1},
+                                   {**d["key"], "public": _flip(d["key"]["public"])}])
+        case "live-no-pin":
+            key = d["key"]
+            d["key"] = rng.choice([None, {**key, "W": 3}, {**key, "public": key["public"][:64]}, {**key, "extra": 1}, 7,
+                                   "key"])
         case "live-moved":
             other = Wd.live_challenger(c.epoch, c.family(Wd.ROUND), rng.randbytes).commitment.to_json()
             d["coins"] = {**coins, "record": {**rec, "commitment": other}}
@@ -480,10 +502,11 @@ def _mutate_live_draw(d: dict, ch: Ch.LiveChallenger, name: str, rng: random.Ran
 
 
 LIVE_DRAW_NAMES = ["live-coins", "live-not-epoch", "live-bare", "live-key", "live-no-record", "live-unsigned",
-                   "live-moved", "live-opening-form", "live-label", "live-epoch", "live-foreign", "live-tampered",
-                   "live-early", "live-units"]
+                   "live-own-key", "live-pinned-other", "live-no-pin", "live-moved", "live-opening-form", "live-label",
+                   "live-epoch", "live-foreign", "live-tampered", "live-early", "live-units"]
 DRAW_NAMES = ["verifier-coins", "recorded-scheme", "registration", "stream", "receipt", "law", "opening-form", "label",
-              "epoch", "foreign", "tampered", "early", "units", "other-key", "early-coins-live", *LIVE_DRAW_NAMES]
+              "epoch", "foreign", "tampered", "early", "units", "other-key", "early-coins-live", "seeded-pinned",
+              *LIVE_DRAW_NAMES]
 
 
 def draw_instance(rng: random.Random, name: str = "honest") -> dict:
@@ -502,4 +525,5 @@ def draw_instance(rng: random.Random, name: str = "honest") -> dict:
 
 
 def draw_args(d: dict) -> tuple:
-    return tuple(d[k] for k in ("coins", "recorded", "opening", "stream", "registration", "receipt", "k", "population", "units"))
+    return tuple(d[k] for k in ("coins", "recorded", "opening", "stream", "registration", "receipt", "k", "population", "units",
+                                "key"))

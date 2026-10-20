@@ -1124,37 +1124,56 @@ SIGNED_LIVE = ("a live window's coins are its challenger's signed record and the
                "(`challenger.trusted_commitment`), not a bare commitment")
 
 
-def _live_coins(coins: dict) -> tuple[Ch.LiveCommitment | None, str | None]:
-    """A live window's commitment from `coins`, ``{"key", "record"}``: the record must be signed under the key
-    (`challenger.record_reason`) and its commitment a live epoch's; else None and why."""
+#: the refusal of a draw whose coins aren't the record of the challenger the window's parameters pin (RT4-INT-5)
+COIN_KEY = "coin-key"
+NO_PINNED_KEY = "the window's parameters pin no challenger key for its draw's record"
+OTHER_KEY = "the challenger record is signed under a key other than the challenger key the window's parameters pin"
+SEEDED_PINNED = ("the window's parameters pin a challenger key, so its draw's coins are that challenger's signed record, "
+                 "not seeded coins")
+
+
+def _live_coins(coins: dict, pinned: Any) -> tuple[Ch.LiveCommitment | None, tuple[str, str] | None]:
+    """A live window's commitment from `coins`, ``{"key", "record"}``: `key` must be `pinned`, the challenger key the
+    window's parameters pin (``coin-key``), the record must be signed under it (`challenger.record_reason`) and its
+    commitment a live epoch's; else None and the refusal."""
     if sorted(coins) != ["key", "record"]:
-        return None, SIGNED_LIVE
+        return None, ("coin", SIGNED_LIVE)
+    try:
+        want = Ch.ChallengerKey.from_json(pinned)
+    except Ch.CoinError as e:
+        return None, (COIN_KEY, f"{NO_PINNED_KEY}: {e}")
     try:
         key = Ch.ChallengerKey.from_json(coins["key"])
     except Ch.CoinError as e:
-        return None, f"the verifier's challenger key is malformed: {e}"
-    why = Ch.record_reason(key, coins["record"], lms_verify)
+        return None, ("coin", f"the verifier's challenger key is malformed: {e}")
+    if key != want:
+        return None, (COIN_KEY, OTHER_KEY)
+    why = Ch.record_reason(want, coins["record"], lms_verify)
     if why is not None:
-        return None, why
+        return None, ("coin", why)
     c = Ch.ChallengerRecord.from_json(coins["record"]).commitment
-    return (None, why) if (why := Wd.live_epoch_reason(c)) is not None else (c, None)
+    return (None, ("coin", why)) if (why := Wd.live_epoch_reason(c)) is not None else (c, None)
 
 
 def draw(coins: Any, recorded: bool, opening: Any, stream: Any, registration: Any, receipt: Any, k: Any, population: Any,
-         units: Any) -> tuple[str, str] | None:
+         units: Any, key: Any = None) -> tuple[str, str] | None:
     """None when `units` are the window's draw: the epoch's draw coin `opening` opens against `coins` (the challenger's
     commitment, its JSON) after the registration `registration` (its digest's hex), and `units` are ``Draw.subset`` of
     `k` over `population` on the stream ``"draw"`` of the key the coin derives under the stream's digest `stream`, the
-    registration and its `receipt`; else the refusal (``coin``, ``draw`` or ``sampler``, and why). A seeded commitment
-    (`coins_of`) has its ``draw`` coin; a live one (`window.LIVE_SCHEME`, a certified window's) is read only from its
-    challenger's signed record with the verifier's key for it, ``{"key", "record"}``, which this check verifies
-    (`challenger.record_reason`; a bare live commitment is refused, `SIGNED_LIVE`), and has its ``pouw/draw`` coin 0
-    (`challenger.live_reason`)."""
+    registration and its `receipt`; else the refusal (``coin``, ``coin-key``, ``draw`` or ``sampler``, and why). A
+    seeded commitment (`coins_of`) has its ``draw`` coin, and is refused when the window's parameters pin a challenger
+    key. A live one (`window.LIVE_SCHEME`, a certified window's) is read only from its challenger's signed record with
+    the key it is signed under, ``{"key", "record"}``: that key must be `key`, the challenger key the window's
+    parameters pin (``coin-key``, so a record the prover signed under a key of its own, over coins it holds, is
+    refused), and this check verifies the record under it (`challenger.record_reason`; a bare live commitment is
+    refused, `SIGNED_LIVE`); it has its ``pouw/draw`` coin 0 (`challenger.live_reason`)."""
     live = isinstance(coins, dict) and ("record" in coins or coins.get("scheme") == Wd.LIVE_SCHEME)
     if live:
-        c, why = _live_coins(coins)
+        c, refused = _live_coins(coins, key)
         if c is None:
-            return "coin", why
+            return refused
+    elif key is not None:
+        return COIN_KEY, SEEDED_PINNED
     else:
         try:
             c = coins_of(coins, recorded)
@@ -1252,7 +1271,7 @@ def line(a: dict) -> str:
     return _canon(a)
 
 
-__all__ = ["ANSWER_KEYS", "FORMATS", "ID", "LEVEL", "ONE_STAGE", "Refused", "SCHEME", "SIGNED_LIVE", "answer", "answer_of",
-           "canonical", "case", "check", "commitment", "digest", "draw", "evidence", "integrity", "integrity_json",
+__all__ = ["ANSWER_KEYS", "COIN_KEY", "FORMATS", "ID", "LEVEL", "ONE_STAGE", "Refused", "SCHEME", "SIGNED_LIVE", "answer",
+           "answer_of", "canonical", "case", "check", "commitment", "digest", "draw", "evidence", "integrity", "integrity_json",
            "law_name", "line", "lms_verify", "opening", "params", "pass_epoch", "ratio", "recorded_reason", "registered",
            "rounds", "unit_draw", "verify_path", "window_domain"]
