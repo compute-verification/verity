@@ -12480,7 +12480,7 @@
    ]
   },
   "Definitions.Claims.Sampling": {
-   "digest": "a4d99073c79ebad537987066300cf1f6d451a6cc8f41378bd448116b7dba0d02",
+   "digest": "3d4a87c54b63f82583945bf124044a09e3ce5b1b565bccad536c59c9204f151a",
    "definitions": {
     "Claims.Sampling.BGate": "63a981e57403ae475c097446b58799e6bbc6ebb87e4a1ff8911d63f602542833",
     "Claims.Sampling.BGate.and": "5e97bb022ac07b984f8303744fbc545e8aa6f37c7e6ec025083230906f800909",
@@ -12572,7 +12572,7 @@
     "Claims.Sampling.Opening.pos": "42dd487eed7169ed4b5f2334ba0c4cfb134669083050ba23b07919148da6c0ca",
     "Claims.Sampling.Opening.val": "ad13def2e7a94d940bf4bbaa5a766627daf1c2cf58943dadd228aa38c307aa8b",
     "Claims.Sampling.Partition": "89ca73a3d4b7f12df2a368f1a85701e5d58cad086a49645866ef5eb81c161634",
-    "Claims.Sampling.Partition.Partitions": "df08318f817011555c559fd5cfa5eb36f67942614a4f046d34d9283713a76141",
+    "Claims.Sampling.Partition.Partitions": "3f190ef6fd7b2a669807efa5e74773bf44700e9b3c682a781d14ed86d9503693",
     "Claims.Sampling.Partition.classes": "ba7ad7d00e035e3ff1b9b23d98e928b0309721026f3188f02bf8ac04cce1e1a8",
     "Claims.Sampling.Partition.gates": "25e5fb5905cc384b6e985f12b5229025d519824f1158448897ab96edf9625cf8",
     "Claims.Sampling.Partition.rus": "10777adc5994a81b09c8af3f294707525aaddf608893de5be95fa459559c510d",
@@ -12656,6 +12656,9 @@
     "Claims.Sampling.slack": "46c756ddc847c82296f6b0ca19b922850004679965f0b7abc0329bea687d90bd",
     "Claims.Sampling.strataPa": "4066df1a938977271f39b9ef03423176dba7f7a74bbb7dc0c3d70a84f894e88d",
     "Claims.Sampling.strataSizes": "28107e2665f3cbaf1697879cf2a180e586b13d51dd3d7e997e5ef8a921d2ee91",
+    "Claims.Sampling.unitClass": "c3b46ba7dc28d55a350e20d697a814e4d67765dca7e8578f62f54dd7a17e79f7",
+    "Claims.Sampling.unitClassMax": "cfd5d8c6c8bd005b894ca319d8f78f9808a91f83c0af6a3f2379d6369d60addb",
+    "Claims.Sampling.unitClasses": "89b7f705e4da346df3203df4f010562817bcec76189e97c1ce5d9ae80efad2d8",
     "Claims.Sampling.unitExt": "d61e7aa6f4cb9fe2ca9e5e36e17e367ea75e0111b4973024dffabe020a5580a6",
     "Claims.Sampling.waitAccC": "144121196c4896fbffe215bc4cfea45d9be7127ea34f8a7b9dd06b8d47a0e3e1",
     "Claims.Sampling.window": "d11d808843864bb4dc6ce0ebb8a26c85eb2d72bf5f633396f7e6f269d091137d",
