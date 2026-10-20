@@ -454,7 +454,8 @@ theorem real_meets (n : ℕ) {δs : ℝ} (hδs : 0 < δs) :
   refine ⟨h.1, h.2.1, h.2.2.1, h.2.2.2.1, h.2.2.2.2.1, h.2.2.2.2.2.1, rfl,
     periodR_every (P := fun live _ => DeadConeDead scheme circuit 1 live)
       (fun _ _ _ _ => by simp [liveWords]) (fun _ _ ht _ => by simp at ht) n,
-    fun x j _ => acceptsUpTo_periodR _ _ _ n j x, fun w => ?_, fun w => ?_, fun _ _ _ _ _ => trivial,
+    fun x j _ => acceptsUpTo_periodR (liveCone scheme circuit 1) 1 1 n j x, fun w => ?_, fun w => ?_,
+    fun _ _ _ _ _ => trivial,
     periodR_perLiveTile (P := fun k G _ => OperandHMu (scheme.mu k) G)
       (fun k t => operandHMu_of_zero _ _ _ _ _ (paid_share .folded (by decide) t)) n,
     periodR_perLiveTile (P := fun k G _ => ReceiptLuckAt (scheme.rB k) G)
