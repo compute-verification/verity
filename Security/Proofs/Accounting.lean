@@ -35,6 +35,7 @@ import Proofs.Accounting.TS
 import Proofs.Accounting.TS.Stages
 import Proofs.Accounting.TS.Steer
 import Proofs.Accounting.TS.Grind
+import Proofs.Accounting.TS.SharedNoise
 import Proofs.Accounting.TS.SessionSound
 import Proofs.Accounting.Actual
 import Proofs.Accounting.Responder

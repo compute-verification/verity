@@ -77,7 +77,8 @@ which the soundness proofs read), and the JSON library's specification, `JsonSpe
 which only completeness reads). What the claims rest on and no Lean statement can say is `trustedBase`.
 
 Frozen by `Flock.Guarantees.ClaimsStated` (`Models/Flock/Guarantees/Claims.lean`), whose statement reads every claim
-here: the lock records each one's text under `reads`, so a changed claim is a changed record.
+here but `Flock.ZK`, and by `Flock.Guarantees.MaskedZK`, which states `Flock.ZK` at the deployed masked record: the lock
+records each one's text under `reads`, so a changed claim is a changed record.
 -/
 
 namespace Claims

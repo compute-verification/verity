@@ -819,10 +819,34 @@ as the core protocol interface provides for a protocol whose acceptance isn't on
 profile is its own: each window's `IntegrityProfile` with its schedule. `ledger` computes every γ term, the session's
 and each window's, from it plus the node's capacities.
 
+### Pacing
+
+A paced session (`Params.pace`, `Pace(k, window_ns)`) releases a live coin every \(k\) passes: each window is a group
+of at most \(k\) passes under a challenge of its own, from the indexed challenger like every window's, with its own
+openings coin, and the last, the closing window, follows at least one other. The stated window doesn't hold between a
+paced session's windows (`Params.window_ns` is then the least time from a challenge to the next, 1 ns in the drivers):
+`Pace.window_ns` is the stated \(T\) its γ is declared over ("Declared outputs"). Window \(t\)'s boundary message is
+due once \(t\) has \(k - 1\) roots, so that the pass in flight is its last
+(at \(k = 1\), once window \(t - 1\) has its root, and window 0's at once), and leaves at the latest at
+\(\max(b_{t-1} + (k - 1) A, D_{t-1})\) (`Session.next_boundary_ns`). So the honest prover never waits on a coin, and a
+window's roots are due within about \(k\) allowances of its challenge. A window's \((k+1)\)-th root is out of turn
+(`order`).
+
+Each root's arrival on the verifier's clock is in the record (`WindowRecord.arrived_ns`), so the record bounds when
+each group's reads were: after its challenge left at \(s_g = b_{g-1}\), and before
+\(e_g = \max(\text{its last root's arrival}, s_{g+1})\) (the closing window's: its last arrival). The time-held line
+reads that (`ledger.memory`, `Accounting.Guarantees.Remote.HeldOverTime`). A registered block absent from node memory
+between two correct reads of it is absent for at most the groups between them, each of whose passes read it wrong, or
+it came back by a rebuild, a disk read or a link. The credited span runs from \(e_0\) (before the first group's reads a
+block may never have been there) to the closing window's challenge \(s_C\), whose reads back it. A block a pass leaves
+out could be absent across that pass with neither a wrong read nor a rebuild, so the time-held forms need every pass to
+read every registered block (`Covers`). A session one of whose passes leaves one out has the snapshot only.
+
 ### Declared outputs
 
 A session's outputs are these, and only these (decided 18 Oct, 17:10Z, under proofs' rule that a protocol publishes
-its structure, its outputs, the verifier's coins and draws, and hiding commitments):
+its structure, its outputs, the verifier's coins and draws, and hiding commitments). An accepted session's are
+`ledger.declared`'s, from its record and the node's capacities (`ledger.Node`):
 
 - **The verdict**, per window and for the session: accepted, or the failure that ended it (one of `FAILURES`, at the
   window it ended in).
@@ -831,27 +855,35 @@ its structure, its outputs, the verifier's coins and draws, and hiding commitmen
   \(W\delta\) and over the horizon at \(\delta\) (§10), each with its failure probability. γ is over the registered
   store only: a receipt of a block appended after the codec seed is drawn and opened like any other but not credited
   (`credit_post_seed` is None, so \(\mu_{\text{carrier}}\) is 0), and γ doesn't depend on what the workload appends.
-  A paced session's windows, for γ, are its stretches. A paced session is one whose windows are each a group of at
-  most \(k\) passes under a live coin of its own, every pass reading every registered block, with the groups taken a
-  stretch of about \(T\) at a time and the last stretch closing the session: its reads back the credited span's end,
-  and it is not credited.
+  A paced session's coins leave as its roots arrive, so when they left is a value, and its γ per window is over the
+  fixed windows of the stated \(T\) (`Pace.window_ns`) from its first challenge, the last ending at its last deadline
+  (`ledger.windows`), protocol structure. A pass is in the fixed window that holds it whole, from its challenge's
+  release to its root's arrival, and one that straddles a boundary is in neither (at \(k = 1\), whose coins leave a
+  pass early, about two passes a boundary); the session's γ credits every pass. A window's post-seed reads
+  \(\sum_i a_{t,i}\) follow from its γ: its timing term is \(1 - (U_t - \sum_i a_{t,i})\, b / (R \Sigma_t)\), and the
+  others are functions of public counts (a fixed window's, of the passes it holds). Under ASK-19 A live KV is
+  uncredited and doesn't enter the store, so no append is credited and they carry no workload. Revisit this when
+  appends are credited.
 - **The memory line**, a session total only, in three forms, each with its ε and δ: the registered bytes the session
   shows held in node memory are at least \((1 - \varepsilon) N b\), except with probability δ.
   - *Snapshot*: the registered blocks in node memory at the start of each credited pass, averaged over those passes.
   - *Time-held*: the registered blocks in node memory at each instant of the credited span, averaged over the span.
-    Only a paced session has one.
+    Only a paced session whose every pass reads every registered block has one ("Pacing").
   - *Link-charged*: the time-held line with the node's boundary links charged as carrying blocks back into node
     memory at their ceiling, which drops Identity.
 
   Every form charges the blocks the node could re-encode from their payloads (its squaring ceiling at the record's
-  codec) and read from its own disks (their measured read ceiling), and its on-chip storage \(S_{\text{chip}}\). δ is
-  the horizon's error plus the sketch's (`timing.sketch_failure`).
+  codec) and read from its own disks (their measured read ceiling), each at its rate over any interval plus one burst
+  (`ledger.Node`: a maximal rebuild batch, \(S_{\text{chip}}\), and a maximal disk read, a second at the ceiling;
+  link-charged, one link window as well), and its on-chip storage \(S_{\text{chip}}\). δ is the horizon's error plus
+  the sketch's (`timing.sketch_failure`).
 
-\(R\), \(S_{\text{chip}}\), the squaring ceiling and the disks' and links' ceilings are the verifier's: the node's
-stated or measured capacities, protocol structure, never the prover's report (§1).
+\(R\), \(S_{\text{chip}}\), the squaring ceiling, the disks' and links' ceilings and the bursts are the verifier's: the
+node's stated or measured capacities, protocol structure, never the prover's report (§1).
 
 Everything else that follows the workload is a value, not public: the blocks the session appended and released and
-the chain over its appends, each pass's plan, its post-seed reads \(a_{t,i}\), its step and its root's arrival, and any
+the chain over its appends, each pass's plan, its post-seed reads \(a_{t,i}\) (a window's sum follows from its γ,
+above), its step and its root's arrival, and any
 memory line per window or by kind (weights, KV, host). Each window's receipts \(U_t\) stay public, since its draws are
 over them. Until `public()` is trimmed to match (after #2519, which keeps `stale` out of it), it still carries
 `appended`, `released` and each window's `post_seed`.

@@ -12,6 +12,9 @@
 # whose ended runs ring their sender are $DIR/nodes.json (a copy of agent_watch_nodes.json, read each sweep), their hosts the notes
 # clone's machines.d.
 # While $DIR/wake exists the watch starts a run on a coordinator ready to wake (--wake); remove the file to go back to recording.
+# While $DIR/launch.env exists (root, 0600, one CURSOR_API_KEY= line: Daniel's user key, which the GitHub broker trusts) the
+# watch relaunches a coordinator it can't resume (launch_coordinator.py from the registry's checkout) and a worker nobody
+# resumed; the watch reads it only to relaunch and passes it only in the launch's environment. Without it, relaunches are recorded.
 DIR=/data/agent-watch
 LOG=$DIR/watch.log
 CONF=/root/.config/verity
