@@ -39,6 +39,17 @@ import Proofs.Flock.Claims.ZK.CutSession
 import Proofs.Flock.Claims.ZK.ExePlan
 import Proofs.Flock.Claims.ZK.Split
 import Proofs.Flock.Claims.ZK.SimCommit
+import Proofs.Flock.Claims.ZK.PrefixLive
+import Proofs.Flock.Claims.ZK.SimSession
+import Proofs.Flock.Claims.ZK.SimInner
+import Proofs.Flock.Claims.ZK.SplitInner
+import Proofs.Flock.Claims.ZK.InnerSlotTriple
+import Proofs.Flock.Claims.ZK.InnerLeaf
+import Proofs.Flock.Claims.ZK.InnerY
+import Proofs.Flock.Claims.ZK.InnerBatched
+import Proofs.Flock.Claims.ZK.InnerTauVal
+import Proofs.Flock.Claims.ZK.InnerTauRep
+import Proofs.Flock.Claims.ZK.InnerTauLig
 import Proofs.Flock.Claims.ZK.Assemble
 import Proofs.Flock.Claims.ZK.Sent
 import Proofs.Flock.Claims.ZK.Round1
@@ -49,17 +60,32 @@ import Proofs.Flock.Claims.ZK.Round2
 import Proofs.Flock.Claims.ZK.Round3Vals
 import Proofs.Flock.Claims.ZK.SimZerocheck
 import Proofs.Flock.Claims.ZK.SimPiopGo
-import Proofs.Flock.Claims.ZK.SimPiop
+import Proofs.Flock.Claims.ZK.SimPiopOf
 import Proofs.Flock.Claims.ZK.PiopSrcVals
 import Proofs.Flock.Claims.ZK.PiopSrcLc
+import Proofs.Flock.Claims.ZK.SentE
+import Proofs.Flock.Claims.ZK.PiopSrcSv
+import Proofs.Flock.Claims.ZK.SimPiop
+import Proofs.Flock.Claims.ZK.SimLig
+import Proofs.Flock.Claims.ZK.FinExe
+import Proofs.Flock.Claims.ZK.FinPads
+import Proofs.Flock.Claims.ZK.CausalExe
+import Proofs.Flock.Claims.ZK.LiveEnd
+import Proofs.Flock.Claims.ZK.FinTau
+import Proofs.Flock.Claims.ZK.FinInner
 import Proofs.Flock.Claims.ZK.Worker
 import Proofs.Flock.Claims.ZK.Switched
 import Proofs.Flock.Claims.ZK.Server
 import Proofs.Flock.Claims.ZK.Blind
 import Proofs.Flock.Claims.ZK.Release
 import Proofs.Flock.Claims.ZK.Refine
+import Proofs.Flock.Claims.ZK.CoinPass
 import Proofs.Flock.Claims.ZK.Os
 import Proofs.Flock.Claims.ZK.FrameTape
+import Proofs.Flock.Claims.ZK.FrameParse
+import Proofs.Flock.Claims.ZK.FrameMask
+import Proofs.Flock.Claims.ZK.FrameRounds
+import Proofs.Flock.Claims.ZK.PadsRoot
 import Proofs.Flock.Claims.ZK.NonVacuous
 import Proofs.Flock.Claims.ZK.SamplingNonVacuous
 import Proofs.Flock.Claims.ZK.Compose
@@ -151,7 +177,8 @@ import Proofs.Flock.Claims.ZK.Stop
 * `CoinOpen`: the Lean coin check (`flock-firewall coins`, `Flock.Firewall.Coins`), whose verdict `coin_tree::Checked`
   takes, is that coin layer's at SHA-512: one opening (`CoinOpen.treeChk_sha`, `CoinOpen.check_isOk`), and a session's
   openings when its requests follow the committed schedule (`CoinOpen.coinLayer_verdict`), so it refuses the openings
-  ZKS10's `LeanRelease.OpeningsRefused` (`Claims/ZK/Refine.lean`) names (`CoinOpen.coinLayer_refuses`).
+  ZKS10's `LeanRelease.OpeningsRefused` (`Claims/ZK/Refine.lean`) names (`CoinOpen.coinLayer_refuses`). The release
+  reads it (`LeanRelease.opens`), and at that coin layer it is the session's check (`LeanRelease.checkIs_coinLayer`).
 * `Tape`: `TapeOK` makes the tape onto the leaves' salts (`RefSession.eP_surjective`), so a session has fewer tables than
   tapes at every statement (`RefSession.J_lt_card_of_tapeOK`), and none with statements of every table count meets it
   (`RefSession.not_tapeOK`): the masked scope bounds no table count.
@@ -260,7 +287,7 @@ import Proofs.Flock.Claims.ZK.Stop
 * `SimPiopGo`: the rest of `SimPiop`'s PIOP in lockstep: the cut's lincheck against the session's
   (`FlockComplete.lincheckCut_alike`), its ring switch (`FlockComplete.ringSwitchCut_alike`), and the cut's PIOP
   returning the session's from a source at the cut's coins (`FlockComplete.PiopSrc`, `FlockComplete.piopCut_alike`).
-* `SimPiop`: `Masked.SimPiop` from the deployed source at the opened coins (`Masked.PiopSrcE`, `Masked.simPiop_of`):
+* `SimPiopOf`: `Masked.SimPiop` from the deployed source at the opened coins (`Masked.PiopSrcE`, `Masked.simPiop_of`):
   `repMix 0` and `repMix 1` differ only in the PIOP (`FlockComplete.repMix_zero_one`).
 * `PiopSrcVals`: `Masked.PiopSrcE`'s zerocheck fields: the deployed source masks at the zerocheck's layout indices
   the plain prover's messages at the opened coins plus the session's pads (`Masked.src_r1ab`, `Masked.src_r1c`,
@@ -271,6 +298,14 @@ import Proofs.Flock.Claims.ZK.Stop
   plain prover's round messages and `z_partial` at `lcCoins` plus the session's pads (`Masked.src_lc0`,
   `Masked.src_lc1`, `Masked.src_zp`), since the prover's halved columns are the model's `lcU`, `lcV` folded at the round
   coins (`Replay.Lc.msg_lcMsg`) and the draw's coins are the executable's (`Masked.lcH_exe`).
+* `SentE`: every check of the deployed cut up to a seen slot passes where no refusal is seen (`Masked.famPasses_of`):
+  each check's round (`Masked.guardSlot`) follows the session's order (`Masked.guardSlot_mono`), and the rank check is
+  full rank at the plan's points, the executable's (`Masked.rankOn_of`).
+* `PiopSrcSv`: `Masked.PiopSrcE`'s ring-switch field (`Masked.src_sv`): where the rep sends masked claim `2r + k`'s
+  `ŝ` (`Masked.famPasses_of`) it is `shat` at `z = (w, u)` at the opened coins (`Masked.sv_masked`), and region claim
+  `k − 2`'s is the witness's off the mask slot at the link points of round `0`'s coin (`Masked.sv_region`,
+  `Masked.extras_x`), each the prover's switched vector (`Replay.Rs.switchVec_shat`).
+* `SimPiop`: `Masked.simPiop`, from `Masked.simPiop_of` at `Masked.piopSrcE`.
 * `HiSalts`: levels ≥ 1's salts by level and position (`Masked.hiSalt`, at `Masked.hiIdx`): at the executable's
   layout, the salts the model hands table `j`'s rep `r` are the masked prover's tape's `salt j r l p` on the schedule's
   levels `l ≥ 1` and their positions (`Masked.hiSalt_exe`), so a Ligerito prover of levels ≥ 1 built from one reading
@@ -289,9 +324,46 @@ import Proofs.Flock.Claims.ZK.Stop
   (`Masked.PrefixLive`, `Masked.SimPiop`, `Masked.SimLig`, `Masked.SimInner`, `Masked.SimCommit`, `Masked.SimSession`,
   `Masked.CausalExe`, `Masked.FinExe`).
 * `SimCommit`: `Masked.simCommit`, the commitments from the cut's leaves (`Masked.SimCommit`).
-* `Assemble`: `Flock.zk_deployZk_masked_exe_split`, Flock's zero knowledge at the deployed masked session from those
-  statements but `SimCommit`: `hstep` from `PrefixLive` and `SimSession` (`Masked.hstep_exe`), `SimSession` from
-  `Masked.simCommit` and the hybrids.
+* `PrefixLive`: `Masked.prefixLive`, the session answered by the openings against the one stopped after the round.
+* `SimSession`: `Masked.simSession_of`, `SimSession` from `SimCommit` and the three hybrids.
+* `SimInner`: `Masked.simInner_of`, `SimInner` from what the cut's source carries for the inner proof
+  (`Masked.InnerSrcE`).
+* `SplitInner`: `InnerSrcE` as statements at its hypotheses (`Masked.InnerAt`): the slot count, the triple's openings,
+  the batched constraint, `τ`'s value and leaf, and `Y` (`Masked.InnerSlot`, `Masked.InnerTriple`,
+  `Masked.InnerBatched`, `Masked.InnerTauVal`, `Masked.InnerTauLeaf`, `Masked.InnerY`), and `SimInner` from them
+  (`Masked.simInner_of_split`).
+* `InnerSlotTriple`: `Masked.innerSlot_holds` and `Masked.innerTriple_holds`, `InnerSlot` and `InnerTriple` from
+  `SimInner`'s `innerPre_slot` and `innerTripleE`.
+* `InnerLeaf`: `Masked.innerTriple` and `Masked.innerTauLeaf`, the cut's triple openings and `τ` commitment read off
+  the tape, and `y_τ`'s bytes as the honest pads' `τ` salt (`Masked.ytau_saltBytes`).
+* `InnerY`: `Masked.innerY`, the cut's `Y` is the session's at the honest pads once `β`'s round is answered.
+* `InnerBatched`: `Masked.innerBatched`, the batched constraint over the shared phases' constraints holds at the honest
+  pads.
+* `InnerTauVal`: `Masked.innerTauVal_of`, `InnerTauVal` from the inner proof's seven rows before the triple
+  (`Masked.TauRows`), split as the replay's five (`Masked.TauRep`) and level 0's two (`Masked.TauLig`).
+* `InnerTauRep`: `Masked.tauRep`, the replay's three rows and the two ring-switch rows are `rowsOf`'s on the view and
+  `czExe`'s coins (the run being the session's, `Masked.innerPre_cutE`); `Masked.innerTauVal_of_tauLig : TauLig →
+  InnerTauVal`.
+* `InnerTauLig`: `Masked.tauLig`, level 0's two lane rows are `limbRows` of the model's `laneRow` at `czExe`'s coins
+  (`Masked.lanesA`), so **`Masked.innerTauVal`**: `InnerTauVal`.
+* `SimLig`: `Masked.simLig`, hybrid 1 against hybrid 2: Ligerito from the cut's source is the session's.
+* `FinExe`: `FinExe` from `LiveEnd`, `SimCommit`, the three hybrids, `RepTau` and the opened positions' fields
+  `RepOpenRest` (`Masked.finExe_of_rest`); the rep count and rep 0's claim points (`Masked.repExact`,
+  `Masked.repPoints`); and `FinalRest`'s level-0 half: level 0's opened rows and salts read from the views are the
+  session's (`Masked.repOpenRest_l0`).
+* `FinPads`: `Masked.repOpenRest_pads`, `FinalRest`'s pads half: the pads' opened columns and salts read from the views
+  are the session's.
+* `LiveEnd`: `Masked.liveEnd`, the session answered by the openings ends as the one answered by the opened coins.
+* `FinTau`: `Masked.repTau_of`, `FinExe`'s `RepTau` from `InnerTauVal`: the session's rep's `τ` is `innerP`'s after the
+  shared phases, at the rep's `ε` slot's coins.
+* `FinInner`: `Masked.repOpenRest` (both halves of `FinalRest`) and `Masked.finExe_of_inner`, `FinExe` from `LiveEnd`,
+  `SimCommit`, the three hybrids and `InnerTauVal`.
+* `CausalExe`: `Masked.causalExe`, `CausalExe`: every executable send reads only coins drawn before it.
+* `Assemble`: **`Flock.zk_deployZk_masked_exe_split`**, Flock's zero knowledge at the deployed masked session given
+  only that `H` is SHA-512 and `0 < t`: `hstep` from `Masked.prefixLive` and `SimSession` (`Masked.hstep_exe`),
+  `SimSession` from `Masked.simCommit`, `Masked.simPiop`, `Masked.simLig` and `SimInner` (`Masked.simSession_of`),
+  `SimInner` from `SplitInner` (`Masked.simInner_of_split`, `τ`'s value `Masked.innerTauVal`), `Causal` by
+  `Masked.causalExe`, and the last message from `Masked.liveEnd` and `Masked.innerTauVal` (`Masked.finExe_of_inner`).
 * `Worker`: Lemma B at any clear values a worker supplies, which never read the pads: the switched prover (`p`'s view
   where its rows hold, else the honest prover's on the pads Lemma A moves) has `S_shvzk`'s distribution on the honest
   `InnerHolds` alone (`sw_shvzk`, `worker_shvzk`), and differs from `p`'s view only in `Y₁`, `C_h` and the pads tree
@@ -331,25 +403,39 @@ import Proofs.Flock.Claims.ZK.Stop
   scheduled round in its place; Rust's own checks only fail a round more (`LeanRelease.cross`). Any other stop comes at its
   `Finish`, with its scheduled rounds in a failed device's place
   (`LeanRelease.fillOf`), and every way a worker fails is a failed round (`LeanRelease.pass_of_none`, `nextD_of_fail`).
-  Its `RefD` is the item-stream refinement `LeanRelease.ItemsRefine` alone, with no assumption on what the firewall
-  computes (`LiveRefine` at the worker's passed rounds and `FillRefine` at the scheduled rounds, read at the values the
-  firewall's transcript reports, where the frame takes the coins, and `StopRefine`, the stop where it refuses them;
-  `LeanRelease.refD`), so
+  Its rounds are the deployed session's (`LeanRelease.kindAt`): the server's own `Hello` at the tape's nonce, the
+  firewall's own link (its recheck's level-0 roots) and `Finish` (`Final.encode` of the record and proof files it
+  builds, `LeanRelease.ownMsg`), and frame rounds released tagged `0`. Its `RefD` is the item-stream refinement
+  `LeanRelease.ItemsRefine` alone, with no assumption on what the firewall computes (`HelloRefine` at the `Hello`,
+  `OwnRefine` at the link and the `Finish`, `LiveRefine` at the worker's passed frame rounds and `FillRefine` at the
+  scheduled ones, read at the values the firewall's transcript reports, where the frame takes the coins, and
+  `StopRefine`, the stop where it refuses them; `LeanRelease.refD`), so
   **`Flock.zk_server_lean`** is `ZkServer.zk_deferred` at it, at any worker: one bit a session.
 * `Refine`: toward `ItemsRefine` at the reference session's prover (`strat`). Its `StopRefine` holds wherever the
   session sends the stop where the frame refuses the coins (`LeanRelease.stopRefine_of_sessionStops`), and so wherever
   the session's message is the frame's release (`SessionFrames`, `stopRefine_of_sessionFrames`) and its abort is the
   stop. The frame checks no opening, so `LiveRefine` makes the release the abort after any opening the session refuses
-  (`LeanRelease.release_eq_abort_of_liveRefine`). The frame's coin refusal reads no tape (`LeanRelease.refusesCoins_tape`),
-  and `RefSession.withStops` is a session with the stop where a rule of the coins says, keeping the session's six Props;
-  where that rule is the frame's refusals up to the protocol's last coin wherever the openings pass
-  (`LeanRelease.StopsAt`), its `StopRefine` is proved (`LeanRelease.stopRefine_withStops`), and its `LiveRefine` and
-  `FillRefine` follow from the transport's refusal of a failed opening, the frame's end past the last coin
-  (`LeanRelease.EndsAt`) and the per-round byte equality at the worker's and the stand-in rounds
-  (`LeanRelease.liveRefine_withStops`, `fillRefine_withStops`), so `Flock.zk_server_lean_stops` assumes no part of
-  `ItemsRefine`; `Flock.zk_server_lean_coinLayer` is it at the deployed coin layer (`CoinLayer.session`). A transport
-  that reads the history only through the decoded coins (`LeanRelease.ReadsCoins`) gives the rule and `StopsAt`
-  (`LeanRelease.stopsAt_of_readsCoins`).
+  (`LeanRelease.release_eq_abort_of_liveRefine`); the release reads the transport's coin check at the tape's nonce
+  (`LeanRelease.opens`) and is the stop where it refuses, so that holds where the check is the session's
+  (`LeanRelease.CheckIs`, `openingsRefused_of_checkIs`). On the histories the check passes, the frame's coin refusal
+  reads no tape (`LeanRelease.refusesCoins_tape`), and `RefSession.withStops` is a session with the stop where a rule
+  of the coins says, and its frame rounds without a rep's leading domain frame (`dropDom`), keeping the session's six
+  Props; where that rule is the frame's refusals up to the protocol's last coin wherever the openings pass
+  (`LeanRelease.StopsAt`),
+  its `StopRefine` is proved (`LeanRelease.stopRefine_withStops`), and its `LiveRefine` and `FillRefine` follow from the
+  check being the session's, the frame's end past the last coin (`LeanRelease.EndsAt`) and the per-round
+  byte equality at the worker's and the stand-in rounds (`LeanRelease.liveRefine_withStops`, `fillRefine_withStops`),
+  its `HelloRefine` and `OwnRefine` from the server's `Hello`, the firewall's link and its `Finish` being the session's
+  (`HelloEq`, `LinkRoundEq`, `FinalRoundEq`: `helloRefine_withStops`, `ownRefine_withStops`), so
+  `Flock.zk_server_lean_stops` assumes no part of `ItemsRefine`; `Flock.zk_server_lean_coinLayer` is it at the deployed
+  coin layer (`CoinLayer.session`) at SHA-512, with `CheckIs` proved from two transport trusts, `flock-firewall coins`
+  reading the server's `Hello` with the tape's nonce (`LeanRelease.HelloParses`) and the requests following the
+  schedule (`LeanRelease.ReqsFollow`). A transport that reads the history only through the decoded coins on the
+  histories its check passes (`LeanRelease.ReadsCoins`) gives the rule and `StopsAt` (`LeanRelease.stopsAt_of_readsCoins`).
+* `CoinPass`: those premises leave a history to be live at. At every tape, past `Hello` and the link, the check passes
+  `Hello`'s answer whose root the first opening walks to under the tape's nonce, and that opening, at every key with bit
+  2047 clear and every opening that reads back (`LeanRelease.opens_coinPass`; the all-zero one,
+  `opens_coinPass_zeros`), so the coins the frame takes there are its own.
 * `Os`: the server's tape as the operating system's bytes (`OsTape`: a stream of exactly `drawBytes` bytes for each rep's
   frame and the tap's streams, one for one), the frame's read proved to be the release's draws (`frame_draws`, with a read
   of any other length refused, `drawsWith_refuses`), and the step to a uniform tape beside independent randomness under
@@ -360,6 +446,31 @@ import Proofs.Flock.Claims.ZK.Stop
   (`padsOf_tapeOfDraws`, `padsOf_drawsAt`, with `h_ab` and `w`), whose leaf salts are the frame's (`innerSalt_fit`), and
   which the release's configuration carries at the rep's rounds (`cfg_tapeOfDraws`), at the operating system's bytes
   too (`padsOf_os`).
+* `FrameParse`: the frame's round (`roundFree`) at the bytes of a round's frames (`encs fs` then the squeeze) is the fold
+  of the frame's step over them (`stepAt`: labels through `Masker.label`, bytes copied, each observed value absorbed and
+  free while the algebraic phase masks), then the inner proof's own round and the squeeze (`roundFree_encs`).
+* `FrameMask`: what the frame releases of such a round. The frames come out with domains dropped and each value of a
+  masked phase as `v + h_i` (`maskFrames`, `maskVal`; `roundFree_on`, `roundFree_off`), the pads' label and root
+  following the zerocheck's label (`roundFree_zc`). The pads are taken in the absorbed order: every pad below `h_ab` but
+  `final_c`'s, ascending (`absorbed_toList`), the indices the masked prover pads its sends under. A device that sends
+  the masked prover's round with each pad added back, its plain values, has that round released but its domain frames
+  (`roundFree_honest`, `dropDoms`), under the masked prover's pads (`padAt_ofDraws_absPos`).
+* `FrameRounds`: the cut's zerocheck, answered by `asksCut`, sends the binding, `r_skip`'s and `r_outer`'s squeezes,
+  `round1`'s and each residual round's masked values with their coins' squeezes (`zerocheckCut_bodies`, `zcBodies`),
+  and the frame releases the device's zerocheck rounds as those bodies (`roundFree_zcBind`, `roundFree_zcOuter`,
+  `roundFree_zcR1`, `roundFree_zcMl`) where each masked value is the device's value plus the frame's pad at its
+  absorbed position (`zcBodies_frame`), the binding without its pending domain. A rep's phase and position carry across
+  a round's coins (`answer_alg`), and the Lean frame's release (`LeanRelease.release`) of those rounds is the frame's
+  round (`release_zcBind`, `release_zcOuter`, `release_zcR1`, `release_zcMl`). The lincheck's bodies are the same way
+  (`lincheckCut_bodies`, `lcBodies_frame`, its values at their absorbed positions `absPos`), released by
+  `LeanRelease.release_on`. A frame round's release is the session's message without its leading domain frame
+  (`dropDom_dom`, `dropDom_noDom`) wherever the device's frames through the frame's masks are the session's
+  (`LeanRelease.RoundFrames`, `release_of_roundFrames`), so wherever the device sends the session's frames with each
+  pad added back (`RoundHonest`, `roundFrames_of_honest`); that gives `LiveRoundEq` and `FillRoundEq`
+  (`LeanRelease.liveRoundEq_of_frames`, `liveRoundEq_of_honest`, `fillRoundEq_of_frames`).
+* `PadsRoot`: the frame's pads root (`padsRoot`, `treeRoot` of its leaves) is `layerOf`'s (`treeRoot_layerOf`), so at a
+  frame rep's draws of `drawBytes` bytes it is the root `innerCommitP` commits the masked prover's pads under on
+  `tapeOfDraws` (`padsRoot_tapeOfDraws`).
 * `NonVacuous`: the claim is not vacuous. A prover that makes no calls has `Fork.Pr = 0`, so the simulator that hashes a
   collision and outputs the empty transcript fails `ZKmalR` at every `ε_zk < 1` and every `γ` (`not_zkmalR_collSim`),
   a prover that sends its witness has no simulator at `ε_zk < 1/2` (`not_zkmalR_leak`), and both fail `ZKAt` at

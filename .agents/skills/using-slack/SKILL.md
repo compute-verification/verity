@@ -33,8 +33,9 @@ The coordination API has one place, three interactions and one lifecycle.
   --poster BC_ID`; it subscribes to that handle's inbox thread itself: the holder has no channel to relay to it. So a
   handover needs no repo change; the registry's `holder` and `branch_suffixes` are a fallback for readers without the
   routes (drive's PR owners), updated when convenient. One agent may hold several handles, and posts as whichever
-  it acts for (`--as`). Handles with a user group are Slack user groups, so a human's composer autocompletes them, and
-  Daniel is a member of each, so a tag notifies him too.
+  it acts for (`--as`). Handles with a user group are Slack user groups, so a human's composer autocompletes them.
+  The groups have no members, so a tag notifies no person (Daniel, 19 Oct). `groups sync` never sets members and
+  never re-enables a group that has any; a handle's old groups are its `retired_usergroups`, which still route.
 - **Only handle holders and the named humans are on Slack.** Workers never post, read or subscribe; a worker asks its own
   coordinator, and the coordinator asks on Slack and relays the answer. So a coordinator decides which of its workers hears
   what.
