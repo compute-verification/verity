@@ -40,7 +40,9 @@ trusted); `yOpen` has it from the tie, whose `linked` field puts a reader of the
 `dequant(z)`, under the run-time check that the Commit's `y` root of the call is the root of those output words. So
 `yOpen` and `perCall` need the less trusted surface. Under `ValueChecked` (below) a `zTree` unit commits its
 `y = dequant(z)` beside its `z`, and its link is then `perCall`'s run-time `y`-root check, with no premise on the
-kernel.
+kernel. The input side is ROOTS1's run-time check: each call's A table root is the Commit's root of its linear's input
+(RT4-INT-14). Without it a credited product could be over an A that isn't the served input, and on the drawn units
+the served `y` would be `dq` of that A's product, the forward pass broken at the linear with nothing to see it.
 
 The link is an equality of values, which useful-work credit needs and which doesn't give it. Useful-work credit is
 Daniel's ASK-71 (19 Oct, 22:09Z): the credited noised work was done on the operands `A`, `B` of a served product that
@@ -74,15 +76,17 @@ units keep their number, each gaining its tile's `z` or `y` words.
 
 `commitCoin` is the coin before which the served code commits a value of each class (`Cls`) of round `r`, as the
 served code is to do it: the registration (the weights' root over every linear's root(B)) before the salt coin and so
-before round `0`'s; a call's A rows, the request entries its round admits and its `z` or `y` rows under its round's
-root, before its coin (`perCall`'s `y` under the next round's); its receipts under the next round's root, the last
-round's in the manifest before the draw. A request entry is a run input (`act`), not a registered one: certified
-serving releases a window's requests after its salt frame, so no queue root can precede the salt (RT3-INT-9). Today's
-code commits the receipts at the draw (`serve.py`'s receipt trees, built after serving), which this schedule is the
-fix of, and its round root covers the A and admit roots only. The admit words and the tally have no class: their
+before round `0`'s; a call's A rows and their scales, the request entries its round admits and its `z` or `y` rows
+under its round's root, before its coin (`perCall`'s `z` and `y` under the next round's, with its receipts); its
+receipts under the next round's root, the last round's in the manifest before the draw. Every served arm is to commit
+in this order, each round's coin live and drawn after its root (RT4-INT-12, 20 Oct). An arm that forms a call's A rows
+after the coin or salt its noise reads is in no form here: dither-a, dither-one and `serve.py`'s seeded mode do today,
+and kernels moves dither-a to this order (#2889). A request entry is a run input (`act`), not a registered one:
+certified serving releases a window's requests after its salt frame, so no queue root can precede the salt (RT3-INT-9).
+Today's code commits the receipts at the draw (`serve.py`'s receipt trees, built after serving), which this schedule is
+the fix of, and its round root covers the A and admit roots only. The admit words and the tally have no class: their
 always-proved units are not in the per-call Program `Properties.Served.ServedUnits` names, so no gate of a served
-circuit is one (RT2-INT-5). They are PADCREDIT's (R8, R9), and the round root's admit root stays a run-time check
-below.
+circuit is one (RT2-INT-5). They are PADCREDIT's (R8, R9), and the round root's admit root stays a run-time check below.
 
 `Tie` is what a declared circuit (`Accounting.Compose.Declared`) must be to be the served window's: its call sites and
 rounds the layout's, each value's commit coin `commitCoin` of its class, and the IR facts that put each class's value
@@ -103,7 +107,9 @@ statement is over the declared circuit; these are the checks that make its `comm
 * `act`, `out`, `served`: round `r`'s root, recorded before round `r`'s coin, over the A table, the request entries
   the round admits, admit (PADCREDIT's), and `z` or Commit `y` roots of exactly round `r`'s calls (`perCall`'s `y`
   roots in round `r + 1`'s; both under `ValueChecked`); each drawn unit's rows of them opened under it; in `perCall`,
-  and in any form under `ValueChecked`, each call's Commit `y` root equal to its units' `y` root;
+  and in any form under `ValueChecked`, each call's Commit `y` root equal to its units' `y` root; and each call's A
+  table root equal to the Commit's root of its linear's input (ROOTS1, RT4-INT-14), so the A rows a call commits are
+  the linear's input as the Commit commits it;
 * the challenger: every round's coin opened by the live challenger, the auditor's device (AGENTS.md, auditor-trusted
   devices; `trusted-nebius-host`), on a machine the prover doesn't control and never a process on the prover's node.
   A challenger in the prover's process gives the prover its coins as they are drawn, so its coins are seeded ones,
@@ -422,12 +428,20 @@ def Llama31Shape : Prop :=
 (`Tie`, which fixes its live rounds at `F.rounds L`), and each window's timed run
 starts at the salt's release `release` (`Pouw.TimedRun.ts`; the service's `salted_at`, `sampled_proofs.service`), so
 every window of the salt is accounted in one `(t_s, t_d]`. One salt spans an epoch's windows (`SaltWindows`,
-`PouwCheck.epochSalt`), and a call's noise key reads that salt and its call index only, so a later window's noise can
-be computed once the salt is out; that work is spent after `release`, inside the interval, so it is counted work. A
-window timed from its own start after `release` under the same salt would leave what it spends from `release` to that
-start uncounted (`Properties.Served.spentIn_split`), and that reopens the precompute. For an actual circuit's run
-(`Accounting.Actual.timedRun`, whose `ts` is `CM_A`'s `tₛ`), `salted` says every window of the salt is costed in
-`CM_A` at the one `tₛ`. -/
+`PouwCheck.epochSalt`). Every window is in `Tie`'s live order, which every served arm is to use (RT4-INT-12, 20 Oct):
+* a call's A rows and their scales go under its round's root before that round's live coin, and so do its `z` and `y`
+  leaves in a form of a round a step;
+* its receipts, which read the coin, follow it under the next round's root, and so do `perCall`'s `z` and `y`.
+A unit's noise reads its round's coin and its round's root, which is over its call's A table (the unit's salt in the
+module docstring's run-time list), so no noise exists before the A rows it noises are committed. A key that read only
+the salt and the call index would let a prover that holds the salt write A after its noise: `A = −b` cancels a one-bit
+dither, and the receipt is then the same for every B (RT4-INT-12's witness). There is no seeded form: `Tie.live` makes
+every round's coin live and `Tie.noised` has each receipt read its round's coin, so a window whose noise the salt fixes
+before its A rows are committed isn't tied. What a window spends between `release` and its own start (its requests come
+after the salt frame, and its A rows from them) is inside the interval. A window timed from its own start would leave
+that spending outside its interval (`Properties.Served.spentIn_split`). For an actual circuit's run
+(`Accounting.Actual.timedRun`, whose `ts` is `CM_A`'s `tₛ`), `salted` says every window of the salt is costed in `CM_A`
+at the one `tₛ`. -/
 structure EpochTie {ι Q R S : Type} (L : Layout) (F : Form) (W : ℕ) (Cd : ℕ → Declared ι) (cls : ℕ → ℕ → Cls)
     (release : ℝ) (run : ℕ → Pouw.TimedRun Q R S) : Prop where
   tie : ∀ w, w < W → Tie L F (Cd w) (cls w)
