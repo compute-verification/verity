@@ -61,9 +61,8 @@ captured from serving, and says so (`window.kind = "stand-in"`). Run A5 (`benchm
 too: a deferred Commit's serving rows, written after serving from its sealed replay bundle opened against the run's record
 (`verity-vllm serving-rows`), whose `of` names the record's vllm-v1 run root and the bundle's manifest digest; the link from
 those roots to the vllm-v1 roots is the committer's opening, not proof. Rows the in-Commit hook writes before any draw are
-`served`: serving's own commitment, which A5 takes only over a SHA-512 record (`deferred_rows.source`). A deferred
-window becomes `served` once serving's record is frame-v3-sha512 / hm96-sha512 itself, or once the circuit opens the vllm-v1
-SHA-256 leaves.
+`served`: serving's own commitment, with no claim that they hold the values under the vllm-v1 roots. A deferred window becomes
+`served` once serving's record is frame-v3-sha512 / hm96-sha512 itself, or once the circuit opens the vllm-v1 SHA-256 leaves.
 
 ## Where things are
 
@@ -99,9 +98,7 @@ SHA-256 leaves.
   root's input gates (drawn `all`: the input unit is always checked), each replay unit one proof unit, and the draw's
   checked proof units as `(slot, index)` in class, stratum and replay-unit order.
 - **The challenger** (`challenger`, Lean of record `SampledProofs/Challenger.lean`): every protocol's live coins, by
-  label and index, each opened once, after its root is recorded. Its commitment is signed on its host before any coin
-  opens; the verifier trusts only that record (`trusted_commitment`), not the prover's. `benchmarks/live_challenger`
-  serves it (`remote`) on the Lean's coins.
+  label and index, each opened once, after its root is recorded.
 - **The Python.** `verity.core.protocols.sampled_proofs.one_stage` is the one-stage audit's reference: `registration`,
   `draw` (the draw's checks, not a sampler), `partition`, `audit` and `verdict`. `consumers` reads its profile. `service` is the proof service over it, whose `Stream`
   draws from the challenger's own randomness as `coins.draw_first` does. `coins` is the verifier's randomness, and
@@ -290,8 +287,6 @@ Code and records call a sampling design a `law`; the name stays until a format v
 - A sampling design's text is `subset:K` or `bernoulli:NUM/DEN` with `NUM ≤ DEN` and `DEN > 0` (M0's `serve --draw`
   syntax), or one of the rules `stratified:K` and `work:K` with `K ≥ 1` (`draw.parse_law`), each number in ASCII digits
   (`draw.digits`, as the Lean reads them; a draw's `p` too).
-- A new Spec states `rate:NUM/DEN[:T]` (`draw.parse_rate`): over N units, `subset:K` at `K = T·⌈NUM·N/(DEN·T)⌉`
-  (`draw.rate_count`), refused (`rate`) unless `1 ≤ K ≤ N`.
 - As objects they are `{"law": "subset", "k": K}`, `{"law": "bernoulli", "p": "NUM/DEN"}`, and the rules expanded by
   `draw.derive`: `{"law": "stratified", "k": K, "strata": [{"template", "units", "k"}, ...]}` and
   `{"law": "work", "k": K, "strata": [{"template", "units", "work", "floor", "k"}, ...]}`. The registration carries the
