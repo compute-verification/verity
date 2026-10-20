@@ -79,7 +79,7 @@ def passOf (j : Json) : Except String Json := do
 def drawOf (j : Json) : Except String Json := do
   let f := get j
   refusal (fun _ => Json.null) (drawCheck (← f "coins") (← flag j "recorded") (← f "opening") (← f "stream")
-    (← f "registration") (← f "receipt") (← f "k") (← f "population") (← f "units"))
+    (← f "registration") (← f "receipt") (← f "k") (← f "population") (← f "units") (SampledProofs.getD j "key"))
 
 def roundsOf (j : Json) : Except String Json := do
   refusal (fun _ => Json.null) (roundsCheck (← get j "coins") (← get j "roots") (← get j "openings"))

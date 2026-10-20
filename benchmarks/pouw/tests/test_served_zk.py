@@ -4,6 +4,7 @@ grid level, registered with exactly PoUW's public items, received by a `Stream`,
 opened against the window root, delivered once, and the final outcome publishing exactly the public items."""
 from __future__ import annotations
 
+import dataclasses
 import hashlib
 import io
 import itertools
@@ -555,6 +556,11 @@ def _live(path: Path, entropy: str | None = None) -> tuple[Ch.LiveChallenger, Ch
         Ch.ChallengerKey(4, 2, lms.public_key(k))
 
 
+def _deployment(client: active.RemoteCertifier, ck: Ch.ChallengerKey) -> SC.Deployment:
+    """What the verifier pins of the deployment: `client`'s certifier key and run id, and its challenger's key `ck`."""
+    return SC.Deployment(client.certifier_key, client.run_id, ck)
+
+
 def _unasked(monkeypatch) -> list[str]:
     """What the challenger asks the certifier (`salt.committed`, `salt.revealed`), recorded and never answered."""
     asked: list[str] = []
@@ -583,7 +589,8 @@ def test_rows_formed_before_any_salt_are_refused_in_every_certified_window(serve
         params, raw, rec, *_ = _certified_window(words, run, salts[p], sid, prover, p)
         live, ck = _live(tmp_path / f"w{p}.json")
         ch = SC.Challenger(params, live, clock=lambda: 0.0, record=OR.Record(lean=False), certifier=client,
-                           prover=prover, coin_record=tmp_path / f"w{p}.json", coin_key=ck, registrations=ledger)
+                           prover=prover, coin_record=tmp_path / f"w{p}.json", deployment=_deployment(client, ck),
+                           registrations=ledger)
         with pytest.raises(S.Refused) as e:
             ch.register(f"w{p}", rec, manifest=raw)
         assert _codes(e) == {"unsalted"} and e.value.verdict.detail["unsalted"] == unread
@@ -609,7 +616,8 @@ def test_one_windows_rows_are_refused_under_two_streams(served, tmp_path, monkey
         params, raw, rec, *_ = _certified_window(words, run, salts[0], sid, prover)
         live, ck = _live(tmp_path / f"{s}.json")
         ch = SC.Challenger(params, live, clock=lambda: 0.0, record=OR.Record(lean=False), certifier=client,
-                           prover=prover, coin_record=tmp_path / f"{s}.json", coin_key=ck, registrations=ledger)
+                           prover=prover, coin_record=tmp_path / f"{s}.json", deployment=_deployment(client, ck),
+                           registrations=ledger)
         with pytest.raises(S.Refused) as e:
             ch.register(s, rec, stream=s, manifest=raw)
         assert _codes(e) == {"unsalted"} and not ch.streams and not ch.regs
@@ -629,16 +637,19 @@ def test_past_the_salt_rule_a_certified_window_is_recorded_revealed_drawn_under_
     the recorded one is refused (``coin``) and takes no reveal: the honest one after it passes (``certifier``), holds
     the salt its pass was checked against, and its draw is the live epoch's ``pouw/draw`` coin 0 opened after the
     registration, under the commitment the challenger read itself from its challenger's signed record, which the draw's
-    check of record verifies again.  Its drawn units are opened under that salt (`Challenger.check`, SALT-BIND-1),
+    check of record verifies again under the challenger key the deployment pins (`Deployment`), and refuses under any
+    other pin (``coin-key``).  Its drawn units are opened under that salt (`Challenger.check`, SALT-BIND-1),
     where `check` alone passes none.  The certifier reveals window 0 once and within its reveal deadline on its own
     clock, so a second registration, or one past the deadline, is refused (``certifier``).  A second proxy of the same
     run (its key, run id and link) gives the same stream id, and the deployment's shared `Registrations` refuse its
     window 0 (``reregistered``); another run (another run id) is another stream, so a record naming the first run's
     stream is refused (``coin``) and one naming its own registers, though coins that aren't its signed record's
     challenger's are refused at the draw.  A certified challenger opens no salt coin, and is refused parameters with a
-    registration deadline, a certifier that names no run (an in-process proxy, which has no signer), coins it can't
-    read from a signed record under its key, a prover id that isn't 64 bytes or a context that names no PoUW window;
-    parameters that name one are refused without a certifier."""
+    registration deadline, a certifier that names no run (an in-process proxy, which has no signer), no deployment, a
+    client for another certifier key or run id than the deployment pins, coins it can't read from a signed record under
+    the deployment's challenger key, a prover id that isn't 64 bytes or a context that names no PoUW window; parameters
+    that name one are refused without a certifier.  A deployment is a certifier's public key, a 32-byte run id and a
+    challenger key, or it is refused (`DEPLOYMENT_FORM`)."""
     monkeypatch.setattr(PS, "unit_reason", lambda unit: None)
     *_, words = served
     run, keys = "r-certified", _keys(tmp_path)
@@ -659,7 +670,8 @@ def test_past_the_salt_rule_a_certified_window_is_recorded_revealed_drawn_under_
     def challenger(name: str, certifier=client, prover=prover, p=params, entropy=None) -> SC.Challenger:
         live, ck = _live(tmp_path / f"{name}.json", entropy)
         return SC.Challenger(p, live, clock=lambda: 0.0, record=OR.Record(lean=False), certifier=certifier,
-                             prover=prover, coin_record=tmp_path / f"{name}.json", coin_key=ck, registrations=ledger)
+                             prover=prover, coin_record=tmp_path / f"{name}.json",
+                             deployment=_deployment(certifier, ck), registrations=ledger)
 
     def refused(ch: SC.Challenger, code: str, r=rec, m=raw, **kw) -> str:
         with pytest.raises(S.Refused) as e:
@@ -678,7 +690,12 @@ def test_past_the_salt_rule_a_certified_window_is_recorded_revealed_drawn_under_
     salt = PS.pouw_salt(salts[0], 0, sid, prover)
     assert ch.passes == {"honest": "certifier"} and ch.salts == {"honest": salt} and "draw" not in ch.openings
     assert (0, sid, prover) in ledger
+    drawn, draw_of_record = [], ch.record.draw
+    ch.record.draw = lambda x: drawn.append(x) or draw_of_record(x)
     d = ch.select("honest")
+    assert [x["key"] for x in drawn] == [ch.deployment.challenger_key.to_json()] == [ch.signed["key"]]
+    assert OR.py_draw({**drawn[0], "key": _live(tmp_path / "pinned.json")[1].to_json()}) == \
+        {"refused": [CC.COIN_KEY, CC.OTHER_KEY]}
     o, st = ch.openings["draw"], ch.regs["honest"][0]
     assert (o.label, o.index, o.after) == (Wd.DRAW, 0, bytes.fromhex(reg.digest))
     assert Ch.live_reason(ch.trusted, o, Wd.DRAW, 0, o.after) is None and ch.trusted == ch.coins.commitment
@@ -732,21 +749,31 @@ def test_past_the_salt_rule_a_certified_window_is_recorded_revealed_drawn_under_
 
     live, ck = _live(tmp_path / "init.json")
     _, foreign = _live(tmp_path / "foreign.json")
-    base = dict(certifier=client, prover=prover, coin_record=tmp_path / "init.json", coin_key=ck)
+    dep = _deployment(client, ck)
+    base = dict(certifier=client, prover=prover, coin_record=tmp_path / "init.json", deployment=dep)
     in_process = Proxy(("127.0.0.1", 9), EGRESS, INGRESS, SyncSet((0, 1), (1, 2)), [ClockSync(0, 1)] * 4, origin=0.0,
                        ingress_link="requests")
+    pinned = "is for the certifier key and run id its deployment pins"
     for p, kw, why in (({**params, "registration_deadline": 60.0}, base, "carry no registration_deadline"),
                        (params, {**base, "certifier": in_process}, "names its run.*without a signer"),
+                       (params, {**base, "deployment": None}, "takes its deployment"),
+                       (params, {**base, "deployment": ck}, "takes its deployment"),
+                       (params, {**base, "deployment": dataclasses.replace(dep, run_id=OTHER_RUN_ID)}, pinned),
+                       (params, {**base, "deployment": dataclasses.replace(dep, certifier_key=keys[1].public_key())},
+                        pinned),
                        (params, {**base, "coin_record": None}, "signed record"),
-                       (params, {**base, "coin_key": None}, "signed record"),
-                       (params, {**base, "coin_key": _coins().commitment}, "signed record"),
                        (params, {**base, "coin_record": tmp_path / "missing.json"}, "opens against its challenger's"),
-                       (params, {**base, "coin_key": foreign}, "opens against its challenger's"),
+                       (params, {**base, "deployment": dataclasses.replace(dep, challenger_key=foreign)},
+                        "opens against its challenger's"),
                        (params, {**base, "prover": prover[:32]}, "64-byte id"),
                        ({**params, "context": _params(run, raw)["context"]}, base, "names its PoUW window"),
                        (params, {}, "so it is certified")):
         with pytest.raises(ValueError, match=why):
             SC.Challenger(p, live, **kw)
+    for edit in ({"challenger_key": _coins().commitment}, {"challenger_key": ck.to_json()}, {"run_id": RUN_ID[:16]},
+                 {"run_id": RUN_ID.hex()}, {"certifier_key": keys[0]}, {"certifier_key": keys[0].public_key().public}):
+        with pytest.raises(ValueError, match=re.escape(SC.DEPLOYMENT_FORM)):
+            dataclasses.replace(dep, **edit)
 
 
 @LEAN
