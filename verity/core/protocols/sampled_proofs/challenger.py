@@ -821,7 +821,7 @@ def _ledger_entry(line: Any) -> dict | None:
     except (ValueError, TypeError, RecursionError):
         return None
     if not (isinstance(e, dict) and sorted(e) == ["body", "kind", "prev", "schema", "seq", "session", "sig"]
-            and e["schema"] in LEDGER_TAGS and _nat(e["seq"]) and _digest_hex(e["prev"]) and type(e["sig"]) is str
+            and type(e["schema"]) is str and e["schema"] in LEDGER_TAGS and _nat(e["seq"]) and _digest_hex(e["prev"]) and type(e["sig"]) is str
             and len(e["sig"]) >= 8 and _HEX.fullmatch(e["sig"]) is not None and isinstance(e["body"], dict)):
         return None
     b, kind, v2 = e["body"], e["kind"], e["schema"] == LEDGER_SCHEMA
