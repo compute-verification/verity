@@ -4,7 +4,7 @@ first coin.
 
     vy-challenger-gate reserve --peer NAME --scheme S --families JSON [--epoch E] [--minutes M] [--for LANE]
     vy-challenger-gate open --session S --root R
-    vy-challenger-gate period-open --name P --cap N --circuit SHA512|PROGRAM_ID [--lane LANE] | period-close --name P
+    vy-challenger-gate period-open --name P --cap N --circuit SHA512 [--lane LANE] | period-close --name P
     vy-challenger-gate status SESSION | ledger | pubkey | fetch SESSION
 
 - **Who reaches it.** Every key in `research`'s authorized_keys on the host is forced to `vy-challenger-gate` (`command=`),
@@ -46,8 +46,8 @@ first coin.
   which the lane's own gate key writes for its lane (`--name P`), or vy-admin for any lane (`period-open --name P --lane
   LANE`, `period-close --name P`). A period's name is used once, and a lane has one period open at a time. Its open
   commits, before window 0's first coin, the most windows it may hold (`--cap`, a positive integer) and its circuit
-  (`--circuit`: the declared circuit's SHA-512 or the registered Program's id, which the gate records and CHAL1 checks each
-  window against). Its windows are exactly the reserves (and one-step v2 opens) whose prover (`for`, else `by`) is its
+  (`--circuit`: the declared circuit's SHA-512, never a Program's id, which the gate records and CHAL1 checks each window
+  against). Its windows are exactly the reserves (and one-step v2 opens) whose prover (`for`, else `by`) is its
   lane between its open and its close, at most `cap` (the next reserve is refused); every one counts. The close is
   refused while one of them is reserved and unexpired or still runs, and lists each, in order, as {root, session,
   complete} (root null for a reserve never opened; complete when its end is in the ledger and complete), with `complete` true only when it lists at least one window and all are: an
@@ -111,7 +111,7 @@ SESSION_KINDS = ("reserve", "open", "end")
 RESERVED = ("by", "for", "peer", "scheme", "epoch", "families", "minutes")
 UTC = re.compile(r"\d{4}-\d\d-\d\dT\d\d:\d\d:\d\dZ")
 CAP = (1, 2 ** 24)
-CIRCUIT = re.compile(r"[A-Za-z0-9][A-Za-z0-9._:/@+-]{0,255}")
+CIRCUIT = re.compile(r"[0-9a-fA-F]{128}")
 HOST_ACCOUNTS = ("root", "vy-admin", "research", "auditor")
 SECRET = "secret"
 OPEN_REQUEST = "open.json"
@@ -213,12 +213,11 @@ def lane_of(e: dict) -> str:
 
 
 def circuit_of(s: str) -> str:
-    """A period's circuit as its open records it: the declared circuit's SHA-512 (128 hex digits, kept in lowercase) or
-    the registered Program's id."""
+    """A period's circuit as its open records it: the declared circuit's SHA-512 (128 hex digits, kept in lowercase).
+    The verifier of record refuses a Program's id there."""
     if type(s) is not str or not CIRCUIT.fullmatch(s):
-        raise Refused(f"--circuit {s!r}: the declared circuit's SHA-512 (128 hex digits) or the registered Program's id "
-                      "(1 to 256 of [A-Za-z0-9._:/@+-], starting with a letter or digit)")
-    return s.lower() if re.fullmatch(r"[0-9a-fA-F]{128}", s) else s
+        raise Refused(f"--circuit {s!r}: the declared circuit's SHA-512 (128 hex digits), not a Program's id")
+    return s.lower()
 
 
 def cap_of(v: Any) -> int:
@@ -442,7 +441,7 @@ def _verify(lines: list[bytes], I: bytes, verify: Callable[[bytes, bytes], bool]
                             raise Refused("not canonical")
                     except Refused:
                         raise ValueError(f"entry {i}: period {name}'s cap is a positive integer and its circuit a "
-                                         "SHA-512 in lowercase or a Program's id") from None
+                                         "SHA-512 in lowercase") from None
                 periods[name], current[lane] = {"lane": lane, "open": e, "close": None, "windows": [], "cap": cap,
                                                 "circuit": circuit}, name
             else:
@@ -689,7 +688,7 @@ def gate_fetch(session: str, host: Host) -> bytes:
 
 USAGE = ("verbs: reserve --peer NAME --scheme S --families JSON [--epoch E] [--minutes M] [--for LANE: vy-admin's] "
          "| open --session S --root R "
-         "| period-open --name P --cap N --circuit SHA512|PROGRAM_ID [--lane LANE: vy-admin's] | period-close --name P "
+         "| period-open --name P --cap N --circuit SHA512 [--lane LANE: vy-admin's] | period-close --name P "
          "(a lane's own gate key, or vy-admin) "
          "| status SESSION | ledger | pubkey | fetch SESSION")
 

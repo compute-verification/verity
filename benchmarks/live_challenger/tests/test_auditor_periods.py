@@ -259,8 +259,8 @@ def test_an_end_after_its_periods_close_leaves_the_close_and_the_ledger_standing
 def test_a_period_open_commits_its_cap_and_circuit_and_the_gate_reserves_no_window_past_the_cap(host, signer):
     """compute-accounting's CircuitWorkPeriod (#2722) reads both, committed before window 0's first coin; a reserve
     counts toward the cap from its entry on, opened or not."""
-    opened = ok(admin(host, signer, "period-open --name k1 --lane kernels --cap 2 --circuit pouw/pearl-c@v3"))
-    assert (opened["body"]["cap"], opened["body"]["circuit"]) == (2, "pouw/pearl-c@v3")
+    opened = ok(admin(host, signer, f"period-open --name k1 --lane kernels --cap 2 --circuit {'ab' * 64}"))
+    assert (opened["body"]["cap"], opened["body"]["circuit"]) == (2, "ab" * 64)
     first = window(host, signer, "01" * 64, token="0001", for_="kernels")["session"]
     window(host, signer, "02" * 64, "hash", token="0002")
     held = ok(admin(host, signer, RESERVE + " --for kernels", token="0003"))["session"]
@@ -273,7 +273,7 @@ def test_a_period_open_commits_its_cap_and_circuit_and_the_gate_reserves_no_wind
     last = window(host, signer, "04" * 64, token="0005", for_="kernels")["session"]
     periods = checked(host)
     assert {k: (p["cap"], p["circuit"], p["windows"]) for k, p in periods.items()} == {
-        "k1": (2, "pouw/pearl-c@v3", [first, held]), "k2": (1, CIRCUIT, [last])}
+        "k1": (2, "ab" * 64, [first, held]), "k2": (1, CIRCUIT, [last])}
 
 
 @pytest.mark.parametrize("args, why", [
@@ -287,7 +287,9 @@ def test_a_period_open_commits_its_cap_and_circuit_and_the_gate_reserves_no_wind
     (f"--name p1 --cap {2 ** 24 + 1} --circuit {CIRCUIT}", f"--cap {2 ** 24 + 1}"),
     ("--name p1 --cap 2 --circuit ''", "--circuit ''"),
     ("--name p1 --cap 2 --circuit 'a b'", "--circuit 'a b'"),
-    (f"--name p1 --cap 2 --circuit {'x' * 257}", "the registered Program's id"),
+    ("--name p1 --cap 2 --circuit pouw/pearl-c@v3", "not a Program's id"),
+    (f"--name p1 --cap 2 --circuit {'a' * 127}", f"--circuit '{'a' * 127}'"),
+    (f"--name p1 --cap 2 --circuit {'a' * 129}", f"--circuit '{'a' * 129}'"),
 ])
 def test_a_period_open_without_a_valid_cap_and_circuit_is_refused(host, signer, args, why):
     rc, doc = ssh(host, signer, f"period-open {args}", "hash")
@@ -304,6 +306,7 @@ def test_a_period_open_without_a_valid_cap_and_circuit_is_refused(host, signer, 
     ({"cap": 3}, "cap is a positive integer"),
     ({"circuit": CIRCUIT}, "cap is a positive integer"),
     ({"cap": 3, "circuit": CIRCUIT.upper()}, "cap is a positive integer"),
+    ({"cap": 3, "circuit": "pouw/pearl-c@v3"}, "its circuit a SHA-512 in lowercase"),
 ])
 def test_the_check_reads_a_periods_cap_and_keeps_one_step_opens_before_the_first_reserve_verifiable(host, signer, body,
                                                                                                     why):
