@@ -349,7 +349,7 @@ def _cases(make, names):
 PARAMS = [(1, 2), (2, 3), (4, 2), (8, 1)]
 #: those for a key that signs a ledger too: 32 leaves, room for a ledger's entries at increasing leaves on either side of
 #: its session's record
-LEDGER_PARAMS = [(1, 5), (2, 5), (4, 5)]
+LEDGER_PARAMS = [(1, 6), (2, 6), (4, 6)]
 HOSTS = ["vy-nebius-cpu-1", "auditor.example", "h", "A_1"]
 
 
@@ -622,12 +622,18 @@ class Session:
 
 PERIODS = ["p-0", "smoke-20261020", "2026-10-20T09:00Z", "a", "x" * 64, "0.1_b"]
 LANES = ["pouw", "vllm", "memory.audit"]
-CIRCUITS = ["ab" * 64, "pouw/matmul@v1", "P:1+x", "c" * 256]
+CIRCUITS = ["ab" * 64, "0" * 128, "c" * 128]
+#: a reserve's start: across a day, a leap day, a century's non-leap February, a year, and at either end of `datetime`'s
+STARTS = ["2026-10-20T12:00:00Z", "2024-02-28T23:59:59Z", "2100-02-28T12:00:00Z", "2026-12-31T23:30:00Z",
+          "0001-01-01T00:00:00Z", "9999-12-31T11:00:00Z"]
+PEERS = ["10.0.0.7", "vy-nebius-1", "::1"]
 #: a body's note, each written as `ledger_text` escapes it (none past the Basic Multilingual Plane, which it writes as a
 #: surrogate pair)
 NOTES = ["\u00e9", "a\"b\\c\n", "\x7f\x01", "\u2026"]
 #: a key `_body` removes
 DROP = object()
+#: an open's `reserve` that `Ledger.lines` resolves to its session's reserve's seq
+RESOLVE = object()
 
 
 def _window(rng: random.Random) -> dict:
@@ -650,39 +656,49 @@ class Ledger:
     sometimes after an older v1 session's, and sometimes (always when `period` is set: "open" or "closed") inside a
     period of `s`'s lane, its close when it has one listing its windows: `events` its entries' (kind, session, body),
     `lines` them chained and signed at drawn increasing leaves of `s`'s key, `s`'s record's leaf between its open's and
-    its end's (or at `leaves`, or under `signer`, an `edit(i, entry)` applied to each entry before it is signed)."""
+    its end's (or at `leaves`, or under `signer`, an `edit(i, entry)` applied to each entry before it is signed).  When
+    `two_step` (drawn when `s`'s id is a reserved one, unless set), every v2 session is reserved before it is opened, its
+    open binding the reserve, and sometimes another reserve is never opened."""
 
-    def __init__(self, rng: random.Random, s: Session, closed: bool = True, period: str | None = None) -> None:
+    def __init__(self, rng: random.Random, s: Session, closed: bool = True, period: str | None = None,
+                 two_step: bool | None = None) -> None:
         self.rng, self.s, self.window = rng, s, _window(rng)
+        self.two_step = (Ch._RESERVED_SESSION.fullmatch(s.id) is not None
+                         and (rng.random() < 0.8 if two_step is None else two_step))
+        self._ids = itertools.count()
+        self.v1: list[dict] = []
         files = {Ch.LOG_FILE: Ch.log_digest(s.lines), Ch.HELLOS_FILE: Ch.log_digest(s.hellos),
                  Ch.RECORD_FILE: rng.randbytes(64).hex(), Ch.CLOSE_FILE: rng.randbytes(64).hex()}
         if rng.random() < 0.5:
             files["serve.log"] = rng.randbytes(64).hex()
         self.lane = rng.choice(LANES)
-        self.opened = self.open_body(self.window, s.host, self.lane)
+        named, self.opened = self.session_events(s.id, self.window, s.host, self.lane)
         self.ended = {"closed": closed, "commitment": s.ch.commitment.root.hex(), "complete": closed, "files": files,
                       "rc": 0 if closed else 1, "record_leaf": s.q, "refused_hellos": len(s.hellos)}
-        named = [("open", s.id, self.opened), ("end", s.id, self.ended)]
-        others = []
-        for sid in ("o-1", "o-2")[:rng.randint(0, 2)]:
-            done = rng.random() < 0.8
-            others.append([("open", sid, self.open_body(_window(rng), f"vy-challenger-1.{sid}", rng.choice(LANES))),
-                           ("end", sid, {"closed": done, "complete": done and rng.random() < 0.8, "files": {}, "rc": 0})])
-        queues = [named] + others
+        named.append(("end", s.id, self.ended))
+        queues = [named]
+        for tag in ("o-1", "o-2")[:rng.randint(0, 2)]:
+            sid, done = self.sid(tag), rng.random() < 0.8
+            events, _ = self.session_events(sid, _window(rng), f"vy-challenger-1.{sid}", rng.choice(LANES))
+            queues.append(events + [("end", sid, {"closed": done, "complete": done and rng.random() < 0.8,
+                                                  "files": {}, "rc": 0})])
+        if self.two_step and rng.random() < 0.5:
+            queues.append([("reserve", self.sid("dead"), self.reserve_body(rng.choice(LANES)))])
         self.events: list[tuple[str, str | None, dict]] = []
         while any(queues):
             q = rng.choice([q for q in queues if q])
             self.events.append(q.pop(0))
         self.period_open = None
         if period is not None or rng.random() < 0.5:
-            self.period_open = {"by": "vy-admin", "cap": rng.randint(3, 8), "circuit": rng.choice(CIRCUITS),
+            self.period_open = {"by": "vy-admin", "cap": rng.randint(4, 8), "circuit": rng.choice(CIRCUITS),
                                 "key_sha512": hashlib.sha512(s.pub).hexdigest(), "lane": self.lane,
                                 "period": rng.choice(PERIODS)}
-            self.events.insert(rng.randint(0, self.index("open", s.id)), ("period-open", None, self.period_open))
+            first = self.index("reserve" if self.two_step else "open", s.id)
+            self.events.insert(rng.randint(0, first), ("period-open", None, self.period_open))
             if period == "closed" or period is None and rng.random() < 0.6:
-                at = rng.randint(self.index("end", s.id) + 1, len(self.events))
+                opens = [k for k, (kind, _, _) in enumerate(self.events) if kind == "open"]
+                at = rng.randint(max([self.index("end", s.id)] + opens) + 1, len(self.events))
                 self.events.insert(at, ("period-close", None, self.close_body(self.events[:at])))
-        self.v1: list[dict] = []
         if rng.random() < 0.3:
             old = {"commit": rng.randbytes(64).hex(), "period": rng.choice(PERIODS)}
             self.v1 = [{"host": "vy-challenger-1", "key_sha512": hashlib.sha512(s.pub).hexdigest(),
@@ -701,17 +717,48 @@ class Ledger:
             body["note"] = self.rng.choice(NOTES)
         return body
 
+    def sid(self, tag: str) -> str:
+        """A session id: `tag`, or a fresh reserved one when the ledger is two-step."""
+        return f"s20261020T{next(self._ids):06d}Z-{self.rng.randbytes(2).hex()}" if self.two_step else tag
+
+    def reserve_body(self, lane: str) -> dict:
+        rng = self.rng
+        start, minutes = rng.choice(STARTS), rng.choice([1, 30, 720, rng.randint(1, 720)])
+        body = rng.choice([{"by": lane}, {"by": "vy-admin", "for": lane}])
+        body.update(peer=rng.choice(PEERS), scheme=rng.choice(SCHEMES), epoch=rng.choice([0, 1, 7]),
+                    families=[[rng.choice(LABELS), rng.randint(1, 4)]], minutes=minutes, started_utc=start,
+                    expires_utc=Ch.later(start, minutes))
+        if rng.random() < 0.2:
+            body["note"] = rng.choice(NOTES)
+        return body
+
+    def session_events(self, sid: str, window: dict, host: str, lane: str) -> tuple[list, dict]:
+        """Session `sid`'s entries up to its open, and its open's body: the open alone, or when the ledger is two-step its
+        reserve and the open binding it, by the reserve's prover and inside its minutes."""
+        if not self.two_step:
+            body = self.open_body(window, host, lane)
+            return [("open", sid, body)], body
+        rng, reserve = self.rng, self.reserve_body(lane)
+        body = _body(self.open_body(window, host, lane), by=DROP, **{"for": DROP})
+        body.update({k: reserve[k] for k in Ch.RESERVED if k in reserve}, reserve=RESOLVE,
+                    opened_by=rng.choice([reserve["by"], reserve.get("for", reserve["by"])]),
+                    started_utc=Ch.later(reserve["started_utc"], rng.randint(0, reserve["minutes"])))
+        return [("reserve", sid, reserve), ("open", sid, body)], body
+
     def close_body(self, before: list) -> dict:
-        """The period-close after entries `before`: the windows of the period's lane opened since its open, each complete
-        when its end is among `before` and complete."""
+        """The period-close after entries `before`: the windows of the period's lane since its open, each counted at its
+        reserve or one-step open, its root null when it isn't opened among `before`, complete when its end is among
+        `before` and complete."""
         p = self.period_open
         start = next(i for i, (_, _, b) in enumerate(before) if b is p)
         outcomes = []
         for kind, sid, b in before[start:]:
-            if kind == "open" and (b.get("for") or b["by"]) == p["lane"]:
+            counts = kind == "reserve" or kind == "open" and "reserve" not in b and not any(b is v for v in self.v1)
+            if counts and (b.get("for") or b["by"]) == p["lane"]:
+                opened = next((o for k, x, o in before if (k, x) == ("open", sid)), None)
                 end = next((e for k, x, e in before if (k, x) == ("end", sid)), None)
-                outcomes.append({"complete": end is not None and end.get("complete") is True,
-                                 "root": b["window"]["root"], "session": sid})
+                outcomes.append({"complete": opened is not None and end is not None and end.get("complete") is True,
+                                 "root": None if opened is None else opened["window"]["root"], "session": sid})
         return {"complete": bool(outcomes) and all(w["complete"] for w in outcomes), "lane": p["lane"],
                 "period": p["period"], "windows": outcomes}
 
@@ -737,6 +784,8 @@ class Ledger:
         out: list[str] = []
         for i, (kind, sid, body) in enumerate(events):
             schema = Ch.LEDGER_SCHEMA_V1 if any(body is b for b in self.v1) else Ch.LEDGER_SCHEMA
+            if body.get("reserve") is RESOLVE:
+                body = {**body, "reserve": next((k for k, (x, y, _) in enumerate(events) if (x, y) == ("reserve", sid)), 0)}
             entry = {"body": body, "kind": kind, "prev": hashlib.sha512(out[-1].encode()).hexdigest() if out else "0" * 128,
                      "schema": schema, "seq": i, "session": sid}
             if edit is not None:
@@ -745,9 +794,14 @@ class Ledger:
         return out
 
 
-def _ledger_session(rng: random.Random) -> Session:
-    """A session whose record's leaf leaves room on either side for a ledger's entries."""
-    return Session(rng, params=LEDGER_PARAMS, q=rng.randrange(12, 20))
+def _ledger_session(rng: random.Random, reserved: bool | None = None) -> Session:
+    """A session whose record's leaf leaves room on either side for a ledger's entries, its id a reserved one (drawn,
+    unless `reserved` says)."""
+    s = Session(rng, params=LEDGER_PARAMS, q=rng.randrange(20, 40))
+    if reserved or reserved is None and rng.random() < 0.5:
+        s.id = f"s20261019T{rng.randrange(10 ** 6):06d}Z-{rng.randbytes(2).hex()}"
+        s.close = s.signed(None)
+    return s
 
 
 CLOSE_NAMES = ["honest", "keys", "extra", "chain-short", "chain-upper", "signature-type", "lines-zero", "lines-big",
@@ -868,7 +922,12 @@ LEDGER_NAMES = ["honest", "no-ledger", "ledger-type", "line-type", "non-canonica
                 "self-keyed", "other-key", "open-form", "end-form", "end-fields", "second-open", "reopen",
                 "end-unopened", "end-twice", "no-open", "truncated", "unclosed", "window-form", "key-form", "params",
                 "request", "reused-leaf", "v1-ledger", "v1-after-v2", "record-outside", "record-entry", "record-twice",
-                "period-form", "period-v1", "period-twice", "period-close", "past-cap", "cap", "circuit", "no-cap"]
+                "period-form", "period-v1", "period-twice", "period-close", "past-cap", "cap", "circuit", "no-cap",
+                "reserve-form", "reserve-again", "open-unbound", "open-request", "opened-by", "open-late",
+                "open-after-close", "one-step-after-reserve"]
+#: the cases whose ledger is two-step
+RESERVE_NAMES = {"reserve-form", "reserve-again", "open-unbound", "open-request", "opened-by", "open-late",
+                 "open-after-close", "one-step-after-reserve"}
 
 
 def _entry_edit(target: int, f):
@@ -883,13 +942,16 @@ def _body_edit(target: int, **changes):
 
 
 def ledger_case(rng: random.Random, name: str) -> Any:
-    s = _ledger_session(rng)
+    two = name in RESERVE_NAMES
+    s = _ledger_session(rng, reserved=True if two else None)
     period = {"period-form": "closed", "period-twice": "open", "period-close": "closed", "past-cap": "open",
-              "cap": "open", "circuit": "open", "no-cap": "open"}.get(name)
-    lg = Ledger(rng, s, closed=name != "unclosed", period=period)
+              "cap": "open", "circuit": "open", "no-cap": "open", "open-after-close": "open"}.get(name)
+    lg = Ledger(rng, s, closed=name != "unclosed", period=period, two_step=True if two else None)
     j = {"key": s.key.to_json(), "ledger": None, "window": lg.window}
     i = rng.randrange(len(lg.events))
     o, end = lg.index("open", s.id), lg.index("end", s.id)
+    r = lg.index("reserve", s.id) if lg.two_step else None
+    reserve = lg.events[r][2] if r is not None else None
     p = None if lg.period_open is None else next(k for k, (_, _, b) in enumerate(lg.events) if b is lg.period_open)
     other = _key(s.w, s.h, 1)
     events = list(lg.events)
@@ -1025,12 +1087,15 @@ def ledger_case(rng: random.Random, name: str) -> Any:
             leaves = lg.leaves()
             j["ledger"] = lg.lines(leaves=leaves, edit=_body_edit(end, record_leaf=rng.choice([leaves[o], leaves[end]])))
         case "record-entry":
-            events.insert(o + 1, ("open", "o-9", lg.open_body(_window(rng), "h", "other")))
+            sid = lg.sid("o-9")
+            events.insert(o + 1, ("reserve", sid, lg.reserve_body("other")) if lg.two_step
+                          else ("open", sid, lg.open_body(_window(rng), "h", "other")))
             leaves = lg.leaves(events)
             j["ledger"] = lg.lines(events, leaves=leaves, edit=_body_edit(end + 1, record_leaf=leaves[o + 1]))
         case "record-twice":
-            events.insert(o, ("open", "o-8", lg.open_body(_window(rng), "h", "other")))
-            events.append(("end", "o-8", {"closed": True, "files": {}, "record_leaf": s.q}))
+            sid = lg.sid("o-8")
+            events[o:o] = lg.session_events(sid, _window(rng), "h", "other")[0]
+            events.append(("end", sid, {"closed": True, "files": {}, "record_leaf": s.q}))
             j["ledger"] = lg.lines(events)
         case "period-form":
             k = rng.choice([k for k, (kind, _, _) in enumerate(events) if kind.startswith("period")])
@@ -1064,7 +1129,9 @@ def ledger_case(rng: random.Random, name: str) -> Any:
             j["ledger"] = lg.lines(events)
         case "past-cap":
             lg.period_open["cap"] = 1
-            events.insert(p + 1, ("open", "o-7", lg.open_body(_window(rng), "h", lg.lane)))
+            sid = lg.sid("o-7")
+            events.insert(p + 1, ("reserve", sid, lg.reserve_body(lg.lane)) if lg.two_step
+                          else ("open", sid, lg.open_body(_window(rng), "h", lg.lane)))
             j["ledger"] = lg.lines(events)
         case "cap":
             j["ledger"] = lg.lines(edit=_body_edit(p, cap=rng.choice([0, -1, Ch.CAP[1] + 1, "4", True, None, [4]])))
@@ -1074,6 +1141,61 @@ def ledger_case(rng: random.Random, name: str) -> Any:
         case "no-cap":
             j["ledger"] = lg.lines(edit=_body_edit(p, **rng.choice([{"cap": DROP, "circuit": DROP},
                                                                      {"cap": None, "circuit": None}])))
+        case "reserve-form":
+            start, minutes = reserve["started_utc"], reserve["minutes"]
+            bad = rng.choice([
+                {"minutes": rng.choice([0, 721, True, "30", None, DROP])},
+                {"expires_utc": rng.choice([Ch.later(start, minutes - 1), None, DROP, start + " "])},
+                {"started_utc": rng.choice(["2026-02-29T12:00:00Z", "2100-02-29T12:00:00Z", "2026-10-20T24:00:00Z",
+                                            "2026-10-20 12:00:00Z", "0000-01-01T00:00:00Z", "2026-10-20T12:00:00z",
+                                            "2026-1-20T12:00:00Z", 5, DROP])},
+                {"by": rng.choice([None, "", ".x", 5, DROP])}, {"for": rng.choice([None, "", "a b", 5])}])
+            j["ledger"] = lg.lines(edit=_body_edit(r, **bad))
+        case "reserve-again":
+            match rng.randrange(3):
+                case 0:
+                    events.insert(rng.randint(r + 1, len(events)), ("reserve", s.id, lg.reserve_body(lg.lane)))
+                case 1:
+                    events[r] = ("reserve", rng.choice(SESSIONS + ["s20261019T000000Z-ABCD", "s2026101T000000Z-abcd"]),
+                                 reserve)
+                case _:
+                    lg.v1 = lg.v1 + [reserve]
+            j["ledger"] = lg.lines(events)
+        case "open-unbound":
+            if rng.random() < 0.3:
+                del events[r]
+                j["ledger"] = lg.lines(events)
+            else:
+                j["ledger"] = lg.lines(edit=_body_edit(o, reserve=rng.choice(
+                    [True, False, None, str(r), r + 1, r - 1, [r], DROP if rng.random() < 0.2 else r + 2])))
+        case "open-request":
+            k = rng.choice(Ch.RESERVED)
+            v = reserve.get(k)
+            match k:
+                case "by" | "peer" | "scheme":
+                    other = "other"
+                case "for":
+                    other = DROP if "for" in reserve else "other"
+                case "families":
+                    other = [[f[0], True if f[1] == 1 else f[1] + 1] for f in v]
+                case _:
+                    other = {0: False, 1: True}.get(v, v + 1)
+            j["ledger"] = lg.lines(edit=_body_edit(o, **{k: other}))
+        case "opened-by":
+            j["ledger"] = lg.lines(edit=_body_edit(o, opened_by=rng.choice(["other", "", "vy-Admin", None, 5, ["x"],
+                                                                            DROP])))
+        case "open-late":
+            start, expiry = reserve["started_utc"], reserve["expires_utc"]
+            late = Ch.later(expiry, rng.randint(1, 100)) or "x"
+            early = "0001-01-01T00:00:00Z" if start != "0001-01-01T00:00:00Z" else late
+            j["ledger"] = lg.lines(edit=_body_edit(o, started_utc=rng.choice(
+                [late, early, start[:-3] + "60Z", "2026-02-30T12:00:00Z", start.lower(), 5, None, DROP])))
+        case "open-after-close":
+            at = rng.randint(r + 1, o)
+            events.insert(at, ("period-close", None, lg.close_body(events[:at])))
+            j["ledger"] = lg.lines(events)
+        case "one-step-after-reserve":
+            j["ledger"] = lg.lines(edit=_body_edit(o, reserve=DROP))
         case _:
             j["ledger"] = lg.lines()
     return j

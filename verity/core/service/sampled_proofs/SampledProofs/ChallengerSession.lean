@@ -18,8 +18,10 @@ client closed, and the roots it received (`releasedRootsOf`). A line is refused 
 
 The auditor's ledger names the one session each window's coins come from (`auditedSession`, `audited_session`): infra's
 `windows.jsonl`, a line per entry `{body, kind, prev, schema, seq, session, sig}` as the auditor writes it (`ledger_text`,
-`PyJson.canonical`), schema v1 or v2 and no v1 after a v2. An open names the window `{root}` (v1's `{commit, period}`),
-the challenger's host, the SHA-512 of its key's public key and in v2 its prover (`for`, else `by`); an end whether the
+`PyJson.canonical`), schema v1 or v2 and no v1 after a v2. A reserve records a window's request, its start and its expiry
+(`later`); an open names the window `{root}` (v1's `{commit, period}`), the challenger's host, the SHA-512 of its key's
+public key and in v2 its prover (`for`, else `by`), and after the ledger's first reserve binds its session's reserve
+(its seq), carries its request (`RESERVED`), is opened by its prover and inside its minutes; an end whether the
 session closed, the SHA-512 of each file it left, and in v2 the leaf its record was signed at, its commitment's root and
 how many hellos it refused; a lane's period is a `period-open` (its cap and circuit) and a `period-close` listing its
 windows with their outcomes. Each entry is signed under the challenger's key:
@@ -31,7 +33,8 @@ SHA-512 is refused before any signature is read, so a ledger signed under its ow
 is infra's `_verify` (`verifyLedger`): each entry chained (`seq` from 0, `prev` the SHA-512 of the previous line) and
 signed at strictly increasing leaves (`u32(q)`, the signature's first four bytes), a root and a session opened once, a
 session ended once after its open with its record's leaf between the two and no entry's, and each period's close
-listing exactly its lane's windows, at most its cap. The window's session must be opened under v2 and ended closed,
+listing exactly its lane's windows, counted at their reserves and at most its cap, a reserve never opened with root
+null. The window's session must be opened under v2 and ended closed,
 naming its record's leaf, commitment and refused hellos and sealing `SEALED_FILES`, so a ledger older than its end is
 refused. The session's files must be that session's (`sessionNamed`): its signed close names the ledger's session id,
 its record the open's host and was signed at that leaf over that commitment, and its release log and refused hellos are
@@ -85,16 +88,21 @@ def ledgerTag? : String → Option String
 def MAX_LEDGER_LINE : Nat := 262144
 /-- `CAP`: a period's cap is 1 to this many windows. -/
 def MAX_CAP : Nat := 2 ^ 24
+/-- `MINUTES`: a reserve's minutes are 1 to this many. -/
+def MAX_MINUTES : Nat := 720
+/-- `RESERVED`: the request a reserve records and its session's open carries. -/
+def RESERVED : List String := ["by", "for", "peer", "scheme", "epoch", "families", "minutes"]
 def ZERO : String := String.ofList (List.replicate 128 '0')
 def WINDOW_FORM : String := "a window's identity is {root}: the served Commit's root, 64 bytes in lowercase hex"
 def LEDGER_FORM : String :=
   "an auditor's ledger line is an entry {body, kind, prev, schema, seq, session, sig} as the auditor writes it " ++
   "(sorted keys, no whitespace, ASCII, no number but an integer): kind open, its body naming the window, the " ++
   "challenger's host, the pinned source commit (40 lowercase hex), the SHA-512 of the challenger key's public " ++
-  "key (key_sha512) and in v2 its opener (by, and for when opened for a lane); kind end, its body whether its " ++
-  "client closed the session (closed), the SHA-512 of each file the session left (files) and in v2 the leaf " ++
-  "its record was signed at, if any; kind period-open, its period, lane and key_sha512; or kind " ++
-  "period-close, its period, lane, windows ({complete, root, session} each) and whether all are complete"
+  "key (key_sha512) and in v2 its opener (by, and for when opened for a lane); kind reserve, its body the " ++
+  "window's request; kind end, its body whether its client closed the session (closed), the SHA-512 of each " ++
+  "file the session left (files) and in v2 the leaf its record was signed at, if any; kind period-open, its " ++
+  "period, lane and key_sha512; or kind period-close, its period, lane, windows ({complete, root, session} " ++
+  "each, root null for a reserve never opened) and whether all are complete"
 def END_FORM : String :=
   "a window's end names the leaf its record was signed at (record_leaf), its commitment's root (commitment), how " ++
   "many hellos it refused (refused_hellos) and seals " ++ ", ".intercalate SEALED_FILES
@@ -247,17 +255,51 @@ private def isV1Window (j : Json) : Bool :=
 /-- `cap_of`'s domain: an integer, not a boolean, from 1 to `MAX_CAP`. -/
 def isCap (j : Json) : Bool := match int? j with | some v => 1 ≤ v && v ≤ MAX_CAP | none => false
 
-private def isHexDigit (c : Char) : Bool := c.isDigit || ('a' ≤ c && c ≤ 'f') || ('A' ≤ c && c ≤ 'F')
-
-/-- `circuit_of`'s fixed points: 1 to 256 of `[A-Za-z0-9._:/@+-]`, the first a letter or digit, and a SHA-512's 128 hex
-digits only in lowercase. -/
+/-- `circuit_of`'s fixed points: a SHA-512's 128 hex digits in lowercase, never a Program's id. -/
 def isCircuit (j : Json) : Bool :=
   match j with
-  | .str s =>
-    1 ≤ s.length && s.length ≤ 256 && s.front.isAlphanum && s.front.toNat < 128 &&
-      s.all (fun c => c.isAlphanum && c.toNat < 128 || "._:/@+-".contains c) &&
-      !(s.length == 128 && s.all isHexDigit && s.any fun c => 'A' ≤ c && c ≤ 'F')
+  | .str s => s.length == 128 && s.all fun c => c.isDigit || ('a' ≤ c && c ≤ 'f')
   | _ => false
+
+/-- `_RESERVED_SESSION`: a reserved session's id, `s[0-9]{8}T[0-9]{6}Z-[0-9a-f]{4}`. -/
+def isReservedSession (s : String) : Bool :=
+  let pat := "sddddddddTddddddZ-hhhh".toList
+  s.length == pat.length && (s.toList.zip pat).all fun (c, p) =>
+    match p with
+    | 'd' => c.isDigit
+    | 'h' => c.isDigit || ('a' ≤ c && c ≤ 'f')
+    | p => c == p
+
+private def leap (y : Nat) : Bool := y % 4 == 0 && (y % 100 != 0 || y % 400 == 0)
+
+private def daysIn (y m : Nat) : Nat :=
+  if m == 2 then (if leap y then 29 else 28) else if m == 4 || m == 6 || m == 9 || m == 11 then 30 else 31
+
+private def digitsAt (cs : List Char) (i n : Nat) : Option Nat :=
+  let ds := (cs.drop i).take n
+  if ds.length == n && ds.all Char.isDigit then some (ds.foldl (fun a c => a * 10 + (c.toNat - '0'.toNat)) 0) else none
+
+private def pad (w n : Nat) : String := let s := toString n; "".pushn '0' (w - s.length) ++ s
+
+/-- `later(t, minutes)`: `t` (`YYYY-MM-DDTHH:MM:SSZ`, a UTC time Python's `datetime` holds, years 1 to 9999) plus
+`minutes` in that form, a reserve's expiry; `none` when `t` isn't such a time or the sum passes year 9999. -/
+def later (t : String) (minutes : Nat) : Option String := do
+  let cs := t.toList
+  guard (cs.length == 20 && cs[4]? == some '-' && cs[7]? == some '-' && cs[10]? == some 'T' &&
+    cs[13]? == some ':' && cs[16]? == some ':' && cs[19]? == some 'Z')
+  let y ← digitsAt cs 0 4
+  let mo ← digitsAt cs 5 2
+  let d ← digitsAt cs 8 2
+  let h ← digitsAt cs 11 2
+  let mi ← digitsAt cs 14 2
+  let s ← digitsAt cs 17 2
+  guard (1 ≤ y && 1 ≤ mo && mo ≤ 12 && 1 ≤ d && d ≤ daysIn y mo && h ≤ 23 && mi ≤ 59 && s ≤ 59)
+  let total := h * 60 + mi + minutes
+  let (y, mo, d) := (List.range (total / 1440)).foldl (fun (y, mo, d) _ =>
+    if d < daysIn y mo then (y, mo, d + 1) else if mo < 12 then (y, mo + 1, 1) else (y + 1, 1, 1)) (y, mo, d)
+  guard (y ≤ 9999)
+  let r := total % 1440
+  return s!"{pad 4 y}-{pad 2 mo}-{pad 2 d}T{pad 2 (r / 60)}:{pad 2 (r % 60)}:{pad 2 s}Z"
 
 /-- `ledger_message(I, entry)`: what an auditor's ledger entry's `sig` signs, `entry` without its `sig`, under its schema's
 tag. -/
@@ -293,7 +335,7 @@ private def escapesSurrogate (text : String) : Bool := Id.run do
   return false
 
 private def isOutcome (w : Json) : Bool :=
-  keys? w == some #["complete", "root", "session"] && isDigest (getD w "root") &&
+  keys? w == some #["complete", "root", "session"] && (getD w "root" == Json.null || isDigest (getD w "root")) &&
     (match getD w "session" with | .str s => isSessionId s | _ => false) &&
     (match getD w "complete" with | .bool _ => true | _ => false)
 
@@ -304,6 +346,7 @@ private def isBodyOf (kind : String) (v2 : Bool) (b : Json) : Bool :=
       (match getD b "host" with | .str h => isHost h | _ => false) && isDigest (getD b "pinned") 40 &&
       isDigest (getD b "key_sha512") &&
       (!v2 || isStr (getD b "by") && (match field? b "for" with | none => true | some j => isStr j))
+  | "reserve" => true
   | "end" =>
     (match getD b "closed" with | .bool _ => true | _ => false) &&
       (match getD b "files" with | .obj _ => (entries (getD b "files")).all (isDigest ·.2) | _ => false) &&
@@ -336,7 +379,7 @@ def ledgerEntry? (line : Json) : Option LedgerEntry := do
   let .obj _ := body | none
   let .str kind := getD e "kind" | none
   let session ← match kind, getD e "session" with
-    | "open", .str s | "end", .str s => if isSessionId s then some s else none
+    | "reserve", .str s | "open", .str s | "end", .str s => if isSessionId s then some s else none
     | "period-open", .null | "period-close", .null => some ""
     | _, _ => none
   guard (isBodyOf kind (schema == LEDGER_SCHEMA) body)
@@ -355,8 +398,9 @@ structure Win where
   leaf : Nat
   ended : Option LedgerEntry := none
 
-/-- A period `verifyLedger` read: its name and lane, its windows' roots, whether it closed, and the cap and circuit its
-open committed (`null` both for a period opened before they were required). -/
+/-- A period `verifyLedger` read: its name and lane, its windows' sessions, counted at their reserves (or one-step
+opens), whether it closed, and the cap and circuit its open committed (`null` both for a period opened before they were
+required). -/
 structure Period where
   name : String
   lane : String
@@ -365,8 +409,42 @@ structure Period where
   cap : Json
   circuit : Json
 
-/-- `lane_of`: a v2 open's prover, its `for` when nonempty, else its `by`. -/
+/-- A reserve `verifyLedger` read: its session, its entry, and the period it joined, if any. -/
+structure Reserve where
+  session : String
+  entry : LedgerEntry
+  period : Option String
+
+/-- `lane_of`: a reserve's or a v2 open's prover, its `for` when nonempty, else its `by`. -/
 def laneOf (body : Json) : String := if truthy (getD body "for") then strOf (getD body "for") else strOf (getD body "by")
+
+/-- `_verify`'s `join`: lane `lane`'s open period, if any, takes window `session` at entry `i`, refused past its cap;
+the periods after it, and the period's name. -/
+private def join (periods : Array Period) (current : Array (String × String)) (i : Nat) (lane session : String) :
+    V (Array Period × Option String) := do
+  let some (_, name) := current.find? (·.1 == lane) | return (periods, none)
+  let some k := periods.findIdx? (·.name == name) | return (periods, none)
+  let p := periods[k]!
+  if let some cap := int? p.cap then
+    if cap ≤ p.windows.size then throw s!"entry {i}: period {name}'s window {p.windows.size} is past its cap {cap}"
+  return (periods.modify k fun p => { p with windows := p.windows.push session }, some name)
+
+/-- A reserve's request as `_verify` requires it: its prover's names, minutes 1 to `MAX_MINUTES`, and its expiry
+`later(started_utc, minutes)`. -/
+private def isReserve (b : Json) : Bool :=
+  nameAt (getD b "by") && (match field? b "for" with | none => true | some j => nameAt j) &&
+    match int? (getD b "minutes"), getD b "started_utc" with
+    | some m, .str t =>
+      1 ≤ m && m ≤ MAX_MINUTES && (match later t m.toNat with
+        | some x => getD b "expires_utc" == Json.str x
+        | none => false)
+    | _, _ => false
+
+/-- Whether an open's `started_utc` is a time in `later`'s form from its reserve's `start` to its `expiry`. -/
+private def inReserve (t : Json) (start expiry : String) : Bool :=
+  match t with
+  | .str t => later t 0 == some t && !decide (t < start) && !decide (expiry < t)
+  | _ => false
 
 /-- `_verify` (module docstring), over entries `ledgerEntry?` read: the ledger's windows and periods, or the first entry
 that fails, in `_verify`'s words. -/
@@ -377,9 +455,11 @@ def verifyLedger (es : Array LedgerEntry) (key : ChallengerKey) : V (Array Win �
   let mut records : Array (Nat × Nat) := #[]
   let mut periods : Array Period := #[]
   let mut current : Array (String × String) := #[]
+  let mut reserves : Array Reserve := #[]
   let mut prev := ZERO
   let mut last : Int := -1
   let mut v2 := false
+  let mut twoStep := false
   for (e, i) in es.zipIdx do
     unless !(v2 && e.schema == LEDGER_SCHEMA_V1) && e.seq == i && e.prev == prev do
       throw s!"entry {i}: not entry {i} of a {LEDGER_SCHEMA} ledger chained to its predecessor"
@@ -390,20 +470,46 @@ def verifyLedger (es : Array LedgerEntry) (key : ChallengerKey) : V (Array Win �
     unless last < q do throw s!"entry {i}: signed at leaf {q}, not after the last entry's {last}"
     let s := e.session
     match e.kind with
+    | "reserve" =>
+      unless e.schema == LEDGER_SCHEMA && isReservedSession s && !reserves.any (·.session == s) &&
+          !wins.any (·.opened.session == s) do
+        throw s!"entry {i}: a reserve is v2 and the first entry of its session {s}"
+      unless isReserve e.body do
+        throw s!"entry {i}: a reserve names its prover, its minutes, its start and its expiry (start + minutes)"
+      twoStep := true
+      let (ps, period) ← join periods current i (laneOf e.body) s
+      periods := ps
+      reserves := reserves.push { session := s, entry := e, period }
     | "open" =>
       let w := getD e.body "window"
       let root := strOf (getD w (if e.schema == LEDGER_SCHEMA then "root" else "commit"))
       if wins.any (·.root == root) || wins.any (·.opened.session == s) then
         throw s!"entry {i}: a second open for root {root.take 16}… or session {s}"
+      let b := e.body
+      if e.schema == LEDGER_SCHEMA && (field? b "reserve").isSome then
+        let some r := reserves.find? (·.session == s)
+          | throw s!"entry {i}: an open for session {s} binds no reserve of it"
+        unless int? (getD b "reserve") == some (Int.ofNat r.entry.seq) do
+          throw s!"entry {i}: an open for session {s} binds no reserve of it"
+        let rb := r.entry.body
+        unless RESERVED.all (fun k => jeq (getD b k) (getD rb k)) do
+          throw s!"entry {i}: session {s}'s open doesn't carry its reserve's request"
+        let who := getD b "opened_by"
+        let lane := if let .str w := who then some w else none
+        let shown := (lane.map pyRepr).getD "no lane"
+        unless lane.any (fun w => w == strOf (getD rb "by") || field? rb "for" == some (Json.str w)) do
+          throw s!"entry {i}: session {s} was opened by {shown}, not its reserve's prover"
+        unless inReserve (getD b "started_utc") (strOf (getD rb "started_utc")) (strOf (getD rb "expires_utc")) do
+          throw s!"entry {i}: session {s} was opened outside its reserve's minutes"
+        if let some name := r.period then
+          if periods.any (fun p => p.name == name && p.closed) then
+            throw s!"entry {i}: session {s} was opened after its period {name} closed"
+      else if e.schema == LEDGER_SCHEMA && twoStep then
+        throw s!"entry {i}: a v2 open without a reserve after the ledger's first reserve"
+      else if e.schema == LEDGER_SCHEMA then
+        let (ps, _) ← join periods current i (laneOf b) s
+        periods := ps
       wins := wins.push { root, opened := e, leaf := q }
-      if e.schema == LEDGER_SCHEMA then
-        if let some (_, name) := current.find? (·.1 == laneOf e.body) then
-          if let some k := periods.findIdx? (·.name == name) then
-            let p := periods[k]!
-            if let some cap := int? p.cap then
-              if cap ≤ p.windows.size then
-                throw s!"entry {i}: period {name}'s window {p.windows.size} is past its cap {cap}"
-            periods := periods.modify k fun p => { p with windows := p.windows.push root }
     | "end" =>
       let some k := wins.findIdx? (·.opened.session == s)
         | throw s!"entry {i}: an end for session {s}, which has no open or has ended"
@@ -426,7 +532,7 @@ def verifyLedger (es : Array LedgerEntry) (key : ChallengerKey) : V (Array Win �
         let cap := getD e.body "cap"
         let circuit := getD e.body "circuit"
         if (cap != Json.null || circuit != Json.null) && !(isCap cap && isCircuit circuit) then
-          throw s!"entry {i}: period {name}'s cap is a positive integer and its circuit a SHA-512 in lowercase or a Program's id"
+          throw s!"entry {i}: period {name}'s cap is a positive integer and its circuit a SHA-512 in lowercase"
         periods := periods.push { name, lane, cap, circuit }
         current := current.push (lane, name)
       else
@@ -435,13 +541,13 @@ def verifyLedger (es : Array LedgerEntry) (key : ChallengerKey) : V (Array Win �
         let p := periods[k]!
         if p.closed || p.lane != lane then
           throw s!"entry {i}: a period-close for {name}, which isn't lane {lane}'s open period"
-        let outcomes := p.windows.map fun r =>
-          let w := wins.find? (·.root == r)
+        let outcomes := p.windows.map fun ses =>
+          let w := wins.find? (·.opened.session == ses)
           let complete := match w.bind (·.ended) with
             | some x => getD x.body "complete" == Json.bool true
             | none => false
-          Json.mkObj [("complete", Json.bool complete), ("root", Json.str r),
-            ("session", Json.str ((w.map (·.opened.session)).getD ""))]
+          Json.mkObj [("complete", Json.bool complete), ("root", (w.map (Json.str ·.root)).getD Json.null),
+            ("session", Json.str ses)]
         let complete := !outcomes.isEmpty && outcomes.all (getD · "complete" == Json.bool true)
         unless jeq (getD e.body "windows") (Json.arr outcomes) && getD e.body "complete" == Json.bool complete do
           throw s!"entry {i}: period {name}'s close doesn't list exactly its windows and their outcomes"
@@ -515,7 +621,7 @@ def auditedSession (ledger window : Json) (key : ChallengerKey) : V Audited := d
   let some recordLeaf := nat? (getD b "record_leaf") | throw malformed
   let some refusedHellos := nat? (getD b "refused_hellos") | throw malformed
   unless isDigest (getD b "commitment") && SEALED_FILES.all (fun f => (field? files f).isSome) do throw malformed
-  let p := periods.find? (·.windows.contains root)
+  let p := periods.find? (·.windows.contains s)
   if let some p := p then
     if p.cap == Json.null || p.circuit == Json.null then
       throw s!"the auditor's ledger's period {p.name}, which holds session {s}, commits no cap or circuit"
