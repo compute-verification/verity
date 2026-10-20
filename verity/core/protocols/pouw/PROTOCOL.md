@@ -165,7 +165,11 @@ coins are the layout `live_families(R)` under `LIVE_SCHEME` (`"verity/pouw/epoch
 r's coin opens after the verifier recorded round r's root, the root of the values round r commits, and round r's noise
 key is `derive(coin_r, "verity/pouw/round-noise/v1", {coins: root, epoch: e, root: root_r, round: r})`: the deferred
 noised products, keyed by a coin the prover could not see when it committed. `core_check.rounds` (Lean
-`PouwCheck.roundsCheck`) is the rule on a window's round coins. A seeded epoch's commitment is unchanged (`SCHEME`, salt
+`PouwCheck.roundsCheck`) is the rule on a window's round coins. It reads the challenger's coins only through the session
+the auditor's record names for the window under the window's pinned challenger key (`challenger.trusted_session_of`, Lean
+`SampledProofs.Challenger.trustedSessionOf`): the record and the close signed under that key, the release log the close
+signs, and the round roots that log shows the challenger received, in order. Coins a prover's own in-process challenger
+drew, an unsigned or tampered log, and a second session for the window are refused. A seeded epoch's commitment is unchanged (`SCHEME`, salt
 and draw only).
 
 ## Registered weights (`registration`)

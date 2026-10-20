@@ -1,30 +1,39 @@
 import PouwWindow.Rounds
 import PouwCheck.Inputs
 import PouwCheck.Pass
+import SampledProofs.ChallengerSession
 
 /-!
 # A live window's round coins (`core_check.py`, "a live window's round coins")
 
-`roundsCheck` is `core_check.rounds`: under the proof service's challenger's live coin commitment
-(`SampledProofs.Challenger.LiveCommitment`), round `r`'s coin opened once, after the `r`-th round root the verifier
-recorded, and every recorded round's coin opened (`PouwWindow.roundsReason`). A refusal is `coin` (the coin rule's, or a
-malformed commitment or opening, in the challenger's words) or `rounds` (the roots or the openings not lists of their
-kind), with Python's words.
+`roundsCheck` is `core_check.rounds`. It reads the challenger's coins only through the challenger's own session, never a
+commitment the prover hands in: the one session the auditor's record names for the window under the window's pinned
+challenger key, its record and its close signed under that key and its release log the one the close signs
+(`SampledProofs.Challenger.trustedSessionOf`). Under the commitment that session signed, round `r`'s coin opened once,
+after the `r`-th round root, every recorded round's coin opened (`PouwWindow.roundsReason`), and the round roots are the
+ones the session's log shows the challenger received, in order. A refusal is `coin` (the key, the session or the coin
+rule's, in the challenger's words) or `rounds` (the roots or the openings not lists of their kind, or roots the
+challenger didn't receive), with Python's words.
 -/
 
 namespace PouwCheck
 
 open Lean (Json)
-open SampledProofs.Challenger (LiveCommitment LiveOpening)
+open SampledProofs.Challenger (ChallengerKey LiveOpening trustedSessionOf)
 
-/-- `core_check.rounds`: none when `openings` are the window's round coins over `roots`, else the refusal. -/
-def roundsCheck (coins roots openings : Json) : R Unit := do
-  let c ← (LiveCommitment.ofJson coins).mapError fun e => ("coin", s!"the verifier's coins are malformed: {e}")
+/-- `core_check.rounds`: none when `openings` are the window's round coins over `roots`, read through the challenger's
+session, else the refusal. -/
+def roundsCheck (key auditor window session roots openings : Json) : R Unit := do
+  let k ← (ChallengerKey.ofJson key).mapError fun e => ("coin", s!"the verifier's challenger key is malformed: {e}")
+  let (c, received) ← (trustedSessionOf auditor window k session).mapError fun e =>
+    ("coin", s!"the challenger's session is not trusted: {e}")
   let some rs := (match roots with
       | .arr rs => rs.toList.mapM fun r => if (str? r).any isHexDigest then hex? r else none
       | _ => none) | throw ("rounds", "the round roots are not a list of SHA-512 digests")
   let .arr os := openings | throw ("rounds", "the round coins are not a list")
   let os ← os.toList.zipIdx.mapM fun (o, i) => (LiveOpening.ofJson o).mapError fun e => ("coin", s!"round coin {i}: {e}")
   if let some why := (← port (PouwWindow.roundsReason c rs os)) then coin why
+  unless (received.lookup PouwWindow.ROUND).getD [] == rs do
+    throw ("rounds", "the round roots are not the roots the challenger's log shows it received, in order")
 
 end PouwCheck
