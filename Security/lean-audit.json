@@ -656,6 +656,14 @@
    "owner": "@proofs",
    "digest": "167287a3a7f1c1def8a44226e55431613ce209de3d6f812bd506108d9fd257e4"
   },
+  "FlockSoundness.Audit.Adaptive.Play.Drawn": {
+   "owner": "@proofs",
+   "digest": "95df2a145c2096b29904657d9fc2cc155f202589e100fda5a4522518423ca878"
+  },
+  "FlockSoundness.Audit.Adaptive.Play.Laws": {
+   "owner": "@proofs",
+   "digest": "9264db5098c104ab446d60b84c5fed6d3b6ba28b5e0041fec1785f2755e6176f"
+  },
   "FlockSoundness.Audit.Analysis.KnowledgeSound": {
    "owner": "@proofs",
    "digest": "9558326f5a4a7375c4e7dd8bf86d1dd7955387bc63207823e84d8de524290c26"
@@ -675,6 +683,10 @@
   "FlockSoundness.Audit.IsHarmBound": {
    "owner": "@proofs",
    "digest": "a273234e547596af777c6dc5deadad42c9f6ea61d8b28a517d22086f09494b1a"
+  },
+  "FlockSoundness.Audit.Law.Design": {
+   "owner": "@proofs",
+   "digest": "75c9749a2c2e0c07cc3a043b9b78b491e4f64eea1fe11eb4aaaf2697467456cb"
   },
   "FlockSoundness.Audit.Partition.AnchorsSound": {
    "owner": "@proofs",
