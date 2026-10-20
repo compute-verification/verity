@@ -277,7 +277,10 @@ theorem honest_meets (n : ℕ) (hn : 0 < n) {δs : ℝ} (hδs : 0 < δs) :
   · classical
     unfold PeriodRun.prefixLen
     rw [Finset.filter_true_of_mem fun w _ => hc x w, Finset.card_univ, Fintype.card_fin]
-  · simp [creditedLive, hc, liveAt_period, liveWords, tileWords_eq]
+  · classical
+    show (∑ w : Fin n, if (run n).Credited x w then
+      ∑ t : Fin 1, (liveWords scheme circuit 1 ((period n).liveAt x w) t : ℝ) else 0) = n
+    simp [hc, liveAt_period, liveWords, tileWords_eq]
 
 /-- **`CircuitWorkPeriod`'s conclusion at the honest period**: `honest_meets` gives `CircuitWorkPeriod` every premise
 in its own form. -/
