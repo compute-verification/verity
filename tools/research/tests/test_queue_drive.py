@@ -1048,7 +1048,8 @@ def test_a_deferred_landing_commits_the_locks_its_running_check_regenerated_and_
 
 def test_a_deferred_landing_whose_regenerated_records_cant_be_read_is_held_and_told(world, monkeypatch, tmp_path):
     """CI-122: a check whose Lean report names a regenerated lock drive can't read, from the store or its node, never lands
-    without it; nor does one whose report can't be read at all once its lean-audit step passed."""
+    without it; nor does one whose report can't be read at all, its lean-audit step having passed or its node being out of
+    reach."""
     h = Harness(world, monkeypatch)
     base = _git(world.origin, "rev-parse", "main")
     rid, tip = _deferred(h, tmp_path, 1, {"Security/A.lean": "theorem a : True := trivial\n"})
@@ -1057,11 +1058,29 @@ def test_a_deferred_landing_whose_regenerated_records_cant_be_read_is_held_and_t
     assert _git(world.origin, "rev-parse", "main") == base and rid not in h.cancelled
     (post,) = [p for p in h.posts if "held, not landed" in p]
     assert rid in post and "Security's lock" in post and "#1" in post, post
-    h.d.fetch = lambda r, names: None                                     # its node can't be reached
-    h.d._seen.clear()
+    h.d.fetch = lambda r, names: None                                     # its report can't be fetched
     h.tick()
     assert _git(world.origin, "rev-parse", "main") == base
-    assert any("lean-audit/audit.json, which says whether it regenerated" in x for x in world.logs), world.logs
+    assert any("lean-audit/audit.json, which says whether its Lean check regenerated" in x for x in world.logs), world.logs
+    logged = len(world.logs)
+    h.d._passed_but_deferred = lambda ids: rid                            # its node can't be reached at all: no steps.jsonl
+    h.evidence = []
+    h.tick()
+    assert _git(world.origin, "rev-parse", "main") == base
+    assert any("which says whether its Lean check regenerated" in x for x in world.logs[logged:]), world.logs[logged:]
+
+
+def test_a_train_whose_check_ran_no_lean_audit_lands_without_a_lock_commit(world, monkeypatch):
+    """A result without the lean-audit step, which no report goes with, regenerated nothing: the train lands as it is."""
+    h = Harness(world, monkeypatch)
+    h.d.regenerate_locks = True
+    h.d.fetch = lambda r, names: None
+    world.gh.put(1, world.change({"a.txt": "1\n"}))
+    h.tick()
+    tip = _tip(world)
+    _check(world, monkeypatch, tip)
+    assert h.tick().startswith("landed #1")
+    assert _git(world.origin, "rev-parse", "main") == tip
 
 
 def test_a_deferred_landing_whose_lock_commit_the_gate_refuses_is_held(world, monkeypatch, tmp_path):

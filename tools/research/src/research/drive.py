@@ -971,7 +971,7 @@ class Driver:
         train is held instead) of a passed train, when drive commits regenerated locks; ("", {}, None) when its check regenerated
         none.  Read from the check's files in the store, else, for a check still running (`--defer`), from its run dir on its
         node (`merge.live_records`).  Held, never landed without them (CI-122), when its Lean report names records neither
-        holds, or can't be read at all though its lean-audit step passed (the step passes only on a readable report)."""
+        holds, or can't be read at all unless its lean-audit step was skipped (`_lean_audit_ran`)."""
         if not self.regenerate_locks:
             return "", {}, None
         from .merge import AUDIT, live_records, regenerated_records
@@ -983,9 +983,9 @@ class Driver:
                     recs = live_records(rid, self.fetch)
             except Exception as e:  # noqa: BLE001  (a guard never fails open: `merge.Unreadable`, or the store failing)
                 return rid, {}, f"its regenerated lock records can't be read: {type(e).__name__}: {e}"
-            if recs is None and self._lean_audited(rid):
-                return rid, {}, (f"its lean-audit step passed, but its {AUDIT}, which says whether it regenerated lock "
-                                 "records, can't be read from the store or from its run dir on its node")
+            if recs is None and self._lean_audit_ran(rid):
+                return rid, {}, (f"its {AUDIT}, which says whether its Lean check regenerated lock records, can't be read "
+                                 "from the store or from its run dir on its node")
             if recs:
                 return rid, {pkg: path for pkg, (_, path) in recs.items() if path is not None}, None
         return "", {}, None
@@ -1008,19 +1008,24 @@ class Driver:
 
         return fetch_run(rid, names, self.repo)
 
-    def _lean_audited(self, rid: str) -> bool:
-        """Whether run ``rid``'s lean-audit step passed: in its result in the store, else in its steps.jsonl (`evidence`)."""
+    def _lean_audit_ran(self, rid: str) -> bool:
+        """Whether run ``rid``'s lean-audit step may have regenerated records: true unless its result in the store, else its
+        steps.jsonl (`evidence`), says the step was skipped or never ran; a run neither can be read of may have."""
         from .merge import step_status
 
-        if step_status(self.q.store, rid, "lean-audit") == "passed":
+        try:
+            stored = bool(((self.q.store.get_attempt(rid) or {}).get("outputs") or {}).get("result"))
+        except Exception:  # noqa: BLE001  (unknown: it may have)
             return True
+        if stored:
+            return step_status(self.q.store, rid, "lean-audit") not in ("skipped", "absent")
         for d in self.evidence(self.repo, [rid]):
             with contextlib.suppress(OSError):
                 for line in (d / PROGRESS[0]).read_text().splitlines():
                     with contextlib.suppress(ValueError):
-                        if (rec := json.loads(line)).get("step") == "lean-audit" and rec.get("status") == "passed":
-                            return True
-        return False
+                        if (rec := json.loads(line)).get("step") == "lean-audit":
+                            return rec.get("status") != "skipped"
+        return True
 
     def _land(self, drive: dict, m: Member, members: list[Member], prs: str, v: Verdict, base: str, main: str,
               moved: list[str], scratch: Path) -> Member | None:
@@ -1065,7 +1070,7 @@ class Driver:
                  env=IDENTITY)
             if why := self._unvouched(v, rid):
                 _git(self.repo, "reset", "-q", "--hard", "refs/remotes/origin/main")
-                self.refuse(drive, f"locks:{m.commit}", f"{prs} passed ({v.attempt}) but is held, not landed: {why}")
+                self.refuse(drive, f"lock-gate:{m.commit}", f"{prs} passed ({v.attempt}) but is held, not landed: {why}")
                 return None
         p = q._remote(self.repo, "push", "-q", "--no-verify", "origin", "main:refs/heads/main", ok=None)
         if p.returncode:
