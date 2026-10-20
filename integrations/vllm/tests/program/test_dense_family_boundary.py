@@ -1,6 +1,6 @@
 """The dense family's Definition modules (dense, activation, norms, RoPE, GEMM bias) import only `verity` and other Definition
-modules, so they can move to `verity/ml/circuits/` as they are. Their twins and vocabulary live in the integration package
-(`tools/migrate/split_dense.py`): `properties.difftests.rope_difftest`, `properties.difftests.rope_gptj_difftest`,
+modules, so they can move to `verity/ml/circuits/` as they are. Their twins and vocabulary live in the integration package:
+`properties.difftests.rope_difftest`, `properties.difftests.rope_gptj_difftest`,
 `program.kernels.rmsnorm_fused_sweep`, `program.frontend.gemm_targets`."""
 from __future__ import annotations
 

@@ -25,7 +25,7 @@ src/research/
 ├── store/          the evidence store (`research data`; README.md there is the contract): tool, tools_registry, derivation, attempt,
 │                   cli_prov (provenance) + canon, ids, model, local, index, remote, remote_s3, kinds, cli (storage)
 ├── telemetry/      the recorded-attempt harness: job.json, status.json, events.jsonl, resources.jsonl, failure.json
-└── pods/           RunPod lifecycle (runpod.py), leases (lease.py), budgets.toml and its guard (budgets.py, guard.py), memory guard, pod-side sh/
+└── pods/           RunPod lifecycle (runpod.py), leases (lease.py), budgets.toml and its guard (budgets.py, guard.py), pod-side sh/
 tests/              pure-Python; the machine side of --on is exercised locally (launch_request is a plain function)
 tests/fixtures/     job_v0.1.json: a record as the harness alone writes it; run_v0.2/: a finished run dir with a `store` section (state.json -> status.json at test time)
 ~~~
@@ -273,8 +273,9 @@ the claim and reports state. The runner's argv carries the workload's command, s
 `pkill -f` aimed at the workload matches it too: it logs SIGTERM / SIGHUP to
 launcher.log and keeps supervising, so the run still records its end and
 publishes. Stop a run with `research cancel RUN --reason TEXT` from any VM: SIGTERM to its workload's process group
-(status.json `pgid`), recorded first as a manual cancel, so the run
-classifies `CANCELLED_MANUAL` (on the machine: `kill -TERM -<pgid>`). Never SIGKILL the runner: one killed during
+(status.json `pgid`), its cgroup scopes (`cluster-<run>`, `gpu-lease-<pid>`) and its processes outside the group,
+recorded first as a manual cancel (`CANCELLED_MANUAL`). 20 s later the runner SIGKILLs what is left, recorded in status.json
+`scope_end`; so does a stage timeout (`telemetry.scope`). Never SIGKILL the runner: one killed during
 its custody upload leaves the run without custody and its minted key on disk. `--exclusive` refuses if any run is live, and
 any launch refuses if an exclusive holder is live.
 
@@ -607,15 +608,3 @@ research notes approaches render | check                                        
 - **The public view** is one generated file per campaign, `campaigns/<c>/APPROACHES.md` in the notes. The steward's
   `[approaches]` rule in `steward.toml` (`store`, `every_min`) refreshes and renders it. The campaign's `BRIEF.md` front matter
   `registry: titles | full` sets whether hypotheses and reasons are shown, since the notes repo is public.
-
-## Not yet built, in order
-
-1. `research status` reading the project's budget ledger with its
-   observation time (no second spend counter).
-2. Reconcile the final `lane/r17-mprof` telemetry revision against
-   `df7fbea3d` once the r17 campaign is frozen; port, do not overwrite.
-3. Milestone: one real SP1 case through `--on`, then the seven-stage
-   `campaign_h100.sh` replaced end to end: the stage sequence stays a
-   benchmark-owned script; `paired_run.py` writes `result.json`; `research`
-   supplies targeting, shipping, identity, telemetry, retrieval. No SP1
-   branch inside `research`.

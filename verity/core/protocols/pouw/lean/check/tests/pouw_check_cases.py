@@ -64,6 +64,8 @@ def honest(rng: random.Random) -> dict:
                           "prescribed": sorted(rng.sample(["prompt", "weights", "noise"], rng.randrange(3))),
                           "programs": [program]},
               "public": {"draw": {"k": k, "law": "subset", "population": w.n, "units": units}}}
+    if rng.random() < 0.4:
+        params["check"][Wd.COINS] = items["check"][Wd.COINS] = rng.choice(Wd.MODES)
     return {"params": params, "record": rec, "answer": answer}
 
 
@@ -101,7 +103,7 @@ MUTATIONS = [
     ("params-eps-other", "params", "eps", "1/7"), ("params-delta-other", "params", "delta", "1/9"),
     ("params-grid-other", "params", "grid_bits", 7), ("params-tile-other", "params", "check.tile_work", 3),
     ("params-template-other", "params", "check", None), ("params-template-unpinned", "params", "check.template", "Other{1}"),
-    ("params-query-other", "params", "query", None),
+    ("params-query-other", "params", "query", None), ("params-coins", "params", "check.coins", "fiat-shamir"),
     ("params-range-low", "params", "range", None), ("params-range-high", "params", "range", None),
     ("record-format", "record", "format", "verity/registration/v0"), ("record-program", "record", "program", 7),
     ("record-partition", "record", "partition", _DROP), ("record-population-type", "record", "population", "8"),
@@ -113,6 +115,7 @@ MUTATIONS = [
     ("record-level-type", "record", "window.public.work.level", "3"), ("record-level-high", "record", "window.public.work.level", None),
     ("record-level-huge", "record", "window.public.work.level", 10 ** 30), ("record-level-step", "record", "window.public.work.level", None),
     ("record-work", "record", "window.public.work.credited", None), ("record-check", "record", "window.public.check.entries", None),
+    ("record-coins", "record", "window.public.check.coins", None),
     ("record-sampling", "record", "window.public.sampling.law.k", None), ("record-root-w", "record", "window.public.root_W", None),
     ("record-no-w-root", "record", "roots", None), ("record-population", "record", "population", None),
     ("record-law", "record", "law.k", None), ("record-law-kind", "record", "law", {"law": "bernoulli", "p": "1/2"}),
@@ -198,6 +201,8 @@ def _derived(name: str, case: dict, rng: random.Random):
         return items["work"]["credited"] + 1
     if name == "record-check":
         return items["check"]["entries"] + 1
+    if name == "record-coins":
+        return "seeded" if Wd.mode(p["check"]) == "live" else "live"
     if name == "record-sampling":
         return items["sampling"]["law"]["k"] + 1
     if name == "record-root-w":

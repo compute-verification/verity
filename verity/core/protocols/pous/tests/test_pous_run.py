@@ -32,7 +32,7 @@ SETUP = run.Setup(Q.blocks, hashlib.sha512(b"the commitment to W").digest(), ROO
 OTHER_ROOT = VerifierKey.from_row_digests(Q, bytes(run.SALT_BYTES), ROWS).root
 SID = hashlib.sha512(b"session").digest()[:32]
 OTHER_SID = hashlib.sha512(b"another session").digest()[:32]
-TRUSTED = (ts.TestSigner(b"run challenger", height=1).public_key,)
+TRUSTED = (ts.public_key(b"run challenger", height=1),)
 """The verifier's list of memory-challenger keys: the default signer's."""
 
 

@@ -7,7 +7,8 @@ runs), segmented into engine steps at `TokenSelect` boundaries (one sampling eve
 
   1. spec sequence — exact; then with attention `T` normalised (the only per-position static);
   2. operand wiring — every operand run is canonicalised to a source: (`W`, weight field name, lo, hi) for an input
-     weight, (`TOK`, lo, hi) for the prompt, (`N`, producer step, producer index-within-step, lo, hi) for a node
+     weight, (`TOK`, lo, hi) for the prompt, (`WIT`, name, lo, hi) for a rank Program's witness input (`load_derived`),
+     (`N`, producer step, producer index-within-step, lo, hi) for a node
      output — and compared 1:1 when the spec sequences align (the weight name comes from each program's own record:
      the derive report's field list / the oracle's `instances.jsonl` hints); cross-step (`KV`) sources are reported apart;
   3. unfolding (padded vs flat) — the padded program's pad-kind instances (`Const*`, `I32Eq`, `BitNot`, `BitAnd`,
@@ -40,6 +41,7 @@ from verity_vllm.check.match import split_selects
 from verity_vllm.check.match.canonical_operands import as_progression as _asP, weight_field_name as _field_name
 from verity_vllm.check.match import supplied_inputs as SI
 from verity_vllm.check.match.peer_reads import PeerReads
+from verity_vllm.check.match import prefix_reads as PX
 from verity_vllm.check.match.sampler_geometry import constant_splits_agree
 from verity_vllm.config import UsageError, option
 from verity_vllm.program.sampling_event import is_sampling_event as _is_sampling_event  # [R15 stoch] the step-boundary families
@@ -73,7 +75,7 @@ def _registry():
     return reg
 
 
-class Prog(PeerReads):
+class Prog(PeerReads, PX.PrefixInput):
     """A decoded root body as an instance sequence."""
 
     compact = False   # operand representation: runs (record) | run progressions ([R17 mfast] cb_a.compact); set per instance in __init__
@@ -138,6 +140,9 @@ class Prog(PeerReads):
         # `peers_layout`).  A read canonicalises as ("PEER", k, lo, hi) with lo/hi relative to the field on BOTH sides.  Set by the loaders.
         self.peer_fields: dict[int, list[tuple[int, int]]] = {}
         self.peer_index: dict[int, int] = {}       # fold side: peers Input node -> request index (batch_decomp ownership)
+        # a rank Program's WITNESS inputs (a user input the link table names neither a prompt nor a peer input: the MoE align `schedule`):
+        # Input node -> its name; a read canonicalises as ("WIT", name, lo, hi), never as an unnamed weight.  Set by `load_derived`.
+        self.witness_fields: dict[int, str] = {}
         self.supplied_fields: dict[int, list[tuple[int, str, int]]] = {}   # `supplied_inputs`, set by the loaders
         self.supplied_owner: dict[int, int | None] = {}
         self.split_statics = split_selects.as_fold_selects(self.inst)       # a select specialised on S compares as the fold's
@@ -266,7 +271,7 @@ class Prog(PeerReads):
                 mapped: list[tuple] = []
                 for p in a:
                     mapped.extend(self._srcP(p, unfold))
-                out.append(rle_mapped(mapped))
+                out.append(rle_mapped(PX.merge_reads(mapped, True) if self.pfx else mapped))
             return out
         for ai, a in enumerate(r["args"]):
             if bound and ai == SPLITS_OPERAND:
@@ -274,7 +279,8 @@ class Prog(PeerReads):
                 e = self.i2step[i][0]
                 out.append([("SPLITS", e, e + 1)])
                 continue
-            out.append([self._src(r, unfold) for run in a for r in self._split_peer(run)])
+            mapped = [self._src(r, unfold) for run in a for r in self._split_peer(run)]
+            out.append(PX.merge_reads(mapped, False) if self.pfx else mapped)
         return out
 
     def _srcP(self, p: tuple, unfold: bool) -> list[tuple]:
@@ -300,6 +306,10 @@ class Prog(PeerReads):
                 return [("SPLITS", (lo0, hi0), (dL, dH), c)]
             if idx0 in getattr(self, "peer_fields", ()):
                 return self._peer_srcP(p, unfold)   # [R17 D90] the k-th received-collective peer input of the request
+            if idx0 in self.pfx:
+                return self._pfx_srcP(p, unfold)
+            if idx0 in getattr(self, "witness_fields", ()):
+                return [("WIT", self.witness_fields[idx0], (lo0, hi0), (dL, dH), c)]
             if idx0 in self.weight_fields:
                 return [("W", _field_name(self.weight_fields[idx0]), (lo0, hi0), (dL, dH), c)]
             wr = getattr(self, "oracle_wmap", None)
@@ -365,6 +375,10 @@ class Prog(PeerReads):
                 return ("SPLITS", lo, hi)   # [M-0169 (4)] the request-owned derived split count, entry per sampling event
             if idx in getattr(self, "peer_fields", ()):
                 return self._peer_src(idx, lo, hi)   # [R17 D90] the k-th received-collective peer input of the request
+            if idx in self.pfx:
+                return self._pfx_src(idx, lo, hi)
+            if idx in getattr(self, "witness_fields", ()):
+                return ("WIT", self.witness_fields[idx], lo, hi)
             if idx in self.weight_fields:
                 return ("W", _field_name(self.weight_fields[idx]), lo, hi)
             wr = getattr(self, "oracle_wmap", None)
@@ -416,21 +430,27 @@ def load_derived(d: str, label: str, cls: type[Prog] = Prog, compact: bool = Fal
     P = cls(label, desc, fields, tok_node=0, compact=compact)
     SI.set_supplied(P, [(n_user, None, reg)] if reg else [], d)
     # [R17 D90] a TP rank Program (derive_step --tp): `tp_links.json` names the user inputs in order (`prompt`, `peers_0`, ... = the k-th
-    # collective's peer partial, issue order); each `peers_<k>` is its own Input node (one field at offset 0).  Refused by name when the
-    # link table and the report disagree on how many user inputs there are.
+    # collective's peer partial, issue order); each `peers_<k>` is its own Input node (one field at offset 0), and so is each WITNESS (a
+    # user input the table lists neither among `prompt_inputs` nor `peer_inputs`: the MoE align `schedule`), bound by its name.  Refused
+    # by name when the link table and the report disagree on how many user inputs there are.
     tl = os.path.join(d, "tp_links.json")
     if os.path.exists(tl):
         links = json.load(open(tl))
         names = list(links.get("user_inputs") or [])
         if len(names) != n_user:
             raise ValueError(f"{d}: tp_links.json names {len(names)} user inputs, derive-report has {n_user}")
+        listed = set(links.get("prompt_inputs", names[:1])) | set(links.get("peer_inputs") or ())
         for j, nm in enumerate(names):
-            if nm.startswith("peers_"):
-                if j not in P.inputs:
-                    raise ValueError(f"{d}: user input {j} ({nm}) is not an Input node of the Program")
+            peer, witness = nm.startswith("peers_"), nm not in listed
+            if (peer or witness) and j not in P.inputs:
+                raise ValueError(f"{d}: user input {j} ({nm}) is not an Input node of the Program")
+            if peer:
                 P.peer_fields[j] = [(0, int(nm[len("peers_"):]))]
+            elif witness:
+                P.witness_fields[j] = nm
         P.tp = {"rank": links.get("rank"), "world": links.get("world")}
         P.tp_links = links.get("links") or []
+    PX.load_layout(P, d)
     return P
 
 
@@ -474,6 +494,7 @@ def load_oracle(d: str, label: str, cls: type[Prog] = Prog, compact: bool = Fals
                              "spec": o.get("spec"), "operand_refs": [[r for r in a if r[0] in ("p", "P")] for a in (o.get("operand_refs") or [])],
                              "pattern": o.get("pattern"),
                              "request": o.get("request"),  # [X-09] the fold's own attribution when recorded
+                             "position": o.get("position"),  # prefix_reads links a cached row to its producer by position (and layer: hint)
                              "operand_roots": o.get("operand_roots")})  # [R15 fp8] per-operand weight names (multi-weight Computes)
     if d not in LOAD_NOTES:     # a pre-header instances.jsonl (no schema line): the form is the default, the digests are still stated
         LOAD_NOTES[d] = {"source": "record files", "instances_schema": None, "operand_refs_form": "runs", "program_sha256": program_sha}

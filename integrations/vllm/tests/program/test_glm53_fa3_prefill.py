@@ -3,6 +3,8 @@ the 128 x 80 tile in the target's rule and the twin's, the row binding `Attentio
 Definition word for word, the kernel's fully-masked leading blocks, and which launches the served split heuristic splits."""
 from __future__ import annotations
 
+__models__ = ("zai-org/GLM-5.3",)
+
 import json
 from pathlib import Path
 
@@ -131,7 +133,7 @@ def test_the_twin_refuses_a_tile_hdim_256_does_not_run():
 def test_the_served_split_heuristic_at_glm53_per_rank(lengths, static, expected):
     """vLLM passes `num_splits = 0` to the MLA prefill outside batch invariance (which GLM-5.3 refuses on sm_90): `get_num_splits`'
     static bound, then the prepare kernel's per-sequence count.  Per rank (8 heads, 132 SMs) launches whose longest sequence has
-    321..1664 tokens run the Split mainloop and `FlashAttnFwdCombine` (outside the model; a sequence counted 1 is written directly);
+    321..1664 tokens run the Split mainloop and `FlashAttnFwdCombine` (`registry.fa3_split`; a sequence counted 1 is written directly);
     993 sequences or more never do."""
     assert fa3_model.split_plan(lengths, NH, KVH, D, num_sms=132) == (static, expected)
     assert fa3_model.num_splits(lengths, NH, KVH, D, num_sms=132) == expected

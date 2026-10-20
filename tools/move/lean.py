@@ -304,9 +304,6 @@ def keep_reachable(m: Map, root: Path, ren: dict, dropped: dict, dry: bool) -> l
     return added
 
 
-CMD = re.compile(r"(lake\s+(?:build|env\s+lean|exe)\s+|import\s+)([A-Za-z_][\w.' ]*)")
-
-
 def rewrite_commands(root: Path, ren: dict, dry: bool, skip=("tools/move/",)) -> int:
     """Module names after `lake build`, `lake exe`, `import` in scripts and docs (never a declaration: only whole tokens
     that are old module names)."""
