@@ -18,7 +18,7 @@ Per engine step s (parity p = s mod 2), around the runner's `execute_model`:
              step s + 1's launches read
 
 The window's coins are served_h1's (`coins.open_coins`, a live window of `ROUNDS` rounds at epoch 1): with
-``$POUW_CHALLENGER`` (HOST:PORT) and ``$POUW_CHALLENGER_SESSION`` (the session infra's request call returned) the
+``$POUW_CHALLENGER`` (HOST:PORT) and ``$POUW_CHALLENGER_SESSION`` (the session infra's gate returned) the
 challenger off the node, one session a window, opened at the window's build; else `window.live_challenger` in this
 process.  `stats` says which (``coins``: ``off-node session ID at HOST:PORT (unchecked)`` or ``in-process (not
 certified)``).  Only the round's coin changes source:

@@ -1,10 +1,10 @@
 """ASK-64's per-step round, measured from the serving node against the proof service's challenger off the node: one live
 round a step (PERIOD-PATH ask 11).
 
-The challenger is one session on its auditor host, requested from infra (lanes don't start sessions there), its layout a
-PoUW live window of ROUNDS rounds (`served_h1/coins.py families --rounds ROUNDS`, `window.LIVE_SCHEME`, epoch 1); the
-request returns the session's id and the port its `ssh -R` tunnel opens on this machine, the serving node
-(`coins.Session`).  This client is served_h1's coin source (`coins.open_coins` over `remote.RemoteChallenger`): it
+The challenger is one session on its auditor host, requested from infra's gate (`served_h1/coins.py open`, under a
+development period: its Commit is a stand-in), its layout a PoUW live window of ROUNDS rounds (`window.LIVE_SCHEME`,
+epoch 1); the gate returns the session's id and the port its challenger listens on at this machine's 127.0.0.1, the
+serving node (`coins.Session`).  This client is served_h1's coin source (`coins.open_coins` over `remote.RemoteChallenger`): it
 refuses another layout, opens the salt coin after a
 stand-in registration root, then round s's coin after step s's stand-in root, sha512(s || coin s-1), so no step's root
 exists before the previous step's coin, and times each round from the root's send to its opening checked against the
@@ -17,13 +17,15 @@ gives as many rounds as its timeout allows and still closes; a session that fail
 `WINDOW` (one Dither window, `dither_fused.ROUNDS`) and per `WINDOW` block (the challenger's release cost grows with the
 round's index), the client's check alone (`live_reason` replayed on every opening), the SHA-512 over the round roots in
 order, and every sample (ns); beside it `percall-wait-ns.txt`, one sample a line, which sbench's dither-1s-percall-rtt
-arm replays.  `check` is the auditor's side, from the session's directory as the challenger published it: its record
-verifies under the key that directory's key.json holds (`remote.trusted_session`; no key is pinned in code), and its log
+arm replays.  `check` is the auditor's side, from the session as the gate publishes it (``ssh GATE fetch SESSION``): the
+gate's request and the signed record name the client's session, the record verifies under the challenger's key record
+(``--key-record``, else key.json's own key, said so; no key is pinned in code; `remote.trusted_session`), and its log
 holds this client's commitment and roots in order; it adds the challenger's own per-round times from that log (its
 monotonic clock).
 
     python3 percall_rtt.py run --challenger 127.0.0.1:PORT --session ID --rounds 32768 --max-s 1800 --out out/percall-rtt.json
-    python3 percall_rtt.py check --challenger-out SESSION_DIR --client ~/.research/runs/CLIENT/out/percall-rtt.json
+    python3 percall_rtt.py check --challenger-out SESSION_DIR --client ~/.research/runs/CLIENT/out/percall-rtt.json \\
+        --key-record KEY_RECORD
 """
 from __future__ import annotations
 
@@ -118,10 +120,19 @@ def run(a: argparse.Namespace) -> int:
 
 
 def check(a: argparse.Namespace) -> int:
-    d, client = Path(a.challenger_out), json.loads(Path(a.client).read_text())
-    key = CO.Ch.ChallengerKey.from_json(json.loads((d / CO.R.KEY).read_text()))
+    (d, req_path), client = CO.published(a.challenger_out), json.loads(Path(a.client).read_text())
+    theirs = CO.Ch.ChallengerKey.from_json(json.loads((d / CO.R.KEY).read_text()))
+    key = CO.key_record(a.key_record) if a.key_record else theirs
     host = CO.Ch.ChallengerRecord.from_json(json.loads((d / CO.R.RECORD).read_text())).host
-    reasons: dict[str, str | None] = {}
+    req = json.loads(req_path.read_text()) if req_path.is_file() else {}
+    sid = client["session"]
+    reasons: dict[str, str | None] = {
+        "key": None if key == theirs else "the session's key.json is not the challenger's key record",
+        "session": (None if req.get("session") == sid and host.endswith(f".{sid}") else
+                    f"the gate's request and signed record are session {req.get('session')!r} on {host}, not {sid!r}")}
+    if reasons["key"] is not None:
+        print(json.dumps({"ok": False, "host": host, "reasons": reasons}, indent=1), flush=True)
+        return 1
     commitment, roots = CO.R.trusted_session(d, key, CO.lms_verify)
     n = client["rounds"]
     got = hashlib.sha512(b"".join(roots[CO.Wd.ROUND][:n])).hexdigest()
@@ -138,6 +149,7 @@ def check(a: argparse.Namespace) -> int:
     serve_ns = [round((e["released_at"] - r["received_at"]) * 1e9) for r, e in rounds]
     gap_ns = [round((b["received_at"] - x["received_at"]) * 1e9) for (x, _), (b, _) in itertools.pairwise(rounds)]
     doc = {"ok": all(v is None for v in reasons.values()), "host": host, "key_sha512": hashlib.sha512(key.public).hexdigest(),
+           "key": "the key record's" if a.key_record else "key.json's own (unanchored)", "window": req.get("window"),
            "reasons": reasons, "rounds_logged": len(roots[CO.Wd.ROUND]),
            "challenger_open": quantiles(serve_ns), "challenger_period": quantiles(gap_ns),
            "challenger_period_by_window_p50_ms": [quantiles(gap_ns[i:i + WINDOW])["p50_ms"]
@@ -160,8 +172,9 @@ def main(argv: list[str] | None = None) -> int:
     r.add_argument("--pace-us", type=float, default=0.0)
     r.add_argument("--out", required=True)
     c = sub.add_parser("check")
-    c.add_argument("--challenger-out", required=True)
+    c.add_argument("--challenger-out", required=True, help="the session as the gate publishes it (request.json, out/)")
     c.add_argument("--client", required=True)
+    c.add_argument("--key-record", default=None, help="the challenger's key record (challenger-key/v1)")
     c.add_argument("--out", default=None)
     a = ap.parse_args(argv)
     if a.cmd == "run":
