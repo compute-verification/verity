@@ -1,14 +1,16 @@
 """The difftest of the description-sized NCI check (`NciCheck.Desc`) against the unrolled one: the Python half.
 
-`verity/core/protocols/network/nci/lean/scripts/desc_difftest_vectors.py` writes 3,650 declarations divided into IUs of
-root nodes (the last two pinned: θ with an input bound per run, refused, and θ the registered one, accepted), each
-expanded gate by gate where it is well-formed, and `scripts/nci_reference.py`'s `check_desc` on each.
+`verity/core/protocols/network/nci/lean/scripts/desc_difftest_vectors.py` writes 3,656 declarations divided into IUs of
+root nodes (six on a composite keyed with an input id, which is no input node, then two pinned: θ with an input bound per
+run, refused, and θ the registered one, accepted), each expanded gate by gate where it is well-formed, and
+`scripts/nci_reference.py`'s `check_desc` on each.
 `check` runs the Lean half in its Lean audit (`runs` in that package's `lean-audit.json`): `NciCheck/DescDifftestMain.lean`
 fails unless `NciCheck.Desc.check` gives Python's result on every instance and `NciCheck.check`'s on every expansion. As
 for `test_nci_lean_difftest.py`, the audit checks the data against the record's SHA-256 and caches its pass on the Lean
 package's files alone, so this test is what says the data is still what the generator and the reference write. The
 other test checks that the generator reaches what its docstring says, on the first 400 instances and the first on each
-fixture's descriptor.
+fixture's descriptor, and the third that the data holds the decoys: a root Call or batch of a composite keyed with an input
+id, whose gates are computed, which `NciCheck.Desc` once took for an input node.
 """
 
 from __future__ import annotations
@@ -37,7 +39,7 @@ RUN = json.loads((LEAN / "lean-audit.json").read_text())["runs"]["NciCheck.DescD
 
 @pytest.mark.slow
 def test_the_data_is_what_the_audit_pins(tmp_path):
-    """All 3,650 instances, their expansions and the reference's results, byte for byte as the record pins them."""
+    """All 3,656 instances, their expansions and the reference's results, byte for byte as the record pins them."""
     made = {n: hashlib.sha256(p.read_bytes()).hexdigest() for n, p in vectors.write(tmp_path).items()}
     assert made == RUN["data"]
     assert RUN["args"] == ["{desc_difftest/instances.jsonl}", "{desc_difftest/expanded.jsonl}",
@@ -62,6 +64,19 @@ def test_the_generator_covers_what_it_says():
     assert any(m["shape"] == "transposed" for m, _ in good) and any(m["shape"].startswith("fixture:") for m, _ in good)
     wide = [m for m, _ in good if len(vectors.expanded(m["instance"], {})["owner"]) > len(m["instance"]["owner"])]
     assert wide, "an instance whose expansion has more gates than root nodes"
+
+
+def test_the_decoys_are_no_input_nodes():
+    """The decoys come just before the pinned instances, and the reference refuses each one the unrolled check refuses:
+    the decoy node in θ (`theta-not-input`) or in no IU (`gate-in-no-iu`), and gives a verdict with the decoy node in an
+    IU."""
+    first = vectors.total() - len(vectors.vectors.pinned()) - len(vectors.decoys())
+    made = [vectors.instance(s)["instance"] for s in range(first, first + len(vectors.decoys()))]
+    assert made == vectors.decoys()
+    got = [reference.check_desc(m).get("error") for m in made]
+    assert got == ["theta-not-input", "gate-in-no-iu", None] * 2
+    for m in made:
+        assert reference.check_desc(m) == reference.check(reference.expand(m))
 
 
 def test_the_pinned_instances_get_their_results():
