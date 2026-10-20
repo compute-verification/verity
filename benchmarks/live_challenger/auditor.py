@@ -306,11 +306,16 @@ def parse_open(argv: list[str], host: Host) -> dict:
         p.add_argument(flag, required=True)
     p.add_argument("--epoch", type=int, default=0)
     p.add_argument("--minutes", type=int, default=120)
+
+    def refuse(why: object) -> None:
+        raise Refused(f"open: {why}; usage: {p.format_usage().strip()} (v2: no --period or --lane: the window is its root, "
+                      "its time the auditor's, its prover your gate key's lane)")
+
+    p.error = refuse
     try:
         a = p.parse_args(argv)
-    except (argparse.ArgumentError, SystemExit) as e:
-        raise Refused(f"open: {e}; usage: {p.format_usage().strip()} (v2: no --period or --lane: the window is its root, "
-                      "its time the auditor's, its prover your gate key's lane)") from None
+    except argparse.ArgumentError as e:
+        refuse(e)
     if not COMMIT.fullmatch(a.commit):
         raise Refused("--commit: the served Commit's root, 128 hex digits (a SHA-512)")
     if a.peer not in peers(host):

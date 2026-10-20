@@ -160,7 +160,7 @@ def test_rt4_int_25_a_client_that_takes_the_salt_and_one_round_coin_then_closes_
     assert A.verify_ledger(A.read_ledger(host.ledger), I, verify)["cd" * 64]["end"] == end
 
 
-def test_rt4_int_30_a_trailing_newline_or_a_period_opens_nothing_and_a_root_is_kept_in_lowercase(host, signer):
+def test_rt4_int_30_a_trailing_newline_or_a_period_opens_nothing_and_a_root_is_kept_in_lowercase(host, signer, capsys):
     rest = f"--peer vy-nebius-1 --scheme verity/test/coins/v1 --families '{json.dumps(FAMILIES)}'"
     for words, why in ((f"open --commit '{COMMIT}\n' {rest}", "128 hex digits"),
                        (f"open --commit '{COMMIT} ' {rest}", "128 hex digits"),
@@ -170,7 +170,7 @@ def test_rt4_int_30_a_trailing_newline_or_a_period_opens_nothing_and_a_root_is_k
                         f"--families '{json.dumps(FAMILIES)}'", "--peer")):
         rc, out = ssh(host, signer, words)
         assert rc == 3 and why in json.loads(out)["refused"], words
-    assert A.read_ledger(host.ledger) == []
+    assert A.read_ledger(host.ledger) == [] and capsys.readouterr() == ("", "")
     rc, out = ssh(host, signer, f"open --commit {COMMIT.upper()} {rest}")
     assert rc == 0 and json.loads(out)["root"] == COMMIT
     rc, out = ssh(host, signer, f"open --commit {COMMIT} {rest}", token="cd34")
