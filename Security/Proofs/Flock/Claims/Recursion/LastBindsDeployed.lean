@@ -42,7 +42,7 @@ when the record lists it. So the calls are compared as sets throughout (ASK-76):
 
 `PlainLastBindsOrSlack` is the collision charge through the plain verifier's steps. `LastColsDeployed` splits it into
 its columns half, proved at SHA-512 (`RecDeploy.plainColsBind_sha512`), and its calls half
-(`RecDeploy.PlainCallsBindOrSlack`), open.
+(`RecDeploy.PlainCallsBindOrSlack`), proved at SHA-512 too (`RecDeploy.plainCallsBindOrSlack_sha512`).
 -/
 
 namespace Claims.Recursion
@@ -405,8 +405,8 @@ def ProofSlack (l l' : Msg) : Prop :=
 
 /-- **`PlainLastBinds` up to the decoder's slack**: its hypotheses give a collision among the decision's calls, or two
 proof files at one position that differ in their bytes and decode alike (`ProofSlack`). It is the collision charge
-through the plain verifier's steps: its columns half holds at SHA-512, and its calls half, with the calls compared as
-sets, is open (`LastColsDeployed`). -/
+through the plain verifier's steps: its columns half and its calls half, with the calls compared as sets, hold at
+SHA-512 (`LastColsDeployed`, `CallsOfProofs`). -/
 def PlainLastBindsOrSlack (H : Msg → Msg) : Prop :=
   ∀ (x : Msg) (ms : List Msg) (l l' : Msg) (cs : List Coin), ms.length + 1 = (FlockDeploy.V false).k x →
     cs.length = ms.length + 1 →
