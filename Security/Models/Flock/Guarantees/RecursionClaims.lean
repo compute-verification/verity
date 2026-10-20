@@ -8,6 +8,11 @@ named assumptions and trusted base they use, so the Lean check records each one'
 under `reads`: a changed claim is a changed record, which reaches Daniel when it lands. It says nothing about the
 compiled verifier. A claim leaves it when a guarantee states that claim at the deployed compiled verifier, and the
 guarantee's own record holds the text from then on.
+
+The recursion's KS (`KS`, `Bits`, `KSFlock`, `KSBound`, and the private variant's) is at its level
+`Claims.Recursion.lam`, about 65 bits per SHA-512 call at the deployed shape (one inner table at `m = 35`, the deployed
+bound record's weight at `IVStar` at `coverW`, ASK-72), below the 100-bit floor and the `2^-128` target under every
+weight (ASK-73).
 -/
 
 namespace Flock.Guarantees
@@ -22,10 +27,7 @@ representation V* binds (`KSBound`, `KSPrivBound`), the inner claim it rests on 
 `Bound.PlainKSAbort`, `Bound.Binds` and `Bound.WeightCovers`) and the last message's binding the recursion's proof
 reads (`Bound.LastBinds`); the shared claims they instantiate (`Claims.KS`, `ZKmalRx`, `Flock.ListWithin`,
 `Complete`, `ScopeMatches`, `ExtractRunsLe`, `ExtractRunsExpLe`, `Nontrivial`), the named assumptions
-(`StrictBirthday`, `ExpectedCR`, `Hm96Hiding`) and `trustedBase`, equal to itself. The recursion's KS (`KS`, `Bits`,
-`KSFlock`, `KSBound`, and the private variant's) is at its level `Claims.Recursion.lam`, about 65 bits per SHA-512 call
-at the deployed shape (one inner table at `m = 35`, the deployed bound record's weight at `IVStar` at `coverW`, ASK-72),
-below the 100-bit floor and the `2^-128` target under every weight (ASK-73). -/
+(`StrictBirthday`, `ExpectedCR`, `Hm96Hiding`) and `trustedBase`, equal to itself. -/
 def RecursionClaimsStated : Prop :=
   let claims := (@Claims.Recursion.KS, @Claims.Recursion.Bits, @Claims.Recursion.Efficient,
     @Claims.Recursion.Complete, @Claims.Recursion.ScopeMatches, @Claims.Recursion.ZK, @Claims.Recursion.Nontrivial,
