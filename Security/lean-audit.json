@@ -621,6 +621,9 @@
   "FlockDeploy.PlainIn": {
    "owner": "@proofs"
   },
+  "FlockDeploy.ZkIn": {
+   "owner": "@proofs"
+  },
   "FlockSoundness.Accounting.Stmt.InRange": {
    "owner": "@proofs",
    "digest": "14f41f745abc478968ebae692fbb51b813f932a65294c6279434928b7d158968"
@@ -1124,9 +1127,6 @@
   "Verity.Declaration.Contains": {
    "owner": "@lean",
    "digest": "2e4651003538493bac63ae90c32a521e95d2e8596bea6b3c85b9cfd150c5647b"
-  },
-  "FlockDeploy.ZkIn": {
-   "owner": "@proofs"
   }
  },
  "meaning": [
@@ -9504,16 +9504,16 @@
    "guarantees": ["Accounting.SecurityProofs.TS.Sm100MeasuredHeadline", "Accounting.SecurityProofs.TS.Sm100SheetHeadline"]
   },
   "Definitions.Accounting.HeadlineDc.Sm100Measured": {
-   "digest": "2647dc2b0841a8941cd12a0a8df31db9cd16d54dc39d36926fba6396e457a655",
+   "digest": "a812d91577bc1b14b7d4ff6a0f8d0779190cf3f88cb83374c2d3e86add8cca8f",
    "definitions": {
     "Accounting.TS.Headline.Sm100Measured.d2s": "a060f99deb4a5d228bd36b31261b7b824fbf420cbca607cc8e55fd917ff89d0a",
-    "Accounting.TS.Headline.Sm100Measured.dc100ri": "d3d6d20bd4252cbebd95873d62ea4e799bccdde31acc1e39665f3bd4fcdd1dc3",
+    "Accounting.TS.Headline.Sm100Measured.dc100ri": "0225a224e35b76667b1fd6ed06b3bbf5bd276c7bee8373921b744882688f644f",
     "Accounting.TS.Headline.Sm100Measured.flat": "4deaa73f2f2ba31f2a80ef7a67e37cd9a5a8d4becf24be9b31fa21e333f47e16",
     "Accounting.TS.Headline.Sm100Measured.flatFold": "b7b10cb8ae010a0ee66b62fc12331764d8abb7ae0cb430e6a1534bdd30cb3d1d",
     "Accounting.TS.Headline.Sm100Measured.flatSkip": "930d8e5a6732e1c11823d0557bd43fb02544c216a4e53042d79c5683378fe447",
-    "Accounting.TS.Headline.Sm100Measured.lamStar": "abcbc5227012868aefc04133fc009b41a524982466c946c06930b67dba4eb88a",
-    "Accounting.TS.Headline.Sm100Measured.machine": "d4f8a1c3b7c181ef2f66614fc6d2467d64812e246cc041392f739fad073cca74",
-    "Accounting.TS.Headline.Sm100Measured.model": "c6ea626228d58476728fd62a7cc24b2675db549fd617afa98a741e0e75c5b538"
+    "Accounting.TS.Headline.Sm100Measured.lamStar": "9deb6e0e13fe43f49574ac87fa2c32e36b5e0e6517d3d278158a5ee7de3f313d",
+    "Accounting.TS.Headline.Sm100Measured.machine": "143e70ca16397d6e525997f48542e71a9b323fae7dfe370dfe237bd4f68c33d0",
+    "Accounting.TS.Headline.Sm100Measured.model": "106a7a808b7d4836378681acf0ae239c0b92e0e8c346d44d8332611d00edcab8"
    },
    "guarantees": ["Accounting.SecurityProofs.TS.Sm100MeasuredHeadline"]
   },
@@ -22094,9 +22094,9 @@
    "guarantees": ["Accounting.SecurityProofs.TS.Sm120MeasuredHeadline", "Accounting.SecurityProofs.TS.Sm120SheetHeadline"]
   },
   "Models.Accounting.Guarantees.HeadlineDc": {
-   "digest": "f1eb5e57b8e8c9beea031063e65dc754075160c3773fd479fdd123361a40541c",
+   "digest": "8eecb434c062ce8cc82a11781030753cb69b88956d46fc94b2ce65120d98c149",
    "definitions": {
-    "Accounting.Guarantees.TS.Sm100MeasuredHeadline": "b5aadf8a4453f171915845b87404aaf6e824dbffc17624a8ec78dbe5fc36d0d5",
+    "Accounting.Guarantees.TS.Sm100MeasuredHeadline": "03569acb8aa478542701191c5fbe978c416c1084431c96a15f7d7d9850a9a849",
     "Accounting.Guarantees.TS.Sm100SheetHeadline": "a25bfa02582f235092289880987c97001343d674b470f38cd4edf7b487bb735a",
     "Accounting.Guarantees.TS.Sm90MeasuredHeadline": "def512940cc102b1946c0555f7c742f5622a20b7f5180a717232e22bbfb2562e",
     "Accounting.Guarantees.TS.Sm90SheetHeadline": "43db4c6646f2c7ba82dec2e1ff8faff03f828d5398b209b7f94bd04cb2cd8335"
