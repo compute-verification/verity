@@ -2014,6 +2014,27 @@ def test_an_equation_lemma_two_modules_realize_counts_as_declared_by_the_importe
 
 
 @pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
+def test_a_checked_declaration_waits_for_what_an_unchecked_one_it_unfolds_needs(tmp_path):
+    """D's `a_t : f = 6 := rfl` makes the kernel unfold `f`, from M, which joins the replay unchecked (it passed, and it
+    imports G, which hasn't), and `f`'s body mentions G's `zz_g`, checked in the same replay. Ordered only by what it
+    mentions itself, `a_t` went to the kernel before `zz_g` was in it: "unknown constant" (#2626's third train,
+    `Flock.sizeOf_lt_of_mem_toArray` and `Std.DTreeMap.Raw.Const.toList`)."""
+    pkg = tmp_path / "behind"
+    (pkg / "R").mkdir(parents=True)
+    shutil.copy(HERE / "fixtures" / "control" / "lean-toolchain", pkg)
+    (pkg / "lakefile.toml").write_text('name = "behind"\ndefaultTargets = ["R"]\n\n[[lean_lib]]\nname = "R"\n')
+    (pkg / "R.lean").write_text("import R.D\n")
+    (pkg / "R" / "G.lean").write_text("def zz_g : Nat := 5\n")
+    (pkg / "R" / "M.lean").write_text("import R.G\ndef f : Nat := zz_g + 1\n")
+    (pkg / "R" / "D.lean").write_text("import R.M\ntheorem a_t : f = 6 := rfl\n")
+    subprocess.run(["lake", "build"], cwd=pkg, check=True, capture_output=True, env=A.lake_env())
+    r = subprocess.run(["lake", "env", "lean", "--run", str(A.TOOL / "Replay.lean"), str(tmp_path / "replay.json"), "R.D",
+                        "--closure", "R.G", "--closure-reused", "R.M"], cwd=pkg, capture_output=True, text=True,
+                       env=A.lake_env())
+    assert r.returncode == 0, r.stderr + r.stdout
+
+
+@pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
 def test_the_controls(tmp_path):
     toolchain = (A.FIXTURES / "control" / "lean-toolchain").read_text().strip()
     assert A.controls(toolchain, tmp_path, log=lambda *_: None) == []

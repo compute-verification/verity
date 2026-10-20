@@ -21,5 +21,6 @@ AGENTS.md).
 | `maxtput/` | the Commit at vLLM's maximum throughput: native compiled vLLM at saturation against the Commit's arms on the same load, each a loop row |
 | `dedup/` | Pearl-C's A rows read from a precomputed root against today's -h3, and the timing of compute accounting's -h4 branch |
 | `memsat/` | memory accounting's remote audit at saturation (receipts and codec against plain serving), through `benchmarks/remote_session` |
+| `exactlin/` | the int8-exact linear as two Triton kernels (`exactlin.py`: the exact quantizer, and the GEMM with the exact epilogue and per-card configs), gated bit-exact against `int8_exact` (`kgate.py`) and the int8 Definitions' replay evaluators (`replay.py`), timed against stock vLLM int8 (Triton, CUTLASS, and CUTLASS on the transposed product, `kgate.cutlass_swapped`) and the exact path at kernel level (`kbench.py`, `ksweep.py`) and served (`served.sh`, through Dither's served harness, PR #2790, after the kernel gate), with the served y checked bit for bit by vllm's `int8_exact_gpu` (`values.py`) and the per-step kernel table (`steps.py`) |
 
 The campaign's findings and the recommendation to Daniel are in the notes, `lanes/hash/`.
