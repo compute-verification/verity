@@ -3,9 +3,9 @@
 # inputs; also that tree's own `lean_headline_dc.py --check`. From the tree under test:
 #
 #   research run --on vy-nebius-cpu-3 --project verity --campaign eps1 --source <that tree> --cwd source --mem-gb 16 \
-#     --timeout 3600 --input <rt4 tree>/benchmarks/pouw/rt4_sheet/dc_price.py \
-#     --input <rt4 tree>/benchmarks/pouw/rt4_sheet/dc_run.sh --input fold_bulk_sm_90a.sass \
-#     --input fold_bulk_sm_100a.sass -- bash "$RESEARCH_RUN_DIR/inputs/dc_run.sh"
+#     --timeout 3600 --send <rt4 tree>/benchmarks/pouw/rt4_sheet/dc_price.py \
+#     --send <rt4 tree>/benchmarks/pouw/rt4_sheet/dc_run.sh --send fold_bulk_sm_90a.sass \
+#     --send fold_bulk_sm_100a.sass -- bash -c 'bash "$RESEARCH_RUN_DIR/inputs/dc_run.sh"'
 #
 # Exit: the exporter's --check rc, else 4 when a route prices under φ* on a sheet.
 set -uo pipefail
