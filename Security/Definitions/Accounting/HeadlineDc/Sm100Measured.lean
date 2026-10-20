@@ -7,7 +7,7 @@ Written by `benchmarks/pouw/lean_headline_dc.py` from the machine model's data (
 and checked against it by `benchmarks/pouw/tests/test_lean_headline_dc.py`: edit the data and rerun the exporter, never
 this file. `Accounting.Guarantees.TS.Sm100MeasuredHeadline` reads it.
 
-* `rowNames`, `dc100ri`, `machine`: the measured vector DC-100-ri, 11 rows of SMSP-cycles a warp instruction at its
+* `rowNames`, `dc100ri`, `machine`: the measured vector DC-100-ri, 9 rows of SMSP-cycles a warp instruction at its
   epoch's census, each sparse over `Sm100.classes`; every facet SM-clocked, f_max 1965 MHz. `UNLISTED` is A2's catch-all
   here: every warp instruction no other class prices on DC-100-ri counts there, at the measured issue slot alone. The
   sheet's classes no run beside DC-100-ri's census timed (DMMA16816, DMMA1684, DMMA1688, DMMA884,
@@ -29,7 +29,7 @@ open Accounting.TS
 
 /-- DC-100-ri's rows, in index order. -/
 def rowNames : List String := [
-  "issue", "M", "A", "I", "SHFL", "TL", "TM100_0", "JI100_0", "JPA100_0", "JPA100_1", "UP"]
+  "issue", "M", "A", "I", "SHFL", "TL", "TM100_0", "JI100_0", "UP"]
 
 /-- DC-100-ri's coefficients, row by row: `(class index, numerator, denominator)`. -/
 def dc100ri : List Sparse := [
@@ -41,7 +41,7 @@ def dc100ri : List Sparse := [
    (35, 1, 1), (36, 1, 1), (37, 1, 1), (38, 1, 1), (39, 1, 1), (40, 1, 1), (41, 1, 1), (42, 1, 1), (43, 1, 1),
    (44, 1, 1), (45, 1, 1), (46, 1, 1), (47, 1, 1), (48, 1, 1), (49, 1, 1), (50, 1, 1), (51, 1, 1)],
   -- 1: M
-  [(9, 7845459510917193, 1000000000000000), (10, 3923192829282303, 500000000000000),
+  [(9, 490339257494561, 62500000000000), (10, 3923192829282303, 500000000000000),
    (32, 5018695645016817, 10000000000000), (34, 25097075487987533, 100000000000000),
    (35, 5018695645016817, 10000000000000), (37, 490239219482687, 3125000000000),
    (38, 18824101664455307, 100000000000000), (39, 12547895316422789, 50000000000000),
@@ -60,25 +60,21 @@ def dc100ri : List Sparse := [
    (18, 1654593511461907, 100000000000000), (19, 17773123589147233, 5000000000000000),
    (20, 3333703374407893, 100000000000000)],
   -- 6: TM100_0
-  [(18, 10337059, 625000), (35, 19911599, 1000000)],
+  [(18, 10337059, 625000), (35, 199132141, 10000000)],
   -- 7: JI100_0
   [(0, 122510713, 125000000), (7, 122510713, 125000000), (8, 122510713, 125000000), (9, 122510713, 125000000),
    (10, 122510713, 125000000), (12, 122510713, 125000000), (13, 122510713, 125000000), (14, 122510713, 125000000),
    (15, 122510713, 125000000), (16, 122510713, 125000000), (17, 122510713, 125000000), (18, 122510713, 125000000),
    (19, 122510713, 125000000), (20, 122510713, 125000000), (21, 122510713, 125000000), (24, 122510713, 125000000),
-   (29, 539, 625000), (32, 122510713, 125000000), (34, 122510713, 125000000), (35, 108760423, 100000000),
+   (29, 539, 625000), (32, 122510713, 125000000), (34, 122510713, 125000000), (35, 10879029, 10000000),
    (37, 122510713, 125000000), (38, 122510713, 125000000), (39, 122510713, 125000000), (40, 122510713, 125000000),
    (41, 122510713, 125000000), (47, 122510713, 125000000), (48, 122510713, 125000000)],
-  -- 8: JPA100_0
-  [(0, 3920543, 2000000), (35, 27417101, 2500000)],
-  -- 9: JPA100_1
-  [(0, 682401081, 1000000000), (35, 250834541, 500000)],
-  -- 10: UP
+  -- 8: UP
   [(29, 9786457500000001, 5000000000000000)]]
 
 /-- The measured machine: DC-100-ri's rows over `Sm100.classes`. -/
-noncomputable def machine : Machine (Fin 52) (Fin 11) :=
-  rowsMachine 52 11 dc100ri 1965
+noncomputable def machine : Machine (Fin 52) (Fin 9) :=
+  rowsMachine 52 9 dc100ri 1965
 
 /-- `dither-2s-licpw-redux-ldtm0-l32`'s design data on DC-100-ri: writer kinds as (class, ω), and `Sm100.d2s`'s routes.
 -/
@@ -106,7 +102,7 @@ def d2s : DesignData where
   Nw := Sm100.d2s.Nw
 
 /-- `dither-2s-licpw-redux-ldtm0-l32`'s TS model on the measured machine. -/
-noncomputable def model : Model (Fin 52) (Fin 11) (Fin 13) Unit Empty (Fin 14) Unit :=
+noncomputable def model : Model (Fin 52) (Fin 9) (Fin 13) Unit Empty (Fin 14) Unit :=
   d2s.model 52 13 14 machine
 
 /-- ♭'s fold a unit on DC-100-ri: the lane fold for 32768 words, the fold routes' cheapest, cp-red2 on every word. -/
@@ -120,7 +116,7 @@ noncomputable def flat : Labelled (Fin 52) :=
   labelled 52 Sm100.flatWords flatFold Sm100.flatFill flatSkip
 
 /-- π*: the certificate, its weights exact and summing to 1. -/
-noncomputable def lamStar : Fin 11 → ℝ :=
-  cert 11 [(0, 1, 1)]
+noncomputable def lamStar : Fin 9 → ℝ :=
+  cert 9 [(0, 1, 1)]
 
 end Accounting.TS.Headline.Sm100Measured
