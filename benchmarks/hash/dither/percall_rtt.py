@@ -18,12 +18,14 @@ many rounds as its timeout allows and still closes; a session that fails is writ
 `WINDOW` (one Dither window, `dither_fused.ROUNDS`) and per `WINDOW` block (the challenger's release cost grows with the
 round's index), the client's check alone (`live_reason` replayed on every opening), the SHA-512 over the round roots in
 order, and every sample (ns); beside it `percall-wait-ns.txt`, one sample a line, which sbench's dither-1s-percall-rtt
-arm replays.  `check` is the auditor's side, from the session as the gate publishes it (``ssh GATE fetch SESSION``) and
+arm replays, and `percall-coins.json`, the openings the client received (`COINS`, about 1.9 kB a round).  `check` is the
+auditor's side, from the session as the gate publishes it (``ssh GATE fetch SESSION``) and
 the gate's ledger (``ssh GATE ledger``): the record verifies under the challenger's key record (``--key-record``, else
 key.json's own key, said so; no key is pinned in code; `remote.trusted_session`); the published session and its ledger
 entries are the client's session, its open binding its reserve, on its stand-in root (`coins.gate_reasons`), in the
-verifier's period when it names one; and the challenger's log holds this client's commitment, its salt after that
-root and its round roots in order; it adds the challenger's own per-round times from that log (its monotonic clock).
+verifier's period when it names one; the challenger's log holds this client's commitment, its salt after that root and
+its round roots in order; and served_h1's `coins.check` passes on the openings the client received (`coins_check`).  It
+adds the challenger's own per-round times from that log (its monotonic clock).
 
     python3 percall_rtt.py run --challenger 127.0.0.1:PORT --session ID --secret-file F --commitment HEX --rounds 32768 \\
         --max-s 1800 --out out/percall-rtt.json
@@ -49,6 +51,8 @@ EPOCH = 1
 #: one Dither window's rounds (`dither_fused.ROUNDS`)
 WINDOW = 1 << 14
 PROGRESS = 1024
+#: beside OUT: the openings the client received, as served_h1's manifest carries its window's (`coins.check`'s `coins`)
+COINS = "percall-coins.json"
 
 
 def quantiles(ns: list[int]) -> dict:
@@ -65,15 +69,20 @@ def step_root(s: int, prev: bytes) -> bytes:
     return hashlib.sha512(b"percall-rtt/step" + s.to_bytes(8, "big") + prev).digest()
 
 
+def draw_root(chain: list[bytes]) -> bytes:
+    """The root the draw coin opens after: over the round roots in order."""
+    return hashlib.sha512(b"percall-rtt/receipts" + hashlib.sha512(b"".join(chain)).digest()).digest()
+
+
 def run(a: argparse.Namespace) -> int:
     cs = CO.open_coins(a.challenger, EPOCH, a.rounds)
-    root = CO.stand_in_root(a.challenger.id)
+    stand_in = CO.stand_in_root(a.challenger.id)
     ns: list[int] = []
-    roots = hashlib.sha512()
+    chain: list[bytes] = []
     salt = draw = None
     ended, stop = None, (time.monotonic() + a.max_s) if a.max_s else None
     try:
-        salt = cs.salt(root)
+        salt = cs.salt(stand_in)
         prev, pace = salt.coin, a.pace_us / 1e6
         for s in range(a.rounds):
             if stop is not None and time.monotonic() >= stop:
@@ -82,12 +91,12 @@ def run(a: argparse.Namespace) -> int:
             t0 = time.perf_counter_ns()
             prev = cs.rounds.record(root).coin
             ns.append(time.perf_counter_ns() - t0)
-            roots.update(root)
+            chain.append(root)
             if len(ns) % PROGRESS == 0:
                 print(f"percall_rtt: {len(ns)} rounds, the last {PROGRESS}: {quantiles(ns[-PROGRESS:])}", flush=True)
             if pace:
                 time.sleep(pace)
-        draw = cs.draw(hashlib.sha512(b"percall-rtt/receipts" + roots.digest()).digest())
+        draw = cs.draw(draw_root(chain))
         cs.close()
     except CO.Ch.CoinError as e:
         ended = str(e)
@@ -110,16 +119,41 @@ def run(a: argparse.Namespace) -> int:
         "by_window_p50_ms": [b["p50_ms"] for b in blocks], "by_window": blocks,
         "client_check": quantiles(check_ns), "record_reason": cs.rounds.reason() if ns else None,
         "opening_bytes": len(json.dumps(cs.rounds.openings[0].to_json())) if ns else None,
-        "root": root.hex(), "root_is": CO.STAND_IN, "salt_after": salt.after.hex() if salt else None,
-        "draw_after": draw.after.hex() if draw else None, "roots_sha512": roots.hexdigest(), "samples_ns": ns,
+        "root": stand_in.hex(), "root_is": CO.STAND_IN, "salt_after": salt.after.hex() if salt else None,
+        "draw_after": draw.after.hex() if draw else None, "roots_sha512": hashlib.sha512(b"".join(chain)).hexdigest(),
+        "samples_ns": ns,
     }
+    received = {"session": a.challenger.id, "commitment": commitment.to_json(), "window": {"root": stand_in.hex()},
+                "salt_coin": salt.to_json() if salt else None,
+                "rounds": [{"opening": o.to_json()} for o in cs.rounds.openings],
+                "draw_coin": draw.to_json() if draw else None}
     out = Path(a.out)
     out.parent.mkdir(parents=True, exist_ok=True)
     out.write_text(json.dumps(doc) + "\n")
     (out.parent / "percall-wait-ns.txt").write_text("\n".join(map(str, ns)) + "\n")
+    (out.parent / COINS).write_text(json.dumps(received) + "\n")
     print(json.dumps({k: doc[k] for k in ("coins", "rounds", "ended", "round_trip", "first_window", "by_window_p50_ms",
                                           "client_check", "record_reason")}, indent=1), flush=True)
     return 0 if ended is None and doc["record_reason"] is None else 1
+
+
+def coins_check(a: argparse.Namespace, stand_in: bytes) -> dict:
+    """served_h1's `coins.check` of the openings the client received (`COINS` beside ``--client``, or ``--coins``)
+    against the published session and the gate's ledger, on the session's stand-in root: round s's root recomputed from
+    them (`step_root` over the salt's coin, then round s - 1's) and the draw's root over those (`draw_root`)."""
+    path = Path(a.coins) if a.coins else Path(a.client).with_name(COINS)
+    try:
+        received = json.loads(path.read_text())
+        prev = CO.Ch.LiveOpening.from_json(received["salt_coin"]).coin
+        chain = []
+        for s, r in enumerate(received["rounds"]):
+            chain.append(step_root(s, prev))
+            prev = CO.Ch.LiveOpening.from_json(r["opening"]).coin
+    except (OSError, ValueError, KeyError, TypeError, CO.Ch.CoinError) as e:
+        return {"ok": False, "reason": f"the client's openings ({path}) are unreadable: {type(e).__name__}: {e}"}
+    got = CO.check(a.challenger_out, received, a.ledger, chain, None, draw_root(chain) if received.get("draw_coin") else None,
+                   key=CO.key_record(a.key_record) if a.key_record else None, period=a.period, root=stand_in)
+    return {k: got[k] for k in ("ok", "coins", "reason", "reasons", "ledger", "rounds", "draws") if k in got}
 
 
 def check(a: argparse.Namespace) -> int:
@@ -147,6 +181,9 @@ def check(a: argparse.Namespace) -> int:
                        else "the salt coin didn't open after the session's stand-in root, here and at the challenger")
     reasons["draw"] = (None if roots[CO.Wd.DRAW] == ((bytes.fromhex(client["draw_after"]),) if client["draw_after"] else ())
                        else "the draw root differs")
+    coins = coins_check(a, root)
+    reasons["coins"] = None if coins.get("ok") else "coins.check refused the client's openings: " + (
+        coins.get("reason") or ", ".join(k for k, v in (coins.get("reasons") or {}).items() if v))
     events = [json.loads(x) for x in (d / CO.R.RELEASES).read_text().splitlines()[1:]]
     rounds = [(r, e) for r, e in zip(events[::2], events[1::2]) if r["label"] == CO.Wd.ROUND]
     serve_ns = [round((e["released_at"] - r["received_at"]) * 1e9) for r, e in rounds]
@@ -154,7 +191,7 @@ def check(a: argparse.Namespace) -> int:
     doc = {"ok": all(v is None for v in reasons.values()), "host": host, "key_sha512": hashlib.sha512(key.public).hexdigest(),
            "key": "the key record's" if a.key_record else "key.json's own (unanchored)", "session": sid,
            "root": root.hex(), "root_is": CO.STAND_IN, "ledger": ledger, "period_named": a.period,
-           "reasons": reasons, "rounds_logged": len(roots[CO.Wd.ROUND]),
+           "reasons": reasons, "coins_check": coins, "rounds_logged": len(roots[CO.Wd.ROUND]),
            "challenger_open": quantiles(serve_ns), "challenger_period": quantiles(gap_ns),
            "challenger_period_by_window_p50_ms": [quantiles(gap_ns[i:i + WINDOW])["p50_ms"]
                                                   for i in range(0, len(gap_ns), WINDOW)]}
@@ -184,6 +221,7 @@ def main(argv: list[str] | None = None) -> int:
                    help="the session as the gate publishes it (request.json, open.json, out/)")
     c.add_argument("--ledger", required=True, help="the gate's ledger (ssh GATE ledger)")
     c.add_argument("--client", required=True)
+    c.add_argument("--coins", default=None, help=f"the client's received openings (default {COINS} beside --client)")
     c.add_argument("--key-record", default=None, help="the challenger's key record (challenger-key/v1)")
     c.add_argument("--period", default=None, help="the development period the session's reserve is a window of")
     c.add_argument("--out", default=None)
