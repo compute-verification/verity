@@ -1243,6 +1243,14 @@
   "Verity.Declaration.Contains": {
    "owner": "@lean",
    "digest": "2e4651003538493bac63ae90c32a521e95d2e8596bea6b3c85b9cfd150c5647b"
+  },
+  "Pouw.FpG1.Leaves.Fp8": {
+   "owner": "@compute-accounting",
+   "digest": "881fe7602bcca20287b67054e76f3cadff019a7458cfb0b5546052274ad61428"
+  },
+  "Pouw.FpG1.Leaves.W4a8": {
+   "owner": "@compute-accounting",
+   "digest": "7cfd18e0250ce18f4e28679c438c71ac38537b955ef174309651294dde643402"
   }
  },
  "meaning": [
@@ -23669,10 +23677,10 @@
    ]
   },
   "Models.Accounting.Guarantees.FpG1": {
-   "digest": "eab27031365ded57379d48680b001161b3af766032934b303206e0eb3377fb1c",
+   "digest": "4b12fa2cb5745503589255f8263d5adcd1d29519f1a0f24ba23b9ac5e2c0879f",
    "definitions": {
-    "Accounting.Guarantees.FpG1.Sm120FpG1SheetHeadline": "0437f60c92f182c79279bd78e2c4901a40c9d4b371fc7ac3064b370885c169d2",
-    "Accounting.Guarantees.FpG1.Sm120W4a8G1SheetHeadline": "493b458f4ff3ebd9b10eeca6bf59d274559823c2cdcfbe93bb36541c8ce4e677"
+    "Accounting.Guarantees.FpG1.Sm120FpG1SheetHeadline": "ff37fc682c51dd04a4ebe4441e5dd22564895240d9871b6f4997e91a3f840dea",
+    "Accounting.Guarantees.FpG1.Sm120W4a8G1SheetHeadline": "7a9ece2dbd3c9a678087467ab8b8176d93ff8375e7381f6abdf9a471beddac59"
    },
    "guarantees": [
     "Accounting.SecurityProofs.FpG1.Sm120FpG1SheetHeadline",
