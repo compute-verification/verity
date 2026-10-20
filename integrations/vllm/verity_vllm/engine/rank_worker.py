@@ -206,8 +206,11 @@ class TP2CaptureWorkerExtension:
     # ------------------------------------------------------------------ topology
 
     def tp2_probe(self) -> dict[str, Any]:
-        """Per-rank facts: process, device, TP group, communicator choice, model/runner classes, sharded shapes."""
-        out = _tp_facts(self)
+        """Per-rank facts: process, device, TP group, communicator choice, model/runner classes, sharded shapes, and the execution
+        this rank's engine runs, read back from its own `vllm_config` (`effective_execution`)."""
+        from verity_vllm.engine import vllm_adapter as va
+
+        out, model = _tp_facts(self), None
         try:
             model = self.model_runner.get_model()
             shapes = {}
@@ -225,6 +228,7 @@ class TP2CaptureWorkerExtension:
                 out["logits_processor"] = {k: getattr(lp, k, None) for k in ("use_all_gather", "org_vocab_size", "vocab_size")}
         except Exception as e:  # noqa: BLE001
             out["model_error"] = repr(e)
+        out["effective_execution"] = va.effective_execution_doc(_LLMShim(self), model)
         return _jsonable(out)
 
     # ------------------------------------------------------------------ observer
