@@ -723,6 +723,26 @@ def test_a_word_definition_that_differs_from_its_boolean_definition_is_caught():
             assert rec["mismatches"] > 0 and f["name"].startswith(f"correspondence/word-mismatch {name}_v1 [{name}Word_v1]: ")
 
 
+def test_a_boolean_constant_is_checked_on_its_one_instance():
+    """A Boolean constant (`Const<w>[0x..]_v2`, `verity.ml.circuits.ops.boolean.scalar.const_word`) takes no operands: its lowering
+    and its word view each compare its one instance, every bit, so a constant one bit off its word constant is named."""
+    from verity.ml.circuits import boolean as BL
+    from verity.ml.circuits.boolean.forms import const_bits
+    from verity.ml.circuits.boolean.trace import definition
+    from verity.ml.circuits.ops import prims as MP
+    from verity.ml.circuits.ops.boolean import scalar as BS
+    from verity.ml.circuits.types import Array
+
+    e = CK.check_definition(BS.const_word(32, 0x3727C5AC), OPTS, pins=PINS)
+    via = {r["via"]: r for r in e["correspondence"]["realizations"]}
+    assert not e["failures"] and via["c-flock:ir_lower"]["ands"] == 0
+    assert [(r["compared"], r["mismatches"]) for r in via.values()] == [(1, 0), (1, 0)]
+    off = definition("CircuitCheckConst", 2, lambda C: const_bits(0x3727C5AD, 32), (), Array(32, BL.BIT),
+                     word=MP.const(32, 0x3727C5AC), register=False)
+    names = [f["name"] for f in CK.check_definition(off, OPTS, pins=PINS)["failures"]]
+    assert names == ["correspondence/word-mismatch CircuitCheckConst_v2 [Const32[0x3727c5ac]_v1]: 1 of 1 vectors"], names
+
+
 def test_a_lowering_that_differs_from_the_ir_is_caught(monkeypatch):
     from verity_flock import ir_lower as IL
     from verity_vllm.program.registry import prims as P

@@ -4,7 +4,8 @@ then 31 decode steps), each step ending at a sampling event; the census path hel
 the served MACs by precision of those rows and of GLM-5.3's served constructions on their stand-ins
 (`tests.program.test_derive_neutrality`); and the Boolean work (`work`) of a word Program through each Call's Boolean version
 (`boolean_version`), held to its lift's and, on Llama-3.2-1B's GEMMs and GLM-5.3's cuBLAS and FP8 expert GEMMs, to their steps'
-gates.
+gates, and on the constants, residual add, embedding shard and fused all-reduce + RMSNorm GLM-5.3 TP8 Calls as root Calls, to
+their Boolean versions' gates.
 A change to a Definition either Program calls moves the census digests with the Program's: recompute them with `_views`.
 The requirement takes the weights as registered (`Program(fn, registered=("weights",))`), whatever the Build binds them as.
 """
@@ -19,7 +20,7 @@ import pytest
 from tests.predict.test_predict import FIX, TINY, _phi
 from tests.program import test_derive_neutrality as GLM
 from tests.program.test_dsa_derive import served  # noqa: F401  (the DSA stand-in's fixture)
-from verity.ml.circuits.census import PRODUCTS, SILICON, census, family, step_ends
+from verity.ml.circuits.census import PRODUCTS, SILICON, NoBooleanWork, census, family, step_ends
 from verity.ml.circuits.codec import descriptor_id
 from verity.ml.circuits.defs import CompositeDefinition, bind
 from verity.ml.circuits.evaluation import bits as BS
@@ -29,7 +30,7 @@ from verity.ml.circuits.program import Program, is_input
 from verity.ml.circuits.requirement import census_gates, census_schedule, from_census, upper_bound
 from verity_vllm.predict.build import build_program, model_shape
 from verity_vllm.program.boolean import boolean_version, lift
-from verity_vllm.program.registry import cublas_bf16 as CB
+from verity_vllm.program.registry import b1, b1_tp2, cublas_bf16 as CB, tp_allreduce as TA
 from verity_vllm.query.required import SAMPLING_EVENTS
 
 CFG = json.loads((FIX / "llama32-1b.config.json").read_text())
@@ -208,6 +209,30 @@ def test_a_cublas_gemm_counts_its_k16_step_parts_as_tc():
     assert e["work"] == {"tc:bf16": _times(B, member), "cuda:gate": _times(B * N, _gates(BG.F2fpBf16))}
     bits = census(Program(bind(CB.BatchedGemm, B=B, K=K, N=N, DOT=BG.HopperBF16WgmmaDot16)), boolean=True)["totals"]
     assert bits["work"] == e["work"] and bits["served_macs_by_precision"] == {"mac:bf16": B * N * K}
+
+
+#: GLM-5.3 TP8 B1's request's root Calls with no Boolean version of their own: two of its 32-bit constants, the residual add
+#: and the fused all-reduce + RMSNorm at their descriptors there, and the embedding shard over 16 rows (the served 19360 x 6144
+#: table is a 119M-leaf input)
+GLM53_TP8 = [P.const(32, 1), P.const(32, 0x11F), bind(b1.ResidualAdd, N=6144), bind(b1_tp2.EmbeddingShard, VS=16, H=2, START=16),
+             pytest.param(bind(TA.AllReduceRmsNormMnnvl, WORLD=8, N=6144, SHOT=1, CLUSTER=8, EPS=1e-5, FMA=True),
+                          marks=pytest.mark.slow)]
+
+
+@pytest.mark.parametrize("fn", GLM53_TP8, ids=descriptor_id)
+def test_glm53_tp8s_constants_residual_add_embedding_shard_and_fused_norm_count_their_boolean_versions(fn):
+    """A root Call of each is refused on words (it reaches no Boolean gate) and, through its Boolean version (a constant's made
+    on demand, the rest σ Definitions), counts that version's compiled gates, all `cuda:gate` (the fused norm's 236M, about
+    5 s)."""
+    cid = descriptor_id(fn)
+    with pytest.raises(NoBooleanWork) as refused:
+        census(Program(_one(fn)), boolean=True)
+    assert list(refused.value.missing) == [cid]
+    e = census(Program(_one(fn)), boolean=boolean_version)["classes"][cid]
+    v = boolean_version(fn)
+    v = bind(v) if isinstance(v, CompositeDefinition) else v
+    g = _gates(v)
+    assert e["boolean_version"] == descriptor_id(v) and e["work"] == ({"cuda:gate": g} if g["gates"] else {})
 
 
 @pytest.mark.slow
