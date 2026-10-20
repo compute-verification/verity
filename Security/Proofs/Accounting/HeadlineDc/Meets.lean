@@ -441,7 +441,7 @@ theorem counts_nonneg {n : ℕ} (v : Sparse) (k : Fin n) : 0 ≤ Sparse.counts v
 /-- **`Sm90SheetHeadline`'s hypotheses hold together at an honest play** on one-bit coins: honest's IGMMA s8
 m64n256k32 (writer kind 12) heads every word and the design's li (route 0) folds every one. -/
 theorem sm90Sheet_meets :
-    ∃ (Pl : Play Bool Sm90.checks (Fin 37) (Fin 24) Unit Empty) (G : ReceiptGame Bool Sm90.checks)
+    ∃ (Pl : Play Bool Sm90.checks (Fin 39) (Fin 24) Unit Empty) (G : ReceiptGame Bool Sm90.checks)
       (Uf : Unfolded Bool Sm90.checks) (pf : ProofLayer Bool Sm90.checks 1 Unit) (δfork δzk : ℝ),
       (Sm90.checks : ℝ) * (Real.sqrt δfork + ((1 : ℕ) : ℝ) * δzk) ≤ (1 / 2) ^ 41 ∧ (∀ x, (Pl.run x).Split) ∧
       (∀ x, SheetClock Sm90.sheet (Pl.run x).run) ∧ (∀ x, SheetDispatch (Pl.run x).run) ∧
@@ -452,14 +452,14 @@ theorem sm90Sheet_meets :
       Pl.game = G.game ∧ G.Pinned ∧ OperandHMu (3 / 4) G ∧ ReceiptLuckAt (1 / 2) G ∧ WholeLuckAt (1 / 2) G Uf ∧
       pf.Of Pl ∧ BindingForkAt pf δfork ∧ ProofSoundAt pf δzk ∧ ProofsPin pf ∧ RightFixed Pl pf Sm90.model.Nw ∧
       ∀ x, Pl.accepts x :=
-  sheet_meets Sm90.sheet Sm90.model Sm90.checks 12 0 (Sparse.counts (Sm90.d2s.folds.getD (0 : Fin 11).val []))
+  sheet_meets Sm90.sheet Sm90.model Sm90.checks 12 0 (Sparse.counts (Sm90.d2s.folds.getD (0 : Fin 14).val []))
     Sm90.lamStar (Nat.cast_pos.mpr (by decide)) (fun p => Nat.cast_pos.mpr (by cases p <;> decide))
     (Nat.cast_nonneg _) (Nat.cast_pos.mpr (by decide)) (counts_nonneg _) rfl rfl
 
 /-- **`Sm90MeasuredHeadline`'s hypotheses hold together at an honest play** on one-bit coins: honest's IGMMA s8
 m64n256k32 (writer kind 0) heads every word and the design's li (route 0) folds every one, within DC-90-ri's rows. -/
 theorem sm90Measured_meets :
-    ∃ (Pl : Play Bool Sm90.checks (Fin 37) (Fin 2) Unit Empty) (G : ReceiptGame Bool Sm90.checks)
+    ∃ (Pl : Play Bool Sm90.checks (Fin 39) (Fin 2) Unit Empty) (G : ReceiptGame Bool Sm90.checks)
       (Uf : Unfolded Bool Sm90.checks) (pf : ProofLayer Bool Sm90.checks 1 Unit) (δfork δzk : ℝ),
       (Sm90.checks : ℝ) * (Real.sqrt δfork + ((1 : ℕ) : ℝ) * δzk) ≤ (1 / 2) ^ 41 ∧ (∀ x, (Pl.run x).Split) ∧
       (∀ x, FacetCeilings Sm90Measured.machine (Pl.run x).run) ∧
@@ -470,13 +470,13 @@ theorem sm90Measured_meets :
       pf.Of Pl ∧ BindingForkAt pf δfork ∧ ProofSoundAt pf δzk ∧ ProofsPin pf ∧
       RightFixed Pl pf Sm90Measured.model.Nw ∧ ∀ x, Pl.accepts x :=
   measured_meets Sm90Measured.machine Sm90Measured.model Sm90.checks 0 0
-    (Sparse.counts (Sm90Measured.d2s.folds.getD (0 : Fin 11).val [])) Sm90Measured.lamStar
+    (Sparse.counts (Sm90Measured.d2s.folds.getD (0 : Fin 14).val [])) Sm90Measured.lamStar
     (Nat.cast_pos.mpr (by decide)) (Nat.cast_nonneg _) (Nat.cast_pos.mpr (by decide)) (counts_nonneg _) rfl rfl
 
 /-- **`Sm100SheetHeadline`'s hypotheses hold together at an honest play** on one-bit coins: honest's UTCIMMA
 m128n256 (writer kind 4) heads every word and the design's li (route 0) folds every one. -/
 theorem sm100Sheet_meets :
-    ∃ (Pl : Play Bool Sm100.checks (Fin 36) (Fin 13) Unit Empty) (G : ReceiptGame Bool Sm100.checks)
+    ∃ (Pl : Play Bool Sm100.checks (Fin 37) (Fin 13) Unit Empty) (G : ReceiptGame Bool Sm100.checks)
       (Uf : Unfolded Bool Sm100.checks) (pf : ProofLayer Bool Sm100.checks 1 Unit) (δfork δzk : ℝ),
       (Sm100.checks : ℝ) * (Real.sqrt δfork + ((1 : ℕ) : ℝ) * δzk) ≤ (1 / 2) ^ 41 ∧ (∀ x, (Pl.run x).Split) ∧
       (∀ x, SheetClock Sm100.sheet (Pl.run x).run) ∧ (∀ x, SheetDispatch (Pl.run x).run) ∧
@@ -488,14 +488,14 @@ theorem sm100Sheet_meets :
       Pl.game = G.game ∧ G.Pinned ∧ OperandHMu (3 / 4) G ∧ ReceiptLuckAt (1 / 2) G ∧ WholeLuckAt (1 / 2) G Uf ∧
       pf.Of Pl ∧ BindingForkAt pf δfork ∧ ProofSoundAt pf δzk ∧ ProofsPin pf ∧ RightFixed Pl pf Sm100.model.Nw ∧
       ∀ x, Pl.accepts x :=
-  sheet_meets Sm100.sheet Sm100.model Sm100.checks 4 0 (Sparse.counts (Sm100.d2s.folds.getD (0 : Fin 11).val []))
+  sheet_meets Sm100.sheet Sm100.model Sm100.checks 4 0 (Sparse.counts (Sm100.d2s.folds.getD (0 : Fin 14).val []))
     Sm100.lamStar (Nat.cast_pos.mpr (by decide)) (fun p => Nat.cast_pos.mpr (by cases p <;> decide))
     (Nat.cast_nonneg _) (Nat.cast_pos.mpr (by decide)) (counts_nonneg _) rfl rfl
 
 /-- **`Sm100MeasuredHeadline`'s hypotheses hold together at an honest play** on one-bit coins: honest's UTCIMMA
 m128n256 (writer kind 4) heads every word and the design's li (route 0) folds every one, within DC-100-ri's rows. -/
 theorem sm100Measured_meets :
-    ∃ (Pl : Play Bool Sm100.checks (Fin 36) (Fin 13) Unit Empty) (G : ReceiptGame Bool Sm100.checks)
+    ∃ (Pl : Play Bool Sm100.checks (Fin 37) (Fin 13) Unit Empty) (G : ReceiptGame Bool Sm100.checks)
       (Uf : Unfolded Bool Sm100.checks) (pf : ProofLayer Bool Sm100.checks 1 Unit) (δfork δzk : ℝ),
       (Sm100.checks : ℝ) * (Real.sqrt δfork + ((1 : ℕ) : ℝ) * δzk) ≤ (1 / 2) ^ 41 ∧ (∀ x, (Pl.run x).Split) ∧
       (∀ x, FacetCeilings Sm100Measured.machine (Pl.run x).run) ∧
@@ -506,7 +506,7 @@ theorem sm100Measured_meets :
       pf.Of Pl ∧ BindingForkAt pf δfork ∧ ProofSoundAt pf δzk ∧ ProofsPin pf ∧
       RightFixed Pl pf Sm100Measured.model.Nw ∧ ∀ x, Pl.accepts x :=
   measured_meets Sm100Measured.machine Sm100Measured.model Sm100.checks 4 0
-    (Sparse.counts (Sm100Measured.d2s.folds.getD (0 : Fin 11).val [])) Sm100Measured.lamStar
+    (Sparse.counts (Sm100Measured.d2s.folds.getD (0 : Fin 14).val [])) Sm100Measured.lamStar
     (Nat.cast_pos.mpr (by decide)) (Nat.cast_nonneg _) (Nat.cast_pos.mpr (by decide)) (counts_nonneg _) rfl rfl
 
 end Accounting.SecurityProofs.TS.HeadlineDcMeets

@@ -65,26 +65,31 @@ def test_folds_meet_fold_opt_at_pi_star():
             assert _price(x, rt3, alu) < nphi["rt3"], fam.ns
 
 
-ROUTES = ["cp-seg4", "cp-seg4u", "cp-ats", "cp-ats2", "cp-ats8", "cp-red", "cp-red2", "cp-red8", "cp-xt"]
+ROUTES = ["cp-seg4", "cp-seg4u", "cp-ats", "cp-ats2", "cp-ats8", "cp-red", "cp-red2", "cp-red8", "cp-red-generic",
+          "cp-red2-generic", "cp-red8-generic", "cp-xt"]
 
 
 def test_the_fold_menu_is_every_bit_exact_checkpoint_loop():
     """RT3-DC-1, -4: on both devices the fold menu is the design's fold and every bit-exact checkpoint loop rt3_dc times
-    (r20261019-183610-89bd on the H200, r20261019-192247-8771 on the B200), and π* prices each class each of them
-    issues above 0, so no route folds for free at the certificate FOLD-OPT is asked at."""
+    (r20261019-183610-89bd on the H200, r20261019-192247-8771 on the B200), with RT4-SHEET-7's L2 XORs through a generic
+    address (ATOM.E, bit-exact on the RTX PRO 6000, r20261020-001850-def6), and π* prices each class each of them issues
+    above 0, so no route folds for free at the certificate FOLD-OPT is asked at. Each sheet's catch-all is priced at its
+    issue slot alone."""
     for fam in H.FAMILIES:
         for v in (fam.sheet, fam.measured):
             x = H.reading(fam, v).data
             assert x.fold_names == ROUTES, (fam.ns, v)
             free = {k for f in x.folds for k, n in f.items() if n and _price(x, x.lam, {k: Fraction(1)}) <= 0}
             assert not free, (fam.ns, v, free)
+        k = H.CATCH_ALL[fam.key]
+        assert H.reading(fam, fam.sheet).data.c[k] == {"DS_issue": 1}, (fam.ns, k)
 
 
 def test_the_h200_measured_menu_is_honests_form():
     """On DC-90-ri the writer kinds are honest's IGMMA_S8_N256 and UNI: every other tensor form carries the scalar
-    coefficient there, which leaves the full menu's bound far above 1%. Its ♭ is `setup`'s floor, which folds on the
-    MIO routes beside CP_SEG4U and so writes every word on the IGMMA, as on DS-90 (the measured file states no word
-    production of its own); the reading is over 1% (RT-HB-HEAD-1)."""
+    coefficient there, which leaves the full menu's bound far above 1%. Its ♭ is `setup`'s floor, which folds by the
+    generic-address L2 XORs (no AT90 line) and so writes every word on the IGMMA, as on DS-90 (the measured file states
+    no word production of its own); the reading is over 1% (RT-HB-HEAD-1)."""
     r, s = H.reading(H.SM90, "DC-90-ri"), H.reading(H.SM90, "DS-90")
     assert [k for k, _ in r.data.writers] == ["IGMMA_S8_N256", "UNI"] and r.menu == "honest"
     assert 0.01 < r.machine_core <= r.bound
