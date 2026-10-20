@@ -73,8 +73,13 @@ worktree at a commit the guard accepts (`git worktree add /tmp/glm-v2-SHA SHA`).
    predict emit refused unless equal to the row's `aot.trace` Build, with its manifest). A row this tree moves is re-pinned
    first, since its AOT Build reads its trace and comparison from `records.json`: `trace_compare.sh` (`SKIP_AOT1=1` once the row
    is known to move) traces it, preserves the trace (`trace_art.sh`), and compares this tree's predictor with it beside an AOT
-   Build against it; `repin.sh ROW RUN` then re-pins the row to the trace and switches it to that comparison, committed as
-   "re-pin ROW", and `build_record.sh` runs at that commit (`AOT_TRACE=<the rehearsal's row dir>` on cpu-2 saves the fetch).
+   Build against it (`SKIP_AOT2=1` leaves that out: the Build of record refuses the same mismatch); `repin.sh ROW RUN` then
+   re-pins the row to the trace and switches it to that comparison as soon as the comparison is equal (a run still in its AOT
+   Build is read over ssh), committed as "re-pin ROW", and `build_record.sh` runs at that commit (`AOT_TRACE=<the rehearsal's
+   row dir>` on cpu-2 saves the fetch). A long trace splits in two runs: `TRACE_ONLY=1` ends after the trace, and
+   `TRACE_RUN=<that run>` compares it; a trace restarted wider (`BUILD_JOBS=N`) takes `SEED_FROM=<the earlier row dir>`, whose
+   finished derives are hard-linked in after `seed_trace.py` checks each (its `.rc`, result.json, whole files, descriptor
+   digests).
 2. Window A, eu or h8 (`gpu_batch.sh a [NODE] [ROW]`, NODE vy-glm53-eu by default or vy-glm53-h8): the four rows' Match GPU legs
    (`match_gpu.sh`). h8 is preemptible, so it takes window A only, never a Commit; an evicted leg reruns with
    `gpu_batch.sh a vy-glm53-h8 ROW`, which moves the evicted `match/` aside (a `match/` whose legs ended is refused). Each leg's

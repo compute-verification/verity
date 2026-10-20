@@ -24,7 +24,7 @@
 # [TRACE_ONLY=1], [TRACE_RUN], [SKIP_AOT2=1].  cwd: the source root.
 # outputs: aot_chain.out, aot_build_summary.json, aot_row.json, aot_neutrality.out; [seed.json, seed_tree.txt], neutrality.out, neutrality.json,
 # build_summary.json, trace.tgz (build_summary.json and every build/rank*/build_*/result.json), rowdir.txt; when moved:
-# trace_art.txt, comparison.json, compare.err, aot2_chain.out, aot2_build_summary.json, aot2_vs_trace.json; [trace_tree.txt].
+# trace_art.txt, comparison.json, compare.err, aot2_chain.out, aot2_build_summary.json, aot2_vs_trace.json; [trace_tree.txt, trace_run.txt].
 set -uo pipefail
 : "${ROW:?ROW}"
 REV=aca966e4e02791568aa6a4ced368624b3d897f42
@@ -86,6 +86,7 @@ if [ -n "${TRACE_RUN:-}" ]; then
   grep -q '^build PASS' "$D/stages.txt" 2>/dev/null || { echo "$D: no passing traced Build"; exit 7; }
   for f in neutrality.json build_summary.json trace_art.txt; do cp "$TO/$f" "$OUT/" || { echo "$TRACE_RUN has no out/$f"; exit 3; }; done
   cp "$TO/tree.txt" "$OUT/trace_tree.txt" || exit 3
+  echo "$TRACE_RUN" >"$OUT/trace_run.txt"
   echo "$D" >"$OUT/rowdir.txt"
   arc=skipped anrc=skipped
   nrc=$("$PY" -c 'import json,sys; r=json.load(open(sys.argv[1]))["rows"][sys.argv[2]]; print(0 if r["build_rc"] == 0 and r["neutral"] else 1)' \
