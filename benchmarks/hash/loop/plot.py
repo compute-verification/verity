@@ -1,11 +1,15 @@
 """The hash loop's plot: iteration (x) against each measure (y), one row of panels per workload (qwen3-8b first, then e.g. glm-5.3
-or a PoUW workload), one line per (GPU, workload:arm), read from the evidence store
+or a PoUW workload), one line per (GPU, workload:arm, served-pin state), pinned lines with filled markers and unpinned hollow,
+read from the evidence store
 (`research data select --label campaign=hash-loop --kind bench-result/v1`: each run's result, its measures per arm in its
 measurements, its iteration (`row`), GPU (`hardware`) and workload (`arm`, e.g. qwen3-8b, or llama8b-int8:commit+mem for a result
 that is one arm) in its labels; a result with no `arm` label is qwen3-8b's; a PoUW result, `arm` pearl-c-*, is drawn as workload
-pouw, its decode step with the hashing against without, `pouw_headline`). Results whose gates passed and that are not labeled
-kernel_outcome=voided are plotted (a failed or voided run stays in the JSON); several at one (iteration, GPU) are averaged, each also drawn as a dot. A what-if row (not an integer, e.g.
-what-if-a) is in the table only. The table marks each row pinned or unpinned (the result's served-pin state).
+pouw, its decode step with the hashing against without, `pouw_headline`). A maxtput row's throughput panel plots its loss
+against its card's native reference run (`native_loss_pct`, `panel_measure`); the table keeps the same-cycle overhead beside it.
+Results whose gates passed and that are labeled neither kernel_outcome=voided nor superseded_by are plotted (the rest stay in
+the JSON); several at one (iteration, GPU, pin state) are averaged, each also drawn as a dot. A what-if row (not an integer,
+e.g. what-if-a) is in the table only. Each table line names the served-pin states of the results it reads (pinned, unpinned,
+or both as pinned/unpinned).
 
     python3 benchmarks/hash/loop/plot.py [--out DIR] [--measures a,b,...] [--table] [--no-refresh]   # measures: TPOT, throughput
 
@@ -30,6 +34,7 @@ MEASURES = ("tpot_overhead_pct", "throughput_overhead_pct", "prefill_step_ms", "
 WORKLOAD = "qwen3-8b"
 ARMS = ("stock", "sha512", "blake3", "sha512-layer")   # their order in the table; plot.py draws every arm it finds
 HEADLINE = ("tpot_overhead_pct", "throughput_overhead_pct")
+NATIVE = {"throughput_overhead_pct": "native_loss_pct"}   # what a maxtput row's panel plots instead (panel_measure)
 
 
 def research(*args: str) -> str:
@@ -84,45 +89,58 @@ def load(refresh: bool = True) -> list[dict]:
         pin = ((meta.get("workload_fingerprint") or {}).get("pin") or {}).get("state", "unpinned")
         out.append({"id": art, "row": row, "pin": pin, "hardware": labels.get("hardware", "?"), "label": labels.get("label", ""),
                     "outcome": labels.get("kernel_outcome", ""), "source": labels.get("source", ""), "run": meta.get("run_id"),
+                    "superseded_by": labels.get("superseded_by", ""),
                     "valid": (meta.get("validation") or {}).get("status") == "passed"
-                    and labels.get("kernel_outcome") != "voided", "measures": meas})
+                    and labels.get("kernel_outcome") != "voided" and not labels.get("superseded_by"), "measures": meas})
     return out
 
 
-def series(results: list[dict], measure: str) -> dict[tuple[str, str], list[tuple[int, float, list[float]]]]:
-    acc: dict[tuple[str, str, int], list[float]] = defaultdict(list)
+def panel_measure(workload: str, measure: str) -> str:
+    """The measure a workload's panel plots for ``measure``: a maxtput row's throughput is its loss against its card's native
+    reference run (row.py's native_loss_pct), not against the same cycle's stock, which can run off native (a smaller KV pool,
+    another attention backend)."""
+    return NATIVE.get(measure, measure) if workload.startswith("maxtput") else measure
+
+
+def series(results: list[dict], measure: str) -> dict[tuple[str, str, str], list[tuple[int, float, list[float]]]]:
+    """(GPU, workload:arm, pin state) -> its points: pinned and unpinned results are separate lines, never averaged."""
+    acc: dict[tuple[str, str, str, int], list[float]] = defaultdict(list)
     for r in results:
         if not r["valid"] or not isinstance(r["row"], int):
             continue
         for (arm, name), v in r["measures"].items():
-            if name == measure:
-                acc[(r["hardware"], arm, r["row"])].append(float(v))
-    out: dict[tuple[str, str], list[tuple[int, float, list[float]]]] = defaultdict(list)
-    for (hw, arm, row), vs in sorted(acc.items()):
-        out[(hw, arm)].append((row, statistics.fmean(vs), vs))
+            if name == panel_measure(arm.split(":")[0], measure):
+                acc[(r["hardware"], arm, r["pin"], r["row"])].append(float(v))
+    out: dict[tuple[str, str, str], list[tuple[int, float, list[float]]]] = defaultdict(list)
+    for (hw, arm, pin, row), vs in sorted(acc.items()):
+        out[(hw, arm, pin)].append((row, statistics.fmean(vs), vs))
     return out
 
 
+def pins(results: list[dict]) -> str:
+    return "/".join(sorted({r["pin"] for r in results}))
+
+
 def table(results: list[dict]) -> str:
-    lines = [("| N | hypothesis | GPU | arm | TPOT ovh % | tput ovh % | prefill hash ms | decode hash ms | serve lost / co-run ms | "
-              "runs | outcome |"), "|---|---|---|---|---:|---:|---:|---:|---:|---|---|"]
+    lines = [("| N | hypothesis | GPU | arm | TPOT ovh % | tput ovh % | lost vs native % | prefill hash ms | decode hash ms | "
+              "serve lost / co-run ms | runs | outcome |"), "|---|---|---|---|---:|---:|---:|---:|---:|---:|---|---|"]
     by: dict[tuple[int | str, str], list[dict]] = defaultdict(list)
     for r in results:
         if r["valid"]:
             by[(r["row"], r["hardware"])].append(r)
-    cols = (*HEADLINE, "prefill_hash_gpu_ms", "decode_hash_gpu_ms", "serve_lost_per_corun_ms")
+    cols = (*HEADLINE, "native_loss_pct", "prefill_hash_gpu_ms", "decode_hash_gpu_ms", "serve_lost_per_corun_ms")
     for (row, hw), rs in sorted(by.items(), key=lambda kv: (isinstance(kv[0][0], str), str(kv[0][0]).zfill(4), kv[0][1])):
         first = [f"{WORKLOAD}:{a}" for a in ARMS[1:]]
         rest = {a for x in rs for a, _ in x["measures"]} - set(first)
         for arm in [*first, *sorted(a for a in rest if not a.endswith(":stock") and a != WORKLOAD)]:
-            vals = [[x["measures"].get((arm, k)) for x in rs] for k in cols]
+            xs = [x for x in rs if any(a == arm for a, _ in x["measures"])]
+            vals = [[x["measures"].get((arm, k)) for x in xs] for k in cols]
             if not any(v is not None for v in vals[0]):
                 continue
             cell = lambda vs: " / ".join(f"{v:.2f}" if abs(v) < 10 else f"{v:.1f}" for v in vs if v is not None)  # noqa: E731
-            pins = "/".join(sorted({x["pin"] for x in rs}))
-            lines.append(f"| {row} | {rs[0]['label'][:60]} | {hw} ({pins}) | {arm} | "
+            lines.append(f"| {row} | {xs[0]['label'][:60]} | {hw} ({pins(xs)}) | {arm} | "
                          + " | ".join(cell(v) for v in vals)
-                         + f" | {', '.join(str(x['run']) for x in rs)} | {rs[0]['outcome']} |")
+                         + f" | {', '.join(str(x['run']) for x in xs)} | {xs[0]['outcome']} |")
     return "\n".join(lines)
 
 
@@ -145,7 +163,7 @@ def main() -> int:
     import matplotlib.pyplot as plt
 
     sers = {m: series(results, m) for m in measures}
-    workloads = sorted({arm.split(":")[0] for s in sers.values() for _, arm in s}, key=lambda w: (w != WORKLOAD, w))
+    workloads = sorted({arm.split(":")[0] for s in sers.values() for _, arm, _ in s}, key=lambda w: (w != WORKLOAD, w))
     cols, rows = len(measures), max(len(workloads), 1)
     fig, axes = plt.subplots(rows, cols, figsize=(7 * cols, 3.8 * rows), squeeze=False)
     colors = {"H200": "tab:blue", "B200": "tab:red", "RTX PRO 6000": "tab:green", "8x H200": "tab:purple"}
@@ -156,19 +174,21 @@ def main() -> int:
     for wi, workload in enumerate(workloads):
         for mi, measure in enumerate(measures):
             ax, ser = axes[wi][mi], sers[measure]
-            dump.setdefault(measure, {}).update({f"{hw}/{arm}": [(row, mean) for row, mean, _ in pts]
-                                                 for (hw, arm), pts in ser.items() if arm.split(":")[0] == workload})
-            for (hw, arm), pts in sorted(ser.items()):
+            shown = panel_measure(workload, measure)
+            dump.setdefault(shown, {}).update({f"{hw}/{arm}/{pin}": [(row, mean) for row, mean, _ in pts]
+                                               for (hw, arm, pin), pts in ser.items() if arm.split(":")[0] == workload})
+            for (hw, arm, pin), pts in sorted(ser.items()):
                 if arm.split(":")[0] != workload:
                     continue
                 xs, ys = [p[0] for p in pts], [p[1] for p in pts]
                 kind = arm.split(":", 1)[1] if ":" in arm else arm
                 style = styles.get(kind, "--" if "blake3" in kind else "-.")
-                ax.plot(xs, ys, style, marker=markers.get(kind, "D"), color=colors.get(hw), label=f"{hw} {arm}")
+                ax.plot(xs, ys, style, marker=markers.get(kind, "D"), color=colors.get(hw), label=f"{hw} {arm} ({pin})",
+                        **({} if pin == "pinned" else {"markerfacecolor": "none"}))
                 for row, _, vs in pts:
                     if len(vs) > 1:
                         ax.scatter([row] * len(vs), vs, s=8, color=colors.get(hw), alpha=0.4)
-            ax.set_title(f"{workload}: {measure}")
+            ax.set_title(f"{workload}: {shown}")
             ax.set_xlabel("iteration")
             ax.grid(alpha=0.3)
             ax.set_xticks(range(top + 1))
@@ -179,10 +199,15 @@ def main() -> int:
             seen.setdefault(lab, h)
     labels = sorted(seen)
     handles = [seen[lab] for lab in labels]
-    hyps = sorted({(r["row"], r["label"]) for r in results if isinstance(r["row"], int)})
-    fig.legend(handles, labels, loc="upper center", ncol=6, fontsize=8)
+    hyps = sorted({(r["row"], r["label"]) for r in results if isinstance(r["row"], int) and r["valid"]})
+    ncol = 3
+    width, panels = fig.get_size_inches()
+    legend_in, text_in = 0.17 * -(-len(labels) // ncol) + 0.2, 0.12 * len(hyps) + 0.2   # 8 pt legend rows, 7 pt text lines
+    height = panels + legend_in + text_in
+    fig.set_size_inches(width, height)
+    fig.legend(handles, labels, loc="upper center", ncol=ncol, fontsize=8)
     fig.text(0.01, 0.005, "\n".join(f"{row}: {h}" for row, h in hyps), fontsize=7, va="bottom")
-    fig.tight_layout(rect=(0, 0.02 + 0.015 * len(hyps), 1, 0.95))
+    fig.tight_layout(rect=(0, text_in / height, 1, 1 - legend_in / height))
     png = a.out / "hash-loop.png"
     fig.savefig(png, dpi=110)
     (a.out / "hash-loop.json").write_text(json.dumps({"results": [{k: v for k, v in r.items() if k != "measures"} for r in results],
