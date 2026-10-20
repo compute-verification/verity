@@ -311,8 +311,11 @@ def cmd_prepare(a) -> int:
         plan["checks"] = [c for c in plan["checks"] if c["tag"] in keep]
         used = keep | {c["statement"] for c in plan["checks"]}
         plan["statements"] = [s for s in plan["statements"] if s["tag"] in used]
+    # the window's A and B rows and the z and receipt rows it served; the public row is the verifier's own
+    served = [p[0] for p in head["meta"]["ports"] if p[0] != "pub"]
     for c in plan["checks"]:
-        c["registered"] = SR.plan(head["meta"], SR.header(Path(c["pub"])), out=vp / f"{c['tag']}.registered.json")
+        c["registered"] = SR.plan(head["meta"], SR.header(Path(c["pub"])), served=served,
+                                  out=vp / f"{c['tag']}.registered.json")
     (work / "plan.json").write_text(json.dumps(plan, indent=1))
     (work / "record.json").write_text(json.dumps(record, indent=1))
     with open(work / "plan.tsv", "w") as f:

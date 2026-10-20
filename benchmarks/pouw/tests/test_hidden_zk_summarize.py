@@ -90,3 +90,27 @@ def test_a_hiding_tile_is_covered_and_drawn_so_its_honest_checks_accept(tmp_path
     for why in (NO_DRAW, TILE_FORM):
         _proved(d, {"honest-own": why})
         assert _summary(tmp_path, "hidden-k64")["lean"]["honest-own"]["pass"] is False
+
+
+def test_an_accepted_check_cites_session_sound_at_only_under_its_registered_plan(tmp_path):
+    """A hiding tile's accepted plain ``--zk`` check passes, and cites no SessionSoundAt: its stager's plan
+    (`served_registered.plan`) says why its served trees are not registered, or it states none. Under a clear plan the
+    check's own verdict, units derived and registered reads the plan's roots, cites it."""
+    d = _staged(tmp_path, "hidden")
+    _proved(d, {"honest-own": True})
+    s = _summary(tmp_path, "hidden-k64")
+    assert s["lean"]["honest-own"]["pass"] is True and s["session_sound_at"] == {
+        "claim": "Accounting.Guarantees.TS.SessionSoundAt", "cited": False,
+        "why": "the path states no registration plan for its served trees"}
+    st = json.loads((d / "stage.json").read_text())
+    blocked = {"claim": "Accounting.Guarantees.TS.SessionSoundAt", "served": ["a0", "b0"], "registered": None, "roots": {},
+               "blockers": ["the statement's rows are hm96-sha512/row-seg/v1, hm96-sha512/row/v2: ..."]}
+    (d / "stage.json").write_text(json.dumps(st | {"registered": blocked}))
+    s = _summary(tmp_path, "hidden-k64")
+    assert s["session_sound_at"]["cited"] is False and "row-seg/v1, hm96-sha512/row/v2" in s["session_sound_at"]["why"]
+    roots = {"a0": {"value": "served.a0", "root": "01" * 64}, "b0": {"value": "served.b0", "root": "02" * 64}}
+    (d / "stage.json").write_text(json.dumps(st | {"registered": blocked | {"blockers": [], "registered": "r.json",
+                                                                             "roots": roots}}))
+    (d / "lean-honest-own.out").write_text("VERDICT " + json.dumps({"accepted": True, "why": "", "registered": roots,
+                                                                      "partition": {"units": "derived"}}))
+    assert _summary(tmp_path, "hidden-k64")["session_sound_at"]["cited"] is True

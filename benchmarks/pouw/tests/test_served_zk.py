@@ -957,6 +957,9 @@ def test_the_cli_runs_the_window_through_the_service(served, tmp_path, monkeypat
     assert not (tmp_path / "draw2.json").exists() and not (tmp_path / "outcome2").exists()
     o = json.loads((tmp_path / "outcome" / "outcome.json").read_text())
     assert o["accepted"] and set(o["public"]) == {x[0] for x in Wd.PUBLIC} and o["public"]["drawn"] == drawn
+    # an accepted plain --zk window whose units' stages state no registration plan cites no SessionSoundAt
+    assert o["session_sound_at"] == {"claim": "Accounting.Guarantees.TS.SessionSoundAt", "cited": False,
+                                     "why": "the path states no registration plan for its served trees"}
     assert o["coins"] == {"commitment": coins.commitment.to_json(), "pass": "coin", "draw": draw}
     assert Fraction(o["public"]["sampling"]["delta"]) == Fraction(1, 10)
     audit = json.loads((tmp_path / "outcome" / "audit.json").read_text())

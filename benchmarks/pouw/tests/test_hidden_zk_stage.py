@@ -34,3 +34,7 @@ def test_fast_staging_writes_the_library_bytes(tmp_path):
     fs, ls = (json.loads((d / "stage.json").read_text()) for d in (fast, lib))
     assert (fs["staging"], ls["staging"]) == ("fast", "library")
     assert {k: v for k, v in fs.items() if k not in OWN} == {k: v for k, v in ls.items() if k not in OWN}
+    # its served rows are per-port rows, which no registered port holds: the plan writes no --registered file and says why
+    plan = fs["registered"]
+    assert plan["served"] == ["a0", "b0"] and plan["registered"] is None and "registered.json" not in files
+    assert "a registered port's rows are hm96-sha512/row/v1 rows" in plan["blockers"][0]
