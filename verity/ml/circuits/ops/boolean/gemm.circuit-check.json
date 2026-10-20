@@ -83,6 +83,9 @@
   },
   "ScaledMmS8Coordinate_v2{K=64,DOT=BlackwellS8ImmaDot32_v2}": {
    "and": 13556
+  },
+  "ScaledMmS8_v2{K=64,N=3,DOT=BlackwellS8ImmaDot32_v2}": {
+   "and": 40668
   }
  }
 }

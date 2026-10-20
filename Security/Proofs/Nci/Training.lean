@@ -154,16 +154,16 @@ theorem trainingIncompressible_of_support {θv : c.D.Transcript} (hw : 0 ≤ b_w
 end Training
 
 theorem IncompressibleThreadedThrottled : Guarantees.IncompressibleThreadedThrottled := by
-  intro Γ α b_w b_a c d ch T dd e hα hbw hba hdd hC hP hT h
-  exact ThreadedThrottled Γ α b_w b_a c d T dd e hα hbw hba hdd hC hP hT (weightsIncompressible_of_training h)
+  intro Γ α b_w b_a c d ch T dd e M hα hbw hba hdd hP hB hT h
+  exact ThreadedThrottled Γ α b_w b_a c d T dd e M hα hbw hba hdd hP hB hT (weightsIncompressible_of_training h)
 
 theorem IncompressibleThreadedThrottledOn : Guarantees.IncompressibleThreadedThrottledOn := by
-  intro Γ α b_w b_a c d ch T dd e M hα hbw hba hdd hP hT h
-  exact ThreadedThrottledOn Γ α b_w b_a c d T dd e M hα hbw hba hdd hP hT (weightsIncompressible_of_training h)
+  intro Γ α b_w b_a c d ch T dd e M hα hbw hba hdd hP hB hT h
+  exact ThreadedThrottledOn Γ α b_w b_a c d T dd e M hα hbw hba hdd hP hB hT (weightsIncompressible_of_training h)
 
 theorem IncompressibleContainedTraining : Guarantees.IncompressibleContainedTraining := by
-  intro Γ α b_w b_a κ c d ch T dd hα hbw hba hd hC hP h hκ
-  have hF := containedMatMul_of_reads Γ α b_w b_a c d ch dd hα hbw hba hd hC hP
+  intro Γ α b_w b_a κ c d ch T dd M hα hbw hba hd hP hB h hκ
+  have hF := containedMatMul_of_reads Γ α b_w b_a c d ch dd M hα hbw hba hd hP hB
     (activationsIncompressible_of_training hba.le h) (partialSumsIncompressible_of_training hba.le h)
   have hF0 : 0 ≤ F α (α * Γ) b_w b_a dd := F_nonneg hα.le (by positivity) hbw.le hba.le (by positivity)
   calc κ * F α (α * Γ) b_w b_a dd * c.D.size c.D.computed
@@ -175,14 +175,14 @@ open Classical in
 /-- **The partial-sum law with dark gates, in reads**: each dark gate is a small IU of its own, whose partial sums are
 within its reads. -/
 theorem IncompressibleContainedMatMulOn : Guarantees.IncompressibleContainedMatMulOn := by
-  intro Γ α K b_w b_a μ c d ch T dd emax M hα hK hw ha hdd hΓ hαK hμ₀ hμ₁ hd he ⟨n, P, hP⟩ hX h
+  intro Γ α K b_w b_a μ c d ch T dd emax M hα hK hw ha hdd hΓ hαK hμ₀ hμ₁ hd he ⟨n, P, hP⟩ hB hX h
   obtain ⟨s, hsum, hs⟩ := partialSumsIncompressible_of_training ha.le h _ (withDark M P)
-    (withDark_caps hα hαK hΓ hP hX)
+    (withDark_caps hα hαK hΓ hP hB hX)
   have hsP : ∀ u, b_w * ((ch.weightsUsed (piece M P u)).card : ℝ) +
       b_a * s (Fintype.equivFin (Fin n ⊕ {v // v ∈ M.dark}) (Sum.inl u)) ≤ novelReads d (P.gates u) := fun u => by
     have h' := hs (Fintype.equivFin (Fin n ⊕ {v // v ∈ M.dark}) (Sum.inl u))
     rw [withDark_gates_inl] at h'
-    exact h'.trans (by exact_mod_cast novelReads_piece u)
+    exact h'.trans (by exact_mod_cast novelReads_piece hB u)
   have hsZ : ∀ v : {v // v ∈ M.dark},
       b_a * (s (Fintype.equivFin (Fin n ⊕ {v // v ∈ M.dark}) (Sum.inr v)) : ℝ) ≤ novelReads c {v.1} := fun v => by
     have h' := hs (Fintype.equivFin (Fin n ⊕ {v // v ∈ M.dark}) (Sum.inr v))
@@ -195,15 +195,15 @@ theorem IncompressibleContainedMatMulOn : Guarantees.IncompressibleContainedMatM
     calc ∑ v : {v // v ∈ M.dark}, b_a * (s (Fintype.equivFin (Fin n ⊕ {v // v ∈ M.dark}) (Sum.inr v)) : ℝ)
         ≤ ∑ v : {v // v ∈ M.dark}, (novelReads c {v.1} : ℝ) := sum_le_sum fun v _ => hsZ v
       _ = ∑ v ∈ M.dark, (novelReads c {v} : ℝ) := sum_coe_sort M.dark fun g => (novelReads c {g} : ℝ)
-  have h₀ := matMulOn_of_counts hα hK hw ha hdd hαK hμ₀ hμ₁ hd he hP
+  have h₀ := matMulOn_of_counts hα hK hw ha hdd hαK hμ₀ hμ₁ hd he hP hB
     (activationsIncompressible_of_training ha.le h) (partialSums_count ha.le hsum hsP)
   exact h₀.trans (by linarith [mul_le_mul_of_nonneg_left hZ (by linarith : (0 : ℝ) ≤ 1 - μ)])
 
 theorem IncompressibleContainedTrainingOn : Guarantees.IncompressibleContainedTrainingOn := by
-  intro Γ α K b_w b_a μ κ c d ch T dd emax M hα hK hw ha hdd hΓ hαK hμ₀ hμ₁ hd he hP hX h hκ
+  intro Γ α K b_w b_a μ κ c d ch T dd emax M hα hK hw ha hdd hΓ hαK hμ₀ hμ₁ hd he hP hB hX h hκ
   exact training_of_counts (le_max_of_le_right (by positivity))
-    (IncompressibleContainedMatMulOn Γ α K b_w b_a μ c d ch T dd emax M hα hK hw ha hdd hΓ hαK hμ₀ hμ₁ hd he hP hX h)
-    hκ (by exact_mod_cast card_products_le_dark M ch)
+    (IncompressibleContainedMatMulOn Γ α K b_w b_a μ c d ch T dd emax M hα hK hw ha hdd hΓ hαK hμ₀ hμ₁ hd he hP hB hX
+      h) hκ (by exact_mod_cast card_products_le_dark M ch)
 
 /-- **Products done in the declaration are bounded by their fan-out**: the case `k = 1` of the packed bound, at `μ = 1`,
 where the dark gates' budget has weight `1 − μ = 0` and the partial sums are not needed. -/

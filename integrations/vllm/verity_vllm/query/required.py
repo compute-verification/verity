@@ -234,7 +234,7 @@ class Population:
 
     `query` is the query of record (`Q_WORD_ID`: the boundary is every Call's) or `Q_MODULE_BODY_ID` (A/B only: module bodies).  Under
     Q_word a Value two Calls of one module body exchange is required too (`interior`, family `call_boundaries`; a fused-MoE block row's
-    Values are committed as its `moe_block_stream` plane, `format.moe_plane_kind`), spelt under
+    Values are committed as its `moe_block_stream` plane, `format.moe_plane_kind` under `format.moe_plane_modules`), spelt under
     `<module>/<fx node>` with its structural member: serving acquires module outputs, so such a Value needs a source of its own.  TENSOR-RETURN reads the module-body boundary under
     either query: it is what a module returns."""
 
@@ -326,7 +326,9 @@ class Population:
         inside = [v for v in B.values if v.call >= 0 and v not in B_module.values and v not in self.policy.protocol_required]
         # a MoE block row's Value inside its body is committed as the row's `moe_block_stream` plane: no member (a member of the body's
         # `out` would be a second producer beside the block's own output, or beside its AllReduce's on a rank Program)
-        self.plane_fed = frozenset(v for v in inside if fmt.moe_plane_kind(P.call(v.call).family, corr.module_of(v.call)) is not None)
+        planes = fmt.moe_plane_modules((c.family, corr.module_of(c.id)) for c in P.calls)
+        self.plane_fed = frozenset(v for v in inside if (m := corr.module_of(v.call)) in planes
+                                   and fmt.moe_plane_kind(P.call(v.call).family, m) is not None)
         self.interior = frozenset(inside) - self.plane_fed
         # (required_values() would recompute the boundary; the policy is validated the same way here)
         known_inputs = frozenset(P.inputs)

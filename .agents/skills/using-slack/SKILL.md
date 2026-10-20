@@ -30,11 +30,14 @@ The coordination API has one place, three interactions and one lifecycle.
   and its working branch's suffix in the route, and routing reads them (`--as`, the owners of PRs and runs; `research msg
   handles` shows each handle's). Run `names open --as HANDLE` again on a new branch: it adds that branch's suffix. A
   second agent working under a handle (a lane that posts as it) is one its holder adds with `names open --as HANDLE
-  --poster BC_ID`; it subscribes to that handle's inbox thread itself: the holder has no channel to relay to it. So a
+  --poster BC_ID`; it subscribes to that handle's inbox thread itself: the holder has no channel to relay to it. A
+  poster's post that names the handle rings the holder (the outgoing generation of a handover reaches the incoming one),
+  and that doorbell in the shared inbox wakes the poster too: one `from HANDLE` for its own post ends the turn. So a
   handover needs no repo change; the registry's `holder` and `branch_suffixes` are a fallback for readers without the
   routes (drive's PR owners), updated when convenient. One agent may hold several handles, and posts as whichever
-  it acts for (`--as`). Handles with a user group are Slack user groups, so a human's composer autocompletes them, and
-  Daniel is a member of each, so a tag notifies him too.
+  it acts for (`--as`). Handles with a user group are Slack user groups, so a human's composer autocompletes them.
+  The groups have no members, so a tag notifies no person (Daniel, 19 Oct). `groups sync` never sets members and
+  never re-enables a group that has any; a handle's old groups are its `retired_usergroups`, which still route.
 - **Only handle holders and the named humans are on Slack.** Workers never post, read or subscribe; a worker asks its own
   coordinator, and the coordinator asks on Slack and relays the answer. So a coordinator decides which of its workers hears
   what.
@@ -113,22 +116,24 @@ research msg subscriptions --as <your handle>    # prints the subscribe calls to
   comms' daily review replays every post against the doorbells rung and chases what missed (COMM-30).
 - **A holder also subscribes to its Linear team's issue events** (`subscribe_linear_issue`: creations and state
   changes), so an issue a human files straight into Linear reaches you; it rings no inbox. **Don't subscribe to its
-  comments.** The sender never rings its own inbox, but every handle posts through one Slack bot and writes to Linear
+  comments.** The holder never rings its own inbox, but every handle posts through one Slack bot and writes to Linear
   as the one Verity Asks app, and Cursor's subscriptions can't filter by actor. So any other subscription wakes you for
   your own writes too. On 14 Oct, 258 of 266 comments in five leads' teams were the team's own handle's (COMM-23).
   Anything another handle must read about your issue comes on Slack, naming you, and rings your inbox.
 - `@infra` subscribes to `#agent-alerts` and `#ask-daniel`. Every channel subscription is `topLevelOnly: true`.
 - **A person's post in `#ask-the-team` rings the lanes it names.** Typed in Slack, it goes through no `research msg`, so
-  its watcher (top's subscription, or infra's agent watch) hands each new one to `research msg deliver --channel
+  the Slack events service (`integrations/slack-events/`) delivers it from Slack's event; until that is deployed, its
+  watcher (top's subscription, or infra's agent watch) hands each new one to `research msg deliver --channel
   ask-the-team --event -` (the Slack message event on stdin; the bot can't read that channel). That rings each lane the
   post starts with (`@name`s and user-group mentions), once per post, with a doorbell that names the channel: `from
   daniel, #ask-the-team thread T[, reply R]: ...`. Answer there: `research msg reply --as ME --channel ask-the-team
-  --thread T` (or `--channel-id C0CA1JZSYNR`).
+  --thread T` (or `--channel-id C0CA1JZSYNR`). `#resource-accounting` (collaborators' questions on compute, memory and
+  network accounting) routes the same way, by the service only; its subscribers are the five lanes that answer there.
 - **Subscribe to a thread (`subscribe_slack_thread`) only where a human may answer**: your own `#ask-daniel` card, a
   or a thread a named human posted in. A task for Daniel's console, laptop or browser goes to `#ask-daniel` as a card
   with the exact steps. Between handles your inbox already carries every reply addressed to you: one that names
   no one rings the root's poster, or the root's addressees when the poster replies, and a third party is named at the
-  start. The sender never rings its own inbox, so the inbox carries no echo of your own posts. A thread subscription
+  start. The holder never rings its own inbox, so the inbox carries no echo of your own posts. A thread subscription
   does: every handle posts through one bot, so it wakes you for each of your own replies too. Unsubscribe from any thread
   between handles you still hold, an announcement's above all (the merge thread is one).
 - Ask for 30 days (`expiresInSeconds: 2592000`); "On every wake" below says when to renew.
@@ -262,6 +267,7 @@ A person who asks the lanes gets a private channel of their own, `#chat-NAME`. `
 research msg chat open NAME (--user U... | --email E) --start-here URL [--note TEXT]   # create or reuse it; invite, pin, publish
 research msg chat list                                                              # each chat in people.d, open or closed
 research msg chat close NAME                                                        # archive it; its record is marked closed
+research msg chat expect NAME --email E [--note TEXT]                                # someone Daniel invited: opened when they join
 ~~~
 
 - `open` invites the person (`--user`, their Slack id; or `--email`, by `users.lookupByEmail`, else through Slack Connect)
@@ -271,10 +277,16 @@ research msg chat close NAME                                                    
 - **No registry PR.** `open` publishes the person to the notes as `people.d/NAME.json` (beside `routes.d`, published the
   same way), and every command reads each open one into `collaborators`; a clone without it reads the published copy.
   `close` marks it closed. The registry's own `collaborators` is for people added by hand. `--dry-run` prints the plan.
-- **Who answers.** `@top` subscribes to each chat channel's top level (`subscriptions --as top` lists them) and hands each
-  post to `research msg deliver --channel chat-NAME --event -`. Until the router (`research msg router`) runs, a post
-  rings the lanes it starts with; a reply that names no one rings the lanes that posted in its thread; anything else,
-  unaddressed, rings `@top`. Answer in the channel (`research msg send --as ME --channel chat-NAME --thread T`) and
+- **Newcomers.** For someone Daniel invites to the workspace, `expect` publishes `people.d/NAME.json` with status
+  `expected`, their email and no channel (`chat list` shows it). When they join, the Slack events service's `team_join`
+  handler finds them by email (`users.info`) and runs `open` for them with the onboarding page as `--start-here`; until
+  it is deployed, `@top` runs `open NAME --email E` once they have joined.
+- **Who answers.** The Slack events service (`integrations/slack-events/`) delivers each post; until it is deployed,
+  `@top` subscribes to each chat channel's top level (`subscriptions --as top` lists them) and hands each post to
+  `research msg deliver --channel chat-NAME --event -`. A post rings the lanes it starts with; a reply that names no one
+  rings the lanes that posted in its thread; anything else, unaddressed, rings `@top`, and the service says so in its
+  thread (routing by model is off). Its watchdog rings again a post with no 👀 and no lane reply after 15 minutes, and
+  `@top` after 60. Answer in the channel (`research msg send --as ME --channel chat-NAME --thread T`) and
   subscribe to that thread, since a person posts in it.
 - **Doorbells carry no text.** The channel is private and the inboxes are not, so a chat's doorbell names the person and
   the thread only; read the post with `research msg read --channel chat-NAME --thread T`.

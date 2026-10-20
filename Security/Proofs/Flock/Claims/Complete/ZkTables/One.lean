@@ -5,9 +5,9 @@ import Proofs.Flock.Claims.Complete.ZkTables.Ready
 
 `honestP` and `honestPZk` send the same messages on every statement whose setup has one table (`honestP_one`), so
 against any verifier their runs there are the same (`run_congr`). Where `readyZk` holds the setup has one table and
-`δc H` is `δcZk H` (`δc_eq_δcZk`); elsewhere `δcZk H` is `1`. So `honestP`'s completeness with error `δc H`
-(`Claims.Flock.Complete H (deployZk rel)`) gives `honestPZk`'s with error `δcZk H` (`completeZk_of`): the bound at
-several tables loses nothing at one.
+`δc H` is `δcZk H` (`δc_eq_δcZk`); elsewhere `δcZk H` is `1`. So `honestP`'s completeness with error `δc H` gives
+`honestPZk`'s with error `δcZk H` (`completeZk_of`): the bound at several tables loses nothing at one. (The record's
+prover, `(deployZk rel).P`, is `honestPR`, which runs `honestP` at the tape's mask words.)
 -/
 
 namespace FlockComplete.ZkTables
@@ -38,10 +38,10 @@ theorem readyZk_one {H : Claims.Msg → Claims.Msg} {x : Claims.Msg} (h : readyZ
     exact ⟨s, spec, sts, hs, h.1.1.1.1.1.1⟩
   · cases h
 
-/-- **Completeness at any number of tables gives it at one**: if the honest masked prover on each table's share is
-complete with error `δc H` (`deployZk`'s), then `honestPZk` is complete with error `δcZk H`. -/
+/-- **Completeness at any number of tables gives it at one**: if the honest masked prover on each table's share
+(`honestP`) is complete with error `δc H` (`deployZk`'s), then `honestPZk` is complete with error `δcZk H`. -/
 theorem completeZk_of (H : Claims.Msg → Claims.Msg) (rel : Readable.Parsed → Readable.Relation)
-    (h : Claims.Flock.Complete H (deployZk rel)) : CompleteWith H (deployZk rel) honestPZk (δcZk H) := by
+    (h : CompleteWith H (deployZk rel) honestP (δc H)) : CompleteWith H (deployZk rel) honestPZk (δcZk H) := by
   intro h64 x w hs hr ω
   by_cases hz : readyZk H x = true
   · obtain ⟨s, spec, sts, hset, h1⟩ := readyZk_one hz

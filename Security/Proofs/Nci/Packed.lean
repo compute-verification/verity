@@ -211,7 +211,7 @@ theorem matMulOn_of_counts_packed {k Γ : ℕ} {α K b_w b_a μ B : ℝ} {c d : 
     (hw : 0 < b_w) (ha : 0 < b_a) (hdd : 0 < dd) (hαK : α * Γ ≤ K) (hμ₀ : 0 ≤ μ) (hμ₁ : μ ≤ 1)
     (hd : ∀ ℓ, dd ≤ ch.d ℓ) (he : ∀ ℓ, ch.e ℓ ≤ emax)
     (hP : ∀ u, d.D.size (P.gates u) ≤ Γ ∧ (novelReads d (P.gates u) : ℝ) ≤ α * d.D.size (P.gates u))
-    (hA : Assumptions.PackedActivationsIncompressible c ch Γ K b_w b_a)
+    (hB : Assumptions.BaselineRegistered c d M) (hA : Assumptions.PackedActivationsIncompressible c ch Γ K b_w b_a)
     (h₂ : ∑ u, (b_w * ((ch.weightsUsed (piece M P u)).card : ℝ) +
         b_a / 2 * (outputsOtherPacked ch (piece M P u)).card) ≤ ∑ u, (novelReads d (P.gates u) : ℝ) + B) :
     max (min ((1 + √μ) ^ 2 * (b_w * b_a * dd / K)) (√2 * (1 + √μ) * √(1 - μ) * (b_a * √(b_w / K))))
@@ -220,9 +220,9 @@ theorem matMulOn_of_counts_packed {k Γ : ℕ} {α K b_w b_a μ B : ℝ} {c d : 
         ch.prod p.1 p.2.1 p.2.2.1 p.2.2.2 ∈ M.S).card ≤
     α * d.D.size d.D.computed + (1 - μ) * B := by
   have hdpos : (0 : ℝ) < dd := by exact_mod_cast hdd
-  have hcapP := piece_caps (M := M) hα hαK hP
+  have hcapP := piece_caps (M := M) hα hαK hP hB
   have hr : ∀ u, (novelReads c (piece M P u) : ℝ) ≤ novelReads d (P.gates u) := fun u => by
-    exact_mod_cast novelReads_piece u
+    exact_mod_cast novelReads_piece hB u
   have hiu := fun u => iu_reads_packed c ch Γ K b_w b_a dd hd ha.le hA (piece M P u) (piece_subset_computed u)
     (hcapP u).1 (hcapP u).2
   have h₁ : ∑ u, (b_w * ((ch.weightsUsed (piece M P u)).card : ℝ) +
@@ -256,14 +256,14 @@ open Classical in
 /-- **Products done in the declaration are bounded by their fan-out, at most `k` products to a gate**: at `μ = 1` the
 dark gates' budget has weight `1 − μ = 0`, so any budget does. -/
 theorem PackedContainedFanOutOn : Guarantees.PackedContainedFanOutOn := by
-  intro k Γ α K b_w b_a c d ch dd emax M hα hK hw ha hdd hαK hd he ⟨n, P, hP⟩ hA
+  intro k Γ α K b_w b_a c d ch dd emax M hα hK hw ha hdd hαK hd he ⟨n, P, hP⟩ hB hA
   have h₂ : ∑ u, (b_w * ((ch.weightsUsed (piece M P u)).card : ℝ) +
         b_a / 2 * (outputsOtherPacked ch (piece M P u)).card) ≤
       ∑ u, (novelReads d (P.gates u) : ℝ) +
         ∑ u, (b_w * ((ch.weightsUsed (piece M P u)).card : ℝ) +
           b_a / 2 * (outputsOtherPacked ch (piece M P u)).card) :=
     le_add_of_nonneg_left (sum_nonneg fun u _ => Nat.cast_nonneg _)
-  have h := matMulOn_of_counts_packed (μ := 1) hα hK hw ha hdd hαK zero_le_one le_rfl hd he hP hA h₂
+  have h := matMulOn_of_counts_packed (μ := 1) hα hK hw ha hdd hαK zero_le_one le_rfl hd he hP hB hA h₂
   have hm : b_a / max (emax : ℝ) (K / (4 * b_w * dd)) ≤
       max (min ((1 + √1) ^ 2 * (b_w * b_a * dd / K)) (√2 * (1 + √1) * √(1 - 1) * (b_a * √(b_w / K))))
         (1 * b_a / max (emax : ℝ) (K / (4 * b_w * dd))) :=
@@ -299,8 +299,8 @@ theorem packedActivationsIncompressible_toPacked {D : Declaration} {c : Chain D.
 /-- **The per-product fan-out bound is the case `k = 1`**: a chain is a packed chain with one product to a gate, and
 the assumption, the products in `S` and the bound are the same under `Chain.toPacked`. -/
 theorem containedFanOutOn_of_packed (h : Guarantees.PackedContainedFanOutOn) : Guarantees.ContainedFanOutOn :=
-  fun Γ α K b_w b_a c d ch dd emax M hα hK hw ha hdd hαK hd he hP hA =>
-    h 1 Γ α K b_w b_a c d ch.toPacked dd emax M hα hK hw ha hdd hαK hd he hP
+  fun Γ α K b_w b_a c d ch dd emax M hα hK hw ha hdd hαK hd he hP hB hA =>
+    h 1 Γ α K b_w b_a c d ch.toPacked dd emax M hα hK hw ha hdd hαK hd he hP hB
       (packedActivationsIncompressible_toPacked.2 hA)
 
 end Nci.SecurityProofs

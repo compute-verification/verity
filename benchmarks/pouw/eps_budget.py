@@ -26,6 +26,17 @@ program's bound B_♭, with ♭ priced on the device's own Π (`prices`), and ho
 design's ε_skip (`design_skip`) is the most over the models, contexts and phases under the floor credit, on sm_120 and
 on every device of the machine model (`device_table`); each registry's `[skip]` is that number (test_eps_budget holds
 them equal).
+
+Two pieces of served-only work that the cheater skips are not priced as skippable:
+
+- co32c's recombination O = O′ − Σ128^d D_d. `TS_EPS` prices co32c as if O were a checked word, but no check reads it:
+  H1's receipts are T, O′ and the D_d.
+- g1's centring correction (FPX-DESIGN's g1 arms), which nothing here prices.
+
+Honest runs both. Under the floor credit, ♭'s credit B_♭ leaves them out, which is sound for any program. Counting
+either as skippable would raise B_♭ and ε_skip together and leave the floor (1 − ε_skip)·B_♭ the same
+(`benchmarks/pouw/fpx_design/h1_o_free.py`). Against honest's time (`summary`'s honest credit) they are skippable work
+these shares omit, so there ε_skip is short of them.
 """
 
 from __future__ import annotations
@@ -185,8 +196,10 @@ def parts(name: str, ctx: int, phase: str, noise: dict[str, str], rates: dict = 
     """Per component, a token-layer: honest int8 products, the skippable ones, honest seconds, skippable seconds and plain
     int8 seconds, each product noised as `noise` (a design's `[noise]`) says. Prefill adds a checked leaf's vector work
     that only the served output needs, in the tensor–scalar model (`TS_EPS`; pv's `pv_ts`, P in blocks of `block` keys,
-    P V's honest seconds then plain int8 × pv_ts's γ), every served output free (no downstream check assumed), and the
-    peel's sums (`t_vsum`, free at a one-hot P row) and served epilogue (`t_apv_serve`). With `checked` the peel's
+    P V's honest seconds then plain int8 × pv_ts's γ), with no downstream check assumed. The exception is co32c's
+    recombination, which `TS_EPS` leaves out, so against honest's time these shares are short of it (the module
+    docstring). Prefill also adds the peel's sums (`t_vsum`, free at a one-hot P row) and served epilogue
+    (`t_apv_serve`). With `checked` the peel's
     served output is checked downstream, so the cheater pays its 4th IMMA (`tail_pv_served`) and epilogue; the
     tensor–scalar leaves stay served free. Decode prices products only. Decode's seconds are the GEMMs' compute, which the DRAM-bound
     step hides (`decode_gamma`); decode's binding facet is DRAM (`decode_dram`)."""
@@ -267,9 +280,13 @@ TS_FACETS = ((16.0, 0.0), (8.115, 1.0), (15.030, 0.317), (15.539, 0.172))
 #: cell (c_l7qs_v − c_l7qs, less its epilogue's 2.2), which every block of P adds once.
 PV_DIGIT_OPS, PV_SERVE_OPS, PV_SCALE_OPS = 7.0, 11.2, 12.0
 #: A checked leaf's vector work that only the served output needs, in the TS model at the duo fold, as a fraction of its
-#: component's own time, by leaf, model and component: co32c's recombination with O committed (linears, lm_head) and
-#: cohalf with every zero-instance route at X_BITSLICED (Q Kᵀ, k = 128), from checked_strip.py @007ee9c54
-#: (`ts_co32c_recombination`, `ts_qk_k128_all_routes`). Two-sided's served outputs are its last checked words and its
+#: component's own time, by leaf, model and component, from checked_strip.py @007ee9c54 (`ts_co32c_recombination`,
+#: `ts_qk_k128_all_routes`):
+#: - co32c (linears, lm_head): `ts_co32c_recombination`'s "O committed", within 1e-5 of "charged". That prices the residue
+#:   sums alone, with the cheater charged for the recombination. No check reads O (H1's receipts are T, O′ and the D_d), so
+#:   this leaves the recombination out of ♭'s credit, which is sound (the module docstring).
+#: - cohalf (Q Kᵀ, k = 128): every zero-instance route at X_BITSLICED; its O = T_last − U·Y is a receipted word.
+#: Two-sided's served outputs are its last checked words and its
 #: bit × bit words cost more than an IMMA (QSTAR's timed r20261017-055042-7c59), so it has none; pv's is `pv_ts`.
 TS_EPS = {"co32c": {"llama-3.1-8b": {"linears": 7.63e-4, "lm_head": 4.9e-5},
                     "llama-3.1-70b": {"linears": 3.91e-4, "lm_head": 4.9e-5}},
@@ -403,6 +420,13 @@ FLOOR_WORDS = {"cohalf": 1.25}
 #: r2's exact ncu counts on sm_120 (checked_strip's APV_TAIL_OPS): its 4 IMMAs (the 4th, 64·S_diag, only the served
 #: output needs), the 256·Y1 combine's 4 IMADs and the other 11.5 (LDGs, NOPs, an LDSM, control), priced as ALU's.
 APV_TAIL = {"IMMA": 4, "IMAD": 4.0, "ALU": 11.5}
+#: The same peel kernels' counts in a device's own SASS, where they exceed sm_120's: the tail by class as APV_TAIL, and
+#: RATES' c_apv_serve and c_vfold, which they replace there. sm_90a's are static counts, not ncu: nvdisasm of apv.cu's
+#: sm_90a build with ncu's rule applied (eps_counts.py; RT-ISA-7, run r20261019-093003-2795,
+#: art:cadf255937a4792d0b347c3540d1c0709a15c7bb697fc0c121153ad4e6f22be4): the tail 27.02 a tile (+39%), the served f
+#: 6.15 a tile (+40%) and vfold's sums 0.760 an entry, the most over shapes. sm_100a's (tail 17.26, served f 4.53,
+#: vfold 0.706) are under sm_120's, so the B200 keeps sm_120's, which overstate its ε_skip.
+SASS = {"sm_90": {"APV_TAIL": {"IMMA": 4, "IMAD": 6.93, "ALU": 16.09}, "c_apv_serve": 6.15 / 128, "c_vfold": 0.760}}
 #: mma.sync m16n8k32's census class: sm_120, sm_80 and sm_89 name it IMMA16832, sm_90 and sm_100 IMMA16832_S8
 IMMA16832 = ("IMMA16832", "IMMA16832_S8")
 #: The TS model's cheater SMSP-cycles a transcript MMA (4096 MACs) of a checked leaf's component (`ts_tile`): co32c
@@ -417,7 +441,8 @@ TS_CHEAT = {"co32c": ts_time(1, 4 * TS_FOLD), "cohalf": ts_time(6, 5 * 4 * TS_FO
 @dataclass(frozen=True)
 class Prices:
     """A design's floor-credit prices on a device's Π, SMSP-cycles: ♭ a 4096-MAC MMA, and adopted P·V's tail a strip
-    product as Π prices BC-KERNEL r2's instruction counts (APV_TAIL), whole and without the 4th IMMA."""
+    product as Π prices BC-KERNEL r2's instruction counts (APV_TAIL, or the device's own in SASS), whole and without
+    the 4th IMMA."""
     vector: str
     mma: float
     tail: float
@@ -434,18 +459,21 @@ def prices(name: str, data: Path = DATA, vector: str = "") -> Prices:
     pi = machine(vector, data)
     imma = next(k for k in IMMA16832 if k in pi.c)
     tile = 128 * 2 * (32 + 1)
-    four = {(imma if k == "IMMA" else k): v for k, v in APV_TAIL.items()}
+    counts = SASS.get(data.name, {}).get("APV_TAIL", APV_TAIL)
+    four = {(imma if k == "IMMA" else k): v for k, v in counts.items()}
     top = lambda n: max(pi.load(n).values())
     return Prices(pi.vector, setup(d, pi, data, "floor", "floor").baseline.T * 4096 / d.L, top(four) / tile,
-                  top({**four, imma: APV_TAIL["IMMA"] - 1}) / tile)
+                  top({**four, imma: counts["IMMA"] - 1}) / tile)
 
 
 def floor_skip(name: str, ctx: int, d: Design, rates: dict = RATES, data: Path = DATA, vector: str = "",
                phase: str = "prefill") -> tuple[float, dict, dict]:
     """Corollary D3's ε_skip pieces (SPEC §2.9, note:20261017T0324Z-draft-eps1-spec), SMSP-cycles a token-layer on
-    `data`'s device: (♭'s committed words, the skippable work n^s_♭ by component with every served output free, the
-    same with P·V's served output checked). The words are `prices` ♭ a MMA on the transcript products (k a word, QKᵀ at
-    FLOOR_WORDS, P·V on the exact causal triangle in prefill, ctx keys in decode); a clean product's words are ♭'s too.
+    `data`'s device: (♭'s committed words, the skippable work n^s_♭ by component with no downstream check assumed, the
+    same with P·V's served output checked). n^s_♭ leaves co32c's recombination and g1's correction out, so ♭'s credit
+    does too, which is sound (the module docstring). The words are `prices` ♭ a MMA on the transcript products (k a
+    word, QKᵀ at FLOOR_WORDS, P·V on the exact causal triangle in prefill, ctx keys in decode); a clean product's words
+    are ♭'s too.
     Each skippable piece is the device's issue model's price of that work:
 
     - the peel's tail, a strip product at its mainloop MACs' price (`c_tail_pv`, apv's measured issue bound on sm_120;
@@ -456,10 +484,11 @@ def floor_skip(name: str, ctx: int, d: Design, rates: dict = RATES, data: Path =
     - a TS leaf's skippable vector work, prefill only: TS_EPS of TS_CHEAT (co32c, cohalf), and pv's gap `pv_ts` at
       16 cycles a plain MMA times its γ.
 
-    Off sm_120 every count is sm_120's for the same kernel source. B_♭ is the words plus the reading's n^s_♭; the
-    non-GEMM kernels are left out of it, as D3's n_♭ leaves them. Decode's ♭ is compute alone (its DRAM-bound time is
-    longer), an upper bound on ε_skip there."""
-    s, r = MODELS[name], rates
+    Off sm_120 every count is sm_120's for the same kernel source, except the peel's where SASS has the device's own.
+    B_♭ is the words plus the reading's n^s_♭; the non-GEMM kernels are left out of it, as D3's n_♭ leaves them.
+    Decode's ♭ is compute alone (its DRAM-bound time is longer), an upper bound on ε_skip there."""
+    s = MODELS[name]
+    r = {**rates, **{k: v for k, v in SASS.get(data.name, {}).items() if k in rates}}
     p = prices(d.name, data, vector)
     L_ = d.L
     keys = (ctx + 1) / 2 if phase == "prefill" else ctx

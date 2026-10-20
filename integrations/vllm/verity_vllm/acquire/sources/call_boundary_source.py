@@ -28,14 +28,15 @@ from typing import Any, Callable, Collection, Mapping, Sequence
 import numpy as np
 
 from verity_vllm.acquire.sources import call_boundary_plan as CP
+from verity_vllm.acquire.sources import int8_source
 from verity_vllm.acquire.sources.call_boundary_plan import FAMILY, WORD_DTYPES, Body, Plan
 
 _SIGNED = {1: "uint8", 2: "int16", 4: "int32", 8: "int64"}
 WARMUP_ID = re.compile(r"warmup-(\d+)(?:-[0-9a-f]{8})?")
 
 #: other sources' claims on `call_boundaries` identities (identity -> the claiming source's `short_name`, or None): a claimed identity is
-#: that source's to acquire (a tap of a Value the runtime already holds, like a pre-bias GEMM output) and is never evaluated here
-CLAIMS: list[Callable[[Mapping[str, Any]], str | None]] = []
+#: that source's to acquire (a tap of a Value the runtime already holds, like the int8 quantizer's results) and is never evaluated here
+CLAIMS: list[Callable[[Mapping[str, Any]], str | None]] = [int8_source.claim]
 
 
 def claimed(r: Mapping[str, Any]) -> str | None:
