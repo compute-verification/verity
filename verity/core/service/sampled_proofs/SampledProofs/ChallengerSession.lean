@@ -25,8 +25,9 @@ closed and the SHA-512 of each file it left, each entry signed under the challen
 
 The key is the one the window's deployment pins, from outside the ledger: an open naming another key's SHA-512 is
 refused before any signature is read, so a ledger signed under its own key can't pin itself. Then each entry is
-chained (`seq` from 0, `prev` the SHA-512 of the previous line) and signed, a window and a session opened once, a session
-ended once after its open; the window's session must be opened and ended closed, so a ledger older than its end is
+chained (`seq` from 0, `prev` the SHA-512 of the previous line) and signed at strictly increasing leaves (`u32(q)`, the
+signature's first four bytes), a Commit opened once whatever period its window names, a session opened once and ended
+once after its open; the window's session must be opened and ended closed, so a ledger older than its end is
 refused. The session's files must be that session's (`sessionNamed`): its signed close names the ledger's session id,
 its record the open's host, and its release log is the one the end sealed. Each refusal throws Python's `CoinError`
 text.
@@ -280,16 +281,22 @@ def auditedSession (ledger window : Json) (key : ChallengerKey) : V Audited := d
   let mut opens : Array LedgerEntry := #[]
   let mut ends : Array LedgerEntry := #[]
   let mut prev := ZERO
+  let mut leaf : Int := -1
   for ((line, e), i) in (lines.zip es).zipIdx do
     unless getD e.entry "schema" == Json.str LEDGER_SCHEMA && nat? (getD e.entry "seq") == some i &&
         getD e.entry "prev" == Json.str prev do
       throw s!"the auditor's ledger entry {i} is not entry {i} of a {LEDGER_SCHEMA} ledger chained to its predecessor"
     unless verifies key (← ledgerMessage (key.pub.extract 0 16) e.entry) e.sig do
       throw s!"the auditor's ledger entry {i}'s signature does not verify under the verifier's challenger key"
+    let q : Nat := (List.range 4).foldl (fun a j => a * 256 + (e.sig.get! j).toNat) 0
+    unless leaf < q do
+      throw s!"the auditor's ledger entry {i} is signed at leaf {q}, not after leaf {leaf}, its predecessor's: the challenger's key signs at increasing leaves, so a ledger that reuses or goes back on one was forked"
+    leaf := q
     let s := e.session
     if e.kind == "open" then
-      if opens.any (fun o => o.session == s || jeq (getD o.body "window") (getD e.body "window")) then
-        throw s!"the auditor's ledger entry {i} opens a second session for its window, or session {s} again: a window has one session"
+      let commit := getD (getD e.body "window") "commit"
+      if opens.any (fun o => o.session == s || getD (getD o.body "window") "commit" == commit) then
+        throw s!"the auditor's ledger entry {i} opens a second session for its window's Commit, or session {s} again: a Commit has one window, whatever its period, and a window one session"
       opens := opens.push e
     else
       if !opens.any (·.session == s) || ends.any (·.session == s) then

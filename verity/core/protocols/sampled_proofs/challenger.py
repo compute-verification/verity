@@ -71,11 +71,13 @@ session for a window, before its first coin, and another when the session ends; 
 each line canonical JSON.  The window is `{commit, period}`: the served Commit's root and the period its lane names.  The
 verifier pins the challenger key from outside the ledger (the window's deployment), refuses any open naming another
 key's SHA-512 before it checks a signature, so a ledger signed under its own key can't pin itself, then checks each
-entry's chain and signature, one open a window and session and one end a session after its open.  The window's session
-must have its end, closed, and its record must name the open's host, its signed close the ledger's session id and its
-release log the one the end sealed (`trusted_session_of`).  A ledger older than the window's end is refused, as is a
-window it opens no session for.  So two sessions under one key can't both pass for one window, and one session's coins
-pass for one window only.  `ledger_line` writes an entry as the auditor does.
+entry's chain and signature, its signatures at strictly increasing leaves of the key (a ledger restored with its key's
+state forks at a reused leaf), one open a Commit, whatever period it names, one open a session and one end a session
+after its open.  The window's session must have its end, closed, and its record must name the open's host, its signed
+close the ledger's session id and its release log the one the end sealed (`trusted_session_of`).  A ledger older than
+the window's end is refused, as is a window it opens no session for.  So two sessions under one key can't both pass for
+one Commit, under one period label or two, and one session's coins pass for one window only.  `ledger_line` writes an
+entry as the auditor does.
 
 The first client is PoUW's live window (`verity.core.protocols.pouw.window`, "Live windows"): its salt, its draw and
 its round coins, round r's opened after round r's root.  The module reads only the standard library and
@@ -628,8 +630,8 @@ def audited_session(ledger: Any, window: Any, key: ChallengerKey, verify: Verify
     """The one challenger session the auditor's ledger `ledger` (its lines, None when the verifier has none) opens for
     window `window` (``{commit, period}``), under the challenger key the window's deployment pins, `key`, and ends closed.
     Raises `CoinError` naming why when there is no ledger, it is malformed, an open names another key, an entry isn't
-    chained or signed under `key`, a window or a session is opened twice or a session ended twice or unopened, or the
-    window's session is missing, unended or ended unclosed."""
+    chained or signed under `key` at a leaf after its predecessor's, a Commit or a session is opened twice or a session
+    ended twice or unopened, or the window's session is missing, unended or ended unclosed."""
     if ledger is None:
         raise CoinError(NO_AUDIT)
     if type(ledger) is not list:
@@ -648,23 +650,32 @@ def audited_session(ledger: Any, window: Any, key: ChallengerKey, verify: Verify
         entries.append(e)
     opens: dict[str, dict] = {}
     ends: dict[str, dict] = {}
-    prev = _ZERO
+    prev, leaf = _ZERO, -1
     for i, (line, e) in enumerate(zip(ledger, entries)):
         if e["schema"] != LEDGER_SCHEMA or e["seq"] != i or e["prev"] != prev:
             raise CoinError(f"the auditor's ledger entry {i} is not entry {i} of a {LEDGER_SCHEMA} ledger chained to its "
                             "predecessor")
+        sig = bytes.fromhex(e["sig"])
         try:
-            ok = verify(key, ledger_message(key.public[:16], e), bytes.fromhex(e["sig"])) is True
+            ok = verify(key, ledger_message(key.public[:16], e), sig) is True
         except ValueError:
             ok = False
         if not ok:
             raise CoinError(f"the auditor's ledger entry {i}'s signature does not verify under the verifier's challenger "
                             "key")
+        q = int.from_bytes(sig[:4], "big")
+        if q <= leaf:
+            raise CoinError(f"the auditor's ledger entry {i} is signed at leaf {q}, not after leaf {leaf}, its "
+                            "predecessor's: the challenger's key signs at increasing leaves, so a ledger that reuses or "
+                            "goes back on one was forked")
+        leaf = q
         s = e["session"]
         if e["kind"] == "open":
-            if s in opens or any(o["body"]["window"] == e["body"]["window"] for o in opens.values()):
-                raise CoinError(f"the auditor's ledger entry {i} opens a second session for its window, or session {s} "
-                                "again: a window has one session")
+            commit = e["body"]["window"]["commit"]
+            if s in opens or any(o["body"]["window"]["commit"] == commit for o in opens.values()):
+                raise CoinError(f"the auditor's ledger entry {i} opens a second session for its window's Commit, or "
+                                f"session {s} again: a Commit has one window, whatever its period, and a window one "
+                                "session")
             opens[s] = e
         else:
             if s not in opens or s in ends:

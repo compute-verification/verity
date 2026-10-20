@@ -510,6 +510,8 @@ LEDGERS = {
                                                               + lines[1:]), "entry 0 is malformed"),
     "an entry of another kind": (lambda h: _ledger_edit(h, _entry_set(1, lambda d: d.update(kind="close"))),
                                  "entry 1 is malformed"),
+    "an open whose Commit ends in a newline": (lambda h: _ledger_edit(h, _entry_set(0, lambda d: d["body"]["window"].update(
+        commit=WINDOW["commit"] + "\n"))), "entry 0 is malformed"),
 }
 
 
@@ -534,7 +536,8 @@ def test_the_verifier_refuses_a_window_the_ledger_does_not_open_or_a_malformed_o
     with pytest.raises(C.CoinError, match="opens no challenger session for this window"):
         host.trusted({**WINDOW, "commit": "44" * 64})
     for bad in ({**WINDOW, "period": 1}, {**WINDOW, "period": ".p"}, {**WINDOW, "stream": "44" * 64},
-                {**WINDOW, "commit": "11"}):
+                {**WINDOW, "commit": "11"}, {**WINDOW, "commit": WINDOW["commit"] + "\n"},
+                {**WINDOW, "period": "p-0\n"}, {**WINDOW, "commit": WINDOW["commit"] + " "}):
         with pytest.raises(C.CoinError, match="window's identity is malformed"):
             host.trusted(bad)
 
@@ -572,7 +575,7 @@ def test_two_sessions_under_one_key_cant_both_pass_for_one_window(tmp_path, sign
     ledger opens for it, and a ledger opening a second session for a window is refused."""
     first = Host(tmp_path, signer, "s-1", "one")
     honest(first)
-    later = {**WINDOW, "period": "p-1"}
+    later = {"commit": "22" * 64, "period": "p-1"}
     second = Host(tmp_path, signer, "s-2", "two", ledger=first.ledger, window=later)
     honest(second)
     assert first.trusted()[0] == first.challenger.commitment
@@ -583,8 +586,61 @@ def test_two_sessions_under_one_key_cant_both_pass_for_one_window(tmp_path, sign
         second.trusted_of()
     first.ledger.open("s-3")
     for host, window in ((first, WINDOW), (second, later)):
-        with pytest.raises(C.CoinError, match="entry 4 opens a second session for its window"):
+        with pytest.raises(C.CoinError, match="entry 4 opens a second session for its window's Commit"):
             host.trusted(window)
+
+
+def test_one_commit_gets_one_session_whatever_period_label_its_windows_name(tmp_path, signer):
+    """RT4-INT-24: two sessions for one Commit under two period labels, both closed, would give the Commit two draws of
+    coins; the ledger that opens the second is refused for both windows."""
+    first = Host(tmp_path, signer, "s-1", "one")
+    honest(first)
+    relabelled = {**WINDOW, "period": "p-0-again"}
+    second = Host(tmp_path, signer, "s-2", "two", ledger=first.ledger, window=relabelled)
+    honest(second)
+    for host, window in ((first, WINDOW), (second, relabelled)):
+        with pytest.raises(C.CoinError, match="entry 2 opens a second session for its window's Commit, or session s-2"):
+            host.trusted(window)
+
+
+@pytest.mark.parametrize("leaves", [[3, 3], [5, 2], [4, 6, 6, 7]])
+def test_a_ledger_that_reuses_or_goes_back_on_a_leaf_is_refused(leaves):
+    """RT4-INT-27: a host whose key state and ledger are restored signs its next entry at a leaf it has signed at
+    already; the key signs at increasing leaves, so a ledger whose leaves don't increase was forked."""
+    def ledger(qs):
+        at = iter(qs)
+        lines: list[str] = []
+        for kind, session, body in [("open", "s-1", {"window": WINDOW, "host": f"{HOST}.s-1", "pinned": "ab" * 20,
+                                                     "key_sha512": hashlib.sha512(lms.public_key(PINNED)).hexdigest()}),
+                                    ("end", "s-1", {"closed": True, "files": {}}),
+                                    ("open", "s-2", {"window": {**WINDOW, "commit": "22" * 64}, "host": f"{HOST}.s-2",
+                                                     "pinned": "ab" * 20,
+                                                     "key_sha512": hashlib.sha512(lms.public_key(PINNED)).hexdigest()}),
+                                    ("end", "s-2", {"closed": True, "files": {}})][:len(qs)]:
+            lines.append(C.ledger_line(lines, kind, session, body, lms.public_key(PINNED)[:16],
+                                       lambda m: lms.sign_at(PINNED, next(at), m).encode()))
+        return lines
+
+    assert C.audited_session(ledger([2 * q + 1 for q in range(len(leaves))]), WINDOW, pinned_key(),
+                             lms_verify).session == "s-1"
+    i = next(i for i in range(1, len(leaves)) if leaves[i] <= leaves[i - 1])
+    with pytest.raises(C.CoinError, match=f"entry {i} is signed at leaf {leaves[i]}, not after leaf {leaves[i - 1]}"):
+        C.audited_session(ledger(leaves), WINDOW, pinned_key(), lms_verify)
+
+
+def test_a_release_log_rewritten_after_its_end_is_refused(tmp_path, signer):
+    """RT4-INT-26: the round roots in the release log rewritten after the session's end, to roots chosen after every
+    coin: the log is no longer the one the ledger's end sealed (nor the one the close signs)."""
+    host = Host(tmp_path, signer)
+    honest(host)
+    log = host.directory / R.RELEASES
+    early = [json.loads(line)["root"] for line in log.read_text().splitlines() if json.loads(line)["event"] == "root"]
+    text = log.read_text()
+    for r in early:
+        text = text.replace(r, hashlib.sha512(b"chosen after every coin " + r.encode()).hexdigest())
+    log.write_text(text)
+    with pytest.raises(C.CoinError, match="release log is not the one"):
+        host.trusted()
 
 
 @pytest.mark.parametrize("address", ["7791", ":7791", "host:port", "host:"])

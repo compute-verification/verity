@@ -344,6 +344,8 @@ def _cases(make, names):
 
 #: small LMS parameter sets (W, H), each key made in milliseconds
 PARAMS = [(1, 2), (2, 3), (4, 2), (8, 1)]
+#: those for a key that signs a ledger too: eight leaves, enough for a ledger's seven entries at increasing leaves
+LEDGER_PARAMS = [(1, 3), (2, 3), (4, 3)]
 HOSTS = ["vy-nebius-cpu-1", "auditor.example", "h", "A_1"]
 
 
@@ -566,10 +568,11 @@ def session(j: Any) -> Any:
 
 class Session:
     """A challenger's session as its host leaves it: a record signed at leaf q of a small key, a release log over drawn
-    roots in canonical JSON on an integer clock, and the close signed at leaf q + 1 (None: its client closed it)."""
+    roots in canonical JSON on an integer clock, and the close signed at leaf q + 1 (None: its client closed it), under a
+    key of one of `params`."""
 
-    def __init__(self, rng: random.Random, ended: str | None = None) -> None:
-        self.w, self.h = rng.choice(PARAMS)
+    def __init__(self, rng: random.Random, ended: str | None = None, params=PARAMS) -> None:
+        self.w, self.h = rng.choice(params)
         self.k = _key(self.w, self.h, 0)
         self.pub = lms.public_key(self.k)
         self.q = rng.randrange(2 ** self.h - 1)
@@ -610,8 +613,8 @@ def _window(rng: random.Random) -> dict:
 
 class Ledger:
     """The auditor's ledger of session `s`'s window and up to two others' sessions, each opened, then ended, interleaved:
-    `events` its entries' (kind, session, body), `lines` them chained and signed, each at a drawn leaf of `s`'s key (or
-    `signer`'s, an `edit(i, entry)` applied to each entry before it is signed)."""
+    `events` its entries' (kind, session, body), `lines` them chained and signed at drawn increasing leaves of `s`'s key
+    (or at `leaves`, or under `signer`, an `edit(i, entry)` applied to each entry before it is signed)."""
 
     def __init__(self, rng: random.Random, s: Session, closed: bool = True) -> None:
         self.rng, self.s, self.window = rng, s, _window(rng)
@@ -640,17 +643,22 @@ class Ledger:
     def index(self, kind: str, session: str) -> int:
         return next(i for i, (k, sid, _) in enumerate(self.events) if (k, sid) == (kind, session))
 
-    def lines(self, events=None, edit=None, signer: lms.PrivateKey | None = None) -> list[str]:
+    def leaves(self, n: int) -> list[int]:
+        return sorted(self.rng.sample(range(2 ** self.s.h), n))
+
+    def lines(self, events=None, edit=None, signer: lms.PrivateKey | None = None, leaves: list[int] | None = None
+              ) -> list[str]:
         k = self.s.k if signer is None else signer
+        events = self.events if events is None else events
+        leaves = self.leaves(len(events)) if leaves is None else leaves
         out: list[str] = []
-        for i, (kind, sid, body) in enumerate(self.events if events is None else events):
+        for i, (kind, sid, body) in enumerate(events):
             entry = {"body": body, "kind": kind, "prev": hashlib.sha512(out[-1].encode()).hexdigest() if out else "0" * 128,
                      "schema": Ch.LEDGER_SCHEMA, "seq": i, "session": sid}
             if edit is not None:
                 edit(i, entry)
             m = Ch.ledger_message(lms.public_key(k)[:16], entry)
-            out.append(canonical_json_text({**entry, "sig": lms.sign_at(k, self.rng.randrange(2 ** k.params.H), m)
-                                            .encode().hex()}))
+            out.append(canonical_json_text({**entry, "sig": lms.sign_at(k, leaves[i], m).encode().hex()}))
         return out
 
 
@@ -770,7 +778,8 @@ def released_case(rng: random.Random, name: str) -> Any:
 LEDGER_NAMES = ["honest", "no-ledger", "ledger-type", "line-type", "non-canonical", "torn", "long", "keys", "kind",
                 "schema", "seq", "prev", "dropped", "swapped", "signature", "signature-form", "other-signer",
                 "self-keyed", "other-key", "open-form", "end-form", "second-open", "reopen", "end-unopened",
-                "end-twice", "no-open", "truncated", "unclosed", "window-form", "key-form", "params", "request"]
+                "end-twice", "no-open", "truncated", "unclosed", "window-form", "key-form", "params", "request",
+                "second-period", "reused-leaf"]
 
 
 def _entry_edit(target: int, f):
@@ -781,7 +790,7 @@ def _entry_edit(target: int, f):
 
 
 def ledger_case(rng: random.Random, name: str) -> Any:
-    s = Session(rng)
+    s = Session(rng, params=LEDGER_PARAMS)
     lg = Ledger(rng, s, closed=name != "unclosed")
     j = {"key": s.key.to_json(), "ledger": None, "window": lg.window}
     i = rng.randrange(len(lg.events))
@@ -841,8 +850,9 @@ def ledger_case(rng: random.Random, name: str) -> Any:
             j["key"] = {**j["key"], "public": lms.public_key(other).hex()}
         case "open-form":
             o = lg.index("open", s.id)
-            bad = rng.choice([{"window": {**lg.window, "period": rng.choice(["", ".p", "a b", 1, "é"])}},
+            bad = rng.choice([{"window": {**lg.window, "period": rng.choice(["", ".p", "a b", 1, "é", "p-0\n"])}},
                               {"window": {**lg.window, "commit": lg.window["commit"][:-2]}},
+                              {"window": {**lg.window, "commit": lg.window["commit"] + rng.choice(["\n", " "])}},
                               {"window": {**lg.window, "stream": "00"}}, {"host": rng.choice(["", "a b", None])},
                               {"pinned": rng.choice(["ab" * 19, "AB" * 20, None])},
                               {"key_sha512": rng.choice([None, "00"])}])
@@ -856,6 +866,16 @@ def ledger_case(rng: random.Random, name: str) -> Any:
             events = list(lg.events)
             events.insert(rng.randint(0, len(events)), ("open", "s-other", lg.open_body(lg.window, "vy-challenger-1.x")))
             j["ledger"] = lg.lines(events)
+        case "second-period":
+            events = list(lg.events)
+            other = {**lg.window, "period": rng.choice([p for p in PERIODS if p != lg.window["period"]])}
+            events.insert(rng.randint(0, len(events)), ("open", "s-other", lg.open_body(other, "vy-challenger-1.x")))
+            j["ledger"] = lg.lines(events)
+        case "reused-leaf":
+            leaves = lg.leaves(len(lg.events))
+            k = rng.randrange(1, len(leaves))
+            leaves[k] = rng.randint(0, leaves[k - 1])
+            j["ledger"] = lg.lines(leaves=leaves)
         case "reopen":
             events = list(lg.events)
             events.append(("open", s.id, lg.open_body(_window(rng), s.host)))
@@ -875,7 +895,8 @@ def ledger_case(rng: random.Random, name: str) -> Any:
             j["ledger"] = lg.lines()[:lg.index(rng.choice(["open", "end"]), s.id)]
         case "window-form":
             j["ledger"] = lg.lines()
-            j["window"] = rng.choice([{**lg.window, "period": rng.choice([0, "", "-p", "x" * 65])},
+            j["window"] = rng.choice([{**lg.window, "period": rng.choice([0, "", "-p", "x" * 65, "p\n"])},
+                                      {**lg.window, "commit": lg.window["commit"] + "\n"},
                                       {**lg.window, "stream": "00"}, {"commit": lg.window["commit"]}, None])
         case "key-form":
             j["ledger"] = lg.lines()
@@ -899,7 +920,7 @@ SESSION_NAMES = ["honest", "no-ledger", "no-open", "unclosed-ledger", "other-hos
 
 
 def session_case(rng: random.Random, name: str) -> Any:
-    s = Session(rng)
+    s = Session(rng, params=LEDGER_PARAMS)
     lg = Ledger(rng, s, closed=name != "unclosed-ledger")
     files = s.files()
     j = {"key": s.key.to_json(), "ledger": None, "session": files, "window": lg.window}
