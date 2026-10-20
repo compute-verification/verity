@@ -438,8 +438,8 @@ def cmd_select(argv: list[str]) -> int:
                   "this store from the remote first (`research data refresh`, or `research data index`); a `research run` job's "
                   "store reads the remote only when the run is launched with `--store-read`", file=sys.stderr)
             return 1
-        rows, _ = _select(st, ns, idx if as_of is not None else None)
-        source = (f"the index ({idx.describe()}, complete as of {as_of})" if as_of is not None else
+        rows, _ = _select(st, ns, idx)
+        source = (f"the index ({idx.describe()}, complete as of {as_of or 'never listed'})" if idx is not None else
                   f"the catalog alone (this store's, {catalog}; no index: {no_index})")
     finally:
         if idx is not None:
