@@ -7,7 +7,7 @@ import Proofs.Accounting.HeadlineDc.Sm100
 (`Definitions.Accounting.HeadlineDc.Sm100Measured`), at the data's certificate `π* = Sm100Measured.lamStar`, the issue
 row (`sm100m_lamStar`), `p = 7/8`, `p₀ = ½` and `Λ = max(κ/ln(8/7), (κ + f)/ln 2)`:
 
-* the data, by `decide`: issue is ♭'s largest facet of DC-100-ri's 11 (`sm100m_max`), so `B_♭` is its issue load
+* the data, by `decide`: issue is ♭'s largest facet of DC-100-ri's 9 (`sm100m_max`), so `B_♭` is its issue load
   (`sm100m_bnd`); every writer kind's word costs at least `1/32768` there (`sm100m_writers`), and so do the vector
   and table words at `½` (`sm100m_vec`), so `w* ≥ 1/32768` (`sm100m_wStar`); each of the 14 fold routes costs at
   least the cheapest one's load there (`sm100m_fold`, `sm100m_phiStar`);
@@ -27,7 +27,7 @@ open Accounting.TS Accounting.TS.Headline Accounting.Assumptions.TS Pouw.Relativ
 def vfCoef100 (r i : ℕ) : ℚ := Sparse.coeff (Sm100Measured.dc100ri.getD r []) i
 
 /-- The measured machine's row `r`. -/
-def vfRow100 (r : Fin 11) (i : ℕ) : ℚ := vfCoef100 r.val i
+def vfRow100 (r : Fin 9) (i : ℕ) : ℚ := vfCoef100 r.val i
 
 /-- ♭'s counts on DC-100-ri, its four lists in `labelled`'s order. -/
 def flat100M : Sparse := Sm100.flatWords ++ Sm100Measured.flatFold ++ Sm100.flatFill ++ Sm100Measured.flatSkip
@@ -41,7 +41,7 @@ def load100M (i : ℕ) : ℚ := dot (vfCoef100 0) 52 (Sm100Measured.d2s.folds.ge
 /-- The cheapest fold route's load on issue. -/
 def phi100M : ℚ := ((List.range 14).map load100M).foldr min (load100M 0)
 
-theorem sm100m_max : ∀ i < 11, dot (vfCoef100 i) 52 flat100M ≤ B100M := by decide +kernel
+theorem sm100m_max : ∀ i < 9, dot (vfCoef100 i) 52 flat100M ≤ B100M := by decide +kernel
 
 theorem sm100m_Bpos : (0 : ℚ) < B100M := by decide +kernel
 
@@ -149,12 +149,12 @@ theorem sm100m_demand_issue : ∀ hd, (1 : ℝ) / 32768 ≤ Sm100Measured.model.
   cases h with
   | writer t =>
     have hw := sm100m_writers t.val t.isLt
-    show (1 : ℝ) / 32768 ≤ (vfCoef100 (0 : Fin 11).val
+    show (1 : ℝ) / 32768 ≤ (vfCoef100 (0 : Fin 9).val
         ((Sm100Measured.d2s.writers.getD t.val (0, 0)).1 % 52) : ℝ) /
         ((Sm100Measured.d2s.writers.getD t.val (0, 0)).2 : ℝ)
     rw [le_div_iff₀ (by exact_mod_cast hw.1)]
     have h : ((1 / 32768 * ((Sm100Measured.d2s.writers.getD t.val (0, 0)).2 : ℚ) : ℚ) : ℝ) ≤
-        ((vfCoef100 (0 : Fin 11).val ((Sm100Measured.d2s.writers.getD t.val (0, 0)).1 % 52) : ℚ) : ℝ) :=
+        ((vfCoef100 (0 : Fin 9).val ((Sm100Measured.d2s.writers.getD t.val (0, 0)).1 % 52) : ℚ) : ℝ) :=
       Rat.cast_le.mpr hw.2
     push_cast at h
     linarith
