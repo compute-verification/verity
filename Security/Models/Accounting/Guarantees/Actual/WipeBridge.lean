@@ -43,7 +43,8 @@ fractions does in PoUS's continuous audit (`Pous.Guarantees.ContinuousAudit`). T
 the state's width at each read), so the step from `UniformLabels` to the deployed PRF labels, and from uniform indices
 to `coin_secret`'s derivation, is an advantage against the distinguisher that runs the system once, as
 `Pous.StreamedWipe.prfAdvantage` states it; `answered` and `unanswered` need `|B|` counterfactual runs a read and stay
-inside the proof.
+inside the proof. `Accounting.Guarantees.Actual.WipeReadHeldPrf` takes the labels' step, with no label assumption;
+the indices' step is still outside.
 -/
 
 namespace Accounting.Guarantees.Actual

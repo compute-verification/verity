@@ -1,0 +1,74 @@
+import Definitions.Accounting.Actual.WipePrf
+import Definitions.Pous.Model.StreamedWipe
+import Models.Accounting.Guarantees.Actual.WipeBridge
+
+/-!
+# The store held read by read, on the deployed labels (trusted)
+
+`Accounting.Guarantees.Actual.WipeReadHeld` takes `Accounting.Assumptions.UniformLabels`, uniform labels given the
+auditor's devices' coins. The deployed labels are SHA-512 of the challenger's 32-byte key and the index (PR #2726), a
+PRF, for which that premise is false. `WipeReadHeldPrf` states the guarantee on them, in PoUS's streamed-label wipe's
+form (`Pous.Guarantees.StreamedWipe`): no named label assumption, and the PRF (C3, claim `prf/sha-512`) enters as an
+advantage term in the conclusion, `Pous.StreamedWipe.prfAdvantage` against an explicit distinguisher, which C3 bounds
+for an efficient one. Proof: `Proofs/Accounting/Actual/WipePrf.lean`.
+
+The system is a run of the other coins `ω`, the label table `F` and the indices `c`, `S ((ω, F), c)`
+(`Definitions.Accounting.Actual.WipePrf`): the challenger uses its key only to compute labels, and the prover never sees
+it. The deployed system is `S` at `F = prf s` for a uniform key `s`. `WipeReadHeld`'s premises are stated of `S` at every
+table, since the physics and the challenger's code don't depend on the labels' values. The devices' coins `ζ` are
+among `ω`, so they are independent of the table.
+
+A uniform table meets `UniformLabels`, so `WipeReadHeld` bounds the event there. The event is decided by one run
+(`Actual.heldEvent`). So the step from the uniform table to `prf s` costs the advantage of the distinguisher that runs
+the system once on the labels it is given and outputs the event (`Actual.heldDistinguisher`). It asks the labels only
+what the audit asks them, and it never reads the key.
+
+Not covered here, and so outside this guarantee:
+
+* The indices are uniform. The deployed ones are `draw_indices(coin_secret, …)`, a PRG of one 32-byte secret, all
+  drawn at the first batch (`streamed_wipe.Challenger.challenge`). The step to them is a PRG advantage against a
+  distinguisher of the same form.
+* One key labels all `n` reads: one wipe's reads, such as the deployed wipe's 74,000. Reads across wipes with fresh keys
+  take one advantage term a wipe, by a hybrid over the wipes.
+-/
+
+namespace Accounting.Guarantees.Actual
+
+/-- **The store held read by read, on the deployed labels**. The wipe's labels are `prf s` for a uniform key
+`s : Bits κ`. The system is a run `S ((ω, F), c)` of the other coins `ω`, the label table `F : Fin N → Bits b` and the
+`n` indices `c` on the store `Fin N`. The deployed system is that run at `F = prf s`. For any `prf`, take
+`WipeReadHeld`'s premises for that system, stated of it at every table:
+
+* `CausalStrategy`, and a latency ceiling `ℓ⁺` from `X` to the challenger's answer leaves `Y`
+  (`Placed.LatencyAtMost`, claim `latency-ceiling`);
+* `LiveReads` and `LiveVerdicts`, the latter for the challenger's verdict `Ch j` on its view;
+* `QuietReads`, up to the devices' coins `ζ`, which are a function of `ω`;
+* `LateAnswers`, with each block's label as the run carries it (`Actual.tableLabel`).
+
+Then the chance over `ω`, `c` and `s` that every read is accepted and arrives at a tick of `T`, and at least `K` reads
+find `X`'s state narrower than `m` bits, is at most `WipeReadHeld`'s bound
+`exp(−K (1 − (a − 1)/N)) + n |T| 2^m C(N, a) 2^{-a b}`, plus the PRF's advantage against the distinguisher one audit
+makes (`Actual.heldDistinguisher`). That distinguisher runs the system once on the labels it is given and outputs the
+event.
+
+No named assumption on the labels: `UniformLabels` is not a premise. The advantage is C3's term (`prf/sha-512`), and C3
+bounds it for a distinguisher as efficient as one audit together with the prover's own strategy, as in
+`Pous.Guarantees.StreamedWipe`. The indices are uniform, and one key labels all `n` reads (the module docstring says
+what that leaves out). Proof: `Accounting.SecurityProofs.Actual.WipeReadHeldPrf`. -/
+def WipeReadHeldPrf : Prop :=
+  ∀ {Ω L Z : Type} [Fintype Ω] [LinearOrder L] {n N b κ : ℕ} (prf : Pous.Bits κ → Fin N → Pous.Bits b)
+    (S : (Ω × (Fin N → Pous.Bits b)) × (Fin n → Fin N) → Actual.Run L) (ℓ : L → L → ℕ) (X Y V : Finset L)
+    (Ch : Fin n → Set (ℕ × L × ℕ × ℕ × ℕ) → Prop) (D ℓmax a m K : ℕ)
+    (arrive : (Ω × (Fin N → Pous.Bits b)) × (Fin n → Fin N) → Fin n → ℕ) (ζ : Ω → Z)
+    (quiet : Fin n → ℕ → Fin N → Z → Set (ℕ × L × ℕ × L × ℕ × ℕ × ℕ)) (T : Finset ℕ),
+    CausalStrategy S ℓ → (∀ r, (S r).A.LatencyAtMost X Y ℓmax) → Assumptions.LiveReads S X arrive →
+    Assumptions.LiveVerdicts (fun r j => Ch j ((S r).view V)) →
+    Assumptions.QuietReads S X arrive D (fun r j => Ch j ((S r).view V)) (fun ω₀ => ζ ω₀.1) quiet →
+    Assumptions.LateAnswers S X Y Actual.tableLabel arrive ℓmax D (fun r j => Ch j ((S r).view V)) →
+    Pous.pr (fun x : (Ω × (Fin n → Fin N)) × Pous.Bits κ =>
+        Actual.heldDistinguisher S X V Ch arrive T m K (x.1, prf x.2)) ≤
+      ENNReal.ofReal (Real.exp (-((K : ℝ) * (1 - ((a : ℝ) - 1) / N))) +
+          n * T.card * 2 ^ m * (N.choose a : ℝ) / 2 ^ (a * b)) +
+        Pous.StreamedWipe.prfAdvantage prf (Actual.heldDistinguisher S X V Ch arrive T m K)
+
+end Accounting.Guarantees.Actual

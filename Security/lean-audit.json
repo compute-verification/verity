@@ -1217,6 +1217,9 @@
    "assumptions": [],
    "type_hash": "2b3c90af401a23241ab54f737beed2c849e13e173bd7a698d7a680454242557f"
   },
+  "Accounting.SecurityProofs.Actual.WipeReadHeldPrf": {
+   "owner": "@memory-accounting"
+  },
   "Accounting.SecurityProofs.Actual.WipeReadPool": {
    "owner": "@memory-accounting",
    "signature": ["Accounting.SecurityProofs.Actual.WipeReadPool.{u_3, u_4} : Accounting.Guarantees.Actual.WipeReadPool"],
@@ -8309,6 +8312,7 @@
    "Accounting.SecurityProofs.Actual.AnsweredOfQuiet": "lemma: the count of coins on which a read answers a blocks at one of C contents, from a causal strategy, the latency ceiling (latency-ceiling) and WipeRead's premises on a verdict read off the coins; WipeReadHeld is what it is for.",
    "Accounting.SecurityProofs.Actual.WipeLag": "lemma: the contents of X's state at t number at most those at s times 2^(beta_X (t - s)), a counting bound over CausalFrom and DeclaredLinks on any strategy, with no function's acceptance; with WipeReadHeld it bounds the state between reads (note:20261019T2210Z-report-timed-round-redteam-3).",
    "Accounting.SecurityProofs.Actual.WipeReadHeld": "frozen (no-function): its acceptance, the challenger's verdict Ch j on its view, is inside a counted event (the card of a filter over the coins, not a shape.events probability), and it takes per-run physical premises (CausalStrategy, Placed.LatencyAtMost) over an arbitrary strategy rather than a function's acceptance (note:20261019T2210Z-report-timed-round-redteam-3).",
+   "Accounting.SecurityProofs.Actual.WipeReadHeldPrf": "frozen (no-function): WipeReadHeld on the deployed labels prf s; its acceptance, the challenger's verdict Ch j on its view, is inside the event of a distinguisher (Actual.heldDistinguisher, read by Pous.pr, which is not a shape.events probability), and it takes WipeReadHeld's per-run physical premises (CausalStrategy, Placed.LatencyAtMost) over an arbitrary strategy rather than a function's acceptance; it fits once the memory challenger's verdict has a Lean function, as WipeReadHeld does.",
    "Accounting.SecurityProofs.Actual.WipeReadPool": "lemma: Ville's inequality over the reads on the challenger's verdicts read off the coins, arithmetic under LiveVerdicts alone; WipeReadHeld is what it is for."
   },
   "conjectures": {
