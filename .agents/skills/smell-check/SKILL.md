@@ -258,6 +258,15 @@ Under each question, newest first; the lane that found or reported it is in brac
   the Lean's numbers and premises.
 - **−5% quoted as the dedup's value** (19 Oct) [compute-accounting]. Kernels' row 2, "71.31 → 67.66 ms (−5.1%)", came from
   a harness with no circuit Commit; the dedup's value (about 40 ms a step) shows only on the full path. Fix: labeled.
+- **A run's GPU read from its preset, not from the device** (19 Oct) [circuits]. Runs r20261019-022648-e1f5 and
+  r20261018-083421-b6d4 served H200 presets on a B200, and their measures read as H200 because the GPU came from
+  `preset.gpu_id`. Fix: `benchmarks/g2/curve.py` takes the device the harness saw, else the attempt's hardware, and a
+  compiled preset for another GPU doesn't count.
+- **A "best achievable" minimum over dropped iterations and what-if rows** (19 Oct) [circuits]. Labeling the hash
+  loop's runs onto G2's curve put its what-if row (r20261018-231625-fccf, cap66, ITL 1.21x) and a dropped iteration
+  (r20261019-012032-de65, per-layer TTFT 1.04x) into the minimum: the winner's curse. Fix: only the loop's line counts
+  (its row from the job's ROW, its verdict from the loop's results); the SHA-256 column takes only pinned runs on their
+  own GPU (unpinned r20261017-234343-c4c4 read 1.14x where pinned r20261018-094733-983c reads 2.76x).
 - **Quoted numbers from a retired scheme** (18 Oct) [kernels]. Two Pearl-C windows (3.097x, 1.630x) were the retired
   BLAKE3 -h2, and three overhead metrics disagreed. Fix: the scheme in every label; one metric against pinned stock.
 - **Published overheads no spec reproduces** [benchmarks]. "All five quoted overheads reproduced inside the rerun's 95%
@@ -275,12 +284,6 @@ Under each question, newest first; the lane that found or reported it is in brac
 
 ### 7. Checks that pass for the wrong reason, or can't fail
 
-- **A word view that compared no instances** (20 Oct) [circuits]. circuit-check crashed on a Boolean constant
-  (`Const32[..]_v2`, no parameters), and the first fix, one instance where there are no vectors, reported
-  `{"compared": 1, "mismatches": 0}`: `evaluate_words` and `evaluate_batch` size a batch by their arguments, so with none
-  they returned empty arrays and nothing was compared, and a constant one bit off its word constant passed. Fix: such a
-  Definition is evaluated as its one instance, with a negative test (`test_a_boolean_constant_is_checked_on_its_one_instance`,
-  CIR-47), before landing.
 - **A literal peel that served data breaks, and a prove that never exercised it** (19 Oct) [kernels-dither-hb,
   kernels-dither-rtx2]. "z − b Bᵀ − A cᵀ − b cᵀ" was off on 433–1,024 of 1,024 cells, because vLLM's per-token quant puts
   ±127 at each row's absmax, so X wraps where A = 127 and b = 1; the K = 64 prove's windows held no A = 127. Fix: the exact
@@ -340,6 +343,12 @@ Under each question, newest first; the lane that found or reported it is in brac
 
 ### 8. Theorems and bounds that say less than they read
 
+- **A premise false on one circuit, unmarked once it is true on another** (19 Oct) [lean]. `ActivationsIncompressible`
+  and `PartialSumsIncompressible` are false on a declared circuit and stand on a reference one (card 7d82eba8), but
+  `shape.conjectures` holds one status per constant, so they left it, and a new guarantee that applies them to a
+  declared circuit would pass `check` without the `falsified` category. Only their docstrings and the frozen reasons of
+  `UpdatedMatMul`, `UpdatedMatMulReads`, `Training` and `Actual.Runtime` say so. Fix: a reference-circuit form the
+  Lean can tell from a declared one (lean, not started).
 - **A recursion soundness statement only a SHA-512 collision could prove** (19 Oct) [proofs]. "Claim it, (d).
   Every change RT5 and RT9 named is applied", on `RecDeploy.KSBoundRoute` (#2546). Fix: REC1 restates it with staging
   and holder-agreement facts, then proves it.
