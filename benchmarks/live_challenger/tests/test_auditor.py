@@ -65,7 +65,7 @@ def test_a_window_gets_one_session_whose_open_entry_is_signed_before_it_serves(h
     doc = json.loads(out)
     assert rc == 0 and doc == {"session": "s20261020T093000Z-ab12", "port": 7811, "peer": "vy-nebius-1", "seq": 0,
                                "host": "vy-challenger-1.s20261020T093000Z-ab12", "root": COMMIT, "by": "vllm",
-                               "secret": SECRET.hex()}
+                               "secret": SECRET.hex(), "commitment": None}
     I, verify = verify_under(host)
     windows = A.verify_ledger(A.read_ledger(host.ledger), I, verify)
     (e,) = [w["open"] for w in windows.values()]

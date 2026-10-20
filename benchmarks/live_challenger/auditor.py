@@ -22,11 +22,13 @@ first coin.
   the auditor's, never the requester's: its open's `seq` and `started_utc` (the gate takes no period), from which the
   period record (proofs', PRF-108) places it in a period. `serve.py` gets the root (`--root`, the salt's hook) and the
   session's secret (`--secret-file`), which the gate returns to the opener alone and which the client's hello must carry;
-  the open entry keeps its SHA-512, `fetch` never ships it, and the session deletes it when it ends.
+  the open entry keeps its SHA-512, `fetch` never ships it, and the session deletes it when it ends. The open's answer also
+  carries the session's coin commitment root (`commitment`, from the record serve.py signs before it listens; `status`
+  gives it too), so the serving side checks the hello's commitment against it before its first coin.
 - **An `end` entry** follows when `serve.py` exits: its exit code, whether its client closed it, the SHA-512 of each file of
   `out/` (which seals the release log), how many coins each family released (`released`, counted from the release log under
   the signed record's commitment; `complete` when every family released all its coins, so a period can refuse a short
-  release) and the leaf the challenger's record was signed at (`record_leaf`). A session with an `open` and no `end` never
+  release), the leaf the challenger's record was signed at (`record_leaf`) and its commitment root (`commitment`). A session with an `open` and no `end` never
   ended (its host stopped): a refused window to the verifier, like one whose `closed` or `complete` is false.
 - **The ledger** (`/var/lib/vy-challenger/windows.jsonl`, `chattr +a`) is one JSON object a line: `schema`, `seq` (from 0),
   `prev` (SHA-512 of the previous line's bytes, 128 zeros first), `kind`, `session`, `body` and `sig`, an LMS signature under
@@ -55,6 +57,7 @@ import signal
 import subprocess
 import sys
 import tarfile
+import time
 from contextlib import contextmanager
 from dataclasses import dataclass
 from datetime import datetime, timezone
@@ -348,9 +351,11 @@ def free_port(lines: list[bytes], active: Callable[[str], bool]) -> int:
 
 
 def gate_open(argv: list[str], host: Host, *, by: str, now: datetime, token: str, admit: Callable[[str], None],
-              start: Callable[[str], None], own: Callable[[Path], None], secret: bytes) -> dict:
-    """Validate a request, hand it to `admit` (as `auditor`) and `start` its unit: the session id, its port on the peer and
-    its secret, which only this answer carries."""
+              start: Callable[[str], None], own: Callable[[Path], None], secret: bytes,
+              ready: Callable[[str], str | None]) -> dict:
+    """Validate a request, hand it to `admit` (as `auditor`) and `start` its unit: the session id, its port on the peer, its
+    secret, which only this answer carries, and its coin commitment's root once `ready` has it (serve.py signs its record
+    before it listens), so the serving side checks the hello's commitment against it before its first coin."""
     req = parse_open(argv, host)
     root = req["window"]["root"]
     if (sid := roots_of(read_ledger(host.ledger)).get(root)) is not None:
@@ -371,7 +376,7 @@ def gate_open(argv: list[str], host: Host, *, by: str, now: datetime, token: str
         start(session)
     entry = sessions_of(read_ledger(host.ledger))[session]["open"]
     return {"session": session, "port": entry["body"]["port"], "peer": req["peer"], "host": entry["body"]["host"],
-            "seq": entry["seq"], "root": root, "by": by, "secret": secret.hex()}
+            "seq": entry["seq"], "root": root, "by": by, "secret": secret.hex(), "commitment": ready(session)}
 
 
 def gate_status(session: str, host: Host, active: Callable[[str], bool]) -> dict:
@@ -380,7 +385,8 @@ def gate_status(session: str, host: Host, active: Callable[[str], bool]) -> dict
     s = sessions_of(read_ledger(host.ledger)).get(session)
     if s is None:
         raise Refused(f"no session {session} in the ledger")
-    return {"session": session, "open": s.get("open"), "end": s.get("end"), "active": "end" not in s and active(session)}
+    return {"session": session, "open": s.get("open"), "end": s.get("end"), "active": "end" not in s and active(session),
+            "commitment": commitment_of(host.sessions / session / "out")}
 
 
 def gate_fetch(session: str, host: Host) -> bytes:
@@ -431,7 +437,8 @@ def gate(argv: list[str], host: Host = Host(), **hooks: Any) -> tuple[int, bytes
             doc = gate_open(rest, host, by=by, now=hooks.get("now") or datetime.now(timezone.utc),
                             token=hooks.get("token") or secrets.token_hex(2), admit=hooks.get("admit") or as_auditor_admit,
                             start=hooks.get("start") or start_unit, own=hooks.get("own") or own_by_auditor,
-                            secret=hooks.get("secret") or secrets.token_bytes(32))
+                            secret=hooks.get("secret") or secrets.token_bytes(32),
+                            ready=hooks.get("ready") or (lambda s: await_commitment(host, s, active)))
         elif verb == "status" and len(rest) == 1:
             doc = gate_status(rest[0], host, active)
         elif verb == "ledger" and not rest:
@@ -512,15 +519,39 @@ def serve_argv(host: Host, session: str, open_body: dict, tree: Path = TREE) -> 
             "--root", open_body["window"]["root"], "--secret-file", str(host.sessions / session / SECRET)]
 
 
+def record_of(out: Path):
+    """The challenger record the session signed in `out` (`remote.RECORD`), with its JSON; (None, None) until it has one."""
+    from verity.core.protocols.sampled_proofs import challenger as C
+    from verity.core.protocols.sampled_proofs import remote
+    try:
+        doc = json.loads((out / remote.RECORD).read_text())
+        return C.ChallengerRecord.from_json(doc), doc
+    except (OSError, ValueError, KeyError, TypeError, C.CoinError):
+        return None, None
+
+
+def commitment_of(out: Path) -> str | None:
+    """The coin commitment's root (hex) of the record the session signed, None until it has one."""
+    record, _ = record_of(out)
+    return None if record is None else record.commitment.root.hex()
+
+
+def await_commitment(host: Host, session: str, active: Callable[[str], bool], seconds: float = 60.0) -> str | None:
+    """The session's commitment root once serve.py has signed its record (before it listens), or None if its unit stopped
+    first or `seconds` passed."""
+    deadline = time.monotonic() + seconds
+    while (root := commitment_of(host.sessions / session / "out")) is None and active(session) and time.monotonic() < deadline:
+        time.sleep(0.2)
+    return root
+
+
 def released_of(out: Path) -> tuple[dict[str, int] | None, int | None]:
     """(coins released by family, counted from the release log under the commitment the record signs; the record's leaf),
     each None when the session left no such file."""
     from verity.core.protocols.sampled_proofs import challenger as C
     from verity.core.protocols.sampled_proofs import remote
-    try:
-        doc = json.loads((out / remote.RECORD).read_text())
-        record = C.ChallengerRecord.from_json(doc)
-    except (OSError, ValueError, KeyError, TypeError, C.CoinError):
+    record, doc = record_of(out)
+    if record is None:
         return None, None
     try:
         released = {label: len(r) for label, r in remote.released_roots(out / remote.RELEASES, record.commitment).items()}
@@ -563,7 +594,7 @@ def run(host: Host, session: str, *, signer, pinned: str, now: Callable[[], date
     complete = released is not None and all(released.get(label) == n for label, n in body["families"])
     end = {"rc": rc, "closed": rc == 0 and summary.get("ended") == "closed by the client",
            "ended": why or summary.get("ended") or f"serve.py exited {rc}", "files": files, "released": released,
-           "complete": complete, "record_leaf": record_leaf, "ended_utc": utc(now())}
+           "complete": complete, "record_leaf": record_leaf, "commitment": commitment_of(out), "ended_utc": utc(now())}
     return append(host, "end", session, lambda lines: end, I, sign)
 
 

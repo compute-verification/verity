@@ -160,6 +160,21 @@ def test_rt4_int_25_a_client_that_takes_the_salt_and_one_round_coin_then_closes_
     assert A.verify_ledger(A.read_ledger(host.ledger), I, verify)["cd" * 64]["end"] == end
 
 
+def test_the_open_answer_status_and_end_carry_the_coin_commitment_the_hello_answers(host, signer, tmp_path, monkeypatch):
+    """vllm's ask (VLLM-58): the serving side checks, before its first coin, that the challenger it reached is its session's."""
+    rc, out = A.gate(["--ssh", open_words(), "--key", "vllm"], host, now=T0, token="ab12", own=lambda d: None,
+                     start=lambda s: None, active=lambda s: False, secret=SECRET, ready=lambda s: "ef" * 64,
+                     admit=lambda s: A.admit(host, s, signer=signer, pinned=PIN, now=T0, active=lambda s: False))
+    session = json.loads(out)["session"]
+    assert rc == 0 and json.loads(out)["commitment"] == "ef" * 64
+    assert A.await_commitment(host, session, active=lambda s: False) is None
+    hello = []
+    end = serve(host, signer, session, lambda c: hello.append(c.commitment.root.hex()), tmp_path, monkeypatch)
+    assert end["body"]["commitment"] == hello[0] == A.await_commitment(host, session, active=lambda s: True)
+    rc, out = ssh(host, signer, f"status {session}")
+    assert rc == 0 and json.loads(out)["commitment"] == hello[0]
+
+
 def test_rt4_int_30_a_trailing_newline_or_a_period_opens_nothing_and_a_root_is_kept_in_lowercase(host, signer, capsys):
     rest = f"--peer vy-nebius-1 --scheme verity/test/coins/v1 --families '{json.dumps(FAMILIES)}'"
     for words, why in ((f"open --commit '{COMMIT}\n' {rest}", "128 hex digits"),
