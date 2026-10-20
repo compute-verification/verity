@@ -7,8 +7,8 @@ import Properties.Proofs.Nci.Desc
 A piece of a segment names gates with their widths (`pieceGates`, `segGates`): a parameter's leaves are none, a row of a
 piece of gates is its elements, and a segment of copies is each copy's pieces. `NovelWidthExact` says `Desc.novelWidth`
 is the total width of the distinct gates its segments name, wherever no gate is named with two widths. It holds wherever
-the one open statement here, `GateIvsExact`, does (`novelWidthExact_of`): `Desc.gateIvs` gives a piece list's gates as
-intervals, with their widths.
+the one open statement here, `PisExact`, does (`novelWidthExact_of_pis`): `Desc.Piece.pis` gives a piece's elements as
+periodic intervals.
 
 The rest is proved, layer by layer:
 
@@ -20,7 +20,11 @@ The rest is proved, layer by layer:
 * `frameFold_inv`: frames of one start, period and count merge into one with the union of their gates (`Array.qsort`
   only permutes, `Properties.RemoteAudit.qsort_toList_perm`).
 * `copiesStep_inv`: a segment of copies gives its copies' intervals or one frame of them, with its gates.
-* `tail_eq` and `novelWidth_sum` put them together.
+* `tail_eq` and `novelWidth_sum` put them together, given `GateIvsExact` (`novelWidthExact_of`): `Desc.gateIvs` gives a
+  piece list's gates as intervals, with their widths.
+* `gateIvsExact_of`: `gateIvs` takes each width's pieces to `ivsOf`, so `GateIvsExact` holds where `IvsOfExact` does.
+* `ivsOfExact_of`: `ivsOf` emits each periodic interval whose runs meet as one interval and sweeps the rest, sorted, merging
+  those of one period and count that meet (`merge_spec`, `mergeFold_spec`), so `IvsOfExact` holds where `PisExact` does.
 -/
 
 namespace NciCheck.Properties.SecurityProofs.Width
@@ -633,7 +637,7 @@ def segGates (s : Seg) : List (ℤ × ℕ) :=
 
 def segsGates (segs : Array Seg) : List (ℤ × ℕ) := segs.toList.flatMap segGates
 
-/-- **Open: `gateIvs` is a piece list's gates.** Of pieces whose gates are naturals, every gate of an interval `gateIvs`
+/-- **`gateIvs` is a piece list's gates.** Of pieces whose gates are naturals, every gate of an interval `gateIvs`
 gives is one of theirs with the interval's width, and each of theirs is in one of the intervals. -/
 def GateIvsExact : Prop :=
   ∀ qs : Array Piece, (∀ x ∈ piecesGates qs, 0 ≤ x.1) →
@@ -943,5 +947,305 @@ theorem novelWidthExact_of (hG : GateIvsExact) : NovelWidthExact := by
     ext a; simp [gs]
   rw [himg, Finset.sum_image fun x hx y hy h => hinj x (by simpa using hx) y (by simpa using hy) h]
   exact Finset.sum_congr rfl fun x hx => hW x (by simpa using hx)
+
+/-! ## `gateIvs`, from `ivsOf` -/
+
+/-- A piece's elements: element `t` of row `r` is `base + r * rowStride + t * stride`, with one row when it has none. -/
+def elems (q : Piece) : List ℤ :=
+  (List.range (max q.rows 1)).flatMap fun r => (List.range q.len).map fun t => q.base + (r : ℤ) * q.rowStride + (t : ℤ) * q.stride
+
+theorem pieceGates_gate {q : Piece} {w : ℕ} (h : q.tgt = .gate w) : pieceGates q = (elems q).map fun e => (e, w) := by
+  simp [pieceGates, h, elems, List.map_flatMap]
+
+theorem pieceGates_ref {q : Piece} {p : Bool} {i : ℕ} (h : q.tgt = .ref p i) : pieceGates q = [] := by
+  simp [pieceGates, h]
+
+theorem tgt_beq_gate (t : Tgt) (w : ℕ) : (t == Tgt.gate w) = true ↔ t = .gate w := by
+  cases t with
+  | ref p i => exact ⟨fun h => absurd h (by change ¬ false = true; simp), fun h => by cases h⟩
+  | gate w' => change (w' == w) = true ↔ _; simp
+
+/-- **`ivsOf` is the pieces' elements.** Of pieces whose elements are naturals, every element of an interval
+`ivsOf` gives is one of a piece's, and each of theirs is in one of the intervals. -/
+def IvsOfExact : Prop :=
+  ∀ qs : Array Piece, (∀ q ∈ qs.toList, ∀ e ∈ elems q, 0 ≤ e) →
+    (∀ iv ∈ (ivsOf qs).toList, ∀ a, iv.1 ≤ a → a < iv.2 → ∃ q ∈ qs.toList, (a : ℤ) ∈ elems q) ∧
+    ∀ q ∈ qs.toList, ∀ e ∈ elems q, ∃ iv ∈ (ivsOf qs).toList, iv.1 ≤ e.toNat ∧ e.toNat < iv.2
+
+theorem mem_qsort_toList {α : Type} {xs : Array α} {lt : α → α → Bool} {a : α} :
+    a ∈ (xs.qsort lt).toList ↔ a ∈ xs.toList :=
+  (Properties.RemoteAudit.qsort_toList_perm xs lt).mem_iff
+
+theorem mem_gateIvs {qs : Array Piece} {z : ℕ × ℕ × ℕ} : z ∈ (gateIvs qs).toList ↔
+    ∃ w, (∃ q ∈ qs.toList, q.tgt = .gate w) ∧ ∃ iv ∈ (ivsOf (qs.filter (·.tgt == .gate w))).toList, z = (iv.1, iv.2, w) := by
+  unfold gateIvs
+  simp only [Array.toList_flatMap, List.mem_flatMap, Array.toList_map, List.mem_map]
+  simp only [List.mem_eraseDups]
+  simp only [mem_qsort_toList]
+  simp only [Array.mem_toList_iff, Array.mem_filterMap]
+  constructor
+  · rintro ⟨w, ⟨q, hq, h⟩, iv, hiv, rfl⟩
+    refine ⟨w, ⟨q, hq, ?_⟩, iv, hiv, rfl⟩
+    revert h; cases q.tgt <;> simp
+  · rintro ⟨w, ⟨q, hq, h⟩, iv, hiv, rfl⟩
+    exact ⟨w, ⟨q, hq, by rw [h]⟩, iv, hiv, rfl⟩
+
+/-- **`GateIvsExact`, from `IvsOfExact`**: `gateIvs` takes each width's pieces to `ivsOf`. -/
+theorem gateIvsExact_of (hV : IvsOfExact) : GateIvsExact := by
+  intro qs hnn
+  have hfil : ∀ w, ∀ q ∈ (qs.filter (·.tgt == .gate w)).toList, q ∈ qs.toList ∧ q.tgt = .gate w := by
+    intro w q hq
+    rw [Array.toList_filter, List.mem_filter, tgt_beq_gate] at hq
+    exact hq
+  have hnn' : ∀ w, ∀ q ∈ (qs.filter (·.tgt == .gate w)).toList, ∀ e ∈ elems q, 0 ≤ e := by
+    intro w q hq e he
+    obtain ⟨hq, ht⟩ := hfil w q hq
+    exact hnn (e, w) (List.mem_flatMap.2 ⟨q, hq, by rw [pieceGates_gate ht]; exact List.mem_map.2 ⟨e, he, rfl⟩⟩)
+  refine ⟨fun z hz a h1 h2 => ?_, fun x hx => ?_⟩
+  · obtain ⟨w, -, iv, hiv, rfl⟩ := mem_gateIvs.1 hz
+    obtain ⟨q, hq, ha⟩ := (hV _ (hnn' w)).1 iv hiv a h1 h2
+    obtain ⟨hq, ht⟩ := hfil w q hq
+    exact List.mem_flatMap.2 ⟨q, hq, by rw [pieceGates_gate ht]; exact List.mem_map.2 ⟨_, ha, rfl⟩⟩
+  · obtain ⟨q, hq, hx⟩ := List.mem_flatMap.1 hx
+    rcases ht : q.tgt with ⟨p, i⟩ | w
+    · rw [pieceGates_ref ht] at hx; cases hx
+    · rw [pieceGates_gate ht, List.mem_map] at hx
+      obtain ⟨e, he, rfl⟩ := hx
+      have hqf : q ∈ (qs.filter (·.tgt == .gate w)).toList := by
+        rw [Array.toList_filter, List.mem_filter, tgt_beq_gate]; exact ⟨hq, ht⟩
+      obtain ⟨iv, hiv, h⟩ := (hV _ (hnn' w)).2 q hqf e he
+      exact ⟨(iv.1, iv.2, w), mem_gateIvs.2 ⟨w, ⟨q, hq, ht⟩, iv, hiv, rfl⟩, h⟩
+
+/-! ## `ivsOf`, from `Piece.pis` -/
+
+/-- `x`'s set: `⋃_{c < cnt} [lo + c·period, lo + c·period + len)`. -/
+def inPI (x : PI) (a : ℕ) : Prop := ∃ c < x.cnt, ∃ t < x.len, a = x.lo + c * x.period + t
+
+/-- A list of intervals' set. -/
+def inIvs (L : List (ℕ × ℕ)) (a : ℕ) : Prop := ∃ iv ∈ L, iv.1 ≤ a ∧ a < iv.2
+
+theorem inIvs_append {A B : List (ℕ × ℕ)} {a : ℕ} : inIvs (A ++ B) a ↔ inIvs A a ∨ inIvs B a := by
+  simp only [inIvs, List.mem_append]
+  constructor
+  · rintro ⟨iv, hiv | hiv, h⟩
+    · exact Or.inl ⟨iv, hiv, h⟩
+    · exact Or.inr ⟨iv, hiv, h⟩
+  · rintro (⟨iv, hiv, h⟩ | ⟨iv, hiv, h⟩)
+    · exact ⟨iv, Or.inl hiv, h⟩
+    · exact ⟨iv, Or.inr hiv, h⟩
+
+/-- **A periodic interval whose runs meet is one interval.** -/
+theorem inPI_run (x : PI) (hc : 0 < x.cnt) (h : x.cnt = 1 ∨ x.period ≤ x.len) (a : ℕ) :
+    inPI x a ↔ x.lo ≤ a ∧ a < x.lo + (x.cnt - 1) * x.period + x.len := by
+  constructor
+  · rintro ⟨c, hc', t, ht, rfl⟩
+    have : c * x.period ≤ (x.cnt - 1) * x.period := Nat.mul_le_mul_right _ (by omega)
+    omega
+  · rintro ⟨h1, h2⟩
+    rcases h with h | h
+    · rw [h] at h2
+      exact ⟨0, by omega, a - x.lo, by simp at h2; omega, by simp; omega⟩
+    · set d := a - x.lo
+      rcases Nat.eq_zero_or_pos x.period with hp | hp
+      · rw [hp] at h2
+        exact ⟨0, hc, d, by simp at h2; omega, by simp [hp]; omega⟩
+      · by_cases hq : d / x.period < x.cnt - 1
+        · refine ⟨d / x.period, by omega, d % x.period, by have := Nat.mod_lt d hp; omega, ?_⟩
+          have := Nat.div_add_mod d x.period
+          rw [Nat.mul_comm] at this
+          omega
+        · have hle : (x.cnt - 1) * x.period ≤ d := by
+            have := Nat.div_mul_le_self d x.period
+            have : (x.cnt - 1) * x.period ≤ d / x.period * x.period := Nat.mul_le_mul_right _ (by omega)
+            omega
+          exact ⟨x.cnt - 1, by omega, d - (x.cnt - 1) * x.period, by omega, by omega⟩
+
+theorem emitRuns (lo period len : ℕ) : ∀ (C : List ℕ) (out : Array (ℕ × ℕ)),
+    (C.foldl (fun o c => o.push (lo + c * period, lo + c * period + len)) out).toList =
+      out.toList ++ C.map fun c => (lo + c * period, lo + c * period + len)
+  | [], out => by simp
+  | c :: C, out => by rw [List.foldl_cons, emitRuns lo period len C]; simp
+
+theorem emit_spec (out : Array (ℕ × ℕ)) (x : PI) (hc : 0 < x.cnt) (a : ℕ) :
+    inIvs (PI.emit out x).toList a ↔ inIvs out.toList a ∨ inPI x a := by
+  unfold PI.emit
+  split_ifs with h
+  · rw [Array.toList_push, inIvs_append, inPI_run x hc (Or.inr h)]
+    simp [inIvs]
+  · rw [← Array.foldl_toList, Array.toList_range, emitRuns, inIvs_append]
+    refine or_congr_right ?_
+    simp only [inIvs, List.mem_map, List.mem_range, inPI]
+    constructor
+    · rintro ⟨_, ⟨c, hc', rfl⟩, h1, h2⟩
+      exact ⟨c, hc', a - (x.lo + c * x.period), by dsimp at h2; omega, by dsimp at h1; omega⟩
+    · rintro ⟨c, hc', t, ht, rfl⟩
+      exact ⟨_, ⟨c, hc', rfl⟩, by dsimp; omega, by dsimp; omega⟩
+
+/-- **Two periodic intervals of one period and count, the second starting within the first's first run, are one.** -/
+theorem merge_spec (c x : PI) (hp : c.period = x.period) (hn : c.cnt = x.cnt) (h1 : c.lo ≤ x.lo)
+    (h2 : x.lo ≤ c.lo + c.len) (a : ℕ) :
+    inPI { c with len := max c.len (x.lo + x.len - c.lo) } a ↔ inPI c a ∨ inPI x a := by
+  simp only [inPI]
+  constructor
+  · rintro ⟨k, hk, t, ht, rfl⟩
+    by_cases htc : t < c.len
+    · exact Or.inl ⟨k, hk, t, htc, rfl⟩
+    · refine Or.inr ⟨k, by omega, t - (x.lo - c.lo), by omega, ?_⟩
+      rw [← hp]; omega
+  · rintro (⟨k, hk, t, ht, rfl⟩ | ⟨k, hk, t, ht, rfl⟩)
+    · exact ⟨k, hk, t, by omega, rfl⟩
+    · refine ⟨k, by omega, x.lo - c.lo + t, by omega, ?_⟩
+      rw [hp]; omega
+
+theorem PI.le_lo {c x : PI} (h : PI.le c x = true) (hp : c.period = x.period) (hn : c.cnt = x.cnt) : c.lo ≤ x.lo := by
+  simp only [PI.le, Bool.or_eq_true, Bool.and_eq_true, decide_eq_true_eq, beq_iff_eq] at h
+  omega
+
+/-- The current periodic interval's set, none before the first. -/
+def inCur (st : Option PI) (a : ℕ) : Prop := match st with
+  | some c => inPI c a
+  | none => False
+
+theorem mergeFold_spec : ∀ (L : List PI) (st : Array (ℕ × ℕ) × Option PI),
+    L.Pairwise (fun x y => PI.le x y = true) → (∀ x ∈ L, 0 < x.cnt) →
+    (∀ c, st.2 = some c → 0 < c.cnt ∧ ∀ z ∈ L, PI.le c z = true) →
+    (∀ c, (L.foldl PI.mergeStep st).2 = some c → 0 < c.cnt) ∧
+      ∀ a, inIvs (L.foldl PI.mergeStep st).1.toList a ∨ inCur (L.foldl PI.mergeStep st).2 a ↔
+        inIvs st.1.toList a ∨ inCur st.2 a ∨ ∃ x ∈ L, inPI x a
+  | [], st, _, _, hst => ⟨fun c hc => (hst c hc).1, fun a => by simp⟩
+  | x :: L, st, hs, hpos, hst => by
+    obtain ⟨hx, hL⟩ := List.pairwise_cons.1 hs
+    have hxpos := hpos x (List.mem_cons_self ..)
+    have key : (∀ c, (PI.mergeStep st x).2 = some c → 0 < c.cnt ∧ ∀ z ∈ L, PI.le c z = true) ∧
+        ∀ a, inIvs (PI.mergeStep st x).1.toList a ∨ inCur (PI.mergeStep st x).2 a ↔
+          inIvs st.1.toList a ∨ inCur st.2 a ∨ inPI x a := by
+      unfold PI.mergeStep
+      rcases hc : st.2 with _ | c
+      · refine ⟨fun c' hc' => ?_, fun a => ?_⟩
+        · simp only [Option.some.injEq] at hc'
+          subst hc'; exact ⟨hxpos, hx⟩
+        · simp [inCur]
+      · obtain ⟨hcpos, hcle⟩ := hst c hc
+        dsimp only
+        split_ifs with hm
+        · simp only [Bool.and_eq_true, beq_iff_eq, decide_eq_true_eq] at hm
+          obtain ⟨⟨hp, hn⟩, h2⟩ := hm
+          have h1 := PI.le_lo (hcle x (List.mem_cons_self ..)) hp hn
+          refine ⟨fun c' hc' => ?_, fun a => ?_⟩
+          · simp only [Option.some.injEq] at hc'
+            subst hc'
+            exact ⟨hcpos, fun z hz => by
+              have := hcle z (List.mem_cons_of_mem _ hz); simpa [PI.le] using this⟩
+          · simp only [inCur]
+            rw [merge_spec c x hp hn h1 h2]
+        · refine ⟨fun c' hc' => ?_, fun a => ?_⟩
+          · simp only [Option.some.injEq] at hc'
+            subst hc'; exact ⟨hxpos, hx⟩
+          · simp only [inCur]
+            rw [emit_spec _ _ hcpos]
+            tauto
+    obtain ⟨h1, h2⟩ := mergeFold_spec L (PI.mergeStep st x) hL (fun z hz => hpos z (List.mem_cons_of_mem _ hz)) key.1
+    refine ⟨h1, fun a => ?_⟩
+    rw [List.foldl_cons, h2, ← or_assoc, key.2 a]
+    simp only [List.mem_cons]
+    constructor
+    · rintro ((h | h | h) | ⟨z, hz, h⟩)
+      · exact Or.inl h
+      · exact Or.inr (Or.inl h)
+      · exact Or.inr (Or.inr ⟨x, Or.inl rfl, h⟩)
+      · exact Or.inr (Or.inr ⟨z, Or.inr hz, h⟩)
+    · rintro (h | h | ⟨z, rfl | hz, h⟩)
+      · exact Or.inl (Or.inl h)
+      · exact Or.inl (Or.inr (Or.inl h))
+      · exact Or.inl (Or.inr (Or.inr h))
+      · exact Or.inr ⟨z, hz, h⟩
+
+theorem inPI_pos {x : PI} {a : ℕ} (h : inPI x a) : 0 < x.cnt ∧ 0 < x.len := by
+  obtain ⟨c, hc, t, ht, -⟩ := h
+  omega
+
+theorem sorted_PI (L : List PI) : (L.mergeSort PI.le).Pairwise (fun x y => PI.le x y = true) :=
+  List.pairwise_mergeSort
+    (fun a b c hab hbc => by
+      simp only [PI.le, Bool.or_eq_true, Bool.and_eq_true, decide_eq_true_eq, beq_iff_eq] at *
+      omega)
+    (fun a b => by
+      simp only [PI.le, Bool.or_eq_true, Bool.and_eq_true, decide_eq_true_eq, beq_iff_eq]
+      omega) L
+
+/-- **`ivsOf`'s intervals are the union of its pieces' periodic intervals.** -/
+theorem ivsOf_spec (qs : Array Piece) (a : ℕ) :
+    inIvs (ivsOf qs).toList a ↔ ∃ x ∈ (qs.flatMap Piece.pis).toList, inPI x a := by
+  unfold ivsOf
+  dsimp only
+  set xs := (qs.flatMap Piece.pis).filter fun x => !(x.cnt == 0 || x.len == 0) with hxs
+  set out := (xs.filter fun x => x.cnt == 1 || x.len ≥ x.period).map
+    fun x => (x.lo, x.lo + (x.cnt - 1) * x.period + x.len) with hout
+  set sl := (xs.filter fun x => !(x.cnt == 1 || x.len ≥ x.period)).toList.mergeSort PI.le with hsl
+  have hmemxs : ∀ x, x ∈ xs.toList ↔ x ∈ (qs.flatMap Piece.pis).toList ∧ 0 < x.cnt ∧ 0 < x.len := by
+    intro x
+    rw [hxs, Array.toList_filter, List.mem_filter]
+    simp only [Bool.not_eq_true', Bool.or_eq_false_iff, beq_eq_false_iff_ne, ne_eq]
+    exact and_congr_right fun _ => and_congr Nat.pos_iff_ne_zero.symm Nat.pos_iff_ne_zero.symm
+  have hmemsl : ∀ x, x ∈ sl ↔ x ∈ xs.toList ∧ ¬ (x.cnt = 1 ∨ x.period ≤ x.len) := by
+    intro x
+    rw [hsl, (List.mergeSort_perm _ _).mem_iff, Array.toList_filter, List.mem_filter]
+    simp only [Bool.not_eq_true', Bool.or_eq_false_iff, beq_eq_false_iff_ne, ne_eq, decide_eq_false_iff_not,
+      not_le, not_or]
+  have hout' : inIvs out.toList a ↔ ∃ x ∈ xs.toList, (x.cnt = 1 ∨ x.period ≤ x.len) ∧ inPI x a := by
+    simp only [inIvs, hout, Array.toList_map, Array.toList_filter, List.mem_map, List.mem_filter, Bool.or_eq_true,
+      beq_iff_eq, decide_eq_true_eq]
+    constructor
+    · rintro ⟨_, ⟨x, ⟨hx, hr⟩, rfl⟩, h⟩
+      have hp := ((hmemxs x).1 hx).2
+      exact ⟨x, hx, hr, (inPI_run x hp.1 hr a).2 h⟩
+    · rintro ⟨x, hx, hr, h⟩
+      have hp := ((hmemxs x).1 hx).2
+      exact ⟨_, ⟨x, ⟨hx, hr⟩, rfl⟩, (inPI_run x hp.1 hr a).1 h⟩
+  obtain ⟨hF1, hF2⟩ := mergeFold_spec sl (out, none) (sorted_PI _)
+    (fun x hx => (((hmemxs x).1 ((hmemsl x).1 hx).1).2).1) (by simp)
+  have hall : inIvs out.toList a ∨ inCur none a ∨ (∃ x ∈ sl, inPI x a) ↔
+      ∃ x ∈ (qs.flatMap Piece.pis).toList, inPI x a := by
+    rw [hout']
+    simp only [inCur, false_or, hmemsl]
+    constructor
+    · rintro (⟨x, hx, -, h⟩ | ⟨x, ⟨hx, -⟩, h⟩) <;> exact ⟨x, ((hmemxs x).1 hx).1, h⟩
+    · rintro ⟨x, hx, h⟩
+      have hxs' := (hmemxs x).2 ⟨hx, inPI_pos h⟩
+      by_cases hr : x.cnt = 1 ∨ x.period ≤ x.len
+      · exact Or.inl ⟨x, hxs', hr, h⟩
+      · exact Or.inr ⟨x, ⟨hxs', hr⟩, h⟩
+  rw [← hall, ← hF2 a]
+  split
+  · rename_i o c heq
+    rw [heq] at hF1 ⊢
+    rw [emit_spec o c (hF1 c rfl) a]
+    rfl
+  · rename_i o heq
+    rw [heq]
+    simp [inCur]
+
+/-- **Open: `Piece.pis` is a piece's elements.** Of a piece whose elements are naturals, every element of a periodic
+interval `pis` gives is one of the piece's, and each of the piece's is in one of them. -/
+def PisExact : Prop :=
+  ∀ q : Piece, (∀ e ∈ elems q, 0 ≤ e) →
+    (∀ x ∈ q.pis.toList, ∀ a, inPI x a → ∃ e ∈ elems q, a = e.toNat) ∧
+    ∀ e ∈ elems q, ∃ x ∈ q.pis.toList, inPI x e.toNat
+
+/-- **`IvsOfExact`, from `PisExact`.** -/
+theorem ivsOfExact_of (hP : PisExact) : IvsOfExact := by
+  intro qs hnn
+  refine ⟨fun iv hiv a h1 h2 => ?_, fun q hq e he => ?_⟩
+  · obtain ⟨x, hx, ha⟩ := (ivsOf_spec qs a).1 ⟨iv, hiv, h1, h2⟩
+    rw [Array.toList_flatMap, List.mem_flatMap] at hx
+    obtain ⟨q, hq, hx⟩ := hx
+    obtain ⟨e, he, rfl⟩ := (hP q (hnn q hq)).1 x hx a ha
+    exact ⟨q, hq, by rw [Int.toNat_of_nonneg (hnn q hq e he)]; exact he⟩
+  · obtain ⟨x, hx, ha⟩ := (hP q (hnn q hq)).2 e he
+    exact (ivsOf_spec qs e.toNat).2 ⟨x, by rw [Array.toList_flatMap, List.mem_flatMap]; exact ⟨q, hq, hx⟩, ha⟩
+
+/-- **`NovelWidthExact`, from `PisExact`.** -/
+theorem novelWidthExact_of_pis (hP : PisExact) : NovelWidthExact :=
+  novelWidthExact_of (gateIvsExact_of (ivsOfExact_of hP))
 
 end NciCheck.Properties.SecurityProofs.Width

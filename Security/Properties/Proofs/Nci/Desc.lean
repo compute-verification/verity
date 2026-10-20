@@ -17,8 +17,8 @@ proved here is the summaries' arithmetic, each step stated against the function 
   width: `novelWidth`'s count of a batch's whole members that no other read meets.
 
 Not proved here: that `analyze`'s reads per root node are the unrolled operands outside it (what `Prog.gate` returns,
-through §7's resolution; open as `Novel.ReadsExact`), and that `gateIvs` gives a piece list's gates as intervals (open as
-`Width.GateIvsExact`, from which `Width.novelWidthExact_of` proves `novelWidth` the width of the union). The difftest
+through §7's resolution; open as `Novel.ReadsExact`), and that `Piece.pis` gives a piece's elements as periodic intervals (open as
+`Width.PisExact`, from which `Width.novelWidthExact_of_pis` proves `novelWidth` the width of the union). The difftest
 holds both (`runs` `NciCheck.DescDifftestMain` in the package's `lean-audit.json`: 3,658 declarations, the
 description-sized check against the unrolled one).
 -/
