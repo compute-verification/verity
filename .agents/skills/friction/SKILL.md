@@ -252,25 +252,10 @@ Newest first. Each is Daniel's unless it names the coordinator.
 - 2026-10-11 (relayed by top): the store has no API server. Writers and guards use the bucket, and displays query an
   index derived from it. D2–D4 (the keys, private metadata in the index, what is public) are as in the design,
   note:verity-top/20261011T1758Z-draft-store-contract.
-- 2026-10-09 (7:04 PM PDT, relayed by top): the end goal is sampled proofs through recursion with hidden unit circuits,
-  on four assumptions: record custody, the OS's randomness, the coin server's randomness, and SHA-512 entering only
-  through reductions. The partition is hidden from the start. The auditor checks only padded counts. The outer proof
-  proves coverage against the committed partition: each sampled unit sits in exactly one slot, of its committed type,
-  on its committed values. Revealing each sampled unit's type would leak the architecture, since a uniform sample's
-  type mix estimates the model's. The public-unit case is this design with the partition opened, and
-  `RecursiveAudit` is stated for it first. The same night:
-  - The universal unit (option 3) is frozen. Its registration, hidden reads, statement hiding and `circuit_indist`
-    are kept; its unit-specific work stops.
-  - VBridge is to become a theorem about one Lean function: Lean's `VStar.statements` builder, proved correct one
-    building block at a time.
-  - Hiding the type mix costs padding, not an evaluation of every type. A session picks its type's matrix by a hidden
-    index, small types are padded to the shape's nonzero bound, and session counts are padded per shape.
-  - No benchmark harness is built until the theory lands.
-  - (7:08 PM) One key per protecting party, drawn once at setup from the OS before anything else: the developer's for
-    its registrations and the firewall, the challenger's for coin commitments. It is public and a constant in V\*, so
-    one V\* serves every registration. A Lean bound over the key chooses the data and the auditor's choices (prompts,
-    coins) after the key, never before it. A key on a wire stays the fallback: hm96's key is a GF(2) Hankel multiplier,
-    XORs as a constant and an AND per product as a wire.
+- 2026-10-09 (7:04 PM PDT, relayed by top): the end goal is sampled proofs through recursion with hidden unit circuits
+  and a hidden partition; the auditor checks only padded counts, and `RecursiveAudit` is stated first for public units.
+  (7:08 PM) One key per protecting party, drawn once at setup from the OS before anything else, public and a constant in
+  V\*. In full: note:proofs/20261020T0255Z-report-ruling-recursion-goal.
 - 2026-10-09 (4:48–5:00 PM PDT, relayed by top): a key that hides a commitment is drawn by the party the hiding
   protects, and fixed in the commitment before use (which party's key, and when it is drawn: 7:08 PM, above). hm96's
   pinned key stays only where the key is wired into a circuit (the row gadget), as a named exception. The inner phase's
