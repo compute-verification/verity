@@ -20,7 +20,8 @@ order they were admitted; `main` fast-forwards to the newest commit on `next` th
                                                    fresh `next` (naming the paths), contains an open PR that isn't admitted
                                                    (naming it), or, merged onto `next` in a temporary worktree, fails `pins.py
                                                    --stale`, tests/test_module_strings.py, test_pins.py, test_doc_paths.py,
-                                                   tools/research/tests/test_pythonpath.py, or `pytest --collect-only` in a suite
+                                                   test_repository.py, tools/research/tests/test_pythonpath.py, or `pytest
+                                                   --collect-only` in a suite
                                                    whose inputs its change touches; --no-preflight skips it (the lander's)
     research queue drive (--on MACHINE | --config PATH [--config-from-tree]) [--max-running N] [--train-size N] [--marked-after TS]
                          [--first N,...] [--defer STEPS] [--[no-]regenerate-locks] [--dry-run]
@@ -61,7 +62,8 @@ that's unusable, a failed pull) the command fails with `STALE`, never answering 
 Preflight.  Each of 17 Oct's marks that broke or cancelled a train was cheap to catch at mark time: a conflict with a PR already
 on `next`, a stale Lake pin, a module string naming a module only an unlanded PR adds, a workspace member without its REAL_ROOTS
 entry, a test that read a row another queued PR refits away (an error at collection), and one lane's unlanded branch carried in
-two PRs.  So `ready` runs `Preflight` before the mark and before any quick tier: a refusal names what it found and the fix, a
+two PRs.  20 Oct's two failed `tests/test_repository.py` (a Markdown cap, a report-genre name), which the preflight now runs
+too.  So `ready` runs `Preflight` before the mark and before any quick tier: a refusal names what it found and the fix, a
 failure `next` has too refuses nothing, and what keeps a check from running is said and refuses nothing (the train's check is the
 gate).  `--no-preflight` skips it, for the lander.
 
@@ -1322,9 +1324,10 @@ def _tree(repo: Path, commit: str) -> str:
 
 #: the invariant tests the preflight runs on the merged tree, from the root.  17 Oct's train breakers each failed one: a module
 #: string naming a module only an unlanded PR adds, stale Lake pins, a doc path, and a workspace member without its REAL_ROOTS
-#: entry (#2271, which reverted 12 landings)
+#: entry (#2271, which reverted 12 landings); 20 Oct's two failed `check`'s preflight-lints on test_repository.py (a skill over
+#: the Markdown cap, #2818; a report-genre name, #2827), about 5 s
 PREFLIGHT_TEST_PATHS = ("tests/test_module_strings.py", "tests/test_pins.py", "tests/test_doc_paths.py",
-                        "tools/research/tests/test_pythonpath.py")
+                        "tests/test_repository.py", "tools/research/tests/test_pythonpath.py")
 
 
 def _by_suite(paths: tuple[str, ...]) -> tuple[tuple[str, tuple[str, ...]], ...]:

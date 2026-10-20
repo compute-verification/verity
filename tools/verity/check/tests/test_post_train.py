@@ -332,6 +332,31 @@ def test_a_later_landing_is_main_s_tip_when_it_is_a_landing_after_the_commit(tmp
     assert PT.later_landing(_git(repo, "rev-parse", "HEAD"), cwd=repo) is None, "a commit main doesn't contain"
 
 
+def test_a_later_landing_with_no_check_line_is_found_by_the_attempt_its_own_job_recorded(tmp_path, monkeypatch):
+    """19 Oct: drive's landings carry no `Check:` line and drive cancels a train's check once it lands, so no queued job was ever
+    superseded: five 200 GB regressions of about an hour each waited in line on node 1. Each job now records its landing's
+    attempt (`note_attempt`), and a job that waited finds main's tip by it."""
+    monkeypatch.setattr(PT, "LOCK", tmp_path / "post-train.lock")
+    origin, repo = tmp_path / "origin.git", tmp_path / "repo"
+    _git(tmp_path, "init", "-q", "--bare", "-b", "main", str(origin))
+    _git(tmp_path, "clone", "-q", str(origin), str(repo))
+
+    def land(msg: str) -> str:
+        _git(repo, "commit", "-q", "--allow-empty", "-m", msg)
+        _git(repo, "push", "-q", "origin", "HEAD:main")
+        return _git(repo, "rev-parse", "HEAD")
+    first = land("Queue: #1 a\n\nPR: #1")
+    tip = land("Queue: #2 b\n\nPR: #2")
+    monkeypatch.setattr(PT, "passed", lambda sha: None)
+    assert PT.later_landing(first, cwd=repo) is None, "no Check: line, no passed check, nothing recorded"
+    PT.note_attempt(first, "r20261019-100000-0001")
+    PT.note_attempt(tip, "r20261019-110000-0002")
+    assert PT.later_landing(first, cwd=repo) == "r20261019-110000-0002"
+    assert PT.queued_attempt(first) == "r20261019-100000-0001"
+    PT.note_attempt(tip, "r20261019-120000-0003")                         # a relaunch records its newer attempt
+    assert PT.queued_attempt(tip) == "r20261019-120000-0003"
+
+
 def test_superseded_is_no_verdict_to_carry(tmp_path, monkeypatch):
     prev = {"key": "note", "value": "regression superseded:r20261003-160000-0002", "by": "regression", "ref": "r20261003-160000-0002"}
     calls, _ = _fake_landing(tmp_path, monkeypatch, "r20261003-145201-e806", prev, untouched=True)
