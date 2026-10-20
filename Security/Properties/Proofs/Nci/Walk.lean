@@ -14,10 +14,13 @@ decoder lays them (`LaidOut`), `Prog.gate`'s descent goes one level down a step 
 (`gateStep_holds`), so it locates every gate of the root's within `Desc.walkable`'s fuel wherever the operands it reaches
 resolve in the activations it visits (`Reach`; `gate_ok_of`, `depth_lt_fuel`).
 
-So `GatesLocated` holds wherever three smaller statements do, each a named `Prop` here, open (`gatesLocated_of`):
-`DecodeLaidOut` (the decoder lays every body out, the root a composite), `OperandsResolve` (operands resolve in every
-activation the walk visits) and `GateReads` (the primitive it locates returns one value, an input's reads nothing, and
-every operand is an earlier gate). `descAgrees_of_gaps` gives `DescAgrees` from those three and `NovelExact`.
+`Desc.walkable` checks every body laid out so, the root a composite, every primitive returning one value and every
+input node called with no arguments (`Desc.bodiesLaidOut`, `bodiesLaidOut_spec`), so the primitive the walk locates
+returns one value and an input's gate reads nothing (`gate_reads_of`).
+
+So `GatesLocated` holds wherever two smaller statements do, each a named `Prop` here, open (`gatesLocated_of`):
+`OperandsResolve` (operands resolve in every activation the walk visits) and `OperandsEarlier` (every operand the walk
+locates is an earlier gate). `descAgrees_of_gaps` gives `DescAgrees` from those two and `NovelExact`.
 -/
 
 namespace NciCheck.Properties.SecurityProofs.Walk
@@ -860,10 +863,113 @@ theorem depth_lt_fuel (P : Prog) (h : Desc.walkable P = true) : (Desc.depths P)[
     exact Nat.le_mul_of_pos_left _ (by omega)
   omega
 
-/-- **Open: the decoder lays every body out**, as `LaidOut` states, and the root is a composite. -/
-def DecodeLaidOut : Prop :=
-  ∀ (bytes : ByteArray) (P : Prog), Flock.Program.decode bytes = .ok P →
-    (P.defs[P.root]!).prim = false ∧ ∀ d < P.defs.size, LaidOut P d
+/-- What `Desc.bodiesLaidOut` checks: the root a composite, every composite's body laid out (`LaidOut`), every primitive
+returning one `Value<w>`, and every input node of a composite called with no arguments. -/
+theorem bodiesLaidOut_spec (P : Prog) (h : Desc.bodiesLaidOut P = true) :
+    (P.defs[P.root]!).prim = false ∧ (∀ d < P.defs.size, LaidOut P d) ∧
+      (∀ d < P.defs.size, (P.defs[d]!).prim = true → ∃ w, (P.defs[d]!).ret = .value w) ∧
+      ∀ d < P.defs.size, (P.defs[d]!).prim = false → ∀ k < (P.defs[d]!).body.nodes.size,
+        Desc.isInputNode P ((P.defs[d]!).body.nodes[k]!) = true → ((P.defs[d]!).body.nodes[k]!).args = #[] := by
+  unfold Desc.bodiesLaidOut at h
+  simp only [Bool.and_eq_true, Bool.not_eq_true', List.all_eq_true, List.mem_range] at h
+  obtain ⟨hr, hall⟩ := h
+  refine ⟨hr, fun d hd hp => ?_, fun d hd hp => ?_, fun d hd hp k hk hin => ?_⟩
+  · have := hall d hd
+    simp only [hp, Bool.false_eq_true, ite_false, Bool.and_eq_true, beq_iff_eq, List.all_eq_true,
+      List.mem_range] at this
+    exact ⟨this.1.1, this.1.2, fun k hk => (this.2 k hk).1⟩
+  · have := hall d hd
+    simp only [hp, ite_true] at this
+    revert this
+    cases (P.defs[d]!).ret <;> simp
+  · have := hall d hd
+    simp only [hp, Bool.false_eq_true, ite_false, Bool.and_eq_true, beq_iff_eq, List.all_eq_true,
+      List.mem_range] at this
+    have := (this.2 k hk).2
+    simp only [hin, Bool.not_true, Bool.false_or, Array.isEmpty_iff] at this
+    exact this
+
+/-- A step of the walk that ends: at a primitive node `k` of the activation, with its member's operands. -/
+theorem gateStep_inl (P : Prog) (g : ℕ) (sc : Flock.Program.Scope) (x)
+    (h : Flock.Program.gateStep P g sc = .ok (.inl x)) :
+    ∃ k < (P.defs[sc.d]!).body.nodes.size, ∃ m, (P.defs[((P.defs[sc.d]!).body.nodes[k]!).fn]!).prim = true ∧
+      x.1 = ((P.defs[sc.d]!).body.nodes[k]!).fn ∧ x.2.2 = sc ∧
+      Flock.Program.operands P sc ((P.defs[sc.d]!).body.nodes[k]!) m = .ok x.2.1 := by
+  unfold Flock.Program.gateStep at h
+  simp only [bind, Except.bind] at h
+  split at h
+  · rename_i k hk
+    obtain ⟨hkK, -⟩ := DescAgree.find?_range_some hk
+    by_cases hp : (P.defs[((P.defs[sc.d]!).body.nodes[k]!).fn]!).prim = true
+    · simp only [hp, ite_true] at h
+      split at h
+      · cases h
+      · rename_i ops hops
+        simp only [pure, Except.pure, Except.ok.injEq, Sum.inl.injEq] at h
+        subst h
+        exact ⟨k, hkK, _, hp, rfl, rfl, hops⟩
+    · simp only [hp, Bool.false_eq_true, ite_false, pure, Except.pure, Except.ok.injEq] at h
+      cases h
+  · simp [throw, throwThe, MonadExceptOf.throw] at h
+
+/-- A step of the walk that goes on: into a member of a composite node `k` of the activation. -/
+theorem gateStep_inr (P : Prog) (g : ℕ) (sc sc' : Flock.Program.Scope)
+    (h : Flock.Program.gateStep P g sc = .ok (.inr sc')) :
+    ∃ k < (P.defs[sc.d]!).body.nodes.size, (P.defs[((P.defs[sc.d]!).body.nodes[k]!).fn]!).prim = false ∧
+      sc'.d = ((P.defs[sc.d]!).body.nodes[k]!).fn := by
+  unfold Flock.Program.gateStep at h
+  simp only [bind, Except.bind] at h
+  split at h
+  · rename_i k hk
+    obtain ⟨hkK, -⟩ := DescAgree.find?_range_some hk
+    by_cases hp : (P.defs[((P.defs[sc.d]!).body.nodes[k]!).fn]!).prim = true
+    · simp only [hp, ite_true] at h
+      split at h
+      · cases h
+      · simp only [pure, Except.pure, Except.ok.injEq] at h
+        cases h
+    · simp only [hp, Bool.false_eq_true, ite_false, pure, Except.pure, Except.ok.injEq, Sum.inr.injEq] at h
+      subst h
+      exact ⟨k, hkK, by simpa using hp, rfl⟩
+  · simp [throw, throwThe, MonadExceptOf.throw] at h
+
+theorem operands_nil (P : Prog) (sc : Flock.Program.Scope) (node : Flock.Program.Node) (m : ℕ) (ops : Array ℕ)
+    (hargs : node.args = #[]) (h : Flock.Program.operands P sc node m = .ok ops) : ops = #[] := by
+  unfold Flock.Program.operands at h
+  simp [hargs, pure, Except.pure, bind, Except.bind] at h
+  first | exact h | exact h.symm
+
+/-- **What the walk locates, on bodies the decoder's way**: the primitive returns one `Value<w>`, and an input primitive's
+gate reads nothing (it is an input node, so `Desc.bodiesLaidOut` gives it no arguments). -/
+theorem gate_reads_of (P : Prog) (hb : Desc.bodiesLaidOut P = true) {g p : ℕ} {ops : Array ℕ}
+    {sc : Flock.Program.Scope} (h : P.gate g = .ok (p, ops, sc)) :
+    (∃ w, (P.defs[p]!).ret = .value w) ∧ (Flock.Program.isInputId (P.defs[p]!).key = true → ops = #[]) := by
+  obtain ⟨hr, -, hret, hinp⟩ := bodiesLaidOut_spec P hb
+  unfold Flock.Program.Prog.gate at h
+  by_cases hge : g ≥ (P.defs[P.root]!).gates
+  · simp [hge, throw, throwThe, MonadExceptOf.throw, bind, Except.bind] at h
+  simp only [hge, ite_false, bind, Except.bind] at h
+  refine DescAgree.run_inv "gate location" (Flock.Program.gateStep P g) (fun sc => (P.defs[sc.d]!).prim = false)
+    (fun b => (∃ w, (P.defs[b.1]!).ret = .value w) ∧ (Flock.Program.isInputId (P.defs[b.1]!).key = true → b.2.1 = #[]))
+    ?_ ?_ Flock.Steps.FUEL P.rootScope (p, ops, sc) hr h
+  · intro a b ha hb'
+    obtain ⟨k, hk, m, hp, h1, -, hops⟩ := gateStep_inl P g a b hb'
+    have hd : a.d < P.defs.size := by
+      refine (Nat.lt_or_ge a.d P.defs.size).elim id fun hn => ?_
+      rw [getElem!_neg P.defs a.d (by omega)] at hk
+      have h0 : (default : Flock.Program.Defn).body.nodes.size = 0 := rfl
+      omega
+    have hfn : ((P.defs[a.d]!).body.nodes[k]!).fn < P.defs.size := by
+      refine (Nat.lt_or_ge _ P.defs.size).elim id fun hn => ?_
+      rw [getElem!_neg P.defs _ (by omega)] at hp
+      cases hp
+    rw [h1]
+    refine ⟨hret _ hfn hp, fun hkey => operands_nil P a _ m _ (hinp a.d hd ha k hk ?_) hops⟩
+    simp [Desc.isInputNode, hp, hkey]
+  · intro a a' _ ha'
+    obtain ⟨k, -, hp, hd'⟩ := gateStep_inr P g a a' ha'
+    show (P.defs[a'.d]!).prim = false
+    rw [hd']; exact hp
 
 /-- **Open: operands resolve on the walk.** On a Program `Desc.evaluate` reads, in every activation `Prog.gate`'s walk
 visits, every primitive node's members' operands resolve (`Flock.Program.resolve` within its fuel, past no scan of no
@@ -875,39 +981,38 @@ def OperandsResolve : Prop :=
       ∀ k < (P.defs[sc.d]!).body.nodes.size, ∀ m < ((P.defs[sc.d]!).body.nodes[k]!).members, ∀ e,
         Flock.Program.operands P sc ((P.defs[sc.d]!).body.nodes[k]!) m ≠ .error e
 
-/-- **Open: what the walk locates is as the circuit needs.** On such a Program, the primitive `Prog.gate` locates a gate
-at returns one `Value<w>`, an input primitive's gate reads nothing, and every operand is an earlier gate. -/
-def GateReads : Prop :=
+/-- **Open: every operand is an earlier gate.** On such a Program, each operand `Prog.gate` locates for a gate is a gate
+before it. -/
+def OperandsEarlier : Prop :=
   ∀ (bytes : ByteArray) (P : Prog), Flock.Program.decode bytes = .ok P → P.orderViolation = none →
     Desc.rootLaidOut P = true → Desc.inputsAtRoot P = true → Desc.walkable P = true →
-    (∃ reads, Desc.analyze P = .ok reads) → ∀ g < gates P, ∀ p ops sc, P.gate g = .ok (p, ops, sc) →
-      (∃ w, (P.defs[p]!).ret = .value w) ∧ (Flock.Program.isInputId (P.defs[p]!).key = true → ops = #[]) ∧
-        ∀ a ∈ ops, a < g
+    (∃ reads, Desc.analyze P = .ok reads) → ∀ g < gates P, ∀ p ops sc, P.gate g = .ok (p, ops, sc) → ∀ a ∈ ops, a < g
 
-/-- **`GatesLocated`, from the decoder's layout, resolution on the walk and what the walk locates**: `Desc.walkable` gives
-the walk its fuel (`depth_lt_fuel`), so with bodies laid out and operands resolving it ends at a primitive
-(`gate_ok_of`). -/
-theorem gatesLocated_of (hD : DecodeLaidOut) (hO : OperandsResolve) (hR : GateReads) : GatesLocated := by
+/-- **`GatesLocated`, from resolution on the walk and the order of its operands**: `Desc.walkable` gives the walk its fuel
+(`depth_lt_fuel`) and bodies laid out (`bodiesLaidOut_spec`), so with operands resolving it ends at a primitive
+(`gate_ok_of`), which returns one value and, for an input, reads nothing (`gate_reads_of`). -/
+theorem gatesLocated_of (hO : OperandsResolve) (hE : OperandsEarlier) : GatesLocated := by
   intro bytes P hdec hov hlo hin hwk han g hg
-  obtain ⟨hrp, hlay⟩ := hD bytes P hdec
-  have hc : Desc.calleesFirst P = true := by
-    unfold Desc.walkable at hwk
-    simp only [Bool.and_eq_true] at hwk
-    exact hwk.1
+  have hwk' := hwk
+  unfold Desc.walkable at hwk'
+  simp only [Bool.and_eq_true] at hwk'
+  have hc : Desc.calleesFirst P = true := hwk'.1.1
+  have hb : Desc.bodiesLaidOut P = true := hwk'.1.2
+  obtain ⟨hrp, hlay, -, -⟩ := bodiesLaidOut_spec P hb
   have hr : P.root < P.defs.size := by
-    by_contra hn
+    refine (Nat.lt_or_ge P.root P.defs.size).elim id fun hn => ?_
     have hg' : g < (P.defs[P.root]!).gates := hg
-    rw [getElem!_neg P.defs P.root hn] at hg'
+    rw [getElem!_neg P.defs P.root (by omega)] at hg'
     have h0 : (default : Flock.Program.Defn).gates = 0 := rfl
     omega
   obtain ⟨⟨p, ops, sc⟩, hx⟩ := gate_ok_of P hc hlay hr hrp (depth_lt_fuel P hwk) hg
     (hO bytes P hdec hov hlo hin hwk han g hg)
-  obtain ⟨⟨w, hw⟩, hinp, hlt⟩ := hR bytes P hdec hov hlo hin hwk han g hg p ops sc hx
-  exact ⟨p, ops, w, ⟨⟨sc, hx⟩, hw, hinp⟩, hlt⟩
+  obtain ⟨⟨w, hw⟩, hinp⟩ := gate_reads_of P hb hx
+  exact ⟨p, ops, w, ⟨⟨sc, hx⟩, hw, hinp⟩, hE bytes P hdec hov hlo hin hwk han g hg p ops sc hx⟩
 
-/-- **`DescAgrees`, from the four open statements**: `GatesLocated` through `gatesLocated_of`, and `NovelExact`. -/
-theorem descAgrees_of_gaps (hD : DecodeLaidOut) (hO : OperandsResolve) (hR : GateReads) (hN : NovelExact) :
+/-- **`DescAgrees`, from the three open statements**: `GatesLocated` through `gatesLocated_of`, and `NovelExact`. -/
+theorem descAgrees_of_gaps (hO : OperandsResolve) (hE : OperandsEarlier) (hN : NovelExact) :
     Properties.DescAgrees :=
-  descAgrees_of (gatesLocated_of hD hO hR) hN
+  descAgrees_of (gatesLocated_of hO hE) hN
 
 end NciCheck.Properties.SecurityProofs.Walk

@@ -52,7 +52,7 @@ In the order checked: `instance` and `params` (`NciCheck.parse`), `program` (the
 (a body names a later node, `Prog.orderViolation`), `program` (the root's offsets are not its layout, a body calls the
 root or holds an input node outside the root's: `rootLaidOut`, `inputsAtRoot`, which the decoder never gives), `program`
 (a `walkBound` past half of `Flock.Steps.FUEL`, past which `Prog.gate`'s walk can run out of steps; or a body calling a
-Definition decoded after it, which the decoder never gives: `walkable`), `program` (a reference the layout can't resolve:
+Definition decoded after it, or a Definition not as the decoder gives it, which the decoder never gives: `walkable`), `program` (a reference the layout can't resolve:
 the output of a scan of no iterations), then θ entry by entry (`theta-unknown`: not a root node, `theta-not-input`,
 `theta-not-registered`: an input node bound per run, `theta-duplicate`), then the owners (`owner-length`: not one per root
 node; node by node `owner-entry`, `input-in-iu`, `gate-in-no-iu`), then
@@ -670,6 +670,20 @@ callee's count. -/
 def calleesFirst (P : Prog) : Bool :=
   (List.range P.defs.size).all fun d => (P.defs[d]!).body.nodes.all fun n => n.fn < d
 
+/-- Every Definition as the decoder gives it (`Flock.Program.getDef`), checked at the cost of the nodes because the
+agreement with `NciCheck.evaluate` rests on it, through `Prog.gate`'s walk: the root a composite, a primitive returning one
+`Value<w>`, a composite's offsets from 0 to its gates, each node's gates its members' callee's after the ones before, and
+an input node called with no arguments. -/
+def bodiesLaidOut (P : Prog) : Bool :=
+  !(P.defs[P.root]!).prim && (List.range P.defs.size).all fun d =>
+    let defn := P.defs[d]!
+    if defn.prim then (match defn.ret with | .value _ => true | _ => false)
+    else
+      let b := defn.body
+      b.offsets[0]! == 0 && b.offsets[b.nodes.size]! == defn.gates && (List.range b.nodes.size).all fun k =>
+        let n := b.nodes[k]!
+        b.offsets[k + 1]! == b.offsets[k]! + n.members * (P.defs[n.fn]!).gates && (!isInputNode P n || n.args.isEmpty)
+
 /-- Per Definition, the activations of one activation of it: itself and, for each composite node, its members' (a
 primitive's are none), once per Definition and multiplied through batches and scans. -/
 def activations (P : Prog) : Array Nat :=
@@ -691,8 +705,9 @@ def walkBound (P : Prog) : Nat := ((activations P)[P.root]! + 1) * ((depths P)[P
 /-- The walk is within `Flock.Steps.FUEL`, with room for `Prog.gate`'s descent. Past it a Program of a few hundred bytes
 can need more steps than `Prog.gate` takes: a gate reading the carry of a scan of `2^32` iterations, each a scan of
 `2^32` identity steps, needs `2^64`. There `NciCheck.evaluate` refuses the gate (`program`), and this check, which
-summarizes each Definition once, would give a verdict. -/
-def walkable (P : Prog) : Bool := calleesFirst P && walkBound P ≤ Flock.Steps.FUEL / 2
+summarizes each Definition once, would give a verdict. The walk also reads every body as the decoder lays it out
+(`bodiesLaidOut`). -/
+def walkable (P : Prog) : Bool := calleesFirst P && bodiesLaidOut P && walkBound P ≤ Flock.Steps.FUEL / 2
 
 /-- Per IU `u < n`, its number of gates: those of its root nodes, root node `k` (in IU `own[k]`) holding gates
 `[offs[k], offs[k + 1])`. -/

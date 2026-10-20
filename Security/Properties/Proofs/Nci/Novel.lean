@@ -16,7 +16,7 @@ open (`novelExact_of`):
 * `NovelWidthExact`: `Desc.novelWidth` is the total width of the distinct gates its segments name, wherever no gate is
   named with two widths (its sorting sweeps: Lean core states nothing about `Array.qsort`).
 
-`descAgrees_of_open` gives `DescAgrees` from these two and `Walk`'s three.
+`descAgrees_of_open` gives `DescAgrees` from these two and `Walk`'s two.
 -/
 
 namespace NciCheck.Properties.SecurityProofs.Novel
@@ -356,10 +356,10 @@ theorem novelExact_of (hR : ReadsExact) (hW : NovelWidthExact) : NovelExact := b
   refine Finset.sum_congr rfl fun a _ => ?_
   cases dv.theta.contains a <;> simp
 
-/-- **`DescAgrees`, from the five open statements**: `Walk`'s three give `GatesLocated` (`Walk.gatesLocated_of`), and
+/-- **`DescAgrees`, from the four open statements**: `Walk`'s two give `GatesLocated` (`Walk.gatesLocated_of`), and
 `ReadsExact` and `NovelWidthExact` give `NovelExact` (`novelExact_of`). -/
-theorem descAgrees_of_open (hD : Walk.DecodeLaidOut) (hO : Walk.OperandsResolve) (hG : Walk.GateReads)
-    (hR : ReadsExact) (hW : NovelWidthExact) : Properties.DescAgrees :=
-  Walk.descAgrees_of_gaps hD hO hG (novelExact_of hR hW)
+theorem descAgrees_of_open (hO : Walk.OperandsResolve) (hE : Walk.OperandsEarlier) (hR : ReadsExact)
+    (hW : NovelWidthExact) : Properties.DescAgrees :=
+  Walk.descAgrees_of_gaps hO hE (novelExact_of hR hW)
 
 end NciCheck.Properties.SecurityProofs.Novel
