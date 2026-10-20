@@ -196,28 +196,28 @@ position to two columns). `KSFlockLin` charges each to a finder of its own, with
 * **level 0's conflict** (`F0`): a run, and if it accepts, `E^rep`'s `k` waits of at most `R` runs each; the first
   collision among the accepted runs' verifier calls, `k + 1` runs in expectation.
 
-The one-run events stay where they were, linear under `B` (weight `k(x)`, the verifier's rounds). `Caps` is what a
-run's view opens at the caps, which `Deploy.cols` doesn't give (it is level 0's columns only); the claim is at a reader,
-and its loop reads only what a run shows.
+The one-run events stay where they were, linear under `B` (weight `k(x)`, the verifier's rounds). `Caps` is which cap
+positions a run's coins query, which `Deploy.cols` doesn't give (it is level 0's columns only); the claim is at a
+reader, and its loop reads only what a run shows: whether it accepts, and its coins.
 
 `KSLin2` is `KSLin` at the bound record with the inner stage reading `KSFlockLin` at `DE` in `Inner.KSAbort`'s place:
 `√(γ_BI·Pr[B_I])` becomes `(4k_I + 1)·Pr[B_I]`, and the inner Flock's caps and level 0 are the composite's finders over
-`E_O`'s draws at `IVStar` (`FCI`, `F0I`), whose loops read a draw's opened inner view (`drawView`). A draw where the
-inner view departs from the prover's plurality is `Fdev`'s, at `FCI`'s two and `F0I`'s `k + 1` draws as well as the
-inner `E^rep`'s `N_I` (`βdev2`). `BitsLin2` is its bits.
+`E_O`'s draws at `IVStar` (`FCI`, `F0I`), whose loops read whether a draw's inner view accepts and the draw's inner
+coins. A draw where the inner view departs from the prover's plurality is `Fdev`'s, at `FCI`'s two and `F0I`'s `k + 1`
+draws as well as the inner `E^rep`'s `N_I` (`βdev2`). `BitsLin2` is its bits.
 -/
 
 section FlockLin
 
 variable {Coin : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin]
 
-/-- **What a run opens at Flock's caps**: the positions of the caps past level 0 at `x` (`width x` of them), the
-verifier's round each position's cap is fixed by (`round`: coins before it are shared by a fork there), and whether a
-run's view opens a position (`opens`). -/
-structure Caps where
+/-- **Which positions a run opens at Flock's caps**: the positions of the caps past level 0 at `x` (`width x` of them),
+the verifier's round each position's cap is fixed by (`round`: coins before it are shared by a fork there), and whether
+the verifier's coins query a position (`opens`, at the run's coins, `coinSeq`). -/
+structure Caps (Coin : Type) where
   width : Msg → ℕ
   round : (x : Msg) → Fin (width x) → ℕ
-  opens : (x : Msg) → Fin (width x) → Seen → Bool
+  opens : (x : Msg) → Fin (width x) → (ℕ → Coin) → Bool
 
 /-- One run's SHA-512 calls as it may abort, both parties'. -/
 def abortCost {Ω A : Type} (H : Msg → Msg) (V : Verifier Coin) (P : Prover Ω) (x : Msg)
@@ -229,28 +229,28 @@ def accAt {Ω A : Type} (H : Msg → Msg) (V : Verifier Coin) (P : Prover Ω) (x
     (keep : Ω → (Fin (V.k x) → Coin) → A → Bool) (ω : Ω) (d : (Fin (V.k x) → Coin) × A) : Prop :=
   (abortRun H P V x keep ω d).out = .acc
 
-/-- The run as it may abort at `d` accepts and opens the cap position `q`. -/
-def opensAt {Ω A : Type} (H : Msg → Msg) (V : Verifier Coin) (Cp : Caps) (P : Prover Ω) (x : Msg)
+/-- The run as it may abort at `d` accepts and its coins query the cap position `q`. -/
+def opensAt {Ω A : Type} (H : Msg → Msg) (V : Verifier Coin) (Cp : Caps Coin) (P : Prover Ω) (x : Msg)
     (keep : Ω → (Fin (V.k x) → Coin) → A → Bool) (q : Fin (Cp.width x)) (ω : Ω) (d : (Fin (V.k x) → Coin) × A) :
     Prop :=
-  (abortRun H P V x keep ω d).out = .acc ∧ Cp.opens x q (abortRun H P V x keep ω d).seen = true
+  (abortRun H P V x keep ω d).out = .acc ∧ Cp.opens x q (coinSeq d.1) = true
 
 /-- `v`'s coins forked at `q`'s round from `d₀`'s, with `v`'s abort coins. -/
-def capFork (V : Verifier Coin) (Cp : Caps) {A : Type} (x : Msg) (q : Fin (Cp.width x))
+def capFork (V : Verifier Coin) (Cp : Caps Coin) {A : Type} (x : Msg) (q : Fin (Cp.width x))
     (d₀ v : (Fin (V.k x) → Coin) × A) : (Fin (V.k x) → Coin) × A :=
   (fork (Cp.round x q) d₀.1 v.1, v.2)
 
 /-- `FC`'s coins at `x`: a cap position, a tape, the first run's coins with its abort coins, and the loop's `M`. -/
-abbrev CapCoins (V : Verifier Coin) (Cp : Caps) (Ω A : Type) (x : Msg) (M : ℕ) : Type :=
+abbrev CapCoins (V : Verifier Coin) (Cp : Caps Coin) (Ω A : Type) (x : Msg) (M : ℕ) : Type :=
   Fin (Cp.width x) × Ω × ((Fin (V.k x) → Coin) × A) × (Fin M → (Fin (V.k x) → Coin) × A)
 
 open Classical in
 /-- **`FC`, the caps' link finder**, at runs that may abort: a cap position `q`, a tape and a run; if the run accepts
-and opens `q`, the loop over `M` continuations forked at `q`'s round from it, stopping at the first that accepts and
-opens `q`, and the first collision among the verifier's calls in the run and that one (the run again where none does).
-Its cost is the run's calls, both parties', and the loop's. -/
+and its coins query `q`, the loop over `M` continuations forked at `q`'s round from it, stopping at the first that
+accepts and queries `q`, and the first collision among the verifier's calls in the run and that one (the run again where
+none does). Its cost is the run's calls, both parties', and the loop's. -/
 noncomputable def FC {Ω A : Type} [Fintype Ω] [Nonempty Ω] [Fintype A] [Nonempty A] (H : Msg → Msg)
-    (V : Verifier Coin) (Cp : Caps) (P : Prover Ω) (x : Msg) (keep : Ω → (Fin (V.k x) → Coin) → A → Bool) (M : ℕ)
+    (V : Verifier Coin) (Cp : Caps Coin) (P : Prover Ω) (x : Msg) (keep : Ω → (Fin (V.k x) → Coin) → A → Bool) (M : ℕ)
     (hW : 0 < Cp.width x) : Finder where
   S := CapCoins V Cp Ω A x M
   ne := ⟨(⟨0, hW⟩, Classical.arbitrary _)⟩
@@ -270,7 +270,7 @@ noncomputable def FC {Ω A : Type} [Fintype Ω] [Nonempty Ω] [Fintype A] [Nonem
 
 /-- `Pr[FC^{P*}(x) outputs a collision]` at `M`, `0` where `x` has no cap position. -/
 noncomputable def PrFC {Ω A : Type} [Fintype Ω] [Nonempty Ω] [Fintype A] [Nonempty A] (H : Msg → Msg)
-    (V : Verifier Coin) (Cp : Caps) (P : Prover Ω) (x : Msg) (keep : Ω → (Fin (V.k x) → Coin) → A → Bool)
+    (V : Verifier Coin) (Cp : Caps Coin) (P : Prover Ω) (x : Msg) (keep : Ω → (Fin (V.k x) → Coin) → A → Bool)
     (M : ℕ) : ℝ :=
   if hW : 0 < Cp.width x then (FC H V Cp P x keep M hW).Pr H else 0
 
@@ -310,7 +310,7 @@ spec and every `M`, `R`: `Pr[run = acc ∧ ¬R(x, E^rep(x))] ≤ κ(x) + 4·k(x)
 4·(Pr[F0] + (k + 1)/(R+1))`, with `k(x)` the verifier's rounds, `W(x)` the caps' positions and `k` `E^rep`'s accepted
 reruns per wait, `E^rep`, `B`, `FC` and `F0` seeing each run as it aborts. It is `Inner.KSAbort` with `√(γ·Pr[B])`
 split into its events, each linear: the one-run events under `B`, the caps' under `FC` and level 0's under `F0`. -/
-def KSFlockLin [Zero Col] (H : Msg → Msg) (D : Flock.Deploy Coin Col T) (Cp : Caps) : Prop :=
+def KSFlockLin [Zero Col] (H : Msg → Msg) (D : Flock.Deploy Coin Col T) (Cp : Caps Coin) : Prop :=
   ∀ decode, decOK D decode → ∀ (x : Msg) (Ω : Type) [Fintype Ω] [Nonempty Ω] (P : Prover Ω) (A : Type) [Fintype A]
     [Nonempty A] (keep : Ω → (Fin (D.V.k x) → Coin) → A → Bool) (M R : ℕ),
     (Inner.ofFlock D decode).PrBadAbort H x P keep ≤
@@ -333,70 +333,64 @@ noncomputable def drawWits (H : Msg → Msg) (D : Deploy Coin) (I : Inner Coin W
     (d : (Fin (D.V.k x) → Coin) × (EO D I DO decO).C x) : List Flock.Wit :=
   ((EO D I DO decO).eval H P x ω d.1 d.2).1.getD []
 
-/-- **A draw's inner view, opened, where it accepts**: where `E_O` gives witnesses at the draw and the inner view they
-give accepts, that view opened (`Bound.openView`), the element-level view `DE` reads; `none` elsewhere. -/
-noncomputable def drawView (H : Msg → Msg) (D : Deploy Coin) (I : Inner Coin W) (DO : Flock.Deploy Coin Col' T')
-    (decO : List (ℕ × Col') → List T') (Bd : Bound Coin Col T) {Ω : Type} (P : Prover Ω) (x : Msg) (ω : Ω)
-    (d : (Fin (D.V.k x) → Coin) × (EO D I DO decO).C x) : Option Seen :=
-  match ((EO D I DO decO).eval H P x ω d.1 d.2).1 with
-  | some ws => if (D.innerView H x d.1 ws).out = .acc then some (Bd.openView (D.innerView H x d.1 ws)) else none
-  | none => none
-
-/-- A draw's opened inner view accepts. -/
+/-- **A draw's inner view accepts**: `E_O` gives witnesses at the draw and the inner view they give accepts (`dec`
+rejects where `E_O` gives up). -/
 def accAtI (H : Msg → Msg) (D : Deploy Coin) (I : Inner Coin W) (DO : Flock.Deploy Coin Col' T')
-    (decO : List (ℕ × Col') → List T') (Bd : Bound Coin Col T) {Ω : Type} (P : Prover Ω) (x : Msg) (ω : Ω)
+    (decO : List (ℕ × Col') → List T') {Ω : Type} (P : Prover Ω) (x : Msg) (ω : Ω)
     (d : (Fin (D.V.k x) → Coin) × (EO D I DO decO).C x) : Prop :=
-  (drawView H D I DO decO Bd P x ω d).isSome = true
+  (dec H D x d.1 ((EO D I DO decO).eval H P x ω d.1 d.2).1).out = .acc
 
-/-- A draw's opened inner view accepts and opens the inner statement's cap position `q`. -/
+/-- A draw's inner view accepts and its inner coins, the draw's first `k_I`, query the inner statement's cap position
+`q`. -/
 def opensAtI (H : Msg → Msg) (D : Deploy Coin) (I : Inner Coin W) (DO : Flock.Deploy Coin Col' T')
-    (decO : List (ℕ × Col') → List T') (Bd : Bound Coin Col T) (Cp : Caps) {Ω : Type} (P : Prover Ω) (x : Msg)
+    (decO : List (ℕ × Col') → List T') (Cp : Caps Coin) {Ω : Type} (P : Prover Ω) (x : Msg)
     (q : Fin (Cp.width (xI D x))) (ω : Ω) (d : (Fin (D.V.k x) → Coin) × (EO D I DO decO).C x) : Prop :=
-  ∃ w, drawView H D I DO decO Bd P x ω d = some w ∧ Cp.opens (xI D x) q w = true
+  accAtI H D I DO decO P x ω d ∧
+    Cp.opens (xI D x) q (coinSeq fun i : Fin (I.V.k (xI D x)) => coinSeq d.1 i.val) = true
 
 /-- `v`'s draw forked at `q`'s inner round from `d₀`'s (at most the inner rounds, which come first), with `v`'s `E_O`
 coins. -/
 def capForkI (D : Deploy Coin) (I : Inner Coin W) (DO : Flock.Deploy Coin Col' T') (decO : List (ℕ × Col') → List T')
-    (Cp : Caps) (x : Msg) (q : Fin (Cp.width (xI D x))) (d₀ v : (Fin (D.V.k x) → Coin) × (EO D I DO decO).C x) :
+    (Cp : Caps Coin) (x : Msg) (q : Fin (Cp.width (xI D x))) (d₀ v : (Fin (D.V.k x) → Coin) × (EO D I DO decO).C x) :
     (Fin (D.V.k x) → Coin) × (EO D I DO decO).C x :=
   (fork (min (Cp.round (xI D x) q) (I.V.k (xI D x))) d₀.1 v.1, v.2)
 
 /-- `FCI`'s coins at `x`: an inner cap position, a tape, the first draw and the loop's `M`. -/
 abbrev CapCoinsI (D : Deploy Coin) (I : Inner Coin W) (DO : Flock.Deploy Coin Col' T')
-    (decO : List (ℕ × Col') → List T') (Cp : Caps) (Ω : Type) (x : Msg) (M : ℕ) : Type :=
+    (decO : List (ℕ × Col') → List T') (Cp : Caps Coin) (Ω : Type) (x : Msg) (M : ℕ) : Type :=
   Fin (Cp.width (xI D x)) × Ω × ((Fin (D.V.k x) → Coin) × (EO D I DO decO).C x) ×
     (Fin M → (Fin (D.V.k x) → Coin) × (EO D I DO decO).C x)
 
 open Classical in
 /-- **`FCI`, the inner caps' link over `E_O`'s draws**: `FC` at the composite. An inner cap position `q`, a tape and a
-draw (the compiled run and `E_O`); if its opened inner view accepts and opens `q`, the loop over `M` draws forked at
-`q`'s inner round from it, stopping at the first whose opened inner view accepts and opens `q`, and the first collision
-among the calls the two draws' outer witnesses record (the first draw again where none does). Its cost is the draws'
-(`drawCost`). -/
+draw (the compiled run and `E_O`); if its inner view accepts and its inner coins query `q`, the loop over `M` draws
+forked at `q`'s inner round from it, stopping at the first whose inner view accepts and whose inner coins query `q`, and
+the first collision among the calls the two draws' outer witnesses record (the first draw again where none does). Its
+cost is the draws' (`drawCost`). -/
 noncomputable def FCI (H : Msg → Msg) (D : Deploy Coin) (I : Inner Coin W) (DO : Flock.Deploy Coin Col' T')
-    (decO : List (ℕ × Col') → List T') (Bd : Bound Coin Col T) (Cp : Caps) {Ω : Type} [Fintype Ω] [Nonempty Ω]
+    (decO : List (ℕ × Col') → List T') (Cp : Caps Coin) {Ω : Type} [Fintype Ω] [Nonempty Ω]
     (P : Prover Ω) (x : Msg) (M : ℕ) (hW : 0 < Cp.width (xI D x)) : Finder where
   S := CapCoinsI D I DO decO Cp Ω x M
   ne := ⟨(⟨0, hW⟩, Classical.arbitrary _)⟩
   out s :=
-    if opensAtI H D I DO decO Bd Cp P x s.1 s.2.1 s.2.2.1 then
+    if opensAtI H D I DO decO Cp P x s.1 s.2.1 s.2.2.1 then
       findColl (D.calls x (drawWits H D I DO decO P x s.2.1 s.2.2.1) ++
         D.calls x (drawWits H D I DO decO P x s.2.1 (capForkI D I DO decO Cp x s.1 s.2.2.1
-          ((firstPick (fun v => opensAtI H D I DO decO Bd Cp P x s.1 s.2.1 (capForkI D I DO decO Cp x s.1 s.2.2.1 v))
+          ((firstPick (fun v => opensAtI H D I DO decO Cp P x s.1 s.2.1 (capForkI D I DO decO Cp x s.1 s.2.2.1 v))
             M s.2.2.2).getD s.2.2.1))))
     else none
   cost s :=
     drawCost H D I DO decO P x s.2.1 s.2.2.1 +
-      if opensAtI H D I DO decO Bd Cp P x s.1 s.2.1 s.2.2.1 then
-        loopCost (fun v => opensAtI H D I DO decO Bd Cp P x s.1 s.2.1 (capForkI D I DO decO Cp x s.1 s.2.2.1 v))
+      if opensAtI H D I DO decO Cp P x s.1 s.2.1 s.2.2.1 then
+        loopCost (fun v => opensAtI H D I DO decO Cp P x s.1 s.2.1 (capForkI D I DO decO Cp x s.1 s.2.2.1 v))
           (fun v => drawCost H D I DO decO P x s.2.1 (capForkI D I DO decO Cp x s.1 s.2.2.1 v)) M s.2.2.2
       else 0
 
 /-- `Pr[FCI^{P*}(x) outputs a collision]` at `M`, `0` where the inner statement has no cap position. -/
 noncomputable def PrFCI (H : Msg → Msg) (D : Deploy Coin) (I : Inner Coin W) (DO : Flock.Deploy Coin Col' T')
-    (decO : List (ℕ × Col') → List T') (Bd : Bound Coin Col T) (Cp : Caps) {Ω : Type} [Fintype Ω] [Nonempty Ω]
+    (decO : List (ℕ × Col') → List T') (Cp : Caps Coin) {Ω : Type} [Fintype Ω] [Nonempty Ω]
     (P : Prover Ω) (x : Msg) (M : ℕ) : ℝ :=
-  if hW : 0 < Cp.width (xI D x) then (FCI H D I DO decO Bd Cp P x M hW).Pr H else 0
+  if hW : 0 < Cp.width (xI D x) then (FCI H D I DO decO Cp P x M hW).Pr H else 0
 
 /-- `F0I`'s coins at `x`: a tape, the first draw, and `k` waits of `R` draws each. -/
 abbrev ConflictCoinsI (D : Deploy Coin) (I : Inner Coin W) (DO : Flock.Deploy Coin Col' T')
@@ -404,37 +398,36 @@ abbrev ConflictCoinsI (D : Deploy Coin) (I : Inner Coin W) (DO : Flock.Deploy Co
   Ω × ((Fin (D.V.k x) → Coin) × (EO D I DO decO).C x) × (Fin k → Fin R → (Fin (D.V.k x) → Coin) × (EO D I DO decO).C x)
 
 open Classical in
-/-- **`F0I`, the inner level 0's conflict over `E_O`'s draws**: `F0` at the composite. A tape and a draw; if its opened
-inner view accepts, the inner `E^rep`'s `k_I` waits of at most `R` draws each, each stopping at its first draw whose
-opened inner view accepts, and the first collision among the calls those draws' outer witnesses record. Its cost is the
-draws'. -/
+/-- **`F0I`, the inner level 0's conflict over `E_O`'s draws**: `F0` at the composite. A tape and a draw; if its inner
+view accepts, the inner `E^rep`'s `k_I` waits of at most `R` draws each, each stopping at its first draw whose inner view
+accepts, and the first collision among the calls those draws' outer witnesses record. Its cost is the draws'. -/
 noncomputable def F0I (H : Msg → Msg) (D : Deploy Coin) (I : Inner Coin W) (DO : Flock.Deploy Coin Col' T')
-    (decO : List (ℕ × Col') → List T') (Bd : Bound Coin Col T) {Ω : Type} [Fintype Ω] [Nonempty Ω] (P : Prover Ω)
+    (decO : List (ℕ × Col') → List T') {Ω : Type} [Fintype Ω] [Nonempty Ω] (P : Prover Ω)
     (x : Msg) (R : ℕ) : Finder where
   S := ConflictCoinsI D I DO decO Ω x (I.k (xI D x)) R
   ne := ⟨Classical.arbitrary _⟩
   out s :=
-    if accAtI H D I DO decO Bd P x s.1 s.2.1 then
+    if accAtI H D I DO decO P x s.1 s.2.1 then
       findColl (D.calls x (drawWits H D I DO decO P x s.1 s.2.1) ++ (List.finRange (I.k (xI D x))).flatMap fun i =>
-        ((firstPick (accAtI H D I DO decO Bd P x s.1) R (s.2.2 i)).map fun d =>
+        ((firstPick (accAtI H D I DO decO P x s.1) R (s.2.2 i)).map fun d =>
           D.calls x (drawWits H D I DO decO P x s.1 d)).getD [])
     else none
   cost s :=
     drawCost H D I DO decO P x s.1 s.2.1 +
-      if accAtI H D I DO decO Bd P x s.1 s.2.1 then
-        ∑ i, loopCost (accAtI H D I DO decO Bd P x s.1) (drawCost H D I DO decO P x s.1) R (s.2.2 i)
+      if accAtI H D I DO decO P x s.1 s.2.1 then
+        ∑ i, loopCost (accAtI H D I DO decO P x s.1) (drawCost H D I DO decO P x s.1) R (s.2.2 i)
       else 0
 
 /-- `Pr[F0I^{P*}(x) outputs a collision]` at waits of `R` draws. -/
 noncomputable def PrF0I (H : Msg → Msg) (D : Deploy Coin) (I : Inner Coin W) (DO : Flock.Deploy Coin Col' T')
-    (decO : List (ℕ × Col') → List T') (Bd : Bound Coin Col T) {Ω : Type} [Fintype Ω] [Nonempty Ω] (P : Prover Ω)
+    (decO : List (ℕ × Col') → List T') {Ω : Type} [Fintype Ω] [Nonempty Ω] (P : Prover Ω)
     (x : Msg) (R : ℕ) : ℝ :=
-  (F0I H D I DO decO Bd P x R).Pr H
+  (F0I H D I DO decO P x R).Pr H
 
 /-- **`Fdev`'s weight with the inner Flock's finders**: `β₂ = (N_I + 8·W_I + 4·(k_I + 1))·k_I(x_I)`, a guess among the
 inner rounds at each draw the inner `E^rep` (`N_I` expected), `FCI` (two, at weight `4·W_I`) and `F0I` (`k_I + 1`, at
 weight `4`) make, with `W_I` the inner caps' positions and `k_I` the inner `E^rep`'s accepted reruns per wait. -/
-noncomputable def βdev2 (D : Deploy Coin) (I : Inner Coin W) (Cp : Caps) (x : Msg) : ℝ :=
+noncomputable def βdev2 (D : Deploy Coin) (I : Inner Coin W) (Cp : Caps Coin) (x : Msg) : ℝ :=
   (NI D I x + 8 * Cp.width (xI D x) + 4 * ((I.k (xI D x) : ℝ) + 1)) * I.V.k (xI D x)
 
 /-- **The recursion's bits with the inner Flock's roots linear**: `λ₂ = min(log₂(1/κ), 255.5 − ½ log₂ γ,
@@ -443,7 +436,7 @@ with `k_I` the inner verifier's rounds in the third term and the inner `E^rep`'s
 `B_I` costs at most `c_Be` per call of the prover's run, `FCI` and `Fdev` two draws', `c_Be` too, and `F0I` `k_I + 1`
 draws', `(k_I + 1)·c_Be/2`; the tails `4·W_I/(M+1)`, `β₂/(M+1)` and `4·(k_I + 1)/(R+1)` are below their collision
 terms at `M + 1 ≥ 2^256/(c_Be·t)` and `R + 1 ≥ 2^257/(c_Be·t)`. -/
-noncomputable def lamLin2 (D : Deploy Coin) (I : Inner Coin W) (Cp : Caps) (x : Msg) : ℝ :=
+noncomputable def lamLin2 (D : Deploy Coin) (I : Inner Coin W) (Cp : Caps Coin) (x : Msg) : ℝ :=
   min (min (min (min (min (Real.logb 2 (1 / κ D I x)) (255.5 - Real.logb 2 (γ D I x) / 2))
     (256 - Real.logb 2 ((4 * I.V.k (xI D x) + 1) * cBe D x)))
     (255 - Real.logb 2 (4 * Cp.width (xI D x) * cBe D x)))
@@ -456,7 +449,7 @@ the spec, on every prover and at every `M`, `R`: `Pr[run = acc ∧ ¬R(x, E*(x))
 (4k_I + 1)·Pr[B_I] + 4·W_I·(Pr[FCI] + 1/(M+1)) + 4·(Pr[F0I] + (k_I + 1)/(R+1)) + β₂·(Pr[Fdev] + 1/(M+1))`, the inner
 caps read by `Cp` at the inner statement. It is `KSBoundLin` with `KSFlockLin`'s terms in place of `√(γ_BI·Pr[B_I])`. -/
 def KSLin2 [Zero Col] [Zero Col'] (H : Msg → Msg) (D : RecAt Coin) (Bd : Bound Coin Col T)
-    (DO : Flock.Deploy Coin Col' T') (Cp : Caps) : Prop :=
+    (DO : Flock.Deploy Coin Col' T') (Cp : Caps Coin) : Prop :=
   ∀ decI, decOK Bd.deploy decI → ∀ decO, decOK DO decO → ∀ (x : Msg) (Ω : Type) [Fintype Ω] [Nonempty Ω]
     (P : Prover Ω) (M R : ℕ),
     PrBad H (D.record Bd.IVStar).V (Recursion.R (D.record Bd.IVStar) (Inner.ofFlock Bd.deploy decI))
@@ -466,8 +459,8 @@ def KSLin2 [Zero Col] [Zero Col'] (H : Msg → Msg) (D : RecAt Coin) (Bd : Bound
         (4 * (Inner.ofFlock Bd.deploy decI).V.k (xI (D.record Bd.IVStar) x) + 1) *
           PrBinner H (D.record Bd.IVStar) (Inner.ofFlock Bd.deploy decI) DO decO P x +
         4 * Cp.width (xI (D.record Bd.IVStar) x) *
-          (PrFCI H (D.record Bd.IVStar) (Inner.ofFlock Bd.deploy decI) DO decO Bd Cp P x M + 1 / ((M : ℝ) + 1)) +
-        4 * (PrF0I H (D.record Bd.IVStar) (Inner.ofFlock Bd.deploy decI) DO decO Bd P x R +
+          (PrFCI H (D.record Bd.IVStar) (Inner.ofFlock Bd.deploy decI) DO decO Cp P x M + 1 / ((M : ℝ) + 1)) +
+        4 * (PrF0I H (D.record Bd.IVStar) (Inner.ofFlock Bd.deploy decI) DO decO P x R +
           (((Inner.ofFlock Bd.deploy decI).k (xI (D.record Bd.IVStar) x) : ℝ) + 1) / ((R : ℝ) + 1)) +
         βdev2 (D.record Bd.IVStar) (Inner.ofFlock Bd.deploy decI) Cp x *
           (PrFdev H (D.record Bd.IVStar) (Inner.ofFlock Bd.deploy decI) DO decO P x M + 1 / ((M : ℝ) + 1))
@@ -477,7 +470,7 @@ outer decoder that meets the spec: every prover making at most `t ≥ 1` SHA-512
 `Pr[acc ∧ ¬R] ≤ t · 2^{−λ₂(x)}`, where `B` obeys the strict birthday bound and `B_I`, `Fdev` and `FCI` at every `M`
 and `F0I` at every `R` the linear expected-time bound. -/
 def BitsLin2 [Zero Col] [Zero Col'] (H : Msg → Msg) (D : RecAt Coin) (Bd : Bound Coin Col T)
-    (DO : Flock.Deploy Coin Col' T') (Cp : Caps) : Prop :=
+    (DO : Flock.Deploy Coin Col' T') (Cp : Caps Coin) : Prop :=
   ∀ decI, decOK Bd.deploy decI → ∀ decO, decOK DO decO → ∀ (x : Msg) (Ω : Type) [Fintype Ω] [Nonempty Ω]
     (P : Prover Ω) (t : ℕ), 1 ≤ t →
     (∀ ω r, (run H P (D.record Bd.IVStar).V x ω r).pLog.length +
@@ -488,8 +481,8 @@ def BitsLin2 [Zero Col] [Zero Col'] (H : Msg → Msg) (D : RecAt Coin) (Bd : Bou
     (∀ (M : ℕ) (hk : 0 < (Inner.ofFlock Bd.deploy decI).V.k (xI (D.record Bd.IVStar) x)),
       ExpectedCR H (Fdev H (D.record Bd.IVStar) (Inner.ofFlock Bd.deploy decI) DO decO P x M hk)) →
     (∀ (M : ℕ) (hW : 0 < Cp.width (xI (D.record Bd.IVStar) x)),
-      ExpectedCR H (FCI H (D.record Bd.IVStar) (Inner.ofFlock Bd.deploy decI) DO decO Bd Cp P x M hW)) →
-    (∀ R : ℕ, ExpectedCR H (F0I H (D.record Bd.IVStar) (Inner.ofFlock Bd.deploy decI) DO decO Bd P x R)) →
+      ExpectedCR H (FCI H (D.record Bd.IVStar) (Inner.ofFlock Bd.deploy decI) DO decO Cp P x M hW)) →
+    (∀ R : ℕ, ExpectedCR H (F0I H (D.record Bd.IVStar) (Inner.ofFlock Bd.deploy decI) DO decO P x R)) →
     PrBad H (D.record Bd.IVStar).V (Recursion.R (D.record Bd.IVStar) (Inner.ofFlock Bd.deploy decI))
         (E H (D.record Bd.IVStar) (Inner.ofFlock Bd.deploy decI) DO decO) x P ≤
       t * (2 : ℝ) ^ (-lamLin2 (D.record Bd.IVStar) (Inner.ofFlock Bd.deploy decI) Cp x)
