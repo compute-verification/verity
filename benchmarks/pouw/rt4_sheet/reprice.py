@@ -1,11 +1,11 @@
-"""RT4-SHEET job 3: the recorded memory-route folds priced on sm_120's sheet, at π* = DS_issue (every warp instruction one
-slot), from the census-cover fixture's timed-loop counts (cpw_routes' modes, RT3-120's run r20261019-192718-5d46).
+"""RT4-SHEET job 3: the recorded memory-route folds priced on sm_120's sheet, at π* = DS_issue (every warp instruction
+one slot), from the census-cover fixture's timed-loop counts (cpw_routes' modes, RT3-120's run r20261019-192718-5d46).
 
 A trip of the timed loop is one set, 8 units (8 IMMA.16832). Every op but IMMA and NOP is the fold's, as `cpw_price.py`
 counts it. Modes 9 and 10 issue some instructions in a body thread 0 runs once a block of W warps; the fixture's counts
-don't split the body out, so this bounds the fold from below with the split most favourable to a cheater: only what every
-warp must issue stays outside (its lane fold, its own global and shared stores and loads, the block barrier, and the
-outer half of each `fence.proxy.async`), and everything else is taken as body, amortized to nothing.
+don't split the body out, so this bounds the fold from below with the split most favourable to a cheater: only what
+every warp must issue stays outside (its lane fold, its own global and shared stores and loads, the block barrier, and
+the outer half of each `fence.proxy.async`), and everything else is taken as body, amortized to nothing.
 
     python benchmarks/pouw/rt4_sheet/reprice.py [FIXTURE]
 
