@@ -11,7 +11,8 @@ session ends, however it ends, the challenger signs its release log and writes t
 
 ~~~text
 frame       u32be len(head) ‖ u32be len(body) ‖ head ‖ body: head a JSON object with its "type", body empty
-client      {"type": "hello"}, then {"type": "open", "label", "index", "after"} per coin, then {"type": "close"}
+client      {"type": "hello"} (with "secret" when the session has one), then {"type": "open", "label", "index", "after"}
+            per coin, then {"type": "close"}
 challenger  {"type": "commitment", "commitment"}, {"type": "opening", "opening"} and {"type": "closed"}, each answering
             the client's frame, or {"type": "refused", "reason"}, which ends the session
 ~~~
@@ -20,28 +21,33 @@ Every message is fail-closed.  The challenger refuses a frame that isn't the nex
 a coin other than its family's next (coin i after the family's i-th root, once: `LiveRecord`) and a root that isn't 64
 bytes; a refusal or a broken stream ends the session, and no coin opens twice (a retry never redraws).  It appends each
 release to `releases.jsonl` (`LiveRecord.log`'s two events, a line each in canonical JSON, integer nanoseconds on its
-monotonic clock), fsynced, before the opening leaves its host, and answers
-the client's close only once its signed close is written.
+monotonic clock), fsynced, before the opening leaves its host, and answers the client's close only once its signed close
+is written.  A session served with a `secret` (the auditor host's gate gives one to the window's opener, RT4-INT-29)
+refuses a hello that doesn't carry it, so no other process that reaches the port takes the session's coins first.
+`greet` reads the hello alone, so a server can refuse a bad one and take the next connection: a refused hello releases
+nothing.
 
 `RemoteChallenger` is the client's `LiveChallenger`, its `commitment` and `open(label, index, after)`, so `LiveRecord`
 (and a client's seam over it) runs on it unchanged.  It raises `CoinError` on a refusal, a broken stream, or an opening
 that isn't the coin asked for opened against the commitment after `after` (`live_reason`), and refuses every coin after.
 
 The verifier reads the challenger's directory from the auditor's side (the challenger's own run), never from the prover's
-bundle (`trusted_session`), and the auditor's signed ledger of which session is a window's (`ledger_lines`): the
-commitment the challenger signed and the roots its signed release log shows it received (`challenger.session_named`),
-its record and close the files the ledger's end sealed, against which a family's openings are `order_reason`'s.  An
+bundle (`trusted_session`), and the auditor's signed ledger of which session is a window's, every head infra published
+(`ledger_lines`, `challenger.ledger_head`): the commitment the challenger signed and the roots its signed release log
+shows it received (`challenger.session_named`), its record, close and refused hellos the files the ledger's end sealed,
+against which a family's openings are `order_reason`'s.  An
 opening's `after` is the prover's to write, so only the challenger's log shows which root a coin followed.
 """
 from __future__ import annotations
 
 import hashlib
+import hmac
 import json
 import os
 import socket
 import struct
 import time
-from collections.abc import Callable
+from collections.abc import Callable, Sequence
 from pathlib import Path
 from typing import Any
 
@@ -51,7 +57,7 @@ from verity.core.protocols.sampled_proofs.challenger import (ChallengerClose, Ch
                                                              write_record)
 from verity.ml.commitments.identity import canonical_json_text
 
-RECORD, KEY, RELEASES, CLOSE = "record.json", "key.json", Ch.LOG_FILE, "challenger.json"
+RECORD, KEY, RELEASES, CLOSE, HELLOS = Ch.RECORD_FILE, "key.json", Ch.LOG_FILE, Ch.CLOSE_FILE, Ch.HELLOS_FILE
 ROOT_BYTES = 64
 HEADER = struct.Struct(">II")
 MAX_HEAD = 1 << 20
@@ -205,11 +211,44 @@ def _closed(session: Session, ended: str | None) -> str | None:
     return ended
 
 
-def serve(sock: socket.socket, session: Session, clock: Callable[[], int] = time.monotonic_ns) -> str | None:
+def _hello_reason(head: dict, secret: bytes | None) -> str | None:
+    if secret is None:
+        return None if head == {"type": "hello"} else SEQUENCE
+    if head.get("type") != "hello" or sorted(head) != ["secret", "type"]:
+        return "a client's first frame is hello with the session's secret"
+    given = head["secret"]
+    if type(given) is not str or not hmac.compare_digest(given.encode(), secret.hex().encode()):
+        return "the hello's secret is not the session's"
+    return None
+
+
+def greet(sock: socket.socket, secret: bytes | None = None) -> str | None:
+    """Read the client's hello on `sock`: None when it is the session's (`serve(..., greeted=True)` then serves the
+    stream), else why it is refused, which is sent before the stream is hung up.  It releases nothing, so a server may
+    take another connection after a refused hello without redrawing anything."""
+    try:
+        why = _hello_reason(_Wire(sock).recv(), secret)
+    except CoinError as e:
+        why = str(e)
+    except OSError as e:
+        return f"the stream broke ({e})"
+    if why is not None:
+        try:
+            _Wire(sock).send({"type": "refused", "reason": why})
+        except OSError:
+            pass
+        _hang_up(sock)
+    return why
+
+
+def serve(sock: socket.socket, session: Session, clock: Callable[[], int] = time.monotonic_ns,
+          secret: bytes | None = None, greeted: bool = False) -> str | None:
     """Serve one client's session on the connected stream `sock` (`open_session`), on the release log's clock `clock`
-    (integers, the log being canonical JSON): None when the client closed it, else why it ended.  However it ends, the session's close is signed and written
-    (`close_session`), before the client's close is answered.  After its last frame it ends its side of the stream and
-    returns only once the client ends its own, so a tunnel torn down after `serve` returns never cuts that frame."""
+    (integers, the log being canonical JSON): None when the client closed it, else why it ended.  With `secret`, the
+    hello must carry it (lowercase hex); `greeted` when `greet` has already accepted it on `sock`.  However it ends, the
+    session's close is signed and written (`close_session`), before the client's close is answered.  After its last frame
+    it ends its side of the stream and returns only once the client ends its own, so a tunnel torn down after `serve`
+    returns never cuts that frame."""
     d, challenger = session.directory, session.challenger
     if (session.close is not None or challenger.record is None or not (d / RECORD).is_file()
             or not (d / RELEASES).is_file()):
@@ -218,8 +257,9 @@ def serve(sock: socket.socket, session: Session, clock: Callable[[], int] = time
     records = {label: LiveRecord(challenger, label, clock) for label, _ in challenger.commitment.families}
     try:
         with open(d / RELEASES, "a", encoding="utf-8") as log:
-            if wire.recv() != {"type": "hello"}:
-                raise CoinError(SEQUENCE)
+            why = None if greeted else _hello_reason(wire.recv(), secret)
+            if why is not None:
+                raise CoinError(why)
             wire.send({"type": "commitment", "commitment": challenger.commitment.to_json()})
             while True:
                 head = wire.recv()
@@ -247,17 +287,18 @@ class RemoteChallenger:
     """The client of a challenger on its own host over the connected stream `sock`: `LiveChallenger`'s `commitment` (the
     challenger's answer to hello) and `open`.  After a refusal, a broken stream or a bad opening it refuses every coin."""
 
-    def __init__(self, sock: socket.socket) -> None:
+    def __init__(self, sock: socket.socket, secret: bytes | None = None) -> None:
         self._wire, self._ended = _Wire(sock), None
-        self.commitment = self._ask({"type": "hello"}, "commitment", LiveCommitment.from_json)
+        hello = {"type": "hello"} if secret is None else {"type": "hello", "secret": bytes(secret).hex()}
+        self.commitment = self._ask(hello, "commitment", LiveCommitment.from_json)
 
     @classmethod
-    def connect(cls, address: str) -> RemoteChallenger:
-        """The challenger at ``HOST:PORT``."""
+    def connect(cls, address: str, secret: bytes | None = None) -> RemoteChallenger:
+        """The challenger at ``HOST:PORT``, its session's `secret` in the hello when it has one."""
         host, sep, port = address.rpartition(":")
         if not sep or not host or not port.isdigit():
             raise ValueError(f"a challenger's address is HOST:PORT, not {address!r}")
-        return cls(socket.create_connection((host, int(port))))
+        return cls(socket.create_connection((host, int(port))), secret)
 
     def _end(self, why: str) -> CoinError:
         self._ended = why
@@ -341,33 +382,42 @@ def released_roots(path: str | os.PathLike, commitment: LiveCommitment) -> dict[
     return Ch.released_roots_of(commitment, log_lines(path))
 
 
+def hello_lines(path: str | os.PathLike) -> list[str] | None:
+    """The refused hellos' lines at `path`, each without its newline (None when there is no such file)."""
+    text = _read(Path(path), "challenger's refused hellos")
+    return None if text is None else (text[:-1] if text.endswith("\n") else text).split("\n") if text else []
+
+
 def session_files(directory: str | os.PathLike) -> dict[str, Any]:
-    """The challenger's session as its directory holds it, ``{"close", "log", "record"}`` (`trusted_session_of`'s
-    `session`): its close record and record (None where missing) and its release log's lines."""
+    """The challenger's session as its directory holds it, ``{"close", "hellos", "log", "record"}``
+    (`trusted_session_of`'s `session`): its close record, refused hellos' lines and record (None where missing) and its
+    release log's lines."""
     d = Path(directory)
-    return {"close": _doc(d / CLOSE, "challenger's close record"), "log": log_lines(d / RELEASES),
-            "record": _doc(d / RECORD, "challenger record")}
+    return {"close": _doc(d / CLOSE, "challenger's close record"), "hellos": hello_lines(d / HELLOS),
+            "log": log_lines(d / RELEASES), "record": _doc(d / RECORD, "challenger record")}
 
 
 def ledger_lines(path: str | os.PathLike) -> list[str]:
-    """The auditor's ledger at `path` (infra's ``windows.jsonl``, the latest the store holds), its lines without their
-    newlines; a missing or unreadable ledger raises `CoinError`."""
+    """One published head of the auditor's ledger at `path` (infra's ``windows.jsonl``), its lines without their
+    newlines; a missing or unreadable head raises `CoinError`."""
     text = _read(Path(path), "auditor's ledger")
     if text is None:
         raise CoinError(f"{Ch.NO_AUDIT} (none at {path})")
     return [line for line in text.split("\n") if line]
 
 
-def trusted_session(directory: str | os.PathLike, ledger: str | os.PathLike, window: Any, key: ChallengerKey,
+def trusted_session(directory: str | os.PathLike, heads: Sequence[str | os.PathLike], window: Any, key: ChallengerKey,
                     verify: Verify) -> tuple[LiveCommitment, dict[str, tuple[bytes, ...]]]:
-    """What the verifier takes from the challenger's directory for window `window`, read on the auditor's side: the one
-    session the auditor's ledger at `ledger` opens for the window, under the challenger key the window's deployment pins,
-    `key` (`challenger.audited_session`); its record and close the files the ledger's end sealed; and from that session's
-    directory the coin commitment the challenger signed and the roots its signed release log shows it received
+    """What the verifier takes from the challenger's directory for window `window`, read on the auditor's side: the
+    auditor's ledger as infra published it, every head at `heads` checked and the longest taken (`challenger.ledger_head`);
+    the one session it opens for the window, under the challenger key the window's deployment pins, `key`
+    (`challenger.audited_session`); its record, close and refused hellos the files the ledger's end sealed; and from that
+    session's directory the coin commitment the challenger signed and the roots its signed release log shows it received
     (`challenger.session_named`).  Each fails closed, raising `CoinError`."""
     d = Path(directory)
-    audited = Ch.audited_session(ledger_lines(ledger), window, key, verify)
-    for name in (RECORD, CLOSE):
+    ledger = Ch.ledger_head([ledger_lines(p) for p in heads], key, verify)
+    audited = Ch.audited_session(ledger, window, key, verify)
+    for name in (RECORD, CLOSE, HELLOS):
         try:
             digest = hashlib.sha512((d / name).read_bytes()).hexdigest()
         except OSError:
@@ -377,6 +427,6 @@ def trusted_session(directory: str | os.PathLike, ledger: str | os.PathLike, win
     return Ch.session_named(audited, key, session_files(d), verify)
 
 
-__all__ = ["CLOSE", "HEADER", "KEY", "MAX_HEAD", "RECORD", "RELEASES", "ROOT_BYTES", "RemoteChallenger", "Session",
-           "close_session", "ledger_lines", "log_lines", "open_session", "released_roots", "serve", "session_files",
-           "trusted_session"]
+__all__ = ["CLOSE", "HEADER", "HELLOS", "KEY", "MAX_HEAD", "RECORD", "RELEASES", "ROOT_BYTES", "RemoteChallenger",
+           "Session", "close_session", "greet", "hello_lines", "ledger_lines", "log_lines", "open_session",
+           "released_roots", "serve", "session_files", "trusted_session"]

@@ -3,7 +3,9 @@
 # key, release log, its signed close and address in $RESEARCH_RUN_DIR/out, which the run publishes from this machine. It runs on a
 # machine the prover doesn't control (AGENTS.md's auditor-trusted devices), never on PEER: once it listens it opens
 # `ssh -R PORT` to PEER (a name in /etc/vy/peers), as benchmarks/remote_session/run.sh's verifier does, so the prover's
-# client (`remote.RemoteChallenger.connect("127.0.0.1:PORT")`) connects to PEER's own 127.0.0.1:PORT.
+# client (`remote.RemoteChallenger.connect("127.0.0.1:PORT")`) connects to PEER's own 127.0.0.1:PORT. The auditor host,
+# vy-challenger-1, takes no research run: there a session is `vy-challenger-gate open ...` (auditor.py), as the auditor user
+# from infra's pinned tree, recorded in its ledger. This script is a research run's session elsewhere, for development.
 #
 #   research run --on vy-nebius-1 --project verity --source . --cwd source --timeout 2h --declared-output 'out/*' \
 #     --env PEER=vy-nebius-2 --env PORT=7811 --env SCHEME=vllm/commit --env SESSION=s-20261020-1 \

@@ -83,6 +83,9 @@
                     with custody, RESEARCH_PREFLIGHT_CUSTODY (the staged key's dir).  A declaration that cannot be read refuses the run.
                     `--preflight TOOL` runs TOOL's preflight before a run of anything else (a Lean record regeneration on a check
                     pod), and refuses when the tree declares none.  job.json run.remote.preflight and the launch's answer carry its report.
+    auditor         a machine with /etc/vy/auditor (deploy.toml installs it on an auditor host, vy-challenger-1) runs only the commands
+                    that file lists, one a line, exactly: launch-request refuses any other before anything starts, and the host's
+                    vy-auditor-only.timer (slot_only.py --auditor) stops one launched from a tree that predates the refusal.
     observe/fetch   `research fetch <id>` copies the small records (or --all files) into the local run dir over one ssh+tar, extracted
                     member by member off the pipe (a big run is never in the launcher's memory); remote.json keeps observed_utc.
                     Unreachable means "last observed at T; current status unknown", never "failed".
@@ -167,6 +170,7 @@ RUNS_VIA_SLOT_FILE = "/etc/vy/runs-via-slot"  # present: a run starts only throu
 #: the machine's own slot_only.py (deploy.toml installs it beside the marker, and vy-slot-only.timer runs it): when present it, not
 #: the shipped tree's package, says which commands pass, so a lane's branch older than a rule change is judged by the deployed rule
 NODE_SLOT_ONLY_FILE = "/usr/local/lib/vy-monitoring/slot_only.py"
+AUDITOR_FILE = "/etc/vy/auditor"              # present: an auditor host, which runs only the commands it lists (slot_only.auditor_allows)
 GUARD_SCRIPT = Path(__file__).resolve().parent / "pods" / "sh" / "pod_guard.sh"
 POD_TARGET_RETRIES = 6           # extra GET /pods/{id} reads when a RUNNING pod answers without an ssh mapping
 POD_TARGET_RETRY_S = 2.0
@@ -1342,6 +1346,12 @@ def _launch_request(request_path: Path) -> dict[str, Any]:
             slot_only = node_slot_only()
             if not slot_only.through_slot(req["command"]):
                 raise Refused(slot_only.refusal(marker))
+        if (marker := Path(os.environ.get("AUDITOR_FILE") or AUDITOR_FILE)).exists():
+            rule = node_slot_only()
+            if not hasattr(rule, "auditor_allows"):
+                from .pods.nebius import slot_only as rule
+            if not rule.auditor_allows(req["command"], marker):
+                raise Refused(rule.auditor_refusal(marker))
         if remote.get("source_sha"):              # a shipped tree executes only from a directory verified READY for the requested identity
             src_dir = remote.get("source_dir") or str(runs_root.parent / "src" / str(remote["source_sha"]))
             require_ready_source(src_dir, str(remote["source_sha"]))
@@ -1754,6 +1764,9 @@ def launch(*, run_id: str, local_dir: Path, machine_name: str, project: str, com
     write_json_atomic(local_dir / "remote.json", rec)
     try:
         m = resolve_machine(machine_name, project)
+        if m.get("auditor"):
+            raise Refused(f"machine {machine_name!r} is an auditor host: it takes no research run, from anyone. Its service is "
+                          f"reached only through its gate: {m['auditor']}")
         guard_min = guard_idle_min(m)
         custody_pub: dict[str, Any] | None = None
         custody_files: list[tuple[str, bytes]] = []

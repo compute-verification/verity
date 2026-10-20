@@ -2,12 +2,14 @@
 (`stub_serve.py`): it draws every coin and salt from those coins, signs and writes its record before it listens, serves one
 session, signs its release log when it ends and publishes nothing secret; the verifier checks the session from the
 process's `out/` and the auditor's signed ledger alone.  A Lean that can't answer starts no session, a second session
-signs at the key's next leaves, a session id the key has signed for is refused, a key inside `out/` is refused, a broken
-sequence ends the session with exit 1, signed as such, and with `--peer` the tunnel opens once the challenger listens and
-a tunnel that ends first ends it."""
+signs at the key's next leaves, a session id the key has signed for is refused, a key inside `out/` is refused, a refused
+hello is logged and the next connection taken, a broken sequence after the hello ends the session with exit 1, signed as
+such, a salt opens only after `--root`, and with `--peer` the tunnel opens once the challenger listens and a tunnel that
+ends first ends it."""
 
 from __future__ import annotations
 
+import fcntl
 import hashlib
 import itertools
 import json
@@ -27,7 +29,12 @@ SERVE = Path(__file__).resolve().parents[1] / "serve.py"
 STUB = Path(__file__).resolve().parent / "stub_serve.py"
 FAMILIES = [["positions", 2], ["replay", 1]]
 HOST = "vy-nebius-cpu-1"
-WINDOW = {"commit": "11" * 64, "period": "p-0"}
+#: the test key: eight leaves, enough for two sessions and the auditor's open and end of each
+PARAMS = lms.Params(64, 4, 3)
+
+
+#: the test key: eight leaves, enough for two sessions and the auditor's open and end of each
+PARAMS = lms.Params(64, 4, 3)
 
 
 def lms_verify(key: C.ChallengerKey, message: bytes, signature: bytes) -> bool:
@@ -35,13 +42,56 @@ def lms_verify(key: C.ChallengerKey, message: bytes, signature: bytes) -> bool:
     return lms.verify(p, key.public, message, lms.Signature.decode(p, signature))
 
 
-def start(tmp_path: Path, out: str = "out", key: Path | None = None, *extra: str, env=None, session: str | None = None
-          ) -> tuple:
+class Auditor:
+    """The auditor's ledger beside the runs in `tmp_path`, under the key they sign with, which it makes first (its seed and
+    leaf state in `key/`, which serve.py then reads): each entry signed through the key's leaf state, as the host's ledger
+    signs, a session's open before serve.py's record and its end after serve.py's close."""
+
+    def __init__(self, tmp_path: Path) -> None:
+        directory = tmp_path / "key"
+        directory.mkdir(mode=0o700)
+        seed = bytes([5]) * PARAMS.N
+        fd = os.open(directory / "seed", os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+        os.write(fd, seed)
+        os.close(fd)
+        self.private = lms.keygen(PARAMS, seed)
+        self.public = lms.public_key(self.private)
+        self.state = directory / "state.json"
+        lms.LeafState.create(self.state, self.public, PARAMS.H)
+        self.path, self.lines, self.windows = tmp_path / "windows.jsonl", [], {}
+
+    def sign(self, message: bytes) -> bytes:
+        with lms.LeafState(self.state, self.public, PARAMS.H) as state:
+            return lms.sign(self.private, state, message).encode()
+
+    def append(self, kind: str, session: str, body: dict) -> None:
+        self.lines.append(C.ledger_line(self.lines, kind, session, body, self.public[:16], self.sign))
+        self.path.write_text("".join(line + "\n" for line in self.lines))
+
+    def open(self, session: str, root: str | None = None) -> None:
+        self.windows[session] = {"root": root or hashlib.sha512(session.encode()).hexdigest()}
+        self.append("open", session, {"window": self.windows[session], "host": HOST, "pinned": "ab" * 20,
+                                      "key_sha512": hashlib.sha512(self.public).hexdigest(), "by": "proofs"})
+
+    def end(self, session: str, out: Path, closed: bool = True) -> None:
+        record = json.loads((out / R.RECORD).read_text())
+        self.append("end", session, {
+            "closed": closed, "rc": 0 if closed else 1, "complete": closed,
+            "files": {p.name: hashlib.sha512(p.read_bytes()).hexdigest() for p in sorted(out.iterdir()) if p.is_file()},
+            "record_leaf": int(record["signature"][:8], 16), "commitment": record["commitment"]["root"],
+            "refused_hellos": len((out / R.HELLOS).read_text().splitlines())})
+
+
+def start(tmp_path: Path, out: str = "out", key: Path | None = None, *extra: str, env=None, session: str | None = None,
+          auditor: Auditor | None = None, root: str | None = None) -> tuple:
+    """serve.py on loopback for session `session` (s-OUT), writing `out`; `auditor`'s ledger opens it first, for `root`."""
     out_dir = tmp_path / out
+    if auditor is not None:
+        auditor.open(session or f"s-{out}", root)
     proc = subprocess.Popen(
         [sys.executable, str(STUB), str(SERVE), "--out", str(out_dir), "--port", "0", "--scheme", "verity/test/coins/v1",
          "--families", json.dumps(FAMILIES), "--session", session or f"s-{out}", "--key", str(key or tmp_path / "key"),
-         "--params", "4,2", "--keygen-workers", "1", "--host", HOST, *extra],
+         "--params", f"{PARAMS.W},{PARAMS.H}", "--keygen-workers", "1", "--host", HOST, *extra],
         stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True,
         env={"COINS_LOG": str(tmp_path / "coins.log"), **(os.environ if env is None else env)})
     return proc, out_dir, proc.stdout.readline()
@@ -52,23 +102,13 @@ def finish(proc: subprocess.Popen) -> tuple[int, str]:
     return proc.returncode, err
 
 
-def trusted(out: Path, session: str = "s-out", closed: bool = True):
-    """The verifier's read of `out`, the auditor's ledger opening `session` for `WINDOW` on `HOST` under the key the run
-    wrote (pinned from the key's own directory, outside `out`) and ending it as `closed` says, sealing `out`'s files,
-    each entry signed with that key (at its last two leaves, which the run doesn't reach)."""
+def trusted(out: Path, auditor: Auditor, session: str = "s-out", closed: bool = True):
+    """The verifier's read of `out`, once `auditor`'s ledger ends `session` as `closed` says, sealing `out`'s files, under
+    the key the run wrote (pinned from the auditor's key, outside `out`)."""
     key = C.ChallengerKey.from_json(json.loads((out / R.KEY).read_text()))
-    assert key.public == (out.parent / "key" / "public").read_bytes()
-    private = lms.keygen(lms.Params(64, key.W, key.H), (out.parent / "key" / "seed").read_bytes())
-    files = {p.name: hashlib.sha512(p.read_bytes()).hexdigest() for p in sorted(out.iterdir()) if p.is_file()}
-    lines: list[str] = []
-    for q, (kind, body) in enumerate((("open", {"window": WINDOW, "host": HOST, "pinned": "ab" * 20,
-                                                "key_sha512": hashlib.sha512(key.public).hexdigest()}),
-                                      ("end", {"closed": closed, "files": files, "rc": 0})), 2 ** key.H - 2):
-        lines.append(C.ledger_line(lines, kind, session, body, key.public[:16],
-                                   lambda m, q=q: lms.sign_at(private, q, m).encode()))
-    ledger = out.parent / f"windows-{session}.jsonl"
-    ledger.write_text("".join(line + "\n" for line in lines))
-    return R.trusted_session(out, ledger, WINDOW, key, lms_verify)
+    assert key.public == auditor.public
+    auditor.end(session, out, closed)
+    return R.trusted_session(out, [auditor.path], auditor.windows[session], key, lms_verify)
 
 
 def close(out: Path) -> dict:
@@ -83,7 +123,8 @@ def session(address: str, roots: int = 1) -> None:
 
 
 def test_the_challenger_signs_before_it_listens_and_the_verifier_checks_its_out_alone(tmp_path):
-    proc, out, first = start(tmp_path)
+    auditor = Auditor(tmp_path)
+    proc, out, first = start(tmp_path, auditor=auditor)
     assert first.startswith("listening 127.0.0.1:")
     assert {p.name for p in out.iterdir()} >= {R.RECORD, R.KEY, R.RELEASES}
     session(first.split()[1], roots=2)
@@ -91,7 +132,7 @@ def test_the_challenger_signs_before_it_listens_and_the_verifier_checks_its_out_
 
     key = C.ChallengerKey.from_json(json.loads((out / R.KEY).read_text()))
     assert key.public == (tmp_path / "key" / "public").read_bytes()
-    commitment, roots = trusted(out)
+    commitment, roots = trusted(out, auditor)
     assert roots == {"positions": (bytes([0]) * 64, bytes([1]) * 64), "replay": ()}
     assert commitment == C.ChallengerRecord.from_json(json.loads((out / R.RECORD).read_text())).commitment
     assert (close(out)["session"], close(out)["ended"], close(out)["lines"]) == ("s-out", None, 5)
@@ -117,14 +158,33 @@ def test_a_lean_that_cannot_answer_starts_no_session(tmp_path):
 
 
 def test_a_second_session_signs_at_the_keys_next_leaves(tmp_path):
-    leaves = []
+    """Each session's record and close sign at the key's next leaves, after the ledger's open of it and before its end."""
+    auditor, leaves = Auditor(tmp_path), []
     for out in ("one", "two"):
-        proc, out_dir, first = start(tmp_path, out)
+        proc, out_dir, first = start(tmp_path, out, auditor=auditor)
         session(first.split()[1])
         assert finish(proc)[0] == 0
-        trusted(out_dir, f"s-{out}")
+        trusted(out_dir, auditor, f"s-{out}")
         leaves += [int(json.loads((out_dir / f).read_text())["signature"][:8], 16) for f in (R.RECORD, R.CLOSE)]
-    assert leaves == [0, 1, 2, 3]
+    assert leaves == [1, 2, 5, 6]
+
+
+def test_the_key_is_held_only_while_it_signs_so_the_hosts_other_signers_sign_during_a_session(tmp_path):
+    """On the auditor host every signer of the key takes `sign.lock` (`--sign-lock`) and the leaf state only to sign: a
+    session holds neither while it serves, so the ledger and the host's other sessions sign meanwhile, and its close
+    signs at the next leaf after theirs."""
+    lock = tmp_path / "sign.lock"
+    proc, out, first = start(tmp_path, "out", None, "--sign-lock", str(lock))
+    key = C.ChallengerKey.from_json(json.loads((out / R.KEY).read_text()))
+    private = lms.keygen(lms.Params(64, key.W, key.H), (tmp_path / "key" / "seed").read_bytes())
+    with open(lock, "a") as held:
+        fcntl.flock(held, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        with lms.LeafState(tmp_path / "key" / "state.json", key.public, key.H) as state:
+            assert lms.sign(private, state, b"another signer").q == 1
+    session(first.split()[1])
+    assert finish(proc)[0] == 0
+    assert (out / "hellos.jsonl").read_text() == ""
+    assert int(close(out)["signature"][:8], 16) == 2
 
 
 def test_a_session_id_the_key_has_signed_for_is_refused(tmp_path):
@@ -144,18 +204,86 @@ def test_a_key_inside_out_is_refused(tmp_path):
     assert not (tmp_path / "out" / "key").exists()
 
 
-def test_a_broken_sequence_ends_the_session_with_exit_1(tmp_path):
-    proc, out, first = start(tmp_path)
+def test_a_broken_sequence_after_the_hello_ends_the_session_with_exit_1(tmp_path):
+    auditor = Auditor(tmp_path)
+    proc, out, first = start(tmp_path, auditor=auditor)
     host, port = first.split()[1].split(":")
-    head = json.dumps({"type": "open", "label": "positions", "index": 0, "after": "00" * 64}).encode()
+    hello = json.dumps({"type": "hello"}).encode()
+    head = json.dumps({"type": "close", "extra": 1}).encode()
     with socket.create_connection((host, int(port))) as s:
+        s.sendall(R.HEADER.pack(len(hello), 0) + hello)
+        assert s.recv(1 << 16)
         s.sendall(R.HEADER.pack(len(head), 0) + head)
         assert s.recv(1 << 16)
     code, _ = finish(proc)
     assert code == 1
     assert close(out)["ended"].startswith("a client's frames are hello")
     with pytest.raises(C.CoinError, match="ended without its client closing it: a client's frames are hello"):
-        trusted(out)
+        trusted(out, auditor)
+
+
+def test_refused_hellos_are_logged_and_the_next_connection_is_taken_until_one_is_accepted_then_none(tmp_path):
+    """A refused hello releases nothing, so it can't spend the window (proofs, on the thread): the session takes the next
+    connection, and once a hello is accepted it stops listening."""
+    secret = bytes(range(32))
+    (tmp_path / "secret").write_text(secret.hex() + "\n")
+    root = "ab" * 64
+    auditor = Auditor(tmp_path)
+    proc, out, first = start(tmp_path, "out", None, "--secret-file", str(tmp_path / "secret"), "--root", root,
+                             auditor=auditor, root=root)
+    address = first.split()[1]
+    host, port = address.split(":")
+    with pytest.raises(C.CoinError, match="the session's secret"):
+        R.RemoteChallenger.connect(address)
+    with pytest.raises(C.CoinError, match="not the session's"):
+        R.RemoteChallenger.connect(address, bytes(32))
+    socket.create_connection((host, int(port))).close()
+    with R.RemoteChallenger.connect(address, secret) as client:
+        with pytest.raises(ConnectionRefusedError):
+            socket.create_connection((host, int(port)))
+        C.LiveRecord(client, "positions", itertools.count().__next__).record(bytes(64))
+    assert finish(proc)[0] == 0
+    assert close(out)["ended"] is None
+    record = C.ChallengerRecord.from_json(json.loads((out / R.RECORD).read_text()))
+    assert {k: len(v) for k, v in R.released_roots(out / R.RELEASES, record.commitment).items()} == {
+        "positions": 1, "replay": 0}
+    logged = [json.loads(ln) for ln in (out / "hellos.jsonl").read_text().splitlines()]
+    assert [h["n"] for h in logged] == [0, 1, 2] and "secret" in logged[0]["reason"] and "closed" in logged[2]["reason"]
+    assert trusted(out, auditor)[0] == record.commitment
+    assert json.loads(auditor.lines[-1])["body"]["refused_hellos"] == 3
+
+    for bad in (["--root", root.upper()], ["--root", root + "\n"]):
+        proc, out, first = start(tmp_path, "bad", None, *bad)
+        assert finish(proc)[0] == 2 and first == ""
+
+
+SALTED = ["--families", json.dumps([["pouw/salt", 1], ["pouw/round", 1]])]
+
+
+@pytest.mark.parametrize("after, served", [("ab", True), ("cd", False)])
+def test_with_a_root_a_salt_opens_only_after_it(tmp_path, after, served):
+    """RT4-INT-24's witness: a session's salt followed a root unrelated to its window's Commit."""
+    proc, out, first = start(tmp_path, "out", None, "--root", "ab" * 64, *SALTED)
+    with R.RemoteChallenger.connect(first.split()[1]) as client:
+        record = C.LiveRecord(client, "pouw/salt", itertools.count().__next__)
+        if served:
+            record.record(bytes.fromhex(after * 64))
+        else:
+            with pytest.raises(C.CoinError, match="only after the window's Commit root"):
+                record.record(bytes.fromhex(after * 64))
+    code, _ = finish(proc)
+    record = C.ChallengerRecord.from_json(json.loads((out / R.RECORD).read_text()))
+    released = len(R.released_roots(out / R.RELEASES, record.commitment)["pouw/salt"])
+    assert (code, released) == ((0, 1) if served else (1, 0))
+    if not served:
+        assert close(out)["ended"].startswith("a pouw/salt coin opens only after the window's Commit root")
+
+
+def test_without_a_root_a_salt_opens_after_any_root(tmp_path):
+    proc, out, first = start(tmp_path, "out", None, *SALTED)
+    with R.RemoteChallenger.connect(first.split()[1]) as client:
+        C.LiveRecord(client, "pouw/salt", itertools.count().__next__).record(bytes(64))
+    assert finish(proc)[0] == 0
 
 
 def fake_ssh(tmp_path: Path, body: str) -> dict:
@@ -189,7 +317,7 @@ def test_a_tunnel_that_ends_before_a_client_connects_ends_the_session(tmp_path):
     assert first.startswith("listening")
     code, _ = finish(proc)
     assert code == 1
-    assert close(out)["ended"] == "the tunnel to vy-nebius-2 ended before a client connected"
+    assert close(out)["ended"] == "the tunnel to vy-nebius-2 ended before a client's hello was accepted"
     assert close(out)["lines"] == 1
 
 
