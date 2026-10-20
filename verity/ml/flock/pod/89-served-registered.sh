@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# The served-registered fixture (verity_flock.served_registered, tests/test_lean_served_registered.py): a RoPE d64 statement
+# The served-registered fixture (tests/served_registered.py, tests/test_lean_served_registered.py): a RoPE d64 statement
 # whose `cs` rows are a served tree registered as a port (`one_stage.served.register_served`), proved in one loopback --zk
 # session under a subset draw, then Lean's `flock-verify verify --zk --registered` on it with the verifier's own file
 # (accepted) and with the tree's root changed (refused). The staged files and the session go into the evidence store as a
@@ -63,7 +63,7 @@ RESEARCH=$(command -v research || true)
 export PATH=$W/py/bin:$PATH PYTHONPATH=$REPO:$REPO/benchmarks/numerical/python:$REPO/verity/ml/flock/python:$REPO/integrations/vllm
 
 D=$S/stage; N=32
-python3 -m verity_flock.served_registered --out $D > $O/stage.json 2> $O/stage.err || { tail -20 $O/stage.err; exit 1; }
+python3 verity/ml/flock/tests/served_registered.py --out $D > $O/stage.json 2> $O/stage.err || { tail -20 $O/stage.err; exit 1; }
 PIN=$(sha512sum $D/circuit.txt | cut -d' ' -f1)
 $B statement --zk --circuit $D/circuit.txt --instances $D/pub-$N.bin --tables $D/tables > $O/statement.txt 2>&1
 PORT=$(python3 -c 'import socket; s = socket.socket(); s.bind(("127.0.0.1", 0)); print(s.getsockname()[1])')
