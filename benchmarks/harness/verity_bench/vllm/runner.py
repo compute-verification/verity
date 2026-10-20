@@ -14,13 +14,14 @@ import time
 import traceback
 from collections.abc import Mapping
 from dataclasses import dataclass
+from pathlib import Path
 from types import SimpleNamespace
 from typing import Any, Protocol
 
 from verity_vllm.engine.env import INDUCTOR_DIR_MARK
 
 from verity_bench.vllm import result as result_format
-from verity_bench.vllm.arms import Arm, Target, build_bound, plugin
+from verity_bench.vllm.arms import Arm, Target, build_bound, plugin, protocols_config
 from verity_bench.vllm.presets import SAMPLING, Preset, SweepPoint
 
 METRICS = ("time_per_output_token_s", "time_to_first_token_s", "tokens_per_s", "peak_gpu_memory_bytes")
@@ -543,6 +544,31 @@ class _DirectLLM:
         pass
 
 
+def _pass_per_step(llm: Any, hooks: Any) -> None:
+    """Each engine step its own Pearl-C pass, as the experimental arm runs it (`benchmarks.pouw.pearl_c_vllm.bench_arm`).
+    `pouw.install` opens one pass for the install's life, whose tile, call and screened-row buffers a served run outgrows
+    within a few prefill steps (`pouw_pearl_c_device.LEAF_CAPACITY`, `FLAG_ROWS`). The adapter exposes no pass boundary,
+    so the device run is its option's ``release`` (``run.finish``)."""
+
+    from verity_vllm.protocol_options import pouw_pearl_c_device as PPD
+
+    option = llm.protocols.get("pouw") if llm.protocols is not None else None
+    run = getattr(getattr(option, "release", None), "__self__", None)
+    if not isinstance(run, PPD.PearlCDeviceRun):
+        return
+
+    def make(original: Any) -> Any:
+        def step(*a: Any, **kw: Any) -> Any:
+            run.begin()
+            out = original(*a, **kw)
+            run.end()
+            return out
+
+        return step
+
+    hooks.wrap(llm.vllm.llm_engine, "step", make)
+
+
 def _kv_cache_tokens(llm: Any) -> int | None:
     """The engine's actual KV pool in tokens (in-process V1 engine), None when the engine does not expose it."""
 
@@ -632,6 +658,7 @@ class _VllmEngine:
                 self.target.hooks.uninstall()
                 raise RuntimeError(f"experimental arm {arm.id!r} patched outside target.hooks")
 
+        kernel_digest = arm.kernel_digest
         engine = engine_args(preset, arm.precision or preset.precision, resident=resident, eager=eager)
         overrides = _callback(self.obj, "engine_overrides", self.target, {}) if self.obj is not None else {}
         engine.update(overrides or {})
@@ -649,9 +676,18 @@ class _VllmEngine:
                  if engine.get(k) is not None},
             )
         else:
+            config: dict[str, Any] = {}
             if arm.protocols:
                 engine["protocols"] = ",".join(arm.protocols)
+                config = protocols_config(arm, os.environ)
+                if config:
+                    engine["protocols_config"] = config
             self.llm = LLM(preset.model, revision=preset.revision, **engine)
+            if arm.protocols:
+                _pass_per_step(self.llm, self.target.hooks)
+                cubin = config.get("pouw", {}).get("cubin")
+                if cubin:
+                    kernel_digest = hashlib.sha256(Path(cubin).read_bytes()).hexdigest()
         self.target.engine, self.target.model = self.llm, self.llm.model
         ready = getattr(self.installed, "ready", None)
         if callable(ready):
@@ -664,7 +700,7 @@ class _VllmEngine:
                 if self.obj is not None and callable(
                     self.obj.get("kernel_digest") if isinstance(self.obj, Mapping) else getattr(self.obj, "kernel_digest", None)
                 )
-                else arm.kernel_digest
+                else kernel_digest
             ),
             "gpu": torch.cuda.get_device_name(0),
             "torch_version": f"{torch.__version__} cuda {torch.version.cuda}",
