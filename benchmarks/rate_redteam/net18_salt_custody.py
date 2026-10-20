@@ -30,7 +30,7 @@ def registration(window: int) -> Registration:
 
 def run(salt: bytes) -> tuple[Proxy, list]:
     proxy = Proxy(("127.0.0.1", 9), P, P, SyncSet((0,), (1,)), [ClockSync(0, 1)] * WINDOWS, origin=0.0,
-                  salt=lambda p, n: salt[:n])
+                  clock=lambda: 0.0, salt=lambda p, n: salt[:n])
     for bucket, frame in TRAFFIC:
         proxy.bucketer.arrive(frame, bucket)
     records = [r for r in (proxy.bucketer.tick()[1] for _ in range(WINDOWS * P.buckets)) if r is not None]
