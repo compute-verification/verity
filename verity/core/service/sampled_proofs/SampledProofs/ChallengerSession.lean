@@ -235,11 +235,11 @@ private def isDigest (j : Json) (n : Nat := 128) : Bool :=
 
 /-- `_LEDGER_NAME`: a period or a lane, 1 to 64 ASCII letters, digits, '.', '_', ':' and '-', the first a letter or
 digit. -/
-private def isName (s : String) : Bool :=
-  1 ≤ s.length && s.length ≤ 64 && !"._:-".contains s.front &&
+private def isLedgerName (s : String) : Bool :=
+  s.length ≤ 64 && (match s.toList with | c :: _ => !"._:-".contains c | [] => false) &&
     s.all fun c => c.isAlphanum && c.toNat < 128 || c == '.' || c == '_' || c == ':' || c == '-'
 
-private def nameAt (j : Json) : Bool := match j with | .str s => isName s | _ => false
+private def nameAt (j : Json) : Bool := match j with | .str s => isLedgerName s | _ => false
 
 private def isStr (j : Json) : Bool := match j with | .str _ => true | _ => false
 
@@ -324,6 +324,7 @@ structure LedgerEntry where
   session : String
   sig : ByteArray
   body : Json
+  deriving Inhabited
 
 /-- Whether `text` holds `\ud8` to `\udf`, the escape of a UTF-16 surrogate, anywhere. -/
 private def escapesSurrogate (text : String) : Bool := Id.run do
@@ -397,6 +398,7 @@ structure Win where
   opened : LedgerEntry
   leaf : Nat
   ended : Option LedgerEntry := none
+  deriving Inhabited
 
 /-- A period `verifyLedger` read: its name and lane, its windows' sessions, counted at their reserves (or one-step
 opens), whether it closed, and the cap and circuit its open committed (`null` both for a period opened before they were
@@ -408,12 +410,14 @@ structure Period where
   closed : Bool := false
   cap : Json
   circuit : Json
+  deriving Inhabited
 
 /-- A reserve `verifyLedger` read: its session, its entry, and the period it joined, if any. -/
 structure Reserve where
   session : String
   entry : LedgerEntry
   period : Option String
+  deriving Inhabited
 
 /-- `lane_of`: a reserve's or a v2 open's prover, its `for` when nonempty, else its `by`. -/
 def laneOf (body : Json) : String := if truthy (getD body "for") then strOf (getD body "for") else strOf (getD body "by")
