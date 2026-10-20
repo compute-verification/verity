@@ -306,8 +306,6 @@ theorem sum_fwt : ∑ j, fwt 0 j = 3 := by
 
 /-- Draw 2 lands on `glue` on half the draw bits. -/
 theorem prob_glue : prob (fun b : Bool => drawF b 2 = 2) = 1 / 2 := by
-  classical
-  unfold prob
   have h : ∀ inst : DecidablePred (fun b : Bool => drawF b 2 = 2),
       (@Finset.filter _ _ inst Finset.univ).card = 1 := by
     intro inst
@@ -315,7 +313,9 @@ theorem prob_glue : prob (fun b : Bool => drawF b 2 = 2) = 1 / 2 := by
     refine ⟨true, Finset.ext fun b => ?_⟩
     rw [Finset.mem_filter, Finset.mem_singleton]
     simp only [Finset.mem_univ, true_and]
+    clear inst
     cases b <;> decide
+  unfold prob
   rw [h, Fintype.card_bool]
   norm_num
 
