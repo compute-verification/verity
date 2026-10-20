@@ -96,11 +96,11 @@
   },
   "Accounting.Assumptions.TS.ServedChecksHold": {
    "owner": "@compute-accounting",
-   "digest": "aa73d45b7577e3e1cab6ecd6fce02580e6236acecacf850da4aad0b445f39e5f"
+   "digest": "f4b0aa6ff8b0acf613569d3307bce95dab7b081ffc4c90273f27810a943f9b8c"
   },
   "Accounting.Assumptions.TS.ServedRootsLinked": {
    "owner": "@proofs",
-   "digest": "ad78bc550460bb1eb3557f4289eb45fbdf6eb3d5f2d1685f9eeb7bbe31e58cec"
+   "digest": "c713909d80e2cd61ef91c69616daf1e165c148473835f104820f95b9835543cb"
   },
   "Accounting.Assumptions.TS.SheetClock": {
    "owner": "@compute-accounting",
@@ -22999,18 +22999,18 @@
    ]
   },
   "Proofs.Accounting.TS.Session.Assumptions": {
-   "digest": "f835533c139e6977c1eb8514918c396af71800a7c19e6e65057183d96e464af7",
+   "digest": "ae6249d482dd5aa2d0d858e5168030640d87784895b700df9aeeaf33cfd73222",
    "definitions": {
-    "Accounting.Assumptions.TS.ServedChecksHold": "aa73d45b7577e3e1cab6ecd6fce02580e6236acecacf850da4aad0b445f39e5f",
-    "Accounting.Assumptions.TS.ServedRootsLinked": "ad78bc550460bb1eb3557f4289eb45fbdf6eb3d5f2d1685f9eeb7bbe31e58cec",
+    "Accounting.Assumptions.TS.ServedChecksHold": "f4b0aa6ff8b0acf613569d3307bce95dab7b081ffc4c90273f27810a943f9b8c",
+    "Accounting.Assumptions.TS.ServedRootsLinked": "c713909d80e2cd61ef91c69616daf1e165c148473835f104820f95b9835543cb",
     "Accounting.Assumptions.TS.WindowLaw": "22e490ac99b292ba1ef0e90c633e3e601e3da5074c218caa25130c5d7ec50b0f"
    },
    "guarantees": ["Accounting.SecurityProofs.TS.SessionSoundAt"]
   },
   "Proofs.Accounting.TS.Session.Guarantees": {
-   "digest": "9db6ea98ab8531328d7aac6bf71dc889432ad3e7d5f9d2a0215adda1b78936a7",
+   "digest": "8405b145444468b93b5f3c6494c23356b06e53111e1d012727a60dca3a1b0716",
    "definitions": {
-    "Accounting.Guarantees.TS.SessionSoundAt": "7e72f6379c7f9e6dcce04363a87cd52362f361438f73e2ffcb87a1bb2c946790"
+    "Accounting.Guarantees.TS.SessionSoundAt": "40991f231587104b17a46fbe9fdab43ec8699543ecf6eef2e559c2b982a61dc5"
    },
    "guarantees": ["Accounting.SecurityProofs.TS.SessionSoundAt"]
   },
