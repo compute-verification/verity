@@ -6,8 +6,8 @@ import Proofs.Flock.C3.RegLevels.AccReads
 `row_agree` reads two of V*'s accepted sessions' entries for one value at one root, leaf count and domain. The
 verifier's statement check runs `RecVStar.checkShared` against its record of V*'s shared rows (`--rec-rows`, one file
 for every session of the family): a port of a session's reads file reading a value some entry of `rows` reads has the
-first such entry's registration (`portDiff?` but reads), and a port reading R's tops `rec-top-stacked-L<l>` needs such
-an entry. So:
+first such entry's registration (`portDiff?` but reads), and a port reading R's tops `rec-top-stacked-L<l>`, or level 0's
+cap `rec-top-L0`, needs such an entry. So:
 
 * `site_of_checkShared`: each port of the reads file reading a value `SharedValue` names (one `rows` registers, or R's
   tops) is the first entry of `rows` reading it, but in reads;
@@ -52,14 +52,19 @@ theorem site_of_checkShared {s : VStar.Stmt} {own : Array Flock.Registered.Port}
         | some d => exact absurd hd (hn d)
       · cases hr; rfl
   · rename_i hw
-    split at hr
-    · obtain ⟨_, h2, -⟩ := FlockSoundness.Refine.ebind_ok hr
-      cases h2
-    · rename_i hn
-      refine ⟨fun hv => ?_, by cases hr; rfl⟩
-      rcases hv with hv | hv
-      · rw [hw] at hv; cases hv
-      · exact absurd hv hn
+    have hs : (RecVStar.stackedTopLevel p.value).isSome = false := by
+      cases hs : (RecVStar.stackedTopLevel p.value).isSome
+      · rfl
+      · first | (rw [hs] at hr; cases hr) | (simp only [hs] at hr; cases hr) | simp [hs] at hr
+    have ht : (RecVStar.topLevel p.value == some 0) = false := by
+      cases ht : (RecVStar.topLevel p.value == some 0)
+      · rfl
+      · first | (rw [hs, ht] at hr; cases hr) | (simp only [hs, ht] at hr; cases hr) | simp [hs, ht] at hr
+    first | rw [hs, ht] at hr | simp only [hs, ht, Bool.false_eq_true, ↓reduceIte] at hr
+    refine ⟨fun hv => ?_, by cases hr; rfl⟩
+    rcases hv with hv | hv
+    · rw [hw] at hv; cases hv
+    · rw [hs] at hv; cases hv
 
 /-- **Two reads files `checkShared` passed at one `rows` register a `SharedValue` under one root, leaf count and
 domain**: both entries are the first entry of `rows` reading it, but in reads. -/

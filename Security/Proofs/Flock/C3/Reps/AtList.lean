@@ -46,13 +46,14 @@ def nLev (i : RecVStar.Inner) : ℕ :=
 
 /-- **The verifier's list**: where it builds, the inner shape is `shape?`'s `sh0`, S's structure and groups return at
 `sh0`'s form at `i.holo`, V*'s parts are as many as the groups, and the list is V*'s statements at that form
-(`statementsOf`), then candidate 3's. -/
+(`statementsOf`), then candidate 3's, then RecCap. -/
 theorem list_ok {i : RecVStar.Inner} {ss : Array VStar.Stmt} (h : RecVStar.statements i = .ok ss) :
     ∃ sh0, RecResiduals.shape? i.m i.kLog i.claims = some sh0 ∧
       ∃ sp ps GS gs A C, VStar.Algebra.specOf (vshOf i) i.holo = .ok sp ∧ VStar.parts sp = .ok ps ∧
         RecAlgebra.structureOf { sh0 with holo := i.holo } = .ok GS ∧
         RecResiduals.groups GS (RecResiduals.portSizes { sh0 with holo := i.holo }) = .ok gs ∧ ps.size = gs.size ∧
-        VStar.statementsOf (vshOf i) i.holo = .ok A ∧ RecVStar.candidate3Statements i = .ok C ∧ ss = A ++ C := by
+        VStar.statementsOf (vshOf i) i.holo = .ok A ∧ RecVStar.candidate3Statements i = .ok C ∧
+        ∃ n, ss = A ++ C ++ #[.cap n] := by
   unfold RecVStar.statements at h
   dsimp only at h
   split at h
@@ -70,11 +71,14 @@ theorem list_ok {i : RecVStar.Inner} {ss : Array VStar.Stmt} (h : RecVStar.state
   · cases h
   obtain ⟨A, hA, h⟩ := FlockC3.VStarList.eok_bind h
   obtain ⟨C, hC, h⟩ := FlockC3.VStarList.eok_bind h
+  obtain ⟨K, hK, h⟩ := FlockC3.VStarList.eok_bind h
+  obtain ⟨n, rfl⟩ := FlockC3.VStarList.capStatement_ok hK
   obtain ⟨u, -, h⟩ := FlockC3.VStarList.eok_bind h
+  obtain ⟨u', -, h⟩ := FlockC3.VStarList.eok_bind h
   cases h
   obtain ⟨sp, hsp, hps⟩ := FlockC3.VStarList.eok_bind (ok_of_mapError hps)
   obtain ⟨GS, hGS, hgs⟩ := FlockC3.VStarList.eok_bind (ok_of_mapError hgs)
-  exact ⟨sh0, hsh, sp, ps, GS, gs, A, C, hsp, hps, hGS, hgs, by simpa using hsz, hA, hC, rfl⟩
+  exact ⟨sh0, hsh, sp, ps, GS, gs, A, C, hsp, hps, hGS, hgs, by simpa using hsz, hA, hC, n, rfl⟩
 
 /-- **Candidate 3's statements** are RecSparse, R's levels and the parts of R's opening. -/
 theorem candidate3_kinds {i : RecVStar.Inner} {C : Array VStar.Stmt} (h : RecVStar.candidate3Statements i = .ok C) :
@@ -92,9 +96,9 @@ theorem candidate3_kinds {i : RecVStar.Inner} {C : Array VStar.Stmt} (h : RecVSt
       exact .inl ⟨_, _, hs⟩
     · exact .inr (hrest s hs)
 
-/-- **The list's statements by index**: past V*'s levels and parts, candidate 3's. -/
+/-- **The list's statements by index**: past V*'s levels and parts, candidate 3's, then RecCap. -/
 theorem getElem?_list {i : RecVStar.Inner} {ss : Array VStar.Stmt} (h : RecVStar.statements i = .ok ss) :
-    ∃ (s : Flock.Schedule) (ps : Array VStar.Part) (C : Array VStar.Stmt), nLev i = s.levels.size ∧
+    ∃ (s : Flock.Schedule) (ps : Array VStar.Part) (C : Array VStar.Stmt) (n : ℕ), nLev i = s.levels.size ∧
       RecVStar.candidate3Statements i = .ok C ∧ ∀ j,
         ss[j]? = if j < s.levels.size then some (.recOpen j (2 ^ (s.levels[j]!).lanes)
             ((s.levels[j]!).d - (s.levels[j]!).cap) (2 * (s.levels[j]!).q))
@@ -102,10 +106,13 @@ theorem getElem?_list {i : RecVStar.Inner} {ss : Array VStar.Stmt} (h : RecVStar
             some (.inner (j - s.levels.size)
               s!"rec-residuals/m{(vshOf i).m}-k{(vshOf i).kLog}-c{(vshOf i).claims}-p{j - s.levels.size}"
               ps[j - s.levels.size]!)
-          else C[j - (s.levels.size + ps.size)]? := by
-  obtain ⟨-, -, -, -, -, -, A, C, -, -, -, -, -, hA, hC, rfl⟩ := list_ok h
+          else (C ++ #[.cap n])[j - (s.levels.size + ps.size)]? := by
+  obtain ⟨-, -, -, -, -, -, A, C, -, -, -, -, -, hA, hC, n, rfl⟩ := list_ok h
   obtain ⟨s, sp, ps, hs, -, -, rfl⟩ := FlockVBridge.Family.statementsOf_eq hA
-  refine ⟨s, ps, C, by simp [nLev, hs], hC, fun j => ?_⟩
+  refine ⟨s, ps, C, n, by simp [nLev, hs], hC, fun j => ?_⟩
+  rw [show ∀ X : Array VStar.Stmt, X ++ C ++ #[VStar.Stmt.cap n] = X ++ (C ++ #[VStar.Stmt.cap n]) by
+    intro X; rw [Array.append_assoc]]
+  generalize C ++ #[VStar.Stmt.cap n] = C'
   rw [← Array.getElem?_toList]
   simp only [Array.toList_append, List.append_assoc]
   split
@@ -128,7 +135,7 @@ theorem getElem?_list {i : RecVStar.Inner} {ss : Array VStar.Stmt} (h : RecVStar
 /-- **The list's statement tagged `.inner p` is its `nLev i + p`th.** -/
 theorem inner_idx {i : RecVStar.Inner} {ss : Array VStar.Stmt} (h : RecVStar.statements i = .ok ss) {j p : ℕ}
     {nm : String} {pt : VStar.Part} (hj : ss[j]? = some (.inner p nm pt)) : j = nLev i + p := by
-  obtain ⟨s, ps, C, hn, hC, hss⟩ := getElem?_list h
+  obtain ⟨s, ps, C, n, hn, hC, hss⟩ := getElem?_list h
   rw [hss j] at hj
   rw [hn]
   split at hj
@@ -136,21 +143,25 @@ theorem inner_idx {i : RecVStar.Inner} {ss : Array VStar.Stmt} (h : RecVStar.sta
   split at hj
   · simp only [Option.some.injEq, VStar.Stmt.inner.injEq] at hj
     omega
-  · rcases candidate3_kinds hC _ (Array.mem_of_getElem? hj) with ⟨_, _, he⟩ | ⟨_, _, _, _, he⟩ |
-      ⟨_, _, _, _, _, _, he⟩ <;> cases he
+  · rcases Array.mem_append.1 (Array.mem_of_getElem? hj) with hm | hm
+    · rcases candidate3_kinds hC _ hm with ⟨_, _, he⟩ | ⟨_, _, _, _, he⟩ |
+        ⟨_, _, _, _, _, _, he⟩ <;> cases he
+    · simp at hm
 
 /-- **The list's statement tagged `.recOpen ℓ` is its `ℓ`th.** -/
 theorem recOpen_idx {i : RecVStar.Inner} {ss : Array VStar.Stmt} (h : RecVStar.statements i = .ok ss) {j ℓ : ℕ}
     {LANES H m : ℕ} (hj : ss[j]? = some (.recOpen ℓ LANES H m)) : j = ℓ := by
-  obtain ⟨s, ps, C, -, hC, hss⟩ := getElem?_list h
+  obtain ⟨s, ps, C, n, -, hC, hss⟩ := getElem?_list h
   rw [hss j] at hj
   split at hj
   · simp only [Option.some.injEq, VStar.Stmt.recOpen.injEq] at hj
     exact hj.1
   split at hj
   · cases hj
-  · rcases candidate3_kinds hC _ (Array.mem_of_getElem? hj) with ⟨_, _, he⟩ | ⟨_, _, _, _, he⟩ |
-      ⟨_, _, _, _, _, _, he⟩ <;> cases he
+  · rcases Array.mem_append.1 (Array.mem_of_getElem? hj) with hm | hm
+    · rcases candidate3_kinds hC _ hm with ⟨_, _, he⟩ | ⟨_, _, _, _, he⟩ |
+        ⟨_, _, _, _, _, _, he⟩ <;> cases he
+    · simp at hm
 
 theorem size_list {i : RecVStar.Inner} {ss : Array VStar.Stmt} (h : RecVStar.statements i = .ok ss) :
     vstarCount i = ss.size := by
