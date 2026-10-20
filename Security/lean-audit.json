@@ -530,7 +530,8 @@
   "Definitions.Accounting.Bandwidth",
   "Models.Accounting.Guarantees.Bandwidth",
   "Definitions.Hash",
-  "Models.Hash.Guarantees"
+  "Models.Hash.Guarantees",
+  "Proofs.Accounting.TS.Session"
  ],
  "claims": {
   "modules": ["Definitions.Claims"],
