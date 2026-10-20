@@ -159,6 +159,9 @@ Daniel's, current. `.agents/skills/friction/SKILL.md` has the dated rulings behi
   switches by the 8 Oct procedure (the friction skill): until it does, its Python verifier and the ml units it reads stay
   on `SOUNDNESS_PATH`, which only shrinks, and no core → ml import edge is added (`tests/test_boundaries.py`).
 - **Soundness is one theorem** (see Lean below).
+- **Soundness and zero knowledge in Lean; completeness may be Python** (Daniel, 18 Oct). What a guarantee says about a
+  cheating prover, soundness and zero knowledge, is proved in Lean or rests on an auditor-trusted device. That honest
+  serving passes (completeness: the Commit's gates, pre-flights, other prover-side checks) may be checked in Python.
 
 ## Tests
 
@@ -176,6 +179,10 @@ remotely through `research run --on auto --cwd source [--wait] -- CMD` (the ship
 `verity check` and `check.py`, circuit-check (24 GB a process), any build of `Security` or `Security/Proofs`, cargo, nvcc, every e2e run
 and every GPU job (the writing-runs skill). The shell hook refuses those commands locally and names the remote one;
 `AGENT_GUARD_LOCAL_OK=1` in the command is the explicit opt-in.
+
+No tool call blocks more than 20 minutes (Daniel, 19 Oct): `research run --wait`, `ask-daniel --wait` and `queue ready --on`
+stop there, cancel nothing, exit 79 naming the command to check back with (`research status RUN`), and you end your turn;
+the shell hook refuses a longer `sleep`.
 
 No test depends on wall-clock time: no sleeps, clock readings or timeouts. Wait on the event itself or inject the clock.
 `tests/test_no_wall_clock.py` enforces it, and its `ALLOWED` list, one reason per entry, holds the exceptions.

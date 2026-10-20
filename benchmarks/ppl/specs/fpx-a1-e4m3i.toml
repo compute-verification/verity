@@ -1,0 +1,45 @@
+description = "FP-NATIVE's FP8-A1 (design A, note:20261019T0525Z-draft-fp-native), measured by FPX-DESIGN: PPL-COMPILE's C2 2S (pc-c2-e4m3i-2s) with design A's coins, every linear and lm_head on E4M3's integers per token and per output row: each activation the nearest level moved by its gap times b + b' - 1 (two fair bits a call, live in the design, seeded here; three levels, stepped inward at the grid's ends), each weight the level below moved by a fair bit at its gap; the one dithered GEMM served and credited, after SmoothQuant 0.5 (kv_shared) and the rotations (lm_head rotated too); Dither-2S's int8 attention (run on the format by C1)"
+
+[[linear]]
+step = "smooth"
+alpha = 0.5
+kv_shared = true
+
+[[linear]]
+step = "rotate"
+
+[[linear]]
+step = "rotate"
+linears = ["lm_head"]
+
+[[linear]]
+step = "native"
+grid = "e4m3i"
+scale = "channel"
+act = "dither3"
+
+[[linear]]
+step = "native"
+grid = "e4m3i"
+scale = "channel"
+act = "dither3"
+linears = ["lm_head"]
+
+[[attention]]
+step = "rotate"
+
+[[attention]]
+step = "center_keys"
+
+[[attention]]
+step = "int8"
+q = "dither"
+k = "dither"
+v = "dither"
+p_sink = true
+
+[[attention]]
+step = "peel"
+operand = "p"
+width = 64
+offset = 64

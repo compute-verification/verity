@@ -45,11 +45,16 @@ theorem verdict_iff_wellFormed (j : Json) : (∃ out, evaluate j = .ok out) ↔ 
     obtain ⟨dv, hd⟩ := (divisionOf_isOk hc _ _).2 ⟨ht, hs, ho, he⟩
     exact ⟨_, (evaluate_ok j _).2 ⟨i, P, c, dv, (parse_ok j i).2 hi, hP, hc, hd, rfl⟩⟩
 
+theorem refusal_error (e : String) : (refusal e).getObjVal? "error" = .ok (.str e) := by
+  unfold refusal
+  rcases fixOf e with _ | m <;> rfl
+
 theorem check_error (j : Json) (k : String) :
     (check j).getObjVal? "error" = .ok (.str k) ↔ evaluate j = .error k := by
   unfold check
   rcases h : evaluate j with e | out
-  · show Except.ok (Json.str e) = _ ↔ _
+  · show (refusal e).getObjVal? "error" = _ ↔ _
+    rw [refusal_error]
     simp [eq_comm]
   · obtain ⟨i, P, c, dv, -, -, -, -, rfl⟩ := (evaluate_ok j out).1 h
     show Except.error _ = _ ↔ _
