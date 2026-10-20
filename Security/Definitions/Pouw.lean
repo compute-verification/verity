@@ -23,6 +23,7 @@ import Definitions.Pouw.Fp8Atom.Vectors.Ada
 import Definitions.Pouw.Fp8Atom.Vectors.Add
 import Definitions.Pouw.Fp8Atom.Vectors.C00
 import Definitions.Pouw.Fp8Atom.Vectors.C01
+import Definitions.Pouw.FpG1
 import Definitions.Pouw.Game.Deadline
 import Definitions.Pouw.Game.Defs
 import Definitions.Pouw.Game.Params
@@ -135,6 +136,13 @@ them by the rounding margin outright, unpinned.
 
 H-1T's per-tile count statement: the tiles, their domain `Tiling.AtLeast` and the output slots (`H1TTile`), the named
 assumption `TTH1T` (`H1TTileAssumptions`), and its two form checks (`H1TTileProofs`).
+
+## `FpG1`: FP8-g1 and W4A8-g1's operands (FPX-DESIGN, PR #2710)
+
+The encodings (`Encoding`): E4M3's integer grid to a bound, the doubled E2M1 grid, round to nearest onto a grid, the
+coin, an operand entry and a device's g1 grids. The int8 GEMM, the coin's rank-one terms and the epilogue (`Gemm`).
+`Proofs.Pouw.FpG1` proves the arithmetic. The record's headlines cover g1's windows by their own quantifier over
+committed values.
 
 ## `PearlC`: Pearl-C's Π and the statements about it
 

@@ -16,7 +16,7 @@ resource:
 | `Causal ℓ` | a gate reads `a` at least `ℓ (x a) (x g)` ticks after `a` | answers before questions |
 | `ComputeRate 𝒳 π Φ` | `π(A[X, [a, b))) ≤ Φ_X (b − a)` | compute faster than declared |
 | `SequentialSpeed ring D span` | a path through more than `D` computed gates at the location of the ring's multiplications spans more than `span` (`Δ + RTT`) ticks | answering faster than `D` sequential multiplications modulo `p` |
-| `Memory 𝒳 M` | `mem_X(t) ≤ M_X` | hidden storage |
+| `Memory 𝒳 M` | `mem_X(t) ≤ M_X` (`MemoryAt 𝒳 M T`: at the ticks `T` only) | hidden storage |
 | `Links ends β link` | every wire between two leaves has a computed source and runs on a declared link joining them; each way, link `e` delivers at most `β_e (b − a)` bits read during `[a, b)` (v2.7) | side channels, hidden bandwidth |
 | `TrustedUnits S 𝒱 cert …` | a strategy `S`: gates in `𝒱`, the auditor's devices on machines the prover doesn't control, are the protocol's; what each certifier sends outside itself during `[a, b)` is a function of its own record before `b` and of its own jitter word, one of `χ` classes a bucket (v2.8) | forged records, timing channels |
 
@@ -74,6 +74,10 @@ def SequentialSpeed (ring : Finset L) (D span : ℕ) : Prop :=
 /-- **Memory**: each location `X` of `𝒳` carries at most `M X` bits across every tick. -/
 def Memory (𝒳 : Set (Finset L)) (M : Finset L → ℕ) : Prop :=
   ∀ X ∈ 𝒳, ∀ t, A.state X t ≤ M X
+
+/-- **Memory at the ticks `T`**: `Memory` read only at the ticks of `T`; `Memory` is it at every tick. -/
+def MemoryAt (𝒳 : Set (Finset L)) (M : Finset L → ℕ) (T : Set ℕ) : Prop :=
+  ∀ X ∈ 𝒳, ∀ t ∈ T, A.state X t ≤ M X
 
 open Classical in
 /-- The bits link `e` carries to the leaf `y`, read during `I`: the gates whose wire to a reader placed at `y` during `I`,

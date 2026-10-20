@@ -70,7 +70,7 @@ prof.apply_env()
 
 import torch  # noqa: E402
 
-from verity_vllm.engine import served as SV, vllm_adapter as va  # noqa: E402
+from verity_vllm.engine import arrivals as AR, served as SV, vllm_adapter as va  # noqa: E402
 from verity_vllm.pipeline.timeline import Timeline  # noqa: E402  (torch-free; VERITY_TIMELINE -> append-only JSONL, else a no-op sink)
 from verity_vllm.commit import challenge as CH, opened as OV, scheme as SCH  # noqa: E402
 from verity_vllm.pipeline import admission_planner as AP, boundary_plan as BP, c2_replay as C2, commit_plan as CP, gpu_lease as GL, group_reuse as GR, replay_bundle as RB  # noqa: E402
@@ -205,10 +205,10 @@ def run_workload(engine: va.Engine, requests: list[dict], sampling: dict) -> dic
     finished: set[str] = set()
     step_t: list[float] = []
     step_tokens: list[int] = []
-    it = 0
+    it, forwards = 0, AR.ForwardCounter(eng, AR.scheduler_of(engine.llm))
     t0 = time.perf_counter()
     while pending or eng.has_unfinished_requests():
-        while pending and int(requests[pending[0]].get("arrive_step") or 0) <= it:
+        while pending and int(requests[pending[0]].get("arrive_step") or 0) <= forwards.n:
             r = requests[pending.pop(0)]
             eng.add_request(request_id=r["request_id"], prompt={"prompt_token_ids": list(r["prompt_token_ids"])},
                             params=va.sampling_params(r, sampling))
@@ -217,7 +217,7 @@ def run_workload(engine: va.Engine, requests: list[dict], sampling: dict) -> dic
             eng.add_request(request_id=r["request_id"], prompt={"prompt_token_ids": list(r["prompt_token_ids"])},
                             params=va.sampling_params(r, sampling))
             continue
-        outs = eng.step()
+        forwards.stepped(outs := eng.step())
         now = time.perf_counter()
         step_t.append(now)
         n = 0
@@ -286,8 +286,8 @@ def stop_rule_of_record(eng, wl: dict, versions: dict) -> dict[str, Any]:
 def engine_schedule(request_rows: dict[int, list[tuple[str, int, int]]] | None, declared: dict[str, int], caps: dict[str, int]) -> dict:
     """[R16 compiled, H100 B8] The engine's schedule of record vs the declaration.  `request_rows` is the scheduler's per-committed-step row
     order as the collector recorded it (which requests ran in which step); a request's OBSERVED arrival is the first committed step it ran
-    in.  The serving loop admits a request at its declared arrive_step OR immediately when the engine is idle (nothing running), and an
-    engine iteration that runs no forward pass (the bookkeeping step after the last request of a step finishes) advances no committed step,
+    in.  The serving loop admits a request once the engine's forwards reach its declared arrive_step (`arrivals.ForwardCounter`: the
+    bookkeeping iteration after the last request finishes runs no forward pass) OR immediately when the engine is idle (nothing running),
     so on a workload with gaps (r0's cap shorter than the next arrival) the committed-step axis and the declared arrive_steps drift apart --
     the required population must be placed on the axis the record is written on.  It is USED only when every declared request was
     observed, each ran a contiguous run of steps (no preemption) of exactly its expected count; otherwise the declaration stands and coverage
@@ -468,7 +468,8 @@ def bootstrap_ci(xs: list[float], n: int = 4000, seed: int = 0) -> tuple[float, 
     return means[int(0.025 * n)], means[int(0.975 * n) - 1]
 
 
-from verity_vllm.check.commit_rules import REQUIRED_CLASSES_DEFAULT, class_coverage, required_classes_default  # noqa: E402
+from verity_vllm.check.commit_rules import (HIDDEN_CLASS_BY_FA, REQUIRED_CLASSES_DEFAULT, class_coverage, hidden_classes_required,  # noqa: E402
+                                            required_classes_default)
 from verity_vllm.check.cublas_route_pin import stamp as route_pin_stamp  # noqa: E402
 from verity_vllm.check.verdict import commit_verdict  # noqa: E402  (X-03/REL-02 fail-closed verdict)
 
@@ -1043,6 +1044,8 @@ class Options:
     replay_deferred: str | None = option("--replay-deferred", nargs="?", const="full", default=None, choices=("full", "slim"), help="the C2 sampled replay + boundary linkage do not run in this process: each instrumented run writes a replay bundle (verity_vllm.pipeline.replay_bundle, <out>/replay_bundle_p<pair>/) and its verdict stays PENDING until the replay runs on CPU from the bundle; exit 0 when every check this process runs passes.  `slim`: the replay's reads are planned here and only the members they open are sealed, with their Merkle paths (the planning adds to the GPU hold)")
     replay_seed: int | None = option("--replay-seed", type=int, default=None, help="sampled replay: a TARGETED sampler seed (negatives / reproduction); default = derived from the run root after commitment (recorded with its source)")
     replay_challenge: str | None = option("--replay-challenge", default=None, help="sampled replay: a VERIFIER-ISSUED post-commitment challenge (hex/string) -- the seed becomes sha256(challenge || run_root) so an " "adaptive prover cannot grind the sample by recommitting (rev-cb M-0572); default = the run root alone (honest-prover measurement)")
+    replay_challenger: str | None = option("--replay-challenger", default=None, metavar="HOST:PORT", help="the served C2 replay's challenge from the auditor host's challenger (verity_vllm.pipeline.replay_coin: its replay coin 0, opened after the run root); without it the challenge is --replay-challenge or this process's own, recorded as such")
+    replay_session: str | None = option("--replay-session", default=None, metavar="JSON", help="with --replay-challenger: the challenger gate's open answer for the Commit's session, {\"session\", \"seq\", \"root\", \"commitment\"} and its \"secret\" (verity_vllm.protocol_options.pouw_h1_challenger.session_of), which the replay challenge's record carries")
     weights_of_record: str | None = option("--weights-of-record", default=None, metavar="JSON", help="[MAN-09, rev-cb M-0610] the weights of record: per-field digests of the served weights COMPOSED FROM THE PINNED CHECKPOINT SHARDS " "(verity_vllm.check.weights_of_record, written beside the Build's Program); every live parameter the committer registers is compared " "with it by name -- a served model that differs from the checkpoint in one element is a named COMMIT FAIL")
     checkpoint_dir: str | None = option("--checkpoint-dir", default=None, help="[MAN-09] derive the weights of record in-process from this pinned checkpoint snapshot + the Program of record (--program-dir / " "--programs-root) when --weights-of-record is not given; the record is written to <out>/weights_of_record.json")
     replay_k: int | None = option("--replay-k", type=int, default=None, help="the config run's sampled replay: k units in all (drawn by --replay-draw) in place of the row's per-stratum sample")
@@ -1156,6 +1159,18 @@ def main(args: Options, argv: list[str] | None = None) -> None:
     required_manifest = None
     if getattr(args, "padded_finalize", False) and not args.required_manifest:
         raise SystemExit("--padded-finalize needs --required-manifest: the padding is RequiredValues outside the executed prefix of record (B9.1); nothing to pad without it")
+    if args.replay_challenger and args.replay_challenge:
+        raise SystemExit("--replay-challenger and --replay-challenge are two sources of the C2 replay's challenge: give one")
+    replay_session = getattr(args, "replay_session", None)
+    if bool(args.replay_challenger) != bool(replay_session):
+        raise SystemExit("--replay-challenger and --replay-session go together: the challenger and the gate's answer for "
+                         "the session it serves the Commit's replay coin in")
+    if replay_session:
+        from verity_vllm.protocol_options.pouw_h1_challenger import session_of
+        try:
+            replay_session = session_of(json.loads(replay_session))
+        except ValueError as e:
+            raise SystemExit(f"--replay-session: {e}") from e
     if args.required_manifest:
         from verity_vllm.commit.binding import require_build_program_digest
         require_build_program_digest(args.required_manifest, args.program_digest)          # [COORD M-0205 (C1)] named refusal, before any engine
@@ -1367,7 +1382,16 @@ def main(args: Options, argv: list[str] | None = None) -> None:
                 raise SystemExit(f"--compiled-taps on needs the native_collect committer (got {kind})")
             compiled_src.attach(com)                         # sets com.external_acquisition: the committer does not wrap the compiled forwards
             print(f"[delta] compiled source attached -> committer {com.name}", flush=True)
-        if args.hidden_so and (required_classes_cli or hidden_family):     # MLA / DSA sparse MLA: no hidden class, no FA2 source
+        _hidden_required = hidden_classes_required(required_manifest)
+        if args.hidden_so and _hidden_required is False:
+            # a tap that never fires would fail the identity check and the required classes as an omitted producer
+            if not required_classes_cli:
+                required_classes = tuple(c for c in required_classes if c not in HIDDEN_CLASS_BY_FA.values())
+            print(f"[delta] hidden source NOT attached: the required-value manifest names no {' / '.join(HIDDEN_CLASS_BY_FA.values())} identity "
+                  f"(families {sorted((required_manifest.get('populations') or {}).get('by_family') or {})}); required classes "
+                  f"{list(required_classes)}", flush=True)
+        # MLA / DSA sparse MLA: no hidden class, no FA2 source
+        if args.hidden_so and _hidden_required is not False and (required_classes_cli or hidden_family):
             from verity_vllm.acquire.sources.hidden_source import HiddenM1Source, make_hidden_source
             # R11 collector-meas: the op namespace defaults to the .so stem (verity_fa2_matReq | verity_fa2_matAll), as e2e_commit_run.py does.
             # R13 hopper: the source class follows the tap build (FA2 v7/v8 -> HiddenM1Source, FA3 v9 -> HiddenM1SourceFA3) and must agree with
@@ -1492,7 +1516,7 @@ def main(args: Options, argv: list[str] | None = None) -> None:
             envelope = {"batch": args.max_num_seqs, "max_prompt": max(len(r["prompt_token_ids"]) for r in reqs),
                         "max_new": max(int(r.get("max_tokens") or sampling.get("max_tokens") or 1) for r in reqs),
                         "max_num_batched_tokens": eng.kwargs.get("max_num_batched_tokens"), "max_model_len": eng.kwargs.get("max_model_len")}
-            asz = com.size_arena(envelope, hidden_m1=bool(args.hidden_so))
+            asz = com.size_arena(envelope, hidden_m1=bool(args.hidden_so) and _hidden_required is not False)
             print(f"[delta] arena sizing (X-02, {kind}): decode block {asz['decode_block_bytes'] >> 20} MiB x{asz['blocks_preallocated']} + prefill block "
                   f"{asz['prefill_block_bytes'] >> 20} MiB "
                   f"(step bound {asz['step_bound_bytes'] >> 20} MiB: prefill {asz['prefill_tokens']} tok -> {asz['prefill_step_bytes'] >> 20} MiB "
@@ -2215,8 +2239,15 @@ def main(args: Options, argv: list[str] | None = None) -> None:
                     import secrets
 
                     row["commit"]["compiled_source"], row["commit"]["compilation"] = served.src.summary(), versions["compilation"]
-                    _sc2 = served.c2(com, rc, reqs, args.replay_challenge or secrets.token_hex(16), args.replay_seed)   # the challenge drawn after the run root
+                    from verity_vllm.pipeline import replay_coin as RCN
+
+                    if args.replay_challenger:   # RT4-INT-21: the auditor host's replay coin, opened after the run root
+                        _chal, _chal_rec = RCN.challenge(args.replay_challenger, rc.run_root, replay_session)
+                    else:
+                        _chal, _chal_rec = RCN.local(args.replay_challenge, secrets.token_hex(16))
+                    _sc2 = served.c2(com, rc, reqs, _chal, args.replay_seed)   # the challenge drawn after the run root
                     components.update(_sc2["components"])
+                    components["replay_challenge"] = _chal_rec
                     vc_methods.insert(0, "sampled-exact-replay (the served Build's Program on the committed values; served_check.py) + boundary linkage")
                     vc_result = _sc2["ok"] if vc_result is None else (vc_result and _sc2["ok"])
                     print(f"[delta] SERVED C2 (pair {pair}): {_sc2['line']}", flush=True)

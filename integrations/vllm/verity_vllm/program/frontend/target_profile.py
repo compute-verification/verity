@@ -86,9 +86,9 @@ class TargetProfile:
                            kernel class back from the instantiated `Fp8LinearMethod.fp8_linear` and refuse a mismatch; a model without
                            FP8 linears makes a declared kernel a mismatch too (nothing to select — the declaration would be idle).
                            Omitted from `to_json()` when None so every pre-R15 profile digest is unchanged.
-    int8_exact          -> which layers run steps.py's plain int8 steps (`INT8_EXACT_SCOPES`): every linear (`engine.int8_exact`, an offline int8
-                           checkpoint, vLLM quantization `INT8_EXACT_QUANTIZATION`), every attention layer (`engine.int8_attention`, attention backend
-                           `INT8_EXACT_ATTENTION_BACKEND`), or both; read back from every layer (`int8_exact_of`).  Omitted from `to_json()` when None.
+    int8_exact          -> which layers run the plain exact-int8 arm (`INT8_EXACT_SCOPES`): every linear (`engine.int8_exact`, an offline int8
+                           checkpoint, vLLM quantization `INT8_EXACT_QUANTIZATION`), every attention layer (`engine.int8_attention`, the LUT
+                           softmax, attention backend `INT8_EXACT_ATTENTION_BACKEND`), or both; read back from every layer (`int8_exact_of`).  Omitted from `to_json()` when None.
     moe_backend         -> `EngineArgs.moe_backend`, the fused-MoE experts kernel (applied to `KernelConfig.moe_backend`; an explicit backend that
                            cannot run raises in vLLM's `select_*_moe_backend`, never falls back).  `"triton"` -> `TritonExperts` (`fused_moe_kernel`,
                            the launch `MoeExpertGemm_v1` and the block-FP8 `MoeExpertFp8Gemm_v1` state); None = vLLM's selection.  Builder and runtime
