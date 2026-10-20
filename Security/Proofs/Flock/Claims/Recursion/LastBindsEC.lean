@@ -1,4 +1,3 @@
-import Proofs.Flock.Claims.Recursion.LastBindsE
 import Proofs.Flock.Claims.Recursion.BindsDeployed
 import Proofs.Flock.Claims.Recursion.FlockKSDeploy
 import Proofs.Flock.Claims.Recursion.DeployMargin
@@ -6,17 +5,16 @@ import Proofs.Flock.Claims.Recursion.DeployMargin
 /-!
 # The route modulo what `E*` reads: what it needs of the last round
 
-The route's last-round comparison modulo `E*`'s reading (R1) makes the plurality prover `P_I` send, at the last inner
-round, some message with the plurality reading, not the extraction's own message. `P_I`'s run there makes `IVStar`'s
-calls on its own message, and `PrBAbort_le_PrBI` needs every call of a kept run among the calls `E_O`'s witnesses
-record at that draw (`innerF_vLog_sub`). So the reading compared at the last round has to carry `IVStar`'s calls as
-well as the decision and `DE`'s columns of the opened view, and two things follow:
+The route's last-round comparison modulo `E*`'s reading makes the plurality prover `P_I` send, at the last inner round,
+some message with the plurality reading, not the extraction's own message. `P_I`'s run there makes `IVStar`'s calls on
+its own message, and `PrBAbort_le_PrBI` needs every call of a kept run among the calls `E_O`'s witnesses record at that
+draw (`innerF_vLog_sub`). So the route reads (P4) as `Bound.LastBindsEC`, where the columns or the calls differ, and
+`Bound.LastCoinFree`, that `IVStar`'s last step reads no last coin (both in `Definitions/Claims/Recursion.lean`). Here:
 
-* `Bound.LastBindsEC`: (P4) where the columns or the calls differ. It gives `LastBindsE` (`LastBindsEC.toE`), and
-  (P4) gives it wherever `IVStar`'s last step reads no last coin (`Bound.lastBindsEC_of_lastBinds`).
-* `Bound.LastCoinFree`: `IVStar`'s last step reads no last coin, since `P_I` evaluates the plurality's message at its
-  own run's last coin. It follows from `DE`'s last step reading none (`Bound.lastCoinFree_of_step`), which the
-  deployed plain verifier meets: its decision passes the coins with the last dropped (`RecDeploy.lastStepFree_of_V`,
+* the first statement of (P4) gives `LastBindsEC` wherever `IVStar`'s last step reads no last coin
+  (`Bound.lastBindsEC_of_lastBinds`);
+* `LastCoinFree` follows from `DE`'s last step reading none (`Bound.lastCoinFree_of_step`), which the deployed plain
+  verifier meets: its decision passes the coins with the last dropped (`RecDeploy.lastStepFree_of_V`,
   `RecDeploy.lastCoinFree_deployed`).
 -/
 
@@ -49,29 +47,6 @@ theorem take_eq_of_dropLast {α : Type} {l l' : List α} (hl : l.length = l'.len
     congr 1
     omega
   rw [h1 l hn, h1 l' (by omega), hd]
-
-/-- **(P4), modulo what `E*` reads and what `IVStar` calls.** Take two decisions `IVStar` accepts at one statement, on
-messages and coins that agree before the last round, that differ in `DE`'s columns of their opened views or in
-`IVStar`'s calls. They show a SHA-512 collision among `IVStar`'s calls in the two decisions. -/
-def Bound.LastBindsEC (H : Msg → Msg) (Bd : Bound Coin Col T) : Prop :=
-  ∀ (x : Msg) (as as' : List Msg) (cs cs' : List Coin), as.length = Bd.DE.V.k x → as'.length = as.length →
-    cs.length = as.length → cs'.length = as.length → as.dropLast = as'.dropLast → cs.dropLast = cs'.dropLast →
-    (Bd.DE.cols (Bd.openView (Bd.viewAt H x as cs)) ≠ Bd.DE.cols (Bd.openView (Bd.viewAt H x as' cs')) ∨
-      ((Bd.IVStar.next x as cs).eval H).2 ≠ ((Bd.IVStar.next x as' cs').eval H).2) →
-    ((Bd.IVStar.next x as cs).eval H).1 = .acc → ((Bd.IVStar.next x as' cs').eval H).1 = .acc →
-    ∃ q ∈ (((Bd.IVStar.next x as cs).eval H).2 ++ ((Bd.IVStar.next x as' cs').eval H).2).map Prod.fst,
-      ∃ q' ∈ (((Bd.IVStar.next x as cs).eval H).2 ++ ((Bd.IVStar.next x as' cs').eval H).2).map Prod.fst,
-        Collision H q q'
-
-theorem Bound.LastBindsEC.toE {H : Msg → Msg} {Bd : Bound Coin Col T} (h : Bd.LastBindsEC H) : Bd.LastBindsE H :=
-  fun x as as' cs cs' hk hl hc hc' hd hcd hne => h x as as' cs cs' hk hl hc hc' hd hcd (Or.inl hne)
-
-/-- **`IVStar`'s last step reads no last coin**: at the last round, two coin lists that agree before it give one
-decision with the same calls. -/
-def Bound.LastCoinFree (H : Msg → Msg) (Bd : Bound Coin Col T) : Prop :=
-  ∀ (x : Msg) (as : List Msg) (cs cs' : List Coin), as.length = Bd.DE.V.k x → cs.length = as.length →
-    cs'.length = as.length → cs.dropLast = cs'.dropLast →
-    (Bd.IVStar.next x as cs).eval H = (Bd.IVStar.next x as cs').eval H
 
 /-- **`DE`'s last step, as `agrees` checks it, reads no last coin.** -/
 def Bound.LastStepFree (H : Msg → Msg) (Bd : Bound Coin Col T) : Prop :=
