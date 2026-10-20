@@ -11,7 +11,8 @@ import PouwCheck.Rounds
 harness (`verity/core/difftest`):
 
 * `opening` (`params` as JSON, `commitment` the registration's bytes as hex, `units` a list of integers or null, `unit`,
-  `pub` the proof's public file as hex, `opening` as JSON): `core_check.opening`'s reason, or null. A refusal of the
+  `pub` the proof's public file as hex, `opening` as JSON, and `salt`, a certified window's salt as hex, null or absent
+  otherwise): `core_check.opening`'s reason, or null. A refusal of the
   parameters or the registration is a reject, as `core_check.params` and `commitment` raise `Refused` (a ValueError).
 * `registered` (`params`, `commitment`, as `opening` reads them): PoUW's rule over the registration
   (`core_check.registered`), as `{"reason"}`, null when it holds.
@@ -39,6 +40,13 @@ def hex (j : Json) (k : String) : Except String ByteArray := do
   let .str s ← get j k | throw s!"the input's {k} is not a string"
   PouwCommit.pyFromHex s
 
+/-- An optional hex field: absent or null is none. -/
+def hexOrNull (j : Json) (k : String) : Except String (Option ByteArray) :=
+  match (PouwWindow.pyGet? j k).getD .null with
+  | .null => pure Option.none
+  | .str s => some <$> PouwCommit.pyFromHex s
+  | _ => throw s!"the input's {k} is malformed"
+
 def openingOf (j : Json) : Except String Json := do
   let p ← paramsOf (← get j "params")
   let c ← registrationOf (← hex j "commitment")
@@ -47,7 +55,7 @@ def openingOf (j : Json) : Except String Json := do
     | .arr a => some <$> a.toList.mapM fun u => need "units" (PouwWindow.strictInt? u)
     | _ => throw "the input's units is malformed"
   let unit ← need "unit" (PouwWindow.strictInt? (← get j "unit"))
-  pure (toJson (← opening p c units unit (← hex j "pub") (← get j "opening")))
+  pure (toJson (← opening p c units unit (← hex j "pub") (← get j "opening") (← hexOrNull j "salt")))
 
 def refusal {α : Type} (ok : α → Json) : R α → Except String Json
   | .ok a => pure (ok a)
@@ -57,13 +65,6 @@ def refusal {α : Type} (ok : α → Json) : R α → Except String Json
 def flag (j : Json) (k : String) : Except String Bool := do
   let .bool b ← get j k | throw s!"the input's {k} is not a boolean"
   pure b
-
-/-- An optional hex field: absent or null is none. -/
-def hexOrNull (j : Json) (k : String) : Except String (Option ByteArray) :=
-  match (PouwWindow.pyGet? j k).getD .null with
-  | .null => pure Option.none
-  | .str s => some <$> PouwCommit.pyFromHex s
-  | _ => throw s!"the input's {k} is malformed"
 
 def passOf (j : Json) : Except String Json := do
   let raw ← match ← get j "raw" with

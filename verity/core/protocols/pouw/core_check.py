@@ -60,7 +60,7 @@ from verity.ml.commitments import Commitment, Opening, VerificationLimits, verif
 from verity.ml.commitments.identity import identity_digest_sha512
 from verity.ml.commitments.indexed import RangeIndexedDomain
 from verity.ml.commitments.merkle import CommitmentDomain, merkle_depth
-from verity.ml.commitments.rowleaf import row_leaf
+from verity.ml.commitments.rowleaf import row_leaf, sha512_row_v2_digest
 from verity.ml.crypto import lms
 from verity.ml.randomness import derive, frame
 
@@ -81,12 +81,24 @@ SERVED_DOMAIN = "verity/one-stage/served-domain/v1"
 OPENED = (("a", "hm96-sha512/row-seg/v1"), ("b", "hm96-sha512/row/v2"))
 SALT_BYTES = 192
 BC_BYTES = 128
+ROW_V2 = "hm96-sha512/row/v2"
+#: a salted unit's public row: the window's certified salt, the unit's position (a u64) and its entry's side roots
+PUBLIC_ROW_BITS = 8 * (PS.SALT_BYTES + 8 + 2 * 64)
+PUBLIC_ROW_SALT_DOMAIN = b"verity/pouw/public-row-salt/v1\0"
+
+
+class Salted(NamedTuple):
+    """A salted tile template's unit: R A rows and C B rows, then its public row ``pub``, the pinned circuit's first
+    R + C + 1 ports in that order, each an ``hm96-sha512/row/v2`` row (`PouwH1Tile`'s ``a0..``, ``b0..``, ``pub``)."""
+    r: int
+    c: int
 
 
 class Tile(NamedTuple):
     tile_work: int
     query: str
     circuit: str
+    salted: Salted | None = None
 
 
 #: the tile templates the verifier pins (Lean's `PouwCheck.tiles`, of record): each one's work per tile, its check query's
@@ -108,6 +120,13 @@ TILES = {
         4096,
         "0f93d0dce725a5269061b91a1eb39ad294a1369c6f47814880acc74cef30aad734b0067d1cc7f5347bf9db4279a6519eb0abfa000c581759b14fd0ed5a7f9647",
         "c4fb8b6c5ce91ad0bc750f315700491911f678ad219cd370baf4359dc751954c9955590eb50304a166e1cc103ffd0d431de31f03c29ad5b6d119a33502b004af"),
+    "PouwH1Tile_v1{EXACT=GemmAccumulatorS8_v2{K=64,DOT=BlackwellS8ImmaDot32_v2},R=4,C=8,PAIRS=((0,0),(0,1),(0,2),(0,3),"
+    "(0,4),(0,5),(0,6),(0,7),(1,0),(1,1),(1,2),(1,3),(1,4),(1,5),(1,6),(1,7),(2,0),(2,1),(2,2),(2,3),(2,4),(2,5),(2,6),"
+    "(2,7),(3,0),(3,1),(3,2),(3,3),(3,4),(3,5),(3,6),(3,7))}": Tile(
+        64 * 32,
+        "1083a2eb9d13f77afdb936ecac9e780aa63b7f993795a8ff59d9d05ca7259c455c1220a833979cd975f907e97d9045033c5427950b7953dd33ac26cfdef44631",
+        "571e56a77368c64505e46a2affd6360d869cf17d272f86926bbb6d8974f2c39177b351e15c20bbf8fd78cbb87a4951f9e3a1062edab8e4a57905eb99e6074b2f",
+        Salted(4, 8)),
 }
 
 
@@ -597,15 +616,84 @@ def _no_constant(s: str) -> Any:
     raise ValueError(f"{s} is not JSON")
 
 
-def opening(p: dict, c: dict, units: list[int] | None, unit: int, pub: bytes, op: Any) -> str | None:
+def public_row(salt: bytes, position: int, roots: tuple[bytes, bytes]) -> bytes:
+    """A salted unit's public row, its `PUBLIC_ROW_BITS` bits as `ml.circuits.seeds` lays them out (`h1unit.pub_words`):
+    `salt`, `position` as a u64 and the two roots, each 32 bits a u32 low bit first."""
+    x = salt + position.to_bytes(8, "big") + roots[0] + roots[1]
+    if len(x) * 8 != PUBLIC_ROW_BITS:
+        raise ValueError(f"a public row is {PUBLIC_ROW_BITS} bits")
+    return b"".join(x[i:i + 4][::-1] for i in range(0, len(x), 4))
+
+
+def public_row_salt(context: str, position: int) -> bytes:
+    """The public row's hm96 salt, which anyone derives from the window's context and the unit's position: three SHA-512
+    blocks of `PUBLIC_ROW_SALT_DOMAIN` ‖ u64be(len) ‖ context ‖ u64be(position) ‖ u8(i)."""
+    ctx = context.encode()
+    head = PUBLIC_ROW_SALT_DOMAIN + len(ctx).to_bytes(8, "big") + ctx + position.to_bytes(8, "big")
+    return b"".join(hashlib.sha512(head + bytes([i])).digest() for i in range(SALT_BYTES // 64))
+
+
+def public_bc(context: str, salt: bytes, position: int, roots: tuple[bytes, bytes]) -> bytes:
+    """The b ‖ c of unit `position`'s public row (`public_row`) under `public_row_salt`: the 128 bytes the verifier
+    requires at the public row's place in the proof's body."""
+    return Wd._HM.commit_string(Wd._HM.default_key, sha512_row_v2_digest(public_row(salt, position, roots), PUBLIC_ROW_BITS),
+                                public_row_salt(context, position))
+
+
+def certified_salt(raw: bytes | None, context: str, reveal: bytes, committed: bytes | None, stream: bytes | None,
+                   prover: bytes | None) -> bytes:
+    """The certified window's salt that `pass_epoch` checks the pass's against (`_certified_salt`), which `opening` holds
+    every drawn salted unit's public row to.  Raises `Co.DomainError` or `Refused` where `pass_epoch` refuses."""
+    if raw is None:
+        raise Co.DomainError("the window names no pass, whose epoch the challenger re-starts from its manifest")
+    return _certified_salt(_manifest(raw), reveal, context, committed, stream, prover)[0]
+
+
+def _salt_reason(p: dict, t: Tile | None, salt: Any) -> str | None:
+    """A certified window (its context names a PoUW window, `salt.window_of`) opens only a salted template's units, under
+    the 64-byte certified salt the verifier holds; any other window, no salt and no salted unit."""
+    if PS.window_of(p["context"]) is not None:
+        if t is None or t.salted is None:
+            return ("the window is certified, and its template's unit reads no salt: no drawn proof of it is held to the "
+                    "window's certified salt")
+        if type(salt) is not bytes or len(salt) != PS.SALT_BYTES:
+            return f"the window is certified, and the verifier holds no {PS.SALT_BYTES}-byte certified salt for it"
+    elif salt is not None:
+        return "the window is not certified, so it has no certified salt for a unit to read"
+    elif t is not None and t.salted is not None:
+        return "the window's template's unit reads a salt, which only a certified window has"
+    return None
+
+
+def _sides(o: Any, n: int) -> list[tuple[int, list[bytes]]] | None:
+    """A salted unit's n rows of one side, ``[{"index", "path"}, …]``, or None."""
+    if not (isinstance(o, list) and len(o) == n and all(isinstance(x, dict) for x in o)):
+        return None
+    out = [(x.get("index"), _path(x.get("path"))) for x in o]
+    return None if any(not _int(i) or s is None for i, s in out) else out
+
+
+def opening(p: dict, c: dict, units: list[int] | None, unit: int, pub: bytes, op: Any,
+            salt: bytes | None = None) -> str | None:
     """None when the tile proof's public file `pub` opens unit `unit`'s rows under the registered window root, else why
     not (`served_commit.check`).  `units` is the draw's (None for a unit opened undrawn, the filler's); `op` the prover's
     opening ``{"entry", "entry_value", "entry_salt", "window_path", "a": {"index", "path"}, "b": …}``: the unit's entry,
     its salt and its path to the window root, and each side's row with its path to the entry's side root.  The proof's
     first two rows, in its header's key order (serde's, as C-Flock reads it), are its A row and its B row, and its body
-    starts with their b ‖ c."""
+    starts with their b ‖ c.
+
+    `salt` is a certified window's salt (`certified_salt`), and a certified window opens only a salted template's units
+    (`Tile.salted`, `_salt_reason`).  A salted unit's opening lists each side's rows, ``"a": [{"index", "path"}, …]`` (R
+    rows) and ``"b"`` (C rows): tile (i, j) of its entry (`window.tile_in`) is A rows R·i + k and B rows C·j + k, and
+    the proof's body starts with their b ‖ c and then its public row's, which must be `public_bc` of the window's context,
+    `salt`, the unit's position and the entry's side roots."""
     if units is not None and unit not in units:
         return f"unit {unit} is not drawn"
+    t = TILES.get(p["check"]["template"])
+    why = _salt_reason(p, t, salt)
+    if why is not None:
+        return why
+    lay = t.salted if t is not None else None
     rec = c["record"]
     dom = window_domain(p, rec)
     roots = {r["port"]: r for r in rec["roots"]}
@@ -622,18 +710,26 @@ def opening(p: dict, c: dict, units: list[int] | None, unit: int, pub: bytes, op
     e = op.get("entry")
     if not _int(e):
         return "the opening names no entry"
-    salt, sibs = _fromhex(op.get("entry_salt"), SALT_BYTES), _path(op.get("window_path"))
-    sides = {s: op.get(s) for s, _ in OPENED}
-    paths = {s: _path(o.get("path")) if isinstance(o, dict) else None for s, o in sides.items()}
-    if salt is None or sibs is None or any(p_ is None or not _int(sides[s].get("index")) for s, p_ in paths.items()):
+    esalt, sibs = _fromhex(op.get("entry_salt"), SALT_BYTES), _path(op.get("window_path"))
+    if lay is None:
+        sides = {s: op.get(s) for s, _ in OPENED}
+        paths = {s: _path(o.get("path")) if isinstance(o, dict) else None for s, o in sides.items()}
+        opened = None if any(p_ is None or not _int(sides[s].get("index")) for s, p_ in paths.items()) else \
+            {s: [(sides[s]["index"], paths[s])] for s in paths}
+    else:
+        opened = {s: _sides(op.get(s), n) for s, n in (("a", lay.r), ("b", lay.c))}
+        opened = None if None in opened.values() else opened
+    if esalt is None or sibs is None or opened is None:
         return (f"the opening's salt is not {SALT_BYTES} bytes, or a path or a side's index is not one (paths of SHA-512 "
                 "digests)")
-    if not (0 <= e < dom.count and verify_path(dom, root, e, Wd.entry_leaf(dom, e, Wd.entry_bc(entry, salt)), sibs)):
+    if not (0 <= e < dom.count and verify_path(dom, root, e, Wd.entry_leaf(dom, e, Wd.entry_bc(entry, esalt)), sibs)):
         return f"entry {e} is not the registered window's entry"
     try:
-        at = dict(zip(("a", "b"), Wd.tile_in(entry, unit)))
+        i, j = Wd.tile_in(entry, unit)
     except ValueError as x:
         return f"entry {e}: {x}"
+    at = {"a": [i], "b": [j]} if lay is None else {"a": [lay.r * i + k for k in range(lay.r)],
+                                                  "b": [lay.c * j + k for k in range(lay.c)]}
     head, nl, body = pub.partition(b"\n")
     try:
         h = json.loads(head.decode(), parse_constant=_no_constant) if nl else None
@@ -646,25 +742,37 @@ def opening(p: dict, c: dict, units: list[int] | None, unit: int, pub: bytes, op
         return "the proof's header has no instance count"
     if n != 1:
         return f"the proof has {n} instances, not one tile"
-    t = TILES.get(p["check"]["template"])
     if t is None or h.get("circuit_sha512") != t.circuit:
         return "the proof's circuit is not the one the verifier pins for the check's template"
     f = h.get("frame_v3")
     s = f.get("schemas") if isinstance(f, dict) else None
-    if not isinstance(s, dict) or [s[k] for k in sorted(s)[:2]] != [schema for _, schema in OPENED]:
-        return "the proof's first rows are not an A row and a B row of the registered schemas"
-    if len(body) < 2 * BC_BYTES:
-        return "the proof's body holds no A row and B row"
-    for i, (side, schema) in enumerate(OPENED):
-        o = sides[side]
-        if o["index"] != at[side]:
-            return f"side {side}: the opening is of row {o['index']}, not the unit's row {at[side]}"
+    if lay is None:
+        if not isinstance(s, dict) or [s[k] for k in sorted(s)[:2]] != [schema for _, schema in OPENED]:
+            return "the proof's first rows are not an A row and a B row of the registered schemas"
+        if len(body) < 2 * BC_BYTES:
+            return "the proof's body holds no A row and B row"
+    else:
+        names = [f"a{k}" for k in range(lay.r)] + [f"b{k}" for k in range(lay.c)] + ["pub"]
+        if not isinstance(s, dict) or any(s.get(x) != ROW_V2 for x in names):
+            return f"the proof's rows {', '.join(names)} are not {ROW_V2} rows"
+        if len(body) < (lay.r + lay.c + 1) * BC_BYTES:
+            return "the proof's body holds no A rows, B rows and public row"
+    k = 0
+    for side, schema in OPENED:
         sdom = Wd.side_domain(dom.domain_id, side)
-        bc = body[i * BC_BYTES:(i + 1) * BC_BYTES]
-        if not (at[side] < sdom.count and verify_path(sdom, entry.root_a if side == "a" else entry.root_b, at[side],
-                                                      row_leaf(sdom, at[side], Wd._HM.tree_leaf(Wd._HM.default_key, bc),
-                                                               schema), paths[side])):
-            return f"side {side}: the proof's committed row is not entry {e}'s row {at[side]}"
+        for want, (idx, path) in zip(at[side], opened[side]):
+            if idx != want:
+                return f"side {side}: the opening is of row {idx}, not the unit's row {want}"
+            bc = body[k * BC_BYTES:(k + 1) * BC_BYTES]
+            if not (want < sdom.count and verify_path(sdom, entry.root_a if side == "a" else entry.root_b, want,
+                                                      row_leaf(sdom, want, Wd._HM.tree_leaf(Wd._HM.default_key, bc),
+                                                               schema if lay is None else ROW_V2), path)):
+                return f"side {side}: the proof's committed row is not entry {e}'s row {want}"
+            k += 1
+    if lay is not None and body[k * BC_BYTES:(k + 1) * BC_BYTES] != public_bc(p["context"], salt, unit,
+                                                                             (entry.root_a, entry.root_b)):
+        return (f"the proof's public row is not the window's certified salt, unit {unit}'s position and entry {e}'s "
+                "side roots")
     return None
 
 
