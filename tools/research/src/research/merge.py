@@ -30,7 +30,7 @@ the diff from its tip either way.  The merge commit carries a `Check: <attempt i
 --dry-run), 1 a failure past the gate (git's merge, the push, the sweep, a train's offending ref), 2 usage, 3 refused
 (`research.gates.refuse`: the gate, the push guard, a train or its build).
 
-With --verdicts (opt-in; CI-33) the same refusals hold before any verdict, and in place of a passing attempt of REF, REF is
+With --verdicts (opt-in; CI-108) the same refusals hold before any verdict, and in place of a passing attempt of REF, REF is
 admitted when the target's `check.py --plan REF --packs-only --base HEAD` (`PLAN`, `verdict_gate`) shows every part it
 requires passed under its key at REF, each by a pass that a recorded check's verdict pack holds: an attempt of the tool that
 ended, ran the declared command whole or as a shard, and lists that pack, by sha256, among its run files (`pack_refusal`).

@@ -98,7 +98,6 @@ research pods sync TARGET [SRC] [--dest DIR] [--exclude G]...     # the worktree
 research tele SUBCOMMAND ...             # the harness's own surface
 research data SUBCOMMAND ...             # the evidence store (below)
 research merge REF [--into main] [--tool check] [-m MSG] [--push] [--dry-run]   # the merge gate (merge.py)
-research merge REF --verdicts [--verdicts-from RUN] [--dry-run]         # opt-in (CI-33): passed part by part in recorded packs (merge.py)
 research merge --train A B C [--on MACHINE --project P] [--command CMD] [--push]  # several refs, one checked candidate
 research merge --train --prepare BRANCH [--onto BASE] [--allow-removal PATH] N@SHA ...  # build, lint, push a train
 research merge --sweep [--into main] [--remote origin] [--dry-run]       # close the PRs that landed, retarget their children
@@ -106,7 +105,7 @@ research merge --mirror [SHA]                                           # main o
 research merge --canary [--tool check] [--json]                    # the gates' daily self-test, in scratch stores
 research queue status|sync|land|eject|drive|ready|open [--dry-run]  # the merge queue on `next` (queue.py)
 research queue judge RUN [--by LANE]      # the mark `queue ready --on` writes, from its quick-tier run that ended after its caller died
-research queue stats --log FILE [--hours 24] [--until T] [--json]  # each landed PR's ready mark -> main, split into queue, rework, machine, check, land (queue_stats.py)
+research queue stats --log FILE [--hours 24] [--until T] [--json]  # where landed PRs' time went (queue_stats.py)
 research git old2new|remap|check|build ...                              # after a history rewrite (commitmap.py, below)
 research msg send|close|read|list|names|traffic|owners|handles|subscriptions|ask-daniel|groups sync [--dry-run]   # Slack (slack.py, below)
 ~~~
