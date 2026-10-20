@@ -25,6 +25,7 @@ from __future__ import annotations
 
 import argparse
 import hashlib
+import itertools
 import json
 import socket
 import sys
@@ -33,7 +34,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[3]
 sys.path[:0] = [str(ROOT), str(ROOT / "benchmarks" / "pouw" / "served_h1")]
-import coins as CO  # noqa: E402
+import coins as CO
 
 EPOCH = 1
 #: one Dither window's rounds (`dither_fused.ROUNDS`)
@@ -45,7 +46,7 @@ def quantiles(ns: list[int]) -> dict:
     if not ns:
         return {"n": 0}
     s = sorted(ns)
-    at = lambda q: round(s[min(len(s) - 1, int(q * len(s)))] / 1e6, 4)  # noqa: E731
+    at = lambda q: round(s[min(len(s) - 1, int(q * len(s)))] / 1e6, 4)
     return {"n": len(s), "min_ms": round(s[0] / 1e6, 4), "p50_ms": at(0.5), "p90_ms": at(0.9), "p99_ms": at(0.99),
             "max_ms": round(s[-1] / 1e6, 4), "mean_ms": round(sum(s) / len(s) / 1e6, 4)}
 
@@ -118,7 +119,7 @@ def check(a: argparse.Namespace) -> int:
     events = [json.loads(x) for x in (d / CO.R.RELEASES).read_text().splitlines()[1:]]
     rounds = [(r, e) for r, e in zip(events[::2], events[1::2]) if r["label"] == CO.Wd.ROUND]
     serve_ns = [round((e["released_at"] - r["received_at"]) * 1e9) for r, e in rounds]
-    gap_ns = [round((b["received_at"] - x["received_at"]) * 1e9) for (x, _), (b, _) in zip(rounds, rounds[1:])]
+    gap_ns = [round((b["received_at"] - x["received_at"]) * 1e9) for (x, _), (b, _) in itertools.pairwise(rounds)]
     doc = {"ok": all(v is None for v in reasons.values()), "host": host, "key_sha512": hashlib.sha512(key.public).hexdigest(),
            "reasons": reasons, "rounds_logged": len(roots[CO.Wd.ROUND]),
            "challenger_open": quantiles(serve_ns), "challenger_period": quantiles(gap_ns),
