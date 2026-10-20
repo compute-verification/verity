@@ -172,7 +172,12 @@ def load(args):
             source = snapshot_download(args.model, revision=args.revision, cache_dir=cache,
                                        allow_patterns=["*.json", "*.safetensors", "*.txt", "*.model", "*.tiktoken"])
             commit = Path(source).name
-        tok = AutoTokenizer.from_pretrained(source, revision=None if cache else args.revision)
+        try:
+            tok = AutoTokenizer.from_pretrained(source, revision=None if cache else args.revision)
+        except ValueError:
+            # some intermediate-checkpoint branches (OLMo-2-0325-32B@stage1-step119000) ship only a slow tokenizer,
+            # which needs sentencepiece or tiktoken to convert; every checkpoint of a repo shares main's tokenizer
+            tok = AutoTokenizer.from_pretrained(args.model, revision="main", cache_dir=cache)
         model = AutoModelForCausalLM.from_pretrained(source, revision=None if cache else args.revision,
                                                      dtype=getattr(torch, args.dtype), device_map=args.device).eval()
         if cache and args.drop:
