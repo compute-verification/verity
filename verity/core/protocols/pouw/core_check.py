@@ -35,9 +35,12 @@ before it drew that salt (`salt.committed`).  `recorded_reason` is that last rul
 challenger runs it before it asks the certifier for one, since the certifier reveals a window once.
 `draw` is the rule on the window's draw (`Challenger.select`'s): the epoch's draw coin opens after the registration,
 and the drawn units are Lean's ``Draw.subset`` of the key it derives.  Both read the coin versions in `COIN_VERSIONS`,
-and a replay of a recorded draw `COIN_EARLY` too.  `rounds` is the rule on a live window's round coins
-(`window.rounds_reason`, over the proof service's challenger `sampled_proofs.challenger`): under the challenger's live
-coin commitment, round r's coin opened once, after the r-th round root the verifier recorded.
+and a replay of a recorded draw `COIN_EARLY` too.  `salt` is the rule on a live window's salt coin: under the
+challenger's live coin commitment, it opened once, after the window's open root, which the verifier recomputes from the
+window's record and its session (`salt.window_open_root`), and the root the auditor's gate opened that session on.
+`rounds` is the rule on a live window's round coins (`window.rounds_reason`, over the proof service's challenger
+`sampled_proofs.challenger`): under the challenger's live coin commitment, round r's coin opened once, after the r-th
+round root the verifier recorded.
 
 Every refusal has one reason, the first rule it breaks in the order below; the Lean port writes the same strings.
 """
@@ -1217,7 +1220,47 @@ def draw(coins: Any, recorded: bool, opening: Any, stream: Any, registration: An
     return None
 
 
-# ---- a live window's round coins ---------------------------------------------------------------------------------------
+# ---- a live window's salt and round coins -----------------------------------------------------------------------------
+
+SALT_FORM = ("the session's open root, the window's weights' root and its round-0 request table's root are not SHA-512 "
+             "digests, or the session is not a gate's session id")
+OTHER_WINDOW = ("the session's open root is not the window's: salt.window_open_root of its weights' root, its round-0 "
+                "request table's root and the session")
+NOT_RECEIVED = "the challenger's log does not show the window's open root as the one root its salt coin followed"
+
+
+def salt(coins: Any, session: Any, root: Any, weights_root: Any, requests_root: Any, received: Any, opening: Any
+         ) -> tuple[str, str] | None:
+    """None when `opening` is a live window's salt coin, opened after the window's own open root: under `coins`, the
+    challenger's live coin commitment (its JSON, `challenger.LiveCommitment`, a live epoch's), `root`, the root the
+    auditor's signed open entry opened session `session` on (hex; `session` the id its signed reserve entry names), is
+    `salt.window_open_root` of the window's weights' root `weights_root` and its round-0 request table's root
+    `requests_root` (hex, from the window's record) and that session; `received`, the roots the session's signed log shows
+    its salt coin followed (hex), is that root alone; and `opening` is the epoch's ``pouw/salt`` coin 0 opened after it
+    (`challenger.live_reason`). Else the refusal (``coin`` or ``salt``, and why). A session opened for one window's
+    weights and requests salts no other window, and a window salted in one session passes under no other."""
+    try:
+        c = Ch.LiveCommitment.from_json(coins)
+    except Ch.CoinError as e:
+        return "coin", f"the verifier's coins are malformed: {e}"
+    why = Wd.live_epoch_reason(c)
+    if why is not None:
+        return "coin", why
+    hexes = [bytes.fromhex(x) if _str(x) and _DIGEST.fullmatch(x) else None for x in (root, weights_root, requests_root)]
+    if None in hexes or not (_str(session) and PS.SESSION.fullmatch(session)):
+        return "salt", SALT_FORM
+    r, w, t = hexes
+    if PS.window_open_root(w, t, session) != r:
+        return "salt", OTHER_WINDOW
+    if received != [root]:
+        return "salt", NOT_RECEIVED
+    try:
+        o = Ch.LiveOpening.from_json(opening)
+    except Ch.CoinError as e:
+        return "coin", f"the salt's {e}"
+    why = Ch.live_reason(c, o, Wd.SALT, 0, r)
+    return None if why is None else ("coin", f"the salt's {why}")
+
 
 def rounds(coins: Any, roots: Any, openings: Any) -> tuple[str, str] | None:
     """None when `openings` are a live window's round coins (`window.rounds_reason`): under `coins`, the challenger's live
@@ -1286,4 +1329,4 @@ def line(a: dict) -> str:
 __all__ = ["ANSWER_KEYS", "COIN_KEY", "FORMATS", "ID", "LEVEL", "ONE_STAGE", "Refused", "SCHEME", "SIGNED_LIVE", "answer",
            "answer_of", "canonical", "case", "check", "commitment", "digest", "draw", "evidence", "integrity", "integrity_json",
            "law_name", "line", "lms_verify", "opening", "params", "pass_epoch", "ratio", "recorded_reason", "registered",
-           "rounds", "unit_draw", "verify_path", "window_domain"]
+           "rounds", "salt", "unit_draw", "verify_path", "window_domain"]

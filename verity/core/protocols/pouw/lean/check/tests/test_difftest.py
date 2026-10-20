@@ -18,7 +18,8 @@ mutation each aimed at every refusal), compared output for output: how the salt 
 
 Its `rounds` against `core_check.rounds`: one `Port`, over the live windows `pouw_rounds_cases` generates (a live epoch's
 round coins, each opened after its recorded round root, then one mutation each aimed at every refusal), compared output
-for output: null, or the same refusal.
+for output: null, or the same refusal. Its `salt` against `core_check.salt` likewise, over the live windows' salt coins
+the same module generates (opened after the session's open root, `salt.window_open_root`).
 """
 from __future__ import annotations
 
@@ -244,3 +245,35 @@ def test_rounds(pass_server):
                  "the round roots are not", "the round coins are not a list", ": a live coin opening is",
                  "the coin commitment's "):
         assert any(part in k for k in ROUNDED), part
+
+
+SALTED: Counter[str] = Counter()
+
+
+def salt(case: dict) -> dict | None:
+    refused = CC.salt(*rounds_cases.salt_args(case))
+    SALTED[f"{refused[0]}: {_template(refused[1])}" if refused else "accept"] += 1
+    return None if refused is None else {"refused": list(refused)}
+
+
+SALT = D.Port("pouw-check-difftest", "salt", salt, package=LEAN, need_rejects=False, of_record=V.RECORD_VERDICT,
+              inputs=st.builds(rounds_cases.salt_instance, st.randoms(use_true_random=False),
+                               st.sampled_from(["honest"] * (len(rounds_cases.SALT_NAMES) // 4) + rounds_cases.SALT_NAMES)))
+
+
+def test_salt(pass_server):
+    """Generated live windows' salt coins, then each mutation over a few seeds (`replay`): another window's weights,
+    requests or session under the session's open root, H1's salt opened after the weights' root, a log showing another
+    root, and every other refusal of `core_check.salt`."""
+    SALTED.clear()
+    stats = D.run(SALT, examples=400, server=pass_server)
+    swept = Counter(D.replay(SALT, rounds_cases.salt_instance(random.Random(f"{name}/{seed}"), name), pass_server)[0]
+                    for name in ["honest", *rounds_cases.SALT_NAMES] for seed in range(3))
+    print(f"pouw-check-difftest salt: {stats}; and {sum(swept.values())} swept ({dict(swept)}); by outcome: "
+          f"{dict(sorted(SALTED.items()))}")
+    assert "accept" in SALTED
+    for part in (CC.SALT_FORM, CC.OTHER_WINDOW, CC.NOT_RECEIVED, "the verifier's coins are malformed",
+                 "the coin commitment's ", "the salt's a live coin opening is", "the salt's coin was not opened after",
+                 "not its pouw/salt coin #", "the salt's coin does not open", "the salt's coin is epoch #",
+                 "the salt's coin opening is malformed"):
+        assert any(_template(part) in k for k in SALTED), part
