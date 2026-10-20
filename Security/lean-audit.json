@@ -3574,22 +3574,48 @@
    "type_hash": "12704b348a183d81be9329792dcc639f4deafa21e0fc0227ff7b0b23ccb3bf9b"
   },
   "Flock.SecurityProofs.ServedRowsLinked": {
-   "owner": "@proofs"
-  },
-  "Flock.SoundAtBridge.soundAtBridge_nonvacuous": {
-   "owner": "@proofs"
+   "owner": "@proofs",
+   "signature": ["Flock.SecurityProofs.ServedRowsLinked : Flock.Guarantees.ServedRowsLinked"],
+   "assumptions": [],
+   "type_hash": "2cde2f3d97c487723b8f8899ebf241205f576cceca38ba6d92a6a1872108aba6"
   },
   "Flock.SecurityProofs.SoundAtBridge": {
    "owner": "@proofs",
    "signature": ["Flock.SecurityProofs.SoundAtBridge : Flock.Guarantees.SoundAtBridge"],
    "assumptions": [],
-   "type_hash": "98071786c4f75d8108782638006751c4515242027c6e546e0d9897582f079342"
+   "type_hash": "a65a67acd33540e7e76f251161afecd4384bc96480823282207852754b72e8fc"
   },
   "Flock.SecurityProofs.ZeroKnowledgeHidden": {
    "owner": "@proofs",
    "signature": ["Flock.SecurityProofs.ZeroKnowledgeHidden : Flock.Guarantees.ZeroKnowledgeHidden"],
    "assumptions": [],
    "type_hash": "84c0e48cb401d6662d94c2c1f395aeedc6aeeac630cd5e87ee5bb6e6e09009d0"
+  },
+  "Flock.SoundAtBridge.soundAtBridge_nonvacuous": {
+   "owner": "@proofs",
+   "signature": [
+    "Flock.SoundAtBridge.soundAtBridge_nonvacuous {Ω : Type} [Fintype Ω] {S nπ : Nat} {V : Type}",
+    "  (sess : Pouw.RelativeSecurity.Paths Ω S → Fin S → Fin nπ → Flock.SoundAtBridge.RowsSession)",
+    "  (out : (x : Pouw.RelativeSecurity.Paths Ω S) → (w : Fin S) → (i : Fin nπ) → (sess x w i).Out)",
+    "  (rows : (s : Flock.SoundAtBridge.RowsSession) → (Fin s.Circ.N → Bool) → V)",
+    "  (right : Pouw.RelativeSecurity.Paths Ω S → (Fin S → Fin nπ → V) → Prop) :",
+    "  And (Flock.SoundAtBridge.AcceptedLive (Flock.SoundAtBridge.rowsLayer sess out rows right) sess out)",
+    "    (And (Flock.SoundAtBridge.OpenedPlurAt (Flock.SoundAtBridge.rowsLayer sess out rows right) sess rows 0)",
+    "      (And (Flock.SoundAtBridge.RelOfRows (Flock.SoundAtBridge.rowsLayer sess out rows right) sess out rows)",
+    "        (And",
+    "          (∀ (x : Pouw.RelativeSecurity.Paths Ω S) (w : Fin S) (i : Fin nπ),",
+    "            Iff ((Flock.SoundAtBridge.rowsLayer sess out rows right).Unsound x w i) ((sess x w i).BadU (out x w i)))",
+    "          (∀ (B : ENNReal),",
+    "            Ne B ENNReal.instTop.top →",
+    "              (∀ (x : Pouw.RelativeSecurity.Paths Ω S) (w : Fin S) (i : Fin nπ),",
+    "                  ENNReal.instLE.le (instHMul.hMul (sess x w i).n.cast (sess x w i).bound) B) →",
+    "                And (Real.instLE.le 0 B.toReal)",
+    "                  (∀ (x : Pouw.RelativeSecurity.Paths Ω S) (w : Fin S) (i : Fin nπ),",
+    "                    ENNReal.instLE.le (instHMul.hMul (sess x w i).n.cast (sess x w i).bound)",
+    "                      (ENNReal.ofReal B.toReal))))))"
+   ],
+   "assumptions": [],
+   "type_hash": "27f84097c41752634b3c9c05e20a4cb02b0ea09db82bc2a57a574b18975fc05d"
   },
   "FlockSoundness.Audit.Law.closure_escape": {
    "owner": "@proofs",
@@ -9880,7 +9906,8 @@
     "Accounting.SecurityProofs.TS.ProofsSoundOfDrawn",
     "Accounting.SecurityProofs.TS.ProofsSoundOfPinned",
     "Accounting.SecurityProofs.TS.Sm120MeasuredHeadline",
-    "Accounting.SecurityProofs.TS.Sm120SheetHeadline"
+    "Accounting.SecurityProofs.TS.Sm120SheetHeadline",
+    "Flock.SoundAtBridge.soundAtBridge_nonvacuous"
    ]
   },
   "Definitions.Accounting.TS.Receipt": {
@@ -15814,6 +15841,7 @@
     "Accounting.SecurityProofs.TS.SteerUnion",
     "Accounting.SecurityProofs.TS.TemplateMoment",
     "Accounting.SecurityProofs.TS.TileLuck",
+    "Flock.SoundAtBridge.soundAtBridge_nonvacuous",
     "Pouw.SecurityProofs.RelativeSecurity.OverlapFloorK",
     "Pouw.SecurityProofs.RelativeSecurity.OverlapFloorKOneSided",
     "Pouw.SecurityProofs.RelativeSecurity.StagedFloorK",
@@ -24424,6 +24452,7 @@
     "Flock.SecurityProofs.RecursiveAuditC3",
     "Flock.SecurityProofs.RecursiveRanRegistered",
     "Flock.SecurityProofs.RecursiveSound",
+    "Flock.SoundAtBridge.soundAtBridge_nonvacuous",
     "FlockSoundness.Audit.Partition.Refines.twoStage_influence",
     "FlockSoundness.Audit.Partition.audit_exfiltration",
     "FlockSoundness.Audit.Partition.audit_influence",
