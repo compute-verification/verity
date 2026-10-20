@@ -1088,6 +1088,38 @@ fn firewall_on(st: &Stmt) -> bool {
     is_zk(st) && std::env::var("FC_FIREWALL").as_deref() == Ok("1")
 }
 
+/// The Lean verifier's name of the statement a firewalled session's `Hello` is set up under: `FC_FIREWALL_STATEMENT`, else
+/// this build's (the circuit's statement, with `+seed-injection` in a build whose identity pins `seed_injection`).
+fn lean_statement(st: &Stmt) -> String {
+    std::env::var("FC_FIREWALL_STATEMENT")
+        .unwrap_or_else(|_| format!("{}{}", st.c.statement(), if cfg!(feature = "seed-injection") { "+seed-injection" } else { "" }))
+}
+
+/// A firewalled session's `Hello` (PROTOCOL.md §10, `firewall::LeanHello`) at the verifier's draw `draw`: one Lean process
+/// for every session of `tables` tables, set up on the statement's circuit (`--circuit`), lookup tables (`--tables`) and the
+/// verifier's own public file of `inst` (`Instances::public_file`, removed once the process has read it), with
+/// `FC_FIREWALL_HELLO_ARGS`' flags after them (`flock-verify`'s `--partition F --program F`). `Ok(Err(why))`: the Lean setup
+/// refused the statement.
+fn lean_hello(st: &Stmt, inst: &Instances, tables: usize, draw: &str, nonce: Option<&[u8; 32]>) -> Result<Result<String, String>, String> {
+    type Hello = (usize, flock_live::firewall::LeanHello, Option<std::path::PathBuf>);
+    static HELLO: Mutex<Option<Hello>> = Mutex::new(None);
+    let mut g = HELLO.lock().unwrap_or_else(PoisonError::into_inner);
+    if !matches!(&*g, Some((j, ..)) if *j == tables) {
+        let public = std::env::temp_dir().join(format!("flock-hello-{}-{tables}.pub", std::process::id()));
+        std::fs::write(&public, inst.public_file()?).map_err(|e| format!("the Lean Hello's public file {}: {e}", public.display()))?;
+        let mut args: Vec<String> = vec!["--statement".into(), lean_statement(st), "--circuit".into(), arg("--circuit", "circuit.txt"),
+            "--public".into(), public.display().to_string(), "--tables".into(), arg("--tables", "tables"), "--session-tables".into(), tables.to_string()];
+        args.extend(std::env::var("FC_FIREWALL_HELLO_ARGS").unwrap_or_default().split_whitespace().map(String::from));
+        *g = Some((tables, flock_live::firewall::LeanHello::start(&flock_live::firewall::lean_frame_exe(), &args)?, Some(public)));
+    }
+    let (_, lean, public) = g.as_mut().expect("the Lean Hello started");
+    let h = lean.hello(draw, nonce);
+    if let Some(p) = public.take() {
+        let _ = std::fs::remove_file(p);
+    }
+    h
+}
+
 thread_local! {
     /// set on the firewall's own threads: the salt context's draws there are the shadow opening's
     static IN_FIREWALL: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
@@ -1116,33 +1148,31 @@ fn finish_dump() -> Option<std::path::PathBuf> {
     std::env::var_os("FC_FINISH_DUMP").map(Into::into)
 }
 
-/// The session's `flock-firewall finish` ([`flock_live::firewall::LeanFinish`]) on the statement the verifier sets up: `--circuit`,
-/// `--public` (else the `pub.bin` beside `--instances`, as staging writes it), the session's table count, `--tables`, and the
-/// verifier's draw (`draw`, the JSON Register answered; none when the session proves the undrawn statement).
-fn lean_finish(tables: usize, draw: Option<&str>) -> Result<flock_live::firewall::LeanFinish, String> {
+/// The session's `flock-firewall finish` ([`flock_live::firewall::LeanFinish`]) on the statement the verifier sets up, as
+/// [`lean_hello`]'s: the statement's name, `--circuit`, the verifier's own public file of `inst`, `--tables`, the session's
+/// table count and `FC_FIREWALL_HELLO_ARGS`' flags, at the verifier's draw (`draw`, the JSON Register answered; `null` when
+/// the session proves the undrawn statement).
+fn lean_finish(st: &Stmt, inst: &Instances, tables: usize, draw: &str) -> Result<flock_live::firewall::LeanFinish, String> {
     use flock_live::firewall::refused;
-    let public = match arg("--public", "") {
-        p if !p.is_empty() => std::path::PathBuf::from(p),
-        _ => std::path::Path::new(&arg("--instances", "inst.bin")).with_file_name("pub.bin"),
-    };
-    if !public.is_file() {
-        return Err(refused(format!("the Lean finish sets up on the verifier's public file: {} is not one (--public F)", public.display())));
-    }
-    let mut args = vec!["--circuit".into(), arg("--circuit", ""), "--public".into(), public.display().to_string(),
-                        "--session-tables".into(), tables.to_string(), "--tables".into(), arg("--tables", "tables")];
-    let draw_file = match draw {
-        Some(d) => {
-            static DRAWS: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
-            let p = std::env::temp_dir().join(format!("flock-finish-draw-{}-{}.json", std::process::id(),
-                                                      DRAWS.fetch_add(1, std::sync::atomic::Ordering::SeqCst)));
-            let record = json!({"unit_draw": serde_json::from_str::<Value>(d).map_err(|e| refused(format!("the session's draw: {e}")))?});
-            std::fs::write(&p, record.to_string()).map_err(|e| refused(format!("the Lean finish's draw {}: {e}", p.display())))?;
-            args.extend(["--draw".into(), p.display().to_string()]);
-            Some(p)
+    static FILES: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
+    let n = FILES.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+    let public = std::env::temp_dir().join(format!("flock-finish-{}-{n}.pub", std::process::id()));
+    std::fs::write(&public, inst.public_file()?).map_err(|e| refused(format!("the Lean finish's public file {}: {e}", public.display())))?;
+    let mut args: Vec<String> = vec!["--statement".into(), lean_statement(st), "--circuit".into(), arg("--circuit", "circuit.txt"),
+        "--public".into(), public.display().to_string(), "--tables".into(), arg("--tables", "tables"), "--session-tables".into(), tables.to_string()];
+    args.extend(std::env::var("FC_FIREWALL_HELLO_ARGS").unwrap_or_default().split_whitespace().map(String::from));
+    let mut owned = vec![public];
+    if draw != "null" {
+        let p = std::env::temp_dir().join(format!("flock-finish-{}-{n}.draw.json", std::process::id()));
+        let record = serde_json::from_str::<Value>(draw).map(|d| json!({"unit_draw": d})).map_err(|e| refused(format!("the session's draw: {e}")));
+        if let Err(e) = record.and_then(|r| std::fs::write(&p, r.to_string()).map_err(|e| refused(format!("the Lean finish's draw {}: {e}", p.display())))) {
+            let _ = std::fs::remove_file(&owned[0]);
+            return Err(e);
         }
-        None => None,
-    };
-    flock_live::firewall::LeanFinish::start(&flock_live::firewall::lean_frame_exe(), &args, draw_file)
+        args.extend(["--draw".into(), p.display().to_string()]);
+        owned.push(p);
+    }
+    flock_live::firewall::LeanFinish::start(&flock_live::firewall::lean_frame_exe(), &args, owned)
 }
 
 /// A rep's request to `flock-firewall finish`, but the rep's draws, which [`zk_finish`] adds, and the inner proof's coins, which
@@ -3498,18 +3528,19 @@ fn session_proved(st: &Arc<Stmt>, inst: &Arc<Instances>, t: SharedTransport, pla
     };
     let t: SharedTransport = shared(Logged { inner: SharedCall(t), coins: log.clone() });
     let t0 = Instant::now();
+    let firewalled = firewall_on(st);
     // registration done: the verifier draws the units (or none), and the statement is the drawn units', in the session's tables
-    let mut drawn: Option<String> = None;
-    let tabs = match call(&t, Req::Register) {
+    let reg = call(&t, Req::Register);
+    let draw = match &reg {
+        Ok(Resp::Draw(d)) if !plan.ignore_draw => d.clone(),
+        _ => "null".to_string(),
+    };
+    let tabs = match reg {
         Ok(Resp::Draw(d)) if d == "null" || plan.ignore_draw => match &plan.split {
             Some(s) if s.names() == names => Ok(s.clone()),
             _ => session_tables(st, inst, None, names.len()),
         },
-        Ok(Resp::Draw(d)) => {
-            let r = session_tables(st, inst, Some(&serde_json::from_str(&d).unwrap_or(Value::Null)), names.len());
-            drawn = Some(d);
-            r
-        }
+        Ok(Resp::Draw(d)) => session_tables(st, inst, Some(&serde_json::from_str(&d).unwrap_or(Value::Null)), names.len()),
         other => return Err((json!({"accepted": false, "why": format!("register: {other:?}"), "prover_stopped": "register refused"}), Vec::new())),
     };
     let tabs = match tabs {
@@ -3522,12 +3553,21 @@ fn session_proved(st: &Arc<Stmt>, inst: &Arc<Instances>, t: SharedTransport, pla
     };
     let st = &tabs.list[0].st;
     // the firewall's proof files of record: one Lean finish on the session's statement, set up beside the witness build
-    let lean_fin = match firewall_on(st).then(|| lean_finish(tabs.list.len(), drawn.as_deref())).transpose() {
+    let lean_fin = match firewall_on(st).then(|| lean_finish(st, inst, tabs.list.len(), &draw)).transpose() {
         Ok(f) => f.map(|f| Arc::new(Mutex::new(f))),
         Err(e) => return Err((json!({"accepted": false, "why": e, "prover_stopped": format!("the firewall's Lean finish: {e}")}), Vec::new())),
     };
     let sig = session_sigma(&tabs.parts());
-    let hello = if is_zk(st) {
+    // under the firewall the Hello is Lean's, at a nonce it draws (a simulator's rewind restarts at the plan's)
+    let hello = if firewalled {
+        match lean_hello(st, inst, names.len(), &draw, plan.coin_nonce.as_ref()) {
+            Ok(Ok(h)) => h,
+            Ok(Err(e)) | Err(e) => {
+                let why = format!("the Lean Hello: {e}");
+                return Err((json!({"accepted": false, "why": why, "prover_stopped": why}), Vec::new()));
+            }
+        }
+    } else if is_zk(st) {
         config_of(&tabs).hello_with_nonce(&plan.coin_nonce.unwrap_or_else(|| flock_live::zk_hooks::coin_nonce(&seed)))
     } else {
         config_of(&tabs).hello()

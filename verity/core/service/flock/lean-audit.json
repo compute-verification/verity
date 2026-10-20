@@ -25,7 +25,7 @@
   "VStar"
  ],
  "exempt": {
-  "FlockFirewall": "the flock-firewall executable's entry point; its commands are Flock.Firewall.cmd, (`contract`) Flock.Firewall.Contract.cmd, (`frame`, `tap`) Flock.Firewall.Frame.cmd and tapCmd, (`coins`) Flock.Firewall.Coins.cmd, (`link`) Flock.Firewall.Link.cmd and (`finish`) Flock.Firewall.Finish.cmd, audited under Flock",
+  "FlockFirewall": "the flock-firewall executable's entry point; its commands are Flock.Firewall.cmd, (`contract`) Flock.Firewall.Contract.cmd, (`frame`, `tap`) Flock.Firewall.Frame.cmd and tapCmd, (`coins`) Flock.Firewall.Coins.cmd, (`link`) Flock.Firewall.Link.cmd, (`hello`) Flock.Firewall.Hello.cmd and (`finish`) Flock.Firewall.Finish.cmd, audited under Flock",
   "FlockRows": "the flock-rows executable's entry point, one line; its command is Flock.Rows.cmd, audited under Flock",
   "FlockWitness": "the flock-witness executable's entry point, one line; its command is Flock.Witness.cmd, audited under Flock",
   "FlockRecSparse": "the flock-rec-sparse executable's entry point, one line; its command is Flock.RecSparseCmd.cmd, audited under Flock",
