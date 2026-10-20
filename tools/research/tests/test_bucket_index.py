@@ -400,7 +400,7 @@ def test_select_with_no_index_and_an_empty_catalog_exits_1_naming_what_is_missin
     assert main([*argv, "--json"]) == 0
     out, err = capsys.readouterr()
     assert [r["id"] for r in json.loads(out)] == [mine]
-    assert "1 artifact(s) from this store's catalog alone" in err and "never listed the bucket" in err
+    assert "1 artifact(s) from the catalog alone" in err and "never listed the bucket" in err
 
 
 def test_select_json_stays_a_list_with_the_index_s_source_and_as_of_on_stderr(tmp_path, monkeypatch, capsys):

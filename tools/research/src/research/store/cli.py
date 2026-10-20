@@ -440,7 +440,7 @@ def cmd_select(argv: list[str]) -> int:
             return 1
         rows, _ = _select(st, ns, idx if as_of is not None else None)
         source = (f"the index ({idx.describe()}, complete as of {as_of})" if as_of is not None else
-                  f"this store's catalog alone ({catalog}; no index: {no_index})")
+                  f"the catalog alone (this store's, {catalog}; no index: {no_index})")
     finally:
         if idx is not None:
             idx.close()
