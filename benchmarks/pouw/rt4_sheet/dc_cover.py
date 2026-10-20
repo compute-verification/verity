@@ -18,7 +18,7 @@ from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
-from dc_price import _load  # noqa: E402
+from dc_price import _load, use_tree  # noqa: E402
 
 #: opcodes a fold or checkpoint could use that no CLASS_RULES pattern names (generic-address memory, local memory,
 #: shared and generic atomics' other spellings, predicate and bit-field ops, warp votes, control)
@@ -53,6 +53,7 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--json", type=Path)
     a = ap.parse_args(argv)
     pouw = a.tree.resolve() / "benchmarks" / "pouw"
+    use_tree(pouw)
     LHD = _load(pouw / "lean_headline_dc.py", "rt4_lean_headline_dc")
     L = _load(pouw / "facet_break" / "loads.py", "rt4_loads")
     res = [scan(LHD, L, fam, v) for fam in (LHD.SM90, LHD.SM100) for v in (fam.sheet, fam.measured)]

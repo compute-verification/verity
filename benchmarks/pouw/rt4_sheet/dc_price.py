@@ -30,6 +30,13 @@ INS = re.compile(r"/\*([0-9a-f]{4,})\*/\s+((?:@!?U?P[T0-9]+\s+)?)([A-Z][A-Z0-9_.
 NAME = re.compile(r"(fb[kuw]|fcp)ILi(\d+)ELi(\d+)E(?:Li(\d+)E)?")
 
 
+def use_tree(pouw: Path) -> None:
+    """Import the tree's own machine model, not the environment's editable install of another checkout's."""
+    sys.path[:0] = [str(pouw / "machine_model"), str(pouw)]
+    for k in [m for m in sys.modules if m.startswith("verity_machine_model")]:
+        del sys.modules[k]
+
+
 def _load(path: Path, name: str):
     spec = importlib.util.spec_from_file_location(name, path)
     m = importlib.util.module_from_spec(spec)
@@ -115,6 +122,7 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--json", type=Path)
     a = ap.parse_args(argv)
     pouw = a.tree.resolve() / "benchmarks" / "pouw"
+    use_tree(pouw)
     LHD = _load(pouw / "lean_headline_dc.py", "rt4_lean_headline_dc")
     L = _load(pouw / "facet_break" / "loads.py", "rt4_loads")
     res = [price_family(LHD, L, LHD.SM90, a.sass90.read_text()),

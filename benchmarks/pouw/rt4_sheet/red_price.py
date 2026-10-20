@@ -27,7 +27,7 @@ from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
-from dc_price import INS, _load, targets  # noqa: E402
+from dc_price import INS, _load, targets, use_tree  # noqa: E402
 
 #: li_loop<CP, GEN> (red_generic.cu) or li_loop<CP, GEN, W> (imadw.cu, W = 1 the multiply-add as IMAD.WIDE)
 NAME = re.compile(r"li_loopILi(\d)ELi(\d)E(?:Li(\d)E)?")
@@ -106,6 +106,7 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--json", type=Path)
     a = ap.parse_args(argv)
     pouw = a.tree.resolve() / "benchmarks" / "pouw"
+    use_tree(pouw)
     LHD = _load(pouw / "lean_headline_dc.py", "rt4_lean_headline_dc")
     L = _load(pouw / "facet_break" / "loads.py", "rt4_loads")
     res = []
