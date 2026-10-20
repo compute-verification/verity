@@ -27,7 +27,7 @@ from fractions import Fraction
 from pathlib import Path
 
 INS = re.compile(r"/\*([0-9a-f]{4,})\*/\s+((?:@!?U?P[T0-9]+\s+)?)([A-Z][A-Z0-9_.]*)([^;]*);")
-NAME = re.compile(r"(fb[kuw])ILi(\d+)ELi(\d+)E(?:Li(\d+)E)?")
+NAME = re.compile(r"(fb[kuw]|fcp)ILi(\d+)ELi(\d+)E(?:Li(\d+)E)?")
 
 
 def _load(path: Path, name: str):
@@ -51,7 +51,7 @@ def loops(sass: str):
             continue
         kern, K, BT = m[1], int(m[2]), int(m[3])
         tag = {"fbk": f"fbk{'256' if m[4] == '1' else '128'}", "fbu": "fbv" if m[4] == "1" else "fbu",
-               "fbw": f"fbw{m[4]}"}[kern]
+               "fbw": f"fbw{m[4]}", "fcp": f"fcp{m[4]}"}[kern]
         ins = [(int(a, 16), p.strip(), op, rest) for a, p, op, rest in INS.findall(body)]
         back = [(t, a) for a, p, op, rest in ins if op.startswith("BRA") for t in targets(rest) if t < a]
         head, tail = max(back, key=lambda lp: lp[1] - lp[0])
