@@ -13,7 +13,7 @@ Rows (each I256/O32, TP8, H200, eager, at its public cap):
 
 ## Merged
 
-Base `origin/main` @ c0ebeb8b93, then, in this order:
+Base `origin/main` @ c0ebeb8b93 (0a0782abed through #2893), then, in this order:
 
 | PR | head | carries |
 |---|---|---|
@@ -23,29 +23,31 @@ Base `origin/main` @ c0ebeb8b93, then, in this order:
 | #2838 | 615e13bdc3 | served-default capture harnesses (bf16 v6); #2828 85d2659299 |
 | #2852 | ba1aa4b2d2 | TP served windows refused unless the run root is SHA-512; #2842 9ef0bf1d46 |
 | #2824 | 5b5840cf7f | the committer's rows-sha512 iterations |
-| `cursor/tp-sha512-21f3` (CIR-63 part 1, no PR yet) | d86c42a576 | TP Commits at rows-sha512 under the SHA-512 TP run root (`verity/tp-run-root/v2`); #2852 ba1aa4b2d2, #2824 5b5840cf7f |
-| `cursor/boolv-21f3` (CIR-47, no PR yet) | 73287c5eb1 | CIR-47's Boolean versions are #2729's σ-lifts and on-demand constants; past #2729 it adds tests of GLM-5.3 TP8's constants, residual add, embedding shard and fused norm through them, circuit-check of a Definition without parameters, and the pins of `Const32[0x00000001]_v2` and `Const32[0x0000011f]_v2` (no op or predictor code) |
+| #2894 (`cursor/tp-sha512-21f3`, CIR-63 part 1) | 210a785aff | TP Commits at rows-sha512 under the SHA-512 TP run root (`verity/tp-run-root/v2`, over 64-byte rank roots; a 32-byte root refused by name); #2852 ba1aa4b2d2, #2824 5b5840cf7f |
+| #2906 (`cursor/boolv-21f3`, CIR-47) | 6ed1e0333d | CIR-47's Boolean versions are #2729's σ-lifts and on-demand constants; past #2729 it adds tests of GLM-5.3 TP8's constants, residual add, embedding shard and fused norm through them, circuit-check of a Definition without parameters, the pins of `Const32[0x00000001]_v2` and `Const32[0x0000011f]_v2`, and #2785 1c2e9db6bd's smell-check entries (no op or predictor code) |
 | #2883 (`cursor/rows64-land-21f3`) | 1d8869d1e4 | `MoeSum_v3` (`MoeSum_v1` on bits as a batch of `MoeSum_v2{TOPK,64}`), A11's Boolean-first probes |
-| `cursor/multimem-land-21f3` (no PR yet) | fd34e6dac0 | `AllReduceMultimem_v1` as a batch of 16-byte vectors (`AllReduceMultimemVector_v2`); its merge of #2836 and its `test_predict` pin are this tree's already |
+| #2888 (`cursor/multimem-land-21f3`) | af95f837ad | `AllReduceMultimem_v1` as a batch of 16-byte vectors (`AllReduceMultimemVector_v2`); its merges of #2836 and #2765 dec1238773 and its `test_predict` pin are this tree's already |
+| #2893 (`cursor/private-one-class-21f3`, CIR-64) | 57081b13db | `partition_v2.build` refuses a v2 private partition whose units span more than one size class; it is on main 0a0782abed, so it brings this tree to there |
 
 ROWS64 and the multimem batch joined when ASK-61 was provisionally accepted (Daniel, 19 Oct 21:59Z, option A: public
 power-of-two output classes up to 262,144 bits). Two conflicts, both sides kept:
 
-- `integrations/vllm/verity_vllm/pipeline/serving_rows.py` `after_commit` (TPSHA512 against #2848): the row-table layout's `row_tables`, and the
-  provenance's `commitment` read from the committer's scheme.
+- `integrations/vllm/verity_vllm/pipeline/serving_rows.py` `after_commit` (TPSHA512 against #2848, and again at #2894's head): the
+  row-table layout's `row_tables` and `CS.commit`'s row salt key and step roots, beside #2894's `commitment` set after the
+  provenance from the reader's committer's scheme.
 - `integrations/vllm/tests/predict/test_predict.py`, GLM-5.3 B8 top-p's LP25/T6 request (multimem against the realized-arrival pin): this tree's
   predictor gives `b632583a…`, the realized-arrival pin; the vector form does not move that Program.
 
 ## To merge when their PR opens
 
-- The branches above re-merge at their PR's head once it opens.
-- CIR-44: the two Call splits. No branch yet.
+- The PRs above re-merge at their head when it moves.
 - The static MoE frontend switch for GLM's expert GEMMs. The ops landed in #2665; no switch commit is on any branch.
   GLM's FP8 MoE in this tree is already the unpermuted pair set: per (token, slot) pair, the expert id is a value operand
   and the slab is gathered inside the unit (`MoeExpertFp8Gemm(W)_v1`, the `indexed-read` construction).
 
 ## Not in v2
 
+- CIR-44's fused-norm split: the GLM rows carry its named exception, as main does (the coordinator, 20 Oct 02:20Z).
 - T8b's prefix commits (`cursor/prefix-tp-6f04`): ASK-42 is provisionally A (the prefix length is private), so a prefix row
   in a batch is proved cold and T8b's C-public commits stay out.
 
