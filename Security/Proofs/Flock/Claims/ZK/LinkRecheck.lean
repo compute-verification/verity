@@ -74,7 +74,7 @@ theorem cap_eq (lv : Level) (tPad : Nat) (i : In) (lf : Nat → ByteArray)
   exact layerOf_congr _ _ (fun q hq => (leaves_getElem! lv tPad i hq).trans (hl q hq).symm) _
 
 /-- **The recheck's root** at a table whose `--zk` schedule is `s`: the flat cap at its level 0. -/
-theorem root_eq (i : In) {s : Schedule} {tPad : Nat} (hz : Zk.schedule i.m = .ok (s, tPad)) :
+theorem root_eq (i : In) {s : _root_.Flock.Schedule} {tPad : Nat} (hz : Zk.schedule i.m = .ok (s, tPad)) :
     root i = flat (cap (s.levels.getD 0 default) tPad i) := by
   unfold root
   rw [hz]
