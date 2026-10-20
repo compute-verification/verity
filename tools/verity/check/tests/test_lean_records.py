@@ -38,11 +38,19 @@ with open(os.environ["AUDIT_LOG"], "a") as f:
                         "locks": sorted(p for p in held if p.endswith(".lock")),
                         **({"lean_slot": os.environ["LEAN_SLOT"]} if "LEAN_SLOT" in os.environ else {})}) + "\\n")
 out, pkg = sys.argv[sys.argv.index("--out") + 1], sys.argv[-1]
+stalls = os.path.basename(pkg) == os.environ.get("AUDIT_STALLS")
 rc = int(os.environ.get("AUDIT_RC", "0")) or int(os.path.basename(pkg) == os.environ.get("AUDIT_FAILS"))
-rep = {"package": pkg, "seconds": {"build": 1.0, "audit": 2.0}, "failures": ["audit: no"] if rc else []}
+rep = {"package": pkg, "seconds": {"build": 1.0, "audit": 2.0}, "failures": ["audit: no"] if rc or stalls else []}
 os.makedirs(os.path.join(out, "audit-x"), exist_ok=True)
 with open(os.path.join(out, "audit-x", "report.json"), "w") as f:
     json.dump(rep, f)
+if stalls:      # the package failed, and the audits beside it go on, in check.py and in a process it started (lake, say)
+    import signal, subprocess
+    beside = subprocess.Popen([sys.executable, "-c", "import os, signal; os.open(os.environ['AUDIT_FIFO'], os.O_RDWR); "
+                               "print('open', flush=True); signal.pause()"], stdout=subprocess.PIPE, text=True)
+    assert beside.stdout.readline() == "open\\n"
+    print(f"AUDIT {os.path.realpath(pkg)}: FAIL", flush=True)
+    signal.pause()
 with open(os.path.join(out, "audit.json"), "w") as f:
     json.dump({"passed": not rc, "failed": [pkg] if rc else [], "packages": [rep]}, f)
 if "--update" in sys.argv:
@@ -77,7 +85,7 @@ def repo(tmp_path, monkeypatch) -> Path:
     monkeypatch.setenv("AUDIT_LOG", str(tmp_path / "audit.log"))
     monkeypatch.setenv("CHECK_CACHE", str(tmp_path / "cache"))
     for k in (LC.LEAN_SLOT.HELD, "LEAN_SLOT_POOL", "RESEARCH_LANE", "RESEARCH_RUN_DIR", "RESEARCH_RUN_ID", "CHECK_SLOT",
-              "AUDIT_RC", "AUDIT_FAILS"):
+              "AUDIT_RC", "AUDIT_FAILS", "AUDIT_STALLS"):
         monkeypatch.delenv(k, raising=False)
     monkeypatch.setattr(LC.LEAN_SLOT, "SLOTS", tmp_path / "no-lean-slots")
     return root
@@ -329,6 +337,38 @@ def test_a_tree_held_outside_its_slot_names_whoever_keeps_the_lock(repo, tmp_pat
         keeper.stdin.close()
         keeper.wait()
     assert LC.audit_records("a", tmp_path / "deps", tree) == 0, "the lock is the descriptor's: free once its last holder exits"
+
+
+def test_a_failure_ends_the_run_and_frees_its_slot(repo, tmp_path, monkeypatch, capsys):
+    """INF-156: r20261020-002315-bb07's package failed in its first minute, then held its slot 23 more, while check.py audited
+    the package its `proved_in` names and the run then audited a requirer. Once check.py prints the asked-for package's
+    failure, it and what it started are stopped (the FIFO's last writer is a process it started), the reports it left make the
+    run's `audit.json`, and no requirer is audited."""
+    tree, deps = tmp_path / "cache" / "lean-records" / "tree", tmp_path / "deps"
+    (repo / "a" / "lean-audit.json").write_text('{"guarantees": {"A.t": {}}}')
+    (repo / "p" / "lean-audit.json").write_text('{"proved_in": ["../c"]}')
+    assert LC.provers_of("p") == ["c"] and LC.provers_of("a") == []
+    fifo = tmp_path / "beside"
+    os.mkfifo(fifo)
+    monkeypatch.setenv("AUDIT_FIFO", str(fifo))
+    monkeypatch.setenv("AUDIT_STALLS", "p")
+    out = tmp_path / "reports"
+    assert LC.audit_records("p", deps, tree, out=out) == 1
+    assert [c["argv"][-1] for c in _calls(tmp_path)] == [str(tree / "p")], "the requirer a is not audited"
+    fd = os.open(fifo, os.O_RDONLY | os.O_NONBLOCK)
+    os.set_blocking(fd, True)
+    assert os.read(fd, 1) == b"", "what check.py started is gone too"
+    os.close(fd)
+    doc = json.loads((out / "audit.json").read_text())
+    assert doc["passed"] is False and doc["failed"] == [str((tree / "p").resolve())] and doc["kind"] == LC.FAST_KIND
+    assert [r["failures"] for r in doc["packages"]] == [["audit: no"]] and "(c)" in doc["stopped"]
+    log = capsys.readouterr().out
+    assert "lean-records: p failed, so check.py was stopped" in log and "stopped at p's failure; not audited: a" in log
+
+    monkeypatch.delenv("AUDIT_STALLS")
+    monkeypatch.setenv("AUDIT_FAILS", "p")
+    assert LC.audit_records("p", deps, tree, out=out) == 1 and len(_calls(tmp_path)) == 1, "a plain failure stops it too"
+    assert "check.py was stopped" not in capsys.readouterr().out, "a check.py that ends on its own is not stopped"
 
 
 def test_it_refuses_a_tree_outside_its_own(repo, tmp_path, capsys):

@@ -25,7 +25,10 @@ run, whose source tree the commit's other runs share: there it is in the run's `
 Then it audits, the same way but never with `--update`, every package whose guarantees' records read PKG's build
 (`requirers`: PKG is in its `closure`, by path or by `proved_in`), each after those it requires, its reports under
 `requirer-<path>/` beside PKG's. A change to what another package's pinned guarantees read (`Security/Properties`' when
-`Security` changes) fails here, not at a train's check; the exit status is the first failure's. A tree keeps the copies of
+`Security` changes) fails here, not at a train's check. The run stops at the first package that fails, its exit status
+that failure's: once check.py prints PKG's failure, it is stopped with the audits it runs beside PKG (of the packages PKG's
+`proved_in` names), and no requirer is audited, so the slot goes to the next run (INF-156: r20261020-002315-bb07 held it
+23 minutes after a Lean error in its first minute, auditing `Security/Proofs` and then `Security`). A tree keeps the copies of
 the packages one run audits (about 170k inodes, 8 GB each), so auditing another package that fetches dependencies there
 drops the rest first.
 
@@ -65,6 +68,7 @@ import json
 import os
 import re
 import shutil
+import signal
 import subprocess
 import sys
 import tempfile
@@ -303,6 +307,8 @@ def records_tree() -> Path:
 
 #: a `research run`'s id, as its run directory, scratch tree and inputs' paths name it
 RUN_ID = re.compile(r"\br\d{8}-\d{6}-[0-9a-f]{4}\b")
+#: how long a stopped check.py and what it started get after SIGTERM before SIGKILL
+STOP_S = 60
 
 
 def holders(lock: Path, proc: Path = Path("/proc")) -> list[str]:
@@ -336,6 +342,68 @@ def holders(lock: Path, proc: Path = Path("/proc")) -> list[str]:
         run = RUN_ID.search(cwd) or RUN_ID.search(cmd)
         out.append(f"pid {d.name}" + (f" (run {run.group()})" if run else "") + f": {cmd[:200]}")
     return out
+
+
+def descendants(pid: int, proc: Path = Path("/proc")) -> list[int]:
+    """``pid``'s descendants, from each process's parent in /proc."""
+    kids: dict[int, list[int]] = {}
+    for d in proc.iterdir():
+        if d.name.isdigit():
+            try:
+                ppid = int((d / "stat").read_text().rsplit(")", 1)[1].split()[1])
+            except (OSError, ValueError, IndexError):
+                continue
+            kids.setdefault(ppid, []).append(int(d.name))
+    out, todo = [], [pid]
+    while todo:
+        out += (more := kids.get(todo.pop(), []))
+        todo += more
+    return out
+
+
+def audit(argv: list[str], cwd: Path, env: dict[str, str], pass_fds: tuple[int, ...], fails: str | None) -> tuple[int, bool]:
+    """check.py (``argv``), its output echoed as it comes; with ``fails`` (`AUDIT <package>: FAIL`), check.py and what it
+    started (lake, lean) are stopped once it prints that line: (its exit status, whether it was stopped)."""
+    if fails is None:
+        return subprocess.run(argv, cwd=cwd, env=env, pass_fds=pass_fds).returncode, False
+    p = subprocess.Popen(argv, cwd=cwd, env=env, pass_fds=pass_fds, stdout=subprocess.PIPE, text=True, encoding="utf-8",
+                         errors="replace")
+    for line in p.stdout:
+        print(line, end="", flush=True)
+        if line.startswith(fails):
+            break
+    else:
+        return p.wait(), False
+    group = [p.pid, *descendants(p.pid)]
+    for sig in (signal.SIGTERM, signal.SIGKILL):
+        for q in group:
+            try:
+                os.kill(q, sig)
+            except ProcessLookupError:
+                pass
+        try:
+            p.wait(timeout=STOP_S)
+            break
+        except subprocess.TimeoutExpired:
+            group = [p.pid, *descendants(p.pid)]
+    p.stdout.close()
+    return 1, True
+
+
+def provers_of(pkg: str) -> list[str]:
+    """The packages check.py audits beside ``pkg``: those its `proved_in` names (none when its policy can't be read)."""
+    try:
+        return [os.path.relpath(q, ROOT.resolve()) for _, q in AUDIT.provers(ROOT / pkg, AUDIT.load(ROOT / pkg))
+                if (q / AUDIT.POLICY).is_file()] if (ROOT / pkg / AUDIT.POLICY).is_file() else []
+    except (OSError, ValueError, KeyError, TypeError):
+        return []
+
+
+def stopped_report(out: Path, pkg: Path, why: str) -> None:
+    """The `audit.json` check.py would have left under ``out``, from the reports it wrote before it was stopped."""
+    reps = [json.loads(p.read_text()) for p in sorted(out.glob("audit-*/report.json"))]
+    (out / "audit.json").write_text(json.dumps({"passed": False, "failed": [str(pkg)], "packages": reps, "stopped": why},
+                                               indent=1, ensure_ascii=False) + "\n")
 
 
 def label(out: Path) -> None:
@@ -424,8 +492,14 @@ def audit_records(name: str, deps: Path, tree: Path | None = None, update: bool 
                 argv = [sys.executable, str(AUDIT_PY), "--build", "--no-replay", "--no-runs",
                         *(["--update"] if update and p == pkg else []),
                         *(["--moved", str(moved.resolve())] if moved and p == pkg else []), "--out", str(mine_out), str(tree / p)]
-                got = subprocess.run(argv, cwd=tree, env={**os.environ, "LEAN_NUM_THREADS": str(LA.COMMON.cores())},
-                                     pass_fds=() if slot is None else (slot,)).returncode
+                fails = f"AUDIT {(tree / p).resolve()}: FAIL" if provers_of(p) else None
+                got, stopped = audit(argv, tree, {**os.environ, "LEAN_NUM_THREADS": str(LA.COMMON.cores())},
+                                     () if slot is None else (slot,), fails)
+                if stopped:
+                    why = (f"{p} failed, so check.py was stopped with the audits it ran beside it "
+                           f"({', '.join(provers_of(p))}), which only supply its guarantees' facts")
+                    stopped_report(mine_out, (tree / p).resolve(), why)
+                    log(f"lean-records: {why}")
                 label(mine_out)
                 log(f"lean-records: {p}: check.py exit {got} in {time.monotonic() - t0:.0f} s on {tree} ({n} files changed "
                     f"there), without the kernel replay or the tests: a {FAST_KIND} result, which check and research merge "
@@ -447,6 +521,9 @@ def audit_records(name: str, deps: Path, tree: Path | None = None, update: bool 
                     log(f"lean-records: {p} requires {pkg}, and its records fail on this tree: what its guarantees read "
                         f"changed; if that is meant, run --records {p} --update")
                 rc = rc or got
+                if got and (rest := todo[todo.index(p) + 1:]):
+                    log(f"lean-records: stopped at {p}'s failure; not audited: {', '.join(rest)}")
+                    break
             if run_dir and run_id:
                 write_result(Path(run_dir), run_id, pkg, rc, out, update)
     finally:

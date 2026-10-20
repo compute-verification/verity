@@ -86,7 +86,8 @@ refuses it, exit 2, even with an `any` pool), never behind merge checks or hour-
 that slot's last run, and audits without the kernel replay: on C-Flock's soundness with nothing to rebuild that was 6.5 minutes, and a
 slot's first run, a cold build, 31. The record is in the run's `lean-audit/audit-*/`, with `review.txt` when it changed; commit
 the record. It then checks, without `--update`, every package whose guarantees read PKG's build (`Security/Properties` for
-`Security`), each in `lean-audit/requirer-<path>/`. When one fails, your change moved what its guarantees read: if you meant
+`Security`), each in `lean-audit/requirer-<path>/`. It stops at the first package that fails, so a failed run frees its slot
+at once and leaves the requirers after it unaudited. When one fails, your change moved what its guarantees read: if you meant
 it, run `--records` on that package with `--update` and commit its record too, since check audits every package whose inputs
 changed. It vouches for nothing: its result is of kind `lean-fast/v1`, which `check`'s lean-audit step and `research merge`
 refuse.
