@@ -19,6 +19,7 @@ import Definitions.Pous.Model.Pebbling
 import Definitions.Pous.Model.SampledAudit
 import Models.Pous.Guarantees.P2
 import Models.Pous.Guarantees.SecureErasure
+import Models.Pous.Guarantees.StreamedWipe
 import Definitions.Pous.Model.BandGraph
 import Definitions.Pous.Model.SegLift
 import Definitions.Pous.Model.Continuous
