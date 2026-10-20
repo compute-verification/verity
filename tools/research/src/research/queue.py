@@ -8,17 +8,21 @@ order they were admitted; `main` fast-forwards to the newest commit on `next` th
     research queue eject PR --reason TEXT [--by HANDLE]
                                                    keep the PR's current head out of `next`; a new push or ready mark re-admits it;
                                                    posted as HANDLE to @ci and the owner in the merge thread (exit 1 if it couldn't be)
-    research queue ready PR (--on MACHINE | --local | --mark) [--by LANE] [--no-preflight]
-                                                   the owner's word that the PR is ready at its current head (a new push needs it again),
+    research queue ready PR (--on MACHINE | --local | --mark) [--by LANE] [--no-preflight] [--sha SHA]
+                                                   the owner's word that the PR is ready at its current head (a new push needs it again;
+                                                   --sha: only at SHA, refused when GitHub still has another head after a few reads),
                                                    once the quick tier passes there: as a run on MACHINE in a check slot
                                                    (`RemoteQuickTier`; `auto` or M1,M2: the one with a free slot), or here
-                                                   (`QuickTier`); exit 3 when it never started (no slot within its wait); or, with
+                                                   (`QuickTier`); exit 3 when it never started (no slot within its wait), 79 when
+                                                   --on's run is still going after 20 min (research.waitcap: `judge RUN` marks it
+                                                   once it ends); or, with
                                                    --mark, on the owner's word alone (`MarkOnly`).  First, in about a minute, the
                                                    preflight (`Preflight`) refuses, with the fix, a head that conflicts with a
                                                    fresh `next` (naming the paths), contains an open PR that isn't admitted
                                                    (naming it), or, merged onto `next` in a temporary worktree, fails `pins.py
                                                    --stale`, tests/test_module_strings.py, test_pins.py, test_doc_paths.py,
-                                                   tools/research/tests/test_pythonpath.py, or `pytest --collect-only` in a suite
+                                                   test_repository.py, tools/research/tests/test_pythonpath.py, or `pytest
+                                                   --collect-only` in a suite
                                                    whose inputs its change touches; --no-preflight skips it (the lander's)
     research queue drive (--on MACHINE | --config PATH [--config-from-tree]) [--max-running N] [--train-size N] [--marked-after TS]
                          [--first N,...] [--defer STEPS] [--[no-]regenerate-locks] [--dry-run]
@@ -59,7 +63,8 @@ that's unusable, a failed pull) the command fails with `STALE`, never answering 
 Preflight.  Each of 17 Oct's marks that broke or cancelled a train was cheap to catch at mark time: a conflict with a PR already
 on `next`, a stale Lake pin, a module string naming a module only an unlanded PR adds, a workspace member without its REAL_ROOTS
 entry, a test that read a row another queued PR refits away (an error at collection), and one lane's unlanded branch carried in
-two PRs.  So `ready` runs `Preflight` before the mark and before any quick tier: a refusal names what it found and the fix, a
+two PRs.  20 Oct's two failed `tests/test_repository.py` (a Markdown cap, a report-genre name), which the preflight now runs
+too.  So `ready` runs `Preflight` before the mark and before any quick tier: a refusal names what it found and the fix, a
 failure `next` has too refuses nothing, and what keeps a check from running is said and refuses nothing (the train's check is the
 gate).  `--no-preflight` skips it, for the lander.
 
@@ -117,7 +122,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Callable, Iterable
 
-from . import quick_tier
+from . import quick_tier, waitcap
 from .gates import git_env
 from .store import ids, vocab
 
@@ -622,11 +627,13 @@ class Queue:
         return out
 
     def order(self, chain: list[Member], entries: dict[int, Entry]) -> list[int]:
-        """Members that keep their head keep their order; the rest follow by PR number, each after the PRs it contains.  The PRs
+        """Members that keep their head, or move it to a descendant (`_same_or_fixed`), keep their order; the rest follow by PR
+        number, each after the PRs it contains.  The PRs
         in `first` (`--first`) that are ready go below all of them, in the order given, so the next train starts with them; but
         above the bottom `hold` members, which a running check covers."""
         ready = {n for n, e in entries.items() if e.state == "ready"}
-        kept = [m.pr for m in chain if m.pr in ready and entries[m.pr].pr.head == m.head or self._frozen(m, entries)]
+        kept = [m.pr for m in chain
+                if m.pr in ready and self._same_or_fixed(m, entries) or self._frozen(m, entries) or self._pending(m, entries)]
         held: list[int] = []
         for m in chain[:self.hold]:
             if m.pr not in kept:
@@ -648,6 +655,24 @@ class Queue:
         for n in held + [f for f in self.first if f in ready] + kept + [n for n in new if n not in cold] + sorted(cold):
             place(n)
         return out
+
+    def _same_or_fixed(self, m: Member, entries: dict[int, Entry]) -> bool:
+        """Whether member ``m``'s PR is at the head `next` holds, or at a head that descends from it (a fix on top, or a merge of a
+        PR below it): such a re-mark keeps its place, since its new head is preflighted and checked like any other (CI-113, 19
+        Oct: #2738 and #2729 were re-merged five times as stacked PRs below them took fixes, and each re-mark sent them behind
+        about 100 PRs)."""
+        new = entries[m.pr].pr.head
+        return new == m.head or not _git(self.workdir, "merge-base", "--is-ancestor", m.head, new, check=False).returncode
+
+    def _pending(self, m: Member, entries: dict[int, Entry]) -> bool:
+        """Whether member ``m`` stays at its admitted head while its PR's new head, a descendant of it, waits for its ready mark:
+        then the mark swaps the head in place (`_same_or_fixed`) instead of the PR rejoining at the back (CI-119, 20 Oct: #2729,
+        at 92, was pushed one commit on, dropped while its preflight ran, and rejoined at 123).  Only while the admitted head is
+        still marked: an ejection withdraws that mark."""
+        e = entries.get(m.pr)
+        if e is None or e.pr.head == m.head or e.state != "waiting" or not e.why.startswith("not marked ready"):
+            return False
+        return bool(self.ready(m.pr, m.head)) and self._same_or_fixed(m, entries)
 
     def _frozen(self, m: Member, entries: dict[int, Entry]) -> bool:
         """Whether member ``m`` stays at its old head: `frozen` names it, its PR is still open, and neither ejected nor held."""
@@ -739,7 +764,7 @@ class Queue:
         entries = self.entries(prs, state)
         entries.update(waiting)
         order = self.order(chain, entries)
-        frozen = {m.pr: m.head for m in chain if self._frozen(m, entries)}
+        frozen = {m.pr: m.head for m in chain if self._frozen(m, entries) or self._pending(m, entries)}
         want = [(n, frozen.get(n, entries[n].pr.head)) for n in order]
         k = next((i for i, (m, w) in enumerate(zip(chain, want)) if (m.pr, m.head) != w), min(len(chain), len(want)))
         members = chain[:k]
@@ -1112,6 +1137,11 @@ class NotStarted(str):
     """Why a quick tier never ran (no check slot within its wait, no machine to run it on): not a failure of the PR's head."""
 
 
+class StillGoing(str):
+    """`ready --on`'s caller stopped waiting at research.waitcap's cap with the tier's run still going: nothing failed or was
+    cancelled, and `research queue judge RUN` marks the PR once the run has ended."""
+
+
 def place(spec: str, repo: Path, read: Callable[[list[str]], dict] | None = None) -> tuple[str | None, str]:
     """`--on auto` (check.py's AUTO) or `--on M1,M2`: the machine `check.py --on` would take for a lane check now (`choose` over
     each machine's `read_slots`, from the caller's checkout), with the Lean audit slots left out, since the quick tier takes none;
@@ -1143,18 +1173,19 @@ class RemoteQuickTier(QuickTier):
     or head, or other than `done` with exit 0, is a failure.  A run that waited `wait_s` for a slot and gave up never started
     (`NotStarted`), and neither did one with no machine to run on.  The tier has `timeout_s` from taking its slot (`--run-max`), so
     the run on the machine is bounded by the two together (`--timeout`), and the caller's wait by that plus REMOTE_GRACE_S of
-    ``clock`` time (a fetch can take its ssh's own timeout, so polls are not counted), past which it ends with the poll under way."""
+    ``clock`` time (a fetch can take its ssh's own timeout, so polls are not counted), past which it ends with the poll under way.
+    The caller waits at most ``max_wait_s`` (research.waitcap's cap) of that: then the run goes on and the wait ends `StillGoing`."""
 
     WORKTREE_SUFFIX = "-ship"
 
     def __init__(self, repo: Path, remote: str, on: str, *, by: str = "", project: str = "verity", root: Path | None = None,
-                 timeout_s: float = REMOTE_TIMEOUT_S, wait_s: float = REMOTE_WAIT_S,
+                 timeout_s: float = REMOTE_TIMEOUT_S, wait_s: float = REMOTE_WAIT_S, max_wait_s: float = waitcap.WAIT_CAP_S,
                  poll_s: float = REMOTE_POLL_S, launch: Callable[[list[str], Path], subprocess.CompletedProcess] = _launch,
                  fetch: Callable[[Path], dict] | None = None, sleep: Callable[[float], None] = time.sleep,
                  clock: Callable[[], float] = time.monotonic, place: Callable[[str, Path], tuple[str | None, str]] = place):
         super().__init__(repo, remote, root)
         self.on, self.by, self.project, self.poll_s = on, by, project, poll_s
-        self.timeout_s, self.wait_s = timeout_s, wait_s
+        self.timeout_s, self.wait_s, self.max_wait_s = timeout_s, wait_s, max_wait_s
         self.launch, self.fetch, self.sleep, self.clock, self.place = launch, fetch, sleep, clock, place
 
     def __call__(self, pr: PR) -> str | None:
@@ -1193,12 +1224,13 @@ class RemoteQuickTier(QuickTier):
         from . import remote
         from . import runs as R
 
-        fetch = self.fetch or remote.fetch
         status: dict = {}
         bound = self.wait_s + self.timeout_s + REMOTE_GRACE_S
-        deadline = self.clock() + bound
+        limit = min(bound, self.max_wait_s)
+        deadline = self.clock() + limit
+        fetch = self.fetch or (lambda d: remote.fetch(d, timeout=deadline - self.clock()))
         while self.clock() < deadline:
-            self.sleep(self.poll_s)
+            self.sleep(min(self.poll_s, deadline - self.clock()))
             try:
                 rec = fetch(d)
             except Exception as e:  # noqa: BLE001  (a fetch that fails is a poll that saw nothing)
@@ -1220,6 +1252,10 @@ class RemoteQuickTier(QuickTier):
                 return status, f"run {d.name}'s runner on {on} exited before the run ended ({gone.get('last_line') or 'no log line'})"
             if gone := rec.get("runner_gone"):
                 return status, f"run {d.name} on {on} ended without recording it: {gone['why']}"
+        if limit < bound:
+            return status, StillGoing(waitcap.still_going(
+                f"the quick tier's run {d.name} on {on} ({status.get('state') or 'without a status'})",
+                f"research queue judge {d.name} --by {self.by or 'LANE'}", limit))
         return status, (f"run {d.name} on {on} didn't end within {bound:g} s (last seen "
                         f"{status.get('state') or 'without a status'}): `research inspect {d.name}`")
 
@@ -1300,9 +1336,10 @@ def _tree(repo: Path, commit: str) -> str:
 
 #: the invariant tests the preflight runs on the merged tree, from the root.  17 Oct's train breakers each failed one: a module
 #: string naming a module only an unlanded PR adds, stale Lake pins, a doc path, and a workspace member without its REAL_ROOTS
-#: entry (#2271, which reverted 12 landings)
+#: entry (#2271, which reverted 12 landings); 20 Oct's two failed `check`'s preflight-lints on test_repository.py (a skill over
+#: the Markdown cap, #2818; a report-genre name, #2827), about 5 s
 PREFLIGHT_TEST_PATHS = ("tests/test_module_strings.py", "tests/test_pins.py", "tests/test_doc_paths.py",
-                        "tools/research/tests/test_pythonpath.py")
+                        "tests/test_repository.py", "tools/research/tests/test_pythonpath.py")
 
 
 def _by_suite(paths: tuple[str, ...]) -> tuple[tuple[str, tuple[str, ...]], ...]:
@@ -1742,18 +1779,35 @@ def ejection(store, pr: PR) -> str | None:
     return f"{last.ref} (ejected by {last.by} at {last.ts})"
 
 
+#: how many times `ready --sha` reads GitHub's open PRs, and the seconds between reads, before refusing a head GitHub doesn't show
+SHA_READS, SHA_WAIT_S = 6, 5.0
+
+
 def ready(github, store, number: int | None, by: str, tier: Callable[[PR], str | None], again: bool = False,
-          preflight: Callable[[PR, list[PR]], str | None] | None = None) -> int:
+          preflight: Callable[[PR, list[PR]], str | None] | None = None, sha: str | None = None,
+          sleep: Callable[[float], None] = time.sleep) -> int:
     """`research queue ready PR`: run the quick tier at the PR's current head (`tier`, a `RemoteQuickTier` or a `QuickTier`), and once
     it passes write `ready = true` on `pr:{n}@{that head}` and push it to the store's remote.  A head whose tree is that of another
     head marked ready (`same_tree_mark`) is marked without running the tier again.  A head drive or the lander ejected is refused
     unless ``again`` (16 Oct: #2174, re-marked at its ejected head, failed a second train on the same line).  Before any of it,
-    ``preflight`` (`Preflight`; None with `--no-preflight`) refuses a head that would break `next`, with the fix."""
-    prs = github.open_prs() if number is not None else []
-    pr = next((p for p in prs if p.number == number), None)
+    ``preflight`` (`Preflight`; None with `--no-preflight`) refuses a head that would break `next`, with the fix.  With ``sha``
+    (`--sha`) it marks only that head: GitHub's head lags a push by seconds (20 Oct: `git push && research queue ready 2848 --mark`
+    marked the old head), so it reads again, up to `SHA_READS` times, and refuses when GitHub still has another head."""
+    for i in range(SHA_READS if sha else 1):
+        prs = github.open_prs() if number is not None else []
+        pr = next((p for p in prs if p.number == number), None)
+        if pr is None or not sha or pr.head.startswith(sha):
+            break
+        if i + 1 < SHA_READS:
+            sleep(SHA_WAIT_S)
     if pr is None:
         print(f"research queue ready: {'#' + str(number) if number is not None else 'a PR number'} is not an open PR", file=sys.stderr)
         return 2
+    if sha and not pr.head.startswith(sha):
+        print(f"research queue ready: #{pr.number} is not marked: GitHub has its head at {pr.head[:12]}, not {sha[:12]}, after "
+              f"{SHA_READS} reads {SHA_WAIT_S:g} s apart. Push {sha[:12]} to the PR's branch (or pass the head GitHub shows), then "
+              "run this again", file=sys.stderr)
+        return 1
     if not again and (why := ejection(store, pr)):
         print(f"research queue ready: #{pr.number} is not marked ready at {pr.head[:12]}: that head was ejected: {why}. Push the fix "
               f"and mark the new head; if the ejection was wrong (a machine fault), say so in the merge thread and pass --again",
@@ -1824,6 +1878,9 @@ def _mark(store, pr: PR, by: str, failed: str | None, command: str) -> int:
     """`ready = true` on `pr:{n}@{head}`, pushed to the store's remote, unless the quick tier ``failed`` there (the refusal)."""
     from .store.cli import _label_write_through
 
+    if isinstance(failed, StillGoing):
+        print(f"research queue {command}: #{pr.number} is not marked ready at {pr.head[:12]} yet. {failed}", file=sys.stderr)
+        return waitcap.STILL_GOING
     if isinstance(failed, NotStarted):
         print(f"research queue {command}: #{pr.number} is not marked ready at {pr.head[:12]}: the quick tier never started: {failed}. "
               f"Nothing failed: run it again (`--on auto` takes the machine with a free check slot)", file=sys.stderr)
@@ -1874,9 +1931,40 @@ def open_pr(top: Path, repo: str, head: str, title: str, body: str, *, base: str
     return out.strip().splitlines()[-1]
 
 
+def _stats(a: argparse.Namespace) -> int:
+    """`research queue stats` (`queue_stats`): each landed PR's head from `main`'s merges onto `next`, its ready mark from the
+    store, the landing check's records fetched with `research status --also`."""
+    from . import queue_stats
+    from .drive import _fetch
+    from .store.local import LocalStore
+
+    top = Path(_out(Path.cwd(), "rev-parse", "--show-toplevel"))
+    _git(top, *STALL, "fetch", "-q", "origin", "main", check=False)
+    heads = {}
+    for body in _out(top, "log", "--first-parent", "--format=%B%x1e", "-n", "5000", "origin/main").split("\x1e"):
+        t = dict(TRAILER_RE.findall(body))
+        if "PR" in t and "Head" in t:
+            heads.setdefault(int(t["PR"].lstrip("#")), t["Head"])
+    labels = StoreLabels(LocalStore(a.store), log=lambda s: None)
+
+    def marked(pr: int):
+        head = heads.get(pr)
+        if head is None:
+            return None
+        labels.ready(pr, head)
+        at = labels.marked_at(pr, head)
+        return queue_stats.ts(at) if at else None
+
+    def run_dir(rid: str) -> Path:
+        return _fetch(top, rid, ["slot.json", "steps.jsonl"]) or Path("/nonexistent")
+
+    return queue_stats.main(a.log, a.hours, a.until, marked, run_dir, a.json)
+
+
 def main(argv: list[str]) -> int:
     ap = argparse.ArgumentParser(prog="research queue", description=__doc__.split("\n\n")[0])
-    ap.add_argument("command", choices=["status", "sync", "land", "eject", "ready", "judge", "drive", "report", "open"])
+    ap.add_argument("command", choices=["status", "sync", "land", "eject", "ready", "judge", "drive", "report", "open",
+                                            "stats"])
     ap.add_argument("pr", nargs="?", help="eject, ready: the PR number; judge: the quick tier's run id")
     ap.add_argument("--reason", help="eject: why, for the owner's notice")
     ap.add_argument("--by", default=os.environ.get("RESEARCH_LANE"),
@@ -1892,7 +1980,9 @@ def main(argv: list[str]) -> int:
     ap.add_argument("--store", default=None, help="evidence store root (default $RESEARCH_STORE or ~/.research/store)")
     ap.add_argument("--json", action="store_true", help="status: as JSON")
     ap.add_argument("--on", metavar="MACHINE", help="ready: run the quick tier as a `research run` there, in a check slot (`auto` or "
-                                                    "M1,M2: the one with a free check slot, as `check.py --on` picks); judge: look "
+                                                    "M1,M2: the one with a free check slot, as `check.py --on` picks), waiting for it "
+                                                    f"{waitcap.WAIT_CAP_S} s at most (then exit {waitcap.STILL_GOING}, the run going "
+                                                    "on: `judge RUN` marks the PR once it ends); judge: look "
                                                     "for a run another VM launched there only")
     ap.add_argument("--local", action="store_true", help="ready: run the quick tier here")
     ap.add_argument("--mark", action="store_true", help="ready: mark it with no quick tier (the train's full check tests it)")
@@ -1922,12 +2012,20 @@ def main(argv: list[str]) -> int:
                          "fresh each tick; a flag given here overrides the file's")
     ap.add_argument("--config-from-tree", action="store_true", help="drive: read --config's PATH from this file system instead")
     ap.add_argument("--head", help="open: the pushed branch to open a PR for")
-    ap.add_argument("--sha", help="open: refuse unless origin's branch is at this commit (the owner's pinned head)")
+    ap.add_argument("--sha", help="open: refuse unless origin's branch is at this commit (the owner's pinned head); ready: mark only "
+                                  "this head, refusing when GitHub still shows another after a few reads (push && ready, safely)")
     ap.add_argument("--title", help="open: the PR's title")
     ap.add_argument("--body-file", type=Path, help="open: the PR's body, verbatim (its first line `Lane NAME` names the owner)")
     ap.add_argument("--base", default="main", help="open: the base branch (default main)")
     ap.add_argument("--draft", action="store_true", help="open: as a draft (default: ready for review)")
+    ap.add_argument("--log", type=Path, help="stats: drive's log (its stdout, every tick's)")
+    ap.add_argument("--hours", type=float, default=24.0, help="stats: the window's length (default 24)")
+    ap.add_argument("--until", metavar="YYYY-MM-DDTHH:MM:SSZ", help="stats: the window's end (default now)")
     a = ap.parse_args(argv)
+    if a.command == "stats":
+        if a.log is None:
+            ap.error("stats needs --log FILE (drive's log)")
+        return _stats(a)
     if a.command == "open":
         if not (a.head and a.title and a.body_file):
             ap.error("open needs --head BRANCH, --title T and --body-file F")
@@ -1986,7 +2084,7 @@ def main(argv: list[str]) -> int:
             top = Path(_out(Path.cwd(), "rev-parse", "--show-toplevel"))
             tier = MarkOnly() if a.mark else RemoteQuickTier(top, remote, a.on, by=a.by) if a.on else QuickTier(top, remote)
             pre = None if a.no_preflight else Preflight(top, remote, store)
-            return ready(GitHub(repo), store, a.pr, a.by, tier, again=a.again, preflight=pre)
+            return ready(GitHub(repo), store, a.pr, a.by, tier, again=a.again, preflight=pre, sha=a.sha)
         labels = StoreLabels(store, log=lambda s: print(s, file=sys.stderr), since=a.marked_after)
         q = Queue(a.workdir, remote=remote, github=GitHub(repo), ready=labels.ready, store=store, shadow=a.shadow,
                   rules=Rules.parse(a.rules.read_text(), str(a.rules)) if a.rules else None,

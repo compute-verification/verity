@@ -188,6 +188,9 @@ def main() -> int:
     ap.add_argument("--decode-s", type=float, default=60.0, help="serving decoded with no pass, before calibration")
     ap.add_argument("--after-s", type=float, default=20.0, help="serving after the last session, before stop")
     ap.add_argument("--wait-s", type=float, default=900.0, help="the longest wait for every engine's next state")
+    ap.add_argument("--overlap-openings", action="store_true",
+                    help="open each window as its draws arrive, beside the later passes (`prover.py "
+                         "--overlap-openings`), so the verifier checks while the session runs")
     device.add_arguments(ap)
     a = ap.parse_args()
     a.out.mkdir(parents=True, exist_ok=True)
@@ -220,7 +223,8 @@ def main() -> int:
         host_, port = a.connect.rsplit(":", 1)
         conn = wire.connect(host_, int(port))
         p = ProverSide(conn, backend, a.node.encode(), parse_plan(a.plan), seed=a.seed,
-                       warmup_ns=round(a.warmup_ms * 1e6), log=log)
+                       warmup_ns=round(a.warmup_ms * 1e6), defer_openings=not a.overlap_openings, log=log)
+        out["overlap_openings"] = a.overlap_openings
         cal = p.register()
         log(f"node: registered, calibration {json.dumps(cal)}")
         out.update({"calibration": cal, "gates": backend.gates, "calibration_trace": backend.calibration_trace,

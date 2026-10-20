@@ -130,6 +130,13 @@ def checkpoint_index(o: Options) -> Any:
     return WR.CheckpointIndex(o.checkpoint_dir, checkpoints_manifest=o.checkpoints_manifest, model=o.model, revision=o.revision)
 
 
+def registered_roles(p: Any) -> dict[str, dict[str, Any]]:
+    """The rank's Build `weight_roles` by registered name (`cpu_replay.registered_roles` of its request Programs' dirs, less its index's prefix)."""
+    from verity_vllm.pipeline import cpu_replay as CPU
+
+    return CPU.registered_roles((v.get("dir") for v in p.loaded.values()), getattr(p.index, "prefix", "") or "")
+
+
 def _peak_rss() -> int:
     return max(resource.getrusage(resource.RUSAGE_SELF).ru_maxrss, resource.getrusage(resource.RUSAGE_CHILDREN).ru_maxrss) * 1024
 
@@ -163,7 +170,7 @@ def replay_rank(o: Options, out: Path, dd: dict[str, Any], pair: int, rank: int,
         p = RR.load(cfg, rank, int(dd["world"]))
         index = ck() if ck else checkpoint_index(o)
         words, wc = CPU.open_weights(bdir, tree, (c.get("weight_registration") or {}).get("root"), index, threads=o.threads,
-                                     tp={"world": int(dd["world"]), "rank": rank})
+                                     tp={"world": int(dd["world"]), "rank": rank}, roles=registered_roles(p))
         # the bytes the relations consume are the checkpoint's, opened against the run's committed weights root: self-consistency
         # with the run as in the rank's process, from the checkpoint's bytes; the pin of record stays the Commit's weights pin
         wc.update(self_consistent=wc["equal"], pin_of_record=None, pinned=None)

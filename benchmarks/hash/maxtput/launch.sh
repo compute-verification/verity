@@ -3,7 +3,7 @@
 # run, then publishes its per-arm results as hash-loop rows (row.py --publish). Run it from a clean checkout of the branch:
 #
 #   bash benchmarks/hash/maxtput/launch.sh [ROW]                                   # Qwen3-8B, stock + both commit arms, all three cards
-#   MACHINES=vy-dc-b200 ARMS=stock,blake3 bash benchmarks/hash/maxtput/launch.sh   # a subset
+#   MACHINES=vy-dc-b200 ARMS=stock,sha512 bash benchmarks/hash/maxtput/launch.sh   # a subset
 #   PIN_ART= PIN_ART_RTX= PIN_ART_B200= XCHECK=1 ARMS=stock CYCLES=1 MAXTPUT_ARGS="--load fixed" PUBLISH=0 \
 #     bash benchmarks/hash/maxtput/launch.sh                                       # the driver against `vllm bench throughput`
 #
@@ -22,9 +22,9 @@ BRANCH=$(git rev-parse --abbrev-ref HEAD) HEAD_SHA=$(git rev-parse HEAD)
 [ -z "$(git status --porcelain)" ] || { echo "launch: the tree is dirty; commit (and push) first" >&2; exit 2; }
 git fetch -q origin "$BRANCH" && [ "$(git rev-parse FETCH_HEAD)" = "$HEAD_SHA" ] \
   || { echo "launch: HEAD $HEAD_SHA is not origin/$BRANCH's tip; push it first" >&2; exit 2; }
-[ -f benchmarks/served_commit/prof_arm.py ] && [ -f benchmarks/harness/env.sh ] \
-  || { echo "launch: this tree has no committer (benchmarks/served_commit/, benchmarks/harness/env.sh); run from a branch that" \
-            "merges circuits' committer iterations (origin/cursor/hash-commit-loop-15ad) with this one, as cursor/kernels-maxtput-15ad" >&2
+grep -q VERITY_ROWS_PHASES integrations/vllm/verity_vllm/commit/committer/native_rows.cu \
+  || { echo "launch: this tree's committer predates the hash loop's iterations (4 KiB rows-sha512 rows through iteration 11's" \
+            "four-launch split form, VERITY_ROWS_PHASES in native_rows.cu); run from main at or after their landing" >&2
        exit 2; }
 MODEL=${MODEL:-qwen3-8b}
 declare -A ENVS=(
