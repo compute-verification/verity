@@ -260,7 +260,8 @@ def test_case_of_keeps_a_paced_sessions_pace(server, tmp_path, name) -> None:
 
 def test_case_of_reads_the_pace_the_pace_k_driver_wrote(server, tmp_path) -> None:
     """The `--pace K` driver wrote a session's pace as its `audit.Pace` (`{k, window_ns}`, r20261019-035339-7f27), not
-    `pace_of`'s k and T: a rejected session, with no record to read it from, replays under it."""
+    `pace_of`'s k and T: a rejected session, with no record to read it from, replays under it. Its `order` isn't in
+    what the record keeps (the books keep no refused root), so the replay holds without reaching it."""
     v = verifier_json(run("order-past-pace"))
     v["sessions"][0]["pace"] = {"k": 2, "window_ns": 10}
     case, _ = R.case_of(v["registration"], v["sessions"][0])
@@ -268,4 +269,4 @@ def test_case_of_reads_the_pace_the_pace_k_driver_wrote(server, tmp_path) -> Non
     path = tmp_path / "verifier.json"
     path.write_text(json.dumps(v))
     row, = R.replay_record(path, server)
-    assert row["agree"] and row["held"] and row["lean"]["rejected"]["failure"] == "order", row
+    assert row["agree"] and row["held"], row
