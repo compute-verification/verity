@@ -379,10 +379,10 @@ theorem completeRelS (H : Claims.Msg → Claims.Msg) (S : JsonRT.JsonSpec) (h64 
     (hPR : ∀ c : Case H Readable.relation, ProverRunsAt c) (hR : ∀ c : Case H Readable.relation, RepShapedAt c)
     (hC : ∀ o : Run H Readable.relation, LgInnerAt H Readable.relation o) (hMR : MaskRank.MaskRankBound) :
     Claims.Flock.Complete H (deployZk Readable.relation) :=
-  completeR H Readable.relation S h64 (stmtAt_all S) hPR hR Run.rsExtras hC hMR
+  completeR H Readable.relation S h64 (stmtAt_all S) hPR hR Run.rsExtras hC hMR maskFree_relation
 
 /-- **Flock's completeness at the deployed masked verifier**, at the deployed relation, of the record's reference
-prover (`(deployZk Readable.relation).P`, `honestP`) at the record's error (`(deployZk Readable.relation).δc`, `δc H`),
+prover (`(deployZk Readable.relation).P`, `honestPR`) at the record's error (`(deployZk Readable.relation).δc`, `δc H`),
 at any number of tables: `completeRelS`, the oracle's 64-byte outputs (`Out64`) being `Claims.Complete`'s own
 antecedent. -/
 theorem complete_json (H : Claims.Msg → Claims.Msg) (S : Claims.JsonSpec printJ Flock.canon)
