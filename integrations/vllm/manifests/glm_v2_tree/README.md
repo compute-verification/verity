@@ -75,8 +75,19 @@ B32 is re-pinned (5af673ff05) to its v2 trace r20261020-060948-f9c7
 (art:da5479fee29a71d62fe67e22cefdd73a853cba54e22e97b70c9097501f8435de, tree 0094d2ef10) and switched to its predict compare
 r20261020-130447-1c49 (tree 8ca6f9878d, 5 h 34 min): EQUAL on every rank, 272 of 272 Programs traced equal to predicted, and
 every new pin equal to the trace's `build_summary.json` digest. 264 pins moved (each rank's workload and 32 request Programs);
-the 8 step Programs did not. Its Build of record runs on vy-glm53-cpu-2 after that node's restart for its grown disk
-("GPU batch" step 1).
+the 8 step Programs did not. Its Build of record, r20261020-192024-d435 on vy-glm53-cpu-2 after that node's restart for its
+grown disk ("GPU batch" step 1), runs at de4c6e3620 with `AOT_TRACE` the trace's row dir, `RESUME=1`, `BUILD_JOBS=24` and
+`--mem-gb 470`, from the B8 Builds' measured peaks (each run's process tree, 2 s samples):
+
+| phase | B8 Builds of record | B32 |
+|---|---|---|
+| request derives (`predict emit`) | 7 at once, at most 17.7 GB each (median 9), about 20 min each; 75 GB | 24 at once: at most 432 GB if every one peaks; its trace's 24 derives peaked at 202 GB |
+| GP-01 composes | 2 at once, 57 GB each: 111 to 116 GB, the Builds' peak | 2 at once (the default 400 GB budget, `compose_bytes` 145 GiB): 153 GB each in its trace r20261020-060948-f9c7, so 306 GB; B8's 116 GB scaled by batch is 464 GB |
+| manifest, 8 processes | 48 GB, 59 min (r20261020-132536-b2d0) | B8's scaled by batch: 192 GB |
+
+While it holds its 470 GB, vy-glm53-cpu-2 has about 330 GB left: B1's Match CPU phase fits there at `--mem-gb 300` (three
+of its 60 GB GM-01 legs at once), and B32's Build, best effort, yields to any G1 row that needs the room (`RESUME=1` keeps its
+derives and composes).
 
 ## GPU batch
 
