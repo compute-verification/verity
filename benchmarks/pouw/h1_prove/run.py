@@ -64,6 +64,7 @@ sys.path.insert(0, str(HERE))
 import h1unit as U  # noqa: E402
 from verity.ml.randomness import derive  # noqa: E402
 from verity.core.protocols.pouw import core_check as CC  # noqa: E402
+from verity.core.protocols.pouw import verifier  # noqa: E402
 from verity.core.protocols.pouw.coins import Challenger, coin_reason  # noqa: E402
 
 DRAW_DOMAIN = "verity/pouw/h1-prove-draw/v0"
@@ -148,7 +149,7 @@ def wait_for(path: Path, what: str, pid: int | None) -> None:
 def epoch(work: Path, name: str, layer: str, number: int, a, record: dict) -> tuple[dict, dict, bytes, Challenger]:
     """One window's epoch to its registration: commit, the salt coin, serve. Returns its commitment, served roots, the unit
     salt and the challenger (its draw coin still closed)."""
-    ch = Challenger(number)
+    ch = Challenger(number, verifier.coins)
     rec = record.setdefault("windows", {}).setdefault(name, {})
     rec["coin_commitment"] = {"epoch": ch.epoch, "root": ch.commitment.root.hex()}
     t = time.time()

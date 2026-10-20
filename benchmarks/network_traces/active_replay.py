@@ -978,6 +978,12 @@ def stand_in(window: int) -> Registration:
     return Registration(record, R.receipt(record, "active-replay", received=str(window)), R.digest(record), window)
 
 
+def reveal_deadline(plan: dict, window_s: float) -> float:
+    """The salted proxy's reveal deadline here: the replay plays the verifier only once its whole run is over, so the
+    deadline covers every window of the plan and one more, where a deployment's covers one PoUW window."""
+    return (plan["windows"] + 1) * window_s
+
+
 def revealed(proxies: Sequence[Proxy]) -> dict[str, str]:
     """Every served window's salt, as the verifier's `reveal` calls give them once the run's records are published."""
     return {str(w): p.reveal(w, stand_in(w)).hex() for p in proxies for w in range(p.start, p.windows)}
@@ -1119,7 +1125,8 @@ async def _proxy(plan: dict, setup: Setup, upstream: tuple[str, int], conn, out:
         def make() -> Proxy:
             return Proxy(upstream, setup.egress_params, setup.ingress_params, setup.sync_set, syncs, origin=origin,
                          publish=publish, egress_link=setup.egress_link, ingress_link=setup.ingress_link,
-                         salt=fresh_salt if salt else None, **advice, **phase_args(plan, start, end))
+                         salt=fresh_salt if salt else None, reveal_deadline=reveal_deadline(plan, window_s),
+                         **advice, **phase_args(plan, start, end))
 
         if k == 0:
             listening = await asyncio.start_server(on_link, host, port)
@@ -1287,7 +1294,8 @@ async def _virtual(plan: dict, setup: Setup, out: Path, upstream: tuple[str, int
         (start, end), (_, enqueued) = runs[k], phases[k]
         proxy = Proxy(listening.sockets[0].getsockname()[:2], e, i, setup.sync_set, syncs, origin=0.0, clock=clock,
                       sleep=clock.sleep, publish=publish, egress_link=setup.egress_link,
-                      ingress_link=setup.ingress_link, salt=fresh_salt if salt else None, **advice,
+                      ingress_link=setup.ingress_link, salt=fresh_salt if salt else None,
+                      reveal_deadline=reveal_deadline(plan, e.buckets * e.bucket_ms / 1000), **advice,
                       **phase_args(plan, start, end))
         if stalls and k == 0:
             proxy._changed = Stalls(proxy, stalls, lambda seconds: clock.advance(clock.now + seconds))

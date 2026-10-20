@@ -15,9 +15,9 @@ and `SessionRuns`, `SessionOpens` and `InnerNumbers` are one statement about the
 * `innerNumbers_code_iff`: `InnerNumbers` is Flock's numbers at the one session's statement.
 
 And of `SampledProofs.Run.run` itself, `run_decided`: a run that doesn't refuse (a `{"step", "codes"}` object) passed
-the population and R1–R7 (`Registration.check`) under the rule's law, ran the draw of record (`Select.select`) on the
-challenger's bytes (`source`) and held it to the registration (`Draw.checkDraw`), and its `draw` and `read` are that
-draw's.
+the population and R1–R7 (`Registration.check`) under the law of the rule over the population (`Select.Rule.over`), ran
+the draw of record (`Select.select`, under `Select.resolve`'s rule) on the challenger's bytes (`source`) and held it to
+the registration (`Draw.checkDraw`), and its `draw` and `read` are that draw's.
 -/
 
 namespace SamplingDeploy
@@ -111,21 +111,21 @@ theorem ite_eq_ok {c : Prop} [Decidable c] {a j : Json} {rest : V Json}
 -- `run` unfolds to 48 decided leaves under one `match` or `if` per step; splitting them takes about 3 minutes.
 set_option maxHeartbeats 4000000 in
 /-- **A decided run passed its registration and ran the draw of record**: `run` either refuses at a step or passed the
-population, R1–R7 under the rule's law over it, and the draw's own check, with its `draw` and `read` those of
-`Select.select` on the challenger's bytes. -/
+population, R1–R7 under the law of the rule over it (`Rule.over`, a rate law's `subset:K`), and the draw's own check,
+with its `draw` and `read` those of `Select.select` under `Select.resolve`'s rule on the challenger's bytes. -/
 theorem run_decided (i : Input) (j : Json) (h : run i = .ok j) :
     (∃ (step : String) (codes : Array String),
       j = Json.mkObj [("step", Json.str step), ("codes", Json.arr (codes.map Json.str))]) ∨
-    ∃ n law, nat? (getD i.record "population") = some n ∧ ¬(n == 0) = true ∧ i.rule.lawOver n = .ok law ∧
-      ¬(!(Registration.check i.record { i.params.verifier with law }).isEmpty) = true ∧
+    ∃ n rule law, nat? (getD i.record "population") = some n ∧ ¬(n == 0) = true ∧ i.rule.over n = some rule ∧
+      rule.lawOver n = .ok law ∧ ¬(!(Registration.check i.record { i.params.verifier with law }).isEmpty) = true ∧
       ∃ derived, Draw.derive i.params.verifier.program i.params.verifier.query law i.params.verifier.workTable =
           .ok derived ∧
-        ∃ draw rest read, Select.select i.rule i.params.verifier.program i.params.verifier.query
+        ∃ resolved, Select.resolve i.rule i.params.verifier.program i.params.verifier.query = .ok resolved ∧
+        ∃ draw rest read, Select.select resolved i.params.verifier.program i.params.verifier.query
             i.params.verifier.workTable i.closure i.source = .ok (draw, rest, read) ∧
           ¬(!(Draw.checkDraw draw (getD i.record "population") derived).isEmpty) = true ∧
-          ∃ receipt interior symbol pub audit, j = Json.mkObj [("receipt", receipt), ("draw", draw),
-            ("read", Lean.toJson read), ("interior", interior), ("symbol", symbol), ("public", pub),
-            ("audit", audit)] := by
+          ∃ receipt symbol pub audit, j = Json.mkObj [("receipt", receipt), ("draw", draw),
+            ("read", Lean.toJson read), ("symbol", symbol), ("public", pub), ("audit", audit)] := by
   unfold run at h
   simp only [bind, Except.bind, pure, Except.pure] at h
   repeat'
@@ -134,7 +134,7 @@ theorem run_decided (i : Input) (j : Json) (h : run i = .ok j) :
     | focus (cases h; done)
     | (obtain ⟨_, h⟩ | ⟨_, h⟩ := ite_eq_ok h; exact Or.inl ⟨_, _, h.symm⟩)
     | exact Or.inl ⟨_, _, (Except.ok.inj h).symm⟩
-    | exact Or.inr ⟨_, _, by assumption, by assumption, by assumption, by assumption, _, by assumption, _, _, _,
-        by assumption, by assumption, _, _, _, _, _, (Except.ok.inj h).symm⟩
+    | exact Or.inr ⟨_, _, _, by assumption, by assumption, by assumption, by assumption, by assumption, _,
+        by assumption, _, by assumption, _, _, _, by assumption, by assumption, _, _, _, _, (Except.ok.inj h).symm⟩
 
 end SampledProofs.Run

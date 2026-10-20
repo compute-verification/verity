@@ -20,7 +20,8 @@ order they were admitted; `main` fast-forwards to the newest commit on `next` th
                                                    fresh `next` (naming the paths), contains an open PR that isn't admitted
                                                    (naming it), or, merged onto `next` in a temporary worktree, fails `pins.py
                                                    --stale`, tests/test_module_strings.py, test_pins.py, test_doc_paths.py,
-                                                   tools/research/tests/test_pythonpath.py, or `pytest --collect-only` in a suite
+                                                   test_repository.py, tools/research/tests/test_pythonpath.py, or `pytest
+                                                   --collect-only` in a suite
                                                    whose inputs its change touches; --no-preflight skips it (the lander's)
     research queue drive (--on MACHINE | --config PATH [--config-from-tree]) [--max-running N] [--train-size N] [--marked-after TS]
                          [--first N,...] [--defer STEPS] [--[no-]regenerate-locks] [--dry-run]
@@ -61,7 +62,8 @@ that's unusable, a failed pull) the command fails with `STALE`, never answering 
 Preflight.  Each of 17 Oct's marks that broke or cancelled a train was cheap to catch at mark time: a conflict with a PR already
 on `next`, a stale Lake pin, a module string naming a module only an unlanded PR adds, a workspace member without its REAL_ROOTS
 entry, a test that read a row another queued PR refits away (an error at collection), and one lane's unlanded branch carried in
-two PRs.  So `ready` runs `Preflight` before the mark and before any quick tier: a refusal names what it found and the fix, a
+two PRs.  20 Oct's two failed `tests/test_repository.py` (a Markdown cap, a report-genre name), which the preflight now runs
+too.  So `ready` runs `Preflight` before the mark and before any quick tier: a refusal names what it found and the fix, a
 failure `next` has too refuses nothing, and what keeps a check from running is said and refuses nothing (the train's check is the
 gate).  `--no-preflight` skips it, for the lander.
 
@@ -1322,9 +1324,10 @@ def _tree(repo: Path, commit: str) -> str:
 
 #: the invariant tests the preflight runs on the merged tree, from the root.  17 Oct's train breakers each failed one: a module
 #: string naming a module only an unlanded PR adds, stale Lake pins, a doc path, and a workspace member without its REAL_ROOTS
-#: entry (#2271, which reverted 12 landings)
+#: entry (#2271, which reverted 12 landings); 20 Oct's two failed `check`'s preflight-lints on test_repository.py (a skill over
+#: the Markdown cap, #2818; a report-genre name, #2827), about 5 s
 PREFLIGHT_TEST_PATHS = ("tests/test_module_strings.py", "tests/test_pins.py", "tests/test_doc_paths.py",
-                        "tools/research/tests/test_pythonpath.py")
+                        "tests/test_repository.py", "tools/research/tests/test_pythonpath.py")
 
 
 def _by_suite(paths: tuple[str, ...]) -> tuple[tuple[str, tuple[str, ...]], ...]:
@@ -1899,9 +1902,40 @@ def open_pr(top: Path, repo: str, head: str, title: str, body: str, *, base: str
     return out.strip().splitlines()[-1]
 
 
+def _stats(a: argparse.Namespace) -> int:
+    """`research queue stats` (`queue_stats`): each landed PR's head from `main`'s merges onto `next`, its ready mark from the
+    store, the landing check's records fetched with `research status --also`."""
+    from . import queue_stats
+    from .drive import _fetch
+    from .store.local import LocalStore
+
+    top = Path(_out(Path.cwd(), "rev-parse", "--show-toplevel"))
+    _git(top, *STALL, "fetch", "-q", "origin", "main", check=False)
+    heads = {}
+    for body in _out(top, "log", "--first-parent", "--format=%B%x1e", "-n", "5000", "origin/main").split("\x1e"):
+        t = dict(TRAILER_RE.findall(body))
+        if "PR" in t and "Head" in t:
+            heads.setdefault(int(t["PR"].lstrip("#")), t["Head"])
+    labels = StoreLabels(LocalStore(a.store), log=lambda s: None)
+
+    def marked(pr: int):
+        head = heads.get(pr)
+        if head is None:
+            return None
+        labels.ready(pr, head)
+        at = labels.marked_at(pr, head)
+        return queue_stats.ts(at) if at else None
+
+    def run_dir(rid: str) -> Path:
+        return _fetch(top, rid, ["slot.json", "steps.jsonl"]) or Path("/nonexistent")
+
+    return queue_stats.main(a.log, a.hours, a.until, marked, run_dir, a.json)
+
+
 def main(argv: list[str]) -> int:
     ap = argparse.ArgumentParser(prog="research queue", description=__doc__.split("\n\n")[0])
-    ap.add_argument("command", choices=["status", "sync", "land", "eject", "ready", "judge", "drive", "report", "open"])
+    ap.add_argument("command", choices=["status", "sync", "land", "eject", "ready", "judge", "drive", "report", "open",
+                                            "stats"])
     ap.add_argument("pr", nargs="?", help="eject, ready: the PR number; judge: the quick tier's run id")
     ap.add_argument("--reason", help="eject: why, for the owner's notice")
     ap.add_argument("--by", default=os.environ.get("RESEARCH_LANE"),
@@ -1954,7 +1988,14 @@ def main(argv: list[str]) -> int:
     ap.add_argument("--body-file", type=Path, help="open: the PR's body, verbatim (its first line `Lane NAME` names the owner)")
     ap.add_argument("--base", default="main", help="open: the base branch (default main)")
     ap.add_argument("--draft", action="store_true", help="open: as a draft (default: ready for review)")
+    ap.add_argument("--log", type=Path, help="stats: drive's log (its stdout, every tick's)")
+    ap.add_argument("--hours", type=float, default=24.0, help="stats: the window's length (default 24)")
+    ap.add_argument("--until", metavar="YYYY-MM-DDTHH:MM:SSZ", help="stats: the window's end (default now)")
     a = ap.parse_args(argv)
+    if a.command == "stats":
+        if a.log is None:
+            ap.error("stats needs --log FILE (drive's log)")
+        return _stats(a)
     if a.command == "open":
         if not (a.head and a.title and a.body_file):
             ap.error("open needs --head BRANCH, --title T and --body-file F")

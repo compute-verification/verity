@@ -8,11 +8,13 @@ import SampledProofs.Bound
 import SampledProofs.PyJson
 import SampledProofs.Record
 import SampledProofs.OneStage
+import SampledProofs.Rate
 import SampledProofs.Select
 import SampledProofs.Slots
 import SampledProofs.Service
 import SampledProofs.Run
-import SampledProofs.TwoStage
+import SampledProofs.Stream
+import SampledProofs.Fleet
 import SampledProofs.Pieces
 import SampledProofs.Hello
 import SampledProofs.DomainAgrees
