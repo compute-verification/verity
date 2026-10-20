@@ -2,11 +2,15 @@
 conjecture into a per-word instruction lower bound checked over a stated program class, plus the argument and the named
 residual premises for the class the search doesn't reach.
 
-The headline `Accounting.SecurityProofs.TS.Sm120SheetHeadline` (0.656%, #2482/#2791) rests on `FoldOptFoldedAt
-Sm120.model (run x) ((1 - share)·Nw) (onFacet Sm120.piStar)`. `FoldOptFoldedAt Z run folded lam` is
+The headline `Accounting.SecurityProofs.TS.Sm120SheetHeadline` (#2482/#2791) rests on `FoldOptFoldedAt Sm120.model
+(run x) ((1 - share)·Nw) lam` at its certificate π* (`Sm120.piStar`: the facet `.issue`, or `.issue` with a weight
+moved onto `.smem`, A5b's shared-memory row). `FoldOptFoldedAt Z run folded lam` is
 `(1 - Z.muF)·folded·Z.phiStar lam ≤ Z.G.price lam (nfold run)` (#2791 `Models/Accounting/Assumptions/TS.lean`). On the
-data-sheet machine every facet row but the pipes is simple, and the certificate is `.issue`:
+data-sheet machine every facet row but the pipes is simple, and FOLD-OPT at π* follows from FOLD-OPT at `.issue`:
 
+- at π* = w_issue·`.issue` + w_smem·`.smem` a class k costs w_issue + w_smem·smem(k)/32 ≥ w_issue a warp instruction,
+  and the menu's classes (ALU, IMAD, UNI) hold no shared memory, so `phiStar π* = w_issue·phiStar .issue` and the
+  premise at π* is the one at `.issue` scaled by w_issue;
 - `Sheet.machine`'s `.issue` row is 1 for every one of the 122 classes (A2's catch-all), so
   `price (onFacet .issue) n = G.load n .issue = Σ_k 1·n(k) = Σ_k n(k)`: the fold's price at issue is the total count of
   fold warp instructions a unit, every class -- uniform, warp-wide, memory, bulk -- one issue slot.
@@ -118,9 +122,27 @@ def _tuples(block: str) -> list[tuple[int, int, int]]:
     return [(int(a), int(b), int(c)) for a, b, c in re.findall(r"\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)\s*\)", block)]
 
 
+_PISTAR_TERM = re.compile(r"(\d+)\s*/\s*(\d+)\s*\*\s*onFacet\s*\(\s*SheetRow\.(\w+)\s*:\s*SheetRow\s+Pipe\s*\)\s*\w+")
+
+
+def parse_pistar(text: str) -> dict[str, Fraction]:
+    """`Sm120.piStar`'s weight on each sheet row: a facet (`def piStar : SheetRow Pipe := .issue`, weight 1) or a sum
+    of `p / q * onFacet (SheetRow.r : SheetRow Pipe) r` terms (`def piStar : SheetRow Pipe → ℝ := fun r => …`)."""
+    if m := re.search(r"def\s+piStar\s*:\s*SheetRow\s+Pipe\s*:=\s*\.(\w+)", text):
+        return {m.group(1): Fraction(1)}
+    m = re.search(r"def\s+piStar\s*:\s*SheetRow\s+Pipe\s*→\s*ℝ\s*:=\s*fun\s+\w+\s*=>(.*?)\n\s*\n", text, re.S)
+    if m is None or _PISTAR_TERM.sub("", m.group(1)).replace("+", "").strip():
+        raise ValueError("Sm120.piStar is neither a facet nor a sum of weighted facets")
+    w: dict[str, Fraction] = {}
+    for p, q, row in _PISTAR_TERM.findall(m.group(1)):
+        w[row] = w.get(row, Fraction(0)) + Fraction(int(p), int(q))
+    return w
+
+
 def parse_sm120() -> dict:
-    """`Sm120.folds` (as a list of routes, each a list of (class, num, den)), `Nw`, `piStar`, `flatFold`, `checks`, and
-    the `.issue` coefficient the machine prices every class at, read from the Lean sources."""
+    """`Sm120.folds` (as a list of routes, each a list of (class, num, den)), `Nw`, `piStar` (its weight on each sheet
+    row), `flatFold`, `checks`, the classes, each class's shared-memory bytes (`smem`), and the `.issue` coefficient the
+    machine prices every class at, read from the Lean sources."""
     text = (repo_root() / SM120).read_text(encoding="utf-8")
     inner = _balanced(text, text.index("folds :="))[1:-1]
     routes, depth, buf = [], 0, ""
@@ -139,12 +161,14 @@ def parse_sm120() -> dict:
             buf += ch
     nw = int(re.search(r"Nw\s*:=\s*(\d+)", text).group(1))
     checks = int(re.search(r"checks\s*:\s*ℕ\s*:=\s*(\d+)", text).group(1))
-    pistar = re.search(r"piStar\s*:\s*SheetRow\s+Pipe\s*:=\s*\.(\w+)", text).group(1)
     flatfold = _tuples(_balanced(text, re.search(r"def\s+flatFold\s*:[^=]*:=", text).end()))
+    classes = re.findall(r'"(\w+)"', _balanced(text, re.search(r"def\s+classes\s*:[^=]*:=", text).end()))
+    smem = [int(x) for x in re.findall(r"\d+", _balanced(text, re.search(r"\bsmem\s*:=", text).end()))]
     sheet = (repo_root() / SHEET).read_text(encoding="utf-8")
     issue_coeff = int(re.search(r"\|\s*\.issue\s*=>\s*(\d+)", sheet).group(1))
-    return {"folds": routes, "Nw": nw, "checks": checks, "piStar": pistar, "flatFold": flatfold,
-            "issue_coeff": issue_coeff}
+    smem_per = int(re.search(r"\|\s*\.smem\s*=>\s*S\.smem\s+k\s*/\s*(\d+)", sheet).group(1))
+    return {"folds": routes, "Nw": nw, "checks": checks, "piStar": parse_pistar(text), "flatFold": flatfold,
+            "classes": classes, "smem": smem, "issue_coeff": issue_coeff, "smem_per": smem_per}
 
 
 def demand_at_issue(route: list[tuple[int, int, int]], issue_coeff: int) -> Fraction:
@@ -152,14 +176,64 @@ def demand_at_issue(route: list[tuple[int, int, int]], issue_coeff: int) -> Frac
     return sum((Fraction(num, den) * issue_coeff for _k, num, den in route), Fraction(0))
 
 
+def demand_at_pistar(route: list[tuple[int, int, int]], d: dict) -> Fraction:
+    """The route's price at π*: Σ_k (num/den)·(w_issue·issue_coeff + w_smem·smem(k)/32) over its classes."""
+    w = d["piStar"]
+    return sum((Fraction(num, den) * (w.get("issue", 0) * d["issue_coeff"]
+                                      + w.get("smem", 0) * Fraction(d["smem"][k], d["smem_per"]))
+                for k, num, den in route), Fraction(0))
+
+
+def pistar_ok(w: dict[str, Fraction]) -> bool:
+    """π* weights `.issue`, and at most `.smem` besides, each weight ≥ 0: the rows the reduction to `.issue` covers."""
+    return w.get("issue", 0) > 0 and set(w) <= {"issue", "smem"} and min(w.values()) >= 0
+
+
+def reduces_to_issue(d: dict) -> bool:
+    """Every class holds ≥ 0 bytes of shared memory and the menu's classes none, so at π* every class costs at least
+    w_issue a warp instruction and each route exactly w_issue times its demand at `.issue`."""
+    menu = {k for route in d["folds"] for k, _num, _den in route}
+    return (len(d["smem"]) == len(d["classes"]) and min(d["smem"]) >= 0 and all(d["smem"][k] == 0 for k in menu)
+            and d["smem_per"] > 0)
+
+
+A5B_PISTAR = """noncomputable def piStar : SheetRow Pipe → ℝ := fun r =>
+    3564 / 3761 * onFacet (SheetRow.issue : SheetRow Pipe) r +
+    197 / 3761 * onFacet (SheetRow.smem : SheetRow Pipe) r
+
+"""
+
+
 def class_statement(ck: Checks, d: dict) -> Fraction:
     """§1: the class statement, as a chain of equalities against Sm120.lean's own data. Returns φ*(issue)."""
     ck.check("Sm120.folds is the menu [[ALU 1/16, IMAD 1/16], [UNI 4]] (route 0 is fx1 on 32 lanes, route 1 the "
              "uniform fold)", d["folds"] == [[(0, 1, 16), (24, 1, 16)], [(105, 4, 1)]], d["folds"])
     ck.check("Sm120.Nw = 128 words a unit", d["Nw"] == 128, d["Nw"])
-    ck.check("Sm120.piStar = .issue (the sheet's certificate)", d["piStar"] == "issue", d["piStar"])
+    w = d["piStar"]
+    ck.check("Sm120.piStar weights .issue and at most .smem besides, each weight ≥ 0 (a facet is .issue alone)",
+             pistar_ok(w), {r: str(v) for r, v in w.items()})
+    ck.check("piStar is read as a facet or term by term as a weighting (A5b's 3564/3761 on .issue, 197/3761 on .smem)",
+             parse_pistar("def piStar : SheetRow Pipe := .issue\n") == {"issue": 1}
+             and parse_pistar(A5B_PISTAR) == {"issue": Fraction(3564, 3761), "smem": Fraction(197, 3761)})
     ck.check("Sheet.machine prices every class 1 slot at .issue (A2's catch-all), so price (onFacet .issue) n = Σ_k n(k)",
              d["issue_coeff"] == 1, d["issue_coeff"])
+    menu = sorted({k for route in d["folds"] for k, _num, _den in route})
+    ck.check("at π* a class k costs w_issue + w_smem·smem(k)/32 ≥ w_issue a warp instruction (smem ≥ 0 for each of the "
+             "sheet's classes), and the menu's classes (ALU, IMAD, UNI) hold no shared memory, so price π* n ≥ "
+             "w_issue·Σ_k n(k) and phiStar π* = w_issue·phiStar .issue: FOLD-OPT at .issue gives it at π*",
+             reduces_to_issue(d), {d["classes"][k]: d["smem"][k] for k in menu})
+    if ck.mutations:
+        ck.mutation("a π* with weight on a pipe row is refused: the reduction to .issue doesn't cover it",
+                    not pistar_ok({**w, "lop": Fraction(1, 2)}))
+        uni = d["folds"][1][0][0]
+        ck.mutation("a menu class holding shared memory (UNI at 16 B) breaks the reduction to .issue",
+                    not reduces_to_issue({**d, "smem": [*d["smem"][:uni], 16, *d["smem"][uni + 1:]]}))
+        try:
+            parse_pistar(A5B_PISTAR.replace("+", "-", 1))
+            refused = False
+        except ValueError:
+            refused = True
+        ck.mutation("a π* that is no sum of weighted facets is refused, not read in part", refused)
 
     demands = [demand_at_issue(r, d["issue_coeff"]) for r in d["folds"]]
     ck.check("route 0 (ALU 1/16 + IMAD 1/16) costs 1/8 warp instruction a word at issue", demands[0] == Fraction(1, 8),
@@ -167,6 +241,9 @@ def class_statement(ck: Checks, d: dict) -> Fraction:
     ck.check("route 1 (UNI 4) costs 4 a word at issue", demands[1] == Fraction(4), demands[1])
     phi = min(demands)
     ck.check("phiStar(.issue) = min over routes = 1/8 warp instruction a word", phi == Fraction(1, 8), phi)
+    phi_pi = min(demand_at_pistar(r, d) for r in d["folds"])
+    ck.check("phiStar π* = w_issue/8, and flatFold (8 ALU + 8 IMAD, no shared memory) costs Nw·phiStar π* = 16·w_issue",
+             phi_pi == w["issue"] * phi and demand_at_pistar(d["flatFold"], d) == d["Nw"] * phi_pi, str(phi_pi))
 
     folded = d["Nw"]                                        # full folded = Nw (share -> 0)
     rhs_floor = folded * phi                                # (1 - muF)·folded·phiStar, muF = 0
