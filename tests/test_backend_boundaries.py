@@ -19,9 +19,11 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 #: The backends' tree: C-Flock, the backend in development.
 BACKENDS = ROOT / "verity" / "ml" / "flock"
-#: The integrations' import packages, from each distribution's wheel configuration.
+#: The integrations' import packages, from each distribution's wheel configuration (a virtual member, such as the Slack
+#: events service, has none to import).
 INTEGRATIONS = frozenset(Path(p).name for pyproject in sorted((ROOT / "integrations").glob("*/pyproject.toml"))
-                         for p in tomllib.loads(pyproject.read_text())["tool"]["hatch"]["build"]["targets"]["wheel"]["packages"])
+                         for p in tomllib.loads(pyproject.read_text()).get("tool", {}).get("hatch", {}).get("build", {})
+                         .get("targets", {}).get("wheel", {}).get("packages", []))
 SKIP_DIRS = {"target", "node_modules", "__pycache__"}
 MODULE_ATTR = re.compile(r"[A-Za-z_]\w*(?:\.[A-Za-z_]\w*)*:[A-Za-z_]\w*")
 IMPORT_CALLS = {"import_module", "__import__", "importorskip"}

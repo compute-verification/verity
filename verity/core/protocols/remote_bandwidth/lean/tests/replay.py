@@ -349,7 +349,8 @@ def main(argv: list[str] | None = None) -> int:
         ns.out.write_text(json.dumps(rows, indent=1) + "\n")
     bad = [r for r in rows if False in (r.get("agree"), r.get("held"), r.get("digest"), r.get("registry"))]
     refusals = [r for r in rows if r.get("recorded") == "registration refused" and r.get("agree") is not None]
-    print(f"{sum(1 for r in rows if 'session' in r and r.get('agree') is not None)} sessions and {len(refusals)} "
+    print(f"{sum(1 for r in rows if 'session' in r and r.get('agree') is not None)} recorded sessions, "
+          f"{sum(1 for r in rows if 'file' in r and r.get('agree') is not None)} transcripts and {len(refusals)} "
           f"refused registrations replayed; "
           f"{sum(1 for r in rows if r.get('agree') is False)} where the verifiers differ; "
           f"{sum(1 for r in rows if r.get('held') is False)} not the recorded verdict; "

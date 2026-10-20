@@ -28,12 +28,24 @@ from dataclasses import dataclass, field
 
 from scipy.optimize import linprog
 
-from verity_machine_model.eps import LANES, MMA, Machine
+from verity_machine_model.eps import DATA, LANES, MMA, Machine, honest, profiles
 
 TENSOR_CYCLES = 16.0  # every MMA kind holds the tensor pipe 16 SMSP-cycles (row M)
 
-#: useful work a warp instruction, in tensor slots (4096 int8 MACs): the classes a hidden program could compute with
+#: useful work a warp instruction, in tensor slots (4096 int8 MACs): the classes a hidden program could compute with,
+#: sm_120's; `useful_of` adds a device's own tensor classes
 USEFUL = {MMA: 1.0, "IMAD": 128 / 4096, "HFMA2": 64 / 4096, "FFMA": 32 / 4096}
+
+
+def useful_of(data=DATA) -> dict[str, float]:
+    """USEFUL with each honest profile's MMA class in `data` at its MACs a warp instruction over 4096. A device whose
+    tensor class isn't sm_120's MMA (UTCIMMA_M128_N256 on sm_100, 256 slots; IGMMA_S8_N256 on sm_90, 32) would
+    otherwise offer a hidden program no tensor pipe at all."""
+    u = dict(USEFUL)
+    for p in profiles(data):
+        h = honest(p, data)
+        u[h.cls] = max(u.get(h.cls, 0.0), h.words * h.depth / 4096)
+    return u
 
 #: a fold's lane instructions a committed word by class (pfill.cuh, receipt_folds.cuh)
 FOLDS = {
@@ -197,9 +209,11 @@ class Window:
                            for (w, g), h in zip(self.groups, self.parts)]}
 
 
-def window(pi: Machine, groups: list[tuple[float, Work]] | tuple[tuple[float, Work], ...]) -> Window:
+def window(pi: Machine, groups: list[tuple[float, Work]] | tuple[tuple[float, Work], ...],
+           useful: dict[str, float] | None = None) -> Window:
     tot = sum(w for w, _ in groups)
     if abs(tot - 1.0) > 1e-6:
         raise SystemExit(f"capacity: the groups' shares of SMSP-time sum to {tot:g}, not 1")
-    empty = hidden(pi, Work("empty", {})).hidden
-    return Window(tuple(groups), pi.vector, empty, hidden(pi, pool(groups)), tuple(hidden(pi, g) for _, g in groups))
+    empty = hidden(pi, Work("empty", {}), useful).hidden
+    return Window(tuple(groups), pi.vector, empty, hidden(pi, pool(groups), useful),
+                  tuple(hidden(pi, g, useful) for _, g in groups))

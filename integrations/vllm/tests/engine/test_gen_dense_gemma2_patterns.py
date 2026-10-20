@@ -174,15 +174,21 @@ def test_every_gemma_root_resolves_to_a_quarantine_dense_compute():
     assert g.operands == (PerRow(v["gu"]),) and g.outputs == (PerRow(v["act"]),)
 
 
-def test_gelu_is_refused_by_name_under_registered_values_until_the_fold_supplies_its_table():
-    """`GeluTanhMul_v3` reads the registered `gelu_tanh_bf16`, which a fold does not supply yet: the fold refuses the op rather than
-    bind `GeluTanhMul_v1`, which a `registered_values` Build does not call."""
-    events, start, _ = gemma_step()
+def test_under_registered_values_gelu_binds_v1_and_the_scalar_constants_are_refused_by_name():
+    """A `registered_values` Build calls `GeluTanhMul_v1` as the constants Build does (its Boolean version computes the activation,
+    `boolean_tanh`, and reads no table), so the fold binds it over the same operands. The Build binds the scalar ops' value twins,
+    which this fold does not, so it refuses each scalar add, divide and multiply by name rather than bind a constant form."""
+    events, start, v = gemma_step()
     ctx = gemma_context(start)
     ctx = dataclasses.replace(ctx, profile=dataclasses.replace(ctx.profile, registered_values=True))
     res = resolve_step(step_events(events), ctx)
-    (u,) = [r for r in res if isinstance(r, Unsupported) and "gelu_tanh_and_mul" in r.op]
-    assert "gelu_tanh_bf16" in u.reason and not [k for k in by_spec(res) if k.startswith("GeluTanhMul")]
+    (g,) = by_spec(res)[f"GeluTanhMul_v1{{I={I}}}"]
+    assert g.operands == (PerRow(v["gu"]),) and g.outputs == (PerRow(v["act"]),)
+    refused = [r for r in res if isinstance(r, Unsupported)]
+    assert all("registered_values" in r.reason and "value twin" in r.reason for r in refused), [r.reason for r in refused]
+    assert sorted(r.detail["spec"].split("{")[0] for r in refused) == ["AddScalarBf16_v1"] * 2 + ["AddScalarF32_v1"] * 2 + [
+        "Bf16DivScalar_v1", "Bf16MulScalar_v1"]
+    assert not [k for k in by_spec(res) if k.split("{")[0] in ("AddScalarBf16_v1", "AddScalarF32_v1", "Bf16DivScalar_v1", "Bf16MulScalar_v1")]
 
 
 @pytest.mark.parametrize("over, needle", [({"block": 512}, "BLOCK_SIZE"), ({"warps": 8}, "num_warps"), ({"k_n": 7}, "N")])

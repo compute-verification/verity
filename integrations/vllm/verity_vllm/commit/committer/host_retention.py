@@ -18,11 +18,11 @@ class _HostWindows:
     that was not retained is an error, never zeros."""
     is_cuda = False
 
-    def __init__(self, wins: list[tuple[int, Any, int]], used: int, W: int) -> None:
+    def __init__(self, wins: list[tuple[int, Any, int]], used: int, W: int, chunk: int = GPU_CHUNK_BYTES) -> None:
         self.wins = {int(k): (hv, int(n)) for k, hv, n in wins if n}
         self.used = int(used)
         self.W = int(W)
-        self.n = -(-self.used // GPU_CHUNK_BYTES) * GPU_CHUNK_BYTES            # logical (padded) length of the step, not the retained bytes
+        self.n = -(-self.used // chunk) * chunk            # logical (padded) length of the step, not the retained bytes
 
     def numel(self) -> int:
         return self.n
@@ -76,10 +76,10 @@ class _HostRanges:
     zeros.  Same duck type as `_HostWindows` / the contiguous `keep` tensor."""
     is_cuda = False
 
-    def __init__(self, ranges: list[tuple[int, int, Any]], used: int, excluded: dict[str, int] | None = None) -> None:
+    def __init__(self, ranges: list[tuple[int, int, Any]], used: int, excluded: dict[str, int] | None = None, chunk: int = GPU_CHUNK_BYTES) -> None:
         self.ranges = sorted(((int(lo), int(hi), hv) for lo, hi, hv in ranges if hi > lo), key=lambda r: r[0])
         self.used = int(used)
-        self.n = -(-self.used // GPU_CHUNK_BYTES) * GPU_CHUNK_BYTES
+        self.n = -(-self.used // chunk) * chunk
         self.excluded = dict(excluded or {})                     # family -> bytes not retained (for the record)
         self._lows = [r[0] for r in self.ranges]
 

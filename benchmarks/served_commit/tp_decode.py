@@ -6,16 +6,17 @@ combination, openings or verdict. Measurement only.
 
     bash benchmarks/served_commit/tp_decode.sh      (ARM, BATCHES, PAIRS; its header has the rest)
 
-One engine process per arm (``--arm``), since the 4 KiB rows are module constants set on each rank before its committer is built
+One engine process per arm (``--arm``), since the row size is a module constant set on each rank before its committer is built
 (`prof_arm.Rows4kArm`):
 
-- ``rows``: today's commit under rows-sha512, with `tp-commit`'s acquisition: the acquired classes' modules, the MoE block
+- ``rows``: rows-sha512's step at 256 B rows, the row size it had before 4 KiB (so its roots are no scheme's now), with
+  `tp-commit`'s acquisition: the acquired classes' modules, the MoE block
   stream, every TP collective's rank-local partial, the capture map's routes and attention taps, and the block-FP8 linears'
   input quantization (`acquisition_manifest` names its family; the vocabulary-range tap, one small tensor a step, is off);
 - ``rows-layer``: rows-sha512 acquiring only what a per-layer unit commits (`per_layer`): each decoder layer's residual stream
   as its fused add-RMSNorm leaves it (`LayerStreamSource`), the MLA cache entry and the DSA indexer's cache row and scale each
   attention layer writes, the embedding's ids and output, the final norm, the logits and the sampled ids;
-- ``rows-4k`` and ``rows-layer-4k``: the same at 4 KiB rows, whose roots are no scheme's.
+- ``rows-4k`` and ``rows-layer-4k``: the same at 4 KiB rows, rows-sha512's row size.
 
 A batch's requests are the row's request with its prompt rotated by ``--rotate`` tokens per request, at the row's prompt length
 and cap, all arriving at once; every request decodes to its cap (``ignore_eos``), so a batch's runs have the same steps. Per run,

@@ -68,7 +68,7 @@ _CONSTRUCTION_SOURCES = ("verity_vllm/program/frontend/export_compat.py", "verit
                          # [R15 stoch] the stochastic token-select rule (the sampler Definitions are registry digests in the descriptor); the fused-MoE rules
                          "verity_vllm/program/frontend/rules/vllm_sampling.py", "verity_vllm/program/frontend/rules/vllm_moe.py",
                          "verity_vllm/program/frontend/rules/vllm_moe_fp8.py", "verity_vllm/program/frontend/rules/vllm_moe_router.py",
-                         "verity_vllm/program/frontend/rules/vllm_dsa.py",
+                         "verity_vllm/program/frontend/rules/vllm_dsa.py", "verity_vllm/program/frontend/rules/vllm_dsa_dense.py",
                          # `TargetProfile.ir == "boolean"`: the derived Program on bits (the Boolean Definitions are digests in the descriptor)
                          "verity_vllm/program/boolean.py",
                          # the vLLM switches the meta instantiation pins (engine.env.EXPORT)
@@ -320,8 +320,7 @@ def applicability_conditions(profile, applied: dict, attention_impls: dict, expo
         # [R15 hopper HOP-03] a request Program built under a declared launch context is reusable only for a batch that co-schedules it the same
         # way (FA3's tile reads the launch's max_seqlen_q).  Key present ONLY when a context was declared: B1 / undeclared identities are unchanged.
         cond["launch_context"] = {"max_seqlen_q_by_step": {str(k): v for k, v in sorted((launch.get("max_seqlen_q_by_step") or {}).items())},
-                                  "conflict": bool(launch.get("conflict")),
-                                  **({"batch_by_step": {str(k): [list(q) for q in v] for k, v in sorted(launch["batch_by_step"].items())}} if launch.get("batch_by_step") else {})}
+                                  "conflict": bool(launch.get("conflict")), **({"batch_by_step": {str(k): [list(q) for q in v] for k, v in sorted(launch["batch_by_step"].items())}} if launch.get("batch_by_step") else {})}
     return cond
 
 
@@ -334,8 +333,7 @@ def _cuda_available() -> bool:
 
 
 def run(out: str, M: int, pos0: int, profile: str, backend: str, intercept: bool = True, wrapper: str = "step", LP: int = 8, T: int = 4, eos: int = 0, model_id: str | None = None, revision: str | None = None, max_model_len: int = 2048,
-        target=None, sampling: dict | None = None, tp: int = 1, rank: int = 0, launch: dict | None = None, emit=None,
-        engine_args: dict | None = None, device_name: str | None = None, batch_dispatch: bool = False, cached: int = 0) -> dict:
+        target=None, sampling: dict | None = None, tp: int = 1, rank: int = 0, launch: dict | None = None, emit=None, engine_args: dict | None = None, device_name: str | None = None, batch_dispatch: bool = False, cached: int = 0) -> dict:
     """`emit`: an `emit_ranks.Emit` (`--emit-ranks`): the other ranks' files are written from this rank's derivation.  `engine_args`:
     the row's engine arguments the meta config takes (`workload_engine_args`).  `device_name`: the name the declared target's GPU
     reports, answered on a GPU-free host (`engine.profiles.devices`, `export_compat.select_cuda_platform`).  `batch_dispatch`: see `LC.missing_batch`.
@@ -385,8 +383,7 @@ def run(out: str, M: int, pos0: int, profile: str, backend: str, intercept: bool
                                              "missing": ["TopPMask (F-dense-02)", "wrapper authoring of the stochastic select (Bet A)",
                                                          "eager resolver patterns for _temperature_kernel / stochastic _gumbel_sample_kernel"]}}
             raise _Refused()
-        # the request's launch batch where the row's kernels read it; [R15 stoch] the stochastic policy's Definition coverage and launch
-        # geometry (S), refused with the reason when not a static
+        # the request's launch batch where the row's kernels read it; [R15 stoch] the stochastic policy's Definition coverage and launch geometry (S)
         geo_refusal = ((wrapper == "request" and batch_dispatch and LC.missing_batch(launch, LP, T))
                        or sampler_geometry(sampling, target, LP=LP if wrapper == "request" else None, T=T if wrapper == "request" else None))
         if geo_refusal:
@@ -418,7 +415,7 @@ def _construct(out, res, target, M, pos0, profile, backend, intercept, wrapper, 
                tp: int = 1, rank: int = 0, launch: dict | None = None, emit=None, engine_args: dict | None = None, C: int = 0) -> None:
     from verity_vllm.program.frontend.target_profile import ArtifactIdentity, profile_mismatches
     with InputsTrace(os.path.join(out, "inputs.json")), contextlib.ExitStack() as tp_stack:
-        from verity_vllm.program.frontend import vllm_meta as vm
+        from verity_vllm.program.frontend import loader_parity, vllm_meta as vm
         from verity_vllm.program.frontend.export_compat import apply_target_profile, host_facts, read_back_applied
         from verity_vllm.program.frontend.triton_capture import TritonLaunchLog
         import torch
@@ -458,13 +455,7 @@ def _construct(out, res, target, M, pos0, profile, backend, intercept, wrapper, 
             from verity_vllm.engine import sparse_mla
             sparse_mla.arm()   # FA3's sparse-MLA split pin, armed as a serving process arms it before vLLM builds the model
             model = vm.instantiate_meta(cfg)
-            # [R15 fp8] loader parity: a checkpoint that ships a redundant `lm_head.weight` under `tie_word_embeddings` is untied by
-            # vLLM for loading and RE-TIED after it iff the two tensors are equal (Qwen3-4B-Instruct-2507-FP8); the same decision from the
-            # pinned checkpoint's bytes, so the Program has the served model's one shared root (see `vm.retie_lm_head_as_the_loader_does`)
-            res["lm_head_tying"] = vm.retie_lm_head_as_the_loader_does(model, cfg)
-            res["mla_absorbed_weights"] = vm.mla_absorbed_weights_as_the_loader_does(model, cfg)
-            res["fp8_block_weights"] = vm.fp8_block_weights_as_the_loader_does(model)
-            res["post_load_tensors"] = vm.post_load_tensors_as_the_loader_does(model)
+            res.update(loader_parity.as_the_loader_does(model, cfg))   # the Parameters the served model has once its weights are loaded
             if tp > 1:
                 res["tp"]["embedding_shards"] = bind_vocab_parallel_embeddings(model, tp_stack.enter_context(hooks.Hooks()))
                 res["tp"]["sharded_params"] = _sharded_param_summary(model)
@@ -732,12 +723,11 @@ class Options:
                                     help="other ranks (comma list) whose files are written from this rank's derivation (pipeline.tp.emit_ranks)")
     emit_root: str | None = option("--emit-root", default=None, help="with --emit-ranks: rank r's files go to <root>/rank<r>/<name of --out>")
     launch_context: str | None = option("--launch-context", default=None,
-                                        help="[R15 hopper HOP-03] the LAUNCH CONTEXT this request Program is built under (structural input): the varlen launch's "
-                                        "max_seqlen_q over every co-scheduled sequence, per request step -- int N (step 0 = a prefill launch whose longest prompt has N "
-                                        "rows), JSON list [n0, n1, ...] (per step), or 'conflict' (requests of this shape are co-scheduled differently: refused under FA3, "
-                                        "whose tile reads it; inert under FA2); without batch invariance the batch itself, '{\"batch\": [[[rows, start], ...] per step]}', "
-                                        "which every token-count-dependent kernel choice reads (required then).  Omitted = own rows (a batch of one).  The row derives it "
-                                        "from the workload (verity_vllm.pipeline.launch_context) for B >= 2.")
+                                        help="[R15 hopper HOP-03] the LAUNCH CONTEXT this request Program is built under (structural input): the varlen launch's max_seqlen_q over "
+                                        "every co-scheduled sequence, per request step -- int N (step 0 = a prefill launch whose longest prompt has N rows), JSON list [n0, n1, ...] "
+                                        "(per step), or 'conflict' (requests of this shape are co-scheduled differently: refused under FA3, whose tile reads it; inert under FA2); "
+                                        "without batch invariance the batch itself, '{\"batch\": [[[rows, start], ...] per step]}', which every token-count-dependent kernel choice "
+                                        "reads (required then).  Omitted = own rows (a batch of one).  The row derives it from the workload (verity_vllm.pipeline.launch_context) for B >= 2.")
 
 
 def main(a: Options) -> int:
