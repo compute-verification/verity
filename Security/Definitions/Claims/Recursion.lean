@@ -1021,9 +1021,9 @@ def Bound.WeightCovers (Bd : Bound Coin Col T) : Prop :=
   ∀ x, Real.sqrt (Bd.DE.weight x) + (1 + (Bd.DE.waits x : ℝ) * Bd.DE.k x) * Real.sqrt (Bd.DE.V.k x / 32) ≤
     Real.sqrt (Bd.weight x)
 
-/-- **(P4) The last message, as `final` reads it, is bound by the rounds before it.** Take two decisions `IVStar` accepts
-at one statement, on messages and coins that agree before the last round, whose last messages `final` reads
-differently. They show a SHA-512 collision among `IVStar`'s calls in the two decisions.
+/-- **(P4) as first stated: the last message, as `final` reads it, is bound by the rounds before it.** Take two
+decisions `IVStar` accepts at one statement, on messages and coins that agree before the last round, whose last messages
+`final` reads differently. They show a SHA-512 collision among `IVStar`'s calls in the two decisions.
 
 It is stated modulo `final` because everything the extractor reads of the last message goes through `final`: `IVStar`'s
 decision and its calls, and the opened view whose columns `Bound.deploy` takes (`Bound.ivstar_congr_final`,
@@ -1036,8 +1036,10 @@ collides on the salt hashes and a different row, at one salt, on the row digests
 committed (Flock's Merkle binding at plain leaves). At the deployment those steps are the code side's (`nextE`), so
 (P4) is a premise of the bound record, not a consequence of `Binds`.
 
-The recursion's KS reads this, not the bridge. `E*`'s inner views read the last message off the outer witnesses, and
-those differ across `E*`'s reruns. -/
+**Superseded** by `LastBindsEC` with `LastCoinFree` (card ef47c02e, 19 Oct): `LastBinds` is false at the deployed
+bound record (`RecDeploy.lastBinds_deployed_rejects`). The deployed plain verifier reads the record's text only through
+`Json.parse`, so the same last message with a trailing space in the record is decided alike, with the same calls, while
+`final` reads the two apart. It stays stated because the route as first proved (`RecDeploy.KSBoundRoute`) reads it. -/
 def Bound.LastBinds (H : Msg → Msg) (Bd : Bound Coin Col T) : Prop :=
   ∀ (x : Msg) (as as' : List Msg) (cs cs' : List Coin), as.length = Bd.DE.V.k x → as'.length = as.length →
     cs.length = as.length → cs'.length = as.length → as.dropLast = as'.dropLast → cs.dropLast = cs'.dropLast →
@@ -1046,6 +1048,53 @@ def Bound.LastBinds (H : Msg → Msg) (Bd : Bound Coin Col T) : Prop :=
     ∃ q ∈ (((Bd.IVStar.next x as cs).eval H).2 ++ ((Bd.IVStar.next x as' cs').eval H).2).map Prod.fst,
       ∃ q' ∈ (((Bd.IVStar.next x as cs).eval H).2 ++ ((Bd.IVStar.next x as' cs').eval H).2).map Prod.fst,
         Collision H q q'
+
+omit [Fintype Coin] [Nonempty Coin] [DecidableEq Col] in
+/-- **The view of `IVStar`'s decision** on the messages `as` at the coins `cs`: each message before the last answered
+by its coin (`ans`), the last by the decision. It is the view `IVStar`'s run shows, in list form. -/
+def Bound.viewAt (Bd : Bound Coin Col T) (H : Msg → Msg) (x : Msg) (as : List Msg) (cs : List Coin) : Seen :=
+  ⟨as.zip (cs.dropLast.map (fun c => Out.msg (Bd.ans c)) ++ [((Bd.IVStar.next x as cs).eval H).1]),
+    ((Bd.IVStar.next x as cs).eval H).1⟩
+
+omit [Fintype Coin] [Nonempty Coin] [DecidableEq Col] in
+/-- **(P4) The last message is bound by the rounds before it, modulo what `E*` reads.** Take two decisions `IVStar`
+accepts at one statement, on messages and coins that agree before the last round, that differ in `DE`'s columns of their
+opened views (`Bound.deploy`'s `cols`) or in the set of `IVStar`'s calls: some call of one is not a call of the other.
+They show a SHA-512 collision among `IVStar`'s calls in the two decisions.
+
+`E*` reads an inner view only through its decision and its openings, and the bound record's openings are `DE`'s columns
+of the opened view. Two accepted decisions share their decision, so what `E*` reads of them differs exactly where those
+columns differ. The calls are compared as well because the route's plurality prover makes `IVStar`'s calls on its own
+last message, and the route charges every call of a kept run to the calls `E_O`'s witnesses record. That charge reads
+the calls only by membership, so they are compared as sets (ASK-76): the record's stream order and its optional digest
+of a table's empty publics change the list of calls the deployed verifier makes, not the set. Two last messages the
+deployed record reads alike, such as the trailing-space pair that refutes `LastBinds`, are one view to `E*` with the
+same calls, so they are no counterexample.
+
+The recursion's KS reads this with `LastCoinFree` (`RecDeploy.ksBoundRoute_of_bridge_cols`), not the bridge. At the
+deployed bound record it follows from `Binds` and the deployed plain verifier's binding of its own last message
+(`RecDeploy.lastBindsEC_deployed`, from `RecDeploy.PlainLastBinds`): its columns half is proved at SHA-512, and its
+calls half (`RecDeploy.PlainCallsBindOrSlack`) and the decoder's canonicity (`RecDeploy.CanonicalProofFiles`) are
+open. -/
+def Bound.LastBindsEC (H : Msg → Msg) (Bd : Bound Coin Col T) : Prop :=
+  ∀ (x : Msg) (as as' : List Msg) (cs cs' : List Coin), as.length = Bd.DE.V.k x → as'.length = as.length →
+    cs.length = as.length → cs'.length = as.length → as.dropLast = as'.dropLast → cs.dropLast = cs'.dropLast →
+    (Bd.DE.cols (Bd.openView (Bd.viewAt H x as cs)) ≠ Bd.DE.cols (Bd.openView (Bd.viewAt H x as' cs')) ∨
+      ((Bd.IVStar.next x as cs).eval H).2.toFinset ≠ ((Bd.IVStar.next x as' cs').eval H).2.toFinset) →
+    ((Bd.IVStar.next x as cs).eval H).1 = .acc → ((Bd.IVStar.next x as' cs').eval H).1 = .acc →
+    ∃ q ∈ (((Bd.IVStar.next x as cs).eval H).2 ++ ((Bd.IVStar.next x as' cs').eval H).2).map Prod.fst,
+      ∃ q' ∈ (((Bd.IVStar.next x as cs).eval H).2 ++ ((Bd.IVStar.next x as' cs').eval H).2).map Prod.fst,
+        Collision H q q'
+
+omit [Fintype Coin] [Nonempty Coin] [DecidableEq Col] in
+/-- **`IVStar`'s last step reads no last coin**: at the last round, two coin lists that agree before it give one
+decision with the same calls. The route's plurality prover evaluates the plurality's last message at its own run's last
+coin, so the recursion's KS reads this with `LastBindsEC`. It holds wherever `DE`'s last step reads no last coin, at the deployed
+plain verifier among them (`RecDeploy.lastCoinFree_deployed`). -/
+def Bound.LastCoinFree (H : Msg → Msg) (Bd : Bound Coin Col T) : Prop :=
+  ∀ (x : Msg) (as : List Msg) (cs cs' : List Coin), as.length = Bd.DE.V.k x → cs.length = as.length →
+    cs'.length = as.length → cs.dropLast = cs'.dropLast →
+    (Bd.IVStar.next x as cs).eval H = (Bd.IVStar.next x as cs').eval H
 
 /-- **(P1) The element-level Flock's KS against aborting provers, at plain leaves**: `Inner.KSAbort` at `DE`, at every
 inner decoder that meets the list-decoding spec. `Bridge` takes it at each decoder. It is a new claim, not on hand:
@@ -1064,7 +1113,8 @@ the bound record) follows from three premises:
 * (P3) `γ`'s weight covers the bridge's loss (`WeightCovers`).
 
 The recursion's KS at the bound record (`KSBound`) rests on the bridge and on (P1) to (P3), and also on (P4), the last
-message's binding (`LastBinds`), which the recursion's proof reads and the bridge doesn't.
+message's binding modulo what `E*` reads (`LastBindsEC`, with `LastCoinFree`), which the recursion's proof reads and the
+bridge doesn't.
 
 The proof builds, from a prover against `IVStar`, a prover against `DE`. At each round it sends the rows that the
 plurality of `IVStar`'s accepted continuations open there, and it aborts where the run opens otherwise. Never the first

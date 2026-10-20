@@ -32,9 +32,10 @@ class _Coins:
     """`e2e.Coins`, trimmed: one epoch's challenger, each coin opened once."""
 
     def __init__(self, epoch: int) -> None:
+        from verity.core.protocols.pouw import verifier
         from verity.core.protocols.pouw.coins import Challenger
 
-        self.challenger, self.opened = Challenger(epoch), {}
+        self.challenger, self.opened = Challenger(epoch, verifier.coins), {}
         self.commitment = self.challenger.commitment
 
     def open(self, label: str, after: bytes) -> Any:

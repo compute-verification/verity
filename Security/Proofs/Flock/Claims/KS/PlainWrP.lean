@@ -41,6 +41,23 @@ theorem checks_draw {zk : Bool} {s : Ins} {spec : SessionSpec} {x : Claims.Msg}
   | none => simp [hd, ProvedScope.drawLaw] at h
   | some d => exact ⟨d, rfl⟩
 
+
+namespace Gen
+
+variable [S : ZkSetup]
+
+/-- **The checks after the verdict refuse a session without a draw** (`drawLaw zk none`). -/
+theorem checks_draw {zk : Bool} {s : Ins} {spec : SessionSpec} {x : Claims.Msg}
+    {link : List ByteArray × List ByteArray} {c₁ : Coin} {mids : List (Claims.Msg × Coin)} {f : Final}
+    (h : checks zk s spec x link c₁ mids f = .ok ()) : ∃ d, s.read.draw = some d :=
+  _root_.FlockDeploy.KS.checks_draw (checks_base h)
+
+end Gen
+
+namespace Gen
+
+variable [S : ZkSetup]
+
 theorem next_acc_draw {zk : Bool} {x : Claims.Msg} {as : List Claims.Msg} {cs : List Coin}
     (h : ((next zk x as cs).eval sha512).1 = .acc) :
     ∃ ins spec sts d, setupOf zk x = some (ins, spec, sts) ∧ ins.read.draw = some d := by
@@ -52,6 +69,17 @@ theorem next_acc_draw {zk : Bool} {x : Claims.Msg} {as : List Claims.Msg} {cs : 
     obtain ⟨d, hd⟩ := checks_draw hc
     exact ⟨s, spec, sts, d, act_decide ha, hd⟩
 
+end Gen
+
+theorem next_acc_draw {zk : Bool} {x : Claims.Msg} {as : List Claims.Msg} {cs : List Coin}
+    (h : ((next zk x as cs).eval sha512).1 = .acc) :
+    ∃ ins spec sts d, setupOf zk x = some (ins, spec, sts) ∧ ins.read.draw = some d :=
+  Gen.next_acc_draw (S := S₀) (zk := zk) (x := x) (as := as) (cs := cs) (h := h)
+
+namespace Gen
+
+variable [S : ZkSetup]
+
 /-- **A statement some run accepts at SHA-512 sets up at a draw.** -/
 theorem acc_draw {zk : Bool} {x : Claims.Msg} (hacc : ¬ Claims.Flock.NoAcc sha512 (V zk) x) :
     ∃ ins spec sts d, setupOf zk x = some (ins, spec, sts) ∧ ins.read.draw = some d := by
@@ -60,6 +88,13 @@ theorem acc_draw {zk : Bool} {x : Claims.Msg} (hacc : ¬ Claims.Flock.NoAcc sha5
   obtain ⟨Ω, P, ω, r, hr⟩ := hacc
   obtain ⟨as, has⟩ := stepWith_acc _ _ _ _ _ _ _ _ _ hr
   exact next_acc_draw has
+
+end Gen
+
+/-- **A statement some run accepts at SHA-512 sets up at a draw.** -/
+theorem acc_draw {zk : Bool} {x : Claims.Msg} (hacc : ¬ Claims.Flock.NoAcc sha512 (V zk) x) :
+    ∃ ins spec sts d, setupOf zk x = some (ins, spec, sts) ∧ ins.read.draw = some d :=
+  Gen.acc_draw (S := S₀) (zk := zk) (x := x) (hacc := hacc)
 
 open Claims.Bridge.CustodyPlain Claims.Bridge.DecodePlain in
 /-- **`wrP`'s verdict at the draw `d`**: flock-verify accepts what `wrP` writes for the outcome at `d` and no drawn
