@@ -36,6 +36,7 @@ has overrun), and only jobs with a hard `max_s` backfill ahead of a reservation.
 """
 from __future__ import annotations
 
+import time
 from dataclasses import dataclass, replace
 from typing import Iterable, Union
 
@@ -93,6 +94,10 @@ class Idle:
 Action = Union[Start, Evict, Freeze, Thaw, Expire, Wait, Refuse, Idle]
 
 
+def _utc(t: int) -> str:
+    return time.strftime("%Y-%m-%dT%H:%MZ", time.gmtime(t))
+
+
 def static_refusal(cluster: Cluster, node: str, job: Job, now: int) -> str | None:
     """Why `job` can never start on `node` from `now` on, whatever else runs there; None if it might."""
     problems = job.problems(cluster)
@@ -116,7 +121,7 @@ def static_refusal(cluster: Cluster, node: str, job: Job, now: int) -> str | Non
         if share.max_job_memory_gib is not None and job.memory_gib > share.max_job_memory_gib:
             return f"{job.project}'s jobs on {node} get at most {share.max_job_memory_gib} GiB each"
         if share.until is not None and (now >= share.until or (length is not None and now + length > share.until)):
-            return f"{job.project}'s share on {node} ends at {share.until}"
+            return f"{job.project}'s share on {node} ends at {_utc(share.until)}"
     if job.workstream is not None:
         w = cluster.workstream(job.workstream, node)
         if w is None or standing != OWNER:
@@ -125,7 +130,7 @@ def static_refusal(cluster: Cluster, node: str, job: Job, now: int) -> str | Non
             return f"larger than workstream {w.name} may hold on {node} ({w.gpus} GPUs + {w.borrow_gpus} borrowed)"
     ends = n.admission_ends
     if ends is not None and (now >= ends or (length is not None and now + length > ends)):
-        return f"would run past {node}'s admission end {ends}"
+        return f"would run past {node}'s admission end {_utc(ends)}"
     if job.pool is not None and job.pool not in n.pools:
         return f"{node} has no CPU pool {job.pool!r}"
     allowed = allowed_cpus(cluster, n, job)
