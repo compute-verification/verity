@@ -1958,13 +1958,14 @@ def slack_post(dry: bool) -> Callable[[dict, dict | None], dict]:
             return "@" + h
 
     def reply(ch: str, text: str, ts: str) -> None:
+        # quiet: a clear under an alert rings no one, and route_targets would otherwise read it as for the alert's owners
         try:
-            slack._post(api, ch, POSTER, text, ts)
+            slack._post(api, ch, POSTER, text, ts, tags=(slack.QUIET,))
         except slack.SlackError as e:
             if not re.search(r"thread_not_found|message_not_found", str(e)):
                 raise
             print(f"{ch} {ts}: its thread is gone ({e}), so this reply is a post of its own", flush=True)
-            slack._post(api, ch, POSTER, text)
+            slack._post(api, ch, POSTER, text, tags=(slack.QUIET,))
 
     def post(ev: dict, thread: dict | None) -> dict:
         """Post `ev`, recording each message in `thread` as soon as Slack has it, so a retry posts only what is still missing."""

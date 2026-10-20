@@ -979,6 +979,27 @@ def test_a_clear_into_a_deleted_thread_is_a_post_of_its_own(monkeypatch, capsys)
     assert "its thread is gone" in capsys.readouterr().out and rstate["threads"] == {}
 
 
+def test_a_clear_is_posted_quiet_so_it_rings_no_one(monkeypatch):
+    """INF-168: a clear under its alert routes to no one; unmarked, the replay read each as a doorbell for the alert's owners."""
+    from research import slack as S
+    for gone in (False, True):
+        posts = fake_slack(monkeypatch, lambda ch, thread: gone and thread and S.SlackError("conversations.replies: thread_not_found"))
+        record, tags = S._post, []
+
+        def _post(api, ch, handle, text, thread=None, **kw):
+            tags.append((text.splitlines()[0], tuple(kw.get("tags") or ())))
+            return record(api, ch, handle, text, thread, **kw)
+
+        monkeypatch.setattr(S, "_post", _post)
+        src, rstate = FakeSource("node1"), {}
+        M.relay_pass(rstate, [src], M.slack_post(False), T0)
+        src.all += [ev("open", "units-n1|system:x"), ev("clear", "units-n1|system:x", text="*Cleared:* x")]
+        M.relay_pass(rstate, [src], M.slack_post(False), T0 + 60)
+        cleared = [t for line, t in tags if line == "*Cleared:* x"]
+        assert cleared and all(S.QUIET in t for t in cleared), (gone, tags)
+        assert [p[1] for p in posts][-1] == "*Cleared:* x"
+
+
 def test_the_relay_posts_grafanas_new_notes_but_not_the_monitors_own():
     old = "---\nid: x\nlane: infra\n---\n\n# old\n"
     src = FakeSource("node1", notes={"20261003T1000Z-alert-x-1.md": old})
