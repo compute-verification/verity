@@ -1,15 +1,8 @@
 """H1's coins from the proof service's challenger on its auditor host (`verity.core.protocols.sampled_proofs.remote`), and the
 verifier's check that a served window's coins are that challenger's.
 
-* **Serving** (the pouw setting ``challenger``, ``HOST:PORT``): a window connects once (`remote.RemoteChallenger.connect`)
-  to a challenger started over a live epoch's layout, scheme `SCHEME` and `families` (S) as ``FAMILIES``
-  (`benchmarks/live_challenger/run.sh`). An H1 window (`Window`) holds the gate's reserve answer (``session``: S) and,
-  once round 0's request table is committed (`pouw_h1.H1Run.open_window`), has the gate (``gate``) open S on the
-  window's open root R = `salt.window_open_root` of the weights' root, that table's root and S, connects, and opens its
-  salt coin after R; the epoch's salt is `audit.salt_of` of that coin over the weights' root. ncp-v2's `session` opens
-  its salt after the weights' root. Round s's coin opens after round s's root (`pouw_h1.H1Run`); `finish` closes the
-  session once the window has finished. The challenger is auditor-trusted (`trusted-nebius-host`): it runs on a machine
-  the prover doesn't control, and the serving process reaches it through ``ssh -R`` on its own 127.0.0.1.
+* **Serving** (`pouw_h1_window`): a window takes its salt, round and draw coins from one session of the auditor host's
+  challenger, H1's opened on the window's open root and ncp-v2's after the weights' root.
 * **Checking** (`trusted_rounds_reason`): the verifier reads the challenger's directory from the challenger's own run
   (``research fetch RUN --all``, its ``out/``), never from the prover's bundle, under its own challenger key (`pinned_key`),
   and the auditor's signed ledger, which opens and ends the one session of the window (`remote.trusted_session`): the coin
@@ -28,10 +21,10 @@ verifier's check that a served window's coins are that challenger's.
 * **Sessions** (RT4-INT-17, the pouw setting ``session``): a lane reserves a session on infra's challenger gate
   (``reserve --peer NAME --scheme S --families JSON``, `benchmarks/live_challenger/auditor.py` on vy-challenger-1, under
   the lane's own gate key), and the window opens it on its root (``open --session S --root R``, H1's R its window-open
-  root, opened from the serving process: `Window`), and carries the gate's open answer (``commits["session"]``: its
+  root, opened from the serving process: `pouw_h1_window.Window`), and carries the gate's open answer (``commits["session"]``: its
   ``session``, ``seq``, ``root`` and coin ``commitment``,
   without its ``secret``; `session_of`, `carried`). The serving side's hello carries the answer's secret, and it refuses a
-  challenger whose coin commitment isn't the answer's before its first coin (`connect`). The gate appends the window's
+  challenger whose coin commitment isn't the answer's before its first coin (`pouw_h1_window.connect`). The gate appends the window's
   ``open`` entry (v2: ``window.root``) to its ledger, signed under the challenger key, before the session's first coin,
   and refuses a second one for the root, ever; the session's ``end`` entry seals the SHA-512 of each file of its
   ``out/``, the coins each family released, whether that was all of them (``complete``), the leaf its record was signed
@@ -64,13 +57,11 @@ from pathlib import Path
 from typing import Any, Callable, Mapping, Sequence
 
 from verity.core.protocols.pouw import core_check as CC
-from verity.core.protocols.pouw import salt as PS
 from verity.core.protocols.pouw import window as Wd
-from verity.core.protocols.pouw.audit import salt_of
 from verity.core.protocols.sampled_proofs import challenger as Ch
 from verity.core.protocols.sampled_proofs import remote
 from verity.core.protocols.sampled_proofs.challenger import (ChallengerKey, ChallengerRecord, CoinError, LiveCommitment,
-                                                             LiveOpening, LiveRecord, live_reason, trusted_commitment)
+                                                             LiveOpening, live_reason, trusted_commitment)
 from verity.ml.commitments.identity import identity_digest_sha512
 
 from verity_vllm.protocol_options import pouw_h1_requests as RQ
@@ -89,8 +80,6 @@ SEALED = (remote.RECORD, remote.KEY, remote.RELEASES)
 #: null), and what else the answer may carry; the window carries it without its ``secret`` (`carried`)
 SESSION_FIELDS = ("session", "seq", "root", "commitment")
 REPLY_FIELDS = ("host", "port", "peer", "by", "for", "reserve", "opened_by", "secret")
-#: what else the gate's reserve answer carries beside its ``session`` (H1's ``session``, `reserved_of`)
-RESERVE_FIELDS = ("seq", "peer", "by", "for", "expires_utc", "period")
 #: the ledger's period entries (session null), and what a two-step open carries unchanged from its reserve
 PERIOD_KINDS = ("period-open", "period-close")
 RESERVED = ("by", "for", "peer", "scheme", "epoch", "families", "minutes")
@@ -143,170 +132,6 @@ def carried(given: Mapping[str, Any]) -> dict[str, Any]:
     """The session a window or a Commit carries: the gate's answer `given` without its hello ``secret``."""
     return {k: v for k, v in given.items() if k != "secret"}
 
-
-def session_setting(raw: Any) -> dict[str, Any] | None:
-    """The pouw setting ``session``: the gate's open answer (`session_of`, ncp-v2's) or, for a window that opens its
-    session itself on its window-open root (H1's), the gate's reserve answer (`reserved_of`)."""
-    return session_of(raw) if isinstance(raw, Mapping) and "root" in raw else reserved_of(raw)
-
-
-def refusals(scheme: str, settings: Any, stage: str, opens: bool = False) -> list[str]:
-    """Why `scheme` can't take its coins from the challenger under `settings` at `stage`; `opens` for a window that opens
-    its session itself (H1's `Window`)."""
-    out = []
-    if settings.session is None:
-        out.append(f"{scheme}: the pouw setting 'challenger' needs 'session', the challenger gate's "
-                   + ("reserve answer for the window ({'session', ...}), which it opens on its window-open root"
-                      if opens else "open answer for the window's Commit ({'session', 'seq', 'root', 'commitment'})")
-                   + ", which the window carries and the verifier checks against the auditor's ledger")
-    elif opens and ("root" in settings.session or settings.gate is None):
-        out.append(f"{scheme}: the window opens its session itself, on its window-open root (salt.window_open_root, over "
-                   "round 0's request table, committed before its salt): the pouw setting 'session' is the gate's reserve "
-                   "answer and 'gate' opens it")
-    elif not opens and "root" not in settings.session:
-        out.append(f"{scheme}: the pouw setting 'session' is the gate's open answer for the window's Commit "
-                   "({'session', 'seq', 'root', 'commitment'})")
-    if not opens and settings.gate is not None:
-        out.append(f"{scheme}: the pouw setting 'gate' opens an H1 window's session on its window-open root")
-    if settings.coins is not None or settings.rounds is not None:
-        out.append(f"{scheme}: the window's coins come from one source: the pouw setting 'challenger' (the auditor host's "
-                   "salt and round coins) or, in tests, 'coins' and 'rounds' held in this process, not both")
-    if stage == "capture":
-        out.append(f"{scheme}: a capture records nothing, so it opens no session on the auditor host's challenger (the pouw "
-                   "setting 'challenger' is a served window's)")
-    return out
-
-
-def connect(at: str, given: Mapping[str, Any]) -> Any:
-    """The session the gate's answer `given` (`session_of`) opened, on the challenger at `at`: its hello carries the
-    answer's ``secret`` when it has one, and a challenger whose coin commitment isn't the answer's is closed and refused
-    (ValueError) before its first coin, since another process's challenger on that port would serve other coins."""
-    secret = given.get("secret")
-    if secret is None:
-        client = remote.RemoteChallenger.connect(at)
-    else:
-        client = remote.RemoteChallenger.connect(at, bytes.fromhex(secret))
-    got = client.commitment.root.hex()
-    if got != given["commitment"]:
-        _close(client)
-        raise ValueError(f"the challenger at {at} commits to coins {got[:16]}..., not {given['commitment'][:16]}..., the "
-                         f"commitment the gate's answer gives session {given['session']}: refused before its first coin")
-    return client
-
-
-def reserved_of(raw: Any) -> dict[str, Any] | None:
-    """H1's pouw setting ``session``: None, or the gate's answer to the window's ``reserve`` (its ``session``, a gate
-    session id, and optionally its `RESERVE_FIELDS`); ValueError otherwise."""
-    if raw is None:
-        return None
-    if not (isinstance(raw, Mapping) and "session" in raw and set(raw) <= {"session", *RESERVE_FIELDS}
-            and isinstance(raw["session"], str) and PS.SESSION.fullmatch(raw["session"])):
-        raise ValueError("H1's pouw setting 'session' is the challenger gate's reserve answer for the window, {'session'} "
-                         f"(a gate session id) and optionally {', '.join(repr(k) for k in RESERVE_FIELDS)}, not {raw!r}: the "
-                         "window opens it itself, on its window-open root (the pouw setting 'gate')")
-    return dict(raw)
-
-
-def _live(entry: str, at: str, steps: int, given: Mapping[str, Any]) -> tuple[Any, LiveCommitment]:
-    """The session the gate's answer `given` opened on the challenger at `at` (`connect`) and its coin commitment, a live
-    epoch's with at least `steps` round coins; on a refusal the session is closed and ValueError raised."""
-    try:
-        client = connect(at, given)
-    except ValueError as e:
-        raise ValueError(f"{entry}: {e}") from e
-    c = client.commitment
-    why = Wd.live_epoch_reason(c)
-    if why is None and c.family(Wd.ROUND) < steps:
-        why = (f"its {c.family(Wd.ROUND)} round coins are fewer than the window's {steps} rounds (start it with SCHEME "
-               f"{SCHEME} and FAMILIES {families(steps)})")
-    if why is not None:
-        _close(client)
-        raise ValueError(f"{entry}: the challenger at {at} is not a live window's: {why}")
-    return client, c
-
-
-def session(entry: str, at: str, steps: int, root: bytes,
-            given: Mapping[str, Any]) -> tuple[Any, LiveCommitment, LiveOpening, LiveRecord, bytes]:
-    """ncp-v2's session on the challenger at `at`, the one the gate's answer `given` opened (`_live`), its salt coin opened
-    after the weights' root `root`. Returns the session, its coin commitment, the salt coin's opening, the `LiveRecord` of
-    its round coins and the epoch's salt; on a refusal the session is closed and ValueError or `CoinError` (the
-    challenger's) raised."""
-    client, c = _live(entry, at, steps, given)
-    try:
-        opening = LiveRecord(client, Wd.SALT).record(root)
-    except BaseException:
-        _close(client)
-        raise
-    return client, c, opening, LiveRecord(client, Wd.ROUND), salt_of(c, opening.coin, root)
-
-
-#: ``gate(session, root)``: the gate's answer (`session_of`'s form) to ``open --session SESSION --root ROOT`` (ROOT 128
-#: lowercase hex), its ``commitment`` the session's (``status SESSION``'s when the open answer's is null)
-Gate = Callable[[str, str], Mapping[str, Any]]
-
-
-class Window:
-    """An H1 window's session on the challenger at `at`, reserved on infra's gate (`reserved`, the gate's reserve answer,
-    `reserved_of`) and opened by `open` once round 0's request table is committed (`pouw_h1.H1Run.open_window`): the gate
-    opens it (`gate`) on the window's open root, `salt.window_open_root` of the weights' root `weights_root`, that
-    table's root and the session, and the salt coin opens after that root. `close` closes the session."""
-
-    def __init__(self, entry: str, at: str, steps: int, weights_root: bytes, reserved: Mapping[str, Any],
-                 gate: Gate) -> None:
-        self.entry, self.at, self.steps, self.weights_root = entry, at, steps, weights_root
-        self.reserved, self.gate, self.client = dict(reserved), gate, None
-
-    def open(self, requests_root: bytes) -> tuple[bytes, LiveRecord, LiveRecord, dict[str, Any]]:
-        """The epoch's salt (`audit.salt_of` over the weights' root), the round and draw coins' `LiveRecord`s and what
-        the commitment records of the session (its ``coins``, ``round_coins``, ``salt_opening`` and the gate's answer
-        without its secret, ``session``). Refused (ValueError, the session closed when it was reached): an answer
-        that isn't the gate's open of the reserved session on the window's open root, or a challenger off it
-        (`_live`); `CoinError` is the challenger's."""
-        if self.client is not None:
-            raise RuntimeError(f"{self.entry}: the window's session is opened once")
-        sid = self.reserved["session"]
-        root = PS.window_open_root(self.weights_root, requests_root, sid)
-        try:
-            answer = session_of(self.gate(sid, root.hex()))
-        except ValueError as e:
-            raise ValueError(f"{self.entry}: the gate's answer to opening session {sid}: {e}") from e
-        if answer is None or (answer["session"], answer["root"]) != (sid, root.hex()):
-            raise ValueError(f"{self.entry}: the gate's answer is not session {sid} opened on the window's open root "
-                             f"{root.hex()[:16]}... (salt.window_open_root of its weights' root, round 0's request table "
-                             "and the session)")
-        client, c = _live(self.entry, self.at, self.steps, answer)
-        try:
-            opening = LiveRecord(client, Wd.SALT).record(root)
-        except BaseException:
-            _close(client)
-            raise
-        self.client = client
-        return (salt_of(c, opening.coin, self.weights_root), LiveRecord(client, Wd.ROUND), LiveRecord(client, Wd.DRAW),
-                {"coins": c.to_json(), "round_coins": c.to_json(), "salt_opening": opening.to_json(),
-                 "session": carried(answer)})
-
-    def close(self) -> None:
-        if self.client is None:
-            raise CoinError("the window's session was never opened")
-        self.client.close()
-
-
-def _close(client: Any) -> str | None:
-    try:
-        client.close()
-    except CoinError as e:
-        return str(e)
-    return None
-
-
-def finish(run: Any, client: Any) -> None:
-    """The window's release: `run.finish()`, then its session closed; how it closed goes in ``details.challenger``."""
-    try:
-        run.finish()
-    finally:
-        if client is not None:
-            why = _close(client)
-            run.details["challenger"] = {"closed": why is None, **({"reason": why} if why else {})}
 
 
 def lms_verify(key: ChallengerKey, message: bytes, signature: bytes) -> bool:
@@ -481,9 +306,44 @@ def _reserve_ok(b: Mapping[str, Any]) -> bool:
             and bool(_UTC.fullmatch(b["started_utc"])) and b.get("expires_utc") == _later(b["started_utc"], b["minutes"]))
 
 
+def _period(i: int, kind: str, schema: Any, e: Mapping[str, Any], periods: dict[str, dict[str, Any]],
+            current: dict[str, str], windows: Mapping[str, Mapping[str, Any]], by_session: Mapping[str, str]) -> None:
+    """`Ledger.verify`'s period-open or period-close entry `e` (entry `i`), recorded in `periods` and `current` (each
+    lane's open period), its close listing exactly its windows and their outcomes; `CoinError` otherwise."""
+    body = e["body"]
+    name, lane = body.get("period"), body.get("lane")
+    if schema != LEDGER_SCHEMA or not (_named(name) and _named(lane)):
+        raise CoinError(f"ledger entry {i} is a {kind} that doesn't name its period and its lane (v2)")
+    if kind == "period-open":
+        if name in periods:
+            raise CoinError(f"ledger entry {i} opens period {name} a second time: a period's name is used once")
+        if lane in current:
+            raise CoinError(f"ledger entry {i} opens period {name} while lane {lane}'s period {current[lane]} is open")
+        cap, circuit = body.get("cap"), body.get("circuit")
+        if (cap is not None or circuit is not None) and not (
+                type(cap) is int and _CAP[0] <= cap <= _CAP[1] and type(circuit) is str and _ROOT.fullmatch(circuit)):
+            raise CoinError(f"ledger entry {i}: period {name}'s cap is a positive integer and its circuit a "
+                            "SHA-512 in lowercase")
+        periods[name] = {"lane": lane, "open": e, "close": None, "windows": [], "cap": cap, "circuit": circuit}
+        current[lane] = name
+    else:
+        p = periods.get(name)
+        if p is None or p["close"] is not None or p["lane"] != lane:
+            raise CoinError(f"ledger entry {i} closes period {name}, which isn't lane {lane}'s open period")
+        outcomes = [{"root": by_session.get(s), "session": s,
+                     "complete": s in by_session and windows[by_session[s]]["end"] is not None
+                     and windows[by_session[s]]["end"]["body"].get("complete") is True} for s in p["windows"]]
+        if (body.get("windows") != outcomes
+                or body.get("complete") is not (bool(outcomes) and all(w["complete"] for w in outcomes))):
+            raise CoinError(f"ledger entry {i} closes period {name} without listing exactly its windows and "
+                            "their outcomes")
+        p["close"] = e
+        del current[lane]
+
+
 # TODO(#2946 v2 follow-up, cursor/challenger-ledger-v2-7c3e): `challenger.audited_session` reads only a v1 ledger, so
 # infra's v1-then-v2 ledger is checked here alone, and this mirror of infra's verify_ledger and verify_periods (the
-# period kinds, the two-step reserve and open, `period_reason`), `evidence` and `released_v2` go once proofs' v2 reader
+# period kinds, the two-step reserve and open, `period_reason`), `evidence` and `released_sealed` go once proofs' v2 reader
 # and signed close are on main; this module then keeps only vllm's checks (a session a window, the commitment before the
 # first coin, the slot tables).
 @dataclass(frozen=True)
@@ -602,39 +462,7 @@ class Ledger:
                 windows[root] = {"reserve": reserved, "open": e, "end": None}
                 opened_at[root], by_session[sid] = q, root
             elif kind in PERIOD_KINDS:
-                name, lane = body.get("period"), body.get("lane")
-                if schema != LEDGER_SCHEMA or not (_named(name) and _named(lane)):
-                    raise CoinError(f"ledger entry {i} is a {kind} that doesn't name its period and its lane (v2)")
-                if kind == "period-open":
-                    if name in periods:
-                        raise CoinError(f"ledger entry {i} opens period {name} a second time: a period's name is used "
-                                        "once")
-                    if lane in current:
-                        raise CoinError(f"ledger entry {i} opens period {name} while lane {lane}'s period "
-                                        f"{current[lane]} is open")
-                    cap, circuit = body.get("cap"), body.get("circuit")
-                    if (cap is not None or circuit is not None) and not (
-                            type(cap) is int and _CAP[0] <= cap <= _CAP[1] and type(circuit) is str
-                            and _ROOT.fullmatch(circuit)):
-                        raise CoinError(f"ledger entry {i}: period {name}'s cap is a positive integer and its circuit a "
-                                        "SHA-512 in lowercase")
-                    periods[name] = {"lane": lane, "open": e, "close": None, "windows": [], "cap": cap,
-                                     "circuit": circuit}
-                    current[lane] = name
-                else:
-                    p = periods.get(name)
-                    if p is None or p["close"] is not None or p["lane"] != lane:
-                        raise CoinError(f"ledger entry {i} closes period {name}, which isn't lane {lane}'s open period")
-                    outcomes = [{"root": by_session.get(s), "session": s,
-                                 "complete": s in by_session and windows[by_session[s]]["end"] is not None
-                                 and windows[by_session[s]]["end"]["body"].get("complete") is True}
-                                for s in p["windows"]]
-                    if (body.get("windows") != outcomes
-                            or body.get("complete") is not (bool(outcomes) and all(w["complete"] for w in outcomes))):
-                        raise CoinError(f"ledger entry {i} closes period {name} without listing exactly its windows and "
-                                        "their outcomes")
-                    p["close"] = e
-                    del current[lane]
+                _period(i, kind, schema, e, periods, current, windows, by_session)
             elif kind == "end":
                 root = by_session.get(sid)
                 if root is None or windows[root]["end"] is not None:
@@ -690,7 +518,7 @@ _ROOT_EVENT = ["event", "index", "label", "received_at", "root"]
 _RELEASE_EVENT = ["after", "event", "index", "label", "released_at"]
 
 
-def released_v2(path: str | Path, commitment: LiveCommitment) -> dict[str, tuple[bytes, ...]]:
+def released_sealed(path: str | Path, commitment: LiveCommitment) -> dict[str, tuple[bytes, ...]]:
     """The roots the release log at `path` of an infra v2 session (JSON lines, its times floats, no signed close: the
     sealing end entry stands in for it) shows the challenger received, by family in order, its head naming `commitment`,
     each root followed by its coin's release; `CoinError` for a missing, unreadable or malformed log, or another
@@ -724,7 +552,7 @@ def evidence(window: Mapping[str, Any], fetch: Fetch, key: ChallengerKey, verify
     end entry seals is the one it sealed (`SEALED` among them), its key is `key` (the one the ledger's open pins) and its
     record is signed for the open entry's host and layout (scheme, epoch, families); for a v2 end, the record's
     commitment root and LMS leaf are the end's ``commitment`` and ``record_leaf``, and the coins its release log shows each
-    family released (`released_v2`, under the commitment its record signs under `key`) are the end's ``released``."""
+    family released (`released_sealed`, under the commitment its record signs under `key`) are the end's ``released``."""
     opened, end = window["open"], window["end"]
     sid, body = opened["session"], opened["body"]
     if end is None:
@@ -764,7 +592,7 @@ def evidence(window: Mapping[str, Any], fetch: Fetch, key: ChallengerKey, verify
         if leaf != sealed.get("record_leaf"):
             raise CoinError(f"session {sid}'s record is signed at LMS leaf {leaf}, not {sealed.get('record_leaf')}, the "
                             "leaf its end entry records")
-        received = released_v2(out / remote.RELEASES, trusted_commitment(out / remote.RECORD, key, verify))
+        received = released_sealed(out / remote.RELEASES, trusted_commitment(out / remote.RECORD, key, verify))
         released = {label: len(r) for label, r in received.items()}
         if released != sealed.get("released"):
             raise CoinError(f"session {sid}'s release log shows {released} coins released, not {sealed.get('released')}, "
@@ -814,7 +642,7 @@ def session_reason(commits: Mapping[str, Any], ledger: Ledger, fetch: Fetch, reg
     """Why the window (its H1 commitment `commits`) isn't held to the one session the auditor's `ledger` opened for its
     Commit's root, ended closed and complete under the window's commitment (`held`), with that session's coins
     (its ``out/`` as `fetch` gives it, `evidence`, checked as `trusted_rounds_reason` checks a v1 session's, over its
-    unsigned log, `released_v2`); None when it is. `registered`
+    unsigned log, `released_sealed`); None when it is. `registered`
     is the weights' root the period registered and `commit` the window's Commit root as the verifier holds it, which the
     window's must be. Fails closed."""
     if commits.get("coin_source") != "challenger":
@@ -832,7 +660,7 @@ def session_reason(commits: Mapping[str, Any], ledger: Ledger, fetch: Fetch, reg
         return f"session {sid}'s evidence is not trusted: {e}"
     try:
         trusted = trusted_commitment(out / remote.RECORD, ledger.key, verify)
-        received = released_v2(out / remote.RELEASES, trusted)
+        received = released_sealed(out / remote.RELEASES, trusted)
     except CoinError as e:
         return f"the challenger's session is not trusted: {e}"
 
@@ -889,8 +717,7 @@ def period_reason(ledger: Ledger, period: str, accepted: Sequence[str]) -> list[
     return out
 
 
-__all__ = ["ENTRY_TAGS", "Fetch", "Gate", "LEDGER_ROLE", "LEDGER_SCHEMA", "LEDGER_V1", "Ledger", "PERIOD_KINDS",
-           "REPLY_FIELDS", "RESERVED", "RESERVE_FIELDS", "SCHEME", "SEALED", "SESSION_FIELDS", "Window", "address",
-           "carried", "connect", "draw_reason", "entry_message", "evidence", "families", "finish", "held", "leaf_of",
-           "lines_of", "lms_verify", "pinned_key", "period_reason", "refusals", "released_v2", "reserved_of", "root_of",
-           "session", "session_of", "session_reason", "session_setting", "trusted_rounds_reason"]
+__all__ = ["ENTRY_TAGS", "Fetch", "LEDGER_ROLE", "LEDGER_SCHEMA", "LEDGER_V1", "Ledger", "PERIOD_KINDS",
+           "REPLY_FIELDS", "RESERVED", "SCHEME", "SEALED", "SESSION_FIELDS", "address", "carried", "draw_reason",
+           "entry_message", "evidence", "families", "held", "leaf_of", "lines_of", "lms_verify", "pinned_key",
+           "period_reason", "released_sealed", "root_of", "session_of", "session_reason", "trusted_rounds_reason"]

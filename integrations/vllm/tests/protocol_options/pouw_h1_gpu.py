@@ -32,7 +32,7 @@ static schedule's check (`engine.static_schedule.check`) of every request. Compi
 ``--challenger HOST:PORT --session JSON --gate CMD`` takes the window's salt and round coins from the auditor host's
 challenger, in the session infra's gate reserved for the window (``--session``, the gate's reserve answer), which the
 window opens through ``CMD open --session S --root R`` on its window-open root once round 0 is admitted
-(`gate_command`; `pouw_h1_challenger.Window`; on PEER, the port the gate forwards), one session a window, so the fill
+(`gate_command`; `pouw_h1_window.Window`; on PEER, the port the gate forwards), one session a window, so the fill
 workload serves only the 64's window. ``--check-challenger CALLS_JSON DIR --key-sha512 HEX --ledger JSONL`` is the
 verifier's side on no GPU. With ``--window WINDOW_JSON`` (``{commit, period}``, its commit the window's open root) the
 ledger is the auditor's signed v1 ledger and DIR the challenger run's own ``out/``: the window's coins against the
@@ -71,7 +71,7 @@ PROMPTS = ["The capital of France is", "def fibonacci(n):\n    \"\"\"Return the 
 
 
 def gate_command(argv: list[str]) -> Any:
-    """The `pouw_h1_challenger.Gate` that runs the gate's verbs as `argv` + VERB (an ``ssh ... research@HOST``): ``open
+    """The `pouw_h1_window.Gate` that runs the gate's verbs as `argv` + VERB (an ``ssh ... research@HOST``): ``open
     --session S --root R``, its JSON answer's ``commitment`` (null until serve.py signs its record) then read from ``status
     S``."""
     def verb(*args: str) -> dict[str, Any]:

@@ -523,7 +523,7 @@ def test_infras_v2_head_and_sessions_bind_under_the_gates_key():
     assert PHC.held(given, ledger, root) == (None, window)
     out = PHC.evidence(window, fetch, key)
     trusted = LC.trusted_commitment(out / R.RECORD, key, PHC.lms_verify)
-    received = PHC.released_v2(out / R.RELEASES, trusted)
+    received = PHC.released_sealed(out / R.RELEASES, trusted)
     assert trusted.root.hex() == commitment and trusted.scheme == "verity/smoke/coins/v1" and len(received["replay"]) == 2
     smoke = {"coin_source": "challenger", "session": given}
     assert PHC.session_reason(smoke, ledger, fetch).startswith("the window's round_coins are not a live coin commitment")
@@ -794,6 +794,20 @@ def test_the_commits_replay_challenge_is_the_auditor_hosts_replay_coin_after_the
     assert RCN.session_reason(rec, chal, run_root, short.ledger(), {"s-d": two.tree}.get) == (
         f"the replay challenge: session s-d ended without releasing every coin of its families (released "
         f"{{'{RCN.FAMILY}': 1}}): a refused window")
+
+
+def test_the_commits_replay_options_name_one_source_and_its_session():
+    """RT4-INT-21: the Commit's ``--replay-challenger`` and ``--replay-challenge`` are two sources (one of them), the
+    challenger and ``--replay-session`` go together and the session is the gate's answer; without a challenger the
+    challenge is the flag's or this process's own, recorded as such."""
+    for args, match in ((("h:1", "ab", None), "two sources"), (("h:1", None, None), "go together"),
+                        ((None, None, "{}"), "go together"), (("h:1", None, '{"session": ""}'), "--replay-session: ")):
+        with pytest.raises(SystemExit, match=match):
+            RCN.session_option(*args)
+    assert RCN.session_option(None, "ab", None) is None
+    assert RCN.drawn(None, b"r", None, "ab") == ("ab", {"source": "flag"})
+    drawn, record = RCN.drawn(None, b"r", None, None)
+    assert record == {"source": "in-process"} and len(bytes.fromhex(drawn)) == 16
 
 
 def test_a_window_admits_in_round_0_only_unless_its_admission_is_per_round():

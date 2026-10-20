@@ -1159,18 +1159,8 @@ def main(args: Options, argv: list[str] | None = None) -> None:
     required_manifest = None
     if getattr(args, "padded_finalize", False) and not args.required_manifest:
         raise SystemExit("--padded-finalize needs --required-manifest: the padding is RequiredValues outside the executed prefix of record (B9.1); nothing to pad without it")
-    if args.replay_challenger and args.replay_challenge:
-        raise SystemExit("--replay-challenger and --replay-challenge are two sources of the C2 replay's challenge: give one")
-    replay_session = getattr(args, "replay_session", None)
-    if bool(args.replay_challenger) != bool(replay_session):
-        raise SystemExit("--replay-challenger and --replay-session go together: the challenger and the gate's answer for "
-                         "the session it serves the Commit's replay coin in")
-    if replay_session:
-        from verity_vllm.protocol_options.pouw_h1_challenger import session_of
-        try:
-            replay_session = session_of(json.loads(replay_session))
-        except ValueError as e:
-            raise SystemExit(f"--replay-session: {e}") from e
+    from verity_vllm.pipeline import replay_coin as RCN
+    replay_session = RCN.session_option(args.replay_challenger, args.replay_challenge, getattr(args, "replay_session", None))
     if args.required_manifest:
         from verity_vllm.commit.binding import require_build_program_digest
         require_build_program_digest(args.required_manifest, args.program_digest)          # [COORD M-0205 (C1)] named refusal, before any engine
@@ -2236,15 +2226,8 @@ def main(args: Options, argv: list[str] | None = None) -> None:
                           f"coincident {(lk.get('attribution') or {}).get('coincident_pairs')} (tokens-only {(lk.get('attribution') or {}).get('coincident_pairs_tokens')}) "
                           f"steps {ckc.get('sampled_steps')} {ckc.get('mismatch', [])[:2]} {ckc.get('missing', [])[:2]} {ckc.get('errors', [])[:1]} {ckc.get('error', '')}", flush=True)
                 if served is not None:
-                    import secrets
-
                     row["commit"]["compiled_source"], row["commit"]["compilation"] = served.src.summary(), versions["compilation"]
-                    from verity_vllm.pipeline import replay_coin as RCN
-
-                    if args.replay_challenger:   # RT4-INT-21: the auditor host's replay coin, opened after the run root
-                        _chal, _chal_rec = RCN.challenge(args.replay_challenger, rc.run_root, replay_session)
-                    else:
-                        _chal, _chal_rec = RCN.local(args.replay_challenge, secrets.token_hex(16))
+                    _chal, _chal_rec = RCN.drawn(args.replay_challenger, rc.run_root, replay_session, args.replay_challenge)
                     _sc2 = served.c2(com, rc, reqs, _chal, args.replay_seed)   # the challenge drawn after the run root
                     components.update(_sc2["components"])
                     components["replay_challenge"] = _chal_rec

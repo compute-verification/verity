@@ -161,7 +161,7 @@ class Gate:
         doc = json.loads((out / R.RECORD).read_text())
         record = LC.ChallengerRecord.from_json(doc)
         try:
-            released = {k: len(r) for k, r in PHC.released_v2(out / R.RELEASES, record.commitment).items()}
+            released = {k: len(r) for k, r in PHC.released_sealed(out / R.RELEASES, record.commitment).items()}
         except LC.CoinError:
             released = None
         families = self._opens[session]["families"]
@@ -209,7 +209,7 @@ class Host:
     `seed` at the next of `leaves` (hosts sharing a key share them) and written to `directory`, serving one client; the
     ledger `ledger` (a new one beside `directory` unless given) opens the session before its record and ends it once
     `ended`. With `period` the ledger opens it only at `open`, the gate's open of the reserved session, for the window
-    ``{commit: root, period}`` the serving side names (an H1 window's open root, `pouw_h1_challenger.Window`)."""
+    ``{commit: root, period}`` the serving side names (an H1 window's open root, `pouw_h1_window.Window`)."""
 
     def __init__(self, directory: Path, challenger: LC.LiveChallenger, seed: int, session: str = "s-1",
                  leaves: Iterator[int] | None = None, ledger: Ledger | None = None, window: dict | None = None,
@@ -236,7 +236,7 @@ class Host:
             self.reason = R.serve(sock, session, itertools.count().__next__)
 
     def open(self, session: str, root: str) -> dict:
-        """The gate's open of `session` on `root` (`pouw_h1_challenger.Gate`): the ledger opens it for ``{commit: root,
+        """The gate's open of `session` on `root` (`pouw_h1_window.Gate`): the ledger opens it for ``{commit: root,
         period}``, and the answer names its ledger entry, its root and the challenger's coin commitment."""
         self.window = {"commit": root, "period": self.period}
         self.ledger.open(session, self.window)

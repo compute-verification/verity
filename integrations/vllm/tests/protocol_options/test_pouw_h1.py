@@ -677,7 +677,7 @@ _GATES: dict = {}
 
 
 def _gate(session, root):
-    """The gate (`pouw_h1_challenger.Gate`) of the host `_host` made last."""
+    """The gate (`pouw_h1_window.Gate`) of the host `_host` made last."""
     return _GATES["host"].open(session, root)
 
 

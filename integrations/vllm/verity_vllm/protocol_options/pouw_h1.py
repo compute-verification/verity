@@ -427,7 +427,7 @@ class H1Run:
     def open_window(self) -> bytes:
         """The Program's salt, opened once: round 0's request table is committed (its binding reads no salt) and its root
         handed to ``opener``, which opens the window's session and its salt coin after the window's open root over it
-        (`pouw_h1_challenger.Window.open`); the commitment records the root (``requests_root``) and what ``opener``
+        (`pouw_h1_window.Window.open`); the commitment records the root (``requests_root``) and what ``opener``
         returns of the opening."""
         if self._salt is None:
             if "unopened" in self.details:
