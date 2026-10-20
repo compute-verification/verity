@@ -37,13 +37,17 @@ roots follow the step's real rows, so this window doesn't use them (the seeded m
   (RT4-LOGIC-4).  Seeds come from the salt, the position and the call's (root(A), root(B)), inside the unit.  A dead unit skips
   the noise and the receipt: its leaf is the canonical empty receipt (zero words), so every receipt tree keeps its shape.
   There is one receipt tree per call.
-* **Coins** (``--coins``), every challenger's entropy the Lean verifier of record's (`pouw.verifier.coins`): seeded, the
-  option's one salt, opened at install before serving; or live, a round a step from the proof service's challenger
-  (`pouw.window.live_challenger`, `sampled_proofs.challenger.LiveRecord`), whose salt coin opens first, against the
-  registration root over the weights' root and the queue's root.  Step s's round root, over its A root and its admit root,
-  is recorded before round s's coin opens, and the step's units take the round's salt (`h1tile.live_salt`:
+* **Coins** (``--coins``): seeded, the option's one salt, opened at install before serving; or live, a round a step from
+  the proof service's challenger (`coins.py`), whose salt coin opens first, against the registration root over the
+  weights' root and the queue's root.  Step s's round root, over its A root and its admit root, is recorded before round
+  s's coin opens (`sampled_proofs.challenger.LiveRecord`), and the step's units take the round's salt (`h1tile.live_salt`:
   `window.round_key(...).stream(0, 64)`), so every candidate and every selection a round's noise reads is committed before
-  that noise's coin.
+  that noise's coin.  The gate's units come from the draw coin, opened after the window's receipts root (`receipts_root`).
+  With ``--challenger HOST:PORT`` (or ``$POUW_CHALLENGER``) the challenger is off the node: one session a window on its
+  auditor host (`benchmarks/live_challenger/run.sh` on vy-challenger-1, `remote.RemoteChallenger`), opened before
+  anything else runs, its layout the window's (`coins.layout`), and the verifier checks the coins from the challenger's
+  own run (`coins.py check`).  Without one the challenger is `window.live_challenger` in this process, and the run is
+  labelled ``coins=in-process (not certified)``, as is every seeded run.
 * **Credit**: only the admitted slots, a tile's iff `PouwH1Tile_v4`'s live bit (the OR of its admit bits) is set, an
   admitted tile of zero-byte rows included (RT4-LOGIC-20) (`credit.tally`, in 16-bit limbs, committed and not proved until
   a tally Definition exists): Cr = Σ admitted rows · N · K, and the published credit point(level(floor_point(Cr))) <= Cr.
@@ -68,7 +72,8 @@ In order, into OUT (`record.json` throughout, `manifest.json` at the end, the op
   prover    the prover's data (the table key, each call's real rows, scales and receipts) as SCRATCH/prover.tar, before the
             gate so a gate failure keeps it; `serve.sh` puts it in the store once the GPU is released, else moves it into
             OUT, which the run's custody uploads
-  gate      drawn units, live and dead, of real and empty steps, against `h1tile.reference` gated by the tile's admit
+  gate      units from the draw coin (live; the prover's entropy when seeded), live and dead, of real and empty steps,
+            against `h1tile.reference` gated by the tile's admit
             words opened from the call's admit tree (receipt) and the
             served integer product (z); controls: the unit at the next position, a flipped receipt bit, root(A) rebuilt (and
             a tampered row, real or empty), the tile's 32 A rows opened against root(A) and the step's A root and A' = -b
@@ -80,7 +85,8 @@ In order, into OUT (`record.json` throughout, `manifest.json` at the end, the op
             zeroed under a nonzero scale still admitted, a live unit's receipt the ungated one
 
     cd integrations/vllm; PYTHONPATH=.:../..:../../tools/research/src:../../benchmarks/pouw/served_h1
-    $PY ../../benchmarks/pouw/served_h1/serve.py --out OUT --cubin noise.cubin --at 2026-10-18T00:00:00Z --by compute-accounting
+    $PY ../../benchmarks/pouw/served_h1/serve.py --out OUT --cubin noise.cubin --at 2026-10-18T00:00:00Z --by compute-accounting \
+      --coins live --challenger 127.0.0.1:7811
 """
 from __future__ import annotations
 
@@ -100,6 +106,7 @@ import numpy as np
 
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
+import coins as CO  # noqa: E402
 import commit as CM  # noqa: E402
 import credit as CR  # noqa: E402
 
@@ -255,6 +262,41 @@ def step_roots(window: str, s: int, cs: list[dict]) -> dict:
     return {"fields": r_fields, "a_step": a_step, "admit_step": admit_step, "root": root}
 
 
+#: the gate's draw key: the challenger's draw coin, opened once after the window's receipts root
+GATE_DRAW_DOMAIN = "verity/pouw/served-h1-gate-draw/v1"
+
+
+def receipts_root(window: str, calls: list[dict]) -> bytes:
+    """The window's receipts root, the tree over its calls' receipt roots in call order ('receipts-window'): what the draw
+    coin opens after, so no unit is drawn before every receipt is committed."""
+    return CM.step_root(CM.domain({"window": window, "calls": len(calls)}, len(calls), "receipts-window"),
+                        [bytes.fromhex(c["receipt_root"]) for c in calls])
+
+
+def gate_rng(commitment, coin: bytes, after: bytes) -> random.Random:
+    """The gate's picks from the draw coin `coin` opened after `after` (`receipts_root`): the harness's self-check of the
+    receipts, not the window's draw of record."""
+    from verity.ml.randomness import derive
+    key = derive(coin, GATE_DRAW_DOMAIN, {"coins": commitment.root, "epoch": commitment.epoch, "receipts": after})
+    return random.Random(key.stream("gate", 64))
+
+
+def coins_expect(manifest: dict) -> dict:
+    """What the verifier recomputes from a live window's manifest for `coins.check`: the round roots from its calls' A
+    and admit roots (`step_roots`), each round's unit salt as its calls carry it, and the draw coin's root, the receipts
+    root over its calls' receipt roots, when the window opened one."""
+    calls, window = manifest["calls"], manifest["window"]
+    by_step: dict[int, list[dict]] = {}
+    for c in calls:
+        by_step.setdefault(c["step"], []).append(c)
+    salts = {}
+    for s, cs in by_step.items():
+        got = {c.get("salt") for c in cs}
+        salts[s] = got.pop() if len(got) == 1 else "the step's calls read more than one salt"
+    return {"rounds": [step_roots(window, s, by_step[s])["root"] for s in sorted(by_step)], "salts": salts,
+            "draw_after": receipts_root(window, calls) if manifest.get("coins", {}).get("draw_coin") else None}
+
+
 def schedule_tap(runner) -> tuple[list, dict, Any]:
     """(spans, info, restore): each engine step's (request id, rows) in batch order, the order its token rows take in every
     linear, read once the runner's `execute_model` returns, from the step's batch (the new runner's `gather_batch_req_state`
@@ -361,6 +403,15 @@ def run(a: argparse.Namespace) -> dict:
     out = Path(a.out)
     out.mkdir(parents=True, exist_ok=True)
     rec = Record(out)
+    at = CO.address(a.challenger)
+    a.coins = a.coins or ("live" if at is not None else "seeded")
+    live = a.coins == "live"
+    if at is not None and not live:
+        raise ValueError(f"the challenger at {at} serves live coins, not --coins {a.coins}")
+    cs = CO.open_coins(at, a.epoch, a.steps or a.max_tokens + 2) if live else None
+    rec.doc["coins"] = cs.label if live else CO.IN_PROCESS
+    rec.step("coin_source", {"mode": a.coins, **(cs.record() if live else {"source": "in-process", "label": CO.IN_PROCESS}),
+                             **({"commitment": cs.commitment.to_json()} if live else {})})
     workers = a.workers or max(2, min(48, len(os.sched_getaffinity(0)) - 2))
     pool = mp.get_context("spawn").Pool(workers)
     import receipts as RC
@@ -453,16 +504,14 @@ def run(a: argparse.Namespace) -> dict:
         if dev.type == "cuda":
             torch.cuda.synchronize()
 
-    live = a.coins == "live"
     pending: list[tuple] = []
     round_log: list[dict] = []
     if live:
         from verity.core.protocols.pouw import window as Wd
         from verity.core.protocols.pouw.circuit import h1tile as HT
         from verity.core.protocols.sampled_proofs import challenger as Ch
-        lch = Wd.live_challenger(a.epoch, s_max, verifier.coins)
-        live_salt = lch.open(Wd.SALT, 0, registration)
-        rounds = Ch.LiveRecord(lch, Wd.ROUND)
+        live_salt = cs.salt(registration)
+        rounds = cs.rounds
 
     def receipts(i: int, slots, salt: bytes) -> None:
         c = calls[i]
@@ -480,7 +529,7 @@ def run(a: argparse.Namespace) -> dict:
         opens; then the step's receipts under the round's 64-byte salt (`h1tile.live_salt`)."""
         st = step_roots(window, s, [calls[i] for i, _ in pending])
         opening = rounds.record(st["root"])
-        salt = HT.live_salt(lch.commitment, opening.coin, s, st["root"])
+        salt = HT.live_salt(cs.commitment, opening.coin, s, st["root"])
         round_log.append({"round": s, "root": st["root"].hex(), "fields": st["fields"], "a_step": st["a_step"].hex(),
                           "admit_step": st["admit_step"].hex(), "opening": opening.to_json()})
         for i, slots in pending:
@@ -659,16 +708,26 @@ def run(a: argparse.Namespace) -> dict:
     a_window = CM.step_root(CM.domain(w_fields, len(steps), "a-window"), [st["a_step"] for st in steps])
     a_roots = {"a_step": [st["a_step"].hex() for st in steps], "admit_step": [st["admit_step"].hex() for st in steps],
                "a_window": a_window.hex(), "a_window_fields": w_fields}
-    coins = {"mode": a.coins, "ok": True}
+    coins = {"mode": a.coins, "ok": True, **(cs.record() if live else {"source": "in-process", "label": CO.IN_PROCESS})}
+    gate_picks = {"from": "the prover's entropy (os.urandom): seeded, not certified"}
+    rng = random.Random(os.urandom(16))
     if live:
         roots = [bytes.fromhex(r["root"]) for r in round_log]
         openings = [Ch.LiveOpening.from_json(r["opening"]) for r in round_log]
-        commitment = Ch.LiveCommitment.from_json(lch.commitment.to_json())
+        commitment = Ch.LiveCommitment.from_json(cs.commitment.to_json())
+        draw_after = receipts_root(window, calls)
+        draw = cs.draw(draw_after)
+        cs.close()
+        rng = gate_rng(commitment, draw.coin, draw_after)
+        gate_picks = {"from": f"the draw coin ({cs.label}), opened after the receipts root", "domain": GATE_DRAW_DOMAIN,
+                      "after": draw_after.hex(), "what": "the harness's self-check of the receipts, not the window's draw"}
         recomputed = [steps[r["round"]]["root"] == root and r["a_step"] == steps[r["round"]]["a_step"].hex()
                       and {c["salt"] for c in by_step[r["round"]]}
                       == {Wd.round_key(commitment, o.coin, r["round"], root).stream(0, 64).hex()}
                       for r, root, o in zip(round_log, roots, openings)]
-        coins.update(scheme=Wd.LIVE_SCHEME, commitment=lch.commitment.to_json(), salt_coin=live_salt.to_json(),
+        coins.update(scheme=Wd.LIVE_SCHEME, commitment=cs.commitment.to_json(), salt_coin=live_salt.to_json(),
+                     draw_coin=draw.to_json(), draw_after=draw_after.hex(),
+                     draw_reason=Ch.live_reason(commitment, draw, Wd.DRAW, 0, draw_after),
                      rounds=round_log, rounds_reason=Wd.rounds_reason(commitment, roots, openings),
                      rounds_cover_steps=[r["round"] for r in round_log] == list(range(s_max)),
                      roots_and_keys_recomputed=all(recomputed), coin_bytes=len(openings[0].coin) if openings else None,
@@ -681,7 +740,11 @@ def run(a: argparse.Namespace) -> dict:
                           "opens; the step's 64-byte H1 salt is h1tile.live_salt = "
                           "window.round_key(commitment, coin_s, s, root_s).stream(0, 64), the tile's coin port; each "
                           "tile derives its own noise from it, its public position and its roots, inside the tile")
-        coins["ok"] = bool(coins["rounds_reason"] is None and coins["rounds_cover_steps"] and all(recomputed))
+        coins["ok"] = bool(coins["rounds_reason"] is None and coins["draw_reason"] is None and coins["rounds_cover_steps"]
+                           and all(recomputed))
+        coins["verify"] = ("the verifier's check: coins.py check --challenger-out <the challenger run's out/> --manifest "
+                           "manifest.json, from the challenger's own run, never this one" if cs.source == "off-node"
+                           else "none: the challenger ran in the prover's process")
         rec.step("coins", {k: v for k, v in coins.items() if k not in ("rounds", "release_log")})
 
     manifest = {"schema": SCHEMA, "scheme": SCHEME, "tile": [RC.R, RC.C_], "framing": FRAMING, "not_covered": NOT_COVERED,
@@ -747,7 +810,8 @@ def run(a: argparse.Namespace) -> dict:
     (out / "manifest.json").write_text(json.dumps(manifest, indent=1, default=str) + "\n")
     rec.step("prover", prover(a, out, key, calls, data))
     try:
-        rec.step("gate", gate(a, calls, data, levels, layers, public["model"], names, queue, weights, key, E, t_max, done))
+        rec.step("gate", {**gate(a, calls, data, levels, layers, public["model"], names, queue, weights, key, E, t_max, done,
+                                 rng), "picks": gate_picks})
     except Exception as e:  # noqa: BLE001
         rec.step("gate", {"ok": False, "error": f"{type(e).__name__}: {e}"[:4000]})
     s = rec.doc["steps"]["serve"]
@@ -761,7 +825,8 @@ def run(a: argparse.Namespace) -> dict:
     rec.save()
     pool.close()
     print(f"SERVED-H1 {'OK' if rec.doc['ok'] else 'FAIL'} calls={len(calls)} units={s['units']} steps={done}/{s_max} "
-          f"tokens_equal={all(equal)} static={s['static']} gate={rec.doc['steps']['gate']['ok']}", flush=True)
+          f"tokens_equal={all(equal)} static={s['static']} gate={rec.doc['steps']['gate']['ok']} "
+          f"coins={rec.doc['coins']}", flush=True)
     return rec.doc
 
 
@@ -778,13 +843,12 @@ def tile_admit(c: dict, d: dict, key: bytes, ri: int, words: list[int] | None = 
 
 
 def gate(a, calls: list[dict], data: list[dict], levels: list, layers: list, model: dict, names: dict, queue: dict,
-         weights: dict, key: bytes, E, t_max: int, done: int) -> dict:
-    """Drawn units against the gated `h1tile.reference`, and the controls: per site a live and a dead unit of real steps'
-    calls, then units of empty steps (dead)."""
+         weights: dict, key: bytes, E, t_max: int, done: int, rng: random.Random) -> dict:
+    """Units picked on `rng` (`gate_rng`'s, from the draw coin, when live) against the gated `h1tile.reference`, and the
+    controls: per site a live and a dead unit of real steps' calls, then units of empty steps (dead)."""
     import torch
     import receipts as RC
 
-    rng = random.Random(os.urandom(16))
     picks = []
     for site in SITES:
         real = [i for i, c in enumerate(calls) if c["site"] == site and c["step"] < done]
@@ -987,8 +1051,11 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--gate-per-site", type=int, default=2)
     ap.add_argument("--workers", type=int, default=0)
     ap.add_argument("--skip-timing", action="store_true")
-    ap.add_argument("--coins", default="seeded", choices=["seeded", "live"],
-                    help="live: a round a step, its coin opened after its A tables' root (the proof service's challenger)")
+    ap.add_argument("--coins", default=None, choices=["seeded", "live"],
+                    help="live: a round a step, its coin opened after its A tables' root (the proof service's challenger); "
+                         "default live with a challenger address, else seeded")
+    ap.add_argument("--challenger", default=None, metavar="HOST:PORT",
+                    help=f"live: the challenger off the node (default ${CO.CHALLENGER_ENV}); none: in-process, not certified")
     return 0 if run(ap.parse_args(argv))["ok"] else 1
 
 

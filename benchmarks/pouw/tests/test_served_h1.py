@@ -6,11 +6,21 @@ bits (`served_h1/credit.py`), from the committed request queue, a dead unit's re
 unit's the reference's (`PouwH1Tile_v4`), an admitted block of zero-byte rows is computed, receipt-checked and credited (RT4-LOGIC-4, RT4-LOGIC-20), a tile's admit bits open from the admit tree and a flipped one is refused, a junk row in a slot the queue leaves unassigned is refused and credits nothing, so is the canonical
 empty row in a slot the queue selects (RT-ALGO-4), and the tally's limbs are 16-bit.  A call's A table is AROW's row table, a tile's rows open against it and the step's A root, and
 A' = -b is refused (CMP-38).  A linear's B table is the same format over its weight rows, under the weights' root; the
-scheduler's record gives the request queue and its commitment."""
+scheduler's record gives the request queue and its commitment.  A window's live coins (`served_h1/coins.py`) come from a
+challenger off the node over its stream (a fake one on loopback, signed with a test key), which refuses a session of
+another layout; the verifier checks them from the challenger's own directory alone and refuses a pin of another key, a
+round root the challenger didn't receive, a salt that isn't its round's coin's, and a draw after another root; with no
+address the coins are in-process and labelled not certified."""
 from __future__ import annotations
 
+import hashlib
 import importlib.util
+import itertools
+import json
+import random
+import socket
 import sys
+import threading
 from pathlib import Path
 
 import numpy as np
@@ -27,7 +37,7 @@ def _load(name: str):
     return mod
 
 
-RC, CM, CR = _load("receipts"), _load("commit"), _load("credit")
+RC, CM, CR, CO = _load("receipts"), _load("commit"), _load("credit"), _load("coins")
 SALT, RA, RB = bytes(range(64)), bytes(range(64, 128)), bytes(range(128, 192))
 
 
@@ -372,3 +382,153 @@ def test_schedule_tap_records_the_queue_and_commits_it():
     moved = {**a, "slot_map": a["slot_map"].copy()}
     moved["slot_map"][1, 9] = 3
     assert SV.commit_queue("w", key, moved)["root"] != qc["root"]
+
+
+EPOCH, ROUNDS = 1, 3
+
+
+class _Host:
+    """The challenger on its auditor host, over loopback: a live window's coins (`coins.layout`, or `rounds` rounds at
+    `epoch`), its record signed with a test LMS key and written to `directory` (`remote.open_session`), serving one
+    session (`remote.serve`) on its own clock."""
+
+    def __init__(self, tmp_path, epoch: int = EPOCH, rounds: int = ROUNDS, host: str = "vy-challenger-1") -> None:
+        from verity.core.protocols.sampled_proofs import remote as R
+        from verity.ml.crypto import lms
+        self.R, self.directory = R, tmp_path / "challenger"
+        self.directory.mkdir()
+        lay = CO.layout(epoch, rounds)
+        self.challenger = CO.Ch.LiveChallenger(lay["scheme"], lay["epoch"], lay["families"], random.Random("host").randbytes)
+        key = lms.keygen(lms.Params(64, 4, 2), bytes([7]) * 64)
+        self.public = lms.public_key(key)
+        lms.LeafState.create(tmp_path / "leaves", self.public, 2)
+        state = lms.LeafState(tmp_path / "leaves", self.public, 2)
+        R.open_session(self.challenger, CO.Ch.ChallengerKey(4, 2, self.public), host,
+                       lambda m: lms.sign(key, state, m).encode(), self.directory)
+        state.close()
+        self.listener = socket.create_server(("127.0.0.1", 0))
+        self.address = f"127.0.0.1:{self.listener.getsockname()[1]}"
+        self.reason: str | None = None
+        self._thread = threading.Thread(target=self._run)
+        self._thread.start()
+
+    def _run(self) -> None:
+        conn, _ = self.listener.accept()
+        self.listener.close()
+        with conn:
+            self.reason = self.R.serve(conn, self.challenger, self.directory, itertools.count().__next__)
+
+    def ended(self) -> str | None:
+        self._thread.join()
+        return self.reason
+
+
+def _calls(rounds: int) -> list[dict]:
+    """A window's calls, two linears a step, with the roots `serve.step_roots` and `receipts_root` read."""
+    return [{"step": s, "linear": w, "root_a": hashlib.sha512(b"a%d/%d" % (s, w)).hexdigest(),
+             "root_admit": hashlib.sha512(b"s%d/%d" % (s, w)).hexdigest(),
+             "receipt_root": hashlib.sha512(b"r%d/%d" % (s, w)).hexdigest()} for s in range(rounds) for w in range(2)]
+
+
+def _serve_window(cs, sv, calls: list[dict], registration: bytes) -> dict:
+    """serve.py's coin path on `cs`: the salt coin after the registration root, round s's coin after step s's round root
+    and the step's units under its live salt, then the draw coin after the receipts root; the manifest it writes."""
+    from verity.core.protocols.pouw.circuit import h1tile as HT
+    salt = cs.salt(registration)
+    log = []
+    for s in sorted({c["step"] for c in calls}):
+        root = sv.step_roots("w", s, [c for c in calls if c["step"] == s])["root"]
+        opening = cs.rounds.record(root)
+        for c in calls:
+            if c["step"] == s:
+                c["salt"] = HT.live_salt(cs.commitment, opening.coin, s, root).hex()
+        log.append({"round": s, "root": root.hex(), "opening": opening.to_json()})
+    after = sv.receipts_root("w", calls)
+    draw = cs.draw(after)
+    cs.close()
+    return {"window": "w", "calls": calls, "roots": {"registration": registration.hex()},
+            "coins": {"mode": "live", **cs.record(), "commitment": cs.commitment.to_json(), "salt_coin": salt.to_json(),
+                      "rounds": log, "draw_coin": draw.to_json(), "draw_after": after.hex()}}
+
+
+def test_off_node_coins_are_checked_from_the_challengers_own_directory_and_a_forged_window_is_refused(tmp_path):
+    """A window's coins from the challenger off the node (`coins.open_coins` over `RemoteChallenger`): salt, one round a
+    step and the draw, each opened there after the root the window sent.  The verifier (`coins.py check`) reads only the
+    challenger's directory and the window's manifest, recomputes the round roots, salts and draw root from the manifest's
+    committed roots, and passes it under the pinned key; it refuses the deployed pin for a test key, and a window whose
+    round root, opening, salt, registration or draw root isn't what the challenger logged."""
+    SV = _load("serve")
+    host = _Host(tmp_path)
+    cs = CO.open_coins(host.address, EPOCH, ROUNDS)
+    assert (cs.source, cs.label) == ("off-node", f"off-node {host.address} (unchecked)")
+    reg = hashlib.sha512(b"registration").digest()
+    m = _serve_window(cs, SV, _calls(ROUNDS), reg)
+    assert host.ended() is None
+    pin = hashlib.sha512(host.public).hexdigest()
+    (tmp_path / "manifest.json").write_text(json.dumps(m))
+    assert CO.main(["check", "--challenger-out", str(host.directory), "--manifest", str(tmp_path / "manifest.json"),
+                    "--key-sha512", pin]) == 0
+    e = SV.coins_expect(m)
+    got = CO.check(host.directory, m["coins"], reg, **e, key_sha512=pin)
+    assert got["ok"] and got["coins"] == "off-node vy-challenger-1 (checked)" and (got["rounds"], got["draws"]) == (ROUNDS, 1)
+    assert "not the one pinned for vy-challenger-1" in CO.check(host.directory, m["coins"], reg, **e)["reason"]
+
+    def refused(coins=m["coins"], registration=reg, **kw) -> dict:
+        r = CO.check(host.directory, coins, registration, **{**e, **kw}, key_sha512=pin)
+        assert not r["ok"] and r["coins"] == "refused"
+        return {k: v for k, v in r["reasons"].items() if v is not None}
+
+    other = hashlib.sha512(b"other").digest()
+    assert list(refused(rounds=[e["rounds"][0], other, e["rounds"][2]])) == ["rounds"]
+    swapped = [*m["coins"]["rounds"]]
+    swapped[1] = {**swapped[1], "opening": swapped[2]["opening"]}
+    assert list(refused(coins={**m["coins"], "rounds": swapped})) == ["rounds", "salts"]
+    assert list(refused(salts={**e["salts"], 2: e["salts"][1]})) == ["salts"]
+    assert list(refused(registration=other)) == ["salt"]
+    assert list(refused(draw_after=other)) == ["draw"]
+    assert list(refused(draw_after=None)) == ["draw"]
+    alone = CO.open_coins(None, EPOCH, ROUNDS, random.Random("prover").randbytes)
+    assert list(refused(coins={**m["coins"], "commitment": alone.commitment.to_json()})) == ["commitment"]
+
+
+def test_a_challenger_of_another_layout_is_refused_before_any_coin_and_its_session_closed(tmp_path):
+    for i, (epoch, rounds) in enumerate(((EPOCH, ROUNDS + 1), (EPOCH + 1, ROUNDS))):
+        (tmp_path / str(i)).mkdir()
+        host = _Host(tmp_path / str(i), epoch, rounds)
+        with pytest.raises(CO.Ch.CoinError, match="not this window's"):
+            CO.open_coins(host.address, EPOCH, ROUNDS)
+        assert host.ended() is None
+        assert [json.loads(x)["event"] for x in (host.directory / "releases.jsonl").read_text().splitlines()] == ["commitment"]
+
+
+def test_without_an_address_the_coins_are_in_process_and_labelled_not_certified(monkeypatch):
+    monkeypatch.delenv(CO.CHALLENGER_ENV, raising=False)
+    assert CO.address(None) is None and CO.address("h:1") == "h:1"
+    monkeypatch.setenv(CO.CHALLENGER_ENV, "127.0.0.1:7811")
+    assert CO.address(None) == "127.0.0.1:7811"
+    cs = CO.open_coins(None, EPOCH, ROUNDS, random.Random("prover").randbytes)
+    assert (cs.source, cs.label, cs.record()["label"]) == ("in-process", "in-process (not certified)", CO.IN_PROCESS)
+    assert CO.layout_reason(cs.commitment, EPOCH, ROUNDS) is None and CO.layout_reason(cs.commitment, EPOCH, 2) is not None
+
+
+def test_an_address_makes_the_window_live_and_seeded_coins_with_one_are_refused(tmp_path, monkeypatch):
+    """serve.py's coins follow the address: given one (here `$POUW_CHALLENGER`) and no ``--coins``, it opens the
+    challenger's session before anything else (this host's layout isn't the window's, so it stops there), and
+    ``--coins seeded`` beside an address is refused."""
+    SV = _load("serve")
+    host = _Host(tmp_path, EPOCH, ROUNDS + 1)
+    monkeypatch.setenv(CO.CHALLENGER_ENV, host.address)
+    argv = ["--out", str(tmp_path / "out"), "--at", "2026-10-20T00:00:00Z", "--by", "test", "--steps", str(ROUNDS)]
+    with pytest.raises(CO.Ch.CoinError, match="not this window's"):
+        SV.main(argv)
+    assert host.ended() is None
+    with pytest.raises(ValueError, match="serves live coins, not --coins seeded"):
+        SV.main([*argv, "--coins", "seeded"])
+
+
+def test_the_gates_picks_follow_the_draw_coin_and_its_root():
+    SV = _load("serve")
+    c = CO.open_coins(None, EPOCH, ROUNDS, random.Random("prover").randbytes).commitment
+    a, b = bytes(64), bytes([1]) * 64
+    picks = SV.gate_rng(c, a, b).random()
+    assert picks == SV.gate_rng(c, a, b).random() and picks not in (SV.gate_rng(c, b, b).random(), SV.gate_rng(c, a, a).random())
