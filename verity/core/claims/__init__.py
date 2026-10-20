@@ -342,15 +342,16 @@ ENTRIES: dict[str, Entry] = {e.id: e for e in (
           "TS operand H-μ at μ", "conjectured"),
     Entry("accounting-ts-proofs-sound", "assumption",
           "Outside binding and proof-soundness failures (S·(δ_bind + n_π·δ_ZK)), an accepted window's committed values "
-          "are right for their derivations from what was committed before σ, and every word that isn't fixed is in its "
-          "round's share", "TS proofs sound", "standard"),
+          "(each round's, committed before its σ) are right for their derivations on the path's coins, and every word "
+          "that isn't fixed is in its round's share", "TS proofs sound", "standard"),
     Entry("accounting-ts-lin-steer", "assumption",
           "LIN-STEER, false for a segmented consumer whose noise-active segments carry unequal counts: zeroing a "
           "fraction φ of a row's noise-active coordinates saves at most φ of the consumer's work",
           "LIN-STEER", "conjectured"),
     Entry("accounting-ts-right-fixed", "assumption",
           "Lemma E1(c) with the rounds' equal shares: on an accepted window whose committed values are right for their "
-          "derivations, every word that isn't fixed is in its round's share", "TS right fixed", "proven"),
+          "derivations on the path's coins, every word that isn't fixed is in its round's share", "TS right fixed",
+          "proven"),
     Entry("accounting-ts-unit-fixed", "assumption",
           "Lemma E1(c) per unit with its fold clause, which doesn't read the draw: on an accepted window the fixed "
           "words per round are at least the good units' words over the rounds, a good unit being one the run computed "
