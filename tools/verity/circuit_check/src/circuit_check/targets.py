@@ -563,7 +563,9 @@ def word_call_families() -> set[str]:
     frontend vocabulary kind's Definition and every template's.  Their bindings build in seconds, without the catalog."""
     if "words" not in _SHORT:
         load_registries()
-        _SHORT["words"] = row_families() | {family(fn) for fn in _kinds_and_templates()}
+        from verity_vllm.program.kernels import rows
+
+        _SHORT["words"] = set(rows.ROWS) | {family(fn) for fn in _kinds_and_templates()}
     return _SHORT["words"]
 
 
@@ -661,6 +663,20 @@ def certified_boolean_calls(word_calls: set[str], only: set[str] | None = None) 
     return out
 
 
+def boolean_call_families(word_calls: set[str], found: dict[str, Any] | None = None) -> set[str]:
+    """Sigma's image of the word Call families ``word_calls``: the family of `verity_vllm.program.boolean.boolean_version` (the
+    switch's table of `word=` links) of each catalog specialization of a word Call family that has one."""
+    from verity.ml.circuits.evaluation import ScalarReference
+    from verity.ml.circuits import boolean as BL
+    out: set[str] = set()
+    for fn in (suite() if found is None else found).values():
+        if family(fn) not in word_calls or isinstance(fn, ScalarReference) or BL.is_boolean(fn):
+            continue
+        if (f := boolean_family(fn)) is not None:
+            out.add(f)
+    return out
+
+
 def row_families() -> set[str]:
     """The replay's row families (`verity_vllm.program.kernels.rows.ROWS`), word Call families whatever the catalog holds."""
     from verity_vllm.program.kernels import rows
@@ -687,21 +703,6 @@ def boolean_links() -> tuple[dict[str, set[str]], dict[str, set[str]]]:
     exact, by_name, _errors = _load()
     return ({k: {f"{d.name}_v{d.version}" for d in ds} for k, ds in exact.items()},
             {k: {f"{d.name}_v{d.version}" for d in ds} for k, ds in by_name.items()})
-
-
-def boolean_call_families(word_calls: set[str], found: dict[str, Any] | None = None) -> set[str]:
-    """Sigma's image of the word Call families ``word_calls``: the family of `verity_vllm.program.boolean.boolean_version` (the
-    switch's table of `word=` links) of each catalog specialization (of ``found``, a `suite`, given) of a word Call family that
-    has one."""
-    from verity.ml.circuits.evaluation import ScalarReference
-    from verity.ml.circuits import boolean as BL
-    out: set[str] = set()
-    for fn in (suite() if found is None else found).values():
-        if family(fn) not in word_calls or isinstance(fn, ScalarReference) or BL.is_boolean(fn):
-            continue
-        if (f := boolean_family(fn)) is not None:
-            out.add(f)
-    return out
 
 
 def catalog_units() -> Iterator[tuple[tuple[str, ...], Callable[[], list[Any]], str, str]]:
