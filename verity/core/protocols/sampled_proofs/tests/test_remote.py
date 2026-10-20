@@ -78,16 +78,28 @@ class Ledger:
         self.path, self.sign, self.I, self.schema = path, sign, lms.public_key(private)[:16], schema
         self.key_sha512 = hashlib.sha512(lms.public_key(private)).hexdigest()
         self.lines: list[str] = []
+        self.reserves: dict[str, tuple[int, dict]] = {}
 
     def append(self, kind: str, session: str | None, body: dict) -> None:
         self.lines.append(C.ledger_line(self.lines, kind, session, body, self.I, self.sign, self.schema))
         self.path.write_text("".join(line + "\n" for line in self.lines))
 
+    def reserve(self, session: str, **changes) -> None:
+        """infra's reserve of `session`: the window's request, its start and its expiry; the session's open binds it."""
+        body = {k: v for k, v in {**RESERVE, **changes}.items() if v is not DROP}
+        self.reserves[session] = (len(self.lines), body)
+        self.append("reserve", session, body)
+
     def open(self, session: str, window: dict = WINDOW, **extra) -> None:
         if self.schema == C.LEDGER_SCHEMA_V1:
             window = {"commit": window["root"], "period": "p-0"}
-        self.append("open", session, {"window": window, "host": f"{HOST}.{session}", "pinned": "ab" * 20,
-                                      "key_sha512": self.key_sha512, "port": 7811, "by": "proofs", **extra})
+        if session in self.reserves:
+            seq, r = self.reserves[session]
+            extra = {**{k: r[k] for k in C.RESERVED if k in r}, "reserve": seq, "opened_by": r.get("for") or r["by"],
+                     "started_utc": "2026-10-20T12:05:00Z", **extra}
+        body = {"window": window, "host": f"{HOST}.{session}", "pinned": "ab" * 20, "key_sha512": self.key_sha512,
+                "port": 7811, "by": "proofs", **extra}
+        self.append("open", session, {k: v for k, v in body.items() if v is not DROP})
 
     def end(self, session: str, directory, closed: bool, **changes) -> None:
         files = sealed(directory)
@@ -100,6 +112,9 @@ class Ledger:
 
 
 DROP = object()
+RESERVE = {"by": "proofs", "peer": "10.0.0.2", "scheme": SCHEME, "epoch": 0, "families": [list(f) for f in FAMILIES],
+           "minutes": 30, "started_utc": "2026-10-20T12:00:00Z", "expires_utc": "2026-10-20T12:30:00Z"}
+RESERVED_SESSION = "s20261020T120000Z-ab12"
 
 
 def sealed(directory) -> dict[str, str]:
@@ -896,7 +911,7 @@ def test_a_ledger_with_periods_is_read_and_a_close_that_misstates_its_windows_is
     assert host.trusted()[0] == host.challenger.commitment
     verify = lambda m, sig: lms_verify(pinned_key(), m, sig)
     periods = C.verify_periods([line.encode() for line in ledger.lines], ledger.I, verify)
-    assert periods["p-0"]["windows"] == [WINDOW["root"]] and periods["p-0"]["close"] is not None
+    assert periods["p-0"]["windows"] == ["s-1"] and periods["p-0"]["close"] is not None
     audited = C.audited_session(ledger.lines, WINDOW, pinned_key(), lms_verify)
     assert (audited.period, audited.cap, audited.circuit) == ("p-0", 4, "cd" * 64)
     for windows, complete in (([{"root": WINDOW["root"], "session": "s-1", "complete": True}], False), ([], False),
@@ -913,6 +928,56 @@ def test_a_ledger_with_periods_is_read_and_a_close_that_misstates_its_windows_is
     _period_open(v1)
     with pytest.raises(C.CoinError, match="entry 0: a period-open is v2 and names its period and its lane"):
         C.audited_session(v1.lines, WINDOW, pinned_key(), lms_verify)
+
+
+def test_a_reserved_window_is_read_when_its_open_binds_its_reserve(tmp_path, signer):
+    """infra's two-step window: a reserve, then an open binding it (its seq), carrying its request, by its prover and
+    inside its minutes, is read, its period counting it at the reserve and closing an unopened reserve with root null.
+    An open that misstates any of these, a malformed reserve, and a one-step open after the first reserve are refused."""
+    ledger = Ledger(tmp_path / "windows.jsonl", signer)
+    _period_open(ledger)
+    ledger.reserve(RESERVED_SESSION)
+    host = Host(tmp_path, signer, RESERVED_SESSION, ledger=ledger)
+    honest(host)
+    assert host.trusted()[0] == host.challenger.commitment
+    audited = C.audited_session(ledger.lines, WINDOW, pinned_key(), lms_verify)
+    assert (audited.session, audited.prover, audited.period, audited.cap) == (RESERVED_SESSION, "proofs", "p-0", 4)
+    unopened = "s20261020T121000Z-cd34"
+    ledger.reserve(unopened)
+    _period_close(ledger, [{"root": WINDOW["root"], "session": RESERVED_SESSION, "complete": True},
+                           {"root": None, "session": unopened, "complete": False}], False)
+    assert host.trusted()[0] == host.challenger.commitment
+    periods = C.verify_periods([line.encode() for line in ledger.lines], ledger.I,
+                               lambda m, sig: lms_verify(pinned_key(), m, sig))
+    assert periods["p-0"]["windows"] == [RESERVED_SESSION, unopened]
+    for i, (reserve, opened, refusal) in enumerate((
+            ({}, {"opened_by": "vllm"}, "was opened by 'vllm', not its reserve's prover"),
+            ({}, {"opened_by": ["proofs"]}, "was opened by no lane, not its reserve's prover"),
+            ({}, {"epoch": True}, "open doesn't carry its reserve's request"),
+            ({}, {"minutes": 31}, "open doesn't carry its reserve's request"),
+            ({}, {"reserve": True}, "binds no reserve of it"),
+            ({}, {"reserve": 1}, "binds no reserve of it"),
+            ({}, {"started_utc": "2026-10-20T12:30:01Z"}, "was opened outside its reserve's minutes"),
+            ({}, {"started_utc": "2026-10-20T11:59:59Z"}, "was opened outside its reserve's minutes"),
+            ({}, {"started_utc": "2026-10-20T12:05:60Z"}, "was opened outside its reserve's minutes"),
+            ({"expires_utc": "2026-10-20T12:31:00Z"}, {}, "a reserve names its prover, its minutes, its start"),
+            ({"minutes": 721, "expires_utc": "2026-10-21T00:01:00Z"}, {}, "a reserve names its prover, its minutes"),
+            ({"started_utc": "2026-02-30T12:00:00Z"}, {}, "a reserve names its prover, its minutes, its start"),
+            ({"for": 7}, {"for": "proofs"}, "a reserve names its prover"))):
+        bad = Ledger(tmp_path / f"reserved{i}.jsonl", at(0, 1))
+        bad.reserve(RESERVED_SESSION, **reserve)
+        bad.open(RESERVED_SESSION, **opened)
+        with pytest.raises(C.CoinError, match=re.escape(refusal)):
+            C.audited_session(bad.lines, WINDOW, pinned_key(), lms_verify)
+    unbound = Ledger(tmp_path / "unbound.jsonl", at(0, 1))
+    unbound.reserve(RESERVED_SESSION)
+    unbound.open("s-1")
+    with pytest.raises(C.CoinError, match="entry 1: a v2 open without a reserve after the ledger's first reserve"):
+        C.audited_session(unbound.lines, WINDOW, pinned_key(), lms_verify)
+    loose = Ledger(tmp_path / "loose.jsonl", at(0))
+    loose.reserve("s-1")
+    with pytest.raises(C.CoinError, match="entry 0: a reserve is v2 and the first entry of its session s-1"):
+        C.audited_session(loose.lines, WINDOW, pinned_key(), lms_verify)
 
 
 def test_a_period_commits_its_cap_and_circuit_and_holds_no_window_past_its_cap(tmp_path, signer):
@@ -939,11 +1004,10 @@ def test_a_period_commits_its_cap_and_circuit_and_holds_no_window_past_its_cap(t
     old.end("s-1", host.directory, True)
     with pytest.raises(C.CoinError, match="period p-0, which holds session s-1, commits no cap or circuit"):
         C.audited_session(old.lines, WINDOW, pinned_key(), lms_verify)
-    for program in ("verity/pouw/h1@v1", "cd" * 64):
-        named = Ledger(tmp_path / "named.jsonl", at(0))
-        _period_open(named, circuit=program)
-        assert C.verify_periods([ln.encode() for ln in named.lines], named.I,
-                                lambda m, sig: lms_verify(pinned_key(), m, sig))["p-0"]["circuit"] == program
+    named = Ledger(tmp_path / "named.jsonl", at(0))
+    _period_open(named, circuit="verity/pouw/h1@v1")
+    with pytest.raises(C.CoinError, match="entry 0: period p-0's cap is a positive integer and its circuit a SHA-512"):
+        C.audited_session(named.lines, WINDOW, pinned_key(), lms_verify)
 
 
 def test_the_ledger_is_the_longest_of_infras_heads_when_each_extends_the_others(tmp_path, signer):

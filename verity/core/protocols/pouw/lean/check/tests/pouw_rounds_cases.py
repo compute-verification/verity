@@ -98,7 +98,7 @@ class Session:
 
 
 PERIODS = ["p-0", "smoke-20261020", "2026-10-20T09:00Z", "a"]
-CIRCUITS = ["ab" * 64, "verity/pouw/h1@v1", "Program:pouw-h1"]
+CIRCUITS = ["ab" * 64, "0f" * 64]
 
 
 def _window(rng: random.Random) -> dict:

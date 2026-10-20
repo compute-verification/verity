@@ -60,14 +60,18 @@ session its client closed; then the roots it received (`released_roots_of`).  A 
 
 **The auditor's ledger** names the one challenger session each window's coins come from (`audited_session`).  The
 auditor (infra's `benchmarks/live_challenger/auditor.py` on the challenger's host) appends a signed entry, under the
-challenger's key, when it opens a session for a window, before its first coin, and another when the session ends; a
-window gets one session.  A lane's period is two more entries, its `period-open` and `period-close`:
+challenger's key, when a lane reserves a window (its request, start and expiry), when it opens the reserved session for
+the window's root, before its first coin, and when the session ends; a window gets one session.  A lane's period is two
+more entries, its `period-open` and `period-close`:
 
     entry   = {body, kind, prev, schema, seq, session, sig}        seq from 0; prev: SHA-512 of the previous line (128
                                                                    zeros first); schema v1 or v2, no v1 after a v2
-    open    = body {window: {root}, host, pinned, key_sha512, by, [for], ...}   host: the one the session's record signs
+    reserve = body {by, [for], peer, scheme, epoch, families, minutes, started_utc, expires_utc}
+    open    = body {window: {root}, host, pinned, key_sha512, by, [for], reserve, opened_by, started_utc, ...}
+                                                                   host: the one the session's record signs
     end     = body {closed, files, record_leaf, commitment, refused_hellos, complete, ...}    files: each file's SHA-512
-    period  = body {period, lane, ...} (session null); a close lists its windows as {root, session, complete}
+    period  = body {period, lane, ...} (session null); a close lists its windows as {root, session, complete}, root
+              null for a reserve never opened
     message = SHA-512([LEDGER_ROLE] || I || [identity_digest_sha512(LEDGER_TAGS[schema], entry without sig)])
 
 each line as the auditor writes it (`ledger_text`).  The window is `{root}`, the served Commit's root, its prover the
@@ -76,8 +80,10 @@ deployment; `key_of_record` reads infra's published pin), and refuses any open o
 SHA-512 before it checks a signature, so a ledger signed under its own key can't pin itself.  Then the ledger is
 infra's reference check, `verify_ledger` and `verify_periods` (one `_verify`, which the auditor's host runs too): each
 entry chained and signed at strictly increasing leaves of the key (a ledger restored with its key's state forks at a
-reused leaf), one open a root and a session, one end a session after its open, each record's leaf between its session's
-open and end and no entry's, and every period's close listing exactly its lane's windows.  The window's session must be
+reused leaf), a reserve first in its session and expiring its minutes after its start, one open a root and a session,
+binding its session's reserve and carrying its request after the first reserve, one end a session after its open, each
+record's leaf between its session's open and end and no entry's, and every period's close listing exactly its lane's
+windows, counted at their reserves.  The window's session must be
 opened under v2, ended and closed, its end naming its record's leaf and commitment and how many hellos it refused, and
 sealing the session's record, close, release log and refused hellos; then its record names the open's host and is
 signed at that leaf over that commitment, its signed close names the ledger's session id, and its release log and
@@ -103,6 +109,7 @@ import string
 import time
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, NamedTuple
 
@@ -158,6 +165,11 @@ LEDGER_SCHEMA = "verity/challenger-auditor/v2"
 LEDGER_ROLE = "verity/challenger-auditor-record/v1"
 LEDGER_TAGS = {LEDGER_SCHEMA_V1: "verity/challenger-auditor/entry/v1", LEDGER_SCHEMA: "verity/challenger-auditor/entry/v2"}
 PERIOD_KINDS = ("period-open", "period-close")
+SESSION_KINDS = ("reserve", "open", "end")
+#: the request a reserve records and its session's open carries
+RESERVED = ("by", "for", "peer", "scheme", "epoch", "families", "minutes")
+#: a reserve's most minutes
+MINUTES = (1, 720)
 RECORD_FILE, CLOSE_FILE, HELLOS_FILE = "record.json", "challenger.json", "hellos.jsonl"
 #: the files of a session the verifier reads, each of which the ledger's end must seal
 SEALED_FILES = (RECORD_FILE, CLOSE_FILE, LOG_FILE, HELLOS_FILE)
@@ -167,16 +179,19 @@ _ZERO = "0" * 128
 _LEDGER_ROOT = re.compile(r"[0-9a-f]{128}")
 _LEDGER_HEX = re.compile(r"(?:[0-9a-f]{2})+")
 _LEDGER_NAME = re.compile(r"[A-Za-z0-9][A-Za-z0-9._:-]{0,63}")
+_RESERVED_SESSION = re.compile(r"s[0-9]{8}T[0-9]{6}Z-[0-9a-f]{4}")
+_UTC = re.compile(r"([0-9]{4})-([0-9]{2})-([0-9]{2})T([0-9]{2}):([0-9]{2}):([0-9]{2})Z")
 CAP = (1, 2 ** 24)
-CIRCUIT = re.compile(r"[A-Za-z0-9][A-Za-z0-9._:/@+-]{0,255}")
+CIRCUIT = re.compile(r"[0-9a-fA-F]{128}")
 WINDOW_FORM = "a window's identity is {root}: the served Commit's root, 64 bytes in lowercase hex"
 LEDGER_FORM = ("an auditor's ledger line is an entry {body, kind, prev, schema, seq, session, sig} as the auditor writes it "
                "(sorted keys, no whitespace, ASCII, no number but an integer): kind open, its body naming the window, the "
                "challenger's host, the pinned source commit (40 lowercase hex), the SHA-512 of the challenger key's public "
-               "key (key_sha512) and in v2 its opener (by, and for when opened for a lane); kind end, its body whether its "
-               "client closed the session (closed), the SHA-512 of each file the session left (files) and in v2 the leaf "
-               "its record was signed at, if any; kind period-open, its period, lane and key_sha512; or kind "
-               "period-close, its period, lane, windows ({complete, root, session} each) and whether all are complete")
+               "key (key_sha512) and in v2 its opener (by, and for when opened for a lane); kind reserve, its body the "
+               "window's request; kind end, its body whether its client closed the session (closed), the SHA-512 of each "
+               "file the session left (files) and in v2 the leaf its record was signed at, if any; kind period-open, its "
+               "period, lane and key_sha512; or kind period-close, its period, lane, windows ({complete, root, session} "
+               "each, root null for a reserve never opened) and whether all are complete")
 END_FORM = ("a window's end names the leaf its record was signed at (record_leaf), its commitment's root (commitment), how "
             "many hellos it refused (refused_hellos) and seals " + ", ".join(SEALED_FILES))
 HEADS_FORM = "the auditor's published heads are a list of ledgers, each its lines"
@@ -643,7 +658,7 @@ def leaf_of(sig: Any) -> int:
 
 
 def lane_of(e: dict) -> str:
-    """An open's prover: the lane vy-admin opened it for (`for`), else its opener (`by`)."""
+    """A reserve's or an open's prover: the lane vy-admin reserved or opened it for (`for`), else its requester (`by`)."""
     return e["body"].get("for") or e["body"]["by"]
 
 
@@ -654,12 +669,24 @@ def root_of(e: dict) -> str:
 
 
 def circuit_of(s: Any) -> str:
-    """A period's circuit as its open records it: the declared circuit's SHA-512 (128 hex digits, kept in lowercase) or
-    the registered Program's id; ValueError otherwise."""
+    """A period's circuit as its open records it: the declared circuit's SHA-512 (128 hex digits, kept in lowercase),
+    never a Program's id; ValueError otherwise."""
     if type(s) is not str or not CIRCUIT.fullmatch(s):
-        raise ValueError(f"--circuit {s!r}: the declared circuit's SHA-512 (128 hex digits) or the registered Program's "
-                         "id (1 to 256 of [A-Za-z0-9._:/@+-], starting with a letter or digit)")
-    return s.lower() if re.fullmatch(r"[0-9a-fA-F]{128}", s) else s
+        raise ValueError(f"--circuit {s!r}: the declared circuit's SHA-512 (128 hex digits), not a Program's id")
+    return s.lower()
+
+
+def later(t: Any, minutes: int) -> str | None:
+    """`t` (``YYYY-MM-DDTHH:MM:SSZ``, UTC) plus `minutes` in that form: a reserve's expiry; None when `t` isn't a time of
+    that form."""
+    m = _UTC.fullmatch(t) if type(t) is str else None
+    if m is None:
+        return None
+    try:
+        d = datetime(*map(int, m.groups()), tzinfo=timezone.utc) + timedelta(minutes=minutes)
+    except (ValueError, OverflowError):
+        return None
+    return f"{d.year:04d}-{d.month:02d}-{d.day:02d}T{d.hour:02d}:{d.minute:02d}:{d.second:02d}Z"
 
 
 def cap_of(v: Any) -> int:
@@ -676,9 +703,12 @@ def extends(published: list[bytes], ledger: list[bytes]) -> bool:
 
 def verify_ledger(lines: list[bytes], I: bytes, verify: Callable[[bytes, bytes], bool]) -> dict[str, dict]:
     """The reference check of a published ledger under the challenger key: every entry v1 or v2 (no v1 after a v2) and signed,
-    `seq` from 0, `prev` chained, its leaves strictly increasing; one `open` a root, whatever its period label, in canonical
-    lowercase; one `end` a session, after its `open`, and a v2 end's `record_leaf` between its session's open and end and no
-    entry's or other record's; periods as `verify_periods` checks them. Returns root -> {"open", "end" or None}; raises
+    `seq` from 0, `prev` chained, its leaves strictly increasing; a `reserve` first in its session, its expiry its start
+    plus its minutes; one `open` a root, whatever its period label, in canonical lowercase, and after the first reserve
+    each open binds its session's reserve (`reserve`, its seq), carries its request, is by its prover and falls inside its
+    minutes and before its period's close; one `end` a session, after its `open`, and a v2 end's `record_leaf` between its
+    session's open and end and no entry's or other record's; periods as `verify_periods` checks them. Returns root ->
+    {"reserve" (None for a one-step open), "open", "end" or None}: S is the open's `session`, R its root; raises
     ValueError at the first entry that fails. It reads one head: a verifier takes infra's newest published head, and refuses
     two that don't `extend` one another."""
     return _verify(lines, I, verify)[0]
@@ -686,14 +716,23 @@ def verify_ledger(lines: list[bytes], I: bytes, verify: Callable[[bytes, bytes],
 
 def verify_periods(lines: list[bytes], I: bytes, verify: Callable[[bytes, bytes], bool]) -> dict[str, dict]:
     """The ledger's periods once `verify_ledger` passes: period -> {"lane", "open", "close" (None while open), "windows":
-    [root, ...], "cap", "circuit"}. A period's name is used once; a lane has one period open at a time; its windows are
-    exactly the v2 opens whose prover is its lane (`lane_of`) between its period-open and its period-close, at most its
-    `cap` (a positive integer, with `circuit` committed beside it before window 0's first coin; both None only for a
-    period opened before they were required, which a reader of the cap refuses), and the close lists each of them,
-    in order, with its outcome (complete when its end precedes the close and is complete) and is complete only when it
-    has a window and every one is. An end after its period's close (the gate's lock leaves none) changes nothing: the
-    close recorded that window incomplete."""
+    [session, ...], "cap", "circuit"}. A period's name is used once; a lane has one period open at a time; its windows are
+    exactly the reserves (and one-step v2 opens) whose prover is its lane (`lane_of`) between its period-open and its
+    period-close, counted at the reserve, so a reserve that expired unopened is one, at most its `cap` (a positive
+    integer, with `circuit` committed beside it before window 0's first coin; both None only for a period opened before
+    they were required, which a reader of the cap refuses), and the close lists each of them, in order, with its root
+    (null when never opened) and outcome (complete when its end precedes the close and is complete) and is complete only
+    when it has a window and every one is. An end after its period's close (the gate's lock leaves none) changes
+    nothing: the close recorded that window incomplete."""
     return _verify(lines, I, verify)[1]
+
+
+def _same(a: Any, b: Any) -> bool:
+    """JSON equality that tells `true` from 1, as no Python `==` does."""
+    try:
+        return canonical_json_text(a) == canonical_json_text(b)
+    except (TypeError, ValueError):
+        return False
 
 
 def _verify(lines: list[bytes], I: bytes, verify: Callable[[bytes, bytes], bool]) -> tuple[dict[str, dict], dict[str, dict]]:
@@ -703,14 +742,24 @@ def _verify(lines: list[bytes], I: bytes, verify: Callable[[bytes, bytes], bool]
     records: dict[int, int] = {}
     periods: dict[str, dict] = {}
     current: dict[str, str] = {}
-    prev, last, v2 = _ZERO, -1, False
+    reserves: dict[str, dict] = {}
+    prev, last, v2, two_step = _ZERO, -1, False, False
+
+    def join(i: int, lane: str | None, session: str) -> str | None:
+        if (period := current.get(lane) if lane is not None else None) is not None:
+            p = periods[period]
+            if p["cap"] is not None and len(p["windows"]) >= p["cap"]:
+                raise ValueError(f"entry {i}: period {period}'s window {len(p['windows'])} is past its cap {p['cap']}")
+            p["windows"].append(session)
+        return period
+
     for i, ln in enumerate(lines):
         try:
             e = json.loads(ln)
         except ValueError:
             raise ValueError(f"entry {i}: not JSON") from None
-        if (type(e) is not dict or e.get("schema") not in LEDGER_TAGS or (v2 and e["schema"] == LEDGER_SCHEMA_V1)
-                or e.get("seq") != i or e.get("prev") != prev):
+        if (type(e) is not dict or type(e.get("schema")) is not str or e["schema"] not in LEDGER_TAGS
+                or (v2 and e["schema"] == LEDGER_SCHEMA_V1) or e.get("seq") != i or e.get("prev") != prev):
             raise ValueError(f"entry {i}: not entry {i} of a {LEDGER_SCHEMA} ledger chained to its predecessor")
         v2 = v2 or e["schema"] == LEDGER_SCHEMA
         kind = e.get("kind")
@@ -722,7 +771,20 @@ def _verify(lines: list[bytes], I: bytes, verify: Callable[[bytes, bytes], bool]
             raise ValueError(f"entry {i}: its signature doesn't verify under the challenger key")
         if q <= last:
             raise ValueError(f"entry {i}: signed at leaf {q}, not after the last entry's {last}")
-        if kind == "open":
+        if kind == "reserve":
+            b, session = e["body"], e["session"]
+            if (e["schema"] != LEDGER_SCHEMA or not _RESERVED_SESSION.fullmatch(session) or session in reserves
+                    or session in by_session):
+                raise ValueError(f"entry {i}: a reserve is v2 and the first entry of its session {session}")
+            if (not _period(b.get("by")) or ("for" in b and not _period(b["for"]))
+                    or type(b.get("minutes")) is not int or not MINUTES[0] <= b["minutes"] <= MINUTES[1]
+                    or later(b.get("started_utc"), b["minutes"]) is None
+                    or b.get("expires_utc") != later(b["started_utc"], b["minutes"])):
+                raise ValueError(f"entry {i}: a reserve names its prover, its minutes, its start and its expiry (start + "
+                                 "minutes)")
+            two_step = True
+            reserves[session] = {"entry": e, "period": join(i, lane_of(e), session), "opened": False}
+        elif kind == "open":
             try:
                 root = root_of(e)
                 lane = lane_of(e) if e["schema"] == LEDGER_SCHEMA else None
@@ -732,12 +794,29 @@ def _verify(lines: list[bytes], I: bytes, verify: Callable[[bytes, bytes], bool]
                 raise ValueError(f"entry {i}: a window root is 128 lowercase hex digits")
             if root in windows or e["session"] in by_session:
                 raise ValueError(f"entry {i}: a second open for root {root[:16]}… or session {e['session']}")
+            b = e["body"]
+            if e["schema"] == LEDGER_SCHEMA and "reserve" in b:
+                r = reserves.get(e["session"])
+                if r is None or type(b["reserve"]) is not int or r["entry"]["seq"] != b["reserve"]:
+                    raise ValueError(f"entry {i}: an open for session {e['session']} binds no reserve of it")
+                rb = r["entry"]["body"]
+                if not all(_same(b.get(k), rb.get(k)) for k in RESERVED):
+                    raise ValueError(f"entry {i}: session {e['session']}'s open doesn't carry its reserve's request")
+                who = b.get("opened_by")
+                if type(who) is not str or who not in (rb["by"], rb.get("for")):
+                    raise ValueError(f"entry {i}: session {e['session']} was opened by "
+                                     f"{repr(who) if type(who) is str else 'no lane'}, not its reserve's prover")
+                if (type(b.get("started_utc")) is not str or later(b["started_utc"], 0) != b["started_utc"]
+                        or not rb["started_utc"] <= b["started_utc"] <= rb["expires_utc"]):
+                    raise ValueError(f"entry {i}: session {e['session']} was opened outside its reserve's minutes")
+                if r["period"] is not None and periods[r["period"]]["close"] is not None:
+                    raise ValueError(f"entry {i}: session {e['session']} was opened after its period {r['period']} closed")
+                r["opened"] = True
+            elif e["schema"] == LEDGER_SCHEMA and two_step:
+                raise ValueError(f"entry {i}: a v2 open without a reserve after the ledger's first reserve")
+            else:
+                join(i, lane, e["session"])
             windows[root], by_session[e["session"]] = {"open": e, "end": None, "q": q}, root
-            if (period := current.get(lane) if lane is not None else None) is not None:
-                p = periods[period]
-                if p["cap"] is not None and len(p["windows"]) >= p["cap"]:
-                    raise ValueError(f"entry {i}: period {period}'s window {len(p['windows'])} is past its cap {p['cap']}")
-                p["windows"].append(root)
         elif kind == "end":
             root = by_session.get(e["session"])
             if root is None or windows[root]["end"] is not None:
@@ -763,16 +842,16 @@ def _verify(lines: list[bytes], I: bytes, verify: Callable[[bytes, bytes], bool]
                             raise ValueError("not canonical")
                     except ValueError:
                         raise ValueError(f"entry {i}: period {name}'s cap is a positive integer and its circuit a "
-                                         "SHA-512 in lowercase or a Program's id") from None
+                                         "SHA-512 in lowercase") from None
                 periods[name], current[lane] = {"lane": lane, "open": e, "close": None, "windows": [], "cap": cap,
                                                 "circuit": circuit}, name
             else:
                 p = periods.get(name)
                 if p is None or p["close"] is not None or p["lane"] != lane:
                     raise ValueError(f"entry {i}: a period-close for {name}, which isn't lane {lane}'s open period")
-                outcomes = [{"root": r, "session": windows[r]["open"]["session"],
-                             "complete": windows[r]["end"] is not None and windows[r]["end"]["body"].get("complete") is True}
-                            for r in p["windows"]]
+                outcomes = [{"root": by_session.get(s), "session": s,
+                             "complete": s in by_session and windows[by_session[s]]["end"] is not None
+                             and windows[by_session[s]]["end"]["body"].get("complete") is True} for s in p["windows"]]
                 if (e["body"].get("windows") != outcomes
                         or e["body"].get("complete") is not (bool(outcomes) and all(w["complete"] for w in outcomes))):
                     raise ValueError(f"entry {i}: period {name}'s close doesn't list exactly its windows and their outcomes")
@@ -784,7 +863,8 @@ def _verify(lines: list[bytes], I: bytes, verify: Callable[[bytes, bytes], bool]
         prev, last = hashlib.sha512(ln).hexdigest(), q
     if reused := sorted(leaves & set(records)):
         raise ValueError(f"entry {records[reused[0]]}: record leaf {reused[0]} is also an entry's")
-    return ({root: {"open": w["open"], "end": w["end"]} for root, w in windows.items()},
+    return ({root: {"reserve": (reserves.get(w["open"]["session"]) or {}).get("entry"), "open": w["open"], "end": w["end"]}
+             for root, w in windows.items()},
             {name: {k: p[k] for k in ("lane", "open", "close", "windows", "cap", "circuit")} for name, p in periods.items()})
 
 
@@ -807,7 +887,8 @@ def _nat(v: Any) -> bool:
 
 
 def _outcome(w: Any) -> bool:
-    return (isinstance(w, dict) and sorted(w) == ["complete", "root", "session"] and _digest_hex(w["root"])
+    return (isinstance(w, dict) and sorted(w) == ["complete", "root", "session"]
+            and (w["root"] is None or _digest_hex(w["root"]))
             and _session_id(w["session"]) and type(w["complete"]) is bool)
 
 
@@ -825,7 +906,7 @@ def _ledger_entry(line: Any) -> dict | None:
             and len(e["sig"]) >= 8 and _HEX.fullmatch(e["sig"]) is not None and isinstance(e["body"], dict)):
         return None
     b, kind, v2 = e["body"], e["kind"], e["schema"] == LEDGER_SCHEMA
-    if kind in ("open", "end"):
+    if kind in SESSION_KINDS:
         if not _session_id(e["session"]):
             return None
     elif kind in PERIOD_KINDS:
@@ -837,6 +918,8 @@ def _ledger_entry(line: Any) -> dict | None:
         ok = ((_window(b.get("window")) if v2 else _v1_window(b.get("window"))) and _host(b.get("host"))
               and _digest_hex(b.get("pinned"), 40) and _digest_hex(b.get("key_sha512"))
               and (not v2 or type(b.get("by")) is str and type(b.get("for", "")) is str))
+    elif kind == "reserve":
+        ok = True
     elif kind == "end":
         files = b.get("files")
         ok = (type(b.get("closed")) is bool and isinstance(files, dict) and all(_digest_hex(v) for v in files.values())
@@ -921,7 +1004,7 @@ def audited_session(ledger: Any, window: Any, key: ChallengerKey, verify: Verify
     if not (_nat(b.get("record_leaf")) and _digest_hex(b.get("commitment")) and _nat(b.get("refused_hellos"))
             and all(f in b["files"] for f in SEALED_FILES)):
         raise CoinError(f"the auditor's ledger's end of session {s} is malformed: {END_FORM}")
-    name = next((n for n, p in periods.items() if window["root"] in p["windows"]), None)
+    name = next((n for n, p in periods.items() if s in p["windows"]), None)
     p = periods.get(name, {"cap": None, "circuit": None})
     if name is not None and (p["cap"] is None or p["circuit"] is None):
         raise CoinError(f"the auditor's ledger's period {name}, which holds session {s}, commits no cap or circuit")
@@ -1088,10 +1171,11 @@ __all__ = ["Audited", "BINDING", "CAP", "CIRCUIT", "CLOSE_FILE", "CLOSE_FORM", "
            "END_FORM", "HEADS_FORM", "HELLOS_FILE", "HELLOS_FORM", "KEY_FORM", "KEY_RECORD_FORM", "KEY_RECORD_SCHEMA",
            "LEDGER_FORM", "LEDGER_ROLE", "LEDGER_SCHEMA", "LEDGER_SCHEMA_V1", "LEDGER_TAGS", "LOG_FILE", "LOG_FORM",
            "LOG_MALFORMED", "LOG_TAG", "LiveChallenger", "LiveCommitment", "LiveOpening", "LiveRecord", "MAX_COINS",
-           "MAX_LEDGER_LINE", "MAX_LOG_LINE", "MAX_LOG_LINES", "MAX_SESSION_ID", "NO_AUDIT", "NO_CLOSE", "NO_RECORD",
-           "OPENING_FORM", "PERIOD_KINDS", "PUBLIC_BYTES", "RECORD_FILE", "RECORD_FORM", "RECORD_ROLE", "SEALED_FILES",
-           "SESSION_FORM", "Verify", "WINDOW_FORM", "audited_session", "cap_of", "circuit_of", "close_message",
-           "extends", "key_of_record", "lane_of", "layout_problem", "leaf_of", "ledger_head", "ledger_line",
+           "MAX_LEDGER_LINE", "MAX_LOG_LINE", "MAX_LOG_LINES", "MAX_SESSION_ID", "MINUTES", "NO_AUDIT", "NO_CLOSE",
+           "NO_RECORD", "OPENING_FORM", "PERIOD_KINDS", "PUBLIC_BYTES", "RECORD_FILE", "RECORD_FORM", "RECORD_ROLE",
+           "RESERVED", "SEALED_FILES", "SESSION_FORM", "SESSION_KINDS", "Verify", "WINDOW_FORM", "audited_session",
+           "cap_of", "circuit_of", "close_message", "extends", "key_of_record", "lane_of", "later", "layout_problem",
+           "leaf_of", "ledger_head", "ledger_line",
            "ledger_message", "ledger_text", "live_domain", "live_leaf", "live_reason", "log_chain", "log_digest",
            "order_reason", "record_message", "record_reason", "released_roots_of", "root_of", "session_named",
            "session_of", "trusted_commitment", "trusted_reason", "trusted_session_of", "verify_ledger",
