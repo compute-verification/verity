@@ -130,7 +130,10 @@ theorem innerRound_eval (H : Claims.Msg → Claims.Msg) (ask : List Claims.Msg �
       Claims.Recursion.spOf ((𝔇).innerMsg x ms cs))).1 =
         List.ofFn (maskOf (y ⟨0, Nat.zero_lt_one⟩)) ++ saltH H (y ⟨0, Nat.zero_lt_one⟩) := by
   simp only [Claims.ZKMal.recSpBind_eq, Claims.ZKMal.spBind_eval, zeroCommits_stop_eval, innerMsg_eval,
-    Claims.ZKMal.finRange_one, List.map_cons, List.map_nil, List.flatten_cons, List.flatten_nil, List.append_nil]
+    Claims.ZKMal.finRange_one, List.map_cons, List.map_nil]
+  first
+    | exact List.append_nil _
+    | simp
 
 theorem stageRound_eval (H : Claims.Msg → Claims.Msg) (ask : List Claims.Msg → Claims.Out) (x : Claims.Msg)
     (ms : List (Claims.Msg × Claims.Out)) (ys : List (Fin (𝔇).saltLen → UInt8)) :
@@ -261,8 +264,12 @@ theorem simStop_eval (H : Claims.Msg → Claims.Msg) (I : Claims.Recursion.Inner
       | (simp only [stopEquiv, Equiv.trans_apply, Equiv.apply_symm_apply]; rfl)
   rw [hc] at hrhs
   dsimp only at hrhs
-  rw [Claims.ZKMal.censorSim_eval, simPre_pm IV b ivScope I H ask x hI,
-    ← Claims.ZKMal.interact_censor ask _ (sR IV ivScope b x) (kPre IV x) (kPre IV x)] at hrhs
+  have hpre : (Claims.SP.eval H ask ((Claims.ZKMal.censorSim (simPre (deployRec IV ivScope b) I) (sR IV ivScope b)
+      (kPre IV)).prog x ((fun i => c₁ i ⟨0, Nat.zero_lt_one⟩), c₂))).1 = _ := by
+    rw [Claims.ZKMal.censorSim_eval, simPre_pm IV b ivScope I H ask x hI,
+      ← Claims.ZKMal.interact_censor ask _ (sR IV ivScope b x) (kPre IV x) (kPre IV x)]
+  replace hrhs := hrhs.trans (congrArg (fun τ₀ => List.foldl (fun τ (j : Fin (nS x)) => stepS H ask SO' x 𝔓 τ j (cs j))
+    τ₀ (List.finRange (nS x))) hpre)
   dsimp only at hrhs
   refine Eq.trans ?_ hrhs.symm
   simp only [Claims.Recursion.SimStop]
