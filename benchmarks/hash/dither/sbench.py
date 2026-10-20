@@ -69,7 +69,8 @@ Arms:
                  tokens).  With -ao after those, the A tables run on a stream of
                  their own, each beside the previous call's units (the units of a call still wait on its A table);
                  -aos puts each call's seeds there too, after its A table (-kh and -hbk, whose seeds are a launch of
-                 their own).  With -pt last, between steps the receipt trees and the admit tables run on streams of
+                 their own); -aom and -aoms are -ao and -aos on four such streams, call w's on stream w % 4 (no
+                 call's A table reads another's).  With -pt last, between steps the receipt trees and the admit tables run on streams of
                  their own beside the z tables and the step trees (`Window.tree_streams`)
     ARM-xl       any dither arm with `verity_int8::row_quant`'s CUDA body exactlin's quantizer (`exactlin.install`, which
                  serves `scaled_mm` from exactlin's GEMM too; the dither arms call row_quant only): the same xq and s_a, so
@@ -339,7 +340,8 @@ def build(arm: str, scratch: Path, gpu_mem: float):
 DITHER_A = {f"dither-a{u}{z}{o}{p}": (unit, zm, ao, pt)
             for u, unit in (("", None), ("-h1r", "h1r"), ("-kh", "kh"), ("-hbk", "hbk"))
             for z, zm in (("", "row"), ("-zy", "zy"), ("-zyc", "zyc"), ("-y", "none"))
-            for o, ao in (("", ""), ("-ao", "a"), ("-aos", "as")) for p, pt in (("", False), ("-pt", True))}
+            for o, ao in (("", ""), ("-ao", "a"), ("-aos", "as"), ("-aom", "m"), ("-aoms", "ms"))
+            for p, pt in (("", False), ("-pt", True))}
 
 
 REF_OF = {"dither": "exact", "dither-side": "exact", "dither-1s": "exact", "dither-1s-credit": "exact",

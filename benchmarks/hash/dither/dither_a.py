@@ -29,8 +29,10 @@ call: about 0.7 ms each on the RTX against 2.9 ms for all 128 batched, zleaf.py)
 A tables run on a third stream above the units' priority: A_w waits on its quantizer and the units of call w on
 A_w, so each call's A table still precedes its seeds and units, and A_(w+1) runs beside call w's units (the same
 launches; only the streams they wait on change); with ao="as" (-aos; kh and hbk, whose seeds are a launch of their own)
-each call's seeds follow its A table on that stream, and its units wait on both.  With pt=True (-pt) the window builds
-the receipt trees and the admit tables between steps on streams of their own (`Window.tree_streams`).
+each call's seeds follow its A table on that stream, and its units wait on both; ao="m" and "ms" (-aom, -aoms) are the
+same on NA_MULTI A streams, call w's on stream w % NA_MULTI, since no call's table reads another's (each call's
+counter is in its own prefix words), and a join waits on every A stream used since the last.  With pt=True (-pt) the
+window builds the receipt trees and the admit tables between steps on streams of their own (`Window.tree_streams`).
 
     import dither_a as DA
     DA.patch(t=T, h1c="libh1c.so", h1o="libh1o.so", unit="h1r")   # before LLM()
@@ -78,7 +80,11 @@ UNITS = ("h1r", "kh", "hbk")
 # and no z table, y only: the leaves'
 # cost floor, never credited
 ZMODES = {"none": 0, "row": 1, "zy": 2, "zyc": 2}
-AO = ("", "a", "as")   # nothing, the A tables, or the A tables and (kh, hbk) the seeds on the A stream
+# nothing, the A tables, or the A tables and (kh, hbk) the seeds on the A stream; "m" and "ms" the same on NA_MULTI
+# A streams, call w's on stream w % NA_MULTI
+AO = ("", "a", "as", "m", "ms")
+AO_SEEDS = ("as", "ms")
+NA_MULTI = 4
 ZY_KIND = "zy-unit-table"
 UNIT = (32, 32)     # (UR, UC): the receipts' units; a narrower down_proj unit changes only this
 H1R_BLOCK, H1R_SPLIT = 3, 4     # h1r_launch's versions: a unit a block, a unit six warps
@@ -252,9 +258,9 @@ class Side:
     def __init__(self, win: DO.Window, unit: str, h1u: str | None, z: str = "row", ao: str = "", pt: bool = False):
         if unit not in UNITS:
             raise ValueError(f"dither-a's unit: one of {UNITS}, not {unit!r}")
-        if ao not in AO or (ao == "as" and unit == "h1r"):
-            raise ValueError(f"dither-a's ao: one of {AO} ('as' for kh and hbk, whose seeds are a launch of their own), "
-                             f"not {ao!r} with unit {unit!r}")
+        if ao not in AO or (ao in AO_SEEDS and unit == "h1r"):
+            raise ValueError(f"dither-a's ao: one of {AO} ({AO_SEEDS} for kh and hbk, whose seeds are a launch of their "
+                             f"own), not {ao!r} with unit {unit!r}")
         self.win, self.unit, self.z, self.zl, self.ao, self.pt, dev = win, unit, z, ZMODES[z], ao, pt, win.dev
         self.side = torch.cuda.Stream(device=dev)
         self.fork, self.join = torch.cuda.Event(), torch.cuda.Event()
@@ -262,9 +268,14 @@ class Side:
             win.tree_streams = (torch.cuda.Stream(device=dev), torch.cuda.Stream(device=dev))
         if ao:
             # the A tables on a stream of their own above the units' priority: a call's table is a chain of dependent
-            # compressions on a few blocks, so it runs beside the previous call's units, which fill the device
-            self.astream = torch.cuda.Stream(device=dev, priority=-1)
-            self.a_done, self.a_join = torch.cuda.Event(), torch.cuda.Event()
+            # compressions on a few blocks, so it runs beside the previous call's units, which fill the device; under
+            # "m" and "ms" on NA_MULTI such streams, since no call's table reads another's
+            na = NA_MULTI if ao in ("m", "ms") else 1
+            self.astreams = [torch.cuda.Stream(device=dev, priority=-1) for _ in range(na)]
+            self.a_done = [torch.cuda.Event() for _ in range(na)]
+            self.a_join = [torch.cuda.Event() for _ in range(na)]
+            # the A streams with work since the last join: a capture may wait only on events recorded inside it
+            self.a_used: set[int] = set()
         self.work = EL.Workspace(dev)
         self.arch = EL.arch(dev.index)
         self.stage = torch.empty_like(win.plan.out)
@@ -374,7 +385,7 @@ class Side:
         if self.unit == "h1r":
             return win.r.lib.h1r_launch(tab, 1, win.units[w], self.ks1[w], win.salt.data_ptr(), win.step_base.data_ptr(),
                                         win.plan.seeds.data_ptr(), self.stage.data_ptr(), 0, self.versions[w], st)
-        rc = 0 if self.ao == "as" else self.seeds(w, st)
+        rc = 0 if self.ao in AO_SEEDS else self.seeds(w, st)
         live = -(-min(M, win.t) // 32)
         if self.unit == "hbk":
             return rc or self.h.kh_one(win.slot[w].data_ptr(), win.wt[w].data_ptr(), win.t, n, k,
@@ -401,12 +412,15 @@ class Side:
         if self.ao:
             # A_w waits only on its quantizer and A_(w-1), and the units of call w on A_w: the A table still comes
             # before the call's seeds and units, and A_(w+1) overlaps the units of call w
-            self.astream.wait_event(self.fork)
-            rc = win.a_call(w, win.slot[w], win.scale[w], self.astream.cuda_stream)
-            if self.ao == "as":
-                rc = rc or self.seeds(w, self.astream.cuda_stream)
-            self.a_done.record(self.astream)
-            self.side.wait_event(self.a_done)
+            i = w % len(self.astreams)
+            ast = self.astreams[i]
+            ast.wait_event(self.fork)
+            rc = win.a_call(w, win.slot[w], win.scale[w], ast.cuda_stream)
+            if self.ao in AO_SEEDS:
+                rc = rc or self.seeds(w, ast.cuda_stream)
+            self.a_done[i].record(ast)
+            self.side.wait_event(self.a_done[i])
+            self.a_used.add(i)
             self.gemm(w, xq, s_a, wt, s_w, y)
             rc = rc or self.units(w, M, st, s_w)
         else:
@@ -431,8 +445,10 @@ class Side:
                                     BLOCK=triton.next_power_of_2(win.L))
         if last or (w % 4 == 0 and _piecewise()):
             if self.ao:
-                self.a_join.record(self.astream)
-                main.wait_event(self.a_join)
+                for i in sorted(self.a_used):
+                    self.a_join[i].record(self.astreams[i])
+                    main.wait_event(self.a_join[i])
+                self.a_used.clear()
             self.join.record(self.side)
             main.wait_event(self.join)
             self.joins += 1
