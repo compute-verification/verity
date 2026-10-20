@@ -650,8 +650,8 @@ def checkCap (c : Circuit) (pub : Public) (own : Array Registered.Port) (N : Nat
 `rec-open-stacked/…` or `rec-opening/…` unit is refused unless the verifier holds its registered reads and the inner session
 (`files`), candidate 3's besides the last three (`c3`), and its verifier-registered values are the ones the coins give
 (`checkOpen`, `checkResiduals`, `checkSparse`, `checkStackedLevel`, `checkOpening`); a `rec-cap/…` unit, which reads no
-coins, unless the verifier holds its registered reads and they hold the cap at fixed rows (`checkCap`); any other unit
-passes. -/
+coins, unless the verifier holds its registered reads and the inner session, as every other V* unit, and its reads hold
+the cap at fixed rows (`checkCap`, last, so no other unit's branch is behind it); any other unit passes. -/
 def check (st : Stmt) (own : Option (Array Registered.Port)) (files : Option Source) (c3 : Option C3 := none) :
     V Unit := do
   let unit := st.c.unit.name
@@ -664,7 +664,6 @@ def check (st : Stmt) (own : Option (Array Registered.Port)) (files : Option Sou
   if o.isNone && res.isNone && sp.isNone && so.isNone && op.isNone && cap.isNone then return
   let some own := own
     | throw s!"rec-coins: {unit}: the verifier holds no registered reads (--registered): its coefficients would be the prover's"
-  if let some N := cap then return ← checkCap st.c st.pub own N
   let needC3 : V C3 := match c3 with
     | some c => pure c
     | none => throw (s!"rec-coins: {unit}: the verifier holds no inner transcript and inner shape of candidate 3's session " ++
@@ -678,7 +677,9 @@ def check (st : Stmt) (own : Option (Array Registered.Port)) (files : Option Sou
   match o, res with
   | some (LANES, H), _ => checkOpen inn st.c st.pub own LANES H
   | _, some (m, k, cl, j) => checkResiduals inn st.c st.pub own m k cl j
-  | none, none => pure ()
+  | none, none => match cap with
+    | some N => checkCap st.c st.pub own N
+    | none => pure ()
 
 /-- A circuit-table level `l`'s `out` port in the reads file: level `l`'s tops `rec-top-L<l>` (`rec_outer.TopValue`),
 instance `i` (rep `i / q`'s opening `i % q`, `checkOpen`'s order) reading node `first + pos >>> H` of them, `pos` the
