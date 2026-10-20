@@ -7,9 +7,8 @@ import Proofs.Flock.Soundness.Discharge.ZkLink.Rows
 `EndToEndRegisteredRows` is `EndToEndRegisteredDrawn`'s statement with the rows link added to its event: at the drawn
 units, an accepted session's committed input rows are the rows the registered roots open to, and its committed output
 rows are the program's outputs on them. It is what PoUW's proof premise (`Accounting.TS.ProofLayer.SoundAt`) reads of
-C-Flock, which `EndToEndHiddenDrawn` and `EndToEndRegisteredDrawn` leave unstated. It is stated first, and recorded
-through `Flock.SecurityProofs.EndToEndRegisteredRowsStated` until its proof, `Flock.SecurityProofs.EndToEndRegisteredRows`,
-lands.
+C-Flock, which `EndToEndHiddenDrawn` and `EndToEndRegisteredDrawn` leave unstated. Its proof is
+`Flock.SecurityProofs.EndToEndRegisteredRows`.
 
 C-Flock's definitions are still in its proofs package, so this module imports
 `Proofs.Flock.Soundness.Discharge.ZkReg.PublicHJ`, and `Models.lean`, which the `security` package builds without
@@ -130,10 +129,5 @@ def EndToEndRegisteredRows : Prop :=
             (Fintype.card (ΩcZ execArith P (planZHJ dj y₀) (tabZHJ dj y₀) vb L p) : ℝ) / Fintype.card L.Ω) *
           (2 * (t' * (1 + k)) / 2 ^ (256 : ℝ) + 1 / (Real.exp 1 * M) + k / (Real.exp 1 * Rw)) / (1 - ρ)) +
         ENNReal.ofReal (qR ^ 2 / 2 ^ (513 : ℝ))
-
-/-- **The rows link is stated** (`EndToEndRegisteredRows`), for its record, until its proof lands. -/
-def EndToEndRegisteredRowsStated : Prop :=
-  let statements := EndToEndRegisteredRows
-  statements = statements
 
 end Flock.Guarantees

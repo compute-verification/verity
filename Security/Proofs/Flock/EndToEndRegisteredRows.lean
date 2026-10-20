@@ -1,9 +1,10 @@
 import Proofs.Flock.EndToEndRegisteredRows.Statement
 import Proofs.Flock.EndToEndRegisteredRows.Reduce
 
-/-! `Flock.SecurityProofs.EndToEndRegisteredRowsStated : Flock.Guarantees.EndToEndRegisteredRowsStated`, by
-reflexivity: the guarantee is there for its record, which holds `Flock.Guarantees.EndToEndRegisteredRows`'s text until
-its proof, `Flock.SecurityProofs.EndToEndRegisteredRows`, lands here. -/
+/-! `Flock.SecurityProofs.EndToEndRegisteredRows : Flock.Guarantees.EndToEndRegisteredRows`: the reduction
+`EndToEndRegisteredRows_of_rowsLink` at the rows' extraction bound `rowsLinkLe`. -/
 
-/-- **The rows link is stated** (`Flock.Guarantees.EndToEndRegisteredRowsStated`). -/
-theorem Flock.SecurityProofs.EndToEndRegisteredRowsStated : Flock.Guarantees.EndToEndRegisteredRowsStated := rfl
+/-- **C-Flock's one-stage audit, end to end, with the rows link, at the drawn units**
+(`Flock.Guarantees.EndToEndRegisteredRows`). -/
+theorem Flock.SecurityProofs.EndToEndRegisteredRows : Flock.Guarantees.EndToEndRegisteredRows :=
+  FlockSoundness.Discharge.ZkReg.EndToEndRegisteredRows_of_rowsLink FlockSoundness.Discharge.ZkReg.rowsLinkLe
