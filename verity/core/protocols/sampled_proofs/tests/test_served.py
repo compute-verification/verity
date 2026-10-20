@@ -74,6 +74,7 @@ def test_the_registration_it_builds_passes_r7_and_the_file_is_the_verifiers():
     assert sr.ports == {"w": {"value": "W", "root": reg.root.hex(), "leaves": 5, "words": 2, "word_bits": 16,
                               "domain": reg.domain.domain_id.hex(), "reads": list(POS)}}
     assert sr.file_bytes() == canonical_json(sr.file) and json.loads(sr.file_bytes()) == sr.file
+    assert sr.partition == P.partition(prog, Q) and tree.row_schema == G.SCHEMA and "row_schema" not in tree.entry()
     assert register_served(prog, Q, [tree], ports={"w": "cs"}).ports.keys() == {"cs"}
 
 
@@ -162,6 +163,9 @@ def test_an_earlier_outputs_tree_keeps_its_port():
     ({"value": ""}, "names the parameter"),
     ({"value": "nope"}, "not a parameter of the program"),
     ({"output": ("ab" * 64,)}, "an output is"),
+    ({"row_schema": "hm96-sha512/row/v2"}, "the registered form reads hm96-sha512/row/v1 rows alone"),
+    ({"row_schema": "hm96-sha512/row-seg/v1"}, "the registered form reads hm96-sha512/row/v1 rows alone"),
+    ({"row_schema": "u16"}, "not one of"),
 ])
 def test_a_malformed_tree_is_refused(change, why):
     prog = _program()
