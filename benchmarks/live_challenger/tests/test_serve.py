@@ -55,17 +55,17 @@ def finish(proc: subprocess.Popen) -> tuple[int, str]:
 def trusted(out: Path, session: str = "s-out", closed: bool = True):
     """The verifier's read of `out`, the auditor's ledger opening `session` for `WINDOW` on `HOST` under the key the run
     wrote (pinned from the key's own directory, outside `out`) and ending it as `closed` says, sealing `out`'s files,
-    each entry signed with that key (at leaves the run doesn't reach)."""
+    each entry signed with that key (at its last two leaves, which the run doesn't reach)."""
     key = C.ChallengerKey.from_json(json.loads((out / R.KEY).read_text()))
     assert key.public == (out.parent / "key" / "public").read_bytes()
     private = lms.keygen(lms.Params(64, key.W, key.H), (out.parent / "key" / "seed").read_bytes())
     files = {p.name: hashlib.sha512(p.read_bytes()).hexdigest() for p in sorted(out.iterdir()) if p.is_file()}
     lines: list[str] = []
-    for kind, body in (("open", {"window": WINDOW, "host": HOST, "pinned": "ab" * 20,
-                                 "key_sha512": hashlib.sha512(key.public).hexdigest()}),
-                       ("end", {"closed": closed, "files": files, "rc": 0})):
+    for q, (kind, body) in enumerate((("open", {"window": WINDOW, "host": HOST, "pinned": "ab" * 20,
+                                                "key_sha512": hashlib.sha512(key.public).hexdigest()}),
+                                      ("end", {"closed": closed, "files": files, "rc": 0})), 2 ** key.H - 2):
         lines.append(C.ledger_line(lines, kind, session, body, key.public[:16],
-                                   lambda m: lms.sign_at(private, 2 ** key.H - 1, m).encode()))
+                                   lambda m, q=q: lms.sign_at(private, q, m).encode()))
     ledger = out.parent / f"windows-{session}.jsonl"
     ledger.write_text("".join(line + "\n" for line in lines))
     return R.trusted_session(out, ledger, WINDOW, key, lms_verify)

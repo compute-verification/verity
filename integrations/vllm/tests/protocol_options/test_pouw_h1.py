@@ -780,8 +780,8 @@ def test_a_second_session_under_the_same_key_for_one_window_is_refused(tmp_path,
     ledger.open("s-3", w)
     for coins, host, window in ((one, first, w), (two, second, later)):
         assert PHC.trusted_rounds_reason(coins, host.directory, ledger.path, window, first.key) == (
-            "the challenger's session is not trusted: the auditor's ledger entry 4 opens a second session for its window, "
-            "or session s-3 again: a window has one session")
+            "the challenger's session is not trusted: the auditor's ledger entry 4 opens a second session for its window's "
+            "Commit, or session s-3 again: a Commit has one window, whatever its period, and a window one session")
 
 
 def test_the_challenger_setting_is_h1s_one_coin_source(tmp_path, monkeypatch):
