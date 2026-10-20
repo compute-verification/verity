@@ -131,7 +131,7 @@ theorem ville_succ_le (hlive : Assumptions.LiveVerdicts acc) (m : ℕ) :
     refine prod_congr rfl fun j hj => ?_
     have hjm : (j : ℕ) < j0 := (mem_filter.1 hj).2
     have hagree : ∀ i' : Fin n, i' ≤ j → Function.update r.2 j0 i i' = r.2 i' := fun i' hi' =>
-      Function.update_of_ne (lt_of_le_of_lt hi' (Fin.lt_iff_val_lt_val.2 hjm)).ne _ _
+      Function.update_of_ne (lt_of_le_of_lt hi' (Fin.lt_def.2 hjm)).ne _ _
     rw [unanswered_congr hlive (r := (r.1, Function.update r.2 j0 i)) (r' := r) rfl
       (fun i' hi' => hagree i' hi'.le)]
     exact if_congr (hlive j (r.1, Function.update r.2 j0 i) r rfl hagree) rfl rfl

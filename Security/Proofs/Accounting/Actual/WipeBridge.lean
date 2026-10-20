@@ -178,8 +178,8 @@ theorem fibre_card_le (hS : CausalStrategy S ℓ) (hlat : ∀ r, (S r).A.Latency
           (((univ.filter fun ω => ζ ω = z ∧ ∀ i ∈ A, lab ω j i = lab r0.1 j i).card : ℝ) * 2 ^ (A.card * b)) := by
         rw [← mul_assoc]
         exact mul_le_mul_of_nonneg_right h2 (by positivity)
-    _ ≤ (Fintype.card (Fin n → B) : ℝ) * (univ.filter fun ω => ζ ω = z).card :=
-        mul_le_mul_of_nonneg_left h1 (Nat.cast_nonneg _)
+    _ ≤ (Fintype.card (Fin n → B) : ℝ) * (univ.filter fun ω => ζ ω = z).card := by
+        convert mul_le_mul_of_nonneg_left h1 (Nat.cast_nonneg (α := ℝ) (Fintype.card (Fin n → B)))
 
 theorem sum_product4 {α β γ δ : Type*} (T : Finset α) (C : Finset β) (I : Finset γ) (W : Finset δ) (f : γ → ℕ) :
     ∑ q ∈ T ×ˢ C ×ˢ I ×ˢ W, f q.2.2.1 = T.card * C.card * W.card * ∑ z ∈ I, f z := by
@@ -279,7 +279,7 @@ theorem WipeReadHeld : Guarantees.Actual.WipeReadHeld := by
   · obtain ⟨hall, hK⟩ := (mem_filter.1 hr).2
     by_cases hb : ∃ j, r ∈ Bad j
     · exact Or.inl hb
-    push_neg at hb
+    simp only [not_exists] at hb
     refine Or.inr (hGood r (fun j => (hall j).1) ?_)
     have hx : ∀ j, (S r).mem X (arrive r j) < m → c ≤ Actual.unanswered acc j r := by
       intro j hj
@@ -297,7 +297,7 @@ theorem WipeReadHeld : Guarantees.Actual.WipeReadHeld := by
     have hx0 : ∀ j, 0 ≤ Actual.unanswered acc j r := fun j => by
       unfold Actual.unanswered
       positivity
-    rcases le_or_lt 0 c with hc0 | hc0
+    rcases le_or_gt 0 c with hc0 | hc0
     · calc (K : ℝ) * c ≤ ((univ.filter fun j => (S r).mem X (arrive r j) < m).card : ℝ) * c :=
             mul_le_mul_of_nonneg_right (by exact_mod_cast hK) hc0
         _ = ∑ j ∈ univ.filter fun j => (S r).mem X (arrive r j) < m, c := by rw [sum_const, nsmul_eq_mul]
