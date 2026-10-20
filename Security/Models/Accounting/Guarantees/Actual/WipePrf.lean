@@ -29,8 +29,9 @@ the system once on the table it is given and outputs the event (`Actual.heldDist
 what the audits ask it, and it never reads the secrets.
 
 Not covered here, and so outside this guarantee: the indices are uniform. The deployed ones are
-`draw_indices(coin_secret, …)`, a PRG of one 32-byte secret a wipe, all drawn at the wipe's first batch
-(`streamed_wipe.Challenger.challenge`). The step to them is a PRG advantage against a distinguisher of the same form.
+`draw_indices(coin_secret, …)`, a keyed SHA-512 stream of one 32-byte secret a wipe, all drawn at the wipe's first batch
+(`streamed_wipe.Challenger.challenge`). `Accounting.Guarantees.Actual.WipeReadHeldPrfDraw` takes the step to them, as
+the coin function's advantage against a distinguisher of the same form plus the sampler's rejection term.
 -/
 
 namespace Accounting.Guarantees.Actual
