@@ -33,27 +33,27 @@ def vfRow100 (r : Fin 11) (i : ℕ) : ℚ := vfCoef100 r.val i
 def flat100M : Sparse := Sm100.flatWords ++ Sm100Measured.flatFold ++ Sm100.flatFill ++ Sm100Measured.flatSkip
 
 /-- `B_♭` on DC-100-ri as a rational: ♭'s load on issue. -/
-def B100M : ℚ := dot (vfCoef100 0) 38 flat100M
+def B100M : ℚ := dot (vfCoef100 0) 52 flat100M
 
 /-- Fold route `i`'s load on issue as a rational. -/
-def load100M (i : ℕ) : ℚ := dot (vfCoef100 0) 38 (Sm100Measured.d2s.folds.getD i [])
+def load100M (i : ℕ) : ℚ := dot (vfCoef100 0) 52 (Sm100Measured.d2s.folds.getD i [])
 
 /-- The cheapest fold route's load on issue. -/
 def phi100M : ℚ := ((List.range 14).map load100M).foldr min (load100M 0)
 
-theorem sm100m_max : ∀ i < 11, dot (vfCoef100 i) 38 flat100M ≤ B100M := by decide +kernel
+theorem sm100m_max : ∀ i < 11, dot (vfCoef100 i) 52 flat100M ≤ B100M := by decide +kernel
 
 theorem sm100m_Bpos : (0 : ℚ) < B100M := by decide +kernel
 
 theorem sm100m_writers : ∀ i < 13, 0 < (Sm100Measured.d2s.writers.getD i (0, 0)).2 ∧
     1 / 32768 * ((Sm100Measured.d2s.writers.getD i (0, 0)).2 : ℚ) ≤
-      vfCoef100 0 ((Sm100Measured.d2s.writers.getD i (0, 0)).1 % 38) := by
+      vfCoef100 0 ((Sm100Measured.d2s.writers.getD i (0, 0)).1 % 52) := by
   decide +kernel
 
-theorem sm100m_vec : ∀ j ∈ Sm100Measured.d2s.vec, 1 ≤ vfCoef100 0 (j % 38) := by decide +kernel
+theorem sm100m_vec : ∀ j ∈ Sm100Measured.d2s.vec, 1 ≤ vfCoef100 0 (j % 52) := by decide +kernel
 
 theorem sm100m_fold :
-    ∀ i < 14, phi100M ≤ dot (vfCoef100 0) 38 (Sm100Measured.d2s.folds.getD i []) := by
+    ∀ i < 14, phi100M ≤ dot (vfCoef100 0) 52 (Sm100Measured.d2s.folds.getD i []) := by
   decide +kernel
 
 theorem sm100m_folded_q :
@@ -76,7 +76,7 @@ theorem sm100m_a_nonneg : ∀ r k, 0 ≤ Sm100Measured.model.G.a r k := fun r k 
 theorem sm100m_bnd : Sm100Measured.model.bnd Sm100Measured.flat = (B100M : ℝ) := by
   unfold Model.bnd
   rw [show Sm100Measured.flat.n = Sparse.counts flat100M from
-    labelled_n 38 Sm100.flatWords Sm100Measured.flatFold Sm100.flatFill Sm100Measured.flatSkip]
+    labelled_n 52 Sm100.flatWords Sm100Measured.flatFold Sm100.flatFill Sm100Measured.flatSkip]
   exact bound_eq _ vfRow100 sm100m_hG flat100M 0 fun r => sm100m_max r.val r.isLt
 
 theorem sm100m_Nw : Sm100Measured.model.Nw = 32768 := by
@@ -136,7 +136,7 @@ theorem sm100m_wf : Sm100Measured.model.Wf Sm100Measured.flat := by
 
 theorem sm100m_vecMin : 1 ≤ Sm100Measured.model.vecMin 0 := by
   have : Nonempty ↥Sm100Measured.model.vec :=
-    ⟨⟨idx 38 3, List.mem_toFinset.mpr (List.mem_map.mpr ⟨3, by decide, rfl⟩)⟩⟩
+    ⟨⟨idx 52 7, List.mem_toFinset.mpr (List.mem_map.mpr ⟨7, by decide, rfl⟩)⟩⟩
   unfold Model.vecMin
   refine le_ciInf fun k => ?_
   obtain ⟨j, hj, hk⟩ := List.mem_map.mp (List.mem_toFinset.mp k.2)
@@ -150,11 +150,11 @@ theorem sm100m_demand_issue : ∀ hd, (1 : ℝ) / 32768 ≤ Sm100Measured.model.
   | writer t =>
     have hw := sm100m_writers t.val t.isLt
     show (1 : ℝ) / 32768 ≤ (vfCoef100 (0 : Fin 11).val
-        ((Sm100Measured.d2s.writers.getD t.val (0, 0)).1 % 38) : ℝ) /
+        ((Sm100Measured.d2s.writers.getD t.val (0, 0)).1 % 52) : ℝ) /
         ((Sm100Measured.d2s.writers.getD t.val (0, 0)).2 : ℝ)
     rw [le_div_iff₀ (by exact_mod_cast hw.1)]
     have h : ((1 / 32768 * ((Sm100Measured.d2s.writers.getD t.val (0, 0)).2 : ℚ) : ℚ) : ℝ) ≤
-        ((vfCoef100 (0 : Fin 11).val ((Sm100Measured.d2s.writers.getD t.val (0, 0)).1 % 38) : ℚ) : ℝ) :=
+        ((vfCoef100 (0 : Fin 11).val ((Sm100Measured.d2s.writers.getD t.val (0, 0)).1 % 52) : ℚ) : ℝ) :=
       Rat.cast_le.mpr hw.2
     push_cast at h
     linarith
@@ -188,7 +188,7 @@ theorem sm100m_phiStar : (phi100M : ℝ) ≤ Sm100Measured.model.phiStar Sm100Me
   rw [load_counts _ vfRow100 sm100m_hG]
   exact Rat.cast_le.mpr (sm100m_fold φ.val φ.isLt)
 
-theorem sm100m_fillOpt {Ω : Type} [Fintype Ω] (Pl : Play Ω Sm100.checks (Fin 38) (Fin 13) Unit Empty)
+theorem sm100m_fillOpt {Ω : Type} [Fintype Ω] (Pl : Play Ω Sm100.checks (Fin 52) (Fin 13) Unit Empty)
     (hSplit : ∀ x, (Pl.run x).Split) : ∀ x, FillOpt Sm100Measured.model (Pl.run x) := fun x =>
   fillOpt_of_zero Sm100Measured.model sm100m_a_nonneg (fun _ _ => rfl) rfl (Pl.run x) (hSplit x)
 

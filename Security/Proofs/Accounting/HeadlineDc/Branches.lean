@@ -1,4 +1,5 @@
 import Proofs.Accounting.Headline.Sm120Measured
+import Definitions.Accounting.HeadlineDc.Encoding
 
 /-!
 # The data-centre headlines' shared steps
@@ -6,6 +7,8 @@ import Proofs.Accounting.Headline.Sm120Measured
 `Whole.headline_of_branches` takes the folded branch's and the unfolded branch's floors at the proof's certificate.
 On a model with `μ_f = μ_x = 0` both floors only grow with `w*` and `φ*`, so a lower bound on each is enough:
 
+* `sheetCoefQ`, `sheet_aQ`, `sheetCoefQ_nonneg`: `sheetCoef` and its two facts for a `SheetDataQ` sheet (rational pipe
+  widths, the DS sheets' uniform datapath);
 * `price_ge_facet`, `price_ge_pair`, `price_ge_triple`: a certificate prices a demand `≥ 0` at least at one facet's
   term, or two's, or three's;
 * `wStar_ge`, `wStar_ge_triple`: `λ_{r₀}·w₀ ≤ w*` when every word route's demand on `r₀` is at least `w₀`, and
@@ -22,6 +25,31 @@ namespace Accounting.SecurityProofs.TS.HeadlineDc
 
 open Accounting.TS Accounting.TS.Headline Accounting.Assumptions.TS Accounting.SecurityProofs.TS
   Accounting.SecurityProofs.TS.Headline
+
+/-- A `SheetDataQ` sheet's rows as rationals, by class index: `Sheet.machine`'s, at `SheetDataQ.sheet`'s lists. -/
+def sheetCoefQ {P : Type} [DecidableEq P] (D : SheetDataQ P) : SheetRow P → ℕ → ℚ
+  | .issue, _ => 1
+  | .tensor, i => (D.macs.getD i 0 : ℚ) / ((D.peak.getD i 0 : ℚ) / 4)
+  | .pipe p, i => if D.pipe.getD i none = some p then 128 / D.width p else 0
+  | .smem, i => (D.smem.getD i 0 : ℚ) / 32
+
+theorem sheet_aQ {P : Type} [DecidableEq P] (D : SheetDataQ P) (n : ℕ) (r : SheetRow P) (k : Fin n) :
+    (D.sheet n).machine.a r k = (sheetCoefQ D r k.val : ℝ) := by
+  cases r with
+  | pipe p =>
+    show (if D.pipe.getD k.val none = some p then (128 : ℝ) / (D.width p : ℝ) else 0) =
+      ((if D.pipe.getD k.val none = some p then (128 : ℚ) / D.width p else 0 : ℚ) : ℝ)
+    by_cases h : D.pipe.getD k.val none = some p
+    · rw [if_pos h, if_pos h, Rat.cast_div, Rat.cast_ofNat]
+    · rw [if_neg h, if_neg h, Rat.cast_zero]
+  | issue => simp only [Sheet.machine, SheetDataQ.sheet, sheetCoefQ] <;> simp
+  | tensor => simp only [Sheet.machine, SheetDataQ.sheet, sheetCoefQ] <;> simp
+  | smem => simp only [Sheet.machine, SheetDataQ.sheet, sheetCoefQ] <;> simp
+
+theorem sheetCoefQ_nonneg {P : Type} [DecidableEq P] (D : SheetDataQ P) (hw : ∀ p, 0 ≤ D.width p)
+    (r : SheetRow P) (i : ℕ) : 0 ≤ sheetCoefQ D r i := by
+  cases r <;> simp only [sheetCoefQ] <;> (try split_ifs) <;>
+    first | positivity | exact div_nonneg (by norm_num) (hw _)
 
 theorem price_ge_facet {R : Type} [Fintype R] (lam d : R → ℝ) (hlam : ∀ r, 0 ≤ lam r) (hd : ∀ r, 0 ≤ d r)
     (r0 : R) : lam r0 * d r0 ≤ demandPrice lam d :=

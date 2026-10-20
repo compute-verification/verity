@@ -27,15 +27,15 @@ open Accounting.TS Accounting.TS.Headline Accounting.Assumptions.TS Pouw.Relativ
 def flat90 : Sparse := Sm90.flatWords ++ Sm90.flatFold ++ Sm90.flatFill ++ Sm90.flatSkip
 
 /-- `B_♭` on DS-90 as a rational: ♭'s load on issue. -/
-def B90 : ℚ := dot (sheetCoef Sm90.ds90 .issue) 40 flat90
+def B90 : ℚ := dot (sheetCoefQ Sm90.ds90 .issue) 50 flat90
 
 /-- Fold route `i`'s load on issue as a rational. -/
-def load90 (i : ℕ) : ℚ := dot (sheetCoef Sm90.ds90 .issue) 40 (Sm90.d2s.folds.getD i [])
+def load90 (i : ℕ) : ℚ := dot (sheetCoefQ Sm90.ds90 .issue) 50 (Sm90.d2s.folds.getD i [])
 
 /-- The cheapest fold route's load on issue. -/
 def phi90 : ℚ := ((List.range 14).map load90).foldr min (load90 0)
 
-theorem sm90_max (r : SheetRow Sm90.Pipe) : dot (sheetCoef Sm90.ds90 r) 40 flat90 ≤ B90 := by
+theorem sm90_max (r : SheetRow Sm90.Pipe) : dot (sheetCoefQ Sm90.ds90 r) 50 flat90 ≤ B90 := by
   cases r with
   | issue => decide +kernel
   | tensor => decide +kernel
@@ -45,14 +45,14 @@ theorem sm90_max (r : SheetRow Sm90.Pipe) : dot (sheetCoef Sm90.ds90 r) 40 flat9
 theorem sm90_Bpos : (0 : ℚ) < B90 := by decide +kernel
 
 theorem sm90_omega :
-    ∀ i < 24, 0 < (Sm90.d2s.writers.getD i (0, 0)).2 ∧ (Sm90.d2s.writers.getD i (0, 0)).2 ≤ 4096 := by
+    ∀ i < 34, 0 < (Sm90.d2s.writers.getD i (0, 0)).2 ∧ (Sm90.d2s.writers.getD i (0, 0)).2 ≤ 4096 := by
   decide +kernel
 
-theorem sm90_fold : ∀ i < 14, phi90 ≤ dot (sheetCoef Sm90.ds90 .issue) 40 (Sm90.d2s.folds.getD i []) := by
+theorem sm90_fold : ∀ i < 14, phi90 ≤ dot (sheetCoefQ Sm90.ds90 .issue) 50 (Sm90.d2s.folds.getD i []) := by
   decide +kernel
 
 theorem sm90_folded_q :
-    (1 - 944 / 100000 : ℚ) * B90 ≤ 4096 * (1 / 4096) * (1 - 41 * (6944471808 / 10000000000) / 6000) +
+    (1 - 944 / 100000 : ℚ) * B90 ≤ 4096 * (1 / 4096) * (1 - 41 * (6931471808 / 10000000000) / 6000) +
       4096 * phi90 := by
   decide +kernel
 
@@ -60,17 +60,17 @@ theorem sm90_unfolded_q :
     (1 - 944 / 100000 : ℚ) * B90 ≤ (4096 * (1 / 4096) + 4096 * phi90) * (1 - 41 / 48000) := by
   decide +kernel
 
-theorem sm90_hG : ∀ r k, Sm90.model.G.a r k = (sheetCoef Sm90.ds90 r k.val : ℝ) := sheet_a Sm90.ds90 40
+theorem sm90_hG : ∀ r k, Sm90.model.G.a r k = (sheetCoefQ Sm90.ds90 r k.val : ℝ) := sheet_aQ Sm90.ds90 50
 
 theorem sm90_a_nonneg : ∀ r k, 0 ≤ Sm90.model.G.a r k := fun r k => by
   rw [sm90_hG]
-  exact Rat.cast_nonneg.mpr (sheetCoef_nonneg _ _ _)
+  exact Rat.cast_nonneg.mpr (sheetCoefQ_nonneg _ (fun p => by cases p <;> decide +kernel) _ _)
 
 theorem sm90_bnd : Sm90.model.bnd Sm90.flat = (B90 : ℝ) := by
   unfold Model.bnd
   rw [show Sm90.flat.n = Sparse.counts flat90 from
-    labelled_n 40 Sm90.flatWords Sm90.flatFold Sm90.flatFill Sm90.flatSkip]
-  exact bound_eq _ (sheetCoef Sm90.ds90) sm90_hG flat90 .issue sm90_max
+    labelled_n 50 Sm90.flatWords Sm90.flatFold Sm90.flatFill Sm90.flatSkip]
+  exact bound_eq _ (sheetCoefQ Sm90.ds90) sm90_hG flat90 .issue sm90_max
 
 theorem sm90_Nw : Sm90.model.Nw = 4096 := by
   show ((4096 : ℕ) : ℝ) = 4096
@@ -128,11 +128,11 @@ theorem sm90_wf : Sm90.model.Wf Sm90.flat := by
 
 theorem sm90_vecMin : 1 ≤ Sm90.model.vecMin .issue := by
   have : Nonempty ↥Sm90.model.vec :=
-    ⟨⟨idx 40 5, List.mem_toFinset.mpr (List.mem_map.mpr ⟨5, by decide, rfl⟩)⟩⟩
+    ⟨⟨idx 50 9, List.mem_toFinset.mpr (List.mem_map.mpr ⟨9, by decide, rfl⟩)⟩⟩
   unfold Model.vecMin
   refine le_ciInf fun k => ?_
   rw [sm90_hG]
-  simp [sheetCoef]
+  simp [sheetCoefQ]
 
 /-- Every word route costs at least `1/4096` on issue: a writer kind's instruction `1/ω` with `ω ≤ 4096`, a vector
 or table word `½/32` an instruction. -/
@@ -171,10 +171,10 @@ theorem sm90_phiStar : (phi90 : ℝ) ≤ Sm90.model.phiStar Sm90.lamStar := by
   refine phiStar_ge_facet Sm90.model Sm90.flat Sm90.lamStar sm90_isCert sm90_wf .issue _ fun φ => ?_
   rw [sm90_one, one_mul]
   show (phi90 : ℝ) ≤ Sm90.model.G.load (Sparse.counts (Sm90.d2s.folds.getD φ.val [])) .issue
-  rw [load_counts _ (sheetCoef Sm90.ds90) sm90_hG]
+  rw [load_counts _ (sheetCoefQ Sm90.ds90) sm90_hG]
   exact Rat.cast_le.mpr (sm90_fold φ.val φ.isLt)
 
-theorem sm90_fillOpt {Ω : Type} [Fintype Ω] (Pl : Play Ω Sm90.checks (Fin 40) (Fin 24) Unit Empty)
+theorem sm90_fillOpt {Ω : Type} [Fintype Ω] (Pl : Play Ω Sm90.checks (Fin 50) (Fin 34) Unit Empty)
     (hSplit : ∀ x, (Pl.run x).Split) : ∀ x, FillOpt Sm90.model (Pl.run x) := fun x =>
   fillOpt_of_zero Sm90.model sm90_a_nonneg (fun _ _ => rfl) rfl (Pl.run x) (hSplit x)
 
