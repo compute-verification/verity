@@ -1,9 +1,11 @@
 #!/usr/bin/env bash
-# A v2 row's Match GPU legs (MATCH_PHASE=gpu: the capture and the control) on vy-glm53-eu, from this tree; no Build needed.  The
-# legs take the node's lease themselves (gpu-lease 8 --wait, around each leg) once every GPU reads 0 MiB and no preemptible lease
-# is held: queued behind the batch's other GPU jobs, never preempting.  After the legs, with no lease, the job hashes match/ and
-# $SW/$ROW.tree (REF@SHA: every job of the row refuses another tree) into $OUT/match.sha256 (paths relative to $SW) for the copy
-# to the CPU node that runs the Match's CPU phase (README "GPU batch").
+# A v2 row's Match GPU legs (MATCH_PHASE=gpu: the capture and the control) on vy-glm53-eu or vy-glm53-h8, from this tree; no Build
+# needed.  The legs take the node's lease themselves (gpu-lease 8 --wait, around each leg) once every GPU reads 0 MiB and no
+# preemptible lease is held: queued behind the batch's other GPU jobs, never preempting.  A match/ with no gpu_legs.json is an
+# evicted job's and is moved aside (match.evicted-*); one whose legs ended is refused.  After the legs, with no lease, the job
+# records each engine's gpu_memory_utilization read back from its vllm_config ($OUT/gpu_memory_utilization.json; exit 12 unless
+# it is GPU_UTIL), and hashes match/ and $SW/$ROW.tree (REF@SHA: every job of the row refuses another tree) into
+# $OUT/match.sha256 (paths relative to $SW) for the copy to the CPU node that runs the Match's CPU phase (README "GPU batch").
 #   research run --on vy-glm53-eu --gpu-host --mem-gb 400 --timeout 3h --cwd source --project verity -- env ROW=... bash integrations/vllm/manifests/glm_v2_tree/jobs/match_gpu.sh
 # env: ROW, [SW=/workspace/cp/circuits/glm-v2/rows], [REF=cursor/glm-v2-21f3].
 set -uo pipefail
@@ -14,7 +16,10 @@ SW=${SW:-/workspace/cp/circuits/glm-v2/rows}
 TREE=$PWD
 D=$SW/$ROW
 mkdir -p "$SW" || exit 3
-[ -z "$(ls -A "$D/match" 2>/dev/null)" ] || { echo "$D/match is not empty: this row dir already ran a Match"; exit 3; }
+[ ! -e "$D/match/gpu_legs.json" ] || { echo "$D/match/gpu_legs.json exists: this row dir already ran its Match GPU legs"; exit 3; }
+if [ -n "$(ls -A "$D/match" 2>/dev/null)" ]; then
+  mv "$D/match" "$D/match.evicted-$(date -u +%Y%m%dT%H%M%SZ)" && echo "$D/match without gpu_legs.json (an evicted leg's): moved aside"
+fi
 source "$TREE/integrations/vllm/manifests/glm_v2_tree/jobs/tree_guard.sh" && tree_guard "$ROW" "$SW" "$REF" first || exit 2
 nvidia-smi --query-gpu=index,memory.used --format=csv,noheader | tee "$OUT/gpus_at_start.txt"
 df -h /workspace | tail -1 | tee "$OUT/disk_at_start.txt"
@@ -52,6 +57,9 @@ for f in row.json stages.txt row.log effective_config.json gpu_lease.json match/
 tail -20 "$OUT/chain.out"
 python3 -c 'import json,sys; d=json.load(open(sys.argv[1])); sys.exit(0 if d["capture_rc"] == 0 and d["control_rc"] == 0 else 1)' \
   "$D/match/gpu_legs.json" 2>/dev/null || { echo "the GPU legs did not both pass ($D/match/gpu_legs.json)"; exit 11; }
+python3 "$TREE/integrations/vllm/manifests/glm_v2_tree/jobs/gpu_util_read_back.py" "$OUT/gpu_memory_utilization.json" "$GPU_UTIL" \
+  "$D/match/capture/topology.json" "$D/match/control/topology.json" ||
+  { echo "the legs passed, but an engine did not read back gpu_memory_utilization=$GPU_UTIL ($OUT/gpu_memory_utilization.json)"; exit 12; }
 du -sh "$D/match" | tee "$OUT/match_du.txt"
 (cd "$SW" && { echo "$ROW.tree"; find "$ROW/match" -type f; } | tr '\n' '\0' | xargs -0 -P 16 -n 256 sha256sum) | sort -k2 >"$OUT/match.sha256"
 echo "match.sha256: $(wc -l <"$OUT/match.sha256") files"

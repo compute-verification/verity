@@ -4,7 +4,8 @@
 # and the Commit ends PENDING until `tp-commit-replay` decides it on a CPU node (replay_publish.sh).  Its row dir holds the Build of
 # record and the passing Match (copied in from the CPU node, README "GPU batch"); the 8 GPUs come from the node's lease once every GPU
 # reads 0 MiB and no preemptible lease is held.  The bundles and "_rowmeta" (the row dir's small records) are preserved in the
-# store, art: ids in $OUT/bundles.json.
+# store, art: ids in $OUT/bundles.json.  The engine's gpu_memory_utilization read back from its vllm_config goes to
+# $OUT/gpu_memory_utilization.json (exit 12, after the bundles are preserved, unless it is GPU_UTIL).
 #   research run --on vy-glm53-eu --gpu-host --mem-gb 600 --timeout 10h --custody-ttl 24h --cwd source --project verity -- env ROW=... BUILD_RUN=... MATCH_RUN=... bash integrations/vllm/manifests/glm_v2_tree/jobs/commit.sh
 # env: ROW, BUILD_RUN, MATCH_RUN, [SW=/workspace/cp/circuits/glm-v2/rows], [REF=cursor/glm-v2-21f3], [MEMORY_MAP], [COMMIT_TIMEOUT].
 set -uo pipefail
@@ -58,6 +59,8 @@ for f in summary.json replay_deferred.json runs.jsonl value_check.json coverage.
 done
 grep -E '^\[tp2commit\] ' "$D/commit.log" 2>/dev/null | tail -60 | cut -c1-400 >"$OUT/commit_tagged.txt"
 tail -30 "$OUT/chain.out"
+python3 "$TREE/integrations/vllm/manifests/glm_v2_tree/jobs/gpu_util_read_back.py" "$OUT/gpu_memory_utilization.json" "$GPU_UTIL" \
+  "$D/commit/versions.json"; urc=$?
 [ "$rc" = 0 ] || exit $rc
 ls -d "$D"/commit/replay_bundle_p*_rank* >/dev/null 2>&1 || { echo "no replay bundles in $D/commit: nothing deferred"; exit 5; }
 "$RB" keep "$D/commit" --owner @circuits --expires 7d --priority high \
@@ -87,4 +90,5 @@ rm -rf "$M"
 [ -n "$art" ] || { echo "rowmeta: research data put failed (bundles_put.log)"; prc=5; }
 printf ',\n "_rowmeta": {"art": "%s"}\n}\n' "$art" >>"$OUT/bundles.json"
 cat "$OUT/bundles.json"
+[ "$prc" != 0 ] || [ "$urc" = 0 ] || { echo "the engine did not read back gpu_memory_utilization=$GPU_UTIL ($OUT/gpu_memory_utilization.json)"; prc=12; }
 exit $prc

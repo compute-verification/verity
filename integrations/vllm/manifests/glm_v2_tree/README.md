@@ -28,6 +28,7 @@ Base `origin/main` @ c0ebeb8b93 (0a0782abed through #2893), then, in this order:
 | #2883 (`cursor/rows64-land-21f3`) | 1d8869d1e4 | `MoeSum_v3` (`MoeSum_v1` on bits as a batch of `MoeSum_v2{TOPK,64}`), A11's Boolean-first probes |
 | #2888 (`cursor/multimem-land-21f3`) | af95f837ad | `AllReduceMultimem_v1` as a batch of 16-byte vectors (`AllReduceMultimemVector_v2`); its merges of #2836 and #2765 dec1238773 and its `test_predict` pin are this tree's already |
 | #2893 (`cursor/private-one-class-21f3`, CIR-64) | 57081b13db | `partition_v2.build` refuses a v2 private partition whose units span more than one size class; it is on main 0a0782abed, so it brings this tree to there |
+| `cursor/tp-readback-21f3` (its PR to open, vllm's files) | b1ac3145f1 | tp-capture's `topology.json` and tp-commit's `versions.json` record `effective_execution`, read back from the engine's `vllm_config` as the single-GPU paths do, so the Match and Commit jobs can show `gpu_memory_utilization` (the coordinator, 20 Oct 00:40Z) |
 
 ROWS64 and the multimem batch joined when ASK-61 was provisionally accepted (Daniel, 19 Oct 21:59Z, option A: public
 power-of-two output classes up to 262,144 bits). Two conflicts, both sides kept:
@@ -57,8 +58,8 @@ Every script is in `jobs/` and runs from this tree's pushed head, `--cwd source`
 `/workspace/cp/circuits/glm-v2/rows/<row>` on each node it visits, because the Commit's replay reads its Build and required
 manifest at the paths the Commit recorded. `/workspace/fs` is not shared between vy-glm53-eu and the CPU nodes, so row dirs move
 with `copy_rowdir.sh SRC DST LIST.sha256`: tar streams through the VM, every file then checked against the list the source job
-wrote (T1's B1 legs: 104 GB, 1.1M files, about 11 min). The GPU jobs are submitted by `gpu_batch.sh a` and `gpu_batch.sh b ROWS.env`;
-each waits for its GPUs on eu's lease, so a window runs back to back. eu is held only for a window: the lease, and the node, are
+wrote (T1's B1 legs: 104 GB, 1.1M files, about 11 min). The GPU jobs are submitted by `gpu_batch.sh a [NODE]` and `gpu_batch.sh b ROWS.env`;
+each waits for its GPUs on its node's lease, so a window runs back to back. eu is held only for a window: the lease, and the node, are
 released where a CPU phase sits between (CIR-51).
 
 A row is built, served and judged by one code tree (`records publish --tree` is not checked against the stage runs):
@@ -74,12 +75,18 @@ worktree at a commit the guard accepts (`git worktree add /tmp/glm-v2-SHA SHA`).
    is known to move) traces it, preserves the trace (`trace_art.sh`), and compares this tree's predictor with it beside an AOT
    Build against it; `repin.sh ROW RUN` then re-pins the row to the trace and switches it to that comparison, committed as
    "re-pin ROW", and `build_record.sh` runs at that commit (`AOT_TRACE=<the rehearsal's row dir>` on cpu-2 saves the fetch).
-2. Window A, eu (`gpu_batch.sh a`): the four rows' Match GPU legs (`match_gpu.sh`). They need no Build: the capture's
-   `--build-rank` registers a Build's post-load tensors, and GLM-5.3 has no model-level post-load hook (`loader_parity`). T1R takes
+2. Window A, eu or h8 (`gpu_batch.sh a [NODE] [ROW]`, NODE vy-glm53-eu by default or vy-glm53-h8): the four rows' Match GPU legs
+   (`match_gpu.sh`). h8 is preemptible, so it takes window A only, never a Commit; an evicted leg reruns with
+   `gpu_batch.sh a vy-glm53-h8 ROW`, which moves the evicted `match/` aside (a `match/` whose legs ended is refused). Each leg's
+   engines read `gpu_memory_utilization` back from their `vllm_config` (`$OUT/gpu_memory_utilization.json`: 0.92, vLLM's
+   default). They need no Build, so nothing is copied to the node first: the capture's `--build-rank` registers a Build's
+   post-load tensors, an absent Build registers none, and GLM-5.3 has no model-level post-load hook (`loader_parity`; every
+   rank's v2 trace records `post_load_tensors` `applies: false`). T1R takes
    the bf16 v6 capture (`BF16_ART`, from `verity-vllm records capture RUN`) and the G2 point (`benchmarks/served_commit/tp_decode.sh`,
    `ARM=rows-4k`: rows-sha512's 4 KiB rows, stock against Commit in one TP8 engine, TTFT, prefill and decode TPOT per batch 1, 8, 32)
    on eu first; `gpu_batch.sh t1r` (`cap_bf16_v6.sh`, then the G2 point) runs them only if those did not hold. Stop eu.
-3. CPU: each row's legs copied eu -> the Build's node (its `match.sha256`), then `match_cpu.sh` (MATCH_PHASE=cpu, `--build-run`
+3. CPU: each row's legs copied from window A's node to the Build's (`copy_rowdir.sh vy-glm53-h8 vy-glm53-cpu-2 match.sha256`,
+   or `vy-glm53-eu`), then `match_cpu.sh` (MATCH_PHASE=cpu, `--build-run`
    the Build of record, `--send match.sha256`); then the row dir (its `rowdir.sha256` and the Match's files) copied to eu.
 4. Window B, eu (`gpu_batch.sh b ROWS.env`): each row's Commit (`commit.sh`: rows-sha512 under `verity/tp-run-root/v2`,
    PENDING by design), its bundles and row records preserved in the store. Stop eu. It commits against the Build of record in
@@ -87,7 +94,8 @@ worktree at a commit the guard accepts (`git worktree add /tmp/glm-v2-SHA SHA`).
    are B1's Commit r20261019-074856-7c3a's and B8's r20261019-091846-1452's: REPLAY_DEFERRED=1, RETAIN=host (the default, not
    the G2 curve's `--retain none`) and PAIRS=1. Deferred, each rank's bundle `store/` holds its retained bytes, so the committed
    values are on disk for the replay and the audits; v1's B1 Commit r20261016-213336-6c35 was not deferred and kept none. The
-   config's default is 3 pairs, which that v1 Commit ran.
+   config's default is 3 pairs, which that v1 Commit ran, so a v2 Commit's overhead rests on one pair (G2's point measures
+   overhead). Its engine reads `gpu_memory_utilization` back (`$OUT/gpu_memory_utilization.json`: 0.88, as the v1 Commits ran).
 5. CPU, vy-nebius-cpu-3 (the verified checkpoint): the Build of record copied in, then `replay_publish.sh` per row (`--send
    bundles.json`): `tp-commit-replay` of every rank, then `records publish --tier heavy` with the nine captures of record cited
    by id (#2838's eight served-default captures, which this tree's `check_capture` accepts, and `BF16_ART`), the Commit's run
