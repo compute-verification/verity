@@ -53,6 +53,15 @@ import Proofs.Flock.Claims.Recursion.BoundRouteCols
 import Proofs.Flock.Claims.Recursion.BoundWeight
 import Proofs.Flock.Claims.Recursion.BoundMerged
 import Proofs.Flock.Claims.Recursion.BoundRouteMerged
+import Proofs.Flock.Claims.Recursion.BoundMergedLin
+import Proofs.Flock.Claims.Recursion.BoundRouteMergedLin
+import Proofs.Flock.Claims.Recursion.KSLin2
+import Proofs.Flock.Claims.Recursion.BoundRouteKSLin2
+import Proofs.Flock.Claims.Recursion.KSLin2Deployed
+import Proofs.Flock.Claims.Recursion.KSLin2Plain
+import Proofs.Flock.Claims.Recursion.FlockKSLin
+import Proofs.Flock.Claims.Recursion.CapLink
+import Proofs.Flock.Claims.Recursion.CapLinkRd
 import Proofs.Flock.Claims.Recursion.LastBindsDeployed
 import Proofs.Flock.Claims.Recursion.LastColsDeployed
 import Proofs.Flock.Claims.Recursion.RepFramesBind
