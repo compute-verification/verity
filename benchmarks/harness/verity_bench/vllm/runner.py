@@ -532,7 +532,7 @@ class _DirectLLM:
 
         runner = get_model_runner(llm)
         self.vllm, self.model = llm, runner.get_model()
-        # benchmarks/pouw/pearl_c_vllm/bench_arm.py and commit_arm.py still read verity_vllm.LLM's private `_engine.llm`.
+        # commit_arm.py still reads verity_vllm.LLM's private `_engine`: its committer takes the whole engine.
         self._engine = SimpleNamespace(llm=llm, model=self.model)
         self.engine_record = {"engine_overrides": dict(engine_overrides)}
         self.protocols = None
