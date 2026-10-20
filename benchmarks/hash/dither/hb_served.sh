@@ -38,9 +38,10 @@
 # verity | gzip`; a --cwd source tree has no history), else the source's git.
 # Env: HB_WHO (the lease owner, default kernels-dither-hb), DITHER_NSYS=1 (sbench's nsys capture of the gate's kernels; kernels.py counts each dither arm's inside its NVTX
 # range, so the source must be dither-rtx's f2c0071c7c or later), LEASE (default "--max-min 14"), RUN_TIMEOUT (seconds
-# inside the lease, default 820), VERITY_BENCH_VENV (default /workspace/cp/venv312), NVCC (default CUDA 13.0's).
+# inside the lease, default 820), VERITY_BENCH_VENV (default /workspace/cp/venv312), NVCC (default CUDA 13.0's),
+# POUW_CHALLENGER or DITHER_CHALLENGERS (the windows' coins off the node: sbench.py's "Coins").
 # Exit: sbench's (3 an engine failed to build, 4 the gate failed), 2 a build failed or a shipped library is missing or
-# another source's.
+# another source's, 15 a challenger's port never opened.
 set -uo pipefail
 MODE=${1:?usage: hb_served.sh build ARCH[,ARCH] | hb_served.sh run sm_90a|sm_100a [sbench args]}
 ARCH=${2:?arch}
@@ -172,6 +173,15 @@ esac
 command -v lake >/dev/null || export PATH="$HOME/.elan/bin:$PATH"
 (cd verity/core/protocols/pouw/lean/check && lake build pouw-check-difftest) > "$OUT/lean-coins-build.log" 2>&1 \
   || { echo "hb_served: LEAN_BUILD_FAIL"; tail -20 "$OUT/lean-coins-build.log"; exit 13; }
+# coins off the node: every port the arms' windows connect to (POUW_CHALLENGER, DITHER_CHALLENGERS' {arm: HOST:PORT}),
+# each its own session of benchmarks/live_challenger/run.sh started first, waited for with ss -ltn before the lease (never
+# a probe connect: a challenger serves its first connection only); with none the coins are in-process (not certified)
+ats=$(echo ${POUW_CHALLENGER:-} $(python3 -c 'import json, os; print(*json.loads(os.environ.get("DITHER_CHALLENGERS") or "{}").values())'))
+for at in $ats; do
+  for _ in $(seq "${CHALLENGER_WAIT_S:-900}"); do ss -Hltn "sport = :${at##*:}" | grep -q . && break; sleep 1; done
+  ss -Hltn "sport = :${at##*:}" | grep -q . || { echo "hb_served: NO_CHALLENGER at $at"; exit 15; }
+done
+echo "coins ${ats:-in-process (not certified)}" | tee -a "$OUT/env/wrapper.txt"
 export PATH=$(dirname "$PY"):$CUDA/bin:$PATH FLASHINFER_CUDA_ARCH_LIST=$FI HF_HOME=${HF_HOME:-/workspace/hf}
 export PYTHONPATH=.:$ROOT:$ROOT/tools/research/src:$ROOT/$DITHER HB_DITHER_DIR=$ROOT/$DITHER
 NSYS=()

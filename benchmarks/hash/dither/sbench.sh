@@ -55,6 +55,15 @@ esac
 command -v lake >/dev/null || export PATH="$HOME/.elan/bin:$PATH"
 (cd verity/core/protocols/pouw/lean/check && lake build pouw-check-difftest) > "$OUT/lean-coins-build.log" 2>&1 \
   || { echo "sbench: LEAN_BUILD_FAIL"; tail -20 "$OUT/lean-coins-build.log"; exit 13; }
+# coins off the node (sbench.py's "Coins"): every port the arms' windows connect to (POUW_CHALLENGER, DITHER_CHALLENGERS'
+# {arm: HOST:PORT}), each its own session of benchmarks/live_challenger/run.sh started first, waited for with ss -ltn
+# before the lease (never a probe connect: a challenger serves its first connection only); none: in-process (not certified)
+ats=$(echo ${POUW_CHALLENGER:-} $(python3 -c 'import json, os; print(*json.loads(os.environ.get("DITHER_CHALLENGERS") or "{}").values())'))
+for at in $ats; do
+  for _ in $(seq "${CHALLENGER_WAIT_S:-900}"); do ss -Hltn "sport = :${at##*:}" | grep -q . && break; sleep 1; done
+  ss -Hltn "sport = :${at##*:}" | grep -q . || { echo "sbench: NO_CHALLENGER at $at"; exit 15; }
+done
+echo "sbench: coins ${ats:-in-process (not certified)}" | tee "$OUT/coins.txt"
 export DITHER_H1C=$S/libh1c.so DITHER_H1F=$S/libh1f.so DITHER_H1O=$S/libh1o.so VLLM_DISABLE_COMPILE_CACHE=1
 # SBENCH_PICK pins Inductor's autotune picks (picks.py); the node's shared Inductor cache would hand back another run's
 # timed .best_config, so a pinned run compiles into its own

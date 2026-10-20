@@ -21,7 +21,9 @@ trees and the admit tables on streams of their own beside the rest), then the ro
 (`sampled_proofs.challenger.LiveRecord`; its coin is not read: no seed waits on it).  With `Window.step_salt` set (CA's
 PERIOD-PATH ask 11) the salt is each step's instead: after step s's round is recorded, step s + 1's seeds read
 `h1tile.live_salt` of that round's opened coin and root, copied to the device between steps (in record_host_ms), so
-each step's noise comes from the round before it; the auditor host's round trip stands in-process.
+each step's noise comes from the round before it.  The rounds' coins are `dither_fused`'s switch (`coins.open_coins`):
+the challenger off the node with ``$POUW_CHALLENGER``, so the auditor host's round trip is in record_host_ms, else in
+this process, labelled ``in-process (not certified)`` in `stats`.
 
 The served value is the dithered product z = X (B + c)^T, exact for every int8 B, with X the int8 A + b the MMA reads (it
 wraps where A = 127 and b = 1), so y is not today's served y (`gate` measures how far) and the tokens are not the exact
@@ -45,7 +47,7 @@ import numpy as np
 import torch
 
 import dither_fused as DF
-from dither_fused import CM, CR, SV, H1C, Dom, Tab, unwords, words, H1R, Call
+from dither_fused import CM, CO, CR, SV, H1C, Dom, Tab, unwords, words, H1R, Call
 import h1c as H1CM
 
 F_DUMP, F_NW_TILES, F_NW_UNITS, F_FAULT, F_FAULT_WB, F_FAULT_XA = 1, 2, 4, 8, 16, 32     # h1o.cu's H1OStep.flags
@@ -210,17 +212,14 @@ class Window:
         self._epoch()
 
     def _epoch(self) -> None:
-        from verity.core.protocols.pouw import verifier
-        from verity.core.protocols.pouw import window as Wd
         from verity.core.protocols.pouw.circuit import h1tile as HT
-        from verity.core.protocols.sampled_proofs import challenger as Ch
         self.HT = HT
-        self.lch = Wd.live_challenger(1, DF.ROUNDS, verifier.coins)
-        self.rounds = Ch.LiveRecord(self.lch, Wd.ROUND)
+        self.coins = CO.open_coins(CO.address(), 1, DF.ROUNDS)
+        self.rounds = self.coins.rounds
         broots = [unwords(self.bset.root(w)) for w in range(self.L)]
         self.epoch_root = CM.step_root(CM.domain({"window": self.window, "linears": self.L}, self.L, "b-step"), broots)
         opening = self.rounds.record(self.epoch_root)
-        self.salt_bytes = HT.live_salt(self.lch.commitment, opening.coin, 0, self.epoch_root)
+        self.salt_bytes = HT.live_salt(self.coins.commitment, opening.coin, 0, self.epoch_root)
         self.salt.copy_(torch.from_numpy(words(self.salt_bytes)))
 
     def arm(self, m: int, names: tuple | None = None) -> None:
@@ -393,7 +392,7 @@ class Window:
         self.phase("record_host")
         opening = self.rounds.record(root)
         if self.step_salt:
-            self.salt_bytes = self.HT.live_salt(self.lch.commitment, opening.coin, opening.index, root)
+            self.salt_bytes = self.HT.live_salt(self.coins.commitment, opening.coin, opening.index, root)
             self.salt.copy_(torch.from_numpy(words(self.salt_bytes)))
         t_end = time.perf_counter()
         self.phase(None)
@@ -428,7 +427,7 @@ class Window:
                for m, xs in sorted(by.items(), key=lambda kv: -len(kv[1]))[:4]}
         pc = None if self.percall is None else {**self.percall, "rounds_served": int(self.o.h1o_percall_done())}
         return {"steps": self.steps, "one_calls_eager": self.calls, "t": self.t, "s": self.s, "epsilon": "seeded",
-                "salt": "step" if self.step_salt else "epoch", "units_form": self.units_form, "peel": self.peel,
+                "salt": "step" if self.step_salt else "epoch", "coins": self.coins.label, "units_form": self.units_form, "peel": self.peel,
                 "percall": pc, "phases_by_m": med, "call_forms": {DF.SITES[w % 4]: self.call_forms[w] for w in range(min(4, self.L))}}
 
 

@@ -14,8 +14,14 @@ Per engine step s (parity p = s mod 2), around the runner's `execute_model`:
              the slots < m, s/<s>/<w>), z tables (each slot row's N int32 LE, z/<s>/<w>, domain 'z-table'), the a-step,
              admit-step and z-step trees and the round over the three ('round'); step s - 1's receipt trees (r/<s-1>/<w>); the
              round root read back, recorded through `sampled_proofs.challenger.LiveRecord` before its coin opens
-             (`pouw.window.live_challenger`), the salt `h1tile.live_salt`, step s's seeds (`h1r_launch` version 0) into the
-             buffer step s + 1's launches read
+             (the window's coins), the salt `h1tile.live_salt`, step s's seeds (`h1r_launch` version 0) into the buffer
+             step s + 1's launches read
+
+The window's coins are served_h1's (`coins.open_coins`, a live window of `ROUNDS` rounds at epoch 1): with
+``$POUW_CHALLENGER`` (HOST:PORT) the challenger off the node, one session a window (`benchmarks/live_challenger/run.sh` on
+its auditor host, opened at the window's build), else `window.live_challenger` in this process, and `stats` says which
+(``coins``: ``off-node HOST:PORT (unchecked)`` or ``in-process (not certified)``).  Only the round's coin changes source:
+the salt, the seeds and what they read are the same either way.
 
 With ``rc="side"`` (`patch`) no `h1f` launch computes receipts: after step s's coin, its seeds, units (`h1r_launch` version
 2) and receipt trees go on a second stream and run beside the engine's step s + 1, whose main stream first waits for step
@@ -43,6 +49,7 @@ for p in (ROOT / "benchmarks" / "pouw" / "served_h1", HERE):
     if str(p) not in sys.path:
         sys.path.insert(0, str(p))
 
+import coins as CO  # noqa: E402
 import commit as CM  # noqa: E402
 import credit as CR  # noqa: E402
 import serve as SV  # noqa: E402
@@ -184,13 +191,10 @@ class Window:
             x.view(torch.uint8).fill_(POISON)
 
     def _coins(self) -> None:
-        from verity.core.protocols.pouw import verifier
-        from verity.core.protocols.pouw import window as Wd
         from verity.core.protocols.pouw.circuit import h1tile as HT
-        from verity.core.protocols.sampled_proofs import challenger as Ch
         self.HT = HT
-        self.lch = Wd.live_challenger(1, ROUNDS, verifier.coins)
-        self.rounds = Ch.LiveRecord(self.lch, Wd.ROUND)
+        self.coins = CO.open_coins(CO.address(), 1, ROUNDS)
+        self.rounds = self.coins.rounds
 
     def _pre_sets(self, p: int) -> dict:
         c, W, t, L = self.c, self.window, self.t, self.L
@@ -290,7 +294,7 @@ class Window:
         root = unwords(pre["round"].root(0))
         t_root = time.perf_counter()
         opening = self.rounds.record(root)
-        salt = self.HT.live_salt(self.lch.commitment, opening.coin, s, root)
+        salt = self.HT.live_salt(self.coins.commitment, opening.coin, s, root)
         t_coin = time.perf_counter()
         if side:
             self._side_receipts(main, s, p, salt)
@@ -371,7 +375,8 @@ class Window:
         med = {str(m): {"steps": len(xs), **{k: round(float(np.median([x[k] for x in xs if k in x])), 4)
                                              for k in dict.fromkeys(k for x in xs for k in x) if k != "m"}}
                for m, xs in sorted(by.items(), key=lambda kv: -len(kv[1]))[:4]}
-        return {"steps": self.steps, "fused_calls_eager": self.calls, "t": self.t, "s": self.s, "phases_by_m": med}
+        return {"steps": self.steps, "fused_calls_eager": self.calls, "t": self.t, "s": self.s, "coins": self.coins.label,
+                "phases_by_m": med}
 
 
 # -- the op and the patch --------------------------------------------------------------------------------------------------

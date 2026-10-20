@@ -100,6 +100,10 @@ a decode step are the two ranges' difference over PROF_N[1] - PROF_N[0] (`exactl
 arm's step by part, its between-step phases by their NVTX ranges).  nsys's capture range ends at the first profiler stop,
 so a run profiles one arm: under DITHER_NSYS=prof the gate runs unprofiled, so a gated run's prof op is the capture.
 
+Coins: a dither arm's window takes its round coins from the challenger off the node when its worker has an address
+(DITHER_CHALLENGERS' entry for the arm, else $POUW_CHALLENGER), one session a window, opened at the window's build and
+closed at the arm's stop; without one they are in-process, and the arm's stats say ``coins: in-process (not certified)``.
+
     python sbench.py --out OUT [--arms stock,exact,dither] [--reps 3] [--t 64] [--ops decode] [--gate]
 """
 from __future__ import annotations
@@ -377,11 +381,25 @@ def pick_of(arm: str) -> str | None:
     only = [p for p in (os.environ.get(PICK_ARMS_ENV) or "").split(",") if p]
     return (os.environ.get(PICK_ENV) or None) if not only or arm.startswith(tuple(only)) else None
 GATE_TOKENS = 16    # enough B32 decode steps for the gate's capture, its receipts, the control's and its receipts
+# {arm: HOST:PORT}: each dither arm's window its own challenger session off the node (its POUW_CHALLENGER), since every
+# arm's engine, and so its window, lives through the whole run
+CHALLENGERS_ENV = "DITHER_CHALLENGERS"
 GATE_RANGE = "verity/dither/gate"   # GATE_RANGE/<arm>: kernels.py reads each dither worker's kernels inside its own
+
+
+def close_coins() -> None:
+    """End this worker's window's off-node coin session, if it has one: the challenger answers closed."""
+    for name in ("dither_fused", "dither_one"):
+        win = getattr(sys.modules.get(name), "WIN", None)
+        if win is not None:
+            win.coins.close()
 
 
 def worker(arm: str, conn, scratch: str, gpu_mem: float) -> None:
     os.environ.setdefault("VLLM_ENABLE_V1_MULTIPROCESSING", "0")
+    at = json.loads(os.environ.get(CHALLENGERS_ENV) or "{}").get(arm)
+    if at:
+        os.environ["POUW_CHALLENGER"] = at
     import torch
     from vllm import SamplingParams
     if arm.startswith("dither"):
@@ -489,6 +507,7 @@ def worker(arm: str, conn, scratch: str, gpu_mem: float) -> None:
     while True:
         cmd = conn.recv()
         if cmd["op"] == "stop":
+            close_coins()
             conn.send({"stopped": True})
             return
         try:
