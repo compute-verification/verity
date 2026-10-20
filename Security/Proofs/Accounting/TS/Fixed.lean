@@ -62,9 +62,7 @@ theorem committed_spliceAt {C B : Type} [Fintype C] [Fintype B] {S m s : ℕ} {J
     rcases h with h | ⟨h1, h2⟩
     · exact Or.inl h
     · refine Or.inr ⟨congrArg Fin.val h1, ?_⟩
-      first
-      | exact h2
-      | simpa [Fin.le_def] using h2
+      exact h2
   unfold DrawnLayer.committed
   rw [← hm]
   exact Plurality.plural_sp (sp := pf.cont ℓ) (opens := fun y v => pf.Opens y ℓ v)
@@ -106,10 +104,12 @@ theorem UnitFixedOfWords : Accounting.Guarantees.TS.UnitFixedOfWords := by
           hfw (fixedWords_of_good pf mode hM x (w, j) (hfix w j hw) hg))
   · refine Finset.sum_le_sum fun w _ => Finset.sum_le_sum fun j _ => ?_
     show (if mode x (w, j) = .whole then 0 else wt w j) ≤ if pf.Folds x (w, j) then wt w j else 0
-    split_ifs with hw hf <;> first
-      | exact le_rfl
-      | exact hwt w j
-      | exact absurd ((hM x (w, j)).2 hw) hf
+    by_cases hw : mode x (w, j) = .whole
+    · refine (ite_eq_left hw).trans_le ?_
+      by_cases hf : pf.Folds x (w, j)
+      · exact (hwt w j).trans_eq (ite_eq_left hf).symm
+      · exact le_of_eq (ite_eq_right hf).symm
+    · exact le_of_eq ((ite_eq_right hw).trans (ite_eq_left ((hM x (w, j)).2 hw)).symm)
 
 /-- **Additive operands don't decide fixedness.** -/
 theorem AdditiveFixed : Accounting.Guarantees.TS.AdditiveFixed := by
@@ -117,9 +117,7 @@ theorem AdditiveFixed : Accounting.Guarantees.TS.AdditiveFixed := by
   refine ⟨?_, fun z => ?_⟩
   · unfold WordLayer.work
     rw [hC.1]
-    first
-    | exact add_sub_cancel_right _ _
-    | (simp only [WordLayer.derive, WordLayer.mulView, WordLayer.addView]; abel)
+    exact add_sub_cancel_right _ _
   · funext k
     exact committed_spliceAt pf.toDrawnLayer x z (pf.pos u.1 u.2 k.1) u.1 (pf.coin u.1 u.2) (hb k.1 k.2)
 

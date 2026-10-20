@@ -121,8 +121,9 @@ noncomputable def ftot : ℝ := ∑ w : Fin 1, ∑ j : Fin 4, fwt w j
 noncomputable def fPlay : Play (Paths Bool 1 × Unit) 1 Unit Unit Unit Unit where
   game := .round (fun _ => 0) (fun _ => True) (fun _ => .done)
   accepts _ := True
-  run _ := { run := ⟨fun _ => 0, 0, 0⟩, nword := fun _ _ => 0, nfold := fun _ => 0, nfill := fun _ => 0,
-    words := fun _ => 0, fixed := ftot }
+  run _ :=
+    { run := ⟨fun _ => 0, 0, 0⟩, nword := fun _ _ => 0, nfold := fun _ => 0, nfill := fun _ => 0,
+      words := fun _ => 0, fixed := ftot }
 
 /-- The run's folded words: the total weight. -/
 noncomputable def ffolded : FCoins → ℝ := fun _ => ftot
@@ -147,6 +148,7 @@ theorem opens_iff (y : FCoins) (ℓ : Fin 10) (v : ℤ) : fdl.Opens y ℓ v ↔ 
 value. -/
 theorem plural_of_val {X V : Type} [Fintype X] [Nonempty V] (sp : X → X → X) (opens : X → V → Prop) (f : X → V)
     (hf : ∀ y v, opens y v ↔ v = f y) (x : X) (hx : ∀ z, f (sp x z) = f x) : plural sp opens x = f x := by
+  classical
   by_contra hne
   have hall : tally sp opens x (f x) = Fintype.card X := by
     unfold tally
@@ -162,11 +164,24 @@ theorem plural_of_val {X V : Type} [Fintype X] [Nonempty V] (sp : X → X → X)
   have hpos : 0 < Fintype.card X := Fintype.card_pos_iff.2 ⟨x⟩
   omega
 
+/-- Each position is cut at its round's start (an input) or after the coin (an output). -/
+theorem cut2 : ∀ ℓ : Fin 10, (cutF ℓ).2 = 0 ∨ (cutF ℓ).2 = 1 := by decide
+
+/-- An input's honest value doesn't read the noise. -/
+theorem hval_input (ℓ : Fin 10) (h : (cutF ℓ).2 = 0) (n n' : ℤ) : hval ℓ n = hval ℓ n' := by
+  fin_cases ℓ <;> first | rfl | exact absurd h (by decide)
+
+/-- A continuation from an output's cut, after the coin, keeps the coin bit. -/
+theorem nz_cont (x z : FCoins) (ℓ : Fin 10) (h : (cutF ℓ).2 = 1) : nz (fdl.cont ℓ x z) = nz x := by
+  show nz (spliceAt (cutF ℓ).1 (cutF ℓ).2 x z) = nz x
+  rw [h, Subsingleton.elim (cutF ℓ).1 0]
+  rfl
+
 /-- A position's honest value is the same on every continuation from its cut. -/
 theorem cont_val (x z : FCoins) (ℓ : Fin 10) : hval ℓ (nz (fdl.cont ℓ x z)) = hval ℓ (nz x) := by
-  obtain ⟨⟨⟨b, ⟨⟩⟩, ⟨⟩⟩, ⟨⟩⟩ := x
-  obtain ⟨⟨⟨b', ⟨⟩⟩, ⟨⟩⟩, ⟨⟩⟩ := z
-  fin_cases ℓ <;> cases b <;> cases b' <;> first | rfl | decide
+  rcases cut2 ℓ with h | h
+  · exact hval_input ℓ h _ _
+  · rw [nz_cont x z ℓ h]
 
 theorem committed_eq (x : FCoins) (ℓ : Fin 10) : fpf.committed x ℓ = hval ℓ (nz x) :=
   plural_of_val (fdl.cont ℓ) (fun y v => fdl.Opens y ℓ v) (fun y => hval ℓ (nz y)) (fun y v => opens_iff y ℓ v) x
@@ -206,15 +221,17 @@ open Classical in
 theorem sum_le_tot (p : Fin 1 → Fin 4 → Prop) : (∑ w, ∑ j, if p w j then fwt w j else 0) ≤ ftot :=
   Finset.sum_le_sum fun w _ => Finset.sum_le_sum fun j _ => by
     show (if p w j then fwt w j else 0) ≤ fwt w j
-    by_cases h : p w j
-    · rw [if_pos h]
-    · rw [if_neg h]
-      exact wt_nonneg w j
+    split_ifs
+    · exact le_rfl
+    · exact wt_nonneg w j
 
+open Classical in
 theorem counts_fixed : CountsFixed fPlay fpf fwt ffolded := by
   intro x _
-  simp only [Nat.cast_one, div_one]
-  exact ⟨sum_le_tot _, sum_le_tot _⟩
+  show (∑ w, ∑ j, if fpf.FixedWords x (w, j) then fwt w j else 0) / ((1 : ℕ) : ℝ) ≤ ftot ∧
+    (∑ w, ∑ j, if fpf.Folds x (w, j) then fwt w j else 0) / ((1 : ℕ) : ℝ) ≤ ftot
+  rw [Nat.cast_one, div_one, div_one]
+  exact ⟨sum_le_tot fun w j => fpf.FixedWords x (w, j), sum_le_tot fun w j => fpf.Folds x (w, j)⟩
 
 theorem writer_reads : fpf.WriterReads := by
   have h : ∀ ℓ : Fin 10, ∀ w : Fin 1, ∀ j : Fin 4, srcF ℓ = some (w, j) → ∃ k : Fin 5, posF j k = ℓ := by decide
@@ -256,7 +273,11 @@ theorem steers_prod : fpf.Steers (0, 0) (0, 3) :=
   ⟨(0, 2), Relation.ReflTransGen.tail (Relation.ReflTransGen.single late01) late12, mulLate23⟩
 
 theorem tot_pos : 0 < ftot := by
-  have h1 : fwt 0 0 = 1 := if_neg (by decide)
+  have h1 : fwt 0 0 = 1 := by
+    unfold fwt
+    split_ifs with h
+    · exact absurd h (by decide)
+    · rfl
   have h2 : fwt 0 0 ≤ ∑ j, fwt 0 j := Finset.single_le_sum (fun j _ => wt_nonneg 0 j) (Finset.mem_univ 0)
   have h3 : ∑ j, fwt 0 j ≤ ftot :=
     Finset.single_le_sum (f := fun w => ∑ j, fwt w j) (fun w _ => Finset.sum_nonneg fun j _ => wt_nonneg w j)
@@ -280,9 +301,13 @@ theorem bound_chunk1 : ∀ k, fpf.role (0, 1) k = SlotRole.mul → fpf.Bound (0,
       (cutF (posF 1 k)).1 < 0 ∨ (cutF (posF 1 k)).1 = 0 ∧ (cutF (posF 1 k)).2 ≤ (0 : Fin 1).castSucc := by decide
   exact h
 
+theorem nz_xt : nz xt = 1 := rfl
+
+theorem nz_splice : nz (spliceAt (0 : Fin 1) (fpf.coin 0 1) xt xf) = 0 := rfl
+
 theorem additive_moves :
     fpf.committed xt (fpf.pos 0 1 2) ≠ fpf.committed (spliceAt (0 : Fin 1) (fpf.coin 0 1) xt xf) (fpf.pos 0 1 2) := by
-  rw [committed_eq, committed_eq]
+  rw [committed_eq, committed_eq, nz_xt, nz_splice]
   decide
 
 /-- **`AdditiveFixed`'s hypotheses hold of an honest K-chunk** whose running sum is written after its coin: `chunk1`'s
@@ -292,6 +317,6 @@ theorem additiveFixed_meets :
     (∀ k, fpf.role (0, 1) k = SlotRole.mul → fpf.Bound (0, 1) k) ∧ (∀ x, fpf.Computed x (0, 1)) ∧
       fpf.role (0, 1) 2 = SlotRole.add ∧ fpf.Late (0, 0) (0, 1) ∧
       fpf.committed xt (fpf.pos 0 1 2) ≠ fpf.committed (spliceAt (0 : Fin 1) (fpf.coin 0 1) xt xf) (fpf.pos 0 1 2) :=
-  ⟨bound_chunk1, fun x => computed_all x (0, 1), by first | rfl | decide, late01, additive_moves⟩
+  ⟨bound_chunk1, fun x => computed_all x (0, 1), rfl, late01, additive_moves⟩
 
 end Accounting.SecurityProofs.TS.FixedMeets
