@@ -43,7 +43,8 @@
    "digest": "4bd7f6457fb6df920661b769a3ad9517f6e4f0e7a2fd0d36a43e376a2deeaca9"
   },
   "Accounting.Assumptions.TS.AcceptedLive": {
-   "owner": "@proofs"
+   "owner": "@proofs",
+   "digest": "e5a4891075e9f3dfe8ceb86685685ffe4b4fc49af34341d02000f77ef3cc221f"
   },
   "Accounting.Assumptions.TS.FacetCeilings": {
    "owner": "@compute-accounting",
@@ -23002,8 +23003,9 @@
    ]
   },
   "Proofs.Accounting.TS.Session.Assumptions": {
-   "digest": "ae6249d482dd5aa2d0d858e5168030640d87784895b700df9aeeaf33cfd73222",
+   "digest": "fe74e5d059f51461779b4947d5cb04940c8d43dea6e10599e8c5a91e0684987b",
    "definitions": {
+    "Accounting.Assumptions.TS.AcceptedLive": "e5a4891075e9f3dfe8ceb86685685ffe4b4fc49af34341d02000f77ef3cc221f",
     "Accounting.Assumptions.TS.ServedChecksHold": "f4b0aa6ff8b0acf613569d3307bce95dab7b081ffc4c90273f27810a943f9b8c",
     "Accounting.Assumptions.TS.ServedRootsLinked": "c713909d80e2cd61ef91c69616daf1e165c148473835f104820f95b9835543cb",
     "Accounting.Assumptions.TS.WindowLaw": "22e490ac99b292ba1ef0e90c633e3e601e3da5074c218caa25130c5d7ec50b0f"
@@ -23011,9 +23013,9 @@
    "guarantees": ["Accounting.SecurityProofs.TS.SessionSoundAt"]
   },
   "Proofs.Accounting.TS.Session.Guarantees": {
-   "digest": "8405b145444468b93b5f3c6494c23356b06e53111e1d012727a60dca3a1b0716",
+   "digest": "77be543688b0562198989806be262bf10f658860f7053980127dae93a088ac57",
    "definitions": {
-    "Accounting.Guarantees.TS.SessionSoundAt": "40991f231587104b17a46fbe9fdab43ec8699543ecf6eef2e559c2b982a61dc5"
+    "Accounting.Guarantees.TS.SessionSoundAt": "34c660ca080bc7a667337bb7718f334d80e5421e553961dfa50f6d08445a263e"
    },
    "guarantees": ["Accounting.SecurityProofs.TS.SessionSoundAt"]
   },
