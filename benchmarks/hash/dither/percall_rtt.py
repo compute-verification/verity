@@ -25,7 +25,8 @@ the client's stand-in root, under the challenger's key record (``--key-record``,
 key is pinned in code; `coins.audited_window`, `remote.trusted_session`); it is the client's session, opened for its
 layout, in the verifier's period when it names one (`coins.window_reasons`); the challenger's log holds this client's
 commitment, its salt after that root and its round roots in order; and served_h1's `coins.check` passes on the openings
-the client received (`coins_check`).  It adds the challenger's own per-round times from that log (its monotonic clock).
+the client received (`coins_check`).  It adds the challenger's own per-round times from that log (integer nanoseconds
+on its monotonic clock).
 
     python3 percall_rtt.py run --challenger 127.0.0.1:PORT --session ID --secret-file F --commitment HEX --rounds 32768 \\
         --max-s 1800 --out out/percall-rtt.json
@@ -190,8 +191,8 @@ def check(a: argparse.Namespace) -> int:
         coins.get("reason") or ", ".join(k for k, v in (coins.get("reasons") or {}).items() if v))
     events = [json.loads(x) for x in (d / CO.R.RELEASES).read_text().splitlines()[1:]]
     rounds = [(r, e) for r, e in zip(events[::2], events[1::2]) if r["label"] == CO.Wd.ROUND]
-    serve_ns = [round((e["released_at"] - r["received_at"]) * 1e9) for r, e in rounds]
-    gap_ns = [round((b["received_at"] - x["received_at"]) * 1e9) for (x, _), (b, _) in itertools.pairwise(rounds)]
+    serve_ns = [e["released_at"] - r["received_at"] for r, e in rounds]
+    gap_ns = [b["received_at"] - x["received_at"] for (x, _), (b, _) in itertools.pairwise(rounds)]
     doc = {"ok": all(v is None for v in reasons.values()), "host": host, "key_sha512": hashlib.sha512(key.public).hexdigest(),
            "key": "the key record's" if a.key_record else "key.json's own (unanchored)", "session": sid,
            "root": root.hex(), "root_is": CO.STAND_IN, "ledger": ledger, "period_named": a.period,
