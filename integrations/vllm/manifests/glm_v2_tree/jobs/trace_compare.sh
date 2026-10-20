@@ -10,6 +10,8 @@
 #      `records switch --trace`), and side by side `predict compare` of this tree's predictor against this tree's trace and the
 #      AOT Build again against it (`--aot-trace`), with its digests against the trace's (aot2_vs_trace.json).
 # SKIP_AOT1=1 skips 1 for a row already known to move (every derive of it is refused only after its whole emission).
+# exit 0: the pins reproduce, or the row moved against the pins being replaced and nothing else (its traced Build passed, the
+# predictor and the AOT Build against the trace equal it), ready for repin.sh; 7-9 name the step that failed; 1 anything else.
 # The pinned vLLM imports libcuda.so.1 even on the meta device: on a node without a driver, CUDA_DRIVER_DIR (W/cuda-driver, the H200
 # hosts' 580.173.02 library) goes on LD_LIBRARY_PATH; no device is opened.  The CPU venv and checkpoint metadata are the ones
 # aot_build_rm.sh (WS-E) keeps on vy-glm53-cpu-2 under W.  Row dirs stay on the node (kept 5d).
@@ -110,7 +112,16 @@ diffs = neutrality.compare(t, a) if t and a else ["a Build has no build_summary.
 Path(sys.argv[3]).write_text(json.dumps({"trace": sys.argv[1], "aot": sys.argv[2], "equal": not diffs, "differences": diffs,
                                          "programs": a}, indent=1) + "\n")
 print("AOT (against this trace) vs this trace:", "EQUAL" if not diffs else "DIFFER", *diffs, sep="\n    ")
+sys.exit(1 if diffs else 0)
 EOF
+vrc=$?
 echo "AOT vs pinned trace rc $arc; neutrality rc $nrc; predict compare rc $crc; AOT vs this trace rc $a2rc"
-[ "$a2rc" = 0 ] || exit 9
-exit 1
+[ "$a2rc" = 0 ] && [ "$vrc" = 0 ] || exit 9
+[ $nrc != 0 ] || { echo "the trace is the pins, but the AOT Build against the pinned trace did not pass (rc $arc, its digests: $anrc)"; exit 1; }
+"$PY" - "$OUT/neutrality.json" "$ROW" <<'EOF' || { echo "neutrality rc $nrc is not only a move against the pins (neutrality.json)"; exit 1; }
+import json, sys
+r = json.load(open(sys.argv[1]))["rows"][sys.argv[2]]
+sys.exit(0 if r["build_rc"] == 0 and r["programs"] and not r["neutral"] else 1)
+EOF
+echo "MOVED against the pins being replaced, nothing else: this tree's trace, its predictor and its AOT Build agree; re-pin with" \
+  "repin.sh $ROW $RESEARCH_RUN_ID"
