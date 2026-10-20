@@ -8,7 +8,7 @@ an `act` value, a run input under the root of the round that admits it, committe
   scheduled request's rows in the order its A tables hold them) to `pouw_h1.H1Run.admit` before the step's forward. Round s closes
   once step s's last linear is recorded: its root (`round_root`) is over the step's calls (`step_digest`, their manifest
   rows with what the listeners bound), its request table's root and its slot table's root, and only then does the round
-  coins' `LiveRecord` (the pouw setting ``rounds``) open round s's coin. The salt is opened at install, before any
+  coins' `LiveRecord` (the auditor host's session, the pouw setting ``challenger``; ``rounds`` in tests) open round s's coin. The salt is opened at install, before any
   admission, so no request entry precedes it.
 * **Entries and slots.** Each `RequestEntry` (its ordinal, round, first slot, cap and prompt tokens) is a hiding leaf of its
   round's request table (`request_table`: T hm96 leaves, the unused ones `EMPTY_REQUEST`), and slot i of round s's slot
@@ -21,7 +21,8 @@ an `act` value, a run input under the root of the round that admits it, committe
   isn't the challenger's opened after it (`live_reason`), and an entry whose first slot in its round doesn't name it.
   `slot_reason` refuses a served slot that names no request, or one whose entry is under a later round than the slot's
   step, so an entry deferred past the step that first serves it is refused. `rounds_reason` holds the whole log to the
-  challenger's coins.
+  challenger's coins, and `pouw_h1_challenger.trusted_rounds_reason` holds those coins to the record the verifier's own
+  challenger signed and the roots its log shows it received.
 * **Not yet.** The slot table names A-table leaves only once the round root commits root(A): the step digest covers what
   the listeners bind, and no served run binds ``root_a`` yet (``details.requests.a_roots``). The round root has no admit
   root (H1 has no admit unit yet) and no receipt root (receipts aren't committed here), and no unit reads the round coins

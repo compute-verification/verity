@@ -28,6 +28,11 @@ the 64 and then the first alone (the 1-sequence row); with it, the 64 in one win
 first alone in a second (`<out>/solo/`). It records each window's step rows against the declaration (`Static.check`), its
 u (`H1Run.utilization`), the credit gate's verdict, each step's seconds (at linear 0 of the next) and tokens/s, and the
 static schedule's check (`engine.static_schedule.check`) of every request. Compile is `--compile-from` on each record.
+
+``--challenger HOST:PORT`` takes the window's salt and round coins from the auditor host's challenger
+(`pouw_h1_challenger`; on PEER, the port `benchmarks/live_challenger/run.sh` forwards), one session a window, so the fill
+workload serves only the 64's window. ``--check-challenger CALLS_JSON CHALLENGER_DIR --key-sha512 HEX`` is the verifier's
+side on no GPU: the window's coins against the challenger run's own ``out/`` (`pouw_h1_challenger.trusted_rounds_reason`).
 """
 from __future__ import annotations
 
@@ -55,9 +60,12 @@ PROMPTS = ["The capital of France is", "def fibonacci(n):\n    \"\"\"Return the 
            "The chemical symbol for gold is", "A haiku about autumn:", "The square root of 144 is", "Photosynthesis is the process"]
 
 
-def h1_settings(eng: Any, rows: int, steps: int, **kw: Any) -> dict[str, Any]:
-    """The option's settings for one served window: the epoch's salt coin, the engine's model runner (where the scheduler's
-    admissions arrive) and the window's live round coins, one a step."""
+def h1_settings(eng: Any, rows: int, steps: int, challenger: str | None = None, **kw: Any) -> dict[str, Any]:
+    """The option's settings for one served window: the engine's model runner (where the scheduler's admissions arrive) and
+    the window's coins, its salt coin and one live round coin a step: the auditor host's at `challenger` (``HOST:PORT``, one
+    session a window, `pouw_h1_challenger`), else held in this process, which no verifier trusts (a measurement)."""
+    if challenger:
+        return {"pouw": {"challenger": challenger, "runner": eng.runner, "rows": rows, "steps": steps, **kw}}
     from verity.core.protocols.pouw import window as Wd
     from verity.core.protocols.pouw.coins import Challenger
     from verity.core.protocols.sampled_proofs.challenger import LiveRecord
@@ -87,10 +95,13 @@ def requests_check(h1: Any, requests: int) -> dict[str, Any]:
             if w is not None:
                 slots.append(w)
     rounds = RQ.rounds_reason(h1.round_log, coins)
+    owners = [h1.owners.get(s, []) for s in range(len(h1.round_log))]
     out = {**h1.details["requests"], "served": requests, "entries_refused": why[:20], "slots_refused": slots[:20],
-           "rounds": rounds}
+           "rounds": rounds, "entries_checked": len(h1.requests), "slots_checked": len(h1.round_log) * h1.rows,
+           "slot_owners": owners, "slots_are_rows": [len(o) for o in owners] == h1.step_rows()[:len(owners)],
+           "entries": [[e.index, e.round, e.slot] for e in h1.requests]}
     out["ok"] = bool(out["admitted"] == requests and not out["refused"] and not out["gaps"] and not why and not slots
-                     and rounds is None)
+                     and rounds is None and out["slots_are_rows"])
     return out
 
 
@@ -124,7 +135,8 @@ def run(a: argparse.Namespace) -> dict[str, Any]:
     plain = serve()
     entry_name = f"pouw:{PH.SCHEME}"
     ctx = PO.Context(stage="serve", enabled=(entry_name,),
-                     settings=h1_settings(eng, a.rows, steps_public, retain_steps=a.retain, transcript_dir=str(outdir)))
+                     settings=h1_settings(eng, a.rows, steps_public, a.challenger, retain_steps=a.retain,
+                                         transcript_dir=str(outdir)))
     t0 = time.monotonic()
     comp = PO.install(eng.model, ctx)
     doc["install_s"] = round(time.monotonic() - t0, 1)
@@ -303,7 +315,8 @@ def fill(a: argparse.Namespace) -> dict[str, Any]:
     def window(name: str, want: list[dict[str, Any]], tdir: Path) -> dict[str, Any]:
         nonlocal layers
         ctx = PO.Context(stage="serve", enabled=(entry_name,),
-                         settings=h1_settings(eng, decl.rows, decl.steps, retain_steps=a.retain, transcript_dir=str(tdir)))
+                         settings=h1_settings(eng, decl.rows, decl.steps, a.challenger, retain_steps=a.retain,
+                                              transcript_dir=str(tdir)))
         t0 = time.monotonic()
         comp = PO.install(eng.model, ctx)
         out: dict[str, Any] = {"install_s": round(time.monotonic() - t0, 1)}
@@ -360,15 +373,21 @@ def fill(a: argparse.Namespace) -> dict[str, Any]:
         finally:
             comp.close()
         out["commitment"] = comp.installed[0].commitment()
+        out["coin_source"], out["challenger"] = out["commitment"].get("coin_source"), h1.details.get("challenger")
+        if a.challenger:
+            out["ok"] = bool(out["ok"] and out["challenger"] == {"closed": True})
         print(f"[fill] {name} {json.dumps({k: v for k, v in out.items() if k not in ('commitment', 'z')}, default=str)[:3000]}",
               flush=True)
         return out
 
     doc["h1"] = window("fill", plain, outdir)
-    try:
-        doc["h1_solo"] = window("solo", plain_solo, outdir / "solo")
-    except Exception as e:  # noqa: BLE001
-        doc["h1_solo"] = {"ok": False, "error": f"{type(e).__name__}: {e}"[:2000]}
+    if a.challenger:
+        doc["h1_solo"] = {"skipped": "the challenger serves one session, the 64's window"}
+    else:
+        try:
+            doc["h1_solo"] = window("solo", plain_solo, outdir / "solo")
+        except Exception as e:  # noqa: BLE001
+            doc["h1_solo"] = {"ok": False, "error": f"{type(e).__name__}: {e}"[:2000]}
     doc["compile"] = "deferred to --compile-from (out/pouw-h1-calls.json and out/solo/pouw-h1-calls.json)"
     doc["ok"] = bool(doc["plain"]["static"]["ok"] and doc["h1"]["ok"] and doc["engine"]["enforce_eager"] is not False)
     (outdir / RECORD).write_text(json.dumps(doc, indent=1, default=str) + "\n")
@@ -421,6 +440,36 @@ def compile_from(calls_file: str, out: str) -> dict[str, Any]:
     return doc
 
 
+def check_challenger(calls_file: str, directory: str, public_sha512: str, out: str) -> dict[str, Any]:
+    """The verifier's side, on no GPU: the served window's coins (`calls_file`'s commitment) against the challenger's own
+    directory (its run's ``out/``, fetched with ``research fetch RUN --all``) under the auditor's key, pinned by the SHA-512
+    of its public key (`pouw_h1_challenger.pinned_key`, `trusted_rounds_reason`)."""
+    from verity.core.protocols.sampled_proofs import remote
+    from verity_vllm.protocol_options import pouw_h1_challenger as PHC
+
+    rec, d = json.loads(Path(calls_file).read_text()), Path(directory)
+    doc: dict[str, Any] = {"schema": SCHEMA + "/challenger", "argv": sys.argv, "calls_file": calls_file, "directory": directory,
+                           "pinned_public_sha512": public_sha512, "coin_source": rec["commitment"].get("coin_source")}
+    try:
+        key = PHC.pinned_key(d / remote.KEY, public_sha512)
+        doc["key"] = {"W": key.W, "H": key.H, "public_sha512": hashlib.sha512(key.public).hexdigest()}
+        doc["reason"] = PHC.trusted_rounds_reason(rec["commitment"], d, key)
+    except Exception as e:  # noqa: BLE001
+        doc["reason"] = f"{type(e).__name__}: {e}"
+    for name in (remote.RECORD, "challenger.json"):
+        try:
+            doc[name] = json.loads((d / name).read_text())
+        except (OSError, ValueError) as e:
+            doc[name] = {"error": str(e)}
+    doc["rounds"] = len(rec["commitment"].get("rounds") or ())
+    doc["ok"] = doc["reason"] is None
+    Path(out).mkdir(parents=True, exist_ok=True)
+    (Path(out) / "pouw_h1_challenger.json").write_text(json.dumps(doc, indent=1, default=str) + "\n")
+    print(f"POUW-H1-CHALLENGER {'OK' if doc['ok'] else 'FAIL'} rounds={doc['rounds']} host={doc[remote.RECORD].get('host')} "
+          f"reason={doc['reason']}", flush=True)
+    return doc
+
+
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description="int8 Llama served with PoUW's H1 + fx1 on the eager int8_exact row, checked on the host")
     ap.add_argument("--out", required=True)
@@ -438,12 +487,23 @@ def main(argv: list[str] | None = None) -> int:
                                                          "batch and the one alone)")
     ap.add_argument("--compile", action="store_true", help="compile every served shape in this process too")
     ap.add_argument("--compile-from", metavar="CALLS_JSON", help="no GPU: compile a served run's record (pouw-h1-calls.json)")
+    ap.add_argument("--challenger", metavar="HOST:PORT", help="the window's salt and round coins from the auditor host's "
+                                                              "challenger (benchmarks/live_challenger/run.sh, SCHEME "
+                                                              "verity/pouw/epoch-coins/live/v1, FAMILIES "
+                                                              "pouw_h1_challenger.families(S)); else held in this process")
+    ap.add_argument("--check-challenger", nargs=2, metavar=("CALLS_JSON", "CHALLENGER_DIR"),
+                    help="no GPU: a served window's coins against the challenger run's out/ (needs --key-sha512)")
+    ap.add_argument("--key-sha512", help="the SHA-512 of the auditor's challenger public key, in hex")
     ap.add_argument("--workload", choices=("batch", "fill"), default="batch",
                     help="batch: PROMPTS batched and the first alone (--rows, --steps, --max-tokens); fill: pouw_h1.FILL, 64 in "
                          "flight every served step (VLLM-52; its own T, S and cap)")
     a = ap.parse_args(argv)
     if a.compile_from:
         return 0 if compile_from(a.compile_from, a.out)["ok"] else 1
+    if a.check_challenger:
+        if not a.key_sha512:
+            ap.error("--check-challenger needs --key-sha512")
+        return 0 if check_challenger(*a.check_challenger, a.key_sha512, a.out)["ok"] else 1
     if not (a.at and a.by):
         ap.error("serving needs --at and --by (the pin entry's, if one is made)")
     return 0 if (fill if a.workload == "fill" else run)(a)["ok"] else 1

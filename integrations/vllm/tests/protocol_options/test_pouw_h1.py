@@ -23,14 +23,19 @@ torch = pytest.importorskip("torch")
 from verity.core.protocols.pouw import window as Wd  # noqa: E402
 from verity.core.protocols.pouw.circuit import seeds as SD  # noqa: E402
 from verity.core.protocols.pouw.coins import Challenger  # noqa: E402
-from verity.core.protocols.sampled_proofs.challenger import LiveRecord  # noqa: E402
+from verity.core.protocols.sampled_proofs import challenger as LC  # noqa: E402
+from verity.core.protocols.sampled_proofs import remote as R  # noqa: E402
+from verity.core.protocols.sampled_proofs.challenger import CoinError, LiveRecord  # noqa: E402
 from verity.ml.circuits.refs import runs  # noqa: E402
 from verity_vllm import protocol_options as PO  # noqa: E402
 from verity_vllm.engine import hooks  # noqa: E402
 from verity_vllm.engine import int8_exact as E  # noqa: E402
 from verity_vllm.protocol_options import pouw  # noqa: E402
 from verity_vllm.protocol_options import pouw_h1 as PH  # noqa: E402
+from verity_vllm.protocol_options import pouw_h1_challenger as PHC  # noqa: E402
 from verity_vllm.protocol_options import pouw_h1_requests as RQ  # noqa: E402
+
+from tests.protocol_options import challenger_host as CH  # noqa: E402
 
 K = 64
 ROW = K * PH.I8_BITS
@@ -332,7 +337,7 @@ def test_h1_is_admitted_beside_sampled_proofs_and_executes_nowhere():
     short = PO.Context(stage="serve", enabled=(_entry(),), settings=_settings(rounds=_rounds(2)))
     assert any("2 unopened coins, fewer than the window's 3 rounds" in r for r in PO.refusals(short))
     other = PO.Context(stage="serve", enabled=("pouw:ncp-v1",), settings={"pouw": {"coins": Challenger(0), "runner": Runner()}})
-    assert any("'runner' and 'rounds' are H1's" in r for r in PO.refusals(other))
+    assert any("'runner', 'rounds' and 'challenger' are H1's" in r for r in PO.refusals(other))
     with pytest.raises(ValueError, match="'rounds' is the window's round coins"):
         pouw.Settings.of({"rounds": object()})
     with pytest.raises(ValueError, match="loaded Model Runner V2"):
@@ -636,3 +641,119 @@ def test_the_batch_order_is_model_runner_v2s():
         assert [r for r, _n in RQ.batch_order(own, so)] == ["d", "e", "p", "v", "x"]
     finally:
         del globals()["sort_batch_req_ids"]
+
+
+AUDITOR = "vy-challenger-1:7811"
+
+
+def _host(tmp_path, monkeypatch, name="auditor", seed=1, rounds=3, challenger=None):
+    """A challenger host serving one session over a live epoch of `rounds` round coins, reached at `AUDITOR`."""
+    host = CH.Host(tmp_path / name, challenger or Wd.live_challenger(0, rounds, CH.entropy(seed)), seed)
+    monkeypatch.setattr(R.RemoteChallenger, "connect", classmethod(lambda cls, at: host.client if at == AUDITOR else None))
+    return host
+
+
+def _serve_window(settings):
+    """`test_the_option_serves_the_arms_y_and_records_each_call`'s two served steps of a 3-step window, under `settings`:
+    the installed option's commitment and its run."""
+    model, runner = Model(Linear(32, 1), Linear(40, 2)), settings["pouw"]["runner"]
+    comp = PO.install(model, PO.Context(stage="serve", enabled=(_entry(),), settings=settings))
+    try:
+        g = torch.Generator().manual_seed(9)
+        for so, rows in ((_so(("a", [5], 4)), (1, 5)), (_so(("b", [7], 2), ("c", list(range(8, 39)), 3), running={"a": 1}),
+                                                        (33, 2))):
+            runner.execute_model(so)
+            for m, layer in zip(rows, model.layers):
+                layer.quant_method.apply(layer, (torch.randn(m, K, generator=g) * 3).bfloat16())
+        run = pouw.h1_run(_entry())
+    finally:
+        comp.close()
+    return comp.installed[0].commitment(), run
+
+
+def _remote(**kw):
+    return {"pouw": {"rows": 64, "steps": 3, "runner": Runner(), "challenger": AUDITOR, **kw}}
+
+
+def test_h1_takes_its_salt_and_round_coins_from_the_auditor_hosts_challenger(tmp_path, monkeypatch):
+    """With the setting ``challenger`` the window's one session on the auditor host opens its salt coin after the weights'
+    root and round s's coin after round s's root, and closes once the window has finished; the verifier, reading the
+    challenger's own directory under its key, trusts the window's coins (`trusted_rounds_reason`), and every request entry
+    and slot still opens under its round's root."""
+    host = _host(tmp_path, monkeypatch)
+    assert PO.refusals(PO.Context(stage="serve", enabled=(_entry(),), settings=_remote())) == ()
+    commitment, run = _serve_window(_remote())
+    assert host.ended() is None and run.details["challenger"] == {"closed": True}
+    coins = host.challenger.commitment
+    assert commitment["coin_source"] == "challenger" and commitment["coins"] == commitment["round_coins"] == coins.to_json()
+    assert PHC.trusted_rounds_reason(commitment, host.directory, host.key) is None
+    received = R.released_roots(host.directory / R.RELEASES, coins)
+    assert received[Wd.SALT] == (bytes.fromhex(commitment["weights_root"]),) and received[Wd.DRAW] == ()
+    assert received[Wd.ROUND] == tuple(bytes.fromhex(r["root"]) for r in commitment["rounds"]) and len(received[Wd.ROUND]) == 3
+    assert all(RQ.request_reason(commitment["rounds"], coins, run.salt, 64, e, run.open_request(e.index),
+                                 run.open_first(e.index)) is None for e in run.requests)
+    assert len(run.requests) == 3 and _slot_reasons(run, coins) == [] and run.request_gaps() == []
+    pin = hashlib.sha512(host.key.public).hexdigest()
+    assert PHC.pinned_key(host.directory / R.KEY, pin) == host.key
+    with pytest.raises(CoinError, match="not the auditor's pinned"):
+        PHC.pinned_key(host.directory / R.KEY, "00" * 64)
+
+
+def test_coins_from_a_prover_side_challenger_are_refused(tmp_path, monkeypatch):
+    """The verifier trusts only the record its own challenger signed and the roots its log shows: a window whose coins are
+    held in the serving process, or come from a challenger host of the prover's under its own key, is refused; so is a
+    missing record, and a window whose round roots (each coin's ``after`` rewritten to match) or salt root aren't the ones
+    the challenger received, or whose log is short."""
+    auditor = _host(tmp_path, monkeypatch)
+    auditor.client.close()
+    assert auditor.ended() is None
+    local, _ = _serve_window(_settings())
+    assert local["coin_source"] == "in-process"
+    assert PHC.trusted_rounds_reason(local, auditor.directory, auditor.key).startswith(
+        "the window's round_coins ") and "coins from a challenger the verifier doesn't hold" in \
+        PHC.trusted_rounds_reason(local, auditor.directory, auditor.key)
+    prover = _host(tmp_path, monkeypatch, name="prover", seed=2)
+    honest, _ = _serve_window(_remote())
+    assert prover.ended() is None and PHC.trusted_rounds_reason(honest, prover.directory, prover.key) is None
+    assert PHC.trusted_rounds_reason(honest, prover.directory, auditor.key) == ("the challenger's session is not trusted: the "
+                                                                               "challenger record's signature does not verify "
+                                                                               "under the verifier's challenger key")
+    (tmp_path / "empty").mkdir()
+    assert PHC.trusted_rounds_reason(honest, tmp_path / "empty", auditor.key).startswith(
+        "the challenger's session is not trusted: no challenger record")
+    log = honest["rounds"]
+    forged = [log[0], {**log[1], "root": "ee" * 64, "coin": {**log[1]["coin"], "after": "ee" * 64}}, log[2]]
+    coins = prover.challenger.commitment
+    assert RQ.rounds_reason(forged, coins) is None
+    assert PHC.trusted_rounds_reason({**honest, "rounds": forged}, prover.directory, prover.key) == \
+        "the window's round roots are not the roots the challenger's log shows it received, in order"
+    assert PHC.trusted_rounds_reason({**honest, "rounds": log[:2]}, prover.directory, prover.key) == \
+        "the window's round log has 2 rounds, not its 3 steps"
+    assert PHC.trusted_rounds_reason({**honest, "weights_root": "ee" * 64}, prover.directory, prover.key) == \
+        "the challenger's log does not show the weights' root as the one root its salt coin followed"
+
+
+def test_the_challenger_setting_is_h1s_one_coin_source(tmp_path, monkeypatch):
+    """``challenger`` is HOST:PORT, H1's only, never beside in-process ``coins`` or ``rounds`` and never at capture; a pipeline
+    that is its own auditor adds no in-process coins beside it; a challenger whose layout isn't a live window of at least S
+    rounds is refused at install, with its session closed."""
+    with pytest.raises(ValueError, match="HOST:PORT"):
+        pouw.Settings.of({"challenger": "7811"})
+
+    def refused(settings, stage="serve", entry=None):
+        return PO.refusals(PO.Context(stage=stage, enabled=(entry or _entry(),), settings=settings))
+    assert any("from one source" in r for r in refused(_remote(coins=Challenger(0))))
+    assert any("from one source" in r for r in refused(_remote(rounds=_rounds())))
+    assert any("opens no session" in r for r in refused(_remote(), stage="capture"))
+    assert any("'challenger' are H1's" in r for r in refused({"pouw": {"coins": Challenger(0), "challenger": AUDITOR}},
+                                                             entry="pouw:ncp-v1"))
+    assert "coins" not in pouw.challenged({"pouw": {"challenger": AUDITOR}}, (_entry(),))["pouw"]
+    short = _host(tmp_path, monkeypatch, rounds=2)
+    with pytest.raises(ValueError, match="its 2 round coins are fewer than the window's 3 rounds"):
+        _serve_window(_remote())
+    assert short.ended() is None
+    other = LC.LiveChallenger("vllm/commit", 0, [("replay", 2)], CH.entropy(3))
+    vllm = _host(tmp_path, monkeypatch, name="vllm", seed=3, challenger=other)
+    with pytest.raises(ValueError, match="not a live window's: the coin commitment's scheme is vllm/commit"):
+        _serve_window(_remote())
+    assert vllm.ended() is None
