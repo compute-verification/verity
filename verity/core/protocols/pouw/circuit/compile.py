@@ -16,9 +16,16 @@
   carries that kind's noise form; `Scheme.plug` sets one), self-contained (decision 106): ``(a: its A rows, b: its B rows,
   salt, position, roots) -> {z: its cells' exact products, receipt}``. The unit derives its seed in its own proof from the
   salt, its position and its seed group's roots (`seeds.PouwSeed`, decision 105, or `seeds.PouwUnitSeeds` for a unit whose
-  receipt folds take keys: seed_j and σ_R, decision 121), and its noise from the seed; nothing else reads the salt. The salt `pouw.salt` is the Program's one coin (`In(kind="coin")` where ports.py is on the tree);
-  `pouw.positions` and `pouw.roots` are inputs bound before the draw, unit u reading position slot u (`Compiled.positions`)
-  and its seed group's (root(A), root(B)). A seed group is the calls committed together (`groups`; by default a site, one
+  receipt folds take keys: seed_j and σ_R, decision 121), and its noise from the seed; nothing else reads the salt. The
+  salt `pouw.salt` is the Program's one coin (`In(kind="coin")` where ports.py is on the tree); unit u reads position slot
+  u (`Compiled.positions`) and its seed group's (root(A), root(B)). The three seed inputs are registered values the
+  one-stage verifier fills itself, so the prover chooses none of them (`sampled_proofs.one_stage.registered`'s
+  `supplied_rows` and `supplied_root`): `pouw.roots` from the roots the record names for each group's operands (a served
+  port's, an AROW row table's included, and the registered weights', which the verifier holds to the root it pinned
+  before the salt, `one_stage.registration.check`'s `pinned`), `pouw.positions` after every unit of the log's earlier records
+  (`registered.log_base`, so no two records of a log share a position), and `pouw.salt` per window, filled by the
+  verifier. R7 refuses a record that registers any other commitment of them (`R7-supplied`); `Compiled.inputs` gives the
+  leaves the verifier fills. A seed group is the calls committed together (`groups`; by default a site, one
   call: a batched call over a layer's heads and the batch is one site, decision 122): one commitment fixes the noise of
   every unit it covers, so the units a group covers are the grinding premium's divisor (decision 112), at least the
   scheme's `cover`, and its dots of each attention kind carry a grind term of at most 0.1% (decision 122: `grind`'s premium
@@ -1068,7 +1075,8 @@ class Compiled:
 
     def positions(self, base: int = 0) -> list[int]:
         """`pouw.positions`' values: unit u's is ``base + u``. A salt seeds each (salt, position) once, so a verifier that runs
-        the Program more than once under one salt gives each run its own range (``base``, a multiple of ``len(units)``)."""
+        the Program more than once under one salt gives each run its own range (``base``); the one-stage verifier's is
+        every unit of the log's earlier records (`sampled_proofs.one_stage.registered.log_base`)."""
         if base < 0 or base + len(self.units) > 1 << 64:
             raise ValueError(f"positions {base} .. {base + len(self.units) - 1} are no u64s")
         return [base + u.slot for u in self.units]
@@ -1080,7 +1088,8 @@ class Compiled:
 
     def inputs(self, salt: bytes, roots: Sequence[tuple[bytes, bytes]], base: int = 0) -> list[list[int]]:
         """The leaves of `pouw.salt`, `pouw.positions` and `pouw.roots` (a pair per seed group), the arguments after the
-        served ones."""
+        served ones: the rows the one-stage verifier fills (`sampled_proofs.one_stage.registered.supplied_rows`) from the
+        window's salt, the log's ``base`` and the roots the record names."""
         _check_roots(roots, len(self.groups))
         b = self.boolean
         return [SD.leaves(salt, b), [v for p in self.positions(base) for v in SD.position_leaves(p, b)],

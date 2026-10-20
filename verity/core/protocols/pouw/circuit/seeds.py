@@ -2,6 +2,8 @@
 
 A drawn unit's noise is neither a public nor a coin input: the unit computes its seed from the epoch's salt (the one coin),
 its position and its operands' roots, all inputs of the unit bound before the draw, and its noise from the seed, in gates.
+The one-stage verifier fills all three itself, so the prover chooses none (`compile`'s docstring,
+`sampled_proofs.one_stage.registered.supplied_rows`).
 
     seed_j  = SHA-512(u64(j) ‖ (SEED_TAG ‖ salt ‖ root(A_j) ‖ root(B_j)) ⊕ u64(j)*)        `PouwSeed`
     σ_R     = SHA-512(u64(j) ‖ (RECEIPT_TAG ‖ salt ‖ root(A_j) ‖ root(B_j)) ⊕ u64(j)*)     `PouwUnitSeeds`, with seed_j
