@@ -31,9 +31,10 @@ static schedule's check (`engine.static_schedule.check`) of every request. Compi
 
 ``--challenger HOST:PORT`` takes the window's salt and round coins from the auditor host's challenger
 (`pouw_h1_challenger`; on PEER, the port `benchmarks/live_challenger/run.sh` forwards), one session a window, so the fill
-workload serves only the 64's window. ``--check-challenger CALLS_JSON CHALLENGER_DIR --key-sha512 HEX --ledger LEDGER
---window WINDOW_JSON`` is the verifier's side on no GPU: the window's coins against the challenger run's own ``out/``, the
-session the auditor's signed ledger opens and ends for the window (`pouw_h1_challenger.trusted_rounds_reason`).
+workload serves only the 64's window. ``--check-challenger CALLS_JSON CHALLENGER_DIR --key-sha512 HEX --ledger HEAD
+[--ledger HEAD ...] --window WINDOW_JSON`` is the verifier's side on no GPU: the window's coins against the challenger
+run's own ``out/``, the session the auditor's signed ledger (the longest of infra's published heads, each extending the
+others) opens and ends for the window (`pouw_h1_challenger.trusted_rounds_reason`).
 """
 from __future__ import annotations
 
@@ -441,13 +442,13 @@ def compile_from(calls_file: str, out: str) -> dict[str, Any]:
     return doc
 
 
-def check_challenger(calls_file: str, directory: str, public_sha512: str, ledger: str, window_file: str, out: str
+def check_challenger(calls_file: str, directory: str, public_sha512: str, ledger: list[str], window_file: str, out: str
                      ) -> dict[str, Any]:
     """The verifier's side, on no GPU: the served window's coins (`calls_file`'s commitment) against the challenger's own
     directory (its run's ``out/``, fetched with ``research fetch RUN --all``) under the auditor's key, pinned by the SHA-512
-    of its public key, as the session the auditor's signed ledger at `ledger` (infra's ``windows.jsonl``, the latest
-    published) opens and ends for the window (`window_file`, its ``{commit, period}``) (`pouw_h1_challenger.pinned_key`,
-    `trusted_rounds_reason`)."""
+    of its public key, as the session the auditor's signed ledger opens and ends for the window (`window_file`, its
+    ``{root}``), the ledger the longest of infra's published heads at `ledger` (each a ``windows.jsonl``)
+    (`pouw_h1_challenger.pinned_key`, `trusted_rounds_reason`)."""
     from verity.core.protocols.sampled_proofs import remote
     from verity_vllm.protocol_options import pouw_h1_challenger as PHC
 
@@ -501,9 +502,9 @@ def main(argv: list[str] | None = None) -> int:
                     help="no GPU: a served window's coins against the challenger run's out/ (needs --key-sha512, "
                          "--ledger and --window)")
     ap.add_argument("--key-sha512", help="the SHA-512 of the auditor's challenger public key, in hex")
-    ap.add_argument("--ledger", metavar="LEDGER", help="the auditor's signed ledger (infra's windows.jsonl), opening and "
-                                                       "ending the window's one challenger session")
-    ap.add_argument("--window", metavar="WINDOW_JSON", help="the window's identity, {commit, period}")
+    ap.add_argument("--ledger", metavar="HEAD", action="append", help="a published head of the auditor's signed ledger "
+                                                                     "(infra's windows.jsonl), once a head infra labelled")
+    ap.add_argument("--window", metavar="WINDOW_JSON", help="the window's identity, {root}")
     ap.add_argument("--workload", choices=("batch", "fill"), default="batch",
                     help="batch: PROMPTS batched and the first alone (--rows, --steps, --max-tokens); fill: pouw_h1.FILL, 64 in "
                          "flight every served step (VLLM-52; its own T, S and cap)")

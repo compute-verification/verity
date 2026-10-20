@@ -932,8 +932,8 @@ def audited_session(ledger: Any, window: Any, key: ChallengerKey, verify: Verify
 def ledger_head(heads: Any, key: ChallengerKey, verify: Verify) -> list[str]:
     """The auditor's ledger as infra published it: every head of `heads` (each its lines; None when the verifier has none)
     checked under the pinned key `key` (`audited_session`'s check of a ledger), any two extending one another, and of them
-    the longest.  Raises `CoinError` naming why, so a ledger forked, cut or rewritten between two publications is
-    refused whichever head a verifier is shown."""
+    the longest.  Raises `CoinError` naming why (and which head, when there are several), so a ledger forked, cut or
+    rewritten between two publications is refused whichever head a verifier is shown."""
     if heads is None or heads == []:
         raise CoinError(NO_AUDIT)
     if type(heads) is not list:
@@ -942,7 +942,7 @@ def ledger_head(heads: Any, key: ChallengerKey, verify: Verify) -> list[str]:
         try:
             _checked(head, key, verify)
         except CoinError as e:
-            raise CoinError(f"the auditor's published head {i} is refused: {e}") from None
+            raise (e if len(heads) == 1 else CoinError(f"the auditor's published head {i} is refused: {e}")) from None
     for i, j in itertools.combinations(range(len(heads)), 2):
         if not (extends(heads[i], heads[j]) or extends(heads[j], heads[i])):
             raise CoinError(f"the auditor's published heads {i} and {j} don't extend one another: its ledger was forked "

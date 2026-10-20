@@ -6,10 +6,14 @@ verifier's check that a served window's coins are that challenger's.
   `families` (S) as ``FAMILIES`` (`benchmarks/live_challenger/run.sh`). The epoch's salt is its salt coin, opened after the
   weights' root (`audit.salt_of`), and round s's coin opens after round s's root (`pouw_h1.H1Run`); `finish` closes the
   session once the window has finished. The challenger is auditor-trusted (`trusted-nebius-host`): it runs on a machine
-  the prover doesn't control, and the serving process reaches it through ``ssh -R`` on its own 127.0.0.1.
+  the prover doesn't control, and the serving process reaches it through ``ssh -R`` on its own 127.0.0.1. On the auditor
+  host a session opens a salt coin only after its window's root (serve.py's ``--root``, the gate's ``open --commit``), so
+  H1's salt, which follows the weights' root, is served there only for a window opened at the weights' root, once a
+  weights root, until the salt is bound to its window.
 * **Checking** (`trusted_rounds_reason`): the verifier reads the challenger's directory from the challenger's own run
   (``research fetch RUN --all``, its ``out/``), never from the prover's bundle, under its own challenger key (`pinned_key`),
-  and the auditor's signed ledger, which opens and ends the one session of the window (`remote.trusted_session`): the coin
+  and the auditor's signed ledger (the longest of infra's published heads, each extending the others), which opens and
+  ends the one session of the window (`remote.trusted_session`): the coin
   commitment the challenger signed and the roots its signed release log shows it received. The window's coins must be that commitment's, its salt coin must have followed the
   weights' root, and its rounds pass PoUW's round rule of record (`core_check.rounds`, Lean `PouwCheck.roundsCheck`):
   each coin opened after its root, the roots the challenger's log shows in order. A window whose coins came from a
@@ -22,14 +26,14 @@ from __future__ import annotations
 import hashlib
 import json
 from pathlib import Path
-from typing import Any, Mapping
+from typing import Any, Mapping, Sequence
 
 from verity.core.protocols.pouw import core_check as CC
 from verity.core.protocols.pouw import window as Wd
 from verity.core.protocols.pouw.audit import salt_of
 from verity.core.protocols.sampled_proofs import remote
 from verity.core.protocols.sampled_proofs.challenger import (ChallengerKey, CoinError, LiveCommitment, LiveOpening,
-                                                             LiveRecord, live_reason)
+                                                             LiveRecord, ledger_head, live_reason)
 
 SCHEME = Wd.LIVE_SCHEME
 
@@ -120,17 +124,19 @@ def pinned_key(path: str | Path, public_sha512: str) -> ChallengerKey:
     return key
 
 
-def trusted_rounds_reason(commits: Mapping[str, Any], directory: str | Path, ledger: str | Path, window: Mapping[str, Any],
-                          key: ChallengerKey, verify: Any = lms_verify) -> str | None:
+def trusted_rounds_reason(commits: Mapping[str, Any], directory: str | Path, heads: Sequence[str | Path],
+                          window: Mapping[str, Any], key: ChallengerKey, verify: Any = lms_verify) -> str | None:
     """Why the window's coins (its H1 commitment `commits`: ``coins``, ``round_coins``, ``salt_opening``, ``weights_root``,
     ``steps`` and the round log ``rounds``) aren't the verifier's own challenger's, read from `directory`, the session the
-    auditor's signed ledger at `ledger` (infra's ``windows.jsonl``) opens and ends for `window` (``{commit, period}``),
-    under `key`, the challenger key the deployment pins; None when they are. Fails closed: a missing, malformed or
-    unsigned record, log or ledger, a ledger signed under another key or older than the session's end, or a window it
-    opens no one session for, trusts nothing (`remote.trusted_session`)."""
+    auditor's signed ledger opens and ends for `window` (``{root}``), under `key`, the challenger key the deployment pins,
+    the ledger the longest of the heads infra published at `heads` (each a ``windows.jsonl``), any two extending one
+    another; None when they are. Fails closed: a missing, malformed or unsigned record, log, hello log or ledger, a ledger
+    signed under another key, forked or older than the session's end, or a window it opens no one session for, trusts
+    nothing (`remote.trusted_session`)."""
     try:
-        trusted, received = remote.trusted_session(directory, ledger, window, key, verify)
-        lines, files = remote.ledger_lines(ledger), remote.session_files(directory)
+        trusted, received = remote.trusted_session(directory, heads, window, key, verify)
+        lines = ledger_head([remote.ledger_lines(p) for p in heads], key, verify)
+        files = remote.session_files(directory)
     except CoinError as e:
         return f"the challenger's session is not trusted: {e}"
     for name in ("round_coins", "coins"):

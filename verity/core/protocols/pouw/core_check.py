@@ -977,9 +977,10 @@ def draw(coins: Any, recorded: bool, opening: Any, stream: Any, registration: An
 def rounds(key: Any, ledger: Any, window: Any, session: Any, roots: Any, openings: Any, verify: Ch.Verify
            ) -> tuple[str, str] | None:
     """None when `openings` are a live window's round coins, read through the challenger's own session and never a
-    commitment the prover hands in: the one session the auditor's signed ledger `ledger` (its lines) opens and ends
-    closed for `window` under the window's pinned challenger key `key` (its JSON), from that session's files `session`
-    (`challenger.trusted_session_of`, its signatures checked with `verify`).  Under the commitment the challenger signed, round r's coin opened once, after
+    commitment the prover hands in: the one session the auditor's signed v2 ledger `ledger` (its lines, the head
+    `challenger.ledger_head` took) opens and ends closed for `window` (``{root}``) under the window's pinned challenger key
+    `key` (its JSON), from that session's files `session` (``{close, hellos, log, record}``;
+    `challenger.trusted_session_of`, its signatures checked with `verify`).  Under the commitment the challenger signed, round r's coin opened once, after
     `roots[r]`, the r-th round root (hex), every recorded round's coin opened (`window.rounds_reason`), and the roots are
     the round roots the challenger's signed log shows it received, in order; else the refusal (``coin`` or ``rounds``,
     and why)."""
