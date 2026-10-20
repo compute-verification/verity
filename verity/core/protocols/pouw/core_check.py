@@ -35,8 +35,8 @@ its manifest re-starts its epoch under the challenger's own coin commitment, and
 and the drawn units are Lean's ``Draw.subset`` of the key it derives.  Both read the coin versions in `COIN_VERSIONS`,
 and a replay of a recorded draw `COIN_EARLY` too.  `rounds` is the rule on a live window's round coins
 (`window.rounds_reason`, over the proof service's challenger `sampled_proofs.challenger`): it reads the challenger's
-coins only through the session the auditor's record names for the window, signed under the window's pinned key
-(`challenger.trusted_session_of`), never a commitment the prover hands in; under the commitment that session signed,
+coins only through the session the auditor's signed ledger opens and ends for the window, under the window's pinned
+key (`challenger.trusted_session_of`), never a commitment the prover hands in; under the commitment that session signed,
 round r's coin opened once, after the r-th round root, and the round roots are the ones its signed log shows it received.
 
 Every refusal has one reason, the first rule it breaks in the order below; the Lean port writes the same strings.
@@ -974,12 +974,12 @@ def draw(coins: Any, recorded: bool, opening: Any, stream: Any, registration: An
 
 # ---- a live window's round coins ---------------------------------------------------------------------------------------
 
-def rounds(key: Any, auditor: Any, window: Any, session: Any, roots: Any, openings: Any, verify: Ch.Verify
+def rounds(key: Any, ledger: Any, window: Any, session: Any, roots: Any, openings: Any, verify: Ch.Verify
            ) -> tuple[str, str] | None:
     """None when `openings` are a live window's round coins, read through the challenger's own session and never a
-    commitment the prover hands in: the one session the auditor's record `auditor` names for `window` under the window's
-    pinned challenger key `key` (its JSON), from that session's files `session` (`challenger.trusted_session_of`, its
-    signatures checked with `verify`).  Under the commitment the challenger signed, round r's coin opened once, after
+    commitment the prover hands in: the one session the auditor's signed ledger `ledger` (its lines) opens and ends
+    closed for `window` under the window's pinned challenger key `key` (its JSON), from that session's files `session`
+    (`challenger.trusted_session_of`, its signatures checked with `verify`).  Under the commitment the challenger signed, round r's coin opened once, after
     `roots[r]`, the r-th round root (hex), every recorded round's coin opened (`window.rounds_reason`), and the roots are
     the round roots the challenger's signed log shows it received, in order; else the refusal (``coin`` or ``rounds``,
     and why)."""
@@ -988,7 +988,7 @@ def rounds(key: Any, auditor: Any, window: Any, session: Any, roots: Any, openin
     except Ch.CoinError as e:
         return "coin", f"the verifier's challenger key is malformed: {e}"
     try:
-        c, received = Ch.trusted_session_of(auditor, window, k, session, verify)
+        c, received = Ch.trusted_session_of(ledger, window, k, session, verify)
     except Ch.CoinError as e:
         return "coin", f"the challenger's session is not trusted: {e}"
     if not (isinstance(roots, list) and all(_str(r) and _DIGEST.fullmatch(r) for r in roots)):

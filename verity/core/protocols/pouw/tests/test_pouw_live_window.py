@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import dataclasses
 import importlib.util
+import json
 import random
 from pathlib import Path
 
@@ -92,10 +93,11 @@ def test_the_round_key_is_its_own_coin_and_root():
 
 
 def test_core_checks_rounds_reads_the_challengers_own_session():
-    """The round rule of record reads the challenger's coins only through the session the auditor's record names, signed
-    under the window's pinned key: a window whose coins an in-process challenger drew, or whose log no one signed, is
-    refused however honest its coins."""
+    """The round rule of record reads the challenger's coins only through the session the auditor's signed ledger opens
+    and ends for the window, under the window's pinned key: a window whose coins an in-process challenger drew, whose
+    log no one signed, or whose ledger is cut before the session's end, is refused however honest its coins."""
     d, s = rounds_cases.honest_rounds(random.Random("a"))
+    d = rounds_cases.with_ledger(d, s, random.Random("l"))
     assert CC.rounds(*rounds_cases.rounds_args(d)) is None
     prover = Wd.live_challenger(s.ch.commitment.epoch, s.ch.commitment.family(Wd.ROUND), entropy("p"))
     in_process = rounds_cases.Session(random.Random("p"), prover, [bytes.fromhex(r) for r in d["roots"]], False, seed=1)
@@ -105,6 +107,11 @@ def test_core_checks_rounds_reads_the_challengers_own_session():
                  "verifier's challenger key")
     assert CC.rounds(*rounds_cases.rounds_args({**d, "session": {**d["session"], "close": None}})) == \
         ("coin", f"the challenger's session is not trusted: {Ch.NO_CLOSE}")
+    end = next(i for i, line in enumerate(d["ledger"]) if json.loads(line)["kind"] == "end"
+               and json.loads(line)["session"] == s.sid)
+    assert CC.rounds(*rounds_cases.rounds_args({**d, "ledger": d["ledger"][:end]})) == \
+        ("coin", f"the challenger's session is not trusted: the auditor's ledger has no end for session {s.sid}: the "
+                 "session never ended, or the ledger is older than its end")
     assert CC.rounds(*rounds_cases.rounds_args({**d, "roots": ["AB" * 64] + d["roots"][1:]})) == \
         ("rounds", "the round roots are not a list of SHA-512 digests")
 
