@@ -15,6 +15,8 @@ import subprocess
 import sys
 from pathlib import Path
 
+import pytest
+
 from verity.core.protocols.sampled_proofs import challenger as C
 from verity.core.protocols.sampled_proofs import remote as R
 from verity.ml.crypto import lms
@@ -117,6 +119,29 @@ def test_a_broken_sequence_ends_the_session_with_exit_1(tmp_path):
     code, _ = finish(proc)
     assert code == 1
     assert json.loads((out / "challenger.json").read_text())["ended"].startswith("a client's frames are hello")
+
+
+def test_a_session_with_a_secret_file_serves_only_the_hello_that_carries_it_and_names_its_window_root(tmp_path):
+    secret = bytes(range(32))
+    (tmp_path / "secret").write_text(secret.hex() + "\n")
+    root = "ab" * 64
+    proc, out, first = start(tmp_path, "denied", None, "--secret-file", str(tmp_path / "secret"), "--root", root)
+    with pytest.raises(C.CoinError, match="the session's secret"):
+        R.RemoteChallenger.connect(first.split()[1])
+    code, _ = finish(proc)
+    summary = json.loads((out / "challenger.json").read_text())
+    assert code == 1 and "secret" in summary["ended"] and summary["released"] == {"positions": 0, "replay": 0}
+
+    proc, out, first = start(tmp_path, "served", None, "--secret-file", str(tmp_path / "secret"), "--root", root)
+    with R.RemoteChallenger.connect(first.split()[1], secret) as client:
+        C.LiveRecord(client, "positions", itertools.count().__next__).record(bytes(64))
+    assert finish(proc)[0] == 0
+    summary = json.loads((out / "challenger.json").read_text())
+    assert summary["window_root"] == root and summary["released"] == {"positions": 1, "replay": 0}
+
+    for bad in (["--root", root.upper()], ["--root", root + "\n"]):
+        proc, out, first = start(tmp_path, "bad", None, *bad)
+        assert finish(proc)[0] == 2 and first == ""
 
 
 def fake_ssh(tmp_path: Path, body: str) -> dict:

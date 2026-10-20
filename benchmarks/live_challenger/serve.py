@@ -2,7 +2,8 @@
 one client session, its record signed with the host's LMS key and written before the first coin opens.
 
     python3 benchmarks/live_challenger/serve.py --out DIR --port PORT --scheme SCHEME --families JSON [--epoch E]
-        [--peer NAME [--peers FILE]] [--key DIR] [--params W,H] [--keygen-workers N] [--host NAME]
+        [--peer NAME [--peers FILE]] [--key DIR] [--params W,H] [--keygen-workers N] [--host NAME] [--root HEX]
+        [--secret-file FILE]
 
 - **The key** is the challenger's LMS key over SHA-512, on its host in `--key DIR` (default
   `~/.local/state/live-challenger/key`), in the memory challenger's layout (`benchmarks/pous/memory_challenger/live.py`):
@@ -19,7 +20,9 @@ one client session, its record signed with the host's LMS key and written before
   then opens `ssh -R PORT` to that machine of `--peers` (`/etc/vy/peers`, as `benchmarks/remote_session/run.sh` does for
   its verifier), whose own 127.0.0.1:PORT the client connects to.  It serves the one client that connects
   (`remote.serve`), and writes `challenger.json`: the commitment, the host, the coins released by family and how the
-  session ended.
+  session ended.  On the auditor host (`auditor.py`) the session has a secret, `--secret-file` (64 hex digits, given to
+  the window's opener by the gate), which the client's hello must carry, and `--root`, the window's Commit root, which
+  `challenger.json` names as `window_root`.
 
 Exit 0 when the client closed the session, 1 when it ended otherwise (a refusal, a broken stream, a tunnel that ended
 first), 2 on arguments or a key it refuses.
@@ -30,6 +33,7 @@ import argparse
 import hashlib
 import json
 import os
+import re
 import selectors
 import shlex
 import socket
@@ -103,7 +107,18 @@ def parse(argv: list[str] | None) -> argparse.Namespace:
     p.add_argument("--params", default=None, metavar="W,H")
     p.add_argument("--keygen-workers", type=int, default=len(os.sched_getaffinity(0)))
     p.add_argument("--host", default=socket.gethostname())
+    p.add_argument("--root", default=None, help="the window's Commit root, 128 lowercase hex digits")
+    p.add_argument("--secret-file", type=Path, default=None)
     return p.parse_args(argv)
+
+
+def read_secret(path: Path | None) -> bytes | None:
+    if path is None:
+        return None
+    text = path.read_text().strip()
+    if not re.fullmatch(r"[0-9a-f]{64}", text):
+        raise ValueError(f"{path}: a session's secret is 64 lowercase hex digits")
+    return bytes.fromhex(text)
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -112,7 +127,11 @@ def main(argv: list[str] | None = None) -> int:
     if key_dir == out or out in key_dir.parents:
         print(f"the challenger's key {key_dir} is inside its published --out {out}", file=sys.stderr)
         return 2
+    if args.root is not None and not re.fullmatch(r"[0-9a-f]{128}", args.root):
+        print("--root: the window's Commit root, 128 lowercase hex digits", file=sys.stderr)
+        return 2
     try:
+        secret = read_secret(args.secret_file)
         params = lms.DEPLOYED if args.params is None else lms.Params(64, *map(int, args.params.split(",")))
         challenger = LiveChallenger(args.scheme, args.epoch, args.families, V.coins)
         ssh = peer_ssh(args.peers, args.peer) if args.peer else None
@@ -148,14 +167,14 @@ def main(argv: list[str] | None = None) -> int:
             conn, _ = listener.accept()
             listener.close()
             with conn:
-                ended = remote.serve(conn, challenger, out)
+                ended = remote.serve(conn, challenger, out, secret=secret)
     finally:
         if tunnel is not None:
             tunnel.terminate()
             tunnel.wait()
     released = {label: len(r) for label, r in remote.released_roots(out / remote.RELEASES, challenger.commitment).items()}
     (out / "challenger.json").write_text(json.dumps({
-        "commitment": challenger.commitment.to_json(), "host": args.host, "released": released,
+        "commitment": challenger.commitment.to_json(), "host": args.host, "released": released, "window_root": args.root,
         "ended": "closed by the client" if ended is None else ended}, indent=1) + "\n")
     print("ended:", "closed by the client" if ended is None else ended, file=sys.stderr)
     return 0 if ended is None else 1
