@@ -40,6 +40,7 @@ from dataclasses import dataclass
 from fractions import Fraction
 from pathlib import Path
 
+import pytest
 from verity_machine_model.model import DATA, attacks, devices, model, vector, vectors
 
 POUW = Path(__file__).resolve().parents[1]
@@ -366,12 +367,14 @@ def test_the_cover_reads_every_source():
     assert {k for k, _ in CLOSING} <= set(devices())
 
 
+@pytest.mark.slow
 def test_every_instruction_is_priced_at_each_statements_certificate():
     """No instruction of a bit-exact program is free at a headline statement's π*, past CLOSING's entries."""
     open_ = [g for (_, item), g in gaps(statements(), programs()).items() if (g.st.key, item) not in CLOSING]
     assert not open_, "\n".join(fix(g) for g in sorted(open_, key=lambda g: (g.st.vector, g.item)))
 
 
+@pytest.mark.slow
 def test_each_closing_entry_is_still_a_gap():
     """A CLOSING entry whose instruction now has its own class priced at every statement's π* is closed: delete it."""
     sts = statements()
