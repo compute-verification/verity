@@ -56,6 +56,7 @@ import Proofs.Flock.Claims.Recursion.LastColsDeployed
 import Proofs.Flock.Claims.Recursion.RepFramesBind
 import Proofs.Flock.Claims.Recursion.RepFramesFields
 import Proofs.Flock.Claims.Recursion.RepFramesLig
+import Proofs.Flock.Claims.Recursion.RepOpenings
 import Proofs.Flock.Claims.Recursion.VStarParts
 import Proofs.Flock.Claims.Recursion.VStarPartsHolo
 import Proofs.Flock.Claims.Recursion.VStarPartsDense
