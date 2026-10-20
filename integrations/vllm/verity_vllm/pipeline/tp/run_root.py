@@ -3,9 +3,9 @@
 
     tp_run_root = SHA-512("verity/tp-run-root/v2" || u32 world || (u32 rank_r || root_r) for r in 0..world-1)
 
-A 32-byte rank root is a vllm-v1 (SHA-256) root and is refused by name.  `tp_run_root_v1` is the SHA-256 form over 32-byte vllm-v1
-rank roots (``verity/tp-run-root/v1``): a TP Commit run under ``--commit-scheme vllm-v1`` and the records committed before v2;
-`combine` takes the form a record's ``root_tag`` names."""
+A 32-byte rank root is a vllm-v1 (SHA-256) root and is refused by name.  `tp_run_root_sha256` is the SHA-256 form over 32-byte
+vllm-v1 rank roots (``verity/tp-run-root/v1``): a TP Commit run under ``--commit-scheme vllm-v1`` and the records committed before
+v2; `combine` takes the form a record's ``root_tag`` names."""
 from __future__ import annotations
 
 import hashlib
@@ -34,7 +34,7 @@ def tp_run_root(world: int, roots: dict[int, bytes]) -> bytes:
     return h.digest()
 
 
-def tp_run_root_v1(world: int, roots: dict[int, bytes]) -> bytes:
+def tp_run_root_sha256(world: int, roots: dict[int, bytes]) -> bytes:
     _ranks(world, roots)
     h = hashlib.sha256(TP_ROOT_TAG_V1 + struct.pack(">I", world))
     for r in range(world):
@@ -44,7 +44,7 @@ def tp_run_root_v1(world: int, roots: dict[int, bytes]) -> bytes:
     return h.digest()
 
 
-FORMS = {TP_ROOT_TAG.decode(): tp_run_root, TP_ROOT_TAG_V1.decode(): tp_run_root_v1}
+FORMS = {TP_ROOT_TAG.decode(): tp_run_root, TP_ROOT_TAG_V1.decode(): tp_run_root_sha256}
 
 
 def combine(root_tag: str | bytes | None, world: int, roots: dict[int, bytes]) -> bytes:

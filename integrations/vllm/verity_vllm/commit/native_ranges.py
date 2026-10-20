@@ -254,6 +254,26 @@ class NativeRangeOpenings:
             roots[ro.step] = merkle
         return True
 
+    def _verify_rows(self, run: Any, opening: Any) -> bool:
+        """rows-sha512's `verify`: the row and its salt give the hiding leaf, the frame path folds it to the tree root, which binds into
+        the step root, which is in the run root."""
+        try:
+            sc = run.steps[opening.step]
+            ident = self.identity_of(opening.step, opening.index)
+        except (IndexError, KeyError):
+            return False
+        if opening.step not in self._gpu_blocks or ident != opening.identity or len(opening.value) != step_rows.ROW_BYTES:
+            return False
+        if len(opening.salt) != step_rows.SALT_BYTES or any(not isinstance(p, bytes) for p in opening.path):
+            return False
+        h = step_rows.hiding_leaf(opening.value, opening.salt, 8 * step_rows.ROW_BYTES)[1]
+        merkle = step_rows.fold_path(self._row_domain(opening.step, sc.n_leaves), opening.index, h, opening.path)
+        if merkle is None:
+            return False
+        root = step_rows.step_root(self.program_digest, self._ctx_digest(opening.step), self._geo_digest,
+                                   self.layout_digest(self._layouts[opening.step]), sc.n_leaves, merkle)
+        return root == sc.root and len(run.run_root) == step_rows.ROOT_BYTES and self._run_root(run) == run.run_root
+
     def _verify_rows_range(self, run: Any, ro: RangeOpening, roots: dict[int, bytes] | None) -> bool:
         """rows-sha512's `verify_range`: each row and its salt give its hiding leaf, the run and its boundary siblings fold to the tree root
         (`step_rows.fold_range`), which binds into the step root, which is in the 64-byte run root."""

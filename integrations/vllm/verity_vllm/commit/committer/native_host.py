@@ -2398,26 +2398,6 @@ class NativeHostCommitter(NativeRangeOpenings, hiding.LeafSchemeRule):
             return False
         return len(run.run_root) == 32 and self._run_root(run) == run.run_root
 
-    def _verify_rows(self, run: RunCommitment, opening: Opening) -> bool:
-        """rows-sha512: the row and its salt give the hiding leaf, the frame path folds it to the tree root, which binds into the step
-        root, which is in the run root."""
-        try:
-            sc = run.steps[opening.step]
-            ident = self.identity_of(opening.step, opening.index)
-        except (IndexError, KeyError):
-            return False
-        if opening.step not in self._gpu_blocks or ident != opening.identity or len(opening.value) != step_rows.ROW_BYTES:
-            return False
-        if len(opening.salt) != step_rows.SALT_BYTES or any(not isinstance(p, bytes) for p in opening.path):
-            return False
-        h = step_rows.hiding_leaf(opening.value, opening.salt, 8 * step_rows.ROW_BYTES)[1]
-        merkle = step_rows.fold_path(self._row_domain(opening.step, sc.n_leaves), opening.index, h, opening.path)
-        if merkle is None:
-            return False
-        root = step_rows.step_root(self.program_digest, self._ctx_digest(opening.step), self._geo_digest,
-                                   self.layout_digest(self._layouts[opening.step]), sc.n_leaves, merkle)
-        return root == sc.root and len(run.run_root) == step_rows.ROOT_BYTES and self._run_root(run) == run.run_root
-
     def _refuse_padding(self, padding: list) -> None:
         if padding and self.rows:
             raise ValueError(f"padding steps are vllm-v1 position-leaf blocks: not implemented under {step_rows.NAME}")
