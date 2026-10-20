@@ -8,8 +8,9 @@ order they were admitted; `main` fast-forwards to the newest commit on `next` th
     research queue eject PR --reason TEXT [--by HANDLE]
                                                    keep the PR's current head out of `next`; a new push or ready mark re-admits it;
                                                    posted as HANDLE to @ci and the owner in the merge thread (exit 1 if it couldn't be)
-    research queue ready PR (--on MACHINE | --local | --mark) [--by LANE] [--no-preflight]
-                                                   the owner's word that the PR is ready at its current head (a new push needs it again),
+    research queue ready PR (--on MACHINE | --local | --mark) [--by LANE] [--no-preflight] [--sha SHA]
+                                                   the owner's word that the PR is ready at its current head (a new push needs it again;
+                                                   --sha: only at SHA, refused when GitHub still has another head after a few reads),
                                                    once the quick tier passes there: as a run on MACHINE in a check slot
                                                    (`RemoteQuickTier`; `auto` or M1,M2: the one with a free slot), or here
                                                    (`QuickTier`); exit 3 when it never started (no slot within its wait), 79 when
@@ -1764,18 +1765,35 @@ def ejection(store, pr: PR) -> str | None:
     return f"{last.ref} (ejected by {last.by} at {last.ts})"
 
 
+#: how many times `ready --sha` reads GitHub's open PRs, and the seconds between reads, before refusing a head GitHub doesn't show
+SHA_READS, SHA_WAIT_S = 6, 5.0
+
+
 def ready(github, store, number: int | None, by: str, tier: Callable[[PR], str | None], again: bool = False,
-          preflight: Callable[[PR, list[PR]], str | None] | None = None) -> int:
+          preflight: Callable[[PR, list[PR]], str | None] | None = None, sha: str | None = None,
+          sleep: Callable[[float], None] = time.sleep) -> int:
     """`research queue ready PR`: run the quick tier at the PR's current head (`tier`, a `RemoteQuickTier` or a `QuickTier`), and once
     it passes write `ready = true` on `pr:{n}@{that head}` and push it to the store's remote.  A head whose tree is that of another
     head marked ready (`same_tree_mark`) is marked without running the tier again.  A head drive or the lander ejected is refused
     unless ``again`` (16 Oct: #2174, re-marked at its ejected head, failed a second train on the same line).  Before any of it,
-    ``preflight`` (`Preflight`; None with `--no-preflight`) refuses a head that would break `next`, with the fix."""
-    prs = github.open_prs() if number is not None else []
-    pr = next((p for p in prs if p.number == number), None)
+    ``preflight`` (`Preflight`; None with `--no-preflight`) refuses a head that would break `next`, with the fix.  With ``sha``
+    (`--sha`) it marks only that head: GitHub's head lags a push by seconds (20 Oct: `git push && research queue ready 2848 --mark`
+    marked the old head), so it reads again, up to `SHA_READS` times, and refuses when GitHub still has another head."""
+    for i in range(SHA_READS if sha else 1):
+        prs = github.open_prs() if number is not None else []
+        pr = next((p for p in prs if p.number == number), None)
+        if pr is None or not sha or pr.head.startswith(sha):
+            break
+        if i + 1 < SHA_READS:
+            sleep(SHA_WAIT_S)
     if pr is None:
         print(f"research queue ready: {'#' + str(number) if number is not None else 'a PR number'} is not an open PR", file=sys.stderr)
         return 2
+    if sha and not pr.head.startswith(sha):
+        print(f"research queue ready: #{pr.number} is not marked: GitHub has its head at {pr.head[:12]}, not {sha[:12]}, after "
+              f"{SHA_READS} reads {SHA_WAIT_S:g} s apart. Push {sha[:12]} to the PR's branch (or pass the head GitHub shows), then "
+              "run this again", file=sys.stderr)
+        return 1
     if not again and (why := ejection(store, pr)):
         print(f"research queue ready: #{pr.number} is not marked ready at {pr.head[:12]}: that head was ejected: {why}. Push the fix "
               f"and mark the new head; if the ejection was wrong (a machine fault), say so in the merge thread and pass --again",
@@ -1980,7 +1998,8 @@ def main(argv: list[str]) -> int:
                          "fresh each tick; a flag given here overrides the file's")
     ap.add_argument("--config-from-tree", action="store_true", help="drive: read --config's PATH from this file system instead")
     ap.add_argument("--head", help="open: the pushed branch to open a PR for")
-    ap.add_argument("--sha", help="open: refuse unless origin's branch is at this commit (the owner's pinned head)")
+    ap.add_argument("--sha", help="open: refuse unless origin's branch is at this commit (the owner's pinned head); ready: mark only "
+                                  "this head, refusing when GitHub still shows another after a few reads (push && ready, safely)")
     ap.add_argument("--title", help="open: the PR's title")
     ap.add_argument("--body-file", type=Path, help="open: the PR's body, verbatim (its first line `Lane NAME` names the owner)")
     ap.add_argument("--base", default="main", help="open: the base branch (default main)")
@@ -2051,7 +2070,7 @@ def main(argv: list[str]) -> int:
             top = Path(_out(Path.cwd(), "rev-parse", "--show-toplevel"))
             tier = MarkOnly() if a.mark else RemoteQuickTier(top, remote, a.on, by=a.by) if a.on else QuickTier(top, remote)
             pre = None if a.no_preflight else Preflight(top, remote, store)
-            return ready(GitHub(repo), store, a.pr, a.by, tier, again=a.again, preflight=pre)
+            return ready(GitHub(repo), store, a.pr, a.by, tier, again=a.again, preflight=pre, sha=a.sha)
         labels = StoreLabels(store, log=lambda s: print(s, file=sys.stderr), since=a.marked_after)
         q = Queue(a.workdir, remote=remote, github=GitHub(repo), ready=labels.ready, store=store, shadow=a.shadow,
                   rules=Rules.parse(a.rules.read_text(), str(a.rules)) if a.rules else None,
