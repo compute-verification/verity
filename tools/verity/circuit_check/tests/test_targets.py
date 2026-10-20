@@ -2,7 +2,7 @@
 directory and import name stays in `REGISTERED`, and one whose module can't be judged fails by name.  `targets.root_functions`:
 every root function a binding file defines runs, the listed ones first.  `targets.definition`: a Definition-valued static in an
 id parses to the Definition it names, bound, recursively, and a record static to the record a catalog root binds, without the
-catalog."""
+catalog.  `targets.word_call_families`: a vocabulary kind that doesn't bind is refused by name."""
 from __future__ import annotations
 
 import sys
@@ -148,3 +148,16 @@ def test_a_record_static_a_catalog_root_binds_parses_without_the_catalog(monkeyp
         assert TG.definition(fid) is fn
     with pytest.raises(pytest.fail.Exception, match="the catalog was built"):
         TG.definition("GfResiduals_v1{S={000000000000}}")
+
+
+def test_a_vocabulary_kind_that_does_not_bind_leaves_the_call_families_refused_by_name(monkeypatch):
+    """A kind left out of `word_call_families` would make every check of its family judge the partition as no Call's, and
+    `test_every_call_the_suite_checks_is_partitioned` pass without it (#2765's `dsv4_indexer_compress` before its statics)."""
+    monkeypatch.setattr(TG, "_SHORT", {})
+    monkeypatch.setattr(TG, "_BOUND", {})
+    monkeypatch.setattr(TG, "load_registries", lambda: None)
+    monkeypatch.setattr(TG, "templates", lambda: [])
+    monkeypatch.setattr(TG, "_vocabulary_bindings", lambda: [("b1-eager-v3/dsv4_indexer_compress", "KeyError: 'ROPE'")])
+    with pytest.raises(RuntimeError, match=r"b1-eager-v3/dsv4_indexer_compress: KeyError: 'ROPE'"):
+        TG.word_call_families()
+    assert "words" not in TG._SHORT
