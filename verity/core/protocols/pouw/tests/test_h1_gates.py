@@ -6,15 +6,12 @@ instances of the tile's s8 dot classes in census/v1, `k` each by property/v1's f
 MACs: an H1 tile's served role is on its receipt's words, which take no MACs. Its committed and served words are the
 receipt's `2·(KS + m)` and the `2·KS` after its segment checkpoints.
 
-census/v1's own MAC counters disagree with the Lean on every row; the Lean is right, and the disagreements are pinned
-here (census/v1 is circuits'):
+census/v1's own MAC counters agree with the Lean on every row:
 
-* `served_macs + tail_atoms` misses the lanes' segment dots, `r·c·(K + 32 m)` MACs. `PRODUCTS` lists neither
-  `PouwSegDot_v2` nor `PouwSegDot0_v2`, so census/v1 counts their gates as no products, though property/v1's family table
-  classes `PouwSegDot_v1` as an s8 dot of 32. It counts only `z`'s `r·c·K`.
-* `served_macs` counts `z`'s products as served: census/v1 counts every product as served unless a family rule
-  (`FAMILY_COUNTS`, `S8Dot_v1`'s) splits it, while the Lean's served MACs are those of the served role (`roleOf`), and no
-  gate of the tile with MACs has that role.
+* its classes' products (`PRODUCTS`) are the row's MACs, `z`'s `r·c·K` and the lanes' segment dots' `r·c·(K + 32 m)`
+  (`PouwSegDot_v2` and `PouwSegDot0_v2`, 32 each);
+* it serves none of them and counts no tail: `GemmAccumulatorS8` and the segment dots count by `census.serves_none`, as
+  the Lean's served MACs are those of the served role (`roleOf`), and no gate of the tile with MACs has that role.
 """
 from __future__ import annotations
 
@@ -25,7 +22,7 @@ from pathlib import Path
 import pytest
 
 from verity.ml.circuits import stacking as P
-from verity.ml.circuits.census import census
+from verity.ml.circuits.census import PRODUCTS, census
 from verity.ml.circuits.defs import bind
 from verity.ml.circuits.ops.boolean import gemm as BG
 from verity.ml.circuits.program import Program
@@ -72,6 +69,6 @@ def test_h1_census(r, c, k, out):
     assert out == (sum(n for _, n in dots), macs, 0, 0, 2 * lay.sets, 2 * lay.ks)
     lane = sum(n * dot_k(f) for f, n in dots if f in LANE)
     assert lane == r * c * (k + 32 * lay.m) and macs - lane == r * c * k
+    assert sum(cl["instances"] * PRODUCTS.get(cl["family"], 0) for cl in doc["classes"].values()) == macs
     t = doc["totals"]
-    assert t["served_macs"] + t["tail_atoms"] == macs - lane
-    assert t["served_macs"] == r * c * k
+    assert t["served_macs"] == t["tail_atoms"] == 0

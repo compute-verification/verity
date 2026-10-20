@@ -41,6 +41,7 @@ PASSES = {"eager": (False, ()), "graphs": (True, ()), "omit-seeds": (False, ("se
 def capture(args) -> int:
     import torch
     from verity.core.protocols.pouw.audit import weights_root
+    from verity.core.protocols.pouw import verifier
     from verity.core.protocols.pouw.coins import Challenger
     from verity_vllm.protocol_options import pouw_pearl_c_device as PPD
 
@@ -53,7 +54,7 @@ def capture(args) -> int:
     kernel = PPD.Kernel.load(args.kernel, args.cubin)
     salt_key = PPD.new_salt_key(args.scheme)
     roots = PPD.weight_roots(kernel, weights, args.scheme, salt_key=salt_key)
-    challenger = Challenger(0)
+    challenger = Challenger(0, verifier.coins)
     opening = challenger.open("salt", weights_root(roots))
     xs = [torch.randn(m, weights[w].shape[1], device=dev, generator=gen).to(torch.bfloat16) for w, m in CALLS]
     s, log = PPD.scheme_of(args.scheme), {}

@@ -56,7 +56,7 @@ from pathlib import Path
 from typing import Any
 
 HARDWARE = {"vy-dc-h200": "H200", "vy-dc-b200": "B200", "vy-nebius-2": "RTX PRO 6000"}
-BRANCH = "cursor/kernels-maxtput-15ad"
+BRANCH = "main"
 HYPOTHESIS = "max throughput: native compiled vLLM at saturation against the Commit's arms"
 ABS = (("output_tokens_per_s", "output_tokens_per_s", 1, "tok/s"), ("requests_per_s", "requests_per_s", 1, "req/s"),
        ("scheduled_tokens_per_s", "scheduled_tokens_per_s", 1, "tok/s"),

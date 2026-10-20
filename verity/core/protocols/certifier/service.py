@@ -7,13 +7,19 @@ records (`CertifiedRecord`), egress leaf 0 and ingress leaf 1, and their heads, 
 Each leaf is `hm96-sha512/row/v2` over its bytes, salted with its own fresh 192-byte salt, in a `frame-v3-sha512` tree
 under one-stage's served domain, whose run is the link and the window. A record leaf's bytes are `encode`'s (the record
 head, then the certificate), and a head leaf's are the head's alone (`RecordHead.encode`). A proof that reads only the
-head, such as N3's, which holds the window's frames to the head's root, opens a head leaf in the head's two or three
-SHA-512 compressions instead of the certificate's 272. The certificates and heads are witness: the challenger sees the
-root, never a certificate or a head.
+head, such as N3's, which is designed to hold the window's frames to the head's root, opens a head leaf in the head's
+two or three SHA-512 compressions instead of the certificate's 272. The certificates and heads are witness: the
+challenger sees the root, never a certificate or a head.
 
 **Selection** is `All`: every link-window is checked, so an accepted outcome is the exhaustive fact. A registration is
 one link-window, one proof unit. Its `window` provenance is `{"kind": "served", "window": w}`, and the challenger holds w
-to the registration's order in the stream (`LinkWindows.register`), so the receipt's order is the link-window.
+to the registration's order in the stream (`LinkWindows.register`), so the receipt's order is the link-window. The
+network verdict of record is `LinkWindows.network_verdict`, the AND over the link's link-windows with no ε or share
+credit: it accepts only when every window of the egress profile is registered in order and its outcome of record
+accepted, so a rejected or late window, one with no outcome, and a gap in the registrations each reject the link. A
+run's is the AND over its links'. The datacenter model (`benchmarks/datacenter`, a Python model) builds no
+`LinkWindows` outcomes, so its account doesn't read it, though `Account.sound` is the same AND over its own port
+records.
 
 **Public items**, each with its reason (`PUBLIC`): the population (one), the window (its index, the order), the
 committed value's leaf count and domain, its salted root, the parameters digests, the charge and the occupancy profile
@@ -22,7 +28,10 @@ rejected link-window shows only the service's `reject`: the violation's kind sta
 
 **The occupancy profile** (`LinkWindows.occupancy`) is the placement's public occupancy for each end of the link: each
 window's T counts, the frames that end's record holds in each bucket, as the Program and the placement fix them. An end
-whose rows the Program reads rather than predicts, such as requests from outside, has none.
+whose rows the Program reads rather than predicts, such as requests from outside, has none. The profile is fixed before
+the run and bound by the spec's context, and nothing declared at run time sets it. So a port-window it leaves empty can
+pass N3's design from public occupancy, with no N3 unit: a head with frames where the profile says 0 fails N2's count
+check. An end without a profile has no such backing, since its occupancy is its record's own.
 
 **The check** is `LinkWindows.unit`, `NetworkLinkWindow` v2{EGRESS, INGRESS}, the AND of three parts:
 - the certificates' check, one opaque primitive over the two record leaves' committed digests with no gates, checked on
@@ -40,27 +49,38 @@ gadgets' Boolean bodies encode to about 140 MB and the proof service encodes the
 Program's digest names the check, so the spec, the stream and each registration bind to it.
 
 The count check is the part of the egress grid check that needs no frame's bytes, and the only grid check on ingress.
-It runs on every link-window, as a structural check must, while N3 runs on drawn windows. N3 recomputes the head's
-frames root over its N frames, which holds N to the head's Σ n_t up to a SHA-512 collision (`certificate`: leaf k is
-frame k for k < Σ n_t and E_0 after), so together they hold N to the profile's window total. In a proof it is an
-equality of each head's 32·T count bits with the profile's row, 32·T − 1 ANDs a head (19,199 at T = 600), beside the
-head's opening (`head_check.size`).
+It runs on every link-window, as a structural check must. In a proof it is an equality of each head's 32·T count bits
+with the profile's row, 32·T − 1 ANDs a head (19,199 at T = 600), beside the head's opening (`head_check.size`).
+
+N3, the content check, is a design and the simulator's behaviour, not part of this protocol: a prototype unit evaluated
+in the clear (`benchmarks/network_sim`, "N3 in zero knowledge"), in no proof-service Spec and not proved. Its design
+runs it on every port-window that recorded frames, recomputing the head's frames root over its N frames, which would
+hold N to the head's Σ n_t up to a SHA-512 collision (`certificate`: leaf k is frame k for k < Σ n_t and E_0 after).
 
 Its verifier of record is `LinkWindows.verify`, which runs on the host and reads the opening: the certified records and
 their four salts. It accepts when
 - the opening reproduces the registered root under the link-window's domain;
 - each end's head check accepts (`head_check.reference`, which the tests hold to the circuit);
-- the audit (`audit.Audit`) accepts both records under the certifier's key and session: the egress record against the
-  Program's grid under the declared syncs, and the ingress record on its status and parameters.
+- the audit (`audit.Audit`) accepts both records under the certifier's key and session, comparing no grid
+  (`check_link(grid=False)`): the egress record on its status, its signature and the declared syncs, and the ingress
+  record on its status and parameters.
 
-The audit compares the certified egress digest with the Program's grid in the clear on every link-window, with a
-profile or without, so the frames' content is checked in full, as a structural check must be, and not only on the
-windows N3 draws. The head check runs beside it and holds the head's status, grid and counts, not its frames.
-`check_link(grid=False)` leaves the grid to the head check and the content to N3, and N2 switches to it once N3 runs on
-every window (NET-38).
+N2 compares no grid in the clear and takes no frames, so its claim is counts only: on every link-window the egress
+head's counts are the profile's (and the ingress head's, where that end declares one), which puts the link's timing at
+the profile. The egress grid is the head's counts filled with the head's frames in order (`grid.fill`), and the head's
+digest binds both, so the frames are the rest of the grid, and N2 says nothing of them. Until N3 is a proof-service
+unit with Selection `All`, nothing here holds the egress grid to the Program's.
 
-`LinkWindows.stand_in` is the verdict as it was before the head check: the in-the-clear audit with the egress grid
-compared, and each head's counts the profile's (`declares`). The tests hold `verify` to it on every link-window.
+N2 covers no lab or served link yet. A link whose egress end has no profile has no verdict (`ValueError`, failing
+closed): nothing would hold its egress timing. That is every link whose egress counts aren't fixed before the run, since
+they follow its run-time clock syncs or its requests' arrivals (the lab's and served traffic's), until a shaper fixes
+them (a constant row) or a unit holds them to the Program's under the declared syncs.
+
+`LinkWindows.stand_in` is the in-the-clear verdict, the Program's egress grid compared as it was before the head check,
+and each head's counts the profile's (`declares`). It reads the frames, so it is the tests' oracle, never a verdict:
+`verify` accepts every link-window it accepts, and differs from it only where the record's grid, at the profile's
+counts, isn't the Program's: in its frames, which N2 doesn't hold (N3's design would), or because the declared syncs
+move the Program's counts off the profile, which N2 holds the counts to instead.
 
 When the audit is the Lean check's (`lean_audit.Audit`), `audit.Audit` runs beside it as the reference: a link-window
 where the two differ rejects, and the verdict says `"by": "lean"` and carries the reference's accept bit (`reference`),
@@ -70,8 +90,9 @@ What that establishes, and what it doesn't: the outcome is accept exactly when t
 accept and the host audit accepts the committed records, and the outcome record binds the registered root, the draw and
 the delivered session. The verifier of record reads the witness, so it is not zero-knowledge: until the unit is proved,
 the certificates' check and the head checks run where the certificates may go. One clock per spatial unit across links
-(`Audit.syncs`) is not checked here: each registration is one link-window, checked alone. Content consistency (that the
-frames are the served computation's) is N3's.
+(`Audit.syncs`) is not checked here: each registration is one link-window, checked alone. The frames, their content
+and their order within the counts, are left to N3: an accepted outcome says nothing of them, so the claim is counts
+only (timing at the profile) until N3 is a proof-service unit with Selection `All`.
 """
 from __future__ import annotations
 
@@ -105,6 +126,7 @@ SPEC = "verity-network-certifier/service-spec/v0"
 SESSION = "verity-network-certifier/session/v0"
 STATEMENT = "verity-network-certifier/statement/v0"
 VERDICT = "verity-network-certifier/verdict/v0"
+NETWORK_VERDICT = "verity-network-certifier/network-verdict/v0"
 VALUE = "certificates"
 SCHEMA = SCHEMA_HM96_SHA512_ROW_V2
 VERIFIER = "network-audit"
@@ -185,6 +207,10 @@ def rows(records: Sequence[CertifiedRecord]) -> list[bytes]:
 
 def _sha512(obj: Any) -> str:
     return hashlib.sha512(canonical_json(obj)).hexdigest()
+
+
+_NO_PROFILE = ("N2 compares no egress grid, so a link whose egress end has no occupancy profile has no verdict: "
+               "nothing would hold its egress counts (declare LinkWindows.occupancy)")
 
 
 def _accepts(egress: Sequence[Any], ingress: Sequence[Any], window: int) -> bool:
@@ -370,11 +396,12 @@ class LinkWindows:
                                    tuple(level[(i >> k) ^ 1] for k, level in enumerate(levels[:-1])), T))
         return out
 
-    def _audit(self, audit: Any, opening: Opening, frames: Sequence[LogicalFrame],
-               syncs: Sequence[ClockSync]) -> tuple[list[Any], list[Any]]:
+    def _audit(self, audit: Any, opening: Opening, syncs: Sequence[ClockSync],
+               frames: Sequence[LogicalFrame] | None = None) -> tuple[list[Any], list[Any]]:
+        """The audit of both records; the egress grid compared with the Program's only when `frames` are given."""
         w, (egress, ingress) = opening.window, opening.records
-        out = audit.check_link(self.link, [egress], frames, list(syncs)[:w + 1], self.sync_set, self.params, key=self.key,
-                               session=self.certifier_session)
+        out = audit.check_link(self.link, [egress], frames or (), list(syncs)[:w + 1], self.sync_set, self.params,
+                               key=self.key, session=self.certifier_session, grid=frames is not None)
         inn = audit.check_ingress_link(self.link, [ingress], w + 1, key=self.key, params=self.ingress_params,
                                        session=self.certifier_session)
         return out, inn
@@ -385,19 +412,19 @@ class LinkWindows:
             raise ValueError("the opening is not the registered link-window's")
         return reg["roots"][0]["root"]
 
-    def verify(self, opening: Opening, draw: S.Draw, frames: Sequence[LogicalFrame],
-               syncs: Sequence[ClockSync]) -> dict[str, Any]:
+    def verify(self, opening: Opening, draw: S.Draw, syncs: Sequence[ClockSync]) -> dict[str, Any]:
         """The verdict of record on the delivered opening: accepted when it reproduces the registered root under the
-        link-window's domain, both head checks accept, and the audit accepts both records, comparing the egress grid
-        with the Program's in the clear on every link-window (the module docstring). `frames` are the egress Program's
-        logical frames and `syncs` the declared clock syncs of windows 0 … w. The verdict reports the public outputs and
-        never the violation's kind."""
+        link-window's domain, both head checks accept, and the audit accepts both records, comparing no grid (the module
+        docstring). `syncs` are the declared clock syncs of windows 0 … w. The verdict reports the public outputs and
+        never the violation's kind. Raises `ValueError` on a link with no egress occupancy profile."""
+        if self.occupancy[0] is None:
+            raise ValueError(_NO_PROFILE)
         root = self._registered(opening, draw)
         w, (egress, ingress) = opening.window, opening.records
         sealed = self.root(opening) == root
         headed = all(i is not None and HC.reference(i) for i in self.head_checks(opening, bytes.fromhex(root)))
         audit = Audit()
-        out, inn = self._audit(audit, opening, frames, syncs)
+        out, inn = self._audit(audit, opening, syncs)
         accepted = sealed and headed and _accepts(out, inn, w)
         public = {"verdict": int(accepted), "deadline": int(egress.head.deadline and ingress.head.deadline)}
         sessions = [self.session(opening, draw)]
@@ -413,11 +440,11 @@ class LinkWindows:
 
     def stand_in(self, opening: Opening, draw: S.Draw, frames: Sequence[LogicalFrame],
                  syncs: Sequence[ClockSync]) -> bool:
-        """`verify`'s accept bit as it was before the head check, the reference its tests hold `verify` to: the opening
-        reproduces the registered root, the host audit (`audit.Audit`) accepts both records with the egress grid
-        compared in the clear, and each head's counts are the profile's (`declares`)."""
+        """The in-the-clear accept bit, the tests' oracle: the opening reproduces the registered root, the host audit
+        (`audit.Audit`) accepts both records with the egress grid compared with the Program's, from its logical
+        `frames`, and each head's counts are the profile's (`declares`)."""
         root = self._registered(opening, draw)
-        out, inn = self._audit(host_audit.Audit(), opening, frames, syncs)
+        out, inn = self._audit(host_audit.Audit(), opening, syncs, frames)
         counted = all(self.declares(d, opening.window, r.head.counts) for d, r in enumerate(opening.records))
         return self.root(opening) == root and counted and _accepts(out, inn, opening.window)
 
@@ -425,12 +452,41 @@ class LinkWindows:
         return {"format": STATEMENT, "check": self.spec.check.program, "link": self.link, "window": opening.window,
                 "root": self.root(opening)}
 
-    def outcome(self, stream: S.Stream, draw: S.Draw, opening: Opening, frames: Sequence[LogicalFrame],
-                syncs: Sequence[ClockSync]) -> S.Outcome:
+    def outcome(self, stream: S.Stream, draw: S.Draw, opening: Opening, syncs: Sequence[ClockSync]) -> S.Outcome:
         """`stream.outcome` on the verifier of record's verdict, with the root the opening reproduces as the session's,
         which one-stage's audit holds to the registered root."""
-        return stream.outcome(draw, {VERIFIER: self.verify(opening, draw, frames, syncs)}, self.statement(opening),
+        return stream.outcome(draw, {VERIFIER: self.verify(opening, draw, syncs)}, self.statement(opening),
                               session_roots={VALUE: self.root(opening)})
+
+    def network_verdict(self, stream: S.Stream, windows: int | None = None) -> dict[str, Any]:
+        """The link's network verdict of record: the AND over its link-windows 0 … `windows` − 1 (by default the egress
+        profile's windows, fixed before the run), with no ε and no share credit. It accepts only when, for every w,
+        the stream's w-th registration is window w and its outcome of record accepted. A window registered out of
+        order or not at all (a gap, or a run that stops short), a registration past the last window, a registration
+        with no outcome yet, and a rejected or late outcome each reject the link; `refused` lists their windows.
+        `records` is each window's outcome record SHA-512 (`S.Outcome.record`, None without one), and `digest` binds
+        the verdict to the stream and those records. Raises `ValueError` on a link with no egress occupancy profile, as
+        `verify` does, and on a stream that isn't this link's."""
+        if self.occupancy[0] is None:
+            raise ValueError(_NO_PROFILE)
+        if stream.spec.digest() != self.spec.digest():
+            raise ValueError("the stream is not this link's: its spec isn't LinkWindows.spec")
+        n = len(self.occupancy[0]) if windows is None else windows
+        if not (type(n) is int and n >= 1):
+            raise ValueError(f"a link has one or more link-windows, not {n!r}")
+        outcomes = {r["registration"]: r for r in stream.records}
+        records: list[str | None] = []
+        refused: list[int] = []
+        for w in range(max(n, len(stream.log))):
+            reg = stream.log[w] if w < len(stream.log) else None
+            body = outcomes.get(R.digest(reg)) if reg is not None and reg.get("window") == self.provenance(w) else None
+            records.append(None if body is None else _sha512(body))
+            if w >= n or body is None or body["symbol"] != S.ACCEPT:
+                refused.append(w)
+        accepted = not refused
+        digest = _sha512({"format": NETWORK_VERDICT, "stream": stream.digest, "windows": n, "records": records,
+                          "accepted": accepted})
+        return {"accepted": accepted, "windows": n, "refused": refused, "records": records, "digest": digest}
 
 
 __all__ = ["HEADS", "LEAVES", "LinkWindows", "OUTPUTS", "Opening", "PUBLIC", "SCHEMA", "VALUE", "encode", "rows",

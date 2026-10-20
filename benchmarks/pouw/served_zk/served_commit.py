@@ -61,8 +61,12 @@ judged through the proof service (`sampled_proofs.service`, P1: a `Stream`'s `re
   registration before an opening may refuse only what the opening refuses (``prelude``); the stream's own state stays
   Python's.
 - **The coins** are the epoch's (`pouw.coins`): the challenger process that holds the Streams holds the epoch's coin
-  challenger, whose commitment it publishes before the epoch (``LOG/coins.json``); with ``--state`` its entropy is the
-  serving controller's (`e2e.state_entropy`), so the pass's salt coin is one it opens.  A window's registration names its
+  challenger.  When the process starts, before it reads a request, that challenger draws the epoch's salt and draw coins
+  and their hm96 salts from the Lean verifier of record (`pouw.verifier.coins`: `pouw-check-difftest`'s ``coins``,
+  `IO.getRandomBytes`, A3) and commits to them, and the process publishes the commitment (``LOG/coins.json``) before
+  any request; with ``--state`` the entropy is instead the file the serving controller wrote from the same Lean coins
+  before it served the pass (`e2e.state_entropy`), so the pass's salt coin is one it opens.  No coin is read from
+  Python's generator.  A window's registration names its
   pass, and the challenger re-starts the pass's epoch from the pass's manifest under its own commitment
   (`pouw_pearl_c_device.manifest_epoch`): the pass's salt coin must open against it, as the salt coin, after the
   weights' root, and the pass's salt must be that coin's; a pass recorded before epoch coins (a beacon's salt) is read
@@ -101,6 +105,7 @@ from verity.ml.commitments.rowleaf import ROLE_W, ROLE_X, SCHEMA_HM96_SHA512_ROW
 from verity.ml.circuits.codec import canonical_json
 from verity.ml.randomness import Key, derive
 from verity.core.protocols.pouw import core_check as CC
+from verity.core.protocols.pouw import verifier as PV
 from verity.core.protocols.pouw import window as Wd
 from verity.core.protocols.pouw.circuit import leaves as L
 from verity.core.protocols.pouw.circuit import pc8
@@ -130,7 +135,9 @@ BUDGET = 1
 #: parameters give ``proof_deadline``: a day
 PROOF_DEADLINE = 86400.0
 #: the window's registration deadline (`Check.registration_deadline`, `Pouw.AcceptsBy`'s td), seconds on the challenger's
-#: clock from the epoch's salt coin's release, unless ``params --registration-deadline`` gives another: an hour
+#: clock from the epoch's salt coin's release: the challenger's ``salt`` request, which opens that coin (drawn when the
+#: challenger process started, from the Lean verifier's coins or ``--state``) after the weights' root.  Unless
+#: ``params --registration-deadline`` gives another: an hour
 REGISTRATION_DEADLINE = 3600.0
 NO_DEADLINE = ("the window's parameters name no registration_deadline, so the service would accept a window EndToEndWindow "
                "doesn't cover: write them with `served_commit.py params` (REGISTRATION_DEADLINE, or --registration-deadline)")
@@ -224,7 +231,8 @@ def law_of(params: dict, ell: int) -> dict:
 def spec_of(params: dict, ell: int, predates_deadline: bool = False) -> S.Spec:
     """P1's Spec of a window at level `ell`: the entries and W committed, subset:K′ of the level, the tile template's
     Program and query as the check, and `LAYOUT` declared.  The check carries ``registration_deadline`` from `params`
-    (seconds on the challenger's clock from the epoch's salt coin's release, `Pouw.AcceptsBy`'s td), and parameters
+    (seconds on the challenger's clock from the epoch's salt coin's release, the ``salt`` request that opens it,
+    `Pouw.AcceptsBy`'s td: `REGISTRATION_DEADLINE`), and parameters
     without one raise `ValueError` (`NO_DEADLINE`) unless `predates_deadline`, a recorded window's replay.  Its proof
     deadline is ``proof_deadline`` in `params`, else `PROOF_DEADLINE`."""
     if params.get("registration_deadline") is None and not predates_deadline:
@@ -1139,7 +1147,8 @@ def answer(ch: Challenger, line: str) -> str | None:
 
 
 def cmd_challenger(a) -> int:
-    """The challenger's process: the epoch's coins, their commitment published to LOG/coins.json before any request; then
+    """The challenger's process: the epoch's coins, drawn now from the Lean verifier of record (`pouw.verifier.coins`) or
+    read from ``--state``, their commitment published to LOG/coins.json before any request; then
     one JSON request a line on stdin (`handle`), one ``WORD {json}`` reply a line on stdout, each also appended to
     LOG/requests.jsonl, each coin it opened to LOG/openings.jsonl, and each request's verdicts of record, Lean's and
     Python's, to LOG/witness.jsonl (a window that ends before its outcome keeps them there); it ends at end of input or
@@ -1153,7 +1162,7 @@ def cmd_challenger(a) -> int:
         from e2e import state_entropy
         coins = Coins(a.epoch, state_entropy(a.state))
     else:
-        coins = Coins(a.epoch)
+        coins = Coins(a.epoch, PV.coins)
     (log / "coins.json").write_text(json.dumps(coins.commitment.to_json(), sort_keys=True))
     ch = Challenger(_json(a.params), coins, lean_sampler(a.lean, log / "draws.jsonl") if a.lean else python_sampler,
                     record=OR.Record(lean=False if a.python_record else None))
@@ -1232,7 +1241,7 @@ def coin_variant(man: dict, coins: CoinCommitment, opening: CoinOpening, case: s
     that coin's (``resalted``)."""
     o = opening
     if case == "foreign":
-        o = Coins(coins.epoch).open("salt", opening.after)
+        o = Coins(coins.epoch, PV.coins).open("salt", opening.after)
     elif case == "early":
         o = CoinOpening(o.epoch, o.label, bytes(len(o.after)), o.coin, o.salt, o.path)
     elif case == "mislabelled":
@@ -1333,7 +1342,10 @@ def main(argv=None) -> int:
     p.add_argument("--max-tokens", type=int, default=MAX_TOKENS,
                    help="the max_tokens the verifier's request set, each row served to it under ignore_eos")
     p.add_argument("--registration-deadline", type=float, default=REGISTRATION_DEADLINE,
-                   help="seconds on the challenger's clock from the salt coin's release (default: REGISTRATION_DEADLINE)")
+                   help="td: seconds on the challenger's clock from the salt coin's release, when the challenger's `salt` "
+                        "request opens it after the weights' root; the coin itself was drawn when the challenger process "
+                        "started, from the Lean verifier's coins (pouw.verifier.coins) or --state (default: "
+                        "REGISTRATION_DEADLINE)")
     p = sub.add_parser("commit")
     for x in ("pass_dir", "params", "out"):
         p.add_argument(x)
@@ -1355,7 +1367,9 @@ def main(argv=None) -> int:
                                   "(default: its Python twin, stream_subset)")
     p.add_argument("--epoch", type=int, default=0, help="the epoch whose coins the challenger holds (default 0)")
     p.add_argument("--state", help="the file holding the challenger's entropy, the one the serving controller's coins drew "
-                                   "from (serve.sh's $WORK/coin-state/<run id>); default: fresh from os.urandom")
+                                   "from (serve.sh's $WORK/coin-state/<run id>, written from the Lean verifier's coins "
+                                   "before serving); default: fresh from the Lean verifier of record when this process "
+                                   "starts (pouw.verifier.coins, IO.getRandomBytes), before it publishes LOG/coins.json")
     p.add_argument("--python-record", action="store_true", help=PYTHON_RECORD)
     p = sub.add_parser("replay")
     for x in ("params", "log", "out"):
