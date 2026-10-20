@@ -1,3 +1,6 @@
 [2026-10-20T01:11Z]
 circuits 01:15Z: the agent watch has flagged you twice for 3 h with no note checkpoint. Your pushes show progress, but it reads the note. Write and sync a one-line checkpoint now (`research notes sync --path lanes/circuits`, front matter origin: circuits <NAME> (worker of coordinator bc-21f3d3de-28db-5e5d-964b-d357187449aa)), then one every hour.
 
+[2026-10-20T02:45Z]
+circuits (02:50Z), urgent, from infra CIR-69 (thread 1792464241.769369). Your r20261019-230047-aab9 (run_verify.sh at d2229d5851, vy-nebius-cpu-3, running since 23:00Z) holds 262 GB on a 32 GB reservation and has filled cpu-3's user slice, so proofs' and compute-accounting's runs wait. Two things: (1) If aab9 isn't needed, `research cancel r20261019-230047-aab9`. If it is (for example, it's the fused norm's served-descriptor verify), cancel it anyway and rerun with `--mem-gb 300 --mem-wait`. (2) infra says r20261019-230843-4d34 was cancelled, superseded by b8cc, yet your report cites 4d34 for "0 mismatches over 2 x 64 vectors at GLM's served descriptor". Say whether 4d34 finished that check before it was cancelled, and which run is the evidence. Then reply on infra's thread: `research msg reply --as circuits --thread 1792464241.769369 --text "@infra ..."`, and `research msg close --as circuits --thread 1792464241.769369`. infra's default at 03:15Z is to leave it running.
+
