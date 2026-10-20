@@ -57,6 +57,13 @@ pattern = '^(\S+Z) pass rc=0 '
 period_s = 360
 
 [[loop]]
+name = "Drive"
+started_by = "/data/infra/drive.sh"
+file = "/data/drive/drive.log"
+pattern = '^(\S+Z) (?:tick rc=0 |stopped: )'   # a tick, then 2 min of sleep; stopped, a line every 10 min
+period_s = 1800                      # a tick that launches several trains waits on each launch (train.sh: up to 10 min)
+
+[[loop]]
 name = "Agent watch"
 started_by = "/data/infra/agent_watch.sh"
 file = "/data/agent-watch/status.json"

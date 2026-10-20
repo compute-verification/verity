@@ -24,6 +24,7 @@ editing on the pod.
 | Budget guard (`research pods guard --supervise`) | `post_start.sh` | `/data/guard-src` (a `main` tree; its `COMMIT` file names it) | `/root/.research/pods/guard-budgets.log` |
 | Resource steward (`research notes watch ... --lease --standby`) | `steward-run.sh`, deployed as `/data/steward/run.sh` | `/data/steward/verity` (a clone of this repo) | `/data/steward/watch.log` |
 | `/tmp` sweep, hourly | `tmp_sweep.sh`, deployed as `/data/infra/tmp_sweep.sh` | the script | `/data/infra/tmp-sweep.log` |
+| Drive (INF-129): `research queue drive`, ci's landing automation, one tick every 2 min as lane ci, flags from main's `tools/verity/check/drive.toml` plus `/data/drive/args`; sources `r2.env` and `relay.env` (its `GH_TOKEN` pushes `next` and `main` through the checkout's credential helper, which reads the variable; `gh` is `/data/drive/bin/gh`); nodes as `research run --on` reaches them, from the steward's notes clone's `machines.d` | `drive.sh`, deployed as `/data/infra/drive.sh`; no tick while `/data/drive/stopped` exists: ci runs `/data/infra/drive.sh stop` (waits for the tick in progress), `start`, `status`, or `once --dry-run` | `/data/drive/verity` (a checkout of origin/main it fetches each tick; its `tools/research`) | `/data/drive/drive.log`; the queue's clone and `verity.state.json` in `/root/.research/queue/`; the store's cache in `/root/drive-store` |
 | Store index, every 5 min (`research data index --postgres` into Neon's `store_private`, and `--public` into `store_public` once `store-export.env` exists) | `store_index.sh`, deployed as `/data/infra/store_index.sh` | `/data/infra/store-index-src` (a `tools/research` tree; its `COMMIT` file names it) | `/data/infra/store-index.log` |
 | Fixture export, every 5 min (`research data export` of main's `fixtures/artifacts.json` to the public export, so nobody exports a new fixture by hand; the relay's `fixtures-public` monitor alerts on one still missing) | `fixtures_export.sh`, deployed as `/data/infra/fixtures_export.sh` | `/data/infra/fixtures-export-repo` (a checkout of origin/main it fetches each pass with the deploy key) | `/data/infra/fixtures-export.log` |
 | Store panels, every 10 min | `/data/console/console-loop.sh` (`tools/research/console/`) | `/data/console` | `/data/console/console.log` |
@@ -46,6 +47,13 @@ watch reads each sweep, so no restart is needed. It is then woken (or, with `--w
 twice that interval. A handle that isn't listed (comms wakes on its inbox, issue events and one-shot timers) is woken only by
 a doorbell pending in its inbox, never on idle time alone.
 
+Drive moved here from ci's VM (INF-129). `post_start.sh` starts its loop, and the loop ticks only while `/data/drive/stopped`
+is absent, so a reset brings drive back in whichever state ci left it. Two drives must never tick against one `next`: ci
+stops its own loop before `drive.sh start` here. Its checkout was cloned over https with `--filter=blob:none`, with
+`notes_sync.CREDENTIAL_HELPER`'s helper for `GH_TOKEN` as its local `credential.helper`; the read-only deploy key can't push.
+`drive.sh start` refuses until a dry-run push of `next` with that token goes through: the token needs Contents and Pull
+requests read and write on this repository (the API's `permissions.push` is its owner's role, not the token's).
+
 The steward holds a lease, so a second copy stands by instead of running. Its `--reap` reads `lane/*` tips from origin with the
 read-only deploy key; if `watch.log` shows `FETCH-FAILED`, remove `--reap` until the fetch works again.
 
@@ -62,6 +70,7 @@ read-only deploy key; if `watch.log` shows `FETCH-FAILED`, remove `--reap` until
 | `/data/uv` | `/root/.local/bin/uv`, `/root/.local/share/uv/python`, `/usr/local/bin/python3.12` | uv and CPython 3.12 |
 | `/data/steward` | `/workspace/steward` | the verity clone, the research-notes clone, the steward's store, `run.sh`, `render-src` |
 | `/data/guard-src` | `/workspace/guard-src` | the guard's code |
+| `/data/drive` | | drive's checkout (`verity`), `bin/gh`, `gh-config`, `args`, the stop file `stopped` and `drive.log` |
 | `/data/console` | `/workspace/console` | the console's loop, its code and its outbox |
 | `/data/chats` | `/workspace/chats` | the chats archive |
 | `/data/research`, `/data/research-control` | `/workspace/research`, `/workspace/research-control` | `research run` state and control worktrees |
@@ -84,6 +93,8 @@ $CP "cat > /data/infra/cloud_watch.sh && chmod +x /data/infra/cloud_watch.sh" < 
 $CP "cat > /data/infra/cloud_watch.py" < infra/control/cloud_watch.py
 $CP "cat > /data/infra/cloud_watch.toml" < infra/control/cloud_watch.toml
 $CP "/data/infra/cloud_watch.sh once --dry-run --digest"     # what it would post, posting nothing and writing no state
+$CP "cat > /data/infra/drive.sh && chmod +x /data/infra/drive.sh" < infra/control/drive.sh
+$CP "/data/infra/drive.sh once --dry-run"     # one tick that pushes, launches and posts nothing
 $CP "cat > /data/infra/agent_watch.sh && chmod +x /data/infra/agent_watch.sh" < infra/control/agent_watch.sh
 $CP "cat > /data/infra/agent_watch.py" < infra/ops/verity_ops/agent_watch.py
 $CP "cat > /data/agent-watch/timers.json" < infra/control/agent_watch_timers.json
