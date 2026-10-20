@@ -386,9 +386,44 @@ def _reserve_ok(b: Mapping[str, Any]) -> bool:
             and bool(_UTC.fullmatch(b["started_utc"])) and b.get("expires_utc") == _later(b["started_utc"], b["minutes"]))
 
 
+def _period(i: int, kind: str, schema: Any, e: Mapping[str, Any], periods: dict[str, dict[str, Any]],
+            current: dict[str, str], windows: Mapping[str, Mapping[str, Any]], by_session: Mapping[str, str]) -> None:
+    """`Ledger.verify`'s period-open or period-close entry `e` (entry `i`), recorded in `periods` and `current` (each
+    lane's open period), its close listing exactly its windows and their outcomes; `CoinError` otherwise."""
+    body = e["body"]
+    name, lane = body.get("period"), body.get("lane")
+    if schema != LEDGER_SCHEMA or not (_named(name) and _named(lane)):
+        raise CoinError(f"ledger entry {i} is a {kind} that doesn't name its period and its lane (v2)")
+    if kind == "period-open":
+        if name in periods:
+            raise CoinError(f"ledger entry {i} opens period {name} a second time: a period's name is used once")
+        if lane in current:
+            raise CoinError(f"ledger entry {i} opens period {name} while lane {lane}'s period {current[lane]} is open")
+        cap, circuit = body.get("cap"), body.get("circuit")
+        if (cap is not None or circuit is not None) and not (
+                type(cap) is int and _CAP[0] <= cap <= _CAP[1] and type(circuit) is str and _ROOT.fullmatch(circuit)):
+            raise CoinError(f"ledger entry {i}: period {name}'s cap is a positive integer and its circuit a "
+                            "SHA-512 in lowercase")
+        periods[name] = {"lane": lane, "open": e, "close": None, "windows": [], "cap": cap, "circuit": circuit}
+        current[lane] = name
+    else:
+        p = periods.get(name)
+        if p is None or p["close"] is not None or p["lane"] != lane:
+            raise CoinError(f"ledger entry {i} closes period {name}, which isn't lane {lane}'s open period")
+        outcomes = [{"root": by_session.get(s), "session": s,
+                     "complete": s in by_session and windows[by_session[s]]["end"] is not None
+                     and windows[by_session[s]]["end"]["body"].get("complete") is True} for s in p["windows"]]
+        if (body.get("windows") != outcomes
+                or body.get("complete") is not (bool(outcomes) and all(w["complete"] for w in outcomes))):
+            raise CoinError(f"ledger entry {i} closes period {name} without listing exactly its windows and "
+                            "their outcomes")
+        p["close"] = e
+        del current[lane]
+
+
 # TODO(#2953): core's `challenger.ledger_head` and `audited_session` read infra's v1-then-v2 ledger and its signed close
 # there, so this mirror of infra's verify_ledger and verify_periods (the period kinds, the two-step reserve and open,
-# `period_reason`), `evidence` and `released_v2` go once #2953 is on main; this module then keeps only vllm's checks (a
+# `period_reason`), `evidence` and `released_sealed` go once #2953 is on main; this module then keeps only vllm's checks (a
 # session a window, the commitment before the first coin, the slot tables).
 @dataclass(frozen=True)
 class Ledger:
@@ -506,39 +541,7 @@ class Ledger:
                 windows[root] = {"reserve": reserved, "open": e, "end": None}
                 opened_at[root], by_session[sid] = q, root
             elif kind in PERIOD_KINDS:
-                name, lane = body.get("period"), body.get("lane")
-                if schema != LEDGER_SCHEMA or not (_named(name) and _named(lane)):
-                    raise CoinError(f"ledger entry {i} is a {kind} that doesn't name its period and its lane (v2)")
-                if kind == "period-open":
-                    if name in periods:
-                        raise CoinError(f"ledger entry {i} opens period {name} a second time: a period's name is used "
-                                        "once")
-                    if lane in current:
-                        raise CoinError(f"ledger entry {i} opens period {name} while lane {lane}'s period "
-                                        f"{current[lane]} is open")
-                    cap, circuit = body.get("cap"), body.get("circuit")
-                    if (cap is not None or circuit is not None) and not (
-                            type(cap) is int and _CAP[0] <= cap <= _CAP[1] and type(circuit) is str
-                            and _ROOT.fullmatch(circuit)):
-                        raise CoinError(f"ledger entry {i}: period {name}'s cap is a positive integer and its circuit a "
-                                        "SHA-512 in lowercase")
-                    periods[name] = {"lane": lane, "open": e, "close": None, "windows": [], "cap": cap,
-                                     "circuit": circuit}
-                    current[lane] = name
-                else:
-                    p = periods.get(name)
-                    if p is None or p["close"] is not None or p["lane"] != lane:
-                        raise CoinError(f"ledger entry {i} closes period {name}, which isn't lane {lane}'s open period")
-                    outcomes = [{"root": by_session.get(s), "session": s,
-                                 "complete": s in by_session and windows[by_session[s]]["end"] is not None
-                                 and windows[by_session[s]]["end"]["body"].get("complete") is True}
-                                for s in p["windows"]]
-                    if (body.get("windows") != outcomes
-                            or body.get("complete") is not (bool(outcomes) and all(w["complete"] for w in outcomes))):
-                        raise CoinError(f"ledger entry {i} closes period {name} without listing exactly its windows and "
-                                        "their outcomes")
-                    p["close"] = e
-                    del current[lane]
+                _period(i, kind, schema, e, periods, current, windows, by_session)
             elif kind == "end":
                 root = by_session.get(sid)
                 if root is None or windows[root]["end"] is not None:
@@ -594,7 +597,7 @@ _ROOT_EVENT = ["event", "index", "label", "received_at", "root"]
 _RELEASE_EVENT = ["after", "event", "index", "label", "released_at"]
 
 
-def released_v2(path: str | Path, commitment: LiveCommitment) -> dict[str, tuple[bytes, ...]]:
+def released_sealed(path: str | Path, commitment: LiveCommitment) -> dict[str, tuple[bytes, ...]]:
     """The roots the release log at `path` of an infra v2 session (JSON lines, its times floats, no signed close: the
     sealing end entry stands in for it) shows the challenger received, by family in order, its head naming `commitment`,
     each root followed by its coin's release; `CoinError` for a missing, unreadable or malformed log, or another
@@ -628,7 +631,7 @@ def evidence(window: Mapping[str, Any], fetch: Fetch, key: ChallengerKey, verify
     end entry seals is the one it sealed (`SEALED` among them), its key is `key` (the one the ledger's open pins) and its
     record is signed for the open entry's host and layout (scheme, epoch, families); for a v2 end, the record's
     commitment root and LMS leaf are the end's ``commitment`` and ``record_leaf``, and the coins its release log shows each
-    family released (`released_v2`, under the commitment its record signs under `key`) are the end's ``released``."""
+    family released (`released_sealed`, under the commitment its record signs under `key`) are the end's ``released``."""
     opened, end = window["open"], window["end"]
     sid, body = opened["session"], opened["body"]
     if end is None:
@@ -668,7 +671,7 @@ def evidence(window: Mapping[str, Any], fetch: Fetch, key: ChallengerKey, verify
         if leaf != sealed.get("record_leaf"):
             raise CoinError(f"session {sid}'s record is signed at LMS leaf {leaf}, not {sealed.get('record_leaf')}, the "
                             "leaf its end entry records")
-        received = released_v2(out / remote.RELEASES, trusted_commitment(out / remote.RECORD, key, verify))
+        received = released_sealed(out / remote.RELEASES, trusted_commitment(out / remote.RECORD, key, verify))
         released = {label: len(r) for label, r in received.items()}
         if released != sealed.get("released"):
             raise CoinError(f"session {sid}'s release log shows {released} coins released, not {sealed.get('released')}, "
@@ -718,7 +721,7 @@ def session_reason(commits: Mapping[str, Any], ledger: Ledger, fetch: Fetch, reg
     """Why the window (its H1 commitment `commits`) isn't held to the one session the auditor's `ledger` opened for its
     Commit's root, ended closed and complete under the window's commitment (`held`), with that session's coins
     (its ``out/`` as `fetch` gives it, `evidence`, checked as `trusted_rounds_reason` checks a session's, over its
-    unsigned log, `released_v2`); None when it is. `registered`
+    unsigned log, `released_sealed`); None when it is. `registered`
     is the weights' root the period registered and `commit` the window's Commit root as the verifier holds it, which the
     window's must be. Fails closed."""
     if commits.get("coin_source") != "challenger":
@@ -736,7 +739,7 @@ def session_reason(commits: Mapping[str, Any], ledger: Ledger, fetch: Fetch, reg
         return f"session {sid}'s evidence is not trusted: {e}"
     try:
         trusted = trusted_commitment(out / remote.RECORD, ledger.key, verify)
-        received = released_v2(out / remote.RELEASES, trusted)
+        received = released_sealed(out / remote.RELEASES, trusted)
     except CoinError as e:
         return f"the challenger's session is not trusted: {e}"
 
@@ -796,5 +799,5 @@ def period_reason(ledger: Ledger, period: str, accepted: Sequence[str]) -> list[
 __all__ = ["ENTRY_TAGS", "Fetch", "LEDGER_ROLE", "LEDGER_SCHEMA", "LEDGER_V1", "Ledger", "PERIOD_KINDS", "REPLY_FIELDS",
            "RESERVED", "SCHEME", "SEALED", "SESSION_FIELDS", "address", "carried", "connect", "draw_reason",
            "entry_message", "evidence", "families", "finish", "held", "leaf_of", "lines_of", "lms_verify", "pinned_key",
-           "period_reason", "refusals", "released_v2", "root_of", "session", "session_of", "session_reason",
+           "period_reason", "refusals", "released_sealed", "root_of", "session", "session_of", "session_reason",
            "trusted_rounds_reason"]
