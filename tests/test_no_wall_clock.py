@@ -43,6 +43,8 @@ ALLOWED: dict[str, str] = {
     "integrations/vllm/tests/program/beyond_gemm.py": "a GPU probe script (not collected) that reports its own wall time",
     "integrations/vllm/tests/program/crosscheck.py::main": "the cross-check script's summary line reports its wall time; no test runs main",
     "integrations/vllm/tests/program/padded_commit_tiny.py": "records build/commit timings in its row; test_padded_commit_tiny asserts none of them",
+    "integrations/vllm/tests/protocol_options/local_gate.py::_now":
+        "the by-hand local gate (not collected) gives infra's auditor.py the times its signed entries record, as on vy-challenger-1",
     "integrations/vllm/tests/protocol_options/pouw_h1_gpu.py::run": "the GPU run records its install, serve and compile seconds; nothing reads them",
     "integrations/vllm/tests/protocol_options/pouw_h1_gpu.py::compile_from": "the host compile records its seconds; nothing reads them",
     "integrations/vllm/tests/protocol_options/pouw_h1_gpu.py::fill": "the GPU run records its serve and step seconds; nothing reads them",
