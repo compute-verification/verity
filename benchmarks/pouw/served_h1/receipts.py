@@ -24,6 +24,7 @@ from __future__ import annotations
 
 import ctypes as C
 import hashlib
+import inspect
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -38,6 +39,11 @@ M32 = (1 << 32) - 1
 R = C_ = 32
 LANES = HT.Layout(R, C_, 64).lanes
 HERE = Path(__file__).resolve().parent
+#: whether this tree's h1tile has `PouwH1Tile_v2`'s dead-tile mask (#2639), `reference(..., gated=...)`: a dead tile's
+#: receipt is zero only under it, so without it the gate refuses a dead tile (`NO_MASK`) and checks only live ones
+MASKED = "gated" in inspect.signature(HT.reference).parameters
+NO_MASK = ("h1tile.reference has no `gated` parameter: a dead tile's zero receipt needs PouwH1Tile_v2's dead-tile mask "
+           "(#2639), which this tree's h1tile lacks")
 
 
 def layout(k: int) -> HT.Layout:
@@ -252,11 +258,16 @@ def call_receipts(call: Call, salt: bytes, base: int, root_a: bytes, root_b: byt
 
 def reference(call: Call, salt: bytes, base: int, root_a: bytes, root_b: bytes, u: int,
               gated: bool = True) -> tuple[list[int], list[int]]:
-    """`h1tile.reference` on unit u of the call: (z, receipt); `gated=False`, a dead tile's receipt as its noise gives it."""
+    """`h1tile.reference` on unit u of the call: (z, receipt); `gated=False`, a dead tile's receipt as its noise gives it.
+    Without the dead-tile mask (`MASKED`), a dead tile under `gated` raises `NO_MASK`."""
     i, j = call.units[u]
     a = (call.a[R * i:R * i + R].to(torch.int64).cpu() & 0xFF).tolist()
     b = (call.b[C_ * j:C_ * j + C_].to(torch.int64).cpu() & 0xFF).tolist()
-    return HT.reference(a, b, salt, base + u, (root_a, root_b), gated=gated)
+    if MASKED:
+        return HT.reference(a, b, salt, base + u, (root_a, root_b), gated=gated)
+    if gated and not any(v for row in a for v in row):
+        raise RuntimeError(NO_MASK)
+    return HT.reference(a, b, salt, base + u, (root_a, root_b))
 
 
 def gated_receipts(call: Call, admit, salt: bytes, base: int, root_a: bytes, root_b: bytes, cubin: Cubin | None = None,
@@ -273,10 +284,13 @@ def gated_receipts(call: Call, admit, salt: bytes, base: int, root_a: bytes, roo
 
 def gated_reference(call: Call, admit, salt: bytes, base: int, root_a: bytes, root_b: bytes, u: int) -> list[int]:
     """Unit u's receipt under the call's admit bits: `h1tile.reference`'s when a slot of its rows is selected, else zero
-    words (which `PouwH1Tile_v2` gives a tile of all-zero rows, the canonical empty rows)."""
+    words (which `PouwH1Tile_v2` gives a tile of all-zero rows, the canonical empty rows); without that mask a dead unit
+    raises `NO_MASK`."""
     i, _ = call.units[u]
     if bool(np.asarray(admit[R * i:R * i + R]).any()):
         return reference(call, salt, base, root_a, root_b, u)[1]
+    if not MASKED:
+        raise RuntimeError(NO_MASK)
     return [0] * (2 * layout(call.a.shape[1]).sets)
 
 
