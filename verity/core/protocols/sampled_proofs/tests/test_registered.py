@@ -212,6 +212,55 @@ def test_a_read_that_is_not_one_whole_row_is_refused():
         G.reads(_program(body=mixed), Q, {"W": 2})
 
 
+@pytest.mark.parametrize("schema", [G.SCHEMA_V2, G.SCHEMA_SEG])
+@pytest.mark.parametrize("word_bits", [16, 32])
+def test_a_bit_row_value_is_its_leaves_bit_row_under_its_ports_schema(schema, word_bits):
+    """A value a bit-row port reads is committed in that port's format: each row the bit row of its leaves (`row_words`
+    unpadded, little-endian), `x` its `sha512/row/v2` or `sha512/row-seg/v1` digest, each leaf framed under the port's
+    schema, so the root differs from the `row/v1` root of the same rows and salts, and a read opens it only in its format.
+    The domain is the same in every format."""
+    from verity.ml.commitments.rowleaf import bit_row, row_leaf, sha512_row_seg_digest, sha512_row_v2_digest
+
+    prog = P.program_digest(_program(w=word_bits))
+    rows = [[0x3727C5AC & ((1 << word_bits) - 1), 0x3E38AA3B & ((1 << word_bits) - 1)], [5, 6], [7, 8]]
+    salts = [bytes([r + 1]) * 192 for r in range(3)]
+    reg = G.Registered.commit(prog, "W", rows, salts, word_bits, schema)
+    v1 = G.Registered.commit(prog, "W", rows, salts, word_bits)
+    inst = hm96.SHA512
+    words = G.row_words(rows[0], word_bits, schema)
+    assert len(words) == 2 * word_bits // 16, "a bit row is its leaves' bits, no whole-block padding"
+    data, n = bit_row((words, 16))
+    assert n == 2 * word_bits and data == b"".join(int(v).to_bytes(word_bits // 8, "little") for v in rows[0])
+    digest = sha512_row_v2_digest(data, n) if schema == G.SCHEMA_V2 else sha512_row_seg_digest(data, n)
+    assert G.row_digest(rows[0], word_bits, schema) == digest
+    assert reg.bcs[0] == inst.commit_string(inst.default_key, digest, salts[0])
+    assert reg.domain.domain_id == v1.domain.domain_id and reg.root != v1.root
+    assert reg.levels[0][1] == row_leaf(reg.domain, 1, inst.tree_leaf(inst.default_key, reg.bcs[1]), schema)
+    for r in range(3):
+        assert G.verify_read(reg.domain, reg.root, r, reg.bcs[r], reg.path(r), schema)
+        assert not G.verify_read(reg.domain, reg.root, r, reg.bcs[r], reg.path(r))
+        other = G.SCHEMA_SEG if schema == G.SCHEMA_V2 else G.SCHEMA_V2
+        assert not G.verify_read(reg.domain, reg.root, r, reg.bcs[r], reg.path(r), other)
+    assert reg.schema == schema and "row_schema" not in reg.entry(), "the registration's entry is the same in every format"
+    with pytest.raises(ValueError, match="not 'hm96-sha512/row/v3'"):
+        G.Registered.commit(prog, "W", rows, salts, word_bits, "hm96-sha512/row/v3")
+
+
+def test_the_verifiers_reads_file_names_a_bit_row_values_format():
+    """`row_schema` is the reads file's key for a value read by a bit-row port (`schemas`), absent for `row/v1`, so a v1
+    file is the bytes it was."""
+    prog = _program()
+    reg = _registered(prog)
+    v1 = G.reads_file(prog, Q, {"W": 2}, {"W": reg.root.hex()})
+    for schema in (G.SCHEMA_V2, G.SCHEMA_SEG):
+        doc = G.reads_file(prog, Q, {"W": 2}, {"W": reg.root.hex()}, schemas={"W": schema})
+        assert doc["ports"]["w"] == {**v1["ports"]["w"], "row_schema": schema}
+        assert list(doc["ports"]["w"])[-2:] == ["row_schema", "reads"]
+    assert G.reads_file(prog, Q, {"W": 2}, {"W": reg.root.hex()}, schemas={"W": G.SCHEMA}) == v1
+    with pytest.raises(ValueError, match="not 'hm96-sha512/row/v3'"):
+        G.reads_file(prog, Q, {"W": 2}, {"W": reg.root.hex()}, schemas={"W": "hm96-sha512/row/v3"})
+
+
 def test_the_verifiers_reads_file():
     """Everything in the file but the root is the verifier's own, from its program: a registration that named another leaf
     count or domain would change nothing here."""
