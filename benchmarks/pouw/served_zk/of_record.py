@@ -121,7 +121,8 @@ def py_registered(x: dict) -> dict:
 
 def py_opening(x: dict) -> str | None:
     p, c = _params_commitment(x)
-    return CC.opening(p, c, x["units"], x["unit"], bytes.fromhex(x["pub"]), x["opening"])
+    salt = None if x.get("salt") is None else bytes.fromhex(x["salt"])
+    return CC.opening(p, c, x["units"], x["unit"], bytes.fromhex(x["pub"]), x["opening"], salt)
 
 
 def py_pass(x: dict) -> dict:
