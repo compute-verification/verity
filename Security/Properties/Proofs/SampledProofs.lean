@@ -546,12 +546,8 @@ theorem outputRoot_some (log : Array Json) (n : Nat) (d p : String) :
     simp only [Option.bind_some, Option.some.injEq, exists_eq_left']
     have hb : (int? (getD r "leaves") == some (n : Int)) = true ↔ int? (getD r "leaves") = some (n : Int) :=
       beq_iff_eq
-    revert hb
-    generalize int? (getD r "leaves") == some (n : Int) = bl
-    generalize getD r "domain" = jd
-    generalize getD r "root" = jr
-    intro hb
-    cases bl <;> cases jd <;> cases jr <;> simp_all
+    rw [← hb]
+    cases (int? (getD r "leaves") == some (n : Int)) <;> cases (getD r "domain") <;> cases (getD r "root") <;> simp
 
 /-- Rewriting the domain of `v`'s entries keeps every value's entry and its leaf count. -/
 theorem find_map_domain (mine : Array Registered.Entry) (v dom u : String) :
@@ -570,14 +566,20 @@ theorem find_leaves_congr {m m' : Array Registered.Entry} {u : String}
     (∀ want, m'.find? (·.value == u) = some want → P want.leaves) ↔
       ∀ want, m.find? (·.value == u) = some want → P want.leaves := by
   revert h
-  rcases m'.find? (·.value == u) with _ | a <;> rcases m.find? (·.value == u) with _ | b <;> intro h
-  · exact Iff.rfl
-  · simp at h
-  · simp at h
-  · have hab : a.leaves = b.leaves := by simpa using h
-    constructor
-    · intro H w hw; cases hw; rw [← hab]; exact H a rfl
-    · intro H w hw; cases hw; rw [hab]; exact H b rfl
+  cases h1 : m'.find? (·.value == u) with
+  | none =>
+    cases h2 : m.find? (·.value == u) with
+    | none => intro _; exact Iff.rfl
+    | some b => intro h; simp at h
+  | some a =>
+    cases h2 : m.find? (·.value == u) with
+    | none => intro h; simp at h
+    | some b =>
+      intro h
+      have hab : a.leaves = b.leaves := by simpa using h
+      constructor
+      · intro H w hw; cases hw; rw [← hab]; exact H a rfl
+      · intro H w hw; cases hw; rw [hab]; exact H b rfl
 
 theorem applyOutput_step (log : Array Json) (c : Array String) (mine : Array Registered.Entry)
     (held : Array (String × String)) (v d p : String) :
