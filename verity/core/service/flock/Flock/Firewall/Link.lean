@@ -95,12 +95,17 @@ def laneCoeffs (lv : Level) (tPad : Nat) (g : Array F128) (extra lanePad : Nat �
   let lanes := 2 ^ lv.lanes
   coeffs lv.cols (if l < lanes then fun c => g[c * lanes + l]! else extra (l - lanes)) ((Array.range tPad).map (lanePad l))
 
-/-- **Level 0's padded codeword** by the FFT, one task to a lane. -/
+/-- **Level 0's padded codeword** by the FFT, one task to a lane, on each lane's `laneCoeffs`. A lane's paddings `mu` are
+built here, once: compiled code eta-expands a definition that returns a function, so `laneCoeffs … l` would rebuild them
+at every coefficient the FFT reads. -/
 def rowsFft (lv : Level) (tPad : Nat) (g : Array F128) (extra lanePad : Nat → Nat → F128) : Array (Array F128) :=
   let nL := 2 ^ lv.lanes + Zk.EXTRA_LANES
   let tw := twiddles (svTable (lv.cols + 1)) lv.d (lv.cols + 1)
   let es := ((Array.range nL).map fun l =>
-    Task.spawn fun _ => fft tw lv.d 0 (lv.cols + 1) (laneCoeffs lv tPad g extra lanePad l)).map Task.get
+    let mu := (Array.range tPad).map (lanePad l)
+    Task.spawn fun _ => fft tw lv.d 0 (lv.cols + 1)
+      (coeffs lv.cols (if l < 2 ^ lv.lanes then fun c => g[c * 2 ^ lv.lanes + l]! else extra (l - 2 ^ lv.lanes)) mu)).map
+    Task.get
   (Array.range (2 ^ lv.d)).map fun q => (Array.range nL).map fun l => es[l]![q]!
 
 /-- **Level 0's padded codeword** of the packed table `g`, with the extra lanes `extra` and the paddings `lanePad`: by the
