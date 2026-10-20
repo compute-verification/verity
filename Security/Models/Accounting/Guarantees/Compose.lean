@@ -372,8 +372,8 @@ def CreditOfWork : Prop :=
     (A : Anatomy K T L U) (folded : ℝ) (lam : SheetRow P → ℝ) (r : ℝ),
     Fits Sc Cd Sh Z → ModelScope Sc Cd Z lam → A.Split →
     SheetClock Sh A.run → SheetDispatch A.run → SheetTensor Sh A.run → SheetPipe Sh A.run → SheetSmem Sh A.run →
-    SheetWords Z A → SheetSemantics Z A → Assumptions.Compose.FoldOptFolded Z A folded →
-    FillOpt Z A → WorkAt (wordsOf Sc Cd : ℝ) (aOf Sc Cd Z lam) (bOf Sc Cd Z lam) r A.fixed folded →
+    SheetWords Z A → SheetSemantics Z A → FoldOptFolded Z A folded → FillOpt Z A →
+    WorkAt (wordsOf Sc Cd : ℝ) (aOf Sc Cd Z lam) (bOf Sc Cd Z lam) r A.fixed folded →
     (1 - epsOf Sc Cd Z lam r) * creditOf Sc Cd Z ≤ A.run.time
 
 /-! ## The composed credit -/
@@ -420,7 +420,7 @@ def CircuitCredit : Prop :=
     (∀ x, SheetClock Sh (Pl.run x).run) → (∀ x, SheetDispatch (Pl.run x).run) →
     (∀ x, SheetTensor Sh (Pl.run x).run) → (∀ x, SheetPipe Sh (Pl.run x).run) →
     (∀ x, SheetSmem Sh (Pl.run x).run) → (∀ x, SheetWords Z (Pl.run x)) → (∀ x, SheetSemantics Z (Pl.run x)) →
-    (∀ x, Assumptions.Compose.FoldOptFolded Z (Pl.run x) (folded x)) → (∀ x, FillOpt Z (Pl.run x)) →
+    (∀ x, FoldOptFolded Z (Pl.run x) (folded x)) → (∀ x, FillOpt Z (Pl.run x)) →
     (certOf Sc Cd Z H lam (rOf Sc Cd Np (aOf Sc Cd Z lam) (bOf Sc Cd Z lam) Λ δs) (δs + (δbind + δks)) win
       CoinMode.live).Holds Pl
 
@@ -470,7 +470,7 @@ def CircuitCreditSeeded : Prop :=
     (∀ x, SheetClock Sh (Pl.run x).run) → (∀ x, SheetDispatch (Pl.run x).run) →
     (∀ x, SheetTensor Sh (Pl.run x).run) → (∀ x, SheetPipe Sh (Pl.run x).run) →
     (∀ x, SheetSmem Sh (Pl.run x).run) → (∀ x, SheetWords Z (Pl.run x)) → (∀ x, SheetSemantics Z (Pl.run x)) →
-    (∀ x, Assumptions.Compose.FoldOptFolded Z (Pl.run x) (folded x)) → (∀ x, FillOpt Z (Pl.run x)) →
+    (∀ x, FoldOptFolded Z (Pl.run x) (folded x)) → (∀ x, FillOpt Z (Pl.run x)) →
     (certOf Sc Cd Z H lam (rOfSeeded Sc Cd Np Kd Tq (aOf Sc Cd Z lam) (bOf Sc Cd Z lam) κ0 ρ δs δg)
       (δs + (δbind + δks) + εid T J + 2 * (Cd.rounds : ℝ) * (δg + δb)) win .seeded).Holds Pl
 

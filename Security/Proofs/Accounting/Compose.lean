@@ -277,7 +277,7 @@ private theorem price_mono (G : Machine K R) (lam : R → ℝ) {f g : K → ℝ}
 theorem price_of_parts_folded [Nonempty F] [Nonempty X] (Z : Model K R T L U F X) (P : Labelled K)
     (A : Anatomy K T L U) (folded : ℝ) (lam : R → ℝ) (h : IsCert lam) (hZ : Z.Wf P) (hA : A.Split)
     (hW : WordsWritten Z A) (hS : ScalarRoute Z A) (hU : SideUnits Z A) (hN : NoSum A)
-    (hF : Assumptions.Compose.FoldOptFolded Z A folded) (hX : FillOpt Z A) :
+    (hF : FoldOptFolded Z A folded) (hX : FillOpt Z A) :
     A.fixed * Z.wStar lam + (1 - Z.muF) * folded * Z.phiStar lam + (1 - Z.muX) * Z.chiStar lam ≤
       Z.G.price lam A.run.n := by
   obtain ⟨-, hw0, -, -⟩ := Accounting.SecurityProofs.TS.stars_nonneg Z P lam hZ h

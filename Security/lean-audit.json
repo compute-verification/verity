@@ -14,10 +14,6 @@
    "owner": "@memory-accounting",
    "digest": "3dee4687f0a5685366080d463e9353692d5143af24e7a7600de6e093a4e07d2d"
   },
-  "Accounting.Assumptions.Compose.FoldOptFolded": {
-   "owner": "@compute-accounting",
-   "digest": "30f444188228982ecbb1451cabbca84085214e6429524ad6ac606dbea70b249d"
-  },
   "Accounting.Assumptions.Compose.GuessLuckAt": {
    "owner": "@compute-accounting",
    "digest": "0793432daba184ac1d9937071bc9342335f5fc5d700b8a6ec6f21e1f51cbf5ae"
@@ -21811,7 +21807,6 @@
   "Models.Accounting.Assumptions.Compose": {
    "digest": "0ef9070ef1d6434ba655e398c1c4fade2e3c2be037d8dd4ae2f82b2d8b98ba5e",
    "definitions": {
-    "Accounting.Assumptions.Compose.FoldOptFolded": "30f444188228982ecbb1451cabbca84085214e6429524ad6ac606dbea70b249d",
     "Accounting.Assumptions.Compose.GuessLuckAt": "0793432daba184ac1d9937071bc9342335f5fc5d700b8a6ec6f21e1f51cbf5ae",
     "Accounting.Assumptions.Compose.SeedExtractedAt": "0227aa9584d74d8b7759a40ae34facb0f0f97979caaefbcd8608c4d8a33ce0e8",
     "Accounting.Assumptions.Compose.SeedLuckAt": "f2e8f15be5f07ccda653d5c8bd0e96b14dfd418cfad9c5e829b3def0862bb9f8",
