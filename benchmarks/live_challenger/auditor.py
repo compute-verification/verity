@@ -2,7 +2,8 @@
 the `auditor` user, from a tree infra pinned, one session a window, each recorded in a signed append-only ledger before its
 first coin.
 
-    vy-challenger-gate open --commit HEX --peer NAME --scheme S --families JSON [--epoch E] [--minutes M]
+    vy-challenger-gate open --commit HEX --peer NAME --scheme S --families JSON [--epoch E] [--minutes M] [--for LANE]
+    vy-challenger-gate period-open --name P [--lane LANE] | period-close --name P
     vy-challenger-gate status SESSION | ledger | pubkey | fetch SESSION
 
 - **Who reaches it.** Every key in `research`'s authorized_keys on the host is forced to `vy-challenger-gate` (`command=`),
@@ -10,7 +11,9 @@ first coin.
   (`vy-challenger-gate LANE`, from `/etc/vy/challenger-gate-keys`, `vy-challenger-setup`), and only such a key opens a window:
   the open records that name as `by`, its prover. A key forced with no name (the shared lane key, which the control pod's
   publisher holds) reads only: `status`, `ledger`, `pubkey`, `fetch`. A lane names a window and gets a session; it never names
-  code. Infra's `vy-admin` runs the same gate (`sudo vy-challenger-gate VERB ...`, `by` vy-admin). Nothing else runs as
+  code. Infra's `vy-admin` runs the same gate (`sudo vy-challenger-gate VERB ...`, `by` vy-admin), and it alone may open a
+  window for a lane that has no key of its own (`--for LANE`: the open records `for` and keeps `by` vy-admin, and the
+  window's prover is LANE). Nothing else runs as
   `research` there, and nothing runs as `auditor` but the session unit and `admit`.
 - **What runs.** `/opt/vy-challenger/current` -> `/opt/vy-challenger/<commit>`, a root-owned `git archive` of that commit
   (`pin.sh`); the commit is the directory's name, and every entry names it (`pinned`). The key (`/var/lib/vy-challenger/key`,
@@ -31,12 +34,20 @@ first coin.
   release), the leaf the challenger's record was signed at (`record_leaf`), its commitment root (`commitment`) and how
   many hellos serve.py refused before it accepted one (`refused_hellos`, each in `out/hellos.jsonl`, which `files` seals). A session with an `open` and no `end` never
   ended (its host stopped): a refused window to the verifier, like one whose `closed` or `complete` is false.
+- **A period** is a lane's span of windows between two signed entries, `period-open` and `period-close` (session null),
+  which the lane's own gate key writes for its lane (`--name P`), or vy-admin for any lane (`period-open --name P --lane
+  LANE`, `period-close --name P`). A period's name is used once, and a lane has one period open at a time. Its windows are
+  exactly the v2 opens whose prover (`for`, else `by`) is its lane between its open and its close; every one counts. The
+  close is refused while one of them still runs, and lists each, in order, as {root, session, complete} (complete when its
+  end is in the ledger and complete), with `complete` true only when it lists at least one window and all are: an
+  incomplete window is the period's visible failure. Period entries are taken under the gate's lock, so no window is
+  admitted between a close's reading of the ledger and its entry.
 - **The ledger** (`/var/lib/vy-challenger/windows.jsonl`, `chattr +a`) is one JSON object a line: `schema`, `seq` (from 0),
   `prev` (SHA-512 of the previous line's bytes, 128 zeros first), `kind`, `session`, `body` and `sig`, an LMS signature under
   the challenger key over `entry_message(I, entry)`. Its entries' LMS leaves strictly increase (`append` refuses an entry
   whose leaf isn't after the last one, as a restored key state would sign), and each record's leaf lies between its
   session's open and end and is no entry's. v2 entries follow the host's v1 entries in one chain, and `verify_ledger`, the
-  reference check, reads both. Infra publishes the ledger and each ended session to the store (`publish.sh`, the control
+  reference check, reads both, and checks the periods (`verify_periods` returns them). Infra publishes the ledger and each ended session to the store (`publish.sh`, the control
   pod's watchers loop `challenger-publish`), each put an extension of the last (`publish.sh` refuses any other head, and
   `extends` is the check), labelled `challenger-ledger head` by infra.
 
@@ -84,6 +95,8 @@ NAME = re.compile(r"[A-Za-z0-9][A-Za-z0-9._:-]{0,63}")
 SCHEME = re.compile(r"[a-z0-9][a-z0-9/._-]{0,127}")
 SESSION = re.compile(r"s\d{8}T\d{6}Z-[0-9a-f]{4}")
 READ_ONLY = "-"
+PERIOD_KINDS = ("period-open", "period-close")
+HOST_ACCOUNTS = ("root", "vy-admin", "research", "auditor")
 SECRET = "secret"
 OUT_FILES = ("record.json", "key.json", "releases.jsonl", "hellos.jsonl", "challenger.json", "address.json", "tunnel.log",
              "serve.log")
@@ -167,7 +180,42 @@ def sessions_of(lines: list[bytes]) -> dict[str, dict[str, dict]]:
     """session -> {"open": entry, "end": entry} as far as the ledger has them."""
     out: dict[str, dict[str, dict]] = {}
     for e in entries(lines):
-        out.setdefault(e["session"], {})[e["kind"]] = e
+        if e["kind"] in ("open", "end"):
+            out.setdefault(e["session"], {})[e["kind"]] = e
+    return out
+
+
+def lane_of(e: dict) -> str:
+    """An open's prover: the lane vy-admin opened it for (`for`), else its opener (`by`)."""
+    return e["body"].get("for") or e["body"]["by"]
+
+
+def periods_of(lines: list[bytes]) -> dict[str, dict]:
+    """period -> {"lane", "open", "close" (None while open), "windows": [root, ...]}: a period's windows are exactly the
+    v2 opens whose prover is its lane between its period-open and its period-close."""
+    periods: dict[str, dict] = {}
+    current: dict[str, dict] = {}
+    for e in entries(lines):
+        if e["kind"] == "period-open":
+            p = current[e["body"]["lane"]] = periods[e["body"]["period"]] = {
+                "lane": e["body"]["lane"], "open": e, "close": None, "windows": []}
+        elif e["kind"] == "period-close":
+            p = periods[e["body"]["period"]]
+            p["close"] = e
+            current.pop(p["lane"], None)
+        elif e["kind"] == "open" and e["schema"] == SCHEMA and (p := current.get(lane_of(e))) is not None:
+            p["windows"].append(root_of(e))
+    return periods
+
+
+def window_outcomes(lines: list[bytes], roots: list[str]) -> list[dict]:
+    """Each window's outcome as a period-close records it: complete only when its end is in the ledger and complete."""
+    sessions, by_root = sessions_of(lines), roots_of(lines)
+    out = []
+    for root in roots:
+        s = sessions[by_root[root]]
+        out.append({"root": root, "session": by_root[root],
+                    "complete": "end" in s and s["end"]["body"].get("complete") is True})
     return out
 
 
@@ -223,12 +271,29 @@ def verify_ledger(lines: list[bytes], I: bytes, verify: Callable[[bytes, bytes],
     """The reference check of a published ledger under the challenger key: every entry v1 or v2 (no v1 after a v2) and signed,
     `seq` from 0, `prev` chained, its leaves strictly increasing; one `open` a root, whatever its period label, in canonical
     lowercase; one `end` a session, after its `open`, and a v2 end's `record_leaf` between its session's open and end and no
-    entry's or other record's. Returns root -> {"open", "end" or None}; raises ValueError at the first entry that fails. It
-    reads one head: a verifier takes infra's newest published head, and refuses two that don't `extend` one another."""
+    entry's or other record's; periods as `verify_periods` checks them. Returns root -> {"open", "end" or None}; raises
+    ValueError at the first entry that fails. It reads one head: a verifier takes infra's newest published head, and refuses
+    two that don't `extend` one another."""
+    return _verify(lines, I, verify)[0]
+
+
+def verify_periods(lines: list[bytes], I: bytes, verify: Callable[[bytes, bytes], bool]) -> dict[str, dict]:
+    """The ledger's periods once `verify_ledger` passes: period -> {"lane", "open", "close" (None while open), "windows":
+    [root, ...]}. A period's name is used once; a lane has one period open at a time; its windows are exactly the v2 opens
+    whose prover is its lane (`lane_of`) between its period-open and its period-close, and the close lists each of them,
+    in order, with its outcome (complete when its end precedes the close and is complete) and is complete only when it
+    has a window and every one is. An end after its period's close (the gate's lock leaves none) changes nothing: the
+    close recorded that window incomplete."""
+    return _verify(lines, I, verify)[1]
+
+
+def _verify(lines: list[bytes], I: bytes, verify: Callable[[bytes, bytes], bool]) -> tuple[dict[str, dict], dict[str, dict]]:
     windows: dict[str, dict] = {}
     by_session: dict[str, str] = {}
     leaves: set[int] = set()
     records: dict[int, int] = {}
+    periods: dict[str, dict] = {}
+    current: dict[str, str] = {}
     prev, last, v2 = ZERO, -1, False
     for i, ln in enumerate(lines):
         try:
@@ -239,24 +304,29 @@ def verify_ledger(lines: list[bytes], I: bytes, verify: Callable[[bytes, bytes],
                 or e.get("prev") != prev):
             raise ValueError(f"entry {i}: not entry {i} of a {SCHEMA} ledger chained to its predecessor")
         v2 = v2 or e["schema"] == SCHEMA
-        if type(e.get("session")) is not str or type(e.get("body")) is not dict:
-            raise ValueError(f"entry {i}: an entry has a session and a body")
+        kind = e.get("kind")
+        period_kind = kind in PERIOD_KINDS
+        if (e.get("session") is not None if period_kind else type(e.get("session")) is not str) or type(e.get("body")) is not dict:
+            raise ValueError(f"entry {i}: a session's entry has a session, a period's none, and each a body")
         q = leaf_of(e.get("sig"))
         if not verify(entry_message(I, e), bytes.fromhex(e["sig"])):
             raise ValueError(f"entry {i}: its signature doesn't verify under the challenger key")
         if q <= last:
             raise ValueError(f"entry {i}: signed at leaf {q}, not after the last entry's {last}")
-        if e.get("kind") == "open":
+        if kind == "open":
             try:
                 root = root_of(e)
+                lane = lane_of(e) if e["schema"] == SCHEMA else None
             except (KeyError, TypeError):
-                raise ValueError(f"entry {i}: an open names its window") from None
+                raise ValueError(f"entry {i}: an open names its window and its prover") from None
             if type(root) is not str or not ROOT.fullmatch(root):
                 raise ValueError(f"entry {i}: a window root is 128 lowercase hex digits")
             if root in windows or e["session"] in by_session:
                 raise ValueError(f"entry {i}: a second open for root {root[:16]}… or session {e['session']}")
             windows[root], by_session[e["session"]] = {"open": e, "end": None, "q": q}, root
-        elif e.get("kind") == "end":
+            if (period := current.get(lane) if lane is not None else None) is not None:
+                periods[period]["windows"].append(root)
+        elif kind == "end":
             root = by_session.get(e["session"])
             if root is None or windows[root]["end"] is not None:
                 raise ValueError(f"entry {i}: an end for session {e['session']}, which has no open or has ended")
@@ -266,13 +336,35 @@ def verify_ledger(lines: list[bytes], I: bytes, verify: Callable[[bytes, bytes],
                     raise ValueError(f"entry {i}: record leaf {r!r} isn't between its open's and its end's, once")
                 records[r] = i
             windows[root]["end"] = e
+        elif period_kind:
+            name, lane = e["body"].get("period"), e["body"].get("lane")
+            if (e["schema"] != SCHEMA or type(name) is not str or not NAME.fullmatch(name) or type(lane) is not str
+                    or not NAME.fullmatch(lane)):
+                raise ValueError(f"entry {i}: a {kind} is v2 and names its period and its lane")
+            if kind == "period-open":
+                if name in periods or lane in current:
+                    raise ValueError(f"entry {i}: period {name} is named twice, or lane {lane} has a period open")
+                periods[name], current[lane] = {"lane": lane, "open": e, "close": None, "windows": []}, name
+            else:
+                p = periods.get(name)
+                if p is None or p["close"] is not None or p["lane"] != lane:
+                    raise ValueError(f"entry {i}: a period-close for {name}, which isn't lane {lane}'s open period")
+                outcomes = [{"root": r, "session": windows[r]["open"]["session"],
+                             "complete": windows[r]["end"] is not None and windows[r]["end"]["body"].get("complete") is True}
+                            for r in p["windows"]]
+                if (e["body"].get("windows") != outcomes
+                        or e["body"].get("complete") is not (bool(outcomes) and all(w["complete"] for w in outcomes))):
+                    raise ValueError(f"entry {i}: period {name}'s close doesn't list exactly its windows and their outcomes")
+                p["close"] = e
+                del current[lane]
         else:
-            raise ValueError(f"entry {i}: kind {e.get('kind')!r}")
+            raise ValueError(f"entry {i}: kind {kind!r}")
         leaves.add(q)
         prev, last = hashlib.sha512(ln).hexdigest(), q
     if reused := sorted(leaves & set(records)):
         raise ValueError(f"entry {records[reused[0]]}: record leaf {reused[0]} is also an entry's")
-    return {root: {"open": w["open"], "end": w["end"]} for root, w in windows.items()}
+    return ({root: {"open": w["open"], "end": w["end"]} for root, w in windows.items()},
+            {name: {k: p[k] for k in ("lane", "open", "close", "windows")} for name, p in periods.items()})
 
 
 # --- the key (serve.py's) -----------------------------------------------------------------------------------------------------
@@ -305,12 +397,16 @@ def peers(host: Host) -> list[str]:
     return [n for n in names if n != host.name]
 
 
-def parse_open(argv: list[str], host: Host) -> dict:
+def parse_open(argv: list[str], host: Host, *, admin: bool = False) -> dict:
+    """An open's request; `--for LANE` (vy-admin's alone: a development window opened for a lane without its own key)
+    names the window's prover."""
     p = argparse.ArgumentParser(prog="vy-challenger-gate open", exit_on_error=False, add_help=False, allow_abbrev=False)
     for flag in ("--commit", "--peer", "--scheme", "--families"):
         p.add_argument(flag, required=True)
     p.add_argument("--epoch", type=int, default=0)
     p.add_argument("--minutes", type=int, default=120)
+    if admin:
+        p.add_argument("--for", dest="lane", default=None)
 
     def refuse(why: object) -> None:
         raise Refused(f"open: {why}; usage: {p.format_usage().strip()} (v2: no --period or --lane: the window is its root, "
@@ -340,8 +436,11 @@ def parse_open(argv: list[str], host: Host) -> dict:
         raise Refused("--epoch: 0 <= E < 2^63")
     if not MINUTES[0] <= a.minutes <= MINUTES[1]:
         raise Refused(f"--minutes: {MINUTES[0]} to {MINUTES[1]}")
+    lane = getattr(a, "lane", None)
+    if lane is not None and (not NAME.fullmatch(lane) or lane in HOST_ACCOUNTS):
+        raise Refused(f"--for {lane!r}: a lane's name")
     return {"window": {"root": a.commit.lower()}, "peer": a.peer, "scheme": a.scheme, "families": families,
-            "epoch": a.epoch, "minutes": a.minutes}
+            "epoch": a.epoch, "minutes": a.minutes, **({"for": lane} if lane else {})}
 
 
 def free_port(lines: list[bytes], active: Callable[[str], bool]) -> int:
@@ -352,13 +451,13 @@ def free_port(lines: list[bytes], active: Callable[[str], bool]) -> int:
     raise Refused(f"every port of {PORTS.start}..{PORTS.stop - 1} has a live session")
 
 
-def gate_open(argv: list[str], host: Host, *, by: str, now: datetime, token: str, admit: Callable[[str], None],
-              start: Callable[[str], None], own: Callable[[Path], None], secret: bytes,
+def gate_open(argv: list[str], host: Host, *, by: str, admin: bool, now: datetime, token: str,
+              admit: Callable[[str], None], start: Callable[[str], None], own: Callable[[Path], None], secret: bytes,
               ready: Callable[[str], str | None]) -> dict:
     """Validate a request, hand it to `admit` (as `auditor`) and `start` its unit: the session id, its port on the peer, its
     secret, which only this answer carries, and its coin commitment's root once `ready` has it (serve.py signs its record
     before it listens), so the serving side checks the hello's commitment against it before its first coin."""
-    req = parse_open(argv, host)
+    req = parse_open(argv, host, admin=admin)
     root = req["window"]["root"]
     if (sid := roots_of(read_ledger(host.ledger)).get(root)) is not None:
         raise Refused(f"root {root[:16]}… already has its session ({sid}) in the ledger: one session a root, ever")
@@ -378,7 +477,8 @@ def gate_open(argv: list[str], host: Host, *, by: str, now: datetime, token: str
         start(session)
     entry = sessions_of(read_ledger(host.ledger))[session]["open"]
     return {"session": session, "port": entry["body"]["port"], "peer": req["peer"], "host": entry["body"]["host"],
-            "seq": entry["seq"], "root": root, "by": by, "secret": secret.hex(), "commitment": ready(session)}
+            "seq": entry["seq"], "root": root, "by": by, **({"for": req["for"]} if "for" in req else {}),
+            "secret": secret.hex(), "commitment": ready(session)}
 
 
 def gate_status(session: str, host: Host, active: Callable[[str], bool]) -> dict:
@@ -401,8 +501,31 @@ def gate_fetch(session: str, host: Host) -> bytes:
     return buf.getvalue()
 
 
-USAGE = ("verbs: open --commit HEX --peer NAME --scheme S --families JSON [--epoch E] [--minutes M] (a lane's own gate key) "
+USAGE = ("verbs: open --commit HEX --peer NAME --scheme S --families JSON [--epoch E] [--minutes M] [--for LANE: vy-admin's] "
+         "| period-open --name P [--lane LANE: vy-admin's] | period-close --name P (a lane's own gate key, or vy-admin) "
          "| status SESSION | ledger | pubkey | fetch SESSION")
+
+
+def parse_period(verb: str, argv: list[str], *, lane: str | None) -> tuple[str, str | None]:
+    """(period, lane) of a period-open or period-close: a lane key's own lane, or vy-admin's `--lane` (period-open)."""
+    p = argparse.ArgumentParser(prog=f"vy-challenger-gate {verb}", exit_on_error=False, add_help=False, allow_abbrev=False)
+    p.add_argument("--name", required=True)
+    if lane is None and verb == "period-open":
+        p.add_argument("--lane", required=True)
+
+    def refuse(why: object) -> None:
+        raise Refused(f"{verb}: {why}; usage: {p.format_usage().strip()}")
+
+    p.error = refuse
+    try:
+        a = p.parse_args(argv)
+    except argparse.ArgumentError as e:
+        refuse(e)
+    named = getattr(a, "lane", None) or lane
+    for what, v in (("--name", a.name), ("--lane", named)):
+        if v is not None and (not NAME.fullmatch(v) or v in HOST_ACCOUNTS):
+            raise Refused(f"{verb}: {what} {v!r}: 1 to 64 of [A-Za-z0-9._:-], starting with a letter or digit")
+    return a.name, named
 
 
 def gate(argv: list[str], host: Host = Host(), **hooks: Any) -> tuple[int, bytes]:
@@ -413,6 +536,7 @@ def gate(argv: list[str], host: Host = Host(), **hooks: Any) -> tuple[int, bytes
         return 3, json.dumps({"refused": why}).encode() + b"\n"
 
     by = hooks.get("by") or os.environ.get("SUDO_USER") or "root"
+    admin = argv[:1] != ["--ssh"]
     if argv[:1] == ["--ssh"]:
         if len(argv) == 4 and argv[2] == "--key":
             key = argv[3]
@@ -436,11 +560,18 @@ def gate(argv: list[str], host: Host = Host(), **hooks: Any) -> tuple[int, bytes
             if by is None:
                 raise Refused("this key reads only: a window is opened with its prover's own gate key, which infra "
                               "registers for its lane (send infra the public half)")
-            doc = gate_open(rest, host, by=by, now=hooks.get("now") or datetime.now(timezone.utc),
+            doc = gate_open(rest, host, by=by, admin=admin, now=hooks.get("now") or datetime.now(timezone.utc),
                             token=hooks.get("token") or secrets.token_hex(2), admit=hooks.get("admit") or as_auditor_admit,
                             start=hooks.get("start") or start_unit, own=hooks.get("own") or own_by_auditor,
                             secret=hooks.get("secret") or secrets.token_bytes(32),
                             ready=hooks.get("ready") or (lambda s: await_commitment(host, s, active)))
+        elif verb in PERIOD_KINDS:
+            if by is None:
+                raise Refused("this key reads only: a period is opened and closed with its lane's own gate key, or by vy-admin")
+            name, lane = parse_period(verb, rest, lane=None if admin else by)
+            with locked(host.root / "gate.lock"):
+                e = (hooks.get("period") or as_auditor_period)([verb, name, lane or READ_ONLY, by])
+            doc = {"seq": e["seq"], "kind": e["kind"], "body": e["body"]}
         elif verb == "status" and len(rest) == 1:
             doc = gate_status(rest[0], host, active)
         elif verb == "ledger" and not rest:
@@ -465,6 +596,14 @@ def as_auditor_admit(session: str) -> None:
     p = subprocess.run(_auditor(["admit", session]), capture_output=True, text=True)
     if p.returncode:
         raise Refused(p.stderr.strip().splitlines()[-1] if p.stderr.strip() else f"admit exited {p.returncode}")
+
+
+def as_auditor_period(args: list[str]) -> dict:
+    p = subprocess.run(_auditor(args), capture_output=True, text=True)
+    if p.returncode:
+        raise Refused(p.stderr.strip().splitlines()[-1].removeprefix("refused: ") if p.stderr.strip()
+                      else f"{args[0]} exited {p.returncode}")
+    return json.loads(p.stdout)
 
 
 def own_by_auditor(d: Path) -> None:
@@ -509,8 +648,42 @@ def admit(host: Host, session: str, *, signer, pinned: str, now: datetime, activ
         return {"window": {"root": root}, "pinned": pinned, "key_sha512": key_sha512, "host": f"{host.name}.{session}",
                 "peer": req["peer"], "port": free_port(lines, active), "scheme": req["scheme"], "epoch": req["epoch"],
                 "families": req["families"], "minutes": req["minutes"], "by": req["by"],
+                **({"for": req["for"]} if "for" in req else {}),
                 "secret_sha512": req["secret_sha512"], "started_utc": utc(now)}
     return append(host, "open", session, body_of, I, sign)
+
+
+def period(host: Host, args: list[str], *, signer, pinned: str, now: datetime, active: Callable[[str], bool]) -> dict:
+    """`period-open NAME LANE BY` or `period-close NAME LANE|- BY` (LANE - for vy-admin's close of any lane's period): the
+    signed entry, or Refused. A period's name is used once and a lane has one period open at a time; a period closes once
+    none of its windows still runs, its close listing each window with its outcome."""
+    verb, name, lane, by = args
+    I, sign, key_sha512 = signer
+
+    def body_of(lines: list[bytes]) -> dict:
+        periods = periods_of(lines)
+        if verb == "period-open":
+            if name in periods:
+                raise Refused(f"period {name} is in the ledger already: a period's name is used once")
+            if (o := next((n for n, p in periods.items() if p["lane"] == lane and p["close"] is None), None)) is not None:
+                raise Refused(f"lane {lane} has period {o} open: close it first (periods of a lane never overlap)")
+            return {"period": name, "lane": lane, "by": by, "pinned": pinned, "key_sha512": key_sha512,
+                    "opened_utc": utc(now)}
+        p = periods.get(name)
+        if p is None or p["close"] is not None:
+            raise Refused(f"no open period {name}")
+        if lane != READ_ONLY and p["lane"] != lane:
+            raise Refused(f"period {name} is lane {p['lane']}'s: only its lane's key or vy-admin closes it")
+        sessions, by_root = sessions_of(lines), roots_of(lines)
+        if running := [by_root[r] for r in p["windows"] if "end" not in sessions[by_root[r]] and active(by_root[r])]:
+            raise Refused(f"period {name}'s window {running[0]} still runs: a period closes once each of its windows has ended")
+        outcomes = window_outcomes(lines, p["windows"])
+        return {"period": name, "lane": p["lane"], "by": by, "windows": outcomes,
+                "complete": bool(outcomes) and all(w["complete"] for w in outcomes), "closed_utc": utc(now)}
+
+    if verb not in PERIOD_KINDS or not NAME.fullmatch(name) or not (lane == READ_ONLY or NAME.fullmatch(lane)):
+        raise Refused(f"period: {args}")
+    return append(host, verb, None, body_of, I, sign)
 
 
 def serve_argv(host: Host, session: str, open_body: dict, tree: Path = TREE) -> list[str]:
@@ -624,6 +797,10 @@ def main(argv: list[str] | None = None) -> int:
             e = admit(host, argv[1], signer=key_signer(host), pinned=pinned_commit(), now=datetime.now(timezone.utc),
                       active=unit_active)
             print(json.dumps({"seq": e["seq"], "session": e["session"]}))
+        elif argv[:1] in (["period-open"], ["period-close"]) and len(argv) == 4:
+            e = period(host, argv, signer=key_signer(host), pinned=pinned_commit(), now=datetime.now(timezone.utc),
+                       active=unit_active)
+            print(json.dumps(e))
         elif argv[:1] == ["run"] and len(argv) == 2:
             e = run(host, argv[1], signer=key_signer(host), pinned=pinned_commit(), now=lambda: datetime.now(timezone.utc))
             print(json.dumps({"seq": e["seq"], "session": e["session"], "rc": e["body"]["rc"]}))
@@ -637,7 +814,8 @@ def main(argv: list[str] | None = None) -> int:
             (host.root / "pubkey.json").write_text(json.dumps(doc, indent=1, sort_keys=True) + "\n")
             print(json.dumps(doc))
         else:
-            print("usage: auditor.py gate VERB ... | admit SESSION | run SESSION | keygen", file=sys.stderr)
+            print("usage: auditor.py gate VERB ... | admit SESSION | run SESSION | period-open|period-close NAME LANE BY "
+                  "| keygen", file=sys.stderr)
             return 2
     except Refused as e:
         print(f"refused: {e}", file=sys.stderr)
