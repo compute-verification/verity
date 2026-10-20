@@ -29,7 +29,8 @@ HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
 from dc_price import INS, _load, targets  # noqa: E402
 
-NAME = re.compile(r"li_loopILi(\d)ELi(\d)E")
+#: li_loop<CP, GEN> (red_generic.cu) or li_loop<CP, GEN, W> (imadw.cu, W = 1 the multiply-add as IMAD.WIDE)
+NAME = re.compile(r"li_loopILi(\d)ELi(\d)E(?:Li(\d)E)?")
 CP = ("red", "red2", "red8")
 ISSUE_ROWS = ("DS_issue", "issue")
 
@@ -44,8 +45,8 @@ def loops(sass: str):
         back = [(t, a) for a, p, op, rest in INS.findall(body) if op.startswith("BRA")
                 for t in targets(rest) for a in [int(a, 16)] if t < a]
         head, tail = max(back, key=lambda lp: lp[1] - lp[0])
-        yield f"cp_{CP[int(m[1])]}_{'generic' if m[2] == '1' else 'global'}", [op for a, op in ins
-                                                                               if head <= a <= tail and op != "NOP"]
+        route = f"cp_{CP[int(m[1])]}_{'generic' if m[2] == '1' else 'global'}{'_wide' if m[3] == '1' else ''}"
+        yield route, [op for a, op in ins if head <= a <= tail and op != "NOP"]
 
 
 def price_reading(LHD, L, fam, vector: str, sass: str) -> dict:
