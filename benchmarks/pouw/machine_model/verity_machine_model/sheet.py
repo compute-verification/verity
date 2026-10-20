@@ -456,7 +456,12 @@ def lean(s: Sheet, data: Path) -> str:
                   f"{s.uniform_issue.source}."),
             "theorem machine_issue (k : Kind) : sheet.machine.a .issue k = census .issue k := by",
             "  simp [Sheet.machine, census]", ""]
-    out += [*_doc("The tensor row: each class's MACs over a quarter of its type's peak is its census line."),
+    # The tensor row's case split unfolds `Kind.form` in every class's case, so its cost grows with the square of the
+    # class count: 200000 ran out at 50 classes on sm_90 and 52 on sm_100 (r20261020-053329-30da).
+    out += ["-- the case split unfolds `Kind.form` in every class's case: its cost grows with the square of the class "
+            "count",
+            "set_option maxHeartbeats 1000000 in",
+            *_doc("The tensor row: each class's MACs over a quarter of its type's peak is its census line."),
             "theorem machine_tensor (k : Kind) : sheet.machine.a .tensor k = census .tensor k := by",
             *_simp("cases k <;> norm_num", [*unfold, "tensorLine", "Kind.form", "Ty.peak", *peak.values()]), ""]
     for q in pipes:

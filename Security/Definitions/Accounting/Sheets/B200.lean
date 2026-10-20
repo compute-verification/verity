@@ -744,6 +744,8 @@ saturated lane stream (the census's UNI issue line, DC-100). -/
 theorem machine_issue (k : Kind) : sheet.machine.a .issue k = census .issue k := by
   simp [Sheet.machine, census]
 
+-- the case split unfolds `Kind.form` in every class's case: its cost grows with the square of the class count
+set_option maxHeartbeats 1000000 in
 /-- The tensor row: each class's MACs over a quarter of its type's peak is its census line. -/
 theorem machine_tensor (k : Kind) : sheet.machine.a .tensor k = census .tensor k := by
   cases k <;> norm_num [Sheet.machine, sheet, census, tensorLine, Kind.form, Ty.peak, peakS8, peakE4m3, peakE5m2,
