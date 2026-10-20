@@ -75,10 +75,10 @@ SCHEME = Wd.LIVE_SCHEME
 #: infra's challenger ledger (`benchmarks/live_challenger/auditor.py`): its entries' schema (v2, after the host's v1
 #: entries in one chain, which are `challenger.audited_session`'s), and the role and tag by schema of what an entry's
 #: ``sig`` signs (`entry_message`)
-LEDGER_V1 = Ch.LEDGER_SCHEMA
-LEDGER_SCHEMA = "verity/challenger-auditor/v2"
+LEDGER_V1 = Ch.LEDGER_SCHEMA_V1
+LEDGER_SCHEMA = Ch.LEDGER_SCHEMA
 LEDGER_ROLE = Ch.LEDGER_ROLE
-ENTRY_TAGS = {LEDGER_V1: Ch.LEDGER_TAG, LEDGER_SCHEMA: "verity/challenger-auditor/entry/v2"}
+ENTRY_TAGS = dict(Ch.LEDGER_TAGS)
 #: the files of a session's ``out/`` the verifier reads, each of which its end entry must seal
 SEALED = (remote.RECORD, remote.KEY, remote.RELEASES)
 #: the pouw setting ``session``: the gate's open answer (``commitment`` from ``status SESSION`` when the answer's is
