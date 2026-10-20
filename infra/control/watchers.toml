@@ -12,7 +12,7 @@ heartbeat_table = "store_private.control_heartbeat"
 cloud_watch_state = "/data/cloud-watch/state.json"
 
 [env]
-PATH = "{src}/infra/control/bin:/data/nebius/bin:/root/.local/bin:/usr/local/bin:/usr/bin:/bin"
+PATH = "{src}/infra/control/bin:{dir}/bin:/data/nebius/bin:/root/.local/bin:/usr/local/bin:/usr/bin:/bin"
 PYTHONPATH = "{src}/tools/research/src:{src}/infra/ops"
 HOME = "/root"
 LC_ALL = "C.UTF-8"
