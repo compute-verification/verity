@@ -210,7 +210,9 @@ only inside a proof (`one_stage.registered`).
   used for another row. Its root is the frame-v3-sha512 root over the rows under `CommitmentDomain(B, -2,
   RangeIndexedDomain(0, rows), hash="sha512")`, `B` the bytes of `identity_digest("verity/one-stage/registered-domain/v0",
   {"program", "value", "schema", "words", "leaves"})`, plus `"word_bits"` when it is not 16. The prover keeps the rows
-  and salts.
+  and salts. A value a bit-row port reads is committed in that port's format (`Registered.commit`'s `schema`):
+  `hm96-sha512/row/v2` over `sha512/row/v2`, or `hm96-sha512/row-seg/v1` over `sha512/row-seg/v1`, of its leaves' bit
+  row (`row_words` unpadded), each leaf framed under that schema, under the same domain.
 - `verity/registration/v2` is v1 with `"registered": [{"value", "root", "leaves", "words", "domain"}, ...]` (plus
   `"word_bits"` when it is not 16), digest `SHA-512("verity/registration/v2\0" ‖ canon(record))`. A record is v2 exactly
   when it registers values, so v1's bytes are unchanged. R7 (`check`, with the verifier's own `registered = {parameter:
@@ -245,7 +247,8 @@ only inside a proof (`one_stage.registered`).
   its frame-v3 path to the registered root (siblings leaf level first, 64 bytes each, hex). The Lean verifier, given the
   verifier's own `--registered` file (`reads_file`: per port, the value, leaf count, row width (`words`, `word_bits`),
   domain and every unit's position from its own program and query, and the root of the registration it accepted),
-  checks that the circuit port's rows are the registered rows' u16 words, every table row's path and every instance's
+  checks each port in its own format (`row_schema`, absent for `hm96-sha512/row/v1`): that the circuit port's rows are
+  the registered rows' u16 words, or a bit row's exactly their bits, every table row's path and every instance's
   position, and refuses a statement that names no `registered` entry for such a port or names one it was not given,
   and one whose units it did not derive (`verity/ml/flock/verifier/PROTOCOL.md` §16.10).
 - The audit record holds `session_registered`, the roots the verifier of record opened the reads against, to the
