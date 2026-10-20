@@ -145,7 +145,7 @@ theorem locate_fst_ge : ∀ (rs : List ℕ) (k i : ℕ), k ≤ (CoinLayer.locate
   | [], _, _ => Nat.le_refl _
   | c :: cs, k, i => by
     by_cases h : i < c
-    · rw [locate_cons_lt h]; exact Nat.le_refl _
+    · rw [locate_cons_lt h] <;> exact Nat.le_refl _
     · rw [locate_cons_ge h]; exact Nat.le_of_succ_le (locate_fst_ge cs (k + 1) (i - c))
 
 theorem locate_lt : ∀ (rs : List ℕ) (k i : ℕ), i < rs.sum → (CoinLayer.locate rs k i).1 < k + rs.length
