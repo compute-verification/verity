@@ -7,9 +7,9 @@ import Proofs.Flock.EndToEndRegisteredRows.Statement
 registrant's opening `rd` replaced by one per unit (`rdU u`). `EndToEndRegisteredRows` reads the input rows only where
 the verifier owns every registered read of `rd` at the outcome's draw (`OwnReadsHJ` is one condition over all of
 them), so at an `rd` covering every unit's reads it links no input row on a draw that leaves one out. With `rdU u` the
-opening of unit `u`'s reads alone (`Registered.ReadsX.restrict`), a drawn unit's input rows are linked wherever its
-own reads are owned, whatever else is drawn; the cost is a union bound over the `n` units
-(`Flock.SoundAtBridge.RowsSession.prob_badU_le`), `n` times `EndToEndRegisteredRows`' bound.
+opening of unit `u`'s reads alone (`Registered.ReadsX.restrict`, in `Proofs.Flock.Recursive.ZkReg.Off`), a drawn
+unit's input rows are linked wherever its own reads are owned, whatever else is drawn; the cost is a union bound over
+the `n` units (`Flock.SoundAtBridge.RowsSession.prob_badU_le`), `n` times `EndToEndRegisteredRows`' bound.
 
 The session's game, prover, value layer and events are those `EndToEndRegisteredRows` reads, at `rdU u` for unit
 `u`:
@@ -21,30 +21,6 @@ The session's game, prover, value layer and events are those `EndToEndRegistered
 * `BadU o`: flock-verify accepts and some drawn unit is wrong or its rows are off;
 * `CR`: `EndToEndRegisteredRows`' named assumptions at every unit's opening; `bound`: its bound.
 -/
-
-namespace FlockSoundness.Registered.ReadsX
-
-open Game Refine Binding Audit
-
-variable {C : Circuit} {n : ℕ} {P : Audit.Partition C n} {Reg : Type} {mPts : ℕ}
-  {plan : Finset (Fin n) → Reg → List (TabSpec mPts)}
-  {tab : (S : Finset (Fin n)) → (R : Reg) → Fin n → Fin (plan S R).length}
-  {decode : Audit.Partition.DecoderB (C := C) (Reg := Reg) plan tab}
-  {lay : FlockSoundness.Binding.Layout P plan tab decode} {rs : HmRowsX lay}
-
-/-- **The registrant's opening of the reads `keep` picks**: `rd` with its registered reads cut to those in `keep`
-(one unit's, say), the rows, salts and paths unchanged. -/
-def restrict (rd : ReadsX lay rs) (keep : lay.Pos → Prop) : ReadsX lay rs where
-  isRead p := rd.isRead p ∧ keep p
-  read_row p hp := rd.read_row p hp.1
-  port := rd.port
-  readAt := rd.readAt
-  wv := rd.wv
-  ws := rd.ws
-  wpath := rd.wpath
-  committed p hp := rd.committed p hp.1
-
-end FlockSoundness.Registered.ReadsX
 
 namespace Flock.SoundAtBridge
 
