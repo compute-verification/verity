@@ -206,6 +206,23 @@ def unlink(pkg: str, tree: Path, links: dict[str, str]) -> None:
     links.pop(pkg, None)
 
 
+def read_links(tree: Path) -> dict[str, str]:
+    """The tree's `links.json`; none when it is missing or can't be read (a write cut short by a full disk left one empty on
+    vy-nebius-cpu-2, 19 Oct, and every run on that slot died reading it), so each package's dependencies are taken again."""
+    try:
+        links = json.loads((tree / LINKS).read_text())
+    except (OSError, ValueError):
+        return {}
+    return links if isinstance(links, dict) else {}
+
+
+def write_links(tree: Path, links: dict[str, str]) -> None:
+    """`links.json`, replaced whole, so a write that fails leaves the old one."""
+    tmp = tree / f"{LINKS}.tmp"
+    tmp.write_text(json.dumps(links, indent=1, sort_keys=True) + "\n")
+    os.replace(tmp, tree / LINKS)
+
+
 def in_sandbox(pkg: str, tree: Path, argv: list[str]) -> list[str]:
     """``argv`` in the sandbox, writable in the `.lake` of ``tree/pkg`` and the packages it requires by path but not in their
     fetched dependencies."""
@@ -365,7 +382,7 @@ def audit_records(name: str, deps: Path, tree: Path | None = None, update: bool 
             except BlockingIOError:
                 log(f"lean-records: another run holds {tree}")
                 return 2
-            links = json.loads((tree / LINKS).read_text()) if (tree / LINKS).is_file() else {}
+            links = read_links(tree)
             run_dir, run_id = os.environ.get("RESEARCH_RUN_DIR"), os.environ.get("RESEARCH_RUN_ID")
             out = (out or (Path(run_dir) / "lean-audit" if run_dir else Path(tempfile.mkdtemp(prefix="lean-records-")))).resolve()
             todo, rc = [pkg, *requirers(pkg, pkgs)], 0
@@ -377,7 +394,7 @@ def audit_records(name: str, deps: Path, tree: Path | None = None, update: bool 
                 if not link(p, tree, deps, links, log, copy=True) and (k := LA.deps_key(tree / p)):
                     links[p] = k
                     log(f"lean-records: {p}: its dependencies are fetched cold, once for this tree")
-                (tree / LINKS).write_text(json.dumps(links, indent=1, sort_keys=True) + "\n")
+                write_links(tree, links)
                 mine_out = out if p == pkg else out / f"requirer-{re.sub(r'[^A-Za-z0-9]+', '_', p)}"
                 argv = [sys.executable, str(AUDIT_PY), "--build", "--no-replay", "--no-runs",
                         *(["--update"] if update and p == pkg else []),
@@ -437,7 +454,7 @@ def run(cache: Path, deps: Path, tree: Path, log=print) -> int:
         except BlockingIOError:
             log("lean-changed: skipped: another check on this machine holds the tree")
             return 0
-        links = json.loads((tree / LINKS).read_text()) if (tree / LINKS).is_file() else {}
+        links = read_links(tree)
         failed: list[str] = []
         built: list[str] = []
         compared: list[str] = []
@@ -487,7 +504,7 @@ def run(cache: Path, deps: Path, tree: Path, log=print) -> int:
                 compared.append(pkg)
                 log(f"lean-changed: {pkg}: its guarantees match their records ({took:.0f} s)")
         finally:
-            (tree / LINKS).write_text(json.dumps(links, indent=1, sort_keys=True) + "\n")
+            write_links(tree, links)
     log(f"lean-changed: {'FAIL (' + ', '.join(failed) + ')' if failed else 'PASS'}: built {len(built)} of the {len(todo)} "
         f"package(s) whose audit misses; compared the guarantees of {len(compared)}")
     return 1 if failed else 0

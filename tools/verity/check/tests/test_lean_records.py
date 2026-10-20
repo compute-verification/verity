@@ -209,6 +209,25 @@ def test_without_the_audits_dependencies_the_tree_fetches_its_own_once(repo, tmp
         "a package that fetches nothing needs none"
 
 
+def test_a_links_file_cut_short_is_no_links_and_is_replaced_whole(repo, tmp_path, capsys):
+    """A full disk on vy-nebius-cpu-2 (19 Oct) left slot build/1's links.json empty, and every run that took the slot died
+    reading it (r20261020-000910-f838). An unreadable links.json names no links, so the tree takes its copy again; it is
+    written to a temporary file and moved over the old one."""
+    tree, deps = tmp_path / "cache" / "lean-records" / "tree", tmp_path / "deps"
+    k = LC.LA.deps_key(repo / "a")
+    (deps / k / "dep").mkdir(parents=True)
+    (deps / k / "dep" / "Dep.olean").write_text("olean")
+    (tree / "a" / ".lake" / "packages" / "stale").mkdir(parents=True)
+    for cut in ("", '{"a": '):
+        (tree / LC.LINKS).write_text(cut)
+        assert LC.audit_records("a", deps, tree) == 0
+        assert json.loads((tree / LC.LINKS).read_text()) == {"a": k}
+        assert f"dependencies copied ({k[:12]})" in capsys.readouterr().out
+        assert (tree / "a" / ".lake" / "packages" / "dep" / "Dep.olean").read_text() == "olean"
+        assert not (tree / "a" / ".lake" / "packages" / "stale").exists()
+        assert not (tree / f"{LC.LINKS}.tmp").exists()
+
+
 def test_the_packages_whose_records_read_the_build_are_audited_after_it(repo, tmp_path, monkeypatch, capsys):
     """`--records Security` left `Security/Properties`' records, which read `Security`'s build, unchecked, and an unintended
     change to three of them surfaced only at a train's check (#1793). `a` requires `p` by path and lists a guarantee, so
