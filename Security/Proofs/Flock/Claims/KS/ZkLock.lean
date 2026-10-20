@@ -56,6 +56,10 @@ theorem zk_range_map_ends {α : Type} (f : ℕ → α) {K : ℕ} (hK : 2 ≤ K) 
   rw [List.range_succ, List.range_succ_eq_map]
   simp
 
+namespace Gen
+
+variable [S : ZkSetup]
+
 /-- **The deployed verifier decides without its last coin**: at coins that differ in the last only, a decision at one
 is the same decision at the other. -/
 theorem zk_act_last_decide {zk : Bool} {x : Claims.Msg} {as : List Claims.Msg} {c₀ : Coin} {l : List Coin} {c : Coin}
@@ -96,6 +100,22 @@ theorem zk_act_last_decide {zk : Bool} {x : Claims.Msg} {as : List Claims.Msg} {
         cases heq
     · cases h
 
+end Gen
+
+/-- **The deployed verifier decides without its last coin**: at coins that differ in the last only, a decision at one
+is the same decision at the other. -/
+theorem zk_act_last_decide {zk : Bool} {x : Claims.Msg} {as : List Claims.Msg} {c₀ : Coin} {l : List Coin} {c : Coin}
+    {s : Ins} {spec : SessionSpec} {sts : Array Stmt} {link : List ByteArray × List ByteArray} {c₁ : Coin}
+    {mids : List (Claims.Msg × Coin)} {f : Final}
+    (h : act zk x as (c₀ :: (l ++ [c])) = .decide s spec sts link c₁ mids f) (c' : Coin) :
+    act zk x as (c₀ :: (l ++ [c'])) = .decide s spec sts link c₁ mids f :=
+  Gen.zk_act_last_decide (S := S₀) (zk := zk) (x := x) (as := as) (c₀ := c₀) (l := l) (c := c) (s := s) (spec := spec)
+    (sts := sts) (link := link) (c₁ := c₁) (mids := mids) (f := f) (h := h) (c' := c')
+
+namespace Gen
+
+variable [S : ZkSetup]
+
 /-- **The deployed verifier accepts without its last coin.** -/
 theorem zk_next_acc_last {zk : Bool} (H : Claims.Msg → Claims.Msg) {x : Claims.Msg} {as : List Claims.Msg} (c₀ : Coin)
     (l : List Coin) (c c' : Coin) :
@@ -114,10 +134,32 @@ theorem zk_next_acc_last {zk : Bool} (H : Claims.Msg → Claims.Msg) {x : Claims
       exact h
   exact ⟨key c c', key c' c⟩
 
+end Gen
+
+/-- **The deployed verifier accepts without its last coin.** -/
+theorem zk_next_acc_last {zk : Bool} (H : Claims.Msg → Claims.Msg) {x : Claims.Msg} {as : List Claims.Msg} (c₀ : Coin)
+    (l : List Coin) (c c' : Coin) :
+    ((next zk x as (c₀ :: (l ++ [c]))).eval H).1 = .acc ↔ ((next zk x as (c₀ :: (l ++ [c']))).eval H).1 = .acc :=
+  Gen.zk_next_acc_last (S := S₀) (zk := zk) (H := H) (x := x) (as := as) (c₀ := c₀) (l := l) (c := c) (c' := c')
+
+namespace Gen
+
+variable [S : ZkSetup]
+
 theorem zk_act_none {zk : Bool} {x : Claims.Msg} (hs : setupOf zk x = none) (as : List Claims.Msg) (cs : List Coin) :
     act zk x as cs = .rej := by
   unfold act
   rw [hs]
+
+end Gen
+
+theorem zk_act_none {zk : Bool} {x : Claims.Msg} (hs : setupOf zk x = none) (as : List Claims.Msg) (cs : List Coin) :
+    act zk x as cs = .rej :=
+  Gen.zk_act_none (S := S₀) (zk := zk) (x := x) (hs := hs) (as := as) (cs := cs)
+
+namespace Gen
+
+variable [S : ZkSetup]
 
 /-- **A deployed run's acceptance does not read its last coin.** -/
 theorem zk_run_acc_iff_last {zk : Bool} (H : Claims.Msg → Claims.Msg) {Ω : Type} (P : Claims.Prover Ω)
@@ -142,6 +184,16 @@ theorem zk_run_acc_iff_last {zk : Bool} (H : Claims.Msg → Claims.Msg) {Ω : Ty
       rw [hb, zk_range_map_ends _ hK, zk_range_map_ends _ hK, h 0 (by omega),
         List.map_congr_left fun i hi => h (i + 1) (by have := List.mem_range.1 hi; omega)]
       exact zk_next_acc_last H _ _ _ _
+
+end Gen
+
+/-- **A deployed run's acceptance does not read its last coin.** -/
+theorem zk_run_acc_iff_last {zk : Bool} (H : Claims.Msg → Claims.Msg) {Ω : Type} (P : Claims.Prover Ω)
+    (x : Claims.Msg) (ω : Ω) (r₁ r₂ : Fin ((V zk).k x) → Coin)
+    (h : ∀ i, i + 1 < (V zk).k x → Claims.coinSeq r₁ i = Claims.coinSeq r₂ i) :
+    (Claims.run H P (V zk) x ω r₁).out = .acc ↔ (Claims.run H P (V zk) x ω r₂).out = .acc :=
+  Gen.zk_run_acc_iff_last (S := S₀) (zk := zk) (H := H) (Ω := Ω) (P := P) (x := x) (ω := ω) (r₁ := r₁) (r₂ := r₂)
+    (h := h)
 
 theorem zkDepHist_congr {Ω : Type} (H : Claims.Msg → Claims.Msg) (P : Claims.Prover Ω) (x : Claims.Msg) (ω : Ω)
     {c₁ c₂ : ℕ → Coin} : ∀ j, (∀ i < j, c₁ i = c₂ i) → zkDepHist H P x ω c₁ j = zkDepHist H P x ω c₂ j
@@ -368,11 +420,21 @@ theorem zkSub_round (J k n : ℕ) (a : Claims.Msg) (hk : k / 2 < J) (hn : n ≤ 
   · rename_i hne
     exact (hne _ rfl).elim
 
+namespace Gen
+
+variable [S : ZkSetup]
+
 theorem zkCnt_le (x : Claims.Msg) (spec : SessionSpec) (sts : Array Stmt) {i : ℕ} (h0 : i ≠ 0) :
     zkCnt x spec sts i ≤ 65536 := by
   unfold zkCnt
   rw [ite_eq_right h0]
   split_ifs <;> omega
+
+end Gen
+
+theorem zkCnt_le (x : Claims.Msg) (spec : SessionSpec) (sts : Array Stmt) {i : ℕ} (h0 : i ≠ 0) :
+    zkCnt x spec sts i ≤ 65536 :=
+  Gen.zkCnt_le (S := S₀) (x := x) (spec := spec) (sts := sts) (i := i) (h0 := h0)
 
 /-! ## The simulator along the live history -/
 
@@ -383,6 +445,20 @@ def zkS (x : Claims.Msg) (spec : SessionSpec) (sts : Array Stmt) {J : ℕ} (hJ :
   ⟨⟨zkStream spec sts (k + 1) / 2, by have := zkStream_lt (spec := spec) h0 (k + 1); omega⟩,
     ⟨zkStream spec sts (k + 1) % 2, Nat.mod_lt _ (by norm_num)⟩, ⟨(dm (k + 1)).tail.toArray⟩, zkCnt x spec sts (k + 1)⟩
 
+
+namespace Gen
+
+variable [S : ZkSetup]
+
+/-- **The simulator's submission `k`**: deployed round `k + 1`'s table, rep and count, and the bytes of `P`'s message
+`dm (k + 1)` after its tag. -/
+def zkS (x : Claims.Msg) (spec : SessionSpec) (sts : Array Stmt) {J : ℕ} (hJ : sts.size ≤ J) (h0 : 0 < sts.size)
+    (dm : ℕ → Claims.Msg) (k : ℕ) : SubmitJ J :=
+  ⟨⟨zkStream spec sts (k + 1) / 2, by have := zkStream_lt (spec := spec) h0 (k + 1); omega⟩,
+    ⟨zkStream spec sts (k + 1) % 2, Nat.mod_lt _ (by norm_num)⟩, ⟨(dm (k + 1)).tail.toArray⟩, zkCnt x spec sts (k + 1)⟩
+
+end Gen
+
 /-- **The live history after `k` submissions**, at the first message of `P` and the messages `b`. -/
 noncomputable def zkHl {Ω : Type} (P : Claims.Prover Ω) (x : Claims.Msg) (spec : SessionSpec) (sts : Array Stmt)
     (ω : Ω) {J : ℕ} (hJ : sts.size ≤ J) (h0 : 0 < sts.size) (hw : 2 * spec.mPts ≤ 65536) (dm b : ℕ → Claims.Msg)
@@ -391,10 +467,41 @@ noncomputable def zkHl {Ω : Type} (P : Claims.Prover Ω) (x : Claims.Msg) (spec
       (zkWire J spec.mPts hw).encPts ((ptsIf (zkWire J spec.mPts hw)).proj (Claims.coinSeq r' 0)))] ++
     zkLiveH (zkWire J spec.mPts hw) b (zkS x spec sts hJ h0 dm) (fun i => Claims.coinSeq r' (i + 1)) k
 
+
+namespace Gen
+
+variable [S : ZkSetup]
+
+/-- **The live history after `k` submissions**, at the first message of `P` and the messages `b`. -/
+noncomputable def zkHl {Ω : Type} (P : Claims.Prover Ω) (x : Claims.Msg) (spec : SessionSpec) (sts : Array Stmt)
+    (ω : Ω) {J : ℕ} (hJ : sts.size ≤ J) (h0 : 0 < sts.size) (hw : 2 * spec.mPts ≤ 65536) (dm b : ℕ → Claims.Msg)
+    (r' : Fin (zkN x + 2) → LCoin 65536) (k : ℕ) : List (Claims.Msg × Claims.Msg) :=
+  [(((P.next x [] ω).eval sha512).1,
+      (zkWire J spec.mPts hw).encPts ((ptsIf (zkWire J spec.mPts hw)).proj (Claims.coinSeq r' 0)))] ++
+    zkLiveH (zkWire J spec.mPts hw) b (zkS x spec sts hJ h0 dm) (fun i => Claims.coinSeq r' (i + 1)) k
+
+end Gen
+
+namespace Gen
+
+variable [S : ZkSetup]
+
 theorem zkHl_length {Ω : Type} (P : Claims.Prover Ω) (x : Claims.Msg) (spec : SessionSpec) (sts : Array Stmt)
     (ω : Ω) {J : ℕ} (hJ : sts.size ≤ J) (h0 : 0 < sts.size) (hw : 2 * spec.mPts ≤ 65536) (dm b : ℕ → Claims.Msg)
     (r' : Fin (zkN x + 2) → LCoin 65536) (k : ℕ) : (zkHl P x spec sts ω hJ h0 hw dm b r' k).length = k + 1 := by
   rw [zkHl, List.length_append, zkLiveH_length, List.length_singleton, Nat.add_comm]
+
+end Gen
+
+theorem zkHl_length {Ω : Type} (P : Claims.Prover Ω) (x : Claims.Msg) (spec : SessionSpec) (sts : Array Stmt)
+    (ω : Ω) {J : ℕ} (hJ : sts.size ≤ J) (h0 : 0 < sts.size) (hw : 2 * spec.mPts ≤ 65536) (dm b : ℕ → Claims.Msg)
+    (r' : Fin (zkN x + 2) → LCoin 65536) (k : ℕ) : (zkHl P x spec sts ω hJ h0 hw dm b r' k).length = k + 1 :=
+  Gen.zkHl_length (S := S₀) (Ω := Ω) (P := P) (x := x) (spec := spec) (sts := sts) (ω := ω) (J := J) (hJ := hJ)
+    (h0 := h0) (hw := hw) (dm := dm) (b := b) (r' := r') (k := k)
+
+namespace Gen
+
+variable [S : ZkSetup]
 
 /-- **The revealed entries along the live history are the live coins'**: before `k + 1`, the simulator reads back
 the first `zkNOf` entries of each live coin. -/
@@ -433,6 +540,23 @@ theorem zkRecon_agree {Ω : Type} (P : Claims.Prover Ω) (x : Claims.Msg) (spec 
     unfold zkReveal
     rw [ite_eq_right (Nat.succ_ne_zero i'), finDecode_code, zkPadE_takeE _ _ _ (by omega)]
 
+end Gen
+
+/-- **The revealed entries along the live history are the live coins'**: before `k + 1`, the simulator reads back
+the first `zkNOf` entries of each live coin. -/
+theorem zkRecon_agree {Ω : Type} (P : Claims.Prover Ω) (x : Claims.Msg) (spec : SessionSpec) (sts : Array Stmt)
+    (ω : Ω) {J : ℕ} (hJ : sts.size ≤ J) (h0 : 0 < sts.size) (hw : 2 * spec.mPts ≤ 65536) (hm1 : 1 ≤ spec.mPts)
+    (dm b : ℕ → Claims.Msg) (r' : Fin (zkN x + 2) → LCoin 65536) (hL : zkN x + 2 = (V true).k x) (k : ℕ)
+    (i : Fin ((V true).k x)) (hi : i.val < k + 1) :
+    Claims.Flock.FnFork.AgreeAt (zkNOf x spec sts i) (zkRecon x spec sts (zkHl P x spec sts ω hJ h0 hw dm b r' k) i)
+      (r' (Fin.cast hL.symm i)) :=
+  Gen.zkRecon_agree (S := S₀) (Ω := Ω) (P := P) (x := x) (spec := spec) (sts := sts) (ω := ω) (J := J) (hJ := hJ)
+    (h0 := h0) (hw := hw) (hm1 := hm1) (dm := dm) (b := b) (r' := r') (hL := hL) (k := k) (i := i) (hi := hi)
+
+namespace Gen
+
+variable [S : ZkSetup]
+
 /-- **The simulator's coins are `zkΦ`'s at every deployed coin the live history has revealed.** -/
 theorem zkSimCoins_agree {Ω : Type} (P : Claims.Prover Ω) (x : Claims.Msg) (spec : SessionSpec) (sts : Array Stmt)
     (ω : Ω) {J : ℕ} (hJ : sts.size ≤ J) (h0 : 0 < sts.size) (hw : 2 * spec.mPts ≤ 65536) (hm1 : 1 ≤ spec.mPts)
@@ -447,6 +571,18 @@ theorem zkSimCoins_agree {Ω : Type} (P : Claims.Prover Ω) (x : Claims.Msg) (sp
       zkRecon_agree P x spec sts ω hJ h0 hw hm1 dm b r' hL k j (lt_of_le_of_lt (Fin.le_def.1 hj) hi)
   · rfl
 
+end Gen
+
+/-- **The simulator's coins are `zkΦ`'s at every deployed coin the live history has revealed.** -/
+theorem zkSimCoins_agree {Ω : Type} (P : Claims.Prover Ω) (x : Claims.Msg) (spec : SessionSpec) (sts : Array Stmt)
+    (ω : Ω) {J : ℕ} (hJ : sts.size ≤ J) (h0 : 0 < sts.size) (hw : 2 * spec.mPts ≤ 65536) (hm1 : 1 ≤ spec.mPts)
+    (dm b : ℕ → Claims.Msg) (u : zkTape x) (r' : Fin (zkN x + 2) → LCoin 65536) (hL : zkN x + 2 = (V true).k x)
+    (k i : ℕ) (hi : i < k + 1) :
+    Claims.coinSeq (zkSimCoins x spec sts u (zkHl P x spec sts ω hJ h0 hw dm b r' k)) i =
+      Claims.coinSeq (zkΦ x spec sts (u, r')) i :=
+  Gen.zkSimCoins_agree (S := S₀) (Ω := Ω) (P := P) (x := x) (spec := spec) (sts := sts) (ω := ω) (J := J) (hJ := hJ)
+    (h0 := h0) (hw := hw) (hm1 := hm1) (dm := dm) (b := b) (u := u) (r' := r') (hL := hL) (k := k) (i := i) (hi := hi)
+
 /-- **The simulator's messages**: deployed round `k + 1`'s on the masked wire before the last, and at the last `P`'s
 last message where `V true` accepts at `zkΦ`, else nothing. -/
 noncomputable def zkB (x : Claims.Msg) (spec : SessionSpec) (sts : Array Stmt) (dm : ℕ → Claims.Msg) (acc : Bool)
@@ -454,15 +590,57 @@ noncomputable def zkB (x : Claims.Msg) (spec : SessionSpec) (sts : Array Stmt) (
   if k < zkN x then zkRound (zkStream spec sts (k + 1)) (zkCnt x spec sts (k + 1)) (dm (k + 1))
   else if acc then dm (k + 1) else []
 
+
+namespace Gen
+
+variable [S : ZkSetup]
+
+/-- **The simulator's messages**: deployed round `k + 1`'s on the masked wire before the last, and at the last `P`'s
+last message where `V true` accepts at `zkΦ`, else nothing. -/
+noncomputable def zkB (x : Claims.Msg) (spec : SessionSpec) (sts : Array Stmt) (dm : ℕ → Claims.Msg) (acc : Bool)
+    (k : ℕ) : Claims.Msg :=
+  if k < zkN x then zkRound (zkStream spec sts (k + 1)) (zkCnt x spec sts (k + 1)) (dm (k + 1))
+  else if acc then dm (k + 1) else []
+
+end Gen
+
 /-- `P`'s messages at `zkΦ`'s coins. -/
 noncomputable def zkDm {Ω : Type} (P : Claims.Prover Ω) (x : Claims.Msg) (spec : SessionSpec) (sts : Array Stmt)
     (ω : Ω) (u : zkTape x) (r' : Fin (zkN x + 2) → LCoin 65536) : ℕ → Claims.Msg :=
   zkDepMsg sha512 P x ω (Claims.coinSeq (zkΦ x spec sts (u, r')))
 
+
+namespace Gen
+
+variable [S : ZkSetup]
+
+/-- `P`'s messages at `zkΦ`'s coins. -/
+noncomputable def zkDm {Ω : Type} (P : Claims.Prover Ω) (x : Claims.Msg) (spec : SessionSpec) (sts : Array Stmt)
+    (ω : Ω) (u : zkTape x) (r' : Fin (zkN x + 2) → LCoin 65536) : ℕ → Claims.Msg :=
+  zkDepMsg sha512 P x ω (Claims.coinSeq (zkΦ x spec sts (u, r')))
+
+end Gen
+
 /-- Whether `V true` accepts `P` at `zkΦ`'s coins. -/
 noncomputable def zkAcc {Ω : Type} (P : Claims.Prover Ω) (x : Claims.Msg) (spec : SessionSpec) (sts : Array Stmt)
     (ω : Ω) (u : zkTape x) (r' : Fin (zkN x + 2) → LCoin 65536) : Bool :=
   decide ((Claims.run sha512 P (V true) x ω (zkΦ x spec sts (u, r'))).out = .acc)
+
+
+namespace Gen
+
+variable [S : ZkSetup]
+
+/-- Whether `V true` accepts `P` at `zkΦ`'s coins. -/
+noncomputable def zkAcc {Ω : Type} (P : Claims.Prover Ω) (x : Claims.Msg) (spec : SessionSpec) (sts : Array Stmt)
+    (ω : Ω) (u : zkTape x) (r' : Fin (zkN x + 2) → LCoin 65536) : Bool :=
+  decide ((Claims.run sha512 P (V true) x ω (zkΦ x spec sts (u, r'))).out = .acc)
+
+end Gen
+
+namespace Gen
+
+variable [S : ZkSetup]
 
 /-- **The simulator sends `zkB` along the live history.** -/
 theorem zkSim_msg {Ω : Type} (P : Claims.Prover Ω) (x : Claims.Msg) (spec : SessionSpec) (sts : Array Stmt) (ω : Ω)
@@ -491,6 +669,22 @@ theorem zkSim_msg {Ω : Type} (P : Claims.Prover Ω) (x : Claims.Msg) (spec : Se
     · rw [ite_eq_right (mt hacc.1 ha)]
       conv_rhs => rw [zkAcc, decide_eq_false ha]
       rfl
+
+end Gen
+
+/-- **The simulator sends `zkB` along the live history.** -/
+theorem zkSim_msg {Ω : Type} (P : Claims.Prover Ω) (x : Claims.Msg) (spec : SessionSpec) (sts : Array Stmt) (ω : Ω)
+    {J : ℕ} (hJ : sts.size ≤ J) (h0 : 0 < sts.size) (hw : 2 * spec.mPts ≤ 65536) (hm1 : 1 ≤ spec.mPts)
+    (u : zkTape x) (r' : Fin (zkN x + 2) → LCoin 65536) (hL : zkN x + 2 = (V true).k x) (k : ℕ) (hk : k ≤ zkN x) :
+    (((zkSim P x spec sts).next x (zkHl P x spec sts ω hJ h0 hw (zkDm P x spec sts ω u r')
+        (zkB x spec sts (zkDm P x spec sts ω u r') (zkAcc P x spec sts ω u r')) r' k) (ω, u)).eval sha512).1 =
+      zkB x spec sts (zkDm P x spec sts ω u r') (zkAcc P x spec sts ω u r') k :=
+  Gen.zkSim_msg (S := S₀) (Ω := Ω) (P := P) (x := x) (spec := spec) (sts := sts) (ω := ω) (J := J) (hJ := hJ) (h0 := h0)
+    (hw := hw) (hm1 := hm1) (u := u) (r' := r') (hL := hL) (k := k) (hk := hk)
+
+namespace Gen
+
+variable [S : ZkSetup]
 
 /-- **The simulator's live outcome**: `P`'s roots, the live link points, the rounds of its submissions and the proof
 files of its last message. -/
@@ -523,6 +717,23 @@ theorem zkSim_liveOut {Ω : Type} (P : Claims.Prover Ω) (x : Claims.Msg) (spec 
   rw [zk_liveOut_known zkN spec.dg (zkW J spec hw) sha512 (zkSim P x spec sts) x (ω, u) r' _ _ hS hb, zkSim_first]
   rfl
 
+end Gen
+
+/-- **The simulator's live outcome**: `P`'s roots, the live link points, the rounds of its submissions and the proof
+files of its last message. -/
+theorem zkSim_liveOut {Ω : Type} (P : Claims.Prover Ω) (x : Claims.Msg) (spec : SessionSpec) (sts : Array Stmt)
+    (ω : Ω) {J : ℕ} (hJ : sts.size ≤ J) (h0 : 0 < sts.size) (hw : 2 * spec.mPts ≤ 65536) (hm1 : 1 ≤ spec.mPts)
+    (u : zkTape x) (r' : Fin (zkN x + 2) → LCoin 65536) (hL : zkN x + 2 = (V true).k x) :
+    liveOut (fun _ => J) (fun _ => spec.mPts) zkN spec.dg (zkW J spec hw) sha512 (zkSim P x spec sts) x (ω, u) r' =
+      ⟨(zkWire J spec.mPts hw).root ((P.next x [] ω).eval sha512).1,
+        (ptsIf (zkWire J spec.mPts hw)).proj (Claims.coinSeq r' 0),
+        zkFoldS spec.dg (zkS x spec sts hJ h0 (zkDm P x spec sts ω u r')) (fun i => Claims.coinSeq r' (i + 1))
+          (zkN x) (fun _ _ => []),
+        (zkWire J spec.mPts hw).proofs
+          (zkB x spec sts (zkDm P x spec sts ω u r') (zkAcc P x spec sts ω u r') (zkN x))⟩ :=
+  Gen.zkSim_liveOut (S := S₀) (Ω := Ω) (P := P) (x := x) (spec := spec) (sts := sts) (ω := ω) (J := J) (hJ := hJ)
+    (h0 := h0) (hw := hw) (hm1 := hm1) (u := u) (r' := r') (hL := hL)
+
 /-! ## The abort -/
 
 /-- **The verdict at the draw refuses an outcome without proof files**: what `wrS` writes has the outcome's proof
@@ -536,6 +747,10 @@ theorem not_accTxJ_nil (I : Discharge.Exec.Inputs) (d : Lean.Json) (j₀ : ℕ) 
   rcases t with ⟨record, proofs⟩
   subst hp
   exact Claims.Bridge.Custody.not_acceptsAt_nil I d record hA
+
+namespace Gen
+
+variable [S : ZkSetup]
 
 /-- **Where `P`'s run at `zkΦ`'s coins is rejected, the simulator's live outcome has no proof files**: its last
 message is empty. -/
@@ -551,6 +766,23 @@ theorem zkSim_proofs_nil {Ω : Type} (P : Claims.Prover Ω) (x : Claims.Msg) (sp
   rw [zkB, ite_eq_right (lt_irrefl _), zkAcc, decide_eq_false hna]
   rfl
 
+end Gen
+
+/-- **Where `P`'s run at `zkΦ`'s coins is rejected, the simulator's live outcome has no proof files**: its last
+message is empty. -/
+theorem zkSim_proofs_nil {Ω : Type} (P : Claims.Prover Ω) (x : Claims.Msg) (spec : SessionSpec) (sts : Array Stmt)
+    (ω : Ω) {J : ℕ} (hJ : sts.size ≤ J) (h0 : 0 < sts.size) (hw : 2 * spec.mPts ≤ 65536) (hm1 : 1 ≤ spec.mPts)
+    (u : zkTape x) (r' : Fin (zkN x + 2) → LCoin 65536) (hL : zkN x + 2 = (V true).k x)
+    (hna : (Claims.run sha512 P (V true) x ω (zkΦ x spec sts (u, r'))).out ≠ .acc) :
+    (liveOut (fun _ => J) (fun _ => spec.mPts) zkN spec.dg (zkW J spec hw) sha512 (zkSim P x spec sts) x (ω, u)
+      r').proofs = #[] :=
+  Gen.zkSim_proofs_nil (S := S₀) (Ω := Ω) (P := P) (x := x) (spec := spec) (sts := sts) (ω := ω) (J := J) (hJ := hJ)
+    (h0 := h0) (hw := hw) (hm1 := hm1) (u := u) (r' := r') (hL := hL) (hna := hna)
+
+namespace Gen
+
+variable [S : ZkSetup]
+
 theorem zk_tabsJ_le {x : Claims.Msg} {ins : Ins} {spec : SessionSpec} {sts : Array Stmt}
     (hset : setupOf true x = some (ins, spec, sts)) (h0 : 0 < sts.size)
     (L : (j : ℕ) → (h : j < sts.size) → Layout sts[j])
@@ -560,11 +792,33 @@ theorem zk_tabsJ_le {x : Claims.Msg} {ins : Ins} {spec : SessionSpec} {sts : Arr
     sts.size ≤ (tabsJ (tables true x).length (zkTabs h0 L hz hk hlay)).length := by
   simp only [tabsJ_length, zk_tables_length hset, le_refl]
 
+end Gen
+
+theorem zk_tabsJ_le {x : Claims.Msg} {ins : Ins} {spec : SessionSpec} {sts : Array Stmt}
+    (hset : setupOf true x = some (ins, spec, sts)) (h0 : 0 < sts.size)
+    (L : (j : ℕ) → (h : j < sts.size) → Layout sts[j])
+    (hz : ∀ j (h : j < sts.size), Zk.schedule sts[j].m = .ok (Claims.Flock.zkSched sts[j].m))
+    (hk : ∀ j (h : j < sts.size), sts[j].c.kLog ≤ 27)
+    (hlay : ∀ j (h : j < sts.size), ((L j h).model (Refine.regionsOf sts[j])).LinkLayout PT_LOCAL spec.mPts) :
+    sts.size ≤ (tabsJ (tables true x).length (zkTabs h0 L hz hk hlay)).length :=
+  Gen.zk_tabsJ_le (S := S₀) (x := x) (ins := ins) (spec := spec) (sts := sts) (hset := hset) (h0 := h0) (L := L)
+    (hz := hz) (hk := hk) (hlay := hlay)
+
+namespace Gen
+
+variable [S : ZkSetup]
+
 /-- **The abort holds at every statement** (`zkSim_proofs_nil`, `not_accTxJ_nil`). -/
 theorem zkSimAbortAt (x : Claims.Msg) : ZkSimAbortAt x :=
   fun _ hs hin _ spec sts hset h0 L hz hk hlay d _ _ P ω j _ C _ u r' hna =>
     not_accTxJ_nil _ d j _ C
       (zkSim_proofs_nil P x spec sts ω (zk_tabsJ_le hset h0 L hz hk hlay) h0 (zk_mPts_le hs hin hset)
         (zk_mPts hs hin hset).2 u r' (zkN_add hset) hna)
+
+end Gen
+
+/-- **The abort holds at every statement** (`zkSim_proofs_nil`, `not_accTxJ_nil`). -/
+theorem zkSimAbortAt (x : Claims.Msg) : ZkSimAbortAt x :=
+  Gen.zkSimAbortAt (S := S₀) (x := x)
 
 end FlockDeploy.KS

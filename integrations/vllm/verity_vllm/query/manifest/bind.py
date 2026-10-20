@@ -26,7 +26,11 @@ each step's events in four passes; the k-th event of a name in the step is occur
    boundary, of `<module>/<fx node>` or of the module itself) that port `port` of one of those Definitions produces: DeepGEMM's quant
    branch `x_q` / `x_s` is its ports 0 / 1, the attention taps the DSA indexer's ports and the sparse MLA and W_UK_T absorb boundaries.
    The occurrences of every label declaring one Port at one module bind its candidates in (invocation, Program) order when there are as
-   many of each, else none: the mHC taps' attention and FFN post_pre are one Definition's port twice per layer, in commit order;
+   many of each, else none: the mHC taps' attention and FFN post_pre are one Definition's port twice per layer, in commit order.  A
+   call boundary's fx node is numbered over its request's own steps, so a step that batches requests at different steps of their own
+   spells one Call once per request (mixed arrivals): then occurrence k binds every request's k-th candidate, when each request has as
+   many as there are occurrences, under the first request's spelling, and `spellings` names each request's own (the binding map's
+   per-request entries);
 3. any other label binds the member of its module that it equals, at invocation k (the call-boundary source, the partial, norm,
    sampler, token-id and plane taps, a capture map's taps whose label is the Call's hint);
 4. the tuple slots of occurrence k of a module bind the members of that module at invocation k that 1-3 left, in Program order: slots
@@ -98,9 +102,14 @@ def _engine_steps(r: Mapping[str, Any], arrivals: Mapping[str, int] | None, decl
         return [int(r["engine_step"])]
     if st in (None, "*"):
         return []
-    rid = declared.get(str(rid), f"r{rid}" if str(rid).isdigit() else str(rid))
     lo, hi = st if isinstance(st, list) else (st, st)
-    return [int(s) + int((arrivals or {}).get(rid, 0)) for s in range(int(lo), int(hi) + 1)]
+    return [int(s) + int((arrivals or {}).get(_request(r, declared), 0)) for s in range(int(lo), int(hi) + 1)]
+
+
+def _request(r: Mapping[str, Any], declared: Mapping[str, str]) -> str:
+    """The row's request as the engine names it (`r<i>`): a declared request id through `declared`, a bare index prefixed."""
+    rid = r.get("request_id")
+    return declared.get(str(rid), f"r{rid}" if str(rid).isdigit() else str(rid))
 
 
 def _on_rank(r: Mapping[str, Any], rank: int | None) -> bool:
@@ -121,6 +130,8 @@ class Binder:
         self.aliases = {k: (str(v[0]), int(v[1])) for k, v in (aliases or {}).items()}
         #: engine step -> (op_path, member, invocation) -> (family, port, position)
         self.rows: dict[int, dict[tuple[str, str, int], tuple[str, str, tuple]]] = defaultdict(dict)
+        #: engine step -> (op_path, member, invocation) -> the requests whose rows spell it
+        self.requests: dict[int, dict[tuple[str, str, int], set[str]]] = defaultdict(dict)
         self.promoted: dict[int, set[tuple[str, str, int]]] = defaultdict(set)
         for row in rows:
             r = {**row, **(row.get("identity") or {})}
@@ -129,9 +140,11 @@ class Binder:
             key = (str(r["op_path"]), str(r.get("output_member", "out")), int(r.get("invocation", 0)))
             for st in _engine_steps(r, arrivals, declared or {}):
                 self.rows[st].setdefault(key, (_family(r.get("spec")), str(r.get("port", key[1])), tuple(r.get("position") or ())))
+                self.requests[st].setdefault(key, set()).add(_request(r, declared or {}))
                 if r.get("promoted"):
                     self.promoted[st].add(key)
         self._by_op: dict[int, dict[str, list[tuple[str, str, int]]]] = {}
+        self._spelt: dict[tuple[int, tuple[str, str, int]], dict[str, tuple[str, str, int]]] = {}
 
     @classmethod
     def of_manifest(cls, manifest: Mapping[str, Any], *, rank: int | None = None, ports: Mapping[str, Port] | None = None,
@@ -157,6 +170,30 @@ class Binder:
         rows, ops = self.rows.get(step, {}), self._ops(step)
         keys = [k for o, ks in ops.items() if o == op or "/" in o and o.rsplit("/", 1)[0] == op for k in ks] if port.call_boundary else ops.get(op, [])
         return [k for k in keys if rows[k][0] in port.families and rows[k][1] == port.port]
+
+    def _per_request(self, step: int, cands: list[tuple[str, str, int]], n: int | None = None) -> dict[str, list[tuple[str, str, int]]]:
+        """A call-boundary port's `cands` at `step` as each request spells them, in Program order, when every request has as many (`n`
+        if given); else {}."""
+        reqs, each = self.requests.get(step, {}), defaultdict(list)
+        for c in cands:
+            for q in sorted(reqs.get(c, ())):
+                each[q].append(c)
+        sizes = {len(v) for v in each.values()}
+        return dict(sorted(each.items())) if "*" not in each and len(sizes) == 1 and n in (None, *sizes) else {}
+
+    def spellings(self, step: int, key: tuple[str, str, int]) -> dict[str, tuple[str, str, int]]:
+        """Each request's own spelling of the call boundary `key` at `step` (module docstring, pass 2): {request: its key at the same place
+        in its Program order}, {} for a key no call-boundary port declares."""
+        step = int(step)
+        if (step, key) not in self._spelt:
+            fam, prt, _pos = self.rows.get(step, {}).get(key, ("", "", ()))
+            port = next((p for p in self.ports.values() if p.call_boundary and fam in p.families and p.port == prt), None)
+            each = self._per_request(step, self._candidates(step, key[0].rsplit("/", 1)[0], port)) if port and "/" in key[0] else {}
+            for at in zip(*each.values()):
+                spelt = dict(zip(each, at))
+                self._spelt.update({(step, c): spelt for c in at})
+            self._spelt.setdefault((step, key), {})
+        return self._spelt[(step, key)]
 
     def bind(self, step: int, names: Sequence[str]) -> list[tuple[str, str, int, str]]:
         """The identity each event of `step` binds, as (op_path, member, invocation, how); how = `consumer-input` | `port` | `label` |
@@ -194,11 +231,13 @@ class Binder:
                 out[i] = (op, label, k, "unbound")
         for (op, port), events in declared.items():
             cands = [c for c in self._candidates(step, op, port) if c not in taken]
-            ok = len(cands) == len(events)
-            for (i, k, label), c in zip(events, cands if ok else [None] * len(events)):
+            each = self._per_request(step, cands, len(events)) if port.call_boundary and len(cands) != len(events) else {}
+            firsts = next(iter(each.values())) if each else cands
+            ok = len(firsts) == len(events)
+            for j, ((i, k, label), c) in enumerate(zip(events, firsts if ok else [None] * len(events))):
                 out[i] = (*c, "port") if c else (op, label, k, "unbound")
                 if c:
-                    taken.add(c)
+                    taken.update([v[j] for v in each.values()] if each else [c])
         ops = self._ops(step)
         for (op, k), sl in slots.items():
             left = [c for c in ops.get(op, []) if c[2] == k and c not in taken]
@@ -266,9 +305,11 @@ def coverage_check(manifest: dict[str, Any], layouts: dict[int | str, list[dict[
                 numel = 1
                 for d in m.get("shape") or []:
                     numel *= int(d)
-            have.setdefault((int(step), op, member, inv), []).append(int(numel))
-            rows_of.setdefault((int(step), op, member, inv), []).append(int(m["shape"][0]) if m.get("shape") else None)
-            by_op[(int(step), op, inv)].append((member, int(numel)))
+            rows = int(m["shape"][0]) if m.get("shape") else None
+            for key in (set(binder.spellings(int(step), (op, member, inv)).values()) if how == "port" else ()) or [(op, member, inv)]:
+                have.setdefault((int(step), *key), []).append(int(numel))
+                rows_of.setdefault((int(step), *key), []).append(rows)
+                by_op[(int(step), key[0], key[2])].append((key[1], int(numel)))
     # the declared composition: engine step -> {request: token rows}, and the step's token rows
     comp: dict[int, dict[str, int]] = {}
     tokens: dict[int, int] = {}

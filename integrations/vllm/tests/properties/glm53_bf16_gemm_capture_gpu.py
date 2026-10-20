@@ -14,8 +14,12 @@ The split-K-off variant (`SWITCH_ENV` and `switch()`) is vLLM's batch-invariant 
 (determinism/batch_invariant.py:1076-1080 and 1127-1138): CUBLAS_WORKSPACE_CONFIG=:16:8 and CUBLASLT_WORKSPACE_SIZE=1 before torch
 creates a cuBLAS handle, fp16 and bf16 reduced-precision reductions off with split-K off (``(False, False)``, torch >= 2.10), and
 cuBLASLt preferred.  vLLM's Triton bmm override is not part of it: `torch.bmm` stays on cuBLAS.  `--served-default` runs without
-the variant. By default the run checks the variant first and vLLM's served default in a second process; the outer verdict needs
-both, so `served_default` is first-class rather than timing-only.
+the variant, at vLLM's served cuBLAS configuration: `environment` clears every switch the process inherited
+(`engine.env.served_defaults`, and the variant's workspace variables) before torch is imported, nothing it imports sets one back
+(vLLM's process groups come from `distributed`), and `configuration` reads it back before the first GEMM (`switch`) and after the
+last (`switch_after`): not batch invariant, no workspace variable, torch's reduced-precision reductions at their default (True)
+and cuBLAS the preferred BLAS.  By default the run checks the variant first and vLLM's served default in a second process; the
+outer verdict needs both, the served default's read-backs among it, so `served_default` is first-class rather than timing-only.
 
   gate       `fa2_target_capture_gpu.gate`: driver, cc 9.0, 132 SMs (an H200).
   scan       in its own process (`scan_run`, `--scan-run`; the parent reads back its scan.json): profiler sessions this large
@@ -35,7 +39,8 @@ both, so `served_default` is first-class rather than timing-only.
              model class (`scan_classes`) at the first M past 256 the box serves it at, plus ENVELOPE, so every distinct
              model cuBLAS serves across decode batches to ENVELOPE is word-checked without launching every M twice.
   selection  each model's `GateLinear(K, N)` with a bf16 weight and f32 out allows tier 1 (ll_bf16_gemm) and tier 4 (cuBLAS) and
-             neither fp32 tier; `dispatch_unquantized_gemm()` is `default_unquantized_gemm` (F.linear); the switch's flags read back.
+             neither fp32 tier; `dispatch_unquantized_gemm()` is `default_unquantized_gemm` (F.linear); the configuration read
+             back (`switch`) is the run's: the variant's, or vLLM's served defaults.
   router     `GateLinear.forward` at M in the model's `router_m`, twice: every `LLBf16Gemm.dispatch` it makes is tapped and must be
              `bf16_gemm_check.dispatch_sm90`'s kernel at the gate's (K, N) (GLM-5.3, (6144, 256): M <= 4 dotprod at BS 128, 5..16
              split-K at 6, or 8 at M 9 and 11; DeepSeek-V4-Pro, (7168, 384): M 1, 2 dotprod at BS 256, whose K loop ends in a tail
@@ -66,7 +71,8 @@ both, so `served_default` is first-class rather than timing-only.
 
 GO needs, for every model and both variants, every case run (the scan's swept boundaries included), 0 mismatches on every word,
 `fma` decided, every launch deterministic and on its expected kernel, every profiled split-K launch's split pinned or fitted and
-its unique hypothesis fit, the scan ok, and the references equal.
+its unique hypothesis fit, the scan ok, the references equal, and each process's configuration read back as its variant's (the
+served default's before the first GEMM and after the last).
 
     cd integrations/vllm; PY=/workspace/venv312/bin/python     # PYTHONPATH as pod_bootstrap.sh sets it
     $PY tests/properties/glm53_bf16_gemm_capture_gpu.py --out DIR [--scratch DIR] [--workers N] [--quick] [--no-default]
@@ -95,9 +101,10 @@ import numpy as np
 
 from tests.properties import fa2_target_capture_gpu as C
 from tests.properties import fa_tap_exactness_gpu as G
+from verity_vllm.engine.env import served_defaults
 from verity_vllm.properties.record import seal as seal_record
 
-SCHEMA = "verity-vllm/glm53-bf16-gemm-capture/v5"
+SCHEMA = "verity-vllm/glm53-bf16-gemm-capture/v6"
 RECORD = "glm53_bf16_gemm_capture.json"
 #: GLM-5.3's MLA at one TP8 rank: heads, the nope and rope query widths, the latent rank and the value width
 NHL, QK_NOPE, QK_ROPE, KV_LORA, V_HEAD = 8, 192, 64, 512, 256
@@ -158,35 +165,51 @@ def _error(e: BaseException) -> str:
 
 
 # ------------------------------------------------------------------------------------------------------------------------- env
-def environment(served_default: bool, triton_cache: Path) -> dict[str, str]:
-    """The env, set before torch is imported: the switch's cuBLAS variables, or (`served_default`) none of them."""
-    env = {"VLLM_ENABLE_V1_MULTIPROCESSING": "0", "VLLM_BATCH_INVARIANT": "0", "TRITON_CACHE_DIR": str(triton_cache)}
-    if served_default:
-        for k in SWITCH_ENV:
-            os.environ.pop(k, None)
-    else:
-        env.update(SWITCH_ENV)
+def environment(served_default: bool, triton_cache: Path) -> tuple[dict[str, str], dict[str, str]]:
+    """vLLM's defaults (`served_defaults`, and no cuBLAS workspace variable), plus the switch's cuBLAS variables unless
+    `served_default`, and the Triton cache in scratch, set before torch is imported: (the env set, the switches cleared)."""
+    cleared = served_defaults()
+    cleared |= {k: os.environ.pop(k) for k in SWITCH_ENV if k in os.environ}
+    env = {"VLLM_ENABLE_V1_MULTIPROCESSING": "0", "TRITON_CACHE_DIR": str(triton_cache), **({} if served_default else SWITCH_ENV)}
     os.environ.update(env)
-    return env
+    return env, cleared
+
+
+REDUCED = ("allow_fp16_reduced_precision_reduction", "allow_bf16_reduced_precision_reduction")
+
+
+def configuration(served_default: bool) -> dict[str, Any]:
+    """The cuBLAS configuration as this process reads it (torch's reduced-precision flags and preferred BLAS, the workspace
+    variables, vLLM's batch invariance, the runtime cuBLAS version), `ok` if it is the one the process runs: the switch's, or
+    (`served_default`) vLLM's served defaults (not batch invariant, no workspace variable, both reductions at torch's default
+    True, cuBLAS the BLAS)."""
+    import torch
+    import vllm.envs as envs
+
+    m = torch.backends.cuda.matmul
+    rec: dict[str, Any] = {"torch": torch.__version__, **{k: repr(getattr(m, k)) for k in REDUCED},
+                           "preferred_blas_library": str(torch.backends.cuda.preferred_blas_library()),
+                           "env": {k: os.environ.get(k) for k in SWITCH_ENV}, "VLLM_BATCH_INVARIANT": bool(envs.VLLM_BATCH_INVARIANT),
+                           "cublas_version": cublas_version()}
+    blas = rec["preferred_blas_library"].rsplit(".", 1)[-1].lower()
+    if served_default:
+        rec["ok"] = not any(rec["env"].values()) and blas == "cublas" and all(rec[k] == "True" for k in REDUCED)
+    else:
+        rec["ok"] = rec["env"] == SWITCH_ENV and blas == "cublaslt" and all(rec[k] in ("(False, False)", "False") for k in REDUCED)
+    rec["ok"] = rec["ok"] and not rec["VLLM_BATCH_INVARIANT"]
+    return rec
 
 
 def switch(served_default: bool) -> dict[str, Any]:
-    """The switch's torch flags (unless `served_default`), set before the first GEMM, read back."""
+    """The switch's torch flags (unless `served_default`), set before the first GEMM, and the configuration read back."""
     import torch
 
-    m = torch.backends.cuda.matmul
     if not served_default:
+        m = torch.backends.cuda.matmul
         m.allow_fp16_reduced_precision_reduction = (False, False)
         m.allow_bf16_reduced_precision_reduction = (False, False)
         torch.backends.cuda.preferred_blas_library(backend="cublaslt")
-    rec = {"torch": torch.__version__, "allow_fp16_reduced_precision_reduction": repr(m.allow_fp16_reduced_precision_reduction),
-           "allow_bf16_reduced_precision_reduction": repr(m.allow_bf16_reduced_precision_reduction),
-           "preferred_blas_library": str(torch.backends.cuda.preferred_blas_library()),
-           "env": {k: os.environ.get(k) for k in SWITCH_ENV}, "cublas_version": cublas_version()}
-    rec["ok"] = served_default or (rec["env"] == SWITCH_ENV and "cublaslt" in rec["preferred_blas_library"].lower()
-                                   and all(v in ("(False, False)", "False") for v in (rec["allow_fp16_reduced_precision_reduction"],
-                                                                                     rec["allow_bf16_reduced_precision_reduction"])))
-    return rec
+    return configuration(served_default)
 
 
 # ------------------------------------------------------------------------------------------------------------------ operands
@@ -409,12 +432,21 @@ def _load_library(path: str):
 
 
 # ------------------------------------------------------------------------------------------------------------------- selection
-def make_gate(vllm_config, model: str):
+def distributed(work: Path) -> None:
+    """vLLM's TP and PP groups at world size 1 (`ReplicatedLinear` reads the TP group's rank), under the current vLLM config.  Not
+    `vllm_meta.ensure_distributed`: importing that module pins `engine.env.EXPORT` (test_env holds every capture that clears
+    `SERVED_DEFAULTS` to importing no pinning module)."""
+    from vllm.distributed import ensure_model_parallel_initialized, init_distributed_environment
+
+    init_distributed_environment(world_size=1, rank=0, distributed_init_method=f"file://{work / 'dist_store'}", local_rank=0,
+                                 backend="gloo")
+    ensure_model_parallel_initialized(1, 1)
+
+
+def make_gate(model: str):
     import torch
     from vllm.model_executor.layers.fused_moe.router.gate_linear import GateLinear
-    from verity_vllm.program.frontend.vllm_meta import ensure_distributed
 
-    ensure_distributed(vllm_config)                                                # ReplicatedLinear reads the TP group's rank
     m = MODELS[model]
     return GateLinear(m.hidden, m.experts, bias=False, out_dtype=torch.float32, params_dtype=torch.bfloat16,
                       prefix="model.layers.3.mlp.gate").cuda()
@@ -719,11 +751,11 @@ def scan_run(a: argparse.Namespace) -> int:
     outdir.mkdir(parents=True, exist_ok=True)
     tmp = tempfile.TemporaryDirectory(dir=a.scratch)
     work = Path(tmp.name)
-    environment(a.served_default, work / "triton_cache")
+    _, cleared = environment(a.served_default, work / "triton_cache")
     import torch
     from vllm.config import CompilationConfig, VllmConfig, set_current_vllm_config
 
-    doc: dict[str, Any] = {"cases": {}, "errors": {}}
+    doc: dict[str, Any] = {"cases": {}, "errors": {}, "env_cleared": cleared}
     try:
         doc["switch"] = switch(a.served_default)
     except Exception as e:  # noqa: BLE001
@@ -732,9 +764,13 @@ def scan_run(a: argparse.Namespace) -> int:
     vllm_config = VllmConfig(compilation_config=CompilationConfig(custom_ops=["all"]))
     with set_current_vllm_config(vllm_config):
         gates: dict[str, Any] = {}
+        try:
+            distributed(work)
+        except Exception as e:  # noqa: BLE001
+            doc["errors"]["distributed"] = _error(e)
         for model in models:
             try:
-                gates[model] = make_gate(vllm_config, model)
+                gates[model] = make_gate(model)
             except Exception as e:  # noqa: BLE001
                 doc["errors"][f"gate/{model}"] = _error(e)
         weights = Weights(work, 4000)
@@ -767,7 +803,12 @@ def scan_run(a: argparse.Namespace) -> int:
                 doc["cases"][skey] = scan_analyze(op, segments[i * len(SCAN_M):(i + 1) * len(SCAN_M)], rows)
             except Exception as e:  # noqa: BLE001
                 doc["errors"][skey] = _error(e)
-    doc["ok"] = (not doc["errors"] and doc["switch"].get("ok") is True and bool(doc["cases"])
+        try:
+            doc["switch_after"] = configuration(a.served_default)
+        except Exception as e:  # noqa: BLE001
+            doc["errors"]["switch_after"] = _error(e)
+            doc["switch_after"] = {"ok": False}
+    doc["ok"] = (not doc["errors"] and all(doc[k].get("ok") is True for k in ("switch", "switch_after")) and bool(doc["cases"])
                  and all(rec["ok"] for rec in doc["cases"].values()))
     (outdir / "scan.json").write_text(json.dumps(doc, indent=1, default=str) + "\n")
     tmp.cleanup()
@@ -1123,7 +1164,7 @@ def model_verdicts(doc: dict[str, Any]) -> dict[str, bool]:
 
 
 def _verdict(doc: dict[str, Any]) -> bool:
-    return (doc["gate"]["ok"] and not doc["errors"] and doc["switch"].get("ok") is True
+    return (doc["gate"]["ok"] and not doc["errors"] and all(doc.get(k, {}).get("ok") is True for k in ("switch", "switch_after"))
             and isinstance(doc["switch"].get("cublas_version"), int)
             and all(s.get("ok") is True for s in doc["selection"].values()) and bool(doc["selection"])
             and doc["bind"].get("ok") is True and {_case(x) for x in doc["launches"]} == set(doc["expected"])
@@ -1147,6 +1188,7 @@ def default_run(a: argparse.Namespace, outdir: Path) -> dict[str, Any]:
     doc = json.loads((sub / RECORD).read_text())
     return {"returncode": proc.returncode, "ok": doc["ok"], "digest": doc["digest"], "errors": sorted(doc["errors"]),
             "model_verdicts": doc.get("model_verdicts"), "cublas_version": doc.get("switch", {}).get("cublas_version"),
+            "env_cleared": doc.get("env_cleared"), "switch": doc.get("switch"), "switch_after": doc.get("switch_after"),
             "profiles": {_case(x): x.get("profile") for x in doc["launches"]},
             "splitk_hypotheses": doc.get("splitk_hypotheses"),
             "changed": sorted(k for k, c in doc["cases"].items() if not c["ok"]), "us": {k: c.get("us") for k, c in doc["cases"].items()}}
@@ -1168,7 +1210,7 @@ def run(a: argparse.Namespace) -> dict[str, Any]:
     outdir.mkdir(parents=True, exist_ok=True)
     tmp = tempfile.TemporaryDirectory(dir=a.scratch)
     work = Path(tmp.name)
-    env = environment(a.served_default, work / "triton_cache")
+    env, cleared = environment(a.served_default, work / "triton_cache")
     import torch
     from vllm.config import CompilationConfig, VllmConfig, set_current_vllm_config
     from verity_vllm.program.registry import bf16_gemm_check as BC
@@ -1176,13 +1218,14 @@ def run(a: argparse.Namespace) -> dict[str, Any]:
     tag = "GLM53-BF16-GEMM" + (" (served default)" if a.served_default else "")
     todo = cases(a.quick, only, models)
     run_scan = not a.quick and not a.no_scan
-    doc: dict[str, Any] = {"schema": SCHEMA, "argv": sys.argv, "env": env, "quick": a.quick, "served_default": a.served_default,
+    doc: dict[str, Any] = {"schema": SCHEMA, "argv": sys.argv, "env": env, "env_cleared": cleared, "quick": a.quick,
+                           "served_default": a.served_default,
                            "variant": "served_default" if a.served_default else "split_k_off",
                            "require_served_default": not a.served_default and not a.no_default,
                            "models": models, "expected": [case_key(*c) for c in todo], "environment": G._environment(),
                            "scan": {"enabled": run_scan, "cases": {}, "ok": True},
                            "gate": C.gate(a.min_driver, a.want_cc, a.want_sms), "errors": {}}
-    print(f"[glm53-bf16-gemm] gate {json.dumps(doc['gate'])}", flush=True)
+    print(f"[glm53-bf16-gemm] gate {json.dumps(doc['gate'])} cleared {sorted(cleared)}", flush=True)
     if not doc["gate"]["ok"]:
         (outdir / RECORD).write_text(json.dumps(seal_record(doc, False), indent=1) + "\n")
         print(f"{tag} GATE-FAIL", flush=True)
@@ -1197,9 +1240,13 @@ def run(a: argparse.Namespace) -> dict[str, Any]:
     vllm_config = VllmConfig(compilation_config=CompilationConfig(custom_ops=["all"]))
     with set_current_vllm_config(vllm_config):
         gates: dict[str, Any] = {}
+        try:
+            distributed(work)
+        except Exception as e:  # noqa: BLE001
+            doc["errors"]["distributed"] = _error(e)
         for model in models:
             try:
-                gates[model] = make_gate(vllm_config, model)
+                gates[model] = make_gate(model)
                 doc["selection"][model] = selection(gates[model])
             except Exception as e:  # noqa: BLE001
                 doc["errors"][f"selection/{model}"] = _error(e)
@@ -1210,7 +1257,8 @@ def run(a: argparse.Namespace) -> dict[str, Any]:
         if run_scan:
             scan_doc = scan_subprocess(a, outdir)
             doc["scan"].update(cases=scan_doc.get("cases") or {}, ok=scan_doc.get("ok") is True,
-                               switch=scan_doc.get("switch"), returncode=scan_doc.get("returncode"))
+                               switch=scan_doc.get("switch"), switch_after=scan_doc.get("switch_after"),
+                               env_cleared=scan_doc.get("env_cleared"), returncode=scan_doc.get("returncode"))
             for skey, msg in (scan_doc.get("errors") or {}).items():
                 doc["errors"][f"scan/{skey}"] = msg
                 print(f"[glm53-bf16-gemm] scan {skey} ERROR {msg[:400]}", flush=True)
@@ -1236,6 +1284,12 @@ def run(a: argparse.Namespace) -> dict[str, Any]:
             except Exception as e:  # noqa: BLE001
                 doc["errors"][key] = _error(e)
                 print(f"[glm53-bf16-gemm] {key} ERROR {doc['errors'][key][:400]}", flush=True)
+        try:
+            doc["switch_after"] = configuration(a.served_default)
+        except Exception as e:  # noqa: BLE001
+            doc["errors"]["switch_after"] = _error(e)
+            doc["switch_after"] = {"ok": False}
+        print(f"[glm53-bf16-gemm] switch_after {json.dumps(doc['switch_after'])}", flush=True)
         del weights
         torch.cuda.empty_cache()
     try:

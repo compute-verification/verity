@@ -22,12 +22,20 @@ an `act` value, a run input under the root of the round that admits it, committe
   `slot_reason` refuses a served slot that names no request, or one whose entry is under a later round than the slot's
   step, so an entry deferred past the step that first serves it is refused. `rounds_reason` holds the whole log to the
   challenger's coins, and `pouw_h1_challenger.trusted_rounds_reason` holds those coins to the session the auditor's signed
-  ledger opens and ends for the window, its record and log signed by the verifier's own challenger, and the rounds to PoUW's round rule of
-  record (`core_check.rounds`).
-* **Not yet.** The slot table names A-table leaves only once the round root commits root(A): the step digest covers what
-  the listeners bind, and no served run binds ``root_a`` yet (``details.requests.a_roots``). The round root has no admit
-  root (H1 has no admit unit yet) and no receipt root (receipts aren't committed here), and no unit reads the round coins
-  yet.
+  ledger opens and ends for the window, its record and log signed by the verifier's own challenger, and the rounds to
+  PoUW's round rule of record (`core_check.rounds`).
+* **Admission** (`ADMISSIONS`, the pouw setting ``admission``): #2722's period fixes a window's live tiles before its
+  first coin, so by default (``round-0``) a window admits requests only in round 0, and an entry under a later round is
+  refused (`request_reason`); ``per-round`` admits in every round, for a statement that fixes each round's live tiles
+  before that round's coin (RT4-INT-22).
+* **Round values** (#2677's live order, RT4-INT-20): each call's A table (its T slots' s8 rows and f32 scales), its served
+  y and, when the run has it, its exact z are hiding tables of the call (`pouw_h1.H1Run`, ``tables`` in its manifest row),
+  so the step digest, and with it round s's root, commits them before round s's coin. Round s + 1's root also commits
+  round s's receipt roots (`receipts_digest`), and the draw coin opens after `draw_root`, over the manifest, the last
+  round's receipts and every round's root and coin, so the draw follows every round coin by hash.
+* **Not yet.** The A table is the run's own: ROOTS1 (it equals the Commit's AROW root of the linear's input) is the
+  Commit's and circuits' check. The round root has no admit root (H1 has no admit unit yet), no producer hands the run a
+  receipt root yet, and no unit reads the round coins yet.
 """
 from __future__ import annotations
 
@@ -73,12 +81,26 @@ EMPTY_SLOT = bytes(4)
 #: draws its own salt key (`pouw_h1.H1Run`'s ``key``), which nothing persists
 REQUESTS_NONCE = 1 << 61
 SLOTS_NONCE = REQUESTS_NONCE + (1 << 40)
-ROUND_TAG = "verity/pouw/h1/round/v2"
+#: call c's A, y and z tables' nonces are TABLES_NONCE + 3c + 0, 1, 2 (`pouw_h1.H1Run`)
+TABLES_NONCE = REQUESTS_NONCE + (1 << 41)
+ROUND_TAG = "verity/pouw/h1/round/v3"
 STEP_TAG = "verity/pouw/h1/step-calls/v1"
 REQUESTS_TAG = "verity/pouw/h1/requests/v2"
 SLOTS_TAG = "verity/pouw/h1/slots/v1"
+RECEIPTS_TAG = "verity/pouw/h1/receipts/v1"
+DRAW_TAG = "verity/pouw/h1/draw/v1"
+#: round 0's ``receipts``: no round precedes it
+NO_RECEIPTS = bytes(64)
+#: the pouw setting ``admission``: requests admitted in round 0 only (#2722's period, the default), or in every round
+ROUND0, PER_ROUND = "round-0", "per-round"
+ADMISSIONS = (ROUND0, PER_ROUND)
 #: the credit refusal of a call in a window that served a row of a request with no entry (`pouw_h1.H1Run.request_gaps`)
 UNENTERED = "credit: request-without-entry: the window served a row of a request with no entry (details.requests.gaps)"
+
+
+def late_admission(r: int) -> str:
+    return (f"admitted in round {r}, after round 0: the period fixes a window's live tiles before its first coin (#2722), "
+            f"so a window admits only in round 0 (the pouw setting 'admission': '{PER_ROUND}' admits in every round)")
 
 
 def requests_binding(salt: bytes, r: int) -> bytes:
@@ -123,10 +145,24 @@ def step_digest(salt: bytes, s: int, rows: Sequence[Mapping[str, Any]]) -> bytes
     return tagged(STEP_TAG, salt, s, *(json.dumps(row, sort_keys=True) for row in rows))
 
 
-def round_root(salt: bytes, r: int, calls: bytes, requests: bytes, slots: bytes) -> bytes:
-    """Round r's root, over step r's calls (`step_digest`), the root of the request table of the entries it admits and the
-    root of its slot table."""
-    return tagged(ROUND_TAG, salt, r, calls, requests, slots)
+def round_root(salt: bytes, r: int, calls: bytes, requests: bytes, slots: bytes, receipts: bytes) -> bytes:
+    """Round r's root, over step r's calls (`step_digest`, their A, y and z tables among them), the root of the request
+    table of the entries it admits, the root of its slot table and round r - 1's receipts (`receipts_digest`;
+    `NO_RECEIPTS` in round 0)."""
+    return tagged(ROUND_TAG, salt, r, calls, requests, slots, receipts)
+
+
+def receipts_digest(salt: bytes, r: int, roots: Sequence[tuple[int, bytes | None]]) -> bytes:
+    """Round r's receipts: each of its calls' (index, receipt root), in call order, an empty root where none was handed
+    over; committed under round r + 1's root, or for the last round in `draw_root`."""
+    return tagged(RECEIPTS_TAG, salt, r, *(p for i, root in roots for p in (i, root or b"")))
+
+
+def draw_root(calls_root: bytes, receipts: bytes, log: Sequence[Mapping[str, Any]]) -> bytes:
+    """What the draw coin opens after: the window's manifest (``calls_root``), its last round's receipts and every round's
+    root and coin, so the draw follows every round coin by hash."""
+    return tagged(DRAW_TAG, calls_root, receipts,
+                  *(p for x in log for p in (bytes.fromhex(x["root"]), bytes.fromhex((x.get("coin") or {}).get("coin", "")))))
 
 
 @dataclass(frozen=True)
@@ -147,9 +183,9 @@ def _round(log: Sequence[Mapping[str, Any]], commitment: LiveCommitment, salt: b
     row = next((x for x in log if x.get("round") == r), None)
     if row is None:
         return None, f"the round log has no round {r}"
-    calls, requests, slots, root = (bytes.fromhex(row[k]) for k in ("calls", "requests", "slots", "root"))
-    if round_root(salt, r, calls, requests, slots) != root:
-        return None, f"round {r}'s root is not over its calls, its request table and its slot table"
+    calls, requests, slots, receipts, root = (bytes.fromhex(row[k]) for k in ("calls", "requests", "slots", "receipts", "root"))
+    if round_root(salt, r, calls, requests, slots, receipts) != root:
+        return None, f"round {r}'s root is not over its calls, its request table, its slot table and the receipts before it"
     if row.get("coin") is None:
         return None, f"round {r} has no live coin, so nothing shows its root committed before one"
     try:
@@ -176,16 +212,21 @@ def _slot(row: Mapping[str, Any], salt: bytes, rows: int, opening: RoundOpening)
 
 
 def request_reason(log: Sequence[Mapping[str, Any]], commitment: LiveCommitment, salt: bytes, rows: int,
-                   entry: RequestEntry, opening: RoundOpening, first: RoundOpening) -> str | None:
+                   entry: RequestEntry, opening: RoundOpening, first: RoundOpening, admission: str = ROUND0) -> str | None:
     """Why `opening` doesn't show `entry` as a leaf under the root of the round that admitted it, a root the round coins'
     `commitment` shows recorded before that round's coin, with `first` (its first slot, opened under that round's slot
-    table) naming it; None when it does. Alone it says nothing of a round the entry isn't under: `slot_reason` refuses an
-    entry under a later round than a step that serves it, and `rounds_reason` holds the whole log to the coins."""
+    table) naming it, and admitted in round 0 unless `admission` is `PER_ROUND`; None when it does. Alone it says nothing
+    of a round the entry isn't under: `slot_reason` refuses an entry under a later round than a step that serves it, and
+    `rounds_reason` holds the whole log to the coins."""
     r, i = opening.round, entry.index
+    if admission not in ADMISSIONS:
+        raise ValueError(f"an admission is one of {ADMISSIONS}, not {admission!r}")
     if not any(x.get("round") == r for x in log):
         return f"request {i}: the round log has no round {r}, so its entry is under no round root"
     if entry.round != r:
         return f"request {i} was admitted in round {entry.round}, and its entry is opened under round {r}'s root"
+    if admission == ROUND0 and r != 0:
+        return f"request {i} was {late_admission(r)}"
     if opening.value[:-HM96_SALT] != entry.row():
         return f"request {i}: the leaf opened under round {r} is not its entry"
     row, why = _round(log, commitment, salt, r)
@@ -207,11 +248,12 @@ def request_reason(log: Sequence[Mapping[str, Any]], commitment: LiveCommitment,
 
 def slot_reason(log: Sequence[Mapping[str, Any]], commitment: LiveCommitment, salt: bytes, rows: int,
                 calls: Sequence[Mapping[str, Any]], slot: RoundOpening, entry: RequestEntry | None = None,
-                opening: RoundOpening | None = None, first: RoundOpening | None = None) -> str | None:
+                opening: RoundOpening | None = None, first: RoundOpening | None = None, admission: str = ROUND0
+                ) -> str | None:
     """Why slot ``slot.position`` of step ``slot.round`` isn't what it must be, given that step's manifest rows `calls` (its
     served rows are linear 0's): a served slot names an admitted request, whose entry (`entry`, opened by `opening` and
-    `first` as `request_reason` takes them) is under the slot's round or an earlier one, and a slot past the served rows
-    names none; None when it is."""
+    `first` as `request_reason` takes them under `admission`) is under the slot's round or an earlier one, and a slot past
+    the served rows names none; None when it is."""
     s, p = slot.round, slot.position
     row, why = _round(log, commitment, salt, s)
     if why is not None:
@@ -229,7 +271,7 @@ def slot_reason(log: Sequence[Mapping[str, Any]], commitment: LiveCommitment, sa
         return f"slot {p} of step {s} is a served row and names no admitted request: a request served without an entry"
     if entry is None or opening is None or first is None or entry.index != owner:
         return f"slot {p} of step {s} names request {owner}, and request {owner}'s entry isn't opened beside it"
-    why = request_reason(log, commitment, salt, rows, entry, opening, first)
+    why = request_reason(log, commitment, salt, rows, entry, opening, first, admission)
     if why is not None:
         return why
     if entry.round > s:
@@ -281,7 +323,8 @@ def batch_order(runner: Any, scheduler_output: Any) -> list[tuple[str, int]]:
     return [(str(r), int(tokens[r])) for r in sort(tokens, drafts, runner.decode_query_len)]
 
 
-__all__ = ["EMPTY_REQUEST", "EMPTY_SLOT", "HM96_SALT", "REQUESTS_NONCE", "RequestEntry", "RoundOpening", "SLOTS_NONCE",
-           "UNENTERED", "batch_order", "new_requests", "request_reason", "request_table", "requests_binding", "round_root",
-           "rounds_reason", "slot_leaf", "slot_owner", "slot_reason", "slot_table", "slots_binding", "sort_batch_req_ids",
-           "step_digest"]
+__all__ = ["ADMISSIONS", "EMPTY_REQUEST", "EMPTY_SLOT", "HM96_SALT", "NO_RECEIPTS", "PER_ROUND", "REQUESTS_NONCE", "ROUND0",
+           "RequestEntry", "RoundOpening", "SLOTS_NONCE", "TABLES_NONCE", "UNENTERED", "batch_order", "draw_root",
+           "late_admission", "new_requests", "receipts_digest", "request_reason", "request_table", "requests_binding",
+           "round_root", "rounds_reason", "slot_leaf", "slot_owner", "slot_reason", "slot_table", "slots_binding",
+           "sort_batch_req_ids", "step_digest"]

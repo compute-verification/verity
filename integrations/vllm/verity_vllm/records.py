@@ -16,7 +16,8 @@ manifest's `spec_histogram` holds), the record's `conformance.due`.  The record 
 `evidence.conformance` (a `property-record/v1`: one run's `<property>.json`, validated and holding, referring to the run's record;
 `capture` preserves them) or names it a gap with its reason under `evidence.gaps`; `publish` refuses a record that leaves one silent.
 With `newest`, each one the caller leaves out cites its newest holding capture in the store (`newest_capture`): what the row pipeline
-publishes with (`pipeline.research.chain`, once a row's Build, Match and Commit pass).  A record published from another tree (a
+publishes with (`pipeline.research.chain`, once a row's Build, Match and Commit pass).  Where the store has no index (`unindexed`: a
+`research run` job's), one its catalog lacks is refused, not read as no capture.  A record published from another tree (a
 pod's job tree) reaches this tree's index with `pull`: the entry is rebuilt from the record alone (`entry`).
 
 A checkpoint's staging is the label `staged` on `ckpt:<repo>@<revision>`: when a host finished staging its weights and checking every
@@ -64,7 +65,7 @@ from typing import Any
 
 from verity_vllm.config import RowId, UsageError, option
 from verity_vllm.pipeline import config_record as CR
-from verity_vllm.pipeline.store_data import data, fetch, listing
+from verity_vllm.pipeline.store_data import data, fetch, listing, selected_from
 
 INDEX = CR.INDEX
 ART = re.compile(r"art:[0-9a-f]{64}")
@@ -241,6 +242,13 @@ def newest_capture(prop: str) -> str | None:
     return max(held)[1] if held else None
 
 
+def unindexed(prop: str) -> bool:
+    """Whether `research data select` of `prop`'s captures here read only this store's own catalog, with no index (no
+    $STORE_PRIVATE_READER_URL and no `research data index` build), as in a `research run` job's custody store.  There, a property
+    missing from the catalog says nothing about the store."""
+    return selected_from("--kind", PROPERTY_KIND, "--where", f"meta.property={prop}") == "the catalog"
+
+
 def due(build: str, listed: list[str]) -> dict[str, Any]:
     """The record's `conformance`: the capture map (`map`, its id) of the Build's checkpoint and world (its construction manifests'
     `model.pin.model` and `tp.world`) and `due`, each property its `captures` name for a map Program the Build uses (one of whose
@@ -334,8 +342,14 @@ def publish(d: str | Path, row: str, *, evidence: dict[str, Any], tree: str, by:
     rec["conformance"] = due(evidence["build"], listed)
     cited, gaps = evidence.get("conformance") or {}, evidence.get("gaps") or {}
     if newest:
-        cited = dict(sorted({**{p: a for p in rec["conformance"]["due"] if p not in cited and p not in gaps and (a := newest_capture(p))},
-                             **cited}.items()))
+        left = [p for p in rec["conformance"]["due"] if p not in cited and p not in gaps]
+        found = {p: a for p in left if (a := newest_capture(p))}
+        if (missed := [p for p in left if p not in found]) and unindexed(missed[0]):
+            raise UsageError(f"{row}: --newest-captures found no capture of {', '.join(missed)} in this store's catalog, and there is "
+                             f"no store index here ($STORE_PRIVATE_READER_URL unset, no `research data index` build; a `research run` job "
+                             f"has none), so the store may hold one: resolve each where the index is (the launcher: `research data select "
+                             f"--kind {PROPERTY_KIND} --where meta.property=PROPERTY`) and pass it as --conformance PROPERTY=art:…")
+        cited = dict(sorted({**found, **cited}.items()))
         rec["evidence"] = {**evidence, "conformance": cited}
     if silent := sorted(set(rec["conformance"]["due"]) - set(cited) - set(gaps)):
         raise UsageError(f"{row}: its Programs need {', '.join(silent)} ({rec['conformance']['map']}), which the record neither cites nor "
@@ -466,7 +480,8 @@ class PublishOptions:
                             help="a property the Programs need with no capture of record for the tree, and why")
     newest_captures: bool = option("--newest-captures", action="store_true", default=False,
                                    help="cite, for each property the Programs need that --conformance and --gap leave out, its newest "
-                                        "holding capture of record in the store")
+                                        "holding capture of record in the store (where the store has no index, as in a job, one its "
+                                        "catalog lacks is refused)")
     cmd: str = field(default="publish", init=False)
 
 

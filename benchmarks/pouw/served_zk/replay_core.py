@@ -54,6 +54,7 @@ import verity_difftest as D
 
 from verity.core.protocols.pouw import coins as Co
 from verity.core.protocols.pouw import core_check as CC
+from verity.core.protocols.pouw import verifier as PV
 from verity.core.protocols.pouw import window as Wd
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
@@ -201,7 +202,7 @@ def _variant(man: dict, coins: dict, opening: dict, case: str) -> dict:
     """`served_commit.coin_variant`: the pass carrying a control's salt coin made of the genuine one."""
     o = dict(opening)
     if case == "foreign":
-        o = Co.Challenger(coins["epoch"]).open("salt", bytes.fromhex(o["after"])).to_json()
+        o = Co.Challenger(coins["epoch"], PV.coins).open("salt", bytes.fromhex(o["after"])).to_json()
     elif case == "early":
         o["after"] = "00" * (len(o["after"]) // 2)
     elif case == "mislabelled":

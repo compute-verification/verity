@@ -95,7 +95,7 @@ and `frame-b3s` that -h1, -h2 and BLAKE3 -h3 named are in `archive/pouw-blake3/`
 **What is public.** Every protocol is zero-knowledge, and only the minimum is public (Daniel's ruling of 2026-10-05,
 7:48 PM PDT). |W|, the size of the weights, is public (his ruling of 2026-10-06, 8:14 AM PDT). A served window's rows
 serve at a public fixed length, so its useful work is public (his ruling of 19 Oct, ASK-39; "The fixed length" below).
-The rulings are recorded in `.agents/skills/friction/SKILL.md`.
+`AGENTS.md` ("Design rules") states them.
 
 **Randomness.** The protocol owns the outer coins, the salt and the draw, and both are the challenger's epoch coins, never
 a public beacon and never Fiat-Shamir over the prover's roots. A window's check item says its coin mode, its optional
@@ -108,8 +108,11 @@ recorded round r's root (decision 36).
 ## Epoch coins (`coins`)
 
 The challenger is the auditor's service that issues coins. Before epoch e it draws one 32-byte coin per label (`"salt"`,
-`"draw"`, in that order) from its own generator, and publishes the coin commitment, a frame-v3-sha512 tree over hiding
-leaves:
+`"draw"`, in that order) from its entropy, and publishes the coin commitment, a frame-v3-sha512 tree over hiding leaves.
+A served challenger's entropy, every coin and hm96 salt, is the Lean verifier of record's read of the operating system
+(`verifier.coins`: `pouw-check-difftest`'s `coins`, `IO.getRandomBytes`, A3); `coins.Challenger` and
+`window.live_challenger` take it as an argument and have no default, so the Python never reads the operating system for a
+coin:
 
 ~~~text
 x_l     = SHA-512("verity/pouw/epoch-coin/v1" || 0x00 || coin_l)
