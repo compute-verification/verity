@@ -30,8 +30,10 @@ A batch record is `u32 b ‖ u32 first ‖ u32 count ‖ u64 send_ns ‖ u64 rec
 answers)` (96 bytes).  The guarantee (`PROTOCOL.md`; Lean `Pous.Guarantees.StreamedWipe`) covers the sequential reveal,
 batch size 1 (`WipeParams.covered`); a larger batch lets an answer depend on the whole batch, which the proof doesn't
 cover yet.  `verdict` is what a verifier checks of a signed session; its public output is the verdict and the egress the
-network certifier counted, in whole MiB (15 bits), which the bound reads.  `retained_bits` and `challenges_for` are the
-guarantee's bound, which says how much of the prior content can survive an accepted wipe.
+network certifier counted, in whole MiB (15 bits), which the bound reads.  Its Lean port decides it
+(`MemoryChallenger.StreamedWipe` and `wipe_verdict.judge` in `verity/core/devices/memory_challenger/lean/`, reading the
+records' `to_json`), and `verdict` here is the reference that port is difftested against.  `retained_bits` and
+`challenges_for` are the guarantee's bound, which says how much of the prior content can survive an accepted wipe.
 """
 
 from __future__ import annotations
@@ -153,6 +155,10 @@ class WipeCommitment:
                 "batch": p.batch, "limit_ns": p.limit_ns, "tiers": [[t, b] for t, b in p.tiers],
                 "clock": "CLOCK_MONOTONIC ns"}
 
+    def to_json(self) -> dict[str, Any]:
+        """The commitment as the Lean verdict reads it (`MemoryChallenger.StreamedWipe.Commitment.ofJson`): its header."""
+        return self.header()
+
 
 @dataclass(frozen=True, slots=True)
 class BatchRecord:
@@ -175,6 +181,10 @@ class BatchRecord:
         return (self.b.to_bytes(4, "big") + self.first.to_bytes(4, "big") + self.count.to_bytes(4, "big")
                 + self.send_ns.to_bytes(8, "big") + self.receipt_ns.to_bytes(8, "big") + self.wrong.to_bytes(4, "big")
                 + self.digest)
+
+    def to_json(self) -> dict[str, Any]:
+        return {"b": self.b, "first": self.first, "count": self.count, "send_ns": self.send_ns,
+                "receipt_ns": self.receipt_ns, "wrong": self.wrong, "digest": self.digest.hex()}
 
 
 def batch_digest(indices: Sequence[int], answers: bytes) -> bytes:
@@ -205,6 +215,13 @@ class SignedWipe:
 
     def message(self) -> bytes:
         return message(self.commitment, self.ended, self.fill_start_ns, self.fill_end_ns, self.batches, self.egress_bits)
+
+    def to_json(self) -> dict[str, Any]:
+        """The signed session as the Lean verdict reads it (`MemoryChallenger.StreamedWipe.Signed.ofJson`)."""
+        return {"commitment": self.commitment.to_json(), "ended": self.ended, "fill_start_ns": self.fill_start_ns,
+                "fill_end_ns": self.fill_end_ns, "batches": [r.to_json() for r in self.batches],
+                "egress_bits": self.egress_bits, "scheme": self.scheme, "public_key": self.public_key.hex(),
+                "signature": self.signature.hex()}
 
 
 def message(commitment: WipeCommitment, ended: str, fill_start_ns: int, fill_end_ns: int,
