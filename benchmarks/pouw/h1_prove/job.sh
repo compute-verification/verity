@@ -17,6 +17,8 @@
 #   5. run.py summarize: out/summary.json
 # env: H1_MEM_GB (the job's --mem-gb)  H1_K (4096; a smaller K truncates every row: a smoke)  H1_COLS (each call's first
 #      N weight rows; 0 all)  H1_DRAW (8)  H1_TOKENS (16)  H1_LAYER (0)  H1_HUB (/workspace/hf/hub)
+#      H1_ONLY (the plan's tags to prove and check, space-separated: "honest other-window-own" skips the negatives; all)
+#      HZ_RUNS (1): sessions a statement, all verified by one Lean process, which reads the circuit once
 #      H1_CONTROLS ("honest output_row_committed_false" below K = 4096, else none)  H1_SERVE_PCT (36) and H1_PROVE_PCT (32):
 #      a session's serve and prove caps, % of H1_MEM_GB (they run side by side, the stager gone; at K = 4096 with 8
 #      instances the serve passes 131 GB resident and the prover 100 GB, so H1_MEM_GB=500)  HZ_RUNS (1)  HZ_WARM (0)
@@ -63,6 +65,7 @@ args=(--work "$WK" --stage "$SW" --lean "$LEAN" --layer "$W/L1.npz" --layer2 "$W
       --name "h1-${RESEARCH_RUN_ID:-local}")
 [ "$K" != 4096 ] && args+=(--k "$K")
 [ "$COLS" != 0 ] && args+=(--cols "$COLS")
+[ -n "${H1_ONLY:-}" ] && args+=(--only "$H1_ONLY")
 "$PY" "$H/run.py" prepare "${args[@]}" 2>&1 | tee -a "$OUT/job.log"
 rc=${PIPESTATUS[0]}
 touch "$SW/requests/END"
@@ -92,7 +95,7 @@ par=$(( STAGE_GB / each )); [ $par -lt 1 ] && par=1; [ $par -gt 6 ] && par=6
 cap=$(( STAGE_GB / par ))
 lean_check() {   # lean_check TAG D PUB STATEMENT_ID
   local tag=$1 D=$2 pub=$3 sid=$4 s
-  s=$(ls -d "$D"/sessions/*/ 2>/dev/null | tail -1)
+  s=$(ls -d "$D"/sessions/*/ 2>/dev/null | tr '\n' ' ')
   [ -n "$s" ] || { echo "no session under $D" > "$OUT/lean/$tag.err"; return; }
   while [ "$(jobs -rp | wc -l)" -ge "$par" ]; do wait -n; done
   $TIME "$OUT/lean/$tag.time" bash -c "$(vlimit $cap) exec $LEAN verify --zk --circuit $D/circuit.txt --statement $sid \

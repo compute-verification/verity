@@ -301,6 +301,11 @@ def cmd_prepare(a) -> int:
                         "expect": "ACCEPT"},
                        *({"tag": d, "statement": d, "pub": str(vp / f"{t}.pub.bin"), "expect": "REFUSED"}
                          for t in IN_PROOF for d in (t, f"{t}{SKIP}"))]}
+    if a.only:
+        keep = set(a.only.split())
+        plan["checks"] = [c for c in plan["checks"] if c["tag"] in keep]
+        used = keep | {c["statement"] for c in plan["checks"]}
+        plan["statements"] = [s for s in plan["statements"] if s["tag"] in used]
     (work / "plan.json").write_text(json.dumps(plan, indent=1))
     (work / "record.json").write_text(json.dumps(record, indent=1))
     with open(work / "plan.tsv", "w") as f:
@@ -320,10 +325,33 @@ def _time(p: Path) -> dict | None:
 
 
 def _verdict(p: Path) -> dict | None:
+    """The check's verdict over every session it verified: accepted iff each was, with the first refusal's reason."""
     if not p.exists():
         return None
     v = [json.loads(x[8:]) for x in p.read_text().splitlines() if x.startswith("VERDICT ")]
-    return v[0] if v else None
+    if not v:
+        return None
+    return {**v[0], "accepted": all(x.get("accepted") for x in v), "sessions": len(v),
+            "why": next((x.get("why", "") for x in v if not x.get("accepted")), "")}
+
+
+def lean_phases(err: Path) -> dict | None:
+    """flock-verify's own timings from its stderr: ``inputs`` (reading and parsing the statement's files, once a process),
+    each statement ``setup``, and each session's verification, in ms."""
+    if not err.exists():
+        return None
+    out: dict = {"inputs_ms": None, "setup_ms": [], "session_ms": []}
+    for x in err.read_text(errors="replace").splitlines():
+        head, _, ms = x.rpartition(": ")
+        if not ms.endswith(" ms") or not ms[:-3].isdigit():
+            continue
+        if head == "inputs":
+            out["inputs_ms"] = int(ms[:-3])
+        elif head.startswith("setup"):
+            out["setup_ms"].append(int(ms[:-3]))
+        else:
+            out["session_ms"].append(int(ms[:-3]))
+    return out
 
 
 def _verdict_word(v: dict | None, err: Path) -> str:
@@ -398,7 +426,8 @@ def cmd_summarize(a) -> int:
         ok &= good
         checks.append({"tag": c["tag"], "expect": c["expect"], "verdict": word, "pass": good,
                        "why": (v or {}).get("why", "")[:300], "lean_seconds": t and t["wall_s"],
-                       "lean_maxrss_gb": t and round(t["maxrss_kb"] / 2**20, 1), **extra})
+                       "lean_maxrss_gb": t and round(t["maxrss_kb"] / 2**20, 1), "sessions": (v or {}).get("sessions"),
+                       "lean_phases": lean_phases(out / "lean" / f"{c['tag']}.err"), **extra})
     honest = next(c for c in checks if c["tag"] == "honest")
     summary = {"schema": "verity/pouw/h1-prove/summary/v0", "pass": ok,
                "unit": record["circuit"]["definition"], "k": record["circuit"]["k"], "tile": [R, C],
@@ -444,6 +473,8 @@ def main(argv=None) -> int:
     p.add_argument("--cols", type=int, default=0)
     p.add_argument("--workers", type=int, default=os.cpu_count())
     p.add_argument("--stager-pid", type=int, default=0)
+    p.add_argument("--only", default="", help="the plan's statements and Lean checks to run, by tag (space-separated); "
+                                              "each check's statement is kept")
     p = sub.add_parser("summarize")
     p.add_argument("--work", required=True)
     p.add_argument("--out", required=True)
