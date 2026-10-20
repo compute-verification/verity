@@ -95,7 +95,7 @@ and `frame-b3s` that -h1, -h2 and BLAKE3 -h3 named are in `archive/pouw-blake3/`
 **What is public.** Every protocol is zero-knowledge, and only the minimum is public (Daniel's ruling of 2026-10-05,
 7:48 PM PDT). |W|, the size of the weights, is public (his ruling of 2026-10-06, 8:14 AM PDT). A served window's rows
 serve at a public fixed length, so its useful work is public (his ruling of 19 Oct, ASK-39; "The fixed length" below).
-The rulings are recorded in `.agents/skills/friction/SKILL.md`.
+`AGENTS.md` ("Design rules") states them.
 
 **Randomness.** The protocol owns the outer coins, the salt and the draw, and both are the challenger's epoch coins, never
 a public beacon and never Fiat-Shamir over the prover's roots. A window's check item says its coin mode, its optional
@@ -108,8 +108,11 @@ recorded round r's root (decision 36).
 ## Epoch coins (`coins`)
 
 The challenger is the auditor's service that issues coins. Before epoch e it draws one 32-byte coin per label (`"salt"`,
-`"draw"`, in that order) from its own generator, and publishes the coin commitment, a frame-v3-sha512 tree over hiding
-leaves:
+`"draw"`, in that order) from its entropy, and publishes the coin commitment, a frame-v3-sha512 tree over hiding leaves.
+A served challenger's entropy, every coin and hm96 salt, is the Lean verifier of record's read of the operating system
+(`verifier.coins`: `pouw-check-difftest`'s `coins`, `IO.getRandomBytes`, A3); `coins.Challenger` and
+`window.live_challenger` take it as an argument and have no default, so the Python never reads the operating system for a
+coin:
 
 ~~~text
 x_l     = SHA-512("verity/pouw/epoch-coin/v1" || 0x00 || coin_l)
@@ -165,7 +168,13 @@ coins are the layout `live_families(R)` under `LIVE_SCHEME` (`"verity/pouw/epoch
 r's coin opens after the verifier recorded round r's root, the root of the values round r commits, and round r's noise
 key is `derive(coin_r, "verity/pouw/round-noise/v1", {coins: root, epoch: e, root: root_r, round: r})`: the deferred
 noised products, keyed by a coin the prover could not see when it committed. `core_check.rounds` (Lean
-`PouwCheck.roundsCheck`) is the rule on a window's round coins. A seeded epoch's commitment is unchanged (`SCHEME`, salt
+`PouwCheck.roundsCheck`) is the rule on a window's round coins. It reads the challenger's coins only through the session
+the auditor's signed ledger opens and ends closed for the window under the window's pinned challenger key
+(`challenger.trusted_session_of`, Lean `SampledProofs.Challenger.trustedSessionOf`): the record, on the host the ledger
+opened the session on, and the close signed under that key, the release log the close signs and the ledger's end sealed,
+and the round roots that log shows the challenger received, in order. Coins a prover's own in-process challenger drew,
+an unsigned or tampered log, a ledger signed under another key or cut before the session's end, and a second session for
+the window are refused. A seeded epoch's commitment is unchanged (`SCHEME`, salt
 and draw only).
 
 ## Registered weights (`registration`)

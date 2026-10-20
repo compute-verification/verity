@@ -140,6 +140,7 @@ import Proofs.Flock.Claims.KS.SlotDistOn
 import Proofs.Flock.Claims.KS.ZkTauSlot
 import Proofs.Flock.Claims.KS.ZkUntrim
 import Proofs.Flock.Claims.KS.ZkExtend
+import Proofs.Flock.Claims.KS.ZkOuter
 
 /-! Flock's knowledge soundness at `E^rep`, in parts: one wait truncated to `E^rep`'s `K` draws, by a coupling with `k`
 independent accepted runs and a Chernoff bound (`Wait`, `ERep_trunc`); the soundness proof's escape events, each a
@@ -627,4 +628,8 @@ on `ExtendJ` alone (`ZkUntrim`: `FlockDeploy.KS.zkSimForkLeCapTau`, `FlockDeploy
 lane no trace one agreement short of its radius has there, which Johnson's bound leaves room for in GF(2^128), so the
 table still does not extract (`ZkExtend`: `Claims.GS.exists_avoid`, `FlockDeploy.KS.zk_fill_step`,
 `FlockDeploy.KS.zk_extendJ`). So masked KS at the untrimmed instance holds with no premise too
-(`FlockDeploy.KS.zk_KS_untrim`). -/
+(`FlockDeploy.KS.zk_KS_untrim`). The chain reads the verifier only through its setup (`FlockDeploy.KS.ZkSetup`), and
+its setup-dependent part is restated over one (`FlockDeploy.KS.Gen`), `deployZk`'s at `FlockDeploy.KS.S₀`. At the
+recursion's outer setup (`FlockDeploy.KS.SO`: the recursive setup, and the verdict's last refusals after the checks)
+the chain's instance is the outer verifier's record (`ZkOuter`: `FlockDeploy.KS.deployZk_SO`), so masked KS holds
+there with no premise (`FlockDeploy.KS.zk_KS_outer`). -/

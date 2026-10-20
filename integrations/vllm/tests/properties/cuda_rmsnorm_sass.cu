@@ -4,7 +4,8 @@
 //     -gencode arch=compute_90,code=sm_90 -cubin cuda_rmsnorm_sass.cu -o rmsnorm.cubin
 #include <cuda_bf16.h>
 #include <cub/block/block_reduce.cuh>
-// vLLM's cub_helpers.h: CCCL 3 (CUDA 13) drops cub::Sum.
+// The block reduction's operator as vLLM's csrc/libtorch_stable/cub_helpers.h picks it (CCCL 3 has no cub::Sum).  Not that
+// header's <cub/cub.cuh>: it adds CUB's EmptyKernel to the cubin.
 #if CUB_VERSION >= 200800
   #include <cuda/std/functional>
 using CubAddOp = cuda::std::plus<>;

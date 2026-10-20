@@ -104,10 +104,17 @@ def test_fine_grid_sweeps_the_near_frontier_and_the_ji3n_0_form():
 
 
 def test_rt_families_are_unique_and_hold_the_programs_that_broke_ji3s_and_ji3t():
-    sizes = {"rt": 726, "rt2": 408, "rt3": 120, "rt4": 95, "rt5": 168, "rt6": 192, "rt7": 144, "rt8": 377}
+    sizes = {"rt": 726, "rt2": 408, "rt3": 120, "rt4": 95, "rt5": 168, "rt6": 192, "rt7": 144, "rt8": 377, "rt9": 319,
+             "rt10": 99, "rt11": 105}
     names = {f: [g["name"] for g in gen.grid(0, 0, family=f)] for f in sizes}
     assert {f: len(set(n)) for f, n in names.items()} == {f: len(n) for f, n in names.items()} == sizes
     assert "jm_i16832_fmuli_q120_p0_a3u20_w8" in names["rt4"]
+    assert {"jm_i16832_fmuli_q120_p0_a3u20_w8_k3", "jm_i16832_fmuli_q120_p0_a3u16_sts128x2_w8",
+            "jm_i16832_none_q0_p0_a2u8_ldsm4x4_w8", "jm_i16832_fmuli_shfl_q96_p0_a2u8_w8"} <= set(names["rt9"])
+    assert {"jm_i16832_fmuli_q120_p0_a3u20_w8_k2", "jm_i16832_axi_q112_p0_a2u16_w8",
+            "jm_i16832_fmuli_dp4ai_q144_p0_a3u20_w8"} <= set(names["rt10"])
+    assert {"jm_i16832_fmuli_q120_p0_a3u20_w8_k1", "jm_i16832_fmuli_uaxi_q120_p0_a3u16_w8",
+            "jm_i16832_fmuli_axi_uaxi_q144_p0_a2u20_w8", "jm_i16832_uaxi_q64_p0_a3u12_w8"} <= set(names["rt11"])
     assert "jm_isp16864_fmuli_q128_p0_a2u16_w8" in names["rt5"]
     assert {"jx_i16832_isp16864_fmuli_q128_a1u20_w8", "jx_i16832_osf16864_none_q0_a8u4_w8", "al_mufu_popc_w16",
             "jm_isp16864_fmuli_q128_p0_a2u20_w8_k3"} <= set(names["rt8"])

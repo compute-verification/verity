@@ -29,12 +29,26 @@ theorem tableErr_nonneg (zk : Bool) (spec : SessionSpec) (st : Stmt) : 0 ≤ tab
     positivity
   · exact tableError_nonneg _ _
 
+namespace Gen
+
+variable [S : ZkSetup]
+
 /-- The tables' errors, summed, are nonnegative. -/
 theorem εtable_nonneg (zk : Bool) (x : Claims.Msg) : 0 ≤ εtable zk x := by
   unfold εtable
   refine List.sum_nonneg fun a ha => ?_
   obtain ⟨p, -, rfl⟩ := List.mem_map.1 ha
   exact tableErr_nonneg zk p.1 p.2
+
+end Gen
+
+/-- The tables' errors, summed, are nonnegative. -/
+theorem εtable_nonneg (zk : Bool) (x : Claims.Msg) : 0 ≤ εtable zk x :=
+  Gen.εtable_nonneg (S := S₀) (zk := zk) (x := x)
+
+namespace Gen
+
+variable [S : ZkSetup]
 
 /-- **The deployed relation splits by table** at an in-scope statement, for a record that reads the claims' parser,
 its tables' own statements, and the tables' traces interleaved (`relS_split`). -/
@@ -54,6 +68,18 @@ theorem splits_of_inScope {Coin Col Tr : Type} {zk : Bool} (r : Tr → Claims.Fl
   refine ⟨t, ht', (Readable.relS_congr t fun i => ?_).2 hR⟩
   rw [Readable.tableWit_getD hj, ← hlen, Claims.Flock.readTables_getD r Ms (by omega),
     Claims.Flock.readTables_singleton]
+
+end Gen
+
+/-- **The deployed relation splits by table** at an in-scope statement, for a record that reads the claims' parser,
+its tables' own statements, and the tables' traces interleaved (`relS_split`). -/
+theorem splits_of_inScope {Coin Col Tr : Type} {zk : Bool} (r : Tr → Claims.Flock.Wit)
+    (D : Claims.Flock.Deploy Coin Col Tr) (hp : D.parse = parse zk Readable.relation)
+    (ht : D.table = table zk Readable.relation) (hr : D.read = Claims.Flock.readTables r) {x : Claims.Msg}
+    {s : Claims.Flock.Stmt} (hs : parse zk Readable.relation x = some s) (hin : Claims.Flock.InScope zk s) :
+    Claims.Flock.Splits D x :=
+  Gen.splits_of_inScope (S := S₀) (Coin := Coin) (Col := Col) (Tr := Tr) (zk := zk) (r := r) (D := D) (hp := hp)
+    (ht := ht) (hr := hr) (x := x) (s := s) (hs := hs) (hin := hin)
 
 /-- **At one table the relation splits**: table 0's own statement is the statement (`table_zero_of_tables_eq_one`). -/
 theorem splits_of_one {Coin Col Tr : Type} {zk : Bool} {rel : Readable.Parsed → Readable.Relation}
@@ -76,11 +102,24 @@ theorem plain_of_oneWait (H : Claims.Msg → Claims.Msg) (rel : Readable.Parsed 
     (h : Claims.Flock.OneWait H (deployPlain rel)) : Claims.Flock.KS H (deployPlain rel) :=
   Claims.Flock.KS_of_oneWait H (deployPlain rel) (fun _ => cap_pos) hk (fun x => εtable_nonneg false x) h
 
+namespace Gen
+
+variable [S : ZkSetup]
+
 /-- **The deployed masked (`--zk`) verifier: KS from one wait's bound.** -/
 theorem zk_of_oneWait (H : Claims.Msg → Claims.Msg) (rel : Readable.Parsed → Readable.Relation)
     (hk : ∀ x, (8 ≤ (deployZk rel).k x ∧ Claims.Flock.Splits (deployZk rel) x) ∨
       Claims.Flock.NoAcc H (deployZk rel).V x)
     (h : Claims.Flock.OneWait H (deployZk rel)) : Claims.Flock.KS H (deployZk rel) :=
   Claims.Flock.KS_of_oneWait H (deployZk rel) (fun _ => cap_pos) hk (fun x => εtable_nonneg true x) h
+
+end Gen
+
+/-- **The deployed masked (`--zk`) verifier: KS from one wait's bound.** -/
+theorem zk_of_oneWait (H : Claims.Msg → Claims.Msg) (rel : Readable.Parsed → Readable.Relation)
+    (hk : ∀ x, (8 ≤ (deployZk rel).k x ∧ Claims.Flock.Splits (deployZk rel) x) ∨
+      Claims.Flock.NoAcc H (deployZk rel).V x)
+    (h : Claims.Flock.OneWait H (deployZk rel)) : Claims.Flock.KS H (deployZk rel) :=
+  Gen.zk_of_oneWait (S := S₀) (H := H) (rel := rel) (hk := hk) (h := h)
 
 end FlockDeploy.KS

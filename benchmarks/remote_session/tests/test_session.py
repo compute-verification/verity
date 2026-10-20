@@ -20,7 +20,7 @@ HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE.parent))
 sys.path.insert(0, str(HERE.parents[2]))
 
-from verity.core.protocols.remote_bandwidth import audit, receipts as rb, timing  # noqa: E402
+from verity.core.protocols.remote_bandwidth import audit, ledger, receipts as rb, timing  # noqa: E402
 from verity.core.protocols.remote_bandwidth import codec as rcodec  # noqa: E402
 
 import prover  # noqa: E402
@@ -150,7 +150,7 @@ class TickingBackend(prover.CpuBackend):
 def run(plan: str, *, blocks: int = 16, windows: int = 3, samples: int = 6, sessions: int = 1, checks=None,
         read_bytes_per_s: float = 1e20, tiers: dict | None = None, lifetime: int = audit.LIFETIME,
         layout: list | None = None, host_bytes: int = 0, paces: list | None = None, verdict: str = verifier.VERDICT,
-        then=None, **kv):
+        then=None, transcript: Path | None = None, **kv):
     """The verifier's sessions and the prover's over one registration, under `verdict`, each paced by its entry in
     `paces` if given; `then(v)` once they end."""
     clock = PassClock()
@@ -170,7 +170,8 @@ def run(plan: str, *, blocks: int = 16, windows: int = 3, samples: int = 6, sess
     th.start()
     v = verifier.Verifier(vconn, source=os.urandom(32), windows=windows, window_ns=20, samples=samples,
                           delta=2.0 ** -40, jitter_ns=10 ** 9, clock=clock, log=lambda m: None,
-                          checks=checks, lifetime=lifetime, host_bytes=host_bytes, verdict=verdict)
+                          checks=checks, lifetime=lifetime, host_bytes=host_bytes, verdict=verdict,
+                          transcript=transcript)
     try:
         v.register()
         allowance = v.allowance(v.ping(4))
@@ -272,6 +273,55 @@ def test_a_sessions_ledgers_carry_the_timing_parts_when_its_calibration_reads_ea
     for short in ({"hbm": {"bytes": 15 * block, "ms": 1e-6}}, None):
         (r,), _ = run("honest", read_bytes_per_s=1.0, tiers=short)
         assert "timing_parts" not in r["ledger"]["measured"] and "timing_parts" not in r["ledger"]["inputs"]
+
+
+def test_an_unpaced_session_declares_its_snapshot_line_and_no_time_held_line(monkeypatch):
+    """The declared outputs are the protocol's (`ledger.declared`): γ at both R, as the readings beside them, and the
+    snapshot line; an unpaced session's coins come a stated window apart, so it has no time-held line."""
+    monkeypatch.setattr(prover, "OPENINGS_PART", 4)
+    (r,), _ = run("honest")
+    lg = r["ledger"]
+    d = lg["declared"]
+    assert d["accepted"] and d["windows"] == 3
+    assert d["gamma"]["spec"]["gamma"] == lg["spec"]["gamma"] and d["gamma"]["measured"]["gamma"] == lg["measured"]["gamma"]
+    assert [w["window"] for w in d["gamma"]["spec"]["windows"]] == [0, 1, 2]
+    assert 0 <= d["memory"][ledger.SNAPSHOT]["epsilon"] <= 1 and d["memory"][ledger.SNAPSHOT]["delta"] > 0
+    assert "unpaced" in d["memory"][ledger.TIME_HELD]["refused"]
+
+
+@pytest.mark.parametrize("k, schedule", [
+    (1, [(0, 1, [1]), (1, 2, [2]), (2, 3, [3]), (3, 4, [4]), (4, 5, [5]), (5, 6, [6])]),
+    (3, [(0, 2, [1, 2, 3]), (2, 5, [4, 5, 6]), (5, 8, [7, 8, 9]), (8, 11, [10, 11, 12]), (11, 14, [13, 14, 15]),
+         (14, 17, [16, 17, 18])]),
+])
+def test_a_paced_session_runs_k_passes_a_coin_and_declares_its_time_held_line(monkeypatch, k, schedule):
+    """Paced (`pace_of`, `audit.Pace(k, T)`: two stretches of two windows and the closing stretch), the prover runs k
+    passes under each coin and waits for the next, and the verifier sends each boundary as the window's (k − 1)-th
+    root arrives (`Session.next_boundary_ns`; k = 1: as the window before's root does), so on the pass clock window t
+    holds k passes, none discarded; γ is declared over the fixed windows of T from the first challenge to the last
+    deadline, and the session declares all three memory forms."""
+    monkeypatch.setattr(prover, "OPENINGS_PART", 4)
+    T = 10**9
+    pace = verifier.pace_of(f"{k}:{T // 10**6}:12:2", 500 / k)
+    assert pace["groups"] == 2 and pace["draws"] == 6
+    (r,), (pr,) = run("honest", paces=[pace])
+    assert r["accepted"] and pr["accepted"] and r["windows"] == 6 and r["pace"] == pace
+    assert r["record"]["public"]["pace"] == {"k": k, "window_ns": T}
+    assert pr["passes"] == [k] * 6 and pr["discarded"] == 0
+    assert [(w["released_ns"], w["boundary_ns"], w["arrivals_ns"]) for w in r["windows_seen"]] == [
+        (s, b, list(a)) for s, b, a in schedule]
+    ws = r["ledger"]["declared"]["gamma"]["spec"]["windows"]
+    span = r["windows_seen"][-1]["deadline_ns"] - schedule[0][0]
+    assert [w["window"] for w in ws] == list(range(-(-span // T)))
+    assert [w["span_ns"] for w in ws] == [T] * (len(ws) - 1) + [span - (len(ws) - 1) * T]
+    d = r["ledger"]["declared"]
+    for form in ledger.FORMS:
+        assert 0 <= d["memory"][form]["epsilon"] <= 1 and d["memory"][form]["delta"] > 0, form
+
+
+def test_a_paced_prover_that_dropped_blocks_is_rejected():
+    (r,), (pr,) = run("skip:0.5", paces=[verifier.pace_of("2:1000:12:2", 250.0)])
+    assert not r["accepted"] and not pr["accepted"] and "declared" not in r.get("ledger", {})
 
 
 def test_a_second_session_waits_out_the_first_and_is_accepted():
@@ -686,6 +736,17 @@ def test_a_paced_session_puts_each_group_of_k_passes_under_a_live_coin_and_a_dro
     assert not r2["accepted"] and r2["failure"]["failure"] == "receipt" and pr2["failure_on_dropped"]
 
 
+def test_a_paced_session_whose_openings_come_beside_its_passes_gets_the_same_verdicts_from_both_verifiers():
+    """`node.py --overlap-openings`: the prover opens each window as its draws arrive instead of after its last pass,
+    so both verifiers take openings between a paced session's roots and coins; the honest session is still accepted
+    and the dropper rejected, with no disagreement."""
+    pace = verifier.pace_of("1:4:40:2", 1.0)
+    (r, r2), (pr, pr2) = run("honest,skip:0.25", paces=[pace, pace], defer_openings=False)
+    assert r["verdict"] == "both" and r["disagreement"] is None and r2["disagreement"] is None
+    assert r["accepted"] and pr["accepted"] and len(r["lean_check_ns"]) == r["windows"] == 12
+    assert not r2["accepted"] and r2["failure"]["failure"] == "receipt" and pr2["failure_on_dropped"]
+
+
 def test_held_over_time_charges_what_a_burst_frees_in_one_groups_slack_and_the_snapshot_does_not():
     """Two stretches of four groups of two passes over N blocks, every pass reading all of them: stretching one
     group's interval (a burst then idle until its deadline) lowers the time-held credit by its absent block-time,
@@ -882,6 +943,38 @@ def test_a_window_the_verifiers_judge_differently_is_refused_as_disagreement(mon
     assert closed[0]["sessions"] == ["disagreement"] and "python" not in closed[0]
 
 
+@pytest.mark.parametrize("verdict", ["both", "python"])
+def test_a_transcript_replays_each_session_to_its_verdict_through_both_verifiers(tmp_path, monkeypatch, verdict):
+    """`--transcript DIR`: each session's difftest case, written as it runs, which `replay.py transcript` replays
+    through `RemoteAudit.Session` and `audit.Session` alike: the honest session accepted, every window verified, and
+    the prover that dropped half its blocks rejected at the window and draw it was rejected at live, at a receipt,
+    which only a transcript's openings can show. The file is the path, bytes and sha256 verifier.json gives it."""
+    monkeypatch.setattr(prover, "OPENINGS_PART", 4)
+    monkeypatch.syspath_prepend(str(HERE.parents[2] / "verity/core/protocols/remote_bandwidth/lean/tests"))
+    import hashlib
+    import json
+
+    import replay
+
+    (honest, dropping), _ = run("honest,skip:0.5", sessions=2, verdict=verdict, transcript=tmp_path)
+    assert honest["accepted"] and dropping["failure"]["failure"] == "receipt"
+    f = dropping["failure"]
+    rows, verified = [], []
+    with replay.server() as s:
+        for r in (honest, dropping):
+            t = r["transcript"]
+            raw = Path(t["path"]).read_bytes()
+            assert Path(t["path"]).parent == tmp_path and t["bytes"] == len(raw)
+            assert t["sha256"] == hashlib.sha256(raw).hexdigest()
+            case = json.loads(raw)
+            verified.append([e["t"] for e in case["events"] if e["kind"] == "verify"])
+            rows.append(replay.replay(case, s))
+    assert all(row["agree"] for row in rows), rows
+    assert sorted(verified[0]) == [0, 1, 2] and verified[1][-1] == f["t"]
+    assert rows[0]["lean"]["outcome"] == "accepted" and rows[0]["lean"]["rejected"] is None
+    assert rows[1]["lean"]["rejected"] == {"failure": "receipt", "window": f["t"], "at": list(f["at"])}
+
+
 def test_an_event_the_verifiers_answer_differently_is_refused_as_disagreement(monkeypatch):
     """Each event goes to both verifiers at one reading of the clock, and their results are compared: a root the Lean
     reads without its step is its `step` rejection where `audit.Session` takes the root, and the session is refused
@@ -1021,6 +1114,44 @@ def test_openings_round_trip_on_the_wire_and_a_short_body_is_none():
     with pytest.raises(ValueError):
         wire.encode_openings([audit.Opening(3, 17, o.block, o.leaf, o.leaf_salt, o.receipt_path, o.payload_salt,
                                             o.payload_path, b"", b"\6" * 63)])
+
+
+def test_a_reader_apart_hands_on_each_frame_in_order_and_ends_with_the_stream_or_the_prover():
+    """The prover's reader in its own process: frames come through its pipe as sent, each with its stamp; a frame over
+    the limits is refused as on a reader thread; the stream's close is `Closed`; and the reader exits once the
+    prover's end of its pipe closes, so it never holds the stream open past the prover."""
+    a, b = socket.socketpair()
+    side, apart = wire.Conn(a), wire.Conn(b)
+    apart.read_apart()
+    sent = [({"type": "coin", "t": 1}, b""), ({"type": "draws", "t": 1}, os.urandom(1 << 20)),
+            ({"type": "close"}, b"x")]
+    for head, body in sent:
+        side.send(head, body)
+    got = [apart.recv() for _ in sent]
+    assert [(h, body) for h, body, _ in got] == sent and all(type(s) is int for _, _, s in got)
+    assert apart.received == side.sent
+    a.sendall(wire.HEADER.pack(wire.MAX_HEAD + 1, 0))
+    with pytest.raises(ValueError, match="over the limit"):
+        apart.recv()
+    assert apart.reader.wait() == 0
+
+    a, b = socket.socketpair()
+    side, apart = wire.Conn(a), wire.Conn(b)
+    apart.read_apart()
+    a.close()
+    with pytest.raises(wire.Closed):
+        apart.recv()
+    assert apart.reader.wait() == 0
+
+    a, b = socket.socketpair()
+    apart = wire.Conn(b)
+    apart.read_apart()
+    os.close(apart._pipe)
+    assert apart.reader.wait() == 0
+    with pytest.raises(ValueError, match="monotonic"):
+        wire.Conn(a, clock=lambda: 0).read_apart()
+    a.close()
+    b.close()
 
 
 @pytest.mark.parametrize("name", ["p1024/k3/masked", "p1024/k2/masked", "p512/k2"])

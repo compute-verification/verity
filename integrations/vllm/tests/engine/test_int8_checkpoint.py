@@ -15,6 +15,7 @@ import torch
 
 from verity_vllm.engine import fp8_checkpoint as F
 from verity_vllm.engine import int8_checkpoint as I
+from verity_vllm.program import model as M
 
 from tests.engine import ppl_oracle as O
 from tests.engine.test_fp8_checkpoint import _base_checkpoint, _bf16, _one_tensor_base
@@ -115,6 +116,18 @@ def test_recipe_container_and_config(tmp_path):
     assert np.array_equal(q, I.quantize(w, I.channel_scales(w))) and np.array_equal(s, I.channel_scales(w))
     cfg = json.loads((out / "config.json").read_text())
     assert cfg["quantization_config"] == {"modules_to_not_convert": ["lm_head"], "quant_method": "verity_int8", "weight_max": 127}
+    assert cfg["quantization_config"] == M.INT8_EXACT_QUANT and M.quant_refusal(cfg["quantization_config"]) is None
+
+
+def test_the_profile_derivation_serves_the_int8_config_and_refuses_variants():
+    base = json.loads((Path(M.__file__).parents[1] / "engine/profiles/hf_configs/LLAMA31_8B.config.json").read_text())
+    C, prov = M.config_of(dict(base, quantization_config=dict(M.INT8_EXACT_QUANT)), model="m", revision="0" * 40)
+    assert C["INT8_EXACT"] == 127 and "FP8_BLOCK" not in C and prov["INT8_EXACT"] == "hf-config"
+    for bad in ({**M.INT8_EXACT_QUANT, "weight_max": 63}, {**M.INT8_EXACT_QUANT, "modules_to_not_convert": []}):
+        assert "is not the exact-int8 profile's" in M.quant_refusal(bad)
+        with pytest.raises(ValueError, match="exact-int8"):
+            M.config_of(dict(base, quantization_config=bad), model="m", revision="0" * 40)
+    assert "dense linears only" in M.quant_refusal(M.INT8_EXACT_QUANT, {"num_experts": 8})
 
 
 @pytest.mark.parametrize("shape, why", [([132, 128], "not a multiple of 8 on both axes"), ([128, 12], "not a multiple of 8 on both axes")])

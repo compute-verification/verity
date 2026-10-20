@@ -1,11 +1,14 @@
 #!/usr/bin/env bash
 # M1 of EPS1 TENSOR: every native MMA form alone and beside IADD3, then the fit. TK_ARCH picks the target: 120 (one RTX
-# PRO 6000, the default) or 89 (one L40S; its forms build as four groups in parallel and run back to back).
+# PRO 6000, the default), 89 (one L40S; its forms build as four groups in parallel and run back to back) or 100 (one
+# B200: the legacy mma.sync forms, premise (M′); group 0, int8, must build, and group 1 is dropped if it doesn't).
 #
 #   research run --on vy-nebius-2 --project verity --campaign pouw --source /workspace --cwd clone --custody-ttl 12h \
 #     --env GPU_LEASE_WHO=tensor -- bash benchmarks/pouw/tensor_kinds/run.sh
 #   research run --on vy-dc-l40s --project verity --campaign cmp-13 --source /workspace --cwd source --custody-ttl 12h \
 #     --env GPU_LEASE_WHO=ada --env TK_ARCH=89 -- bash benchmarks/pouw/tensor_kinds/run.sh
+#   research run --on vy-dc-b200 --project verity --campaign eps1 --cwd source --mem-gb 8 \
+#     --env GPU_LEASE_WHO=rt2-blackwell --env TK_ARCH=100 -- bash benchmarks/pouw/tensor_kinds/run.sh
 #
 # The binaries are built and their SASS dumped outside the lease; the timed GPU work runs under `gpu-lease 1 --wait
 # --max-min 15`, with nvidia-smi sampling the leased GPU's clock and power every 200 ms. Clocks are read, never set.
@@ -24,7 +27,8 @@ echo "{\"run_id\":\"${RESEARCH_RUN_ID:-unknown}\",\"host\":\"$(hostname)\",\"arc
 case $ARCH in
   120) GENCODE=arch=compute_120a,code=sm_120a GROUPS_=(-1) ;;
   89) GENCODE=arch=compute_89,code=sm_89 GROUPS_=(0 1 2 3) ;;
-  *) echo "TK_ARCH=$ARCH: 120 or 89" >&2; exit 2 ;;
+  100) GENCODE=arch=compute_100a,code=sm_100a GROUPS_=(0 1) ;;
+  *) echo "TK_ARCH=$ARCH: 120, 89 or 100" >&2; exit 2 ;;
 esac
 pids=()
 for g in "${GROUPS_[@]}"; do
@@ -32,12 +36,19 @@ for g in "${GROUPS_[@]}"; do
     "$SRC/tensor_kinds.cu" >"$OUT/build_g$g.log" 2>&1 &
   pids+=($!)
 done
+built=()
 for i in "${!pids[@]}"; do
-  if ! wait "${pids[$i]}"; then
-    tail -40 "$OUT/build_g${GROUPS_[$i]}.log" >&2
+  g=${GROUPS_[$i]}
+  if wait "${pids[$i]}"; then
+    built+=("$g")
+  elif [ "$ARCH" = 100 ] && [ "$g" != 0 ]; then
+    echo "group $g did not build (build_g$g.log); dropped" >>"$OUT/gpu.log"
+  else
+    tail -40 "$OUT/build_g$g.log" >&2
     exit 2
   fi
 done
+GROUPS_=("${built[@]}")
 for g in "${GROUPS_[@]}"; do "$CUOBJDUMP" -sass "$WORK/tensor_kinds_g$g"; done >"$OUT/sass/tensor_kinds.sass" 2>&1
 
 cat >"$WORK/gpu.sh" <<EOF
