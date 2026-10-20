@@ -429,10 +429,13 @@ def drift(node: Node, ref: str, run: Runner, repo: Path = REPO) -> dict:
                for t in node.entries if t.tree and p.startswith(t.path.rstrip("/") + "/")}
     if in_tree:
         got = probe(node, sorted(in_tree), run)["files"]
-        recent = versions(sorted({rp for _, rp in in_tree.values()}), "--remotes=origin", since=f"{AHEAD_DAYS}.days", repo=repo)
+        srcs = sorted({rp for _, rp in in_tree.values()})
+        recent = versions(srcs, "--remotes=origin", since=f"{AHEAD_DAYS}.days", repo=repo)
+        removed = versions(srcs, commit, repo=repo)    # REF held this version once and has deleted it since: a stray
         for p, (t, rp) in sorted(in_tree.items()):
-            hit = recent.get((rp, (got.get(p) or {}).get("blob")))
-            if hit:
+            key = (rp, (got.get(p) or {}).get("blob"))
+            hit = recent.get(key)
+            if hit and key not in removed:
                 strays.remove(p)
                 entries.append({"path": p, "src": rp, "owner": t.owner, "state": "ahead", "restart": None, "tree": t.path, "detail":
                                 f"commit {hit[0][:12]} ({hit[1]}) on {', '.join(origin_branches(hit[0], repo)) or 'a branch'}, not in {ref}"})

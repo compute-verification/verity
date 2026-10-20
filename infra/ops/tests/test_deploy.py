@@ -163,6 +163,25 @@ def test_a_file_installed_from_a_commit_main_has_since_merged_and_changed_is_sta
     assert c["state"] == "stale", "no record: the recent search finds the blob in main's own history"
 
 
+def test_a_tree_file_main_deleted_is_a_stray_not_ahead(world):
+    """Node 1's cluster trees kept shadow-node2.sh after main deleted it, and drift called it `ahead` (an old restack branch
+    still held it), so `attic` refused it: a version main held and then removed is a stray however many branches keep it."""
+    node, repo, n = world["node"], world["repo"], world["nodes"]["n"]
+    _git(repo, "checkout", "-q", "-b", "old")
+    _commit(repo, {"src/t/gone.sh": "g1\n"}, "an old branch adds it")
+    _git(repo, "push", "-q", "origin", "old")
+    _git(repo, "checkout", "-q", "main")
+    _commit(repo, {"src/t/gone.sh": "g1\n"}, "main adds it")
+    _git(repo, "rm", "-q", "src/t/gone.sh")
+    _git(repo, "commit", "-q", "-m", "main deletes it")
+    _git(repo, "push", "-q", "origin", "main")
+    (node / "tree" / "gone.sh").write_text("g1\n")
+    rep = deploy.drift(n, "origin/main", local, repo)
+    assert "gone.sh" not in _states(rep) and str(node / "tree" / "gone.sh") in rep["strays"]
+    assert deploy.attic(n, "origin/main", "lane-x", [str(node / "tree" / "gone.sh")], False, local, apply=True, repo=repo)
+    assert not (node / "tree" / "gone.sh").exists()
+
+
 def test_install_refuses_an_unpushed_commit_and_installs_a_pushed_one_atomically_with_a_record(world, capsys):
     node, repo, n = world["node"], world["repo"], world["nodes"]["n"]
     b = node / "bin" / "b"
