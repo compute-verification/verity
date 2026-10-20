@@ -14,7 +14,8 @@
 # While /data/drive/stopped exists no tick starts (a running one finishes): `drive.sh stop` writes it and waits for the tick in
 # progress to end, `drive.sh start` removes it once a dry-run push of next shows the token can push, `drive.sh status` says
 # which and shows the log's tail, and `drive.sh once [FLAGS]` runs one tick here in the foreground, after the one in progress,
-# with FLAGS added (`--dry-run`).
+# with FLAGS added (`--dry-run`). `drive.sh queue ARGS` runs `research queue ARGS` the same way, between ticks, against drive's
+# state (the lander's `queue eject N --by ci --reason ...`, which edits verity.state.json and syncs next).
 # Log: /data/drive/drive.log
 DIR=/data/drive
 LOG=$DIR/drive.log
@@ -24,14 +25,14 @@ STOP=$DIR/stopped
 TICK=/root/drive-tick.lock
 export PATH=$DIR/bin:/root/.local/bin:$PATH GH_CONFIG_DIR=$DIR/gh-config GIT_TERMINAL_PROMPT=0 LC_ALL=C.UTF-8 \
   RESEARCH_LANE=ci RESEARCH_NOTES=/data/steward/research-notes RESEARCH_STORE=/root/drive-store
-tick() {
+locked() {
   exec 8> "$TICK"; flock 8
   set -a; . $CONF/r2.env; . $CONF/relay.env; set +a
   GH_TOKEN=$(/data/infra/gh_app_token.sh) || exit 1; export GH_TOKEN
   git -C "$REPO" fetch -q origin main && git -C "$REPO" checkout -q -f --detach FETCH_HEAD || exit 1
-  cd "$REPO" && PYTHONPATH=$REPO/tools/research/src exec python3.12 -m research queue drive \
-    --config tools/verity/check/drive.toml $(grep -v '^#' $DIR/args 2>/dev/null) "$@"
+  cd "$REPO" && PYTHONPATH=$REPO/tools/research/src exec python3.12 -m research queue "$@"
 }
+tick() { locked drive --config tools/verity/check/drive.toml $(grep -v '^#' $DIR/args 2>/dev/null) "$@"; }
 case ${1:-} in
   start) (GH_TOKEN=$(/data/infra/gh_app_token.sh) || exit 1; export GH_TOKEN
           git -C "$REPO" fetch -q origin +refs/heads/next:refs/remotes/origin/next \
@@ -46,8 +47,9 @@ case ${1:-} in
           flock -n "$TICK" true && echo "drive: no tick running" || echo "drive: a tick is running"
           tail -n 5 "$LOG" 2>/dev/null; exit 0 ;;
   once) shift; (tick "$@"); exit $? ;;
+  queue) shift; (locked "$@"); exit $? ;;
   '') ;;
-  *) echo "drive.sh [start|stop|status|once [FLAGS]]: with no argument, the loop" >&2; exit 2 ;;
+  *) echo "drive.sh [start|stop|status|once [FLAGS]|queue ARGS]: with no argument, the loop" >&2; exit 2 ;;
 esac
 mkdir -p "$DIR"
 exec 9> /root/drive.lock
