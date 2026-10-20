@@ -85,7 +85,14 @@ constexpr int WARPS = H1U_WARPS;
 #ifndef H1K_AUTO
 #define H1K_AUTO 0
 #endif
+// H1K_RONLY = 1 (with H1U_KSPLIT): kh_one writes its receipts only, for a caller whose served z and y come from another
+// kernel (dither-a): h1k skips the wrap words, Cw and every z, zo and y store, and calls past h1k take h1u's receipts-only
+// form (kh_unit_ws'); the receipts are the same words
+#ifndef H1K_RONLY
+#define H1K_RONLY 0
+#endif
 static_assert(!H1K_AUTO || H1U_KSPLIT == 4, "H1K_AUTO picks between h1k<4> and h1k<2>: build it with H1U_KSPLIT = 4");
+static_assert(!H1K_RONLY || H1U_KSPLIT, "H1K_RONLY is kh_one's K split without z and y: build it with H1U_KSPLIT");
 static_assert(16 % H1U_PD == 0, "a chunk's 16 segments are whole rings of H1U_PD");
 static_assert(H1U_KSPLIT == 0 || H1U_KSPLIT == 2 || H1U_KSPLIT == 4, "h1k's producers: 2 or 4");
 static_assert(!H1U_SPLIT || (WARPS % 2 == 0 && WARPS <= 4), "a split unit is a pair of warps; 2 pairs fill 48 KiB");
@@ -692,10 +699,13 @@ __global__ void __launch_bounds__(32 * (KP + 1), 1) h1k(const int8_t* __restrict
   const int4 st = *reinterpret_cast<const int4*>(oo.step);
   const int alive = st.y, flags = st.w;
   const bool rcpt = !(flags & F_NW_UNITS);
+  constexpr bool RO = H1K_RONLY;
+  static_assert(!(RO && PL), "H1K_RONLY has no peel");
   if (live && !live[ri]) {
     if (wp) return;
     if (rcpt)
       for (u32 w = lane; w < nwords; w += 32) o[w] = 0;
+    if constexpr (RO) return;
     const u32 row = 32 * ri + lane;
     if (!(flags & F_NW_TILES)) {
       uint4* zr = reinterpret_cast<uint4*>(oo.z + (u64)row * N + 32 * cj);
@@ -875,8 +885,10 @@ __global__ void __launch_bounds__(32 * (KP + 1), 1) h1k(const int8_t* __restrict
           const u32 v0 = ulo[nt] + c0, v1 = uhi[nt] + c1;
           bf[nt][0] = addw(b8.x, v0);
           bf[nt][1] = addw(b8.y, v1);
-          wbf[nt][0] = wrapw(b8.x, v0);
-          wbf[nt][1] = wrapw(b8.y, v1);
+          if constexpr (!RO) {
+            wbf[nt][0] = wrapw(b8.x, v0);
+            wbf[nt][1] = wrapw(b8.y, v1);
+          }
           if constexpr (PL) {
             cf[nt][0] = c0;
             cf[nt][1] = c1;
@@ -884,7 +896,7 @@ __global__ void __launch_bounds__(32 * (KP + 1), 1) h1k(const int8_t* __restrict
             b0[nt][1] = b8.y;
           }
         }
-        if ((flags & F_FAULT_WB) && u == 0 && lane == 0 && sg == 0)
+        if (!RO && (flags & F_FAULT_WB) && u == 0 && lane == 0 && sg == 0)
           wbf[0][0] = (wbf[0][0] & ~0xFFu) | ((wbf[0][0] & 0xFFu) == 0 ? 1u : 0u);
         int dT[8][4];
 #pragma unroll
@@ -897,7 +909,7 @@ __global__ void __launch_bounds__(32 * (KP + 1), 1) h1k(const int8_t* __restrict
           for (int nt = 0; nt < 4; ++nt) {
             mma_s8(dT[4 * mt + nt], af[mt], bf[nt]);
             mma_s8(Y[4 * mt + nt], af[mt], idr[nt]);
-            mma_s8(Cw[4 * mt + nt], af[mt], wbf[nt]);
+            if constexpr (!RO) mma_s8(Cw[4 * mt + nt], af[mt], wbf[nt]);
             if constexpr (PL) {
               mma_s8(Pz[4 * mt + nt], af[mt], cf[nt]);
               mma_s8(Pz[4 * mt + nt], bb[mt], b0[nt]);
@@ -945,7 +957,7 @@ __global__ void __launch_bounds__(32 * (KP + 1), 1) h1k(const int8_t* __restrict
 #pragma unroll
     for (int t = 0; t < 8; ++t) {
       S.dt[0][pp][t][lane] = make_int4(Y[t][0], Y[t][1], Y[t][2], Y[t][3]);
-      S.dt[1][pp][t][lane] = make_int4(Cw[t][0], Cw[t][1], Cw[t][2], Cw[t][3]);
+      if constexpr (!RO) S.dt[1][pp][t][lane] = make_int4(Cw[t][0], Cw[t][1], Cw[t][2], Cw[t][3]);
     }
   }
   __syncthreads();
@@ -954,11 +966,13 @@ __global__ void __launch_bounds__(32 * (KP + 1), 1) h1k(const int8_t* __restrict
     for (int p = 0; p < KP; ++p)
 #pragma unroll
       for (int t = 0; t < 8; ++t) {
-        const int4 a = S.dt[0][p][t][lane], c = S.dt[1][p][t][lane];
+        const int4 a = S.dt[0][p][t][lane];
         Y[t][0] = (int)((u32)Y[t][0] + (u32)a.x);
         Y[t][1] = (int)((u32)Y[t][1] + (u32)a.y);
         Y[t][2] = (int)((u32)Y[t][2] + (u32)a.z);
         Y[t][3] = (int)((u32)Y[t][3] + (u32)a.w);
+        if constexpr (RO) continue;
+        const int4 c = S.dt[1][p][t][lane];
         Cw[t][0] = (int)((u32)Cw[t][0] + (u32)c.x);
         Cw[t][1] = (int)((u32)Cw[t][1] + (u32)c.y);
         Cw[t][2] = (int)((u32)Cw[t][2] + (u32)c.z);
@@ -1053,6 +1067,7 @@ __global__ void __launch_bounds__(32 * (KP + 1), 1) h1k(const int8_t* __restrict
       for (int nt = 0; nt < 4; ++nt) mma_s8(Y[4 * mt + nt], ad[d][mt], uf[nt]);
     fold(Y, y, z);
     ring_put(S, d, lane, y, z);
+    if constexpr (RO) continue;
 #pragma unroll
     for (int t = 0; t < 8; ++t)
 #pragma unroll
@@ -1060,6 +1075,7 @@ __global__ void __launch_bounds__(32 * (KP + 1), 1) h1k(const int8_t* __restrict
   }
   __syncwarp();
   if (rcpt && lane < 2 * MD) o[2 * ks + lane] = ring_xor(S, lane);
+  if constexpr (RO) return;
 #pragma unroll
   for (int mt = 0; mt < 2; ++mt)
 #pragma unroll
@@ -1471,8 +1487,9 @@ static unsigned h1k_wave() {
 template <int MD, bool WS, bool J10 = false, bool PL = false>
 static void launch_one(unsigned units, cudaStream_t s, const void* A, const void* B, unsigned M, unsigned N, unsigned K,
                        const void* seeds, const void* live, void* out, const void* ws, const OneOut& oo) {
+  constexpr bool RO = H1K_RONLY && !J10 && !PL;
 #if H1U_KSPLIT
-  if constexpr (WS && !J10) {
+  if constexpr (WS && !J10 && (RO || !H1K_RONLY)) {
     const unsigned rows = oo.M < M ? oo.M : M, lu = (rows + 31) / 32 * (N / 32);
 #if H1K_AUTO
     if (lu <= h1k_wave<MD, PL, 4>()) {
@@ -1491,7 +1508,7 @@ static void launch_one(unsigned units, cudaStream_t s, const void* A, const void
 #endif
   }
 #endif
-  h1u<MD, WS, true, J10, PL><<<(units + WARPS - 1) / WARPS, 32 * WARPS, 0, s>>>((const int8_t*)A, (const int8_t*)B, M, N,
+  h1u<MD, WS, !RO, J10, PL><<<(units + WARPS - 1) / WARPS, 32 * WARPS, 0, s>>>((const int8_t*)A, (const int8_t*)B, M, N,
                                                                               K, (const u64*)seeds, (const uint8_t*)live,
                                                                               (u32*)out, (const u32*)ws, oo);
 }
@@ -1555,7 +1572,7 @@ static int one_call(const void* A, const void* B, unsigned rows, unsigned N, uns
 #if H1U_SPLIT
   return 2;
 #endif
-  if (K % 512 || rows % 32 || N % 32 || !z || !y || !step || (ws && !J)) return 2;
+  if (K % 512 || rows % 32 || N % 32 || !z || !y || !step || (ws && !J) || (H1K_RONLY && PL)) return 2;
   const int m = n_digits((int)(K / 32));
   if (m != 2 && m != 3) return 2;
   const unsigned units = (rows / 32) * (N / 32);

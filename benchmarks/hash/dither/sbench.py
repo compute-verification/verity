@@ -62,13 +62,13 @@ Arms:
                  call's A table (form 3), seeds and receipts of the noised product only; its tokens must equal exact's.
                  dither-a-h1r takes h1r's block or split receipts per call, dither-a-kh h1u.cu's kh_unit_ws (HB_H1U),
                  dither-a the second where HB_H1U is set, dither-a-hbk the K split's kh_one (HB_H1U_KSPLIT) for its
-                 receipts only.  Each with -zy commits CA's z/y leaves (one hiding leaf a
+                 receipts only, dither-a-hbr the same call built H1K_RONLY (HB_H1U_KRONLY: no z, y or their MMA).  Each with -zy commits CA's z/y leaves (one hiding leaf a
                  32 x 32 unit holding its z and its y = dequant(z): the epilogue writes the records, the window
                  builds every call's table between steps; -zyc the side stream each call's after its receipts),
                  and with -y commits no z at all (y only: the leaves' cost floor, never credited; its gate is its
                  tokens).  With -ao after those, the A tables run on a stream of
                  their own, each beside the previous call's units (the units of a call still wait on its A table);
-                 -aos puts each call's seeds there too, after its A table (-kh and -hbk, whose seeds are a launch of
+                 -aos puts each call's seeds there too, after its A table (-kh, -hbk and -hbr, whose seeds are a launch of
                  their own); -aom and -aoms are -ao and -aos on four such streams, call w's on stream w % 4 (no
                  call's A table reads another's).  With -pt last, between steps the receipt trees and the admit tables run on streams of
                  their own beside the z tables and the step trees (`Window.tree_streams`)
@@ -323,8 +323,8 @@ def build(arm: str, scratch: Path, gpu_mem: float):
         h1u = os.environ.get("HB_H1U")
         unit, z, ao, pt = DITHER_A[arm]
         unit = unit or ("kh" if h1u else "h1r")
-        if unit == "hbk":
-            h1u = os.environ["HB_H1U_KSPLIT"]
+        if unit in DA.KONE:
+            h1u = os.environ["HB_H1U_KSPLIT" if unit == "hbk" else "HB_H1U_KRONLY"]
         a = engine_args(gpu_mem)
         DA.patch(t=a["max_num_batched_tokens"], h1c=os.environ["DITHER_H1C"], h1o=os.environ["DITHER_H1O"], unit=unit,
                  h1u=h1u, z=z, ao=ao, pt=pt)
@@ -338,7 +338,7 @@ def build(arm: str, scratch: Path, gpu_mem: float):
 
 
 DITHER_A = {f"dither-a{u}{z}{o}{p}": (unit, zm, ao, pt)
-            for u, unit in (("", None), ("-h1r", "h1r"), ("-kh", "kh"), ("-hbk", "hbk"))
+            for u, unit in (("", None), ("-h1r", "h1r"), ("-kh", "kh"), ("-hbk", "hbk"), ("-hbr", "hbr"))
             for z, zm in (("", "row"), ("-zy", "zy"), ("-zyc", "zyc"), ("-y", "none"))
             for o, ao in (("", ""), ("-ao", "a"), ("-aos", "as"), ("-aom", "m"), ("-aoms", "ms"))
             for p, pt in (("", False), ("-pt", True))}
