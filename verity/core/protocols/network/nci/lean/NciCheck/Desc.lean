@@ -576,15 +576,18 @@ def nodeOf (offsets : Array Nat) (g : Nat) : Nat := Id.run do
     if offsets[mid]! ≤ g then a := mid else b := mid
   return a
 
+/-- One interval `(lo, hi, w)` of the sweep sorted by `lo`, after `(total, cover)`: its gates past `cover` added. -/
+def coverStep (st : Nat × Nat) (x : Nat × Nat × Nat) : Nat × Nat :=
+  if x.2.1 ≤ st.2 then st else (st.1 + (x.2.1 - max x.1 st.2) * x.2.2, x.2.1)
+
 /-- The total width of the distinct gates of `ivs` (each `(lo, hi, w)`: gates `[lo, hi)` of width `w`). -/
 def distinctWidth (ivs : Array (Nat × Nat × Nat)) : Nat :=
-  ((ivs.toList.mergeSort fun x y => x.1 ≤ y.1).foldl (init := (0, 0)) fun (tot, cover) (lo, hi, w) =>
-    if hi ≤ cover then (tot, cover) else (tot + (hi - max lo cover) * w, hi)).1
+  ((ivs.toList.mergeSort fun x y => x.1 ≤ y.1).foldl coverStep (0, 0)).1
 
 /-- The gates of `qs` as intervals with their widths. -/
 def gateIvs (qs : Array Piece) : Array (Nat × Nat × Nat) :=
   let ws := (qs.filterMap fun q => match q.tgt with | .gate w => some w | _ => none).qsort (· < ·) |>.toList.eraseDups
-  ws.toArray.flatMap fun w => (ivsOf (qs.filter (·.tgt == .gate w))).map fun (lo, hi) => (lo, hi, w)
+  ws.toArray.flatMap fun w => (ivsOf (qs.filter (·.tgt == .gate w))).map fun iv => (iv.1, iv.2, w)
 
 /-- Gates `cnt` copies, `period` apart, of `res` (each `(lo, hi, w)` from `lo`, none past `span ≤ period`). -/
 structure Cl where
@@ -601,11 +604,11 @@ def copiesStep (acc : Array (Nat × Nat × Nat) × Array Cl) (s : Seg) : Array (
   if s.reps ≤ 1 then acc else
   let r := gateIvs s.ps
   if r.isEmpty then acc else
-  let lo := r.foldl (fun m (a, _, _) => min m a) r[0]!.1
-  let hi := r.foldl (fun m (_, b, _) => max m b) 0
+  let lo := r.foldl (fun m x => min m x.1) r[0]!.1
+  let hi := r.foldl (fun m x => max m x.2.1) 0
   if s.shift ≤ 0 || hi - lo > s.shift.toNat then (acc.1 ++ (Array.range s.reps).flatMap fun m => gateIvs (s.copy m), acc.2)
   else (acc.1, acc.2.push { lo, period := s.shift.toNat, cnt := s.reps, span := hi - lo,
-                             res := r.map fun (a, b, w) => (a - lo, b - lo, w) })
+                             res := r.map fun x => (x.1 - lo, x.2.1 - lo, x.2.2) })
 
 /-- Frames of one start, period and count, next to each other once sorted: one frame. -/
 def frameStep (frames : Array Cl) (x : Cl) : Array Cl :=
@@ -621,7 +624,7 @@ def expandIn (ivs : Array (Nat × Nat × Nat)) (frames : Array Cl) (j : Nat) : A
   if j < ivs.size then #[ivs[j]!]
   else
     let x := frames[j - ivs.size]!
-    (Array.range x.cnt).flatMap fun m => x.res.map fun (a, b, w) => (x.lo + m * x.period + a, x.lo + m * x.period + b, w)
+    (Array.range x.cnt).flatMap fun m => x.res.map fun y => (x.lo + m * x.period + y.1, x.lo + m * x.period + y.2.1, y.2.2)
 
 /-- The width of one component of the sweep: copies times one copy's for a frame alone, else of its items' gates. -/
 def widthIn (ivs : Array (Nat × Nat × Nat)) (frames : Array Cl) (comp : Array Nat) : Nat :=
@@ -643,7 +646,7 @@ def novelWidth (segs : Array Seg) : Nat :=
   let frames := (acc.2.qsort fun x y =>
     x.lo < y.lo || (x.lo == y.lo && (x.period < y.period || (x.period == y.period && x.cnt < y.cnt)))).foldl frameStep #[]
   let n := ivs.size
-  let items := (ivs.mapIdx fun i (lo, hi, _) => (lo, hi, i)) ++
+  let items := (ivs.mapIdx fun i x => (x.1, x.2.1, i)) ++
     (frames.mapIdx fun i x => (x.lo, x.lo + (x.cnt - 1) * x.period + x.span, n + i))
   let fin := (items.toList.mergeSort fun x y => x.1 ≤ y.1).foldl (sweepStep (widthIn ivs frames)) (0, #[], 0)
   if fin.2.1.isEmpty then fin.1 else fin.1 + widthIn ivs frames fin.2.1
