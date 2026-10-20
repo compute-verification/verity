@@ -1,8 +1,11 @@
 # The per-family headline (`machine-model headline`, headline.py): each GPU family's design of record, the vector each
 # reading prices it on, and the conditions its rows are stated under. Every number is computed from the design files
 # and the vectors; what is written here is only which design, which vector, and the conditions no computation shows.
-# The floor a row needs (½ or 1.22 slots) and its fillers' credit are computed and printed beside these.
-capacity = "ε is relative to the declared capacity, the reading's Π (decision 100): an error in Π is no term of ε"
+# The floor a row needs (½ or 1.22 slots) and its fillers' credit are computed and printed beside these. A design of
+# record credits only work a check reads: the fold the served unit's Definition recomputes, and a filler at the theorem
+# its check meets (decision 99; RT-LOGIC-12).
+capacity = "ε is relative to the declared capacity, the reading's Π (decision 100), which rests on accounting-declared-device (ASK-74 = A, the auditor's inventory of the node): every GPU on the node declared, each the declared board and vBIOS, no SM clock above the top of that vBIOS's clock table; an error in Π is no term of ε"
+scope = "ε is per node (ASK-65 = A): an accepted window's node, its GPUs, host CPU and peer GPUs together, performed at least 1 − ε of the credited work; read per GPU, it needs LOC's host deduction (decision 37) and every billable GPU on the node credited each window (the README's \"The headline is per node\"; RT-SCOPE, #2681)"
 
 [floor]             # (I3) ScalarRoute, the floor a vector- or table-headed word pays; a row names the one it needs
 half = "the ½-slot floor ((I3) at q* = ½: Lean Accounting.SecurityProofs.TS.SheetScalarRouteHalf, from A6)"
@@ -26,22 +29,24 @@ gpu = "RTX PRO 6000"
 design = "dither-c-peel-fx1"
 conditions = ["fx1 at 4 lane instructions a word is the cheapest fold (FOLD-OPT; ASSUME r2, #2289)"]
 sheet = { vector = "DS-120" }
-measured = { vector = "VF3r-16" }
+measured = { vector = "VF3r-16", conditions = ["not the Lean statement's reading: Sm120MeasuredHeadline reads VF3s-16 at q = q_T = 9/8 (0.591%; 7.791% at the ½ floor), because bit-exact census programs load VF3r-16's JI3s_0 at up to 1.0383, so (I1) on its rows is false (RT2-LOGIC-9); this row stays on VF3r-16 at 1.22 until the design records ε_skip at VF3s-16 and a reading takes a family's own q"] }
 
 [family.sm_90]
 gpu = "H200"
-design = "dither-2s-licpw-redux-l32"
-p1 = "dither-2s-licpw-redux-p1-l32"
-conditions = ["ffill's p = 0 rests on its bit-exact check, ffill_ref.receipt (benchmarks/pouw/dc; decision 99, DC r12): ffill.cu's conformance to it on the H200 (ffill.sh) has not run",
+design = "dither-2s-licpw-redux-p1-l32"
+conditions = ["ffill is credited at p = 1: no check reads its chains (PouwWarpCheck's li absorbs H1's call words only; RT-LOGIC-12, decision 99)",
+              "LI-CP-W redux at its lane instructions a word is the cheapest fold (FOLD-OPT, decision 94): on DS-90 ε_machine first rises at 0.992 a word, 5.9% under li's 1.055 (RT-HB-HEAD-2)",
               "LI-CP-W's receipt luck 0 needs every absorbed word pinned (PIN, decision 97)"]
 sheet = { vector = "DS-90" }
-measured = { vector = "DC-90-ri" }
+measured = { vector = "DC-90-ri", conditions = ["over 1%: without ffill in ♭ the cheater puts most words on the uniform datapath; only a check that reads ffill's chains brings DC-90-ri under 1% (RT-HB-HEAD-1)"] }
 
 [family.sm_100]
 gpu = "B200"
-design = "dither-2s-licpw-redux-heavy-l32"
-conditions = ["LI-CP-W's receipt luck 0 needs every absorbed word pinned (PIN, decision 97)"]
-sheet = { vector = "DS-100" }
+design = "dither-2s-licpw-redux-ldtm0-l32"
+conditions = ["the fold credited is the one the checks read, plain LI-CP-W redux (PouwLiAbsorb_v2: no extra keyed round; RT-LOGIC-12)",
+              "LI-CP-W redux at its lane instructions a word is the cheapest fold (FOLD-OPT, decision 94): on DS-100 ε_machine first rises at 0.496 a word, 53% under li's 1.055 (RT-HB-HEAD-2)",
+              "LI-CP-W's receipt luck 0 needs every absorbed word pinned (PIN, decision 97)"]
+sheet = { vector = "DS-100", conditions = ["FOLD-OPT at DS-100's π* (a LOP3 1.979, an IMAD 0.021): li's XOR of two words has no IMAD- or FP-pipe program under 93 instructions (the bit-serial one is 193; FOLD-MIN's 1 + 2|B| IMAD round is a keyed round's, which plain li has none of, #2751). With the fold at its instruction count alone, no pipe premise, this row is 1.328%"] }
 measured = { vector = "DC-100-ri" }
 
 [family.sm_89]

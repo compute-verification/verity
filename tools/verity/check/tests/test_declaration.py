@@ -155,7 +155,7 @@ def _main_parts(monkeypatch, argv):
     monkeypatch.delenv("RESEARCH_RUN_ID", raising=False)
     monkeypatch.delenv("RESEARCH_RUN_DIR", raising=False)
     monkeypatch.setattr(CHECK.SUITES, "foreign", lambda members, env: None)
-    monkeypatch.setattr(CHECK, "run", lambda out, n, cache, keep_going, only: got.append(only) or (True, []))
+    monkeypatch.setattr(CHECK, "run", lambda out, n, cache, keep_going, only, *packs: got.append(only) or (True, []))
     rc = CHECK.main(argv)
     return rc, got[0] if got else None
 

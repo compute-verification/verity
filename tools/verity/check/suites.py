@@ -168,12 +168,12 @@ RUNNER_PREFIX, RUNNER_ENV = "RESEARCH_", ("PYTHONPYCACHEPREFIX",)
 #: step (its `lean-suites`), and on its own this runs that build before them, so they run or skip alike in both
 AFTER_LEAN = ("verity-flock", "verity-lean-audit", "verity-difftest", "pous-check", "core-identity", "verity-core-composition",
               "verity-core-evaluate", "verity-core-firewall",
-              "verity/core/service/vstar", "verity-core-sampled-proofs",
+              "verity/core/service/vstar", "verity/core/service/sigma", "verity-core-sampled-proofs",
               "verity/core/protocols/remote_bandwidth/lean",
               "verity/core/protocols/network", "verity-pouw-window-difftest",
               "verity-pouw-check-difftest", "verity/core/protocols/pouw/lean/commit", "memory-challenger-lean", "benchmarks/pous",
               "verity/core/protocols/sampled_proofs", "verity/core/protocols/certifier", "verity-pouw-benchmarks",
-              "verity/core/primitives/requirement")
+              "verity/core/primitives/requirement", "benchmarks/remote_session")
 #: the toolchain `lean-toolchain` pins, through elan when `lake` is missing (as `ci-pod.sh` does)
 ELAN = ('command -v lake >/dev/null || command -v "$HOME/.elan/bin/lake" >/dev/null || { curl -sSf '
         'https://raw.githubusercontent.com/leanprover/elan/master/elan-init.sh | sh -s -- -y --default-toolchain none >/dev/null; }; '
@@ -212,15 +212,18 @@ def cpus() -> int:
 TEST_PROCESS_GB = 9
 
 
-def default_jobs(meminfo: Path = Path("/proc/meminfo")) -> int:
+def default_jobs(meminfo: Path = Path("/proc/meminfo"), limit_gb: float | None = None) -> int:
     """The default `--jobs`: the CPUs this process may use (`cpus`), or fewer where the memory available holds fewer test
-    processes at `TEST_PROCESS_GB` each."""
+    processes at `TEST_PROCESS_GB` each. The memory is the machine's MemAvailable or this run's own limit (``limit_gb``, by
+    default `slot_mem_gb`: the check slot's, else the cgroup's `memory.max`), whichever is less (19 Oct, r20261019-045749-398f:
+    an `--on auto` agent-test's 16 GiB scope on a node with 1.5 TB free started 32 test processes and was OOM-killed)."""
     n = cpus()
-    try:
+    limit_gb = slot_mem_gb() if limit_gb is None else limit_gb
+    limits = [] if limit_gb is None else [limit_gb]
+    with contextlib.suppress(OSError, StopIteration, ValueError, IndexError):
         kb = next(int(ln.split()[1]) for ln in meminfo.read_text().splitlines() if ln.startswith("MemAvailable:"))
-    except (OSError, StopIteration, ValueError, IndexError):
-        return n
-    return min(n, max(1, kb // (TEST_PROCESS_GB << 20)))
+        limits.append(kb / 2**20)
+    return min(n, max(1, int(min(limits) // TEST_PROCESS_GB))) if limits else n
 
 
 def _git(*args: str, env: dict | None = None, stdin: str | None = None) -> str:
@@ -378,13 +381,36 @@ def discover() -> list[Suite]:
             if s.path != "." else s for s in suites]
 
 
+#: the git tree of the Lean verifier's sources, per checkout (`built_from`): they don't change while a run keys its suites
+_SOURCES: dict[Path, str] = {}
+
+
+def built_from(artifact: str) -> str | None:
+    """What a build output the Lean verifier's `lake build` makes (under its `.lake/build/`) is keyed by: the git tree of the
+    verifier's directory (its sources, lakefile, manifest and toolchain pin), not the bytes built, while its lakefile requires no
+    other package.
+    check runs a suite that declares one only after its lean-build step has built them from that tree (`AFTER_LEAN`), and this
+    runner builds them first (`lean_build`), so a plan that builds nothing (`check.py --plan`) keys such a suite as the check
+    does.  None for any other output, or with no verifier."""
+    lean = flock_lean()
+    if not (lean / "lakefile.toml").is_file() or not (ROOT / artifact).resolve().is_relative_to((lean / ".lake" / "build").resolve()):
+        return None
+    if "require" in (lean / "lakefile.toml").read_text():          # the build reads another package then, which its tree misses
+        return None
+    if ROOT not in _SOURCES:
+        _SOURCES[ROOT] = object_ids(worktree(), [lean.relative_to(ROOT).as_posix()])[lean.relative_to(ROOT).as_posix()]
+    return f"built from {_SOURCES[ROOT]}"
+
+
 def artifact_ids(suite: Suite) -> dict[str, str]:
-    """Each declared build output as the key sees it: a file's sha256, "directory", or "absent" (git ignores build outputs, so the
-    tree's object ids never see them)."""
+    """Each declared build output as the key sees it: what the Lean verifier builds, by its sources (`built_from`); any other, a
+    file's sha256, "directory", or "absent" (git ignores build outputs, so the tree's object ids never see them)."""
     out = {}
     for a in suite.artifacts:
         p = ROOT / a
-        if p.is_file():
+        if src := built_from(a):
+            out[a] = src
+        elif p.is_file():
             with open(p, "rb") as f:
                 out[a] = hashlib.file_digest(f, "sha256").hexdigest()
         else:
@@ -1663,11 +1689,19 @@ SLOT_MEM_ENV = "CHECK_SLOT_MEM_GB"
 STOP_GRACE_S = 30.0
 
 
+#: the memory `research run --mem-gb` reserved for the run (remote.py), which on a CPU node is no cgroup cap
+RUN_MEM_ENV = "RESEARCH_RUN_MEM_GB"
+
+
 def slot_mem_gb() -> float | None:
-    """The check slot's memory, when this runs in one (17 Oct: a quick tier in proofs' 480 GB pool slot ran circuit_check's suite
-    on 94 workers, 784 GB, since only `check` passed `--mem-gb`)."""
-    v = os.environ.get(SLOT_MEM_ENV, "")
-    return float(v) if v.replace(".", "", 1).isdigit() else cgroup_mem_gb()
+    """The memory this run may use: its check slot's, else its `research run --mem-gb` reservation's, else its cgroup's cap (17 Oct:
+    a quick tier in proofs' 480 GB pool slot ran circuit_check's suite on 94 workers, 784 GB, since only `check` passed `--mem-gb`;
+    19 Oct, INF-118: a quick tier on a 32 GB reservation on cpu-2, where nothing caps it, reached 900 GiB and OOM-killed others)."""
+    for env in (SLOT_MEM_ENV, RUN_MEM_ENV):
+        v = os.environ.get(env, "")
+        if v.replace(".", "", 1).isdigit():
+            return float(v)
+    return cgroup_mem_gb()
 
 
 def cgroup_mem_gb(root: Path = Path("/")) -> float | None:

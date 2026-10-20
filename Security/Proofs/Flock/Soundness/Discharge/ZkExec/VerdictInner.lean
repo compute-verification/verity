@@ -409,7 +409,8 @@ theorem zk_inner_accepts : ZkInnerAccepts := by
       [c₀, c₁, c₂, c₃]
       (ZkLink.innerCheckC hs512.H hs512.Ep hs512.Lp hs512.Lτ T.dom T.pos rows T.tr (toDig pr.root)
         (toDig pr.tauCommit) (fOf c₀[0]!) (fOf pr.rho, fOf pr.sigma) (fun i : Fin (7 + 3) => fOf c₁[i.val]!)
-        (fOf c₂[0]!) (vecOf (T.np + T.nP) pr.y) (fun i : Fin T.q => fOf c₃[i.val]!)) := by
+        (fOf c₂[0]!) (vecOf (T.np + T.nP) pr.y) (fun i : Fin T.q => fOf c₃[i.val]!),
+        ZkLink.qposOf T.pos (fun i : Fin T.q => fOf c₃[i.val]!)) := by
     unfold ZkLink.innerGameC
     refine Plays.bind' (ms₂ := [⟨𝔽 × 𝔽, (fOf pr.rho, fOf pr.sigma)⟩, ⟨Dig, toDig pr.tauCommit⟩,
         ⟨Fin (T.np + T.nP) → 𝔽, vecOf (T.np + T.nP) pr.y⟩]) (cs₂ := [c₁, c₂, c₃]) (Plays.drawOne c₀ hs₀) ?_ rfl rfl

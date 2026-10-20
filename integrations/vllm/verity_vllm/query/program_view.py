@@ -40,6 +40,7 @@ from collections.abc import Sequence as _SequenceABC
 from dataclasses import dataclass
 from typing import Any, Callable, Iterable, Iterator, Sequence
 
+from verity_vllm.query.type_repr import parse_type_repr
 from verity_vllm.query.units import ValueRef
 
 __all__ = ["Port", "CallView", "ProgramView", "InputView", "from_instances", "from_descriptor", "definition_ports", "parse_type_repr",
@@ -66,6 +67,7 @@ class CallView:
     name: str                        # the recorded naming hint (`<module>/<fx node>[/<member>][row]`), "" if none
     port_table: tuple[Port, ...]
     reads: Sequence[ValueRef]        # a tuple, or the lazy `_Reads` of a columnar body (materialized only while iterated)
+    bits: str | None = None          # a Boolean Program's Call (its rows' `bits`): the spec id of the Boolean Definition it is of
 
     @property
     def ports(self) -> tuple[str, ...]:
@@ -157,13 +159,14 @@ class _Columns:
     the port-name index (`array('H')` into `port_names`) -- in operand order, each Value once; and the same for the reads of
     prescribed inputs alone (`pread_*`), so a pass over the weights a body reads never touches the Call reads."""
 
-    __slots__ = ("n", "specs", "families", "port_tables", "spec_idx", "forms", "form_idx", "names", "port_names",
+    __slots__ = ("n", "specs", "families", "bits", "port_tables", "spec_idx", "forms", "form_idx", "names", "port_names",
                  "read_off", "read_call", "read_port", "pread_off", "pread_call", "pread_port", "views")
 
     def __init__(self) -> None:
         self.n = 0
         self.specs: list[str] = []
         self.families: list[str] = []
+        self.bits: list[str | None] = []
         self.port_tables: list[tuple[Port, ...]] = []
         self.spec_idx = array("i")
         self.forms: list[str] = []
@@ -186,7 +189,7 @@ class _Columns:
         if v is None:
             s = self.spec_idx[k]
             v = views[k] = CallView(k, self.specs[s], self.families[s], self.forms[self.form_idx[k]], self.names[k], self.port_tables[s],
-                                    _Reads(self, k))
+                                    _Reads(self, k), self.bits[s])
         return v
 
     def family_of(self, k: int) -> str:
@@ -323,7 +326,8 @@ class _Builder:
                 raise ValueError("more than 65535 distinct port names")
         return k
 
-    def add(self, i: int, spec: str, form: str, name: str, port_table: tuple[Port, ...], args: Iterable[Iterable[Sequence[Any]]]) -> None:
+    def add(self, i: int, spec: str, form: str, name: str, port_table: tuple[Port, ...], args: Iterable[Iterable[Sequence[Any]]],
+            bits: str | None = None) -> None:
         c = self.c
         if i != c.n:
             raise _OutOfOrder(f"row {i} at body position {c.n}")
@@ -332,6 +336,7 @@ class _Builder:
             s = self._spec_of[spec] = len(c.specs)
             c.specs.append(spec)
             c.families.append(spec_base(spec))
+            c.bits.append(bits)
             c.port_tables.append(port_table)
             self._spec_pidx.append(tuple(self._port_index(p.name) for p in port_table))
         fi = self._form_of.get(form)
@@ -485,6 +490,19 @@ def spec_statics(spec: str) -> dict[str, Any]:
     return out
 
 
+def bits_gates(group: dict[str, Any], specialize: Callable[[str, dict], Any], violations: list[dict[str, Any]]) -> int:
+    """The Boolean gates per Call of a `query.word.check_calls` group's `bits` Definition (a Boolean Program's word link), 0 for a
+    group without one; a `bits` that does not resolve is an `unresolved` violation, appended to ``violations``."""
+    bits = group.get("bits")
+    if not bits:
+        return 0
+    try:
+        return int(specialize(spec_base(bits), spec_statics(bits)).gates)
+    except (KeyError, TypeError, ValueError, AttributeError) as e:
+        violations.append({"definition": bits, "class": "unresolved", "why": f"{type(e).__name__}: {str(e)[:200]}"})
+        return 0
+
+
 def ports_of_type(t) -> tuple[Port, ...]:
     """The output ports of a `verity.ml.circuits.types.Type`: one `out` for a Value / Array, `"0"`.. for a Tuple, field names for a Record."""
     from verity.ml.circuits.types import Record, Tuple as TupleT
@@ -508,83 +526,8 @@ def ports_of_type(t) -> tuple[Port, ...]:
     return (one("out", 0, t),)
 
 
-class TypeReprError(ValueError):
-    pass
-
-
-def parse_type_repr(s: str):
-    """The `repr` of a `verity.ml.circuits.types.Type` back to a Type: `Value<32>`, `Array<31,Value<32>>`, `(A, B)`, `{name: A, other: B}`."""
-    from verity.ml.circuits.types import Array, Record, Tuple as TupleT, Value
-    pos = 0
-    n = len(s)
-
-    def skip_ws() -> None:
-        nonlocal pos
-        while pos < n and s[pos] in " \n\t":
-            pos += 1
-
-    def expect(ch: str) -> None:
-        nonlocal pos
-        skip_ws()
-        if pos >= n or s[pos] != ch:
-            raise TypeReprError(f"type repr: expected {ch!r} at {pos} in {s[:80]!r}")
-        pos += 1
-
-    def parse():
-        nonlocal pos
-        skip_ws()
-        if s[pos:pos + 6] == "Value<":
-            pos += len("Value<")
-            j = s.index(">", pos)
-            w = int(s[pos:j])
-            pos = j + 1
-            return Value(w)
-        if s[pos:pos + 6] == "Array<":
-            pos += len("Array<")
-            j = s.index(",", pos)
-            k = int(s[pos:j])
-            pos = j + 1
-            elem = parse()
-            expect(">")
-            return Array(k, elem)
-        if s[pos] == "(":
-            pos += 1
-            fields = []
-            skip_ws()
-            while s[pos] != ")":
-                fields.append(parse())
-                skip_ws()
-                if s[pos] == ",":
-                    pos += 1
-                    skip_ws()
-            pos += 1
-            return TupleT(*fields)
-        if s[pos] == "{":
-            pos += 1
-            pairs = []
-            skip_ws()
-            while s[pos] != "}":
-                j = s.index(":", pos)
-                key = s[pos:j].strip()
-                pos = j + 1
-                pairs.append((key, parse()))
-                skip_ws()
-                if s[pos] == ",":
-                    pos += 1
-                    skip_ws()
-            pos += 1
-            return Record(*pairs)
-        raise TypeReprError(f"type repr: unexpected {s[pos:pos + 20]!r} at {pos}")
-
-    t = parse()
-    skip_ws()
-    if pos != n:
-        raise TypeReprError(f"type repr: trailing {s[pos:pos + 20]!r}")
-    return t
-
-
 def _registry():
-    """(REGISTRY, import errors) of the integration's registry, every module loaded (`verity_vllm.program.registry.load`); a module that
+    """(REGISTRY, import errors) of the integration's registry, every module loaded (`verity_vllm.program.registry.catalog.load`); a module that
     fails to import is reported with the lookup that needed it, never treated as "not registered"."""
     try:
         from verity.ml.circuits.defs import REGISTRY  # noqa: F401
@@ -725,14 +668,17 @@ def _instances_columns(params: tuple[InputView, ...], rows: Iterable[dict[str, A
     b = _Builder(params)
     for r in rows:
         spec = r["spec"]
-        b.add(int(r["i"]), spec, str(r.get("form") or "call"), str(r.get("name") or ""), definition_ports(spec), r.get("args") or ())
+        b.add(int(r["i"]), spec, str(r.get("form") or "call"), str(r.get("name") or ""), definition_ports(spec), r.get("args") or (),
+              r.get("bits"))
     return b
 
 
 def from_instances(path_or_doc: str | dict[str, Any]) -> ProgramView:
     """`instances.json.gz` (or its loaded document) -> ProgramView.  Rows are body positions; the Definition's ports come from the
     registry (`definition_ports`, once per distinct spec); a row of a `batch` form carries no `n`, so its output is read as the
-    single-instance signature (the reference request Programs are `call` rows throughout).
+    single-instance signature (the reference request Programs are `call` rows throughout).  A Boolean Program's rows are its word
+    view (`pipeline.build_instances`): each Call is the word Definition its Boolean Definition computes, with that Boolean spec as
+    `CallView.bits`, so its families, ports and reads are the word Program's.
 
     A path is STREAMED: the rows are decoded one at a time into the columnar body (`iter_instance_rows`), the file read once.  A file
     whose rows are not in body order (never written by `derive_step`) is read again as a document; a document's rows are sorted."""

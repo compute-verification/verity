@@ -1,20 +1,27 @@
 # `pouw_window`: PoUW's audit window as executable Lean
 
 The port of `verity/core/protocols/pouw/window.py`, on Lean core and PoUW's commitments (`pouw_commit`: its frame-v3-sha512
-domains, C-Flock's SHA-512 and hm96, core's tagged identity). Once its properties are proven it moves, as a
+domains, C-Flock's SHA-512 and hm96, core's tagged identity), and the proof service's challenger for a live window's
+coins (`core_sampled_proofs`). Once its properties are proven it moves, as a
 pure move, to the same path under `verity/core/`; the Python keeps running until then.
+
+Tokens served past the honest run's end-of-sequence are not useful work, so a row of record serves at a public fixed
+length, ignore_eos at each slot's public max_tokens, which the window registers and the verifier checks (Daniel, 19 Oct,
+ASK-39; `PouwWindow.Length`).
 
 | module | `window.py` |
 | --- | --- |
 | `PouwWindow.Grid` | `GRID_BITS`, `on_grid`, `floor_point`, `pad`, `level`, `point`, `levels`, `Work`, `bucket`, with their refusals |
 | `PouwWindow.Draw` | `k_prime` (K′, exact: `missAtMost`, then bisection), `sampling` |
-| `PouwWindow.Public` | `PUBLIC`, `REGISTERED`, `KINDS` |
+| `PouwWindow.Public` | `PUBLIC`, `REGISTERED`, `LEGACY_REGISTERED`, `KINDS` |
+| `PouwWindow.Length` | `STOP_FIXED`, `LENGTH_KEYS`, `length_item`, `length_problem`: the rows of record's fixed length (Daniel, 19 Oct, ASK-39) |
 | `PouwWindow.Json` | integers read as Python's `json` reads them; the items written as Python writes them |
 | `PouwWindow.Entry` | `T_BITS`, `DEPTHS`, `PORT`, `ENTRY_SCHEMA`, `TILE`, `ROW_STEP`, `Entry` (`row`, `words`, `from_row`, `from_words`), `pass_tiles`, `tiles`, `layout_problem`, `tile_in`, `tile_at`, `tile_read`, `entry_digest`, `entry_bc`, `entry_leaf` |
 | `PouwWindow.Record` | `record_digest` (`canonical_json` as Python writes it), `record_problem`, and how Python reads a record's JSON |
 | `PouwWindow.Side` | `SIDE_DOMAIN`, `OWNER`, `SIDE_INDEX_WORDS`, `side_row`, `side_index`, `side_domain`, `pad_node`, `side_levels`, `side_path` |
 | `PouwWindow.Statement` | `window_problem`, the window statement L4 on the entry rows, with the records and side indices |
 | `PouwWindow.Inputs` | `PUBLIC_INPUTS_FORMAT`, `PUBLIC_PORTS`, `M_MAX`, `session_cap`, `sessions`, `instance_ts`, `public_inputs` |
+| `PouwWindow.Rounds` | `COINS`, `MODES` (`CoinMode`), `mode`, `LIVE_SCHEME`, `SALT`, `DRAW`, `ROUND`, `live_families`, `live_epoch_reason`, `rounds_reason`, `round_key`: a live window's round coins over the proof service's challenger (`core_sampled_proofs`'s `SampledProofs.Challenger`) |
 | `PouwWindow.Difftest` | the difftest's table: one `Difftest.Fn` per ported function of `window.py` |
 
 `pouw-window-difftest` (`PouwWindow/DifftestMain.lean`) serves that table on the shared harness

@@ -10,6 +10,8 @@ import subprocess
 import sys
 from pathlib import Path
 
+import pytest
+
 from circuit_check import entries as E
 
 REPO = Path(__file__).resolve().parents[4]
@@ -938,19 +940,22 @@ def test_the_catalogs_units_are_its_root_functions_and_entries():
     assert {u for u in units[b1] if edited.get(u) != units[b1][u]} == {"_model_roots:ResidualAdd_v1"}
 
 
-def test_every_binding_and_pin_is_in_the_module_it_binds():
-    """The tree is migrated (`migrate_bindings.py`): it would move no binding out of `targets.py` and no pin out of the file
-    that holds it, so a binding or pin added in the wrong place fails here."""
-    import importlib.util
+#: `targets.py`'s own binding units: what no one module owns (every kernel's and vocabulary kind's self-check bindings), its
+#: module body, and `_root_bindings`, a helper whose name reads as a binding's
+TARGETS_UNITS = {"_kernel_roots", "_vocabulary_bindings", "_vocabulary_roots", "_root_bindings", "common"}
 
+
+def test_every_binding_and_pin_is_in_the_module_it_binds():
+    """`targets.py` binds only what no one module owns, and every pin is in the file of the module that owns it, so a binding
+    or pin added in the wrong place fails here: a Definition's goes in its module's sidecar (`circuit_check.sidecars`)."""
+    from circuit_check import cache as CC
     from circuit_check import checks as CK
     from circuit_check import sidecars as SC
+    from circuit_check import targets as TG
 
-    spec = importlib.util.spec_from_file_location("migrate_bindings", REPO / "tools/verity/circuit_check/migrate_bindings.py")
-    MB = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(MB)
-    moved, _text, summary = MB.plan(strict=True)
-    assert not moved and not summary["stays"], (sorted(moved), summary["stays"])
+    stray = sorted(set(CC._units_of(CC.TARGETS.read_text())[0]) - TARGETS_UNITS)
+    assert not stray, f"targets.py binds {stray}: move each to the sidecar of the module that defines what it binds"
+    TG.load_registries()
     misplaced = []
     for kind, pins in CK.load_pins().items():
         for key in pins:
@@ -1057,3 +1062,62 @@ def test_the_task_list_is_reused_only_while_nothing_its_build_could_depend_on_ch
     out = _run(root)
     assert out["hits"] == ["SynOther_v1"] and "task_list" not in out["stats"] and out["stats"]["stored"] == 1
     assert _run(root)["stats"]["task_list"]
+
+
+#: the harness with each target checked in a process of its own, forked from a zygote that is itself forked from the harness's
+#: process once the task list is built (`cli.Zygote` ``fork``, as `circuit-check` runs), so it holds this process's catalog
+FORKED = HARNESS.replace("log=None, cache=", "log=None, jobs=2, isolate=True, fork=True, cache=")
+
+
+def test_a_zygote_forked_once_the_task_list_is_built_records_what_a_check_here_does(tmp_path):
+    """b103 (6c4f254) built the catalog twice, in circuit-check's process for the keys and again in the forkserver zygote its
+    434 rerun targets fork from: about 40 of its 125 minutes.  Forked from the process that built it, the zygote builds nothing:
+    its children check the harness's own task list, which a forkserver zygote would build again from the real catalog.  A
+    target's process records what checking it first in this process records (less the probes this process's lookups made of
+    the cache's git-ignored directories, which are always absent); its entry is reused, and an edit reruns only what it reaches."""
+    here, forked = _tree(tmp_path / "here"), _tree(tmp_path / "forked")
+    assert _run(here)["hits"] == [] and _run(forked, FORKED)["hits"] == []
+
+    def held(root: Path, target: str) -> dict:
+        reads = _entry(root, target)["reads"]
+        return {**reads, "probes": {p: v for p, v in reads["probes"].items() if not p.startswith("cache/")}}
+
+    assert held(forked, "SynOther_v1") == held(here, "SynOther_v1")
+    for target in ("SynOther_v1", "SynTop_v1"):
+        assert _values(forked, target) == _values(here, target) and _entry(forked, target)["report"]["peak_gb"] > 0
+    assert _run(forked, FORKED)["hits"] == ["SynOther_v1", "SynTop_v1"]
+    _edit(forked, "syn/sub.py", "B.call(SynAdd, a, b)", "B.call(SynAdd, b, a)")
+    out = _run(forked, FORKED)
+    assert out["hits"] == ["SynOther_v1"] and out["stats"]["stored"] == 1
+
+
+#: the harness with the checker a copy inside the tree (``checker/circuit_check``), as `src/circuit_check/` is inside the
+#: repository, whose scheduler's peaks the process has read before the checks (`cli.heavy`, as a run of the parallel path does)
+CHECKER = (HARNESS.replace("sys.path.insert(0, str(root))", "sys.path.insert(0, str(root))\nsys.path.insert(0, str(root / 'checker'))")
+           .replace("rep = cli.run(", "cli.heavy()\nrep = cli.run(")
+           .replace('"hits": hits}', '"hits": hits, "checker": cli.__file__}'))
+
+
+@pytest.mark.slow
+def test_the_scheduler_s_peaks_are_in_no_key(tmp_path):
+    """`heavy.json` (`cli.HEAVY`) says only which targets may run beside which (`cli.run`'s scheduler), never what a check
+    computes: an edit to it reuses every target and the task list (17 Oct: `PousSha512Head_v1`'s 161.8 GiB peak was left out
+    of it because adding it made `circuit-check --all` run cold), and so does an edit to the known failures (`cache.KNOWN`,
+    which decide only the summary), while an edit to the checker's code still reruns them all."""
+    import shutil
+
+    root = _tree(tmp_path)
+    checker = root / "checker" / "circuit_check"
+    shutil.copytree(REPO / "tools/verity/circuit_check/src/circuit_check", checker,
+                    ignore=shutil.ignore_patterns("__pycache__", "heavy.json"))
+    (checker / "heavy.json").write_text(json.dumps({"SynOther_v1": 20.0}))
+    assert _run(root, CHECKER)["checker"] == str(checker / "cli.py")
+    (checker / "heavy.json").write_text(json.dumps({"SynOther_v1": 20.0, "SynTop_v1": 161.8}))
+    out = _run(root, CHECKER)
+    assert out["hits"] == ["SynOther_v1", "SynTop_v1"] and out["stats"]["task_list"]
+    for p in (checker / "known.py", *sorted((checker / "known").rglob("*.toml"))):
+        p.write_text(p.read_text() + "\n# another known failure\n")
+    out = _run(root, CHECKER)
+    assert out["hits"] == ["SynOther_v1", "SynTop_v1"] and out["stats"]["task_list"]
+    (checker / "checks.py").write_text((checker / "checks.py").read_text() + "\n# another version of the checker\n")
+    assert _run(root, CHECKER)["hits"] == []

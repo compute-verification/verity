@@ -1,7 +1,9 @@
 import Difftest
 import PouwWindow.Json
+import PouwWindow.Length
 import PouwWindow.Statement
 import PouwWindow.Inputs
+import PouwWindow.Rounds
 
 /-!
 # The difftest's functions: the window's Lean behind `Difftest.serve`
@@ -14,7 +16,8 @@ suite (`tests/test_difftest.py`) draws the inputs and holds each to Python.
   `lo`, `hi`);
 * `k_prime` (`eps`, `delta` as `[num, den]`, `credited`, `n`, `w_max`); `sampling` (`eps`, `delta`, `work`, `tile_work`,
   `bits`); `work_to_json` (`work`, `tile_work`);
-* `constants`: `PUBLIC`, `REGISTERED`, `KINDS` and `GRID_BITS`;
+* `constants`: `PUBLIC`, `REGISTERED`, `LEGACY_REGISTERED`, `KINDS`, `GRID_BITS` and `STOP_FIXED`;
+* the fixed length: `length_item` (`max_tokens`); `length_problem` (`item`, `max_tokens`);
 * the entry row: `entry_row`, `entry_words` (`entry`, as `Entry.to_json`); `entry_from_row` (`row` hex),
   `entry_from_words` (`words`); `layout_problem`, `pass_tiles`, `tiles`, `entry_digest` (`row`); `entry_bc` (`row`,
   `salt`); `entry_leaf` (`domain` `{binding, count}`, `e`, `bc`); `tile_in` (`row`, `t`); `tile_at` (`rows`, `t`);
@@ -25,6 +28,8 @@ suite (`tests/test_difftest.py`) draws the inputs and holds each to Python.
 * the window statement: `window_problem` (`rows`, `work`, `bound`, `root_h3`, `bits`, and `records`, `indices` or null);
 * the public inputs: `session_cap` (`k_log`, `per_block`); `sessions` (`k`, `cap`); `instance_ts` (`registration`,
   `drawn`, `sigma`, `cap`); `public_inputs` (those and `domain_h3`); `layout_constants`.
+* a live window: `live_epoch_reason` (`commitment`, the challenger's live coin commitment); `round_key` (`commitment`,
+  `coin`, `round`, `root`).
 
 A domain `{binding, count}` is `CommitmentDomain(binding, OWNER, RangeIndexedDomain(0, count), hash="sha512")`; bytes are
 hex, read as `bytes.fromhex` reads them.
@@ -92,6 +97,8 @@ def domain (j : Json) : Except String PouwCommit.Domain := do
   let d ← get j "domain"
   PouwCommit.Domain.mk? .sha512 (← hex d "binding") owner (← nat d "count")
 
+def natList (j : Json) (k : String) : Except String (List Nat) := do need k (nats? (← get j k))
+
 def ints (j : Json) (k : String) : Except String (List Int) := do
   (← arr j k).toList.mapM fun w => need k (intOf? w)
 
@@ -129,7 +136,10 @@ def table : String → Option _root_.Difftest.Fn := _root_.Difftest.table [
     pure (← sampling (← rat j "eps") (← rat j "delta") (← work j) (← int j "tile_work") (← nat j "bits")).toJson),
   ("work_to_json", fun j => do pure ((← work j).itemJson (← int j "tile_work"))),
   ("constants", fun _ => pure <| Json.mkObj [("PUBLIC", Json.arr (publicItems.map PublicItem.toJson).toArray),
-    ("REGISTERED", toJson registered), ("KINDS", toJson kinds), ("GRID_BITS", toJson gridBits)]),
+    ("REGISTERED", toJson registered), ("LEGACY_REGISTERED", toJson legacyRegistered), ("KINDS", toJson kinds),
+    ("GRID_BITS", toJson gridBits), ("STOP_FIXED", toJson stopFixed)]),
+  ("length_item", fun j => do pure (lengthItem (← natList j "max_tokens"))),
+  ("length_problem", fun j => do pure (toJson (lengthProblem (← get j "item") (← natList j "max_tokens")))),
   ("entry_row", fun j => do pure (hexJ (← entryOf (← get j "entry")).row)),
   ("entry_words", fun j => do pure (toJson (← entryOf (← get j "entry")).words)),
   ("entry_from_row", fun j => do pure (entryJson (← rowEntry j))),
@@ -173,6 +183,11 @@ def table : String → Option _root_.Difftest.Fn := _root_.Difftest.table [
   ("public_inputs", fun j => do
     pure (hexJ (← publicInputs? (← get j "registration") (← arr j "drawn").toList (← get j "sigma") (← int j "cap")
       (← hex j "domain_h3")))),
+  ("live_epoch_reason", fun j => do
+    pure (toJson (liveEpochReason (← SampledProofs.Challenger.LiveCommitment.ofJson (← get j "commitment"))))),
+  ("round_key", fun j => do
+    let c ← SampledProofs.Challenger.LiveCommitment.ofJson (← get j "commitment")
+    pure (hexJ (← roundKey c (← hex j "coin") (← nat j "round") (← hex j "root")))),
   ("layout_constants", fun _ => pure <| Json.mkObj [("T_BITS", toJson tBits),
     ("DEPTHS", Json.mkObj (sides.map fun s => (s.name, toJson s.depth))), ("PORT", toJson port),
     ("ENTRY_SCHEMA", toJson entrySchema), ("ENTRY_BYTES", toJson entryBytes), ("TILE", toJson tile),

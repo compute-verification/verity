@@ -60,8 +60,10 @@ from typing import Any
 
 from verity_vllm.check import gates as G
 from verity_vllm.config import RowEngine, UsageError, option
+from verity_vllm.engine.served import ENFORCE_EAGER
 from verity_vllm.observe.fold.supplied import program_registered_values
 from verity_vllm.pipeline import experiment as EXP
+from verity_vllm.pipeline import gpu_lease as GL
 from verity_vllm.program.sampling_event import program_sampler_construction
 
 DEFAULT_SNAPSHOT_STEPS = "all"        # evidence for every specialization (h1: attention T at non-snapshot steps was uncovered)
@@ -683,6 +685,8 @@ def main(a: Options) -> int:
     spec_note = write_spec_for(plan, a, man)          # D88: spec.json (known before execution) -- written once, before any GPU stage
     recs = load_stages(plan.run)
     logs = plan.run / "logs"
+    if a.phase in ("gpu", "all"):
+        GL.acquire()                 # a leased row's GPU phase: its GPU from here to the exit (`row_stages.SingleRow.match`); nothing reads the device before
     t_phase = time.time()
     stages = _batch_replays(stages, plan.parallel)
     if a.phase == "cpu":
@@ -884,10 +888,10 @@ def snapshot_cap_bytes(doc: dict | None, hf: dict | None, engine_args: dict | No
                  "floor_bytes": SNAPSHOT_CAP_FLOOR, "cap_bytes": cap, "raised": cap > SNAPSHOT_CAP_FLOOR}
 
 
-# [R15 EXEC-02 / COORD M-0063 (2)] torch-free mirror of vllm_adapter.execution_of_workload / EXECUTION_ENFORCE_EAGER (this driver runs on
-# the laptop): the row's declared execution label (explicit `execution` / `sweep.execution`, else the row-id suffix) and the enforce_eager
-# it implies.  The GPU stages derive the same from the workload themselves and refuse a contradicting engine arg (build_engine).
-_EXECUTION_ENFORCE_EAGER = {"bi-eager": True, "bi-eager-fa2": True, "eager": True, "bi-compiled": False, "compiled": False}
+# [R15 EXEC-02 / COORD M-0063 (2)] torch-free mirror of vllm_adapter.execution_of_workload (this driver runs on the laptop): the row's
+# declared execution label (explicit `execution` / `sweep.execution`, else the row-id suffix) and the enforce_eager it implies
+# (`engine.served.ENFORCE_EAGER`).  The GPU stages derive the same from the workload themselves and refuse a contradicting engine arg
+# (build_engine).
 
 
 def _workload_moe_construction(path: str | None) -> str | None:
@@ -916,9 +920,9 @@ def _workload_enforce_eager(path: str | None) -> bool:
     ex = _workload_execution(path)
     if ex is None:
         return True                                   # undeclared execution: the historical eager default (recorded as declared null)
-    if ex not in _EXECUTION_ENFORCE_EAGER:
-        raise SystemExit(f"workload {path}: execution label {ex!r} is not modelled by the harness (known: {sorted(_EXECUTION_ENFORCE_EAGER)})")
-    return _EXECUTION_ENFORCE_EAGER[ex]
+    if ex not in ENFORCE_EAGER:
+        raise SystemExit(f"workload {path}: execution label {ex!r} is not modelled by the harness (known: {sorted(ENFORCE_EAGER)})")
+    return ENFORCE_EAGER[ex]
 
 
 # ---------------------------------------------------------------------------------------------------------
@@ -1077,6 +1081,7 @@ def persist_program(result: Any, run_dir: Path, *, profile_name: str, log_path: 
                # (step, k, kind, site, rows, N, leaf offset) -- cb_a.compare locates every peer leaf range from these, never by guessing
                "params": [[n, repr(t)] for n, t in (getattr(result, "params", None) or ())],
                "tp": getattr(result, "tp", None), "peers_layout": _jsonable(getattr(result, "peers_layout", None) or []),
+               "witness_layout": _jsonable(getattr(result, "witness_layout", None) or []),   # the witness parameters by name
                "supplied": _jsonable(getattr(result, "supplied", None) or {})}   # a `registered_values` fold's, with `input_nodes`
         p = run_dir / "program.json"
         _ptext = json.dumps(doc, separators=(",", ":"), sort_keys=True) + "\n"

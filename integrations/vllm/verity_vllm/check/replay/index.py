@@ -2,7 +2,7 @@
 
 `ProgramIndex` holds a request Program's rows with the manifest address of each output slice (op_path, member, request-local
 step and row), the weights struct a row binds (`parse_struct`), and the MoE plane a row's module is committed under
-(`moe_plane_kind`).  Nothing here reads committed words.
+(`moe_plane_kind`, under `moe_plane_modules`).  Nothing here reads committed words.
 """
 from __future__ import annotations
 
@@ -12,6 +12,7 @@ from typing import Any
 
 import numpy as np
 
+from verity_vllm.check.replay import cached_prefix as CP
 from verity_vllm.query.manifest import format as RM
 from verity_vllm.query.manifest.format import moe_plane_kind
 from verity_vllm.program.compact import expanded_file_args, p_item_indices, runs_from_file_items
@@ -133,6 +134,9 @@ class ProgramIndex:
         del P, corr, pop
         self.params: list[list] = [list(p) for p in inst.get("params", [])]
         self.prefix = RM.wrapper_prefix_of(self.rows, attention_paths or []) if prefix is None else prefix
+        # a warm Program's cached-prefix input (`cached_prefix.layout_of`), and per request reading it the producers' rows (`populate`)
+        self.kv_prefix: dict[str, Any] | None = CP.layout_of(program_dir)
+        self.cached_prefix: dict[str, CP.CachedPrefix] = {}
         self.segs = RM.segment_steps(self.rows)
         self._seg_lo = [lo for lo, _hi in self.segs]
         self.by_i = {int(r["i"]): r for r in self.rows}
@@ -169,9 +173,10 @@ class ProgramIndex:
         self._moe_kind: dict[int, str] = {}
         self._moe_fused: set[int] = set()                  # act_quant rows of the fused SiLU quant: they read the up row, not an act row
         mcounts: dict[tuple, int] = {}
+        planes = RM.moe_plane_modules((RM.spec_family(r["spec"]), RM.split_name(r.get("name") or "")[0]) for r in self.rows)
         for r in self.rows:
             mod0 = RM.split_name(r.get("name") or "")[0]
-            kind = moe_plane_kind(RM.spec_family(r["spec"]), mod0)
+            kind = moe_plane_kind(RM.spec_family(r["spec"]), mod0) if mod0 in planes else None
             if kind == "quant":
                 # the activation's group quant reads an `act` row of its runner; the input's reads the block's input
                 first = ((r.get("args") or [[]])[0] or [None])[0]
@@ -211,9 +216,12 @@ class ProgramIndex:
 
     def ids_params(self) -> set[int]:
         """The Program parameter(s) carrying the declared prompt ids: every parameter that is not the registered `weights` record, not a
-        sampler input (`seed`, `splits`) and not a supplied input (`values`, `run_<i>`) -- the same reading `_gather_inputs` resolves a
-        `['p', a, k, k+1]` slice by (the committed `input_token_ids` row k of the arrival step)."""
-        return {a for a, n in enumerate(self.pnames) if n not in ("weights", SEED_PARAM, RM.SPLITS_PARAM) and a not in self.supplied}
+        sampler input (`seed`, `splits`), not the `schedule` witness, not a supplied input (`values`, `run_<i>`) and not a warm Program's
+        cached prefix -- the same reading `_gather_inputs` resolves a `['p', a, k, k+1]` slice by (the committed `input_token_ids` row
+        k - C of the arrival step)."""
+        pfx = self.kv_prefix["input"] if self.kv_prefix else None
+        return {a for a, n in enumerate(self.pnames)
+                if n not in ("weights", SEED_PARAM, RM.SPLITS_PARAM, RM.SCHEDULE_PARAM) and a not in self.supplied and a != pfx}
 
     def embed_op_path(self) -> str | None:
         """The op_path of the Program's Embedding rows (the `input_token_ids` identity lives under it as member `in`): the first row whose

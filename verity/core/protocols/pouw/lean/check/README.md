@@ -6,12 +6,12 @@ Python reference held to it.
 
 | field | here |
 | --- | --- |
-| `Params` | the verifier's own: the check item (`entries`, `scheme`, `template`, `tile_work`), `eps` and `delta` as ratio strings, `grid_bits`, the declared `range` of tile counts, the window's `context`, the check query's SHA-512; the template one `PouwCheck.tiles` pins, with its tile work and query |
-| `Commitment` | the window's registration, one-stage's record (`registration.record`) as canonical JSON, its window `{kind, context, public}` holding `window.REGISTERED` |
+| `Params` | the verifier's own: the check item (`entries`, `scheme`, `template`, `tile_work`, and optionally `coins`, the window's coin mode, `live` or `seeded`), `eps` and `delta` as ratio strings, `grid_bits`, the declared `range` of tile counts, the window's `context`, the check query's SHA-512; the template one `PouwCheck.tiles` pins, with its tile work and query; and the rows' fixed `length` (`{max_tokens, stop}`, stop `fixed`: Daniel, 19 Oct, ASK-39) |
+| `Commitment` | the window's registration, one-stage's record (`registration.record`) as canonical JSON, its window `{kind, context, public}` holding `window.REGISTERED`, whose `length` item must be a fixed-length window's at the verifier's max_tokens (`PouwWindow.lengthProblem`; a window without one, registered before the rule, is refused as `window-form: no-fixed-length`) |
 | `digest` | the record's own: SHA-512(format ‖ 0 ‖ the canonical record), `registration.digest` |
 | `Evidence` | the proof service's answer for a registration, read by `Core.Answer.ofJson` (protocol one-stage's): on acceptance the profile, read by `Core.Integrity.ofJson`, and the public outputs `{"draw": d}`, `d` the verifier's draw as one-stage's `draw.py` writes it (`subset`, `bernoulli`, `stratified` or `work`, with exactly `check_draw`'s keys) |
 | `check` | `PouwCheck.check`: PoUW's rule over the registration (`registered`), then the service's answer to it (`outcome`); every refusal is the first rule it breaks, with `core_check.py`'s reason |
-| `Public` | `window.PUBLIC`: `verdict`, `work`, `check`, `sampling`, `drawn`, `root_W` |
+| `Public` | `window.PUBLIC`: `verdict`, `work`, `check`, `sampling`, `length`, `drawn`, `root_W` |
 | `Profile` | the service's `Core.Integrity`, passed through once it is the registered partition's N units drawn subset:K′ at the window's δ, and the draw is subset:K′ over N |
 
 | module | `core_check.py` |
@@ -23,7 +23,9 @@ Python reference held to it.
 | `PouwCheck.Protocol` | the `Core.Protocol` value |
 | `PouwCheck.Opening` | `opening`, `window_domain`, `verify_path`: one unit's opening beside the check (`served_commit.check`'s rule) |
 | `PouwCheck.Pass` | `pass_epoch` and `draw`, with `coins_of`, `opening_of`, `coin_reason` and `weights_root` under `COIN_VERSIONS`: the window's pass and its draw (`served_commit.Challenger`'s rules) |
-| `PouwCheck.Difftest` | the difftest's functions behind `pouw-check-difftest` (`opening`, `pass`, `draw`) |
+| `PouwCheck.Rounds` | `rounds`: a live window's round coins, each opened once after its recorded round root (`window.rounds_reason`'s rules, `PouwWindow.roundsReason`, over the proof service's challenger, `SampledProofs.Challenger`) |
+| `PouwCheck.Difftest` | the difftest's functions behind `pouw-check-difftest` (`opening`, `pass`, `draw`, `rounds`) |
+| `PouwCheck.DifftestMain` | `pouw-check-difftest`'s server, and its `coins n`: `n` bytes of `IO.getRandomBytes` (A3), the challenger's entropy (`verifier.coins`; `tests/test_coins.py`) |
 
 `opening` holds a tile proof's public file to the registered window: the unit drawn (or opened undrawn, the filler's),
 the entries root's domain one-stage's served domain of the registered program and partition, the opening's entry under
@@ -57,7 +59,9 @@ reasons, over `tests/pouw_opening_cases.py`: honest openings and one mutation pe
 share: hex as `bytes.fromhex` reads it, the header's keys sorted), every mutation also replayed over a few seeds, and
 every reason reached. Its `pass` and `draw` go against `core_check.pass_epoch` and `core_check.draw` the same way, over
 `tests/pouw_pass_cases.py`: honest passes of each coin version and a recorded beacon's, honest draws, and one mutation
-per refusal. `verity/core/protocols/pouw/tests/test_pouw_core_check.py` checks that every mutation reaches the refusal it
+per refusal. Its `rounds` goes against `core_check.rounds` over `tests/pouw_rounds_cases.py`: an honest live window's
+round roots and coins, and one mutation per refusal (a coin opened twice, one opened before its round's root, a foreign
+epoch's, a seeded epoch's commitment or another layout's). `verity/core/protocols/pouw/tests/test_pouw_core_check.py` checks that every mutation reaches the refusal it
 aims at.
 
 ~~~text

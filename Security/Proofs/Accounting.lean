@@ -1,7 +1,10 @@
 import Proofs.Accounting.Memory
 import Proofs.Accounting.Device
-import Proofs.Accounting.FillerLuck
 import Proofs.Accounting.Gates
+import Proofs.Accounting.FillerLuck
+import Proofs.Accounting.Headline
+import Proofs.Accounting.Gates.Rows
+import Proofs.Accounting.Gates.Macs
 import Proofs.Accounting.Bandwidth
 import Proofs.Accounting.ChainWork
 import Proofs.Accounting.Prob
@@ -12,6 +15,7 @@ import Proofs.Accounting.BandwidthAudit
 import Proofs.Accounting.RateAudit
 import Proofs.Accounting.BoundReceipt
 import Proofs.Accounting.Capacity
+import Proofs.Accounting.DeclaredCircuit
 import Proofs.Accounting.Remote
 import Proofs.Accounting.PerRunTruncation
 import Proofs.Accounting.PerRunPouw
@@ -25,15 +29,20 @@ import Proofs.Accounting.RemoteHeld.Meets
 import Proofs.Accounting.Requirement
 import Proofs.Accounting.RequirementPouw
 import Proofs.Accounting.Sanity
+import Proofs.Accounting.Stacking
 import Proofs.Accounting.Tag
 import Proofs.Accounting.TS
 import Proofs.Accounting.TS.Stages
 import Proofs.Accounting.TS.Steer
 import Proofs.Accounting.TS.Grind
+import Proofs.Accounting.TS.Fixed
+import Proofs.Accounting.TS.FixedMeets
+import Proofs.Accounting.TS.SharedNoise
 import Proofs.Accounting.Actual
 import Proofs.Accounting.Responder
 import Proofs.Accounting.Responder.Latency
 import Proofs.Accounting.HMu
 import Proofs.Accounting.CoinFlow
+import Proofs.Accounting.Layers
 
 /-! `Proofs.Accounting`: the proofs of resource accounting's guarantees. -/

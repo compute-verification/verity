@@ -168,6 +168,24 @@ def test_an_entry_that_goes_away_while_it_is_read_is_left_out(tmp_path, monkeypa
         assert sorted(tar.getnames()) == VERDICTS[:-1]
 
 
+def test_a_pack_of_the_entries_named_is_xz_and_import_and_combine_read_it(tmp_path, monkeypatch):
+    """`check.Reused`'s pack: the entries a plan found, each once, in path order; a name that is no verdict entry here (absent,
+    hidden, outside the caches, a part never packed) is left out, never read."""
+    r = _machine(tmp_path, monkeypatch, "a")
+    _fill(r)
+    names = ["tests/k1.json", "check/lean-audit/k2.json", "tests/k1.json", "tests/absent.json", "tests/../k1.json",
+             "check/circuit-check/v1/d/.e2.tmp", "check/lean-deps/m/manifest.json", "other/k1.json", "tests/durations.json"]
+    pack = tmp_path / "reused.tar.xz"
+    assert V.export_paths(pack, names, xz=True) == 2
+    assert pack.read_bytes()[:6] == b"\xfd7zXZ\x00" and V.refusal(pack) is None
+    with tarfile.open(pack) as tar:
+        assert tar.getnames() == ["check/lean-audit/k2.json", "tests/k1.json"]
+    V.export(gz := tmp_path / "new.tar.gz")
+    _machine(tmp_path, monkeypatch, "b")
+    assert V.combine([pack, gz], both := tmp_path / "both.tar.gz") == 4 and V.import_(pack) == (2, 0)
+    assert V.import_(both) == (2, 2)
+
+
 SKIPPED = ["check/lean-deps/m.json", "tests/logs/a.json", "check/lean-changed/links.json",
            "check/lean-records/build-0/p/lean-audit.json", "tests/durations.json", "check/lean-audit-scratch-x1/p/lake-manifest.json",
            "check/lean-changed/p/lean-audit.json", "check/lean-builds/k/ir/P/M.setup.json",
@@ -367,6 +385,22 @@ def test_a_failed_or_cancelled_checks_pack_is_gathered_and_a_running_ones_is_not
     assert "2 entries gathered from 2 recorded checks (r-failed, r-cancelled)" in capsys.readouterr().out
     _machine(tmp_path, monkeypatch, "pod")
     assert V.import_(got) == (2, 0)
+
+
+def test_a_sigkilled_checks_pack_is_taken_from_its_run_record(tmp_path, monkeypatch, capsys):
+    """A cancel's SIGKILL (rc 137) leaves no result.json, so the attempt has no run files listed from it, only the run record
+    custody uploaded, which holds the pack `record` declares."""
+    check = _load("check")
+    r = _machine(tmp_path, monkeypatch, "killed")
+    _write(r["tests"] / "killed.json", "k")
+    V.export(pack := tmp_path / "killed.tar.gz")
+
+    class Killed(_Store):
+        def get_attempt(self, rid: str) -> dict:
+            return {"outputs": {"run_record": f"art:{rid}"}}
+
+    check.gather_verdicts(tmp_path / "out", Killed(tmp_path, {"r-killed": pack}, {"r-killed": "cancelled"}))
+    assert "1 entries gathered from 1 recorded checks (r-killed)" in capsys.readouterr().out
 
 
 def test_a_store_that_cant_be_read_gathers_nothing_and_says_why(tmp_path, capsys):

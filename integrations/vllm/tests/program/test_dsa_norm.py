@@ -2,9 +2,12 @@
 from the H200's PTX, lane by lane: each thread's vector loads unpacked as `mov.b32 {lo, hi}` does, every FMUL, FFMA and FADD rounded
 once from the exact rational (`test_dsa`'s helpers), `shfl.sync.bfly` simulated over every lane; `rsqrt.approx.ftz` is core's
 `RsqrtApprox_v1`.  Its twin (`kernels.dsa_norm_rows`) against the reference evaluator on edge rows; the statics it refuses; and that
-its scale is not `RMSNormTriton_v1`'s on served-like rows.  The Boolean version's agreement with this word view is circuit-check's
-(`boolean_dsa_norm.circuit-check.py`)."""
+its scale is not `RMSNormTriton_v1`'s on served-like rows.  `TritonBlockRMSNorm_v1` (`_fused_q_kv_rmsnorm_kernel`) against the same
+kind of model from its PTX, every masked lane's +0 summed, and `DsaRMSNorm_v1` as its 4-warp unmasked case.  The Boolean versions'
+agreement with these word views is circuit-check's (`boolean_dsa_norm.circuit-check.py`)."""
 from __future__ import annotations
+
+__models__ = ("zai-org/GLM-5.3",)
 
 import numpy as np
 import pytest
@@ -149,3 +152,63 @@ def test_registrations() -> None:
     x, w = _bf16_row(rng, 512, 1.0), _w(rng, 512)
     got = RK.ROWS[NR.FAMILY].fn({"N": 512, "EPS": '{"f64":"' + float(EPS).hex() + '"}'}, [x, w])["out"]
     assert got.tolist() == list(evaluate(word, x.tolist(), w.tolist()))
+
+
+def ptx_block_model(xb: list[int], wb: list[int], eps: float, block: int, warps: int) -> list[int]:
+    """`_fused_q_kv_rmsnorm_kernel`'s program as its PTX runs it: thread t's runs of V = min(block / threads, 8) at `r * V * threads + Vt`
+    (`ld.global.v4.b32`, `v2.b32`, `b32` at V = 8, 4, 2, each under `setp.lt.u32` against SIZE, a masked run +0), `mul.f32 x1*x1` then
+    `fma.rn.f32 xk, xk, s` for k = 0, 2, 3, ..; each warp's butterfly 16..1 and lane 0 to shared memory; threads 0..warps-1 butterfly
+    warps/2..1; `div.full.f32` by `cvt.rn.f32.u32` of SIZE (core's DivFullScaleA times DivFullRcp); `add.f32 eps, mean`;
+    `rsqrt.approx.ftz`; `mul.f32 r, x` then `mul.f32 (.), w`."""
+    n, threads = len(xb), 32 * warps
+    V = min(block // threads, 8)
+    x = [v << 16 for v in xb] + [0] * (block - len(xb))
+    lanes = []
+    for t in range(threads):
+        r = [x[i] for run in range(0, block, V * threads) for i in range(run + V * t, run + V * t + V)]
+        s = _ffma(r[0], r[0], _fmul(r[1], r[1]))
+        for v in r[2:]:
+            s = _ffma(v, v, s)
+        lanes.append(s)
+    sums = [_butterfly(lanes[32 * g:32 * g + 32], _fadd, (16, 8, 4, 2, 1)) for g in range(warps)]
+    total = _butterfly(sums, _fadd, tuple(warps >> k for k in range(1, warps.bit_length())))
+    size = P.bits_of(np.float32(n))
+    mean = _fmul(evaluate(P.DivFullScaleA, total, size)[0], evaluate(P.DivFullRcp, size)[0])
+    r = evaluate(P.RsqrtApprox, _fadd(P.bits_of(np.float32(eps)), mean))[0]
+    return [_bf16(_fmul(_fmul(r, v), w << 16)) for v, w in zip(x[:n], wb)]
+
+
+@pytest.mark.parametrize("N,BLOCK,WARPS", [(1536, 2048, 8), (512, 2048, 8), (3072, 4096, 8), (768, 1024, 4), (448, 512, 4),
+                                           (192, 256, 4)])
+def test_block_definition_matches_the_ptx_model(N: int, BLOCK: int, WARPS: int) -> None:
+    """DeepSeek-V4's q and kv rows (1536 and 512 of 2048 on 8 warps), a block of two runs a thread whose second run is masked in half
+    the threads (3072 of 4096), 4 warps, and runs of 4 and 2 elements a thread."""
+    rng = np.random.default_rng(N + BLOCK)
+    fn, w = bind(DN.TritonBlockRMSNorm, N=N, BLOCK=BLOCK, WARPS=WARPS, EPS=1e-6), _w(rng, N)
+    for i, x in enumerate(r for j, r in enumerate(_edge_rows(rng, N)) if j != OVERFLOW):
+        assert list(evaluate(fn, x.tolist(), w.tolist())) == ptx_block_model(x.tolist(), w.tolist(), 1e-6, BLOCK, WARPS), i
+
+
+@pytest.mark.parametrize("N", [256, 2048])
+def test_dsa_rmsnorm_is_the_unmasked_four_warp_block(N: int) -> None:
+    rng = np.random.default_rng(N + 2)
+    w = _w(rng, N)
+    for x in _edge_rows(rng, N):
+        assert (list(evaluate(bind(DN.TritonBlockRMSNorm, N=N, BLOCK=N, WARPS=4, EPS=EPS), x.tolist(), w.tolist()))
+                == list(evaluate(bind(DN.DsaRMSNorm, N=N, EPS=EPS), x.tolist(), w.tolist())))
+
+
+@pytest.mark.parametrize("statics,match", [({"N": 128, "BLOCK": 128, "WARPS": 4}, "two elements a thread"),
+                                           ({"N": 512, "BLOCK": 1536, "WARPS": 8}, "power-of-two BLOCK"),
+                                           ({"N": 512, "BLOCK": 2048, "WARPS": 6}, "power-of-two warp count"),
+                                           ({"N": 1540, "BLOCK": 2048, "WARPS": 8}, "whole vectors"),
+                                           ({"N": 4096, "BLOCK": 2048, "WARPS": 8}, "whole vectors")])
+def test_block_statics_are_checked(statics: dict, match: str) -> None:
+    with pytest.raises(ValueError, match=match):
+        bind(DN.TritonBlockRMSNorm, EPS=EPS, **statics).body
+
+
+def test_block_registrations() -> None:
+    word = bind(DN.TritonBlockRMSNorm, N=512, BLOCK=1024, WARPS=4, EPS=EPS)
+    assert SW.boolean_version(word).id == "TritonBlockRMSNorm_v2{N=512,BLOCK=1024,WARPS=4,EPS=1e-05}"
+    assert TR.word_of(bind(BN.TritonBlockRMSNormV2, N=512, BLOCK=1024, WARPS=4, EPS=EPS)).id == word.id

@@ -11,12 +11,14 @@ import CircuitRequirement
 takes an instance, value by value, with the store, a plan per step, the block size and the number of steps:
 
     {"width": [w], "registered": [v], "inputs": [v], "ops": [[v]], "uses": [[v]], "step": [s | null], "value": [x],
-     "block": [j], "offset": [o], "store": {"registered": N, "written": [[j]], "freed": [[j]], "payload": [hex]},
+     "block": [j], "offset": [o], "encoded": [e],
+     "store": {"registered": N, "written": [[j]], "freed": [[j]], "payload": [hex]},
      "plans": [[j]], "block_bits": B, "steps": T,
      "leaf": [x], "ticks": [[tick]], "price": [π],
      "windows": [{"devices": [x], "marked": [v], "lo": a, "hi": b, "start": s, "len": l}]}
 
-A step is an engine step; `ticks` gives, device by device, the tick at which it begins each engine step. A payload is
+A step is an engine step; `encoded` gives, by store index, each block's first encoded read (0 past its end); `ticks`
+gives, device by device, the tick at which it begins each engine step. A payload is
 lowercase hex (Python writes no integer of more than 4,300 digits, a block's payload among them). It refuses an instance
 that isn't one (a field missing or of the wrong kind, a per-value list not of one entry per value, a registered value
 or run input that isn't one, a plan count that isn't `T`), an execution that doesn't follow its wiring, and, when it is
@@ -74,7 +76,8 @@ def decode (j : Json) : Flock.V Instance := do
     step := ← perValue j "step" n optNat
     value := ← perValue j "value" n Flock.J.asNat
     block := ← perValue j "block" n Flock.J.asNat
-    offset := ← perValue j "offset" n Flock.J.asNat }
+    offset := ← perValue j "offset" n Flock.J.asNat
+    encoded := (← nats (← Flock.J.get j "encoded" "input") "encoded").toArray }
 
 def placement (j : Json) (n : Nat) : Flock.V Placement := do
   return {
