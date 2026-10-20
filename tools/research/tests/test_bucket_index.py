@@ -380,7 +380,8 @@ def test_displays_read_the_index_with_what_this_store_holds_beside_it(tmp_path, 
 def test_select_with_no_index_and_an_empty_catalog_exits_1_naming_what_is_missing(tmp_path, monkeypatch, capsys):
     """A `research run` job's store (r20261019-154742-af14: no reader, no build, an empty catalog) answered `select --json` with []
     for properties the bucket holds. With nothing to select from it now exits 1 and says what to set or build; an index build that
-    never listed the bucket is no index."""
+    never listed the bucket counts as none for that refusal, and once the catalog holds an artifact select reads that build and
+    says it never listed."""
     from research.store.cli import main
     from research.store.local import LocalStore
 
@@ -400,7 +401,7 @@ def test_select_with_no_index_and_an_empty_catalog_exits_1_naming_what_is_missin
     assert main([*argv, "--json"]) == 0
     out, err = capsys.readouterr()
     assert [r["id"] for r in json.loads(out)] == [mine]
-    assert "1 artifact(s) from the catalog alone" in err and "never listed the bucket" in err
+    assert "1 artifact(s) from the index" in err and "never listed" in err and "1 of them only here" in err
 
 
 def test_select_json_stays_a_list_with_the_index_s_source_and_as_of_on_stderr(tmp_path, monkeypatch, capsys):
