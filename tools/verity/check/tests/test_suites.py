@@ -1578,11 +1578,29 @@ def test_mem_gb_defaults_to_the_check_slots_memory(tmp_path, monkeypatch):
     """17 Oct 11:21Z, cpu-2: a quick tier in a 480 GB pool slot ran circuit_check's suite on 94 workers (784 GB), since only
     `check` passed `--mem-gb`."""
     S = _suites(monkeypatch, tmp_path)
+    monkeypatch.delenv(S.RUN_MEM_ENV, raising=False)
     monkeypatch.setenv(S.SLOT_MEM_ENV, "480")
     assert S.slot_mem_gb() == 480.0
     monkeypatch.setenv(S.SLOT_MEM_ENV, "")
     monkeypatch.setattr(S, "cgroup_mem_gb", lambda: None)
     assert S.slot_mem_gb() is None
+
+
+def test_mem_gb_is_no_more_than_the_runs_reservation(tmp_path, monkeypatch):
+    """CI-99, 19 Oct: on vy-nebius-cpu-3 a direct `research run --mem-gb 24` would have started about 46 xdist workers, since
+    suites.py read the machine, not the run's reservation (`RESEARCH_RUN_MEM_GB`, which sets no cgroup cap)."""
+    S = _suites(monkeypatch, tmp_path)
+    monkeypatch.setattr(S, "cgroup_mem_gb", lambda: None)
+    monkeypatch.delenv(S.SLOT_MEM_ENV, raising=False)
+    monkeypatch.setenv(S.RUN_MEM_ENV, "24")
+    assert S.slot_mem_gb() == 24.0                                       # a direct run: its reservation
+    monkeypatch.setenv(S.SLOT_MEM_ENV, "560")
+    assert S.slot_mem_gb() == 24.0                                       # the smaller of the slot and the reservation
+    monkeypatch.setenv(S.RUN_MEM_ENV, "900")
+    assert S.slot_mem_gb() == 560.0
+    monkeypatch.setattr(S, "cgroup_mem_gb", lambda: 100.0)
+    monkeypatch.delenv(S.SLOT_MEM_ENV)
+    assert S.slot_mem_gb() == 100.0                                      # a cgroup tighter than the reservation
 
 
 def test_mem_gb_falls_back_to_the_jobs_cgroup_limit(tmp_path, monkeypatch):
