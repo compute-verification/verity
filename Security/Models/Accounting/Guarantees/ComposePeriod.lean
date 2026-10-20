@@ -15,8 +15,9 @@ RT-INT-1: both live lines are quoted at 48,000 equal live rounds, and each has i
 Compose's line (`CircuitWork`, 0.744% at #2638, `a = 0.218`, `b = 0.998`) it is at least 10,552 equal live rounds a
 window, under marginal per-tile luck. On #2482's sm_120 bound (0.656% sheet, 0.591% measured) it is 9,496 rounds (sheet)
 and 9,652 (measured) (HEADLINE-FIX, note:compute-accounting/20261019T0730Z-draft-headline-fix). SERVE-H1's windows
-have 18. Over a period the rounds are the period's, `n·M`, so served windows reach it by being many. This statement
-is Compose's line, and every number below is on it.
+have 18. Over a period the rounds are the period's, `n·M`, so served windows reach it by being many. Compose's line is
+a time credit, which no statement here gives over a period (RT4-LOGIC-6): the numbers below are the proved word
+credit's (`CircuitCreditPeriod` at `a = b = 1`), and Compose's time line, where quoted, is labeled unstated.
 
 RT2-INT-1 (note:compute-accounting/20261019T1100Z-draft-rt2-int): on SERVE-H1's masked unit (`PouwH1Tile_v2`, #2639)
 a dead tile, whose rows are all the canonical empty row, has the canonical empty receipt at every coin, so its whole
@@ -24,8 +25,8 @@ skip always passes and no guess bound holds of it; 52.8% of a served window's un
 So each window names its live tiles (`Period`), the per-tile claims are asked of live tiles only (`PerLiveTile`), and
 a dead tile's words count for nothing (`liveCone`, `periodMode`, `creditedLive`).
 
-RT3-INT-7 (note:compute-accounting/20261019T1700Z-draft-rt3-int): an honest period of 46,604 windows completes with
-probability `(1 − f)^n`, 63% at a per-window failure rate `f = 10^-5`, and dropping failed windows instead hides about
+RT3-INT-7 (note:compute-accounting/20261019T1700Z-draft-rt3-int): an honest period of 82,403 windows completes with
+probability `(1 − f)^n`, 44% at a per-window failure rate `f = 10^-5`, and dropping failed windows instead hides about
 `0.26` of the live words per dropped share. So a period is credited up to its first window with a refused proof
 (`PeriodRun.Credited`), a stopping time, and the tail is taken at it (`PeriodTailMax`).
 
@@ -120,15 +121,18 @@ at the realized `j`, never at the cap: undiscounted, an all-skip window that pas
 times an honest stream's credit per unit of work (RT4-INT-8). The time credit `(1 − ε)·j·T_cred` would be
 `CircuitCredit` over the period, whose sheet premises read one window's run, not a prefix's total: not stated.
 
-*Live tiles on the served gate.* `live` is the gate's. SERVE-GATE's `PouwQueueAdmit_v3` (#2731,
-`cursor/ca-serve-gate-ea24` at 166e5e573d) admits a slot iff the request queue, committed before the window's first
-coin, assigns it a request live at its step and its row's scale is nonzero. Its always-proved admit unit refuses an
-unadmitted slot whose row isn't the canonical empty row (`junk`), a selected slot whose row is (`hollow`, RT-ALGO-4)
-and zero bytes under a nonzero scale (`scale_only`). So on an accepted window a tile is live iff its row block holds an
-admitted slot, and that is fixed before the window's first coin. A `live` that names a dead tile live makes the guess
-premise false (RT2-INT's `guess_false_dead`), and one that names a live tile dead only loses its words. The gate credits
-admitted rows, which lie in live tiles, so as a share of the gate's credit the deficit is at most
-`(d_F + d₀)·N_w/N_adm`, `N_adm/N_w = u` the prefix's admitted rows over its declared rows.
+*Live tiles on the served gate* (RT4-LOGIC-4). `live` is meant to be the gate's, and today it can't be. SERVE-GATE's
+`PouwQueueAdmit_v3` (#2731 at 166e5e573d, lifted onto main by #2892) admits a slot iff the request queue, committed
+before the window's first coin, assigns it a request live at its step and its row's scale is nonzero. It reads no row
+byte, so it admits a selected row of zero bytes under a nonzero scale (`scale_only`), and nothing on the verifier's
+side refuses one: the gate checks `junk` and `hollow` (RT-ALGO-4) in Python on its picked units, and `scale_only` is
+only the prover's own flag. A block of `scale_only` rows is dead in-circuit (its masked receipt is the zero words at
+every coin), so if `live` is the admit bits' its tile is named live, its whole skip passes, `GuessLuckAt` fails on it
+(RT2-INT's `guess_false_dead`), and on such a period the premise is false and the statement says nothing. So `live`
+must be the tiles live in-circuit, which the served tally is to count (#2892) and doesn't yet. A `live` that names a
+live tile dead only loses its words. Once the tally credits only rows in live tiles, as a share of its credit the
+deficit is at most `(d_F + d₀)·N_w/N_adm`, with `N_adm/(j·N_w) = u`: `N_adm` the prefix's admitted rows and `j·N_w`
+its declared rows.
 
 *The period's order and its record* (RT2-INT-4, RT3-INT-13, RT4-INT-6). `Period` makes the order the model's. The
 statement needs a period record, kept by the service, from which the credit is read: the period's cap `n` and circuit
@@ -150,6 +154,12 @@ commitment, it would be the period's check.
 draw. Windows run at once on several GPUs are not one period, so a period's windows are one serving stream's, and a
 fleet runs one period per stream: adding GPUs doesn't shorten a period.
 
+*Each window's writers.* `Declared.periodLayer` puts every position's writer in its own window by definition (its
+`src` at window `w` names a tile of window `w`, `periodLayer_src` by `rfl`, so a late edge stays in its window,
+`late_one`), and nothing is assumed for it. That a late edge's cone lies in the IR's rests on `Scope`'s `Declared.Wf` and `LayerCommitted`,
+the service committing each value it writes by its IR cut. Today's code doesn't meet `LayerCommitted` (one salt a
+window, opened before the activations are committed), so a live window it serves is out of scope.
+
 *Live coins only* (RT3-INT-2). Every number below is for live windows, and no served path runs one yet. A certified
 window's noise comes from the certifier's salt, which reaches the prover before its operands are committed, so the
 window is seeded, and Compose says every PoUW window it runs is seeded. #2654 (on main) has the live challenger sign
@@ -160,34 +170,45 @@ form: its premium is per window, so it would not divide by `j`.
 
 Its line, with equal rounds (`w_max = 1/M`), `ρ = 1/r` (`F = 1`), `x = K_d/(r·M)`: `Λ` is `SplitRateExp`'s,
 `max(a/(M·−ln(p + (1 − p)e^{−x})), b/(M·−ln(p0 + (1 − p0)e^{−x})))`, and the logical term per credited window is
-`Λ·ln(1/δ_s)/j`, or `Λ·ln(1/δ_s)/(u·j)` of the gate's credit. At `a = 0.218`, `b = 0.998`, `p = 7/8`, `p0 = ½`,
-`δ_s = 2^-40` and `ε_♭ = 0.571%` (the sm_120 sheet, `ε_μ = 0`, `D₀ = 0`), SERVE-H1's window shape (`M = 18`,
-`r = 2.87`) with W2's draw (`K_d = 8`) has `Λ = 0.745` (`Λ·ln(1/δ_s) = 20.65`). With every tile live (`u = 1`) `ε` is
-below 1% from 4,815 credited windows. At r20261019-012935-2c52's load it is below 1% of the live tiles' words (17/36 of
-units live) from 10,195 windows, and of the gate's credit (`u = 119/1152`, 10.3% of rows admitted) from 46,604
-windows: 838,872 live rounds, 372,832 drawn tiles, 237 days of one stream at the measured 439 s a window
-(r20261018-234409-19cd, the masked circuit's own). They are live windows, which no served path runs yet (above). For
-small `x` the term is about `2b·r·ln(1/δ_s)/(u·j·K_d)`: the prefix's total draws `j·K_d` and its load set it, not how
-it is cut into windows.
+`Λ·ln(1/δ_s)/(min(a, b)·j)` of a window's declared words, or `/(u·j)` of the gate's credit. The proved line is the
+word credit's (`CircuitCreditPeriod`), best at `a = b = 1`. At `p = 7/8`, `p0 = ½`, `δ_s = 2^-40` and `D₀ = 0`,
+SERVE-H1's window shape (`M = 18`, `r = 2.87`) with W2's draw (`K_d = 8`) has `Λ = 3.070` (`Λ·ln(1/δ_s) = 85.1`), so
+`ε(j) = 85.1/(u·j)`, with no `ε_♭` term. With every tile live (`u = 1`) `ε` is below 1% from 8,513 credited windows.
+At r20261019-012935-2c52's load it is below 1% of the live tiles' words (17/36 of units live) from 18,026 windows,
+and of the gate's credit (`u = 119/1152`, 10.3% of rows admitted) from 82,403 windows: 1,483,254 live rounds, 659,224
+drawn tiles, 419 days of one stream at the measured 439 s a window (r20261018-234409-19cd, the masked circuit's own).
+Compose's time line, at the physical costs `a = 0.218`, `b = 0.998` with `ε_♭ = 0.571%` (the sm_120 sheet,
+`ε_μ = 0`), is `0.571% + 20.65/(u·j)` (`Λ = 0.745`), below 1% from 4,815, 10,195 and 46,604 windows (237 days): that
+is the time credit, which no statement here gives (`CircuitCreditPeriod`), so those numbers are unstated. They are
+all live windows, which no served path runs yet (above). For small `x` the term is about
+`max(a/(1 − p), b/(1 − p0))·r·ln(1/δ_s)/(min(a, b)·u·j·K_d)`, `8r·ln(1/δ_s)/(u·j·K_d)` at `a = b = 1`: the prefix's
+total draws `j·K_d` and its load set it, not how it is cut into windows.
+
+`D₀ = 0` is an assumption of these numbers, not a computed fact (RT4-LOGIC-6). `zeroCone` is `0` when no tile of no
+words has a late cone, which COMPILE's `salt-flow` and `noise-in-z` checks are meant to give, but no `Declared` is
+built from a served Program, so nothing computes `zeroCone` for SERVE-H1's masked circuit. A positive `D₀` adds
+`D₀/u` to `ε(j)`, and that term doesn't shrink with `j`.
 
 *Liveness* (RT3-INT-7). An honest stream whose windows fail independently at rate `f` (a late proof, a certifier or a
-node fault; no rate is measured) completes a 46,604-window period with probability `(1 − f)^n`: 63% at `f = 10^-5`,
-39% at `2·10^-5` and 0.95% at `10^-4`; half fail from `f = 1.5·10^-5` (`1.4·10^-4` at 4,815 windows). A failed
+node fault; no rate is measured) completes an 82,403-window period with probability `(1 − f)^n`: 44% at `f = 10^-5`,
+19% at `2·10^-5` and 0.03% at `10^-4`; half fail from `f = 8.4·10^-6` (`8.1·10^-5` at 8,513 windows). A failed
 period is credited for its prefix and the stream opens the next, each paying `Λ·ln(1/δ_s)` once, so over a stream the
 gate's logical term is `Λ·ln(1/δ_s)/(u·E[j])`, `E[j]` the mean credited prefix: under 1% of the gate's credit only
-while `f < 1/46,604 = 2.1·10^-5`, with a cap of 62,743 windows at `f = 10^-5` (1.108% at a cap of 46,604). A window
+while `f < 1/82,403 = 1.2·10^-5`, with a cap of 173,748 windows at `f = 10^-5` (1.468% at a cap of 82,403). On the
+unstated time line these are 63%, 39% and 0.95% at 46,604 windows, `f < 2.1·10^-5`, and a cap of 62,743. A window
 that fails ends its period; dropping it and running on would hide about `0.26` of the live words per dropped share,
 and a period picked from `N` windows after the fact would pay `ln C(N, n)` in place of `ln(1/δ_s)`.
 
 *The whole δ* (RT3-INT-12). The period fails with probability `δ_s + n·(δ_bind + δ_ks)`, `n` the cap, and binding is
 priced at one prover budget `T` (`BindingOfECR`): `|L|·2^-88` a window at `T = 2^80` and `|L|·2^-64` at `2^128`, `|L|`
-from `2^20` to `2^30`. At `n = 46,604` (`2^15.5`) the binding term is `2^-52.5` to `2^-42.5` at `T = 2^80`, so
-`δ_s + n·δ_bind` is `2^-40.0` to `2^-39.8`; at `T = 2^128` it is `2^-28.5` to `2^-18.5`, set by binding, not by `δ_s`
-(`2^-31.8` to `2^-21.8` at 4,815). `δ_ks` has no number on main (`WindowEps`'s `max_c κ_c + coll` is unstated), and
-`n·δ_ks` stays under `2^-40` at 46,604 windows only if `δ_ks ≤ 2^-55.5` a window.
+from `2^20` to `2^30`. At `n = 82,403` (`2^16.3`) the binding term is `2^-51.7` to `2^-41.7` at `T = 2^80`, so
+`δ_s + n·δ_bind` is `2^-40.0` to `2^-39.6`; at `T = 2^128` it is `2^-27.7` to `2^-17.7`, set by binding, not by `δ_s`
+(`2^-30.9` to `2^-20.9` at 8,513). `δ_ks` has no number on main (`WindowEps`'s `max_c κ_c + coll` is unstated), and
+`n·δ_ks` stays under `2^-40` at 82,403 windows only if `δ_ks ≤ 2^-56.3` a window.
 
 What it doesn't say: no window's own `ε` (an accepted prefix may hold windows skipped whole, `Λ·ln(1/δ_s)` of
-declared-word share in all, about 200 windows' worth of the gate's credit at `u = 0.103`); no attribution inside the
+declared-word share in all, about 824 windows' worth of the gate's credit at `u = 0.103` and `a = b = 1`); no
+attribution inside the
 period (one certificate for the prefix's device interval); no credit for windows past the first failure (no retry,
 and none dropped); no link between windows beyond each window's inputs, cut where its IR cuts them; no period over
 windows run at once (above); no check that the service's record ran the windows in order or kept its periods disjoint
@@ -232,10 +253,11 @@ nothing, and where the prefix ends, which the cheater may steer, is priced by `P
 
 It counts words, each one unit, so its best line is at `a = b = 1` (`r(j)/min(a, b)` is homogeneous in `(a, b)` and
 least at `a = b`): `Λ = 3.070` at SERVE-H1's window shape with W2's draw (`Λ·ln(1/δ_s) = 85.1` windows of declared
-words, `D₀ = 0`). Then `ε(j) ≥ 1` up to 85 windows with every tile live, 180 at r20261019-012935-2c52's live words
-(17/36 of units) and 824 of the gate's credit (`u = 119/1152`), and `ε(j) < 1%` from 8,513, 18,026 and 82,403 windows.
-The headline's line is the time credit, at the physical costs `a = 0.218`, `b = 0.998` with `ε_♭ = 0.571%`, where
-`ε(j) ≥ 1` up to 20, 43 and 201 windows and `ε(j) < 1%` from 4,815, 10,195 and 46,604: that credit,
+words, `D₀ = 0`, an assumption: *Its line*). Then `ε(j) ≥ 1` up to 85 windows with every tile live, 180 at
+r20261019-012935-2c52's live words (17/36 of units) and 824 of the gate's credit (`u = 119/1152`), and `ε(j) < 1%` from
+8,513, 18,026 and 82,403 windows: the proved line. Compose's line is the time credit, at the physical costs
+`a = 0.218`, `b = 0.998` with `ε_♭ = 0.571%`, where `ε(j) ≥ 1` up to 20, 43 and 201 windows and `ε(j) < 1%` from 4,815,
+10,195 and 46,604: that credit,
 `(1 − ε_♭ − ε_μ − r(j)·N_w/N_live)₊` of the prefix's live words' `T_cred`, needs `CreditOfWork` on each credited
 window's run, which the period's one `Pl.run` doesn't give, and is not stated. Everything `CircuitWorkPeriod` doesn't
 say, this doesn't either: in particular no served path keeps the period record it reads (*The period's order and
