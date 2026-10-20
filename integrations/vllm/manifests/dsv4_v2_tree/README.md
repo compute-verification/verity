@@ -93,6 +93,15 @@ they need a host with at least 755 GB, and run on vy-glm53-cpu-3 in a gap after 
    tree passes 4e9a's manifest with every call boundary claimed (r20261020-154201-a617). A code change moves the row's tree, so
    the Build of record is r20261020-154450-ab0f at 1bbf831029, with 4e9a's row dir under `attempts/`.
 
+   ab0f passed in 29.5 min (1772 s), its largest process at 27.6 GB. Its Program digests and its manifest (648,552 identities,
+   digest f32c76d659f58fd3) are 4e9a's. Its step manifest read 4e9a's unit rules from the cache, in 17 s against 2,893 s.
+   Its call-boundary check claims all 233,472 call boundaries (sources `vocab_range`, `dsv4_attention`, `moe_align`, `moe`).
+   - `BUILD_RUN`, its `vllm.build` Attempt: r20261020-154507-f208.
+   - `BUILD_ART`: art:2122a7f8f506acce54471de447d4fd21101c6cc6bf7e00f5cc1625bb45001819.
+   - `rowdir.sha256` lists 215 files and is in ab0f's `out/` (`research fetch r20261020-154450-ab0f --all` brings it to
+     `~/.research/runs/r20261020-154450-ab0f/out/`).
+   - The row dir is 1.76 GB (1,762,126,162 B), and r20261020-162800-6cbc checks the list against it.
+
 ## GPU leg
 
 The node is a parameter, `NODE`: vy-glm53-eu, vy-glm53-h8 (preemptible), or a RunPod 8x H200 registered as vy-glm53-rp1.
@@ -108,7 +117,8 @@ Staged on the node before window A:
   (r20261020-072311-c012 on vy-nebius-cpu-3: 55.5 GB in 55 s, checked in 10 s), that is about 15 min to download and 3 min
   to check. It needs 865 GB free on `/workspace`, besides the row dir. The only other copy is eu2's data disk
   (`/workspace/cp/dsv4-ckpt`, verified), which serves only while eu2 runs; eu's was deleted on 18 Oct (CIR-34).
-- the Build of record: `copy_rowdir.sh <CPU node> NODE rowdir.sha256 /workspace/cp/circuits/dsv4-v2/rows`. Unlike GLM-5.3,
+- the Build of record: `copy_rowdir.sh vy-nebius-cpu-3 NODE ~/.research/runs/r20261020-154450-ab0f/out/rowdir.sha256
+  /workspace/cp/circuits/dsv4-v2/rows` (CPU gates, step 3). Unlike GLM-5.3,
   DeepSeek-V4's loader has a post-load hook. Each rank's Build records `model.layers.0.hc_attn_fn_broadcast` ([24, 7168] f32,
   mHC's `hc_attn_fn` summed over the residual streams), and the capture registers it as a root from the Build's request
   Programs (`--build-rank`, `component_programs.post_load_tensors`, which reads each Program's `result.json` beside its
@@ -122,8 +132,10 @@ Then:
 1. Window A: `MODEL=dsv4-pro gpu_batch.sh a NODE`, which runs `match_gpu.sh`: capture and control, gpu_memory_utilization
    0.92 read back from the driver and each rank, `match.sha256`.
 2. CPU: `copy_rowdir.sh NODE <CPU node> match.sha256 /workspace/cp/circuits/dsv4-v2/rows`, then `match_cpu.sh`
-   (`BUILD_RUN`, `--send match.sha256`), then `copy_rowdir.sh <CPU node> NODE match_cpu.sha256 ...` back to window B's node.
-3. Window B: `MODEL=dsv4-pro gpu_batch.sh b ROWS.env NODE`, where ROWS.env is the line `<row> BUILD_RUN MATCH_RUN`. It runs
+   (`BUILD_RUN=r20261020-154507-f208`, `--send match.sha256`), then `copy_rowdir.sh <CPU node> NODE match_cpu.sha256 ...`
+   back to window B's node.
+3. Window B: `MODEL=dsv4-pro gpu_batch.sh b ROWS.env NODE`, where ROWS.env is the line `<row> r20261020-154507-f208 MATCH_RUN`
+   (`ROW BUILD_RUN MATCH_RUN`). It runs
    `commit.sh`: rows-sha512 under `verity/tp-run-root/v2`, REPLAY_DEFERRED=1, RETAIN=host, PAIRS=1, gpu_memory_utilization
    0.88 read back, with the bundles and `_rowmeta` preserved. A preemptible node may run it. An eviction fails the run, which
    stays published as failed, and the Commit reruns whole from a new commitment with new draws
@@ -151,7 +163,8 @@ Then:
      Commit's run, whose run record the record cites;
    - the Match's `match/tp2_match.json`, `match/fold_match/tp2_fold_match.json` and `match/fold_match/tp2_rank_match.json` in the
      row dir (step 2's `match_cpu.sh`), and `MATCH_RUN`;
-   - `BUILD_ART`, the Build of record's artifact (its `vllm.build` run's), whose construction manifests `due` reads.
+   - `BUILD_ART`, the Build of record's artifact (its `vllm.build` run's, art:2122a7f8f506acce…), whose construction manifests
+     `due` reads.
 
    It cites nine of DeepSeek-V4-Pro's ten capture properties, preserved from their GO runs (13–14 Oct) with `records capture`,
    and names `dsv4_moe_capture` a gap: its capture r20261013-205619-5c39 ran with `VLLM_BATCH_INVARIANT=1`, where vLLM's default
@@ -161,10 +174,11 @@ Then:
    this row carry, so that waits for the next tree.
 
    Dry run, without GPU output: the job's nine citations pass `check_capture`, its evidence passes `evidence_of`, the row is no
-   `index_refusal`, its tier is heavy and its `aot` is r20261020-085740-90ff's. `due` against the v2 trace's Build (16
-   construction manifests) is empty under that map. In the Build of record's row dir, every rank's two derived Programs are
-   `aot` (publish refuses a switched row whose Build traced one), and `config_record.record` finds the Build ok on all 8 ranks,
-   its outcome "word check not run" until the Match and Commit are in.
+   `index_refusal`, its tier is heavy and its `aot` is r20261020-085740-90ff's. `due` against the Build of record's artifact
+   (16 construction manifests), as against the v2 trace's Build before it, is empty under that map. In the Build of record's
+   row dir (r20261020-162800-6cbc), every rank's two derived Programs are `aot` (publish refuses a switched row whose Build
+   traced one). `config_record.record` finds the Build ok on all 8 ranks, its stage PASS with manifest f32c76d659f58fd3, and its
+   outcome "word check not run" until the Match and Commit are in.
 
 The replay host. The Commit's replay of record evaluates its picks with the word row kernels (`check.replay.evaluate`'s
 `ROW_EVALUATORS` is empty on every record), so it builds no Boolean body. `boolean-replay`, which would, is a single-device
@@ -185,7 +199,7 @@ replays its ranks in turn, so the jobs at once are the host's memory over that p
 The plan is vy-glm53-cpu-3, else vy-glm53-cpu-2. Either needs the checkpoint staged and verified at `REPLAY_CK`,
 `/workspace/cp/dsv4-ckpt`: `stage_ckpt.sh` with `PY=/workspace/cp/circuits/venv312/bin/python` (a CPU node's venv), 864.7 GB in
 about 18 min, with 865 GB free. It also needs the row dir: the Build of record (`copy_rowdir.sh vy-nebius-cpu-3 HOST
-rowdir.sha256 /workspace/cp/circuits/dsv4-v2/rows`) and the Match's files.
+~/.research/runs/r20261020-154450-ab0f/out/rowdir.sha256 /workspace/cp/circuits/dsv4-v2/rows`) and the Match's files.
 
 GPU time (wall of the GPU job, all 8 GPUs):
 
