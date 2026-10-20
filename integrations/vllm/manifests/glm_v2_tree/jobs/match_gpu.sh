@@ -8,7 +8,8 @@
 # preempting.  A match/ with no gpu_legs.json is an
 # evicted job's and is moved aside (match.evicted-*); one whose legs ended is refused.  After the legs, with no lease, the job
 # records each engine's gpu_memory_utilization read back from its vllm_config, the driver's and each rank's (the control, with no
-# observer, the driver's alone; $OUT/gpu_memory_utilization.json; exit 12 unless every one is GPU_UTIL), and hashes match/ and $SW/$ROW.tree (REF@SHA: every job of the row refuses another tree) into
+# observer, the driver's alone; $OUT/gpu_memory_utilization.json; exit 12 unless every one is GPU_UTIL; each rank's own sizing
+# line from vLLM's log, both legs, in $OUT/vllm_memory_sizing.txt), and hashes match/ and $SW/$ROW.tree (REF@SHA: every job of the row refuses another tree) into
 # $OUT/match.sha256 (paths relative to $SW) for the copy to the CPU node that runs the Match's CPU phase (README "GPU batch").
 #   research run --on vy-glm53-eu --mem-gb 400 --timeout 3h --source . --cwd source --project verity -- env ROW=... bash integrations/vllm/manifests/glm_v2_tree/jobs/match_gpu.sh
 # env: ROW, [SW], [REF] (model.sh's defaults), [DISK_NEED_GIB: by row, below].
@@ -77,6 +78,7 @@ for f in row.json stages.txt row.log effective_config.json gpu_lease.json match/
 tail -20 "$OUT/chain.out"
 python3 -c 'import json,sys; d=json.load(open(sys.argv[1])); sys.exit(0 if d["capture_rc"] == 0 and d["control_rc"] == 0 else 1)' \
   "$D/match/gpu_legs.json" 2>/dev/null || { echo "the GPU legs did not both pass ($D/match/gpu_legs.json)"; exit 11; }
+grep -h "Desired GPU memory utilization" "$D/match/capture.log" "$D/match/control.log" >"$OUT/vllm_memory_sizing.txt"
 python3 "$TREE/integrations/vllm/manifests/glm_v2_tree/jobs/gpu_util_read_back.py" "$OUT/gpu_memory_utilization.json" "$GPU_UTIL" \
   "$D/match/capture/topology.json" "driver:$D/match/control/topology.json" ||
   { echo "the legs passed, but an engine did not read back gpu_memory_utilization=$GPU_UTIL ($OUT/gpu_memory_utilization.json)"; exit 12; }
