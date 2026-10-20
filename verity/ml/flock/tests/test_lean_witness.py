@@ -355,11 +355,11 @@ def test_f1_lean_builds_the_inner_statement_from_its_own_partition_object_and_pr
 def test_f1_vstars_statements_are_outer_statements_at(f1_gate, f1_inner):
     """`outerStatementsAt st`: the inner shape `innerAt` reads (m, k_log, 2 + points·regions claims, regions; `rec-inner`'s),
     `outerParts` over it (the exe's copy, `outerPartsOf`, is it by `rfl`) and `RecVStar.statements` there, which are the
-    units of the gate's six staged statements, then RecCap over level 0's 128 nodes, which `outerParts` does not count and
-    the gate (staged before RecCap) has no session of."""
+    units of the gate's six staged statements, then RecCap over level 0's 128 nodes, which `outerParts` counts and the gate
+    (staged before RecCap) has no session of."""
     c = f1_inner["accepts_stmt"]
     assert c["shape"] == {"format": "verity/rec-inner/v1", "m": 27, "k_log": 24, "claims": 8, "regions": 3}
-    assert c["outer_parts"] == len(c["statements"]) - 1 == len(F1_PARTS)
+    assert c["outer_parts"] == len(c["statements"]) == len(F1_PARTS) + 1
     assert c["statements"] == [nm for nm, _ in F1_STATEMENTS] + ["rec-cap/n128"] == [_unit(f1_gate, p) for p in F1_PARTS] + [
         "rec-cap/n128"]
 

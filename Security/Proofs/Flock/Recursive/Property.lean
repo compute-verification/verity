@@ -94,7 +94,8 @@ noncomputable abbrev innerExec {nT r : ℕ} (T : Fin nT → Type) (CT : Fin r �
 claims, as V*'s staging lays them out (`rec_vstage.stage`, `VStar.statements`) and the verifier of record groups the
 algebra's residuals (`Flock.RecResiduals.groups`, `rec_residuals.parts`): one `RecOpen` per Ligerito level of
 `fast100 m`, then one `InnerRepCheck` per part of the rep's algebra, each residual in S's order in the first part that
-stays within `Flock.RecResiduals.MAX_SLOTS` sha512x3 slots, `MAX_REGIONS` regions and 16 residuals. Zero at a shape the
+stays within `Flock.RecResiduals.MAX_SLOTS` sha512x3 slots, `MAX_REGIONS` regions and 16 residuals, then the one `RecCap`
+over the `2^cap₀` nodes of `root_B`'s level-0 cap (`VStar.capStatement`, `RecVStar.checkCapListed`). Zero at a shape the
 verifier refuses, where V* stages nothing. -/
 def outerParts (m kLog claims : ℕ) : ℕ :=
   match Flock.RecResiduals.shape? m kLog claims with
@@ -102,7 +103,7 @@ def outerParts (m kLog claims : ℕ) : ℕ :=
   | some sh =>
     match Flock.RecAlgebra.structureOf sh >>= fun S =>
         Flock.RecResiduals.groups S (Flock.RecResiduals.portSizes sh) with
-    | .ok gs => sh.sched.levels.size + gs.size
+    | .ok gs => sh.sched.levels.size + gs.size + 1
     | .error _ => 0
 
 /-- **The number of V*'s outer statements over the class `cls` and its regions `regs`**: `outerParts` at the class's
