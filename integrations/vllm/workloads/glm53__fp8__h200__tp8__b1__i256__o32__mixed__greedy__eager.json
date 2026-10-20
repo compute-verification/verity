@@ -39,7 +39,8 @@
  "sampling": {
   "variant": "greedy",
   "seed": null,
-  "n": 1
+  "n": 1,
+  "ignore_eos": true
  },
  "serving_profile": "sweep-B1",
  "context_class": "I256-O32",
@@ -379,5 +380,5 @@
   "tp": 8,
   "execution": "eager"
  },
- "note": "R12 sweep glm53__fp8__h200__tp8__b1__i256__o32__mixed__greedy__eager: B=1 I<=256 O<=32 greedy arrivals=none; prompt lens [256], caps [32], arrive steps [0]; every request to max_tokens => 32 engine steps; max_num_batched_tokens keeps the whole admitted prefill in one step; max_model_len = I + O.  EOS untouched.  13 Oct: NCCL_P2P_DISABLE dropped (an L40S-row carry-over; Daniel's ruling: standard vLLM on H boxes).  13 Oct: disable_custom_all_reduce dropped (an L40S-row carry-over, set false = vLLM's default; Daniel's ruling: standard vLLM on H boxes)."
+ "note": "R12 sweep glm53__fp8__h200__tp8__b1__i256__o32__mixed__greedy__eager: B=1 I<=256 O<=32 greedy arrivals=none; prompt lens [256], caps [32], arrive steps [0]; every request to max_tokens => 32 engine steps; max_num_batched_tokens keeps the whole admitted prefill in one step; max_model_len = I + O.  A row of record: sampling.ignore_eos, every request done only at its public cap.  13 Oct: NCCL_P2P_DISABLE dropped (an L40S-row carry-over; Daniel's ruling: standard vLLM on H boxes).  13 Oct: disable_custom_all_reduce dropped (an L40S-row carry-over, set false = vLLM's default; Daniel's ruling: standard vLLM on H boxes)."
 }

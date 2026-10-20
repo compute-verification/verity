@@ -3202,9 +3202,13 @@ def _leaves(v: Any, at: str = ""):
 
 def manifest_diff(repo: dict, live: dict) -> list[str]:
     """The live manifest against the repo's, one line per key path: `+` only the repo has it, `-` only the live app, `~` both
-    with different values (live -> repo). A set's member is `path: member`."""
+    with different values (live -> repo). A set's member is `path: member`.  A key one side lacks and the other sets to
+    false is no difference: Slack exports its false defaults (pkce_enabled, is_mcp_enabled, ...), and the file omits them."""
     a = {(p, m): v for p, m, v in _leaves(live)}
     b = {(p, m): v for p, m, v in _leaves(repo)}
+    for x, y in ((a, b), (b, a)):
+        for k in [k for k, v in x.items() if v is False and k not in y]:
+            del x[k]
     show = lambda k, v: f"{k[0]}: {k[1]}" if k[1] is not None else f"{k[0]}: {json.dumps(v, ensure_ascii=False)}"  # noqa: E731
     out = []
     for k in sorted(a.keys() | b.keys(), key=lambda k: (k[0], k[1] or "")):
