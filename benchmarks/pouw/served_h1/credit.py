@@ -140,6 +140,11 @@ def word_rows(ws: Sequence[int]) -> list[bytes]:
     return [int(w).to_bytes(2, "little") for w in ws]
 
 
+def tile_words(ri: int) -> range:
+    """Row block ri's admit words: the leaves of the call's admit tree its tile's `admit` input is bound to."""
+    return range(R * ri // WORD, (R * ri + R) // WORD)
+
+
 def live_blocks(bits: np.ndarray) -> list[int]:
     """The call's row blocks with a selected slot."""
     b = np.asarray(bits, dtype=bool)
@@ -210,4 +215,4 @@ def proof_plan(n_calls: int, t: int, steps: int, sites: Sequence[str], populatio
 
 
 __all__ = ["bits_of", "hollow", "junk", "live_blocks", "live_units", "nonempty", "proof_plan", "published", "queue_admit",
-           "queue_leaves", "queue_of", "queue_select", "scale_only", "scales", "tally", "word_rows", "words"]
+           "queue_leaves", "queue_of", "queue_select", "scale_only", "scales", "tally", "tile_words", "word_rows", "words"]

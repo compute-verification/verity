@@ -132,6 +132,28 @@ def test_an_admitted_zero_byte_block_is_live_and_a_non_admitted_block_is_dead():
     assert tl["rows"] == 32 and tl["macs"] == 32 * 64 * 64
 
 
+def test_a_tiles_admit_input_opens_from_the_admit_tree_and_a_flipped_bit_is_refused():
+    """The gate's binding of `PouwH1Tile_v4`'s admit input (`serve.tile_admit`): each row block's two admit words open from
+    the call's admit tree against its root as the tally's 32 bits, and a word with any one bit flipped is refused."""
+    SV = _load("serve")
+    t, key = 128, bytes(range(64))
+    bits = np.zeros(t, dtype=bool)
+    bits[[0, 5, 40, 77]] = True
+    ws = CR.words(bits)
+    fields = {"window": 0, "step": 3, "linear": 2, "module": "m", "slots": t, "schema": CM.SCHEMA}
+    dom = CM.domain(fields, len(ws), "admit")
+    lv = CM.levels(dom, [CM.leaf(dom, key, "s/3/2", q, x)[0] for q, x in enumerate(CR.word_rows(ws))])
+    c, d = {"step": 3, "linear": 2, "admit_fields": fields, "root_admit": lv[-1][0].hex()}, {"words": ws, "s_levels": lv}
+    for ri in range(t // 32):
+        assert list(SV.tile_admit(c, d, key, ri)) == list(bits[32 * ri:32 * ri + 32])
+        for q in CR.tile_words(ri):
+            for b in range(CR.WORD):
+                forged = list(ws)
+                forged[q] ^= 1 << b
+                assert SV.tile_admit(c, d, key, ri, forged) is None
+    assert SV.tile_admit({**c, "linear": 1}, d, key, 0) is None
+
+
 def test_a_opens_against_the_step_root_and_refuses_neg_b():
     """CMP-38 on PoUW's side: a call's A table is AROW's row table (`row_table.commit` over `s8_row`s gives the root `leaf` and
     `levels` give), a tile's 32 A rows open against it and the step's A root, A' = -b (the tile's B rows negated) is refused

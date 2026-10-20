@@ -762,6 +762,18 @@ def run(a: argparse.Namespace) -> dict:
     return rec.doc
 
 
+def tile_admit(c: dict, d: dict, key: bytes, ri: int, words: list[int] | None = None) -> np.ndarray | None:
+    """Row block ri's `PouwH1Tile_v4` admit input: its words (`credit.tile_words`; the committed ones by default) opened
+    from call c's admit tree against its root, as the tile's 32 bits; None if one doesn't open."""
+    ws = d["words"] if words is None else words
+    dom = CM.domain(c["admit_fields"], len(d["words"]), "admit")
+    label, root = f"s/{c['step']}/{c['linear']}", bytes.fromhex(c["root_admit"])
+    for q in CR.tile_words(ri):
+        if not CM.verify(dom, root, q, CM.leaf(dom, key, label, q, CR.word_rows([ws[q]])[0])[0], CM.path(d["s_levels"], q)):
+            return None
+    return CR.bits_of([ws[q] for q in CR.tile_words(ri)])
+
+
 def gate(a, calls: list[dict], data: list[dict], levels: list, layers: list, model: dict, names: dict, queue: dict,
          weights: dict, key: bytes, E, t_max: int, done: int) -> dict:
     """Drawn units against the gated `h1tile.reference`, and the controls: per site a live and a dead unit of real steps'
@@ -802,15 +814,11 @@ def gate(a, calls: list[dict], data: list[dict], levels: list, layers: list, mod
         live = bool(bits[32 * ri:32 * ri + 32].any())
         s_dom = CM.domain(c["admit_fields"], t_max // CR.WORD, "admit")
         s_label = f"s/{c['step']}/{c['linear']}"
-        root_s = bytes.fromhex(c["root_admit"])
-        tw = range(32 * ri // CR.WORD, (32 * ri + 32) // CR.WORD)
-
-        def opens(q: int, word: int) -> bool:
-            leaf_ = CM.leaf(s_dom, key, s_label, q, CR.word_rows([word])[0])[0]
-            return CM.verify(s_dom, root_s, q, leaf_, CM.path(d["s_levels"], q))
-
-        tile_bits = CR.bits_of([d["words"][q] for q in tw])
-        fq = rng.choice(list(tw))
+        tile_bits = tile_admit(c, d, key, ri)
+        if tile_bits is None:
+            raise ValueError(f"call {i}: row block {ri}'s admit words don't open against its admit root")
+        forged = list(d["words"])
+        forged[rng.choice(list(CR.tile_words(ri)))] ^= 1 << rng.randrange(CR.WORD)
         z, ungated = RC.reference(call, salt, c["base"], root_a, root_b, u)
         want = RC.reference(call, salt, c["base"], root_a, root_b, u, gated=tile_bits)[1]
         got = [int(v) for v in d["receipts"][u]]
@@ -820,12 +828,11 @@ def gate(a, calls: list[dict], data: list[dict], levels: list, layers: list, mod
 
         admit_root = CM.levels(s_dom, [CM.leaf(s_dom, key, s_label, q, x)[0]
                                        for q, x in enumerate(CR.word_rows(CR.words(bits)))])[-1][0]
-        sel = {"live": live, "admit_root_rebuilt": admit_root == root_s,
+        sel = {"live": live, "admit_root_rebuilt": admit_root == bytes.fromhex(c["root_admit"]),
                "admit_words_committed": CR.words(bits) == d["words"], "no_junk_row": not CR.junk(a_rows, bits),
                "no_hollow_row": not CR.hollow(a_rows, chosen),
-               "tile_admit_opens_from_admit_tree": all(opens(q, d["words"][q]) for q in tw),
                "tile_admit_is_tally_bits": bool(np.array_equal(tile_bits, bits[32 * ri:32 * ri + 32])),
-               "tampered_tile_admit_refused": not opens(fq, d["words"][fq] ^ (1 << rng.randrange(CR.WORD)))}
+               "tampered_tile_admit_refused": tile_admit(c, d, key, ri, forged) is None}
         free = [r_ for r_ in range(32 * ri, 32 * ri + 32) if not bits[r_]]
         if free:
             jr = rng.choice(free)
