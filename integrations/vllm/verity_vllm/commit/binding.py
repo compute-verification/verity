@@ -116,8 +116,8 @@ def build_binding_map(layouts: dict[int, list], steps: list, run_root: bytes, pr
     A MoE block plane whose rows are not a token multiple binds no request: its entry is request `*` with `refused`, the reason.
     Entries are compact (one per tensor x request); `digest` is over the canonical JSON of the entries -- recorded in the Commit record and
     mixed into the challenge, so the map cannot be chosen after the openings.
-    `binder` (`verity_vllm.query.manifest.bind.Binder`, from the required manifest): the identity each committed tensor binds; an entry bound
-    other than by its label or a tuple slot says how (`observation`).  Without one (no manifest) a name is its identity (`split_name`)."""
+    `binder` (`query.manifest.bind.Binder`, from the required manifest): each tensor's identity, a call boundary's under each request's
+    own spelling (`Binder.spellings`), and how if not by label or slot (`observation`); without one a name is its identity (`split_name`)."""
     entries: list[dict[str, Any]] = []
     for step in sorted(layouts):
         metas = layouts[step]
@@ -167,9 +167,11 @@ def build_binding_map(layouts: dict[int, list], steps: list, run_root: bytes, pr
                 splits = [(rid, 0, numel, 0) for rid, _lo, _hi in rr]
             if not splits:
                 splits = [(request_id, 0, numel, 0)]
+            spelt = binder.spellings(step, (op, member, k)) if binder is not None and how == "port" else {}
             for rid, lo, hi, goff in splits:
+                op_r, member_r, k_r = spelt.get(rid, (op, member, k))
                 entries.append({
-                    "identity": identity_dict(identity(program_digest, rid, step, k, op, member, lo, hi, rank)),
+                    "identity": identity_dict(identity(program_digest, rid, step, k_r, op_r, member_r, lo, hi, rank)),
                     "kind": "leaf", "step_root": step_root, "layout": layout_version, "chunk": int(m.chunk),
                     "leaf_lo": int(off // chunk), "leaf_hi": int((off + max(m.nbytes, 1) - 1) // chunk + 1),
                     "stream_offset": int(off), "width_bytes": int(m.nbytes), "encoding": {"dtype": m.dtype, "shape": list(m.shape)}, "element_offset": int(goff),
