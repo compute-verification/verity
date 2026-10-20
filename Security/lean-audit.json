@@ -4640,11 +4640,11 @@
    "assumptions": [],
    "type_hash": "5af258b4edf35bdc24ef90dd56ead302a83b3ae798a0b367538a5134c6f31c23"
   },
-  "Flock.SecurityProofs.EndToEndRegisteredRowsStated": {
+  "Flock.SecurityProofs.EndToEndRegisteredRows": {
    "owner": "@proofs",
-   "signature": ["Flock.SecurityProofs.EndToEndRegisteredRowsStated : Flock.Guarantees.EndToEndRegisteredRowsStated"],
+   "signature": ["Flock.SecurityProofs.EndToEndRegisteredRows : Flock.Guarantees.EndToEndRegisteredRows"],
    "assumptions": [],
-   "type_hash": "a008a3ec7f8b876753df956eefa170b2d58e4029da0d65e6e857ba60a2c3489b"
+   "type_hash": "2663b1a7e4d37b7b0c345dbf40b33344f4e86c82f17c36de855847c1e11059d9"
   },
   "Flock.SecurityProofs.EndToEnd_refSetup": {
    "owner": "@proofs",
@@ -9377,7 +9377,6 @@
    "FlockSoundness.Audit.Adaptive.harm_count": "frozen (obligation,no-function): It states the cumulative harm budget over an abstract adaptive play (`Adaptive.Play.prEv`, Security/Proofs/Flock/Soundness/Audit/HarmBudget.lean) under per-round design and drawn-unit hypotheses (`Play.Laws`, `Play.Drawn`), rather than the acceptance of a Lean function.",
    "FlockSoundness.Audit.Adaptive.harm_count_kstar": "frozen (obligation,no-function): It states the cumulative harm budget over an abstract adaptive play (`Adaptive.Play.prEv`, Security/Proofs/Flock/Soundness/Audit/HarmBudget.lean) under per-round design and drawn-unit hypotheses (`Play.Laws`, `Play.Drawn`), rather than the acceptance of a Lean function.",
    "FlockSoundness.Audit.Adaptive.life_harm_budget": "frozen (obligation,no-function): It takes KnowledgeSound and LinkSound (Security/Proofs/Flock/Soundness/Audit/OneStage.lean:85, :94), open obligations of the backend, as hypotheses, and it is about the abstract lifetime of one-stage audits rather than a Lean function.",
-   "Flock.SecurityProofs.EndToEndRegisteredRowsStated": "frozen (no-function): It states no property of the verifier: it reads Flock.Guarantees.EndToEndRegisteredRows, so the lock records its text, and it leaves the list when that statement's own proof is listed.",
    "Accounting.SecurityProofs.TS.CondReceiptLuckMarginal": "lemma: a receipt game's luck at pr over every round, from its luck at pr given the rest over its own part (CondReceiptLuck, a hypothesis) at any split of the coin; not a property of a Lean function.",
    "Accounting.SecurityProofs.TS.GridLuck": "lemma: the exponential moment at most 1 of a grid's gain at rate theta, rows and columns each with their own coins, a unit dead with probability at most q over its row's coins and otherwise lucky with probability at most p over its column's given the rows and the earlier columns (hypotheses), under each unit's condition q e^{n theta w} + (1 - q)(p e^{r theta w} + (1 - p) e^{-kappa r theta w})^{n/r} <= 1; not a property of a Lean function.",
    "Accounting.SecurityProofs.TS.GridTemplateCondition": "lemma: h1tile's template (q = 2^{-w}, p = 1/2, kappa = 4, w <= 32) meets GridLuck's condition at r theta = 1/(4 max(64, e)) for every ratio e > 0 of a row's units to a column's; an inequality of reals, not a property of a Lean function.",
@@ -9440,7 +9439,8 @@
    "Nci.SecurityProofs.ActivationsChain": "lemma: ActivationsIncompressibleAll gives ActivationsIncompressible for a chain that is part of the threading (ChainIn, Security/Definitions/Nci/Links.lean); it relates two named premises and is about no function.",
    "Nci.SecurityProofs.CertificateSlack": "frozen (no-function): It is Markov's inequality over the windows of an arbitrary distribution on a finite outcome space, under the named PouwSound (Security/Models/Nci/Assumptions/Remote.lean) as a bound on each window's marginal, not from a function's acceptance; joining it to PoUW's verifier, whose rejection of a wrong certificate PouwSound bounds, is what would give it one.",
    "Nci.SecurityProofs.VerdictLag": "frozen (no-function): It bounds the declared work an arbitrary set of faulty proof blocks skips, under the named TerminalDetection (Security/Models/Nci/Assumptions/Remote.lean) and a per-identity capacity bound taken as a hypothesis, not from a function's acceptance; joining it to the halt's verdict and the sampled proofs' verifier is what would give it one.",
-   "Nci.SecurityProofs.DampenerRemote": "frozen (no-function): It composes the remote protocol's compute dampener from CertificateSlack, VerdictLag and ThreadedThrottled discharging the declared source, under the named PouwSound, TerminalDetection (Security/Models/Nci/Assumptions/Remote.lean) and WeightsIncompressible (Security/Models/Nci/Assumptions/Threads.lean), with the other sources' bounds as hypotheses, not from a function's acceptance; joining the sources to their protocols' verifiers is what would give it one."
+   "Nci.SecurityProofs.DampenerRemote": "frozen (no-function): It composes the remote protocol's compute dampener from CertificateSlack, VerdictLag and ThreadedThrottled discharging the declared source, under the named PouwSound, TerminalDetection (Security/Models/Nci/Assumptions/Remote.lean) and WeightsIncompressible (Security/Models/Nci/Assumptions/Threads.lean), with the other sources' bounds as hypotheses, not from a function's acceptance; joining the sources to their protocols' verifiers is what would give it one.",
+   "Flock.SecurityProofs.EndToEndRegisteredRows": "frozen (hash,world-unlisted,scope): It takes the table, link and rows finders' collision bounds (TableCRZ, LinkCRZC, RowsCRZC) as hypotheses instead of a collision disjunct tied to the run, and live-verifier custody (RecordCustodyZKJ), a premise that isn't on the list; it also takes hscope (scopeOk), which flock_verify_sound now derives from acceptance."
   },
   "conjectures": {
    "Pous.P2.Assumptions.P2RingAuditSecure": {
