@@ -25,7 +25,7 @@
 #     --send BUILD_RUN/out/lib/sm_90a/h1u.so --send ... --send BUILD_RUN/out/lib/sm_90a/BUILD.txt \
 #     -- bash benchmarks/hash/dither/job.sh sm_90a h1u
 #
-# Env: VARIANTS (default below), JOBS (builds at once, default 8), BENCH_ARGS (extra flags for the bench, e.g. "--ms 1,32 --linears o"), LEASE (gpu-lease flags, default
+# Env: VARIANTS (default below), JOBS (builds at once, default 8), BENCH_ARGS (extra flags for the bench, e.g. "--ms 1,32 --linears o"), HB_WHO (the lease owner, default kernels-dither-hb), LEASE (gpu-lease flags, default
 # "--max-min 14"), LIBS (the shipped libraries, default $RESEARCH_RUN_DIR/inputs), VERITY_BENCH_VENV (default
 # /workspace/cp/venv312), NVCC (default CUDA 13.0's), NCU (default the ncu beside NVCC).
 # Exit: the bench's (4 a gate failed), 2 a build failed or the shipped libraries are missing or another commit's.
@@ -68,7 +68,9 @@ if [ "$BENCH" = build ]; then
     [ "$arch" = sm_100a ] && builds+=(kb_pg)
     # h1u.cu's knobs: H1U_MINB (CTAs an SM the registers leave room for), H1U_PF (the fused form prefetches too), H1U_PD
     # (segments of A and B in flight), H1U_L2PF (L2 prefetch 16 segments ahead and of the next chunk's workspace), H1U_WARPS,
-    # H1U_SPLIT (h1p: a pair of warps a unit)
+    # H1U_SPLIT (h1p: a pair of warps a unit), H1U_KSPLIT (h1k: the one-stream unit's K split, 2 or 4 producer warps, for
+    # calls of at most H1K_MAXU live units), H1K_AUTO (with H1U_KSPLIT = 4: 4 producers where one wave holds the call's
+    # units, else 2)
     for v in ${VARIANTS:-b3=-DH1U_MINB=3 pf=-DH1U_PF=1 pd2=-DH1U_PF=1,-DH1U_PD=2 pd4=-DH1U_PF=1,-DH1U_PD=4 \
              pd8=-DH1U_PF=1,-DH1U_PD=8 l2=-DH1U_PF=1,-DH1U_L2PF=1 pd2l2=-DH1U_PF=1,-DH1U_PD=2,-DH1U_L2PF=1 \
              pd4l2=-DH1U_PF=1,-DH1U_PD=4,-DH1U_L2PF=1 pd2b3=-DH1U_PF=1,-DH1U_PD=2,-DH1U_MINB=3 \
@@ -165,7 +167,7 @@ if [ -n "${GPU_LEASE_UUID:-}" ]; then
   bash -c "$bench"
 else
   read -r -a lease <<< "${LEASE:---max-min 14}"
-  GPU_LEASE_WHO=kernels-dither-hb gpu-lease 1 --wait "${lease[@]}" -- bash -c "$bench"
+  GPU_LEASE_WHO=${HB_WHO:-kernels-dither-hb} gpu-lease 1 --wait "${lease[@]}" -- bash -c "$bench"
 fi
 rc=$?
 echo "lease rc $rc"
