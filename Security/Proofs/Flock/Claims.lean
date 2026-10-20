@@ -64,6 +64,7 @@ import Proofs.Flock.Claims.Recursion.DecodeLog
 import Proofs.Flock.Claims.Recursion.VerdictLog
 import Proofs.Flock.Claims.Recursion.CallsAgree
 import Proofs.Flock.Claims.Recursion.CallsOfProofs
+import Proofs.Flock.Claims.Recursion.LastBindsClosed
 import Proofs.Flock.Claims.Recursion.VStarParts
 import Proofs.Flock.Claims.Recursion.VStarPartsHolo
 import Proofs.Flock.Claims.Recursion.VStarPartsDense

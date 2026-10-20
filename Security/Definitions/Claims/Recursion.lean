@@ -1074,8 +1074,9 @@ same calls, so they are no counterexample.
 The recursion's KS reads this with `LastCoinFree` (`RecDeploy.ksBoundRoute_of_bridge_cols`), not the bridge. At the
 deployed bound record it follows from `Binds` and the deployed plain verifier's binding of its own last message
 (`RecDeploy.lastBindsEC_deployed`, from `RecDeploy.PlainLastBinds`): its columns half and its calls half
-(`RecDeploy.PlainCallsBindOrSlack`) are proved at SHA-512, and the decoder's canonicity
-(`RecDeploy.CanonicalProofFiles`) is open (`RecDeploy.lastBindsEC_deployed_sha512_of_canonical`). -/
+(`RecDeploy.PlainCallsBindOrSlack`) are proved at SHA-512, and so is the decoder's canonicity
+(`RecDeploy.CanonicalProofFiles`, from `Flock.decodeProof_canonical`), so it holds there at SHA-512 with no premise
+(`RecDeploy.lastBindsEC_deployed_sha512_closed`). -/
 def Bound.LastBindsEC (H : Msg → Msg) (Bd : Bound Coin Col T) : Prop :=
   ∀ (x : Msg) (as as' : List Msg) (cs cs' : List Coin), as.length = Bd.DE.V.k x → as'.length = as.length →
     cs.length = as.length → cs'.length = as.length → as.dropLast = as'.dropLast → cs.dropLast = cs'.dropLast →
