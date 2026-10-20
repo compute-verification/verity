@@ -207,8 +207,9 @@ def unlink(pkg: str, tree: Path, links: dict[str, str]) -> None:
 
 
 def read_links(tree: Path) -> dict[str, str]:
-    """The tree's `LINKS`; none when the file is missing or not a JSON object (a run stopped while an older version wrote
-    it in place left it empty), so each package's dependencies are taken again, as in a new tree."""
+    """The tree's `LINKS`; none when the file is missing or not a JSON object (a write in place that failed after its
+    truncation, on a full disk or a stopped run, left it empty), so each package's dependencies are taken again, as in a
+    new tree."""
     try:
         links = json.loads((tree / LINKS).read_text())
     except (FileNotFoundError, ValueError):
@@ -217,7 +218,7 @@ def read_links(tree: Path) -> dict[str, str]:
 
 
 def write_links(tree: Path, links: dict[str, str]) -> None:
-    """`LINKS`, replaced whole, so a run stopped while writing it leaves the previous file."""
+    """`LINKS`, replaced whole, so a write that fails (a full disk, a stopped run) leaves the previous file."""
     tmp = tree / f"{LINKS}.tmp"
     tmp.write_text(json.dumps(links, indent=1, sort_keys=True) + "\n")
     os.replace(tmp, tree / LINKS)
