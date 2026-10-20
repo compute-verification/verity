@@ -16,26 +16,29 @@ verifier's check that a served window's coins are that challenger's.
   the prover's) is refused, since the verifier's key signed no record of it. The window's draw coin must have been opened
   once, after `pouw_h1_requests.draw_root` over its manifest, last receipts and every round's root and coin: a draw
   opened early, from another family, or never (a session closed at `finish` with no draw) is refused.
-* **Sessions** (RT4-INT-17, the pouw setting ``session``): a lane opens a session on infra's challenger gate for a window,
-  the served Commit's root (``open --commit HEX --peer NAME --scheme S --families JSON``,
-  `benchmarks/live_challenger/auditor.py` on vy-challenger-1, under the lane's own gate key), and the serving window
-  carries the gate's answer (``commits["session"]``: its ``session``, ``seq``, ``root`` and coin ``commitment``, without
-  its ``secret``; `session_of`, `carried`). The serving side's hello carries the answer's secret, and it refuses a
+* **Sessions** (RT4-INT-17, the pouw setting ``session``): a lane reserves a session on infra's challenger gate
+  (``reserve --peer NAME --scheme S --families JSON``, `benchmarks/live_challenger/auditor.py` on vy-challenger-1, under
+  the lane's own gate key) and opens it for its window's root (``open --session S --root R``), and the serving window
+  carries the gate's open answer (``commits["session"]``: its ``session``, ``seq``, ``root`` and coin ``commitment``,
+  without its ``secret``; `session_of`, `carried`). The serving side's hello carries the answer's secret, and it refuses a
   challenger whose coin commitment isn't the answer's before its first coin (`connect`). The gate appends the window's
   ``open`` entry (v2: ``window.root``) to its ledger, signed under the challenger key, before the session's first coin,
   and refuses a second one for the root, ever; the session's ``end`` entry seals the SHA-512 of each file of its
   ``out/``, the coins each family released, whether that was all of them (``complete``), the leaf its record was signed
-  at and its commitment's root. `Ledger.verify` is infra's ``verify_ledger`` over one published head under the
-  verifier's own key (`pinned_key`, its pin from config): chained, no v1 entry after a v2, its LMS leaves strictly
-  increasing, each record's leaf between its session's open and end and no entry's, one session a root and one root a
-  session; `Ledger.newest` reads every published head and refuses two that don't extend one another. `session_reason`
-  holds a window to the one session the ledger opened for its Commit's root, ended, closed and complete with the
-  window's commitment, reading that session's tree from the gate's ``fetch`` (never the prover's bundle), each file the
-  one its end entry sealed, its key the verifier's, its record signed for the open entry's host and layout at the end's
-  record leaf, and its release log the end's counts; `period_reason` refuses a period with a session that released coins
-  and has no accepted window (a window abandoned after its coins), or one that never ended. The ledger has no period
-  yet: a period's sessions are those opened between its ``period-open`` and ``period-close`` entries (PRF-108), which
-  `period_reason` takes as a range of ledger seqs.
+  at and its commitment's root. `Ledger.verify` is infra's ``verify_ledger`` and ``verify_periods`` over one published
+  head under the verifier's own key (`pinned_key`, its pin from config): chained, no v1 entry after a v2, its LMS leaves
+  strictly increasing, each record's leaf between its session's open and end and no entry's, one session a root and one
+  root a session, each two-step open bound to its session's reserve and inside its minutes, and each period's close
+  listing exactly its windows and their outcomes; `Ledger.newest` reads every published head and refuses two that don't
+  extend one another. `session_reason` holds a window to the one session the ledger opened for its Commit's root, ended,
+  closed and complete with the window's commitment, reading that session's tree from the gate's ``fetch`` (never the
+  prover's bundle), each file the one its end entry sealed, its key the verifier's, its record signed for the open
+  entry's host and layout at the end's record leaf, and its release log the end's counts.
+* **Periods**: a lane's period is its windows between its ``period-open`` and ``period-close`` entries (session null),
+  each window counted at its reserve (or a one-step v2 open) whose prover (``for``, else ``by``) is the lane.
+  `period_reason` refuses a period the ledger doesn't close, one whose close isn't complete (an empty one, or a window
+  never opened, never ended, unclosed or short of its coins), an accepted window that isn't one of its windows, and a
+  window of it that has no accepted window (abandoned after its coins).
 """
 from __future__ import annotations
 
@@ -43,6 +46,7 @@ import hashlib
 import json
 import re
 from dataclasses import dataclass
+from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Any, Callable, Mapping, Sequence
 
@@ -67,10 +71,18 @@ SEALED = (remote.RECORD, remote.KEY, remote.RELEASES)
 #: the pouw setting ``session``: the gate's open answer (``commitment`` from ``status SESSION`` when the answer's is
 #: null), and what else the answer may carry; the window carries it without its ``secret`` (`carried`)
 SESSION_FIELDS = ("session", "seq", "root", "commitment")
-REPLY_FIELDS = ("host", "port", "peer", "by", "secret")
+REPLY_FIELDS = ("host", "port", "peer", "by", "for", "reserve", "opened_by", "secret")
+#: the ledger's period entries (session null), and what a two-step open carries unchanged from its reserve
+PERIOD_KINDS = ("period-open", "period-close")
+RESERVED = ("by", "for", "peer", "scheme", "epoch", "families", "minutes")
 _ROOT = re.compile(r"^[0-9a-f]{128}$")
 _SECRET = re.compile(r"^[0-9a-f]{64}$")
 _HEX = re.compile(r"^(?:[0-9a-f]{2})+$")
+_NAME = re.compile(r"[A-Za-z0-9][A-Za-z0-9._:-]{0,63}")
+_SESSION = re.compile(r"s\d{8}T\d{6}Z-[0-9a-f]{4}")
+_UTC = re.compile(r"\d{4}-\d\d-\d\dT\d\d:\d\d:\d\dZ")
+_MINUTES = (1, 720)
+_CAP = (1, 2 ** 24)
 _ZERO = "0" * 128
 
 
@@ -92,8 +104,8 @@ def address(raw: Any) -> str | None:
 def session_of(raw: Any) -> dict[str, Any] | None:
     """The pouw setting ``session``: None, or the gate's answer to the window's ``open`` (its ``session``, ledger ``seq``,
     window ``root`` (the served Commit's root) and coin ``commitment``'s root, each root 128 lowercase hex, and optionally
-    the challenger's ``host``, ``port`` and ``peer``, the opener ``by`` and the hello's ``secret``, 64 lowercase hex);
-    ValueError otherwise."""
+    the challenger's ``host``, ``port`` and ``peer``, the reserve's ``by``, ``for`` and ``seq`` (``reserve``), the
+    ``opened_by`` and the hello's ``secret``, 64 lowercase hex); ValueError otherwise."""
     if raw is None:
         return None
     ok = (isinstance(raw, Mapping) and set(SESSION_FIELDS) <= set(raw) <= {*SESSION_FIELDS, *REPLY_FIELDS}
@@ -104,7 +116,7 @@ def session_of(raw: Any) -> dict[str, Any] | None:
         raise ValueError("pouw setting 'session' is the challenger gate's open answer for the window, {'session', 'seq', "
                          "'root', 'commitment'} (the served Commit's root and the session's coin commitment root, 128 "
                          "lowercase hex; the commitment from 'status SESSION' when the answer's is null) and optionally "
-                         f"'host', 'port', 'peer', 'by' and 'secret' (64 lowercase hex), not {raw!r}")
+                         f"{', '.join(repr(k) for k in REPLY_FIELDS[:-1])} and 'secret' (64 lowercase hex), not {raw!r}")
     return dict(raw)
 
 
@@ -325,41 +337,79 @@ def lines_of(path: str | Path) -> list[bytes]:
     return [line for line in data.split(b"\n") if line]
 
 
-def _prover_of(opened: Mapping[str, Any]) -> Any:
-    return opened["body"].get("by" if opened["schema"] == LEDGER_SCHEMA else "lane")
+def _later(t: str, minutes: int) -> str:
+    """`t` (``%Y-%m-%dT%H:%M:%SZ``) plus `minutes`: a reserve's expiry, as infra's ``later`` computes it."""
+    return (datetime.strptime(t, "%Y-%m-%dT%H:%M:%SZ") + timedelta(minutes=minutes)).strftime("%Y-%m-%dT%H:%M:%SZ")
 
 
+def _named(v: Any) -> bool:
+    return type(v) is str and bool(_NAME.fullmatch(v))
+
+
+def _reserve_ok(b: Mapping[str, Any]) -> bool:
+    return (_named(b.get("by")) and ("for" not in b or _named(b["for"])) and type(b.get("minutes")) is int
+            and _MINUTES[0] <= b["minutes"] <= _MINUTES[1] and type(b.get("started_utc")) is str
+            and bool(_UTC.fullmatch(b["started_utc"])) and b.get("expires_utc") == _later(b["started_utc"], b["minutes"]))
+
+
+# TODO(#2946): proofs' CHAL1 (PRF-117) is the challenger ledger's verifier of record, and its v2 follow-up
+# (cursor/challenger-ledger-v2-7c3e) brings verify_ledger and verify_periods; once both are on main, `Ledger.verify` calls
+# them instead of mirroring infra's, and this module keeps only vllm's checks (a session a window, the commitment before
+# the first coin, the slot tables).
 @dataclass(frozen=True)
 class Ledger:
     """Infra's challenger ledger (`LEDGER_SCHEMA`, after the host's `LEDGER_V1` entries), verified under the verifier's
-    challenger `key`: each window root to its one session's ``open`` entry and its ``end`` entry (None while it hasn't
-    ended)."""
+    challenger `key`: each window root to its one session's ``reserve`` entry (None for a one-step open), ``open`` entry
+    and ``end`` entry (None while it hasn't ended), and each period's name to its ``lane``, ``open`` and ``close`` entries
+    (``close`` None while it is open), its ``windows`` (session ids, in order) and its ``cap`` and ``circuit``."""
 
     key: ChallengerKey
     windows: Mapping[str, Mapping[str, Any]]
+    periods: Mapping[str, Mapping[str, Any]]
 
     @classmethod
     def verify(cls, lines: Sequence[bytes], key: ChallengerKey, verify: Any = lms_verify) -> Ledger:
-        """The ledger of `lines` (one head's raw lines, as published), infra's ``verify_ledger`` under `key`, refused
-        (`CoinError`) at its first entry that isn't entry i of a v1-then-v2 ledger chained to its predecessor and signed
-        under `key` at a leaf after the last entry's: an open of no root or under another key's pin, a second open for a
-        root or a session, an end with no open or a second end, a v2 end whose record leaf isn't between its open's and
-        its end's (or is another end's or an entry's), or another kind. Fails closed: one bad entry trusts nothing."""
+        """The ledger of `lines` (one head's raw lines, as published), infra's ``verify_ledger`` and ``verify_periods``
+        under `key`, refused (`CoinError`) at its first entry that isn't entry i of a v1-then-v2 ledger chained to its
+        predecessor and signed under `key` at a leaf after the last entry's: a reserve, an open or a period-open under
+        another key's pin; a reserve that isn't v2 and first in its session or whose expiry isn't its start plus its
+        minutes; an open of no root, a second open for a root or a session, a two-step open that doesn't bind its
+        session's reserve, carry its request, name its prover as opener and fall inside its minutes and before its
+        period's close, or a one-step v2 open after the first reserve; an end with no open or a second end, or a v2 end
+        whose record leaf isn't between its open's and its end's (or is another end's or an entry's); a period name used
+        twice, a lane's second open period, a cap or circuit off form, a window past its period's cap, a close of a
+        period that isn't its lane's open one or that doesn't list exactly its windows and their outcomes; or another
+        kind. Fails closed: one bad entry trusts nothing."""
         pin = hashlib.sha512(key.public).hexdigest()
         windows: dict[str, dict[str, Any]] = {}
         opened_at: dict[str, int] = {}
         by_session: dict[str, str] = {}
+        reserves: dict[str, dict[str, Any]] = {}
+        periods: dict[str, dict[str, Any]] = {}
+        current: dict[str, str] = {}
         leaves: set[int] = set()
         records: dict[int, int] = {}
-        prev, last, v2 = _ZERO, -1, False
+        prev, last, v2, two_step = _ZERO, -1, False, False
+
+        def join(i: int, lane: str | None, sid: str) -> str | None:
+            period = current.get(lane) if lane is not None else None
+            if period is not None:
+                p = periods[period]
+                if p["cap"] is not None and len(p["windows"]) >= p["cap"]:
+                    raise CoinError(f"ledger entry {i} puts window {len(p['windows'])} in period {period}, past its cap "
+                                    f"{p['cap']}")
+                p["windows"].append(sid)
+            return period
+
         for i, line in enumerate(lines):
             try:
                 e = json.loads(line)
                 if type(e) is not dict:
                     raise TypeError(f"an entry is an object, not {e!r}")
                 kind, sid, body, q = e["kind"], e["session"], e["body"], leaf_of(e["sig"])
-                if not (isinstance(sid, str) and isinstance(body, dict)):
-                    raise TypeError("an entry has a session (a string) and a body (an object)")
+                if not ((sid is None if kind in PERIOD_KINDS else isinstance(sid, str)) and isinstance(body, dict)):
+                    raise TypeError("a session's entry has a session (a string), a period's none, and each a body (an "
+                                    "object)")
             except (KeyError, TypeError, ValueError) as err:
                 raise CoinError(f"ledger entry {i} is malformed ({err})") from err
             schema = e.get("schema")
@@ -373,20 +423,88 @@ class Ledger:
             if q <= last:
                 raise CoinError(f"ledger entry {i} is signed at LMS leaf {q}, not after the last entry's {last}: a key "
                                 "state restored or forked")
-            if kind == "open":
+            if kind in ("reserve", "open", "period-open") and body.get("key_sha512") != pin:
+                raise CoinError(f"ledger entry {i} ({kind} of {sid or body.get('period')}) is under the key pin "
+                                f"{body.get('key_sha512')}, not the verifier's {pin[:16]}...")
+            if kind == "reserve":
+                if schema != LEDGER_SCHEMA or not _SESSION.fullmatch(sid) or sid in reserves or sid in by_session:
+                    raise CoinError(f"ledger entry {i} reserves session {sid}, which is not a v2 entry first in its "
+                                    "session")
+                if not _reserve_ok(body):
+                    raise CoinError(f"ledger entry {i} reserves session {sid} without its prover, its minutes, its start "
+                                    "and its expiry (its start plus its minutes)")
+                two_step = True
+                reserves[sid] = {"entry": e, "period": join(i, body.get("for") or body["by"], sid)}
+            elif kind == "open":
                 try:
                     root = root_of(e)
                 except ValueError as err:
                     raise CoinError(f"ledger entry {i} opens session {sid} for no window ({err})") from err
-                if body.get("key_sha512") != pin:
-                    raise CoinError(f"ledger entry {i} opens session {sid} under the key pin {body.get('key_sha512')}"
-                                    f", not the verifier's {pin[:16]}...")
                 if root in windows:
                     raise CoinError(f"ledger entry {i} opens a second session ({sid}, after "
                                     f"{windows[root]['open']['session']}) for root {root}: one window, one session")
                 if sid in by_session:
                     raise CoinError(f"ledger entry {i} opens session {sid} for a second window")
-                windows[root], opened_at[root], by_session[sid] = {"open": e, "end": None}, q, root
+                reserved = None
+                if schema == LEDGER_SCHEMA and "reserve" in body:
+                    r = reserves.get(sid)
+                    if r is None or type(body["reserve"]) is not int or r["entry"]["seq"] != body["reserve"]:
+                        raise CoinError(f"ledger entry {i} opens session {sid} binding no reserve of it")
+                    reserved, rb = r["entry"], r["entry"]["body"]
+                    if any(body.get(k) != rb.get(k) for k in RESERVED):
+                        raise CoinError(f"ledger entry {i} opens session {sid} without its reserve's request")
+                    if body.get("opened_by") not in {rb["by"], rb.get("for")} - {None}:
+                        raise CoinError(f"ledger entry {i} opens session {sid} by {body.get('opened_by')!r}, not its "
+                                        "reserve's prover")
+                    t = body.get("started_utc")
+                    if not (type(t) is str and _UTC.fullmatch(t) and rb["started_utc"] <= t <= rb["expires_utc"]):
+                        raise CoinError(f"ledger entry {i} opens session {sid} outside its reserve's minutes")
+                    if r["period"] is not None and periods[r["period"]]["close"] is not None:
+                        raise CoinError(f"ledger entry {i} opens session {sid} after its period {r['period']} closed")
+                elif schema == LEDGER_SCHEMA and two_step:
+                    raise CoinError(f"ledger entry {i} opens session {sid} without a reserve, after the ledger's first "
+                                    "reserve")
+                elif schema == LEDGER_SCHEMA:
+                    lane = body.get("for") or body.get("by")
+                    if not _named(lane):
+                        raise CoinError(f"ledger entry {i} opens session {sid} for no prover")
+                    join(i, lane, sid)
+                windows[root] = {"reserve": reserved, "open": e, "end": None}
+                opened_at[root], by_session[sid] = q, root
+            elif kind in PERIOD_KINDS:
+                name, lane = body.get("period"), body.get("lane")
+                if schema != LEDGER_SCHEMA or not (_named(name) and _named(lane)):
+                    raise CoinError(f"ledger entry {i} is a {kind} that doesn't name its period and its lane (v2)")
+                if kind == "period-open":
+                    if name in periods:
+                        raise CoinError(f"ledger entry {i} opens period {name} a second time: a period's name is used "
+                                        "once")
+                    if lane in current:
+                        raise CoinError(f"ledger entry {i} opens period {name} while lane {lane}'s period "
+                                        f"{current[lane]} is open")
+                    cap, circuit = body.get("cap"), body.get("circuit")
+                    if (cap is not None or circuit is not None) and not (
+                            type(cap) is int and _CAP[0] <= cap <= _CAP[1] and type(circuit) is str
+                            and _ROOT.fullmatch(circuit)):
+                        raise CoinError(f"ledger entry {i}: period {name}'s cap is a positive integer and its circuit a "
+                                        "SHA-512 in lowercase")
+                    periods[name] = {"lane": lane, "open": e, "close": None, "windows": [], "cap": cap,
+                                     "circuit": circuit}
+                    current[lane] = name
+                else:
+                    p = periods.get(name)
+                    if p is None or p["close"] is not None or p["lane"] != lane:
+                        raise CoinError(f"ledger entry {i} closes period {name}, which isn't lane {lane}'s open period")
+                    outcomes = [{"root": by_session.get(s), "session": s,
+                                 "complete": s in by_session and windows[by_session[s]]["end"] is not None
+                                 and windows[by_session[s]]["end"]["body"].get("complete") is True}
+                                for s in p["windows"]]
+                    if (body.get("windows") != outcomes
+                            or body.get("complete") is not (bool(outcomes) and all(w["complete"] for w in outcomes))):
+                        raise CoinError(f"ledger entry {i} closes period {name} without listing exactly its windows and "
+                                        "their outcomes")
+                    p["close"] = e
+                    del current[lane]
             elif kind == "end":
                 root = by_session.get(sid)
                 if root is None or windows[root]["end"] is not None:
@@ -399,12 +517,13 @@ class Ledger:
                     records[r] = i
                 windows[root]["end"] = e
             else:
-                raise CoinError(f"ledger entry {i} is of kind {kind!r}, not open or end")
+                raise CoinError(f"ledger entry {i} is of kind {kind!r}, not reserve, open, end, period-open or "
+                                "period-close")
             leaves.add(q)
             prev, last = hashlib.sha512(line).hexdigest(), q
         if reused := sorted(leaves & set(records)):
             raise CoinError(f"ledger entry {records[reused[0]]}'s record leaf {reused[0]} is also an entry's leaf")
-        return cls(key, windows)
+        return cls(key, windows, periods)
 
     @classmethod
     def load(cls, path: str | Path, key: ChallengerKey, verify: Any = lms_verify) -> Ledger:
@@ -551,36 +670,45 @@ def session_reason(commits: Mapping[str, Any], ledger: Ledger, fetch: Fetch, reg
     return trusted_rounds_reason(commits, out, ledger.key, verify)
 
 
-def period_reason(ledger: Ledger, accepted: Sequence[str], fetch: Fetch, prover: str | None = None,
-                  seqs: range | None = None, verify: Any = lms_verify) -> list[str]:
-    """Each session of the period that released a coin and has no window among `accepted` (the session ids of the windows
-    `session_reason` accepted): a window abandoned after its coins, which a prover keeps only when it liked them. Each one
-    refuses the period. A session that never ended, or whose evidence is unreadable, is refused too (fails closed); one
-    that released nothing is not. The period's sessions are those the auditor's `ledger` opened for `prover` (a v2 open's
-    ``by``, a v1 open's ``lane``; every prover's when None) at a ledger seq in `seqs`: the entries between the period's
-    ``period-open`` and ``period-close`` (PRF-108), the whole ledger when None, since the ledger has no period entry
-    yet."""
-    out = []
-    for commit, window in ledger.windows.items():
-        opened = window["open"]
-        sid = opened["session"]
-        if (sid in accepted or (seqs is not None and opened["seq"] not in seqs)
-                or (prover is not None and _prover_of(opened) != prover)):
-            continue
-        try:
-            _c, received = remote.trusted_session(evidence(window, fetch, ledger.key, verify), ledger.key, verify)
-        except CoinError as err:
-            out.append(f"session {sid} (Commit {commit}): its evidence is not trusted ({err}), so nothing shows it "
-                       "released no coin")
-            continue
-        released = sum(len(r) for r in received.values())
-        if released:
-            out.append(f"session {sid} (Commit {commit}) released {released} coin"
-                       f"{'' if released == 1 else 's'} and has no accepted window: a window abandoned after its coins")
+def _incomplete(ledger: Ledger, outcome: Mapping[str, Any]) -> str:
+    if outcome["root"] is None:
+        return "reserved and never opened"
+    end = ledger.windows[outcome["root"]]["end"]
+    if end is None:
+        return f"Commit {outcome['root']}, never ended"
+    return f"Commit {outcome['root']}, ended {end['body'].get('ended')!r}, released {end['body'].get('released')}"
+
+
+def period_reason(ledger: Ledger, period: str, accepted: Sequence[str]) -> list[str]:
+    """Why the auditor's `ledger` doesn't credit the lane's period `period`, given `accepted` (the session ids of its
+    windows that `session_reason` accepted), one reason each; [] when it does. Refused: a period the ledger has no
+    period-open for, or no period-close (its windows aren't all known); an accepted window that isn't one of the
+    period's (its lane's reserves and one-step opens between its period-open and its period-close); a close that isn't
+    complete (no window, or a window never opened, never ended, unclosed or short of its coins: every window counts); and
+    a window of it with no accepted window, which ended complete, so released every coin: a window abandoned after its
+    coins, which a prover keeps only when it liked them."""
+    p = ledger.periods.get(period)
+    if p is None:
+        return [f"the auditor's ledger has no period {period}"]
+    out = [f"session {s}, an accepted window, is not one of period {period}'s windows ({p['windows']}, lane {p['lane']}'s "
+           "between its period-open and its period-close)" for s in accepted if s not in p["windows"]]
+    if p["close"] is None:
+        return out + [f"period {period} has no period-close in the auditor's ledger, so its windows aren't all known: an "
+                      "open period credits nothing"]
+    listed = p["close"]["body"]["windows"]
+    if not listed:
+        out.append(f"period {period} closed with no window")
+    for w in listed:
+        if not w["complete"]:
+            out.append(f"period {period}'s window {w['session']} is incomplete ({_incomplete(ledger, w)}): a refused "
+                       "window refuses its period")
+        elif w["session"] not in accepted:
+            out.append(f"period {period}'s window {w['session']} (Commit {w['root']}) ended complete and has no accepted "
+                       "window: a window abandoned after its coins")
     return out
 
 
-__all__ = ["ENTRY_TAGS", "Fetch", "LEDGER_ROLE", "LEDGER_SCHEMA", "LEDGER_V1", "Ledger", "REPLY_FIELDS", "SCHEME", "SEALED",
-           "SESSION_FIELDS", "address", "carried", "connect", "draw_reason", "entry_message", "evidence", "families",
-           "finish", "held", "leaf_of", "lines_of", "lms_verify", "pinned_key", "period_reason", "refusals", "root_of",
-           "session", "session_of", "session_reason", "trusted_rounds_reason"]
+__all__ = ["ENTRY_TAGS", "Fetch", "LEDGER_ROLE", "LEDGER_SCHEMA", "LEDGER_V1", "Ledger", "PERIOD_KINDS", "REPLY_FIELDS",
+           "RESERVED", "SCHEME", "SEALED", "SESSION_FIELDS", "address", "carried", "connect", "draw_reason",
+           "entry_message", "evidence", "families", "finish", "held", "leaf_of", "lines_of", "lms_verify", "pinned_key",
+           "period_reason", "refusals", "root_of", "session", "session_of", "session_reason", "trusted_rounds_reason"]
