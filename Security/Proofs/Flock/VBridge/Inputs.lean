@@ -32,7 +32,7 @@ local notation "𝔽" => FlockLevel3.GF128
 (`fast100 st.m`) and the extra claims `extras` (`st.extra sess.points`). -/
 def repShape (st : Setup) (sch : Schedule) (extras : Array Claim) : Shape :=
   { m := st.m, kLog := st.kLog, claims := 2 + extras.size, sched := sch, hashLen := st.merkle.digestLen,
-    saltLen := if st.merkle.saltBytes = 0 then none else some st.merkle.saltBytes, plainTag := st.plainTag }
+    saltLen := if st.merkle.saltBytes = 0 then none else some st.merkle.saltBytes }
 
 /-! ## The openings' coefficients -/
 

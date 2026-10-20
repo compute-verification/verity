@@ -10,8 +10,8 @@ import Proofs.Flock.Soundness.Discharge.ZkView.Decode
 `R1csProofLigerito` (PROTOCOL.md §8), each `Vec` as its `u64` length then its elements, each `F128` as
 `le64(lo) ‖ le64(hi)`, the vectors the verifier requires empty (`matrix_evals`, the grinding nonces but the query, claim
 and consistency nonces, `sumcheck_transcript`) empty, each ring switch's grinding nonce `0`, then the zk patch's
-`zk_level0 = None` tag or nothing, as the shape pins (`Shape.plainTag`): the verifier's `Flock.Wire.proofFile`, the one
-file `decodeProof` accepts for `p`. Its pair is `--zk`'s `wProof` (ZkView/Wire.lean), the pair that file's proof starts
+`zk_level0 = None` tag, as every deployed prover writes it: the verifier's `Flock.Wire.proofFile`, the one file
+`decodeProof` accepts for `p`. Its pair is `--zk`'s `wProof` (ZkView/Wire.lean), the pair that file's proof starts
 with.
 
 * `decodeProof_encodeProof`: `decodeProof sh (encodeProof sh p) = .ok p` for every `p` of the shape (`ProofShaped`):
@@ -61,17 +61,12 @@ width, and a file whose length fits a `u64`. -/
 def ProofShaped (sh : Shape) (p : Proof) : Prop :=
   0 < sh.hashLen ∧ 1 ≤ sh.sched.levels.size - 1 ∧ (encodeProof sh p).size < 2 ^ 64 ∧ Lengths sh p
 
-theorem ok_of_reads {sh : Shape} {m : Reader.M Proof} {b : ByteArray} {x : Proof} {what : String}
-    (h : ZkView.Reads m b x) (hb : (b ++ Flock.Wire.plainEnd sh).size < 2 ^ 64) :
-    Reader.runPlain m (b ++ Flock.Wire.plainEnd sh) what = .ok x := by
-  have e := h ByteArray.empty (Flock.Wire.plainEnd sh) (by rw [ByteArray.empty_append]; exact hb)
+theorem ok_of_reads {m : Reader.M Proof} {b : ByteArray} {x : Proof} {what : String}
+    (h : ZkView.Reads m b x) (hb : (b ++ Flock.Wire.plainEnd).size < 2 ^ 64) :
+    Reader.runPlain m (b ++ Flock.Wire.plainEnd) what = .ok x := by
+  have e := h ByteArray.empty Flock.Wire.plainEnd (by rw [ByteArray.empty_append]; exact hb)
   rw [ByteArray.empty_append] at e
-  unfold Flock.Wire.plainEnd at e ⊢
-  by_cases hT : sh.plainTag = true
-  · simp only [hT, ↓reduceIte] at e ⊢
-    exact Reader.runPlain_of_run_tag e (Nat.zero_add b.size)
-  · simp only [hT, Bool.false_eq_true, ↓reduceIte, ByteArray.append_empty] at e ⊢
-    exact Reader.runPlain_of_run e (Nat.zero_add b.size)
+  exact Reader.runPlain_of_run_tag e (Nat.zero_add b.size)
 
 /-- **`decodeProof` inverts `encodeProof`** at every proof of the shape. -/
 theorem decodeProof_encodeProof (sh : Shape) (p : Proof) (hp : ProofShaped sh p) :
@@ -344,9 +339,7 @@ theorem encodeProof_size_le (sh : Shape) (p : Proof) (hp : Lengths sh p) : (enco
   rw [hood] at e16
   rw [hcbn] at e17
   rw [hcon] at e18
-  have htag : (Flock.Wire.plainEnd sh).size ≤ 1 := by
-    unfold Flock.Wire.plainEnd
-    split <;> decide
+  have htag : Flock.Wire.plainEnd.size = 1 := rfl
   simp only [encodeProof, Flock.Wire.proofFile, ZkView.wProof, ZkView.wLigerito, ByteArray.size_append, ht, hw0] at *
   simp only [fileBound, schedPart]
   omega

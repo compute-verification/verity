@@ -78,16 +78,13 @@ structure Shape where
   /-- hidden unit circuits (`rec_algebra.Shape.holo`): the prover absorbs `h`, the hidden part's fold, in a round of its
   own after `z_partial`, and V*'s lincheck reads the comb's operand as `comb[l] + h[l]` -/
   holo : Bool := false
-  /-- the plain file ends with the zk patch's `zk_level0 = None` tag, as every deployed prover writes it (§8.1); false:
-  upstream's form, without it (`Tags.upstreamPlain`) -/
-  plainTag : Bool := true
   deriving Inhabited
 
 /-! ## A plain proof's one file (§8.1)
 
 `Wire.proofFile sh p` is the file a prover writes for `p` at `sh`: `bincode 1.3` of the pair, each `Vec` as its `u64`
 length then its elements, each `F128` as `le64(lo) ‖ le64(hi)`, the vectors the verifier requires empty empty, each ring
-switch's grinding nonce `0`, then `Wire.plainEnd sh`. `decodeProof` accepts a file only if it is this encoding of what it
+switch's grinding nonce `0`, then `Wire.plainEnd`. `decodeProof` accepts a file only if it is this encoding of what it
 decodes to. -/
 
 namespace Wire
@@ -143,17 +140,18 @@ def wProof (sh : Shape) (p : Proof) : ByteArray :=
     wVec (fun v => wVec F128.toBytes v ++ wLen 0) p.ringSwitches ++ wLen 0 ++
     wLigerito sh p.ligerito
 
-/-- What follows the pair: the zk patch's `zk_level0 = None` tag, one byte `0`, or nothing (`Shape.plainTag` false). -/
-def plainEnd (sh : Shape) : ByteArray := if sh.plainTag then ByteArray.mk #[0] else ByteArray.empty
+/-- What follows the pair in every deployed prover's file: the zk patch's `zk_level0 = None` tag, one byte `0`
+(`pod/60-circuit.sh` builds with `flock-zk-b684b12.patch`). -/
+def plainEnd : ByteArray := ByteArray.mk #[0]
 
 /-- **A plain proof's file**: the pair, then `plainEnd`. -/
-def proofFile (sh : Shape) (p : Proof) : ByteArray := wProof sh p ++ plainEnd sh
+def proofFile (sh : Shape) (p : Proof) : ByteArray := wProof sh p ++ plainEnd
 
 end Wire
 
 open Reader in
 /-- The pair's reader (§8.1): every length at its value for the shape, then nothing or the zk patch's `None` tag
-(`Reader.runPlain`). `decodeProof` pins which of the two. -/
+(`Reader.runPlain`). `decodeProof` pins the second. -/
 def decodeRead (sh : Shape) (bytes : ByteArray) : V Proof := do
   let s := sh.sched
   let R := s.levels.size - 1
@@ -229,11 +227,9 @@ def decodeRead (sh : Shape) (bytes : ByteArray) : V Proof := do
   runPlain prog bytes "proof"
 
 /-- Why a file that reads as `p` is not `p`'s one file `file`. -/
-def fileMismatch (sh : Shape) (file bytes : ByteArray) : String :=
-  if sh.plainTag && bytes.size + 1 == file.size then
+def fileMismatch (file bytes : ByteArray) : String :=
+  if bytes.size + 1 == file.size then
     "zk_level0: the file ends without the `None` tag every deployed prover writes after a plain proof (upstream's form: --upstream-plain)"
-  else if !sh.plainTag && bytes.size == file.size + 1 then
-    "zk_level0: the file ends with the zk patch's `None` tag, and under --upstream-plain a plain proof is upstream's form, without it"
   else "proof: the file is not the one encoding of the proof it decodes to"
 
 /-- **The plain proof file** (§8.1): what `decodeRead` reads, if the file is its one encoding at the shape
@@ -241,7 +237,7 @@ def fileMismatch (sh : Shape) (file bytes : ByteArray) : String :=
 def decodeProof (sh : Shape) (bytes : ByteArray) : V Proof :=
   match decodeRead sh bytes with
   | .error e => .error e
-  | .ok p => if Wire.proofFile sh p = bytes then .ok p else .error (fileMismatch sh (Wire.proofFile sh p) bytes)
+  | .ok p => if Wire.proofFile sh p = bytes then .ok p else .error (fileMismatch (Wire.proofFile sh p) bytes)
 
 theorem decodeProof_read {sh : Shape} {bytes : ByteArray} {p : Proof} (h : decodeProof sh bytes = .ok p) :
     decodeRead sh bytes = .ok p ∧ Wire.proofFile sh p = bytes := by
@@ -264,5 +260,25 @@ theorem decodeProof_of_read {sh : Shape} {p : Proof} (h : decodeRead sh (Wire.pr
 theorem decodeProof_canonical {sh : Shape} {b b' : ByteArray} {p : Proof} (h : decodeProof sh b = .ok p)
     (h' : decodeProof sh b' = .ok p) : b = b' :=
   (decodeProof_read h).2.symm.trans (decodeProof_read h').2
+
+/-- **What `verify` decodes from a plain proof file** under its statement's `Tags.upstreamPlain` (`flock-verify verify
+--upstream-plain`, §8.1): upstream's form ends after the pair, so the file then the zk patch's `None` tag; by default the
+file itself, the deployed form. Each form is refused where the other is pinned: a file without the tag by default
+(`fileMismatch`), and one with it under the flag, which then ends in a second `0` (`Reader.runPlain`). -/
+def plainBytes (upstream : Bool) (file : ByteArray) : ByteArray := if upstream then file ++ Wire.plainEnd else file
+
+theorem plainBytes_inj {u : Bool} {b b' : ByteArray} (h : plainBytes u b = plainBytes u b') : b = b' := by
+  cases u
+  · exact h
+  · apply ByteArray.ext
+    have := congrArg ByteArray.data h
+    simp only [plainBytes, ite_true, ByteArray.data_append] at this
+    exact (Array.append_left_inj _).1 this
+
+/-- **Canonical proof files at the pinned form**: under either flag, two files `verify` decodes alike at one shape are
+one file. -/
+theorem plainBytes_canonical {u : Bool} {sh : Shape} {b b' : ByteArray} {p : Proof}
+    (h : decodeProof sh (plainBytes u b) = .ok p) (h' : decodeProof sh (plainBytes u b') = .ok p) : b = b' :=
+  plainBytes_inj (decodeProof_canonical h h')
 
 end Flock

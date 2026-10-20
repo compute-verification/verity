@@ -1,9 +1,10 @@
 /-
 A proof file is the one encoding of what it decodes to (§8.1, D17 and D18 of §17.1): `decodeProof` and `Zk.decode` accept a
-file written field by field at a small shape (two levels, one query each, one-byte digests, no salts). The plain file is
-accepted in the form its statement pins: with the zk patch's `zk_level0 = None` after the pair (every deployed prover's,
-`Shape.plainTag`), or without it under `--upstream-plain` (upstream's builds). Each form is refused where the other is
-pinned, and so is every other byte after the end and a plain file whose `matrix_evals` holds one pair, each with its reason.
+file written field by field at a small shape (two levels, one query each, one-byte digests, no salts). `decodeProof`
+accepts the plain file in the deployed form, with the zk patch's `zk_level0 = None` after the pair; `verify` reads a file
+through its statement's pin (`plainBytes`), so upstream's form, without the tag, passes under `--upstream-plain` alone.
+Each form is refused where the other is pinned, and so is every other byte after the end and a plain file whose
+`matrix_evals` holds one pair, each with its reason.
 -/
 import Flock.ZkProof
 
@@ -58,30 +59,32 @@ def why {α} : V α → String
 
 def canon : ByteArray := pair sh 2 0
 
-/-- `sh` with upstream's plain form pinned (`flock-verify --upstream-plain`). -/
-def shU : Shape := { sh with plainTag := false }
-
 def tagged : ByteArray := canon ++ zeros 1
 
-#guard why (decodeProof sh tagged) == "accepted"
-#guard why (decodeProof sh canon) ==
+/-- What `verify` decodes from `file` by default (`up = false`) and under `--upstream-plain` (`up = true`). -/
+def read (up : Bool) (file : ByteArray) : V Proof := decodeProof sh (plainBytes up file)
+
+#guard why (read false tagged) == "accepted"
+#guard why (read false canon) ==
   "zk_level0: the file ends without the `None` tag every deployed prover writes after a plain proof (upstream's form: --upstream-plain)"
-#guard why (decodeProof shU canon) == "accepted"
-#guard why (decodeProof shU tagged) ==
-  "zk_level0: the file ends with the zk patch's `None` tag, and under --upstream-plain a plain proof is upstream's form, without it"
-
-#guard (decodeProof sh tagged).toOption.map (Wire.proofFile sh) == some tagged
-#guard (decodeProof shU canon).toOption.map (Wire.proofFile shU) == some canon
-
-#guard [sh, shU].all fun s => why (decodeProof s (canon ++ ByteArray.mk #[1])) ==
-  "zk_level0: tag 1, want 0: a plain proof carries no hiding messages"
-#guard [sh, shU].all fun s => why (decodeProof s (canon ++ ByteArray.mk #[1] ++ zeros 99)) ==
-  "zk_level0: tag 1, want 0: a plain proof carries no hiding messages"
-#guard [sh, shU].all fun s => why (decodeProof s (canon ++ zeros 2)) ==
+#guard why (read true canon) == "accepted"
+#guard why (read true tagged) ==
   s!"proof: the file has {canon.size + 2} bytes and its encoding ends at byte {canon.size + 1}"
-#guard [sh, shU].all fun s => why (decodeProof s (canon ++ zeros 64)) ==
-  s!"proof: the file has {canon.size + 64} bytes and its encoding ends at byte {canon.size + 1}"
-#guard [sh, shU].all fun s => why (decodeProof s (pair s 2 1)) == "matrix_evals: length 1, want 0"
+
+#guard (read false tagged).toOption.map (Wire.proofFile sh) == some tagged
+#guard (read true canon).toOption.map (Wire.proofFile sh) == some tagged
+
+#guard why (read false (canon ++ ByteArray.mk #[1])) ==
+  "zk_level0: tag 1, want 0: a plain proof carries no hiding messages"
+#guard why (read false (canon ++ ByteArray.mk #[1] ++ zeros 99)) ==
+  "zk_level0: tag 1, want 0: a plain proof carries no hiding messages"
+#guard [false, true].all fun up => why (read up (canon ++ ByteArray.mk #[1])) != "accepted"
+#guard why (read false (canon ++ zeros 2)) ==
+  s!"proof: the file has {canon.size + 2} bytes and its encoding ends at byte {canon.size + 1}"
+#guard [false, true].all fun up => why (read up (canon ++ zeros 64)) ==
+  s!"proof: the file has {canon.size + 64 + (if up then 1 else 0)} bytes and its encoding ends at byte {canon.size + 1}"
+#guard why (read false (pair sh 2 1 ++ zeros 1)) == "matrix_evals: length 1, want 0"
+#guard why (read true (pair sh 2 1)) == "matrix_evals: length 1, want 0"
 
 #guard why (Zk.decode sh (zkFile sh)) == "accepted"
 #guard why (Zk.decode sh (zkFile sh ++ zeros 1)) ==
