@@ -38,6 +38,10 @@
    "owner": "@memory-accounting",
    "digest": "4bd7f6457fb6df920661b769a3ad9517f6e4f0e7a2fd0d36a43e376a2deeaca9"
   },
+  "Accounting.Assumptions.TS.BindingForkAt": {
+   "owner": "@compute-accounting",
+   "digest": "4d7e04e16c77829a8aadc6429665b8a54544e18cb7bf2cc66379ac8267b9d23d"
+  },
   "Accounting.Assumptions.TS.FacetCeilings": {
    "owner": "@compute-accounting",
    "digest": "fa76dfe63e705d955b2dec4c6d8e3b6826c2bf36058b476ef8f1b7a8bb7c0d3b"
@@ -73,6 +77,14 @@
   "Accounting.Assumptions.TS.OperandHMu": {
    "owner": "@compute-accounting",
    "digest": "c286bfdcb1c3bc358b47cad5625850ef2de3501375d23e554515e939a4fe47dc"
+  },
+  "Accounting.Assumptions.TS.ProofSoundAt": {
+   "owner": "@compute-accounting",
+   "digest": "c13e208b16273cf7b13fa743820d7840c1098c93a9f9a4cf484bef0b17fffd0c"
+  },
+  "Accounting.Assumptions.TS.ProofsPin": {
+   "owner": "@compute-accounting",
+   "digest": "37838c7a2f826edc8cd369742ec0ad9a827db051952f9efa824a9b89f7cca1f6"
   },
   "Accounting.Assumptions.TS.ProofsSound": {
    "owner": "@compute-accounting",
@@ -473,18 +485,6 @@
   "Pouw.PearlC.pearlCTilesDevChainCap": {
    "owner": "@compute-accounting",
    "digest": "2170dd5823cfd9a6272b9ce11cf29f7de11dce337c0926e307ab60d0f8dd34b6"
-  },
-  "Accounting.Assumptions.TS.BindingForkAt": {
-   "owner": "@compute-accounting",
-   "digest": "4d7e04e16c77829a8aadc6429665b8a54544e18cb7bf2cc66379ac8267b9d23d"
-  },
-  "Accounting.Assumptions.TS.ProofSoundAt": {
-   "owner": "@compute-accounting",
-   "digest": "c13e208b16273cf7b13fa743820d7840c1098c93a9f9a4cf484bef0b17fffd0c"
-  },
-  "Accounting.Assumptions.TS.ProofsPin": {
-   "owner": "@compute-accounting",
-   "digest": "37838c7a2f826edc8cd369742ec0ad9a827db051952f9efa824a9b89f7cca1f6"
   }
  },
  "meaning": [
@@ -8516,7 +8516,7 @@
    "guarantees": ["Accounting.SecurityProofs.TS.Sm120MeasuredHeadline", "Accounting.SecurityProofs.TS.Sm120SheetHeadline"]
   },
   "Definitions.Accounting.Headline.Sm120": {
-   "digest": "4009ad302b29d9fdd28aec19ffba79af5ba519fd03ffed884194c6a35711edbc",
+   "digest": "0645a51843070602775f7653106ad4cdfec7ceb7b6756402a28742fd30ac6101",
    "definitions": {
     "Accounting.TS.Headline.Sm120.Pipe": "2bca7649adecea1103990e84d41626c2c5668255a78c1bb2873d0352526d9791",
     "Accounting.TS.Headline.Sm120.Pipe.casesOn": "1ad14beedcf4e7eb5471c4eaec9f632e73e2cfcbbb00a27bccb236d3b1474036",
@@ -8528,7 +8528,7 @@
     "Accounting.TS.Headline.Sm120.Pipe.width": "967c3954f1f19da8bcecd1b8c63729f198d15d3563990e8287aea75a814d1fca",
     "Accounting.TS.Headline.Sm120.Pipe.xu": "f11d4a1ddd9e9ff1e84072565b410aa104ea8117ea87c06b3f7cd9d5c8f2476f",
     "Accounting.TS.Headline.Sm120.checks": "ae8e4e4c25c4bb8b27f6aeb5a139de2a1e13bbd7f2ed9873b72d4e16fbfd9aae",
-    "Accounting.TS.Headline.Sm120.ds120": "a8781e51e72c61d51b39695cdd76451783cf33bbf92c6f2bbabce0b9af07356d",
+    "Accounting.TS.Headline.Sm120.ds120": "ca5adebb9d3d7604da9bde09dab665949eaf168a9c64623c87a100e2550d9119",
     "Accounting.TS.Headline.Sm120.flat": "b9b8b48bf0020f9970ba8177c790d7dbe2e06bd802f1848b0510f23c6d7e4f73",
     "Accounting.TS.Headline.Sm120.flatFold": "6eea49af7038931fa768c5996e8b13cf32cc893f41fa3b611d9dfc0e6326d62c",
     "Accounting.TS.Headline.Sm120.flatSkip": "69e0e59c9db3f2313694ee525565f3170a27d53be94eb6f91a81564d8d7e6351",
@@ -8537,7 +8537,7 @@
     "Accounting.TS.Headline.Sm120.instDecidableEqPipe": "2148dcd54c0370d8d493176ba9386343c2091052e0f0f4ebdb3f5e3ddd323ea1",
     "Accounting.TS.Headline.Sm120.instFintypePipe": "774f748010c4154f00a1134416cdc8c1f2d6113fb889b81de897cf54de8370f4",
     "Accounting.TS.Headline.Sm120.model": "c0bf0929b7382d341511c5a65d85eb11562c726ec1c5e70846616d0b5ab6deb8",
-    "Accounting.TS.Headline.Sm120.piStar": "29efa18364df97b8817a7bf334d6603cd33a1944f75072712b700f84bbd1a75a",
+    "Accounting.TS.Headline.Sm120.piStar": "168fae4183bb819574bb473cfabe7a5f13d5faf90a988b79a30c23a8d05f81c9",
     "Accounting.TS.Headline.Sm120.sheet": "d04a18d0b47bd9bea70b7ce3c1d5686023929761a8bd6cea221fbdc82b970f88"
    },
    "guarantees": ["Accounting.SecurityProofs.TS.Sm120MeasuredHeadline", "Accounting.SecurityProofs.TS.Sm120SheetHeadline"]
@@ -20827,10 +20827,10 @@
    ]
   },
   "Models.Accounting.Guarantees.Headline": {
-   "digest": "9f0fcb730490987dac94ce32b765d09199515a2ecfd8d629b2bb8357032e4c33",
+   "digest": "d55876e37139c20a7d0fa80abea99ad3c1c6d8ce9cb955bbea5ab02583570274",
    "definitions": {
     "Accounting.Guarantees.TS.Sm120MeasuredHeadline": "bae07f933ee02e72d88651a068c4ee94eacfeaddf8423aac6bbc714cf546e68c",
-    "Accounting.Guarantees.TS.Sm120SheetHeadline": "fdc70c01afee3212ea21c8e2d55aca356da529c78022d10dcfdf4e20fdc3fe12"
+    "Accounting.Guarantees.TS.Sm120SheetHeadline": "30817f7fabe9b49af37106c5856ada7503ca2061d514649929ad7d10c55d3945"
    },
    "guarantees": ["Accounting.SecurityProofs.TS.Sm120MeasuredHeadline", "Accounting.SecurityProofs.TS.Sm120SheetHeadline"]
   },
