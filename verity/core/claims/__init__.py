@@ -355,11 +355,12 @@ ENTRIES: dict[str, Entry] = {e.id: e for e in (
           "probability at most μ given a view of the cheater that decides the round's share (¾ in the headlines)",
           "TS operand H-μ at μ", "conjectured"),
     Entry("accounting-ts-proofs-sound", "assumption",
-          "Binding at δ_bind and proof soundness at δ_ZK, over a window of S rounds of n_π proofs. The TS statements "
-          "take them in one premise with the protocol's order, pinning (accounting-ts-proofs-pin) and E1(c) "
-          "(accounting-ts-right-fixed), ProofsSound: outside an event of probability at most S·(δ_bind + n_π·δ_ZK), an "
-          "accepted window is accepted by the ideal game and its owned right fixed words per unit are at least "
-          "(1 − Σ_w d_w/S)·N_w. The sm_120 headlines take the two alone as named premises: binding in its fork form at "
+          "Binding at δ_bind and proof soundness at δ_ZK, over a window of S rounds of n_π proofs whose leaves are each "
+          "round's values committed before its σ. The TS statements take them in one premise with the protocol's "
+          "order, pinning (accounting-ts-proofs-pin) and E1(c) (accounting-ts-right-fixed), ProofsSound: outside an "
+          "event of probability at most S·(δ_bind + n_π·δ_ZK), an accepted window is accepted by the ideal game and its "
+          "owned right fixed words per unit are at least (1 − Σ_w d_w/S)·N_w, rightness read on the path's coins. The "
+          "sm_120 headlines take the two alone as named premises: binding in its fork form at "
           "δ_fork (BindingForkAt: at every round w, on a run and on its continuation from w on fresh coins, which share "
           "w's commitment, every proof of round w is accepted and some proof opens w's leaves differently, with "
           "probability at most δ_fork), read at δ_bind = √δ_fork through BindingOfFork; and each proof's soundness at "
@@ -369,18 +370,20 @@ ENTRIES: dict[str, Entry] = {e.id: e for e in (
           "is not stated there", "TS proofs sound", "standard"),
     Entry("accounting-ts-proofs-pin", "assumption",
           "Pinning: the relations a window's proofs pass pin every committed value, so values that satisfy every "
-          "proof's relation are right for their derivations (ProofsPin, ProofLayer.Pins). It is a property of our "
-          "circuit Definitions, and no Lean checks it of the served relations: PouwSegCheck_v2 lacks it (it ties only "
-          "the drawn segment's set to the one before, so its window's other absorbed prefix-word sets are free "
-          "witness), PIN's checks (PouwSegCheck_v3, PouwCallCheck_v1, PouwWarpCheck_v1 and _v2, #2417) recompute every "
-          "word they absorb, and nothing states that the served relations are PIN's", "TS proofs pin", "conjectured"),
+          "proof's relation are right for their derivations on the path's coins (ProofsPin, ProofLayer.Pins). It is a "
+          "property of our circuit Definitions, and no Lean checks it of the served relations: PouwSegCheck_v2 lacks it "
+          "(it ties only the drawn segment's set to the one before, so its window's other absorbed prefix-word sets "
+          "are free witness), PIN's checks (PouwSegCheck_v3, PouwCallCheck_v1, PouwWarpCheck_v1 and _v2, #2417) "
+          "recompute every word they absorb, and nothing states that the served relations are PIN's", "TS proofs pin",
+          "conjectured"),
     Entry("accounting-ts-lin-steer", "assumption",
           "LIN-STEER, false for a segmented consumer whose noise-active segments carry unequal counts: zeroing a "
           "fraction φ of a row's noise-active coordinates saves at most φ of the consumer's work",
           "LIN-STEER", "conjectured"),
     Entry("accounting-ts-right-fixed", "assumption",
           "Lemma E1(c) with the rounds' equal shares: on an accepted window whose committed values are right for their "
-          "derivations, every word that isn't fixed is in its round's share", "TS right fixed", "proven"),
+          "derivations on the path's coins, every word that isn't fixed is in its round's share", "TS right fixed",
+          "proven"),
     Entry("accounting-ts-unit-fixed", "assumption",
           "Lemma E1(c) per unit with its fold clause, which doesn't read the draw: on an accepted window the fixed "
           "words per round are at least the good units' words over the rounds, a good unit being one the run computed "
