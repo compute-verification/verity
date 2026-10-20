@@ -19,15 +19,19 @@ One round (`S = 1`) with one coin bit (`m = 1`, `C = Bool`), a draw bit (`B = Bo
 
 Draws 0, 1 and 3 name units 0, 1 and 3; draw 2 names `glue` when the draw bit is set and `prod` when it isn't. So
 `glue` is sampled, not always proved, and priced: draw 2 lands on it with probability `1/2`, and its late cone (`glue`
-and `prod`) weighs `1 ≤ 1/2 · 3`, its round's weight being `3`. `prod` is fixed through the priced `glue`, `glue`
-through the always-proved `chunk1`, and the chunks by their bound operands. `prod` also reads `glue`'s other input, so
-every position is opened on every path.
+and `prod`) weighs `1 ≤ 1/2 · 3`, the mean round weight `N_w` being `3`. `prod` is fixed through the priced `glue`,
+`glue` through the always-proved `chunk1`, and the chunks by their bound operands. `prod` also reads `glue`'s other
+input, so every position is opened on every path.
 
 Each unit writes its words at every output slot and its receipt commits them. Every unit is paid (`mode = paid`) and
 `fixed` is the total weight, `glue` weighing nothing. So every unit is fixed under option A, computed, and good, and
 `chunk0` steers `prod` (through `chunk1` and `glue`): `FixedWords` asks of `prod` what `Fixed ∧ Computed` doesn't. For
 `AdditiveFixed`, `chunk1`'s multiplicative operands are bound before its coin, it is computed on every path, and its
 additive operand takes two values on two continuations from its coin.
+
+This witness tests no skip. No unit is skipped, so it shows the hypotheses can all hold of an honest run, not that a
+skipped, priced writer's cone is charged at its draw probability: every unit is good, nothing here charges a unit that
+isn't (`DrawnLayer.Covers`), and `Priced` holds of `glue` without a run in which `glue` is skipped.
 -/
 
 namespace Accounting.SecurityProofs.TS.FixedMeets
@@ -320,11 +324,15 @@ theorem prob_glue : prob (fun b : Bool => drawF b 2 = 2) = 1 / 2 := by
   norm_num
 
 /-- **`glue` is priced at its public fan-out**: draw 2 lands on it with probability `1/2`, and its late cone weighs `1`,
-at most `1/2` of its round's weight `3`. -/
+at most `1/2` of the mean round weight `N_w = 3` (one round). -/
 theorem priced_glue : fpf.Priced fwt (0, 2) := by
   refine ⟨2, ?_⟩
-  show fpf.coneWt fwt (0, 2) ≤ prob (fun b : Bool => drawF b 2 = 2) * ∑ j, fwt 0 j
-  rw [prob_glue, sum_fwt]
+  show fpf.coneWt fwt (0, 2) ≤
+    prob (fun b : Bool => drawF b 2 = 2) * ((∑ w : Fin 1, ∑ j, fwt w j) / ((1 : ℕ) : ℝ))
+  have h : prob (fun b : Bool => drawF b 2 = 2) * ((∑ w : Fin 1, ∑ j, fwt w j) / ((1 : ℕ) : ℝ)) = 3 / 2 := by
+    rw [prob_glue, Fin.sum_univ_one, sum_fwt]
+    norm_num
+  rw [h]
   linarith [coneWt_glue]
 
 theorem bound_of_none : ∀ (j : Fin 4) (k : Fin 5), srcF (posF j k) = none →
