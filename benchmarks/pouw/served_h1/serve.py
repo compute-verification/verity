@@ -34,12 +34,13 @@ roots follow the step's real rows, so this window doesn't use them (the seeded m
   its 32 rows.  Seeds come from the salt, the position and the call's (root(A), root(B)), inside the unit.  A dead unit skips
   the noise and the receipt: its leaf is the canonical empty receipt (zero words), so every receipt tree keeps its shape.
   There is one receipt tree per call.
-* **Coins** (``--coins``): seeded, the option's one salt, opened at install before serving; or live, a round a step from
-  the proof service's challenger (`pouw.window.live_challenger`, `sampled_proofs.challenger.LiveRecord`), whose salt coin
-  opens first, against the registration root over the weights' root and the queue's root.  Step s's round
-  root, over its A root and its admit root, is recorded before round s's coin opens, and the step's units take the round's
-  salt (`h1tile.live_salt`: `window.round_key(...).stream(0, 64)`), so every candidate and every selection a round's noise
-  reads is committed before that noise's coin.
+* **Coins** (``--coins``), every challenger's entropy the Lean verifier of record's (`pouw.verifier.coins`): seeded, the
+  option's one salt, opened at install before serving; or live, a round a step from the proof service's challenger
+  (`pouw.window.live_challenger`, `sampled_proofs.challenger.LiveRecord`), whose salt coin opens first, against the
+  registration root over the weights' root and the queue's root.  Step s's round root, over its A root and its admit root,
+  is recorded before round s's coin opens, and the step's units take the round's salt (`h1tile.live_salt`:
+  `window.round_key(...).stream(0, 64)`), so every candidate and every selection a round's noise reads is committed before
+  that noise's coin.
 * **Credit**: only the admitted slots (`credit.tally`, in 16-bit limbs, every tally unit always proved): Cr = Σ admitted
   rows · N · K, and the published credit point(level(floor_point(Cr))) <= Cr.  The padded compute (the non-admitted rows of
   live units, noised) is shown and not credited; dead units cost only their emptiness check.
@@ -367,6 +368,7 @@ def run(a: argparse.Namespace) -> dict:
                                                                        RC.noise_blocks_cpu(probe, 40)))})
 
     from tests.engine import int8_exact_gpu as G
+    from verity.core.protocols.pouw import verifier
     from verity.core.protocols.pouw.coins import Challenger
     from verity_vllm import protocol_options as PO
     from verity_vllm.engine import int8_exact as E
@@ -415,7 +417,7 @@ def run(a: argparse.Namespace) -> dict:
                        "slot_leaves": q_commit["slot_leaves"], "request_leaves": q_commit["request_leaves"]})
 
     option = f"pouw:{PH.SCHEME}"
-    ctx = PO.Context(stage="serve", enabled=(option,), settings={"pouw": {"coins": Challenger(a.epoch), "retain_steps": 0,
+    ctx = PO.Context(stage="serve", enabled=(option,), settings={"pouw": {"coins": Challenger(a.epoch, verifier.coins), "retain_steps": 0,
                                                                          "transcript_dir": str(out)}})
     t0 = time.perf_counter()
     comp = PO.install(eng.model, ctx)
@@ -451,7 +453,7 @@ def run(a: argparse.Namespace) -> dict:
         from verity.core.protocols.pouw import window as Wd
         from verity.core.protocols.pouw.circuit import h1tile as HT
         from verity.core.protocols.sampled_proofs import challenger as Ch
-        lch = Wd.live_challenger(a.epoch, s_max)
+        lch = Wd.live_challenger(a.epoch, s_max, verifier.coins)
         live_salt = lch.open(Wd.SALT, 0, registration)
         rounds = Ch.LiveRecord(lch, Wd.ROUND)
 

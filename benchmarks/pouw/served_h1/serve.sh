@@ -13,6 +13,10 @@ CUDA=${CUDA:-/usr/local/cuda-13.0}
 "$CUDA/bin/nvcc" -O3 -std=c++17 -gencode arch=compute_120a,code=sm_120a -I benchmarks/codec_tensor -cubin \
   -o "$S/noise.cubin" benchmarks/pouw/served_h1/noise.cu > "$OUT/nvcc.txt" 2>&1 \
   || { echo "served-h1: NVCC_FAIL"; tail -20 "$OUT/nvcc.txt"; exit 11; }
+# the challenger's coins are the Lean verifier of record's (pouw.verifier.coins): built before the lease, not inside it
+command -v lake >/dev/null || export PATH="$HOME/.elan/bin:$PATH"
+(cd verity/core/protocols/pouw/lean/check && lake build pouw-check-difftest) > "$OUT/lean-coins-build.log" 2>&1 \
+  || { echo "served-h1: LEAN_BUILD_FAIL"; tail -20 "$OUT/lean-coins-build.log"; exit 12; }
 cd integrations/vllm
 PY=${PY:-/workspace/jobs/venv312/bin/python3}
 export PYTHONPATH=.:$ROOT:$ROOT/tools/research/src:$ROOT/benchmarks/pouw/served_h1

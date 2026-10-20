@@ -184,11 +184,12 @@ class Window:
             x.view(torch.uint8).fill_(POISON)
 
     def _coins(self) -> None:
+        from verity.core.protocols.pouw import verifier
         from verity.core.protocols.pouw import window as Wd
         from verity.core.protocols.pouw.circuit import h1tile as HT
         from verity.core.protocols.sampled_proofs import challenger as Ch
         self.HT = HT
-        self.lch = Wd.live_challenger(1, ROUNDS)
+        self.lch = Wd.live_challenger(1, ROUNDS, verifier.coins)
         self.rounds = Ch.LiveRecord(self.lch, Wd.ROUND)
 
     def _pre_sets(self, p: int) -> dict:
