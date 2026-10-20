@@ -366,7 +366,7 @@ ENTRIES: dict[str, Entry] = {e.id: e for e in (
           "The labelling counts fixed words as fixed: on an accepted window the owned right fixed words per round are at "
           "least the words of the units that are fixed under option A, computed, and with every unit steering them "
           "computed, over the rounds, and the folded words at least the words of the units whose receipts commit their "
-          "folds", "TS counts fixed", "standard"),
+          "folds", "TS counts fixed", "conjectured"),
 )}
 
 

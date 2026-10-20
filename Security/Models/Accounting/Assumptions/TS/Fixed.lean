@@ -17,7 +17,7 @@ modes.
 * `CountsFixed`: the labelling counts a fixed word as fixed. The play's `fixed` and `folded` are free reals
   (`Anatomy.fixed`), which mean something only through the labelling's definition of `N_right − N_adapt`, so some
   premise has to tie them to the values (note:20261019T0028Z-draft-adaptive-model, F5). This is that premise, at unit
-  grain.
+  grain. It is `conjectured`, and retires once it is proved or the labelling is computed in a checked program.
 -/
 
 namespace Accounting.Assumptions.TS
