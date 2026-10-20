@@ -53,6 +53,24 @@ power-of-two output classes up to 262,144 bits). Two conflicts, both sides kept:
 - T8b's prefix commits (`cursor/prefix-tp-6f04`): ASK-42 is provisionally A (the prefix length is private), so a prefix row
   in a batch is proved cold and T8b's C-public commits stay out.
 
+## Builds of record
+
+On vy-glm53-cpu-2, row dirs `/workspace/cp/circuits/glm-v2/rows/<row>`. Each passed (`build PASS`, manifest rc 0), its manifest
+complete (no unmodelled value, no unbound TP peer), every Program `aot`, and every rank's step, workload and request digest equal
+to the row's pin in `records.json` at its tree, which is this tree's head's. `rowdir.sha256` is in the run's outputs: the list
+`copy_rowdir.sh` takes (its sha256 and file count here); the size is the row dir without `match/` and `commit*` (`du -sb`).
+
+| row | `build_record.sh` run, its outputs | `vllm.build` Attempt | tree | manifest digest | identities | call boundaries | `rowdir.sha256` | size |
+|---|---|---|---|---|---|---|---|---|
+| B1 greedy | r20261020-062225-e880, art:b145a0da2a75f45bebb9928352b5527445506715d7d36c1e79509d424a37b723 | r20261020-062246-b987, art:32c488d8ca7bb12f80b38e45ec5a97d95312bcb62974a4d776da0b58d1adec35 | e2c986e7ba | `9cc899187e87230548b6c00a7b5390e78187dd23a56d29ebaad848a1b2a2a77a` | 670,120 | 39,936 of 39,936 | `8d3a09c2a33d2fad0f4b39d2b88c8dac379eb51b10abe63b39c2c09bc68c0600`, 215 files | 7,491,220,559 B |
+| B8 greedy | r20261020-132536-b2d0, art:3727b9d6083b726afc997d68f0a3c1ccff949bcde87c0dc6f9cc505a19afd419 | r20261020-132554-c189, art:3bed6c69048dc98305cfca262f2aee4bc76f21a98d48690badb6babc97464dfe | 6fcebc0433 | `9e85828772b8aa55a05c6e145e64178e4e53880086997b63764de959ad4a9ef1` | 2,925,528 | 173,472 of 173,472 | `579139933be78d33bc869687fd97544716553f26211dae6b7b92b789f3f02c1e`, 775 files | 27,804,214,059 B |
+| B8 stochastic | r20261020-132545-cc45, art:5d0c575053d2280b25076e8b963cf82004fa6e417028535df962e25c29b04b8f | r20261020-132557-d5f6, art:54d43fba35acf3a56af7b9779929c4cabbf2f0c6fce2b53359dbcce64446296c | 6fcebc0433 | `9003863bfe2eedb99a660522552b7b4866975da168ea08bc65d5fb1a0c6ff2af` | 2,529,368 | 149,760 of 149,760 | `376debc7048c57a3d65159fbce511b18251fac78c0d704b087b15e37cc92aeaa`, 775 files | 27,166,896,631 B |
+
+The B8 rows are `RESUME=1` reruns (each about 60 min) of r20261020-084508-06dd
+(art:4e82f2aee40dc827c8ff33749c0ecd3f319246feb30fe31f292db9b27dd8a5f0) and r20261020-084527-5384
+(art:764b8ee91900985294eaa2cdea9522852cc367c830141e267a997b627226cd18), whose manifests overran row_tp's 7200 s; their verdicts and
+manifest logs are in each rerun's `prior/`. B32's waits for its re-pin (vy-glm53-cpu-3, "GPU batch" step 1).
+
 ## GPU batch
 
 Every script is in `jobs/` and runs from this tree's pushed head, `--cwd source` (publish: `--cwd clone`); every row dir is
