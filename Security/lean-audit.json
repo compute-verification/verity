@@ -1139,6 +1139,30 @@
   "Verity.Declaration.Contains": {
    "owner": "@lean",
    "digest": "2e4651003538493bac63ae90c32a521e95d2e8596bea6b3c85b9cfd150c5647b"
+  },
+  "Accounting.TS.WordLayer.Bound": {
+   "owner": "@compute-accounting",
+   "digest": "bdc9dd799acc5edd5a087a2d52688b2d85d81af02208c1b2cc329fc7df25b4b1"
+  },
+  "Accounting.TS.WordLayer.Computed": {
+   "owner": "@compute-accounting",
+   "digest": "d949bc47a3075d25d70343f0cc2bcac2097ff2053a65c9294fccb7bd670ab87a"
+  },
+  "Accounting.TS.WordLayer.Fixed": {
+   "owner": "@compute-accounting",
+   "digest": "17120ebb9c1a85cc7a54f1f74a4c882a62b88d54c9e2124107fff7aecb5671ea"
+  },
+  "FlockSoundness.Audit.Adaptive.Play.Drawn": {
+   "owner": "@proofs",
+   "digest": "95df2a145c2096b29904657d9fc2cc155f202589e100fda5a4522518423ca878"
+  },
+  "FlockSoundness.Audit.Adaptive.Play.Laws": {
+   "owner": "@proofs",
+   "digest": "9264db5098c104ab446d60b84c5fed6d3b6ba28b5e0041fec1785f2755e6176f"
+  },
+  "FlockSoundness.Audit.Law.Design": {
+   "owner": "@proofs",
+   "digest": "75c9749a2c2e0c07cc3a043b9b78b491e4f64eea1fe11eb4aaaf2697467456cb"
   }
  },
  "meaning": [
