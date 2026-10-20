@@ -652,7 +652,6 @@ def test_machine_resolution_clones_the_registry_on_a_fresh_vm(cloud_vm, tmp_path
 def test_a_stale_index_lock_is_removed_only_when_no_git_works_in_the_repository(tmp_path):
     """19 Oct: a git killed mid-write left the steward's clone locked three times in three hours, and each later sync failed."""
     import os
-    import time
     from research import notes_sync as NS
     repo = tmp_path / "notes"
     subprocess.run(["git", "init", "-q", str(repo)], check=True)
@@ -660,7 +659,7 @@ def test_a_stale_index_lock_is_removed_only_when_no_git_works_in_the_repository(
     lock.write_text("")
     procs = tmp_path / "proc"
     procs.mkdir()
-    now = time.time()
+    now = 1_800_000_000.0
     os.utime(lock, (now - 60, now - 60))
     assert not NS.clear_stale_lock(repo, now=now, procs=procs) and lock.exists(), "a fresh lock is a live writer's"
     os.utime(lock, (now - 3600, now - 3600))
