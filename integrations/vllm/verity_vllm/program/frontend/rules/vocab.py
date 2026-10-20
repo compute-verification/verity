@@ -257,11 +257,9 @@ PROFILE_B1_EAGER_V2 = Vocabulary(
 # specialization ids the accepted `GEMMA2_2B` record resolved to are unchanged). `rules/vllm_bindings.py` asks for them. ----------------
 def _dense_kinds() -> tuple[dict, dict]:
     from verity_vllm.program.registry import dense as DN
-    from verity_vllm.program.registry import tables as _tables
     kinds = {
         "scale_tensor": lambda N: ir_bind(b1.Bf16MulScalarTensor, N=N),
         "gelu_tanh_mul": lambda I: ir_bind(DN.GeluTanhMul, I=I),
-        "gelu_tanh_mul_table": lambda I: ir_bind(_tables.GeluTanhMulV3, I=I),
         "attention_softcap": lambda T, NH, KVH, D, CAP: ir_bind(DN.AttentionSoftcap, T=T, NH=NH, KVH=KVH, D=D, BN=b1.fa2_kblock_n(D), CAP=CAP),
         "bf16_div_scalar": lambda N, C: ir_bind(DN.Bf16DivScalar, N=N, C=C),
         "bf16_mul_scalar": lambda N, C: ir_bind(DN.Bf16MulScalar, N=N, C=C),
@@ -289,7 +287,6 @@ def _dense_kinds() -> tuple[dict, dict]:
     notes = {
         "scale_tensor": "Bf16MulScalarTensor_v1{N}: aten.mul.Tensor(bf16 row, 0-d bf16 tensor) — f32 multiply, cvt.rn.bf16.f32",
         "gelu_tanh_mul": "GeluTanhMul_v1{I}: vLLM _C.gelu_tanh_and_mul (act_and_mul_kernel<bf16, gelu_tanh_kernel, act_first>)",
-        "gelu_tanh_mul_table": "GeluTanhMul_v3{I}(gu, gelu_tanh_bf16): GeluTanhMul_v1 with the activation read from the registered table",
         "attention_softcap": "AttentionSoftcap_v1{T,NH,KVH,D,BN=fa2_kblock_n(D),CAP}: FA2 causal GQA with Is_softcap (MUFU.TANH on the scores)",
         "bf16_div_scalar": "Bf16DivScalar_v1{N,C}: aten.div.Tensor(bf16, C) — f32(x) * RN32(1/C), cvt.rn.bf16.f32",
         "bf16_mul_scalar": "Bf16MulScalar_v1{N,C}: aten.mul.Tensor(bf16, C) — f32 multiply, cvt.rn.bf16.f32",
@@ -463,9 +460,11 @@ PROFILE_B1_EAGER_V3 = Vocabulary(
            "dsa_indexer_q": lambda H, D, ROPE: ir_bind(_dsa.DsaIndexerQ, H=H, D=D, ROPE=ROPE),
            "dsa_mqa_logits": lambda N, H, D: ir_bind(_dsa.DsaMqaLogitsV3, N=N, H=H, D=D),
            "dsa_topk_short_row": lambda TOPK: ir_bind(_dsa.DsaTopKShortRow, TOPK=TOPK),
-           # a row past TOPK keys (registry.dsa_topk): the run's order checked against the top-TOPK set, and the rows it selects
+           # a row past TOPK keys (registry.dsa_topk): the order the run's Waksman settings route, checked against the top-TOPK set,
+           # and the rows the same settings read
            "dsa_topk_order": lambda N, TOPK: ir_bind(_dsa_topk.DsaTopKOrder, N=N, TOPK=TOPK),
-           "dsa_gather_rows": lambda N, TOPK, W: ir_bind(_dsa_topk.DsaGatherRows, N=N, TOPK=TOPK, W=W),
+           "dsa_waksman_order": lambda N, TOPK: ir_bind(_dsa_topk.DsaWaksmanOrder, N=N, TOPK=TOPK),
+           "dsa_waksman_rows": lambda N, TOPK, W: ir_bind(_dsa_topk.DsaWaksmanRows, N=N, K=TOPK, W=W, E=16),
            "dsa_rmsnorm": lambda N, EPS: ir_bind(_dsa_norm.DsaRMSNorm, N=N, EPS=EPS),
            "triton_block_rmsnorm": lambda N, BLOCK, WARPS, EPS: ir_bind(_dsa_norm.TritonBlockRMSNorm, N=N, BLOCK=BLOCK, WARPS=WARPS, EPS=EPS),
            "dsa_kv_rope": lambda D: ir_bind(_rope.RoPEHeadGptJV2, D=D),
@@ -602,10 +601,12 @@ PROFILE_B1_EAGER_V3 = Vocabulary(
            "dsa_topk_short_row": "DsaTopKShortRow_v1{TOPK}: the top-k of a row of at most TOPK keys (top_k_per_row_prefill, cooperative_topk) "
                                  "-- slot i = i < len ? i : -1",
            "dsa_topk_order": "DsaTopKOrder_v1{N,TOPK}: the selection relation of a row of N > TOPK keys (cooperative_topk's "
-                             "histogram_4096_topk) -- 1 when the run's TOPK-slot order is a permutation of the top-TOPK set of the "
+                             "histogram_4096_topk) -- 1 when a TOPK-slot order is a permutation of the top-TOPK set of the "
                              "logits by convert_to_uint32_v2 key descending, then index ascending",
-           "dsa_gather_rows": "DsaGatherRows_v1{N,TOPK,W}: the W-word rows at a row's TOPK selected indices, Embedding_v1{V=N,H=W} "
-                              "per slot (a mux over the N history rows)",
+           "dsa_waksman_order": "DsaWaksmanOrder_v1{N,TOPK}: the order a Waksman network of N rows reads its first TOPK outputs in at "
+                                "the run's settings (the indices 0..N-1 routed through it)",
+           "dsa_waksman_rows": "DsaWaksmanRows_v1{N,K=TOPK,W,E=16}: the W-word bf16 rows a Waksman network of N rows routes to its "
+                               "first TOPK outputs at the run's settings (one Select and one Xor3 per word a switch)",
            "dsa_rmsnorm": "DsaRMSNorm_v1{N,EPS}: _fused_norm_rope_kernel's cc 9.0 PTX reduction",
            "triton_block_rmsnorm": "TritonBlockRMSNorm_v1{N,BLOCK,WARPS,EPS}: the same reduction over N live elements of a masked BLOCK "
                                    "on 32 WARPS threads (_fused_q_kv_rmsnorm_kernel)",

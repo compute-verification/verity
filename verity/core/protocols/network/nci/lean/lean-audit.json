@@ -7,12 +7,17 @@
  },
  "runs": {
   "NciCheck.DescDifftestMain": {
-   "why": "3,650 declarations divided into IUs of root nodes (3,000 random, a quarter of them read across their arrays' rows, 24 on each distinct descriptor of the circuits fixtures, and the unrolled difftest's two pinned ones) on which NciCheck.Desc.check gives what scripts/nci_reference.py's check_desc computes, and, on each one it gives a verdict on, what NciCheck.check gives on the instance expanded gate by gate: the description-sized check against the unrolled one",
-   "args": ["{desc_difftest/instances.jsonl}", "{desc_difftest/expanded.jsonl}", "{desc_difftest/python.jsonl}", "3650"],
+   "why": "3,656 declarations divided into IUs of root nodes (3,000 random, a quarter of them read across their arrays' rows, 24 on each distinct descriptor of the circuits fixtures, and 6 on a composite keyed with an input id, which is no input node, then the unrolled difftest's two pinned ones) on which NciCheck.Desc.check gives what scripts/nci_reference.py's check_desc computes, and, on each one it gives a verdict on, what NciCheck.check gives on the instance expanded gate by gate: the description-sized check against the unrolled one",
+   "args": [
+    "{desc_difftest/instances.jsonl}",
+    "{desc_difftest/expanded.jsonl}",
+    "{desc_difftest/python.jsonl}",
+    "3656"
+   ],
    "data": {
-    "desc_difftest/expanded.jsonl": "2b14c1dfcdc954d05e8e513d341147d2d1bb763b31c56ed198d0a56cd82b4259",
-    "desc_difftest/instances.jsonl": "7147547d92db4215bc8ec236eaa530835e8592d8b4c1d18e53a1c86ce0043366",
-    "desc_difftest/python.jsonl": "7f8066be724a59ddde6f7991f55d81373f52b209f394a0f0cfc833f821c07fed"
+    "desc_difftest/expanded.jsonl": "0954947401337167d696448c2893c5eda7e24a372d5af1569d184d1e78be5780",
+    "desc_difftest/instances.jsonl": "0d08649bb802e2526763e1055e64b80efd4ea4e1f414599c0ee3e6813fa64161",
+    "desc_difftest/python.jsonl": "a29e3db65683126a5163a5571fad9e7244b8d3abf3154070f8b57a19ae454cf6"
    },
    "generate": ["python3", "scripts/desc_difftest_vectors.py", "{repo}", "--out", "{out}"]
   },
