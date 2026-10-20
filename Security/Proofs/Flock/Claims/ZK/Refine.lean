@@ -826,9 +826,13 @@ theorem checkIs_coinLayer (nr : Msg → ℕ → ℕ) (T : CoinLayer.TableData)
         unfold coinVerdict
         rw [hp]
         rfl
-      rw [hop, CoinOpen.refP_chk_eq]
-      simp only [List.map_cons, allOk, ocBind_eval, CoinOpen.chkAt, hpd, treeChk, OC.eval]
-      try rfl
+      rw [hop]
+      show false =
+        (OC.eval CoinOpen.shaH (allOk (CoinOpen.chkAt (CoinLayer.place nr x) _ ρ₀) 0 ((o :: ops).map Prod.snd))).1
+      have hc : ∀ ν', CoinOpen.chkAt (CoinLayer.place nr x) ν' ρ₀ 0 o.2 = .ret false := fun ν' => by
+        simp only [CoinOpen.chkAt, hpd, treeChk]
+      simp only [List.map_cons, allOk, hc]
+      all_goals rfl
 
 end LeanRelease
 
