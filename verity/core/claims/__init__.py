@@ -376,20 +376,6 @@ ENTRIES: dict[str, Entry] = {e.id: e for e in (
           "are free witness), PIN's checks (PouwSegCheck_v3, PouwCallCheck_v1, PouwWarpCheck_v1 and _v2, #2417) "
           "recompute every word they absorb, and nothing states that the served relations are PIN's", "TS proofs pin",
           "conjectured"),
-    Entry("accounting-ts-lin-steer", "assumption",
-          "LIN-STEER, false for a segmented consumer whose noise-active segments carry unequal counts: zeroing a "
-          "fraction φ of a row's noise-active coordinates saves at most φ of the consumer's work",
-          "LIN-STEER", "conjectured"),
-    Entry("accounting-ts-right-fixed", "assumption",
-          "Lemma E1(c) with the rounds' equal shares: on an accepted window whose committed values are right for their "
-          "derivations on the path's coins, every word that isn't fixed is in its round's share", "TS right fixed",
-          "proven"),
-    Entry("accounting-ts-unit-fixed", "assumption",
-          "Lemma E1(c) per unit with its fold clause, which doesn't read the draw: on an accepted window the fixed "
-          "words per round are at least the good units' words over the rounds, a good unit being one the run computed "
-          "(not skipped and guessed), with every unit writing it a value after the coin its noise reads, so a unit "
-          "whose check passes by luck isn't credited; and the folded words per round are at least the words of the "
-          "units not skipped whole over the rounds", "TS unit fixed", "proven"),
     Entry("accounting-ts-accepted-live", "assumption",
           "A proof is credited only after flock-verify --zk --registered accepts its session", "TS accepted live",
           "standard"),
@@ -409,6 +395,20 @@ ENTRIES: dict[str, Entry] = {e.id: e for e in (
           "C-Flock's rows link covers the served roots: outside δ_s, where flock-verify accepts a session and every "
           "drawn unit is right at its owned reads, the session's extracted value layer is the served layer's opening "
           "(the round's served leaves, committed before σ_w)", "TS served roots linked", "conjectured"),
+    Entry("accounting-ts-lin-steer", "assumption",
+          "LIN-STEER, false for a segmented consumer whose noise-active segments carry unequal counts: zeroing a "
+          "fraction φ of a row's noise-active coordinates saves at most φ of the consumer's work",
+          "LIN-STEER", "conjectured"),
+    Entry("accounting-ts-right-fixed", "assumption",
+          "Lemma E1(c) with the rounds' equal shares: on an accepted window whose committed values are right for their "
+          "derivations on the path's coins, every word that isn't fixed is in its round's share", "TS right fixed",
+          "proven"),
+    Entry("accounting-ts-unit-fixed", "assumption",
+          "Lemma E1(c) per unit with its fold clause, which doesn't read the draw: on an accepted window the fixed "
+          "words per round are at least the good units' words over the rounds, a good unit being one the run computed "
+          "(not skipped and guessed), with every unit writing it a value after the coin its noise reads, so a unit "
+          "whose check passes by luck isn't credited; and the folded words per round are at least the words of the "
+          "units not skipped whole over the rounds", "TS unit fixed", "proven"),
 )}
 
 
