@@ -201,7 +201,11 @@ context `pubS` reads), which reads only the class, `T` and the owed outputs, giv
 live: the auditor draws each after the commit strings before it, and each message `msgs … i` and the requests `reqs`
 read those strings (`firewallStrings`, `firewallCommits`). What it takes of the code is each an obligation: the requests run through the firewall to `T` with the messages' salted commit strings in
 it (`FirewallSends`), and V*'s staging (`SessionsPublic`, `SessionsCoined`, `SessionsHonest`, and `OuterZK.Sessions`'
-`hz`, `hR`, `hS`). -/
+`hz`, `hR`, `hS`).
+
+(i) is in fork form and states no bits. The recursion's knowledge form, `Claims.Recursion.KS`, is at its level
+`Claims.Recursion.lam`: about 65 bits per SHA-512 call at the deployed shape, below the 100-bit floor and the `2^-128`
+target under every weight (ASK-73). -/
 def RecursiveAudit : Prop :=
   (∀ {nT r : ℕ} (T : Fin nT → Type) (CT : Fin r → Type) [∀ k, Fintype (CT k)] [∀ k, Inhabited (CT k)]
     -- the registration's draws, a finite space with an element, and the units each draws

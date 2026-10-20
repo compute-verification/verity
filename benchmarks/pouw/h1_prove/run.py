@@ -36,6 +36,12 @@ carry a wrong witness instead:
   pub.bin is the verifier's, every committed row is the window's, and the receipt row is not what the circuit computes on
   the unit's inputs, salt, position and roots.
 * ``in-z``: the same with its z cell 0 plus one (``--z-cell``).
+* ``in-d``: the same with a kernel's D_1 word (lane 0, entry 0) one too large (``--d-word``): z and the receipt both
+  computed from it, so both output rows are replaced; under ``H1_TILE=v3`` z is that word's recombination.
+* ``in-xa`` (``H1_TILE=v3`` only): the same with its z computed with one entry's X wrap bit xa = [A = 127] ∧ b flipped
+  (``--xa-flip``: the first set one, else the first clear one; the receipt the honest one), as a prover that skipped (or
+  invented) the activation-wrap correction would serve it. Its tampered window's served.json says whether the flipped
+  bit was set and how many z words moved.
 
 Each is proved like the honest statement, whose prover stops on the failing witness before it sends a proof, and again as
 ``<tag>-skip`` with ``FC_ZK_SELF_CHECK=skip`` (C-Flock's negative-control prover, which sends its proofs anyway), so the
@@ -70,7 +76,8 @@ from verity.core.protocols.pouw.coins import Challenger, coin_reason  # noqa: E4
 DRAW_DOMAIN = "verity/pouw/h1-prove-draw/v0"
 R, C = 4, 8
 #: the in-proof negatives: the tampered window's flag, and the output row whose committed words its statement carries
-IN_PROOF = {"in-receipt": ("--receipt-word", "o1"), "in-z": ("--z-cell", "o0")}
+IN_PROOF = {"in-receipt": ("--receipt-word", ("o1",)), "in-z": ("--z-cell", ("o0",)), "in-d": ("--d-word", ("o0", "o1")),
+            **({"in-xa": ("--xa-flip", ("o0",))} if U.tile() == "v3" else {})}
 #: a statement tag's suffix whose prover runs with FC_ZK_SELF_CHECK=skip (job.sh), sending its proof though the witness fails
 SKIP = "-skip"
 
@@ -214,6 +221,8 @@ def cmd_prepare(a) -> int:
                             *((t, f"{w1}-{t}", f) for t, (f, _p) in IN_PROOF.items())):
         if flag:
             served_t = prover("tamper", str(work / w1), str(work / priv), str(work / f"{priv}-served.json"), flag, str(u0))
+            if flag == "--xa-flip":
+                record["xa_flip"] = served_t["tampered"]
         else:
             served_t = served1
         prover("open", str(work / priv), salt1.hex(), ",".join(map(str, units)), str(work / f"open-{tag}"))
@@ -271,11 +280,14 @@ def cmd_prepare(a) -> int:
         raise SystemExit("the honest statement's pub.bin is not the verifier's own file")
     # the in-proof negatives: the honest statement with the first drawn unit's (instance 0's) output row the tampered
     # window's, under the verifier's own file of that window, so binding holds and the witness is wrong
-    for t, (_f, port) in IN_PROOF.items():
-        words = np.load(work / f"open-{t}" / "rows.npz")[f"w_{port}"][0]
+    for t, (_f, ports) in IN_PROOF.items():
         for d in (t, f"{t}{SKIP}"):
-            record.setdefault("forged", {})[d] = U.forge_statement(sw / "st-honest", sw / f"st-{d}", (vp / f"{t}.pub.bin").read_bytes(),
-                                                                   0, port, words, sw / "circuit.txt")
+            src = sw / "st-honest"
+            for port in ports:
+                words = np.load(work / f"open-{t}" / "rows.npz")[f"w_{port}"][0]
+                record.setdefault("forged", {}).setdefault(d, {})[port] = U.forge_statement(
+                    src, sw / f"st-{d}", (vp / f"{t}.pub.bin").read_bytes(), 0, port, words, sw / "circuit.txt")
+                src = sw / f"st-{d}"
         log(f"forged {t}: {record['forged'][t]}")
     st = record["staged"]
     plan = {"statements": [{"tag": "honest", "dir": stmts["honest"]["out"], "n": len(units)},
@@ -289,6 +301,11 @@ def cmd_prepare(a) -> int:
                         "expect": "ACCEPT"},
                        *({"tag": d, "statement": d, "pub": str(vp / f"{t}.pub.bin"), "expect": "REFUSED"}
                          for t in IN_PROOF for d in (t, f"{t}{SKIP}"))]}
+    if a.only:
+        keep = set(a.only.split())
+        plan["checks"] = [c for c in plan["checks"] if c["tag"] in keep]
+        used = keep | {c["statement"] for c in plan["checks"]}
+        plan["statements"] = [s for s in plan["statements"] if s["tag"] in used]
     (work / "plan.json").write_text(json.dumps(plan, indent=1))
     (work / "record.json").write_text(json.dumps(record, indent=1))
     with open(work / "plan.tsv", "w") as f:
@@ -308,10 +325,33 @@ def _time(p: Path) -> dict | None:
 
 
 def _verdict(p: Path) -> dict | None:
+    """The check's verdict over every session it verified: accepted iff each was, with the first refusal's reason."""
     if not p.exists():
         return None
     v = [json.loads(x[8:]) for x in p.read_text().splitlines() if x.startswith("VERDICT ")]
-    return v[0] if v else None
+    if not v:
+        return None
+    return {**v[0], "accepted": all(x.get("accepted") for x in v), "sessions": len(v),
+            "why": next((x.get("why", "") for x in v if not x.get("accepted")), "")}
+
+
+def lean_phases(err: Path) -> dict | None:
+    """flock-verify's own timings from its stderr: ``inputs`` (reading and parsing the statement's files, once a process),
+    each statement ``setup``, and each session's verification, in ms."""
+    if not err.exists():
+        return None
+    out: dict = {"inputs_ms": None, "setup_ms": [], "session_ms": []}
+    for x in err.read_text(errors="replace").splitlines():
+        head, _, ms = x.rpartition(": ")
+        if not ms.endswith(" ms") or not ms[:-3].isdigit():
+            continue
+        if head == "inputs":
+            out["inputs_ms"] = int(ms[:-3])
+        elif head.startswith("setup"):
+            out["setup_ms"].append(int(ms[:-3]))
+        else:
+            out["session_ms"].append(int(ms[:-3]))
+    return out
 
 
 def _verdict_word(v: dict | None, err: Path) -> str:
@@ -386,7 +426,8 @@ def cmd_summarize(a) -> int:
         ok &= good
         checks.append({"tag": c["tag"], "expect": c["expect"], "verdict": word, "pass": good,
                        "why": (v or {}).get("why", "")[:300], "lean_seconds": t and t["wall_s"],
-                       "lean_maxrss_gb": t and round(t["maxrss_kb"] / 2**20, 1), **extra})
+                       "lean_maxrss_gb": t and round(t["maxrss_kb"] / 2**20, 1), "sessions": (v or {}).get("sessions"),
+                       "lean_phases": lean_phases(out / "lean" / f"{c['tag']}.err"), **extra})
     honest = next(c for c in checks if c["tag"] == "honest")
     summary = {"schema": "verity/pouw/h1-prove/summary/v0", "pass": ok,
                "unit": record["circuit"]["definition"], "k": record["circuit"]["k"], "tile": [R, C],
@@ -401,6 +442,10 @@ def cmd_summarize(a) -> int:
                "openings": record["openings"], "prover_pub_is_verifiers": record["prover_pub_is_verifiers"],
                "windows": {w: {k: v[k] for k in ("tiles", "calls", "commit_seconds", "serve_seconds") if k in v}
                            for w, v in record["windows"].items()},
+               "tile": U.tile(), "z_is_served_product": {w: v["served"].get("z_is_served_product")
+                                                          for w, v in record["windows"].items()},
+               "xa": {w: v["served"].get("xa") for w, v in record["windows"].items()},
+               "xa_flip": record.get("xa_flip"),
                "staged": record["staged"]}
     (out / "summary.json").write_text(json.dumps(summary, indent=1))
     print(json.dumps({k: summary[k] for k in ("pass", "unit", "k", "ands", "window_tiles", "drawn_units", "statements",
@@ -428,6 +473,8 @@ def main(argv=None) -> int:
     p.add_argument("--cols", type=int, default=0)
     p.add_argument("--workers", type=int, default=os.cpu_count())
     p.add_argument("--stager-pid", type=int, default=0)
+    p.add_argument("--only", default="", help="the plan's statements and Lean checks to run, by tag (space-separated); "
+                                              "each check's statement is kept")
     p = sub.add_parser("summarize")
     p.add_argument("--work", required=True)
     p.add_argument("--out", required=True)

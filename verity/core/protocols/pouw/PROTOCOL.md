@@ -1387,9 +1387,20 @@ block_t = SHA-512(NOISE_TAG ‖ seed_j ‖ u64(t))                              
 
 j is the unit's position and (root(A_j), root(B_j)) its seed group's roots. ``⊕ u64(j)*`` XORs every message word after the
 first with the position, an injective encoding that makes every gate of a seed read its own position, so no two units compute
-a common value. Positions (`pouw.positions`, unit u at slot u, `Compiled.positions(base)`) and roots (`pouw.roots`) are inputs
-bound before the draw; a verifier that runs the Program more than once under one salt gives each run its own range of
-positions, so each (salt, position) seeds one unit.
+a common value. Unit u reads position slot u (`Compiled.positions(base)`) and its seed group's roots.
+
+The seed inputs `pouw.roots`, `pouw.positions` and `pouw.salt` are registered values the one-stage verifier fills itself,
+so the prover chooses none of them (`sampled_proofs.one_stage.registered`'s `supplied_rows` and `supplied_root`; the
+sampled_proofs README's "Supplied values"; `Compiled.inputs` gives the leaves it fills):
+
+- `pouw.roots`: each seed group's (root(A), root(B)) from the roots the record names for its operands: a served port's
+  root (A's committed tap, an AROW row table included) and a registered value's (B's weights, which the verifier holds to
+  the root it pinned before the salt, `one_stage.registration.check`'s `pinned`).
+- `pouw.positions`: unit u's position is u after every unit of the log's earlier records (`registered.log_base`), so no
+  two records of one log share a position and each (salt, position) seeds one unit.
+- `pouw.salt`: per window, filled by the verifier.
+
+R7 recomputes each one's root and refuses a record that registers any other (`R7-supplied`).
 
 A unit's receipt keys and chain starts come from σ_R, a hash of its own tag, never from the noise seed (decision 121). A unit
 whose folds take keys calls `PouwUnitSeeds` once for both, [seed_j, σ_R] with the masked salt and roots shared, since two

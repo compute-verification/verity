@@ -713,6 +713,15 @@ def _gib(n: float) -> str:
     return f"{n / 2**30:.2f} GiB"
 
 
+def _split_step_names(srcs: list[Any], names: Any, step: int, padding_only: bool) -> tuple[Any, dict[str, tuple[int, int]]]:
+    """The step's names with each call-boundary source's own split off in turn, and every source's mismatches."""
+    bad: dict[str, tuple[int, int]] = {}
+    for src in srcs:
+        names, mine = src.split_step_names(names, step, padding_only)
+        bad.update(mine)
+    return names, bad
+
+
 _MEMTRACE = bool(os.environ.get("VERITY_MEMTRACE"))
 
 
@@ -2151,10 +2160,7 @@ class NativeHostCommitter(NativeRangeOpenings, hiding.LeafSchemeRule):
                 moe_bad = {-1: sum(c for n, c in moe_src.items() if n.startswith("moe/"))}      # MoE tensors from no declared source
             n_ids = (1 if "runner.sampler/sampled_token_ids" in pad_ident else 0) if padding_only else names.get("runner.sampler/sampled_token_ids", 0)
             sampler_bad = bool(man["sampler_ids"]) and n_ids != man["sampler_ids"]
-            cb_bad: dict[str, tuple[int, int]] = {}
-            for cb_src in cb_srcs:
-                mod_names, bad = cb_src.split_step_names(mod_names, step, padding_only)
-                cb_bad.update(bad)
+            mod_names, cb_bad = _split_step_names(cb_srcs, mod_names, step, padding_only)
             split_bad = {k: bad for k, bad in (("call_boundaries", cb_bad), ("routes", rt_bad)) if bad}
             ref_names = mod_names if ref_names is None else ref_names
             if padding_only:                                              # (b): set equality of identity names with step 0, not multiplicity
