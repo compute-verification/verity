@@ -249,7 +249,9 @@ def test_a_period_open_commits_its_cap_and_circuit_and_the_gate_admits_no_window
     (f"--name p1 --cap 2 --circuit {'x' * 257}", "the registered Program's id"),
 ])
 def test_a_period_open_without_a_valid_cap_and_circuit_is_refused(host, signer, args, why):
-    refused(ssh(host, signer, f"period-open {args}", "hash"), why)
+    rc, doc = ssh(host, signer, f"period-open {args}", "hash")
+    refused((rc, doc), why)
+    assert "\n" not in doc["refused"] and doc["refused"].count("usage:") <= 1
     assert A.read_ledger(host.ledger) == []
 
 
