@@ -8,7 +8,9 @@
 # asks, so the token is never in git's config or arguments; drive gives its own clone the same helper (`credential_args`), and
 # gh (/data/drive/bin/gh) reads GH_TOKEN itself. GH_TOKEN is the verity-drive App's, minted each tick by gh_app_token.sh from
 # /data/state/secrets/verity-drive.pem (an installation token, 1 h, contents and pull requests write on verity; INF-133).
-# r2.env (the store's parent key, which train.sh needs) and relay.env (SLACK_BOT_TOKEN for drive's posts) are sourced. The nodes are reached as `research run --on` reaches them: the notes clone's
+# r2.env (the store's parent key, which train.sh needs) and relay.env (SLACK_BOT_TOKEN for drive's posts) are sourced.
+# Drive posts as @ci, which `research msg` allows only ci's holder: RESEARCH_AGENT_URL is the caller's, else /data/drive/agent-url
+# (ci's coordinator URL, one line; ci rewrites it at a handover). The nodes are reached as `research run --on` reaches them: the notes clone's
 # machines.d (RESEARCH_NOTES, the steward's clone) and ~/.runpod/ssh/runpodctl-ssh-key. The store is a cache of the bucket on the
 # container disk (/root/drive-store, as the store index keeps its own): its SQLite catalog on the volume took minutes a pull.
 # While /data/drive/stopped exists no tick starts (a running one finishes): `drive.sh stop` writes it and waits for the tick in
@@ -28,6 +30,7 @@ export PATH=$DIR/bin:/root/.local/bin:$PATH GH_CONFIG_DIR=$DIR/gh-config GIT_TER
 locked() {
   exec 8> "$TICK"; flock 8
   set -a; . $CONF/r2.env; . $CONF/relay.env; set +a
+  [ -n "${RESEARCH_AGENT_URL:-}" ] || RESEARCH_AGENT_URL=$(cat $DIR/agent-url 2>/dev/null); export RESEARCH_AGENT_URL
   GH_TOKEN=$(/data/infra/gh_app_token.sh) || exit 1; export GH_TOKEN
   git -C "$REPO" fetch -q origin main && git -C "$REPO" checkout -q -f --detach FETCH_HEAD || exit 1
   cd "$REPO" && PYTHONPATH=$REPO/tools/research/src exec python3.12 -m research queue "$@"
