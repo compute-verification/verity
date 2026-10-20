@@ -7,10 +7,11 @@ unit's the reference's (`PouwH1Tile_v4`), an admitted block of zero-byte rows is
 empty row in a slot the queue selects (RT-ALGO-4), and the tally's limbs are 16-bit.  A call's A table is AROW's row table, a tile's rows open against it and the step's A root, and
 A' = -b is refused (CMP-38).  A linear's B table is the same format over its weight rows, under the weights' root; the
 scheduler's record gives the request queue and its commitment.  A window's live coins (`served_h1/coins.py`) come from a
-challenger off the node over its stream (a fake one on loopback, signed with a test key), which refuses a session of
-another layout; the verifier checks them from the challenger's own directory alone and refuses a pin of another key, a
-round root the challenger didn't receive, a salt that isn't its round's coin's, and a draw after another root; with no
-address the coins are in-process and labelled not certified."""
+challenger session off the node over its stream (a fake one on loopback, signed with a test key, its id and address as
+infra's request call would return them), which refuses a session of another layout; the verifier checks them from the
+challenger's own directory alone, under the key its key.json holds, and refuses a record under another key, a round root
+the challenger didn't receive, a salt that isn't its round's coin's, and a draw after another root; an address without its
+session id is refused, and with neither the coins are in-process and labelled not certified."""
 from __future__ import annotations
 
 import hashlib
@@ -18,6 +19,7 @@ import importlib.util
 import itertools
 import json
 import random
+import shutil
 import socket
 import sys
 import threading
@@ -408,6 +410,7 @@ class _Host:
         state.close()
         self.listener = socket.create_server(("127.0.0.1", 0))
         self.address = f"127.0.0.1:{self.listener.getsockname()[1]}"
+        self.session = CO.Session("test-session", self.address)
         self.reason: str | None = None
         self._thread = threading.Thread(target=self._run)
         self._thread.start()
@@ -455,26 +458,33 @@ def test_off_node_coins_are_checked_from_the_challengers_own_directory_and_a_for
     """A window's coins from the challenger off the node (`coins.open_coins` over `RemoteChallenger`): salt, one round a
     step and the draw, each opened there after the root the window sent.  The verifier (`coins.py check`) reads only the
     challenger's directory and the window's manifest, recomputes the round roots, salts and draw root from the manifest's
-    committed roots, and passes it under the pinned key; it refuses the deployed pin for a test key, and a window whose
-    round root, opening, salt, registration or draw root isn't what the challenger logged."""
+    committed roots, and passes it under the key the directory's key.json holds; it refuses that directory with another
+    key in key.json, and a window whose round root, opening, salt, registration or draw root isn't what the challenger
+    logged."""
+    from verity.ml.crypto import lms
     SV = _load("serve")
     host = _Host(tmp_path)
-    cs = CO.open_coins(host.address, EPOCH, ROUNDS)
-    assert (cs.source, cs.label) == ("off-node", f"off-node {host.address} (unchecked)")
+    cs = CO.open_coins(host.session, EPOCH, ROUNDS)
+    assert (cs.source, cs.label) == ("off-node", f"off-node session test-session at {host.address} (unchecked)")
+    assert cs.record()["session"] == "test-session"
     reg = hashlib.sha512(b"registration").digest()
     m = _serve_window(cs, SV, _calls(ROUNDS), reg)
     assert host.ended() is None
-    pin = hashlib.sha512(host.public).hexdigest()
     (tmp_path / "manifest.json").write_text(json.dumps(m))
-    assert CO.main(["check", "--challenger-out", str(host.directory), "--manifest", str(tmp_path / "manifest.json"),
-                    "--key-sha512", pin]) == 0
+    assert CO.main(["check", "--challenger-out", str(host.directory), "--manifest", str(tmp_path / "manifest.json")]) == 0
     e = SV.coins_expect(m)
-    got = CO.check(host.directory, m["coins"], reg, **e, key_sha512=pin)
-    assert got["ok"] and got["coins"] == "off-node vy-challenger-1 (checked)" and (got["rounds"], got["draws"]) == (ROUNDS, 1)
-    assert "not the one pinned for vy-challenger-1" in CO.check(host.directory, m["coins"], reg, **e)["reason"]
+    got = CO.check(host.directory, m["coins"], reg, **e)
+    assert got["ok"] and got["coins"] == "off-node vy-challenger-1 session test-session (checked)"
+    assert (got["rounds"], got["draws"], got["key_sha512"]) == (ROUNDS, 1, hashlib.sha512(host.public).hexdigest())
+    forged = tmp_path / "forged"
+    shutil.copytree(host.directory, forged)
+    other = lms.public_key(lms.keygen(lms.Params(64, 4, 2), bytes([8]) * 64))
+    (forged / "key.json").write_text(json.dumps(CO.Ch.ChallengerKey(4, 2, other).to_json()))
+    bad = CO.check(forged, m["coins"], reg, **e)
+    assert not bad["ok"] and bad["coins"] == "refused" and bad["reason"].startswith("CoinError")
 
     def refused(coins=m["coins"], registration=reg, **kw) -> dict:
-        r = CO.check(host.directory, coins, registration, **{**e, **kw}, key_sha512=pin)
+        r = CO.check(host.directory, coins, registration, **{**e, **kw})
         assert not r["ok"] and r["coins"] == "refused"
         return {k: v for k, v in r["reasons"].items() if v is not None}
 
@@ -496,33 +506,41 @@ def test_a_challenger_of_another_layout_is_refused_before_any_coin_and_its_sessi
         (tmp_path / str(i)).mkdir()
         host = _Host(tmp_path / str(i), epoch, rounds)
         with pytest.raises(CO.Ch.CoinError, match="not this window's"):
-            CO.open_coins(host.address, EPOCH, ROUNDS)
+            CO.open_coins(host.session, EPOCH, ROUNDS)
         assert host.ended() is None
         assert [json.loads(x)["event"] for x in (host.directory / "releases.jsonl").read_text().splitlines()] == ["commitment"]
 
 
-def test_without_an_address_the_coins_are_in_process_and_labelled_not_certified(monkeypatch):
+def test_without_a_session_the_coins_are_in_process_and_labelled_not_certified_and_half_a_session_is_refused(monkeypatch):
     monkeypatch.delenv(CO.CHALLENGER_ENV, raising=False)
-    assert CO.address(None) is None and CO.address("h:1") == "h:1"
+    monkeypatch.delenv(CO.SESSION_ENV, raising=False)
+    assert CO.session() is None and CO.session("h:1", "s1") == CO.Session("s1", "h:1")
+    for half in (("h:1", None), (None, "s1")):
+        with pytest.raises(CO.Ch.CoinError, match="an id and an address"):
+            CO.session(*half)
     monkeypatch.setenv(CO.CHALLENGER_ENV, "127.0.0.1:7811")
-    assert CO.address(None) == "127.0.0.1:7811"
+    with pytest.raises(CO.Ch.CoinError, match="an id and an address"):
+        CO.session()
+    monkeypatch.setenv(CO.SESSION_ENV, "s2")
+    assert CO.session() == CO.Session("s2", "127.0.0.1:7811")
     cs = CO.open_coins(None, EPOCH, ROUNDS, random.Random("prover").randbytes)
     assert (cs.source, cs.label, cs.record()["label"]) == ("in-process", "in-process (not certified)", CO.IN_PROCESS)
     assert CO.layout_reason(cs.commitment, EPOCH, ROUNDS) is None and CO.layout_reason(cs.commitment, EPOCH, 2) is not None
 
 
 def test_an_address_makes_the_window_live_and_seeded_coins_with_one_are_refused(tmp_path, monkeypatch):
-    """serve.py's coins follow the address: given one (here `$POUW_CHALLENGER`) and no ``--coins``, it opens the
-    challenger's session before anything else (this host's layout isn't the window's, so it stops there), and
-    ``--coins seeded`` beside an address is refused."""
+    """serve.py's coins follow the session: given one (here `$POUW_CHALLENGER` and `$POUW_CHALLENGER_SESSION`) and no
+    ``--coins``, it opens the challenger's session before anything else (this host's layout isn't the window's, so it
+    stops there), and ``--coins seeded`` beside a session is refused."""
     SV = _load("serve")
     host = _Host(tmp_path, EPOCH, ROUNDS + 1)
     monkeypatch.setenv(CO.CHALLENGER_ENV, host.address)
+    monkeypatch.setenv(CO.SESSION_ENV, host.session.id)
     argv = ["--out", str(tmp_path / "out"), "--at", "2026-10-20T00:00:00Z", "--by", "test", "--steps", str(ROUNDS)]
     with pytest.raises(CO.Ch.CoinError, match="not this window's"):
         SV.main(argv)
     assert host.ended() is None
-    with pytest.raises(ValueError, match="serves live coins, not --coins seeded"):
+    with pytest.raises(ValueError, match="session test-session serves live coins, not --coins seeded"):
         SV.main([*argv, "--coins", "seeded"])
 
 
