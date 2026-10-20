@@ -107,7 +107,7 @@ import hashlib
 from collections import Counter
 from dataclasses import dataclass
 from functools import lru_cache
-from typing import Any, Callable, Iterable
+from typing import Any, Callable, Iterable, Iterator
 
 from . import boolean as BL
 from . import ports
@@ -223,13 +223,57 @@ def silicon_step(fn: Any, model: Any) -> Any:
     return fn
 
 
+_PIECE = 1 << 16
+_SCALARS = {int, str, bool, type(None)}
+
+
+def _canonical_pieces(x: Any) -> Iterator[bytes]:
+    """`canonical_json(x)` in pieces: objects key by key, lists of scalars `_PIECE` items at a time, other lists their items in
+    runs of about `_PIECE` leaves (a DeepSeek-V4-Pro request census is 5 GB of canonical JSON, hashed without holding it)."""
+    if isinstance(x, dict):
+        yield b"{"
+        for i, k in enumerate(sorted(x)):
+            yield (b"," if i else b"") + canonical_json(k) + b":"
+            yield from _canonical_pieces(x[k])
+        yield b"}"
+    elif isinstance(x, (list, tuple)) and set(map(type, x)) <= _SCALARS:
+        yield b"["
+        for i in range(0, len(x), _PIECE):
+            yield (b"," if i else b"") + canonical_json(x[i:i + _PIECE])[1:-1]
+        yield b"]"
+    elif isinstance(x, (list, tuple)):
+        yield b"["
+        run: list = []
+        n, sep = 0, b""
+        for y in x:
+            w = len(y) if isinstance(y, (list, tuple)) else 1
+            if run and (isinstance(y, dict) or w > _PIECE or n + w > _PIECE):
+                yield sep + canonical_json(run)[1:-1]
+                run, n, sep = [], 0, b","
+            if isinstance(y, dict) or w > _PIECE:
+                yield sep
+                yield from _canonical_pieces(y)
+                sep = b","
+            else:
+                run.append(y)
+                n += w
+        if run:
+            yield sep + canonical_json(run)[1:-1]
+        yield b"]"
+    else:
+        yield canonical_json(x)
+
+
 def seal(doc: dict) -> dict:
     """`doc` with its `digest`: the SHA-512 of the canonical JSON of every other field (refused outside that JSON's domain)."""
     body = {k: v for k, v in doc.items() if k != "digest"}
     err = jcs_domain_error(body)
     if err is not None:
         raise ValueError(f"{doc.get('schema')}: outside the canonical JSON domain: {err}")
-    return body | {"digest": hashlib.sha512(canonical_json(body)).hexdigest()}
+    h = hashlib.sha512()
+    for piece in _canonical_pieces(body):
+        h.update(piece)
+    return body | {"digest": h.hexdigest()}
 
 
 def step_ends(program: Any, families: Iterable[str]) -> list[int]:

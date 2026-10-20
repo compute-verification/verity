@@ -2,6 +2,7 @@
 gates' operands, its classes from the activations), served MACs and family rules, steps, and the digest."""
 from __future__ import annotations
 
+import hashlib
 import sys
 import tracemalloc
 from collections import Counter, defaultdict
@@ -369,11 +370,21 @@ def test_step_ends_and_their_refusals():
 def test_the_digest_is_of_the_canonical_json():
     P = request()
     a, b = census(P, digest="ab" * 64), census(request())
-    assert a["digest"] == seal({k: v for k, v in a.items() if k != "digest"})["digest"]
+    body = {k: v for k, v in a.items() if k != "digest"}
+    assert a["digest"] == seal(body)["digest"] == hashlib.sha512(canonical_json(body)).hexdigest()
     assert a["program"] == "ab" * 64 and b["program"] is None and a["digest"] != b["digest"]
     assert census(request())["digest"] == b["digest"] != census(request(2))["digest"]
     with pytest.raises(ValueError, match="canonical JSON domain"):
         seal({"schema": "x", "n": 2 ** 53})
+
+
+@pytest.mark.parametrize("piece", [1, 2, 3, 1 << 16])
+def test_the_digest_hashes_the_canonical_json_in_pieces(monkeypatch, piece):
+    monkeypatch.setattr(CE, "_PIECE", piece)
+    mixed = {"b": [[], [1, [2, {"z": 1, "a": [3] * 5}]], (4, 5), [6] * 7, {"y": None}, "s", True], "": {}, "a": [[8, 9]] * 3,
+             "t": (), "u": [{"k": [1, 2]}, {}], "n": 2 ** 53 - 1}
+    for doc in [census(P) for _, P in programs()] + [mixed, [], {}, [[]], 7, "x"]:
+        assert b"".join(CE._canonical_pieces(doc)) == canonical_json(doc)
 
 
 def test_a_batch_too_large_to_enumerate_is_marked_approximate(monkeypatch):
