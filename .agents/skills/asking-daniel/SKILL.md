@@ -21,7 +21,13 @@ database's URL and data source (`pages`). A coordinator asks directly, one quest
 
 Only keys and claims need him (8 Oct, narrowed 13 Oct): access and keys, and what a guarantee says or rests on. Anything else,
 spend included, is its owner's call, and his standing rulings stand until he reverses them. Check the recorded rulings first
-("Rulings so far" in `.agents/skills/friction/SKILL.md`, `AGENTS.md`, the skills): if one covers the case, follow it.
+(`AGENTS.md`, the skills, "Standing rulings" in `.agents/skills/friction/SKILL.md`): if one covers the case, follow it.
+
+Until he says otherwise (19 Oct, 2:59 PM PDT: "provisionally accept all of them"), an ask that isn't money, keys or access
+goes on its page already decided: Status *Decided by lane*, Choose set to your pick, and Decision "Provisionally accepted
+(Daniel, 19 Oct 21:59Z standing rule): <option>. Re-check: <why it holds>". Resolve its card with that option and act on
+it; he reviews them as a batch in the database's "Provisional, to review" view and can reverse any. On a page that does
+wait on him, leave Choose empty: a Choose there reads as his pick.
 
 A decision that waits in a note or a thread waits forever: every ask gets a card, which mentions him (1 Oct).
 
@@ -115,6 +121,7 @@ once you've read the page as Daniel will), Asked by (your agent's URL), Card ID,
 
 ~~~bash
 research msg ask-daniel status <id> [--wait]                  # the card: "status choice source decided_at"; exit 0 once decided
+                                                              # --wait polls 20 min at most: still pending, it exits 79; end your turn
 research msg ask-daniel pages [--as HANDLE] [--hours H] [--json]
 research msg ask-daniel resolve <id> --choice <value> --note '<page url or his reply>'
 ~~~

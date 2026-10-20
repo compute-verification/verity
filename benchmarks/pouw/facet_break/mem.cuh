@@ -4,6 +4,9 @@
 //   FB_LD(name, D1, D2, R, P, Q, tpb)          every warp: Q loads an iteration; load q is D2 when q % R == R - 1
 //   FB_LDMMA(name, Form, D1, D2, R, P, Q, tpb) every warp: 8 MMAs and Q such loads an iteration, spread after the MMAs
 //
+// Two shared kinds aren't table reads: LDSM.16.M88.4 (ldmatrix x4, lane l gives row l's address) and STS.128 (a store of a
+// loop-invariant quad), the operand-staging traffic of a GEMM beside its MMAs.
+//
 // A block's table is a ring of 64 lines of 512 B (32 KB): its shared table, or its own region of `a.g` for LDG and TLD, so
 // a global table stays L1-resident. Load q of an iteration reads line (QL (warp + it) + q) mod 64, QL the power of two
 // at or above Q, so ptxas folds q into the instruction's immediate, can't merge two loads, and the loop is not invariant.
@@ -23,13 +26,16 @@
 namespace fb {
 
 enum Ld { D_NONE, D_LDS32, D_LDS64, D_LDS128, D_LDSU8, D_LDG32, D_LDGNC32, D_LDG64, D_LDG128, D_TLD1, D_TLD2, D_TLD4,
-          D_TLD4N, D_LDG256, D_L2G128, D_L2G128NA, D_L2G128CG, D_L2G256, D_L2G256CG };
+          D_TLD4N, D_LDG256, D_L2G128, D_L2G128NA, D_L2G128CG, D_L2G256, D_L2G256CG, D_LDSM4, D_STS128 };
 enum Pat { P_LINE, P_BCAST, P_QUAD, P_SCAT };
 
 constexpr unsigned FB_LINE = 512, FB_RING = 64, FB_RINGB = FB_LINE * FB_RING, FB_L2B = 256u << 10;
 
-__host__ __device__ constexpr bool shared_ld(int d) { return d >= D_LDS32 && d <= D_LDSU8; }
-// bytes between two lanes' words: the load's width, or its texel's (tex1's texel is 4 B whatever the fetch's width)
+__host__ __device__ constexpr bool shared_ld(int d) {
+  return (d >= D_LDS32 && d <= D_LDSU8) || d == D_LDSM4 || d == D_STS128;
+}
+// bytes between two lanes' words: the load's width, or its texel's (tex1's texel is 4 B whatever the fetch's width);
+// LDSM's lane gives one 16-byte matrix row
 __host__ __device__ constexpr unsigned lane_stride(int d) {
   return d == D_LDS64 || d == D_LDG64 ? 8
          : d == D_LDG256 || d == D_L2G256 || d == D_L2G256CG ? 32
@@ -88,6 +94,13 @@ __device__ __forceinline__ uint32_t ld(const OpArgs& a, uint32_t sbase, const un
                                 : tex1Dfetch<uint4>((cudaTextureObject_t)a.tex1, (int)(gel + o / 4));
     r0 = v.x; r1 = v.y; r2 = v.z; r3 = v.w;
   }
+  if constexpr (D == D_LDSM4)
+    asm volatile("ldmatrix.sync.aligned.m8n8.x4.shared.b16 {%0,%1,%2,%3}, [%4];"
+                 : "=r"(r0), "=r"(r1), "=r"(r2), "=r"(r3) : "r"(sbase + o));
+  // a store's quad is loop-invariant, so ptxas keeps it in one aligned quad and the loop holds the STS alone
+  if constexpr (D == D_STS128)
+    asm volatile("st.shared.v4.u32 [%0], {%1,%2,%3,%4};" ::"r"(sbase + o), "r"((uint32_t)a.mode), "r"(gel),
+                 "r"((uint32_t)a.mode ^ 0x9E3779B9u), "r"(gel ^ 0x7F4A7C15u));
   return r0 ^ r1 ^ r2 ^ r3 ^ r4 ^ r5 ^ r6 ^ r7;
 }
 
