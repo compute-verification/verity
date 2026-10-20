@@ -3,12 +3,13 @@ import Definitions.Accounting.Physical
 import Models.Accounting.Assumptions.WipeRead
 
 /-!
-# The lifetime pool on the actual circuit: the pool, the count and the lag (trusted, frozen)
+# The lifetime pool on the actual circuit: the pool, the count and the lag (trusted)
 
 `Accounting.Guarantees.Actual.WipePool` bounds the un-held fractions a run tree of wipes labels (`Accounting.WipePlay`)
 under `Accounting.Assumptions.TimedRoundSound`, which the labels alone make true. These state the pool on the
 challenger's actual verdicts instead, per read, what an answered block costs the server's state at the read, and what
-the state can gain between reads. Frozen statements of the MEM-55 red team: no theorem proves them yet.
+the state can gain between reads. Restated by the MEM-55 and MEM-60 red teams, and proved without `TimedRoundSound` in
+`Proofs/Accounting/Actual/WipeReadPool.lean`, `WipeBridge.lean` and `WipeLag.lean`.
 
 The setting is `Models.Accounting.Assumptions.WipeRead`'s: a strategy `S` on coins `r = (ω₀, c)`, `n` timed reads over
 its life with uniform indices `c : Fin n → B` on a store `B`, labels `lab ω₀ j` of `b` bits, read `j`'s index reaching
@@ -50,7 +51,7 @@ namespace Accounting.Guarantees.Actual
 open Finset
 
 open Classical in
-/-- **The lifetime pool per read, on the challenger's verdicts** (frozen, not proved). For verdicts `acc` on coins
+/-- **The lifetime pool per read, on the challenger's verdicts**. For verdicts `acc` on coins
 `r = (ω₀, c)` with `n` uniform indices on `B`, each fixed by the coins up to its own read (`Assumptions.LiveVerdicts`),
 and any `H`, the share of the coins on which the challenger accepts every read and the reads' un-answered fractions
 (`Actual.unanswered`) sum to at least `H` is at most `exp(−H)`. -/
@@ -60,7 +61,7 @@ def WipeReadPool : Prop :=
     ((univ.filter fun r => (∀ j, acc r j) ∧ H ≤ ∑ j, Actual.unanswered acc j r).card : ℝ) ≤
       Real.exp (-H) * Fintype.card (Ω₀ × (Fin n → B))
 
-/-- **What an answered block costs** (frozen, not proved). A causal strategy `S` (`CausalStrategy`: causal from every
+/-- **What an answered block costs**. A causal strategy `S` (`CausalStrategy`: causal from every
 tick, and each run at the latencies `ℓ`) with a latency ceiling of `ℓ⁺` from `X` to the leaves `Y` where the challenger
 reads its answers (`Placed.LatencyAtMost`), whose reads are live (`Assumptions.LiveReads`) and quiet for the deadline
 `D` when accepted, up to the devices' own coins `ζ` (`Assumptions.QuietReads`), with a verdict that accepts only late
@@ -83,7 +84,7 @@ def AnsweredOfQuiet : Prop :=
         a ≤ (Actual.answered acc j r).card).card : ℝ) ≤
       T.card * C.card * ((Fintype.card B).choose a : ℝ) / 2 ^ (a * b) * Fintype.card (Ω₀ × (Fin n → B))
 
-/-- **The lag between reads** (frozen, not proved). For a strategy `S` causal from every tick (`CausalFrom`) on links
+/-- **The lag between reads**. For a strategy `S` causal from every tick (`CausalFrom`) on links
 as declared (`DeclaredLinks`: each link `e` delivers one of at most `2^{β e}` signals a tick each way, and every wire
 between leaves runs on a declared link), a location `X`, ticks `s ≤ t` and any set `K` of coins, the contents of `X`'s
 state at `t` over `K` (`Actual.contents`) number at most those at `s` times `2^{β_X (t − s)}`, where `β_X` is the
@@ -98,7 +99,7 @@ def WipeLag : Prop :=
       (Actual.contents S X s K).encard * ((2 ^ (linkCapacity ends β X * (t - s)) : ℕ) : ℕ∞)
 
 open Classical in
-/-- **The store held read by read** (frozen, not proved). The challenger at the leaves `V` decides read `j` by
+/-- **The store held read by read**. The challenger at the leaves `V` decides read `j` by
 `Ch j` of its view (`Actual.Run.view`), as `Accounting.Sound` reads a verifier. Under `WipeReadPool`'s and
 `AnsweredOfQuiet`'s premises for that verdict, for any ticks `T`, any count `a`, any width `m` and any `K`, the share of
 the coins on which every read is accepted and arrives at a tick of `T`, and at least `K` reads find `X`'s state

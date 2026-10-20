@@ -78,6 +78,9 @@
    "owner": "@memory-accounting",
    "digest": "9191da3bbab04e2c655d21d45cd15f7b317e9cc5cfe9b93627e1b050b7203aec"
   },
+  "Accounting.Placed.LatencyAtMost": {
+   "owner": "@memory-accounting"
+  },
   "Claims.ExpectedCR": {
    "owner": "@proofs",
    "digest": "ccb0737889852a6df27bfbac4afc86597d213f0c77267a6c81a44e5c1dd7479e"
@@ -676,6 +679,9 @@
  },
  "four_names": ["Nci", "NetTiming", "Accounting"],
  "guarantees": {
+  "Accounting.SecurityProofs.Actual.AnsweredOfQuiet": {
+   "owner": "@memory-accounting"
+  },
   "Accounting.SecurityProofs.Actual.Runtime": {
    "owner": "@lean",
    "signature": ["Accounting.SecurityProofs.Actual.Runtime.{u_1, u_2} : Accounting.Guarantees.Actual.Runtime"],
@@ -708,6 +714,9 @@
    "assumptions": [],
    "type_hash": "374296d8334aa13abbb145fd7f4dc2b4bd0879828f6d5863bb10306b610fadce"
   },
+  "Accounting.SecurityProofs.Actual.WipeLag": {
+   "owner": "@memory-accounting"
+  },
   "Accounting.SecurityProofs.Actual.WipePool": {
    "owner": "@lean",
    "signature": ["Accounting.SecurityProofs.Actual.WipePool : Accounting.Guarantees.Actual.WipePool"],
@@ -719,6 +728,12 @@
    "signature": ["Accounting.SecurityProofs.Actual.WipePoolDelta : Accounting.Guarantees.Actual.WipePoolDelta"],
    "assumptions": [],
    "type_hash": "6d1788cd897b115bad02b6978826ceae7b7be7b32e0b3b26abe4736b4f3277a7"
+  },
+  "Accounting.SecurityProofs.Actual.WipeReadHeld": {
+   "owner": "@memory-accounting"
+  },
+  "Accounting.SecurityProofs.Actual.WipeReadPool": {
+   "owner": "@memory-accounting"
   },
   "Accounting.SecurityProofs.B2": {
    "owner": "@memory-accounting",
@@ -5009,21 +5024,21 @@
    }
   },
   "frozen": {
-   "Accounting.Guarantees.Actual.AnsweredOfQuiet": "unstated: what an answered block costs on the actual circuit, at most |T| |C| C(|B|, a) 2^(-a b) of the coins answer a blocks at one of C contents, from a causal strategy, a latency ceiling from X to the challenger's answer leaves (latency-ceiling), live reads, quiet accepted reads up to the devices' own coins, acceptance of late answers only and labels uniform given those coins; a lemma of WipeReadHeld, frozen for the MEM-60 red team, not proved yet (note:20261019T2210Z-report-timed-round-redteam-3)",
-   "Accounting.Guarantees.Actual.WipeLag": "unstated: the lag between reads, X's state contents at t at most those at s times 2^(beta_X (t - s)); frozen for the MEM-60 red team, not proved yet (note:20261019T2210Z-report-timed-round-redteam-3)",
-   "Accounting.Guarantees.Actual.WipeReadHeld": "unstated: the store held read by read, at most exp(-K (1 - (a - 1)/|B|)) + n |T| 2^m C(|B|, a) 2^(-a b) of the coins have every read accepted by the challenger's verdict on its view and at least K reads under m bits of state, from WipeReadPool's and AnsweredOfQuiet's premises on that verdict; frozen for the MEM-60 red team, not proved yet (note:20261019T2210Z-report-timed-round-redteam-3)",
-   "Accounting.Guarantees.Actual.WipeReadPool": "unstated: the lifetime pool per read on the challenger's verdicts (Accounting.Actual.unanswered), WipePool at k = 1 with U the un-answered blocks, under live verdicts alone; a lemma of WipeReadHeld, frozen for the MEM-60 red team, not proved yet (note:20261019T2210Z-report-timed-round-redteam-3)",
    "Accounting.Guarantees.Remote.Conservation": "unstated: the remote audit's conservation statement, at no location; proved from its routes as hypotheses by Accounting.SecurityProofs.Remote.Conservation, a lemma; not listed until the routes are proved for the runs the actual circuit realizes (note:20261012T1824Z-draft-remote-theorem-spec)",
    "Accounting.Guarantees.Remote.NodeLevel": "unstated: the remote audit's node-level statement under Identity (statement C); proved from its routes as hypotheses by Accounting.SecurityProofs.Remote.NodeLevel, a lemma; not listed until the routes are proved for the runs the actual circuit realizes (note:20261012T1824Z-draft-remote-theorem-spec)",
    "Accounting.Guarantees.Remote.NodeLevelJoint": "unstated: the node-level statement's counting form under Identity (Mbw at the node); proved from its routes as hypotheses by Accounting.SecurityProofs.Remote.NodeLevelJoint, a lemma; not listed until the routes are proved for the runs the actual circuit realizes (note:20261012T1824Z-draft-remote-theorem-spec)",
    "Accounting.Guarantees.Remote.NodeLevelLinks": "unstated: the node-level statement without Identity, with the links charged; proved from its routes as hypotheses by Accounting.SecurityProofs.Remote.NodeLevelLinks, a lemma; not listed until the routes are proved for the runs the actual circuit realizes (note:20261012T1824Z-draft-remote-theorem-spec)",
+   "Accounting.SecurityProofs.Actual.AnsweredOfQuiet": "lemma: the count of coins on which a read answers a blocks at one of C contents, from a causal strategy, the latency ceiling (latency-ceiling) and WipeRead's premises on a verdict read off the coins; WipeReadHeld is what it is for.",
    "Accounting.SecurityProofs.Actual.Runtime": "falsified (conjecture,no-function): It is the runtime corollary of Accounting.SecurityProofs.Actual.Windows and UpdatedMatMulReads, so it rests on ActivationsIncompressible and PartialSumsIncompressible, an analysis simplification, known false (Daniel 7:46 PM PDT (02:46Z)); lean restates them.",
    "Accounting.SecurityProofs.Actual.ThreadedRate": "frozen (no-function,world-unlisted): It is stated over an arbitrary actual circuit (Accounting.Placed) and a threaded reference circuit its developer's declaration contains, and takes the physical constraints Causal, ComputeRate and Links, a bound on the state at each wipe, and the named WeightsIncompressible on the reference circuit, per-run hypotheses rather than a function's acceptance.",
    "Accounting.SecurityProofs.Actual.ThreadedRuntime": "frozen (no-function,world-unlisted): It is stated over an arbitrary actual circuit (Accounting.Placed) and a threaded reference circuit its developer's declaration contains, and takes the physical constraints Causal, ComputeRate and Links, a bound on the state at each window's start, and the named WeightsIncompressible on the reference circuit, per-run hypotheses rather than a function's acceptance.",
    "Accounting.SecurityProofs.Actual.Windows": "frozen (no-function,world-unlisted): It is stated over an arbitrary actual circuit (Accounting.Placed) and takes the physical constraints Causal, ComputeRate, Memory and Links about it, per-run hypotheses that are not on the premises list, rather than a function's acceptance.",
    "Accounting.SecurityProofs.Actual.WindowsAt": "frozen (no-function,world-unlisted): It is stated over an arbitrary actual circuit (Accounting.Placed) and arbitrary cuts of its run, and takes the physical constraints Causal, ComputeRate and Links about it, per-run hypotheses that are not on the premises list, rather than a function's acceptance.",
+   "Accounting.SecurityProofs.Actual.WipeLag": "lemma: the contents of X's state at t number at most those at s times 2^(beta_X (t - s)), a counting bound over CausalFrom and DeclaredLinks on any strategy, with no function's acceptance; with WipeReadHeld it bounds the state between reads (note:20261019T2210Z-report-timed-round-redteam-3).",
    "Accounting.SecurityProofs.Actual.WipePool": "frozen (no-function): It states the lifetime pool over an abstract run tree of wipes (Accounting.WipePlay.prEv) under the named timed-round premise Accounting.Assumptions.TimedRoundSound, a bound on a probability over the prover's strategies rather than a property of a function's acceptance.",
    "Accounting.SecurityProofs.Actual.WipePoolDelta": "frozen (no-function): It is the lifetime pool at H = ln(1/δ)/k, over the same abstract run tree of wipes (Accounting.WipePlay.prEv) under Accounting.Assumptions.TimedRoundSound, rather than a property of a function's acceptance.",
+   "Accounting.SecurityProofs.Actual.WipeReadHeld": "frozen (no-function): its acceptance, the challenger's verdict Ch j on its view, is inside a counted event (the card of a filter over the coins, not a shape.events probability), and it takes per-run physical premises (CausalStrategy, Placed.LatencyAtMost) over an arbitrary strategy rather than a function's acceptance (note:20261019T2210Z-report-timed-round-redteam-3).",
+   "Accounting.SecurityProofs.Actual.WipeReadPool": "lemma: Ville's inequality over the reads on the challenger's verdicts read off the coins, arithmetic under LiveVerdicts alone; WipeReadHeld is what it is for.",
    "Accounting.SecurityProofs.B2": "frozen (no-function,world-unlisted): It is stated over arbitrary strategies (maps from PoUS's outcomes to Accounting.Actual.Run) causal from every tick (CausalFrom), and takes the challenge ticks read off the run and increasing in it, the location's state, first tick and help fixed by the setup, what reaches it during each window fixed by the help, that window's challenge and its tick, the next tick a function of those and of what the location does, and each challenge's tick taking at most 2^τ values on the runs on time, as hypotheses that are not on the premises list, rather than a function's acceptance.",
    "Accounting.SecurityProofs.B2Adds": "frozen (no-function,world-unlisted): It is stated over arbitrary families of strategies (maps from PoUS's outcomes to Accounting.Actual.Run) causal from every tick, takes B2's hypotheses on them, which are not on the premises list, and composes them with PoUS's AuditSecureOn over the ring model, taken as a hypothesis, through lemma M: about no function of the code.",
    "Accounting.SecurityProofs.B2AddsP2Ring": "frozen (no-function,world-unlisted): It is B2Adds at P2's deployed point: stated over arbitrary families of strategies causal from every tick, with B2's hypotheses on them, which are not on the premises list, and P2's named assumption P2RingAuditSecure taken as a hypothesis: about no function of the code.",

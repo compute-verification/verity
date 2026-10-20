@@ -3,8 +3,8 @@ import Definitions.Accounting.Actual.WipeHeld
 /-!
 # Timed reads on the actual circuit: the lifetime pool's premises, restated (trusted)
 
-The MEM-55 restatement of `Accounting.Assumptions.TimedRoundSound` (owner memory-accounting, frozen as statements, not
-yet proved or carded). That premise reads only `Accounting.WipePlay`'s labels: at every wipe, a passing draw
+The MEM-55 restatement of `Accounting.Assumptions.TimedRoundSound` (owner memory-accounting; the guarantees that take
+these premises are proved in `Proofs/Accounting/Actual/WipeBridge.lean`, not yet carded). That premise reads only `Accounting.WipePlay`'s labels: at every wipe, a passing draw
 challenges no block of `U`. Taking `U` as the blocks whose every challenge fails makes it true by definition, and
 taking `U = ∅` makes it true of any tree, so it says nothing about a server. Here `U` is read `j`'s un-answered
 blocks (`Accounting.Actual.answered`), which makes the pool a theorem with no premise but `LiveVerdicts`, and these say
