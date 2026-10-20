@@ -10,9 +10,12 @@ core's ``verity/registration/v1`` record (``registration.record``) with ``window
 run root>, ...provenance}`` (``registration``).  The served Programs' digests are provenance in the window: no query of core's selects
 template instances inside a served Program (the template queries need every root node to be an instance).
 
-A population is a sequence of members (:class:`Member`), one per template in the partition's order, each with its row ports and
-output ports in M0's order.  Each output port is a row too, after the member's input rows: its words zero-padded to whole SHA-512
-blocks, committed under its own salt like an input row (an output is a value: no output word is ever public).  Per row
+A population is a sequence of members (:class:`Member`), one per template in the partition's order, or a template's units in
+consecutive chunks, one member per statement (a circuit's spec shape caps its instances), each with its row ports and output
+ports in M0's order.  Each output port is a row too, after the member's input rows: its words zero-padded to whole SHA-512
+blocks, committed under its own salt like an input row (an output is a value: no output word is ever public).  A bit-row member
+(C-Flock's ``row_schemas``) commits each row as the bits of its words under its port's schema (``hm96-sha512/row/v2`` or
+``…/row-seg/v1``), each output row exactly its words.  Per row of ``hm96-sha512/row/v1``
 (``tests/commit/test_serving_rows.py`` pins it to core and to M0's vector):
 
   row     the words, u16 little-endian
@@ -23,13 +26,14 @@ blocks, committed under its own salt like an input row (an output is a value: no
   string  ``b || c = hm96.SHA512.commit_string(default_key, x, y)``                               (public, 128 bytes)
   leaf    the ``frame-v3-sha512`` row leaf, schema ``hm96-sha512/row/v1``, over ``hm96.SHA512.tree_leaf(default_key, b || c)``
 
-Each port ``<descriptor id>/<port>`` is one tree under ``CommitmentDomain(binding, -1, [0, leaves), "sha512")``, with core's
+Each port ``<member>/<port>`` is one tree under ``CommitmentDomain(binding, -1, [0, leaves), "sha512")``, with core's
 served-domain rule (``registration.served_domain``): ``binding = identity_digest_sha512(DOMAIN_TAG, {program, partition, port,
 schema, leaves, run})``, every field a registration field and ``run`` the vllm-v1 run root, so the verifier recomputes every domain
 from the registration and the Commit's record (``expected_ports``).  The leaf layer is the SHA-512 of the canonical map from each
-member's template to the SHA-512 of its public body (``leaf_layer``).  ``write`` puts into a window directory ``registration.json``,
-``index.json`` (unit -> served identity, its SHA-512 in the window's provenance), per member ``m<k>-public.bin`` and
-``m<k>-private.bin`` (M0's public and prover bodies; the private one is prover only) and ``window.json``; ``flock_input_files`` wraps
+member (its template, or its chunk's name) to the SHA-512 of its public body (``leaf_layer``).  ``write`` puts into a window
+directory ``registration.json``, ``index.json`` (unit -> served identity, its SHA-512 in the window's provenance), per member
+``m<k>-public.bin`` and ``m<k>-private.bin`` (M0's public and prover bodies; the private one is prover only) and ``m<k>-units.json``
+(its global unit indices), and ``window.json``; ``flock_input_files`` wraps
 member ``k``'s bodies as M0's ``m<k>-pub-<n>.bin`` (``rows: false``) and ``m<k>-inst-<n>.bin``.
 """
 from __future__ import annotations
@@ -52,13 +56,16 @@ from verity.ml.commitments import hm96
 from verity.ml.commitments.identity import identity_digest_sha512
 from verity.ml.commitments.indexed import RangeIndexedDomain
 from verity.ml.commitments.merkle import CommitmentDomain
-from verity.ml.commitments.rowleaf import ROLE_X, SCHEMA_HM96_SHA512_ROW, sha512_row_prefix
+from verity.ml.commitments.rowleaf import (ROLE_X, SCHEMA_HM96_SHA512_ROW, SCHEMA_HM96_SHA512_ROW_SEG, SCHEMA_HM96_SHA512_ROW_V2,
+                                           sha512_row_prefix, sha512_row_seg_digest, sha512_row_v2_prefix)
 from verity.ml.circuits.codec import canonical_json
 
 from .hiding import HidingLeaves
 
 SCHEME = "frame-v3-sha512/hm96-sha512"
 ROW_SCHEMA = SCHEMA_HM96_SHA512_ROW
+BIT_ROW_SCHEMAS = (SCHEMA_HM96_SHA512_ROW_V2, SCHEMA_HM96_SHA512_ROW_SEG)
+UNITS_SCHEMA = "verity-vllm/serving-rows/units/v0"
 WORD_SCHEMA = "u16"
 DOMAIN_TAG = R.SERVED_DOMAIN
 OWNER = -1
@@ -184,7 +191,7 @@ def _chunk(task: tuple[str, int, int]) -> tuple[str, int, bytes, bytes]:
         m, rb = hi - start, j["row_bytes"]
         rows = memoryview(j["rows"])[start * rb:hi * rb]
         ys = j["salts"][start * SALT_BYTES:hi * SALT_BYTES]
-        x = b"".join(_copy_update(j["inner"], rows[i * rb:(i + 1) * rb]) for i in range(m))
+        x = b"".join(j["inner"](rows[i * rb:(i + 1) * rb]) for i in range(m))
         b = memoryview((np.frombuffer(x, dtype=np.uint8).reshape(m, 64) ^ _JOB["hiding"].masks(ys, m)).tobytes())
         yv, out = memoryview(ys), bytearray()
         salt_h, leaf_h, schema = _JOB["salt_h"], _JOB["leaf_h"], j["schema"]
@@ -204,34 +211,59 @@ def _chunk(task: tuple[str, int, int]) -> tuple[str, int, bytes, bytes]:
 
 @dataclass(frozen=True)
 class Member:
-    """One template of the population: its descriptor id, row and output ports ``(name, words)`` in M0's order, its instance count
-    and the global index of its first unit."""
+    """One statement's units of the population: its template's descriptor id, row and output ports ``(name, words)`` in M0's
+    order, its instance count and the global index of its first unit.  A template is one member, or consecutive chunks of its
+    units (``name`` ``<descriptor id>/c<j>``), one per statement of at most the circuit's chunk cap.  ``schemas``: a bit-row
+    member's row schema per port (``hm96-sha512/row/v2`` or ``…/row-seg/v1``, C-Flock's ``row_schemas``), each row the bits
+    of its u16 words and each output row exactly its words; else every row is ``hm96-sha512/row/v1``."""
     template: str
     rows: tuple[tuple[str, int], ...]
     outs: tuple[tuple[str, int], ...]
     n: int
     base: int = 0
     tables: tuple[tuple[str, int], ...] = ()     # a shared-row member: each row port's table size (rows are referenced by refs)
+    name: str = ""
+    schemas: tuple[tuple[str, str], ...] = ()
+
+    def __post_init__(self) -> None:
+        if self.schemas and (sorted(p for p, _ in self.schemas) != sorted(p for p, _ in self.rows + self.outs)
+                             or any(s not in BIT_ROW_SCHEMAS for _, s in self.schemas)):
+            raise ValueError(f"{self.key}: a bit-row member names one of {BIT_ROW_SCHEMAS} for each port, not {dict(self.schemas)}")
+
+    @property
+    def key(self) -> str:
+        """What its ports, the leaf layer and the files call it: its template, or its chunk's name."""
+        return self.name or self.template
 
     @property
     def out_rows(self) -> tuple[tuple[str, int], ...]:
-        """Each output port's row: its words zero-padded to whole SHA-512 blocks (64 words each), as M0's ``out_row``."""
-        return tuple((p, -(-w // 64) * 64) for p, w in self.outs)
+        """Each output port's row: its words zero-padded to whole SHA-512 blocks (64 words each), as M0's ``out_row``; a bit-row
+        member's, exactly its words."""
+        return tuple((p, w if self.schemas else -(-w // 64) * 64) for p, w in self.outs)
 
     @property
     def all_rows(self) -> tuple[tuple[str, int], ...]:
         """M0's rows: the input rows, then one output row per output port."""
         return self.rows + self.out_rows
 
+    def schema(self, port: str) -> str:
+        return dict(self.schemas).get(port, ROW_SCHEMA)
+
+    @property
+    def row_schemas(self) -> list[list[Any]] | None:
+        """C-Flock META's ``row_schemas`` for a bit-row member: ``[schema, bits]`` per row, in M0's order."""
+        return [[self.schema(p), 16 * w] for p, w in self.all_rows] if self.schemas else None
+
     def port(self, name: str) -> str:
-        """The name a root, its domain and the registration use: ``<descriptor id>/<port>``."""
-        return f"{self.template}/{name}"
+        """The name a root, its domain and the registration use: ``<member>/<port>``."""
+        return f"{self.key}/{name}"
 
 
-def population_program(templates: Sequence[tuple[Any, int]]) -> tuple[Any, dict[str, Any]]:
+def population_program(templates: Sequence[tuple[Any, int]], several: bool = False) -> tuple[Any, dict[str, Any]]:
     """The verifier's population program and query over ``(template Definition, instances)`` in order: ``TemplateInstances`` and
-    ``Q_template_instance`` for one template, ``TemplatePopulations`` and ``Q_template_instances`` for several."""
-    if len(templates) == 1:
+    ``Q_template_instance`` for one template, ``TemplatePopulations`` and ``Q_template_instances`` for several (or, ``several``,
+    for one)."""
+    if len(templates) == 1 and not several:
         (t, n), = templates
         return P.population_program(t, n), P.template_instance_query(t)
     return P.mixed_population_program(list(templates)), P.template_instances_query([t for t, _ in templates])
@@ -248,9 +280,20 @@ class Window:
     members: tuple[Member, ...]
 
     def __post_init__(self) -> None:
-        mine = [(m.template, m.base, m.n) for m in self.members]
-        if P.ranges(self.program, self.query) != mine:
-            raise ValueError(f"members {mine} are not the partition's units {P.ranges(self.program, self.query)}")
+        mine, want = [(m.template, m.base, m.n) for m in self.members], P.ranges(self.program, self.query)
+        tiled, it = [], iter(mine)
+        for t, base, n in want:
+            at = base
+            while at < base + n:
+                got = next(it, None)
+                if got is None or got[0] != t or got[1] != at or got[2] < 1:
+                    break
+                at += got[2]
+            tiled.append(at == base + n)
+        if not all(tiled) or next(it, None) is not None or sum(m.n for m in self.members) != sum(n for _, _, n in want):
+            raise ValueError(f"members {mine} are not the partition's units {want} (each template's, in consecutive chunks)")
+        if len({m.key for m in self.members}) != len(self.members):
+            raise ValueError(f"members {[m.key for m in self.members]}: each its own name")
 
     @cached_property
     def partition(self) -> dict[str, Any]:
@@ -275,7 +318,7 @@ class Window:
 @dataclass
 class Committed:
     window: Window
-    roots: dict[str, bytes]            # by <descriptor id>/<port>
+    roots: dict[str, bytes]            # by <member>/<port>
     domains: dict[str, CommitmentDomain]
     bc: dict[str, bytes]               # per row port: every row's b || c, concatenated
     salts: dict[str, bytes]            # per row port: every row's salt (private)
@@ -309,19 +352,34 @@ class Committed:
         return {"frame": "frame-v3-sha512", "roots": {p: self.roots[m.port(p)].hex() for p in names},
                 "domain_ids": {p: self.domains[m.port(p)].domain_id.hex() for p in names},
                 "bindings": {p: self.domains[m.port(p)].binding.hex() for p in names}, "owner": OWNER,
-                "schemas": {p: ROW_SCHEMA for p in names}, "row_key_sha512": hashlib.sha512(INST.default_key).hexdigest()}
+                "schemas": {p: m.schema(p) for p in names}, "row_key_sha512": hashlib.sha512(INST.default_key).hexdigest()}
+
+
+def _inner(schema: str, words: int) -> Any:
+    """A row's inner digest under ``schema``, from its u16 words' bytes: ``sha512/row/v1`` (role X, 16-bit words), or the bit row
+    of its ``16 words`` bits (``sha512/row/v2``, ``sha512/row-seg/v1``)."""
+    if schema == ROW_SCHEMA:
+        h = hashlib.sha512(sha512_row_prefix(ROLE_X, 16, words))
+    elif schema == SCHEMA_HM96_SHA512_ROW_V2:
+        h = hashlib.sha512(sha512_row_v2_prefix(16 * words))
+    elif schema == SCHEMA_HM96_SHA512_ROW_SEG:
+        return lambda row: sha512_row_seg_digest(bytes(row), 16 * words)
+    else:
+        raise ValueError(f"row schema {schema!r} is not one of {(ROW_SCHEMA, *BIT_ROW_SCHEMAS)}")
+    return lambda row: _copy_update(h, row)
 
 
 def commit_ports(domains: dict[str, CommitmentDomain], rows: dict[str, np.ndarray], words: dict[str, np.ndarray], ys: dict[str, bytes], *,
-                 workers: int = 1, chunk: int = CHUNK) -> tuple[dict[str, bytes], dict[str, bytes]]:
-    """Roots of row ports (``rows[p]``: (count, words) u16, salts ``ys[p]``) and word ports (``words[p]``: u16, flattened), each
-    under its domain; and every row's ``b || c``.  Equal to core's ``FrameV3.root`` over ``row_leaf`` / word leaves."""
+                 workers: int = 1, chunk: int = CHUNK, schemas: Mapping[str, str] | None = None) -> tuple[dict[str, bytes], dict[str, bytes]]:
+    """Roots of row ports (``rows[p]``: (count, words) u16, salts ``ys[p]``, schema ``schemas[p]``, else ``hm96-sha512/row/v1``)
+    and word ports (``words[p]``: u16, flattened), each under its domain; and every row's ``b || c``.  Equal to core's
+    ``FrameV3.root`` over ``row_leaf`` / word leaves."""
     ports: dict[str, dict[str, Any]] = {}
     for p, r in rows.items():
         r = np.ascontiguousarray(r).astype("<u2")
+        s = (schemas or {}).get(p, ROW_SCHEMA)
         ports[p] = {"kind": "row", "count": domains[p].count, "domain_id": domains[p].domain_id, "rows": r.tobytes(),
-                    "row_bytes": 2 * int(r.shape[1]), "salts": ys[p], "inner": hashlib.sha512(sha512_row_prefix(ROLE_X, 16, int(r.shape[1]))),
-                    "schema": _part(ROW_SCHEMA.encode())}
+                    "row_bytes": 2 * int(r.shape[1]), "salts": ys[p], "inner": _inner(s, int(r.shape[1])), "schema": _part(s.encode())}
     for p, w in words.items():
         ports[p] = {"kind": "word", "count": domains[p].count, "domain_id": domains[p].domain_id,
                     "words": np.ascontiguousarray(w).reshape(-1).astype(np.uint16), "schema": _part(WORD_SCHEMA.encode())}
@@ -360,18 +418,20 @@ def commit(window: Window, data: Sequence[dict[str, dict[str, np.ndarray]]], *, 
     ms = window.members
     if len(data) != len(ms) or sum(m.n for m in ms) != window.population:
         raise ValueError(f"{sum(m.n for m in ms)} units in {len(ms)} members; the registered population is {window.population}")
-    rows, refs = {}, {}
+    rows, refs, schemas = {}, {}, {}
     for k, (m, dk) in enumerate(zip(ms, data, strict=True)):
         count = dict(m.tables)
         for kind, ports in (("rows", m.rows), ("outs", m.outs)):
             if set(dk[kind]) != {p for p, _ in ports}:
-                raise ValueError(f"{m.template}: {kind} {sorted(dk[kind])} are not {[p for p, _ in ports]}")
+                raise ValueError(f"{m.key}: {kind} {sorted(dk[kind])} are not {[p for p, _ in ports]}")
             for p, words in ports:
                 a = np.asarray(dk[kind][p], dtype=np.uint16)
                 want = (count.get(p, m.n) if kind == "rows" else m.n, words)
-                if a.shape != want or (kind == "rows" and (2 * words) % 128):
-                    raise ValueError(f"{m.port(p)}: {a.shape} is not {want[0]} x {words}" + (" words of whole SHA-512 blocks" if kind == "rows" else ""))
+                blocks = kind == "rows" and m.schema(p) == ROW_SCHEMA
+                if a.shape != want or (blocks and (2 * words) % 128):
+                    raise ValueError(f"{m.port(p)}: {a.shape} is not {want[0]} x {words}" + (" words of whole SHA-512 blocks" if blocks else ""))
                 rows[m.port(p)] = a
+                schemas[m.port(p)] = m.schema(p)
         for (p, w), (_, padded) in zip(m.outs, m.out_rows, strict=True):
             row = np.zeros((m.n, padded), dtype=np.uint16)
             row[:, :w] = rows[m.port(p)]
@@ -380,15 +440,15 @@ def commit(window: Window, data: Sequence[dict[str, dict[str, np.ndarray]]], *, 
             r = np.asarray(dk["refs"], dtype=np.int64)
             bound = np.array([count[p] for p, _ in m.rows])
             if r.shape != (m.n, len(m.rows)) or (r < 0).any() or (r >= bound).any():
-                raise ValueError(f"{m.template}: refs {r.shape} are not {m.n} x {len(m.rows)} rows inside tables {dict(m.tables)}")
+                raise ValueError(f"{m.key}: refs {r.shape} are not {m.n} x {len(m.rows)} rows inside tables {dict(m.tables)}")
             own = np.repeat(np.arange(m.n, dtype=np.int64)[:, None], len(m.outs), axis=1)
             refs[k] = np.concatenate([r, own], axis=1).astype(np.uint32)
     key = os.urandom(32) if salt_key is None else bytes(salt_key)
     ys = {p: salts(key, k, len(rows[p])) for k, p in enumerate(rows)}
     del key
     t_salt = time.perf_counter()
-    domains = {p: window.domain(p, ROW_SCHEMA, len(a)) for p, a in rows.items()}
-    roots, bc = commit_ports(domains, rows, {}, ys, workers=workers, chunk=chunk)
+    domains = {p: window.domain(p, schemas[p], len(a)) for p, a in rows.items()}
+    roots, bc = commit_ports(domains, rows, {}, ys, workers=workers, chunk=chunk, schemas=schemas)
     t1 = time.perf_counter()
     return Committed(window, roots, domains, bc, ys, rows, {"salts_s": round(t_salt - t0, 3), "commit_s": round(t1 - t_salt, 3),
                                                             "total_s": round(t1 - t0, 3), "workers": workers}, refs)
@@ -403,15 +463,15 @@ def port_leaves(m: Member) -> dict[str, int]:
 
 
 def expected_ports(window: Window) -> dict[str, dict[str, Any]]:
-    """The ports the verifier's own window derives, as ``registration.check`` takes them: ``{<descriptor id>/<port>: {leaves,
+    """The ports the verifier's own window derives, as ``registration.check`` takes them: ``{<member>/<port>: {leaves,
     domain}}``, each domain ``registration.served_domain`` over the window's program, partition and run."""
     prog, part = window.partition["program"], window.partition_digest
-    return {m.port(p): {"leaves": n, "domain": R.served_domain(prog, part, m.port(p), ROW_SCHEMA, n, window.run)}
+    return {m.port(p): {"leaves": n, "domain": R.served_domain(prog, part, m.port(p), m.schema(p), n, window.run)}
             for m in window.members for p, n in port_leaves(m).items()}
 
 
 def leaf_layer(publics: Mapping[str, bytes]) -> str:
-    """``LEAF_LAYER`` over ``{template: public body}``."""
+    """``LEAF_LAYER`` over ``{member: public body}``."""
     return hashlib.sha512(canonical_json({t: hashlib.sha512(b).hexdigest() for t, b in publics.items()})).hexdigest()
 
 
@@ -424,7 +484,7 @@ def registration(c: Committed, provenance: Mapping[str, Any], previous: str | No
         raise ValueError(f"window kind {kind!r} is not one of {R.KINDS}")
     w = c.window
     roots = [{"port": p, "root": c.roots[p].hex(), "leaves": c.domains[p].count, "domain": c.domains[p].domain_id.hex()} for p in c.roots]
-    publics = {m.template: c.public_body(k) for k, m in enumerate(w.members)}
+    publics = {m.key: c.public_body(k) for k, m in enumerate(w.members)}
     return R.record(w.program, w.query, w.law, SCHEME, roots, {**provenance, "kind": kind, "run": w.run},
                     leaf_layer=leaf_layer(publics), previous=previous)
 
@@ -434,7 +494,14 @@ def index_doc(members: Sequence[Member], entries: Sequence[Sequence[list[Any]]],
     (a RoPE head, or 0 for a template that is the row itself)."""
     return {"schema": INDEX_SCHEMA, "order": ORDER, "run": run,
             "columns": ["lo", "hi", "request", "engine_step", "layer", "op_path", "member", "token_row", "program_row"],
-            "members": [{"template": m.template, "base": m.base, "n": m.n, "rows": list(map(list, e))} for m, e in zip(members, entries, strict=True)]}
+            "members": [{"template": m.template, **({"name": m.name} if m.name else {}), "base": m.base, "n": m.n, "rows": list(map(list, e))}
+                        for m, e in zip(members, entries, strict=True)]}
+
+
+def units_doc(m: Member) -> dict[str, Any]:
+    """Member ``m``'s public file of its global unit indices (``m<k>-units.json``): a consecutive run of its template's units."""
+    return {"schema": UNITS_SCHEMA, "member": m.key, "template": m.template, "base": m.base, "n": m.n,
+            "indices": list(range(m.base, m.base + m.n))}
 
 
 def index_bytes(doc: dict[str, Any]) -> bytes:
@@ -458,9 +525,13 @@ def write(c: Committed, out_dir: str | Path, provenance: dict[str, Any], index: 
         fd = os.open(d / f"m{k}-private.bin", os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
         with os.fdopen(fd, "wb") as f:
             f.write(c.private_body(k))
-        members.append({"k": k, "template": m.template, "n": m.n, "base": m.base, "ports": [list(p) for p in m.all_rows],
+        ub = index_bytes(units_doc(m))
+        (d / f"m{k}-units.json").write_bytes(ub)
+        members.append({"k": k, "name": m.key, "template": m.template, "n": m.n, "base": m.base, "ports": [list(p) for p in m.all_rows],
                         "input_ports": len(m.rows), "out_ports": [list(p) for p in m.outs], "frame_v3": c.frame_entry(k),
-                        "public_sha512": hashlib.sha512(pub).hexdigest(),
+                        "public_sha512": hashlib.sha512(pub).hexdigest(), "units": f"m{k}-units.json",
+                        "units_sha512": hashlib.sha512(ub).hexdigest(),
+                        **({"row_schemas": m.row_schemas} if m.schemas else {}),
                         **({"shared_rows": {**dict(m.tables), **{p: m.n for p, _ in m.out_rows}}} if m.tables else {})})
     win = {"schema": "verity-vllm/serving-rows/v2", "scheme": SCHEME, "population": c.window.population, "members": members,
            "partition": c.window.partition, "partition_digest": c.window.partition_digest, "run": c.window.run,
@@ -486,6 +557,8 @@ def flock_input_files(window_dir: str | Path, k: int, circuit_text: str, out_dir
             or meta.get("input_ports") != mem["input_ports"]):
         raise ValueError(f"the circuit's ports {meta['ports']} / {meta['out_ports']} ({meta.get('input_ports')} input rows) are not "
                          f"member {k}'s {mem['ports']} / {mem['out_ports']} ({mem['input_ports']} input rows)")
+    if meta.get("row_schemas") != mem.get("row_schemas"):
+        raise ValueError(f"the circuit's row schemas {meta.get('row_schemas')} are not member {k}'s {mem.get('row_schemas')}")
     if meta.get("scheme") != SCHEME:
         raise ValueError(f"the circuit commits under {meta.get('scheme')!r}, the window under {SCHEME!r}")
     cls_meta = {x: v for x, v in meta.items() if x not in M0_BINDING_KEYS}
