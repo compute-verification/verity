@@ -35,6 +35,8 @@ WORKLOADS = ROOT / "workloads"
 CHECKPOINTS = MANIFESTS / "checkpoints.json"
 #: The remote bandwidth session's processes (not a package), whose prover runs in the Commit's (`store.remote`).
 REMOTE_SESSION = ROOT.parent.parent / "benchmarks" / "remote_session"
+#: kv.cu's launchers over torch (``paged.py``, with ``word_codec/kv_bench.py``), the remote session's device encode.
+VLLM_ENCODED = ROOT.parent.parent / "benchmarks" / "vllm_encoded"
 
 
 def checkpoints_hf_home() -> str | None:
@@ -446,6 +448,9 @@ class MatchConfig:
     fold_rank_workers: int = option("--fold-rank-workers", env="FOLD_RANK_WORKERS", type=int, default=0,
                                     help="TP: ranks whose fold Match legs run at once (0 = every rank; a GLM-5.3 B8 rank's X-09 compare "
                                          "passes 200 GB, so 8 at once overfill a 1.5 TB host)")
+    fold_workers: int = option("--fold-workers", env="FOLD_WORKERS", type=int, default=0,
+                               help="TP: ranks whose fold leg runs at once (0 = as --fold-rank-workers, which then bounds only their compare "
+                                    "and GM-01 legs; a GLM-5.3 B8 I256 rank's fold peaks at 40 GB, its GM-01 with the shared X-09 near 400 GB)")
     match_reuse: str = option("--match-reuse", env="MATCH_REUSE", default="off", choices=("off", "fold", "legs"),
                               help="TP, --match-phase cpu, rerunning a CPU half that stopped part way under the same code: fold = keep each "
                                    "rank's persisted fold of the capture in place; legs = also each rank's written compare and GM-01 "
@@ -509,8 +514,8 @@ class CommitConfig:
                                            "deferred Commit's come from its bundle (verity-vllm serving-rows); a TP row's, one window per "
                                            "rank, from tp-commit itself (verity_vllm.pipeline.tp.serving_rows; needs REPLAY_DEFERRED=1)")
     remote_verifier: str | None = option("--remote-verifier", env="REMOTE_VERIFIER", default=None, metavar="HOST:PORT",
-                                         help="the remote bandwidth session's verifier: the Commit proves its store to it while "
-                                              "serving (verity_vllm.store.remote; single-GPU rows)")
+                                         help="the remote bandwidth session's verifier: the Commit proves its store to it in lockstep "
+                                              "with its first instrumented run (verity_vllm.store.remote; single-GPU rows)")
     norm_tap: str = option("--norm-tap", env="NORM_TAP", default="1",
                            help="0 opts out, for A/B only: by default the row commits one scale per norm Call row (verity_vllm.query."
                                 "norm_scales) through the norm-scale tap (acquire.sources.norm_scale_source) when its manifest names norm scales")
