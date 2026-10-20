@@ -5,10 +5,19 @@
 # tree_guard checks this job against it.  No GPU.  Every file the phase writes under the row dir (the check, the folds, a
 # served-shape derive's Programs) is hashed into $OUT/match_cpu.sha256 (paths relative to $SW), the list copy_rowdir.sh takes
 # to window B's node, which holds the legs already when it ran window A.
-#   research run --on vy-glm53-cpu-2 --mem-gb 450 --mem-wait 28800 --timeout 20h --custody-ttl 24h --cwd source --project verity --send match.sha256 -- env ROW=... BUILD_RUN=... bash integrations/vllm/manifests/glm_v2_tree/jobs/match_cpu.sh
-# env: ROW, BUILD_RUN, [SW], [REF] (model.sh's defaults), [FOLD_RANK_WORKERS=3], [BUDGET_GB=150].
+#   research run --on vy-glm53-cpu-2 --mem-gb 450 --mem-wait 28800 --timeout 30h --custody-ttl 24h --cwd source --project verity --send match.sha256 -- env ROW=... BUILD_RUN=... bash integrations/vllm/manifests/glm_v2_tree/jobs/match_cpu.sh
+# env: ROW, BUILD_RUN, [SW], [REF] (model.sh's defaults), [FOLD_WORKERS=2], [FOLD_RANK_WORKERS: the ranks whose compare and GM-01
+# legs run at once, as many as the run's --mem-gb holds at GM_GB a rank beside FOLD_WORKERS folds at 40 GB], [GM_GB: a GM-01 leg's
+# peak, by batch: B8 370 (339 GiB, WSBSTOCH's r20261019-162751-9b01), B1 60 and B32 1500 scaled from it, unmeasured],
+# [FOLD_TIMEOUT=86400 a leg: row_tp's default 7200 s bounds the whole fold Match at 8 h, and a B8 row's takes about 17 h one GM-01
+# at a time], [BUDGET_GB=150].
 set -uo pipefail
-: "${ROW:?ROW}" "${BUILD_RUN:?BUILD_RUN}"
+: "${ROW:?ROW}" "${BUILD_RUN:?BUILD_RUN}" "${RESEARCH_RUN_MEM_GB:?research run --mem-gb sizes the fold Match}"
+case $ROW in *__b1__*) gm=60 ;; *__b32__*) gm=1500 ;; *) gm=370 ;; esac
+GM_GB=${GM_GB:-$gm} FOLD_WORKERS=${FOLD_WORKERS:-2} mem=${RESEARCH_RUN_MEM_GB%.*}
+n=$(( (mem - 40 * FOLD_WORKERS) / GM_GB )); [ "$n" -le 8 ] || n=8
+FOLD_RANK_WORKERS=${FOLD_RANK_WORKERS:-$n}
+[ "$FOLD_RANK_WORKERS" -ge 1 ] || { echo "--mem-gb $mem holds no GM-01 leg of $GM_GB GB beside $FOLD_WORKERS folds of 40 GB"; exit 3; }
 W0=/workspace/cp/circuits
 TREE=$PWD
 source "$TREE/integrations/vllm/manifests/glm_v2_tree/jobs/model.sh"
@@ -27,7 +36,8 @@ ldconfig -p | grep -q 'libcuda\.so\.1 ' || export LD_LIBRARY_PATH=${CUDA_DRIVER_
   >"$OUT/bootstrap.log" 2>&1 || { tail -30 "$OUT/bootstrap.log"; exit 5; }
 export PY=$W0/venv312/bin/python
 export PATH=$W0/venv312/bin:$PATH
-export MATCH_PHASE=cpu FOLD_RANK_WORKERS=${FOLD_RANK_WORKERS:-3} HF_HOME=$W0/hf HF_HUB_OFFLINE=1 CUDA_VISIBLE_DEVICES=
+export MATCH_PHASE=cpu FOLD_RANK_WORKERS FOLD_WORKERS FOLD_TIMEOUT=${FOLD_TIMEOUT:-86400} HF_HOME=$W0/hf HF_HUB_OFFLINE=1 CUDA_VISIBLE_DEVICES=
+echo "fold Match: $FOLD_RANK_WORKERS ranks' compare and GM-01 legs at once ($GM_GB GB each), $FOLD_WORKERS folds, $FOLD_TIMEOUT s a leg (--mem-gb $mem)"
 export PYTHONPATH=$TREE:$TREE/tools/research/src:$TREE/infra/cluster/src:$TREE/integrations/vllm:$TREE/verity/ml/flock/python:$TREE/tools/verity/circuit_check/src
 export RESEARCH_STORE_CONFIG=$C/store.toml
 eval "$($PY -m verity_vllm.pipeline.cli epoch custody-env "$C")"

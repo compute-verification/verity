@@ -114,7 +114,13 @@ worktree at a commit the guard accepts (`git worktree add /tmp/glm-v2-SHA SHA`).
 3. CPU: each row's legs copied from window A's node to the Build's (`copy_rowdir.sh vy-glm53-h8 vy-glm53-cpu-2 match.sha256`,
    or `vy-glm53-eu`), then `match_cpu.sh` (MATCH_PHASE=cpu, `--build-run`
    the Build of record, `--send match.sha256`); then the row dir (its `rowdir.sha256` and the `match_cpu.sha256` that
-   `match_cpu.sh` writes, every file the Match CPU phase wrote) copied to window B's node.
+   `match_cpu.sh` writes, every file the Match CPU phase wrote) copied to window B's node. The phase's bottleneck is the
+   per-rank GM-01 (with its shared X-09): 339 GiB and about 1.5 h a B8 rank, beside folds of about 40 GB and 2 h two at a time
+   (WSBSTOCH's B8 stochastic rehearsal r20261019-162751-9b01: 17 h, one GM-01 at a time). `match_cpu.sh` runs as many ranks'
+   GM-01 at once as the run's `--mem-gb` holds: one B8 rank at 450 on vy-glm53-cpu-2 (755 GiB) or vy-nebius-cpu-3 (497 GB
+   cap), three at 1300 on vy-nebius-1 (1690 GiB). B1's 60 GB and B32's 1500 GB a rank are B8's scaled by batch, unmeasured: B32's
+   runs only on an otherwise empty vy-nebius-1, one rank at a time, and refuses a `--mem-gb` that cannot hold one. A row dir
+   after the phase is about 580 GiB (B8) and 1.19M inodes.
 4. Window B (`gpu_batch.sh b ROWS.env [NODE] [ROW]`, NODE vy-glm53-eu by default, or a preemptible 8x H200 node: vy-glm53-h8 or
    another): each row's Commit (`commit.sh`: rows-sha512 under `verity/tp-run-root/v2`, PENDING by design), in value order
    whatever ROWS.env's order, its bundles and row records preserved in the store. Stop the node. An eviction fails the
