@@ -20,11 +20,11 @@ open scoped ENNReal
 (#2909's `RowsSession`) with outcome `out x w i`, a reading `rows s` of a session's value layer as a layer value, a
 check `chk` (the served Definition's output is 1 at a value) and `served` (a value's served operand and receipt leaves
 are the trees the path commits):
-given `Flock.Guarantees.EndToEndRegisteredRows` with its named assumptions at every session and every unit's opening
-(`RowsSession.CR`), the window's law (`Accounting.Assumptions.TS.WindowLaw`), the check at the drawn units
-(`ServedChecksHold`), the rows link at the served roots outside `δs` (`ServedRootsLinked`), a relation that holds at
-any value whose check holds and whose served leaves are the committed trees' (the relation's Definition), and `δ ≥ 0`
-with
+given `Flock.Guarantees.EndToEndRegisteredRows`' named assumptions at every session and every unit's opening
+(`RowsSession.CR`; the rows link itself is `Flock.SecurityProofs.EndToEndRegisteredRows`), the window's law
+(`Accounting.Assumptions.TS.WindowLaw`), the check at the drawn units (`ServedChecksHold`), the rows link at the served
+roots outside `δs` (`ServedRootsLinked`), a relation that holds at any value whose check holds and whose served leaves
+are the committed trees' (the relation's Definition), and `δ ≥ 0` with
 $$n \cdot (\varepsilon_{ks} + \delta_{link} + \delta_{rows} + q_R^2/2^{513}) \le \delta$$
 at every session a path runs, each proof of `onSessions pf sess out rows` is accepted with an opening that fails its
 relation on the path with probability at most `δs + δ`. -/
@@ -33,7 +33,6 @@ def SessionSoundAt : Prop :=
     (sess : Paths Ω S → Fin S → Fin nπ → RowsSession) (out : ∀ x w i, (sess x w i).Out)
     (rows : ∀ s : RowsSession, (Fin s.Circ.N → Bool) → V) (chk served : Paths Ω S → Fin S → Fin nπ → V → Prop)
     (δs δ : ℝ),
-    Flock.Guarantees.EndToEndRegisteredRows →
     (∀ x w i, (sess x w i).CR) →
     Accounting.Assumptions.TS.WindowLaw sess out →
     Accounting.Assumptions.TS.ServedChecksHold sess out rows chk →

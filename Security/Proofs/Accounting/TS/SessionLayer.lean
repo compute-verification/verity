@@ -65,15 +65,16 @@ open Accounting.TS Flock.SoundAtBridge FlockSoundness.Discharge.ZkReg in
 accepted with `pf`'s relation failing at its session's value layer. If every drawn unit is right at its owned reads,
 `ServedChecksHold` gives the check there, so the relation's Definition leaves only the served leaves off the committed
 trees', `ServedRootsLinked`'s event; otherwise some drawn unit is wrong or off, `RowsSession.BadU`, at most
-`n · bound ≤ δ` by `EndToEndRegisteredRows` (`RowsSession.prob_badU_le`). -/
+`n · bound ≤ δ` by `Flock.SecurityProofs.EndToEndRegisteredRows` (`RowsSession.prob_badU_le`). -/
 theorem Accounting.SecurityProofs.TS.SessionSoundAt : Accounting.Guarantees.TS.SessionSoundAt := by
-  intro Ω _ S nπ V pf sess out rows chk served δs δ hE hCR hLaw hChk hLink hRel hδ hδ0
+  intro Ω _ S nπ V pf sess out rows chk served δs δ hCR hLaw hChk hLink hRel hδ hδ0
   refine soundAt_of_sessions (onSessions pf sess out rows) (Out := fun s : RowsSession => s.Out) (fun s => s.G)
     (fun s => s.τ) (fun s => s.BadU) sess out
     (fun x w i => LiveAcceptsZKR (sess x w i).I (sess x w i).own (out x w i) ∧
       (∀ u ∈ (out x w i).2.1, ¬ (sess x w i).WrongAt u ∧ (sess x w i).RowsAt (out x w i) u) ∧
       ¬ served x w i (rows (sess x w i) (sess x w i).Xv)) δs δ hLaw hLink
-    (fun x w i => (RowsSession.prob_badU_le hE _ (hCR x w i)).trans (hδ x w i)) hδ0 ?_
+    (fun x w i => (RowsSession.prob_badU_le Flock.SecurityProofs.EndToEndRegisteredRows _ (hCR x w i)).trans
+      (hδ x w i)) hδ0 ?_
   rintro x w i ⟨⟨_, hL⟩, hR⟩
   by_cases hD : ∀ u ∈ (out x w i).2.1, ¬ (sess x w i).WrongAt u ∧ (sess x w i).RowsAt (out x w i) u
   · exact Or.inl ⟨hL, hD, fun hs => hR (hRel x w i _ (hChk x w i hL hD) hs)⟩

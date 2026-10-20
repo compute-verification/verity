@@ -50,7 +50,9 @@ at each round and proof, the probability over the window's paths that flock-veri
 unit is right at its own owned reads, and yet `rows` of the session's value layer is not `served` there (its served
 operand and receipt leaves are not those of the trees the path commits before and after the coin) is at most `δs`.
 `EndToEndRegisteredRows` links only registered reads, and the window checks' operand and receipt trees are served
-roots, hiding commitments that bind nothing on their own. -/
+roots, hiding commitments that bind nothing on their own. `Flock.SecurityProofs.ServedRowsLinked` links them pointwise
+where the service registers each served tree as a port of `own` (`RowsSession.ServedRegistered`); this premise is what
+a window needs of that link at `served`. -/
 def ServedRootsLinked [Fintype Ω] (sess : Paths Ω S → Fin S → Fin nπ → RowsSession) (out : ∀ x w i, (sess x w i).Out)
     (rows : ∀ s : RowsSession, (Fin s.Circ.N → Bool) → V) (served : Paths Ω S → Fin S → Fin nπ → V → Prop)
     (δs : ℝ) : Prop :=
