@@ -813,8 +813,9 @@ theorem witP_productOf : ProductOf witLayout witP witPCls 103 (List.range' 1 32)
     rw [zero_add, sum_zipWith_one 32 _ (by simp)]
   have hC : Accounting.Gates.val witP.dag x 102 =
       x 0 * ((List.range' 33 32).map (Accounting.Gates.val witP.dag x)).sum := by
-    rw [val_of_getElem? witP.dag x 102 (g := witCGate) rfl (by decide +kernel), ← hc, ← hS]
-    rfl
+    rw [val_of_getElem? witP.dag x 102 (g := witCGate) rfl (by decide +kernel)]
+    simp only [witCGate, witGateR, Accounting.Gates.Op.out, Accounting.Gates.Op.raw, List.map_cons, List.map_nil,
+      List.headD_cons, List.getD_cons_succ, List.getD_cons_zero, hc, hS]
   rw [val_of_getElem? witP.dag x 103 (g := witPZGate) rfl (by decide +kernel)]
   refine (affine_two 1 (-1) _ _).trans ?_
   rw [hm, hC, sum_zipWith_add (x 0) _ _ (by simp)]
