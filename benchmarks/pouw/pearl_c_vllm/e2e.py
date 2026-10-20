@@ -633,12 +633,14 @@ def prompt_logprobs(llm, sampling_params, timed, windows: list[list[int]]) -> di
 
 class Coins:
     """The challenger's side of one epoch in the controller: its coins (`coins.Challenger`), committed before any engine
-    starts.  A coin opens once; an engine started again in the same epoch (the ABAB blocks) asking for it after the same
-    record gets the one opening again, and after any other record a refusal, so nothing redraws."""
+    starts, drawn from `entropy` (by default the Lean verifier of record's, `pouw.verifier.coins`, `IO.getRandomBytes`).
+    A coin opens once; an engine started again in the same epoch (the ABAB blocks) asking for it after the same record
+    gets the one opening again, and after any other record a refusal, so nothing redraws."""
 
     def __init__(self, epoch: int, entropy=None):
+        from verity.core.protocols.pouw import verifier
         from verity.core.protocols.pouw.coins import Challenger
-        self.challenger, self.opened = (Challenger(epoch, entropy) if entropy else Challenger(epoch)), {}
+        self.challenger, self.opened = Challenger(epoch, entropy or verifier.coins), {}
         self.commitment = self.challenger.commitment
 
     def open(self, label: str, after: bytes):
@@ -805,16 +807,18 @@ def split(results: dict) -> dict:
 
 
 def state_entropy(path: str):
-    """The challenger's entropy held in the file `path` (created from os.urandom when absent, readable only by its owner):
-    the same coins for the controller here and for the challenger process that later draws the window's units
-    (`served_commit.py challenger --state`)."""
+    """The challenger's entropy held in the file `path` (readable only by its owner; when absent, created from the Lean
+    verifier of record's coins, `pouw.verifier.coins`, before any engine starts): the same coins for the controller here
+    and for the challenger process that later draws the window's units (`served_commit.py challenger --state`)."""
+    from verity.core.protocols.pouw import verifier
     from verity.core.protocols.pouw.coins import COIN_BYTES, HM96, LABELS
     p = Path(path)
     if not p.exists():
+        entropy = verifier.coins(len(LABELS) * (COIN_BYTES + HM96.salt_bytes))
         p.parent.mkdir(parents=True, exist_ok=True)
         fd = os.open(p, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
         with os.fdopen(fd, "wb") as f:
-            f.write(os.urandom(len(LABELS) * (COIN_BYTES + HM96.salt_bytes)))
+            f.write(entropy)
     data, at = p.read_bytes(), [0]
 
     def take(n: int) -> bytes:
