@@ -1,4 +1,7 @@
 import Models.Accounting.Guarantees.Actual
+import Models.Accounting.Guarantees.Actual.Threaded
+import Models.Accounting.Guarantees.Actual.WipePool
+import Models.Accounting.Guarantees.Actual.Dampener
 import Models.Accounting.Guarantees.Bandwidth
 import Models.Accounting.Guarantees.Bandwidth.Causal
 import Models.Accounting.Guarantees.BandwidthAudit
@@ -38,6 +41,7 @@ import Models.Accounting.Guarantees.TS
 import Models.Accounting.Guarantees.Sheet
 import Models.Accounting.Guarantees.TS.Receipt
 import Models.Accounting.Guarantees.TS.Grind
+import Models.Accounting.Guarantees.TS.SharedNoise
 import Models.Accounting.Guarantees.TS.Stages
 import Models.Accounting.Guarantees.TS.Steer
 import Models.Accounting.Guarantees.TS.FoldFanIn
@@ -51,11 +55,13 @@ charged as compute, with partial completion and with a sketch-then-hash tag, the
 tiers and chained passes, the causal horizon bound on its samples and its conservation with named words, the one
 composed guarantee for the remote bandwidth audit as deployed and its deployed instance, the remote
 bandwidth audit's conservation and node-level guarantees on the actual-circuit model, the actual circuit's capacity
-theorem, runtime corollary, localization, composition and fit, the obligations B1, B2 and B4, the tag and sketch
-guarantees, Lemma B with (H-μ⁺) derived from fresh coins and Lemma B′ for a persistent pattern, the view independence the Build's coin rules give it, co-location and the link relay for receipts bound to the matmul, what a relay of the deployed bound
-receipt's sketch must exchange, the bandwidth audit's guarantee, their per-run forms, PoUW's work lower bound on an isolated node,
-a declared circuit's live and read bits from the blocks the audit credits, PoUW's credits and help as its placed
-execution's gates, the grinding premium under hashed seeds and the deployed tile's moment, stacking's carrier lemma
-with the deployed remote audit for devices that read from carriers, also read against a declared circuit's
-requirement, and the composed guarantee for a declared circuit that passes the stacking property: its credited live
-and read bits from an accepted stacked audit. -/
+theorem, runtime corollary, memory cap over threads with its rate, dark gates and the compute dampener's windows,
+the memory cap's lifetime pool over wipes, localization, composition and fit,
+the obligations B1, B2 and B4, the tag and sketch guarantees, Lemma B with (H-μ⁺) derived from fresh coins and Lemma B′
+for a persistent pattern, the view independence the Build's coin rules give it, co-location and the link relay for
+receipts bound to the matmul, what a relay of the deployed bound receipt's sketch must exchange, the bandwidth audit's
+guarantee, their per-run forms, PoUW's work lower bound on an isolated node, a declared circuit's live and read bits
+from the blocks the audit credits, PoUW's credits and help as its placed execution's gates, the grinding premium
+under hashed seeds and the deployed tile's moment, stacking's carrier lemma with the deployed remote audit for devices
+that read from carriers, also read against a declared circuit's requirement, and the composed guarantee for a declared
+circuit that passes the stacking property: its credited live and read bits from an accepted stacked audit. -/

@@ -28,7 +28,7 @@ gpu = "RTX PRO 6000"
 design = "dither-c-peel-fx1"
 conditions = ["fx1 at 4 lane instructions a word is the cheapest fold (FOLD-OPT; ASSUME r2, #2289)"]
 sheet = { vector = "DS-120" }
-measured = { vector = "VF3r-16" }
+measured = { vector = "VF3r-16", conditions = ["not the Lean statement's reading: Sm120MeasuredHeadline reads VF3s-16 at q = q_T = 9/8 (0.591%; 7.791% at the ½ floor), because bit-exact census programs load VF3r-16's JI3s_0 at up to 1.0383, so (I1) on its rows is false (RT2-LOGIC-9); this row stays on VF3r-16 at 1.22 until the design records ε_skip at VF3s-16 and a reading takes a family's own q"] }
 
 [family.sm_90]
 gpu = "H200"

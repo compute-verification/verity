@@ -92,6 +92,7 @@ from typing import Callable, NamedTuple, Sequence
 import numpy as np
 
 from verity.core.protocols.certifier import certificate as CT
+from verity.core.protocols.certifier import head_check as HC
 from verity.core.protocols.certifier import service as N2
 from verity.core.protocols.certifier.active import DATA, HEADER, LAST, encode_frame
 from verity.core.protocols.certifier.grid import COMPLETE, GridParams, Reason, Status, fill
@@ -1341,8 +1342,9 @@ class Certifier:
                                                        signature))
 
     def commit(self, link: str, window: int, heads: Sequence[CT.RecordHead], egress: GridParams, ingress: GridParams,
-               sync_set: SyncSet) -> Committed:
-        lw = N2.LinkWindows(link, egress, sync_set, self.public, self.run, self.session, ingress=ingress)
+               sync_set: SyncSet, occupancy: tuple = (None, None)) -> Committed:
+        lw = N2.LinkWindows(link, egress, sync_set, self.public, self.run, self.session, ingress=ingress,
+                            occupancy=occupancy)
         salts = _salts(self.seed + b"/n2/" + link.encode() + b"\0" + window.to_bytes(8, "big"), N2.LEAVES)
         return Committed(lw, lw.commit(window, *(self.certify(h) for h in heads), salts))
 
@@ -1601,7 +1603,8 @@ class Window:
 class Setup:
     """A run's statement, units, registered layout, the ports' links (the link-window commitment each records into,
     and its end), each port's grid, Σ_sync, each port's link as its certifier names it in its heads (when not its
-    commitment's), the certifier, and every link-window's commitment: what every window's instance is built from."""
+    commitment's), the certifier, every link-window's commitment, and each port's occupancy profile where it declares
+    one (N2's `LinkWindows.occupancy`): what every window's instance is built from."""
 
     S: Statement
     units: UnitTable
@@ -1613,6 +1616,7 @@ class Setup:
     named: dict[str, str] = field(default_factory=dict)
     certifier: Certifier | None = None
     committed: dict[tuple[str, int], Committed] = field(default_factory=dict)
+    occupancy: dict[str, tuple[tuple[int, ...], ...]] = field(default_factory=dict)
 
     @classmethod
     def build(cls, S: Statement, declared: dict[str, list[list[tuple]]], ports: list[str],
@@ -1650,8 +1654,15 @@ class Setup:
             ports = {v: k for k, v in self.links.items()}
             heads = [self.head(ports[(link, d)], window, recorded.get((link, d, window))) for d in (0, 1)]
             self.committed[(link, window)] = self.certifier.commit(  # type: ignore[union-attr]
-                link, window, heads, self.grids[ports[(link, 0)]], self.grids[ports[(link, 1)]], self.sync_set)
+                link, window, heads, self.grids[ports[(link, 0)]], self.grids[ports[(link, 1)]], self.sync_set,
+                tuple(self.occupancy.get(ports[(link, d)]) for d in (0, 1)))
         return self.committed[(link, window)]
+
+    def head_checks(self, link: str, window: int, recorded: dict[tuple[str, int, int], Window]) -> bool:
+        """N2's head checks on the link-window's commitment (`LinkWindows.head_checks`, each `head_check.reference`):
+        each head complete under its end's grid and, on an end with a profile, its counts the profile's row."""
+        c = self.commit(link, window, recorded)
+        return all(i is not None and HC.reference(i) for i in c.lw.head_checks(c.opening, c.root))
 
     def attach(self, windows: list[Window]) -> list[Window]:
         """Each window's instance, its port's earlier frames giving its first descriptor's position; or why none
@@ -1712,18 +1723,23 @@ def sim_windows(public: dict, witness: dict, records: dict[str, list[tuple[int, 
                 seed: bytes = b"n3-unit") -> tuple[Setup, list[Window]]:
     """The simulator's windows: per certified link direction, `buckets` buckets a window, the recorded frames in grid
     order (stably by bucket), against the layout of φ's declared frames, registered before the run. Every port's grid
-    is `buckets` buckets of r slots, r the most frames any port declared or recorded in one bucket."""
+    is `buckets` buckets of r slots, r the most frames any port declared or recorded in one bucket. φ fixes every
+    frame's bucket, so each port's declared counts are its occupancy profile, through the last window any port
+    declares, and every port has a window for each of them and for each window it recorded past them."""
     S = statement(public, witness)
     links = sim_ports(S.hw)
     declared = sim_declared(S)
     per_bucket = [n for v in (*declared.values(), *records.values()) for n in Counter(b for b, _ in v).values()]
     grid = GridParams(buckets, max([1] + per_bucket), S.phi.frame_bytes)
+    W = max([b for v in declared.values() for b, _ in v] + [-1]) // buckets + 1
+    occupancy = {key: tuple(tuple(sum(1 for b, _ in declared.get(key, []) if b == t)
+                                  for t in range(w * buckets, (w + 1) * buckets)) for w in range(W)) for key in links}
     setup = Setup.build(S, {k: [p for _, p in v] for k, v in declared.items()}, list(links), links,
-                        dict.fromkeys(links, grid), seed)
+                        dict.fromkeys(links, grid), seed, occupancy=occupancy)
     windows = []
     for key in links:
         rec = sorted(records.get(key, []), key=lambda x: x[0])
-        last = max([b for b, _ in rec] + [-1])
+        last = max([b for b, _ in rec] + [W * buckets - 1])
         for w in range(last // buckets + 1):
             lo, hi = w * buckets, (w + 1) * buckets
             frames = [f for b, f in rec if lo <= b < hi]
@@ -1832,6 +1848,22 @@ def _sized(windows: list[Window], circuit: bool) -> list[dict]:
     return out
 
 
+def link_checks(setup: Setup, windows: list[Window], checked: Sequence[dict] = ()) -> list[dict]:
+    """Every link-window N2 commits, in order: N2's head checks' bit (`Setup.head_checks`), the N3 ok bit of each of
+    its port-windows (`checked`'s, else the window's reference or its public data), and their conjunction. N2 compares
+    no grid in the clear, so the link-window is ok only with both."""
+    recorded = {(*setup.links[w.port], w.window): w for w in windows}
+    known = {(r["port"], r["window"]): r["ok"] for r in checked}
+    out = []
+    for link, window in sorted({(link, w) for link, _, w in recorded}):
+        ports = [recorded[(link, d, window)] for d in (0, 1) if (link, d, window) in recorded]
+        n3 = {w.port: known.get((w.port, w.window), None) for w in ports}
+        n3 = {p: w.check(circuit=False)["ok"] if n3[p] is None else n3[p] for p, w in zip(n3, ports)}
+        n2 = setup.head_checks(link, window, recorded)
+        out.append({"link": link, "window": window, "n2": n2, "n3": n3, "ok": n2 and all(n3.values())})
+    return out
+
+
 def _sim(args) -> dict:
     from .block import Context
     from .n3 import merge
@@ -1849,8 +1881,11 @@ def _sim(args) -> dict:
     records, _ = merge(results)
     setup, windows = sim_windows(public, witness, records, args.buckets)
     checked = _sized(windows, not args.reference_only)
-    return {"config": config, "buckets": args.buckets, "format": setup.fmt._asdict(), "summary": summarize(checked),
-            "windows": checked}
+    links = link_checks(setup, windows, checked)
+    summary = summarize(checked) | {"link_windows": len(links), "link_windows_ok": sum(r["ok"] for r in links),
+                                    "n2_not_ok": [f"{r['link']}[{r['window']}]" for r in links if not r["n2"]]}
+    return {"config": config, "buckets": args.buckets, "format": setup.fmt._asdict(), "summary": summary,
+            "windows": checked, "link_windows": links}
 
 
 def _lab(args) -> dict:

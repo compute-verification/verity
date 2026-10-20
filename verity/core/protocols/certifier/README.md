@@ -9,8 +9,15 @@ A spec-level reference for network accounting's timing channel:
 - one link-window's certificates through the proof service (`service`): the network `Spec`, a salted root over the
   certified records, and the check, whose Boolean part is each head's check (`head_check`: the head's hiding opening,
   its fields and its counts against the public occupancy profile), with a host-side verifier of record (no proof of the
-  check yet) that also compares each egress record's grid with the Program's in the clear, on every link-window, until
-  N3 runs on every window (NET-38);
+  check yet) that compares no grid in the clear. Its claim is counts only: on every link-window the head check holds
+  the egress head's counts to the profile (and the ingress head's, where that end declares one), so the link's timing
+  is at the profile. Holding the frames, the rest of the egress grid, is N3's, which is a design and the simulator's
+  behaviour (`benchmarks/network_sim`), not a protocol: a prototype in the clear, in no proof-service Spec, so the claim
+  stays counts only until N3 is a proof-service unit with Selection `All`. It covers no lab or served link yet: an
+  egress end without an occupancy profile gets no verdict (`ValueError`, failing closed). The network verdict of
+  record is `LinkWindows.network_verdict`, the AND over the link's link-windows with no ε or share credit: every window
+  of the egress profile registered in order with an accepted outcome, and a rejected, late, missing or out-of-order
+  window rejects the link;
 - the capacity counts;
 - the calibration of honest runs;
 - the online prover (`online`): each window's clock sync declared at its first bucket from what it had seen `lag`
@@ -20,9 +27,11 @@ A spec-level reference for network accounting's timing channel:
   windows) gets one salt of `salt_bits` bits (512 by default), carried into the block only. The ingress record holds a
   salt frame with a salt-free placeholder, so every record is a function of the traffic alone; the salt sits in the
   certifier's sealed record cell `_salts[p]` until `Proxy.reveal(p, registration)` opens it on the PoUW window's
-  registration after its last ingress record is published, and `active.check_salts` reads the salt frames. The weights'
-  root PoUW's noise seed reads is recorded before the salt's draw (`Proxy.commit_weights(p, root)`, the sealed cell
-  `_weights[p]`) and given on the same conditions (`Proxy.committed(p, registration)`). A proxy back
+  registration after its last ingress record is published, once and only within `reveal_deadline` of the window's
+  end on the certifier's clock, and `active.check_salts` reads the salt frames. The weights' root PoUW's noise seed
+  reads is recorded before the salt's draw, signed by the registered prover (`Proxy.commit_weights(p, root,
+  signature)` under `prover_key`, the sealed cell `_weights[p]`), and given on the same conditions
+  (`Proxy.committed(p, registration)`). A proxy back
   from maintenance (`Proxy(start=k, position=p)`, off by default) serves from window k on, its first egress frame the
   Program's at position p, and carries nothing from before: a window it was down for has no record.
 
