@@ -29,11 +29,17 @@
   }
  },
  "pieces": {
+  "PouwMask32_v1": {
+   "and": 32
+  },
   "PouwOneStream2_v1": {
    "and": 24
   },
   "PouwOneStream3_v1": {
    "and": 41
+  },
+  "PouwOrBit_v1": {
+   "and": 1
   },
   "PouwPeelSeg_v1": {
    "and": 1563
