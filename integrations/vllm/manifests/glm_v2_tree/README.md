@@ -29,6 +29,7 @@ Base `origin/main` @ c0ebeb8b93 (0a0782abed through #2893), then, in this order:
 | #2888 (`cursor/multimem-land-21f3`) | af95f837ad | `AllReduceMultimem_v1` as a batch of 16-byte vectors (`AllReduceMultimemVector_v2`); its merges of #2836 and #2765 dec1238773 and its `test_predict` pin are this tree's already |
 | #2893 (`cursor/private-one-class-21f3`, CIR-64) | 57081b13db | `partition_v2.build` refuses a v2 private partition whose units span more than one size class; it is on main 0a0782abed, so it brings this tree to there |
 | `cursor/tp-readback-21f3` (#2935) | 2cf3c2c788 | tp-capture's `topology.json` and tp-commit's `versions.json` record `effective_execution`, read back from the engine's `vllm_config` as the single-GPU paths do, the driver's and (`tp2_probe`) each rank's own, so the Match and Commit jobs can show `gpu_memory_utilization`; record files only, no digest moves (the coordinator, 20 Oct 00:40Z) |
+| `cursor/dsv4-v2-21f3` (DSV4V2), `jobs/` only | 8b7254f55b | the jobs read the row's model from its name (`jobs/model.sh`), so DeepSeek-V4-Pro's B1 runs on them from its own tree; `stage_cpu.sh`, `stage_ckpt.sh`, `match_gpu.sh`'s post-load check, `match_cpu.sha256`, `gpu_batch.sh`'s `MODEL`. GLM-5.3 keeps every default (revision, tree, row dirs, snapshot, checkpoint paths, config; no census skip, no derive sizing). Taken as files, not merged: DSV4's pins, its MANIFEST and the census skip in `memory_map.census_entry` stay on that tree (the coordinator, 20 Oct 09:10Z) |
 
 ROWS64 and the multimem batch joined when ASK-61 was provisionally accepted (Daniel, 19 Oct 21:59Z, option A: public
 power-of-two output classes up to 262,144 bits). Two conflicts, both sides kept:
@@ -62,6 +63,14 @@ wrote (T1's B1 legs: 104 GB, 1.1M files, about 11 min). The GPU jobs are submitt
 each waits for its GPUs on its node's lease, so a window runs back to back. eu is held only for a window: the lease, and the node, are
 released where a CPU phase sits between (CIR-51).
 
+One runbook for both models: each window runs GLM-5.3's four rows in value order from this tree, then DeepSeek-V4-Pro's B1
+(`dsv4-pro__fp8__h200__tp8__b1__i256__o32__mixed__greedy__eager`) with `MODEL=dsv4-pro` from a checkout of
+`cursor/dsv4-v2-21f3`, whose MANIFEST has that row's CPU gates and what its GPU leg stages on the node. The jobs read the row's
+model from its name (`jobs/model.sh`), and `gpu_batch.sh` refuses a HEAD that is not a pushed commit of the model's tree.
+Submitted in that order, the jobs take the node's lease in that order. A fresh CPU node is readied by `stage_cpu.sh` (the venv,
+`libcuda.so.1`, the pin's metadata); GLM-5.3's pin names only `config.json` and `tokenizer.json`, so on a node other than
+vy-glm53-cpu-2 its `model.safetensors.index.json`, which `build_record.sh` requires, is not staged.
+
 A row is built, served and judged by one code tree (`records publish --tree` is not checked against the stage runs):
 its first job writes `<row>.tree` (`cursor/glm-v2-21f3@SHA`) beside the row dir, and every later job (`jobs/tree_guard.sh`)
 runs at that commit or at a descendant that changes only `manifests/records.json` and this directory. The Build of record and
@@ -93,11 +102,14 @@ worktree at a commit the guard accepts (`git worktree add /tmp/glm-v2-SHA SHA`).
    rank's v2 trace records `post_load_tensors` `applies: false`). T1R takes
    the bf16 v6 capture (`BF16_ART`, from `verity-vllm records capture RUN`) and the G2 point (`benchmarks/served_commit/tp_decode.sh`,
    `ARM=rows-4k`: rows-sha512's 4 KiB rows, stock against Commit in one TP8 engine, TTFT, prefill and decode TPOT per batch 1, 8, 32)
-   on eu first; `gpu_batch.sh t1r` (`cap_bf16_v6.sh`, then the G2 point) runs them only if those did not hold. Stop eu.
+   on eu first; `gpu_batch.sh t1r` (`cap_bf16_v6.sh`, then the G2 point) runs them only if those did not hold. Then
+   DeepSeek-V4-Pro's B1 (`MODEL=dsv4-pro gpu_batch.sh a NODE` from its tree), after its checkpoint is staged on the node
+   (`stage_ckpt.sh`, about 18 min) and its Build of record copied in: its loader has a post-load hook, and `match_gpu.sh`
+   refuses its legs (exit 2) unless every rank's Build records the tensor the capture registers. Stop eu.
 3. CPU: each row's legs copied from window A's node to the Build's (`copy_rowdir.sh vy-glm53-h8 vy-glm53-cpu-2 match.sha256`,
    or `vy-glm53-eu`), then `match_cpu.sh` (MATCH_PHASE=cpu, `--build-run`
-   the Build of record, `--send match.sha256`); then the row dir (its `rowdir.sha256` and the Match's files) copied to window B's
-   node.
+   the Build of record, `--send match.sha256`); then the row dir (its `rowdir.sha256` and the `match_cpu.sha256` that
+   `match_cpu.sh` writes, every file the Match CPU phase wrote) copied to window B's node.
 4. Window B (`gpu_batch.sh b ROWS.env [NODE] [ROW]`, NODE vy-glm53-eu by default, or a preemptible 8x H200 node: vy-glm53-h8 or
    another): each row's Commit (`commit.sh`: rows-sha512 under `verity/tp-run-root/v2`, PENDING by design), in value order
    whatever ROWS.env's order, its bundles and row records preserved in the store. Stop the node. An eviction fails the
@@ -112,7 +124,7 @@ worktree at a commit the guard accepts (`git worktree add /tmp/glm-v2-SHA SHA`).
    values are on disk for the replay and the audits; v1's B1 Commit r20261016-213336-6c35 was not deferred and kept none. The
    config's default is 3 pairs, which that v1 Commit ran, so a v2 Commit's overhead rests on one pair (G2's point measures
    overhead). Its engine reads `gpu_memory_utilization` back, the driver and each rank (`$OUT/gpu_memory_utilization.json`: 0.88, as the
-   v1 Commits ran).
+   v1 Commits ran). Then DeepSeek-V4-Pro's B1 (`MODEL=dsv4-pro gpu_batch.sh b ROWS.env NODE` from its tree).
 5. CPU, vy-nebius-cpu-3 (the verified checkpoint): the Build of record copied in, then `replay_publish.sh` per row (`--send
    bundles.json`): `tp-commit-replay` of every rank, then `records publish --tier heavy` with the nine captures of record cited
    by id (#2838's eight served-default captures, which this tree's `check_capture` accepts, and `BF16_ART`), the Commit's run
@@ -130,8 +142,9 @@ NODE as the parameter, but the GPU jobs assume what those VMs have:
   preemptible lease held). With no user systemd (a container), gpu-lease runs its command without a memory cap and says so;
 - `/workspace/cp/venv312` (vLLM and the pipeline's Python), `/workspace/cp/hf` (GLM-5.3's snapshot at `REV`), `/usr/local/cuda`;
 - the checkpoint read through the HF snapshot from `/workspace/fs/glm53/$REV`, the Nebius shared filesystem, or a verified copy at
-  `/workspace/cp/glm53-ckpt/$REV` bound over it with `sudo -n mount --bind` (a container may have neither sudo nor the mount
-  capability: the shards then sit at `/workspace/fs/glm53/$REV` themselves);
+  `/workspace/cp/glm53-ckpt/$REV` (`stage_ckpt.sh` stages one from the hub, every file checked against `checkpoints.json`)
+  served there by `model.sh`'s `ckpt_bind`: bound over it with `sudo -n mount --bind` where that directory exists, linked to
+  it where it does not (a container without the shared filesystem, sudo or the mount capability);
 - row dirs at `/workspace/cp/circuits/glm-v2/rows/<row>`, the path the Commit records and its replay reads, with room for a
   row's Build of record, legs and bundles (B1's legs alone: 104 GB), and `/tmp` for the jobs' scratch.
 
@@ -149,7 +162,11 @@ GPU time (wall of the GPU job, which holds all 8 GPUs but for the capture):
 | Commit B8 greedy | 8 | 110 min | r20261019-091846-1452 (lease 109.9 min) |
 | Commit B8 stochastic | 8 | ~110 min | never run; B8 greedy's |
 | Commit B32 | 8 | ~4 h | never run; its bundles ~4x B8's |
+| DeepSeek-V4-Pro checkpoint staging | 0 | ~18 min | its MANIFEST (r20261020-072311-c012's rate, scaled to 864.7 GB) |
+| Match GPU legs DeepSeek-V4-Pro B1 | 8 | ~23 min | its v1 Match r20261018-023527-3dc1 (1379 s) |
+| Commit DeepSeek-V4-Pro B1 | 8 | ~1 h | never run deferred; GLM-5.3 B1's |
 
-Window A (the four legs) is about 1.8 node-hours and window B about 8.6, so about 10.4 node-hours (83 GPU-hours), of which
-6.5 are estimates (B32's two jobs, B8 stochastic's Commit); T1R's capture and G2 point add about 0.3 if `t1r` runs them. The
+Window A (the four GLM legs) is about 1.8 node-hours and window B about 8.6, so about 10.4 node-hours (83 GPU-hours), of which
+6.5 are estimates (B32's two jobs, B8 stochastic's Commit); T1R's capture and G2 point add about 0.3 if `t1r` runs them.
+DeepSeek-V4-Pro's B1 adds about 1.7 (its staging, legs and Commit, all estimates), so about 12.1 with both models. The
 measured Commits ran under vllm-v1; rows-sha512's cost at TP8 is what the G2 point measures.

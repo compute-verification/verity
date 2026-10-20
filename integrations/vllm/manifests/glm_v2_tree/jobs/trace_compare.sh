@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# circuits V2PREP: one GLM-5.3 row's Programs on this tree, its AOT Build rehearsed, and its own trace compared with the pins:
+# circuits V2PREP: one v2 row's Programs on this tree (its model from model.sh), its AOT Build rehearsed, and its own trace compared with the pins:
 #   1. the row's AOT Build (`row chain --stages build --no-publish`, construction record: each derive `predict emit` against the row's
 #      pinned `aot.trace` Build, fetched from the store, refused where this tree's predicted Program is not that trace's),
 #      Programs only (`--build-programs-only=1`: no manifest), as a vllm.build Attempt of its own; its digests against the pins
@@ -18,8 +18,9 @@
 # exit 0: the pins reproduce, or the row moved against the pins being replaced and nothing else (its traced Build passed, the
 # predictor and the AOT Build against the trace equal it), ready for repin.sh; 7-9 name the step that failed; 1 anything else.
 # The pinned vLLM imports libcuda.so.1 even on the meta device: on a node without a driver, CUDA_DRIVER_DIR (W/cuda-driver, the H200
-# hosts' 580.173.02 library) goes on LD_LIBRARY_PATH; no device is opened.  The CPU venv and checkpoint metadata are the ones
-# aot_build_rm.sh (WS-E) keeps on vy-glm53-cpu-2 under W.  Row dirs stay on the node (kept 5d).
+# hosts' 580.173.02 library) goes on LD_LIBRARY_PATH; no device is opened.  The CPU venv is the one aot_build_rm.sh (WS-E) keeps on
+# vy-glm53-cpu-2 under W; the checkpoint metadata is put at SNAP from the hub where missing (model.sh stage_meta, each file
+# checkpoints.json's).  Row dirs stay on the node (kept 5d).
 # env: ROW, [W (/workspace/cp/circuits)], [BUDGET_GB (100)], [WORKERS (2)], [SKIP_TRACE=1], [SKIP_AOT1=1], [SEED_FROM], [BUILD_JOBS],
 # [TRACE_ONLY=1], [TRACE_RUN], [SKIP_AOT2=1].  cwd: the source root.
 # outputs: aot_chain.out, aot_build_summary.json, aot_row.json, aot_neutrality.out; [seed.json, seed_tree.txt], neutrality.out, neutrality.json,
@@ -27,12 +28,10 @@
 # trace_art.txt, comparison.json, compare.err, aot2_chain.out, aot2_build_summary.json, aot2_vs_trace.json; [trace_tree.txt, trace_run.txt].
 set -uo pipefail
 : "${ROW:?ROW}"
-REV=aca966e4e02791568aa6a4ced368624b3d897f42
 TREE=$PWD
+source "$TREE/integrations/vllm/manifests/glm_v2_tree/jobs/model.sh"
 W=${W:-/workspace/cp/circuits}
-SW=$W/glm-v2/$RESEARCH_RUN_ID
-SNAP=$W/hf/hub/models--zai-org--GLM-5.3/snapshots/$REV
-[ -s "$SNAP/config.json" ] && [ -s "$SNAP/model.safetensors.index.json" ] || { echo "no GLM-5.3 metadata at $SNAP"; exit 3; }
+SW=$W/$V2/$RESEARCH_RUN_ID
 C=$(dirname "$(dirname "$RESEARCH_RUN_DIR")")/requests/$RESEARCH_RUN_ID/custody
 [ -f "$C/cred.json" ] || { echo "no custody key at $C"; exit 4; }
 if ! ldconfig -p | grep -q 'libcuda\.so\.1 '; then
@@ -46,8 +45,9 @@ git -C "$TREE" rev-parse HEAD >"$OUT/tree.txt" 2>/dev/null || echo "${RESEARCH_S
 (cd integrations/vllm && WORK=$W VENV=$W/venv312 HF_HOME=$W/hf bash verity_vllm/ops/pod_bootstrap.sh --cpu --cases "" --out "$OUT/bootstrap") \
   >"$OUT/bootstrap.log" 2>&1 || { tail -30 "$OUT/bootstrap.log"; exit 5; }
 tail -1 "$OUT/bootstrap.log"
+stage_meta "$W/venv312/bin/python" || { echo "no $WHAT metadata at $SNAP"; exit 3; }
 export PY=$W/venv312/bin/python HF_HOME=$W/hf HF_HUB_OFFLINE=1 TOKENIZERS_PARALLELISM=false CUDA_VISIBLE_DEVICES=
-export TMPDIR=$(mktemp -d /workspace/research/scratch/glmv2.XXXXXX)
+export TMPDIR=$(mktemp -d /workspace/research/scratch/$V2.XXXXXX)
 trap 'rm -rf "$TMPDIR"' EXIT
 export PATH=$W/venv312/bin:$PATH
 export PYTHONPATH=$TREE:$TREE/tools/research/src:$TREE/infra/cluster/src:$TREE/infra/ops:$TREE/integrations/vllm:$TREE/verity/ml/flock/python:$TREE/tools/verity/circuit_check/src:$TREE/tools/verity/cli:$TREE/verity/core/difftest/python
@@ -56,14 +56,14 @@ eval "$($PY -m verity_vllm.pipeline.cli epoch custody-env "$C")"
 printf '#!/bin/sh\nexec %s -m research "$@"\n' "$PY" >"$SW/research" && chmod +x "$SW/research"
 export RESEARCH_BIN=$SW/research
 "$RESEARCH_BIN" keep "$SW" --owner @circuits --expires 5d --priority normal \
-  --why "GLM v2 AOT and traced Builds of $ROW ($RESEARCH_RUN_ID): a moved row's AOT Build takes the trace as --aot-trace" \
+  --why "$WHAT v2 AOT and traced Builds of $ROW ($RESEARCH_RUN_ID): a moved row's AOT Build takes the trace as --aot-trace" \
   || echo "research keep failed (continuing)"
 cd integrations/vllm || exit 6
 B=${BUDGET_GB:-100}
 
 aot() {  # aot TAG SWEEP [--aot-trace DIR]: the AOT Build, Programs only, as a vllm.build Attempt
   local tag=$1 sweep=$2; shift 2
-  /usr/bin/time -v "$PY" -m verity_vllm.pipeline.cli row chain --stages build --no-publish --by circuits "$ROW" GLM53 zai-org/GLM-5.3 "$REV" \
+  /usr/bin/time -v "$PY" -m verity_vllm.pipeline.cli row chain --stages build --no-publish --by circuits "$ROW" "$ROLE" "$REPO" "$REV" \
     --sweep-dir "$sweep" --build-construction record "$@" --build-programs-only=1 --build-ram-budget-gb "$B" >"$OUT/${tag}_chain.out" 2>&1
   local rc=$?
   grep -E "^build |Elapsed|Maximum resident" "$OUT/${tag}_chain.out" | tail -4
@@ -82,7 +82,7 @@ EOF
 }
 
 if [ -n "${TRACE_RUN:-}" ]; then
-  D=$W/glm-v2/$TRACE_RUN/$ROW TO=$(dirname "$RESEARCH_RUN_DIR")/$TRACE_RUN/out
+  D=$W/$V2/$TRACE_RUN/$ROW TO=$(dirname "$RESEARCH_RUN_DIR")/$TRACE_RUN/out
   grep -q '^build PASS' "$D/stages.txt" 2>/dev/null || { echo "$D: no passing traced Build"; exit 7; }
   for f in neutrality.json build_summary.json trace_art.txt; do cp "$TO/$f" "$OUT/" || { echo "$TRACE_RUN has no out/$f"; exit 3; }; done
   cp "$TO/tree.txt" "$OUT/trace_tree.txt" || exit 3
@@ -136,7 +136,7 @@ else
 fi
 
 /usr/bin/time -v "$PY" -m verity_vllm.pipeline.cli predict compare "$D" --row "$ROW" \
-  --config verity_vllm/engine/profiles/hf_configs/GLM53.config.json --out "$OUT/comparison.json" --workers "${WORKERS:-2}" 2>"$OUT/compare.err" &
+  --config "$CONFIG" --out "$OUT/comparison.json" --workers "${WORKERS:-2}" 2>"$OUT/compare.err" &
 cpid=$!
 A2=$SW/aot2 a2rc=skipped
 [ -n "${SKIP_AOT2:-}" ] || { aot aot2 "$A2" --aot-trace "$D"; a2rc=$?; }

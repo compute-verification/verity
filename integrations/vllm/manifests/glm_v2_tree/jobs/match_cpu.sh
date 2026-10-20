@@ -2,16 +2,16 @@
 # A v2 row's Match CPU phase (MATCH_PHASE=cpu: the tp2 check, the per-rank fold Match, compare, GM-01, the cross-rank leg) on a CPU
 # node, over the Build of record and the GPU legs, both in the row dir: the legs copied from window A's node and checked against match_gpu.sh's
 # match.sha256 (inputs/match.sha256, README "GPU batch"), all but its `<row>.tree` line: copy_rowdir.sh settled the row's tree, and
-# tree_guard checks this job against it.  No GPU.
+# tree_guard checks this job against it.  No GPU.  Every file the phase writes under the row dir (the check, the folds, a
+# served-shape derive's Programs) is hashed into $OUT/match_cpu.sha256 (paths relative to $SW), the list copy_rowdir.sh takes
+# to window B's node, which holds the legs already when it ran window A.
 #   research run --on vy-glm53-cpu-2 --mem-gb 450 --mem-wait 28800 --timeout 20h --custody-ttl 24h --cwd source --project verity --send match.sha256 -- env ROW=... BUILD_RUN=... bash integrations/vllm/manifests/glm_v2_tree/jobs/match_cpu.sh
-# env: ROW, BUILD_RUN, [SW=/workspace/cp/circuits/glm-v2/rows], [REF=cursor/glm-v2-21f3], [FOLD_RANK_WORKERS=3], [BUDGET_GB=150].
+# env: ROW, BUILD_RUN, [SW], [REF] (model.sh's defaults), [FOLD_RANK_WORKERS=3], [BUDGET_GB=150].
 set -uo pipefail
 : "${ROW:?ROW}" "${BUILD_RUN:?BUILD_RUN}"
-REV=aca966e4e02791568aa6a4ced368624b3d897f42
-REF=${REF:-cursor/glm-v2-21f3}
-SW=${SW:-/workspace/cp/circuits/glm-v2/rows}
 W0=/workspace/cp/circuits
 TREE=$PWD
+source "$TREE/integrations/vllm/manifests/glm_v2_tree/jobs/model.sh"
 D=$SW/$ROW
 [ -f "$D/build_summary.json" ] && [ -s "$D/manifest.json" ] || { echo "no Build of record (build_summary.json, manifest.json) in $D"; exit 3; }
 [ ! -e "$D/match/tp2_match.json" ] || { echo "$D/match already ran its check"; exit 3; }
@@ -31,15 +31,18 @@ export MATCH_PHASE=cpu FOLD_RANK_WORKERS=${FOLD_RANK_WORKERS:-3} HF_HOME=$W0/hf 
 export PYTHONPATH=$TREE:$TREE/tools/research/src:$TREE/infra/cluster/src:$TREE/integrations/vllm:$TREE/verity/ml/flock/python:$TREE/tools/verity/circuit_check/src
 export RESEARCH_STORE_CONFIG=$C/store.toml
 eval "$($PY -m verity_vllm.pipeline.cli epoch custody-env "$C")"
-W=$(mktemp -d /tmp/glm-v2-mcpu.XXXXXX); trap 'rm -rf "$W"' EXIT
+W=$(mktemp -d /tmp/$V2-mcpu.XXXXXX); trap 'rm -rf "$W"' EXIT
 printf '#!/bin/sh\nexec %s -m research "$@"\n' "$PY" >"$W/research" && chmod +x "$W/research"
 export RESEARCH_BIN=$W/research TMPDIR=$W
 "$RESEARCH_BIN" keep "$SW" --owner @circuits --expires 5d --priority normal \
-  --why "GLM-5.3 v2 rows (cursor/glm-v2-21f3): Build of record and Match CPU phase ($RESEARCH_RUN_ID)" || echo "research keep failed (continuing)"
+  --why "$WHAT v2 rows ($REF): Build of record and Match CPU phase ($RESEARCH_RUN_ID)" || echo "research keep failed (continuing)"
+M0=$W/started && touch "$M0"
 $PY -m verity_vllm.pipeline.cli row chain --stages match --build-run "$BUILD_RUN" --no-publish --ref "$REF" --by circuits \
-  "$ROW" GLM53 zai-org/GLM-5.3 "$REV" --sweep-dir "$SW" --build-ram-budget-gb "${BUDGET_GB:-150}" >"$OUT/chain.out" 2>&1
+  "$ROW" "$ROLE" "$REPO" "$REV" --sweep-dir "$SW" --build-ram-budget-gb "${BUDGET_GB:-150}" >"$OUT/chain.out" 2>&1
 rc=$?
 for f in row.json stages.txt row.log match/tp2_match.json; do cp "$D/$f" "$OUT/" 2>/dev/null; done
+(cd "$SW" && find "$ROW" -type f -newer "$M0" -print0 | xargs -0 -r -P 16 -n 256 sha256sum) | sort -k2 >"$OUT/match_cpu.sha256"
+echo "match_cpu.sha256: $(wc -l <"$OUT/match_cpu.sha256") files"
 tail -30 "$OUT/chain.out"
 grep -E '^match ' "$D/stages.txt" | tail -1
 exit $rc
