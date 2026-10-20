@@ -9,23 +9,25 @@ import Proofs.Flock.Soundness.ExecDraw
 
 C-Flock reads every hm96 leaf salt from the operating system, 192 bytes a leaf (`getrandom`, the kernel's `getrandom(2)`;
 Daniel, 9 Oct, decision 4(a)), as the recursive audit's firewall and a registrant do. The hiding and zero-knowledge
-theorems draw each salt uniformly from `Salt`, hm96-sha512's 1536 salt bits. The step between the two is A3
-(`Assumptions.UniformRandomBytes`, `uniform/io-getrandombytes`: the operating system's bytes are independent and
-uniform), and no premise on a stream generator is left on the salts:
+theorems draw each salt uniformly from `Salt`, hm96-sha512's 1536 salt bits. The step between the two is A3 per test
+(`Assumptions.UniformRandomBytesTest`, `uniform/io-getrandombytes`: the operating system's bytes pass the test as
+independent uniform bytes do, up to `η`), taken at the one event each theorem bounds, and `η` enters its bound. No
+premise on a stream generator is left on the salts:
 
 * `saltOfBytes`, `saltEquiv`: 192 bytes as a salt, in `bitsOf`'s order (bit `t` is bit `t % 8` of byte `t / 8`), a
   bijection. `saltBytes_saltOfBytes`: the bytes a leaf hashes for that salt are the OS's bytes themselves
   (`Audit.Law.streamOf`), so the executable's leaf under the OS's salt is the model's leaf at `saltOfBytes`
   (`leaf_os`, from `leafSplit`). `saltsEquiv n`: `n` salts from `n` streams of 192 bytes.
-* `prCoin_os`, `prCoin_os_prod`: an event of values decoded bijectively from A3's bytes has the probability it has for
-  uniform values, alone or beside any independent randomness.
-* `hm96Hiding_os`: hm96 hiding (`Claims.Hm96Hiding`, a statement about uniform salts) at the OS's salt;
-  `hm96Sha512_os`: at hm96-sha512's pinned key with no premise but A3, at the bound `hidingGap My saltHash`
-  (`CROnly.hm96Hiding_gap`), which `hash-derived-key` says is at most `2^-193`.
-* `ideal_leaves_swap_os`: T1 once per leaf (`ZK.ideal_leaves_swap`) for `n` leaves salted from `n` OS streams.
-* `hides_os`: a registration that hides under uniform salts hides, as a `PrivateCircuit.Hides`, under the OS's.
-  `hides_leaves`: a registration of hm96 leaves hides at `2·|ι|·δ₁` under uniform salts; `hides_leaves_os`: an
-  hm96-sha512 one at the OS's salts, at `2·n·hidingGap My saltHash`, with no premise but A3.
+* `uniformRandomBytesTest_of`: A3's every-event form gives the per-test form at every test, at `η = 0`.
+* `prCoin_os`, `prCoin_os_prod`: an event of values decoded bijectively from the OS's bytes has, within `η` either way,
+  the probability it has for uniform values, alone or beside any independent randomness.
+* `hm96Hiding_os`: hm96 hiding (`Claims.Hm96Hiding`, a statement about uniform salts) at the OS's salt, plus `η`;
+  `hm96Sha512_os`: at hm96-sha512's pinned key with no premise but A3 per test, at the bound
+  `hidingGap My saltHash + η` (`CROnly.hm96Hiding_gap`), which `hash-derived-key` says is at most `2^-193 + η`.
+* `ideal_leaves_swap_os`: T1 once per leaf (`ZK.ideal_leaves_swap`) for `n` leaves salted from the OS's streams.
+* `hides_os`: a registration that hides under uniform salts hides under the OS's at one event, plus the slack at each
+  program. `hides_leaves`: a registration of hm96 leaves hides at `2·|ι|·δ₁` under uniform salts; `hides_leaves_os`: an
+  hm96-sha512 one at the OS's salts, at `2·n·hidingGap My saltHash` plus the slacks, with no premise but A3 per test.
 
 No computational property of SHA-512 enters. hm96's hiding is the leftover hash lemma over the Hankel family
 (`CROnly.sum_hidingGap_le`), which reads of the salt hash `c(y) = SHA-512(sp ‖ y)` only that it takes at most `2^512`
@@ -114,71 +116,103 @@ noncomputable def saltsEquiv (n : ℕ) : (Fin n → Fin 192 → Fin 256) ≃ (Fi
 theorem saltsEquiv_apply {n : ℕ} (b : Fin n → Fin 192 → Fin 256) (i : Fin n) :
     saltsEquiv n b i = saltOfBytes (b i) := rfl
 
-/-! ## A3's bytes as uniform values -/
+/-! ## The OS's bytes as uniform values -/
 
-/-- **A3's bytes, decoded one for one, are uniform**: for a byte source that meets A3, every event of the values `e`
-decodes from its bytes has the probability it has for a uniform value. -/
-theorem prCoin_os {Ω Y : Type} [Fintype Ω] [Fintype Y] {m : ℕ} {L : Fin m → ℕ}
-    {t : Ω → (i : Fin m) → Fin (L i) → Fin 256} (hA3 : Assumptions.UniformRandomBytes L t)
-    (e : ((i : Fin m) → Fin (L i) → Fin 256) ≃ Y) (E : Y → Prop) :
-    prCoin (fun ω => E (e (t ω))) = prCoin E :=
-  (hA3 fun b => E (e b)).trans (prCoin_congr_equiv e E)
+/-- **A3 gives A3 per test**: a source whose every event has its probability for uniform bytes passes every test with no
+slack. -/
+theorem uniformRandomBytesTest_of {Ω : Type} [Fintype Ω] {m : ℕ} {L : Fin m → ℕ}
+    {t : Ω → (i : Fin m) → Fin (L i) → Fin 256} (h : Assumptions.UniformRandomBytes L t)
+    (E : ((i : Fin m) → Fin (L i) → Fin 256) → Prop) : Assumptions.UniformRandomBytesTest L t E 0 :=
+  ⟨(h E).le.trans le_self_add, (h E).ge.trans le_self_add⟩
+
+private theorem avg_const_le {C : Type} [Fintype C] (x : ℝ≥0∞) : avg (fun _ : C => x) ≤ x := by
+  rcases isEmpty_or_nonempty C with hC | hC
+  · simp [avg]
+  · exact (avg_const x).le
+
+/-- **The OS's bytes, decoded one for one, pass a test as uniform values do**: for a byte source that passes the test
+`E ∘ e` up to `η` (A3 per test), the event `E` of the values `e` decodes from its bytes has, within `η` either way, the
+probability it has for a uniform value. -/
+theorem prCoin_os {Ω Y ι : Type} [Fintype Ω] [Fintype Y] [Fintype ι] [DecidableEq ι] {L : ι → ℕ}
+    {t : Ω → (i : ι) → Fin (L i) → Fin 256} (e : ((i : ι) → Fin (L i) → Fin 256) ≃ Y) (E : Y → Prop) {η : ℝ≥0∞}
+    (hA3 : Assumptions.UniformRandomBytesTest L t (fun b => E (e b)) η) :
+    prCoin (fun ω => E (e (t ω))) ≤ prCoin E + η ∧ prCoin E ≤ prCoin (fun ω => E (e (t ω))) + η := by
+  rw [← prCoin_congr_equiv e E]
+  exact hA3
 
 /-- **The same beside independent randomness**: in an experiment on `A × Ω` whose `Ω` is the byte source, the values
-decoded from it may be taken uniform. -/
-theorem prCoin_os_prod {A Ω Y : Type} [Fintype A] [Fintype Ω] [Fintype Y] {m : ℕ} {L : Fin m → ℕ}
-    {t : Ω → (i : Fin m) → Fin (L i) → Fin 256} (hA3 : Assumptions.UniformRandomBytes L t)
-    (e : ((i : Fin m) → Fin (L i) → Fin 256) ≃ Y) (E : A → Y → Prop) :
-    prCoin (fun p : A × Ω => E p.1 (e (t p.2))) = prCoin (fun p : A × Y => E p.1 p.2) := by
+decoded from it may be taken uniform, within `η` either way, where the source passes the test at every `a`. -/
+theorem prCoin_os_prod {A Ω Y ι : Type} [Fintype A] [Fintype Ω] [Fintype Y] [Fintype ι] [DecidableEq ι] {L : ι → ℕ}
+    {t : Ω → (i : ι) → Fin (L i) → Fin 256} (e : ((i : ι) → Fin (L i) → Fin 256) ≃ Y) (E : A → Y → Prop) {η : ℝ≥0∞}
+    (hA3 : ∀ a, Assumptions.UniformRandomBytesTest L t (fun b => E a (e b)) η) :
+    prCoin (fun p : A × Ω => E p.1 (e (t p.2))) ≤ prCoin (fun p : A × Y => E p.1 p.2) + η ∧
+      prCoin (fun p : A × Y => E p.1 p.2) ≤ prCoin (fun p : A × Ω => E p.1 (e (t p.2))) + η := by
   rw [prCoin_prod_split (fun a ω => E a (e (t ω))), prCoin_prod_split E]
-  exact congrArg avg (funext fun a => prCoin_os hA3 e (E a))
+  constructor
+  · calc avg (fun a => prCoin fun ω => E a (e (t ω)))
+        ≤ avg (fun a => prCoin (fun y => E a y) + η) := avg_mono fun a => (prCoin_os e (E a) (hA3 a)).1
+      _ = avg (fun a => prCoin fun y => E a y) + avg (fun _ : A => η) := avg_add _ _
+      _ ≤ _ := add_le_add le_rfl (avg_const_le η)
+  · calc avg (fun a => prCoin fun y => E a y)
+        ≤ avg (fun a => prCoin (fun ω => E a (e (t ω))) + η) := avg_mono fun a => (prCoin_os e (E a) (hA3 a)).2
+      _ = avg (fun a => prCoin fun ω => E a (e (t ω))) + avg (fun _ : A => η) := avg_add _ _
+      _ ≤ _ := add_le_add le_rfl (avg_const_le η)
 
 /-! ## hm96 hiding at the OS's salts -/
 
-/-- **hm96 hiding at the OS's salt** (A3): where `Hm96Hiding My c δ₁` holds for a uniform salt, it holds for the salt
-`e` decodes from a byte source that meets A3. -/
-theorem hm96Hiding_os {Ω Y B C : Type} [Fintype Ω] [Fintype Y] [Fintype B] {m : ℕ} {L : Fin m → ℕ}
-    {t : Ω → (i : Fin m) → Fin (L i) → Fin 256} (hA3 : Assumptions.UniformRandomBytes L t)
-    (e : ((i : Fin m) → Fin (L i) → Fin 256) ≃ Y) (My : Y → B) (c : Y → C) {δ₁ : ℝ≥0∞}
-    (hT1 : Claims.Hm96Hiding My c δ₁) (E : B × C → Prop) :
-    prCoin (fun ω => E (My (e (t ω)), c (e (t ω)))) ≤ prCoin (fun p : B × Y => E (p.1, c p.2)) + δ₁ := by
-  rw [prCoin_os hA3 e fun y => E (My y, c y)]
-  exact Assumptions.hm96Hiding_apply hT1 E
+/-- **hm96 hiding at the OS's salt** (A3 per test): where `Hm96Hiding My c δ₁` holds for a uniform salt, it holds up to
+`δ₁ + η` for the salt `e` decodes from a byte source that passes the test up to `η`. -/
+theorem hm96Hiding_os {Ω Y B C ι : Type} [Fintype Ω] [Fintype Y] [Fintype B] [Fintype ι] [DecidableEq ι] {L : ι → ℕ}
+    {t : Ω → (i : ι) → Fin (L i) → Fin 256} (e : ((i : ι) → Fin (L i) → Fin 256) ≃ Y) (My : Y → B) (c : Y → C)
+    {δ₁ : ℝ≥0∞} (hT1 : Claims.Hm96Hiding My c δ₁) (E : B × C → Prop) {η : ℝ≥0∞}
+    (hA3 : Assumptions.UniformRandomBytesTest L t (fun b => E (My (e b), c (e b))) η) :
+    prCoin (fun ω => E (My (e (t ω)), c (e (t ω)))) ≤ prCoin (fun p : B × Y => E (p.1, c p.2)) + δ₁ + η :=
+  (prCoin_os e (fun y => E (My y, c y)) hA3).1.trans (add_le_add (Assumptions.hm96Hiding_apply hT1 E) le_rfl)
 
-/-- **hm96-sha512 hides at the OS's salt, with no premise but A3**: for the salt of one 192-byte stream of a byte
-source that meets A3 (`uniform/io-getrandombytes`), no test tells `(M(κ₀)·y, SHA-512(sp ‖ y))` from `(U, SHA-512(sp ‖ y))`
-with advantage above `hidingGap My saltHash`, the statistical distance at the pinned key `κ₀`. That this is at most
-`2^-193` is `hash-derived-key`; at all but `2^-64` of the keys it is (`CROnly.hm96_sha512_bad_keys`). -/
-theorem hm96Sha512_os {Ω : Type} [Fintype Ω] {t : Ω → Fin 1 → Fin 192 → Fin 256}
-    (hA3 : Assumptions.UniformRandomBytes (fun _ : Fin 1 => 192) t) (E : Bits × ByteArray → Prop) :
+/-- **hm96-sha512 hides at the OS's salt, with no premise but A3 per test**: for the salt of one 192-byte stream of a
+byte source that passes the test up to `η` (`uniform/io-getrandombytes`), the test `E` tells `(M(κ₀)·y, SHA-512(sp ‖ y))`
+from `(U, SHA-512(sp ‖ y))` with advantage at most `hidingGap My saltHash + η`, the first the statistical distance at the
+pinned key `κ₀`. That it is at most `2^-193` is `hash-derived-key`; at all but `2^-64` of the keys it is
+(`CROnly.hm96_sha512_bad_keys`). -/
+theorem hm96Sha512_os {Ω : Type} [Fintype Ω] {t : Ω → Fin 1 → Fin 192 → Fin 256} (E : Bits × ByteArray → Prop)
+    {η : ℝ≥0∞} (hA3 : Assumptions.UniformRandomBytesTest (fun _ : Fin 1 => 192) t
+      (fun b => E (My (saltOfBytes (b 0)), saltHash (saltOfBytes (b 0)))) η) :
     prCoin (fun ω => E (My (saltOfBytes (t ω 0)), saltHash (saltOfBytes (t ω 0)))) ≤
-      prCoin (fun p : Bits × Salt => E (p.1, saltHash p.2)) + ENNReal.ofReal (CROnly.hidingGap My saltHash) :=
-  hm96Hiding_os hA3 ((Equiv.funUnique (Fin 1) _).trans saltEquiv) My saltHash (CROnly.hm96Hiding_gap My saltHash) E
+      prCoin (fun p : Bits × Salt => E (p.1, saltHash p.2)) + ENNReal.ofReal (CROnly.hidingGap My saltHash) + η :=
+  hm96Hiding_os ((Equiv.funUnique (Fin 1) _).trans saltEquiv) My saltHash (CROnly.hm96Hiding_gap My saltHash) E hA3
 
-/-- **T1 for `n` leaves salted from the OS** (A3): in an experiment on `Ω` and a byte source of `n` streams that meets
-A3, whose leaf `i` is `H(x_i(ω) + M·y_i, c(y_i))` with `y_i` decoded from stream `i`, replacing every leaf by an ideal
-one `H(U_i, c(y_i))` changes the probability of any event by at most `n·δ₁`. The digests may read anything in `Ω`; the
-streams are read by their leaves only. -/
-theorem ideal_leaves_swap_os {Ω Ωos Y B C D : Type} [Fintype Ω] [Nonempty Ω] [Fintype Ωos] [Fintype Y] [Nonempty Y]
-    [AddCommGroup B] [Fintype B] {n : ℕ} {L : Fin n → ℕ} {t : Ωos → (i : Fin n) → Fin (L i) → Fin 256}
-    (hA3 : Assumptions.UniformRandomBytes L t) (e : ((i : Fin n) → Fin (L i) → Fin 256) ≃ (Fin n → Y))
+/-- **T1 for `n` leaves salted from the OS** (A3 per test): in an experiment on `Ω` and a byte source, whose leaf `i` is
+`H(x_i(ω) + M·y_i, c(y_i))` with the salts `y` decoded from the source, replacing every leaf by an ideal one
+`H(U_i, c(y_i))` changes the probability of the event by at most `n·δ₁ + η`, where the source passes the event's test up
+to `η` at every `ω`. The digests may read anything in `Ω`; the streams are read by their leaves only. -/
+theorem ideal_leaves_swap_os {Ω Ωos Y B C D ι : Type} [Fintype Ω] [Nonempty Ω] [Fintype Ωos] [Fintype Y] [Nonempty Y]
+    [AddCommGroup B] [Fintype B] [Fintype ι] [DecidableEq ι] {n : ℕ} {L : ι → ℕ}
+    {t : Ωos → (i : ι) → Fin (L i) → Fin 256} (e : ((i : ι) → Fin (L i) → Fin 256) ≃ (Fin n → Y))
     (My : Y → B) (c : Y → C) {δ₁ : ℝ≥0∞} (hT1 : Claims.Hm96Hiding My c δ₁) (H : B × C → D)
-    (x : Ω → Fin n → B) (G : Ω → (Fin n → D) → Prop) :
+    (x : Ω → Fin n → B) (G : Ω → (Fin n → D) → Prop) {η : ℝ≥0∞}
+    (hA3 : ∀ ω, Assumptions.UniformRandomBytesTest L t (fun b => G ω fun i => H (x ω i + My (e b i), c (e b i))) η) :
     prCoin (fun p : Ω × Ωos => G p.1 fun i => H (x p.1 i + My (e (t p.2) i), c (e (t p.2) i)))
-      ≤ prCoin (fun p : Ω × (Fin n → B × Y) => G p.1 fun i => H ((p.2 i).1, c (p.2 i).2)) + n * δ₁ := by
-  rw [prCoin_os_prod hA3 e fun ω y => G ω fun i => H (x ω i + My (y i), c (y i))]
-  exact ideal_leaves_swap My c hT1 H n x G
+      ≤ prCoin (fun p : Ω × (Fin n → B × Y) => G p.1 fun i => H ((p.2 i).1, c (p.2 i).2)) + n * δ₁ + η :=
+  (prCoin_os_prod e (fun ω y => G ω fun i => H (x ω i + My (y i), c (y i))) hA3).1.trans
+    (add_le_add (ideal_leaves_swap My c hT1 H n x G) le_rfl)
 
 /-! ## A registration under the OS's salts -/
 
-/-- **A registration that hides under uniform salts hides under the OS's** (A3): `reg` read at the salt `e` decodes
-from a byte source that meets A3 is a registration on the source's outcomes, and it hides up to the same `ε`. -/
-theorem hides_os {P V Ω Y : Type} [Fintype Ω] [Fintype Y] {m : ℕ} {L : Fin m → ℕ}
-    {t : Ω → (i : Fin m) → Fin (L i) → Fin 256} (hA3 : Assumptions.UniformRandomBytes L t)
-    (e : ((i : Fin m) → Fin (L i) → Fin 256) ≃ Y) {reg : P → Y → V} {ε : ℝ≥0∞} (h : PrivateCircuit.Hides reg ε) :
-    PrivateCircuit.Hides (fun p (ω : Ω) => reg p (e (t ω))) ε := fun p p' E => by
-  rw [prCoin_os hA3 e fun y => E (reg p y), prCoin_os hA3 e fun y => E (reg p' y)]
-  exact h p p' E
+/-- **A registration that hides under uniform salts hides under the OS's** (A3 per test): at programs `p`, `p'` and an
+event `E`, `reg` read at the salt `e` decodes from a byte source that passes `E`'s test at `p` up to `η` and at `p'` up
+to `η'` gives `E` at `p` at most its probability at `p'` plus `ε + η + η'`. -/
+theorem hides_os {P V Ω Y ι : Type} [Fintype Ω] [Fintype Y] [Fintype ι] [DecidableEq ι] {L : ι → ℕ}
+    {t : Ω → (i : ι) → Fin (L i) → Fin 256} (e : ((i : ι) → Fin (L i) → Fin 256) ≃ Y) {reg : P → Y → V} {ε : ℝ≥0∞}
+    (h : PrivateCircuit.Hides reg ε) (p p' : P) (E : V → Prop) {η η' : ℝ≥0∞}
+    (hA3 : Assumptions.UniformRandomBytesTest L t (fun b => E (reg p (e b))) η)
+    (hA3' : Assumptions.UniformRandomBytesTest L t (fun b => E (reg p' (e b))) η') :
+    prCoin (fun ω => E (reg p (e (t ω)))) ≤ prCoin (fun ω => E (reg p' (e (t ω)))) + ε + η + η' :=
+  calc prCoin (fun ω => E (reg p (e (t ω))))
+      ≤ prCoin (fun y => E (reg p y)) + η := (prCoin_os e (fun y => E (reg p y)) hA3).1
+    _ ≤ prCoin (fun y => E (reg p' y)) + ε + η := add_le_add (h p p' E) le_rfl
+    _ ≤ prCoin (fun ω => E (reg p' (e (t ω)))) + η' + ε + η :=
+        add_le_add (add_le_add (prCoin_os e (fun y => E (reg p' y)) hA3').2 le_rfl) le_rfl
+    _ = _ := by ring
 
 theorem prCoin_unit_snd {C : Type} [Fintype C] (P : C → Prop) : prCoin (fun p : Unit × C => P p.2) = prCoin P := by
   rw [prCoin_prod_split fun (_ : Unit) c => P c]
@@ -200,17 +234,21 @@ theorem hides_leaves {P Y B C D ι : Type} [Fintype Y] [Nonempty Y] [AddCommGrou
     _ ≤ _ := add_le_add h2 le_rfl
     _ = _ := by ring
 
-/-- **hm96-sha512 registrations hide at the OS's salts, with no premise but A3**: a registration whose leaf `i` is
-`H(x p i ⊕ M(κ₀)·y_i, SHA-512(sp ‖ y_i))`, `y_i` the salt of stream `i` of a byte source that meets A3
-(`uniform/io-getrandombytes`), hides the program up to `2·n·hidingGap(My, saltHash)`; under `hash-derived-key` that is
-at most `2·n·2^-193`. -/
-theorem hides_leaves_os {P Ω : Type} [Fintype Ω] {n : ℕ} {t : Ω → Fin n → Fin 192 → Fin 256}
-    (hA3 : Assumptions.UniformRandomBytes (fun _ : Fin n => 192) t) (x : P → Fin n → Bits) :
-    PrivateCircuit.Hides
-      (fun p (ω : Ω) i => leafH (x p i + My (saltOfBytes (t ω i)), saltHash (saltOfBytes (t ω i))))
-      (2 * n * ENNReal.ofReal (CROnly.hidingGap My saltHash)) := by
+/-- **hm96-sha512 registrations hide at the OS's salts, with no premise but A3 per test**: a registration whose leaf `i` is
+`H(x p i ⊕ M(κ₀)·y_i, SHA-512(sp ‖ y_i))`, `y_i` the salt of stream `i` of a byte source (`uniform/io-getrandombytes`)
+that passes the event's test at `p` up to `η` and at `p'` up to `η'`, hides the program at that event up to
+`2·n·hidingGap(My, saltHash) + η + η'`; under `hash-derived-key` the first term is at most `2·n·2^-193`. -/
+theorem hides_leaves_os {P Ω : Type} [Fintype Ω] {n : ℕ} {t : Ω → Fin n → Fin 192 → Fin 256} (x : P → Fin n → Bits)
+    (p p' : P) (E : (Fin n → ByteArray) → Prop) {η η' : ℝ≥0∞}
+    (hA3 : Assumptions.UniformRandomBytesTest (fun _ : Fin n => 192) t
+      (fun b => E fun i => leafH (x p i + My (saltOfBytes (b i)), saltHash (saltOfBytes (b i)))) η)
+    (hA3' : Assumptions.UniformRandomBytesTest (fun _ : Fin n => 192) t
+      (fun b => E fun i => leafH (x p' i + My (saltOfBytes (b i)), saltHash (saltOfBytes (b i)))) η') :
+    prCoin (fun ω => E fun i => leafH (x p i + My (saltOfBytes (t ω i)), saltHash (saltOfBytes (t ω i)))) ≤
+      prCoin (fun ω => E fun i => leafH (x p' i + My (saltOfBytes (t ω i)), saltHash (saltOfBytes (t ω i)))) +
+        2 * n * ENNReal.ofReal (CROnly.hidingGap My saltHash) + η + η' := by
   have h := hides_leaves My saltHash (CROnly.hm96Hiding_gap My saltHash) leafH x
   rw [Fintype.card_fin] at h
-  exact hides_os hA3 (saltsEquiv n) h
+  exact hides_os (saltsEquiv n) h p p' E hA3 hA3'
 
 end FlockSoundness.Discharge.ZkView

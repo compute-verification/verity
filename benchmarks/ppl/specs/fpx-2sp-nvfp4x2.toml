@@ -1,0 +1,47 @@
+description = "FPX-DESIGN FP4-2SP's served path: the whole E2M1 grid as integers (twice its values: 0..4, 6, 8, 12) in blocks of 16 with odd UE4M3 scales (1..15), one FP32 scale per token and per output row, on every linear and lm_head, both operands rounded to nearest (the coined twin is peeled off in the proof), after SmoothQuant 0.5 (kv_shared) and the rotations (lm_head rotated too); Dither-2S's int8 attention (run on the format by C1)"
+
+[[linear]]
+step = "smooth"
+alpha = 0.5
+kv_shared = true
+
+[[linear]]
+step = "rotate"
+
+[[linear]]
+step = "rotate"
+linears = ["lm_head"]
+
+[[linear]]
+step = "native"
+grid = "e2m1x2"
+scale = "nv"
+act = "round"
+weight = "round"
+
+[[linear]]
+step = "native"
+grid = "e2m1x2"
+scale = "nv"
+act = "round"
+weight = "round"
+linears = ["lm_head"]
+
+[[attention]]
+step = "rotate"
+
+[[attention]]
+step = "center_keys"
+
+[[attention]]
+step = "int8"
+q = "dither"
+k = "dither"
+v = "dither"
+p_sink = true
+
+[[attention]]
+step = "peel"
+operand = "p"
+width = 64
+offset = 64

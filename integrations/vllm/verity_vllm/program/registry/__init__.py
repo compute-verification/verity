@@ -65,6 +65,10 @@ def _register_lazy_families() -> None:
         from verity_vllm.program.registry import fp8_moe_experts
         return fp8_moe_experts
 
+    def _dsa_topk():
+        from verity_vllm.program.registry import dsa_topk
+        return dsa_topk
+
     def _marlin_moe():
         from verity_vllm.program.registry import marlin_moe
         return marlin_moe
@@ -78,6 +82,8 @@ def _register_lazy_families() -> None:
     # [DeepSeek-V4] the Marlin W4A16 expert-row gathers, likewise built per expert count while deriving (`marlin_moe`)
     register_lazy_family(r"^GatherE2m1Pairx(\d+)_v1$", lambda m: _marlin_moe().gather_e2m1_pair(int(m[1])))
     register_lazy_family(r"^GatherE8m0x(\d+)_v1$", lambda m: _marlin_moe().gather_e8m0(int(m[1])))
+    # [GLM-5.3] the top-k selection relation's accelerator, one per (row length, TOPK), built while deriving a row past TOPK
+    register_lazy_family(r"^DsaTopKOrderCheck(\d+)x(\d+)_v1$", lambda m: _dsa_topk().order_check(int(m[1]), int(m[2])))
     # [R15 stoch] the top-p keep word (one per vocabulary; [R16] the split count S is its i32 `splits` OPERAND) and the bit extractor
     register_lazy_family(r"^TopPMaskWordx(\d+)_v1$", lambda m: _sampling().topp_mask_word(int(m[1])))
     register_lazy_family(r"^BitAtx(\d+)_v1$", lambda m: _sampling().bit_at(int(m[1])))
