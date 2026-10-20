@@ -50,6 +50,7 @@ from __future__ import annotations
 
 import enum
 import hashlib
+import threading
 from collections.abc import Sequence
 from dataclasses import dataclass, field
 from functools import lru_cache
@@ -302,11 +303,14 @@ class LmsKey:
 
 class LmsSigner:
     """A certifier's LMS key and its leaf state (`lms.LeafState` at `state`), held from the first signature on, so a second
-    signer on the same state is refused. ``floor`` is the next leaf known unused, such as 1 + the last q published."""
+    signer on the same state is refused. ``floor`` is the next leaf known unused, such as 1 + the last q published. One
+    signer may be shared across threads (an `Issuer` on the proxy's loop, its reveal endpoint off it): it signs one
+    message at a time."""
 
     def __init__(self, key: lms.PrivateKey, state: str | Path, *, floor: int = 0) -> None:
         self.key, self.state, self.floor = key, Path(state), floor
         self._leaves: lms.LeafState | None = None
+        self._lock = threading.Lock()  # the leaf state reads, then advances, the next leaf: never two at once
 
     @classmethod
     def create(cls, key: lms.PrivateKey, state: str | Path) -> LmsSigner:
@@ -327,21 +331,24 @@ class LmsSigner:
         return self._leaves
 
     def start(self, session: bytes) -> None:
-        try:
-            self._state().start(session)
-        except lms.StateError as e:
-            raise SignerRefused(str(e)) from None
+        with self._lock:
+            try:
+                self._state().start(session)
+            except lms.StateError as e:
+                raise SignerRefused(str(e)) from None
 
     def sign(self, message: bytes) -> bytes:
-        try:
-            return lms.sign(self.key, self._state(), message).encode()
-        except lms.StateError as e:
-            raise SignerRefused(str(e)) from None
+        with self._lock:
+            try:
+                return lms.sign(self.key, self._state(), message).encode()
+            except lms.StateError as e:
+                raise SignerRefused(str(e)) from None
 
     def close(self) -> None:
-        if self._leaves is not None:
-            self._leaves.close()
-            self._leaves = None
+        with self._lock:
+            if self._leaves is not None:
+                self._leaves.close()
+                self._leaves = None
 
 
 @dataclass(frozen=True, slots=True)
