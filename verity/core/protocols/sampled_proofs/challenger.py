@@ -116,6 +116,8 @@ LOG_TAG = "verity/challenger/release-log/v1"
 MAX_SESSION_ID = 128
 #: a release log's most lines: its head, then a root and its release per coin
 MAX_LOG_LINES = 2 * MAX_COINS + 1
+#: a release log line's most characters
+MAX_LOG_LINE = 4096
 CLOSE_FORM = ("a challenger close record is {chain, ended, lines, session, signature}: a 64-byte chain and a signature in "
               "lowercase hex, how the session ended (null when its client closed it), the release log's line count, "
               f"1 to {MAX_LOG_LINES}, and a session id of at most {MAX_SESSION_ID} ASCII letters, digits, '-', '.' and '_'")
@@ -468,21 +470,25 @@ _RELEASE_EVENT = ["after", "event", "index", "label", "released_at"]
 
 
 def _event(line: str) -> Any:
-    """A release log line's event: the line is canonical JSON (`canonical_json_text`, integers only), so no two readers
-    of it can read one line two ways."""
+    """A release log line's event: the line is canonical JSON (`canonical_json_text`, integers only) of at most
+    `MAX_LOG_LINE` characters, so no two readers of it can read one line two ways."""
     try:
-        doc = json.loads(line)
-        if canonical_json_text(doc) == line:
+        doc = json.loads(line) if len(line) <= MAX_LOG_LINE else None
+        if doc is not None and canonical_json_text(doc) == line:
             return doc
     except (ValueError, TypeError, RecursionError):
         pass
     raise CoinError(LOG_MALFORMED)
 
 
+def _time(t: Any) -> bool:
+    return type(t) is int and t >= 0
+
+
 def released_roots_of(commitment: LiveCommitment, log: Sequence[str]) -> dict[str, tuple[bytes, ...]]:
     """The roots the challenger received, by family in order: its release log's lines `log`, whose head names
     `commitment`, each root followed by its coin's release.  A malformed log, or another commitment's, raises `CoinError`."""
-    if not log or _event(log[0]) != {"event": "commitment", "root": commitment.root.hex()}:
+    if not log or log[0] != canonical_json_text({"event": "commitment", "root": commitment.root.hex()}):
         raise CoinError(f"the challenger's release log is not coin commitment {commitment.root.hex()[:16]}'s")
     roots: dict[str, list[bytes]] = {label: [] for label, _ in commitment.families}
     if len(log) % 2 == 0:
@@ -495,7 +501,8 @@ def released_roots_of(commitment: LiveCommitment, log: Sequence[str]) -> dict[st
                 or root["index"] != len(roots[root["label"]]) or type(release["index"]) is not int
                 or release["label"] != root["label"] or release["index"] != root["index"]
                 or release["after"] != root["root"] or type(root["root"]) is not str
-                or len(root["root"]) != 128 or _hex(root["root"]) is None):
+                or len(root["root"]) != 128 or _hex(root["root"]) is None or not _time(root["received_at"])
+                or not _time(release["released_at"])):
             raise CoinError(LOG_MALFORMED)
         roots[root["label"]].append(bytes.fromhex(root["root"]))
     return {label: tuple(r) for label, r in roots.items()}
@@ -684,7 +691,7 @@ class LiveRecord:
 
 
 __all__ = ["AUDIT_FORM", "BINDING", "CLOSE_FORM", "CLOSE_ROLE", "COIN_BYTES", "COMMITMENT_FORM", "COMMITMENT_TAG", "KEY_FORM",
-           "LOG_FORM", "LOG_MALFORMED", "LOG_TAG", "MAX_COINS", "MAX_LOG_LINES", "MAX_SESSION_ID", "NO_AUDIT", "NO_CLOSE",
+           "LOG_FORM", "LOG_MALFORMED", "LOG_TAG", "MAX_COINS", "MAX_LOG_LINE", "MAX_LOG_LINES", "MAX_SESSION_ID", "NO_AUDIT", "NO_CLOSE",
            "NO_RECORD", "OPENING_FORM", "PUBLIC_BYTES", "RECORD_FORM", "RECORD_ROLE", "SESSION_FORM", "WINDOW_FORM",
            "ChallengerClose", "ChallengerKey", "ChallengerRecord", "CoinError", "LiveChallenger", "LiveCommitment",
            "LiveOpening", "LiveRecord", "Verify", "audited_session", "close_message", "layout_problem", "live_domain",

@@ -15,6 +15,9 @@ malformed form. Each piece answers ``{"refused": why}`` where the challenger ref
 from __future__ import annotations
 
 import functools
+import hashlib
+import itertools
+import json
 import random
 import shutil
 from collections import Counter
@@ -26,6 +29,7 @@ from hypothesis import strategies as st
 
 import verity_difftest as D
 from verity.core.protocols.sampled_proofs import challenger as Ch
+from verity.ml.commitments.identity import canonical_json_text
 from verity.ml.crypto import lms
 
 PACKAGE = Path(__file__).resolve().parents[1]
@@ -503,6 +507,289 @@ def trusted_case(rng: random.Random, name: str) -> Any:
     return d
 
 
+# ---- the challenger's session -------------------------------------------------------------------------------------------
+
+SESSIONS = ["s-1", "s-20261020-1", "A.b_c-9", "x" * Ch.MAX_SESSION_ID]
+
+
+def _roots(roots: dict[str, tuple[bytes, ...]]) -> dict[str, list[str]]:
+    return {label: [r.hex() for r in rs] for label, rs in roots.items()}
+
+
+def close(j: Any) -> Any:
+    _request(j, ["I", "close", "commitment", "host"])
+    I = _hex(j["I"])
+    if type(j["host"]) is not str:
+        raise D.Reject("host is not a string")
+
+    def go():
+        c = Ch.ChallengerClose.from_json(j["close"])
+        m = Ch.close_message(I, j["host"], Ch.LiveCommitment.from_json(j["commitment"]), c.session, c.lines, c.chain,
+                             c.ended)
+        return {"close": c.to_json(), "message": m.hex()}
+    return _refusing(go)
+
+
+def released(j: Any) -> Any:
+    _request(j, ["commitment", "log"])
+    if type(j["log"]) is not list or not all(type(line) is str for line in j["log"]):
+        raise D.Reject("log is not a list of strings")
+
+    def go():
+        roots = Ch.released_roots_of(Ch.LiveCommitment.from_json(j["commitment"]), j["log"])
+        return {"chain": Ch.log_chain(j["log"]).hex(), "roots": _roots(roots)}
+    return _refusing(go)
+
+
+def session(j: Any) -> Any:
+    _request(j, ["auditor", "key", "session", "window"])
+
+    def go():
+        c, roots = Ch.trusted_session_of(j["auditor"], j["window"], Ch.ChallengerKey.from_json(j["key"]), j["session"],
+                                         lms_verify)
+        return {"commitment": c.to_json(), "roots": _roots(roots)}
+    return _refusing(go)
+
+
+class Session:
+    """A challenger's session as its host leaves it: a record signed at leaf q of a small key, a release log over drawn
+    roots in canonical JSON on an integer clock, and the close signed at leaf q + 1 (None: its client closed it)."""
+
+    def __init__(self, rng: random.Random, ended: str | None = None) -> None:
+        self.w, self.h = rng.choice(PARAMS)
+        self.k = _key(self.w, self.h, 0)
+        self.pub = lms.public_key(self.k)
+        self.q = rng.randrange(2 ** self.h - 1)
+        self.ch = _challenger(rng)
+        self.host = rng.choice(HOSTS)
+        self.ch.sign_record(self.host, self.pub, lambda m: lms.sign_at(self.k, self.q, m).encode())
+        self.key = Ch.ChallengerKey(self.w, self.h, self.pub)
+        c = self.ch.commitment
+        self.lines = [canonical_json_text({"event": "commitment", "root": c.root.hex()})]
+        clock = itertools.count(rng.choice([0, 1, 10 ** 12])).__next__
+        records = {label: Ch.LiveRecord(self.ch, label, clock) for label, _ in c.families}
+        picks = [label for label, n in c.families for _ in range(rng.randint(0, min(n, 4)))] or [c.families[0][0]]
+        rng.shuffle(picks)
+        for label in picks:
+            n = len(records[label].log)
+            records[label].record(rng.choice([rng.randbytes(64), bytes(64)]))
+            self.lines += [canonical_json_text(e) for e in records[label].log[n:]]
+        self.id = rng.choice(SESSIONS)
+        self.close = self.signed(ended)
+
+    def signed(self, ended: str | None, lines: list[str] | None = None, session: str | None = None) -> dict:
+        lines = self.lines if lines is None else lines
+        sid = self.id if session is None else session
+        chain = Ch.log_chain(lines)
+        m = Ch.close_message(self.pub[:16], self.host, self.ch.commitment, sid, len(lines), chain, ended)
+        return Ch.ChallengerClose(sid, len(lines), chain, ended, lms.sign_at(self.k, self.q + 1, m).encode()).to_json()
+
+    def files(self) -> dict:
+        return {"close": self.close, "log": list(self.lines), "record": self.ch.record.to_json()}
+
+
+def _window(rng: random.Random) -> dict:
+    return {"commit": rng.randbytes(64).hex(), "period": rng.choice([0, 1, 7, 1 << 40]),
+            "pouw_salt": rng.randbytes(64).hex(), "stream": rng.randbytes(64).hex()}
+
+
+def _entry(rng: random.Random, window: dict, session: str, public: bytes) -> dict:
+    return {**window, "code": rng.randbytes(20).hex(), "key": hashlib.sha512(public).hexdigest(), "session": session}
+
+
+CLOSE_NAMES = ["honest", "keys", "extra", "chain-short", "chain-upper", "signature-type", "lines-zero", "lines-big",
+               "lines-type", "ended-type", "session-chars", "session-type", "commitment-form", "I-short", "request"]
+
+
+def close_case(rng: random.Random, name: str) -> Any:
+    s = Session(rng, rng.choice([None, None, "the stream closed"]))
+    d = dict(s.close)
+    j = {"I": s.pub[:16].hex() if rng.random() < 0.7 else rng.randbytes(16).hex(), "close": d,
+         "commitment": s.ch.commitment.to_json(), "host": s.host}
+    match name:
+        case "honest":
+            pass
+        case "keys":
+            del d[rng.choice(sorted(d))]
+        case "extra":
+            d["host"] = s.host
+        case "chain-short":
+            d["chain"] = d["chain"][:rng.choice([0, 2, 126])]
+        case "chain-upper":
+            d["chain"] = d["chain"].upper()
+        case "signature-type":
+            d["signature"] = rng.choice([None, 5, d["signature"].upper(), d["signature"] + "0"])
+        case "lines-zero":
+            d["lines"] = rng.choice([0, -1])
+        case "lines-big":
+            d["lines"] = Ch.MAX_LOG_LINES + rng.choice([1, 1 << 70])
+        case "lines-type":
+            d["lines"] = rng.choice([True, "3", None, [3]])
+        case "ended-type":
+            d["ended"] = rng.choice([1, False, ["x"], {"a": "b"}])
+        case "session-chars":
+            d["session"] = rng.choice(["", "a b", "a/b", "é", "x" * (Ch.MAX_SESSION_ID + 1), "s\n"])
+        case "session-type":
+            d["session"] = rng.choice([None, 1, ["s-1"]])
+        case "commitment-form":
+            j["commitment"] = commitment_case(rng, rng.choice(COMMITMENT_NAMES[1:]))
+        case "I-short":
+            j["I"] = rng.randbytes(rng.choice([0, 15, 17, 64])).hex()
+        case "request":
+            k = rng.choice(["I", "host", None])
+            if k is None:
+                del j[rng.choice(sorted(j))]
+            else:
+                j[k] = rng.choice([None, 5, ["x"]] + (["AB", "0"] if k == "I" else []))
+    return j
+
+
+def _set(lines: list[str], i: int, **changes) -> list[str]:
+    doc = json.loads(lines[i])
+    doc.update(changes)
+    return lines[:i] + [canonical_json_text(doc)] + lines[i + 1:]
+
+
+RELEASED_NAMES = ["honest", "head", "head-form", "empty", "odd", "root", "after", "index", "label", "label-release",
+                  "event", "time", "time-type", "extra", "non-canonical", "torn", "long", "float", "commitment-form",
+                  "request"]
+
+
+def released_case(rng: random.Random, name: str) -> Any:
+    s = Session(rng)
+    lines = list(s.lines)
+    i = 1 + 2 * rng.randrange((len(lines) - 1) // 2)
+    j = {"commitment": s.ch.commitment.to_json(), "log": lines}
+    match name:
+        case "honest":
+            pass
+        case "head":
+            j["log"] = [canonical_json_text({"event": "commitment", "root": _flip(s.ch.commitment.root.hex())})] + lines[1:]
+        case "head-form":
+            j["log"] = [json.dumps(json.loads(lines[0]))] + lines[1:]
+        case "empty":
+            j["log"] = []
+        case "odd":
+            j["log"] = lines[:-1]
+        case "root":
+            j["log"] = _set(lines, i, root=_flip(json.loads(lines[i])["root"]))
+        case "after":
+            j["log"] = _set(lines, i + 1, after=rng.choice([_flip(json.loads(lines[i + 1])["after"]), None, 5]))
+        case "index":
+            j["log"] = _set(lines, rng.choice([i, i + 1]), index=rng.choice([-1, 1 << 40, True, "0", None]))
+        case "label":
+            j["log"] = _set(lines, i, label=rng.choice(["nope", 5, None]))
+        case "label-release":
+            j["log"] = _set(lines, i + 1, label=rng.choice(["nope", 5, None]))
+        case "event":
+            j["log"] = _set(lines, rng.choice([i, i + 1]), event=rng.choice(["commitment", "rooted", 1, None]))
+        case "time":
+            j["log"] = _set(lines, rng.choice([i, i + 1]), **{rng.choice(["received_at", "released_at"]): -1})
+        case "time-type":
+            k = "received_at" if rng.random() < 0.5 else "released_at"
+            j["log"] = _set(lines, i if k == "received_at" else i + 1, **{k: rng.choice(["1", None, True, [1]])})
+        case "extra":
+            j["log"] = _set(lines, rng.choice([i, i + 1]), retry=True)
+        case "non-canonical":
+            j["log"] = lines[:i] + [json.dumps(json.loads(lines[i]))] + lines[i + 1:]
+        case "torn":
+            j["log"] = lines[:i] + [lines[i][:rng.randrange(1, len(lines[i]))]] + lines[i + 1:]
+        case "long":
+            j["log"] = _set(lines, i, received_at=10 ** rng.choice([4096, 4100]))
+        case "float":
+            n = json.loads(lines[i])["index"]
+            written = rng.choice([f"{n}.0", f"{n}e0", f"{n}E0", f"{n * 10}e-1"])
+            j["log"] = lines[:i] + [lines[i].replace(f'"index":{n},', f'"index":{written},', 1)] + lines[i + 1:]
+        case "commitment-form":
+            j["commitment"] = commitment_case(rng, rng.choice(COMMITMENT_NAMES[1:]))
+        case "request":
+            if rng.random() < 0.5:
+                del j[rng.choice(sorted(j))]
+            else:
+                j["log"] = rng.choice([None, "x", lines + [5]])
+    return j
+
+
+SESSION_NAMES = ["honest", "no-auditor", "auditor-form", "auditor-type", "window-form", "no-session", "two-sessions",
+                 "session-twice", "other-key", "wrong-session", "session-form", "no-record", "record-signature",
+                 "no-close", "close-form", "close-signature", "close-renamed", "rechained", "log-tampered",
+                 "log-dropped", "log-form", "unclosed", "key-form", "params", "request"]
+
+
+def session_case(rng: random.Random, name: str) -> Any:
+    s = Session(rng)
+    window = _window(rng)
+    others = [_entry(rng, _window(rng), sid, s.pub) for sid in ("o-1", "o-2")[:rng.randint(0, 2)]]
+    named = _entry(rng, window, s.id, s.pub)
+    auditor = others + [named]
+    rng.shuffle(auditor)
+    files = s.files()
+    j = {"auditor": auditor, "key": s.key.to_json(), "session": files, "window": window}
+    lines = files["log"]
+    match name:
+        case "honest":
+            pass
+        case "no-auditor":
+            j["auditor"] = None
+        case "auditor-form":
+            bad = rng.choice([{k: v for k, v in named.items() if k != "code"}, {**named, "key": named["key"].upper()},
+                              {**named, "code": named["code"][:38]}, {**named, "period": -1}, {**named, "session": ""},
+                              {**named, "extra": 1}, "entry"])
+            j["auditor"] = [bad if e is named else e for e in auditor]
+        case "auditor-type":
+            j["auditor"] = rng.choice([{"entries": auditor}, "x", 5])
+        case "window-form":
+            j["window"] = rng.choice([{**window, "period": rng.choice([-1, True, "0"])},
+                                      {**window, "stream": window["stream"][:-2]}, {**window, "code": "00"},
+                                      {k: v for k, v in window.items() if k != "commit"}, None])
+        case "no-session":
+            j["window"] = {**window, rng.choice(["commit", "pouw_salt", "stream"]): rng.randbytes(64).hex()}
+        case "two-sessions":
+            j["auditor"] = auditor + [_entry(rng, window, "s-other", s.pub)]
+        case "session-twice":
+            j["auditor"] = auditor + [_entry(rng, {**window, "period": window["period"] + 1}, s.id, s.pub)]
+        case "other-key":
+            j["auditor"] = [_entry(rng, window, s.id, lms.public_key(_key(s.w, s.h, 1))) if e is named else e
+                            for e in auditor]
+        case "wrong-session":
+            j["auditor"] = [{**named, "session": rng.choice([x for x in SESSIONS + ["o-3"] if x != s.id])} if e is named
+                            else e for e in auditor]
+        case "session-form":
+            j["session"] = rng.choice([{k: v for k, v in files.items() if k != "log"}, {**files, "extra": 1}, None])
+        case "no-record":
+            files["record"] = None
+        case "record-signature":
+            files["record"] = {**files["record"], "signature": _flip(files["record"]["signature"], 9)}
+        case "no-close":
+            files["close"] = None
+        case "close-form":
+            files["close"] = rng.choice([{**files["close"], "lines": 0}, {**files["close"], "chain": "00"}, "x"])
+        case "close-signature":
+            files["close"] = {**files["close"], "signature": _flip(files["close"]["signature"], 9)}
+        case "close-renamed":
+            files["close"] = {**files["close"], "session": "renamed"}
+            j["auditor"] = [{**named, "session": "renamed"} if e is named else e for e in auditor]
+        case "rechained":
+            files["log"] = _set(lines, 1, root=_flip(json.loads(lines[1])["root"]))
+            files["close"] = {**files["close"], "chain": Ch.log_chain(files["log"]).hex()}
+        case "log-tampered":
+            files["log"] = _set(lines, rng.randrange(1, len(lines)), **{"x": 1})
+        case "log-dropped":
+            files["log"] = lines[:-1]
+        case "log-form":
+            files["log"] = rng.choice([None, "x", lines[:-1] + [5]])
+        case "unclosed":
+            files["close"] = s.signed(rng.choice(["the stream closed", "a client's frames are hello", ""]))
+        case "key-form":
+            j["key"] = key_case(rng, rng.choice(KEY_NAMES[1:]))
+        case "params":
+            w, h = rng.choice([p for p in PARAMS if p != (s.w, s.h)])
+            j["key"] = {**j["key"], "W": w, "H": h}
+        case "request":
+            del j[rng.choice(sorted(j))]
+    return j
+
+
 COMMITMENT = D.Port(PIECES, "challenger_commitment", commitment, _cases(commitment_case, COMMITMENT_NAMES),
                     package=PACKAGE, need_rejects=False, of_record="lean")
 OPENING = D.Port(PIECES, "challenger_opening", opening, _cases(opening_case, OPENING_NAMES), package=PACKAGE,
@@ -514,12 +801,19 @@ KEY = D.Port(PIECES, "challenger_key", key, _cases(key_case, KEY_NAMES), package
 RECORD = D.Port(PIECES, "challenger_record", record, _cases(record_case, RECORD_NAMES), package=PACKAGE, of_record="lean")
 TRUSTED = D.Port(PIECES, "challenger_trusted", trusted, _cases(trusted_case, TRUSTED_NAMES), package=PACKAGE,
                  of_record="lean")
+CLOSE = D.Port(PIECES, "challenger_close", close, _cases(close_case, CLOSE_NAMES), package=PACKAGE, of_record="lean")
+RELEASED = D.Port(PIECES, "challenger_released", released, _cases(released_case, RELEASED_NAMES), package=PACKAGE,
+                  of_record="lean")
+SESSION = D.Port(PIECES, "challenger_session", session, _cases(session_case, SESSION_NAMES), package=PACKAGE,
+                 of_record="lean")
 
 pieces = D.server_fixture(COMMITMENT)
 
 RUNS = [(COMMITMENT, commitment_case, COMMITMENT_NAMES, 300), (OPENING, opening_case, OPENING_NAMES, 300),
         (REASON, reason_case, REASON_NAMES, 400), (ORDER, order_case, ORDER_NAMES, 400), (KEY, key_case, KEY_NAMES, 200),
-        (RECORD, record_case, RECORD_NAMES, 200), (TRUSTED, trusted_case, TRUSTED_NAMES, 300)]
+        (RECORD, record_case, RECORD_NAMES, 200), (TRUSTED, trusted_case, TRUSTED_NAMES, 300),
+        (CLOSE, close_case, CLOSE_NAMES, 200), (RELEASED, released_case, RELEASED_NAMES, 300),
+        (SESSION, session_case, SESSION_NAMES, 300)]
 
 
 @pytest.mark.parametrize("port, make, names, examples", RUNS, ids=[r[0].fn for r in RUNS])
