@@ -8,7 +8,7 @@ import Proofs.Flock.Claims.Recursion.DeployMargin
 The route's last-round comparison modulo `E*`'s reading makes the plurality prover `P_I` send, at the last inner round,
 some message with the plurality reading, not the extraction's own message. `P_I`'s run there makes `IVStar`'s calls on
 its own message, and `PrBAbort_le_PrBI` needs every call of a kept run among the calls `E_O`'s witnesses record at that
-draw (`innerF_vLog_sub`). So the route reads (P4) as `Bound.LastBindsEC`, where the columns or the calls differ, and
+draw (`innerF_vLog_sub`). So the route reads (P4) as `Bound.LastBindsEC`, where the columns or the sets of calls differ, and
 `Bound.LastCoinFree`, that `IVStar`'s last step reads no last coin (both in `Definitions/Claims/Recursion.lean`). Here:
 
 * the first statement of (P4) gives `LastBindsEC` wherever `IVStar`'s last step reads no last coin

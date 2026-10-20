@@ -1059,24 +1059,28 @@ def Bound.viewAt (Bd : Bound Coin Col T) (H : Msg → Msg) (x : Msg) (as : List 
 omit [Fintype Coin] [Nonempty Coin] [DecidableEq Col] in
 /-- **(P4) The last message is bound by the rounds before it, modulo what `E*` reads.** Take two decisions `IVStar`
 accepts at one statement, on messages and coins that agree before the last round, that differ in `DE`'s columns of their
-opened views (`Bound.deploy`'s `cols`) or in `IVStar`'s calls. They show a SHA-512 collision among `IVStar`'s calls in
-the two decisions.
+opened views (`Bound.deploy`'s `cols`) or in the set of `IVStar`'s calls: some call of one is not a call of the other.
+They show a SHA-512 collision among `IVStar`'s calls in the two decisions.
 
 `E*` reads an inner view only through its decision and its openings, and the bound record's openings are `DE`'s columns
 of the opened view. Two accepted decisions share their decision, so what `E*` reads of them differs exactly where those
 columns differ. The calls are compared as well because the route's plurality prover makes `IVStar`'s calls on its own
-last message, and the route charges every call of a kept run to the calls `E_O`'s witnesses record. Two last messages
-the deployed record reads alike, such as the trailing-space pair that refutes `LastBinds`, are one view to `E*` with the
+last message, and the route charges every call of a kept run to the calls `E_O`'s witnesses record. That charge reads
+the calls only by membership, so they are compared as sets (ASK-76): the record's stream order and its optional digest
+of a table's empty publics change the list of calls the deployed verifier makes, not the set. Two last messages the
+deployed record reads alike, such as the trailing-space pair that refutes `LastBinds`, are one view to `E*` with the
 same calls, so they are no counterexample.
 
 The recursion's KS reads this with `LastCoinFree` (`RecDeploy.ksBoundRoute_of_bridge_cols`), not the bridge. At the
 deployed bound record it follows from `Binds` and the deployed plain verifier's binding of its own last message
-(`RecDeploy.lastBindsEC_deployed`, from `RecDeploy.PlainLastBinds`, open). -/
+(`RecDeploy.lastBindsEC_deployed`, from `RecDeploy.PlainLastBinds`): its columns half is proved at SHA-512, and its
+calls half (`RecDeploy.PlainCallsBindOrSlack`) and the decoder's canonicity (`RecDeploy.CanonicalProofFiles`) are
+open. -/
 def Bound.LastBindsEC (H : Msg → Msg) (Bd : Bound Coin Col T) : Prop :=
   ∀ (x : Msg) (as as' : List Msg) (cs cs' : List Coin), as.length = Bd.DE.V.k x → as'.length = as.length →
     cs.length = as.length → cs'.length = as.length → as.dropLast = as'.dropLast → cs.dropLast = cs'.dropLast →
     (Bd.DE.cols (Bd.openView (Bd.viewAt H x as cs)) ≠ Bd.DE.cols (Bd.openView (Bd.viewAt H x as' cs')) ∨
-      ((Bd.IVStar.next x as cs).eval H).2 ≠ ((Bd.IVStar.next x as' cs').eval H).2) →
+      ((Bd.IVStar.next x as cs).eval H).2.toFinset ≠ ((Bd.IVStar.next x as' cs').eval H).2.toFinset) →
     ((Bd.IVStar.next x as cs).eval H).1 = .acc → ((Bd.IVStar.next x as' cs').eval H).1 = .acc →
     ∃ q ∈ (((Bd.IVStar.next x as cs).eval H).2 ++ ((Bd.IVStar.next x as' cs').eval H).2).map Prod.fst,
       ∃ q' ∈ (((Bd.IVStar.next x as cs).eval H).2 ++ ((Bd.IVStar.next x as' cs').eval H).2).map Prod.fst,

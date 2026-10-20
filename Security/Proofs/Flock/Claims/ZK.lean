@@ -92,6 +92,8 @@ import Proofs.Flock.Claims.ZK.Compose
 import Proofs.Flock.Claims.ZK.Layout
 import Proofs.Flock.Claims.ZK.Cut
 import Proofs.Flock.Claims.ZK.Stop
+import Proofs.Flock.Claims.ZK.LinkFft
+import Proofs.Flock.Claims.ZK.LinkRecheck
 
 /-!
 # Flock's zero knowledge against a malicious verifier
@@ -431,11 +433,20 @@ import Proofs.Flock.Claims.ZK.Stop
   history only through the decoded coins on the histories its check passes (`LeanRelease.ReadsCoins`) gives the rule
   and `StopsAt` (`LeanRelease.rfOf`, `stopsAt_of_readsCoins`). `Flock.zk_server_lean_coinLayer` is it at the deployed
   coin layer (`CoinLayer.session`) at SHA-512 from the transport's trusts alone, each named for its reason:
-  `LeanRelease.HelloEq`, `LinkRoundEq`, `FinalRoundEq`, `ReqsFollow` and `ReadsCoins` are facts about what Rust
-  computes (`hello_with_nonce`, `Firewall::root`, `Firewall::finish`, `coin_tree::Checked`, `LeanFrame`), and
-  `HelloDParses` one about Lean's own `Hello.parse` of `CoinLayer.helloD`, which the kernel cannot evaluate
-  (`Lean.Json.parse` is `partial`); `CheckIs` is proved from them (`LeanRelease.checkIs_coinLayer`,
-  `helloParses_of_helloEq`).
+  `LeanRelease.HelloEq`, `FinalRoundEq`, `ReqsFollow` and `ReadsCoins` are facts about what Rust computes
+  (`hello_with_nonce`, `Firewall::finish`, `coin_tree::Checked`, `LeanFrame`), `LinkRoundEq` one about what the
+  transport hands `flock-firewall link` (`LinkRecheck`), and `HelloDParses` one about Lean's own `Hello.parse` of
+  `CoinLayer.helloD`, which the kernel cannot evaluate (`Lean.Json.parse` is `partial`); `CheckIs` is proved from them
+  (`LeanRelease.checkIs_coinLayer`, `helloParses_of_helloEq`).
+* `LinkRecheck`: the firewall's link at the Lean recheck. `flock-firewall link`'s root (`Flock.Firewall.Link.root`, its
+  tree built in tasks) is `layerOf`'s cap over `hm96-sha512/v1`'s leaves of `encodeRowsZk`'s rows
+  (`Flock.Firewall.Link.root_eq`, `cap_eq`), the switched prover's level-0 leaves are the honest prover's
+  (`swExeOf_inl`, `Masked.leafAt_swCutAt`), so the recheck's link message at the tape (`Masked.linkMsg`) is round `0`'s
+  encoding of the switched cut (`Masked.enc0_swCutAt`), and at the deployed session `LinkRoundEq` follows from the
+  firewall's link being that message (`LeanRelease.LinkIs`, **`LeanRelease.linkRoundEq_of_linkIs`**).
+* `LinkFft`: the recheck's rows by the additive FFT in the novel basis (`Flock.Firewall.Link.rowsFft`) are
+  `encodeRowsZk`'s where the padding fits below `2^cols` and `cols < d ≤ 64` (`Flock.Firewall.Link.rowsFft_eq`), so
+  `rows` is `encodeRowsZk` on both of its paths (`rows_eq`).
 * `CoinPass`: those premises leave a history to be live at. At every tape, past `Hello` and the link, the check passes
   `Hello`'s answer whose root the first opening walks to under the tape's nonce, and that opening, at every key with bit
   2047 clear and every opening that reads back (`LeanRelease.opens_coinPass`; the all-zero one,
