@@ -8,10 +8,10 @@ committed beforehand (its models, code and data in storage). The values of every
 remaining input gates hold data such as prompts, and every computed gate is computed after the commitment. Per
 deployment, the workload's Program is the one circuit of record.
 
-Implementation and containment carry over to declarations as they are between their circuits, and say nothing about the
-baselines. That a containment keeps novel information novel, sending no novel input of the contained declaration into the
-containing one's baseline, is a premise about the protocol's baseline rule (`Nci.Assumptions.BaselineRegistered`), which
-each guarantee that needs it takes for its containment.
+Implementation carries over to declarations when it keeps novel information novel: an input gate of `t` outside `t`'s
+baseline is an input gate of `d` outside `d`'s. Containment carries over as it is between the circuits, and says nothing
+about the baselines: that a containment keeps novel information novel is a premise about the protocol's baseline rule
+(`Nci.Assumptions.BaselineRegistered`), which each guarantee that needs it takes for its containment.
 -/
 
 namespace Verity
@@ -24,8 +24,10 @@ structure Declaration where
 
 namespace Declaration
 
-/-- `t ≼ d`: `d`'s circuit implements `t`'s. -/
-def Implements (t d : Declaration) : Prop := Nonempty (Implementation t.D d.D)
+/-- `t ≼ d`: `d`'s circuit implements `t`'s, through an implementation that sends no novel input gate of `t` into
+`d`'s baseline. -/
+def Implements (t d : Declaration) : Prop :=
+  ∃ I : Implementation t.D d.D, ∀ g, t.D.isInput g = true → I.inp g ∈ d.θ → g ∈ t.θ
 
 /-- `d` contains `t`: `d`'s circuit contains `t`'s. -/
 def Contains (t d : Declaration) : Prop := Nonempty (Containment t.D d.D)

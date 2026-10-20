@@ -56,7 +56,7 @@ theorem Inference : Guarantees.Inference := by
     refine Nat.cast_le.2 (Finset.sum_le_sum_of_subset fun a ha => ?_)
     rw [Finset.mem_sdiff] at ha
     exact (Finset.mem_union.1 (hreads u ha.1)).resolve_left ha.2
-  refine ⟨hc, le_trans (iInf₂_le d ⟨Verity.SecurityProofs.ContainsImplements d d ⟨Containment.refl d.D⟩,
-    hc⟩) ENNReal.div_self_le_one⟩
+  refine ⟨hc, le_trans (iInf₂_le d ⟨Verity.SecurityProofs.ContainsImplements d d (Containment.refl d.D)
+    fun _ _ h => h, hc⟩) ENNReal.div_self_le_one⟩
 
 end Nci.SecurityProofs
