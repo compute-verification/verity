@@ -798,8 +798,8 @@ def unpreserved(ctx: Ctx) -> list[Finding]:
         r = ctx.run([*ctx.research, "pods", "unpreserved", mach, "--older-min", "30", "--json"], capture_output=True, text=True,
                     timeout=ctx.bound(900))
         if r.returncode == 2 and "unrecognized arguments" in (r.stderr or ""):
-            raise RuntimeError("`research pods unpreserved` here has no --older-min (the custody lane's "
-                               "cursor/node-custody-unit-558b adds it)")
+            raise RuntimeError("`research pods unpreserved` here has no --older-min: its tools/research predates it "
+                               "(pods/drain.py); deploy a newer tree")
         if r.returncode not in (0, 1):
             raise RuntimeError(f"research pods unpreserved {mach} exited {r.returncode}: {(r.stderr or '').strip()[-200:]}")
         ids = [x if isinstance(x, str) else str(x.get("id") or x.get("attempt") or x) for x in json.loads(r.stdout).get("unpreserved") or []]

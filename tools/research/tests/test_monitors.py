@@ -727,7 +727,7 @@ def test_unpreserved_asks_for_runs_over_30_minutes_old_and_says_when_the_flag_is
     assert f.key == "vy-nebius-1" and "4 runs" in f.text and "a1, a2, a3 and 1 more" in f.text
     assert ["--older-min", "30", "--json"] == run.calls[0][0][-3:]
     old = Run((has("unpreserved"), (2, "", "research: error: unrecognized arguments: --older-min 30")))
-    with pytest.raises(RuntimeError, match="node-custody-unit"):
+    with pytest.raises(RuntimeError, match="has no --older-min"):
         M.unpreserved(M.Ctx(now=T0, run=old))
 
 
