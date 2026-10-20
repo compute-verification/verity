@@ -6,11 +6,8 @@ import Properties.Proofs.Nci.Desc
 
 A piece of a segment names gates with their widths (`pieceGates`, `segGates`): a parameter's leaves are none, a row of a
 piece of gates is its elements, and a segment of copies is each copy's pieces. `NovelWidthExact` says `Desc.novelWidth`
-is the total width of the distinct gates its segments name, wherever no gate is named with two widths. It holds wherever
-the one open statement here, `PisExact`, does (`novelWidthExact_of_pis`): `Desc.Piece.pis` gives a piece's elements as
-periodic intervals.
-
-The rest is proved, layer by layer:
+is the total width of the distinct gates its segments name, wherever no gate is named with two widths. It holds
+(`novelWidthExact`), proved layer by layer:
 
 * `distinctWidth_eq`: `coverStep`'s sweep over intervals sorted by start counts each gate once (`List.mergeSort` sorts,
   as Lean core proves).
@@ -25,6 +22,8 @@ The rest is proved, layer by layer:
 * `gateIvsExact_of`: `gateIvs` takes each width's pieces to `ivsOf`, so `GateIvsExact` holds where `IvsOfExact` does.
 * `ivsOfExact_of`: `ivsOf` emits each periodic interval whose runs meet as one interval and sweeps the rest, sorted, merging
   those of one period and count that meet (`merge_spec`, `mergeFold_spec`), so `IvsOfExact` holds where `PisExact` does.
+* `pisExact`: each case of `Piece.pis` is its piece's elements, one row's progression from its smallest element (`ap`), a
+  grid whose rows (or columns) are runs as one periodic interval (`grid`), else row by row (`one_spec`).
 -/
 
 namespace NciCheck.Properties.SecurityProofs.Width
@@ -625,7 +624,7 @@ theorem tail_eq (W : ℕ → ℕ) (ivs : Array (ℕ × ℕ × ℕ)) (cls : Array
 when it has none (as `Desc.Piece.pis` reads it); a parameter's leaves are no gates. -/
 def pieceGates (q : Piece) : List (ℤ × ℕ) :=
   match q.tgt with
-  | .gate w => (List.range (max q.rows 1)).flatMap fun r => (List.range q.len).map fun t =>
+  | .gate w => (List.range (max q.rows 1)).flatMap fun (r : ℕ) => (List.range q.len).map fun (t : ℕ) =>
       (q.base + (r : ℤ) * q.rowStride + (t : ℤ) * q.stride, w)
   | .ref _ _ => []
 
@@ -952,10 +951,11 @@ theorem novelWidthExact_of (hG : GateIvsExact) : NovelWidthExact := by
 
 /-- A piece's elements: element `t` of row `r` is `base + r * rowStride + t * stride`, with one row when it has none. -/
 def elems (q : Piece) : List ℤ :=
-  (List.range (max q.rows 1)).flatMap fun r => (List.range q.len).map fun t => q.base + (r : ℤ) * q.rowStride + (t : ℤ) * q.stride
+  (List.range (max q.rows 1)).flatMap fun (r : ℕ) => (List.range q.len).map fun (t : ℕ) =>
+    q.base + (r : ℤ) * q.rowStride + (t : ℤ) * q.stride
 
 theorem pieceGates_gate {q : Piece} {w : ℕ} (h : q.tgt = .gate w) : pieceGates q = (elems q).map fun e => (e, w) := by
-  simp [pieceGates, h, elems, List.map_flatMap]
+  simp [pieceGates, h, elems, List.map_flatMap, Function.comp_def]
 
 theorem pieceGates_ref {q : Piece} {p : Bool} {i : ℕ} (h : q.tgt = .ref p i) : pieceGates q = [] := by
   simp [pieceGates, h]
@@ -1225,7 +1225,7 @@ theorem ivsOf_spec (qs : Array Piece) (a : ℕ) :
     rw [heq]
     simp [inCur]
 
-/-- **Open: `Piece.pis` is a piece's elements.** Of a piece whose elements are naturals, every element of a periodic
+/-- **`Piece.pis` is a piece's elements.** Of a piece whose elements are naturals, every element of a periodic
 interval `pis` gives is one of the piece's, and each of the piece's is in one of them. -/
 def PisExact : Prop :=
   ∀ q : Piece, (∀ e ∈ elems q, 0 ≤ e) →
@@ -1244,8 +1244,216 @@ theorem ivsOfExact_of (hP : PisExact) : IvsOfExact := by
   · obtain ⟨x, hx, ha⟩ := (hP q (hnn q hq)).2 e he
     exact (ivsOf_spec qs e.toNat).2 ⟨x, by rw [Array.toList_flatMap, List.mem_flatMap]; exact ⟨q, hq, hx⟩, ha⟩
 
+/-! ## `Piece.pis` -/
+
+/-- `Piece.pis`'s first element of a progression `b + i * s`, `i < k`: its smallest. -/
+def rlo (s : ℤ) (k : ℕ) (b : ℤ) : ℕ := (if s ≥ 0 then b else b + ((k - 1 : ℕ) : ℤ) * s).toNat
+
+/-- `Piece.pis`'s one row. -/
+def one (q : Piece) : Array PI :=
+  if q.len == 0 then #[]
+  else if q.stride == 0 || q.len == 1 then #[⟨q.base.toNat, 1, 1, 1⟩]
+  else
+    let lo := (if q.stride > 0 then q.base else q.at (q.len - 1)).toNat
+    if q.stride.natAbs == 1 then #[⟨lo, q.len, 1, 1⟩] else #[⟨lo, 1, q.stride.natAbs, q.len⟩]
+
+theorem pis_eq (q : Piece) : q.pis =
+    if q.rows ≤ 1 || q.len == 0 then one (q.row 0)
+    else if q.stride.natAbs == 1 || q.len == 1 then
+      #[⟨rlo q.rowStride q.rows (rlo q.stride q.len q.base : ℤ), q.len, q.rowStride.natAbs, q.rows⟩]
+    else if q.rowStride.natAbs == 1 && q.stride.natAbs ≥ q.rows then
+      #[⟨rlo q.stride q.len (rlo q.rowStride q.rows q.base : ℤ), q.rows, q.stride.natAbs, q.len⟩]
+    else q.rowsOf.flatMap one := rfl
+
+/-- **A progression is its smallest element on.** Of `b + i * s`, `i < k`, all naturals: they are
+`rlo s k b + j * |s|`, `j < k`. -/
+theorem ap (b s : ℤ) (k : ℕ) (hk : 0 < k) (hnn : ∀ i < k, 0 ≤ b + (i : ℤ) * s) (a : ℤ) :
+    (∃ i < k, a = b + (i : ℤ) * s) ↔ ∃ j < k, a = (rlo s k b : ℤ) + (j : ℤ) * (s.natAbs : ℤ) := by
+  unfold rlo
+  rw [Int.natCast_natAbs]
+  by_cases hs : 0 ≤ s
+  · simp only [hs, ↓reduceIte]
+    rw [Int.toNat_of_nonneg (by simpa using hnn 0 hk), abs_of_nonneg hs]
+  · simp only [hs, ↓reduceIte]
+    rw [Int.toNat_of_nonneg (hnn (k - 1) (by omega)), abs_of_neg (by omega)]
+    constructor
+    · rintro ⟨i, hi, rfl⟩
+      refine ⟨k - 1 - i, by omega, ?_⟩
+      push_cast [Nat.cast_sub (show 1 ≤ k by omega), Nat.cast_sub (show i ≤ k - 1 by omega)]
+      ring
+    · rintro ⟨j, hj, rfl⟩
+      refine ⟨k - 1 - j, by omega, ?_⟩
+      push_cast [Nat.cast_sub (show 1 ≤ k by omega), Nat.cast_sub (show j ≤ k - 1 by omega)]
+      ring
+
+theorem rlo_shift (b s δ : ℤ) (k : ℕ) (hk : 0 < k) (hnn : ∀ i < k, 0 ≤ b + (i : ℤ) * s)
+    (hnn' : ∀ i < k, 0 ≤ b + δ + (i : ℤ) * s) : (rlo s k (b + δ) : ℤ) = rlo s k b + δ := by
+  unfold rlo
+  by_cases hs : 0 ≤ s
+  · simp only [hs, ↓reduceIte]
+    rw [Int.toNat_of_nonneg (by simpa using hnn' 0 hk), Int.toNat_of_nonneg (by simpa using hnn 0 hk)]
+  · simp only [hs, ↓reduceIte]
+    rw [Int.toNat_of_nonneg (hnn' (k - 1) (by omega)), Int.toNat_of_nonneg (hnn (k - 1) (by omega))]
+    ring
+
+/-- **A grid whose rows are runs is one periodic interval**: `b + j * s₂ + i * s₁` (`i < k₁`, `j < k₂`), each row a run
+(`|s₁| = 1`, or one element). -/
+theorem grid (b s₁ s₂ : ℤ) (k₁ k₂ : ℕ) (hk₁ : 0 < k₁) (hk₂ : 0 < k₂) (h : s₁.natAbs = 1 ∨ k₁ = 1)
+    (hnn : ∀ j < k₂, ∀ i < k₁, 0 ≤ b + (j : ℤ) * s₂ + (i : ℤ) * s₁) (a : ℕ) :
+    inPI ⟨rlo s₂ k₂ (rlo s₁ k₁ b : ℤ), k₁, s₂.natAbs, k₂⟩ a ↔
+      ∃ j < k₂, ∃ i < k₁, (a : ℤ) = b + (j : ℤ) * s₂ + (i : ℤ) * s₁ := by
+  have hrow : ∀ j < k₂, ∀ a' : ℤ, (∃ i < k₁, a' = b + (j : ℤ) * s₂ + (i : ℤ) * s₁) ↔
+      ∃ t < k₁, a' = (rlo s₁ k₁ b : ℤ) + (j : ℤ) * s₂ + t := by
+    intro j hj a'
+    rw [ap (b + (j : ℤ) * s₂) s₁ k₁ hk₁ (hnn j hj) a',
+      rlo_shift b s₁ _ k₁ hk₁ (fun i hi => by simpa using hnn 0 hk₂ i hi) (hnn j hj)]
+    rcases h with h | h
+    · rw [h]; simp
+    · subst h
+      constructor
+      · rintro ⟨t, ht, rfl⟩
+        obtain rfl : t = 0 := by omega
+        exact ⟨0, by omega, by simp⟩
+      · rintro ⟨t, ht, rfl⟩
+        obtain rfl : t = 0 := by omega
+        exact ⟨0, by omega, by simp⟩
+  have hmin : ∀ j < k₂, 0 ≤ (rlo s₁ k₁ b : ℤ) + (j : ℤ) * s₂ := by
+    intro j hj
+    rw [← rlo_shift b s₁ _ k₁ hk₁ (fun i hi => by simpa using hnn 0 hk₂ i hi) (hnn j hj)]
+    exact Int.natCast_nonneg _
+  simp only [inPI]
+  constructor
+  · rintro ⟨c, hc, t, ht, rfl⟩
+    obtain ⟨j, hj, hjc⟩ := (ap _ s₂ k₂ hk₂ hmin ((rlo s₂ k₂ (rlo s₁ k₁ b : ℤ) : ℤ) + (c : ℤ) * s₂.natAbs)).2 ⟨c, hc, rfl⟩
+    refine ⟨j, hj, (hrow j hj _).2 ⟨t, ht, ?_⟩⟩
+    rw [Int.natCast_natAbs] at hjc
+    push_cast; linarith
+  · rintro ⟨j, hj, i, hi, ha⟩
+    obtain ⟨t, ht, hat⟩ := (hrow j hj a).1 ⟨i, hi, ha⟩
+    obtain ⟨c, hc, hcj⟩ := (ap _ s₂ k₂ hk₂ hmin ((a : ℤ) - t)).1 ⟨j, hj, by linarith⟩
+    refine ⟨c, hc, t, ht, ?_⟩
+    rw [Int.natCast_natAbs] at hcj
+    have : (a : ℤ) = ((rlo s₂ k₂ (rlo s₁ k₁ b : ℤ) + c * s₂.natAbs + t : ℕ) : ℤ) := by push_cast; linarith
+    exact_mod_cast this
+
+theorem one_spec (q : Piece) (hnn : ∀ t < q.len, 0 ≤ q.base + (t : ℤ) * q.stride) (a : ℕ) :
+    (∃ x ∈ (one q).toList, inPI x a) ↔ ∃ t < q.len, (a : ℤ) = q.base + (t : ℤ) * q.stride := by
+  unfold one
+  by_cases h0 : q.len = 0
+  · simp [h0]
+  have hb := hnn 0 (by omega)
+  simp only [Nat.cast_zero, zero_mul, add_zero] at hb
+  simp only [show (q.len == 0) = false by simpa using h0, Bool.false_eq_true, ↓reduceIte]
+  by_cases h1 : q.stride = 0 ∨ q.len = 1
+  · simp only [show (q.stride == 0 || q.len == 1) = true by simpa using h1, ↓reduceIte]
+    simp only [List.mem_singleton, exists_eq_left, inPI, Nat.lt_one_iff, exists_eq_left, zero_mul, add_zero]
+    constructor
+    · rintro rfl
+      exact ⟨0, by omega, by simp [Int.toNat_of_nonneg hb]⟩
+    · rintro ⟨t, ht, ha⟩
+      have : (a : ℤ) = q.base := by
+        rcases h1 with h1 | h1
+        · rw [ha, h1]; simp
+        · have : t = 0 := by omega
+          rw [ha, this]; simp
+      omega
+  simp only [show (q.stride == 0 || q.len == 1) = false by simpa using h1, Bool.false_eq_true, ↓reduceIte]
+  have hlo : (if q.stride > 0 then q.base else q.at (q.len - 1)).toNat = rlo q.stride q.len q.base := by
+    unfold rlo Piece.at
+    by_cases hs : 0 < q.stride
+    · simp [hs, show (0 : ℤ) ≤ q.stride by omega]
+    · simp [hs, show ¬ (0 : ℤ) ≤ q.stride by omega]
+  rw [hlo, ap q.base q.stride q.len (by omega) hnn]
+  by_cases h2 : q.stride.natAbs = 1
+  · simp only [show (q.stride.natAbs == 1) = true by simpa using h2, ↓reduceIte]
+    simp only [List.mem_singleton, exists_eq_left, inPI, h2]
+    constructor
+    · rintro ⟨c, hc, t, ht, rfl⟩
+      exact ⟨t, ht, by push_cast; omega⟩
+    · rintro ⟨j, hj, ha⟩
+      exact ⟨0, by omega, j, hj, by push_cast at ha; omega⟩
+  · simp only [show (q.stride.natAbs == 1) = false by simpa using h2, Bool.false_eq_true, ↓reduceIte,
+      List.mem_singleton, exists_eq_left, inPI]
+    constructor
+    · rintro ⟨c, hc, t, ht, rfl⟩
+      exact ⟨c, hc, by push_cast; omega⟩
+    · rintro ⟨j, hj, ha⟩
+      refine ⟨j, hj, 0, by omega, ?_⟩
+      rw [Int.natCast_natAbs] at ha
+      exact_mod_cast (show (a : ℤ) = ((rlo q.stride q.len q.base + j * q.stride.natAbs + 0 : ℕ) : ℤ) by
+        push_cast; linarith)
+
+theorem mem_elems {q : Piece} {e : ℤ} : e ∈ elems q ↔
+    ∃ r < max q.rows 1, ∃ t < q.len, e = q.base + (r : ℤ) * q.rowStride + (t : ℤ) * q.stride := by
+  unfold elems
+  constructor
+  · intro h
+    obtain ⟨r, hr, h⟩ := List.mem_flatMap.1 h
+    obtain ⟨t, ht, rfl⟩ := List.mem_map.1 h
+    exact ⟨r, List.mem_range.1 hr, t, List.mem_range.1 ht, rfl⟩
+  · rintro ⟨r, hr, t, ht, rfl⟩
+    exact List.mem_flatMap.2 ⟨r, List.mem_range.2 hr, List.mem_map.2 ⟨t, List.mem_range.2 ht, rfl⟩⟩
+
+theorem pis_spec (q : Piece) (hnn : ∀ e ∈ elems q, 0 ≤ e) (a : ℕ) :
+    (∃ x ∈ q.pis.toList, inPI x a) ↔
+      ∃ r < max q.rows 1, ∃ t < q.len, (a : ℤ) = q.base + (r : ℤ) * q.rowStride + (t : ℤ) * q.stride := by
+  have hnn' : ∀ r < max q.rows 1, ∀ t < q.len, 0 ≤ q.base + (r : ℤ) * q.rowStride + (t : ℤ) * q.stride :=
+    fun r hr t ht => hnn _ (mem_elems.2 ⟨r, hr, t, ht, rfl⟩)
+  have hrow : ∀ r < max q.rows 1, ∀ a : ℕ, (∃ x ∈ (one (q.row r)).toList, inPI x a) ↔
+      ∃ t < q.len, (a : ℤ) = q.base + (r : ℤ) * q.rowStride + (t : ℤ) * q.stride := by
+    intro r hr a
+    exact one_spec (q.row r) (fun t ht => hnn' r hr t ht) a
+  rw [pis_eq]
+  split_ifs with h1 h2 h3
+  · simp only [Bool.or_eq_true, decide_eq_true_eq, beq_iff_eq] at h1
+    rw [hrow 0 (by omega) a]
+    rcases h1 with h1 | h1
+    · constructor
+      · rintro ⟨t, ht, ha⟩; exact ⟨0, by omega, t, ht, by simpa using ha⟩
+      · rintro ⟨r, hr, t, ht, ha⟩
+        obtain rfl : r = 0 := by omega
+        exact ⟨t, ht, by simpa using ha⟩
+    · rw [h1]; simp
+  · simp only [Bool.or_eq_true, decide_eq_true_eq, beq_iff_eq, not_or] at h1 h2
+    simp only [List.mem_singleton, exists_eq_left]
+    rw [grid q.base q.stride q.rowStride q.len q.rows (by omega) (by omega) h2
+      (fun j hj i hi => hnn' j (by omega) i hi) a]
+    rw [show max q.rows 1 = q.rows by omega]
+  · simp only [Bool.or_eq_true, decide_eq_true_eq, beq_iff_eq, not_or, Bool.and_eq_true] at h1 h2 h3
+    simp only [List.mem_singleton, exists_eq_left]
+    rw [grid q.base q.rowStride q.stride q.rows q.len (by omega) (by omega) (Or.inl h3.1)
+      (fun j hj i hi => by have := hnn' i (by omega) j hj; linarith) a]
+    rw [show max q.rows 1 = q.rows by omega]
+    constructor
+    · rintro ⟨j, hj, i, hi, ha⟩; exact ⟨i, hi, j, hj, by linarith⟩
+    · rintro ⟨i, hi, j, hj, ha⟩; exact ⟨j, hj, i, hi, by linarith⟩
+  · simp only [Bool.or_eq_true, decide_eq_true_eq, beq_iff_eq, not_or] at h1
+    simp only [Piece.rowsOf, Array.toList_flatMap, Array.toList_map, Array.toList_range, List.flatMap_map,
+      List.mem_flatMap, List.mem_range]
+    constructor
+    · rintro ⟨x, ⟨r, hr, hx⟩, ha⟩
+      obtain ⟨t, ht, h⟩ := (hrow r (by omega) a).1 ⟨x, hx, ha⟩
+      exact ⟨r, by omega, t, ht, h⟩
+    · rintro ⟨r, hr, t, ht, h⟩
+      obtain ⟨x, hx, ha⟩ := (hrow r hr a).2 ⟨t, ht, h⟩
+      exact ⟨x, ⟨r, by omega, hx⟩, ha⟩
+
+/-- **`PisExact` holds.** -/
+theorem pisExact : PisExact := by
+  intro q hnn
+  refine ⟨fun x hx a ha => ?_, fun e he => ?_⟩
+  · obtain ⟨r, hr, t, ht, h⟩ := (pis_spec q hnn a).1 ⟨x, hx, ha⟩
+    exact ⟨_, mem_elems.2 ⟨r, hr, t, ht, rfl⟩, by rw [← h]; simp⟩
+  · obtain ⟨r, hr, t, ht, rfl⟩ := mem_elems.1 he
+    have h0 := hnn _ he
+    obtain ⟨x, hx, ha⟩ := (pis_spec q hnn _).2 ⟨r, hr, t, ht, Int.toNat_of_nonneg h0⟩
+    exact ⟨x, hx, ha⟩
+
 /-- **`NovelWidthExact`, from `PisExact`.** -/
 theorem novelWidthExact_of_pis (hP : PisExact) : NovelWidthExact :=
   novelWidthExact_of (gateIvsExact_of (ivsOfExact_of hP))
+
+/-- **`novelWidth` is the width of the union.** -/
+theorem novelWidthExact : NovelWidthExact := novelWidthExact_of_pis pisExact
 
 end NciCheck.Properties.SecurityProofs.Width

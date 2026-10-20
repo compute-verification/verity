@@ -7,16 +7,13 @@ import Properties.Proofs.Nci.Width
 Toward `NovelExact`. A segment names gates with their widths (`Width.segGates`). `Desc.intoOf`
 collects, per IU, the segments its root nodes read whose first piece is in a root node of another IU and outside θ's
 nodes (`intoOf_spec`), and `NciCheck.ius` sums the widths of the gates outside an IU that its gates read, θ's taken out
-(`ius_snd`, `hashSet_fold_sum'`). `Desc.novelWidth` sums the widths of the distinct gates of those segments wherever
-`Width.PisExact` holds (`Width.novelWidthExact_of_pis`). So `NovelExact` holds wherever two smaller statements do, each
-a named `Prop`, open (`novelExact_of`):
+(`ius_snd`, `hashSet_fold_sum'`), and `Desc.novelWidth` sums the widths of the distinct gates of those segments
+(`Width.novelWidthExact`). So `NovelExact` holds wherever one smaller statement does, a named `Prop` here, open
+(`novelExact_of`): `ReadsExact`, that on a Program `Desc.evaluate` reads, the segments `Desc.analyze` gives a root node
+name, as gates with their widths, exactly the gates outside the node that its gates read, each in the root node of its
+segment's first piece.
 
-* `ReadsExact` (here): on a Program `Desc.evaluate` reads, the segments `Desc.analyze` gives a root node name, as gates
-  with their widths, exactly the gates outside the node that its gates read, each in the root node of its segment's
-  first piece.
-* `Width.PisExact`: `Desc.Piece.pis` gives a piece's elements as periodic intervals.
-
-`descAgrees_of_open` gives `DescAgrees` from these two and `Walk`'s two.
+`descAgrees_of_open` gives `DescAgrees` from it and `Walk`'s two.
 -/
 
 namespace NciCheck.Properties.SecurityProofs.Novel
@@ -231,7 +228,7 @@ theorem segGates_ps {s : Desc.Seg} {x : ℤ × ℕ} (h : x ∈ segGates s) : ∃
 /-- **`NovelExact`, from `analyze`'s reads and `novelWidth`'s union**: the segments `intoOf` collects for an IU name, with
 their widths, the gates outside it that its gates read, θ's taken out, each once; `novelWidth` sums their widths, and so
 does `NciCheck.ius`. -/
-theorem novelExact_of (hR : ReadsExact) (hP : Width.PisExact) : NovelExact := by
+theorem novelExact_of (hR : ReadsExact) : NovelExact := by
   intro bytes P reads mask own c dv hdec hov hlo hin han hc hms hos hdsz hmask hown hdiv hn u hu
   obtain ⟨-, h0, hK, hmono⟩ := rootLaidOut_spec P hlo
   obtain ⟨hcN, -, -, -, -⟩ := circuitOf_ok P c hc
@@ -271,7 +268,7 @@ theorem novelExact_of (hR : ReadsExact) (hP : Width.PisExact) : NovelExact := by
     have : a = b := by exact_mod_cast hab
     subst this; rfl
   have e1 : Desc.novelWidth segs = ∑ x ∈ (segsGates segs).toFinset, x.2 := by
-    rw [Width.novelWidthExact_of_pis hP segs hnn hcons, dedup_sum]
+    rw [Width.novelWidthExact segs hnn hcons, dedup_sum]
   have e2 : (ius c dv)[u]!.2 =
       ∑ a ∈ (tally c dv)[u]!.2.toList.toFinset, if dv.theta.contains a = true then 0 else c.w[a]! := by
     rw [ius_snd c dv hu]; exact hashSet_fold_sum' _ _ _
@@ -329,10 +326,10 @@ theorem novelExact_of (hR : ReadsExact) (hP : Width.PisExact) : NovelExact := by
   refine Finset.sum_congr rfl fun a _ => ?_
   cases dv.theta.contains a <;> simp
 
-/-- **`DescAgrees`, from the four open statements**: `Walk`'s two give `GatesLocated` (`Walk.gatesLocated_of`), and
-`ReadsExact` and `Width.PisExact` give `NovelExact` (`novelExact_of`). -/
-theorem descAgrees_of_open (hO : Walk.OperandsResolve) (hE : Walk.OperandsEarlier) (hR : ReadsExact)
-    (hP : Width.PisExact) : Properties.DescAgrees :=
-  Walk.descAgrees_of_gaps hO hE (novelExact_of hR hP)
+/-- **`DescAgrees`, from the three open statements**: `Walk`'s two give `GatesLocated` (`Walk.gatesLocated_of`), and
+`ReadsExact` gives `NovelExact` (`novelExact_of`). -/
+theorem descAgrees_of_open (hO : Walk.OperandsResolve) (hE : Walk.OperandsEarlier) (hR : ReadsExact) :
+    Properties.DescAgrees :=
+  Walk.descAgrees_of_gaps hO hE (novelExact_of hR)
 
 end NciCheck.Properties.SecurityProofs.Novel
