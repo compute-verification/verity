@@ -1071,9 +1071,10 @@ _PACKING = ("import os; open(os.environ['RESEARCH_RUN_DIR'] + '/verdicts.tar.gz'
             + _RESULT % "passed")
 
 
-def _packed(tmp_path: Path, checkout: Path, monkeypatch, pack: str = "a pack", *command: str, program: str = _PACKING) -> tuple[str, str]:
+def _packed(tmp_path: Path, checkout: Path, monkeypatch, pack: str = "a pack", *command: str, program: str = _PACKING,
+            tool: str | None = "mytools.decl_check:T") -> tuple[str, str]:
     """(attempt id, its pack's sha256): a check of ``checkout`` (the declared one, or ``command``) that published a pack among
-    its run files, as a check node's run does (`--run-record`)."""
+    its run files, as a check node's run does (`--run-record`); recorded as no tool with ``tool`` None."""
     import hashlib
 
     from research.store.local import LocalStore
@@ -1082,7 +1083,7 @@ def _packed(tmp_path: Path, checkout: Path, monkeypatch, pack: str = "a pack", *
     monkeypatch.setenv("PACK", pack)
     before = {r for (r,) in LocalStore().index.sql("SELECT id FROM attempts")}
     monkeypatch.chdir(checkout)
-    rc = research_main(["run", "--runs-dir", str(tmp_path / "runs"), "--project", "t", "--no-sampler", "--tool", "mytools.decl_check:T",
+    rc = research_main(["run", "--runs-dir", str(tmp_path / "runs"), "--project", "t", "--no-sampler", *(["--tool", tool] if tool else []),
                         "--run-record", "--cwd", "source", "--", *(command or CHECKED)])
     assert rc in (0, 1)
     [rid] = {r for (r,) in LocalStore().index.sql("SELECT id FROM attempts")} - before
@@ -1100,7 +1101,7 @@ def _part(name: str, rid: str | None, sha: str | None, state: str = "passed", **
 
 def test_verdicts_admits_a_commit_no_check_ran_on_when_its_plan_shows_every_part_passed_in_a_recorded_checks_pack(
         tmp_path, monkeypatch, capsys):
-    """CI-33: no attempt of feat's tip exists, so the exact-attempt gate (the default) refuses it; with --verdicts, a plan whose
+    """CI-108: no attempt of feat's tip exists, so the exact-attempt gate (the default) refuses it; with --verdicts, a plan whose
     every part (a Lake package's audit among them) passed in the pack of a check of main is admitted, and the merge cites that
     check in `Verdicts:`."""
     import research.merge as M
@@ -1110,8 +1111,8 @@ def test_verdicts_admits_a_commit_no_check_ran_on_when_its_plan_shows_every_part
     tree = _git(feat, "rev-parse", f"{tip}^{{tree}}")
     asked = []
 
-    def plan(repo, commit, base, also):
-        asked.append((repo, commit, base, also))
+    def plan(repo, commit, base, also, on=None):
+        asked.append((repo, commit, base, also, on))
         return _plan(commit, tree, [_part("suite:a", rid, sha), _part("lean-audit:pkg", rid, sha),
                                     _part("lean-agreement", None, None, "must-run", required=False)])
     monkeypatch.setattr(M, "run_plan", plan)
@@ -1119,11 +1120,45 @@ def test_verdicts_admits_a_commit_no_check_ran_on_when_its_plan_shows_every_part
     assert merge_main(["feat", "--dry-run"]) == 3 and "no passing `check` attempt" in capsys.readouterr().err
     assert merge_main(["feat", "--verdicts", "--dry-run", "--verdicts-from", "r-x"]) == 0
     assert f"passed in the packs of {rid}, part by part" in capsys.readouterr().out
-    assert asked[-1] == (main, tip, _git(main, "rev-parse", "HEAD"), ("r-x",))
+    assert asked[-1] == (main, tip, _git(main, "rev-parse", "HEAD"), ("r-x",), None)
     assert merge_main(["feat", "--verdicts"]) == 0
     msg = _git(main, "log", "-1", "--format=%B")
     assert f"\nVerdicts: {rid}" in msg and "Check:" not in msg
     assert _git(main, "rev-parse", "HEAD^2") == tip
+
+
+def test_verdicts_plan_on_plans_on_each_machine_in_turn_and_admits_on_the_first_fully_passed(tmp_path, monkeypatch, capsys):
+    """`--plan-on M1,M2`: the plan is `check.py --plan --on M` for each machine in turn (its keys are that machine's); the first
+    whose plan is fully passed by cited passes admits, and a refusal names each machine's reason."""
+    import pytest
+
+    import research.merge as M
+
+    main, feat, tip = _repos(tmp_path)
+    rid, sha = _packed(tmp_path, main, monkeypatch)
+    tree = _git(feat, "rev-parse", f"{tip}^{{tree}}")
+    asked, passes, run_plan = [], {"gpu": False, "cpu": True}, M.run_plan
+
+    def plan(repo, commit, base, also, on=None):
+        asked.append(on)
+        if on == "gone":
+            raise M.Refused(f"`check.py --plan {commit[:12]} --on gone` printed no plan (exit 2): no such machine")
+        return _plan(commit, tree, [_part("lean-audit:pkg", rid, sha), _part("suite:a", rid, sha) if passes[on]
+                                    else _part("suite:a", None, None, "must-run")])
+    monkeypatch.setattr(M, "run_plan", plan)
+    monkeypatch.chdir(main)
+    assert merge_main(["feat", "--verdicts", "--dry-run", "--plan-on", "gone,gpu,cpu"]) == 0 and asked == ["gone", "gpu", "cpu"]
+    capsys.readouterr()
+    passes["cpu"] = False
+    assert merge_main(["feat", "--verdicts", "--dry-run", "--plan-on", "gpu,cpu"]) == 3
+    err = capsys.readouterr().err
+    assert "on gpu: 1 of 2 parts have no cited pass" in err and "on cpu: 1 of 2" in err
+    with pytest.raises(SystemExit):
+        merge_main(["feat", "--plan-on", "cpu"])
+
+    monkeypatch.setattr(M, "PLAN", (sys.executable, "-c", "import json, sys; print(json.dumps({'argv': sys.argv[1:]}))"))
+    assert run_plan(main, tip, "b", ("r-x",), on="cpu")["argv"] == [tip, "--json", "--packs-only", "--base", "b", "--from",
+                                                                      "r-x", "--on", "cpu"]
 
 
 def test_verdicts_cites_only_a_pass_under_its_key_in_an_ended_declared_checks_published_pack(tmp_path, monkeypatch):
@@ -1151,7 +1186,7 @@ def test_verdicts_cites_only_a_pass_under_its_key_in_an_ended_declared_checks_pu
     assert "flock-circuit-build unkeyed (no key)" in judge([*ok, _part("flock-circuit-build", None, None, "unkeyed", why="no key")])[1]
     assert "lean-audit:q skipped" in judge([*ok, _part("lean-audit:q", None, None, "skipped", required=False)])[1]
     assert "suite:c (no pass found in a recorded check's pack)" in judge([*ok, _part("suite:c", None, None)])[1]
-    assert "no verdicts.tar.gz of that sha256" in judge([_part("suite:a", rid, "0" * 64)])[1]
+    assert "no verdicts.tar.gz or verdicts-reused.tar.xz of that sha256" in judge([_part("suite:a", rid, "0" * 64)])[1]
     assert "is a `check` attempt, not `other`" in judge(ok, tool="other")[1]
     assert "isn't the target's declared" in judge([_part("suite:a", other, other_sha)])[1]
     assert "not a check-plan/v1 of the clean" in judge(ok, commit=_git(main, "rev-parse", "HEAD"))[1]
@@ -1162,6 +1197,77 @@ def test_verdicts_cites_only_a_pass_under_its_key_in_an_ended_declared_checks_pu
     assert judge([*ok, agree]) == ([rid], None)                                   # not required, not wanted
     assert store.get_attempt(failed)["status"]["state"] == "failed"
     assert judge([_part("suite:a", failed, failed_sha)]) == ([failed], None)
+
+
+def test_verdicts_cites_a_pass_in_a_checks_reused_pack_as_that_check(tmp_path, monkeypatch):
+    """A check's `verdicts-reused.tar.xz` holds the passes it found and reused (`check.Reused`), which its `verdicts.tar.gz`
+    doesn't; a pass found there is cited as that check, as `gate` cites a check that reused a pass."""
+    import hashlib
+
+    import research.merge as M
+    from research.store.local import LocalStore
+
+    main, feat, tip = _repos(tmp_path)
+    program = ("import os; open(os.environ['RESEARCH_RUN_DIR'] + '/verdicts-reused.tar.xz', 'wb').write(b'reused'); " + _PACKING)
+    rid, sha = _packed(tmp_path, main, monkeypatch, program=program)
+    reused = hashlib.sha256(b"reused").hexdigest()
+    store, tree = LocalStore(), _git(feat, "rev-parse", f"{tip}^{{tree}}")
+    judge = [M.plan_refusal(_plan(tip, tree, [_part("suite:a", rid, s), _part("lean-audit:pkg", rid, sha)]), store, tip, tree,
+                            "check", M.declared_command(main, "check"), {}) for s in (reused, "0" * 64)]
+    assert judge[0] == ([rid], None)
+    assert "no verdicts.tar.gz or verdicts-reused.tar.xz of that sha256" in judge[1][1]
+
+
+def test_verdicts_cites_a_post_landing_runs_pack_though_no_tool_recorded_it_and_no_other_untooled_run(tmp_path, monkeypatch):
+    """Drive cancels a train's check once every step it doesn't defer passed, and runs the deferred ones (pytest, circuit-check)
+    on the `main` it landed: `check.py --record --deferred STEPS`, recorded without `--tool check` so no gate takes it as a
+    check.  Its pack holds passes as a check's does, so `--verdicts` cites them part by part (`post_landing`); a run without the
+    tool of anything but the declared command with `--deferred STEPS` once is still another tool's."""
+    import research.merge as M
+    from research.store.local import LocalStore
+
+    main, feat, tip = _repos(tmp_path)
+    rid, sha = _packed(tmp_path, main, monkeypatch)
+    late, late_sha = _packed(tmp_path, main, monkeypatch, "a late pack", *CHECKED, "--keep-going", "--deferred", "pytest,circuit-check",
+                             tool=None)
+    bare, bare_sha = _packed(tmp_path, main, monkeypatch, "a bare pack", *CHECKED, tool=None)
+    odd, odd_sha = _packed(tmp_path, main, monkeypatch, "an odd pack", *CHECKED, "--deferred", "pytest", "--bogus", tool=None)
+    store, tree = LocalStore(), _git(feat, "rev-parse", f"{tip}^{{tree}}")
+
+    def judge(r, s):
+        return M.plan_refusal(_plan(tip, tree, [_part("lean-audit:pkg", rid, sha), _part("suite:a", r, s)]), store, tip, tree,
+                              "check", M.declared_command(main, "check"), {})
+
+    assert judge(late, late_sha) == (sorted([rid, late]), None)
+    assert "is a `python" in judge(bare, bare_sha)[1] and "not `check`" in judge(bare, bare_sha)[1]
+    assert "not `check`" in judge(odd, odd_sha)[1]
+    assert M.post_landing(["python3", "tools/verity/check/slot.py", "--priority", "--", *CHECKED, "--deferred", "pytest"],
+                          CHECKED) == "pytest"
+    assert M.post_landing([*CHECKED, "--deferred", "Py test"], CHECKED) is None
+
+
+def test_verdicts_admits_a_build_step_only_by_the_cited_passes_of_the_parts_that_read_what_it_builds(tmp_path, monkeypatch):
+    """A build step keeps no verdict (`plan.IMPLIED`): it is `implied` by the parts that read its output, each of which needs
+    its own cited pass, required or not; one that names no part, or a part that didn't pass or has no cited pass, refuses."""
+    import research.merge as M
+    from research.store.local import LocalStore
+
+    main, feat, tip = _repos(tmp_path)
+    rid, sha = _packed(tmp_path, main, monkeypatch)
+    store, tree = LocalStore(), _git(feat, "rev-parse", f"{tip}^{{tree}}")
+
+    def judge(*parts):
+        return M.plan_refusal(_plan(tip, tree, [_part("lean-audit:pkg", rid, sha), *parts]), store, tip, tree, "check",
+                              M.declared_command(main, "check"), {})
+
+    build = {"part": "lean-build", "step": "lean-build", "state": "implied", "found": [], "implied_by": ["suite:a", "lean-agreement"]}
+    agree = _part("lean-agreement", rid, sha, required=False)
+    assert judge(build, _part("suite:a", rid, sha), agree) == ([rid], None)
+    assert "lean-build implied (lean-agreement not passed)" in judge(build, _part("suite:a", rid, sha),
+                                                                       _part("lean-agreement", None, None, "must-run", required=False))[1]
+    assert "lean-agreement (no pass found" in judge(build, _part("suite:a", rid, sha), _part("lean-agreement", None, None, required=False))[1]
+    assert "lean-build implied (by no part this plan lists)" in judge({**build, "implied_by": []}, _part("suite:a", rid, sha))[1]
+    assert "by no part this plan lists" in judge({**build, "implied_by": ["suite:gone"]}, _part("suite:a", rid, sha))[1]
 
 
 def test_verdicts_takes_one_ref_and_no_push_and_a_plan_that_prints_nothing_refuses(tmp_path, monkeypatch, capsys):
