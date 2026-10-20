@@ -1005,8 +1005,9 @@ def census(program: Any, ends: list[int] | None = None, digest: str | None = Non
         spans[j].extend((lo, hi, (2, 0)) for lo, hi in norm(ivs))
     al = _Aliases(an, root.body)
     # which of a node's own leaves name one gate is its Definition's: the same at every node of one form and length calling it
-    # with the same leaves passed through. (t, g, k): leaves [t, t + k) name the gates leaves [g, g + k) name first
-    twins: dict[tuple, list[tuple[int, int, int]]] = {}
+    # with the same leaves passed through. (t, g, k, s): leaf t + i names the gate leaf g + i * s names first, for i < k (a
+    # broadcast is s = 0)
+    twins: dict[tuple, list[tuple[int, int, int, int]]] = {}
     for j in range(len(nodes) - 1, I - 1, -1):  # a leaf a node passes through is its producer's value: its readers read that
         runs = [(lo, hi, x) for lo, hi, x, _ in al.resolved(j)[1]] if al.node(j) else []
         al.release(j)  # only later nodes name j, and they are done
@@ -1021,11 +1022,13 @@ def census(program: Any, ends: list[int] | None = None, digest: str | None = Non
                 for t in range(nd.out.leaves):
                     if contains(passed, t) or (g := first.setdefault(resolve(program.circuit.root_scope, ("n", j, t)), t)) == t:
                         continue
-                    if same and same[-1][0] + same[-1][2] == t and same[-1][1] + same[-1][2] == g:
-                        same[-1] = (same[-1][0], same[-1][1], same[-1][2] + 1)
-                    else:
-                        same.append((t, g, 1))
-            runs.extend((t, t + k, Affine("n", j, g, k)) for t, g, k in same)
+                    if same and same[-1][0] + same[-1][2] == t:
+                        t0, g0, k, s = same[-1]
+                        if g == g0 + k * s or (k == 1 and g >= g0):
+                            same[-1] = (t0, g0, k + 1, g - g0 if k == 1 else s)
+                            continue
+                    same.append((t, g, 1, 1))
+            runs.extend((t, t + k, Affine("n", j, g, k) if s == 1 else Strided("n", j, g, 1, s, 0, k)) for t, g, k, s in same)
             runs.sort(key=lambda x: x[0])
         if not runs:
             continue

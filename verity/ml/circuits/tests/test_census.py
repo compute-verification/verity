@@ -143,13 +143,21 @@ def _write(Bd, S, c, x):
     return tuple_of(array_of([c[0], *y, c[3]]), array_of(y))
 
 
+def _spread(Bd, S, x):
+    a = Bd.call(Add32, x, x)
+    b = Bd.call(Add32, a, x)
+    c = Bd.call(Add32, b, x)
+    return array_of([a, c, b, a, b, a, a])
+
+
 def twice(n: int) -> Program:
     """A cache written n times, by a Call returning the cache with two words its own and those words again, as a KV write
-    returns its row; and two batches, of n and 2 members, of a Definition returning its word twice: every node names gates
-    twice."""
+    returns its row; two batches, of n and 2 members, of a Definition returning its word twice; and two Calls of one returning
+    words a, c, b, a, b, a, a (a run of first namings two apart, then a broadcast): every node names gates twice."""
     C = Array(4, V32)
     Write = comp("TWrite", [("c", C), ("x", V32)], Tuple(C, Array(2, V32)), _write)
     Pair = comp("TPair", [("x", V32)], Tuple(V32, V32), lambda Bd, S, x: (lambda y: tuple_of(y, y))(Bd.call(Add32, x, x)))
+    Spread = comp("TSpread", [("x", V32)], Array(7, V32), _spread)
 
     def body(Bd, S, c, xs):
         ys = []
@@ -158,11 +166,14 @@ def twice(n: int) -> Program:
             c = r[0]
             ys.append(r[1][i % 2])
         s = Bd.call(Add32, ys[0], c[1])
-        return tuple_of(c, array_of(ys + [s]), Bd.batch(Pair, xs, axes=(0,)), Bd.batch(Pair, array_of(ys[:2]), axes=(0,)))
+        w = [Bd.call(Spread, xs[i]) for i in range(2)]
+        v = Bd.call(Add32, w[0][4], w[1][6])
+        return tuple_of(c, array_of(ys + [s, v, w[0][3], w[1][5]]), Bd.batch(Pair, xs, axes=(0,)),
+                        Bd.batch(Pair, array_of(ys[:2]), axes=(0,)))
 
     P2 = Array(2, Tuple(V32, V32))
     return Program(comp("TTwice", [("c", C), ("xs", Array(n, V32))],
-                        Tuple(C, Array(n + 1, V32), Array(n, Tuple(V32, V32)), P2), body))
+                        Tuple(C, Array(n + 4, V32), Array(n, Tuple(V32, V32)), P2), body))
 
 
 def programs():
@@ -406,7 +417,7 @@ def test_the_census_is_linear_in_its_pass_throughs(shape):
 def test_which_leaves_name_one_gate_is_resolved_once_per_definition(monkeypatch):
     """Which of a Call's own leaves name one gate is resolved through the layout once per Definition, form and length, not at
     every node calling it (DeepSeek-V4-Pro's request Program writes its KV cache in 1952 such Calls): `TWrite`'s four own
-    leaves once, and each batch of `TPair`'s leaves at its length once."""
+    leaves once, `TSpread`'s seven once, and each batch of `TPair`'s leaves at its length once."""
     n = 0
     real = CE.resolve
 
@@ -417,7 +428,7 @@ def test_which_leaves_name_one_gate_is_resolved_once_per_definition(monkeypatch)
 
     monkeypatch.setattr(CE, "resolve", counted)
     census(twice(8))
-    assert n == 4 + 2 * 8 + 2 * 2
+    assert n == 4 + 7 + 2 * 8 + 2 * 2
 
 
 def test_a_column_every_token_selects_in_is_held_once():
