@@ -226,12 +226,26 @@ OPENING_EXPECT = {
     **{n: "side a: the proof's committed row is not" for n in ("a-row", "a-path-short", "rows-swapped", "past-side")},
     **{n: "side b: the proof's committed row is not" for n in ("b-row", "b-path")},
     "params-bad": CC.Refused, "commitment-bad": CC.Refused,
+    "certified-unsalted": "the window is certified, and its template's unit reads no salt",
+    "uncertified-salt": "the window is not certified, so it has no certified salt",
+    "salted": None, **{n: "the window is certified, and the verifier holds no 64-byte certified salt" for n in (
+        "salted-no-salt", "salted-salt-short")},
+    **{n: "the proof's public row is not the window's certified salt" for n in (
+        "salted-other-salt", "salted-position", "salted-roots", "salted-row-salt")},
+    "salted-uncertified": "the window's template's unit reads a salt, which only a certified window has",
+    **{n: "the proof's rows a0, a1, a2, a3, b0," for n in ("salted-schemas", "salted-schemas-missing")},
+    "salted-body-short": "the proof's body holds no A rows, B rows and public row",
+    **{n: _FIELDS for n in ("salted-sides-short", "salted-side-dict")},
+    "salted-a-index": "side a: the opening is of row", "salted-b-row": "side b: the proof's committed row is not",
+    "salted-pub-swapped": "side b: the proof's committed row is not",
+    "salted-circuit": "the proof's circuit is not the one the verifier pins",
 }
 
 
 def _opening(case: dict) -> str | None:
     return CC.opening(CC.params(case["params"]), CC.commitment(bytes.fromhex(case["commitment"])), case["units"],
-                      case["unit"], bytes.fromhex(case["pub"]), case["opening"])
+                      case["unit"], bytes.fromhex(case["pub"]), case["opening"],
+                      None if case["salt"] is None else bytes.fromhex(case["salt"]))
 
 
 def _hits(reason: str | None, want) -> bool:
@@ -255,6 +269,71 @@ def test_every_opening_mutation_hits_its_refusal():
             assert any(_hits(got, w) for w in (want if isinstance(want, set) else {want})), (name, seed, got)
 
 
+def _certified_pass(p: int) -> tuple[bytes, str, bytes, bytes, bytes, bytes]:
+    """A certified pass of PoUW window `p` (two certifier windows per PoUW window) under a stream and a prover: its
+    manifest, the window's context, and the verifier's reveal, record, stream and prover."""
+    import hashlib
+    from verity.core.protocols.pouw import salt as PS
+    from verity.core.protocols.pouw.audit import Epoch, Workload, weights_root
+    from verity.core.protocols.pouw.protocol import Matmul, Shape
+    roots, work = {2: hashlib.sha512(b"salt-bind weights").digest()}, Workload((Matmul(5, Shape(16, 128, 4), 2),))
+    reveal, sid, prover = (hashlib.sha512(b"salt-bind " + x).digest() for x in (b"reveal", b"stream", b"prover"))
+    man = {"run": "r-salt-bind", "matmuls": [{"index": 5, "m": 16, "k": 128, "n": 4, "weight": 2}],
+           "weights": {"2": {"root": roots[2].hex()}}, "schema": CC.MANIFEST_CERTIFIED,
+           "salt": Epoch.certified(work, roots, [2 * p, 2 * p + 1], 2, reveal, sid, prover).salt.hex()}
+    raw = json.dumps(man, sort_keys=True).encode()
+    ctx = PS.context("served-zk/salt-bind", p, hashlib.sha512(raw).hexdigest())
+    return raw, ctx, reveal, PS.pouw_record(weights_root(roots), sid, prover), sid, prover
+
+
+def test_a_salted_unit_opens_only_under_its_certified_windows_salt():
+    """RT4-INT-10, at the opening of record. A certified window's pass passes `pass_epoch` under the certifier's reveal,
+    and `certified_salt` is the salt it checked, `salt.pouw_salt(reveal, p, stream, prover)`. A salted unit whose public
+    row was formed under that salt opens under it (the honest twin: every rule of the opening met). The same unit with
+    its public row formed under a salt the prover chose, which it can form before any certifier salt exists, is refused
+    at its public row under the certified salt (and opens only under its own, which no verifier holds); with no salt, or
+    in a window the context doesn't certify, the opening refuses before it reads a row."""
+    import hashlib
+    from verity.core.protocols.pouw import salt as PS
+    raw, ctx, reveal, committed, sid, prover = _certified_pass(1)
+    assert CC.pass_epoch(None, raw, ctx, reveal=reveal, committed=committed, stream=sid, prover=prover) == (
+        "certifier", None)
+    salt = CC.certified_salt(raw, ctx, reveal, committed, sid, prover)
+    assert salt == PS.pouw_salt(reveal, 1, sid, prover) == bytes.fromhex(json.loads(raw)["salt"])
+    own = hashlib.sha512(b"the prover's own salt, chosen before any certifier window").digest()
+    for seed in range(3):
+        cases = {s: openings.honest(random.Random(f"salt-bind/{seed}"), salted=True, context=ctx, salt=s)
+                 for s in (salt, own)}
+        assert cases[salt]["opening"] == cases[own]["opening"] and cases[salt]["pub"] != cases[own]["pub"]
+
+        def opened(case, held):
+            return CC.opening(CC.params(case["params"]), CC.commitment(vectors._canon(case["record"]).encode()),
+                              case["units"], case["unit"], case["pub"], case["opening"], held)
+
+        assert opened(cases[salt], salt) is None
+        why = opened(cases[own], salt)
+        assert why is not None and why.startswith("the proof's public row is not the window's certified salt")
+        assert opened(cases[own], own) is None
+        assert opened(cases[salt], None).startswith("the window is certified, and the verifier holds no 64-byte")
+        other = {**cases[salt]["params"], "context": "served-zk/salt-bind/uncertified"}
+        assert opened({**cases[salt], "params": other}, salt).startswith("the window is not certified")
+        assert opened({**cases[salt], "params": other}, None).startswith("the window's template's unit reads a salt")
+
+
+def test_the_public_row_is_the_compiled_programs_salt_position_and_roots():
+    """`core_check.public_row`'s bits are the leaves `Compiled.inputs` fills for one unit: `pouw.salt`, the unit's
+    position, then its group's two roots (`seeds.leaves`, `seeds.position_leaves`, Boolean), bit t of the row bit t % 8
+    of byte t // 8."""
+    import hashlib
+    import numpy as np
+    from verity.core.protocols.pouw.circuit import seeds as SD
+    salt, roots = hashlib.sha512(b"s").digest(), (hashlib.sha512(b"a").digest(), hashlib.sha512(b"b").digest())
+    for pos in (0, 1, 5, 1 << 39, (1 << 64) - 1):
+        bits = np.unpackbits(np.frombuffer(CC.public_row(salt, pos, roots), np.uint8), bitorder="little").tolist()
+        assert len(bits) == CC.PUBLIC_ROW_BITS
+        assert bits == SD.leaves(salt, True) + SD.position_leaves(pos, True) + SD.leaves(roots[0] + roots[1], True), pos
+
+
 def test_the_opening_reads_what_served_zk_writes():
     """`core_check.opening`'s constants are the ones served_zk commits under: one-stage's served domain, and the fp8-p
     A and B rows' schemas."""
@@ -271,16 +350,24 @@ def test_the_opening_reads_what_served_zk_writes():
 def test_the_pinned_tiles_are_their_templates():
     """Each pinned template the code still builds has as its query one-stage's query digest of its Definition's instance
     query: the served window's (`pc8.side_tile`) at the served K and the test window's, with tile work K, and the hiding
-    tile's. The leaf-H3 tile's Definition is retired, and its pin is its recorded windows'. The served circuit is tied to
-    the build by benchmarks/pouw's staged-unit test."""
+    tile's. The leaf-H3 tile's Definition is retired, and its pin is its recorded windows'. The salted H1 tile unit at
+    K = 64 (4 x 8 dot products of K) is pinned salted, its R and C its Definition's. The served circuit is tied to the build
+    by benchmarks/pouw's staged-unit test, and the H1 unit's by its pin test (`test_h1_pin.py`)."""
+    from verity.core.protocols.pouw.circuit import h1tile as H
     from verity.core.protocols.pouw.circuit import pc8
     from verity.core.protocols.sampled_proofs.one_stage import partition as PT
-    built = [pc8.side_tile(4096), pc8.side_tile(128), pc8.templates(4096, (1, 1), hidden=True)["tile"]]
+    from verity.ml.circuits.defs import bind
+    from verity.ml.circuits.ops.boolean import gemm as BG
+    pairs = tuple((i, j) for i in range(4) for j in range(8))
+    h1 = bind(H.PouwH1Tile, EXACT=bind(BG.GemmAccumulatorS8, K=64, **BG.GEMM_SM120_S8), R=4, C=8, PAIRS=pairs)
+    built = [pc8.side_tile(4096), pc8.side_tile(128), pc8.templates(4096, (1, 1), hidden=True)["tile"], h1]
     for d in built:
         assert CC.TILES[d.id].query == R.query_digest(PT.template_instance_query(d)), d.id
     assert set(CC.TILES) - {d.id for d in built} == {"Pc8TileLeafH3_v1{K=4096,DEV='sm120'}"}
     for k in (4096, 128):
         assert CC.TILES[pc8.side_tile(k).id].tile_work == k
+    assert [t for t, x in CC.TILES.items() if x.salted] == [h1.id]
+    assert CC.TILES[h1.id].salted == CC.Salted(4, 8) and CC.TILES[h1.id].tile_work == 64 * len(pairs)
 
 
 def test_canonical_json_is_leans():
