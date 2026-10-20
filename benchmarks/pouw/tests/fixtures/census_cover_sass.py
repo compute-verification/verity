@@ -92,7 +92,8 @@ def main(argv: list[str] | None = None) -> int:
              "for test_census_cover.py: cpw_routes' every mode (RT3-120; out/sass/counts.json, all_bitexact=1), "
              "rt3_dc's lane loops on the H200 and B200 (RT3-DC; the SASS gate's loop, each form 0 mismatches in "
              "exact.jsonl) and red_generic's generic-address checkpoint loops in the H200's and B200's SASS (RT4-SHEET-7; "
-             "art:9463456f9f, each form 0 mismatches on the RTX PRO 6000 in device.txt, not yet run on either chip). "
+             "art:9463456f9f, each form 0 mismatches on the RTX PRO 6000 in device.txt, and on the H200 and the B200: "
+             "r20261020-031119-3113, r20261020-031119-013a, all_bitexact=1). "
              f"Written by census_cover_sass.py: {len(witnesses)} programs.")
     lines = ["{", f'  "about": {json.dumps(about, ensure_ascii=False)},', '  "programs": [']
     lines += [f"    {json.dumps(w, ensure_ascii=False)}{',' * (j + 1 < len(witnesses))}" for j, w in enumerate(witnesses)]
