@@ -122,21 +122,21 @@ times an honest stream's credit per unit of work (RT4-INT-8). The time credit `(
 `CircuitCredit` over the period, whose sheet premises read one window's run, not a prefix's total: not stated.
 
 *Live tiles on the served gate* (RT4-LOGIC-4, RT4-LOGIC-20). `live` must be the tiles live in-circuit, and whether the
-gate's admit bits are those depends on the tile version. SERVE-GATE's `PouwQueueAdmit_v3` (#2731 at 166e5e573d, lifted
-onto main by #2892) admits a slot iff the request queue, committed before the window's first coin, assigns it a request
-live at its step and its row's scale is nonzero. It reads no row byte, so it admits a selected row of zero bytes under
-a nonzero scale (`scale_only`), and nothing on the verifier's side refuses one: the gate checks `junk` and `hollow`
-(RT-ALGO-4) in Python on its picked units, and `scale_only` is only the prover's own flag. #2731 serves #2639's
-`PouwH1Tile_v2`, which reads a tile as dead when all its row bytes are zero. There a block of `scale_only` rows is dead
-in-circuit (its masked receipt is the zero words at every coin), so if `live` is the admit bits' its tile is named
-live, its whole skip passes, `GuessLuckAt` fails on it (RT2-INT's `guess_false_dead`), and on such a period the premise
-is false and the statement says nothing. #2902's `PouwH1Tile_v4` instead masks the receipt with the OR of the tile's
-admit bits, the words the tally counts, once the protocol binds its `admit` input to them by commitment equality (its
-precondition). There a `scale_only` block is live and receipted, and the admit bits are the tiles live in-circuit:
-kernels is moving the served credit back to them, which suits `live` under v4 only. Neither tile is on main. A `live`
-that names a live tile dead only loses its words. When the tally credits only rows in live tiles (under v4 every
-admitted row is in one), as a share of its credit the deficit is at most `(d_F + d₀)·N_w/N_adm`, with
-`N_adm/(j·N_w) = u`: `N_adm` the prefix's admitted rows and `j·N_w` its declared rows. `live` is fixed before the
+gate's admit bits are those depends on the tile version. SERVE-GATE's `PouwQueueAdmit_v3` (#2731 at 166e5e573d, which
+#2892, open, lifts onto main) admits a slot iff the request queue, committed before the window's first coin, assigns
+it a request live at its step and its row's scale is nonzero. It reads no row byte, so it admits a selected row of
+zero bytes under a nonzero scale (`scale_only`), and nothing on the verifier's side refuses one: the gate checks
+`junk` and `hollow` (RT-ALGO-4) in Python on its picked units, and `scale_only` is only the prover's own flag. #2731
+serves #2639's `PouwH1Tile_v2`, which reads a tile as dead when all its row bytes are zero. There a block of
+`scale_only` rows is dead in-circuit (its masked receipt is the zero words at every coin), so if `live` is the admit
+bits' its tile is named live, its whole skip passes, `GuessLuckAt` fails on it (RT2-INT's `guess_false_dead`), and on
+such a period the premise is false and the statement says nothing. #2902's `PouwH1Tile_v4` instead masks the receipt
+with the OR of the tile's admit bits, the words the tally counts, once the protocol binds its `admit` input to them by
+commitment equality (its precondition). There a `scale_only` block is live and receipted, and the admit bits are the
+tiles live in-circuit: kernels is moving the served credit back to them, which suits `live` under v4 only. Neither
+tile is on main. A `live` that names a live tile dead only loses its words. When the tally credits only rows in live
+tiles (under v4 every admitted row is in one), as a share of its credit the deficit is at most `(d_F + d₀)·N_w/N_adm`,
+with `N_adm/(j·N_w) = u`: `N_adm` the prefix's admitted rows and `j·N_w` its declared rows. `live` is fixed before the
 window's first coin (`Period.window`), so the statement covers a window whose gate admits every slot before that coin:
 FILL's, whose 64 entries are all in round 0. H1 admits round by round, each step's slots under its round's root after
 the earlier rounds' coins (#2940's `_admitted_run` admits two in round 1), and a window that admits after round 0 is
