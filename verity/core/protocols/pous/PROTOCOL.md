@@ -465,8 +465,8 @@ The verdict a caller records is the Lean's: `MemoryChallenger.StreamedWipe.verdi
 `streamed-wipe-verdict`, which `wipe_verdict.judge` (beside the Lean package) sends the signed session, the commitment,
 the trusted keys and the accepted schemes' ids as JSON (`to_json`), and which refuses a record `to_json` can't have
 written. `wipe_verdict.VERDICT` is the switch: `lean` (the Lean alone), `both` (the Python's beside it, and a session
-the two differ on in any field rejected as a disagreement) or `python` (no Lean). `tests/test_wipe_verdict.py` there
-holds the Lean to `streamed_wipe.verdict` on drawn sessions at every batch size, one adversarial edit of them (a wrong
+the two differ on in any field rejected as a disagreement) or `python` (no Lean).
+`verity/core/devices/memory_challenger/lean/tests/test_wipe_verdict.py` holds the Lean to `streamed_wipe.verdict` on drawn sessions at every batch size, one adversarial edit of them (a wrong
 label, a late or early answer, an untrusted signer, a wrong count, a batch dropped or added, a field past its width),
 JSON the Lean must refuse, and named negative controls.
 
