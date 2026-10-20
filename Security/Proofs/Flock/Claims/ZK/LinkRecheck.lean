@@ -93,9 +93,9 @@ theorem _root_.FlockSoundness.Discharge.ZkView.Coined.swContent_inl {K W Hi VL :
     {z : ZkView.Sizes} (T : ZkView.Coined K W Hi VL z) (w : W) (v : T.tab.Vals) (b : ZkView.Base z Hi)
     (p : Fin (z.nS + z.nU)) : T.swContent w v b (.inl p) = T.content w b (.inl p) := by
   unfold ZkView.Coined.swContent
-  split_ifs
-  · rfl
-  · rfl
+  by_cases h : T.tab.onVals.RowsAt (w, v) b.1 b.2.1.2.1
+  · rw [if_pos h] <;> rfl
+  · rw [if_neg h] <;> rfl
 
 /-- **The executable's level-0 leaves at the switched prover are the honest prover's.** -/
 theorem swExeOf_inl {J : ℕ} (C : Fin J → Composed.CoinedSetup) (cz : ∀ j, Composed.CoinsZK (C j).Rest)
@@ -169,9 +169,11 @@ theorem root_linkIn (x : Msg) (w : Claims.Flock.Wit) (t : UE.Tape) (cz : ∀ j, 
         (linkIn x w t j).g (linkIn x w t j).extra (linkIn x w t j).lanePad)[q]!) ((linkIn x w t j).salt q) :=
     fun q hq => by
       have hq' : q < (tabC PE x j).z.nS + (tabC PE x j).z.nU := lt_of_lt_of_eq hq hd.symm
-      rw [leafAt_swCutAt PE x cz (wtOf PE x w) v _ _ j hq', swExeOf_inl,
-        exeOf_inl PE (TapeLayout.exe PE) exeTape (agrees0_exe PE) w t cz j ⟨q, hq'⟩,
-        _root_.Flock.Firewall.Link.rows_eq] <;> rfl
+      refine (leafAt_swCutAt PE x cz (wtOf PE x w) v (UE.tape x t).1
+        (swExeOf (tabC PE x) cz (wtOf PE x w) v (UE.tape x t).1 (UE.tape x t).2.1) j hq').trans
+        ((swExeOf_inl (tabC PE x) cz (wtOf PE x w) v (UE.tape x t).1 (UE.tape x t).2.1 j ⟨q, hq'⟩).trans
+        ((exeOf_inl PE (TapeLayout.exe PE) exeTape (agrees0_exe PE) w t cz j ⟨q, hq'⟩).trans ?_))
+      rw [_root_.Flock.Firewall.Link.rows_eq] <;> rfl
   rw [_root_.Flock.Firewall.Link.root_eq (linkIn x w t j) (zkTab x j).hz]
   show _root_.Flock.Firewall.Link.flat (_root_.Flock.Firewall.Link.cap (lv0 x j) (zkTab x j).tPad (linkIn x w t j)) = _
   rw [_root_.Flock.Firewall.Link.flat_eq, _root_.Flock.Firewall.Link.cap_eq (lv0 x j) (zkTab x j).tPad _ _ hl] <;> rfl
@@ -183,7 +185,7 @@ theorem enc0_swCutAt (x : Msg) (w : Claims.Flock.Wit) (t : UE.Tape) (cz : ∀ j,
     enc0 PE x cz (swCutAt (tabC PE x) cz (wtOf PE x w) v (UE.tape x t).1
       (swExeOf (tabC PE x) cz (wtOf PE x w) v (UE.tape x t).1 (UE.tape x t).2.1)) = linkMsg x w t := by
   unfold enc0 linkMsg
-  simp only [root_linkIn x w t cz v]
+  simp only [root_linkIn x w t cz v] <;> rfl
 
 /-- Round `0` sees no refusal, so a stopped plan's round `0` is the plan's. -/
 theorem encStop_zero {C : Tabs} {cz : (x : Msg) → (Fin (refK x) → FlockDeploy.Coin) → ∀ j, Composed.CoinsZK (C x j).Rest}
@@ -226,7 +228,10 @@ theorem linkRoundEq_of_linkIs (nr : Msg → ℕ → ℕ) (vs : (session nr dataE
   rw [hL ν t m₀ ρ₀ hk hr, ← e]
   unfold RefSession.swMsgAt
   rw [List.length_nil, if_pos hk]
-  exact ((encStop_zero (encExe PE) x _ _).trans (encExe_zero PE x _ _)).symm
+  first
+  | exact ((encStop_zero (encExe PE) x _ _).trans (encExe_zero PE x _ _)).symm
+  | (show _ = encStop (encExe PE) x ((session nr dataE).pad []) 0 _
+     rw [encStop_zero, encExe_zero])
 
 end LeanRelease
 
