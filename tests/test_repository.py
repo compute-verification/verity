@@ -57,7 +57,6 @@ SKILL_SIZE_CAP = 16 * 1024
 #: compacts it.
 OVERSIZE_SKILLS = {
     ".agents/skills/smell-check/SKILL.md": 41 * 1024,
-    ".agents/skills/lean-proofs/SKILL.md": 29 * 1024,
     ".agents/skills/using-slack/SKILL.md": 29 * 1024,
     ".agents/skills/kernel-engineering/SKILL.md": 26 * 1024,
 }
