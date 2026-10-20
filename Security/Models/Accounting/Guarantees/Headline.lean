@@ -159,9 +159,9 @@ no vendor document states, and DS-120 has no uniform-pipe row. Without A2u the m
 measured uniform-pipe row and 100% with none (RT-MACHINE-4). Measured, it holds at saturation: beside a saturating
 vector stream no kernel's total rate exceeds 1 over 279 measurements (r20261019-120714-132b, RT2-120-4). A2's
 catch-all counts an instruction the 122 classes don't name in `NOROW`, at its issue slot alone, so no instruction is
-free at `π*`, where every class costs at least 3564/3761 of a slot a count and a bulk instruction `S/99 KB` of a count;
-no coefficient the bound reads moves (RT2-HOPPER-2). A5b (`SheetSmem`) holds a bulk or TMA instruction's size `S` in
-the banks at A5's 32 B an SMSP-cycle (above). -/
+free at `π*`: a count of any class costs at least 3564/3761 there, and a bulk instruction is `S/99 KB` of a UTMABIG
+count (RT2-HOPPER-2). A5b (`SheetSmem`) holds a bulk or TMA instruction's size `S` in the banks at A5's 32 B an
+SMSP-cycle (above). -/
 def Sm120SheetHeadline : Prop :=
   ∀ (Ω : Type) [Fintype Ω] (Pl : Play Ω Sm120.checks (Fin 122) (Fin 17) Unit Empty) (G : ReceiptGame Ω Sm120.checks)
     (Uf : Unfolded Ω Sm120.checks) {V : Type} {nπ : ℕ} (pf : ProofLayer Ω Sm120.checks nπ V) (δfork δzk : ℝ),
