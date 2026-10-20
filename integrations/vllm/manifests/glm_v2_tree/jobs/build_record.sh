@@ -3,7 +3,7 @@
 # its Program equals the `aot.trace` Build's) with its required-value manifest and call-boundary check, as a vllm.build Attempt
 # (`row chain --stages build --no-publish`), in the sweep the Match CPU phase and the Commit read (README "GPU batch").  A row whose
 # v2 trace moved a Program takes that trace as AOT_TRACE (trace_compare.sh's row dir) and is re-pinned with it.  Hashes the row dir
-# into $OUT/rowdir.sha256 for the copies to eu and to the replay host.
+# into $OUT/rowdir.sha256 for the copies to window B's node and to the replay host.
 #   research run --on vy-glm53-cpu-2 --mem-gb 450 --mem-wait 28800 --timeout 20h --custody-ttl 24h --cwd source --project verity -- env ROW=... bash integrations/vllm/manifests/glm_v2_tree/jobs/build_record.sh
 # env: ROW, [AOT_TRACE], [SW=/workspace/cp/circuits/glm-v2/rows], [REF=cursor/glm-v2-21f3], [BUDGET_GB=400], [VERITY_MANIFEST_JOBS=2].
 set -uo pipefail
