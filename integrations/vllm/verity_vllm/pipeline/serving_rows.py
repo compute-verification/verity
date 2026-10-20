@@ -317,7 +317,7 @@ def after_commit(out_dir: str, *, partition_file: str, programs: dict[str, dict[
                  digests: Mapping[str, str] | None = None, committer: dict[str, Any] | None = None,
                  workers: int | None = None, stand_in: Mapping[str, Any] | None = None, tp: Mapping[str, Any] | None = None,
                  index: Mapping[str, Any] | None = None) -> dict[str, Any]:
-    """Commit the verifier's partition's units of a run whose roots are final and write the window's files into ``out_dir``:
+    """Commit the verifier's partition's units of a run whose vllm-v1 roots are final and write the window's files into ``out_dir``:
     the registration (core's v1 record, its window the run root ``run_root`` and the provenance: the scheme the values were read
     under (``commitment``: the reader's committer's, vllm-v1 or a TP rank's rows-sha512), the research run ``run``, the row, the
     committer and the served Programs' ``digests``), ``partition.json``, the index and M0's bodies.  The window is ``served``;
@@ -333,10 +333,10 @@ def after_commit(out_dir: str, *, partition_file: str, programs: dict[str, dict[
     got = [read(m, r, store, weights, arrivals) for m, r in zip(ms, rows, strict=True)]
     t_read = time.perf_counter()
     c = CS.commit(window, [g[0] for g in got], workers=workers or min(16, os.cpu_count() or 1))
-    prov = {"commitment": getattr(getattr(committed, "com", None), "commit_scheme", "vllm-v1"), "row": row, "research_run": run,
-            "committer": dict(committer or {}, module=CS.__name__),
+    prov = {"commitment": "vllm-v1", "row": row, "research_run": run, "committer": dict(committer or {}, module=CS.__name__),
             "served_programs": {str(k): str(v) for k, v in sorted((digests or {}).items())}, "scope": pf.get("scope"),
             **({"tp": dict(tp)} if tp else {}), **(stand_in or {})}
+    prov["commitment"] = getattr(getattr(committed, "com", None), "commit_scheme", prov["commitment"])
     c.seconds["read_s"] = round(t_read - t0, 3)
     Path(out_dir).mkdir(parents=True, exist_ok=True)
     (Path(out_dir) / "partition.json").write_text(json.dumps(partition_doc(window, pf), indent=1) + "\n")
