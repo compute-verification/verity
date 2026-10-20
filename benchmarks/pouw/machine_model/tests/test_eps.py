@@ -581,15 +581,17 @@ def test_the_fold_routes_are_the_cheaters_and_the_floor_programs():
     the uniform datapath, shared-memory and L2 atomics, a transpose through shared memory), each instruction at its
     census class, and the check reads the checkpoint word, not its program, so the cheater folds by any mix of the
     design's fold and its `[fold_routes]`, RT4-SHEET-7's generic-address L2 XORs (ATOM.E, no AT90 line) among them. With
-    ♭ at REDUX they beat it by 1.47% on DS-90 and 1.97% on DC-90-ri; ♭ on the same menu folds by cp-red2 (3 LOP3 and 2
-    REDG a segment) on DS-90, and ε_machine is 0 there. Honest's kernel folds by REDUX, so γ doesn't move."""
+    ♭ at REDUX they beat it by 1.47% on DS-90 and 4.37% on DC-90-ri, where the cheater folds by the generic CP_RED8
+    (ATOME32 on the issue row alone, with no joint issue line: RT4-SHEET-12); ♭ on the same menu folds by cp-red2 (3
+    LOP3 and 2 REDG a segment) on DS-90, and ε_machine is 0 there and 0.446% on DC-90-ri. Honest's kernel folds by
+    REDUX, so γ doesn't move."""
     d = DEVICES / "sm_90"
     ds = E.design("dither-2s-licpw-redux-p1-l32", d)
     assert list(ds.fold_routes) == ["cp-seg4", "cp-seg4u", "cp-ats", "cp-ats2", "cp-ats8", "cp-red", "cp-red2", "cp-red8",
                                     "cp-red-generic", "cp-red2-generic", "cp-red8-generic", "cp-xt"] and ds.fold_routes_source
     assert ds.with_fold_cost(0.5).fold_routes["cp-seg4u"]["UNI"] == pytest.approx(0.0078125 * 0.5 / ds.fold_cost())
     plain = replace(ds, fold_routes={})
-    for vec, q, attack, eps in (("DS-90", 0.5, 0.014706, 0.0), ("DC-90-ri", 1.22, 0.019724, 0.000473)):
+    for vec, q, attack, eps in (("DS-90", 0.5, 0.014706, 0.0), ("DC-90-ri", 1.22, 0.043702, 0.004460)):
         pi = E.machine(vec, d)
         s, s0 = E.setup(ds, pi, d, "free", "floor"), E.setup(plain, pi, d, "free", "floor")
         assert not s0.baseline.folds and s.baseline.T < s0.baseline.T
@@ -659,9 +661,9 @@ def test_dc_the_headline_holds_decision_76s_margin():
     moves the H200 and the B200 depends on their designs, which the audit reads rather than pins.
     dither-2s-li-l32, the H200's headline before LI-CP-W, is the thin design: its 0.02 FFMA filler puts honest on JI90_0
     by only the ALU pipe's 1.5% issue slack, so a 2% rise in JPA90_0 (ALU lanes beside the tensor) moves honest's
-    binding off JI90_0 and opens the lane route, taking core to 0.98% (it crosses 1% past a 2.1% margin). A 0.05 FFMA
-    filler a word restores the full margin (core back to its 0.574% floor) at γ 1.589, the cheapest add-on; its ε_skip
-    at the larger ♭ is CALC's to re-price."""
+    binding off JI90_0 and opens the lane route, taking core to 1.084% with the peel at sm_90a's own counts (RT-ISA-7;
+    0.98% at sm_120's): it crosses 1% past a 1.7% margin. A 0.05 FFMA filler a word restores the full margin (core back
+    to its 0.679% floor) at γ 1.589, the cheapest add-on; its ε_skip at the larger ♭ is CALC's to re-price."""
     worst = {}
     for dev, (name, vec) in HEADLINE.items():
         data = device(dev)
@@ -680,8 +682,9 @@ def test_dc_the_headline_holds_decision_76s_margin():
     sm90 = device("sm_90")
     p90 = E.machine("", sm90)
     thin = E.design("dither-2s-li-l32", sm90)
-    assert E.eps(thin, p90, HEADLINE_Q, sm90, operands="free", credit="floor").core() == pytest.approx(0.00576, abs=5e-5)
-    assert 0.0095 < _worst_core_under_margin(sm90, p90, thin, 0.02) < 0.0099
+    assert E.eps(thin, p90, HEADLINE_Q, sm90, operands="free", credit="floor").core() == pytest.approx(0.00681, abs=5e-5)
+    assert _worst_core_under_margin(sm90, p90, thin, 0.02) == pytest.approx(0.01084, abs=5e-5)
+    assert _worst_core_under_margin(sm90, p90, thin, 0.016) < 0.01 < _worst_core_under_margin(sm90, p90, thin, 0.018)
     wide = replace(thin, filler=(E.lane_fill(0.05, {"FFMA": 1.0}),))
     assert _worst_core_under_margin(sm90, p90, wide, 0.02) == pytest.approx(0.00679, abs=5e-5)
 

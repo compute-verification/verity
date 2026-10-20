@@ -1285,6 +1285,10 @@ def cmd_cancel(argv: list[str]) -> int:
     except (FileNotFoundError, LookupError, remote.Refused) as e:
         print(f"research cancel: {e}", file=sys.stderr)
         return 1
+    if out.get("withdrawn"):
+        print(f"research cancel: {run_dir.name}: withdrawn from its {out['hold']} before its runner started (SIGTERM to pid {out['pid']}); "
+              f"refused.json records fault Withdrawn; {out['released']}")
+        return 0
     if not out["delivered"]:
         print(f"research cancel: {run_dir.name}: SIGTERM to process group {out['pgid']} not delivered ({out['why']})", file=sys.stderr)
         return 1
