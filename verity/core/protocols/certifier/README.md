@@ -7,7 +7,10 @@ A spec-level reference for network accounting's timing channel:
   certificates (`certificate`: the network certifier's signature over the record's SHA-512 digest, with the window's
   frames in a fixed-depth SHA-512 tree), and the ingress links' status check;
 - one link-window's certificates through the proof service (`service`): the network `Spec`, a salted root over the
-  certified records, and a host-side verifier of record (no circuit proves the check yet);
+  certified records, and the check, whose Boolean part is each head's check (`head_check`: the head's hiding opening,
+  its fields and its counts against the public occupancy profile), with a host-side verifier of record (no proof of the
+  check yet) that also compares each egress record's grid with the Program's in the clear, on every link-window, until
+  N3 runs on every window (NET-38);
 - the capacity counts;
 - the calibration of honest runs;
 - the online prover (`online`): each window's clock sync declared at its first bucket from what it had seen `lag`
@@ -25,6 +28,7 @@ It is pure Python. It imports only the standard library and `verity`: for the re
 `tagged_sha512` and `canonical_json_bytes`, in `service` the proof service, the hm96 leaves and the check's
 Definition, and in `active` the proof service's registration and receipt, which `reveal` reads. The certificate's signature scheme is a parameter: the certifier's
 `certificate.Issuer` takes a `Signer`, and the audit a `PublicKey`.
+From `verity`, `head_check` takes the circuits, their evaluator and the commitment gadgets.
 `PROTOCOL.md` has the semantics and the correspondence to the Lean analysis (`Security/`, area `NetworkCertifier`).
 `lean/` is the certifier program, the Lake package `certifier_program` (Lean core only): List forms of the analysis's
 definitions, proved equal to them in `Security/Proofs/NetworkCertifier/Code.lean`, and the difftest that holds this
