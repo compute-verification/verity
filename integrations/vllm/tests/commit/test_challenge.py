@@ -76,7 +76,7 @@ def test_a_run_with_an_uncommitted_step_has_no_root_to_draw_from():
         CH.run_root_of(_run([b"", step, b""], (err,)))
     with pytest.raises(CH.NoRunRoot, match="first error: none recorded"):
         CH.run_root_of(_run([b""]))
-    with pytest.raises(ValueError, match="run root must be 32 bytes"):
+    with pytest.raises(ValueError, match=r"a run root is 32 bytes \(vllm-v1\) or 64 \(SHA-512\), not 0"):
         CH.challenge_positions(b"", [4], 1)
 
 
