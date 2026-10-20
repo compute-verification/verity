@@ -6,14 +6,14 @@ import Models.Accounting.Guarantees.HeadlineDc
 
 `Sm100SheetHeadline` is `Whole.sheetDIdealFloor_whole` at DS-100 and `dither-2s-licpw-redux-ldtm0-l32`
 (`Definitions.Accounting.HeadlineDc.Sm100`), at the data's certificate `π* = Sm100.lamStar` (DS_issue
-`1/2`, DS_alu `1/2`), `p = 7/8`, `p₀ = ½` and `Λ = max(κ/ln(8/7), (κ + f)/ln 2)`:
+`666666667/10^9`, DS_alu `333333333/10^9`), `p = 7/8`, `p₀ = ½` and `Λ = max(κ/ln(8/7), (κ + f)/ln 2)`:
 
 * the data, by `decide`: issue is ♭'s largest facet (`sm100_max`), so `B_♭` is its issue load (`sm100_bnd`);
   every writer kind's `ω ≤ 32768` (`sm100_omega`), so each word route costs at least `1/32768` on issue and
-  `w* ≥ λ_issue/32768` (`sm100_wStar`); each of the four fold routes (the design's fold, cp-seg4, cp-seg4u and the
-  uniform one) costs at least the cheapest one's price on the two facets (`sm100_fold`, `sm100_phiStar`);
-* the folded branch from those bounds (`folded_of_lower`): below `774/100000` by `decide` (`sm100_folded_q`);
-* the unfolded branch (`unfolded_of_lower`): below `774/100000` by `decide` (`sm100_unfolded_q`);
+  `w* ≥ λ_issue/32768` (`sm100_wStar`); each of the 14 fold routes costs at least the cheapest one's price on the
+  two facets (`sm100_fold`, `sm100_phiStar`);
+* the folded branch from those bounds (`folded_of_lower`): below `783/100000` by `decide` (`sm100_folded_q`);
+* the unfolded branch (`unfolded_of_lower`): below `783/100000` by `decide` (`sm100_unfolded_q`);
 * FILL-OPT holds since there is no filler (`fillOpt_of_zero`), and (I7) at `7/8` is the receipt split's
   (`luck_of_receipt_half`).
 -/
@@ -27,22 +27,22 @@ open Accounting.TS Accounting.TS.Headline Accounting.Assumptions.TS Pouw.Relativ
 def flat100 : Sparse := Sm100.flatWords ++ Sm100.flatFold ++ Sm100.flatFill ++ Sm100.flatSkip
 
 /-- `B_♭` on DS-100 as a rational: ♭'s load on issue. -/
-def B100 : ℚ := dot (sheetCoef Sm100.ds100 .issue) 26 flat100
+def B100 : ℚ := dot (sheetCoef Sm100.ds100 .issue) 37 flat100
 
 /-- π*'s weights as rationals: DS_issue and DS_alu. -/
-def li100 : ℚ := 1 / 2
+def li100 : ℚ := 666666667 / 1000000000
 
-def la100 : ℚ := 1 / 2
+def la100 : ℚ := 333333333 / 1000000000
 
 /-- Fold route `i`'s price at π* as a rational, on DS_issue and DS_alu. -/
 def price100 (i : ℕ) : ℚ :=
-  li100 * dot (sheetCoef Sm100.ds100 .issue) 26 (Sm100.d2s.folds.getD i []) +
-    la100 * dot (sheetCoef Sm100.ds100 (.pipe .alu)) 26 (Sm100.d2s.folds.getD i [])
+  li100 * dot (sheetCoef Sm100.ds100 .issue) 37 (Sm100.d2s.folds.getD i []) +
+    la100 * dot (sheetCoef Sm100.ds100 (.pipe .alu)) 37 (Sm100.d2s.folds.getD i [])
 
 /-- The cheapest fold route's price at π*. -/
-def phi100 : ℚ := min (min (price100 0) (price100 1)) (min (price100 2) (price100 3))
+def phi100 : ℚ := ((List.range 14).map price100).foldr min (price100 0)
 
-theorem sm100_max (r : SheetRow Sm100.Pipe) : dot (sheetCoef Sm100.ds100 r) 26 flat100 ≤ B100 := by
+theorem sm100_max (r : SheetRow Sm100.Pipe) : dot (sheetCoef Sm100.ds100 r) 37 flat100 ≤ B100 := by
   cases r with
   | issue => decide +kernel
   | tensor => decide +kernel
@@ -55,23 +55,23 @@ theorem sm100_omega :
     ∀ i < 13, 0 < (Sm100.d2s.writers.getD i (0, 0)).2 ∧ (Sm100.d2s.writers.getD i (0, 0)).2 ≤ 32768 := by
   decide +kernel
 
-theorem sm100_fold : ∀ i < 4, phi100 ≤
-    li100 * dot (sheetCoef Sm100.ds100 .issue) 26 (Sm100.d2s.folds.getD i []) +
-      la100 * dot (sheetCoef Sm100.ds100 (.pipe .alu)) 26 (Sm100.d2s.folds.getD i []) := by
+theorem sm100_fold : ∀ i < 14, phi100 ≤
+    li100 * dot (sheetCoef Sm100.ds100 .issue) 37 (Sm100.d2s.folds.getD i []) +
+      la100 * dot (sheetCoef Sm100.ds100 (.pipe .alu)) 37 (Sm100.d2s.folds.getD i []) := by
   decide +kernel
 
 theorem sm100_lam_q : 0 ≤ li100 ∧ 0 ≤ la100 ∧ li100 + la100 = 1 := by decide +kernel
 
 theorem sm100_folded_q :
-    (1 - 774 / 100000 : ℚ) * B100 ≤ 32768 * (li100 * (1 / 32768)) * (1 - 41 * (6931471808 / 10000000000) / 6000) +
+    (1 - 783 / 100000 : ℚ) * B100 ≤ 32768 * (li100 * (1 / 32768)) * (1 - 41 * (6931471808 / 10000000000) / 6000) +
       32768 * phi100 := by
   decide +kernel
 
 theorem sm100_unfolded_q :
-    (1 - 774 / 100000 : ℚ) * B100 ≤ (32768 * (li100 * (1 / 32768)) + 32768 * phi100) * (1 - 41 / 48000) := by
+    (1 - 783 / 100000 : ℚ) * B100 ≤ (32768 * (li100 * (1 / 32768)) + 32768 * phi100) * (1 - 41 / 48000) := by
   decide +kernel
 
-theorem sm100_hG : ∀ r k, Sm100.model.G.a r k = (sheetCoef Sm100.ds100 r k.val : ℝ) := sheet_a Sm100.ds100 26
+theorem sm100_hG : ∀ r k, Sm100.model.G.a r k = (sheetCoef Sm100.ds100 r k.val : ℝ) := sheet_a Sm100.ds100 37
 
 theorem sm100_a_nonneg : ∀ r k, 0 ≤ Sm100.model.G.a r k := fun r k => by
   rw [sm100_hG]
@@ -80,7 +80,7 @@ theorem sm100_a_nonneg : ∀ r k, 0 ≤ Sm100.model.G.a r k := fun r k => by
 theorem sm100_bnd : Sm100.model.bnd Sm100.flat = (B100 : ℝ) := by
   unfold Model.bnd
   rw [show Sm100.flat.n = Sparse.counts flat100 from
-    labelled_n 26 Sm100.flatWords Sm100.flatFold Sm100.flatFill Sm100.flatSkip]
+    labelled_n 37 Sm100.flatWords Sm100.flatFold Sm100.flatFill Sm100.flatSkip]
   exact bound_eq _ (sheetCoef Sm100.ds100) sm100_hG flat100 .issue sm100_max
 
 theorem sm100_Nw : Sm100.model.Nw = 32768 := by
@@ -100,11 +100,11 @@ theorem sm100_S : ((Sm100.checks : ℕ) : ℝ) = 48000 := by
   norm_num
 
 theorem sm100_li : Sm100.lamStar .issue = (li100 : ℝ) := by
-  show (1 / 2 : ℝ) = ((1 / 2 : ℚ) : ℝ)
+  show (666666667 / 1000000000 : ℝ) = ((666666667 / 1000000000 : ℚ) : ℝ)
   norm_num
 
 theorem sm100_la : Sm100.lamStar (.pipe .alu) = (la100 : ℝ) := by
-  show (1 / 2 : ℝ) = ((1 / 2 : ℚ) : ℝ)
+  show (333333333 / 1000000000 : ℝ) = ((333333333 / 1000000000 : ℚ) : ℝ)
   norm_num
 
 theorem sm100_lamStar_zero : ∀ r : SheetRow Sm100.Pipe, r ≠ .issue ∧ r ≠ .pipe .alu → Sm100.lamStar r = 0
@@ -154,7 +154,7 @@ theorem sm100_wf : Sm100.model.Wf Sm100.flat := by
 
 theorem sm100_vecMin : 1 ≤ Sm100.model.vecMin .issue := by
   have : Nonempty ↥Sm100.model.vec :=
-    ⟨⟨idx 26 1, List.mem_toFinset.mpr (List.mem_map.mpr ⟨1, by decide, rfl⟩)⟩⟩
+    ⟨⟨idx 37 3, List.mem_toFinset.mpr (List.mem_map.mpr ⟨3, by decide, rfl⟩)⟩⟩
   unfold Model.vecMin
   refine le_ciInf fun k => ?_
   rw [sm100_hG]
@@ -201,13 +201,13 @@ theorem sm100_phiStar : (phi100 : ℝ) ≤ Sm100.model.phiStar Sm100.lamStar := 
   push_cast at h
   linarith
 
-theorem sm100_fillOpt {Ω : Type} [Fintype Ω] (Pl : Play Ω Sm100.checks (Fin 26) (Fin 13) Unit Empty)
+theorem sm100_fillOpt {Ω : Type} [Fintype Ω] (Pl : Play Ω Sm100.checks (Fin 37) (Fin 13) Unit Empty)
     (hSplit : ∀ x, (Pl.run x).Split) : ∀ x, FillOpt Sm100.model (Pl.run x) := fun x =>
   fillOpt_of_zero Sm100.model sm100_a_nonneg (fun _ _ => rfl) rfl (Pl.run x) (hSplit x)
 
-/-- The folded branch at π*, `p = 7/8` and `δ′ ≥ 2^-41` is at least `1 − 774/100000`. -/
+/-- The folded branch at π*, `p = 7/8` and `δ′ ≥ 2^-41` is at least `1 − 783/100000`. -/
 theorem sm100_folded (δ' : ℝ) (hδ' : (1 / 2 : ℝ) ^ 41 ≤ δ') :
-    1 - 774 / 100000 ≤ 1 - Sm100.model.epsSkip Sm100.flat Sm100.lamStar -
+    1 - 783 / 100000 ≤ 1 - Sm100.model.epsSkip Sm100.flat Sm100.lamStar -
       Sm100.model.epsCert Sm100.flat Sm100.lamStar - Sm100.model.epsRoute Sm100.flat Sm100.lamStar -
       Sm100.model.epsMand Sm100.flat Sm100.lamStar -
       Sm100.model.epsJl Sm100.flat Sm100.lamStar (7 / 8) δ' Sm100.checks := by
@@ -219,9 +219,9 @@ theorem sm100_folded (δ' : ℝ) (hδ' : (1 / 2 : ℝ) ^ 41 ≤ δ') :
   rw [sm100_Nw, sm100_bnd, le_div_iff₀ hB]
   linarith
 
-/-- The unfolded branch's floor at π* is at least `1 − 774/100000`. -/
+/-- The unfolded branch's floor at π* is at least `1 − 783/100000`. -/
 theorem sm100_unfolded :
-    1 - 774 / 100000 ≤ (Sm100.model.Nw * Sm100.model.wStar Sm100.lamStar +
+    1 - 783 / 100000 ≤ (Sm100.model.Nw * Sm100.model.wStar Sm100.lamStar +
       (1 - Sm100.model.muF) * Sm100.model.Nw * Sm100.model.phiStar Sm100.lamStar) /
         Sm100.model.bnd Sm100.flat * (1 - 41 / 48000) := by
   refine unfolded_of_lower Sm100.model Sm100.flat Sm100.lamStar sm100_wf rfl _ _ _ sm100_wStar sm100_phiStar ?_
@@ -243,10 +243,12 @@ open Accounting.TS Accounting.TS.Headline Accounting.Assumptions.TS Pouw.Relativ
 (`luck_of_receipt_half`), (I8) from its pieces (`ProofsSoundOfPinned`), FILL-OPT from the data, and the terms bounded
 by `Whole.headline_of_branches`: the folded branch by `sm100_folded`, the unfolded one by `sm100_unfolded`. -/
 theorem Sm100SheetHeadline : Accounting.Guarantees.TS.Sm100SheetHeadline := by
-  intro Ω _ Pl G Uf V nπ pf δbind δzk hδ hSplit h1 h2 h3 h4 h5 h6 h7 hF hG hPinG hOp hRL hWL hOf hB hZK hPin hRF
+  intro Ω _ Pl G Uf V nπ pf δfork δzk hδ hSplit h1 h2 h3 h4 h5 h6 h7 hF hG hPinG hOp hRL hWL hOf hB hZK hPin hRF
+  set δbind := Real.sqrt δfork
   have hL := luck_of_receipt_half Pl.game G hG hPinG hOp hRL
   have hPS :=
-    ProofsSoundOfPinned Ω Sm100.checks nπ Pl pf Sm100.model.Nw δbind δzk hOf hB hZK hPin hRF
+    ProofsSoundOfPinned Ω Sm100.checks nπ Pl pf Sm100.model.Nw δbind δzk hOf
+    (Whole.moved_le_sqrt pf δfork hB) hZK hPin hRF
   have hδlo : (1 / 2 : ℝ) ^ 41 ≤ (1 / 2) ^ 40 - (Sm100.checks : ℝ) * (δbind + nπ * δzk) := by
     have e : ((1 : ℝ) / 2) ^ 40 = 2 * (1 / 2) ^ 41 := by norm_num
     linarith
