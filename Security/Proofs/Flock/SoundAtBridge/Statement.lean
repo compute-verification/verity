@@ -21,6 +21,12 @@ follows:
 
 So `δ_ZK = δo + δ`, where `δ` bounds `n · (ε_ks + δ_link + δ_rows + q_R²/2^513)` at every session a path runs: the
 whole of `EndToEndRegisteredRows`' bound, its rewinding terms `1/(e·M) + k/(e·Rw)` included, times the session's `n`.
+
+Importing this module makes `X` a token (ArkLib's global `notation3 "X"`, `ArkLib.Data.Polynomial.Trivariate`), so a
+module whose declarations bind `X` can't import it. `RowsSession` reads C-Flock's definitions, whose modules all reach
+`Trivariate` through one edge, `Discharge.ZkSession.InnerSound` (BCIKS20's unique decoding), under
+`ZkSession.Compose`; the edge leaves this closure only when C-Flock's definitions leave its proof modules. The
+composition over any family of sessions, `Proofs.Flock.SoundAtBridge.Union`, imports no ArkLib module.
 -/
 
 namespace Flock.SoundAtBridge
@@ -91,11 +97,5 @@ def SoundAtBridge : Prop :=
     RelOfRows pf sess out rows →
     (∀ x w i, ((sess x w i).n : ℝ≥0∞) * (sess x w i).bound ≤ ENNReal.ofReal δ) → 0 ≤ δ →
     pf.SoundAt (δo + δ)
-
-/-- **The bridge is stated** (`SoundAtBridge`), for its record, until its proof lands: `soundAtBridge_of_rows` at
-`Flock.SecurityProofs.EndToEndRegisteredRows`. -/
-def SoundAtBridgeStated : Prop :=
-  let statements := SoundAtBridge
-  statements = statements
 
 end Flock.Guarantees

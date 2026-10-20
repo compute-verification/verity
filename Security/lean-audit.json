@@ -3496,11 +3496,11 @@
    "assumptions": [],
    "type_hash": "5af258b4edf35bdc24ef90dd56ead302a83b3ae798a0b367538a5134c6f31c23"
   },
-  "Flock.SecurityProofs.EndToEndRegisteredRowsStated": {
+  "Flock.SecurityProofs.EndToEndRegisteredRows": {
    "owner": "@proofs",
-   "signature": ["Flock.SecurityProofs.EndToEndRegisteredRowsStated : Flock.Guarantees.EndToEndRegisteredRowsStated"],
+   "signature": ["Flock.SecurityProofs.EndToEndRegisteredRows : Flock.Guarantees.EndToEndRegisteredRows"],
    "assumptions": [],
-   "type_hash": "a008a3ec7f8b876753df956eefa170b2d58e4029da0d65e6e857ba60a2c3489b"
+   "type_hash": "2663b1a7e4d37b7b0c345dbf40b33344f4e86c82f17c36de855847c1e11059d9"
   },
   "Flock.SecurityProofs.EndToEnd_refSetup": {
    "owner": "@proofs",
@@ -3587,17 +3587,49 @@
    "assumptions": [],
    "type_hash": "12704b348a183d81be9329792dcc639f4deafa21e0fc0227ff7b0b23ccb3bf9b"
   },
-  "Flock.SecurityProofs.SoundAtBridgeStated": {
+  "Flock.SecurityProofs.ServedRowsLinked": {
    "owner": "@proofs",
-   "signature": ["Flock.SecurityProofs.SoundAtBridgeStated : Flock.Guarantees.SoundAtBridgeStated"],
+   "signature": ["Flock.SecurityProofs.ServedRowsLinked : Flock.Guarantees.ServedRowsLinked"],
    "assumptions": [],
-   "type_hash": "98071786c4f75d8108782638006751c4515242027c6e546e0d9897582f079342"
+   "type_hash": "2cde2f3d97c487723b8f8899ebf241205f576cceca38ba6d92a6a1872108aba6"
+  },
+  "Flock.SecurityProofs.SoundAtBridge": {
+   "owner": "@proofs",
+   "signature": ["Flock.SecurityProofs.SoundAtBridge : Flock.Guarantees.SoundAtBridge"],
+   "assumptions": [],
+   "type_hash": "a65a67acd33540e7e76f251161afecd4384bc96480823282207852754b72e8fc"
   },
   "Flock.SecurityProofs.ZeroKnowledgeHidden": {
    "owner": "@proofs",
    "signature": ["Flock.SecurityProofs.ZeroKnowledgeHidden : Flock.Guarantees.ZeroKnowledgeHidden"],
    "assumptions": [],
    "type_hash": "84c0e48cb401d6662d94c2c1f395aeedc6aeeac630cd5e87ee5bb6e6e09009d0"
+  },
+  "Flock.SoundAtBridge.soundAtBridge_nonvacuous": {
+   "owner": "@proofs",
+   "signature": [
+    "Flock.SoundAtBridge.soundAtBridge_nonvacuous {Ω : Type} [Fintype Ω] {S nπ : Nat} {V : Type}",
+    "  (sess : Pouw.RelativeSecurity.Paths Ω S → Fin S → Fin nπ → Flock.SoundAtBridge.RowsSession)",
+    "  (out : (x : Pouw.RelativeSecurity.Paths Ω S) → (w : Fin S) → (i : Fin nπ) → (sess x w i).Out)",
+    "  (rows : (s : Flock.SoundAtBridge.RowsSession) → (Fin s.Circ.N → Bool) → V)",
+    "  (right : Pouw.RelativeSecurity.Paths Ω S → (Fin S → Fin nπ → V) → Prop) :",
+    "  And (Flock.SoundAtBridge.AcceptedLive (Flock.SoundAtBridge.rowsLayer sess out rows right) sess out)",
+    "    (And (Flock.SoundAtBridge.OpenedPlurAt (Flock.SoundAtBridge.rowsLayer sess out rows right) sess rows 0)",
+    "      (And (Flock.SoundAtBridge.RelOfRows (Flock.SoundAtBridge.rowsLayer sess out rows right) sess out rows)",
+    "        (And",
+    "          (∀ (x : Pouw.RelativeSecurity.Paths Ω S) (w : Fin S) (i : Fin nπ),",
+    "            Iff ((Flock.SoundAtBridge.rowsLayer sess out rows right).Unsound x w i) ((sess x w i).BadU (out x w i)))",
+    "          (∀ (B : ENNReal),",
+    "            Ne B ENNReal.instTop.top →",
+    "              (∀ (x : Pouw.RelativeSecurity.Paths Ω S) (w : Fin S) (i : Fin nπ),",
+    "                  ENNReal.instLE.le (instHMul.hMul (sess x w i).n.cast (sess x w i).bound) B) →",
+    "                And (Real.instLE.le 0 B.toReal)",
+    "                  (∀ (x : Pouw.RelativeSecurity.Paths Ω S) (w : Fin S) (i : Fin nπ),",
+    "                    ENNReal.instLE.le (instHMul.hMul (sess x w i).n.cast (sess x w i).bound)",
+    "                      (ENNReal.ofReal B.toReal))))))"
+   ],
+   "assumptions": [],
+   "type_hash": "27f84097c41752634b3c9c05e20a4cb02b0ea09db82bc2a57a574b18975fc05d"
   },
   "FlockSoundness.Audit.Law.closure_escape": {
    "owner": "@proofs",
@@ -7202,6 +7234,7 @@
    "Flock.SecurityProofs.EndToEndHidden_refSetup": "lemma: leaves the list under the 5:11 PM ruling",
    "Flock.SecurityProofs.EndToEndRegistered": "frozen (hash,world-unlisted,scope): It takes the table and link finders' collision bounds (TableCRZ, LinkCRZC) as hypotheses instead of a collision disjunct tied to the run, and two premises that aren't on the list: A3 (the verifier's IO.getRandomBytes is uniform) and live-verifier custody (RecordCustodyZKJ). It also takes hscope (scopeOk), which flock_verify_sound now derives from acceptance.",
    "Flock.SecurityProofs.EndToEndRegisteredDrawn": "frozen (hash,world-unlisted,scope): It takes the table and link finders' collision bounds (TableCRZ, LinkCRZC) as hypotheses instead of a collision disjunct tied to the run, and live-verifier custody (RecordCustodyZKJ), a premise that isn't on the list; it also takes hscope (scopeOk), which flock_verify_sound now derives from acceptance.",
+   "Flock.SecurityProofs.EndToEndRegisteredRows": "frozen (hash,world-unlisted,scope): It takes the table, link and rows finders' collision bounds (TableCRZ, LinkCRZC, RowsCRZC) as hypotheses instead of a collision disjunct tied to the run, and live-verifier custody (RecordCustodyZKJ), a premise that isn't on the list; it also takes hscope (scopeOk), which flock_verify_sound now derives from acceptance.",
    "Flock.SecurityProofs.EndToEnd_refSetup": "lemma: leaves the list under the 5:11 PM ruling",
    "Flock.SecurityProofs.RecursiveSound": "frozen (obligation,world-unlisted,scope): In fork form it assumes no hash, but it takes InnerSound as an open obligation; beside VBridge, the one listed premise it takes, it takes A3 (_hA3), the outer sessions' custody (ZkOuter's field hRec) and their scope (ZkOuter's parameter hscope).",
    "Flock.SecurityProofs.RecursiveZK": "frozen (obligation,no-function): It takes the outer proof's zero knowledge as an open obligation, and as a simulation statement it has no acceptance of a function to take; stated at the hm96 hiding gap, it takes no premise on the key or on SHA-512.",
@@ -7790,9 +7823,10 @@
    "Pous.SecurityProofs.StreamedWipeMeets2600GB": "frozen (no-function): A bound in the streamed-label wipe's game (Security/Definitions/Pous/Model/StreamedWipe.lean), whose acceptance is the model's Accepts over an arbitrary prover, not a run of streamed_wipe.verdict or any Lean function; it fits once the memory challenger's check has a Lean function to state it against.",
    "Accounting.SecurityProofs.TS.Sm120SheetHeadline": "frozen (no-function,world-unlisted): sm_120's headline at 0.656%, under full checking with live coins (epsilon_sample and the Fiat-Shamir premium are separate lines), Whole.sheetDIdealFloor_whole at the exact data of DS-120 and H1 + fx1 (Definitions.Accounting.Headline.Sm120) with pi* the issue facet, p = 7/8, p0 = 1/2, Lambda = max(kappa/ln(8/7), (kappa + f)/ln 2), S = 48,000 and delta = 2^-40, over every play of 48,000 equal live rounds (the window's shape: with S rounds its two branches give epsilon < 1% only from 9,496, Compose's live line only from 10,552, RT-INT-1) and window of proofs on any finite coins and every unfolded share, not a Lean function, the unfolded branch binding (0.656%; the folded one gives 0.599%); A1-A7 (A2 with A2u, a uniform-datapath instruction an issue slot, which no vendor document states and which alone holds this epsilon: RT-MACHINE-4), FOLD-OPT per word folded (FoldOptFolded at the run's unfolded share, ASK-6 = A), so fold skippers are charged, the receipt split (the play's ideal game a ReceiptGame's and Pinned, with two luck premises: OperandHMu at 3/4, H-mu at the deficient words, the first, and ReceiptLuckAt at 1/2, HMU's B' case, the second, which give p = 7/8 by LemmaB at fibre 1 and LuckOfReceipt), WholeLuckAt at 1/2 (B' at a unit whose fold the run skips, ASK-9 = A at p0 = 1/2 for live coins only; the whole-unit guess bound 2^-64 is not granted), binding at delta_bind, proof soundness at delta_ZK, the Definitions' pinning (ProofLayer.Pins, met by main's circuit Definitions since PIN, #2417), the play being its proofs' (ProofLayer.Of) and RightFixed are not on the premises list.",
    "Accounting.SecurityProofs.TS.Sm120MeasuredHeadline": "frozen (no-function,world-unlisted): sm_120's headline on its measured vector at 0.591%, under full checking with live coins (epsilon_sample and the Fiat-Shamir premium are separate lines), Whole.dIdealFloor_whole at the exact data of VF3r-16 and H1 + fx1 (Definitions.Accounting.Headline.Sm120Measured) with pi* JI3s_0, q = q_T = 9/8, p = 7/8, p0 = 1/2, Lambda = max(kappa/ln(8/7), (kappa + f)/ln 2), S = 48,000 and delta = 2^-40, over every play of 48,000 equal live rounds (the window's shape: with S rounds its two branches give epsilon < 1% only from 9,652, Compose's live line only from 10,552, RT-INT-1) and window of proofs on any finite coins and every unfolded share, not a Lean function, the folded branch binding (0.591%; the unfolded one gives 0.573%); FacetCeilings on VF3r-16's rows, WordsWritten at the forms' omega, ScalarRoute at 9/8, NoSum, FOLD-OPT per word folded (FoldOptFolded at the run's unfolded share, ASK-6 = A), so fold skippers are charged, the receipt split (the play's ideal game a ReceiptGame's and Pinned, with two luck premises: OperandHMu at 3/4, H-mu at the deficient words, the first, and ReceiptLuckAt at 1/2, HMU's B' case, the second, which give p = 7/8 by LemmaB at fibre 1 and LuckOfReceipt), WholeLuckAt at 1/2 (B' at a unit whose fold the run skips, ASK-9 = A at p0 = 1/2 for live coins only; the whole-unit guess bound 2^-64 is not granted), binding at delta_bind, proof soundness at delta_ZK, the Definitions' pinning (ProofLayer.Pins, met by main's circuit Definitions since PIN, #2417), the play being its proofs' (ProofLayer.Of) and RightFixed are not on the premises list.",
-   "Flock.SecurityProofs.EndToEndRegisteredRowsStated": "frozen (no-function): It states no property of the verifier: it reads Flock.Guarantees.EndToEndRegisteredRows, so the lock records its text, and it leaves the list when that statement's own proof is listed.",
-   "Flock.SecurityProofs.SoundAtBridgeStated": "frozen (no-function): It states no property of the verifier: it reads Flock.Guarantees.SoundAtBridge, so the lock records its text, and it leaves the list when that statement's own proof is listed.",
-   "Accounting.SecurityProofs.TS.SessionSoundAt": "frozen (no-function,world-unlisted): #2909's SoundAt bridge on #2855's proof layer read through its C-Flock sessions (Accounting.TS.onSessions), over every window of sessions, not a Lean function; its premises WindowLaw, ServedChecksHold and ServedRootsLinked (Proofs.Accounting.TS.Session.Assumptions) are not on the premises list, and it takes Flock.Guarantees.EndToEndRegisteredRows, still a statement, as a hypothesis."
+   "Flock.SecurityProofs.SoundAtBridge": "frozen (no-function,hash,world-unlisted,scope): A bound on the proof layer's ProofLayer.SoundAt over a window's paths, not a run of a Lean function. It takes EndToEndRegisteredRows' finders' collision bounds at every session (RowsSession.CR: TableCRZ, LinkCRZC, RowsCRZC and the registered reads' cr/sha-512) as hypotheses instead of a collision disjunct tied to the run, live-verifier custody and scope through RowsSession's fields, and compute-accounting's four bridge premises (WindowLaw, AcceptedLive, OpenedPlurAt, RelOfRows), none on the premises list.",
+   "Flock.SoundAtBridge.soundAtBridge_nonvacuous": "lemma: SoundAtBridge's witness, as ZkReg.zk_session_soundHJR_nonvacuous is zk_session_soundHJR's; leaves the list under the 5:11 PM ruling",
+   "Flock.SecurityProofs.ServedRowsLinked": "frozen (no-function,world-unlisted): A pointwise implication at one accepted outcome of a C-Flock session, not a bound on a run of a Lean function; it takes the service's registration of its served trees as ports of own (RowsSession.ServedRegistered), a premise that isn't on the list.",
+   "Accounting.SecurityProofs.TS.SessionSoundAt": "frozen (no-function,world-unlisted): #2909's SoundAt bridge on #2855's proof layer read through its C-Flock sessions (Accounting.TS.onSessions), over every window of sessions, not a Lean function; it takes EndToEndRegisteredRows' collision bounds at every session (RowsSession.CR) as hypotheses, and its premises WindowLaw, ServedChecksHold and ServedRootsLinked (Proofs.Accounting.TS.Session.Assumptions) are not on the premises list."
   },
   "conjectures": {
    "Nci.Assumptions.ActivationsIncompressible": {
@@ -9887,7 +9921,8 @@
     "Accounting.SecurityProofs.TS.ProofsSoundOfDrawn",
     "Accounting.SecurityProofs.TS.ProofsSoundOfPinned",
     "Accounting.SecurityProofs.TS.Sm120MeasuredHeadline",
-    "Accounting.SecurityProofs.TS.Sm120SheetHeadline"
+    "Accounting.SecurityProofs.TS.Sm120SheetHeadline",
+    "Flock.SoundAtBridge.soundAtBridge_nonvacuous"
    ]
   },
   "Definitions.Accounting.TS.Receipt": {
@@ -15821,6 +15856,7 @@
     "Accounting.SecurityProofs.TS.SteerUnion",
     "Accounting.SecurityProofs.TS.TemplateMoment",
     "Accounting.SecurityProofs.TS.TileLuck",
+    "Flock.SoundAtBridge.soundAtBridge_nonvacuous",
     "Pouw.SecurityProofs.RelativeSecurity.OverlapFloorK",
     "Pouw.SecurityProofs.RelativeSecurity.OverlapFloorKOneSided",
     "Pouw.SecurityProofs.RelativeSecurity.StagedFloorK",
@@ -24431,6 +24467,7 @@
     "Flock.SecurityProofs.RecursiveAuditC3",
     "Flock.SecurityProofs.RecursiveRanRegistered",
     "Flock.SecurityProofs.RecursiveSound",
+    "Flock.SoundAtBridge.soundAtBridge_nonvacuous",
     "FlockSoundness.Audit.Partition.Refines.twoStage_influence",
     "FlockSoundness.Audit.Partition.audit_exfiltration",
     "FlockSoundness.Audit.Partition.audit_influence",
