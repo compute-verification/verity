@@ -1,12 +1,14 @@
 """The challenger's host process (`serve.py`) over loopback with a test key and the Lean verifier's coins stubbed
 (`stub_serve.py`): it draws every coin and salt from those coins, signs and writes its record before it listens, serves one
-session and publishes nothing secret; the verifier checks the session from the process's `out/` alone.  A Lean that can't
-answer starts no session, a second session signs at the key's next leaf, a key inside `out/` is refused, a broken sequence
-ends the session with exit 1, and with `--peer` the tunnel opens once the challenger listens and a tunnel that ends first
-ends it."""
+session, signs its release log when it ends and publishes nothing secret; the verifier checks the session from the
+process's `out/` and the auditor's session record alone.  A Lean that can't answer starts no session, a second session
+signs at the key's next leaves, a session id the key has signed for is refused, a key inside `out/` is refused, a broken
+sequence ends the session with exit 1, signed as such, and with `--peer` the tunnel opens once the challenger listens and
+a tunnel that ends first ends it."""
 
 from __future__ import annotations
 
+import hashlib
 import itertools
 import json
 import os
@@ -14,6 +16,8 @@ import socket
 import subprocess
 import sys
 from pathlib import Path
+
+import pytest
 
 from verity.core.protocols.sampled_proofs import challenger as C
 from verity.core.protocols.sampled_proofs import remote as R
@@ -23,6 +27,7 @@ SERVE = Path(__file__).resolve().parents[1] / "serve.py"
 STUB = Path(__file__).resolve().parent / "stub_serve.py"
 FAMILIES = [["positions", 2], ["replay", 1]]
 HOST = "vy-nebius-cpu-1"
+WINDOW = {"commit": "11" * 64, "period": 0, "pouw_salt": "22" * 64, "stream": "33" * 64}
 
 
 def lms_verify(key: C.ChallengerKey, message: bytes, signature: bytes) -> bool:
@@ -30,12 +35,13 @@ def lms_verify(key: C.ChallengerKey, message: bytes, signature: bytes) -> bool:
     return lms.verify(p, key.public, message, lms.Signature.decode(p, signature))
 
 
-def start(tmp_path: Path, out: str = "out", key: Path | None = None, *extra: str, env=None) -> tuple:
+def start(tmp_path: Path, out: str = "out", key: Path | None = None, *extra: str, env=None, session: str | None = None
+          ) -> tuple:
     out_dir = tmp_path / out
     proc = subprocess.Popen(
         [sys.executable, str(STUB), str(SERVE), "--out", str(out_dir), "--port", "0", "--scheme", "verity/test/coins/v1",
-         "--families", json.dumps(FAMILIES), "--key", str(key or tmp_path / "key"), "--params", "4,2",
-         "--keygen-workers", "1", "--host", HOST, *extra],
+         "--families", json.dumps(FAMILIES), "--session", session or f"s-{out}", "--key", str(key or tmp_path / "key"),
+         "--params", "4,2", "--keygen-workers", "1", "--host", HOST, *extra],
         stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True,
         env={"COINS_LOG": str(tmp_path / "coins.log"), **(os.environ if env is None else env)})
     return proc, out_dir, proc.stdout.readline()
@@ -44,6 +50,19 @@ def start(tmp_path: Path, out: str = "out", key: Path | None = None, *extra: str
 def finish(proc: subprocess.Popen) -> tuple[int, str]:
     _, err = proc.communicate()
     return proc.returncode, err
+
+
+def trusted(out: Path, session: str = "s-out"):
+    """The verifier's read of `out`, the auditor's record naming `session` for `WINDOW` under the key the run wrote."""
+    key = C.ChallengerKey.from_json(json.loads((out / R.KEY).read_text()))
+    auditor = out.parent / f"auditor-{session}.jsonl"
+    auditor.write_text(json.dumps({**WINDOW, "code": "ab" * 20, "key": hashlib.sha512(key.public).hexdigest(),
+                                   "session": session}) + "\n")
+    return R.trusted_session(out, auditor, WINDOW, key, lms_verify)
+
+
+def close(out: Path) -> dict:
+    return json.loads((out / R.CLOSE).read_text())
 
 
 def session(address: str, roots: int = 1) -> None:
@@ -62,11 +81,10 @@ def test_the_challenger_signs_before_it_listens_and_the_verifier_checks_its_out_
 
     key = C.ChallengerKey.from_json(json.loads((out / R.KEY).read_text()))
     assert key.public == (tmp_path / "key" / "public").read_bytes()
-    commitment, roots = R.trusted_session(out, key, lms_verify)
+    commitment, roots = trusted(out)
     assert roots == {"positions": (bytes([0]) * 64, bytes([1]) * 64), "replay": ()}
-    summary = json.loads((out / "challenger.json").read_text())
-    assert summary["released"] == {"positions": 2, "replay": 0}
-    assert summary["ended"] == "closed by the client" and summary["commitment"] == commitment.to_json()
+    assert commitment == C.ChallengerRecord.from_json(json.loads((out / R.RECORD).read_text())).commitment
+    assert (close(out)["session"], close(out)["ended"], close(out)["lines"]) == ("s-out", None, 5)
     seed = (tmp_path / "key" / "seed").read_bytes()
     assert all(seed not in p.read_bytes() and seed.hex() not in p.read_text() for p in out.iterdir())
 
@@ -88,16 +106,25 @@ def test_a_lean_that_cannot_answer_starts_no_session(tmp_path):
     assert not out.exists() and not (tmp_path / "key").exists()
 
 
-def test_a_second_session_signs_at_the_keys_next_leaf(tmp_path):
+def test_a_second_session_signs_at_the_keys_next_leaves(tmp_path):
     leaves = []
     for out in ("one", "two"):
         proc, out_dir, first = start(tmp_path, out)
         session(first.split()[1])
         assert finish(proc)[0] == 0
-        key = C.ChallengerKey.from_json(json.loads((out_dir / R.KEY).read_text()))
-        R.trusted_session(out_dir, key, lms_verify)
-        leaves.append(int(json.loads((out_dir / R.RECORD).read_text())["signature"][:8], 16))
-    assert leaves == [0, 1]
+        trusted(out_dir, f"s-{out}")
+        leaves += [int(json.loads((out_dir / f).read_text())["signature"][:8], 16) for f in (R.RECORD, R.CLOSE)]
+    assert leaves == [0, 1, 2, 3]
+
+
+def test_a_session_id_the_key_has_signed_for_is_refused(tmp_path):
+    proc, _, first = start(tmp_path, "one", session="s-1")
+    session(first.split()[1])
+    assert finish(proc)[0] == 0
+    proc, out, first = start(tmp_path, "two", session="s-1")
+    code, err = finish(proc)
+    assert (code, first) == (2, "") and "is already started" in err
+    assert not (out / R.RECORD).exists()
 
 
 def test_a_key_inside_out_is_refused(tmp_path):
@@ -116,7 +143,9 @@ def test_a_broken_sequence_ends_the_session_with_exit_1(tmp_path):
         assert s.recv(1 << 16)
     code, _ = finish(proc)
     assert code == 1
-    assert json.loads((out / "challenger.json").read_text())["ended"].startswith("a client's frames are hello")
+    assert close(out)["ended"].startswith("a client's frames are hello")
+    with pytest.raises(C.CoinError, match="ended without its client closing it: a client's frames are hello"):
+        trusted(out)
 
 
 def fake_ssh(tmp_path: Path, body: str) -> dict:
@@ -150,8 +179,8 @@ def test_a_tunnel_that_ends_before_a_client_connects_ends_the_session(tmp_path):
     assert first.startswith("listening")
     code, _ = finish(proc)
     assert code == 1
-    assert json.loads((out / "challenger.json").read_text())["ended"] == (
-        "the tunnel to vy-nebius-2 ended before a client connected")
+    assert close(out)["ended"] == "the tunnel to vy-nebius-2 ended before a client connected"
+    assert close(out)["lines"] == 1
 
 
 def test_a_peer_missing_from_the_peers_file_is_refused(tmp_path):
