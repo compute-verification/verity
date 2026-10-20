@@ -30,8 +30,8 @@ and at most `fmax`. sm_120's 2430 MHz is the maximum SM clock its driver reports
 Server Edition, SPEC's P1), not a data sheet's, and the same die boosts to 2617 MHz as the Workstation Edition; the
 B200's sheet gives none either, so its `fmax` is its driver's reported maximum too, and the H200's 1980 MHz is EPS1
 DC's measured f_max at default clocks (its sheet quotes TOPS at 1830 MHz, RT4-SHEET-8). A driver's report and a
-measurement are the device's own, which decision 96 doesn't take as a source, so A1 is assumed there. So is the absence of a clock offset: nothing
-checks it at run time, and the clock is the prover's configuration. Our nodes' driver allows none (NVML's allowed
+measurement are the device's own, which decision 96 doesn't take as a source, so A1 is assumed there. So is the
+absence of a clock offset: nothing checks it at run time, and the clock is the prover's configuration. Our nodes' driver allows none (NVML's allowed
 offset range `[0, 0]`, r20261019-121222-faa3), but a prover picks its own VBIOS and driver (RT2-LOGIC-7). -/
 def SheetClock (S : Sheet K P) (Q : Run K) : Prop := 0 < Q.clock ∧ Q.clock ≤ S.fmax
 

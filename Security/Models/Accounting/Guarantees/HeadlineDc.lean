@@ -25,8 +25,8 @@ IMAD (its one IMAD-pipe class) replaced by 32 ALU shift-adds prices below `N_w �
 sheets (105.9 against 128.3 on DS-90, 846.9 against 1026.0 on DS-100) and at 1/20 I + 19/20 UP on the measured rows,
 where the ALU class is free (the fold prices at 0 against 6.28 on DC-90-ri and against 50.2 on DC-100-ri, its
 ATOME32 and REDG32 having no line on either row). At `π*` the same fold costs far more: 2117 against 133.0 (DS-90),
-22571 against 1066.7 (DS-100), 2073 against 130.2 (DC-90-ri) and 16936 against 1064.0 (DC-100-ri); on DS-90's `π*` an IMAD costs 1
-and its 32 ALU 32, on DS-100's ⅔ and 42⅔. At `π*` it is a conjecture (`shape.conjectures`), which
+22571 against 1066.7 (DS-100), 2073 against 130.2 (DC-90-ri) and 16936 against 1064.0 (DC-100-ri); on DS-90's
+`π*` an IMAD costs 1 and its 32 ALU 32, on DS-100's ⅔ and 42⅔. At `π*` it is a conjecture (`shape.conjectures`), which
 `benchmarks/pouw/tests/test_lean_headline_dc.py` tests on ♭'s fold and that one, and in which every fold route prices
 each class it issues above 0.
 
@@ -69,17 +69,19 @@ Per device:
   through a generic address, has no `AT90` line (AT90 was timed on REDG alone). Each sheet declares A2's catch-all,
   `NOROW` at its issue slot alone: every warp instruction no other class names counts there (RT4-SHEET-7, -9). Without
   ffill in ♭, `setup`'s floor program on DC-90-ri writes every word on the IGMMA, and `Sm90Measured.flat` is that
-  floor, its shares exact (`B_♭` 195.30 a unit; the machine model's reading is 1.348% at `q = ½`). It is over 1%; crediting ffill would need a check that
-  reads its chains (RT-HB-HEAD-1). ε_skip prices the P·V peel at sm_90a's own instruction counts (`eps_budget`'s
-  `SASS`: RT-ISA-7's static nvdisasm counts with ncu's rule applied, not ncu): 0.858% on DS-90, 0.592% on DC-90-ri.
+  floor, its shares exact (`B_♭` 195.30 a unit; the machine model's reading is 1.348% at `q = ½`). It is over 1%;
+  crediting ffill would need a check that reads its chains (RT-HB-HEAD-1). ε_skip prices the P·V peel at sm_90a's own
+  instruction counts (`eps_budget`'s `SASS`: RT-ISA-7's static nvdisasm counts with ncu's rule applied, not ncu):
+  0.858% on DS-90, 0.592% on DC-90-ri. DS-90's `f_max` (1980 MHz) is EPS1 DC's measured f_max at default clocks; the
+  sheet quotes its TOPS at 1830 MHz (RT4-SHEET-8).
 * The B200 (sm_100) runs `dither-2s-licpw-redux-ldtm0-l32` (Dither-2S, LI-CP-W redux, no filler): its fold is the
   one `PouwWarpCheck` recomputes (`PouwLiAbsorb_v2`, no extra keyed round), and its ♭ credits none of honest's 8
   `tcgen05.ld` a MMA: the operands-free cheater never pays them, so crediting them was all of DC-100-ri's
   `ε_machine`. Honest still runs them; a lower credit is sound for any program. Its fold menu is the H200's, at the
   same sound price (the same classes but ISETP, which its loops don't issue, with VIADD, at one issue slot, and MOV in
-  the catch-all NOROW; the B200 has no atomic row, so REDG32 and ATOME32 are an issue slot alone there): ♭ folds by CP_RED2 and
-  CP_RED8 (65/72 and 7/72 of the words) on DS-100 and by CP_RED2 alone on DC-100-ri. DS-100's `f_max` (1965 MHz) is
-  the driver's reported maximum: the data sheet gives no clock.
+  the catch-all NOROW; the B200 has no atomic row, so REDG32 and ATOME32 are an issue slot alone there): ♭ folds by
+  CP_RED2 and CP_RED8 (65/72 and 7/72 of the words) on DS-100 and by CP_RED2 alone on DC-100-ri. DS-100's `f_max`
+  (1965 MHz) is the driver's reported maximum: the data sheet gives no clock.
 
 Outside every statement: `S8MmaExact`, that IGMMA s8 (sm_90a) and tcgen05 `kind::i8` (sm_100a) write `C + Σ a_k b_k`
 exactly in s32 on the design's operands. The bounds read classes and words (A6), not values, so they don't read it;
@@ -108,8 +110,8 @@ does the B200's and 0.102% the B200's measured reading; the H200's measured read
 target at 2.37% (RT2-HOPPER-10: the 5.9% and 53% once quoted here scaled ♭'s fold with the cheater's). DS-90's
 `π*`, DS_issue alone, prices every instruction at one issue slot, so there FOLD-OPT is an instruction count with no
 pipe premise. DS-100's, DS_issue ⅔ + DS_alu ⅓, prices the pipes apart, a LOP3 at 4/3 and an IMAD or FFMA at ⅔, so
-there FOLD-OPT also says li's XOR of two words has no IMAD- or FP-pipe program of 1 instruction. That is checked within a modelled menu, not proved over the B200: no program of 1
-or 2 instructions on DS-100's IMAD/FP menu computes li's `x ⊕ y ⊕ K` bit-exactly for any `K` (FOLD-XOR, k = 1 in
+there FOLD-OPT also says li's XOR of two words has no IMAD- or FP-pipe program of 1 instruction. That is checked
+within a modelled menu, not proved over the B200: no program of 1 or 2 instructions on DS-100's IMAD/FP menu computes li's `x ⊕ y ⊕ K` bit-exactly for any `K` (FOLD-XOR, k = 1 in
 #2778, r20261019-125446-db4e; k = 2 in #2850, all 1,456 two-instruction sequences unsat, r20261019-183441-c6b3), so
 such a program costs at least 2, above the LOP3's 4/3. The menu is IMAD, IMAD.HI, IDP.4A, IDP.2A and FFMA2;
 IMAD.WIDE, HFMA2 and the whole ALU class are outside it. The cheapest program known is 78 instructions, all on the

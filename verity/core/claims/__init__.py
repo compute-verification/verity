@@ -295,13 +295,15 @@ ENTRIES: dict[str, Entry] = {e.id: e for e in (
     Entry("accounting-sheet-clock", "assumption",
           "A1 CLOCK: the SM clock never exceeds the device's f_max, from the device's own source. Assumed: sm_120's "
           "2430 MHz, like the B200's f_max, is the maximum SM clock its driver reports (nvidia-smi), not a data "
-          "sheet's, and nothing checks a clock offset at run time; our nodes' driver allows none (NVML's offset range "
+          "sheet's, the H200's 1980 MHz is EPS1 DC's measured f_max at default clocks (its sheet quotes TOPS at "
+          "1830 MHz), and nothing checks a clock offset at run time; our nodes' driver allows none (NVML's offset range "
           "[0, 0], r20261019-121222-faa3)", "A1 clock (assumed)", "measured"),
     Entry("accounting-sheet-dispatch", "assumption",
           "A2 DISPATCH: each SMSP issues at most one warp instruction a cycle, whatever its pipe, uniform-datapath "
           "instructions included (A2u, which no vendor document states), and every warp instruction takes at least one "
           "issue slot whether or not its class is listed: one no other class names counts in the device's catch-all "
-          "class at its issue slot alone (sm_120's NOROW); a device whose classes have none leaves it free",
+          "class at its issue slot alone (NOROW on sm_120 and on the H200's and B200's sheets); a reading whose "
+          "classes have none (the H200's and B200's measured readings) leaves it free",
           "A2 dispatch (whitepapers)", "measured"),
     Entry("accounting-sheet-tensor", "assumption",
           "A3 TENSOR: the tensor cores do at most the data sheet's dense MACs per SM clock for each operand type",
