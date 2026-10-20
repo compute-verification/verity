@@ -11,7 +11,6 @@ import Proofs.Accounting.TS.ProofsSound
 import Proofs.Accounting.TS.Fork
 import Proofs.Accounting.TS.Drawn
 import Proofs.Accounting.TS.Keyed
-import Proofs.Accounting.TS.SessionLayer
 import Proofs.Pouw.RelativeSecurity
 
 /-!
