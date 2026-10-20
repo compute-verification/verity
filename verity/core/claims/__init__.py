@@ -358,6 +358,9 @@ ENTRIES: dict[str, Entry] = {e.id: e for e in (
           "(not skipped and guessed), with every unit writing it a value after the coin its noise reads, so a unit "
           "whose check passes by luck isn't credited; and the folded words per round are at least the words of the "
           "units not skipped whole over the rounds", "TS unit fixed", "proven"),
+    Entry("accounting-ts-accepted-live", "assumption",
+          "A proof is credited only after flock-verify --zk --registered accepts its session", "TS accepted live",
+          "standard"),
     Entry("accounting-ts-window-law", "assumption",
           "The proof service's draws and audit coins are the window's live coins: at each round and proof, given what "
           "the path fixes before the session (its setting and its prover), the session's coins are the path's next "
