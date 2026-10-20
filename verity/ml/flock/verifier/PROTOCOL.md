@@ -1260,6 +1260,13 @@ SHA-512, and the unit draw is live (§7.3). `Flock.HmRow` is its statement; the 
   must be `rec-open-stacked/l<LANES>-h<H>`, and the same three rules hold at those parameters, the net being the same
   builder's under the unit's own name.
 
+  Under `--rec-inner`, a unit named `rec-cap/n<N>` (V*'s hold of the table's level-0 cap, `VStar.capUnit`,
+  `rec_cap.lowering`) is V*'s last statement, at `N = 2^cap₀` of `fast100(m)`'s level 0, and its file must be V*'s byte
+  for byte: one input port `top` and one output port `out` of 64 u16 words each, `out` being `top`'s words 32 to 63
+  then 32 zero words, with no AND. Instance `i` reads node `i` of `rec-top-L0`, at the registration the shared rows
+  hold, and `out` the verifier's zero rows `rec-cap-zero` (D19), so every node of `root_B` is held at a fixed row
+  whatever the query coins draw.
+
   So must a unit net whose name starts with `rec-residuals/` (a part of V*'s algebra, `rec_residuals.lowering`):
   - its name must be `rec-residuals/m<m>-k<k_log>-c<claims>-p<j>`, with a `fast100` schedule at `m`, `k_log ≥ 6` and
     `claims ≥ 2`, and neither `k_log` nor `claims` above the unit's input bits, compared before the verifier computes
@@ -1838,6 +1845,14 @@ expectation):
   the unit. V*'s populations are their units `0..n-1`, so its honest statements pass. Upstream reads no inner shape; the
   spec refuses at setup. No vector exercises it; `Flock.Test.Labels` runs it on synthetic draws and labels, and
   `test_the_honest_level_passes_setup_at_the_honest_inner_session` passes it on an honest V* level.
+- **D19:** V*'s list holds the table's level-0 cap (`RecCap`, `rec-cap/n<N>`, `N = 2^cap₀`, its last statement), and a
+  session of it must read node `i` of `rec-top-L0` in instance `i`, at the registration the verifier's shared rows
+  (`--rec-rows`) hold, every row the node the coin server committed, its outputs the verifier's zero rows
+  `rec-cap-zero` (`RecVStar.checkCapListed`, `RecCoins.checkCap`, `RecVStar.checkShared`, `checkTopRows`); a session
+  whose port reads `rec-top-L0` without that shared row is refused, level 0's included. Upstream reads no inner shape
+  and verifies such a session as any flock-circuit; the spec refuses at setup. No vector exercises it;
+  `Flock.Test.RecCap` runs the list's and `checkCap`'s refusals, and `test_lean_rec_coins`' RecCap tests the honest cap
+  and its refusals on the Lean verifier.
 
 - **D17:** a byte after the proof pair and its optional `zk_level0 = None` tag (§8.1), a tag other than 0 there, or a
   byte after a `--zk` file's inner proof (`Zk.decode`). Upstream's `bincode::deserialize` ignores them; the spec refuses

@@ -24,6 +24,9 @@
 #                cached by its sources, on the plain statement: --plain-leaves), then each level's RecOpen, the algebra's
 #                InnerRepCheck and the forgeries (FORGE="message sum comb top top-salt coef dirs", each under forged-<kind>/),
 #                JOBS at once; the job fails if one does not stage
+#   STEP=vcap    (CPU) RecCap alone over the inner's last proxied session (rec_vstage.stage_cap: level 0's tops under the
+#                firewall's salts, no running sums) into data/$TAG/v/cap, beside the statements vstage staged, whose sessions
+#                stay valid (then oprove LEVELS=cap)
 #   STEP=oprove  (GPU leases) each staged statement proved with --zk on loopback, WARM + RUNS sessions per MODES (dev host
 #                firewall; a forgery's: one, by a prover that sends its proofs though the witness fails,
 #                FC_ZK_SELF_CHECK=skip), and upstream's replay --zk of the last (REPLAY=0: STEP=oreplay's); CONTROLS=DIR: the
@@ -53,7 +56,7 @@
 #      MODES=dev  REPLAY=1  CONTROLS= (oprove)  LOOPBACK_DRAW=all (a --zk loopback's draw: every unit; none: no draw)
 for kv in "$@"; do case $kv in *=*) export "$kv" ;; esac; done
 set -uxo pipefail
-STEP=${STEP:?STEP=build|inner|icheck|vstage|oprove|oreplay|lean}
+STEP=${STEP:?STEP=build|inner|icheck|vstage|vcap|oprove|oreplay|lean}
 [ -z "${GPU_LEASE_UUID:-}" ] || { echo "REFUSED: the job holds a GPU lease (launched with --gpus): launch it without, each prove leases its own"; exit 2; }
 REPO=$(pwd); O=${RESEARCH_RUN_DIR:-/tmp/rec-reprice-job}/out; mkdir -p $O
 FW=${FLOCK_WORK:-/workspace/jobs/rec-reprice}; W=$FW/flock-circuit; L=$FW/cache; TAG=${TAG:-k4096}; DD=$FW/data/$TAG
@@ -595,8 +598,21 @@ pub, priv, proofs = V.load(Path(sys.argv[1])); print(' '.join(str(l['level']) fo
   [ ${PIPESTATUS[1]} = 0 ] || { echo "vstage: a statement did not stage (out/vstage/<name>.err)"; exit 1; }
   (cd $V && du -sb $(find . -name '*.bin' -o -name circuit.txt | LC_ALL=C sort)) > $O/vstage/sizes.txt
   ;;
+vcap)
+  INNER=${INNER:-$DD/inner/s$((NS - 1))}
+  [ -f $INNER/public.json ] && [ -f $INNER/private.json ] || { echo "INNER=$INNER: no public.json and private.json (run STEP=inner first)"; exit 1; }
+  [ -f $DD/v/L0/registered.json ] || { echo "run STEP=vstage first: RecCap is staged beside V*'s other statements"; exit 1; }
+  mkdir -p $O/vstage; rm -rf $DD/v/cap
+  /usr/bin/time -v -o $O/vstage/time-cap.txt python3 -c '
+import json, sys; from pathlib import Path; from verity_flock import rec_vstage as S
+print(json.dumps(S.stage_cap(Path(sys.argv[1]), Path(sys.argv[2]))))' $INNER $DD/v/cap > $O/vstage/cap.json 2> $O/vstage/cap.err \
+    || { tail -20 $O/vstage/cap.err; exit 1; }
+  python3 -c 'import json, sys; r = json.load(open(sys.argv[1])); sys.exit(0 if r["unit_agrees"] and all(r["unit_agrees"]) else "RecCap: the unit disagrees with its reference")' \
+    $O/vstage/cap.json || exit 1
+  cp $DD/v/cap/registered.json $O/vstage/cap-registered.json
+  ;;
 oprove)
-  V=$DD/v; [ -f $V/acc-salts.bin ] || { echo "run STEP=vstage first"; exit 1; }
+  V=$DD/v; [ -n "$(find $V -name inst.bin -print -quit 2>/dev/null)" ] || { echo "run STEP=vstage (or vcap) first"; exit 1; }
   # every staged statement (each level's, each of the algebra's parts, each forgery's: L3, alg-p0, forged-sum-L6, ..), proved with --zk on
   # loopback, a forgery's once; upstream's replay --zk of the last session, which (accepted or not) is kept under $DD/v-sess
   # beside the statement directory Lean reads it with. MODES names the prover's sides, WARM + RUNS sessions each per
@@ -661,7 +677,7 @@ lean)
   # V*'s own inputs (RecVStar.checkStmt; without them every V* statement is refused at setup): the inner shape (rec-inner
   # of the inner statement), each statement's index in rec-statements' list and its bindings (rec_bindings of its
   # partition object and program), and the shared rows (rec_vstage.shared_rows: the honest algebra's row ports but v and
-  # out, and R's levels' tops; without the algebra, the level's acc as acc0)
+  # out, R's levels' tops, and level 0's cap rec-top-L0 as L0 and cap read it; without the algebra, the level's acc as acc0)
   if [ -d $DD/v-sess ]; then
     $LEAN_BIN rec-inner --circuit $DD/stage/circuit.txt --public $DD/stage/pub-$N.bin --partition $DD/stage/partition.json \
       --program $DD/stage/program.json > $O/lean/rec-inner.json 2> $O/lean/rec-inner.err || { tail -5 $O/lean/rec-inner.err; exit 1; }
@@ -675,7 +691,8 @@ o, v, vs = map(Path, sys.argv[1:])
 (line,) = [json.loads(ln[9:]) for ln in (o / "rec-statements.txt").read_text().splitlines() if ln.startswith("RECVSTAR ")]
 names = [s[0] for s in line["statements"]]
 try:
-    shared = VS.shared_rows(sorted(v.glob("alg/*")), sorted(v.glob("stacked/L*")))["ports"]
+    shared = VS.shared_rows(sorted(v.glob("alg/*")), sorted(v.glob("stacked/L*")),
+                            [d for d in (v / "L0", v / "cap") if (d / "registered.json").is_file()])["ports"]
 except ValueError as e:
     sys.exit(str(e))
 for s in sorted(p for p in vs.iterdir() if p.is_dir()):

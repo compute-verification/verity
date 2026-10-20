@@ -363,7 +363,7 @@ def recInnerInput (args : List String) : IO (Except String (Option RecVStar.Inne
 /-- `--rec-part J`: which of V*'s statements the verifier holds this session for, `J` indexing `RecVStar.statements` at the
 verifier's own inner shape from 0 (the list `rec-statements` prints): the levels first, `L<level>` as `J = level`, then the
 algebra's parts, `alg/p<j>` as `J = levels + j`, then candidate 3's: RecSparse (`sparse`), R's levels (`stacked/L<level>`)
-and R's opening's parts (`stacked/open/p<j>`). -/
+and R's opening's parts (`stacked/open/p<j>`), then last the table's level-0 cap (`cap`). -/
 def recPartInput (args : List String) : Except String (Option Nat) :=
   match argOf args "--rec-part" with
   | none => .ok none
@@ -643,7 +643,7 @@ verifier's own `--work K`, `--work-table`, `--program` and `--partition`, one wi
 values its own `--registered F` (`Registered.check`), a circuit with public input ports its own `--public-inputs F`, and
 a public file whose header names an identifier its own `--identifier F` (§16.10), one of V*'s statements its own inner
 shape `--rec-inner F` (under which `--statement` must be `verity/flock-circuit`, V*'s, and no lookup table is held), which of V*'s statements the session is `--rec-part J` (`J` indexing the list `rec-statements`
-prints from 0: the levels, then the algebra's parts) and its own bindings `--rec-bindings F` (from
+prints from 0: the levels, then the algebra's parts, then candidate 3's, then the level-0 cap) and its own bindings `--rec-bindings F` (from
 `verity_flock.rec_bindings`, which META's must equal; `RecVStar.checkStmt`), and a V* statement (a `rec-open/…` or `rec-residuals/…` unit) the inner
 statement and session its coefficients are checked against (`RecCoins.check`; or, with the session, `rec-coins`'s record
 of what that check reads of them, `--rec-inner-coins`), and a statement reading a `rec-c<k>` the
@@ -653,7 +653,9 @@ coin server's record of the inner session whose `c_k` its rows must be (`--rec-i
 `rec-residuals/…` or `rec-sparse/…` unit) needs the inner transcript, whose link points the inner session's record must
 hold (`RecVStar.innerLink`); a circuit-table level's `out` reads `rec-top-L<l>` at each opening's node (`RecCoins.checkLink`)
 and its rows are the tops the coin server recorded (`RecVStar.checkTopRows`), whose rounds and sizes are the inner
-shape's schedule's (`RecVStar.checkLinkRounds`). At candidate 3's inner shape (`--rec-inner` naming a RecSparse shape) every session
+shape's schedule's (`RecVStar.checkLinkRounds`). The table's level-0 cap statement (`rec-cap/n<N>`, the list's last) reads
+`rec-top-L0` at every node in order and V*'s zero rows (`RecCoins.checkCap`), and needs the inner transcript, whose
+`root_B` its rows are. At candidate 3's inner shape (`--rec-inner` naming a RecSparse shape) every session
 needs the inner statement's files, on which its setup first checks check 5's sparse refusals (`RecCoins.checkAtC3`), and
 the inner transcript and R's registration (`RecSetup.checks`, `RecSetup.commits`).
 Each DIR holds `session.json`
@@ -841,7 +843,8 @@ Its verifier-registered values are checked against the verifier's coins (`RecCoi
 reads: the inner statement and session (`--rec-inner-public` and its three, or `--rec-inner-coins`), or for R's levels and
 opening the inner transcript and the verifier's inner shape alone; with the inner statement and session, a statement
 whose check 5 reads the link points needs the inner transcript, and a circuit-table level's `out` reads the coin server's
-tops (`RecCoins.checkLink`). At candidate 3's inner shape (`--rec-inner` naming a
+tops (`RecCoins.checkLink`). The level-0 cap statement (`rec-cap/n<N>`) is checked against its registered reads and
+the inner transcript alone (`RecCoins.checkCap`, `RecCoins.checkLink`). At candidate 3's inner shape (`--rec-inner` naming a
 RecSparse shape), every statement needs the inner statement's files, whose sparse range is checked first
 (`RecCoins.checkAtC3`), and the inner transcript and R's registration (`RecSetup.checks`, `RecSetup.commits`). -/
 def statementCmd (args : List String) : IO UInt32 := do
@@ -907,9 +910,11 @@ def statementCmd (args : List String) : IO UInt32 := do
       if let (some i, some lk) := (recInner, recLink) then RecVStar.checkLinkRounds i lk
       if recLink.isSome then RecVStar.checkTopRows st registered recLink
       let u := st.c.unit.name
-      if recCoins.isSome || (c3.isSome && ((RecCoins.stackedParams u).isSome || (RecOpening.params u).isSome)) then
+      let cap := (VStar.capParams u).isSome
+      if recCoins.isSome || cap || (c3.isSome && ((RecCoins.stackedParams u).isSome || (RecOpening.params u).isSome)) then
         RecCoins.check st registered (RecCoins.Source.atC3 recCoins recInner recCommits) c3
-      if recCoins.isSome then RecCoins.checkLink st registered (RecCoins.Source.atC3 recCoins recInner recCommits) recLink
+      if recCoins.isSome || cap then
+        RecCoins.checkLink st registered (RecCoins.Source.atC3 recCoins recInner recCommits) recLink
       pure st) with
   | .ok st =>
     let dk := if tags.hm96Rows then "sha512" else "sha256"
