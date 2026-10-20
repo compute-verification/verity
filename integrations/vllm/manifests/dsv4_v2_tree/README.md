@@ -106,7 +106,10 @@ Then:
    stays published as failed, and the Commit reruns whole from a new commitment with new draws
    (`gpu_batch.sh b ROWS.env NODE <row>`); `commit_attempts.jsonl` counts the attempts.
 4. CPU: the Commit's replay and publish. `replay_publish.sh` is GLM-5.3's (its conformance captures), so DeepSeek-V4-Pro's
-   publish step is still to be written.
+   publish step is still to be written. Its Boolean replay (`pipeline.boolean_replay`) builds each picked row's Boolean
+   version, and some are large to build at the served statics: `BL.is_boolean` on `Dsv4QNormRopeKvInsert_v2` took 45 min at
+   225 GiB, and on `FlashMlaDecode_v2` passed 424 GB in 90 min without finishing, in `boolean_dsa.build`'s `bits.compile`
+   (r20261020-083555-d46d, cancelled). Its host needs more than cpu-3's 497 GB.
 
 GPU time (wall of the GPU job, all 8 GPUs):
 
