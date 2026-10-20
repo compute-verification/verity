@@ -1,12 +1,12 @@
-import Proofs.Accounting.TS.Session.Layer
 import Proofs.Accounting.TS.Session.Assumptions
 
 /-!
-# A window read through its C-Flock sessions is sound (the statement)
+# #2855's served layer is sound through its C-Flock sessions (the statement)
 
-`Accounting.Guarantees.TS.SessionSoundAt`, #2909's bridge on #2855's proof layer read through its sessions
-(`Accounting.TS.onSessions`), with the bridge's `WindowLaw` and `RelOfRows` taken from named premises
-(`Accounting.Assumptions.TS`). It sits in the proofs package because the sessions do (`reads_exempt`).
+`Accounting.Guarantees.TS.SessionSoundAt`, #2909's bridge on #2855's proof layer `pf` itself, with the bridge's
+`WindowLaw`, `RelOfRows` and `OpenedPlurAt` taken from named premises (`Accounting.Assumptions.TS`). Its conclusion is
+`pf.SoundAt`, so `BindingAt`, `Of` and `RightFixed` keep reading `pf`'s served openings. It sits in the proofs package
+because the sessions do (`reads_exempt`).
 -/
 
 namespace Accounting.Guarantees.TS
@@ -15,30 +15,32 @@ open Accounting.TS Flock.SoundAtBridge
 open Pouw.RelativeSecurity (Paths)
 open scoped ENNReal
 
-/-- **A window of proofs read through its C-Flock sessions is sound at `δs + δ`.** For any window of proofs
+/-- **A window of proofs is sound at `δs + δ` through its C-Flock sessions.** For any window of proofs
 (`pf : ProofLayer Ω S nπ V`, #2855's) whose proof `i` of round `w` on the path `x` is the C-Flock session `sess x w i`
-(#2909's `RowsSession`) with outcome `out x w i`, a reading `rows s` of a session's value layer as a layer value, a
-check `chk` (the served Definition's output is 1 at a value) and `served` (a value's served operand and receipt leaves
-are the trees the path commits):
+(#2909's `RowsSession`) with outcome `out x w i`, and a reading `rows s` of a session's value layer as a layer value:
 given `Flock.Guarantees.EndToEndRegisteredRows`' named assumptions at every session and every unit's opening
-(`RowsSession.CR`; the rows link itself is `Flock.SecurityProofs.EndToEndRegisteredRows`), the window's law
-(`Accounting.Assumptions.TS.WindowLaw`), the check at the drawn units (`ServedChecksHold`), the rows link at the served
-roots outside `δs` (`ServedRootsLinked`), a relation that holds at any value whose check holds and whose served leaves
-are the committed trees' (the relation's Definition), and `δ ≥ 0` with
+(`RowsSession.CR`; the rows link itself is `Flock.SecurityProofs.EndToEndRegisteredRows`), that `pf` accepts a proof
+only where flock-verify accepts its session (#2909's `AcceptedLive`), the window's law
+(`Accounting.Assumptions.TS.WindowLaw`), `pf`'s relation at the value layer of an accepted session whose drawn units
+are right (`ServedChecksHold`), that value layer being `pf`'s opening outside `δs` (`ServedRootsLinked`), and `δ ≥ 0`
+with
 $$n \cdot (\varepsilon_{ks} + \delta_{link} + \delta_{rows} + q_R^2/2^{513}) \le \delta$$
-at every session a path runs, each proof of `onSessions pf sess out rows` is accepted with an opening that fails its
-relation on the path with probability at most `δs + δ`. -/
+at every session a path runs, each proof of `pf` is accepted with an opening that fails its relation on the path with
+probability at most `δs + δ`.
+
+Under a sampled draw `ServedChecksHold` holds only for a relation that reads the drawn units alone, so there this
+bounds the drawn units' unsoundness; the bound on every unit (ε at δ) is the sampled-proofs statement's, not this
+one's. Under full checking (`kd = n`) the relation may read every unit. -/
 def SessionSoundAt : Prop :=
   ∀ {Ω : Type} [Fintype Ω] {S nπ : ℕ} {V : Type} (pf : ProofLayer Ω S nπ V)
     (sess : Paths Ω S → Fin S → Fin nπ → RowsSession) (out : ∀ x w i, (sess x w i).Out)
-    (rows : ∀ s : RowsSession, (Fin s.Circ.N → Bool) → V) (chk served : Paths Ω S → Fin S → Fin nπ → V → Prop)
-    (δs δ : ℝ),
+    (rows : ∀ s : RowsSession, (Fin s.Circ.N → Bool) → V) (δs δ : ℝ),
     (∀ x w i, (sess x w i).CR) →
+    AcceptedLive pf sess out →
     Accounting.Assumptions.TS.WindowLaw sess out →
-    Accounting.Assumptions.TS.ServedChecksHold sess out rows chk →
-    Accounting.Assumptions.TS.ServedRootsLinked sess out rows served δs →
-    (∀ x w i v, chk x w i v → served x w i v → pf.rel x w i v) →
+    Accounting.Assumptions.TS.ServedChecksHold pf sess out rows →
+    Accounting.Assumptions.TS.ServedRootsLinked pf sess out rows δs →
     (∀ x w i, ((sess x w i).n : ℝ≥0∞) * (sess x w i).bound ≤ ENNReal.ofReal δ) → 0 ≤ δ →
-    (onSessions pf sess out rows).SoundAt (δs + δ)
+    pf.SoundAt (δs + δ)
 
 end Accounting.Guarantees.TS
