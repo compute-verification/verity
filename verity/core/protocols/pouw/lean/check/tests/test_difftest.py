@@ -93,6 +93,8 @@ REASONS = {_template(r) for r in (
     "the proof's circuit is not the one the verifier pins for the check's template",
     "the proof's first rows are not an A row and a B row of the registered schemas",
     "the proof's body holds no A row and B row",
+    *(f"the proof's header does not list its rows {', '.join(p)} first, in its circuit's port order"
+      for p in (["a0", "b0"], [*(f"a{k}" for k in range(4)), *(f"b{k}" for k in range(8))])),
     *(f"side {s}: the opening is of row #, not the unit's row #" for s in "ab"),
     *(f"side {s}: the proof's committed row is not entry #'s row #" for s in "ab"),
     "the window is certified, and its template's unit reads no salt: no drawn proof of it is held to the window's "
