@@ -209,10 +209,10 @@ def test_without_the_audits_dependencies_the_tree_fetches_its_own_once(repo, tmp
         "a package that fetches nothing needs none"
 
 
-def test_a_links_file_left_empty_by_a_stopped_run_is_no_links(repo, tmp_path, capsys):
-    """A run stopped while `links.json` was written in place left it empty, and every later run on that slot's tree
-    failed reading it (r20261019-232316-c617). The tree takes its dependencies again, as a new tree does, and the file is
-    replaced whole."""
+def test_a_links_file_left_empty_by_a_failed_write_is_no_links(repo, tmp_path, capsys):
+    """A write of `links.json` in place that failed on a full disk after truncating it left it empty, and every later
+    run on that slot's tree failed reading it (r20261019-232316-c617). The tree takes its dependencies again, as a new
+    tree does, and the file is replaced whole."""
     tree, deps = tmp_path / "cache" / "lean-records" / "tree", tmp_path / "deps"
     k = LC.LA.deps_key(repo / "a")
     (deps / k / "dep").mkdir(parents=True)
