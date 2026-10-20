@@ -110,7 +110,7 @@ theorem sqrt_add_le_γBI {g p : ℝ} (hp0 : 0 ≤ p) (hp1 : p ≤ 1) :
     have h1 : Real.sqrt p ≤ 1 := (Real.sqrt_le_sqrt hp1).trans_eq Real.sqrt_one
     have h2 := Real.mul_self_sqrt hp0
     nlinarith [Real.sqrt_nonneg p]
-  rw [Real.sqrt_mul' _ hp0, Real.sqrt_sq (by positivity)]
+  rw [Real.sqrt_mul' ((Real.sqrt g + 1) ^ 2) hp0, Real.sqrt_sq (by positivity)]
   nlinarith [Real.sqrt_nonneg p]
 
 /-- **The inner stage, linearly, where the inner rounds' forks bind**: at most

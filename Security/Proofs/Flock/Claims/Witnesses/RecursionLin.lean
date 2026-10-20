@@ -107,10 +107,12 @@ theorem accI_lamLin_pos (x : Msg) : 0 < lamLin (ksR Coin) (accI Coin) x := by
     norm_num
   have e4 : (4 : ℝ) = 2 ^ ((2 : ℕ) : ℝ) := by rw [Real.rpow_natCast]; norm_num
   have h4 : Real.logb 2 4 = 2 := by
-    rw [e4, Real.logb_rpow (by norm_num) (by norm_num)] <;> norm_num
+    rw [e4, Real.logb_rpow (by norm_num) (by norm_num)]
+    norm_num
   have e8 : (1 : ℝ) / (1 / 8) = 2 ^ ((3 : ℕ) : ℝ) := by rw [Real.rpow_natCast]; norm_num
   have h8 : Real.logb 2 ((1 : ℝ) / (1 / 8)) = 3 := by
-    rw [e8, Real.logb_rpow (by norm_num) (by norm_num)] <;> norm_num
+    rw [e8, Real.logb_rpow (by norm_num) (by norm_num)]
+    norm_num
   have hκ : (accI Coin).κ [] = 1 / 8 := rfl
   unfold lamLin
   rw [ksR_κ, ksR_γ, Real.logb_zero, hγBI, hβ, hc, one_mul, h4, hκ, h8, sub_pos]
