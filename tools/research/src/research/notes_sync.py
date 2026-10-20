@@ -87,6 +87,8 @@ KEY_PATTERNS = {
 SECRET_ENV_RE = re.compile(r"(KEY|SECRET|TOKEN|PASSWORD)", re.I)
 NEVER_COMMIT = ("steward-state.json", ".steward-state.json.tmp")
 EVIDENCE_PATH = re.compile(r"^(?:renders/|campaigns/[^/]+/assets/|lanes/[^/]+/evidence/)")
+#: an index.lock this old, with no git process in the repository, was left by a git that died mid-write
+STALE_LOCK_S = 600
 
 
 def is_evidence(path: str) -> bool:
@@ -470,6 +472,33 @@ def citation_warnings(cites: dict[str, list[str]], remote=None) -> list[str]:
     return out
 
 
+def clear_stale_lock(root: Path, now: float | None = None, procs: Path = Path("/proc")) -> bool:
+    """Remove the repository's index.lock when it is over STALE_LOCK_S old and no git process works in the repository; whether it
+    did.  A git killed mid-write leaves it, and every later sync then fails at its rebase (the control pod's steward, 19 Oct: three
+    times in three hours, each cleared by hand)."""
+    gitdir = (_out(root, "rev-parse", "--absolute-git-dir") or "").strip()
+    if not gitdir:
+        return False
+    lock = Path(gitdir) / "index.lock"
+    try:
+        if (now if now is not None else time.time()) - lock.stat().st_mtime < STALE_LOCK_S:
+            return False
+    except FileNotFoundError:
+        return False
+    real = Path(root).resolve()
+    for proc in procs.glob("[0-9]*"):
+        try:
+            if (proc / "comm").read_text().strip() != "git":
+                continue
+            cwd = Path(os.readlink(proc / "cwd")).resolve()
+        except OSError:
+            continue
+        if cwd == real or real in cwd.parents:
+            return False
+    lock.unlink(missing_ok=True)
+    return True
+
+
 def sync(root: Path, paths: list[str] | None = None, message: str | None = None, retries: int = 5, remote: str = "origin",
          max_bytes: int = MAX_BYTES, secrets: list[str] | None = None, now: dt.datetime | None = None) -> dict:
     """Commit, then fetch / rebase / push with bounded retries (module docstring).  The report: `commit`, `paths`, `skipped`,
@@ -484,7 +513,10 @@ def sync(root: Path, paths: list[str] | None = None, message: str | None = None,
     if not branch:
         return {"rc": 2, "pushed": False, "attempts": 0, "commit": None,
                 "error": "HEAD is detached; nothing committed: check out the notes branch"}
+    stale = clear_stale_lock(root)
     rep = {"rc": 0, "pushed": False, "attempts": 0, **commit(root, paths, message, max_bytes, now)}
+    if stale:
+        rep["warn"] = [*rep.get("warn", []), f"removed a stale .git/index.lock (over {STALE_LOCK_S} s old, no git running here)"]
     if rep["future"] or rep["header"]:
         rep["rc"] = FUTURE_RC
     if _out(root, "remote", "get-url", remote) is None:

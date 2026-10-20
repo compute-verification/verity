@@ -110,6 +110,32 @@ def test_registration_from_a_runner(shared, interleaved):
     assert s.pool.ids.shape == (PAGES, 4) and s.pool.ids[1].tolist() == [4, 5, 6, 7]
 
 
+def test_a_registered_tensor_moved_or_reshaped_since_registration_is_named():
+    """`Binder.moved`: an in-place reader holds each registered tensor's device address, so a parameter whose data
+    is reallocated, or a KV cache the runner rebinds, is named; one left where it was is not."""
+    s, r = Store(), runner()
+    b = Binder(s, block_bytes=1024)
+    b.on_load(r)
+    b.on_kv(r, SimpleNamespace(num_blocks=PAGES))
+    assert b.moved() == []
+    w = r.model[0].weight
+    w.data = w.data.clone()
+    r.kv_caches[2] = r.kv_caches[2].clone()
+    assert b.moved() == ["0.weight", "kv[2]"]
+
+
+@pytest.mark.parametrize("budget, registered", [(8, 64 * 32 * 4), (7, 0)])
+def test_a_weight_block_budget_registers_the_tensors_that_fit_and_counts_the_rest(budget, registered):
+    s = Store()
+    b = Binder(s, block_bytes=1024, weight_blocks=budget)
+    r = runner()
+    b.on_load(r)
+    b.on_kv(r, SimpleNamespace(num_blocks=PAGES))
+    st = b.stats()
+    assert st["bytes_by_kind"].get("weights", 0) == registered and st["bytes_by_kind"]["kv"] == 3 * 2 * PAGES * 2048
+    assert st["unregistered_bytes"] == 2 * 32 * 4 + 64 * 32 * 4 - registered
+
+
 def test_steps_append_the_scheduled_slots_and_reuse_freed_pages_fifo():
     s = Store()
     b = Binder(s, block_bytes=1024)

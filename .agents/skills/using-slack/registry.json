@@ -163,6 +163,7 @@
         "benchmarks/tc_probe/",
         "benchmarks/tc_probe_fp4/",
         "benchmarks/load_time/",
+        "benchmarks/bool_build_cost/",
         "verity/ml/circuits/ops/",
         "integrations/vllm/verity_vllm/program/",
         "integrations/vllm/verity_vllm/query/",
@@ -202,7 +203,7 @@
     },
     {
       "handle": "compute-accounting",
-      "holder": "the compute-accounting coordinator (bc-1f5fcd84-768c-5ac6-a73e-0e3a950e61ef); its research lane (bc-ebc09a9a-ce64-52b5-b3b6-2c8862c7e9ac), which runs PoUW's relative-security work, posts as it too",
+      "holder": "the compute-accounting coordinator (bc-1f5fcd84-768c-5ac6-a73e-0e3a950e61ef): the served path's interfaces with circuits, kernels and vllm, the stranded-branch landing, and anything else; its research lane (bc-ebc09a9a-ce64-52b5-b3b6-2c8862c7e9ac), which posts as it too: the machine model, the Lean accounting statements and their red and blue teams, and PoUW's protocol statements (period, salt, credit form)",
       "remit": "Proof of useful work: verity/core/protocols/pouw, its schemes and their runs.",
       "charter": "note:20260930T1740Z-handoff-from-pous-charter-pouw",
       "usergroup": "S0CAB8FRE6R",
