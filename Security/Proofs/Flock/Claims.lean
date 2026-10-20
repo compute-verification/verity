@@ -48,7 +48,6 @@ import Proofs.Flock.Claims.Recursion.BoundAccepts
 import Proofs.Flock.Claims.Recursion.BoundRoute
 import Proofs.Flock.Claims.Recursion.BoundBridge
 import Proofs.Flock.Claims.Recursion.BoundWeight
-import Proofs.Flock.Claims.Recursion.BoundReaders
 import Proofs.Flock.Claims.Recursion.VStarParts
 import Proofs.Flock.Claims.Recursion.VStarPartsHolo
 import Proofs.Flock.Claims.Recursion.VStarPartsDense
@@ -60,6 +59,7 @@ import Proofs.Flock.Claims.Recursion.VStarCross
 import Proofs.Flock.Claims.Recursion.DeployChecked
 import Proofs.Flock.Claims.Recursion.DeployLayout
 import Proofs.Flock.Claims.Counted
+import Proofs.Flock.Claims.Recursion.BoundReaders
 import Proofs.Flock.Claims.Recursion
 import Proofs.Flock.Claims.Decode
 import Proofs.Flock.Claims.DecodeFlock
