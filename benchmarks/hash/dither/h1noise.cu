@@ -2,7 +2,7 @@
 // compression of a 96-byte message) on sm_90a / sm_100a, the floor of any H1 + fx1 kernel on these cards: a unit derives
 // h1tile.Layout's `blocks` from seed_j and `lanes` from sigma_R (576 + 32 at K = 4096, 1856 + 32 at K = 14336).
 //
-//   ca     compute accounting's served_h1/noise.cu `h1_noise` (origin/cursor/serve-h1-ea24 8d04cd79db), copied verbatim:
+//   ca     compute accounting's benchmarks/pouw/served_h1/noise.cu `h1_noise`, copied verbatim:
 //          one thread a block, codec_tensor's sha512_compress (K from constant memory, rounds rolled by 16)
 //   mid    one warp an (S, chunk) item, J blocks a lane (t = chunk 32 J + 32 j + lane): the message's words 0..10 are the
 //          seed's, so rounds 0..10 (the midstate) and every schedule term free of word 11 (t) are computed once an item,

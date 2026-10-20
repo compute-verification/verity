@@ -15,7 +15,7 @@ columns; the units read their rows from the leader's region), gated against CA's
     gate  before any timing, per shape and gated arm: h1zbench.gate_one (0xA5 over receipts, z, zo, y and the workspace;
           z = A B^T on the selected row blocks against float64; y = dequantize(z); the no-write control refused;
           F_FAULT, F_FAULT_WB and F_FAULT_XA conforming on unit 0, a band leader). The per-unit arm's receipts against
-          receipts_ca on its picks. A banded arm's receipts and z: unit 0 and non-leaders (the first, the last, one
+          served_h1/receipts.py on its picks. A banded arm's receipts and z: unit 0 and non-leaders (the first, the last, one
           drawn) against CA's banded_reference itself (without CA's tree the gate fails), every band leader's receipt
           equal to the per-unit arm's (a leader's noise is its own) and every non-leader's different; its workspace with no 0xA5 block left in a leader's rows or in any unit's columns, and drawn blocks
           against seeds.noise_block of their unit's seed_j.
@@ -486,7 +486,7 @@ def main() -> int:
            "sms": props.multi_processor_count, "l2_bytes": l2, "torch": torch.__version__,
            "started": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()), "builds": builds, "ref_lib": args.ref_lib,
            "gs": gs, "fault_shift": shift,
-           "reference": "per-unit: receipts_ca.py, h1zref.cu (z = A B^T in float64); banded: CA's banded_reference "
+           "reference": "per-unit: served_h1/receipts.py, h1zref.cu (z = A B^T in float64); banded: CA's banded_reference "
                         f"(#2866 @ {JB.CA_SHA}) on 4 units a shape and arm, the leaders against the per-unit arm",
            "timing": "seeds (kh_seeds) included in every arm; -noise and -units arms are the two launches alone",
            "shapes": []}
