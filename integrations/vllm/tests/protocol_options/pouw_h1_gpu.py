@@ -94,12 +94,13 @@ def h1_settings(eng: Any, rows: int, steps: int, challenger: str | None = None, 
     if challenger:
         return {"pouw": {"challenger": challenger, "session": session, "gate": gate, "runner": eng.runner, "rows": rows,
                          "steps": steps, **kw}}
+    from verity.core.protocols.pouw import verifier
     from verity.core.protocols.pouw import window as Wd
     from verity.core.protocols.pouw.coins import Challenger
     from verity.core.protocols.sampled_proofs.challenger import LiveRecord
-    rounds = LiveRecord(Wd.live_challenger(0, steps, os.urandom), Wd.ROUND)
-    return {"pouw": {"coins": Challenger(0, os.urandom), "runner": eng.runner, "rounds": rounds, "rows": rows, "steps": steps,
-                     **kw}}
+    rounds = LiveRecord(Wd.live_challenger(0, steps, verifier.coins), Wd.ROUND)
+    return {"pouw": {"coins": Challenger(0, verifier.coins), "runner": eng.runner, "rounds": rounds, "rows": rows,
+                     "steps": steps, **kw}}
 
 
 def requests_check(h1: Any, requests: int) -> dict[str, Any]:
