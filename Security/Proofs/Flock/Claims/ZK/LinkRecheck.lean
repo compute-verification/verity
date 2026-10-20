@@ -1,7 +1,7 @@
 import Proofs.Flock.Claims.ZK.Refine
 import Proofs.Flock.Claims.ZK.Split
 import Proofs.Flock.Claims.ZK.Switched
-import Flock.Firewall.Link
+import Proofs.Flock.Claims.ZK.LinkFft
 
 /-!
 # The link round at the Lean recheck
@@ -11,9 +11,9 @@ level-0 root, committed again from the host's witness, the table's level-0 hidin
 `Firewall::new` holds `commit_zk`'s root to and the session's link carries (live `PROTOCOL.md` §10.2). Here that
 function is held to the session's link.
 
-* `Flock.Firewall.Link.root_eq`, `cap_eq`, `leaves_getElem!`, `layer_eq`, `parRange_eq`, `rows_eq`: the recheck's root
-  is `FlockComplete.flat` of `FlockComplete.layerOf`'s cap over `hm96-sha512/v1`'s leaves of `encodeRowsZk`'s rows
-  under the salts; its tasks (`parRange`) split one map.
+* `Flock.Firewall.Link.root_eq`, `cap_eq`, `leaves_getElem!`, `layer_eq`, `parRange_eq`: the recheck's root is
+  `FlockComplete.flat` of `FlockComplete.layerOf`'s cap over `hm96-sha512/v1`'s leaves of `encodeRowsZk`'s rows under the
+  salts (`rows_eq`, `LinkFft`: the FFT's rows are those rows); its tasks (`parRange`) split one map.
 * `Coined.swContent_inl`, `swExeOf_inl`, `Masked.leafAt_swCutAt`: the switched prover's level-0 leaves are the honest
   prover's, whatever values the workers supply: level 0 reads neither the values nor the moved pads.
 * `Masked.linkIn`, `Masked.linkMsg`: what the firewall hands `flock-firewall link` for table `j` at the tape (the packed
@@ -28,9 +28,6 @@ function is held to the session's link.
 namespace Flock.Firewall.Link
 
 theorem flat_eq : flat = FlockComplete.flat := rfl
-
-theorem rows_eq (lv : Level) (tPad : Nat) (g : Array F128) (extra lanePad : Nat → Nat → F128) :
-    rows lv tPad g extra lanePad = FlockComplete.encodeRowsZk lv tPad g extra lanePad := rfl
 
 /-- **The recheck's tree is `layerOf`'s** with SHA-512 nodes. -/
 theorem layer_eq (d : Nat) (lf : Nat → ByteArray) :
@@ -62,8 +59,8 @@ theorem leaves_getElem! (lv : Level) (tPad : Nat) (i : In) {q : Nat} (hq : q < 2
     (leaves lv tPad i)[q]! = leaf ((rows lv tPad i.g i.extra i.lanePad)[q]!) (i.salt q) := by
   have hk : 2 ^ (lv.d - min lv.d CHUNK) * 2 ^ min lv.d CHUNK = 2 ^ lv.d := by
     rw [← Nat.pow_add, Nat.sub_add_cancel (Nat.min_le_left _ _)]
-  simp only [leaves, rows, parRange_eq, hk]
-  rw [FlockSoundness.Refine.getElem!_range_map _ hq, FlockSoundness.Refine.getElem!_range_map _ hq]
+  simp only [leaves, parRange_eq, hk]
+  rw [FlockSoundness.Refine.getElem!_range_map _ hq]
 
 /-- **The recheck's cap** is `layerOf`'s over any leaves that are its leaves below `2^d`. -/
 theorem cap_eq (lv : Level) (tPad : Nat) (i : In) (lf : Nat → ByteArray)

@@ -92,6 +92,7 @@ import Proofs.Flock.Claims.ZK.Compose
 import Proofs.Flock.Claims.ZK.Layout
 import Proofs.Flock.Claims.ZK.Cut
 import Proofs.Flock.Claims.ZK.Stop
+import Proofs.Flock.Claims.ZK.LinkFft
 import Proofs.Flock.Claims.ZK.LinkRecheck
 
 /-!
@@ -443,6 +444,9 @@ import Proofs.Flock.Claims.ZK.LinkRecheck
   (`swExeOf_inl`, `Masked.leafAt_swCutAt`), so the recheck's link message at the tape (`Masked.linkMsg`) is round `0`'s
   encoding of the switched cut (`Masked.enc0_swCutAt`), and at the deployed session `LinkRoundEq` follows from the
   firewall's link being that message (`LeanRelease.LinkIs`, **`LeanRelease.linkRoundEq_of_linkIs`**).
+* `LinkFft`: the recheck's rows by the additive FFT in the novel basis (`Flock.Firewall.Link.rowsFft`) are
+  `encodeRowsZk`'s where the padding fits below `2^cols` and `cols < d ≤ 64` (`Flock.Firewall.Link.rowsFft_eq`), so
+  `rows` is `encodeRowsZk` on both of its paths (`rows_eq`).
 * `CoinPass`: those premises leave a history to be live at. At every tape, past `Hello` and the link, the check passes
   `Hello`'s answer whose root the first opening walks to under the tape's nonce, and that opening, at every key with bit
   2047 clear and every opening that reads back (`LeanRelease.opens_coinPass`; the all-zero one,

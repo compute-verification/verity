@@ -12,7 +12,7 @@ commitment (`FlockComplete.commitPZk` in the analysis), here as the code the fir
   `lanePad l`, `t_pad` of them). `rowsDirect` evaluates each entry so; `rowsFft` takes each lane's entry as one polynomial
   in the novel basis over `cols + 1` bits (`coeffs`) and evaluates it on all `2^d` points by the additive FFT (`fft`),
   `d·2^d` products a lane where `rowsDirect` takes `2^(d + cols)`. `rows` is `rowsFft` where the padding fits below
-  `2^cols` and the domain in a word, as at `m` = 25, 26 and 27.
+  `2^cols` and the domain, wider than the columns, in a word, as at `m` = 25, 26 and 27.
 * `leaves`: row `q`'s `hm96-sha512/v1` leaf under the salt `salt q` fitted to 192 bytes, computed in tasks of `2^5` rows
   (`parRange`).
 * `cap`: the Merkle nodes `SHA-512(l ‖ r)` `d − cap` levels up from the leaves (`layer`), and `root` their concatenation,
@@ -94,9 +94,10 @@ def rowsFft (lv : Level) (tPad : Nat) (g : Array F128) (extra lanePad : Nat → 
   (Array.range (2 ^ lv.d)).map fun q => (Array.range nL).map fun l => es[l]![q]!
 
 /-- **Level 0's padded codeword** of the packed table `g`, with the extra lanes `extra` and the paddings `lanePad`: by the
-FFT where the padding fits below `2^cols` and the domain in a word, else row by row. -/
+FFT where the padding fits below `2^cols` and the domain, wider than the columns, in a word; else row by row. -/
 def rows (lv : Level) (tPad : Nat) (g : Array F128) (extra lanePad : Nat → Nat → F128) : Array (Array F128) :=
-  if tPad ≤ 2 ^ lv.cols ∧ lv.d ≤ 64 then rowsFft lv tPad g extra lanePad else rowsDirect lv tPad g extra lanePad
+  if tPad ≤ 2 ^ lv.cols ∧ lv.cols < lv.d ∧ lv.d ≤ 64 then rowsFft lv tPad g extra lanePad
+  else rowsDirect lv tPad g extra lanePad
 
 /-- The first `n` bytes of `b`, zero-padded to `n`. -/
 def fitBytes (n : Nat) (b : ByteArray) : ByteArray :=
