@@ -257,6 +257,12 @@ Under each question, newest first; the lane that found or reported it is in brac
 
 ### 7. Checks that pass for the wrong reason, or can't fail
 
+- **"All 114 regression tests passed" with the manifest rebuild skipped** (20 Oct) [circuits]. #2614's gate
+  (r20261019-022133-71e4) ran tests/regression without `VERITY_REGRESSION_REBUILD=1`, so `manifest_digest` skipped on
+  every row, the rows #2382 said one naming would move ("The manifest digest moves; Program digests don't") among them.
+  Its body read "all 114 regression tests passed, including T0 rows 23, 60, 67, 68, 73, 74", and the post-train
+  regression then failed on four landings. Fix: nine labelled decisions and the rebaselined expected/ (circuits); a change
+  that says a manifest digest moves runs the rebuild tier on its rows before it lands.
 - **A gate killed at its cap read as "never ran", and the train landed** (18 Oct) [ci]. "touched suites passed;
   it lands" after a gate run exited 143 at its 90-min cap. Fix: a capped gate reruns once, then holds the train
   (#2583).
