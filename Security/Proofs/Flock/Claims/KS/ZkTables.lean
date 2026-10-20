@@ -130,8 +130,7 @@ theorem runOf_eqJ {zk : Bool} {seen : Claims.Seen} {f : Final} {x : Claims.Msg} 
       rr = { m := (Setup.ofCircuit st).m, kLog := (Setup.ofCircuit st).kLog, claims := 2 + extras.size,
              hashLen := (Setup.ofCircuit st).merkle.digestLen, saltLen := saltLenOf zk (Setup.ofCircuit st),
              reps := [(lv.streams.getD (2 * j) #[], f.proofs.getD (2 * j) ByteArray.empty),
-                      (lv.streams.getD (2 * j + 1) #[], f.proofs.getD (2 * j + 1) ByteArray.empty)],
-             plainTag := (Setup.ofCircuit st).plainTag } := by
+                      (lv.streams.getD (2 * j + 1) #[], f.proofs.getD (2 * j + 1) ByteArray.empty)] } := by
   unfold runOf at hr
   simp only [Option.bind_eq_bind, Option.bind_eq_some_iff, Option.pure_def, Option.some.injEq] at hr
   obtain ⟨f', hf', ⟨s', spec', sts'⟩, hs', st, hst, lv', hlv', extras, hext, rfl⟩ := hr

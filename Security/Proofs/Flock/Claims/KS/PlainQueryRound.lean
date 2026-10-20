@@ -317,7 +317,7 @@ theorem plainQueryRound_verifyRepWith (hs : Hashes Flock.V) (spec : SessionSpec)
 theorem plainProofShape_eq (st : Setup) (sch : Flock.Schedule) (extras : Array Flock.Claim)
     (hsch : fast100 st.m = some sch) :
     Claims.Flock.plainProofShape st.m st.kLog (2 + extras.size) st.merkle.digestLen
-      (if st.merkle.saltBytes = 0 && !st.openedSalts then none else some st.merkle.saltBytes) st.plainTag =
+      (if st.merkle.saltBytes = 0 && !st.openedSalts then none else some st.merkle.saltBytes) =
       shapeOf st sch extras.size := by
   simp only [Claims.Flock.plainProofShape, Claims.Flock.plainSched, hsch, Option.getD_some, shapeOf]
 
@@ -333,8 +333,7 @@ theorem plainRepColsOf_verifyRepWith (hs : Hashes Flock.V) (spec : SessionSpec) 
       st.extra sess.points = .ok extras ∧ decodeProof (shapeOf st sch extras.size) bytes = .ok p ∧
       Claims.Flock.plainQueryRound st.m st.kLog sch.k0 (2 + extras.size) < stream.rounds.size ∧
       Claims.Flock.plainRepColsOf (Claims.Flock.plainProofShape st.m st.kLog (2 + extras.size) st.merkle.digestLen
-          (if st.merkle.saltBytes = 0 && !st.openedSalts then none else some st.merkle.saltBytes) st.plainTag)
-          stream.rounds bytes =
+          (if st.merkle.saltBytes = 0 && !st.openedSalts then none else some st.merkle.saltBytes)) stream.rounds bytes =
         Claims.Flock.zkRepCols (sch.levels.getD 0 default)
           (stream.rounds[Claims.Flock.plainQueryRound st.m st.kLog sch.k0 (2 + extras.size)]!).coins
           p.ligerito.initialProof.rows ∧
@@ -429,8 +428,7 @@ theorem plainQueryRound_verifyWithM (hs : Hashes Flock.V) (spec : SessionSpec) (
           Claims.Flock.plainQueryRound tabs[i].m tabs[i].kLog sch.k0 (2 + extras.size) < stream.rounds.size ∧
           Claims.Flock.plainRepColsOf (Claims.Flock.plainProofShape tabs[i].m tabs[i].kLog (2 + extras.size)
               tabs[i].merkle.digestLen
-              (if tabs[i].merkle.saltBytes = 0 && !tabs[i].openedSalts then none else some tabs[i].merkle.saltBytes)
-              tabs[i].plainTag)
+              (if tabs[i].merkle.saltBytes = 0 && !tabs[i].openedSalts then none else some tabs[i].merkle.saltBytes))
               stream.rounds proofs[2 * i + r]! =
             Claims.Flock.zkRepCols (sch.levels.getD 0 default)
               (stream.rounds[Claims.Flock.plainQueryRound tabs[i].m tabs[i].kLog sch.k0 (2 + extras.size)]!).coins

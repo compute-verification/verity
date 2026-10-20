@@ -55,8 +55,7 @@ theorem cols_plain (hs : Hashes Flock.V) {seen : Claims.Seen} {f : Final} {ins :
       { m := (Setup.ofCircuit sts[0]).m, kLog := (Setup.ofCircuit sts[0]).kLog, claims := 2 + extras.size,
         hashLen := (Setup.ofCircuit sts[0]).merkle.digestLen, saltLen := saltLenOf false (Setup.ofCircuit sts[0]),
         reps := [(lv.streams.getD 0 #[], f.proofs.getD 0 ByteArray.empty),
-                 (lv.streams.getD 1 #[], f.proofs.getD 1 ByteArray.empty)],
-        plainTag := (Setup.ofCircuit sts[0]).plainTag } := by
+                 (lv.streams.getD 1 #[], f.proofs.getD 1 ByteArray.empty)] } := by
     unfold runOf
     simp [hf, hset, hst, hlv, hex, Except.toOption]
   unfold cols

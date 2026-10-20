@@ -72,9 +72,8 @@ point and its coin, the `k0` lane challenges, and level 1's two OOD intros of tw
 def plainQueryRound (m kLog k0 claims : ℕ) : ℕ := (3 + (m - 6)) + (3 + (kLog - 6)) + (claims + 1) + (k0 + 6)
 
 /-- The plain verifier's proof shape for a table (`verifyRep`'s `shape`). -/
-def plainProofShape (m kLog claims hashLen : ℕ) (saltLen : Option ℕ) (plainTag : Bool := true) :
-    _root_.Flock.Shape :=
-  { m, kLog, claims, sched := plainSched m, hashLen, saltLen, plainTag }
+def plainProofShape (m kLog claims hashLen : ℕ) (saltLen : Option ℕ) : _root_.Flock.Shape :=
+  { m, kLog, claims, sched := plainSched m, hashLen, saltLen }
 
 /-- **A plain rep's opened level-0 columns** from its recorded rounds and proof bytes: none if the proof does not
 decode. -/
@@ -88,8 +87,7 @@ def plainRepColsOf (sh : _root_.Flock.Shape) (rounds : Array _root_.Flock.Round)
   | .error _ => []
 
 /-- A run's plain proof shape. -/
-def ZkRun.plainShape (r : ZkRun) : _root_.Flock.Shape :=
-  plainProofShape r.m r.kLog r.claims r.hashLen r.saltLen r.plainTag
+def ZkRun.plainShape (r : ZkRun) : _root_.Flock.Shape := plainProofShape r.m r.kLog r.claims r.hashLen r.saltLen
 
 /-- **A plain run's opened level-0 columns** for one table: its reps' columns, one per position, below `2^d`. -/
 def plainRunCols (r : ZkRun) : List (ℕ × List 𝔽) :=
@@ -356,8 +354,7 @@ def runOf (zk : Bool) (s : Claims.Seen) (j : ℕ) : Option Claims.Flock.ZkRun :=
   pure { m := tab.m, kLog := tab.kLog, claims := 2 + extras.size, hashLen := tab.merkle.digestLen,
          saltLen := saltLenOf zk tab,
          reps := [(lv.streams.getD (2 * j) #[], f.proofs.getD (2 * j) ByteArray.empty),
-                  (lv.streams.getD (2 * j + 1) #[], f.proofs.getD (2 * j + 1) ByteArray.empty)],
-         plainTag := tab.plainTag }
+                  (lv.streams.getD (2 * j + 1) #[], f.proofs.getD (2 * j + 1) ByteArray.empty)] }
 
 /-- **The opened level-0 columns of a run's table `j`**: its two reps' (`plainRunCols`, `zkRunCols`); none where the
 run's last message does not set up table `j`. -/

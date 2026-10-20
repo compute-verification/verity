@@ -146,8 +146,7 @@ theorem runOf_eq {zk : Bool} {seen : Claims.Seen} {f : Final} {x : Claims.Msg} {
       rr = { m := (Setup.ofCircuit st).m, kLog := (Setup.ofCircuit st).kLog, claims := 2 + extras.size,
              hashLen := (Setup.ofCircuit st).merkle.digestLen, saltLen := saltLenOf zk (Setup.ofCircuit st),
              reps := [(lv.streams.getD 0 #[], f.proofs.getD 0 ByteArray.empty),
-                      (lv.streams.getD 1 #[], f.proofs.getD 1 ByteArray.empty)],
-             plainTag := (Setup.ofCircuit st).plainTag } := by
+                      (lv.streams.getD 1 #[], f.proofs.getD 1 ByteArray.empty)] } := by
   unfold runOf at hr
   simp only [Option.bind_eq_bind, Option.bind_eq_some_iff, Option.pure_def, Option.some.injEq] at hr
   obtain ⟨f', hf', ⟨s', spec', sts'⟩, hs', st, hst, lv', hlv', extras, hext, rfl⟩ := hr
@@ -239,7 +238,7 @@ theorem plain_opening_raw {Ω : Type} {P : Claims.Prover Ω} {x : Claims.Msg} {�
   have hk2 : 2 * 0 + k < lv.streams.size := by rw [hlsz]; exact hk'
   have hcolsEq : Claims.Flock.plainRepColsOf
       (Claims.Flock.plainProofShape (Setup.ofCircuit st).m (Setup.ofCircuit st).kLog (2 + extras.size)
-        (Setup.ofCircuit st).merkle.digestLen (saltLenOf false (Setup.ofCircuit st)) (Setup.ofCircuit st).plainTag)
+        (Setup.ofCircuit st).merkle.digestLen (saltLenOf false (Setup.ofCircuit st)))
       (lv.streams.getD k #[]) (f.proofs.getD k ByteArray.empty) =
       Claims.Flock.zkRepCols (sch.levels.getD 0 default)
         (y.rounds[Claims.Flock.plainQueryRound (Setup.ofCircuit st).m (Setup.ofCircuit st).kLog sch.k0
