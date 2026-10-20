@@ -1666,11 +1666,22 @@ SLOT_MEM_ENV = "CHECK_SLOT_MEM_GB"
 STOP_GRACE_S = 30.0
 
 
+#: the memory a `research run --mem-gb` reserved for its workload, which sets no cgroup cap (`remote.py`; CI-99)
+RUN_MEM_ENV = "RESEARCH_RUN_MEM_GB"
+
+
+def _gb(v: str) -> float | None:
+    return float(v) if v.replace(".", "", 1).isdigit() else None
+
+
 def slot_mem_gb() -> float | None:
-    """The check slot's memory, when this runs in one (17 Oct: a quick tier in proofs' 480 GB pool slot ran circuit_check's suite
-    on 94 workers, 784 GB, since only `check` passed `--mem-gb`)."""
-    v = os.environ.get(SLOT_MEM_ENV, "")
-    return float(v) if v.replace(".", "", 1).isdigit() else cgroup_mem_gb()
+    """The memory this run may use: the check slot's when it runs in one (17 Oct: a quick tier in proofs' 480 GB pool slot ran
+    circuit_check's suite on 94 workers, 784 GB, since only `check` passed `--mem-gb`), else its cgroup's limit; and no more than
+    its run's reservation (19 Oct: on vy-nebius-cpu-3 a direct run reserving 24 GB would have started about 46 workers)."""
+    have = _gb(os.environ.get(SLOT_MEM_ENV, ""))
+    have = cgroup_mem_gb() if have is None else have
+    run = _gb(os.environ.get(RUN_MEM_ENV, ""))
+    return min(x for x in (have, run) if x is not None) if (have, run) != (None, None) else None
 
 
 def cgroup_mem_gb(root: Path = Path("/")) -> float | None:
