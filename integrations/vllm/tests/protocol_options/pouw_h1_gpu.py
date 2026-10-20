@@ -17,10 +17,19 @@ One process writes `<out>/pouw_h1_gpu.json` and the option's record (`<out>/pouw
   hook      a listener (`H1Run.listen`) gets every call with the served tensors on the GPU: A int8 [m, k] and s_a f32 [m]
             (the Commit's ``Int8RowQuant_v1`` /0 and /1), the layer's own int8 weight and scales; what it returns is in the
             manifest; steps begin at linear 0, and every step's calls run over the same layers in order.
+
+``--workload fill`` serves `pouw_h1.FILL` instead (VLLM-52, PERIOD-PATH's ask 1): 64 one-token prompts (`fill_prompts`) under
+VLLM-31's static schedule (``ignore_eos``, every request to its cap, host prefix cache off), with ``max_num_seqs`` 64 and T = 64,
+so all 64 prefill at step 0 and decode together for the 16 served steps of an S = 18 window. Without the option it serves
+the 64 and then the first alone (the 1-sequence row); with it, the 64 in one window (`<out>/pouw-h1-calls.json`) and the
+first alone in a second (`<out>/solo/`). It records each window's step rows against the declaration (`Static.check`), its
+u (`H1Run.utilization`), the credit gate's verdict, each step's seconds (at linear 0 of the next) and tokens/s, and the
+static schedule's check (`engine.static_schedule.check`) of every request. Compile is `--compile-from` on each record.
 """
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import os
 import sys
@@ -32,6 +41,7 @@ from typing import Any
 import numpy as np
 import torch
 
+from tests.engine.int8_exact_gpu import PROMPTS as SERVE_H1_PROMPTS
 from tests.engine.int8_exact_gpu import generate, pin, scratch_checkpoints
 
 SCHEMA = "verity-vllm/pouw-h1-gpu/v1"
@@ -147,6 +157,188 @@ def run(a: argparse.Namespace) -> dict[str, Any]:
     return doc
 
 
+#: candidates for `fill_prompts`: each word's first token (no BOS) is one prompt
+FILL_WORDS = ("The capital France def Water Once In A To Photosynthesis Columbus Light Gold Tea Autumn Square Planet Primary Speed "
+              "Village Number Return Import Class If When Why How What Where Who My Our Your Their This That These Those Every "
+              "Some Many Most All Each Today Yesterday Tomorrow Science History Music Art Math Code Data River Mountain Ocean "
+              "Forest City Market Doctor Teacher Engine Garden Winter Summer Spring Morning Evening Night Story Letter Question "
+              "Answer Problem").split()
+
+
+def fill_prompts(tokenizer: Any, n: int) -> list[int]:
+    """`n` distinct one-token prompts: each `FILL_WORDS` word's first token, in order, first occurrence only."""
+    out: list[int] = []
+    for w in FILL_WORDS:
+        t = tokenizer.encode(w, add_special_tokens=False)[0]
+        if t not in out:
+            out.append(int(t))
+    if len(out) < n:
+        raise SystemExit(f"only {len(out)} distinct one-token prompts in FILL_WORDS, {n} needed")
+    return out[:n]
+
+
+def generate_static(llm: Any, prompts: list[int], max_tokens: int) -> list[dict[str, Any]]:
+    """Greedy one-token prompts under VLLM-31's static schedule (``ignore_eos``: every request runs to its cap)."""
+    from vllm import SamplingParams
+    outs = llm.generate([{"prompt_token_ids": [t]} for t in prompts],
+                        SamplingParams(temperature=0.0, max_tokens=max_tokens, seed=0, ignore_eos=True), use_tqdm=False)
+    return [{"prompt": [t], "token_ids": list(o.outputs[0].token_ids), "finish_reason": str(o.outputs[0].finish_reason),
+             "num_cached_tokens": getattr(o, "num_cached_tokens", None)} for t, o in zip(prompts, outs)]
+
+
+def static_check(gen: list[dict[str, Any]], max_tokens: int) -> dict[str, Any]:
+    """`engine.static_schedule.check` of each request: by length at its cap, no prefix-cache read."""
+    from verity_vllm.engine import static_schedule
+    reqs = [{"request_id": str(i), "max_tokens": max_tokens} for i in range(len(gen))]
+    timing = {"requests": {str(i): {"finish_reason": g["finish_reason"], "n_generated": len(g["token_ids"])} for i, g in enumerate(gen)}}
+    out = static_schedule.check(reqs, timing, cached_tokens={str(i): g["num_cached_tokens"] for i, g in enumerate(gen)})
+    return {"ok": out["ok"], "problems": out["problems"][:20]}
+
+
+def rate(gen: list[dict[str, Any]], seconds: float, steps: int) -> dict[str, Any]:
+    tokens = sum(len(g["token_ids"]) for g in gen)
+    return {"sequences": len(gen), "tokens": tokens, "s": round(seconds, 3), "step_s": round(seconds / steps, 4),
+            "tokens_per_s": round(tokens / seconds, 1)}
+
+
+def tokens_digest(gen: list[dict[str, Any]]) -> str:
+    return hashlib.sha256(json.dumps([g["token_ids"] for g in gen]).encode()).hexdigest()
+
+
+def fill(a: argparse.Namespace) -> dict[str, Any]:
+    from verity.core.protocols.pouw.coins import Challenger
+    from verity_vllm import protocol_options as PO
+    from verity_vllm.engine.build import build_engine
+    from verity_vllm.program.frontend.kernel_readback import int8_exact_of
+    from verity_vllm.program.frontend.target_profile import TargetProfile
+    from verity_vllm.protocol_options import pouw
+    from verity_vllm.protocol_options import pouw_h1 as PH
+
+    decl = PH.FILL
+    outdir = Path(a.out)
+    outdir.mkdir(parents=True, exist_ok=True)
+    target = TargetProfile.from_device().with_overrides(int8_exact="all")
+    doc: dict[str, Any] = {"schema": SCHEMA + "/fill", "argv": sys.argv, "torch": torch.__version__,
+                           "device": torch.cuda.get_device_name(0), "scheme": PH.SCHEME,
+                           "public": {"slots": decl.slots, "prompt_lens": list(decl.prompt_lens), "max_tokens": decl.max_tokens,
+                                      "rows": decl.rows, "steps": decl.steps, "schedule": decl.schedule(), "u": str(decl.u)}}
+    with tempfile.TemporaryDirectory() as scratch:
+        entry, how = pin(a)
+        doc["pin"] = {"repo": entry["repo"], "revision": entry["revision"], "source": how}
+        args = decl.engine_args()
+        eng = build_engine(scratch_checkpoints(a.checkpoints, entry, Path(scratch)), case=a.role, target=target,
+                           max_num_seqs=args.pop("max_num_seqs"), engine_args=args)
+    doc["engine"] = {"int8_exact": int8_exact_of(eng.model), "enforce_eager": eng.kwargs.get("enforce_eager"),
+                     "effective": eng.effective, "args": decl.engine_args()}
+    try:
+        cfg = eng.llm.llm_engine.vllm_config
+        doc["engine"]["scheduler"] = {"max_num_seqs": cfg.scheduler_config.max_num_seqs,
+                                      "max_num_batched_tokens": cfg.scheduler_config.max_num_batched_tokens,
+                                      "max_model_len": cfg.model_config.max_model_len,
+                                      "num_gpu_blocks": cfg.cache_config.num_gpu_blocks, "block_size": cfg.cache_config.block_size}
+    except Exception as e:  # noqa: BLE001
+        doc["engine"]["scheduler"] = {"error": repr(e)[:300]}
+    print(f"[fill] engine {json.dumps(doc['engine'], default=str)[:1500]}", flush=True)
+
+    tok = eng.llm.get_tokenizer()
+    prompts = fill_prompts(tok, decl.slots)
+    doc["prompts"] = prompts
+    lens = tuple(len(tok.encode(p)) for p in SERVE_H1_PROMPTS)
+    doc["serve_h1"] = {"prompt_lens": list(lens), "u": str(PH.Static(lens, decl.max_tokens, decl.rows, decl.steps).u)}
+    cap, served_steps = decl.max_tokens, decl.max_tokens
+    t0 = time.monotonic()
+    plain = generate_static(eng.llm, prompts, cap)
+    t1 = time.monotonic()
+    plain_solo = generate_static(eng.llm, prompts[:1], cap)
+    t2 = time.monotonic()
+    doc["plain"] = {"fill": rate(plain, t1 - t0, served_steps), "solo": rate(plain_solo, t2 - t1, served_steps),
+                    "static": static_check(plain + plain_solo, cap), "tokens_digest": tokens_digest(plain),
+                    "solo_is_first_of_fill": plain_solo[0]["token_ids"] == plain[0]["token_ids"]}
+    print(f"[fill] plain {json.dumps(doc['plain'])}", flush=True)
+    entry_name = f"pouw:{PH.SCHEME}"
+    layers = None
+
+    def window(name: str, want: list[dict[str, Any]], tdir: Path) -> dict[str, Any]:
+        nonlocal layers
+        ctx = PO.Context(stage="serve", enabled=(entry_name,), settings={"pouw": {
+            "coins": Challenger(0, os.urandom), "retain_steps": a.retain, "transcript_dir": str(tdir), "rows": decl.rows,
+            "steps": decl.steps}})
+        t0 = time.monotonic()
+        comp = PO.install(eng.model, ctx)
+        out: dict[str, Any] = {"install_s": round(time.monotonic() - t0, 1)}
+        h1 = pouw.h1_run(entry_name)
+        layers = layers or PH.layers(eng.model, pouw.linear_types())
+        bad: list[str] = []
+        stamps: dict[int, float] = {}
+        serving = [True]
+
+        def listener(call: Any, a_: Any, s_a: Any, weight: Any, weight_scale: Any) -> dict[str, Any]:
+            if serving[0] and call.layer == 0:
+                stamps[call.step] = time.monotonic()
+            ok = (a_.is_cuda and a_.dtype == torch.int8 and tuple(a_.shape) == (call.m, call.k) and s_a.dtype == torch.float32
+                  and tuple(s_a.shape) == (call.m,) and weight is layers[call.layer].weight
+                  and weight_scale is layers[call.layer].weight_scale)
+            if not ok:
+                bad.append(f"{call.index}: {a_.device} {a_.dtype} {tuple(a_.shape)} {s_a.dtype} {tuple(s_a.shape)}")
+            return {"listener": "pouw_h1_gpu"}
+
+        h1.listen(listener)
+        try:
+            t0 = time.monotonic()
+            got = generate_static(eng.llm, prompts[:len(want)], cap)
+            end = time.monotonic()
+            serving[0] = False
+            h1.close()
+            steps = sorted(stamps)
+            step_s = [round((stamps[s + 1] if s + 1 in stamps else end) - stamps[s], 4) for s in steps]
+            rows = h1.step_rows()
+            decl_w = decl if len(want) == decl.slots else PH.Static(decl.prompt_lens[:len(want)], cap, decl.rows, decl.steps)
+            zs = []
+            for index, xq, _sa, y in h1.retained:
+                call = h1.calls[index]
+                w = PH.numpy_of(layers[call.layer].weight).astype(np.int64)
+                zs.append({"index": index, "shape": [call.m, call.k, call.n], "y_exact": bool(np.array_equal(y, xq.astype(np.int64) @ w.T))})
+            credit = h1.credit()
+            out.update({
+                "serve": rate(got, end - t0, served_steps), "step_s": step_s,
+                "decode_step_s_median": float(np.median(step_s[1:])) if len(step_s) > 1 else None,
+                "same_tokens": [g["token_ids"] for g in got] == [g["token_ids"] for g in want], "tokens_digest": tokens_digest(got),
+                "static_schedule": static_check(got, cap), "step_rows": rows, "declared_rows": decl_w.schedule(),
+                "schedule_problems": decl_w.check(rows), "u": str(h1.utilization()), "u_float": float(h1.utilization()),
+                "u_declared": str(decl_w.u), "layout_static": h1.static(), "refused": h1.refused[:20], "calls": len(h1.calls),
+                "units": sum(c.units for c in h1.calls), "u_step": h1.u_step, "hook_bad": bad[:20],
+                "steps_in_layer_order": all([c.layer for c in h1.calls if c.step == s] == list(range(len(layers)))
+                                            for s in range(h1.steps)),
+                "z": zs, "shapes": [list(x) for x in h1.shapes()],
+                "credit": {"credited": credit["credited"], "refused": credit["refused"], "padded": credit["padded"],
+                           "units": credit["units"], "served_frac_of_macs": credit["served_frac_of_macs"]}})
+            out["ok"] = bool(out["same_tokens"] and out["static_schedule"]["ok"] and not out["schedule_problems"]
+                             and out["u"] == out["u_declared"] and out["layout_static"] and not bad and out["steps_in_layer_order"]
+                             and zs and all(z["y_exact"] for z in zs))
+        finally:
+            comp.close()
+        out["commitment"] = comp.installed[0].commitment()
+        print(f"[fill] {name} {json.dumps({k: v for k, v in out.items() if k not in ('commitment', 'z')}, default=str)[:3000]}",
+              flush=True)
+        return out
+
+    doc["h1"] = window("fill", plain, outdir)
+    try:
+        doc["h1_solo"] = window("solo", plain_solo, outdir / "solo")
+    except Exception as e:  # noqa: BLE001
+        doc["h1_solo"] = {"ok": False, "error": f"{type(e).__name__}: {e}"[:2000]}
+    doc["compile"] = "deferred to --compile-from (out/pouw-h1-calls.json and out/solo/pouw-h1-calls.json)"
+    doc["ok"] = bool(doc["plain"]["static"]["ok"] and doc["h1"]["ok"] and doc["engine"]["enforce_eager"] is not False)
+    (outdir / RECORD).write_text(json.dumps(doc, indent=1, default=str) + "\n")
+    h = doc["h1"]
+    print(f"POUW-H1-FILL {'OK' if doc['ok'] else 'FAIL'} u={h['u']} rows={h['step_rows']} same_tokens={h['same_tokens']} "
+          f"credited_rows={h['credit']['credited']['rows']} refused_calls={h['credit']['refused']['calls']} "
+          f"step_s(64)={h['decode_step_s_median']} step_s(1)={doc['h1_solo'].get('decode_step_s_median')} "
+          f"tok/s(64)={h['serve']['tokens_per_s']} tok/s(1)={doc['h1_solo'].get('serve', {}).get('tokens_per_s')} "
+          f"digest={h['tokens_digest'][:16]}", flush=True)
+    return doc
+
+
 def _check(h1: Any) -> tuple[dict[str, Any], bool]:
     try:
         out = h1.check()
@@ -204,12 +396,15 @@ def main(argv: list[str] | None = None) -> int:
                                                          "batch and the one alone)")
     ap.add_argument("--compile", action="store_true", help="compile every served shape in this process too")
     ap.add_argument("--compile-from", metavar="CALLS_JSON", help="no GPU: compile a served run's record (pouw-h1-calls.json)")
+    ap.add_argument("--workload", choices=("batch", "fill"), default="batch",
+                    help="batch: PROMPTS batched and the first alone (--rows, --steps, --max-tokens); fill: pouw_h1.FILL, 64 in "
+                         "flight every served step (VLLM-52; its own T, S and cap)")
     a = ap.parse_args(argv)
     if a.compile_from:
         return 0 if compile_from(a.compile_from, a.out)["ok"] else 1
     if not (a.at and a.by):
         ap.error("serving needs --at and --by (the pin entry's, if one is made)")
-    return 0 if run(a)["ok"] else 1
+    return 0 if (fill if a.workload == "fill" else run)(a)["ok"] else 1
 
 
 if __name__ == "__main__":

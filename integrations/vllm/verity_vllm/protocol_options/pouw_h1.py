@@ -15,6 +15,11 @@ served int8 linear call as its own Program on bits, which `verity.core.protocols
   off(w) the units of the linears before w), and steps past the last served one are all empty. Nothing about a call's rows or
   positions comes from its tokens, batch or EOS. Credit is the served rows of the calls the credit gate passes only; the
   padded work is shown beside it.
+* **u** (`H1Run.utilization`, PERIOD-PATH's ``u`` in `benchmarks/pouw/period_cost.py`): the window's served rows over its
+  declared rows, Σ_s m_s / (S·T). A `Static` declaration (VLLM-31's ``sampling.ignore_eos``: every request admitted at
+  step 0, prefilled there and run to its cap) fixes each step's rows ahead of serving, so its u is public: SERVE-H1's 5
+  prompts (44 tokens) at cap 16 are 119/1152, and `FILL`'s 64 one-token prompts fill all 16 served steps, 16/18. A served
+  step short of its declared rows is padded in the layout (its calls keep their positions) and refused by `Static.check`.
 * **Groups.** A call is one site and one seed group (decision 122: a batched call over a step's batch is one site): its
   (root(A), root(B)) seeds its units. Calls are never grouped together, since a later call reads an earlier one's output.
 * **Units** are in compile's order, the order the manifest lists them in: the call, then its row block, then its column
@@ -45,6 +50,7 @@ import hashlib
 import json
 from collections import Counter, deque
 from dataclasses import dataclass
+from fractions import Fraction
 from functools import lru_cache
 from pathlib import Path
 from typing import Any, Callable, Mapping, Sequence
@@ -185,6 +191,65 @@ def slots(a: Any, s_a: Any, rows: int) -> tuple[Any, Any]:
     out, sc = a.new_zeros((rows, int(a.shape[1]))), s_a.reshape(-1).new_zeros(rows)
     out[:m], sc[:m] = a, s_a.reshape(-1)
     return out, sc
+
+
+def utilization(step_rows: Sequence[int], rows: int, steps: int) -> Fraction:
+    """PERIOD-PATH's u: the window's served rows over its declared rows, Σ_s m_s / (S·T)."""
+    if len(step_rows) > steps or any(not 0 <= m <= rows for m in step_rows):
+        raise ValueError(f"{list(step_rows)} is not a window of {steps} steps of at most {rows} rows")
+    return Fraction(sum(step_rows), rows * steps)
+
+
+@dataclass(frozen=True)
+class Static:
+    """A static H1 window's declaration (VLLM-31's ``sampling.ignore_eos``): requests of ``prompt_lens`` tokens, all admitted
+    at step 0 and prefilled there in one step, each running exactly ``max_tokens`` steps (no early stop, no preemption, no host
+    prefix cache), at T ``rows`` a call and S ``steps``. Each step's rows are then a function of the declaration alone
+    (`schedule`), and so is the window's u."""
+
+    prompt_lens: tuple[int, ...]
+    max_tokens: int
+    rows: int
+    steps: int
+
+    def __post_init__(self) -> None:
+        layout([], self.rows)
+        if not self.prompt_lens or min(self.prompt_lens) < 1 or sum(self.prompt_lens) > self.rows:
+            raise ValueError(f"prompts of {list(self.prompt_lens)} tokens don't prefill in one step of {self.rows} rows")
+        if not 1 <= self.max_tokens <= self.steps:
+            raise ValueError(f"a cap of {self.max_tokens} tokens doesn't fit a window of {self.steps} steps")
+
+    @property
+    def slots(self) -> int:
+        return len(self.prompt_lens)
+
+    def schedule(self) -> list[int]:
+        """Each step's rows: the prompts' tokens at step 0, one row a request for its other ``max_tokens`` - 1 steps, then the
+        window's empty steps."""
+        return [sum(self.prompt_lens)] + [self.slots] * (self.max_tokens - 1) + [0] * (self.steps - self.max_tokens)
+
+    @property
+    def u(self) -> Fraction:
+        return utilization(self.schedule(), self.rows, self.steps)
+
+    def engine_args(self) -> dict[str, Any]:
+        """vLLM's scheduler limits for the declaration: every request in flight at once, T tokens a step, no prefix cache."""
+        return {"max_num_seqs": self.slots, "max_num_batched_tokens": self.rows, "enable_chunked_prefill": True,
+                "enable_prefix_caching": False}
+
+    def check(self, realized: Sequence[int]) -> list[str]:
+        """Each step whose served rows aren't the declared ones, by name; empty when the window is the declaration."""
+        want = self.schedule()
+        if len(realized) > len(want):
+            return [f"{len(realized)} served steps past the window's {len(want)}"]
+        got = list(realized) + [0] * (len(want) - len(realized))
+        return [f"step {s}: {m} rows served, {d} declared ({'fewer' if m < d else 'more'}: an early stop, a preemption or an "
+                f"admission off the declaration decided it, not the public schedule)"
+                for s, (m, d) in enumerate(zip(got, want)) if m != d]
+
+
+#: PERIOD-PATH's ask 1: 64 one-token prompts at cap 16, every row of SERVE-H1's 16 served steps filled (u = 16/18)
+FILL = Static((1,) * 64, 16, 64, 18)
 
 
 @dataclass(frozen=True)
@@ -334,6 +399,8 @@ class H1Run:
                 a = weight.new_zeros((0, k)) if weight is not None else None
                 self._call(s, w, a, scale.reshape(-1).new_zeros(0) if scale is not None else None, weight, scale)
         self.details["static"] = self.static()
+        self.details["step_rows"] = self.step_rows()
+        self.details["u"] = str(self.utilization())
         self.details["credit"] = self.credit()
 
     def static(self) -> bool:
@@ -341,6 +408,14 @@ class H1Run:
         want = [(s, w, s * self.u_step + self.offs[w], units(k, n, self.rows))
                 for s in range(self.steps) for w, (n, k) in enumerate(self.shapes_)]
         return self.order_ok and not self.refused and [(c.step, c.layer, c.base, c.units) for c in self.calls] == want
+
+    def step_rows(self) -> list[int]:
+        """Each step's served rows, its first linear's m (0 for a step with no call)."""
+        rows = {c.step: c.m for c in self.calls if c.layer == 0}
+        return [rows.get(s, 0) for s in range(self.steps)]
+
+    def utilization(self) -> Fraction:
+        return utilization(self.step_rows(), self.rows, self.steps)
 
     def verdict(self, call: Call) -> dict[str, Any]:
         """The call's credit verdict; a served call recorded outside a traced ``apply`` (`traced`) is refused."""
@@ -462,6 +537,6 @@ def bind_all(calls: Sequence[Call], bound: Mapping[int, Mapping[str, Any]]) -> l
     return out
 
 
-__all__ = ["CALLS_FILE", "Call", "H1Run", "Listener", "RECORD", "SALT_TAG", "SCHEME", "TILE", "VllmInt8LinearH1", "bind_all",
-           "check_tiles", "compiled", "coordinate", "layers", "layout", "numpy_of", "observer", "padded", "program", "program_salt",
-           "slots", "traced", "units", "weight_root"]
+__all__ = ["CALLS_FILE", "Call", "FILL", "H1Run", "Listener", "RECORD", "SALT_TAG", "SCHEME", "Static", "TILE", "VllmInt8LinearH1",
+           "bind_all", "check_tiles", "compiled", "coordinate", "layers", "layout", "numpy_of", "observer", "padded", "program",
+           "program_salt", "slots", "traced", "units", "utilization", "weight_root"]

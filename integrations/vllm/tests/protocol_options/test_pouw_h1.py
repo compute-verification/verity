@@ -10,6 +10,7 @@ from __future__ import annotations
 import hashlib
 import json
 import random
+from fractions import Fraction
 
 import numpy as np
 import pytest
@@ -166,6 +167,51 @@ def test_credit_is_the_served_rows_and_the_padding_is_shown_beside_it():
     assert (c["refused"]["calls"], c["refused"]["rows"], c["refused"]["macs"]) == (2, 5, served)
     assert c["padded"]["rows"] == 4 * 32 - 5 and c["padded"]["macs"] == (2 * 32 * 32 + 2 * 32 * 64) * K - served
     assert c["units"] == 6 == run.commits["units"]
+
+
+def test_fill_declares_every_served_step_full_and_serve_h1_is_119_of_1152():
+    """`FILL` (VLLM-52): 64 one-token prompts at cap 16 in T = 64, S = 18 prefill at step 0 and decode together, so each of
+    the 16 served steps carries 64 rows and u = 16/18, PERIOD-PATH's ask 1; the engine runs all 64 in flight with no prefix
+    cache. SERVE-H1's 5 prompts (44 tokens with BOS) at the same cap are 44 + 15 x 5 rows: today's 119/1152."""
+    assert PH.FILL.schedule() == [64] * 16 + [0, 0] and PH.FILL.u == Fraction(16, 18)
+    assert PH.FILL.engine_args() == {"max_num_seqs": 64, "max_num_batched_tokens": 64, "enable_chunked_prefill": True,
+                                     "enable_prefix_caching": False}
+    serve_h1 = PH.Static((6, 18, 6, 7, 7), 16, 64, 18)
+    assert serve_h1.schedule()[:2] == [44, 5] and serve_h1.u == Fraction(119, 1152)
+    with pytest.raises(ValueError, match="don't prefill in one step of 64 rows"):
+        PH.Static((2,) * 64, 16, 64, 18)
+    with pytest.raises(ValueError, match="doesn't fit a window of 18 steps"):
+        PH.Static((1,) * 64, 19, 64, 18)
+
+
+def _fill_run(rows_per_step):
+    """`FILL`'s window over two small linears, step s serving rows_per_step[s] rows."""
+    rng = np.random.default_rng(11)
+    run = PH.H1Run("t", SALT, {0: "q", 1: "o"}, [(32, K), (40, K)], PH.FILL.rows, PH.FILL.steps)
+    for m in rows_per_step:
+        for w, n in ((0, 32), (1, 40)):
+            assert run.record(w, *_tap(rng, m, n)) is not None
+    run.close()
+    return run
+
+
+def test_a_filled_window_measures_its_declared_u():
+    run = _fill_run(PH.FILL.schedule()[:PH.FILL.max_tokens])
+    assert run.step_rows() == PH.FILL.schedule() and run.utilization() == PH.FILL.u == Fraction(16, 18)
+    assert run.static() and PH.FILL.check(run.step_rows()) == [] and run.details["u"] == "8/9"
+
+
+def test_a_step_short_of_its_declared_rows_is_padded_in_the_layout_and_refused_by_the_declaration():
+    """One sequence missing from step 5 (a preemption, say) and the last served step gone (an early stop): the layout pads
+    them (every call keeps its public position, the empty slots and step are padding, u falls), and `Static.check` names
+    both steps."""
+    short = [64] * 5 + [63] + [64] * 9
+    run, full = _fill_run(short), _fill_run([64] * 16)
+    assert run.static() and [(c.step, c.layer, c.base) for c in run.calls] == [(c.step, c.layer, c.base) for c in full.calls]
+    assert run.step_rows() == short + [0, 0, 0] and run.utilization() == Fraction(16 * 64 - 65, 18 * 64)
+    assert run.credit()["padded"]["rows"] == full.credit()["padded"]["rows"] + 2 * 65
+    assert [p.split(":")[0] for p in PH.FILL.check(run.step_rows())] == ["step 5", "step 15"]
+    assert "63 rows served, 64 declared (fewer" in PH.FILL.check(run.step_rows())[0]
 
 
 def test_slots_put_the_served_rows_first_then_empty_rows_under_scale_0():
