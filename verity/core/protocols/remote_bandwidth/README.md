@@ -27,7 +27,9 @@ friction skill), on these grounds:
   holds every field the ledger reads, except four. The coins' commitment root is the books'. The block size is a
   constant. The registration's receipt, bind, codec, layout and rows are bound by its digest, which the Lean's record
   names. The integrity profile is a function of the Lean's lengths and draws at δ (`audit.window_profile`).
-- every recorded run in the store replays through the Lean to the verdict the Python gave (`lean/tests/replay.py`).
+- every recorded session in the store replays through both to the same verdict (`lean/tests/replay.py`), and to the
+  one it recorded wherever its `verifier.json` keeps enough to rebuild its events in turn: three sessions that failed
+  `few` don't keep their appends, and both verifiers refuse the same call of their replay.
 - the Python keeps running beside the Lean as the reference.
 - the protocol's properties are in `Security/Properties/`.
 
