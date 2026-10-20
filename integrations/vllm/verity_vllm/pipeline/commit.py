@@ -1044,6 +1044,7 @@ class Options:
     replay_deferred: str | None = option("--replay-deferred", nargs="?", const="full", default=None, choices=("full", "slim"), help="the C2 sampled replay + boundary linkage do not run in this process: each instrumented run writes a replay bundle (verity_vllm.pipeline.replay_bundle, <out>/replay_bundle_p<pair>/) and its verdict stays PENDING until the replay runs on CPU from the bundle; exit 0 when every check this process runs passes.  `slim`: the replay's reads are planned here and only the members they open are sealed, with their Merkle paths (the planning adds to the GPU hold)")
     replay_seed: int | None = option("--replay-seed", type=int, default=None, help="sampled replay: a TARGETED sampler seed (negatives / reproduction); default = derived from the run root after commitment (recorded with its source)")
     replay_challenge: str | None = option("--replay-challenge", default=None, help="sampled replay: a VERIFIER-ISSUED post-commitment challenge (hex/string) -- the seed becomes sha256(challenge || run_root) so an " "adaptive prover cannot grind the sample by recommitting (rev-cb M-0572); default = the run root alone (honest-prover measurement)")
+    replay_challenger: str | None = option("--replay-challenger", default=None, metavar="HOST:PORT", help="the served C2 replay's challenge from the auditor host's challenger (verity_vllm.pipeline.replay_coin: its replay coin 0, opened after the run root); without it the challenge is --replay-challenge or this process's own, recorded as such")
     weights_of_record: str | None = option("--weights-of-record", default=None, metavar="JSON", help="[MAN-09, rev-cb M-0610] the weights of record: per-field digests of the served weights COMPOSED FROM THE PINNED CHECKPOINT SHARDS " "(verity_vllm.check.weights_of_record, written beside the Build's Program); every live parameter the committer registers is compared " "with it by name -- a served model that differs from the checkpoint in one element is a named COMMIT FAIL")
     checkpoint_dir: str | None = option("--checkpoint-dir", default=None, help="[MAN-09] derive the weights of record in-process from this pinned checkpoint snapshot + the Program of record (--program-dir / " "--programs-root) when --weights-of-record is not given; the record is written to <out>/weights_of_record.json")
     replay_k: int | None = option("--replay-k", type=int, default=None, help="the config run's sampled replay: k units in all (drawn by --replay-draw) in place of the row's per-stratum sample")
@@ -1157,6 +1158,8 @@ def main(args: Options, argv: list[str] | None = None) -> None:
     required_manifest = None
     if getattr(args, "padded_finalize", False) and not args.required_manifest:
         raise SystemExit("--padded-finalize needs --required-manifest: the padding is RequiredValues outside the executed prefix of record (B9.1); nothing to pad without it")
+    if args.replay_challenger and args.replay_challenge:
+        raise SystemExit("--replay-challenger and --replay-challenge are two sources of the C2 replay's challenge: give one")
     if args.required_manifest:
         from verity_vllm.commit.binding import require_build_program_digest
         require_build_program_digest(args.required_manifest, args.program_digest)          # [COORD M-0205 (C1)] named refusal, before any engine
@@ -2225,8 +2228,15 @@ def main(args: Options, argv: list[str] | None = None) -> None:
                     import secrets
 
                     row["commit"]["compiled_source"], row["commit"]["compilation"] = served.src.summary(), versions["compilation"]
-                    _sc2 = served.c2(com, rc, reqs, args.replay_challenge or secrets.token_hex(16), args.replay_seed)   # the challenge drawn after the run root
+                    from verity_vllm.pipeline import replay_coin as RCN
+
+                    if args.replay_challenger:   # RT4-INT-21: the auditor host's replay coin, opened after the run root
+                        _chal, _chal_rec = RCN.challenge(args.replay_challenger, rc.run_root)
+                    else:
+                        _chal, _chal_rec = RCN.local(args.replay_challenge, secrets.token_hex(16))
+                    _sc2 = served.c2(com, rc, reqs, _chal, args.replay_seed)   # the challenge drawn after the run root
                     components.update(_sc2["components"])
+                    components["replay_challenge"] = _chal_rec
                     vc_methods.insert(0, "sampled-exact-replay (the served Build's Program on the committed values; served_check.py) + boundary linkage")
                     vc_result = _sc2["ok"] if vc_result is None else (vc_result and _sc2["ok"])
                     print(f"[delta] SERVED C2 (pair {pair}): {_sc2['line']}", flush=True)

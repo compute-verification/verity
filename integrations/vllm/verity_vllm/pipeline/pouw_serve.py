@@ -2,11 +2,14 @@
 first call's tiles tampered.
 
     verity-vllm pouw-serve --workload workloads/workload_qwen05_32x16_1req.json [--draws 16] [--out DIR]
+        [--challenger HOST:PORT --session '{"id": ..., "commit": ..., "period": ...}']
 
 The engine is `verity_vllm.LLM` on the workload's pinned model, with ``pouw:ncp-v2`` installed. Every linear call is
 committed natively as it is served (`protocol_options.pouw_native`), under an epoch whose salt is the salt coin of the
-command's own challenger (`verity.core.protocols.pouw.coins.Challenger`, epoch 0): the command is its run's
-auditor. Once the engine closes, the circuit replay
+auditor host's challenger at ``--challenger``, in the session infra gave the window (``--session``,
+`protocol_options.pouw_h1_challenger`), opened after the weights' root. Without ``--challenger`` the salt is the command's
+own challenger's (`verity.core.protocols.pouw.coins.Challenger`, epoch 0): the command is then its run's auditor, and the
+run is a measurement, not a window any verifier credits. Once the engine closes, the circuit replay
 (`check.replay.pouw_circuit.replay`) runs twice, the run's calls as one window under the work law at a budget of K =
 ``--draws``:
 
@@ -47,6 +50,21 @@ class Options:
     draws: int = option("--draws", type=int, default=16, help="the window's work-law budget K (default 16)")
     out: str = option("--out", env="RESEARCH_RUN_DIR", default=".", help="the output directory (default $RESEARCH_RUN_DIR, else .)")
     run_id: str = option("--run-id", env="RESEARCH_RUN_ID", default="", help="the research run's id: result.json is written when set")
+    challenger: str | None = option("--challenger", default=None, metavar="HOST:PORT", help="the auditor host's challenger the epoch's salt coin comes from (the pouw setting 'challenger'); without it the command's own in-process challenger draws it, and the run is a measurement only")
+    session: str | None = option("--session", default=None, metavar="JSON", help="with --challenger: the session infra gave the window, {\"id\", \"commit\", \"period\"[, \"root\"]} (the pouw setting 'session')")
+
+
+def protocols_config(a: Options) -> dict[str, Any]:
+    """PoUW's settings: the salt from the auditor host's challenger in the session infra gave (``--challenger``,
+    ``--session``), else from the command's own in-process challenger."""
+    if a.challenger is None:
+        if a.session is not None:
+            raise ValueError("--session is the session of the challenger at --challenger")
+        from verity.core.protocols.pouw.coins import Challenger
+        return {"pouw": {"coins": Challenger(0), "draws": a.draws}}
+    if a.session is None:
+        raise ValueError("--challenger needs --session, the session infra gave the window for its Commit and period")
+    return {"pouw": {"challenger": a.challenger, "session": json.loads(a.session), "draws": a.draws}}
 
 
 def verdicts(records: Sequence[Any], commitment: dict[str, Any], draws: int) -> dict[str, Any]:
@@ -93,8 +111,7 @@ def main(a: Options) -> int:
     out = Path(a.out)
     out.mkdir(parents=True, exist_ok=True)
     t0 = time.monotonic()
-    from verity.core.protocols.pouw.coins import Challenger
-    llm = LLM(wl["model"], revision=rev, protocols=ENTRY, protocols_config={"pouw": {"coins": Challenger(0), "draws": a.draws}})
+    llm = LLM(wl["model"], revision=rev, protocols=ENTRY, protocols_config=protocols_config(a))
     built = time.monotonic() - t0
     prompts = [{"prompt_token_ids": r["prompt_token_ids"]} for r in wl["requests"]]
     params = [SamplingParams(temperature=0.0, max_tokens=int(r["max_tokens"])) for r in wl["requests"]]
@@ -140,4 +157,4 @@ def main(a: Options) -> int:
     return 0 if ok else 1
 
 
-__all__ = ["Options", "main", "per_forward", "verdicts"]
+__all__ = ["Options", "main", "per_forward", "protocols_config", "verdicts"]
