@@ -1,6 +1,6 @@
 """`circuit.admit`: `PouwQueueAdmit_v3` is its `_v2` word, a slot is admitted iff the queue assigns it a request live at the
 step and its row's scale is nonzero, so a selected slot holding the canonical empty row is not admitted, and the unit
-reads no row byte."""
+reads no row byte, so a selected `scale_only` row (zero bytes, a nonzero scale) is admitted."""
 from __future__ import annotations
 
 import random
@@ -67,7 +67,8 @@ def test_a_selected_block_of_canonical_empty_rows_admits_nothing():
 
 
 def test_the_unit_reads_no_row_byte():
-    """Its ports are the step, the queue's 16 entries and the rows' 16 scales: no slot's s8 bytes reach it."""
+    """Its ports are the step, the queue's 16 entries and the rows' 16 scales: no slot's s8 bytes reach it, so a selected
+    `scale_only` row admits like a live one and an admit bit is not a live tile (RT4-LOGIC-4)."""
     params, ret = A.PouwQueueAdmit.signature(None)
     assert [n for n, _ in params] == ["t", "q", "start", "stop", "scale"] and ret == A.U16
     assert [t for n, t in params if n == "scale"] == [Array(A.SLOTS, A.U32)]
