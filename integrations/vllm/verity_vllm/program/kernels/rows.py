@@ -777,6 +777,8 @@ for m, fn in ((softcap_rows, attention_softcap), (act_rows, act_rows.silu_mul_ex
               (batched_gemm_rows, batched_gemm_rows.batched_gemm)):
     _row(m.FAMILY, fn, ("out",), check_targets=m.check_targets)
 EVALUATOR_PROVENANCE[batched_gemm_rows.FAMILY] = batched_gemm_rows.PROVENANCE
+from verity_vllm.program.kernels import marlin_moe_rows  # noqa: E402
+marlin_moe_rows.register_rows(EVALUATORS, _row)
 deepgemm_rows.register_rows(EVALUATORS, _row)
 moe_align_rows.register_rows(EVALUATORS, _row)
 glm53_rows.register_rows(EVALUATORS, _row, _sample)

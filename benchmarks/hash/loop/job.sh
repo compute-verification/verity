@@ -5,13 +5,14 @@
 #
 # Env: ROW (the iteration), HYP (its hypothesis), ARMS (default below), REPS (3), WORK, VERITY_BENCH_VENV,
 # NATIVE_COLLECT_BUILD, HF_HOME (the node's, as iterate.sh's tables set them), LEASE (gpu-lease's flags, default "--max-min 75"),
-# CHECK_TESTS (the committer's GPU byte-identity tests and check_b3.py, the BLAKE3 arm against the hash lane's hm96 reference, run in
-# the lease before timing, once in each rows-sha512 leaf form, VERITY_ROWS_FORM=fused and split; a failure is exit 7 and no timing;
-# empty skips them).  The timed arms run the device's own form (native_rows.cu, verity_rows_leaves_form).
+# CHECK_TESTS (the committer's GPU byte-identity tests, run in the lease before timing, once in each rows-sha512 leaf form,
+# VERITY_ROWS_FORM=fused and split; a failure is exit 7 and no timing; empty skips them; a branch that carries rows-blake3, which
+# stays off main, adds check_b3.py and check_hfirst.py).  The timed arms run the device's own form (native_rows.cu,
+# verity_rows_leaves_form).
 # PIN_BUILD_NAME (iterate.sh sets it on each GPU it has a Build of record for: the H200, and the RTX PRO 6000 once named): the Build sent with the run,
 # as $RESEARCH_RUN_DIR/inputs/<name>; prof.sh then runs every arm under its compile artifact (PIN_BUILD) and checks the winners after.
-# The loop's arms (arms.py: the BLAKE3 sibling served-commit-rows-blake3, what-if served-commit-rows-whatif-q) run through a copy
-# of circuits' prof.sh with their case lines added; prof.sh itself is circuits' and is not edited.
+# The loop's arms (arms.py: what-if served-commit-rows-whatif-q, and on such a branch the BLAKE3 sibling served-commit-rows-blake3)
+# run through a copy of circuits' prof.sh with their case lines added; prof.sh itself is circuits' and is not edited.
 # On a dc VM the GPU is held only for the timed bench; a queued job (vy-nebius-2) already runs inside the queue's lease, which
 # it reuses.
 set -uo pipefail
@@ -19,13 +20,13 @@ export OUT=${OUT:-${RESEARCH_RUN_DIR:-.}/out}
 mkdir -p "$OUT"
 # served-commit-rows-layer: circuits' per-layer acquisition (each layer's residual, K and V; no scheme's roots) at the committer's
 # 4 KiB rows, their -layer-4k frontier (iteration 1's pinned H200 baseline r20261018-104600-f33a), under the loop's committer
-export ARMS=${ARMS:-stock,stock-prof,served-commit-rows,served-commit-rows-blake3,served-commit-rows-layer} REPS=${REPS:-3}
+export ARMS=${ARMS:-stock,stock-prof,served-commit-rows,served-commit-rows-layer} REPS=${REPS:-3}
 PY=${VERITY_BENCH_VENV:?}/bin/python
 HF_HOME=${HF_HOME:-/workspace/hf} "$PY" -c "
 from huggingface_hub import snapshot_download
 print(snapshot_download('Qwen/Qwen3-8B', revision='b968826d9c46dd6066d109eabc6255188de91218',
       allow_patterns=['*.json', '*.safetensors', '*.txt', '*.model', '*.py'], cache_dir='$HF_HOME/hub'))" || exit 8
-export CHECK_TESTS=${CHECK_TESTS-integrations/vllm/tests/commit/test_rows_cuda.py integrations/vllm/tests/commit/test_windowed_rows_sha512.py integrations/vllm/tests/commit/test_native_collect.py benchmarks/hash/loop/check_b3.py benchmarks/hash/loop/check_hfirst.py}
+export CHECK_TESTS=${CHECK_TESTS-integrations/vllm/tests/commit/test_rows_cuda.py integrations/vllm/tests/commit/test_windowed_rows_sha512.py integrations/vllm/tests/commit/test_native_collect.py}
 PROF=$(mktemp -d)/prof.sh
 sed -e '/^    served-commit-rows) /i\    served-commit-rows-blake3) mods+=(--arm-module hash.loop.arms:SERVED_COMMIT_ROWS_BLAKE3);;' \
     -e '/^    served-commit-rows) /i\    served-commit-rows-whatif-q) mods+=(--arm-module hash.loop.arms:SERVED_COMMIT_ROWS_WHATIF_Q);;' \

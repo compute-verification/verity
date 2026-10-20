@@ -5,7 +5,7 @@
 # the machines train.sh launches each train's check on (a machine, or `auto`)
 on = ["vy-nebius-1", "vy-nebius-2", "vy-nebius-cpu-1", "vy-nebius-cpu-2"]
 # the most checks of `next` running at once
-max_running = 4
+max_running = 6
 # PRs per checked train on `next`
 train_size = 15
 # ready marks written before this don't count: drive's cutoff, 12 Oct
