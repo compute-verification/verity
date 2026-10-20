@@ -31,9 +31,11 @@ from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
-from verity.core.protocols.pouw import window as Wd
-from verity.core.protocols.sampled_proofs import challenger as Ch
-from verity.core.protocols.sampled_proofs import remote as R
+sys.path.insert(0, str(Path(__file__).resolve().parents[3]))
+
+from verity.core.protocols.pouw import window as Wd  # noqa: E402
+from verity.core.protocols.sampled_proofs import challenger as Ch  # noqa: E402
+from verity.core.protocols.sampled_proofs import remote as R  # noqa: E402
 
 CHALLENGER_ENV = "POUW_CHALLENGER"
 IN_PROCESS = "in-process (not certified)"
