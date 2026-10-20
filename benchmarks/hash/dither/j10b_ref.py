@@ -11,7 +11,7 @@ unit (I, b g). seed_j(v) = seeds.seed(salt, base + v, root_a, root_b) and σ_R(v
 * Column streams stay per unit (they carry I): the unit's own h1tile columns, blocks 32 RB + j CB .. of seed_j(u).
 * Fold keys stay per unit: h1tile.fold_keys(σ_R(u)).
 With g = 1 every unit is its own leader and this is h1tile.reference exactly (`self_check`). The unit's z and receipt
-on that noise are v3's (j10r_ca.unit, h1v3_ca's word functions, copied verbatim from CA's H1V3).
+on that noise are v3's (j10r_ca.unit on h1v3_ca: h1tile's word functions and v3's unpeeled stream_cell).
 """
 from __future__ import annotations
 

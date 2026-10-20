@@ -17,9 +17,10 @@ j10r_ca.py's CPU twin (receipts and z on three units a shape, the noise and z ch
 every unit of two small calls.
 
 Gates before any timing (a failed gate exits 4 and its build is not timed):
-  * anchors (CPU): every build's kh_one, fused and two-launch, against h1v3_ca.reference(stream=True) (v3's words,
-    copied verbatim) on every unit of a 64 x 64 x 512 call whose second row block is dead and of a 32 x 32 x 4608 call
-    (m = 3), z and receipt, B over all of int8 (-128 included); the reference kernel (h1zref.cu) against the same z;
+  * anchors (CPU): every build's kh_one, fused and two-launch, against h1v3_ca.reference(stream=True) (v3's unpeeled
+    unit on h1tile's word functions) on every unit of a 64 x 64 x 512 call whose second row block is dead and of a
+    32 x 32 x 4608 call (m = 3), z and receipt, B over all of int8 (-128 included); the reference kernel (h1zref.cu)
+    against the same z;
   * every timed shape, 0xA5 poison over receipts, z, zo, y and the workspace first:
     - the receipts on sampled units against served_h1/receipts.py's call_receipts, the seeds against seeds.py;
     - z against h1zref (X (B + c)^T by dp4a from full compressions) on every cell of the selected row blocks (all of
