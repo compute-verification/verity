@@ -63,6 +63,7 @@ def test_a_session_verified_on_the_file_register_served_wrote_is_accepted_and_a_
     tree = ServedTree(**json.loads((fx / "stage" / "served.json").read_text()))
     sr = register_served(program, query, [tree])
     assert sr.file_bytes() == (fx / "stage" / "registered.json").read_bytes()
+    assert sr.partition == json.loads((fx / "stage" / "partition.json").read_text())
     ok = _verify(fx, sr.write(tmp_path / "registered.json"))
     assert ok["accepted"] is True, ok
     assert ok["registered"] == {"cs": {"value": SR.VALUE, "root": tree.root}}
