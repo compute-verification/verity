@@ -140,6 +140,7 @@ def run(a: argparse.Namespace) -> dict[str, Any]:
     from verity_vllm.program.frontend.target_profile import TargetProfile
     from verity_vllm.protocol_options import pouw
     from verity_vllm.protocol_options import pouw_h1 as PH
+    from verity_vllm.protocol_options import pouw_h1_hooks as PHK
 
     outdir = Path(a.out)
     outdir.mkdir(parents=True, exist_ok=True)
@@ -169,7 +170,7 @@ def run(a: argparse.Namespace) -> dict[str, Any]:
     comp = PO.install(eng.model, ctx)
     doc["install_s"] = round(time.monotonic() - t0, 1)
     h1 = pouw.h1_run(entry_name)
-    layers = PH.layers(eng.model, pouw.linear_types())
+    layers = PHK.layers(eng.model, pouw.linear_types())
     seen: list[str] = []
 
     def listener(call: Any, a_: Any, s_a: Any, weight: Any, weight_scale: Any) -> dict[str, Any]:
@@ -295,6 +296,7 @@ def fill(a: argparse.Namespace) -> dict[str, Any]:
     from verity_vllm.program.frontend.target_profile import TargetProfile
     from verity_vllm.protocol_options import pouw
     from verity_vllm.protocol_options import pouw_h1 as PH
+    from verity_vllm.protocol_options import pouw_h1_hooks as PHK
 
     decl = PH.FILL
     outdir = Path(a.out)
@@ -349,7 +351,7 @@ def fill(a: argparse.Namespace) -> dict[str, Any]:
         comp = PO.install(eng.model, ctx)
         out: dict[str, Any] = {"install_s": round(time.monotonic() - t0, 1)}
         h1 = pouw.h1_run(entry_name)
-        layers = layers or PH.layers(eng.model, pouw.linear_types())
+        layers = layers or PHK.layers(eng.model, pouw.linear_types())
         bad: list[str] = []
         stamps: dict[int, float] = {}
         serving = [True]

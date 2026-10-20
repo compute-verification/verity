@@ -387,6 +387,8 @@ class H1Run:
         #: each served call's credit verdict (`credit_gate.verdict`), by call index, and the call `record` just made with its z
         self.verdicts: dict[int, dict[str, Any]] = {}
         self._recorded: tuple[Call, Any] | None = None
+        #: why the window's salt opening was refused (also ``details["unopened"]``): a window opens it once
+        self._unopened: str | None = None
         self.rounds, self._key = rounds, key if key is not None else os.urandom(32)
         self.draw, self.admission, self.coin_source = draw, admission, coin_source
         #: each call's table roots (hex; z None when the run has no exact Y for it) and each call's receipt root
@@ -430,15 +432,15 @@ class H1Run:
         (`pouw_h1_window.Window.open`); the commitment records the root (``requests_root``) and what ``opener``
         returns of the opening."""
         if self._salt is None:
-            if "unopened" in self.details:
-                raise RuntimeError(f"{self.entry}: the window's salt was refused ({self.details['unopened']}), and a "
+            if self._unopened is not None:
+                raise RuntimeError(f"{self.entry}: the window's salt was refused ({self._unopened}), and a "
                                    "window opens it once")
             table = self._tables[0] = RQ.request_table(None, 0, self.rows, self.admitted.get(0, []), self._key)
             self.commits["requests_root"] = table.commitment.root.hex()
             try:
                 salt, self.rounds, self.draw, commits = self._opener(table.commitment.root)
             except Exception as e:
-                self.details["unopened"] = str(e)
+                self._unopened = self.details["unopened"] = str(e)
                 raise
             self.commits.update(commits)
             self._salt = salt
@@ -636,7 +638,7 @@ class H1Run:
         if self.closed:
             return
         self.closed = True
-        if not self.commit or "unopened" in self.details:
+        if not self.commit or self._unopened is not None:
             return
         self.details["steps_served"] = self.step + 1
         self.details["last_step_complete"] = self.last in (None, len(self.shapes_) - 1)
@@ -741,7 +743,7 @@ class H1Run:
         """Close the window, commit its manifest, then open ``draw``'s coin after `pouw_h1_requests.draw_root` over the
         manifest, the last round's receipts and every round's root and coin, so the draw follows all of them."""
         self.close()
-        if not self.commit or "unopened" in self.details:
+        if not self.commit or self._unopened is not None:
             return
         calls_root = self.calls_root()
         self.commits.update(calls_root=calls_root.hex(), static=self.details["static"])
@@ -765,63 +767,6 @@ class H1Run:
                                                     "refused": self.refused, "calls": self.manifest()}) + "\n")
 
 
-def layers(model: Any, types: tuple[type, ...]) -> list[Any]:
-    """The linear layers by type in module order; ValueError names every one not on the int8_exact plain arm
-    (`engine.int8_vllm.Int8PlainLinearMethod`, whose ``observe`` the option wraps) with its int8 weight and scales."""
-    out = [m for m in model.modules() if isinstance(m, types)]
-    if not out:
-        raise ValueError(f"pouw:{SCHEME}: the model has no linear layer")
-    bad = []
-    for w, layer in enumerate(out):
-        method = layer.quant_method
-        dtype = str(getattr(getattr(layer, "weight", None), "dtype", None)).removeprefix("torch.")
-        if getattr(method, "int8_arm", None) is None or not callable(getattr(method, "observe", None)) or dtype != "int8" \
-                or getattr(layer, "weight_scale", None) is None:
-            bad.append(f"linear {w}: {type(method).__name__} with a {dtype} weight is not the int8_exact plain arm")
-    if bad:
-        raise ValueError(f"pouw:{SCHEME} refused at install: " + "; ".join(bad))
-    return out
-
-
-def observer(run: H1Run, w: int, orig: Any) -> Any:
-    """Layer `w`'s ``observe``: the arm's own, then the call recorded with the layer's weight and the z the arm's kernel
-    wrote, if it hands one over (`H1Run.record`)."""
-
-    def observe(layer: Any, xq: Any, s_a: Any, y: Any, z: Any = None) -> None:
-        orig(layer, xq, s_a, y) if z is None else orig(layer, xq, s_a, y, z)
-        if run.commit:
-            run.record(w, xq, s_a, layer.weight, layer.weight_scale, z, y=y)
-    return observe
-
-
-def traced(run: H1Run, w: int, orig: Any) -> Any:
-    """Layer `w`'s ``apply``: the arm's own under the credit gate's trace (`credit_gate.Trace`), then the call `record` made
-    inside it judged against the y it returns (`H1Run.judge`)."""
-
-    def apply(layer: Any, x: Any, bias: Any = None) -> Any:
-        if not run.commit:
-            return orig(layer, x, bias)
-        run._recorded = None
-        with CG.Trace(run.modules.get(w, f"linear {w}")) as trace:
-            y = orig(layer, x, bias)
-        run.judge(trace, y)
-        return y
-    return apply
-
-
-def admitting(run: H1Run, orig: Any, runner: Any) -> Any:
-    """The model runner's ``execute_model``: the step's admitted requests and its batch order handed to the run
-    (`H1Run.admit`) before the step's forward, so each entry is in the round of the step that admits it and each served row
-    names its request; a dummy run or a step with no scheduled token admits nothing."""
-
-    def execute_model(scheduler_output: Any, *args: Any, **kw: Any) -> Any:
-        dummy = bool(kw.get("dummy_run", False)) or (len(args) >= 2 and bool(args[1]))
-        if not dummy and int(getattr(scheduler_output, "total_num_scheduled_tokens", 0) or 0):
-            run.admit(RQ.new_requests(scheduler_output), RQ.batch_order(runner, scheduler_output))
-        return orig(scheduler_output, *args, **kw)
-    return execute_model
-
-
 def bind_all(calls: Sequence[Call], bound: Mapping[int, Mapping[str, Any]]) -> list[tuple[bytes, bytes] | None]:
     """Each call's (root(A), root(B)) from what its listeners bound (``root_a``, ``root_b``, hex), None where either is missing."""
     out: list[tuple[bytes, bytes] | None] = []
@@ -832,7 +777,6 @@ def bind_all(calls: Sequence[Call], bound: Mapping[int, Mapping[str, Any]]) -> l
 
 
 __all__ = ["CALLS_FILE", "CHALLENGER", "Call", "FILL", "H1Run", "IN_PROCESS", "Listener", "Opener", "RECORD", "SALT_TAG",
-           "SCHEME",
-           "Static", "TABLE_TAGS", "TILE", "VllmInt8LinearH1", "admitting", "bind_all", "check_tiles", "compiled",
-           "coordinate", "layers", "layout", "numpy_of", "observer", "padded", "program", "program_salt", "slots",
-           "table_leaves", "traced", "units", "utilization", "weight_root"]
+           "SCHEME", "Static", "TABLE_TAGS", "TILE", "VllmInt8LinearH1", "bind_all", "check_tiles", "compiled",
+           "coordinate", "layout", "numpy_of", "padded", "program", "program_salt", "slots", "table_leaves", "units",
+           "utilization", "weight_root"]

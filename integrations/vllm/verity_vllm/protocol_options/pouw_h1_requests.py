@@ -3,7 +3,7 @@ an `act` value, a run input under the root of the round that admits it, committe
 `pouw_h1.H1Run` builds them as it serves; this module holds what they are and how they are checked.
 
 * **Rounds.** Round s is step s, one round a step. vLLM's scheduler admits a request in the step that first schedules it
-  (`SchedulerOutput.scheduled_new_reqs`), and `pouw_h1.admitting`, the option's wrap of the model runner's
+  (`SchedulerOutput.scheduled_new_reqs`), and `pouw_h1_hooks.admitting`, the option's wrap of the model runner's
   ``execute_model``, hands those (`new_requests`) and the step's batch order (`batch_order`: Model Runner V2's own, each
   scheduled request's rows in the order its A tables hold them) to `pouw_h1.H1Run.admit` before the step's forward. Round s closes
   once step s's last linear is recorded: its root (`round_root`) is over the step's calls (`step_digest`, their manifest

@@ -69,6 +69,7 @@ from verity_vllm.protocol_options import pouw_circuit as PC
 from verity_vllm.protocol_options import pouw_device as PD
 from verity_vllm.protocol_options import pouw_h1 as PH
 from verity_vllm.protocol_options import pouw_h1_challenger as PHC
+from verity_vllm.protocol_options import pouw_h1_hooks as PHK
 from verity_vllm.protocol_options import pouw_h1_settings as PHS
 from verity_vllm.protocol_options import pouw_h1_window as PHW
 from verity_vllm.protocol_options import pouw_h1_requests as RQ
@@ -639,7 +640,7 @@ def commit_weights(scheme: str, target: Target) -> dict[str, Any]:
     committed (`verity.core.protocols.pouw.audit.commit_rows`), as ``{"weight_roots": {id: hex}, "shapes": {id: [n, k]}}``.
     Under H1, the int8_exact arm's int8 weight rows as they are served (`pouw_h1.weight_root`)."""
     if scheme == PH.SCHEME:
-        layers = PH.layers(target.model, linear_types())
+        layers = PHK.layers(target.model, linear_types())
         return {"weight_roots": {str(w): PH.weight_root(w, PH.numpy_of(m.weight)).hex() for w, m in enumerate(layers)},
                 "shapes": {str(w): list(m.weight.shape) for w, m in enumerate(layers)}}
     _, layers, shapes = _layers(scheme, target)
@@ -733,9 +734,9 @@ def _install_h1(entry: str, settings: Settings, target: Target) -> Option:
     """H1 on the int8_exact arm: the epoch's salt `audit.salt_of` over the weights' root, as every scheme's, from the
     challenger's salt coin (the auditor host's opened after the window's open root, once round 0 is admitted:
     `pouw_h1.H1Run.open_window`), and each layer's ``observe`` the arm's own with its call recorded and handed to the run's listeners
-    (`pouw_h1.observer`), in the static layout of the settings' ``rows`` and ``steps``; each layer's ``apply`` runs
-    under the credit gate's trace (`pouw_h1.traced`), and the ``runner``'s ``execute_model`` hands each step's admitted
-    requests and its batch order to the run (`pouw_h1.admitting`), each entry and each served row's request under its
+    (`pouw_h1_hooks.observer`), in the static layout of the settings' ``rows`` and ``steps``; each layer's ``apply`` runs
+    under the credit gate's trace (`pouw_h1_hooks.traced`), and the ``runner``'s ``execute_model`` hands each step's admitted
+    requests and its batch order to the run (`pouw_h1_hooks.admitting`), each entry and each served row's request under its
     round's root before the ``rounds`` coin, and the window's draw coin opens at release after its manifest. With the
     setting ``challenger`` the salt, round and draw coins are the auditor host's, from the one session infra's gate
     reserved for the window (``session``, the gate's reserve answer) and ``gate`` opened on its window-open root (the
@@ -743,7 +744,7 @@ def _install_h1(entry: str, settings: Settings, target: Target) -> Option:
     has finished; without it the coins are this process's and the
     window credits nothing (`pouw_h1.IN_PROCESS`). ``admission`` is the run's (`pouw_h1_requests.ADMISSIONS`, round 0
     only by default). The served values are the arm's, untouched."""
-    layers = PH.layers(target.model, linear_types())
+    layers = PHK.layers(target.model, linear_types())
     committed = target.weight_commitments.get(entry) or commit_weights(PH.SCHEME, target)
     roots = {int(w): bytes.fromhex(r) for w, r in committed["weight_roots"].items()}
     declared = Workload(tuple(Matmul(w, Shape(16, k, n), w) for w, (n, k) in
@@ -776,10 +777,10 @@ def _install_h1(entry: str, settings: Settings, target: Target) -> Option:
     _H1_RUNS[entry] = run
     h = target.hooks(entry)
     if settings.runner is not None:
-        h.wrap(settings.runner, "execute_model", lambda orig: PH.admitting(run, orig, settings.runner))
+        h.wrap(settings.runner, "execute_model", lambda orig: PHK.admitting(run, orig, settings.runner))
     for w, layer in enumerate(layers):
-        h.wrap(layer.quant_method, "observe", lambda orig, w=w: PH.observer(run, w, orig))
-        h.wrap(layer.quant_method, "apply", lambda orig, w=w: PH.traced(run, w, orig))
+        h.wrap(layer.quant_method, "observe", lambda orig, w=w: PHK.observer(run, w, orig))
+        h.wrap(layer.quant_method, "apply", lambda orig, w=w: PHK.traced(run, w, orig))
     return Option(name=entry, hooks=h, commits=run.commits, details=run.details, release=lambda: PHW.finish(run, session))
 
 

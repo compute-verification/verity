@@ -1,4 +1,4 @@
-"""`protocol_options.credit_gate` and its place in H1's credit (`pouw_h1.traced`, `H1Run.credit`): a served call is credited
+"""`protocol_options.credit_gate` and its place in H1's credit (`pouw_h1_hooks.traced`, `H1Run.credit`): a served call is credited
 only if the y the linear hands back is the credited kernel's own output, one GEMM invocation writing z and y, and no other
 GEMM ran for it.  Today's served path (vllm's int8 arm: `scaled_mm`'s y, z a second ``_int_mm`` beside it) is refused with
 its named reason; a fused kernel, one dispatcher op returning z and y = dequant(z), is credited."""

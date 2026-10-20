@@ -34,6 +34,7 @@ from verity_vllm.engine import hooks  # noqa: E402
 from verity_vllm.engine import int8_exact as E  # noqa: E402
 from verity_vllm.protocol_options import pouw  # noqa: E402
 from verity_vllm.protocol_options import pouw_h1 as PH  # noqa: E402
+from verity_vllm.protocol_options import pouw_h1_hooks as PHK  # noqa: E402
 from verity_vllm.protocol_options import pouw_h1_challenger as PHC  # noqa: E402
 from verity_vllm.protocol_options import pouw_h1_requests as RQ  # noqa: E402
 
@@ -435,7 +436,7 @@ def _admitted_run():
     rng = np.random.default_rng(12)
     rounds, runner = _rounds(), Runner()
     run = PH.H1Run("t", SALT, {0: "q", 1: "o"}, [(32, K), (40, K)], 32, 3, rounds=rounds, key=KEY, admission=RQ.PER_ROUND)
-    step = PH.admitting(run, runner.execute_model, runner)
+    step = PHK.admitting(run, runner.execute_model, runner)
     for so in (_so(("a", [1, 2, 3], 4)), _so(("b", [4], 2), ("c", [5, 6], 3), running={"a": 1}),
                _so(running={"a": 1, "b": 1, "c": 1})):
         step(so)
@@ -569,7 +570,7 @@ def test_a_request_resumed_after_a_preemption_keeps_its_one_entry():
     rng = np.random.default_rng(14)
     rounds, runner = _rounds(), Runner()
     run = PH.H1Run("t", SALT, {0: "q"}, [(32, K)], 32, 3, rounds=rounds, key=KEY)
-    step = PH.admitting(run, runner.execute_model, runner)
+    step = PHK.admitting(run, runner.execute_model, runner)
     for so in (_so(("a", [1, 2], 4), ("b", [3], 4)), _so(running={"a": 1}), _so(("b", [3, 9], 4), running={"a": 1})):
         step(so)
         run.record(0, *_tap(rng, so.total_num_scheduled_tokens, 32))
@@ -588,7 +589,7 @@ def test_a_request_served_without_an_entry_is_a_gap_its_rows_are_refused_and_the
     rng = np.random.default_rng(15)
     rounds, runner = _rounds(2), Runner()
     run = PH.H1Run("t", SALT, {0: "q"}, [(32, K)], 32, 2, rounds=rounds, key=KEY)
-    step = PH.admitting(run, runner.execute_model, runner)
+    step = PHK.admitting(run, runner.execute_model, runner)
     so = _so(("a", [1], 2), running={"e": 3, "p": 1, "x": 1})
     so.scheduled_new_reqs += [SimpleNamespace(req_id="e", prompt_token_ids=None, prompt_embeds=object(),
                                               sampling_params=SimpleNamespace(max_tokens=2)),
@@ -617,7 +618,7 @@ def test_the_engines_admissions_go_to_the_next_steps_round_and_past_the_window_a
     rng = np.random.default_rng(13)
     run = PH.H1Run("t", SALT, {0: "q"}, [(32, K)], 32, 2, rounds=_rounds(2), key=bytes(32), admission=RQ.PER_ROUND)
     seen, runner = [], Runner()
-    step = PH.admitting(run, lambda so, *a, **kw: seen.append(so), runner)
+    step = PHK.admitting(run, lambda so, *a, **kw: seen.append(so), runner)
     step(_so(("p", [1], 1)), None, True)
     step(_so(("q", [2], 1)), dummy_run=True)
     step(_so(("r", [3], 1), tokens=0))
