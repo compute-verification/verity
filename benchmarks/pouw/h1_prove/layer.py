@@ -6,9 +6,13 @@
 * **Activations.** The layer's input for M prompt tokens, x = RMSNorm(embed(tokens)) · g (layer 0's input norm, ε 1e-5,
   float32), quantized per token as H1's activation quantizer (cgemm.cu's ``cquant_h1``): s = max(|x_row|, 1e-30) / 126,
   A = floor(x / s), clamped to [-126, 125], so the unit's dithered X = A + b (b a noise bit) is an s8 code in [-126, 126].
+* **``--quant vllm``** quantizes as vLLM's int8 w8a8 path does instead (``scaled_int8_quant``, symmetric): activations
+  per token and weights per output row, s = max|row| / 127, code = rint(x / s) clamped to [-128, 127], so every row's
+  absmax entry is ±127 and the unit's X = A + b wraps (X = -128) wherever A = 127 meets b = 1. ``--quant-k K`` takes each
+  row's absmax over its first K entries, the row a ``--k K`` smoke's unit sees, so those ±127 entries are in its tiles.
 * **The checkpoint** is read with numpy alone (safetensors' header and raw little-endian bf16), from the HF cache.
 
-    python layer.py MODEL_DIR OUT.npz [--tokens 16] [--layer 0] [--seed-tokens HEX] [--fetch REPO]
+    python layer.py MODEL_DIR OUT.npz [--tokens 16] [--layer 0] [--seed-tokens HEX] [--fetch REPO] [--quant vllm [--quant-k K]]
 
 ``--fetch REPO`` (a node without the checkpoint): MODEL_DIR gets REPO's index, tokenizer and only the shards holding the
 embedding and layer L's tensors, from huggingface.co, where they are not there already.
@@ -101,6 +105,14 @@ def quant_a(x: np.ndarray) -> np.ndarray:
     return np.clip(np.floor(x / s), -A_TOP, A_TOP - 1).astype(np.int8)
 
 
+def quant_vllm(x: np.ndarray, k: int = 0) -> np.ndarray:
+    """vLLM's symmetric int8 quantization of each row, its scale from the row's first ``k`` entries (0: all)."""
+    # With k (a K = 64 smoke) the absmax is over those k entries so ±127 lands inside the tiles: not vLLM's full-row scale.
+    x = x[:, :k] if k else x
+    s = np.maximum(np.abs(x).max(axis=1, keepdims=True), 1e-30) / 127
+    return np.clip(np.rint(x / s), -128, 127).astype(np.int8)
+
+
 def tokens_of(model: Path, m: int, seed: bytes | None) -> list[int]:
     """M prompt tokens: ids from ``seed`` where one is given, else the tokenizer's ids of a fixed prompt where `tokenizers` is
     installed, else ids from a fresh seed."""
@@ -132,7 +144,10 @@ def main() -> int:
     ap.add_argument("--seed-tokens", default="")
     ap.add_argument("--calls", default=",".join(CALLS))
     ap.add_argument("--fetch", default="")
+    ap.add_argument("--quant", choices=("h1", "vllm"), default="h1")
+    ap.add_argument("--quant-k", type=int, default=0)
     a = ap.parse_args()
+    qa, qw = (quant_a, quant_w) if a.quant == "h1" else ((lambda v: quant_vllm(v, a.quant_k)),) * 2
     root = Path(a.model)
     if a.fetch:
         fetch(a.fetch, root, a.layer, a.calls.split(","))
@@ -143,15 +158,16 @@ def main() -> int:
     emb = ck.tensor("model.embed_tokens.weight", toks)
     g = ck.tensor(f"model.layers.{a.layer}.input_layernorm.weight")
     x = emb / np.sqrt((emb.astype(np.float64) ** 2).mean(axis=1, keepdims=True) + EPS).astype(np.float32) * g
-    out = {"tokens": np.array(toks, np.int64), "a": quant_a(x)}
+    out = {"tokens": np.array(toks, np.int64), "a": qa(x)}
     calls = a.calls.split(",")
     for c in calls:
         part = "self_attn" if c in ("q_proj", "k_proj", "v_proj", "o_proj") else "mlp"
-        out[f"b_{c}"] = quant_w(ck.tensor(f"model.layers.{a.layer}.{part}.{c}.weight"))
+        out[f"b_{c}"] = qw(ck.tensor(f"model.layers.{a.layer}.{part}.{c}.weight"))
     np.savez(a.out, **out)
     print(json.dumps({"model": str(root), "layer": a.layer, "tokens": toks, "a": list(out["a"].shape),
-                      "calls": {c: list(out[f"b_{c}"].shape) for c in calls},
-                      "a_range": [int(out["a"].min()), int(out["a"].max())]}))
+                      "calls": {c: list(out[f"b_{c}"].shape) for c in calls}, "quant": a.quant, "quant_k": a.quant_k,
+                      "a_range": [int(out["a"].min()), int(out["a"].max())],
+                      "rows_with_a_127": int((out["a"] == 127).any(axis=1).sum())}))
     return 0
 
 

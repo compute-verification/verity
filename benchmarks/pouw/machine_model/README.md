@@ -42,6 +42,8 @@ uv run machine-model --device sm_100 sheet   # the data sheet: its DS lines agai
 uv run machine-model --device sm_90 sheet --eps   # the headline's sheet reading on the sheet's lines, A3 at f_max
 uv run machine-model --device sm_100 sheet --eps --uni 0.1 0.02   # ... with a uniform instruction at 0.1, 0.02 a slot
 uv run machine-model capacity 0.745/duo:0.6+lane:0.3 0.255/served:0.15   # the certified share σ of a window's capacity
+uv run machine-model counts e-l7qs 2048 28672 4096   # H's closed-form instruction counts and model bound at a shape
+uv run machine-model counts e-l7qs --check           # every ncu observation of H against them
 ~~~
 
 The data, each kind of thing a file or a line of its own:
@@ -63,6 +65,9 @@ The data, each kind of thing a file or a line of its own:
   at the 32 lanes it serves), with the words a warp instruction of it writes.
 - `data/honest/NAME.toml`: an honest kernel's instruction profile a MMA (every class it issues, the fold inside it), the
   least operand delivery any program pays a MMA, and its measured SMSP-cycles a MMA, with its source.
+- `data/counts/NAME.toml`: an honest kernel's executed warp instructions by class as a closed form in the shape (a
+  stage's, a tile's, a raster group crossing's and a launch's, per variant), the ncu observations they are fitted to and the tolerance that holds
+  them.
 - `data/designs/NAME.toml`: one design of the registry ("Designs" below): its name, title and aliases, the noise on each
   product, its honest profile, L, the noise's operand-delivery floor φ_del, the fold and filler (lane instructions a
   word by class), plain (unfolded) MMAs beside its work, the proof unit, the coins, its perplexity arm, and ε_skip's and
@@ -76,7 +81,7 @@ The data, each kind of thing a file or a line of its own:
 - `data/table.toml`: the cheater's table route (`eps --lookups`): lane instructions and L2 bytes a word, and the L2
   bandwidth it is bound by (the most L2 read in any measured pattern, + 2%).
 - `data/headline.toml`: the per-family headline's spec: each GPU family's design of record, the vector each reading
-  prices it on, and the conditions no computation shows.
+  prices it on, the conditions no computation shows, and its scope, per node ("The headline is per node").
 - `data/devices/sm_NN/`: another device's data ("Devices" below).
 
 The code:
@@ -92,6 +97,8 @@ The code:
 - `verity_machine_model/resolve.py`: re-solving a named vector from the data.
 - `verity_machine_model/eps.py`: the ε budget of the tensor–scalar model (note:20261017T0310Z-report-eps1-program §2)
   and ε_machine's LP.
+- `verity_machine_model/counts.py`: n(H)(m, n, k) from that closed form, the model bound it gives at any shape the
+  kernel runs, its fit and its check.
 - `verity_machine_model/capacity.py`: the certified share σ = 1 − hidden(n̄)/hidden(0) of a window's capacity,
   hidden(n̄) the useful work any program could still add beside the pooled certified load n̄ (the filler workstream,
   decision 77; note:20261017T0652Z-draft-filler).
@@ -329,6 +336,29 @@ The other options:
 - `--checking sampled`: charges ε_adapt for the design's own proof unit (`unit`, whole dot products: +0.35%).
   `--adapt UNIT` charges another (`data/adapt.toml`): `segment`, the spot check decision 72 replaced (≈ 21%), or
   `whole-recompute` and `per-stage` (0). The Python `eps()` charges none unless given one.
+
+## The headline is per node
+
+`machine-model headline`'s ε, and the Lean headline guarantees exported from this data
+(`Accounting.Guarantees.TS.Sm120SheetHeadline` and `Sm120MeasuredHeadline`), bound work done by the node (ASK-65 = A,
+19 Oct): an accepted window's node, its GPUs, host CPU and peer GPUs together, performed at least (1 − ε) of the
+credited work. The device that did it is left to the attribution layer. The floor argument places no work: every
+credited word is a fresh function of the post-coin noise, so it was computed after the coin, but nothing ties a
+committed tile to the GPU that computed it. The transcript is a Merkle root over tile digests, so a helper holding the
+salt ships one 64-byte digest a tile. The model prices the work on one device's rows, which makes ε a share of the
+credited time `T_cred` on that device, not of that device's own time.
+
+A per-GPU reading of ε comes only through the attribution layer, under two conditions:
+
+- **LOC's host deduction** (decision 37, LOC: the node computes its own certified work): what the host CPU can compute
+  of the credited work exactly is deducted from the GPUs' credit. On int8 that is AMX for a tile's products and AVX-512
+  for the fold and credited fillers, each bit-exact.
+- **The peer-GPU premise**: every billable GPU on the node is credited each window, so no uncredited peer computes a
+  credited GPU's tiles over NVLink. Otherwise the node is the unit.
+
+Counted per GPU without them, as the headline's ε plus the host's or a peer's share of the credited time, the host's
+AMX and AVX-512 (and NVLink peers) take every device over 1% on some real host. #2681 (RT-SCOPE) measures the host's
+rate on each host family and prints the counted ε at both readings.
 
 ## Adopt a probe's census
 

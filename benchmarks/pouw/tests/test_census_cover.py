@@ -40,6 +40,7 @@ from dataclasses import dataclass
 from fractions import Fraction
 from pathlib import Path
 
+import pytest
 from verity_machine_model.model import DATA, attacks, devices, model, vector, vectors
 
 POUW = Path(__file__).resolve().parents[1]
@@ -315,21 +316,27 @@ CLOSING: dict[tuple[str, str], tuple[str, str]] = {
     ("sm_120", "UNI64"): (UNOWNED, "228 bit-slice attack variants' XU on UNI64, which is on UP alone (#2791's OFF_MENU)"),
     ("sm_120", "TMA512"): (UNOWNED, "attack (ii)'s TMA gather and dither-duo-l32's [per_mma]"),
     ("sm_120", "TMAred512"): (UNOWNED, "attack (ii)'s TMA reduce-add"),
+    ("sm_120", "UBLKRED.G.S.XOR"): (UNOWNED, "cpw_routes modes 8-10's bulk reduce-xor (1 to 16 KB): TMAred512"),
     ("sm_120", "UTMA16K"): (UNOWNED, "the TMA loads of twelve honest profiles' [per_mma] (c-fx1, the l7qs kernels, fattn)"),
 }
 
 
+#: an instruction no class can ever name, for the tests of the check itself: every `loads.class_of` rule matches an
+#: upper-case SASS mnemonic, and no SASS opcode is lower case, so a class added later can't take it
+UNCLASSED = "toy.unclassed"
+
+
 def test_the_check_finds_an_unclassed_instruction():
-    """A store with no class (STG.E.64), a classed instruction free at π* (SHFL.BFLY) and a class the vector has no line
-    for (IMAD) are each a gap; a priced instruction and a NOP are not; a catch-all covers the unclassed store and the
-    class with no line, never a listed class π* prices at 0."""
+    """An instruction with no class (UNCLASSED), a classed instruction free at π* (SHFL.BFLY) and a class the vector has
+    no line for (IMAD) are each a gap; a priced instruction and a NOP are not; a catch-all covers the unclassed
+    instruction and the class with no line, never a listed class π* prices at 0."""
     st = Statement("toy", "sm_120", DATA, "toy", {"R": Fraction(1)}, {"ALU": Fraction(1), "SHFL": Fraction(0)}, None,
                    "lean_headline.py")
-    p = Program("sm_120", "toy", {"LOP3.LUT": 2, "STG.E.64": 1, "SHFL.BFLY": 1, "NOP": 3}, True)
+    p = Program("sm_120", "toy", {"LOP3.LUT": 2, UNCLASSED: 1, "SHFL.BFLY": 1, "NOP": 3}, True)
     q = Program("sm_120", "toy classes", {"ALU": 1, "IMAD": 1}, False)
     found = gaps([st], [p, q])
-    assert {i for _, i in found} == {"STG.E.64", "SHFL.BFLY", "IMAD"}
-    assert found[("toy", "STG.E.64")].cls is None and found[("toy", "SHFL.BFLY")].cls == "SHFL"
+    assert {i for _, i in found} == {UNCLASSED, "SHFL.BFLY", "IMAD"}
+    assert found[("toy", UNCLASSED)].cls is None and found[("toy", "SHFL.BFLY")].cls == "SHFL"
     caught = Statement(**{**st.__dict__, "catch_all": "ALU"})
     assert set(gaps([caught], [p, q])) == {("toy", "SHFL.BFLY")}
 
@@ -340,8 +347,8 @@ def test_a_closing_entry_waits_for_its_own_class():
     st = Statement("toy", "sm_120", DATA, "toy", {"R": Fraction(1)}, {"ALU": Fraction(1), "SHFL": Fraction(0)}, "ALU",
                    "lean_headline.py")
     other = Statement(**{**st.__dict__, "vector": "toy2", "price": {"ALU": Fraction(1), "SHFL": Fraction(2)}})
-    p = Program("sm_120", "toy", {"LOP3.LUT": 2, "STG.E.64": 1, "SHFL.BFLY": 1}, True)
-    closing = {("sm_120", "STG.E.64"), ("sm_120", "SHFL.BFLY"), ("sm_120", "LOP3.LUT"), ("sm_90", "LOP3.LUT")}
+    p = Program("sm_120", "toy", {"LOP3.LUT": 2, UNCLASSED: 1, "SHFL.BFLY": 1}, True)
+    closing = {("sm_120", UNCLASSED), ("sm_120", "SHFL.BFLY"), ("sm_120", "LOP3.LUT"), ("sm_90", "LOP3.LUT")}
     assert set(stale([st, other], gaps([st, other], [p]), closing)) == {("sm_120", "LOP3.LUT")}
     assert set(stale([other], gaps([other], [p]), closing)) == {("sm_120", "SHFL.BFLY"), ("sm_120", "LOP3.LUT")}
 
@@ -360,12 +367,14 @@ def test_the_cover_reads_every_source():
     assert {k for k, _ in CLOSING} <= set(devices())
 
 
+@pytest.mark.slow
 def test_every_instruction_is_priced_at_each_statements_certificate():
     """No instruction of a bit-exact program is free at a headline statement's π*, past CLOSING's entries."""
     open_ = [g for (_, item), g in gaps(statements(), programs()).items() if (g.st.key, item) not in CLOSING]
     assert not open_, "\n".join(fix(g) for g in sorted(open_, key=lambda g: (g.st.vector, g.item)))
 
 
+@pytest.mark.slow
 def test_each_closing_entry_is_still_a_gap():
     """A CLOSING entry whose instruction now has its own class priced at every statement's π* is closed: delete it."""
     sts = statements()

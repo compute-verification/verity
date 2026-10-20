@@ -160,12 +160,21 @@ as a `Spec` of its own (`service.LinkWindows`, one per link):
   leaves 0 and 1, each `hm96-sha512/row/v2` over `service.encode` (the head, then the certificate), and their heads,
   leaves 2 and 3, each over the head alone (`RecordHead.encode`). Every leaf has its own fresh salt, in one
   `frame-v3-sha512` tree under one-stage's served domain for the run, the link and the window. A proof that reads only a
-  head (N3's, which holds the window's frames to the head's root) opens its head leaf in two or three SHA-512
-  compressions, where the record leaf would cost the certificate's 272 more. The firewall keeps the records and salts
-  (`Opening`). The challenger receives one salted root and never a certificate or a head.
+  head (N3's, which is designed to hold the window's frames to the head's root) opens its head leaf in two or three
+  SHA-512 compressions, where the record leaf would cost the certificate's 272 more. The firewall keeps the records and
+  salts (`Opening`). The challenger receives one salted root and never a certificate or a head.
 - **Selection:** `All`. A registration is one link-window, one proof unit, so an accepted outcome is the exhaustive fact.
   The record's `window` provenance is exactly `{"kind": "served", "window": w}`, and the challenger holds w to the
   registration's order (`LinkWindows.register`): the receipt keeps the order, and the order is the link-window.
+- **The network verdict of record** is `LinkWindows.network_verdict`, the AND over the link's link-windows with no ε
+  or share credit. Over the stream's registrations and outcome records, it accepts only when, for every window w of
+  the egress profile, the w-th registration is window w and its outcome of record accepted. A rejected or late window,
+  a registered window with no outcome yet, a gap in the registrations (a window registered out of order or never, or a
+  run that stops short of the profile) and a registration past the profile each reject the link, and `refused` lists
+  their windows. A run's network verdict is the AND over its links'. The datacenter model (`benchmarks/datacenter`, a
+  Python model, not a verifier of record) builds no `LinkWindows` outcomes, so its account doesn't read this
+  aggregate. Its `Account.sound` is the same AND over its own port records: false on any refused port-window, each
+  charged at its link's line rate (`refused_bits`).
 - **Public:** the population, the window, the value's leaf count, domain and salted root, the parameters digests, the
   charge (log2 #Σ_sync per window, 7 bits at 16 × 8) and the occupancy profile (`LinkWindows.occupancy`: for each end,
   each window's T counts as the Program and the placement fix them, or none for an end the Program reads rather than
@@ -188,29 +197,45 @@ as a `Spec` of its own (`service.LinkWindows`, one per link):
 - **Its sizes** (`head_check.size`, L = 9): the count check is an equality of 32·T bits, 32·T − 1 ANDs (19,199 at
   T = 600); the fields are 736 + 8·L − 1 (807); the opening is 775,077 at T = 4 and 1,876,070 at T = 600, nearly all
   of it the head row's hm96 digest. The count check needs no frame's bytes, so it is the part of the egress grid check
-  a proof can make without the content, and the only grid check on ingress. It runs on every link-window, and N3, which
-  holds its N frames to the head's root, so to Σ n_t, runs on drawn ones.
+  a proof can make without the content, and the only grid check on ingress. It runs on every link-window (RT-NET29
+  item 3: a structural check runs in full).
+- **N3, the content check,** is a design and the simulator's behaviour, not part of this protocol: a prototype unit in
+  `benchmarks/network_sim` ("N3 in zero knowledge"), evaluated in the clear, in no proof-service Spec and not proved.
+  Its design runs it on every port-window that recorded frames, holding its N frames to the head's frames root, so to
+  Σ n_t, and to the committed layout's frames. A port-window the profile leaves empty passes from public occupancy,
+  with no N3 unit. That holds because the profile is fixed by the Program and the placement before the run and bound
+  by the spec's context: nothing declared at run time sets it, and a head with frames where the profile says 0 fails
+  N2's count check. An end without a profile has no such backing, since its occupancy is its record's own.
 - **Its verifier of record** is `LinkWindows.verify`, on the host, which reads the opening. It accepts when the opening
   reproduces the registered root, each end's head check accepts (`head_check.reference`, which the tests hold to the
-  circuit), and the audit accepts both records under the certifier's key in its session: `check_link` under the
-  declared syncs, `check_ingress_link` on the status and parameters. `check_link` compares the certified egress digest
-  with the Program's grid in the clear on every link-window, with a profile or without, so the frames' content is
-  checked in full and not only on the windows N3 draws: a structural check runs in full (RT-NET29 item 3). The head
-  check runs beside it, holding the head's status, grid and counts. `check_link(grid=False)` leaves the grid to the
-  head check and the content to N3, and N2 switches to it once N3 runs on every window (NET-38). The outcome passes the
-  opening's root as the session's, which one-stage's audit holds to the registered one. An unset deadline bit is a
-  `no-verdict` there, so a reject; a proof after `proof_deadline` is the service's `late`.
-- **The reference** is `LinkWindows.stand_in`, the verdict before the head check: the in-the-clear audit with the egress
-  grid compared, and each head's counts the profile's (`LinkWindows.declares`). The tests hold `verify` to it on every
-  link-window.
+  circuit), and the audit accepts both records under the certifier's key in its session, comparing no grid:
+  `check_link(grid=False)` on the status, the signature and the declared syncs, `check_ingress_link` on the status and
+  parameters. `verify` reads no frames, so its claim is counts only: the egress head's counts are the profile's (and
+  the ingress head's, where that end declares one), which puts the link's timing at the profile. The egress grid is
+  the head's counts filled with its frames in order, and the head's digest binds both, so the frames are the rest of
+  the grid, and nothing in this protocol holds them: until N3 is a proof-service unit with Selection `All`, it doesn't
+  say the egress grid is the Program's. A link whose egress end has no profile has no verdict (`ValueError`, failing
+  closed), since nothing would hold its egress timing: every link whose egress counts aren't fixed before the run (the
+  lab's, served traffic's), until a shaper fixes them or a unit holds them to the Program's under the declared syncs.
+  The outcome passes the opening's root as the session's, which one-stage's audit holds to the registered one. An
+  unset deadline bit is a `no-verdict` there, so a reject; a proof after `proof_deadline` is the service's `late`.
+- **The oracle** is `LinkWindows.stand_in`, the in-the-clear verdict: the audit with the Program's egress grid
+  compared, and each head's counts the profile's (`LinkWindows.declares`). `verify` accepts every link-window it
+  accepts, and differs only where the record's grid, at the profile's counts, isn't the Program's: in its frames, which
+  N2 doesn't hold (N3's design would reject them), or where the declared syncs move the Program's counts off the
+  profile, which N2 holds the counts to instead.
 
 What this establishes: the outcome is accept exactly when the opening seals, both head checks accept and the audit
-accepts the registered link-window's records, and the outcome record binds the root, the draw and the session. What it
-doesn't: the verifier of record reads the witness, so it is not zero-knowledge, and it must run where the certificates
-may go until the unit is proved. The frames' content is compared in the clear, on every window, until N3 runs on every
-window (NET-38). The head check leaves the head's deadline byte and frames root free: the certificates' check reads the deadline, and N3
-the frames root. One clock per spatial unit across links is not checked (each registration is one link-window, alone),
-and the frames' consistency with the served computation is N3.
+accepts the registered link-window's records, and the outcome record binds the root, the draw and the session. The
+claim is counts only: on every link-window of a link whose egress end declares a profile, the egress head's counts are
+the profile's (and the ingress head's, where that end declares one), so the link's timing is at the profile. It stays
+counts only until N3 is a proof-service unit with Selection `All`. N2 covers no lab or served link yet: an egress end
+without an occupancy profile gets no verdict (`ValueError`, failing closed). What it doesn't establish: the verifier
+of record reads the witness, so it is not zero-knowledge, and it must run where the certificates may go until the unit
+is proved. The head check leaves the head's deadline byte and frames root free. The certificates' check reads the
+deadline, and N3's design would read the frames root, so an accepted outcome says nothing of the frames. One clock per
+spatial unit across links is not checked (each registration is one link-window, alone), and the frames' consistency
+with the served computation is left to N3.
 
 ## The Program's logical schedule and the clock-sync advice (`schedule`)
 
@@ -490,24 +515,66 @@ them.
     `Accounting.TrustedUnits` (W2) asks of a certifier's sends, in `Security/Definitions/Accounting/Physical.lean`.
   - **The weights before the salt.** PoUW's noise seed reads the weights' root, so a credited window needs the
     weights fixed before its salt. A second sealed record cell per PoUW window, `_weights[p]`, holds that order: the
-    prover's registration path hands `Proxy.commit_weights(p, root)` the 64-byte frame-v3-sha512 root
-    (`WEIGHTS_ROOT_BYTES`) once, and the certifier refuses it (`RuntimeError`) once p's first ingress tick, the salt's
-    draw, has run or was missed (a proxy back from maintenance after it), and refuses a second root for p. Nothing the
-    certifier sends depends on it. `Proxy.committed(p, registration)` gives it to the verifier on `reveal`'s
-    conditions, and refuses a window whose weights weren't recorded. The order is the certifier's word, under
-    `trusted-nebius-host`, like the salt. The call isn't authenticated, so whoever reaches the certifier first fixes
-    p's root: a wrong one only makes p uncredited, and beyond the auditor's hosts it would need the prover's signature.
+    prover's registration path hands `Proxy.commit_weights(p, root, signature)` the 64-byte frame-v3-sha512 root
+    (`WEIGHTS_ROOT_BYTES`) once, signed under the prover key registered with the certifier (`Proxy(prover_key=…)`, any
+    `certificate.PublicKey`, LMS in deployment) over `weights_message(link, p, root, context)`: the tag
+    `verity-network-certifier/weights/v1`, the certifier's ingress link, p, the root and the deployment's binding of the
+    run (`prover_context`, an epoch's stream, say), so a message signed for one run is never taken in another. The
+    certifier refuses (`RuntimeError`) without a prover key, on a signature that doesn't verify, once p's first ingress
+    tick, the salt's draw, has run or was missed (a proxy back from maintenance after it), and a second root for p, so
+    only the registered prover fixes p's root. Nothing the certifier sends depends on it. `Proxy.committed(p,
+    registration)` gives it to the verifier on `reveal`'s conditions (as often as asked: it is a hiding commitment), and
+    refuses a window whose weights weren't recorded. The order is the certifier's word, under `trusted-nebius-host`,
+    like the salt.
   - **Revealed on the window's registration, after t_d.** `Proxy.reveal(p, registration)` gives PoUW window p's salt.
     The verifier calls it with the registration the proof service returned for p (`Registration`, from
     `sampled_proofs.service`), and the certifier fails closed (`RuntimeError`) unless the registration's receipt is a
     registration receipt (`one_stage.registration.RECEIPT`) whose digest is the record's own and the registration's,
     and `registered` reads p off the registration: by default `served_window`, which reads the provenance
     `{"kind": "served", "window": p}`, and otherwise the reader the protocol gives (`Proxy(registered=…)`). It also
-    refuses while p's last ingress record, window p·k + k − 1's, is unpublished (t_d), and for a PoUW window whose salt
-    was never drawn. Nothing else publishes the salt. The receipt isn't signed, so `reveal` holds only while it is
-    called on the auditor's side: by the verifier, or by the proof service's challenger, which is the auditor's too
-    (#2573). Exposed beyond the auditor's hosts, it would need an authenticated caller or a receipt signed under LMS
-    (`lms.DEPLOYED`, n = 64), the repository's one signature scheme.
+    refuses while p's last ingress record, window p·k + k − 1's, is unpublished (t_d); once the certifier's own clock
+    is more than `reveal_deadline` past p's end (`Proxy(reveal_deadline=…)`, one PoUW window by default), so a
+    registration made after the window's work gets no salt and that work is timed; for a PoUW window whose salt was
+    never drawn; and for one whose salt it has revealed already, so a second registration naming p, by another stream
+    or epoch, gets none. Nothing else publishes the salt.
+  - **Asked for and answered under LMS** (`Proxy(challenger_key=…, signer=…)`, both or neither). Deployed, the
+    certifier runs on the link, off the prover's node, and the proof service's challenger (#2573), which is the
+    auditor's, on an auditor host. `challenger_key` comes from the auditor's deployment record, never from the
+    prover's configuration, and `trusted-nebius-host` covers that record's custody. Each proxy draws a run id at
+    construction, 32 bytes of the certifier's own randomness (`Proxy.run_id`; `run_nonce`, `secrets.token_bytes` by
+    default, is the tests' hook), and the record gives it to the challenger beside the certifier's key, written when
+    the auditor starts the proxy, since a restart draws a new one. The record, not a signed `hello`, because a hello
+    would either let any caller spend the certifier's LMS leaves or need a signed request of its own, and the record
+    is already where the client gets the certifier's key. With the keys, `reveal(p, registration, request)` and
+    `committed(p, registration, request)` take only a request the challenger signed under `challenger_key` (LMS:
+    `lms.DEPLOYED`, n = 64) over `reveal_request_message(key_id, run_id, link, p, digest, what)`: the tag
+    `verity-network-certifier/reveal-request/v1`, then u16be len(key_id) ‖ key_id, the certifier signer's, the run id
+    (32 bytes), u16be len(link) ‖ link, the certifier's ingress link, u64be p, u32be len(digest) ‖ digest, the
+    registration's, and u8 len(what) ‖ what, `salt` or `weights`. A request that doesn't verify is refused
+    (`RuntimeError`) before anything else is read, and spends nothing: no third party can spend p's one reveal, a
+    request for another certifier or another run is never taken, and since the digest binds the registration's record,
+    a registration counts only if the challenger signed it, whatever its receipt. The answer is a `Revealed(window,
+    value, signature, key_id, run_id)`, signed by the certifier's own key (`signer`, the network certifier's, as its
+    `Issuer` signs with) over `reveal_response_message`, the request's fields then u32be len(value) ‖ value under
+    `verity-network-certifier/reveal-response/v1`. `Revealed.verify(key, run_id, link, digest, what)` holds only if it
+    names that key's id and that run and the signature verifies, so a consumer can key p on the certifier run, (key
+    id, run id, link), which `Proxy.certifier_run` and `RemoteCertifier.certifier_run` give alike (link is the ingress
+    link the messages bind): two proxies with one link name, whose p's collide, or two runs of one certifier, never
+    answer for each other. A signer that refuses leaves p's reveal spent and gives nothing. The salt needs
+    authenticity, not confidentiality: after t_d the block's server already holds it, and the verifier fills
+    `pouw.salt` as a public input, so nothing is encrypted. A refusal (`{"refused": reason}`) isn't signed: forged on
+    the path, it costs the window as dropping the answer would; so does a request copied off the path and sent
+    first, which spends the reveal on a salt that is no longer secret. `serve_reveals(proxy, host, port)` serves both
+    calls beside `run`, one JSON line per request and per answer, each call off the loop; `RemoteCertifier(host, port, certifier_key, challenger_signer, link, run_id)` is
+    the challenger's client, given the certifier's key and run id by the deployment record, whose `reveal` and
+    `committed` return the value they verified, as a keyless proxy's do in process, and raise `RuntimeError` on a
+    refusal, an answer of another run, one that doesn't verify, or no answer. t_d, the deadline and the once rule are
+    unchanged. What still rests on `trusted-nebius-host` is the certifier's key custody, its signing key and leaf state
+    on its host (`LmsSigner`, one leaf at a time across the threads that share it) and its word on what it signs, and
+    the deployment record's custody: the keys and the run id it gives each side. The challenger's key is the
+    auditor's, on its own host. A proxy with neither key is the in-process call the tests and replays make
+    (`reveal(p, registration)`, which returns the salt): it takes no request, and holds only while called on the
+    auditor's side.
   - **The audit's read** (`check_salts(audit, link, records, windows, salts, pouw_window=k, salt_bits=…)`). PoUW
     window p is accepted, at its first certifier window w = p·k, if w has exactly one raw record, which holds exactly
     one salt frame of p, carrying the placeholder, and p's revealed salt has `salt_bits` bits. Anything else, a missing
@@ -624,9 +691,10 @@ and seven lemmas, and three more proved lemmas:
   accept, nothing of a certificate or a violation's kind in what the challenger keeps, each refused registration (an
   extra field, a certificate in the clear, a window other than the order), and each reject (a bad signature, a digest
   mismatch, another window or link, a certificate from another session, an unset deadline bit, a late proof, an opening of
-  another root), each held to the stand-in; the unit's id and its gates by size class; under an egress profile, a
-  window whose content differs at the profile's counts is rejected by the in-the-clear comparison, as by the stand-in,
-  and an egress head under another parameters digest is rejected; a head of another size class is a reject;
+  another root), each held to the stand-in; the unit's id and its gates by size class; N2 compares no grid, so a window
+  whose frames differ from the Program's at the profile's counts (in content, or in order within a bucket) is accepted
+  where the stand-in rejects it, its frames being left to N3, and an egress head under another parameters digest is
+  rejected; a link whose egress end has no profile has no verdict; a head of another size class is a reject;
 - **`test_network_certifier_head_check.py`:** N2's head check: the count check is 32·T − 1 ANDs and the fields
   736 + 8·L − 1; each part equals its reference on honest heads and refuses each tampered input where it belongs (link,
   direction, window, parameters digest or status: the fields; another profile row or edited counts: the counts; another

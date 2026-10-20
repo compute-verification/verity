@@ -101,10 +101,13 @@ def test_cli(capsys):
     assert all(H.TERMS[k] in head for k in ("skip", "mand", "machine", "luck", "gamma", "threshold"))
     assert any(x.startswith("| H200 | dither-2s-licpw-redux-p1-l32 | DC-90-ri | 0.605% |") for x in out)
     assert any(x.startswith("- H200: the 1.22-slot issue floor") for x in out)
+    assert f"- {H.spec()['scope']}" in out and "per node (ASK-65 = A)" in H.spec()["scope"]
     assert main(["headline", "--json"]) == 0
     d = json.loads(capsys.readouterr().out)
     assert d["terms"] == H.TERMS and list(d["readings"]) == list(H.READINGS)
     assert d["credit"] == "floor" and d["operands"] == "free" and "decision 100" in d["capacity"]
+    assert "accounting-declared-device" in d["capacity"] and f"- {d['capacity']}" in out
+    assert d["scope"] == H.spec()["scope"]
     r = d["readings"]["sheet"]["rows"][0]
     assert {k for k in H.TERMS} <= set(r) and r["vector"] == "DS-120" and r["core"] == pytest.approx(0.005852, abs=2e-6)
 

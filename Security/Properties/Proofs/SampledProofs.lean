@@ -537,6 +537,154 @@ theorem checkRegistered_supplied (c : Array String) (got : Json) (mine : Flock.V
   have : supplied.any (·.1 == x.1) = true := Array.any_eq_true'.2 ⟨x, hx, by simp⟩
   simp [heldFor, this]
 
+theorem outputRoot_some (log : Array Json) (n : Nat) (d p : String) :
+    (∃ x, Registration.outputRoot log n d p = some x) ↔ OutputPortIs log n d p := by
+  unfold Registration.outputRoot OutputPortIs
+  cases Registration.outputPort log d p with
+  | none => simp
+  | some r =>
+    simp only [Option.bind_some, Option.some.injEq, exists_eq_left']
+    have hb : (int? (getD r "leaves") == some (n : Int)) = true ↔ int? (getD r "leaves") = some (n : Int) :=
+      beq_iff_eq
+    rw [← hb]
+    cases (int? (getD r "leaves") == some (n : Int)) <;> cases (getD r "domain") <;> cases (getD r "root") <;> simp
+
+/-- Rewriting the domain of `v`'s entries keeps every value's entry and its leaf count. -/
+theorem find_map_domain (mine : Array Registered.Entry) (v dom u : String) :
+    ((mine.map fun e => if e.value == v then { e with domain := dom } else e).find? (·.value == u)).map (·.leaves) =
+      (mine.find? (·.value == u)).map (·.leaves) := by
+  have hv : ((fun x : Registered.Entry => x.value == u) ∘
+      fun e => if e.value == v then { e with domain := dom } else e) = fun x => x.value == u := by
+    funext e; simp only [Function.comp]; split <;> rfl
+  have hl : ((fun x : Registered.Entry => x.leaves) ∘
+      fun e => if e.value == v then { e with domain := dom } else e) = fun x => x.leaves := by
+    funext e; simp only [Function.comp]; split <;> rfl
+  rw [Array.find?_map, hv, Option.map_map, hl]
+
+theorem find_leaves_congr {m m' : Array Registered.Entry} {u : String}
+    (h : (m'.find? (·.value == u)).map (·.leaves) = (m.find? (·.value == u)).map (·.leaves)) (P : Nat → Prop) :
+    (∀ want, m'.find? (·.value == u) = some want → P want.leaves) ↔
+      ∀ want, m.find? (·.value == u) = some want → P want.leaves := by
+  revert h
+  cases h1 : m'.find? (·.value == u) with
+  | none =>
+    cases h2 : m.find? (·.value == u) with
+    | none => intro _; exact Iff.rfl
+    | some b => intro h; simp at h
+  | some a =>
+    cases h2 : m.find? (·.value == u) with
+    | none => intro h; simp at h
+    | some b =>
+      intro h
+      have hab : a.leaves = b.leaves := by simpa using h
+      constructor
+      · intro H w hw; cases hw; rw [← hab]; exact H a rfl
+      · intro H w hw; cases hw; rw [hab]; exact H b rfl
+
+theorem applyOutput_step (log : Array Json) (c : Array String) (mine : Array Registered.Entry)
+    (held : Array (String × String)) (v d p : String) :
+    ((Registration.applyOutput log (c, mine, held) (v, d, p)).1 = #[] ↔ c = #[] ∧
+      ∀ want, mine.find? (·.value == v) = some want → OutputPortIs log want.leaves d p) ∧
+    ∀ u, ((Registration.applyOutput log (c, mine, held) (v, d, p)).2.1.find? (·.value == u)).map (·.leaves) =
+      (mine.find? (·.value == u)).map (·.leaves) := by
+  simp only [Registration.applyOutput]
+  cases hf : mine.find? (·.value == v) with
+  | none => simp
+  | some want =>
+    dsimp only
+    cases ho : Registration.outputRoot log want.leaves d p with
+    | none =>
+      dsimp only
+      refine ⟨?_, fun _ => rfl⟩
+      simp only [addCode_ne_nil, false_iff, not_and]
+      intro _ h
+      obtain ⟨x, hx⟩ := (outputRoot_some log want.leaves d p).2 (h want rfl)
+      rw [ho] at hx
+      cases hx
+    | some dr =>
+      rcases dr with ⟨dom, root⟩
+      dsimp only
+      refine ⟨⟨fun hc => ⟨hc, fun w hw => ?_⟩, fun h => h.1⟩, fun u => find_map_domain mine v dom u⟩
+      cases hw
+      exact (outputRoot_some log want.leaves d p).1 ⟨_, ho⟩
+
+/-- `applyOutputs` adds no code exactly when each output value with an entry has its earlier port. -/
+theorem applyOutputs_nil (log : Array Json) (outputs : Array (String × String × String)) (c : Array String)
+    (mine : Array Registered.Entry) (held : Array (String × String)) :
+    (Registration.applyOutputs c mine held outputs log).1 = #[] ↔ c = #[] ∧
+      ∀ o ∈ outputs, ∀ want, mine.find? (·.value == o.1) = some want → OutputPortIs log want.leaves o.2.1 o.2.2 := by
+  unfold Registration.applyOutputs
+  rw [← Array.foldl_toList]
+  have hm : ∀ o, o ∈ outputs ↔ o ∈ outputs.toList := fun o => Array.mem_toList_iff.symm
+  simp only [hm]
+  generalize outputs.toList = l
+  induction l generalizing c mine held with
+  | nil => simp
+  | cons o os ih =>
+    rcases o with ⟨v, d, p⟩
+    rw [List.foldl_cons]
+    obtain ⟨h1, h2⟩ := applyOutput_step log c mine held v d p
+    revert h1 h2
+    generalize Registration.applyOutput log (c, mine, held) (v, d, p) = r
+    rcases r with ⟨c', mine', held'⟩
+    intro h1 h2
+    dsimp only at h1 h2
+    refine (ih c' mine' held').trans ?_
+    rw [h1]
+    simp only [List.mem_cons, forall_eq_or_imp, and_assoc]
+    exact and_congr Iff.rfl (and_congr Iff.rfl (forall_congr' fun o => forall_congr' fun _ =>
+      find_leaves_congr (h2 o.1) (fun n => OutputPortIs log n o.2.1 o.2.2)))
+
+/-- R7 with output values (`checkOutputs`): every output value with an entry has its earlier port, and the rest of R7
+holds against the entries and held roots `applyOutputs` leaves. -/
+theorem checkOutputs_nil (c : Array String) (got : Json) (mine : Flock.V (Array Registered.Entry))
+    (held : Array (String × String)) (supplied : Array (String × Supplied.Rows))
+    (rootOf : String → Supplied.Rows → Registered.Entry → Flock.V String)
+    (outputs : Array (String × String × String)) (log : Array Json) :
+    Registration.checkOutputs c got mine held supplied rootOf outputs log = #[] ↔ c = #[] ∧
+      ∃ mine0 es mine' held', mine = .ok mine0 ∧ got = .arr es ∧
+      (∀ o ∈ outputs, ∀ want, mine0.find? (·.value == o.1) = some want → OutputPortIs log want.leaves o.2.1 o.2.2) ∧
+      (Registration.applyOutputs #[] mine0 held outputs log).2 = (mine', held') ∧
+      (∀ e ∈ es, keys? e = some Registered.ENTRY_KEYS ∨
+        keys? e = some (sortStrings (Registered.ENTRY_KEYS.push Registered.WIDTH_KEY))) ∧
+      ValuesAre es mine' ∧
+      (∀ want ∈ mine', ∀ e, es.reverse.find? (fun e => jeq (getD e "value") (.str want.value)) = some e →
+        EntryIs e want (heldFor supplied held' want.value)) ∧
+      SuppliedIs es mine' supplied rootOf := by
+  unfold Registration.checkOutputs
+  rcases mine with err | mine0
+  · simp [addCode_ne_nil]
+  dsimp only
+  by_cases h0 : c = #[]
+  · subst h0
+    have hc := applyOutputs_nil log outputs #[] mine0 held
+    revert hc
+    generalize hr : Registration.applyOutputs #[] mine0 held outputs log = r
+    rcases r with ⟨c', mine', held'⟩
+    intro hc
+    dsimp only at hc ⊢
+    rw [checkRegistered_nil_supplied]
+    constructor
+    · rintro ⟨hc', mine'', es, hm, hg, hk, hv, he, hsu⟩
+      cases hm
+      exact ⟨rfl, mine0, es, mine', held', rfl, hg, (hc.1 hc').2, by rw [hr], hk, hv, he, hsu⟩
+    · rintro ⟨-, m0, es, m, h, hm0, hg, hf, hmh, hk, hv, he, hsu⟩
+      cases hm0
+      rw [hr] at hmh
+      simp only [Prod.mk.injEq] at hmh
+      obtain ⟨rfl, rfl⟩ := hmh
+      exact ⟨hc.2 ⟨rfl, hf⟩, _, es, rfl, hg, hk, hv, he, hsu⟩
+  · have hc := applyOutputs_nil log outputs c mine0 held
+    revert hc
+    generalize Registration.applyOutputs c mine0 held outputs log = r
+    rcases r with ⟨c', mine', held'⟩
+    intro hc
+    dsimp only at hc ⊢
+    rw [checkRegistered_nil_supplied]
+    constructor
+    · rintro ⟨hc', -⟩; exact absurd (hc.1 hc').1 h0
+    · rintro ⟨h, -⟩; exact absurd h h0
+
 theorem step_ite {P : Prop} (Q : Prop) (j' j : Unit → Array String → Id (Array String)) (b : Bool) (x : String)
     (hj : ∀ c, j () c = #[] ↔ c = #[] ∧ P)
     (hdef : ∀ c, j' () c = if b = true then j () (addCode c x) else j () c)
@@ -620,17 +768,28 @@ theorem id_bind {α β : Type} (x : Id α) (f : α → Id β) : x >>= f = f x :=
 theorem registration_nil (rec : Json) (v : Registration.Verifier) :
     Registration.check rec v = #[] ↔ ∃ law, Registered v rec law := by
   unfold Registration.check
-  extract_lets v2 get c0 w program part partDigest mine roots previous j13 j12 j11 j10 j9 j8 distinct j7 j6 j5 j4 j3 j2 j1 j0 c1
-  have h13 : ∀ c, j13 () c = #[] ↔ c = #[] ∧ True := fun c => ⟨fun h => ⟨h, trivial⟩, fun h => h.1⟩
-  have h12 : ∀ c, j12 () c = #[] ↔ c = #[] ∧ (v2 = true → R7 rec v) ∧ True := by
+  extract_lets v2 get c0 w program part partDigest mine roots previous j14 j13 j12 j11 j10 j9 j8 distinct j7 j6 j5 j4 j3 j2 j1 j0
+    c1
+  have h14 : ∀ c, j14 () c = #[] ↔ c = #[] ∧ True := fun c => ⟨fun h => ⟨h, trivial⟩, fun h => h.1⟩
+  have h13 : ∀ c, j13 () c = #[] ↔ c = #[] ∧ (v2 = true → R7 rec v) ∧ True := by
     intro c
-    simp only [j12]
+    simp only [j13]
     by_cases hv : v2 = true
     · simp only [hv, ↓reduceIte, true_implies]
-      rw [h13, checkRegistered_nil_supplied]
+      rw [h14, checkOutputs_nil]
       exact ⟨fun ⟨⟨a, b⟩, _⟩ => ⟨a, b, trivial⟩, fun ⟨a, b, _⟩ => ⟨⟨a, b⟩, trivial⟩⟩
-    · simp only [hv, Bool.false_eq_true, ↓reduceIte, false_implies, h13]
+    · simp only [hv, Bool.false_eq_true, ↓reduceIte, false_implies, h14]
       exact ⟨fun ⟨a, _⟩ => ⟨a, trivial, trivial⟩, fun ⟨a, _⟩ => ⟨a, trivial⟩⟩
+  have h12 : ∀ c, j12 () c = #[] ↔ c = #[] ∧ (∀ sp, v.binding = some sp →
+      jeq (getD (get "window") "stream") (.str sp.1) = true ∧
+      jeq (getD (get "window") "prover") (.str sp.2) = true) ∧ ((v2 = true → R7 rec v) ∧ True) := by
+    intro c
+    simp only [j12]
+    rcases hb : v.binding with _ | ⟨stream, prover⟩
+    · simp [h13]
+    · by_cases hs : jeq (getD (get "window") "stream") (.str stream) = true <;>
+        by_cases hp : jeq (getD (get "window") "prover") (.str prover) = true <;>
+        simp [hs, hp, h13, addCode_ne_nil]
   have h11 := step_ite (∀ e ∈ v.log, jeq (getD e "window") (getD rec "window") = false) j11 j12 _ _ h12
     (fun _ => rfl) (any_false_iff _ _)
   have h10 := step_ite (jeq (getD rec "previous") previous = true) j10 j11 _ _ h11 (fun _ => rfl) (not_false_iff' _)
@@ -795,15 +954,15 @@ theorem registration_nil (rec : Json) (v : Registration.Verifier) :
   rw [ek, ef, e7]
   constructor
   · rintro ⟨hk, ⟨hf, hp⟩, ⟨law, hd, hl⟩, _, ⟨hw1, hw2⟩, hprog, ⟨d, hd'⟩, hloop, hpop, _, hsch, hroots, hports, h7',
-      h4', h5', h6a, h6b, h7r, _⟩
+      h4', h5', h6a, h6b, h6c, h7r, _⟩
     have ⟨l1, l2, l3⟩ := (r2loop get _ _ _).1 hloop
     exact ⟨law, ⟨hk, hf, hp, hd, hl, hw1, hw2⟩, ⟨hprog, l1, l2, ⟨d, hd', l3 d hd'⟩, hpop⟩,
-      ⟨hsch, hroots.1, hroots.2, hports.1, hports.2.1, hports.2.2, h7'⟩, h4', h5', ⟨h6a, h6b⟩, h7r⟩
+      ⟨hsch, hroots.1, hroots.2, hports.1, hports.2.1, hports.2.2, h7'⟩, h4', h5', ⟨h6a, h6b, h6c⟩, h7r⟩
   · rintro ⟨law, ⟨hk, hf, hp, hd, hl, hw1, hw2⟩, ⟨hprog, l1, l2, ⟨d, hd', l3⟩, hpop⟩,
-      ⟨hsch, hr1, hr2, hp1, hp2, hp3, h7'⟩, h4', h5', ⟨h6a, h6b⟩, h7r⟩
+      ⟨hsch, hr1, hr2, hp1, hp2, hp3, h7'⟩, h4', h5', ⟨h6a, h6b, h6c⟩, h7r⟩
     refine ⟨hk, ⟨hf, hp⟩, ⟨law, hd, hl⟩, rfl, ⟨hw1, hw2⟩, hprog, ⟨d, hd'⟩,
       (r2loop get _ _ _).2 ⟨l1, l2, fun d' hd'' => ?_⟩, hpop, rfl, hsch, ⟨hr1, hr2⟩, ⟨hp1, hp2, hp3⟩, h7', h4', h5',
-      h6a, h6b, h7r, trivial⟩
+      h6a, h6b, h6c, h7r, trivial⟩
     have : some d' = some d := hd''.symm.trans hd'
     cases this
     exact l3

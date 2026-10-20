@@ -5,8 +5,9 @@ holds before the draw, so the prover never chooses it.
 * `sources`: the verifier's `{value: [[source, ...], ...]}`, each source `{"port": P}` (the record's `roots` entry of port
   P), `{"value": V}` (its `registered` entry of value V, never a supplied value's), `{"bytes": hex}` (the verifier's own
   bytes), `{"position": "K"}` (K, a decimal below the record's population, after every unit of the log's records,
-  `logBase`, as a u64 big-endian) or `{"window": hex}` (`windowSalt`: SHA-512 of `WINDOW_SALT`, the coin and the record's
-  window as canonical JSON, NUL between them, a window that is an object of the canonical domain);
+  `logBase`, as a u64 big-endian) or `{"window": hex}` (`windowSalt`: SHA-512 of `WINDOW_SALT`, the coin, the verifier's
+  binding, its stream's digest and its prover's identity as hex, and the record's window as canonical JSON, NUL between
+  them, a window that is an object of the canonical domain; none without a binding);
 * a row is its sources' bytes in order (a root the record names, its last entry, as R3 and R7 read a name twice; hex
   non-empty lowercase of whole bytes), read as the parameter's leaves of `w` bits (`bytesLeaves`: each big-endian
   32-bit half, its `32 / w` leaves least significant first, so a digest is 16 leaves of 32 bits or 512 of one);
@@ -28,7 +29,7 @@ open Lean (Json)
 open Flock (V)
 
 def SUPPLIED_SALT : String := "verity/one-stage/supplied-salt/v0"
-def WINDOW_SALT : String := "verity/one-stage/window-salt/v0"
+def WINDOW_SALT : String := "verity/one-stage/window-salt/v1"
 def SOURCES : List String := ["port", "value", "bytes", "position", "window"]
 def SALT_BYTES : Nat := 192
 
@@ -71,19 +72,23 @@ def logBase (log : Array Json) : V Nat :=
     | some n => if n < 0 then throw "a record of the log has no population" else pure (base + n.toNat)
     | none => throw "a record of the log has no population") 0
 
-/-- `registered.window_salt`: the salt of the record's window under the verifier's coin. -/
-def windowSalt (coin : ByteArray) (window : Json) : V ByteArray := do
+/-- `registered.window_salt`: the salt of the record's window under the verifier's coin and its binding
+`(stream, prover)`. -/
+def windowSalt (coin : ByteArray) (binding : Option (String × String)) (window : Json) : V ByteArray := do
+  let some (stream, prover) := binding
+    | throw "a window salt is bound to a stream and a prover: the verifier holds no binding"
   if !(window matches .obj _) || (Flock.Program.domainError window).isSome then
     throw "the record's window is no canonical JSON object"
-  return Flock.Sha512.hash ((WINDOW_SALT.toUTF8.push 0 ++ coin).push 0 ++ (← Flock.canon window).toUTF8)
+  let head := ((WINDOW_SALT.toUTF8.push 0 ++ coin).push 0 ++ stream.toUTF8).push 0 ++ prover.toUTF8
+  return Flock.Sha512.hash (head.push 0 ++ (← Flock.canon window).toUTF8)
 
 private def decimal? (s : String) : Option Nat :=
   if s == "0" || (!s.isEmpty && s.toList.all Char.isDigit && s.front != '0') then some s.toNat! else none
 
 /-- A source's bytes: the root the record names for it, the verifier's own, a position after the log's, or the verifier's
-coin bound to the record's window; an error where there is none. -/
-def sourceBytes (rec : Json) (log : Array Json) (supplied : Array String) (value : String) :
-    String × String → V ByteArray
+coin bound to its binding and the record's window; an error where there is none. -/
+def sourceBytes (rec : Json) (log : Array Json) (binding : Option (String × String)) (supplied : Array String)
+    (value : String) : String × String → V ByteArray
   | (kind, name) => do
     if kind == "position" then
       let some k := decimal? name | throw s!"supplied value {value}: position {name} is no decimal"
@@ -94,7 +99,7 @@ def sourceBytes (rec : Json) (log : Array Json) (supplied : Array String) (value
       return Flock.be64 p.toUInt64
     if kind == "window" then
       if name.isEmpty then throw s!"supplied value {value}: window {name} is no bytes"
-      return (← windowSalt (← Flock.unhex name) (getD rec "window"))
+      return (← windowSalt (← Flock.unhex name) binding (getD rec "window"))
     let text ← if kind == "bytes" then pure (Json.str name) else do
       if kind == "value" && supplied.contains name then
         throw s!"supplied value {value} reads supplied value {name}'s root"
@@ -108,12 +113,12 @@ def sourceBytes (rec : Json) (log : Array Json) (supplied : Array String) (value
     Flock.unhex s
 
 /-- `registered.supplied_rows`: each row its sources' bytes as the parameter's leaves. -/
-def rows (rec : Json) (log : Array Json) (ps : Array Registered.Param) (supplied : Array String) (value : String)
-    (rs : Rows) : V (Array (Array Nat)) := do
+def rows (rec : Json) (log : Array Json) (binding : Option (String × String)) (ps : Array Registered.Param)
+    (supplied : Array String) (value : String) (rs : Rows) : V (Array (Array Nat)) := do
   let some p := ps.find? (·.name == value) | throw s!"{value} is not a parameter of the program"
   let [w] := Registered.widthSet p.ty | throw s!"parameter {value}: its leaves are not one width"
   rs.mapM fun r => do
-    let data ← r.foldlM (fun acc s => return acc ++ (← sourceBytes rec log supplied value s)) ByteArray.empty
+    let data ← r.foldlM (fun acc s => return acc ++ (← sourceBytes rec log binding supplied value s)) ByteArray.empty
     bytesLeaves data w
 
 /-- A registered row's u16 words: each leaf `wordBits / 16` words, low first, zero-padded to whole SHA-512 blocks. -/
@@ -123,9 +128,9 @@ def rowWords (row : Array Nat) (wordBits : Nat) : Array Nat :=
 
 /-- `registered.supplied_root`: the root R7 holds a supplied value's entry to (hex), the rows of `rs` committed under
 `salt` at the verifier's own entry `want`; an error where a source names nothing or the rows are not its shape. -/
-def root (rec : Json) (log : Array Json) (ps : Array Registered.Param) (program : String) (supplied : Array String)
-    (value : String) (rs : Rows) (want : Registered.Entry) : V String := do
-  let got ← rows rec log ps supplied value rs
+def root (rec : Json) (log : Array Json) (binding : Option (String × String)) (ps : Array Registered.Param)
+    (program : String) (supplied : Array String) (value : String) (rs : Rows) (want : Registered.Entry) : V String := do
+  let got ← rows rec log binding ps supplied value rs
   if got.size != want.leaves || got.any (·.size != want.words) then
     throw s!"supplied value {value}: rows of {got.map (·.size)} leaves, not {want.leaves} of {want.words}"
   let dom ← Registered.domain program value want.words want.leaves want.wordBits

@@ -43,7 +43,13 @@ from dataclasses import dataclass
 from typing import Literal, Protocol, runtime_checkable
 
 from .errors import InvalidArtifact
-from .integer import BLACKWELL_SM120_S8_M16N8K32, BLACKWELL_SM120_S8_M16N8K32_WRAP, BLACKWELL_SM120_U8S8_M16N8K32
+from .integer import (
+    BLACKWELL_SM100_S8_K32,
+    BLACKWELL_SM120_S8_M16N8K32,
+    BLACKWELL_SM120_S8_M16N8K32_WRAP,
+    BLACKWELL_SM120_U8S8_M16N8K32,
+    HOPPER_SM90_S8_K32,
+)
 from .term import (
     FP32_MAX_EXPONENT,
     FP32_MIN_NORMAL_EXPONENT,
@@ -174,7 +180,9 @@ class GroupSum:
     ``dtype`` names the operand format (``term.FORMATS``); a ``width`` below
     24 means the incoming FP32 accumulator's significand is *truncated* to the
     adder before the grouped add (Hopper/Ada FP8: 14 bits), exactly as a
-    product is.
+    product is.  ``executes`` names the operand format the instruction
+    multiplies in where it isn't ``dtype`` (Triton's MMAv2 e4m3 dot on sm_90
+    promotes its operands exactly to f16 for HMMA), else None.
     """
 
     name: str
@@ -185,6 +193,7 @@ class GroupSum:
     width: int
     zero_exponent: int
     validated: str
+    executes: str | None = None
 
     @property
     def k(self) -> int:
@@ -959,5 +968,7 @@ MODELS: dict[str, Model] = {
         BLACKWELL_SM120_S8_M16N8K32,
         BLACKWELL_SM120_S8_M16N8K32_WRAP,
         BLACKWELL_SM120_U8S8_M16N8K32,
+        HOPPER_SM90_S8_K32,
+        BLACKWELL_SM100_S8_K32,
     )
 }

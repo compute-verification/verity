@@ -115,8 +115,8 @@ theorem honest_wholeLuck (Ω : Type) [Fintype Ω] (p0 : ℝ) (n : ℕ) :
 def honestLayer (Ω : Type) (S : ℕ) : ProofLayer Ω S 1 Unit where
   accepted _ _ _ := True
   opened _ _ _ := ()
-  rel _ _ _ := True
-  right _ := True
+  rel _ _ _ _ := True
+  right _ _ := True
 
 theorem honestLayer_fork (Ω : Type) [Fintype Ω] (S : ℕ) : BindingForkAt (honestLayer Ω S) 0 := by
   intro w
@@ -130,7 +130,7 @@ theorem honestLayer_sound (Ω : Type) [Fintype Ω] (S : ℕ) : ProofSoundAt (hon
   exact h.2 trivial
 
 theorem honestLayer_pins (Ω : Type) (S : ℕ) : ProofsPin (honestLayer Ω S) := by
-  intro _ _
+  intro _ _ _
   trivial
 
 theorem budget_zero (n : ℕ) : (n : ℝ) * (Real.sqrt 0 + ((1 : ℕ) : ℝ) * 0) ≤ (1 / 2) ^ 41 := by
