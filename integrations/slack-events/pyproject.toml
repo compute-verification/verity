@@ -1,0 +1,22 @@
+[project]
+name = "verity-slack-events"
+version = "0.0.0"
+description = "The Slack events service: Slack's Events and Interactivity requests onto a queue, routed by research msg's own code."
+requires-python = ">=3.12"
+# service/pyproject.toml's pins, which Vercel installs (tests/test_service.py holds the two lists equal).
+dependencies = ["fastapi==0.149.0", "vercel-queue==0.9.2", "vercel-cache==0.7.6", "tzdata==2026.5"]
+
+# Not an installable package: a workspace member so that its tests run in the workspace environment. The deployment is
+# service/ alone (its Vercel Root Directory), with its own pyproject.toml, which the workspace excludes.
+[tool.uv]
+package = false
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["service"]
+markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
+
+[tool.verity.tests]
+# The service runs `research msg`'s slack.py as a single file and routes by the registry; build.py copies both into the
+# deployment, and the tests load them from the tree.
+inputs = ["tools/research/src/research/slack.py", ".agents/skills/using-slack/registry.json"]

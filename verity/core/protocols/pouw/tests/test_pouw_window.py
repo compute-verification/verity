@@ -283,7 +283,7 @@ def test_the_window_statement_refuses_each_departure_from_the_layout():
     assert Wd.window_problem(_rows([es[0], replace(es[1], tile0=9)] + es[2:]), w, 5, H3) is None
     with pytest.raises(ValueError, match="64 bytes"):
         Wd.window_problem(_rows(es), w, 5, H3[:32])
-    assert {p[0] for p in Wd.PUBLIC} == {"verdict", "work", "check", "sampling", "drawn", "root_W"}
+    assert {p[0] for p in Wd.PUBLIC} == {"verdict", "work", "check", "sampling", "length", "drawn", "root_W"}
     assert set(Wd.REGISTERED) == {p[0] for p in Wd.PUBLIC if p[2] != "outcome"}
 
 

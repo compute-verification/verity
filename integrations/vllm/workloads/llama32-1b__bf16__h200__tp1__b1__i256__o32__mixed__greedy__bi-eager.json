@@ -22,7 +22,8 @@
  "sampling": {
   "variant": "greedy",
   "seed": null,
-  "n": 1
+  "n": 1,
+  "ignore_eos": true
  },
  "serving_profile": "sweep-B1",
  "context_class": "I256-O32",
@@ -361,5 +362,5 @@
   "seed_rule": "seed = SHA256(row_id); rng(purpose) = default_rng(SHA256(seed || '/' || purpose)); sampling seed i = SHA256(seed||'/sampling/'||i)[:4]",
   "lengths_only": false
  },
- "note": "R12 sweep llama32-1b__bf16__h200__tp1__b1__i256__o32__mixed__greedy__bi-eager: B=1 I<=256 O<=32 greedy arrivals=none; prompt lens [256], caps [32], arrive steps [0]; every request to max_tokens => 32 engine steps; max_num_batched_tokens keeps the whole admitted prefill in one step; max_model_len = I + O.  EOS untouched."
+ "note": "R12 sweep llama32-1b__bf16__h200__tp1__b1__i256__o32__mixed__greedy__bi-eager: B=1 I<=256 O<=32 greedy arrivals=none; prompt lens [256], caps [32], arrive steps [0]; every request to max_tokens => 32 engine steps; max_num_batched_tokens keeps the whole admitted prefill in one step; max_model_len = I + O.  A row of record: sampling.ignore_eos, every request done only at its public cap."
 }

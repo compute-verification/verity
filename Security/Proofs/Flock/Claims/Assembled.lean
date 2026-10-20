@@ -61,7 +61,8 @@ prover: as an argument, or from the record. `Claims.Complete` stays folded: with
 * `hKS : Flock.KS H (deployZkTrim rel)`. At SHA-512 it follows from the fixed-table bound at the untrimmed instance at
   statements of one table (`FlockDeploy.KS.zk_KS_trim`); at the untrimmed record, from one wait's bound
   (`FlockDeploy.KS.zk_of_oneWait`, as at the plain record). At SHA-512 and the deployed relation it holds with no
-  premise (`FlockDeploy.KS.zk_KS`), so `flock_zk_assembled_trim` drops it.
+  premise (`FlockDeploy.KS.zk_KS`), so `flock_zk_assembled_trim` drops it; so does KS at the untrimmed instance, which
+  the sampling claims read (`FlockDeploy.KS.zk_KS_untrim`).
 * `hComplete`: `Flock.Complete` at the masked record, unfolded, of `ZkTables.honestPR` at `ZkTables.δc H`, at any
   number of tables, the untrimmed record's (`Flock.complete_mapCols`). At the deployed relation it follows from the
   record's JSON and three premises on the honest masked run, each at every good case or run and every table of it
