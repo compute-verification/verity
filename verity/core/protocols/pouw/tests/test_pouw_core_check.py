@@ -6,7 +6,9 @@ them, on the shared harness. The tests here hold this module to PoUW's rule: eac
 at, and an accepted window publishes exactly `window.PUBLIC`."""
 from __future__ import annotations
 
+import hashlib
 import importlib.util
+import itertools
 import json
 import random
 import sys
@@ -18,8 +20,11 @@ import pytest
 from verity.core.protocols.pouw import coins as Co
 from verity.core.protocols.pouw import core_check as CC
 from verity.core.protocols.pouw import window as Wd
+from verity.core.protocols.sampled_proofs import challenger as Ch
 from verity.core.protocols.sampled_proofs import service as S
 from verity.core.protocols.sampled_proofs.one_stage import registration as R
+from verity.ml.crypto import lms
+from verity.ml.randomness import derive
 
 ROOT = Path(__file__).resolve().parents[5]
 PKG = ROOT / "verity/core/protocols/pouw/lean/check"
@@ -443,6 +448,9 @@ DRAW_EXPECT = {
     "live-key": ("coin", "the verifier's challenger key is malformed: a challenger key is {H, W, public}"),
     "live-no-record": ("coin", "no challenger record: the verifier holds no coin commitment"),
     "live-unsigned": ("coin", "the challenger record's signature does not verify under the verifier's challenger key"),
+    "live-own-key": (CC.COIN_KEY, CC.OTHER_KEY), "live-pinned-other": (CC.COIN_KEY, CC.OTHER_KEY),
+    "live-no-pin": (CC.COIN_KEY, f"{CC.NO_PINNED_KEY}: a challenger key is {{H, W, public}}"),
+    "seeded-pinned": (CC.COIN_KEY, CC.SEEDED_PINNED),
     "live-moved": ("coin", "the challenger record's signature does not verify under the verifier's challenger key"),
     "live-opening-form": ("coin", "the draw's a live coin opening is"),
     "live-label": ("coin", "the draw's coin is the epoch's pouw/salt coin 0, not its pouw/draw coin 0"),
@@ -481,10 +489,12 @@ def test_each_honest_pass_is_had_as_it_was_salted():
 
 def test_every_draw_mutation_hits_its_refusal():
     """`core_check.draw` accepts an honest draw under seeded coins or a live epoch's (a certified window's, held as its
-    challenger's signed record with the verifier's key for it, which the check verifies) and refuses each mutation with
-    the refusal it aims at: a bare live commitment, a malformed key, no record, a record signed under another key, a
-    tampered signature or a record whose commitment was swapped. A live draw's coin is ``pouw/draw`` 0, so a seeded
-    opening under live coins is refused, and so is a live opening under seeded coins."""
+    challenger's signed record with the key it is signed under, which must be the one the window's parameters pin) and
+    refuses each mutation with the refusal it aims at: a bare live commitment, a malformed key, no record, a record
+    signed under another key than the one its coins name, a tampered signature or a record whose commitment was
+    swapped (``coin``); a record under a key of the prover's own, a pin of another key, no pin or a malformed one, and
+    seeded coins under a pin (``coin-key``). A live draw's coin is ``pouw/draw`` 0, so a seeded opening under live
+    coins is refused, and so is a live opening under seeded coins."""
     assert set(DRAW_EXPECT) == set(passes.DRAW_NAMES) | {"honest"}
     for name, want in DRAW_EXPECT.items():
         for seed in range(6):
@@ -498,6 +508,48 @@ def test_every_draw_mutation_hits_its_refusal():
         assert CC.draw(*passes.draw_args({**live, "opening": seeded["opening"]}))[1].startswith(
             "the draw's a live coin opening is")
         assert CC.draw(*passes.draw_args({**seeded, "opening": live["opening"]}))[0] == "coin"
+
+
+def _live_draw(sk: lms.PrivateKey, coins: str, reg: str, stream: str, receipt: dict, n: int, k: int, pinned: dict) -> dict:
+    """The draw's check of record's input (`pouw_pass_cases.honest_live_draw`'s layout) for a challenger run on coins
+    `coins`, its record signed under `sk` and naming that key, in a window whose parameters pin challenger key `pinned`."""
+    ch = Wd.live_challenger(0, 1, random.Random(coins).randbytes)
+    message = Ch.record_message(lms.public_key(sk)[:16], "provers-node", ch.commitment)
+    record = Ch.ChallengerRecord(ch.commitment, "provers-node", lms.sign_at(sk, 0, message).encode())
+    o = ch.open(Wd.DRAW, 0, bytes.fromhex(reg))
+    ctx, size = CC.draw_key_context(stream, reg, receipt), 2 * k * CC.width(n) + 64
+    return {"coins": {"key": Ch.ChallengerKey(4, 2, lms.public_key(sk)).to_json(), "record": record.to_json()},
+            "recorded": False, "opening": o.to_json(), "stream": stream, "registration": reg, "receipt": receipt, "k": k,
+            "population": n, "units": CC.stream_subset(k, n, derive(o.coin, CC.DRAW_DOMAIN, ctx).stream("draw", size)),
+            "key": pinned}
+
+
+def test_a_draw_record_the_prover_signed_over_its_own_coins_is_refused():
+    """RT4-INT-5's witness, refused. A prover that runs a challenger on coins of its own and signs its record under a key
+    of its own sees each candidate registration's draw before it registers, and keeps one whose draw misses the unit it
+    can't prove (unit 0). The draw's check of record now verifies the record under the challenger key the window's
+    parameters pin, not the key its coins name: the prover's record naming its own key is refused (``coin-key``), and
+    naming the pinned key it doesn't verify under it (``coin``); with no key pinned, no live record is read
+    (``coin-key``). The verifier's own challenger's record, signed under the pinned key, passes on the same draw."""
+    verifier = lms.keygen(lms.Params(64, 4, 2), hashlib.sha512(b"the verifier's challenger").digest())
+    prover = lms.keygen(lms.Params(64, 4, 2), hashlib.sha512(b"the prover's challenger key").digest())
+    pinned = Ch.ChallengerKey(4, 2, lms.public_key(verifier)).to_json()
+    stream, n, k, bad = hashlib.sha512(b"stream").hexdigest(), 26, 3, 0
+    for i in itertools.count():
+        reg = hashlib.sha512(b"candidate %d" % i).hexdigest()
+        receipt = {"format": "verity/registration-receipt/v1", "received": str(i), "registration": reg,
+                   "verifier": "served-zk/challenger/window"}
+        d = _live_draw(prover, "the prover's coins", reg, stream, receipt, n, k, pinned)
+        if bad not in d["units"]:
+            break
+    assert CC.draw(*passes.draw_args(d)) == (CC.COIN_KEY, CC.OTHER_KEY)
+    assert CC.draw(*passes.draw_args({**d, "coins": {**d["coins"], "key": pinned}})) == \
+        ("coin", "the challenger record's signature does not verify under the verifier's challenger key")
+    code, why = CC.draw(*passes.draw_args({**d, "key": None}))
+    assert code == CC.COIN_KEY and why.startswith(CC.NO_PINNED_KEY)
+    assert CC.draw(*passes.draw_args({**d, "key": d["coins"]["key"]})) is None
+    honest = _live_draw(verifier, "the verifier's coins", reg, stream, receipt, n, k, pinned)
+    assert CC.draw(*passes.draw_args(honest)) is None
 
 
 #: the refusal each rounds mutation aims at: its code and a part of its reason

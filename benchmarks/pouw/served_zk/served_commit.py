@@ -82,7 +82,8 @@ judged through the proof service (`sampled_proofs.service`, P1: a `Stream`'s `re
   parameters carry no ``registration_deadline``.  The window registers once per PoUW window, stream and prover
   (`salt.Registrations`, ``reregistered``), and its draw coin is a live epoch's ``pouw/draw`` coin 0, checked against
   the commitment the challenger reads from its challenger's signed record (`challenger.trusted_commitment`), which the
-  draw's check of record verifies again.
+  draw's check of record verifies again, both under the challenger key the window's deployment pins (`Deployment`,
+  beside the certifier's key and run id), so a record the prover signs under its own key is refused (``coin-key``).
 - **The check** reads a proof's public file (``pub.bin``): instance 0's b ‖ c of its A row and B row must be the unit's rows,
   each by its frame-v3 path to its entry's side root, and the entry by its path to the registered window root.  A
   certified window's units are opened under the salt its pass was checked against (`Challenger.check`,
@@ -99,6 +100,7 @@ import math
 import os
 import subprocess
 import sys
+from dataclasses import dataclass
 from fractions import Fraction
 from functools import lru_cache
 from pathlib import Path
@@ -263,6 +265,31 @@ def certifier_run(certifier: Any) -> dict[str, str]:
         raise ValueError(f"a certified window's certifier names its run: a key id, a {RUN_ID_BYTES}-byte run id and its "
                          "ingress link")
     return {"key_id": key_id.hex(), "link": link, "run_id": run_id.hex()}
+
+
+DEPLOYMENT_FORM = ("a certified window's deployment is the network certifier's public key, its run's "
+                   f"{RUN_ID_BYTES}-byte id and the verifier's challenger key (`challenger.ChallengerKey`)")
+
+
+@dataclass(frozen=True, slots=True)
+class Deployment:
+    """What a certified window's verifier pins of its deployment: the network certifier's public key and its run's id,
+    the only ones whose answers the challenger takes (its client, `certifier.active.RemoteCertifier`, must be for them,
+    and refuses any other), and the key of the verifier's own challenger, under which the challenger reads the window's
+    coin record and the draw's check of record verifies it (`core_check.draw`, ``coin-key``), so no record a prover
+    signs over coins it holds is read."""
+
+    # TODO(NET-50): the auditor's deployment record is to give all three; nothing writes it yet, so the caller does.
+    certifier_key: Any
+    run_id: bytes
+    challenger_key: Ch.ChallengerKey
+
+    def __post_init__(self) -> None:
+        key = self.certifier_key
+        if not (type(getattr(key, "key_id", None)) is bytes and callable(getattr(key, "verify", None))
+                and type(self.run_id) is bytes and len(self.run_id) == RUN_ID_BYTES
+                and isinstance(self.challenger_key, Ch.ChallengerKey)):
+            raise ValueError(DEPLOYMENT_FORM)
 
 
 def stream_id(params: dict, stream: str, certifier: Mapping[str, str]) -> bytes:
@@ -702,7 +729,8 @@ def _signed_coins(path: str | os.PathLike | None, key: Ch.ChallengerKey | None) 
     there is no such record, or it isn't a live epoch's."""
     if path is None or not isinstance(key, Ch.ChallengerKey):
         raise ValueError("a certified window's challenger reads its coin commitment from its challenger's signed record "
-                         "(`coin_record`, the path it was written to) under the verifier's key for it (`coin_key`)")
+                         "(`coin_record`, the path it was written to) under the challenger key its deployment pins "
+                         "(`Deployment.challenger_key`)")
     try:
         trusted = Ch.trusted_commitment(path, key, CC.lms_verify)
         doc = json.loads(Path(path).read_text(encoding="utf-8"))
@@ -743,19 +771,22 @@ class Challenger:
     `reveal` are the certifier's signed answers to the challenger's signed requests, verified; `prover` is its 64-byte
     id (`salt.prover_id`), `coins` the live epoch's challenger (`window.live_challenger`) whose ``pouw/draw`` coin 0 the
     draw opens, `coin_record` the path of the record that challenger signed and wrote on its own host
-    (`challenger.write_record`) and `coin_key` the verifier's key for it (`challenger.ChallengerKey`): the challenger
-    reads its trusted commitment from them itself (`challenger.trusted_commitment`), every opening is checked against it,
-    and the draw's check of record verifies the record again.  `registrations` is the deployment's `salt.Registrations`,
+    (`challenger.write_record`), and `deployment` what the verifier pins of its deployment (`Deployment`): the network
+    certifier's key and run id, which `certifier` must be the client for, and its challenger's key, under which the
+    challenger reads its trusted commitment itself (`challenger.trusted_commitment`).  Every opening is checked against
+    it, and the draw's check of record verifies the record again under the key the deployment pins, not the one the
+    record's coins name (``coin-key``).  `registrations` is the deployment's `salt.Registrations`,
     shared by its challengers.  Each registered window's salt, the one its pass was checked against, is held
     (`salts`), and `check` opens its drawn units under it."""
 
     def __init__(self, params: dict, coins: Any, sampler: Sampler = python_sampler, budget: int = BUDGET,
                  clock: Callable[[], float] | None = None, record: OR.Record | None = None,
                  predates_deadline: bool = False, certifier: Any = None, prover: bytes | None = None,
-                 coin_record: str | os.PathLike | None = None, coin_key: Ch.ChallengerKey | None = None,
+                 coin_record: str | os.PathLike | None = None, deployment: Deployment | None = None,
                  registrations: PS.Registrations | None = None) -> None:
         self.trusted: Ch.LiveCommitment | None = None
         self.signed: dict | None = None
+        self.deployment: Deployment | None = None
         if certifier is not None:
             # TODO(RT4-INT-7): no Lean statement covers a certified window's timing, and no run measures the commit
             # pipeline the certifier's reveal deadline must be sized against.
@@ -765,10 +796,15 @@ class Challenger:
                 raise ValueError(f"a certified window's prover is its {PS.PROVER_BYTES}-byte id (`salt.prover_id`)")
             if not certified(params):
                 raise ValueError("a certified window's context names its PoUW window (`salt.context`)")
-            self.trusted, self.signed = _signed_coins(coin_record, coin_key)
-            # TODO(NET-50): the client's certifier key and run id are to come from the auditor's deployment record,
-            # which nothing writes yet; the caller passes them.
+            if not isinstance(deployment, Deployment):
+                raise ValueError(f"a certified window's challenger takes its deployment (`Deployment`): {DEPLOYMENT_FORM}")
             self.run = certifier_run(certifier)
+            if (getattr(certifier, "certifier_key", None) != deployment.certifier_key
+                    or getattr(certifier, "run_id", None) != deployment.run_id):
+                raise ValueError("a certified window's certifier client is for the certifier key and run id its "
+                                 "deployment pins (`Deployment`)")
+            self.trusted, self.signed = _signed_coins(coin_record, deployment.challenger_key)
+            self.deployment = deployment
         elif certified(params):
             raise ValueError("the window's context names a PoUW window, so it is certified: its challenger holds the "
                              "network certifier (`certifier`)")
@@ -1009,7 +1045,8 @@ class Challenger:
             "coins": self._coins_json(), "recorded": self.recorded[name],
             "opening": self.openings["draw"].to_json(), "stream": st.digest, "registration": reg.digest,
             "receipt": dict(reg.receipt), "k": reg.record["law"]["k"], "population": reg.record["population"],
-            "units": list(d.units)})
+            "units": list(d.units),
+            "key": None if self.deployment is None else self.deployment.challenger_key.to_json()})
         if out is not None:
             raise _refused(*out["refused"]) if isinstance(out["refused"], list) else _refused("draw", out["refused"])
         self.draws[name] = d

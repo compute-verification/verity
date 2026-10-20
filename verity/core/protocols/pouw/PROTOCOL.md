@@ -99,8 +99,9 @@ the served window proves its drawn tiles in zero knowledge, and its verifier of 
      `serve_reveals`): each `committed` and `reveal` is a request the challenger signs for the certifier's run and an
      answer the certifier signs over its run, p, the registration's digest and the value, which the client verifies
      under the certifier's key. A `Proxy` in process has no signer, so it names no run, and a certified challenger
-     refuses it. Open: the client's certifier key and run id are to come from the auditor's deployment record, which
-     nothing writes yet, so the challenger's caller passes them.
+     refuses it. The certifier's key and run id are the window's `Deployment` (`served_commit.Deployment`), beside its
+     challenger's key, and the challenger refuses a client for any other. Open: the deployment is to come from the
+     auditor's deployment record, which nothing writes yet, so the challenger's caller passes it.
 3. **Units.** For each matmul (a 64-bit index, a shape, a weight id), the activation rows are committed bound to the salt
    and the index. The scheme derives its noise from (salt, matmul, roots); every tile yields checked values and a digest.
    The useful output is assembled from the tiles.
@@ -117,9 +118,11 @@ the served window proves its drawn tiles in zero knowledge, and its verifier of 
    its registration's receipt (`benchmarks/pouw/served_zk/served_commit.py`, `Challenger.select`). A certified window's
    draw coin is a live epoch's `pouw/draw` coin 0 (`window.live_challenger`), under the commitment the challenger reads
    itself from the record its challenger signed (`challenger.trusted_commitment` of `Challenger(coin_record=…,
-   coin_key=…)`). The draw's check of record (`core_check.draw`, Lean `drawCheck`) takes that record and the verifier's
-   key, `{key, record}`, verifies the record's LMS signature and reads the commitment from it, so a bare commitment is
-   refused: one trusted root per coin.
+   deployment=…)`), under the challenger key the window's deployment pins (`Deployment.challenger_key`). The draw's
+   check of record (`core_check.draw`, Lean `drawCheck`) takes that record and the key it names, `{key, record}`, and
+   the pinned key (`key`): it refuses a record whose key isn't the pinned one, no pin, or seeded coins under a pin
+   (`coin-key`), so a record the prover signs over coins it holds is refused; it verifies the record's LMS signature
+   under the pinned key and reads the commitment from it, so a bare commitment is refused: one trusted root per coin.
    - **N and K′.** A window of N_real real tiles registers the level `window.bucket(N_real)`: it is credited g_ℓ tiles,
      the largest grid point at most N_real, and pads with filler tiles to N = g_(ℓ+1) = `window.pad(N_real + 1)`, at
      least one filler. Every tile is the one template's and does w_max = `tile_work`, and filler tiles are drawn like
