@@ -6,12 +6,12 @@ import Definitions.Pous.Model.M1p
 
 `Accounting.Assumptions.UniformLabels` draws the labels uniform given the auditor's devices' coins. The deployed labels
 are not: wipe `w`'s label of block `i` is SHA-512 of the wipe's key and `i` (PR #2726), and the wipe's key is derived
-from the memory challenger's secret and the wipe's session (`streamed_wipe.wipe_key`), a PRF of that secret (claim
-`prf/sha-512`). The challenger uses the secret only to compute labels: it streams them in the fill and compares answers
-to them. So a run is a function of the other coins `ω` (the prover's, the auditor's devices'), the lifetime label table
-`F : Fin (W * N) → Bits b` of `W` wipes of `N` blocks, and the indices `c`, `S ((ω, F), c)`, and the deployed system is
-that run at `F = prf s` for a uniform secret `s`, as PoUS's streamed-label wipe states it for one wipe
-(`Pous.StreamedWipe.winReal`, whose prover sees only the labels).
+from the auditor's secret for the server and the wipe (`streamed_wipe.wipe_key`), a PRF of the secrets (claim
+`prf/sha-512`). The challenger uses the secrets only to compute labels: it streams them in the fill and compares
+answers to them. So a run is a function of the other coins `ω` (the prover's, the auditor's devices'), the lifetime
+label table `F : Fin (W * N) → Bits b` of `W` wipes of `N` blocks, and the indices `c`, `S ((ω, F), c)`, and the
+deployed system is that run at `F = prf s` for uniform secrets `s`, as PoUS's streamed-label wipe states it for one
+wipe (`Pous.StreamedWipe.winReal`, whose prover sees only the labels).
 
 * `tableLabel`: the label a run carries for block `i` at read `j`, the table's entry for read `j`'s wipe `wipe j` and
   `i` (slot `finProdFinEquiv (wipe j, i)`), as a number, bit `k` with weight `2^k` (`Pous.bitsVal`), as
@@ -21,7 +21,7 @@ that run at `F = prf s` for a uniform secret `s`, as PoUS's streamed-label wipe 
   `m` bits at the arrival (`Actual.Run.mem`). One run decides it.
 * `heldDistinguisher`: the distinguisher one audit makes of the system, in `Pous.StreamedWipe.prfAdvantage`'s form:
   with coins `(ω, c)` and a table `F`, it runs `S ((ω, F), c)` once and outputs `heldEvent`. It asks the table only what
-  the audits ask it (each wipe's fill streams its labels, each read compares one), and it never reads a secret.
+  the audits ask it (each wipe's fill streams its labels, each read compares one), and it never reads the secrets.
 -/
 
 namespace Accounting

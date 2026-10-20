@@ -83,7 +83,7 @@ The model of `note:console/20261012T0645Z-draft-actual-circuit-model` (`Security
   and uniform labels; `WipeReadHeld`, the two composed with `WipeReadPool`: `K` narrow reads among accepted ones on
   at most `exp(−K (1 − (a − 1)/|B|)) + n |T| 2^m C(|B|, a) 2^{-a b}` of the coins.
 * `Actual/WipePrf.lean`: `WipeReadHeldPrf`, `WipeReadHeld` on the deployed labels, one lifetime table `prf s` of the
-  wipes' labels for a uniform secret `s`, with no label assumption: a uniform table meets `UniformLabels` given the
+  wipes' labels for uniform secrets `s`, with no label assumption: a uniform table meets `UniformLabels` given the
   devices' coins (`uniformLabels_table`), and the step to `prf s` adds the PRF's advantage against the distinguisher
   that runs the system once and outputs the event.
 -/
