@@ -18,8 +18,8 @@ this file. `Accounting.Guarantees.TS.Sm100MeasuredHeadline` reads it.
 * `d2s`, `model`: `dither-2s-licpw-redux-ldtm0-l32` on that machine, its writer kinds every MMA class it times (ω its
   destination's words, A6); `Sm100.d2s`'s vector classes, fold routes, floors and `N_w`.
 * `flatFold`, `flatSkip`, `flat`: ♭ is `Sm100.flat`'s word production and filler, its fold DC-100-ri's (the fold routes'
-  cheapest, cp-red2-generic on every word), with ε_skip's skippable work at DC-100-ri's 0.814462%
-  (`eps_budget.design_skip` on DC-100-ri), at FFMA's price.
+  cheapest, cp-red2 on every word), with ε_skip's skippable work at DC-100-ri's 0.814462% (`eps_budget.design_skip` on
+  DC-100-ri), at FFMA's price.
 * `lamStar`: π*, the certificate minimising the bound over this menu (issue 1.000000).
 -/
 
@@ -62,15 +62,13 @@ def dc100ri : List Sparse := [
   -- 6: TM100_0
   [(18, 10337059, 625000), (35, 19911599, 1000000)],
   -- 7: JI100_0
-  [(0, 122510713, 125000000), (2, 122510713, 125000000), (7, 122510713, 125000000), (8, 122510713, 125000000),
-   (9, 122510713, 125000000), (10, 122510713, 125000000), (11, 122510713, 125000000), (12, 122510713, 125000000),
-   (13, 122510713, 125000000), (14, 122510713, 125000000), (15, 122510713, 125000000), (16, 122510713, 125000000),
-   (17, 122510713, 125000000), (18, 122510713, 125000000), (19, 122510713, 125000000), (20, 122510713, 125000000),
-   (21, 122510713, 125000000), (22, 122510713, 125000000), (23, 122510713, 125000000), (24, 122510713, 125000000),
-   (25, 122510713, 125000000), (26, 122510713, 125000000), (27, 122510713, 125000000), (28, 122510713, 125000000),
+  [(0, 122510713, 125000000), (7, 122510713, 125000000), (8, 122510713, 125000000), (9, 122510713, 125000000),
+   (10, 122510713, 125000000), (12, 122510713, 125000000), (13, 122510713, 125000000), (14, 122510713, 125000000),
+   (15, 122510713, 125000000), (16, 122510713, 125000000), (17, 122510713, 125000000), (18, 122510713, 125000000),
+   (19, 122510713, 125000000), (20, 122510713, 125000000), (21, 122510713, 125000000), (24, 122510713, 125000000),
    (29, 539, 625000), (32, 122510713, 125000000), (34, 122510713, 125000000), (35, 108760423, 100000000),
    (37, 122510713, 125000000), (38, 122510713, 125000000), (39, 122510713, 125000000), (40, 122510713, 125000000),
-   (41, 122510713, 125000000), (47, 122510713, 125000000), (48, 122510713, 125000000), (51, 122510713, 125000000)],
+   (41, 122510713, 125000000), (47, 122510713, 125000000), (48, 122510713, 125000000)],
   -- 8: JPA100_0
   [(0, 3920543, 2000000), (35, 27417101, 2500000)],
   -- 9: JPA100_1
@@ -111,9 +109,8 @@ def d2s : DesignData where
 noncomputable def model : Model (Fin 52) (Fin 11) (Fin 13) Unit Empty (Fin 14) Unit :=
   d2s.model 52 13 14 machine
 
-/-- ♭'s fold a unit on DC-100-ri: the lane fold for 32768 words, the fold routes' cheapest, cp-red2-generic on every
-word. -/
-def flatFold : Sparse := [(0, 536, 1), (1, 16, 1), (8, 512, 1)]
+/-- ♭'s fold a unit on DC-100-ri: the lane fold for 32768 words, the fold routes' cheapest, cp-red2 on every word. -/
+def flatFold : Sparse := [(0, 536, 1), (8, 512, 1), (22, 16, 1)]
 
 /-- ♭'s skippable work a unit on DC-100-ri, at its FFMA price. -/
 def flatSkip : Sparse := [(7, 1445669286395, 165309230717)]

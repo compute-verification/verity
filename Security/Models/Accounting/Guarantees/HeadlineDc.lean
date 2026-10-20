@@ -68,13 +68,13 @@ Per device:
   the H200 and the B200 (r20261019-183610-89bd, r20261019-192247-8771; RT3-DC-1, -4), and CP_RED, CP_RED2 and CP_RED8
   through a generic address (`red.relaxed.gpu.xor.b32`, which ptxas emits as ATOM.E on sm_90a and sm_100a;
   RT4-SHEET-7), bit-exact on the H200 and the B200 too (r20261020-031119-3113, r20261020-031119-013a: every global
-  and generic red, red2 and red8 loop at 0 mismatches). On DS-90 ♭ folds by CP_RED2 alone; on DC-90-ri by CP_ATS8
-  and the generic CP_RED8 (0.170 and 0.830 of the words). Honest's kernel keeps REDUX, so γ is unchanged. Each memory,
-  control and warp-reduce instruction those loops issue (ATOMS32, LDS128, STS128, STS32, STG128, STG32, REDUX, REDG32,
-  ATOME32, ISETP) is its own census class at one issue slot on the issue rows and nothing on a pipe row, the sound
-  price: each issues once, and no pipe row is asserted for a class nobody timed on it (`FacetCeilings` reads every
-  line), so a class's price only falls short of its cost. The H200's REDG32 also costs 290 SMSP-cycles on `AT90`, the
-  L2's atomic row (RT2-HOPPER's G5); ATOME32, the same reduction through a generic address, is one slot on the
+  and generic red, red2 and red8 loop at 0 mismatches). On DS-90 ♭ folds by CP_RED2 alone; on DC-90-ri by the
+  generic CP_RED8 alone. Honest's kernel keeps REDUX, so γ is unchanged. Each memory, control and warp-reduce
+  instruction those loops issue (ATOMS32, LDS128, STS128, STS32, STG128, STG32, REDUX, REDG32, ATOME32, ISETP) is its
+  own census class at one issue slot (on the measured vectors the issue row's, with no joint-issue line: no run timed
+  them on SHFL's JI rows) and nothing on a pipe row, the sound price: each issues once, and no row is asserted for a
+  class nobody timed on it (`FacetCeilings` reads every line), so a class's price only falls short of its cost. The
+  H200's REDG32 also costs 290 SMSP-cycles on `AT90`, the L2's atomic row (RT2-HOPPER's G5); ATOME32, the same reduction through a generic address, is one slot on the
   measured issue row alone, with no joint issue or `AT90` line: no run has timed ATOM.E (RT4-SHEET-12; the device
   batch above checks its bits, not its time). Each sheet declares A2's catch-all,
   `NOROW` at its issue slot alone: every warp instruction no other class names counts there (RT4-SHEET-7, -9). Each
@@ -198,7 +198,7 @@ def Sm90SheetHeadline : Prop :=
 (`Sm90Measured.machine`), `dither-2s-licpw-redux-p1-l32`'s TS model on it (`Sm90Measured.model`: honest's IGMMA s8
 m64n256k32 and `UNI` at 2 the writer kinds, `q = q_T = ½`, `b_T = 0`, `N_w = 4096`) and its floor program
 (`Sm90Measured.flat`: `setup`'s floor, all but 0.047% of the words on the IGMMA and the rest on dp4a, and its fold by
-CP_ATS8 and the generic CP_RED8), over
+the generic CP_RED8), over
 `Sm90.checks = 48,000` rounds on any finite coins `Ω`: for any window's play
 `Pl` and proof layer `pf` whose binding and soundness cost at most `2^-41` over the window, if the labelling splits,
 (I1) `FacetCeilings` holds on DC-90-ri's rows, A6 (`SheetWords`) and (I5) `NoSum` hold on every run, FOLD-OPT per word
@@ -210,7 +210,9 @@ chains) of the credit `T_cred = B_♭/f_max`. The folded branch binds, at exactl
 `276830423957315889317326020021042965503626527/14512735002307735137851562500000000000000000000` (1.9075000%); the
 unfolded gives 1.8363268%. ATOME32 is priced at the measured issue slot alone, since no run has timed ATOM.E
 (RT4-SHEET-12). FOLD-OPT's premise has no slack; the reading reaches its 3% target with every fold route 1.67%
-cheaper.
+cheaper. FOLD-OPT at `π*` is false for a memory round trip's XOR: an ATOM.E.XOR and a load back, counted but not
+built, fold a word at 0.5038 `φ*` (RT4-SHEET-13), so the statement says nothing about a run that folds that way;
+that run's most-loaded row still holds the conclusion (+0.072 on issue).
 `NoSum` carries the tensor forms off the menu: DC-90-ri prices them at the scalar coefficient on its joint rows. Two of
 them would move the reading if they were on it: the register-sourced IGMMA form, whose coefficient fitted from the
 H200's probes gives about 1.64% in the machine model at #2699's earlier design, and DMMA, which at the scalar

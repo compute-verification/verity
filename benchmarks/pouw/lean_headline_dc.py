@@ -124,7 +124,7 @@ class Family:
 # lower bound on their issue cost"), and no certificate prices them otherwise (M gives a GMMA 32 SMSP-cycles to
 # IGMMA's 62.7 on JI90_0), so its measured menu is the machine model's: honest's form, the rest off it (NoSum).
 # The H200's design credits ffill at p = 1, since no check reads its chains (RT-LOGIC-12, decision 99). With ATOME32 at
-# the issue row alone (RT4-SHEET-12), `setup`'s floor on DC-90-ri folds by CP_ATS8 and the generic CP_RED8 and heads
+# the issue row alone (RT4-SHEET-12), `setup`'s floor on DC-90-ri folds by the generic CP_RED8 alone and heads
 # 0.047% of the words on the design's lane baseline (dp4a), the rest on the IGMMA; `_flat_shares` makes the split exact.
 # A uniform instruction heads up to 2 words (UIMAD.WIDE.U32 writes a UR pair, RT-HOPPER-7), so UNI's ω is 2.
 SM90 = Family("Sm90", "H200", "sm_90", "dither-2s-licpw-redux-p1-l32", "DS-90", "DC-90-ri", 1980,
