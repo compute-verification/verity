@@ -2,6 +2,7 @@
 gates' operands, its classes from the activations), served MACs and family rules, steps, and the digest."""
 from __future__ import annotations
 
+import sys
 from collections import Counter, defaultdict
 from types import SimpleNamespace
 
@@ -10,7 +11,7 @@ import pytest
 import test_ports as TP
 from test_ir_liveness import Add16, Add32, Coord, Embedding, Gemm, Mul16, comp, prim, programs as liveness_programs
 from verity.ml.circuits import boolean as BL
-from verity.ml.circuits import census as CE, ports
+from verity.ml.circuits import census as CE, intervals as IV, ports, refs as RF
 from verity.ml.circuits.census import NoBooleanWork, census, seal, silicon_step, step_ends
 from verity.ml.circuits.evaluation import bits as BS
 from verity.ml.circuits.codec import canonical_json, descriptor_id
@@ -80,10 +81,43 @@ def _passes(Bd, S, x):
 Col = comp("TCol", [("x", Array(3, V32))], V32, lambda Bd, S, x: Bd.call(Add32, x[0], x[2]))
 
 
+def relay(n: int) -> Program:
+    """A state passed through n Calls unchanged, each also computing a word from it: the last Call's state is n hops from the
+    root's."""
+    St = Array(4, V32)
+    Pass = comp("TPass", [("s", St)], Tuple(St, V32), lambda Bd, S, s: tuple_of(s, Bd.call(Add32, s[0], s[3])))
+
+    def body(Bd, S, s):
+        ys = []
+        for _ in range(n):
+            r = Bd.call(Pass, s)
+            s = r[0]
+            ys.append(r[1])
+        return tuple_of(s, array_of(ys))
+
+    return Program(comp("TRelay", [("s", St)], Tuple(St, Array(n, V32)), body))
+
+
+def fan(n: int) -> Program:
+    """n Calls' words gathered into an array one Call passes through whole, each word of which a Call reads: n runs, read in n
+    spans."""
+    A = Array(n, V32)
+    Keep = comp("TKeep", [("a", A)], A, lambda Bd, S, a: a)
+    One = comp("TOne", [("x", V32)], V32, lambda Bd, S, x: Bd.call(Add32, x, x))
+
+    def body(Bd, S, xs):
+        a = Bd.call(Keep, array_of([Bd.call(One, xs[i]) for i in range(n)]))
+        return array_of([Bd.call(One, a[i]) for i in range(n)])
+
+    return Program(comp("TFan", [("xs", A)], A, body))
+
+
 def programs():
     yield from liveness_programs()
     yield "request", request()
     yield "pass-through", Program(comp("TPasses", [("x", Array(2, V32))], V32, _passes))
+    yield "relay", relay(5)
+    yield "fan", fan(5)
     yield "columns", Program(comp("TColumns", [("M", Array(3, Array(4, V32)))], Array(4, V32),
                                   lambda Bd, S, M: Bd.batch(Col, M, axes=(1,))))
 
@@ -287,6 +321,31 @@ def test_embedding_without_evaluate_lazy_reads_its_table():
     c = census(Program(bind(Embedding)))
     assert c["selects"] == {"call": [], "gates": [], "bits": [], "values": []}
     assert c["values"]["reads"][:2] == [[2], [2]]
+
+
+def _lines(P: Program) -> int:
+    """The lines of census.py, intervals.py and refs.py that `P`'s census executes: its work, counted rather than timed."""
+    files, n = {CE.__file__, IV.__file__, RF.__file__}, 0
+
+    def line(frame, event, arg):
+        nonlocal n
+        n += event == "line"
+        return line
+
+    was = sys.gettrace()
+    sys.settrace(lambda frame, event, arg: line if frame.f_code.co_filename in files else None)
+    try:
+        census(P)
+    finally:
+        sys.settrace(was)
+    return n
+
+
+@pytest.mark.parametrize("shape", [relay, fan])
+def test_the_census_is_linear_in_its_pass_throughs(shape):
+    """A pass-through chain 200 Calls deep, and 200 runs read in 200 spans, cost the census at most 4.5 times what a quarter of
+    each costs (linear is 4). Walking the chain again from each Call, or every run for each span, costs 11 and 7.7 times."""
+    assert _lines(shape(200)) <= 4.5 * _lines(shape(50))
 
 
 Wide64 = prim("TWide64", [], V64, lambda: 1 << 60)
