@@ -26,6 +26,17 @@ program's bound B_♭, with ♭ priced on the device's own Π (`prices`), and ho
 design's ε_skip (`design_skip`) is the most over the models, contexts and phases under the floor credit, on sm_120 and
 on every device of the machine model (`device_table`); each registry's `[skip]` is that number (test_eps_budget holds
 them equal).
+
+Two pieces of served-only work that the cheater skips are not priced as skippable:
+
+- co32c's recombination O = O′ − Σ128^d D_d. `TS_EPS` prices co32c as if O were a checked word, but no check reads it:
+  H1's receipts are T, O′ and the D_d.
+- g1's centring correction (FPX-DESIGN's g1 arms), which nothing here prices.
+
+Honest runs both. Under the floor credit, ♭'s credit B_♭ leaves them out, which is sound for any program. Counting
+either as skippable would raise B_♭ and ε_skip together and leave the floor (1 − ε_skip)·B_♭ the same
+(`benchmarks/pouw/fpx_design/h1_o_free.py`). Against honest's time (`summary`'s honest credit) they are skippable work
+these shares omit, so there ε_skip is short of them.
 """
 
 from __future__ import annotations
@@ -185,8 +196,10 @@ def parts(name: str, ctx: int, phase: str, noise: dict[str, str], rates: dict = 
     """Per component, a token-layer: honest int8 products, the skippable ones, honest seconds, skippable seconds and plain
     int8 seconds, each product noised as `noise` (a design's `[noise]`) says. Prefill adds a checked leaf's vector work
     that only the served output needs, in the tensor–scalar model (`TS_EPS`; pv's `pv_ts`, P in blocks of `block` keys,
-    P V's honest seconds then plain int8 × pv_ts's γ), every served output free (no downstream check assumed), and the
-    peel's sums (`t_vsum`, free at a one-hot P row) and served epilogue (`t_apv_serve`). With `checked` the peel's
+    P V's honest seconds then plain int8 × pv_ts's γ), with no downstream check assumed. The exception is co32c's
+    recombination, which `TS_EPS` leaves out, so against honest's time these shares are short of it (the module
+    docstring). Prefill also adds the peel's sums (`t_vsum`, free at a one-hot P row) and served epilogue
+    (`t_apv_serve`). With `checked` the peel's
     served output is checked downstream, so the cheater pays its 4th IMMA (`tail_pv_served`) and epilogue; the
     tensor–scalar leaves stay served free. Decode prices products only. Decode's seconds are the GEMMs' compute, which the DRAM-bound
     step hides (`decode_gamma`); decode's binding facet is DRAM (`decode_dram`)."""
@@ -267,9 +280,13 @@ TS_FACETS = ((16.0, 0.0), (8.115, 1.0), (15.030, 0.317), (15.539, 0.172))
 #: cell (c_l7qs_v − c_l7qs, less its epilogue's 2.2), which every block of P adds once.
 PV_DIGIT_OPS, PV_SERVE_OPS, PV_SCALE_OPS = 7.0, 11.2, 12.0
 #: A checked leaf's vector work that only the served output needs, in the TS model at the duo fold, as a fraction of its
-#: component's own time, by leaf, model and component: co32c's recombination with O committed (linears, lm_head) and
-#: cohalf with every zero-instance route at X_BITSLICED (Q Kᵀ, k = 128), from checked_strip.py @007ee9c54
-#: (`ts_co32c_recombination`, `ts_qk_k128_all_routes`). Two-sided's served outputs are its last checked words and its
+#: component's own time, by leaf, model and component, from checked_strip.py @007ee9c54 (`ts_co32c_recombination`,
+#: `ts_qk_k128_all_routes`):
+#: - co32c (linears, lm_head): `ts_co32c_recombination`'s "O committed", within 1e-5 of "charged". That prices the residue
+#:   sums alone, with the cheater charged for the recombination. No check reads O (H1's receipts are T, O′ and the D_d), so
+#:   this leaves the recombination out of ♭'s credit, which is sound (the module docstring).
+#: - cohalf (Q Kᵀ, k = 128): every zero-instance route at X_BITSLICED; its O = T_last − U·Y is a receipted word.
+#: Two-sided's served outputs are its last checked words and its
 #: bit × bit words cost more than an IMMA (QSTAR's timed r20261017-055042-7c59), so it has none; pv's is `pv_ts`.
 TS_EPS = {"co32c": {"llama-3.1-8b": {"linears": 7.63e-4, "lm_head": 4.9e-5},
                     "llama-3.1-70b": {"linears": 3.91e-4, "lm_head": 4.9e-5}},
@@ -443,9 +460,11 @@ def prices(name: str, data: Path = DATA, vector: str = "") -> Prices:
 def floor_skip(name: str, ctx: int, d: Design, rates: dict = RATES, data: Path = DATA, vector: str = "",
                phase: str = "prefill") -> tuple[float, dict, dict]:
     """Corollary D3's ε_skip pieces (SPEC §2.9, note:20261017T0324Z-draft-eps1-spec), SMSP-cycles a token-layer on
-    `data`'s device: (♭'s committed words, the skippable work n^s_♭ by component with every served output free, the
-    same with P·V's served output checked). The words are `prices` ♭ a MMA on the transcript products (k a word, QKᵀ at
-    FLOOR_WORDS, P·V on the exact causal triangle in prefill, ctx keys in decode); a clean product's words are ♭'s too.
+    `data`'s device: (♭'s committed words, the skippable work n^s_♭ by component with no downstream check assumed, the
+    same with P·V's served output checked). n^s_♭ leaves co32c's recombination and g1's correction out, so ♭'s credit
+    does too, which is sound (the module docstring). The words are `prices` ♭ a MMA on the transcript products (k a
+    word, QKᵀ at FLOOR_WORDS, P·V on the exact causal triangle in prefill, ctx keys in decode); a clean product's words
+    are ♭'s too.
     Each skippable piece is the device's issue model's price of that work:
 
     - the peel's tail, a strip product at its mainloop MACs' price (`c_tail_pv`, apv's measured issue bound on sm_120;

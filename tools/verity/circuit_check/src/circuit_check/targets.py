@@ -516,7 +516,7 @@ _CALLS: set[str] = set()
 #: doesn't (``uncertified``)
 _SHORT: dict[str, set[str]] = {}
 #: the catalog's roots, made without building a body (`binding_roots`), each part once: ``bindings`` (`_kinds_and_templates`) and
-#: ``roots`` (the registered ones, every other root function's and each model's)
+#: ``roots`` (the registered ones, every other root function's and each model's); ``unbound``, the vocabulary kinds that made none
 _BOUND: dict[str, list[Any]] = {}
 
 
@@ -551,21 +551,32 @@ def _kinds_and_templates() -> list[Any]:
     if "bindings" not in _BOUND:
         load_registries()
         units = _root_bindings("_vocabulary_roots")[0][0]
-        out = _produce(units, lambda: [fn for _label, fn in _vocabulary_bindings() if not isinstance(fn, str)])
+        unbound: list[str] = []
+
+        def kinds() -> list[Any]:
+            bound = _vocabulary_bindings()
+            unbound.extend(f"{label}: {fn}" for label, fn in bound if isinstance(fn, str))
+            return [fn for _label, fn in bound if not isinstance(fn, str)]
+
+        out = _produce(units, kinds)
         for _label, sub, sts in templates():
             out += _produce((_template_unit(sub.template.id),), lambda sub=sub, sts=sts: [sub.definition(**st) for st in sts])
-        _BOUND["bindings"] = out
+        _BOUND["bindings"], _BOUND["unbound"] = out, unbound
     return _BOUND["bindings"]
 
 
 def word_call_families() -> set[str]:
     """The word Call families of a served Program: the replay's row families (`verity_vllm.program.kernels.rows.ROWS`), every
-    frontend vocabulary kind's Definition and every template's.  Their bindings build in seconds, without the catalog."""
+    frontend vocabulary kind's Definition and every template's.  Their bindings build in seconds, without the catalog.  A kind that
+    doesn't bind is refused by name: left out, its family's partition would be judged as no Call's."""
     if "words" not in _SHORT:
         load_registries()
         from verity_vllm.program.kernels import rows
 
-        _SHORT["words"] = set(rows.ROWS) | {family(fn) for fn in _kinds_and_templates()}
+        made = _kinds_and_templates()
+        if _BOUND["unbound"]:
+            raise RuntimeError(f"the Call families are unknown while a vocabulary kind doesn't bind: {_BOUND['unbound']}")
+        _SHORT["words"] = set(rows.ROWS) | {family(fn) for fn in made}
     return _SHORT["words"]
 
 

@@ -39,7 +39,10 @@ What it rests on:
 - FOLD-OPT (`Accounting.Assumptions.TS.FoldOpt`): fx1 at 4 lane instructions a word is the cheapest fold. It leaves out
   a run that skips a fold; charged by hand, unproved, the sheet's ε is ≈ 0.656% (#2482);
 - ε's source above, on the full-checking layer: ε_sample and the Fiat–Shamir premium are separate lines;
-- G, the block's GPUs, as its only devices for the work: A1–A7 price none of its other devices (its CPUs, its DPU);
+- the node's work, in its G GPUs' ticks: the headline is per node (ASK-65 = A), the work of its GPUs, host CPU and
+  peer GPUs together, priced on the GPUs' sheet (A1–A7 price none of its other devices: its CPUs, its DPU). Read as
+  the G GPUs' own time, it needs LOC's host deduction (decision 37) and every billable GPU on the node credited each
+  window (the machine model's README, "The headline is per node"; RT-SCOPE, #2681);
 - per block only under attribution's grade: PoUW credits the prover system (decision 111), so the ledger puts this on
   the block only as far as `BlockAccount.local_at_least` places it there, graded by its anchor (`Credit.grade`), and
   the rest on the datacenter.

@@ -180,6 +180,8 @@ def _walk_refs(acc: _Acc, r) -> None:
             acc.run(r.space, r.idx, r.base, r.base + r.count)
     elif tr is Concat:
         parts = r.parts
+        if type(parts) is not list:   # a PartLog cut's shared prefix: indexed below, so one list for the walk
+            parts = list(parts)
         n = len(parts)
         i = 0
         while i < n:
