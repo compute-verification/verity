@@ -361,7 +361,8 @@ class H1Run:
     given; nothing persists it or the tables, so their leaves open only while the run is held (`open_request`,
     `open_slot`). ``admission`` is `pouw_h1_requests.ROUND0` (admit in round 0 only) or ``PER_ROUND``; ``coin_source`` is
     `CHALLENGER` only for coins from the auditor host's challenger, and any other credits nothing. With ``served``
-    (`pouw_h1_served.Served`) each call's tables are registered values of the verifier's window Program.
+    (`pouw_h1_served.Served`) the window's A codes and B rows are also committed as the window Program's registered
+    values, at `close`, and `calls_root` binds them.
 
     The Program's ``salt`` is given, or None with ``opener``: then `open_window` opens it once round 0's admissions are in
     (or at the first use of the salt), after its request table, and ``opener`` sets ``rounds`` and ``draw``."""
@@ -448,8 +449,6 @@ class H1Run:
         return self._salt
 
     def _table(self, call: Call, name: str, leaves: list[bytes]) -> str:
-        if self.served is not None:
-            return self.served.commit(self, call, name, leaves)
         j = list(TABLE_TAGS).index(name)
         return commit_rows(tagged(TABLE_TAGS[name], self.salt, call.index), call.index, leaves, hash=HM96,
                            salt_key=self._key, nonce=RQ.TABLES_NONCE + 3 * call.index + j).commitment.root.hex()
@@ -476,6 +475,8 @@ class H1Run:
         self.calls.append(call)
         if self.commit:
             self._commit_tables(call, a, s_a, y, z)
+            if self.served is not None:
+                self.served.record(call, a, weight)
         for fn in self.listeners:
             out = fn(call, a, s_a, weight, weight_scale)
             if out is not None:
@@ -651,6 +652,8 @@ class H1Run:
                 a = weight.new_zeros((0, k)) if weight is not None else None
                 self._call(s, w, a, scale.reshape(-1).new_zeros(0) if scale is not None else None, weight, scale)
         self._close_rounds(self.steps - 1)
+        if self.served is not None:
+            self.served.close(self)
         bound = all("root_a" in self.bound.get(c.index, {}) for c in self.calls if c.m)
         self.details["requests"] = {"admitted": len(self.requests), "refused": self.refused_requests,
                                     "per_round": [len(self.admitted.get(r, [])) for r in range(self.steps)],
@@ -736,11 +739,12 @@ class H1Run:
         return self._rows(self.calls)
 
     def calls_root(self) -> bytes:
-        """SHA-512 over the manifest, in order: what the install commits to (its positions and what was bound)."""
+        """SHA-512 over the manifest, in order: what the install commits to (its positions and what was bound), and with
+        ``served`` its registered trees' entries."""
         h = hashlib.sha512(b"verity/pouw/h1/calls/v2\0" + self.salt)
         for row in self.manifest():
             h.update(json.dumps(row, sort_keys=True).encode() + b"\n")
-        return h.digest()
+        return h.digest() if self.served is None else hashlib.sha512(h.digest() + self.served.digest()).digest()
 
     def finish(self) -> None:
         """Close the window, commit its manifest, then open ``draw``'s coin after `pouw_h1_requests.draw_root` over the
