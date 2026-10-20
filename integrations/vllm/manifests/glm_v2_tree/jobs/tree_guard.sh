@@ -2,7 +2,7 @@
 # `first`) writes SW/ROW.tree (REF@SHA), the copies carry it, and a later job runs at that commit or at a descendant whose changes
 # since are only pins and this runbook (PINS_ONLY): of the tree, only the Build (`config_record.aot_of`) and publish read a row's
 # pins, so a moved row is re-pinned between its Match GPU legs and its Build of record.  Needs TREE (the job's source root).
-PINS_ONLY='^integrations/vllm/manifests/(records\.json$|glm_v2_tree/)'
+PINS_ONLY='^integrations/vllm/manifests/(records\.json$|glm_v2_tree/|dsv4_v2_tree/)'
 tree_guard() {
   local row=$1 sw=$2 ref=$3 first=${4:-} sha t at s0 moved
   sha=${RESEARCH_SOURCE_SHA:-$(git -C "$TREE" rev-parse HEAD)} t=$sw/$row.tree
