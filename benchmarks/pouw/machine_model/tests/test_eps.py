@@ -579,16 +579,16 @@ def test_the_fold_routes_are_the_cheaters_and_the_floor_programs():
     """RT2-HOPPER-9, -11 and RT3-DC-1, -4: the bit-exact checkpoint routes (four segments' words in one STG.128, an XOR on
     the uniform datapath, shared-memory and L2 atomics, a transpose through shared memory), each instruction at its
     census class, and the check reads the checkpoint word, not its program, so the cheater folds by any mix of the
-    design's fold and its `[fold_routes]`. With ♭ at REDUX they beat it by 1.47% on DS-90 and 1.86% on DC-90-ri; ♭ on
-    the same menu folds by cp-red2 (3 LOP3 and 2 REDG a segment) on DS-90, and ε_machine is 0 there. Honest's kernel
-    folds by REDUX, so γ doesn't move."""
+    design's fold and its `[fold_routes]`, RT4-SHEET-7's generic-address L2 XORs (ATOM.E, no AT90 line) among them. With
+    ♭ at REDUX they beat it by 1.47% on DS-90 and 1.97% on DC-90-ri; ♭ on the same menu folds by cp-red2 (3 LOP3 and 2
+    REDG a segment) on DS-90, and ε_machine is 0 there. Honest's kernel folds by REDUX, so γ doesn't move."""
     d = DEVICES / "sm_90"
     ds = E.design("dither-2s-licpw-redux-p1-l32", d)
     assert list(ds.fold_routes) == ["cp-seg4", "cp-seg4u", "cp-ats", "cp-ats2", "cp-ats8", "cp-red", "cp-red2", "cp-red8",
-                                    "cp-xt"] and ds.fold_routes_source
+                                    "cp-red-generic", "cp-red2-generic", "cp-red8-generic", "cp-xt"] and ds.fold_routes_source
     assert ds.with_fold_cost(0.5).fold_routes["cp-seg4u"]["UNI"] == pytest.approx(0.0078125 * 0.5 / ds.fold_cost())
     plain = replace(ds, fold_routes={})
-    for vec, q, attack, eps in (("DS-90", 0.5, 0.014706, 0.0), ("DC-90-ri", 1.22, 0.018635, 0.000436)):
+    for vec, q, attack, eps in (("DS-90", 0.5, 0.014706, 0.0), ("DC-90-ri", 1.22, 0.019724, 0.000473)):
         pi = E.machine(vec, d)
         s, s0 = E.setup(ds, pi, d, "free", "floor"), E.setup(plain, pi, d, "free", "floor")
         assert not s0.baseline.folds and s.baseline.T < s0.baseline.T
