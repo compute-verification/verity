@@ -46,8 +46,15 @@ keeps every default it had, so V2PREP can merge them into `cursor/glm-v2-21f3` a
 
 The jobs are `../glm_v2_tree/jobs/`, with `REF` and `SW` defaulting to this tree and `/workspace/cp/circuits/dsv4-v2/rows`.
 
+A B1 request derive peaks at 161 GB (`research mem`'s GB, 10^9 B): about 47 GB when its descriptor is written, then the
+census the Build writes beside it (`pipeline.memory_map.census_entry`, which v1 predates) for over 35 min more.
+`row_records.derive_bytes` plans 13.5 GB for it, so `--build-jobs auto` starts all 8 ranks at once, and in r20261020-071632-1bcf
+cpu-3's cgroup OOM killer (its /user.slice caps at 497 GB) took five of them. So `model.sh` sets `DERIVE_GB=170` for this model,
+and every job that derives runs `BUILD_JOBS` = its `--mem-gb` over that: three at once in 510 GB, two in 340 (cpu-3 holds two).
+
 1. `trace_compare.sh` (`SKIP_AOT1=1`): the v2 trace, `predict compare` against it, and the AOT Build against it, on
-   vy-nebius-cpu-3 after `stage_cpu.sh` (r20261020-071632-1bcf).
+   vy-nebius-cpu-3 after `stage_cpu.sh`. r20261020-071632-1bcf is the first run, whose finished derives seed the rerun
+   (`SEED_FROM`).
 2. `repin.sh ROW RUN vy-nebius-cpu-3`, committed as "re-pin ROW": the step, request and workload Programs of all 8 ranks from
    the v2 trace, `records.json`'s `aot` switched to its comparison and trace art.
 3. `build_record.sh` at that commit (`AOT_TRACE=<the trace's row dir>` on the same node): the Build of record, with its
