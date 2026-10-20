@@ -156,9 +156,10 @@ fleet runs one period per stream: adding GPUs doesn't shorten a period.
 
 *Each window's writers.* `Declared.periodLayer` puts every position's writer in its own window by definition (its
 `src` at window `w` names a tile of window `w`, `periodLayer_src` by `rfl`, so a late edge stays in its window,
-`late_one`), and nothing is assumed for it. That a late edge's cone lies in the IR's rests on `Scope`'s `Declared.Wf` and `LayerCommitted`,
-the service committing each value it writes by its IR cut. Today's code doesn't meet `LayerCommitted` (one salt a
-window, opened before the activations are committed), so a live window it serves is out of scope.
+`late_one`), and nothing is assumed for it. That a late edge's cone lies in the IR's rests on `Scope`'s `Declared.Wf`
+and `LayerCommitted`, the service committing each value it writes by its IR cut. Today's code doesn't meet
+`LayerCommitted` (one salt a window, opened before the activations are committed), so a live window it serves is out
+of scope.
 
 *Live coins only* (RT3-INT-2). Every number below is for live windows, and no served path runs one yet. A certified
 window's noise comes from the certifier's salt, which reaches the prover before its operands are committed, so the
@@ -185,9 +186,9 @@ all live windows, which no served path runs yet (above). For small `x` the term 
 total draws `j·K_d` and its load set it, not how it is cut into windows.
 
 `D₀ = 0` is an assumption of these numbers, not a computed fact (RT4-LOGIC-6). `zeroCone` is `0` when no tile of no
-words has a late cone, which COMPILE's `salt-flow` and `noise-in-z` checks are meant to give, but no `Declared` is
-built from a served Program, so nothing computes `zeroCone` for SERVE-H1's masked circuit. A positive `D₀` adds
-`D₀/u` to `ε(j)`, and that term doesn't shrink with `j`.
+words reaches a tile of words, which COMPILE's `salt-flow` and `noise-in-z` checks are meant to give, but no
+`Declared` is built from a served Program, so nothing computes `zeroCone` for SERVE-H1's masked circuit. A positive
+`D₀` adds `D₀/u` to `ε(j)`, and that term doesn't shrink with `j`.
 
 *Liveness* (RT3-INT-7). An honest stream whose windows fail independently at rate `f` (a late proof, a certifier or a
 node fault; no rate is measured) completes an 82,403-window period with probability `(1 − f)^n`: 44% at `f = 10^-5`,
@@ -208,9 +209,8 @@ from `2^20` to `2^30`. At `n = 82,403` (`2^16.3`) the binding term is `2^-51.7` 
 
 What it doesn't say: no window's own `ε` (an accepted prefix may hold windows skipped whole, `Λ·ln(1/δ_s)` of
 declared-word share in all, about 824 windows' worth of the gate's credit at `u = 0.103` and `a = b = 1`); no
-attribution inside the
-period (one certificate for the prefix's device interval); no credit for windows past the first failure (no retry,
-and none dropped); no link between windows beyond each window's inputs, cut where its IR cuts them; no period over
+attribution inside the period (one certificate for the prefix's device interval); no credit for windows past the
+first failure (no retry, and none dropped); no link between windows beyond each window's inputs, cut where its IR cuts them; no period over
 windows run at once (above); no check that the service's record ran the windows in order or kept its periods disjoint
 (above); nothing of seeded windows, which every served window is today (above); and, as `CircuitWork`, nothing of a
 served workload until a `Declared` is built from a compiled Program and `Properties.Compose.UnitsOfLayout` is
