@@ -1,9 +1,10 @@
 {
  "roots": ["NciCheck"],
  "exempt": {
-  "NciCheck.CheckMain": "the nci-check exe: reads an instance file and prints NciCheck.Desc.check (or, with --unrolled, NciCheck.check) on it; IO around the audited check, not a proof",
+  "NciCheck.CheckMain": "the nci-check exe: reads an instance file and the service's trusted input and prints NciCheck.Baseline.check (or, with --unrolled, NciCheck.Baseline.checkUnrolled) on them, or with --policy NciCheck.Desc.check (NciCheck.check) on the instance alone; IO around the audited check, not a proof",
   "NciCheck.DescDifftestMain": "the description-sized check's difftest, under `runs`: compiled evaluation of NciCheck.DescDifftest.main, audited under NciCheck, a test and not a proof",
-  "NciCheck.DifftestMain": "the difftest against the Python reference, under `runs`: compiled evaluation of NciCheck.Difftest.main, audited under NciCheck, a test and not a proof"
+  "NciCheck.DifftestMain": "the difftest against the Python reference, under `runs`: compiled evaluation of NciCheck.Difftest.main, audited under NciCheck, a test and not a proof",
+  "NciCheck.BaselineDifftestMain": "the provenance check's difftest, under `runs`: compiled evaluation of NciCheck.BaselineDifftest.main, audited under NciCheck, a test and not a proof"
  },
  "runs": {
   "NciCheck.DescDifftestMain": {
@@ -29,6 +30,21 @@
     "difftest/python.jsonl": "61ecdd5542bdeabd85836ed8e2fd7dca22767f016a77b941d5563e74d9f60666"
    },
    "generate": ["python3", "scripts/difftest_vectors.py", "{repo}", "--out", "{out}"]
+  },
+  "NciCheck.BaselineDifftestMain": {
+   "why": "1,210 declarations with θ, θ's provenance and the service's trusted input (the registration log in R6's chain, the accepted record digests, the run's digest and its parameters): 1,200 random, just under half of them broken in one way, and 10 pinned on a declaration worked by hand (one accepted, one negative per refusal code, theta-not-registered among them), on which NciCheck.Baseline.check gives what scripts/nci_reference.py's check_baseline computes, and, on each one the policy check gives a verdict on, what NciCheck.Baseline.checkUnrolled gives on the case expanded gate by gate",
+   "args": [
+    "{baseline_difftest/cases.jsonl}",
+    "{baseline_difftest/expanded.jsonl}",
+    "{baseline_difftest/python.jsonl}",
+    "1210"
+   ],
+   "data": {
+    "baseline_difftest/cases.jsonl": "de3aac5d942a487ca748b3c3ce6398b71a3aa8e5fc02cbdfee56b3a2a81e76f4",
+    "baseline_difftest/expanded.jsonl": "3a96702afbc0aaea8646981aa1599a7ffcb812217ab51205bd270bc78d0e08a3",
+    "baseline_difftest/python.jsonl": "6d6a5fb2415d59e40fd2295de3a3cbb313645f434927f129102b9c4f589d18c8"
+   },
+   "generate": ["python3", "scripts/baseline_difftest_vectors.py", "{repo}", "--out", "{out}"]
   }
  },
  "layers": {
@@ -41,6 +57,11 @@
    "imports": ["Std", "Flock.Program", "NciCheck.Check"],
    "except": [],
    "why": "the description-sized check is code, as NciCheck.Check is: Lean core, C-Flock's program decoder and the check's instance format and verdict"
+  },
+  "NciCheck.Baseline": {
+   "imports": ["Std", "Flock.Program", "NciCheck.Check", "NciCheck.Desc"],
+   "except": [],
+   "why": "θ's provenance check is code, as NciCheck.Desc is: Lean core, C-Flock's program decoder (with the canonical JSON and SHA-512 it imports) and the policy check it runs first"
   }
  },
  "guarantees": {},
