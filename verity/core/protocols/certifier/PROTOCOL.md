@@ -7,6 +7,28 @@ areas `Definitions/NetworkCertifier`, `Models/NetworkCertifier` and `Proofs/Netw
 tests mirror some of its statements by name; the Tests section lists which. The certifier program (`lean/`, the Lake
 package `certifier_program`, Lean core only) is the code the difftest runs, proved equal to the analysis's definitions.
 
+## Zero knowledge: what ties the checks, and the two named gaps
+
+N2's count check and N3 read the same head leaf of N2's commitment. N3 holds the window's N frames to the head's root,
+and so to the head's Σ n_t, and N2 holds those counts to the occupancy profile. The two are tied only under three
+conditions, each of which holds:
+1. The root is registered before either check's coins or draws (the firewall's registration, `LinkWindows.commit`).
+2. The leaf index, 2 + d, is fixed by the link-window's direction (`service.HEADS`), which is public structure, not
+   something the prover chooses.
+3. SHA-512 is collision resistant, as hm96 rows in frame-v3-sha512 trees already assume.
+
+Two gaps keep the network audit from being zero-knowledge, and nothing may call it that until both are closed (the
+README states them too):
+- **N2 compares the certified egress digest with the Program's grid in the clear**, which reads witness. It goes when
+  N3 runs on every link-window (NET-38) and N2 switches to `check_link(grid=False)`.
+- **The host checks the certificate's signature over an unsalted record digest**, a hash of witness: the record's
+  counts and an unsalted root of its raw frames. It goes when the certifier signs `H("verity/net-cert/v1" ‖ salt_c ‖
+  R)` (NET-42):
+  - `salt_c` is drawn by the certifier, 64 bytes, fresh per record, and handed to the prover as witness only;
+  - the head-check unit proves `R = H(head)` and that `H(salt_c ‖ R)` is the signed digest;
+  - the host's LMS check then reads only the public fields (key id, session, link, direction, window) and that hiding
+    digest.
+
 ## The certifier (`grid`)
 
 Each boundary link has an active certifier with fixed parameters (W1). The protocol programs them from a security
