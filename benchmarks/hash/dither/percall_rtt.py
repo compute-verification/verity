@@ -1,10 +1,11 @@
 """ASK-64's per-step round, measured from the serving node against the proof service's challenger off the node: one live
 round a step (PERIOD-PATH ask 11).
 
-The challenger is one session of `benchmarks/live_challenger/run.sh` on its auditor host (vy-challenger-1, its own key),
-its layout a PoUW live window of ROUNDS rounds (`served_h1/coins.py families --rounds ROUNDS`, `window.LIVE_SCHEME`,
-epoch 1); its `ssh -R` tunnel opens 127.0.0.1:PORT on this machine, the serving node.  This client is served_h1's coin
-source (`coins.open_coins` over `remote.RemoteChallenger`): it refuses another layout, opens the salt coin after a
+The challenger is one session on its auditor host, requested from infra (lanes don't start sessions there), its layout a
+PoUW live window of ROUNDS rounds (`served_h1/coins.py families --rounds ROUNDS`, `window.LIVE_SCHEME`, epoch 1); the
+request returns the session's id and the port its `ssh -R` tunnel opens on this machine, the serving node
+(`coins.Session`).  This client is served_h1's coin source (`coins.open_coins` over `remote.RemoteChallenger`): it
+refuses another layout, opens the salt coin after a
 stand-in registration root, then round s's coin after step s's stand-in root, sha512(s || coin s-1), so no step's root
 exists before the previous step's coin, and times each round from the root's send to its opening checked against the
 commitment (`live_reason`, inside `RemoteChallenger.open`); then the draw coin, and the close.  Rounds go back to back
@@ -16,12 +17,13 @@ gives as many rounds as its timeout allows and still closes; a session that fail
 `WINDOW` (one Dither window, `dither_fused.ROUNDS`) and per `WINDOW` block (the challenger's release cost grows with the
 round's index), the client's check alone (`live_reason` replayed on every opening), the SHA-512 over the round roots in
 order, and every sample (ns); beside it `percall-wait-ns.txt`, one sample a line, which sbench's dither-1s-percall-rtt
-arm replays.  `check` is the auditor's side, from the challenger's own run: its key is the one pinned for its host
-(`coins.KEYS`), its record verifies (`remote.trusted_session`), and its log holds this client's commitment and roots in
-order; it adds the challenger's own per-round times from that log (its monotonic clock).
+arm replays.  `check` is the auditor's side, from the session's directory as the challenger published it: its record
+verifies under the key that directory's key.json holds (`remote.trusted_session`; no key is pinned in code), and its log
+holds this client's commitment and roots in order; it adds the challenger's own per-round times from that log (its
+monotonic clock).
 
-    python3 percall_rtt.py run --challenger 127.0.0.1:7811 --rounds 32768 --max-s 1800 --out out/percall-rtt.json
-    python3 percall_rtt.py check --challenger-out ~/.research/runs/CHALLENGER/out --client ~/.research/runs/CLIENT/out/percall-rtt.json
+    python3 percall_rtt.py run --challenger 127.0.0.1:PORT --session ID --rounds 32768 --max-s 1800 --out out/percall-rtt.json
+    python3 percall_rtt.py check --challenger-out SESSION_DIR --client ~/.research/runs/CLIENT/out/percall-rtt.json
 """
 from __future__ import annotations
 
@@ -95,7 +97,8 @@ def run(a: argparse.Namespace) -> int:
     blocks = [quantiles(ns[i:i + WINDOW]) for i in range(0, len(ns), WINDOW)]
     doc = {
         "what": "ASK-64 / PERIOD-PATH 11: one live round a step, the serving node to the challenger off the node",
-        "client_host": socket.gethostname(), "challenger": a.challenger, "coins": cs.label,
+        "client_host": socket.gethostname(), "challenger": a.challenger.address, "session": a.challenger.id,
+        "coins": cs.label,
         "commitment": commitment.to_json(), "layout_rounds": a.rounds, "rounds": len(ns), "max_s": a.max_s,
         "pace_us": a.pace_us, "ended": ended or "closed by the client",
         "round_trip": quantiles(ns), "first_window": quantiles(ns[:WINDOW]), "window": WINDOW,
@@ -118,9 +121,7 @@ def check(a: argparse.Namespace) -> int:
     d, client = Path(a.challenger_out), json.loads(Path(a.client).read_text())
     key = CO.Ch.ChallengerKey.from_json(json.loads((d / CO.R.KEY).read_text()))
     host = CO.Ch.ChallengerRecord.from_json(json.loads((d / CO.R.RECORD).read_text())).host
-    pin = a.key_sha512 or CO.KEYS.get(host)
-    reasons: dict[str, str | None] = {"key": None if pin and hashlib.sha512(key.public).hexdigest() == pin
-                                      else f"the challenger's key is not the one pinned for {host}"}
+    reasons: dict[str, str | None] = {}
     commitment, roots = CO.R.trusted_session(d, key, CO.lms_verify)
     n = client["rounds"]
     got = hashlib.sha512(b"".join(roots[CO.Wd.ROUND][:n])).hexdigest()
@@ -152,6 +153,7 @@ def main(argv: list[str] | None = None) -> int:
     sub = ap.add_subparsers(dest="cmd", required=True)
     r = sub.add_parser("run")
     r.add_argument("--challenger", default=None, metavar="HOST:PORT", help=f"default ${CO.CHALLENGER_ENV}")
+    r.add_argument("--session", default=None, metavar="ID", help=f"the session's id from infra (default ${CO.SESSION_ENV})")
     r.add_argument("--rounds", type=int, default=WINDOW, help="the session's layout: at most this many rounds")
     r.add_argument("--max-s", type=float, default=0.0,
                    help="stop opening rounds after this many seconds, then draw and close (inside the session's timeout)")
@@ -160,13 +162,13 @@ def main(argv: list[str] | None = None) -> int:
     c = sub.add_parser("check")
     c.add_argument("--challenger-out", required=True)
     c.add_argument("--client", required=True)
-    c.add_argument("--key-sha512", default=None)
     c.add_argument("--out", default=None)
     a = ap.parse_args(argv)
     if a.cmd == "run":
-        a.challenger = CO.address(a.challenger)
+        a.challenger = CO.session(a.challenger, a.session)
         if a.challenger is None:
-            ap.error("run measures the challenger off the node: --challenger HOST:PORT or $POUW_CHALLENGER")
+            ap.error("run measures the challenger off the node: --challenger HOST:PORT and --session ID, or "
+                     f"${CO.CHALLENGER_ENV} and ${CO.SESSION_ENV}")
         return run(a)
     return check(a)
 

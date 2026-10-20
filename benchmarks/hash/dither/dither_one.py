@@ -22,7 +22,8 @@ trees and the admit tables on streams of their own beside the rest), then the ro
 PERIOD-PATH ask 11) the salt is each step's instead: after step s's round is recorded, step s + 1's seeds read
 `h1tile.live_salt` of that round's opened coin and root, copied to the device between steps (in record_host_ms), so
 each step's noise comes from the round before it.  The rounds' coins are `dither_fused`'s switch (`coins.open_coins`):
-the challenger off the node with ``$POUW_CHALLENGER``, so the auditor host's round trip is in record_host_ms, else in
+the challenger off the node with ``$POUW_CHALLENGER`` and ``$POUW_CHALLENGER_SESSION``, so the auditor host's round
+trip is in record_host_ms, else in
 this process, labelled ``in-process (not certified)`` in `stats`.
 
 The served value is the dithered product z = X (B + c)^T, exact for every int8 B, with X the int8 A + b the MMA reads (it
@@ -214,7 +215,7 @@ class Window:
     def _epoch(self) -> None:
         from verity.core.protocols.pouw.circuit import h1tile as HT
         self.HT = HT
-        self.coins = CO.open_coins(CO.address(), 1, DF.ROUNDS)
+        self.coins = CO.open_coins(CO.session(), 1, DF.ROUNDS)
         self.rounds = self.coins.rounds
         broots = [unwords(self.bset.root(w)) for w in range(self.L)]
         self.epoch_root = CM.step_root(CM.domain({"window": self.window, "linears": self.L}, self.L, "b-step"), broots)

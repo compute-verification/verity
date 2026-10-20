@@ -18,9 +18,10 @@ Per engine step s (parity p = s mod 2), around the runner's `execute_model`:
              step s + 1's launches read
 
 The window's coins are served_h1's (`coins.open_coins`, a live window of `ROUNDS` rounds at epoch 1): with
-``$POUW_CHALLENGER`` (HOST:PORT) the challenger off the node, one session a window (`benchmarks/live_challenger/run.sh` on
-its auditor host, opened at the window's build), else `window.live_challenger` in this process, and `stats` says which
-(``coins``: ``off-node HOST:PORT (unchecked)`` or ``in-process (not certified)``).  Only the round's coin changes source:
+``$POUW_CHALLENGER`` (HOST:PORT) and ``$POUW_CHALLENGER_SESSION`` (the session infra's request call returned) the
+challenger off the node, one session a window, opened at the window's build; else `window.live_challenger` in this
+process.  `stats` says which (``coins``: ``off-node session ID at HOST:PORT (unchecked)`` or ``in-process (not
+certified)``).  Only the round's coin changes source:
 the salt, the seeds and what they read are the same either way.
 
 With ``rc="side"`` (`patch`) no `h1f` launch computes receipts: after step s's coin, its seeds, units (`h1r_launch` version
@@ -193,7 +194,7 @@ class Window:
     def _coins(self) -> None:
         from verity.core.protocols.pouw.circuit import h1tile as HT
         self.HT = HT
-        self.coins = CO.open_coins(CO.address(), 1, ROUNDS)
+        self.coins = CO.open_coins(CO.session(), 1, ROUNDS)
         self.rounds = self.coins.rounds
 
     def _pre_sets(self, p: int) -> dict:

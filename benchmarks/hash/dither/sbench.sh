@@ -56,9 +56,14 @@ command -v lake >/dev/null || export PATH="$HOME/.elan/bin:$PATH"
 (cd verity/core/protocols/pouw/lean/check && lake build pouw-check-difftest) > "$OUT/lean-coins-build.log" 2>&1 \
   || { echo "sbench: LEAN_BUILD_FAIL"; tail -20 "$OUT/lean-coins-build.log"; exit 13; }
 # coins off the node (sbench.py's "Coins"): every port the arms' windows connect to (POUW_CHALLENGER, DITHER_CHALLENGERS'
-# {arm: HOST:PORT}), each its own session of benchmarks/live_challenger/run.sh started first, waited for with ss -ltn
+# {arm: {"session": ID, "address": HOST:PORT}}), each its own session requested from infra first, waited for with ss -ltn
 # before the lease (never a probe connect: a challenger serves its first connection only); none: in-process (not certified)
-ats=$(echo ${POUW_CHALLENGER:-} $(python3 -c 'import json, os; print(*json.loads(os.environ.get("DITHER_CHALLENGERS") or "{}").values())'))
+if [ -n "${POUW_CHALLENGER:-}${POUW_CHALLENGER_SESSION:-}" ] && { [ -z "${POUW_CHALLENGER:-}" ] || [ -z "${POUW_CHALLENGER_SESSION:-}" ]; }; then
+  echo "sbench: NO_CHALLENGER: a challenger session is POUW_CHALLENGER and POUW_CHALLENGER_SESSION together"; exit 15
+fi
+ats=$(python3 -c 'import json, os; m = json.loads(os.environ.get("DITHER_CHALLENGERS") or "{}"); ok = isinstance(m, dict) and all(isinstance(v, dict) and sorted(v) == ["address", "session"] and all(isinstance(x, str) and x for x in v.values()) for v in m.values()); print(*(v["address"] for v in m.values())) if ok else exit(1)') \
+  || { echo "sbench: NO_CHALLENGER: DITHER_CHALLENGERS is not {arm: {\"session\": ID, \"address\": HOST:PORT}}"; exit 15; }
+ats=$(echo ${POUW_CHALLENGER:-} $ats)
 for at in $ats; do
   for _ in $(seq "${CHALLENGER_WAIT_S:-900}"); do ss -Hltn "sport = :${at##*:}" | grep -q . && break; sleep 1; done
   ss -Hltn "sport = :${at##*:}" | grep -q . || { echo "sbench: NO_CHALLENGER at $at"; exit 15; }
