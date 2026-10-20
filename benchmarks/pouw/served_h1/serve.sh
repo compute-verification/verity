@@ -3,14 +3,16 @@
 # 28 minutes.  Extra arguments go to serve.py.
 #   research run --on vy-nebius-2 --project verity --campaign hash-loop --source <tree> --cwd source \
 #     --env GPU_LEASE_WHO=<id> -- bash benchmarks/pouw/served_h1/serve.sh
-# Coins off the node: request the window's challenger session from infra's interface first (lanes don't start sessions
-# on the auditor host), for this window's Commit and period, with the window's layout (S = --steps, default
-# --max-tokens + 2; EPOCH = serve.py's --epoch, default 1; FAMILIES = `coins.py families --rounds S`).  It returns the
-# session's id and the port its tunnel opens here; run this with POUW_CHALLENGER=127.0.0.1:PORT and
-# POUW_CHALLENGER_SESSION=ID.  It waits for that port with `ss -ltn` (never a probe connect: the challenger serves the
-# first connection only).  Without either the coins are in-process; with one alone it exits 13.  The verifier's check
-# reads the session's directory as the challenger published it:
-#   python3 benchmarks/pouw/served_h1/coins.py check --challenger-out SESSION_DIR --manifest THIS_RUN/out/manifest.json
+# Coins off the node: POUW_CHALLENGER_GATE=USER@HOST (infra's gate), POUW_WINDOW_PERIOD=P and POUW_PEER=this node's name:
+# serve.py requests the window's session from the gate once its registration root (the window's Commit) is fixed, with
+# the window's layout (S = --steps, default --max-tokens + 2; EPOCH = serve.py's --epoch, default 1), and connects the
+# moment the challenger listens here; the gate takes this node's ssh key (--ssh-key PATH).  For development, a session
+# requested before the run (`coins.py open`, its Commit not this window's): POUW_CHALLENGER=127.0.0.1:PORT and
+# POUW_CHALLENGER_SESSION=ID, waited for with `ss -ltn` (never a probe connect: the challenger serves the first
+# connection only).  Without any the coins are in-process; with one of the pair alone it exits 13.  The verifier's check
+# reads the session as the gate publishes it (`ssh GATE fetch SESSION`) and the challenger's key record:
+#   python3 benchmarks/pouw/served_h1/coins.py check --challenger-out SESSION_DIR --manifest THIS_RUN/out/manifest.json \
+#     --key-record KEY_RECORD --period P
 set -uo pipefail
 D=${RESEARCH_RUN_DIR:?}; OUT=$D/out; mkdir -p "$OUT"
 mkdir -p /workspace/pouw
@@ -30,12 +32,14 @@ if [ -n "${POUW_CHALLENGER:-}${POUW_CHALLENGER_SESSION:-}" ] && { [ -z "${POUW_C
 fi
 if [ -n "${POUW_CHALLENGER:-}" ]; then
   port=${POUW_CHALLENGER##*:}
-  for _ in $(seq "${CHALLENGER_WAIT_S:-900}"); do
+  for _ in $(seq $((${CHALLENGER_WAIT_S:-900} * 20))); do
     ss -Hltn "sport = :$port" | grep -q . && break
-    sleep 1
+    sleep 0.05
   done
   ss -Hltn "sport = :$port" | grep -q . || { echo "served-h1: NO_CHALLENGER: nothing listens on $POUW_CHALLENGER"; exit 13; }
-  echo "served-h1: coins from challenger session $POUW_CHALLENGER_SESSION at $POUW_CHALLENGER"
+  echo "served-h1: coins from challenger session $POUW_CHALLENGER_SESSION at $POUW_CHALLENGER (development: its Commit isn't this window's)"
+elif [ -n "${POUW_CHALLENGER_GATE:-}" ]; then
+  echo "served-h1: coins from a session serve.py requests from $POUW_CHALLENGER_GATE for period ${POUW_WINDOW_PERIOD:-?}"
 else
   echo "served-h1: coins=in-process (not certified)"
 fi
