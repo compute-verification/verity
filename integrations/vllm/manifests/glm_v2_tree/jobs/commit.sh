@@ -1,13 +1,16 @@
 #!/usr/bin/env bash
-# A v2 row's TP8 Commit on vy-glm53-eu at this tree's default scheme, rows-sha512 under the SHA-512 TP run root
+# A v2 row's TP8 Commit on an 8x H200 node (vy-glm53-eu, or a preemptible one: vy-glm53-h8) at this tree's default scheme, rows-sha512 under the SHA-512 TP run root
 # (`verity/tp-run-root/v2`), with REPLAY_DEFERRED=1 RETAIN=host PAIRS=1: every rank seals a replay bundle of its committed store
 # and the Commit ends PENDING until `tp-commit-replay` decides it on a CPU node (replay_publish.sh).  Its row dir holds the Build of
 # record and the passing Match (copied in from the CPU node, README "GPU batch"); the 8 GPUs come from the node's lease once every GPU
 # reads 0 MiB and no preemptible lease is held.  The bundles and "_rowmeta" (the row dir's small records) are preserved in the
 # store, art: ids in $OUT/bundles.json.  The engine's gpu_memory_utilization read back from its vllm_config, the driver's and
 # each rank's, goes to $OUT/gpu_memory_utilization.json (exit 12, after the bundles are preserved, unless every one is GPU_UTIL).
-#   research run --on vy-glm53-eu --gpu-host --mem-gb 600 --timeout 10h --custody-ttl 24h --cwd source --project verity -- env ROW=... BUILD_RUN=... MATCH_RUN=... bash integrations/vllm/manifests/glm_v2_tree/jobs/commit.sh
-# env: ROW, BUILD_RUN, MATCH_RUN, [SW=/workspace/cp/circuits/glm-v2/rows], [REF=cursor/glm-v2-21f3], [MEMORY_MAP], [COMMIT_TIMEOUT].
+# An evicted Commit's run fails, and its rerun is a whole new attempt: the unfinished commit/ (and commit.log) moved aside, a new
+# commitment and new draws.  Each attempt is a line of the row dir's commit_attempts.jsonl (in "_rowmeta", and $OUT), and its
+# number is in the bundles' and the rowmeta's meta.
+#   research run --on vy-glm53-eu --mem-gb 600 --timeout 10h --custody-ttl 24h --source . --cwd source --project verity -- env ROW=... BUILD_RUN=... MATCH_RUN=... NODE=vy-glm53-eu bash integrations/vllm/manifests/glm_v2_tree/jobs/commit.sh
+# env: ROW, BUILD_RUN, MATCH_RUN, [NODE=$(hostname)], [SW=/workspace/cp/circuits/glm-v2/rows], [REF=cursor/glm-v2-21f3], [MEMORY_MAP], [COMMIT_TIMEOUT].
 set -uo pipefail
 : "${ROW:?ROW}" "${BUILD_RUN:?BUILD_RUN}" "${MATCH_RUN:?MATCH_RUN}"
 REV=aca966e4e02791568aa6a4ced368624b3d897f42
@@ -20,7 +23,18 @@ source "$TREE/integrations/vllm/manifests/glm_v2_tree/jobs/tree_guard.sh" && tre
 test -s "$D/manifest.json" || { echo "no manifest.json in $D: copy the Build of record in first"; exit 2; }
 test -s "$D/match/tp2_match.json" || { echo "no match/tp2_match.json in $D: copy the passing Match in first"; exit 2; }
 [ ! -s "$D/commit/summary.json" ] || { echo "$D/commit already holds a Commit (summary.json)"; exit 3; }
-[ ! -d "$D/commit" ] || mv "$D/commit" "$D/commit.failed-$(date -u +%Y%m%dT%H%M%SZ)"
+prev=null
+if [ -d "$D/commit" ] || [ -f "$D/commit.log" ]; then
+  f=commit.failed-$(date -u +%Y%m%dT%H%M%SZ)
+  if [ -d "$D/commit" ]; then mv "$D/commit" "$D/$f"; else mkdir "$D/$f"; fi
+  [ ! -f "$D/commit.log" ] || mv "$D/commit.log" "$D/$f/row-commit.log"
+  prev="\"$f\"" && echo "an earlier attempt's unfinished commit/ moved aside to $f"
+fi
+L=$D/commit_attempts.jsonl
+ATTEMPT=$(( $(cat "$L" 2>/dev/null | wc -l) + 1 ))
+printf '{"attempt": %d, "run": "%s", "node": "%s", "tree": "%s", "started": "%s", "after": %s}\n' "$ATTEMPT" "$RESEARCH_RUN_ID" \
+  "${NODE:-$(hostname)}" "$REF@$TREE_SHA" "$(date -u +%FT%TZ)" "$prev" >>"$L" && cp "$L" "$OUT/commit_attempts.jsonl"
+echo "Commit attempt $ATTEMPT of $ROW ($L)"
 nvidia-smi --query-gpu=index,memory.used --format=csv,noheader | tee "$OUT/gpus_at_start.txt"
 df -h /workspace | tail -1 | tee "$OUT/disk_at_start.txt"
 C=$(dirname "$(dirname "$RESEARCH_RUN_DIR")")/requests/$RESEARCH_RUN_ID/custody
@@ -71,7 +85,7 @@ for b in "$D"/commit/replay_bundle_p*_rank*; do
   [ -f "$b/MANIFEST.json" ] || { echo "$b: not sealed"; prc=5; continue; }
   name=$(basename "$b"); sha=$(sha256sum "$b/MANIFEST.json" | cut -c1-64)
   art=$("$RB" data put --kind vllm-replay-bundle/v1 --tree "$b" --preserve \
-        --meta "{\"row\": \"$ROW\", \"bundle\": \"$name\", \"manifest_sha256\": \"$sha\", \"commit_run\": \"$RESEARCH_RUN_ID\", \"tree\": \"$REF@$TREE_SHA\"}" \
+        --meta "{\"row\": \"$ROW\", \"bundle\": \"$name\", \"manifest_sha256\": \"$sha\", \"commit_run\": \"$RESEARCH_RUN_ID\", \"attempt\": $ATTEMPT, \"tree\": \"$REF@$TREE_SHA\"}" \
         2>>"$OUT/bundles_put.log" | grep -oE 'art:[0-9a-f]{64}' | tail -1)
   [ -n "$art" ] || { echo "$name: research data put failed (bundles_put.log)"; prc=5; }
   [ $first = 1 ] || echo ',' >>"$OUT/bundles.json"; first=0
@@ -84,7 +98,7 @@ M=$(mktemp -d "$SW/.rowmeta.XXXXXX")
    -not -regex './match/fold_match/rank[0-9]*/\(instances\.jsonl\|accesses\.jsonl\.gz\|program\.json\)' -print0 | xargs -0 cp --parents -l -t "$M")
 echo "rowmeta: $(find "$M" -type f | wc -l) files, $(du -sh --apparent-size "$M" | cut -f1)"
 art=$("$RB" data put --kind vllm-row-meta/v1 --tree "$M" --preserve \
-      --meta "{\"row\": \"$ROW\", \"commit_run\": \"$RESEARCH_RUN_ID\", \"tree\": \"$REF@$TREE_SHA\", \"what\": \"the row dir's records less the Build, the capture planes, the folds' instances and the replay bundles\"}" \
+      --meta "{\"row\": \"$ROW\", \"commit_run\": \"$RESEARCH_RUN_ID\", \"attempt\": $ATTEMPT, \"tree\": \"$REF@$TREE_SHA\", \"what\": \"the row dir's records less the Build, the capture planes, the folds' instances and the replay bundles\"}" \
       2>>"$OUT/bundles_put.log" | grep -oE 'art:[0-9a-f]{64}' | tail -1)
 rm -rf "$M"
 [ -n "$art" ] || { echo "rowmeta: research data put failed (bundles_put.log)"; prc=5; }

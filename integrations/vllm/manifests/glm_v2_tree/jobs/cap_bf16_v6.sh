@@ -2,7 +2,7 @@
 # The bf16 v6 capture (`glm53_bf16_gemm_capture`, verity-vllm/glm53-bf16-gemm-capture/v6) on one H200, the one conformance capture
 # the v2 rows need that the store lacks (#2838: the other eight served-default captures stand).  The harness runs the split-K-off
 # variant and then vLLM's served default in a second process, reading the configuration back before and after.
-#   research run --on vy-glm53-eu --gpus 1 --mem-gb 64 --timeout 45m --cwd source --project verity -- bash integrations/vllm/manifests/glm_v2_tree/jobs/cap_bf16_v6.sh
+#   research run --on vy-glm53-eu --gpus 1 --mem-gb 64 --timeout 45m --source . --cwd source --project verity -- bash integrations/vllm/manifests/glm_v2_tree/jobs/cap_bf16_v6.sh
 # then, from any VM: `verity-vllm records capture RUN --property glm53_bf16_gemm_capture` prints the art.
 set -uo pipefail
 TREE=$PWD
