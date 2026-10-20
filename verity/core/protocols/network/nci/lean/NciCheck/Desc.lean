@@ -12,8 +12,8 @@ difftest (`NciCheck.DescDifftest`) checks both on the same declarations, the old
 
 The fields are `NciCheck.Check`'s (`program`, `theta`, `owner`, `gamma`, `alpha`), read by `NciCheck.parse`, with two read
 per root node instead of per gate:
-* `theta`: θ as root nodes, each an input node (§5.2 of `verity/ml/circuits/PROTOCOL.md`), none twice. θ is every gate of
-  those nodes.
+* `theta`: θ as root nodes, each an input node (§5.2 of `verity/ml/circuits/PROTOCOL.md`) bound at registration
+  (`RegisteredInput<w>_v1`), none twice. θ is every gate of those nodes.
 * `owner`: one entry per root node: `"input"` for an input node, and `u` for a Call (any other root node), every gate of
   which is in IU `u`. A root node without gates (a batch of none, or a Call of a Definition without gates) holds no gate of
   any IU, so its entry is only read for its form.
@@ -49,9 +49,11 @@ copy). Serve_v1 meets none of them, at word level or on bits.
 ## Refusals
 
 In the order checked: `instance` and `params` (`NciCheck.parse`), `program` (the decoder refuses it), `not-topological`
-(a body names a later node, `Prog.orderViolation`), `program` (a reference the layout can't resolve: the output of a scan
-of no iterations), then θ entry by entry (`theta-unknown`: not a root node, `theta-not-input`, `theta-duplicate`), then the
-owners (`owner-length`: not one per root node; node by node `owner-entry`, `input-in-iu`, `gate-in-no-iu`), then
+(a body names a later node, `Prog.orderViolation`), `program` (the root's offsets are not its layout, a body calls the
+root or holds an input node outside the root's: `rootLaidOut`, `inputsAtRoot`, which the decoder never gives), `program`
+(a reference the layout can't resolve: the output of a scan of no iterations), then θ entry by entry (`theta-unknown`: not
+a root node, `theta-not-input`, `theta-not-registered`: an input node bound per run, `theta-duplicate`), then the owners
+(`owner-length`: not one per root node; node by node `owner-entry`, `input-in-iu`, `gate-in-no-iu`), then
 `empty-iu`. `NciCheck.evaluate` checks the order gate by gate, so it gives a verdict on a program in which a node reads
 an earlier member of itself, which this check refuses.
 -/
@@ -642,7 +644,24 @@ def novelWidth (segs : Array Seg) : Nat := Id.run do
   if !comp.isEmpty then total := total + width comp
   return total
 
-def isInputNode (P : Prog) (n : Node) : Bool := isInputId (P.defs[n.fn]!).key
+/-- An input node: its callee is an input primitive (§5.2). A composite's key may read as an input id (`Input16_v1` is a
+well-formed static-free composite key), and its gates are computed. -/
+def isInputNode (P : Prog) (n : Node) : Bool := let f := P.defs[n.fn]!; f.prim && isInputId f.key
+
+/-- The root body's layout as `NciCheck.evaluate` reads it through `Prog.gate`: one offset per node and one more, from 0,
+not decreasing, to the root's gates. The decoder lays every body out so; it is checked here, at the cost of the root's
+nodes, because the agreement with `NciCheck.evaluate` rests on it. -/
+def rootLaidOut (P : Prog) : Bool :=
+  let r := P.defs[P.root]!
+  let offs := r.body.offsets
+  let K := r.body.nodes.size
+  offs.size == K + 1 && offs[0]! == 0 && offs[K]! == r.gates && (List.range K).all fun k => offs[k]! ≤ offs[k + 1]!
+
+/-- No body calls the root, and only the root's holds input nodes (the decoder's refusal of §5.2), so every gate of a
+root node that is no input node is a computed gate. -/
+def inputsAtRoot (P : Prog) : Bool :=
+  (List.range P.defs.size).all fun d =>
+    (P.defs[d]!).body.nodes.all fun n => n.fn != P.root && (d == P.root || !isInputNode P n)
 
 /-- Per IU `u < n`, its number of gates: those of its root nodes, root node `k` (in IU `own[k]`) holding gates
 `[offs[k], offs[k + 1])`. -/
@@ -651,59 +670,71 @@ def sizes (offs : Array Nat) (own : Array (Option Nat)) (n : Nat) : Array Nat :=
     | some u => s.modify u (· + (offs[k + 1]! - offs[k]!))
     | none => s) (Array.replicate n 0)
 
+/-- One entry of θ, a root node (`inp[k]`: node `k` is an input node; `reg[k]`: its callee is bound at registration),
+added to the mask of the entries before it. -/
+def thetaStep (inp reg mask : Array Bool) (t : Json) : Except String (Array Bool) := do
+  let some k := natOf? t | throw "theta-unknown"
+  if k ≥ inp.size then throw "theta-unknown"
+  if !inp[k]! then throw "theta-not-input"
+  if !reg[k]! then throw "theta-not-registered"
+  if mask[k]! then throw "theta-duplicate"
+  return mask.set! k true
+
+/-- A root node's owner entry `e`, the node an input node (`inp`) or not, holding gates (`held`) or none: `none` for
+`"input"` and for a node without gates, `some u` for IU `u`. -/
+def ownerStep (inp held : Bool) (e : Json) : Except String (Option Nat) := do
+  let o ← if isInputTag e then pure none else match natOf? e with
+    | some u => pure (some u)
+    | none => throw "owner-entry"
+  if held then
+    if o.isSome && inp then throw "input-in-iu"
+    if o.isNone && !inp then throw "gate-in-no-iu"
+  return if held then o else none
+
+/-- Per IU `u < n`, the segments its root nodes read (`reads`) outside it and outside θ's nodes (`theta`). -/
+def intoOf (offs : Array Nat) (own : Array (Option Nat)) (theta : Array Bool) (reads : Array (Array Seg)) (n : Nat) :
+    Array (Array Seg) :=
+  (List.range own.size).foldl (fun into k => match own[k]! with
+    | none => into
+    | some u => reads[k]!.foldl (fun into s => match s.ps[0]? with
+      | none => into
+      | some q =>
+        let k' := nodeOf offs q.base.toNat
+        if s.count == 0 || own[k']! == some u || theta[k']! then into else into.modify u (·.push s)) into)
+    (Array.replicate n #[])
+
 def evaluate (j : Json) : Except String Json := do
   let i ← parse j
   let P ← match decode i.program.toUTF8 with
     | .ok P => pure P
     | .error _ => throw "program"
   if P.orderViolation.isSome then throw "not-topological"
+  if !(rootLaidOut P && inputsAtRoot P) then throw "program"
   let reads ← match analyze P with
     | .ok r => pure r
     | .error _ => throw "program"
   let body := (P.defs[P.root]!).body
   let K := body.nodes.size
   let offs := body.offsets
-  let gatesOf (k : Nat) : Nat := offs[k + 1]! - offs[k]!
   let inp := body.nodes.map (isInputNode P)
-  let mut theta := Array.replicate K false
-  for t in i.theta do
-    let some k := natOf? t | throw "theta-unknown"
-    if k ≥ K then throw "theta-unknown"
-    if !inp[k]! then throw "theta-not-input"
-    if theta[k]! then throw "theta-duplicate"
-    theta := theta.set! k true
+  let reg := body.nodes.map fun n => isRegisteredId (P.defs[n.fn]!).key
+  let theta ← (List.range i.theta.size).foldlM (fun m t => thetaStep inp reg m i.theta[t]!) (Array.replicate K false)
   if i.owner.size != K then throw "owner-length"
-  let mut own : Array (Option Nat) := #[]
-  for k in [0:K] do
-    let e := i.owner[k]!
-    let o ← if isInputTag e then pure none else match natOf? e with
-      | some u => pure (some u)
-      | none => throw "owner-entry"
-    if gatesOf k > 0 then
-      if o.isSome && inp[k]! then throw "input-in-iu"
-      if o.isNone && !inp[k]! then throw "gate-in-no-iu"
-    own := own.push (if gatesOf k > 0 then o else none)
+  let own ← (List.range K).foldlM
+    (fun own k => own.push <$> ownerStep inp[k]! (offs[k + 1]! - offs[k]! > 0) i.owner[k]!) #[]
   let n := iuCount own
   if n > K then throw "empty-iu"
   let used := usedOf own
   if !(List.range n).all used.contains then throw "empty-iu"
   let size := sizes offs own n
-  let mut into : Array (Array Seg) := Array.replicate n #[]
-  for k in [0:K] do
-    let some u := own[k]! | continue
-    for s in reads[k]! do
-      let some q := s.ps[0]? | continue
-      if s.count == 0 then continue
-      let k' := nodeOf offs q.base.toNat
-      if own[k']! == some u || theta[k']! then continue
-      into := into.modify u (·.push s)
+  let into := intoOf offs own theta reads n
   let r := (Array.range n).map fun u => (size[u]!, novelWidth into[u]!)
   return verdict (P.defs[P.root]!).gates r (failure i.gamma i.num i.den r)
 
-/-- `evaluate`, with a refusal as `{"error": code}`. -/
+/-- `evaluate`, with a refusal as `NciCheck.refusal` writes it. -/
 def check (j : Json) : Json :=
   match evaluate j with
   | .ok r => r
-  | .error code => Json.mkObj [("error", Json.str code)]
+  | .error code => refusal code
 
 end NciCheck.Desc

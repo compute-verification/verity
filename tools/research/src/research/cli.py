@@ -14,7 +14,8 @@
                [--gpus N] [--custody-ttl 6h | --no-custody-r2] [--preflight TOOL] [...] -- CMD...   # run custody on the store's remote is the default
                                                  # where gpu-lease hands out the GPUs, only --gpus N (a FCFS wait for N) shows the run any
                                                  # with --on; a --tool's declared preflight (or --preflight TOOL's) runs on the machine first
-                                                 # it returns once the machine starts the run; --wait blocks until it ends and exits with its rc
+                                                 # it returns once the machine starts the run; --wait blocks until it ends and exits with its rc,
+                                                 # for at most 20 min (--wait-max S lowers it): then exit 79, the run going on (research/waitcap.py)
   research run --job-user USER [...] -- CMD...   # the workload as USER in a sandboxed system unit; records stay the runner's (research/jobuser.py)
   research fetch <run-id> [--all] [--on NAME]    # copy the machine's records (or every file, verified) into the local run dir
   research cancel <run-id> --reason TEXT [--by WHO] [--on NAME]   # SIGTERM to the run's workload process group and its whole cgroup
@@ -112,6 +113,7 @@ import math
 import os
 import subprocess
 import sys
+import time
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -119,6 +121,7 @@ from . import clone
 from . import compare as C
 from . import record, remote, result
 from . import runs as R
+from . import waitcap
 from .timefmt import both
 
 EX_DATAERR = 65
@@ -175,6 +178,7 @@ def cmd_run(argv: list[str]) -> int:
 
 
 def _cmd_run(argv: list[str], clones: list[Path]) -> int:
+    started = time.monotonic()                   # --wait's cap counts the launch too: it bounds the whole tool call
     if "--" not in argv:
         print("research run: the workload command goes after `--`", file=sys.stderr)
         return 2
@@ -196,9 +200,13 @@ def _cmd_run(argv: list[str], clones: list[Path]) -> int:
                                                                                  "the attempt's params.env (values of secret-named keys redacted)")
     ap.add_argument("--exclusive", action="store_true", help="with --on: refuse if another research run is live on the machine")
     ap.add_argument("--wait", action="store_true",
-                    help="with --on (or --queue): block until the run ends and exit with its rc (else 1; 3 if refused). Without it, run "
-                         "returns once the machine has started the run, so a loop of launches doesn't serialize them")
+                    help="with --on (or --queue): block until the run ends and exit with its rc (else 1; 3 if refused), for at most "
+                         f"{waitcap.WAIT_CAP_S} s with the launch (20 minutes: no tool call blocks longer, Daniel, 19 Oct): then it stops waiting, "
+                         f"cancels nothing, names the check-back command (`research status RUN`) and exits {waitcap.STILL_GOING}. "
+                         "Without it, run returns once the machine has started the run, so a loop of launches doesn't serialize them")
     ap.add_argument("--wait-every", type=float, default=30.0, metavar="S", help="with --wait: fetch the run's records every S seconds (30)")
+    ap.add_argument("--wait-max", type=float, default=None, metavar="S",
+                    help=f"with --wait: stop waiting after S seconds instead of {waitcap.WAIT_CAP_S}; never more than {waitcap.WAIT_CAP_S}")
     ap.add_argument("--mem-gb", type=float, default=None, metavar="N",
                     help="with --on: admit only if the machine's memory cgroup has N GB free after live reservations (/workspace/ramlock), "
                          "and reserve them for the run, which the workload reads as $RESEARCH_RUN_MEM_GB (a reservation sets no cgroup "
@@ -216,7 +224,8 @@ def _cmd_run(argv: list[str], clones: list[Path]) -> int:
     ap.add_argument("--pool", default=None, metavar="NAME",
                     help="with --on --source: run in the machine's NAME pool (`research`: any lane's research runs on vy-nebius-cpu-1, "
                          "at nice 19 beside the merge checks; `proofs`): the run takes a slot there and its cwd is its source, or "
-                         "with --cwd clone a private clone of it, for a job that writes into the tree (a Lean check that rewrites a lock)")
+                         "with --cwd clone a private clone of it, for a job that writes into the tree (a Lean check that rewrites a lock); "
+                         "its --timeout counts from taking the slot, after a wait of up to an hour for one")
     ap.add_argument("--as", dest="lane", default=os.environ.get("RESEARCH_LANE"), metavar="LANE",
                     help="with --pool: the lane the slot names (default $RESEARCH_LANE)")
     q = ap.add_argument_group("the queue (--queue): the one queue over the shared nodes (infra/cluster) places and runs the job; "
@@ -284,6 +293,15 @@ def _cmd_run(argv: list[str], clones: list[Path]) -> int:
                          "$RESEARCH_LOCAL_ONLY). A usable remote is pushed to either way; --on MACHINE gets custody on the remote instead")
     ap.add_argument("--source-identity", default=None, help=argparse.SUPPRESS)   # machine side: JSON {commit, tree, dirty} of the shipped source
     ns, harness_opts = ap.parse_known_args(opts)
+    ns.started = started
+    if ns.wait_max is not None:
+        try:
+            if not ns.wait:
+                raise waitcap.OverCap("--wait-max is for --wait")
+            waitcap.max_s(ns.wait_max)
+        except waitcap.OverCap as e:
+            print(f"research run: {e}", file=sys.stderr)
+            return 2
     if ns.on == "auto" and (why := _auto_placement(ns, harness_opts)):
         print(f"research run --on auto: {why}", file=sys.stderr)
         return 2
@@ -312,10 +330,15 @@ def _cmd_run(argv: list[str], clones: list[Path]) -> int:
             print(f"research run: --pool {why}", file=sys.stderr)
             return 2
         try:
-            command = slot_only.in_pool(ns.pool, ns.lane, command)
+            timeout = remote.timeout_seconds(remote.flag_value(harness_opts, "--timeout"))
+            command = slot_only.in_pool(ns.pool, ns.lane, command, timeout)
         except ValueError as e:
             print(f"research run: --pool: {e}", file=sys.stderr)
             return 2
+        if timeout:
+            harness_opts = [*harness_opts, "--timeout", f"{slot_only.POOL_WAIT_S + timeout:g}"]
+            print(f"research run: --pool {ns.pool}: --timeout {timeout:g} s counts from taking a slot (slot.py --run-max); it waits "
+                  f"up to {slot_only.POOL_WAIT_S // 60} min for one, then exits 75 without running", file=sys.stderr)
         if ns.mem_gb is not None:
             # the slot's mem= admits and reserves the run; a launch-time reservation too was held through the wait for a slot,
             # beside the slot's once it ran (INF-61, cpu-3 18 Oct: two waiting runs held 128 GB, admission sat at -89 GB)
@@ -986,8 +1009,9 @@ def _auto_placement(ns: argparse.Namespace, harness_opts: list[str]) -> str | No
 
 
 def _auto_size(ns: argparse.Namespace, harness_opts: list[str], command: list[str]) -> None:
-    """`--on auto` as AUTO_KIND, of a suites.py run of named suites: the memory and time their `[tool.verity.tests]` worker_gb and
-    timeout_s call for (research.suite_size), where it gives no --mem-gb, or no --timeout or --max-min."""
+    """`--on auto` as AUTO_KIND, of a suites.py run (named suites, `--changed REV`'s or all): the memory and time their
+    `[tool.verity.tests]` worker_gb and timeout_s call for (research.suite_size), where it gives no --mem-gb, or no --timeout or
+    --max-min."""
     timed = ns.max_min is not None or remote.flag_value(harness_opts, "--timeout") is not None
     if ns.queue_kind != AUTO_KIND or (ns.mem_gb is not None and timed):
         return
@@ -1003,8 +1027,9 @@ def _auto_size(ns: argparse.Namespace, harness_opts: list[str], command: list[st
         ns.max_min = math.ceil(shape["max_s"] / 60)
         said.append(f"{ns.max_min} min")
     if said:
-        print(f"research run --on auto: {' and '.join(said)}, from the [tool.verity.tests] of {', '.join(shape['suites'])}",
-              file=sys.stderr)
+        of = shape["suites"]
+        of = ", ".join(of) if len(of) <= 6 else f"its {len(of)} suites ({', '.join(of[:3])}, ...)"
+        print(f"research run --on auto: {' and '.join(said)}, from the [tool.verity.tests] of {of}", file=sys.stderr)
 
 
 def _run_queued(ns: argparse.Namespace, harness_opts: list[str], command: list[str]) -> int:
@@ -1133,7 +1158,8 @@ def _run_remote(ns: argparse.Namespace, run_id: str, run_dir: Path, harness_opts
         print(f"research: {ns.on} holds it until whole cores of its own are free (research cpu-hold, in its launcher.log)", file=sys.stderr)
     print(f"research: workload cwd: {rec.get('workload_cwd') or remote.WORKLOAD_CWD_DEFAULT}", file=sys.stderr)
     if getattr(ns, "wait", False):
-        return wait_remote(run_id, run_dir, every_s=ns.wait_every)
+        launched_s = time.monotonic() - getattr(ns, "started", time.monotonic())
+        return wait_remote(run_id, run_dir, every_s=ns.wait_every, max_s=max(1.0, waitcap.max_s(ns.wait_max) - launched_s))
     print(f"research: observe with `research fetch {run_id}`; the workload does not depend on this session staying alive", file=sys.stderr)
     return 0
 
@@ -1142,12 +1168,17 @@ def _run_remote(ns: argparse.Namespace, run_id: str, run_dir: Path, harness_opts
 ENDED = (*R.TERMINAL, "refused", "launcher-exited", "runner-gone")
 
 
-def wait_remote(run_id: str, run_dir: Path, *, every_s: float, fetch=None, sleep=None) -> int:
+def wait_remote(run_id: str, run_dir: Path, *, every_s: float, max_s: float = waitcap.WAIT_CAP_S, fetch=None, sleep=None,
+                clock=None) -> int:
     """`research run --on ... --wait`: fetch the run's records every `every_s` seconds until it has ended, and return its rc (1 when
-    it ended without one, 3 when the machine refused it). An unreachable machine is waited out, as `research fetch` would be."""
+    it ended without one, 3 when the machine refused it). An unreachable machine is waited out, as `research fetch` would be, but
+    no wait outlasts `max_s` of `clock` time: then the run goes on, the check-back command is printed, and it returns
+    STILL_GOING (research.waitcap)."""
     import time
 
-    fetch, sleep = fetch or remote.fetch, sleep or time.sleep
+    sleep, clock = sleep or time.sleep, clock or time.monotonic
+    start = clock()
+    fetch = fetch or (lambda d: remote.fetch(d, timeout=max_s - (clock() - start)))
     while True:
         rec = fetch(run_dir)
         s = R.summarize(run_dir)
@@ -1163,7 +1194,10 @@ def wait_remote(run_id: str, run_dir: Path, *, every_s: float, fetch=None, sleep
             return rc
         if (rec or {}).get("last_fetch_error"):
             print(f"research: run {run_id}: machine unreachable (rc {rec['last_fetch_error'].get('rc')}); still waiting", file=sys.stderr)
-        sleep(every_s)
+        if (left := max_s - (clock() - start)) <= 0:
+            print(waitcap.still_going(f"run {run_id} ({s['state']})", f"research status {run_id}", clock() - start), file=sys.stderr)
+            return waitcap.STILL_GOING
+        sleep(min(every_s, left))
 
 
 def _run_dir(root: Path, ref: str, on: str | None, *, unique: bool = False) -> Path:
@@ -1251,6 +1285,10 @@ def cmd_cancel(argv: list[str]) -> int:
     except (FileNotFoundError, LookupError, remote.Refused) as e:
         print(f"research cancel: {e}", file=sys.stderr)
         return 1
+    if out.get("withdrawn"):
+        print(f"research cancel: {run_dir.name}: withdrawn from its {out['hold']} before its runner started (SIGTERM to pid {out['pid']}); "
+              f"refused.json records fault Withdrawn; {out['released']}")
+        return 0
     if not out["delivered"]:
         print(f"research cancel: {run_dir.name}: SIGTERM to process group {out['pgid']} not delivered ({out['why']})", file=sys.stderr)
         return 1

@@ -6,7 +6,8 @@
 # when the prover ends.
 #
 # MODEL the checkpoint (default unsloth/Llama-3.1-8B, bf16), ENGINE_ARGS engine.py's (such as --step-hz 2
-# --concurrency 64), ENGINE_CPUS the engines' cores (default 0-47), NODE_ARGS node.py's (such as --decode-s 60).
+# --concurrency 64; Qwen/Qwen2.5-32B's 61 GiB of weights take --arena-gib 62 --util 0.8), ENGINE_CPUS the engines'
+# cores (default 0-47), NODE_ARGS node.py's (such as --decode-s 60).
 set -uxo pipefail
 : "${O:?}" "${B:?}" "${RS:?}" "${PY:?}" "${VPY:?}" "${PORT:?}" "${PLAN:?}"
 IFS=, read -ra DEVS <<< "${CUDA_VISIBLE_DEVICES:?}"

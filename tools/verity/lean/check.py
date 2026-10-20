@@ -243,12 +243,16 @@ def cores() -> int:
 #: what auditing a package that pins ArkLib (Security/Proofs, and Security, which audits it beside itself) needs: its build
 #: of C-Flock's soundness peaks at 15–24 GB (the lean-proofs skill); `VERITY_LEAN_MEM_FLOOR_GIB` sets another floor, 0 none
 MEM_FLOOR_GIB = 24
-#: an audit of a spec whose guarantees an ArkLib package proves (Security): its facts of that package held 30–50 GiB between
-#: replays in r20261018-175656-1c85, so with replay threads bounded (`replay_threads`) about this fits
-SPEC_FLOOR_GIB = 64
+#: an audit of a spec whose guarantees an ArkLib package proves (Security): its whole replay peaked at 145 GiB at 48 threads
+#: (r20261018-175656-1c85) and was killed at a 128 GiB cap at 16 (r20261019-084601-01a0), so the replay's resident base is
+#: about 120 GiB and a thread adds under 1: fewer threads don't make it fit, only the floor does
+SPEC_FLOOR_GIB = 160
 #: where a machine below the floor runs it instead
 ON_NODE = ("research run --on vy-nebius-1 --project verity --source . --cwd source --declared-output 'lean-audit/*' -- "
            "python3 tools/verity/lean/lean_changed.py --records {pkg}")
+#: the same for a spec beside its ArkLib package, on a cluster shape above SPEC_FLOOR_GIB (`cpu-xl`, 280 GiB)
+ON_NODE_SPEC = ("research run --on auto --kind lean-audit --project verity --source . --cwd source "
+                "--declared-output 'lean-audit/*' -- python3 tools/verity/lean/check.py --build {pkg}")
 
 
 def memory_gib(proc: Path = Path("/proc"), cgroup: Path = Path("/sys/fs/cgroup")) -> float:
@@ -301,9 +305,9 @@ def build_threads(pkg: Path, env=os.environ, have_gib: float | None = None) -> i
     return max(1, min(cores(), int(gib // BUILD_GIB_PER_JOB)))
 
 
-#: about what one replay thread of a Mathlib or ArkLib package peaks at: the whole-Security `--build --update` of 18 Oct
-#: (r20261018-175656-1c85, 48 threads) peaked at 145 GiB in one replay, about 3 GiB a thread, and was OOM-killed at 64 and
-#: 96 GiB; a heavy replay runs alone (`_HEAVY_REPLAY`), since two side by side took that run to 183 GiB
+#: memory per replay thread of a Mathlib or ArkLib package, a cap on its threads: the whole-Security replay's peak is mostly
+#: its resident base (`SPEC_FLOOR_GIB`), with 145 GiB at 48 threads and over 128 at 16; a heavy replay runs alone
+#: (`_HEAVY_REPLAY`), since two side by side took that run to 183 GiB
 REPLAY_GIB_PER_THREAD = 4
 _HEAVY_REPLAY = threading.Semaphore(1)
 
@@ -334,7 +338,8 @@ def memory_refusal(pkgs: list[Path], have_gib: float, env=os.environ) -> str | N
     what = (f"{rel(spec[0])}'s audit reads {rel(heavy[0])}'s facts for every guarantee it proves, about 40 GiB beside the "
             f"replay" if heavy and spec else f"{rel(heavy[0])} pins ArkLib, whose build peaks near {MEM_FLOOR_GIB} GiB")
     return (f"{what}, and this machine has {have_gib:.0f} GiB (memory and swap, within its cgroup), under the {floor:.0f} "
-            f"GiB floor: run it on a node, `{ON_NODE.format(pkg=rel(pkgs[0]))}` (add --update for the record), or set "
+            f"GiB floor: run it on a node, `{(ON_NODE_SPEC if heavy and spec else ON_NODE).format(pkg=rel(pkgs[0]))}` "
+            f"(add --update for the record), or set "
             f"VERITY_LEAN_MEM_FLOOR_GIB=0 to try here anyway")
 
 
@@ -1067,6 +1072,14 @@ def dropped(pkg: Path, files: dict[str, str], facts: dict, where: str = "") -> l
             f"a local notation over section variables can make Lean drop every declaration after it; so does `#exit`)"]
 
 
+def own_modules(facts: dict) -> set[str]:
+    """The modules of ``facts``' import graph that a package of this repository builds (an `.olean` in its own
+    `.lake/build`), not the toolchain's or a fetched dependency's (under `.lake/packages`): a premise headed by one of
+    their constants is one the lock lists, whatever its module (`assumption_records`)."""
+    return {m for m, g in (facts.get("graph") or {}).items()
+            if "/.lake/build/" in (o := str(g.get("olean", ""))) and "/.lake/packages/" not in o}
+
+
 def judge(policy: dict, facts: dict, files: dict[str, str], update: bool = False, owner: str | None = None
           ) -> tuple[list[str], dict]:
     """(failures, the policy with guarantees and reads as the build has them).  A pure function of the facts: the tests run
@@ -1074,6 +1087,7 @@ def judge(policy: dict, facts: dict, files: dict[str, str], update: bool = False
     record for a guarantee that has none."""
     fails = []
     allowed = set(policy.get("axioms", STANDARD))
+    own = set(facts["own_modules"]) if "own_modules" in facts else own_modules(facts)
     by_axiom: dict[str, list[str]] = {}
     for o in facts["offenders"]:
         for a in o["axioms"]:
@@ -1149,7 +1163,7 @@ def judge(policy: dict, facts: dict, files: dict[str, str], update: bool = False
         if not set(f["axioms"]) <= allowed:
             fails.append(f"guarantees: {name} uses {', '.join(sorted(set(f['axioms']) - allowed))}")
         for pr in f.get("premises") or []:
-            if "Assumptions" in (pr.get("module") or "").split("."):
+            if "Assumptions" in (m := pr.get("module") or "").split(".") or m in own:
                 premised.setdefault(pr["head"], set()).add(name)
         named = []
         for h in f["hypotheses"]:
@@ -1366,7 +1380,9 @@ def assumption_records(policy: dict, now_reads: dict, update: bool, owner: str |
     update writes the digests, drops an entry no guarantee reads, and converts a list of assumption modules into the
     definitions the guarantees read there, each owned by the one owner of the guarantees that read it (or ``owner``).
     ``premised`` ({definition: the guarantees whose statements take it}, from `Facts.lean`'s `premises`) names the premises
-    a statement takes in an assumptions module, its `Guarantees` definitions unfolded and a `Premises` abbrev seen through:
+    a statement takes, headed by a constant of an assumptions module or of any module this repository builds
+    (`own_modules`: a premise defined in `Definitions` carries what it assumes as much as one in `Models`), its `Guarantees`
+    definitions unfolded and a `Premises` abbrev seen through:
     one the lock doesn't list fails, and an update adds it the same way, so an entry lost in a merge is never silent."""
     assumed, fails, out = policy.get("assumptions", {}), [], {}
     read = {d: (m, h, g["guarantees"]) for m, g in now_reads.items() for d, h in g["definitions"].items()}
@@ -1381,6 +1397,10 @@ def assumption_records(policy: dict, now_reads: dict, update: bool, owner: str |
                 assumed[d] = {"owner": who.pop()} if len(who) == 1 else {}
     for a, rec in sorted(assumed.items()):
         who = (rec or {}).get("owner") or owner
+        if a not in read and a in (premised or {}):
+            # a premise only unfolding reaches (a reducible definition the statement reads stands for it): no read record
+            out[a] = {"owner": who} if who else {}
+            continue
         if a not in read:
             if not update:
                 fails.append(f"assumptions: {a} is listed, but no guarantee reads it; remove the entry")
@@ -1841,7 +1861,8 @@ def proved(pkg: Path, policy: dict, facts: dict, work: Path, moved: dict[str, st
         sources.append((entry, qf, files))
         conflicts += qf.get("moved_conflicts", [])
     pins, more, by = assign(policy.get("guarantees", {}), sources)
-    return fails + more, facts | {"pins": pins, "moved_conflicts": conflicts}, by
+    own = sorted(set().union(*(own_modules(f) for _, f, _ in sources)))
+    return fails + more, facts | {"pins": pins, "moved_conflicts": conflicts, "own_modules": own}, by
 
 
 REPRINTED = "printed differently: the same statement (type hash and named assumptions unchanged)"

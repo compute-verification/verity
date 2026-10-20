@@ -21,8 +21,9 @@ of that position against one root in the run's own log, a `PlainLevelClash` (`pl
   level-`ℓ` rows at the positions of its coins.
 * `plainLevels_verifyRepWith`, `plainLevels_verifyWithM`: an accepted rep's, and an accepted session's, later levels'
   Merkle checks at those rounds, on those rows.
-* `plainRawLevelCols`, `plain_levelClash`: the level-`ℓ` rows table 0's rep `k` opens in a plain record, and two of
-  them at one position that differ clash in an accepted run's log.
+* `plainRawLevelCols`, `plain_levelOpening`, `plain_levelClash`: the level-`ℓ` rows table 0's rep `k` opens in a
+  plain record, each an `Opening` in an accepted run's log against the rep's proof's cap, and two of them at one
+  position that differ clash there.
 -/
 
 namespace FlockDeploy.KS
@@ -323,38 +324,44 @@ def plainRawLevelCols (s : Claims.Seen) (k ℓ : ℕ) : List (ℕ × List FlockL
     | none => []
   | none => []
 
-/-- **Two rows one rep of an accepted plain run opens at one later-level position clash in its log**: two of table 0's
-rep `k`'s level-`ℓ` rows at one position that differ are two `Opening`s of that position against the flattened
-`ℓ − 1`-th recursive cap of the rep's proof, each SHA-512 input of them in the run's verifier log: its verdict accepts
-with SHA-512 answered within that log (`acc_within`), so level `ℓ`'s Merkle check passed on those rows at those
-positions (`plainLevels_verifyWithM`), and the check, carried back to `OC`, logged them (`merkleCheck_logs`). -/
-theorem plain_levelClash {Ω : Type} {P : Claims.Prover Ω} {x : Claims.Msg} {ω : Ω}
-    {r : Fin ((V false).k x) → Coin} {k ℓ q : ℕ} {a b : List FlockLevel3.GF128}
+/-- **A row one rep of an accepted plain run opens at a later level is an `Opening` in its log**: a level-`ℓ` row of
+table 0's rep `k` is an `Opening` of its position against the flattened `ℓ − 1`-th recursive cap of the rep's proof
+(the proof file decoded at the table's `fast100` schedule and `|regions| · points` extra claims), a cap of `2^cap`
+64-byte digests, each SHA-512 input of it in the run's verifier log: its verdict accepts with SHA-512 answered within
+that log (`acc_within`), so level `ℓ`'s Merkle check passed on the rep's rows at those positions
+(`plainLevels_verifyWithM`), and the check at the table's scheme, carried back to `OC`, logged them
+(`merkleCheck_logsOf`). -/
+theorem plain_levelOpening {Ω : Type} {P : Claims.Prover Ω} {x : Claims.Msg} {ω : Ω}
+    {r : Fin ((V false).k x) → Coin} {k ℓ q : ℕ} {a : List FlockLevel3.GF128}
     (h : (Claims.run sha512 P (V false) x ω r).out = .acc)
-    (ha : (q, a) ∈ plainRawLevelCols (Claims.run sha512 P (V false) x ω r).seen k ℓ)
-    (hb : (q, b) ∈ plainRawLevelCols (Claims.run sha512 P (V false) x ω r).seen k ℓ) (hab : a ≠ b) :
-    ∃ (ms : MerkleScheme) (lv : Flock.Level) (lanes : ℕ),
-      PlainLevelClash ms lv lanes (Claims.run sha512 P (V false) x ω r).vLog := by
+    (ha : (q, a) ∈ plainRawLevelCols (Claims.run sha512 P (V false) x ω r).seen k ℓ) :
+    ∃ (s : Ins) (spec : SessionSpec) (sts : Array Stmt) (f : Final) (st : Stmt) (sch : Flock.Schedule) (p : Proof)
+      (row : Array F128), setupOf false x = some (s, spec, sts) ∧
+      lastFinal (Claims.run sha512 P (V false) x ω r).seen = some f ∧ sts[0]? = some st ∧
+      fast100 st.m = some sch ∧
+      decodeProof (shapeOf (Setup.ofCircuit st) sch (st.regions.size * spec.points)) f.proofs[k]! = .ok p ∧
+      a = row.toList.map FlockLevel3.GF128.of ∧
+      p.ligerito.recursiveCaps[ℓ - 1]!.size = 2 ^ (sch.levels.getD ℓ default).cap ∧
+      (∀ b ∈ p.ligerito.recursiveCaps[ℓ - 1]!.toList, b.size = 64) ∧
+      Opening (Setup.ofCircuit st).merkle (sch.levels.getD ℓ default) (2 ^ (sch.levels.getD ℓ default).lanes)
+        (p.ligerito.recursiveCaps[ℓ - 1]!.foldl (· ++ ·) ByteArray.empty) (Claims.run sha512 P (V false) x ω r).vLog
+        q row := by
   obtain ⟨s, spec, sts, link, c₁, mids, f, hs, hf, hlink, hc, hv⟩ := acc_within h
   generalize hL : (Claims.run sha512 P (V false) x ω r).vLog = L at hv ⊢
   obtain ⟨hx, lv, hlv, -⟩ := Claims.Bridge.Custody.checks_ok hc
-  unfold plainRawLevelCols at ha hb
+  unfold plainRawLevelCols at ha
   split at ha
   swap
   · simp at ha
   rename_i rr hrr
-  rw [hrr] at hb
   obtain ⟨st, extras, hst, hext, rfl⟩ := runOf_eq hf hx hs hlv hrr
-  obtain ⟨hk, ha, hb⟩ : k < 2 ∧
+  obtain ⟨hk, ha⟩ : k < 2 ∧
       (q, a) ∈ plainLevelColsOf (Claims.Flock.plainProofShape (Setup.ofCircuit st).m (Setup.ofCircuit st).kLog
-        (2 + extras.size) (Setup.ofCircuit st).merkle.digestLen (saltLenOf false (Setup.ofCircuit st)))
-        (lv.streams.getD k #[]) (f.proofs.getD k ByteArray.empty) ℓ ∧
-      (q, b) ∈ plainLevelColsOf (Claims.Flock.plainProofShape (Setup.ofCircuit st).m (Setup.ofCircuit st).kLog
         (2 + extras.size) (Setup.ofCircuit st).merkle.digestLen (saltLenOf false (Setup.ofCircuit st)))
         (lv.streams.getD k #[]) (f.proofs.getD k ByteArray.empty) ℓ := by
     rcases k with _ | _ | k
-    · exact ⟨by omega, ha, hb⟩
-    · exact ⟨by omega, ha, hb⟩
+    · exact ⟨by omega, ha⟩
+    · exact ⟨by omega, ha⟩
     · simp at ha
   have hsts0 : 0 < sts.size := by
     rcases Array.getElem?_eq_some_iff.1 hst with ⟨h0, -⟩
@@ -407,9 +414,8 @@ theorem plain_levelClash {Ω : Type} {P : Claims.Prover Ω} {x : Claims.Msg} {ω
     refine plainLevelColsOf_congr _ _ _ fun j => ?_
     rw [← Array.getElem?_toList, ← Array.getElem?_toList]
     exact (hcoins j).symm
-  rw [hcolsEq] at ha hb
+  rw [hcolsEq] at ha
   obtain ⟨j, hj, -, hjq, hja⟩ := mem_zkRepCols ha
-  obtain ⟨j', hj', -, hjq', hjb⟩ := mem_zkRepCols hb
   have hms : (Setup.ofCircuit st).merkle = MerkleScheme.hm96Sha512 ∨
       (Setup.ofCircuit st).merkle = MerkleScheme.sha512 "flock-leaf/sha512-unsalted" := by
     rcases checks_leaf hc (setupOf_some hs).2 0 hsts0 with h | ⟨-, h⟩
@@ -437,9 +443,32 @@ theorem plain_levelClash {Ω : Type} {P : Claims.Prover Ω} {x : Claims.Msg} {ω
         ((sch.levels.getD ℓ default).d - (sch.levels.getD ℓ default).cap) i,
       hcs, fun b hb => (hcw b hb).trans hdl, rfl, merkleCheck_opens _ _ _ _ _ _ _ _ _ hpure i hi,
       fun b hb => (merkleCheck_sibs _ _ _ _ _ _ _ _ _ hpure i b hb).trans hdl, hlog i hi⟩
-  refine ⟨(Setup.ofCircuit st).merkle, sch.levels.getD ℓ default, 2 ^ (sch.levels.getD ℓ default).lanes,
-    p.ligerito.recursiveCaps[ℓ - 1]!.foldl (· ++ ·) ByteArray.empty, q, _, _, fun he => hab ?_,
-    hjq ▸ hop j hj, hjq' ▸ hop j' hj'⟩
-  rw [hja, hjb, he]
+  have hn : extras.size = st.regions.size * spec.points := by
+    obtain ⟨hsz, hall⟩ := rep_plain _ hv hlv
+    obtain ⟨sess', -, -, -, hpts', hpn', -⟩ := hall 0 (by omega)
+    rw [extraClaims_size (st := st) hext, ← hpts', hpn']
+  rw [hn, Nat.mul_zero, Nat.zero_add] at hp'
+  exact ⟨s, spec, sts, f, st, sch, p, _, hs, hf, hst, hsch, hp', hja, hcs, fun b hb => (hcw b hb).trans hdl,
+    hjq ▸ hop j hj⟩
+
+/-- **Two rows one rep of an accepted plain run opens at one later-level position clash in its log**: two of table 0's
+rep `k`'s level-`ℓ` rows at one position that differ are two `Opening`s of that position against one root, the
+flattened `ℓ − 1`-th recursive cap of the rep's proof (`plain_levelOpening`). -/
+theorem plain_levelClash {Ω : Type} {P : Claims.Prover Ω} {x : Claims.Msg} {ω : Ω}
+    {r : Fin ((V false).k x) → Coin} {k ℓ q : ℕ} {a b : List FlockLevel3.GF128}
+    (h : (Claims.run sha512 P (V false) x ω r).out = .acc)
+    (ha : (q, a) ∈ plainRawLevelCols (Claims.run sha512 P (V false) x ω r).seen k ℓ)
+    (hb : (q, b) ∈ plainRawLevelCols (Claims.run sha512 P (V false) x ω r).seen k ℓ) (hab : a ≠ b) :
+    ∃ (ms : MerkleScheme) (lv : Flock.Level) (lanes : ℕ),
+      PlainLevelClash ms lv lanes (Claims.run sha512 P (V false) x ω r).vLog := by
+  obtain ⟨s, spec, sts, f, st, sch, p, row, hs, hf, hst, hsch, hp, hra, -, -, hop⟩ := plain_levelOpening h ha
+  obtain ⟨s', spec', sts', f', st', sch', p', row', hs', hf', hst', hsch', hp', hrb, -, -, hop'⟩ :=
+    plain_levelOpening h hb
+  obtain ⟨rfl, rfl, rfl⟩ : s = s' ∧ spec = spec' ∧ sts = sts' := by simpa using hs.symm.trans hs'
+  obtain rfl := Option.some.inj (hf.symm.trans hf')
+  obtain rfl := Option.some.inj (hst.symm.trans hst')
+  obtain rfl := Option.some.inj (hsch.symm.trans hsch')
+  obtain rfl := Except.ok.inj (hp.symm.trans hp')
+  exact ⟨_, _, _, _, q, row, row', fun he => hab (by rw [hra, hrb, he]), hop, hop'⟩
 
 end FlockDeploy.KS

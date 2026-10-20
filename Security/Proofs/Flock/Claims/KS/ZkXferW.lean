@@ -159,7 +159,7 @@ theorem zkLiveAccWJ_of_xferWJ {x : Claims.Msg} (hno : ¬ Claims.Flock.NoAcc sha5
   have hg := tabsJ_get (tables true x).length (zkTabs h0 L hz hk hlay) (finJ (zkTabs h0 L hz hk hlay) hj)
   refine ⟨OkOffWJ (tabsJ (tables true x).length (zkTabs h0 L hz hk hlay)) j rootB₀ C,
     AccTxJ ins.read.I d j rootB₀ C, opnD sts _, dg, decD _, fun _ _ => true, fun _ _ _ => [],
-    fun rs j => Exec.capOfRoot rs[j.val]!, N, rootB₀, fun o h => ⟨h.1, ?_⟩,
+    fun rs j => Exec.capOfRoot rs[j.val]!, N, rootB₀, fun o h => ⟨h.1, ?_⟩, fun _ _ h => h.1,
     decodesTableW_deploy hs hin hset h0 L hz hk hlay hd j rootB₀ C, τ, inferInstance, inferInstance, σL, hσ, htr,
     hadv, hP, hTau, h₀, hsc⟩
   have h2 := h.2 rfl
