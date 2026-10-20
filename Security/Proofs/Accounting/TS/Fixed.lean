@@ -82,10 +82,10 @@ theorem steers_late {C B : Type} {S m s : ℕ} {J Q Pos V N W : Type} (pf : Word
   · exact Or.inl h1
 
 /-- **A good fixed unit has fixed words** when the modes are the run's. -/
-theorem fixedWords_of_good {C B : Type} [Fintype C] [Fintype B] {S m s : ℕ} {J Q Pos V N W : Type} [Nonempty V]
-    [AddCommGroup W] (pf : WordLayer C B S m s J Q Pos V N W) (mode : Paths (Paths C m × B) S → Fin S × J → Mode)
-    (hM : ModesRun pf mode) (x : Paths (Paths C m × B) S) (u : Fin S × J) (hF : pf.Fixed u)
-    (hG : pf.Good mode x u.1 u.2) : pf.FixedWords x u :=
+theorem fixedWords_of_good {C B : Type} [Fintype C] [Fintype B] {S m s : ℕ} {J Q Pos V N W : Type} [Fintype J]
+    [Nonempty V] [AddCommGroup W] (pf : WordLayer C B S m s J Q Pos V N W) {wt : Fin S → J → ℝ}
+    (mode : Paths (Paths C m × B) S → Fin S × J → Mode) (hM : ModesRun pf mode) (x : Paths (Paths C m × B) S)
+    (u : Fin S × J) (hF : pf.Fixed wt u) (hG : pf.Good mode x u.1 u.2) : pf.FixedWords wt x u :=
   ⟨hF, (hM x u).1 (hG u Relation.ReflTransGen.refl), fun t ht => (hM x t).1 (hG t (steers_late pf ht))⟩
 
 open Classical in
@@ -96,7 +96,7 @@ theorem UnitFixedOfWords : Accounting.Guarantees.TS.UnitFixedOfWords := by
   refine ⟨le_trans (div_le_div_of_nonneg_right ?_ (Nat.cast_nonneg S)) h1,
     le_trans (div_le_div_of_nonneg_right ?_ (Nat.cast_nonneg S)) h2⟩
   · refine Finset.sum_le_sum fun w _ => Finset.sum_le_sum fun j _ => ?_
-    show (if pf.Good mode x w j then wt w j else 0) ≤ if pf.FixedWords x (w, j) then wt w j else 0
+    show (if pf.Good mode x w j then wt w j else 0) ≤ if pf.FixedWords wt x (w, j) then wt w j else 0
     split_ifs with hg hfw <;> first
       | exact le_rfl
       | exact hwt w j

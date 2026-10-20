@@ -5,10 +5,11 @@ import Definitions.Accounting.TS.Drawn
 
 ASK-40's option A, as Daniel ruled it: a unit's words are **fixed** when each of its multiplicative operands is bound
 before the coin its noise reads, or is written by a unit that is always proved, or by one the service prices at its
-public fan-out. Additive operands don't decide fixedness: a computed unit's work reads its multiplicative operands and
-its noise only (`Accounting.Guarantees.TS.AdditiveFixed`, a lemma, not an assumption). Option B (every operand bound
-before the coin) was refused because it drops K-chunk sums and glue-fed products, and option C (`UnitFixed`'s own
-reading) because it admits a cheater who cancels the noise (`A = −noise`). The scoping is
+public fan-out. Pricing is a property of the draw (`Priced`): some draw lands on the writer with probability at least
+its late cone's weight over its round's. Additive operands don't decide fixedness: a computed unit's work reads its
+multiplicative operands and its noise only (`Accounting.Guarantees.TS.AdditiveFixed`, a lemma, not an assumption).
+Option B (every operand bound before the coin) was refused because it drops K-chunk sums and glue-fed products, and
+option C (`UnitFixed`'s own reading) because it admits a cheater who cancels the noise (`A = −noise`). The scoping is
 note:20261019T0028Z-draft-adaptive-model; this file is its §2.1 with the slot roles the ruling needs and no
 well-founded chain, so late cones may be cyclic.
 
@@ -18,7 +19,8 @@ additive operands add (`acc`, which reads neither the noise nor a multiplicative
 
 * `Bound u k`: slot `k`'s position is committed no later than `u`'s coin, so its committed value is a function of the
   coins before that coin (σ_{<c}).
-* `AlwaysProved`, `Fixed`: every draw names the unit; option A, per unit, a public property of the layer.
+* `AlwaysProved`, `Priced`, `Fixed`: every draw names the unit; some draw lands on it at its late cone's weight
+  (`DrawnLayer.coneWt`) over its round's; option A, per unit, a public property of the layer and the weights.
 * `MulLate`, `Steers`: a unit writes one of `u`'s multiplicative operands after `u`'s coin; a unit reaches such a
   writer along `DrawnLayer.Late`, additive edges included.
 * `mulView`, `addView`, `derive`, `work`: a unit's multiplicative and additive operands at their committed values, its
@@ -55,10 +57,7 @@ inductive SlotRole
 * `acc u b`: what its additive operands `b` add to its work. It reads neither the noise nor a multiplicative operand,
   so an operand the noise meets is multiplicative;
 * `output u v n k`: the value `u` writes at slot `k`, from its slots' values `v` under noise `n`;
-* `receipt u`, `fold u`: the slot of `u`'s receipt, and the fold of its words that the receipt commits;
-* `priced u`: the service draws `u` with the weight of its public fan-out (the credited units reading it), so a wrong
-  `u` is charged that weight, `F` in `skipped ≤ F·wt(B)/(1 − p) + slack`. Protocol structure, which the share's charge
-  carries in this model (`DrawnLayer.Covers`, `DrawnLayer.coneWt`). -/
+* `receipt u`, `fold u`: the slot of `u`'s receipt, and the fold of its words that the receipt commits. -/
 structure WordLayer (C B : Type) (S m s : ℕ) (J Q Pos V N W : Type) extends DrawnLayer C B S m s J Q Pos V where
   role : Fin S × J → Q → SlotRole
   noise : Paths (Paths C m × B) S → Fin S × J → N
@@ -68,7 +67,6 @@ structure WordLayer (C B : Type) (S m s : ℕ) (J Q Pos V N W : Type) extends Dr
   output : Fin S × J → (Q → V) → N → Q → V
   receipt : Fin S × J → Q
   fold : Fin S × J → W → V
-  priced : Fin S × J → Prop
 
 namespace WordLayer
 
@@ -84,11 +82,25 @@ def Bound (u : Fin S × J) (k : Q) : Prop :=
 /-- **Unit `u` is always proved**: every draw names it, so its proof is among its round's on every path. -/
 def AlwaysProved (u : Fin S × J) : Prop := ∀ b, ∃ i, pf.draw b i = u.2
 
-/-- **ASK-40's option A: unit `u` is fixed** (public, a property of the layer): each of its multiplicative operands is
-bound before the coin its noise reads, or is written by a unit that is always proved or priced at its public fan-out.
-Its additive operands don't enter. -/
-def Fixed (u : Fin S × J) : Prop :=
-  ∀ k, pf.role u k = .mul → pf.Bound u k ∨ ∃ v, pf.src (pf.pos u.1 u.2 k) = some v ∧ (pf.AlwaysProved v ∨ pf.priced v)
+section Priced
+
+variable [Fintype B] [Fintype J]
+
+/-- **Unit `v` is priced at its public fan-out** under the weights `wt` (`wt w j`: unit `j`'s words in round `w`): some
+draw `i` lands on it with probability at least its late cone's weight (`DrawnLayer.coneWt`: itself and every unit it
+writes a value after that unit's coin, transitively, so every credited unit a wrong `v` spoils) over its round's weight.
+A skipped `v` is then charged its cone, `F` in `skipped ≤ F·wt(B)/(1 − p) + slack`. A property of the draw, public. -/
+def Priced (wt : Fin S → J → ℝ) (v : Fin S × J) : Prop :=
+  ∃ i, pf.coneWt wt v ≤ prob (fun b : B => pf.draw b i = v.2) * ∑ j, wt v.1 j
+
+/-- **ASK-40's option A: unit `u` is fixed** under the weights `wt` (public, a property of the layer and the weights):
+each of its multiplicative operands is bound before the coin its noise reads, or is written by a unit that is always
+proved or priced at its public fan-out (`Priced`). Its additive operands don't enter. -/
+def Fixed (wt : Fin S → J → ℝ) (u : Fin S × J) : Prop :=
+  ∀ k, pf.role u k = .mul → pf.Bound u k ∨
+    ∃ v, pf.src (pf.pos u.1 u.2 k) = some v ∧ (pf.AlwaysProved v ∨ pf.Priced wt v)
+
+end Priced
 
 /-- **Unit `v` writes one of `u`'s multiplicative operands after `u`'s coin.** -/
 def MulLate (v u : Fin S × J) : Prop :=
@@ -129,10 +141,11 @@ def Computed (x : Paths (Paths C m × B) S) (u : Fin S × J) : Prop :=
     ∀ k, pf.src (pf.pos u.1 u.2 k) = some u →
       pf.committed x (pf.pos u.1 u.2 k) = pf.output u (pf.view x u.1 u.2) (pf.noise x u) k
 
-/-- **Unit `u`'s words on `x` are fixed words**: `u` is fixed (option A), the run computed it, and it computed every
-unit that steers it. -/
-def FixedWords (x : Paths (Paths C m × B) S) (u : Fin S × J) : Prop :=
-  pf.Fixed u ∧ pf.Computed x u ∧ ∀ t, pf.Steers t u → pf.Computed x t
+variable [Fintype J] in
+/-- **Unit `u`'s words on `x` are fixed words** under the weights `wt`: `u` is fixed (option A), the run computed it,
+and it computed every unit that steers it. -/
+def FixedWords (wt : Fin S → J → ℝ) (x : Paths (Paths C m × B) S) (u : Fin S × J) : Prop :=
+  pf.Fixed wt u ∧ pf.Computed x u ∧ ∀ t, pf.Steers t u → pf.Computed x t
 
 end WordLayer
 

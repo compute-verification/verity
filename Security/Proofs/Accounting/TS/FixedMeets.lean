@@ -7,32 +7,35 @@ import Models.Accounting.Guarantees.TS.Fixed
 The witness Rule I asks of `Accounting.Guarantees.TS.UnitFixedOfWords` and `Accounting.Guarantees.TS.AdditiveFixed`:
 an honest word layer, with a K-chunk running sum and a glue, that meets every hypothesis of both statements.
 
-One round (`S = 1`) with one coin bit (`m = 1`, `C = Bool`, `B = Unit`) and four units, all drawn every round (`s = 4`),
-values, noise and words in `ℤ`, the noise being the coin bit `n`:
+One round (`S = 1`) with one coin bit (`m = 1`, `C = Bool`), a draw bit (`B = Bool`) and four units, four draws a round
+(`s = 4`), values, noise and words in `ℤ`, the noise being the coin bit `n`:
 
 * `chunk0` (unit 0) computes `S₀ = 2·(3 + n)` from two inputs committed before the coin;
 * `chunk1` (unit 1) computes `S₁ = 5·(7 + n) + S₀`: its product of two inputs committed before the coin, plus `chunk0`'s
   running sum, an additive operand written after the coin;
 * `glue` (unit 2) computes `G = S₁·2`, its noise not read, its multiplicative operand `S₁` written after the coin by
-  `chunk1`, which is always proved (and priced);
-* `prod` (unit 3) computes `G·(11 + n)`, its multiplicative operand `G` written after the coin by the always-proved
-  `glue`.
+  `chunk1`, which is always proved;
+* `prod` (unit 3) computes `G·(11 + n)`, its multiplicative operand `G` written after the coin by `glue`.
+
+Draws 0, 1 and 3 name units 0, 1 and 3; draw 2 names `glue` when the draw bit is set and `prod` when it isn't. So
+`glue` is sampled, not always proved, and priced: draw 2 lands on it with probability `1/2`, and its late cone (`glue`
+and `prod`) weighs `1 ≤ 1/2 · 3`, its round's weight being `3`. `prod` is fixed through the priced `glue`, `glue`
+through the always-proved `chunk1`, and the chunks by their bound operands. `prod` also reads `glue`'s other input, so
+every position is opened on every path.
 
 Each unit writes its words at every output slot and its receipt commits them. Every unit is paid (`mode = paid`) and
 `fixed` is the total weight, `glue` weighing nothing. So every unit is fixed under option A, computed, and good, and
 `chunk0` steers `prod` (through `chunk1` and `glue`): `FixedWords` asks of `prod` what `Fixed ∧ Computed` doesn't. For
 `AdditiveFixed`, `chunk1`'s multiplicative operands are bound before its coin, it is computed on every path, and its
 additive operand takes two values on two continuations from its coin.
-
-Every unit is always proved, so `priced` is not exercised: `Fixed` holds through `AlwaysProved` alone.
 -/
 
 namespace Accounting.SecurityProofs.TS.FixedMeets
 
 open Accounting.TS Accounting.Assumptions.TS Pouw.RelativeSecurity
 
-/-- The window's coins: one round, one coin bit, a unit draw coin. -/
-abbrev FCoins := Paths (Paths Bool 1 × Unit) 1
+/-- The window's coins: one round, one coin bit, a draw bit. -/
+abbrev FCoins := Paths (Paths Bool 1 × Bool) 1
 
 /-- The coin bit. -/
 def fbit (y : FCoins) : Bool := coinAt (coinAt y 0).1 0
@@ -43,10 +46,14 @@ def nzb (b : Bool) : ℤ := if b then 1 else 0
 /-- The noise on `y`: its coin bit. -/
 def nz (y : FCoins) : ℤ := nzb (fbit y)
 
+/-- Draw `i` on draw bit `b`: draw 2 names `glue` when `b` is set and `prod` when it isn't; draw `i` otherwise names
+unit `i`. -/
+def drawF (b : Bool) (i : Fin 4) : Fin 4 := if i = 2 ∧ b = false then 3 else i
+
 /-- Each unit's slots' positions: `chunk0` reads `0, 1` and writes `2`; `chunk1` reads `3, 4` and `2` (additively) and
-writes `5`; `glue` reads `5, 6` and writes `7`; `prod` reads `7, 8` and writes `9`. -/
+writes `5`; `glue` reads `5, 6` and writes `7`; `prod` reads `7, 8` and `6` and writes `9`. -/
 def posF : Fin 4 → Fin 5 → Fin 10 :=
-  ![![0, 1, 2, 2, 2], ![3, 4, 2, 5, 5], ![5, 6, 7, 7, 7], ![7, 8, 9, 9, 9]]
+  ![![0, 1, 2, 2, 2], ![3, 4, 2, 5, 5], ![5, 6, 7, 7, 7], ![7, 8, 9, 9, 6]]
 
 /-- Each position's honest value under noise `n`. -/
 def hval (ℓ : Fin 10) (n : ℤ) : ℤ :=
@@ -83,20 +90,20 @@ def outF (u : Fin 1 × Fin 4) (v : Fin 5 → ℤ) (n : ℤ) (_ : Fin 5) : ℤ :=
 /-- A unit's receipt slot: its first output slot. -/
 def receiptF (u : Fin 1 × Fin 4) : Fin 5 := if u.2 = 1 then 3 else 2
 
-/-- The drawn layer: every unit drawn, every proof accepted, opening the honest values. -/
-def fdl : DrawnLayer Bool Unit 1 1 4 (Fin 4) (Fin 5) (Fin 10) ℤ where
-  draw _ i := i
+/-- The drawn layer: draws by `drawF`, every proof accepted, opening the honest values. -/
+def fdl : DrawnLayer Bool Bool 1 1 4 (Fin 4) (Fin 5) (Fin 10) ℤ where
+  draw := drawF
   pos _ := posF
   coin _ _ := 0
   cut := cutF
   src := srcF
   accepted _ _ _ := True
-  opened y _ i k := hval (posF i k) (nz y)
+  opened y w i k := hval (posF (drawF (coinAt y w).2 i) k) (nz y)
   rel _ _ _ _ := True
   right _ _ _ _ := True
 
 /-- The word layer: each unit's words are its honest derivation at its committed slots. -/
-noncomputable def fpf : WordLayer Bool Unit 1 1 4 (Fin 4) (Fin 5) (Fin 10) ℤ ℤ ℤ where
+noncomputable def fpf : WordLayer Bool Bool 1 1 4 (Fin 4) (Fin 5) (Fin 10) ℤ ℤ ℤ where
   toDrawnLayer := fdl
   role := roleF
   noise y _ := nz y
@@ -106,7 +113,6 @@ noncomputable def fpf : WordLayer Bool Unit 1 1 4 (Fin 4) (Fin 5) (Fin 10) ℤ �
   output := outF
   receipt := receiptF
   fold _ w := w
-  priced u := u.2 = 1
 
 /-- Every unit is paid. -/
 def fmode : FCoins → Fin 1 × Fin 4 → Mode := fun _ _ => .paid
@@ -118,7 +124,7 @@ noncomputable def fwt (_ : Fin 1) (j : Fin 4) : ℝ := if j = 2 then 0 else 1
 noncomputable def ftot : ℝ := ∑ w : Fin 1, ∑ j : Fin 4, fwt w j
 
 /-- The play: one round, always accepted, with the total weight fixed. -/
-noncomputable def fPlay : Play (Paths Bool 1 × Unit) 1 Unit Unit Unit Unit where
+noncomputable def fPlay : Play (Paths Bool 1 × Bool) 1 Unit Unit Unit Unit where
   game := .round (fun _ => 0) (fun _ => True) (fun _ => .done)
   accepts _ := True
   run _ :=
@@ -129,20 +135,21 @@ noncomputable def fPlay : Play (Paths Bool 1 × Unit) 1 Unit Unit Unit Unit wher
 noncomputable def ffolded : FCoins → ℝ := fun _ => ftot
 
 /-- The paths with coin bit `1` and `0`. -/
-def xt : FCoins := (((true, ()), ()), ())
-def xf : FCoins := (((false, ()), ()), ())
+def xt : FCoins := (((true, ()), false), ())
+def xf : FCoins := (((false, ()), false), ())
 
-theorem read_all : ∀ ℓ : Fin 10, ∃ j : Fin 4, ∃ k : Fin 5, posF j k = ℓ := by decide
+/-- On either draw bit, the drawn units read every position. -/
+theorem read_all : ∀ ℓ : Fin 10, ∀ b : Bool, ∃ i : Fin 4, ∃ k : Fin 5, posF (drawF b i) k = ℓ := by decide
 
 theorem opens_iff (y : FCoins) (ℓ : Fin 10) (v : ℤ) : fdl.Opens y ℓ v ↔ v = hval ℓ (nz y) := by
   constructor
   · rintro ⟨w, i, k, hp, -, rfl⟩
-    have hp' : posF i k = ℓ := hp
+    have hp' : posF (drawF (coinAt y w).2 i) k = ℓ := hp
     subst hp'
     rfl
   · rintro rfl
-    obtain ⟨j, k, rfl⟩ := read_all ℓ
-    exact ⟨0, j, k, rfl, trivial, rfl⟩
+    obtain ⟨i, k, rfl⟩ := read_all ℓ (coinAt y 0).2
+    exact ⟨0, i, k, rfl, trivial, rfl⟩
 
 /-- A plurality whose every continuation opens one value, a function of the path that the continuations keep, is that
 value. -/
@@ -227,33 +234,118 @@ theorem sum_le_tot (p : Fin 1 → Fin 4 → Prop) : (∑ w, ∑ j, if p w j then
 open Classical in
 theorem counts_fixed : CountsFixed fPlay fpf fwt ffolded := by
   intro x _
-  show (∑ w, ∑ j, if fpf.FixedWords x (w, j) then fwt w j else 0) / ((1 : ℕ) : ℝ) ≤ ftot ∧
+  show (∑ w, ∑ j, if fpf.FixedWords fwt x (w, j) then fwt w j else 0) / ((1 : ℕ) : ℝ) ≤ ftot ∧
     (∑ w, ∑ j, if fpf.Folds x (w, j) then fwt w j else 0) / ((1 : ℕ) : ℝ) ≤ ftot
   rw [Nat.cast_one, div_one, div_one]
-  exact ⟨sum_le_tot fun w j => fpf.FixedWords x (w, j), sum_le_tot fun w j => fpf.Folds x (w, j)⟩
+  exact ⟨sum_le_tot fun w j => fpf.FixedWords fwt x (w, j), sum_le_tot fun w j => fpf.Folds x (w, j)⟩
 
 theorem writer_reads : fpf.WriterReads := by
   have h : ∀ ℓ : Fin 10, ∀ w : Fin 1, ∀ j : Fin 4, srcF ℓ = some (w, j) → ∃ k : Fin 5, posF j k = ℓ := by decide
   rintro ℓ ⟨w, j⟩ hs
   exact h ℓ w j hs
 
-theorem always_proved (v : Fin 1 × Fin 4) : fpf.AlwaysProved v := fun _ => ⟨v.2, rfl⟩
+theorem draw_fix (b : Bool) (i : Fin 4) (h : i ≠ 2) : drawF b i = i := by
+  unfold drawF
+  exact ite_eq_right fun h' => h h'.1
+
+/-- Every unit but `glue` is always proved. -/
+theorem always_proved (v : Fin 1 × Fin 4) (h : v.2 ≠ 2) : fpf.AlwaysProved v := fun b => ⟨v.2, draw_fix b v.2 h⟩
+
+/-- **`glue` is sampled**: no draw names it when the draw bit isn't set. -/
+theorem glue_sampled : ¬ fpf.AlwaysProved (0, 2) := fun h => by
+  have h2 : ∀ i : Fin 4, drawF false i ≠ 2 := by decide
+  obtain ⟨i, hi⟩ := h false
+  exact h2 i hi
+
+/-- A late edge out of `glue` or `prod` lands on `glue` or `prod`. -/
+theorem late_closed (u v : Fin 1 × Fin 4) (h : fpf.Late u v) (hu : u.2 = 2 ∨ u.2 = 3) : v.2 = 2 ∨ v.2 = 3 := by
+  have key : ∀ (j : Fin 4) (k : Fin 5) (u : Fin 1 × Fin 4), srcF (posF j k) = some u → (u.2 = 2 ∨ u.2 = 3) →
+      j = 2 ∨ j = 3 := by decide
+  obtain ⟨k, hk, -⟩ := h
+  exact key v.2 k u hk hu
+
+/-- `glue`'s late cone is `glue` and `prod`. -/
+theorem cone_glue (v : Fin 1 × Fin 4) (h : Relation.ReflTransGen fpf.Late (0, 2) v) : v.2 = 2 ∨ v.2 = 3 := by
+  induction h with
+  | refl => exact Or.inl rfl
+  | tail _ hl ih => exact late_closed _ _ hl ih
+
+theorem fwt2 (w : Fin 1) : fwt w 2 = 0 := by
+  unfold fwt
+  exact ite_eq_left rfl
+
+theorem fwt_ne2 (w : Fin 1) (j : Fin 4) (h : j ≠ 2) : fwt w j = 1 := by
+  unfold fwt
+  exact ite_eq_right h
+
+open Classical in
+theorem cone_term (v : Fin 1 × Fin 4) :
+    (if Relation.ReflTransGen fpf.Late (0, 2) v then fwt v.1 v.2 else 0) ≤ if v = (0, 3) then (1 : ℝ) else 0 := by
+  by_cases hc : Relation.ReflTransGen fpf.Late (0, 2) v
+  · rw [ite_eq_left hc]
+    rcases cone_glue v hc with h | h
+    · rw [h, fwt2]
+      split_ifs <;> norm_num
+    · have hv : v = (0, 3) := Prod.ext (Subsingleton.elim _ _) h
+      rw [ite_eq_left hv]
+      exact (fwt_ne2 v.1 v.2 (by rw [h]; decide)).le
+  · rw [ite_eq_right hc]
+    split_ifs <;> norm_num
+
+open Classical in
+/-- `glue`'s late cone weighs `1`, `prod`'s weight. -/
+theorem coneWt_glue : fpf.coneWt fwt (0, 2) ≤ 1 := by
+  unfold DrawnLayer.coneWt
+  calc (∑ v : Fin 1 × Fin 4, if Relation.ReflTransGen fpf.Late (0, 2) v then fwt v.1 v.2 else 0)
+      ≤ ∑ v : Fin 1 × Fin 4, if v = (0, 3) then (1 : ℝ) else 0 := Finset.sum_le_sum fun v _ => cone_term v
+    _ = 1 := by simp [Finset.sum_ite_eq']
+
+theorem sum_fwt : ∑ j, fwt 0 j = 3 := by
+  rw [Fin.sum_univ_four, fwt_ne2 0 0 (by decide), fwt_ne2 0 1 (by decide), fwt2, fwt_ne2 0 3 (by decide)]
+  norm_num
+
+/-- Draw 2 lands on `glue` on half the draw bits. -/
+theorem prob_glue : prob (fun b : Bool => drawF b 2 = 2) = 1 / 2 := by
+  classical
+  unfold prob
+  have h : ∀ inst : DecidablePred (fun b : Bool => drawF b 2 = 2),
+      (@Finset.filter _ _ inst Finset.univ).card = 1 := by
+    intro inst
+    rw [Finset.card_eq_one]
+    refine ⟨true, Finset.ext fun b => ?_⟩
+    rw [Finset.mem_filter, Finset.mem_singleton]
+    simp only [Finset.mem_univ, true_and]
+    cases b <;> decide
+  rw [h, Fintype.card_bool]
+  norm_num
+
+/-- **`glue` is priced at its public fan-out**: draw 2 lands on it with probability `1/2`, and its late cone weighs `1`,
+at most `1/2` of its round's weight `3`. -/
+theorem priced_glue : fpf.Priced fwt (0, 2) := by
+  refine ⟨2, ?_⟩
+  show fpf.coneWt fwt (0, 2) ≤ prob (fun b : Bool => drawF b 2 = 2) * ∑ j, fwt 0 j
+  rw [prob_glue, sum_fwt]
+  linarith [coneWt_glue]
 
 theorem bound_of_none : ∀ (j : Fin 4) (k : Fin 5), srcF (posF j k) = none →
     (cutF (posF j k)).1 < 0 ∨ (cutF (posF j k)).1 = 0 ∧ (cutF (posF j k)).2 ≤ (0 : Fin 1).castSucc := by
   decide
 
-theorem fixed_all (u : Fin 1 × Fin 4) : fpf.Fixed u := by
+theorem fixed_all (u : Fin 1 × Fin 4) : fpf.Fixed fwt u := by
   obtain ⟨w, j⟩ := u
   obtain rfl : w = 0 := Subsingleton.elim w 0
   intro k _
   rcases h : srcF (posF j k) with _ | v
   · exact Or.inl (bound_of_none j k h)
-  · exact Or.inr ⟨v, h, Or.inl (always_proved v)⟩
+  · refine Or.inr ⟨v, h, ?_⟩
+    by_cases hv : v.2 = 2
+    · obtain rfl : v = (0, 2) := Prod.ext (Subsingleton.elim _ _) hv
+      exact Or.inr priced_glue
+    · exact Or.inl (always_proved v hv)
 
-theorem credited_fixed (w : Fin 1) (j : Fin 4) (_ : fwt w j ≠ 0) : fpf.Fixed (w, j) := fixed_all (w, j)
+theorem credited_fixed (w : Fin 1) (j : Fin 4) (_ : fwt w j ≠ 0) : fpf.Fixed fwt (w, j) := fixed_all (w, j)
 
-theorem fixedWords_all (x : FCoins) (u : Fin 1 × Fin 4) : fpf.FixedWords x u :=
+theorem fixedWords_all (x : FCoins) (u : Fin 1 × Fin 4) : fpf.FixedWords fwt x u :=
   ⟨fixed_all u, computed_all x u, fun t _ => computed_all x t⟩
 
 theorem good_all (x : FCoins) (w : Fin 1) (j : Fin 4) : fpf.Good fmode x w j := fun _ _ => rfl
@@ -283,17 +375,17 @@ theorem tot_pos : 0 < ftot := by
       (Finset.mem_univ 0)
   linarith
 
-/-- **`UnitFixedOfWords`'s hypotheses hold of an honest run** with a K-chunk running sum and a glue: nonnegative weights,
-positive in total, every credited unit fixed, the modes the run's, the labelling counting fixed words, every writer
-reading what it writes, every path accepted and every unit good, and `chunk0` steering `prod` through a late
-multiplicative operand. -/
+/-- **`UnitFixedOfWords`'s hypotheses hold of an honest run** with a K-chunk running sum and a sampled glue: nonnegative
+weights, positive in total, every credited unit fixed, the modes the run's, the labelling counting fixed words, every
+writer reading what it writes, every path accepted and every unit good, `chunk0` steering `prod` through a late
+multiplicative operand, and `glue`, which writes it, sampled and priced, not always proved. -/
 theorem unitFixedOfWords_meets :
-    (∀ w j, 0 ≤ fwt w j) ∧ 0 < ftot ∧ (∀ w j, fwt w j ≠ 0 → fpf.Fixed (w, j)) ∧ ModesRun fpf fmode ∧
+    (∀ w j, 0 ≤ fwt w j) ∧ 0 < ftot ∧ (∀ w j, fwt w j ≠ 0 → fpf.Fixed fwt (w, j)) ∧ ModesRun fpf fmode ∧
       CountsFixed fPlay fpf fwt ffolded ∧ fpf.WriterReads ∧ (∀ x, fPlay.accepts x) ∧
-      (∀ x w j, fpf.Good fmode x w j) ∧ (∀ x u, fpf.FixedWords x u) ∧ fpf.Steers (0, 0) (0, 3) ∧
-      ¬ fpf.Bound (0, 3) 0 :=
+      (∀ x w j, fpf.Good fmode x w j) ∧ (∀ x u, fpf.FixedWords fwt x u) ∧ fpf.Steers (0, 0) (0, 3) ∧
+      ¬ fpf.Bound (0, 3) 0 ∧ fpf.MulLate (0, 2) (0, 3) ∧ ¬ fpf.AlwaysProved (0, 2) ∧ fpf.Priced fwt (0, 2) :=
   ⟨wt_nonneg, tot_pos, credited_fixed, modes_run, counts_fixed, writer_reads, fun _ => trivial, good_all,
-    fixedWords_all, steers_prod, prod_late⟩
+    fixedWords_all, steers_prod, prod_late, mulLate23, glue_sampled, priced_glue⟩
 
 theorem bound_chunk1 : ∀ k, fpf.role (0, 1) k = SlotRole.mul → fpf.Bound (0, 1) k := by
   have h : ∀ k : Fin 5, roleF (0, 1) k = SlotRole.mul →

@@ -4,9 +4,8 @@ import Models.Accounting.Assumptions.TS.Fixed
 /-!
 # `UnitFixed` from a fixed word (trusted)
 
-ASK-40's option A (`Definitions.Accounting.TS.Fixed`), stated for its red team before its proof (Daniel, 17 Oct:
-statement, then red team, then proof). Each `def G : Prop` is to be proved as `Accounting.SecurityProofs.TS.G`; until
-then it is under `shape.frozen` as unstated.
+ASK-40's option A (`Definitions.Accounting.TS.Fixed`). Each `def G : Prop` is proved as `Accounting.SecurityProofs.TS.G`
+(`Proofs.Accounting.TS.Fixed`), with its non-vacuity witness in `Proofs.Accounting.TS.FixedMeets`.
 
 * `UnitFixedOfWords`: `UnitFixed` (E1(c) per unit, with its fold clause) on a word layer whose credited units are fixed
   under option A, from `ModesRun` and `CountsFixed`. A good unit (`DrawnLayer.Good`: the run paid for its late cone) is
@@ -24,16 +23,17 @@ namespace Accounting.Guarantees.TS
 
 open Accounting.TS Accounting.Assumptions.TS Pouw.RelativeSecurity
 
-/-- **`UnitFixed` from option A's fixed word.** On a word layer whose units of positive weight are fixed (option A:
-each multiplicative operand bound before the unit's coin, or written by a unit always proved or priced at its public
-fan-out), with nonnegative weights, if the modes are the run's (`ModesRun`) and the labelling counts fixed words as
-fixed (`CountsFixed`), then `UnitFixed` holds of its drawn layer, at the same modes, weights and folded words. -/
+/-- **`UnitFixed` from option A's fixed word.** On a word layer whose units of positive weight are fixed under the
+weights (option A: each multiplicative operand bound before the unit's coin, or written by a unit always proved or
+priced at its public fan-out, `WordLayer.Priced`), with nonnegative weights, if the modes are the run's (`ModesRun`)
+and the labelling counts fixed words as fixed (`CountsFixed`), then `UnitFixed` holds of its drawn layer, at the same
+modes, weights and folded words. -/
 def UnitFixedOfWords : Prop :=
   ∀ {K T L U : Type} [Fintype K] [Fintype T] [Fintype L] [Fintype U] {C B : Type} [Fintype C] [Fintype B]
     {S m s : ℕ} {J Q Pos V N W : Type} [Fintype J] [Nonempty V] [AddCommGroup W]
     (P : Play (Paths C m × B) S K T L U) (pf : WordLayer C B S m s J Q Pos V N W)
     (mode : Paths (Paths C m × B) S → Fin S × J → Mode) (wt : Fin S → J → ℝ) (folded : Paths (Paths C m × B) S → ℝ),
-    (∀ w j, 0 ≤ wt w j) → (∀ w j, wt w j ≠ 0 → pf.Fixed (w, j)) → ModesRun pf mode → CountsFixed P pf wt folded →
+    (∀ w j, 0 ≤ wt w j) → (∀ w j, wt w j ≠ 0 → pf.Fixed wt (w, j)) → ModesRun pf mode → CountsFixed P pf wt folded →
       UnitFixed P pf.toDrawnLayer mode wt folded
 
 /-- **Additive operands don't decide fixedness.** For a unit `u` whose multiplicative operands are all bound before its
