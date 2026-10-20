@@ -3,9 +3,10 @@ registered values committed in each port's own format (`registered.Registered.co
 opens each table row under its port's leaf schema, refusing a registration in another format, under another format's
 root or of another width. The statement is `test_lean_registered_reads.py`'s RoPE d64 one, composed with every row a bit
 row of its words' bits (`compose`'s `port_bits`) and cs segmented, and both input ports registered: x (unit i reads row
-i) as a `row/v2` value and cs (`cs_table`) as a `row-seg/v1` one. Composing the circuit takes about 30 s and each call
-sets it up, so the module is slow; it catches what `tests/test_registered.py` can't: the executable verifier's own
-checks of each format."""
+i) as a `row/v2` value and cs (`cs_table`) as a `row-seg/v1` one. A second circuit has both ports `row/v2` and reads
+two rows of one value a unit, one at each port (`one_value`), as H1's tile reads R rows of A. Composing a circuit takes
+about 30 s and each call sets it up, so the module is slow; it catches what `tests/test_registered.py` can't: the
+executable verifier's own checks of each format, and of several rows of one value a unit."""
 from __future__ import annotations
 
 import json
@@ -27,6 +28,8 @@ from test_lean_registered_reads import BIN, LEAN, POSITIONS, STATEMENT, TABLE_RO
 N = len(POSITIONS)
 WORDS = 64
 SCHEMAS = {"x": G.SCHEMA_V2, VALUE: G.SCHEMA_SEG}
+#: the one value both input ports read rows of (`one_value`)
+ROWS = "rope.rows"
 
 pytestmark = [pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain"), pytest.mark.slow]
 
@@ -68,14 +71,57 @@ def staged(tmp_path_factory):
     return st
 
 
+@pytest.fixture(scope="module")
+def one_value(tmp_path_factory):
+    """Two rows of one registered value a unit (H1's A, a tile's R rows at ports `a0 .. a{R-1}`): the circuit with x and
+    cs both `row/v2` rows, and one value `ROWS` of N + TABLE_ROWS rows whose row u unit u reads at x and row
+    N + POSITIONS[u] at cs, each port its own registered port of the value; the verifier's reads file and the honest
+    statement."""
+    from verity_numerical.bench import templates as TM
+    from verity_numerical.bench.generate import generate
+    from verity_numerical.bench.input_sets import InputSet
+
+    subprocess.run(["lake", "build", "flock-verify"], cwd=LEAN, check=True, capture_output=True)
+    d = tmp_path_factory.mktemp("registered-rows-of-one-value")
+    program, query = _program()
+    part = P.partition(program, query)
+    s = InputSet.open(generate(TM.rope_head(64), N, 20260928, d / "set")["path"])
+    text = FC.compose(FC.lowering_for_set(s), s.subcircuit, partition=P.digest(part), program=P.program_digest(program),
+                      statics=FC.set_statics(s), port_bits=[16 * WORDS, 16 * WORDS])
+    assert [tuple(r) for r in json.loads(text.split("\n", 2)[1][5:])["row_schemas"][:2]] == [(G.SCHEMA_V2, 1024)] * 2
+    (d / "circuit.txt").write_text(text)
+    (d / "program.json").write_bytes(canonical_json(encode_program(program)))
+    (d / "partition.json").write_text(json.dumps(part))
+    rng = np.random.default_rng(20261021)
+    prog, n = P.program_digest(program), N + TABLE_ROWS
+    regs = {name: G.Registered.commit(prog, value, rng.integers(0, 1 << 16, (n, WORDS)).tolist(), schema=G.SCHEMA_V2)
+            for name, value in (("rows", ROWS), ("again", ROWS), ("other", "other"))}
+    reads = {"x": list(range(N)), "cs": [N + p for p in POSITIONS]}
+    reg = regs["rows"]
+    port = {"value": ROWS, "root": reg.root.hex(), "leaves": n, "words": WORDS, "word_bits": 16,
+            "domain": reg.domain.domain_id.hex(), "row_schema": G.SCHEMA_V2}
+    own = {"format": G.READS, "ports": {p: {**port, "reads": r} for p, r in reads.items()}}
+    (d / "own.json").write_text(json.dumps(own))
+    st = SimpleNamespace(dir=d, text=text, regs=regs, reads=reads, own=own,
+                         bound=["--partition", str(d / "partition.json"), "--program", str(d / "program.json")])
+    st.public = _write(st, "honest", {p: (reg, r) for p, r in reads.items()})
+    return st
+
+
 def _stage(s, name: str, regs: dict | None = None) -> Path:
     """The statement whose x and cs tables are the registered rows each unit reads, under their registered salts and paths
     (`regs`: these registrations in place of the fixture's)."""
     regs = regs or s.regs
+    return _write(s, name, {"x": (regs["x"], range(N)), "cs": (regs[VALUE], POSITIONS)})
+
+
+def _write(s, name: str, reads: dict) -> Path:
+    """The statement whose table of each port is the rows of `reads[port]`'s registration at its positions, each unit
+    reading its own, under their registered salts and paths."""
     tabs, salts, entries, refs = {}, {}, {}, {}
-    for port, value, reads in (("x", "x", range(N)), ("cs", VALUE, POSITIONS)):
-        positions, refs[port] = G.table(reads)
-        rows, salts[port], entries[port] = regs[value].statement(positions)
+    for port, (reg, rows_read) in reads.items():
+        positions, refs[port] = G.table(rows_read)
+        rows, salts[port], entries[port] = reg.statement(positions)
         tabs[port] = np.asarray(rows, np.uint16)
     sub = json.loads(s.text.split("\n", 2)[1][5:]).get("subcircuit", "rope-head/d64/neox-bf16")
     inputs = SimpleNamespace(name="rope-registered-bit-rows", subcircuit=SimpleNamespace(id=sub))
@@ -86,8 +132,9 @@ def _stage(s, name: str, regs: dict | None = None) -> Path:
     return out
 
 
-def _statement(s, own: Path) -> tuple[int, str]:
-    args = [str(BIN), "statement", "--statement", STATEMENT, "--circuit", str(s.dir / "circuit.txt"), "--public", str(s.public)]
+def _statement(s, own: Path, public: Path | None = None) -> tuple[int, str]:
+    args = [str(BIN), "statement", "--statement", STATEMENT, "--circuit", str(s.dir / "circuit.txt"),
+            "--public", str(public or s.public)]
     p = subprocess.run(args + s.bound + ["--registered", str(own)], capture_output=True, text=True, check=False)
     return p.returncode, (p.stdout + p.stderr).strip()
 
@@ -151,3 +198,41 @@ def test_a_bit_row_registration_of_another_width_is_refused(staged):
             else:
                 assert code == 1 and f"port {port}'s rows are 1024 bits (64 u16 words), not {value}'s registered {want}" in out, \
                     (name, port, out)
+
+
+def test_two_rows_of_one_value_a_unit_are_accepted(one_value):
+    """Each unit reads two rows of the one value, row u at x and row N + POSITIONS[u] at cs: each port opens the value's
+    root at its own positions."""
+    code, out = _statement(one_value, one_value.dir / "own.json")
+    assert code == 0, out
+    root = one_value.regs["rows"].root.hex()
+    assert json.loads(out.splitlines()[0])["registered"] == {p: {"value": ROWS, "root": root} for p in ("x", "cs")}
+
+
+def test_a_row_at_the_wrong_index_is_refused(one_value):
+    """A row of the value at another index than the one the verifier's program reads for the unit at that port: the
+    verifier's reads shifted by one row, or the two ports' reads swapped (the honest statement, each of its rows still
+    opening the root at its stated position). The verifier checks its ports in name order, cs first."""
+    r = one_value.reads
+    for name, edit, want in (
+            ("own-shifted", lambda ps: ps["x"].update(reads=r["x"][1:] + r["x"][:1]),
+             "port x: unit 0 reads position 0, and the verifier's program reads 1"),
+            ("own-swapped", lambda ps: (ps["x"].update(reads=r["cs"]), ps["cs"].update(reads=r["x"])),
+             f"port cs: unit 0 reads position {N + POSITIONS[0]}, and the verifier's program reads 0")):
+        code, out = _statement(one_value, _own(one_value, name, edit))
+        assert code == 1 and want in out, (name, out)
+    swapped = _write(one_value, "swapped", {"x": (one_value.regs["rows"], r["cs"]), "cs": (one_value.regs["rows"], r["x"])})
+    code, out = _statement(one_value, one_value.dir / "own.json", swapped)
+    assert code == 1 and f"port cs: unit 0 reads position 0, and the verifier's program reads {N + POSITIONS[0]}" in out, out
+
+
+def test_a_row_of_another_value_is_refused(one_value):
+    """cs's rows from another commitment: another tree under the value's own name and domain opens another root, and
+    another value's rows are named as that value's."""
+    rows, again, other = (one_value.regs[k] for k in ("rows", "again", "other"))
+    for name, reg, want in (("again", again, f"port cs: table row 0 does not open {ROWS}'s registered root at position "
+                                                f"{N + POSITIONS[0]}"),
+                            ("other", other, f"port cs reads {ROWS}, not another value")):
+        public = _write(one_value, f"cs-{name}", {"x": (rows, one_value.reads["x"]), "cs": (reg, one_value.reads["cs"])})
+        code, out = _statement(one_value, one_value.dir / "own.json", public)
+        assert code == 1 and want in out, (name, out)
