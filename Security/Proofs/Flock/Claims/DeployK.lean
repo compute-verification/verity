@@ -597,7 +597,7 @@ theorem streams_size_plain (hs : Hashes Flock.V) {spec : SessionSpec} {sts : Arr
 
 /-- The column reader's plain proof shape is the verifier's (`shapeOf`) at the table's `fast100` schedule. -/
 theorem plainProofShape_eq {tab : Setup} {sch : Schedule} (h : Claims.Flock.plainSched tab.m = sch) (n : ℕ) :
-    Claims.Flock.plainProofShape tab.m tab.kLog (2 + n) tab.merkle.digestLen (saltLenOf false tab) =
+    Claims.Flock.plainProofShape tab.m tab.kLog (2 + n) tab.merkle.digestLen (saltLenOf false tab) tab.plainTag =
       shapeOf tab sch n := by
   subst h
   rfl
@@ -613,7 +613,7 @@ theorem queryRound_plain (hs : Hashes Flock.V) {spec : SessionSpec} {sts : Array
     ∃ (extras : Array Flock.Claim) (p : Proof) (rd : Round),
       tab.extra lv.points = .ok extras ∧
       decodeProof (Claims.Flock.plainProofShape tab.m tab.kLog (2 + extras.size) tab.merkle.digestLen
-        (saltLenOf false tab)) proofs[k]! = .ok p ∧
+        (saltLenOf false tab) tab.plainTag) proofs[k]! = .ok p ∧
       lv.streams[k][Claims.Flock.plainQueryRound tab.m tab.kLog (Claims.Flock.plainSched tab.m).k0
         (2 + extras.size)]? = some rd ∧
       rd.n = (Claims.Flock.plainLevel0 tab.m).q ∧
@@ -717,7 +717,7 @@ theorem runOf_queryRound_plain (hs : Hashes Flock.V) {s : Claims.Seen} {f : Fina
   · rw [hget]; exact hrd
   · show Claims.Flock.plainRepColsOf
         (Claims.Flock.plainProofShape (Setup.ofCircuit st).m (Setup.ofCircuit st).kLog (2 + extras.size)
-          (Setup.ofCircuit st).merkle.digestLen (saltLenOf false (Setup.ofCircuit st)))
+          (Setup.ofCircuit st).merkle.digestLen (saltLenOf false (Setup.ofCircuit st)) (Setup.ofCircuit st).plainTag)
         (lv.streams.getD j #[]) (f.proofs.getD j ByteArray.empty) =
       Claims.Flock.zkRepCols (Claims.Flock.plainLevel0 (Setup.ofCircuit st).m) rd.coins p.ligerito.initialProof.rows
     rw [hget, getD_empty f.proofs j]

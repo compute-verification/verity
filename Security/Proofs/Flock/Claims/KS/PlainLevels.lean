@@ -217,7 +217,7 @@ theorem plainLevels_verifyRepWith (hs : Hashes Flock.V) (spec : SessionSpec) (st
       st.extra sess.points = .ok extras ∧ decodeProof (shapeOf st sch extras.size) bytes = .ok p ∧
       ∀ ℓ, 1 ≤ ℓ → ℓ < sch.levels.size →
         plainLevelColsOf (Claims.Flock.plainProofShape st.m st.kLog (2 + extras.size) st.merkle.digestLen
-            (if st.merkle.saltBytes = 0 && !st.openedSalts then none else some st.merkle.saltBytes))
+            (if st.merkle.saltBytes = 0 && !st.openedSalts then none else some st.merkle.saltBytes) st.plainTag)
             stream.rounds bytes ℓ =
           Claims.Flock.zkRepCols (sch.levels.getD ℓ default)
             (stream.rounds[plainLevelRound st.m st.kLog sch.k0 (2 + extras.size) (sch.levels.size - 1) ℓ]!).coins
@@ -287,7 +287,8 @@ theorem plainLevels_verifyWithM (hs : Hashes Flock.V) (spec : SessionSpec) (tabs
           ∀ ℓ, 1 ≤ ℓ → ℓ < sch.levels.size →
             plainLevelColsOf (Claims.Flock.plainProofShape tabs[i].m tabs[i].kLog (2 + extras.size)
                 tabs[i].merkle.digestLen
-                (if tabs[i].merkle.saltBytes = 0 && !tabs[i].openedSalts then none else some tabs[i].merkle.saltBytes))
+                (if tabs[i].merkle.saltBytes = 0 && !tabs[i].openedSalts then none else some tabs[i].merkle.saltBytes)
+                tabs[i].plainTag)
                 stream.rounds proofs[2 * i + r]! ℓ =
               Claims.Flock.zkRepCols (sch.levels.getD ℓ default)
                 (stream.rounds[plainLevelRound tabs[i].m tabs[i].kLog sch.k0 (2 + extras.size)
@@ -347,10 +348,12 @@ theorem plain_levelClash {Ω : Type} {P : Claims.Prover Ω} {x : Claims.Msg} {ω
   obtain ⟨st, extras, hst, hext, rfl⟩ := runOf_eq hf hx hs hlv hrr
   obtain ⟨hk, ha, hb⟩ : k < 2 ∧
       (q, a) ∈ plainLevelColsOf (Claims.Flock.plainProofShape (Setup.ofCircuit st).m (Setup.ofCircuit st).kLog
-        (2 + extras.size) (Setup.ofCircuit st).merkle.digestLen (saltLenOf false (Setup.ofCircuit st)))
+        (2 + extras.size) (Setup.ofCircuit st).merkle.digestLen (saltLenOf false (Setup.ofCircuit st))
+          (Setup.ofCircuit st).plainTag)
         (lv.streams.getD k #[]) (f.proofs.getD k ByteArray.empty) ℓ ∧
       (q, b) ∈ plainLevelColsOf (Claims.Flock.plainProofShape (Setup.ofCircuit st).m (Setup.ofCircuit st).kLog
-        (2 + extras.size) (Setup.ofCircuit st).merkle.digestLen (saltLenOf false (Setup.ofCircuit st)))
+        (2 + extras.size) (Setup.ofCircuit st).merkle.digestLen (saltLenOf false (Setup.ofCircuit st))
+          (Setup.ofCircuit st).plainTag)
         (lv.streams.getD k #[]) (f.proofs.getD k ByteArray.empty) ℓ := by
     rcases k with _ | _ | k
     · exact ⟨by omega, ha, hb⟩
@@ -384,7 +387,8 @@ theorem plain_levelClash {Ω : Type} {P : Claims.Prover Ω} {x : Claims.Msg} {ω
   subst hys
   have hcoins := forall₂_coins (fun _ _ hab => hab.2.1) hfa
   have hsched : (Claims.Flock.plainProofShape (Setup.ofCircuit st).m (Setup.ofCircuit st).kLog (2 + extras.size)
-      (Setup.ofCircuit st).merkle.digestLen (saltLenOf false (Setup.ofCircuit st))).sched = sch := by
+      (Setup.ofCircuit st).merkle.digestLen (saltLenOf false (Setup.ofCircuit st)) (Setup.ofCircuit st).plainTag).sched =
+      sch := by
     simp only [Claims.Flock.plainProofShape, Claims.Flock.plainSched, hsch]
     rfl
   have hℓ : 1 ≤ ℓ ∧ ℓ < sch.levels.size := by
@@ -393,7 +397,8 @@ theorem plain_levelClash {Ω : Type} {P : Claims.Prover Ω} {x : Claims.Msg} {ω
     simp at ha
   obtain ⟨hent, hmc⟩ := hlev ℓ hℓ.1 hℓ.2
   have hcolsEq : plainLevelColsOf (Claims.Flock.plainProofShape (Setup.ofCircuit st).m (Setup.ofCircuit st).kLog
-      (2 + extras.size) (Setup.ofCircuit st).merkle.digestLen (saltLenOf false (Setup.ofCircuit st)))
+      (2 + extras.size) (Setup.ofCircuit st).merkle.digestLen (saltLenOf false (Setup.ofCircuit st))
+      (Setup.ofCircuit st).plainTag)
       (lv.streams.getD k #[]) (f.proofs.getD k ByteArray.empty) ℓ =
       Claims.Flock.zkRepCols (sch.levels.getD ℓ default)
         (y.rounds[plainLevelRound (Setup.ofCircuit st).m (Setup.ofCircuit st).kLog sch.k0 (2 + extras.size)

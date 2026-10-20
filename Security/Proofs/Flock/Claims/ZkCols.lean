@@ -72,6 +72,8 @@ structure ZkRun where
   hashLen : ℕ
   saltLen : Option ℕ
   reps : List (Array Flock.Round × ByteArray)
+  /-- the plain files' form (`Setup.plainTag`); the masked files have one form -/
+  plainTag : Bool := true
 
 /-- The run's proof shape. -/
 def ZkRun.shape (r : ZkRun) : Flock.Shape := zkProofShape r.m r.kLog r.claims r.hashLen r.saltLen
