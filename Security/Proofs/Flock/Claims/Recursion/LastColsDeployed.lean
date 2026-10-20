@@ -130,7 +130,8 @@ theorem streams_sizes_plain (hs : Hashes Flock.V) {spec : SessionSpec} {sts : Ar
   refine List.ext_getElem (by simp [hsz]) fun i h₁ h₂ => ?_
   have hi : i < lv.streams.size := by simpa using h₁
   simp only [List.getElem_map, List.getElem_range, Array.getElem_toList]
-  rw [← hall i hi, List.length_map, Array.length_toList]
+  rw [← hall i hi]
+  simp only [List.length_map, Array.length_toList]
 
 /-- **Two accepted plain records of one session under custody of the same round messages carry the same coins, stream
 by stream**, whatever hashes each verdict ran with. -/
@@ -164,9 +165,9 @@ theorem coins_at {S S' : Array (Array Round)}
         Array.getElem?_eq_getElem hj'] at e
       exact Option.some.inj e
     have hi : (S[j].toList.map Round.coins)[i]? = some rd.coins := by
-      rw [List.getElem?_map, Array.getElem?_toList, h] <;> rfl
+      rw [List.getElem?_map, Array.getElem?_toList, h]; rfl
     have hi' : (S'[j].toList.map Round.coins)[i]? = some rd'.coins := by
-      rw [List.getElem?_map, Array.getElem?_toList, h'] <;> rfl
+      rw [List.getElem?_map, Array.getElem?_toList, h']; rfl
     rw [hrow, hi'] at hi
     exact (Option.some.inj hi).symm
   · have e₁ : S.getD j #[] = #[] := by simp [Array.getD, hj]
@@ -230,7 +231,7 @@ theorem cols_eq_raw {seen : Claims.Seen} {st : Stmt} {extras : Array Flock.Claim
       Claims.Flock.distinctBelow (Claims.Flock.plainLevel0 (Setup.ofCircuit st).m).d (plainRawCols seen) := by
   unfold cols plainRawCols
   rw [h]
-  simp only [Bool.false_eq_true, ↓reduceIte, Claims.Flock.plainRunCols, plainRun0] <;> rfl
+  simp only [Bool.false_eq_true, ↓reduceIte, Claims.Flock.plainRunCols, plainRun0]
 
 theorem rawCols_eq {seen : Claims.Seen} {st : Stmt} {extras : Array Flock.Claim} {lv : Live} {f : Final}
     (h : runOf false seen 0 = some (plainRun0 st extras lv f)) :
@@ -241,7 +242,7 @@ theorem rawCols_eq {seen : Claims.Seen} {st : Stmt} {extras : Array Flock.Claim}
           (f.proofs.getD 1 ByteArray.empty) := by
   unfold plainRawCols
   rw [h]
-  simp only [plainRun0, List.flatMap_cons, List.flatMap_nil, List.append_nil] <;> rfl
+  simp only [plainRun0, List.flatMap_cons, List.flatMap_nil, List.append_nil]
 
 /-- **Two accepted plain records whose rep streams carry the same coins open table 0 at the same positions**: each
 rep queries level 0 at its query round's coins, and its Merkle check passes there with one row per position. -/
@@ -442,8 +443,8 @@ theorem plain_cols_tied {x : Claims.Msg} {ms : List Claims.Msg} {l l' : Claims.M
     intro l₀
     unfold RecDeploy.plainView
     exact List.map_fst_zip (by
-      simp only [List.length_append, List.length_cons, List.length_singleton, List.length_map,
-        List.length_dropLast, hc] <;> omega)
+      simp only [List.length_append, List.length_cons, List.length_map, List.length_dropLast, hc]
+      omega)
   have hf₁ : lastFinal (RecDeploy.plainView (b :: ms'' ++ [l]) cs) = some f := by
     have h := act_decide_final hact
     rw [← hmsg l, List.getLast?_map, Option.bind_map] at h
