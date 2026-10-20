@@ -22,11 +22,11 @@ The witness is an honest window on any finite coins `Ω`, generic in the rounds 
   when every leaf is in them. Binding and soundness hold at `δ_bind = δ_ZK = 0`.
 
 `Premises` is the statements' hypotheses but the g1 premise, as one conjunction, and `bound_of_premises` feeds it to
-`sm120SheetHeadline_bind`. `honest_premises` proves it at that window, for any `v` in H1's ranges.
-`sm120FpG1_honest` and `sm120W4a8G1_honest` add the g1 premise at the honest encoders' leaves (`encodeFp8`, `encodeW4a8`), which are g1's on H1's grids and so in
-H1's ranges (`Leaves.fp8_inH1`, `Leaves.w4a8_inH1`): every premise of each statement holds there, and
-`sm120FpG1_honest_applies` and `sm120W4a8G1_honest_applies` feed them to the statements. The honest window is accepted
-on every path, its time exactly the credit (`honest_accepted`, `honestRun_time`).
+`sm120SheetHeadline_bind`. `honest_premises` proves it at that window, for any `v` in H1's ranges. `sm120FpG1_honest`
+and `sm120W4a8G1_honest` add the g1 premise at the honest encoders' leaves (`encodeFp8`, `encodeW4a8`), which are g1's
+on H1's grids and so in H1's ranges (`Leaves.fp8_inH1`, `Leaves.w4a8_inH1`): every premise of each statement holds
+there, and `sm120FpG1_honest_applies` and `sm120W4a8G1_honest_applies` feed them to the statements. The honest window
+is accepted on every path, its time exactly the credit (`honest_accepted`, `honestRun_time`).
 
 `offGrid_premises`: at `Pouw.FpG1.offGrid`'s leaves, in H1's ranges but off E4M3's grid, the other premises all hold
 and FP8-g1's fails (`offGrid_not_fp8`), so the other premises don't imply the g1 premise.
