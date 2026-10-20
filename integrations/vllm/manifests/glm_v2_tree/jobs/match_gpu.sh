@@ -1,12 +1,12 @@
 #!/usr/bin/env bash
-# A v2 row's Match GPU legs (MATCH_PHASE=gpu: the capture and the control) on vy-glm53-eu or vy-glm53-h8, from this tree; no Build
+# A v2 row's Match GPU legs (MATCH_PHASE=gpu: the capture and the control) on an 8x H200 node (gpu_batch.sh), from this tree; no Build
 # needed.  The legs take the node's lease themselves (gpu-lease 8 --wait, around each leg) once every GPU reads 0 MiB and no
 # preemptible lease is held: queued behind the batch's other GPU jobs, never preempting.  A match/ with no gpu_legs.json is an
 # evicted job's and is moved aside (match.evicted-*); one whose legs ended is refused.  After the legs, with no lease, the job
 # records each engine's gpu_memory_utilization read back from its vllm_config, the driver's and each rank's (the control, with no
 # observer, the driver's alone; $OUT/gpu_memory_utilization.json; exit 12 unless every one is GPU_UTIL), and hashes match/ and $SW/$ROW.tree (REF@SHA: every job of the row refuses another tree) into
 # $OUT/match.sha256 (paths relative to $SW) for the copy to the CPU node that runs the Match's CPU phase (README "GPU batch").
-#   research run --on vy-glm53-eu --gpu-host --mem-gb 400 --timeout 3h --cwd source --project verity -- env ROW=... bash integrations/vllm/manifests/glm_v2_tree/jobs/match_gpu.sh
+#   research run --on vy-glm53-eu --mem-gb 400 --timeout 3h --source . --cwd source --project verity -- env ROW=... bash integrations/vllm/manifests/glm_v2_tree/jobs/match_gpu.sh
 # env: ROW, [SW=/workspace/cp/circuits/glm-v2/rows], [REF=cursor/glm-v2-21f3].
 set -uo pipefail
 : "${ROW:?ROW}"

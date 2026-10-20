@@ -58,7 +58,7 @@ Every script is in `jobs/` and runs from this tree's pushed head, `--cwd source`
 `/workspace/cp/circuits/glm-v2/rows/<row>` on each node it visits, because the Commit's replay reads its Build and required
 manifest at the paths the Commit recorded. `/workspace/fs` is not shared between vy-glm53-eu and the CPU nodes, so row dirs move
 with `copy_rowdir.sh SRC DST LIST.sha256`: tar streams through the VM, every file then checked against the list the source job
-wrote (T1's B1 legs: 104 GB, 1.1M files, about 11 min). The GPU jobs are submitted by `gpu_batch.sh a [NODE]` and `gpu_batch.sh b ROWS.env`;
+wrote (T1's B1 legs: 104 GB, 1.1M files, about 11 min). The GPU jobs are submitted by `gpu_batch.sh a [NODE]` and `gpu_batch.sh b ROWS.env [NODE]`;
 each waits for its GPUs on its node's lease, so a window runs back to back. eu is held only for a window: the lease, and the node, are
 released where a CPU phase sits between (CIR-51).
 
@@ -82,9 +82,10 @@ worktree at a commit the guard accepts (`git worktree add /tmp/glm-v2-SHA SHA`).
    `TRACE_RUN=<that run>` compares it; a trace restarted wider (`BUILD_JOBS=N`) takes `SEED_FROM=<the earlier row dir>`, whose
    finished derives are hard-linked in after `seed_trace.py` checks each (its `.rc`, result.json, whole files, descriptor
    digests).
-2. Window A, eu or h8 (`gpu_batch.sh a [NODE] [ROW]`, NODE vy-glm53-eu by default or vy-glm53-h8): the four rows' Match GPU legs
-   (`match_gpu.sh`). h8 is preemptible, so it takes window A only, never a Commit; an evicted leg reruns with
-   `gpu_batch.sh a vy-glm53-h8 ROW`, which moves the evicted `match/` aside (a `match/` whose legs ended is refused). Each leg's
+2. Window A (`gpu_batch.sh a [NODE] [ROW]`, NODE vy-glm53-eu by default, vy-glm53-h8 or any vy-glm53-* 8x H200 node): the four
+   rows' Match GPU legs (`match_gpu.sh`), in value order (B1 greedy, B8 greedy, B8 stochastic, B32) so a short window lands the
+   most. On a preemptible node an evicted leg reruns with `gpu_batch.sh a NODE ROW`, which moves the evicted `match/` aside (a
+   `match/` whose legs ended is refused). Each leg's
    engines read `gpu_memory_utilization` back from their `vllm_config`, the driver and each rank (the no-observer control: the
    driver alone; `$OUT/gpu_memory_utilization.json`: 0.92, vLLM's default, exit 12 otherwise). They need no Build, so nothing
    is copied to the node first: the capture's `--build-rank` registers a Build's
@@ -95,9 +96,16 @@ worktree at a commit the guard accepts (`git worktree add /tmp/glm-v2-SHA SHA`).
    on eu first; `gpu_batch.sh t1r` (`cap_bf16_v6.sh`, then the G2 point) runs them only if those did not hold. Stop eu.
 3. CPU: each row's legs copied from window A's node to the Build's (`copy_rowdir.sh vy-glm53-h8 vy-glm53-cpu-2 match.sha256`,
    or `vy-glm53-eu`), then `match_cpu.sh` (MATCH_PHASE=cpu, `--build-run`
-   the Build of record, `--send match.sha256`); then the row dir (its `rowdir.sha256` and the Match's files) copied to eu.
-4. Window B, eu (`gpu_batch.sh b ROWS.env`): each row's Commit (`commit.sh`: rows-sha512 under `verity/tp-run-root/v2`,
-   PENDING by design), its bundles and row records preserved in the store. Stop eu. It commits against the Build of record in
+   the Build of record, `--send match.sha256`); then the row dir (its `rowdir.sha256` and the Match's files) copied to window B's
+   node.
+4. Window B (`gpu_batch.sh b ROWS.env [NODE] [ROW]`, NODE vy-glm53-eu by default, or a preemptible 8x H200 node: vy-glm53-h8 or
+   another): each row's Commit (`commit.sh`: rows-sha512 under `verity/tp-run-root/v2`, PENDING by design), in value order
+   whatever ROWS.env's order, its bundles and row records preserved in the store. Stop the node. An eviction fails the
+   Commit's run, which is published as failed, and that row's Commit reruns whole (`gpu_batch.sh b ROWS.env NODE ROW`) from a
+   new commitment with new draws: the unfinished `commit/` and `commit.log` are moved aside (`commit.failed-*`), never resumed.
+   Every attempt is a line of the row dir's `commit_attempts.jsonl` (run, node, tree, start, what it moved aside), which the
+   row's `_rowmeta` and the Commit's outputs carry, and its number is in the bundles' meta; a Commit rerun on another node
+   takes that file with the row dir. It commits against the Build of record in
    the same row dir, since publish refuses a Commit whose required manifest or per-rank Programs are not that Build's. Its modes
    are B1's Commit r20261019-074856-7c3a's and B8's r20261019-091846-1452's: REPLAY_DEFERRED=1, RETAIN=host (the default, not
    the G2 curve's `--retain none`) and PAIRS=1. Deferred, each rank's bundle `store/` holds its retained bytes, so the committed
@@ -112,6 +120,20 @@ worktree at a commit the guard accepts (`git worktree add /tmp/glm-v2-SHA SHA`).
    about 70 min at about 265 GB (B8 greedy, r20261019-123645-e69d: 8 ranks in 9 h in one job), so a row runs two `RANKS=` jobs
    side by side and then one without `RANKS` that publishes. `rejudge` of the decided Commit passed on that replay; on a
    PENDING Commit it reports `ranks` and `verdict` as FAIL, so it runs only after the replay.
+
+On a node that is not one of circuits' Nebius H200 VMs (a RunPod 8x H200 as vy-glm53-rp1), the windows run the same way with
+NODE as the parameter, but the GPU jobs assume what those VMs have:
+
+- a research machine of project `verity` (`research pods register`; `research run --on` refuses an unlisted one), runs root
+  `/workspace/research`;
+- `/usr/local/bin/gpu-lease` and `nvidia-smi`: `match_gpu.sh` and `commit.sh` wrap the lease (every GPU at 0 MiB, no
+  preemptible lease held). With no user systemd (a container), gpu-lease runs its command without a memory cap and says so;
+- `/workspace/cp/venv312` (vLLM and the pipeline's Python), `/workspace/cp/hf` (GLM-5.3's snapshot at `REV`), `/usr/local/cuda`;
+- the checkpoint read through the HF snapshot from `/workspace/fs/glm53/$REV`, the Nebius shared filesystem, or a verified copy at
+  `/workspace/cp/glm53-ckpt/$REV` bound over it with `sudo -n mount --bind` (a container may have neither sudo nor the mount
+  capability: the shards then sit at `/workspace/fs/glm53/$REV` themselves);
+- row dirs at `/workspace/cp/circuits/glm-v2/rows/<row>`, the path the Commit records and its replay reads, with room for a
+  row's Build of record, legs and bundles (B1's legs alone: 104 GB), and `/tmp` for the jobs' scratch.
 
 GPU time (wall of the GPU job, which holds all 8 GPUs but for the capture):
 
