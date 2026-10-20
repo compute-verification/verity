@@ -34,6 +34,14 @@ case " $* " in *dither-a-kh*)
   grep -B1 -A2 "h1u_ws\|h1s_noise" "$OUT/build-h1u.log" | grep -i "registers\|spill" | head -6
   export HB_H1U=$S/h1u.so ;;
 esac
+# dither-a-hbk's: the K split's kh_one (H1U_KSPLIT = 4, H1K_AUTO), as job.sh's ka variant (HB_H1U_KSPLIT)
+case " $* " in *dither-a-hbk*)
+  nvcc -O3 -std=c++17 --expt-relaxed-constexpr -gencode arch=compute_120a,code=sm_120a -Xptxas -v -Xcompiler -fPIC -shared \
+    -DH1U_KSPLIT=4 -DH1K_AUTO=1 -o "$S/h1u_ka.so" benchmarks/hash/dither/h1u.cu > "$OUT/build-h1u_ka.log" 2>&1 \
+    || { echo "sbench: NVCC_FAIL h1u_ka"; grep -v "^ptxas info" "$OUT/build-h1u_ka.log" | tail -30; exit 11; }
+  grep -B1 -A2 "h1k" "$OUT/build-h1u_ka.log" | grep -i "registers\|spill" | head -6
+  export HB_H1U_KSPLIT=$S/h1u_ka.so ;;
+esac
 [ -n "${BUILD_ONLY:-}" ] && { echo "sbench: built (BUILD_ONLY)"; exit 0; }
 export DITHER_H1C=$S/libh1c.so DITHER_H1F=$S/libh1f.so DITHER_H1O=$S/libh1o.so VLLM_DISABLE_COMPILE_CACHE=1
 # SBENCH_PICK pins Inductor's autotune picks (picks.py); the node's shared Inductor cache would hand back another run's
