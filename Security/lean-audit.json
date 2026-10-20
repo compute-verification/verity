@@ -1207,6 +1207,34 @@
   "Verity.Declaration.Contains": {
    "owner": "@lean",
    "digest": "2e4651003538493bac63ae90c32a521e95d2e8596bea6b3c85b9cfd150c5647b"
+  },
+  "Accounting.TS.ReceiptGame.CondReceiptLuck": {
+   "owner": "@compute-accounting",
+   "digest": "4d6a2e9169250dc3be6a7303e25e7765d0d48a57b536298487c6e19b922dcba5"
+  },
+  "Nci.Small": {
+   "owner": "@lean",
+   "digest": "e26bc2309132d5947568f97a601841bafc0dbd669c72759ef80e422ae0f74fa7"
+  },
+  "Nci.SmallInfo": {
+   "owner": "@lean",
+   "digest": "689dc56b30c2f9189e985d5b7e7d9cd090a125b182a7a2e50b45efba7ea4e090"
+  },
+  "Nci.Threading.Sources.FanOutBound": {
+   "owner": "@lean",
+   "digest": "d364a5a88c81d44574549cda1c4eb8bf4e2663c6977243390d873b9e985e8408"
+  },
+  "Nci.Threading.Sources.OffFresh": {
+   "owner": "@lean",
+   "digest": "8b560cf7102de1dd61ff88825bca7bb78d7cff0711eb138e29a3b41226027e15"
+  },
+  "Nci.Threading.Threaded": {
+   "owner": "@lean",
+   "digest": "330e7d987d1e438395ab65211a1f71ecd87c2bebdc0bb612c064d787c6280311"
+  },
+  "Nci.Threading.ThreadedInfo": {
+   "owner": "@lean",
+   "digest": "2ece3e35e0337bc7a3514c2b3a7f7fe63f0f531e067a91178f84509082f600b9"
   }
  },
  "meaning": [
