@@ -84,7 +84,6 @@ clashes of two runs: a registrant fork, a round fork, a session fork, an inner f
 with candidate 3's error. -/
 theorem zk_sessions_recursive_fork_reg {nT r : ℕ} (T : Fin nT → Type) (CT : Fin r → Type) [∀ k, Fintype (CT k)]
     [∀ k, Nonempty (CT k)] {st : Flock.Stmt} (hp : HoloParams) (_hcls : ClassOk (shapeOf st))
-    (_hA3 : ∀ j, Assumptions.UniformRandomBytes (Vs j).law.Lb (Vs j).law.src)
     (zs : Reg → L.Ω → List (Cm × (holoInnerAt T CT st hp).Coin) → Reg₂ → (j : Fin S) → (Vs j).Outer Reg')
     (dg : ByteArray → ByteArray) (N : ℕ)
     {k Rw M : ℕ} (_hk : 1 ≤ k) (_hRw : 1 ≤ Rw) (_hM : 1 ≤ M) {ρ : ℝ} (_hρ : ρ < 1)
@@ -109,7 +108,7 @@ theorem zk_sessions_recursive_fork_reg {nT r : ℕ} (T : Fin nT → Type) (CT : 
           ((holoInnerAt T CT st hp).r : ℝ≥0∞) * expAt σ (fun ω t s => sumV (zs σ.1 ω t) dg N
             (fun R₂ j τ => (zs σ.1 ω t R₂ j).slackCR dg N k Rw M ρ τ) s) +
           ENNReal.ofReal (holoError (holoAt st hp)) :=
-  zk_sessions_recursive_fork_innerL _hA3 zs dg N _hk _hRw _hM _hρ _hr σ _ wmsg Sk cmt msg _hbr Refine.H512 _
+  zk_sessions_recursive_fork_innerL zs dg N _hk _hRw _hM _hρ _hr σ _ wmsg Sk cmt msg _hbr Refine.H512 _
     (Nat.succ_pos r) (innerAtLeavesL_reg T CT hp _hcls zs dg N k Rw σ wmsg cap)
 
 /-- **Gap 2 at the word the prover's runs open, off a value the verifier registers itself**: `zk_sessions_recursive_fork_reg`
@@ -119,7 +118,6 @@ leaves', the held salts' and the held top's finders finding a collision four mor
 (`zk_sessions_recursive_fork_innerLV`). -/
 theorem zk_sessions_recursive_fork_regV {nT r : ℕ} (T : Fin nT → Type) (CT : Fin r → Type) [∀ k, Fintype (CT k)]
     [∀ k, Nonempty (CT k)] {st : Flock.Stmt} (hp : HoloParams) (_hcls : ClassOk (shapeOf st))
-    (_hA3 : ∀ j, Assumptions.UniformRandomBytes (Vs j).law.Lb (Vs j).law.src)
     (zs : Reg → L.Ω → List (Cm × (holoInnerAt T CT st hp).Coin) → Reg₂ → (j : Fin S) → (Vs j).Outer Reg')
     (vsrc : ValueSrc L Reg Cm Reg₂ (holoInnerAt T CT st hp) Vs) (dg : ByteArray → ByteArray) (N : ℕ)
     {k Rw M : ℕ} (_hk : 1 ≤ k) (_hRw : 1 ≤ Rw) (_hM : 1 ≤ M) {ρ : ℝ} (_hρ : ρ < 1)
@@ -151,7 +149,7 @@ theorem zk_sessions_recursive_fork_regV {nT r : ℕ} (T : Fin nT → Type) (CT :
           ((holoInnerAt T CT st hp).r : ℝ≥0∞) * expAt σ (fun ω t s => sumV (zs σ.1 ω t) dg N
             (fun R₂ j τ => (zs σ.1 ω t R₂ j).slackCR dg N k Rw M ρ τ) s) +
           ENNReal.ofReal (holoError (holoAt st hp)) :=
-  zk_sessions_recursive_fork_innerLV _hA3 zs vsrc (holoAt st hp).rsch.sch.level₀ cap salt wr st reg bcs' hstk dg N
+  zk_sessions_recursive_fork_innerLV zs vsrc (holoAt st hp).rsch.sch.level₀ cap salt wr st reg bcs' hstk dg N
     _hk _hRw _hM _hρ _hr σ _ wmsg Sk cmt msg _hbr Refine.H512 _
     (Nat.succ_pos r) (innerAtLeavesL_reg T CT hp _hcls zs dg N k Rw σ wmsg cap)
 
@@ -163,7 +161,6 @@ reads it at the registered typing `hp.τ`, which `_hbr`'s `τv` is wherever chec
 theorem zk_sessions_recursive_fork_regVτ {nT r : ℕ} (T : Fin nT → Type) (CT : Fin r → Type) [∀ k, Fintype (CT k)]
     [∀ k, Nonempty (CT k)] {st : Flock.Stmt} (hp : HoloParams) (τv : Fin (2 ^ hp.sLog) → Fin (2 ^ hp.tLog))
     (_hcls : ClassOk (shapeOf st))
-    (_hA3 : ∀ j, Assumptions.UniformRandomBytes (Vs j).law.Lb (Vs j).law.src)
     (zs : Reg → L.Ω → List (Cm × (holoInnerAtτ T CT st hp τv).Coin) → Reg₂ → (j : Fin S) → (Vs j).Outer Reg')
     (vsrc : ValueSrc L Reg Cm Reg₂ (holoInnerAtτ T CT st hp τv) Vs) (lv : FlockSoundness.Accounting.Level)
     (dg : ByteArray → ByteArray) (N : ℕ)
@@ -197,7 +194,7 @@ theorem zk_sessions_recursive_fork_regVτ {nT r : ℕ} (T : Fin nT → Type) (CT
           ((holoInnerAtτ T CT st hp τv).r : ℝ≥0∞) * expAt σ (fun ω t s => sumV (zs σ.1 ω t) dg N
             (fun R₂ j τ => (zs σ.1 ω t R₂ j).slackCR dg N k Rw M ρ τ) s) +
           ENNReal.ofReal (holoError (holoAt st hp)) :=
-  zk_sessions_recursive_fork_innerLV _hA3 zs vsrc lv cap salt wr st reg bcs' hstk dg N _hk _hRw _hM _hρ _hr σ _
+  zk_sessions_recursive_fork_innerLV zs vsrc lv cap salt wr st reg bcs' hstk dg N _hk _hRw _hM _hρ _hr σ _
     wmsg Sk cmt msg _hbr Refine.H512 _
     (Nat.succ_pos r) (innerAtLeavesL_regτ T CT hp τv _hcls zs dg N k Rw σ wmsg cap)
 

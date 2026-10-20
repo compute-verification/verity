@@ -147,6 +147,15 @@ class Datacenter:
         """The links with exactly one end in a block, or with ends in two blocks."""
         return [l for l in self.links if self.block_of(l.a) is not self.block_of(l.b)]
 
+    def uncovered_links(self) -> list[Link]:
+        """The links outside every block with no trusted device at either end (a switch-to-switch fabric link, an outside
+        host's link to a switch), where two machines the auditor doesn't control meet with no certifier between them.
+        The network certifiers cover every link when this is empty."""
+        devices = self.devices
+        inside = lambda l: self.block_of(l.a) is not None and self.block_of(l.a) is self.block_of(l.b)  # noqa: E731
+        return [l for l in self.links if not inside(l)
+                and not any(devices[e].trusted for e in (l.a, l.b) if e in devices)]
+
     def port(self, a: str, b: str) -> Port | None:
         """The certifier port a hop from device `a` to device `b` passes, if the hop crosses a boundary at a certifier."""
         devices = self.devices
