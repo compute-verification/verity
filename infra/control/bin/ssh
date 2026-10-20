@@ -1,0 +1,4 @@
+#!/bin/sh
+# ssh for the watchers' loops (watchers.toml puts this directory first on their PATH): the node aliases agent VMs have (n1, n2,
+# cpu1..cpu3) and the RunPod key, which the Nebius VMs accept, from watchers_ssh_config beside it
+exec /usr/bin/ssh -F "$(dirname "$0")/../watchers_ssh_config" "$@"

@@ -704,7 +704,7 @@ def test_failed_login_session_scopes_are_one_incident_spanning_them():
 
 # ---- relay-side ----------------------------------------------------------------------------------------------------------------
 
-def test_drift_is_one_incident_per_node_and_kind_and_an_unreadable_node_fails_the_check():
+def test_drift_is_one_incident_per_node_and_kind_and_an_unreadable_node_fails_the_check_but_a_stopped_one_is_skipped():
     rep = {"vy-nebius-1": {"commit": "c", "strays": ["/usr/local/bin/vy-old.bak-1"], "entries": [
         {"path": "/a", "state": "stale", "restart": None}, {"path": "/b", "state": "stale", "restart": None},
         {"path": "/c", "state": "ok", "restart": "a process started before"}, {"path": "/t/x", "state": "missing", "tree": "/t", "restart": None}]}}
@@ -713,17 +713,26 @@ def test_drift_is_one_incident_per_node_and_kind_and_an_unreadable_node_fails_th
     assert set(got) == {"vy-nebius-1:stale", "vy-nebius-1:restart", "vy-nebius-1:stray"} and "2 stale" in got["vy-nebius-1:stale"]
     with pytest.raises(RuntimeError, match="vy-nebius-2"):
         M.deploy_drift(M.Ctx(now=T0, run=Run((has("drift"), (1, json.dumps({**rep, "vy-nebius-2": {"error": "ssh"}}), "")))))
+    stopped = {"vy-glm53-eu": {"error": "probe failed (exit 255): ssh: connect to host h port 22: timed out", "unreachable": True}}
+    run = Run((has("drift"), (1, json.dumps({**rep, **stopped}), "")))
+    assert {f.key for f in M.deploy_drift(M.Ctx(now=T0, run=run))} == set(got)
+    with pytest.raises(RuntimeError, match="vy-glm53-eu"):
+        M.deploy_drift(M.Ctx(now=T0, run=Run((has("drift"), (1, json.dumps(stopped), "")))))
 
 
-def test_unpreserved_asks_for_runs_over_30_minutes_old_and_says_when_the_flag_is_missing():
-    rep = {"schema": "research/pods-unpreserved/v0.1", "unpreserved": ["a1", {"id": "a2"}, "a3", "a4"]}
-    run = Run((has("vy-nebius-1"), (1, json.dumps(rep), "")), (has("vy-nebius-2"), (0, json.dumps({"unpreserved": []}), "")))
-    (f,) = M.unpreserved(M.Ctx(now=T0, run=run))
-    assert f.key == "vy-nebius-1" and "4 runs" in f.text and "a1, a2, a3 and 1 more" in f.text
-    assert ["--older-min", "30", "--json"] == run.calls[0][0][-3:]
-    old = Run((has("unpreserved"), (2, "", "research: error: unrecognized arguments: --older-min 30")))
-    with pytest.raises(RuntimeError, match="node-custody-unit"):
-        M.unpreserved(M.Ctx(now=T0, run=old))
+def test_a_retired_monitors_open_incident_is_cleared_once_with_why_it_retired(tmp_path):
+    assert "unpreserved" in M.RETIRED and "unpreserved" not in {m.id for m in M.MONITORS}
+    state = M.new_state()
+    state["open"]["unpreserved|unreadable"] = {"monitor": "unpreserved", "since": "2026-10-19T22:00:00Z", "owners": ["infra"],
+                                               "severity": "warn", "text": "*Monitor `unpreserved` can't read its input*",
+                                               "cleared": "*Cleared:* monitor `unpreserved` reads its input again."}
+    state["monitors"]["unpreserved"] = {"since": T0 - 9000, "error": "RuntimeError: exited 2"}
+    m = mon(lambda ctx: [])
+    (ev,) = M.step(state, [m], lambda memo: M.Ctx(now=T0, memo=memo), T0, M.AlertDir(tmp_path), by="test")
+    assert (ev["event"], ev["key"], ev["since"]) == ("clear", "unpreserved|unreadable", "2026-10-19T22:00:00Z")
+    assert "is retired" in ev["text"] and "disk-n1" in ev["text"] and state["open"] == {}
+    assert "unpreserved" not in state["monitors"], "a retired monitor's error isn't reported as failing"
+    assert M.step(state, [m], lambda memo: M.Ctx(now=T0 + 60, memo=memo), T0 + 60, M.AlertDir(tmp_path), by="test") == []
 
 
 def test_an_unanswered_ask_goes_to_whoever_it_asked():
@@ -809,6 +818,32 @@ def test_the_relay_posts_what_is_still_open_first_then_each_new_event_once_with_
     M.relay_pass(rstate, [src], post, T0)
     assert posts[1:] == [("clear", "m|b", "ts-m|b"), ("event", "m|e", None)]
     assert M.relay_pass(rstate, [src], post, T0) == 0 and rstate["sources"]["node1"]["lines"] == 8
+
+
+def test_a_seeded_relay_records_what_is_open_as_posted_and_then_posts_only_new_events(tmp_path, monkeypatch):
+    """`relay --seed`: the relay taking over from another posts nothing on its first pass (19 Oct: a fresh relay on the control pod
+    would have posted 65 open incidents and rung five lanes again)."""
+    lines = {"node1": [ev("open", "m|a"), ev("open", "m|b")], "relay": [ev("open", "asks|1")]}
+
+    class Src(FakeSource):
+        def __init__(self, name, path, host=None):
+            super().__init__(name, lines.get(name, []))
+
+    def no_slack(dry):
+        raise AssertionError("a seeding pass reaches no Slack client")
+
+    monkeypatch.setattr(M, "Source", Src)
+    monkeypatch.setattr(M, "run_once", lambda *a: ())
+    monkeypatch.setattr(M, "slack_post", no_slack)
+    posts = tmp_path / "posts.json"
+    assert M.main(["relay", "--by", "t", "--posts", str(posts), "--state", str(tmp_path / "s.json"),
+                   "--alerts", str(tmp_path / "alerts"), "--seed"]) == 0
+    rstate = json.loads(posts.read_text())
+    assert rstate["sources"]["node1"]["lines"] == 2 and rstate["sources"]["relay"]["lines"] == 1
+    sent = []
+    lines["node1"].append(ev("open", "m|c"))
+    assert M.relay_pass(rstate, [Src("node1", "/x"), Src("relay", "/x")], lambda e, t: sent.append(e["key"]) or {"ts": "1"}, T0) == 1
+    assert sent == ["m|c"]
 
 
 def test_a_post_that_fails_is_its_sources_first_next_pass_and_the_other_sources_go_on():

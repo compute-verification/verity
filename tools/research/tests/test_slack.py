@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import base64
 import email.message
+import http.client
 import http.server
 import io
 import itertools
@@ -549,6 +550,46 @@ def test_a_rate_limited_call_waits_as_asked_then_succeeds(broker, monkeypatch):
     broker.fails = [http_error(429, {"error": "rate_limited"}, Retry_After="2"), http_error(429, {"error": "rate_limited"}, Retry_After="99")]
     slack.Slack(None).call("chat.postMessage", channel=COORD, text="after the burst")
     assert waits == [2.0, float(slack.RATE_WAIT_MAX_S)] and broker.state.messages[COORD][-1]["text"] == "after the burst"
+
+
+def test_a_read_cut_short_reset_or_timed_out_is_retried_with_backoff_and_fails_clearly_once_retries_run_out(monkeypatch):
+    """The control pod's agent-watch relay died twice on 19 Oct when conversations.replies came back truncated
+    (http.client.IncompleteRead, which is no OSError, so it escaped as a traceback instead of a SlackError)."""
+    waits: list[float] = []
+    monkeypatch.setattr(slack, "_sleep", waits.append)
+    fails = [http.client.IncompleteRead(b"x" * 10, 90), ConnectionResetError(104, "reset"),
+             urllib.error.URLError(TimeoutError("timed out"))]
+
+    def transport(url, data, headers):
+        if fails:
+            raise fails.pop(0)
+        return {"ok": True, "messages": [{"ts": "1.0"}]}
+
+    api = slack.Slack("xoxb-dummy", transport=transport)
+    assert api.call("conversations.replies", channel=COORD, ts="1.0")["messages"] == [{"ts": "1.0"}]
+    assert waits == [2.0, 4.0, 8.0]
+
+    waits.clear()
+    fails[:] = [http_error(502, "")] + [http.client.IncompleteRead(b"", 5)] * 3
+    with pytest.raises(slack.SlackError, match=re.escape("conversations.history: IncompleteRead: ") + ".*after 4 tries"):
+        api.call("conversations.history", channel=COORD)
+    assert waits == [2.0, 4.0, 8.0]
+
+
+@pytest.mark.parametrize("fail", [http.client.IncompleteRead(b"", 5), urllib.error.URLError(TimeoutError("timed out")),
+                                  http_error(503, "")])
+def test_a_write_cut_short_is_not_retried_since_slack_may_have_taken_it(monkeypatch, fail):
+    waits: list[float] = []
+    monkeypatch.setattr(slack, "_sleep", waits.append)
+    sent = []
+
+    def transport(url, data, headers):
+        sent.append(url)
+        raise fail
+
+    with pytest.raises(slack.SlackError, match=r"^chat\.postMessage: "):
+        slack.Slack("xoxb-dummy", transport=transport).call("chat.postMessage", channel=COORD, text="once")
+    assert len(sent) == 1 and waits == []
 
 
 def test_a_long_running_client_gets_a_new_identity_once_the_broker_rejects_its_cached_one(broker, monkeypatch):

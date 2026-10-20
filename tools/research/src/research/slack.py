@@ -150,6 +150,8 @@ SAFE_POINT = "Apply at your next safe point; don't interrupt running jobs."
 EXPIRES_S = 2592000                                              # 30 days; a lapsed subscription wakes no one and says nothing
 PAGE = 200
 RATE_RETRIES, RATE_WAIT_MAX_S = 3, 30                         # a 429: retry this often, waiting at most this long each time
+TRANSIENT_RETRIES, TRANSIENT_WAIT_S = 3, 2.0                  # a read cut short, reset, timed out or a 5xx: 2, 4, then 8 s
+READ_VERBS = ("get", "list", "history", "replies", "info", "members", "lookup", "test")
 ASK_DANIEL = "https://website-docs-sage.vercel.app/api/agent-approvals"   # the cards' route, and its OIDC token's audience
 ASK_CHANNEL = "ask-daniel"
 DANIEL = "daniel"                                                # whose asks are pages: `traffic`'s lane for the cards
@@ -596,6 +598,24 @@ class _NoRedirect(urllib.request.HTTPRedirectHandler):
         raise urllib.error.URLError("redirected; refusing to forward the bearer token")
 
 
+def transient(e: BaseException) -> bool:
+    """A failure that a second identical request may not meet: a 5xx, a response cut short (IncompleteRead, a dropped
+    connection), a reset or a timeout. A refusal (4xx), a DNS failure or an unparseable answer is not."""
+    if isinstance(e, urllib.error.HTTPError):
+        return e.code >= 500
+    if isinstance(e, http.client.HTTPException):
+        return True
+    if isinstance(e, urllib.error.URLError):
+        e = e.reason if isinstance(e.reason, BaseException) else e
+    return isinstance(e, (ConnectionResetError, ConnectionAbortedError, BrokenPipeError, TimeoutError, http.client.HTTPException))
+
+
+def idempotent(method: str) -> bool:
+    """A read (`conversations.replies`, `users.list`, `chat.getPermalink`), which a retry can't repeat. A write cut short or timed
+    out may already have been taken (a post would appear twice), so only reads are retried after a transient failure."""
+    return method.rsplit(".", 1)[-1].startswith(READ_VERBS)
+
+
 def post(url: str, data: bytes, headers: dict[str, str], timeout: float = 30) -> dict:
     """The one HTTP exchange: POST `data`, parse the JSON answer. Raises urllib's errors for the caller to map."""
     req = urllib.request.Request(url, data=data, method="POST", headers=headers)
@@ -728,24 +748,31 @@ class Slack:
                   file=self.log or sys.stderr)
             return {"ok": True, "dry_run": True}
         args = {k: json.dumps(v) if isinstance(v, (dict, list)) else str(v) for k, v in params.items()}
-        for attempt in range(RATE_RETRIES + 1):
+        rate = flaky = 0
+        while True:
             try:
                 out = self._broker(method, args) if self.via == "broker" else self.transport(
                     self.base + method, urllib.parse.urlencode(args).encode(),
                     {**({"Authorization": f"Bearer {self.token}"} if self.token else {}),
                      "Content-Type": "application/x-www-form-urlencoded; charset=utf-8"})
                 break
-            except urllib.error.HTTPError as e:
-                if e.code == 429 and attempt < RATE_RETRIES:                 # a burst of doorbells: wait as asked, then again
+            except (urllib.error.URLError, OSError, ValueError, http.client.HTTPException) as e:
+                if isinstance(e, urllib.error.HTTPError) and e.code == 429 and rate < RATE_RETRIES:   # a burst of doorbells
+                    rate += 1
                     _sleep(min(float(e.headers.get("Retry-After") or 1), RATE_WAIT_MAX_S))
                     continue
-                if self.via == "broker":
-                    raise SlackError(broker_error(method, e)) from None
-                hint = f" (rate limited; retry after {e.headers.get('Retry-After')} s)" if e.code == 429 else ""
-                raise SlackError(f"{method}: HTTP {e.code}{hint}") from None
-            except (urllib.error.URLError, OSError, ValueError) as e:
+                if transient(e) and idempotent(method) and flaky < TRANSIENT_RETRIES:
+                    flaky += 1
+                    _sleep(TRANSIENT_WAIT_S * 2 ** (flaky - 1))
+                    continue
+                if isinstance(e, urllib.error.HTTPError):
+                    if self.via == "broker":
+                        raise SlackError(broker_error(method, e)) from None
+                    hint = f" (rate limited; retry after {e.headers.get('Retry-After')} s)" if e.code == 429 else ""
+                    raise SlackError(f"{method}: HTTP {e.code}{hint}") from None
                 where = "the Slack broker is unreachable" if self.via == "broker" else type(e).__name__
-                raise SlackError(f"{method}: {where}: {getattr(e, 'reason', e)}") from None
+                tries = f" (after {flaky + 1} tries)" if flaky else ""
+                raise SlackError(f"{method}: {where}: {getattr(e, 'reason', e)}{tries}") from None
         if not isinstance(out, dict):
             raise SlackError(f"{method}: the answer is not a JSON object")
         if not out.get("ok"):

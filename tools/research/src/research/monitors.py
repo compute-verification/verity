@@ -1,7 +1,8 @@
 """Monitors: invariants in code, each with an owner, a severity, a threshold and an action (the infra vision's Signals surface).
 One registry (MONITORS) and one runner. Node 1's service (`vy-monitors.timer`, pods/nebius/monitoring/) runs the node-side
-monitors and writes each incident once when it opens and once when it clears; the relay on infra's VM runs the relay-side ones
-(they need GitHub, the evidence store or Slack) and posts both sets to #agent-alerts. Every Nebius machine runs the `machine`
+monitors and writes each incident once when it opens and once when it clears; the relay on the control pod
+(infra/control/watchers.toml) runs the relay-side ones (they need GitHub, the evidence store or Slack) and posts both sets to
+#agent-alerts. Every Nebius machine runs the `machine`
 monitors (`vy-watchdog.timer`: `run --where machine --machine NAME --peer HOST ...`): memory pressure that holds, each process
 the OOM killer took (named with its run and the run's sender), a peer that stops answering, /workspace filling within hours on its
 recent trend (named with the biggest live runs), a unit deploy.toml runs there that was never installed or is off, and
@@ -10,7 +11,7 @@ yesterday's count of full checks lost to infrastructure. The machines watch each
     research monitors list [--where node|relay] [--json]
     research monitors check [ID ...] [--where node|relay] [--json]     evaluate now and write nothing
     research monitors run --by WHO [--where node|relay] [--state PATH] [--alerts DIR] [--only ID ...] [--json]
-    research monitors relay --by WHO [--node1 HOST] [--node-alerts DIR] [--every 60] [--once] [--dry-run]
+    research monitors relay --by WHO [--node1 HOST] [--node-alerts DIR] [--every 60] [--once] [--dry-run] [--seed]
 
 **A monitor** has an id, an owner handle, a severity (`warn`, or `page` when work stops), where it runs, how often, a check that
 returns findings, and the action its owner takes. A finding's `key` is stable while the incident lasts: the runner opens an
@@ -195,7 +196,6 @@ class Ctx:
     n2_host: str = "vy-n2"
     node1: str = "n1"
     node_state: str = STATE
-    machines: tuple[str, ...] = ("vy-nebius-1", "vy-nebius-2")
     machine: str = ""                   # where a `machine` monitor runs (its runner's --machine)
     peers: tuple[str, ...] = ()         # the ssh hosts it watches (--peer)
     research: tuple[str, ...] = (sys.executable, "-m", "research")
@@ -773,11 +773,13 @@ def n2_parts(names: set[str] | frozenset[str]) -> dict[str, list]:
 
 def deploy_drift(ctx: Ctx) -> list[Finding]:
     """Files on the nodes that aren't main's, still run old code, or stray (`research deploy drift --json`; it fetches origin,
-    which the nodes can't): one incident per node and kind."""
+    which the nodes can't): one incident per node and kind.  A node ssh can't connect to (a stopped VM) is skipped; any other
+    read that fails, or every node unreachable, is the monitor's error."""
     from .pods.nebius.preflight_probe import findings
 
     reps = json.loads(ctx.sh([*ctx.research, "deploy", "drift", "--json"], ok=(0, 1), timeout=900))
-    if bad := sorted(n for n, r in reps.items() if "error" in r):
+    none_read = all("error" in r for r in reps.values())
+    if bad := sorted(n for n, r in reps.items() if "error" in r and (none_read or not r.get("unreachable"))):
         raise RuntimeError(f"deploy drift can't read {', '.join(bad)}: {str(reps[bad[0]]['error'])[:200]}")
     groups: dict[tuple[str, str], list[str]] = {}
     for line in findings(reps):
@@ -785,26 +787,6 @@ def deploy_drift(ctx: Ctx) -> list[Finding]:
         groups.setdefault((n, kind), []).append(path)
     return [Finding(f"{n}:{kind}", f"*Deploy drift on {n}: {len(ps)} {kind}*: {', '.join(f'`{p}`' for p in ps[:5])}"
                     + (f" and {len(ps) - 5} more" if len(ps) > 5 else "") + ".") for (n, kind), ps in sorted(groups.items())]
-
-
-def unpreserved(ctx: Ctx) -> list[Finding]:
-    """Runs that ended over 30 minutes ago and aren't preserved on the remote, per machine (`research pods unpreserved MACHINE
-    --older-min 30 --json`)."""
-    out = []
-    for mach in ctx.machines:
-        r = ctx.run([*ctx.research, "pods", "unpreserved", mach, "--older-min", "30", "--json"], capture_output=True, text=True,
-                    timeout=ctx.bound(900))
-        if r.returncode == 2 and "unrecognized arguments" in (r.stderr or ""):
-            raise RuntimeError("`research pods unpreserved` here has no --older-min (the custody lane's "
-                               "cursor/node-custody-unit-558b adds it)")
-        if r.returncode not in (0, 1):
-            raise RuntimeError(f"research pods unpreserved {mach} exited {r.returncode}: {(r.stderr or '').strip()[-200:]}")
-        ids = [x if isinstance(x, str) else str(x.get("id") or x.get("attempt") or x) for x in json.loads(r.stdout).get("unpreserved") or []]
-        if ids:
-            out.append(Finding(mach, f"*{mach}: {len(ids)} run{'s' if len(ids) > 1 else ''} ended over 30 minutes ago and "
-                               f"{'are' if len(ids) > 1 else 'is'} not preserved on the remote*: {', '.join(ids[:3])}"
-                               + (f" and {len(ids) - 3} more" if len(ids) > 3 else "") + "."))
-    return out
 
 
 def asks(ctx: Ctx) -> list[Finding]:
@@ -1462,6 +1444,12 @@ UNITS_ACTION = ("`systemctl status UNIT` and `journalctl -u UNIT -n 50` on the n
                 "`systemctl reset-failed UNIT`, or, if it fails on this hardware by design, add it to EXPECTED_FAILED in "
                 "research/monitors.py with the reason.")
 
+#: monitor id -> why it no longer runs; a pass clears what it still had open
+RETIRED = {
+    "unpreserved": "the node watermarks (disk-n1, disk-n2: resource_probe.py's custody backlog) read the nodes' own finished runs "
+                   "without custody, which a relay seeing only the remote can't",
+}
+
 MONITORS: list[Monitor] = [
     Monitor("disk-n1", "infra", "warn", "node", watermarks("n1"), RETENTION, every_s=600, clear_s=1800),
     Monitor("disk-n2", "infra", "warn", "node", watermarks("n2"), RETENTION, every_s=600, clear_s=1800, n2="probe"),
@@ -1516,9 +1504,6 @@ MONITORS: list[Monitor] = [
             "`research deploy drift --on N` for the detail; install main's version (`research deploy install N --by WHO "
             "PATH`), restart what runs old code, or move strays to the attic (`research deploy attic N PATH`).",
             every_s=3600, unread_s=4 * 3600),
-    Monitor("unpreserved", "infra", "warn", "relay", unpreserved,
-            "`research pods unpreserved MACHINE` lists them and `research data preserved RUN` says why each isn't preserved: "
-            "push them, or fix the custody service that should have.", every_s=1800, unread_s=4 * 3600),
     Monitor("asks", "infra", "warn", "relay", asks,
             "Answer the ask, or close it: `research msg close --as YOU --thread TS` (✅), or with `--declined WHY` (❌).",
             every_s=900, unread_s=3 * 3600),
@@ -1677,6 +1662,12 @@ def step(state: dict, monitors: list[Monitor], ctx_for: Callable[[dict], Ctx], n
         judge(m, state, shared, ctx_for, now, emit)
         if checkpoint:
             checkpoint()
+    for key, o in [(k, o) for k, o in state["open"].items() if o["monitor"] in RETIRED]:
+        gone = Monitor(o["monitor"], (o.get("owners") or ["infra"])[0], o.get("severity") or "warn", "", lambda _: [], "")
+        if emit(gone, "clear", key, None, {**o, "cleared": f"*Cleared:* monitor `{o['monitor']}` is retired: {RETIRED[o['monitor']]}."}):
+            del state["open"][key]
+    for gone_id in [k for k in state["monitors"] if k in RETIRED and not any(o["monitor"] == k for o in state["open"].values())]:
+        del state["monitors"][gone_id]
     for k in [k for k, t in seen.items() if now - t > EVENTS_KEEP_S]:
         del seen[k]
     if webhook:
@@ -1795,7 +1786,7 @@ def select(where: str | None, only: list[str] | None) -> list[Monitor]:
     return [m for m in MONITORS if (not where or m.where == where) and (not only or m.id in only)]
 
 
-# ---- the relay (infra's VM: Slack) --------------------------------------------------------------------------------------------
+# ---- the relay (the control pod: Slack) ---------------------------------------------------------------------------------------
 
 def still_open(events: list[dict]) -> list[dict]:
     """The opens among `events` that no later clear ends, oldest first."""
@@ -2096,7 +2087,7 @@ def cmd_relay(ns: argparse.Namespace) -> int:
     if fd is None:
         print(f"monitors: refused: another relay holds {posts}.lock", file=sys.stderr)
         return 3
-    post = slack_post(ns.dry_run)
+    post = (lambda ev, thread: {}) if ns.seed else slack_post(ns.dry_run)
     sources = [Source("node1", ns.node_alerts, host=ns.node1), Source("relay", ns.alerts)]
     for spec in ns.machine_alerts or []:
         name, _, where = spec.partition("=")
@@ -2119,7 +2110,7 @@ def cmd_relay(ns: argparse.Namespace) -> int:
             print(f"{stamp} relay failed: {type(e).__name__}: {e}", flush=True)
         if checkpoint:
             checkpoint()
-        if ns.once:
+        if ns.once or ns.seed:
             return 0
         time.sleep(ns.every)
 
@@ -2163,6 +2154,9 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--every", type=float, default=60.0)
     p.add_argument("--once", action="store_true")
     p.add_argument("--dry-run", action="store_true", help="print the posts instead, and keep what was posted only in memory")
+    p.add_argument("--seed", action="store_true",
+                   help="one pass that records every event as posted and posts none: a relay taking over from another starts "
+                        "where that one is, instead of posting every open incident again")
     ns = ap.parse_args(argv)
     try:
         select(None, getattr(ns, "ids", None) or getattr(ns, "only", None))
