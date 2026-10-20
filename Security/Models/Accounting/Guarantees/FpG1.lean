@@ -27,7 +27,9 @@ What is g1's is that the premises hold at an honest g1 window: `Proofs.Accountin
 `sm120FpG1_honest_applies` and `sm120W4a8G1_honest_applies` discharge every premise at an honest window whose layer
 checks H1's committed ranges, which g1's leaves meet (`Leaves.fp8_inH1`, `Leaves.w4a8_inH1`). The witness isn't a
 served window: its relation is H1's ranges, not a served Program's, its receipt game is the honest one, and its time
-is exactly the credit, so it shows only that every premise can hold at once.
+is exactly the credit, so it shows only that every premise can hold at once. Both statements are stated on the
+pre-#2855 `ProofLayer`, where no served window meets `BindingForkAt` (RT3-LOGIC-1), and are restated on
+`DrawnLayer.BindingAt` once #2855 lands.
 
 The statements:
 
