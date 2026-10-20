@@ -3457,7 +3457,7 @@
    "owner": "@proofs",
    "signature": ["Flock.SecurityProofs.EndToEndRegisteredRows : Flock.Guarantees.EndToEndRegisteredRows"],
    "assumptions": [],
-   "type_hash": "a008a3ec7f8b876753df956eefa170b2d58e4029da0d65e6e857ba60a2c3489b"
+   "type_hash": "2663b1a7e4d37b7b0c345dbf40b33344f4e86c82f17c36de855847c1e11059d9"
   },
   "Flock.SecurityProofs.EndToEnd_refSetup": {
    "owner": "@proofs",
