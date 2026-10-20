@@ -24,8 +24,9 @@ many reads of a node's registered blocks the node made in each window, from rece
    a registration that binds z also of PoUW's tile output `z` before the read (`Tiles`); it commits them in a tree
    bound to the plan and sends the root and the plan, whole or as its change from the previous pass's
    (`Plan.changed`), with the step it covers, as soon as the pass ends (`Session.receive`).  A pass covers one
-   step `s` of the served circuit's execution (the engine step), and its plan is the blocks the circuit reads at `s`:
-   the steps are public, and strictly increase over the session's passes.  The chain runs across the session's windows: a window's first
+   step `s` of the served circuit's execution (the engine step), and its plan holds every complete block the circuit
+   reads at `s`, filler beside them allowed (`PlanMatches`): the steps are public, and strictly increase over the
+   session's passes.  The chain runs across the session's windows: a window's first
    pass follows the root of the previous window's last.  On a boundary message the prover finishes the pass in flight,
    which is its window's last, and starts the next window's chain.  Blocks written after the codec seed (KV pages)
    join the store mid-session: their payloads committed (`append_tree`, `Session.append`) before any pass whose plan
@@ -66,9 +67,9 @@ many reads of a node's registered blocks the node made in each window, from rece
    their carriers may hold (μ_carrier); without one, those receipts are certified but not credited.  On the served
    circuit's requirement linked to the passes (`requirement`, a `RequirementLink`: I4's plan and memory-map units and
    the census's layout rule, the memory-map unit's verdict on the record's appends and heads among them, `mapped`),
-   each pass's credit is its receipts at the link's D bits each, at most the circuit's reads at its step
-   (`Ledger.linked`), less the share ε of it the units' draw leaves unproved, its δ added to the ledger's error
-   (`Ledger.error`);
+   each pass is credited the bits the circuit reads from complete blocks at its step, less a block for each planned
+   block it credits no receipt of (`linked_bits`, `Accounting.Guarantees.RequirementMoved`; `Ledger.linked`), less the
+   share ε of it the units' draw leaves unproved, its δ added to the ledger's error (`Ledger.error`);
    without one the credit is the node's reads of its store.
    What an accepted window certifies, and on what, is `PROTOCOL.md`.
 
@@ -937,8 +938,9 @@ class Session:
         registered store).  A plan is over the store's blocks so far, registered and appended, and holds none released;
         its rejection, `lifetime`, if it holds an appended block that joined a window `Params.lifetime` or more before
         `t`.  `step` is the step of the served circuit whose reads the pass covers, above the previous pass's: the plan
-        is to be the blocks the circuit reads at it, which the plan's proof unit checks against the prover's memory map
-        (`PROTOCOL.md` §8); its rejection, `step`, if it is missing or not above.  A paced session's window holds at
+        is to hold every complete block the circuit reads at it, filler beside them allowed (`PlanMatches`), which the
+        plan's proof unit checks against the prover's memory map (`PROTOCOL.md` §8); its rejection, `step`, if it is
+        missing or not above.  A paced session's window holds at
         most k roots, and a later one is out of turn (`order`).  The root's arrival, the clock now, goes in the record.
         Returns the rejection they cause, if any."""
         self._live()
@@ -1256,8 +1258,9 @@ class Registry:
 LEDGER_SOURCES = {
     "timing": "the record: the span its passes don't cover at the node's capacity (the round trip and the pass in "
               "flight at the span's ends, the chaining gaps, blocks a plan leaves out), the session's or a window's own "
-              "[b_(t−1), D_t]; on a requirement link, each pass's credit is its receipts at D bits each, at most the "
-              "circuit's reads at its step, less the link's ε of the session's (the whole of it from any one window)",
+              "[b_(t−1), D_t]; on a requirement link, each pass's credit is the circuit's reads from complete blocks "
+              "at its step, less a block for each planned block it credits no receipt of (`linked_bits`, "
+              "RequirementMoved), less the link's ε of the session's (the whole of it from any one window)",
     "sample": "the record: its openings' bound on wrong receipts, each window's own at delta (`Ledger.sample`, the "
               "per-window reading), or the session's pooled over its windows at one delta (`Ledger.horizon`, `pooled`)",
     "chip": "S_chip, measured: one pass's worth a block held on chip need not be read again",
@@ -1288,12 +1291,18 @@ class PostSeedVerdict(Protocol):
 
 class RequirementLink(Protocol):
     """The served circuit's requirement, linked to a session's passes (A1's `Accounting.Requirement`), as `ledger`
-    reads it: whether the link `holds`; `density_bits`, D, the fewest bits of the circuit's values that any block a
-    plan holds carries; and `read_bits(step)`, the bits the circuit reads at a step (`requirement.Requirement.read_bits`
-    in `verity.ml.circuits`).  It holds once the proof units have shown, for every pass, that its plan holds only
-    blocks the circuit reads at the pass's step (`PlanMatches`; the plan unit, I4's), each carrying at least D of its
-    values' bits (`Packs` under the census's layout rule), and that every free in the memory map, of a registered
-    block or a written one, is at its values' last read (the memory-map unit, I4's).  `mapped(record)` is the
+    reads it: whether the link `holds`, and `read_bits(step)`, the bits the circuit reads at a step from complete blocks
+    (`creditedReadBits`: the bits of `requirement.credited_reads` in `verity.ml.circuits`; for a store of registered
+    blocks only, the weights while KV isn't registered, the bits the step reads of registered values).  It holds once
+    the proof units have shown, for every pass, that its plan holds every complete block the circuit reads at the
+    pass's step and the layout packs the values read into blocks (`PlanMatches`; the plan unit, I4's: PlanMatch, or
+    PlanShard for a registered store, with `Packs` under the census's layout rule), and that every free in the memory
+    map, of a registered block or a written one, is at its values' last read (the memory-map unit, I4's).  The link
+    is one-sided: a plan may hold blocks the circuit doesn't read at its step (filler, a gathered table's unselected
+    rows, a paused request's pages), which carry none of its reads, so a planned block need carry none of its bits,
+    and the ledger credits each pass the circuit's reads, never its receipts (`linked_bits`, `RequirementMoved`).  A
+    plan unit that lets a plan leave blocks out (PlanShard at GAPS > 0) makes each shard's count public, and so how
+    many of a shard's blocks each plan holds; at GAPS = 0 every count is its shard's size.  `mapped(record)` is the
     memory-map unit's verdict on this session's record: that W's memory map, the one the plan unit's plans are of,
     makes exactly the appends of the chain `Record.appends` (None without one), each a write at its production step,
     in the map's order, at the index the verifier gave it; that each pass's head (`WindowRecord.heads`) is the chain
@@ -1301,16 +1310,14 @@ class RequirementLink(Protocol):
     its own and before the rest; a re-key only at the lifetime cap, its old index below the stale bound
     (`WindowRecord.stale`, which the unit recomputes from those appends) of the first pass after its step, and of the
     same payload; and no other (PROTOCOL.md §8, "The memory map's choices").  The units are sampled, so the link
-    holds on what their draw established: `epsilon`, the most share of the linked credit (Σ min(n·D, read_bits(step))
-    over the passes) that the units it leaves unproved can carry, the passes whose plan unit is wrong and those holding
-    a block a wrong memory-map unit wrote, except with probability `delta`.  Those checks are theirs; the ledger takes the link as given, credits 1 − ε of the
-    linked credit, adds δ to its error, and refuses a link whose `mapped` isn't True of the record."""
+    holds on what their draw established: `epsilon`, the most share of the linked credit (`linked_bits` summed over
+    the passes) that the units it leaves unproved can carry, the passes whose plan unit is wrong and those holding a
+    block a wrong memory-map unit wrote, except with probability `delta`.  Those checks are theirs; the ledger takes
+    the link as given, credits 1 − ε of the linked credit, adds δ to its error, and refuses a link whose `mapped`
+    isn't True of the record."""
 
     @property
     def holds(self) -> bool: ...
-
-    @property
-    def density_bits(self) -> int: ...
 
     @property
     def epsilon(self) -> float: ...
@@ -1372,7 +1379,8 @@ class Ledger(_Terms):
     openings pooled over its windows at one δ (`pooled`).  `floor` is the most of any window's receipts the pooled
     event leaves wrong.  `windows` are the same terms over each window's own span, and `worst` and `worst_horizon`
     the windows of the largest γ either way: the every-window half of the claim is theirs, beside the horizon's.
-    `linked`: whether the credit is the served circuit's (capped at its reads, on a `RequirementLink`); without a link
+    `linked`: whether the credit is the served circuit's (its reads at each pass's step, on a `RequirementLink`:
+    `linked_bits`); without a link
     the credited bytes are the node's reads of its store, not shown to be reads the circuit makes.  `error` is the
     probability the per-window reading fails, every window's δ and AuditRO's 2^-slack_log2 a pass, plus the link's δ;
     `error_horizon` the horizon's, one δ in place of the windows'.  A sketch-sha512 record adds `RateAuditSketch`'s."""
@@ -1474,6 +1482,35 @@ def named_bits(k: int, queries_log2: int = QUERIES_LOG2) -> int:
     return k * queries_log2 - max(0, math.floor(factorial * (1 - 2.0 ** -40)) - 1)
 
 
+def linked_bits(window: WindowRecord, requirement: RequirementLink, block_bytes: int,
+                post_seed: bool) -> tuple[int, ...]:
+    """Each pass's credit on a requirement link, in bits, its post-seed receipts credited or not (`post_seed`).
+
+    `Accounting.Guarantees.RequirementMoved`: when the pass's plan covers the complete blocks the circuit reads at its
+    step (`PlanMatches`, the link's to hold), a pass that moved the planned blocks M moved every bit the circuit reads
+    from complete blocks at that step, r = `read_bits(step)`, but at most a block's b bits for each planned block
+    outside M.  A pass computes one receipt a planned block, so one whose receipts are all credited covers its plan,
+    and is credited r: a credited receipt that wasn't a read from node memory (wrong, or answered from the chip, a
+    rebuild, the host or a link) is a planned block outside M, which `sample` and the other terms already charge a
+    block each.  One credited n of its plan's L receipts (its post-seed ones uncredited, without the property's
+    verdict) is credited r − (L − n)·b, at least 0: the same lemma, its L − n uncredited blocks outside M.  A planned
+    block the circuit doesn't read at the step (filler) adds nothing to r and costs nothing.  `PlanMatches` packs the
+    values read into the planned blocks (`Packs`), so r is at most L·b: a link reading more is refused, since it can't
+    hold."""
+    bits = 8 * block_bytes
+    out = []
+    for length, n, s in zip(window.lengths, window.credited(post_seed), window.steps, strict=True):
+        r = requirement.read_bits(s)
+        if type(r) is not int or r < 0:
+            raise ValueError(f"the bits the circuit reads at step {s} are a nonnegative integer")
+        if r > length * bits:
+            raise ValueError(f"the circuit reads {r} bits from complete blocks at step {s}, more than its pass's plan "
+                             f"of {length} blocks of {bits} bits holds: PlanMatches packs the values read into the "
+                             "planned blocks, so this link doesn't hold; read_bits is the step's creditedReadBits")
+        out.append(max(0, r - (length - n) * bits))
+    return tuple(out)
+
+
 def ledger(record: Record, *, capacity_bytes_per_s: float, chip_bytes: int, rebuild: Rebuild, host: float = 0.0,
            link: float = 0.0, queries_log2: int = QUERIES_LOG2, slack_log2: int = SLACK_LOG2,
            wrong: Callable[[IntegrityProfile], float] = IntegrityProfile.bound,
@@ -1495,15 +1532,17 @@ def ledger(record: Record, *, capacity_bytes_per_s: float, chip_bytes: int, rebu
     that fails is refused).  Crediting them charges μ_carrier, each pass the least of the verdict's carrier bytes and
     its post-seed bytes.  `sample`, `counting`, the horizon and the capacity check count every certified receipt.
     On `requirement`, the served circuit's requirement linked to the passes (`RequirementLink`, which must hold, its
-    memory-map unit making the record's appends at the passes' heads, `mapped`), a pass's credit is its credited
-    receipts at D bits each, at most the bits the circuit reads at the pass's step, so
-    the credit is the circuit's reads (`Ledger.linked`); `sample` still charges a whole block for a wrong receipt.
+    memory-map unit making the record's appends at the passes' heads, `mapped`), a pass's credit is the bits the
+    circuit reads from complete blocks at its step, less a block for each planned block it credits no receipt of
+    (`linked_bits`, by `RequirementMoved`), so the credit is the circuit's reads (`Ledger.linked`), and a plan topped
+    up with filler earns nothing for it; `sample` still charges a whole block for a wrong receipt, as
+    `RequirementMoved` charges a planned block the pass didn't move.
     The link's units are sampled: the session's credit is 1 − ε of that sum, and a window's is its own less ε of the
     session's, since the unproved share may sit in any one window; the link's δ is added to `error` and
     `error_horizon`."""
     if credit_post_seed is not None and credit_post_seed.holds is not True:
         raise ValueError("a verdict that the property fails credits nothing after the seed: pass None")
-    density, epsilon, link_delta = 8 * record.block_bytes, 0.0, 0.0
+    epsilon, link_delta = 0.0, 0.0
     if requirement is not None:
         if requirement.holds is not True:
             raise ValueError("a requirement link whose proofs don't hold caps nothing: pass None, and the credit is "
@@ -1516,9 +1555,6 @@ def ledger(record: Record, *, capacity_bytes_per_s: float, chip_bytes: int, rebu
                              "`appends` chain, each pass's head through the appends of the steps below its own, each "
                              "re-key below the next pass's stale bound) caps nothing: frees, re-keys and append order "
                              "chosen after the seed are advice no term charges")
-        density = requirement.density_bits
-        if type(density) is not int or not 1 <= density <= 8 * record.block_bytes:
-            raise ValueError(f"a link's density is a whole number of bits from 1 to a block's {8 * record.block_bytes}")
         epsilon, link_delta = requirement.epsilon, requirement.delta
         if type(epsilon) not in (int, float) or not 0 <= epsilon <= 1:
             raise ValueError("a link's epsilon is the share of its credit its units' draw leaves unproved, 0 to 1")
@@ -1555,13 +1591,7 @@ def ledger(record: Record, *, capacity_bytes_per_s: float, chip_bytes: int, rebu
     def credited_bytes(w: WindowRecord) -> float:
         if requirement is None:
             return sum(w.credited(credit)) * b
-        out = 0
-        for n, s in zip(w.credited(credit), w.steps):
-            r = requirement.read_bits(s)
-            if type(r) is not int or r < 0:
-                raise ValueError(f"the bits the circuit reads at step {s} are a nonnegative integer")
-            out += min(n * density, r)
-        return out / 8
+        return sum(linked_bits(w, requirement, b, credit)) / 8
 
     windows, carriers, credits = [], [carried(w) for w in record.windows], [credited_bytes(w) for w in record.windows]
     unproved = epsilon * sum(credits)
