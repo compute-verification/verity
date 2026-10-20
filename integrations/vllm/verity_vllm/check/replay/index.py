@@ -2,7 +2,7 @@
 
 `ProgramIndex` holds a request Program's rows with the manifest address of each output slice (op_path, member, request-local
 step and row), the weights struct a row binds (`parse_struct`), and the MoE plane a row's module is committed under
-(`moe_plane_kind`).  Nothing here reads committed words.
+(`moe_plane_kind`, under `moe_plane_modules`).  Nothing here reads committed words.
 """
 from __future__ import annotations
 
@@ -173,9 +173,10 @@ class ProgramIndex:
         self._moe_kind: dict[int, str] = {}
         self._moe_fused: set[int] = set()                  # act_quant rows of the fused SiLU quant: they read the up row, not an act row
         mcounts: dict[tuple, int] = {}
+        planes = RM.moe_plane_modules((RM.spec_family(r["spec"]), RM.split_name(r.get("name") or "")[0]) for r in self.rows)
         for r in self.rows:
             mod0 = RM.split_name(r.get("name") or "")[0]
-            kind = moe_plane_kind(RM.spec_family(r["spec"]), mod0)
+            kind = moe_plane_kind(RM.spec_family(r["spec"]), mod0) if mod0 in planes else None
             if kind == "quant":
                 # the activation's group quant reads an `act` row of its runner; the input's reads the block's input
                 first = ((r.get("args") or [[]])[0] or [None])[0]
