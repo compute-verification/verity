@@ -31,10 +31,11 @@
 # dither-1s-hbp, dither-1s-hb peeled (kh_one_peel: z = A B^T, y today's; hb_peel.py's gate, sent too), from the .so
 # HB_H1U_PEEL names if it's set (the fastest peeled build need not be the fastest unpeeled one); and dither-1s-hbk,
 # dither-1s-hbp on the unit's K split (an H1U_KSPLIT build, the .so HB_H1U_KSPLIT names). The
-# dither-1s arms' gate also runs CA's H1V3 h1tile.reference, this source's own (PouwH1Tile_v4, ungated) unless H1V3_SHA
-# names a commit, and dither-1s-hbp's the tree with the peel's too, the source's unless H1V3_PEEL_SHA names one (v3 before
-# the peel, bd702a2c46, is peeled on the CPU), each from a sent h1v3-SHA.tar.gz (`git archive SHA verity | gzip`; a --cwd
-# source tree has no history), else the source's git.
+# dither-1s arms' gate also runs CA's H1V3 h1tile.reference: this source's own (PouwH1Tile_v4, ungated, z = A B^T) unless
+# H1V3_SHA names a commit (one before the peel, as bd702a2c46, z = X (B + c)^T, holds an unpeeled arm's z to CA's code
+# directly; against a peeled tree that z is compared through the CPU's unpeel), and dither-1s-hbp's and -hbk's the tree
+# with the peel's too, the source's unless H1V3_PEEL_SHA names one; each from a sent h1v3-SHA.tar.gz (`git archive SHA
+# verity | gzip`; a --cwd source tree has no history), else the source's git.
 # Env: HB_WHO (the lease owner, default kernels-dither-hb), DITHER_NSYS=1 (sbench's nsys capture of the gate's kernels; kernels.py counts each dither arm's inside its NVTX
 # range, so the source must be dither-rtx's f2c0071c7c or later), LEASE (default "--max-min 14"), RUN_TIMEOUT (seconds
 # inside the lease, default 820), VERITY_BENCH_VENV (default /workspace/cp/venv312), NVCC (default CUDA 13.0's).
