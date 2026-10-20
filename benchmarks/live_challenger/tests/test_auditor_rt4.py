@@ -254,14 +254,17 @@ def kinds(log: Path) -> list[str]:
 
 
 def publish(tmp_path: Path, lines: list[bytes], log: Path) -> subprocess.CompletedProcess:
-    """publish.sh's pass against a host whose ledger is `lines`, with ssh and research stubbed: `research data put` prints
-    the file's sha256 as its art and logs it, `label` logs."""
+    """publish.sh's pass against a host whose ledger is `lines`, with ssh and research stubbed: ssh drains its stdin, as the
+    real one does, and serves `ledger` and `fetch SESSION` (from `host-ledger.sessions/`); `research data put` prints the
+    file's sha256 as its art and logs it, `label` logs."""
     bin_dir = tmp_path / "bin"
     if not bin_dir.exists():
         bin_dir.mkdir()
-        (bin_dir / "ssh").write_text('#!/bin/sh\nfor a; do v=$a; done\n[ "$v" = ledger ] && exec cat "$LEDGER"\nexit 9\n')
+        (bin_dir / "ssh").write_text(
+            '#!/bin/sh\ncat > /dev/null\nfor a; do w=$v; v=$a; done\n[ "$v" = ledger ] && exec cat "$LEDGER"\n'
+            '[ "$w" = fetch ] && exec tar -czf - -C "$LEDGER.sessions" "$v"\nexit 9\n')
         (bin_dir / "research").write_text(
-            '#!/bin/sh\nif [ "$2" = put ]; then while [ $# -gt 0 ]; do [ "$1" = --file ] && f=$2; shift; done\n'
+            '#!/bin/sh\nif [ "$2" = put ]; then while [ $# -gt 0 ]; do case $1 in --file|--tree) f=$2;; esac; shift; done\n'
             '  echo "put $f" >> "$PUBLISHED"; sha256sum "$f" | cut -c1-64\nelse echo "label $*" >> "$PUBLISHED"; fi\n')
         for p in bin_dir.iterdir():
             p.chmod(0o755)
@@ -270,3 +273,18 @@ def publish(tmp_path: Path, lines: list[bytes], log: Path) -> subprocess.Complet
            "PUBLISHED": str(log), "VY_CHALLENGER_STATE": str(tmp_path / "state")}
     return subprocess.run(["bash", str(HERE.parent / "publish.sh"), "research@10.0.0.1"], env=env, capture_output=True,
                           text=True)
+
+
+def test_publish_puts_every_session_that_ended_since_its_last_pass(tmp_path):
+    def entry(kind, session):
+        return json.dumps({"schema": A.SCHEMA, "kind": kind, "session": session, "body": {"key_sha512": "k"}}).encode()
+
+    sessions = ["s20261020T105206Z-9738", "s20261020T105232Z-1281"]
+    for s in sessions:
+        (tmp_path / "host-ledger.sessions" / s).mkdir(parents=True)
+        (tmp_path / "host-ledger.sessions" / s / "request.json").write_text("{}")
+    log = tmp_path / "published.log"
+    done = publish(tmp_path, [entry(k, s) for s in sessions for k in ("open", "end")], log)
+    assert done.returncode == 0, done.stderr
+    assert [ln.split()[1].rsplit("/", 1)[1] for ln in log.read_text().splitlines()[2:]] == sessions
+    assert (tmp_path / "state" / "sessions").read_text().split() == sessions

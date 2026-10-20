@@ -33,7 +33,7 @@ mkdir -p "$ST"
 touch "$ST/sessions"
 W=$(mktemp -d)
 trap 'rm -rf "$W"' EXIT
-gate() { "${SSH[@]}" "$DEST" "${GATE[@]}" "$@"; }
+gate() { "${SSH[@]}" "$DEST" "${GATE[@]}" "$@" < /dev/null; }  # ssh would eat the session loop's stdin
 put() { local a; a=$(research data put "$@" --preserve); echo "art:${a#art:}"; }
 
 gate ledger > "$W/windows.jsonl"
