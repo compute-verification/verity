@@ -7,7 +7,8 @@
                                  memory, idle hours (no GPU at >= 5% and load under a tenth of its cores)
     fleet.py instances           every VM in the tenant's projects as JSON (the control pod's cloud watch reads it)
     fleet.py quota               each tenant quota at >= 80% of its limit, and the card's day so far against $FLEET_CARD_DAILY_USD
-    fleet.py loop                sample every 5 min, quota every 30 (an alert in #agent-alerts once per quota and UTC day), and at
+    fleet.py loop                sample every 5 min, quota every 30 (an alert in #agent-alerts once per quota and UTC day, kept in
+                                 $FLEET_DIR/quota-told-YYYY-MM-DD.json across restarts), and at
                                  15:00Z (08:00 PDT) the last 24 h's report to infra's status thread and @top
 
 Vy-nebius-1 sat ~0% GPU-busy for a week and the H200s had no usage record at all, and the card's daily limit and the tenant's
@@ -27,6 +28,7 @@ import time
 import tomllib
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
+from typing import Callable
 
 HERE = Path(__file__).resolve().parent
 FLEET_DIR = Path(os.environ.get("FLEET_DIR", str(Path.home() / ".research" / "fleet")))
@@ -192,10 +194,40 @@ def post(args: list[str], text: str) -> None:
                    stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 
 
-def loop() -> int:
-    last_quota, told, reported = 0.0, set(), ""
-    while True:
-        now = time.time()
+TOLD_KEEP_DAYS = 2
+
+
+def load_told(now: float) -> set[tuple[str, str]]:
+    """The (UTC day, quota key) alerts already posted, from $FLEET_DIR/quota-told-YYYY-MM-DD.json, so a restarted loop doesn't post
+    them again; a day's file older than TOLD_KEEP_DAYS is removed."""
+    told, oldest = set(), utc(now - TOLD_KEEP_DAYS * 86400)[:10]
+    for f in sorted(FLEET_DIR.glob("quota-told-*.json")):
+        day = f.name[len("quota-told-"):-len(".json")]
+        if day < oldest:
+            f.unlink(missing_ok=True)
+            continue
+        try:
+            told |= {(day, k) for k in json.loads(f.read_text())}
+        except (OSError, ValueError) as e:
+            print(f"{utc(now)} {f} unreadable, its alerts may post again: {e}", file=sys.stderr, flush=True)
+    return told
+
+
+def save_told(told: set[tuple[str, str]], day: str) -> None:
+    FLEET_DIR.mkdir(parents=True, exist_ok=True)
+    f = FLEET_DIR / f"quota-told-{day}.json"
+    tmp = f.with_name(f".{f.name}.{os.getpid()}")
+    tmp.write_text(json.dumps(sorted(k for d, k in told if d == day)) + "\n")
+    os.replace(tmp, f)
+
+
+def loop(clock: Callable[[], float] = time.time, sleep: Callable[[float], None] = time.sleep,
+         send: Callable[[list[str], str], None] | None = None, passes: int | None = None) -> int:
+    send = send or post
+    last_quota, told, reported = 0.0, load_told(clock()), ""
+    while passes is None or passes > 0:
+        passes = None if passes is None else passes - 1
+        now = clock()
         try:
             sample(now)
         except Exception as e:  # noqa: BLE001 (a failed pass is logged, the loop goes on)
@@ -212,7 +244,8 @@ def loop() -> int:
                 for key, line in found:
                     if (day, key) not in told:
                         told.add((day, key))
-                        post(["--channel", "agent-alerts", "--kind", "alert"],
+                        save_told(told, day)
+                        send(["--channel", "agent-alerts", "--kind", "alert"],
                              f"Quota at {QUOTA_ALERT:.0%}+: {line}. Ask for a raise now (Nebius console, Administration > Quotas; "
                              f"the card: Daniel), before it stops a launch. (fleet.py quota)")
             except Exception as e:  # noqa: BLE001
@@ -220,9 +253,10 @@ def loop() -> int:
         if datetime.fromtimestamp(now, timezone.utc).hour == REPORT_HOUR_UTC and reported != day:
             reported = day
             text = render(report(load_samples(now - 86400, now), 24), 24, now)
-            post(["--thread", STATUS_THREAD, "--kind", "fyi"], text)
-            post(["--to", "@top", "--kind", "fyi"], text)
-        time.sleep(max(1.0, INTERVAL_S - (time.time() - now)))
+            send(["--thread", STATUS_THREAD, "--kind", "fyi"], text)
+            send(["--to", "@top", "--kind", "fyi"], text)
+        sleep(max(1.0, INTERVAL_S - (clock() - now)))
+    return 0
 
 
 def main(argv: list[str] | None = None) -> int:
