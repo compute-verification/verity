@@ -136,12 +136,19 @@ precondition). There a `scale_only` block is live and receipted, and the admit b
 kernels is moving the served credit back to them, which suits `live` under v4 only. Neither tile is on main. A `live`
 that names a live tile dead only loses its words. When the tally credits only rows in live tiles (under v4 every
 admitted row is in one), as a share of its credit the deficit is at most `(d_F + d₀)·N_w/N_adm`, with
-`N_adm/(j·N_w) = u`: `N_adm` the prefix's admitted rows and `j·N_w` its declared rows.
+`N_adm/(j·N_w) = u`: `N_adm` the prefix's admitted rows and `j·N_w` its declared rows. `live` is fixed before the
+window's first coin (`Period.window`), so the statement covers a window whose gate admits every slot before that coin:
+FILL's, whose 64 entries are all in round 0. H1 admits round by round, each step's slots under its round's root after
+the earlier rounds' coins (#2940's `_admitted_run` admits two in round 1), and a window that admits after round 0 is
+not one this statement speaks of (RT4-INT-22). Covering it would take `live` per round, each round's set fixed before
+its coin.
 
 *The period's order and its record* (RT2-INT-4, RT3-INT-13, RT4-INT-6). `Period` makes the order the model's. The
 statement needs a period record, kept by the service, from which the credit is read: the period's cap `n` and circuit
-committed before window 0's first coin; each window's first coin opened after the previous window's draw (the
-challenger's `order_reason` over one family, below); and the record closed at the first window with a refused proof
+committed before window 0's first coin; each window's challenger session named in the record before the window's
+first coin, so a window reads only its own session's coins and a session left unclosed is a recorded window, not a
+dropped one (RT4-INT-17; the record is proofs', PRF-108); each window's first coin opened after the previous window's
+draw (the challenger's `order_reason` over one family, below); and the record closed at the first window with a refused proof
 or at the `n`-th window, every window up to its close recorded, none replaced or dropped. A stream's committed periods
 must be disjoint: each window in at most one period, and one period open at a time, the next committed only after the
 last closes. Two periods that share windows count those windows twice, and a prover that commits `P` overlapping

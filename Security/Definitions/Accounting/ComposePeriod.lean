@@ -86,9 +86,10 @@ end RoundGame
 
 /-- **The cheater's play over a period of `n` windows** of one circuit of `M` rounds: window by window, its live tiles
 `live` (fixed before the window's first coin: on SERVE-GATE's served gate, the tiles whose row block holds an admitted
-slot), its split stages (`SplitStages`: each tile's mode, rightness and checked values per stage, on the window's
-rounds' coins), then the rest of the period as a function of the window's coins `Ω` (its rounds' coins, its draw and
-its proofs' coins). -/
+slot, so a window's gate admits every slot before its first coin, as FILL's does in round 0; a window that admits in a
+later round is not of this form, RT4-INT-22), its split stages (`SplitStages`: each tile's mode, rightness and
+checked values per stage, on the window's rounds' coins), then the rest of the period as a function of the window's
+coins `Ω` (its rounds' coins, its draw and its proofs' coins). -/
 inductive Period (C Ω V : Type) (M : ℕ) : ℕ → Type
   | done : Period C Ω V M 0
   | window {n : ℕ} (live : V → Bool) (W : SplitStages C V M) (next : Ω → Period C Ω V M n) :
