@@ -4,7 +4,7 @@ import Definitions.Accounting.Gates.Model
 # The registry's primitives, each in one class (trusted)
 
 Every primitive of the registry in exactly one class of the model (`Model.lean`), as the 19:15Z ruling closes the free
-set (note:20261017T1859Z-report-property-redteam), 254 ids: the 194 of `verity/ml/circuits/ops/prims.py` at
+set (note:20261017T1859Z-report-property-redteam), 258 ids: the 194 of `verity/ml/circuits/ops/prims.py` at
 `615eabc13a`; S8-PORT's (`ops/s8.py` and `ops/boolean/s8.py` at `45351115eb`): the s8 family's two steps
 `BlackwellS8ImmaDot32` and `BlackwellU8S8ImmaDot32` and LimbSplit's four limb steps (`S32LowByte`, `S32ByteCarry`,
 `S32ClampS8`, `S32ClampRest`), each as its word Definition (`_v1`) and on bits (`_v2`); PIN's spot check
@@ -14,7 +14,8 @@ and the H1 + fx1 tile's (`verity/core/protocols/pouw/circuit/`'s `segment.py`, `
 `_v2` and `PouwSegDot0`), its noise (`PouwU129`, `PouwI8AddBit`, `PouwI8Add`, `PouwI8Neg`, and the seeds' composites
 `PouwUnitSeeds` and `PouwNoiseBlock`), its digits (`PouwDigitLo`, `PouwDigitHi`, `PouwDigitZ`, `PouwLow8`, `PouwSx8`,
 `PouwResAdd`), its fold (`PouwFx1Absorb`, `PouwXinFinal`, and `PouwXor32`'s `_v2` across lanes) and its one stream
-(`PouwOneStream2`, `PouwOneStream3`, `PouwWrapBits`, `PouwWrapSeg`, `PouwXWrap`, `PouwPeelSeg`). Its exact accumulator
+(`PouwOneStream2`, `PouwOneStream3`, `PouwWrapBits`, `PouwWrapSeg`, `PouwXWrap`, `PouwPeelSeg`), with v4's dead-tile
+mask (`PouwOrBit`, `PouwMask32`, #2902's `PouwH1Tile_v4`). Its exact accumulator
 `GemmAccumulatorS8_v2{K}` is a body of `BlackwellS8ImmaDot32_v2` steps, not a primitive, and isn't listed.
 
 * **free:** the s8-family steps (`family`, with their operand formats, `k` and clamp or wrap), each the exact dot mod
@@ -36,7 +37,8 @@ and the H1 + fx1 tile's (`verity/core/protocols/pouw/circuit/`'s `segment.py`, `
   `range` and `low` kinds. Its `lifted` kind (`LGatherRow`) is not listed, so refused.
 * **budgeted**, in units: `compareSelect` (comparisons, selections, min, max and clamps, `F32Sat_v1` and `S32ClampS8`
   among them, the 1-bit logic ops `And2`, `Xor2`, `BitAnd`, `BitOr`, `BitXor`, `BitNot`, `Not`, the salt-dead tests,
-  PIN's `PouwSel32_v1` and `PouwWinOk_v1`, and H1's wrap and digit tests `PouwWrapBits`, `PouwXWrap` and `PouwDigitZ`);
+  PIN's `PouwSel32_v1` and `PouwWinOk_v1`, H1's wrap and digit tests `PouwWrapBits`, `PouwXWrap` and `PouwDigitZ`, and
+  v4's live bit and receipt mask `PouwOrBit` and `PouwMask32`);
   `fold` (the receipt folds' steps, `PouwDuoAbsorb_v1` and fx1's `PouwFx1Absorb`); and `rounding`, every other
   primitive: FP arithmetic and casts (`E4m3ToF32_v1` and `F32Neg_v1` among them), the exact widenings and packings but
   `Bf16ToF32_v1`, the FP and FP8 dots, integer division, remainder and narrowing, integer products and sums reduced mod
@@ -255,6 +257,8 @@ def registry : List (String × Class) := [
   ("PouwLow8_v1", .budgeted .rounding),
   ("PouwLow8_v2", .budgeted .rounding),
   ("PouwMaj32_v1", .budgeted .rounding),
+  ("PouwMask32_v1", .budgeted .compareSelect),
+  ("PouwMask32_v2", .budgeted .compareSelect),
   ("PouwNegBetaSum16_v1", .budgeted .rounding),
   ("PouwNoiseBlock_v1", .budgeted .rounding),
   ("PouwNoiseBlock_v2", .budgeted .rounding),
@@ -263,6 +267,8 @@ def registry : List (String × Class) := [
   ("PouwOneStream2_v2", .budgeted .rounding),
   ("PouwOneStream3_v1", .budgeted .rounding),
   ("PouwOneStream3_v2", .budgeted .rounding),
+  ("PouwOrBit_v1", .budgeted .compareSelect),
+  ("PouwOrBit_v2", .budgeted .compareSelect),
   ("PouwPackBE4_v1", .budgeted .rounding),
   ("PouwPeelSeg_v1", .budgeted .rounding),
   ("PouwPeelSeg_v2", .budgeted .rounding),

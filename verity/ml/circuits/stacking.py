@@ -84,7 +84,8 @@ audit certified as read in it and its duration):
 
 The sink, coin and limb-split types of the s8 family's companions (the receipt fold, the noise derivation, `LimbSplit`) are
 circuits' Build types; their primitives are budgeted gate by gate, never free (`LimbSplit`'s byte, carry and clamp, and the
-H1 + fx1 tile's noise, digit, one-stream and fold primitives, each with its Definition on bits, are listed). Bits become bytes
+H1 + fx1 tile's noise, digit, one-stream and fold primitives and v4's dead-tile mask, each with its Definition on bits, are
+listed). Bits become bytes
 exactly (bits / 8), and every comparison is exact
 (`fractions.Fraction`): c, R_in and a window's duration are given as an int, a Fraction or a str, and a float, which would be
 read at its binary value, is refused.
@@ -221,7 +222,8 @@ CLASSES: dict[str, str] = {
         "GuardNegInfZero_v1 I32Eq_v1 I32Le_v1 NcpAbsMax_v1 PouwBlackwellE4m3SaltDead_v1 PouwHopperE4m3SaltDead_v1 "
         "PouwSel32_v1 PouwSqGe_v1 PouwWinOk_v1 SelectBf16_v1 SelectBit_v1 SelectF32_v1 SelectI32_v1 U32Ge_v1 "
         "F32Sat_v1 S32ClampS8_v1 S32ClampS8_v2 And2_v1 Xor2_v1 BitAnd_v1 BitOr_v1 BitXor_v1 BitNot_v1 Not_v1 "
-        "PouwDigitZ_v1 PouwDigitZ_v2 PouwWrapBits_v1 PouwWrapBits_v2 PouwXWrap_v1 PouwXWrap_v2"
+        "PouwDigitZ_v1 PouwDigitZ_v2 PouwWrapBits_v1 PouwWrapBits_v2 PouwXWrap_v1 PouwXWrap_v2 "
+        "PouwOrBit_v1 PouwOrBit_v2 PouwMask32_v1 PouwMask32_v2"
     ), "compare_select"),
     **dict.fromkeys(("PouwDuoAbsorb_v1", "PouwFx1Absorb_v1", "PouwFx1Absorb_v2"), "folds"),
 }
