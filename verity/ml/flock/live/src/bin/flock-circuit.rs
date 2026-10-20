@@ -1088,6 +1088,38 @@ fn firewall_on(st: &Stmt) -> bool {
     is_zk(st) && std::env::var("FC_FIREWALL").as_deref() == Ok("1")
 }
 
+/// The Lean verifier's name of the statement a firewalled session's `Hello` is set up under: `FC_FIREWALL_STATEMENT`, else
+/// this build's (the circuit's statement, with `+seed-injection` in a build whose identity pins `seed_injection`).
+fn lean_statement(st: &Stmt) -> String {
+    std::env::var("FC_FIREWALL_STATEMENT")
+        .unwrap_or_else(|_| format!("{}{}", st.c.statement(), if cfg!(feature = "seed-injection") { "+seed-injection" } else { "" }))
+}
+
+/// A firewalled session's `Hello` (PROTOCOL.md §10, `firewall::LeanHello`) at the verifier's draw `draw`: one Lean process
+/// for every session of `tables` tables, set up on the statement's circuit (`--circuit`), lookup tables (`--tables`) and the
+/// verifier's own public file of `inst` (`Instances::public_file`, removed once the process has read it), with
+/// `FC_FIREWALL_HELLO_ARGS`' flags after them (`flock-verify`'s `--partition F --program F`). `Ok(Err(why))`: the Lean setup
+/// refused the statement.
+fn lean_hello(st: &Stmt, inst: &Instances, tables: usize, draw: &str, nonce: Option<&[u8; 32]>) -> Result<Result<String, String>, String> {
+    type Hello = (usize, flock_live::firewall::LeanHello, Option<std::path::PathBuf>);
+    static HELLO: Mutex<Option<Hello>> = Mutex::new(None);
+    let mut g = HELLO.lock().unwrap_or_else(PoisonError::into_inner);
+    if !matches!(&*g, Some((j, ..)) if *j == tables) {
+        let public = std::env::temp_dir().join(format!("flock-hello-{}-{tables}.pub", std::process::id()));
+        std::fs::write(&public, inst.public_file()?).map_err(|e| format!("the Lean Hello's public file {}: {e}", public.display()))?;
+        let mut args: Vec<String> = vec!["--statement".into(), lean_statement(st), "--circuit".into(), arg("--circuit", "circuit.txt"),
+            "--public".into(), public.display().to_string(), "--tables".into(), arg("--tables", "tables"), "--session-tables".into(), tables.to_string()];
+        args.extend(std::env::var("FC_FIREWALL_HELLO_ARGS").unwrap_or_default().split_whitespace().map(String::from));
+        *g = Some((tables, flock_live::firewall::LeanHello::start(&flock_live::firewall::lean_frame_exe(), &args)?, Some(public)));
+    }
+    let (_, lean, public) = g.as_mut().expect("the Lean Hello started");
+    let h = lean.hello(draw, nonce);
+    if let Some(p) = public.take() {
+        let _ = std::fs::remove_file(p);
+    }
+    h
+}
+
 thread_local! {
     /// set on the firewall's own threads: the salt context's draws there are the shadow opening's
     static IN_FIREWALL: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
@@ -3451,8 +3483,14 @@ fn session_proved(st: &Arc<Stmt>, inst: &Arc<Instances>, t: SharedTransport, pla
     };
     let t: SharedTransport = shared(Logged { inner: SharedCall(t), coins: log.clone() });
     let t0 = Instant::now();
+    let firewalled = firewall_on(st);
     // registration done: the verifier draws the units (or none), and the statement is the drawn units', in the session's tables
-    let tabs = match call(&t, Req::Register) {
+    let reg = call(&t, Req::Register);
+    let draw = match &reg {
+        Ok(Resp::Draw(d)) if !plan.ignore_draw => d.clone(),
+        _ => "null".to_string(),
+    };
+    let tabs = match reg {
         Ok(Resp::Draw(d)) if d == "null" || plan.ignore_draw => match &plan.split {
             Some(s) if s.names() == names => Ok(s.clone()),
             _ => session_tables(st, inst, None, names.len()),
@@ -3470,7 +3508,16 @@ fn session_proved(st: &Arc<Stmt>, inst: &Arc<Instances>, t: SharedTransport, pla
     };
     let st = &tabs.list[0].st;
     let sig = session_sigma(&tabs.parts());
-    let hello = if is_zk(st) {
+    // under the firewall the Hello is Lean's, at a nonce it draws (a simulator's rewind restarts at the plan's)
+    let hello = if firewalled {
+        match lean_hello(st, inst, names.len(), &draw, plan.coin_nonce.as_ref()) {
+            Ok(Ok(h)) => h,
+            Ok(Err(e)) | Err(e) => {
+                let why = format!("the Lean Hello: {e}");
+                return Err((json!({"accepted": false, "why": why, "prover_stopped": why}), Vec::new()));
+            }
+        }
+    } else if is_zk(st) {
         config_of(&tabs).hello_with_nonce(&plan.coin_nonce.unwrap_or_else(|| flock_live::zk_hooks::coin_nonce(&seed)))
     } else {
         config_of(&tabs).hello()
