@@ -7,8 +7,8 @@ The Commit carries its session, the challenger gate's reply (``--replay-session`
 the record. `reason` is the verifier's check of the record against the commitment the challenger signed (read on the
 auditor's side, `pouw_h1_challenger.trusted_rounds_reason`'s way): the coin is replay coin 0 of that commitment, opened
 after this run root, and the challenge is the coin. `session_reason` first holds the record's session to the one the
-auditor's ledger opened for its period and Commit (`pouw_h1_challenger.held`), and reads that commitment from the
-session's sealed tree.
+auditor's ledger opened for its Commit root (`pouw_h1_challenger.held`), and reads that commitment from the session's
+sealed tree.
 """
 from __future__ import annotations
 
@@ -31,11 +31,13 @@ def after(run_root: bytes) -> bytes:
 
 
 def challenge(at: str, run_root: bytes, session: Any = None) -> tuple[str, dict[str, Any]]:
-    """The replay challenge (the coin, hex) from the challenger at `at`, in the session the gate's reply `session` names
-    (`pouw_h1_challenger.session_of`, which the record carries), and its record; ValueError (a malformed session or a
-    challenger of another layout) or `CoinError` (the challenger's refusal), with the session closed either way."""
+    """The replay challenge (the coin, hex) from the challenger at `at`, in the session the gate's answer `session` names
+    (`pouw_h1_challenger.session_of`; its hello carries the answer's secret, and a challenger of another commitment is
+    refused before the coin, `pouw_h1_challenger.connect`), and its record, which carries the session without its secret;
+    ValueError (a malformed session, another commitment than the answer's or a challenger of another layout) or
+    `CoinError` (the challenger's refusal), with the session closed either way."""
     given = PHC.session_of(session)
-    client = remote.RemoteChallenger.connect(at)
+    client = remote.RemoteChallenger.connect(at) if given is None else PHC.connect(at, given)
     try:
         c = client.commitment
         if c.scheme != SCHEME or not c.family(FAMILY):
@@ -47,8 +49,8 @@ def challenge(at: str, run_root: bytes, session: Any = None) -> tuple[str, dict[
             client.close()
         except CoinError:
             pass
-    return opening.coin.hex(), {"source": "challenger", "at": at, "session": given, "commitment": c.to_json(),
-                                "opening": opening.to_json()}
+    return opening.coin.hex(), {"source": "challenger", "at": at, "session": given and PHC.carried(given),
+                                "commitment": c.to_json(), "opening": opening.to_json()}
 
 
 def local(given: str | None, drawn: str) -> tuple[str, dict[str, Any]]:
@@ -79,8 +81,9 @@ def reason(record: Mapping[str, Any], challenge_hex: str, run_root: bytes, trust
 def session_reason(record: Mapping[str, Any], challenge_hex: str, run_root: bytes, ledger: PHC.Ledger, fetch: PHC.Fetch,
                    commit: str | None = None) -> str | None:
     """Why the replay challenge isn't the replay coin of the one session the auditor's `ledger` opened for the record's
-    period and Commit (`commit`, the Commit root the verifier holds, when given), read from that session's tree as
-    `fetch` gives it (`pouw_h1_challenger.evidence`); None when it is."""
+    Commit root (`commit`, the Commit root the verifier holds, when given), ended closed and complete under the record's
+    commitment (`pouw_h1_challenger.held`), read from that session's tree as `fetch` gives it
+    (`pouw_h1_challenger.evidence`); None when it is."""
     if record.get("source") != "challenger":
         return f"the replay challenge's source is {record.get('source')!r}, not the auditor host's challenger"
     why, window = PHC.held(record.get("session"), ledger, commit)

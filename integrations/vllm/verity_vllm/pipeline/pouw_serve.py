@@ -2,12 +2,12 @@
 first call's tiles tampered.
 
     verity-vllm pouw-serve --workload workloads/workload_qwen05_32x16_1req.json [--draws 16] [--out DIR]
-        [--challenger HOST:PORT --session '{"session": ..., "seq": ..., "period": ..., "commit": ...}']
+        [--challenger HOST:PORT --session '{"session": ..., "seq": ..., "root": ..., "commitment": ..., "secret": ...}']
 
 The engine is `verity_vllm.LLM` on the workload's pinned model, with ``pouw:ncp-v2`` installed. Every linear call is
 committed natively as it is served (`protocol_options.pouw_native`), under an epoch whose salt is the salt coin of the
 auditor host's challenger at ``--challenger``, in the session infra's gate opened for the window (``--session``, the
-gate's reply, `protocol_options.pouw_h1_challenger`), opened after the weights' root. Without ``--challenger`` the salt
+gate's answer, `protocol_options.pouw_h1_challenger`), opened after the weights' root. Without ``--challenger`` the salt
 is the command's own challenger's (`verity.core.protocols.pouw.coins.Challenger`, epoch 0): the command is then its
 run's auditor, and the run is a measurement, not a window any verifier credits. Once the engine closes, the circuit
 replay (`check.replay.pouw_circuit.replay`) runs twice, the run's calls as one window under the work law at a budget of
@@ -51,7 +51,7 @@ class Options:
     out: str = option("--out", env="RESEARCH_RUN_DIR", default=".", help="the output directory (default $RESEARCH_RUN_DIR, else .)")
     run_id: str = option("--run-id", env="RESEARCH_RUN_ID", default="", help="the research run's id: result.json is written when set")
     challenger: str | None = option("--challenger", default=None, metavar="HOST:PORT", help="the auditor host's challenger the epoch's salt coin comes from (the pouw setting 'challenger'); without it the command's own in-process challenger draws it, and the run is a measurement only")
-    session: str | None = option("--session", default=None, metavar="JSON", help="with --challenger: the challenger gate's reply for the window, {\"session\", \"seq\", \"period\", \"commit\"} (the pouw setting 'session')")
+    session: str | None = option("--session", default=None, metavar="JSON", help="with --challenger: the challenger gate's open answer for the window, {\"session\", \"seq\", \"root\", \"commitment\"} and its \"secret\" (the pouw setting 'session')")
 
 
 def protocols_config(a: Options) -> dict[str, Any]:
@@ -63,7 +63,7 @@ def protocols_config(a: Options) -> dict[str, Any]:
         from verity.core.protocols.pouw.coins import Challenger
         return {"pouw": {"coins": Challenger(0), "draws": a.draws}}
     if a.session is None:
-        raise ValueError("--challenger needs --session, the challenger gate's reply for the window's period and Commit")
+        raise ValueError("--challenger needs --session, the challenger gate's open answer for the window's Commit")
     return {"pouw": {"challenger": a.challenger, "session": json.loads(a.session), "draws": a.draws}}
 
 

@@ -736,7 +736,8 @@ def install(scheme: str, target: Target) -> Option:
     declared = Workload(tuple(Matmul(w, Shape(16, k, n), w) for w, (n, k) in shapes.items()))
     session = None
     if settings.challenger is not None:
-        session, commitment, opening, _rounds, salt = PHC.session(entry, settings.challenger, 0, weights_root(roots))
+        session, commitment, opening, _rounds, salt = PHC.session(entry, settings.challenger, 0, weights_root(roots),
+                                                                    settings.session)
     else:
         commitment, opening = settings.coins.commitment, settings.coins.open("salt", weights_root(roots))
         salt = Epoch.start(declared, roots, commitment, opening).salt
@@ -750,7 +751,7 @@ def install(scheme: str, target: Target) -> Option:
                else _Run(s, entry, settings, roots, salt))
         run.commits.update(coins=commitment.to_json(), salt_opening=opening.to_json())
     if session is not None:
-        run.commits.update(coin_source=PH.CHALLENGER, session=dict(settings.session))
+        run.commits.update(coin_source=PH.CHALLENGER, session=PHC.carried(settings.session))
     if isinstance(run, _CircuitRun):
         _CIRCUIT_RUNS[entry] = (run, _sites(target.model, layers))
     h = target.hooks(entry)
@@ -776,10 +777,10 @@ def _install_h1(entry: str, settings: Settings, target: Target) -> Option:
     requests and its batch order to the run (`pouw_h1.admitting`), each entry and each served row's request under its
     round's root before the ``rounds`` coin, and the window's draw coin opens at release after its manifest. With the
     setting ``challenger`` the salt, round and draw coins are the auditor host's, from the one session infra's gate
-    opened for the window (``session``, the gate's reply, which the commitment carries; `pouw_h1_challenger.session`),
-    closed once the window has finished; without it the coins are this process's and the window credits nothing
-    (`pouw_h1.IN_PROCESS`). ``admission`` is the run's (`pouw_h1_requests.ADMISSIONS`, round 0 only by default). The
-    served values are the arm's, untouched."""
+    opened for the window (``session``, the gate's answer, which the commitment carries without its secret;
+    `pouw_h1_challenger.session`), closed once the window has finished; without it the coins are this process's and the
+    window credits nothing (`pouw_h1.IN_PROCESS`). ``admission`` is the run's (`pouw_h1_requests.ADMISSIONS`, round 0
+    only by default). The served values are the arm's, untouched."""
     layers = PH.layers(target.model, linear_types())
     committed = target.weight_commitments.get(entry) or commit_weights(PH.SCHEME, target)
     roots = {int(w): bytes.fromhex(r) for w, r in committed["weight_roots"].items()}
@@ -790,7 +791,7 @@ def _install_h1(entry: str, settings: Settings, target: Target) -> Option:
     session, rounds = None, settings.rounds
     if settings.challenger is not None:
         session, commitment, opening, rounds, salt = PHC.session(entry, settings.challenger, settings.steps,
-                                                                 weights_root(roots))
+                                                                 weights_root(roots), settings.session)
     else:
         commitment, opening = settings.coins.commitment, settings.coins.open("salt", weights_root(roots))
         salt = Epoch.start(declared, roots, commitment, opening).salt
@@ -804,7 +805,7 @@ def _install_h1(entry: str, settings: Settings, target: Target) -> Option:
     run.commits.update(weights_root=weights_root(roots).hex(), coins=commitment.to_json(), salt_opening=opening.to_json(),
                        coin_source=source)
     if session is not None:
-        run.commits["session"] = dict(settings.session)
+        run.commits["session"] = PHC.carried(settings.session)
     if rounds is not None:
         run.commits["round_coins"] = rounds.challenger.commitment.to_json()
     _H1_RUNS[entry] = run

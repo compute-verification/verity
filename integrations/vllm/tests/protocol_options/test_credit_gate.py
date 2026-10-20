@@ -113,14 +113,17 @@ def _linear_is_the_stand_in(monkeypatch):
 
 
 AUDITOR = "vy-challenger-1:7811"
-SESSION = {"session": "s20261020T000000Z-0001", "seq": 0, "period": "0", "commit": "c1" * 64}
+SESSION = {"session": "s20261020T000000Z-0001", "seq": 0, "root": "c1" * 64, "commitment": "c0" * 64}
 
 
 @pytest.fixture
 def auditor(tmp_path, monkeypatch):
-    """The auditor host's challenger, one session over a one-round live epoch, reached at `AUDITOR`."""
+    """The auditor host's challenger, one session over a one-round live epoch, reached at `AUDITOR`, whose coin
+    commitment `SESSION` names."""
     host = CH.Host(tmp_path / "auditor", Wd.live_challenger(0, 1, CH.entropy(1)), 1)
-    monkeypatch.setattr(R.RemoteChallenger, "connect", classmethod(lambda cls, at: host.client if at == AUDITOR else None))
+    monkeypatch.setattr(R.RemoteChallenger, "connect",
+                        classmethod(lambda cls, at, secret=None: host.client if at == AUDITOR else None))
+    monkeypatch.setitem(SESSION, "commitment", host.challenger.commitment.root.hex())
     return host
 
 

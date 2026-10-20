@@ -656,9 +656,12 @@ AUDITOR = "vy-challenger-1:7811"
 
 
 def _host(tmp_path, monkeypatch, name="auditor", seed=1, rounds=3, challenger=None):
-    """A challenger host serving one session over a live epoch of `rounds` round coins, reached at `AUDITOR`."""
+    """A challenger host serving one session over a live epoch of `rounds` round coins, reached at `AUDITOR`, whose coin
+    commitment `SESSION` (the gate's answer) names."""
     host = CH.Host(tmp_path / name, challenger or Wd.live_challenger(0, rounds, CH.entropy(seed)), seed)
-    monkeypatch.setattr(R.RemoteChallenger, "connect", classmethod(lambda cls, at: host.client if at == AUDITOR else None))
+    monkeypatch.setattr(R.RemoteChallenger, "connect",
+                        classmethod(lambda cls, at, secret=None: host.client if at == AUDITOR else None))
+    monkeypatch.setitem(SESSION, "commitment", host.challenger.commitment.root.hex())
     return host
 
 
@@ -680,8 +683,8 @@ def _serve_window(settings):
     return comp.installed[0].commitment(), run
 
 
-#: the challenger gate's reply for the window (RT4-INT-17), with the period and Commit root its open named
-SESSION = {"session": "s20261020T000000Z-000a", "seq": 0, "period": "7", "commit": "ca" * 64}
+#: the challenger gate's open answer for the window (RT4-INT-17): its Commit root and coin commitment (the host's, `_host`)
+SESSION = {"session": "s20261020T000000Z-000a", "seq": 0, "root": "ca" * 64, "commitment": "c0" * 64}
 
 
 def _remote(**kw):
