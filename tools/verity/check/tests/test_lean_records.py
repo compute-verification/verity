@@ -7,7 +7,10 @@ import fcntl
 import importlib.util
 import json
 import os
+import shlex
 import shutil
+import subprocess
+import sys
 from pathlib import Path
 
 import pytest
@@ -303,6 +306,29 @@ def test_it_names_one_package_and_one_run_holds_a_tree(repo, tmp_path, capsys):
         fcntl.flock(held, fcntl.LOCK_EX)
         assert LC.audit_records("a", deps, tree) == 2
     assert f"lean-records: another run holds {tree}" in capsys.readouterr().out and _calls(tmp_path) == []
+
+
+def test_a_tree_held_outside_its_slot_names_whoever_keeps_the_lock(repo, tmp_path, capsys):
+    """INF-156: r20261020-000527-fd30 held slot build/0 and was refused its tree, whose lock r20261020-000257-9783 held while
+    copying it (`(flock -n 9 && cp -a ...) 9>build-0/.lock`): the process that took the flock had exited, and the one that kept
+    the descriptor is the one to name, with its run."""
+    tree = tmp_path / "cache" / "lean-records" / "tree"
+    tree.mkdir(parents=True)
+    work = tmp_path / "scratch" / "r20261020-000257-9783" / "tree"
+    work.mkdir(parents=True)
+    take = f"{shlex.quote(sys.executable)} -c 'import fcntl; fcntl.flock(9, fcntl.LOCK_EX)'"
+    keeper = subprocess.Popen(["sh", "-c", f"exec 9>>{shlex.quote(str(tree / '.lock'))}; {take} && echo held && exec cat"],
+                              cwd=work, stdin=subprocess.PIPE, stdout=subprocess.PIPE, text=True)
+    try:
+        assert keeper.stdout.readline() == "held\n"
+        assert LC.audit_records("a", tmp_path / "deps", tree) == 2 and _calls(tmp_path) == []
+        out = capsys.readouterr().out
+        assert f"lean-records: another run holds {tree}, outside this run's Lean slot (none here)" in out
+        assert f"pid {keeper.pid} (run r20261020-000257-9783): cat" in out
+    finally:
+        keeper.stdin.close()
+        keeper.wait()
+    assert LC.audit_records("a", tmp_path / "deps", tree) == 0, "the lock is the descriptor's: free once its last holder exits"
 
 
 def test_it_refuses_a_tree_outside_its_own(repo, tmp_path, capsys):

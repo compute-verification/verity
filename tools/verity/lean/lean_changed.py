@@ -13,7 +13,9 @@ node's Lean slots of pool `build` (`lean_slot.py`; refused when SLOTS lists no `
 for), never one of the `audit` pool's, where hour-long audits hold every slot, whatever slot (LEAN_SLOT) the process that
 started it holds. Slot `build/I`'s tree is `lean-records/build-I` under the check cache, whoever holds that slot's lock owns
 it, and check.py inherits the lock's descriptor, so the slot is held until check.py exits; with no SLOTS (a laptop) the tree
-is `lean-records/local`. `--tree` names another only under `lean-records/`. The tree's fetched dependencies are its own copy
+is `lean-records/local`. `--tree` names another only under `lean-records/`. The tree's own lock (its `.lock`, which no
+child inherits) is taken after the slot; one held outside the slot (a copy of the tree, say) refuses the run, which names
+each process that has it open and its run. The tree's fetched dependencies are its own copy
 of the audit's (taken once per manifest and toolchain, else fetched cold), never links, so what Lake writes there stays out of
 what the audit keeps. That bounds Lake's own writes, not compile-time code: check.py builds in its sandbox only where the
 machine allows one, and without it that code can write anything this user can, the audit's kept dependencies and passes
@@ -299,6 +301,43 @@ def records_tree() -> Path:
     return LA.COMMON.cache_dir() / RECORDS / (os.environ.get(LEAN_SLOT.HELD) or "local").replace("/", "-")
 
 
+#: a `research run`'s id, as its run directory, scratch tree and inputs' paths name it
+RUN_ID = re.compile(r"\br\d{8}-\d{6}-[0-9a-f]{4}\b")
+
+
+def holders(lock: Path, proc: Path = Path("/proc")) -> list[str]:
+    """Every other process with ``lock`` open, as `pid N (run R): CMD`, the run read from its working directory or command:
+    whoever took its flock may have exited while what it started keeps the descriptor (`(flock -n 9 && cp -a ...) 9>.lock`:
+    r20261020-000257-9783 copying `build-0`, INF-156), so /proc/locks' pid alone can name no one."""
+    try:
+        st = lock.stat()
+    except OSError:
+        return []
+    out = []
+    for d in sorted((p for p in proc.iterdir() if p.name.isdigit() and int(p.name) != os.getpid()), key=lambda p: int(p.name)):
+        try:
+            fds = list((d / "fd").iterdir())
+        except OSError:
+            continue
+        for fd in fds:
+            try:
+                s = fd.stat()
+            except OSError:
+                continue
+            if (s.st_dev, s.st_ino) == (st.st_dev, st.st_ino):
+                break
+        else:
+            continue
+        try:
+            cmd = (d / "cmdline").read_bytes().replace(b"\0", b" ").decode(errors="replace").strip()
+            cwd = os.readlink(d / "cwd")
+        except OSError:
+            continue
+        run = RUN_ID.search(cwd) or RUN_ID.search(cmd)
+        out.append(f"pid {d.name}" + (f" (run {run.group()})" if run else "") + f": {cmd[:200]}")
+    return out
+
+
 def label(out: Path) -> None:
     """Write ``FAST_KIND`` into the reports check.py left under ``out``: `audit.json`, its packages, and each `report.json`."""
     for p in [out / "audit.json", *sorted(out.glob("audit-*/report.json"))]:
@@ -363,7 +402,10 @@ def audit_records(name: str, deps: Path, tree: Path | None = None, update: bool 
             try:
                 fcntl.flock(held, fcntl.LOCK_EX | fcntl.LOCK_NB)
             except BlockingIOError:
-                log(f"lean-records: another run holds {tree}")
+                who = holders(tree / ".lock")
+                log(f"lean-records: another run holds {tree}, outside this run's Lean slot "
+                    f"({os.environ.get(LEAN_SLOT.HELD) or 'none here'}), whose tree it is: "
+                    + ("; ".join(who) if who else f"no process has {tree / '.lock'} open any more; rerun"))
                 return 2
             links = json.loads((tree / LINKS).read_text()) if (tree / LINKS).is_file() else {}
             run_dir, run_id = os.environ.get("RESEARCH_RUN_DIR"), os.environ.get("RESEARCH_RUN_ID")
