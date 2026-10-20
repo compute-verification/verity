@@ -264,9 +264,12 @@ SLOT_WRAP = ["python3", "tools/verity/check/slot.py", "--"]
 
 def slot_wrap(priority: bool = False, twin: str | None = None) -> list[str]:
     """SLOT_WRAP naming who asked (RESEARCH_LANE, else RESEARCH_AGENT_URL), which `slot.py --status` on the machine shows, and
-    with --priority for the lander's train checks and --twin for one of a check's twins."""
+    with --priority for the lander's train checks, --rank from CHECK_SLOT_RANK (drive's train position, so the train that lands
+    next takes the next slot; CI-110) and --twin for one of a check's twins."""
     by = os.environ.get("RESEARCH_LANE") or os.environ.get("RESEARCH_AGENT_URL")
-    return [*SLOT_WRAP[:-1], *(["--priority"] if priority else []), *(["--by", by] if by else []),
+    rank = os.environ.get("CHECK_SLOT_RANK", "")
+    return [*SLOT_WRAP[:-1], *(["--priority"] if priority else []),
+            *(["--rank", rank] if priority and re.fullmatch(r"\d{1,6}", rank) else []), *(["--by", by] if by else []),
             *(["--twin", twin] if twin else []), SLOT_WRAP[-1]]
 
 

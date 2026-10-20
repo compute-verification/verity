@@ -35,7 +35,13 @@
 * **Registered values** (`verity/registration/v2`): the record adds `"registered": [{"value", "root", "leaves", "words",
   "domain"}, ...]` (with `"word_bits"` for a value whose leaves are not 16 bits), the program's weights, constants and
   tables committed once under hiding leaves (`registered`), and R7 holds them to the verifier's own list and to the roots
-  the log's earlier records registered. A record registers values exactly when it is v2; v1's bytes are unchanged.
+  the log's earlier records registered, or to a root the verifier held before the record (`pinned`: weights recorded
+  before the salt). A record registers values exactly when it is v2; v1's bytes are unchanged.
+* **Supplied values**: a registered value the verifier fills itself (`supplied`, `registered.supplied_root`: rows of the
+  record's roots, positions after the log's, its coin bound to the record's window and its own bytes, under public
+  salts). R7 recomputes its root and refuses a record that names another (`R7-supplied`); it is the record's own, so no
+  earlier record holds it. The window is otherwise provenance: R6 takes one record a window, so a salt bound to it is
+  one salt a window.
 """
 from __future__ import annotations
 
@@ -119,19 +125,28 @@ def receipt(rec: Mapping[str, Any], verifier: str, received: str | None = None) 
 def check(rec: Mapping[str, Any], program: Program, query: Mapping[str, Any], law: Mapping[str, Any], scheme: str,
           ports: Mapping[str, Mapping[str, Any]], leaf_layer: str | None = None, anchors: Sequence[Any] = (),
           log: Iterable[Mapping[str, Any]] = (), partition: Mapping[str, Any] | None = None,
-          work_table: Mapping[str, Any] | None = None, registered: Mapping[str, int] | None = None) -> Verdict:
+          work_table: Mapping[str, Any] | None = None, registered: Mapping[str, int] | None = None,
+          supplied: Mapping[str, Any] | None = None, pinned: Mapping[str, str] | None = None) -> Verdict:
     """R1-R7 against the verifier's own copies: its program and query, its law and scheme, the ports its layout derives
     (`{port: {"leaves", "domain"}}`), the digest of its copy of the leaf layer, its anchors, its log of this prover's
-    earlier records, and the parameters it expects registered (`registered`: `{parameter: words}`).  `partition`: the
+    earlier records, the parameters it expects registered (`registered`: `{parameter: words}`), of those the ones it
+    fills itself (`supplied`: `{parameter: [[source, ...], ...]}`, `registered.sources`) and the roots it held before the
+    record for others (`pinned`: `{parameter: root}`, the weights' root recorded before the salt, say); ValueError without
+    `registered`, or in another form.  `partition`: the
     verifier's own partition object when it isn't the canonical one (a record made before the canonical envelope); its
     program must still be `program`'s, and the population is `query`'s.  R1 holds the registered law to the verifier's own
     law expanded over its program and query (`draw.derive`): for `stratified`, the strata by template descriptor id and
     each stratum's k by the rule; for `work`, also its own `work_table`.  R7 holds the registered values to the verifier's
-    own (`registered_entries`) and a value an earlier record of the log registered to that record's root (`held_roots`):
-    a value is committed once, and the log is the only place the verifier holds its roots.  R3 reads `ports` by name, so
+    own (`registered_entries`), a pinned value to its pinned root, and a value an earlier record of the log registered to
+    that record's root (`held_roots`): a value is committed once; a supplied value's root is the one it recomputes from
+    this record and the log (`registered.supplied_root`) instead.  R3 reads `ports` by name, so
     its codes come in the ports' sorted order whatever order the mapping has, as the Lean port reads them."""
     c = _Collect()
     v2 = bool(registered)
+    sup = G.sources(supplied if supplied is not None else {})
+    if supplied is not None and not v2:
+        raise ValueError("supplied values are registered values: the verifier expects none registered")
+    pins = _pins(pinned, registered or {}, sup)
     keys = _KEYS | {"registered"} if v2 else _KEYS
     if not isinstance(rec, Mapping) or set(rec) != keys:
         c.fail("keys", sorted(set(rec) ^ keys) if isinstance(rec, Mapping) else rec)
@@ -201,11 +216,25 @@ def check(rec: Mapping[str, Any], program: Program, query: Mapping[str, Any], la
         c.fail("R6-window", rec["window"])
     # R7
     if v2:
-        _check_registered(c, rec["registered"], program, registered, held_roots(earlier))
+        _check_registered(c, rec["registered"], program, registered, {**held_roots(earlier), **pins}, rec, sup, earlier)
     return c.verdict()
 
 
-def _check_registered(c: _Collect, got: Any, program: Program, values: Mapping[str, int], held: Mapping[str, str]) -> None:
+def _pins(pinned: Mapping[str, str] | None, registered: Mapping[str, int], supplied: Mapping[str, Any]) -> dict[str, str]:
+    """The verifier's pinned roots, each of a value it expects registered and doesn't fill itself, as lowercase hex of
+    64 bytes; ValueError otherwise, which the Lean verifier refuses too (`OneStage.paramsOfJson`)."""
+    if pinned is None:
+        return {}
+    if not isinstance(pinned, Mapping) or not registered:
+        raise ValueError(f"pinned roots are an object of registered values' roots: {pinned!r}")
+    for v, r in pinned.items():
+        if v not in registered or v in supplied or not (isinstance(r, str) and len(r) == 128 and _HEX.fullmatch(r)):
+            raise ValueError(f"pinned value {v!r}: not a registered value it doesn't fill, pinned to 64 bytes: {r!r}")
+    return dict(pinned)
+
+
+def _check_registered(c: _Collect, got: Any, program: Program, values: Mapping[str, int], held: Mapping[str, str],
+                      rec: Mapping[str, Any], supplied: Mapping[str, Any], log: Sequence[Mapping[str, Any]]) -> None:
     try:
         mine = G.registered_entries(program, values)
     except ValueError as e:
@@ -232,8 +261,23 @@ def _check_registered(c: _Collect, got: Any, program: Program, values: Mapping[s
         width = e.get(G.WIDTH_KEY, G.WORD_BITS)
         if type(width) is not int or width != want["word_bits"] or e.get(G.WIDTH_KEY) == G.WORD_BITS:
             c.fail("R7-word_bits", {"value": v, "registered": width, "verifier": want["word_bits"]})
-        if v in held and e["root"] != held[v]:
+        if v in held and v not in supplied and e["root"] != held[v]:
             c.fail("R7-held", {"value": v, "registered": e["root"], "verifier": held[v]})
+    prog = P.program_digest(program) if supplied else None
+    for v in sorted(supplied):
+        want, e = mine.get(v), by_value.get(v)
+        if want is None:
+            c.fail("R7-supplied", {"value": v, "verifier": "not a value it expects registered"})
+            continue
+        if e is None:
+            continue
+        try:
+            root = G.supplied_root(program, v, supplied[v], rec, want, sorted(supplied), log, prog)
+        except ValueError as err:
+            c.fail("R7-supplied", {"value": v, "verifier": str(err)})
+            continue
+        if e["root"] != root:
+            c.fail("R7-supplied", {"value": v, "registered": e["root"], "verifier": root})
 
 
 def matches_public(rec: Mapping[str, Any], scheme: str, roots: Mapping[str, str], domains: Mapping[str, str],
