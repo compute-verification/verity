@@ -8,10 +8,10 @@ import Proofs.Accounting.HeadlineDc.Sm90
 rows (issue, JI90_0, JI90_1; `sm90m_isCert`), `p = 7/8`, `p₀ = ½` and `Λ = max(κ/ln(8/7), (κ + f)/ln 2)`:
 
 * the data, by `decide`: JPA90_0 is ♭'s largest facet of DC-90-ri's 15 (`sm90m_max`), so `B_♭` is its load
-  (`sm90m_bnd`); on π*'s three rows each writer kind's word costs at least honest's IGMMA's (`sm90m_writers`), and so
-  do the vector and table words at `½`, priced at each row's ALU coefficient, which is that row's least over the
-  vector classes (`sm90m_vec`, `sm90m_wv`), so `w* ≥ w90M` (`sm90m_wStar`); each of the 14 fold routes costs at
-  least the cheapest one's price on π*'s rows (`sm90m_fold`, `sm90m_phiStar`);
+  (`sm90m_bnd`); `w90M` is the cheapest word route's price on π*'s three rows, so each writer kind's word costs at
+  least it (`sm90m_writers`), and so do the vector and table words at `½`, priced at each row's ALU coefficient,
+  which is that row's least over the vector classes (`sm90m_vec`, `sm90m_wv`), so `w* ≥ w90M` (`sm90m_wStar`); each
+  of the 14 fold routes costs at least the cheapest one's price on π*'s rows (`sm90m_fold`, `sm90m_phiStar`);
 * A6 (`SheetWords`) gives (I2)/(I4) `WordsWritten` and, at `q = q_T = ½` and `b_T = 0`, (I3) `ScalarRoute`
   (`scalarRoute_half`); (I5) `SideUnits` and FILL-OPT hold at any run, since the model has no side unit and no filler;
 * the folded branch from those bounds (`folded_of_lower`): below `1908/100000` by `decide` (`sm90m_folded_q`), and it
@@ -44,9 +44,21 @@ def flat90M : Sparse :=
 /-- `B_♭` on DC-90-ri as a rational: ♭'s load on JPA90_0. -/
 def B90M : ℚ := dot (vfCoef90 10) 50 flat90M
 
-/-- Honest's IGMMA word priced at π* on its three rows. -/
-def w90M : ℚ :=
-  lam90 0 * (vfRow90 0 23 / 4096) + lam90 5 * (vfRow90 5 23 / 4096) + lam90 6 * (vfRow90 6 23 / 4096)
+/-- Writer kind `i`'s word priced at π* on its three rows. -/
+def wordPrice90M (i : ℕ) : ℚ :=
+  lam90 0 * (vfRow90 0 ((Sm90Measured.d2s.writers.getD i (0, 0)).1 % 50) /
+      ((Sm90Measured.d2s.writers.getD i (0, 0)).2 : ℚ)) +
+    lam90 5 * (vfRow90 5 ((Sm90Measured.d2s.writers.getD i (0, 0)).1 % 50) /
+      ((Sm90Measured.d2s.writers.getD i (0, 0)).2 : ℚ)) +
+    lam90 6 * (vfRow90 6 ((Sm90Measured.d2s.writers.getD i (0, 0)).1 % 50) /
+      ((Sm90Measured.d2s.writers.getD i (0, 0)).2 : ℚ))
+
+/-- The vector word at `½` priced at π* on its three rows, each at its ALU coefficient. -/
+def vecPrice90M : ℚ :=
+  lam90 0 * (1 / 2 / 32 * vfRow90 0 0) + lam90 5 * (1 / 2 / 32 * vfRow90 5 0) + lam90 6 * (1 / 2 / 32 * vfRow90 6 0)
+
+/-- The cheapest word route's price at π*: the two writer kinds' and the vector word's. -/
+def w90M : ℚ := ((List.range 2).map wordPrice90M).foldr min vecPrice90M
 
 /-- Fold route `i` priced at π* on its three rows. -/
 def price90M (i : ℕ) : ℚ :=
@@ -164,8 +176,8 @@ theorem sm90m_vecMin (r : Fin 15) (h : ∀ j ∈ Sm90Measured.d2s.vec, vfRow90 r
   rw [sm90m_hG, ← hk]
   exact Rat.cast_le.mpr (h j hj)
 
-/-- `w* ≥ w90M` at π*: every writer kind's word costs at least honest's IGMMA's on π*'s rows, and so do the vector
-and table words at `½`. -/
+/-- `w* ≥ w90M` at π*: every writer kind's word costs at least the cheapest word route's price on π*'s rows, and so
+do the vector and table words at `½`. -/
 theorem sm90m_wStar : (w90M : ℝ) ≤ Sm90Measured.model.wStar Sm90Measured.lamStar := by
   have hvec : (w90M : ℝ) ≤ (lam90 0 : ℝ) * (1 / 2 / 32 * Sm90Measured.model.vecMin 0) +
       (lam90 5 : ℝ) * (1 / 2 / 32 * Sm90Measured.model.vecMin 5) +
