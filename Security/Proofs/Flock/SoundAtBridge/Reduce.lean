@@ -59,7 +59,7 @@ theorem openedPlur_zero (pf : ProofLayer Ω S nπ V) (sess : Paths Ω S → Fin 
 /-- **The proof layer a family of sessions gives**: proof `i` of round `w` is accepted exactly where flock-verify
 accepts its session's outcome, its opening is the session's value layer read as a layer value, and its relation holds
 there when no drawn unit of the session is wrong or off at its own reads. -/
-def rowsLayer (sess : Paths Ω S → Fin S → Fin nπ → RowsSession) (out : ∀ x w i, (sess x w i).Out)
+noncomputable def rowsLayer (sess : Paths Ω S → Fin S → Fin nπ → RowsSession) (out : ∀ x w i, (sess x w i).Out)
     (rows : ∀ s : RowsSession, (Fin s.Circ.N → Bool) → V) (right : Paths Ω S → (Fin S → Fin nπ → V) → Prop) :
     ProofLayer Ω S nπ V where
   accepted x w i := LiveAcceptsZKR (sess x w i).I (sess x w i).own (out x w i)
