@@ -4,8 +4,8 @@
 # and the Commit ends PENDING until `tp-commit-replay` decides it on a CPU node (replay_publish.sh).  Its row dir holds the Build of
 # record and the passing Match (copied in from the CPU node, README "GPU batch"); the 8 GPUs come from the node's lease once every GPU
 # reads 0 MiB and no preemptible lease is held.  The bundles and "_rowmeta" (the row dir's small records) are preserved in the
-# store, art: ids in $OUT/bundles.json.  The engine's gpu_memory_utilization read back from its vllm_config goes to
-# $OUT/gpu_memory_utilization.json (exit 12, after the bundles are preserved, unless it is GPU_UTIL).
+# store, art: ids in $OUT/bundles.json.  The engine's gpu_memory_utilization read back from its vllm_config, the driver's and
+# each rank's, goes to $OUT/gpu_memory_utilization.json (exit 12, after the bundles are preserved, unless every one is GPU_UTIL).
 #   research run --on vy-glm53-eu --gpu-host --mem-gb 600 --timeout 10h --custody-ttl 24h --cwd source --project verity -- env ROW=... BUILD_RUN=... MATCH_RUN=... bash integrations/vllm/manifests/glm_v2_tree/jobs/commit.sh
 # env: ROW, BUILD_RUN, MATCH_RUN, [SW=/workspace/cp/circuits/glm-v2/rows], [REF=cursor/glm-v2-21f3], [MEMORY_MAP], [COMMIT_TIMEOUT].
 set -uo pipefail

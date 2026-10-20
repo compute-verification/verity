@@ -28,7 +28,7 @@ Base `origin/main` @ c0ebeb8b93 (0a0782abed through #2893), then, in this order:
 | #2883 (`cursor/rows64-land-21f3`) | 1d8869d1e4 | `MoeSum_v3` (`MoeSum_v1` on bits as a batch of `MoeSum_v2{TOPK,64}`), A11's Boolean-first probes |
 | #2888 (`cursor/multimem-land-21f3`) | af95f837ad | `AllReduceMultimem_v1` as a batch of 16-byte vectors (`AllReduceMultimemVector_v2`); its merges of #2836 and #2765 dec1238773 and its `test_predict` pin are this tree's already |
 | #2893 (`cursor/private-one-class-21f3`, CIR-64) | 57081b13db | `partition_v2.build` refuses a v2 private partition whose units span more than one size class; it is on main 0a0782abed, so it brings this tree to there |
-| `cursor/tp-readback-21f3` (its PR to open, vllm's files) | b1ac3145f1 | tp-capture's `topology.json` and tp-commit's `versions.json` record `effective_execution`, read back from the engine's `vllm_config` as the single-GPU paths do, so the Match and Commit jobs can show `gpu_memory_utilization` (the coordinator, 20 Oct 00:40Z) |
+| `cursor/tp-readback-21f3` (#2935) | 2cf3c2c788 | tp-capture's `topology.json` and tp-commit's `versions.json` record `effective_execution`, read back from the engine's `vllm_config` as the single-GPU paths do, the driver's and (`tp2_probe`) each rank's own, so the Match and Commit jobs can show `gpu_memory_utilization`; record files only, no digest moves (the coordinator, 20 Oct 00:40Z) |
 
 ROWS64 and the multimem batch joined when ASK-61 was provisionally accepted (Daniel, 19 Oct 21:59Z, option A: public
 power-of-two output classes up to 262,144 bits). Two conflicts, both sides kept:
@@ -83,8 +83,9 @@ worktree at a commit the guard accepts (`git worktree add /tmp/glm-v2-SHA SHA`).
 2. Window A, eu or h8 (`gpu_batch.sh a [NODE] [ROW]`, NODE vy-glm53-eu by default or vy-glm53-h8): the four rows' Match GPU legs
    (`match_gpu.sh`). h8 is preemptible, so it takes window A only, never a Commit; an evicted leg reruns with
    `gpu_batch.sh a vy-glm53-h8 ROW`, which moves the evicted `match/` aside (a `match/` whose legs ended is refused). Each leg's
-   engines read `gpu_memory_utilization` back from their `vllm_config` (`$OUT/gpu_memory_utilization.json`: 0.92, vLLM's
-   default). They need no Build, so nothing is copied to the node first: the capture's `--build-rank` registers a Build's
+   engines read `gpu_memory_utilization` back from their `vllm_config`, the driver and each rank (the no-observer control: the
+   driver alone; `$OUT/gpu_memory_utilization.json`: 0.92, vLLM's default, exit 12 otherwise). They need no Build, so nothing
+   is copied to the node first: the capture's `--build-rank` registers a Build's
    post-load tensors, an absent Build registers none, and GLM-5.3 has no model-level post-load hook (`loader_parity`; every
    rank's v2 trace records `post_load_tensors` `applies: false`). T1R takes
    the bf16 v6 capture (`BF16_ART`, from `verity-vllm records capture RUN`) and the G2 point (`benchmarks/served_commit/tp_decode.sh`,
@@ -100,7 +101,8 @@ worktree at a commit the guard accepts (`git worktree add /tmp/glm-v2-SHA SHA`).
    the G2 curve's `--retain none`) and PAIRS=1. Deferred, each rank's bundle `store/` holds its retained bytes, so the committed
    values are on disk for the replay and the audits; v1's B1 Commit r20261016-213336-6c35 was not deferred and kept none. The
    config's default is 3 pairs, which that v1 Commit ran, so a v2 Commit's overhead rests on one pair (G2's point measures
-   overhead). Its engine reads `gpu_memory_utilization` back (`$OUT/gpu_memory_utilization.json`: 0.88, as the v1 Commits ran).
+   overhead). Its engine reads `gpu_memory_utilization` back, the driver and each rank (`$OUT/gpu_memory_utilization.json`: 0.88, as the
+   v1 Commits ran).
 5. CPU, vy-nebius-cpu-3 (the verified checkpoint): the Build of record copied in, then `replay_publish.sh` per row (`--send
    bundles.json`): `tp-commit-replay` of every rank, then `records publish --tier heavy` with the nine captures of record cited
    by id (#2838's eight served-default captures, which this tree's `check_capture` accepts, and `BF16_ART`), the Commit's run
