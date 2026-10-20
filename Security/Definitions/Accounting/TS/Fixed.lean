@@ -92,7 +92,8 @@ draw `i` lands on it with probability at least its late cone's weight (`DrawnLay
 writes a value after that unit's coin, transitively, so every credited unit a wrong `v` spoils) over the mean round
 weight `N_w = Σ wt / S`, the unit `DrawnLayer.Covers` charges the game's deficiency in (not `v`'s own round's weight,
 which differs from it by `wt(v.1)/N_w`). A skipped `v` is then charged its cone, `F` in
-`skipped ≤ F·wt(B)/(1 − p) + slack`. A property of the draw, public. -/
+`skipped ≤ F·wt(B)/(1 − p) + slack`. A property of the draw, public.
+A reader composing it with `DrawnLayer.Covers` passes `Covers` the same `Nw = Σ wt / S` that it reads. -/
 def Priced (wt : Fin S → J → ℝ) (v : Fin S × J) : Prop :=
   ∃ i, pf.coneWt wt v ≤ prob (fun b : B => pf.draw b i = v.2) * ((∑ w, ∑ j, wt w j) / S)
 
