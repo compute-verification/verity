@@ -2106,6 +2106,14 @@ def closure_plan(facts: dict, passed) -> tuple[list[str], list[str]]:
     return sorted(missing), sorted(above - missing)
 
 
+def store_replay(replay_cache: Path, key: str, module: str) -> None:
+    """Record that ``module`` passed the replay under ``key``. The packages of one audit replay in threads of one process, and
+    two whose closures share a module store its key at once, so the temporary name is the thread's."""
+    tmp = replay_cache / f".{key}.{os.getpid()}.{threading.get_ident()}.tmp"
+    tmp.write_text(json.dumps({"schema": REPLAY_SCHEMA, "module": module, "key": key}))
+    os.replace(tmp, replay_cache / f"{key}.json")
+
+
 def replay_step(pkg: Path, policy: dict, facts: dict, toolchain: str, work: Path, replay_cache: Path | None,
                 closure: bool = False) -> tuple[list[str], dict]:
     """(failures, how many modules were checked and reused): the kernel replay of the package's audited modules
@@ -2136,9 +2144,7 @@ def replay_step(pkg: Path, policy: dict, facts: dict, toolchain: str, work: Path
         if accepted:
             replay_cache.mkdir(parents=True, exist_ok=True)
             for m in accepted:
-                tmp = replay_cache / f".{keys[m]}.{os.getpid()}.tmp"
-                tmp.write_text(json.dumps({"schema": REPLAY_SCHEMA, "module": m, "key": keys[m]}))
-                os.replace(tmp, replay_cache / f"{keys[m]}.json")
+                store_replay(replay_cache, keys[m], m)
     stats = {"checked": len(checked), "reused": len(reused), "peak_gib": round(_peak.bytes / 2**30, 1),
              "phases": doc.get("seconds", {})}
     if closure:

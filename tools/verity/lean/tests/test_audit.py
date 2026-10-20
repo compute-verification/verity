@@ -1881,6 +1881,25 @@ def test_the_closure_replay_checks_each_imported_module_once_and_then_reuses_it(
     assert rep["failures"] == [] and counts(rep) == (3, 1) and rep["replay"]["closure"]["checked"] == 0
 
 
+def test_two_packages_storing_one_replay_key_at_once_both_succeed(tmp_path, monkeypatch):
+    """The gate audits its packages in threads of one process, and two whose closures share a module store its replay key
+    at once; with the temporary file named by the pid alone, the second store renamed the first's away and the first's
+    rename failed (r20261020-021950-2eb0). The store between the first's write and its rename runs on another thread."""
+    real, nested = os.replace, []
+
+    def replace(src, dst):
+        if not nested:
+            nested.append(1)
+            t = threading.Thread(target=A.store_replay, args=(tmp_path, "k", "M"))
+            t.start()
+            t.join()
+        real(src, dst)
+
+    monkeypatch.setattr(A.os, "replace", replace)
+    A.store_replay(tmp_path, "k", "M")
+    assert json.loads((tmp_path / "k.json").read_text())["module"] == "M" and not list(tmp_path.glob(".*.tmp"))
+
+
 @pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
 def test_an_equation_lemma_two_modules_realize_counts_as_declared_by_the_imported_one(tmp_path):
     """`f.eq_1` is realized in B and in C, which don't import each other; D imports C and uses it. With B replayed and C
