@@ -747,7 +747,8 @@ def test_the_challenger_setting_is_h1s_one_coin_source(tmp_path, monkeypatch):
     assert any("opens no session" in r for r in refused(_remote(), stage="capture"))
     assert any("'challenger' are H1's" in r for r in refused({"pouw": {"coins": Challenger(0), "challenger": AUDITOR}},
                                                              entry="pouw:ncp-v1"))
-    assert "coins" not in pouw.challenged({"pouw": {"challenger": AUDITOR}}, (_entry(),))["pouw"]
+    assert "coins" not in PO.own_auditor({"pouw": {"challenger": AUDITOR}}, SimpleNamespace(protocols=(_entry(),)))["pouw"]
+    assert "coins" in PO.own_auditor({"pouw": {}}, SimpleNamespace(protocols=(_entry(),)))["pouw"]
     short = _host(tmp_path, monkeypatch, rounds=2)
     with pytest.raises(ValueError, match="its 2 round coins are fewer than the window's 3 rounds"):
         _serve_window(_remote())

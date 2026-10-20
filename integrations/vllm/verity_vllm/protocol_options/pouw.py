@@ -697,10 +697,9 @@ def weights_claim(scheme: Any, curated: bool = False, needs_gamma_fold: bool = F
 def challenged(settings: Mapping[str, Mapping[str, Any]], enabled: Any, epoch: int = 0) -> dict[str, dict[str, Any]]:
     """`settings` (the loaded protocols config) with PoUW's ``coins`` a challenger of `epoch` held in this process
     (`verity.core.protocols.pouw.coins.Challenger`) when `enabled` (the protocol set) has PoUW, for a pipeline
-    that is its run's own auditor (it replays and judges what it served); a config's own ``coins`` is kept, and a config
-    naming the auditor host's ``challenger`` gets none."""
+    that is its run's own auditor (it replays and judges what it served); a config's own ``coins`` is kept."""
     out = {k: dict(v) for k, v in settings.items()}
-    if any(str(e).partition(":")[0] == NAME for e in (enabled or ())) and "challenger" not in out.get(NAME, {}):
+    if any(str(e).partition(":")[0] == NAME for e in (enabled or ())):
         out.setdefault(NAME, {}).setdefault("coins", Challenger(epoch))
     return out
 
