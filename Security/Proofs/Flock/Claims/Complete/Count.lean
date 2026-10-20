@@ -5,9 +5,9 @@ import Proofs.Flock.Claims.DeployK
 /-!
 # The honest session's sends fit the verifier's rounds
 
-* **The sends** (`sendsC`): at most `n` bodies pushed by a run of the pure session that returns, a cost bound that
-  `cost_walk` reads off each prover step: a squeeze sends at most one round, a commitment (quiet) and the record
-  (`recordJson_sends`) none.
+* **The sends** (`sendsC`): at most `n` bodies pushed by a run of the pure session, whether it returns or stops, a
+  cost bound that `cost_walk` reads off each prover step: a squeeze sends at most one round, a commitment (quiet) and
+  the record (`recordJson_sends`) none.
 * **Per step**: zerocheck `3 + (m − 6)`, lincheck `3 + (kLog − 6)`, the ring switch one per claim and one more, Ligerito
   `k0 + 9` and then `11` per recursive level but the last, which sends `7` (`ligeritoP_sends`); a rep their sum
   (`repP_sends`).
@@ -24,43 +24,44 @@ open With
 
 /-! ## The sends -/
 
-/-- **At most `n` sends**: a run of the pure session that returns pushes at most `n` bodies. -/
+/-- **At most `n` sends**: a run of the pure session pushes at most `n` bodies, whether it returns or stops. -/
 def sendsC : Cost PS where
-  P y n := ∀ l a l', y.go l = (.ok a, l') → l'.size ≤ l.size + n
-  mono h hnm l a l' e := (h l a l' e).trans (by omega)
-  pure a l b l' e := by
-    simp only [StV.go, Id.run] at e
-    cases e
-    simp
-  bind {α β x f n m} hx hf l b l' e := by
-    rw [go_bind] at e
+  P y n := ∀ l, (y.go l).2.size ≤ l.size + n
+  mono h hnm l := (h l).trans (by omega)
+  pure a l := Nat.le_add_right _ _
+  bind {α β x f n m} hx hf l := by
+    rw [go_bind]
+    have h1 := hx l
     rcases hy : x.go l with ⟨r, l''⟩
-    rw [hy] at e
+    rw [hy] at h1
     cases r with
-    | error _ => cases e
-    | ok a =>
-      have h1 := hx l a l'' hy
-      have h2 := hf a l'' b l' e
+    | error _ =>
+      dsimp only at h1 ⊢
       omega
-  throw _ _ _ _ _ e := by cases e
-  lift v l a l' e := by
-    cases v with
-    | error _ => cases e
-    | ok b =>
-      have : l' = l := (Prod.mk.inj e).2.symm
-      subst this
-      simp
+    | ok a =>
+      have h2 := hf a l''
+      dsimp only at h1 ⊢
+      omega
+  throw _ _ l := Nat.le_add_right _ _
+  lift v l := by
+    cases v <;> exact Nat.le_add_right _ _
+
+/-- A run from no sends that ends at `l` pushed at most `n` bodies. -/
+theorem sendsC_ran {α : Type} {y : PS α} {n : ℕ} (h : sendsC.P y n) {r : Except String α} {l : Array Claims.Msg}
+    (e : y.go #[] = (r, l)) : l.size ≤ n := by
+  have := h #[]
+  rw [e] at this
+  simpa using this
 
 theorem sendsC_round (resp : ℕ → Claims.Msg) (c : ByteArray) : sendsC.P ((asksS resp).round c) 1 := by
-  intro l a l' e
-  cases e
+  intro l
+  show (l.push (Claims.toMsg c)).size ≤ l.size + 1
   simp
 
 theorem sendsC_quiet {α : Type} {v : V α} {y : PS α} (h : quietS.R v y) : sendsC.P y 0 := by
-  intro l a l' e
-  rw [h l] at e
-  cases e
-  simp
+  intro l
+  rw [h l]
+  exact Nat.le_add_right _ _
 
 theorem squeezeP_sends (resp : ℕ → Claims.Msg) (kind : UInt8) (n : ℕ) :
     (sendsC.st Transcript).P (squeezeP (asksS resp) kind n) 1 := by
@@ -206,24 +207,24 @@ theorem recordJson_sends (h : ByteArray → ByteArray) (spec : SessionSpec) (roo
 /-- A lifted verdict's value: what follows it is bounded at the value it returns. -/
 theorem sendsC_lift_bind {α β : Type} (v : V α) {f : α → PS β} {n : ℕ} (h : ∀ a, v = .ok a → sendsC.P (f a) n) :
     sendsC.P (monadLift v >>= f) n := by
-  intro l b l' e
-  rw [go_bind] at e
+  intro l
+  rw [go_bind]
   cases v with
-  | error _ => cases e
-  | ok a => exact h a rfl l b l' e
+  | error _ => exact Nat.le_add_right _ _
+  | ok a => exact h a rfl l
 
 /-- A quiet run's value: what follows it is bounded at the value it returns. -/
 theorem sendsC_quiet_bind {α β : Type} {v : V α} {y : PS α} (hq : quietS.R v y) {f : α → PS β} {n : ℕ}
     (h : ∀ a, v = .ok a → sendsC.P (f a) n) : sendsC.P (y >>= f) n := by
-  intro l b l' e
-  rw [go_bind, hq l] at e
+  intro l
+  rw [go_bind, hq l]
   cases v with
-  | error _ => cases e
-  | ok a => exact h a rfl l b l' e
+  | error _ => exact Nat.le_add_right _ _
+  | ok a => exact h a rfl l
 
 theorem sendsC_link (resp : ℕ → Claims.Msg) (a b : Array ByteArray) : sendsC.P ((asksS resp).link a b) 1 := by
-  intro l c l' e
-  cases e
+  intro l
+  show (l.push (linkBody a.toList b.toList)).size ≤ l.size + 1
   simp
 
 /-- **The sends after the link message**, one table's two reps. -/
@@ -294,7 +295,6 @@ theorem sendCount_goal (H : Claims.Msg → Claims.Msg) (rel : Readable.Parsed �
     simp only [hsts, rounds, repRounds, hf, List.foldl_toArray', List.foldl_cons, List.foldl_nil,
       Bool.false_eq_true, ↓reduceIte]
     omega
-  have := hP #[] _ _ o.ran
-  simpa using this
+  exact sendsC_ran hP o.ran
 
 end FlockComplete

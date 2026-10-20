@@ -101,6 +101,18 @@ def test_shape_contexts_co_arrival_and_staggered():
     assert LC.shape_contexts(sw)[(8, 2)] == [1024, 1, 1]
 
 
+def test_an_arrival_the_idle_engine_brings_forward_is_prefilled_alone():
+    # GLM-5.3 B8 stochastic's head: r0 is done after step 1, so r1 (declared 9) runs at 2..8 and r2 (declared 13) at 9, alone; r3
+    # keeps its step 13, where r2 decodes.  Declared steps would have put r2's prefill beside r3's and r1's decode (337 rows).
+    reqs = [(256, 2, 0), (25, 7, 9), (245, 23, 13), (91, 3, 13)]
+    ctx = LC.shape_contexts(_wl(reqs))
+    assert ctx[(25, 6)] == [25] + [1] * 6
+    assert ctx[(245, 22)] == [245, 1, 1, 1, 91] + [1] * 18
+    assert ctx[(91, 2)] == [91, 1, 1]
+    batch = LC.shape_contexts({**_wl(reqs), "engine": {"target": {"batch_invariant": False}}})
+    assert batch[(245, 22)][0] == [[245, 0]] and batch[(245, 22)][4] == [[1, 248], [91, 0]]
+
+
 def test_measured_workload_file():
     import os
     p = os.path.join(os.path.dirname(__file__), "..", "..", "out", "gen", "sweep", "workloads",
