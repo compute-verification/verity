@@ -265,9 +265,12 @@ theorem simStop_eval (H : Claims.Msg → Claims.Msg) (I : Claims.Recursion.Inner
   rw [hc] at hrhs
   dsimp only at hrhs
   have hpre : (Claims.SP.eval H ask ((Claims.ZKMal.censorSim (simPre (deployRec IV ivScope b) I) (sR IV ivScope b)
-      (kPre IV)).prog x ((fun i => c₁ i ⟨0, Nat.zero_lt_one⟩), c₂))).1 = _ := by
+      (kPre IV)).prog x ((fun i => c₁ i ⟨0, Nat.zero_lt_one⟩), c₂))).1 =
+        Claims.ZKMal.interact ask (Claims.ZKMal.censor (sR IV ivScope b x) (kPre IV x)
+          (pmZ b H x (I.V.k (xIOf x)) (fun i => c₁ i ⟨0, Nat.zero_lt_one⟩) (c₂ ⟨0, Nat.zero_lt_one⟩))) (kPre IV x) [] := by
     rw [Claims.ZKMal.censorSim_eval, simPre_pm IV b ivScope I H ask x hI,
-      ← Claims.ZKMal.interact_censor ask _ (sR IV ivScope b x) (kPre IV x) (kPre IV x)]
+      Claims.ZKMal.interact_censor ask _ (sR IV ivScope b x) (kPre IV x) (kPre IV x)]
+    try rfl
   replace hrhs := hrhs.trans (congrArg (fun τ₀ => List.foldl (fun τ (j : Fin (nS x)) => stepS H ask SO' x 𝔓 τ j (cs j))
     τ₀ (List.finRange (nS x))) hpre)
   dsimp only at hrhs
