@@ -26,7 +26,7 @@ def summarize(result) -> dict:
             "tp": result.tp,
             "collectives": [{**{k: v for k, v in c.items() if k != "own_view"}, "own_view": repr(c.get("own_view"))} for c in result.collectives],
             "collectives_by_kind": _hist(c["kind"] for c in result.collectives),
-            "peers_layout": result.peers_layout, "supplied": result.supplied}
+            "peers_layout": result.peers_layout, "witness_layout": result.witness_layout, "supplied": result.supplied}
 
 
 def _hist(items) -> dict[str, int]:

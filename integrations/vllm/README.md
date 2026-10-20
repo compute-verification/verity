@@ -17,7 +17,7 @@ Imports point down the layer order `pipeline` > `check` | `properties` > `acquir
 ~~~text
 verity_vllm/
   pipeline/           stage drivers      build.py match.py commit.py row*.py report.py hot.py layout.py cli.py llm.py research_tools.py tp/
-  engine/             the vLLM engine    build.py capture.py pinned.py run_facts.py code_identity.py vllm_adapter.py engine_driver.py engine_profile.py arrivals.py rank_worker.py profiles/
+  engine/             the vLLM engine    build.py capture.py pinned.py run_facts.py code_identity.py vllm_adapter.py engine_driver.py engine_profile.py arrivals.py static_schedule.py rank_worker.py profiles/
   program/            Program            registry/ frontend/ lifting/ verity/ml/kernels/ model.py workload.py compact.py dtypes.py
   query/              verification query module_body.py word.py cross_call.py required.py program_view.py manifest/ compare.py
   correspondence/     runtime corresp.   runtime.py reader_for_*.py resolve*.py capture_identities.py
@@ -32,6 +32,7 @@ verity_vllm/
   pins/               measured pins      <DEVICE>.json (cuBLAS routes, SMs) served/<ROLE>.<DEVICE>.json (a served Build's artifact, dispatch, MoE launches)
   ops/                pod operations     pod_bootstrap.sh pod_gate.sh pod_*_tap.sh canary.sh *_negatives.sh known_roots.json
 tests/<subpackage>/   mirrors the package; tests/regression = the R19 reference harness (opt in with VERITY_REGRESSION=1)
+tools/                scripts run by path: popread.py (which units' cross-unit reads a committed value steers; each unit's egress E(u)), migrate/ (registry splits)
 workloads/ manifests/ fixtures/ data/ docs/    records of the qualification table; never rewritten by the tool
 ~~~
 
@@ -48,7 +49,8 @@ lives here is misfiled.
 **`engine/`** is the vLLM engine we attach to: `build.py` (the engine under κ and what it reads back), `capture.py` (the
 step observer and run header; `pinned.py` its host buffers), `run_facts.py` (profile manifest, versions), `code_identity.py` (executed code objects),
 `vllm_adapter.py` (workloads and request driving; the stages import the engine's names from it), `engine_driver.py`,
-`engine_profile.py`, `arrivals.py`, `rank_worker.py` (the TP rank worker extension), and `profiles/` (kappa: capture profiles and workload JSON; one generic
+`engine_profile.py`, `arrivals.py`, `static_schedule.py` (a `sampling.ignore_eos` run held to the schedule its declaration alone
+decides), `rank_worker.py` (the TP rank worker extension), and `profiles/` (kappa: capture profiles and workload JSON; one generic
 constructor + a facts table).  Never: commit, decide what is required.
 
 **`program/`** implements *Program*: Definitions (`registry/`, the registered library; importing it registers the on-demand
