@@ -57,6 +57,8 @@ import Proofs.Flock.Claims.Recursion.BoundRouteMerged
 import Proofs.Flock.Claims.Recursion.BoundRouteLin
 import Proofs.Flock.Claims.Recursion.BoundMergedLin
 import Proofs.Flock.Claims.Recursion.BoundRouteMergedLin
+import Proofs.Flock.Claims.Recursion.KSLin2
+import Proofs.Flock.Claims.Recursion.BoundRouteKSLin2
 import Proofs.Flock.Claims.Recursion.VStarParts
 import Proofs.Flock.Claims.Recursion.VStarPartsHolo
 import Proofs.Flock.Claims.Recursion.VStarPartsDense
