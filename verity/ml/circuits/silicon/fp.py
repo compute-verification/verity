@@ -6,11 +6,12 @@ for general f32 operands and specializes itself when called on bf16-widened word
 program constants.
 
 Every piece that produces an f32 ends in :func:`round_f32`, the one rounding routine (round to nearest even, subnormals
-kept, overflow to infinity). A NaN result is the canonical 0x7FC00000 inside composite pieces, whose final bf16 casts
-canonicalize; ``f32_add`` / ``f32_mul`` with ``ir_nan`` return the IR primitives' NaN bit for bit (``F32Add_v1`` /
-``F32Mul_v1`` are numpy float32 on x86-64: an operand's NaN, quieted, else the default NaN of an invalid operation), and
-``f32_fma_bits``' NaN is 0x7FC00000. The ``_v2`` primitives' pieces pass ``nan_word=F32_NAN_PTX``: every NaN result the GPU's
-0x7FFFFFFF, no operand's payload or sign kept.
+kept, overflow to infinity); :func:`round_fp` and :func:`unpack_fp` are it and :func:`unpack` at any IEEE binary format,
+for the f64 pieces of `verity.ml.circuits.ops.boolean.int8`. A NaN result is the canonical 0x7FC00000 inside composite
+pieces, whose final bf16 casts canonicalize; ``f32_add`` / ``f32_mul`` with ``ir_nan`` return the IR primitives' NaN bit
+for bit (``F32Add_v1`` / ``F32Mul_v1`` are numpy float32 on x86-64: an operand's NaN, quieted, else the default NaN of an
+invalid operation), and ``f32_fma_bits``' NaN is 0x7FC00000. The ``_v2`` primitives' pieces pass
+``nan_word=F32_NAN_PTX``: every NaN result the GPU's 0x7FFFFFFF, no operand's payload or sign kept.
 """
 from __future__ import annotations
 
@@ -106,9 +107,11 @@ class F32:
     e_eff: list      # the exponent field or 1 for zero / subnormal (8 bits): value = sig * 2^(e_eff - 150)
 
 
-def unpack(C, w) -> F32:
-    assert len(w) == 32
-    m, e, s = list(w[:23]), list(w[23:31]), w[31]
+def unpack_fp(C, w, eb: int, mb: int) -> F32:
+    """The fields of an IEEE binary word of ``eb`` exponent and ``mb`` mantissa bits (`F32`'s, at that format: value =
+    sig * 2^(e_eff - bias - mb))."""
+    assert len(w) == 1 + eb + mb
+    m, e, s = list(w[:mb]), list(w[mb:mb + eb]), w[mb + eb]
     e_nz = or_reduce(C, e)
     e_max = and_reduce(C, e)
     m_nz = or_reduce(C, m)
@@ -117,6 +120,10 @@ def unpack(C, w) -> F32:
     zero = NOT(OR(C, e_nz, m_nz))
     e_eff = [e[0] ^ NOT(e_nz)] + e[1:]     # e_nz = 0 forces e[0] = 0, so the OR is an XOR
     return F32(s, e, m, e_nz, e_max, m_nz, nan, inf, zero, m + [e_nz], e_eff)
+
+
+def unpack(C, w) -> F32:
+    return unpack_fp(C, w, 8, 23)
 
 
 def f32_const(value: int):
@@ -130,8 +137,16 @@ def round_f32(C, sign, E_b, off: int, M, zero_sign, underflow: bool = True, rz: 
     ``E >= 1`` (no right shift into the subnormal range is ever needed), which drops that shifter. ``rz``: round toward zero
     instead (overflow then saturates at the largest finite word); ``rm``: toward -infinity (a positive overflow saturates, a
     negative one is -infinity)."""
+    return round_fp(C, sign, E_b, off, M, zero_sign, 8, 23, underflow=underflow, rz=rz, rm=rm)
+
+
+def round_fp(C, sign, E_b, off: int, M, zero_sign, eb: int, mb: int, underflow: bool = True, rz: bool = False,
+             rm: bool = False):
+    """`round_f32` at the IEEE binary format of ``eb`` exponent and ``mb`` mantissa bits: the word nearest to
+    ``(-1)^sign * M * 2^(E - bias - (len(M) - 1))``, bias = 2^(eb - 1) - 1, ``E_b`` wide enough for ``E_b + 1`` and for the
+    all-ones exponent field."""
     n = len(M)
-    P = ceil_pow2(max(n, 32))
+    P = ceil_pow2(max(n, 1 + eb + mb))
     Mp = [ZERO] * (P - n) + list(M)
     az, lz = lzc(C, Mp)
     EW = len(E_b)
@@ -149,22 +164,23 @@ def round_f32(C, sign, E_b, off: int, M, zero_sign, underflow: bool = True, rz: 
         y = shl(C, Mp, sh_l)
         st = ZERO
         X = sub(C, diff, sh_l, EW)[0]
-    sig = y[P - 24:]
-    guard = y[P - 25]
-    sticky = OR(C, or_reduce(C, y[:P - 25]), st)
+    w = eb + mb
+    sig = y[P - mb - 1:]
+    guard = y[P - mb - 2]
+    sticky = OR(C, or_reduce(C, y[:P - mb - 2]), st)
     rnd = ZERO if rz else C.AND(sign, OR(C, guard, sticky)) if rm else C.AND(guard, OR(C, sticky, sig[0]))
-    ex = add(C, X, [sig[23]], width=EW)                                    # the exponent field before rounding
-    _, lt255 = sub(C, ex, const_bits(255, EW), EW)
-    ovf = NOT(lt255)
-    word = add(C, sig[:23] + ex[:8], [rnd], width=31)
+    ex = add(C, X, [sig[mb]], width=EW)                                    # the exponent field before rounding
+    _, lt_max = sub(C, ex, const_bits((1 << eb) - 1, EW), EW)
+    ovf = NOT(lt_max)
+    word = add(C, sig[:mb] + ex[:eb], [rnd], width=w)
     if rm:
         inf, sat = C.AND(ovf, sign), C.AND(ovf, NOT(sign))
-        word = [C.AND(NOT(inf), b) for b in word[:23]] + [OR(C, inf, b) for b in word[23:31]]
-        word = [OR(C, sat, b) for b in word[:23]] + [C.AND(NOT(sat), word[23])] + [OR(C, sat, b) for b in word[24:31]]
+        word = [C.AND(NOT(inf), b) for b in word[:mb]] + [OR(C, inf, b) for b in word[mb:w]]
+        word = [OR(C, sat, b) for b in word[:mb]] + [C.AND(NOT(sat), word[mb])] + [OR(C, sat, b) for b in word[mb + 1:w]]
     elif rz:
-        word = [OR(C, ovf, b) for b in word[:23]] + [C.AND(NOT(ovf), word[23])] + [OR(C, ovf, b) for b in word[24:31]]
+        word = [OR(C, ovf, b) for b in word[:mb]] + [C.AND(NOT(ovf), word[mb])] + [OR(C, ovf, b) for b in word[mb + 1:w]]
     else:
-        word = [C.AND(NOT(ovf), b) for b in word[:23]] + [OR(C, ovf, b) for b in word[23:31]]
+        word = [C.AND(NOT(ovf), b) for b in word[:mb]] + [OR(C, ovf, b) for b in word[mb:w]]
     word = [C.AND(NOT(az), b) for b in word]
     return word + [mux(C, az, [zero_sign], [sign])[0]]
 

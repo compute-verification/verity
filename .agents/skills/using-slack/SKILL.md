@@ -30,7 +30,9 @@ The coordination API has one place, three interactions and one lifecycle.
   and its working branch's suffix in the route, and routing reads them (`--as`, the owners of PRs and runs; `research msg
   handles` shows each handle's). Run `names open --as HANDLE` again on a new branch: it adds that branch's suffix. A
   second agent working under a handle (a lane that posts as it) is one its holder adds with `names open --as HANDLE
-  --poster BC_ID`; it subscribes to that handle's inbox thread itself: the holder has no channel to relay to it. So a
+  --poster BC_ID`; it subscribes to that handle's inbox thread itself: the holder has no channel to relay to it. A
+  poster's post that names the handle rings the holder (the outgoing generation of a handover reaches the incoming one),
+  and that doorbell in the shared inbox wakes the poster too: one `from HANDLE` for its own post ends the turn. So a
   handover needs no repo change; the registry's `holder` and `branch_suffixes` are a fallback for readers without the
   routes (drive's PR owners), updated when convenient. One agent may hold several handles, and posts as whichever
   it acts for (`--as`). Handles with a user group are Slack user groups, so a human's composer autocompletes them.
@@ -114,7 +116,7 @@ research msg subscriptions --as <your handle>    # prints the subscribe calls to
   comms' daily review replays every post against the doorbells rung and chases what missed (COMM-30).
 - **A holder also subscribes to its Linear team's issue events** (`subscribe_linear_issue`: creations and state
   changes), so an issue a human files straight into Linear reaches you; it rings no inbox. **Don't subscribe to its
-  comments.** The sender never rings its own inbox, but every handle posts through one Slack bot and writes to Linear
+  comments.** The holder never rings its own inbox, but every handle posts through one Slack bot and writes to Linear
   as the one Verity Asks app, and Cursor's subscriptions can't filter by actor. So any other subscription wakes you for
   your own writes too. On 14 Oct, 258 of 266 comments in five leads' teams were the team's own handle's (COMM-23).
   Anything another handle must read about your issue comes on Slack, naming you, and rings your inbox.
@@ -131,7 +133,7 @@ research msg subscriptions --as <your handle>    # prints the subscribe calls to
   or a thread a named human posted in. A task for Daniel's console, laptop or browser goes to `#ask-daniel` as a card
   with the exact steps. Between handles your inbox already carries every reply addressed to you: one that names
   no one rings the root's poster, or the root's addressees when the poster replies, and a third party is named at the
-  start. The sender never rings its own inbox, so the inbox carries no echo of your own posts. A thread subscription
+  start. The holder never rings its own inbox, so the inbox carries no echo of your own posts. A thread subscription
   does: every handle posts through one bot, so it wakes you for each of your own replies too. Unsubscribe from any thread
   between handles you still hold, an announcement's above all (the merge thread is one).
 - Ask for 30 days (`expiresInSeconds: 2592000`); "On every wake" below says when to renew.

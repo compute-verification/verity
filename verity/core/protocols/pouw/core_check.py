@@ -8,9 +8,10 @@ must show, and publishes `window.PUBLIC` from it.  This is that composition in o
 
 * **Params**, canonical JSON: the check item (`check`: the tile template, its work per tile w, the commitment scheme,
   the public bound on entries and optionally its coin mode, ``coins``, live or seeded: `window.mode`), ε and δ as ratio
-  strings, the grid's bits, the declared range of tile counts, the
-  window's context and the check query's SHA-512 (one-stage's `query_digest` of the tile template's instance query).  The
-  template is one the verifier pins (`TILES`, Lean's `PouwCheck.tiles`), with that template's tile work and query.
+  strings, the grid's bits, the declared range of tile counts, the window's context, the check query's SHA-512
+  (one-stage's `query_digest` of the tile template's instance query) and the rows' fixed length
+  ``{"stop": "fixed", "max_tokens": [...]}``, each slot's max_tokens.  The template is one the verifier pins (`TILES`,
+  Lean's `PouwCheck.tiles`), with that template's tile work and query.
 * **Commitment**: the window's registration, one-stage's record (`registration.record`) as canonical JSON, its window
   ``{"kind": "served", "context", "public"}`` holding exactly `window.REGISTERED`.  Its digest is the record's own,
   `registration.digest`, the one the service's receipt, draw and outcome cite.
@@ -18,8 +19,9 @@ must show, and publishes `window.PUBLIC` from it.  This is that composition in o
   read it (only what `toJson` writes, in the shapes `answer` returns): its verdict, the registration digest it is for,
   and on acceptance the integrity profile and the public outputs ``{"draw": d}``, `d` the verifier's draw as one-stage's
   `draw.py` writes it (any of its laws; PoUW's rule then holds it to subset:K′).
-* **The check** accepts when the registration is PoUW's (`window.REGISTERED`, each item the verifier's own at the
-  registered level, N = point(level + 1) in the declared range, the law subset:K′ with K′ = `window.k_prime`, the check's
+* **The check** accepts when the registration is PoUW's (`window.REGISTERED`, its `length` item a fixed-length
+  window's at the verifier's max_tokens (`window.length_problem`; Daniel, 19 Oct, ASK-39), each item the verifier's own
+  at the registered level, N = point(level + 1) in the declared range, the law subset:K′ with K′ = `window.k_prime`, the check's
   query and scheme), the service accepted this registration, and its profile and draw are of the registered partition's N
   units drawn subset:K′ at the window's δ.  It publishes exactly `window.PUBLIC` and the service's profile.  The service's
   reject is a reject and its undecided (the verifier of record hasn't run) is undecided.
@@ -72,7 +74,8 @@ ONE_STAGE = "verity/sampled-proofs/one-stage/v1"
 SCHEME = "frame-v3-sha512/hm96-sha512"
 FORMATS = ("verity/registration/v1", "verity/registration/v2")
 LEVEL = "unit"
-PARAMS_KEYS = ("check", "context", "delta", "eps", "grid_bits", "query", "range")
+PARAMS_KEYS = ("check", "context", "delta", "eps", "grid_bits", "length", "query", "range")
+LENGTH_PARAM_KEYS = ("max_tokens", "stop")
 CHECK_KEYS = ("entries", "scheme", "template", "tile_work")
 ANSWER_KEYS = ("commitment", "profile", "protocol", "public", "reason", "verdict")
 VERDICTS = ("accept", "reject", "undecided")
@@ -244,7 +247,13 @@ def params(j: Any) -> dict:
         raise Refused("check.tile_work is not its pinned template's tile work")
     if j["query"] != t.query:
         raise Refused("query is not its pinned template's query digest")
-    return {**out, "grid_bits": j["grid_bits"], "query": j["query"], "range": tuple(rg)}
+    ln = j["length"]
+    m = ln.get("max_tokens") if isinstance(ln, dict) else None
+    if not (isinstance(ln, dict) and sorted(ln) == list(LENGTH_PARAM_KEYS) and ln["stop"] == Wd.STOP_FIXED
+            and isinstance(m, list) and m and all(_nat(x) and x >= 1 for x in m)):
+        raise Refused("length is not {max_tokens, stop} with stop fixed and max_tokens a non-empty list of positive natural "
+                      "numbers")
+    return {**out, "grid_bits": j["grid_bits"], "query": j["query"], "range": tuple(rg), "max_tokens": list(m)}
 
 
 def _root(r: Any) -> dict | None:
@@ -510,7 +519,12 @@ def _registered(p: dict, c: dict) -> tuple[str | None, Any]:
         return (f"window: registered kind {win['kind']} in context {win['context']}, the verifier's served in "
                 f"{p['context']}"), None
     if sorted(items) != sorted(Wd.REGISTERED):
+        if sorted(items) == sorted(Wd.LEGACY_REGISTERED):
+            return "window-form: no-fixed-length: registered before the fixed-length rule (19 Oct), so not of record", None
         return f"public-items: registered {', '.join(sorted(items))}, declared {', '.join(sorted(Wd.REGISTERED))}", None
+    why = Wd.length_problem(items["length"], p["max_tokens"])
+    if why is not None:
+        return why, None
     work = items["work"]
     ell = work.get("level") if isinstance(work, dict) else None
     if not _nat(ell):

@@ -72,10 +72,15 @@ server = D.server_fixture(PORT)
 
 @pytest.mark.slow
 def test_pouw_check(server):
+    """Generated cases, then each mutation over a few seeds (`replay`), so every verdict is reached whatever the draw: the
+    seeded draw moves whenever the cases' modules change, and a run of it has drawn no `answer-undecided`."""
     RULES.clear()
     stats = D.run(PORT, examples=EXAMPLES, server=server)
-    print(f"pouw-check difftest: {stats}; by rule: {dict(sorted(RULES.items()))}")
-    assert stats.counts.get("accept") and stats.counts.get("reject") and stats.counts.get("undecided")
+    swept = Counter(D.replay(PORT, cases.instance(random.Random(f"{name}/{seed}"), name), server)[0]
+                    for name in ["honest", *cases.NAMES] for seed in range(3))
+    print(f"pouw-check difftest: {stats}, and {sum(swept.values())} swept ({dict(swept)}); by rule: "
+          f"{dict(sorted(RULES.items()))}")
+    assert {"accept", "reject", "undecided"} <= set(swept), dict(swept)
 
 
 def _template(why: str) -> str:

@@ -40,12 +40,13 @@ def _ports(ps) -> list:
 
 
 def check_against_reference(rows: dict, outs: dict) -> None:
-    """Each instance's staged z and receipt words are `h1tile.reference`'s on its codes, salt, position and roots."""
+    """Each instance's staged z and receipt words are `h1tile.reference`'s (v3's under ``H1_TILE=v3``) on its codes, salt,
+    position and roots."""
     from verity.core.protocols.pouw.circuit import h1tile as H
     salt, units, roots = bytes(rows["salt"]), rows["units"], rows["roots"]
     for i, u in enumerate(units):
         z, rc = H.reference([[int(x) & 0xFF for x in r] for r in rows["a"][i]], [[int(x) & 0xFF for x in r] for r in rows["b"][i]],
-                            salt, int(u), (bytes(roots[i][0]), bytes(roots[i][1])))
+                            salt, int(u), (bytes(roots[i][0]), bytes(roots[i][1])), stream=U.tile() == "v3")
         if not (np.array_equal(outs["o0"][i], U.z_words(z)) and np.array_equal(outs["o1"][i], U.receipt_words(rc))):
             raise AssertionError(f"{NAME}: instance {i} (unit {int(u)}): the lowered circuit's outputs are not h1tile.reference's")
 

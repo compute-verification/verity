@@ -51,9 +51,11 @@ copy). Serve_v1 meets none of them, at word level or on bits.
 In the order checked: `instance` and `params` (`NciCheck.parse`), `program` (the decoder refuses it), `not-topological`
 (a body names a later node, `Prog.orderViolation`), `program` (the root's offsets are not its layout, a body calls the
 root or holds an input node outside the root's: `rootLaidOut`, `inputsAtRoot`, which the decoder never gives), `program`
-(a reference the layout can't resolve: the output of a scan of no iterations), then θ entry by entry (`theta-unknown`: not
-a root node, `theta-not-input`, `theta-not-registered`: an input node bound per run, `theta-duplicate`), then the owners
-(`owner-length`: not one per root node; node by node `owner-entry`, `input-in-iu`, `gate-in-no-iu`), then
+(a `walkBound` past half of `Flock.Steps.FUEL`, past which `Prog.gate`'s walk can run out of steps; or a body calling a
+Definition decoded after it, or a Definition not as the decoder gives it, which the decoder never gives: `walkable`), `program` (a reference the layout can't resolve:
+the output of a scan of no iterations), then θ entry by entry (`theta-unknown`: not a root node, `theta-not-input`,
+`theta-not-registered`: an input node bound per run, `theta-duplicate`), then the owners (`owner-length`: not one per root
+node; node by node `owner-entry`, `input-in-iu`, `gate-in-no-iu`), then
 `empty-iu`. `NciCheck.evaluate` checks the order gate by gate, so it gives a verdict on a program in which a node reads
 an earlier member of itself, which this check refuses.
 -/
@@ -151,34 +153,36 @@ def Piece.pis (q : Piece) : Array PI :=
       #[⟨rlo q.stride n col, q.rows, q.stride.natAbs, n⟩]
     else q.rowsOf.flatMap one
 
+/-- `x`'s set as intervals: one when its runs meet, else one per run. -/
+def PI.emit (out : Array (Nat × Nat)) (x : PI) : Array (Nat × Nat) :=
+  if x.len ≥ x.period then out.push (x.lo, x.lo + (x.cnt - 1) * x.period + x.len)
+  else (Array.range x.cnt).foldl (fun o c => o.push (x.lo + c * x.period, x.lo + c * x.period + x.len)) out
+
+/-- By period, then count, then first run (`List.mergeSort`'s order, which Lean core proves sorts). -/
+def PI.le (x y : PI) : Bool :=
+  x.period < y.period || (x.period == y.period && (x.cnt < y.cnt || (x.cnt == y.cnt && x.lo ≤ y.lo)))
+
+/-- One periodic interval of the sorted sweep: merged into the current one when of its period and count and starting
+within its first run, else the current one emitted and this one current. -/
+def PI.mergeStep (st : Array (Nat × Nat) × Option PI) (x : PI) : Array (Nat × Nat) × Option PI :=
+  match st.2 with
+  | some c =>
+    if c.period == x.period && c.cnt == x.cnt && x.lo ≤ c.lo + c.len then
+      (st.1, some { c with len := max c.len (x.lo + x.len - c.lo) })
+    else (PI.emit st.1 c, some x)
+  | none => (st.1, some x)
+
 /-- The pieces' elements as intervals of naturals (an order-free view), not necessarily disjoint. Periodic intervals of one
 period and count are sorted and those that abut or overlap merged: the rows of a transposed or of a row-strided part,
 read part by part, become one run per period, one interval when the runs fill the period. -/
-def ivsOf (qs : Array Piece) : Array (Nat × Nat) := Id.run do
-  let mut out := #[]
-  let mut periodic : Array PI := #[]
-  for q in qs do
-    for x in q.pis do
-      if x.cnt == 0 || x.len == 0 then continue
-      if x.cnt == 1 || x.len ≥ x.period then out := out.push (x.lo, x.lo + (x.cnt - 1) * x.period + x.len)
-      else periodic := periodic.push x
-  let s := periodic.qsort fun x y =>
-    x.period < y.period || (x.period == y.period && (x.cnt < y.cnt || (x.cnt == y.cnt && x.lo < y.lo)))
-  let emit (out : Array (Nat × Nat)) (x : PI) : Array (Nat × Nat) :=
-    if x.len ≥ x.period then out.push (x.lo, x.lo + (x.cnt - 1) * x.period + x.len)
-    else (Array.range x.cnt).foldl (fun o c => o.push (x.lo + c * x.period, x.lo + c * x.period + x.len)) out
-  let mut cur : Option PI := none
-  for x in s do
-    match cur with
-    | some c =>
-      if c.period == x.period && c.cnt == x.cnt && x.lo ≤ c.lo + c.len then
-        cur := some { c with len := max c.len (x.lo + x.len - c.lo) }
-      else
-        out := emit out c
-        cur := some x
-    | none => cur := some x
-  if let some c := cur then out := emit out c
-  return out
+def ivsOf (qs : Array Piece) : Array (Nat × Nat) :=
+  let xs := (qs.flatMap Piece.pis).filter fun x => !(x.cnt == 0 || x.len == 0)
+  let out := (xs.filter fun x => x.cnt == 1 || x.len ≥ x.period).map fun x =>
+    (x.lo, x.lo + (x.cnt - 1) * x.period + x.len)
+  let s := (xs.filter fun x => !(x.cnt == 1 || x.len ≥ x.period)).toList.mergeSort PI.le
+  match s.foldl PI.mergeStep (out, none) with
+  | (out, some c) => PI.emit out c
+  | (out, none) => out
 
 /-- `reps` copies of one member's pieces `ps` (`len` positions), copy `m`'s gates `m * shift` after copy 0's: the output
 of a batch whose members' return isn't one run, read by whole members. Only gates repeat: `ps` names no leaf when
@@ -572,16 +576,18 @@ def nodeOf (offsets : Array Nat) (g : Nat) : Nat := Id.run do
     if offsets[mid]! ≤ g then a := mid else b := mid
   return a
 
+/-- One interval `(lo, hi, w)` of the sweep sorted by `lo`, after `(total, cover)`: its gates past `cover` added. -/
+def coverStep (st : Nat × Nat) (x : Nat × Nat × Nat) : Nat × Nat :=
+  if x.2.1 ≤ st.2 then st else (st.1 + (x.2.1 - max x.1 st.2) * x.2.2, x.2.1)
+
 /-- The total width of the distinct gates of `ivs` (each `(lo, hi, w)`: gates `[lo, hi)` of width `w`). -/
 def distinctWidth (ivs : Array (Nat × Nat × Nat)) : Nat :=
-  let s := ivs.qsort fun x y => x.1 < y.1
-  (s.foldl (init := (0, 0)) fun (tot, cover) (lo, hi, w) =>
-    if hi ≤ cover then (tot, cover) else (tot + (hi - max lo cover) * w, hi)).1
+  ((ivs.toList.mergeSort fun x y => x.1 ≤ y.1).foldl coverStep (0, 0)).1
 
 /-- The gates of `qs` as intervals with their widths. -/
 def gateIvs (qs : Array Piece) : Array (Nat × Nat × Nat) :=
   let ws := (qs.filterMap fun q => match q.tgt with | .gate w => some w | _ => none).qsort (· < ·) |>.toList.eraseDups
-  ws.toArray.flatMap fun w => (ivsOf (qs.filter (·.tgt == .gate w))).map fun (lo, hi) => (lo, hi, w)
+  ws.toArray.flatMap fun w => (ivsOf (qs.filter (·.tgt == .gate w))).map fun iv => (iv.1, iv.2, w)
 
 /-- Gates `cnt` copies, `period` apart, of `res` (each `(lo, hi, w)` from `lo`, none past `span ≤ period`). -/
 structure Cl where
@@ -592,57 +598,58 @@ structure Cl where
   res : Array (Nat × Nat × Nat)
   deriving Inhabited
 
+/-- One segment of `novelWidth`'s: none when it is no segment of copies or names no gate, its copies' intervals when
+copies may overlap or go backwards, else one frame. -/
+def copiesStep (acc : Array (Nat × Nat × Nat) × Array Cl) (s : Seg) : Array (Nat × Nat × Nat) × Array Cl :=
+  if s.reps ≤ 1 then acc else
+  let r := gateIvs s.ps
+  if r.isEmpty then acc else
+  let lo := r.foldl (fun m x => min m x.1) r[0]!.1
+  let hi := r.foldl (fun m x => max m x.2.1) 0
+  if s.shift ≤ 0 || hi - lo > s.shift.toNat then (acc.1 ++ (Array.range s.reps).flatMap fun m => gateIvs (s.copy m), acc.2)
+  else (acc.1, acc.2.push { lo, period := s.shift.toNat, cnt := s.reps, span := hi - lo,
+                             res := r.map fun x => (x.1 - lo, x.2.1 - lo, x.2.2) })
+
+/-- Frames of one start, period and count, next to each other once sorted: one frame. -/
+def frameStep (frames : Array Cl) (x : Cl) : Array Cl :=
+  match frames.back? with
+  | some y =>
+    if y.lo == x.lo && y.period == x.period && y.cnt == x.cnt then
+      frames.pop.push { y with span := max y.span x.span, res := y.res ++ x.res }
+    else frames.push x
+  | none => frames.push x
+
+/-- Item `j` of `novelWidth`'s sweep as gates: interval `j` of `ivs`, or frame `j - ivs.size`'s copies. -/
+def expandIn (ivs : Array (Nat × Nat × Nat)) (frames : Array Cl) (j : Nat) : Array (Nat × Nat × Nat) :=
+  if j < ivs.size then #[ivs[j]!]
+  else
+    let x := frames[j - ivs.size]!
+    (Array.range x.cnt).flatMap fun m => x.res.map fun y => (x.lo + m * x.period + y.1, x.lo + m * x.period + y.2.1, y.2.2)
+
+/-- The width of one component of the sweep: copies times one copy's for a frame alone, else of its items' gates. -/
+def widthIn (ivs : Array (Nat × Nat × Nat)) (frames : Array Cl) (comp : Array Nat) : Nat :=
+  if comp.size == 1 && comp[0]! ≥ ivs.size then
+    let x := frames[comp[0]! - ivs.size]!
+    x.cnt * distinctWidth x.res
+  else distinctWidth (comp.flatMap (expandIn ivs frames))
+
+/-- One item `(st, en, j)` of the sweep sorted by start: a new component once it starts past what the current one reaches. -/
+def sweepStep (width : Array Nat → Nat) (acc : Nat × Array Nat × Nat) (it : Nat × Nat × Nat) : Nat × Array Nat × Nat :=
+  if !acc.2.1.isEmpty && it.1 ≥ acc.2.2 then (acc.1 + width acc.2.1, #[it.2.2], it.2.1)
+  else (acc.1, acc.2.1.push it.2.2, max acc.2.2 it.2.1)
+
 /-- The total width of the distinct gates of `segs`. A segment of copies is copies of one frame; copies of one frame are
 counted as copies times one copy's width, alone in their span, and with what else meets their span as gates. -/
-def novelWidth (segs : Array Seg) : Nat := Id.run do
-  let mut ivs := gateIvs (segs.filter (·.reps ≤ 1) |>.flatMap (·.ps))
-  let mut cls : Array Cl := #[]
-  for s in segs do
-    if s.reps ≤ 1 then continue
-    let r := gateIvs s.ps
-    if r.isEmpty then continue
-    let lo := r.foldl (fun m (a, _, _) => min m a) r[0]!.1
-    let hi := r.foldl (fun m (_, b, _) => max m b) 0
-    if s.shift ≤ 0 || hi - lo > s.shift.toNat then
-      ivs := ivs ++ (Array.range s.reps).flatMap fun m => gateIvs (s.copy m)
-    else
-      cls := cls.push { lo, period := s.shift.toNat, cnt := s.reps, span := hi - lo,
-                        res := r.map fun (a, b, w) => (a - lo, b - lo, w) }
-  let cs := cls.qsort fun x y =>
-    x.lo < y.lo || (x.lo == y.lo && (x.period < y.period || (x.period == y.period && x.cnt < y.cnt)))
-  let mut frames : Array Cl := #[]
-  for x in cs do
-    match frames.back? with
-    | some y =>
-      if y.lo == x.lo && y.period == x.period && y.cnt == x.cnt then
-        frames := frames.pop.push { y with span := max y.span x.span, res := y.res ++ x.res }
-      else frames := frames.push x
-    | none => frames := frames.push x
+def novelWidth (segs : Array Seg) : Nat :=
+  let acc := segs.foldl copiesStep (gateIvs (segs.filter (·.reps ≤ 1) |>.flatMap (·.ps)), #[])
+  let ivs := acc.1
+  let frames := (acc.2.qsort fun x y =>
+    x.lo < y.lo || (x.lo == y.lo && (x.period < y.period || (x.period == y.period && x.cnt < y.cnt)))).foldl frameStep #[]
   let n := ivs.size
-  let items := (ivs.mapIdx fun i (lo, hi, _) => (lo, hi, i)) ++
+  let items := (ivs.mapIdx fun i x => (x.1, x.2.1, i)) ++
     (frames.mapIdx fun i x => (x.lo, x.lo + (x.cnt - 1) * x.period + x.span, n + i))
-  let expand (j : Nat) : Array (Nat × Nat × Nat) :=
-    if j < n then #[ivs[j]!]
-    else
-      let x := frames[j - n]!
-      (Array.range x.cnt).flatMap fun m => x.res.map fun (a, b, w) => (x.lo + m * x.period + a, x.lo + m * x.period + b, w)
-  let width (comp : Array Nat) : Nat :=
-    if comp.size == 1 && comp[0]! ≥ n then
-      let x := frames[comp[0]! - n]!
-      x.cnt * distinctWidth x.res
-    else distinctWidth (comp.flatMap expand)
-  let mut total := 0
-  let mut comp : Array Nat := #[]
-  let mut reach := 0
-  for (st, en, j) in items.qsort fun x y => x.1 < y.1 do
-    if !comp.isEmpty && st ≥ reach then
-      total := total + width comp
-      comp := #[]
-      reach := 0
-    comp := comp.push j
-    reach := max reach en
-  if !comp.isEmpty then total := total + width comp
-  return total
+  let fin := (items.toList.mergeSort fun x y => x.1 ≤ y.1).foldl (sweepStep (widthIn ivs frames)) (0, #[], 0)
+  if fin.2.1.isEmpty then fin.1 else fin.1 + widthIn ivs frames fin.2.1
 
 /-- An input node: its callee is an input primitive (§5.2). A composite's key may read as an input id (`Input16_v1` is a
 well-formed static-free composite key), and its gates are computed. -/
@@ -662,6 +669,50 @@ root node that is no input node is a computed gate. -/
 def inputsAtRoot (P : Prog) : Bool :=
   (List.range P.defs.size).all fun d =>
     (P.defs[d]!).body.nodes.all fun n => n.fn != P.root && (d == P.root || !isInputNode P n)
+
+/-- Every node calls a Definition decoded before its own (the decoder decodes callees first), so `activations` reads each
+callee's count. -/
+def calleesFirst (P : Prog) : Bool :=
+  (List.range P.defs.size).all fun d => (P.defs[d]!).body.nodes.all fun n => n.fn < d
+
+/-- Every Definition as the decoder gives it (`Flock.Program.getDef`), checked at the cost of the nodes because the
+agreement with `NciCheck.evaluate` rests on it, through `Prog.gate`'s walk: the root a composite, a primitive returning one
+`Value<w>`, a composite's offsets from 0 to its gates, each node's gates its members' callee's after the ones before, and
+an input node called with no arguments. -/
+def bodiesLaidOut (P : Prog) : Bool :=
+  !(P.defs[P.root]!).prim && (List.range P.defs.size).all fun d =>
+    let defn := P.defs[d]!
+    if defn.prim then (match defn.ret with | .value _ => true | _ => false)
+    else
+      let b := defn.body
+      b.offsets[0]! == 0 && b.offsets[b.nodes.size]! == defn.gates && (List.range b.nodes.size).all fun k =>
+        let n := b.nodes[k]!
+        b.offsets[k + 1]! == b.offsets[k]! + n.members * (P.defs[n.fn]!).gates && (!isInputNode P n || n.args.isEmpty)
+
+/-- Per Definition, the activations of one activation of it: itself and, for each composite node, its members' (a
+primitive's are none), once per Definition and multiplied through batches and scans. -/
+def activations (P : Prog) : Array Nat :=
+  (List.range P.defs.size).foldl (fun a d =>
+    let defn := P.defs[d]!
+    a.push (if defn.prim then 0 else 1 + defn.body.nodes.foldl (fun s n => s + n.members * a[n.fn]!) 0)) #[]
+
+/-- Per Definition, how deep its activations nest: none for a primitive, else one more than its composite callees'. -/
+def depths (P : Prog) : Array Nat :=
+  (List.range P.defs.size).foldl (fun a d =>
+    let defn := P.defs[d]!
+    a.push (if defn.prim then 0 else 1 + defn.body.nodes.foldl (fun s n => max s a[n.fn]!) 0)) #[]
+
+/-- A bound on the steps of `Prog.gate`'s walk to an operand, `(A + 1) · (H + 2)` for the root's `A` activations and
+depth `H`: each step goes down into an activation, up out of one, or to the scan iteration before, and none returns to
+where an earlier one was. -/
+def walkBound (P : Prog) : Nat := ((activations P)[P.root]! + 1) * ((depths P)[P.root]! + 2)
+
+/-- The walk is within `Flock.Steps.FUEL`, with room for `Prog.gate`'s descent. Past it a Program of a few hundred bytes
+can need more steps than `Prog.gate` takes: a gate reading the carry of a scan of `2^32` iterations, each a scan of
+`2^32` identity steps, needs `2^64`. There `NciCheck.evaluate` refuses the gate (`program`), and this check, which
+summarizes each Definition once, would give a verdict. The walk also reads every body as the decoder lays it out
+(`bodiesLaidOut`). -/
+def walkable (P : Prog) : Bool := calleesFirst P && bodiesLaidOut P && walkBound P ≤ Flock.Steps.FUEL / 2
 
 /-- Per IU `u < n`, its number of gates: those of its root nodes, root node `k` (in IU `own[k]`) holding gates
 `[offs[k], offs[k + 1])`. -/
@@ -710,6 +761,7 @@ def evaluate (j : Json) : Except String Json := do
     | .error _ => throw "program"
   if P.orderViolation.isSome then throw "not-topological"
   if !(rootLaidOut P && inputsAtRoot P) then throw "program"
+  if !walkable P then throw "program"
   let reads ← match analyze P with
     | .ok r => pure r
     | .error _ => throw "program"

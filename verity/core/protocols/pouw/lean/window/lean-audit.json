@@ -21,6 +21,11 @@
    "except": [],
    "why": "the program is code: Lean core only, no Mathlib and nothing of Security (Daniel's layout ruling, 5 Oct)"
   },
+  "PouwWindow.Length": {
+   "imports": ["PouwWindow.Json", "Lean.Data.Json"],
+   "except": [],
+   "why": "the program is code: Lean core only, no Mathlib and nothing of Security (Daniel's layout ruling, 5 Oct)"
+  },
   "PouwWindow.Entry": {
    "imports": ["PouwWindow.Grid", "Flock.Hash", "Flock.Hm96", "Flock.HmRow", "PouwCommit.Frame"],
    "except": [],

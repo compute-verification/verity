@@ -10,12 +10,20 @@ opening   u32be pass ‖ u64be position ‖ block (4096) ‖ u16be len(leaf) ‖
 Every byte each side sends and receives is counted (`Conn.sent`, `Conn.received`, by message type). Decoding an
 opening the prover sent never raises past `decode_openings`, which returns None for a body it cannot read, so a
 malformed body reaches `Session.verify` as no openings and rejects as `malformed`.
+
+The prover's side (`connect`) reads in a process of its own (`Conn.read_apart`, `READER`): it takes each frame off the
+stream and stamps it as its last byte arrives, on the host's monotonic clock, then hands it to `recv` through a pipe.
+A boundary's stamp, which the prover's boundary rule compares with a pass's start, is then the frame's arrival
+whatever holds the prover's GIL; only how soon the session acts on it still waits on that.
 """
 from __future__ import annotations
 
 import json
+import os
 import socket
 import struct
+import subprocess
+import sys
 import threading
 import time
 from collections import Counter
@@ -26,6 +34,40 @@ from verity.core.protocols.remote_bandwidth import codec as rcodec
 HEADER = struct.Struct(">II")
 MAX_HEAD = 1 << 20
 MAX_BODY = 1 << 31
+STAMP = struct.Struct(">Q")
+
+READER = f"""
+import os, select, struct, sys, time
+sock, out = int(sys.argv[1]), int(sys.argv[2])
+watch = select.poll()
+watch.register(sock, select.POLLIN)
+watch.register(out, 0)
+def exact(n):
+    got = bytearray()
+    while len(got) < n:
+        if any(fd == out for fd, _ in watch.poll()):
+            sys.exit(0)
+        chunk = os.read(sock, min(n - len(got), 1 << 22))
+        if not chunk:
+            sys.exit(0)
+        got += chunk
+    return got
+def put(rec):
+    rec = memoryview(rec)
+    while rec:
+        rec = rec[os.write(out, rec):]
+while True:
+    head = exact(8)
+    nh, nb = struct.unpack(">II", head)
+    if nh > {MAX_HEAD} or nb > {MAX_BODY}:
+        put(struct.pack(">Q", time.monotonic_ns()) + head)
+        sys.exit(0)
+    frame = head + exact(nh) + (exact(nb) if nb else b"")
+    put(struct.pack(">Q", time.monotonic_ns()) + frame)
+"""
+"""`Conn.read_apart`'s reader: argv the stream's descriptor and the pipe's write end. Each record is the frame's arrival
+(u64be monotonic ns) and the frame as it came; a frame over the limits goes on as its stamp and header alone, which
+`recv` refuses. It exits when the stream closes or the pipe's read end does (the prover's process gone)."""
 
 
 class Closed(ConnectionError):
@@ -43,6 +85,20 @@ class Conn:
         self.sent: Counter = Counter()
         self.received: Counter = Counter()
         self._lock = threading.Lock()
+        self.reader: subprocess.Popen | None = None
+        self._pipe: int | None = None
+
+    def read_apart(self) -> None:
+        """Read in a process of the reader's own (`READER`), whose stamps are on the host's monotonic clock: `recv`
+        then reads its records from a pipe, and nothing in this process reads the stream again."""
+        if self.clock is not time.monotonic_ns:
+            raise ValueError("a reader apart stamps on time.monotonic_ns, not this side's clock")
+        r, w = os.pipe()
+        fd = self.sock.fileno()
+        self.reader = subprocess.Popen([sys.executable, "-I", "-c", READER, str(fd), str(w)], pass_fds=(fd, w),
+                                       stdin=subprocess.DEVNULL)
+        os.close(w)
+        self._pipe = r
 
     def send(self, head: dict, body: bytes = b"") -> None:
         h = json.dumps(head, separators=(",", ":")).encode()
@@ -54,19 +110,22 @@ class Conn:
     def _exact(self, n: int) -> bytes:
         out = bytearray()
         while len(out) < n:
-            chunk = self.sock.recv(min(n - len(out), 1 << 22))
+            k = min(n - len(out), 1 << 22)
+            chunk = self.sock.recv(k) if self._pipe is None else os.read(self._pipe, k)
             if not chunk:
                 raise Closed("the stream closed")
             out += chunk
         return bytes(out)
 
     def recv(self) -> tuple[dict, bytes, int]:
+        stamp = None if self._pipe is None else STAMP.unpack(self._exact(STAMP.size))[0]
         nh, nb = HEADER.unpack(self._exact(HEADER.size))
         if nh > MAX_HEAD or nb > MAX_BODY:
             raise ValueError(f"a frame of {nh} + {nb} bytes is over the limit")
         head = json.loads(self._exact(nh))
         body = self._exact(nb) if nb else b""
-        stamp = self.clock()
+        if stamp is None:
+            stamp = self.clock()
         if type(head) is not dict or type(head.get("type")) is not str:
             raise ValueError("a frame's head is an object with a type")
         self.received[head["type"]] += HEADER.size + nh + nb
@@ -85,13 +144,17 @@ def listen(host: str, port: int) -> socket.socket:
     return s
 
 
-def connect(host: str, port: int, attempts: int = 600) -> Conn:
-    """Connect, retrying while the verifier is not yet listening (each retry waits on the refused connect itself)."""
+def connect(host: str, port: int, attempts: int = 600, apart: bool = True) -> Conn:
+    """Connect, retrying while the verifier is not yet listening (each retry waits on the refused connect itself); the
+    prover's side, reading in a process of its own unless not `apart`."""
     for k in range(attempts):
         try:
             sock = socket.create_connection((host, port), timeout=10)
             sock.settimeout(None)
-            return Conn(sock)
+            conn = Conn(sock)
+            if apart:
+                conn.read_apart()
+            return conn
         except (ConnectionRefusedError, TimeoutError):
             if k + 1 == attempts:
                 raise

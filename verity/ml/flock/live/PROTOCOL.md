@@ -689,11 +689,13 @@ Before the session's `Commit` the firewall recomputes the level-0 commitment its
 host witness (`FC_HOST_WITNESS=1`: the firewall assembles the witness on the host and uploads it whole, so the witness the
 recheck commits is its own; the assembly is counted in the session's prove time, as the device's witness kernel is
 without it), under `hm96::begin` with the session's level-0 salts (`LeafSalts::level0`), with the `Level0Zk` the host
-drew. When the device's root differs, the recheck's root leaves in the `Commit` and the session stops at its `Finish`
-(`FIREWALL-REFUSED: level-0 root`, §10.1). It keeps the tree, so
-the proof's level-0 rows and paths are checked against it at the end. Its cost is reported per statement as `FIREWALL` lines
-(`t.firewall_recheck` wall seconds, `cpu.firewall_recheck` the process's CPU seconds over it), beside the device's
-`t.encoding_commitment`.
+drew. The root of record is the Lean verifier's: `flock-firewall link` (`Flock.Firewall.Link`) commits the same level 0
+from the same witness words, extra lanes, paddings and salts, beside `commit_zk`, and a table whose two roots differ is
+refused before anything of it leaves (`FIREWALL-REFUSED: level-0 recheck`). When the device's root differs, the recheck's
+root leaves in the `Commit` and the session stops at its `Finish` (`FIREWALL-REFUSED: level-0 root`, §10.1). It keeps
+`commit_zk`'s tree, so the proof's level-0 rows and paths are checked against it at the end. Its cost is reported per
+statement as `FIREWALL` lines (`t.firewall_recheck` wall seconds and `cpu.firewall_recheck` the process's CPU seconds of
+`commit_zk`, `t.lean_link` the Lean link's wall seconds, `rust_root_agrees`), beside the device's `t.encoding_commitment`.
 
 ### 10.3 The rule, inner phase (`rec_live`)
 
@@ -823,7 +825,12 @@ the same way at the second table:
 | `cut-decode` | returns output that does not decode, from the rep that holds that round | `FIREWALL-REFUSED: the device failed: the device's output does not decode: …` |
 | `cut-tree` | draws its first tree at or after that round one leaf larger than the statement's (the CPU device: its trees draw through the salt context) | `FIREWALL-REFUSED: opening round …` |
 
-`FC_FIREWALL_CUT_AT` counts the table's device rounds over both reps (default 0), and a `cut-` control fires once a table.
+`FC_FIREWALL_CUT_AT` counts the table's device rounds over both reps (default 0; a rep's bucket has the count so far as
+`firewall_device_rounds`, which leaves out the rounds the host's inner proof sends), and a `cut-` control fires once a table.
+The selftest's `zk_worker_cut_MODE` holds each `cut-` control to the rule on the CPU path, beside an honest firewalled
+session: cut at the table's third, half-way and last device round (`cut-tree` at its first and half-way round), the verifier
+gets the honest session's every request up to its `Finish`, in the same order and at the same sizes, with no proof. It
+needs the Lean frame (`FC_FIREWALL_LEAN`) and skips without it.
 
 With `FC_FIREWALL_TRANSCRIPT=DIR` (the CPU path only, a statement of one table: several are refused), each gated session also writes what the firewall let out as a
 `verity/firewall-transcript/v0` transcript, `DIR/session-<k>.json`, for the firewall's contract (`flock-firewall contract`):

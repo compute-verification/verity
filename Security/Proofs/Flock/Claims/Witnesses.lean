@@ -3,6 +3,8 @@ import Proofs.Flock.Claims.Witnesses.Flock
 import Proofs.Flock.Claims.Witnesses.Sampling
 import Proofs.Flock.Claims.Witnesses.Recursion
 import Proofs.Flock.Claims.Witnesses.RecursionMeets
+import Proofs.Flock.Claims.Witnesses.RecursionLin
+import Proofs.Flock.Claims.Witnesses.RecursionLin2
 import Proofs.Flock.Claims.Witnesses.Stated
 import Proofs.Flock.Claims.Witnesses.Meets
 import Proofs.Flock.Claims.Witnesses.BindingMeets

@@ -18,14 +18,16 @@ the deployed `Zk.verify` accepts the record and proof files at the recursive set
 so do the verdict's last refusals (`fullDrawO`, `nextO_decide_sha512`).
 
 `deployZkRec rel` is the record Flock's claims read at that verifier: `deployZk rel`'s code, decoder spec and numbers,
-each read at the recursive setup's tables (`Readable.tableOf`, `colsO`, `εtableO`, `N₀O`, `weightO`).
+each read at the recursive setup's tables (`Readable.tableOf`, `colsO`, `εtableO`, `N₀O`, `weightO`). `N₀O` sums
+every table's level-0 codeword length, as `FlockDeploy.N₀ true` does, so the tables' words together are no longer
+than it (`sum_wordLenJO_le`, the `hN` a masked KS proof reads).
 -/
 
 namespace RecDeploy
 
 open Flock
 open FlockDeploy (Coin Act Final Ins linkOf finalOf decision outOf rounds checks tabsOf verdictWith sha512 hOf_sha512
-  lastFinal liveOf saltLenOf tableErr tableWeight)
+  lastFinal liveOf saltLenOf tableErr tableLen tableWeight)
 
 local notation "𝔽" => FlockLevel3.GF128
 
@@ -271,11 +273,51 @@ def tablesO (x : Claims.Msg) : List (SessionSpec × Stmt) :=
 /-- **`ε_table`**: the session's tables' masked errors, summed (`FlockDeploy.tableErr true`). -/
 noncomputable def εtableO (x : Claims.Msg) : ℝ := ((tablesO x).map fun p => tableErr true p.1 p.2).sum
 
-/-- **`N₀`**: table 0's masked level-0 codeword length, `2^{d₀}`. -/
-noncomputable def N₀O (x : Claims.Msg) : ℝ :=
-  match (tablesO x).head? with
+/-- **`N₀`**: the session's tables' masked level-0 codeword lengths, summed (`FlockDeploy.tableLen true`), as
+`FlockDeploy.N₀ true` sums them: table 0's `2^{d₀}` at one table. -/
+noncomputable def N₀O (x : Claims.Msg) : ℝ := ((tablesO x).map fun p => tableLen true p.2).sum
+
+/-- **Table `j`'s word's length**: its masked level-0 codeword length `2^d`; `0` past the statement's tables. -/
+def wordLenJO (x : Claims.Msg) (j : ℕ) : ℕ :=
+  match (tablesO x)[j]? with
   | some (_, st) => 2 ^ (Claims.Flock.zkLevel0 st.m).d
   | none => 0
+
+private theorem sum_range_getD_le {α : Type} (g : α → ℕ) : ∀ (l : List α) (n : ℕ),
+    ∑ j ∈ Finset.range n, (l[j]?.map g).getD 0 ≤ (l.map g).sum
+  | [], n => by simp
+  | a :: l, 0 => by simp
+  | a :: l, n + 1 => by
+    rw [Finset.sum_range_succ']
+    simp only [List.getElem?_cons_succ, List.getElem?_cons_zero, Option.map_some, Option.getD_some, List.map_cons,
+      List.sum_cons]
+    have := sum_range_getD_le g l n
+    omega
+
+/-- **The words together are no longer than `N₀O`** (`FlockDeploy.KS.sum_wordLenJ_le` at the recursive setup): the
+`hN` of `Claims.Flock.oneWait_of_tableBoundJR` at `deployZkRec`. -/
+theorem sum_wordLenJO_le (x : Claims.Msg) (n : ℕ) : ((∑ j : Fin n, wordLenJO x j : ℕ) : ℝ) ≤ N₀O x := by
+  set g : SessionSpec × Stmt → ℕ := fun p => 2 ^ (Claims.Flock.zkLevel0 p.2.m).d with hg
+  have hw : ∀ j, wordLenJO x j = ((tablesO x)[j]?.map g).getD 0 := by
+    intro j
+    unfold wordLenJO
+    cases (tablesO x)[j]? <;> rfl
+  have hN : N₀O x = (((tablesO x).map g).sum : ℕ) := by
+    unfold N₀O
+    rw [Nat.cast_list_sum, List.map_map]
+    congr 1
+    refine List.map_congr_left fun p _ => ?_
+    simp [hg, tableLen]
+  rw [hN, Fin.sum_univ_eq_sum_range (fun j => wordLenJO x j) n]
+  simp only [hw]
+  exact_mod_cast sum_range_getD_le g (tablesO x) n
+
+theorem N₀O_nonneg (x : Claims.Msg) : 0 ≤ N₀O x := by
+  unfold N₀O
+  exact List.sum_nonneg fun a ha => by
+    obtain ⟨p, -, rfl⟩ := List.mem_map.1 ha
+    unfold tableLen
+    positivity
 
 /-- **The weight `C` of `γ`**: the session's tables' masked weights, summed (`FlockDeploy.tableWeight true`). -/
 noncomputable def weightO (x : Claims.Msg) : ℝ := ((tablesO x).map fun p => tableWeight true p.2).sum
@@ -309,7 +351,7 @@ noncomputable def deployZkRec (rel : Readable.Parsed → Readable.Relation) :
   waits _ := Claims.Flock.Numbers.waits
   cap _ := Claims.Flock.Numbers.cap
   Tape := FlockComplete.TapeZk
-  P := FlockComplete.ZkTables.honestP
+  P := FlockComplete.ZkTables.honestPR
   δc := FlockComplete.ZkTables.δc
 
 /-- **`ScopeMatches` for the outer verifier** (C's `scopeMatches` at its parser and scope check). -/

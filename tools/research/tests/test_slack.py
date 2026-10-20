@@ -612,6 +612,21 @@ METHOD_SCOPES = {
 }
 
 
+def test_manifest_diff_skips_a_false_default_one_side_omits():
+    live = {"oauth_config": {"pkce_enabled": False, "scopes": {"bot": ["chat:write"]}},
+            "settings": {"is_mcp_enabled": False, "org_deploy_enabled": False, "socket_mode_enabled": True}}
+    repo = {"oauth_config": {"scopes": {"bot": ["chat:write"]}}, "settings": {"org_deploy_enabled": False}}
+    assert slack.manifest_diff(repo, live) == ["- settings.socket_mode_enabled: true"]
+
+def test_the_app_manifest_keeps_the_live_request_urls_and_events():
+    """apply replaces the whole manifest, so one without the interactivity URL (the #ask-daniel card buttons) or the event
+    subscriptions (the events service) would switch them off (infra caught it on 19 Oct and merged the live blocks in)."""
+    m = json.loads(REAL_MANIFEST.read_text())
+    assert m["settings"]["interactivity"]["is_enabled"] and m["settings"]["interactivity"]["request_url"].startswith("https://")
+    ev = m["settings"]["event_subscriptions"]
+    assert ev["request_url"].startswith("https://") and ev["request_url"].endswith("/api/slack/events")
+    assert {"message.channels", "message.groups", "team_join"} <= set(ev["bot_events"])
+
 def test_the_app_manifest_s_bot_scopes_cover_every_method_this_module_calls():
     """A silent scope swap (19 Oct: channels:history replaced by groups:history) fails here, naming the scope."""
     called = set(re.findall(r"\.(?:call|paged)\(\s*\"([a-z]+(?:\.[A-Za-z]+)+)\"", Path(slack.__file__).read_text())) - set(slack.APP_METHODS)
@@ -622,7 +637,7 @@ def test_the_app_manifest_s_bot_scopes_cover_every_method_this_module_calls():
     assert not missing, "the manifest's bot scopes lack " + ", ".join(f"{s} (for {m})" for s, m in missing)
     assert manifest["display_information"]["name"] == manifest["features"]["bot_user"]["display_name"] == "Agents"
     assert len(manifest["display_information"]["description"]) <= slack.DESCRIPTION_MAX
-    assert not any(manifest["settings"].values())
+    assert not any(manifest["settings"][k] for k in ("org_deploy_enabled", "socket_mode_enabled", "token_rotation_enabled"))
 
 
 APP = "A0VERITY"
@@ -2434,8 +2449,38 @@ def test_a_long_post_goes_out_whole_with_its_rest_as_quiet_replies(fake, registr
 
 def test_send_refuses_a_post_that_names_only_its_author(registry, capsys):
     rc, _, err = run(capsys, "send", "--as", "infra", "--dry-run", "--text", "<!subteam^SINFRA|@infra> steward: is exit 1 harmless?")
-    assert rc == 2 and "never wakes its author" in err
+    assert rc == 2 and "never wakes its own inbox's holder" in err
     assert run(capsys, "send", "--as", "infra", "--dry-run", "--text", "@infra @ci is exit 1 harmless?")[0] == 0
+
+
+def test_a_handover_s_outgoing_generation_rings_the_holder_and_the_holder_never_rings_itself(fake, registry, routes_dirs,
+                                                                                           capsys, monkeypatch):
+    """20 Oct 00:12Z: proofs gen 3, kept as a poster after gen 4 took the inbox, posted 7 asks for gen 4 as @proofs, and
+    none rang gen 4, since a post never rang its author's handle (COMM-54).  What counts is the agent: a post by an agent
+    other than the inbox's holder rings it."""
+    monkeypatch.setattr(slack, "acting_as", ACTING_AS)
+    gen3, gen4 = "bc-8f4b652b-17bc-5055-a120-b56940b7c7a9", "bc-a26cefd0-1111-2222-3333-444444444444"
+    box = inbox(fake, routes_dirs, "proofs", holder=gen4, posters=[gen3])
+    top = inbox(fake, routes_dirs, "top")
+    monkeypatch.setenv("RESEARCH_AGENT_URL", f"https://cursor.com/agents/{gen3}")
+    assert run(capsys, "send", "--as", "proofs", "--text", "@proofs (gen 4) a new code item for you")[0] == 0
+    assert len(bells(fake, box)) == 1
+    assert run(capsys, "send", "--as", "proofs", "--to", "@proofs", "--text", "INT7 is yours from 05:00Z")[0] == 0
+    assert len(bells(fake, box)) == 2
+    root = fake.add(COORD, text="@proofs gen 3, hand your workers over", username="top", bot_id=BOT)
+    assert run(capsys, "reply", "--as", "proofs", "--thread", root["ts"], "--text", "@proofs (gen 4) INT7 is idle")[0] == 0
+    assert len(bells(fake, box)) == 3 and bells(fake, top) == []                       # it names gen 4's handle, so it's for gen 4
+    assert run(capsys, "reply", "--as", "proofs", "--thread", root["ts"], "--text", "done: all five are listed")[0] == 0
+    assert len(bells(fake, top)) == 1 and len(bells(fake, box)) == 3                   # naming no one, it's still for the asker
+    monkeypatch.setenv("RESEARCH_AGENT_URL", f"https://cursor.com/agents/{gen4[:11]}")  # the holder, under its short id
+    rc, _, err = run(capsys, "send", "--as", "proofs", "--text", "@proofs (gen 3) taken")
+    assert rc == 2 and "never wakes its own inbox's holder" in err
+    assert run(capsys, "send", "--as", "proofs", "--to", "@proofs", "--text", "x")[0] == 2
+    assert run(capsys, "reply", "--as", "proofs", "--thread", root["ts"], "--text", "@proofs (gen 3) taken")[0] == 0
+    assert len(bells(fake, box)) == 3                                                  # the holder is never its own target
+    assert not slack.rings_own_inbox(slack.Routes(), "proofs", None) and slack.rings_own_inbox(slack.Routes(), "proofs", gen3)
+    assert not slack.route_targets({"text": "@proofs x", "ts": "1.1", "bot_id": BOT, "username": "proofs"}, None,
+                                   json.loads(registry.read_text()))
 
 
 def test_an_announcement_to_every_handle_refuses_leading_names(registry, capsys):
@@ -2728,6 +2773,16 @@ def test_traffic_replay_names_each_post_whose_doorbells_differ_from_route_target
     assert f"REPLAY {typed['ts']} by @proofs: missed @circuits: @circuits sent by a client" in out and "replayed: 2 post(s)" in out
 
 
+def test_traffic_replay_skips_a_long_posts_later_pieces(fake, registry, routes_dirs, capsys, monkeypatch):
+    """`_post`'s later pieces (`(2/3) ...`, quiet) wake nobody by design; one naming a PR read as a miss in the 19 Oct replay."""
+    inbox(fake, routes_dirs, "circuits")
+    monkeypatch.setattr(slack, "route_targets", lambda *a, **k: ["circuits"])
+    piece = fake.add(COORD, text=f"(2/2) the rest, about #12{slack._footer((slack.QUIET,))}", username="proofs", bot_id=BOT)
+    plain_post = fake.add(COORD, text="a post the rule would ring", username="proofs", bot_id=BOT)
+    rc, out, _ = run(capsys, "traffic", "--hours", "1e6", "--now", "1700100000", "--replay", "--json")
+    rep = {x["ts"]: x for x in json.loads(out)["replay"]}
+    assert rc == 0 and piece["ts"] not in rep and rep[plain_post["ts"]]["missed"] == ["circuits"]
+
 def test_traffic_asks_origin_main_before_dropping_an_unknown_group(fake, registry, routes_dirs, capsys, monkeypatch):
     """A stale analysis checkout must not report a fresher sender's group mentions as dropped (14 Oct: three false
     DROPPED lines for groups created that morning); a group origin/main doesn't know either still drops."""
@@ -2931,16 +2986,17 @@ def test_traffic_reads_each_asks_record_first_and_says_which_record_answered(fak
     assert f"UNANSWERED {silent['ts']} by @infra to @proofs" in out and "): Slack, no record: no reply or reaction" in out
 
 
-def test_traffic_latency_times_daniels_cards_by_their_pages_and_a_linked_ask_by_its_issue_alone(fake, registry, routes_dirs, notion,
-                                                                                                 capsys, monkeypatch):
+def test_traffic_latency_times_daniels_cards_by_their_pages_and_a_linked_ask_by_its_issue_or_the_lanes_reply(fake, registry, routes_dirs,
+                                                                                                            notion, capsys, monkeypatch):
     """Daniel's card is answered when its page's Status leaves Waiting on Daniel, timed at the page's last edit (Notion keeps no
-    property history); a status reached after --now doesn't count.  A lane's reply under a linked ask is no answer while its
-    issue sits in Backlog.  Without $NOTION_API_KEY the cards count unanswered, and the report says why."""
+    property history); a status reached after --now doesn't count.  A lane's reply under a linked ask answers it even while
+    its issue sits in Backlog (19 Oct: top answered TOP-70 in its thread).  A machine's alert asks nothing.  Without $NOTION_API_KEY the cards count unanswered, and the report says why."""
     from research import linear
     proofs = inbox(fake, routes_dirs, "proofs")
     now = T0 + 86400
     linked = ask_at(fake, proofs, 0, "infra", "@proofs the cut's error?\nLinear: <https://linear.app/x/issue/PRF-5|PRF-5>")
     reply_at(fake, linked, 60, "proofs", "on it")
+    alert = ask_at(fake, proofs, 30, "vy-monitors", "@proofs n2's disk is at 91%")       # no lane: not an ask
     approved = card_at(fake, 100, "lean", url=URL_A)
     waiting = card_at(fake, 200, "lean", url=URL_B)
     late = card_at(fake, 300, "lean", mention_url=URL_C)
@@ -2951,7 +3007,8 @@ def test_traffic_latency_times_daniels_cards_by_their_pages_and_a_linked_ask_by_
     rc, out, _ = run(capsys, "traffic", "--latency", "--hours", "24", "--now", f"{now:.0f}", "--json")
     rep = json.loads(out)
     by = {a["ts"]: a for a in rep["asks"]}
-    assert rc == 0 and [by[linked["ts"]][k] for k in ("lane", "record", "ref", "first")] == ["proofs", "linear", "PRF-5", None]
+    assert rc == 0 and [by[linked["ts"]][k] for k in ("lane", "record", "ref", "first", "minutes")] == ["proofs", "linear", "PRF-5", "slack-reply", 1.0]
+    assert alert["ts"] not in by
     assert {k: by[approved["ts"]][k] for k in ("lane", "by", "record", "ref", "state", "first", "minutes")} == \
         {"lane": "daniel", "by": "lean", "record": "notion", "ref": URL_A, "state": "Approved", "first": "notion-status", "minutes": 45.0}
     assert (by[waiting["ts"]]["first"], by[waiting["ts"]]["state"]) == (None, "Waiting on Daniel")
@@ -2963,7 +3020,7 @@ def test_traffic_latency_times_daniels_cards_by_their_pages_and_a_linked_ask_by_
     lines = out.splitlines()
     assert rc == 0 and lines[1].split()[:6] == ["lane", "asks", "answered", "slack", "linear", "notion"]
     assert lines[2].split() == ["@daniel", "3", "1", "0", "0", "1", "0", "45.0", "45.0", "2", "2"]
-    assert lines[3].split() == ["@proofs", "1", "0", "0", "0", "0", "0", "-", "-", "1", "1"]
+    assert lines[3].split() == ["@proofs", "1", "1", "1", "0", "0", "0", "1.0", "1.0", "0", "0"]
     monkeypatch.delenv("NOTION_API_KEY")
     rc, out, _ = run(capsys, "traffic", "--latency", "--hours", "24", "--now", f"{now:.0f}")
     assert rc == 0 and out.splitlines()[2].split()[:3] == ["@daniel", "3", "0"]
