@@ -1,11 +1,12 @@
 """RT4-INT's item 3, the served form under ASK-71 A (INT-TIE's `Accounting.Served` on `cursor/int-tie-ea24` at 8f161917ab,
 kernels' `dither-a` arm on `cursor/kernels-dither-cut-15ad` at f878a05970).
 
-Every served arm forms a call's A rows after the salt its noise reads: dither-a's seeds read the window's salt (with
+dither-a and dither-one form a call's A rows after the salt its noise reads: their seeds read the window's salt (with
 `-ls`, the round before's), and step s's A table goes under step s's round root between steps, after its receipts.
-`Served.Tie` orders the other way (A under round r's root before coin r, receipts reading coin r), and `EpochTie`'s text
-says a call's noise key reads "that salt and its call index only". The code's order is sound only because the key
-reads root(A): each unit's seed is `seeds.seed(salt, position, root_a, root_b)`. The noise on A is one dither bit an
+`Served.Tie` orders the other way (A under round r's root before coin r, receipts reading coin r), as `serve.py`'s live
+mode and dither-fused do, and `EpochTie`'s text says a call's noise key reads "that salt and its call index only".
+dither-a's order is sound only because the key reads root(A): each unit's seed is
+`seeds.seed(salt, position, root_a, root_b)`. The noise on A is one dither bit an
 entry, X = A + b, so a key that reads no root(A) lets an A written after its noise be −b: X = 0, and the unit's receipt
 is the same for every B, no noised work on the weights, while its z = A Bᵀ is still a product (RT4-INT-12).
 """
