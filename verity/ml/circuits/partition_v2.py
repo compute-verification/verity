@@ -192,12 +192,27 @@ def _members(node: Any) -> int:
     return node.n if node.form == "batch" else 1
 
 
-def build(program: Any, q: Mapping[str, Any] | None = None, owners: Callable[[Any, CallGraph], Sequence[int]] | None = None, *,
-          mixed: bool = False) -> Advice:
+def build(program: Any, q: Mapping[str, Any] | None = None, owners: Callable[[Any, CallGraph], Sequence[int]] | None = None) -> Advice:
     """The advice of `program`'s partition: the cuts of the query `q` (`Q_word` v1 or v2, `Q_call` excluded, or a template query:
     each instance one unit), or of `owners(fn, graph)` (a unit per computing gate of each root Call's Definition, cut flat, one cut
     per Definition).  Default: `Q_word{16, 32}` v1.  It refuses a partition whose units span more than one size class
-    (`unit_class`, `MixedClasses`), unless ``mixed``: advice past the builder's scope, as a prover may send it to `check`."""
+    (`unit_class`, `MixedClasses`)."""
+    advice, spans = _advice(program, q, owners)
+    if len(spans) > 1:
+        raise MixedClasses(spans)
+    return advice
+
+
+def _build_unchecked(program: Any, q: Mapping[str, Any] | None = None,
+                     owners: Callable[[Any, CallGraph], Sequence[int]] | None = None) -> Advice:
+    """`build` without its refusal of units of several size classes: advice past the builder's scope, as a prover may send it to
+    `check`.  Tests alone call it (`TEST_ONLY` in the repository's `tests/test_boundaries.py`)."""
+    return _advice(program, q, owners)[0]
+
+
+def _advice(program: Any, q: Mapping[str, Any] | None,
+            owners: Callable[[Any, CallGraph], Sequence[int]] | None) -> tuple[Advice, dict[int | None, tuple[str, int]]]:
+    """`build`'s advice, and each size class of its units with the first unit in it (`MixedClasses.spans`)."""
     if q is not None and owners is not None:
         raise ValueError("a query or an owner function, not both")
     bad = PO.order_violation(program)
@@ -264,9 +279,7 @@ def build(program: Any, q: Mapping[str, Any] | None = None, owners: Callable[[An
         m = _members(nodes[k])
         calls.append(Call(k, e, m, start))
         start += m * entries[e].units
-    if len(spans) > 1 and not mixed:
-        raise MixedClasses(spans)
-    return Advice(program_digest(program), tuple(calls), tuple(entries))
+    return Advice(program_digest(program), tuple(calls), tuple(entries)), spans
 
 
 # --- rows ------------------------------------------------------------------------------------------------------------------------
