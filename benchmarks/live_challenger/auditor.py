@@ -290,8 +290,8 @@ def parse_open(argv: list[str], host: Host, *, admin: bool = False) -> dict:
         p.add_argument("--for", dest="lane", default=None)
 
     def refuse(why: object) -> None:
-        raise Refused(f"open: {why}; usage: {p.format_usage().strip()} (v2: no --period or --lane: the window is its root, "
-                      "its time the auditor's, its prover your gate key's lane)")
+        raise Refused(f"open: {why}; {' '.join(p.format_usage().split())} (v2: no --period or --lane: the window is its "
+                      "root, its time the auditor's, its prover your gate key's lane)")
 
     p.error = refuse
     try:
@@ -400,7 +400,7 @@ def parse_period(verb: str, argv: list[str], *, lane: str | None) -> tuple[str, 
         p.add_argument("--circuit", required=True)
 
     def refuse(why: object) -> None:
-        raise Refused(f"{verb}: {why}; usage: {p.format_usage().strip()}")
+        raise Refused(f"{verb}: {why}; {' '.join(p.format_usage().split())}")
 
     p.error = refuse
     try:
@@ -484,7 +484,8 @@ def _auditor(args: list[str]) -> list[str]:
 def as_auditor_admit(session: str) -> None:
     p = subprocess.run(_auditor(["admit", session]), capture_output=True, text=True)
     if p.returncode:
-        raise Refused(p.stderr.strip().splitlines()[-1] if p.stderr.strip() else f"admit exited {p.returncode}")
+        raise Refused(p.stderr.strip().splitlines()[-1].removeprefix("refused: ") if p.stderr.strip()
+                      else f"admit exited {p.returncode}")
 
 
 def as_auditor_period(args: list[str]) -> dict:
