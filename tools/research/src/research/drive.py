@@ -126,6 +126,8 @@ PER_PR_BRANCH = "per-pr/"
 PER_PR_RANK = 999_999
 #: its records kept once they end
 PER_PR_DONE = 1000
+#: its landing commits' identity, so none equals a commit of `next`
+PER_PR_IDENTITY = {**IDENTITY, "GIT_COMMITTER_NAME": "research queue per-PR shadow"}
 #: its records' phases in which it still acts: a terminal one (would-land, failed, conflict) waits for a new head or the trains
 PER_PR_LIVE = ("queued", "checking", "planning")
 
@@ -1735,15 +1737,16 @@ class Driver:
                 f"{phases.count('would-land')} would land")
 
     def _per_pr_running(self) -> int:
-        return sum(r["phase"] == "checking" or (r["checks"] and not r["checks"][-1].get("ended") and r["checks"][-1].get("ids"))
+        return sum(r["phase"] == "checking" or bool(r["checks"] and not r["checks"][-1].get("ended") and r["checks"][-1].get("ids"))
                    for r in self._per_pr_recs.values())
 
     def _per_pr_commit(self, rec: dict, main: str) -> tuple[str | None, str]:
         """(L, ""): ``rec``'s PR's head merged onto ``main`` as drive's sync merges it onto `next` (`queue._message`), or (None,
-        why) when they conflict."""
+        why) when they conflict.  Its committer is the shadow's (`PER_PR_IDENTITY`): a commit equal to a train's would share
+        that train's attempts, and the trains' verdicts with them."""
         pr = self._prs.get(rec["pr"]) or PR(rec["pr"], rec["head"], "", f"Lane {rec['owner']}")
         _git(self.repo, "checkout", "-q", "-f", "--detach", main)
-        r = _git(self.repo, "merge", "--no-ff", "--no-edit", "-m", _message(pr), rec["head"], check=False, env=IDENTITY)
+        r = _git(self.repo, "merge", "--no-ff", "--no-edit", "-m", _message(pr), rec["head"], check=False, env=PER_PR_IDENTITY)
         if r.returncode == 0:
             return _out(self.repo, "rev-parse", "HEAD"), ""
         files = _out(self.repo, "diff", "--name-only", "--diff-filter=U").split()

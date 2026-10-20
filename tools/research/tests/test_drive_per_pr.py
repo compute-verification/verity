@@ -72,8 +72,8 @@ def _branches(world: World) -> set[str]:
     return set(_git(world.origin, "for-each-ref", "--format=%(refname:short)", "refs/heads/").split())
 
 
-def _parents(world: World, commit: str) -> list[str]:
-    return _git(world.origin, "rev-list", "--parents", "-n", "1", commit).split()[1:]
+def _parents(repo, commit: str) -> list[str]:
+    return _git(repo, "rev-list", "--parents", "-n", "1", commit).split()[1:]
 
 
 def test_ready_prs_get_one_check_each_of_their_merge_onto_main_oldest_mark_first_up_to_the_cap(world, monkeypatch):
@@ -90,7 +90,7 @@ def test_ready_prs_get_one_check_each_of_their_merge_onto_main_oldest_mark_first
     assert [c for c, *_ in h.launched] == [h.check_of(3)["commit"], h.check_of(1)["commit"]]
     for n in (3, 1):
         commit = h.check_of(n)["commit"]
-        assert _parents(world, commit) == [main, heads[n]] and h.check_of(n)["main"] == main
+        assert _parents(world.origin, commit) == [main, heads[n]] and h.check_of(n)["main"] == main
         assert _git(world.origin, "rev-parse", f"refs/heads/per-pr/{n}") == commit
         assert h.ranks[commit] == str(PER_PR_RANK)
     assert "CHECK_SLOT_RANK" not in os.environ and h.q.load_state()["drive"]["launched"] == {}
@@ -114,7 +114,7 @@ def test_a_new_head_restarts_only_its_own_prs_check(world, monkeypatch):
     h.tick()
     assert h.cancelled == one["ids"]                                      # #1's run alone
     assert h.check_of(2) == two and h.rec(2)["phase"] == "checking"       # #2's check runs on, untouched
-    assert h.rec(1)["head"] == new and _parents(world, h.check_of(1)["commit"]) == [_main(world), new]
+    assert h.rec(1)["head"] == new and _parents(world.origin, h.check_of(1)["commit"]) == [_main(world), new]
     assert h.launched[-1][0] == h.check_of(1)["commit"] and len(h.launched) == 3
     (old,) = h.shadow()["done"]
     assert old["head"] != new and old["ended"]["why"] == "new-head" and old["checks"] == [one]
@@ -150,7 +150,7 @@ def test_on_a_moved_main_the_new_landing_commit_is_planned_by_its_keys_and_would
     _check(world, monkeypatch, first)
     h.tick()
     (plan,) = h.planned
-    assert h.rec(1)["phase"] == "planning" and _parents(world, plan["commit"])[0] == other
+    assert h.rec(1)["phase"] == "planning" and _parents(h.d.repo, plan["commit"])[0] == other
     assert plan["base"] == other and plan["runs"] == [h.check_of(1)["ended"]["attempt"]] and plan["machines"] == ["m1"]
     h.tick()
     assert h.rec(1)["phase"] == "planning" and len(h.planned) == 1        # the plan runs: nothing more
@@ -201,6 +201,7 @@ def test_the_shadow_never_touches_next_main_or_the_trains_records(world, monkeyp
         trees = [_git(w.origin, "rev-parse", f"{r}^{{tree}}") for r in ("main", "next")]
         return h, trees
 
+    (tmp_path / "plain").mkdir()
     plain, plain_trees = run(World(tmp_path / "plain"), 0)
     h, trees = run(world, 2)
     launched = h.q.load_state()["drive"]["launched"]
@@ -214,10 +215,10 @@ def test_the_shadow_never_touches_next_main_or_the_trains_records(world, monkeyp
     h.tick()
     assert [m.pr for m in h.q.chain()] == [1, 2] and h.posts == [] and h.q.load_state().get("ejected", {}) == {}
     before, trains = _main(world), {rid for r in h.q.load_state()["drive"]["launched"].values() for rid in r["ids"]}
-    live = h.check_of(1)["ids"]
+    live, failed = h.check_of(1)["ids"], h.check_of(2)["ids"]
     _check(world, monkeypatch, _tip(world))                              # the trains' tip passes and lands both
     assert h.tick().startswith("landed #2") and _main(world) == _tip(world) != before
-    assert set(h.cancelled) - trains == set(live)                         # of its own runs, only #1's, which still ran
+    assert set(h.cancelled) - trains == {*live, *failed}                  # its own runs only: #2's failed one, #1's at the landing
     assert {r["pr"]: r["ended"]["why"] for r in h.shadow()["done"]} == {1: "landed", 2: "landed"} and h.shadow()["prs"] == {}
     assert _branches(world) == {"main", "next"}
 
