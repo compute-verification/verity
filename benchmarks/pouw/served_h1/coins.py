@@ -214,7 +214,7 @@ class Coins:
         return self.challenger.open(Wd.DRAW, 0, after)
 
     def close(self) -> None:
-        """End an off-node session: the challenger answers closed and writes its summary."""
+        """End an off-node session: the challenger signs and writes its close (challenger.json), then answers closed."""
         if self.source == "off-node":
             self.challenger.close()
 
@@ -311,15 +311,10 @@ def window_reasons(audited: Ch.Audited, entries: dict[str, dict], commitment: Ch
 
 
 def key_record(path: str | os.PathLike) -> Ch.ChallengerKey:
-    """The challenger's key from its deployment record (infra's challenger-key/v1: H, W, pubkey, pubkey_sha512), the key
-    a verifier holds a session to, never the session's own key.json nor the gate ledger's key_sha512."""
-    doc = json.loads(Path(path).read_text())
-    if not str(doc.get("schema", "")).startswith("challenger-key/"):
-        raise ValueError(f"{path} is not a challenger-key record")
-    key = Ch.ChallengerKey.from_json({"H": doc["H"], "W": doc["W"], "public": doc["pubkey"]})
-    if hashlib.sha512(key.public).hexdigest() != doc["pubkey_sha512"]:
-        raise ValueError(f"{path}'s pubkey is not its pubkey_sha512's")
-    return key
+    """The challenger's key from its deployment record at `path` (infra's challenger-key/v1, read by core's
+    `challenger.key_of_record`), the key a verifier holds a session to, never the session's own key.json nor the
+    ledger's key_sha512."""
+    return Ch.key_of_record(json.loads(Path(path).read_text()))
 
 
 def check(directory: str | os.PathLike, coins: dict, heads: Sequence[str | os.PathLike], rounds: list[bytes],
