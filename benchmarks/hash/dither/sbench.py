@@ -64,7 +64,7 @@ Arms:
                  dither-a the second where HB_H1U is set, dither-a-hbk the K split's kh_one (HB_H1U_KSPLIT) for its
                  receipts only, dither-a-hbr the same call built H1K_RONLY (HB_H1U_KRONLY: no z, y or their MMA).  Each with -zy commits CA's z/y leaves (one hiding leaf a
                  32 x 32 unit holding its z and its y = dequant(z): the epilogue writes the records, the window
-                 builds every call's table between steps; -zyc the side stream each call's after its receipts),
+                 builds every call's table between steps),
                  and with -y commits no z at all (y only: the leaves' cost floor, never credited; its gate is its
                  tokens).  With -ao after those, the A tables run on a stream of
                  their own, each beside the previous call's units (the units of a call still wait on its A table);
@@ -341,7 +341,7 @@ def build(arm: str, scratch: Path, gpu_mem: float):
 
 DITHER_A = {f"dither-a{u}{z}{o}{p}{q}": (unit, zm, ao, pt, ls)
             for u, unit in (("", None), ("-h1r", "h1r"), ("-kh", "kh"), ("-hbk", "hbk"), ("-hbr", "hbr"))
-            for z, zm in (("", "row"), ("-zy", "zy"), ("-zyc", "zyc"), ("-y", "none"))
+            for z, zm in (("", "row"), ("-zy", "zy"), ("-y", "none"))
             for o, ao in (("", ""), ("-ao", "a"), ("-aos", "as"), ("-aom", "m"), ("-aoms", "ms"), ("-aomn", "mn"))
             for p, pt in (("", False), ("-pt", True))
             for q, ls in (("", False), ("-ls", True))}

@@ -25,8 +25,7 @@ step and receipt trees between steps, and nothing waits on the side stream but t
 is committed as CA's leaves instead of the window's row z tables: the epilogue writes one record a 32 x 32 unit (its z,
 then its y = dequant(z), 0 past m) and the window builds every call's leaf table between steps in the row z tables'
 place, beside the receipt trees, each root the call's leaf of the z-step tree, so the round over them still comes before
-the draw; with z="zyc" (-zyc) the side stream builds each call's table instead, after the call's receipts (one build a
-call: about 0.7 ms each on the RTX against 2.9 ms for all 128 batched, zleaf.py).  With ao="a" (the arms' -ao) the
+the draw (CA, 00:33Z: every leaf in its registered root before the draw coin, nothing written after it).  With ao="a" (the arms' -ao) the
 A tables run on a third stream above the units' priority: A_w waits on its quantizer and the units of call w on
 A_w, so each call's A table still precedes its seeds and units, and A_(w+1) runs beside call w's units (the same
 launches; only the streams they wait on change); with ao="as" (-aos; kh and hbk, whose seeds are a launch of their own)
@@ -79,11 +78,11 @@ LIB = "dithera"
 UNITS = ("h1r", "kh", "hbk", "hbr"); KONE = ("hbk", "hbr")
 # z's commitment: "row" each slot's N int32 a hiding leaf (dither_one's z table, built between steps); "zy" CA's leaf
 # (the coordinator's 22:40Z shape): one hiding leaf a credited UR x UC unit holding its z (int32) then its y = dequant(z)
-# (bf16), 0 past m, which the epilogue writes as one record a unit and the window commits between steps ("zyc": the side
-# stream per call after the call's receipts) (ZY_KIND, provisional until INT-TIE names the fields); "none" no z stored
+# (bf16), 0 past m, which the epilogue writes as one record a unit and the window commits between steps (ZY_KIND,
+# provisional until INT-TIE names the fields); "none" no z stored
 # and no z table, y only: the leaves'
 # cost floor, never credited
-ZMODES = {"none": 0, "row": 1, "zy": 2, "zyc": 2}
+ZMODES = {"none": 0, "row": 1, "zy": 2}
 # nothing, the A tables, or the A tables and (kh, hbk) the seeds on the A stream; "m" and "ms" the same on NA_MULTI
 # A streams, call w's on stream w % NA_MULTI
 AO = ("", "a", "as", "m", "ms", "mn")
@@ -298,11 +297,11 @@ class Side:
         self.zy: list[torch.Tensor] = []
         if z != "row":
             # the window's row z tables are never built: under "zy" its z/y leaf tables are, between steps in their
-            # place, under "zyc" each call's on the side stream after its receipts
+            # place
             zset, build = win.pre["z"], win.c.build
             win.c.build = lambda st, step, domains=True: None if st is zset else build(st, step, domains)
             win.z = [torch.empty(0, dtype=torch.int32, device=dev) for _ in win.z]
-        if z in ("zy", "zyc"):
+        if z == "zy":
             self.unit_of = [UNIT] * win.L
             self.zy = [torch.empty(zy_count(win, w, self.unit_of[w]) * zy_bytes(self.unit_of[w]), dtype=torch.uint8,
                                    device=dev) for w in range(win.L)]
@@ -311,10 +310,7 @@ class Side:
                                         stride=zy_bytes(self.unit_of[w]), body=zy_bytes(self.unit_of[w]),
                                         length=zy_bytes(self.unit_of[w]), lab=("zy/", f"/{w}"),
                                         out=win.pre["mid"].leaves_addr(2) + 64 * w) for w in range(win.L)])
-            self.tb = C.sizeof(H1CM._Tab)
-            self.gemm_done = torch.cuda.Event()
-            if z == "zy":
-                win.pre["z"] = self.zyset
+            win.pre["z"] = self.zyset
         if unit in ("kh",) + KONE:
             if not h1u:
                 raise RuntimeError(f"dither-a's {unit} unit needs h1u.so (HB_H1U; HB_H1U_KSPLIT for hbk, HB_H1U_KRONLY for hbr)")
@@ -455,13 +451,6 @@ class Side:
             self.side.wait_event(self.fork)
             self.gemm(w, xq, s_a, wt, s_w, y)
             rc = win.a_call(w, win.slot[w], win.scale[w], st) or self.units(w, M, st, s_w)
-        if not rc and self.z == "zyc":
-            # the call's z/y leaves and their tree, after its receipts, once its GEMM has written the records
-            self.gemm_done.record(main)
-            self.side.wait_event(self.gemm_done)
-            zs = self.zyset
-            rc = win.c.lib.h1c_build(C.addressof(zs.host) + self.tb * w, zs.dev.data_ptr() + self.tb * w, 1,
-                                     win.stepv.data_ptr(), win.c.btab.data_ptr(), 1, st)
         if rc:
             raise RuntimeError(f"dither-a call {w} (M={M}): a side launch returned {rc}")
         last = w == win.L - 1
@@ -484,7 +473,7 @@ class Side:
         self.calls += 1
 
     def leaf_bytes(self) -> dict | None:
-        """Per step under "zy" or "zyc": the bytes the epilogue writes into the records, and the leaf build reads (the
+        """Per step under "zy": the bytes the epilogue writes into the records, and the leaf build reads (the
         records) and writes (segment digests, leaves, levels), from the tables' shapes."""
         if not self.zy:
             return None
