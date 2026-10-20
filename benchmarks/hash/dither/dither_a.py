@@ -34,6 +34,7 @@ each call's seeds follow its A table on that stream, and its units wait on both;
 same on NA_MULTI A streams, call w's on stream w % NA_MULTI, since no call's table reads another's (each call's
 counter is in its own prefix words), and a join waits on every A stream used since the last.  With pt=True (-pt) the
 window builds the receipt trees and the admit tables between steps on streams of their own (`Window.tree_streams`).
+With ls=True (-ls) each step's seeds read the live salt of the round before it (`Window.step_salt`).
 
     import dither_a as DA
     DA.patch(t=T, h1c="libh1c.so", h1o="libh1o.so", unit="h1r")   # before LLM()
@@ -515,6 +516,7 @@ CONF: dict = {}
 def side() -> Side:
     if not SIDE:
         win = DO._window(torch.device("cuda"))
+        win.step_salt = CONF["ls"]
         SIDE.append(Side(win, CONF["unit"], CONF["h1u"], CONF["z"], CONF["ao"], CONF["pt"]))
         before = DO.Window.before
 
@@ -562,14 +564,14 @@ def _mm_fake(x, w, s_w, idx):
 
 
 def patch(t: int, h1c: str, h1o: str, unit: str = "h1r", h1u: str | None = None, key: bytes | None = None,
-          z: str = "row", ao: str = "", pt: bool = False) -> None:
+          z: str = "row", ao: str = "", pt: bool = False, ls: bool = False) -> None:
     """dither_one's patch (its weights' registry, the window's libraries), then every int8-exact linear's `apply`
     through ``dithera::mm`` (before the engine is built, in its process)."""
     from verity_vllm.engine import int8_vllm as IV
     if unit not in UNITS or z not in ZMODES or ao not in AO:
         raise ValueError(f"dither-a's unit: one of {UNITS}, not {unit!r}; its z: one of {tuple(ZMODES)}, not {z!r}; "
                          f"its ao: one of {AO}, not {ao!r}")
-    CONF.update(unit=unit, h1u=h1u, z=z, ao=ao, pt=pt)
+    CONF.update(unit=unit, h1u=h1u, z=z, ao=ao, pt=pt, ls=ls)
     os.environ.setdefault("DITHER_A_FORM", "3")
     DO.patch(t=t, h1c=h1c, h1o=h1o, key=key, gate=True)
 
@@ -659,13 +661,14 @@ def check(win: DO.Window, lib_h1o: str, which: str = "gate", n_cpu_units: int = 
             yleaf_bad.append(w)
     doc["z_vs_int_mm_bad"], doc["y_vs_dequant_z_bad"] = z_bad, y_bad if g["y"] is not None else None
     doc["y_leaf_vs_dequant_z_bad"] = yleaf_bad if zy else None
-    # every receipt against h1r v1 on the saved slots, the window's salt and the CPU's roots
+    # every receipt against h1r v1 on the saved slots, the step's salt and the CPU's roots
     r = H1R(lib_h1o)
     live = torch.from_numpy((np.arange(t // 32) * 32 < m).astype(np.uint8)).to(win.dev)
     roots = [torch.from_numpy(np.concatenate([np.frombuffer(a_cpu[w], ">u8"), np.frombuffer(g["b_roots"][w], ">u8")])
                               .astype("<u8").view("<i8").copy()).to(win.dev) for w in range(L)]
     plan = r.plan([Call(g["a"][w], win.wt[w], s * win.u_step + win.offs[w], roots[w], live) for w in range(L)])
-    r.launch(plan, win.salt, version=1)
+    salt = DO.cap_salt(win, g)
+    r.launch(plan, salt[1], version=1)
     torch.cuda.synchronize()
     got = g["receipts"]
     shift = SIDE[0].shift if SIDE else 24
@@ -703,13 +706,13 @@ def check(win: DO.Window, lib_h1o: str, which: str = "gate", n_cpu_units: int = 
             a32 = g["a"][w][0:32].cpu().numpy()
             b32 = win.wt[w][32 * u:32 * u + 32].cpu().numpy()
             pos = s * win.u_step + win.offs[w] + u
-            ref = DO.h1v3_unit(a32, b32, win.salt_bytes, pos, (a_cpu[w], g["b_roots"][w]))
+            ref = DO.h1v3_unit(a32, b32, salt[0], pos, (a_cpu[w], g["b_roots"][w]))
             zk = zr[w][0:32, 32 * u:32 * u + 32].cpu().numpy().astype(np.int64)
             rk = (got_of(w)[u].cpu().numpy().astype(np.int64) & M32).tolist()
             units_doc.append({"call": w, "unit": u, "k": k, "receipt_equal": rk == ref["receipt"],
                               "z_equal_today": bool((zk == ref["today"]).all()), "_zk": zk, "_rk": rk})
             h1v3_in.append({"a": (a32.astype(np.int64) & 0xFF).tolist(), "b": (b32.astype(np.int64) & 0xFF).tolist(),
-                            "salt": win.salt_bytes.hex(), "position": int(pos), "roots": [a_cpu[w].hex(), g["b_roots"][w].hex()]})
+                            "salt": salt[0].hex(), "position": int(pos), "roots": [a_cpu[w].hex(), g["b_roots"][w].hex()]})
         hv = DO.h1v3_itself(h1v3_in)
         if "units" in hv:
             for x, hu in zip(units_doc, hv["units"]):

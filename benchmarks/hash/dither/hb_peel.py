@@ -155,7 +155,7 @@ def check(win: DO.Window, lib_h1o: str, which: str = "gate", n_cpu_units: int = 
     roots = [torch.from_numpy(np.concatenate([np.frombuffer(a_cpu[w], ">u8"), np.frombuffer(g["b_roots"][w], ">u8")])
                               .astype("<u8").view("<i8").copy()).to(win.dev) for w in range(L)]
     plan = r.plan([Call(g["a"][w], win.wt[w], s * win.u_step + win.offs[w], roots[w], live) for w in range(L)])
-    r.launch(plan, win.salt, version=1)
+    r.launch(plan, DO.cap_salt(win, g)[1], version=1)
     cb = r.lib.h1r_call_bytes()
     zv3 = [torch.empty(t, n, dtype=torch.int32, device=win.dev) for n, _ in win.nk]
     for w in range(L):

@@ -71,7 +71,8 @@ Arms:
                  -aos puts each call's seeds there too, after its A table (-kh, -hbk and -hbr, whose seeds are a launch of
                  their own); -aom and -aoms are -ao and -aos on four such streams, call w's on stream w % 4 (no
                  call's A table reads another's).  With -pt last, between steps the receipt trees and the admit tables run on streams of
-                 their own beside the z tables and the step trees (`Window.tree_streams`)
+                 their own beside the z tables and the step trees (`Window.tree_streams`); with -ls after that, each step's
+                 seeds read the live salt of the round before it (`Window.step_salt`, CA's ask 11)
     ARM-xl       any dither arm with `verity_int8::row_quant`'s CUDA body exactlin's quantizer (`exactlin.install`, which
                  serves `scaled_mm` from exactlin's GEMM too; the dither arms call row_quant only): the same xq and s_a, so
                  ARM's gate and reference arm, and its tokens gated as ARM's are; sbench.sh and hb_served.sh run exactlin's
@@ -321,13 +322,13 @@ def build(arm: str, scratch: Path, gpu_mem: float):
         from verity_vllm.engine import int8_vllm
         int8_vllm.register()
         h1u = os.environ.get("HB_H1U")
-        unit, z, ao, pt = DITHER_A[arm]
+        unit, z, ao, pt, ls = DITHER_A[arm]
         unit = unit or ("kh" if h1u else "h1r")
         if unit in DA.KONE:
             h1u = os.environ["HB_H1U_KSPLIT" if unit == "hbk" else "HB_H1U_KRONLY"]
         a = engine_args(gpu_mem)
         DA.patch(t=a["max_num_batched_tokens"], h1c=os.environ["DITHER_H1C"], h1o=os.environ["DITHER_H1O"], unit=unit,
-                 h1u=h1u, z=z, ao=ao, pt=pt)
+                 h1u=h1u, z=z, ao=ao, pt=pt, ls=ls)
         llm = LLM(model=str(DF.int8_checkpoint(PIN, scratch)), **a)
         win = DO.hook(llm)
         win.captures = DA.CAPTURES
@@ -337,11 +338,12 @@ def build(arm: str, scratch: Path, gpu_mem: float):
     raise ValueError(arm)
 
 
-DITHER_A = {f"dither-a{u}{z}{o}{p}": (unit, zm, ao, pt)
+DITHER_A = {f"dither-a{u}{z}{o}{p}{q}": (unit, zm, ao, pt, ls)
             for u, unit in (("", None), ("-h1r", "h1r"), ("-kh", "kh"), ("-hbk", "hbk"), ("-hbr", "hbr"))
             for z, zm in (("", "row"), ("-zy", "zy"), ("-zyc", "zyc"), ("-y", "none"))
             for o, ao in (("", ""), ("-ao", "a"), ("-aos", "as"), ("-aom", "m"), ("-aoms", "ms"))
-            for p, pt in (("", False), ("-pt", True))}
+            for p, pt in (("", False), ("-pt", True))
+            for q, ls in (("", False), ("-ls", True))}
 
 
 REF_OF = {"dither": "exact", "dither-side": "exact", "dither-1s": "exact", "dither-1s-credit": "exact",

@@ -18,7 +18,10 @@ forward's stream, is two launches: its A slot and table (`h1c_a_call`, the root 
 admit and z tables, the a-step,
 admit-step and z-step trees, the round over them, and the receipt trees (with `Window.tree_streams` set, the receipt
 trees and the admit tables on streams of their own beside the rest), then the round root recorded
-(`sampled_proofs.challenger.LiveRecord`; its coin is not read: no seed waits on it).
+(`sampled_proofs.challenger.LiveRecord`; its coin is not read: no seed waits on it).  With `Window.step_salt` set (CA's
+PERIOD-PATH ask 11) the salt is each step's instead: after step s's round is recorded, step s + 1's seeds read
+`h1tile.live_salt` of that round's opened coin and root, copied to the device between steps (in record_host_ms), so
+each step's noise comes from the round before it; the auditor host's round trip stands in-process.
 
 The served value is the dithered product z = X (B + c)^T, exact for every int8 B, with X the int8 A + b the MMA reads (it
 wraps where A = 127 and b = 1), so y is not today's served y (`gate` measures how far) and the tokens are not the exact
@@ -176,6 +179,7 @@ class Window:
         self.S = torch.zeros(4, dtype=torch.int32, device=dev)
         self.units = [self.plan.offs[w][1] for w in range(L)]
         self.salt = torch.zeros(8, dtype=torch.int64, device=dev)
+        self.step_salt = False
         self.step_base = torch.zeros(1, dtype=torch.int64, device=dev)
         self.stepv = torch.zeros(2, dtype=torch.int32, device=dev)
         # the engine's own forwards (its profile run, its graph captures) come before any step's `before`, and
@@ -305,7 +309,7 @@ class Window:
                           | (F_FAULT_WB if name == "fault_wb" else 0) | (F_FAULT_XA if name == "fault_xa" else 0))
             self._poison(self.slot + self.scale + self.z + list(self.ydump or [])
                          + [self.plan.out, self.plan.seeds, self.pre["mid"].level, self.pre["a"].level])
-            self.caps[name] = {"s": self.s, "m": m}
+            self.caps[name] = {"s": self.s, "m": m, "salt": self.salt_bytes}
         t, s = self.t, self.s
         bits = np.arange(t) < m
         self.live.copy_(torch.from_numpy((np.arange(t // 32) * 32 < m).astype(np.uint8)))
@@ -361,7 +365,10 @@ class Window:
         root = unwords(pre["round"].root(0))
         t_root = time.perf_counter()
         self.phase("record_host")
-        self.rounds.record(root)
+        opening = self.rounds.record(root)
+        if self.step_salt:
+            self.salt_bytes = self.HT.live_salt(self.lch.commitment, opening.coin, opening.index, root)
+            self.salt.copy_(torch.from_numpy(words(self.salt_bytes)))
         t_end = time.perf_counter()
         self.phase(None)
         self.phases.append({"m": m, "forward_ms": 1e3 * (t_fwd - self.t_before),
@@ -395,8 +402,8 @@ class Window:
                for m, xs in sorted(by.items(), key=lambda kv: -len(kv[1]))[:4]}
         pc = None if self.percall is None else {**self.percall, "rounds_served": int(self.o.h1o_percall_done())}
         return {"steps": self.steps, "one_calls_eager": self.calls, "t": self.t, "s": self.s, "epsilon": "seeded",
-                "units_form": self.units_form, "peel": self.peel, "percall": pc, "phases_by_m": med,
-                "call_forms": {DF.SITES[w % 4]: self.call_forms[w] for w in range(min(4, self.L))}}
+                "salt": "step" if self.step_salt else "epoch", "units_form": self.units_form, "peel": self.peel,
+                "percall": pc, "phases_by_m": med, "call_forms": {DF.SITES[w % 4]: self.call_forms[w] for w in range(min(4, self.L))}}
 
 
 # -- the op and the patch --------------------------------------------------------------------------------------------------
@@ -533,6 +540,12 @@ def _sx(v: np.ndarray) -> np.ndarray:
 def _s32(v: np.ndarray) -> np.ndarray:
     v = v & M32
     return np.where(v >> 31, v - (1 << 32), v)
+
+
+def cap_salt(win, g: dict) -> tuple[bytes, torch.Tensor]:
+    """The salt capture g's step ran under (the epoch's, or with step_salt its round's) and its words on the device."""
+    b = g.get("salt", win.salt_bytes)
+    return b, torch.from_numpy(words(b)).to(win.dev)
 
 
 def h1v3_unit(a32: np.ndarray, b32: np.ndarray, salt: bytes, position: int, roots: tuple[bytes, bytes]) -> dict:
@@ -715,7 +728,7 @@ def check(win: Window, lib_h1o: str, which: str = "gate", n_cpu_units: int = 3,
     roots = [torch.from_numpy(np.concatenate([np.frombuffer(a_cpu[w], ">u8"), np.frombuffer(g["b_roots"][w], ">u8")])
                               .astype("<u8").view("<i8").copy()).to(win.dev) for w in range(L)]
     plan = r.plan([Call(g["a"][w], win.wt[w], s * win.u_step + win.offs[w], roots[w], live) for w in range(L)])
-    r.launch(plan, win.salt, version=1)
+    r.launch(plan, cap_salt(win, g)[1], version=1)
     cb = r.lib.h1r_call_bytes()
     zref = [torch.empty(t, n, dtype=torch.int32, device=win.dev) for n, _ in win.nk]
     for w in range(L):
