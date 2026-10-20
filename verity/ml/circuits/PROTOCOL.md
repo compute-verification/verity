@@ -626,7 +626,9 @@ as declared, so a composite over exact steps declares the intervals its operands
   from it (the unit's noise) are values no port rule follows, read any number of times. Where they reach is the unit's
   check: PoUW's compile pass holds a unit's z to read none of them (`noise-in-z`), or under a one-stream scheme to be made
   from the words its receipt folds by the Definitions that peel the noise back out (`stream`). No dataflow rule can tell
-  a peeled value from a noised one: the peel removes the noise by its arithmetic.
+  a peeled value from a noised one: the peel removes the noise by its arithmetic. So a seed is minted only by PoUW's
+  `verity/core/protocols/pouw/circuit/seeds.py`, and a `"kind": "position"` port is declared only there, beside a unit's
+  sink return, or in a test named with its reason (`tests/test_seed_ports.py`).
 - **`E_COIN_REUSE`** (one use): in the flattened Program (every call, batch member and scan iteration counted), an input leaf
   of origin `coin` that a noise primitive reads is read more than once, by it or by anything else; or a leaf a noise
   primitive returns is read more than once, the Program's outputs counting as one read. A primitive returns one value, so
