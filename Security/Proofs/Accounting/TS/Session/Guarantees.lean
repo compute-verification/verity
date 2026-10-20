@@ -4,9 +4,9 @@ import Proofs.Accounting.TS.Session.Assumptions
 # #2855's served layer is sound through its C-Flock sessions (the statement)
 
 `Accounting.Guarantees.TS.SessionSoundAt`, #2909's bridge on #2855's proof layer `pf` itself, with the bridge's
-`WindowLaw`, `RelOfRows` and `OpenedPlurAt` taken from named premises (`Accounting.Assumptions.TS`). Its conclusion is
-`pf.SoundAt`, so `BindingAt`, `Of` and `RightFixed` keep reading `pf`'s served openings. It sits in the proofs package
-because the sessions do (`reads_exempt`).
+`AcceptedLive`, `WindowLaw`, `RelOfRows` and `OpenedPlurAt` taken from named premises (`Accounting.Assumptions.TS`).
+Its conclusion is `pf.SoundAt`, so `BindingAt`, `Of` and `RightFixed` keep reading `pf`'s served openings. It sits in
+the proofs package because the sessions do (`reads_exempt`).
 -/
 
 namespace Accounting.Guarantees.TS
@@ -19,11 +19,10 @@ open scoped ENNReal
 (`pf : ProofLayer Ω S nπ V`, #2855's) whose proof `i` of round `w` on the path `x` is the C-Flock session `sess x w i`
 (#2909's `RowsSession`) with outcome `out x w i`, and a reading `rows s` of a session's value layer as a layer value:
 given `Flock.Guarantees.EndToEndRegisteredRows`' named assumptions at every session and every unit's opening
-(`RowsSession.CR`; the rows link itself is `Flock.SecurityProofs.EndToEndRegisteredRows`), that `pf` accepts a proof
-only where flock-verify accepts its session (#2909's `AcceptedLive`), the window's law
-(`Accounting.Assumptions.TS.WindowLaw`), `pf`'s relation at the value layer of an accepted session whose drawn units
-are right (`ServedChecksHold`), that value layer being `pf`'s opening outside `δs` (`ServedRootsLinked`), and `δ ≥ 0`
-with
+(`RowsSession.CR`; the rows link itself is `Flock.SecurityProofs.EndToEndRegisteredRows`), the proof service's
+acceptance rule (`Accounting.Assumptions.TS.AcceptedLive`), the window's law (`WindowLaw`), `pf`'s relation at the
+value layer of an accepted session whose drawn units are right (`ServedChecksHold`), that value layer being `pf`'s
+opening outside `δs` (`ServedRootsLinked`), and `δ ≥ 0` with
 $$n \cdot (\varepsilon_{ks} + \delta_{link} + \delta_{rows} + q_R^2/2^{513}) \le \delta$$
 at every session a path runs, each proof of `pf` is accepted with an opening that fails its relation on the path with
 probability at most `δs + δ`.
@@ -36,7 +35,7 @@ def SessionSoundAt : Prop :=
     (sess : Paths Ω S → Fin S → Fin nπ → RowsSession) (out : ∀ x w i, (sess x w i).Out)
     (rows : ∀ s : RowsSession, (Fin s.Circ.N → Bool) → V) (δs δ : ℝ),
     (∀ x w i, (sess x w i).CR) →
-    AcceptedLive pf sess out →
+    Accounting.Assumptions.TS.AcceptedLive pf sess out →
     Accounting.Assumptions.TS.WindowLaw sess out →
     Accounting.Assumptions.TS.ServedChecksHold pf sess out rows →
     Accounting.Assumptions.TS.ServedRootsLinked pf sess out rows δs →

@@ -14,11 +14,11 @@ This module imports `Proofs.Flock.SoundAtBridge`, whose imports make `X` a token
 
 open Accounting.TS Flock.SoundAtBridge FlockSoundness.Discharge.ZkReg in
 /-- **A window of proofs is sound at `δs + δ` through its C-Flock sessions**
-(`Accounting.Guarantees.TS.SessionSoundAt`). An unsound proof is accepted, so flock-verify accepted its session (`AcceptedLive`), and its relation fails at its
-opening. If every drawn unit is right at its owned reads, `ServedChecksHold` gives the relation at the session's value
-layer, so that layer isn't the opening: `ServedRootsLinked`'s event, at most `δs`. Otherwise some drawn unit is wrong
-or off, `RowsSession.BadU`, at most `n · bound ≤ δ` by `Flock.SecurityProofs.EndToEndRegisteredRows`
-(`RowsSession.prob_badU_le`). -/
+(`Accounting.Guarantees.TS.SessionSoundAt`). An unsound proof is accepted, so flock-verify accepted its session
+(`AcceptedLive`), and its relation fails at its opening. If every drawn unit is right at its owned reads,
+`ServedChecksHold` gives the relation at the session's value layer, so that layer isn't the opening:
+`ServedRootsLinked`'s event, at most `δs`. Otherwise some drawn unit is wrong or off, `RowsSession.BadU`, at most
+`n · bound ≤ δ` by `Flock.SecurityProofs.EndToEndRegisteredRows` (`RowsSession.prob_badU_le`). -/
 theorem Accounting.SecurityProofs.TS.SessionSoundAt : Accounting.Guarantees.TS.SessionSoundAt := by
   intro Ω _ S nπ V pf sess out rows δs δ hCR hAcc hLaw hChk hLink hδ hδ0
   refine soundAt_of_sessions pf (Out := fun s : RowsSession => s.Out) (fun s => s.G)

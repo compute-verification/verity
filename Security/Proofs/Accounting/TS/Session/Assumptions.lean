@@ -4,7 +4,8 @@ import Proofs.Flock.SoundAtBridge
 # The named premises a window of C-Flock sessions takes
 
 The premises `Accounting.Guarantees.TS.SessionSoundAt` takes on #2855's served layer `pf`, besides #2909's own, as
-decided for the lane (option A for both, 20 Oct): the window's law (`WindowLaw`), and in place of #2909's
+decided for the lane (option A for both, 20 Oct): the proof service's acceptance rule (`AcceptedLive`, #2909's premise
+of that name, as a named `Prop`), the window's law (`WindowLaw`), and in place of #2909's
 `Flock.SoundAtBridge.RelOfRows` and `Flock.SoundAtBridge.OpenedPlurAt`, the same two facts on the accepted sessions
 whose drawn units are right: there `pf`'s relation, the served Definition's check, holds at the session's value layer
 (`ServedChecksHold`), and the value layer is `pf`'s served opening, outside `δs` (`ServedRootsLinked`).
@@ -20,6 +21,13 @@ open Accounting.TS Flock.SoundAtBridge FlockSoundness.Discharge.ZkReg
 open Pouw.RelativeSecurity (Paths)
 
 variable {Ω : Type} {S nπ : ℕ} {V : Type}
+
+/-- `accounting-ts-accepted-live` (the proof service's acceptance rule; owner @proofs). **A proof is credited only after
+flock-verify `--zk --registered` accepts its session**: on every path, `pf` accepts proof `i` of round `w` only where
+flock-verify accepts its session's outcome (`LiveAcceptsZKR`). `Flock.SoundAtBridge.AcceptedLive` is the same `Prop`. -/
+def AcceptedLive (pf : ProofLayer Ω S nπ V) (sess : Paths Ω S → Fin S → Fin nπ → RowsSession)
+    (out : ∀ x w i, (sess x w i).Out) : Prop :=
+  ∀ x w i, pf.accepted x w i → LiveAcceptsZKR (sess x w i).I (sess x w i).own (out x w i)
 
 /-- `accounting-ts-window-law` (live coins at the window: the proof service's draws and audit coins are the window's).
 **At each round and proof, the window's coins read through the session have the session game's law**: for every event

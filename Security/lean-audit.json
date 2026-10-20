@@ -42,6 +42,9 @@
    "owner": "@memory-accounting",
    "digest": "4bd7f6457fb6df920661b769a3ad9517f6e4f0e7a2fd0d36a43e376a2deeaca9"
   },
+  "Accounting.Assumptions.TS.AcceptedLive": {
+   "owner": "@proofs"
+  },
   "Accounting.Assumptions.TS.FacetCeilings": {
    "owner": "@compute-accounting",
    "digest": "fa76dfe63e705d955b2dec4c6d8e3b6826c2bf36058b476ef8f1b7a8bb7c0d3b"
@@ -7832,7 +7835,7 @@
    "Flock.SecurityProofs.SoundAtBridge": "frozen (no-function,hash,world-unlisted,scope): A bound on the proof layer's ProofLayer.SoundAt over a window's paths, not a run of a Lean function. It takes EndToEndRegisteredRows' finders' collision bounds at every session (RowsSession.CR: TableCRZ, LinkCRZC, RowsCRZC and the registered reads' cr/sha-512) as hypotheses instead of a collision disjunct tied to the run, live-verifier custody and scope through RowsSession's fields, and compute-accounting's four bridge premises (WindowLaw, AcceptedLive, OpenedPlurAt, RelOfRows), none on the premises list.",
    "Flock.SoundAtBridge.soundAtBridge_nonvacuous": "lemma: SoundAtBridge's witness, as ZkReg.zk_session_soundHJR_nonvacuous is zk_session_soundHJR's; leaves the list under the 5:11 PM ruling",
    "Flock.SecurityProofs.ServedRowsLinked": "frozen (no-function,world-unlisted): A pointwise implication at one accepted outcome of a C-Flock session, not a bound on a run of a Lean function; it takes the service's registration of its served trees as ports of own (RowsSession.ServedRegistered), a premise that isn't on the list.",
-   "Accounting.SecurityProofs.TS.SessionSoundAt": "frozen (no-function,world-unlisted): #2909's SoundAt bridge on #2855's proof layer through its C-Flock sessions, over every window of sessions, not a Lean function; it takes EndToEndRegisteredRows' collision bounds at every session (RowsSession.CR) and the bridge's AcceptedLive as hypotheses, and its premises WindowLaw, ServedChecksHold and ServedRootsLinked (Proofs.Accounting.TS.Session.Assumptions) are not on the premises list."
+   "Accounting.SecurityProofs.TS.SessionSoundAt": "frozen (no-function,world-unlisted): #2909's SoundAt bridge on #2855's proof layer through its C-Flock sessions, over every window of sessions, not a Lean function; it takes EndToEndRegisteredRows' collision bounds at every session (RowsSession.CR) as hypotheses, and its premises AcceptedLive, WindowLaw, ServedChecksHold and ServedRootsLinked (Proofs.Accounting.TS.Session.Assumptions) are not on the premises list."
   },
   "conjectures": {
    "Nci.Assumptions.ActivationsIncompressible": {
