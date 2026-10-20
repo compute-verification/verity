@@ -121,7 +121,9 @@ from verity.core.protocols.sampled_proofs.one_stage import registration as R
 from verity.core.protocols.sampled_proofs.one_stage.verdict import Verdict, _Collect
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "hidden_zk"))
 import of_record as OR  # noqa: E402
+import served_registered as SR  # noqa: E402
 
 SCHEMA = "verity-pouw/served-zk-window/v1"
 CHALLENGER = "served-zk/challenger"
@@ -906,13 +908,15 @@ def _sessions(units: list[dict]) -> list[str]:
 
 
 def _units(rows: list[dict]) -> list[dict]:
-    """The outcome's units from the job's rows (each unit's stage, public file, Lean output, opening verdict, live log)."""
+    """The outcome's units from the job's rows (each unit's stage, public file, Lean output, opening verdict, live log), each
+    with whether its Lean check may cite SessionSoundAt (`served_registered.claim` of its stage's plan)."""
     out = []
     for u in rows:
-        pub = Path(u["pub"]).read_bytes()
-        out.append({"unit": u["unit"], "statement": statement(_json(u["stage"]), pub),
+        pub, stage = Path(u["pub"]).read_bytes(), _json(u["stage"])
+        out.append({"unit": u["unit"], "statement": statement(stage, pub),
                     "verdicts": {"lean": lean_verdict(Path(u["lean"])), "opening": _json(u["opening"]),
-                                 **({"rust": rust_verdict(Path(u["rust"]))} if u.get("rust") else {})}})
+                                 **({"rust": rust_verdict(Path(u["rust"]))} if u.get("rust") else {})},
+                    "session_sound_at": SR.claim(stage.get("registered"), SR.verdicts(Path(u["lean"])))})
     return out
 
 
@@ -953,12 +957,14 @@ def handle(ch: Challenger, cmd: Mapping[str, Any]) -> tuple[str, dict]:
             o = ch.deliver(name, _sessions(_json(cmd["units"])))
             return ("DELIVERED", {"sessions": len(ch.sessions[name])}) if o is None else (o.verdict.codes[0].upper(), {})
         if op == "outcome":
-            o, public, body = ch.outcome(name, _units(_json(cmd["units"])))
+            units = _units(_json(cmd["units"]))
+            o, public, body = ch.outcome(name, units)
             if cmd.get("out"):
                 _put(f"{cmd['out']}/outcome.json", {"accepted": o.accepted, "verdict": o.verdict.to_json(), "public": public,
                                                     "profile": o.profile.to_json() if o.profile else None,
                                                     "terms": {"sampling": o.terms.sampling}, "record": o.record,
-                                                    "coins": ch.coins_of(name), "of_record": ch.witness.get(name)})
+                                                    "coins": ch.coins_of(name), "of_record": ch.witness.get(name),
+                                                    "session_sound_at": SR.window([u["session_sound_at"] for u in units])})
                 _put(f"{cmd['out']}/audit.json", body)
             audit = body["audit"] or {}
             return "ACCEPT" if o.accepted else o.verdict.codes[0].upper(), {

@@ -19,6 +19,8 @@
 #      check has passed it refuses a plain tile's output row of two output ports, so a plain tile's honest checks are
 #      REFUSED, and a hiding tile's, whose rows (row-seg/v1, row/v2) are covered, ACCEPT
 #      A tile has no public input, so it runs honest-own without --public-inputs and none of the anchor controls.
+#      A check passes --registered only once the stager's plan (served_registered.py) registered every served tree; until
+#      then each config's summary says why it cites no SessionSoundAt (session_sound_at)
 #   3. summarize.py: out/<role>-k<K>/summary.json and out/summary.json
 # A staged config is kept under $HZ_CACHE/stage, keyed by its role, K, N, HZ_STAGE, the venv and every source stage.py
 # reads; a later run with the same key proves the kept files (stage-cache.json says which, stage.json their own staging).
@@ -163,6 +165,8 @@ lean_jobs() {   # lean_jobs D O ROLE: every Lean check of one config, as many at
   par=$(( STAGE_GB / each )); [ $par -lt 1 ] && par=1; [ $par -gt 8 ] && par=8
   local base="verify --zk --circuit $D/circuit.txt"
   [ -e "$D/partition.json" ] && base+=" --partition $D/partition.json"   # the verifier's own copy of the partition the circuit binds
+  # the served trees as registered ports, once the stager's plan (served_registered.py) wrote the verifier's reads file
+  [ -e "$D/registered.json" ] && base+=" --program $D/program.json --registered $D/registered.json"
   local cmds=()
   s=$(ls -d "$D"/sessions/*/ 2>/dev/null | tail -1)
   if [ -n "$s" ]; then
@@ -219,7 +223,8 @@ $(tail -1 "$O/lean-$tag.err" | cut -c1-160)"
 stage_config() {   # stage_config ROLE K TAG D O: D holds the config's staged files, from the stage cache or staged now
   local role=$1 k=$2 tag=$3 D=$4 O=$5 key S rc=0
   key=$(tree_key benchmarks/pouw/hidden_zk/stage.py benchmarks/pouw/hidden_zk/fast_stage.py benchmarks/pouw/hidden_zk/core3_scratch.py \
-    benchmarks/pouw/hidden_zk/hash_scratch.py verity/ml/flock/python verity verity/ml/circuits verity/ml/kernels \
+    benchmarks/pouw/hidden_zk/hash_scratch.py benchmarks/pouw/hidden_zk/served_registered.py verity/ml/flock/python verity \
+    verity/ml/circuits verity/ml/kernels \
     verity/core)
   S=${HZ_CACHE:-$W/cache}/stage/$tag-n$N-$HZ_STAGE-$(basename "$(dirname "$(dirname "$PY")")")-$key
   mkdir -p "$(dirname "$S")"

@@ -48,8 +48,11 @@ Each is proved like the honest statement, whose prover stops on the failing witn
 in-session verifier and Lean judge a proof. ``summarize`` records which layer refused each (the prover, the in-session
 verifier, Lean) and with what message.
 
-``summarize`` reads the job's proving and Lean records into OUT/summary.json: the unit and statement counts, proving
-time and Lean verify time, and every check's verdict against its expectation.
+Each Lean check's plan (`served_registered.plan` of the circuit's META and the check's public file) is in plan.json, and
+plan.tsv's fifth column is its ``--registered`` file, ``-`` while a served tree is not registered. ``summarize`` reads the
+job's proving and Lean records into OUT/summary.json: the unit and statement counts, proving time and Lean verify time,
+every check's verdict against its expectation, and whether the honest check may cite SessionSoundAt
+(``session_sound_at``, `served_registered.claim`).
 """
 from __future__ import annotations
 
@@ -66,8 +69,10 @@ import numpy as np
 
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
+sys.path.insert(0, str(HERE.parent / "hidden_zk"))
 
 import h1unit as U  # noqa: E402
+import served_registered as SR  # noqa: E402
 from verity.ml.randomness import derive  # noqa: E402
 from verity.core.protocols.pouw import core_check as CC  # noqa: E402
 from verity.core.protocols.pouw import verifier  # noqa: E402
@@ -306,13 +311,16 @@ def cmd_prepare(a) -> int:
         plan["checks"] = [c for c in plan["checks"] if c["tag"] in keep]
         used = keep | {c["statement"] for c in plan["checks"]}
         plan["statements"] = [s for s in plan["statements"] if s["tag"] in used]
+    for c in plan["checks"]:
+        c["registered"] = SR.plan(head["meta"], SR.header(Path(c["pub"])), out=vp / f"{c['tag']}.registered.json")
     (work / "plan.json").write_text(json.dumps(plan, indent=1))
     (work / "record.json").write_text(json.dumps(record, indent=1))
     with open(work / "plan.tsv", "w") as f:
         for s in plan["statements"]:
             f.write(f"S\t{s['tag']}\t{s['dir']}\t{s['n']}\n")
         for c in plan["checks"]:
-            f.write(f"C\t{c['tag']}\t{next(s['dir'] for s in plan['statements'] if s['tag'] == c['statement'])}\t{c['pub']}\n")
+            f.write(f"C\t{c['tag']}\t{next(s['dir'] for s in plan['statements'] if s['tag'] == c['statement'])}\t{c['pub']}\t"
+                    f"{c['registered']['registered'] or '-'}\n")
     log(f"planned: {len(plan['statements'])} statements, {len(plan['checks'])} Lean checks; staged in "
         f"{st['honest']['seconds']} s (honest, {st['honest']['instances']} instances), {st['other']['seconds']} s (other)")
     return 0
@@ -425,6 +433,7 @@ def cmd_summarize(a) -> int:
             good = word == c["expect"]
         ok &= good
         checks.append({"tag": c["tag"], "expect": c["expect"], "verdict": word, "pass": good,
+                       "session_sound_at": SR.claim(c.get("registered"), SR.verdicts(out / "lean" / f"{c['tag']}.out")),
                        "why": (v or {}).get("why", "")[:300], "lean_seconds": t and t["wall_s"],
                        "lean_maxrss_gb": t and round(t["maxrss_kb"] / 2**20, 1), "sessions": (v or {}).get("sessions"),
                        "lean_phases": lean_phases(out / "lean" / f"{c['tag']}.err"), **extra})
@@ -438,7 +447,8 @@ def cmd_summarize(a) -> int:
                "statement_instances": {s["tag"]: s["n"] for s in plan["statements"]},
                "epsilon_at_delta": {f"{d}": round(1 - d ** (1 / record["draw_k"]), 4) for d in (0.5, 0.1, 0.01)},
                "proving_seconds": {k: (v["prove"] or {}).get("wall_s") for k, v in proofs.items()},
-               "lean_verify_seconds": honest["lean_seconds"], "checks": checks, "proofs": proofs,
+               "lean_verify_seconds": honest["lean_seconds"], "session_sound_at": honest["session_sound_at"],
+               "checks": checks, "proofs": proofs,
                "openings": record["openings"], "prover_pub_is_verifiers": record["prover_pub_is_verifiers"],
                "windows": {w: {k: v[k] for k in ("tiles", "calls", "commit_seconds", "serve_seconds") if k in v}
                            for w, v in record["windows"].items()},

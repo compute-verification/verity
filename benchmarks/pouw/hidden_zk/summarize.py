@@ -7,12 +7,16 @@ when not accepted, an honest check only with the refusal as its reason. A plain 
 passed, its output row holding two output ports, a form the proof does not cover: its honest checks pass only with a
 refusal as their reason (REFUSED). A hiding tile's rows (row-seg/v1, row/v2) are covered and its session drawn, so its
 honest checks pass only when accepted. Every other tile check passes only when a check rejects it.
+`session_sound_at` is whether the honest check may cite SessionSoundAt (`served_registered.claim` of the stager's plan and
+that check's verdict), and says why not.
 Under HZ_STAGE_ONLY=1 nothing is proved or verified, so a config is `stage_only` and its `all_pass` and `lean_checks` are null."""
 import json
 import os
 import statistics
 import sys
 from pathlib import Path
+
+import served_registered as SR
 
 OUT = Path(sys.argv[1])
 EXPECT = {"honest-own": True, "honest-wrong": False, "honest-chosen": False, "st-honest": True}
@@ -112,6 +116,7 @@ def one(d: Path) -> dict:
                lean_checks=os.environ.get("HZ_LEAN") or "*")
     rec["all_pass"] = bool(rec["zk"] and rec["zk"].get("accepted") and rec["lean"]
                            and all(v["pass"] for v in rec["lean"].values()) and all(v["pass"] for v in rec["controls"].values()))
+    rec["session_sound_at"] = SR.claim((st or {}).get("registered"), SR.verdicts(d / "lean-honest-own.out"))
     if os.environ.get("HZ_STAGE_ONLY", "0") == "1":
         rec.update(stage_only=True, lean_checks=None, all_pass=None)
     (d / "summary.json").write_text(json.dumps(rec, indent=1))

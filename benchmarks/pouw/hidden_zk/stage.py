@@ -9,7 +9,8 @@ PoUW's rows (`leaves.statement_rows`) and, for a row unit, its anchors as public
 
 x is a seeded N(0, 1) row in BF16; a tile's rows are `pouw_rows_vectors`' seeded nvfp4-p rows. The anchors are the
 verifier's own (`TileAnchors.of` the scheme's seeds). Writes circuit.txt, inst.bin, pub.bin, pin.txt and stage.json under
-OUT, and for a row unit the verifier's own file public-inputs.bin (`TileAnchors.public_inputs`) and the controls' files:
+OUT (its ``registered`` the statement's `served_registered.plan`, which writes registered.json once nothing blocks it), and
+for a row unit the verifier's own file public-inputs.bin (`TileAnchors.public_inputs`) and the controls' files:
 public-inputs-wrong.bin (one anchor bit flipped, the verifier's file wrong) and pub-chosen.bin (the same bit flipped in the
 public file's tail, an anchor the prover chose).
 
@@ -148,6 +149,9 @@ def main() -> None:
     t_stage = time.time() - t0
     text = fast_stage.composed() if STAGE == "fast" else (OUT / "circuit.txt").read_text()
     meta = got["meta"]
+    sys.path.insert(0, str(HERE))
+    import served_registered as SR
+    rec["registered"] = SR.plan(meta, SR.header(OUT / "pub.bin"), served=[r for r, *_ in in_rows], out=OUT / "registered.json")
     pin = FC.digest(text)
     (OUT / "pin.txt").write_text(pin)
     if ports:

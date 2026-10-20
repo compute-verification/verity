@@ -207,6 +207,7 @@ summary() {      # summary.json
     echo "\"real_tiles\": $REAL, \"filler_from\": $FILL, \"filler_unit\": ${FU:-null}, \"params\": $(cat "$RP"),"
     echo "\"public\": $(jq_ "$OUT/outcome-honest/outcome.json" "json.dumps(d['public'])" 2>/dev/null || echo null),"
     echo "\"coins\": $(jq_ "$OUT/outcome-honest/outcome.json" "json.dumps(d['coins'])" 2>/dev/null || echo null),"
+    echo "\"session_sound_at\": $(jq_ "$OUT/outcome-honest/outcome.json" "json.dumps(d['session_sound_at'])" 2>/dev/null || echo null),"
     echo "\"stage\": $(cat "$OUT/u$U0/stage.json" 2>/dev/null || echo null),"
     echo "\"shape\": $(cat "$OUT/shape-filler.json" 2>/dev/null || echo null),"
     echo "\"checks\": {$(for t in "${!VERDICT[@]}"; do printf '"%s": {"verdict": "%s", "expected": "%s"},' "$t" "${VERDICT[$t]}" "${EXPECT[$t]}"; done | sed 's/,$//')}"

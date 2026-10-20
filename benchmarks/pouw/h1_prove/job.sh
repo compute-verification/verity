@@ -13,7 +13,8 @@
 #      ACCEPT; in-receipt, in-z and their -skip runs REFUSED by some layer), as many at a time as 90% of H1_MEM_GB holds at 6x the circuit text each (two at K = 4096 and
 #      H1_MEM_GB=500), and the selftest build's controls on
 #      the drawn units' statement (H1_CONTROLS; at K = 4096 a selftest, prover and verifier in one process, peaks past
-#      170 GB)
+#      170 GB); a check passes --registered only when run.py's plan registered every served tree (plan.tsv's fifth
+#      column), and summary.json's session_sound_at says why the honest check cites no SessionSoundAt until then
 #   5. run.py summarize: out/summary.json
 # env: H1_MEM_GB (the job's --mem-gb)  H1_K (4096; a smaller K truncates every row: a smoke)  H1_COLS (each call's first
 #      N weight rows; 0 all)  H1_DRAW (8)  H1_TOKENS (16)  H1_LAYER (0)  H1_HUB (/workspace/hf/hub)
@@ -93,17 +94,18 @@ done < "$WK/plan.tsv"
 each=$(( $(stat -L -c %s "$SW/circuit.txt") * 6 / 1024 / 1024 / 1024 + 4 ))
 par=$(( STAGE_GB / each )); [ $par -lt 1 ] && par=1; [ $par -gt 6 ] && par=6
 cap=$(( STAGE_GB / par ))
-lean_check() {   # lean_check TAG D PUB STATEMENT_ID
-  local tag=$1 D=$2 pub=$3 sid=$4 s
+lean_check() {   # lean_check TAG D PUB STATEMENT_ID REGISTERED: REGISTERED the plan's --registered file, or - while it has none
+  local tag=$1 D=$2 pub=$3 sid=$4 reg=$5 s extra=""
   s=$(ls -d "$D"/sessions/*/ 2>/dev/null | tr '\n' ' ')
   [ -n "$s" ] || { echo "no session under $D" > "$OUT/lean/$tag.err"; return; }
+  [ "$reg" != - ] && extra="--partition $D/partition.json --program $D/program.json --registered $reg"
   while [ "$(jobs -rp | wc -l)" -ge "$par" ]; do wait -n; done
   $TIME "$OUT/lean/$tag.time" bash -c "$(vlimit $cap) exec $LEAN verify --zk --circuit $D/circuit.txt --statement $sid \
-    --public $pub --session $s" > "$OUT/lean/$tag.out" 2> "$OUT/lean/$tag.err" &
+    --public $pub $extra --session $s" > "$OUT/lean/$tag.out" 2> "$OUT/lean/$tag.err" &
 }
 log "lean: $par at a time, cap $cap GB each"
-while IFS=$'\t' read -r kind tag D pub; do
-  [ "$kind" = C ] && lean_check "$tag" "$D" "$pub" verity/flock-circuit
+while IFS=$'\t' read -r kind tag D pub reg; do
+  [ "$kind" = C ] && lean_check "$tag" "$D" "$pub" verity/flock-circuit "${reg:--}"
 done < "$WK/plan.tsv"
 wait
 HD=$(awk -F'\t' '$1 == "S" && $2 == "honest" {print $3}' "$WK/plan.tsv")

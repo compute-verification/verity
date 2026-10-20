@@ -5,7 +5,7 @@ of the window's entry the unit falls in (`pouw.window.tile_at` of ``advice.json`
 zero rows), each a side row with its index field (`pouw.window.side_row`), under the salts `served_commit.py commit`
 committed them with, so the proof's committed rows have the b ‖ c the entry's leaves hold; the tile digest is its output
 row.  `class_statement.stage_unit` writes circuit.txt, inst.bin and pub.bin under OUT; this writes pin.txt, stage.json
-and opening.json (the prover's: the entry, its salt and path to the window root, and each row's frame-v3 path to the
+(its ``registered`` the served rows' `served_registered.plan`: registered.json once nothing blocks them) and opening.json (the prover's: the entry, its salt and path to the window root, and each row's frame-v3 path to the
 entry's side root).  As `hidden_zk/stage.py`'s hiding tile, the PoUW word primitives lower through `hash_scratch`'s
 pieces, checked against their primitives first, so a result is labelled 'hash scratch'; `HZ_STAGE` (``fast``, the
 default, or ``library``) as there.  A window committed before side rows carried their index is refused."""
@@ -33,6 +33,7 @@ from verity_flock import class_statement as CS  # noqa: E402
 from verity_flock import ir_lower as IL  # noqa: E402
 
 import served_commit as SC  # noqa: E402
+import served_registered as SR  # noqa: E402
 
 TILE = (1, 1)
 DEV = "sm120"
@@ -85,6 +86,7 @@ def main() -> None:
            "circuit_bytes": fast_stage.size(text) if stage == "fast" else len(text), "circuit_sha512": pin,
            "class_sha512": FC.class_digest(text), "tile_digest": L.digest_bytes(
                [int(x) for x in np.asarray(got["outs"]["o0"][0], dtype="<u2").view("<u4")]).hex(),
+           "registered": SR.plan(got["meta"], SR.header(out / "pub.bin"), served=["a0", "b0"], out=out / "registered.json"),
            "seconds": round(time.time() - t0, 1),
            "maxrss_gb": round(resource.getrusage(resource.RUSAGE_SELF).ru_maxrss / 2**20, 2)}
     if stage == "fast":
