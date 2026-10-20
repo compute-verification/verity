@@ -92,6 +92,11 @@ constexpr int WARPS = H1U_WARPS;
 #ifndef H1K_RONLY
 #define H1K_RONLY 0
 #endif
+// H1U_CARVE = 1: kh_one's units kernels ask for the maximum shared-memory carveout, once a process each, before their
+// first launch (the driver's default on an RTX PRO 6000 holds one 42 KB h1u CTA an SM, where registers allow two)
+#ifndef H1U_CARVE
+#define H1U_CARVE 0
+#endif
 static_assert(!H1K_AUTO || H1U_KSPLIT == 4, "H1K_AUTO picks between h1k<4> and h1k<2>: build it with H1U_KSPLIT = 4");
 static_assert(!H1K_RONLY || H1U_KSPLIT, "H1K_RONLY is kh_one's K split without z and y: build it with H1U_KSPLIT");
 static_assert(16 % H1U_PD == 0, "a chunk's 16 segments are whole rings of H1U_PD");
@@ -1497,10 +1502,26 @@ static void launch_unit(unsigned units, cudaStream_t s, const void* A, const voi
 #endif
 }
 
+// H1U_CARVE's attribute for kernel F (a failure leaves the driver's default, and clears the error it set)
+template <auto F>
+static void carve() {
+#if H1U_CARVE
+  static const bool set = [] {
+    if (cudaFuncSetAttribute((const void*)F, cudaFuncAttributePreferredSharedMemoryCarveout,
+                             (int)cudaSharedmemCarveoutMaxShared) == cudaSuccess)
+      return true;
+    (void)cudaGetLastError();
+    return false;
+  }();
+  (void)set;
+#endif
+}
+
 #if H1U_KSPLIT
 template <int MD, bool PL, int KP>
 static void launch_k(unsigned units, cudaStream_t s, const void* A, const void* B, unsigned M, unsigned N, unsigned K,
                      const void* seeds, const void* live, void* out, const void* ws, const OneOut& oo) {
+  carve<h1k<MD, PL, KP>>();
   h1k<MD, PL, KP><<<units, 32 * (KP + 1), 0, s>>>((const int8_t*)A, (const int8_t*)B, M, N, K, (const u64*)seeds,
                                                   (const uint8_t*)live, (u32*)out, (const u32*)ws, oo);
 }
@@ -1544,6 +1565,7 @@ static void launch_one(unsigned units, cudaStream_t s, const void* A, const void
 #endif
   }
 #endif
+  carve<h1u<MD, WS, !RO, J10, PL>>();
   h1u<MD, WS, !RO, J10, PL><<<(units + WARPS - 1) / WARPS, 32 * WARPS, 0, s>>>((const int8_t*)A, (const int8_t*)B, M, N,
                                                                               K, (const u64*)seeds, (const uint8_t*)live,
                                                                               (u32*)out, (const u32*)ws, oo);

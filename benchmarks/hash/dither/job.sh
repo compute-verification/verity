@@ -20,6 +20,10 @@
 #            with h1noise.so shipped too, its --noise-lib, which BENCH_ARGS --tw's tile-width price needs)
 #   prof     every h1u*.so shipped: hb_prof.py under ncu (--set full, --clock-control none), each build gated as h1ubench.py
 #            gates it, then profiled once at the served shapes ($OUT/prof.ncu-rep and its text pages in $OUT/prof/)
+#   units    h1u_kr.so (dither-a's served receipts-only build, the base) and every h1u_kr*.so variant shipped:
+#            unitsbench.py (the served noise and units launches at the served window, each build gated against
+#            receipts.py and the base's every word, then timed: each call's units and the step's 128)
+#   unitsprof  the same builds under ncu (--set full; kernels h1u and h1k): unitsbench.py --profile, then the text pages
 # Benches in a comma list (kbench,h1u) run one after another under one lease.
 #
 #   research run --on vy-nebius-2 --preemptible --project verity --campaign dither-loop --source . --cwd source \
@@ -33,7 +37,7 @@
 # /workspace/cp/venv312), NVCC (default CUDA 13.0's), NCU (default the ncu beside NVCC).
 # Exit: the bench's (4 a gate failed), 2 a build failed or the shipped libraries are missing or another commit's.
 set -uo pipefail
-ARCH=${1:?usage: job.sh ARCH[,ARCH] build | job.sh sm_90a|sm_100a kbench|h1|h1u|h1z|j10hb|prof[,...]}
+ARCH=${1:?usage: job.sh ARCH[,ARCH] build | job.sh sm_90a|sm_100a|sm_120a kbench|h1|h1u|h1z|j10hb|prof|units|unitsprof[,...]}
 BENCH=${2:-kbench}
 HERE=$(cd "$(dirname "$0")" && pwd)
 export OUT=${OUT:-${RESEARCH_RUN_DIR:-.}/out}
@@ -139,6 +143,21 @@ for b in ${BENCH//,/ }; do
       [ -n "$jl" ] || { echo "job.sh: j10hb needs an h1u*.so in $LIBS" >&2; exit 2; }
       [ -f "$LIBS/h1noise.so" ] && { NEED+=(h1noise); jl+=" --noise-lib $LIBS/h1noise.so"; }
       CMDS+=("$PY $HERE/j10hb.py$jl --ref-lib $LIBS/h1zref.so --out $OUT ${BENCH_ARGS:-}") ;;
+    units|unitsprof)
+      # h1u_kr.so (today's served receipts-only build) as the base, then every other h1u_kr*.so shipped
+      ul=""
+      for f in "$LIBS"/h1u_kr.so "$LIBS"/h1u_kr?*.so; do
+        [ -f "$f" ] || continue
+        v=$(basename "$f" .so); NEED+=("$v"); ul+=" --lib ${v#h1u_}=$f"
+      done
+      [ -f "$LIBS/h1u_kr.so" ] || { echo "job.sh: $b needs $LIBS/h1u_kr.so, the base" >&2; exit 2; }
+      if [ "$b" = units ]; then
+        CMDS+=("$PY $HERE/unitsbench.py$ul --out $OUT ${BENCH_ARGS:-}")
+      else
+        NCU=${NCU:-$(dirname "$NVCC")/ncu}
+        CMDS+=("$NCU --profile-from-start off --clock-control none --set full --nvtx -k regex:h1u|h1k -f -o $OUT/prof $PY $HERE/unitsbench.py$ul --profile --out $OUT ${BENCH_ARGS:-}")
+        CMDS+=("$PY $HERE/hb_prof.py --pages $OUT/prof.ncu-rep --ncu $NCU --out $OUT")
+      fi ;;
     prof)
       plibs=""
       for f in "$LIBS"/h1u.so "$LIBS"/h1u_*.so; do
