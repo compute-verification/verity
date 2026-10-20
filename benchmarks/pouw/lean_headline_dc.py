@@ -34,15 +34,16 @@ record. The checks are `lean_headline.instance()`'s: the sheet reproduces every 
 program, and the bound is at most the family's target. A uniform writer heads 2 words (`UIMAD.WIDE.U32` writes a UR
 pair, RT-HOPPER-7). The fold menu is the design's fold and its `fold_routes`, every bit-exact checkpoint loop
 (CP_SEG4 and CP_SEG4U, RT2-HOPPER-9, -11; CP_ATS, CP_ATS2, CP_ATS8, CP_RED, CP_RED2, CP_RED8 and CP_XT, RT3-DC-1, -4;
-CP_RED, CP_RED2 and CP_RED8 through a generic address, ATOM.E, RT4-SHEET-7) on lanes, and alone on the uniform datapath
-at the least of their counts. Each reading declares A2's catch-all (`CATCH_ALL`), as sm_120's sheet does: every warp
-instruction no class of the reading prices counts there, at its issue slot alone, NOROW's DS_issue on a sheet and
-UNLISTED's measured issue line on DC-90-ri and DC-100-ri. A class no run has measured on a pipe is read the same way
-(A2's reading, the coordinator's ruling of 20 Oct 03:12Z): ATOME32, the generic-address red's ATOM.E, carries SHFL's
-issue and joint issue lines and no pipe row. Charging it SHFL's every row (RT3-DC's reading) would charge pipes
-nobody measured it on, which inflates ♭'s credit and, where a cheater uses the class, can overstate the floor. Measured
-rows replace it once a device batch prices them (r20261020-031119-3113 on the H200, r20261020-031119-013a on the
-B200, or a later one). ♭ folds by `setup`'s mix of them on each vector
+CP_RED, CP_RED2 and CP_RED8 through a generic address, ATOM.E, RT4-SHEET-7, bit-exact on the H200 and the B200:
+r20261020-031119-3113 and r20261020-031119-013a, every global and generic red, red2 and red8 loop at 0 mismatches) on
+lanes, and alone on the uniform datapath at the least of their counts. Each reading declares A2's catch-all
+(`CATCH_ALL`), as sm_120's sheet does: every warp instruction no class of the reading prices counts there, at its issue
+slot alone, NOROW's DS_issue on a sheet and UNLISTED's measured issue line on DC-90-ri and DC-100-ri. A class no run
+has timed is read the same way (A2's reading, the coordinator's ruling of 20 Oct 03:12Z): ATOME32, the generic-address
+red's ATOM.E, is one slot on the measured issue row (and DS_issue) alone, with no joint issue or pipe line, since no run
+has timed ATOM.E (RT4-SHEET-12; the device batch checks its bits, not its time). Charging it another class's rows
+(SHFL's, RT3-DC's reading) asserts lines nobody measured, which inflates ♭'s credit and, where a cheater uses the
+class, can overstate the floor; measured rows replace it once a run times it. ♭ folds by `setup`'s mix of them on each vector
 and writes by its split of the words between the tensor route and the design's baseline program (`_flat_shares`), so
 a measured file states its own `flatFold` or `flatWords` where that mix or split is not the sheet's.
 """
@@ -108,9 +109,9 @@ class Family:
 # DC-90-ri's joint rows price every tensor form but honest's IGMMA_S8_N256 at the scalar coefficient (rows.csv: "a
 # lower bound on their issue cost"), and no certificate prices them otherwise (M gives a GMMA 32 SMSP-cycles to
 # IGMMA's 62.7 on JI90_0), so its measured menu is the machine model's: honest's form, the rest off it (NoSum).
-# The H200's design credits ffill at p = 1, since no check reads its chains (RT-LOGIC-12, decision 99). With ♭'s
-# checkpoint on the generic-address routes (CP_RED2 and CP_RED8 through ATOM.E, RT4-SHEET-7), `setup`'s floor on
-# DC-90-ri writes every word on the IGMMA, as on DS-90; where a floor heads a share on the design's lane baseline, `_flat_shares` makes it exact.
+# The H200's design credits ffill at p = 1, since no check reads its chains (RT-LOGIC-12, decision 99). With ATOME32 at
+# the issue row alone (RT4-SHEET-12), `setup`'s floor on DC-90-ri folds by CP_ATS8 and the generic CP_RED8 and heads
+# 0.047% of the words on the design's lane baseline (dp4a), the rest on the IGMMA; `_flat_shares` makes the split exact.
 # A uniform instruction heads up to 2 words (UIMAD.WIDE.U32 writes a UR pair, RT-HOPPER-7), so UNI's ω is 2.
 SM90 = Family("Sm90", "H200", "sm_90", "dither-2s-licpw-redux-p1-l32", "DS-90", "DC-90-ri",
               {"DS_alu": ("alu", 64), "DS_imad": ("imad", 64), "DS_shfl": ("shfl", 32)},
@@ -471,9 +472,18 @@ SHAPES = {"Sm90": "sm_90's wgmma as one warp's m16 slice of its m64 warpgroup in
           "Sm100": "sm_100's tcgen05 MMA whole (`m·n·k`), its mma.sync as m16n8"}
 
 
+def _entries(x: _Exact, n: dict[str, Fraction]) -> list[str]:
+    return [f"({x.classes.index(k)}, {v.numerator}, {v.denominator})"
+            for k, v in sorted(n.items(), key=lambda kv: x.classes.index(kv[0]))]
+
+
 def _sparse(x: _Exact, n: dict[str, Fraction]) -> str:
-    return "[" + ", ".join(f"({x.classes.index(k)}, {v.numerator}, {v.denominator})"
-                           for k, v in sorted(n.items(), key=lambda kv: x.classes.index(kv[0]))) + "]"
+    return "[" + ", ".join(_entries(x, n)) + "]"
+
+
+def _sparse_def(name: str, x: _Exact, n: dict[str, Fraction]) -> str:
+    head = f"def {name} : Sparse := ["
+    return head + LH._wrap(_entries(x, n), " " * len(head))[len(head):] + "]"
 
 
 def _q(v: Fraction) -> str:
@@ -606,19 +616,19 @@ def d2s : DesignData where
   Nw := {x.Nw}
 
 /-- ♭'s filler a unit{": ffill on lanes" if filler else ": none"}. -/
-def flatFill : Sparse := {_sparse(x, x.nx)}
+{_sparse_def("flatFill", x, x.nx)}
 
 /-- `{fam.design}`'s TS model on the data sheet's machine. -/
 {_model_line(fam, x, "d2s", "sheet.machine", "flatFill", "(SheetRow Pipe)")}
 
 {LH._words(f"♭'s word production a unit: {x.words_mix}. -/", "/-- ", "")}
-def flatWords : Sparse := {_sparse(x, x.nw)}
+{_sparse_def("flatWords", x, x.nw)}
 
 {LH._words(f"♭'s fold a unit: the lane fold for {x.Nw} words, {x.fold_mix}. -/", "/-- ", "")}
-def flatFold : Sparse := {_sparse(x, x.nf)}
+{_sparse_def("flatFold", x, x.nf)}
 
 /-- ♭'s skippable work a unit, at {x.skip}'s price. -/
-def flatSkip : Sparse := {_sparse(x, x.ns)}
+{_sparse_def("flatSkip", x, x.ns)}
 
 /-- The floor program ♭, labelled. -/
 noncomputable def flat : Labelled (Fin {nk}) := labelled {nk} flatWords flatFold flatFill flatSkip
@@ -643,9 +653,9 @@ def render_measured(fam: Family, r: Reading, s: Reading) -> str:
     fold = "flatFold" if own else f"{fam.ns}.flatFold"
     words = "flatWords" if own_w else f"{fam.ns}.flatWords"
     own_fold = ((LH._words(f"♭'s word production a unit on {fam.measured}: {x.words_mix}. -/", "/-- ", "")
-                 + f"\ndef flatWords : Sparse := {_sparse(x, x.nw)}\n\n") if own_w else "") + (
+                 + f"\n{_sparse_def('flatWords', x, x.nw)}\n\n") if own_w else "") + (
         (LH._words(f"♭'s fold a unit on {fam.measured}: the lane fold for {x.Nw} words, {x.fold_mix}. -/", "/-- ", "")
-         + f"\ndef flatFold : Sparse := {_sparse(x, x.nf)}\n\n") if own else "")
+         + f"\n{_sparse_def('flatFold', x, x.nf)}\n\n") if own else "")
     mine = [p for p, o in (("word production", own_w), ("fold", own)) if o]
     theirs = [p for p, o in (("word production", own_w), ("fold", own)) if not o] + ["filler"]
     ix = x.classes.index
@@ -717,7 +727,7 @@ noncomputable def model : Model (Fin {nk}) (Fin {m}) (Fin {nt}) Unit Empty (Fin 
   {body}
 
 {own_fold}/-- ♭'s skippable work a unit on {fam.measured}, at its {x.skip} price. -/
-def flatSkip : Sparse := {_sparse(x, x.ns)}
+{_sparse_def("flatSkip", x, x.ns)}
 
 /-- The floor program ♭ on {fam.measured}, labelled. -/
 noncomputable def flat : Labelled (Fin {nk}) :=
