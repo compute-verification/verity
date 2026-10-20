@@ -849,7 +849,7 @@ def test_a_signed_reveal_takes_only_the_challengers_request_and_answers_under_th
 
     def proxy(**keys) -> Proxy:
         p = Proxy(("127.0.0.1", 9), EGRESS, INGRESS, SYNC_SET, SYNCS, origin=0.0, clock=lambda: 0.0,
-                  salt=lambda w, n: bytes([w + 1]) * n, prover_key=prover_key,
+                  ingress_link="requests", salt=lambda w, n: bytes([w + 1]) * n, prover_key=prover_key,
                   **({"run_nonce": lambda n: RUN} | keys))
         p.commit_weights(0, root, prove(active.weights_message("requests", 0, root)))
         for _ in range(2 * INGRESS.buckets):
@@ -908,7 +908,8 @@ def test_a_signed_reveal_takes_only_the_challengers_request_and_answers_under_th
         active.reveal_request_message(key.key_id, RUN[1:], "requests", 0, reg.digest, active.SALT_KIND)
     assert 2 * lms.DEPLOYED.signature_bytes() < active.REVEAL_LINE_BYTES // 8
 
-    drawn = [Proxy(("127.0.0.1", 9), EGRESS, INGRESS, SYNC_SET, SYNCS, origin=0.0).run_id for _ in range(2)]
+    drawn = [Proxy(("127.0.0.1", 9), EGRESS, INGRESS, SYNC_SET, SYNCS, origin=0.0, ingress_link="requests").run_id
+             for _ in range(2)]
     assert [len(r) for r in drawn] == [active.RUN_ID_BYTES] * 2 and drawn[0] != drawn[1]
     for bad in (lambda n: RUN[1:], lambda n: RUN.hex()):
         with pytest.raises(ValueError, match="run id is 32 bytes"):
@@ -1037,8 +1038,8 @@ def test_two_runs_on_one_link_name_neither_take_nor_give_each_others_reveals(tmp
 
     def proxy(run: bytes, fill: int) -> Proxy:
         p = Proxy(("127.0.0.1", 9), EGRESS, INGRESS, SYNC_SET, SYNCS, origin=0.0, clock=lambda: 0.0,
-                  salt=lambda w, n: bytes([fill]) * n, challenger_key=challenger.public_key(), signer=certifier,
-                  run_nonce=lambda n: run)
+                  ingress_link="requests", salt=lambda w, n: bytes([fill]) * n,
+                  challenger_key=challenger.public_key(), signer=certifier, run_nonce=lambda n: run)
         for _ in range(2 * INGRESS.buckets):
             p.bucketer.tick()
         return p
@@ -1117,7 +1118,7 @@ def test_a_proxy_and_its_client_name_one_certifier_run_which_its_answers_bind(tm
     assert answer.verify(key, run_id, link, reg.digest, active.SALT_KIND)
     assert not answer.verify(key, run_id, "out-3", reg.digest, active.SALT_KIND)
     with pytest.raises(ValueError, match="no key id"):
-        Proxy(("127.0.0.1", 9), EGRESS, INGRESS, SYNC_SET, SYNCS, origin=0.0).certifier_run
+        Proxy(("127.0.0.1", 9), EGRESS, INGRESS, SYNC_SET, SYNCS, origin=0.0, ingress_link="in-7").certifier_run
 
 
 ENVELOPE = ClockSync(max(SYNC_SET.deltas), min(SYNC_SET.rhos))
