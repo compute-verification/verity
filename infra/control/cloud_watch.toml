@@ -8,7 +8,7 @@ digest_hour_utc = 15                 # 08:00 PDT, the hour fleet.py's daily comp
 unreadable_passes = 3                # a check that fails this many passes in a row opens `<check>|unreadable`
 clear_passes = 2                     # an anomaly clears once it has been gone this many passes in a row
 channel = "C0C5Q30MCNA"              # #agent-alerts (.agents/skills/using-slack/registry.json)
-mention = "S0C5APDSYF9"              # @infra's user group, named in each anomaly's post
+mention = "S0CA15YVA0P"              # @infra's user group, named in each anomaly's post
 username = "infra"
 
 # Each loop post_start.sh starts, and its success marker: a log line whose first group is its time (`pattern`), a JSON file's
