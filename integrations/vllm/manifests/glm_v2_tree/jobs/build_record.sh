@@ -5,16 +5,24 @@
 # v2 trace moved a Program takes that trace as AOT_TRACE (trace_compare.sh's row dir) and is re-pinned with it.  Hashes the row dir
 # into $OUT/rowdir.sha256 for the copies to window B's node and to the replay host.
 #   research run --on vy-glm53-cpu-2 --mem-gb 450 --mem-wait 28800 --timeout 20h --custody-ttl 24h --cwd source --project verity -- env ROW=... bash integrations/vllm/manifests/glm_v2_tree/jobs/build_record.sh
-# env: ROW, [AOT_TRACE], [SW], [REF] (model.sh's defaults), [BUDGET_GB=400], [VERITY_MANIFEST_JOBS=2].
+# env: ROW, [AOT_TRACE], [SW], [REF] (model.sh's defaults), [BUDGET_GB=400], [VERITY_MANIFEST_JOBS=8], [BUILD_TIMEOUT=86400],
+# [VERITY_UNIT_RULE_CACHE=$SW/../unit-rule-cache], [RESUME=1: a failed Build's derives and composed workloads are kept, its verdicts
+# and manifest moved to $OUT/prior].  row_tp's BUILD_TIMEOUT also bounds the whole manifest, whose default 7200 s a B8 row's
+# (64 components) overruns.
 set -uo pipefail
 : "${ROW:?ROW}"
 W0=/workspace/cp/circuits
 TREE=$PWD
 source "$TREE/integrations/vllm/manifests/glm_v2_tree/jobs/model.sh"
 D=$SW/$ROW
-[ ! -e "$D/build_summary.json" ] || { echo "$D already holds a Build"; exit 3; }
+[ ! -e "$D/build_summary.json" ] || { [ "${RESUME:-}" = 1 ] && ! grep -q '^build PASS' "$D/stages.txt" 2>/dev/null; } ||
+  { echo "$D already holds a Build (RESUME=1 resumes a failed one)"; exit 3; }
 mkdir -p "$SW" || exit 3
 source "$TREE/integrations/vllm/manifests/glm_v2_tree/jobs/tree_guard.sh" && tree_guard "$ROW" "$SW" "$REF" first || exit 2
+if [ -e "$D/build_summary.json" ]; then
+  mkdir -p "$OUT/prior" && for f in build_summary.json stages.txt manifest.json manifest.log; do [ ! -e "$D/$f" ] || mv "$D/$f" "$OUT/prior/" || exit 3; done
+  echo "resume: $D's failed Build verdicts moved to $OUT/prior; its derives and composed workloads are reused"
+fi
 [ -s "$SNAP/config.json" ] && [ -s "$SNAP/model.safetensors.index.json" ] || { echo "no $WHAT metadata at $SNAP (stage_cpu.sh stages it)"; exit 3; }
 C=$(dirname "$(dirname "$RESEARCH_RUN_DIR")")/requests/$RESEARCH_RUN_ID/custody
 [ -f "$C/cred.json" ] || { echo "no custody key at $C"; exit 4; }
@@ -23,7 +31,8 @@ ldconfig -p | grep -q 'libcuda\.so\.1 ' || export LD_LIBRARY_PATH=${CUDA_DRIVER_
   >"$OUT/bootstrap.log" 2>&1 || { tail -30 "$OUT/bootstrap.log"; exit 5; }
 export PY=$W0/venv312/bin/python
 export PATH=$W0/venv312/bin:$PATH HF_HOME=$W0/hf HF_HUB_OFFLINE=1 TOKENIZERS_PARALLELISM=false CUDA_VISIBLE_DEVICES=
-export VERITY_MANIFEST_JOBS=${VERITY_MANIFEST_JOBS:-2}
+export VERITY_MANIFEST_JOBS=${VERITY_MANIFEST_JOBS:-8} BUILD_TIMEOUT=${BUILD_TIMEOUT:-86400}
+export VERITY_UNIT_RULE_CACHE=${VERITY_UNIT_RULE_CACHE:-$(dirname "$SW")/unit-rule-cache}
 export PYTHONPATH=$TREE:$TREE/tools/research/src:$TREE/infra/cluster/src:$TREE/infra/ops:$TREE/integrations/vllm:$TREE/verity/ml/flock/python:$TREE/tools/verity/circuit_check/src:$TREE/tools/verity/cli:$TREE/verity/core/difftest/python
 export RESEARCH_STORE_CONFIG=$C/store.toml
 eval "$($PY -m verity_vllm.pipeline.cli epoch custody-env "$C")"

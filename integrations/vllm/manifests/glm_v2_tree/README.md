@@ -90,7 +90,12 @@ worktree at a commit the guard accepts (`git worktree add /tmp/glm-v2-SHA SHA`).
    row dir>` on cpu-2 saves the fetch). A long trace splits in two runs: `TRACE_ONLY=1` ends after the trace, and
    `TRACE_RUN=<that run>` compares it; a trace restarted wider (`BUILD_JOBS=N`) takes `SEED_FROM=<the earlier row dir>`, whose
    finished derives are hard-linked in after `seed_trace.py` checks each (its `.rc`, result.json, whole files, descriptor
-   digests).
+   digests). row_tp's `BUILD_TIMEOUT` bounds each derive and also the whole manifest (the word check, then one build per rank and
+   request Program), so `build_record.sh` sets 24 h: the default 7200 s holds B1's manifest (85 min) but not B8's (about 5 h at 2
+   processes; r20261020-084508-06dd and r20261020-084527-5384 failed at it). It runs the manifest in 8 processes and shares the
+   word check's unit rules through `glm-v2/unit-rule-cache` (keyed by content, so a read rule is the computed one). `RESUME=1`
+   reruns a failed Build in its row dir, keeping its derives and composed workloads and moving its verdicts and manifest into
+   the run's `prior/`.
 2. Window A (`gpu_batch.sh a [NODE] [ROW]`, NODE vy-glm53-eu by default, vy-glm53-h8 or any vy-glm53-* 8x H200 node): the four
    rows' Match GPU legs (`match_gpu.sh`), in value order (B1 greedy, B8 greedy, B8 stochastic, B32) so a short window lands the
    most. On a preemptible node an evicted leg reruns with `gpu_batch.sh a NODE ROW`, which moves the evicted `match/` aside (a
