@@ -67,7 +67,7 @@ theorem label_eq_of_late {R R' : Actual.Run L} {ℓ : L → L → ℕ} (hc : R.A
     exact ⟨g, a, hr, ha, by rw [h2]; exact hg', by rw [h1]; exact ht', rfl⟩
   exact (hr.2 p hp).symm.trans (hr' p hp')
 
-variable [LinearOrder L] {Ω₀ B : Type*} {n : ℕ}
+variable {Ω₀ B : Type*} {n : ℕ}
 
 /-- **The verdict binds one label to what `X` sent** (red team 3's `VerdictBinds`, now a consequence): under causality, a
 latency ceiling from `X` to `Y` and the late-answer rule, two coins on which read `j` is accepted at the same arrival
@@ -91,10 +91,12 @@ variable {Ω₀ B L Z : Type*} [Fintype Ω₀] [Fintype B] [LinearOrder L] {n : 
   {b D ℓmax : ℕ} {arrive : Ω₀ × (Fin n → B) → Fin n → ℕ} {acc : Ω₀ × (Fin n → B) → Fin n → Prop} {ζ : Ω₀ → Z}
   {quiet : Fin n → ℕ → B → Z → Set (ℕ × L × ℕ × L × ℕ × ℕ × ℕ)}
 
+omit [Fintype Ω₀] in
 theorem mem_answered {j : Fin n} {r : Ω₀ × (Fin n → B)} {i : B} :
     i ∈ Actual.answered acc j r ↔ acc (r.1, Function.update r.2 j i) j := by
   simp only [Actual.answered, mem_filter, mem_univ, true_and]
 
+omit [Fintype Ω₀] [Fintype B] in
 /-- **The label of an accepted index is fixed by the window**: two coins whose read `j` is accepted with the same
 index, arrival tick, content and devices' coins have the same label there. -/
 theorem label_eq_of_window (hS : CausalStrategy S ℓ) (hlat : ∀ r, (S r).A.LatencyAtMost X Y ℓmax)
@@ -112,6 +114,7 @@ theorem label_eq_of_window (hS : CausalStrategy S ℓ) (hlat : ∀ r, (S r).A.La
   rw [← ht]
   exact congrArg (fun p => p.2.1) hacts
 
+omit [Fintype Ω₀] in
 /-- **An answered block's label is fixed before its index**: two coins whose read `j` arrives at the same tick and
 finds the same content, with the same devices' coins, have the same label at every block both would accept. -/
 theorem label_eq_of_answered (hS : CausalStrategy S ℓ) (hlat : ∀ r, (S r).A.LatencyAtMost X Y ℓmax)
@@ -283,10 +286,12 @@ theorem WipeReadHeld : Guarantees.Actual.WipeReadHeld := by
       have hlt : (Actual.answered acc j r).card < a := by
         by_contra h
         exact hb j (hBad j r (hall j).2 (hCm _ ((content_length_le _ _ _).trans_lt hj)) (not_lt.1 h))
-      haveI : Nonempty B := ⟨r.2 j⟩
+      have : Nonempty B := ⟨r.2 j⟩
       have hB : (0 : ℝ) < Fintype.card B := by exact_mod_cast Fintype.card_pos
       have hle : (Actual.answered acc j r).card ≤ Fintype.card B := card_le_univ _
-      have hlt' : ((Actual.answered acc j r).card : ℝ) + 1 ≤ a := by exact_mod_cast hlt
+      have hlt' : ((Actual.answered acc j r).card : ℝ) + 1 ≤ a := by
+        have h := Nat.add_one_le_iff.2 hlt
+        exact_mod_cast h
       rw [hc, Actual.unanswered, Nat.cast_sub hle, le_div_iff₀ hB, sub_mul, one_mul, div_mul_cancel₀ _ hB.ne']
       linarith
     have hx0 : ∀ j, 0 ≤ Actual.unanswered acc j r := fun j => by
