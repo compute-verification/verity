@@ -8,7 +8,9 @@ from an earlier pass's ticket) before the one ahead of it is awaited (`wait`), s
 passes. A boundary message (the next window's coin, or the close) is taken at the first root that reaches the host
 after it: that root is sent as its window's last if its pass started (the root before it reached the host) before the
 message arrived, and dropped otherwise, and the pass queued behind it is dropped too; the next window's first pass
-chains from the last root sent. Each session runs under a mode of the prover's plan, which the verifier never sees:
+chains from the last root sent. A message arrives when the prover's reader, a process of its own (`wire.connect`,
+`wire.Conn.read_apart`), stamps it, so the rule's comparison does not wait on whatever holds this process's GIL.
+Each session runs under a mode of the prover's plan, which the verifier never sees:
 
 ~~~text
 honest          every block held and read
