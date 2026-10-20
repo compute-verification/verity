@@ -135,7 +135,8 @@ the standing rulings stated nowhere else.
   - the remote bandwidth audit's pass seeds inside a window, derived from the window's live challenge and the previous
     pass's root (Daniel, 12 Oct);
   - PoUW's per-matmul noise seeds, seed_j = SHA-512(tag ‖ salt ‖ forward ‖ position ‖ root(A_j) ‖ root(B_j)), from the
-    epoch's live salt and the operands' committed roots, which a drawn unit's proof derives along with its own noise.
+    window's live salt (`pouw.salt`, one per PoUW window from the certifier's draw, #2637) and the operands' committed
+    roots, which a drawn unit's proof derives along with its own noise.
     Grinding is a term of the guarantee: a steer that needs m noised coordinates succeeds with probability at most
     μ^m a try (Daniel, 18 Oct).
 
