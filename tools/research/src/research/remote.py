@@ -518,9 +518,44 @@ QUEUE_WRAP = "wrap"                       # the runner's, custody included: the 
 QUEUE_WORKLOAD_WRAP = "workload_wrap"     # the workload's alone: a GPU phase's lease
 
 
+#: the queue's description, under the --source tree's infra/cluster
+QUEUE_DESCRIPTION = Path("descriptions") / "nebius.toml"
+#: where the description's current version is read: the branch every node's stops and shares are recorded on
+QUEUE_DESCRIPTION_REF = "origin/main"
+
+
+def queue_description(source: Path, src: Path, scratch: Path) -> tuple[Path, str | None]:
+    """The description `cluster submit` places by, and a warning when it isn't the --source tree's. The nodes' stops and the
+    projects' shares are the cluster's, not the job's commit's: a branch cut before main renewed them still says they ended
+    (INF-156: INT-TIE's branch, before 15dc55cc72, had the queue refuse vy-nebius-1 and vy-nebius-2 at 00:06Z on 20 Oct). So
+    when `QUEUE_DESCRIPTION_REF` changed the description in a commit the tree's HEAD lacks, it is that ref's description, beside
+    the tree's own `kinds/`, written under ``scratch``; otherwise (the tree has it, or git can't say) the tree's."""
+    mine = src / QUEUE_DESCRIPTION
+    rel = os.path.relpath(mine, source)
+
+    def git(*args: str) -> subprocess.CompletedProcess:
+        return subprocess.run(["git", "-C", str(source), *args], capture_output=True, text=True, timeout=60)
+
+    try:
+        last = git("log", "-1", "--format=%H", QUEUE_DESCRIPTION_REF, "--", rel)
+        if last.returncode or not (sha := last.stdout.strip()) or git("merge-base", "--is-ancestor", sha, "HEAD").returncode != 1:
+            return mine, None
+        text = git("show", f"{QUEUE_DESCRIPTION_REF}:{rel}")
+    except (OSError, subprocess.TimeoutExpired):
+        return mine, None
+    if text.returncode:
+        return mine, None
+    there = scratch / QUEUE_DESCRIPTION
+    there.parent.mkdir(parents=True, exist_ok=True)
+    there.write_text(text.stdout)
+    (scratch / "kinds").symlink_to((src / "kinds").resolve(), target_is_directory=True)
+    return there, (f"placed by {QUEUE_DESCRIPTION_REF}'s {rel} (its {sha[:10]}, which this tree's HEAD lacks): the nodes' stops "
+                   f"and shares are the cluster's; the job's kinds are still this tree's")
+
+
 def queue_placement(source: Path | None, run_id: str, spec: dict[str, Any]) -> dict[str, Any]:
-    """`research run --queue`: the queue's placement for this job, `{node, machine, why, job, wrap}`, from `cluster submit` and the
-    description in the --source tree (infra/cluster). Refused when the queue refuses the job."""
+    """`research run --queue`: the queue's placement for this job, `{node, machine, why, job, wrap}`, from `cluster submit` in the
+    --source tree (infra/cluster) and the current description (`queue_description`). Refused when the queue refuses the job."""
     from .store import tools_registry
 
     src = (Path(source) / (tools_registry.resolve("infra/cluster", lambda p: (Path(source) / p).is_dir()) or "infra/cluster")
@@ -529,20 +564,23 @@ def queue_placement(source: Path | None, run_id: str, spec: dict[str, Any]) -> d
         raise Refused("--queue: the --source tree has no infra/cluster with `cluster submit` (the queue's description and client)")
     env = dict(os.environ)
     env["PYTHONPATH"] = str(src / "src") + (os.pathsep + env["PYTHONPATH"] if env.get("PYTHONPATH") else "")
-    argv = [sys.executable, "-m", "cluster", "submit", str(src / "descriptions" / "nebius.toml"), "--run-id", run_id,
-            "--now", str(int(time.time()))]
-    for k, v in spec.items():
-        if v is True:
-            argv.append(f"--{k}")
-        elif v not in (None, False):
-            argv += [f"--{k}", str(v)]
-    r = subprocess.run(argv, env=env, capture_output=True, text=True, timeout=60)
+    with tempfile.TemporaryDirectory(prefix="queue-description-") as scratch:
+        description, note = queue_description(Path(source), src, Path(scratch))
+        argv = [sys.executable, "-m", "cluster", "submit", str(description), "--run-id", run_id, "--now", str(int(time.time()))]
+        for k, v in spec.items():
+            if v is True:
+                argv.append(f"--{k}")
+            elif v not in (None, False):
+                argv += [f"--{k}", str(v)]
+        r = subprocess.run(argv, env=env, capture_output=True, text=True, timeout=60)
     try:
         out = json.loads(r.stdout.strip().splitlines()[-1])
     except (IndexError, ValueError):
         raise Refused(f"--queue: `cluster submit` failed (exit {r.returncode}): {r.stderr.strip()[-400:]}") from None
     if "refused" in out:
-        raise Refused(f"the queue refuses the job: {out['refused']}")
+        raise Refused(f"the queue refuses the job: {out['refused']}" + (f" ({note})" if note else ""))
+    if note:
+        out["warnings"] = [*(out.get("warnings") or []), note]
     return out
 
 
