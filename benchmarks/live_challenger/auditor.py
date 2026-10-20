@@ -3,7 +3,7 @@ the `auditor` user, from a tree infra pinned, one session a window, each recorde
 first coin.
 
     vy-challenger-gate open --commit HEX --peer NAME --scheme S --families JSON [--epoch E] [--minutes M] [--for LANE]
-    vy-challenger-gate period-open --name P [--lane LANE] | period-close --name P
+    vy-challenger-gate period-open --name P --cap N --circuit SHA512|PROGRAM_ID [--lane LANE] | period-close --name P
     vy-challenger-gate status SESSION | ledger | pubkey | fetch SESSION
 
 - **Who reaches it.** Every key in `research`'s authorized_keys on the host is forced to `vy-challenger-gate` (`command=`),
@@ -36,8 +36,11 @@ first coin.
   ended (its host stopped): a refused window to the verifier, like one whose `closed` or `complete` is false.
 - **A period** is a lane's span of windows between two signed entries, `period-open` and `period-close` (session null),
   which the lane's own gate key writes for its lane (`--name P`), or vy-admin for any lane (`period-open --name P --lane
-  LANE`, `period-close --name P`). A period's name is used once, and a lane has one period open at a time. Its windows are
-  exactly the v2 opens whose prover (`for`, else `by`) is its lane between its open and its close; every one counts. The
+  LANE`, `period-close --name P`). A period's name is used once, and a lane has one period open at a time. Its open
+  commits, before window 0's first coin, the most windows it may hold (`--cap`, a positive integer) and its circuit
+  (`--circuit`: the declared circuit's SHA-512 or the registered Program's id, which the gate records and CHAL1 checks each
+  window against). Its windows are exactly the v2 opens whose prover (`for`, else `by`) is its lane between its open and
+  its close, at most `cap` (`admit` refuses the next); every one counts. The
   close is refused while one of them still runs, and lists each, in order, as {root, session, complete} (complete when its
   end is in the ledger and complete), with `complete` true only when it lists at least one window and all are: an
   incomplete window is the period's visible failure. Period entries are taken under the gate's lock, so no window is
@@ -83,8 +86,9 @@ TREE = HERE.parents[1]
 sys.path.insert(0, str(TREE))
 
 from verity.core.protocols.sampled_proofs.challenger import (LEDGER_ROLE as ROLE, LEDGER_SCHEMA as SCHEMA,  # noqa: E402
-                                                             LEDGER_SCHEMA_V1 as SCHEMA_V1, LEDGER_TAGS as TAGS,
-                                                             PERIOD_KINDS, extends, lane_of, leaf_of,
+                                                             LEDGER_SCHEMA_V1 as SCHEMA_V1,
+                                                             LEDGER_TAGS as TAGS, PERIOD_KINDS, cap_of as _cap_of,
+                                                             circuit_of as _circuit_of, extends, lane_of, leaf_of,
                                                              ledger_message as entry_message, ledger_text, root_of,
                                                              verify_ledger, verify_periods)
 
@@ -161,15 +165,32 @@ def sessions_of(lines: list[bytes]) -> dict[str, dict[str, dict]]:
     return out
 
 
+def circuit_of(s: str) -> str:
+    """A period's circuit as its open records it (`challenger.circuit_of`), or Refused."""
+    try:
+        return _circuit_of(s)
+    except ValueError as e:
+        raise Refused(str(e)) from None
+
+
+def cap_of(v: Any) -> int:
+    """A period's cap (`challenger.cap_of`), or Refused."""
+    try:
+        return _cap_of(v)
+    except ValueError as e:
+        raise Refused(str(e)) from None
+
+
 def periods_of(lines: list[bytes]) -> dict[str, dict]:
-    """period -> {"lane", "open", "close" (None while open), "windows": [root, ...]}: a period's windows are exactly the
-    v2 opens whose prover is its lane between its period-open and its period-close."""
+    """period -> {"lane", "open", "close" (None while open), "windows": [root, ...], "cap", "circuit"}: a period's windows
+    are exactly the v2 opens whose prover is its lane between its period-open and its period-close."""
     periods: dict[str, dict] = {}
     current: dict[str, dict] = {}
     for e in entries(lines):
         if e["kind"] == "period-open":
             p = current[e["body"]["lane"]] = periods[e["body"]["period"]] = {
-                "lane": e["body"]["lane"], "open": e, "close": None, "windows": []}
+                "lane": e["body"]["lane"], "open": e, "close": None, "windows": [], "cap": e["body"].get("cap"),
+                "circuit": e["body"].get("circuit")}
         elif e["kind"] == "period-close":
             p = periods[e["body"]["period"]]
             p["close"] = e
@@ -362,16 +383,21 @@ def gate_fetch(session: str, host: Host) -> bytes:
 
 
 USAGE = ("verbs: open --commit HEX --peer NAME --scheme S --families JSON [--epoch E] [--minutes M] [--for LANE: vy-admin's] "
-         "| period-open --name P [--lane LANE: vy-admin's] | period-close --name P (a lane's own gate key, or vy-admin) "
+         "| period-open --name P --cap N --circuit SHA512|PROGRAM_ID [--lane LANE: vy-admin's] | period-close --name P "
+         "(a lane's own gate key, or vy-admin) "
          "| status SESSION | ledger | pubkey | fetch SESSION")
 
 
-def parse_period(verb: str, argv: list[str], *, lane: str | None) -> tuple[str, str | None]:
-    """(period, lane) of a period-open or period-close: a lane key's own lane, or vy-admin's `--lane` (period-open)."""
+def parse_period(verb: str, argv: list[str], *, lane: str | None) -> tuple[str, str | None, list[str]]:
+    """(period, lane, [cap, circuit] for a period-open) of a period-open or period-close: a lane key's own lane, or
+    vy-admin's `--lane` (period-open)."""
     p = argparse.ArgumentParser(prog=f"vy-challenger-gate {verb}", exit_on_error=False, add_help=False, allow_abbrev=False)
     p.add_argument("--name", required=True)
     if lane is None and verb == "period-open":
         p.add_argument("--lane", required=True)
+    if verb == "period-open":
+        p.add_argument("--cap", required=True)
+        p.add_argument("--circuit", required=True)
 
     def refuse(why: object) -> None:
         raise Refused(f"{verb}: {why}; usage: {p.format_usage().strip()}")
@@ -385,7 +411,10 @@ def parse_period(verb: str, argv: list[str], *, lane: str | None) -> tuple[str, 
     for what, v in (("--name", a.name), ("--lane", named)):
         if v is not None and (not NAME.fullmatch(v) or v in HOST_ACCOUNTS):
             raise Refused(f"{verb}: {what} {v!r}: 1 to 64 of [A-Za-z0-9._:-], starting with a letter or digit")
-    return a.name, named
+    if verb != "period-open":
+        return a.name, named, []
+    cap = cap_of(int(a.cap)) if re.fullmatch(r"[1-9][0-9]{0,8}", a.cap) else cap_of(a.cap)
+    return a.name, named, [str(cap), circuit_of(a.circuit)]
 
 
 def gate(argv: list[str], host: Host = Host(), **hooks: Any) -> tuple[int, bytes]:
@@ -428,9 +457,9 @@ def gate(argv: list[str], host: Host = Host(), **hooks: Any) -> tuple[int, bytes
         elif verb in PERIOD_KINDS:
             if by is None:
                 raise Refused("this key reads only: a period is opened and closed with its lane's own gate key, or by vy-admin")
-            name, lane = parse_period(verb, rest, lane=None if admin else by)
+            name, lane, extra = parse_period(verb, rest, lane=None if admin else by)
             with locked(host.root / "gate.lock"):
-                e = (hooks.get("period") or as_auditor_period)([verb, name, lane or READ_ONLY, by])
+                e = (hooks.get("period") or as_auditor_period)([verb, name, lane or READ_ONLY, by, *extra])
             doc = {"seq": e["seq"], "kind": e["kind"], "body": e["body"]}
         elif verb == "status" and len(rest) == 1:
             doc = gate_status(rest[0], host, active)
@@ -505,6 +534,11 @@ def admit(host: Host, session: str, *, signer, pinned: str, now: datetime, activ
         if root in roots or session in roots.values():
             raise Refused(f"root {root[:16]}… already has session {roots.get(root, session)} in the ledger: one session a "
                           "root, ever")
+        lane = req.get("for") or req["by"]
+        for name, p in periods_of(lines).items():
+            if p["lane"] == lane and p["close"] is None and p["cap"] is not None and len(p["windows"]) >= p["cap"]:
+                raise Refused(f"period {name} holds its cap of {p['cap']} windows: close it (period-close --name {name}) "
+                              "and open another for more")
         return {"window": {"root": root}, "pinned": pinned, "key_sha512": key_sha512, "host": f"{host.name}.{session}",
                 "peer": req["peer"], "port": free_port(lines, active), "scheme": req["scheme"], "epoch": req["epoch"],
                 "families": req["families"], "minutes": req["minutes"], "by": req["by"],
@@ -514,10 +548,16 @@ def admit(host: Host, session: str, *, signer, pinned: str, now: datetime, activ
 
 
 def period(host: Host, args: list[str], *, signer, pinned: str, now: datetime, active: Callable[[str], bool]) -> dict:
-    """`period-open NAME LANE BY` or `period-close NAME LANE|- BY` (LANE - for vy-admin's close of any lane's period): the
-    signed entry, or Refused. A period's name is used once and a lane has one period open at a time; a period closes once
-    none of its windows still runs, its close listing each window with its outcome."""
-    verb, name, lane, by = args
+    """`period-open NAME LANE BY CAP CIRCUIT` or `period-close NAME LANE|- BY` (LANE - for vy-admin's close of any lane's
+    period): the signed entry, or Refused. A period's name is used once and a lane has one period open at a time; its
+    open commits the most windows it may hold (`cap`) and its circuit; it closes once none of its windows still runs, its
+    close listing each window with its outcome."""
+    if len(args) != (6 if args[:1] == ["period-open"] else 4):
+        raise Refused(f"period: {args}")
+    verb, name, lane, by = args[:4]
+    if verb == "period-open":
+        cap = cap_of(int(args[4])) if re.fullmatch(r"[1-9][0-9]{0,8}", args[4]) else cap_of(args[4])
+        circuit = circuit_of(args[5])
     I, sign, key_sha512 = signer
 
     def body_of(lines: list[bytes]) -> dict:
@@ -527,8 +567,8 @@ def period(host: Host, args: list[str], *, signer, pinned: str, now: datetime, a
                 raise Refused(f"period {name} is in the ledger already: a period's name is used once")
             if (o := next((n for n, p in periods.items() if p["lane"] == lane and p["close"] is None), None)) is not None:
                 raise Refused(f"lane {lane} has period {o} open: close it first (periods of a lane never overlap)")
-            return {"period": name, "lane": lane, "by": by, "pinned": pinned, "key_sha512": key_sha512,
-                    "opened_utc": utc(now)}
+            return {"period": name, "lane": lane, "by": by, "cap": cap, "circuit": circuit, "pinned": pinned,
+                    "key_sha512": key_sha512, "opened_utc": utc(now)}
         p = periods.get(name)
         if p is None or p["close"] is not None:
             raise Refused(f"no open period {name}")
@@ -663,7 +703,7 @@ def main(argv: list[str] | None = None) -> int:
             e = admit(host, argv[1], signer=key_signer(host), pinned=pinned_commit(), now=datetime.now(timezone.utc),
                       active=unit_active)
             print(json.dumps({"seq": e["seq"], "session": e["session"]}))
-        elif argv[:1] in (["period-open"], ["period-close"]) and len(argv) == 4:
+        elif argv[:1] in (["period-open"], ["period-close"]):
             e = period(host, argv, signer=key_signer(host), pinned=pinned_commit(), now=datetime.now(timezone.utc),
                        active=unit_active)
             print(json.dumps(e))
@@ -680,8 +720,8 @@ def main(argv: list[str] | None = None) -> int:
             (host.root / "pubkey.json").write_text(json.dumps(doc, indent=1, sort_keys=True) + "\n")
             print(json.dumps(doc))
         else:
-            print("usage: auditor.py gate VERB ... | admit SESSION | run SESSION | period-open|period-close NAME LANE BY "
-                  "| keygen", file=sys.stderr)
+            print("usage: auditor.py gate VERB ... | admit SESSION | run SESSION | period-open NAME LANE BY CAP CIRCUIT "
+                  "| period-close NAME LANE|- BY | keygen", file=sys.stderr)
             return 2
     except Refused as e:
         print(f"refused: {e}", file=sys.stderr)

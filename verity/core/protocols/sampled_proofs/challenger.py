@@ -167,6 +167,8 @@ _ZERO = "0" * 128
 _LEDGER_ROOT = re.compile(r"[0-9a-f]{128}")
 _LEDGER_HEX = re.compile(r"(?:[0-9a-f]{2})+")
 _LEDGER_NAME = re.compile(r"[A-Za-z0-9][A-Za-z0-9._:-]{0,63}")
+CAP = (1, 2 ** 24)
+CIRCUIT = re.compile(r"[A-Za-z0-9][A-Za-z0-9._:/@+-]{0,255}")
 WINDOW_FORM = "a window's identity is {root}: the served Commit's root, 64 bytes in lowercase hex"
 LEDGER_FORM = ("an auditor's ledger line is an entry {body, kind, prev, schema, seq, session, sig} as the auditor writes it "
                "(sorted keys, no whitespace, ASCII, no number but an integer): kind open, its body naming the window, the "
@@ -651,6 +653,22 @@ def root_of(e: dict) -> str:
     return w["root"] if e["schema"] == LEDGER_SCHEMA else w["commit"]
 
 
+def circuit_of(s: Any) -> str:
+    """A period's circuit as its open records it: the declared circuit's SHA-512 (128 hex digits, kept in lowercase) or
+    the registered Program's id; ValueError otherwise."""
+    if type(s) is not str or not CIRCUIT.fullmatch(s):
+        raise ValueError(f"--circuit {s!r}: the declared circuit's SHA-512 (128 hex digits) or the registered Program's "
+                         "id (1 to 256 of [A-Za-z0-9._:/@+-], starting with a letter or digit)")
+    return s.lower() if re.fullmatch(r"[0-9a-fA-F]{128}", s) else s
+
+
+def cap_of(v: Any) -> int:
+    """A period's cap: the most windows it may hold, a positive integer; ValueError otherwise."""
+    if type(v) is not int or not CAP[0] <= v <= CAP[1]:
+        raise ValueError(f"--cap {v!r}: the most windows the period may hold, {CAP[0]} to {CAP[1]}")
+    return v
+
+
 def extends(published: list[bytes], ledger: list[bytes]) -> bool:
     """Whether `ledger` is `published` with entries appended: a head that isn't (a fork, a cut, an edit) is refused."""
     return ledger[:len(published)] == published
@@ -668,8 +686,10 @@ def verify_ledger(lines: list[bytes], I: bytes, verify: Callable[[bytes, bytes],
 
 def verify_periods(lines: list[bytes], I: bytes, verify: Callable[[bytes, bytes], bool]) -> dict[str, dict]:
     """The ledger's periods once `verify_ledger` passes: period -> {"lane", "open", "close" (None while open), "windows":
-    [root, ...]}. A period's name is used once; a lane has one period open at a time; its windows are exactly the v2 opens
-    whose prover is its lane (`lane_of`) between its period-open and its period-close, and the close lists each of them,
+    [root, ...], "cap", "circuit"}. A period's name is used once; a lane has one period open at a time; its windows are
+    exactly the v2 opens whose prover is its lane (`lane_of`) between its period-open and its period-close, at most its
+    `cap` (a positive integer, with `circuit` committed beside it before window 0's first coin; both None only for a
+    period opened before they were required, which a reader of the cap refuses), and the close lists each of them,
     in order, with its outcome (complete when its end precedes the close and is complete) and is complete only when it
     has a window and every one is. An end after its period's close (the gate's lock leaves none) changes nothing: the
     close recorded that window incomplete."""
@@ -714,7 +734,10 @@ def _verify(lines: list[bytes], I: bytes, verify: Callable[[bytes, bytes], bool]
                 raise ValueError(f"entry {i}: a second open for root {root[:16]}… or session {e['session']}")
             windows[root], by_session[e["session"]] = {"open": e, "end": None, "q": q}, root
             if (period := current.get(lane) if lane is not None else None) is not None:
-                periods[period]["windows"].append(root)
+                p = periods[period]
+                if p["cap"] is not None and len(p["windows"]) >= p["cap"]:
+                    raise ValueError(f"entry {i}: period {period}'s window {len(p['windows'])} is past its cap {p['cap']}")
+                p["windows"].append(root)
         elif kind == "end":
             root = by_session.get(e["session"])
             if root is None or windows[root]["end"] is not None:
@@ -733,7 +756,16 @@ def _verify(lines: list[bytes], I: bytes, verify: Callable[[bytes, bytes], bool]
             if kind == "period-open":
                 if name in periods or lane in current:
                     raise ValueError(f"entry {i}: period {name} is named twice, or lane {lane} has a period open")
-                periods[name], current[lane] = {"lane": lane, "open": e, "close": None, "windows": []}, name
+                cap, circuit = e["body"].get("cap"), e["body"].get("circuit")
+                if cap is not None or circuit is not None:
+                    try:
+                        if cap_of(cap) != cap or circuit_of(circuit) != circuit:
+                            raise ValueError("not canonical")
+                    except ValueError:
+                        raise ValueError(f"entry {i}: period {name}'s cap is a positive integer and its circuit a "
+                                         "SHA-512 in lowercase or a Program's id") from None
+                periods[name], current[lane] = {"lane": lane, "open": e, "close": None, "windows": [], "cap": cap,
+                                                "circuit": circuit}, name
             else:
                 p = periods.get(name)
                 if p is None or p["close"] is not None or p["lane"] != lane:
@@ -753,7 +785,7 @@ def _verify(lines: list[bytes], I: bytes, verify: Callable[[bytes, bytes], bool]
     if reused := sorted(leaves & set(records)):
         raise ValueError(f"entry {records[reused[0]]}: record leaf {reused[0]} is also an entry's")
     return ({root: {"open": w["open"], "end": w["end"]} for root, w in windows.items()},
-            {name: {k: p[k] for k in ("lane", "open", "close", "windows")} for name, p in periods.items()})
+            {name: {k: p[k] for k in ("lane", "open", "close", "windows", "cap", "circuit")} for name, p in periods.items()})
 
 
 def ledger_text(entry: dict) -> str:
@@ -848,7 +880,8 @@ def _checked(ledger: Any, key: ChallengerKey, verify: Verify) -> tuple[dict[str,
 
 class Audited(NamedTuple):
     """The window's session as the auditor's ledger names it: its id, the host its open names, its prover, the SHA-512 of
-    each file its end sealed, the leaf its record was signed at, its commitment's root and how many hellos it refused."""
+    each file its end sealed, the leaf its record was signed at, its commitment's root, how many hellos it refused, and
+    the period holding the window with the cap and circuit its open committed (all None when no period holds it)."""
     session: str
     host: str
     prover: str
@@ -856,6 +889,9 @@ class Audited(NamedTuple):
     record_leaf: int
     commitment: str
     refused_hellos: int
+    period: str | None = None
+    cap: int | None = None
+    circuit: str | None = None
 
 
 def audited_session(ledger: Any, window: Any, key: ChallengerKey, verify: Verify) -> Audited:
@@ -863,10 +899,11 @@ def audited_session(ledger: Any, window: Any, key: ChallengerKey, verify: Verify
     window `window` (``{root}``), under the challenger key the window's deployment pins, `key`, and ends closed.
     Raises `CoinError` naming why when there is no ledger, a line isn't of the ledger's form or names another key, the
     ledger fails `verify_ledger`, or the window's session is missing, opened under v1, unended, ended unclosed or its end
-    names no record leaf, commitment, refused hellos or sealed file the verifier reads."""
+    names no record leaf, commitment, refused hellos or sealed file the verifier reads, or the period holding the window
+    committed no cap or circuit."""
     if not _window(window):
         raise CoinError(f"the window's identity is malformed: {WINDOW_FORM}")
-    windows, _ = _checked(ledger, key, verify)
+    windows, periods = _checked(ledger, key, verify)
     w = windows.get(window["root"])
     if w is None:
         raise CoinError("the auditor's ledger opens no challenger session for this window")
@@ -884,8 +921,12 @@ def audited_session(ledger: Any, window: Any, key: ChallengerKey, verify: Verify
     if not (_nat(b.get("record_leaf")) and _digest_hex(b.get("commitment")) and _nat(b.get("refused_hellos"))
             and all(f in b["files"] for f in SEALED_FILES)):
         raise CoinError(f"the auditor's ledger's end of session {s} is malformed: {END_FORM}")
+    name = next((n for n, p in periods.items() if window["root"] in p["windows"]), None)
+    p = periods.get(name, {"cap": None, "circuit": None})
+    if name is not None and (p["cap"] is None or p["circuit"] is None):
+        raise CoinError(f"the auditor's ledger's period {name}, which holds session {s}, commits no cap or circuit")
     return Audited(s, o["body"]["host"], lane_of(o), dict(b["files"]), b["record_leaf"], b["commitment"],
-                   b["refused_hellos"])
+                   b["refused_hellos"], name, p["cap"], p["circuit"])
 
 
 def ledger_head(heads: Any, key: ChallengerKey, verify: Verify) -> list[str]:
@@ -1042,15 +1083,16 @@ class LiveRecord:
         return order_reason(self.challenger.commitment, self.label, self.roots, self.openings)
 
 
-__all__ = ["BINDING", "CLOSE_FILE", "CLOSE_FORM", "CLOSE_ROLE", "COIN_BYTES", "COMMITMENT_FORM", "COMMITMENT_TAG", "END_FORM",
-           "HEADS_FORM", "HELLOS_FILE", "HELLOS_FORM", "KEY_FORM", "KEY_RECORD_FORM", "KEY_RECORD_SCHEMA", "LEDGER_FORM",
-           "LEDGER_ROLE", "LEDGER_SCHEMA", "LEDGER_SCHEMA_V1", "LEDGER_TAGS", "LOG_FILE", "LOG_FORM", "LOG_MALFORMED",
-           "LOG_TAG", "MAX_COINS", "MAX_LEDGER_LINE", "MAX_LOG_LINE", "MAX_LOG_LINES", "MAX_SESSION_ID", "NO_AUDIT",
-           "NO_CLOSE", "NO_RECORD", "OPENING_FORM", "PERIOD_KINDS", "PUBLIC_BYTES", "RECORD_FILE", "RECORD_FORM",
-           "RECORD_ROLE", "SEALED_FILES", "SESSION_FORM", "WINDOW_FORM", "Audited", "ChallengerClose", "ChallengerKey",
-           "ChallengerRecord", "CoinError", "LiveChallenger", "LiveCommitment", "LiveOpening", "LiveRecord", "Verify",
-           "audited_session", "close_message", "extends", "key_of_record", "lane_of", "layout_problem", "leaf_of",
-           "ledger_head", "ledger_line", "ledger_message", "ledger_text", "live_domain", "live_leaf", "live_reason",
-           "log_chain", "log_digest", "order_reason", "record_message", "record_reason", "released_roots_of", "root_of",
-           "session_named", "session_of", "trusted_commitment", "trusted_reason", "trusted_session_of", "verify_ledger",
+__all__ = ["Audited", "BINDING", "CAP", "CIRCUIT", "CLOSE_FILE", "CLOSE_FORM", "CLOSE_ROLE", "COIN_BYTES",
+           "COMMITMENT_FORM", "COMMITMENT_TAG", "ChallengerClose", "ChallengerKey", "ChallengerRecord", "CoinError",
+           "END_FORM", "HEADS_FORM", "HELLOS_FILE", "HELLOS_FORM", "KEY_FORM", "KEY_RECORD_FORM", "KEY_RECORD_SCHEMA",
+           "LEDGER_FORM", "LEDGER_ROLE", "LEDGER_SCHEMA", "LEDGER_SCHEMA_V1", "LEDGER_TAGS", "LOG_FILE", "LOG_FORM",
+           "LOG_MALFORMED", "LOG_TAG", "LiveChallenger", "LiveCommitment", "LiveOpening", "LiveRecord", "MAX_COINS",
+           "MAX_LEDGER_LINE", "MAX_LOG_LINE", "MAX_LOG_LINES", "MAX_SESSION_ID", "NO_AUDIT", "NO_CLOSE", "NO_RECORD",
+           "OPENING_FORM", "PERIOD_KINDS", "PUBLIC_BYTES", "RECORD_FILE", "RECORD_FORM", "RECORD_ROLE", "SEALED_FILES",
+           "SESSION_FORM", "Verify", "WINDOW_FORM", "audited_session", "cap_of", "circuit_of", "close_message",
+           "extends", "key_of_record", "lane_of", "layout_problem", "leaf_of", "ledger_head", "ledger_line",
+           "ledger_message", "ledger_text", "live_domain", "live_leaf", "live_reason", "log_chain", "log_digest",
+           "order_reason", "record_message", "record_reason", "released_roots_of", "root_of", "session_named",
+           "session_of", "trusted_commitment", "trusted_reason", "trusted_session_of", "verify_ledger",
            "verify_periods", "write_record"]

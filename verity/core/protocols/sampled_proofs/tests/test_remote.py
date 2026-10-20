@@ -873,8 +873,9 @@ def test_a_windows_prover_is_the_lane_its_open_names_it_for_else_its_opener(tmp_
 
 
 def _period_open(ledger: Ledger, name: str = "p-0", lane: str = "proofs", **changes) -> None:
-    ledger.append("period-open", None, {"period": name, "lane": lane, "by": lane, "pinned": "ab" * 20,
-                                        "key_sha512": ledger.key_sha512, "opened_utc": "2026-10-20T12:00:00Z", **changes})
+    body = {"period": name, "lane": lane, "by": lane, "cap": 4, "circuit": "cd" * 64, "pinned": "ab" * 20,
+            "key_sha512": ledger.key_sha512, "opened_utc": "2026-10-20T12:00:00Z", **changes}
+    ledger.append("period-open", None, {k: v for k, v in body.items() if v is not DROP})
 
 
 def _period_close(ledger: Ledger, windows: list, complete: bool, name: str = "p-0", lane: str = "proofs") -> None:
@@ -896,6 +897,8 @@ def test_a_ledger_with_periods_is_read_and_a_close_that_misstates_its_windows_is
     verify = lambda m, sig: lms_verify(pinned_key(), m, sig)
     periods = C.verify_periods([line.encode() for line in ledger.lines], ledger.I, verify)
     assert periods["p-0"]["windows"] == [WINDOW["root"]] and periods["p-0"]["close"] is not None
+    audited = C.audited_session(ledger.lines, WINDOW, pinned_key(), lms_verify)
+    assert (audited.period, audited.cap, audited.circuit) == ("p-0", 4, "cd" * 64)
     for windows, complete in (([{"root": WINDOW["root"], "session": "s-1", "complete": True}], False), ([], False),
                               ([{"root": WINDOW["root"], "session": "s-1", "complete": False}], False)):
         ledger.lines = list(before)
@@ -910,6 +913,37 @@ def test_a_ledger_with_periods_is_read_and_a_close_that_misstates_its_windows_is
     _period_open(v1)
     with pytest.raises(C.CoinError, match="entry 0: a period-open is v2 and names its period and its lane"):
         C.audited_session(v1.lines, WINDOW, pinned_key(), lms_verify)
+
+
+def test_a_period_commits_its_cap_and_circuit_and_holds_no_window_past_its_cap(tmp_path, signer):
+    """A period's open commits the most windows it may hold and its circuit (compute-accounting's CircuitWorkPeriod): a
+    window past the cap is refused, as is a cap or circuit of another form, and a window in a period that committed
+    neither (opened before they were required) isn't read, since its cap is unknown."""
+    one = Ledger(tmp_path / "one.jsonl", signer)
+    _period_open(one, cap=1)
+    host = Host(tmp_path, signer, ledger=one)
+    honest(host)
+    assert host.trusted()[0] == host.challenger.commitment
+    one.open("s-2", {"root": "22" * 64})
+    with pytest.raises(C.CoinError, match="entry 3: period p-0's window 1 is past its cap 1"):
+        host.trusted()
+    for i, changes in enumerate(({"cap": 0}, {"cap": True}, {"cap": 2 ** 24 + 1}, {"cap": DROP},
+                                 {"circuit": "CD" * 64}, {"circuit": "-x"}, {"circuit": DROP})):
+        bad = Ledger(tmp_path / f"bad{i}.jsonl", at(0))
+        _period_open(bad, **changes)
+        with pytest.raises(C.CoinError, match="entry 0: period p-0's cap is a positive integer and its circuit"):
+            C.audited_session(bad.lines, WINDOW, pinned_key(), lms_verify)
+    old = Ledger(tmp_path / "old.jsonl", at(0, 1, 4))
+    _period_open(old, cap=DROP, circuit=DROP)
+    old.open("s-1")
+    old.end("s-1", host.directory, True)
+    with pytest.raises(C.CoinError, match="period p-0, which holds session s-1, commits no cap or circuit"):
+        C.audited_session(old.lines, WINDOW, pinned_key(), lms_verify)
+    for program in ("verity/pouw/h1@v1", "cd" * 64):
+        named = Ledger(tmp_path / "named.jsonl", at(0))
+        _period_open(named, circuit=program)
+        assert C.verify_periods([ln.encode() for ln in named.lines], named.I,
+                                lambda m, sig: lms_verify(pinned_key(), m, sig))["p-0"]["circuit"] == program
 
 
 def test_the_ledger_is_the_longest_of_infras_heads_when_each_extends_the_others(tmp_path, signer):
