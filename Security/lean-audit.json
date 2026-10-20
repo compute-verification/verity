@@ -10895,7 +10895,7 @@
    "guarantees": ["Flock.SecurityProofs.ClaimsStated"]
   },
   "Definitions.Claims.Recursion": {
-   "digest": "594a8952550f0abdc1e278417fa734e733e9d0647bdd8db847f842ccec92377b",
+   "digest": "fc629c89b634cac66287cca62e25b9c94aa799c0270817d9137367750d43b4f3",
    "definitions": {
     "Claims.Recursion.BAbort": "cc6d1eae158f7e9353eed3e76a1d0be441485fa6b07023915a3bfb5b17d469a6",
     "Claims.Recursion.Be": "144f16201ad772e1f10447efc6a7622c61aa6d25922226b932a9556d5f11051b",
@@ -10906,7 +10906,7 @@
     "Claims.Recursion.Bound.DE": "327f27b2237460428939b9e3f6b6ad7d5668817d2ad47b04705847e64eeede2f",
     "Claims.Recursion.Bound.IVStar": "137185c636e2d70008f163623204e09d545ee6f84b00bef985d3b712a748a51a",
     "Claims.Recursion.Bound.LastBinds": "5167cb9e4d264b017e58940bf2d6c97f379eb03198c659d263b53d25a0a1ac7d",
-    "Claims.Recursion.Bound.LastBindsEC": "d9b5e8cb3b3d7b9701ce56afb662d52a3adcbf59555b9cdd2b1941eb5e3ac432",
+    "Claims.Recursion.Bound.LastBindsEC": "3d767acc16d6d4f014d90e4a649c18e0ca082980bfb8cbf5c8ffafc8ce3d6c42",
     "Claims.Recursion.Bound.LastCoinFree": "df7477989f22a2a0a7c3f84c5027773632ef1905cc0b528b484f4421170a2c40",
     "Claims.Recursion.Bound.PlainKSAbort": "f47c0563127f50809311f993df9976a067d626327d299d7e006aca87de994f34",
     "Claims.Recursion.Bound.WeightCovers": "e6d07126d527a1ec5f74d003d99004de880bdcf436598eeea6a6dbdbf5ba0edb",
