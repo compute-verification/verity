@@ -26,12 +26,18 @@ open Claims.Recursion.VStar (readAt)
 theorem readAt_length (w : Flock.Wit) (ps : List ℕ) : (readAt w ps).length = (ps.length + 7) / 8 := by
   simp [readAt, VStar.bytesOf]
 
+theorem readForms_length (w : Flock.Wit) (fs : List _root_.Flock.HmNets.Lin) :
+    (readForms w fs).length = (fs.length + 7) / 8 := by
+  simp [readForms, VStar.bytesOf]
+
 /-- A piece's bytes have the length its segments fix. -/
-theorem readSegs_length (w : Flock.Wit) (segs : List (Msg × List ℕ)) : (readSegs w segs).length = pieceLen segs := by
-  simp [readSegs, pieceLen, List.length_flatMap, readAt_length]
+theorem readSegs_length (w : Flock.Wit) (segs : List (Msg × List _root_.Flock.HmNets.Lin)) :
+    (readSegs w segs).length = pieceLen segs := by
+  simp [readSegs, pieceLen, List.length_flatMap, readForms_length]
 
 theorem mem_foldl_pieces (w : Flock.Wit) (s : ℕ) :
-    ∀ (l : List (ℕ × List (Msg × List ℕ))) (o₀ : ℕ) (acc : List (ℕ × Msg)) (e : ℕ × Msg),
+    ∀ (l : List (ℕ × List (Msg × List _root_.Flock.HmNets.Lin))) (o₀ : ℕ) (acc : List (ℕ × Msg))
+      (e : ℕ × Msg),
       e ∈ (l.foldl (fun (acc : ℕ × List (ℕ × Msg)) p =>
         (acc.1 + pieceLen p.2, if p.1 = s then acc.2 ++ [(acc.1, readSegs w p.2)] else acc.2)) (o₀, acc)).2 →
       e ∈ acc ∨ ∃ pre p post, l = pre ++ p :: post ∧ p.1 = s ∧
@@ -63,11 +69,12 @@ theorem LayoutB.mem_piecesOf {L : LayoutB} {x : Msg} {s : ℕ} {w : Flock.Wit} {
 
 /-- **An assembled round holds each piece at its offset**, read off its part's witness. -/
 theorem LayoutB.assembled_piece {L : LayoutB} {x : Msg} {ws : List Flock.Wit} {i s : ℕ} (hs : s < ws.length)
-    {pre post : List (ℕ × List (Msg × List ℕ))} {p : ℕ × List (Msg × List ℕ)}
+    {pre post : List (ℕ × List (Msg × List _root_.Flock.HmNets.Lin))}
+    {p : ℕ × List (Msg × List _root_.Flock.HmNets.Lin)}
     (hl : L.pieceAt x i = pre ++ p :: post) (hp : p.1 = s) :
     ((L.assembled x ws i).drop (pre.map fun q => pieceLen q.2).sum).take (readSegs ws[s] p.2).length =
       readSegs ws[s] p.2 := by
-  have hg : ∀ q : ℕ × List (Msg × List ℕ),
+  have hg : ∀ q : ℕ × List (Msg × List _root_.Flock.HmNets.Lin),
       ((ws[q.1]?.map fun w => readSegs w q.2).getD (List.replicate (pieceLen q.2) 0)).length = pieceLen q.2 := by
     intro q
     cases ws[q.1]? with

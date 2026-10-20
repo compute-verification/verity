@@ -4,7 +4,13 @@ For the expert reviewer and for Table 1. This file states every named assumption
 soundness theorems take, each in full; the detail behind them is in `assumptions/`. What is proved is in `README.md`
 and, for the audit layer, `Audit/README.md`. `DESIGN.md` holds the derivations.
 
-**The end-to-end theorem** is a skeleton: `flock_e2e_count` and `flock_e2e_drawn`, in `E2E.lean`, and
+**The guarantee of record** for the one-stage `--zk` audit is `Flock.Guarantees.EndToEnd`
+(`../EndToEnd/Statement.lean`, proved as `Flock.SecurityProofs.EndToEnd`). It bounds the executable verifier's
+acceptance, `flock-verify verify --zk`, with no model between them, under A3, `live-verifier` (with A6), `cr/sha-512`
+and `ecr/sha-512`, each a hypothesis (below). The rest of this section and The headline describe the older, model-level
+forms.
+
+**The end-to-end skeleton**: `flock_e2e_count` and `flock_e2e_drawn`, in `E2E.lean`, and
 `Prog.flock_e2e_count` and `Prog.flock_e2e_drawn` on the circuit of the statement's rows (`Prog.circuit`). They state the
 chain from the audit's acceptance to the integrity profile on the committed circuit. Each unfinished piece is a named
 hypothesis, and `assumption-notes/e2e-checklist.md` lists them with their owners. The circuit is the one the statement's rows
@@ -480,20 +486,7 @@ would not fail the audit.
 
 ## Upstream status
 
-Whether a dependency proves what these theorems assume, or what they prove by hand, is computed, not written here. The
-watch list is the `upstream` section of `lean-audit.json`, one entry per statement:
-
-- `A1-johnson-mca` and `udr-mca`: A1 (proved here from DKT26) and its unique-decoding fallback;
-- `collision-resistance`, `keyed-cr` and `rom-cr`: `SHA512CRStrict` and `SHA512CRExpected`, against upstream's generic,
-  keyed and random-oracle statements of collision resistance;
-- `list-size` and `list-size-code`: the Johnson list bound (`ListSize.closeMsgs_card_le`);
-- `tensor-fold`: the fold union in `LigeritoLevels`;
-- `novel-basis`: the novel basis (`Arith.Correct.xhat_poly`, `L ≤ 40`).
-
-`python tools/verity/lean/upstream.py Security/Proofs` prints each entry's status at the pinned
-revisions: the upstream theorems about it, which are proved, and which nobody has acknowledged. The audit runs that pass
-over ArkLib, with ArkLib's own `sorry` baseline, and fails on a proved theorem no entry acknowledges. `--lean`, the
-exact pass over everything imported (VCVio and CompPoly too), is run at a dependency bump.
+Whether a dependency proves what these theorems assume is computed from `lean-audit.json`'s `upstream` watch list: `assumption-notes/upstream.md`.
 
 ## Trusted components
 

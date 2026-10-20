@@ -20,7 +20,9 @@ file. `Accounting.Guarantees.TS.Sm120SheetHeadline` reads it.
   of honest work (an IMMA.16832 at L = 32).
 * `flat`: the floor program ♭ a unit: the MMA and the design's operand floor (word production), the fold, no filler, and
   ε_skip's skippable work at NOROW's price, 0.420701% of ♭'s bound (`eps_budget.design_skip` on DS-120).
-* `piStar`: π*, the facet (DS_issue) the machine model's LP certificate sits on at q* = ½.
+* `piStar`: π*, the facet (DS_issue) the machine model's LP certificate sits on at q* = ½, with 197/3761 moved onto
+  DS_smem: the least weight there at which each bulk-reduction floor (the exporter's `BULK_FLOORS`, A5b) costs at least
+  the menu's φ*.
 * `checks`: the checks a window, one a round (Theorem S's S).
 -/
 
@@ -87,8 +89,8 @@ def ds120 : SheetData Pipe where
   smem := [
     0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
     0, 0, 0, 128, 128, 128, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 128, 128, 128, 128, 128, 128, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-    0, 0, 0, 0, 0, 0, 0, 128, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
+    0, 0, 0, 0, 0, 0, 0, 128, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 512, 512, 4096, 0, 0,
+    16, 8208, 528, 1040, 16400, 32784, 2064, 48, 49168, 32, 4112, 101376, 0, 0, 0]
 
 /-- The data sheet over the census's classes. -/
 noncomputable def sheet : Sheet (Fin 122) Pipe := ds120.sheet 122
@@ -140,8 +142,10 @@ def flatSkip : Sparse := [(65, 14325412520309335111003, 199158597757329117000000
 /-- The floor program ♭, labelled. -/
 noncomputable def flat : Labelled (Fin 122) := labelled 122 flatWords flatFold [] flatSkip
 
-/-- π*: the machine model's certificate at q* = ½. -/
-def piStar : SheetRow Pipe := .issue
+/-- π*: the machine model's certificate at q* = ½, priced so that the bulk-reduction floors cost at least φ*. -/
+noncomputable def piStar : SheetRow Pipe → ℝ := fun r =>
+    3564 / 3761 * onFacet (SheetRow.issue : SheetRow Pipe) r +
+    197 / 3761 * onFacet (SheetRow.smem : SheetRow Pipe) r
 
 /-- The checks a window. -/
 def checks : ℕ := 48000

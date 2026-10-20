@@ -113,11 +113,11 @@ theorem ActivationsReads : Guarantees.ActivationsReads := activations_reads
 
 /-- **The activations bound over all of training, with dark gates** ([ACTIVATIONS-BOUND]). -/
 theorem ActivationsBoundOn : Guarantees.ActivationsBoundOn := by
-  intro Γ α K b_w b_a c d T L dd e M hα hαK hbw hba hdd ⟨n, P, hP⟩ he hd hA
+  intro Γ α K b_w b_a c d T L dd e M hα hαK hbw hba hdd ⟨n, P, hP⟩ hB he hd hA
   set Λ := T.bound K b_w dd e
   have hΛ : 0 ≤ Λ := le_max_of_le_left (Nat.cast_nonneg _)
   have hreads : ∀ u, (novelReads c (piece M P u) : ℝ) ≤ α * d.D.size (P.gates u) := fun u =>
-    (Nat.cast_le.2 (novelReads_piece u)).trans (hP u).2
+    (Nat.cast_le.2 (novelReads_piece hB u)).trans (hP u).2
   have hpiece : ∀ u, Small c Γ K (piece M P u) := fun u =>
     ⟨piece_subset_computed u, (card_piece_le u).trans (hP u).1,
       ((hreads u).trans (mul_le_mul_of_nonneg_left (by exact_mod_cast (hP u).1) hα)).trans hαK⟩
@@ -137,8 +137,8 @@ theorem ActivationsBoundOn : Guarantees.ActivationsBoundOn := by
 
 /-- **Training is slowed, by the activations bound, with dark gates.** -/
 theorem ActivationsTrainingOn : Guarantees.ActivationsTrainingOn := by
-  intro Γ α K b_w b_a κ c d T L dd e M hα hαK hbw hba hdd hP he hd hA hκ
-  have h := ActivationsBoundOn Γ α K b_w b_a c d T L dd e M hα hαK hbw hba hdd hP he hd hA
+  intro Γ α K b_w b_a κ c d T L dd e M hα hαK hbw hba hdd hP hB he hd hA hκ
+  have h := ActivationsBoundOn Γ α K b_w b_a c d T L dd e M hα hαK hbw hba hdd hP hB he hd hA
   have hs : (T.M.card : ℝ) ≤ M.dark.card + (T.M ∩ M.S).card := by
     exact_mod_cast card_le_dark_add_inter M T.M_computed
   have h1 := mul_le_mul_of_nonneg_left hκ hba.le
