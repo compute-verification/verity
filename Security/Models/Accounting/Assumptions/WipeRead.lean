@@ -3,13 +3,14 @@ import Definitions.Accounting.Actual.WipeHeld
 /-!
 # Timed reads on the actual circuit: the lifetime pool's premises, restated (trusted)
 
-The MEM-55 restatement of `Accounting.Assumptions.TimedRoundSound` (owner memory-accounting; the guarantees that take
-these premises are proved in `Proofs/Accounting/Actual/WipeBridge.lean`, not yet carded). That premise reads only `Accounting.WipePlay`'s labels: at every wipe, a passing draw
-challenges no block of `U`. Taking `U` as the blocks whose every challenge fails makes it true by definition, and
-taking `U = ∅` makes it true of any tree, so it says nothing about a server. Here `U` is read `j`'s un-answered
-blocks (`Accounting.Actual.answered`), which makes the pool a theorem with no premise but `LiveVerdicts`, and these say
-what an answered block costs the server's state, per read, so a server that refetches or rebuilds between the rounds
-of one wipe is covered (`Accounting.Guarantees.Actual.AnsweredOfQuiet`).
+The MEM-55 restatement of the lifetime pool's premise (owner memory-accounting; the guarantees that take these premises
+are proved in `Proofs/Accounting/Actual/WipeReadPool.lean` and `WipeBridge.lean`, not yet carded). The lemma
+`Accounting.SecurityProofs.Actual.WipePool` takes `WipePlay.UnheldFails`, which reads only `Accounting.WipePlay`'s
+labels: at every wipe, a passing draw challenges no block of `U`. Taking `U` as the blocks whose every challenge fails
+makes it true by definition, and taking `U = ∅` makes it true of any tree, so it says nothing about a server. Here `U`
+is read `j`'s un-answered blocks (`Accounting.Actual.answered`), which makes the pool a theorem with no premise but
+`LiveVerdicts`, and these say what an answered block costs the server's state, per read, so a server that refetches or
+rebuilds between the rounds of one wipe is covered (`Accounting.Guarantees.Actual.AnsweredOfQuiet`).
 
 The setting: a strategy `S` on coins `r = (ω₀, c)`, `n` reads over the strategy's life with indices `c : Fin n → B`,
 labels `lab ω₀ j`, read `j`'s index reaching the server `X` at `arrive r j`, and the memory challenger's verdict

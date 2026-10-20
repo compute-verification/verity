@@ -5,11 +5,11 @@ import Models.Accounting.Assumptions.WipeRead
 /-!
 # The lifetime pool on the actual circuit: the pool, the count and the lag (trusted)
 
-`Accounting.Guarantees.Actual.WipePool` bounds the un-held fractions a run tree of wipes labels (`Accounting.WipePlay`)
-under `Accounting.Assumptions.TimedRoundSound`, which the labels alone make true. These state the pool on the
-challenger's actual verdicts instead, per read, what an answered block costs the server's state at the read, and what
-the state can gain between reads. Restated by the MEM-55 and MEM-60 red teams, and proved without `TimedRoundSound` in
-`Proofs/Accounting/Actual/WipeReadPool.lean`, `WipeBridge.lean` and `WipeLag.lean`.
+The lemma `Accounting.SecurityProofs.Actual.WipePool` bounds the un-held fractions a run tree of wipes labels
+(`Accounting.WipePlay`) on a tree meeting `WipePlay.UnheldFails`, which every tree meets once each un-held set is
+empty. These state the pool on the challenger's actual verdicts instead, per read, what an answered block costs the
+server's state at the read, and what the state can gain between reads. Restated by the MEM-55 and MEM-60 red teams, and
+proved in `Proofs/Accounting/Actual/WipeReadPool.lean`, `WipeBridge.lean` and `WipeLag.lean`.
 
 The setting is `Models.Accounting.Assumptions.WipeRead`'s: a strategy `S` on coins `r = (ω₀, c)`, `n` timed reads over
 its life with uniform indices `c : Fin n → B` on a store `B`, labels `lab ω₀ j` of `b` bits, read `j`'s index reaching
@@ -17,8 +17,8 @@ the server `X` at `arrive r j`, the challenger's verdict `acc r j`, and read `j`
 (`Accounting.Actual.unanswered`).
 
 * `WipeReadPool` (the pool): `Pr[every read accepted ∧ Σ_j x_j ≥ H] ≤ exp(−H)`, under live verdicts alone. It is
-  `WipePool` at `k = 1`, one read a wipe, with each read's `U` its un-answered blocks: the premise `TimedRoundSound`
-  holds of that `U` by definition, so this is arithmetic, not physics.
+  the lemma `WipePool` at `k = 1`, one read a wipe, with each read's `U` its un-answered blocks: `UnheldFails` holds
+  of that `U` by definition, so this is arithmetic, not physics.
 * `AnsweredOfQuiet` (the count, the physics): at any read, the coins on which `X`'s content at the arrival is one of a
   set `C` of contents, at a tick of a set `T`, and the challenger would accept at least `a` of the indices, are at most
   a `|T| |C| C(|B|, a) 2^{-a b}` share. Each accepted index's label is fixed by the content, the tick and the index, so
