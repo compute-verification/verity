@@ -43,8 +43,9 @@ roots follow the step's real rows, so this window doesn't use them (the seeded m
   s's coin opens (`sampled_proofs.challenger.LiveRecord`), and the step's units take the round's salt (`h1tile.live_salt`:
   `window.round_key(...).stream(0, 64)`), so every candidate and every selection a round's noise reads is committed before
   that noise's coin.  The gate's units come from the draw coin, opened after the window's receipts root (`receipts_root`).
-  With ``--challenger HOST:PORT`` (or ``$POUW_CHALLENGER``) the challenger is off the node: one session a window on its
-  auditor host (`benchmarks/live_challenger/run.sh` on vy-challenger-1, `remote.RemoteChallenger`), opened before
+  With ``--challenger HOST:PORT`` and ``--session ID`` (or ``$POUW_CHALLENGER`` and ``$POUW_CHALLENGER_SESSION``), the
+  session infra's request call returned, the challenger is off the node: one session a window on its auditor host
+  (`coins.Session`, `remote.RemoteChallenger`), opened before
   anything else runs, its layout the window's (`coins.layout`), and the verifier checks the coins from the challenger's
   own run (`coins.py check`).  Without one the challenger is `window.live_challenger` in this process, and the run is
   labelled ``coins=in-process (not certified)``, as is every seeded run.
@@ -86,7 +87,7 @@ In order, into OUT (`record.json` throughout, `manifest.json` at the end, the op
 
     cd integrations/vllm; PYTHONPATH=.:../..:../../tools/research/src:../../benchmarks/pouw/served_h1
     $PY ../../benchmarks/pouw/served_h1/serve.py --out OUT --cubin noise.cubin --at 2026-10-18T00:00:00Z --by compute-accounting \
-      --coins live --challenger 127.0.0.1:7811
+      --coins live --challenger 127.0.0.1:PORT --session ID
 """
 from __future__ import annotations
 
@@ -403,11 +404,11 @@ def run(a: argparse.Namespace) -> dict:
     out = Path(a.out)
     out.mkdir(parents=True, exist_ok=True)
     rec = Record(out)
-    at = CO.address(a.challenger)
+    at = CO.session(a.challenger, a.session)
     a.coins = a.coins or ("live" if at is not None else "seeded")
     live = a.coins == "live"
     if at is not None and not live:
-        raise ValueError(f"the challenger at {at} serves live coins, not --coins {a.coins}")
+        raise ValueError(f"challenger session {at.id} serves live coins, not --coins {a.coins}")
     cs = CO.open_coins(at, a.epoch, a.steps or a.max_tokens + 2) if live else None
     rec.doc["coins"] = cs.label if live else CO.IN_PROCESS
     rec.step("coin_source", {"mode": a.coins, **(cs.record() if live else {"source": "in-process", "label": CO.IN_PROCESS}),
@@ -742,8 +743,8 @@ def run(a: argparse.Namespace) -> dict:
                           "tile derives its own noise from it, its public position and its roots, inside the tile")
         coins["ok"] = bool(coins["rounds_reason"] is None and coins["draw_reason"] is None and coins["rounds_cover_steps"]
                            and all(recomputed))
-        coins["verify"] = ("the verifier's check: coins.py check --challenger-out <the challenger run's out/> --manifest "
-                           "manifest.json, from the challenger's own run, never this one" if cs.source == "off-node"
+        coins["verify"] = ("the verifier's check: coins.py check --challenger-out <the session's published directory> "
+                           "--manifest manifest.json, from the challenger's own record, never this one" if cs.source == "off-node"
                            else "none: the challenger ran in the prover's process")
         rec.step("coins", {k: v for k, v in coins.items() if k not in ("rounds", "release_log")})
 
@@ -1056,6 +1057,8 @@ def main(argv: list[str] | None = None) -> int:
                          "default live with a challenger address, else seeded")
     ap.add_argument("--challenger", default=None, metavar="HOST:PORT",
                     help=f"live: the challenger off the node (default ${CO.CHALLENGER_ENV}); none: in-process, not certified")
+    ap.add_argument("--session", default=None, metavar="ID",
+                    help=f"the challenger session's id from infra's request call (default ${CO.SESSION_ENV})")
     return 0 if run(ap.parse_args(argv))["ok"] else 1
 
 

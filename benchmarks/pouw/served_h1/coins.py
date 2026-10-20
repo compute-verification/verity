@@ -1,24 +1,26 @@
 """A served window's live coins: where they come from, and the verifier's check of them from the challenger's own run.
 
-* **Off the node** (``--challenger HOST:PORT``, else ``$POUW_CHALLENGER``): the proof service's challenger on its auditor
-  host (`sampled_proofs.remote.RemoteChallenger` to `benchmarks/live_challenger/run.sh`, which places it on
-  vy-challenger-1 under `trusted-nebius-host`), one session a window. The session's layout is the window's live epoch
-  (`layout`: `window.LIVE_SCHEME`, the window's epoch, `window.live_families(rounds)`), and the client refuses a
-  commitment of any other. Each coin opens there, after the root the serving loop sends, and the challenger logs both
-  before the coin leaves its host. The prover's record says only ``coins=off-node HOST:PORT (unchecked)``: what it
-  writes about its coins is the prover's.
+* **Off the node** (`Session`: ``--challenger HOST:PORT`` and ``--session ID``, else ``$POUW_CHALLENGER`` and
+  ``$POUW_CHALLENGER_SESSION``): the proof service's challenger on its auditor host (`sampled_proofs.remote.
+  RemoteChallenger`), one session a window. A session comes from infra's request call, which takes the window's Commit
+  and period and returns the session's id and the port its tunnel opens on the prover's node; lanes don't start
+  challenger sessions themselves. An address without its session id, or an id without its address, is refused. The
+  session's layout is the window's live epoch (`layout`: `window.LIVE_SCHEME`, the window's epoch,
+  `window.live_families(rounds)`, the FAMILIES the request names), and the client refuses a commitment of any other.
+  Each coin opens there, after the root the serving loop sends, and the challenger logs both before the coin leaves its
+  host. The prover's record says only ``coins=off-node session ID at HOST:PORT (unchecked)``: what it writes about its
+  coins is the prover's.
 * **In-process** (no address): `window.live_challenger` in the serving process, on the prover's node. It stays for CPU
   tests, and every run that uses it carries `IN_PROCESS`, ``coins=in-process (not certified)``.
 
-`check` is the verifier's side. It reads the challenger's directory from the challenger's own run (``research fetch RUN
---all``, then RUN/out: record.json, key.json, releases.jsonl), never the prover's bundle, through
-`remote.trusted_session`, under a challenger key whose public key's SHA-512 it pins (`KEYS`). It holds the window's
-manifest to that record: the commitment the challenger signed, the salt coin after the registration root, round s's coin
+`check` is the verifier's side. It reads the session's directory as the challenger published it (record.json, key.json,
+releases.jsonl), never the prover's bundle, through `remote.trusted_session` under the key that directory's key.json
+holds; no key is pinned in code. It holds the window's manifest to that record: the commitment the challenger signed, the salt coin after the registration root, round s's coin
 after round s's root for every round the challenger logged, and the draw coin after the root the manifest names. Only
 then are the coins ``off-node (checked)``.
 
     python3 coins.py families --rounds S                        # the challenger's FAMILIES for a window of S rounds
-    python3 coins.py check --challenger-out RUN/out --manifest OUT/manifest.json [--key-sha512 HEX]
+    python3 coins.py check --challenger-out SESSION_DIR --manifest OUT/manifest.json
 """
 from __future__ import annotations
 
@@ -28,6 +30,7 @@ import json
 import os
 import sys
 from collections.abc import Callable
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
@@ -37,16 +40,26 @@ from verity.core.protocols.pouw import window as Wd  # noqa: E402
 from verity.core.protocols.sampled_proofs import challenger as Ch  # noqa: E402
 from verity.core.protocols.sampled_proofs import remote as R  # noqa: E402
 
-CHALLENGER_ENV = "POUW_CHALLENGER"
+CHALLENGER_ENV, SESSION_ENV = "POUW_CHALLENGER", "POUW_CHALLENGER_SESSION"
 IN_PROCESS = "in-process (not certified)"
-#: each auditor host's challenger key: the SHA-512 of its LMS public key (I || T[1]), as infra published it
-KEYS = {"vy-challenger-1": "2a9b71992af60fce7db6cad989692f57374eb710b87746e739afa3d96484c306"
-                           "793c34c02fb1bb9a85857376cfec9d94e8a7103c7f4de15cf433ccfb27fb5ba7"}
 
 
-def address(arg: str | None = None) -> str | None:
-    """The challenger's address: `arg`, else ``$POUW_CHALLENGER``; None for the in-process challenger."""
-    return arg or os.environ.get(CHALLENGER_ENV) or None
+@dataclass(frozen=True)
+class Session:
+    """A challenger session as infra's request call returns it: its id and the HOST:PORT its tunnel opens here."""
+    id: str
+    address: str
+
+
+def session(address: str | None = None, sid: str | None = None) -> Session | None:
+    """The window's challenger session: `address` and `sid`, else ``$POUW_CHALLENGER`` and ``$POUW_CHALLENGER_SESSION``;
+    None (neither) for the in-process challenger.  One without the other is refused."""
+    at = address or os.environ.get(CHALLENGER_ENV) or None
+    sid = sid or os.environ.get(SESSION_ENV) or None
+    if (at is None) != (sid is None):
+        raise Ch.CoinError(f"a challenger session is an id and an address from infra's request call, not {sid or at!r} "
+                           f"alone (--challenger and --session, or ${CHALLENGER_ENV} and ${SESSION_ENV})")
+    return None if at is None else Session(sid, at)
 
 
 def layout(epoch: int, rounds: int) -> dict:
@@ -68,11 +81,12 @@ class Coins:
     in-process `LiveChallenger`), `source` "off-node" or "in-process": its salt and draw coins, and its rounds through
     `LiveRecord` (`rounds`)."""
 
-    def __init__(self, challenger: Any, source: str, at: str | None = None) -> None:
-        self.challenger, self.source, self.at = challenger, source, at
+    def __init__(self, challenger: Any, source: str, session: Session | None = None) -> None:
+        self.challenger, self.source, self.session = challenger, source, session
         self.commitment: Ch.LiveCommitment = challenger.commitment
         self.rounds = Ch.LiveRecord(challenger, Wd.ROUND)
-        self.label = f"off-node {at} (unchecked)" if source == "off-node" else IN_PROCESS
+        self.label = (f"off-node session {session.id} at {session.address} (unchecked)" if session is not None
+                      else IN_PROCESS)
 
     def salt(self, after: bytes) -> Ch.LiveOpening:
         return self.challenger.open(Wd.SALT, 0, after)
@@ -86,19 +100,20 @@ class Coins:
             self.challenger.close()
 
     def record(self) -> dict:
-        return {"source": self.source, "label": self.label, "challenger": self.at}
+        s = self.session
+        return {"source": self.source, "label": self.label, "challenger": s and s.address, "session": s and s.id}
 
 
-def open_coins(at: str | None, epoch: int, rounds: int, entropy: Callable[[int], bytes] | None = None,
+def open_coins(at: Session | None, epoch: int, rounds: int, entropy: Callable[[int], bytes] | None = None,
                connect: Callable[[str], Any] = R.RemoteChallenger.connect) -> Coins:
-    """The window's coins: the challenger at `at` (``HOST:PORT``), its commitment held to `layout`, or with no address the
+    """The window's coins: the challenger of session `at`, its commitment held to `layout`, or with no session the
     in-process challenger over `entropy` (the Lean verifier of record's coins by default)."""
     if at is None:
         if entropy is None:
             from verity.core.protocols.pouw import verifier
             entropy = verifier.coins
         return Coins(Wd.live_challenger(epoch, rounds, entropy), "in-process")
-    client = connect(at)
+    client = connect(at.address)
     why = layout_reason(client.commitment, epoch, rounds)
     if why is not None:
         client.close()
@@ -120,31 +135,26 @@ def _openings(docs: list[dict]) -> list[Ch.LiveOpening]:
 
 
 def check(directory: str | os.PathLike, coins: dict, registration: bytes, rounds: list[bytes],
-          salts: dict[int, str] | None = None, draw_after: bytes | None = None, key_sha512: str | None = None) -> dict:
+          salts: dict[int, str] | None = None, draw_after: bytes | None = None) -> dict:
     """The verifier's check of a window's coins against the challenger's directory `directory`, read from the
     challenger's own run.  `coins` is the manifest's ``coins`` item (the openings the prover received), and the rest is
     what the verifier recomputes from the window's committed roots: `registration`, the round roots `rounds` in order,
     round r's unit salt `salts[r]` (hex) where it holds them, and `draw_after`, the root the draw coin follows (None: the
-    window opened no draw).  It holds: the challenger's public key hashes to `key_sha512` (by default `KEYS`' entry for
-    the host its record names); the record verifies under it (`trusted_session`); the window's commitment is the
+    window opened no draw).  It holds: the record verifies under the key the directory's key.json holds
+    (`trusted_session`); the window's commitment is the
     record's, a live epoch's; the salt coin opened after the registration root; the challenger received exactly `rounds`,
     and round r's coin opened once after round r's root (`rounds_reason` over the challenger's roots); each salt is
     `h1tile.live_salt` of the opened coin; the draw coin opened after `draw_after`, or none opened.  ``ok`` only when
     all hold."""
     from verity.core.protocols.pouw.circuit import h1tile as HT
     d = Path(directory)
-    out: dict[str, Any] = {"ok": False, "coins": "refused", "challenger_out": str(d)}
+    out: dict[str, Any] = {"ok": False, "coins": "refused", "challenger_out": str(d), "session": coins.get("session")}
     try:
         key = Ch.ChallengerKey.from_json(json.loads((d / R.KEY).read_text()))
         host = Ch.ChallengerRecord.from_json(json.loads((d / R.RECORD).read_text())).host
     except (OSError, ValueError) as e:
         return {**out, "reason": f"the challenger's key or record is unreadable: {e}"}
-    pin = key_sha512 or KEYS.get(host)
     out.update(host=host, key_sha512=hashlib.sha512(key.public).hexdigest())
-    if pin is None:
-        return {**out, "reason": f"no challenger key is pinned for host {host}"}
-    if out["key_sha512"] != pin:
-        return {**out, "reason": f"the challenger's key is not the one pinned for {host}"}
     try:
         commitment, roots = R.trusted_session(d, key, lms_verify)
         mine = Ch.LiveCommitment.from_json(coins.get("commitment"))
@@ -172,7 +182,7 @@ def check(directory: str | os.PathLike, coins: dict, registration: bytes, rounds
     }
     out.update(reasons=reasons, rounds=len(got), draws=len(roots[Wd.DRAW]), commitment=commitment.root.hex())
     out["ok"] = all(v is None for v in reasons.values())
-    out["coins"] = f"off-node {host} (checked)" if out["ok"] else "refused"
+    out["coins"] = f"off-node {host} session {out['session']} (checked)" if out["ok"] else "refused"
     return out
 
 
@@ -182,9 +192,8 @@ def main(argv: list[str] | None = None) -> int:
     f = sub.add_parser("families", help="the challenger session's FAMILIES for a window of --rounds rounds")
     f.add_argument("--rounds", type=int, required=True)
     c = sub.add_parser("check", help="a window's coins against the challenger's own run")
-    c.add_argument("--challenger-out", required=True, help="the challenger run's out/ (research fetch RUN --all)")
+    c.add_argument("--challenger-out", required=True, help="the session's directory as the challenger published it")
     c.add_argument("--manifest", required=True, help="the window's manifest.json")
-    c.add_argument("--key-sha512", default=None, help="the challenger key to pin (default: KEYS' for the record's host)")
     a = ap.parse_args(argv)
     if a.cmd == "families":
         print(json.dumps(layout(0, a.rounds)["families"], separators=(",", ":")))
@@ -196,8 +205,7 @@ def main(argv: list[str] | None = None) -> int:
     SV = sys.modules[spec.name] = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(SV)
     m = json.loads(Path(a.manifest).read_text())
-    got = check(a.challenger_out, m.get("coins", {}), bytes.fromhex(m["roots"]["registration"]), **SV.coins_expect(m),
-                key_sha512=a.key_sha512)
+    got = check(a.challenger_out, m.get("coins", {}), bytes.fromhex(m["roots"]["registration"]), **SV.coins_expect(m))
     print(json.dumps(got, indent=1))
     return 0 if got["ok"] else 1
 
