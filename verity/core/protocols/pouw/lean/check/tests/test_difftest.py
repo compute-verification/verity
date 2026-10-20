@@ -247,9 +247,12 @@ def test_rounds(pass_server):
                  "the coin commitment's ", "not trusted: no challenger close record",
                  "not trusted: the challenger record's signature does not verify",
                  "not trusted: the challenger's release log is not the one its close record signs",
-                 "opens a second session for its window", ", not the window's pinned key",
+                 ": a second open for root ", ", not the window's pinned key",
                  "not trusted: the auditor's ledger has no end for session",
                  "not trusted: the challenger's release log is not the one the auditor's ledger sealed",
+                 "under verity/challenger-auditor/v#, which names no prover", "'s end of session s# is malformed: ",
+                 "not trusted: the challenger's record is signed at leaf ",
+                 "not trusted: the challenger's refused hellos are not the ",
                  "the challenger's log shows it received"):
         assert any(part in k for k in ROUNDED), part
 

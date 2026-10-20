@@ -1,9 +1,11 @@
 """The proof service's challenger on its auditor host, in this process: a `LiveChallenger` its test hands in, its session
 opened under an id with its record signed with an LMS key (`remote.open_session`), and `remote.serve` on one end of a socket
 pair, the serving side's `RemoteChallenger` on the other; the session's close is signed at the key's next leaf. The
-auditor's signed ledger (`Ledger`, infra's ``windows.jsonl``) opens the session for its window before the first coin and
-ends it once it has ended, sealing its files. The verifier reads `directory` under `key`, as the ledger opens and ends it.
-`Gate` is infra's v2 gate instead, whose ledger `pouw_h1_challenger.Ledger` reads. #2643's `tests/check/challenger_host.py`, over any challenger."""
+auditor's signed ledger (`Ledger`, infra's ``windows.jsonl``, v2) opens the session for its window before the first coin and
+ends it once it has ended, sealing its files (the refused hellos' log, empty here, among them) and naming its record's
+leaf, its commitment and how many hellos it refused. The verifier reads `directory` under `key`, as the ledger opens and ends it.
+`Gate` is infra's v2 gate instead, whose ledger `pouw_h1_challenger.Ledger` reads. #2643's `tests/check/challenger_host.py`,
+over any challenger."""
 from __future__ import annotations
 
 import hashlib
@@ -39,8 +41,8 @@ def challenger_key(seed: int, H: int = 4) -> tuple[lms.PrivateKey, LC.Challenger
 
 
 def window(seed: int) -> dict:
-    """A window's identity, ``{commit, period}``, as the auditor's ledger opens it."""
-    return {"commit": random.Random(f"window/{seed}").randbytes(64).hex(), "period": f"p-{seed}"}
+    """A window's identity, ``{root}``, as the auditor's ledger opens it."""
+    return {"root": random.Random(f"window/{seed}").randbytes(64).hex()}
 
 
 WINDOW = window(0)
@@ -190,40 +192,48 @@ class Ledger:
         self.leaves = itertools.count() if leaves is None else leaves
         self.key_sha512 = hashlib.sha512((named or self.key).public).hexdigest()
 
-    def append(self, kind: str, session: str, body: dict) -> None:
-        sign = lambda m: lms.sign_at(self.private, next(self.leaves), m).encode()  # noqa: E731
+    def append(self, kind: str, session: str, body: dict, leaf: int | None = None) -> None:
+        q = next(self.leaves) if leaf is None else leaf
+        sign = lambda m: lms.sign_at(self.private, q, m).encode()  # noqa: E731
         self.lines.append(LC.ledger_line(self.lines, kind, session, body, self.key.public[:16], sign))
         self.path.write_text("".join(line + "\n" for line in self.lines))
 
-    def open(self, session: str, window: dict) -> None:
+    def open(self, session: str, window: dict, leaf: int | None = None) -> None:
         self.append("open", session, {"window": window, "host": f"{HOST}.{session}", "pinned": "0" * 40,
-                                      "key_sha512": self.key_sha512, "port": 7811})
+                                      "key_sha512": self.key_sha512, "port": 7811, "by": "vllm"}, leaf)
 
     def end(self, session: str, directory: Path, closed: bool) -> None:
         files = {p.name: hashlib.sha512(p.read_bytes()).hexdigest() for p in sorted(directory.iterdir()) if p.is_file()}
-        self.append("end", session, {"closed": closed, "files": files, "rc": 0 if closed else 1})
+        record = json.loads((directory / R.RECORD).read_text())
+        self.append("end", session, {"closed": closed, "files": files, "rc": 0 if closed else 1, "complete": closed,
+                                     "record_leaf": int(record["signature"][:8], 16),
+                                     "commitment": record["commitment"]["root"],
+                                     "refused_hellos": len((directory / R.HELLOS).read_text().splitlines())})
 
 
 class Host:
     """`challenger` in session `session` of `window` (`WINDOW` by default), its record and close signed under key
     `seed` at the next of `leaves` (hosts sharing a key share them) and written to `directory`, serving one client; the
     ledger `ledger` (a new one beside `directory` unless given) opens the session before its record and ends it once
-    `ended`. With `period` the ledger opens it only at `open`, the gate's open of the reserved session, for the window
-    ``{commit: root, period}`` the serving side names (an H1 window's open root, `pouw_h1_window.Window`)."""
+    `ended`. When `gated` the ledger opens it only at `open`, the gate's open of the reserved session, for the window
+    ``{root}`` the serving side names (an H1 window's open root, `pouw_h1_window.Window`), at the leaf held before the
+    record's, since the ledger's check wants a record's leaf between its session's open's and end's."""
 
     def __init__(self, directory: Path, challenger: LC.LiveChallenger, seed: int, session: str = "s-1",
                  leaves: Iterator[int] | None = None, ledger: Ledger | None = None, window: dict | None = None,
-                 period: str | None = None) -> None:
-        self.directory, self.challenger, self.session_id, self.period = directory, challenger, session, period
+                 gated: bool = False) -> None:
+        self.directory, self.challenger, self.session_id = directory, challenger, session
         directory.mkdir()
         private, self.key = challenger_key(seed)
         leaves = itertools.count() if leaves is None else leaves
         self.ledger = ledger or Ledger(directory.parent / f"{directory.name}.jsonl", seed, leaves)
-        self.window = None if period is not None else WINDOW if window is None else window
+        self.window = None if gated else WINDOW if window is None else window
         if self.window is not None:
             self.ledger.open(session, self.window)
+        self._open_leaf = next(leaves) if gated else None
         session_ = R.open_session(challenger, self.key, f"{HOST}.{session}",
                                   lambda m: lms.sign_at(private, next(leaves), m).encode(), directory, session)
+        (directory / R.HELLOS).write_text("")
         ours, theirs = socket.socketpair()
         self.reason: str | None = None
         self._ended = False
@@ -236,10 +246,10 @@ class Host:
             self.reason = R.serve(sock, session, itertools.count().__next__)
 
     def open(self, session: str, root: str) -> dict:
-        """The gate's open of `session` on `root` (`pouw_h1_window.Gate`): the ledger opens it for ``{commit: root,
-        period}``, and the answer names its ledger entry, its root and the challenger's coin commitment."""
-        self.window = {"commit": root, "period": self.period}
-        self.ledger.open(session, self.window)
+        """The gate's open of `session` on `root` (`pouw_h1_window.Gate`): the ledger opens it for ``{root}``, and
+        the answer names its ledger entry, its root and the challenger's coin commitment."""
+        self.window = {"root": root}
+        self.ledger.open(session, self.window, self._open_leaf)
         return {"session": session, "seq": len(self.ledger.lines) - 1, "root": root,
                 "commitment": self.challenger.commitment.root.hex()}
 

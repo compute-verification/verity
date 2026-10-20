@@ -15,9 +15,11 @@ the challenger's words) or `salt` (the roots or the session not of their form, t
 that shows another root), with Python's words.
 
 `roundsCheck` is `core_check.rounds`. It reads the challenger's coins only through the challenger's own session, never a
-commitment the prover hands in: the one session the auditor's signed ledger opens and ends closed for the window under
-the window's pinned challenger key, its record on the host the ledger opened it on and its close signed under that key,
-and its release log the one the close signs and the ledger's end sealed (`SampledProofs.Challenger.trustedSessionOf`). Under the commitment that session signed, round `r`'s coin opened once,
+commitment the prover hands in: the one session the auditor's signed v2 ledger opens and ends closed for the window
+(`{root}`) under the window's pinned challenger key, its record on the host the ledger opened it on and signed at the
+leaf and over the commitment the ledger's end names, its close signed under that key, and its release log and refused
+hellos the ones the ledger's end sealed (`SampledProofs.Challenger.trustedSessionOf`). Under the commitment that session
+signed, round `r`'s coin opened once,
 after the `r`-th round root, every recorded round's coin opened (`PouwWindow.roundsReason`), and the round roots are the
 ones the session's log shows the challenger received, in order. A refusal is `coin` (the key, the session or the coin
 rule's, in the challenger's words) or `rounds` (the roots or the openings not lists of their kind, or roots the

@@ -74,6 +74,12 @@ node and lower jobs backfill only around it; no job admitted past its node's adm
 time not counted against `max_s`; equal jobs take turns by submitter; idle GPU leases named and reclaimed from `requeue`
 holders.
 
+A node's stop is machine state: its live `/etc/research/deadline`, which infra rewrites on each renewal. Node 2's agent
+reads it every tick (`agent --deadline-file`), and `research run --queue` reads each candidate node's over ssh and passes it
+as `cluster submit --stop NODE=EPOCH`, so a renewal places and plans without a new description. A node's `stops_at` is the
+fallback for when the file can't be read, and a refusal at the admission end names which of the two it used. A share whose
+`until = "stops_at"` lasts until its node's stop.
+
 A lease taken by hand over SSH (a kernel inner loop, a debugger) is a `session` allocation, so the same rules see it. A
 session may have no hard limit but an expected length (`gpu-lease` without `--max-min`), which plans backfill and is never
 enforced, and a lease may be CPU-unmanaged (`cpus = 0`), as `gpu-lease`'s are.

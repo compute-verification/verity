@@ -9,8 +9,10 @@ as ``FAMILIES`` (`benchmarks/live_challenger/run.sh`). An H1 window (`Window`) h
 open S on the window's open root R = `salt.window_open_root` of the weights' root, that table's root and S, connects,
 and opens its salt coin after R; the epoch's salt is `audit.salt_of` of that coin over the weights' root. ncp-v2's
 `session` opens its salt after the weights' root. Round s's coin opens after round s's root (`pouw_h1.H1Run`); `finish`
-closes the session once the window has finished. The challenger is auditor-trusted (`trusted-nebius-host`): it runs on
-a machine the prover doesn't control, and the serving process reaches it through ``ssh -R`` on its own 127.0.0.1.
+closes the session once the window has finished. The host opens a salt coin only after the root its session was
+opened on (serve.py's ``--root``, RT4-INT-24), H1's R. The challenger is auditor-trusted (`trusted-nebius-host`): it
+runs on a machine the prover doesn't control, and the serving process reaches it through ``ssh -R`` on its own
+127.0.0.1.
 """
 from __future__ import annotations
 

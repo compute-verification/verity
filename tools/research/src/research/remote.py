@@ -83,6 +83,9 @@
                     with custody, RESEARCH_PREFLIGHT_CUSTODY (the staged key's dir).  A declaration that cannot be read refuses the run.
                     `--preflight TOOL` runs TOOL's preflight before a run of anything else (a Lean record regeneration on a check
                     pod), and refuses when the tree declares none.  job.json run.remote.preflight and the launch's answer carry its report.
+    auditor         a machine with /etc/vy/auditor (deploy.toml installs it on an auditor host, vy-challenger-1) runs only the commands
+                    that file lists, one a line, exactly: launch-request refuses any other before anything starts, and the host's
+                    vy-auditor-only.timer (slot_only.py --auditor) stops one launched from a tree that predates the refusal.
     observe/fetch   `research fetch <id>` copies the small records (or --all files) into the local run dir over one ssh+tar, extracted
                     member by member off the pipe (a big run is never in the launcher's memory); remote.json keeps observed_utc.
                     Unreachable means "last observed at T; current status unknown", never "failed".
@@ -167,6 +170,7 @@ RUNS_VIA_SLOT_FILE = "/etc/vy/runs-via-slot"  # present: a run starts only throu
 #: the machine's own slot_only.py (deploy.toml installs it beside the marker, and vy-slot-only.timer runs it): when present it, not
 #: the shipped tree's package, says which commands pass, so a lane's branch older than a rule change is judged by the deployed rule
 NODE_SLOT_ONLY_FILE = "/usr/local/lib/vy-monitoring/slot_only.py"
+AUDITOR_FILE = "/etc/vy/auditor"              # present: an auditor host, which runs only the commands it lists (slot_only.auditor_allows)
 GUARD_SCRIPT = Path(__file__).resolve().parent / "pods" / "sh" / "pod_guard.sh"
 POD_TARGET_RETRIES = 6           # extra GET /pods/{id} reads when a RUNNING pod answers without an ssh mapping
 POD_TARGET_RETRY_S = 2.0
@@ -328,26 +332,58 @@ def sender(environ: dict[str, str] | None = None) -> str | None:
 
 
 WAKE_WAIT_S, WAKE_POLL_S = 900.0, 15.0
+NEBIUS_KEY_ENV = ("NEBIUS_SA_ID", "NEBIUS_SA_PUBLIC_KEY_ID", "NEBIUS_SA_PRIVATE_KEY_B64")
+CONTROL_WAKE = "PYTHONPATH=/data/infra/store-index-src/src python3.12 -m research.pods.nebius.wake start"   # pods/nebius/wake.py
 
 
-def wake(machine: dict[str, Any], ssh: list[str], *, nebius=None, sleep=time.sleep, clock=time.monotonic) -> str | None:
+def wake_on_control(iid: str, *, run=None) -> str | None:
+    """Ask the control pod to start instance `iid` (pods/nebius/wake.py there, which starts only an instance the registry names,
+    before its deadline, under a live budget line) over the ssh path `pods create` reads the budgets guard through; -> the state
+    it was in. Refused with the pod's reason."""
+    from .pods import budgets
+    from .pods.connect import ssh_base
+
+    host = os.environ.get("RESEARCH_GUARD_HOST") or budgets.GUARD_HOST
+    try:
+        r = (run or subprocess.run)([*ssh_base(host), f"{CONTROL_WAKE} {shlex.quote(iid)}"], capture_output=True, text=True, timeout=180)
+    except Exception as e:  # noqa: BLE001  (no RunPod key or API, a timeout: the pod can't be asked)
+        raise Refused(f"the control pod {host} can't be reached ({type(e).__name__}: {str(e)[:200]})") from None
+    if r.returncode != 0:
+        why = (r.stderr or r.stdout).strip().splitlines()
+        raise Refused(f"the control pod {host} refused: {why[-1][:400] if why else f'rc {r.returncode}'}")
+    return json.loads(r.stdout.strip().splitlines()[-1]).get("was")
+
+
+def wake(machine: dict[str, Any], ssh: list[str], *, nebius=None, control=None, sleep=time.sleep, clock=time.monotonic) -> str | None:
     """Start a stopped Nebius VM before a run and wait for its ssh (INF-58: the H200s stop after 2 h idle, disks kept): a machine
     whose registry entry names its `nebius_instance_id` and whose ssh doesn't answer is started through the Nebius API, then waited
-    for up to WAKE_WAIT_S. Returns what it did, None when the machine answered at once or names no instance."""
+    for up to WAKE_WAIT_S. With no Nebius key here (a lane's VM), the control pod starts it (`wake_on_control`, or `control`).
+    Returns what it did, None when the machine answered at once or names no instance."""
     iid = machine.get("nebius_instance_id")
     if not iid or ssh_run(ssh, ["true"], timeout=30).returncode == 0:
         return None
-    if nebius is None:
-        from .pods.nebius.fleet import nb as nebius
-    try:
-        state = (nebius("compute", "instance", "get", "--id", iid).get("status") or {}).get("state")
-        if state in ("STOPPED", "STOPPING"):
-            nebius("compute", "instance", "start", "--id", iid, "--async")
-    except (RuntimeError, OSError, ValueError) as e:
-        raise Refused(f"{machine['name']} doesn't answer on ssh and couldn't be started through the Nebius API ({e}); with no Nebius "
-                      f"credentials here, ask @infra to start {iid}") from None
-    print(f"research: {machine['name']} was {state}; started it through the Nebius API, waiting up to {WAKE_WAIT_S / 60:g} min "
-          f"for its ssh (disks kept)", file=sys.stderr)
+    if nebius is None and control is None and not all(os.environ.get(k) for k in NEBIUS_KEY_ENV):
+        control = wake_on_control
+    if control is not None:
+        try:
+            state = control(iid)
+        except Refused as e:
+            raise Refused(f"{machine['name']} doesn't answer on ssh, and with no Nebius key here it was to be started by the control "
+                          f"pod: {e}") from None
+        how = "the control pod started it"
+    else:
+        if nebius is None:
+            from .pods.nebius.fleet import nb as nebius
+        try:
+            state = (nebius("compute", "instance", "get", "--id", iid).get("status") or {}).get("state")
+            if state in ("STOPPED", "STOPPING"):
+                nebius("compute", "instance", "start", "--id", iid, "--async")
+        except (RuntimeError, OSError, ValueError) as e:
+            raise Refused(f"{machine['name']} doesn't answer on ssh and couldn't be started through the Nebius API ({e}); with no "
+                          f"Nebius credentials here, ask @infra to start {iid}") from None
+        how = "started it through the Nebius API"
+    print(f"research: {machine['name']} was {state}; {how}, waiting up to {WAKE_WAIT_S / 60:g} min for its ssh (disks kept)",
+          file=sys.stderr)
     end = clock() + WAKE_WAIT_S
     while clock() < end:
         sleep(WAKE_POLL_S)
@@ -518,9 +554,30 @@ QUEUE_WRAP = "wrap"                       # the runner's, custody included: the 
 QUEUE_WORKLOAD_WRAP = "workload_wrap"     # the workload's alone: a GPU phase's lease
 
 
-def queue_placement(source: Path | None, run_id: str, spec: dict[str, Any]) -> dict[str, Any]:
+NODE_DEADLINE = "/etc/research/deadline"
+
+
+def live_stop(machine: str, project: str) -> tuple[int | None, str]:
+    """A node's stop as the node itself has it: the epoch in its NODE_DEADLINE (`EPOCH ISO BY`, which infra rewrites on each
+    renewal), read over ssh, and 0 when the file doesn't parse (as the VM's own deadline check reads it). (None, why) when it
+    can't be read, so the description's stops_at stands."""
+    try:
+        m = resolve_machine(machine, project)
+        tgt = pod_target(m)
+        r = ssh_run(ssh_argv(tgt["host"], tgt["port"], user=tgt.get("user", "root"), connect_timeout=10), ["cat", NODE_DEADLINE],
+                    timeout=30)
+    except (Refused, OSError, subprocess.TimeoutExpired) as e:
+        return None, f"{type(e).__name__}: {e}"
+    if r.returncode:
+        return None, f"`cat {NODE_DEADLINE}` exited {r.returncode}: {r.stderr.decode(errors='replace').strip()[-200:]}"
+    words = r.stdout.decode(errors="replace").split()
+    return (int(words[0]) if words and words[0].isdigit() else 0), NODE_DEADLINE
+
+
+def queue_placement(source: Path | None, run_id: str, spec: dict[str, Any], *, now: float | None = None) -> dict[str, Any]:
     """`research run --queue`: the queue's placement for this job, `{node, machine, why, job, wrap}`, from `cluster submit` and the
-    description in the --source tree (infra/cluster). Refused when the queue refuses the job."""
+    description in the --source tree (infra/cluster), with each candidate node's stop as the node reports it (`live_stop`, passed
+    as `--stop`), so a renewal places without a new description. Refused when the queue refuses the job."""
     from .store import tools_registry
 
     src = (Path(source) / (tools_registry.resolve("infra/cluster", lambda p: (Path(source) / p).is_dir()) or "infra/cluster")
@@ -529,8 +586,19 @@ def queue_placement(source: Path | None, run_id: str, spec: dict[str, Any]) -> d
         raise Refused("--queue: the --source tree has no infra/cluster with `cluster submit` (the queue's description and client)")
     env = dict(os.environ)
     env["PYTHONPATH"] = str(src / "src") + (os.pathsep + env["PYTHONPATH"] if env.get("PYTHONPATH") else "")
-    argv = [sys.executable, "-m", "cluster", "submit", str(src / "descriptions" / "nebius.toml"), "--run-id", run_id,
-            "--now", str(int(time.time()))]
+    description = src / "descriptions" / "nebius.toml"
+    argv = [sys.executable, "-m", "cluster", "submit", str(description), "--run-id", run_id,
+            "--now", str(int(time.time() if now is None else now))]
+    model = src / "src" / "cluster" / "model.py"
+    if model.is_file() and "def with_stop" in model.read_text():
+        nodes = [spec["node"]] if spec.get("node") else sorted(tomllib.loads(description.read_text()).get("nodes", {}))
+        for name in nodes:
+            stop, why = live_stop(name, spec.get("project") or "")
+            if stop is None:
+                print(f"research run --queue: {name}'s live deadline is unread ({why}): placing there with the description's "
+                      f"stops_at", file=sys.stderr)
+            else:
+                argv += ["--stop", f"{name}={stop}"]
     for k, v in spec.items():
         if v is True:
             argv.append(f"--{k}")
@@ -1342,6 +1410,12 @@ def _launch_request(request_path: Path) -> dict[str, Any]:
             slot_only = node_slot_only()
             if not slot_only.through_slot(req["command"]):
                 raise Refused(slot_only.refusal(marker))
+        if (marker := Path(os.environ.get("AUDITOR_FILE") or AUDITOR_FILE)).exists():
+            rule = node_slot_only()
+            if not hasattr(rule, "auditor_allows"):
+                from .pods.nebius import slot_only as rule
+            if not rule.auditor_allows(req["command"], marker):
+                raise Refused(rule.auditor_refusal(marker))
         if remote.get("source_sha"):              # a shipped tree executes only from a directory verified READY for the requested identity
             src_dir = remote.get("source_dir") or str(runs_root.parent / "src" / str(remote["source_sha"]))
             require_ready_source(src_dir, str(remote["source_sha"]))
@@ -1754,6 +1828,9 @@ def launch(*, run_id: str, local_dir: Path, machine_name: str, project: str, com
     write_json_atomic(local_dir / "remote.json", rec)
     try:
         m = resolve_machine(machine_name, project)
+        if m.get("auditor"):
+            raise Refused(f"machine {machine_name!r} is an auditor host: it takes no research run, from anyone. Its service is "
+                          f"reached only through its gate: {m['auditor']}")
         guard_min = guard_idle_min(m)
         custody_pub: dict[str, Any] | None = None
         custody_files: list[tuple[str, bytes]] = []
