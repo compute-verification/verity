@@ -801,11 +801,12 @@ KEY = D.Port(PIECES, "challenger_key", key, _cases(key_case, KEY_NAMES), package
 RECORD = D.Port(PIECES, "challenger_record", record, _cases(record_case, RECORD_NAMES), package=PACKAGE, of_record="lean")
 TRUSTED = D.Port(PIECES, "challenger_trusted", trusted, _cases(trusted_case, TRUSTED_NAMES), package=PACKAGE,
                  of_record="lean")
-CLOSE = D.Port(PIECES, "challenger_close", close, _cases(close_case, CLOSE_NAMES), package=PACKAGE, of_record="lean")
+CLOSE = D.Port(PIECES, "challenger_close", close, _cases(close_case, CLOSE_NAMES), package=PACKAGE, need_rejects=False,
+               of_record="lean")
 RELEASED = D.Port(PIECES, "challenger_released", released, _cases(released_case, RELEASED_NAMES), package=PACKAGE,
                   of_record="lean")
 SESSION = D.Port(PIECES, "challenger_session", session, _cases(session_case, SESSION_NAMES), package=PACKAGE,
-                 of_record="lean")
+                 need_rejects=False, of_record="lean")
 
 pieces = D.server_fixture(COMMITMENT)
 
