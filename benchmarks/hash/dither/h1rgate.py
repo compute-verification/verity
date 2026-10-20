@@ -8,7 +8,7 @@ two counts, so some calls have a dead row block.
 
     gate     per version, h1r into an output poisoned with 0xA5, against `served_h1/receipts.gated_receipts` (CA's torch
              path, its noise through CA's `noise.cu`, computed once) on every unit of every call; `h1tile.reference`
-             (`receipts.reference`) on chosen units (K = 4096 and 14336, first and last, a dead one); a no-write control
+             (`receipts.gated_reference`) on chosen units (K = 4096 and 14336, first and last, a dead one); a no-write control
              (nowrite: the poison must survive and be refused); the launch captured as a CUDA graph and replayed into a fresh
              poison, then under a second salt written into the same device buffer (as a served step does), each against
              receipts.py on sampled units
@@ -171,7 +171,7 @@ def main() -> int:
     want = []
     live_units = 0
     for i, m in enumerate(meta):
-        w, lu = RC.gated_receipts(RC.Call(calls[i].a, calls[i].b), salt, m["base"], m["root_a"], m["root_b"], cub,
+        w, lu = RC.gated_receipts(RC.Call(calls[i].a, calls[i].b), m["admit"], salt, m["base"], m["root_a"], m["root_b"], cub,
                                   chunk=max(16, (1 << 20) // m["k"]))
         want.append(w)
         live_units += len(lu)
@@ -181,7 +181,7 @@ def main() -> int:
     for ci, u in [(0, 0), (3, 0), (2, 895), (1, 128 + 5), (7, 127), (4, 192 + 5)]:
         m = meta[ci]
         t1 = time.perf_counter()
-        w = RC.reference(RC.Call(calls[ci].a, calls[ci].b), salt, m["base"], m["root_a"], m["root_b"], u)[1]
+        w = RC.gated_reference(RC.Call(calls[ci].a, calls[ci].b), m["admit"], salt, m["base"], m["root_a"], m["root_b"], u)
         refs_want.append(({"call": ci, "k": m["k"], "unit": u, "live": bool(any(w)), "s": round(time.perf_counter() - t1, 1)},
                           w))
     salt2 = os.urandom(64)

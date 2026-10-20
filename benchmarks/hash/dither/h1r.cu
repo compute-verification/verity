@@ -17,9 +17,9 @@
 //               build the segments, and the fold is split in two by the fx1 + duo chains it feeds.
 //
 // A step is a table of calls (`H1Call`): A [T, K] and B [N, K] s8 row-major (16-byte aligned rows), the unit positions
-// base (plus the step's, read from the device) + u, the call's roots and its row blocks' live bits (the caller's: a unit
-// is live iff its row block's bit is set, which `receipts.gated_receipts` reads from the block's A bytes); a dead unit's
-// receipt is zero words and nothing of it is hashed.  K % 512 == 0 (each stream's
+// base (plus the step's, read from the device) + u, the call's roots and its row blocks' live bits (a unit is live iff its
+// row block holds an admitted row, `receipts.gated_receipts`); a dead unit's receipt is zero words and nothing of it is
+// hashed.  K % 512 == 0 (each stream's
 // tail, the digit coins or U, is then one block of its own); the host wrapper refuses any other K.
 #include <cstdint>
 #include <cuda_runtime.h>

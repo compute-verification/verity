@@ -270,19 +270,29 @@ def reference(call: Call, salt: bytes, base: int, root_a: bytes, root_b: bytes, 
     return HT.reference(a, b, salt, base + u, (root_a, root_b))
 
 
-def gated_receipts(call: Call, salt: bytes, base: int, root_a: bytes, root_b: bytes, cubin: Cubin | None = None,
+def gated_receipts(call: Call, admit, salt: bytes, base: int, root_a: bytes, root_b: bytes, cubin: Cubin | None = None,
                    chunk: int | None = None) -> tuple[np.ndarray, list[int]]:
-    """The call's receipts by each tile's live bit, `PouwH1Tile._live`'s (a nonzero byte among its 32 A rows; no admit bit,
-    RT4-LOGIC-4): a live unit's is `h1tile`'s, a dead unit's the canonical empty receipt (zero words) with no noise derived;
-    and the live units."""
-    rb, cb = call.a.shape[0] // R, call.b.shape[0] // C_
-    alive = call.a[:R * rb].reshape(rb, -1).ne(0).any(dim=1).tolist()
-    live = [ri * cb + cj for ri in range(rb) if alive[ri] for cj in range(cb)]
+    """The call's receipts under its admit bits: a live unit's (a selected slot among its rows) is `h1tile`'s, a dead
+    unit's the canonical empty receipt (zero words) with no noise derived; and the live units."""
+    live = [ri * (call.b.shape[0] // C_) + cj for ri in range(call.a.shape[0] // R)
+            if bool(np.asarray(admit[R * ri:R * ri + R]).any()) for cj in range(call.b.shape[0] // C_)]
     out = np.zeros((len(call.units), 2 * layout(call.a.shape[1]).sets), dtype=np.uint32)
     if live:
         out[live] = call_receipts(call, salt, base, root_a, root_b, cubin, chunk=chunk, only=live)
     return out, live
 
 
-__all__ = ["Call", "Cubin", "LANES", "call_receipts", "gated_receipts", "layout", "noise_blocks", "noise_blocks_cpu",
-           "reference", "tile_receipts", "unit_seeds", "units"]
+def gated_reference(call: Call, admit, salt: bytes, base: int, root_a: bytes, root_b: bytes, u: int) -> list[int]:
+    """Unit u's receipt under the call's admit bits: `h1tile.reference`'s when a slot of its rows is selected, else zero
+    words (which `PouwH1Tile_v2` gives a tile of all-zero rows, the canonical empty rows); without that mask a dead unit
+    raises `NO_MASK`."""
+    i, _ = call.units[u]
+    if bool(np.asarray(admit[R * i:R * i + R]).any()):
+        return reference(call, salt, base, root_a, root_b, u)[1]
+    if not MASKED:
+        raise RuntimeError(NO_MASK)
+    return [0] * (2 * layout(call.a.shape[1]).sets)
+
+
+__all__ = ["Call", "Cubin", "LANES", "call_receipts", "gated_receipts", "gated_reference", "layout", "noise_blocks",
+           "noise_blocks_cpu", "reference", "tile_receipts", "unit_seeds", "units"]
