@@ -82,8 +82,9 @@ AUDIT_RECORD = "lean-audit.json"
 #: what Daniel is shown when a guarantee changes; it grows 3-5 KiB per pin and with every definition under `meaning` (following the whole
 #: executable verifier, `Flock`, took soundness's record past 2 MiB, and `Security`'s holds every package's guarantees).
 AUDIT_RECORD_LIMIT = 6 * 1024 * 1024
-#: Tracked data (everything but CODE_SUFFIXES) in the whole tree, so that many small files cannot
-#: add up to what one large one may not be.
+#: Tracked data (everything but CODE_SUFFIXES and audit records) in the whole tree, so that many small files cannot
+#: add up to what one large one may not be. Audit records are left out: they must stay in Git and each has its own
+#: AUDIT_RECORD_LIMIT, so counting them here would make every new guarantee spend the fixtures' budget.
 DATA_BUDGET = 40 * 1024 * 1024
 REGISTRY = "fixtures/artifacts.json"
 
@@ -336,7 +337,7 @@ def test_every_path_has_owner() -> None:
 def test_tracked_data_within_budget() -> None:
     total = 0
     for p in _tracked():
-        if os.path.splitext(p)[1] in CODE_SUFFIXES:
+        if os.path.splitext(p)[1] in CODE_SUFFIXES or os.path.basename(p) == AUDIT_RECORD:
             continue
         try:
             total += os.path.getsize(ROOT / p)
