@@ -93,7 +93,7 @@ sense, ePrint 2024/1434), for the audit's value layer (Daniel, Sep 27; constant 
 - **Upstream:** watch entries `collision-resistance`, `keyed-cr` and `rom-cr` (see Upstream status).
 
 **A3. The operating system's randomness is independent uniform bytes** (`uniform/io-getrandombytes`), for the
-verifier's unit draw and, for zero knowledge, the commitments' salts.
+verifier's unit draw, the proof service's epoch salt (`Stream.salt`) and, for zero knowledge, the commitments' salts.
 
 - **Statement.** A byte source is a finite probability space and, on each outcome, the first `L i` bytes of each stream
   `i`. `UniformRandomBytes L t` says every event about those bytes has the probability it has for independent uniform

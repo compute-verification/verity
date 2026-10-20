@@ -331,22 +331,25 @@ def target_equivalence(target: Any, definition: Any, opts: Options, F: Findings)
     return {"target": target.id, "compared": len(rows), "mismatches": len(bad)}
 
 
-def _wide_words(t: Any, params: Sequence[Any], ret: Any, arrays: Sequence[np.ndarray], n: int) -> np.ndarray:
-    """`evaluate_words` where an element is wider than its 64 bits (PoUW's 576-bit sums of squares): Python ints, each element
-    through its bits (`verity.ml.circuits.evaluation.bits.evaluate_bits`)."""
+def _wide_words(t: Any, words: Sequence[Any], ret: Any, params: Sequence[Any], arrays: Sequence[np.ndarray], n: int) -> np.ndarray:
+    """`evaluate_words` through the bits (`verity.ml.circuits.evaluation.bits.evaluate_bits`), in Python ints: each argument split
+    into the word Definition's leaves (``words``, ``ret``) and each leaf into its bits, LSB first. For an element wider than its 64
+    bits (PoUW's 576-bit sums of squares), and for a port of single bits: `Array<n, Value<1>>` is n one-bit words on the word side
+    and, as `boolean.bit_type` leaves it, one n-bit element on bits, so the word view (`Value<n>`) is not the word's signature
+    (`DsaWaksmanRows_v2`'s settings)."""
     from verity.ml.circuits.evaluation.batch import type_shape
     from verity.ml.circuits.evaluation.bits import evaluate_bits
 
     ins = []
-    for a, p in zip(arrays, params):
-        widths = BL.elements(p)
+    for a, wp, p in zip(arrays, words, params):
+        widths = wp.leaf_widths()
         rows = np.asarray(a, dtype=object).reshape(n, len(widths))
         ins.append(np.array([[(int(v) >> j) & 1 for v, w in zip(row, widths) for j in range(w)] for row in rows],
                             dtype=np.uint8).reshape(n, *type_shape(p)))
     bits = np.asarray(evaluate_bits(t, *ins)).reshape(n, -1)
-    out = np.zeros((n, len(BL.elements(ret))), dtype=object)
+    out = np.zeros((n, ret.leaves), dtype=object)
     at = 0
-    for e, w in enumerate(BL.elements(ret)):
+    for e, w in enumerate(ret.leaf_widths()):
         for i in range(n):
             out[i, e] = sum(int(b) << j for j, b in enumerate(bits[i, at:at + w]))
         at += w
@@ -366,13 +369,14 @@ def word_view(t: Any, opts: Options, F: Findings) -> dict | None:
         word = word_of(t)
     except KeyError:
         return None
-    pw, _ = signature_of(word)
+    pw, rw = signature_of(word)
     arrays = vectors(pw, 16 * opts.vectors, opts.seed + 2)
     n = arrays[0].shape[0]
     pb, rb = signature_of(t)
-    if max(w for p in (*pb, rb) for w in BL.elements(p)) > 64:
+    single_bits = [BL.word_type(p) for p in (*pb, rb)] != [*pw, rw] and [BL.bit_type(p) for p in (*pw, rw)] == [*pb, rb]
+    if single_bits or max(w for p in (*pb, rb) for w in BL.elements(p)) > 64:
         want = np.asarray(evaluate_batch(word, *arrays), dtype=object).reshape(n, -1)
-        got = _wide_words(t, pb, rb, arrays, n)
+        got = _wide_words(t, pw, rw, pb, arrays, n)
     else:
         want = np.asarray(evaluate_batch(word, *arrays), dtype=np.uint64).reshape(n, -1)
         got = np.asarray(evaluate_words(t, *arrays), dtype=np.uint64).reshape(n, -1)
