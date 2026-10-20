@@ -15,9 +15,10 @@
 * RT4-INT-21: a window whose coins were held in the serving process is no session's and credits nothing; pouw-serve and
   the Commit's C2 replay challenge take the auditor host's challenger.
 * RT4-INT-22: a window admits in round 0 only unless its ``admission`` is ``per-round``.
-* RT4-INT-23: the release log, the only evidence that a round's coin followed its root, is an unsigned file; roots
-  chosen after every coin pass once the log is rewritten to name them. Infra's end entry now seals it (a rewritten log
-  is refused under the ledger, `test_a_window_is_held_to_the_one_session...`); read without a ledger it stays a witness.
+* RT4-INT-23: the release log, the only evidence that a round's coin followed its root, was an unsigned file; roots
+  chosen after every coin passed once the log was rewritten to name them. The challenger's signed close (#2946) now
+  signs it and the auditor's v1 ledger seals the close, and infra's v2 end entry seals the log itself: a rewritten log is
+  refused either way.
 """
 from __future__ import annotations
 
@@ -68,19 +69,25 @@ def _linear_is_the_stand_in(monkeypatch):
 
 class _Session:
     """One session `name` of the auditor's challenger under its one key `KEY`, its record signed at LMS leaf `leaf` for
-    the gate's host ``vy-challenger-1.<name>``, with its own coins (`seed`), reached at `T.AUDITOR` until the next
-    session is made, each hello's secret kept in `secrets`; its tree (the gate's ``fetch``) is `tree`, `directory` its
-    ``out/`` and `commitment` its coin commitment's root, which `T.SESSION` names while it is reached."""
+    the gate's host ``vy-challenger-1.<name>`` and its close at `close()` (by default `leaf` + 1), with its own coins
+    (`seed`), reached at `T.AUDITOR` until the next session is made, each hello's secret kept in `secrets`; its tree (the
+    gate's ``fetch``) is `tree`, `directory` its ``out/`` and `commitment` its coin commitment's root, which `T.SESSION`
+    names while it is reached."""
 
-    def __init__(self, tmp_path, monkeypatch, name: str, leaf: int, seed: int, challenger=None) -> None:
-        self.tree, self.directory = tmp_path / name, tmp_path / name / "out"
+    def __init__(self, tmp_path, monkeypatch, name: str, leaf: int, seed: int, challenger=None, close=None) -> None:
+        self.name, self.tree, self.directory = name, tmp_path / name, tmp_path / name / "out"
         self.challenger = challenger or Wd.live_challenger(0, 3, CH.entropy(seed))
         self.directory.mkdir(parents=True)
-        R.open_session(self.challenger, KEY, f"{CH.HOST}.{name}", lambda m: lms.sign_at(PRIVATE, leaf, m).encode(),
-                       self.directory)
+        leaves = [leaf]
+
+        def sign(m: bytes) -> bytes:
+            q = leaves.pop() if leaves else (close() if close else leaf + 1)
+            return lms.sign_at(PRIVATE, q, m).encode()
+        session = R.open_session(self.challenger, KEY, f"{CH.HOST}.{name}", sign, self.directory, name)
         ours, theirs = socket.socketpair()
         self.reason: str | None = None
-        self._thread = threading.Thread(target=self._serve, args=(ours,))
+        self._ledger: Path | None = None
+        self._thread = threading.Thread(target=self._serve, args=(ours, session))
         self._thread.start()
         self.client = R.RemoteChallenger(theirs)
         self.commitment, self.secrets = self.challenger.commitment.root.hex(), []
@@ -91,13 +98,27 @@ class _Session:
         self.secrets.append(secret)
         return self.client if at == T.AUDITOR else None
 
-    def _serve(self, sock: socket.socket) -> None:
+    def _serve(self, sock: socket.socket, session: R.Session) -> None:
         with sock:
-            self.reason = R.serve(sock, self.challenger, self.directory, iter(range(1 << 20)).__next__)
+            self.reason = R.serve(sock, session, iter(range(1 << 20)).__next__)
 
     def ended(self) -> str | None:
         self._thread.join()
         return self.reason
+
+    def audited(self) -> Path:
+        """The auditor's v1 ledger (`CH.Ledger`) under `KEY`, opening this session for `CH.WINDOW` and ending it over its
+        ``out/`` once it has ended (closed when its client closed it)."""
+        if self._ledger is None:
+            ledger = CH.Ledger(self.tree / "windows.jsonl", 1, iter((26, 27)), H=KEY.H)
+            ledger.open(self.name, CH.WINDOW)
+            ledger.end(self.name, self.directory, self.ended() is None)
+            self._ledger = ledger.path
+        return self._ledger
+
+    def trusted(self, commits) -> str | None:
+        """`trusted_rounds_reason` of `commits` against this session, as `audited` opens and ends it."""
+        return PHC.trusted_rounds_reason(commits, self.directory, self.audited(), CH.WINDOW, KEY)
 
 
 def _serve(settings, seed: int = 9, prompt: int = 5, run: bool = False):
@@ -126,7 +147,7 @@ def _window(gate, tmp_path, monkeypatch, name: str, seed: int, commit: str = COM
     """A window served in session `name`, which `gate` opened for `commit` (its answer's commitment, ``status
     SESSION``'s, once the session's record is signed) and ended over its ``out/``: its commitment and its session."""
     reply = gate.open(name, commit, Wd.live_families(3))
-    session = _Session(tmp_path, monkeypatch, name, gate.take(), seed)
+    session = _Session(tmp_path, monkeypatch, name, gate.take(), seed, close=gate.take)
     served = _serve(T._remote(session={**reply, "commitment": session.commitment}))
     assert session.ended() is None and session.secrets == [bytes.fromhex(reply["secret"])]
     gate.end(name, session.directory)
@@ -148,8 +169,7 @@ def test_a_window_is_held_to_the_one_session_the_auditors_ledger_opened_for_its_
     gate = _gate()
     first, a = _window(gate, tmp_path, monkeypatch, "s-a", 11)
     second, b = _window(gate, tmp_path, monkeypatch, "s-b", 12, commit=COMMIT_B)
-    assert PHC.trusted_rounds_reason(first, a.directory, KEY) is None
-    assert PHC.trusted_rounds_reason(second, b.directory, KEY) is None
+    assert a.trusted(first) is None and b.trusted(second) is None
     assert _coins(first) != _coins(second) and first["session"]["session"] == "s-a" and first["session"]["seq"] == 0
     assert "secret" not in first["session"] and first["session"]["commitment"] == a.commitment
     ledger, fetch = gate.ledger(), {"s-a": a.tree, "s-b": b.tree}.get
@@ -174,7 +194,7 @@ def test_a_window_is_held_to_the_one_session_the_auditors_ledger_opened_for_its_
         f"session s-a's end entry records coin commitment {a.commitment[:16]}..., not {b.commitment[:16]}..., the "
         "window's (the gate's answer): a refused window")
     assert PHC.session_reason(first, ledger, {"s-a": b.tree}.get) == (
-        "session s-a's evidence is not trusted: session s-a's record.json is not the one its end entry sealed")
+        "session s-a's evidence is not trusted: session s-a's challenger.json is not the one its end entry sealed")
     assert PHC.session_reason(first, ledger, {}.get) == (
         "session s-a's evidence is not trusted: session s-a has no tree on the auditor's side (the gate's fetch)")
     rewritten = tmp_path / "rewritten"
@@ -306,7 +326,7 @@ def test_a_period_is_its_lanes_windows_between_its_signed_open_and_close_and_cre
     gate.period_close("p1")
     gate.period_open("p2")
     gate.open("s-i", "cc" * 64, Wd.live_families(3))
-    idle = _Session(tmp_path, monkeypatch, "s-i", gate.take(), seed=13)
+    idle = _Session(tmp_path, monkeypatch, "s-i", gate.take(), seed=13, close=gate.take)
     idle.client.close()
     assert idle.ended() is None
     gate.end("s-i", idle.directory)
@@ -478,7 +498,8 @@ def test_infras_v2_head_and_sessions_bind_under_the_gates_key():
     given = {"session": sid, "seq": 8, "root": root, "commitment": commitment}
     assert PHC.held(given, ledger, root) == (None, window)
     out = PHC.evidence(window, fetch, key)
-    trusted, received = R.trusted_session(out, key, PHC.lms_verify)
+    trusted = LC.trusted_commitment(out / R.RECORD, key, PHC.lms_verify)
+    received = PHC.released_v2(out / R.RELEASES, trusted)
     assert trusted.root.hex() == commitment and trusted.scheme == "verity/smoke/coins/v1" and len(received["replay"]) == 2
     smoke = {"coin_source": "challenger", "session": given}
     assert PHC.session_reason(smoke, ledger, fetch).startswith("the window's round_coins are not a live coin commitment")
@@ -545,7 +566,10 @@ def test_an_early_draw_is_refused_and_the_windows_own_draw_fails_visibly(tmp_pat
     assert nothing in commitment["draw"]["refused"] and commitment["draw"]["coin"] is None
     received = R.released_roots(host.directory / R.RELEASES, host.challenger.commitment)
     assert received[Wd.DRAW] == (probe,) and draw.after == probe
-    assert PHC.trusted_rounds_reason(commitment, host.directory, KEY) == (
+    assert host.trusted(commitment) == (
+        "the challenger's session is not trusted: the auditor's ledger ends session auditor unclosed: its client didn't "
+        "close it")
+    assert PHC.draw_reason(commitment, host.challenger.commitment, received[Wd.DRAW]) == (
         "the challenger's log does not show the window's draw root as the one root its draw coin followed: a draw opened "
         "before the window's rounds, or after another root")
 
@@ -556,14 +580,14 @@ def test_a_draw_from_another_family_off_its_root_or_never_opened_is_refused(tmp_
     host = _Session(tmp_path, monkeypatch, "auditor", leaf=0, seed=14)
     honest = _serve(T._remote())
     assert host.ended() is None
-    assert PHC.trusted_rounds_reason(honest, host.directory, KEY) is None
+    assert host.trusted(honest) is None
     assert honest["draw"]["root"] == RQ.draw_root(bytes.fromhex(honest["calls_root"]), bytes.fromhex(
         honest["draw"]["receipts"]), honest["rounds"]).hex()
     swapped = {**honest, "draw": {**honest["draw"], "coin": honest["rounds"][0]["coin"]}}
-    assert PHC.trusted_rounds_reason(swapped, host.directory, KEY) == (
+    assert host.trusted(swapped) == (
         f"the window's draw coin: coin is the epoch's {Wd.ROUND} coin 0, not its {Wd.DRAW} coin 0")
     bent = {**honest, "draw": {**honest["draw"], "receipts": "ee" * 64}}
-    assert PHC.trusted_rounds_reason(bent, host.directory, KEY) == (
+    assert host.trusted(bent) == (
         "the window's draw root is not over its manifest, its last round's receipts and every round's root and coin")
     quiet = _Session(tmp_path, monkeypatch, "quiet", leaf=1, seed=15)
     weights = bytes.fromhex(honest["weights_root"])
@@ -574,7 +598,7 @@ def test_a_draw_from_another_family_off_its_root_or_never_opened_is_refused(tmp_
     c = quiet.challenger.commitment.to_json()
     closed = {**honest, "coins": c, "round_coins": c, "salt_opening": salt.to_json(),
               "rounds": [{**r, "coin": o.to_json()} for r, o in zip(honest["rounds"], rounds)]}
-    assert PHC.trusted_rounds_reason(closed, quiet.directory, KEY) == (
+    assert quiet.trusted(closed) == (
         "the challenger's session closed with no draw coin opened, so the window has no draw of the challenger's")
 
 
@@ -636,7 +660,7 @@ def test_coins_held_in_the_serving_process_are_no_session_and_credit_nothing(tmp
     auditor = _Session(tmp_path, monkeypatch, "auditor", leaf=0, seed=14)
     auditor.client.close()
     assert auditor.ended() is None
-    assert "coins from a challenger the verifier doesn't hold" in PHC.trusted_rounds_reason(local, auditor.directory, KEY)
+    assert "coins from a challenger the verifier doesn't hold" in auditor.trusted(local)
 
 
 def test_pouw_serve_and_ncp_v2_take_the_auditor_hosts_challenger():
@@ -705,7 +729,7 @@ def test_the_commits_replay_challenge_is_the_auditor_hosts_replay_coin_after_the
     with pytest.raises(ValueError, match="commits to coins .*, not dddd"):
         RCN.challenge(T.AUDITOR, run_root, {**opened, "commitment": "dd" * 64})
     assert other.ended() is None
-    host = _Session(tmp_path, monkeypatch, "s-c", leaf=gate.take(), seed=16,
+    host = _Session(tmp_path, monkeypatch, "s-c", leaf=gate.take(), seed=16, close=gate.take,
                     challenger=LC.LiveChallenger(RCN.SCHEME, 0, [(RCN.FAMILY, 1)], CH.entropy(16)))
     reply = {**opened, "commitment": host.commitment}
     chal, rec = RCN.challenge(T.AUDITOR, run_root, reply)
@@ -722,7 +746,7 @@ def test_the_commits_replay_challenge_is_the_auditor_hosts_replay_coin_after_the
     assert RCN.session_reason(rec, chal, run_root, ledger, {}.get).startswith(
         "the replay challenge's session s-c is not trusted: session s-c has no tree")
     assert RCN.session_reason(rec, "00" * 64, run_root, ledger, fetch) == "the replay challenge is not the replay coin"
-    trusted, received = R.trusted_session(host.directory, KEY, PHC.lms_verify)
+    trusted, received = R.trusted_session(host.directory, host.audited(), CH.WINDOW, KEY, PHC.lms_verify)
     assert received[RCN.FAMILY] == (RCN.after(run_root),)
     assert RCN.reason(rec, chal, run_root, trusted) is None
     assert RCN.reason(rec, chal, hashlib.sha256(b"another").digest(), trusted) == (
@@ -736,7 +760,7 @@ def test_the_commits_replay_challenge_is_the_auditor_hosts_replay_coin_after_the
         RCN.challenge(T.AUDITOR, run_root)
     short = _gate()
     opened = short.open("s-d", COMMIT_B, [(RCN.FAMILY, 2)], scheme=RCN.SCHEME)
-    two = _Session(tmp_path, monkeypatch, "s-d", leaf=short.take(), seed=20,
+    two = _Session(tmp_path, monkeypatch, "s-d", leaf=short.take(), seed=20, close=short.take,
                    challenger=LC.LiveChallenger(RCN.SCHEME, 0, [(RCN.FAMILY, 2)], CH.entropy(20)))
     chal, rec = RCN.challenge(T.AUDITOR, run_root, {**opened, "commitment": two.commitment})
     assert two.ended() is None
@@ -770,9 +794,9 @@ def test_a_window_admits_in_round_0_only_unless_its_admission_is_per_round():
         PH.H1Run("t", T.SALT, {0: "q"}, [(32, T.K)], 32, 1, admission="late")
 
 
-def test_the_order_of_roots_and_coins_is_an_unsigned_file_and_a_rewrite_of_it_passes(tmp_path, monkeypatch):
-    """RT4-INT-23 (infra's: a signed close), still a witness: roots chosen after every coin, with a draw opened after a
-    root over them, are refused against the honest log and pass once the log is rewritten to name them."""
+def test_the_order_of_roots_and_coins_is_signed_by_the_challengers_close_and_a_rewrite_of_it_is_refused(tmp_path, monkeypatch):
+    """RT4-INT-23: roots chosen after every coin, with a draw opened after a root over them, are refused against the
+    honest log, and so is a log rewritten to name them, which the challenger's signed close (#2946) no longer signs."""
     host = _Session(tmp_path, monkeypatch, "auditor", leaf=0, seed=15)
     weights = hashlib.sha512(b"the weights' root").digest()
     salt = host.client.open(Wd.SALT, 0, weights)
@@ -789,14 +813,15 @@ def test_the_order_of_roots_and_coins_is_an_unsigned_file_and_a_rewrite_of_it_pa
     commits = {"coins": c, "round_coins": c, "weights_root": weights.hex(), "salt_opening": salt.to_json(), "steps": 3,
                "rounds": log, "calls_root": calls_root.hex(),
                "draw": {"root": draw_root.hex(), "receipts": RQ.NO_RECEIPTS.hex(), "coin": draw.to_json()}}
-    assert PHC.trusted_rounds_reason(commits, host.directory, KEY) == (
-        "the window's round roots are not the roots the challenger's log shows it received, in order")
+    assert host.trusted(commits) == (
+        "the window's rounds: the round roots are not the roots the challenger's log shows it received, in order")
     path = host.directory / R.RELEASES
     text = path.read_text()
     for e, x in zip(early, late):
         text = text.replace(e.hex(), x.hex())
     path.write_text(text)
-    assert PHC.trusted_rounds_reason(commits, host.directory, KEY) is None
+    assert host.trusted(commits) == (
+        "the challenger's session is not trusted: the challenger's release log is not the one its close record signs")
 
 
 def test_the_challengers_record_is_tied_to_its_session_by_the_gates_host_string_and_end_entry(tmp_path, monkeypatch):
@@ -806,7 +831,7 @@ def test_the_challengers_record_is_tied_to_its_session_by_the_gates_host_string_
     released (none here, so not complete)."""
     gate = _gate()
     reply = gate.open("s-a", COMMIT_A, Wd.live_families(3))
-    a = _Session(tmp_path, monkeypatch, "s-a", leaf=gate.take(), seed=11)
+    a = _Session(tmp_path, monkeypatch, "s-a", leaf=gate.take(), seed=11, close=gate.take)
     a.client.close()
     assert a.ended() is None
     record = json.loads((a.directory / R.RECORD).read_text())

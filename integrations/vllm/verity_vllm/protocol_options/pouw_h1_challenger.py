@@ -8,14 +8,16 @@ verifier's check that a served window's coins are that challenger's.
   session once the window has finished. The challenger is auditor-trusted (`trusted-nebius-host`): it runs on a machine
   the prover doesn't control, and the serving process reaches it through ``ssh -R`` on its own 127.0.0.1.
 * **Checking** (`trusted_rounds_reason`): the verifier reads the challenger's directory from the challenger's own run
-  (``research fetch RUN --all``, its ``out/``), never from the prover's bundle, under its own challenger key (`pinned_key`):
-  the coin commitment the challenger signed and the roots its release log shows it received (`remote.trusted_session`).
-  The window's coins must be that commitment's, its salt coin must have followed the weights' root and its rounds must be
-  the challenger's logged roots in order, each coin opened after its root (`pouw_h1_requests.rounds_reason`). A window
-  whose coins came from a challenger the prover holds (the in-process ``coins`` and ``rounds`` of tests, or a host of
-  the prover's) is refused, since the verifier's key signed no record of it. The window's draw coin must have been opened
-  once, after `pouw_h1_requests.draw_root` over its manifest, last receipts and every round's root and coin: a draw
-  opened early, from another family, or never (a session closed at `finish` with no draw) is refused.
+  (``research fetch RUN --all``, its ``out/``), never from the prover's bundle, under its own challenger key (`pinned_key`),
+  and the auditor's signed ledger, which opens and ends the one session of the window (`remote.trusted_session`): the coin
+  commitment the challenger signed and the roots its signed release log shows it received. The window's coins must be
+  that commitment's, its salt coin must have followed the weights' root, and its rounds pass PoUW's round rule of record
+  (`core_check.rounds`, Lean `PouwCheck.roundsCheck`): each coin opened after its root, the roots the challenger's log
+  shows in order. A window whose coins came from a challenger the prover holds (the in-process ``coins`` and ``rounds``
+  of tests, or a host of the prover's), whose log no one signed, or whose ledger is signed under another key, is cut
+  before the session's end or opens a second session for the window, is refused. The window's draw coin must have been
+  opened once, after `pouw_h1_requests.draw_root` over its manifest, last receipts and every round's root and coin: a
+  draw opened early, from another family, or never (a session closed at `finish` with no draw) is refused.
 * **Sessions** (RT4-INT-17, the pouw setting ``session``): a lane reserves a session on infra's challenger gate
   (``reserve --peer NAME --scheme S --families JSON``, `benchmarks/live_challenger/auditor.py` on vy-challenger-1, under
   the lane's own gate key) and opens it for its window's root (``open --session S --root R``), and the serving window
@@ -25,15 +27,18 @@ verifier's check that a served window's coins are that challenger's.
   ``open`` entry (v2: ``window.root``) to its ledger, signed under the challenger key, before the session's first coin,
   and refuses a second one for the root, ever; the session's ``end`` entry seals the SHA-512 of each file of its
   ``out/``, the coins each family released, whether that was all of them (``complete``), the leaf its record was signed
-  at and its commitment's root. `Ledger.verify` is infra's ``verify_ledger`` and ``verify_periods`` over one published
-  head under the verifier's own key (`pinned_key`, its pin from config): chained, no v1 entry after a v2, its LMS leaves
-  strictly increasing, each record's leaf between its session's open and end and no entry's, one session a root and one
-  root a session, each two-step open bound to its session's reserve and inside its minutes, and each period's close
-  listing exactly its windows and their outcomes; `Ledger.newest` reads every published head and refuses two that don't
-  extend one another. `session_reason` holds a window to the one session the ledger opened for its Commit's root, ended,
-  closed and complete with the window's commitment, reading that session's tree from the gate's ``fetch`` (never the
-  prover's bundle), each file the one its end entry sealed, its key the verifier's, its record signed for the open
-  entry's host and layout at the end's record leaf, and its release log the end's counts.
+  at and its commitment's root. `remote.trusted_session` reads only a v1 ledger and a signed close, and infra's ledger is
+  v1 then v2, its sessions' close unsigned, so until proofs' v2 follow-up lands its ledger is checked here alone:
+  `Ledger.verify` is infra's ``verify_ledger`` and ``verify_periods`` over one published head under the verifier's own
+  key (`pinned_key`, its pin from config): chained, no v1 entry after a v2, its LMS leaves strictly increasing, each
+  record's leaf between its session's open and end and no entry's, one session a root and one root a session, each
+  two-step open bound to its session's reserve and inside its minutes, and each period's close listing exactly its
+  windows and their outcomes; `Ledger.newest` reads every published head and refuses two that don't extend one another.
+  `session_reason` holds a window to the one session the ledger opened for its Commit's root, ended, closed and complete
+  with the window's commitment, reading that session's tree from the gate's ``fetch`` (never the prover's bundle), each
+  file the one its end entry sealed, its key the verifier's, its record signed for the open entry's host and layout at
+  the end's record leaf, and its release log the end's counts; its coins pass the checks above, the rounds by the rule
+  `core_check.rounds` applies (`window.rounds_reason` and the log's roots in order).
 * **Periods**: a lane's period is its windows between its ``period-open`` and ``period-close`` entries (session null),
   each window counted at its reserve (or a one-step v2 open) whose prover (``for``, else ``by``) is the lane.
   `period_reason` refuses a period the ledger doesn't close, one whose close isn't complete (an empty one, or a window
@@ -50,22 +55,25 @@ from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Any, Callable, Mapping, Sequence
 
+from verity.core.protocols.pouw import core_check as CC
 from verity.core.protocols.pouw import window as Wd
 from verity.core.protocols.pouw.audit import salt_of
+from verity.core.protocols.sampled_proofs import challenger as Ch
 from verity.core.protocols.sampled_proofs import remote
 from verity.core.protocols.sampled_proofs.challenger import (ChallengerKey, ChallengerRecord, CoinError, LiveCommitment,
-                                                             LiveOpening, LiveRecord, live_reason)
+                                                             LiveOpening, LiveRecord, live_reason, trusted_commitment)
 from verity.ml.commitments.identity import identity_digest_sha512
 
 from verity_vllm.protocol_options import pouw_h1_requests as RQ
 
 SCHEME = Wd.LIVE_SCHEME
 #: infra's challenger ledger (`benchmarks/live_challenger/auditor.py`): its entries' schema (v2, after the host's v1
-#: entries in one chain), and the role and tag by schema of what an entry's ``sig`` signs (`entry_message`)
-LEDGER_V1 = "verity/challenger-auditor/v1"
+#: entries in one chain, which are `challenger.audited_session`'s), and the role and tag by schema of what an entry's
+#: ``sig`` signs (`entry_message`)
+LEDGER_V1 = Ch.LEDGER_SCHEMA
 LEDGER_SCHEMA = "verity/challenger-auditor/v2"
-LEDGER_ROLE = "verity/challenger-auditor-record/v1"
-ENTRY_TAGS = {LEDGER_V1: "verity/challenger-auditor/entry/v1", LEDGER_SCHEMA: "verity/challenger-auditor/entry/v2"}
+LEDGER_ROLE = Ch.LEDGER_ROLE
+ENTRY_TAGS = {LEDGER_V1: Ch.LEDGER_TAG, LEDGER_SCHEMA: "verity/challenger-auditor/entry/v2"}
 #: the files of a session's ``out/`` the verifier reads, each of which its end entry must seal
 SEALED = (remote.RECORD, remote.KEY, remote.RELEASES)
 #: the pouw setting ``session``: the gate's open answer (``commitment`` from ``status SESSION`` when the answer's is
@@ -225,15 +233,10 @@ def pinned_key(path: str | Path, public_sha512: str) -> ChallengerKey:
     return key
 
 
-def trusted_rounds_reason(commits: Mapping[str, Any], directory: str | Path, key: ChallengerKey,
-                          verify: Any = lms_verify) -> str | None:
-    """Why the window's coins (its H1 commitment `commits`: ``coins``, ``round_coins``, ``salt_opening``, ``weights_root``,
-    ``steps`` and the round log ``rounds``) aren't the verifier's own challenger's, read from `directory` under `key`; None
-    when they are. Fails closed: a missing, malformed or unsigned record or an unreadable release log trusts nothing."""
-    try:
-        trusted, received = remote.trusted_session(directory, key, verify)
-    except CoinError as e:
-        return f"the challenger's session is not trusted: {e}"
+def _window_reason(commits: Mapping[str, Any], trusted: LiveCommitment, received: Mapping[str, Sequence[bytes]],
+                   rounds: Callable[[list], str | None]) -> str | None:
+    """Why the window's coins (its H1 commitment `commits`) aren't those of the session whose signed coin commitment is
+    `trusted` and whose log shows it received `received`, its round log held to `rounds`; None when they are."""
     for name in ("round_coins", "coins"):
         try:
             c = LiveCommitment.from_json(commits.get(name))
@@ -249,7 +252,7 @@ def trusted_rounds_reason(commits: Mapping[str, Any], directory: str | Path, key
         root, salt = bytes.fromhex(commits["weights_root"]), LiveOpening.from_json(commits.get("salt_opening"))
     except (CoinError, KeyError, TypeError, ValueError) as e:
         return f"the window's salt coin or weights' root is malformed ({e})"
-    if received.get(Wd.SALT) != (root,):
+    if tuple(received.get(Wd.SALT, ())) != (root,):
         return "the challenger's log does not show the weights' root as the one root its salt coin followed"
     why = live_reason(trusted, salt, Wd.SALT, 0, root)
     if why is not None:
@@ -257,12 +260,34 @@ def trusted_rounds_reason(commits: Mapping[str, Any], directory: str | Path, key
     log = list(commits.get("rounds") or ())
     if len(log) != commits.get("steps"):
         return f"the window's round log has {len(log)} rounds, not its {commits.get('steps')} steps"
-    why = RQ.rounds_reason(log, trusted)
+    if [x.get("round") for x in log] != list(range(len(log))):
+        return "the round log is not rounds 0, 1, ... in order"
+    why = rounds(log)
     if why is not None:
-        return why
-    if received.get(Wd.ROUND) != tuple(bytes.fromhex(x["root"]) for x in log):
-        return "the window's round roots are not the roots the challenger's log shows it received, in order"
+        return f"the window's rounds: {why}"
     return draw_reason(commits, trusted, received.get(Wd.DRAW, ()))
+
+
+def trusted_rounds_reason(commits: Mapping[str, Any], directory: str | Path, ledger: str | Path, window: Mapping[str, Any],
+                          key: ChallengerKey, verify: Any = lms_verify) -> str | None:
+    """Why the window's coins (its H1 commitment `commits`: ``coins``, ``round_coins``, ``salt_opening``, ``weights_root``,
+    ``steps``, the round log ``rounds`` and the ``draw``) aren't the verifier's own challenger's, read from `directory`,
+    the session the auditor's signed ledger at `ledger` (infra's ``windows.jsonl``) opens and ends for `window`
+    (``{commit, period}``), under `key`, the challenger key the deployment pins; None when they are. Fails closed: a
+    missing, malformed or unsigned record, log or ledger, a ledger signed under another key or older than the session's
+    end, or a window it opens no one session for, trusts nothing (`remote.trusted_session`)."""
+    try:
+        trusted, received = remote.trusted_session(directory, ledger, window, key, verify)
+        lines, files = remote.ledger_lines(ledger), remote.session_files(directory)
+    except CoinError as e:
+        return f"the challenger's session is not trusted: {e}"
+
+    def rounds(log: list) -> str | None:
+        refused = CC.rounds(key.to_json(), lines, window, files, [x.get("root") for x in log],
+                            [x.get("coin") for x in log], verify)
+        return None if refused is None else refused[1]
+
+    return _window_reason(commits, trusted, received, rounds)
 
 
 def draw_reason(commits: Mapping[str, Any], trusted: LiveCommitment, received: Sequence[bytes]) -> str | None:
@@ -297,7 +322,9 @@ def _field(b: bytes) -> bytes:
 def entry_message(I: bytes, entry: Mapping[str, Any]) -> bytes:
     """What a ledger entry's ``sig`` signs, infra's ``entry_message``: SHA-512([LEDGER_ROLE] || I || [identity_digest_sha512(
     ENTRY_TAGS[schema], entry without sig)]), each [x] prefixed with its length (u64), under the key whose identifier is
-    `I`."""
+    `I`; a v1 entry's is `challenger.ledger_message`."""
+    if entry.get("schema") == LEDGER_V1:
+        return Ch.ledger_message(I, dict(entry))
     if len(I) != 16:
         raise CoinError(f"an LMS identifier is 16 bytes, not {len(I)}")
     tag = ENTRY_TAGS.get(entry.get("schema"))
@@ -352,10 +379,11 @@ def _reserve_ok(b: Mapping[str, Any]) -> bool:
             and bool(_UTC.fullmatch(b["started_utc"])) and b.get("expires_utc") == _later(b["started_utc"], b["minutes"]))
 
 
-# TODO(#2946): proofs' CHAL1 (PRF-117) is the challenger ledger's verifier of record, and its v2 follow-up
-# (cursor/challenger-ledger-v2-7c3e) brings verify_ledger and verify_periods; once both are on main, `Ledger.verify` calls
-# them instead of mirroring infra's, and this module keeps only vllm's checks (a session a window, the commitment before
-# the first coin, the slot tables).
+# TODO(#2946 v2 follow-up, cursor/challenger-ledger-v2-7c3e): `challenger.audited_session` reads only a v1 ledger, so
+# infra's v1-then-v2 ledger is checked here alone, and this mirror of infra's verify_ledger and verify_periods (the
+# period kinds, the two-step reserve and open, `period_reason`), `evidence` and `released_v2` go once proofs' v2 reader
+# and signed close are on main; this module then keeps only vllm's checks (a session a window, the commitment before the
+# first coin, the slot tables).
 @dataclass(frozen=True)
 class Ledger:
     """Infra's challenger ledger (`LEDGER_SCHEMA`, after the host's `LEDGER_V1` entries), verified under the verifier's
@@ -556,13 +584,45 @@ def _sealed(path: Path) -> str:
     return hashlib.sha512(path.read_bytes()).hexdigest()
 
 
+_ROOT_EVENT = ["event", "index", "label", "received_at", "root"]
+_RELEASE_EVENT = ["after", "event", "index", "label", "released_at"]
+
+
+def released_v2(path: str | Path, commitment: LiveCommitment) -> dict[str, tuple[bytes, ...]]:
+    """The roots the release log at `path` of an infra v2 session (JSON lines, its times floats, no signed close: the
+    sealing end entry stands in for it) shows the challenger received, by family in order, its head naming `commitment`,
+    each root followed by its coin's release; `CoinError` for a missing, unreadable or malformed log, or another
+    commitment's."""
+    try:
+        events = [json.loads(line) for line in Path(path).read_text(encoding="utf-8").splitlines()]
+    except FileNotFoundError:
+        raise CoinError(f"no challenger release log at {path}") from None
+    except (OSError, ValueError) as e:
+        raise CoinError(f"the challenger release log at {path} is unreadable ({e})") from e
+    if not events or events[0] != {"event": "commitment", "root": commitment.root.hex()}:
+        raise CoinError(f"the challenger release log at {path} is not coin commitment {commitment.root.hex()[:16]}'s")
+    roots: dict[str, list[bytes]] = {label: [] for label, _ in commitment.families}
+    pairs = events[1:]
+    if len(pairs) % 2:
+        raise CoinError(f"the challenger release log at {path} ends on a root without its release")
+    for root, release in zip(pairs[::2], pairs[1::2]):
+        if (not isinstance(root, dict) or not isinstance(release, dict) or sorted(root) != _ROOT_EVENT
+                or sorted(release) != _RELEASE_EVENT or root["event"] != "root" or release["event"] != "release"
+                or type(root["label"]) is not str or root["label"] not in roots or type(root["index"]) is not int
+                or root["index"] != len(roots[root["label"]]) or type(release["index"]) is not int
+                or (release["label"], release["index"]) != (root["label"], root["index"])
+                or release["after"] != root["root"] or type(root["root"]) is not str or not _ROOT.match(root["root"])):
+            raise CoinError(f"the challenger release log at {path} is malformed")
+        roots[root["label"]].append(bytes.fromhex(root["root"]))
+    return {label: tuple(r) for label, r in roots.items()}
+
+
 def evidence(window: Mapping[str, Any], fetch: Fetch, key: ChallengerKey, verify: Any = lms_verify) -> Path:
     """The ``out/`` of `window`'s session as `fetch` gives it, refused (`CoinError`) unless the session ended, each file its
     end entry seals is the one it sealed (`SEALED` among them), its key is `key` (the one the ledger's open pins) and its
     record is signed for the open entry's host and layout (scheme, epoch, families); for a v2 end, the record's
     commitment root and LMS leaf are the end's ``commitment`` and ``record_leaf``, and the coins its release log shows each
-    family released (`remote.trusted_session`, which also checks the record's signature under `key`) are the end's
-    ``released``."""
+    family released (`released_v2`, under the commitment its record signs under `key`) are the end's ``released``."""
     opened, end = window["open"], window["end"]
     sid, body = opened["session"], opened["body"]
     if end is None:
@@ -602,7 +662,7 @@ def evidence(window: Mapping[str, Any], fetch: Fetch, key: ChallengerKey, verify
         if leaf != sealed.get("record_leaf"):
             raise CoinError(f"session {sid}'s record is signed at LMS leaf {leaf}, not {sealed.get('record_leaf')}, the "
                             "leaf its end entry records")
-        _c, received = remote.trusted_session(out, key, verify)
+        received = released_v2(out / remote.RELEASES, trusted_commitment(out / remote.RECORD, key, verify))
         released = {label: len(r) for label, r in received.items()}
         if released != sealed.get("released"):
             raise CoinError(f"session {sid}'s release log shows {released} coins released, not {sealed.get('released')}, "
@@ -651,7 +711,8 @@ def session_reason(commits: Mapping[str, Any], ledger: Ledger, fetch: Fetch, reg
                    commit: str | None = None, verify: Any = lms_verify) -> str | None:
     """Why the window (its H1 commitment `commits`) isn't held to the one session the auditor's `ledger` opened for its
     Commit's root, ended closed and complete under the window's commitment (`held`), with that session's coins
-    (`trusted_rounds_reason` over the session's ``out/`` as `fetch` gives it, `evidence`); None when it is. `registered`
+    (its ``out/`` as `fetch` gives it, `evidence`, checked as `trusted_rounds_reason` checks a v1 session's, over its
+    unsigned log, `released_v2`); None when it is. `registered`
     is the weights' root the period registered and `commit` the window's Commit root as the verifier holds it, which the
     window's must be. Fails closed."""
     if commits.get("coin_source") != "challenger":
@@ -667,7 +728,25 @@ def session_reason(commits: Mapping[str, Any], ledger: Ledger, fetch: Fetch, reg
         out = evidence(window, fetch, ledger.key, verify)
     except CoinError as e:
         return f"session {sid}'s evidence is not trusted: {e}"
-    return trusted_rounds_reason(commits, out, ledger.key, verify)
+    try:
+        trusted = trusted_commitment(out / remote.RECORD, ledger.key, verify)
+        received = released_v2(out / remote.RELEASES, trusted)
+    except CoinError as e:
+        return f"the challenger's session is not trusted: {e}"
+
+    def rounds(log: list) -> str | None:
+        why = RQ.rounds_reason(log, trusted)
+        if why is not None:
+            return why
+        try:
+            roots = tuple(bytes.fromhex(x["root"]) for x in log)
+        except (KeyError, TypeError, ValueError):
+            return "the round roots are not a list of SHA-512 digests"
+        if received.get(Wd.ROUND, ()) != roots:
+            return "the round roots are not the roots the challenger's log shows it received, in order"
+        return None
+
+    return _window_reason(commits, trusted, received, rounds)
 
 
 def _incomplete(ledger: Ledger, outcome: Mapping[str, Any]) -> str:
@@ -711,4 +790,5 @@ def period_reason(ledger: Ledger, period: str, accepted: Sequence[str]) -> list[
 __all__ = ["ENTRY_TAGS", "Fetch", "LEDGER_ROLE", "LEDGER_SCHEMA", "LEDGER_V1", "Ledger", "PERIOD_KINDS", "REPLY_FIELDS",
            "RESERVED", "SCHEME", "SEALED", "SESSION_FIELDS", "address", "carried", "connect", "draw_reason",
            "entry_message", "evidence", "families", "finish", "held", "leaf_of", "lines_of", "lms_verify", "pinned_key",
-           "period_reason", "refusals", "root_of", "session", "session_of", "session_reason", "trusted_rounds_reason"]
+           "period_reason", "refusals", "released_v2", "root_of", "session", "session_of", "session_reason",
+           "trusted_rounds_reason"]

@@ -16,7 +16,8 @@ import hashlib
 from typing import Any, Mapping
 
 from verity.core.protocols.sampled_proofs import remote
-from verity.core.protocols.sampled_proofs.challenger import CoinError, LiveCommitment, LiveOpening, live_reason
+from verity.core.protocols.sampled_proofs.challenger import (CoinError, LiveCommitment, LiveOpening, live_reason,
+                                                             trusted_commitment)
 
 from verity_vllm.protocol_options import pouw_h1_challenger as PHC
 
@@ -90,7 +91,8 @@ def session_reason(record: Mapping[str, Any], challenge_hex: str, run_root: byte
     if why is not None:
         return f"the replay challenge: {why}"
     try:
-        trusted, _received = remote.trusted_session(PHC.evidence(window, fetch, ledger.key), ledger.key, PHC.lms_verify)
+        out = PHC.evidence(window, fetch, ledger.key)
+        trusted = trusted_commitment(out / remote.RECORD, ledger.key, PHC.lms_verify)
     except CoinError as e:
         return f"the replay challenge's session {window['open']['session']} is not trusted: {e}"
     return reason(record, challenge_hex, run_root, trusted)

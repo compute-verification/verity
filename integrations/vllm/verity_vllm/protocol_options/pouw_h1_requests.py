@@ -21,8 +21,9 @@ an `act` value, a run input under the root of the round that admits it, committe
   isn't the challenger's opened after it (`live_reason`), and an entry whose first slot in its round doesn't name it.
   `slot_reason` refuses a served slot that names no request, or one whose entry is under a later round than the slot's
   step, so an entry deferred past the step that first serves it is refused. `rounds_reason` holds the whole log to the
-  challenger's coins, and `pouw_h1_challenger.trusted_rounds_reason` holds those coins to the record the verifier's own
-  challenger signed and the roots its log shows it received.
+  challenger's coins, and `pouw_h1_challenger.trusted_rounds_reason` holds those coins to the session the auditor's signed
+  ledger opens and ends for the window, its record and log signed by the verifier's own challenger, and the rounds to
+  PoUW's round rule of record (`core_check.rounds`).
 * **Admission** (`ADMISSIONS`, the pouw setting ``admission``): #2722's period fixes a window's live tiles before its
   first coin, so by default (``round-0``) a window admits requests only in round 0, and an entry under a later round is
   refused (`request_reason`); ``per-round`` admits in every round, for a statement that fixes each round's live tiles
