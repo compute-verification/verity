@@ -31,8 +31,10 @@ roots follow the step's real rows, so this window doesn't use them (the seeded m
   T admit bits are T/16 16-bit words, each its own hiding leaf of the call's admit tree, written by an always-proved admit
   unit that reads the 16 slots' queue entries and scales, and refuses a slot it does not admit unless its row is the
   canonical empty row (`credit.junk`) and a selected slot whose row is (`credit.hollow`).
-* **Receipts**: `h1tile`'s unit on the GPU (`receipts.gated_receipts`) on every live unit, one with an admitted slot among
-  its 32 rows.  Seeds come from the salt, the position and the call's (root(A), root(B)), inside the unit.  A dead unit skips
+* **Receipts**: `h1tile`'s unit (`PouwH1Tile_v4`) on the GPU (`receipts.gated_receipts`) on every live unit, one with an
+  admitted slot among its 32 rows, whatever their bytes: the tile's `admit` input is its rows' admit bits, bound by
+  commitment equality to the admit-tree leaves the tally reads, so it is live exactly when the tally credits it
+  (RT4-LOGIC-4).  Seeds come from the salt, the position and the call's (root(A), root(B)), inside the unit.  A dead unit skips
   the noise and the receipt: its leaf is the canonical empty receipt (zero words), so every receipt tree keeps its shape.
   There is one receipt tree per call.
 * **Coins** (``--coins``), every challenger's entropy the Lean verifier of record's (`pouw.verifier.coins`): seeded, the
@@ -64,14 +66,16 @@ In order, into OUT (`record.json` throughout, `manifest.json` at the end, the op
   prover    the prover's data (the table key, each call's real rows, scales and receipts) as SCRATCH/prover.tar, before the
             gate so a gate failure keeps it; `serve.sh` puts it in the store once the GPU is released, else moves it into
             OUT, which the run's custody uploads
-  gate      drawn units, live and dead, of real and empty steps, against the gated `h1tile.reference` (receipt) and the
+  gate      drawn units, live and dead, of real and empty steps, against `h1tile.reference` gated by the tile's admit
+            words opened from the call's admit tree (receipt) and the
             served integer product (z); controls: the unit at the next position, a flipped receipt bit, root(A) rebuilt (and
             a tampered row, real or empty), the tile's 32 A rows opened against root(A) and the step's A root and A' = -b
             (the tile's B rows negated) refused there, its re-commitment moving both roots (CMP-38), root(B) rebuilt, the
             tile's 32 B rows opened against it and a tampered weight row refused, the admit root rebuilt from the queue, a
             dead unit's rows empty and its skipped noise real work, a junk row in a slot the queue leaves unassigned refused
-            and not admitted, the canonical empty row in a slot the queue selects refused and not admitted, a live unit not
-            empty
+            and not admitted, the canonical empty row in a slot the queue selects refused and not admitted, the tile's admit
+            words equal to the tally's bits and a tampered one refused against the admit root, the tile's selected rows
+            zeroed under a nonzero scale still admitted, a live unit's receipt the ungated one
 
     cd integrations/vllm; PYTHONPATH=.:../..:../../tools/research/src:../../benchmarks/pouw/served_h1
     $PY ../../benchmarks/pouw/served_h1/serve.py --out OUT --cubin noise.cubin --at 2026-10-18T00:00:00Z --by compute-accounting
@@ -796,21 +800,32 @@ def gate(a, calls: list[dict], data: list[dict], levels: list, layers: list, mod
         bits = CR.queue_admit(queue, c["step"], a_rows)
         chosen = CR.queue_select(queue, c["step"])
         live = bool(bits[32 * ri:32 * ri + 32].any())
-        z, template = RC.reference(call, salt, c["base"], root_a, root_b, u)
-        ungated = template if live else RC.reference(call, salt, c["base"], root_a, root_b, u, gated=False)[1]
-        want = RC.gated_reference(call, bits, salt, c["base"], root_a, root_b, u)
+        s_dom = CM.domain(c["admit_fields"], t_max // CR.WORD, "admit")
+        s_label = f"s/{c['step']}/{c['linear']}"
+        root_s = bytes.fromhex(c["root_admit"])
+        tw = range(32 * ri // CR.WORD, (32 * ri + 32) // CR.WORD)
+
+        def opens(q: int, word: int) -> bool:
+            leaf_ = CM.leaf(s_dom, key, s_label, q, CR.word_rows([word])[0])[0]
+            return CM.verify(s_dom, root_s, q, leaf_, CM.path(d["s_levels"], q))
+
+        tile_bits = CR.bits_of([d["words"][q] for q in tw])
+        fq = rng.choice(list(tw))
+        z, ungated = RC.reference(call, salt, c["base"], root_a, root_b, u)
+        want = RC.reference(call, salt, c["base"], root_a, root_b, u, gated=tile_bits)[1]
         got = [int(v) for v in d["receipts"][u]]
         y = E.int_mm(slots[32 * ri:32 * ri + 32].to(weight.device), weight[32 * cj:32 * cj + 32]).cpu().to(torch.int64)
         z_ok = [v & 0xFFFFFFFF for v in y.flatten().tolist()] == z
         nxt = RC.reference(call, salt, c["base"] + 1, root_a, root_b, u)[1] if live else None
-        s_dom = CM.domain(c["admit_fields"], t_max // CR.WORD, "admit")
-        s_label = f"s/{c['step']}/{c['linear']}"
 
         admit_root = CM.levels(s_dom, [CM.leaf(s_dom, key, s_label, q, x)[0]
                                        for q, x in enumerate(CR.word_rows(CR.words(bits)))])[-1][0]
-        sel = {"live": live, "admit_root_rebuilt": admit_root == bytes.fromhex(c["root_admit"]),
+        sel = {"live": live, "admit_root_rebuilt": admit_root == root_s,
                "admit_words_committed": CR.words(bits) == d["words"], "no_junk_row": not CR.junk(a_rows, bits),
-               "no_hollow_row": not CR.hollow(a_rows, chosen)}
+               "no_hollow_row": not CR.hollow(a_rows, chosen),
+               "tile_admit_opens_from_admit_tree": all(opens(q, d["words"][q]) for q in tw),
+               "tile_admit_is_tally_bits": bool(np.array_equal(tile_bits, bits[32 * ri:32 * ri + 32])),
+               "tampered_tile_admit_refused": not opens(fq, d["words"][fq] ^ (1 << rng.randrange(CR.WORD)))}
         free = [r_ for r_ in range(32 * ri, 32 * ri + 32) if not bits[r_]]
         if free:
             jr = rng.choice(free)
@@ -828,8 +843,13 @@ def gate(a, calls: list[dict], data: list[dict], levels: list, layers: list, mod
             sel.update(hollow_row_refused=CR.hollow(hollow_rows, chosen) == [hr],
                        hollow_row_not_admitted=not CR.queue_admit(queue, c["step"], hollow_rows)[hr]
                        and int(CR.queue_admit(queue, c["step"], hollow_rows).sum()) == c["selected"] - 1)
+            zero_rows = a_rows.copy()
+            zero_rows[taken, :-4] = 0
+            zero_rows[taken, -4:] = np.frombuffer(np.float32(0.5).tobytes(), dtype=np.uint8)
+            zb = CR.queue_admit(queue, c["step"], zero_rows)
+            sel.update(zero_byte_rows_admitted=bool(zb[taken].all()) and set(taken) <= set(CR.scale_only(zero_rows)))
         if live:
-            sel.update(next_position_differs=nxt != got, live_unit_not_empty=bool(a_rows[32 * ri:32 * ri + 32].any()))
+            sel.update(next_position_differs=nxt != got, live_receipt_is_ungated=got == ungated)
         else:
             sel.update(dead_receipt_is_empty_receipt=not any(got),
                        dead_rows_canonical_empty=not a_rows[32 * ri:32 * ri + 32].any(),
@@ -895,7 +915,7 @@ def gate(a, calls: list[dict], data: list[dict], levels: list, layers: list, mod
                     "b_root_in_weights_root": CM.verify(w_dom, weights["root"], w, root_b, CM.path(w_lv, w))}
         r = {"step": c["step"], "linear": c["linear"], "module": c["module"], "k": c["k"], "unit": u,
              "position": c["base"] + u, "real_rows_in_tile": max(0, min(32, d["m"] - 32 * ri)),
-             "receipt_equal_reference": got == want, "receipt_equal_template": got == template,
+             "receipt_equal_reference": got == want,
              "z_equal_served_product": z_ok, **sel,
              "receipt_opens": CM.verify(dom, root_r, u, leaf, sibs),
              "flipped_receipt_refused": not CM.verify(dom, root_r, u, leaf_f, sibs),

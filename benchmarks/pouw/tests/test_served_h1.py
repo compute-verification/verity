@@ -3,7 +3,7 @@ K = 64 and 128 (a partial row block left uncovered), and saturated operands at K
 position, salt and roots and every operand byte of its tile.  A call's receipt tree (`served_h1/commit.py`) is the same built in
 pool tasks or leaf by leaf, opens a unit's leaf, and refuses a flipped bit or another call's salt label.  Under a call's admit
 bits (`served_h1/credit.py`), from the committed request queue, a dead unit's receipt is the canonical empty receipt and a live
-unit's the reference's, a junk row in a slot the queue leaves unassigned is refused and credits nothing, so is the canonical
+unit's the reference's (`PouwH1Tile_v4`), an admitted block of zero-byte rows is live and credited (RT4-LOGIC-4), a junk row in a slot the queue leaves unassigned is refused and credits nothing, so is the canonical
 empty row in a slot the queue selects (RT-ALGO-4), and the tally's limbs are 16-bit.  A call's A table is AROW's row table, a tile's rows open against it and the step's A root, and
 A' = -b is refused (CMP-38).  A linear's B table is the same format over its weight rows, under the weights' root; the
 scheduler's record gives the request queue and its commitment."""
@@ -104,9 +104,32 @@ def test_dead_units_skip_noise_and_receipt():
     for u in range(len(call.units)):
         want = RC.gated_reference(call, bits, SALT, 9, RA, RB, u)
         assert list(got[u]) == want
-        assert want == RC.reference(call, SALT, 9, RA, RB, u)[1]
-        ungated = RC.reference(call, SALT, 9, RA, RB, u, gated=False)[1]
+        ungated = RC.reference(call, SALT, 9, RA, RB, u)[1]
         assert (want == ungated) if u in live else (not any(want) and any(ungated))
+
+
+def test_an_admitted_zero_byte_block_is_live_and_a_non_admitted_block_is_dead():
+    """RT4-LOGIC-4 under `PouwH1Tile_v4`: the admit unit reads no row byte, so a selected block of zero-byte rows under
+    nonzero scales is admitted; a tile's live bit is the OR of its admit bits, the bits the tally reads, so that block is
+    live, noised and receipted (the ungated unit's receipt) and credited, and the block the queue leaves unselected is
+    dead: the zero receipt, its noise never derived, and no credit."""
+    call = _padded_call(0, 64, 64, 64, 12)
+    scales = np.zeros(64, dtype=np.float32)
+    scales[:32] = 0.5
+    queue = CR.queue_of([[("r0", 32)]], 1, 64)
+    rows = CM.s8_rows(call.a.numpy(), scales)
+    bits = CR.queue_admit(queue, 0, rows)
+    assert list(bits) == [True] * 32 + [False] * 32 and CR.scale_only(rows) == list(range(32))
+    assert not CR.junk(rows, bits) and not CR.hollow(rows, CR.queue_select(queue, 0))
+    got, live = RC.gated_receipts(call, bits, SALT, 9, RA, RB)
+    assert live == CR.live_units(bits, 64) == [0, 1]
+    for u in range(len(call.units)):
+        want = RC.gated_reference(call, bits, SALT, 9, RA, RB, u)
+        ungated = RC.reference(call, SALT, 9, RA, RB, u)[1]
+        assert list(got[u]) == want and any(ungated)
+        assert want == ungated if u in live else not any(want)
+    tl = CR.tally([{"step": 0, "site": "x", "n": 64, "k": 64}], [int(bits.sum())], 1, ("x",))
+    assert tl["rows"] == 32 and tl["macs"] == 32 * 64 * 64
 
 
 def test_a_opens_against_the_step_root_and_refuses_neg_b():
@@ -200,10 +223,9 @@ def test_junk_row_in_an_unassigned_slot_is_refused_and_credits_nothing():
 def test_canonical_empty_rows_in_selected_slots_are_refused_and_credit_nothing():
     """RT-ALGO-4 (note:20261019T0618Z-draft-rt-algo-r2): a block whose 32 slots the queue selects but whose rows are all the
     canonical empty row is dead to the tile, which zeroes its receipt.  The admit unit admits none of its slots, so the
-    block is dead to credit too and the tally counts none of its rows, and it refuses every one of them (`hollow`).  A row
-    of zero bytes under a nonzero scale is refused (`scale_only`), and a selected row of nonzero bytes under scale 0 is
-    not admitted and so refused as junk: in a window none of these refuse, a selected slot is admitted iff its bytes are
-    nonzero."""
+    block is dead to credit too and the tally counts none of its rows, and it refuses every one of them (`hollow`).  A
+    selected row of zero bytes under a nonzero scale is admitted (`scale_only`: the admit unit reads no byte), and a
+    selected row of nonzero bytes under scale 0 is not admitted and so refused as junk."""
     t, k = 64, 64
     queue = CR.queue_of([[("a", 32)]], 1, t)
     chosen = CR.queue_select(queue, 0)

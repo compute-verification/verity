@@ -9,13 +9,16 @@ scales.
               a function of the slot's row, and admitted iff it is selected and its row's scale is nonzero (`queue_admit`,
               the word of `PouwQueueAdmit`): a row can withhold its slot's admission, never grant it; the admit unit
               refuses a slot that is not admitted unless its row is the canonical empty row (K zero bytes, scale 0:
-              `junk`), a slot that is selected whose row is the canonical empty row (`hollow`, RT-ALGO-4), and a row of zero
-              bytes under a nonzero scale (`scale_only`), so a tile, which reads only the bytes, sees a dead row as an
-              all-zero row and an admitted slot's row as live
+              `junk`) and a slot that is selected whose row is the canonical empty row (`hollow`, RT-ALGO-4); it reads no
+              row byte, so a selected row of zero bytes under a nonzero scale (`scale_only`) is admitted
     words     a call's T admit bits as T / 16 words of 16 bits (bit b of word q is slot 16 q + b), one admit unit each: a
               proof unit's outputs are at most 16 bits; each word is its own hiding leaf, in the call's admit tree
-    dead      a unit (32 slot rows by 32 weight rows) is dead iff its 32 slots' admit bits are all 0: its rows are the
-              canonical empty row, it skips the H1 noise and receipt, and its receipt leaf is the canonical empty receipt
+    tile      a unit (32 slot rows by 32 weight rows) is `PouwH1Tile_v4`, whose `admit` input is its 32 rows' admit bits,
+              bound by commitment equality to the two admit-tree leaves the tally reads: its live bit is their OR, so
+              the tiles the circuit treats as live are exactly the tiles the tally credits, and an admitted tile of
+              zero-byte rows is live, noised and receipted (RT4-LOGIC-4)
+    dead      a unit is dead iff its 32 slots' admit bits are all 0: its rows are the canonical empty row (the admit unit
+              refuses any other), it skips the H1 noise and receipt, and its receipt leaf is the canonical empty receipt
               (2 (KS + m) zero words), so the receipt trees keep their shape
     tally     per (step, site): the admit words' popcount over the site's calls of the step (at most 32 T, 2^11 at T = 64);
               per site: those limbs' sum over the steps (at most S 32 T, under 2^16 at S = 18); the credit Cr is
@@ -114,8 +117,8 @@ def hollow(rows: np.ndarray, selected: np.ndarray) -> list[int]:
 
 
 def scale_only(rows: np.ndarray) -> list[int]:
-    """The slots the admit unit refuses: zero s8 bytes under a nonzero scale.  A tile reads only the s8 bytes, so it can
-    tell a dead row only as all-zero bytes; with these refused, a row's bytes are zero iff it is the canonical empty row."""
+    """The slots whose rows hold zero s8 bytes under a nonzero scale.  The admit unit reads no byte, so it admits such a
+    row when selected, and its tile is live under its admit bit (`PouwH1Tile_v4`)."""
     r = np.asarray(rows, dtype=np.uint8).reshape(rows.shape[0], -1)
     return [int(i) for i in np.flatnonzero(~r[:, :-4].any(axis=1) & r[:, -4:].any(axis=1))]
 
@@ -189,13 +192,18 @@ def proof_plan(n_calls: int, t: int, steps: int, sites: Sequence[str], populatio
                           "request entry, opened from the queue committed before the first coin) and their rows' scales, "
                           "outputs their 16 admit bits, the leaf of the call's admit tree it writes; it opens the 16 slots' "
                           "A rows from the call's a-table and refuses a slot not admitted whose row is not the canonical "
-                          "empty row, a slot selected whose row is, and a row of zero bytes under a nonzero scale",
+                          "empty row and a slot selected whose row is; it reads no row byte, so a selected row of zero "
+                          "bytes under a nonzero scale is admitted",
+            "tile_unit": "PouwH1Tile_v4 on the tile's 32 A rows, 32 B rows and 32 admit bits; its admit input is bound "
+                         "by commitment equality to the two leaves of the call's admit tree that the tally reads, so its "
+                         "live bit (their OR) is the tally's liveness: credit counts exactly the tiles live in-circuit "
+                         "(RT4-LOGIC-4)",
             "tally_units": f"{steps * len(sites)} per (step, site) popcount sums (<= 2^11), {len(sites)} per-site sums over "
                            "the steps (< 2^16), and one level unit (window.level(floor_point(sum_site count N K)), <= 9 bits)",
-            "dead_unit": "a drawn dead unit proves, with the live tile's proof shape (one gated template), that its 32 A "
-                         "rows' bytes are zero and its receipt is the canonical empty receipt; no noise is computed when "
-                         "serving. The template reads no admit bit: its 32 admit bits are 0 because the admit unit admits "
-                         "no slot whose row's scale is zero and refuses a row of zero bytes under a nonzero scale",
+            "dead_unit": "a drawn dead unit proves, with the live tile's template (PouwH1Tile_v4), that its 32 bound "
+                         "admit bits are 0 and so its receipt is the canonical empty receipt; no noise is computed when "
+                         "serving. Its rows are the canonical empty row because the admit unit refuses a slot not "
+                         "admitted whose row is not",
             "egress": "no dead slot's output reaches a served output: the receipts are beside the served y and feed no "
                       "egress, and vLLM samples each served token from the step's selected rows only (admit is the served "
                       "prefix [1] * m + [0] * (T - m) in every call)"}
