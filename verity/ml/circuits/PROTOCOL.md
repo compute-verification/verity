@@ -622,11 +622,11 @@ as declared, so a composite over exact steps declares the intervals its operands
   Definition, primitive or composite, with a coin port and a `"kind": "position"` port and no sink in its return is a
   *seed*: it derives a unit's seed from the coin and the unit's position, and inside a seed's body its coin port's leaves
   have origin `gate` (no rule follows the coin into it). So a coin reaches only the coin port of a noise primitive, a
-  receipt fold or a seed, never any other node, directly or through a return. Also refused (seeds): in the flattened
-  Program, a Definition that calls a seed returns, at a leaf it does not declare `"sink": true`, the seed's output or any
-  value computed from it, through any primitive or call (the unit's noise); the root's outputs count as its returns. So a
-  seed and its noise reach only the receipt of the unit that derives them, never its z, and inside the unit they may be
-  read any number of times.
+  receipt fold or a seed, never any other node, directly or through a return. A seed's output and the values computed
+  from it (the unit's noise) are values no port rule follows, read any number of times. Where they reach is the unit's
+  check: PoUW's compile pass holds a unit's z to read none of them (`noise-in-z`), or under a one-stream scheme to be made
+  from the words its receipt folds by the Definitions that peel the noise back out (`stream`). No dataflow rule can tell
+  a peeled value from a noised one: the peel removes the noise by its arithmetic.
 - **`E_COIN_REUSE`** (one use): in the flattened Program (every call, batch member and scan iteration counted), an input leaf
   of origin `coin` that a noise primitive reads is read more than once, by it or by anything else; or a leaf a noise
   primitive returns is read more than once, the Program's outputs counting as one read. A primitive returns one value, so
@@ -647,6 +647,6 @@ Vectors: `verity/ml/circuits/tests/test_ports.py`: each rule's acceptance and re
 narrower than its type refused, and narrowed by a range check instead; a chain of exact steps declaring its words' intervals
 and a limb split's bound on them; an explicit limb split with its carries; a word read at
 another width (`E_REINTERPRET`), built and in a tampered descriptor; the coin rules through calls,
-batches and scans; seeds batched over positions, with their noise confined to the unit's receipt;
+batches and scans; seeds batched over positions, and a unit's z read from its noise;
 tampered descriptors; the canonical form; and a pinned
 digest of one typed descriptor.

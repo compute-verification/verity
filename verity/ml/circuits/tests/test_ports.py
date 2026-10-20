@@ -894,6 +894,11 @@ def Widen(x):
     return x
 
 
+@primitive("PortsTestNeg8", 1, (("x", V8),), V8)
+def Neg8(x):
+    return -x & 0xFF
+
+
 SEED = Ports(params={"salt": In(kind="coin"), "position": In(kind="position")})
 COIN_SALT = Ports(params={"salt": In(kind="coin")})
 #: a seed whose body computes on the salt: refused as coin flow without the position port that makes it a seed
@@ -975,18 +980,16 @@ def test_a_seed_coin_is_read_by_seeds_alone():
             "a coin that a noise primitive reads is read once", "PortsTestDither_v1")
 
 
-def test_a_seed_and_its_noise_reach_only_the_receipt():
-    refused("E_COIN_FLOW", lambda: Program(units("PortsTestUnitsNoisyZ", unit("PortsTestUnitNoisyZ", lambda B, a, b, s, x: x))),
-            "PortsTestUnitNoisyZ_v1 return leaf 0: returns the seed of PortsTestUnitNoisyZ_v1 node 0", "never its other returns")
-    refused("E_COIN_FLOW", lambda: Program(units("PortsTestUnitsSeedZ", unit("PortsTestUnitSeedZ",
-                                                                              lambda B, a, b, s, x: B.call(Byte, s)))),
-            "PortsTestUnitSeedZ_v1 return leaf 0", "(its z)")
-    refused("E_COIN_FLOW", lambda: Program(units("PortsTestUnitsNoiseZ", unit("PortsTestUnitNoiseZ",
-                                                                               lambda B, a, b, s, x: B.call(noise_of, s)))),
-            "PortsTestUnitNoiseZ_v1 return leaf 0")
-    refused("E_COIN_FLOW", lambda: Program(comp("PortsTestSeedOut", [("salt", V32), ("position", V32)], V32,
-                                                lambda B, S, salt, position: B.call(Seed, salt, position), ports=SEED)),
-            "return leaf 0: returns the seed of", "never the program's outputs")
+def test_no_port_rule_follows_a_seeds_noise():
+    """A unit's z that peels its noise back out (x - noise = a, as PoUW's one-stream tile does) and one that doesn't are one
+    dataflow, so the port rules admit both and the unit's own check (PoUW's `noise-in-z` and `stream`) tells them apart."""
+    peeled = unit("PortsTestUnitPeelZ", lambda B, a, b, s, x: B.call(Add8, x, B.call(Neg8, B.call(noise_of, s))))
+    assert [evaluate(bind(peeled), a, 2, 5, 7)[0] for a in (0, 1, 200, 255)] == [0, 1, 200, 255]
+    for name, z in (("PeelZ", None), ("NoisyZ", lambda B, a, b, s, x: x), ("SeedZ", lambda B, a, b, s, x: B.call(Byte, s)),
+                    ("NoiseZ", lambda B, a, b, s, x: B.call(noise_of, s))):
+        roundtrip(Program(units(f"PortsTestUnits{name}", peeled if z is None else unit(f"PortsTestUnit{name}", z))))
+    roundtrip(Program(comp("PortsTestSeedOut", [("salt", V32), ("position", V32)], V32,
+                           lambda B, S, salt, position: B.call(Seed, salt, position), ports=SEED)))
 
 
 def test_a_harness_evaluates_a_seed():

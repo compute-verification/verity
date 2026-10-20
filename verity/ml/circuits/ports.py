@@ -54,9 +54,11 @@ declares one, so an undeclared Definition's entry, id and digests are what they 
   coins reach nothing but its one reader's forward cone (`Accounting.Guarantees.CoinFlow` in `Security/`). A coin seeds read
   is read by seeds alone, any number of them, and no position leaf is read by two seeds, so each (coin, position) seeds
   one unit (`E_COIN_REUSE`).
-* **Seeds.** A seed's output, and every value computed from it (the unit's noise), reaches only the sinks of the Definition
-  that calls the seed (the unit's receipt), never a return leaf not declared `Out(sink=True)` (its z), the root's outputs
-  included (`E_COIN_FLOW`). Inside the unit they may be read any number of times.
+* **Seeds.** A seed's output and every value computed from it (the unit's noise) are values no rule here follows: they may
+  be read any number of times, and where they reach is the unit's own check. PoUW's compile pass holds each unit's z to
+  read none of them (``noise-in-z``), or, under a one-stream scheme, to be made from the words its receipt folds by the
+  Definitions that peel the noise back out (``stream``). A dataflow rule can't tell a peeled value from a noised one:
+  that the peel removes the noise is its arithmetic.
 
 Facts flow down every call and up through declarations. A parameter's facts, in a Definition's body, are the join over all its
 instances of its operands' facts, so a bound sees its operand's producer through any number of calls. A Definition's output
@@ -1094,7 +1096,7 @@ def _analyse(root: Any, order: list, typed: bool) -> Facts:
         if sp is root:
             root_env, root_ret = env, R
     if any(p.kind == "coin" for _k, _lo, _hi, p, _w in (rpt.inputs if rpt is not None else ())):
-        _Uses(root, rpt, harness_).check()
+        _Uses(root, rpt).check()
     return Facts(root, typed, root_env, root_ret, params_out)
 
 
@@ -1136,8 +1138,8 @@ def _spaces(r: Refs, out: set) -> None:
 class _Summary:
     """One activation of a composite whose parameters' tracked leaves are `pattern`: `reads[(i, leaf)]`, how often parameter
     i's leaf is read by a noise primitive, a receipt fold, a seed and any other primitive, with the first readers; `ret[j]`,
-    what return leaf j is: ("p", i, leaf), that parameter leaf; ("s",), a value computed from a seeded parameter leaf; or
-    ("c", inst, leaf, count, readers), noise made inside and read there `count` times."""
+    what return leaf j is: ("p", i, leaf), that parameter leaf; or ("c", inst, leaf, count, readers), noise made inside and
+    read there `count` times."""
 
     __slots__ = ("reads", "ret")
 
@@ -1148,14 +1150,12 @@ class _Summary:
 class _Uses:
     """The one-use and seed rules over the flattened Program: each tracked leaf (a root coin, ("coin", node, leaf); a root
     position, ("pos", node, leaf); or a noise primitive instance's output, ("c", inst, leaf)) is counted at every primitive or
-    seed operand that reads it, once per member, step and instance, through every call. A seed instance's output, and every
-    value a primitive or a composite computes from it, is ("s", inst) (("s", None) in a callee it is passed to), followed to
-    the return of the Definition that called the seed. A composite's activation is summarized once per pattern of tracked
-    parameter leaves, so a batch or scan of one body costs one simulation and a count per tracked leaf per member. A
-    harness's outputs are its Definition's, so a harness of a seed returns the seed."""
+    seed operand that reads it, once per member, step and instance, through every call. A composite's activation is
+    summarized once per pattern of tracked parameter leaves, so a batch or scan of one body costs one simulation and a count
+    per tracked leaf per member."""
 
-    def __init__(self, root: Any, rpt: PortTypes, harness: bool = False) -> None:
-        self.root, self.rpt, self.harness = root, rpt, harness
+    def __init__(self, root: Any, rpt: PortTypes) -> None:
+        self.root, self.rpt = root, rpt
         self.memo: dict[tuple, _Summary] = {}
         self.coins: dict[tuple, list] = {}
         self.made: dict[tuple, list] = {}
@@ -1198,7 +1198,7 @@ class _Uses:
         return out
 
     def _read(self, s: tuple, role: int, n: int, at: list, reads: dict) -> None:
-        if s[0] == "s" or (s[0] == "pos" and role != _SEED):
+        if s[0] == "pos" and role != _SEED:
             return
         if s[0] == "p":
             e = reads.setdefault((s[1], s[2]), [0, 0, 0, 0, []])
@@ -1230,16 +1230,6 @@ class _Uses:
                             f"{'; then by '.join(e[4])}): two copies of one noise cancel, and noise shared across rows, "
                             f"matmuls, batch members or scan steps is fresh for none of them. Draw fresh coins for each use")
 
-    @staticmethod
-    def _seeded(args: list) -> tuple | None:
-        """A seeded source among `args`' tracked leaves, one of this activation's seeds first."""
-        got = None
-        for d in args:
-            for s in d.values():
-                if s[0] == "s" and (got is None or (got[1] is None and s[1] is not None)):
-                    got = s
-        return got
-
     def _apply(self, fn: Any, args: list, at: str, reads: dict) -> dict:
         """One instance of `fn` (a primitive or a composite) on arguments whose tracked leaves are `args` ({leaf: source}
         per parameter): count its reads, and give its return's tracked leaves."""
@@ -1250,17 +1240,14 @@ class _Uses:
             for d in args:
                 for s in d.values():
                     self._read(s, _OTHER if role is None else role, 1, [at], reads)
-            leaves = fn.signature()[1].leaves
-            seeded = ("s", self._new(at)) if role == _SEED else self._seeded(args)
-            if seeded is not None:
-                return dict.fromkeys(range(leaves), seeded)
             if role != _NOISE:
                 return {}
+            leaves = fn.signature()[1].leaves
             inst = self._new(at)
             for j in range(leaves):
                 self.made[(inst, j)] = [0, 0, 0, 0, []]
             return {j: ("c", inst, j) for j in range(leaves)}
-        pattern = tuple(tuple(sorted((leaf, s[0] == "s") for leaf, s in d.items())) for d in args)
+        pattern = tuple(tuple(sorted(d)) for d in args)
         S = self.memo.get((id(fn), pattern))
         if S is None:
             S = self.memo[(id(fn), pattern)] = self._simulate(fn, pattern)
@@ -1272,9 +1259,6 @@ class _Uses:
         for j, r in S.ret.items():
             if r[0] == "p":
                 out[j] = args[r[1]][r[2]]
-                continue
-            if r[0] == "s":
-                out[j] = self._seeded(args)
                 continue
             inst = fresh.get(r[1])
             if inst is None:
@@ -1306,8 +1290,7 @@ class _Uses:
         from .program import is_input
 
         root = sp is self.root
-        env: dict[tuple[str, int], dict] = {("p", i): {leaf: ("s", None) if seeded else ("p", i, leaf) for leaf, seeded in leaves}
-                                            for i, leaves in enumerate(pattern)}
+        env: dict[tuple[str, int], dict] = {("p", i): {leaf: ("p", i, leaf) for leaf in leaves} for i, leaves in enumerate(pattern)}
         if root:
             for k, lo, hi, p, _w in self.rpt.inputs:
                 if p.kind in ("coin", "position"):
@@ -1350,20 +1333,9 @@ class _Uses:
                 out = self._apply(fn, tracked, at, reads)
             env[("n", k)] = out
         R = self._gather(sp.body.ret, env)
-        pt = self.rpt if root else port_types(sp)
-        sinks = [(lo, hi) for lo, hi, o, _w in (pt.ret if pt is not None else ()) if o.sink]
         ret: dict = {}
         for j, s in R.items():
-            if s[0] == "s":
-                if s[1] is None:
-                    ret[j] = ("s",)
-                elif _covered(sinks, j, j + 1) is not None and not (root and self.harness):
-                    where = "the program's outputs" if root else "its other returns"
-                    raise PortError("E_COIN_FLOW", f"{sp.id} return leaf {j}: returns the seed of {self.labels[s[1]]}, or a "
-                                    f"value computed from it (its noise), at a leaf it doesn't declare Out(sink=True). A "
-                                    f"seed and its noise are internal to the Definition that calls the seed, the unit: they "
-                                    f"reach only its receipt (its sinks), never {where} (its z)")
-            elif root:
+            if root:
                 self._read(s, _OTHER, 1, [f"{sp.id}'s outputs"], reads)
             elif s[0] == "p":
                 ret[j] = s
