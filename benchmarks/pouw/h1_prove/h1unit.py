@@ -4,22 +4,32 @@ prover and the verifier of `run.py` share.
 * **The unit** is `circuit.h1tile.PouwH1Tile{EXACT=GemmAccumulatorS8_v2{K, sm120}, R, C, PAIRS=the full grid}`, the
   Definition the compile pass binds for an s8 grid tile (`h1tile._Unit`). Its statement (`stager`): input rows ``a0..a{R-1}``
   and ``b0..b{C-1}``, one ``hm96-sha512/row/v2`` bit row per A row and B row (8 K bits, the int8 codes' bytes), the public
-  row ``pub`` (``salt || position || roots``, 1600 bits: the window's salt, the unit's position and its seed group's
-  roots), and two output rows, ``z`` (o0: the cells' exact s32 products) and ``receipt`` (o1: CP-W's 2 (KS + m) words),
-  each one ``row/v2`` row of exactly its words.
+  row ``pub`` (``salt || position || roots``, 1600 bits: the window's salt, the unit's position and the window's roots),
+  and two output rows, ``z`` (o0: the cells' exact s32 products) and ``receipt`` (o1: CP-W's 2 (KS + m) words), each one
+  ``row/v2`` row of exactly its words.
 * **The public row** stands for public input ports, which the Lean verifier refuses as a form its soundness proof does
   not cover (`ProvedScope.statementRules`). Its hm96 salt is public (`pub_salt`), so the verifier computes the row's
   ``b || c`` from its own salt, position and roots, and its public file binds the proof to them; its content is public, so
   the public salt hides nothing that needed hiding.
 * **The window's commitments** are those rows' ``b || c`` (hm96-sha512 under the committer's salts) as frame-v3-sha512
-  leaves (`rowleaf.row_leaf`) of one tree per side and call (A rows, B rows) and one per output (z, receipt) over the
-  window's tiles. `commit_strings` computes a row's ``b || c`` with C-Flock's own function on the port the statement's
-  META declares (`stage.py` holds the two equal), so a proof's committed rows are the window's leaves exactly when its
-  rows and salts are the committed ones.
+  leaves (`rowleaf.row_leaf`) of four trees: ``a``, the window's A rows (the activations every call reads) in a slot of
+  `slot` rows, the token rows padded with zero rows; ``b``, every call's B rows (the model's), call after call; and ``z``
+  and ``receipt`` over the window's tiles. The roots are the window's ``(root(a), root(b))``, every unit's ``roots``
+  input. `commit_strings` computes a row's ``b || c`` with C-Flock's own function on the port the statement's META
+  declares (`stage.py` holds the two equal), so a proof's committed rows are the window's leaves exactly when its rows and
+  salts are the committed ones.
+* **The window's public Program** (`PouwH1Window`, `Shape.window`): every tile of the window as one call of the unit, its
+  A rows a slice of the parameter ``a`` (the slot), its B rows a slice of ``b`` (its call's rows), its position one row of
+  ``position``, and ``roots``; unit u is the tile `window.py` numbers u, and its outputs row u of ``z`` and ``receipt``.
+  Its `Q_template_instance` partition derives the units, and the statement binds it (`Shape.stager`'s ``bind``), so the
+  Lean verifier derives each instance's unit from its own copy of the program (``--program``, ``--partition``) and the
+  indices the public file states, and `unit_reads` is the row of each tree each unit reads. The slot is the window's size
+  class and the calls' B rows the model's, so the layout is protocol structure and the real token count stays the
+  prover's. Each circuit port reads one tree in every unit, as a registered port reads one value.
 * **The verifier's public file** (`verifier_pub`) is built from the opened leaves and the verifier's own public row alone:
-  the statement's header (its circuit pin, each port's frame-v3 root over those ``b || c``) and the ``b || c``. Lean
-  ``verify --zk`` holds a session to that file, so it accepts only a proof whose committed rows are the window's and whose
-  salt, position and roots are the verifier's.
+  the statement's header (its circuit pin, its units' global indices, each port's frame-v3 root over those ``b || c``)
+  and the ``b || c``. Lean ``verify --zk`` holds a session to that file, so it accepts only a proof whose committed rows
+  are the window's and whose salt, position and roots are the verifier's.
 """
 from __future__ import annotations
 
@@ -31,6 +41,10 @@ from pathlib import Path
 
 import numpy as np
 
+from verity.ml.circuits.defs import CompositeDefinition
+from verity.ml.circuits.ports import In, Ports
+from verity.ml.circuits.refs import coll_concat, runs
+from verity.ml.circuits.types import Array
 from verity.ml.commitments import hm96
 from verity.ml.commitments.identity import identity_digest_sha512
 from verity.ml.commitments.indexed import RangeIndexedDomain
@@ -66,6 +80,87 @@ def unit_salt(coin: bytes) -> bytes:
 def pub_salt(window: str, position: int) -> bytes:
     """The public row's hm96 salt, which anyone derives from the window and the unit's position."""
     return hashlib.shake_256(PUB_SALT_TAG + window.encode() + b"\0" + int(position).to_bytes(8, "big")).digest(SALT_BYTES)
+
+
+def slot(rows: int, r: int = 4) -> int:
+    """A window's A slot for ``rows`` token rows: the least power of two holding them, at least ``r``. The window pads its
+    A rows with zero rows to it."""
+    if rows < 1:
+        raise ValueError("a window has at least one token row")
+    return max(r, 1 << (rows - 1).bit_length())
+
+
+# -- the window's public Program --------------------------------------------------------------------------------------------
+
+def _window_signature(S):
+    (_, a), (_, b) = S.TILE.signature()[0][:2]
+    D, P = SD.types(True)
+    T = sum((S.M // a.n) * (n // b.n) for _name, n in S.CALLS)
+    return ((("a", Array(S.M, a.elem)), ("b", Array(sum(n for _name, n in S.CALLS), b.elem)), ("salt", D),
+             ("position", Array(T, P)), ("roots", Array(2, D))), Array(T, S.TILE.signature()[1]))
+
+
+def _window_body(B, S, a, b, salt, position, roots):
+    (_, at), (_, bt) = S.TILE.signature()[0][:2]
+    r, c, b0, outs = at.n, bt.n, 0, []
+    for _name, n in S.CALLS:
+        for ti in range(S.M // r):
+            for tj in range(n // c):
+                outs.append(B.call(S.TILE, a[r * ti:r * ti + r], b[b0 + c * tj:b0 + c * tj + c], salt, position[len(outs)], roots))
+        b0 += n
+    return coll_concat(_window_signature(S)[1], outs)
+
+
+PouwH1Window = CompositeDefinition(
+    "PouwH1Window", 1, ("TILE", "CALLS", "M"), _window_signature, _window_body, register=False,
+    ports=lambda S: Ports(params={"salt": In(kind="coin")}),
+    doc="One H1 window's tiles, call by call and row block major: tile (call, ti, tj) is TILE on A rows [R ti, R ti + R) "
+        "of the M-row slot a and B rows [C tj, C tj + C) of the call's rows of b (the calls' B rows in order), the salt, "
+        "the tile's position and the window's roots.")
+
+
+def window_shape(com: dict) -> tuple[tuple[tuple[str, int], ...], int]:
+    """A window commitment's public shape: its calls' names and B rows, and its A slot."""
+    return tuple((c["name"], int(c["n"])) for c in com["calls"]), int(com["slot"])
+
+
+def window_roots(com: dict) -> tuple[bytes, bytes]:
+    """A window commitment's roots (root(a), root(b)), every unit's ``roots`` input."""
+    return bytes.fromhex(com["root_a"]), bytes.fromhex(com["root_b"])
+
+
+def _inputs(program) -> dict[int, str]:
+    """Each root Input node's parameter: a parameter's leaves are one Input node's gates, all of them."""
+    from verity.ml.circuits.program import is_input
+    body, got = program.root.body, {}
+    at = {body.offsets[k]: k for k, n in enumerate(body.nodes) if is_input(n.fn)}
+    for pi, (name, t) in enumerate(program.fn.signature()[0]):
+        rs = runs(program.input_coll(pi).refs)
+        if len(rs) != 1 or rs[0][2] not in at or rs[0][3] - rs[0][2] != t.leaves or \
+                body.offsets[at[rs[0][2]] + 1] - rs[0][2] != t.leaves:
+            raise ValueError(f"parameter {name} is not one Input node's leaves")
+        got[at[rs[0][2]]] = name
+    return got
+
+
+def unit_reads(program, tp, u: int) -> dict[str, tuple[str, int]]:
+    """The rows unit ``u`` reads in the window's Program (``tp`` its template partition): each of the unit's A and B ports
+    (``a{i}``, ``b{j}``) and its ``salt``, ``position`` and ``roots`` the parameter and row of the one whole row it reads,
+    and its outputs ``o0`` and ``o1`` row ``u`` of the window's z and receipt. From the call's references alone (one run
+    per port), so a unit costs its ports at any K."""
+    k, _m = tp.locate(u)
+    node, inputs, out = program.root.body.nodes[k], _inputs(program), {}
+    for (name, t), arg in zip(node.fn.signature()[0], node.args):
+        for port, c in ([(f"{name}{i}", arg[i]) for i in range(t.n)] if name in ("a", "b") else [(name, arg)]):
+            rs = runs(c.refs)
+            if len(rs) != 1 or rs[0][0] != "n" or rs[0][1] not in inputs:
+                raise ValueError(f"unit {u}: port {port} reads no one run of a parameter")
+            _s, node_k, lo, hi = rs[0]
+            param, w = inputs[node_k], hi - lo
+            if lo % w or dict(program.fn.signature()[0])[param].leaves % w:
+                raise ValueError(f"unit {u}: port {port} reads no whole row of {param}")
+            out[port] = (param, lo // w)
+    return {**out, "o0": ("z", u), "o1": ("receipt", u)}
 
 
 @dataclass(frozen=True)
@@ -107,12 +202,25 @@ class Shape:
         return bind(H.PouwH1Tile3 if tile() == "v3" else H.PouwH1Tile, EXACT=exact, R=self.r, C=self.c,
                     PAIRS=tuple((i, j) for i in range(self.r) for j in range(self.c)))
 
-    def stager(self, name: str, circuit=None):
-        """The unit's `UnitStager`: its circuit, built once (the long step at K = 4096) and written to ``circuit``."""
+    def window(self, calls, m: int):
+        """The window's public Program (`PouwH1Window` over this unit, its ``calls`` ``(name, B rows)`` and A slot ``m``) and
+        its `Q_template_instance` query."""
+        from verity.ml.circuits.defs import bind
+        from verity.ml.circuits.program import Program
+        from verity.core.protocols.sampled_proofs.one_stage import partition as P
+        calls = tuple((str(name), int(n)) for name, n in calls)
+        if m != slot(m, self.r) or any(n < self.c or n % self.c for _name, n in calls):
+            raise ValueError(f"a window's A slot is a power of two of at least {self.r} rows and its calls' B rows whole "
+                             f"blocks of {self.c}: slot {m}, calls {calls}")
+        return Program(bind(PouwH1Window, TILE=self.definition(), CALLS=calls, M=m)), P.template_instance_query(self.definition())
+
+    def stager(self, name: str, circuit=None, bind: dict | None = None):
+        """The unit's `UnitStager`: its circuit, built once (the long step at K = 4096) and written to ``circuit``, bound to
+        ``bind`` (``{"partition", "program"}``: the window's partition and Program, `Shape.window`)."""
         from verity_flock import class_statement as CS
         in_rows = ([(f"a{i}", V2, 8 * self.k, [f"a[{i}]"]) for i in range(self.r)]
                    + [(f"b{j}", V2, 8 * self.k, [f"b[{j}]"]) for j in range(self.c)] + [("pub", V2, PUB_BITS, list(PUBLIC))])
-        return CS.UnitStager(self.definition(), name, in_rows, [(V2, (0,)), (V2, (1,))], circuit=circuit)
+        return CS.UnitStager(self.definition(), name, in_rows, [(V2, (0,)), (V2, (1,))], circuit=circuit, bind=bind)
 
 
 # -- words ------------------------------------------------------------------------------------------------------------------
@@ -241,19 +349,22 @@ def forge_statement(honest: Path, out: Path, pub: bytes, instance: int, port: st
         np.frombuffer(data[nl + at:nl + at + 2 * len(words)], "<u2") != words))}
 
 
-def verifier_pub(circuit_head: dict, set_name: str, subcircuit: str, bcs: list[dict[str, bytes]]) -> bytes:
+def verifier_pub(circuit_head: dict, set_name: str, subcircuit: str, bcs: list[dict[str, bytes]], indices: list[int]) -> bytes:
     """The verifier's own public file for n units (`circuit.write`'s ``pub_path``): ``circuit_head`` the statement's
-    circuit-side fields (its META, pin and class, which the verifier reads off the circuit file it holds), and each unit's
-    rows' ``b || c`` (port name -> 128 bytes): the window's opened leaves, and its own public row's."""
+    circuit-side fields (its META, pin and class, which the verifier reads off the circuit file it holds), each unit's
+    global index in the window's Program (``indices``, ascending: the drawn units), and each unit's rows' ``b || c`` (port
+    name -> 128 bytes): the window's opened leaves, and its own public row's."""
     from verity_flock import circuit as FC
     meta, pin, cls = circuit_head["meta"], circuit_head["pin"], circuit_head["class"]
     if meta.get("public_inputs"):
         raise ValueError("the unit's statement has public input ports, which the Lean verifier refuses")
     ports = FC._meta_ports(meta)
     n = len(bcs)
+    indices = [int(u) for u in indices]
+    if len(indices) != n or indices != sorted(set(indices)):
+        raise ValueError(f"{n} units need {n} ascending global indices, not {indices}")
     fv = _frame(ports, set_name, n, {p.name: [u[p.name] for u in bcs] for p in ports})
     G = meta["vus_per_block"]
-    indices = list(range(n))
     units = {"vus_per_block": G, "units_per_vu": meta.get("units_per_vu", 1), "indices": indices,
              "blocks": [indices[b:b + G] for b in range(0, n, G)], "classes": [cls] * n}
     head = {"format": FC.INST_FORMAT, "statement": meta.get("statement", FC.STATEMENT), "scheme": FC.SCHEME, "set": set_name,

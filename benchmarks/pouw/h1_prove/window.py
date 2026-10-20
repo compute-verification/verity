@@ -1,8 +1,9 @@
 """The committer and prover of one H1 window (`run.py` drives it; the challenger and the verifier never import this file).
 
     python window.py commit LAYER.npz WINDOW PRIV OUT.json [--k K] [--cols N] [--calls q_proj,...]
-        each call's A rows and B rows (`layer.py`'s codes) as row/v2 bit rows under fresh salts, one frame-v3-sha512 tree
-        per side and call: OUT.json the public commitment (each call's shape, first tile and two roots), PRIV the prover's
+        the window's A rows (`layer.py`'s codes, padded with zero rows to their slot, `h1unit.slot`) and every call's B
+        rows as row/v2 bit rows under fresh salts, one frame-v3-sha512 tree per side: OUT.json the public commitment (the
+        slot, each call's B rows, first B row and first tile, the two roots), PRIV the prover's (its token rows too)
     python window.py serve PRIV SALT_HEX OUT.json [--workers W]
         once the salt coin is open: every tile's z (its cells' exact products) and CP-W receipt (`h1tile.reference`, the
         word reference the served kernel's receipts equal), each an output row under a fresh salt in the window's z tree
@@ -16,9 +17,10 @@
         the drawn units' rows (their public row's too) and salts for staging (OUT_DIR/rows.npz, the prover's), and their
         opening (OUT_DIR/opening.json: each committed row's b || c and its path to the window's registered root)
 
-A tile is (call, ti, tj): A rows [R ti, R (ti + 1)) and B rows [C tj, C (tj + 1)) of the call; tiles are numbered call by
-call, row block major, and a tile's number is its position, the unit's ``position`` input. A call is one seed group, its
-roots (root(A), root(B)) the unit's ``roots`` input. ``--k`` truncates every row to its first K codes (a smoke run's).
+A tile is (call, ti, tj): A rows [R ti, R (ti + 1)) of the slot and B rows [C tj, C (tj + 1)) of the call's; tiles are
+numbered call by call, row block major, and a tile's number is its position, the unit's ``position`` input
+(`h1unit.PouwH1Window`). The window is one seed group, its roots (root(a), root(b)) every unit's ``roots`` input. ``--k``
+truncates every row to its first K codes (a smoke run's).
 """
 from __future__ import annotations
 
@@ -49,7 +51,7 @@ def _bl(a: np.ndarray) -> list[bytes]:
 def tiles(com: dict) -> list[tuple[int, int, int]]:
     out = []
     for c, call in enumerate(com["calls"]):
-        for ti in range(call["m"] // R):
+        for ti in range(com["slot"] // R):
             for tj in range(call["n"] // C):
                 out.append((c, ti, tj))
     return out
@@ -69,43 +71,50 @@ def cmd_commit(a) -> int:
     priv.mkdir(parents=True, exist_ok=True)
     calls = a.calls.split(",") if a.calls else sorted(k[2:] for k in lay.files if k.startswith("b_"))
     A = lay["a"][:, :a.k] if a.k else lay["a"]
-    k = A.shape[1]
+    rows, k = A.shape
     shape = U.Shape(k, R, C)
     port = shape.ports()[0]
-    m = A.shape[0] - A.shape[0] % R
-    A = A[:m]
-    out_calls, arrays, tile0 = [], {}, 0
+    m = U.slot(rows, R)
+    A = np.concatenate([A, np.zeros((m - rows, k), A.dtype)])
+    out_calls, Bs, tile0, b0 = [], [], 0, 0
     for name in calls:
         B = lay[f"b_{name}"][:, :k]
         if a.cols:
             B = B[:a.cols]
         n = B.shape[0] - B.shape[0] % C
-        B = B[:n]
-        sa, sb = _salts(m), _salts(n)
-        bca = U.commit_strings(port, U.row_words(A), _bl(sa))
-        bcb = U.commit_strings(port, U.row_words(B), _bl(sb))
-        da, db = U.domain(a.window, f"a/{name}", m), U.domain(a.window, f"b/{name}", n)
-        ra, rb = U.levels(da, bca)[-1][0], U.levels(db, bcb)[-1][0]
         t = (m // R) * (n // C)
-        out_calls.append({"name": name, "m": m, "k": k, "n": n, "tile0": tile0, "tiles": t, "root_a": ra.hex(), "root_b": rb.hex()})
-        tile0 += t
-        arrays.update({f"{name}_b": B, f"{name}_sa": sa, f"{name}_sb": sb,
-                       f"{name}_bca": np.frombuffer(b"".join(bca), np.uint8).reshape(m, 128),
-                       f"{name}_bcb": np.frombuffer(b"".join(bcb), np.uint8).reshape(n, 128)})
-    np.savez(priv / "rows.npz", a=A, **arrays)
-    com = {"schema": "verity/pouw/h1-prove/commitment/v0", "window": a.window, "unit": {"definition": "PouwH1Tile_v1", "k": k, "r": R, "c": C,
-           "exact": "GemmAccumulatorS8_v2"}, "calls": out_calls, "tiles": tile0, "tokens": [int(x) for x in lay["tokens"]]}
+        out_calls.append({"name": name, "n": n, "b0": b0, "tile0": tile0, "tiles": t})
+        Bs.append(B[:n])
+        tile0, b0 = tile0 + t, b0 + n
+    B = np.concatenate(Bs)
+    sa, sb = _salts(m), _salts(len(B))
+    bca = U.commit_strings(port, U.row_words(A), _bl(sa))
+    bcb = U.commit_strings(port, U.row_words(B), _bl(sb))
+    ra = U.levels(U.domain(a.window, "a", m), bca)[-1][0]
+    rb = U.levels(U.domain(a.window, "b", len(B)), bcb)[-1][0]
+    np.savez(priv / "rows.npz", a=A, b=B, sa=sa, sb=sb, bca=np.frombuffer(b"".join(bca), np.uint8).reshape(m, 128),
+             bcb=np.frombuffer(b"".join(bcb), np.uint8).reshape(len(B), 128))
+    com = {"schema": "verity/pouw/h1-prove/commitment/v1", "window": a.window, "unit": {"definition": "PouwH1Tile_v1", "k": k, "r": R, "c": C,
+           "exact": "GemmAccumulatorS8_v2"}, "slot": m, "calls": out_calls, "b_rows": len(B), "root_a": ra.hex(),
+           "root_b": rb.hex(), "tiles": tile0, "rows": rows, "tokens": [int(x) for x in lay["tokens"]]}
     (priv / "commitment.json").write_text(json.dumps(com, indent=1))
-    Path(a.out).write_text(json.dumps({x: com[x] for x in ("schema", "window", "unit", "calls", "tiles")}, indent=1))
-    print(json.dumps({"window": a.window, "k": k, "m": m, "calls": {c["name"]: c["n"] for c in out_calls}, "tiles": tile0}))
+    Path(a.out).write_text(json.dumps({x: com[x] for x in PUBLIC}, indent=1))
+    print(json.dumps({"window": a.window, "k": k, "slot": m, "calls": {c["name"]: c["n"] for c in out_calls}, "tiles": tile0}))
     return 0
+
+
+#: the public commitment's fields; the prover's copy adds its token rows and tokens
+PUBLIC = ("schema", "window", "unit", "slot", "calls", "b_rows", "root_a", "root_b", "tiles")
+
+
+roots = U.window_roots
 
 
 def _rows(priv: dict, com: dict, u: int) -> tuple[np.ndarray, np.ndarray, tuple[bytes, bytes], dict]:
     c, ti, tj = tile_of(com, u)
     call = com["calls"][c]
-    return (priv["a"][R * ti:R * (ti + 1)], priv[f"{call['name']}_b"][C * tj:C * (tj + 1)],
-            (bytes.fromhex(call["root_a"]), bytes.fromhex(call["root_b"])), call)
+    b0 = call["b0"] + C * tj
+    return priv["a"][R * ti:R * (ti + 1)], priv["b"][b0:b0 + C], roots(com), call
 
 
 _W: dict = {}
@@ -277,7 +286,8 @@ def cmd_open(a) -> int:
     T, w = com["tiles"], com["window"]
     lz = U.levels(U.domain(w, "z", T), _bl(priv["bcz"]))
     lr = U.levels(U.domain(w, "receipt", T), _bl(priv["bcr"]))
-    side_levels = {}
+    la = U.levels(U.domain(w, "a", com["slot"]), _bl(priv["bca"]))
+    lb = U.levels(U.domain(w, "b", com["b_rows"]), _bl(priv["bcb"]))
     salt = bytes.fromhex(a.salt)
     rows = {f"a{i}": [] for i in range(R)} | {f"b{j}": [] for j in range(C)} | {"pub": [], "o0": [], "o1": []}
     salts = {p: [] for p in rows}
@@ -285,27 +295,21 @@ def cmd_open(a) -> int:
     for u in units:
         c, ti, tj = tile_of(com, u)
         call = com["calls"][c]
-        nm = call["name"]
-        for s, n in (("a", call["m"]), ("b", call["n"])):
-            if (nm, s) not in side_levels:
-                side_levels[nm, s] = U.levels(U.domain(w, f"{s}/{nm}", n), _bl(priv[f"{nm}_bc{s}"]))
-        A, B = priv["a"][R * ti:R * (ti + 1)], priv[f"{nm}_b"][C * tj:C * (tj + 1)]
+        A, B, _roots, _call = _rows(priv, com, u)
         codes["a"].append(A)
         codes["b"].append(B)
-        op = {"unit": u, "call": nm, "tile": [ti, tj], "rows": {}}
+        op = {"unit": u, "call": call["name"], "tile": [ti, tj], "rows": {}}
         for i in range(R):
             r = R * ti + i
             rows[f"a{i}"].append(U.row_words(A[i:i + 1])[0])
-            salts[f"a{i}"].append(bytes(priv[f"{nm}_sa"][r]))
-            op["rows"][f"a{i}"] = {"tree": f"a/{nm}", "index": r, "bc": bytes(priv[f"{nm}_bca"][r]).hex(),
-                                   "path": U.path(side_levels[nm, "a"], r)}
+            salts[f"a{i}"].append(bytes(priv["sa"][r]))
+            op["rows"][f"a{i}"] = {"tree": "a", "index": r, "bc": bytes(priv["bca"][r]).hex(), "path": U.path(la, r)}
         for j in range(C):
-            r = C * tj + j
+            r = call["b0"] + C * tj + j
             rows[f"b{j}"].append(U.row_words(B[j:j + 1])[0])
-            salts[f"b{j}"].append(bytes(priv[f"{nm}_sb"][r]))
-            op["rows"][f"b{j}"] = {"tree": f"b/{nm}", "index": r, "bc": bytes(priv[f"{nm}_bcb"][r]).hex(),
-                                   "path": U.path(side_levels[nm, "b"], r)}
-        rows["pub"].append(U.pub_words(salt, u, (bytes.fromhex(call["root_a"]), bytes.fromhex(call["root_b"]))))
+            salts[f"b{j}"].append(bytes(priv["sb"][r]))
+            op["rows"][f"b{j}"] = {"tree": "b", "index": r, "bc": bytes(priv["bcb"][r]).hex(), "path": U.path(lb, r)}
+        rows["pub"].append(U.pub_words(salt, u, roots(com)))
         salts["pub"].append(U.pub_salt(w, u))
         rows["o0"].append(priv["zw"][u])
         rows["o1"].append(priv["rw"][u])
@@ -314,9 +318,8 @@ def cmd_open(a) -> int:
         op["rows"]["o0"] = {"tree": "z", "index": u, "bc": bytes(priv["bcz"][u]).hex(), "path": U.path(lz, u)}
         op["rows"]["o1"] = {"tree": "receipt", "index": u, "bc": bytes(priv["bcr"][u]).hex(), "path": U.path(lr, u)}
         openings.append(op)
-    roots = [[bytes.fromhex(com["calls"][tile_of(com, u)[0]][f"root_{s}"]) for s in "ab"] for u in units]
     np.savez(out / "rows.npz", units=np.array(units), a=np.stack(codes["a"]), b=np.stack(codes["b"]),
-             salt=np.frombuffer(salt, np.uint8), roots=np.array([[np.frombuffer(r, np.uint8) for r in rr] for rr in roots]),
+             salt=np.frombuffer(salt, np.uint8), roots=np.array([[np.frombuffer(r, np.uint8) for r in roots(com)]] * len(units)),
              **{f"w_{p}": np.stack(v) for p, v in rows.items()},
              **{f"s_{p}": np.frombuffer(b"".join(v), np.uint8).reshape(len(v), U.SALT_BYTES) for p, v in salts.items()})
     (out / "opening.json").write_text(json.dumps({"window": w, "units": openings}, indent=1))

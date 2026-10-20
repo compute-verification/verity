@@ -9,12 +9,17 @@ challenger and the verifier never hold a row, a salt or a served value):
 1. the challenger (`pouw.coins.Challenger`) commits to the epoch's salt and draw coins; the prover commits the window's
    A and B rows (`window.py commit`), and the salt coin opens after those roots are recorded;
 2. the prover serves every tile's z and receipt under the unit salt (`h1unit.unit_salt` of the coin) and commits them
-   (`window.py serve`); the registration (the window's four kinds of root) is recorded, and the draw coin opens after it;
+   (`window.py serve`); the registration (the window's four roots) is recorded, and the draw coin opens after it. The
+   verifier builds the window's public Program and its template-instance partition from the commitment's public shape
+   (`window_program`: WORK/verifier/program.json and partition.json, Lean's ``--program`` and ``--partition``), and the
+   stager its statement bound to them;
 3. the verifier draws ``--draw`` units of the window's tiles by Lean ``flock-verify draw`` on the coin's stream;
-4. the prover opens the drawn units (`window.py open`), and the verifier checks each opened row's path to its registered
-   root and builds its own public file (`h1unit.verifier_pub`) from the opened ``b || c`` and its own public row;
-5. the stager (`stage.py`, building the circuit since the job started) stages the drawn units as one statement on the
-   prover's rows, and the prover's pub.bin must be the verifier's byte for byte.
+4. the prover opens the drawn units (`window.py open`), and the verifier checks each opened row is the one the Program's
+   unit reads (`h1unit.unit_reads`) with a path to its registered root, and builds its own public file
+   (`h1unit.verifier_pub`) from the opened ``b || c``, its own public row and the drawn units' indices;
+5. the stager (`stage.py`, building the circuit once the window's shape is known) stages the drawn units as one statement
+   on the prover's rows at their indices, and the prover's pub.bin must be the verifier's byte for byte. Lean derives each
+   instance's unit from its own Program, and an accepted check must say so (``units: derived``).
 
 The planted negatives, each checked by Lean against the verifier's own file:
 
@@ -61,6 +66,7 @@ import subprocess
 import sys
 import time
 from pathlib import Path
+from types import SimpleNamespace
 
 import numpy as np
 
@@ -68,7 +74,9 @@ HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
 
 import h1unit as U  # noqa: E402
+from verity.ml.circuits.codec import canonical_json, encode_program  # noqa: E402
 from verity.ml.randomness import derive  # noqa: E402
+from verity.core.protocols.sampled_proofs.one_stage import partition as P  # noqa: E402
 from verity.core.protocols.pouw import core_check as CC  # noqa: E402
 from verity.core.protocols.pouw import verifier  # noqa: E402
 from verity.core.protocols.pouw.coins import Challenger, coin_reason  # noqa: E402
@@ -103,25 +111,29 @@ def digest(*parts: bytes) -> bytes:
 
 # -- the verifier's view of a window ----------------------------------------------------------------------------------------
 
-def tile_of(com: dict, u: int) -> tuple[dict, int, int]:
-    for call in com["calls"]:
-        if call["tile0"] <= u < call["tile0"] + call["tiles"]:
-            v = u - call["tile0"]
-            return call, v // (call["n"] // C), v % (call["n"] // C)
-    raise ValueError(f"unit {u} is no tile of the window")
+def window_program(com: dict) -> SimpleNamespace:
+    """The verifier's own public Program of a window commitment's shape (`h1unit.Shape.window`), its template-instance query
+    and partition (``tp`` as core evaluates it, ``obj`` the `verity/partition/v1` object)."""
+    program, query = U.Shape(com["unit"]["k"], R, C).window(*U.window_shape(com))
+    tp = P.evaluate(program, query)
+    if tp.population != com["tiles"]:
+        raise SystemExit(f"the window's Program has {tp.population} units, its commitment {com['tiles']} tiles")
+    return SimpleNamespace(program=program, query=query, tp=tp, obj=P.partition(program, query))
 
 
-def check_opening(com: dict, served: dict, op: dict, u: int) -> list[str]:
-    """Why unit ``u``'s opening ``op`` is not the registered window's (``com`` its commitment, ``served`` its output roots):
-    each row's tree and index are the unit's, and its path reaches the registered root."""
-    call, ti, tj = tile_of(com, u)
+def check_opening(win: SimpleNamespace, com: dict, served: dict, op: dict, u: int) -> list[str]:
+    """Why unit ``u``'s opening ``op`` is not the registered window's (``win`` its Program, ``com`` its commitment, ``served``
+    its output roots): each committed row is the one the Program's unit ``u`` reads (`h1unit.unit_reads`), and its path
+    reaches that tree's registered root."""
     w, T, why = com["window"], com["tiles"], []
+    trees = {"a": (com["slot"], com["root_a"]), "b": (com["b_rows"], com["root_b"]), "z": (T, served["z_root"]),
+             "receipt": (T, served["receipt_root"])}
     if op.get("unit") != u:
         why.append(f"the opening is unit {op.get('unit')}'s, not {u}'s")
-    want = ({f"a{i}": (f"a/{call['name']}", R * ti + i, call["m"], call["root_a"]) for i in range(R)}
-            | {f"b{j}": (f"b/{call['name']}", C * tj + j, call["n"], call["root_b"]) for j in range(C)}
-            | {"o0": ("z", u, T, served["z_root"]), "o1": ("receipt", u, T, served["receipt_root"])})
-    for port, (tree, index, count, root) in want.items():
+    for port, (tree, index) in U.unit_reads(win.program, win.tp, u).items():
+        if tree not in trees:
+            continue
+        count, root = trees[tree]
         r = op["rows"].get(port)
         if r is None or r["tree"] != tree or r["index"] != index:
             why.append(f"{port}: not row {index} of tree {tree}")
@@ -132,10 +144,8 @@ def check_opening(com: dict, served: dict, op: dict, u: int) -> list[str]:
 
 def unit_bcs(shape: U.Shape, com: dict, salt: bytes, op: dict) -> dict[str, bytes]:
     """The unit's rows' ``b || c`` as the verifier holds them: the opened leaves, and its own public row's."""
-    call, _ti, _tj = tile_of(com, op["unit"])
     pub = shape.ports()[R + C]
-    roots = (bytes.fromhex(call["root_a"]), bytes.fromhex(call["root_b"]))
-    own = U.commit_strings(pub, U.pub_words(salt, op["unit"], roots)[None, :], [U.pub_salt(com["window"], op["unit"])])[0]
+    own = U.commit_strings(pub, U.pub_words(salt, op["unit"], U.window_roots(com))[None, :], [U.pub_salt(com["window"], op["unit"])])[0]
     return {**{p: bytes.fromhex(op["rows"][p]["bc"]) for p in [*shape.in_rows, "o0", "o1"]}, "pub": own}
 
 
@@ -177,7 +187,8 @@ def epoch(work: Path, name: str, layer: str, number: int, a, record: dict) -> tu
     t = time.time()
     served = prover("serve", str(work / name), salt.hex(), str(work / f"{name}-served.json"), "--workers", str(a.workers))
     rec["serve_seconds"] = round(time.time() - t, 1)
-    rec.update(tiles=com["tiles"], calls={c["name"]: [c["m"], c["k"], c["n"]] for c in com["calls"]}, served=served)
+    rec.update(tiles=com["tiles"], slot=com["slot"], calls={c["name"]: [com["slot"], com["unit"]["k"], c["n"]] for c in com["calls"]},
+               served=served)
     log(f"{name}: {com['tiles']} tiles committed ({rec['commit_seconds']} s) and served ({rec['serve_seconds']} s)")
     return com, served, salt, ch
 
@@ -202,6 +213,21 @@ def cmd_prepare(a) -> int:
     record: dict = {"schema": "verity/pouw/h1-prove/record/v0", "draw_k": a.draw}
     w1, w2 = f"{a.name}-w1", f"{a.name}-w2"
     com1, served1, salt1, ch1 = epoch(work, w1, a.layer, 1, a, record)
+    # the window's public Program and partition: the verifier's own copies, and the shape the stager binds its statement to
+    t = time.time()
+    win = window_program(com1)
+    calls, slot = U.window_shape(com1)
+    (sw / "window.json").write_text(json.dumps({"k": com1["unit"]["k"], "slot": slot, "calls": [list(c) for c in calls]}))
+    vp = work / "verifier"
+    vp.mkdir(exist_ok=True)
+    descriptor = canonical_json(encode_program(win.program))
+    (vp / "program.json").write_bytes(descriptor)
+    (vp / "partition.json").write_text(json.dumps(win.obj))
+    record["program"] = {"descriptor_bytes": len(descriptor), "program_sha512": win.obj["program"],
+                         "partition": P.digest(win.obj), "query": win.query, "population": win.tp.population,
+                         "seconds": round(time.time() - t, 1)}
+    log(f"the window's Program: {win.tp.population} units, {len(descriptor)} descriptor bytes "
+        f"({record['program']['seconds']} s)")
     reg = registration(com1, served1)
     do = ch1.open("draw", reg)
     assert coin_reason(ch1.commitment, do, "draw", reg) is None
@@ -211,7 +237,7 @@ def cmd_prepare(a) -> int:
     u0 = units[0]
     record["windows"][w1].update(registration=reg.hex(), draw_opening=do.to_json())
     record["draw"] = {"population": T, "k": a.draw, "units": units, "by": "flock-verify draw (Lean)",
-                      "tiles": {str(u): {"call": c["name"], "ti": i, "tj": j} for u in units for c, i, j in [tile_of(com1, u)]}}
+                      "reads": {str(u): U.unit_reads(win.program, win.tp, u) for u in units}}
     log(f"drew {units} of {T}")
     shape = U.Shape(com1["unit"]["k"], R, C)
 
@@ -227,8 +253,8 @@ def cmd_prepare(a) -> int:
             served_t = served1
         prover("open", str(work / priv), salt1.hex(), ",".join(map(str, units)), str(work / f"open-{tag}"))
         ops = json.loads((work / f"open-{tag}" / "opening.json").read_text())["units"]
-        why = {u: check_opening(com1, served_t, op, u) for u, op in zip(units, ops)}
-        why_vs_honest = {u: check_opening(com1, served1, op, u) for u, op in zip(units, ops)}
+        why = {u: check_opening(win, com1, served_t, op, u) for u, op in zip(units, ops)}
+        why_vs_honest = {u: check_opening(win, com1, served1, op, u) for u, op in zip(units, ops)}
         opened[tag] = [unit_bcs(shape, com1, salt1, op) for op in ops]
         record.setdefault("openings", {})[tag] = {
             "registered": {k: served_t[k] for k in ("z_root", "receipt_root")},
@@ -241,31 +267,33 @@ def cmd_prepare(a) -> int:
 
     # the second window, its first drawn unit's tile presented as window 1's
     com2, served2, salt2, _ch2 = epoch(work, w2, a.layer2, 2, a, record)
-    if [c["name"] for c in com2["calls"]] != [c["name"] for c in com1["calls"]] or com2["tiles"] != T:
-        raise SystemExit("the second window's calls are not the first's")
+    if U.window_shape(com2) != U.window_shape(com1) or com2["tiles"] != T:
+        raise SystemExit("the second window's shape (its slot and calls) is not the first's, so its Program is another")
     prover("open", str(work / w2), salt2.hex(), str(u0), str(work / "open-other"))
     op2 = json.loads((work / "open-other" / "opening.json").read_text())["units"][0]
-    record["openings"]["other-window"] = {"unit": u0, "refused": check_opening(com1, served1, op2, u0),
-                                          "against_own_window": check_opening(com2, served2, op2, u0)}
+    record["openings"]["other-window"] = {"unit": u0, "refused": check_opening(win, com1, served1, op2, u0),
+                                          "against_own_window": check_opening(win, com2, served2, op2, u0)}
     log(f"opening other-window: refused against window 1 for {len(record['openings']['other-window']['refused'])} rows")
 
     set_h, set_o = f"{w1}-draw", f"{w1}-u{u0}"
-    stmts = {"honest": {"rows": str(work / "open-honest" / "rows.npz"), "set": set_h, "out": str(sw / "st-honest")},
-             "other": {"rows": str(work / "open-other" / "rows.npz"), "set": set_o, "out": str(sw / "st-other")}}
+    stmts = {"honest": {"rows": str(work / "open-honest" / "rows.npz"), "set": set_h, "out": str(sw / "st-honest"),
+                        "indices": units},
+             "other": {"rows": str(work / "open-other" / "rows.npz"), "set": set_o, "out": str(sw / "st-other"), "indices": [u0]}}
     for name, req in stmts.items():
         (sw / "requests" / f"{name}.json").write_text(json.dumps(req))
 
     wait_for(sw / "circuit.json", "circuit built", a.stager_pid)
     head = json.loads((sw / "circuit.json").read_text())
     record["circuit"] = {x: head[x] for x in head if x != "meta"}
-    vp = work / "verifier"
-    vp.mkdir(exist_ok=True)
-    files = {"honest": (set_h, opened["honest"]), "flipped-z": (set_h, opened["flipped-z"]),
-             "wrong-receipt": (set_h, opened["wrong-receipt"]), "other-window": (set_o, [opened["honest"][0]]),
-             "other-window-own": (set_o, [unit_bcs(shape, com2, salt2, op2)]),
-             **{t: (set_h, opened[t]) for t in IN_PROOF}}
-    for tag, (set_name, bcs) in files.items():
-        (vp / f"{tag}.pub.bin").write_bytes(U.verifier_pub(head, set_name, head["subcircuit"], bcs))
+    bound = {"partition": head["meta"].get("partition"), "program_sha512": head["meta"].get("program_sha512")}
+    if bound != {"partition": {"rule": "verity/partition/v1", "digest": P.digest(win.obj)}, "program_sha512": win.obj["program"]}:
+        raise SystemExit(f"the unit's statement binds {bound}, not the window's partition and Program")
+    files = {"honest": (set_h, opened["honest"], units), "flipped-z": (set_h, opened["flipped-z"], units),
+             "wrong-receipt": (set_h, opened["wrong-receipt"], units), "other-window": (set_o, [opened["honest"][0]], [u0]),
+             "other-window-own": (set_o, [unit_bcs(shape, com2, salt2, op2)], [u0]),
+             **{t: (set_h, opened[t], units) for t in IN_PROOF}}
+    for tag, (set_name, bcs, indices) in files.items():
+        (vp / f"{tag}.pub.bin").write_bytes(U.verifier_pub(head, set_name, head["subcircuit"], bcs, indices))
     for name, req in stmts.items():
         wait_for(Path(req["out"]) / "stage.json", f"staged {name}", a.stager_pid)
         st = json.loads((Path(req["out"]) / "stage.json").read_text())
@@ -422,9 +450,11 @@ def cmd_summarize(a) -> int:
                      "lean_err": (out / "lean" / f"{c['tag']}.err").read_text(errors="replace").strip().splitlines()[-2:]
                      if (out / "lean" / f"{c['tag']}.err").exists() else None}
         else:
-            good = word == c["expect"]
+            # an accepted unit's index binds its rows only as far as Lean derived it from the verifier's own Program
+            good = word == c["expect"] and (word != "ACCEPT" or (v or {}).get("partition", {}).get("units") == "derived")
         ok &= good
         checks.append({"tag": c["tag"], "expect": c["expect"], "verdict": word, "pass": good,
+                       "partition_units": (v or {}).get("partition", {}).get("units"),
                        "why": (v or {}).get("why", "")[:300], "lean_seconds": t and t["wall_s"],
                        "lean_maxrss_gb": t and round(t["maxrss_kb"] / 2**20, 1), "sessions": (v or {}).get("sessions"),
                        "lean_phases": lean_phases(out / "lean" / f"{c['tag']}.err"), **extra})
@@ -434,13 +464,14 @@ def cmd_summarize(a) -> int:
                "ands": record["circuit"]["ands"], "k_log": record["circuit"]["k_log"],
                "circuit_bytes": record["circuit"]["circuit_bytes"], "circuit_build_seconds": record["circuit"]["build_seconds"],
                "window_tiles": record["draw"]["population"], "drawn_units": len(record["draw"]["units"]),
+               "program": record.get("program"),
                "units": record["draw"]["units"], "statements": len(plan["statements"]),
                "statement_instances": {s["tag"]: s["n"] for s in plan["statements"]},
                "epsilon_at_delta": {f"{d}": round(1 - d ** (1 / record["draw_k"]), 4) for d in (0.5, 0.1, 0.01)},
                "proving_seconds": {k: (v["prove"] or {}).get("wall_s") for k, v in proofs.items()},
                "lean_verify_seconds": honest["lean_seconds"], "checks": checks, "proofs": proofs,
                "openings": record["openings"], "prover_pub_is_verifiers": record["prover_pub_is_verifiers"],
-               "windows": {w: {k: v[k] for k in ("tiles", "calls", "commit_seconds", "serve_seconds") if k in v}
+               "windows": {w: {k: v[k] for k in ("tiles", "slot", "calls", "commit_seconds", "serve_seconds") if k in v}
                            for w, v in record["windows"].items()},
                "tile": U.tile(), "z_is_served_product": {w: v["served"].get("z_is_served_product")
                                                           for w, v in record["windows"].items()},
@@ -452,7 +483,7 @@ def cmd_summarize(a) -> int:
                                                 "proving_seconds", "lean_verify_seconds")}))
     for c in checks:
         print(f"  {c['tag']:<20} expect {c['expect']:<7} got {c['verdict']:<8} {'ok' if c['pass'] else 'FAIL'}  "
-              f"{c['lean_seconds']} s  {c['why'][:120]}")
+              f"{c['lean_seconds']} s  units {c['partition_units']}  {c['why'][:120]}")
         for r in c.get("refused_by", []):
             print(f"      refused by {r[:300]}")
     return 0 if ok else 1
