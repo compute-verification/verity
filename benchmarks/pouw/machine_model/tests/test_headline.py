@@ -22,7 +22,7 @@ PINS = {
     },
     "measured": {
         "sm_120": (0.003628, 0.001251, 0.000517, 0.005396, 2.1357, "issue", None),
-        "sm_90": (0.005921, 0.004460, 0.000987, 0.011368, 2.3435, "issue", None),
+        "sm_90": (0.006051, 0.004460, 0.000987, 0.011498, 2.3435, "issue", None),
         "sm_100": (0.008145, 0.0, 0.000002, 0.008147, 2.5611, "half", None),
         "sm_89": (0.001470, 0.001126, 0.000468, 0.003065, 3.0144, "issue", None),
         "sm_80": (0.001470, 0.0, 0.0, 0.001470, 4.2263, "half", None),
@@ -99,7 +99,7 @@ def test_cli(capsys):
     assert out[0] == "## decision 89's measured reading (`measured`): q* = 1.22, operands free, credit ♭"
     head = next(x for x in out if x.startswith("| GPU"))
     assert all(H.TERMS[k] in head for k in ("skip", "mand", "machine", "luck", "gamma", "threshold"))
-    assert any(x.startswith("| H200 | dither-2s-licpw-redux-p1-l32 | DC-90-ri | 0.592% |") for x in out)
+    assert any(x.startswith("| H200 | dither-2s-licpw-redux-p1-l32 | DC-90-ri | 0.605% |") for x in out)
     assert any(x.startswith("- H200: the 1.22-slot issue floor") for x in out)
     assert main(["headline", "--json"]) == 0
     d = json.loads(capsys.readouterr().out)
