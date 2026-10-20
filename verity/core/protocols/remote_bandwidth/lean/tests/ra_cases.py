@@ -1181,7 +1181,8 @@ SCENARIOS: dict[str, tuple[World, dict, Callable[[Run], None], str | None]] = {
 
 @functools.cache
 def recorded(name: str) -> tuple[dict, str | None]:
-    """Scenario `name`'s case and the outcome the recorded session reached."""
+    """Scenario `name`'s case and the outcome the recorded session reached. Cached and shared by every test in the
+    process: copy the case before editing it."""
     world, kw, build, _ = SCENARIOS[name]
     r = Run(world, **kw)
     build(r)

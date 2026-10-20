@@ -5,6 +5,7 @@ contradicts (an accepted session with a window that drew another count) is caugh
 
 from __future__ import annotations
 
+import copy
 import hashlib
 import json
 import shutil
@@ -86,7 +87,7 @@ def test_a_transcript_that_names_no_pace_replays_only_with_the_pace_its_verifier
     """A transcript written before it named its session's pace: replayed unpaced, a paced session's windows would be
     held to no cap on their roots, so it replays only with the pace its `verifier.json` recorded, and its bytes the
     ones recorded there; and its outcome is held to the one recorded there."""
-    case, _ = M.recorded("order-past-pace")
+    case = copy.deepcopy(M.recorded("order-past-pace")[0])
     del case["params"]["pace"]
     path = tmp_path / "case.json"
     path.write_text(json.dumps(case))
