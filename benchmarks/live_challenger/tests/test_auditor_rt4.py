@@ -59,21 +59,27 @@ def verify_under(host):
     return public[:16], lambda m, sig: lms.verify(P, public, m, lms.Signature.decode(P, sig))
 
 
-def ssh(host, signer, words, key="vllm", token="ab12"):
+def ssh(host, signer, words, key="vllm", token="ab12", **hooks):
     return A.gate(["--ssh", words, "--key", key], host, now=T0, token=token, own=lambda d: None, start=lambda s: None,
                   active=lambda s: False, secret=SECRET,
-                  admit=lambda s: A.admit(host, s, signer=signer, pinned=PIN, now=T0, active=lambda s: False))
+                  reserve=lambda s: A.reserve(host, s, signer=signer, pinned=PIN, now=T0),
+                  admit=lambda s: A.admit(host, s, signer=signer, pinned=PIN, now=T0, active=lambda s: False), **hooks)
 
 
-def open_words(commit=COMMIT, *extra):
-    return (f"open --commit {commit} --peer vy-nebius-1 --scheme verity/test/coins/v1 --families '{json.dumps(FAMILIES)}' "
-            + " ".join(extra))
+RESERVE = f"reserve --peer vy-nebius-1 --scheme verity/test/coins/v1 --families '{json.dumps(FAMILIES)}'"
+
+
+def reserve(host, signer, *, token, key="vllm") -> str:
+    rc, out = ssh(host, signer, RESERVE, key, token)
+    assert rc == 0, out
+    return json.loads(out)["session"]
 
 
 def open_window(host, signer, *, token, commit=COMMIT, key="vllm"):
-    rc, out = ssh(host, signer, open_words(commit), key, token)
+    session = reserve(host, signer, token=token, key=key)
+    rc, out = ssh(host, signer, f"open --session {session} --root {commit}", key)
     assert rc == 0, out
-    return json.loads(out)["session"]
+    return session
 
 
 def v1_open(host, signer, session, period, commit=COMMIT):
@@ -109,9 +115,10 @@ def serve(host, signer, session, client, tmp_path, monkeypatch) -> dict:
 
 def test_rt4_int_24_a_root_gets_one_session_whatever_period_a_v1_open_named_and_its_prover_is_the_keys_lane(host, signer):
     v1_open(host, signer, "s20261020T092000Z-0001", "p0")
-    for words in (open_words(), open_words(COMMIT.upper())):
-        rc, out = ssh(host, signer, words, "hash", "cd34")
-        assert rc == 3 and "one session a root, ever" in json.loads(out)["refused"]
+    held = reserve(host, signer, token="cd34", key="hash")
+    for root, why in ((COMMIT, "one session a root, ever"), (COMMIT.upper(), "128 lowercase hex digits")):
+        rc, out = ssh(host, signer, f"open --session {held} --root {root}", "hash")
+        assert rc == 3 and why in json.loads(out)["refused"]
     vllm = open_window(host, signer, token="ab12", commit="cd" * 64, key="vllm")
     hash_ = open_window(host, signer, token="ef56", commit="ef" * 64, key="hash")
 
@@ -120,6 +127,7 @@ def test_rt4_int_24_a_root_gets_one_session_whatever_period_a_v1_open_named_and_
     assert list(windows) == [COMMIT, "cd" * 64, "ef" * 64]
     assert [w["open"]["schema"] for w in windows.values()] == [A.SCHEMA_V1, A.SCHEMA, A.SCHEMA]
     assert [w["open"]["body"]["by"] for w in windows.values()] == ["research", "vllm", "hash"]
+    assert [w["reserve"] and w["reserve"]["session"] for w in windows.values()] == [None, vllm, hash_]
     for session, root in ((vllm, "cd" * 64), (hash_, "ef" * 64)):
         argv = A.serve_argv(host, session, A.sessions_of(A.read_ledger(host.ledger))[session]["open"]["body"])
         assert argv[argv.index("--root") + 1] == root
@@ -162,10 +170,8 @@ def test_rt4_int_25_a_client_that_takes_the_salt_and_one_round_coin_then_closes_
 
 def test_the_open_answer_status_and_end_carry_the_coin_commitment_the_hello_answers(host, signer, tmp_path, monkeypatch):
     """vllm's ask (VLLM-58): the serving side checks, before its first coin, that the challenger it reached is its session's."""
-    rc, out = A.gate(["--ssh", open_words(), "--key", "vllm"], host, now=T0, token="ab12", own=lambda d: None,
-                     start=lambda s: None, active=lambda s: False, secret=SECRET, ready=lambda s: "ef" * 64,
-                     admit=lambda s: A.admit(host, s, signer=signer, pinned=PIN, now=T0, active=lambda s: False))
-    session = json.loads(out)["session"]
+    session = reserve(host, signer, token="ab12")
+    rc, out = ssh(host, signer, f"open --session {session} --root {COMMIT}", ready=lambda s: "ef" * 64)
     assert rc == 0 and json.loads(out)["commitment"] == "ef" * 64
     assert A.await_commitment(host, session, active=lambda s: False) is None
     hello = []
@@ -175,21 +181,24 @@ def test_the_open_answer_status_and_end_carry_the_coin_commitment_the_hello_answ
     assert rc == 0 and json.loads(out)["commitment"] == hello[0]
 
 
-def test_rt4_int_30_a_trailing_newline_or_a_period_opens_nothing_and_a_root_is_kept_in_lowercase(host, signer, capsys):
-    rest = f"--peer vy-nebius-1 --scheme verity/test/coins/v1 --families '{json.dumps(FAMILIES)}'"
-    for words, why in ((f"open --commit '{COMMIT}\n' {rest}", "128 hex digits"),
-                       (f"open --commit '{COMMIT} ' {rest}", "128 hex digits"),
-                       (f"open --period 'p0\n' --commit {COMMIT} {rest}", "no --period"),
-                       (f"open --period p0 --commit {COMMIT} {rest}", "no --period"),
-                       (f"open --commit {COMMIT} --peer 'vy-nebius-1\n' --scheme verity/test/coins/v1 "
-                        f"--families '{json.dumps(FAMILIES)}'", "--peer")):
+def test_rt4_int_30_a_trailing_newline_or_a_period_opens_nothing_and_an_uppercase_root_is_refused(host, signer, capsys):
+    rest = f"--scheme verity/test/coins/v1 --families '{json.dumps(FAMILIES)}'"
+    for words, why in ((f"reserve --peer 'vy-nebius-1\n' {rest}", "--peer"),
+                       (f"reserve --period 'p0\n' --peer vy-nebius-1 {rest}", "no --commit, --period"),
+                       (f"reserve --period p0 --peer vy-nebius-1 {rest}", "no --commit, --period"),
+                       (f"reserve --commit {COMMIT} --peer vy-nebius-1 {rest}", "no --commit, --period")):
         rc, out = ssh(host, signer, words)
         assert rc == 3 and why in json.loads(out)["refused"], words
     assert A.read_ledger(host.ledger) == [] and capsys.readouterr() == ("", "")
-    rc, out = ssh(host, signer, f"open --commit {COMMIT.upper()} {rest}")
+    session = reserve(host, signer, token="ab12")
+    for words in (f"open --session {session} --root '{COMMIT}\n'", f"open --session {session} --root '{COMMIT} '",
+                  f"open --session '{session}\n' --root {COMMIT}", f"open --session {session} --root {COMMIT.upper()}"):
+        rc, out = ssh(host, signer, words)
+        assert rc == 3 and ("128 lowercase hex digits" in json.loads(out)["refused"]
+                            or "--session" in json.loads(out)["refused"]), words
+    assert len(A.read_ledger(host.ledger)) == 1
+    rc, out = ssh(host, signer, f"open --session {session} --root {COMMIT}")
     assert rc == 0 and json.loads(out)["root"] == COMMIT
-    rc, out = ssh(host, signer, f"open --commit {COMMIT} {rest}", token="cd34")
-    assert rc == 3 and "one session a root" in json.loads(out)["refused"]
 
 
 def snapshot(host, to: Path, ledger: bool) -> list[Path]:
@@ -213,18 +222,18 @@ def test_rt4_int_27_a_restored_key_state_signs_at_a_used_leaf_which_append_and_t
     head = A.read_ledger(host.ledger)
     restore(saved, tmp_path / "key-only")
 
-    rc, out = ssh(host, signer, open_words("ef" * 64), token="ef56")
+    rc, out = ssh(host, signer, RESERVE, token="ef56")
     assert rc == 3 and "not after the ledger's last entry's" in json.loads(out)["refused"]
     assert A.read_ledger(host.ledger) == head
 
     restore(saved, tmp_path / "key-only")
     I, sign, _ = signer
-    e = {"schema": A.SCHEMA, "seq": 2, "prev": hashlib.sha512(head[-1]).hexdigest(), "kind": "open",
+    e = {"schema": A.SCHEMA, "seq": 4, "prev": hashlib.sha512(head[-1]).hexdigest(), "kind": "open",
          "session": "s20261020T093000Z-0a0b", "body": {"window": {"root": "ef" * 64}}}
     e["sig"] = sign(A.entry_message(I, e)).hex()
     forged = [*head, json.dumps(e, sort_keys=True, separators=(",", ":")).encode()]
     _, verify = verify_under(host)
-    with pytest.raises(ValueError, match="entry 2: signed at leaf 1, not after the last entry's 1"):
+    with pytest.raises(ValueError, match="entry 4: signed at leaf 2, not after the last entry's 3"):
         A.verify_ledger(forged, I, verify)
 
 
@@ -234,7 +243,7 @@ def test_rt4_int_27_a_record_leaf_outside_its_session_is_refused(host, signer):
     opened = A.leaf_of(A.sessions_of(A.read_ledger(host.ledger))[session]["open"]["sig"])
     A.append(host, "end", session, lambda lines: {"record_leaf": opened}, I, sign)
     _, verify = verify_under(host)
-    with pytest.raises(ValueError, match="record leaf 0 isn't between"):
+    with pytest.raises(ValueError, match="record leaf 1 isn't between"):
         A.verify_ledger(A.read_ledger(host.ledger), I, verify)
 
 
