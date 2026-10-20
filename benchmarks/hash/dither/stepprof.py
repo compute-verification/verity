@@ -179,9 +179,14 @@ def table(doc: dict) -> str:
             out.append(f"  {r['us_per_step'] / 1e3:8.3f} ms  {100 * (r['share_of_wall'] or 0):5.1f}%  "
                        f"{r['launches_per_step']:8.1f} launches  {p}")
         out.append("  host wall by phase (ms/step): " + ", ".join(f"{k} {v:.3f}" for k, v in a["phase_host_ms_per_step"].items()))
-        for q, s in a.get("streams", {}).items():
+        streams = a.get("streams", {})
+        big = {q: s for q, s in streams.items() if s["busy_ms_per_step"] >= 0.01 * a["wall_ms_per_step"]}
+        for q, s in big.items():
             top = ", ".join(f"{p} {v:.3f}" for p, v in list(s["parts"].items())[:4])
             out.append(f"  stream {q}: busy {s['busy_ms_per_step']:.3f} ms/step ({top})")
+        if len(streams) > len(big):
+            rest = sum(s["busy_ms_per_step"] for q, s in streams.items() if q not in big)
+            out.append(f"  {len(streams) - len(big)} more streams under 1% of the wall each: {rest:.3f} ms/step in all")
     return "\n".join(out)
 
 
