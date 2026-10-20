@@ -1064,4 +1064,3 @@ def test_a_commit_of_the_locks_a_passing_check_regenerated_merges_on_that_check(
     _git(feat, "reset", "-q", "--hard", tip)
     regen = _relock(feat, '{"records": 2}\n', "pkg/lean-audit.json")
     assert merge_main(["feat", "--dry-run"]) == 0 and f"({regen[:12]}) may be merged into main" in capsys.readouterr().out
-
