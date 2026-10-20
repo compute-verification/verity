@@ -41,8 +41,8 @@ The logical layer:
   values the prover writes (every gate but a coin input).
 * `isWord`, `wordGates`, `Kind`, `kindAt`: the circuit's committed words of served products (`T_t`), and each gate's
   kind, computed from the IR, never asserted: its primitive, its site's statics (what `Gates.roleOf` reads) and
-  whether each operand depends on a run input (an activation) or not (a weight). So a gather-fed `QKᵀ` and a weight
-  matmul of one shape are different kinds.
+  whether each operand depends on a run input (an activation) or not (a weight), a receipt word's read off its tile's
+  operand rows. So a gather-fed `QKᵀ` and a weight matmul of one shape are different kinds.
 * `unitGates`, `unitWords`, `Declared.roundOf`, `Declared.stageOf`, `Declared.kindOf`: a unit's gates and words, its
   round, its stage counted from the last round (as `SplitStages` counts) and its words' kind (none for glue).
 * `coinMark`, `Declared.firstRead`, `Declared.cutOf`, `Declared.Late`, `Declared.UnitLate`, `Declared.Reaches`: each
@@ -214,9 +214,11 @@ structure Kind where
   actB : Bool
   deriving DecidableEq
 
-/-- A site's statics: an `S8Dot_v1` body's `K`, `L` and tail groups, its step zeroed. -/
+/-- A site's statics: an `S8Dot_v1` body's `K`, `L` and tail groups, its step zeroed; an H1 + fx1 tile's receipt
+word's dot kind and `K`, its word and operand rows zeroed. -/
 def statics : Gates.Site → Gates.Site
   | .dot K L tail _ => .dot K L tail 0
+  | .receipt d K _ _ _ => .receipt d K 0 [] []
   | .other => .other
 
 /-- An s8-family step's `k`, and `0` for any other operation. -/
@@ -224,11 +226,18 @@ def mmaK {ι : Type} : Gates.Op ι → ℕ
   | .mma _ _ k _ => k
   | _ => 0
 
-/-- Gate `g`'s kind in circuit `C`: its primitive, its site's statics, and whether any of its `a` operands
-(`args[1 … k]`) and any of its `b` operands (`args[k+1 …]`) depends on a run input. -/
+/-- The gates of gate `g`'s `a` and `b` operands: a receipt word's tile's operand rows (`Gates.Site.receipt`), and
+otherwise `args[1 … k]` and `args[k+1 …]`. -/
+def operandGates {ι : Type} (g : Gates.Gate ι) : List ℕ × List ℕ :=
+  match g.site with
+  | .receipt _ _ _ a b => (a, b)
+  | _ => (g.args.tail.take (mmaK g.op), g.args.tail.drop (mmaK g.op))
+
+/-- Gate `g`'s kind in circuit `C`: its primitive, its site's statics, and whether any of its `a` operands and any
+of its `b` operands (`operandGates`) depends on a run input. -/
 def kindOfGate {ι : Type} (C : Gates.Dag ι) (g : Gates.Gate ι) : Kind :=
-  ⟨g.prim, statics g.site, (g.args.tail.take (mmaK g.op)).any fun j => (runDep C).getD j false,
-    (g.args.tail.drop (mmaK g.op)).any fun j => (runDep C).getD j false⟩
+  ⟨g.prim, statics g.site, (operandGates g).1.any fun j => (runDep C).getD j false,
+    (operandGates g).2.any fun j => (runDep C).getD j false⟩
 
 /-- **Gate `i`'s kind** (`kindOfGate`), and an empty one past the circuit's gates. -/
 def kindAt {ι : Type} (Cd : Declared ι) (i : ℕ) : Kind :=
