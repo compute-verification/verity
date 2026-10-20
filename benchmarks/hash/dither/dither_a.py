@@ -36,6 +36,13 @@ and hbr) is "ms" with each call's noise there too, after its seeds (kh_one_noise
 the side stream's kh_one_units reading it), so the side stream runs the units alone.  With pt=True (-pt) the
 window builds the receipt trees and the admit tables between steps on streams of their own (`Window.tree_streams`).
 With ls=True (-ls) each step's seeds read the live salt of the round before it (`Window.step_salt`).
+The round's leaves are a-step, admit-step, z-step, then y-step (under "zy") and receipt-step (`dither_one.ROUND_EXTRA`).
+Under "zy" the serving stream copies each call's served y, the bytes the next layer reads, into y records after its GEMM
+(`dithera_ycommit`); between steps the window builds the served y's tables, whose roots are the y-step leaves, and a y
+table over the zy records' y halves, and a call whose two roots differ refuses its step (CA's RT4-INT-11). The
+receipt-step leaf is the calls' receipt-table roots, so the round recorded before the next coin fixes the receipts
+(RT4-INT-13); the round waits on the receipt trees for it. Open: the z/y leaves still go under the round recorded after
+the coin the step's noise read (RT4-INT-12, which needs the units after their round's coin, beside the next step).
 
     import dither_a as DA
     DA.patch(t=T, h1c="libh1c.so", h1o="libh1o.so", unit="h1r")   # before LLM()
@@ -47,7 +54,9 @@ A, admit and z roots and the round against commit.py; z = A B^T (int_mm, the A t
 zero past m; the served y (dumped) = dequant(z); every receipt = h1r v1's on the saved slots under the window's salt and
 the CPU's roots (another unit implementation); three units' receipts by CA's definition on the CPU (`h1v3_unit`) and by
 H1V3's own code.  The control (nothing written: the A slot, z, receipts) must be refused on z and on the receipts; the
-fault must be refused on the receipts at exactly the flipped words, z and y untouched.
+fault must be refused on the receipts at exactly the flipped words, z and y untouched; "fault_y" (bit 0 of every call's
+served y[0, 0] flipped in place) must be refused at run time on every call's y root, every other commitment kept; and
+"fault_rr" (the round recorded without the receipt roots) must be refused on the receipt-step leaf and the round alone.
 """
 from __future__ import annotations
 
