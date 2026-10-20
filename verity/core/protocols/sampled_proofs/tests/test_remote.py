@@ -1,15 +1,18 @@
 """The challenger as a service on its own host (`remote`), over loopback: it signs and writes its record before its first
 coin opens, answers each root with that family's next coin and logs the release before the coin leaves; it refuses
-every malformed or out-of-order frame and ends the session there.  The client (`RemoteChallenger`) is `LiveRecord`'s
-challenger as it is, and refuses a coin that doesn't open.  The verifier, reading the challenger's directory, trusts only
-the commitment it signed and checks the openings against the roots it logged, so a prover that rewrites a coin's root is
-refused."""
+every malformed or out-of-order frame and ends the session there, and however the session ends it signs its release log
+(the close record).  The client (`RemoteChallenger`) is `LiveRecord`'s challenger as it is, and refuses a coin that
+doesn't open.  The verifier, reading the challenger's directory and the auditor's session record, trusts only the one
+session the record names for the window, its commitment and the roots its signed log shows, so a prover that rewrites a
+coin's root, an entry of the log, or presents an unsigned log, an unclosed session or a second session is refused."""
 
 from __future__ import annotations
 
 import dataclasses
+import hashlib
 import itertools
 import json
+import re
 import socket
 import threading
 
@@ -23,6 +26,7 @@ from test_challenger import HOST, entropy, lms_key, lms_verify, verifier_key
 
 SCHEME = "verity/test/coins/v1"
 FAMILIES = [("positions", 3), ("replay", 2)]
+WINDOW = {"commit": "11" * 64, "period": 0, "pouw_salt": "22" * 64, "stream": "33" * 64}
 
 
 def root(i: int) -> bytes:
@@ -45,22 +49,37 @@ def reply(sock: socket.socket) -> dict:
     return json.loads(head)
 
 
-class Host:
-    """The challenger on its host: a challenger over `FAMILIES` whose record `open_session` signed with the test key and
-    wrote to `directory`, serving one session on a loopback port; `reason` is how `serve` ended it."""
+@pytest.fixture
+def signer(tmp_path):
+    """The challenger key's signer on its host, at its next leaf: one for every session under the key."""
+    k = lms_key(0)
+    path = tmp_path / "key.lms"
+    lms.LeafState.create(path, lms.public_key(k), k.params.H)
+    with lms.LeafState(path, lms.public_key(k), k.params.H) as state:
+        yield lambda m: lms.sign(k, state, m).encode()
 
-    def __init__(self, tmp_path, signed: bool = True) -> None:
-        self.directory = tmp_path / "challenger"
+
+def entry(session: str, window: dict = WINDOW, key: C.ChallengerKey | None = None) -> dict:
+    """The auditor's entry naming `session` for `window`, under `key` (the test key by default)."""
+    return {**window, "code": "ab" * 20, "key": hashlib.sha512((key or verifier_key()).public).hexdigest(),
+            "session": session}
+
+
+def audit(tmp_path, *entries: dict):
+    path = tmp_path / "auditor.jsonl"
+    path.write_text("".join(json.dumps(e) + "\n" for e in entries))
+    return path
+
+
+class Host:
+    """The challenger on its host: a challenger over `FAMILIES` whose record `open_session` signed with `sign` and wrote to
+    `directory` for session `session`, serving one session on a loopback port; `reason` is how `serve` ended it."""
+
+    def __init__(self, tmp_path, sign, session: str = "s-1", seed: str = "host") -> None:
+        self.directory = tmp_path / session
         self.directory.mkdir()
-        self.challenger = C.LiveChallenger(SCHEME, 0, FAMILIES, entropy("host"))
-        if signed:
-            k = lms_key(0)
-            state_path = tmp_path / "key.lms"
-            lms.LeafState.create(state_path, lms.public_key(k), k.params.H)
-            state = lms.LeafState(state_path, lms.public_key(k), k.params.H)
-            R.open_session(self.challenger, verifier_key(), HOST, lambda m: lms.sign(k, state, m).encode(),
-                           self.directory)
-            state.close()
+        self.challenger = C.LiveChallenger(SCHEME, 0, FAMILIES, entropy(seed))
+        self.session = R.open_session(self.challenger, verifier_key(), HOST, sign, self.directory, session)
         self.listener = socket.create_server(("127.0.0.1", 0))
         self.address = "127.0.0.1:%d" % self.listener.getsockname()[1]
         self.reason: str | None = None
@@ -73,7 +92,7 @@ class Host:
         self.listener.close()
         with conn:
             try:
-                self.reason = R.serve(conn, self.challenger, self.directory, itertools.count().__next__)
+                self.reason = R.serve(conn, self.session, itertools.count().__next__)
             except Exception as e:
                 self.error = e
 
@@ -81,11 +100,14 @@ class Host:
         self._thread.join()
         return self.reason
 
+    def trusted(self, tmp_path, auditor=None, window: dict = WINDOW, key: C.ChallengerKey | None = None):
+        auditor = audit(tmp_path, entry(self.session.id)) if auditor is None else auditor
+        return R.trusted_session(self.directory, auditor, window, key or verifier_key(), lms_verify)
 
-def test_an_honest_session_checks_against_what_the_challenger_signed_and_logged(tmp_path):
-    host = Host(tmp_path)
+
+def honest(host: Host) -> dict[str, C.LiveRecord]:
+    """The honest client's session: a root and its coin per family, twice, a third positions root, then its close."""
     client = R.RemoteChallenger.connect(host.address)
-    assert client.commitment == host.challenger.commitment
     records = {label: C.LiveRecord(client, label, itertools.count().__next__) for label, _ in FAMILIES}
     for i in range(2):
         for record in records.values():
@@ -93,36 +115,55 @@ def test_an_honest_session_checks_against_what_the_challenger_signed_and_logged(
     records["positions"].record(root(2))
     client.close()
     assert host.ended() is None
+    return records
 
-    commitment, roots = R.trusted_session(host.directory, verifier_key(), lms_verify)
-    assert commitment == client.commitment
+
+def test_an_honest_session_checks_against_what_the_challenger_signed_and_logged(tmp_path, signer):
+    host = Host(tmp_path, signer)
+    records = honest(host)
+    commitment, roots = host.trusted(tmp_path)
+    assert commitment == host.challenger.commitment
     assert roots == {"positions": (root(0), root(1), root(2)), "replay": (root(0), root(1))}
     for label, record in records.items():
         assert record.reason() is None
         assert C.order_reason(commitment, label, roots[label], record.openings) is None
+    close = json.loads((host.directory / R.CLOSE).read_text())
+    assert (close["session"], close["ended"], close["lines"]) == ("s-1", None, 11)
 
 
-def test_the_challenger_hangs_up_only_after_the_client_so_its_last_frame_arrives(tmp_path):
-    host = Host(tmp_path)
+def test_the_challenger_hangs_up_only_after_the_client_so_its_last_frame_arrives(tmp_path, signer):
+    host = Host(tmp_path, signer)
     with socket.create_connection(host.listener.getsockname()) as s:
         s.sendall(frame({"type": "hello"}))
         assert reply(s)["type"] == "commitment"
         s.sendall(frame({"type": "close"}))
         assert reply(s) == {"type": "closed"}
+        assert (host.directory / R.CLOSE).is_file()
         assert s.recv(1) == b""
         assert host._thread.is_alive()
     assert host.ended() is None
 
 
-def test_the_challenger_serves_only_once_its_record_is_written(tmp_path):
+def test_the_challenger_serves_a_session_once_and_only_once_its_record_is_written(tmp_path, signer):
     ch = C.LiveChallenger(SCHEME, 0, FAMILIES, entropy("host"))
+    session = R.open_session(ch, verifier_key(), HOST, signer, tmp_path, "s-1")
+    (tmp_path / R.RECORD).unlink()
     a, b = socket.socketpair()
     with a, b, pytest.raises(C.CoinError, match="open_session"):
-        R.serve(a, ch, tmp_path)
+        R.serve(a, session, itertools.count().__next__)
+    R.close_session(session, None)
+    with pytest.raises(C.CoinError, match="closed once"):
+        R.close_session(session, None)
+    with a, b, pytest.raises(C.CoinError, match="serves a session once"):
+        R.serve(a, session, itertools.count().__next__)
+    ch = C.LiveChallenger(SCHEME, 0, FAMILIES, entropy("host"))
     ch.open("positions", 0, root(0))
     with pytest.raises(C.CoinError, match="before any coin opens"):
-        R.open_session(ch, verifier_key(), HOST, lambda m: b"", tmp_path)
-    assert not (tmp_path / R.RECORD).exists()
+        R.open_session(ch, verifier_key(), HOST, lambda m: b"", tmp_path / "other", "s-2")
+    for bad in ("", "a b", "x" * (C.MAX_SESSION_ID + 1)):
+        with pytest.raises(C.CoinError, match="session id"):
+            R.open_session(C.LiveChallenger(SCHEME, 0, FAMILIES, entropy("h")), verifier_key(), HOST, signer, tmp_path,
+                           bad)
 
 
 OPEN = {"type": "open", "label": "positions", "index": 0, "after": root(0).hex()}
@@ -148,8 +189,9 @@ REFUSED = {
 
 
 @pytest.mark.parametrize("case", sorted(REFUSED))
-def test_every_malformed_or_out_of_order_frame_is_refused_and_ends_the_session(tmp_path, case):
-    host = Host(tmp_path)
+def test_every_malformed_or_out_of_order_frame_is_refused_and_ends_the_session(tmp_path, signer, case):
+    """A refused session is signed, with why it ended, and is no window's: the verifier refuses it."""
+    host = Host(tmp_path, signer)
     frames, opened = REFUSED[case], 0
     with socket.create_connection(host.listener.getsockname()) as s:
         for f in frames[:-1]:
@@ -163,8 +205,23 @@ def test_every_malformed_or_out_of_order_frame_is_refused_and_ends_the_session(t
         assert s.recv(1) == b""
     assert host.ended() == answer["reason"]
     assert host.error is None
-    commitment, roots = R.trusted_session(host.directory, verifier_key(), lms_verify)
+    assert json.loads((host.directory / R.CLOSE).read_text())["ended"] == answer["reason"]
+    roots = R.released_roots(host.directory / R.RELEASES, host.challenger.commitment)
     assert sum(len(r) for r in roots.values()) == opened
+    with pytest.raises(C.CoinError, match="ended without its client closing it: " + re.escape(answer["reason"])):
+        host.trusted(tmp_path)
+
+
+def test_a_session_its_client_never_closed_is_signed_as_such_and_refused(tmp_path, signer):
+    host = Host(tmp_path, signer)
+    with socket.create_connection(host.listener.getsockname()) as s:
+        s.sendall(frame({"type": "hello"}))
+        assert reply(s)["type"] == "commitment"
+        s.sendall(frame(OPEN))
+        assert reply(s)["type"] == "opening"
+    assert host.ended() == "the stream closed"
+    with pytest.raises(C.CoinError, match="ended without its client closing it: the stream closed"):
+        host.trusted(tmp_path)
 
 
 class Liar:
@@ -227,13 +284,13 @@ def test_the_client_refuses_a_bad_answer_and_every_coin_after(case):
         client.open("positions", 1, root(1))
 
 
-def test_a_root_the_prover_rewrites_is_refused_against_the_challengers_log(tmp_path):
-    host = Host(tmp_path)
+def test_a_root_the_prover_rewrites_is_refused_against_the_challengers_log(tmp_path, signer):
+    host = Host(tmp_path, signer)
     with R.RemoteChallenger.connect(host.address) as client:
         record = C.LiveRecord(client, "positions", itertools.count().__next__)
         record.record(root(0))
     assert host.ended() is None
-    commitment, roots = R.trusted_session(host.directory, verifier_key(), lms_verify)
+    commitment, roots = host.trusted(tmp_path)
     ground = dataclasses.replace(record.openings[0], after=root(5))
     assert C.live_reason(commitment, ground, "positions", 0, root(5)) is None
     assert "not opened after" in C.order_reason(commitment, "positions", roots["positions"], [ground])
@@ -248,26 +305,36 @@ def _set(i: int, key: str, value) -> object:
     def f(lines):
         doc = json.loads(lines[i])
         doc[key] = value
-        return lines[:i] + [json.dumps(doc)] + lines[i + 1:]
+        return lines[:i] + [json.dumps(doc, sort_keys=True)] + lines[i + 1:]
     return f
+
+
+def _one_coin(tmp_path, signer) -> Host:
+    host = Host(tmp_path, signer)
+    with R.RemoteChallenger.connect(host.address) as client:
+        C.LiveRecord(client, "positions", itertools.count().__next__).record(root(0))
+    assert host.ended() is None
+    return host
 
 
 TAMPERED = {
     "missing": (None, "no challenger release log"),
-    "another commitment's": (_set(0, "root", "00" * 64), "not coin commitment"),
-    "a root without its release": (lambda lines: lines[:-1], "without its release"),
-    "a rewritten root": (_set(1, "root", root(7).hex()), "malformed"),
-    "a skipped index": (_set(1, "index", 1), "malformed"),
-    "a torn line": (lambda lines: lines[:-1] + [lines[-1][:9]], "unreadable"),
+    "another commitment's": (_set(0, "root", "00" * 64), "not the one its close record signs"),
+    "a root without its release": (lambda lines: lines[:-1], "has 2 lines, not the 3"),
+    "an appended release": (lambda lines: lines + [lines[-1]], "has 4 lines, not the 3"),
+    "a rewritten root": (_set(1, "root", root(7).hex()), "not the one its close record signs"),
+    "a rewritten release": (_set(2, "after", root(7).hex()), "not the one its close record signs"),
+    "a rewritten time": (_set(2, "released_at", 0.5), "not the one its close record signs"),
+    "a skipped index": (_set(1, "index", 1), "not the one its close record signs"),
+    "a torn line": (lambda lines: lines[:-1] + [lines[-1][:9]], "not the one its close record signs"),
 }
 
 
 @pytest.mark.parametrize("case", sorted(TAMPERED))
-def test_the_verifier_refuses_a_missing_or_tampered_release_log(tmp_path, case):
-    host = Host(tmp_path)
-    with R.RemoteChallenger.connect(host.address) as client:
-        C.LiveRecord(client, "positions", itertools.count().__next__).record(root(0))
-    assert host.ended() is None
+def test_the_verifier_refuses_a_missing_or_tampered_release_log(tmp_path, signer, case):
+    """Any edit to a signed log's entries, however well-formed, is refused against the chain its close signs."""
+    host = _one_coin(tmp_path, signer)
+    host.trusted(tmp_path)
     edit, why = TAMPERED[case]
     log = host.directory / R.RELEASES
     if edit is None:
@@ -275,20 +342,118 @@ def test_the_verifier_refuses_a_missing_or_tampered_release_log(tmp_path, case):
     else:
         _edit(log, edit)
     with pytest.raises(C.CoinError, match=why):
-        R.trusted_session(host.directory, verifier_key(), lms_verify)
+        host.trusted(tmp_path)
 
 
-def test_the_verifier_refuses_a_session_whose_record_is_missing_or_another_keys(tmp_path):
-    host = Host(tmp_path)
+def _rechain(host: Host, edit) -> None:
+    """Rewrite the log with `edit` and the close's chain and line count to match it, under the old signature."""
+    _edit(host.directory / R.RELEASES, edit)
+    lines = R.log_lines(host.directory / R.RELEASES)
+    close = json.loads((host.directory / R.CLOSE).read_text())
+    close.update(chain=C.log_chain(lines).hex(), lines=len(lines))
+    (host.directory / R.CLOSE).write_text(json.dumps(close))
+
+
+CLOSES = {
+    "an unsigned log": (lambda h: (h.directory / R.CLOSE).unlink(), "^no challenger close record"),
+    "a log re-chained under the old signature": (lambda h: _rechain(h, _set(1, "root", root(7).hex())),
+                                                 "close record's signature does not verify"),
+    "a close renamed to another session": (lambda h: _close(h, session="s-2"), "close record's signature does not verify"),
+    "how the session ended, rewritten": (lambda h: _close(h, ended="the stream closed"),
+                                         "close record's signature does not verify"),
+    "a close of another form": (lambda h: _close(h, extra=1), "close record is malformed"),
+    "a close of a torn signature": (lambda h: _close(h, signature="00"), "close record's signature does not verify"),
+}
+
+
+def _close(host: Host, **changes) -> None:
+    close = json.loads((host.directory / R.CLOSE).read_text())
+    (host.directory / R.CLOSE).write_text(json.dumps({**close, **changes}))
+
+
+@pytest.mark.parametrize("case", sorted(CLOSES))
+def test_the_verifier_refuses_an_unsigned_log_or_a_close_the_challenger_did_not_sign(tmp_path, signer, case):
+    host = _one_coin(tmp_path, signer)
+    edit, why = CLOSES[case]
+    edit(host)
+    with pytest.raises(C.CoinError, match=why):
+        host.trusted(tmp_path)
+
+
+STRUCTURE = {
+    "another commitment's": (_set(0, "root", "00" * 64), "not coin commitment"),
+    "a root without its release": (lambda lines: lines[:-1], "without its release"),
+    "a rewritten root": (_set(1, "root", root(7).hex()), "malformed"),
+    "a skipped index": (_set(1, "index", 1), "malformed"),
+    "a torn line": (lambda lines: lines[:-1] + [lines[-1][:9]], "malformed"),
+}
+
+
+@pytest.mark.parametrize("case", sorted(STRUCTURE))
+def test_a_log_that_is_not_a_release_order_is_refused_even_unsigned(tmp_path, signer, case):
+    host = _one_coin(tmp_path, signer)
+    edit, why = STRUCTURE[case]
+    _edit(host.directory / R.RELEASES, edit)
+    with pytest.raises(C.CoinError, match=why):
+        R.released_roots(host.directory / R.RELEASES, host.challenger.commitment)
+
+
+def test_the_verifier_refuses_a_session_whose_record_is_missing_or_another_keys(tmp_path, signer):
+    host = Host(tmp_path, signer)
     with R.RemoteChallenger.connect(host.address):
         pass
     assert host.ended() is None
     other = C.ChallengerKey(4, 2, lms.public_key(lms_key(1)))
     with pytest.raises(C.CoinError, match="does not verify"):
-        R.trusted_session(host.directory, other, lms_verify)
+        host.trusted(tmp_path, audit(tmp_path, entry("s-1", key=other)), key=other)
+    with pytest.raises(C.CoinError, match="not the window's pinned key"):
+        host.trusted(tmp_path, key=other)
     (host.directory / R.RECORD).unlink()
     with pytest.raises(C.CoinError, match="no challenger record"):
-        R.trusted_session(host.directory, verifier_key(), lms_verify)
+        host.trusted(tmp_path)
+
+
+def test_two_sessions_under_one_key_cant_both_pass_for_one_window(tmp_path, signer):
+    """Two honest sessions under the one key, each signed and closed: the window takes only the session the auditor's
+    record names for it, and a record naming both, or naming one for two windows, is refused."""
+    first = Host(tmp_path, signer, "s-1", "one")
+    honest(first)
+    second = Host(tmp_path, signer, "s-2", "two")
+    honest(second)
+    auditor = audit(tmp_path, entry("s-1"))
+    assert first.trusted(tmp_path, auditor)[0] == first.challenger.commitment
+    with pytest.raises(C.CoinError, match="the challenger's session is s-2, not s-1, the one the auditor's record names"):
+        second.trusted(tmp_path, auditor)
+    with pytest.raises(C.CoinError, match="names 2 challenger sessions for this window, and a window has one"):
+        first.trusted(tmp_path, audit(tmp_path, entry("s-1"), entry("s-2")))
+    later = {**WINDOW, "period": 1}
+    both = audit(tmp_path, entry("s-1"), entry("s-1", later))
+    for window in (WINDOW, later):
+        with pytest.raises(C.CoinError, match="names challenger session s-1 for more than one window"):
+            first.trusted(tmp_path, both, window)
+    assert second.trusted(tmp_path, audit(tmp_path, entry("s-1"), entry("s-2", later)), later)[0] == \
+        second.challenger.commitment
+
+
+AUDITS = {
+    "no record": (None, "^no auditor's session record: .*none at"),
+    "a record naming another window": ([entry("s-1", {**WINDOW, "stream": "44" * 64})], "names no challenger session"),
+    "an entry without its key": ([{k: v for k, v in entry("s-1").items() if k != "key"}], "record is malformed"),
+    "an entry with a short commit": ([{**entry("s-1"), "commit": "11"}], "record is malformed"),
+    "an entry with an uppercase key": ([{**entry("s-1"), "key": entry("s-1")["key"].upper()}], "record is malformed"),
+}
+
+
+@pytest.mark.parametrize("case", sorted(AUDITS))
+def test_the_verifier_refuses_a_window_the_auditors_record_does_not_name_one_session_for(tmp_path, signer, case):
+    host = Host(tmp_path, signer)
+    honest(host)
+    entries, why = AUDITS[case]
+    path = tmp_path / "auditor.jsonl" if entries is None else audit(tmp_path, *entries)
+    with pytest.raises(C.CoinError, match=why):
+        host.trusted(tmp_path, path)
+    with pytest.raises(C.CoinError, match="window's identity is malformed"):
+        host.trusted(tmp_path, window={**WINDOW, "period": -1})
 
 
 @pytest.mark.parametrize("address", ["7791", ":7791", "host:port", "host:"])
