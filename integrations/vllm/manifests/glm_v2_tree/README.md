@@ -69,7 +69,14 @@ to the row's pin in `records.json` at its tree, which is this tree's head's. `ro
 The B8 rows are `RESUME=1` reruns (each about 60 min) of r20261020-084508-06dd
 (art:4e82f2aee40dc827c8ff33749c0ecd3f319246feb30fe31f292db9b27dd8a5f0) and r20261020-084527-5384
 (art:764b8ee91900985294eaa2cdea9522852cc367c830141e267a997b627226cd18), whose manifests overran row_tp's 7200 s; their verdicts and
-manifest logs are in each rerun's `prior/`. B32's waits for its re-pin (vy-glm53-cpu-3, "GPU batch" step 1).
+manifest logs are in each rerun's `prior/`.
+
+B32 is re-pinned (5af673ff05) to its v2 trace r20261020-060948-f9c7
+(art:da5479fee29a71d62fe67e22cefdd73a853cba54e22e97b70c9097501f8435de, tree 0094d2ef10) and switched to its predict compare
+r20261020-130447-1c49 (tree 8ca6f9878d, 5 h 34 min): EQUAL on every rank, 272 of 272 Programs traced equal to predicted, and
+every new pin equal to the trace's `build_summary.json` digest. 264 pins moved (each rank's workload and 32 request Programs);
+the 8 step Programs did not. Its Build of record runs on vy-glm53-cpu-2 after that node's restart for its grown disk
+("GPU batch" step 1).
 
 ## GPU batch
 
@@ -103,9 +110,10 @@ worktree at a commit the guard accepts (`git worktree add /tmp/glm-v2-SHA SHA`).
 
 1. CPU, before window B (any order, overlapping window A): `build_record.sh` per row (the AOT Build of record: predict emit
    refused unless equal to the row's `aot.trace` Build, with its manifest), B1's and the B8 rows' on vy-glm53-cpu-2 ("Builds of
-   record" below), B32's on vy-glm53-cpu-3 (cpu-d3: 256 vCPU, 1 TiB, 3 TB disk) as that node's first job once B32 is re-pinned,
-   after `stage_cpu.sh` and with its trace's row dir copied from cpu-2 (`copy_rowdir.sh vy-glm53-cpu-2 vy-glm53-cpu-3 LIST.sha256
-   /workspace/cp/circuits/glm-v2`, then `AOT_TRACE=` that dir). A row this tree moves is re-pinned
+   record" below), B32's on vy-glm53-cpu-2 too, after the node's restart for its grown disk, with `AOT_TRACE=` its trace's row
+   dir there (`/workspace/cp/circuits/glm-v2/r20261020-060948-f9c7/<row>`, 79 GB): vy-glm53-cpu-3 (cpu-d3: 256 vCPU, 1 TiB, 3 TB
+   disk) could not be launched when B32 was re-pinned. On another node a Build of record follows `stage_cpu.sh`, with the
+   trace's row dir copied (`copy_rowdir.sh SRC DST LIST.sha256 /workspace/cp/circuits/glm-v2`). A row this tree moves is re-pinned
    first, since its AOT Build reads its trace and comparison from `records.json`: `trace_compare.sh` (`SKIP_AOT1=1` once the row
    is known to move) traces it, preserves the trace (`trace_art.sh`), and compares this tree's predictor with it beside an AOT
    Build against it (`SKIP_AOT2=1` leaves that out: the Build of record refuses the same mismatch); `repin.sh ROW RUN` then
@@ -143,7 +151,7 @@ worktree at a commit the guard accepts (`git worktree add /tmp/glm-v2-SHA SHA`).
    (WSBSTOCH's B8 stochastic rehearsal r20261019-162751-9b01: 17 h, one GM-01 at a time). `match_cpu.sh` runs as many ranks'
    GM-01 at once as the run's `--mem-gb` holds: one B8 rank at 450 on vy-glm53-cpu-2 (755 GiB) or vy-nebius-cpu-3 (497 GB
    cap), two at 1000 with `FOLD_WORKERS=4` on vy-glm53-cpu-3 (1 TiB, 1099 GB: three need 1110 GB with no fold beside them),
-   three at 1300 on vy-nebius-1 (1690 GiB). Scaled from the 17 h at one, two take about 9 h and three about 7 h (unmeasured). B8 greedy's runs on vy-glm53-cpu-3, after B32's Build of record, and B8 stochastic's on vy-nebius-1 or
+   three at 1300 on vy-nebius-1 (1690 GiB). Scaled from the 17 h at one, two take about 9 h and three about 7 h (unmeasured). B8 greedy's runs on vy-glm53-cpu-3 if it is up, and B8 stochastic's on vy-nebius-1 or
    vy-glm53-cpu-2. B1's 60 GB and B32's 1500 GB a rank are B8's scaled by batch, unmeasured: B32's runs only on an otherwise
    empty vy-nebius-1, one rank at a time, and refuses a `--mem-gb` that cannot hold one. A row dir after the phase is about
    580 GiB (B8) and 1.19M inodes.
