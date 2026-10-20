@@ -483,7 +483,7 @@ would not fail the audit.
 
 ## Upstream status
 
-Whether a dependency proves what these theorems assume is computed from `lean-audit.json`'s `upstream` watch list: `assumption-notes/upstream-status.md`.
+Whether a dependency proves what these theorems assume is computed from `lean-audit.json`'s `upstream` watch list: `assumption-notes/upstream.md`.
 
 ## Trusted components
 
