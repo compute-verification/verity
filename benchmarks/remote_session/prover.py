@@ -32,6 +32,9 @@ kvoverwrite:P   kv:P with serving ahead of the passes (--ahead), but its writes 
                 opening of it carries the true block
 ~~~
 
+In a paced session (the session message's `pace`, k: `audit.Pace`) the prover runs at most k passes under a coin, then
+waits for the next, and a window's first pass starts at its coin's arrival.
+
 With serving ahead of the passes (`Ahead`: --ahead K for a kv session, or a serving backend's own), serving runs on
 its own thread, at most K steps past the pass in flight, and each pass takes the newest step it can: s, once serving
 has handed step s − 1, the records of the steps since the last pass's applied first, to which a kv session adds the
@@ -794,6 +797,7 @@ class ProverSide:
             inflight = deque([launch(0, 0, None, first if cap < math.inf else clock())])
             while inflight or (cap < math.inf and not stopping):
                 if not inflight:
+                    # Paced: this window's k passes are done, and the next pass waits on the next coin.
                     msg, _, stamp = pending.popleft() if pending else self._boundary()
                     if msg["type"] != "coin":
                         ended, stopping = (msg, True) if msg["type"] == "end" else (ended, True)

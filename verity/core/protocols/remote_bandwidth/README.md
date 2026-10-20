@@ -25,8 +25,11 @@ verdict the Python gave, the Python keeps running beside it as the reference, an
 `Models/` to `Properties/`. What the Lean doesn't check yet that `audit.py` does:
 
 - a registration that binds PoUW's tiles, which the Lean refuses;
-- the record past the summary `RemoteAudit.Session` returns: the coins' commitment, the integrity profile and the
-  ledger's terms.
+- pacing (`Params.pace`, `audit.Pace`): a paced window's (k + 1)-th root, which `audit.Session` refuses as `order` and
+  the Lean takes, so under `both` or `lean` such a session is refused as `disagreement` (the honest prover never sends
+  one);
+- the record past the summary `RemoteAudit.Session` returns: the coins' commitment, the integrity profile, each root's
+  arrival (`WindowRecord.arrived_ns`), the pace and the ledger's terms.
 
 ## Replay
 
@@ -43,7 +46,11 @@ uv run python verity/core/protocols/remote_bandwidth/lean/tests/replay.py transc
 
 ## Code
 
-- `audit.py`: the lifecycle (`register`, `Registry`, `Session`), the record and its ledger.
+- `audit.py`: the lifecycle (`register`, `Registry`, `Session`), pacing (`Pace`: a live coin every k passes), the
+  record and its ledger.
+- `ledger.py`: the declared outputs from an accepted session's record (`declared`): γ at both R, per window and over
+  the session, and the memory line's three forms (snapshot, time-held and link-charged) on the verifier's node
+  (`Node`).
 - `coins.py`: the challenger's committed live coins.
 - `receipts.py`: seeds, plans, receipts and their trees.
 - `codec.py`: the store's encoding (kv/v0).

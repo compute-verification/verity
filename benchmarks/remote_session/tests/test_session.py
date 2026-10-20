@@ -20,7 +20,7 @@ HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE.parent))
 sys.path.insert(0, str(HERE.parents[2]))
 
-from verity.core.protocols.remote_bandwidth import audit, receipts as rb, timing  # noqa: E402
+from verity.core.protocols.remote_bandwidth import audit, ledger, receipts as rb, timing  # noqa: E402
 from verity.core.protocols.remote_bandwidth import codec as rcodec  # noqa: E402
 
 import prover  # noqa: E402
@@ -273,6 +273,55 @@ def test_a_sessions_ledgers_carry_the_timing_parts_when_its_calibration_reads_ea
     for short in ({"hbm": {"bytes": 15 * block, "ms": 1e-6}}, None):
         (r,), _ = run("honest", read_bytes_per_s=1.0, tiers=short)
         assert "timing_parts" not in r["ledger"]["measured"] and "timing_parts" not in r["ledger"]["inputs"]
+
+
+def test_an_unpaced_session_declares_its_snapshot_line_and_no_time_held_line(monkeypatch):
+    """The declared outputs are the protocol's (`ledger.declared`): γ at both R, as the readings beside them, and the
+    snapshot line; an unpaced session's coins come a stated window apart, so it has no time-held line."""
+    monkeypatch.setattr(prover, "OPENINGS_PART", 4)
+    (r,), _ = run("honest")
+    lg = r["ledger"]
+    d = lg["declared"]
+    assert d["accepted"] and d["windows"] == 3
+    assert d["gamma"]["spec"]["gamma"] == lg["spec"]["gamma"] and d["gamma"]["measured"]["gamma"] == lg["measured"]["gamma"]
+    assert [w["window"] for w in d["gamma"]["spec"]["windows"]] == [0, 1, 2]
+    assert 0 <= d["memory"][ledger.SNAPSHOT]["epsilon"] <= 1 and d["memory"][ledger.SNAPSHOT]["delta"] > 0
+    assert "unpaced" in d["memory"][ledger.TIME_HELD]["refused"]
+
+
+@pytest.mark.parametrize("k, schedule", [
+    (1, [(0, 1, [1]), (1, 2, [2]), (2, 3, [3]), (3, 4, [4]), (4, 5, [5]), (5, 6, [6])]),
+    (3, [(0, 2, [1, 2, 3]), (2, 5, [4, 5, 6]), (5, 8, [7, 8, 9]), (8, 11, [10, 11, 12]), (11, 14, [13, 14, 15]),
+         (14, 17, [16, 17, 18])]),
+])
+def test_a_paced_session_runs_k_passes_a_coin_and_declares_its_time_held_line(monkeypatch, k, schedule):
+    """Paced (`pace_of`, `audit.Pace(k, T)`: two stretches of two windows and the closing stretch), the prover runs k
+    passes under each coin and waits for the next, and the verifier sends each boundary as the window's (k − 1)-th
+    root arrives (`Session.next_boundary_ns`; k = 1: as the window before's root does), so on the pass clock window t
+    holds k passes, none discarded; γ is declared over the fixed windows of T from the first challenge to the last
+    deadline, and the session declares all three memory forms."""
+    monkeypatch.setattr(prover, "OPENINGS_PART", 4)
+    T = 10**9
+    pace = verifier.pace_of(f"{k}:{T // 10**6}:12:2", 500 / k)
+    assert pace["groups"] == 2 and pace["draws"] == 6
+    (r,), (pr,) = run("honest", paces=[pace])
+    assert r["accepted"] and pr["accepted"] and r["windows"] == 6 and r["pace"] == pace
+    assert r["record"]["public"]["pace"] == {"k": k, "window_ns": T}
+    assert pr["passes"] == [k] * 6 and pr["discarded"] == 0
+    assert [(w["released_ns"], w["boundary_ns"], w["arrivals_ns"]) for w in r["windows_seen"]] == [
+        (s, b, list(a)) for s, b, a in schedule]
+    ws = r["ledger"]["declared"]["gamma"]["spec"]["windows"]
+    span = r["windows_seen"][-1]["deadline_ns"] - schedule[0][0]
+    assert [w["window"] for w in ws] == list(range(-(-span // T)))
+    assert [w["span_ns"] for w in ws] == [T] * (len(ws) - 1) + [span - (len(ws) - 1) * T]
+    d = r["ledger"]["declared"]
+    for form in ledger.FORMS:
+        assert 0 <= d["memory"][form]["epsilon"] <= 1 and d["memory"][form]["delta"] > 0, form
+
+
+def test_a_paced_prover_that_dropped_blocks_is_rejected():
+    (r,), (pr,) = run("skip:0.5", paces=[verifier.pace_of("2:1000:12:2", 250.0)])
+    assert not r["accepted"] and not pr["accepted"] and "declared" not in r.get("ledger", {})
 
 
 def test_a_second_session_waits_out_the_first_and_is_accepted():
