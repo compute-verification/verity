@@ -1,4 +1,4 @@
-"""A served tree registered as a port, end to end (`one_stage.served.register_served`, `verity_flock.served_registered`): a
+"""A served tree registered as a port, end to end (`one_stage.served.register_served`, `served_registered.py`): a
 RoPE d64 statement whose 32 units each read their `cs` row from the served tree `cs_table`, proved by C-Flock in one
 loopback `--zk` session under a subset draw of 16 (`pod/89-served-registered.sh`, `FIXTURE`). The verifier writes its own
 `--registered` file from the tree as the service holds it (`served.json`), with `register_served` on its own program, and
@@ -56,7 +56,7 @@ def _verify(fx: Path, registered: Path) -> dict:
 
 
 def test_a_session_verified_on_the_file_register_served_wrote_is_accepted_and_a_changed_root_refused(fx, tmp_path):
-    from verity_flock import served_registered as SR
+    import served_registered as SR
 
     program, query = SR.program()
     assert canonical_json(encode_program(program)) == (fx / "stage" / "program.json").read_bytes()
