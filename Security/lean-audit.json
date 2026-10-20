@@ -621,6 +621,9 @@
   "FlockDeploy.PlainIn": {
    "owner": "@proofs"
   },
+  "FlockDeploy.ZkIn": {
+   "owner": "@proofs"
+  },
   "FlockSoundness.Accounting.Stmt.InRange": {
    "owner": "@proofs",
    "digest": "14f41f745abc478968ebae692fbb51b813f932a65294c6279434928b7d158968"
