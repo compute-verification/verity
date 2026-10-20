@@ -47,7 +47,7 @@
       "request_url": "https://website-docs-sage.vercel.app/api/slack/interactivity"
     },
     "event_subscriptions": {
-      "request_url": "https://verity-slack-events-git-cursor-comms-sl-1c1398-compute-6da2eae4.vercel.app/api/slack/events",
+      "request_url": "https://website-docs-sage.vercel.app/api/slack/events",
       "bot_events": [
         "message.channels",
         "message.groups",
