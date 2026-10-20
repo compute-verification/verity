@@ -33,9 +33,10 @@ or read at one value, so there it is to hold.
 (`LastGap.decision_congr_record`), so two records that parse alike give one decision with the same calls and the same
 columns: the trailing-space pair that refutes `LastBinds` is no counterexample to `PlainLastBinds`.
 
-`PlainLastBindsOrSlack` is open. It is the collision charge through the plain verifier's steps: each proof-file field a
-check reads is absorbed into a transcript whose coins the record's rounds pin, Merkle-checked against a committed cap,
-or pinned by custody.
+`PlainLastBindsOrSlack` is the collision charge through the plain verifier's steps. `LastColsDeployed` splits it into
+its columns half, proved at SHA-512 (`RecDeploy.plainColsBind_sha512`), and its calls half, open
+(`RecDeploy.PlainCallsBindOrSlack`): each proof-file field a check reads is absorbed into a transcript whose coins the
+record's rounds pin, Merkle-checked against a committed cap, or pinned by custody.
 -/
 
 namespace Claims.Recursion
@@ -371,7 +372,7 @@ def ProofSlack (l l' : Msg) : Prop :=
 
 /-- **`PlainLastBinds` up to the decoder's slack**: its hypotheses give a collision among the decision's calls, or two
 proof files at one position that differ in their bytes and decode alike (`ProofSlack`). It is the collision charge
-through the plain verifier's steps, and open. -/
+through the plain verifier's steps: its columns half holds at SHA-512, its calls half is open (`LastColsDeployed`). -/
 def PlainLastBindsOrSlack (H : Msg → Msg) : Prop :=
   ∀ (x : Msg) (ms : List Msg) (l l' : Msg) (cs : List Coin), ms.length + 1 = (FlockDeploy.V false).k x →
     cs.length = ms.length + 1 →
