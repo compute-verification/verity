@@ -16,7 +16,7 @@ the prefix:
 * `Rewinding.sum_off_eq_zero_of_conflict`, `Lock.nodeE_nodeOff_eq_zero`: where two runs never conflict, nothing is off a
   plurality table, so a subtree whose fork is `0` (`SlotAt.nul`) has no off mass either;
 * `Lock.nodeE_nodeOff_le_offC`: the alignment, at the fork event `SlotAt` is stated for, so every `SlotAt` proof of the
-  √ chain applies unchanged.
+  √ chain applies unchanged; `Lock.nodeE_congr`: aligned locksteps have the same `nodeE`, as `forkE_congr`.
 -/
 
 namespace FlockSoundness
@@ -113,6 +113,25 @@ theorem offC_nonneg (op : α → P → Option V) : ∀ (j : ℕ) (g : Game α) (
 namespace Lock
 
 variable {T D I β : Type} {get : I → ℕ → Option (T × D)} {R : I → α → β → Prop}
+
+/-- **Aligned locksteps have the same node functional**: `nodeE` reads only the compiled side and the slots. -/
+theorem nodeE_congr (plur : Chooser T D β) (slot : ℕ) (Ψ : D → (g : Game β) → Strategy g → ℝ)
+    {R₁ R₂ : I → α → β → Prop} {i₁ i₂ : I} {g₁ g₂ : Game α} {g' : Game β}
+    {L₁ : Lock T D get R₁ i₁ g₁ g'} {L₂ : Lock T D get R₂ i₂ g₂ g'} (h : Aligned L₁ L₂) :
+    ∀ σ' : Strategy g', nodeE plur slot Ψ L₁ σ' = nodeE plur slot Ψ L₂ σ' := by
+  induction h with
+  | ret => intro σ'; rfl
+  | coin C _ ih =>
+      intro σ'
+      simp only [nodeE]
+      exact congrArg (· / _) (Finset.sum_congr rfl fun c _ => ih c (σ' c))
+  | send M _ ih => intro σ'; exact ih σ'.1 σ'.2
+  | table s _ ih =>
+      intro σ'
+      simp only [nodeE]
+      split_ifs
+      · rfl
+      · exact ih _ σ'.1 σ'.2
 
 omit [Nonempty V] in
 /-- **No fork, no off mass**: at a plurality chooser, a subtree whose fork conflict at `slot` is `0` has no off mass
