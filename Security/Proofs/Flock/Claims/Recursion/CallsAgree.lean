@@ -9,6 +9,7 @@ import Proofs.Flock.Claims.DeployK
   `Tags.MAX_TABLES`), so its rep streams too.
 * `streams_pinned`: S11's count and names then leave a decoded session no stream but the one it finds at each rep
   stream's name.
+* `decode_publics`: the public words `Record.decode` reads (S7) are `liveOf`'s.
 -/
 
 namespace FlockDeploy.KS
@@ -69,7 +70,8 @@ theorem repNames_nodup {spec : SessionSpec} (h : spec.tables.toList.Nodup) :
   have e' := congrArg String.toList e
   simp only [Function.comp, String.toList_append, Nat.toString_eq_repr, Nat.toList_repr] at e'
   have hlen : ∀ r < 2, (Nat.toDigits 10 r).length = 1 := by decide
-  obtain ⟨e1, e2⟩ := List.append_inj' e' (by rw [hlen _ (Nat.mod_lt _ (by omega)), hlen _ (Nat.mod_lt _ (by omega))])
+  obtain ⟨e1, e2⟩ :=
+    List.append_inj' e' (by rw [hlen _ (Nat.mod_lt _ (by omega)), hlen _ (Nat.mod_lt _ (by omega))])
   have et : spec.tables[k / 2]! = spec.tables[k' / 2]! := String.toList_injective (List.append_cancel_right e1)
   have hi : k / 2 < spec.tables.size := by have := repStreams_size spec; omega
   have hi' : k' / 2 < spec.tables.size := by have := repStreams_size spec; omega
@@ -129,5 +131,108 @@ theorem streams_pinned {spec : SessionSpec} {sess : Session} (hn : (spec.repStre
   simp only [Array.getElem_toList] at hxs
   rw [hxs]
   exact find?_self_of_nodup StreamRec.name hnN hs
+
+/-! ## The decoded public words are `liveOf`'s -/
+
+section Publics
+
+open Lean (Json)
+open Claims.Bridge.Custody
+
+/-- Table `t`'s public words as the record's link has them: empty where absent. -/
+def PubField (pubs : Json) (t : String) (p : ByteArray) : Prop :=
+  (Record.isNull pubs t = true → p = ByteArray.empty) ∧
+    (Record.isNull pubs t = false → ∃ s, Record.str pubs t = .ok s ∧ unhex s = .ok p)
+
+theorem pubField_unique {pubs : Json} {t : String} {a b : ByteArray} (ha : PubField pubs t a)
+    (hb : PubField pubs t b) : a = b := by
+  cases hn : Record.isNull pubs t
+  · obtain ⟨s, h1, h2⟩ := ha.2 hn
+    obtain ⟨s', h1', h2'⟩ := hb.2 hn
+    rw [h1] at h1'
+    cases h1'
+    rw [h2] at h2'
+    cases h2'
+    rfl
+  · rw [ha.1 hn, hb.1 hn]
+
+theorem pubField_of {pubs : Json} {t : String} {p : ByteArray}
+    (h : (if Record.isNull pubs t = true then pure ByteArray.empty else do unhex (← Record.str pubs t) :
+      Flock.V ByteArray) = .ok p) : PubField pubs t p := by
+  refine ⟨fun hn => ?_, fun hn => ?_⟩
+  · rw [ite_eq_left hn] at h
+    exact (Except.ok.inj h).symm
+  · rw [ite_eq_right (by simp [hn])] at h
+    obtain ⟨s, hs, h⟩ := ebind_ok h
+    exact ⟨s, hs, h⟩
+
+/-- **What `Record.decode` reads of the public words.** -/
+theorem decode_pubs {spec : SessionSpec} {text : String} {sess : Session} (h : Record.decode spec text = .ok sess) :
+    ∃ j l pubs, Json.parse text = .ok j ∧ Record.fld j "link" = .ok l ∧ Record.fld l "publics" = .ok pubs ∧
+      List.Forall₂ (PubField pubs) spec.tables.toList sess.publics.toList := by
+  revert sess
+  show Ret (Record.decode spec text) _
+  rw [Record.decode.eq_def]
+  cases hp : Json.parse text with
+  | error e => intro sess h; cases h
+  | ok j =>
+    simp only []
+    rw [pure_bind]
+    ret_walk [Record.fld, Array.mapM]
+    all_goals
+      refine ⟨j, _, _, rfl, by assumption, by assumption, ?_⟩
+      refine List.Forall₂.imp (fun t p h => ?_) (mapM_forall₂ (by assumption))
+      beta_reduce at h
+      split at h
+      · rename_i hn
+        rw [pure_bind] at h
+        refine ⟨fun _ => ?_, fun hn' => by simp [hn] at hn'⟩
+        split at h
+        · obtain ⟨_, _, h⟩ := ebind_ok h
+          obtain ⟨_, _, h⟩ := ebind_ok h
+          exact (Except.ok.inj h).symm
+        · exact (Except.ok.inj h).symm
+      · rename_i hn
+        obtain ⟨s, hs, h⟩ := ebind_ok h
+        obtain ⟨p', hp', h⟩ := ebind_ok h
+        refine ⟨fun hn' => absurd hn' hn, fun _ => ⟨s, hs, ?_⟩⟩
+        split at h
+        · obtain ⟨_, _, h⟩ := ebind_ok h
+          obtain ⟨_, _, h⟩ := ebind_ok h
+          rw [← Except.ok.inj h]
+          exact hp'
+        · rw [← Except.ok.inj h]
+          exact hp'
+
+/-- **What `liveOf` reads of the public words.** -/
+theorem liveOf_pubs {spec : SessionSpec} {record : String} {lv : Live} (h : liveOf spec record = .ok lv) :
+    ∃ j l pubs, Json.parse record = .ok j ∧ Record.fld j "link" = .ok l ∧ Record.fld l "publics" = .ok pubs ∧
+      List.Forall₂ (PubField pubs) spec.tables.toList lv.publics.toList := by
+  revert lv
+  show Ret (liveOf spec record) _
+  rw [liveOf.eq_def]
+  cases hp : Json.parse record with
+  | error e => intro lv h; cases h
+  | ok j =>
+    dsimp only
+    rw [pure_bind]
+    ret_walk [Record.fld, Array.mapM]
+    refine ⟨j, _, _, rfl, by assumption, by assumption, ?_⟩
+    exact List.Forall₂.imp (fun t p h => pubField_of h) (mapM_forall₂ (by assumption))
+
+/-- **The decoded session's public words are `liveOf`'s.** -/
+theorem decode_publics {spec : SessionSpec} {text : String} {sess : Session} {lv : Live}
+    (hd : Record.decode spec text = .ok sess) (hl : liveOf spec text = .ok lv) : sess.publics = lv.publics := by
+  obtain ⟨j, l, pubs, hp, hl1, hp1, hf⟩ := decode_pubs hd
+  obtain ⟨j', l', pubs', hp', hl1', hp1', hf'⟩ := liveOf_pubs hl
+  rw [hp] at hp'
+  cases hp'
+  rw [hl1] at hl1'
+  cases hl1'
+  rw [hp1] at hp1'
+  cases hp1'
+  exact Array.ext' (forall₂_unique (R := PubField pubs) (fun _ _ _ => pubField_unique) hf hf')
+
+end Publics
 
 end FlockDeploy.KS
