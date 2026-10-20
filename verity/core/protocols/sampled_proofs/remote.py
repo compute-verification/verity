@@ -28,13 +28,14 @@ the client's close only once its signed close is written.
 that isn't the coin asked for opened against the commitment after `after` (`live_reason`), and refuses every coin after.
 
 The verifier reads the challenger's directory from the auditor's side (the challenger's own run), never from the prover's
-bundle (`trusted_session`), and the auditor's record of which session is a window's (`auditor_record`): the commitment the
-challenger signed and the roots its signed release log shows it received (`challenger.trusted_session_of`), against
-which a family's openings are `order_reason`'s.  An opening's `after` is the prover's to write, so only the challenger's
-log shows which root a coin followed.
+bundle (`trusted_session`), and the auditor's signed ledger of which session is a window's (`ledger_lines`): the
+commitment the challenger signed and the roots its signed release log shows it received (`challenger.session_named`),
+its record and close the files the ledger's end sealed, against which a family's openings are `order_reason`'s.  An
+opening's `after` is the prover's to write, so only the challenger's log shows which root a coin followed.
 """
 from __future__ import annotations
 
+import hashlib
 import json
 import os
 import socket
@@ -50,7 +51,7 @@ from verity.core.protocols.sampled_proofs.challenger import (ChallengerClose, Ch
                                                              write_record)
 from verity.ml.commitments.identity import canonical_json_text
 
-RECORD, KEY, RELEASES, CLOSE = "record.json", "key.json", "releases.jsonl", "challenger.json"
+RECORD, KEY, RELEASES, CLOSE = "record.json", "key.json", Ch.LOG_FILE, "challenger.json"
 ROOT_BYTES = 64
 HEADER = struct.Struct(">II")
 MAX_HEAD = 1 << 20
@@ -348,27 +349,34 @@ def session_files(directory: str | os.PathLike) -> dict[str, Any]:
             "record": _doc(d / RECORD, "challenger record")}
 
 
-def auditor_record(path: str | os.PathLike) -> list[Any]:
-    """The auditor's session record at `path`, one entry a line (`challenger.audited_session`, `AUDIT_FORM`), as infra's
-    launcher appends it before each session's first coin.  A missing or unreadable record raises `CoinError`."""
-    text = _read(Path(path), "auditor's session record")
+def ledger_lines(path: str | os.PathLike) -> list[str]:
+    """The auditor's ledger at `path` (infra's ``windows.jsonl``, the latest the store holds), its lines without their
+    newlines; a missing or unreadable ledger raises `CoinError`."""
+    text = _read(Path(path), "auditor's ledger")
     if text is None:
         raise CoinError(f"{Ch.NO_AUDIT} (none at {path})")
-    try:
-        return [json.loads(line) for line in text.splitlines() if line.strip()]
-    except ValueError as e:
-        raise CoinError(f"the auditor's session record at {path} is unreadable ({e})") from e
+    return [line for line in text.split("\n") if line]
 
 
-def trusted_session(directory: str | os.PathLike, auditor: str | os.PathLike, window: Any, key: ChallengerKey,
+def trusted_session(directory: str | os.PathLike, ledger: str | os.PathLike, window: Any, key: ChallengerKey,
                     verify: Verify) -> tuple[LiveCommitment, dict[str, tuple[bytes, ...]]]:
     """What the verifier takes from the challenger's directory for window `window`, read on the auditor's side: the one
-    session the auditor's record at `auditor` names for the window, under the challenger key the window's deployment
-    pins, `key`, and from that session's directory the coin commitment the challenger signed and the roots its signed
-    release log shows it received (`challenger.trusted_session_of`).  Each fails closed, raising `CoinError`."""
-    return Ch.trusted_session_of(auditor_record(auditor), window, key, session_files(directory), verify)
+    session the auditor's ledger at `ledger` opens for the window, under the challenger key the window's deployment pins,
+    `key` (`challenger.audited_session`); its record and close the files the ledger's end sealed; and from that session's
+    directory the coin commitment the challenger signed and the roots its signed release log shows it received
+    (`challenger.session_named`).  Each fails closed, raising `CoinError`."""
+    d = Path(directory)
+    audited = Ch.audited_session(ledger_lines(ledger), window, key, verify)
+    for name in (RECORD, CLOSE):
+        try:
+            digest = hashlib.sha512((d / name).read_bytes()).hexdigest()
+        except OSError:
+            digest = None
+        if digest is None or audited.files.get(name) != digest:
+            raise CoinError(f"the challenger's {name} is not the one the auditor's ledger sealed at its session's end")
+    return Ch.session_named(audited, key, session_files(d), verify)
 
 
 __all__ = ["CLOSE", "HEADER", "KEY", "MAX_HEAD", "RECORD", "RELEASES", "ROOT_BYTES", "RemoteChallenger", "Session",
-           "auditor_record", "close_session", "log_lines", "open_session", "released_roots", "serve", "session_files",
+           "close_session", "ledger_lines", "log_lines", "open_session", "released_roots", "serve", "session_files",
            "trusted_session"]
