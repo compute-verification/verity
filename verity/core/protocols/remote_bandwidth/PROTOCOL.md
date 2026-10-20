@@ -5,7 +5,7 @@ node made. The node's memory is its GPUs' HBM and its host's DRAM. No prover har
 and its NICs are all part of the prover. Each window's challenge and its openings coin are live coins from the
 challenger, committed before the session. Inside a window the passes' seeds are Fiat–Shamir: each is derived from the
 window's challenge and the prover's previous root, so the passes are chained. Daniel allowed that for this protocol on
-12 Oct, because a live coin a pass is impractical at its rate (the friction skill's rulings). Appendix A is the
+12 Oct, because a live coin a pass is impractical at its rate (`AGENTS.md`, "Live coins only"). Appendix A is the
 live-coin design and what it would cost.
 
 The code is `audit.py` (the lifecycle), `coins.py` (the coins), `receipts.py` (seeds, plans, receipts and trees),

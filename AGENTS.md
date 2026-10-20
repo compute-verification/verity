@@ -102,7 +102,8 @@ research status RUN  # check back on a run (`research run` returns once it start
 
 ## Design rules
 
-Daniel's, current. `.agents/skills/friction/SKILL.md` has the dated rulings behind most of them.
+Daniel's, current. Their dates and history are in his decisions log in Notion; `.agents/skills/friction/SKILL.md` has
+the standing rulings stated nowhere else.
 
 - **Circuits and values.** A circuit holds only gates. Everything a program or a request brings, every intermediate and
   every output, is a value. A value is committed under a hiding leaf and touched only inside a zero-knowledge proof.
@@ -317,7 +318,7 @@ keys, and what a guarantee says or rests on, go to Daniel through your coordinat
 still bound themselves under a `budgets.toml` line, and a budget line named in a standing ruling stands. A change that
 crosses owners goes to the other owner, and the coordinator settles a disagreement. When a tool, rule or step gets in
 your way, fix it at the source if the fix is clearly yours. Record each ruling you get. The friction skill,
-`.agents/skills/friction/SKILL.md`, has the rulings so far and the friction notes.
+`.agents/skills/friction/SKILL.md`, has the standing rulings this file doesn't state and the friction note format.
 
 A guard never fails open, and an agent VM can be suspended at any moment, so nothing that bounds spend or preserves
 results may depend on one. Pods bound themselves (`research pods create --max-hours`, under a line of the notes repo's
@@ -463,4 +464,4 @@ Coordinators are launched, handed over and archived from Daniel's laptop with `i
 - Before adding, changing or retiring a process (a rule here or in the lane contract, a gate in `check` or
   `research merge`, a required review, a file every PR must update), assess its effect on research velocity:
   `.agents/skills/process-design/SKILL.md`.
-- Creating or modifying a skill: `.agents/skills/authoring-skills/SKILL.md`.
+- Creating or modifying a skill (at most 16 KB: current rules, not their history): `.agents/skills/authoring-skills/SKILL.md`.
