@@ -40,7 +40,9 @@ keeps every default it had, so V2PREP can merge them into `cursor/glm-v2-21f3` a
   `census_entry`) leaves the request Build's census out (CPU gates, below). Its `MANIFEST_JOBS=8` and `BUILD_TO=14400` run the
   Build's required-value manifest in 8 processes under a 4 h timeout, with the unit rules kept in
   `/workspace/cp/circuits/dsv4-v2/unit-rule-cache`.
-- `replay_publish.sh` refuses a non-GLM row: its conformance captures are GLM-5.3's.
+- `replay_publish.sh` reads the row's model from `model.sh` (repo, revision, `REPLAY_CK`: the verified checkpoint its replay
+  reads) and cites each model's captures of record; `BF16_ART` is GLM-5.3's alone, and the Match's record is stored as
+  `<model>/tp8-match-record/v1` (`glm53/` as before, `dsv4-pro/`).
 
 ## Not in v2
 
@@ -67,6 +69,11 @@ The Build's required-value manifest then cuts each Definition's unit rule (`word
 takes about 45 min. At `build_record.sh`'s 2 processes the first two took the manifest's first 46 min, before the rest of the
 word check and the component builds (GLM-5.3's took 56 and 29 min), against the Build's 2 h timeout. So r20261020-121943-5683
 was cancelled in its manifest, and `model.sh` sets `MANIFEST_JOBS=8` and `BUILD_TO=14400`.
+
+Every Call Definition the Programs derive has a Boolean version that keeps its boundary (the G1 probe). Of the 53 step Calls, 30
+were checked deep, building each Boolean body. The other 23 are deferred, best effort and not a G1 gate, since circuit-check's suite
+already checks those families: building `FlashMlaDecode_v2`'s Boolean body passed 424 GB (r20261020-083555-d46d, cancelled), so
+they need a host with at least 755 GB, and run on vy-glm53-cpu-3 in a gap after the GLM-5.3 rows' CPU Match phases.
 
 1. `trace_compare.sh` (`SKIP_AOT1=1`): the v2 trace, `predict compare` against it, and the AOT Build against it, on
    vy-nebius-cpu-3 after `stage_cpu.sh`. r20261020-071632-1bcf is the first run (cancelled in its request derives' census),
@@ -113,11 +120,48 @@ Then:
    0.88 read back, with the bundles and `_rowmeta` preserved. A preemptible node may run it. An eviction fails the run, which
    stays published as failed, and the Commit reruns whole from a new commitment with new draws
    (`gpu_batch.sh b ROWS.env NODE <row>`); `commit_attempts.jsonl` counts the attempts.
-4. CPU: the Commit's replay and publish. `replay_publish.sh` is GLM-5.3's (its conformance captures), so DeepSeek-V4-Pro's
-   publish step is still to be written. Its Boolean replay (`pipeline.boolean_replay`) builds each picked row's Boolean
-   version, and some are large to build at the served statics: `BL.is_boolean` on `Dsv4QNormRopeKvInsert_v2` took 45 min at
-   225 GiB, and on `FlashMlaDecode_v2` passed 424 GB in 90 min without finishing, in `boolean_dsa.build`'s `bits.compile`
-   (r20261020-083555-d46d, cancelled). Its host needs more than cpu-3's 497 GB.
+4. CPU, on the replay host (below): `replay_publish.sh` per `RANKS` job, then one without `RANKS` that publishes, as GLM-5.3's
+   rows run it (`../glm_v2_tree/README.md` step 5): `tp-commit-replay` of every rank from the bundles window B preserved, then
+   `records publish --tier heavy`. It needs from the GPU legs:
+   - window B's `$OUT/bundles.json` (`--send` it), naming each rank's bundle and the `_rowmeta` tree, and `COMMIT_RUN`, the
+     Commit's run, whose run record the record cites;
+   - the Match's `match/tp2_match.json`, `match/fold_match/tp2_fold_match.json` and `match/fold_match/tp2_rank_match.json` in the
+     row dir (step 2's `match_cpu.sh`), and `MATCH_RUN`;
+   - `BUILD_ART`, the Build of record's artifact (its `vllm.build` run's), whose construction manifests `due` reads.
+
+   It cites nine of DeepSeek-V4-Pro's ten capture properties, preserved from their GO runs (13–14 Oct) with `records capture`,
+   and names `dsv4_moe_capture` a gap: its capture r20261013-205619-5c39 ran with `VLLM_BATCH_INVARIANT=1`, where vLLM's default
+   is 0. The other nine set no vLLM switch away from its default, but none reads the switches back as GLM-5.3's #2838 captures
+   do. The capture map (`deepseek-v4-eager-hopper-tp8-v0`) names no Program's captures, so publish requires none of the ten
+   (`records.due` is empty). Naming them in the map changes `manifests/capture-maps/`, which `tree_guard.sh` lets no later job of
+   this row carry, so that waits for the next tree.
+
+   Dry run, without GPU output: the job's nine citations pass `check_capture`, its evidence passes `evidence_of`, the row is no
+   `index_refusal`, its tier is heavy and its `aot` is r20261020-085740-90ff's. `due` against the v2 trace's Build (16
+   construction manifests) is empty under that map. In the Build of record's row dir, every rank's two derived Programs are
+   `aot` (publish refuses a switched row whose Build traced one), and `config_record.record` finds the Build ok on all 8 ranks,
+   its outcome "word check not run" until the Match and Commit are in.
+
+The replay host. The Commit's replay of record evaluates its picks with the word row kernels (`check.replay.evaluate`'s
+`ROW_EVALUATORS` is empty on every record), so it builds no Boolean body. `boolean-replay`, which would, is a single-device
+re-verification (`row_dir/build_request`, no TP weights) and takes no TP8 bundle, so it is not run for this row. A rank's replay
+holds its share of the checkpoint, opened against the committed weights root, beside a forked pool fitted to the job's memory
+(`driver.fit_pool`). GLM-5.3 B8's peaked at 257–259 GiB a rank with 32 workers, 66–71 min a rank with 9 min of it opening the
+weights (r20261019-123645-e69d). DeepSeek-V4-Pro's checkpoint is 805 GiB against GLM-5.3's 704 GiB, so a rank's share is about
+14% larger, and its replay is estimated at 270–300 GiB a rank. That is not measured: the first job runs `RANKS=0` alone at
+`--mem-gb 330` and records its peak (`sampled_replay_p0_rank0.json`'s `peak_rss_bytes`), and the rest are packed by it. A job
+replays its ranks in turn, so the jobs at once are the host's memory over that peak:
+
+| host | memory | jobs at once | 8 ranks |
+|---|---|---|---|
+| vy-glm53-cpu-3 (cpu-d3, being brought up by infra) | 1 TiB, else 768 GB | 3, else 2 | ~3.5 h, else ~4.5 h |
+| vy-glm53-cpu-2, after its disk restart | 755 GiB | 2 | ~4.5 h |
+| vy-nebius-cpu-3 | 497 GB (/user.slice) | 1 | ~9 h |
+
+The plan is vy-glm53-cpu-3, else vy-glm53-cpu-2. Either needs the checkpoint staged and verified at `REPLAY_CK`,
+`/workspace/cp/dsv4-ckpt`: `stage_ckpt.sh` with `PY=/workspace/cp/circuits/venv312/bin/python` (a CPU node's venv), 864.7 GB in
+about 18 min, with 865 GB free. It also needs the row dir: the Build of record (`copy_rowdir.sh vy-nebius-cpu-3 HOST
+rowdir.sha256 /workspace/cp/circuits/dsv4-v2/rows`) and the Match's files.
 
 GPU time (wall of the GPU job, all 8 GPUs):
 
