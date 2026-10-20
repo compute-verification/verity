@@ -64,8 +64,9 @@ writes no census, its `result.json`'s `census` says it skipped, and `records.jso
 over the census-free trace's largest process (27.6 GB, r20261020-085740-90ff): every job that derives runs `BUILD_JOBS` = its
 `--mem-gb` over 32, so 9 at once in 300 GB. The GPU leg's Commit runs without `MEMORY_MAP`; one with it computes the census
 then (`memory_map.of_build`). `census_entry` reads `VERITY_BUILD_CENSUS` from the environment, which the P7 lint
-(`tests/lint/test_p07_declared_inputs.py`) refuses. Taking it as a `build` option edits `build.py`, one of the construction
-sources whose hash every artifact identity carries, so that waits for the next tree.
+(`tests/lint/test_p07_declared_inputs.py`) refuses, so that test fails on this tree. Taking it as a `build` option would edit
+`build.py`, one of the construction sources whose hash every artifact identity carries. The failure stays on this tree only: it
+is never a PR, and on `main` CIR-73's census fix removes the need for the switch.
 
 The Build's required-value manifest then cuts each Definition's unit rule (`word.prefetch`), and each 384-expert MoE GEMM's
 takes about 45 min. At `build_record.sh`'s 2 processes the first two took the manifest's first 46 min, before the rest of the
@@ -127,6 +128,22 @@ Then:
    0.88 read back, with the bundles and `_rowmeta` preserved. A preemptible node may run it. An eviction fails the run, which
    stays published as failed, and the Commit reruns whole from a new commitment with new draws
    (`gpu_batch.sh b ROWS.env NODE <row>`); `commit_attempts.jsonl` counts the attempts.
+
+   Watch in the first Commit: `moe_block_stream` among its required classes. The TP driver adds the class once the MoE source
+   attaches on every rank (`pipeline/tp/commit.py`), although this manifest names no `moe_block_stream` identity. Here the
+   source runs `at_calls` and commits the Marlin block's call boundaries instead, the ones its claim covers (1bbf831029, #2959).
+   `required_classes_check` passes the class when every rank declares it with more than zero tensors.
+   - Harmless: `commit.log` has `[tp2commit] MoE block source attached on every rank ({'layers': 61, ...}); required classes
+     [..., 'moe_block_stream']`. Each `commit/declaration_rank<r>.json` declares `moe_block_stream` `bound-as-leaf`, with
+     `at_calls` true, `hash_layers` [0, 1, 2] and `tensors` above 0. The rank's verdict passes, or fails for a reason unrelated
+     to the MoE block.
+   - Harmful: a rank's verdict (`commit.log`, `commit/summary.json`) fails for one of these reasons:
+     - `required class 'moe_block_stream' not declared`: a rank attached no MoE source. The driver usually refuses first,
+       with `the MoE block source attached on ranks [...] of 8`.
+     - `class 'moe_block_stream' declared bound-as-leaf with tensors=0`: vLLM ran none of the launch sites the source wraps (another
+       Marlin path), so the claimed call boundaries are unbound too.
+     - `identity coverage: N of M required identities have no binding` or `identity check: ... step(s) differ`, first naming
+       a `model.layers.K.ffn.experts/` Value: the source committed the block, but not at the ports the gate's claim assumes.
 4. CPU, on the replay host (below): `replay_publish.sh` per `RANKS` job, then one without `RANKS` that publishes, as GLM-5.3's
    rows run it (`../glm_v2_tree/README.md` step 5): `tp-commit-replay` of every rank from the bundles window B preserved, then
    `records publish --tier heavy`. It needs from the GPU legs:
