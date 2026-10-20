@@ -1362,7 +1362,7 @@ def same_agent(a: str, b: str) -> bool:
     return bool(short) and full.startswith(short)
 
 
-def rings_own_inbox(routes: "Routes | None", handle: str, sender: str | None) -> bool:
+def rings_own_inbox(routes: Routes | None, handle: str, sender: str | None) -> bool:
     """Whether a post as `handle` by the agent `sender` may ring `handle`'s own inbox: only when its open route's holder is
     another agent.  So the outgoing generation of a handover (`names open --succeeds`, which keeps it as a poster) or any
     other poster reaches the holder, and the holder is never woken by its own posts.  No sender, no route: never."""
