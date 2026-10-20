@@ -38,6 +38,7 @@ import Models.Accounting.Guarantees.TS
 import Models.Accounting.Guarantees.Sheet
 import Models.Accounting.Guarantees.TS.Receipt
 import Models.Accounting.Guarantees.TS.Grind
+import Models.Accounting.Guarantees.TS.SharedNoise
 import Models.Accounting.Guarantees.TS.Stages
 import Models.Accounting.Guarantees.TS.Steer
 import Models.Accounting.Guarantees.TS.FoldFanIn

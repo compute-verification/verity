@@ -2850,6 +2850,14 @@
    "assumptions": [],
    "type_hash": "02bd3db81d5d22dbabc01b1ffa131e1b3e20419216342f5d9b23aae834605aa9"
   },
+  "Accounting.SecurityProofs.TS.CondReceiptLuckMarginal": {
+   "owner": "@compute-accounting",
+   "signature": [
+    "Accounting.SecurityProofs.TS.CondReceiptLuckMarginal : Accounting.Guarantees.TS.CondReceiptLuckMarginal"
+   ],
+   "assumptions": [],
+   "type_hash": "51416f47075f6f8230002dfc49b39536ff552b03278ee1643401e778a657bc6c"
+  },
   "Accounting.SecurityProofs.TS.DIdeal": {
    "owner": "@compute-accounting",
    "signature": ["Accounting.SecurityProofs.TS.DIdeal : Accounting.Guarantees.TS.DIdeal"],
@@ -2939,6 +2947,24 @@
    "signature": ["Accounting.SecurityProofs.TS.Fx1SegmentsBind : Accounting.Guarantees.TS.Fx1SegmentsBind"],
    "assumptions": [],
    "type_hash": "aad18a7a2fbca41c4809056d4c3457aa70bea4a8d619583a0b843828d9d9f63f"
+  },
+  "Accounting.SecurityProofs.TS.GridLuck": {
+   "owner": "@compute-accounting",
+   "signature": ["Accounting.SecurityProofs.TS.GridLuck : Accounting.Guarantees.TS.GridLuck"],
+   "assumptions": [],
+   "type_hash": "7ede8f2db2f005fe9cd7b0c249cd01aa71a292955286779fb9e8197aec60aaa9"
+  },
+  "Accounting.SecurityProofs.TS.GridTemplateCondition": {
+   "owner": "@compute-accounting",
+   "signature": ["Accounting.SecurityProofs.TS.GridTemplateCondition : Accounting.Guarantees.TS.GridTemplateCondition"],
+   "assumptions": [],
+   "type_hash": "1ae36165effe14bfba0c16dc715ab19be25f4ad8301e2bb8d7665a37a54a707e"
+  },
+  "Accounting.SecurityProofs.TS.GridTemplateMoment": {
+   "owner": "@compute-accounting",
+   "signature": ["Accounting.SecurityProofs.TS.GridTemplateMoment : Accounting.Guarantees.TS.GridTemplateMoment"],
+   "assumptions": [],
+   "type_hash": "3ba4bb193c6450722a5ab1f7a9575a3e4ab21e2b903136106242cce37f24b667"
   },
   "Accounting.SecurityProofs.TS.GrindMass": {
    "owner": "@compute-accounting",
@@ -8765,7 +8791,11 @@
    "FlockSoundness.Audit.Adaptive.harm_count": "frozen (obligation,no-function): It states the cumulative harm budget over an abstract adaptive play (`Adaptive.Play.prEv`, Security/Proofs/Flock/Soundness/Audit/HarmBudget.lean) under per-round design and drawn-unit hypotheses (`Play.Laws`, `Play.Drawn`), rather than the acceptance of a Lean function.",
    "FlockSoundness.Audit.Adaptive.harm_count_kstar": "frozen (obligation,no-function): It states the cumulative harm budget over an abstract adaptive play (`Adaptive.Play.prEv`, Security/Proofs/Flock/Soundness/Audit/HarmBudget.lean) under per-round design and drawn-unit hypotheses (`Play.Laws`, `Play.Drawn`), rather than the acceptance of a Lean function.",
    "FlockSoundness.Audit.Adaptive.life_harm_budget": "frozen (obligation,no-function): It takes KnowledgeSound and LinkSound (Security/Proofs/Flock/Soundness/Audit/OneStage.lean:85, :94), open obligations of the backend, as hypotheses, and it is about the abstract lifetime of one-stage audits rather than a Lean function.",
-   "Flock.SecurityProofs.EndToEndRegisteredRowsStated": "frozen (no-function): It states no property of the verifier: it reads Flock.Guarantees.EndToEndRegisteredRows, so the lock records its text, and it leaves the list when that statement's own proof is listed."
+   "Flock.SecurityProofs.EndToEndRegisteredRowsStated": "frozen (no-function): It states no property of the verifier: it reads Flock.Guarantees.EndToEndRegisteredRows, so the lock records its text, and it leaves the list when that statement's own proof is listed.",
+   "Accounting.SecurityProofs.TS.CondReceiptLuckMarginal": "lemma: a receipt game's luck at pr over every round, from its luck at pr given the rest over its own part (CondReceiptLuck, a hypothesis) at any split of the coin; not a property of a Lean function.",
+   "Accounting.SecurityProofs.TS.GridLuck": "lemma: the exponential moment at most 1 of a grid's gain at rate theta, rows and columns each with their own coins, a unit dead with probability at most q over its row's coins and otherwise lucky with probability at most p over its column's given the rows and the earlier columns (hypotheses), under each unit's condition q e^{n theta w} + (1 - q)(p e^{r theta w} + (1 - p) e^{-kappa r theta w})^{n/r} <= 1; not a property of a Lean function.",
+   "Accounting.SecurityProofs.TS.GridTemplateCondition": "lemma: h1tile's template (q = 2^{-w}, p = 1/2, kappa = 4, w <= 32) meets GridLuck's condition at r theta = 1/(4 max(64, e)) for every ratio e > 0 of a row's units to a column's; an inequality of reals, not a property of a Lean function.",
+   "Accounting.SecurityProofs.TS.GridTemplateMoment": "lemma: GridLuck at h1tile's template on an r by n grid, its gain's moment at most 1 at theta = 1/(4 max(64 r, n)), the dead and lucky events' probabilities and what they read hypotheses; not a property of a Lean function."
   },
   "conjectures": {
    "Nci.Assumptions.ActivationsIncompressible": {
@@ -10939,6 +10969,7 @@
     "Accounting.TS.xorAll": "e79c7bb80c4a340fa20f2ac319de5139cc27cdb654e1d37262bb86e7309933b9"
    },
    "guarantees": [
+    "Accounting.SecurityProofs.TS.CondReceiptLuckMarginal",
     "Accounting.SecurityProofs.TS.DuoSegmentsBind",
     "Accounting.SecurityProofs.TS.Fx1SegmentsBind",
     "Accounting.SecurityProofs.TS.LiSegmentsBind",
@@ -11050,6 +11081,13 @@
     "Accounting.SecurityProofs.TS.StageIdeal",
     "Accounting.SecurityProofs.TS.VectorThresholdD1"
    ]
+  },
+  "Definitions.Accounting.TS.SharedNoise": {
+   "digest": "f287c134963f98b7bff64c7a5af6c01dcc412d59968d745ae96f24c1346efbe3",
+   "definitions": {
+    "Accounting.TS.ReceiptGame.CondReceiptLuck": "4d6a2e9169250dc3be6a7303e25e7765d0d48a57b536298487c6e19b922dcba5"
+   },
+   "guarantees": ["Accounting.SecurityProofs.TS.CondReceiptLuckMarginal"]
   },
   "Definitions.Accounting.TS.Sheet": {
    "digest": "1cfc992fd24b7c21a652bbe6ecdea0891d713bb1ba67609d41b62d48783afa3f",
@@ -16833,6 +16871,7 @@
     "Accounting.SecurityProofs.TS.BindingOfFork",
     "Accounting.SecurityProofs.TS.CompilerC",
     "Accounting.SecurityProofs.TS.CompilerStage",
+    "Accounting.SecurityProofs.TS.CondReceiptLuckMarginal",
     "Accounting.SecurityProofs.TS.DIdeal",
     "Accounting.SecurityProofs.TS.DIdealFloor",
     "Accounting.SecurityProofs.TS.DecompositionD",
@@ -16840,6 +16879,8 @@
     "Accounting.SecurityProofs.TS.DrawnRightOff",
     "Accounting.SecurityProofs.TS.ExchangeTail",
     "Accounting.SecurityProofs.TS.FloorCreditD3",
+    "Accounting.SecurityProofs.TS.GridLuck",
+    "Accounting.SecurityProofs.TS.GridTemplateMoment",
     "Accounting.SecurityProofs.TS.GrindPremium",
     "Accounting.SecurityProofs.TS.GrindPremiumAt",
     "Accounting.SecurityProofs.TS.GrindTail",
@@ -22842,6 +22883,21 @@
     "Accounting.SecurityProofs.TS.LuckOfReceipt",
     "Accounting.SecurityProofs.TS.OperandLuckCube",
     "Accounting.SecurityProofs.TS.ReceiptLuckCaseA"
+   ]
+  },
+  "Models.Accounting.Guarantees.TS.SharedNoise": {
+   "digest": "27bc81019587d58055603bd87a436bbeb3a10c06b7c3bbd928fc51b4d49edca4",
+   "definitions": {
+    "Accounting.Guarantees.TS.CondReceiptLuckMarginal": "1f233287c8ff4146d93fb29598e509fd3468b715aa2ac47f9e5e0209ce23074d",
+    "Accounting.Guarantees.TS.GridLuck": "c838679368f42e64822bc3615a1906874339262dbc7c0793b3274f287595b0a5",
+    "Accounting.Guarantees.TS.GridTemplateCondition": "74c9dde7b5a0477969e5d8766785e37946edcc78b13bd1bb04ff80978ffec88e",
+    "Accounting.Guarantees.TS.GridTemplateMoment": "54acce1cb061f5d3f0242bf59c3819065f7aedf47cf86d222974b476ed7899bf"
+   },
+   "guarantees": [
+    "Accounting.SecurityProofs.TS.CondReceiptLuckMarginal",
+    "Accounting.SecurityProofs.TS.GridLuck",
+    "Accounting.SecurityProofs.TS.GridTemplateCondition",
+    "Accounting.SecurityProofs.TS.GridTemplateMoment"
    ]
   },
   "Models.Accounting.Guarantees.TS.Stages": {
