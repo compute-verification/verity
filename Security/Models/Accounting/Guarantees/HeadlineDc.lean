@@ -93,7 +93,7 @@ Per device:
   `ε_machine`. Honest still runs them; a lower credit is sound for any program. Its fold menu is the H200's, at the
   same sound price (the same classes but ISETP, which its loops don't issue, with VIADD, at one issue slot, and MOV in
   NOROW, the sheet's catch-all; the B200 has no atomic row, so REDG32 is its issue lines there and ATOME32 the issue
-  row alone): ♭ folds by CP_RED2 and CP_RED8 (65/72 and 7/72 of the words) on DS-100 and by the generic CP_RED2 alone
+  row alone): ♭ folds by CP_RED2 and CP_RED8 (65/72 and 7/72 of the words) on DS-100 and by the global CP_RED2 alone
   on DC-100-ri. DS-100's `f_max`
   (1965 MHz) is the driver's reported maximum: the data sheet gives no clock.
 
@@ -145,7 +145,7 @@ The statements:
   `1 − 0.783%` (the unfolded branch binds, at 0.7828807%; the folded gives 0.6983541%).
 * `Sm100MeasuredHeadline`: the B200 on DC-100-ri, at π* = issue: at least `1 − 0.900%` (the unfolded branch binds, at
   0.8991826%; the folded gives 0.8149027%), under 1%. RT3-DC read 1.2401% here with each new class priced as SHFL on
-  every row and NOP as ALU; at the sound price above (one issue slot, no pipe row) ♭ folds by the generic CP_RED2,
+  every row and NOP as ALU; at the sound price above (one issue slot, no pipe row) ♭ folds by the global CP_RED2,
   which costs
   the cheater as much as ♭, and the reading is `1 − Y` at ε_skip plus the unfolded branch's `41/S` share.
 
@@ -277,7 +277,7 @@ folded at `π*` (`Sm100Measured.lamStar`, issue alone) prices every run's fold a
 `ProofsPin`), then outside an event of probability at most `2^-40` every accepted window's time is at least
 `1 − 900/100000` (`1 − 0.900%`) of the credit `T_cred = B_♭/f_max`, under 1%. The unfolded branch binds, at exactly
 `71934604043397/8000000000000000` (0.8991826%); the folded gives 0.8149027%. With each new class at one issue slot
-and no pipe row (the sound price: no row is asserted that nobody timed), ♭ folds by the generic CP_RED2, at `π*` the
+and no pipe row (the sound price: no row is asserted that nobody timed), ♭ folds by the global CP_RED2, at `π*` the
 price of CP_RED2, the cheater's cheapest, so `1 − Y` is ε_skip alone (0.8145%); RT3-DC's pricing, each new class as SHFL on every row, read 1.2401% here, over 1%.
 FOLD-OPT's premise has no slack; the reading's against 1% is 0.102%. FILL-OPT is not a hypothesis: the design has
 no filler. -/
