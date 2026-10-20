@@ -172,11 +172,12 @@ def test_credit_is_the_served_rows_and_the_padding_is_shown_beside_it():
 def test_fill_declares_every_served_step_full_and_serve_h1_is_119_of_1152():
     """`FILL` (VLLM-52): 64 one-token prompts at cap 16 in T = 64, S = 18 prefill at step 0 and decode together, so each of
     the 16 served steps carries 64 rows and u = 16/18, PERIOD-PATH's ask 1; the engine runs all 64 in flight with no prefix
-    cache. SERVE-H1's 5 prompts (44 tokens with BOS) at the same cap are 44 + 15 x 5 rows: today's 119/1152."""
+    cache. SERVE-H1's 5 prompts (`tests/engine/int8_exact_gpu.PROMPTS`, 44 tokens with BOS under the int8 Llama-3.1-8B's
+    tokenizer, r20261020-011113-6876) at the same cap are 44 + 15 x 5 rows: today's 119/1152."""
     assert PH.FILL.schedule() == [64] * 16 + [0, 0] and PH.FILL.u == Fraction(16, 18)
     assert PH.FILL.engine_args() == {"max_num_seqs": 64, "max_num_batched_tokens": 64, "enable_chunked_prefill": True,
                                      "enable_prefix_caching": False}
-    serve_h1 = PH.Static((6, 18, 6, 7, 7), 16, 64, 18)
+    serve_h1 = PH.Static((6, 14, 6, 7, 11), 16, 64, 18)
     assert serve_h1.schedule()[:2] == [44, 5] and serve_h1.u == Fraction(119, 1152)
     with pytest.raises(ValueError, match="don't prefill in one step of 64 rows"):
         PH.Static((2,) * 64, 16, 64, 18)
