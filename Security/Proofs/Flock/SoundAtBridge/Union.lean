@@ -32,7 +32,7 @@ theorem game_prob_exists_le {α : Type} {ι : Type*} (s : Finset ι) (E : ι →
     have h0 : (fun a : α => ∃ i ∈ (∅ : Finset ι), E i a) = fun _ => False :=
       funext fun a => propext ⟨fun ⟨_, hi, _⟩ => absurd hi (Finset.notMem_empty _), False.elim⟩
     rw [h0, Game.prob_false]
-    exact zero_le _
+    exact zero_le
   | insert a s ha ih =>
     rw [Finset.sum_insert ha]
     refine (Game.prob_mono (fun o ho => ?_) g σ).trans

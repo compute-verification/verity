@@ -30,7 +30,7 @@ variable {C : Circuit} {n : ℕ} {P : Audit.Partition C n} {Reg : Type} {mPts : 
   {plan : Finset (Fin n) → Reg → List (TabSpec mPts)}
   {tab : (S : Finset (Fin n)) → (R : Reg) → Fin n → Fin (plan S R).length}
   {decode : Audit.Partition.DecoderB (C := C) (Reg := Reg) plan tab}
-  {lay : Layout P plan tab decode} {rs : HmRowsX lay}
+  {lay : FlockSoundness.Binding.Layout P plan tab decode} {rs : HmRowsX lay}
 
 /-- **The registrant's opening of the reads `keep` picks**: `rd` with its registered reads cut to those in `keep`
 (one unit's, say), the rows, salts and paths unchanged. -/
@@ -53,6 +53,7 @@ open FlockSoundness FlockSoundness.Game FlockSoundness.Audit FlockSoundness.Disc
   FlockSoundness.Discharge.Composed FlockSoundness.Discharge.ZkHidden FlockSoundness.Discharge.ZkReg
 open FlockSoundness.Discharge.Tables (LiveOutJ)
 open scoped ENNReal
+open Classical
 
 /-- **One C-Flock session in `EndToEndRegisteredRows`' setting, with a registrant's opening per unit**: its binders,
 in its order (the roots `own`, then the statement `I` with its coin, then the live prover `τ`), with its one `rd`
@@ -106,6 +107,8 @@ structure RowsSession where
 
 attribute [instance] RowsSession.instF RowsSession.instN
 
+noncomputable section
+
 namespace RowsSession
 
 variable (s : RowsSession)
@@ -126,8 +129,8 @@ abbrev P := (keyProg s.c s.hU s.n).partition (Discharge.Layout.outsOf s.c s.hU s
 abbrev Circ := (keyProg s.c s.hU s.n).circuit (Discharge.Layout.outsOf s.c s.hU s.n)
 
 /-- The value binding of the session's rows. -/
-abbrev vb := (rsZHJS s.dj s.y₀ s.ht s.hc s.hscope s.hU s.hpub).bindingZ
-  (rsZHJS_computes s.dj s.y₀ s.ht s.hc s.hscope s.hU s.hpub)
+abbrev vb := (rsZHJS (Reg := s.Reg) s.dj s.y₀ s.ht s.hc s.hscope s.hU s.hpub).bindingZ
+  (rsZHJS_computes (Reg := s.Reg) s.dj s.y₀ s.ht s.hc s.hscope s.hU s.hpub)
 
 /-- Unit `u`'s registrant's openings. -/
 abbrev wo (u : Fin s.n) : s.vb.Pos → s.vb.Opening := fun p => ((p, (s.rdU u).wv p, (s.rdU u).ws p) : s.vb.Opening)
@@ -180,16 +183,18 @@ def CR : Prop :=
       H512 s.qR)
 
 /-- `δ_link`'s closed form (also `δ_rows`'). -/
-noncomputable def δlink : ℝ :=
+def δlink : ℝ :=
   (∑ p : s.vb.Pos,
       (Fintype.card (ΩcZ execArith s.P (planZHJ s.dj s.y₀) (tabZHJ s.dj s.y₀) s.vb s.L p) : ℝ) / Fintype.card s.L.Ω) *
     (2 * (s.t' * (1 + s.k)) / 2 ^ (256 : ℝ) + 1 / (Real.exp 1 * s.M) + s.k / (Real.exp 1 * s.Rw)) / (1 - s.ρ)
 
 /-- **`EndToEndRegisteredRows`' bound**: `ε_ks + δ_link + δ_rows + q_R²/2^513`. -/
-noncomputable def bound : ℝ≥0∞ :=
+def bound : ℝ≥0∞ :=
   ksAvgStrictZ (planZHJ s.dj s.y₀) s.L s.k s.qF s.qS (reg s.σ) + ENNReal.ofReal s.δlink + ENNReal.ofReal s.δlink +
     ENNReal.ofReal (s.qR ^ 2 / 2 ^ (513 : ℝ))
 
 end RowsSession
+
+end
 
 end Flock.SoundAtBridge
