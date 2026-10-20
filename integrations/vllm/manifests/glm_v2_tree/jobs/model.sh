@@ -10,10 +10,16 @@
 case ${ROW:?ROW} in
   glm53__*) ROLE=GLM53 REPO=zai-org/GLM-5.3 REV=aca966e4e02791568aa6a4ced368624b3d897f42 WHAT=GLM-5.3
             FS_CK=/workspace/fs/glm53/$REV LOCAL_CK=/workspace/cp/glm53-ckpt/$REV
-            V2=glm-v2 REF=${REF:-cursor/glm-v2-21f3} POST_LOAD= DERIVE_GB= CENSUS= ;;
+            V2=glm-v2 REF=${REF:-cursor/glm-v2-21f3} POST_LOAD= DERIVE_GB= CENSUS=
+            # its checkpoints.json pin names config.json and tokenizer.json only; these are the other non-shard files, as
+            # vy-glm53-cpu-2's snapshot holds them for the B1 and B8 Builds of record
+            META_EXTRA="model.safetensors.index.json=e0fe7f28c1f853d4824e4d796374e3dacf1fe470988773952c79b063768134bf
+                        tokenizer_config.json=98b1271574f41abf89427ae2dda030d94dc9478f0edc5a8bd240db213c6fd5fc
+                        generation_config.json=ac76b43d8683d3b930126870fc8be73d8679308fe752fa1f381096d8354f6a55
+                        chat_template.jinja=3740abcea51c45830cb3ca562084ad5fb2ef53589376f73332e9886f93ade41c" ;;
   dsv4-pro__*) ROLE=DSV4_PRO REPO=deepseek-ai/DeepSeek-V4-Pro REV=b5968e9190ef611bbf34a7229255be88a0e937c1 WHAT=DeepSeek-V4-Pro
             FS_CK=/workspace/fs/dsv4/$REV LOCAL_CK=/workspace/cp/dsv4-ckpt
-            V2=dsv4-v2 REF=${REF:-cursor/dsv4-v2-21f3} POST_LOAD=model.layers.0.hc_attn_fn_broadcast DERIVE_GB=60 CENSUS=skip ;;
+            V2=dsv4-v2 REF=${REF:-cursor/dsv4-v2-21f3} POST_LOAD=model.layers.0.hc_attn_fn_broadcast DERIVE_GB=60 CENSUS=skip META_EXTRA= ;;
   *) echo "row $ROW: no model for it in model.sh"; exit 2 ;;
 esac
 CONFIG=verity_vllm/engine/profiles/hf_configs/$ROLE.config.json SW=${SW:-/workspace/cp/circuits/$V2/rows}
@@ -38,24 +44,25 @@ ckpt_bind() {
   else echo "checkpoint: $FS_CK read over the shared fs"; fi
 }
 
-stage_meta() {  # stage_meta PY: the pin's non-shard files at SNAP (none of the shards), refused unless each is checkpoints.json's
-  HF_HUB_OFFLINE= "$1" - "$REPO" "$REV" "$SNAP" "$TREE/integrations/vllm/manifests/checkpoints.json" <<'EOF'
+stage_meta() {  # stage_meta PY: the pin's non-shard files at SNAP (none of the shards) and META_EXTRA's, refused unless each is its sha256
+  HF_HUB_OFFLINE= "$1" - "$REPO" "$REV" "$SNAP" "$TREE/integrations/vllm/manifests/checkpoints.json" "$META_EXTRA" <<'EOF'
 import hashlib, json, os, sys, tempfile
-repo, rev, snap, pins = sys.argv[1:5]
+repo, rev, snap, pins, extra = sys.argv[1:6]
 pin = [c for c in json.load(open(pins))["checkpoints"] if c["repo"] == repo and c["revision"] == rev][0]
 sha = lambda p: hashlib.sha256(open(p, "rb").read()).hexdigest()
 want = {n: f for n, f in pin["files"].items() if not n.endswith(".safetensors")}
+want |= {n: {"sha256": h} for n, _, h in (e.partition("=") for e in extra.split())}
 todo = [n for n, f in want.items() if not (os.path.isfile(os.path.join(snap, n)) and sha(os.path.join(snap, n)) == f["sha256"])]
 if not todo:
-    sys.exit(print(f"metadata: {len(want)} files at {snap}, each checkpoints.json's"))
+    sys.exit(print(f"metadata: {len(want)} files at {snap}, each checkpoints.json's or META_EXTRA's"))
 from huggingface_hub import hf_hub_download
 os.makedirs(snap, exist_ok=True)
 with tempfile.TemporaryDirectory(dir=os.path.dirname(snap)) as t:
     for name in todo:
         h = sha(hf_hub_download(repo, name, revision=rev, local_dir=t))
         if h != want[name]["sha256"]:
-            sys.exit(f"{repo}@{rev} {name}: sha256 {h}, checkpoints.json {want[name]['sha256']}")
+            sys.exit(f"{repo}@{rev} {name}: sha256 {h}, pinned {want[name]['sha256']}")
         os.replace(os.path.join(t, name), os.path.join(snap, name))
-        print(f"staged {name} ({want[name]['size']} B, sha256 {h[:16]} = checkpoints.json)")
+        print(f"staged {name} ({os.path.getsize(os.path.join(snap, name))} B, sha256 {h[:16]} = its pin)")
 EOF
 }
