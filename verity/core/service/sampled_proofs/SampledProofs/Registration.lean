@@ -105,32 +105,45 @@ def outputPort (log : Array Json) (record port : String) : Option Json := do
   let .arr roots := getD r "roots" | none
   roots.reverse.find? fun e => (e matches .obj _) && jeq (getD e "port") (Json.str port)
 
+/-- The domain and root of `port` in the log's record with digest `record` (`outputPort`), when its leaf count is
+`leaves` and both are strings. -/
+def outputRoot (log : Array Json) (leaves : Nat) (record port : String) : Option (String × String) :=
+  (outputPort log record port).bind fun r =>
+    match int? (getD r "leaves") == some (leaves : Int), getD r "domain", getD r "root" with
+    | true, .str dom, .str root => some (dom, root)
+    | _, _, _ => none
+
+/-- One output value `(v, record, port)` with an entry in `mine` takes its earlier record's port (`outputRoot`): its
+domain in `mine` and its root ahead of what `held` holds, or `R7-output` in `c`. -/
+def applyOutput (log : Array Json) :
+    Array String × Array Registered.Entry × Array (String × String) → String × String × String →
+      Array String × Array Registered.Entry × Array (String × String)
+  | (c, mine, held), (v, d, p) =>
+    match mine.find? (·.value == v) with
+    | none => (c, mine, held)
+    | some want => match outputRoot log want.leaves d p with
+      | some (dom, root) =>
+        (c, mine.map fun e => if e.value == v then { e with domain := dom } else e, #[(v, root)] ++ held)
+      | none => (addCode c "R7-output", mine, held)
+
+/-- `registration._check_registered`'s output values, before the rest of R7: `applyOutput` for each, in order. -/
+def applyOutputs (c : Array String) (mine : Array Registered.Entry) (held : Array (String × String))
+    (outputs : Array (String × String × String)) (log : Array Json) :
+    Array String × Array Registered.Entry × Array (String × String) :=
+  outputs.foldl (applyOutput log) (c, mine, held)
+
 /-- `registration._check_registered`, R7: the record's `registered` against the verifier's own entries (`mine`, an error
 where `registered_entries` raises), the roots the log holds, and each supplied value's root to the one `rootOf` recomputes
 (an error where `supplied_root` raises). -/
 def checkRegistered (c : Array String) (got : Json) (mine : V (Array Registered.Entry))
     (held : Array (String × String)) (supplied : Array (String × Supplied.Rows))
-    (rootOf : String → Supplied.Rows → Registered.Entry → V String)
-    (outputs : Array (String × String × String) := #[]) (log : Array Json := #[]) : Array String := Id.run do
+    (rootOf : String → Supplied.Rows → Registered.Entry → V String) : Array String := Id.run do
   let .ok mine := mine | return addCode c "R7-registered"
-  let mut c := c
-  let mut mine := mine
-  let mut held := held
-  -- an output value takes its earlier record's port: its domain, and its root ahead of what the log holds
-  for (v, d, p) in outputs do
-    let some want := mine.find? (·.value == v) | continue
-    let port := (outputPort log d p).filter fun r =>
-      int? (getD r "leaves") == some (want.leaves : Int) && (getD r "domain" matches .str _)
-        && (getD r "root" matches .str _)
-    match port.map (fun r => (getD r "domain", getD r "root")) with
-    | some (.str dom, .str root) =>
-      mine := mine.map fun e => if e.value == v then { e with domain := dom } else e
-      held := #[(v, root)] ++ held
-    | _ => c := addCode c "R7-output"
   let widthKeys := sortStrings (Registered.ENTRY_KEYS.push Registered.WIDTH_KEY)
   let .arr got := got | return addCode c "R7-registered"
   if !got.all (fun e => keys? e == some Registered.ENTRY_KEYS || keys? e == some widthKeys) then
     return addCode c "R7-registered"
+  let mut c := c
   -- Python's `{e["value"]: e}`: a value that isn't a string is none of the verifier's, which are parameter names
   let values := got.map (getD · "value")
   let names := values.filterMap fun v => match v with | .str s => some s | _ => none
@@ -165,6 +178,17 @@ def checkRegistered (c : Array String) (got : Json) (mine : V (Array Registered.
         | .error _ => c := addCode c "R7-supplied"
         | .ok r => if !jeq (getD e "root") (Json.str r) then c := addCode c "R7-supplied"
   return c
+
+/-- R7 with output values: `checkRegistered` on the entries and held roots `applyOutputs` leaves, after its codes. -/
+def checkOutputs (c : Array String) (got : Json) (mine : V (Array Registered.Entry))
+    (held : Array (String × String)) (supplied : Array (String × Supplied.Rows))
+    (rootOf : String → Supplied.Rows → Registered.Entry → V String)
+    (outputs : Array (String × String × String)) (log : Array Json) : Array String :=
+  match mine with
+  | .error _ => addCode c "R7-registered"
+  | .ok mine =>
+    let (c, mine, held) := applyOutputs c mine held outputs log
+    checkRegistered c got (.ok mine) held supplied rootOf
 
 /-- `registration.check`'s failure codes, R1–R7 in order: empty when the record holds. -/
 def check (rec : Json) (v : Verifier) : Array String := Id.run do
@@ -226,7 +250,7 @@ def check (rec : Json) (v : Verifier) : Array String := Id.run do
     if !jeq (getD (get "window") "prover") (Json.str prover) then c := addCode c "R6-prover"
   -- R7
   if v2 then
-    c := checkRegistered c (get "registered") (Registered.entries v.program.desc v.params v.registered)
+    c := checkOutputs c (get "registered") (Registered.entries v.program.desc v.params v.registered)
       (v.pinned ++ heldRoots v.log) v.supplied
       (Supplied.root rec v.log v.binding v.params (Flock.hexOf v.program.desc.sha512) (v.supplied.map (·.1)))
       v.outputs v.log
