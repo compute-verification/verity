@@ -18,8 +18,11 @@ columns (`RecDeploy.PlainColsBind`), or in the decision's calls (`RecDeploy.Plai
   `root_B[0]`, every SHA-512 input of each in its decision's calls (`plain_opening_at`), which collide
   (`tiedColl_of_openings`).
 
-The calls half is open. With it and `CanonicalProofFiles`, `PlainLastBinds` holds at SHA-512
-(`RecDeploy.plainLastBinds_sha512_of_calls`).
+The calls half is false as stated: it compares the two decisions' calls as lists, and `Record.decodeWith` hashes the
+rounds in the record's own stream order, which only S11's count and names constrain, so two records that list the
+streams in two orders are accepted with permuted calls and no collision
+(`note:proofs/20261020T0132Z-finding-rec2-calls-as-lists`). `RecDeploy.plainLastBinds_sha512_of_calls` reduces
+`PlainLastBinds` to it and `CanonicalProofFiles`.
 -/
 
 namespace FlockDeploy.KS
@@ -517,7 +520,8 @@ def PlainColsBind (H : Msg → Msg) : Prop :=
 /-- **The deployed plain verifier binds its last message's calls, up to the decoder's slack**: two last messages it
 accepts after the same rounds and coins, where it answered each earlier round with that round's coin, that differ in
 the decision's calls, show a collision among those calls, or two proof files at one position that differ in their
-bytes and decode alike (`ProofSlack`). Open. -/
+bytes and decode alike (`ProofSlack`). False at the deployed record decoder: two records that list the same streams in
+two orders give permuted calls, and a table's empty publics may come with their digest (one more call) or without. -/
 def PlainCallsBindOrSlack (H : Msg → Msg) : Prop :=
   ∀ (x : Msg) (ms : List Msg) (l l' : Msg) (cs : List Coin), ms.length + 1 = (FlockDeploy.V false).k x →
     cs.length = ms.length + 1 →
@@ -546,8 +550,8 @@ theorem plainColsBind_sha512 : PlainColsBind FlockDeploy.sha512 := by
   obtain ⟨u, v, hcol, hu, hv⟩ := FlockDeploy.KS.plain_cols_tied hc hacc hacc' hne
   exact ⟨u, hu, v, hv, hcol⟩
 
-/-- **The deployed plain verifier binds its last message at SHA-512** (`PlainLastBinds`) from the decoder's canonicity
-and the calls half alone. -/
+/-- **`PlainLastBinds` at SHA-512 from the decoder's canonicity and the calls half alone**, which is false as stated
+(`PlainCallsBindOrSlack`). -/
 theorem plainLastBinds_sha512_of_calls (hC : CanonicalProofFiles)
     (hK : PlainCallsBindOrSlack FlockDeploy.sha512) : PlainLastBinds FlockDeploy.sha512 :=
   plainLastBinds_of_canonical hC (plainLastBindsOrSlack_of plainColsBind_sha512 hK)

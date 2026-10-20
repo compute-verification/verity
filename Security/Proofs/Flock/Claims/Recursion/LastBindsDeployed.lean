@@ -29,14 +29,17 @@ so they need not collide. CANON1's change to the decoder (`Reader.runAll`, `matr
 `Flock.Test.ProofCanon`'s guards) refuses both; every other field `decodeProof` reads is kept in the `Proof` it returns
 or read at one value, so there it is to hold.
 
-**The record's text needs nothing.** The verifier reads the record's text only through `Json.parse`
+**Where the record's text stands.** The verifier reads the record's text only through `Json.parse`
 (`LastGap.decision_congr_record`), so two records that parse alike give one decision with the same calls and the same
-columns: the trailing-space pair that refutes `LastBinds` is no counterexample to `PlainLastBinds`.
+columns: the trailing-space pair that refutes `LastBinds` is no counterexample to `PlainLastBinds`. Two records that
+parse differently can still give the same accepted decision, with calls that are the same set but not the same list:
+`Record.decodeWith` hashes the rounds in the record's own stream order, and the digest of a table's empty publics only
+when the record lists it. So `PlainLastBinds`, with its calls compared as lists, is false at this record decoder,
+whatever `decodeProof` does (`note:proofs/20261020T0132Z-finding-rec2-calls-as-lists`).
 
 `PlainLastBindsOrSlack` is the collision charge through the plain verifier's steps. `LastColsDeployed` splits it into
-its columns half, proved at SHA-512 (`RecDeploy.plainColsBind_sha512`), and its calls half, open
-(`RecDeploy.PlainCallsBindOrSlack`): each proof-file field a check reads is absorbed into a transcript whose coins the
-record's rounds pin, Merkle-checked against a committed cap, or pinned by custody.
+its columns half, proved at SHA-512 (`RecDeploy.plainColsBind_sha512`), and its calls half
+(`RecDeploy.PlainCallsBindOrSlack`), false as stated for the same reason.
 -/
 
 namespace Claims.Recursion
@@ -372,7 +375,8 @@ def ProofSlack (l l' : Msg) : Prop :=
 
 /-- **`PlainLastBinds` up to the decoder's slack**: its hypotheses give a collision among the decision's calls, or two
 proof files at one position that differ in their bytes and decode alike (`ProofSlack`). It is the collision charge
-through the plain verifier's steps: its columns half holds at SHA-512, its calls half is open (`LastColsDeployed`). -/
+through the plain verifier's steps: its columns half holds at SHA-512, its calls half is false as stated, since the
+record's stream order permutes the calls (`LastColsDeployed`). -/
 def PlainLastBindsOrSlack (H : Msg → Msg) : Prop :=
   ∀ (x : Msg) (ms : List Msg) (l l' : Msg) (cs : List Coin), ms.length + 1 = (FlockDeploy.V false).k x →
     cs.length = ms.length + 1 →
