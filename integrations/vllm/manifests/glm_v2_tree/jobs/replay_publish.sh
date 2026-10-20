@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # A v2 row's CPU tail: the deferred Commit's C2 replay of every rank (`tp-commit-replay`) from the bundles commit.sh preserved, then
 # `records publish --tier heavy` citing each conformance property's capture of record by id (no --newest-captures: a job's store
-# has no index).  Runs on a CPU node holding the verified checkpoint (vy-nebius-cpu-3), with the Build of record copied into the row
+# has no index), the Commit's run record and the Match's record (its three tp2 files stored as glm53/tp8-match-record/v1, as the v1
+# records' were).  Runs on a CPU node holding the verified checkpoint (vy-nebius-cpu-3), with the Build of record copied into the row
 # dir (the replay reads each rank's Build and the required manifest at the Commit's paths, README "GPU batch").  `--cwd clone`:
 # publish writes manifests/records.json, kept in $OUT for the re-pin PR.  A rank's replay is ~70 min at ~265 GB peak (B8 greedy,
 # r20261019-123645-e69d), so a row's ranks split over concurrent jobs on one node, RANKS=0,1,2,3 and RANKS=4,5,6,7 (each fetches
@@ -70,6 +71,14 @@ if [ -n "${RANKS:-}" ]; then
   case $rc in 0|4) echo "ranks $RANKS replayed (tp-commit-replay rc $rc); the job without RANKS publishes"; exit 0 ;; esac
 fi
 [ "$rc" = 0 ] || { echo "tp-commit-replay rc=$rc (3 FAIL, 4 ranks remain, 2 refused)"; exit "$rc"; }
+COMMIT_ART=$("$RB" data show "$COMMIT_RUN" --json | python3 -c 'import json,sys; print(json.load(sys.stdin)["outputs"]["run_record"])') ||
+  { echo "the store has no run_record for $COMMIT_RUN"; exit 2; }
+mkdir -p "$W/match" && cp -p "$D/match/tp2_match.json" "$D/match/fold_match/tp2_fold_match.json" "$D/match/fold_match/tp2_rank_match.json" "$W/match/" ||
+  { echo "no passing Match's tp2_match.json, fold_match/tp2_fold_match.json and fold_match/tp2_rank_match.json in $D/match"; exit 2; }
+MATCH_ART=$("$RB" data put --kind glm53/tp8-match-record/v1 --tree "$W/match" --meta "{\"row\": \"$ROW\", \"run\": \"$MATCH_RUN\"}" --preserve |
+  grep -oE 'art:[0-9a-f]{64}' | tail -1)
+[ -n "$MATCH_ART" ] || { echo "research data put of the Match record failed"; exit 6; }
+echo "match record $MATCH_ART, commit record $COMMIT_ART" | tee "$OUT/evidence_arts.txt"
 CONF=(
   --conformance deepgemm_capture=art:407dd8a4c2be83ed4f421c7603ba395b700099023a41c3d61f5a3ce3ee3f3481
   --conformance glm53_tp8_allreduce_capture=art:f248a6771ee6efdf2464743e0e35d60cd26391cbae1a9f8fb6aae287ee8bc4f5
@@ -83,7 +92,7 @@ CONF=(
 )
 cd "$TREE/integrations/vllm"
 $PY -m verity_vllm.pipeline.cli records publish "$D" "$ROW" --build "$BUILD_ART" --tree "$REF@${RESEARCH_SOURCE_SHA:-$(git -C "$TREE" rev-parse HEAD)}" --by circuits --tier heavy \
-  --match-run "$MATCH_RUN" --commit-run "$COMMIT_RUN" "${CONF[@]}" 2>&1 | tee "$OUT/publish.out"
+  --match "$MATCH_ART" --match-run "$MATCH_RUN" --commit "$COMMIT_ART" --commit-run "$COMMIT_RUN" "${CONF[@]}" 2>&1 | tee "$OUT/publish.out"
 prc=${PIPESTATUS[0]}
 git -C "$TREE" diff -- integrations/vllm/manifests/records.json >"$OUT/records_json.diff"
 exit "$prc"

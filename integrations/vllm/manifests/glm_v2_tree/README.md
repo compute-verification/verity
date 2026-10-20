@@ -80,10 +80,14 @@ worktree at a commit the guard accepts (`git worktree add /tmp/glm-v2-SHA SHA`).
 3. CPU: each row's legs copied eu -> the Build's node (its `match.sha256`), then `match_cpu.sh` (MATCH_PHASE=cpu, `--build-run`
    the Build of record, `--send match.sha256`); then the row dir (its `rowdir.sha256` and the Match's files) copied to eu.
 4. Window B, eu (`gpu_batch.sh b ROWS.env`): each row's Commit (`commit.sh`: rows-sha512 under `verity/tp-run-root/v2`,
-   REPLAY_DEFERRED=1 RETAIN=host PAIRS=1, PENDING by design), its bundles and row records preserved in the store. Stop eu.
+   PENDING by design), its bundles and row records preserved in the store. Stop eu. It commits against the Build of record in
+   the same row dir, since publish refuses a Commit whose required manifest or per-rank Programs are not that Build's. Its modes
+   are the records': RETAIN=host as B1's Commit r20261016-213336-6c35 (not the G2 curve's `--retain none`), REPLAY_DEFERRED=1
+   and PAIRS=1 as B8's r20261019-091846-1452 (the config's default is 3 pairs, which B1's v1 Commit ran in-process).
 5. CPU, vy-nebius-cpu-3 (the verified checkpoint): the Build of record copied in, then `replay_publish.sh` per row (`--send
    bundles.json`): `tp-commit-replay` of every rank, then `records publish --tier heavy` with the nine captures of record cited
-   by id (#2838's eight served-default captures, which this tree's `check_capture` accepts, and `BF16_ART`). A rank's replay is
+   by id (#2838's eight served-default captures, which this tree's `check_capture` accepts, and `BF16_ART`), the Commit's run
+   record and the Match's record (its three tp2 files, which the job stores as the v1 records' were). A rank's replay is
    about 70 min at about 265 GB (B8 greedy, r20261019-123645-e69d: 8 ranks in 9 h in one job), so a row runs two `RANKS=` jobs
    side by side and then one without `RANKS` that publishes. `rejudge` of the decided Commit passed on that replay; on a
    PENDING Commit it reports `ranks` and `verdict` as FAIL, so it runs only after the replay.
