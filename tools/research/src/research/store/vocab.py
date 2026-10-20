@@ -94,6 +94,8 @@ COMMIT_MAP = "commit_map"                             # on a commit-map/v1 artif
 CUSTODY = "custody"                                   # on a run id: whether `research data custody --triage` needs more of it
 CUSTODY_VALUES = ("waived", "never-ran", "needed")
 SOURCE_LOST = "source-lost"                             # on a run id: its exact source (commit + dirty bytes) is gone
+CHALLENGER_KEY = "challenger-key"                     # on a challenger-key/v1 record, by infra: whether verifiers pin its key now
+CHALLENGER_KEY_VALUES = ("current", "retired")
 
 # ---- evidence labels: probe captures and input sets --------------------------------------------------------------------------------
 
@@ -320,6 +322,8 @@ VOCAB: dict[str, Key] = {k.name: k for k in (
        "triage believes only while the run dir shows no sign of a start: no pid in status.json, no started, span_start or sampler_start "
        "event, no sampler reading, no output; needed: triage reads its records again, which withdraws an earlier waived or never-ran); "
        "the latest label wins", CUSTODY_VALUES),
+    _k(CHALLENGER_KEY, GROUP_VERIFICATION, ENUM, "on a challenger-key/v1 record, by infra: whether it names the auditor host's signing key "
+       "that verifiers pin now (current) or one no longer signing (retired); the latest label wins", CHALLENGER_KEY_VALUES),
     _k(SOURCE_LOST, GROUP_VERIFICATION, BOOL, "on a run id: the exact source it ran is gone (its tree held a dirty source that no record "
        "kept, and it was deleted), so the run cannot be re-run or audited from its source; the ref is the note that says how"),
     _k(BELOW_BAR, GROUP_VERIFICATION, BOOL, "the verified proof's whole-proof bound is below the tables' 2^-128 bar: shown in the below-bar drill-down, never a Table 2 cell"),

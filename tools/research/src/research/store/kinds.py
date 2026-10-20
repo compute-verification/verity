@@ -112,6 +112,9 @@ KINDS: dict[str, str] = {
     "challenger-session/v1": "one session of the auditor host's challenger: payload tree = request.json + out/ (record.json, key.json, "
                              "releases.jsonl, challenger.json, ...); meta {session, host}; refs.ledger, the challenger-ledger/v1 "
                              "whose end entry seals out/",
+    "challenger-key/v1": "the auditor host's challenger signing key, published by infra apart from the ledger so that a verifier pins "
+                         "it from here: payload one JSON file {host, instance, pubkey (hex), pubkey_sha512, W, H, pinned, valid_from_utc, "
+                         "retired [{pubkey_sha512, retired_utc, sessions}]}; label challenger-key current|retired",
 }
 
 
