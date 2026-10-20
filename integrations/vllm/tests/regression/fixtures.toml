@@ -242,6 +242,16 @@ batch = 1
 oracle = "/vault/tmp/oracle/llama32-1b__bf16__l40s__tp1__b1__i4096__o512__mixed__greedy__bi-eager"
 programs_state = "uploaded"
 
+# labelled decision (Draft 3 §7): one naming names a Call's members structurally; labelled by lane circuits (REGRESS) on runs r20261020-023034-a7fe / r20261020-023034-4785
+[[rows."llama32-1b__bf16__l40s__tp1__b1__i4096__o512__mixed__greedy__bi-eager".decisions]]
+check = "manifest_digest"
+since = "#2614 (merge 01e7539353)"
+since_commit = "01e75393532fdbdf72b24b7cbd7d20a90241a1d6"
+finding = "one naming (#2382, relanded in #2614)"
+status = "pending_review"
+reason = "One naming (#2382's, relanded by #2614 at 01e7539353) names a Call's members structurally and retires query.required's NAMED_RESIDUALS: a Linear's output member 0 is `out`, a RoPE's 0 / 1 are `query` / `key` (query.manifest.bind binds vLLM's slots). The Program is the one of record and the identity count stays 109219; 49152 identities are renamed, 6 classes x 8192: model.layers.<k>.{self_attn.qkv_proj, self_attn.o_proj, mlp.gate_up_proj, mlp.down_proj}/0 -> out and self_attn.rotary_emb/0|1 -> query|key (removed_n = added_n, every added row in those six classes; nothing added or dropped). Solely one naming: f4c839da, the landing before #2614, reproduces expected/<row>.json (post-train pass r20261019-174053-a212); main at c0ebeb8b gives this manifest (r20261019-234950-861e)."
+expected = { identities = 109219, added_n = 49152, removed_n = 49152, complete = true, manifest_digest = "bec879b7964f43985dbb9d730f90e200e496c9dde1485d753675d07b7b322210" }
+
 [rows."llama32-1b__bf16__l40s__tp1__b1__i4096__o512__mixed__greedy__bi-eager".local]
 
 [rows."llama32-1b__bf16__l40s__tp1__b1__i4096__o512__mixed__greedy__bi-eager".artifacts]
@@ -737,6 +747,16 @@ tp = 1
 batch = 64
 oracle = "/vault/tmp/oracle/llama32-1b__bf16__l40s__tp1__b64__i1024__o128__mixed__greedy__bi-eager"
 programs_state = "uploaded"
+
+# labelled decision (Draft 3 §7): one naming names a Call's members structurally; labelled by lane circuits (REGRESS) on runs r20261020-023034-a7fe / r20261020-023034-4785
+[[rows."llama32-1b__bf16__l40s__tp1__b64__i1024__o128__mixed__greedy__bi-eager".decisions]]
+check = "manifest_digest"
+since = "#2614 (merge 01e7539353)"
+since_commit = "01e75393532fdbdf72b24b7cbd7d20a90241a1d6"
+finding = "one naming (#2382, relanded in #2614)"
+status = "pending_review"
+reason = "One naming (#2382's, relanded by #2614 at 01e7539353) names a Call's members structurally and retires query.required's NAMED_RESIDUALS: a Linear's output member 0 is `out`, a RoPE's 0 / 1 are `query` / `key` (query.manifest.bind binds vLLM's slots). The Program is the one of record and the identity count stays 505743; 245376 identities are renamed, 6 classes x 40896: model.layers.<k>.{self_attn.qkv_proj, self_attn.o_proj, mlp.gate_up_proj, mlp.down_proj}/0 -> out and self_attn.rotary_emb/0|1 -> query|key, each paired with a row of the previous manifest equal in every other IDENTITY_KEY field; nothing added or dropped. Solely one naming: f4c839da, the landing before #2614, reproduces expected/<row>.json exactly (manifest_digest 5fddeee6...; r20261020-023034-a7fe), and 01e7539353 gives this manifest (r20261020-023034-4785)."
+expected = { identities = 505743, added_n = 245376, removed_n = 245376, complete = true, manifest_digest = "2d4e122adf139a8c822c8a3de5ce7dc93e0d90b4426035f2a3c2d15148d3ddfe" }
 
 [rows."llama32-1b__bf16__l40s__tp1__b64__i1024__o128__mixed__greedy__bi-eager".local]
 tp2 = "/workspace/cp/sweep/r19-int-7/llama32-1b__bf16__l40s__tp1__b64__i1024__o128__mixed__greedy__bi-eager"
@@ -4190,6 +4210,16 @@ status = "pending_review"
 reason = "S1 builds the manifest of record under Q_word_v1{X=16,W=32,R=no-recompute}: every Value one Call produces and another reads is required, a Value two Calls of one module body exchange too (family call_boundaries, <module>/<fx node>/out). The Program is the one of record (program_digest fdb622a6...). Every one of the v1 manifest's 189239 identities stays (removed_n = 0) and 14336 are added, all call boundaries model.layers.<k>.self_attn.qkv_proj/triton_launch_<n>/out: 28 layers x 512 decode steps, the output of the Triton launch inside each step's QKV projection. Solely S1: the same Programs rebuilt under Q_module_body_v1 with --word-check off, the query of record before S1, reproduce expected/<row>.json exactly (189239 identities, manifest_digest 844f2c72...; r20261003-173418-89e5)."
 expected = { identities = 203575, only_new = 14336, removed_n = 0, complete = true, manifest_digest = "cde2b92ae6918a2b0e0915b3532eb7146393c6fd7a86d27b7f327ae7451c95fa" }
 
+# labelled decision (Draft 3 §7): one naming names a Call's members structurally; labelled by lane circuits (REGRESS) on runs r20261020-023034-a7fe / r20261020-023034-4785
+[[rows."qwen25-15b__bf16__l40s__tp1__b1__i4096__o512__mixed__greedy__bi-eager".decisions]]
+check = "manifest_digest"
+since = "#2614 (merge 01e7539353)"
+since_commit = "01e75393532fdbdf72b24b7cbd7d20a90241a1d6"
+finding = "one naming (#2382, relanded in #2614)"
+status = "pending_review"
+reason = "One naming (#2382's, relanded by #2614 at 01e7539353) names a Call's members structurally and retires query.required's NAMED_RESIDUALS: a Linear's output member 0 is `out`, a RoPE's 0 / 1 are `query` / `key` (query.manifest.bind binds vLLM's slots). On top of S1's manifest of record (the S1 decision above: 189239 v1 identities + 14336 qkv_proj/triton_launch_<n>/out call boundaries = 203575, unchanged), 86016 identities are renamed, 6 classes x 14336: model.layers.<k>.{self_attn.qkv_proj, self_attn.o_proj, mlp.gate_up_proj, mlp.down_proj}/0 -> out and self_attn.rotary_emb/0|1 -> query|key (added_n - removed_n = S1's 14336; nothing else added or dropped). Solely one naming: f4c839da, the landing before #2614, reproduces S1's decision (post-train pass r20261019-174053-a212); main at c0ebeb8b gives this manifest (r20261019-234950-861e)."
+expected = { identities = 203575, added_n = 100352, removed_n = 86016, complete = true, manifest_digest = "9586b789c65fa79788780b7ce344ae87e1dcdd619bb14d605996b82823b2f10e" }
+
 [rows."qwen25-15b__bf16__l40s__tp1__b1__i4096__o512__mixed__greedy__bi-eager".local]
 
 [rows."qwen25-15b__bf16__l40s__tp1__b1__i4096__o512__mixed__greedy__bi-eager".artifacts]
@@ -4726,6 +4756,16 @@ finding = "S1 #232 (Q_word v1 as the partition of record)"
 status = "pending_review"
 reason = "S1 builds the manifest of record under Q_word_v1{X=16,W=32,R=no-recompute}: every Value one Call produces and another reads is required, a Value two Calls of one module body exchange too (family call_boundaries, <module>/<fx node>/out). Every one of the v1 manifest's 163052 identities stays (removed_n = 0) and 341712 are added: F-r19-int-20's 432 model/out, and 341280 call boundaries inside module bodies -- Gemma2's RMSNorm steps (pow, mean, add, rsqrt, mul) in each layer's four layernorms and model.norm, and the final-logit soft-cap's div / tanh / triton_launch in logits_processor. Solely S1: the same Programs rebuilt under Q_module_body_v1 with --word-check off, the query of record before S1, reproduce expected/<row>.json exactly (163484 identities, manifest_digest d54d8efe...)."
 expected = { identities = 504764, only_new = 341712, removed_n = 0, complete = true, manifest_digest = "691f00d491fe7f72c5b8205716c3dd494ef2ea0d80f289e5c514c617c95c3d3f" }
+
+# labelled decision (Draft 3 §7): one naming names a Call's members structurally; labelled by lane circuits (REGRESS) on runs r20261020-023034-a7fe / r20261020-023034-4785
+[[rows."gemma2-2b__bf16__l40s__tp1__b8__i1024__o128__mixed__greedy__bi-eager".decisions]]
+check = "manifest_digest"
+since = "#2614 (merge 01e7539353)"
+since_commit = "01e75393532fdbdf72b24b7cbd7d20a90241a1d6"
+finding = "one naming (#2382, relanded in #2614)"
+status = "pending_review"
+reason = "One naming (#2382's, relanded by #2614 at 01e7539353) names a Call's members structurally and retires query.required's NAMED_RESIDUALS: a Linear's output member 0 is `out`, a RoPE's 0 / 1 are `query` / `key` (query.manifest.bind binds vLLM's slots). On top of S1's manifest of record (the S1 decision above: 504764 identities, 341712 beyond v1), 67392 identities are renamed, 6 classes x 11232: model.layers.<k>.{self_attn.qkv_proj, self_attn.o_proj, mlp.gate_up_proj, mlp.down_proj}/0 -> out and self_attn.rotary_emb/0|1 -> query|key, each paired with a row of S1's manifest equal in every other IDENTITY_KEY field; nothing added or dropped. Solely one naming: f4c839da, the landing before #2614, reproduces S1's decision exactly (manifest_digest 691f00d4...; r20261020-023034-a7fe), and 01e7539353 gives this manifest (r20261020-023034-4785). expected/<row>.json is not rebaselined: its contract carries F-r19-int-20's promoted_member, now 5.6 MB, over the 5 MiB blob cap."
+expected = { identities = 504764, added_n = 409104, removed_n = 67392, complete = true, manifest_digest = "a1d5a631003badbde196bd8121d7975547cd1e8f5fc258c9f5f4f824e4ac475d" }
 
 [rows."gemma2-2b__bf16__l40s__tp1__b8__i1024__o128__mixed__greedy__bi-eager".local]
 tp2 = "/workspace/cp/sweep/r19-int-10/gemma2-2b__bf16__l40s__tp1__b8__i1024__o128__mixed__greedy__bi-eager"
@@ -5517,6 +5557,16 @@ tp = 1
 batch = 8
 oracle = "/vault/tmp/oracle/mistral-7b__bf16__l40s__tp1__b8__i1024__o128__mixed__greedy__bi-eager"
 programs_state = "uploaded"
+
+# labelled decision (Draft 3 §7): one naming names a Call's members structurally; labelled by lane circuits (REGRESS) on runs r20261020-023034-a7fe / r20261020-023034-4785
+[[rows."mistral-7b__bf16__l40s__tp1__b8__i1024__o128__mixed__greedy__bi-eager".decisions]]
+check = "manifest_digest"
+since = "#2614 (merge 01e7539353)"
+since_commit = "01e75393532fdbdf72b24b7cbd7d20a90241a1d6"
+finding = "one naming (#2382, relanded in #2614)"
+status = "pending_review"
+reason = "One naming (#2382's, relanded by #2614 at 01e7539353) names a Call's members structurally and retires query.required's NAMED_RESIDUALS: a Linear's output member 0 is `out`, a RoPE's 0 / 1 are `query` / `key` (query.manifest.bind binds vLLM's slots). The Program is the one of record and the identity count stays 205144; 99072 identities are renamed, 6 classes x 16512: model.layers.<k>.{self_attn.qkv_proj, self_attn.o_proj, mlp.gate_up_proj, mlp.down_proj}/0 -> out and self_attn.rotary_emb/0|1 -> query|key (removed_n = added_n, every added row in those six classes; nothing added or dropped). Solely one naming: f4c839da, the landing before #2614, reproduces expected/<row>.json (post-train pass r20261019-174053-a212); main at c0ebeb8b gives this manifest (r20261019-234950-861e)."
+expected = { identities = 205144, added_n = 99072, removed_n = 99072, complete = true, manifest_digest = "ec2e1f0d684f1c2a3d203fa1552ae7b558bc1ec1777b431421550d8ee38c8e3d" }
 
 [rows."mistral-7b__bf16__l40s__tp1__b8__i1024__o128__mixed__greedy__bi-eager".local]
 
@@ -6398,6 +6448,16 @@ status = "accepted"
 accepted_by = "Daniel Reuter (delegated to the vLLM coordinator: 'clear all the old stuff', 23 Sep)"
 reason = "record predates the v2 rule; v1 code removed; recomputed under v2 rule. The v2 query addresses the MoeSum_v1 rows at the experts module (model.layers.<k>.mlp.experts, FusedMoE.forward's returned tensor: F-r19-int-24) where the v1 rule used the synthetic moe/L<k> path: 2416 stratum keys renamed; every count (population, strata sizes, the draw, lifetime, phase anchors) is unchanged."
 expected = { population = { vus = 5745046, strata_n = 38748 }, strata = { "MoeSum_v1{TOPK=8,H=2048}|r0|rank0|first-decode|model.layers.0.mlp.experts|fresh-window" = { population = 1, sampled = 1 } } }
+
+# labelled decision (Draft 3 §7): one naming names a Call's members structurally; labelled by lane circuits (REGRESS) on runs r20261020-023034-a7fe / r20261020-023034-4785
+[[rows."olmoe-1b-7b__bf16__l40s__tp1__b32__i1024__o128__mixed__greedy__bi-eager".decisions]]
+check = "manifest_digest"
+since = "#2614 (merge 01e7539353)"
+since_commit = "01e75393532fdbdf72b24b7cbd7d20a90241a1d6"
+finding = "one naming (#2382, relanded in #2614)"
+status = "pending_review"
+reason = "One naming (#2382's, relanded by #2614 at 01e7539353) names a Call's members structurally and retires query.required's NAMED_RESIDUALS: a Linear's or router's output member 0 is `out`, a RoPE's 0 / 1 are `query` / `key` (query.manifest.bind binds vLLM's slots). On top of F-r19-int-24's MoeSum_v1 boundary Values (the decision above: 20928 model.layers.<k>.mlp.experts/out beyond v1, 406432 identities, unchanged), 104640 identities are renamed, 5 classes x 20928: model.layers.<k>.{mlp.gate, self_attn.qkv_proj, self_attn.o_proj}/0 -> out and self_attn.rotary_emb/0|1 -> query|key (added_n - removed_n = F-r19-int-24's 20928; nothing else added or dropped). Solely one naming: f4c839da, the landing before #2614, reproduces expected/<row>.json (post-train pass r20261019-174053-a212); main at c0ebeb8b gives this manifest (r20261019-234950-861e)."
+expected = { identities = 406432, added_n = 125568, removed_n = 104640, complete = true, manifest_digest = "cc5ff1c69612993fcc59dac027a3ffee101b5246958f9ececeb3863ace21a73a" }
 
 [rows."olmoe-1b-7b__bf16__l40s__tp1__b32__i1024__o128__mixed__greedy__bi-eager".local]
 
@@ -8233,6 +8293,16 @@ status = "accepted"
 accepted_by = "Daniel Reuter (delegated to the vLLM coordinator: 'clear all the old stuff', 23 Sep)"
 reason = "record predates the v2 rule; v1 code removed; recomputed under v2 rule. The v2 query addresses the MoeSum_v1 rows at the experts module (model.layers.<k>.mlp.experts, FusedMoE.forward's returned tensor: F-r19-int-24) where the v1 rule used the synthetic moe/L<k> path: 2016 stratum keys renamed; every count (population, strata sizes, the draw, lifetime, phase anchors) is unchanged."
 expected = { population = { vus = 5830562, strata_n = 33192 }, strata = { "MoeSum_v1{TOPK=8,H=2048}|r0|rank0|first-decode|model.layers.0.mlp.experts|fresh-window" = { population = 1, sampled = 1 } } }
+
+# labelled decision (Draft 3 §7): one naming names a Call's members structurally; labelled by lane circuits (REGRESS) on runs r20261020-023034-a7fe / r20261020-023034-4785
+[[rows."olmoe-1b-7b__bf16__l40s__tp1__b32__i1024__o128__mixed-arrivals__greedy__bi-eager".decisions]]
+check = "manifest_digest"
+since = "#2614 (merge 01e7539353)"
+since_commit = "01e75393532fdbdf72b24b7cbd7d20a90241a1d6"
+finding = "one naming (#2382, relanded in #2614)"
+status = "pending_review"
+reason = "One naming (#2382's, relanded by #2614 at 01e7539353) names a Call's members structurally and retires query.required's NAMED_RESIDUALS: a Linear's or router's output member 0 is `out`, a RoPE's 0 / 1 are `query` / `key` (query.manifest.bind binds vLLM's slots). On top of F-r19-int-24's MoeSum_v1 boundary Values (the decision above: 20704 model.layers.<k>.mlp.experts/out beyond v1, 402938 identities, unchanged), 103520 identities are renamed, 5 classes x 20704: model.layers.<k>.{mlp.gate, self_attn.qkv_proj, self_attn.o_proj}/0 -> out and self_attn.rotary_emb/0|1 -> query|key (added_n - removed_n = F-r19-int-24's 20704; nothing else added or dropped). Solely one naming: f4c839da, the landing before #2614, reproduces expected/<row>.json (post-train pass r20261019-174053-a212); main at c0ebeb8b gives this manifest (r20261019-234950-861e)."
+expected = { identities = 402938, added_n = 124224, removed_n = 103520, complete = true, manifest_digest = "75dfcf6656d04db0313de687b05e535aa62f9192255e5cce917a91f9127d9847" }
 
 [rows."olmoe-1b-7b__bf16__l40s__tp1__b32__i1024__o128__mixed-arrivals__greedy__bi-eager".local]
 tp2 = "/workspace/cp/sweep/r19-int-10/olmoe-1b-7b__bf16__l40s__tp1__b32__i1024__o128__mixed-arrivals__greedy__bi-eager"
@@ -11293,6 +11363,16 @@ programs_state = "uploaded"
 # built with every policy on
 manifest_flags = []
 
+# labelled decision (Draft 3 §7): one naming names a Call's members structurally, and an FA3 grouped-query stream is named by FA3's own geometry; labelled by lane circuits (REGRESS) on runs r20261020-023034-a7fe / r20261020-023034-4785
+[[rows."qwen3-4b__bf16__h100__tp1__b8__i1024__o128__mixed__greedy__bi-eager".decisions]]
+check = "manifest_digest"
+since = "#2614 (merge 01e7539353)"
+since_commit = "01e75393532fdbdf72b24b7cbd7d20a90241a1d6"
+finding = "one naming (#2382, relanded in #2614) + the FA3 composed-geometry fix (50a7e18423)"
+status = "pending_review"
+reason = "One naming (#2382's, relanded by #2614 at 01e7539353) names a Call's members structurally and retires query.required's NAMED_RESIDUALS: a Linear's output member 0 is `out`, a RoPE's 0 / 1 are `query` / `key` (query.manifest.bind binds vLLM's slots). The Program is the one of record and the identity count stays 316347; 102816 identities are renamed, 6 classes x 17136: model.layers.<k>.{self_attn.qkv_proj, self_attn.o_proj, mlp.gate_up_proj, mlp.down_proj}/0 -> out and self_attn.rotary_emb/0|1 -> query|key, each paired with a row of the previous manifest equal in every other IDENTITY_KEY field. The other 396 (36 layers x 11 shapes, family fa3_hidden_m1_stream) carry the composed stream name 50a7e18423 (compose_global's FA3 geometry fix, also in #2614) gives a B>=2 FA3 grouped-query row, M = rows * NH / KVH as FA3 packs it (fa3.m1/L<k>/g8x1x3x128x128 -> g8x4x3x128x128 at NH/KVH = 4): the tap's own stream names. Nothing added or dropped. Solely these two: f4c839da, the landing before #2614, reproduces expected/<row>.json exactly (manifest_digest 466e6718..., the v1 manifest row for row; r20261020-023034-a7fe), and 01e7539353 gives this manifest (r20261020-023034-4785)."
+expected = { identities = 316347, added_n = 103212, removed_n = 103212, complete = true, manifest_digest = "710bfe787dcfff4030b08a03774a389066c91012134487f93838269e902195e1" }
+
 [rows."qwen3-4b__bf16__h100__tp1__b8__i1024__o128__mixed__greedy__bi-eager".local]
 
 # records: the epoch records tree art:da7b7474 (25 GB) less match/capture/values/**, commit/binding_map_p0.json,
@@ -13429,6 +13509,16 @@ tp = 1
 batch = 1
 oracle = "/workspace/stoch/oracle/llama32-1b__bf16__l40s__tp1__b1__i256__o32__mixed__stoch-t0.8-p0.95__bi-eager"
 programs_state = "uploaded"
+
+# labelled decision (Draft 3 §7): one naming names a Call's members structurally; labelled by lane circuits (REGRESS) on runs r20261020-023034-a7fe / r20261020-023034-4785
+[[rows."llama32-1b__bf16__l40s__tp1__b1__i256__o32__mixed__stoch-t0.8-p0.95__bi-eager".decisions]]
+check = "manifest_digest"
+since = "#2614 (merge 01e7539353)"
+since_commit = "01e75393532fdbdf72b24b7cbd7d20a90241a1d6"
+finding = "one naming (#2382, relanded in #2614)"
+status = "pending_review"
+reason = "One naming (#2382's, relanded by #2614 at 01e7539353) names a Call's members structurally and retires query.required's NAMED_RESIDUALS: a Linear's output member 0 is `out`, a RoPE's 0 / 1 are `query` / `key` (query.manifest.bind binds vLLM's slots). The Program is the one of record and the identity count stays 7043; 3072 identities are renamed, 6 classes x 512: model.layers.<k>.{self_attn.qkv_proj, self_attn.o_proj, mlp.gate_up_proj, mlp.down_proj}/0 -> out and self_attn.rotary_emb/0|1 -> query|key (removed_n = added_n, every added row in those six classes; nothing added or dropped). Solely one naming: f4c839da, the landing before #2614, reproduces expected/<row>.json (post-train pass r20261019-174053-a212); main at c0ebeb8b gives this manifest (r20261019-234950-861e)."
+expected = { identities = 7043, added_n = 3072, removed_n = 3072, complete = true, manifest_digest = "6833798a5bad6d373017fc15e42c21d69e3db257054bb499ac76a0db224f74b0" }
 
 [rows."llama32-1b__bf16__l40s__tp1__b1__i256__o32__mixed__stoch-t0.8-p0.95__bi-eager".local]
 
