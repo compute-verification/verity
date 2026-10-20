@@ -89,8 +89,8 @@ prefix, of `j = PeriodRun.prefixLen` windows. Under:
   load;
 * the period's ideal game the windows' `serviceGame`s at share `1` per unit of each skipped tile's live late cone
   (`periodGame` at `liveCone`);
-* in every window, no dead tile's late cone holds live words (`DeadConeDead`, which every Program COMPILE accepts has),
-  so a dead tile's `liveCone` is `0`;
+* in every window, no dead tile's late cone holds live words (`DeadConeDead`, which a Program COMPILE accepts has when
+  its `zeroCone` is `0`: *Its line*), so a dead tile's `liveCone` is `0`;
 * sampled (I8)'s pieces on the period's proofs, `Declared.layer` in every window (`Declared.periodLayer` at the run's
   `pr`): `Of`'s game clause on every prefix (`PrefixOf`), binding at `δ_bind` in each window (`MovedIn`), proof
   soundness jointly over each window's draws at `δ_ks` (`JointSound`) and `Pins`. Binding is per window, so the period
@@ -121,18 +121,22 @@ at the realized `j`, never at the cap: undiscounted, an all-skip window that pas
 times an honest stream's credit per unit of work (RT4-INT-8). The time credit `(1 − ε)·j·T_cred` would be
 `CircuitCredit` over the period, whose sheet premises read one window's run, not a prefix's total: not stated.
 
-*Live tiles on the served gate* (RT4-LOGIC-4). `live` is meant to be the gate's, and today it can't be. SERVE-GATE's
-`PouwQueueAdmit_v3` (#2731 at 166e5e573d, lifted onto main by #2892) admits a slot iff the request queue, committed
-before the window's first coin, assigns it a request live at its step and its row's scale is nonzero. It reads no row
-byte, so it admits a selected row of zero bytes under a nonzero scale (`scale_only`), and nothing on the verifier's
-side refuses one: the gate checks `junk` and `hollow` (RT-ALGO-4) in Python on its picked units, and `scale_only` is
-only the prover's own flag. A block of `scale_only` rows is dead in-circuit (its masked receipt is the zero words at
-every coin), so if `live` is the admit bits' its tile is named live, its whole skip passes, `GuessLuckAt` fails on it
-(RT2-INT's `guess_false_dead`), and on such a period the premise is false and the statement says nothing. So `live`
-must be the tiles live in-circuit, which the served tally is to count (#2892) and doesn't yet. A `live` that names a
-live tile dead only loses its words. Once the tally credits only rows in live tiles, as a share of its credit the
-deficit is at most `(d_F + d₀)·N_w/N_adm`, with `N_adm/(j·N_w) = u`: `N_adm` the prefix's admitted rows and `j·N_w`
-its declared rows.
+*Live tiles on the served gate* (RT4-LOGIC-4, RT4-LOGIC-20). `live` must be the tiles live in-circuit, and whether the
+gate's admit bits are those depends on the tile version. SERVE-GATE's `PouwQueueAdmit_v3` (#2731 at 166e5e573d, lifted
+onto main by #2892) admits a slot iff the request queue, committed before the window's first coin, assigns it a request
+live at its step and its row's scale is nonzero. It reads no row byte, so it admits a selected row of zero bytes under
+a nonzero scale (`scale_only`), and nothing on the verifier's side refuses one: the gate checks `junk` and `hollow`
+(RT-ALGO-4) in Python on its picked units, and `scale_only` is only the prover's own flag. #2731 serves #2639's
+`PouwH1Tile_v2`, which reads a tile as dead when all its row bytes are zero. There a block of `scale_only` rows is dead
+in-circuit (its masked receipt is the zero words at every coin), so if `live` is the admit bits' its tile is named
+live, its whole skip passes, `GuessLuckAt` fails on it (RT2-INT's `guess_false_dead`), and on such a period the premise
+is false and the statement says nothing. #2902's `PouwH1Tile_v4` instead masks the receipt with the OR of the tile's
+admit bits, the words the tally counts, once the protocol binds its `admit` input to them by commitment equality (its
+precondition). There a `scale_only` block is live and receipted, and the admit bits are the tiles live in-circuit:
+kernels is moving the served credit back to them, which suits `live` under v4 only. Neither tile is on main. A `live`
+that names a live tile dead only loses its words. When the tally credits only rows in live tiles (under v4 every
+admitted row is in one), as a share of its credit the deficit is at most `(d_F + d₀)·N_w/N_adm`, with
+`N_adm/(j·N_w) = u`: `N_adm` the prefix's admitted rows and `j·N_w` its declared rows.
 
 *The period's order and its record* (RT2-INT-4, RT3-INT-13, RT4-INT-6). `Period` makes the order the model's. The
 statement needs a period record, kept by the service, from which the credit is read: the period's cap `n` and circuit
@@ -187,8 +191,11 @@ total draws `j·K_d` and its load set it, not how it is cut into windows.
 
 `D₀ = 0` is an assumption of these numbers, not a computed fact (RT4-LOGIC-6). `zeroCone` is `0` when no tile of no
 words reaches a tile of words, which COMPILE's `salt-flow` and `noise-in-z` checks are meant to give, but no
-`Declared` is built from a served Program, so nothing computes `zeroCone` for SERVE-H1's masked circuit. A positive
-`D₀` adds `D₀/u` to `ε(j)`, and that term doesn't shrink with `j`.
+`Declared` is built from a served Program, so nothing computes `zeroCone` for SERVE-H1's masked circuit. `DeadConeDead`
+rests on it too (RT4-LOGIC-18): at `D₀ > 0` a tile of no words reaches a tile of words, and in a window where that tile
+is dead and the tile it reaches is live, `DeadConeDead` fails, the premise is false and the statement says nothing.
+Only where every such tile is live, in every window, does a positive `D₀` merely add `D₀/u` to `ε(j)`, a term that
+doesn't shrink with `j`.
 
 *Liveness* (RT3-INT-7). An honest stream whose windows fail independently at rate `f` (a late proof, a certifier or a
 node fault; no rate is measured) completes an 82,403-window period with probability `(1 − f)^n`: 44% at `f = 10^-5`,
