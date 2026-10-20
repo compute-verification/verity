@@ -2153,7 +2153,8 @@ def cancel(local_dir: Path, *, reason: str, by: str) -> dict[str, Any]:
     """`research cancel`: SIGTERM to the workload's process group on the machine (status.json `pgid`), its intent recorded first in the
     run's events.jsonl (`tele cancel-intent --actor manual`), so the run classifies CANCELLED_MANUAL.  The SIGTERM reaches every process
     of the run's own cgroup scopes and the run's processes outside its group too, and CANCEL_GRACE_S later the runner SIGKILLs what is
-    left of them, confirms they are gone and records it (status.json `scope_end`; telemetry.scope, INF-93).  Never the runner: it
+    left of them, confirms they are gone and records it (status.json `scope_end`; telemetry.scope, INF-93); when the runner had
+    recorded the workload's exit already or is gone, the cancel on the machine does, and this call waits the grace.  Never the runner: it
     records the workload's exit and then publishes custody, and one killed in its upload leaves the run without custody.  A run whose
     shipped tool predates the scope end gets the SIGTERM to its group and run-dir processes alone, and the result says so (`scope`).
     A run another VM launched (`adopt`) has no shipped tool in its remote.json; the machine's job.json names it (`run.remote.tool`), and

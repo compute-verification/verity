@@ -15,6 +15,7 @@ from pathlib import Path
 import pytest
 
 from research import cli, remote
+from research.telemetry.procs import stat_fields
 
 TOOL = Path(remote.__file__).resolve().parents[1]
 
@@ -38,7 +39,9 @@ def _run(tmp_path: Path, monkeypatch, state: str = "running"):
     d = root / "runs" / "r-x"
     d.mkdir(parents=True)
     workload, runner = _workload(d), subprocess.Popen(["cat"], stdin=subprocess.PIPE, start_new_session=True)
-    (d / "status.json").write_text(json.dumps({"state": state, "pid": workload.pid, "pgid": workload.pid}))
+    stream = f"h:{runner.pid}:{stat_fields(runner.pid)['starttime_ticks']}"
+    (d / "status.json").write_text(json.dumps({"state": state, "pid": workload.pid, "pgid": workload.pid, "transitions": [
+        {"state": "running", "stream": stream, "pid": workload.pid, "pgid": workload.pid}]}))
     (d / "events.jsonl").write_text("")
     local = tmp_path / "local" / "r-x"
     local.mkdir(parents=True)
