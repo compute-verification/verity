@@ -618,7 +618,7 @@ pub, priv, proofs = V.load(Path(sys.argv[1])); print(' '.join(str(l['level']) fo
 vcap)
   INNER=${INNER:-$DD/inner/s$((NS - 1))}
   [ -f $INNER/public.json ] && [ -f $INNER/private.json ] || { echo "INNER=$INNER: no public.json and private.json (run STEP=inner first)"; exit 1; }
-  [ -f $DD/v/acc-salts.bin ] || { echo "run STEP=vstage first: RecCap is staged beside V*'s other statements"; exit 1; }
+  [ -f $DD/v/L0/registered.json ] || { echo "run STEP=vstage first: RecCap is staged beside V*'s other statements"; exit 1; }
   mkdir -p $O/vstage; rm -rf $DD/v/cap
   /usr/bin/time -v -o $O/vstage/time-cap.txt python3 -c '
 import json, sys; from pathlib import Path; from verity_flock import rec_vstage as S
@@ -629,7 +629,7 @@ print(json.dumps(S.stage_cap(Path(sys.argv[1]), Path(sys.argv[2]))))' $INNER $DD
   cp $DD/v/cap/registered.json $O/vstage/cap-registered.json
   ;;
 oprove)
-  V=$DD/v; [ -f $V/acc-salts.bin ] || { echo "run STEP=vstage first"; exit 1; }
+  V=$DD/v; [ -n "$(find $V -name inst.bin -print -quit 2>/dev/null)" ] || { echo "run STEP=vstage (or vcap) first"; exit 1; }
   # every staged statement (each level's, each of the algebra's parts, each forgery's: L3, alg-p0, forged-sum-L6, ..), proved with --zk on
   # loopback, a forgery's once; upstream's replay --zk of the last session, which (accepted or not) is kept under $DD/v-sess
   # beside the statement directory Lean reads it with. MODES names the prover's sides, WARM + RUNS sessions each per
