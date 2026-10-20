@@ -720,15 +720,17 @@ def test_drift_is_one_incident_per_node_and_kind_and_an_unreadable_node_fails_th
         M.deploy_drift(M.Ctx(now=T0, run=Run((has("drift"), (1, json.dumps(stopped), "")))))
 
 
-def test_unpreserved_asks_for_runs_over_30_minutes_old_and_says_when_the_flag_is_missing():
-    rep = {"schema": "research/pods-unpreserved/v0.1", "unpreserved": ["a1", {"id": "a2"}, "a3", "a4"]}
-    run = Run((has("vy-nebius-1"), (1, json.dumps(rep), "")), (has("vy-nebius-2"), (0, json.dumps({"unpreserved": []}), "")))
-    (f,) = M.unpreserved(M.Ctx(now=T0, run=run))
-    assert f.key == "vy-nebius-1" and "4 runs" in f.text and "a1, a2, a3 and 1 more" in f.text
-    assert ["--older-min", "30", "--json"] == run.calls[0][0][-3:]
-    old = Run((has("unpreserved"), (2, "", "research: error: unrecognized arguments: --older-min 30")))
-    with pytest.raises(RuntimeError, match="has no --older-min"):
-        M.unpreserved(M.Ctx(now=T0, run=old))
+def test_a_retired_monitors_open_incident_is_cleared_once_with_why_it_retired(tmp_path):
+    assert "unpreserved" in M.RETIRED and "unpreserved" not in {m.id for m in M.MONITORS}
+    state = M.new_state()
+    state["open"]["unpreserved|unreadable"] = {"monitor": "unpreserved", "since": "2026-10-19T22:00:00Z", "owners": ["infra"],
+                                               "severity": "warn", "text": "*Monitor `unpreserved` can't read its input*",
+                                               "cleared": "*Cleared:* monitor `unpreserved` reads its input again."}
+    m = mon(lambda ctx: [])
+    (ev,) = M.step(state, [m], lambda memo: M.Ctx(now=T0, memo=memo), T0, M.AlertDir(tmp_path), by="test")
+    assert (ev["event"], ev["key"], ev["since"]) == ("clear", "unpreserved|unreadable", "2026-10-19T22:00:00Z")
+    assert "is retired" in ev["text"] and "disk-n1" in ev["text"] and state["open"] == {}
+    assert M.step(state, [m], lambda memo: M.Ctx(now=T0 + 60, memo=memo), T0 + 60, M.AlertDir(tmp_path), by="test") == []
 
 
 def test_an_unanswered_ask_goes_to_whoever_it_asked():

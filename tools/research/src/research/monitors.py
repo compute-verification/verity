@@ -196,7 +196,6 @@ class Ctx:
     n2_host: str = "vy-n2"
     node1: str = "n1"
     node_state: str = STATE
-    machines: tuple[str, ...] = ("vy-nebius-1", "vy-nebius-2")
     machine: str = ""                   # where a `machine` monitor runs (its runner's --machine)
     peers: tuple[str, ...] = ()         # the ssh hosts it watches (--peer)
     research: tuple[str, ...] = (sys.executable, "-m", "research")
@@ -788,26 +787,6 @@ def deploy_drift(ctx: Ctx) -> list[Finding]:
         groups.setdefault((n, kind), []).append(path)
     return [Finding(f"{n}:{kind}", f"*Deploy drift on {n}: {len(ps)} {kind}*: {', '.join(f'`{p}`' for p in ps[:5])}"
                     + (f" and {len(ps) - 5} more" if len(ps) > 5 else "") + ".") for (n, kind), ps in sorted(groups.items())]
-
-
-def unpreserved(ctx: Ctx) -> list[Finding]:
-    """Runs that ended over 30 minutes ago and aren't preserved on the remote, per machine (`research pods unpreserved MACHINE
-    --older-min 30 --json`)."""
-    out = []
-    for mach in ctx.machines:
-        r = ctx.run([*ctx.research, "pods", "unpreserved", mach, "--older-min", "30", "--json"], capture_output=True, text=True,
-                    timeout=ctx.bound(900))
-        if r.returncode == 2 and "unrecognized arguments" in (r.stderr or ""):
-            raise RuntimeError("`research pods unpreserved` here has no --older-min: its tools/research predates it "
-                               "(pods/drain.py); deploy a newer tree")
-        if r.returncode not in (0, 1):
-            raise RuntimeError(f"research pods unpreserved {mach} exited {r.returncode}: {(r.stderr or '').strip()[-200:]}")
-        ids = [x if isinstance(x, str) else str(x.get("id") or x.get("attempt") or x) for x in json.loads(r.stdout).get("unpreserved") or []]
-        if ids:
-            out.append(Finding(mach, f"*{mach}: {len(ids)} run{'s' if len(ids) > 1 else ''} ended over 30 minutes ago and "
-                               f"{'are' if len(ids) > 1 else 'is'} not preserved on the remote*: {', '.join(ids[:3])}"
-                               + (f" and {len(ids) - 3} more" if len(ids) > 3 else "") + "."))
-    return out
 
 
 def asks(ctx: Ctx) -> list[Finding]:
@@ -1462,6 +1441,12 @@ UNITS_ACTION = ("`systemctl status UNIT` and `journalctl -u UNIT -n 50` on the n
                 "`systemctl reset-failed UNIT`, or, if it fails on this hardware by design, add it to EXPECTED_FAILED in "
                 "research/monitors.py with the reason.")
 
+#: monitor id -> why it no longer runs; a pass clears what it still had open
+RETIRED = {
+    "unpreserved": "the node watermarks (disk-n1, disk-n2: resource_probe.py's custody backlog) read the nodes' own finished runs "
+                   "without custody, which a relay seeing only the remote can't",
+}
+
 MONITORS: list[Monitor] = [
     Monitor("disk-n1", "infra", "warn", "node", watermarks("n1"), RETENTION, every_s=600, clear_s=1800),
     Monitor("disk-n2", "infra", "warn", "node", watermarks("n2"), RETENTION, every_s=600, clear_s=1800, n2="probe"),
@@ -1516,9 +1501,6 @@ MONITORS: list[Monitor] = [
             "`research deploy drift --on N` for the detail; install main's version (`research deploy install N --by WHO "
             "PATH`), restart what runs old code, or move strays to the attic (`research deploy attic N PATH`).",
             every_s=3600, unread_s=4 * 3600),
-    Monitor("unpreserved", "infra", "warn", "relay", unpreserved,
-            "`research pods unpreserved MACHINE` lists them and `research data preserved RUN` says why each isn't preserved: "
-            "push them, or fix the custody service that should have.", every_s=1800, unread_s=4 * 3600),
     Monitor("asks", "infra", "warn", "relay", asks,
             "Answer the ask, or close it: `research msg close --as YOU --thread TS` (✅), or with `--declined WHY` (❌).",
             every_s=900, unread_s=3 * 3600),
@@ -1677,6 +1659,10 @@ def step(state: dict, monitors: list[Monitor], ctx_for: Callable[[dict], Ctx], n
         judge(m, state, shared, ctx_for, now, emit)
         if checkpoint:
             checkpoint()
+    for key, o in [(k, o) for k, o in state["open"].items() if o["monitor"] in RETIRED]:
+        gone = Monitor(o["monitor"], (o.get("owners") or ["infra"])[0], o.get("severity") or "warn", "", lambda _: [], "")
+        if emit(gone, "clear", key, None, {**o, "cleared": f"*Cleared:* monitor `{o['monitor']}` is retired: {RETIRED[o['monitor']]}."}):
+            del state["open"][key]
     for k in [k for k, t in seen.items() if now - t > EVENTS_KEEP_S]:
         del seen[k]
     if webhook:
