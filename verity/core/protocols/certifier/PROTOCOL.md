@@ -491,14 +491,15 @@ them.
     value, signature, key_id, run_id)`, signed by the certifier's own key (`signer`, the network certifier's, as its
     `Issuer` signs with) over `reveal_response_message`, the request's fields then u32be len(value) ‖ value under
     `verity-network-certifier/reveal-response/v1`. `Revealed.verify(key, run_id, link, digest, what)` holds only if it
-    names that key's id and that run and the signature verifies, so a consumer can key p on (key id, run id, p): two
-    proxies with one link name, whose p's collide, or two runs of one certifier, never answer for each other. A signer
-    that refuses leaves p's reveal spent and gives nothing. The salt needs authenticity, not confidentiality: after t_d
-    the block's server already holds it, and the verifier fills `pouw.salt` as a public input, so nothing is
-    encrypted. A refusal (`{"refused": reason}`) isn't signed: forged on the path, it costs the window as dropping the
-    answer would; so does a request copied off the path and sent first, which spends the reveal on a salt that is no
-    longer secret. `serve_reveals(proxy, host, port)` serves both calls beside `run`, one JSON line per request and per
-    answer, each call off the loop; `RemoteCertifier(host, port, certifier_key, challenger_signer, link, run_id)` is
+    names that key's id and that run and the signature verifies, so a consumer can key p on the certifier run, (key
+    id, run id, link), which `Proxy.certifier_run` and `RemoteCertifier.certifier_run` give alike (link is the ingress
+    link the messages bind): two proxies with one link name, whose p's collide, or two runs of one certifier, never
+    answer for each other. A signer that refuses leaves p's reveal spent and gives nothing. The salt needs
+    authenticity, not confidentiality: after t_d the block's server already holds it, and the verifier fills
+    `pouw.salt` as a public input, so nothing is encrypted. A refusal (`{"refused": reason}`) isn't signed: forged on
+    the path, it costs the window as dropping the answer would; so does a request copied off the path and sent
+    first, which spends the reveal on a salt that is no longer secret. `serve_reveals(proxy, host, port)` serves both
+    calls beside `run`, one JSON line per request and per answer, each call off the loop; `RemoteCertifier(host, port, certifier_key, challenger_signer, link, run_id)` is
     the challenger's client, given the certifier's key and run id by the deployment record, whose `reveal` and
     `committed` return the value they verified, as a keyless proxy's do in process, and raise `RuntimeError` on a
     refusal, an answer of another run, one that doesn't verify, or no answer. t_d, the deadline and the once rule are

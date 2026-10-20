@@ -8,8 +8,9 @@ reasons too, `Core.Protocol.case`'s framing included, so this port compares the 
 that refused, and agreeing on it holds which rule refused, not only that one did.
 
 `pouw-check-difftest`'s `opening` against `core_check.opening`: one `Port`, over the openings `pouw_opening_cases`
-generates (honest openings of a call's tile or the filler's, and one mutation each aimed at every refusal or at a reading
-both sides share), compared output for output: null, or the same reason.
+generates (honest openings of a call's tile or the filler's, unsalted or a salted unit's in a certified window, and one
+mutation each aimed at every refusal or at a reading both sides share), compared output for output: null, or the same
+reason.
 
 Its `pass` and `draw` against `core_check.pass_epoch` and `core_check.draw`: one `Port` each, over the cases
 `pouw_pass_cases` generates (honest passes of each coin version and a recorded beacon's, and honest draws, then one
@@ -94,13 +95,21 @@ REASONS = {_template(r) for r in (
     "the proof's body holds no A row and B row",
     *(f"side {s}: the opening is of row #, not the unit's row #" for s in "ab"),
     *(f"side {s}: the proof's committed row is not entry #'s row #" for s in "ab"),
+    "the window is certified, and its template's unit reads no salt: no drawn proof of it is held to the window's "
+    "certified salt", "the window is certified, and the verifier holds no 64-byte certified salt for it",
+    "the window is not certified, so it has no certified salt for a unit to read",
+    "the window's template's unit reads a salt, which only a certified window has",
+    f"the proof's rows {', '.join([*(f'a{k}' for k in range(4)), *(f'b{k}' for k in range(8)), 'pub'])} are not "
+    f"{CC.ROW_V2} rows", "the proof's body holds no A rows, B rows and public row",
+    "the proof's public row is not the window's certified salt, unit #'s position and entry #'s side roots",
 )}
 OPENED: Counter[str] = Counter()
 
 
 def opening(case: dict) -> str | None:
     why = CC.opening(CC.params(case["params"]), CC.commitment(bytes.fromhex(case["commitment"])), case["units"],
-                     case["unit"], bytes.fromhex(case["pub"]), case["opening"])
+                     case["unit"], bytes.fromhex(case["pub"]), case["opening"],
+                     None if case.get("salt") is None else bytes.fromhex(case["salt"]))
     OPENED[_template(why) if why else "accept"] += 1
     return why
 
