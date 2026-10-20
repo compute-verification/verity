@@ -7,8 +7,9 @@ a warp) is classed by the tree's `facet_break/loads.class_of` and priced π*·c[
 is kept (the menu's routes leave it out, so this is the cheater's cost from above). An opcode whose class is None or
 not among the vector's classes is priced 0, as neither family's machine counts it (no catch-all), and listed; the route
 is priced again with each at π*'s issue weight alone, as an A2 catch-all would. A full-work run that folds by the
-route and skips only ♭'s skippable work reads time/credit (B (1 − ε_skip) − N_w φ* + N_w route) / B against
-1 − the reading's bound.
+route and skips only ♭'s skippable work reads time/credit (B (1 − ε_skip) − N_w φ* + N_w route) / B at π*. Its model
+time is its most-loaded row, which π*'s mix only bounds from below, so the route breaks the conclusion when ♭'s word
+production and filler plus N_w words of the route load every row under (1 − the reading's bound) · B.
 
     uv run python benchmarks/pouw/rt4_sheet/red_price.py --tree TREE SASS_SM90 SASS_SM100 [--json OUT]
 
@@ -73,10 +74,25 @@ def price_reading(LHD, L, fam, vector: str, sass: str) -> dict:
 
         per, per_ca = cost(False) / words, cost(True) / words
         tc = (B * (1 - skip) - r.Nw * phi + r.Nw * per) / B
+        # the run's model time is its most-loaded row, which π*'s mix only bounds from below: ♭'s word production and
+        # filler (`data.nw`, `data.nx`, a unit) plus N_w words of this route, each opcode on every row of its class
+        n = collections.Counter()
+        for op in ops:
+            k = L.class_of(op)
+            if k is not None and k in c:
+                n[k] += Fraction(r.Nw, words)
+        for part in (r.data.nw, r.data.nx):
+            for k, v in part.items():
+                n[k] += v
+        rowload = {row: sum((c[k].get(row, Fraction(0)) * v for k, v in n.items()), Fraction(0))
+                   for row in r.data.rows}
+        top = max(rowload, key=rowload.get)
+        tmax = rowload[top] / B
         out["routes"][name] = {"per_word": float(per), "over_phi": float(per / phi),
                                "over_phi_with_catch_all": float(per_ca / phi), "below_phi": per < phi,
                                "time_over_credit": float(tc), "one_minus_bound": float(1 - bound),
-                               "breaks_conclusion": tc < 1 - bound, "unpriced": dict(free.most_common()),
+                               "time_over_credit_max_row": float(tmax), "binding_row": top,
+                               "breaks_conclusion": tmax < 1 - bound, "unpriced": dict(free.most_common()),
                                "loop": dict(collections.Counter(ops).most_common())}
     return out
 
@@ -103,7 +119,8 @@ def main(argv: list[str] | None = None) -> int:
               f"♭ {f['B']:.4f} a unit, bound {f['bound']:.6%}, ε_skip {f['eps_skip']:.4%}")
         for n, v in f["routes"].items():
             print(f"  {n}: {v['per_word']:.6f} a word = {v['over_phi']:.4f} φ* (with a catch-all "
-                  f"{v['over_phi_with_catch_all']:.4f} φ*); time/credit {v['time_over_credit']:.5f} vs "
+                  f"{v['over_phi_with_catch_all']:.4f} φ*); time/credit at π* {v['time_over_credit']:.5f}, on the "
+                  f"most-loaded row ({v['binding_row']}) {v['time_over_credit_max_row']:.5f}, vs "
                   f"{v['one_minus_bound']:.5f}{'  BREAKS' if v['breaks_conclusion'] else ''}")
             if v["unpriced"]:
                 print(f"    unpriced on {f['vector']}: {v['unpriced']}")
