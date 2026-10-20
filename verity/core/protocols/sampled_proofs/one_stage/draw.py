@@ -33,6 +33,11 @@ k_s = min(n_s, max(f_s, ceil(K w_s n_s / W))) (`work_k`), and a work stratum is 
   every unit of a template must be credited the same work: a template whose units are padded differently is split before
   the law is derived, or credited 0. The escape bound needs each unit's inclusion probability to be at least K w_u / W
   over the credited W, which a per-template work that over-credits any unit breaks.
+
+**The rate law** (`parse_rate`, the Lean's `Select.parseRate`): a selection rule's `rate:NUM/DEN` or `rate:NUM/DEN:T` has no
+law object of its own. Over a registration's N units it is `subset:K` at K = `rate_count`, ceil(q N) for q = NUM/DEN
+rounded up to a multiple of the T tables, so its draw object is a subset's. Under a fixed `subset:K` a unit's inclusion
+K/N falls as the prover pads N; under a rate it stays at least q.
 """
 from __future__ import annotations
 
@@ -69,6 +74,33 @@ def parse_law(text: str) -> dict[str, Any]:
         if digits(num) and digits(den) and 0 < int(den) and int(num) <= int(den):
             return {"law": "bernoulli", "p": f"{int(num)}/{int(den)}"}
     raise ValueError(f"a law is subset:K, stratified:K, work:K or bernoulli:NUM/DEN, not {text!r}")
+
+
+def parse_rate(text: Any) -> tuple[int, int, int] | None:
+    """The rate law `rate:NUM/DEN` or `rate:NUM/DEN:T` as `(NUM, DEN, T)`: a public rate NUM/DEN with 0 < NUM <= DEN over
+    T >= 1 tables (one when it names none), numbers in ASCII digits; None for any other text. A selection rule states it
+    (`service.Law`), and over a registration's N units it is `subset:K` at K = `rate_count` (`service.selection_law`)."""
+    if not isinstance(text, str):
+        return None
+    kind, _, arg = text.partition(":")
+    q, sep, t = arg.partition(":")
+    num, _, den = q.partition("/")
+    if not sep:
+        tables = 1
+    elif digits(t):
+        tables = int(t)
+    else:
+        return None
+    if kind == "rate" and digits(num) and digits(den) and 0 < int(num) <= int(den) and tables >= 1:
+        return int(num), int(den), tables
+    return None
+
+
+def rate_count(num: int, den: int, tables: int, n: int) -> int:
+    """The rate law's draw over n units: ceil(NUM n / DEN) rounded up to a multiple of `tables`, so each of the session's
+    tables proves the same count and every unit is drawn with probability K/n >= NUM/DEN, whatever n the prover registers.
+    The Lean's `SampledProofs.Rate.count` is this."""
+    return tables * -(-(num * n) // (den * tables))
 
 
 def stratum_k(k: int, size: int, population: int) -> int:
@@ -290,5 +322,5 @@ def check_proved(draw: Mapping[str, Any], proved_units: Sequence[int], instances
     return c.verdict()
 
 
-__all__ = ["check_draw", "check_proved", "derive", "digits", "law_of", "parse_law", "proved", "same_law", "strata_problem",
-           "stratum_k", "total_work", "work_k", "work_table"]
+__all__ = ["check_draw", "check_proved", "derive", "digits", "law_of", "parse_law", "parse_rate", "proved", "rate_count",
+           "same_law", "strata_problem", "stratum_k", "total_work", "work_k", "work_table"]

@@ -15,7 +15,7 @@ import sys
 
 HARDWARE = {"vy-dc-h200": "H200", "vy-dc-b200": "B200", "vy-nebius-2": "RTX PRO 6000", "vy-glm53-s1": "H200",  # circuits' iteration-0 H200 run
             "vy-glm53-eu": "8x H200"}  # circuits' GLM-5.3 TP8 runs (glm_rows.py)
-BRANCH = "cursor/hash-commit-loop-15ad"
+BRANCH = "main"
 
 
 def research(*args: str) -> str:
