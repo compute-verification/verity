@@ -12,10 +12,12 @@ plain verifier binding its own last message.
   `Bound.LastStepBinds`, the element-level verifier's binding of its last message. Where the two decisions' openings
   differ, some earlier round's commit string opens two ways, a collision by `Binds` (`Bound.opens_coll`). Where they
   agree, the opened messages share every round before the last, so the two decisions differ in `DE`'s columns of the
-  opened view or in `DE`'s last step's calls, which `LastStepBinds` charges to a collision.
+  opened view or in the set of `DE`'s last step's calls, which `LastStepBinds` charges to a collision. `IVStar`'s
+  calls there are the opening checks' then `agrees`', so `DE`'s last-step calls being one set makes `IVStar`'s one set
+  (`OCSet`, `Bound.ivstar_eval_snoc`).
 * `RecDeploy.lastBindsEC_deployed`: at the deployed bound record, from `RecDeploy.PlainLastBinds`, `LastStepBinds` read
   at the deployed plain verifier. Two last messages it accepts after the same rounds and coins, that differ in table
-  0's opened columns or in the decision's calls, show a collision among those calls.
+  0's opened columns or in the set of the decision's calls, show a collision among those calls.
 * `RecDeploy.CanonicalProofFiles`, what (P4) needs of V*'s proof-file decoder: `decodeProof` accepts a file only if it
   is the one encoding of what it decodes to, so two files it decodes alike are one file. `PlainLastBinds` follows from
   it and `RecDeploy.PlainLastBindsOrSlack` (`RecDeploy.plainLastBinds_of_canonical`), which allows, beside a collision,
@@ -34,12 +36,13 @@ or read at one value, so there it is to hold.
 columns: the trailing-space pair that refutes `LastBinds` is no counterexample to `PlainLastBinds`. Two records that
 parse differently can still give the same accepted decision, with calls that are the same set but not the same list:
 `Record.decodeWith` hashes the rounds in the record's own stream order, and the digest of a table's empty publics only
-when the record lists it. So `PlainLastBinds`, with its calls compared as lists, is false at this record decoder,
-whatever `decodeProof` does (`note:proofs/20261020T0132Z-finding-rec2-calls-as-lists`).
+when the record lists it. So the calls are compared as sets throughout (ASK-76): with them compared as lists,
+`PlainLastBinds` is false at this record decoder, whatever `decodeProof` does
+(`note:proofs/20261020T0132Z-finding-rec2-calls-as-lists`).
 
 `PlainLastBindsOrSlack` is the collision charge through the plain verifier's steps. `LastColsDeployed` splits it into
 its columns half, proved at SHA-512 (`RecDeploy.plainColsBind_sha512`), and its calls half
-(`RecDeploy.PlainCallsBindOrSlack`), false as stated for the same reason.
+(`RecDeploy.PlainCallsBindOrSlack`), open.
 -/
 
 namespace Claims.Recursion
@@ -55,6 +58,26 @@ theorem mem_fst_append_mono {A B C D : List (Msg × Msg)} (h1 : ∀ e ∈ A, e �
   · exact List.mem_map.2 ⟨e, List.mem_append_left _ (h1 e he), rfl⟩
   · exact List.mem_map.2 ⟨e, List.mem_append_right _ (h2 e he), rfl⟩
 
+/-- **Two oracle programs alike but for their calls' order and multiplicity**: one result, one set of calls. -/
+def OCSet (H : Msg → Msg) {α : Type} (p p' : OC α) : Prop :=
+  (p.eval H).1 = (p'.eval H).1 ∧ (p.eval H).2.toFinset = (p'.eval H).2.toFinset
+
+theorem ocSet_bindOC (H : Msg → Msg) {α β : Type} {p p' : OC α} {f f' : α → OC β} (hp : OCSet H p p')
+    (hf : ∀ a, OCSet H (f a) (f' a)) : OCSet H (bindOC p f) (bindOC p' f') := by
+  unfold OCSet at hp ⊢
+  rw [eval_bindOC_full, eval_bindOC_full, hp.1]
+  exact ⟨(hf _).1, by rw [List.toFinset_append, List.toFinset_append, hp.2, (hf _).2]⟩
+
+theorem ocSet_allOC_map (H : Msg → Msg) {ι : Type} (f g : ι → OC Bool) :
+    ∀ l : List ι, (∀ j ∈ l, OCSet H (f j) (g j)) → OCSet H (allOC (l.map f)) (allOC (l.map g))
+  | [], _ => ⟨rfl, rfl⟩
+  | j :: l, h => by
+    simp only [List.map_cons, allOC]
+    refine ocSet_bindOC H (h j List.mem_cons_self) fun b => ?_
+    cases b
+    · exact ⟨rfl, rfl⟩
+    · exact ocSet_allOC_map H f g l fun i hi => h i (List.mem_cons_of_mem _ hi)
+
 /-- **The opened view of an accepted last round**: the element-level messages `ms`, each before the last answered by its
 coin (`ans`), the last by acceptance. -/
 def Bound.lastView (Bd : Bound Coin Col T) (ms : List Msg) (cs : List Coin) : Seen :=
@@ -62,7 +85,7 @@ def Bound.lastView (Bd : Bound Coin Col T) (ms : List Msg) (cs : List Coin) : Se
 
 /-- **(P4) at the element level**: two last messages that the element-level verifier accepts after the same rounds and
 coins, where it answered each earlier round with that round's coin, and that differ in its columns of the opened view or
-in its last step's calls, show a SHA-512 collision among those calls. -/
+in the set of its last step's calls, show a SHA-512 collision among those calls. -/
 def Bound.LastStepBinds (H : Msg → Msg) (Bd : Bound Coin Col T) : Prop :=
   ∀ (x : Msg) (ms : List Msg) (l l' : Msg) (cs : List Coin), ms.length + 1 = Bd.DE.V.k x →
     cs.length = ms.length + 1 →
@@ -70,28 +93,31 @@ def Bound.LastStepBinds (H : Msg → Msg) (Bd : Bound Coin Col T) : Prop :=
       .msg (Bd.ans (cs.getD j default))) →
     ((Bd.DE.V.next x (ms ++ [l]) cs).eval H).1 = .acc → ((Bd.DE.V.next x (ms ++ [l']) cs).eval H).1 = .acc →
     (Bd.DE.cols (Bd.lastView (ms ++ [l]) cs) ≠ Bd.DE.cols (Bd.lastView (ms ++ [l']) cs) ∨
-      ((Bd.DE.V.next x (ms ++ [l]) cs).eval H).2 ≠ ((Bd.DE.V.next x (ms ++ [l']) cs).eval H).2) →
+      ((Bd.DE.V.next x (ms ++ [l]) cs).eval H).2.toFinset ≠
+        ((Bd.DE.V.next x (ms ++ [l']) cs).eval H).2.toFinset) →
     ∃ q ∈ (((Bd.DE.V.next x (ms ++ [l]) cs).eval H).2 ++ ((Bd.DE.V.next x (ms ++ [l']) cs).eval H).2).map Prod.fst,
       ∃ q' ∈ (((Bd.DE.V.next x (ms ++ [l]) cs).eval H).2 ++
         ((Bd.DE.V.next x (ms ++ [l']) cs).eval H).2).map Prod.fst, Collision H q q'
 
-/-- `agrees` on messages that share every round before the last reads the last only in its last step. -/
+/-- `agrees` on messages that share every round before the last reads the last only in its last step, up to the calls'
+order. -/
 theorem Bound.agrees_eval_snoc (Bd : Bound Coin Col T) (H : Msg → Msg) (x : Msg) {ms : List Msg} {l l' : Msg}
     {cs : List Coin}
-    (h : (Bd.DE.V.next x (ms ++ [l']) (cs.take (ms.length + 1))).eval H =
-      (Bd.DE.V.next x (ms ++ [l]) (cs.take (ms.length + 1))).eval H) :
-    (Bd.agrees x (ms ++ [l']) cs).eval H = (Bd.agrees x (ms ++ [l]) cs).eval H := by
+    (h : OCSet H (Bd.DE.V.next x (ms ++ [l']) (cs.take (ms.length + 1)))
+      (Bd.DE.V.next x (ms ++ [l]) (cs.take (ms.length + 1)))) :
+    OCSet H (Bd.agrees x (ms ++ [l']) cs) (Bd.agrees x (ms ++ [l]) cs) := by
   unfold Bound.agrees
   simp only [List.length_append, List.length_singleton]
-  refine eval_allOC_map_congr H _ _ _ fun j hj => ?_
+  refine ocSet_allOC_map H _ _ _ fun j hj => ?_
   rw [List.mem_range] at hj
   by_cases hj' : j < ms.length
   · rw [List.take_append_of_le_length (show j + 1 ≤ ms.length by omega),
       List.take_append_of_le_length (show j + 1 ≤ ms.length by omega)]
+    exact ⟨rfl, rfl⟩
   · obtain rfl : j = ms.length := by omega
     rw [List.take_of_length_le (show (ms ++ [l']).length ≤ ms.length + 1 by simp),
       List.take_of_length_le (show (ms ++ [l]).length ≤ ms.length + 1 by simp)]
-    exact eval_bindOC_congr H h fun _ => rfl
+    exact ocSet_bindOC H h fun _ => ⟨rfl, rfl⟩
 
 /-- `IVStar` at its last round, where `final` reads the last message. -/
 theorem Bound.ivstar_last (Bd : Bound Coin Col T) (x : Msg) (pre : List Msg) (a : Msg) (cs : List Coin)
@@ -107,21 +133,22 @@ theorem Bound.ivstar_last (Bd : Bound Coin Col T) (x : Msg) (pre : List Msg) (a 
   simp only [Bound.IVStar, hlt, ↓reduceIte, List.getLastD_concat, hfin, List.dropLast_concat,
     List.length_append, List.length_singleton]
 
-/-- Two last messages `final` reads to the same openings give one `IVStar` decision with the same calls where the
-element-level verifier's acceptance of the opened messages is one. -/
+/-- Two last messages `final` reads to the same openings give one `IVStar` decision with one set of calls where the
+element-level verifier's acceptance of the opened messages is one, with one set of calls. -/
 theorem Bound.ivstar_eval_snoc (Bd : Bound Coin Col T) (H : Msg → Msg) (x : Msg) {pre : List Msg} {a a' : Msg}
     {cs : List Coin} {os : List (List (Msg × (Fin Bd.saltLen → UInt8)))} {last last' : Msg}
     (hk : pre.length + 1 = Bd.DE.V.k x) (hfin : Bd.final a = some (os, last)) (hfin' : Bd.final a' = some (os, last'))
-    (hag : (Bd.agrees x (Bd.opened os last') cs).eval H = (Bd.agrees x (Bd.opened os last) cs).eval H) :
-    (Bd.IVStar.next x (pre ++ [a']) cs).eval H = (Bd.IVStar.next x (pre ++ [a]) cs).eval H := by
+    (hag : OCSet H (Bd.agrees x (Bd.opened os last') cs) (Bd.agrees x (Bd.opened os last) cs)) :
+    OCSet H (Bd.IVStar.next x (pre ++ [a']) cs) (Bd.IVStar.next x (pre ++ [a]) cs) := by
   rw [Bd.ivstar_last x pre a' cs hk hfin', Bd.ivstar_last x pre a cs hk hfin]
   by_cases hc : os.length + 1 = pre.length + 1 ∧ ∀ j < os.length, (os.getD j []).length = Bd.nAt x j
   · rw [ite_eq_left hc, ite_eq_left hc]
-    refine eval_bindOC_congr H rfl fun ok => ?_
+    refine ocSet_bindOC H ⟨rfl, rfl⟩ fun ok => ?_
     cases ok
-    · rfl
-    · exact eval_bindOC_congr H hag fun _ => rfl
+    · exact ⟨rfl, rfl⟩
+    · exact ocSet_bindOC H hag fun _ => ⟨rfl, rfl⟩
   · rw [ite_eq_right hc, ite_eq_right hc]
+    exact ⟨rfl, rfl⟩
 
 /-- The opened view of an accepted decision is the opened messages, answered as `lastView` answers them. -/
 theorem Bound.openView_viewAt (Bd : Bound Coin Col T) (H : Msg → Msg) (x : Msg) {pre : List Msg} {a : Msg}
@@ -227,14 +254,15 @@ theorem Bound.lastBindsEC_of_lastStep {H : Msg → Msg} {Bd : Bound Coin Col T} 
     have hv' := Bd.openView_viewAt H x hpc hfin' ha'
     rw [hv, hv', hop last, hop last'] at hne
     have hdiff : Bd.DE.cols (Bd.lastView (P ++ [last]) cs) ≠ Bd.DE.cols (Bd.lastView (P ++ [last']) cs) ∨
-        ((Bd.DE.V.next x (P ++ [last]) cs).eval H).2 ≠ ((Bd.DE.V.next x (P ++ [last']) cs).eval H).2 := by
+        ((Bd.DE.V.next x (P ++ [last]) cs).eval H).2.toFinset ≠
+          ((Bd.DE.V.next x (P ++ [last']) cs).eval H).2.toFinset := by
       refine hne.imp_right fun h heq => h ?_
-      have hA : (Bd.agrees x (Bd.opened os last') cs).eval H = (Bd.agrees x (Bd.opened os last) cs).eval H := by
+      have hA : OCSet H (Bd.agrees x (Bd.opened os last') cs) (Bd.agrees x (Bd.opened os last) cs) := by
         rw [hop last, hop last']
         exact Bd.agrees_eval_snoc H x (by
           rw [hcs]
-          exact Prod.ext ((hstepA hag').1.trans (hstepA hag).1.symm) heq.symm)
-      exact congrArg Prod.snd (Bd.ivstar_eval_snoc H x hpk hfin hfin' hA).symm
+          exact ⟨(hstepA hag').1.trans (hstepA hag).1.symm, heq.symm⟩)
+      exact (Bd.ivstar_eval_snoc H x hpk hfin hfin' hA).2.symm
     obtain ⟨q, hq, q', hq', hcol⟩ :=
       hS x P last last' cs (by omega) (by omega) hearly (hstepA hag).1 (hstepA hag').1 hdiff
     have hsub : ∀ e ∈ ((Bd.DE.V.next x (P ++ [last]) cs).eval H).2,
@@ -289,7 +317,8 @@ def plainView (ms : List Msg) (cs : List Coin) : Claims.Seen :=
 
 /-- **The deployed plain verifier binds its last message**: `Bound.LastStepBinds` at its steps and its table-0 columns.
 Two last messages it accepts after the same rounds and coins, where it answered each earlier round with that round's
-coin, that differ in table 0's opened columns or in the decision's calls, show a SHA-512 collision among those calls. -/
+coin, that differ in table 0's opened columns or in the set of the decision's calls, show a SHA-512 collision among
+those calls. -/
 def PlainLastBinds (H : Msg → Msg) : Prop :=
   ∀ (x : Msg) (ms : List Msg) (l l' : Msg) (cs : List Coin), ms.length + 1 = (FlockDeploy.V false).k x →
     cs.length = ms.length + 1 →
@@ -298,7 +327,8 @@ def PlainLastBinds (H : Msg → Msg) : Prop :=
     ((FlockDeploy.next false x (ms ++ [l]) cs).eval H).1 = .acc →
     ((FlockDeploy.next false x (ms ++ [l']) cs).eval H).1 = .acc →
     (FlockDeploy.cols false (plainView (ms ++ [l]) cs) 0 ≠ FlockDeploy.cols false (plainView (ms ++ [l']) cs) 0 ∨
-      ((FlockDeploy.next false x (ms ++ [l]) cs).eval H).2 ≠ ((FlockDeploy.next false x (ms ++ [l']) cs).eval H).2) →
+      ((FlockDeploy.next false x (ms ++ [l]) cs).eval H).2.toFinset ≠
+        ((FlockDeploy.next false x (ms ++ [l']) cs).eval H).2.toFinset) →
     ∃ q ∈ (((FlockDeploy.next false x (ms ++ [l]) cs).eval H).2 ++
         ((FlockDeploy.next false x (ms ++ [l']) cs).eval H).2).map Prod.fst,
       ∃ q' ∈ (((FlockDeploy.next false x (ms ++ [l]) cs).eval H).2 ++
@@ -375,8 +405,8 @@ def ProofSlack (l l' : Msg) : Prop :=
 
 /-- **`PlainLastBinds` up to the decoder's slack**: its hypotheses give a collision among the decision's calls, or two
 proof files at one position that differ in their bytes and decode alike (`ProofSlack`). It is the collision charge
-through the plain verifier's steps: its columns half holds at SHA-512, its calls half is false as stated, since the
-record's stream order permutes the calls (`LastColsDeployed`). -/
+through the plain verifier's steps: its columns half holds at SHA-512, and its calls half, with the calls compared as
+sets, is open (`LastColsDeployed`). -/
 def PlainLastBindsOrSlack (H : Msg → Msg) : Prop :=
   ∀ (x : Msg) (ms : List Msg) (l l' : Msg) (cs : List Coin), ms.length + 1 = (FlockDeploy.V false).k x →
     cs.length = ms.length + 1 →
@@ -385,7 +415,8 @@ def PlainLastBindsOrSlack (H : Msg → Msg) : Prop :=
     ((FlockDeploy.next false x (ms ++ [l]) cs).eval H).1 = .acc →
     ((FlockDeploy.next false x (ms ++ [l']) cs).eval H).1 = .acc →
     (FlockDeploy.cols false (plainView (ms ++ [l]) cs) 0 ≠ FlockDeploy.cols false (plainView (ms ++ [l']) cs) 0 ∨
-      ((FlockDeploy.next false x (ms ++ [l]) cs).eval H).2 ≠ ((FlockDeploy.next false x (ms ++ [l']) cs).eval H).2) →
+      ((FlockDeploy.next false x (ms ++ [l]) cs).eval H).2.toFinset ≠
+        ((FlockDeploy.next false x (ms ++ [l']) cs).eval H).2.toFinset) →
     (∃ q ∈ (((FlockDeploy.next false x (ms ++ [l]) cs).eval H).2 ++
         ((FlockDeploy.next false x (ms ++ [l']) cs).eval H).2).map Prod.fst,
       ∃ q' ∈ (((FlockDeploy.next false x (ms ++ [l]) cs).eval H).2 ++

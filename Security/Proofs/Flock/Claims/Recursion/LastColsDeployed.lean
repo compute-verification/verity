@@ -18,11 +18,11 @@ columns (`RecDeploy.PlainColsBind`), or in the decision's calls (`RecDeploy.Plai
   `root_B[0]`, every SHA-512 input of each in its decision's calls (`plain_opening_at`), which collide
   (`tiedColl_of_openings`).
 
-The calls half is false as stated: it compares the two decisions' calls as lists, and `Record.decodeWith` hashes the
-rounds in the record's own stream order, which only S11's count and names constrain, so two records that list the
-streams in two orders are accepted with permuted calls and no collision
-(`note:proofs/20261020T0132Z-finding-rec2-calls-as-lists`). `RecDeploy.plainLastBinds_sha512_of_calls` reduces
-`PlainLastBinds` to it and `CanonicalProofFiles`.
+The calls half compares the two decisions' calls as sets (ASK-76): `Record.decodeWith` hashes the rounds in the
+record's own stream order, which only S11's count and names constrain, so two records that list the streams in two
+orders are accepted with permuted calls and no collision (`note:proofs/20261020T0132Z-finding-rec2-calls-as-lists`).
+It is open. `RecDeploy.plainLastBinds_sha512_of_calls` reduces `PlainLastBinds` to it and `CanonicalProofFiles`, and
+`RecDeploy.lastBindsEC_deployed_sha512` gives (P4) at the deployed bound record from the same two.
 -/
 
 namespace FlockDeploy.KS
@@ -519,9 +519,11 @@ def PlainColsBind (H : Msg → Msg) : Prop :=
 
 /-- **The deployed plain verifier binds its last message's calls, up to the decoder's slack**: two last messages it
 accepts after the same rounds and coins, where it answered each earlier round with that round's coin, that differ in
-the decision's calls, show a collision among those calls, or two proof files at one position that differ in their
-bytes and decode alike (`ProofSlack`). False at the deployed record decoder: two records that list the same streams in
-two orders give permuted calls, and a table's empty publics may come with their digest (one more call) or without. -/
+the set of the decision's calls, show a collision among those calls, or two proof files at one position that differ in
+their bytes and decode alike (`ProofSlack`). The calls are compared as sets (ASK-76): two records that list the same
+streams in two orders give permuted calls, and a table's empty publics may come with their digest `H(ε)`, which S12
+already calls, or without. Open: its core is two reps accepted on one stream, whose frames `rep_frames_bind` binds and
+whose fields before Ligerito `rep_bind_fields` binds; the openings and Ligerito's fields remain. -/
 def PlainCallsBindOrSlack (H : Msg → Msg) : Prop :=
   ∀ (x : Msg) (ms : List Msg) (l l' : Msg) (cs : List Coin), ms.length + 1 = (FlockDeploy.V false).k x →
     cs.length = ms.length + 1 →
@@ -529,7 +531,8 @@ def PlainCallsBindOrSlack (H : Msg → Msg) : Prop :=
       .msg (cs.getD j default).bytes) →
     ((FlockDeploy.next false x (ms ++ [l]) cs).eval H).1 = .acc →
     ((FlockDeploy.next false x (ms ++ [l']) cs).eval H).1 = .acc →
-    ((FlockDeploy.next false x (ms ++ [l]) cs).eval H).2 ≠ ((FlockDeploy.next false x (ms ++ [l']) cs).eval H).2 →
+    ((FlockDeploy.next false x (ms ++ [l]) cs).eval H).2.toFinset ≠
+      ((FlockDeploy.next false x (ms ++ [l']) cs).eval H).2.toFinset →
     (∃ q ∈ (((FlockDeploy.next false x (ms ++ [l]) cs).eval H).2 ++
         ((FlockDeploy.next false x (ms ++ [l']) cs).eval H).2).map Prod.fst,
       ∃ q' ∈ (((FlockDeploy.next false x (ms ++ [l]) cs).eval H).2 ++
@@ -550,10 +553,19 @@ theorem plainColsBind_sha512 : PlainColsBind FlockDeploy.sha512 := by
   obtain ⟨u, v, hcol, hu, hv⟩ := FlockDeploy.KS.plain_cols_tied hc hacc hacc' hne
   exact ⟨u, hu, v, hv, hcol⟩
 
-/-- **`PlainLastBinds` at SHA-512 from the decoder's canonicity and the calls half alone**, which is false as stated
+/-- **`PlainLastBinds` at SHA-512 from the decoder's canonicity and the calls half alone**, which is open
 (`PlainCallsBindOrSlack`). -/
 theorem plainLastBinds_sha512_of_calls (hC : CanonicalProofFiles)
     (hK : PlainCallsBindOrSlack FlockDeploy.sha512) : PlainLastBinds FlockDeploy.sha512 :=
   plainLastBinds_of_canonical hC (plainLastBindsOrSlack_of plainColsBind_sha512 hK)
+
+/-- **(P4) modulo what `E*` reads at the deployed bound record, at SHA-512**, from the decoder's canonicity and the
+calls half; the columns half is `plainColsBind_sha512`. -/
+theorem lastBindsEC_deployed_sha512 (rel : _root_.Flock.Readable.Parsed → _root_.Flock.Readable.Relation)
+    (wE : Msg → ℝ) (join : List Msg → Msg) (final : Msg → Option (List (List (Msg × Salt)) × Msg)) (w : Msg → ℝ)
+    (hC : CanonicalProofFiles) (hK : PlainCallsBindOrSlack FlockDeploy.sha512) :
+    (bdDeployed rel (FlockDeploy.V false).next (FlockDeploy.deployPlainTrim rel).cols wE join rowInDeployed final
+      w).LastBindsEC FlockDeploy.sha512 :=
+  lastBindsEC_deployed rel wE join final w FlockDeploy.sha512 (plainLastBinds_sha512_of_calls hC hK)
 
 end RecDeploy
