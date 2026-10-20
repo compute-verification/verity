@@ -634,6 +634,27 @@
    "owner": "@proofs",
    "digest": "9f8ca19eb73c6e77085e8079a6efea1872bcd76fdde12c53be7806e797234db1"
   },
+  "Flock.SoundAtBridge.AcceptedLive": {
+   "owner": "@proofs"
+  },
+  "Flock.SoundAtBridge.OpenedPlurAt": {
+   "owner": "@proofs"
+  },
+  "Flock.SoundAtBridge.RelOfRows": {
+   "owner": "@proofs"
+  },
+  "Flock.SoundAtBridge.RowsSession.CR": {
+   "owner": "@proofs"
+  },
+  "Flock.SoundAtBridge.RowsSession.RowsAt": {
+   "owner": "@proofs"
+  },
+  "Flock.SoundAtBridge.RowsSession.ServedRegistered": {
+   "owner": "@proofs"
+  },
+  "Flock.SoundAtBridge.WindowLaw": {
+   "owner": "@proofs"
+  },
   "FlockDeploy.PlainIn": {
    "owner": "@proofs"
   },
@@ -771,6 +792,10 @@
   "FlockSoundness.Discharge.ZkLink.DrawFileZK": {
    "owner": "@proofs",
    "digest": "ed0f0c63bc94a1cfa14945fe0612099ac06c96ea16040e699b06836ba24f57ca"
+  },
+  "FlockSoundness.Discharge.ZkReg.LiveAcceptsZKR": {
+   "owner": "@proofs",
+   "digest": "c29b27d7b194c783ad2a91b68e032b214dd164a06bdab08e740dce2f9544d569"
   },
   "FlockSoundness.Model.Arith.Correct": {
    "owner": "@proofs",
@@ -1849,7 +1874,8 @@
   "Proofs.Flock.Claims.Recursion.DeployInputs": "the claims' meets witnesses state antecedents at the recursion's deployed record's inputs (`RecDeploy.RecIns`, `setupO`), still in Proofs; C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT)",
   "Proofs.Flock.Claims.Complete.Ready": "the claims' meets witnesses state antecedents at Flock's deployed records (`deployPlain`, `deployZk`), still in Proofs; C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT)",
   "Proofs.Flock.Masked": "the masked guarantees state Flock's claims at its deployed masked records (`deployZk`, `zkDeployed`), still in Proofs; C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT)",
-  "Proofs.Flock.EndToEndRegisteredRows": "C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT)"
+  "Proofs.Flock.EndToEndRegisteredRows": "C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT)",
+  "Proofs.Flock.SoundAtBridge": "the bridge from C-Flock's rows link to the proof layer reads C-Flock's definitions, which are still in Proofs; C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT)"
  },
  "four_names": ["Nci", "NetTiming", "Accounting", "Hash"],
  "guarantees": {
@@ -4747,6 +4773,18 @@
    "assumptions": [],
    "type_hash": "12704b348a183d81be9329792dcc639f4deafa21e0fc0227ff7b0b23ccb3bf9b"
   },
+  "Flock.SecurityProofs.ServedRowsLinked": {
+   "owner": "@proofs",
+   "signature": ["Flock.SecurityProofs.ServedRowsLinked : Flock.Guarantees.ServedRowsLinked"],
+   "assumptions": [],
+   "type_hash": "2cde2f3d97c487723b8f8899ebf241205f576cceca38ba6d92a6a1872108aba6"
+  },
+  "Flock.SecurityProofs.SoundAtBridge": {
+   "owner": "@proofs",
+   "signature": ["Flock.SecurityProofs.SoundAtBridge : Flock.Guarantees.SoundAtBridge"],
+   "assumptions": [],
+   "type_hash": "a65a67acd33540e7e76f251161afecd4384bc96480823282207852754b72e8fc"
+  },
   "Flock.SecurityProofs.ZeroKnowledgeHidden": {
    "owner": "@proofs",
    "signature": ["Flock.SecurityProofs.ZeroKnowledgeHidden : Flock.Guarantees.ZeroKnowledgeHidden"],
@@ -4821,6 +4859,32 @@
    ],
    "assumptions": [],
    "type_hash": "fad6abda57759f92adfd9169f61dfc87716ee7ae83e2d94dd04300e65eecef54"
+  },
+  "Flock.SoundAtBridge.soundAtBridge_nonvacuous": {
+   "owner": "@proofs",
+   "signature": [
+    "Flock.SoundAtBridge.soundAtBridge_nonvacuous {Ω : Type} [Fintype Ω] {S nπ : Nat} {V : Type}",
+    "  (sess : Pouw.RelativeSecurity.Paths Ω S → Fin S → Fin nπ → Flock.SoundAtBridge.RowsSession)",
+    "  (out : (x : Pouw.RelativeSecurity.Paths Ω S) → (w : Fin S) → (i : Fin nπ) → (sess x w i).Out)",
+    "  (rows : (s : Flock.SoundAtBridge.RowsSession) → (Fin s.Circ.N → Bool) → V)",
+    "  (right : Pouw.RelativeSecurity.Paths Ω S → (Fin S → Fin nπ → V) → Prop) :",
+    "  And (Flock.SoundAtBridge.AcceptedLive (Flock.SoundAtBridge.rowsLayer sess out rows right) sess out)",
+    "    (And (Flock.SoundAtBridge.OpenedPlurAt (Flock.SoundAtBridge.rowsLayer sess out rows right) sess rows 0)",
+    "      (And (Flock.SoundAtBridge.RelOfRows (Flock.SoundAtBridge.rowsLayer sess out rows right) sess out rows)",
+    "        (And",
+    "          (∀ (x : Pouw.RelativeSecurity.Paths Ω S) (w : Fin S) (i : Fin nπ),",
+    "            Iff ((Flock.SoundAtBridge.rowsLayer sess out rows right).Unsound x w i) ((sess x w i).BadU (out x w i)))",
+    "          (∀ (B : ENNReal),",
+    "            Ne B ENNReal.instTop.top →",
+    "              (∀ (x : Pouw.RelativeSecurity.Paths Ω S) (w : Fin S) (i : Fin nπ),",
+    "                  ENNReal.instLE.le (instHMul.hMul (sess x w i).n.cast (sess x w i).bound) B) →",
+    "                And (Real.instLE.le 0 B.toReal)",
+    "                  (∀ (x : Pouw.RelativeSecurity.Paths Ω S) (w : Fin S) (i : Fin nπ),",
+    "                    ENNReal.instLE.le (instHMul.hMul (sess x w i).n.cast (sess x w i).bound)",
+    "                      (ENNReal.ofReal B.toReal))))))"
+   ],
+   "assumptions": [],
+   "type_hash": "27f84097c41752634b3c9c05e20a4cb02b0ea09db82bc2a57a574b18975fc05d"
   },
   "FlockSoundness.Audit.Adaptive.harm_budget": {
    "owner": "@proofs",
@@ -9444,7 +9508,10 @@
    "Nci.SecurityProofs.CertificateSlack": "frozen (no-function): It is Markov's inequality over the windows of an arbitrary distribution on a finite outcome space, under the named PouwSound (Security/Models/Nci/Assumptions/Remote.lean) as a bound on each window's marginal, not from a function's acceptance; joining it to PoUW's verifier, whose rejection of a wrong certificate PouwSound bounds, is what would give it one.",
    "Nci.SecurityProofs.VerdictLag": "frozen (no-function): It bounds the declared work an arbitrary set of faulty proof blocks skips, under the named TerminalDetection (Security/Models/Nci/Assumptions/Remote.lean) and a per-identity capacity bound taken as a hypothesis, not from a function's acceptance; joining it to the halt's verdict and the sampled proofs' verifier is what would give it one.",
    "Nci.SecurityProofs.DampenerRemote": "frozen (no-function): It composes the remote protocol's compute dampener from CertificateSlack, VerdictLag and ThreadedThrottled discharging the declared source, under the named PouwSound, TerminalDetection (Security/Models/Nci/Assumptions/Remote.lean) and WeightsIncompressible (Security/Models/Nci/Assumptions/Threads.lean), with the other sources' bounds as hypotheses, not from a function's acceptance; joining the sources to their protocols' verifiers is what would give it one.",
-   "Flock.SecurityProofs.EndToEndRegisteredRows": "frozen (hash,world-unlisted,scope): It takes the table, link and rows finders' collision bounds (TableCRZ, LinkCRZC, RowsCRZC) as hypotheses instead of a collision disjunct tied to the run, and live-verifier custody (RecordCustodyZKJ), a premise that isn't on the list; it also takes hscope (scopeOk), which flock_verify_sound now derives from acceptance."
+   "Flock.SecurityProofs.EndToEndRegisteredRows": "frozen (hash,world-unlisted,scope): It takes the table, link and rows finders' collision bounds (TableCRZ, LinkCRZC, RowsCRZC) as hypotheses instead of a collision disjunct tied to the run, and live-verifier custody (RecordCustodyZKJ), a premise that isn't on the list; it also takes hscope (scopeOk), which flock_verify_sound now derives from acceptance.",
+   "Flock.SecurityProofs.SoundAtBridge": "frozen (no-function,hash,world-unlisted,scope): A bound on the proof layer's ProofLayer.SoundAt over a window's paths, not a run of a Lean function. It takes EndToEndRegisteredRows' finders' collision bounds at every session (RowsSession.CR: TableCRZ, LinkCRZC, RowsCRZC and the registered reads' cr/sha-512) as hypotheses instead of a collision disjunct tied to the run, live-verifier custody and scope through RowsSession's fields, and compute-accounting's four bridge premises (WindowLaw, AcceptedLive, OpenedPlurAt, RelOfRows), none on the premises list.",
+   "Flock.SoundAtBridge.soundAtBridge_nonvacuous": "lemma: SoundAtBridge's witness, as ZkReg.zk_session_soundHJR_nonvacuous is zk_session_soundHJR's; leaves the list under the 5:11 PM ruling",
+   "Flock.SecurityProofs.ServedRowsLinked": "frozen (no-function,world-unlisted): A pointwise implication at one accepted outcome of a C-Flock session, not a bound on a run of a Lean function; it takes the service's registration of its served trees as ports of own (RowsSession.ServedRegistered), a premise that isn't on the list."
   },
   "conjectures": {
    "Pous.P2.Assumptions.P2RingAuditSecure": {
@@ -11608,7 +11675,8 @@
     "Accounting.SecurityProofs.TS.ProofsSoundOfDrawn",
     "Accounting.SecurityProofs.TS.ProofsSoundOfPinned",
     "Accounting.SecurityProofs.TS.Sm120MeasuredHeadline",
-    "Accounting.SecurityProofs.TS.Sm120SheetHeadline"
+    "Accounting.SecurityProofs.TS.Sm120SheetHeadline",
+    "Flock.SoundAtBridge.soundAtBridge_nonvacuous"
    ]
   },
   "Definitions.Accounting.TS.Receipt": {
@@ -18126,6 +18194,7 @@
     "Accounting.SecurityProofs.TS.SteerUnion",
     "Accounting.SecurityProofs.TS.TemplateMoment",
     "Accounting.SecurityProofs.TS.TileLuck",
+    "Flock.SoundAtBridge.soundAtBridge_nonvacuous",
     "Pouw.SecurityProofs.RelativeSecurity.OverlapFloorK",
     "Pouw.SecurityProofs.RelativeSecurity.OverlapFloorKOneSided",
     "Pouw.SecurityProofs.RelativeSecurity.StagedFloorK",
@@ -27176,6 +27245,7 @@
     "Flock.SecurityProofs.RecursiveAuditC3",
     "Flock.SecurityProofs.RecursiveRanRegistered",
     "Flock.SecurityProofs.RecursiveSound",
+    "Flock.SoundAtBridge.soundAtBridge_nonvacuous",
     "FlockSoundness.Audit.Partition.Refines.twoStage_influence",
     "FlockSoundness.Audit.Partition.audit_exfiltration",
     "FlockSoundness.Audit.Partition.audit_influence",
