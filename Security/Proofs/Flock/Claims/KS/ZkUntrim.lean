@@ -11,7 +11,8 @@ The trimmed record's KS holds with no premise (`zk_KS`), and does not give the u
 * `zkSimForkLeCapTau`: the fork bound at the caps and `τ`, from the caps' alignment and clash (`zkSlotAlign`,
   `zkForkClash`) and `τ`'s bound (`zkSimForkLeTau`);
 * `zk_KS_untrim_of_extendJ`: with the pads' fork bound and view clash (`zkSimForkLePads`, `zkViewClashQP`), KS at the
-  untrimmed instance at SHA-512 at the deployed relation from `ExtendJ` alone.
+  untrimmed instance at SHA-512 at the deployed relation from `ExtendJ` alone, which `ZkExtend` proves
+  (`zk_extendJ`, `zk_KS_untrim`).
 -/
 
 namespace FlockDeploy.KS

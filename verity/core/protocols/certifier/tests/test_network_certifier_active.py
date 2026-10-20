@@ -4,6 +4,7 @@ while a sender that times its writes to signal either leaves the wire byte-ident
 
 import asyncio
 import dataclasses
+import itertools
 import json
 import math
 import random
@@ -13,7 +14,10 @@ from concurrent.futures import Executor, Future
 from pathlib import Path
 
 import pytest
+import signers
+from verity.ml.crypto import lms
 from verity.core.protocols.certifier import active, online
+from verity.core.protocols.certifier.certificate import LmsKey
 from verity.core.protocols.certifier.active import (
     DATA,
     LAST,
@@ -547,7 +551,7 @@ def registration(window: int, provenance: dict | None = None) -> Registration:
 def salted_run(seed: int, **salting):
     """The honest run with the salt on, each salt drawn from `random.Random(seed)`. Returns the proxy, the wire, the
     salts drawn by PoUW window, the server, and at each tick, for each of PoUW windows 0 … WINDOWS − 1, whether `reveal`
-    gave its salt on its registration (True) or refused (None)."""
+    gave its salt on its registration (True) or refused (None), so each window's True is the one tick it is revealed."""
     rng, drawn, revealable = random.Random(seed), {}, []
 
     def source(window: int, n: int) -> bytes:
@@ -573,7 +577,8 @@ def test_the_salt_reaches_only_the_blocks_side_and_no_record_depends_on_it(hones
     it: the wire the peer reads and the egress records are the unsalted run's, byte for byte. Each window's ingress
     record holds one salt frame at its first bucket, carrying the placeholder, and is otherwise the unsalted run's, so
     every verdict is too, and two runs on different salts publish the same records. `reveal` refuses a window until its
-    ingress record is published and gives the salt on its registration after; `check_salts` accepts the revealed
+    ingress record is published, gives the salt on its registration at that tick, and refuses it after; `check_salts`
+    accepts the revealed
     salts and rejects a missing one, one of another width, a record with a second salt frame and the unsalted run."""
     plain, plain_wire = honest_run
     proxy, wire, drawn, server, revealable = salted_run(7)
@@ -596,7 +601,7 @@ def test_the_salt_reaches_only_the_blocks_side_and_no_record_depends_on_it(hones
     assert audit(proxy, FRAMES, SYNCS) == audit(plain, FRAMES, SYNCS)
 
     T = INGRESS.buckets
-    assert revealable == [[True if w < (t + 1) // T else None for w in range(WINDOWS)] for t in range(WINDOWS * T)]
+    assert revealable == [[True if t == (w + 1) * T - 1 else None for w in range(WINDOWS)] for t in range(WINDOWS * T)]
     with pytest.raises(RuntimeError):
         proxy.reveal(WINDOWS, registration(WINDOWS))
     with pytest.raises(ValueError):
@@ -623,8 +628,8 @@ def test_the_salt_reaches_only_the_blocks_side_and_no_record_depends_on_it(hones
 def test_one_salt_per_pouw_window_of_its_width(honest_run):
     """With PoUW windows of two certifier windows and 256-bit salts, the proxy draws one 256-bit salt per PoUW window,
     at its first bucket: PoUW window 0's at certifier window 0, 1's at window 2. Window 1's ingress record is the
-    unsalted run's, and the server receives each salt once. `reveal` gives PoUW window 0's salt once windows 0 and 1 are
-    published (t_d), and never PoUW window 1's, whose window 3 the run doesn't reach. `check_salts` reads the salt
+    unsalted run's, and the server receives each salt once. `reveal` gives PoUW window 0's salt at the tick windows 0 and
+    1 are published (t_d), and only then, and never PoUW window 1's, whose window 3 the run doesn't reach. `check_salts` reads the salt
     frames at windows 0 and 2, of salts of that width."""
     plain, _ = honest_run
     proxy, _, drawn, server, revealable = salted_run(9, pouw_window=2, salt_bits=256)
@@ -637,7 +642,7 @@ def test_one_salt_per_pouw_window_of_its_width(honest_run):
         assert ingress[w].grid[0][0] == active.salt_frame(p, active.PLACEHOLDER, B)
         assert ingress[w].grid[1:] == unsalted[w].grid[1:]
     T = INGRESS.buckets
-    assert revealable == [[True if p == 0 and t >= 2 * T - 1 else None for p in range(WINDOWS)]
+    assert revealable == [[True if p == 0 and t == 2 * T - 1 else None for p in range(WINDOWS)]
                           for t in range(WINDOWS * T)]
     records = list(ingress.values())
     assert active.check_salts(Audit(), "requests", records, WINDOWS, drawn, pouw_window=2, salt_bits=256) == \
@@ -664,7 +669,8 @@ def test_reveal_takes_the_windows_registration_and_fails_closed_without_it():
             drawn.append(w)
             return bytes([w + 1]) * n
 
-        p = Proxy(("127.0.0.1", 9), EGRESS, INGRESS, SYNC_SET, SYNCS, origin=0.0, salt=source, **kwargs)
+        p = Proxy(("127.0.0.1", 9), EGRESS, INGRESS, SYNC_SET, SYNCS, origin=0.0, clock=lambda: 0.0, salt=source,
+                  **kwargs)
         for _ in range(windows * INGRESS.buckets):
             p.bucketer.tick()
         return p
@@ -695,6 +701,115 @@ def test_reveal_takes_the_windows_registration_and_fails_closed_without_it():
         back.reveal(0, reg)
     with pytest.raises(RuntimeError, match="published"):
         back.reveal(1, registration(1))
+
+
+def prover_signer(seed: bytes = b"prover"):
+    """The prover's LMS key as the certifier registers it (`LmsKey`), and a signer of `weights_message`s at one-time
+    keys 0, 1, ... in turn."""
+    k, leaves = signers.key(seed), itertools.count()
+    public = LmsKey(signers.SMALL, lms.public_key(k))
+    return public, lambda message: lms.sign_at(k, next(leaves), message).encode()
+
+
+def test_the_weights_are_recorded_only_before_the_salt_and_given_on_reveals_conditions():
+    """`commit_weights(p, root, signature)` records PoUW window p's 64-byte weights' root once, while p's first ingress
+    tick, the salt's draw, is still ahead, and only the registered prover's: the signature verifies under `prover_key`
+    over `weights_message`, which binds the ingress link, p, the root and the prover's context. It refuses a root after
+    that tick, a second root, a root of another length or type, a window the proxy doesn't serve, a proxy without the
+    salt or without a prover key, a signature by anyone else, and one over another window, root or context; a proxy back
+    from maintenance past p's first tick refuses p. `committed(p, registration)` gives the root on `reveal`'s conditions,
+    as often as asked, and refuses a window whose weights weren't recorded."""
+    key, sign = prover_signer()
+    _, forge = prover_signer(b"someone else")
+
+    def proxy(**kwargs) -> Proxy:
+        return Proxy(("127.0.0.1", 9), EGRESS, INGRESS, SYNC_SET, SYNCS, origin=0.0, clock=lambda: 0.0,
+                     salt=lambda w, n: bytes([w + 1]) * n, prover_key=key, prover_context=b"epoch 7", **kwargs)
+
+    def signed(w: int, root: bytes, link: str = "requests", context: bytes = b"epoch 7") -> bytes:
+        return sign(active.weights_message(link, w, root, context))
+
+    T, roots = INGRESS.buckets, [bytes([w]) * active.WEIGHTS_ROOT_BYTES for w in range(WINDOWS)]
+    p = proxy()
+    for bad in (forge(active.weights_message("requests", 0, roots[0], b"epoch 7")), signed(1, roots[0]),
+                signed(0, roots[1]), signed(0, roots[0], context=b"epoch 8"), signed(0, roots[0], link="responses"),
+                b"", None):
+        with pytest.raises(RuntimeError, match="isn't signed by the registered prover"):
+            p.commit_weights(0, roots[0], bad)
+    p.commit_weights(0, roots[0], signed(0, roots[0]))
+    for bad in (roots[0][:32], roots[0].hex(), None):
+        with pytest.raises(ValueError, match="64 bytes"):
+            p.commit_weights(1, bad, b"")
+    for w in (-1, WINDOWS, True):
+        with pytest.raises(ValueError, match="serves"):
+            p.commit_weights(w, roots[0], b"")
+    with pytest.raises(ValueError, match="salt is off"):
+        Proxy(("127.0.0.1", 9), EGRESS, INGRESS, SYNC_SET, SYNCS, origin=0.0).commit_weights(0, roots[0], b"")
+    keyless = Proxy(("127.0.0.1", 9), EGRESS, INGRESS, SYNC_SET, SYNCS, origin=0.0, salt=active.fresh_salt)
+    with pytest.raises(RuntimeError, match="no prover key"):
+        keyless.commit_weights(0, roots[0], signed(0, roots[0]))
+    p.bucketer.tick()
+    with pytest.raises(RuntimeError, match="drawn"):
+        p.commit_weights(0, roots[1], signed(0, roots[1]))
+    for _ in range(T - 1):
+        p.bucketer.tick()
+    p.commit_weights(1, roots[1], signed(1, roots[1]))
+    with pytest.raises(RuntimeError, match="already recorded"):
+        p.commit_weights(1, roots[2], signed(1, roots[2]))
+    with pytest.raises(RuntimeError, match="published"):
+        p.committed(1, registration(1))
+    for _ in range((WINDOWS - 1) * T):
+        p.bucketer.tick()
+    with pytest.raises(RuntimeError, match="drawn"):
+        p.commit_weights(2, roots[2], signed(2, roots[2]))
+    assert [p.committed(w, registration(w)) for w in (0, 1, 0)] == [roots[0], roots[1], roots[0]]
+    assert p.reveal(0, registration(0)) == bytes([1]) * active.SALT_BYTES
+    assert p.committed(0, registration(0)) == roots[0]
+    with pytest.raises(RuntimeError, match="no weights"):
+        p.committed(2, registration(2))
+    with pytest.raises(RuntimeError, match="no registration"):
+        p.committed(0, registration(1))
+
+    back = proxy(start=1)
+    with pytest.raises(RuntimeError, match="passed"):
+        back.commit_weights(0, roots[0], signed(0, roots[0]))
+    back.commit_weights(1, roots[1], signed(1, roots[1]))
+
+
+def test_reveal_gives_each_salt_once_and_only_until_its_deadline():
+    """`reveal` gives a PoUW window's salt once: a second registration naming the window, or the same one again, gets
+    none. It refuses once the certifier's clock is more than `reveal_deadline` past the window's end (one PoUW window by
+    default), so a registration made after the window's work gets no salt; `committed` keeps that deadline. A deadline
+    that isn't a positive number of seconds is refused."""
+    T, now = INGRESS.buckets, [0.0]
+    window_s = T * INGRESS.bucket_ms / 1000
+
+    def proxy(**kwargs) -> Proxy:
+        p = Proxy(("127.0.0.1", 9), EGRESS, INGRESS, SYNC_SET, SYNCS, origin=0.0, clock=lambda: now[0],
+                  salt=lambda w, n: bytes([w + 1]) * n, **kwargs)
+        for _ in range(WINDOWS * T):
+            p.bucketer.tick()
+        return p
+
+    p = proxy()
+    assert p.reveal_deadline == window_s
+    now[0] = 1 * window_s + window_s
+    assert p.reveal(0, registration(0)) == bytes([1]) * active.SALT_BYTES
+    with pytest.raises(RuntimeError, match="revealed already"):
+        p.reveal(0, registration(0))
+    now[0] = 2 * window_s + window_s + 1e-3
+    with pytest.raises(RuntimeError, match="ended more than"):
+        p.reveal(1, registration(1))
+    with pytest.raises(RuntimeError, match="ended more than"):
+        p.committed(1, registration(1))
+    assert p.reveal(2, registration(2)) == bytes([3]) * active.SALT_BYTES
+    late = proxy(reveal_deadline=10 * window_s)
+    assert [late.reveal(w, registration(w)) for w in range(WINDOWS)] == \
+        [bytes([w + 1]) * active.SALT_BYTES for w in range(WINDOWS)]
+    for bad in (0, -1.0, "1", float("nan")):
+        with pytest.raises(ValueError, match="deadline"):
+            Proxy(("127.0.0.1", 9), EGRESS, INGRESS, SYNC_SET, SYNCS, origin=0.0, salt=active.fresh_salt,
+                  reveal_deadline=bad)
 
 
 ENVELOPE = ClockSync(max(SYNC_SET.deltas), min(SYNC_SET.rhos))
