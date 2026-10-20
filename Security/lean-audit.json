@@ -22737,7 +22737,7 @@
    ]
   },
   "Flock.Verify": {
-   "digest": "be71751e16db3c245e981999113870c2e997784d3aabd7579d5101c1a6a4293e",
+   "digest": "cb674913befc12646444b16027ee438a3d37d0caa3b0ef772bbbbe22fc058088",
    "definitions": {
     "Flock.Setup": "d2a3501d253e96d60f3a3d9ed6996b2d651e7311830ab69bab285a6540d4ddc4",
     "Flock.Setup.digest": "2c5aef9c9a030b9fe1e816f93568a87c3877fa6148511592758b14752e7bcab2",
@@ -22752,7 +22752,8 @@
     "Flock.instInhabitedSetup": "d1cb5d1ed94c1644e245bf6ac8623c2e53f9493e0b7b7481f24837a817d5f1d9",
     "Flock.instInhabitedSetup.default": "888fa22c942acaabd25fe05477261fc1201b6560e8881042d401f70cf12d2a5a",
     "Flock.pcsParams": "53349e4759eeab7fe4cde94ffeb46863b703ae2f9d7293993c20e39cb8f12c84",
-    "Flock.verify": "cc1d6aa90406cd3e1698fcbf635d7a6960110b4c10915d554bb7dff037fe4aa9",
+    "Flock.verify": "81e11785798d4e709ed7e129a63792f71eb2d9aae88e0c395b4b88f7338efd76",
+    "Flock.verifyFiles": "e99df92b9399bbfcfb8b61b04b27a6561f5ee137c2a6c250488840d8ec9d3110",
     "Flock.verifyRep": "f9cf59ba9a64e389bf6911db64404819c2b388a2fff11fe14353bcc588b298f9",
     "Flock.verifyRep._sparseCasesOn_5": "9f6ace488738f8b16e5145d32a158bb73b2d0e199b69a5e957f5ba9da82d89f2"
    },
