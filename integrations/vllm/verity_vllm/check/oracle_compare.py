@@ -395,7 +395,7 @@ class MatchOracle:
             for m in by_spec:
                 per_pos[(m.get("request"), m.get("position"), m.get("row"))].append(m)
             k = max(len(v) for v in per_pos.values())
-            if k > 1 and nbytes is not None and len({len(v) for v in per_pos.values()}) == 1 and self._member_span(by_spec, member) == nbytes:
+            if k > 1 and nbytes is not None and len({len(v) for v in per_pos.values()}) == 1 and self._member_span(by_spec, member, producer) == nbytes:
                 pass
             elif k > 1:
                 ordinal = (producer or {}).get("ordinal")
@@ -439,15 +439,15 @@ class MatchOracle:
             first = m["output_views"][0] if m.get("output_views") else (m["operand_views"][0] if m.get("operand_views") else {})
             return (int(pos) if pos is not None else (int(m["row"]) if m.get("row") is not None else 0), int(first.get("offset") or 0))
         insts = sorted(insts, key=_order)
+        port = _port_view(member, producer)
         parts: list[bytes] = []
         for m in insts:
             if member == "in":
                 views = m["operand_views"][:1]
             elif member in ("out", "0") or want_hint or producer_view0:
                 views = m["output_views"][:1]
-            elif member.isdigit():
-                j = int(member)
-                views = m["output_views"][j:j + 1]
+            elif port is not None and len(m["output_views"]) > 1:
+                views = m["output_views"][port:port + 1]
             else:
                 views = m["output_views"][:1]
             if not views:
@@ -458,13 +458,14 @@ class MatchOracle:
             parts.append(b)
         return b"".join(parts), None, len(insts)
 
-    def _member_span(self, insts: list[dict], member: str) -> int | None:
-        """The bytes of the views `member` reads over `insts` (an instance with one output view: that view; else view `member` when it is
-        a digit, else view 0); None when one has no such view."""
+    def _member_span(self, insts: list[dict], member: str, producer: dict[str, Any] | None = None) -> int | None:
+        """The bytes of the views `member` reads over `insts` (an instance with one output view: that view; else the member's port view,
+        `_port_view`, else view 0); None when one has no such view."""
+        port = _port_view(member, producer)
         n = 0
         for m in insts:
             ovs = m.get("output_views") or []
-            j = int(member) if member.isdigit() and len(ovs) > 1 else 0
+            j = port if port is not None and len(ovs) > 1 else 0
             r = self._view_bytes_range(ovs[j]) if j < len(ovs) else None
             if r is None:
                 return None
@@ -508,6 +509,14 @@ class MatchOracle:
         if i >= len(ids):
             return None, f"SampleEnd carries {len(ids)} ids for {len(labs)} requests"
         return ids[i], None
+
+
+def _port_view(member: str, producer: dict[str, Any] | None) -> int | None:
+    """The output view of a several-output Call that `member` is: its manifest row's `port`, else the port `query.required.member_name`
+    spells into it (`<port>`, or `<hint>.<port>` when the Build recorded a hint), when that port is a digit; else None."""
+    port = (producer or {}).get("port")
+    port = str(port) if port is not None else member.rsplit(".", 1)[-1]
+    return int(port) if port.isdigit() else None
 
 
 def _family_of(entry: dict) -> str:
@@ -565,6 +574,8 @@ def producers_of(manifest: dict[str, Any] | None) -> dict[tuple[str, str], dict[
         # oracle through the Value's dataflow (MatchOracle._promoted_instances); `promoted` is part of the producer's identity here (a
         # promoted and a vocabulary row on one member is a conflict), the consumer lists of the rows are unioned in first-seen order
         ent = {"spec": str(r["spec"]).split("{", 1)[0], "ordinal": r.get("producer_ordinal"), "operand": r.get("producer_operand")}
+        if r.get("port") is not None:
+            ent["port"] = str(r["port"])
         if r.get("promoted"):
             ent["promoted"] = True                    # a vocabulary row's entry is byte-for-byte what it was (no key added)
         if r.get("family") == "call_boundaries":
