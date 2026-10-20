@@ -30,7 +30,8 @@ def COMPLETE : String := "complete"
 /-- The public egress count's unit: one MiB, in bits. -/
 def EGRESS_UNIT_BITS : Int := 8 * 2 ^ 20
 
-/-- The count saturates at 15 bits: a proof unit's outputs are at most 16 bits, the verdict's one and the count's 15. -/
+/-- The count saturates at 15 bits: the verdict's unit stays in the least public size class, 16 bits, the verdict's one
+and the count's 15. -/
 def EGRESS_MAX_UNITS : Int := 2 ^ 15 - 1
 
 /-- `WipeParams`: `labels` (`N`), the `k` challenges revealed `batch` at a time, each batch's deadline, and the memory
