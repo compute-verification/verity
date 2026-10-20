@@ -14,7 +14,8 @@ Sampled proofs' one-stage audit as a `Core.Protocol` (`one_stage.audit.audit_rec
   of a value it expects registered and doesn't fill, lowercase hex of 64 bytes), and `outputs`, the ones that are
   outputs of an earlier run (`{value: {"record", "port"}}`, each of a value it expects registered and neither fills nor
   pinned, `record` lowercase hex of 64 bytes and `port` a string), each refused with any other form or when it expects
-  none registered;
+  none registered; and it may add `binding`, `{"stream", "prover"}`: its stream's digest (lowercase hex of 64 bytes) and
+  the identity it registered the prover under (lowercase hex of whole bytes), refused in any other form;
 * **commitment**: the registration record, canonical JSON, fixed before the draw; its digest is
   `SHA-512(format || 0 || canon(record))` (`Registration.digest`), which the receipt names;
 * **evidence**: canonical JSON with exactly `receipt`, `draw` (the verifier's draw), `proved_units`, `instances`,
@@ -111,7 +112,8 @@ def paramsOfJson (j : Json) : V Params := do
   let keys := if v2 then PARAM_KEYS.push "parameters" else PARAM_KEYS
   let keys := if (field? j "supplied").isSome then keys.push "supplied" else keys
   let keys := if (field? j "pinned").isSome then keys.push "pinned" else keys
-  exactly j (if (field? j "outputs").isSome then keys.push "outputs" else keys) "the parameters"
+  let keys := if (field? j "outputs").isSome then keys.push "outputs" else keys
+  exactly j (if (field? j "binding").isSome then keys.push "binding" else keys) "the parameters"
   let program ← Program.parse (← Flock.canon (← obj (getD j "program") "program")).toUTF8
   let query ← obj (getD j "query") "query"
   let law ← rule (getD j "law")
@@ -171,11 +173,20 @@ def paramsOfJson (j : Json) : V Params := do
         | .str d, .str p => if d.length == 128 && isHex d then pure (v, d, p) else throw fail
         | _, _ => throw fail
     | some _ => throw "output values are not an object"
+  let binding ← match field? j "binding" with
+    | none => pure none
+    | some b => do
+      exactly b #["prover", "stream"] "the binding"
+      let (.str stream, .str prover) := (getD b "stream", getD b "prover")
+        | throw "the binding's stream and prover are not strings"
+      if !(stream.length == 128 && isHex stream) then throw "the binding's stream is not lowercase hex of 64 bytes"
+      if !(isHex prover && prover.length % 2 == 0) then throw "the binding's prover is not lowercase hex bytes"
+      pure (some (stream, prover))
   let .str d := getD j "delta" | throw "delta is not a ratio"
   let delta ← Core.Ratio.ofString d "delta"
   if delta.num == 0 || delta.den ≤ delta.num then throw "delta is not in (0, 1)"
   return { verifier := { program, query, law, workTable, scheme, ports, leafLayer, anchors, log, partition, registered,
-                         params, supplied, pinned, outputs }, delta }
+                         params, supplied, pinned, outputs, binding }, delta }
 
 def commitmentOf (b : ByteArray) : V Commitment := do
   let j ← Core.canonicalJson b

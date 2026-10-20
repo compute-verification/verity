@@ -593,7 +593,7 @@ prover at padded tables `T j`. Every prover has, at each table `j`, old masked f
 `rd j` and a one-run event, such that at each tape, each table `j` of the statement and each table `C` of its word
 that `Ok` allows, a mixture `σ` of masked sessions after a `Commit` of cap `cap₀`, table `j` at position
 `pre.length` of the batch, bounds the deployed runs accepting with no column of table `j` off `C` by its acceptance
-there with no level-0 opening off `C` unless it self-clashes, and table `j`'s events bound its `Adv`s and self-clash.
+there and at every table before it (`AccUpTo`) with no level-0 opening off `C` unless it self-clashes, and table `j`'s events bound its `Adv`s and self-clash.
 -/
 def ZkSessJ {K D Sl : Type} [Field K] [Fintype K] [DecidableEq K] [Inhabited D] [Inhabited Sl]
     (A : Model.Arith 𝔽 K) (Hs : Hashes 𝔽 D Sl) (Ok : Claims.Msg → ℕ → List 𝔽 → Prop) (x : Claims.Msg) {mPts : ℕ}
@@ -617,7 +617,7 @@ def ZkSessJ {K D Sl : Type} [Field K] [Fintype K] [DecidableEq K] [Inhabited D] 
                 Claims.Flock.lookCol (cols true (Claims.run sha512 P (V true) x ω r).seen j) p.val = some u ∧
                   u ≠ C p) ≤
             (∑ t, expect (ind fun outs : List (OutZC 𝔽 D Sl) =>
-                (outs.getD pre.length dfltOutZC).accepted = true ∧
+                AccUpTo pre.length outs ∧
                   ¬ (Off₀Z Hs (T j) cap₀ (Claims.Flock.oracleOf C) (outs.getD pre.length dfltOutZC) ∧
                     ¬ SelfClashZ Hs (T j) (outs.getD pre.length dfltOutZC)))
               (sessAtZ pre post (tabAfterZC A Hs (T j) cap₀)) (σ t)) / Fintype.card τ ∧
@@ -672,7 +672,7 @@ theorem zk_le_sessionsJ {K D Sl : Type} [Field K] [Fintype K] [DecidableEq K] [I
           Claims.Flock.lookCol (cols true (Claims.run sha512 P (V true) x ω r).seen j) p.val = some u ∧
             u ≠ C p) ≤
       (∑ t, expect (ind fun outs : List (OutZC 𝔽 D Sl) =>
-          (outs.getD pre.length dfltOutZC).accepted = true ∧
+          AccUpTo pre.length outs ∧
             ¬ (Off₀Z Hs (T j) cap₀ (Claims.Flock.oracleOf C) (outs.getD pre.length dfltOutZC) ∧
               ¬ SelfClashZ Hs (T j) (outs.getD pre.length dfltOutZC)))
         (sessAtZ pre post (tabAfterZC A Hs (T j) cap₀)) (σ t)) / Fintype.card τ)
@@ -698,27 +698,27 @@ theorem zk_le_sessionsJ {K D Sl : Type} [Field K] [Fintype K] [DecidableEq K] [I
             u ≠ C p := by
   obtain ⟨h25, h35, hsch, ht, he, hS, hN, hq, hδ, -⟩ := hT j hj
   have hper : ∀ t, expect (ind fun outs : List (OutZC 𝔽 D Sl) =>
-        (outs.getD pre.length dfltOutZC).accepted = true ∧
+        AccUpTo pre.length outs ∧
           ¬ (Off₀Z Hs (T j) cap₀ (Claims.Flock.oracleOf C) (outs.getD pre.length dfltOutZC) ∧
             ¬ SelfClashZ Hs (T j) (outs.getD pre.length dfltOutZC)))
       (sessAtZ pre post (tabAfterZC A Hs (T j) cap₀)) (σ t) ≤ epsSZ A Hs (T j) pre post cap₀ (σ t) := by
     intro t
     have hs := session_sound_of_table_accZ_sc A hA Hs (T j) pre post cap₀
-      (fun outs => (outs.getD pre.length dfltOutZC).accepted = true ∧
+      (fun outs => AccUpTo pre.length outs ∧
         ¬ (Off₀Z Hs (T j) cap₀ (Claims.Flock.oracleOf C) (outs.getD pre.length dfltOutZC) ∧
           ¬ SelfClashZ Hs (T j) (outs.getD pre.length dfltOutZC)))
       (fun _ h => h.1) (Claims.Flock.oracleOf C) (σ t)
     have e : (ind fun outs : List (OutZC 𝔽 D Sl) =>
-        ((outs.getD pre.length dfltOutZC).accepted = true ∧
+        (AccUpTo pre.length outs ∧
           ¬ (Off₀Z Hs (T j) cap₀ (Claims.Flock.oracleOf C) (outs.getD pre.length dfltOutZC) ∧
             ¬ SelfClashZ Hs (T j) (outs.getD pre.length dfltOutZC))) ∧
           ¬ (T j).Committed A (Claims.Flock.oracleOf C)) = ind fun outs =>
-        (outs.getD pre.length dfltOutZC).accepted = true ∧
+        AccUpTo pre.length outs ∧
           ¬ (Off₀Z Hs (T j) cap₀ (Claims.Flock.oracleOf C) (outs.getD pre.length dfltOutZC) ∧
             ¬ SelfClashZ Hs (T j) (outs.getD pre.length dfltOutZC)) :=
       congrArg ind (funext fun _ => propext (and_iff_left hTc))
     have e₀ : (ind fun outs : List (OutZC 𝔽 D Sl) =>
-        ((outs.getD pre.length dfltOutZC).accepted = true ∧
+        (AccUpTo pre.length outs ∧
           ¬ (Off₀Z Hs (T j) cap₀ (Claims.Flock.oracleOf C) (outs.getD pre.length dfltOutZC) ∧
             ¬ SelfClashZ Hs (T j) (outs.getD pre.length dfltOutZC))) ∧
           ¬ SelfClashZ Hs (T j) (outs.getD pre.length dfltOutZC) ∧
