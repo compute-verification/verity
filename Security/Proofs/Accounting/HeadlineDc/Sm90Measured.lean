@@ -42,7 +42,7 @@ def flat90M : Sparse :=
   Sm90.flatWords ++ Sm90Measured.flatFold ++ Sm90.flatFill ++ Sm90Measured.flatSkip
 
 /-- `B_♭` on DC-90-ri as a rational: ♭'s load on JPA90_0. -/
-def B90M : ℚ := dot (vfCoef90 10) 39 flat90M
+def B90M : ℚ := dot (vfCoef90 10) 40 flat90M
 
 /-- Honest's IGMMA word priced at π* on its three rows. -/
 def w90M : ℚ :=
@@ -50,30 +50,30 @@ def w90M : ℚ :=
 
 /-- Fold route `i` priced at π* on its three rows. -/
 def price90M (i : ℕ) : ℚ :=
-  lam90 0 * dot (vfRow90 0) 39 (Sm90Measured.d2s.folds.getD i []) +
-    lam90 5 * dot (vfRow90 5) 39 (Sm90Measured.d2s.folds.getD i []) +
-    lam90 6 * dot (vfRow90 6) 39 (Sm90Measured.d2s.folds.getD i [])
+  lam90 0 * dot (vfRow90 0) 40 (Sm90Measured.d2s.folds.getD i []) +
+    lam90 5 * dot (vfRow90 5) 40 (Sm90Measured.d2s.folds.getD i []) +
+    lam90 6 * dot (vfRow90 6) 40 (Sm90Measured.d2s.folds.getD i [])
 
 /-- The cheapest fold route's price at π*. -/
 def phi90M : ℚ := ((List.range 14).map price90M).foldr min (price90M 0)
 
 theorem sm90m_lamSum : dot (fun _ => 1) 15 lamv90 = 1 := by decide +kernel
 
-theorem sm90m_max : ∀ i < 15, dot (vfCoef90 i) 39 flat90M ≤ B90M := by decide +kernel
+theorem sm90m_max : ∀ i < 15, dot (vfCoef90 i) 40 flat90M ≤ B90M := by decide +kernel
 
 theorem sm90m_Bpos : (0 : ℚ) < B90M := by decide +kernel
 
 theorem sm90m_writers : ∀ i < 2, 0 < (Sm90Measured.d2s.writers.getD i (0, 0)).2 ∧
-    w90M ≤ lam90 0 * (vfRow90 0 ((Sm90Measured.d2s.writers.getD i (0, 0)).1 % 39) /
+    w90M ≤ lam90 0 * (vfRow90 0 ((Sm90Measured.d2s.writers.getD i (0, 0)).1 % 40) /
         ((Sm90Measured.d2s.writers.getD i (0, 0)).2 : ℚ)) +
-      lam90 5 * (vfRow90 5 ((Sm90Measured.d2s.writers.getD i (0, 0)).1 % 39) /
+      lam90 5 * (vfRow90 5 ((Sm90Measured.d2s.writers.getD i (0, 0)).1 % 40) /
         ((Sm90Measured.d2s.writers.getD i (0, 0)).2 : ℚ)) +
-      lam90 6 * (vfRow90 6 ((Sm90Measured.d2s.writers.getD i (0, 0)).1 % 39) /
+      lam90 6 * (vfRow90 6 ((Sm90Measured.d2s.writers.getD i (0, 0)).1 % 40) /
         ((Sm90Measured.d2s.writers.getD i (0, 0)).2 : ℚ)) := by
   decide +kernel
 
-theorem sm90m_vec : ∀ j ∈ Sm90Measured.d2s.vec, vfRow90 0 0 ≤ vfRow90 0 (j % 39) ∧
-    vfRow90 5 0 ≤ vfRow90 5 (j % 39) ∧ vfRow90 6 0 ≤ vfRow90 6 (j % 39) := by
+theorem sm90m_vec : ∀ j ∈ Sm90Measured.d2s.vec, vfRow90 0 0 ≤ vfRow90 0 (j % 40) ∧
+    vfRow90 5 0 ≤ vfRow90 5 (j % 40) ∧ vfRow90 6 0 ≤ vfRow90 6 (j % 40) := by
   decide +kernel
 
 theorem sm90m_wv :
@@ -82,9 +82,9 @@ theorem sm90m_wv :
   decide +kernel
 
 theorem sm90m_fold : ∀ i < 14, phi90M ≤
-    lam90 0 * dot (vfRow90 0) 39 (Sm90Measured.d2s.folds.getD i []) +
-      lam90 5 * dot (vfRow90 5) 39 (Sm90Measured.d2s.folds.getD i []) +
-      lam90 6 * dot (vfRow90 6) 39 (Sm90Measured.d2s.folds.getD i []) := by
+    lam90 0 * dot (vfRow90 0) 40 (Sm90Measured.d2s.folds.getD i []) +
+      lam90 5 * dot (vfRow90 5) 40 (Sm90Measured.d2s.folds.getD i []) +
+      lam90 6 * dot (vfRow90 6) 40 (Sm90Measured.d2s.folds.getD i []) := by
   decide +kernel
 
 theorem sm90m_folded_q :
@@ -105,7 +105,7 @@ theorem sm90m_a_nonneg : ∀ r k, 0 ≤ Sm90Measured.model.G.a r k := fun r k =>
 theorem sm90m_bnd : Sm90Measured.model.bnd Sm90Measured.flat = (B90M : ℝ) := by
   unfold Model.bnd
   rw [show Sm90Measured.flat.n = Sparse.counts flat90M from
-    labelled_n 39 Sm90.flatWords Sm90Measured.flatFold Sm90.flatFill Sm90Measured.flatSkip]
+    labelled_n 40 Sm90.flatWords Sm90Measured.flatFold Sm90.flatFill Sm90Measured.flatSkip]
   exact bound_eq _ vfRow90 sm90m_hG flat90M 10 fun r => sm90m_max r.val r.isLt
 
 theorem sm90m_Nw : Sm90Measured.model.Nw = 4096 := by
@@ -154,10 +154,10 @@ theorem sm90m_wf : Sm90Measured.model.Wf Sm90Measured.flat := by
     norm_num
 
 /-- A row's least vector-class coefficient is at least its ALU one, when every vector class costs that much there. -/
-theorem sm90m_vecMin (r : Fin 15) (h : ∀ j ∈ Sm90Measured.d2s.vec, vfRow90 r 0 ≤ vfRow90 r (j % 39)) :
+theorem sm90m_vecMin (r : Fin 15) (h : ∀ j ∈ Sm90Measured.d2s.vec, vfRow90 r 0 ≤ vfRow90 r (j % 40)) :
     (vfRow90 r 0 : ℝ) ≤ Sm90Measured.model.vecMin r := by
   have : Nonempty ↥Sm90Measured.model.vec :=
-    ⟨⟨idx 39 5, List.mem_toFinset.mpr (List.mem_map.mpr ⟨5, by decide, rfl⟩)⟩⟩
+    ⟨⟨idx 40 5, List.mem_toFinset.mpr (List.mem_map.mpr ⟨5, by decide, rfl⟩)⟩⟩
   unfold Model.vecMin
   refine le_ciInf fun k => ?_
   obtain ⟨j, hj, hk⟩ := List.mem_map.mp (List.mem_toFinset.mp k.2)
@@ -188,11 +188,11 @@ theorem sm90m_wStar : (w90M : ℝ) ≤ Sm90Measured.model.wStar Sm90Measured.lam
   | writer t =>
     have hw := sm90m_writers t.val t.isLt
     show (w90M : ℝ) ≤
-      (lam90 0 : ℝ) * ((vfRow90 0 ((Sm90Measured.d2s.writers.getD t.val (0, 0)).1 % 39) : ℝ) /
+      (lam90 0 : ℝ) * ((vfRow90 0 ((Sm90Measured.d2s.writers.getD t.val (0, 0)).1 % 40) : ℝ) /
         ((Sm90Measured.d2s.writers.getD t.val (0, 0)).2 : ℝ)) +
-      (lam90 5 : ℝ) * ((vfRow90 5 ((Sm90Measured.d2s.writers.getD t.val (0, 0)).1 % 39) : ℝ) /
+      (lam90 5 : ℝ) * ((vfRow90 5 ((Sm90Measured.d2s.writers.getD t.val (0, 0)).1 % 40) : ℝ) /
         ((Sm90Measured.d2s.writers.getD t.val (0, 0)).2 : ℝ)) +
-      (lam90 6 : ℝ) * ((vfRow90 6 ((Sm90Measured.d2s.writers.getD t.val (0, 0)).1 % 39) : ℝ) /
+      (lam90 6 : ℝ) * ((vfRow90 6 ((Sm90Measured.d2s.writers.getD t.val (0, 0)).1 % 40) : ℝ) /
         ((Sm90Measured.d2s.writers.getD t.val (0, 0)).2 : ℝ))
     exact_mod_cast hw.2
   | vector =>
@@ -230,7 +230,7 @@ theorem sm90m_phiStar : (phi90M : ℝ) ≤ Sm90Measured.model.phiStar Sm90Measur
   push_cast at h
   linarith
 
-theorem sm90m_fillOpt {Ω : Type} [Fintype Ω] (Pl : Play Ω Sm90.checks (Fin 39) (Fin 2) Unit Empty)
+theorem sm90m_fillOpt {Ω : Type} [Fintype Ω] (Pl : Play Ω Sm90.checks (Fin 40) (Fin 2) Unit Empty)
     (hSplit : ∀ x, (Pl.run x).Split) : ∀ x, FillOpt Sm90Measured.model (Pl.run x) := fun x =>
   fillOpt_of_zero Sm90Measured.model sm90m_a_nonneg (fun _ _ => rfl) rfl (Pl.run x) (hSplit x)
 

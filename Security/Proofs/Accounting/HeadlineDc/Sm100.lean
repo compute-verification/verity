@@ -27,7 +27,7 @@ open Accounting.TS Accounting.TS.Headline Accounting.Assumptions.TS Pouw.Relativ
 def flat100 : Sparse := Sm100.flatWords ++ Sm100.flatFold ++ Sm100.flatFill ++ Sm100.flatSkip
 
 /-- `B_♭` on DS-100 as a rational: ♭'s load on issue. -/
-def B100 : ℚ := dot (sheetCoef Sm100.ds100 .issue) 37 flat100
+def B100 : ℚ := dot (sheetCoef Sm100.ds100 .issue) 38 flat100
 
 /-- π*'s weights as rationals: DS_issue and DS_alu. -/
 def li100 : ℚ := 666666667 / 1000000000
@@ -36,13 +36,13 @@ def la100 : ℚ := 333333333 / 1000000000
 
 /-- Fold route `i`'s price at π* as a rational, on DS_issue and DS_alu. -/
 def price100 (i : ℕ) : ℚ :=
-  li100 * dot (sheetCoef Sm100.ds100 .issue) 37 (Sm100.d2s.folds.getD i []) +
-    la100 * dot (sheetCoef Sm100.ds100 (.pipe .alu)) 37 (Sm100.d2s.folds.getD i [])
+  li100 * dot (sheetCoef Sm100.ds100 .issue) 38 (Sm100.d2s.folds.getD i []) +
+    la100 * dot (sheetCoef Sm100.ds100 (.pipe .alu)) 38 (Sm100.d2s.folds.getD i [])
 
 /-- The cheapest fold route's price at π*. -/
 def phi100 : ℚ := ((List.range 14).map price100).foldr min (price100 0)
 
-theorem sm100_max (r : SheetRow Sm100.Pipe) : dot (sheetCoef Sm100.ds100 r) 37 flat100 ≤ B100 := by
+theorem sm100_max (r : SheetRow Sm100.Pipe) : dot (sheetCoef Sm100.ds100 r) 38 flat100 ≤ B100 := by
   cases r with
   | issue => decide +kernel
   | tensor => decide +kernel
@@ -56,8 +56,8 @@ theorem sm100_omega :
   decide +kernel
 
 theorem sm100_fold : ∀ i < 14, phi100 ≤
-    li100 * dot (sheetCoef Sm100.ds100 .issue) 37 (Sm100.d2s.folds.getD i []) +
-      la100 * dot (sheetCoef Sm100.ds100 (.pipe .alu)) 37 (Sm100.d2s.folds.getD i []) := by
+    li100 * dot (sheetCoef Sm100.ds100 .issue) 38 (Sm100.d2s.folds.getD i []) +
+      la100 * dot (sheetCoef Sm100.ds100 (.pipe .alu)) 38 (Sm100.d2s.folds.getD i []) := by
   decide +kernel
 
 theorem sm100_lam_q : 0 ≤ li100 ∧ 0 ≤ la100 ∧ li100 + la100 = 1 := by decide +kernel
@@ -71,7 +71,7 @@ theorem sm100_unfolded_q :
     (1 - 783 / 100000 : ℚ) * B100 ≤ (32768 * (li100 * (1 / 32768)) + 32768 * phi100) * (1 - 41 / 48000) := by
   decide +kernel
 
-theorem sm100_hG : ∀ r k, Sm100.model.G.a r k = (sheetCoef Sm100.ds100 r k.val : ℝ) := sheet_a Sm100.ds100 37
+theorem sm100_hG : ∀ r k, Sm100.model.G.a r k = (sheetCoef Sm100.ds100 r k.val : ℝ) := sheet_a Sm100.ds100 38
 
 theorem sm100_a_nonneg : ∀ r k, 0 ≤ Sm100.model.G.a r k := fun r k => by
   rw [sm100_hG]
@@ -80,7 +80,7 @@ theorem sm100_a_nonneg : ∀ r k, 0 ≤ Sm100.model.G.a r k := fun r k => by
 theorem sm100_bnd : Sm100.model.bnd Sm100.flat = (B100 : ℝ) := by
   unfold Model.bnd
   rw [show Sm100.flat.n = Sparse.counts flat100 from
-    labelled_n 37 Sm100.flatWords Sm100.flatFold Sm100.flatFill Sm100.flatSkip]
+    labelled_n 38 Sm100.flatWords Sm100.flatFold Sm100.flatFill Sm100.flatSkip]
   exact bound_eq _ (sheetCoef Sm100.ds100) sm100_hG flat100 .issue sm100_max
 
 theorem sm100_Nw : Sm100.model.Nw = 32768 := by
@@ -154,7 +154,7 @@ theorem sm100_wf : Sm100.model.Wf Sm100.flat := by
 
 theorem sm100_vecMin : 1 ≤ Sm100.model.vecMin .issue := by
   have : Nonempty ↥Sm100.model.vec :=
-    ⟨⟨idx 37 3, List.mem_toFinset.mpr (List.mem_map.mpr ⟨3, by decide, rfl⟩)⟩⟩
+    ⟨⟨idx 38 3, List.mem_toFinset.mpr (List.mem_map.mpr ⟨3, by decide, rfl⟩)⟩⟩
   unfold Model.vecMin
   refine le_ciInf fun k => ?_
   rw [sm100_hG]
@@ -201,7 +201,7 @@ theorem sm100_phiStar : (phi100 : ℝ) ≤ Sm100.model.phiStar Sm100.lamStar := 
   push_cast at h
   linarith
 
-theorem sm100_fillOpt {Ω : Type} [Fintype Ω] (Pl : Play Ω Sm100.checks (Fin 37) (Fin 13) Unit Empty)
+theorem sm100_fillOpt {Ω : Type} [Fintype Ω] (Pl : Play Ω Sm100.checks (Fin 38) (Fin 13) Unit Empty)
     (hSplit : ∀ x, (Pl.run x).Split) : ∀ x, FillOpt Sm100.model (Pl.run x) := fun x =>
   fillOpt_of_zero Sm100.model sm100_a_nonneg (fun _ _ => rfl) rfl (Pl.run x) (hSplit x)
 
