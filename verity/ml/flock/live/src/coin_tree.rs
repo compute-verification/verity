@@ -194,6 +194,14 @@ pub fn hello_nonce(hello: &str) -> Result<[u8; NONCE_BYTES], String> {
     Ok(out)
 }
 
+/// The session stream's coin count from the prover's `Hello`: the link points, `link.points · link.m` (the server's `Commit`
+/// opens exactly these), 0 without a link.
+pub fn hello_links(hello: &str) -> usize {
+    let v: serde_json::Value = serde_json::from_str(hello).unwrap_or_default();
+    let n = |k: &str| v["link"][k].as_u64().unwrap_or(0) as usize;
+    n("points") * n("m")
+}
+
 fn f128_bytes(x: &F128) -> [u8; 16] {
     let mut b = [0u8; 16];
     b[..8].copy_from_slice(&x.lo.to_le_bytes());
@@ -367,41 +375,70 @@ pub fn check(spec: &Spec, rules: &Rules, root: &[u8; 64], stream: usize, round: 
     Ok(coins)
 }
 
-/// The prover's transport under a committed coin schedule: takes its own nonce from the `Hello` it sends and the root and
-/// session key from `Hello`'s answer (exactly 20 words, the key's bit 2047 zero), and checks every coin the verifier sends (the
-/// link points, every round) against them before handing it on, stripped of its opening. Anything else stops the prover there
-/// (a refusal), before it answers anything that depends on it.
+/// The check of record on [`Checked`]'s openings: the Lean verifier's (`Flock.Firewall.Coins`, `flock-firewall coins`,
+/// [`crate::firewall::LeanCoins`]), which sees what `Checked` sees, as the wire frames it: the prover's `Hello`, `Hello`'s
+/// answer, then each opening (`Resp::Coins`' frame) of `n` coins of a stream's next round. `Ok(Err(why))` refuses
+/// (`PROVER-STOPPED: …`, `check`'s reasons word for word, `live/src/coin_open_vectors.json`) and ends the session; `Err` is
+/// the check failing to run.
+pub trait OpeningCheck: Send {
+    fn hello(&mut self, hello: &str) -> Result<Result<(), String>, String>;
+    fn answer(&mut self, frame: &[u8]) -> Result<Result<(), String>, String>;
+    fn open(&mut self, stream: &str, n: usize, frame: &[u8]) -> Result<Result<Vec<F128>, String>, String>;
+}
+
+/// The prover's transport under a committed coin schedule: takes its own nonce and the link points' count from the `Hello`
+/// it sends and the root and session key from `Hello`'s answer (exactly 20 words, the key's bit 2047 zero), and checks every
+/// coin the verifier sends (the link points, every round) against them before handing it on, stripped of its opening.
+/// Anything else stops the prover there (a refusal), before it answers anything that depends on it. With an
+/// [`OpeningCheck`] ([`Checked::with_lean`]), its verdict decides: its refusal is the prover's, its coins are the ones handed
+/// on, and this check can only refuse more.
 pub struct Checked<T: Transport> {
     pub inner: T,
     pub spec: Spec,
     nonce: Option<[u8; NONCE_BYTES]>,
+    links: usize,
     rules: Option<Rules>,
     root: Option<[u8; 64]>,
     rounds: std::collections::BTreeMap<String, usize>,
+    lean: Option<Box<dyn OpeningCheck>>,
     /// every coin handed on, by stream and round (the simulator's extraction)
     pub opened: std::collections::BTreeMap<(String, usize), Vec<F128>>,
 }
 
 impl<T: Transport> Checked<T> {
     pub fn new(inner: T, spec: Spec) -> Self {
-        Checked { inner, spec, nonce: None, rules: None, root: None, rounds: Default::default(), opened: Default::default() }
+        Checked { inner, spec, nonce: None, links: 0, rules: None, root: None, rounds: Default::default(), lean: None, opened: Default::default() }
+    }
+    pub fn with_lean(mut self, lean: Box<dyn OpeningCheck>) -> Self {
+        self.lean = Some(lean);
+        self
     }
     pub fn root(&self) -> Option<[u8; 64]> {
         self.root
     }
-    fn take(&mut self, stream: &str, n: usize, words: Vec<F128>) -> Resp {
-        let (Some(root), Some(rules)) = (self.root, self.rules.as_ref()) else {
-            return Resp::Refused("PROVER-STOPPED: coins before the step-0 coin commitment".into());
+    fn take(&mut self, stream: &str, n: usize, words: Vec<F128>) -> Result<Resp, String> {
+        let lean = match self.lean.as_mut() {
+            Some(l) => match l.open(stream, n, &Resp::Coins(words.clone()).encode())? {
+                Ok(c) => Some(c),
+                Err(why) => return Ok(Resp::Refused(why)),
+            },
+            None => None,
         };
-        let Some(si) = self.spec.stream_index(stream) else { return Resp::Refused(format!("PROVER-STOPPED: {stream} is outside the committed schedule")) };
+        let (Some(root), Some(rules)) = (self.root, self.rules.as_ref()) else {
+            return Ok(Resp::Refused("PROVER-STOPPED: coins before the step-0 coin commitment".into()));
+        };
+        let Some(si) = self.spec.stream_index(stream) else { return Ok(Resp::Refused(format!("PROVER-STOPPED: {stream} is outside the committed schedule"))) };
         let k = *self.rounds.get(stream).unwrap_or(&0);
         match check(&self.spec, rules, &root, si, k, n, &words) {
             Ok(c) => {
+                if lean.as_ref().is_some_and(|l| *l != c) {
+                    return Err(format!("the Lean check and coin_tree::check open different coins of {stream} round {k}"));
+                }
                 self.rounds.insert(stream.to_string(), k + 1);
                 self.opened.insert((stream.to_string(), k), c.clone());
-                Resp::Coins(c)
+                Ok(Resp::Coins(c))
             }
-            Err(e) => Resp::Refused(format!("PROVER-STOPPED: {e}")),
+            Err(e) => Ok(Resp::Refused(format!("PROVER-STOPPED: {e}"))),
         }
     }
 }
@@ -410,10 +447,16 @@ impl<T: Transport> Transport for Checked<T> {
     fn call(&mut self, req: Req) -> Result<Resp, String> {
         let what = match &req {
             Req::Hello(h) => {
+                if let Some(l) = self.lean.as_mut() {
+                    if let Err(why) = l.hello(h)? {
+                        return Ok(Resp::Refused(why));
+                    }
+                }
                 match hello_nonce(h) {
                     Ok(n) => self.nonce = Some(n),
                     Err(e) => return Ok(Resp::Refused(format!("PROVER-STOPPED: {e}"))),
                 }
+                self.links = hello_links(h);
                 Some((String::new(), 0usize, true))
             }
             Req::Commit { .. } => Some((SESSION.to_string(), 0, false)),
@@ -424,6 +467,11 @@ impl<T: Transport> Transport for Checked<T> {
         let Some((stream, n, hello)) = what else { return Ok(r) };
         match r {
             Resp::Coins(w) if hello => {
+                if let Some(l) = self.lean.as_mut() {
+                    if let Err(why) = l.answer(&Resp::Coins(w.clone()).encode())? {
+                        return Ok(Resp::Refused(why));
+                    }
+                }
                 if w.len() != 4 + KEY_BYTES / 16 {
                     return Ok(Resp::Refused(format!("PROVER-STOPPED: Hello's answer has {} words, not the coin tree's root and session key (20)", w.len())));
                 }
@@ -436,9 +484,9 @@ impl<T: Transport> Transport for Checked<T> {
                 Ok(Resp::Coins(w))
             }
             Resp::Coins(w) => {
-                // the link points' count is the statement's, not the request's: every word before the opening's tail
-                let n = if stream == SESSION { w.len() - self.spec.opening_words(0) } else { n };
-                Ok(self.take(&stream, n, w))
+                // the link points' count is the statement's (`Hello`'s link), not the request's
+                let n = if stream == SESSION { self.links } else { n };
+                self.take(&stream, n, w)
             }
             other => Ok(other),
         }
@@ -626,6 +674,151 @@ mod tests {
         assert_eq!(refused(high, Some(&good)), (true, true), "a key with bit 2047 set");
         for bad in [None, Some(&good[..62]), Some(&good.to_uppercase()[..])] {
             assert_eq!(refused(t.answer_words(), bad), (true, false), "a Hello without a well-formed nonce is not sent");
+        }
+    }
+
+    /// A verifier that answers each request with the next of its answers.
+    struct Script(std::collections::VecDeque<Resp>);
+
+    impl Transport for Script {
+        fn call(&mut self, _: Req) -> Result<Resp, String> {
+            self.0.pop_front().ok_or_else(|| "the script has no answer left".to_string())
+        }
+    }
+
+    /// One case of `coin_open_vectors.json`: the prover's `Hello`, `Hello`'s answer (none: the verifier answers it without
+    /// coins), then the openings the verifier answers, each `(stream, n, words)`.
+    struct Case {
+        case: &'static str,
+        hello: String,
+        answer: Option<Vec<F128>>,
+        opens: Vec<(&'static str, usize, Vec<F128>)>,
+    }
+
+    /// The case through [`Checked`]: each step the Lean check takes (`flock-firewall coins`'s `hello`, `answer`, `open`) with
+    /// what Rust answered, the coins handed on or the refusal, which ends the case.
+    fn run(c: &Case) -> serde_json::Value {
+        use serde_json::json;
+        let mut script = std::collections::VecDeque::from([c.answer.clone().map_or(Resp::Ok, Resp::Coins)]);
+        script.extend(c.opens.iter().map(|(_, _, w)| Resp::Coins(w.clone())));
+        let left = script.len();
+        let mut ch = Checked::new(Script(script), spec_spec());
+        let mut steps = vec![json!({"hello": c.hello})];
+        let r = ch.call(Req::Hello(c.hello.clone())).unwrap();
+        if let (true, Some(w)) = (ch.inner.0.len() < left, &c.answer) {
+            steps.push(json!({"answer": hx(&Resp::Coins(w.clone()).encode())}));
+        }
+        if let Resp::Refused(why) = r {
+            steps.last_mut().unwrap()["stop"] = json!(why);
+            return json!({"case": c.case, "steps": steps});
+        }
+        for (stream, n, w) in &c.opens {
+            let req = if *stream == SESSION {
+                Req::Commit { root_f: vec![], roots: vec![], publics: vec![] }
+            } else {
+                Req::Round { stream: stream.to_string(), content: vec![], n: *n as u32 }
+            };
+            let n = if *stream == SESSION { ch.links } else { *n };
+            let mut step = json!({"open": stream, "n": n, "frame": hx(&Resp::Coins(w.clone()).encode())});
+            match ch.call(req).unwrap() {
+                Resp::Coins(coins) => step["coins"] = json!(hx(&bytes64(&coins))),
+                Resp::Refused(why) => {
+                    step["stop"] = json!(why);
+                    steps.push(step);
+                    break;
+                }
+                _ => panic!("{}: an answer that is neither coins nor a refusal", c.case),
+            }
+            steps.push(step);
+        }
+        json!({"case": c.case, "steps": steps})
+    }
+
+    /// `coin_open_vectors.json`, which `test_lean_coin_open.py` holds the Lean check (`Flock.Firewall.Coins`,
+    /// `flock-firewall coins`) to, word for word: honest and altered openings of the §9 tree through [`Checked`], each step
+    /// with Rust's answer. `COIN_OPEN_VECTORS=write` rewrites the file from these cases.
+    #[test]
+    fn checked_answers_the_lean_checks_vectors() {
+        let t = CoinTree::draw(spec_spec(), &NONCE, &mut spec_tape());
+        let open = |s: usize, k: usize, n: usize| t.open(s, k, n).unwrap().1;
+        let with = |mut w: Vec<F128>, f: &dyn Fn(&mut Vec<F128>)| {
+            f(&mut w);
+            w
+        };
+        let good = hx(&NONCE);
+        let hello_of = |nonce: serde_json::Value, link: serde_json::Value| -> String {
+            let mut coins = spec_spec().to_json();
+            if !nonce.is_null() {
+                coins["nonce"] = nonce;
+            }
+            let mut h = serde_json::json!({"coins": coins, "profile": "fast100", "reps": 2});
+            if !link.is_null() {
+                h["link"] = link;
+            }
+            h.to_string()
+        };
+        let link = |points: u64, m: u64| serde_json::json!({"m": m, "points": points, "sigma": "ab".repeat(64)});
+        let hello = hello_of(serde_json::json!(good), link(2, 1));
+        let ans = t.answer_words();
+        let rep0 = |w: Vec<F128>| vec![("t/rep0", 2, w)];
+        let at = |i: usize, bit: u32| move |w: &mut Vec<F128>| if bit < 64 { w[i].lo ^= 1 << bit } else { w[i].hi ^= 1 << (bit - 64) };
+        let case = |case, hello: &String, answer: Option<Vec<F128>>, opens| Case { case, hello: hello.clone(), answer, opens };
+        let cases = vec![
+            case("honest", &hello, Some(ans.clone()), vec![(SESSION, 0, open(0, 0, 2)), ("t/rep0", 2, open(1, 0, 2)), ("t/rep0", 0, open(1, 1, 0)),
+                 ("t/rep0", 3, open(1, 2, 3)), ("t/rep0", 1, open(1, 3, 1)), ("t/rep1", 2, open(2, 0, 2)), ("t/rep1", 3, open(2, 1, 3))]),
+            case("a coin's bit", &hello, Some(ans.clone()), rep0(with(open(1, 0, 2), &at(0, 0)))),
+            case("the last coin's top bit", &hello, Some(ans.clone()), rep0(with(open(1, 0, 2), &at(1, 127)))),
+            case("T_n's bit", &hello, Some(ans.clone()), rep0(with(open(1, 0, 2), &at(2, 0)))),
+            case("T_n's top bit", &hello, Some(ans.clone()), rep0(with(open(1, 0, 2), &at(5, 127)))),
+            case("the salt's bit", &hello, Some(ans.clone()), rep0(with(open(1, 0, 2), &at(6, 0)))),
+            case("the salt's top bit", &hello, Some(ans.clone()), rep0(with(open(1, 0, 2), &at(17, 127)))),
+            case("the round's path node", &hello, Some(ans.clone()), rep0(with(open(1, 0, 2), &at(18, 0)))),
+            case("the streams' path node", &hello, Some(ans.clone()), rep0(with(open(1, 0, 2), &at(33, 127)))),
+            case("a word short", &hello, Some(ans.clone()), rep0(with(open(1, 0, 2), &|w| { w.pop(); }))),
+            case("a word long", &hello, Some(ans.clone()), rep0(with(open(1, 0, 2), &|w| w.push(F128::ZERO)))),
+            case("no words", &hello, Some(ans.clone()), rep0(vec![])),
+            case("round 1's opening for round 0", &hello, Some(ans.clone()), rep0(open(1, 1, 2))),
+            case("t/rep1's opening for t/rep0", &hello, Some(ans.clone()), rep0(open(2, 0, 2))),
+            case("the session's opening for t/rep0", &hello, Some(ans.clone()), rep0(open(0, 0, 2))),
+            case("3 coins for 2", &hello, Some(ans.clone()), rep0(open(1, 0, 3))),
+            case("2 coins for 3", &hello, Some(ans.clone()), vec![("t/rep0", 3, open(1, 0, 2))]),
+            case("4 coins, past the block", &hello, Some(ans.clone()), vec![("t/rep0", 4, with(open(1, 0, 3), &|w| w.push(F128::ZERO)))]),
+            case("round 4, past the schedule", &hello, Some(ans.clone()),
+                 vec![("t/rep0", 1, open(1, 0, 1)), ("t/rep0", 1, open(1, 1, 1)), ("t/rep0", 1, open(1, 2, 1)), ("t/rep0", 1, open(1, 3, 1)), ("t/rep0", 1, open(1, 3, 1))]),
+            case("a stream outside the tree", &hello, Some(ans.clone()), vec![("t/rep2", 2, open(2, 0, 2))]),
+            case("the session's count is Hello's", &hello, Some(ans.clone()), vec![(SESSION, 0, open(0, 0, 3))]),
+            case("a Hello of 3 link points", &hello_of(serde_json::json!(good), link(1, 3)), Some(ans.clone()), vec![(SESSION, 0, open(0, 0, 3))]),
+            case("a Hello of link points past the block", &hello_of(serde_json::json!(good), link(2, 2)), Some(ans.clone()),
+                 vec![(SESSION, 0, with(open(0, 0, 3), &|w| w.push(F128::ZERO)))]),
+            case("another nonce", &hello_of(serde_json::json!("11".repeat(32)), link(2, 1)), Some(ans.clone()), rep0(open(1, 0, 2))),
+            case("another key", &hello, Some(with(ans.clone(), &at(4, 0))), rep0(open(1, 0, 2))),
+            case("another root", &hello, Some(with(ans.clone(), &at(0, 0))), rep0(open(1, 0, 2))),
+            case("a 4-word answer", &hello, Some(ans[..4].to_vec()), rep0(open(1, 0, 2))),
+            case("a 21-word answer", &hello, Some(with(ans.clone(), &|w| w.push(F128::ZERO))), rep0(open(1, 0, 2))),
+            case("the key's bit 2047", &hello, Some(with(ans.clone(), &at(19, 127))), rep0(open(1, 0, 2))),
+            case("Hello answered without coins", &hello, None, rep0(open(1, 0, 2))),
+            case("a Hello without a nonce", &hello_of(serde_json::Value::Null, link(2, 1)), Some(ans.clone()), rep0(open(1, 0, 2))),
+            case("a nonce that is not a string", &hello_of(serde_json::json!(5), link(2, 1)), Some(ans.clone()), rep0(open(1, 0, 2))),
+            case("an uppercase nonce", &hello_of(serde_json::json!(good.to_uppercase()), link(2, 1)), Some(ans.clone()), rep0(open(1, 0, 2))),
+            case("a short nonce", &hello_of(serde_json::json!(&good[..62]), link(2, 1)), Some(ans.clone()), rep0(open(1, 0, 2))),
+        ];
+        let ran: Vec<serde_json::Value> = cases.iter().map(run).collect();
+        let built = serde_json::json!({
+            "comment": "The coin tree's opening checks (`coin-tree/hm96-sha512/v2`) on docs/coin-tree-v2.md §9's tree, which coin_tree.rs's test holds Rust's `Checked` to and test_lean_coin_open.py holds the Lean check (`Flock.Firewall.Coins`, `flock-firewall coins`) to, word for word. Each case is the steps the Lean check takes: the prover's `hello`, `Hello`'s `answer` (`Resp::Coins`' frame, hex), then each `open` of `n` coins of a stream's next round (its frame); an open's `coins` are the ones handed on (hex), and a step's `stop` is the refusal, which ends the case.",
+            "cases": ran,
+        });
+        let path = concat!(env!("CARGO_MANIFEST_DIR"), "/src/coin_open_vectors.json");
+        if std::env::var("COIN_OPEN_VECTORS").as_deref() == Ok("write") {
+            std::fs::write(path, serde_json::to_string_pretty(&built).unwrap() + "\n").unwrap();
+        }
+        let file: serde_json::Value = serde_json::from_str(&std::fs::read_to_string(path).unwrap()).unwrap();
+        for (want, got) in file["cases"].as_array().unwrap().iter().zip(built["cases"].as_array().unwrap()) {
+            assert_eq!(want, got, "{}: coin_open_vectors.json is not what Checked answers (COIN_OPEN_VECTORS=write rewrites it)", got["case"]);
+        }
+        assert_eq!(file, built, "coin_open_vectors.json's cases are not these (COIN_OPEN_VECTORS=write rewrites it)");
+        for c in built["cases"].as_array().unwrap() {
+            let honest = ["honest", "a Hello of 3 link points"].contains(&c["case"].as_str().unwrap());
+            assert_eq!(c["steps"].as_array().unwrap().iter().all(|s| s.get("stop").is_none()), honest, "{}: refused exactly when altered", c["case"]);
         }
     }
 }

@@ -15,7 +15,10 @@ each key where it differs: `drift` (live differs, or is absent), `undeclared` (l
 leave the node (`ENV`'s, and any other `VY_POOL_*`). Node 2 is read in one command whose gate, on node 2's clock and before any
 other read, reads only the fill runner's `status.txt` and `windows`: unless `status.txt` says `QUIET`, is at most
 `STATUS_FRESH_S` old and not ahead of the clock, and no booked window is on or starts within `WINDOW_LEAD_S`, it reads nothing
-else and every node 2 key is unknown.
+else and every node 2 key is unknown. A `status.txt` older than `STATUS_STALE_S` while no fill runner runs is read from
+gpu-lease's own state instead: node 2 is read as quiet (and `diff` says so) while no lease is timed, no one pid holds every GPU,
+nobody waits for every GPU and no booked window is on or starts within `STALE_WINDOW_LEAD_S`. A write on node 2 (`cluster
+policy apply`) still needs the runner's fresh quiet status.
 
 Values are compared in one spelling per surface (`canon`): Kubernetes quantities by amount (`384Gi` is 412316860416), CPU
 lists by their CPUs, a window by its start and minutes. A window that has ended is not compared. A ClusterQueue held
@@ -28,7 +31,8 @@ ledger is (`ledger.Ledger`). `show` merges the overrides in force from a local l
 its live values and compares live with the policy in force, the description's value with any override applied. A log that
 doesn't verify is refused (exit 3): the policy in force can't be told from it. Recording an override changes nothing on a
 node: n1_lease.py takes its pool's `max`, `borrow` and `borrow-until` from `show` when `$VY_POOL_POLICY` names the command,
-and every other value is still set by hand. Those three of such a loop are read from the `LIMITS` file it writes, and while it
+`cluster policy apply` (policy_apply.py) writes the values whose surface has an applier, and every other value is set by
+hand. Those three of such a loop are read from the `LIMITS` file it writes, and while it
 says they came from anywhere but the policy, they are drift whatever their values.
 """
 from __future__ import annotations
@@ -63,6 +67,13 @@ FILL = "/workspace/pouw/fill"
 QUIET = "timed False, window waiting False"
 STATUS_FRESH_S = 60
 WINDOW_LEAD_S = 60
+#: a status.txt this old, while no process runs fill_runner.py (RUNNER_RE, as its unit and its tmux pane start it), is no
+#: runner's: node 2 is read from gpu-lease's own state then, keeping every booked window STALE_WINDOW_LEAD_S away, since no
+#: runner drains the GPUs for one or says it is on
+STATUS_STALE_S = 900
+STALE_WINDOW_LEAD_S = 1800
+RUNNER_RE = r"^[^ ]*python[0-9.]*( [^ ]+)* [^ ]*fill_runner\.py( |$)"
+LEASE_DIR = str(nebius2.LEASE_DIR)
 HOLDERS = {"vy-quiet-hour": "/var/lib/vy-quiet-hour/held", "vy-disk-guard": "/var/lib/vy-disk-guard/held"}
 #: a lease pool's tmux session, where its n1_lease.py loop runs
 SESSIONS = {"provers": "n1-lease", "circuits": "n1-lease-circuits"}
@@ -406,31 +417,85 @@ _LEASE = (
 _DISPATCH = (f'f={shlex.quote(DISPATCH_ENV)}; if [ -e "$f" ]; then echo "{FILE_MARK}$f"; '
              f'grep -E "^VY_PROVER_CPUS=" "$f" || [ $? -eq 1 ]; else echo "{ABSENT_MARK}$f"; fi')
 
-# node 2's gate, before any other read there and on its own clock: unless status.txt is QUIET and fresh and no booked window is
-# near (a windows line that doesn't parse counts as one), it prints `refused WHY: STATUS` and reads nothing else
-_N2_GATE = (
-    "set -f\n"
-    f"s=$(head -1 {FILL}/status.txt) || exit 1\n"
-    "now=$(date +%s) || exit 1\n"
-    'no() { printf "refused %s: %s\\n" "$1" "$s"; exit 0; }\n'
-    f'case "$s" in *"{QUIET}"*) ;; *) no "a timed window is on or waiting" ;; esac\n'
-    't=$(date -d "${s%% *}" +%s 2>/dev/null) || no "status.txt does not say when it was written"\n'
-    "[ \"$t\" -le \"$now\" ] || no \"status.txt is stamped $((t - now)) s ahead of node 2's clock\"\n"
-    f'[ $((now - t)) -le {STATUS_FRESH_S} ] || no "status.txt is $((now - t)) s old: is the fill runner running?"\n'
-    f"w={FILL}/windows\n"
-    'if [ -e "$w" ]; then\n'
-    '  while IFS= read -r x || [ -n "$x" ]; do\n'
-    "    set -- ${x%%#*}\n"
-    "    [ $# -gt 0 ] || continue\n"
-    "    m=${2:-30}\n"
-    "    b=$(date -d \"$1\" +%s 2>/dev/null) || no \"windows line '$x' does not parse\"\n"
-    "    case \"$m\" in *[!0-9.]*|*.*.*|.) no \"windows line '$x' does not parse\" ;; esac\n"
-    f"    if awk -v n=\"$now\" -v b=\"$b\" -v m=\"$m\" 'BEGIN {{ exit !(b - {WINDOW_LEAD_S} <= n && n < b + 60 * m) }}'; then\n"
-    f'      no "window $1 ($m min) is on or starts within {WINDOW_LEAD_S} s"\n'
-    "    fi\n"
-    '  done < "$w" || exit 1\n'
-    "fi\n"
-    'printf "status %s\\n" "$s"\n')
+# the stale form of the gate, read-only, from gpu-lease's own lines and /proc (never a `flock -n` probe: nebius2.py): a live
+# owner line tagged timed=1, every GPU's lock under one live pid, or a live waiter for every GPU is a timed window on or
+# waiting; an owner line naming no pid can't be told from one
+_N2_LEASES = (
+    "set +f\n"
+    "g=0; h=0; one=; same=1\n"
+    f'for o in {LEASE_DIR}/[0-9]*.lock; do [ -e "$o" ] && g=$((g + 1)); done\n'
+    f'for o in {LEASE_DIR}/[0-9]*.owner; do\n'
+    '  [ -e "$o" ] || continue\n'
+    '  l=$(head -1 "$o") || no "gpu-lease owner line $o could not be read"\n'
+    '  p=${l#pid=}; p=${p%% *}\n'
+    '  case "$l" in pid=*) ;; *) no "gpu-lease owner line $o names no pid" ;; esac\n'
+    '  case "$p" in ""|*[!0-9]*) no "gpu-lease owner line $o names no pid" ;; esac\n'
+    "  [ -d /proc/$p ] || continue\n"
+    '  case " $l " in *" timed=1 "*) no "lease ${o##*/} of pid $p is timed (gpu-lease --timed)" ;; esac\n'
+    '  h=$((h + 1)); [ -n "$one" ] || one=$p; [ "$p" = "$one" ] || same=0\n'
+    "done\n"
+    '[ "$g" -gt 0 ] && [ "$h" -ge "$g" ] && [ "$same" = 1 ] && no "pid $one holds all $g GPUs"\n'
+    f'for o in {LEASE_DIR}/wait.*; do\n'
+    '  [ -e "$o" ] || continue\n'
+    "  p=${o##*.}\n"
+    '  case "$p" in ""|*[!0-9]*) continue ;; esac\n'
+    "  [ -d /proc/$p ] || continue\n"
+    '  l=" $(head -1 "$o" 2>/dev/null) "; k=${l#* n=}; k=${k%% *}\n'
+    '  case "$k" in ""|*[!0-9]*) no "waiter ${o##*/} does not say how many GPUs it wants" ;; esac\n'
+    '  [ "$g" -gt 0 ] && [ "$k" -ge "$g" ] && no "waiter ${o##*/} wants all $g GPUs"\n'
+    "done\n"
+    "set -f\n")
+
+
+def _n2_gate(stale_ok: bool) -> str:
+    """Node 2's gate, before any other read there and on its own clock. While status.txt is fresh it must say QUIET; with
+    `stale_ok`, a status.txt older than STATUS_STALE_S while no fill runner runs reads gpu-lease's state instead
+    (`_N2_LEASES`) and keeps every booked window STALE_WINDOW_LEAD_S away. Unless all holds (a windows line that doesn't parse
+    counts as a window near) it prints `refused WHY: STATUS` and reads nothing else; else `status STATUS`, or `stale WHY:
+    STATUS` when the stale form let it read."""
+    stale = (
+        f'  [ "$age" -gt {STATUS_STALE_S} ] || no "status.txt is $age s old: is the fill runner running?"\n'
+        f"  x=$(pgrep -f '{RUNNER_RE}'); r=$?\n"
+        '  case $r in 0) no "status.txt is $age s old while a fill runner runs: it may be stuck" ;; 1) ;;\n'
+        '    *) no "pgrep exited $r: whether a fill runner runs is not known" ;; esac\n'
+        + "".join(f"  {x}\n" for x in _N2_LEASES.splitlines())
+        + f"  lead={STALE_WINDOW_LEAD_S}\n"
+        f'  q="no fill runner runs (status.txt is $age s old), and gpu-lease shows no timed lease, no holder or waiter of '
+        f'every GPU and no booked window within {STALE_WINDOW_LEAD_S} s, so it is read as quiet"\n'
+        if stale_ok else
+        '  no "status.txt is $age s old: is the fill runner running? (a write needs its fresh quiet status)"\n')
+    return (
+        "set -f\n"
+        f"s=$(head -1 {FILL}/status.txt) || exit 1\n"
+        "now=$(date +%s) || exit 1\n"
+        'no() { printf "refused %s: %s\\n" "$1" "$s"; exit 0; }\n'
+        't=$(date -d "${s%% *}" +%s 2>/dev/null) || no "status.txt does not say when it was written"\n'
+        "[ \"$t\" -le \"$now\" ] || no \"status.txt is stamped $((t - now)) s ahead of node 2's clock\"\n"
+        f"age=$((now - t)); lead={WINDOW_LEAD_S}; q=\n"
+        f'if [ "$age" -gt {STATUS_FRESH_S} ]; then\n'
+        + stale +
+        "else\n"
+        f'  case "$s" in *"{QUIET}"*) ;; *) no "a timed window is on or waiting" ;; esac\n'
+        "fi\n"
+        f"w={FILL}/windows\n"
+        'if [ -e "$w" ]; then\n'
+        '  while IFS= read -r x || [ -n "$x" ]; do\n'
+        "    set -- ${x%%#*}\n"
+        "    [ $# -gt 0 ] || continue\n"
+        "    m=${2:-30}\n"
+        "    b=$(date -d \"$1\" +%s 2>/dev/null) || no \"windows line '$x' does not parse\"\n"
+        "    case \"$m\" in *[!0-9.]*|*.*.*|.) no \"windows line '$x' does not parse\" ;; esac\n"
+        "    if awk -v n=\"$now\" -v b=\"$b\" -v m=\"$m\" -v d=\"$lead\" 'BEGIN { exit !(b - d <= n && n < b + 60 * m) }'; then\n"
+        '      no "window $1 ($m min) is on or starts within $lead s"\n'
+        "    fi\n"
+        '  done < "$w" || exit 1\n'
+        "fi\n"
+        'if [ -n "$q" ]; then printf "stale %s: %s\\n" "$q" "$s"; else printf "status %s\\n" "$s"; fi\n')
+
+
+N2_GATE = _n2_gate(stale_ok=True)
+#: what a write on node 2 runs first: the fill runner's fresh quiet status, never the stale form
+N2_WRITE_GATE = _n2_gate(stale_ok=False)
 
 COMMANDS = {
     "lease": _LEASE,
@@ -438,7 +503,7 @@ COMMANDS = {
     "holds": _dump(sorted(HOLDERS.values())),
     "files": _dump([LEAN_SLOTS, CHECK_SLOTS, *DIRECT.values(), USER_CPUSET]) + " && " + _DISPATCH,
     "overrides": _dump([OVERRIDES]),
-    "n2": _N2_GATE + _dump([f"{FILL}/windows", f"{FILL}/cpu-sets", CHECK_SLOTS, *DIRECT.values(), USER_CPUSET, OVERRIDES]),
+    "n2": N2_GATE + _dump([f"{FILL}/windows", f"{FILL}/cpu-sets", CHECK_SLOTS, *DIRECT.values(), USER_CPUSET, OVERRIDES]),
 }
 READS = {nebius1.NODE: ("lease", "kueue", "holds", "files", "overrides"), nebius2.NODE: ("n2",)}
 
@@ -464,6 +529,8 @@ class Live:
     notes: dict[str, str]
     overrides: list[dict[str, Any]] = field(default_factory=list)
     faults: dict[str, str] = field(default_factory=dict)
+    #: why node 2's gate read it as quiet with no fresh status from its fill runner (its stale form), with that status
+    quiet: str | None = None
 
 
 def _read_overrides(node: str, files: dict[str, str | None], live: Live) -> None:
@@ -614,7 +681,9 @@ def _read_n2(node: str, raw: str, now: int, live: Live) -> None:
     if kind == "refused":
         live.unknown[node] = f"node 2 refused to be read, and nothing else there was: {line[:240]}"
         return
-    if kind != "status":
+    if kind == "stale":
+        live.quiet = line
+    elif kind != "status":
         live.unknown[node] = f"node 2's gate printed {first[:80]!r}, neither a status nor a refusal"
         return
     files = _files(rest)
@@ -765,6 +834,8 @@ def render_diff(reports: list[dict[str, Any]]) -> str:
         o = sum(1 for r in rep["keys"] if r.get("override"))
         out.append(f"{rep['node']}: {n['ok']} as declared, {n['drift']} drift, {n['undeclared']} undeclared, {n['unknown']} unknown"
                    + (f"; {o} under an override" if o else ""))
+        if rep.get("quiet"):
+            out.append(f"  read as quiet: {rep['quiet']}")
         for r in rep["keys"]:
             if r["status"] == "ok" and not r.get("override"):
                 continue
@@ -848,7 +919,8 @@ def main_override(description: str | Path, key: str, value: str, until: str, by:
         print(f"{'overrode' if apply else 'would override'} {key}: {was} -> {v} until {until}, by {by}: {reason}"
               f"{'' if apply else f' (in {path}; --apply records it)'}\n"
               "Nothing carries it to the node but n1_lease.py, for its pool's max, borrow and borrow-until while $VY_POOL_POLICY "
-              "is set: set any other value yourself. `cluster policy diff` compares the live value with it.")
+              f"is set, and `cluster policy apply --key {key} --apply --as WHO --reason R`: set any other value yourself. "
+              "`cluster policy diff` compares the live value with it.")
     return 0
 
 
@@ -871,8 +943,9 @@ def main_diff(description: str | Path, which: str, as_json: bool, key: Path | No
             lv = live(node, raw, now)
             rows = diff(effective(keys, lv.overrides, now, node), node, lv, now)
         except Exception as e:  # noqa: BLE001  (output of any unexpected shape is unknown, exit 3, never drift's 1)
-            rows = diff(keys, node, Live({}, {node: f"its live policy couldn't be parsed: {type(e).__name__}: {e}"}, {}), now)
-        reports.append({"node": node, "keys": rows})
+            lv = Live({}, {node: f"its live policy couldn't be parsed: {type(e).__name__}: {e}"}, {})
+            rows = diff(keys, node, lv, now)
+        reports.append({"node": node, "keys": rows, **({"quiet": lv.quiet} if lv.quiet else {})})
     found = [r for rep in reports for r in rep["keys"] if r["status"] != "ok"]
     if as_json:
         print(json.dumps({"schema": "cluster/policy-diff/v1", "t": now, "description": str(description), "nodes": reports},

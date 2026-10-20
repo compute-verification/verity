@@ -482,9 +482,57 @@ def test_circuit_check_has_the_whole_slot_only_when_neither_pytest_nor_lean_runs
         [cc] = [s for g in CHECK.groups(tmp_path, 16, only=only) for s in g if s[0] == "circuit-check"]
         return cc[1][cc[1].index("--mem-gb") + 1]
 
-    assert mem(None) == mem(["circuit-check", "pytest"]) == mem(["circuit-check", "lean-build"]) == "210"
+    assert mem(None) == mem(["circuit-check", "lean-build"]) == mem(["circuit-check", "pytest", "lean-build"]) == "210"
     assert mem(["flock-circuit-build", "circuit-check", "flock-rust-tests"]) == "560"
     assert CHECK.cc_mem_gb(400, True) == 100 and CHECK.cc_mem_gb(100, True) == 25
+
+
+def test_beside_pytest_alone_circuit_check_takes_the_share_lean_suites_would_have(tmp_path, monkeypatch):
+    """A post-landing run (`--deferred circuit-check,pytest`) runs no Lean step, yet circuit-check got 210 GiB of a 560 GiB slot
+    while pytest kept to its half of the rest, 175: lean-suites' 175 went unused, and the 147-167 GiB SHA-512 targets ran one at
+    a time (b103, r20261019-015150-b103: 4 of them, 5,318 s end to end).  Pytest's share is unchanged."""
+    monkeypatch.setattr(CHECK, "FLOCK_LEAN", tmp_path / "verifier-lean")
+    monkeypatch.setattr(CHECK, "memory_gb", lambda: 2048)
+    monkeypatch.setenv(CHECK.SLOT.SLOT_MEM_ENV, "560")
+
+    def mem(only, step):
+        [s] = [s for g in CHECK.groups(tmp_path, 16, only=only) for s in g if s[0] == step]
+        return s[1][s[1].index("--mem-gb") + 1]
+
+    assert mem(["circuit-check", "pytest"], "circuit-check") == "385"
+    assert mem(["circuit-check", "pytest"], "pytest") == mem(None, "pytest") == "175"
+    assert CHECK.cc_mem_gb(400, True, lean=False) == 250 and CHECK.cc_mem_gb(100, True, lean=False) == 63
+
+
+def test_circuit_check_is_granted_the_slot_once_every_step_beside_it_has_ended(tmp_path, monkeypatch):
+    """b103 (r20261019-015150-b103): pytest ended 83 minutes into circuit-check's 125, and circuit-check kept to the share it
+    had beside pytest to the end.  Beside other steps it gets ``--mem-gb-file``, which `run` writes the slot's mem= to once those
+    steps have ended (`grant_when_alone`), a stale grant removed first; alone in the slot it has all of it already."""
+    import threading
+
+    monkeypatch.setattr(CHECK, "FLOCK_LEAN", tmp_path / "verifier-lean")
+    monkeypatch.setattr(CHECK, "memory_gb", lambda: 2048)
+    monkeypatch.setenv(CHECK.SLOT.SLOT_MEM_ENV, "560")
+
+    def argv(only):
+        [cc] = [s for g in CHECK.groups(tmp_path, 16, only=only) for s in g if s[0] == "circuit-check"]
+        return cc[1]
+
+    assert argv(["circuit-check", "pytest"])[-2:] == ["--mem-gb-file", str(tmp_path / CHECK.CC_GRANT)]
+    assert "--mem-gb-file" not in argv(["flock-circuit-build", "circuit-check", "flock-rust-tests"])
+    done = [threading.Event(), threading.Event()]
+    for e in done:
+        e.set()
+    CHECK.grant_when_alone(tmp_path / CHECK.CC_GRANT, done, 560)
+    assert (tmp_path / CHECK.CC_GRANT).read_text() == "560\n"
+
+    grant, ok = tmp_path / CHECK.CC_GRANT, _py("pass")
+    grant.unlink()
+    _fake_run(monkeypatch, [[("pytest", ok, tmp_path)], [("circuit-check", ok, tmp_path)]])
+    assert CHECK.run(tmp_path, 2)[0] and grant.read_text() == "560\n"
+    grant.write_text("9999\n")
+    _fake_run(monkeypatch, [[("circuit-check", ok, tmp_path)]])
+    assert CHECK.run(tmp_path, 1)[0] and not grant.exists()
 
 
 def test_the_tests_get_what_circuit_check_leaves_of_the_slot(tmp_path, monkeypatch):
@@ -1345,6 +1393,23 @@ def test_train_sh_against_keeps_the_quick_tiers_bounds_and_lean_build():
     assert f"wait_s={queue.REMOTE_WAIT_S} run_s={queue.REMOTE_TIMEOUT_S}" in text
     assert "".join(f" --lean {d}" for d in queue.LEAN_BUILDS) + " --head" in text
     assert "uv run --locked --all-packages --extra torch-cpu python tools/verity/check/suites.py" == " ".join(queue.QUICK_TIER[:-1])
+
+
+def test_train_sh_stops_a_launcher_that_launched_nothing_in_the_wait(tmp_path):
+    """18 Oct: train.sh gave up on a check.py still gathering verdicts after its wait, and check.py launched its runs later. Drive
+    had no ids for them, so nothing cancelled them, and one held a check slot 3 h on a tree no longer on `next`."""
+    import os
+
+    git, train, _ = _train_repo(tmp_path)
+    bin_, pidf, stopped = tmp_path / "bin", tmp_path / "pid", tmp_path / "stopped"
+    (bin_ / "uv").write_text(f"#!/bin/sh\n{_POST_STUB.format(posted=tmp_path / 'posted')}echo $$ > {pidf}.tmp\nmv {pidf}.tmp {pidf}\n"
+                             f"trap 'touch {stopped}; exit 143' TERM\nwhile :; do :; done\n")
+    (bin_ / "sleep").write_text(f"#!/bin/sh\nuntil [ -e {pidf} ]; do :; done\n")       # each poll waits on the launch, not on a clock
+    p = train("HEAD", "vy-x")
+    assert p.returncode != 0 and "stopped its launcher" in p.stderr, (p.stdout, p.stderr)
+    assert stopped.exists()
+    with pytest.raises(ProcessLookupError):
+        os.kill(int(pidf.read_text()), 0)
 
 
 def test_train_sh_returns_the_exit_of_a_check_that_died_before_launching(tmp_path):

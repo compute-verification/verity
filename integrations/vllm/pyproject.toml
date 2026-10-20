@@ -51,16 +51,25 @@ markers = [
 # tests/regression/test_attempt_resolution.py resolves. Test-only: tests/pipeline checks the fixtures
 # this package registers; tests/program/test_fp8_moe.py replays the Hopper e4m3 k32 step's pinned vectors (under `verity`);
 # tests/program/test_lowering.py imports `verity_sp1.proofs`; tests/engine's int8 tests run benchmarks/ppl's int8 steps as their oracle;
-# tests/store/test_remote_session.py runs the remote session's prover and verifier (`store.remote`).
+# tests/store/test_remote_session.py runs the remote session's prover and verifier (`store.remote`), and the verifier
+# imports lean_verifier.py.
 inputs_only = true
 inputs = ["verity", "verity/README.md", "tools/config/verity_config", "benchmarks/specs", "fixtures/artifacts.json", ".gitignore", "archive/sp1/python/verity_sp1",
           "benchmarks/ppl/steps.py", "benchmarks/ppl/matmul.py", "benchmarks/ppl/gates.py", "benchmarks/ppl/spec.py", "benchmarks/ppl/methodology.py", "benchmarks/ppl/model.py",
           "benchmarks/remote_session/prover.py", "benchmarks/remote_session/verifier.py", "benchmarks/remote_session/wire.py",
-          "benchmarks/remote_session/checks.py",
+          "benchmarks/remote_session/checks.py", "benchmarks/remote_session/lean_verifier.py",
           "tools/research/src/research/__init__.py", "tools/research/src/research/cli.py", "tools/research/src/research/clone.py",
           "tools/research/src/research/compare.py", "tools/research/src/research/env.py", "tools/research/src/research/pythonpath.py",
           "tools/research/src/research/record.py", "tools/research/src/research/remote.py", "tools/research/src/research/result.py",
-          "tools/research/src/research/runs.py", "tools/research/src/research/secret_hint.py", "tools/research/src/research/timefmt.py",
+          "tools/research/src/research/runs.py", "tools/research/src/research/secret_hint.py", "tools/research/src/research/timefmt.py", "tools/research/src/research/waitcap.py",
           "tools/research/src/research/store", "tools/research/src/research/telemetry", "tools/research/tests/fixtures/run_v0.2",
+          "tools/research/src/research/withdraw.py",
           "tools/research/src/research/__main__.py"]
 parallel = true
+# an xdist worker peaked at 6.2 GB, most stayed under 2 GB (19 Oct, vy-nebius-2: the full suite on 14 workers, r20261019-050410-3339;
+# 3.9 GB in the quick tier, r20261019-050331-542f); `--mem-gb`, or a job's memory cgroup, divides by this, so the default 16 GB
+# agent-test job runs 2 workers where the 9 GB default ran 1 and timed out at 60 min
+worker_gb = 8
+# the full suite took 10,187 s on 5 workers (r20261018-214339-1952), past suites.py's SUITE_TIMEOUT_S; `--quick` leaves out the
+# tests over 5 s (tests/slow_tests.json and the `slow` marks)
+timeout_s = 14400

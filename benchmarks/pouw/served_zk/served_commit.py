@@ -2,7 +2,8 @@
 judged through the proof service (`sampled_proofs.service`, P1: a `Stream`'s `register`, `select`, `deliver` and
 `outcome`), and the check that a hidden tile proof's committed rows are the drawn tile's.
 
-  python served_commit.py params PASS_DIR OUT [--eps E --delta D --entries P]   the verifier's own parameters of the window
+  python served_commit.py params PASS_DIR OUT [--eps E --delta D --entries P --max-tokens T --registration-deadline S]
+                                                                              the verifier's own parameters of the window
   python served_commit.py commit PASS_DIR PARAMS OUT [--calls N | --call I ...]   the committer: the window, salted and committed
   python served_commit.py register COMMIT_DIR PARAMS OUT [--extra ITEM=JSON]  the committer: the record, the public items only
   python served_commit.py edit REGISTRATION OUT KEY=JSON ...                  a control's registration, a field changed
@@ -38,11 +39,16 @@ judged through the proof service (`sampled_proofs.service`, P1: a `Stream`'s `re
   each call, not W's rows, until registered rows (P7) read B from W.  ``commitment.json`` is what the committer registers:
   the context, the level, the public items and the two roots.  ``advice.json`` (the entries and their salts) and
   ``prover.npz`` (rows, salts, b ‖ c) are the prover's.
+- **The fixed length** (Daniel, 19 Oct, ASK-39): the request is served at a public max_tokens under ignore_eos, so its
+  useful work is public.  The verifier's parameters hold its request's max_tokens (``length``), the committer registers
+  the runner's record of how it served it (``served.json`` beside the pass, `served_length`), and PoUW's rule refuses an
+  EOS-keyed row or a served length other than max_tokens (``window-form``).  A pass with no served record registers no
+  length item, which the verifier refuses as registered before the rule.
 - **The service** (P1): the committer's `register` writes one-stage's v1 record, scheme `service.SCHEME`, whose window
   holds exactly `pouw.window.REGISTERED`.  Two rules hold it: the service's (`service.check_public` over the `Spec`,
   which declares what one-stage's record shows besides the two salted roots: N, the window item, each root's leaf count
   and domain) and PoUW's inside the window item (`public_problem`: exactly those items, each the verifier's own
-  recomputation at the registered level from its own context, ε, δ, the grid, P and |W|).  The `Challenger` holds both,
+  recomputation at the registered level from its own context, ε, δ, the grid, P, |W| and max_tokens).  The `Challenger` holds both,
   then `Stream.register` (R1-R7 and the receipt), `select`, `deliver` (the drawn units' session records' SHA-512, once)
   and `outcome` (final), and publishes exactly `pouw.window.PUBLIC`.  A Spec fixes one law and K′ is a function of the
   level, so the challenger holds one Stream per level.
@@ -50,10 +56,10 @@ judged through the proof service (`sampled_proofs.service`, P1: a `Stream`'s `re
   `public_problem` mirrors for the committer), R1-R6, the pass's epoch, the draw, PoUW's check over the stream's outcome
   (`core_check.case`) and a unit's opening each run Lean's port and Python's reference on one input; Lean's verdict
   decides and is the published items', both go in the window's witness (``outcome.json``'s ``of_record``, the opening
-  verdict's ``witness``), and a disagreement refuses as ``lean-python-disagree: <check>``.  `service.check_public` runs
-  beside R1-R6, which decide what it reads of the record, and may refuse only what they refuse (``public``), as `check`'s
-  reading of the registration before an opening may refuse only what the opening refuses (``prelude``); the stream's own
-  state stays Python's.
+  verdict's ``witness``), and a disagreement refuses as ``lean-python-disagree: <check>``.  The service's public-items
+  rule is Lean's too (``public``, `Service.checkPublic` beside `service.check_public`), and `check`'s reading of the
+  registration before an opening may refuse only what the opening refuses (``prelude``); the stream's own state stays
+  Python's.
 - **The coins** are the epoch's (`pouw.coins`): the challenger process that holds the Streams holds the epoch's coin
   challenger, whose commitment it publishes before the epoch (``LOG/coins.json``); with ``--state`` its entropy is the
   serving controller's (`e2e.state_entropy`), so the pass's salt coin is one it opens.  A window's registration names its
@@ -62,8 +68,10 @@ judged through the proof service (`sampled_proofs.service`, P1: a `Stream`'s `re
   weights' root, and the pass's salt must be that coin's; a pass recorded before epoch coins (a beacon's salt) is read
   only when the request says it is a recorded replay.  `select` opens the epoch's draw coin after the registration (its
   digest), once, with no retry, and the draw's key is `draw_key` of that coin; Lean ``flock-verify draw --population N
-  --k K′ --stream`` samples over the key's stream (`stream_subset` is its Python twin).  The challenger records each
-  opening (``LOG/openings.jsonl``), and `replay` re-runs its requests from those records, byte for byte.
+  --k K′ --stream`` samples over the key's stream (`stream_subset` is its Python twin).  A window is received within
+  the registration deadline of the salt coin's release and before the epoch's draw coin is released, or it is refused
+  (`late-registration`); parameters without the deadline are refused.  The challenger records each opening
+  (``LOG/openings.jsonl``), and `replay` re-runs its requests from those records, byte for byte.
 - **The check** reads a proof's public file (``pub.bin``): instance 0's b ‖ c of its A row and B row must be the unit's rows,
   each by its frame-v3 path to its entry's side root, and the entry by its path to the registered window root.  The
   opening hands the verifier the drawn units' entries: a development shortcut, until position reads in gates (the joint
@@ -121,6 +129,11 @@ BUDGET = 1
 #: the window's proof deadline (`Check.proof_deadline`), seconds on the challenger's clock from the draw, unless the
 #: parameters give ``proof_deadline``: a day
 PROOF_DEADLINE = 86400.0
+#: the window's registration deadline (`Check.registration_deadline`, `Pouw.AcceptsBy`'s td), seconds on the challenger's
+#: clock from the epoch's salt coin's release, unless ``params --registration-deadline`` gives another: an hour
+REGISTRATION_DEADLINE = 3600.0
+NO_DEADLINE = ("the window's parameters name no registration_deadline, so the service would accept a window EndToEndWindow "
+               "doesn't cover: write them with `served_commit.py params` (REGISTRATION_DEADLINE, or --registration-deadline)")
 #: the frame's owner, as C-Flock's statement domains have it (`verity_flock.ir_frame.OWNER`)
 OWNER = -1
 SALT_BYTES = 192
@@ -137,6 +150,10 @@ W_DOMAIN = "verity/pouw/served-zk/weights-domain/v0"
 ENTRIES = 16
 RANGE = (1, 1 << 40)
 EPS, DELTA = "1/2", "1/10"
+#: the max_tokens of the request the verifier issues, `e2e.SERVED_TOKENS`, and the runner's record of how it served it
+#: (``{"ignore_eos", "max_tokens", "served"}``, a list per slot), which `e2e.py` writes beside the retained pass
+MAX_TOKENS = 4
+SERVED_RECORD = "served.json"
 
 
 # ---- the window's parameters and its spec ---------------------------------------------------------------------------------
@@ -170,19 +187,29 @@ def check_item(params: dict) -> dict:
     return {"template": template(params["k"]).id, "tile_work": tile_work(params), "scheme": S.SCHEME, "entries": params["entries"]}
 
 
-def items_of(params: dict, ell: int, root_w: str | None) -> dict:
-    """The registered public items at level `ell` (`pouw.window.REGISTERED`)."""
+def served_length(served: Mapping[str, Any]) -> dict:
+    """The registered length item (`pouw.window.length_item`'s form) of the runner's served record (``served.json``,
+    `e2e.py`'s served requests): each slot's max_tokens and served length, and stop fixed when it served under
+    ignore_eos, else ``eos``, which the verifier refuses as an EOS-keyed row."""
+    return {"max_tokens": list(served["max_tokens"]), "served": list(served["served"]),
+            "stop": Wd.STOP_FIXED if served.get("ignore_eos") is True else "eos"}
+
+
+def items_of(params: dict, ell: int, root_w: str | None, length: Mapping[str, Any] | None = None) -> dict:
+    """The registered public items at level `ell` (`pouw.window.REGISTERED`), the rows' length item `length`; with none,
+    `pouw.window.LEGACY_REGISTERED`, a window the verifier refuses as registered before the fixed-length rule."""
     w = work_at(params, ell)
     return {"work": w.to_json(tile_work(params)), "check": check_item(params),
             "sampling": Wd.sampling(Fraction(params["eps"]), Fraction(params["delta"]), w, tile_work(params), params["grid_bits"]),
-            "root_W": root_w}
+            **({"length": dict(length)} if length is not None else {}), "root_W": root_w}
 
 
 #: what one-stage's record shows besides the two salted roots, each declared to the service's rule with its reason
 LAYOUT = (
     ("population", "structure", "N, the padded tile count g_(ℓ+1): the draw's range, a function of the registered level"),
-    ("window", "output", "PoUW's registered items, exactly `pouw.window.REGISTERED` (work, check, sampling, root_W), each "
-                         "the verifier's own recomputation at the registered level (`public_problem`)"),
+    ("window", "output", "PoUW's registered items, exactly `pouw.window.REGISTERED` (work, check, sampling, length, root_W), "
+                         "each the verifier's own recomputation at the registered level, the length its fixed max_tokens "
+                         "(`public_problem`)"),
     (f"leaves:{PORT}", "structure", "P, the public bound on a window's entries"),
     (f"domain:{PORT}", "structure", "the entries' served domain: the window's program, partition and context"),
     ("leaves:W", "structure", "|W|, the deployment's weight rows at k = n = K"),
@@ -194,11 +221,14 @@ def law_of(params: dict, ell: int) -> dict:
     return items_of(params, ell, None)["sampling"]["law"]
 
 
-def spec_of(params: dict, ell: int) -> S.Spec:
+def spec_of(params: dict, ell: int, predates_deadline: bool = False) -> S.Spec:
     """P1's Spec of a window at level `ell`: the entries and W committed, subset:K′ of the level, the tile template's
-    Program and query as the check, and `LAYOUT` declared.  With ``registration_deadline`` in `params` (seconds on the
-    challenger's clock from the epoch's salt coin's release), the check carries it: `Pouw.AcceptsBy`'s td.  Its proof
+    Program and query as the check, and `LAYOUT` declared.  The check carries ``registration_deadline`` from `params`
+    (seconds on the challenger's clock from the epoch's salt coin's release, `Pouw.AcceptsBy`'s td), and parameters
+    without one raise `ValueError` (`NO_DEADLINE`) unless `predates_deadline`, a recorded window's replay.  Its proof
     deadline is ``proof_deadline`` in `params`, else `PROOF_DEADLINE`."""
+    if params.get("registration_deadline") is None and not predates_deadline:
+        raise ValueError(NO_DEADLINE)
     d = template(params["k"])
     return S.Spec(values=(S.Value(PORT, ENTRY_SCHEMA, "serve"), S.Value("W", W_SCHEMA, "epoch")),
                   selection=S.Law(f"subset:{law_of(params, ell)['k']}"),
@@ -252,7 +282,8 @@ def level_of(rec: Mapping[str, Any]) -> int:
 def public_problem(params: dict, rec: Any) -> Verdict:
     """PoUW's rule inside the window item, which the service's rule declares as one item: the window is
     ``{"kind": "served", "context", "public"}`` under the verifier's own context, its public items are exactly
-    `pouw.window.REGISTERED`, each the verifier's own at the registered level (root_W the registered W root), and N is the
+    `pouw.window.REGISTERED`, each the verifier's own at the registered level (root_W the registered W root; the length a
+    fixed-length window's at the verifier's max_tokens, `pouw.window.length_problem`, else ``window-form``), and N is the
     level's padded count."""
     c = _Collect()
     window = rec.get("window") if isinstance(rec, Mapping) else None
@@ -262,9 +293,16 @@ def public_problem(params: dict, rec: Any) -> Verdict:
     if window["kind"] != "served" or window["context"] != params["context"]:
         c.fail("public-context", {"registered": [window["kind"], window["context"]], "verifier": ["served", params["context"]]})
     items = window["public"]
+    if isinstance(items, Mapping) and set(items) == set(Wd.LEGACY_REGISTERED):
+        c.fail("window-form", "no-fixed-length: registered before the fixed-length rule (19 Oct), so not of record")
+        return c.verdict()
     if not isinstance(items, Mapping) or set(items) != set(Wd.REGISTERED):
         c.fail("public-items", {"registered": sorted(items) if isinstance(items, Mapping) else items,
                                 "declared": sorted(Wd.REGISTERED)})
+        return c.verdict()
+    why = Wd.length_problem(items["length"], params["length"]["max_tokens"])
+    if why is not None:
+        c.fail("window-form", why.split(": ", 1)[1])
         return c.verdict()
     try:
         ell = level_of(rec)
@@ -375,14 +413,15 @@ def filler_shape(fill: int) -> tuple[int, int]:
     return -(-fill // b), b
 
 
-def commit_window(params: dict, calls: list[dict], root_w: str, root_h3: bytes, salts: dict | None = None
-                  ) -> tuple[dict, dict, dict]:
+def commit_window(params: dict, calls: list[dict], root_w: str, root_h3: bytes, salts: dict | None = None,
+                  length: Mapping[str, Any] | None = None) -> tuple[dict, dict, dict]:
     """The window's commitment from its calls (each `{"record", "words": {"a", "b"}}`, the record holding the call's
     ``shape`` [m, k, n] and its first tile in the pass ``tile0``, a side's words None where the scheme refused the row) of
     the pass whose -h3 tile commitment's root is `root_h3`: (``commitment.json``, ``advice.json``, the prover's rows).  Each
     side tree holds the kept rows only, each with its place in the call (`Wd.side_row`); the call's record
     (`advice["records"]`, its SHA-512 in the entry) gains those places (``keep``), and the entry its tile0, cols and m.
-    `salts` replays the salts of an earlier commit's prover file (`load`)."""
+    `salts` replays the salts of an earlier commit's prover file (`load`).  `length` is the registered length item
+    (`served_length` of the pass's served record; none, a window registered before the fixed-length rule)."""
     k = params["k"]
     zero = Wd.side_row([0] * L.ROW_WORDS["fp8-p"](k), 0)
     keeps = [{s: [i for i, w in enumerate(c["words"][s]) if w is not None] for s in SIDES} for c in calls]
@@ -424,7 +463,7 @@ def commit_window(params: dict, calls: list[dict], root_w: str, root_h3: bytes, 
     levels = tree_levels(dom, [entry_leaf(dom, e, entry_bc(x, s)) for e, (x, s) in enumerate(zip(entries, esalts))])
     roots = [{"port": PORT, "root": levels[-1][0].hex(), "leaves": params["entries"], "domain": dom.domain_id.hex()},
              {"port": "W", "root": root_w, "leaves": params["w_rows"], "domain": weights_domain(params).domain_id.hex()}]
-    public = {"schema": SCHEMA, "context": params["context"], "level": ell, "items": items_of(params, ell, root_w),
+    public = {"schema": SCHEMA, "context": params["context"], "level": ell, "items": items_of(params, ell, root_w, length),
               "roots": roots}
     advice = {"schema": SCHEMA, "level": ell, "real": real, "root_h3": root_h3.hex(), "entries": [x.to_json() for x in entries],
               "records": records,
@@ -639,14 +678,23 @@ class Challenger:
     fixes one law and K′ is a function of the registered level, so it holds one Stream per (stream name, level); each
     registration it accepted is held by name.  A control stream `replay`s an earlier draw and opens no coin, so a
     control's verdicts are judged on the honest draw's units.  The window's Check has a proof deadline (`spec_of`): a
-    drawn window whose proof isn't delivered by it is `late`.  Under a
-    ``registration_deadline`` the salt coin's opening reads the clock (its release), and each stream records the epoch's
-    salt at that release (`Stream.salt_released`) before its first registration, so a window received later than the
-    deadline, or before the salt is open, is refused (`late-registration`) and earns no credit.  Without one the clock
-    decides only the proof deadline; it counts the challenger's reads of it unless `clock` is given."""
+    drawn window whose proof isn't delivered by it is `late`.  It has a registration deadline too, and `params` without
+    ``registration_deadline`` are refused (`NO_DEADLINE`): the salt coin's opening reads the clock (its release), and
+    each stream records the epoch's salt at that release (`Stream.salt_released`) before its first registration, so a
+    window received later than the deadline, or before the salt is open, is refused (`late-registration`) and earns no
+    credit.  A window received after the epoch's draw coin was released is refused as `late-registration` too: the
+    record's order is each root's receipt before the coin's release.  A control (`replay`) opens no coin and is exempt.
+    `predates_deadline` replays a record whose parameters predate the deadline as it ran, untimed.  The clock counts the
+    challenger's reads of it unless `clock` is given."""
 
     def __init__(self, params: dict, coins: Any, sampler: Sampler = python_sampler, budget: int = BUDGET,
-                 clock: Callable[[], float] | None = None, record: OR.Record | None = None) -> None:
+                 clock: Callable[[], float] | None = None, record: OR.Record | None = None,
+                 predates_deadline: bool = False) -> None:
+        if (params.get("registration_deadline") is None) != predates_deadline:
+            raise ValueError(NO_DEADLINE if not predates_deadline else
+                             "the window's parameters carry a registration_deadline: only a record that predates it replays "
+                             "without one")
+        self.predates_deadline = predates_deadline
         self.params, self.coins, self.sampler, self.budget = params, coins, sampler, budget
         self.record = OR.Record() if record is None else record
         self.core = core_params(params)
@@ -675,7 +723,7 @@ class Challenger:
         if why is not None:
             raise _refused("coin", f"the {label}'s {why}")
         self.openings[label] = o
-        if label == "salt" and self.params.get("registration_deadline") is not None:
+        if label == "salt" and not self.predates_deadline:
             self.salt_released_at = self.clock()
         return o
 
@@ -712,9 +760,9 @@ class Challenger:
             raise _refused(*out["refused"]) if isinstance(out["refused"], list) else _refused("manifest", out["refused"])
         return out["how"]
 
-    def r1_r6(self, name: str, st: S.Stream, rec: Mapping[str, Any], ports_: dict, public: list[str]) -> None:
-        """One-stage's R1-R6 against the challenger's own copies, as `Stream.register` runs them, of record, with the
-        public-items rule's codes `public` beside them (`Record.public`).  Raises `Refused`."""
+    def r1_r6(self, name: str, st: S.Stream, rec: Mapping[str, Any], ports_: dict) -> None:
+        """One-stage's R1-R6 against the challenger's own copies and the service's public-items rule over the Stream's
+        Spec, as `Stream.register` runs them, each of record.  Raises `Refused`."""
         n = rec["population"]
         law = D.parse_law(st.spec.selection.text)
         prog = PT.population_program(st.unit, n)
@@ -723,9 +771,11 @@ class Challenger:
                                 OR.registration_params(prog, q, law, S.SCHEME, ports_, list(st.log), self.params["delta"]),
                                 dict(rec), lambda: R.check(rec, prog, q, law, S.SCHEME, ports_, None, (), list(st.log), None,
                                                           None, None).codes)
-        codes = self._of_record(name, self.record.public, public, codes)
+        public = self._of_record(name, self.record.public, OR.public_params(st.spec, rec, S.SCHEME),
+                                 lambda: S.check_public(st.spec, rec).to_json())
+        codes = list(codes) + [c for c in public.get("codes", ["public"]) if c not in codes]
         if codes:
-            raise S.Refused(Verdict(False, tuple(codes), {c: "R1-R6, of record" for c in codes}))
+            raise S.Refused(Verdict(False, tuple(codes), {c: "R1-R6 and the public-items rule, of record" for c in codes}))
 
     def _keyed(self, law: Mapping[str, Any], n: int) -> list[int]:
         if self._key is None:
@@ -734,7 +784,8 @@ class Challenger:
 
     def stream(self, name: str, ell: int, sampler: Callable[[Mapping[str, Any], int], list[int]]) -> S.Stream:
         if (name, ell) not in self.streams:
-            self.streams[name, ell] = S.Stream(spec_of(self.params, ell), template(self.params["k"]), budget=self.budget,
+            self.streams[name, ell] = S.Stream(spec_of(self.params, ell, self.predates_deadline), template(self.params["k"]),
+                                               budget=self.budget,
                                                delta=float(Fraction(self.params["delta"])), challenger=f"{CHALLENGER}/{name}",
                                                clock=self.clock, sampler=sampler)
         return self.streams[name, ell]
@@ -751,20 +802,24 @@ class Challenger:
 
     def register(self, name: str, rec: Mapping[str, Any], stream: str = "window", replay: str | None = None,
                  manifest: bytes | None = None, recorded: bool = False) -> S.Registration:
-        """Receive window `rec` from the pass whose manifest is `manifest` (`pass_epoch`), or a control's (`replay`)."""
+        """Receive window `rec` from the pass whose manifest is `manifest` (`pass_epoch`), or a control's (`replay`).  A
+        window received after the epoch's draw coin was released is refused (`late-registration`)."""
         self.witness[name] = []
+        if replay is None and not self.predates_deadline and "draw" in self.openings:
+            raise _refused("late-registration", f"received after the epoch's draw coin was released (opened after "
+                                                f"registration {self.openings['draw'].after.hex()[:32]}): a window "
+                                                f"registers before the draw coin")
         self.registered(name, rec)
         how = self.pass_epoch(manifest, recorded, name) if replay is None else None
         ell = level_of(rec)
         sampler = self._keyed if replay is None else (lambda law, n, d=self._drawn(replay): d.units)
         st = self.stream(stream, ell, sampler)
-        if (self.params.get("registration_deadline") is not None and self.salt_released_at is not None
-                and (stream, ell) not in self._salted):
+        if not self.predates_deadline and self.salt_released_at is not None and (stream, ell) not in self._salted:
             st.salt_released(self.openings["salt"].coin, self.salt_released_at)
             self._salted.add((stream, ell))
         own = ports(self.params, ell)
         st.ready()
-        self.r1_r6(name, st, rec, own, list(S.check_public(st.spec, rec).codes))
+        self.r1_r6(name, st, rec, own)
         reg = st.register(rec, own)
         self.regs[name] = (st, reg)
         self.recorded[name] = bool(recorded)
@@ -941,13 +996,16 @@ def _weights(man: dict, calls: list[dict]) -> list[int]:
 
 
 def cmd_params(a) -> int:
-    """The verifier's own parameters, from the served request it audits: its run and manifest name the window, and the
-    model's k = n = K weights give |W|."""
+    """The verifier's own parameters, from the served request it audits: its run and manifest name the window, the
+    model's k = n = K weights give |W|, the request's one slot its fixed length (``--max-tokens``, ignore_eos), and the
+    registration deadline is the window's td."""
     _, man, sha, calls = _pass(Path(a.pass_dir))
     rows = sum(next(u["n"] for u in calls if int(u["weight"]) == w) for w in _weights(man, calls))
     deployment = f"served-zk/{man.get('run')}"
     params = {"context": f"{deployment}/{sha}", "deployment": deployment, "k": K, "eps": a.eps, "delta": a.delta,
-              "grid_bits": Wd.GRID_BITS, "range": list(RANGE), "entries": a.entries, "w_rows": rows}
+              "grid_bits": Wd.GRID_BITS, "range": list(RANGE), "entries": a.entries, "w_rows": rows,
+              "length": {"max_tokens": [a.max_tokens], "stop": Wd.STOP_FIXED},
+              "registration_deadline": a.registration_deadline}
     Path(a.out).write_text(json.dumps(params, sort_keys=True))
     print(json.dumps(params), flush=True)
     return 0
@@ -1000,7 +1058,12 @@ def cmd_commit(a) -> int:
             for j in range(n):
                 yield data[2 * K * j:2 * K * (j + 1)]
     root_w, _ = commit_weights(params, w_rows())
-    public, advice, priv = commit_window(params, window, root_w, root_h3_of(man))
+    served = pass_dir / SERVED_RECORD
+    length = served_length(_json(served)) if served.is_file() else None
+    if length is None:
+        print(f"no {SERVED_RECORD} beside the pass: the window registers no fixed length, and the verifier refuses it",
+              flush=True)
+    public, advice, priv = commit_window(params, window, root_w, root_h3_of(man), length=length)
     advice["provenance"] = {"run": man.get("run"), "manifest_sha512": sha, "scheme": man["scheme"],
                             "transcript_root": man.get("transcript_root"), "commitment": man.get("commitment"),
                             "records_root": man.get("records_root"),
@@ -1093,7 +1156,7 @@ def cmd_challenger(a) -> int:
         coins = Coins(a.epoch)
     (log / "coins.json").write_text(json.dumps(coins.commitment.to_json(), sort_keys=True))
     ch = Challenger(_json(a.params), coins, lean_sampler(a.lean, log / "draws.jsonl") if a.lean else python_sampler,
-                    record=OR.Record(lean=not a.python_record))
+                    record=OR.Record(lean=False if a.python_record else None))
     for line in sys.stdin:
         if not line.strip():
             continue
@@ -1123,11 +1186,14 @@ def replay(params: dict, log: Path, out: Path, sampler: Sampler = python_sampler
            ) -> list[str]:
     """The challenger's requests again (LOG/requests.jsonl) from its records alone: the published commitment and the
     coins it opened (`Recorded`), each request's ``out`` under OUT.  Every difference from the record: a reply, or a file
-    a request wrote; empty when the replay is byte-identical."""
+    a request wrote; empty when the replay is byte-identical.  A record whose parameters predate the registration
+    deadline replays as it ran (`Challenger`'s `predates_deadline`): the deadline is in the Spec's digest, which keys the
+    draw, so it can't be added to a recorded window."""
     coins = Recorded(CoinCommitment.from_json(_json(log / "coins.json")),
                      [CoinOpening.from_json(json.loads(x)) for x in
                       ((log / "openings.jsonl").read_text().splitlines() if (log / "openings.jsonl").exists() else ()) if x])
-    ch, diffs = Challenger(params, coins, sampler, record=record), []
+    ch = Challenger(params, coins, sampler, record=record, predates_deadline=params.get("registration_deadline") is None)
+    diffs = []
     for i, x in enumerate((log / "requests.jsonl").read_text().splitlines()):
         entry = json.loads(x)
         line, was, wrote = entry["request"], entry["reply"], None
@@ -1148,9 +1214,10 @@ def replay(params: dict, log: Path, out: Path, sampler: Sampler = python_sampler
 
 def cmd_replay(a) -> int:
     diffs = replay(_json(a.params), Path(a.log), Path(a.out), lean_sampler(a.lean) if a.lean else python_sampler,
-                   OR.Record(lean=not a.python_record))
+                   OR.Record(lean=False if a.python_record else None))
     n = len((Path(a.log) / "requests.jsonl").read_text().splitlines())
-    print(f"{'SAME' if not diffs else 'DIFFERENT'} {json.dumps({'requests': n, 'diffs': diffs[:8]})}", flush=True)
+    out = {"requests": n, "diffs": diffs[:8], **({"predates_deadline": True} if "registration_deadline" not in _json(a.params) else {})}
+    print(f"{'SAME' if not diffs else 'DIFFERENT'} {json.dumps(out)}", flush=True)
     return 0 if not diffs else 1
 
 
@@ -1186,7 +1253,7 @@ def cmd_coin_variant(a) -> int:
 
 def cmd_check(a) -> int:
     params, reg, d = _json(a.params), _json(a.registration), _json(a.draw)
-    record = OR.Record(lean=not a.python_record)
+    record = OR.Record(lean=False if a.python_record else None)
     why = check(params, reg, d, a.unit, Path(a.pub).read_bytes(), _json(a.opening), drawn=not a.undrawn, record=record)
     record.close()
     if a.out:
@@ -1263,6 +1330,10 @@ def main(argv=None) -> int:
     p.add_argument("--eps", default=EPS)
     p.add_argument("--delta", default=DELTA)
     p.add_argument("--entries", type=int, default=ENTRIES)
+    p.add_argument("--max-tokens", type=int, default=MAX_TOKENS,
+                   help="the max_tokens the verifier's request set, each row served to it under ignore_eos")
+    p.add_argument("--registration-deadline", type=float, default=REGISTRATION_DEADLINE,
+                   help="seconds on the challenger's clock from the salt coin's release (default: REGISTRATION_DEADLINE)")
     p = sub.add_parser("commit")
     for x in ("pass_dir", "params", "out"):
         p.add_argument(x)

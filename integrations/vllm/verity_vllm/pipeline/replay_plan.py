@@ -101,7 +101,8 @@ def _serve(conn: Connection, args: Any) -> None:
     q = manifest if isinstance(manifest, dict) else None
     arrive = {rl[str(r.get("request_id"))]: int(r.get("arrive_step") or 0) for r in reqs}
     memo: dict = {}
-    SR.populate(progs, [0], arrive, {}, ring, attention_paths=None, tp=None, program_dirs=dirs, manifest=q, memo=memo)
+    warm = C2.cached_prefixes(reqs, rl)
+    SR.populate(progs, [0], arrive, {}, ring, attention_paths=None, tp=None, program_dirs=dirs, manifest=q, memo=memo, cached_prefixes=warm)
     k0 = next(iter(progs))
     conn.send(C2.linkage_facts(loaded, progs, memo[("index", id(progs[k0]))]) | {"prepare_s": round(time.perf_counter() - t0, 3)})
     f = conn.recv()
@@ -115,7 +116,7 @@ def _serve(conn: Connection, args: Any) -> None:
                            seed=f["seed"], seed_source=f["seed_source"], seed_challenge=f["seed_challenge"], max_evaluate=int(args.replay_max),
                            challenge_key=CH.replay_key(bytes.fromhex(f["live_key"]), bytes.fromhex(f["run_root"])) if f.get("live_key") else None,
                            targets=list(args.replay_target or []), replay_k=args.replay_k, replay_draw=C2.draw_of(args), ring_slots=ring, manifest=q, program_dirs=dirs, plan=True,
-                           memo=memo, **f["sr_kw"])
+                           memo=memo, cached_prefixes=warm, **f["sr_kw"])
     conn.send({"reads": list(dict.fromkeys(reads)), "plan": sr | {"reads_made": len(reads)}})
 
 

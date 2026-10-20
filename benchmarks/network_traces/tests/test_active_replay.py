@@ -122,6 +122,81 @@ def test_an_honest_run_is_accepted_and_is_run_shapers(runs):
     assert audit["timing"]["tick_late_ms"]["egress"]["max"] < 0.001
 
 
+def test_a_salted_run_puts_the_salt_frame_on_ingress_only(setup, runs, tmp_path):
+    """With the certifier's salt on, each window's ingress record holds one salt frame, the placeholder's, and no
+    egress record holds any, nor any salt; the server receives every window's salt, the audit reads each salt frame
+    and the width of the salt `reveal` gave, and every verdict and comparison is the unsalted run's. No record binds the
+    salt, so another salt of the width passes the salt check, and only the server's log tells it apart."""
+    _, report, _ = setup
+    plan, results = runs
+    assert ar.run_virtual(plan, report, tmp_path, salt=True) == {"server": 0, "proxy": 0, "peer": 0}
+    salts = json.loads((tmp_path / "salts.json").read_text())
+    assert sorted(salts) == ["0", "1", "2"] and all(len(bytes.fromhex(s)) == 64 for s in salts.values())
+    audit = ar.audit_configuration(plan, report, tmp_path)
+    honest = results["honest"][1]
+    assert audit["rows"] == honest["rows"]
+    assert audit["comparisons"] == honest["comparisons"]
+    assert audit["salt"] == {"accepted": True, "violations": [], "ingress_salt_frames": [1, 1, 1],
+                             "egress_salt_frames": 0, "egress_holds_salt": False, "block_received": True}
+    assert ar.against_honest(tmp_path, results["honest"][0])["wire_is_honests"]
+    assert "salt" not in honest
+
+    for other, accepted in ((bytes(64), True), (bytes(32), False)):
+        (tmp_path / "salts.json").write_text(json.dumps(dict(salts, **{"1": other.hex()})))
+        audit = ar.audit_configuration(plan, report, tmp_path)
+        assert audit["salt"]["accepted"] is accepted and audit["salt"]["violations"] == ([] if accepted else [[1, "salt"]])
+        assert audit["salt"]["block_received"] is False and audit["rows"] == honest["rows"]
+
+
+def test_a_certifier_down_for_a_window_publishes_nothing_for_it_and_the_rest_as_if_never_down(setup, tmp_path):
+    """`outage_plan`: the block is drained for window 1, its proxy serves window 0 and closes the link, nothing
+    listens for window 1, and a proxy back from maintenance serves window 2 on the peer's second connection. The
+    audit has no verdict for window 1 on either link and accepts the others; the records of windows 0 and 2, raw and
+    committed, and the wire are those of a certifier that never went down, on the same plan."""
+    doc, report, s = setup
+    plan = ar.plan_configuration(doc["configurations"][0], s)
+    outage = ar.outage_plan(plan, s)
+    assert outage["outage"] == {"window": 1, "position": 12, "bucket": 2 * T}
+    assert len(outage["requests"]) == 6 and all(q["enqueue"] // T != 1 for q in outage["requests"])
+    down, never = tmp_path / "down", tmp_path / "never"
+    assert ar.run_virtual(outage, report, down) == {"server": 0, "proxy": 0, "peer": 0}
+    always = {k: v for k, v in outage.items() if k != "outage"}
+    assert ar.run_virtual(always, report, never) == {"server": 0, "proxy": 0, "peer": 0}
+    audit = ar.audit_configuration(outage, report, down)
+    assert [(r["link"], r["window"], r["raw"], r["committed"]) for r in audit["rows"]] == \
+        [(link, w, *(("no-verdict",) * 2 if w == 1 else (None, None))) for link in ("responses", "requests")
+         for w in range(3)]
+    c = audit["comparisons"]
+    assert c["records_are_run_shapers"] and c["hands_are_the_rules"] and c["frames_log_is_the_programs"]
+    assert c["wire_is_the_records"] and c["frames_read"] == c["frames_meant"] == 24
+    for name, params in (("responses.records", s.egress_params), ("requests.records", s.ingress_params)):
+        assert ar.read_blobs(down / name) == [b for b in ar.read_blobs(never / name)
+                                              if ar.unpack_record(b, params.frame_bytes).window != 1]
+    assert sorted((down / "committed.jsonl").read_text().splitlines()) == \
+        sorted(line for line in (never / "committed.jsonl").read_text().splitlines()
+               if json.loads(line)["window"] != 1)
+    wire = json.loads((never / "peer.json").read_text())["window_sha256"]
+    assert json.loads((down / "peer.json").read_text())["window_sha256"] == [wire[0], wire[2]]
+    import gzip
+    assert json.load(gzip.open(down / "proxy.json.gz", "rt"))["served"] == [[0, 1], [2, 3]]
+
+
+def test_an_outage_is_refused_where_the_windows_before_are_still_in_flight(setup):
+    """An outage in the first or last window has no window before or after it, an online prover declares from window
+    0 on, and a session of window 0 whose frames are ready only in window 1 would be cut by the outage."""
+    doc, _, s = setup
+    plan = ar.plan_configuration(doc["configurations"][0], s)
+    for window in (0, 2):
+        with pytest.raises(ValueError, match="one of windows 1"):
+            ar.outage_plan(plan, s, window)
+    with pytest.raises(ValueError, match="online prover"):
+        ar.outage_plan(ar.plan_configuration(doc["configurations"][0], s, syncs="cover-2-1"), s)
+    name, stream, ds = plan["sessions"][0]
+    slow = plan | {"sessions": [[name, stream, [d + T for d in ds]], *plan["sessions"][1:]]}
+    with pytest.raises(ValueError, match="ready or handed"):
+        ar.outage_plan(slow, s)
+
+
 def test_a_released_frame_that_isnt_the_programs_is_counted_not_a_crash(setup, runs, tmp_path):
     """The records of an honest run with one released frame replaced, as a server that numbers an event other than
     the Program does: the audit counts it, and its window is a mismatch raw (the committed records are the run's)."""

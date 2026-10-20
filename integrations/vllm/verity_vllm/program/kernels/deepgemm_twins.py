@@ -4,6 +4,8 @@ GLM-5.3's ue8m0 requantisation.  The capture (tests/properties/deepgemm_capture_
 and the word Definitions with the GPU; tests/program/test_deepgemm.py pins each twin to its Definition."""
 from __future__ import annotations
 
+__models__ = ("zai-org/GLM-5.3", "deepseek-ai/DeepSeek-V4-Pro")
+
 import numpy as np
 
 from verity_vllm.program.kernels import derived_rows as R

@@ -1,3 +1,6 @@
 import Firewall.Protocol
+import Firewall.Json
 
-def main (args : List String) : IO UInt32 := Core.Firewall.protocol.main args
+def main : List String → IO UInt32
+  | ["decide"] => Core.Firewall.decideMain
+  | args => Core.Firewall.protocol.main args

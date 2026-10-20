@@ -107,6 +107,19 @@ most $2^{-40}$; `record_sizing_one_fewer`: $K = 27{,}712$ does not reach it unde
 acceptance probability. `FlockWork.lean`'s `workRule_eq_draw` and `countRule_eq_draw`: the executable's
 `Flock.Draw.workK` and `stratumK` are `Law.workRule` and `countRule`.
 
+**Theorems, harm bounds** (`Audit/HarmBound.lean`, `IsHarmBound` proved for the stratified sampling design):
+`stratified_escape_le_exp`, **the closed form**: a set with $c_s$ units in stratum $s$ has acceptance probability at most
+$\exp(-\sum_s k_s c_s / n_s)$ (`work_escape_le_exp` for the work sampling design), so one with acceptance probability at
+least $\delta > 0$ has $c_s \le n_s - k_s$ and $\sum_s k_s c_s / n_s \le \ln(1/\delta)$ (`stratified_risk_le`).
+`stratified_isHarmBound_dual`: with harm $g_s$ per unit of stratum $s$, every $\tau \ge 0$ gives the harm bound
+$\tau \ln(1/\delta) + \sum_s (n_s - k_s) \max(0, g_s - \tau k_s / n_s)$, weak duality for that fractional knapsack.
+`stratified_isHarmBound_fill`: a fill that some $\tau$ separates attains it, so the greedy fill's value (the sampling
+optimizer's `density_bound`) is a harm bound. `work_isHarmBound_fill` is the work sampling design's, with harm the
+credited work; `stratified_isHarmBound_bits` and `Partition.audit_exfiltration_stratified` are the exfiltration form,
+the floor of the fill's value over output bits as `audit_exfiltration`'s $H$. `stratified_isHarmBound_exact` is the same
+duality over the exact risk $\ln(\binom{n_s}{k_s}/\binom{n_s - c}{k_s})$ (`stratumRisk`, at least $k_s c / n_s$ by
+`le_stratumRisk`), the knapsack whose value core's `Stratified.harm_bound` computes.
+
 **Theorems, closure draws** (`Audit/Closure.lean`; `../../PROTOCOL.md` §7.3): `Law.closure L cl` is `L` widened on its coins
 by the verifier's closure map, each drawn unit proved with its closure. `closure_escape`: its acceptance probability is
 the base sampling design's acceptance probability of $B \cup \mathrm{unsound}(B)$, $\mathrm{unsound}(B)$ being the units

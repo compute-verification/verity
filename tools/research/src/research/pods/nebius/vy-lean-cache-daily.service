@@ -12,6 +12,6 @@ AssertPathIsMountPoint=/build
 [Service]
 Type=oneshot
 ExecStart=/usr/local/lib/vy-lean-cache/run-daily
-TimeoutStartSec=3h
+TimeoutStartSec=20h
 Nice=15
 IOSchedulingClass=idle

@@ -16,7 +16,8 @@ the deployed runs. At a plain statement in scope with a draw, `wrP`'s decoders a
 * `PlainLiveW`: `PlainLiveWrPAt` at `plainOpn` where the outputs are public and at `plainOpnH` where they are hidden
   under `hm96-sha512/v1` leaves, and `PlainLiveAccAt` itself where they are hidden under plain SHA-512 leaves, which the
   scope admits and the deployed decoders are not yet proved right at, at the statements in scope that set up at a
-  draw; it gives `PlainLiveAcc` where some run accepts (`plainLiveAcc_of_w`), and with `Extendθ`, KS (`plain_KS_of_w`).
+  draw; it gives `PlainLiveAcc` where some run accepts (`plainLiveAcc_of_w`), and KS at the trimmed record
+  (`plain_KS_of_w`).
 -/
 
 namespace FlockDeploy.KS
@@ -211,11 +212,10 @@ theorem plainLiveAcc_of_w {x : Claims.Msg} (hno : ¬ Claims.Flock.NoAcc sha512 (
     · exact plainLiveAccAt_of_wrP (hhid hh hleaf)
     · exact hplain hh hleaf
 
-/-- **The deployed plain verifier: KS**, at SHA-512 at the deployed relation, from the live sessions' bound at the
-deployed decoders (`PlainLiveW`) at the statements some run accepts, and `Extendθ` at full-width columns. -/
-theorem plain_KS_of_w (hl : ∀ x, ¬ Claims.Flock.NoAcc sha512 (V false) x → PlainLiveW x)
-    (hext : Claims.Flock.Extendθ (deployPlain Readable.relation) (wordLen false) (wide false)) :
-    Claims.Flock.KS sha512 (deployPlain Readable.relation) :=
-  plain_KS_of_liveAcc (fun x hno => plainLiveAcc_of_w hno (hl x hno)) hext
+/-- **The deployed plain verifier: KS**, at SHA-512 at the trimmed record at the deployed relation, from the live
+sessions' bound at the deployed decoders (`PlainLiveW`) at the statements some run accepts. -/
+theorem plain_KS_of_w (hl : ∀ x, ¬ Claims.Flock.NoAcc sha512 (V false) x → PlainLiveW x) :
+    Claims.Flock.KS sha512 (deployPlainTrim Readable.relation) :=
+  plain_KS_of_liveAcc fun x hno => plainLiveAcc_of_w hno (hl x hno)
 
 end FlockDeploy.KS
