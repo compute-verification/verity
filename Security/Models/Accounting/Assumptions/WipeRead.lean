@@ -38,8 +38,9 @@ cheating server can break by cheating keeps that cheat out of the theorem instea
   to `Y` (`Accounting.Placed.LatencyAtMost`, the listed claim `latency-ceiling`) each such answer left `X` during the
   deadline, so one label sent before the arrival, or relayed from outside `X`, binds no verdict.
 * `UniformLabels`: the labels of a read's wipe are uniform `b`-bit values, independent across blocks, given the
-  devices' coins `ζ`. A model: the deployed labels are a PRF of a 32-byte key (PR #2726), for which it is false.
-  `Accounting.Guarantees.Actual.WipeReadHeldPrf` takes the step to them, as the PRF's advantage, and doesn't take this.
+  devices' coins `ζ`. A model: the deployed labels are a PRF of the challenger's secret (PR #2726), for which it is
+  false. `Accounting.Guarantees.Actual.WipeReadHeldPrf` takes the step to them, as the PRF's advantage, and doesn't
+  take this.
 
 `QuietReads`, `LateAnswers` and `LiveVerdicts` are what the challenger's code checks or does, stated on a verdict
 `acc` read off the coins; once the challenger has a Lean function they are its refusals, proved of it, and the world
