@@ -262,6 +262,7 @@ theorem Bound.keepDO_iff_accAtI {ω : Ω}
       · rfl
     exact ⟨hs, h, Classical.byContradiction fun hn => hb ⟨hs, hn⟩⟩
 
+omit [DecidableEq Col'] in
 /-- **Off the bad draws, `P_O`'s aborting run accepts exactly where its draw's inner view does.** -/
 theorem Bound.accAt_iff (decC : Msg → Msg → Coin) (hdec : ∀ x c, decC x (Bd.ans c) = c)
     (hV : InnerViewRun H D (Inner.ofFlock Bd.deploy decI) DO) (hn : Bd.DE.V.k (xI D x) ≤ D.V.k x) (ω : Ω)
@@ -273,6 +274,7 @@ theorem Bound.accAt_iff (decC : Msg → Msg → Coin) (hdec : ∀ x c, decC x (B
   unfold accAt
   rw [Bound.abortRun_eqO decC hn, Bound.innerFO_acc_iff decC hdec hV, Bound.keepDO_iff_accAtI hb]
 
+omit [DecidableEq Col'] in
 /-- **Off the bad draws, `P_O`'s aborting run opens a cap position exactly where its draw does**: the run's coins are
 the draw's inner coins (`innerCoins_extend`). -/
 theorem Bound.opensAt_iff (decC : Msg → Msg → Coin) (hdec : ∀ x c, decC x (Bd.ans c) = c)
@@ -335,6 +337,7 @@ theorem Bound.Ex_badO (hR : InnerRounds D (Inner.ofFlock Bd.deploy decI)) [Finty
   refine congrArg Ex (funext fun u => ?_)
   by_cases hb : Bd.BadO decI H D DO decO P x ω (extendDraw u) <;> simp [hb]
 
+omit [DecidableEq Col'] in
 /-- **The caps' link at `P_O`'s aborting runs is `FCI`, but where its loop meets a bad draw**: the first run, opening,
 is kept, so its draw isn't bad; off the bad draws the loop opens where the draws do and picks the same draw
 (`opensAt_iff`, `firstPick_map_of_loopCost_zero`), and the runs' collision is the draws' (`findColl_cover`). The loop
@@ -449,6 +452,7 @@ theorem Bound.PrFC_le_FCI (decC : Msg → Msg → Coin) (hdec : ∀ x c, decC x 
     ∃ u v, (FCI H D (Inner.ofFlock Bd.deploy decI) DO decO Cp P x M hW).out s' = some (u, v) ∧ Collision H u v)))
     hbad))
 
+omit [DecidableEq Col'] in
 /-- **Level 0's conflict at `P_O`'s aborting runs is `F0I`, but where a wait meets a bad draw**: the first run,
 accepting, is kept; off the bad draws each wait accepts where the draws do and picks the same draw
 (`accAt_iff`, `firstPick_map_of_loopCost_zero`), and the runs' collision is the draws' (`findColl_cover`). Each of the
@@ -593,6 +597,7 @@ theorem Bound.PrF0_le_F0I (decC : Msg → Msg → Coin) (hdec : ∀ x c, decC x 
     ∃ u v, (F0I H D (Inner.ofFlock Bd.deploy decI) DO decO P x R).out s' = some (u, v) ∧ Collision H u v)))
     hbad))
 
+omit [DecidableEq Col'] in
 /-- **The inner stage at the bound record from `KSFlockLin` at `DE`, with no root**: at most
 `κ_I + (4k_I + 1)·Pr[B_I] + 4·W_I·(Pr[FCI] + 1/(M+1)) + 4·(Pr[F0I] + (k_I + 1)/(R+1)) + β₂·(Pr[Fdev] + 1/(M+1))`.
 `E^rep` at `DE` against `P_O`'s aborting runs is `KSFlockLin`'s bound (`PrBadGood_le_merged`), its `B` at most `B_I`
