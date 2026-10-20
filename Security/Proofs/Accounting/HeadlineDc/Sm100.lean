@@ -238,10 +238,11 @@ namespace Accounting.SecurityProofs.TS
 open Accounting.TS Accounting.TS.Headline Accounting.Assumptions.TS Pouw.RelativeSecurity
   Accounting.SecurityProofs.TS.Headline Accounting.SecurityProofs.TS.HeadlineDc
 
-/-- The B200's headline at the data sheet: `Whole.sheetDIdealFloor_whole` at π* (`Sm100.lamStar`), `p = 7/8`,
-`p₀ = ½`, `Λ = max(κ/ln(8/7), (κ + f)/ln 2)`, `S = 48,000` and `δ = 2^-40`, (I7) from the receipt split
-(`luck_of_receipt_half`), (I8) from its pieces (`ProofsSoundOfPinned`), FILL-OPT from the data, and the terms bounded
-by `Whole.headline_of_branches`: the folded branch by `sm100_folded`, the unfolded one by `sm100_unfolded`. -/
+/-- The B200's headline at the data sheet: `Whole.sheetDIdealFloor_whole` at π* (`Sm100.lamStar`, DS_issue ⅔ +
+DS_alu ⅓), `p = 7/8`, `p₀ = ½`, `Λ = max(κ/ln(8/7), (κ + f)/ln 2)`, `S = 48,000` and `δ = 2^-40`, (I7) from the
+receipt split (`luck_of_receipt_half`), (I8) from its pieces (`ProofsSoundOfPinned`, binding at `√δ_fork` by
+`Whole.moved_le_sqrt`), FILL-OPT from the data, and the terms bounded by `Whole.headline_of_branches`: the folded
+branch by `sm100_folded`, the unfolded one by `sm100_unfolded`. -/
 theorem Sm100SheetHeadline : Accounting.Guarantees.TS.Sm100SheetHeadline := by
   intro Ω _ Pl G Uf V nπ pf δfork δzk hδ hSplit h1 h2 h3 h4 h5 h6 h7 hF hG hPinG hOp hRL hWL hOf hB hZK hPin hRF
   set δbind := Real.sqrt δfork

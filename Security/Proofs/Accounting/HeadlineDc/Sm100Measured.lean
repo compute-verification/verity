@@ -231,8 +231,9 @@ open Accounting.TS Accounting.TS.Headline Accounting.Assumptions.TS Pouw.Relativ
 /-- The B200's headline on DC-100-ri: `Whole.dIdealFloor_whole` at π* (`Sm100Measured.lamStar`, the issue row),
 `p = 7/8`, `p₀ = ½`, `Λ = max(κ/ln(8/7), (κ + f)/ln 2)`, `S = 48,000` and `δ = 2^-40`, (I2)/(I4) and (I3) from A6
 (`scalarRoute_half`), (I7) from the receipt split (`luck_of_receipt_half`), (I8) from its pieces
-(`ProofsSoundOfPinned`), (I5) `SideUnits` and FILL-OPT from the data, and the terms bounded by
-`Whole.headline_of_branches`: the folded branch by `sm100m_folded`, the unfolded one by `sm100m_unfolded`. -/
+(`ProofsSoundOfPinned`, binding at `√δ_fork` by `Whole.moved_le_sqrt`), (I5) `SideUnits` and FILL-OPT from the data,
+and the terms bounded by `Whole.headline_of_branches`: the folded branch by `sm100m_folded`, the unfolded one by
+`sm100m_unfolded`. -/
 theorem Sm100MeasuredHeadline : Accounting.Guarantees.TS.Sm100MeasuredHeadline := by
   intro Ω _ Pl G Uf V nπ pf δfork δzk hδ hSplit h1 h6 hN hF hG hPinG hOp hRL hWL hOf hB hZK hPin hRF
   set δbind := Real.sqrt δfork
