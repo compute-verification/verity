@@ -5,7 +5,9 @@ gets a part.  Here a kernel's part is first the window phase (dither_one.PHASE_R
 the host thread (CUPTI's correlation id joins the launch to the kernel; a graph's nodes join to its cudaGraphLaunch,
 outside every phase, so they are the forward's), then, in the forward, the part its name matches (PARTS, else
 steps.CATEGORIES).  Each phase's host wall time a step is reported beside the parts, and the step's GPU idle time
-(wall minus busy): where the GPU waits on the host.
+(wall minus busy): where the GPU waits on the host.  A dither-a arm runs on several streams at once, so parts sum past the
+wall; each stream's busy time a step and its parts are reported too, and the serving stream's busy time short of the wall
+is how long it waits on the others and the host.
 
 The units kernels carry the noise b, c and U, the MMAs, the receipts, the peel and y in one launch, so they are one part;
 the peel's own cost is the peeled form's kernel time less the unpeeled form's (a kernel-level row).  The old quantizer
@@ -40,6 +42,8 @@ PARTS = [
     ("tree levels (h1c)", re.compile(r"h1c_leaves|h1c_segs|h1c_level")),
     ("quantizer (exactlin)", re.compile(r"exactlin_quant_rows")),
     ("GEMM (exactlin)", re.compile(r"exactlin_scaled_mm")),
+    ("GEMM with the z/y epilogue (dithera_mm)", re.compile(r"dithera_mm")),
+    ("receipt commit and fault (dithera_commit, dithera_fault)", re.compile(r"dithera_(commit|fault)")),
 ]
 
 
@@ -85,12 +89,12 @@ def analyse(path: str) -> dict:
                 f"SELECT correlationId, globalTid, start FROM {table}")})
         except sqlite3.Error:
             pass
-    ops = [(strings.get(n, str(n)), int(p), int(s), int(e), int(c)) for n, p, s, e, c in db.execute(
-        "SELECT demangledName, globalPid, start, end, correlationId FROM CUPTI_ACTIVITY_KIND_KERNEL")]
+    ops = [(strings.get(n, str(n)), int(p), int(s), int(e), int(c), int(q)) for n, p, s, e, c, q in db.execute(
+        "SELECT demangledName, globalPid, start, end, correlationId, streamId FROM CUPTI_ACTIVITY_KIND_KERNEL")]
     for table, label in (("CUPTI_ACTIVITY_KIND_MEMCPY", "memcpy"), ("CUPTI_ACTIVITY_KIND_MEMSET", "memset")):
         try:
-            ops += [(f"[{label}]", int(p), int(s), int(e), int(c)) for p, s, e, c in db.execute(
-                f"SELECT globalPid, start, end, correlationId FROM {table}")]
+            ops += [(f"[{label}]", int(p), int(s), int(e), int(c), int(q)) for p, s, e, c, q in db.execute(
+                f"SELECT globalPid, start, end, correlationId, streamId FROM {table}")]
         except sqlite3.Error:
             pass
     doc: dict = {"arms": {}}
@@ -103,7 +107,8 @@ def analyse(path: str) -> dict:
         for n, (start, end, pid) in ((n1, r1), (n2, r2)):
             rows: dict[tuple[str, str], list[int]] = {}
             iv = []
-            for name, gpid, s, e, corr in ops:
+            by_stream: dict[int, list] = {}
+            for name, gpid, s, e, corr, q in ops:
                 if ST._pid(gpid) != pid or s < start or e > end:
                     continue
                 tid, t = api.get((pid, corr), (None, None))
@@ -112,12 +117,16 @@ def analyse(path: str) -> dict:
                 r[0] += 1
                 r[1] += e - s
                 iv.append((s, e))
+                sq = by_stream.setdefault(q, [[], {}])
+                sq[0].append((s, e))
+                sq[1][key[1]] = sq[1].get(key[1], 0) + e - s
             host: dict[str, int] = {}
             for v in phases.values():
                 for s, e, ph in v:
                     if start <= s and e <= end:
                         host[ph] = host.get(ph, 0) + e - s
-            per[n] = {"rows": rows, "busy": ST._busy(iv), "wall": end - start, "host": host}
+            per[n] = {"rows": rows, "busy": ST._busy(iv), "wall": end - start, "host": host,
+                      "streams": {q: (ST._busy(v[0]), v[1]) for q, v in by_stream.items()}}
         steps = n2 - n1
         wall = (per[n2]["wall"] - per[n1]["wall"]) / steps
         kernels = []
@@ -139,12 +148,21 @@ def analyse(path: str) -> dict:
         busy = (per[n2]["busy"] - per[n1]["busy"]) / steps
         host = {ph: round((per[n2]["host"].get(ph, 0) - per[n1]["host"].get(ph, 0)) / steps / 1e6, 4)
                 for ph in set(per[n1]["host"]) | set(per[n2]["host"])}
+        streams = {}
+        for q in set(per[n1]["streams"]) | set(per[n2]["streams"]):
+            b1, p1 = per[n1]["streams"].get(q, (0, {}))
+            b2, p2 = per[n2]["streams"].get(q, (0, {}))
+            ps = {p: round((p2.get(p, 0) - p1.get(p, 0)) / steps / 1e6, 4) for p in set(p1) | set(p2)}
+            if b2 - b1 > 0:
+                streams[str(q)] = {"busy_ms_per_step": round((b2 - b1) / steps / 1e6, 4),
+                                   "parts": dict(sorted(((p, v) for p, v in ps.items() if v > 0), key=lambda kv: -kv[1]))}
         doc["arms"][arm] = {
             "n": [n1, n2], "decode_steps": steps, "wall_ms_per_step": round(wall / 1e6, 4),
             "gpu_busy_ms_per_step": round(busy / 1e6, 4), "gpu_idle_ms_per_step": round((wall - busy) / 1e6, 4),
             "kernel_ms_per_step": round(sum(r["us_per_step"] for r in kernels) / 1e3, 4),
             "parts": dict(sorted(parts.items(), key=lambda kv: -kv[1]["us_per_step"])),
             "phase_host_ms_per_step": dict(sorted(host.items(), key=lambda kv: -kv[1])),
+            "streams": dict(sorted(streams.items(), key=lambda kv: -kv[1]["busy_ms_per_step"])),
             "kernels": kernels}
     return doc
 
@@ -161,6 +179,9 @@ def table(doc: dict) -> str:
             out.append(f"  {r['us_per_step'] / 1e3:8.3f} ms  {100 * (r['share_of_wall'] or 0):5.1f}%  "
                        f"{r['launches_per_step']:8.1f} launches  {p}")
         out.append("  host wall by phase (ms/step): " + ", ".join(f"{k} {v:.3f}" for k, v in a["phase_host_ms_per_step"].items()))
+        for q, s in a.get("streams", {}).items():
+            top = ", ".join(f"{p} {v:.3f}" for p, v in list(s["parts"].items())[:4])
+            out.append(f"  stream {q}: busy {s['busy_ms_per_step']:.3f} ms/step ({top})")
     return "\n".join(out)
 
 
