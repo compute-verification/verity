@@ -13,6 +13,9 @@
     verity.ml.circuits.ops.s8      IR composites: the exact s8 matmul family S8Dot / S8Matmul over the s8 and u8 x s8 IMMA steps
                       (prefix words, tail atoms, operand bounds, noise, limbs and committed layout as statics), and
                       LimbSplit, the registered split of a runtime s32 word into s8 limbs; `ops.boolean.s8` has them on bits
+    verity.ml.circuits.ops.moe     IR composites: a padded static MoE layer's expert GEMMs, one unit per (token slot, top-k slot) pair
+                      with the expert a value selected inside it (MoeSelectBf16x{E}, MoePairCoordinate(W), MoePairGemm(W)),
+                      and their numpy kernels; `ops.boolean.moe` has them on bits
     verity.ml.circuits.ops.boolean word arithmetic as Boolean circuits, built with `verity.ml.circuits.boolean`'s builders
                       (`forms`, `gather`, the multiplexer tree, and `trace`, Boolean Definitions from builders) and
                       `verity.ml.circuits.silicon`'s (`fp`, `tc_step`, `fp4`): `softmax`, attention's circuits over `forms`,

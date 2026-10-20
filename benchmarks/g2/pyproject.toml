@@ -1,0 +1,4 @@
+# G2's curve renderer (curve.py): not a package. Its selection logic runs here as a suite
+# (`uv run tools/verity/check/suites.py benchmarks/g2`); the rendering itself reads the evidence store.
+[tool.pytest.ini_options]
+testpaths = ["tests"]

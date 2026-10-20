@@ -37,7 +37,7 @@ def evaluate(snapshot: Path, ids: np.ndarray, window_ids: list[int], arms: list,
     if any(a.needs_calib for a in arms) and calib_ids is None:
         raise ValueError("an arm reads calibration statistics: pass the calibration windows")
     use_calib = calib_ids is not None and any(a.needs_calib for a in arms)
-    gptq_arms = [a for a in arms if any(s.defn.name == "int8" and s.kw.get("gptq") for s in a.linear)]
+    gptq_arms = [a for a in arms if any(s.defn.name in ("int8", "native") and s.kw.get("gptq") for s in a.linear)]
     W = Weights(snapshot)
     top = W.read(["model.embed_tokens.weight", "model.norm.weight"])
     emb = top["model.embed_tokens.weight"].to(device=device, dtype=torch.bfloat16)

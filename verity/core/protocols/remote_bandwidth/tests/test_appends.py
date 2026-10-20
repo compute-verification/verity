@@ -98,12 +98,15 @@ class Run:
         self.head: bytes | None = None
         self.passes: dict[tuple[int, int], audit.Pass] = {}
         self.coins: dict[int, bytes] = {}
+        self.received: list[tuple[int, int, bytes]] = []
 
     def commit(self, root: bytes, count: int) -> int:
-        """An append's root sent (`Session.append`): the index the verifier assigns, its coin kept and, if the store
-        awaits that append's coin, its blocks encoded under it."""
+        """An append's root sent (`Session.append`): the index the verifier assigns, its coin kept, the append as the
+        verifier received it, (first, count, root), kept in `received` and, if the store awaits that append's coin,
+        its blocks encoded under it."""
         first, coin = self.s.append(root, count)
         self.coins[first] = coin
+        self.received.append((first, count, root))
         self.head = audit.append_head(self.head, first, count, root)
         if first in self.store.pending:
             self.store.encode(first, coin)
@@ -255,7 +258,8 @@ def units_mapped(record: audit.Record, appends, rekeys=()) -> bool:
     """The memory-map unit's verdict as the record fixes it, for a map whose appends are `appends`, (step, first,
     count, root) in the map's order, and whose re-keys are `rekeys`, (step, old index): the chain over all of them is
     the record's, each pass's head is the chain through those of the steps below its own, and each re-key's old index
-    is below the stale bound of the first pass after its step."""
+    is below the stale bound of the first pass after its step, which the unit recomputes from its appends
+    (`stale_of`) rather than reads."""
 
     def chain(below: int) -> bytes | None:
         head = None
@@ -264,31 +268,31 @@ def units_mapped(record: audit.Record, appends, rekeys=()) -> bool:
                 head = audit.append_head(head, first, count, root)
         return head
 
-    passes = [(s, h, b) for w in record.windows for s, h, b in zip(w.steps, w.heads, w.stale, strict=True)]
-    if record.appends != chain(audit.STEP_LIMIT) or any(h != chain(s) for s, h, _ in passes):
+    steps = [s for w in record.windows for s in w.steps]
+    if record.appends != chain(audit.STEP_LIMIT) or any(
+            h != chain(s) for w in record.windows for s, h in zip(w.steps, w.heads, strict=True)):
         return False
-    return all(next((b for s, _, b in passes if s > r), -1) > old for r, old in rekeys)
+    bounds = [b for w in stale_of(record, [(f, c, root) for _, f, c, root in appends]) for b in w]
+    return all(next((b for s, b in zip(steps, bounds) if s > r), -1) > old for r, old in rekeys)
 
 
-def stale_from_public(pub: dict, extents) -> list[list[int]]:
-    """Each pass's stale bound from the public record and the appends' extents as the verifier receives them, (first,
-    count, root) in order: an append joined the window of the first pass whose head chains it, and a pass of window t
-    is bounded at `blocks` plus the counts of the appends that joined window t − `lifetime` or before."""
+def stale_of(record: audit.Record, received) -> list[tuple[int, ...]]:
+    """Each pass's stale bound as the memory-map unit recomputes it inside its proof, from the appends, (first, count,
+    root) in the order the verifier received them, and the record's `blocks`, `lifetime` and heads, never its
+    `stale`: an append joined the window of the first pass whose head chains it, and a pass of window t is bounded at
+    `blocks` plus the counts of the appends that joined window t − `lifetime` or before."""
     chain, through = None, {None: 0}
-    for n, (first, count, root) in enumerate(extents, 1):
+    for n, (first, count, root) in enumerate(received, 1):
         chain = audit.append_head(chain, first, count, root)
-        through[chain.hex()] = n
+        through[chain] = n
     joined: dict[int, int] = {}
-    for t, hs in enumerate(pub["heads"]):
-        for h in hs:
+    for w in record.windows:
+        for h in w.heads:
             for a in range(through[h]):
-                joined.setdefault(a, t)
-    return [[pub["blocks"] + sum(c for a, (_, c, _) in enumerate(extents) if joined[a] <= t - pub["lifetime"])
-             for _ in hs] for t, hs in enumerate(pub["heads"])]
-
-
-def extents(r: Run) -> list[tuple[int, int, bytes]]:
-    return [(a.first, a.count, a.root) for a in r.store.appends]
+                joined.setdefault(a, w.window)
+    return [tuple(record.blocks + sum(c for a, (_, c, _) in enumerate(received)
+                                      if joined[a] <= w.window - record.lifetime) for _ in w.heads)
+            for w in record.windows]
 
 
 @dataclasses.dataclass(frozen=True)
@@ -359,38 +363,49 @@ def test_a_requirement_link_caps_nothing_unless_its_memory_map_unit_makes_the_re
 def test_a_record_carries_each_pass_s_head_and_stale_bound(honest) -> None:
     """Each pass's head is the chain over the appends received before its root, which its seed binds: none before
     pages 8 … 11, then theirs through window 0, then theirs and 12 … 13's through window 1.  Its stale bound is N
-    throughout, since no block reaches L = 60.  The public record lists both per window (the heads hiding
-    commitments, the bounds protocol structure), and the honest session's map, step 0 appending 8 … 11 and step 2
-    12 … 13, is the units' at every pass."""
+    throughout, since no block reaches L = 60, and the received appends give the same.  The public record lists the
+    heads per window (hiding commitments), the verifier's profile heads and bounds both, and the honest session's
+    map, step 0 appending 8 … 11 and step 2 12 … 13, is the units' at every pass.  A link reads the heads, not the
+    bounds, which its unit recomputes: a record without heads is refused one, and one without bounds is not."""
     r, _ = honest
     rec = r.s.record()
     first, second = r.store.appends
     h1 = audit.append_head(None, first.first, first.count, first.root)
     h2 = audit.append_head(h1, second.first, second.count, second.root)
     assert [w.heads for w in rec.windows] == [(None, h1, h1), (h2, h2)] and h2 == rec.appends
-    assert [w.stale for w in rec.windows] == [(N, N, N), (N, N)]
-    pub = rec.public()
-    assert pub["heads"] == [[None, h1.hex(), h1.hex()], [h2.hex(), h2.hex()]]
-    assert pub["stale"] == [[N, N, N], [N, N]] == stale_from_public(pub, extents(r))
+    assert [w.stale for w in rec.windows] == [(N, N, N), (N, N)] == stale_of(rec, r.received)
+    assert rec.public()["heads"] == [[None, h1.hex(), h1.hex()], [h2.hex(), h2.hex()]]
     assert rec.profile()["windows"][1]["heads"] == [h2.hex(), h2.hex()]
     assert rec.profile()["windows"][1]["stale"] == [N, N]
     assert units_mapped(rec, [(0, first.first, first.count, first.root), (2, second.first, second.count, second.root)])
     assert not units_mapped(rec, [(1, first.first, first.count, first.root),
                                   (2, second.first, second.count, second.root)])
     common = dict(capacity_bytes_per_s=4096 * 10**9 / 10, chip_bytes=0, rebuild=audit.Rebuild(P512, 0.0))
-    for shorn in (dict(heads=()), dict(stale=())):
-        bare = dataclasses.replace(rec, windows=(dataclasses.replace(rec.windows[0], **shorn), rec.windows[1]))
-        with pytest.raises(ValueError, match="name none"):
-            audit.ledger(bare, **common, requirement=Link(True, 8 * 4096, {}))
+
+    def shorn(**field) -> audit.Record:
+        return dataclasses.replace(rec, windows=(dataclasses.replace(rec.windows[0], **field), rec.windows[1]))
+
+    with pytest.raises(ValueError, match="name none"):
+        audit.ledger(shorn(heads=()), **common, requirement=Link(True, 8 * 4096, {}))
+    assert audit.ledger(shorn(stale=()), **common, requirement=Link(True, 8 * 4096, {})).linked
 
 
-def test_a_stale_bound_is_the_appends_extents_and_windows_and_l_as_the_public_record_gives_them() -> None:
+def test_the_public_record_has_no_stale_bound(honest) -> None:
+    """A stale bound sums the counts of the appends each window joined, which follow the workload, so it is a value:
+    `public()` has no `stale`, and is the same whatever the windows' bounds are."""
+    rec = honest[0].s.record()
+    assert "stale" not in rec.public() and all(w.stale for w in rec.windows)
+    moved = dataclasses.replace(rec, windows=tuple(
+        dataclasses.replace(w, stale=tuple(b + 1 for b in w.stale)) for w in rec.windows))
+    assert moved.public() == rec.public() and moved.profile() != rec.profile()
+
+
+def test_a_stale_bound_is_recomputed_from_the_received_appends_the_heads_and_l() -> None:
     """L = 1, two passes a window.  Pages 8 and 9 join window 0; 10 and then 11, 12 join window 1, between its passes;
     13 joins window 2 between its passes.  Window 1 is bounded past 8 and 9 (N + 2), window 2 past 8 … 12 (N + 5),
     whether its pass's root comes before 13's append (where the session takes the store's extent) or after (13's first
-    index).  Recomputed from the public record's `blocks`, `lifetime` and `heads` and the appends' extents as the
-    verifier receives them, the same lists: the record lists the extents only as their chain, so they are the one
-    input beyond it."""
+    index).  Recomputed as the memory-map unit does, from the appends as the verifier received them and the record's
+    `blocks`, `lifetime` and heads, the same bounds."""
     r = Run(store(), windows=3, lifetime=1)
     assert r.run() is None
     r.append(2)
@@ -408,8 +423,8 @@ def test_a_stale_bound_is_the_appends_extents_and_windows_and_l_as_the_public_re
     assert r.run(change=(((N + 5, 1),), ())) is None
     r.boundary()
     assert [v.accepted for v in r.finish()] == [True] * 3
-    pub = r.s.record().public()
-    assert pub["stale"] == [[N, N], [N + 2, N + 2], [N + 5, N + 5]] == stale_from_public(pub, extents(r))
+    rec = r.s.record()
+    assert [w.stale for w in rec.windows] == [(N, N), (N + 2, N + 2), (N + 5, N + 5)] == stale_of(rec, r.received)
 
 
 def appended_at_step_one(early: bool) -> Run:
@@ -472,8 +487,7 @@ def test_a_re_key_s_old_index_is_below_the_stale_bound_of_the_pass_after_its_ste
     r.boundary()
     assert [v.accepted for v in r.finish()] == [True] * 4
     rec = r.s.record()
-    assert [w.stale for w in rec.windows] == [(N,), (N,), (N + 2,), (N + 3,)]
-    assert rec.public()["stale"] == [[N], [N], [N + 2], [N + 3]] == stale_from_public(rec.public(), extents(r))
+    assert [w.stale for w in rec.windows] == [(N,), (N,), (N + 2,), (N + 3,)] == stale_of(rec, r.received)
     appends = [(s, x.first, x.count, x.root) for s, x in zip((0, 1, 2), r.store.appends)]
     assert units_mapped(rec, appends) and units_mapped(rec, appends, ((2, N), (2, N + 1)))
     assert units_mapped(rec, appends, ((2, N), (2, N + 1), (3, N + 2)))
@@ -529,8 +543,8 @@ def test_a_window_record_s_heads_and_stale_bounds_are_each_pass_s() -> None:
     h = hashlib.sha512(b"a chain").digest()
     rec = synthetic((10, 12), (), (3, 8), (None, h), (10, 12))
     assert rec.windows[0].to_json()["heads"] == [None, h.hex()] and rec.windows[0].to_json()["stale"] == [10, 12]
-    assert rec.public()["heads"] == [[None, h.hex()]] and rec.public()["stale"] == [[10, 12]]
-    assert synthetic((10, 12), ()).windows[0].heads == () and synthetic((10, 12), ()).public()["stale"] == [[]]
+    assert rec.public()["heads"] == [[None, h.hex()]] and "stale" not in rec.public()
+    assert synthetic((10, 12), ()).windows[0].heads == () and synthetic((10, 12), ()).public()["heads"] == [[]]
     for bad in ((h,), (h, h, h), (None, h[:63]), (None, h.hex()), (None, bytearray(h))):
         with pytest.raises(ValueError, match="heads"):
             synthetic((10, 12), (), heads=bad)
