@@ -41,6 +41,7 @@ import sys
 from dataclasses import dataclass
 from pathlib import Path
 
+from verity_vllm.engine import static_schedule
 from verity_vllm.config import option
 from verity_vllm.engine import engine_profile as prof  # noqa: F401  (apply_env before vllm import)
 
@@ -227,6 +228,7 @@ def main(args: Options) -> None:
     for ln in acq_docs.log_lines("m1"):
         print(ln, flush=True)
 
+    tw = None
     if not args.no_warmup:
         warm = va.throwaway_requests(eng, wl["requests"])
         with tl.span("prep.warmup_control"):
@@ -291,6 +293,7 @@ def main(args: Options) -> None:
 
     if protocols is not None:
         protocols.close()
+    ss = static_schedule.against_warmup(timing.get("static_schedule"), (tw or {}).get("static_schedule"))
     doc = {"requests": [], "per_step_sampled": per_step, "timing": timing, "observer": not args.no_observer, "protocols": protocol_entries,
            "profile_id": header.profile_id if header is not None else None, "case": case, "model": eng.cp["repo"],
            # [coverage D87] the serving profile / context class the workload declares and the realized shape of this run
@@ -341,5 +344,9 @@ def main(args: Options) -> None:
     if children:
         doc["children"] = [{"request_id": rid, "generated_token_ids": toks} for rid, toks in sorted(children.items())]
     (out / "tokens.json").write_text(json.dumps(doc, indent=1) + "\n")
+    for ln in static_schedule.report_lines(ss) if ss is not None else []:
+        print(f"[m1] {ln}", flush=True)
+    if ss is not None and not ss["ok"]:
+        sys.exit(3)
     tl.event("process.end", "mark", rc=0, s=round(time.time() - _T_PROCESS0, 3))
     print(f"[m1] done -> {out}", flush=True)

@@ -9,14 +9,18 @@ The seed is `seed_of`'s: the driver's targeted seed, else the verifier's challen
 
 `in_process` and `defer` take the worker's commit state (`TP2CaptureWorkerExtension._tp2_commit`: rank, world, committer, engine,
 the weights it registered, binding map, replay config).  Under ``tp-commit --memory-map`` each first writes the rank's memory map
-from the live committer (`memory_map`), which changes no verdict."""
+from the live committer (`memory_map`), which changes no verdict.  Under ``tp-commit --replay-ranks-at-once K`` each runs in one of
+K host slots (`host_slot`)."""
 from __future__ import annotations
 
+import fcntl
+import gc
 import json
 import os
 import time
 import traceback
-from collections.abc import Callable
+from collections.abc import Callable, Iterator
+from contextlib import contextmanager
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -158,20 +162,31 @@ def manifest_of_rank(doc: Any, rank: int) -> dict[str, Any] | None:
     return dict(doc, identities=[x for x in doc["identities"] if int(x.get("rank", 0) or 0) == rank])
 
 
-def index_memo(p: Loaded, manifest: dict[str, Any] | None) -> dict:
-    """`sampled_replay`'s memo holding `load`'s index of the first Program, when it is the index the replay would build (the manifest's
-    query is the default one, no norm-scale policy); else empty, and the replay builds its own."""
-    from verity_vllm.check.replay import driver as SR, index as IX
+def index_query(manifest: dict[str, Any] | None) -> dict[str, Any]:
+    """The query and norm-scale policy `sampled_replay` builds a Program's index under for ``manifest`` (`driver.populate`)."""
+    from verity_vllm.check.replay import driver as SR
     from verity_vllm.query import norm_scales
 
-    if (SR.manifest_query(manifest) or IX.DEFAULT_QUERY) != IX.DEFAULT_QUERY or norm_scales.policy_of(manifest):
+    return {"query": SR.manifest_query(manifest), "norm_scales": norm_scales.policy_of(manifest)}
+
+
+def index_memo(p: Loaded, manifest: dict[str, Any] | None) -> dict:
+    """`sampled_replay`'s memo holding `load`'s index of the first Program, when it is the index the replay would build (the manifest's
+    query is the default one, no norm-scale policy); else empty, and the replay builds its own.  The rank's memory map fills it with
+    the rest, built as the replay builds them (`index_query`), so no index is built twice (`in_process`)."""
+    from verity_vllm.check.replay import index as IX
+
+    q = index_query(manifest)
+    if (q["query"] or IX.DEFAULT_QUERY) != IX.DEFAULT_QUERY or q["norm_scales"]:
         return {}
     return {("index", id(p.progs[next(iter(p.progs))])): p.index}
 
 
 def evaluate(p: Loaded, cfg: dict[str, Any], *, bmap: dict[str, Any], committed: Any, weights_of: Callable[[str], Any],
-             weights_check: dict[str, Any], run_root: bytes, manifest_doc: Any, worker_peak: int | None = None) -> tuple[dict, dict]:
-    """(the rank's sampled-replay record, its boundary-linkage record) on the rank's map, committed members and weight shards."""
+             weights_check: dict[str, Any], run_root: bytes, manifest_doc: Any, worker_peak: int | None = None,
+             memo: dict | None = None) -> tuple[dict, dict]:
+    """(the rank's sampled-replay record, its boundary-linkage record) on the rank's map, committed members and weight shards; the
+    replay's index memo is ``memo`` when given (`index_memo`'s, which the memory map may have filled), else `index_memo`'s."""
     from verity_vllm.check.replay import driver as SR
 
     rank = p.rank
@@ -182,7 +197,8 @@ def evaluate(p: Loaded, cfg: dict[str, Any], *, bmap: dict[str, Any], committed:
                            seed=seed, seed_source=seed_src, max_evaluate=int(cfg.get("max_evaluate") or 2000), weights_check=weights_check,
                            targets=list(cfg.get("targets") or []), workers=cfg.get("workers"), worker_peak=worker_peak,
                            ring_slots=(int(ring) if ring else None), attention_paths=p.attn_paths, tp=p.tp,
-                           manifest=man, program_dirs=p.dirs, replay_k=(cfg.get("k_per_rank") or {}).get(str(rank)), memo=index_memo(p, man))
+                           manifest=man, program_dirs=p.dirs, replay_k=(cfg.get("k_per_rank") or {}).get(str(rank)),
+                           memo=index_memo(p, man) if memo is None else memo)
     sr["wrapper_prefix"] = p.index.prefix
     sr["tp_context"] = p.tp
     sr["programs"] = {k: {"dir": p.loaded[k].get("dir"), "program_digest": p.digs[k]} for k in p.loaded}
@@ -203,10 +219,12 @@ def not_run(rank: int, e: BaseException, trace: str) -> tuple[dict, dict]:
             {"schema": "verity-sweep/boundary-linkage/v1", "result": None, "rank": rank, "why": f"rank {rank}: boundary linkage not run: {e!r}"[:300], "pairs": 0, "linked": 0})
 
 
-def memory_map(st: dict[str, Any], p: Loaded, committed: Any) -> dict[str, Any] | None:
+def memory_map(st: dict[str, Any], p: Loaded, committed: Any, indices: dict | None = None,
+               index_kw: dict[str, Any] | None = None) -> dict[str, Any] | None:
     """`tp-commit --memory-map`: the rank's memory map (`pipeline.memory_map.after_commit` at the rank) from its Programs of record,
-    its committed slots and KV words (``committed``) and its KV-slots source's caches; what its record keeps of it (counts and the
-    engine's agreement, or the failure), None without a request.  It changes no verdict."""
+    its committed slots and KV words (``committed``) and its KV-slots source's caches, its Program indices built under ``index_kw``
+    (`index_query`: the manifest's spelling) and read from and put in the replay's ``indices`` when given; what its record keeps
+    of it (counts and the engine's agreement, or the failure), None without a request.  It changes no verdict."""
     from verity_vllm.acquire.sources.kv_slots_source import caches_of
     from verity_vllm.pipeline import memory_map as MMP
 
@@ -215,10 +233,35 @@ def memory_map(st: dict[str, Any], p: Loaded, committed: Any) -> dict[str, Any] 
         return None
     try:
         got = MMP.after_commit(request, loaded=p.loaded, bmap=st["bmap"], committed=committed, manifest=manifest_of_rank(st.get("manifest_doc"), p.rank),
-                               arrivals=p.arrivals, caches=caches_of(st["com"]), tp=p.tp, attention_paths=p.attn_paths)
+                               arrivals=p.arrivals, caches=caches_of(st["com"]), tp=p.tp, attention_paths=p.attn_paths, indices=indices,
+                               index_kw=index_kw)
     except Exception as e:  # noqa: BLE001
         return {"error": repr(e)[:400]}
     return got if "error" in got else {k: got[k] for k in ("map", "tp", "blocks", "page", "steps", "written", "freed", "engine", "seconds")}
+
+
+@contextmanager
+def host_slot(cfg: dict[str, Any], rank: int) -> Iterator[dict[str, Any] | None]:
+    """``tp-commit --replay-ranks-at-once K``: at most K ranks of the host replay at once.  Rank r waits for slot r % K (a lock file in
+    the Commit's out dir) and gives its heap back (`gc`, `malloc_trim`) before the slot passes on, since a rank holds every request
+    Program it loads while it replays (GLM-5.3 TP8 B8: ~140 GB a rank, so eight at once passed the host's 1.5 TB).  Yields the slot's
+    record, or None without K (every rank at once)."""
+    k = int(cfg.get("ranks_at_once") or 0)
+    if k <= 0:
+        yield None
+        return
+    from verity_vllm.check.replay.driver import _malloc_trim
+
+    slot = rank % k
+    with open(Path(cfg["slot_dir"]) / f"replay_slot{slot}.lock", "a") as f:
+        t0 = time.perf_counter()
+        fcntl.flock(f, fcntl.LOCK_EX)
+        try:
+            yield {"slot": slot, "ranks_at_once": k, "waited_s": round(time.perf_counter() - t0, 3)}
+        finally:
+            gc.collect()
+            _malloc_trim()
+            fcntl.flock(f, fcntl.LOCK_UN)
 
 
 def no_map() -> dict[str, Any]:
@@ -242,11 +285,13 @@ def in_process(st: dict[str, Any], rc: Any) -> dict[str, Any]:
 
         com = st["com"]
         p = load(cfg, rank, st.get("world"))
-        if cfg.get("workers") is None:      # the world's ranks replay at once on the node
-            cfg = dict(cfg, workers=SR.default_workers(p.world))
+        if cfg.get("workers") is None:      # the ranks that replay at once on the node: the world's, or K under host slots
+            cfg = dict(cfg, workers=SR.default_workers(min(p.world, int(cfg.get("ranks_at_once") or p.world))))
         xrank_facts(st, p)
         rd = OC.OpenedReader(com, rc)
-        mm = memory_map(st, p, rd)
+        man = manifest_of_rank(st.get("manifest_doc"), rank)
+        memo = index_memo(p, man)
+        mm = memory_map(st, p, rd, memo, index_query(man))
         # [O5] the shards the relations consume must be the COMMITTED shards: re-register the live parameters now vs the run's weights root
         try:
             w_saved = getattr(com, "weights", None)
@@ -266,7 +311,7 @@ def in_process(st: dict[str, Any], rc: Any) -> dict[str, Any]:
         except Exception as we:  # noqa: BLE001
             wc = {"equal": None, "self_consistent": None, "pin_of_record": None, "pinned": None, "note": f"by reference, unverified at replay: {we!r}"[:200]}
         sr, lk = evaluate(p, cfg, bmap=bmap, committed=rd, weights_of=lambda prefix: SR.model_weights_provider(st["weights"], prefix),
-                          weights_check=wc, run_root=rc.run_root, manifest_doc=st.get("manifest_doc"))
+                          weights_check=wc, run_root=rc.run_root, manifest_doc=st.get("manifest_doc"), memo=memo)
     except Exception as e:  # noqa: BLE001  -- fail closed: an unrunnable replay is 'not evaluated', never PASS
         sr, lk = not_run(rank, e, traceback.format_exc())
     return base | {"sampled_replay": sr, "boundary_linkage": lk, "wall_s": round(time.perf_counter() - t0, 3)} | ({"memory_map": mm} if mm else {})
@@ -295,7 +340,7 @@ def defer(st: dict[str, Any], rc: Any, to: dict[str, Any]) -> dict[str, Any]:
         p = load(cfg, rank, st.get("world"))
         xrank_facts(st, p)
         if cfg.get("memory_map"):
-            mm = memory_map(st, p, OC.OpenedReader(st["com"], rc))
+            mm = memory_map(st, p, OC.OpenedReader(st["com"], rc), index_kw=index_query(manifest_of_rank(st.get("manifest_doc"), rank)))
         hashed: dict[str, str] = {}
         part = RB.write_store(out, pair, st["com"], rc, digests=hashed, rank=rank)
         (part / "binding_map.json").write_text(json.dumps(bmap, default=str) + "\n")

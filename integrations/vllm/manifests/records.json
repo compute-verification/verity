@@ -68,17 +68,21 @@
       "build_request_LP256_T31": "7a67deae480117a825d59fbe228e5b5587b47b40dd35184942b847b36075e56afdfc2aadfe6126399931e96648c31af01ceab77d9512c925ebdf24573fe76255"
      }
     }
+   },
+   "aot": {
+    "comparison": "r20261018-222738-a095",
+    "trace": "art:826e06ff60bf5ede2823cc3a859fb5f9e6c9b867ea0ffc47be17634f7362e5a4"
    }
   },
   "glm53__fp8__h200__tp8__b1__i256__o32__mixed__greedy__eager": {
-   "record": "art:440154ed238eaabac0adbbc673560ae4f94aaa8abbed066d3436e1a2d5af807e",
+   "record": "art:553920a35aa07cce59a9b364f92ce5449e2d45d872e40f5a4420ebb442cb74ce",
    "tier": "heavy",
    "pinned_from": {
-    "record": "art:440154ed238eaabac0adbbc673560ae4f94aaa8abbed066d3436e1a2d5af807e",
-    "build": "art:5c0cdf4e86811b0e60c42b9056d88b46b3b348c4e2bfee74618d5994e9547f28",
-    "tree": "cursor/glm53-fold-moe-shared-21f3@1b53f685a81a38f649947e5f88b5ae360709a932"
+    "record": "art:553920a35aa07cce59a9b364f92ce5449e2d45d872e40f5a4420ebb442cb74ce",
+    "build": "art:8be49d1e6f506b6a2105dfba80222db6aa6b9542613548c1c9012af1ebcca4f4",
+    "tree": "cursor/glm-b1-commit-21f3@f41e783b95be946411522417f96eab7d266907dc"
    },
-   "manifest_digest": "958d528b12ec4dc038e2999323152a8c6b9a625c52480ea6c3edc8ab02986f4b",
+   "manifest_digest": "0d0357ada61dcc77dc8782aefb310cfc978455eef4338f75ce1cc5d210f0ae94",
    "programs": {
     "0": {
      "step": "00d09c910e3ed568727791dbf7e81936aec27df1a2da1b92a6e04ac8d89f2192fd56ed9483841f9e692ff94bc5e02f7f9365422985464eef20eef32b7591ea58",

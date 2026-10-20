@@ -102,7 +102,8 @@ research status RUN  # check back on a run (`research run` returns once it start
 
 ## Design rules
 
-Daniel's, current. `.agents/skills/friction/SKILL.md` has the dated rulings behind most of them.
+Daniel's, current. Their dates and history are in his decisions log in Notion; `.agents/skills/friction/SKILL.md` has
+the standing rulings stated nowhere else.
 
 - **Circuits and values.** A circuit holds only gates. Everything a program or a request brings, every intermediate and
   every output, is a value. A value is committed under a hiding leaf and touched only inside a zero-knowledge proof.
@@ -179,6 +180,10 @@ remotely through `research run --on auto --cwd source [--wait] -- CMD` (the ship
 `verity check` and `check.py`, circuit-check (24 GB a process), any build of `Security` or `Security/Proofs`, cargo, nvcc, every e2e run
 and every GPU job (the writing-runs skill). The shell hook refuses those commands locally and names the remote one;
 `AGENT_GUARD_LOCAL_OK=1` in the command is the explicit opt-in.
+
+No tool call blocks more than 20 minutes (Daniel, 19 Oct): `research run --wait`, `ask-daniel --wait` and `queue ready --on`
+stop there, cancel nothing, exit 79 naming the command to check back with (`research status RUN`), and you end your turn;
+the shell hook refuses a longer `sleep`.
 
 No test depends on wall-clock time: no sleeps, clock readings or timeouts. Wait on the event itself or inject the clock.
 `tests/test_no_wall_clock.py` enforces it, and its `ALLOWED` list, one reason per entry, holds the exceptions.
@@ -313,11 +318,13 @@ keys, and what a guarantee says or rests on, go to Daniel through your coordinat
 still bound themselves under a `budgets.toml` line, and a budget line named in a standing ruling stands. A change that
 crosses owners goes to the other owner, and the coordinator settles a disagreement. When a tool, rule or step gets in
 your way, fix it at the source if the fix is clearly yours. Record each ruling you get. The friction skill,
-`.agents/skills/friction/SKILL.md`, has the rulings so far and the friction notes.
+`.agents/skills/friction/SKILL.md`, has the standing rulings this file doesn't state and the friction note format.
 
 A guard never fails open, and an agent VM can be suspended at any moment, so nothing that bounds spend or preserves
 results may depend on one. Pods bound themselves (`research pods create --max-hours`, under a line of the notes repo's
-`budgets.toml`), and runs preserve their results from the pod.
+`budgets.toml`), and runs preserve their results from the pod. The lane whose budget line pays for a machine owns its
+use, and stops it when its work there ends; `research run --on` starts it again, and infra's idle stop is only a backstop
+(Daniel, 19 Oct).
 
 Never print a secret's value.
 
@@ -351,6 +358,9 @@ Never print a secret's value.
   - `research notes sync --path lanes/<lane>` publishes notes from any VM with `RESEARCH_NOTES_TOKEN` set.
   - A Cursor agent store is its agent's scratch: nothing another agent or a person needs lives only there, and nothing
     cites a `store:` path.
+- **Writing for a person** (an explanation, a one-pager, an answer in someone's chat) is a Notion page, or cites only
+  what they can open: PRs, repository files, run ids and Notion pages. The notes repo is private, so a `note:` id is for
+  agents (Daniel, 19 Oct).
 - **Evidence and generated output** (explore JSON, plots, gate outputs, logs, run results, rendered tables and reports)
   go in the evidence store only, never Git: neither this repo nor the notes.
   - `research run` publishes every run, completed or failed, as an Attempt with its outputs. The contract is
@@ -454,4 +464,4 @@ Coordinators are launched, handed over and archived from Daniel's laptop with `i
 - Before adding, changing or retiring a process (a rule here or in the lane contract, a gate in `check` or
   `research merge`, a required review, a file every PR must update), assess its effect on research velocity:
   `.agents/skills/process-design/SKILL.md`.
-- Creating or modifying a skill: `.agents/skills/authoring-skills/SKILL.md`.
+- Creating or modifying a skill (at most 16 KB: current rules, not their history): `.agents/skills/authoring-skills/SKILL.md`.

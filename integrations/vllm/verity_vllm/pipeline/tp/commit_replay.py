@@ -79,7 +79,7 @@ def result_path(out: str | os.PathLike, pair: int, rank: int) -> Path:
 def _of_record(out: Path, dd: dict[str, Any], b: dict[str, Any], pair: int, rank: int) -> tuple[dict, dict, Any, Any, dict]:
     """(the run's row, the rank's commit block, store, run, binding map) once the bundle is shown to be the record's; else Refused."""
     from verity_vllm.commit import store_dump as SD
-    from verity_vllm.pipeline.tp.commit import tp_run_root
+    from verity_vllm.pipeline.tp.run_root import tp_run_root
 
     ctx, bdir = b["context"], Path(b["path"])
     ent = next((x for x in dd.get("bundles") or [] if (int(x["pair"]), int(x["rank"])) == (pair, rank)), None)

@@ -320,7 +320,7 @@ noncomputable def zkDeployed (rel : _root_.Flock.Readable.Parsed → _root_.Floc
 /-- **Flock's zero knowledge against a malicious verifier at the deployed masked record**: `Claims.Flock.ZK` at
 `zkDeployed`, at every rep rounds' coin counts `nr`, at `ε_zk = 8·n_L·δ₁ + 8t·n_L·δ₁ + 2·3^{-t}` with `n_L` the session's
 pre-final leaves, under `Claims.Hm96Hiding` at the pinned key, the tables' five Props (`Tables`, `Complete`, `DummyReg`,
-`Causal`, `TapeOK`) and `HonestMsgs`: `refP`'s messages are `ZkTables.honestP`'s. -/
+`Causal`, `TapeOK`) and `HonestMsgs`: `refP`'s messages are `ZkTables.honestPR`'s. -/
 theorem Flock.zk_deployZk_ref (H : Msg → Msg) (rel : _root_.Flock.Readable.Parsed → _root_.Flock.Readable.Relation)
     (nr : Msg → ℕ → ℕ) (T : TableData) (t : ℕ) (ht : 0 < t) {δ₁ : ENNReal}
     (hT1 : Claims.Hm96Hiding ZkView.My ZkView.saltHash δ₁) (hδ₁ : δ₁ ≠ ⊤) (hS : (session nr T).Tables)
