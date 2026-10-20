@@ -29,7 +29,7 @@ checks H1's committed ranges, which g1's leaves meet (`Leaves.fp8_inH1`, `Leaves
 served window: its relation is H1's ranges, not a served Program's, its receipt game is the honest one, and its time
 is exactly the credit, so it shows only that every premise can hold at once. Both statements are stated on the
 pre-#2855 `ProofLayer`, where no served window meets `BindingForkAt` (RT3-LOGIC-1), and are restated on
-`DrawnLayer.BindingAt` once #2855 lands.
+`ProofLayer.BindingAt` once #2855 lands.
 
 The statements:
 
