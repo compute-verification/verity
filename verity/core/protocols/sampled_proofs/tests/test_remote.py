@@ -628,6 +628,44 @@ def test_a_ledger_that_reuses_or_goes_back_on_a_leaf_is_refused(leaves):
         C.audited_session(ledger(leaves), WINDOW, pinned_key(), lms_verify)
 
 
+def test_a_ledger_whose_key_changes_without_a_signed_move_is_refused(tmp_path, signer):
+    """A ledger handed to a new key (an auditor host moved to another project, its key rotated) with no move entry signed
+    under the old key: whichever key the verifier pins, the entries under the other one are refused, so neither key's
+    windows pass on that ledger."""
+    host = Host(tmp_path, signer)
+    honest(host)
+    host.trusted()
+    new = lms_key(2)
+    leaves = itertools.count()
+    moved = Ledger(host.ledger.path, lambda m: lms.sign_at(new, next(leaves), m).encode(), new)
+    moved.lines = list(host.ledger.lines)
+    moved.open("s-2", {"commit": "22" * 64, "period": "p-1"})
+    with pytest.raises(C.CoinError, match="entry 2 opens session s-2 under challenger key .*, not the window's pinned key"):
+        host.trusted()
+    with pytest.raises(C.CoinError, match="entry 0 opens session s-1 under challenger key .*, not the window's pinned key"):
+        host.trusted(key=pinned_key(new))
+    moved.lines = list(host.ledger.lines)
+    moved.key_sha512 = host.ledger.key_sha512
+    moved.open("s-2", {"commit": "22" * 64, "period": "p-1"})
+    with pytest.raises(C.CoinError, match="entry 2's signature does not verify under the verifier's challenger key"):
+        host.trusted()
+
+
+def test_the_pin_is_read_from_infras_key_record():
+    """`key_of_record` reads a ``challenger-key/v1`` record (the store artifact infra labels ``challenger-key current``)
+    and refuses one whose public key isn't the one its SHA-512 names, or of another form."""
+    public = lms.public_key(PINNED)
+    record = {"schema": "challenger-key/v1", "W": 4, "H": 4, "pubkey": public.hex(),
+              "pubkey_sha512": hashlib.sha512(public).hexdigest(), "retired": [], "valid_from_utc": "2026-10-20T09:45:24Z"}
+    assert C.key_of_record(record) == pinned_key()
+    with pytest.raises(C.CoinError, match="is not the one whose SHA-512 it names"):
+        C.key_of_record({**record, "pubkey": public[::-1].hex()})
+    for bad in ({**record, "schema": "challenger-key/v2"}, {**record, "pubkey": public.hex().upper()},
+                {**record, "pubkey_sha512": "00"}, {**record, "W": 3}, None):
+        with pytest.raises(C.CoinError, match="challenger key"):
+            C.key_of_record(bad)
+
+
 def test_a_release_log_rewritten_after_its_end_is_refused(tmp_path, signer):
     """RT4-INT-26: the round roots in the release log rewritten after the session's end, to roots chosen after every
     coin: the log is no longer the one the ledger's end sealed (nor the one the close signs)."""

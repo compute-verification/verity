@@ -76,8 +76,10 @@ state forks at a reused leaf), one open a Commit, whatever period it names, one 
 after its open.  The window's session must have its end, closed, and its record must name the open's host, its signed
 close the ledger's session id and its release log the one the end sealed (`trusted_session_of`).  A ledger older than
 the window's end is refused, as is a window it opens no session for.  So two sessions under one key can't both pass for
-one Commit, under one period label or two, and one session's coins pass for one window only.  `ledger_line` writes an
-entry as the auditor does.
+one Commit, under one period label or two, and one session's coins pass for one window only.  Every entry is under the
+one pinned key (`key_of_record` reads infra's published pin), so a ledger whose key changes is refused: v1 has no move
+entry, signed under the old key, that could hand the ledger to a new one.  `ledger_line` writes an entry as the auditor
+does.
 
 The first client is PoUW's live window (`verity.core.protocols.pouw.window`, "Live windows"): its salt, its draw and
 its round coins, round r's opened after round r's root.  The module reads only the standard library and
@@ -123,6 +125,9 @@ RECORD_FORM = ("a challenger record is {commitment, host, signature}: a live coi
                "digits, '-', '.' and '_', and lowercase hex")
 KEY_FORM = ("a challenger key is {H, W, public}: LMS over SHA-512 (N = 64) with W in 1, 2, 4, 8 and 1 <= H <= 30, and its "
             "80-byte public key in lowercase hex")
+KEY_RECORD_SCHEMA = "challenger-key/v1"
+KEY_RECORD_FORM = (f"a challenger key record is {KEY_RECORD_SCHEMA} {{H, W, pubkey, pubkey_sha512, schema, ...}}: a "
+                   "challenger key's parameters, its public key in lowercase hex and that public key's SHA-512")
 NO_RECORD = "no challenger record: the verifier holds no coin commitment its challenger recorded and signed"
 CLOSE_ROLE = "verity/challenger-close/v1"
 LOG_TAG = "verity/challenger/release-log/v1"
@@ -354,6 +359,19 @@ class ChallengerKey:
         if not isinstance(doc, dict) or sorted(doc) != ["H", "W", "public"] or _hex(doc["public"]) is None:
             raise CoinError(KEY_FORM)
         return cls(doc["W"], doc["H"], _hex(doc["public"]))
+
+
+def key_of_record(doc: Any) -> ChallengerKey:
+    """The challenger key a published key record pins (`KEY_RECORD_SCHEMA`, the store artifact the auditor's operator
+    labels ``challenger-key current``; the caller reads only one infra published): its `W`, `H` and public key, refused
+    (`CoinError`) unless the record is of that form and the public key's SHA-512 is the one it names."""
+    if not (isinstance(doc, dict) and doc.get("schema") == KEY_RECORD_SCHEMA and _digest_hex(doc.get("pubkey_sha512"))
+            and _hex(doc.get("pubkey")) is not None):
+        raise CoinError(KEY_RECORD_FORM)
+    key = ChallengerKey(doc.get("W"), doc.get("H"), _hex(doc["pubkey"]))
+    if hashlib.sha512(key.public).hexdigest() != doc["pubkey_sha512"]:
+        raise CoinError("the challenger key record's public key is not the one whose SHA-512 it names")
+    return key
 
 
 @dataclass(frozen=True, slots=True)
@@ -815,12 +833,13 @@ class LiveRecord:
         return order_reason(self.challenger.commitment, self.label, self.roots, self.openings)
 
 
-__all__ = ["BINDING", "CLOSE_FORM", "CLOSE_ROLE", "COIN_BYTES", "COMMITMENT_FORM", "COMMITMENT_TAG", "KEY_FORM", "LEDGER_FORM",
+__all__ = ["BINDING", "CLOSE_FORM", "CLOSE_ROLE", "COIN_BYTES", "COMMITMENT_FORM", "COMMITMENT_TAG", "KEY_FORM", "KEY_RECORD_FORM",
+           "KEY_RECORD_SCHEMA", "LEDGER_FORM",
            "LEDGER_ROLE", "LEDGER_SCHEMA", "LEDGER_TAG", "LOG_FILE", "LOG_FORM", "LOG_MALFORMED", "LOG_TAG", "MAX_COINS",
            "MAX_LEDGER_LINE", "MAX_LOG_LINE", "MAX_LOG_LINES", "MAX_SESSION_ID", "NO_AUDIT", "NO_CLOSE", "NO_RECORD",
            "OPENING_FORM", "PUBLIC_BYTES", "RECORD_FORM", "RECORD_ROLE", "SESSION_FORM", "WINDOW_FORM", "Audited",
            "ChallengerClose", "ChallengerKey", "ChallengerRecord", "CoinError", "LiveChallenger", "LiveCommitment",
-           "LiveOpening", "LiveRecord", "Verify", "audited_session", "close_message", "layout_problem", "ledger_line",
+           "LiveOpening", "LiveRecord", "Verify", "audited_session", "close_message", "key_of_record", "layout_problem", "ledger_line",
            "ledger_message", "live_domain", "live_leaf", "live_reason", "log_chain", "log_digest", "order_reason",
            "record_message", "record_reason", "released_roots_of", "session_named", "session_of", "trusted_commitment",
            "trusted_reason", "trusted_session_of", "write_record"]
