@@ -9,14 +9,19 @@ record (`lastBinds_deployed_rejects`). This file proves the route with (P4) repl
 `Bound.LastCoinFree`, through REC1's chain as it stands (`KS_of_flockKS_binds`):
 
 * The compiled record's inner view reads the last message as a representative of its reading (`RecDeploy.deployRecC`):
-  `IVStar`'s decision with its calls, and `DE`'s columns of the opened view (`Bound.readL`), at the coins before the
-  last round (`Bound.repL`). Where `IVStar`'s last step reads no last coin (`LastCoinFree`), the representative keeps
-  the decision, the calls and the columns (`Bound.run_nfC`). `E*` reads an inner view only through its decision and its
-  openings (`served_eval_congr`), so `E*`'s output and `KSA` are the deployed record's (`RecDeploy.ksA_of_C`), and the
-  inner view's calls are still among the witnesses' (`RecDeploy.callsLogColl_C`).
+  `IVStar`'s decision with the set of its calls, and `DE`'s columns of the opened view (`Bound.readL`), at the coins
+  before the last round (`Bound.repL`). Where `IVStar`'s last step reads no last coin (`LastCoinFree`), the
+  representative keeps the decision, the calls as a set and the columns (`Bound.run_nfC`). `E*` reads an inner view
+  only through its decision and its openings (`served_eval_congr`), so `E*`'s output and `KSA` are the deployed
+  record's (`RecDeploy.ksA_of_C`), and since `CallsLogColl` reads the calls only by membership, the inner view's calls
+  are still among the witnesses' (`RecDeploy.callsLogColl_C`).
 * Two inner views that differ at the last round then differ in their readings, at coins that agree before it
-  (`Bound.readL_ne_of_repL`). Both accept, so their calls or their columns differ, and `LastBindsEC` gives a collision
-  among `IVStar`'s calls, which the witnesses record (`RecDeploy.forksBind_C`).
+  (`Bound.readL_ne_of_repL`). Both accept, so their call sets or their columns differ, and `LastBindsEC` gives a
+  collision among `IVStar`'s calls, which the witnesses record (`RecDeploy.forksBind_C`).
+
+The reading takes the calls as a set because `LastBindsEC` compares them so (ASK-76): the record's stream order and
+its optional digest of a table's empty publics change the list of calls the deployed verifier makes, not the set
+(`note:proofs/20261020T0132Z-finding-rec2-calls-as-lists`).
 
 `RecDeploy.KSBoundRouteCols` is `KSBoundRoute` with `LastBindsEC` and `LastCoinFree` for `LastBinds`;
 `RecDeploy.ksBoundRoute_of_bridge_cols` proves it from the bridge. At the deployed plain verifier's own steps
@@ -69,10 +74,11 @@ section Reading
 
 variable {Coin Col T : Type} [Inhabited Coin]
 
-/-- **What `E*` reads of `IVStar`'s decision, with `IVStar`'s calls**: the decision on the messages `as` at the coins
-`cs` with its calls, and `DE`'s columns of the opened view. -/
+/-- **What `E*` reads of `IVStar`'s decision, with `IVStar`'s calls as a set**: the decision on the messages `as` at
+the coins `cs` with the set of its calls, and `DE`'s columns of the opened view. -/
 def Bound.readL (Bd : Bound Coin Col T) (H : Msg → Msg) (x : Msg) (as : List Msg) (cs : List Coin) :=
-  ((Bd.IVStar.next x as cs).eval H, Bd.DE.cols (Bd.openView (Bd.viewAt H x as cs)))
+  ((((Bd.IVStar.next x as cs).eval H).1, ((Bd.IVStar.next x as cs).eval H).2.toFinset),
+    Bd.DE.cols (Bd.openView (Bd.viewAt H x as cs)))
 
 /-- **The reading doesn't read the last coin** where `IVStar`'s last step doesn't. -/
 theorem Bound.readL_coins {H : Msg → Msg} {Bd : Bound Coin Col T} (hCF : Bd.LastCoinFree H) {x : Msg}
@@ -89,12 +95,12 @@ theorem Bound.readL_default {H : Msg → Msg} {Bd : Bound Coin Col T} (hCF : Bd.
     (by simp only [List.length_append, List.length_dropLast, List.length_singleton]; omega)
     (by rw [List.dropLast_concat])
 
-/-- Two readings of accepted decisions that differ, differ in the columns or in the calls. -/
+/-- Two readings of accepted decisions that differ, differ in the columns or in the call sets. -/
 theorem Bound.readL_ne {H : Msg → Msg} {Bd : Bound Coin Col T} {x : Msg} {as as' : List Msg} {cs cs' : List Coin}
     (h : Bd.readL H x as cs ≠ Bd.readL H x as' cs')
     (ha : ((Bd.IVStar.next x as cs).eval H).1 = ((Bd.IVStar.next x as' cs').eval H).1) :
     Bd.DE.cols (Bd.openView (Bd.viewAt H x as cs)) ≠ Bd.DE.cols (Bd.openView (Bd.viewAt H x as' cs')) ∨
-      ((Bd.IVStar.next x as cs).eval H).2 ≠ ((Bd.IVStar.next x as' cs').eval H).2 := by
+      ((Bd.IVStar.next x as cs).eval H).2.toFinset ≠ ((Bd.IVStar.next x as' cs').eval H).2.toFinset := by
   by_cases hc : Bd.DE.cols (Bd.openView (Bd.viewAt H x as cs)) = Bd.DE.cols (Bd.openView (Bd.viewAt H x as' cs'))
   · exact Or.inr fun hl => h (Prod.ext (Prod.ext ha hl) hc)
   · exact Or.inl hc
@@ -203,27 +209,29 @@ theorem Bound.seen_viewAt (Bd : Bound Coin Col T) (H : Msg → Msg) (x : Msg) (m
   simp only [List.zip_append, List.length_map, List.length_range, zip_map_range]
   rfl
 
-/-- **`IVStar`'s run on the representative**: the same decision, the same calls and the same columns of the opened
-view, where its last step reads no last coin. -/
+/-- **`IVStar`'s run on the representative**: the same decision, the same calls as a set and the same columns of the
+opened view, where its last step reads no last coin. -/
 theorem Bound.run_nfC (Bd : Bound Coin Col T) (H : Msg → Msg) (hCF : Bd.LastCoinFree H) (x : Msg) (ms : List Msg)
     (r : Fin (Bd.IVStar.k x) → Coin) :
     (run H (replay (Bd.nfMsgsC H x ((List.range (Bd.DE.V.k x)).map (coinSeq r)) ms)) Bd.IVStar x () r).out =
         (run H (replay ms) Bd.IVStar x () r).out ∧
-      (run H (replay (Bd.nfMsgsC H x ((List.range (Bd.DE.V.k x)).map (coinSeq r)) ms)) Bd.IVStar x () r).vLog =
-        (run H (replay ms) Bd.IVStar x () r).vLog ∧
+      (run H (replay (Bd.nfMsgsC H x ((List.range (Bd.DE.V.k x)).map (coinSeq r)) ms)) Bd.IVStar x () r).vLog.toFinset =
+        (run H (replay ms) Bd.IVStar x () r).vLog.toFinset ∧
       Bd.DE.cols (Bd.openView (run H (replay (Bd.nfMsgsC H x ((List.range (Bd.DE.V.k x)).map (coinSeq r)) ms))
         Bd.IVStar x () r).seen) = Bd.DE.cols (Bd.openView (run H (replay ms) Bd.IVStar x () r).seen) := by
   rcases Nat.eq_zero_or_pos (Bd.DE.V.k x) with hk | hk
   · rw [Bd.run_ivstar_zero H x _ r hk, Bd.run_ivstar_zero H x _ r hk]
     exact ⟨rfl, rfl, rfl⟩
   have h := Bd.readL_nf hCF x ms ((List.range (Bd.DE.V.k x)).map (coinSeq r)) (by simp)
-  have hdec : Bd.decAt H x (Bd.nfMsgsC H x ((List.range (Bd.DE.V.k x)).map (coinSeq r)) ms) r =
-      Bd.decAt H x ms r := congrArg Prod.fst h
+  have hdec : ((Bd.decAt H x (Bd.nfMsgsC H x ((List.range (Bd.DE.V.k x)).map (coinSeq r)) ms) r).1,
+      (Bd.decAt H x (Bd.nfMsgsC H x ((List.range (Bd.DE.V.k x)).map (coinSeq r)) ms) r).2.toFinset) =
+      ((Bd.decAt H x ms r).1, (Bd.decAt H x ms r).2.toFinset) := congrArg Prod.fst h
+  obtain ⟨h1, h2⟩ := Prod.mk.inj hdec
   refine ⟨?_, ?_, ?_⟩
   · rw [Bd.run_ivstar H x _ r hk, Bd.run_ivstar H x _ r hk]
-    exact congrArg Prod.fst hdec
+    exact h1
   · rw [Bd.run_ivstar H x _ r hk, Bd.run_ivstar H x _ r hk]
-    exact congrArg Prod.snd hdec
+    exact h2
   · rw [Bd.seen_viewAt H x _ r hk, Bd.seen_viewAt H x _ r hk]
     exact congrArg Prod.snd h
 
@@ -282,6 +290,8 @@ theorem innerView_C [DecidableEq Col] (H : Msg → Msg) (Bd : Bound Coin Col T) 
   let h := Bd.run_nfC H hCF (xIOf x) (b.rd.msgs x ws) fun i => coinSeq r i.val
   ⟨h.1, h.2.2⟩
 
+/-- **The inner view's calls are still among the witnesses'**: the representative's calls are the deployed record's as
+a set, and `CallsLogColl` reads them only by membership. -/
 theorem callsLogColl_C {Col' T' : Type} [DecidableEq Col] (H : Msg → Msg) (Bd : Bound Coin Col T)
     (decI : List (ℕ × Col) → List T) (ivScope : Msg → Bool) (b : Brings) (DO : Claims.Flock.Deploy Coin Col' T')
     (hCF : Bd.LastCoinFree H)
@@ -293,11 +303,12 @@ theorem callsLogColl_C {Col' T' : Type} [DecidableEq Col] (H : Msg → Msg) (Bd 
     intro e he
     rw [innerRun_C] at he
     apply h
-    have hv : (run H (replay (msgsC Bd b H x r ws)) Bd.IVStar (xIOf x) () fun i => coinSeq r i.val).vLog =
-        (Claims.Recursion.innerRun H (deployRec Bd.IVStar ivScope b) (Inner.ofFlock Bd.deploy decI) x r ws).vLog :=
+    have hv : (run H (replay (msgsC Bd b H x r ws)) Bd.IVStar (xIOf x) () fun i => coinSeq r i.val).vLog.toFinset =
+        (Claims.Recursion.innerRun H (deployRec Bd.IVStar ivScope b) (Inner.ofFlock Bd.deploy decI) x r
+          ws).vLog.toFinset :=
       (Bd.run_nfC H hCF (xIOf x) (b.rd.msgs x ws) fun i => coinSeq r i.val).2.1.trans
-        (congrArg Claims.Trace.vLog (innerRun_bound H Bd decI ivScope b x r ws)).symm
-    exact (congrArg (fun l => e ∈ l) hv).mp he
+        (congrArg (fun t => t.vLog.toFinset) (innerRun_bound H Bd decI ivScope b x r ws)).symm
+    exact List.mem_toFinset.1 (hv ▸ List.mem_toFinset.2 he)
   · exact Or.inr h
 
 theorem innerAcceptsColl_C {Col' T' : Type} [DecidableEq Col] (H : Msg → Msg) (Bd : Bound Coin Col T)
@@ -486,9 +497,9 @@ end Cols
 /-! ## The route -/
 
 /-- **`KSBoundRoute` with the last message bound modulo what `E*` reads**: its premises with (P4, `Bound.LastBinds`)
-replaced by `Bound.LastBindsEC` (a collision where two accepted decisions differ in `DE`'s columns or in `IVStar`'s
-calls) and `Bound.LastCoinFree` (`IVStar`'s last step reads no last coin, which holds at the deployed plain verifier's
-own steps, `lastCoinFree_deployed`). -/
+replaced by `Bound.LastBindsEC` (a collision where two accepted decisions differ in `DE`'s columns or in the set of
+`IVStar`'s calls) and `Bound.LastCoinFree` (`IVStar`'s last step reads no last coin, which holds at the deployed plain
+verifier's own steps, `lastCoinFree_deployed`). -/
 def KSBoundRouteCols (rel relO : _root_.Flock.Readable.Parsed → _root_.Flock.Readable.Relation) (b : Brings)
     (L : Claims.Recursion.VStarB.LayoutB) : Prop :=
   ∀ (nextE : Msg → List Msg → List Coin → Claims.OC Out)
