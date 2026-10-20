@@ -3,7 +3,7 @@ K = 64 and 128 (a partial row block left uncovered), and saturated operands at K
 position, salt and roots and every operand byte of its tile.  A call's receipt tree (`served_h1/commit.py`) is the same built in
 pool tasks or leaf by leaf, opens a unit's leaf, and refuses a flipped bit or another call's salt label.  Under a call's admit
 bits (`served_h1/credit.py`), from the committed request queue, a dead unit's receipt is the canonical empty receipt and a live
-unit's the reference's (`PouwH1Tile_v4`), an admitted block of zero-byte rows is computed and not credited (RT4-LOGIC-4), a junk row in a slot the queue leaves unassigned is refused and credits nothing, so is the canonical
+unit's the reference's (`PouwH1Tile_v4`), an admitted block of zero-byte rows is computed, receipt-checked and credited (RT4-LOGIC-4, RT4-LOGIC-20), a tile's admit bits open from the admit tree and a flipped one is refused, a junk row in a slot the queue leaves unassigned is refused and credits nothing, so is the canonical
 empty row in a slot the queue selects (RT-ALGO-4), and the tally's limbs are 16-bit.  A call's A table is AROW's row table, a tile's rows open against it and the step's A root, and
 A' = -b is refused (CMP-38).  A linear's B table is the same format over its weight rows, under the weights' root; the
 scheduler's record gives the request queue and its commitment."""
@@ -108,12 +108,12 @@ def test_dead_units_skip_noise_and_receipt():
         assert (want == ungated) if u in live else (not any(want) and any(ungated))
 
 
-def test_an_admitted_zero_byte_block_is_computed_and_not_credited():
-    """RT4-LOGIC-4 (#2722 credits only tiles live in-circuit, `PouwH1Tile._live`): the admit unit reads no row byte, so a
-    selected block of zero-byte rows under nonzero scales is admitted, and the gate computes it (noised and receipted, the
-    ungated unit's receipt, under `PouwH1Tile_v4`'s admit bits), but it is dead in-circuit and never credited; a selected
-    block of nonzero bytes is live and credited; the block the queue leaves unselected is dead: the zero receipt, its noise
-    never derived, and no credit."""
+def test_an_admitted_zero_byte_block_is_computed_and_credited_and_a_non_admitted_block_is_not():
+    """RT4-LOGIC-4 and RT4-LOGIC-20 under `PouwH1Tile_v4`: the admit unit reads no row byte, so a selected block of
+    zero-byte rows under nonzero scales is admitted; a tile's live bit is the OR of its admit bits, the bits the tally
+    reads, so that block is computed and receipt-checked (the ungated unit's receipt) and credited, as is a selected block
+    of nonzero bytes; the block the queue leaves unselected is dead: the zero receipt, its noise never derived, and no
+    credit."""
     call = _padded_call(96, 96, 64, 64, 12)
     call.a[:32] = 0
     call.a[64:] = 0
@@ -124,8 +124,7 @@ def test_an_admitted_zero_byte_block_is_computed_and_not_credited():
     bits = CR.queue_admit(queue, 0, rows)
     assert list(bits) == [True] * 64 + [False] * 32 and CR.scale_only(rows) == list(range(32))
     assert not CR.junk(rows, bits) and not CR.hollow(rows, CR.queue_select(queue, 0))
-    assert list(CR.tile_live(rows)) == [False, True, False]
-    assert list(CR.credited(bits, rows)) == [False] * 32 + [True] * 32 + [False] * 32
+    assert CR.live_blocks(bits) == [0, 1]
     got, live = RC.gated_receipts(call, bits, SALT, 9, RA, RB)
     assert live == CR.live_units(bits, 64) == [0, 1, 2, 3]
     for u in range(len(call.units)):
@@ -133,15 +132,13 @@ def test_an_admitted_zero_byte_block_is_computed_and_not_credited():
         ungated = RC.reference(call, SALT, 9, RA, RB, u)[1]
         assert list(got[u]) == want and any(ungated)
         assert want == ungated if u in live else not any(want)
-    calls = [{"step": 0, "site": "x", "n": 64, "k": 64}]
-    assert CR.tally(calls, [int(bits.sum())], 1, ("x",))["rows"] == 64
-    tl = CR.tally(calls, [int(CR.credited(bits, rows).sum())], 1, ("x",))
-    assert tl["rows"] == 32 and tl["macs"] == 32 * 64 * 64
+    tl = CR.tally([{"step": 0, "site": "x", "n": 64, "k": 64}], [int(bits.sum())], 1, ("x",))
+    assert tl["rows"] == 64 and tl["macs"] == 64 * 64 * 64
 
 
 def test_a_tiles_admit_input_opens_from_the_admit_tree_and_a_flipped_bit_is_refused():
     """The gate's binding of `PouwH1Tile_v4`'s admit input (`serve.tile_admit`): each row block's two admit words open from
-    the call's admit tree against its root as the queue's 32 bits, and a word with any one bit flipped is refused."""
+    the call's admit tree against its root as the tally's 32 bits, and a word with any one bit flipped is refused."""
     SV = _load("serve")
     t, key = 128, bytes(range(64))
     bits = np.zeros(t, dtype=bool)

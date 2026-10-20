@@ -264,9 +264,9 @@ def reference(call: Call, salt: bytes, base: int, root_a: bytes, root_b: bytes, 
 
 def gated_receipts(call: Call, admit, salt: bytes, base: int, root_a: bytes, root_b: bytes, cubin: Cubin | None = None,
                    chunk: int | None = None) -> tuple[np.ndarray, list[int]]:
-    """The call's receipts under its admit bits, `PouwH1Tile_v4`'s (a tile is computed iff one of its 32 rows is admitted;
-    its credit is `credit.credited`'s): a computed unit's is `h1tile`'s, whatever its rows' bytes, a dead unit's the
-    canonical empty receipt (zero words) with no noise derived; and the computed units."""
+    """The call's receipts under its admit bits, `PouwH1Tile_v4`'s (a tile's live bit is the OR of its 32 rows' admit
+    bits, the bits the tally reads): a live unit's is `h1tile`'s, whatever its rows' bytes, a dead unit's the canonical
+    empty receipt (zero words) with no noise derived; and the live units."""
     live = [ri * (call.b.shape[0] // C_) + cj for ri in range(call.a.shape[0] // R)
             if bool(np.asarray(admit[R * ri:R * ri + R]).any()) for cj in range(call.b.shape[0] // C_)]
     out = np.zeros((len(call.units), 2 * layout(call.a.shape[1]).sets), dtype=np.uint32)

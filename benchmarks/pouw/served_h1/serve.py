@@ -33,8 +33,8 @@ roots follow the step's real rows, so this window doesn't use them (the seeded m
   canonical empty row (`credit.junk`) and a selected slot whose row is (`credit.hollow`).
 * **Receipts**: `h1tile`'s unit (`PouwH1Tile_v4`) on the GPU (`receipts.gated_receipts`) on every live unit, one with an
   admitted slot among its 32 rows, whatever their bytes: the tile's `admit` input is its rows' admit bits, bound by
-  commitment equality to the call's admit-tree leaves.  Seeds come from the salt, the position and the call's (root(A),
-  root(B)), inside the unit.  A dead unit skips
+  commitment equality to the admit-tree leaves the tally reads, so it is live exactly when the tally credits it
+  (RT4-LOGIC-4).  Seeds come from the salt, the position and the call's (root(A), root(B)), inside the unit.  A dead unit skips
   the noise and the receipt: its leaf is the canonical empty receipt (zero words), so every receipt tree keeps its shape.
   There is one receipt tree per call.
 * **Coins** (``--coins``), every challenger's entropy the Lean verifier of record's (`pouw.verifier.coins`): seeded, the
@@ -44,11 +44,10 @@ roots follow the step's real rows, so this window doesn't use them (the seeded m
   is recorded before round s's coin opens, and the step's units take the round's salt (`h1tile.live_salt`:
   `window.round_key(...).stream(0, 64)`), so every candidate and every selection a round's noise reads is committed before
   that noise's coin.
-* **Credit**: only the admitted slots of tiles live in-circuit (`credit.credited`: `PouwH1Tile._live`, a nonzero byte
-  among the tile's 32 A rows, as #2722's period guarantee credits; `credit.tally`, in 16-bit limbs, every tally unit always
-  proved): Cr = Σ credited rows · N · K, and the published credit point(level(floor_point(Cr))) <= Cr.  An admit bit reads
-  no row byte, so an admitted block of zero-byte rows under nonzero scales is computed and never credited (RT4-LOGIC-4).
-  The padded compute (the non-credited rows of live units, noised) is shown and not credited; dead units cost only their
+* **Credit**: only the admitted slots, a tile's iff `PouwH1Tile_v4`'s live bit (the OR of its admit bits) is set, an
+  admitted tile of zero-byte rows included (RT4-LOGIC-20) (`credit.tally`, in 16-bit limbs, committed and not proved until
+  a tally Definition exists): Cr = Σ admitted rows · N · K, and the published credit point(level(floor_point(Cr))) <= Cr.
+  The padded compute (the non-admitted rows of live units, noised) is shown and not credited; dead units cost only their
   emptiness check.
 * **Not covered**: attention (QKᵀ, P·V) and lm_head.
 
@@ -65,8 +64,7 @@ In order, into OUT (`record.json` throughout, `manifest.json` at the end, the op
   serve     the prompts again with the option; inside its `record`, each call's A table, admit words and receipts; then the
             empty steps; the token ids must be the reference's
   receipts  one receipt tree per call (one leaf per unit, `commit`)
-  credit    the tally's limbs and tree, the credited (admitted, in tiles live in-circuit) and padded split, the admitted
-            slots of dead tiles, the dead units skipped
+  credit    the tally's limbs and tree, the credited (admitted) and padded split, the dead units skipped
   prover    the prover's data (the table key, each call's real rows, scales and receipts) as SCRATCH/prover.tar, before the
             gate so a gate failure keeps it; `serve.sh` puts it in the store once the GPU is released, else moves it into
             OUT, which the run's custody uploads
@@ -78,8 +76,8 @@ In order, into OUT (`record.json` throughout, `manifest.json` at the end, the op
             tile's 32 B rows opened against it and a tampered weight row refused, the admit root rebuilt from the queue, a
             dead unit's rows empty and its skipped noise real work, a junk row in a slot the queue leaves unassigned refused
             and not admitted, the canonical empty row in a slot the queue selects refused and not admitted, the tile's admit
-            words equal to the queue's bits and a tampered one refused against the admit root, the tile's rows zeroed
-            under a nonzero scale still admitted and not credited (RT4-LOGIC-4), a live unit's receipt the ungated one
+            words equal to the tally's bits and a tampered one refused against the admit root, the tile's selected rows
+            zeroed under a nonzero scale still admitted, a live unit's receipt the ungated one
 
     cd integrations/vllm; PYTHONPATH=.:../..:../../tools/research/src:../../benchmarks/pouw/served_h1
     $PY ../../benchmarks/pouw/served_h1/serve.py --out OUT --cubin noise.cubin --at 2026-10-18T00:00:00Z --by compute-accounting
@@ -514,7 +512,6 @@ def run(a: argparse.Namespace) -> dict:
                       "base": s * u_step + offs[w], "units": (t_max // 32) * (n // 32), "root_a": root_a.hex(),
                       "root_b": weights["roots"][w].hex(), "a_domain": dom.domain_id.hex(), "a_fields": fields,
                       "root_admit": s_lv[-1][0].hex(), "admit_fields": s_fields, "selected": int(bits.sum()),
-                      "credited": int(CR.credited(bits, rows).sum()),
                       "scale_only": len(CR.scale_only(rows)), "junk": len(CR.junk(rows, bits)),
                       "hollow": len(CR.hollow(rows, CR.queue_select(queue, s)))})
         data.append({"m": m, "xq": slots[:m].cpu().numpy(), "sa": scales[:m].copy(), "receipts": None, "admit": bits,
@@ -583,7 +580,7 @@ def run(a: argparse.Namespace) -> dict:
                      for s in range(s_max) for w in range(len(layers))])
     padded_superset = {"units": sum(c["units"] for c in calls), "rows": len(calls) * t_max,
                        "macs": sum(t_max * c["n"] * c["k"] for c in calls)}
-    tl = CR.tally(calls, [c["credited"] for c in calls], s_max, SITES)
+    tl = CR.tally(calls, [c["selected"] for c in calls], s_max, SITES)
     live_u = sum(c["live_units"] for c in calls)
     noised = {"units": live_u, "rows": sum(32 * len(CR.live_blocks(d["admit"])) for d in data),
               "macs": sum(c["live_units"] * 32 * 32 * c["k"] for c in calls)}
@@ -595,11 +592,7 @@ def run(a: argparse.Namespace) -> dict:
     credit = {"credited": {"rows": tl["rows"], "macs": tl["macs"], **CR.published(tl["macs"]),
                            "frac_of_padded_macs": round(tl["macs"] / max(1, padded_superset["macs"]), 6)},
               "padded": {"rows": noised["rows"] - tl["rows"], "macs": noised["macs"] - tl["macs"],
-                         "what": "the non-credited rows of live units: noised and receipted, shown, never credited"},
-              "admitted_dead": {"rows": sum(c["selected"] - c["credited"] for c in calls),
-                                "what": "admitted slots of tiles dead in-circuit (PouwH1Tile._live: zero bytes under "
-                                        "nonzero scales, which an admit bit doesn't read; RT4-LOGIC-4): computed, never "
-                                        "credited"},
+                         "what": "the non-admitted rows of live units: noised and receipted, shown, never credited"},
               "dead": {"units": padded_superset["units"] - live_u,
                        "frac_of_units": round(1 - live_u / max(1, padded_superset["units"]), 6),
                        "macs": padded_superset["macs"] - noised["macs"],
@@ -740,17 +733,16 @@ def run(a: argparse.Namespace) -> dict:
                            "salts": "SHA-512(SALT_TAG || key || u32be len(label) || label || u64be i || u8 c), c = 0..2, "
                                     "labels a/<s>/<w>, s/<s>/<w>, r/<s>/<w>, t, b/<w>, q and qr; the key is the prover's"},
                 "credit": {**{k: v for k, v in credit.items() if k != "tally"},
-                           "rule": "PADCREDIT round 2 with RT10's fixes: only admitted slots of tiles live in-circuit "
-                                   "(PouwH1Tile._live: a nonzero byte among the tile's 32 A rows; RT4-LOGIC-4, #2722) are "
-                                   "credited; slot i of step "
+                           "rule": "PADCREDIT round 2 with RT10's fixes: only admitted slots are credited, a tile's iff "
+                                   "PouwH1Tile_v4's live bit (the OR of its 32 admit bits) is set; slot i of step "
                                    "t is admitted iff the request queue (committed before the first coin) assigns it a "
                                    "request live at t and its row's scale is nonzero (pouw.circuit.admit.PouwQueueAdmit: "
                                    "the row can withhold admission, never grant it; RT-ALGO-4), written by an "
                                    "always-proved admit unit into its own leaf, which refuses a slot not admitted whose row "
                                    "is not the canonical empty row and a slot the queue selects whose row is; the admit "
                                    "leaves are committed (live) in the round "
-                                   "root before the round's coin; the tally is 16-bit limbs, every tally unit always "
-                                   "proved; Pub = point(level(floor_point(Cr)))"},
+                                   "root before the round's coin; the tally is 16-bit limbs, committed and not proved "
+                                   "until a tally Definition exists; Pub = point(level(floor_point(Cr)))"},
                 "calls": calls, "tokens_equal": all(equal)}
     (out / "manifest.json").write_text(json.dumps(manifest, indent=1, default=str) + "\n")
     rec.step("prover", prover(a, out, key, calls, data))
@@ -842,7 +834,7 @@ def gate(a, calls: list[dict], data: list[dict], levels: list, layers: list, mod
         sel = {"live": live, "admit_root_rebuilt": admit_root == bytes.fromhex(c["root_admit"]),
                "admit_words_committed": CR.words(bits) == d["words"], "no_junk_row": not CR.junk(a_rows, bits),
                "no_hollow_row": not CR.hollow(a_rows, chosen),
-               "tile_admit_is_queue_bits": bool(np.array_equal(tile_bits, bits[32 * ri:32 * ri + 32])),
+               "tile_admit_is_tally_bits": bool(np.array_equal(tile_bits, bits[32 * ri:32 * ri + 32])),
                "tampered_tile_admit_refused": tile_admit(c, d, key, ri, forged) is None}
         free = [r_ for r_ in range(32 * ri, 32 * ri + 32) if not bits[r_]]
         if free:
@@ -862,11 +854,10 @@ def gate(a, calls: list[dict], data: list[dict], levels: list, layers: list, mod
                        hollow_row_not_admitted=not CR.queue_admit(queue, c["step"], hollow_rows)[hr]
                        and int(CR.queue_admit(queue, c["step"], hollow_rows).sum()) == c["selected"] - 1)
             zero_rows = a_rows.copy()
-            zero_rows[32 * ri:32 * ri + 32, :-4] = 0
+            zero_rows[taken, :-4] = 0
             zero_rows[taken, -4:] = np.frombuffer(np.float32(0.5).tobytes(), dtype=np.uint8)
             zb = CR.queue_admit(queue, c["step"], zero_rows)
-            sel.update(zero_byte_rows_admitted=bool(zb[taken].all()) and set(taken) <= set(CR.scale_only(zero_rows)),
-                       zero_byte_block_not_credited=not CR.credited(zb, zero_rows)[32 * ri:32 * ri + 32].any())
+            sel.update(zero_byte_rows_admitted=bool(zb[taken].all()) and set(taken) <= set(CR.scale_only(zero_rows)))
         if live:
             sel.update(next_position_differs=nxt != got, live_receipt_is_ungated=got == ungated)
         else:

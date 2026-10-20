@@ -14,21 +14,20 @@ scales.
     words     a call's T admit bits as T / 16 words of 16 bits (bit b of word q is slot 16 q + b), one admit unit each: a
               proof unit's outputs are at most 16 bits; each word is its own hiding leaf, in the call's admit tree
     tile      a unit (32 slot rows by 32 weight rows) is `PouwH1Tile_v4`, whose `admit` input is its 32 rows' admit bits,
-              bound by commitment equality to the call's two admit-tree leaves they are: the gate computes (noises and
-              receipts) a tile with an admitted slot
+              bound by commitment equality to the two admit-tree leaves the tally reads: its live bit is their OR, so
+              the tiles the circuit treats as live are exactly the tiles the tally credits, and an admitted tile of
+              zero-byte rows is live, noised, receipted and credited (RT4-LOGIC-4, RT4-LOGIC-20)
     dead      a unit is dead iff its 32 slots' admit bits are all 0: its rows are the canonical empty row (the admit unit
               refuses any other), it skips the H1 noise and receipt, and its receipt leaf is the canonical empty receipt
               (2 (KS + m) zero words), so the receipt trees keep their shape
-    credited  a tile's admitted slots, only if the tile is live in-circuit (`tile_live`: `PouwH1Tile._live`, a nonzero
-              byte among its 32 A rows), the liveness #2722's period guarantee credits; the admit unit reads no byte, so an
-              admitted block of zero-byte rows under nonzero scales is computed and never credited (RT4-LOGIC-4)
-    tally     per (step, site): the credited slots' count over the site's calls of the step (at most 32 T, 2^11 at T = 64);
+    tally     per (step, site): the admit words' popcount over the site's calls of the step (at most 32 T, 2^11 at T = 64);
               per site: those limbs' sum over the steps (at most S 32 T, under 2^16 at S = 18); the credit Cr is
               sum_site count_site N_site K_site, a public weighting of four 16-bit limbs; the level is
               window.level(window.floor_point(Cr)) and the published credit Pub = window.point(level) <= Cr
 
-Every admit unit and every tally unit is proved in every window (`proof_plan`); the draw is uniform over every unit position
-of the window, dead ones included, never weighted by an annotation.  Numpy and `pouw.circuit.admit`'s word.
+Every admit unit is proved in every window (`proof_plan`); the tally is no proof unit until a tally Definition exists.  The
+draw is uniform over every unit position of the window, dead ones included, never weighted by an annotation.  Numpy and
+`pouw.circuit.admit`'s word.
 """
 from __future__ import annotations
 
@@ -120,8 +119,7 @@ def hollow(rows: np.ndarray, selected: np.ndarray) -> list[int]:
 
 def scale_only(rows: np.ndarray) -> list[int]:
     """The slots whose rows hold zero s8 bytes under a nonzero scale.  The admit unit reads no byte, so it admits such a
-    row when selected; a block of them is computed under its admit bits and, dead in-circuit (`tile_live`), never
-    credited."""
+    row when selected, and its tile is live under its admit bit (`PouwH1Tile_v4`): computed and credited."""
     r = np.asarray(rows, dtype=np.uint8).reshape(rows.shape[0], -1)
     return [int(i) for i in np.flatnonzero(~r[:, :-4].any(axis=1) & r[:, -4:].any(axis=1))]
 
@@ -146,22 +144,6 @@ def word_rows(ws: Sequence[int]) -> list[bytes]:
 def tile_words(ri: int) -> range:
     """Row block ri's admit words: the leaves of the call's admit tree its tile's `admit` input is bound to."""
     return range(R * ri // WORD, (R * ri + R) // WORD)
-
-
-def tile_live(rows: np.ndarray) -> np.ndarray:
-    """(T / 32,) bool: each row block's tile live in-circuit, `PouwH1Tile._live` on the committed rows' s8 bytes (a nonzero
-    byte among its 32 A rows; never a scale or an admit bit)."""
-    r = np.asarray(rows, dtype=np.uint8).reshape(rows.shape[0], -1)[:, :-4]
-    n = r.shape[0] // R
-    return r[:R * n].reshape(n, -1).any(axis=1)
-
-
-def credited(bits: np.ndarray, rows: np.ndarray) -> np.ndarray:
-    """(T,) bool: the credited slots, the admitted slots of tiles live in-circuit (`tile_live`)."""
-    b = np.asarray(bits, dtype=bool)
-    on = np.zeros(b.size, dtype=bool)
-    on[:R * (b.size // R)] = np.repeat(tile_live(rows), R)
-    return b & on
 
 
 def live_blocks(bits: np.ndarray) -> list[int]:
@@ -207,11 +189,10 @@ def published(macs: int) -> dict:
 def proof_plan(n_calls: int, t: int, steps: int, sites: Sequence[str], population: int) -> dict:
     """What every window proves, beside the uniform draw over its units."""
     admit_units = n_calls * (t // WORD)
-    tally_units = steps * len(sites) + len(sites) + 1
     return {"population": population,
             "draw": "uniform over every unit position of the window, live or dead, by the window's draw coin: public "
                     "structure, never weighted by an annotation",
-            "always_proved": {"admit": admit_units, "tally": tally_units, "total": admit_units + tally_units},
+            "always_proved": {"admit": admit_units},
             "admit_unit": "PouwQueueAdmit on the step, 16 slots' queue entries (the slot map's leaf and each slot's "
                           "request entry, opened from the queue committed before the first coin) and their rows' scales, "
                           "outputs their 16 admit bits, the leaf of the call's admit tree it writes; it opens the 16 slots' "
@@ -219,13 +200,12 @@ def proof_plan(n_calls: int, t: int, steps: int, sites: Sequence[str], populatio
                           "empty row and a slot selected whose row is; it reads no row byte, so a selected row of zero "
                           "bytes under a nonzero scale is admitted",
             "tile_unit": "PouwH1Tile_v4 on the tile's 32 A rows, 32 B rows and 32 admit bits; its admit input is bound "
-                         "by commitment equality to the two leaves of the call's admit tree, which pick the tiles the gate "
-                         "computes",
-            "credited": "the tally counts a tile's admitted slots only if the tile is live in-circuit (PouwH1Tile._live: "
-                        "a nonzero byte among its 32 A rows), never by its admit bits: an admitted block of zero-byte "
-                        "rows under nonzero scales is computed and never credited (RT4-LOGIC-4, #2722)",
-            "tally_units": f"{steps * len(sites)} per (step, site) popcount sums (<= 2^11), {len(sites)} per-site sums over "
-                           "the steps (< 2^16), and one level unit (window.level(floor_point(sum_site count N K)), <= 9 bits)",
+                         "by commitment equality to the two leaves of the call's admit tree that the tally reads, so its "
+                         "live bit (their OR) is the tally's liveness: credit counts exactly the tiles live in-circuit, "
+                         "an admitted tile of zero-byte rows included (RT4-LOGIC-4, RT4-LOGIC-20)",
+            "tally": f"no proof unit until a tally Definition exists; the harness computes and commits {steps * len(sites)} "
+                     f"per (step, site) popcount sums (<= 2^11), {len(sites)} per-site sums over the steps (< 2^16), and "
+                     "the level (window.level(floor_point(sum_site count N K)), <= 9 bits)",
             "dead_unit": "a drawn dead unit proves, with the live tile's template (PouwH1Tile_v4), that its 32 bound "
                          "admit bits are 0 and so its receipt is the canonical empty receipt; no noise is computed when "
                          "serving. Its rows are the canonical empty row because the admit unit refuses a slot not "
@@ -235,6 +215,5 @@ def proof_plan(n_calls: int, t: int, steps: int, sites: Sequence[str], populatio
                       "prefix [1] * m + [0] * (T - m) in every call)"}
 
 
-__all__ = ["bits_of", "credited", "hollow", "junk", "live_blocks", "live_units", "nonempty", "proof_plan", "published",
-           "queue_admit", "queue_leaves", "queue_of", "queue_select", "scale_only", "scales", "tally", "tile_live",
-           "tile_words", "word_rows", "words"]
+__all__ = ["bits_of", "hollow", "junk", "live_blocks", "live_units", "nonempty", "proof_plan", "published", "queue_admit",
+           "queue_leaves", "queue_of", "queue_select", "scale_only", "scales", "tally", "tile_words", "word_rows", "words"]
