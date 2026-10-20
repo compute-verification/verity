@@ -261,9 +261,9 @@ theorem decodeProof_canonical {sh : Shape} {b b' : ByteArray} {p : Proof} (h : d
     (h' : decodeProof sh b' = .ok p) : b = b' :=
   (decodeProof_read h).2.symm.trans (decodeProof_read h').2
 
-/-- **What `verify` decodes from a plain proof file** under its statement's `Tags.upstreamPlain` (`flock-verify verify
---upstream-plain`, §8.1): upstream's form ends after the pair, so the file then the zk patch's `None` tag; by default the
-file itself, the deployed form. Each form is refused where the other is pinned: a file without the tag by default
+/-- **What the verifier decodes from a plain proof file** under its statement's `Tags.upstreamPlain` (`flock-verify verify
+--upstream-plain`, §8.1; `verifyFiles`, whose S17 hashes the file itself): upstream's form ends after the pair, so the
+file then the zk patch's `None` tag; by default the file itself, the deployed form (`verify`). Each form is refused where the other is pinned: a file without the tag by default
 (`fileMismatch`), and one with it under the flag, which then ends in a second `0` (`Reader.runPlain`). -/
 def plainBytes (upstream : Bool) (file : ByteArray) : ByteArray := if upstream then file ++ Wire.plainEnd else file
 

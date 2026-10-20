@@ -61,7 +61,7 @@ def canon : ByteArray := pair sh 2 0
 
 def tagged : ByteArray := canon ++ zeros 1
 
-/-- What `verify` decodes from `file` by default (`up = false`) and under `--upstream-plain` (`up = true`). -/
+/-- What the verifier decodes from `file` by default (`up = false`) and under `--upstream-plain` (`up = true`). -/
 def read (up : Bool) (file : ByteArray) : V Proof := decodeProof sh (plainBytes up file)
 
 #guard why (read false tagged) == "accepted"

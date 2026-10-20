@@ -465,7 +465,8 @@ decodes to (`decodeProof` compares it with `Wire.proofFile`): S17 hashes the who
 read, or a second encoding of one proof, would be one the record's digest binds and nothing else does. Upstream's builds
 end the file after `consistency_batch_grinding_nonces`; a statement takes that form only when it says so
 (`Tags.upstreamPlain`, `flock-verify verify --upstream-plain`: the agreement corpus's sessions from upstream's binaries,
-D17), and `verify` then decodes each plain file as the file then the tag (`plainBytes`). Under either pin, and at each
+D17), and the verifier then decodes each plain file as the file then the tag (`verifyFiles (plainBytes true)`), while
+S17 still hashes the file as the server received it. Under either pin, and at each
 `--zk` statement, a proof thus has one file (`Flock.decodeProof_canonical`, `Flock.plainBytes_canonical`).
 
 ### 8.2 Layout
