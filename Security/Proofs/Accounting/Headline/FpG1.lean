@@ -5,9 +5,9 @@ import Models.Accounting.Guarantees.FpG1
 /-!
 # FP8-g1's and W4A8-g1's headlines on sm_120, and an honest g1 window that meets every premise
 
-`Sm120FpG1SheetHeadline` and `Sm120W4a8G1SheetHeadline` are `Sm120SheetHeadline` at `V = Leaves × W` and
-`n_π + 1` proofs a round: the g1 premise is dropped and the record's applies as it stands. The g1 premise does no work
-in the bound.
+`Sm120FpG1SheetHeadline` and `Sm120W4a8G1SheetHeadline` are the record's argument with binding at `δ_bind`
+(`sm120SheetHeadline_bind`, which `Sm120SheetHeadline` takes at `√δ_fork`) at `V = Leaves × W` and `n_π + 1` proofs a
+round: the g1 premise is dropped and the argument applies as it stands. The g1 premise does no work in the bound.
 
 The witness is an honest window on any finite coins `Ω`, generic in the rounds `n` and taken at `S = 48,000`:
 
@@ -19,17 +19,17 @@ The witness is an honest window on any finite coins `Ω`, generic in the rounds 
   at `π*` since the lane fold costs `16 = 128 · ⅛` issue slots and `φ* ≤ ⅛`;
 * its proof layer (`honestLayer`) is one proof a round, accepted on every path, opening the round's leaves to one
   `Leaves` value `v`; the proof's relation is H1's committed ranges (`Leaves.InH1`), and a window's values are right
-  when every leaf is in them. Binding and soundness hold at `δ_fork = δ_ZK = 0`.
+  when every leaf is in them. Binding and soundness hold at `δ_bind = δ_ZK = 0`.
 
-`RecordPremises` is the record's hypotheses as one conjunction, and `record_of_premises` feeds it to the record.
-`honest_premises` proves it at that window, for any `v` in H1's ranges. `sm120FpG1_honest` and `sm120W4a8G1_honest`
-add the g1 premise at the honest encoders' leaves (`encodeFp8`, `encodeW4a8`), which are g1's on H1's grids and so in
+`Premises` is the statements' hypotheses but the g1 premise, as one conjunction, and `bound_of_premises` feeds it to
+`sm120SheetHeadline_bind`. `honest_premises` proves it at that window, for any `v` in H1's ranges.
+`sm120FpG1_honest` and `sm120W4a8G1_honest` add the g1 premise at the honest encoders' leaves (`encodeFp8`, `encodeW4a8`), which are g1's on H1's grids and so in
 H1's ranges (`Leaves.fp8_inH1`, `Leaves.w4a8_inH1`): every premise of each statement holds there, and
 `sm120FpG1_honest_applies` and `sm120W4a8G1_honest_applies` feed them to the statements. The honest window is accepted
 on every path, its time exactly the credit (`honest_accepted`, `honestRun_time`).
 
-`offGrid_record_applies`: at `Pouw.FpG1.offGrid`'s leaves, in H1's ranges but off E4M3's grid, the record's premises
-all hold and FP8-g1's fails (`offGrid_not_fp8`), so the record's premises don't imply the g1 premise.
+`offGrid_premises`: at `Pouw.FpG1.offGrid`'s leaves, in H1's ranges but off E4M3's grid, the other premises all hold
+and FP8-g1's fails (`offGrid_not_fp8`), so the other premises don't imply the g1 premise.
 
 The witness isn't a served window. Its relation checks H1's ranges; it is no model of the served Programs, which no
 Lean here models (`ProofsPin`'s docstring). Its receipt game is the honest one, so it doesn't exercise H1's coin-keyed
@@ -41,15 +41,15 @@ namespace Accounting.SecurityProofs.FpG1
 open Finset Accounting.TS Accounting.TS.Headline Accounting.Assumptions.TS Pouw.RelativeSecurity Pouw.FpG1
   Accounting.SecurityProofs.TS.Headline
 
-/-- **FP8-g1's headline on sm_120**: the record's at `V = Leaves × W` and `n_π + 1` proofs a round. -/
+/-- **FP8-g1's headline on sm_120**: `sm120SheetHeadline_bind` at `V = Leaves × W` and `n_π + 1` proofs a round. -/
 theorem Sm120FpG1SheetHeadline : Accounting.Guarantees.FpG1.Sm120FpG1SheetHeadline := by
-  intro Ω _ Pl G Uf W nπ pf δfork δzk _
-  exact Accounting.SecurityProofs.TS.Sm120SheetHeadline Ω Pl G Uf pf δfork δzk
+  intro Ω _ Pl G Uf W nπ pf δbind δzk _
+  exact Accounting.SecurityProofs.TS.sm120SheetHeadline_bind Pl G Uf pf δbind δzk
 
-/-- **W4A8-g1's headline on sm_120**: the record's at `V = Leaves × W` and `n_π + 1` proofs a round. -/
+/-- **W4A8-g1's headline on sm_120**: `sm120SheetHeadline_bind` at `V = Leaves × W` and `n_π + 1` proofs a round. -/
 theorem Sm120W4a8G1SheetHeadline : Accounting.Guarantees.FpG1.Sm120W4a8G1SheetHeadline := by
-  intro Ω _ Pl G Uf W nπ pf δfork δzk _
-  exact Accounting.SecurityProofs.TS.Sm120SheetHeadline Ω Pl G Uf pf δfork δzk
+  intro Ω _ Pl G Uf W nπ pf δbind δzk _
+  exact Accounting.SecurityProofs.TS.sm120SheetHeadline_bind Pl G Uf pf δbind δzk
 
 theorem prob_le_of_none {Ω : Type} [Fintype Ω] {p : Ω → Prop} {c : ℝ} (hc : 0 ≤ c) (h : ∀ ω, ¬ p ω) :
     prob p ≤ c :=
@@ -326,13 +326,13 @@ theorem honestPlay_game (Ω : Type) (n : ℕ) (A : Anatomy (Fin 122) (Fin 17) Un
   rfl
 
 /-- **The honest proof layer**: one proof a round, accepted on every path, opening the round's leaves to `v` and
-nothing else beside them; its relation is H1's committed ranges, and the window's values are right when every leaf
-is in them. -/
+nothing else beside them; its relation is H1's committed ranges on every path, and the window's values are right on a
+path when every leaf is in them. -/
 def honestLayer (Ω : Type) (n : ℕ) (v : Leaves) : ProofLayer Ω n (0 + 1) (Leaves × Unit) where
   accepted _ _ _ := True
   opened _ _ _ := (v, ())
-  rel _ _ c := c.1.InH1
-  right c := ∀ w i, (c w i).1.InH1
+  rel _ _ _ c := c.1.InH1
+  right _ c := ∀ w i, (c w i).1.InH1
 
 theorem honestLayer_committed (Ω : Type) [Fintype Ω] (n : ℕ) (v : Leaves) (x : Paths Ω n) (w : Fin n)
     (i : Fin (0 + 1)) : ((honestLayer Ω n v).committed x w i).1 = v :=
@@ -342,10 +342,10 @@ theorem honestLayer_of (Ω : Type) [Fintype Ω] (n : ℕ) (v : Leaves) (A : Anat
     (honestLayer Ω n v).Of (honestPlay Ω n A) :=
   ⟨fun _ _ _ _ => trivial, fun x _ => honestGame_accepts Ω n x⟩
 
-theorem honestLayer_fork (Ω : Type) [Fintype Ω] (n : ℕ) (v : Leaves) : BindingForkAt (honestLayer Ω n v) 0 := by
+theorem honestLayer_binding (Ω : Type) [Fintype Ω] (n : ℕ) (v : Leaves) : (honestLayer Ω n v).BindingAt 0 := by
   intro w
-  refine prob_le_of_none le_rfl fun p h => ?_
-  obtain ⟨-, -, i, hi⟩ := h
+  refine prob_le_of_none le_rfl fun x h => ?_
+  obtain ⟨-, i, hi⟩ := h
   exact hi rfl
 
 theorem honestLayer_sound (Ω : Type) [Fintype Ω] (n : ℕ) {v : Leaves} (hv : v.InH1) :
@@ -354,7 +354,7 @@ theorem honestLayer_sound (Ω : Type) [Fintype Ω] (n : ℕ) {v : Leaves} (hv : 
   exact prob_le_of_none le_rfl fun _ h => h.2 hv
 
 theorem honestLayer_pins (Ω : Type) (n : ℕ) (v : Leaves) : ProofsPin (honestLayer Ω n v) :=
-  fun _ h => h
+  fun _ _ h => h
 
 theorem honestLayer_rightFixed (Ω : Type) [Fintype Ω] (v : Leaves) :
     RightFixed (honestPlay Ω Sm120.checks honestRun) (honestLayer Ω Sm120.checks v) Sm120.model.Nw := by
@@ -363,18 +363,18 @@ theorem honestLayer_rightFixed (Ω : Type) [Fintype Ω] (v : Leaves) :
   rw [honestGame_deficiency, sm120_Nw]
   norm_num
 
-theorem honest_budget : (Sm120.checks : ℝ) * (Real.sqrt 0 + ((0 + 1 : ℕ) : ℝ) * 0) ≤ (1 / 2) ^ 41 := by
-  rw [Real.sqrt_zero, mul_zero, add_zero, mul_zero]
+theorem honest_budget : (Sm120.checks : ℝ) * (0 + ((0 + 1 : ℕ) : ℝ) * 0) ≤ (1 / 2) ^ 41 := by
+  rw [mul_zero, add_zero, mul_zero]
   positivity
 
 /-! ## The witnesses -/
 
-/-- **The record's premises at a window**, `Sm120SheetHeadline`'s hypotheses in its order (`record_of_premises`
-feeds them to it). -/
-def RecordPremises {Ω : Type} [Fintype Ω] (Pl : Play Ω Sm120.checks (Fin 122) (Fin 17) Unit Empty)
+/-- **The statements' premises at a window but the g1 premise**, `sm120SheetHeadline_bind`'s hypotheses in its order
+(`bound_of_premises` feeds them to it): `Sm120SheetHeadline`'s, with binding at `δ_bind` in place of its fork form. -/
+def Premises {Ω : Type} [Fintype Ω] (Pl : Play Ω Sm120.checks (Fin 122) (Fin 17) Unit Empty)
     (G : ReceiptGame Ω Sm120.checks) (Uf : Unfolded Ω Sm120.checks) {V : Type} {nπ : ℕ}
-    (pf : ProofLayer Ω Sm120.checks nπ V) (δfork δzk : ℝ) : Prop :=
-  (Sm120.checks : ℝ) * (Real.sqrt δfork + nπ * δzk) ≤ (1 / 2) ^ 41 ∧ (∀ x, (Pl.run x).Split) ∧
+    (pf : ProofLayer Ω Sm120.checks nπ V) (δbind δzk : ℝ) : Prop :=
+  (Sm120.checks : ℝ) * (δbind + nπ * δzk) ≤ (1 / 2) ^ 41 ∧ (∀ x, (Pl.run x).Split) ∧
     (∀ x, SheetClock Sm120.sheet (Pl.run x).run) ∧ (∀ x, SheetDispatch (Pl.run x).run) ∧
     (∀ x, SheetTensor Sm120.sheet (Pl.run x).run) ∧ (∀ x, SheetPipe Sm120.sheet (Pl.run x).run) ∧
     (∀ x, SheetSmem Sm120.sheet (Pl.run x).run) ∧ (∀ x, SheetWords Sm120.model (Pl.run x)) ∧
@@ -382,23 +382,23 @@ def RecordPremises {Ω : Type} [Fintype Ω] (Pl : Play Ω Sm120.checks (Fin 122)
     (∀ x, FoldOptFoldedAt Sm120.model (Pl.run x) ((1 - Uf.share x / Sm120.checks) * Sm120.model.Nw)
       (onFacet Sm120.piStar)) ∧
     Pl.game = G.game ∧ G.Pinned ∧ OperandHMu (3 / 4) G ∧ ReceiptLuckAt (1 / 2) G ∧ WholeLuckAt (1 / 2) G Uf ∧
-    pf.Of Pl ∧ BindingForkAt pf δfork ∧ ProofSoundAt pf δzk ∧ ProofsPin pf ∧ RightFixed Pl pf Sm120.model.Nw
+    pf.Of Pl ∧ pf.BindingAt δbind ∧ ProofSoundAt pf δzk ∧ ProofsPin pf ∧ RightFixed Pl pf Sm120.model.Nw
 
-/-- The record's conclusion at a window whose premises hold. -/
-theorem record_of_premises {Ω : Type} [Fintype Ω] {Pl : Play Ω Sm120.checks (Fin 122) (Fin 17) Unit Empty}
+/-- The statements' conclusion at a window whose premises but the g1 premise hold. -/
+theorem bound_of_premises {Ω : Type} [Fintype Ω] {Pl : Play Ω Sm120.checks (Fin 122) (Fin 17) Unit Empty}
     {G : ReceiptGame Ω Sm120.checks} {Uf : Unfolded Ω Sm120.checks} {V : Type} {nπ : ℕ}
-    {pf : ProofLayer Ω Sm120.checks nπ V} {δfork δzk : ℝ} (h : RecordPremises Pl G Uf pf δfork δzk) :
+    {pf : ProofLayer Ω Sm120.checks nπ V} {δbind δzk : ℝ} (h : Premises Pl G Uf pf δbind δzk) :
     prob (fun x => Pl.accepts x ∧ (Pl.run x).run.time / Sm120.model.credit Sm120.flat < 1 - 656 / 100000) ≤
       (1 / 2) ^ 40 := by
   obtain ⟨h0, h1, h2, h3, h4, h5, h6, h7, h8, h9, h10, h11, h12, h13, h14, h15, h16, h17, h18, h19⟩ := h
-  exact Accounting.SecurityProofs.TS.Sm120SheetHeadline Ω Pl G Uf pf δfork δzk h0 h1 h2 h3 h4 h5 h6 h7 h8 h9 h10 h11
-    h12 h13 h14 h15 h16 h17 h18 h19
+  exact Accounting.SecurityProofs.TS.sm120SheetHeadline_bind Pl G Uf pf δbind δzk h0 h1 h2 h3 h4 h5 h6 h7 h8 h9 h10
+    h11 h12 h13 h14 h15 h16 h17 h18 h19
 
-/-- **Every premise the record states holds at the honest window**, for any leaves `v` in H1's ranges: the honest
+/-- **Every premise but the g1 premise holds at the honest window**, for any leaves `v` in H1's ranges: the honest
 play, receipt game and unfolded share over `S = 48,000` rounds, the honest proof layer at `v`, and
-`δ_fork = δ_ZK = 0`. The witness isn't a served window: its relation is H1's ranges, not a served Program's. -/
+`δ_bind = δ_ZK = 0`. The witness isn't a served window: its relation is H1's ranges, not a served Program's. -/
 theorem honest_premises (Ω : Type) [Fintype Ω] {v : Leaves} (hv : v.InH1) :
-    RecordPremises (honestPlay Ω Sm120.checks honestRun) (honestGame Ω Sm120.checks) (honestUnfolded Ω Sm120.checks)
+    Premises (honestPlay Ω Sm120.checks honestRun) (honestGame Ω Sm120.checks) (honestUnfolded Ω Sm120.checks)
       (honestLayer Ω Sm120.checks v) 0 0 :=
   ⟨honest_budget, fun _ => honestRun_split, fun _ => honestRun_clock, fun _ => honestRun_dispatch,
     fun _ => honestRun_tensor, fun _ => honestRun_pipe, fun _ => honestRun_smem, fun _ => honestRun_sheetWords,
@@ -406,7 +406,7 @@ theorem honest_premises (Ω : Type) [Fintype Ω] {v : Leaves} (hv : v.InH1) :
     honestPlay_game Ω Sm120.checks honestRun, honestGame_pinned Ω Sm120.checks,
     honestGame_hmu Ω (3 / 4) Sm120.checks, honestGame_receiptLuck Ω (by norm_num) Sm120.checks,
     honestGame_wholeLuck Ω (1 / 2) Sm120.checks, honestLayer_of Ω Sm120.checks v honestRun,
-    honestLayer_fork Ω Sm120.checks v, honestLayer_sound Ω Sm120.checks hv, honestLayer_pins Ω Sm120.checks v,
+    honestLayer_binding Ω Sm120.checks v, honestLayer_sound Ω Sm120.checks hv, honestLayer_pins Ω Sm120.checks v,
     honestLayer_rightFixed Ω v⟩
 
 /-- **The honest window is accepted on every path, its time exactly the credit.** -/
@@ -416,20 +416,20 @@ theorem honest_accepted (Ω : Type) (x : Paths Ω Sm120.checks) :
   ⟨trivial, honestRun_time⟩
 
 /-- **Every premise of FP8-g1's statement holds at an honest FP8-g1 window**: the honest encoder's leaves on H1's
-grids, at any scales and model values, committed at every round, with the record's premises. The witness isn't a
+grids, at any scales and model values, committed at every round, with the other premises. The witness isn't a
 served window (`honest_premises`). -/
 theorem sm120FpG1_honest (Ω : Type) [Fintype Ω] (sa sw : ℕ → ℚ) (x y : ℕ → ℕ → ℚ) :
     (∀ p w i, ((honestLayer Ω Sm120.checks (encodeFp8 Grids.h1 sa sw x y)).committed p w i).1.Fp8 Grids.h1) ∧
-      RecordPremises (honestPlay Ω Sm120.checks honestRun) (honestGame Ω Sm120.checks)
+      Premises (honestPlay Ω Sm120.checks honestRun) (honestGame Ω Sm120.checks)
         (honestUnfolded Ω Sm120.checks) (honestLayer Ω Sm120.checks (encodeFp8 Grids.h1 sa sw x y)) 0 0 :=
   ⟨fun _ _ _ => encodeFp8_fp8 Grids.h1 sa sw x y, honest_premises Ω (Leaves.fp8_inH1 (encodeFp8_fp8 _ sa sw x y))⟩
 
 /-- **Every premise of W4A8-g1's statement holds at an honest W4A8-g1 window**: the honest encoder's leaves on H1's
-grids, at any scales, block scales and model values, committed at every round, with the record's premises. The
+grids, at any scales, block scales and model values, committed at every round, with the other premises. The
 witness isn't a served window (`honest_premises`). -/
 theorem sm120W4a8G1_honest (Ω : Type) [Fintype Ω] (sa sw : ℕ → ℚ) (m : ℕ → ℕ → ℕ) (x y : ℕ → ℕ → ℚ) :
     (∀ p w i, ((honestLayer Ω Sm120.checks (encodeW4a8 Grids.h1 sa sw m x y)).committed p w i).1.W4a8 Grids.h1) ∧
-      RecordPremises (honestPlay Ω Sm120.checks honestRun) (honestGame Ω Sm120.checks)
+      Premises (honestPlay Ω Sm120.checks honestRun) (honestGame Ω Sm120.checks)
         (honestUnfolded Ω Sm120.checks) (honestLayer Ω Sm120.checks (encodeW4a8 Grids.h1 sa sw m x y)) 0 0 :=
   ⟨fun _ _ _ => encodeW4a8_w4a8 sa sw m x y, honest_premises Ω (Leaves.w4a8_inH1 (encodeW4a8_w4a8 sa sw m x y))⟩
 
@@ -455,10 +455,11 @@ theorem sm120W4a8G1_honest_applies (Ω : Type) [Fintype Ω] (sa sw : ℕ → ℚ
     (honestUnfolded Ω Sm120.checks) (honestLayer Ω Sm120.checks (encodeW4a8 Grids.h1 sa sw m x y)) 0 0 hg h0 h1 h2 h3
     h4 h5 h6 h7 h8 h9 h10 h11 h12 h13 h14 h15 h16 h17 h18 h19
 
-/-- **The g1 premise is not the record's**: at `offGrid`'s leaves, in H1's ranges with a weight off E4M3's grid, every
-premise of the record holds, so its conclusion does, and FP8-g1's premise fails at every round's commitment. -/
-theorem offGrid_record_applies (Ω : Type) [Fintype Ω] :
-    RecordPremises (honestPlay Ω Sm120.checks honestRun) (honestGame Ω Sm120.checks) (honestUnfolded Ω Sm120.checks)
+/-- **The other premises don't imply the g1 premise**: at `offGrid`'s leaves, in H1's ranges with a weight off E4M3's
+grid, every premise but the g1 premise holds, so the bound does, and FP8-g1's premise fails at every round's
+commitment. -/
+theorem offGrid_premises (Ω : Type) [Fintype Ω] :
+    Premises (honestPlay Ω Sm120.checks honestRun) (honestGame Ω Sm120.checks) (honestUnfolded Ω Sm120.checks)
         (honestLayer Ω Sm120.checks offGrid) 0 0 ∧
       ∀ p w i, ¬ ((honestLayer Ω Sm120.checks offGrid).committed p w i).1.Fp8 Grids.h1 :=
   ⟨honest_premises Ω offGrid_inH1, fun _ _ _ => offGrid_not_fp8⟩
