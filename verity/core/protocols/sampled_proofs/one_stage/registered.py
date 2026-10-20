@@ -27,9 +27,11 @@ A *supplied value* is a registered value the verifier fills itself, from what it
 bytes of its sources in order, each source a root the record names (`{"port": P}`, the `roots` entry of port P;
 `{"value": V}`, the `registered` entry of value V, never a supplied value's), bytes of its own (`{"bytes": hex}`), a
 position (`{"position": "K"}`: K, a decimal below the record's population, after every unit of the log's earlier
-records, `log_base`, as a u64 big-endian, so no two records of one log share a position) or its coin bound to the
-record's window (`{"window": hex}`: `window_salt`, SHA-512 of `WINDOW_SALT`, the coin and the window's canonical JSON, a
-salt per window, as R6 takes one record a window). A row's bytes are read as the parameter's leaves of `w` bits
+records, `log_base`, as a u64 big-endian, so no two records of one log share a position) or its coin bound to its
+stream, its prover and the record's window (`{"window": hex}`: `window_salt`, SHA-512 of `WINDOW_SALT`, the coin, the
+verifier's binding, `{"stream", "prover"}`, and the window's canonical JSON: a salt per prover, stream and window, as R6
+takes one record a window and the window names the binding, so a tile seeded in one stream is no other's). A row's bytes
+are read as the parameter's leaves of `w` bits
 (`bytes_leaves`: each big-endian 32-bit half, its `32 / w` leaves least significant first, so a digest is 16 leaves of 32
 bits or 512 of one). Its rows are
 committed as any registered value's, under public salts (`supplied_salts`, row i's from the program's digest, the value's
@@ -68,7 +70,7 @@ ENTRY_KEYS = ("value", "root", "leaves", "words", "domain")
 #: the entry key a value of another width than `WORD_BITS` adds
 WIDTH_KEY = "word_bits"
 SUPPLIED_SALT = "verity/one-stage/supplied-salt/v0"
-WINDOW_SALT = "verity/one-stage/window-salt/v0"
+WINDOW_SALT = "verity/one-stage/window-salt/v1"
 #: a supplied row's source kinds: a served port's root, a registered value's root, the verifier's own bytes, a position
 #: after the log's, the verifier's coin bound to the record's window
 SOURCES = ("port", "value", "bytes", "position", "window")
@@ -339,12 +341,17 @@ def log_base(log: Sequence[Any]) -> int:
     return base
 
 
-def window_salt(coin: bytes, window: Any) -> bytes:
-    """The salt of `window` (a record's) under the verifier's coin: SHA-512 of `WINDOW_SALT`, the coin and the window's
-    canonical JSON, NUL between them; ValueError for a window that is no object of the canonical domain."""
+def window_salt(coin: bytes, window: Any, binding: Mapping[str, str] | None) -> bytes:
+    """The salt of `window` (a record's) under the verifier's coin and binding (`{"stream", "prover"}`, each lowercase
+    hex): SHA-512 of `WINDOW_SALT`, the coin, the stream, the prover and the window's canonical JSON, NUL between them
+    (only the coin, first, may hold a NUL). ValueError without a binding, or for a window that is no object of the
+    canonical domain."""
+    if binding is None:
+        raise ValueError("a window salt is bound to a stream and a prover: the verifier holds no binding")
     if not isinstance(window, Mapping) or jcs_domain_error(dict(window)) is not None:
         raise ValueError(f"the record's window is no canonical JSON object: {window!r}")
-    return hashlib.sha512(WINDOW_SALT.encode() + b"\0" + coin + b"\0" + canonical_json(dict(window))).digest()
+    return hashlib.sha512(WINDOW_SALT.encode() + b"\0" + coin + b"\0" + binding["stream"].encode() + b"\0"
+                          + binding["prover"].encode() + b"\0" + canonical_json(dict(window))).digest()
 
 
 def _hex_bytes(value: str, kind: str, name: str, text: Any) -> bytes:
@@ -353,14 +360,16 @@ def _hex_bytes(value: str, kind: str, name: str, text: Any) -> bytes:
     return bytes.fromhex(text)
 
 
-def _source_bytes(rec: Any, value: str, kind: str, name: str, supplied: Sequence[str], log: Sequence[Any]) -> bytes:
+def _source_bytes(rec: Any, value: str, kind: str, name: str, supplied: Sequence[str], log: Sequence[Any],
+                  binding: Mapping[str, str] | None) -> bytes:
     """A source's bytes: the root the record names for it (its last entry, as R3 and R7 read a name twice), the verifier's
-    own, a position after the log's, or the verifier's coin bound to the record's window; ValueError where there is none."""
+    own, a position after the log's, or the verifier's coin bound to its binding and the record's window; ValueError
+    where there is none."""
     rec = rec if isinstance(rec, Mapping) else {}
     if kind == "bytes":
         return _hex_bytes(value, kind, name, name)
     if kind == "window":
-        return window_salt(_hex_bytes(value, kind, name, name), rec.get("window"))
+        return window_salt(_hex_bytes(value, kind, name, name), rec.get("window"), binding)
     if kind == "position":
         n = rec.get("population")
         if not (_DEC.fullmatch(name) and type(n) is int and int(name) < n):
@@ -380,25 +389,27 @@ def _source_bytes(rec: Any, value: str, kind: str, name: str, supplied: Sequence
 
 
 def supplied_rows(program: Program, value: str, rows: Sequence[Sequence[tuple[str, str]]], rec: Any,
-                  supplied: Sequence[str] = (), log: Sequence[Any] = ()) -> list[list[int]]:
-    """The rows the verifier fills a supplied value with, from `rec`, the log of this prover's earlier records and its own
-    bytes: each row its sources' bytes, read as the parameter's leaves (`bytes_leaves` at its leaf width). `supplied`:
-    every supplied value's name, whose roots no row reads. ValueError where a source names nothing the record holds, or
-    the leaves are not one width dividing 32."""
+                  supplied: Sequence[str] = (), log: Sequence[Any] = (),
+                  binding: Mapping[str, str] | None = None) -> list[list[int]]:
+    """The rows the verifier fills a supplied value with, from `rec`, the log of this prover's earlier records, its
+    binding (`window_salt`) and its own bytes: each row its sources' bytes, read as the parameter's leaves (`bytes_leaves`
+    at its leaf width). `supplied`: every supplied value's name, whose roots no row reads. ValueError where a source names
+    nothing the record or the verifier holds, or the leaves are not one width dividing 32."""
     t = dict(program.fn.signature()[0]).get(value)
     w = None if t is None else t.homogeneous_width()
     if w is None:
         raise ValueError(f"{value!r} is not a parameter of the program whose leaves are one width")
-    return [bytes_leaves(b"".join(_source_bytes(rec, value, k, n, supplied, log) for k, n in row), w) for row in rows]
+    return [bytes_leaves(b"".join(_source_bytes(rec, value, k, n, supplied, log, binding) for k, n in row), w)
+            for row in rows]
 
 
 def supplied_root(program: Program, value: str, rows: Sequence[Sequence[tuple[str, str]]], rec: Any,
                   want: Mapping[str, Any], supplied: Sequence[str] = (), log: Sequence[Any] = (),
-                  prog: str | None = None) -> str:
+                  prog: str | None = None, binding: Mapping[str, str] | None = None) -> str:
     """The root R7 holds a supplied value's entry to: its rows (`supplied_rows`), as many as the verifier's own entry's
     `leaves` (`registered_entries`), each of its `words` leaves, committed under `supplied_salts` at its `word_bits`.
     `prog`: `program`'s digest (`P.program_digest`), when the caller holds it."""
-    got = supplied_rows(program, value, rows, rec, supplied, log)
+    got = supplied_rows(program, value, rows, rec, supplied, log, binding)
     if len(got) != want["leaves"] or any(len(r) != want["words"] for r in got):
         raise ValueError(f"supplied value {value!r}: rows of {[len(r) for r in got]} leaves, not {want['leaves']} of "
                          f"{want['words']}")
@@ -407,11 +418,12 @@ def supplied_root(program: Program, value: str, rows: Sequence[Sequence[tuple[st
 
 
 def supplied_value(program: Program, value: str, rows: Sequence[Sequence[tuple[str, str]]], rec: Any,
-                   supplied: Sequence[str] = (), log: Sequence[Any] = (), prog: str | None = None) -> Registered:
+                   supplied: Sequence[str] = (), log: Sequence[Any] = (), prog: str | None = None,
+                   binding: Mapping[str, str] | None = None) -> Registered:
     """The prover's side of a supplied value: the rows the verifier fills from `rec` (a record without this value's own
-    entry will do: no row reads it) and the log under the public salts, whose `entry()` the record registers and whose
-    `statement` opens a unit's reads like any registered value's."""
-    got = supplied_rows(program, value, rows, rec, supplied, log)
+    entry will do: no row reads it), the log and the binding under the public salts, whose `entry()` the record
+    registers and whose `statement` opens a unit's reads like any registered value's."""
+    got = supplied_rows(program, value, rows, rec, supplied, log, binding)
     prog = prog or P.program_digest(program)
     return Registered.commit(prog, value, got, supplied_salts(prog, value, len(got)), width(program, value))
 

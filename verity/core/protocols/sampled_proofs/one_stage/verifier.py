@@ -56,7 +56,6 @@ RECORD_VERDICT = "lean"
 """Whose verdict is the record's: `"lean"` (`sampled-proofs-verifier`) or `"python"` (this package's, the reference)."""
 
 DISAGREE = "disagree"
-VERIFIERS = ("lean", "python")
 CORE = Path(__file__).resolve().parents[3]
 PACKAGE = CORE / "service" / "sampled_proofs"
 EXE = "sampled-proofs-verifier"
@@ -222,7 +221,7 @@ def _params(program: Program, query: Mapping[str, Any], law: Mapping[str, Any], 
             ports: Mapping[str, Mapping[str, Any]], leaf_layer: str | None, anchors: Sequence[Any],
             log: Iterable[Mapping[str, Any]], partition: Mapping[str, Any] | None, work_table: Mapping[str, Any] | None,
             registered: Mapping[str, int] | None, supplied: Mapping[str, Any] | None = None,
-            pinned: Mapping[str, str] | None = None) -> dict[str, Any]:
+            pinned: Mapping[str, str] | None = None, binding: Mapping[str, str] | None = None) -> dict[str, Any]:
     """`registration.check`'s copies as the Lean's parameters (`OneStage.paramsOfJson`)."""
     p = {"anchors": list(anchors), "delta": REGISTRATION_DELTA, "law": dict(law), "leaf_layer": leaf_layer,
          "log": [dict(r) for r in log], "partition": None if partition is None else dict(partition),
@@ -235,6 +234,8 @@ def _params(program: Program, query: Mapping[str, Any], law: Mapping[str, Any], 
         p["supplied"] = {v: [[dict(s) for s in row] for row in rows] for v, rows in supplied.items()}
     if pinned:
         p["pinned"] = dict(pinned)
+    if binding is not None:
+        p["binding"] = dict(binding)
     return p
 
 
@@ -242,13 +243,15 @@ def check(rec: Mapping[str, Any], program: Program, query: Mapping[str, Any], la
           ports: Mapping[str, Mapping[str, Any]], leaf_layer: str | None = None, anchors: Sequence[Any] = (),
           log: Iterable[Mapping[str, Any]] = (), partition: Mapping[str, Any] | None = None,
           work_table: Mapping[str, Any] | None = None, registered: Mapping[str, int] | None = None,
-          supplied: Mapping[str, Any] | None = None, pinned: Mapping[str, str] | None = None) -> Verdict:
+          supplied: Mapping[str, Any] | None = None, pinned: Mapping[str, str] | None = None,
+          binding: Mapping[str, str] | None = None) -> Verdict:
     """`registration.check` (R1-R7) by the verifier of record."""
     log = list(log)
     py = R.check(rec, program, query, law, scheme, ports, leaf_layer, anchors, log, partition, work_table, registered,
-                 supplied, pinned)
+                 supplied, pinned, binding)
     got = lean("registration", {"params": _params(program, query, law, scheme, ports, leaf_layer, anchors, log, partition,
-                                                  work_table, registered, supplied, pinned), "record": dict(rec)})
+                                                  work_table, registered, supplied, pinned, binding),
+                       "record": dict(rec)})
     if "codes" in got:
         got = {"ok": not got["codes"], "codes": got["codes"]}
     return _decide(got, py, whole=False)
@@ -322,7 +325,7 @@ def run(python: Mapping[str, Any], rec: Mapping[str, Any], program: Program, que
         instances: int | None = None, served: Sequence[int] | None = None,
         session_roots: Mapping[str, str] | None = None, *, interior_values: Iterable[tuple[str, bool]] = (),
         interior: Mapping[str, Any] | None = None, supplied: Mapping[str, Any] | None = None,
-        pinned: Mapping[str, str] | None = None) -> Verdict:
+        pinned: Mapping[str, str] | None = None, binding: Mapping[str, str] | None = None) -> Verdict:
     """The stream's run of one registration, from its public check through its verdict, by the Lean (`Run.run`), held whole to
     `python`, the stream's own (`{"receipt", "draw", "read", "interior", "symbol", "public", "audit"}`, each audit record
     without its `verifiers`, `interior` null or the interiors' `{"receipt", "audit"}`): on `check`'s copies,
@@ -337,7 +340,7 @@ def run(python: Mapping[str, Any], rec: Mapping[str, Any], program: Program, que
                           interior["anchors"], interior["log"], None, None, None),
         "record": dict(interior["record"]), "received": interior["received"]}
     got = lean("run", {"params": _params(program, query, law, scheme, ports, leaf_layer, anchors, log, None, work_table,
-                                         registered, supplied, pinned),
+                                         registered, supplied, pinned, binding),
                        "record": dict(rec), "rule": dict(rule), "values": [{"name": n, "registered": r} for n, r in values],
                        "interior_values": [{"name": n, "registered": r} for n, r in interior_values],
                        "public": list(declared), "challenger": challenger, "received": received, "source": read.hex(),
@@ -433,6 +436,38 @@ def check_probability(law: TS.TwoStageLaw, cls: str, n_v: int) -> tuple[Fraction
                    lambda: TS.check_probability(law, cls, n_v), lambda p: {"p": str(p)})
 
 
+def stream(params: Mapping[str, Any], state: Mapping[str, Any], op: Mapping[str, Any], decision: Mapping[str, Any],
+           after: Mapping[str, Any]) -> tuple[dict[str, Any], dict[str, Any], Verdict]:
+    """A proof service stream's rules on `op` (the Lean's `Stream.run` on `state`) against Python's `decision` and the
+    state `after` it (`service._step`'s), compared without Python's `detail`, which the decision of record keeps: the
+    decision and the state of record, and the verdict, `disagree` where the two differ."""
+    return _ruled("stream", {"params": dict(params), "state": dict(state), "op": dict(op)}, decision, after)
+
+
+def fleet(state: Mapping[str, Any], op: Mapping[str, Any], decision: Mapping[str, Any],
+          after: Mapping[str, Any]) -> tuple[dict[str, Any], dict[str, Any], Verdict]:
+    """A proof service fleet's rules on `op` (the Lean's `Fleet.run` on `state`) against Python's `decision` and the state
+    `after` it (`service._fleet_step`'s), as `stream` compares a stream's."""
+    return _ruled("fleet", {"state": dict(state), "op": dict(op)}, decision, after)
+
+
+def _ruled(piece: str, args: dict[str, Any], decision: Mapping[str, Any],
+           after: Mapping[str, Any]) -> tuple[dict[str, Any], dict[str, Any], Verdict]:
+    got = lean(piece, args)
+    try:
+        theirs = {"decision": got["decision"], "state": json.loads(got["state"])}
+    except (KeyError, TypeError, ValueError):
+        theirs = {"error": got.get("refused")}
+    mine = {"decision": {k: v for k, v in decision.items() if k != "detail"}, "state": dict(after)}
+    verifiers = {"of_record": RECORD_VERDICT, "lean": theirs, "python": mine}
+    if not _same(theirs, mine):
+        return dict(decision), dict(after), Verdict(False, (DISAGREE,), {DISAGREE: {"lean": theirs, "python": mine}},
+                                                    verifiers)
+    rec = theirs if RECORD_VERDICT == "lean" else mine
+    d = {**rec["decision"], **({"detail": decision["detail"]} if "detail" in decision else {})}
+    return d, rec["state"], Verdict(True, (), {}, verifiers)
+
+
 def _record_summary(r: Mapping[str, Any]) -> dict[str, Any]:
     if "refused" in r:
         return {"refused": r["refused"]}
@@ -477,5 +512,5 @@ def audit_record(registration: Mapping[str, Any], receipt: Mapping[str, Any], dr
 
 
 __all__ = ["BUILD_LOCK", "COINS_MAX", "DISAGREE", "EXE", "LeanError", "PACKAGE", "RECORD_VERDICT", "audit_record",
-           "check", "check_draw", "check_proved", "check_public", "check_verdicts", "coins", "executable", "lean",
-           "matches_public", "run", "select"]
+           "check", "check_draw", "check_proved", "check_public", "check_verdicts", "coins", "executable", "fleet",
+           "lean", "matches_public", "run", "select", "stream"]
