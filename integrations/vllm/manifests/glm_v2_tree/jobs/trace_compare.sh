@@ -10,15 +10,21 @@
 #      `records switch --trace`), and side by side `predict compare` of this tree's predictor against this tree's trace and the
 #      AOT Build again against it (`--aot-trace`), with its digests against the trace's (aot2_vs_trace.json).
 # SKIP_AOT1=1 skips 1 for a row already known to move (every derive of it is refused only after its whole emission).
+# SEED_FROM=DIR (an earlier trace's row dir of this row) seeds 2 with the derives it finished, each checked first (seed_trace.py:
+# its .rc 0, result.json ok, its files whole, its descriptor's digests result.json's): $OUT/seed.json.  BUILD_JOBS=N: 2's derives
+# at once (default: as many as BUDGET_GB holds at the row's largest shape).  TRACE_ONLY=1 ends the run after 2 (and the trace
+# preserved); TRACE_RUN=RUN is 3 alone, on that run's trace (its trace_art.txt, its tree as trace_tree.txt).  SKIP_AOT2=1 leaves
+# out 3's AOT Build against the trace, which the row's Build of record (build_record.sh) runs anyway.
 # exit 0: the pins reproduce, or the row moved against the pins being replaced and nothing else (its traced Build passed, the
 # predictor and the AOT Build against the trace equal it), ready for repin.sh; 7-9 name the step that failed; 1 anything else.
 # The pinned vLLM imports libcuda.so.1 even on the meta device: on a node without a driver, CUDA_DRIVER_DIR (W/cuda-driver, the H200
 # hosts' 580.173.02 library) goes on LD_LIBRARY_PATH; no device is opened.  The CPU venv and checkpoint metadata are the ones
 # aot_build_rm.sh (WS-E) keeps on vy-glm53-cpu-2 under W.  Row dirs stay on the node (kept 5d).
-# env: ROW, [W (/workspace/cp/circuits)], [BUDGET_GB (100)], [WORKERS (2)], [SKIP_TRACE=1], [SKIP_AOT1=1].  cwd: the source root.
-# outputs: aot_chain.out, aot_build_summary.json, aot_row.json, aot_neutrality.out; neutrality.out, neutrality.json,
+# env: ROW, [W (/workspace/cp/circuits)], [BUDGET_GB (100)], [WORKERS (2)], [SKIP_TRACE=1], [SKIP_AOT1=1], [SEED_FROM], [BUILD_JOBS],
+# [TRACE_ONLY=1], [TRACE_RUN], [SKIP_AOT2=1].  cwd: the source root.
+# outputs: aot_chain.out, aot_build_summary.json, aot_row.json, aot_neutrality.out; [seed.json, seed_tree.txt], neutrality.out, neutrality.json,
 # build_summary.json, trace.tgz (build_summary.json and every build/rank*/build_*/result.json), rowdir.txt; when moved:
-# trace_art.txt, comparison.json, compare.err, aot2_chain.out, aot2_build_summary.json, aot2_vs_trace.json.
+# trace_art.txt, comparison.json, compare.err, aot2_chain.out, aot2_build_summary.json, aot2_vs_trace.json; [trace_tree.txt].
 set -uo pipefail
 : "${ROW:?ROW}"
 REV=aca966e4e02791568aa6a4ced368624b3d897f42
@@ -67,43 +73,78 @@ aot() {  # aot TAG SWEEP [--aot-trace DIR]: the AOT Build, Programs only, as a v
   return $rc
 }
 
-A1=$SW/aot
-if [ -n "${SKIP_AOT1:-}" ]; then
-  arc=skipped anrc=skipped
-  echo "AOT Build against the pinned trace: skipped (SKIP_AOT1)"
-else
-  aot aot "$A1"; arc=$?
-  "$PY" -m verity_vllm.pipeline.cli neutrality "$ROW" --tier heavy --compare --out "$A1" >"$OUT/aot_neutrality.out" 2>&1; anrc=$?
-  tail -12 "$OUT/aot_neutrality.out"
-  echo "AOT Build against the pinned trace: rc $arc; its digests against the pins: $([ $anrc = 0 ] && echo NEUTRAL || echo MOVED)"
-fi
-[ -n "${SKIP_TRACE:-}" ] && { [ "$arc" = 0 ] && [ "$anrc" = 0 ] && exit 0; exit 9; }
+moved_only() {  # the traced Build passed and moved against the pins being replaced, nothing else (neutrality.json)
+  "$PY" - "$OUT/neutrality.json" "$ROW" <<'EOF'
+import json, sys
+r = json.load(open(sys.argv[1]))["rows"][sys.argv[2]]
+sys.exit(0 if r["build_rc"] == 0 and r["programs"] and not r["neutral"] else 1)
+EOF
+}
 
-/usr/bin/time -v "$PY" -m verity_vllm.pipeline.cli neutrality "$ROW" --tier heavy --out "$SW" \
-  --row-flag=--build-ram-budget-gb=$B >"$OUT/neutrality.out" 2>&1
-nrc=$?
-grep -E "^\[neutrality\]|^    rank|Elapsed|Maximum resident" "$OUT/neutrality.out" | tail -30
-cp "$SW/neutrality.json" "$OUT/" 2>/dev/null
-D=$SW/$ROW
-for f in stages.txt row.log build_summary.json; do cp "$D/$f" "$OUT/" 2>/dev/null; done
-echo "$D" >"$OUT/rowdir.txt"
-grep -q '^build PASS' "$D/stages.txt" 2>/dev/null || { echo "the traced Build did not pass (neutrality rc $nrc): $(grep '^build ' "$D/stages.txt" | tail -1 | cut -c1-300)"; exit 7; }
-(cd "$D" && tar czf "$OUT/trace.tgz" build_summary.json $(ls -d build/rank*/build_*/result.json 2>/dev/null))
-if [ "$arc" = 0 ] && [ "$anrc" = 0 ] && [ $nrc = 0 ]; then
-  echo "v2 moves no Program of $ROW: its AOT Build emits the pins, and its trace is them"; exit 0
+if [ -n "${TRACE_RUN:-}" ]; then
+  D=$W/glm-v2/$TRACE_RUN/$ROW TO=$(dirname "$RESEARCH_RUN_DIR")/$TRACE_RUN/out
+  grep -q '^build PASS' "$D/stages.txt" 2>/dev/null || { echo "$D: no passing traced Build"; exit 7; }
+  for f in neutrality.json build_summary.json trace_art.txt; do cp "$TO/$f" "$OUT/" || { echo "$TRACE_RUN has no out/$f"; exit 3; }; done
+  cp "$TO/tree.txt" "$OUT/trace_tree.txt" || exit 3
+  echo "$D" >"$OUT/rowdir.txt"
+  arc=skipped anrc=skipped
+  nrc=$("$PY" -c 'import json,sys; r=json.load(open(sys.argv[1]))["rows"][sys.argv[2]]; print(0 if r["build_rc"] == 0 and r["neutral"] else 1)' \
+    "$OUT/neutrality.json" "$ROW") || exit 3
+  echo "the trace of $TRACE_RUN ($(cat "$OUT/trace_art.txt"), tree $(cat "$OUT/trace_tree.txt")): $([ "$nrc" = 0 ] && echo NEUTRAL || echo MOVED)"
+else
+  A1=$SW/aot
+  if [ -n "${SKIP_AOT1:-}" ]; then
+    arc=skipped anrc=skipped
+    echo "AOT Build against the pinned trace: skipped (SKIP_AOT1)"
+  else
+    aot aot "$A1"; arc=$?
+    "$PY" -m verity_vllm.pipeline.cli neutrality "$ROW" --tier heavy --compare --out "$A1" >"$OUT/aot_neutrality.out" 2>&1; anrc=$?
+    tail -12 "$OUT/aot_neutrality.out"
+    echo "AOT Build against the pinned trace: rc $arc; its digests against the pins: $([ $anrc = 0 ] && echo NEUTRAL || echo MOVED)"
+  fi
+  [ -n "${SKIP_TRACE:-}" ] && { [ "$arc" = 0 ] && [ "$anrc" = 0 ] && exit 0; exit 9; }
+
+  D=$SW/$ROW
+  if [ -n "${SEED_FROM:-}" ]; then
+    mkdir -p "$D" && "$PY" "$TREE/integrations/vllm/manifests/glm_v2_tree/jobs/seed_trace.py" "$SEED_FROM" "$D" "$OUT/seed.json" ||
+      { echo "seeding from $SEED_FROM failed"; exit 3; }
+    cp "$(dirname "$RESEARCH_RUN_DIR")/$(basename "$(dirname "$SEED_FROM")")/out/tree.txt" "$OUT/seed_tree.txt" 2>/dev/null &&
+      echo "the seeded derives' tree: $(cat "$OUT/seed_tree.txt")"
+  fi
+  /usr/bin/time -v "$PY" -m verity_vllm.pipeline.cli neutrality "$ROW" --tier heavy --out "$SW" \
+    --row-flag=--build-ram-budget-gb=$B ${BUILD_JOBS:+"--row-flag=--build-jobs=$BUILD_JOBS"} >"$OUT/neutrality.out" 2>&1
+  nrc=$?
+  grep -E "^\[neutrality\]|^    rank|Elapsed|Maximum resident" "$OUT/neutrality.out" | tail -30
+  cp "$SW/neutrality.json" "$OUT/" 2>/dev/null
+  for f in stages.txt row.log build_summary.json; do cp "$D/$f" "$OUT/" 2>/dev/null; done
+  echo "$D" >"$OUT/rowdir.txt"
+  grep -q '^build PASS' "$D/stages.txt" 2>/dev/null || { echo "the traced Build did not pass (neutrality rc $nrc): $(grep '^build ' "$D/stages.txt" | tail -1 | cut -c1-300)"; exit 7; }
+  (cd "$D" && tar czf "$OUT/trace.tgz" build_summary.json $(ls -d build/rank*/build_*/result.json 2>/dev/null))
+  if [ "$arc" = 0 ] && [ "$anrc" = 0 ] && [ $nrc = 0 ]; then
+    echo "v2 moves no Program of $ROW: its AOT Build emits the pins, and its trace is them"; exit 0
+  fi
+  [ $nrc = 0 ] || (ROW=$ROW D=$D bash "$TREE/integrations/vllm/manifests/glm_v2_tree/jobs/trace_art.sh") || echo "the trace was not preserved (trace_art.sh)"
+  if [ -n "${TRACE_ONLY:-}" ]; then
+    [ $nrc = 0 ] && { echo "the trace of $ROW is its pins (TRACE_ONLY: not compared)"; exit 0; }
+    [ -s "$OUT/trace_art.txt" ] || exit 1
+    moved_only || { echo "neutrality rc $nrc is not only a move against the pins (neutrality.json)"; exit 1; }
+    echo "MOVED against the pins being replaced, nothing else: the trace is $(cat "$OUT/trace_art.txt"); compare it with" \
+      "TRACE_RUN=$RESEARCH_RUN_ID"
+    exit 0
+  fi
 fi
-[ $nrc = 0 ] || (ROW=$ROW D=$D bash "$TREE/integrations/vllm/manifests/glm_v2_tree/jobs/trace_art.sh") || echo "the trace was not preserved (trace_art.sh)"
 
 /usr/bin/time -v "$PY" -m verity_vllm.pipeline.cli predict compare "$D" --row "$ROW" \
   --config verity_vllm/engine/profiles/hf_configs/GLM53.config.json --out "$OUT/comparison.json" --workers "${WORKERS:-2}" 2>"$OUT/compare.err" &
 cpid=$!
-A2=$SW/aot2
-aot aot2 "$A2" --aot-trace "$D"; a2rc=$?
+A2=$SW/aot2 a2rc=skipped
+[ -n "${SKIP_AOT2:-}" ] || { aot aot2 "$A2" --aot-trace "$D"; a2rc=$?; }
 wait $cpid; crc=$?
 grep -E "Elapsed|Maximum resident" "$OUT/compare.err"
 "$PY" -c 'import json,sys; d=json.load(open(sys.argv[1])); print("predict compare equal:", d.get("equal"))' "$OUT/comparison.json" 2>/dev/null
 [ "$crc" = 0 ] || { echo "neutrality rc $nrc, predict compare rc $crc: the predictor does not give this tree's trace"; exit 8; }
-"$PY" - "$D" "$A2/$ROW" "$OUT/aot2_vs_trace.json" <<'EOF'
+if [ -z "${SKIP_AOT2:-}" ]; then
+  "$PY" - "$D" "$A2/$ROW" "$OUT/aot2_vs_trace.json" <<'EOF'
 import json, sys
 from pathlib import Path
 from verity_vllm.pipeline import epoch, neutrality
@@ -114,14 +155,13 @@ Path(sys.argv[3]).write_text(json.dumps({"trace": sys.argv[1], "aot": sys.argv[2
 print("AOT (against this trace) vs this trace:", "EQUAL" if not diffs else "DIFFER", *diffs, sep="\n    ")
 sys.exit(1 if diffs else 0)
 EOF
-vrc=$?
-echo "AOT vs pinned trace rc $arc; neutrality rc $nrc; predict compare rc $crc; AOT vs this trace rc $a2rc"
-[ "$a2rc" = 0 ] && [ "$vrc" = 0 ] || exit 9
+  vrc=$?
+  echo "AOT vs pinned trace rc $arc; neutrality rc $nrc; predict compare rc $crc; AOT vs this trace rc $a2rc"
+  [ "$a2rc" = 0 ] && [ "$vrc" = 0 ] || exit 9
+else
+  echo "AOT Build against this trace: skipped (SKIP_AOT2: the row's Build of record runs it)"
+fi
 [ $nrc != 0 ] || { echo "the trace is the pins, but the AOT Build against the pinned trace did not pass (rc $arc, its digests: $anrc)"; exit 1; }
-"$PY" - "$OUT/neutrality.json" "$ROW" <<'EOF' || { echo "neutrality rc $nrc is not only a move against the pins (neutrality.json)"; exit 1; }
-import json, sys
-r = json.load(open(sys.argv[1]))["rows"][sys.argv[2]]
-sys.exit(0 if r["build_rc"] == 0 and r["programs"] and not r["neutral"] else 1)
-EOF
-echo "MOVED against the pins being replaced, nothing else: this tree's trace, its predictor and its AOT Build agree; re-pin with" \
-  "repin.sh $ROW $RESEARCH_RUN_ID"
+moved_only || { echo "neutrality rc $nrc is not only a move against the pins (neutrality.json)"; exit 1; }
+echo "MOVED against the pins being replaced, nothing else: this tree's trace, its predictor$([ "$a2rc" = skipped ] || echo " and its AOT Build")" \
+  "agree; re-pin with repin.sh $ROW $RESEARCH_RUN_ID"
