@@ -104,9 +104,15 @@ _ALU = re.compile(r"\bIADD3\b|\bIADD\b|\bLOP3\b|\bLOP\b|\bSHF\b|\bPRMT\b|\bLEA\b
 UNIFORM = re.compile(r"U[A-Z].*|LDCU|R2UR|S2UR|CS2UR|VOTEU")
 UR_PAIR = re.compile(r"\.(64|WIDE)\b")
 #: the bulk-copy and TMA units' shared-memory instructions (`cp.async.bulk`, `cp.reduce.async.bulk`, their `.tensor`
-#: forms): one costs its shared-memory bytes on DS_smem (A5b), which its opcode doesn't show, so `class_of` leaves it
-#: unclassed, ahead of the uniform rule that would call it UNI (RT4-SHEET-6), and `bulk_counts` classes it by its bytes
+#: forms): one costs its shared-memory bytes on DS_smem (A5b), which its opcode doesn't show, so `bulk_counts` classes
+#: it by its bytes and `class_of` takes it ahead of the uniform rule that would call it UNI (RT4-SHEET-6): unclassed,
+#: but for a bulk reduction (`BULK_RED`)
 BULK = re.compile(r"UBLK(CP|RED)|UTMA(LDG|STG|REDG)")
+#: a bulk reduction (UBLKRED) by its opcode alone is TMAred512, the census's class for one of 512 B: its issue slot and
+#: 512 B on DS_smem on DS-120, its own unit's rows on the measured census. That bounds below every bulk reduction the
+#: tree runs on sm_120 (side.cu's and smem_side.cu's 512 B to 4 KB, cpw_routes' 1 to 16 KB, fold_bulk's 8 to 32 KB);
+#: one under 512 B would be overstated, so it must be counted by its bytes
+BULK_RED = "UBLKRED"
 #: UTMABIG's bytes on DS-120: 99 KB, the most shared memory a block holds on sm_120 (CUDA C++ Programming Guide,
 #: compute capability 12.0), so a bulk instruction's count `S/99 KB` is at most one and a box is never one UTMABIG there
 BULK_BYTES = 101376
@@ -129,11 +135,12 @@ def bulk_counts(opcode: str, nbytes: int) -> dict[str, Fraction]:
 
 def class_of(opcode: str) -> str | None:
     """The census class of a dotted SASS opcode (`IMMA.16832.S8.S8`, `LOP3.LUT`, `SHFL.BFLY`), or None when not certain:
-    a bulk or TMA instruction's class is its bytes' (`bulk_counts`)."""
+    a bulk copy's or TMA instruction's class is its bytes' (`bulk_counts`), and a bulk reduction's TMAred512
+    (`BULK_RED`)."""
     op = opcode.split("@")[-1].strip()
     base = op.split(".")[0]
     if BULK.match(base):
-        return None
+        return "TMAred512" if base.startswith(BULK_RED) else None
     if UNIFORM.fullmatch(base):
         return "UNI64" if UR_PAIR.search(op) else "UNI"
     for pat, kind in CLASS_RULES:
@@ -160,7 +167,8 @@ TLD_BY_NAME = {"tld1": "TLD1", "tld2": "TLD2", "tld4": "TLD4w", "tld4n": "TLD4w"
 _TLD_NAME = re.compile(r"_(tld4n|tld4|tld2|tld1)_")
 
 #: side.cu counts its side unit by a wildcard (`REDG*`, `UBLKRED*`), so its unit's name (`hs_red64`, `sa_red64`) is the
-#: class; a unit missing here (a 4 KB bulk op is several TMAred512) stays unclassed
+#: class; a unit missing here takes its pattern's `class_of` (sa_blkred4k's 4 KB reduction is one TMAred512, a lower
+#: bound)
 SIDE_BY_NAME = {"red32": {"REDG*": "RED32"}, "red64": {"REDG*": "RED64"}, "redv4": {"REDG*": "REDV"},
                 "redv4h": {"REDG*": "REDV"}, "redblk": {"REDG*": "RED32"}, "atomg32": {"ATOMG*": "ATOMG32"},
                 "atomgd": {"ATOMG*": "ATOMG32"}, "ldgsts": {"LDGSTS*": "LDGSTS16"},

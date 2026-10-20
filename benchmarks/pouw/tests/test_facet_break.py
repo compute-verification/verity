@@ -74,8 +74,8 @@ def test_class_of():
             "ATOMS.CAST.SPIN.64": "ATOMS64", "ATOM.E.ADD.STRONG.GPU": "ATOME32", "ATOM.E.EXCH.64.STRONG.GPU": "ATOME64",
             "STS.128": "STS128", "STS": None, "LDGSTS.E.BYPASS.128": "LDGSTS16", "LDSM.16.M88": "LDSM_X1",
             "LDSM.16.MT88.4": "LDSM_X4T", "LDSM.8.MT1616.2": "LDSM8T_X2", "STSM.16.M88.2": "STSM_X2",
-            "STSM.8.MT1616.4": "STSM8T_X4", "UBLKRED.G.S.XOR": None, "UBLKCP.S.G": None, "UTMALDG.2D": None,
-            "UBLKRED*": None, "UBLKPF.L2": "UNI"}
+            "STSM.8.MT1616.4": "STSM8T_X4", "UBLKRED.G.S.XOR": "TMAred512", "UBLKCP.S.G": None, "UTMALDG.2D": None,
+            "UBLKRED*": "TMAred512", "UBLKPF.L2": "UNI"}
     assert {op: loads.class_of(op) for op in want} == want
 
 
@@ -97,7 +97,8 @@ def test_a_side_unit_counted_by_wildcard_takes_its_class_from_its_name():
     row = {"probe": "hs_red64", "rates": {"0:IMMA.16832.S8.S8": 0.4, "1:REDG*": 0.08}}
     assert loads.rates_by_class(row) == pytest.approx({"IMMA16832": 0.1, "RED64": 0.02})
     assert loads.rates_by_class({"probe": "sa_blkred512", "rates": {"0:UBLKRED*": 0.04}}) == {"TMAred512": 0.01}
-    assert loads.rates_by_class({"probe": "sa_blkred4k", "rates": {"0:UBLKRED*": 0.04}}) == {}
+    assert loads.rates_by_class({"probe": "sa_blkred4k", "rates": {"0:UBLKRED*": 0.04}}) == {"TMAred512": 0.01}
+    assert loads.rates_by_class({"probe": "sa_blkcp1k", "rates": {"0:UBLKCP*": 0.04}}) == {}
 
 
 def test_a_tld_takes_its_width_from_the_program_and_unpriced_loads_are_listed(census):
