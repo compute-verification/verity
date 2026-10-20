@@ -445,7 +445,7 @@ theorem HRuns.levelChals (resp : ℕ → Claims.Msg) (last : Bool) (sm : LState)
         obtain rfl := ForInStep.yield.inj hs'
         have hj3 : j + 1 ≠ 4 := by simpa using hc
         exact ⟨fun _ => jc_step hj (hx.1 hj) false (by simpa using hj3) (hr ▸ hy) hm, fun h => absurd h hj3⟩
-  · intro f y _ _ ⟨-, hf⟩
+  · rintro f y _ _ ⟨-, hf⟩
     exact hf rfl
 
 /-! ## Between levels -/
