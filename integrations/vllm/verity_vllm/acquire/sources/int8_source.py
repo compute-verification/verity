@@ -6,10 +6,11 @@ inside one module body, committed as the ops computed them.
   them on the host.  The fx node's name counts on through the run, so the names come from the manifest: per (engine step, module) its
   one Int8RowQuant_v1 site.
 - `verity_int8::kv_quant` inside an attention module, or `verity_int8::kv_quant_window` under a credited cache read
-  (`engine.int8_window`): its (K', V', s_v, f32(V'_0)) per KV head are the `instance_outputs` identities of Int8KvQuant_v1's ports
-  0..3, each the op's result over every KV head, committed under the member the manifest spells for that port
-  (`<attention>/kv_quant.0..3`, the Build's hint, `query.required.member_name`); several requests at one step are committed in call
-  order, concatenated.
+  (`engine.int8_window`): its (K', V', s_v, f32(V'_0)) per KV head are the `instance_outputs` identities of `Int8KvQuant_v1`'s ports
+  0..3 at `<attention>`, each the op's result over every KV head; several requests at one step are committed in call order,
+  concatenated.  They are committed as `<attention>/kv_quant.<port>`, labels this source declares as those ports (`ports`), so the
+  binder binds them by structure whatever the manifest's member spelling (`<hint>.<port>`), and the attention's own return binds its
+  one remaining member.
 
 Attached whenever the required manifest names either (`taps.attach`); no kernel changes: the wrappers run the installed ops unchanged
 and acquire their results on their device.
@@ -20,11 +21,15 @@ import time
 from typing import Any, Mapping
 
 from verity_vllm.acquire.sources.call_boundary_plan import FAMILY
+from verity_vllm.query.manifest.bind import Port
 
 SHORT_NAME = "int8"
 QUANT_SPEC = "Int8RowQuant_v1"
 KV_SPEC = "Int8KvQuant_v1"
+#: Int8KvQuant_v1's ports (K', V', s_v, f32(V'_0)) and the labels they are committed under (never a bare digit: the binder reads
+#: `<module>/<k>` as slot k of the module's return)
 KV_PORTS = ("0", "1", "2", "3")
+KV_LABELS = tuple(f"kv_quant.{p}" for p in KV_PORTS)
 KV_CLASS = "int8_kv_quant"
 #: the ops whose results are a request's Int8KvQuant_v1: from the pages (`paged_attention`) or a credited read's window
 KV_OPS = ("kv_quant", "kv_quant_window")
@@ -49,28 +54,23 @@ def quant_sites(manifest: Mapping[str, Any] | None) -> dict[tuple[int, str], str
     return out
 
 
-def kv_modules(manifest: Mapping[str, Any] | None) -> dict[str, tuple[str, ...]]:
-    """attention module -> the members of record of its Int8KvQuant_v1 ports 0..3, for the modules whose results the manifest
-    requires (`instance_outputs`; a row's `port` names the Definition's port, its `output_member` the identity)."""
-    got: dict[str, dict[str, str]] = {}
-    for r in (manifest or {}).get("identities") or []:
-        if r.get("family") == "instance_outputs" and _spec(r) == KV_SPEC:
-            port = str(r.get("port", r.get("output_member")))
-            if port in KV_PORTS:
-                got.setdefault(str(r["op_path"]), {})[port] = str(r["output_member"])
-    return {op: tuple(m.get(p, p) for p in KV_PORTS) for op, m in sorted(got.items())}
+def kv_modules(manifest: Mapping[str, Any] | None) -> list[str]:
+    """The attention modules whose Int8KvQuant_v1 results the manifest requires (`instance_outputs` rows of its ports 0..3)."""
+    return sorted({str(r["op_path"]) for r in (manifest or {}).get("identities") or []
+                   if r.get("family") == "instance_outputs" and _spec(r) == KV_SPEC
+                   and str(r.get("port", r.get("output_member"))) in KV_PORTS})
 
 
 class Int8Source:
     short_name = SHORT_NAME
 
-    def __init__(self, committer: Any, model: Any, quant: Mapping[tuple[int, str], str], kv: Mapping[str, tuple[str, ...]]) -> None:
+    def __init__(self, committer: Any, model: Any, quant: Mapping[tuple[int, str], str], kv: list[str]) -> None:
         import torch
 
         if not quant and not kv:
             raise ValueError("int8: no quantizer to tap")
         self.torch, self.c, self.model = torch, committer, model
-        self.quant, self.kv = dict(quant), dict(kv)
+        self.quant, self.kv = dict(quant), list(kv)
         self.modules = sorted({m for _e, m in self.quant} | set(self.kv))
         self._at: dict[int, dict[str, int]] = {}
         for (e, _m), op in self.quant.items():
@@ -186,10 +186,10 @@ class Int8Source:
 
     def _commit_kv(self, op: str, outs: list[tuple], job: Any) -> None:
         torch, t0, n = self.torch, time.perf_counter(), 0
-        for j, member in enumerate(self.kv[op]):
+        for j, label in enumerate(KV_LABELS):
             parts = [o[j].contiguous().reshape(-1) for o in outs]
             t = parts[0] if len(parts) == 1 else torch.cat(parts)
-            self._take(f"{op}/{member}", t, job, "kv")
+            self._take(f"{op}/{label}", t, job, "kv")
             n += int(t.numel()) * t.element_size()
         self._span(job, t0, n)
 
@@ -199,11 +199,15 @@ class Int8Source:
             spans.add("acquisition", time.perf_counter() - t0, step=job.step, nbytes=nbytes)
 
     def targets_at(self, engine_step: int) -> dict[str, int]:
-        """The call-boundary names this source commits at `engine_step`, once each (the KV names are module members, the binder's pass 3)."""
+        """The call-boundary names this source commits at `engine_step`, once each (the KV names are module members, rule (4)'s)."""
         return dict(self._at.get(int(engine_step), {}))
 
     def target_names(self) -> frozenset[str]:
         return self._names
+
+    def ports(self) -> dict[str, Port]:
+        """`bind.Binder`'s declared labels: each KV label, its Int8KvQuant_v1 port."""
+        return {label: Port(frozenset({KV_SPEC}), port) for label, port in zip(KV_LABELS, KV_PORTS)} if self.kv else {}
 
     def split_step_names(self, names: Mapping[str, int], engine_step: int, padding_only: bool) -> tuple[dict[str, int], dict[str, tuple[int, int]]]:
         """X-03 for the call-boundary names, as `call_boundary_source.CallBoundarySource.split_step_names`: (the step's other names,
@@ -240,7 +244,7 @@ class Int8Source:
         if self.kv:
             out.append({"class": KV_CLASS, "how": "bound-as-leaf", "rule": None, "count": self.stats["kv_tensors"], "bytes": self.stats["kv_bytes"],
                         "tensors": self.stats["kv_tensors"], "errors": self.stats["errors"],
-                        "evidence": (f"int8 source: Int8KvQuant_v1's ports 0..3 of {len(self.kv)} attention modules, the results of verity_int8::kv_quant "
+                        "evidence": (f"int8 source: `<attention>/kv_quant.0..3` of {len(self.kv)} attention modules, the results of verity_int8::kv_quant "
                                      "(or kv_quant_window under a credited read) per KV head as the served op computed them (engine.int8_ops; "
                                      "no kernel change)")})
         return out
