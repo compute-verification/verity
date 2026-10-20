@@ -5,7 +5,7 @@ import Models.Accounting.Assumptions.Sheet
 /-!
 # FP8-g1's and W4A8-g1's headlines on sm_120 (trusted)
 
-`Models.Accounting.Guarantees.Headline`'s `Sm120SheetHeadline` (H1 + fx1 on DS-120's sheet, `1 − 0.656%` outside
+`Models.Accounting.Guarantees.Headline`'s `Sm120SheetHeadline` (H1 + fx1 on DS-120's sheet, `1 − 5.860%` outside
 `2^-40`) at H1's windows whose committed leaves are FP8-g1's or W4A8-g1's: its conclusion and every premise as they
 are but binding's, over proof layers whose values carry the round's operand leaves (`Pouw.FpG1.Leaves`), the round's
 other values in a free `W` as the record's `V`, with at least one proof a round, and one premise more, that every leaf
@@ -50,7 +50,7 @@ binding at `δ_bind` (`ProofLayer.BindingAt`) in place of its fork form, at a wi
 (`n_π + 1`), open the round's operand leaves beside its other values (`Leaves × W`), every committed leaf an FP8-g1
 level on H1's grids (`Leaves.Fp8 Grids.h1`: E4M3's integers to 120 for activations and to 104 for weights): under the
 record's other premises, outside an event of probability at most `2^-40`
-every accepted window's time is at least `1 − 656/100000` (`1 − 0.656%`) of the credit `T_cred = B_♭/f_max`. The
+every accepted window's time is at least `1 − 5860/100000` (`1 − 5.860%`) of the credit `T_cred = B_♭/f_max`. The
 credit counts the int8 GEMM's MACs that carry the FP8 model's products; whether they are its useful work is open.
 The g1 premise does no work in the bound: it narrows the windows covered, and the bound is the record's.
 `ε_sample` and the Fiat–Shamir premium are separate lines, as in the record. -/
@@ -65,10 +65,10 @@ def Sm120FpG1SheetHeadline : Prop :=
     (∀ x, SheetSmem Sm120.sheet (Pl.run x).run) → (∀ x, SheetWords Sm120.model (Pl.run x)) →
     (∀ x, SheetSemantics Sm120.model (Pl.run x)) →
     (∀ x, FoldOptFoldedAt Sm120.model (Pl.run x) ((1 - Uf.share x / Sm120.checks) * Sm120.model.Nw)
-      (onFacet Sm120.piStar)) →
+      Sm120.piStar) →
     Pl.game = G.game → G.Pinned → OperandHMu (3 / 4) G → ReceiptLuckAt (1 / 2) G → WholeLuckAt (1 / 2) G Uf →
     pf.Of Pl → pf.BindingAt δbind → ProofSoundAt pf δzk → ProofsPin pf → RightFixed Pl pf Sm120.model.Nw →
-    prob (fun x => Pl.accepts x ∧ (Pl.run x).run.time / Sm120.model.credit Sm120.flat < 1 - 656 / 100000) ≤
+    prob (fun x => Pl.accepts x ∧ (Pl.run x).run.time / Sm120.model.credit Sm120.flat < 1 - 5860 / 100000) ≤
       (1 / 2) ^ 40
 
 /-- **W4A8-g1's headline on sm_120 at the data sheet**, under full checking with live coins. `Sm120SheetHeadline`, with
@@ -76,7 +76,7 @@ binding at `δ_bind` (`ProofLayer.BindingAt`) in place of its fork form, at a wi
 open the round's operand leaves beside its other values, every committed leaf W4A8-g1's on H1's grids
 (`Leaves.W4a8 Grids.h1`: the record's int8 activations in `[−126, 126]`, weights a doubled E2M1 level under an integer
 block scale in `[1, 9]`): under the record's other premises, outside an event of probability at
-most `2^-40` every accepted window's time is at least `1 − 656/100000` of the credit `T_cred = B_♭/f_max`. The credit
+most `2^-40` every accepted window's time is at least `1 − 5860/100000` of the credit `T_cred = B_♭/f_max`. The credit
 counts the int8 GEMM's MACs that carry the FP4 weights' products; whether they are the model's useful work is open.
 The g1 premise does no work in the bound: it narrows the windows covered, and the bound is the record's. -/
 def Sm120W4a8G1SheetHeadline : Prop :=
@@ -90,10 +90,10 @@ def Sm120W4a8G1SheetHeadline : Prop :=
     (∀ x, SheetSmem Sm120.sheet (Pl.run x).run) → (∀ x, SheetWords Sm120.model (Pl.run x)) →
     (∀ x, SheetSemantics Sm120.model (Pl.run x)) →
     (∀ x, FoldOptFoldedAt Sm120.model (Pl.run x) ((1 - Uf.share x / Sm120.checks) * Sm120.model.Nw)
-      (onFacet Sm120.piStar)) →
+      Sm120.piStar) →
     Pl.game = G.game → G.Pinned → OperandHMu (3 / 4) G → ReceiptLuckAt (1 / 2) G → WholeLuckAt (1 / 2) G Uf →
     pf.Of Pl → pf.BindingAt δbind → ProofSoundAt pf δzk → ProofsPin pf → RightFixed Pl pf Sm120.model.Nw →
-    prob (fun x => Pl.accepts x ∧ (Pl.run x).run.time / Sm120.model.credit Sm120.flat < 1 - 656 / 100000) ≤
+    prob (fun x => Pl.accepts x ∧ (Pl.run x).run.time / Sm120.model.credit Sm120.flat < 1 - 5860 / 100000) ≤
       (1 / 2) ^ 40
 
 end Accounting.Guarantees.FpG1

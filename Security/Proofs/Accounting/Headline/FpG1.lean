@@ -16,7 +16,8 @@ The witness is an honest window on any finite coins `Ω`, generic in the rounds 
 * its run (`honestRun`) is ♭'s counts at ♭'s bound `B_♭` cycles and `f_max`, its word production IMMA16832's (writer
   kind 6, `ω = 128`) with ♭'s operand floor, its fold ♭'s lane fold, no filler, and its 128 committed words a unit
   fixed and headed by IMMA16832. A1–A7 hold at the sheet's coefficients, issue being ♭'s largest facet, and FOLD-OPT
-  at `π*` since the lane fold costs `16 = 128 · ⅛` issue slots and `φ* ≤ ⅛`;
+  at `π*` (`c = 3564/3761` on issue, `197/3761` on shared memory) since the lane fold costs `16c = 128 · c/8` there,
+  16 issue slots and no shared memory, and `φ* ≤ c/8`;
 * its proof layer (`honestLayer`) is one proof a round, accepted on every path, opening the round's leaves to one
   `Leaves` value `v`; the proof's relation is H1's committed ranges (`Leaves.InH1`), and a window's values are right
   when every leaf is in them. Binding and soundness hold at `δ_bind = δ_ZK = 0`.
@@ -276,30 +277,35 @@ theorem honestRun_semantics : SheetSemantics Sm120.model honestRun := by
   show (128 : ℝ) ≤ ∑ h, honestWords h
   exact honestWords_sum.ge
 
-/-- `φ*(π*) ≤ ⅛`: the lane fold's issue count a word. -/
-theorem phiStar_le : Sm120.model.phiStar (onFacet Sm120.piStar) ≤ 1 / 8 := by
-  refine (Accounting.SecurityProofs.TS.iInf_le_price (onFacet Sm120.piStar) Sm120.model.fold 0).trans (le_of_eq ?_)
-  rw [demandPrice_onFacet]
-  show Sm120.model.G.load (Sparse.counts [(0, 1, 16), (24, 1, 16)]) Sm120.piStar = 1 / 8
-  rw [load_counts _ (sheetCoef Sm120.ds120) sm120_hG]
-  have h : dot (sheetCoef Sm120.ds120 Sm120.piStar) 122 [(0, 1, 16), (24, 1, 16)] = 1 / 8 := by decide +kernel
-  rw [h]
+/-- `φ*(π*) ≤ c/8`, `c = 3564/3761`: the lane fold's issue count a word, with no shared memory. -/
+theorem phiStar_le : Sm120.model.phiStar Sm120.piStar ≤ 3564 / 3761 / 8 := by
+  refine (Accounting.SecurityProofs.TS.iInf_le_price Sm120.piStar Sm120.model.fold 0).trans (le_of_eq ?_)
+  rw [demandPrice_piStar]
+  show 3564 / 3761 * Sm120.model.G.load (Sparse.counts [(0, 1, 16), (24, 1, 16)]) .issue +
+      197 / 3761 * Sm120.model.G.load (Sparse.counts [(0, 1, 16), (24, 1, 16)]) .smem = 3564 / 3761 / 8
+  rw [load_counts _ (sheetCoef Sm120.ds120) sm120_hG, load_counts _ (sheetCoef Sm120.ds120) sm120_hG]
+  have hi : dot (sheetCoef Sm120.ds120 .issue) 122 [(0, 1, 16), (24, 1, 16)] = 1 / 8 := by decide +kernel
+  have hs : dot (sheetCoef Sm120.ds120 .smem) 122 [(0, 1, 16), (24, 1, 16)] = 0 := by decide +kernel
+  rw [hi, hs]
   norm_num
 
-/-- ♭'s fold costs 16 issue slots a unit at `π*`. -/
-theorem honest_foldPrice : Sm120.model.G.price (onFacet Sm120.piStar) (Sparse.counts Sm120.flatFold) = 16 := by
-  show demandPrice (onFacet Sm120.piStar) (Sm120.model.G.load (Sparse.counts Sm120.flatFold)) = 16
-  rw [demandPrice_onFacet, load_counts _ (sheetCoef Sm120.ds120) sm120_hG]
-  have h : dot (sheetCoef Sm120.ds120 Sm120.piStar) 122 Sm120.flatFold = 16 := by decide +kernel
-  rw [h]
+/-- ♭'s fold costs `16c` a unit at `π*`, `c = 3564/3761`: 16 issue slots and no shared memory. -/
+theorem honest_foldPrice :
+    Sm120.model.G.price Sm120.piStar (Sparse.counts Sm120.flatFold) = 3564 / 3761 * 16 := by
+  show demandPrice Sm120.piStar (Sm120.model.G.load (Sparse.counts Sm120.flatFold)) = 3564 / 3761 * 16
+  rw [demandPrice_piStar, load_counts _ (sheetCoef Sm120.ds120) sm120_hG,
+    load_counts _ (sheetCoef Sm120.ds120) sm120_hG]
+  have hi : dot (sheetCoef Sm120.ds120 .issue) 122 Sm120.flatFold = 16 := by decide +kernel
+  have hs : dot (sheetCoef Sm120.ds120 .smem) 122 Sm120.flatFold = 0 := by decide +kernel
+  rw [hi, hs]
   norm_num
 
 theorem honestRun_foldOpt (Ω : Type) (n : ℕ) (x : Paths Ω n) :
     FoldOptFoldedAt Sm120.model honestRun ((1 - (honestUnfolded Ω n).share x / Sm120.checks) * Sm120.model.Nw)
-      (onFacet Sm120.piStar) := by
+      Sm120.piStar := by
   unfold FoldOptFoldedAt
   rw [honestUnfolded_share, show Sm120.model.muF = 0 from rfl, sm120_Nw]
-  show _ ≤ Sm120.model.G.price (onFacet Sm120.piStar) (Sparse.counts Sm120.flatFold)
+  show _ ≤ Sm120.model.G.price Sm120.piStar (Sparse.counts Sm120.flatFold)
   rw [honest_foldPrice]
   have := phiStar_le
   simp only [sub_zero, zero_div, one_mul]
@@ -380,7 +386,7 @@ def Premises {Ω : Type} [Fintype Ω] (Pl : Play Ω Sm120.checks (Fin 122) (Fin 
     (∀ x, SheetSmem Sm120.sheet (Pl.run x).run) ∧ (∀ x, SheetWords Sm120.model (Pl.run x)) ∧
     (∀ x, SheetSemantics Sm120.model (Pl.run x)) ∧
     (∀ x, FoldOptFoldedAt Sm120.model (Pl.run x) ((1 - Uf.share x / Sm120.checks) * Sm120.model.Nw)
-      (onFacet Sm120.piStar)) ∧
+      Sm120.piStar) ∧
     Pl.game = G.game ∧ G.Pinned ∧ OperandHMu (3 / 4) G ∧ ReceiptLuckAt (1 / 2) G ∧ WholeLuckAt (1 / 2) G Uf ∧
     pf.Of Pl ∧ pf.BindingAt δbind ∧ ProofSoundAt pf δzk ∧ ProofsPin pf ∧ RightFixed Pl pf Sm120.model.Nw
 
@@ -388,7 +394,7 @@ def Premises {Ω : Type} [Fintype Ω] (Pl : Play Ω Sm120.checks (Fin 122) (Fin 
 theorem bound_of_premises {Ω : Type} [Fintype Ω] {Pl : Play Ω Sm120.checks (Fin 122) (Fin 17) Unit Empty}
     {G : ReceiptGame Ω Sm120.checks} {Uf : Unfolded Ω Sm120.checks} {V : Type} {nπ : ℕ}
     {pf : ProofLayer Ω Sm120.checks nπ V} {δbind δzk : ℝ} (h : Premises Pl G Uf pf δbind δzk) :
-    prob (fun x => Pl.accepts x ∧ (Pl.run x).run.time / Sm120.model.credit Sm120.flat < 1 - 656 / 100000) ≤
+    prob (fun x => Pl.accepts x ∧ (Pl.run x).run.time / Sm120.model.credit Sm120.flat < 1 - 5860 / 100000) ≤
       (1 / 2) ^ 40 := by
   obtain ⟨h0, h1, h2, h3, h4, h5, h6, h7, h8, h9, h10, h11, h12, h13, h14, h15, h16, h17, h18, h19⟩ := h
   exact Accounting.SecurityProofs.TS.sm120SheetHeadline_bind Pl G Uf pf δbind δzk h0 h1 h2 h3 h4 h5 h6 h7 h8 h9 h10
@@ -436,7 +442,7 @@ theorem sm120W4a8G1_honest (Ω : Type) [Fintype Ω] (sa sw : ℕ → ℚ) (m : �
 /-- **FP8-g1's headline applies at the honest FP8-g1 window**: `sm120FpG1_honest`'s premises fed to it. -/
 theorem sm120FpG1_honest_applies (Ω : Type) [Fintype Ω] (sa sw : ℕ → ℚ) (x y : ℕ → ℕ → ℚ) :
     prob (fun p => (honestPlay Ω Sm120.checks honestRun).accepts p ∧
-      ((honestPlay Ω Sm120.checks honestRun).run p).run.time / Sm120.model.credit Sm120.flat < 1 - 656 / 100000) ≤
+      ((honestPlay Ω Sm120.checks honestRun).run p).run.time / Sm120.model.credit Sm120.flat < 1 - 5860 / 100000) ≤
       (1 / 2) ^ 40 := by
   obtain ⟨hg, h0, h1, h2, h3, h4, h5, h6, h7, h8, h9, h10, h11, h12, h13, h14, h15, h16, h17, h18, h19⟩ :=
     sm120FpG1_honest Ω sa sw x y
@@ -447,7 +453,7 @@ theorem sm120FpG1_honest_applies (Ω : Type) [Fintype Ω] (sa sw : ℕ → ℚ) 
 /-- **W4A8-g1's headline applies at the honest W4A8-g1 window**: `sm120W4a8G1_honest`'s premises fed to it. -/
 theorem sm120W4a8G1_honest_applies (Ω : Type) [Fintype Ω] (sa sw : ℕ → ℚ) (m : ℕ → ℕ → ℕ) (x y : ℕ → ℕ → ℚ) :
     prob (fun p => (honestPlay Ω Sm120.checks honestRun).accepts p ∧
-      ((honestPlay Ω Sm120.checks honestRun).run p).run.time / Sm120.model.credit Sm120.flat < 1 - 656 / 100000) ≤
+      ((honestPlay Ω Sm120.checks honestRun).run p).run.time / Sm120.model.credit Sm120.flat < 1 - 5860 / 100000) ≤
       (1 / 2) ^ 40 := by
   obtain ⟨hg, h0, h1, h2, h3, h4, h5, h6, h7, h8, h9, h10, h11, h12, h13, h14, h15, h16, h17, h18, h19⟩ :=
     sm120W4a8G1_honest Ω sa sw m x y
