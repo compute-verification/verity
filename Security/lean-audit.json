@@ -2224,7 +2224,12 @@
    "type_hash": "7a94747611d0047831949e30d92a30156cb3773cfefb2fba15f03b7f71b3df88"
   },
   "Accounting.SecurityProofs.FpG1.Sm120FpG1MeasuredHeadline": {
-   "owner": "@compute-accounting"
+   "owner": "@compute-accounting",
+   "signature": [
+    "Accounting.SecurityProofs.FpG1.Sm120FpG1MeasuredHeadline : Accounting.Guarantees.FpG1.Sm120FpG1MeasuredHeadline"
+   ],
+   "assumptions": [],
+   "type_hash": "510443f144524d82ec1b720a21e2e37297f8437f24dce77bfb35365b2ff8e300"
   },
   "Accounting.SecurityProofs.FpG1.Sm120FpG1SheetHeadline": {
    "owner": "@compute-accounting",
@@ -2235,7 +2240,12 @@
    "type_hash": "9bf83cdf3cfbd6f55a855ddf9851c188eff696b8cae663149595ba04195c05b3"
   },
   "Accounting.SecurityProofs.FpG1.Sm120W4a8G1MeasuredHeadline": {
-   "owner": "@compute-accounting"
+   "owner": "@compute-accounting",
+   "signature": [
+    "Accounting.SecurityProofs.FpG1.Sm120W4a8G1MeasuredHeadline : Accounting.Guarantees.FpG1.Sm120W4a8G1MeasuredHeadline"
+   ],
+   "assumptions": [],
+   "type_hash": "7262035bfa980cd0821ae8935cce8e648e64ea13f9f5680359fbf229e17906dc"
   },
   "Accounting.SecurityProofs.FpG1.Sm120W4a8G1SheetHeadline": {
    "owner": "@compute-accounting",
@@ -10452,7 +10462,9 @@
    },
    "guarantees": [
     "Accounting.SecurityProofs.CoinFlow.PointMass",
+    "Accounting.SecurityProofs.FpG1.Sm120FpG1MeasuredHeadline",
     "Accounting.SecurityProofs.FpG1.Sm120FpG1SheetHeadline",
+    "Accounting.SecurityProofs.FpG1.Sm120W4a8G1MeasuredHeadline",
     "Accounting.SecurityProofs.FpG1.Sm120W4a8G1SheetHeadline",
     "Accounting.SecurityProofs.HMu.CoinPointMass",
     "Accounting.SecurityProofs.HMu.CoinPointMassHalf",
@@ -10493,7 +10505,9 @@
     "Accounting.TS.Headline.rowsMachine": "5e9aabf80511ea661b5ff64967978bde21f94bfab89db17b7c9a4d9099354a0b"
    },
    "guarantees": [
+    "Accounting.SecurityProofs.FpG1.Sm120FpG1MeasuredHeadline",
     "Accounting.SecurityProofs.FpG1.Sm120FpG1SheetHeadline",
+    "Accounting.SecurityProofs.FpG1.Sm120W4a8G1MeasuredHeadline",
     "Accounting.SecurityProofs.FpG1.Sm120W4a8G1SheetHeadline",
     "Accounting.SecurityProofs.TS.Sm120MeasuredHeadline",
     "Accounting.SecurityProofs.TS.Sm120SheetHeadline"
@@ -10525,7 +10539,9 @@
     "Accounting.TS.Headline.Sm120.sheet": "d04a18d0b47bd9bea70b7ce3c1d5686023929761a8bd6cea221fbdc82b970f88"
    },
    "guarantees": [
+    "Accounting.SecurityProofs.FpG1.Sm120FpG1MeasuredHeadline",
     "Accounting.SecurityProofs.FpG1.Sm120FpG1SheetHeadline",
+    "Accounting.SecurityProofs.FpG1.Sm120W4a8G1MeasuredHeadline",
     "Accounting.SecurityProofs.FpG1.Sm120W4a8G1SheetHeadline",
     "Accounting.SecurityProofs.TS.Sm120MeasuredHeadline",
     "Accounting.SecurityProofs.TS.Sm120SheetHeadline"
@@ -10542,7 +10558,11 @@
     "Accounting.TS.Headline.Sm120Measured.piStar": "c1de65e34966627832062e95e941279474355bf7dbd9f34cfc3ddae0573b0239",
     "Accounting.TS.Headline.Sm120Measured.vf3s16": "df7561232e082fdc78ba414b646d5e6cbfd6cfda4a907e9b45e8846aac2b0bdc"
    },
-   "guarantees": ["Accounting.SecurityProofs.TS.Sm120MeasuredHeadline"]
+   "guarantees": [
+    "Accounting.SecurityProofs.FpG1.Sm120FpG1MeasuredHeadline",
+    "Accounting.SecurityProofs.FpG1.Sm120W4a8G1MeasuredHeadline",
+    "Accounting.SecurityProofs.TS.Sm120MeasuredHeadline"
+   ]
   },
   "Definitions.Accounting.Joint": {
    "digest": "e7071ec7ee29f00f35223386652b2e0f647fd2a1a865fdde31f5751142f979ab",
@@ -11566,7 +11586,9 @@
     "Accounting.TS.onFacet": "850cfeb0d37054d602d058fcbfbb3f5eea8b861b1f50278d40c70a74fe94be6f"
    },
    "guarantees": [
+    "Accounting.SecurityProofs.FpG1.Sm120FpG1MeasuredHeadline",
     "Accounting.SecurityProofs.FpG1.Sm120FpG1SheetHeadline",
+    "Accounting.SecurityProofs.FpG1.Sm120W4a8G1MeasuredHeadline",
     "Accounting.SecurityProofs.FpG1.Sm120W4a8G1SheetHeadline",
     "Accounting.SecurityProofs.TS.BindingFacetD1",
     "Accounting.SecurityProofs.TS.CompilerC",
@@ -11605,7 +11627,9 @@
     "Accounting.SecurityProofs.FillerLuck.FillerLuckAt",
     "Accounting.SecurityProofs.FillerLuck.PinnedFillBudget",
     "Accounting.SecurityProofs.FillerLuck.PinnedFillLuckAt",
+    "Accounting.SecurityProofs.FpG1.Sm120FpG1MeasuredHeadline",
     "Accounting.SecurityProofs.FpG1.Sm120FpG1SheetHeadline",
+    "Accounting.SecurityProofs.FpG1.Sm120W4a8G1MeasuredHeadline",
     "Accounting.SecurityProofs.FpG1.Sm120W4a8G1SheetHeadline",
     "Accounting.SecurityProofs.TS.CompilerC",
     "Accounting.SecurityProofs.TS.CompilerStage",
@@ -11648,7 +11672,9 @@
     "Accounting.TS.splice": "23e1874cde3d6a922d163ccc57a9b970e58ca7e88f6898d154d6764a0e24ecc0"
    },
    "guarantees": [
+    "Accounting.SecurityProofs.FpG1.Sm120FpG1MeasuredHeadline",
     "Accounting.SecurityProofs.FpG1.Sm120FpG1SheetHeadline",
+    "Accounting.SecurityProofs.FpG1.Sm120W4a8G1MeasuredHeadline",
     "Accounting.SecurityProofs.FpG1.Sm120W4a8G1SheetHeadline",
     "Accounting.SecurityProofs.TS.BindingOfFork",
     "Accounting.SecurityProofs.TS.DrawnBindingOfFork",
@@ -11729,7 +11755,9 @@
     "Accounting.TS.xorAll": "e79c7bb80c4a340fa20f2ac319de5139cc27cdb654e1d37262bb86e7309933b9"
    },
    "guarantees": [
+    "Accounting.SecurityProofs.FpG1.Sm120FpG1MeasuredHeadline",
     "Accounting.SecurityProofs.FpG1.Sm120FpG1SheetHeadline",
+    "Accounting.SecurityProofs.FpG1.Sm120W4a8G1MeasuredHeadline",
     "Accounting.SecurityProofs.FpG1.Sm120W4a8G1SheetHeadline",
     "Accounting.SecurityProofs.TS.CondReceiptLuckMarginal",
     "Accounting.SecurityProofs.TS.DuoSegmentsBind",
@@ -11752,7 +11780,9 @@
     "Accounting.TS.ReceiptGame.OperandPointMass": "6df5cc888c4948e81cfd63c48efd7e5cb7c956f25c2a3bf31d645fb38dc3aed3"
    },
    "guarantees": [
+    "Accounting.SecurityProofs.FpG1.Sm120FpG1MeasuredHeadline",
     "Accounting.SecurityProofs.FpG1.Sm120FpG1SheetHeadline",
+    "Accounting.SecurityProofs.FpG1.Sm120W4a8G1MeasuredHeadline",
     "Accounting.SecurityProofs.FpG1.Sm120W4a8G1SheetHeadline",
     "Accounting.SecurityProofs.TS.Sm120MeasuredHeadline",
     "Accounting.SecurityProofs.TS.Sm120SheetHeadline"
@@ -11830,7 +11860,9 @@
     "Accounting.TS.instFintypeHead": "b7c57ef6926da68a1ac20397bcf6f1912d3322e75bd72cc82abae4b3e6a7cd49"
    },
    "guarantees": [
+    "Accounting.SecurityProofs.FpG1.Sm120FpG1MeasuredHeadline",
     "Accounting.SecurityProofs.FpG1.Sm120FpG1SheetHeadline",
+    "Accounting.SecurityProofs.FpG1.Sm120W4a8G1MeasuredHeadline",
     "Accounting.SecurityProofs.FpG1.Sm120W4a8G1SheetHeadline",
     "Accounting.SecurityProofs.TS.BindingFacetD1",
     "Accounting.SecurityProofs.TS.CompilerC",
@@ -11989,7 +12021,9 @@
     "Accounting.TS.Unfolded.share": "378870a4b597b08fc1c4a5ae28c39f9eb10c60ab9486286b57d4b2e25804b50d"
    },
    "guarantees": [
+    "Accounting.SecurityProofs.FpG1.Sm120FpG1MeasuredHeadline",
     "Accounting.SecurityProofs.FpG1.Sm120FpG1SheetHeadline",
+    "Accounting.SecurityProofs.FpG1.Sm120W4a8G1MeasuredHeadline",
     "Accounting.SecurityProofs.FpG1.Sm120W4a8G1SheetHeadline",
     "Accounting.SecurityProofs.TS.Sm120MeasuredHeadline",
     "Accounting.SecurityProofs.TS.Sm120SheetHeadline"
@@ -15346,7 +15380,9 @@
     "Pouw.FpG1.instDecidablePredE4M3Nat": "526915b0330ba3929f6abb76e69f31df11fc22bd8d50f0ebcf9964e2e0037692"
    },
    "guarantees": [
+    "Accounting.SecurityProofs.FpG1.Sm120FpG1MeasuredHeadline",
     "Accounting.SecurityProofs.FpG1.Sm120FpG1SheetHeadline",
+    "Accounting.SecurityProofs.FpG1.Sm120W4a8G1MeasuredHeadline",
     "Accounting.SecurityProofs.FpG1.Sm120W4a8G1SheetHeadline"
    ]
   },
@@ -15365,7 +15401,9 @@
     "Pouw.FpG1.Level.int8": "b9e394d4d9a7b4ba06082916111fbb0e0a10f2189fe292d7010eb605cc081dee"
    },
    "guarantees": [
+    "Accounting.SecurityProofs.FpG1.Sm120FpG1MeasuredHeadline",
     "Accounting.SecurityProofs.FpG1.Sm120FpG1SheetHeadline",
+    "Accounting.SecurityProofs.FpG1.Sm120W4a8G1MeasuredHeadline",
     "Accounting.SecurityProofs.FpG1.Sm120W4a8G1SheetHeadline"
    ]
   },
@@ -18188,7 +18226,9 @@
     "Accounting.SecurityProofs.FillerLuck.PinnedFillBlocksDeficit",
     "Accounting.SecurityProofs.FillerLuck.PinnedFillBudget",
     "Accounting.SecurityProofs.FillerLuck.PinnedFillLuckAt",
+    "Accounting.SecurityProofs.FpG1.Sm120FpG1MeasuredHeadline",
     "Accounting.SecurityProofs.FpG1.Sm120FpG1SheetHeadline",
+    "Accounting.SecurityProofs.FpG1.Sm120W4a8G1MeasuredHeadline",
     "Accounting.SecurityProofs.FpG1.Sm120W4a8G1SheetHeadline",
     "Accounting.SecurityProofs.HMu.CoinPointMass",
     "Accounting.SecurityProofs.HMu.CoinPointMassHalf",
@@ -23450,7 +23490,9 @@
    "guarantees": [
     "Accounting.SecurityProofs.FillerLuck.FillerLuckAt",
     "Accounting.SecurityProofs.FillerLuck.PinnedFillLuckAt",
+    "Accounting.SecurityProofs.FpG1.Sm120FpG1MeasuredHeadline",
     "Accounting.SecurityProofs.FpG1.Sm120FpG1SheetHeadline",
+    "Accounting.SecurityProofs.FpG1.Sm120W4a8G1MeasuredHeadline",
     "Accounting.SecurityProofs.FpG1.Sm120W4a8G1SheetHeadline",
     "Accounting.SecurityProofs.TS.AdaptSteerFail",
     "Accounting.SecurityProofs.TS.CompilerC",
@@ -23685,13 +23727,17 @@
    ]
   },
   "Models.Accounting.Guarantees.FpG1": {
-   "digest": "7297e683773877092b8981f9224e81970da2fdba8d9c6650b8f4472b3cab2f64",
+   "digest": "5a8e41ad6fb5a4cd61fc6edd4393c30de18fc58f6f749b187d4e493d35ad9349",
    "definitions": {
+    "Accounting.Guarantees.FpG1.Sm120FpG1MeasuredHeadline": "b0c4499ed07b90e492574a9b08b309caa870d2956f2dc624b2c8073097123ab0",
     "Accounting.Guarantees.FpG1.Sm120FpG1SheetHeadline": "7a08d8ea36e23b38e12a914529b83204294a0bdeed2582a718f998b025101a2a",
+    "Accounting.Guarantees.FpG1.Sm120W4a8G1MeasuredHeadline": "61bced753f31e19edf524b4e88e0bd579c406536f746a5c2d0306e86d5166757",
     "Accounting.Guarantees.FpG1.Sm120W4a8G1SheetHeadline": "eb7646db3e1481aee6d8b41906c88408ce615e373a6ed7429b1fdcac4dd1cd41"
    },
    "guarantees": [
+    "Accounting.SecurityProofs.FpG1.Sm120FpG1MeasuredHeadline",
     "Accounting.SecurityProofs.FpG1.Sm120FpG1SheetHeadline",
+    "Accounting.SecurityProofs.FpG1.Sm120W4a8G1MeasuredHeadline",
     "Accounting.SecurityProofs.FpG1.Sm120W4a8G1SheetHeadline"
    ]
   },
