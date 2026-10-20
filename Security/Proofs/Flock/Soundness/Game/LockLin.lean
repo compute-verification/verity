@@ -67,12 +67,12 @@ theorem rdAt_card_le (p : P) (a : α) : (rdAt op p a).card ≤ 1 := by
   unfold rdAt
   cases op a p <;> simp
 
-omit [Fintype P] in
+omit [Fintype P] [Fintype V] [DecidableEq V] in
 theorem pRd_rdAt (g : Game α) (s : Strategy g) (p : P) (v : V) :
     LinkFinder.pRd g s (rdAt op p) v = expect (ind fun a => op a p = some v) g s := by
   simp only [LinkFinder.pRd, rdAt_eq_singleton]
 
-omit [Fintype P] in
+omit [Fintype P] [Fintype V] [DecidableEq V] in
 theorem sRd_rdAt (g : Game α) (s : Strategy g) (p : P) : LinkFinder.sRd g s (rdAt op p) = 0 := by
   unfold LinkFinder.sRd
   have h : (ind fun a => 2 ≤ (rdAt op p a).card) = fun _ => (0 : ℝ) := funext fun a => by
@@ -91,6 +91,7 @@ theorem expect_off_eq (g : Game α) (s : Strategy g) (vstar : P → V) (p : P) :
   unfold ind Off
   by_cases h1 : (op a p).isSome <;> by_cases h2 : op a p = some (vstar p) <;> simp_all
 
+omit [Fintype P] [Fintype V] [DecidableEq V] in
 /-- **The finder's success is a conflict between two runs from the node**: its first run and the further run it
 stopped at open its position differently. -/
 theorem linkSucc_conflict (x : P × α × List α) (h : LinkSucc op x) :
@@ -148,7 +149,7 @@ theorem expect_bad_le_link [Nonempty P] (g : Game α) (s : Strategy g) (vstar : 
     by_cases h : ∃ p, Off op vstar a p
     · obtain ⟨p, hp⟩ := h
       calc ind (fun a => ∃ p, Off op vstar a p) a = ind (fun a => Off op vstar a p) a := by
-            simp only [ind]; rw [if_pos ⟨p, hp⟩, if_pos hp]
+            simp only [ind]; rw [ite_eq_left ⟨p, hp⟩, ite_eq_left hp]
         _ ≤ ∑ p, ind (fun a => Off op vstar a p) a :=
             Finset.single_le_sum (f := fun p => ind (fun a => Off op vstar a p) a)
               (fun p _ => ind_nonneg _ _) (Finset.mem_univ p)
@@ -156,13 +157,18 @@ theorem expect_bad_le_link [Nonempty P] (g : Game α) (s : Strategy g) (vstar : 
       exact Finset.sum_nonneg fun p _ => ind_nonneg _ _
   have hlink := expect_linkG g s M (ind (LinkSucc op))
   have hN : (Fintype.card P : ℝ) ≠ 0 := by exact_mod_cast Fintype.card_ne_zero
+  have hs : (∑ p, expect (fun x => ind (LinkSucc op) (p, x)) (LinkFinder.finderG g M)
+      (LinkFinder.finderStrat g s M)) = ∑ p, expect (ind (LinkFinder.Succ (rdAt op p)))
+        (LinkFinder.finderG g M) (LinkFinder.finderStrat g s M) := rfl
   calc _ ≤ ∑ p, expect (ind fun a => Off op vstar a p) g s := hunion
     _ ≤ ∑ p, (expect (ind (LinkFinder.Succ (rdAt op p))) (LinkFinder.finderG g M)
           (LinkFinder.finderStrat g s M) + 1 / (Real.exp 1 * M)) := Finset.sum_le_sum fun p _ => hpos p
     _ = _ := by
-      rw [Finset.sum_add_distrib, hlink, Finset.sum_const, Finset.card_univ, nsmul_eq_mul, mul_div_cancel₀ _ hN]
+      rw [Finset.sum_add_distrib, hlink, hs, Finset.sum_const, Finset.card_univ, nsmul_eq_mul,
+        mul_div_cancel₀ _ hN]
       ring
 
+omit [Fintype V] [DecidableEq V] in
 /-- **The link finder costs at most two runs** in expectation, at every position and so on average. -/
 theorem expect_linkCost_le [Nonempty P] (g : Game α) (s : Strategy g) (c : α → ℝ) (hc : ∀ a, 0 ≤ c a) (M : ℕ) :
     expect (linkCost op c) (linkG P g M) (linkStrat P g s M) ≤ 2 * expect c g s := by
@@ -302,7 +308,7 @@ theorem leafE_off_le_link {P V : Type} [Fintype P] [Nonempty P] [Fintype V] [Dec
       simp only [leafE, nodeE]
       by_cases hs : s = slot
       · subst hs
-        rw [if_pos rfl]
+        rw [ite_eq_left rfl]
         set t := plur s σ'.1 (k' σ'.1) σ'.2
         rw [leafE_fixed plur s (t, σ'.1) (ind fun b => ∃ p, Rewinding.Off (op σ'.1) (row t) b p) _
           (fun i b h => by
@@ -312,7 +318,7 @@ theorem leafE_off_le_link {P V : Type} [Fintype P] [Nonempty P] [Fintype V] [Dec
             refine propext ⟨fun ⟨t₁, d₁, ⟨h1, h2⟩, h3⟩ => ?_, fun h3 => ⟨_, _, ⟨rfl, rfl⟩, h3⟩⟩
             subst h1; subst h2; exact h3) _ σ'.2 (hset t σ'.1)]
         exact Rewinding.expect_bad_le_link (op σ'.1) (k' σ'.1) σ'.2 (row t) (hplur _ _ _) M hM
-      · rw [if_neg hs]
+      · rw [ite_eq_right hs]
         exact leafE_off_le_link op row slot plur hplur M hM _ σ'.2
           (by rw [hkeep _ _ slot (Ne.symm hs), hi])
 
