@@ -30,9 +30,10 @@ The statement is in `../ASSUMPTIONS.md`: `UniformRandomBytes L t` (every event),
   knowledge form, `Claims.Recursion.KS`, is at its level `Claims.Recursion.lam`, about 65 bits per SHA-512 call at the
   deployed shape, below the 100-bit floor and the 2^-128 target under every weight (ASK-73). Route 2C's bound λ₂
   (`lamLin2`) evaluates to at least 100 at the deployed records (`RecDeploy.lamLin2_deployed_ge_dep`, about 165.8), but
-  `KSLin2` at the deployment is not yet established: it takes `HeldB` (false at the deployed V\*, which has no holder of
-  round 0's `root_B`) and open premises (`PartChecksB`, `PartOpensB`, `DecompB`, the readers' facts; the full list is
-  `RecDeploy.ksLin2_deployed_plain`'s), and `BitsLin2` is not yet derived from it.
+  `KSLin2` at the deployment's dense statements (`KSLin2On` at `RecDeploy.DenseAt`) only follows from premises still
+  open: `FinPieces`, `VstarShowsB`, `PartChecksB`, `PartOpensB`, `DecompB`, `RunPairs` and the readers' three facts
+  (`RecDeploy.ksLin2_deployed_caps`; `HeldB` at `layoutBTops` follows from `FinPieces`, `RecDeploy.heldB_layoutBTops`).
+  Holo statements are candidate 3's own model, and `BitsLin2` is not yet derived from it.
 - **The salts** (Daniel, 9 Oct, decisions 4(a) and 4(c)). C-Flock's prover reads every hm96 leaf salt, 192 bytes a leaf,
   from the operating system (`getrandom`, the kernel's `getrandom(2)`, which `/dev/urandom` also reads; under the
   firewall, from its tap), and the recursive audit's firewall and a registrant read theirs the same way (`os.urandom`).
