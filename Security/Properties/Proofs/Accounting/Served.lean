@@ -7,13 +7,15 @@ import Properties.Accounting.Served
 /-!
 # Proofs of the served tie's statements (`Accounting.Served`, `Properties.Served`)
 
-`TieCommits` goes class by class: a registered value's commit coin is `0`; an A row's or a `y` row's is its round,
-which is its first reader's, since only its own call reads it (`firstRead_cases`), or below the draw when nothing does
-(`round_lt`); a `zTree` `z` word's is its round, the floor of its cut; a receipt's or `perCall`'s
-`y` word's is the round after its own, which its coin read reaches (`Tie.noised`); an inner value's is its cut.
+`TieCommits` goes class by class, every class but the receipt in `LayerCommitted`'s first case: a registered value's
+commit coin is `0`; an A row's or a `y` row's is its round, which is its first reader's, since only its own call reads
+it (`firstRead_cases`), or below the draw when nothing does (`round_lt`); a `zTree` `z` word's is its round, the floor
+of its cut; `perCall`'s `z` or `y` word's is the round after its own, which its coin read reaches (`Tie.noised`); an
+inner value's is its cut. A receipt is in the second case: a computed value (`Tie.computed`), committed by the draw
+(`Tie.receipt`), and only gates of its own unit read it (`Tie.readers`; each reader is a gate, `reads_lt`).
 `TieLive`: a unit with a word has a first gate, its round is a round of the window, and every one is live.
 `SeededScheduleNotLive`: `UnitsOfLayout` puts a read run input at the draw, `LayerCommitted` at its first reader's
-round, which `Wf` puts below it. `TieScope` is `Scope` from `TieLive`, `TieCommits` and its three hypotheses, and
+round, which `Wf` puts below it (an input has no second case). `TieScope` is `Scope` from `TieLive`, `TieCommits` and its three hypotheses, and
 `epochScope` each window's of an `EpochTie`. `spentIn_split` is what a window timed from its own start after the salt's
 release leaves uncounted. `Llama31Shape` and `Llama31Rounds` are kernel computations. `witTie`: `Tie` holds of a circuit
 with gates (one call, its coin, an A row and a receipt reading both), so `TieCommits` isn't true only of the empty
@@ -111,27 +113,39 @@ theorem round_le_cut_of_none {ι : Type} {Cd : Declared ι} {ℓ : ℕ} (hb : Cd
   simp only [Declared.cutOf, hb]
   exact le_max_left _ _
 
+/-- A gate that reads a value is a gate of the circuit. -/
+theorem reads_lt {ι : Type} {Cd : Declared ι} {i j : ℕ} (h : Cd.Reads j i) : j < Cd.dag.length := by
+  by_contra hge
+  have hnone : Cd.dag[j]? = none := List.getElem?_eq_none (by omega)
+  unfold Declared.Reads at h
+  rw [hnone] at h
+  simp at h
+
 theorem tieCommits : TieCommits := by
   intro ι L F Cd cls T ℓ hW
   obtain ⟨hlt, hnc⟩ := hW
   have hround := T.round _ (T.inRange ℓ hlt)
   cases hk : cls ℓ with
   | coin => exact absurd ((T.coin ℓ hlt).1 hk) hnc
-  | inner => exact le_of_eq (T.inner ℓ hlt hk)
+  | inner => exact Or.inl (le_of_eq (T.inner ℓ hlt hk))
   | registered =>
-    rw [T.commit ℓ hlt (by simp [hk]) (by simp [hk]), hk]
+    left
+    rw [T.commit ℓ hlt (by simp [hk]) (by simp [hk]) (by simp [hk]), hk]
     simp [commitCoin]
   | act =>
+    left
     obtain ⟨hb, hr⟩ := T.act ℓ hlt (Or.inl hk)
-    rw [T.commit ℓ hlt (by simp [hk]) (by simp [hk]), hk, ← hround]
+    rw [T.commit ℓ hlt (by simp [hk]) (by simp [hk]) (by simp [hk]), hk, ← hround]
     exact round_le_cut_of_run T hlt hb hr
   | served =>
+    left
     obtain ⟨hb, hr⟩ := T.act ℓ hlt (Or.inr hk)
-    rw [T.commit ℓ hlt (by simp [hk]) (by simp [hk]), hk, ← hround]
+    rw [T.commit ℓ hlt (by simp [hk]) (by simp [hk]) (by simp [hk]), hk, ← hround]
     exact round_le_cut_of_run T hlt hb hr
   | outZ =>
+    left
     have hb := T.computed ℓ hlt (by simp [hk])
-    rw [T.commit ℓ hlt (by simp [hk]) (by simp [hk]), hk, ← hround]
+    rw [T.commit ℓ hlt (by simp [hk]) (by simp [hk]) (by simp [hk]), hk, ← hround]
     by_cases hF : F = .perCall
     · subst hF
       have hn := T.noised ℓ hlt (Or.inr ⟨Or.inl hk, rfl⟩)
@@ -141,8 +155,9 @@ theorem tieCommits : TieCommits := by
     · rw [commitCoin_outZ hF]
       exact round_le_cut_of_none hb
   | outY =>
+    left
     have hb := T.computed ℓ hlt (by simp [hk])
-    rw [T.commit ℓ hlt (by simp [hk]) (by simp [hk]), hk, ← hround]
+    rw [T.commit ℓ hlt (by simp [hk]) (by simp [hk]) (by simp [hk]), hk, ← hround]
     by_cases hF : F = .perCall
     · subst hF
       have hn := T.noised ℓ hlt (Or.inr ⟨Or.inr hk, rfl⟩)
@@ -152,12 +167,8 @@ theorem tieCommits : TieCommits := by
     · rw [commitCoin_outY hF]
       exact round_le_cut_of_none hb
   | receipt =>
-    have hb := T.computed ℓ hlt (by simp [hk])
-    have hn := T.noised ℓ hlt (Or.inl hk)
-    rw [T.commit ℓ hlt (by simp [hk]) (by simp [hk]), hk, ← hround]
-    show Cd.round (Cd.call ℓ) + 1 ≤ Cd.cutOf ℓ
-    simp only [Declared.cutOf, hb]
-    exact le_max_of_le_right hn
+    exact Or.inr ⟨T.computed ℓ hlt (by simp [hk]), (T.receipt ℓ hlt hk).2,
+      fun j hR => T.readers ℓ hlt hk j (reads_lt hR) hR⟩
 
 theorem tieLive : TieLive := by
   intro ι K Sc L F Cd cls T u _ hw
@@ -209,11 +220,13 @@ theorem seededScheduleNotLive : SeededScheduleNotLive := by
     simp [Declared.binding, hnone] at hb
   have hW : Cd.Writes ℓ := ⟨hlt, by rw [hb]; simp⟩
   have h1 : Cd.commitRound ℓ = Cd.rounds := by simpa [hb] using hd ℓ hW
-  have h2 := hLC ℓ hW
   have h3 : Cd.cutOf ℓ = Cd.firstRead ℓ := by simp [Declared.cutOf, hb]
   obtain ⟨j', hj', _, h⟩ := firstRead_of_reads Cd hj hR
   have hr := hW2 _ (hW1 j' hj').1
-  omega
+  rcases hLC ℓ hW with h2 | ⟨hn, -⟩
+  · omega
+  · rw [hb] at hn
+    cases hn
 
 /-! ## A tied circuit with gates -/
 
@@ -272,6 +285,8 @@ theorem witTie : Tie witLayout .beside witCircuit witCls where
   forms := by decide +kernel
   linked := fun _ _ _ => trivial
   commit := by decide +kernel
+  receipt := by decide +kernel
+  readers := fun _ _ _ _ _ _ => rfl
   inner := by decide +kernel
 
 /-- The witness's receipt is committed at coin `1`, its cut, the round after the coin it reads. -/
@@ -325,6 +340,8 @@ theorem witTieCall : Tie witLayout .perCall witCircuitCall witClsCall where
   forms := by decide +kernel
   linked := fun _ _ _ => ⟨2, by decide +kernel, by decide +kernel, rfl⟩
   commit := by decide +kernel
+  receipt := by decide +kernel
+  readers := fun _ _ _ _ _ _ => rfl
   inner := by decide +kernel
 
 /-- The `perCall` witness's `y` is committed at coin `1`, its cut, after the coin it reads. -/
@@ -593,6 +610,8 @@ theorem witTieZ : Tie witLayout .zTree witZ witZCls where
   forms := by decide +kernel
   linked := fun _ _ _ => ⟨68, by decide +kernel, by decide +kernel, rfl⟩
   commit := by decide +kernel
+  receipt := by decide +kernel
+  readers := fun _ _ _ _ _ _ => rfl
   inner := by decide +kernel
 
 theorem witZ_layerCommitted : LayerCommitted witZ :=
@@ -763,6 +782,8 @@ theorem witTieP : Tie witLayout .perCall witP witPCls where
   forms := by decide +kernel
   linked := fun _ _ _ => ⟨103, by decide +kernel, by decide +kernel, rfl⟩
   commit := by decide +kernel
+  receipt := by decide +kernel
+  readers := fun _ _ _ _ _ _ => rfl
   inner := by decide +kernel
 
 theorem witP_layerCommitted : LayerCommitted witP :=
@@ -974,6 +995,8 @@ theorem witTieTwice2 : Tie witLayout2 .zTree witTwice witTwiceCls where
     · exact ⟨68, by decide +kernel, by decide +kernel, by decide +kernel⟩
     · exact ⟨104, by decide +kernel, by decide +kernel, by decide +kernel⟩
   commit := by decide +kernel
+  receipt := by decide +kernel
+  readers := by unfold Declared.Reads; decide +kernel
   inner := by decide +kernel
 
 /-- The call has two units, the window's population is two, and the circuit declares exactly those two, each receipt's
@@ -1035,6 +1058,8 @@ theorem witTieWS : Tie witLayout .zTree witWS witZCls where
   forms := by decide +kernel
   linked := fun _ _ _ => ⟨68, by decide +kernel, by decide +kernel, rfl⟩
   commit := by decide +kernel
+  receipt := by decide +kernel
+  readers := fun _ _ _ _ _ _ => rfl
   inner := by decide +kernel
 
 theorem witWS_typed : Accounting.Gates.Typed witWS.dag witX3 := typed_of_all witX3 (by decide +kernel)
@@ -1096,6 +1121,8 @@ theorem witTieRaw : Tie witLayout .zTree witRaw witRawCls where
   forms := by decide +kernel
   linked := fun _ _ _ => ⟨68, by decide +kernel, by decide +kernel, rfl⟩
   commit := by decide +kernel
+  receipt := by decide +kernel
+  readers := fun _ _ _ _ _ _ => rfl
   inner := by decide +kernel
 
 theorem witRaw_typed : Accounting.Gates.Typed witRaw.dag witX3 := typed_of_all witX3 (by decide +kernel)
