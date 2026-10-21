@@ -311,7 +311,7 @@ def closureInput (args : List String) : IO (Except String (Option (Std.HashMap N
 /-- `--registered F`: the verifier's own registered reads (`Registered.ofJson`: per registered port, the value, its
 registered root, leaf count, row width and domain, and the position each unit reads), a path, or with `--archive` its
 SHA-512. With `flag` `--rec-rows`, the verifier's record of V*'s shared rows (`RecVStar.checkRows`), a file of the same
-form. A file naming a key twice in one object (a port, or a port's key) is refused (`Registered.dupKey`): the parser
+form. A file naming a key twice in one object (a port, or a port's key) is refused (`JsonKeys.dupKey`): the parser
 would keep one of them. -/
 def registeredInput (args : List String) (flag : String := "--registered") (ctx : String := "registered reads") :
     IO (Except String (Option (Array Registered.Port))) := do
@@ -323,7 +323,7 @@ def registeredInput (args : List String) (flag : String := "--registered") (ctx 
   | .error e => return .error e
   | .ok b => match String.fromUTF8? b with
     | none => return .error s!"{ctx}: not UTF-8"
-    | some t => match Lean.Json.parse t, Registered.dupKey t with
+    | some t => match Lean.Json.parse t, JsonKeys.dupKey t with
       | .ok _, some k =>
         return .error s!"{ctx}: an object of the file names the key {k} twice, which a JSON parser would read as once: each port, and each key of a port, once"
       | .ok j, none =>
