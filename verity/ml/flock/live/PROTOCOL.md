@@ -850,13 +850,20 @@ the recheck and the shadow opening are still Rust's (`FirewallComputes`), as are
 reads; the inner proof's `[ρ, σ]` and `Y` are the frame's. Each rep's rank check logs `FRAMERANK` (the frame's) beside `ZKRANK` (Rust's
 reference, over Rust's claim points).
 
-**The proof file is the Lean finish's.** Each session has one `flock-firewall finish` (`Flock.Firewall.Finish`) on the
-statement the verifier sets up, from the files the Lean `Hello` is set up from (§10.4's `flock-firewall hello`: the
+**The proof file is the Lean finish's.** Each session has one Lean finish (`Flock.Firewall.Finish`) on the statement the
+verifier sets up at the draw Register answered: under the Lean session loop, the loop's own (a connection to its frames
+port, `finish LEN` and the draw, `Finish.serveLoop`), at the statement the loop's `Hello` is set up from; without it, a
+`flock-firewall finish` process, from the files the Lean `Hello` is set up from (§10.4's `flock-firewall hello`: the
 statement's name, `--circuit`, the verifier's own public file, `--tables`, the session's tables and
-`FC_FIREWALL_HELLO_ARGS`) at the draw Register answered. Each table's recheck hands it the table's level-0 request (`table J LEN`, the
-Lean link's bytes), whose root must be the Lean link's. After a rep's inner proof it gets the rep's request (`rep J R LEN`:
-the rep's draws, the values the firewall passed, the extra claims' points, the shadow's salts for levels ≥ 1 and every
-round's coins) and computes the rep's whole proof file from them. That file is the one that leaves. Rust still computes the
+`FC_FIREWALL_HELLO_ARGS`). Each table's recheck hands it the table's level 0: under the loop its root (`level0 J LEN`), and
+the finish takes the loop's `Level0` of that root (§10.2), its rows, layers and cap, without committing again; without the
+loop the table's level-0 request (`table J LEN`, the Lean link's bytes). Either way the root it answers must be the root of
+record. With the table it draws each rep's salts for levels ≥ 1 itself, from the OS (`salts J R 0`, `192·2^d` bytes a
+level), and hands them to the prover, whose shadow and device trees at those levels take them (`LeafSalts::preset`): no salt
+of the rep's proof file comes from the prover, and a shadow whose salts are not the finish's is refused at the rep's end.
+After a rep's inner proof the finish gets the rep's request (`rep J R LEN`: the rep's draws, the values the firewall
+passed, the extra claims' points and every round's coins) and computes the rep's whole proof file from them and its own
+salts. That file is the one that leaves. Rust still computes the
 same file (`zk_finish`, from the shadow opening and its own inner proof) as its speed reference, and a rep whose two files
 differ is refused (`FIREWALL-REFUSED: table J rep R: the Lean finish's proof file … is not zk_finish's … from byte N`). A
 rep that a check failed, or whose frame stopped it, leaves no proof file, so the finish never gets its request. The

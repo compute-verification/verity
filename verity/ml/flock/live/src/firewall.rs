@@ -789,9 +789,10 @@ pub fn link_body(z: &[F128], extra: &[Vec<F128>], pads: &[Vec<F128>], salts: &[u
 }
 
 /// A rep's request bytes to `flock-firewall finish` (`Flock.Firewall.Finish.parseRep`): the rep's draws (`pads`, then the pads
-/// tree's `salts`), the passed values, the extra claims' points, levels ≥ 1's salts, and every round's coins.
+/// tree's `salts`), the passed values, the extra claims' points, and every round's coins. Levels ≥ 1's salts are the
+/// finish's own ([`LeanFinish::salts`]).
 #[cfg(feature = "sha512")]
-pub fn rep_body(pads: &crate::zk_veil::Pads, salts: &[u8], vals: &[F128], extras: &[Vec<F128>], hi_salts: &[u8], rounds: &[Vec<F128>]) -> Vec<u8> {
+pub fn rep_body(pads: &crate::zk_veil::Pads, salts: &[u8], vals: &[F128], extras: &[Vec<F128>], rounds: &[Vec<F128>]) -> Vec<u8> {
     let mut b = Vec::new();
     for v in [&pads.h, &pads.mu, &pads.pad_h, &pads.pad_mu] {
         b.extend(f128_wire(v));
@@ -804,7 +805,6 @@ pub fn rep_body(pads: &crate::zk_veil::Pads, salts: &[u8], vals: &[F128], extras
         b.extend((x.len() as u64).to_le_bytes());
         b.extend(f128_wire(x));
     }
-    b.extend_from_slice(hi_salts);
     b.extend((rounds.len() as u64).to_le_bytes());
     for c in rounds {
         b.extend((c.len() as u64).to_le_bytes());
@@ -813,14 +813,16 @@ pub fn rep_body(pads: &crate::zk_veil::Pads, salts: &[u8], vals: &[F128], extras
     b
 }
 
-/// The firewall's proof files of record on a firewalled session: one `flock-firewall finish` process
-/// (`Flock.Firewall.Finish` in the Lean verifier) on the session's statement, given each table's level-0 request and then
-/// each of its reps'. It ends at its first refusal, so every later request is refused too.
+/// The firewall's proof files of record on a firewalled session: one Lean finish (`Flock.Firewall.Finish` in the Lean
+/// verifier) on the session's statement, given each table's level 0, then per rep, at its start, asked for its salts for
+/// levels ≥ 1, which it draws itself, and at its end given its request. It is the Lean session loop's
+/// ([`LeanFinish::connect`], which reads each table's level 0 from its own) or a `flock-firewall finish` process of its own
+/// ([`LeanFinish::start`]). It ends at its first refusal, so every later request is refused too.
 #[cfg(feature = "sha512")]
 pub struct LeanFinish {
-    child: std::process::Child,
-    stdin: std::process::ChildStdin,
-    stdout: std::io::BufReader<std::process::ChildStdout>,
+    child: Option<std::process::Child>,
+    stdin: Box<dyn std::io::Write + Send>,
+    stdout: std::io::BufReader<Box<dyn std::io::Read + Send>>,
     owned: Vec<std::path::PathBuf>,
 }
 
@@ -841,8 +843,32 @@ impl LeanFinish {
                 return Err(refused(format!("the Lean finish {} does not start ({e}): `lake build flock-firewall` in verity/core/service/flock, or FC_FIREWALL_LEAN", exe.display())));
             }
         };
-        let (stdin, stdout) = (child.stdin.take().expect("piped stdin"), std::io::BufReader::new(child.stdout.take().expect("piped stdout")));
-        Ok(LeanFinish { child, stdin, stdout, owned })
+        let (stdin, stdout) = (child.stdin.take().expect("piped stdin"), child.stdout.take().expect("piped stdout"));
+        Ok(LeanFinish { child: Some(child), stdin: Box::new(stdin), stdout: std::io::BufReader::new(Box::new(stdout)), owned })
+    }
+
+    /// The Lean session loop's finish, on its frames port `addr` ([`LeanSession::frames`]), at the session's draw `draw` (the
+    /// JSON `Register` answered, `null` for none): the loop sets the statement up as its `Hello` does, and reads each
+    /// table's level 0 from its own ([`Self::level0`]).
+    pub fn connect(addr: &str, draw: &str) -> Result<Self, String> {
+        use std::io::{BufRead, Write};
+        let fail = |e: String| refused(format!("the Lean session loop's finish at {addr}: {e}"));
+        let tcp = std::net::TcpStream::connect(addr).map_err(|e| fail(e.to_string()))?;
+        let _ = tcp.set_nodelay(true);
+        let reader = tcp.try_clone().map_err(|e| fail(e.to_string()))?;
+        let mut f = LeanFinish { child: None, stdin: Box::new(tcp), stdout: std::io::BufReader::new(Box::new(reader)), owned: Vec::new() };
+        write!(f.stdin, "finish {}\n{draw}", draw.len()).and_then(|_| f.stdin.flush()).map_err(|e| fail(e.to_string()))?;
+        let mut line = String::new();
+        f.stdout.read_line(&mut line).map_err(|e| fail(e.to_string()))?;
+        match line.trim_end() {
+            "ok 0" => Ok(f),
+            l => Err(fail(l.strip_prefix("err ").unwrap_or(if l.is_empty() { "no answer" } else { l }).to_string())),
+        }
+    }
+
+    /// Whether this is the session loop's finish, which holds the tables' level 0.
+    pub fn in_loop(&self) -> bool {
+        self.child.is_none()
     }
 
     fn ask(&mut self, head: &str, body: &[u8]) -> Result<Vec<u8>, String> {
@@ -866,6 +892,31 @@ impl LeanFinish {
         self.ask(&format!("table {i}"), body)
     }
 
+    /// Session table `i`'s level 0, the loop's of root `root` ([`Self::in_loop`]): its level-0 root, which the finish
+    /// computes from it.
+    pub fn level0(&mut self, i: usize, root: &[u8]) -> Result<Vec<u8>, String> {
+        self.ask(&format!("level0 {i}"), root)
+    }
+
+    /// Rep `r` of session table `i`'s salts for levels ≥ 1, which the finish draws from the OS once, for the rep's proof
+    /// file: one byte string a level, levels `1` to `R` in order, each 192 bytes a leaf (`Finish.saltsBytes`).
+    pub fn salts(&mut self, i: usize, r: usize) -> Result<Vec<Vec<u8>>, String> {
+        let b = self.ask(&format!("salts {i} {r}"), &[])?;
+        let bad = || refused(format!("the Lean finish's salts of table {i} rep {r}: {} bytes that do not parse", b.len()));
+        let u64_at = |o: usize| b.get(o..o + 8).map(|x| u64::from_le_bytes(x.try_into().unwrap()) as usize);
+        let n = u64_at(0).ok_or_else(bad)?;
+        let (mut o, mut out) = (8usize, Vec::with_capacity(n.min(64)));
+        for _ in 0..n {
+            let len = u64_at(o).ok_or_else(bad)?;
+            out.push(b.get(o + 8..o + 8 + len).ok_or_else(bad)?.to_vec());
+            o += 8 + len;
+        }
+        if o != b.len() {
+            return Err(bad());
+        }
+        Ok(out)
+    }
+
     /// Rep `r` of session table `i`, on its request (`rep_body`): the rep's proof file.
     pub fn rep(&mut self, i: usize, r: usize, body: &[u8]) -> Result<Vec<u8>, String> {
         self.ask(&format!("rep {i} {r}"), body)
@@ -875,8 +926,10 @@ impl LeanFinish {
 #[cfg(feature = "sha512")]
 impl Drop for LeanFinish {
     fn drop(&mut self) {
-        let _ = self.child.kill();
-        let _ = self.child.wait();
+        if let Some(c) = self.child.as_mut() {
+            let _ = c.kill();
+            let _ = c.wait();
+        }
         for p in &self.owned {
             let _ = std::fs::remove_file(p);
         }

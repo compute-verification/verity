@@ -10,7 +10,8 @@ firewall runs, the analysis's masked prover (`Flock.Firewall.Finish`'s copies, `
 * `rowsFft`, `commitFw`: a level ≥ 1's commitment of an F-table, its codeword by the additive FFT (`Link.fft`) on each lane
   (`FlockComplete.commitP`'s, which evaluates each entry on its own), its leaves `hm96-sha512/v1`'s in tasks.
 * `commit0`: level 0's commitment of the table the transport hands it (`Link.In`, the same table `flock-firewall link`
-  commits; `FlockComplete.commitPZk`'s).
+  commits; `FlockComplete.commitPZk`'s). `commitOf`: the same commitment read off the table's `Level0`, which the session
+  loop drew and committed (`Level0.ofDraws_ok`: its rows, layers and root are `Link`'s of its own inputs).
 * `zerocheckFw`, `lincheckFw`: the masked zerocheck and lincheck sending the passed values `v_i` as `v_i + h_i`
   (`FlockComplete.zerocheckCut`, `lincheckCut` at `masked i = v_i + h_i`), `final_c`'s too: the inner proof holds the
   passed `final_c` to `P_c(ζ)` of the passed `round1_c` (`Zk.replay`'s constraint).
@@ -20,10 +21,15 @@ firewall runs, the analysis's masked prover (`Flock.Firewall.Finish`'s copies, `
   `encZk` at `shapeZk`; a constraint that fails on the rep's pads (`failingOn`) stops it, and no file leaves. The rank check is the Lean frame's (`Frame.maskRank`), which stops the rep before this runs.
 * `asksOf`: a rep's rounds answered by the coins the stream answered them, round by round.
 
-`flock-firewall finish` serves it (`cmd`) on the statement of `flock-verify verify --zk` (`Witness.setupOf`).
+* `serve`: the requests, on the statement of `flock-verify verify --zk`: each table's level 0, each rep's salts for levels
+  ≥ 1, which this code draws itself from the operating system at the rep's start and hands the prover (`salts`), and
+  each rep's proof file on them. `flock-firewall finish` serves them on its standard input (`cmd`, `Witness.setupOf`);
+  the session loop on its frames port (`serveLoop`, `Hello.Setup`), reading each table's level 0 from its own `Level0`s.
 -/
 import Flock.Firewall.FinishProver
 import Flock.Firewall.Frame
+import Flock.Firewall.Hello
+import Flock.Firewall.Level0
 import Flock.Firewall.Link
 import Flock.Witness
 
@@ -72,6 +78,12 @@ def commitFw (lv : Level) (g : Array F128) (salt : Nat → ByteArray) : Commit :
 `flock-firewall link` commits (`Link.rows`), under the table's level-0 salts. -/
 def commit0 (lv : Level) (tPad : Nat) (i : Link.In) : Commit :=
   commitRows lv (Link.rows lv tPad i.g i.extra i.lanePad) i.salt
+
+/-- **Level 0's commitment as the session loop keeps it** (`Level0`): its rows, its salts fitted to 192 bytes, its layers
+from the leaves to the cap, and the cap, the top layer; `commit0`'s of the table `l.toIn` where `Level0.ofDraws_ok` holds,
+read off rather than committed again. -/
+def commitOf (l : Level0.Level0) : Commit :=
+  ⟨l.rows, (Array.range (2 ^ l.lv.d)).map (fun q => fitBytes 192 (l.salt q)), l.layers, l.layers.back?.getD #[]⟩
 
 /-! ## The rep -/
 
@@ -205,8 +217,8 @@ structure Tab where
   cm0 : Commit
 
 /-- **What one rep's proof reads beyond its table**: its draws (`Frame.Draws`, the Lean frame's), the values that passed
-the firewall by pad index, the extra claims' coordinates, levels ≥ 1's salts by level (`192` bytes a leaf), and each
-round's coins. -/
+the firewall by pad index, the extra claims' coordinates, levels ≥ 1's salts by level (`192` bytes a leaf, `hiSaltsOf`'s),
+and each round's coins. -/
 structure RepIn where
   draws : Frame.Draws
   vals : Array F128
@@ -265,19 +277,16 @@ def vecOf (what : String) : Rd (Array F128) := do
 
 /-- **A rep's request** for the table `t`, every byte little-endian: the draws (`Frame.drawBytes` of the layout: `h`, `μ`,
 the rows' padding, `τ`'s salt, the pads tree's salts), the passed values (`lay.zp 64` words, by pad index), the
-extra claims (a count, then each as a count and its words), levels ≥ 1's salts (`192·2^d` bytes each, levels `1` to `R`),
-and the coins (a round count, then each round as a count and its words); nothing after. -/
-def parseRep (t : Tab) (b : ByteArray) : V RepIn := do
+extra claims (a count, then each as a count and its words), and the coins (a round count, then each round as a count
+and its words); nothing after. Levels ≥ 1's salts are `hiSalts`, the ones drawn here for the rep (`hiSaltsOf`). -/
+def parseRep (t : Tab) (hiSalts : Array ByteArray) (b : ByteArray) : V RepIn := do
   let lay := Zk.PadLayout.new t.st.m t.st.kLog t.sch.k0
-  let R := t.sch.levels.size - 1
   let rd : Rd RepIn := do
     let draws := Frame.Draws.ofBytes lay (← take (Frame.drawBytes lay) "the draws")
     let vals ← wordsOf (lay.zp 64) "the passed values"
     let nx ← u64 "the extra claims"
     let mut xs := #[]
     for _ in [0:nx] do xs := xs.push (← vecOf "an extra claim")
-    let mut hiSalts := #[]
-    for l in [1:R + 1] do hiSalts := hiSalts.push (← take (192 * 2 ^ (t.sch.levels.getD l default).d) s!"level {l}'s salts")
     let nk ← u64 "the coins"
     let mut coins := #[]
     for _ in [0:nk] do coins := coins.push (← vecOf "a round's coins")
@@ -293,21 +302,98 @@ def tabOf (st : Setup) (b : ByteArray) : V Tab := do
   return { st, sch, tPad, g := i.g, extra := i.extra, lanePad := i.lanePad
            cm0 := commit0 (sch.levels.getD 0 default) tPad i }
 
-/-! ## `flock-firewall finish` -/
+/-- **A table's state** from its level 0 as the session loop keeps it (`Level0`) at the statement `st`: the loop's
+witness, hiding and commitment (`commitOf`), at level 0 of `st`'s `--zk` schedule. -/
+def tabOfLevel0 (st : Setup) (l : Level0.Level0) : V Tab := do
+  if st.merkle.id != MerkleScheme.hm96Sha512.id then throw s!"finish: a {st.merkle.id} statement: --zk commits hm96-sha512/v1"
+  if l.m != st.m then throw s!"finish: a level 0 drawn at m = {l.m} for a table at m = {st.m}"
+  let (sch, tPad) ← Zk.schedule st.m
+  if l.tPad != tPad then throw s!"finish: a level 0 with t_pad {l.tPad} for a table whose schedule's is {tPad}"
+  let i := l.toIn
+  return { st, sch, tPad, g := l.g, extra := i.extra, lanePad := i.lanePad, cm0 := commitOf l }
+
+/-- **A rep's salts for levels ≥ 1** of the table `t`, drawn from `get`: `192·2^d` bytes for each level `1` to `R` of its
+schedule, one read a level. The prover's trees at those levels take them (`salts`), so they never come from it. -/
+def hiSaltsOf (get : USize → IO ByteArray) (t : Tab) : IO (Array ByteArray) :=
+  (Array.range (t.sch.levels.size - 1)).mapM fun j => get (192 * 2 ^ (t.sch.levels.getD (j + 1) default).d).toUSize
+
+/-- The salts as they go to the prover: their count, then each level's byte count and bytes, every count a `u64le`. -/
+def saltsBytes (s : Array ByteArray) : ByteArray :=
+  s.foldl (fun b x => b ++ le64 x.size.toUInt64 ++ x) (le64 s.size.toUInt64)
+
+/-! ## Serving it -/
+
+/-- **The finish's requests** on `ch`, at the session's statement (`spec`, its tables' `setups`), each a line `HEAD LEN`
+followed by `LEN` bytes, answered `ok N` followed by `N` bytes:
+* `table I LEN`: table `I`'s level-0 data (`Link.parse`'s, `tabOf`), kept; the answer is its level-0 root.
+* `level0 I LEN`: the root of a level 0 that `level0Of` holds (the session loop's), kept as table `I` (`tabOfLevel0`);
+  the answer is its root.
+* `salts I R 0`: rep `R`'s salts for levels ≥ 1 on table `I`, drawn from `get` once (`hiSaltsOf`), kept for its proof
+  file; the answer is them (`saltsBytes`). A rep's salts are drawn once: asking again is refused.
+* `rep I R LEN`: rep `R`'s request (`parseRep`) on table `I`, after its salts; the answer is its proof file
+  (`proofFile`).
+Anything else, or a request it refuses, is answered `err WHY` and ends it, with exit code `1`. -/
+def serve (ch : Frame.Chan) (get : USize → IO ByteArray) (spec : SessionSpec) (setups : Array Setup)
+    (level0Of : ByteArray → IO (Option Level0.Level0)) : IO UInt32 := do
+  let refuse := fun (why : String) => do
+    ch.write (s!"err {why.replace "\n" " "}\n").toUTF8
+    ch.flush
+    return (1 : UInt32)
+  let answer := fun (b : ByteArray) => do
+    ch.write (s!"ok {b.size}\n").toUTF8
+    ch.write b
+    ch.flush
+  let mut tabs : Array (Option Tab) := Array.replicate setups.size none
+  let mut hi : Array (Array (Option (Array ByteArray))) := Array.replicate setups.size #[none, none]
+  repeat
+    let line := (← ch.getLine).replace "\n" ""
+    if line.isEmpty then break
+    match line.splitOn " " with
+    | ["table", i, len] | ["level0", i, len] =>
+      let (some i, some len) := (i.toNat?, len.toNat?) | return (← refuse s!"a request `{line}`")
+      let some st := setups[i]? | return (← refuse s!"table {i} of the session's {setups.size}")
+      let b ← ch.readExact len
+      let t : V Tab ← if line.startsWith "table " then pure (tabOf st b) else do
+        match ← level0Of b with
+        | some l => pure (tabOfLevel0 st l)
+        | none => pure (.error s!"finish: table {i}'s root is no level 0's the session loop drew")
+      match t with
+      | .ok t =>
+        tabs := tabs.set! i (some t)
+        hi := hi.set! i #[none, none]
+        answer (flat t.cm0.cap)
+      | .error e => return (← refuse e)
+    | ["salts", i, r, len] =>
+      let (some i, some r, some len) := (i.toNat?, r.toNat?, len.toNat?) | return (← refuse s!"a request `{line}`")
+      let _ ← ch.readExact len
+      let some (some t) := tabs[i]? | return (← refuse s!"rep {r}'s salts of table {i} before its table")
+      if r > 1 then return (← refuse s!"rep {r}: a table has reps 0 and 1")
+      if ((hi[i]!)[r]!).isSome then return (← refuse s!"table {i} rep {r}'s salts for levels ≥ 1 were drawn already")
+      let s ← hiSaltsOf get t
+      hi := hi.set! i ((hi[i]!).set! r (some s))
+      answer (saltsBytes s)
+    | ["rep", i, r, len] =>
+      let (some i, some r, some len) := (i.toNat?, r.toNat?, len.toNat?) | return (← refuse s!"a request `{line}`")
+      let b ← ch.readExact len
+      let some (some t) := tabs[i]? | return (← refuse s!"a rep of table {i} before its table")
+      let some name := spec.tables[i]? | return (← refuse s!"table {i} of the session's {spec.tables.size}")
+      if r > 1 then return (← refuse s!"rep {r}: a table has reps 0 and 1")
+      let some s := (hi[i]!)[r]! | return (← refuse s!"table {i} rep {r} before its salts for levels ≥ 1")
+      match parseRep t s b >>= proofFile t r (spec.domain name r).toUTF8 with
+      | .ok p => answer p
+      | .error e => return (← refuse e)
+    | _ => return (← refuse s!"a request `{line}`")
+  return 0
 
 /-- **`flock-firewall finish --circuit F --public F [--statement ID] [--session-tables J] [--tables DIR] [--partition F]
-[--program F] [--draw F]`**: the firewall's proof files, served on stdin and stdout, on the statement `flock-verify verify
---zk` sets up (`Witness.setupOf`, at the `unit_draw` of the JSON object in `--draw`). `table I LEN` followed by `LEN` bytes
-of table `I`'s level-0 data (`Link.parse`'s) keeps the table and is answered `ok N` followed by the `N` bytes of its
-level-0 root. `rep I R LEN` followed by the `LEN` bytes of rep `R`'s request (`parseRep`) on table `I` is answered
-`ok N` followed by the `N` bytes of the rep's proof file (`proofFile`). Anything else, or a request it refuses, is
-answered `err WHY` and ends it. -/
+[--program F] [--draw F]`**: the firewall's proof files, `serve`d on stdin and stdout, on the statement `flock-verify verify
+--zk` sets up (`Witness.setupOf`, at the `unit_draw` of the JSON object in `--draw`), every salt drawn from the operating
+system. With no session loop beside it, it holds no level 0 of its own: a table comes as `table I LEN`. -/
 def cmd (args : List String) : IO UInt32 := do
-  let stdin ← IO.getStdin
-  let stdout ← IO.getStdout
+  let ch ← Frame.stdio
   let refuse := fun (why : String) => do
-    stdout.putStrLn s!"err {why.replace "\n" " "}"
-    stdout.flush
+    ch.write (s!"err {why.replace "\n" " "}\n").toUTF8
+    ch.flush
     return (1 : UInt32)
   let (some cf, some pf) := (Witness.argOf args "--circuit", Witness.argOf args "--public")
     | refuse "usage: flock-firewall finish --circuit F --public F [--statement ID] [--session-tables J] [--tables DIR] [--partition F] [--program F] [--draw F]"
@@ -325,37 +411,30 @@ def cmd (args : List String) : IO UInt32 := do
   let (spec, sts) ← match Witness.setupOf I draw with
     | .ok s => pure s
     | .error e => return (← refuse s!"setup: {e}")
-  let setups := sts.map Setup.ofCircuit
-  let mut tabs : Array (Option Tab) := Array.replicate setups.size none
-  repeat
-    let line := (← stdin.getLine).replace "\n" ""
-    if line.isEmpty then break
-    match line.splitOn " " with
-    | ["table", i, len] =>
-      let (some i, some len) := (i.toNat?, len.toNat?) | return (← refuse s!"a request `{line}`")
-      let some st := setups[i]? | return (← refuse s!"table {i} of the session's {setups.size}")
-      let b ← Coins.readExact "finish" stdin len
-      match tabOf st b with
-      | .ok t =>
-        tabs := tabs.set! i (some t)
-        let r := flat t.cm0.cap
-        stdout.putStrLn s!"ok {r.size}"
-        stdout.write r
-        stdout.flush
-      | .error e => return (← refuse e)
-    | ["rep", i, r, len] =>
-      let (some i, some r, some len) := (i.toNat?, r.toNat?, len.toNat?) | return (← refuse s!"a request `{line}`")
-      let b ← Coins.readExact "finish" stdin len
-      let some (some t) := tabs[i]? | return (← refuse s!"a rep of table {i} before its table")
-      let some name := spec.tables[i]? | return (← refuse s!"table {i} of the session's {spec.tables.size}")
-      if r > 1 then return (← refuse s!"rep {r}: a table has reps 0 and 1")
-      match parseRep t b >>= proofFile t r (spec.domain name r).toUTF8 with
-      | .ok p =>
-        stdout.putStrLn s!"ok {p.size}"
-        stdout.write p
-        stdout.flush
-      | .error e => return (← refuse e)
-    | _ => return (← refuse s!"a request `{line}`")
-  return 0
+  serve ch IO.getRandomBytes spec (sts.map Setup.ofCircuit) fun _ => pure none
+
+/-- **The session loop's finish**, a connection to its frames port whose first line is `line`: `finish LEN` followed by
+the `LEN` bytes of the session's draw (`Hello.drawOf`'s JSON, `null` for none) sets the session's statement up as the
+loop's `Hello` does (`Hello.Setup.setupAt`), is answered `ok 0`, and then `serve`s, every salt drawn from the operating
+system and each `level0 I LEN` read from the loop's own level 0 of that root (`Level0.Registry`, `l0s`). -/
+def serveLoop (ch : Frame.Chan) (S : Hello.Setup) (specs : Hello.Specs) (l0s : IO.Ref Level0.Registry)
+    (line : String) : IO Unit := do
+  let say := fun (s : String) => do
+    ch.write (s ++ "\n").toUTF8
+    ch.flush
+  match (line.replace "\n" "").splitOn " " with
+  | ["finish", len] =>
+    let some len := len.toNat? | say s!"err a request `{line.trim}`"
+    let text := (String.fromUTF8? (← ch.readExact len)).getD "?"
+    match Hello.drawOf text with
+    | .error e => say s!"err {e.replace "\n" " "}"
+    | .ok draw =>
+      match ← S.setupAt specs draw with
+      | .error e => say s!"err setup: {e.replace "\n" " "}"
+      | .ok (spec, sts) =>
+        say "ok 0"
+        let _ ← serve ch IO.getRandomBytes spec (sts.map Setup.ofCircuit) fun r => do
+          return ((← l0s.get).find? (·.l0.root == r)).map (·.l0)
+  | _ => say s!"err a request `{line.trim}`"
 
 end Flock.Firewall.Finish
