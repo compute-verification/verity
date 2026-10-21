@@ -38,4 +38,4 @@ def test_a_v4_window_composed_from_its_parts_is_its_traced_size():
     memo: dict = {}
     rows = (C.checked(f, rec, [1, 2, 4], 2, False, memo, R=2) + C.checked(f, rec, [3], 2, False, memo, R=1)
             + C.checked(f._replace(B=128), rec, [2, 3], 2, True, memo, R=2))
-    assert [r["ands"] for r in rows] == [4_253_426, 6_489_906, 9_230_684, 6_976_579, 4_714_085, 7_409_181]
+    assert [r["ands"] for r in rows] == [3_916_380, 5_647_291, 8_388_069, 6_471_010, 4_377_039, 6_566_566]

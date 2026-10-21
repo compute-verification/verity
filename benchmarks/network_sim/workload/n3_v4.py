@@ -68,6 +68,12 @@ def slots(S: int, k: int) -> int:
     return ((S - 1) >> k) + 1 + ((S - 1) % (1 << k) != 0)
 
 
+def width(S: int, k: int, D: int) -> int:
+    """The level-k nodes `N3Range` hashes: the run's slots, at most the 2^(D - k) nodes of the level, which are all
+    that level D's first node reads."""
+    return min(slots(S, k), 1 << (D - k))
+
+
 def _check_run(S, D) -> None:
     if not all(isinstance(x, int) and not isinstance(x, bool) for x in (S, D)) or not 1 <= D <= 64 or not 1 <= S <= 1 << D:
         raise ValueError(f"a run is 1 <= S <= 2^D leaves of a tree of depth 1 <= D <= 64, not S={S!r}, D={D!r}")
@@ -116,7 +122,7 @@ def _body_range(B, S, start, leaves, domain, left, right):
     X = [leaves[j] for j in range(S.S)]
     firsts = [X[0]]
     for k in range(S.D):
-        M1 = slots(S.S, k + 1)
+        M1 = width(S.S, k + 1, S.D)
         f = (S.S - 1) >> k
         P = X + [zero] * max(0, 2 * M1 - len(X))
         a = U._coll(BIT, [sel.refs[4 * k]])
@@ -159,7 +165,7 @@ def range_levels(domain: bytes, start: int, leaves: Sequence[bytes], left: Seque
     X, out = list(leaves), [leaves[0]]
     total = start + S - 1
     for k in range(D):
-        M1, f = slots(S, k + 1), (S - 1) >> k
+        M1, f = width(S, k + 1, D), (S - 1) >> k
         P = X + [ZD] * max(0, 2 * M1 - len(X))
         E = [(left[k] if i == 0 else P[i - 1]) if start >> k & 1 else P[i] for i in range(2 * M1)]
         delta = ((total >> k) - ((start >> (k + 1)) << 1) - f) % 4
