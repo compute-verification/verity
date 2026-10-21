@@ -8809,7 +8809,32 @@
    "type_hash": "546ccd629ce2e7bcfaa89bc1e67ffc82ee88b8a66514d06777ea133da444b27f"
   },
   "RecDeploy.lamLin2_deployed_ge_dep": {
-   "owner": "@proofs"
+   "owner": "@proofs",
+   "signature": [
+    "RecDeploy.lamLin2_deployed_ge_dep (rel : Flock.Readable.Parsed → Flock.Readable.Relation) (b : RecDeploy.Brings)",
+    "  (L : Claims.Recursion.VStarB.LayoutB)",
+    "  (nextE : Claims.Msg → List Claims.Msg → List FlockDeploy.Coin → Claims.OC Claims.Out)",
+    "  (colsE : Claims.Seen → Nat → List (Prod Nat (List FlockLevel3.GF128))) (wE : Claims.Msg → Real)",
+    "  (join : List Claims.Msg → Claims.Msg) (rowIn : Claims.Msg → Claims.Msg)",
+    "  (final : Claims.Msg → Option (Prod (List (List (Prod Claims.Msg RecDeploy.Salt))) Claims.Msg)) (w : Claims.Msg → Real)",
+    "  (decI : List (Prod Nat (List FlockLevel3.GF128)) → List Claims.Flock.PlainTrace) {x : Claims.Msg}",
+    "  {s : FlockDeploy.Ins} {spec : Flock.SessionSpec} {sts : Array Flock.Stmt}",
+    "  (hin : FlockDeploy.PlainIn (RecDeploy.xIOf x) s spec sts)",
+    "  (hO :",
+    "    ∀ (j : Nat),",
+    "      instLTNat.lt j (RecDeploy.nS x) →",
+    "        Exists fun i =>",
+    "          Exists fun spec' =>",
+    "            Exists fun sts' => RecDeploy.PartIn (RecDeploy.staged b.st x (RecDeploy.pick b.st x j) j) i spec' sts')",
+    "  (hn : instLENat.le (RecDeploy.nS x) (instHPow.hPow 2 16)) :",
+    "  Real.instLE.le 100",
+    "    (Claims.Recursion.lamLin2",
+    "      ((RecDeploy.recBoundAt rel b L).record (RecDeploy.bdDeployed rel nextE colsE wE join rowIn final w).IVStar)",
+    "      (Claims.Recursion.Inner.ofFlock (RecDeploy.bdDeployed rel nextE colsE wE join rowIn final w).deploy decI)",
+    "      FlockDeploy.KS.CpDep x)"
+   ],
+   "assumptions": [],
+   "type_hash": "fc9040a10677f74473fe6409c43ae03eb1114fe68d0c5b36cfe0916881b6fdc7"
   },
   "Verity.SecurityProofs.ComposeCone": {
    "owner": "@proofs",
@@ -13026,7 +13051,8 @@
     "Flock.SecurityProofs.RecursionClaimsStated",
     "Flock.SecurityProofs.SamplingClaimsStated",
     "Hash.SecurityProofs.Stated",
-    "RecDeploy.lamLin2_deployed_ge"
+    "RecDeploy.lamLin2_deployed_ge",
+    "RecDeploy.lamLin2_deployed_ge_dep"
    ]
   },
   "Definitions.Claims.Hm96": {
@@ -13318,7 +13344,8 @@
     "Claims.Witness.Recursion.ZKStop_meets_ready",
     "Claims.Witness.Recursion.ZK_fails",
     "Flock.SecurityProofs.RecursionClaimsStated",
-    "RecDeploy.lamLin2_deployed_ge"
+    "RecDeploy.lamLin2_deployed_ge",
+    "RecDeploy.lamLin2_deployed_ge_dep"
    ]
   },
   "Definitions.Claims.RecursionLin": {
@@ -13378,7 +13405,8 @@
     "Claims.Witness.Recursion.KSFlockLin_fails",
     "Claims.Witness.Recursion.KSLin2_fails",
     "Claims.Witness.Recursion.KSLin_fails",
-    "RecDeploy.lamLin2_deployed_ge"
+    "RecDeploy.lamLin2_deployed_ge",
+    "RecDeploy.lamLin2_deployed_ge_dep"
    ]
   },
   "Definitions.Claims.Sampling": {
@@ -18952,7 +18980,8 @@
     "FlockVBridge.keyProg_parse",
     "FlockVBridge.unit_check",
     "FlockVBridge.unit_recOpen",
-    "RecDeploy.lamLin2_deployed_ge"
+    "RecDeploy.lamLin2_deployed_ge",
+    "RecDeploy.lamLin2_deployed_ge_dep"
    ]
   },
   "Flock.Canon": {
@@ -19155,7 +19184,8 @@
     "FlockSoundness.Discharge.ZkReg.zk_session_soundHJR_nonvacuous",
     "FlockVBridge.keyProg_parse",
     "FlockVBridge.unit_check",
-    "RecDeploy.lamLin2_deployed_ge"
+    "RecDeploy.lamLin2_deployed_ge",
+    "RecDeploy.lamLin2_deployed_ge_dep"
    ]
   },
   "Flock.CircuitType": {
@@ -19263,7 +19293,8 @@
     "FlockSoundness.Discharge.ZkReg.zk_session_soundHJR_nonvacuous",
     "FlockVBridge.keyProg_parse",
     "FlockVBridge.unit_check",
-    "RecDeploy.lamLin2_deployed_ge"
+    "RecDeploy.lamLin2_deployed_ge",
+    "RecDeploy.lamLin2_deployed_ge_dep"
    ]
   },
   "Flock.CoinTree": {
@@ -19328,7 +19359,8 @@
     "FlockSoundness.Discharge.ZkHidden.zk_session_viewHJ_nonvacuous",
     "FlockSoundness.Discharge.ZkReg.zk_session_soundHJR_custody_nonvacuous",
     "FlockSoundness.Discharge.ZkReg.zk_session_soundHJR_nonvacuous",
-    "RecDeploy.lamLin2_deployed_ge"
+    "RecDeploy.lamLin2_deployed_ge",
+    "RecDeploy.lamLin2_deployed_ge_dep"
    ]
   },
   "Flock.Comp": {
@@ -19409,7 +19441,8 @@
     "FlockVBridge.keyProg_parse",
     "FlockVBridge.unit_check",
     "FlockVBridge.unit_recOpen",
-    "RecDeploy.lamLin2_deployed_ge"
+    "RecDeploy.lamLin2_deployed_ge",
+    "RecDeploy.lamLin2_deployed_ge_dep"
    ]
   },
   "Flock.Derive": {
@@ -19460,7 +19493,8 @@
     "FlockSoundness.Discharge.ZkReg.zk_session_soundHJR_nonvacuous",
     "FlockVBridge.keyProg_parse",
     "FlockVBridge.unit_check",
-    "RecDeploy.lamLin2_deployed_ge"
+    "RecDeploy.lamLin2_deployed_ge",
+    "RecDeploy.lamLin2_deployed_ge_dep"
    ]
   },
   "Flock.DeriveAll": {
@@ -19586,7 +19620,8 @@
     "FlockSoundness.Discharge.ZkReg.zk_session_soundHJR_nonvacuous",
     "FlockVBridge.keyProg_parse",
     "FlockVBridge.unit_check",
-    "RecDeploy.lamLin2_deployed_ge"
+    "RecDeploy.lamLin2_deployed_ge",
+    "RecDeploy.lamLin2_deployed_ge_dep"
    ]
   },
   "Flock.DeriveCheck": {
@@ -19679,7 +19714,8 @@
     "FlockSoundness.Discharge.ZkReg.zk_session_soundHJR_nonvacuous",
     "FlockVBridge.keyProg_parse",
     "FlockVBridge.unit_check",
-    "RecDeploy.lamLin2_deployed_ge"
+    "RecDeploy.lamLin2_deployed_ge",
+    "RecDeploy.lamLin2_deployed_ge_dep"
    ]
   },
   "Flock.Draw": {
@@ -20013,7 +20049,8 @@
     "FlockVBridge.sound_residualForms",
     "FlockVBridge.unit_check",
     "FlockVBridge.unit_recOpen",
-    "RecDeploy.lamLin2_deployed_ge"
+    "RecDeploy.lamLin2_deployed_ge",
+    "RecDeploy.lamLin2_deployed_ge_dep"
    ]
   },
   "Flock.Firewall": {
@@ -20750,7 +20787,8 @@
     "FlockSoundness.Discharge.ZkReg.zk_session_soundHJR_nonvacuous",
     "FlockVBridge.keyProg_parse",
     "FlockVBridge.unit_check",
-    "RecDeploy.lamLin2_deployed_ge"
+    "RecDeploy.lamLin2_deployed_ge",
+    "RecDeploy.lamLin2_deployed_ge_dep"
    ]
   },
   "Flock.Library": {
@@ -20809,7 +20847,8 @@
     "FlockSoundness.Discharge.ZkReg.zk_session_soundHJR_nonvacuous",
     "FlockVBridge.keyProg_parse",
     "FlockVBridge.unit_check",
-    "RecDeploy.lamLin2_deployed_ge"
+    "RecDeploy.lamLin2_deployed_ge",
+    "RecDeploy.lamLin2_deployed_ge_dep"
    ]
   },
   "Flock.Ligerito": {
@@ -21047,7 +21086,8 @@
     "FlockVBridge.sound_recOpen",
     "FlockVBridge.unit_check",
     "FlockVBridge.unit_recOpen",
-    "RecDeploy.lamLin2_deployed_ge"
+    "RecDeploy.lamLin2_deployed_ge",
+    "RecDeploy.lamLin2_deployed_ge_dep"
    ]
   },
   "Flock.Net": {
@@ -21149,7 +21189,8 @@
     "FlockVBridge.laid_unit",
     "FlockVBridge.unit_check",
     "FlockVBridge.unit_recOpen",
-    "RecDeploy.lamLin2_deployed_ge"
+    "RecDeploy.lamLin2_deployed_ge",
+    "RecDeploy.lamLin2_deployed_ge_dep"
    ]
   },
   "Flock.Opening": {
@@ -21817,7 +21858,8 @@
     "FlockSoundness.Discharge.ZkHidden.zk_session_viewHJ_nonvacuous",
     "FlockSoundness.Discharge.ZkReg.zk_session_soundHJR_custody_nonvacuous",
     "FlockSoundness.Discharge.ZkReg.zk_session_soundHJR_nonvacuous",
-    "RecDeploy.lamLin2_deployed_ge"
+    "RecDeploy.lamLin2_deployed_ge",
+    "RecDeploy.lamLin2_deployed_ge_dep"
    ]
   },
   "Flock.Qcall": {
@@ -22992,7 +23034,8 @@
     "FlockSoundness.Discharge.ZkHidden.zk_session_viewHJ_nonvacuous",
     "FlockSoundness.Discharge.ZkReg.zk_session_soundHJR_custody_nonvacuous",
     "FlockSoundness.Discharge.ZkReg.zk_session_soundHJR_nonvacuous",
-    "RecDeploy.lamLin2_deployed_ge"
+    "RecDeploy.lamLin2_deployed_ge",
+    "RecDeploy.lamLin2_deployed_ge_dep"
    ]
   },
   "Flock.Registered": {
@@ -23117,7 +23160,8 @@
     "FlockSoundness.Discharge.ZkHidden.zk_session_viewHJ_nonvacuous",
     "FlockSoundness.Discharge.ZkReg.zk_session_soundHJR_custody_nonvacuous",
     "FlockSoundness.Discharge.ZkReg.zk_session_soundHJR_nonvacuous",
-    "RecDeploy.lamLin2_deployed_ge"
+    "RecDeploy.lamLin2_deployed_ge",
+    "RecDeploy.lamLin2_deployed_ge_dep"
    ]
   },
   "Flock.Schedule": {
@@ -23288,7 +23332,8 @@
     "FlockSoundness.Discharge.ZkHidden.zk_session_viewHJ_nonvacuous",
     "FlockSoundness.Discharge.ZkReg.zk_session_soundHJR_custody_nonvacuous",
     "FlockSoundness.Discharge.ZkReg.zk_session_soundHJR_nonvacuous",
-    "RecDeploy.lamLin2_deployed_ge"
+    "RecDeploy.lamLin2_deployed_ge",
+    "RecDeploy.lamLin2_deployed_ge_dep"
    ]
   },
   "Flock.Steps": {
@@ -23463,7 +23508,8 @@
     "FlockSoundness.Discharge.ZkReg.zk_session_soundHJR_custody_nonvacuous",
     "FlockSoundness.Discharge.ZkReg.zk_session_soundHJR_nonvacuous",
     "FlockVBridge.keyProg_parse",
-    "RecDeploy.lamLin2_deployed_ge"
+    "RecDeploy.lamLin2_deployed_ge",
+    "RecDeploy.lamLin2_deployed_ge_dep"
    ]
   },
   "Flock.TemplateQuery": {
@@ -23697,7 +23743,8 @@
     "FlockSoundness.Discharge.ZkReg.zk_session_soundHJR_nonvacuous",
     "FlockVBridge.keyProg_parse",
     "FlockVBridge.unit_check",
-    "RecDeploy.lamLin2_deployed_ge"
+    "RecDeploy.lamLin2_deployed_ge",
+    "RecDeploy.lamLin2_deployed_ge_dep"
    ]
   },
   "Flock.Verify": {
@@ -26808,7 +26855,8 @@
     "FlockSoundness.Discharge.ZkReg.zk_session_soundHJR_nonvacuous",
     "FlockVBridge.chainAcc_level",
     "FlockVBridge.chainAcc_sum",
-    "RecDeploy.lamLin2_deployed_ge"
+    "RecDeploy.lamLin2_deployed_ge",
+    "RecDeploy.lamLin2_deployed_ge_dep"
    ]
   },
   "Proofs.Flock.Level3.GF128Ring": {
