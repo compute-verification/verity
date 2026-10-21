@@ -4,16 +4,20 @@
 #   research run --on vy-nebius-2 --project verity --campaign pouw --source . --cwd source --mem-gb G \
 #     --declared-output 'out/*' --env H1_MEM_GB=G [--env H1_K=64 --env H1_COLS=64] -- bash benchmarks/pouw/h1_prove/job.sh
 #   1. hidden_zk/job.sh's builds (flock-circuit's proving and selftest builds, the Lean flock-verify, a venv)
-#   2. layer.py records the window's int8 codes from the checkpoint (layer L's q/k/v/gate/up at H1's quantizers; a second
-#      window from other tokens) and run.py prepare commits, serves, draws, opens, checks the openings and has the drawn
-#      units staged, while stage.py builds the unit's circuit (the long step at K = 4096), bound to the window's Program
-#      once the commitment gives its shape
-#   3. one loopback --zk session per statement (the drawn units; the other window's unit; the drawn units on a tampered A
-#      row; the in-proof negatives, each also as <tag>-skip, proved with FC_ZK_SELF_CHECK=skip), every instance drawn
-#   4. the Lean checks of run.py's plan, each with the verifier's own window Program, partition and registered reads
-#      (--program, --partition, --registered: honest ACCEPT with its units derived; flipped-z, wrong-receipt, other-window
-#      REJECT; other-window-own ACCEPT; tampered-a REJECT by its registered reads; in-receipt, in-z and their -skip runs
-#      REFUSED by some layer), as many at a time as 90% of H1_MEM_GB holds at 6x the circuit text each (two at K = 4096 and
+#   2. layer.py records the window's int8 codes and their f32 scales from the checkpoint (layer L's q/k/v/gate/up at H1's
+#      quantizers; a second window from other tokens) and run.py prepare commits (each call's A table and z table of its
+#      tiles' z/y records, and the weights' B rows), serves, draws, opens, checks the openings and has the drawn units
+#      staged, one statement a drawn call, while stage.py builds the unit's circuit (the long step at K = 4096), bound to
+#      the window's Program once the commitment gives its shape
+#   3. one loopback --zk session per statement (each drawn call's units, honest the first drawn unit's call; the other
+#      window's unit; honest's units on a tampered A row; the in-proof negatives on honest's units, each also as
+#      <tag>-skip, proved with FC_ZK_SELF_CHECK=skip), every instance drawn
+#   4. the Lean checks of run.py's plan, each with the verifier's own window Program, partition and its call's registered
+#      reads (--program, --partition, --registered: honest and each honest-c<c> ACCEPT with their units derived;
+#      flipped-zy, wrong-receipt, other-window
+#      REJECT; other-window-own ACCEPT; tampered-a REJECT by its registered reads; in-receipt, in-d, the record negatives
+#      in-y, in-z, in-swap, in-call, in-z-only (and in-xa under H1_TILE=v3) and their -skip runs REFUSED by some layer),
+#      as many at a time as 90% of H1_MEM_GB holds at 6x the circuit text each (two at K = 4096 and
 #      H1_MEM_GB=500), and the selftest build's controls on
 #      the drawn units' statement (H1_CONTROLS; at K = 4096 a selftest, prover and verifier in one process, peaks past
 #      170 GB)
@@ -113,7 +117,8 @@ done < "$WK/plan.tsv"
 wait
 HD=$(awk -F'\t' '$1 == "S" && $2 == "honest" {print $3}' "$WK/plan.tsv")
 N=$(awk -F'\t' '$1 == "S" && $2 == "honest" {print $4}' "$WK/plan.tsv")
-if [ -n "$CONTROLS" ] && [ -e "$HD/inst.bin" ]; then
+HREG=$(awk -F'\t' '$1 == "C" && $2 == "honest" {print $5}' "$WK/plan.tsv")
+if [ -n "$CONTROLS" ] && [ -e "$HD/inst.bin" ] && [ -n "$HREG" ]; then
   CASES=$CONTROLS PROVE_GB=$STAGE_GB
   controls "$HD" "$OUT/honest" tile
   for s in "$HD"/st/*/; do
@@ -121,7 +126,7 @@ if [ -n "$CONTROLS" ] && [ -e "$HD/inst.bin" ]; then
     c=$(basename "$s"); pub=$HD/pub.bin; [ -e "$s/pub.bin" ] && pub=$s/pub.bin
     while [ "$(jobs -rp | wc -l)" -ge "$par" ]; do wait -n; done
     $TIME "$OUT/lean/st-$c.time" bash -c "$(vlimit $cap) exec $LEAN verify --zk --circuit $HD/circuit.txt \
-      --statement verity/flock-circuit+seed-injection --public $pub $BOUND --registered $WK/verifier/w1.registered.json \
+      --statement verity/flock-circuit+seed-injection --public $pub $BOUND --registered $HREG \
       --session $s" > "$OUT/lean/st-$c.out" 2> "$OUT/lean/st-$c.err" &
   done
 fi
