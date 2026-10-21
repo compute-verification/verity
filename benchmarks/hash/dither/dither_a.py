@@ -1,10 +1,11 @@
 """The `dither-a` arm: ASK-71's option A (CA's card), the provisional credit form since Daniel's 21:59Z ruling (19 Oct).
 Under it the noised work is credited on the operands A, B of a served product that is value-checked (on every drawn
 unit z_u = A_u B_u^T, proved and committed before the draw, y from the committed z), so the served product may come from
-a plain GEMM beside the receipted one.  Every run is labelled by its unit (`form_of`, RT4-INT-39): form=ASK-71 A
-(provisional) only where the units commit z, and here none does (every committed z, the row tables' or the -zy records',
-is the served GEMM's epilogue's), so each unit's runs are form=beside: receipts beside the served GEMM.  hbk is the one
-that reads either way: its units compute z and y = dequant(z), into scratch that nothing commits or compares.
+a plain GEMM beside the receipted one.  Every run is labelled by its z commitment and its order (`form`, RT4-INT-39 as
+RT4-INT narrowed it, 14:44Z): form=ASK-71 A (provisional) only for -so<D> with -zy (`dither_so`), whose served epilogue
+commits #3018's per-unit z/y records under round s's root before coin s (the receipts need no z of their own);
+form=beside, receipts beside the served GEMM, for the row z tables or no z, and for every arm outside the -so order
+(RT4-INT-12), which this module's arms all are.
 
 Serving stream, per int8-exact linear (`dithera::mm`, one op opaque to Inductor): exactlin's quantizer, which also stores
 the call's live rows and scales (rows < m, unless the step's flags say no-write) into the window's A slot
@@ -85,21 +86,28 @@ import exactlin as EL
 
 FORM_A = "ASK-71 A (provisional)"
 BESIDE = "beside"
-# each unit's form and why (RT4-INT-39): ASK-71 A only for units that commit z, which none of these does
-FORMS = {"h1r": (BESIDE, "receipts beside the served GEMM; the units write no z"),
-         "kh": (BESIDE, "receipts beside the served GEMM; the units write no z"),
-         "hbk": (BESIDE, ("receipts beside the served GEMM; the units compute z and y = dequant(z) into scratch, which "
-                          "nothing commits (ambiguous: ASK-71 A if a unit that writes z counts, beside if it must commit "
-                          "z)")),
-         "hbr": (BESIDE, "receipts beside the served GEMM; the units write no z (H1K_RONLY: no z, no y, no MMA for them)")}
+# each z commitment's form and why, in the statement's order (RT4-INT-39 as RT4-INT narrowed it, 14:44Z): ASK-71 A
+# only under -zy in the -so order; outside it every arm is beside (OUT_OF_ORDER)
+FORMS = {"zy": (FORM_A, ("the served epilogue commits #3018's per-unit z/y records under round s's root before coin "
+                         "s; the receipts need no z of their own")),
+         "row": (BESIDE, ("receipts beside the served GEMM; z committed as the window's row tables, not #3018's "
+                          "per-unit records (ambiguous: the same z under the same round, in another leaf shape)")),
+         "none": (BESIDE, "receipts beside the served GEMM; no z committed (y only, never credited)")}
+OUT_OF_ORDER = ("receipts beside the served GEMM; outside the statement's order (RT4-INT-12): the step's units read a "
+                "coin drawn before its A and z/y went under a round")
 
 
-def form_of(unit: str | None) -> str:
-    return FORMS[unit][0] if unit in FORMS else FORM_A
+def form(z: str | None, in_order: bool) -> tuple[str, str]:
+    """A run's form and its basis, by its z commitment and whether it runs in the -so order."""
+    if z not in FORMS:
+        return BESIDE, "no dither-a side"
+    if not in_order:
+        return BESIDE, OUT_OF_ORDER
+    return FORMS[z]
 
 
-def form_basis(unit: str | None) -> str:
-    return FORMS[unit][1] if unit in FORMS else "the units commit z"
+def form_of(side: Side | None) -> str:
+    return form(side.z, side.in_order)[0] if side is not None else form(None, False)[0]
 # "fault_y" (the served y tampered after the GEMM) and "fault_rr" (the round recorded without the receipt roots), set
 # by `patch`: "fault_y" only under z="zy", which has the units' y to compare
 CAPTURES = ("gate", "control", "fault", "fault_rr")
@@ -313,6 +321,8 @@ def _piecewise() -> bool:
 
 class Side:
     """The serving stream's GEMM state and the side stream's units over a dither_one Window."""
+
+    in_order = False
 
     def __init__(self, win: DO.Window, unit: str, h1u: str | None, z: str = "row", ao: str = "", pt: bool = False):
         if unit not in UNITS:
@@ -577,7 +587,8 @@ class Side:
                 "build_reads": recs + 64 * segs, "build_writes": 64 * segs + 64 * 2 * leaves}
 
     def info(self) -> dict:
-        return {"form": form_of(self.unit), "form_basis": form_basis(self.unit), "unit": self.unit, "z": self.z, "a_overlap": self.ao, "trees_parallel": self.pt,
+        f, basis = form(self.z, self.in_order)
+        return {"form": f, "form_basis": basis, "unit": self.unit, "z": self.z, "a_overlap": self.ao, "trees_parallel": self.pt,
                 "leaf_bytes_per_step": self.leaf_bytes(), "round_leaves": list(self.win.round_kinds),
                 "y_root_refused_steps": self.y_refused[:8] if self.zy else None,
                 "a_form": self.win.c.a_form, "calls": self.calls, "joins": self.joins,
@@ -635,6 +646,16 @@ def zy_split(rec: torch.Tensor, t: int, n: int, unit: tuple[int, int]) -> tuple[
     z = v32.reshape(nr, nc, ur, uc).permute(0, 2, 1, 3).reshape(t, n)
     y = v16.reshape(nr, nc, ur, uc).permute(0, 2, 1, 3).reshape(t, n).view(torch.bfloat16)
     return z, y
+
+
+def zy_join(z: torch.Tensor, y: torch.Tensor, unit: tuple[int, int]) -> torch.Tensor:
+    """`zy_split`'s inverse: z (T, N) int32 and y (T, N) bf16 as the call's records, (units, zy_bytes) uint8."""
+    ur, uc = unit
+    t, n = z.shape
+
+    def units(x: torch.Tensor) -> torch.Tensor:
+        return x.reshape(t // ur, ur, n // uc, uc).permute(0, 2, 1, 3).reshape(-1, ur * uc).contiguous().view(torch.uint8)
+    return torch.cat([units(z), units(y.view(torch.int16))], dim=1)
 
 
 SIDE: list[Side] = []
@@ -749,7 +770,7 @@ def check(win: DO.Window, lib_h1o: str, which: str = "gate", n_cpu_units: int = 
         return {"ok": False, "complete": False, "why": f"{which} step incomplete: {sorted(g)}"}
     m, s, t, L = g["m"], g["s"], win.t, win.L
     unit = SIDE[0].unit if SIDE else None
-    doc: dict = {"which": which, "form": form_of(unit), "complete": True, "s": s, "m": m, "t": t,
+    doc: dict = {"which": which, "form": form_of(SIDE[0] if SIDE else None), "complete": True, "s": s, "m": m, "t": t,
                  "poison": f"{DF.POISON:#04x}", "epsilon": "seeded", "unit": unit}
     key, W = win.key, win.window
     zy = bool(SIDE) and bool(SIDE[0].zy)
@@ -963,7 +984,7 @@ def gate_verdict(gate: dict, control: dict, fault: dict, *more: dict) -> dict:
     extra = {f"{x.get('which')}_refused": bool(x.get("complete") and not x.get("ok") and x.get("conforming"))
              for x in more}
     return {"ok": bool(gate.get("ok")) and refused and fault_refused and all(extra.values()),
-            "form": gate.get("form", form_of(SIDE[0].unit if SIDE else None)),
+            "form": gate.get("form", form_of(SIDE[0] if SIDE else None)),
             "gate_ok": bool(gate.get("ok")), "control_refused": refused, "fault_refused": fault_refused, **extra,
             "control_bad": {k: len(control.get(k) or []) for k in ("z_vs_int_mm_bad", "y_vs_dequant_z_bad",
                                                                     "receipts_vs_h1r_bad", "a_roots_bad", "z_roots_bad")},

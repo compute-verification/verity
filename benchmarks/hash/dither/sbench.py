@@ -57,8 +57,9 @@ Arms:
                  root(A) to the host, a host function, a coin back, all captured in the graphs) and no wait: its plumbing
     dither-1s-percall-rtt  the same with the host function holding each call one measured challenger round trip
                  (DITHER_PERCALL_WAITS: `percall_rtt.py`'s paced samples from the serving node, replayed in order)
-    dither-a     ASK-71's option A, the provisional credit form (`dither_a`; every run labelled by its unit,
-                 `dither_a.form_of`: form=beside for each, since no unit here commits z, RT4-INT-39): exact-fused's
+    dither-a     ASK-71's option A, the provisional credit form (`dither_a`; every run labelled by its z commitment
+                 and order, `dither_a.form`, RT4-INT-39: form=ASK-71 A for -so<D> with -zy, form=beside for every
+                 other arm, these included): exact-fused's
                  quantizer and GEMM serve y = dequant(z) and commit z, and a side stream runs each
                  call's A table (form 3), seeds and receipts of the noised product only; its tokens must equal exact's.
                  dither-a-h1r takes h1r's block or split receipts per call, dither-a-kh h1u.cu's kh_unit_ws (HB_H1U),
@@ -91,7 +92,12 @@ Arms:
                  inside its time (the next window's challenger made after it), its gate adds the ended window's
                  checks and two end faults (fault_tail, fault_late_receipt, `dither_so.check_end`); off the node the
                  session's one window ends at its layout's last step (DITHER_CHALLENGERS' "rounds"), served there at
-                 the arm's stop, its manifest in OUT (`dither_manifest`) and its checks in stop.json
+                 the arm's stop, its manifest in OUT (`dither_manifest`) and its checks in stop.json.  Under -we each
+                 step's live A rows, scales and z/y records go to pinned host memory as their ring slot retires and
+                 stay until the window's draw (`dither_so.Spill`, about 291 MB a step at T 64, m 32; the pool grown
+                 in the warm-up, bounded by $DITHER_SPILL_MAX_GB), and the ended window's check opens three of its
+                 steps from them; -wea (`-so<D>[-ov...]-wea`) holds A and the scales alone (about 27 MB a step), z/y
+                 recomputed from them at an opening
     ARM-xl       any dither arm with `verity_int8::row_quant`'s CUDA body exactlin's quantizer (`exactlin.install`, which
                  serves `scaled_mm` from exactlin's GEMM too; the dither arms call row_quant only): the same xq and s_a, so
                  ARM's gate and reference arm, and its tokens gated as ARM's are; sbench.sh and hb_served.sh run exactlin's
@@ -369,11 +375,11 @@ def build(arm: str, scratch: Path, gpu_mem: float):
         import dither_so as SO
         from verity_vllm.engine import int8_vllm
         int8_vllm.register()
-        unit, ao, pt, depth, ov, serve_prio, we = DITHER_SO[arm]
+        unit, ao, pt, depth, ov, serve_prio, we, spill = DITHER_SO[arm]
         a = engine_args(gpu_mem)
         SO.patch(t=a["max_num_batched_tokens"], h1c=os.environ["DITHER_H1C"], h1o=os.environ["DITHER_H1O"], unit=unit,
                  h1u=os.environ["HB_H1U_KSPLIT" if unit == "hbk" else "HB_H1U_KRONLY"], ao=ao, pt=pt, depth=depth, ov=ov,
-                 serve_prio=serve_prio, window_end=we)
+                 serve_prio=serve_prio, window_end=we, spill=spill)
         llm = LLM(model=str(DF.int8_checkpoint(PIN, scratch)), **a)
         win = DO.hook(llm)
         win.captures = SO.CAPTURES
@@ -389,12 +395,13 @@ DITHER_A = {f"dither-a{u}{z}{o}{p}{q}": (unit, zm, ao, pt, ls)
             for p, pt in (("", False), ("-pt", True))
             for q, ls in (("", False), ("-ls", True))}
 # -ov: round s and step s's units beside step s + 1's forward, a round ring of 2 steps (-ov1: 1); -ovp: -ov with the
-# engine serving on a stream above the trees' and the units' priority; -we: each window ends (`dither_so.SoWindow.end`)
-DITHER_SO = {f"dither-a-{unit}-zy-{o}{p}-so{d}{v}{e}": (unit, ao, pt, d, r, sp, we)
+# engine serving on a stream above the trees' and the units' priority; -we: each window ends (`dither_so.SoWindow.end`),
+# each step's A and z/y records held in pinned host memory until its draw (`dither_so.Spill`), -wea its A alone
+DITHER_SO = {f"dither-a-{unit}-zy-{o}{p}-so{d}{v}{e}": (unit, ao, pt, d, r, sp, we, spill)
              for unit in ("hbk", "hbr") for o, ao in (("aom", "m"), ("aomn", "mn"), ("ab", "b"), ("abn", "bn"))
              for p, pt in (("", False), ("-pt", True)) for d in range(2, 9)
              for v, r, sp in (("", 0, False), ("-ov", 2, False), ("-ov1", 1, False), ("-ovp", 2, True))
-             for e, we in (("", False), ("-we", True))}
+             for e, we, spill in (("", False, None), ("-we", True, "azy"), ("-wea", True, "a"))}
 
 
 REF_OF = {"dither": "exact", "dither-side": "exact", "dither-1s": "exact", "dither-1s-credit": "exact",
@@ -509,6 +516,10 @@ def worker(arm: str, conn, scratch: str, gpu_mem: float) -> None:
         if cmd["op"] == "warm":
             gen(ps, 8)
             gen(prompts(64), 16)
+            win = getattr(llm, "dither_win", None)
+            if getattr(win, "spill_mode", None) and getattr(win, "end_each", False):
+                # a -we arm's spill pool grown here to a timed window's size (N2 steps), not inside rep 0
+                gen(ps, N2)
             conn.send({"warm": True})
         elif cmd["op"] == "decode":
             t1, _ = gen(ps, N1)
