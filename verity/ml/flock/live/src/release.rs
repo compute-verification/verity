@@ -1,8 +1,9 @@
 //! `firewall/v0`'s release side (PROTOCOL.md §10.5): the decisions of whether an outer session of a recursive session goes
-//! on, and when its proofs leave. `flock-circuit prove --firewall-state DIR --session ID --part NAME` runs each outer session
-//! through [`outer_session`], with the Lean decision (`Core.Firewall.decide`, `core-firewall decide`) as its judge: this
-//! module's decision is the reference, and nothing leaves that the Lean decision doesn't send. `verity_flock.firewall` is the same record in Python: the inner phase's side (`rec_live` opens,
-//! finishes and stops recursive sessions) and the test driver. Both write `record.jsonl` alike, byte for byte (Python's
+//! on, and when its proofs leave, in Rust: the reference the Lean release side is held to. `flock-circuit prove
+//! --firewall-state DIR --session ID --part NAME` runs each outer session through the Lean one (`core-firewall session`,
+//! `Core.Firewall.Loop`), and nothing serves through this module; `verity/core/service/firewall/tests` compiles it to hold
+//! the Lean to it (`release-reference`). `verity_flock.firewall` is the same record in Python: the inner phase's side
+//! (`rec_live` opens, finishes and stops recursive sessions) and the test driver. All write `record.jsonl` alike, byte for byte (Python's
 //! `json.dumps(ev, sort_keys=True)`; `firewall_record_vectors.json` pins it), and take the same two `flock(2)` locks:
 //! `record.lock` around every read-and-append of the record, and `slot.lock`, the outer slot.
 //!
