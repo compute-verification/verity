@@ -48,7 +48,9 @@ def main() -> None:
     stager = shape.stager("unit/pouw-h1-tile", circuit=work / "circuit.txt")
     t1 = time.time()
     if "--circuit-only" in sys.argv[3:]:
-        head = {"k": k, "ands": stager.low.layout.counts["ands"], "circuit_bytes": (work / "circuit.txt").stat().st_size,
+        head = {"k": k, "ands": stager.low.layout.counts["ands"], "useful": stager.low.layout.useful,
+                "k_log": stager.meta.get("k_log"), "vus_per_block": stager.meta.get("vus_per_block"),
+                "circuit_bytes": (work / "circuit.txt").stat().st_size,
                 "build_seconds": round(t1 - t0, 1),
                 "maxrss_gb": round(resource.getrusage(resource.RUSAGE_SELF).ru_maxrss / 2**20, 2)}
         head |= description(shape.definition())

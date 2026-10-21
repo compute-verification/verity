@@ -4,6 +4,8 @@ cells), so its text is a fraction of the flat text's; and the Lean fixture of ``
 flat text written out there."""
 from __future__ import annotations
 
+import numpy as np
+
 from verity.ml.circuits.boolean import forms as F
 from verity_flock import ir_lower as IL
 from verity_flock import tmpl as T
@@ -29,6 +31,20 @@ def test_a_dot_products_template_unrolls_to_its_flat_unit_and_does_not_grow_with
         sizes.append((sum(map(len, lines)), len(text)))
     (flat_s, t_s), (flat_l, t_l) = sizes
     assert flat_l > 3 * flat_s and t_l < 1.1 * t_s and t_l * 10 < flat_l, sizes
+
+
+def test_the_aligned_template_unrolls_to_the_padded_unit_with_every_run_at_an_aligned_power_of_two():
+    flat = T.parse_flat(_dot(48))
+    t, _ = T.emit(flat)
+    t2, f2, st = T.align(t, flat)
+    got = T.unroll(T.parse(T.write(t2)))
+    assert T.flat_lines(got) == T.flat_lines(f2)
+    runs = [c for d in t2.defs for c in d.calls if c.count > 1]
+    assert runs and all(c.stride & (c.stride - 1) == 0 and c.base % c.stride == 0 for c in runs), st
+    # the same rows, each moved by an increasing map: input rows in place, the constant last
+    n, n2 = flat.useful, f2.useful
+    assert n2 >= n and f2.const == n2 - 1 and np.array_equal(np.diff(f2.ptr)[np.diff(f2.ptr) > 0], np.diff(flat.ptr)[np.diff(flat.ptr) > 0])
+    assert [f2.row(i) for i in range(48 * 16)] == [flat.row(i) for i in range(48 * 16)]
 
 
 def test_the_lean_fixture_unrolls_to_its_flat_text():

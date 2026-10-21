@@ -520,6 +520,209 @@ def emit(flat: Flat, **kw) -> tuple[Tmpl, dict]:
     return _Emitter(flat, **kw).emit()
 
 
+# --- aligned slots ----------------------------------------------------------------------------------------------------
+
+WORD = 128
+
+
+def _pow2(n: int) -> int:
+    return 1 << max(0, (n - 1).bit_length())
+
+
+def _up(x: int, a: int) -> int:
+    return -(-x // a) * a
+
+
+def _groups(tok: list[str]) -> tuple[list[tuple[int, int, list[int]]], list[tuple[int, int, list[int]]]]:
+    v, at, out = list(map(int, tok)), 0, []
+    for _ in range(2):
+        gs = []
+        n, at = v[at], at + 1
+        for _ in range(n):
+            col, words, nb = v[at:at + 3]
+            gs.append((col, words, v[at + 3:at + 3 + nb]))
+            at += 3 + nb
+        out.append(gs)
+    return out[0], out[1]
+
+
+def _group_tokens(gs) -> list[str]:
+    return [str(len(gs))] + [str(x) for col, words, bits in gs for x in (col, words, len(bits), *bits)]
+
+
+class NotAligned(ValueError):
+    pass
+
+
+def align(t: Tmpl, flat: Flat) -> tuple[Tmpl, Flat, dict]:
+    """``t`` with its repeated blocks in aligned power-of-two slots, and ``flat`` padded to match: so the fold over each run
+    of copies splits into the copy's own columns and the slot index (``eq(r, o + j·2^s + x)``, ``o`` a multiple of
+    ``2^s``). Each Definition is laid out once, its rows and unwritten columns in their order, each run of two or more
+    copies at a stride of its callee's size rounded up to a power of two and a start aligned to it, a single copy at its
+    callee's alignment. The unit's input rows keep their columns and each output group its width, at a start aligned to
+    its words. The padding is empty rows (forced zeros); the map from old to new columns is increasing, so every row
+    still reads earlier columns, and A and B keep their entries. ``flat`` is ``unroll(t)``."""
+    defs = t.defs
+    ins_g, outs_g = _groups(t.groups)
+    in_end = (ins_g[-1][0] + ins_g[-1][1]) * WORD if ins_g else 0
+    out_rng = [(c * WORD, (c + w) * WORD) for c, w, _ in outs_g]
+    maps: list[np.ndarray] = [np.zeros(0, np.int64)] * len(defs)
+    size, align_of = [0] * len(defs), [1] * len(defs)
+    place: list[list[tuple[int, int]]] = [[] for _ in defs]  # per call: (new base, new stride)
+    st = {"runs": 0, "nopad_runs": 0}
+    for d, D in enumerate(defs):
+        root = d == t.root
+        L = D.cols
+        m = np.empty(L, np.int64)
+        pos, x, al = 0, 0, 1
+        points = sorted(lo for lo, _ in out_rng) if root else []
+        done: set[int] = set()
+
+        def seq(x0: int, x1: int) -> None:
+            nonlocal pos
+            for p in points:
+                if x0 <= p <= x1 and p not in done:
+                    m[x0:p] = np.arange(pos, pos + p - x0)
+                    pos += p - x0
+                    x0 = p
+                    words = next(w for c, w, _ in outs_g if c * WORD == p)
+                    pos = _up(pos, words * WORD)
+                    done.add(p)
+            m[x0:x1] = np.arange(pos, pos + x1 - x0)
+            pos += x1 - x0
+
+        order = sorted(range(len(D.calls)), key=lambda i: D.calls[i].base)
+        newc: dict[int, tuple[int, int]] = {}
+        for ci in order:
+            c = D.calls[ci]
+            e = defs[c.e]
+            if c.base < x:
+                raise NotAligned(f"definition {d}: calls overlap")
+            seq(x, c.base)
+            if c.count > 1 and c.stride != e.cols:
+                raise NotAligned(f"definition {d}: a call's copies have gaps")
+            width = (c.count - 1) * c.stride + e.cols
+            inside = [r for r in out_rng if r[0] <= c.base < r[1]]
+            if root and (c.base < in_end or inside):
+                if (c.base < in_end and c.base + width > in_end) or (inside and c.base + width > inside[0][1]):
+                    raise NotAligned("a call crosses the end of the input rows or of an output group")
+                if size[c.e] != e.cols:
+                    raise NotAligned("a call in the input rows or an output group has padding inside")
+                nb, S = pos, c.stride
+                st["nopad_runs"] += c.count > 1
+            elif c.count > 1:
+                S = _pow2(size[c.e])
+                nb = _up(pos, S)
+                al = max(al, S)
+            else:
+                S = size[c.e]
+                nb = _up(pos, align_of[c.e])
+                al = max(al, align_of[c.e])
+            st["runs"] += c.count > 1
+            j = np.arange(c.count, dtype=np.int64)[:, None]
+            m[c.base + j * c.stride + np.arange(e.cols)[None, :]] = nb + j * S + maps[c.e][None, :]
+            newc[ci] = (nb, S)
+            pos = nb + (c.count - 1) * S + size[c.e]
+            x = c.base + width
+        seq(x, L)
+        maps[d], size[d], align_of[d] = m, pos, al
+        place[d] = [newc[i] for i in range(len(D.calls))]
+    phi = maps[t.root]
+    if not (np.diff(phi) > 0).all():
+        raise NotAligned("the column map is not increasing")
+    if in_end and not (phi[:in_end] == np.arange(in_end)).all():
+        raise NotAligned("the input rows moved")
+
+    split = 0
+    new_defs = []
+    for d, D in enumerate(defs):
+        m, L, L2 = maps[d], D.cols, size[d]
+
+        def loc(v: int) -> int:
+            return int(m[v]) if v < L else v - L + L2
+
+        def locv(v: np.ndarray) -> np.ndarray:
+            return np.where(v < L, m[np.minimum(v, L - 1)], v - L + L2)
+
+        rows = tuple((int(m[col]), tuple(map(loc, a)), tuple(map(loc, b))) for col, a, b in D.rows)
+
+        def bind(c: Call, j0: int, count: int):
+            """Copies ``j0 … j0 + count − 1``'s bindings as segments in new columns, or None if one is not affine."""
+            j = np.arange(count, dtype=np.int64)[:, None]
+            segs = []
+            for ln, at, sp in c.segs:
+                if ln == 0:
+                    segs.append((0, at, sp))
+                    continue
+                W = locv(at + (j0 + j) * sp + np.arange(ln, dtype=np.int64)[None, :])
+                s2 = int(W[1, 0] - W[0, 0]) if count > 1 else 0
+                if s2 >= 0 and (W == W[0, 0] + j * s2 + np.arange(ln)[None, :]).all():
+                    segs.append((ln, int(W[0, 0]), s2))
+                    continue
+                for q in range(ln):
+                    w = W[:, q]
+                    s2 = int(w[1] - w[0]) if count > 1 else 0
+                    if s2 < 0 or not (w == w[0] + j[:, 0] * s2).all():
+                        return None
+                    segs.append((1, int(w[0]), s2))
+            return tuple(segs)
+
+        calls = []
+        for c, (nb, S) in zip(D.calls, place[d]):
+            segs = bind(c, 0, c.count)
+            if segs is not None:
+                calls.append(Call(c.e, c.count, nb, S, segs))
+                continue
+            # a chained run (copy j reads copy j − 1) whose copy 0 reads what precedes the run: copy 0 on its own
+            rest = bind(c, 1, c.count - 1) if c.count > 2 else None
+            if rest is not None:
+                st["peeled"] = st.get("peeled", 0) + 1
+                calls.append(Call(c.e, 1, nb, size[c.e], bind(c, 0, 1)))
+                calls.append(Call(c.e, c.count - 1, nb + S, S, rest))
+                continue
+            split += 1
+            for jj in range(c.count):
+                one = tuple((1, int(v), 0) for ln, at, sp in c.segs for v in locv(at + jj * sp + np.arange(ln)))
+                calls.append(Call(c.e, 1, nb + jj * S, size[c.e], one))
+        new_defs.append(Def(L2, D.ins, rows, tuple(calls)))
+
+    n2 = size[t.root]
+    outs2 = [(int(phi[c * WORD]) // WORD, w, bits) for c, w, bits in outs_g]
+    groups2 = _group_tokens(ins_g) + _group_tokens(outs2)
+    t2 = Tmpl(t.name, t.root, groups2, new_defs, t.leaves)
+    lens = np.diff(flat.ptr)
+    lens2 = np.zeros(n2, np.int64)
+    lens2[phi] = lens
+    na2 = np.zeros(n2, np.int32)
+    na2[phi] = flat.na
+    f2 = Flat([FLAT, flat.name, str(n2), str(n2 - 1), *groups2], np.concatenate([[0], np.cumsum(lens2)]).astype(np.int64),
+              phi[flat.refs].astype(np.int32), na2, flat.leaves)
+    pow2_runs = sum(1 for D in new_defs for c in D.calls if c.count > 1 and c.stride & (c.stride - 1) == 0
+                    and c.base % c.stride == 0)
+    n = flat.useful
+    st |= {"useful": n, "useful_aligned": n2, "unit_log": max(7, (n - 1).bit_length()),
+           "unit_log_aligned": max(7, (n2 - 1).bit_length()), "pow2_aligned_runs": pow2_runs, "split_calls": split}
+    return t2, f2, st
+
+
+def write_flat(f: Flat, path, block: str = "NET") -> None:
+    """``f`` as a circuit file holding only its block (``flock_tmpl``'s diff reads it), a chunk of rows at a time."""
+    with open(path, "w") as fh:
+        n = len(f.na)
+        fh.write(f"flock-ir-unit-only {f.name}\nMETA {{}}\n{block} {f.name} {1 + n + (f.leaves is not None)}\n")
+        fh.write(" ".join(f.head) + "\n")
+        for a in range(0, n, _CHUNK):
+            b = min(n, a + _CHUNK)
+            out = []
+            for i in range(a, b):
+                r = f.refs[f.ptr[i]:f.ptr[i + 1]].tolist()
+                k = int(f.na[i])
+                out.append(" ".join(map(str, (k, *r[:k], len(r) - k, *r[k:]))))
+            fh.write("\n".join(out) + "\n")
+        if f.leaves is not None:
+            fh.write(f.leaves + "\n")
+
+
 def main(argv: list[str]) -> int:
     import argparse
     import resource
@@ -529,6 +732,8 @@ def main(argv: list[str]) -> int:
     ap.add_argument("out")
     ap.add_argument("--name")
     ap.add_argument("--check", action="store_true", help="unroll the output in Python and compare (small units)")
+    ap.add_argument("--align", metavar="TMPL", help="also write the template with aligned power-of-two slots (`align`)")
+    ap.add_argument("--align-flat", metavar="CIRCUIT", help="and the padded flat unit it unrolls to, as a one-block file")
     a = ap.parse_args(argv)
     t0 = time.time()
     flat, size = read_flat(a.circuit, a.name)
@@ -540,13 +745,28 @@ def main(argv: list[str]) -> int:
               "read_seconds": round(t1 - t0, 1), "emit_seconds": round(time.time() - t1, 1),
               "maxrss_gb": round(resource.getrusage(resource.RUSAGE_SELF).ru_maxrss / 2**20, 2)}
     if a.check:
-        t2 = time.time()
-        got = unroll(parse(text))
-        equal = (got.head == flat.head and got.leaves == flat.leaves and np.array_equal(got.ptr, flat.ptr)
-                 and np.array_equal(got.na, flat.na) and np.array_equal(got.refs, flat.refs))
-        stats["check"] = {"equal": bool(equal), "seconds": round(time.time() - t2, 1)}
+        stats["check"] = _check(text, flat)
+    if a.align:
+        t3 = time.time()
+        t2, f2, ast = align(t, flat)
+        text2 = write(t2)
+        Path(a.align).write_text(text2)
+        if a.align_flat:
+            write_flat(f2, a.align_flat)
+        stats["aligned"] = ast | {"tmpl_bytes": len(text2.encode()), "seconds": round(time.time() - t3, 1)}
+        if a.check:
+            stats["aligned"]["check"] = _check(text2, f2)
     print("TMPL " + json.dumps(stats), flush=True)
-    return 0 if stats.get("check", {}).get("equal", True) else 1
+    ok = all(s.get("check", {}).get("equal", True) for s in (stats, stats.get("aligned", {})))
+    return 0 if ok else 1
+
+
+def _check(text: str, flat: Flat) -> dict:
+    t0 = time.time()
+    got = unroll(parse(text))
+    equal = (got.head == flat.head and got.leaves == flat.leaves and np.array_equal(got.ptr, flat.ptr)
+             and np.array_equal(got.na, flat.na) and np.array_equal(got.refs, flat.refs))
+    return {"equal": bool(equal), "seconds": round(time.time() - t0, 1)}
 
 
 if __name__ == "__main__":

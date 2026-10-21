@@ -7,7 +7,9 @@
 #   research run --as proofs --project verity --on vy-nebius-cpu-1 --source . --pool proofs --cwd clone -- \
 #     bash benchmarks/verifier_cost/flock_tmpl.sh 256 4096
 # $OUT gets, per K, build-K.json, emit-K.json (the emitter's statistics), unit-K.tmpl, read-K.jsonl and diff-K.jsonl
-# (flock-tmpl's PHASE lines) and each step's /usr/bin/time -v. A K whose diff fails stops the run (exit 1).
+# (flock-tmpl's PHASE lines) and each step's /usr/bin/time -v. A K whose diff fails stops the run (exit 1). With ALIGN=1,
+# also aligned-K.tmpl (`tmpl.align`: repeated blocks in aligned power-of-two slots, emit-K.json's "aligned" the padded
+# unit's size) and adiff-K.jsonl, its unroll diffed against the padded flat unit.
 set -euo pipefail
 O=${OUT:?run under research run, which sets OUT}
 [ $# -gt 0 ] || { echo "usage: flock_tmpl.sh K..." >&2; exit 2; }
@@ -37,7 +39,7 @@ for k in "$@"; do
   /usr/bin/time -v uv run python benchmarks/verifier_cost/flock_read.py "$k" "$w" --circuit-only > "$O/stage-$k.out" \
     2> "$O/stage-time-$k.txt" || { tail -40 "$O/stage-time-$k.txt" >&2; exit 1; }
   cp "$w/build.json" "$O/build-$k.json"
-  /usr/bin/time -v uv run python -m verity_flock.tmpl "$w/circuit.txt" "$O/unit-$k.tmpl" > "$O/emit-$k.out" \
+  /usr/bin/time -v uv run python -m verity_flock.tmpl "$w/circuit.txt" "$O/unit-$k.tmpl" ${ALIGN:+--align "$O/aligned-$k.tmpl" --align-flat "$w/padded.txt"} > "$O/emit-$k.out" \
     2> "$O/emit-time-$k.txt" || { tail -40 "$O/emit-time-$k.txt" >&2; exit 1; }
   grep '^TMPL ' "$O/emit-$k.out" | sed 's/^TMPL //' > "$O/emit-$k.json"
   /usr/bin/time -v "$X" read "$O/unit-$k.tmpl" > "$O/read-$k.out" 2> "$O/read-time-$k.txt" \
@@ -46,6 +48,11 @@ for k in "$@"; do
   rc=0
   /usr/bin/time -v "$X" diff "$O/unit-$k.tmpl" "$w/circuit.txt" > "$O/diff-$k.out" 2> "$O/diff-time-$k.txt" || rc=$?
   grep '^PHASE ' "$O/diff-$k.out" | sed 's/^PHASE //' > "$O/diff-$k.jsonl"
+  if [ -n "${ALIGN:-}" ]; then
+    /usr/bin/time -v "$X" diff "$O/aligned-$k.tmpl" "$w/padded.txt" > "$O/adiff-$k.out" 2> "$O/adiff-time-$k.txt" || rc=$?
+    grep '^PHASE ' "$O/adiff-$k.out" | sed 's/^PHASE //' > "$O/adiff-$k.jsonl"
+    cat "$O/adiff-$k.jsonl"
+  fi
   cat "$O/build-$k.json" "$O/emit-$k.json" "$O/read-$k.jsonl" "$O/diff-$k.jsonl"
   grep -E 'Maximum resident|Elapsed' "$O"/{stage,emit,read,diff}-time-$k.txt
   rm -rf "$w"
