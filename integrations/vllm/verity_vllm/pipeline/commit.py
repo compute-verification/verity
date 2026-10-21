@@ -71,7 +71,7 @@ import torch  # noqa: E402
 
 from verity_vllm.engine import arrivals as AR, served as SV, vllm_adapter as va  # noqa: E402
 from verity_vllm.pipeline.timeline import Timeline  # noqa: E402  (torch-free; VERITY_TIMELINE -> append-only JSONL, else a no-op sink)
-from verity_vllm.commit import challenge as CH, opened as OV, scheme as SCH  # noqa: E402
+from verity_vllm.commit import challenge as CH, opened as OV, scheme as SCH, step_rows as SR  # noqa: E402
 from verity_vllm.pipeline import admission_planner as AP, boundary_plan as BP, c2_replay as C2, commit_plan as CP, gpu_lease as GL, group_reuse as GR, replay_bundle as RB  # noqa: E402
 from verity_vllm.pipeline.c2_replay import rss_kb  # noqa: E402
 from verity_vllm.pipeline.report import bootstrap_ci  # noqa: E402
@@ -411,6 +411,8 @@ def make_committer(kind: str, engine: va.Engine, args: Options, run_id: str):
         raise ValueError(f"leaf layout {layout} is implemented by the native_collect committers only, not {kind}")
     if kind in ("native_host", "native_host_direct"):
         from verity_vllm.commit.committer.native_host import NativeHostCommitter
+        if getattr(args, "commit_scheme", None) == SR.NAME:
+            raise ValueError(f"--committer {kind} commits vllm-v1 only: {SR.NAME} is native_collect_v2b's (or name --commit-scheme vllm-v1)")
         return NativeHostCommitter(engine, run_id=run_id, chunk=args.chunk, hash_threads=args.hash_threads, populate_threads=getattr(args, "pinned_populate_threads", None),
                                    staging="arena" if kind == "native_host" else "direct", arena_bytes=((args.arena_mb << 20) if args.arena_mb else None),
                                    batch_copy=bool(getattr(args, "batch_copy", False)), fast_copy=bool(getattr(args, "fast_copy", False)), regen_row4=bool(getattr(args, "regen_row4", False)), gpu_tree=bool(getattr(args, "gpu_tree", False)))
@@ -823,6 +825,7 @@ def openings_after_release(com, rc, eng, reqs, sampling, base, args, pair: int, 
         com.pool = com.pool.fresh()             # the frozen view owns the original pinned blocks (its levels live there); the replay gets a fresh pool
         t_r = time.perf_counter()
         try:
+            com.replay_row_keys = dict(frozen.row_keys) if getattr(com, "rows", False) else None   # rows-sha512: the run's salts, or no root to match
             com.reset()
             com.install()
             r2 = run_workload(eng, reqs, sampling)
@@ -1016,7 +1019,8 @@ class Options:
     case: str | None = option("--case", default=None)
     out: str = option("--out")
     pairs: int = option("--pairs", type=int, default=5)
-    committer: str = option("--committer", default="native_host", help="native_host | native_host_direct | hooks_only | plugin:<module>:<factory>")
+    committer: str = option("--committer", default="native_collect_v2b", help="native_collect_v2b (default: the windowed worker, which commits rows-sha512) | native_collect* | native_host | native_host_direct | hooks_only | plugin:<module>:<factory>")
+    commit_scheme: str = option("--commit-scheme", default=SR.NAME, choices=(SR.NAME, "vllm-v1"), help="the commitment scheme: rows-sha512 (default; the windowed worker, native_collect_v2b with --window-mb > 0, 64-byte roots) or vllm-v1 by name (any other committer, an old record's configuration)")
     chunk: int = option("--chunk", type=int, default=65536, help="native_host leaf = chunk bytes of the packed step stream (opening granularity); 4096 measured 3x slower on decode steps (per-leaf Python overhead)")
     arena_unchecked: bool = option("--arena-unchecked", default=False, action="store_true", help="NEGATIVE TEST ONLY: skip the X-02 arm-time bound check for an explicit --arena-mb so a " "too-small block reaches the collector (its refusal must then yield Commit FAIL under X-03)")
     arena_mb: int = option("--arena-mb", type=int, default=0, help="device staging block (MB); default 0 = X-02 auto: sized at arm time from the workload envelope " "(B, max prompt, max_num_batched_tokens, max_model_len; + FA2 hidden stream); 2 blocks preallocated, grown on demand (counted). " "An explicit value smaller than the step bound is refused before the run. Memory headroom for the arena comes from " "--engine-arg gpu_memory_utilization=<x> (0.5-0.6 on 48 GB for <=2B models at 1024-token prompts; 0.75 on 80 GB)")
