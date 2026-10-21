@@ -604,7 +604,7 @@ def checkMsgNames (s : VStar.Stmt) (c : Circuit) (holo : Bool := false) : V Unit
 def showReads (r : Array (Option Nat)) : String := toString (r.toList.map fun x => (x.map toString).getD "null")
 
 /-- The first field in which two registered ports differ, with both values: the registration (value, root, leaf count,
-row width, domain) and, with `reads`, the read positions; none if they agree. -/
+row width, domain, leaf schema) and, with `reads`, the read positions; none if they agree. -/
 def portDiff? (a b : Registered.Port) (reads : Bool := true) : Option String :=
   let w := fun (x : Option Nat) => (x.map toString).getD "none"
   if a.value != b.value then some s!"value {a.value}, against {b.value}"
@@ -613,6 +613,7 @@ def portDiff? (a b : Registered.Port) (reads : Bool := true) : Option String :=
   else if a.words != b.words then some s!"words {w a.words}, against {w b.words}"
   else if a.wordBits != b.wordBits then some s!"word_bits {a.wordBits}, against {b.wordBits}"
   else if a.domain != b.domain then some s!"domain {hexOf a.domain}, against {hexOf b.domain}"
+  else if a.schema != b.schema then some s!"row_schema {a.schema}, against {b.schema}"
   else if reads && a.reads != b.reads then some s!"reads {showReads a.reads}, against {showReads b.reads}"
   else none
 

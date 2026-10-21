@@ -65,7 +65,8 @@ theorem opensLeaf_one (dom payload : ByteArray) :
         root := _root_.Flock.Registered.climb dom (_root_.Flock.Registered.rowLeaf dom 0 payload) 0 0 (bytes []),
         leaves := 1, words := none, wordBits := 16, domain := dom, reads := #[] } payload 0 (bytes []) = true := by
   have h1 : _root_.Flock.log2ceil 1 = 0 := rfl
-  simp [_root_.Flock.Registered.opensLeaf, h1, size_bytes]
+  simp [_root_.Flock.Registered.opensLeaf, _root_.Flock.Registered.leafAs, _root_.Flock.Registered.rowLeaf, h1,
+    size_bytes]
 
 /-- **An opening passes at the deployed record**: at every code that registers one port of one leaf, at the root the
 opening's row climbs to with no siblings, and addresses that root's leaf `0` with an empty path. -/

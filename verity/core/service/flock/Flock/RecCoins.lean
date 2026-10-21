@@ -232,8 +232,8 @@ def checkRows (salt : String → Nat → ByteArray) (c : Circuit) (pub : Public)
   if reg.value != value then throw s!"rec-coins: {unit}: port {port} reads {reg.value}, not the verifier's {value}"
   let n := rows.size
   let w := (rows[0]?.map (·.size)).getD 0
-  if reg.leaves != n || reg.words != some w || reg.wordBits != 16 then
-    throw s!"rec-coins: {unit}: {value}: {reg.leaves} rows of {reg.words.getD 0} words registered, the verifier computes {n} of {w}"
+  if reg.leaves != n || reg.words != some w || reg.wordBits != 16 || reg.schema != HmRow.ROW_SCHEMA then
+    throw s!"rec-coins: {unit}: {value}: {reg.leaves} {reg.schema} rows of {reg.words.getD 0} words registered, the verifier computes {n} {HmRow.ROW_SCHEMA} rows of {w}"
   if reg.reads != (Array.range n).map some then
     throw s!"rec-coins: {unit}: {value}: the reads file does not read row i of the verifier's {n} rows in unit i"
   let .ok prog := c.metaJ.getObjValAs? String "program_sha512" | throw s!"rec-coins: {unit}: META names no program_sha512"

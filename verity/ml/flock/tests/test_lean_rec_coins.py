@@ -742,8 +742,8 @@ def test_the_honest_level_is_refused_with_a_lookup_table_held(forged, shape, tmp
 def bit_rows(built, once) -> Path:
     """Level 3 staged with every row a `sha512/row/v2` bit row of its words' 16 bits (`compose`'s `port_bits`, META
     `row_schemas`), which `ProvedScope.scopeOkH` admits under hidden outputs (`bitRows`) and V*'s `scopeOk` does not. Its
-    rows read no registered value: a bit row's registered reads are refused by `Registered` (registered rows are
-    `sha512/row/v1` rows), so the verifier holds none (no `--registered`), and `scopeOk` alone stands between it and V*."""
+    rows read no registered value: V*'s registered rows are `sha512/row/v1` rows (`RecCoins.checkRows`), so the verifier
+    holds none (no `--registered`), and `scopeOk` alone stands between it and V*."""
     from verity_flock import circuit as FC
 
     compose, write = FC.compose, FC.write
