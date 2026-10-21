@@ -36,8 +36,9 @@ them as ports of the verifier's own ``--registered`` file (`one_stage.served.reg
   statement, one C-Flock session and one registration, so one ``--registered`` file (`FILE`) in the window's directory,
   whatever its K. It refuses a value an earlier record of the log registered under its domain and another root (R7-held,
   `held`) before `register_served`.
-* `declared_layout` and `Served.layout` give the window Program's `h1window.program` arguments, the layout the record
-  commits and core's credit draws from (`credit.strata`).
+* `descriptor` is a declared Program's descriptor bytes, the period's ``circuit`` (their SHA-512) and the window
+  evidence's ``descriptor``, from which core's credit reads the layout it draws from (`credit.layout_of`);
+  `declared_layout` is that layout without building the Program.
 """
 from __future__ import annotations
 
@@ -54,7 +55,7 @@ from verity.core.protocols.pouw.audit import hm96_salt
 from verity.core.protocols.pouw.circuit import h1window as HW
 from verity.core.protocols.sampled_proofs.one_stage import partition as P, registered as G, registration as R
 from verity.core.protocols.sampled_proofs.one_stage.served import ServedRegistration, ServedTree, register_served
-from verity.ml.circuits.codec import canonical_json
+from verity.ml.circuits.codec import canonical_json, encode_program
 from verity.ml.circuits.program import Program
 from verity.ml.commitments import hm96
 from verity.ml.commitments.rowleaf import sha512_row_v2_digest
@@ -119,10 +120,18 @@ def declared(shapes: Sequence[tuple[int, int]], modules: Mapping[int, str], rows
     return HW.program([tuple(x) for x in lay["linears"]], [tuple(x) for x in lay["calls"]], lay["m"], tile, prefix, unit)
 
 
+def descriptor(program: Program) -> bytes:
+    """`program`'s descriptor as the period commits it: its canonical JSON without annotations, the bytes whose SHA-512
+    is its `codec.program_digest` (the period-open's ``circuit``) and from which core's credit reads the window's
+    layout (`credit.layout_of`)."""
+    return canonical_json({k: v for k, v in encode_program(program).items() if k != "annotations"})
+
+
 def declared_layout(shapes: Sequence[tuple[int, int]], modules: Mapping[int, str], rows: int, steps: int,
                     tile: tuple[int, int] = PH.TILE, blocks: Sequence[int] | None = None) -> dict[str, Any]:
-    """`declared`'s arguments to `h1window.program` as the window's layout, the form `credit.strata` reads (its units and
-    their order, so the draw's population): ``{calls: [[linear, A block], ...], linears: [[name, K, n], ...], m, tile}``."""
+    """`declared`'s arguments to `h1window.program` as the window's layout, ``{calls: [[linear, A block], ...],
+    linears: [[name, K, n], ...], m, tile}``: what core's `credit.layout_of` reads from `declared`'s `descriptor`, built
+    without the Program (the proof service sizes the period's K from it, `pouw_h1_challenger.draw_k`)."""
     mods = [modules.get(w, str(w)) for w in range(len(shapes))]
     calls = [(s, w) for s in range(steps) for w in range(len(shapes))]
     return {"calls": [[mods[w], b] for (_s, w), b in zip(calls, layout(shapes, calls, blocks))],
@@ -282,13 +291,6 @@ class Served:
         if why is not None:
             self.refused.append(why[1])
 
-    def layout(self) -> dict[str, Any] | None:
-        """The committed Program's `h1window.program` arguments (`declared_layout`'s form), None when `close` refused it."""
-        if self.program is None:
-            return None
-        return {"calls": [list(x) for x in self.calls], "linears": [list(x) for x in self.linears], "m": self.m,
-                "tile": list(self.tile)}
-
     def ks(self) -> list[int]:
         """The window's contractions, ascending: one tile template, one A and one B value each."""
         return sorted({int(r.value.rsplit("/", 1)[1]) for r in self.registered})
@@ -370,5 +372,5 @@ def register(run: Any, log: Sequence[Mapping[str, Any]] = (), directory: str | P
     return reg
 
 
-__all__ = ["FILE", "NONCE", "PREFIX", "Served", "V2", "declared", "digest_of", "held", "layout", "nonce", "prefix", "register",
-           "row_words", "served_tree", "trees"]
+__all__ = ["FILE", "NONCE", "PREFIX", "Served", "V2", "declared", "declared_layout", "descriptor", "digest_of", "held",
+           "layout", "nonce", "prefix", "register", "row_words", "served_tree", "trees"]

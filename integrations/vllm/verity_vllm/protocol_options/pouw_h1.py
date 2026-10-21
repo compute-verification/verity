@@ -715,7 +715,6 @@ class H1Run:
         self.commits.update(calls_root=calls_root.hex(), static=self.details["static"])
         if self.served is not None:
             self.commits["served"] = {"entries": self.served.entries(), "refused": list(self.served.refused)}
-            self.commits["layout"] = self.served.layout()
         if "draw" not in self.commits:
             receipts = self.receipts_of(self.steps - 1)
             root = RQ.draw_root(calls_root, receipts, self.round_log)
