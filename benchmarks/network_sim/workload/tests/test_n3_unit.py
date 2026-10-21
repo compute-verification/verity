@@ -432,10 +432,10 @@ def lab_records(block: str, egress: list[bytes], ingress: list[bytes], B: int, s
     return out
 
 
-def lab_setup(B: int):
+def lab_setup(B: int, d: int = 4):
     """An honest run's statement and witness, each block's honest egress and ingress frames, B, and each message's
-    payload by stream."""
-    spec = {"d": 4, "layers": 3, "requests": 2}
+    payload by stream, for an MLP of width d."""
+    spec = {"d": d, "layers": 3, "requests": 2}
     ctx = Context({"spec": spec, "blocks": 3, "devices": 2, "frame_bytes": B, "seed": 1})
     program = L.Lab.of(ctx, B)
     values = dict(ctx.inputs) | ctx.constants
