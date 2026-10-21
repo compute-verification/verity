@@ -34,7 +34,7 @@ statement as produced values (`one_stage.produced`), and the negatives of the pr
   combine's ok is 0 (REJECT); ``receipt-mismatch`` a registered receipt one bit off the lanes' XOR, with the produced
   values recommitted under its registration: the combine's ok is 0 (REJECT).
 
-``prepare`` writes WORK/plan.tsv (``S tag dir`` a session; ``C tag dir pub registered expect`` a Lean check),
+``cost`` counts a leaf's ANDs at a K (4096, the served one) without staging anything. ``prepare`` writes WORK/plan.tsv (``S tag dir`` a session; ``C tag dir pub registered expect`` a Lean check),
 WORK/plan.json and WORK/prepare.json; ``summarize`` writes OUT/summary.json from the Lean verdicts, and exits 1 unless every
 check's verdict is the expected one and the honest statements' reported roots are the produced record's
 (`produced.opened`).
@@ -513,10 +513,36 @@ def summarize(args) -> int:
     return 0 if ok else 1
 
 
+def cost(args) -> None:
+    """A leaf's ANDs at K (`--k`, 4096 the served one): lane ``--lane``'s, the seeds' and the combine's, each its statement's
+    lowering (`class_statement.unit_lowering`, as `UnitStager` lowers it)."""
+    from verity_flock import class_statement as CS
+
+    t = tile(args.k)
+    lay = L.layout(t)
+    ab = [f"a[{i}]" for i in range(L.LANE_R)] + [f"b[{j}]" for j in range(L.LANE_C)]
+    units = {"seeds": (bind(SD.PouwUnitSeedsBits), [("pub", list(U.PUBLIC))]),
+             "combine": (L.combine(lay), [(L.partial_port(i), [f"p[{i}]"]) for i in range(lay.lanes)] + [("receipt", ["receipt"])]),
+             f"lane{args.lane}": (L.lane(t, args.lane), [(p.replace("[", "").replace("]", ""), [p]) for p in ab]
+                                  + [("zy", ["zy"]), ("seeds", ["seeds"])])}
+    out = {"k": args.k, "tile": U.tile(), "lanes": lay.lanes}
+    for name, (d, rows) in units.items():
+        t0 = time.time()
+        low, _words = CS.unit_lowering(d, f"unit/pouw-h1-{name}", rows, ())
+        out[name] = {"ands": low.layout.counts["ands"], "seconds": round(time.time() - t0, 1)}
+        print(f"{name}: {out[name]}", flush=True)
+    out["leaf_ands"] = out["seeds"]["ands"] + lay.lanes * out[f"lane{args.lane}"]["ands"] + out["combine"]["ands"]
+    print("COST " + json.dumps(out), flush=True)
+    if args.out:
+        Path(args.out).mkdir(parents=True, exist_ok=True)
+        (Path(args.out) / "cost.json").write_text(json.dumps(out, indent=1))
+
+
 def main() -> None:
     ap = argparse.ArgumentParser()
-    ap.add_argument("cmd", choices=("prepare", "summarize"))
-    ap.add_argument("--work", required=True)
+    ap.add_argument("cmd", choices=("prepare", "summarize", "cost"))
+    ap.add_argument("--lane", type=int, default=0)
+    ap.add_argument("--work")
     ap.add_argument("--out")
     ap.add_argument("--k", type=int, default=384)
     ap.add_argument("--jobs", type=int, default=8)
@@ -526,6 +552,8 @@ def main() -> None:
     a = ap.parse_args()
     if a.cmd == "prepare":
         prepare(a)
+    elif a.cmd == "cost":
+        cost(a)
     else:
         sys.exit(summarize(a))
 
