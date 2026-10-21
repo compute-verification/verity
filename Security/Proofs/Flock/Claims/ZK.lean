@@ -110,6 +110,7 @@ import Proofs.Flock.Claims.ZK.FinishSwSrc
 import Proofs.Flock.Claims.ZK.FinishRows
 import Proofs.Flock.Claims.ZK.FinishZc
 import Proofs.Flock.Claims.ZK.FinishTau
+import Proofs.Flock.Claims.ZK.FinishLane
 import Proofs.Flock.Claims.ZK.HelloLean
 import Proofs.Flock.Claims.ZK.SessionLean
 
@@ -543,6 +544,9 @@ import Proofs.Flock.Claims.ZK.SessionLean
   the tape's (`RankAt.cut_coins`, through the ring switch and the opening by `RankAt.ringSwitchCut_grows` and
   `RankAt.ligeritoPZk_grows`), and at the model's coins and switched vectors its first five constraints are `rowsOf`'s
   (**`Composed.tauFw`**).
+* `FinishLane`: level 0's two lane rows on a view's masked values, constants included. Where level 0's proof reads the
+  view's masked values, its target is the opening's `T` and its restart is `T'`, `ligeritoConstraints`' two rows are
+  `rowsOf`'s rows 5 and 6 as whole forms (**`Masked.lanesR`**, by `Masked.laneRowR`).
 * `CoinPass`: those premises leave a history to be live at. At every tape, past `Hello` and the link, the check passes
   `Hello`'s answer whose root the first opening walks to under the tape's nonce, and that opening, at every key with bit
   2047 clear and every opening that reads back (`LeanRelease.opens_coinPass`; the all-zero one,
