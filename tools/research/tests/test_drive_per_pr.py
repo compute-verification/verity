@@ -128,6 +128,8 @@ def test_a_pass_on_the_main_it_was_built_on_would_land_without_pushing_main_or_e
     world.gh.put(1, world.change({"a.txt": "1\n"}))
     h.tick()
     main, commit = _main(world), h.check_of(1)["commit"]
+    assert _git(world.origin, "log", "-1", "--format=%cn", commit) == "research queue per-PR shadow" != \
+        _git(world.origin, "log", "-1", "--format=%cn", _tip(world))     # never `next`'s commit, whose attempts are the trains'
     h.clock += 1800
     _check(world, monkeypatch, commit)
     assert "1 would land" in h.tick()
