@@ -106,11 +106,16 @@ def resultJ : Session.Result → Json
   | .accepted t => Json.mkObj [("accepted", toJson t)]
 
 def summaryJ (registration : ByteArray) (x : Session.Summary) : Json :=
-  Json.mkObj [("registration", hexJ registration), ("appended", toJson x.appended), ("released", toJson x.released),
+  Json.mkObj [("registration", hexJ registration), ("blocks", toJson x.blocks), ("appended", toJson x.appended),
+    ("released", toJson x.released), ("lifetime", toJson x.lifetime),
+    ("pace", match x.pace with
+      | some p => Json.mkObj [("k", toJson p.k), ("window_ns", toJson p.windowNs)]
+      | none => .null),
     ("appends", match x.appends with | some h => hexJ h | none => .null),
     ("windows", .arr (x.windows.map fun w => Json.mkObj [("lengths", toJson w.lengths), ("steps", toJson w.steps),
-      ("post_seed", toJson w.post), ("released_ns", toJson w.releasedNs), ("deadline_ns", toJson w.deadlineNs),
-      ("opened_ns", toJson w.openedNs), ("drawn", toJson w.drawn)]))]
+      ("post_seed", toJson w.post), ("heads", .arr (w.heads.map fun h => match h with | some h => hexJ h | none => .null)),
+      ("stale", toJson w.stale), ("arrived_ns", toJson w.arrivedNs), ("released_ns", toJson w.releasedNs),
+      ("deadline_ns", toJson w.deadlineNs), ("opened_ns", toJson w.openedNs), ("drawn", toJson w.drawn)]))]
 
 private def positive (p : Json) (k : String) : V Nat := do
   let n ← J.nat p k "params"
@@ -119,18 +124,25 @@ private def positive (p : Json) (k : String) : V Nat := do
 
 /-- A session's `{"params", "coins", "append_coins", "not_before_ns"}`. The parameters name whether the prover defers
 an appended block's residency to its encode (`deferred`), which `audit.Params` refuses at a lifetime of one window: a
-block appended in window w is resident from w or w + 1, so its re-key falls at age L − 1. -/
+block appended in window w is resident from w or w + 1, so its re-key falls at age L − 1; and its pace (`null`, or
+`{"k", "window_ns"}`), which `audit.Params` takes only with at least two windows. -/
 def sessionOf (j : Json) : V (Session.Params × Array ByteArray × Array ByteArray × Nat) := do
   let p ← J.get j "params" "input"
+  let pace ← match ← J.get p "pace" "params" with
+    | .null => pure none
+    | q => do pure (some ({ k := ← positive q "k", windowNs := ← positive q "window_ns" } : Session.Pace))
   let params : Session.Params :=
     { deadlineNs := ← positive p "deadline_ns"
       windows := ← positive p "windows"
       samples := ← positive p "samples"
       minPasses := ← positive p "min_passes"
       windowNs := ← positive p "window_ns"
-      lifetime := ← positive p "lifetime" }
+      lifetime := ← positive p "lifetime"
+      pace }
   if (← J.bool p "deferred" "params") && params.lifetime < 2 then
     throw "a session that defers residency has a lifetime of at least 2 windows"
+  if pace.isSome && params.windows < 2 then
+    throw "a paced session has at least one window and the closing window"
   let coins ← hexes j "coins"
   if coins.size ≠ 2 * params.windows || coins.any (·.size ≠ Codec.COIN_BYTES) then throw "2W coins of 32 bytes"
   let appendCoins ← hexes j "append_coins"
@@ -162,7 +174,7 @@ def registerFn (j : Json) : V Json := do
 those drawn, or as one given in full. -/
 inductive Op
   | register (node : ByteArray) (blocks : Nat) (payloadRoot : ByteArray) (codec : Codec.Codec) (receipt : Kind)
-      (layout : String) (rows : Nat) (nonce : ByteArray)
+      (bind : Bool) (layout : String) (rows : Nat) (nonce : ByteArray)
   | session (registration : Nat ⊕ Registration) (params : Session.Params) (coins appendCoins : Array ByteArray)
       (notBeforeNs : Nat) (index : Option Int)
   | event (node : ByteArray) (k : Nat) (e : Session.Event)
@@ -173,10 +185,10 @@ inductive Op
 def opOf (j : Json) : V Op := do
   match ← J.str j "op" "op" with
   | "register" =>
-    if ← J.bool j "bind" "op" then throw "a registration that binds PoUW's tile outputs is not covered: the port refuses it"
+    let bind ← J.bool j "bind" "op"
     let some kind := Kind.ofName? (← J.str j "receipt" "op") | throw "a receipt kind is sketch-sha512 or block-sha512"
     pure (.register (← hex j "node") (← nat j "blocks") (← hex j "payload_root") (← codecOf (← J.get j "codec" "op")) kind
-      (← J.str j "layout" "op") (← nat j "rows") (← hex j "nonce"))
+      bind (← J.str j "layout" "op") (← nat j "rows") (← hex j "nonce"))
   | "session" =>
     let which ← match ← J.get j "registration" "op" with
       | .num n => .inl <$> J.asNat (.num n) "registration"
@@ -207,8 +219,8 @@ def registryFn (j : Json) : V Json := do
   let mut out : Array Json := #[]
   for op in ops do
     match op with
-    | .register node blocks root codec kind layout rows nonce =>
-      let (reg?, r') ← r.register source node blocks root codec kind false layout rows nonce
+    | .register node blocks root codec kind bind layout rows nonce =>
+      let (reg?, r') ← r.register source node blocks root codec kind bind layout rows nonce
       r := r'
       match reg? with
       | some reg =>

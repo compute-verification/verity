@@ -23,9 +23,11 @@ Python reference held to it.
 | `PouwCheck.Protocol` | the `Core.Protocol` value |
 | `PouwCheck.Opening` | `opening`, `window_domain`, `verify_path`, `public_bc`: one unit's opening beside the check (`served_commit.check`'s rule), a certified window's under its certified salt |
 | `PouwCheck.Pass` | `pass_epoch` and `draw`, with `coins_of`, `opening_of`, `coin_reason` and `weights_root` under `COIN_VERSIONS`: the window's pass and its draw (`served_commit.Challenger`'s rules) |
-| `PouwCheck.Rounds` | `rounds`: a live window's round coins, each opened once after its recorded round root (`window.rounds_reason`'s rules, `PouwWindow.roundsReason`, over the proof service's challenger, `SampledProofs.Challenger`) |
-| `PouwCheck.Difftest` | the difftest's functions behind `pouw-check-difftest` (`opening`, `pass`, `draw`, `rounds`) |
+| `PouwCheck.Rounds` | `salt`, `rounds`: a live window's salt coin, opened once after its open root (`salt.window_open_root` of its record and the session the auditor's ledger reserved), and its round coins, each opened once after its recorded round root (`window.rounds_reason`'s rules, `PouwWindow.roundsReason`), both read through the challenger's session the ledger opens for the window (`SampledProofs.Challenger.auditedSession`, `sessionNamed`) |
+| `PouwCheck.Difftest` | the difftest's functions behind `pouw-check-difftest` (`opening`, `registered`, `pass`, `draw`, `salt`, `rounds`) |
 | `PouwCheck.DifftestMain` | `pouw-check-difftest`'s server, and its `coins n`: `n` bytes of `IO.getRandomBytes` (A3), the challenger's entropy (`verifier.coins`; `tests/test_coins.py`) |
+| `PouwCheck.Credit` | `credit.py`'s `credited`, `outcome` and `a_link`: a served window's credit bits fixed before its draw coin, no partial credit over its drawn units, and its A trees tied to its round roots (RT4-INT-32, RT4-INT-34) |
+| `PouwCheck.CreditDifftest` | the difftest's `credit`, `outcome` and `a-link` behind `pouw-check-difftest` (`CreditDifftest.all`, the functions `DifftestMain` serves) |
 
 `opening` holds a tile proof's public file to the registered window: the unit drawn (or opened undrawn, the filler's),
 the entries root's domain one-stage's served domain of the registered program and partition, the opening's entry under
@@ -68,6 +70,17 @@ refuses a bare commitment, and checks the opening against it
 in a replay of a recorded pass, the e2e-service passes' (`epoch-coins/v2`, whose binding and weights' root keep the
 first 32 bytes of `tagged`).
 
+`PouwCheck.Credit` holds a served window's credit to what it fixed before each coin (`credit.py`, the Python reference).
+`credited`: each manifest row (the window's calls in order, `index` 0, 1, …) carries its call's verdict as `credit`, a
+credited row its z table's root (`tables.z`), and the draw root over the rows (`calls_root`), the last round's receipts
+and every round's root and coin must be the one root the challenger's log shows its draw coin followed, read through the
+session the auditor's ledger opens for the window; so a bit changed after the draw coin is refused, and the credited calls
+are the rows whose bit is true. `outcome`: the window is accepted only when every drawn unit has exactly one proof
+outcome and it is an accept; a failed or missing one refuses the whole window. `aLink`: each round's root (the one the
+challenger received before that round's coin) is `credit.round_root` of the serving process's own round root and that
+round's rows of every registered A value (`…/a/<K>`) as aligned subtrees (`credit.cover`), and each A value's registered
+root must be the frame-v3 SHA-512 tree over those subtrees and its domain's pads.
+
 The properties are stated in `Security/Properties/Pouw/Check.lean` and proved in
 `Security/Properties/Proofs/Pouw/Check.lean`.
 
@@ -87,7 +100,10 @@ in-process challenger's coins, an unsigned or tampered log, a ledger signed unde
 end, a second session for the window, roots the challenger's log doesn't show,
 a coin opened twice, one opened before its round's root, a foreign epoch's, a seeded epoch's commitment or another
 layout's). `verity/core/protocols/pouw/tests/test_pouw_core_check.py` checks that every mutation reaches the refusal it
-aims at.
+aims at. Its `credit`, `outcome` and `a-link` go against `credit.credited`, `credit.outcome` and `credit.a_link` over
+`tests/pouw_credit_cases.py` (a credit bit flipped after the draw coin, a drawn unit failed or missing, an A tree the
+round roots didn't commit, and one mutation per other refusal), and `verity/core/protocols/pouw/tests/test_pouw_credit.py`
+holds each mutation to its refusal.
 
 ~~~text
 lake build                                                         the library, pouw-check and pouw-check-difftest

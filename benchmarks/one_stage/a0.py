@@ -197,6 +197,13 @@ def lean_draw_test(lean: str, cases: list[dict], out: Path, name: str) -> list[d
     return [json.loads(line.split(" ", 1)[1]) for line in p.stdout.splitlines() if line.startswith("DRAWCHECK")]
 
 
+def firewall_env(st: dict) -> dict:
+    """What a firewalled prover (`FC_FIREWALL=1`) sets its Lean `Hello` up on (live PROTOCOL.md §10.4): the statement
+    `lean_verify` verifies under, and the statement's partition and program."""
+    args = [x for k in ("partition", "program") if st.get(f"{k}_file") for x in (f"--{k}", str(st[f"{k}_file"]))]
+    return {"FC_FIREWALL_STATEMENT": STATEMENT_ID, "FC_FIREWALL_HELLO_ARGS": " ".join(args)}
+
+
 def lean_verify(lean: str, st: dict, n: int, out: Path, zk: bool = False) -> dict:
     """The verifier of record: Lean `flock-verify verify` on the session's record, with the circuit and the public file
     held by content (`--archive`, SHA-512 keys), and the verifier's own registered reads (`st["registered_file"]`,

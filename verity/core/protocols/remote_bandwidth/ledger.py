@@ -52,8 +52,10 @@ class Node:
     (bytes a second, 0 charging none).  Each way back into node memory also has a burst, the bytes it can bring at once
     beyond its rate (`SquaringCeiling`, `Disks` and `Links` hold over every interval as rate·length + burst): one
     maximal rebuild batch, one maximal disk read and one link window.  A burst of 0 states the rate down to one
-    nanosecond, which no device with a nonzero rate meets.  `stated` takes `timing`'s, which a reported read rate can
-    only raise."""
+    nanosecond, which no device with a nonzero rate meets.  Beside the read ceilings are the write ceilings, one GPU's
+    and the host DRAM's (bytes a second), how fast a fill can write labels into each tier, which a wipe's timing reads;
+    the node states no DPU's (`timing.HOST_WRITE_BYTES_PER_S`).  `stated` takes `timing`'s, which a reported read rate
+    can only raise."""
 
     spec_bytes_per_s: float
     read_bytes_per_s: float
@@ -65,9 +67,11 @@ class Node:
     rebuild_burst_bytes: float = 0.0
     disk_burst_bytes: float = 0.0
     link_burst_bytes: float = 0.0
+    gpu_write_bytes_per_s: float = timing.GPU_WRITE_BYTES_PER_S
+    host_write_bytes_per_s: float = timing.HOST_WRITE_BYTES_PER_S
 
     def __post_init__(self) -> None:
-        for name in ("spec_bytes_per_s", "read_bytes_per_s"):
+        for name in ("spec_bytes_per_s", "read_bytes_per_s", "gpu_write_bytes_per_s", "host_write_bytes_per_s"):
             if not 0 < _rate(getattr(self, name), name):
                 raise ValueError(f"{name} is positive")
         if type(self.chip_bytes) is not int or self.chip_bytes < 0:
@@ -93,7 +97,8 @@ class Node:
         disk = disk_bytes_per_s if disk_burst_bytes is None else disk_burst_bytes
         link = (timing.LINK_WINDOW_BYTES if link_bytes_per_s else 0.0) if link_burst_bytes is None else link_burst_bytes
         return cls(max(timing.SPEC_BYTES_PER_S, measured), measured, timing.CHIP_BYTES, timing.SQUARINGS_PER_S,
-                   timing.SHA512_PER_S, disk_bytes_per_s, link_bytes_per_s, float(timing.CHIP_BYTES), disk, link)
+                   timing.SHA512_PER_S, disk_bytes_per_s, link_bytes_per_s, float(timing.CHIP_BYTES), disk, link,
+                   timing.GPU_WRITE_BYTES_PER_S, timing.HOST_WRITE_BYTES_PER_S)
 
     def rebuild(self, codec: audit.Codec) -> audit.Rebuild:
         """μ_rebuild's model at the record's codec: the node's squaring ceiling at its width."""
@@ -103,7 +108,8 @@ class Node:
 
     def to_json(self) -> dict:
         return {"chip_bytes": self.chip_bytes, "disk_burst_bytes": self.disk_burst_bytes,
-                "disk_bytes_per_s": self.disk_bytes_per_s, "link_burst_bytes": self.link_burst_bytes,
+                "disk_bytes_per_s": self.disk_bytes_per_s, "gpu_write_bytes_per_s": self.gpu_write_bytes_per_s,
+                "host_write_bytes_per_s": self.host_write_bytes_per_s, "link_burst_bytes": self.link_burst_bytes,
                 "link_bytes_per_s": self.link_bytes_per_s, "read_bytes_per_s": self.read_bytes_per_s,
                 "rebuild_burst_bytes": self.rebuild_burst_bytes, "sha512_per_s": self.sha512_per_s,
                 "spec_bytes_per_s": self.spec_bytes_per_s, "squarings_per_s": dict(self.squarings_per_s)}

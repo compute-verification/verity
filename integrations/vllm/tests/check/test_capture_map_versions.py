@@ -122,4 +122,4 @@ def test_a_stale_or_foreign_version_is_reported():
 def test_a_boolean_version_of_another_definition_is_reported():
     cmap = copy.deepcopy(CMAP)
     cmap["programs"]["moe-sum"]["definitions"] = ["MoeSum_v1", "TokenSelect_v2"]
-    assert violations(cmap) == ["moe-sum: cites the Boolean TokenSelect_v2; the Boolean versions of what its roles bind are ['MoeSum_v2']"]
+    assert violations(cmap) == ["moe-sum: cites the Boolean TokenSelect_v2; the Boolean versions of what its roles bind are ['MoeSum_v3']"]

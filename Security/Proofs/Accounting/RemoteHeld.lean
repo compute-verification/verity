@@ -14,8 +14,8 @@ memory at its start, those on a chip then (at most `S`) and those that came in d
 are consecutive (`sum_passes`), so what came in during them came in over `[t_0, t_P) ⊆ [s₀, e]`, one interval: at most
 `s/E + β` a tick and one burst of each, `Br + Bd`, by rebuilds and disk reads, none over the links.
 
-The time-held forms are not proved here: `heldOverTime_of_links` reduces `HeldOverTime` to `HeldOverTimeLinks`, at links
-of rate 0, which is all Identity says.
+`heldOverTime_of_links` reduces `HeldOverTime` to `HeldOverTimeLinks`, at links of rate 0, which is all Identity says.
+Both time-held forms are proved in `Proofs.Accounting.RemoteHeld.OverTime`.
 -/
 
 namespace Accounting.SecurityProofs.Remote
@@ -146,7 +146,7 @@ theorem links_of_identity (hI : Identity T) : Links T 0 0 := fun ω u v _ => by
   rw [h0, Nat.cast_zero, zero_mul, add_zero]
 
 /-- **The time-held line under Identity is the link-charged one at links of rate 0 and burst 0**: `HeldOverTime`
-follows from `HeldOverTimeLinks`, so the one time-held proof left is `HeldOverTimeLinks`'s. -/
+follows from `HeldOverTimeLinks`. -/
 theorem heldOverTime_of_links (h : Accounting.Guarantees.Remote.HeldOverTimeLinks) :
     Accounting.Guarantees.Remote.HeldOverTime := by
   intro Ω _ T K S s E β Br Bd W δs δc hE hs hβ hW hI hsq hd hS hr hp hcov hk hw

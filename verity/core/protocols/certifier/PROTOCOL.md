@@ -17,10 +17,9 @@ conditions, each of which holds:
    something the prover chooses.
 3. SHA-512 is collision resistant, as hm96 rows in frame-v3-sha512 trees already assume.
 
-Two gaps keep the network audit from being zero-knowledge, and nothing may call it that until both are closed (the
-README states them too):
-- **N2 compares the certified egress digest with the Program's grid in the clear**, which reads witness. It goes when
-  N3 runs on every link-window (NET-38) and N2 switches to `check_link(grid=False)`.
+N2 no longer compares the grid in the clear: `LinkWindows.verify` runs `check_link(grid=False)` (NET-38), and the
+network claim is counts only until N3 is a proof-service unit on every window (ASK-70, counts-first). Two gaps keep the
+count check from being zero-knowledge, and nothing may call it that until both are closed (the README states them too):
 - **The host checks the certificate's signature over an unsalted record digest**, a hash of witness: the record's
   counts and an unsalted root of its raw frames. It goes when the certifier signs `H("verity/net-cert/v1" ‖ salt_c ‖
   R)` (NET-42):
@@ -28,6 +27,9 @@ README states them too):
   - the head-check unit proves `R = H(head)` and that `H(salt_c ‖ R)` is the signed digest;
   - the host's LMS check then reads only the public fields (key id, session, link, direction, window) and that hiding
     digest.
+- **N2's unit isn't proved yet:** its verifier of record runs `head_check.reference` on the host over the opening. When
+  it is proved, the head-check gate binds `NetworkHeadCheck_v1`'s circuit digest and a proof of any other circuit is
+  refused (NET-43).
 
 ## The certifier (`grid`)
 

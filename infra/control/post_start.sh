@@ -27,3 +27,4 @@ setsid -f /data/infra/fixtures_export.sh > /dev/null 2>&1 < /dev/null
 setsid -f /data/infra/agent_watch.sh > /dev/null 2>&1 < /dev/null
 setsid -f /data/infra/cloud_watch.sh > /dev/null 2>&1 < /dev/null
 setsid -f /data/infra/control-disk/run.sh > /dev/null 2>&1 < /dev/null
+setsid -f /data/watchers/run.sh > /dev/null 2>&1 < /dev/null

@@ -548,3 +548,95 @@ def test_h1_tile_v3_is_its_reference():
     assert _words(got[:S]) == z == _words(list(evaluate(served.fn, *args))) and [_s32(v) for v in z] == _served(a, b)
     assert _words(got[S:]) == rc == H.reference(a, b, SALT, 0, ROOTS)[1]
     assert sum(_wraps(4, b)) > 0
+
+
+# -- v4, the gated unit ------------------------------------------------------------------------------------------------------
+
+def _v(d):
+    return bind(d, EXACT=_acc(64), R=4, C=8, PAIRS=GRID48)
+
+
+def test_v4_is_registered_beside_v3():
+    """v4 is v3's signature with the R admit bits after b; v3's scheme still binds v3."""
+    assert H.PouwH1Tile4.id == "PouwH1Tile_v4"
+    params, ret = _v(H.PouwH1Tile4).signature()
+    assert [n for n, _t in params] == ["a", "b", "admit", "salt", "position", "roots"] and params[2][1] == Array(4, BIT)
+    assert ret == _v(H.PouwH1Tile3).signature()[1]
+    assert C._scheme(H.SCHEME_V3).units[H.KINDS[0]].defn is H.PouwH1Tile3
+
+
+def test_or_bit_and_mask32_on_bits_are_their_words():
+    rng = random.Random(6)
+    for a in (0, 1):
+        for b in (0, 1):
+            assert list(evaluate(H.PouwOrBit, [a], [b])) == [a | b] == list(evaluate(H.PouwOrBit.word, a, b))
+    for w in [0, 1, H.M32, 1 << 31, *(rng.getrandbits(32) for _ in range(16))]:
+        for live in (0, 1):
+            got = evaluate(H.PouwMask32, [(w >> i) & 1 for i in range(32)], [live])
+            assert _words(list(got)) == [w if live else 0] == list(evaluate(H.PouwMask32.word, w, live))
+
+
+def test_a_gated_dead_tile_has_the_zero_receipt(monkeypatch):
+    """`reference(gated=)`: a dead tile, every admit bit 0, gives z = A Bᵀ and the zero receipt without deriving noise; any
+    admitted row makes the tile live, and its z and receipt are then the ungated v3's, bit for bit; gated is r bits."""
+    rng = random.Random(10)
+    a, b = _full(rng, 4, 64), _rows(rng, 8, 64, -128, 127)
+    live = H.reference(a, b, SALT, 0, ROOTS, stream=True)
+    for gated in ([0, 1, 0, 0], [1, 1, 1, 1], [0, 0, 0, 1], (1, 0, 1, 0)):
+        assert H.reference(a, b, SALT, 0, ROOTS, stream=True, gated=gated) == live
+    for bad in (True, 0, [1, 1, 1], [0] * 5):
+        with pytest.raises(ValueError, match="admit bits"):
+            H.reference(a, b, SALT, 0, ROOTS, stream=True, gated=bad)
+
+    def no_noise(*_a):
+        raise AssertionError("a dead tile derived noise")
+
+    monkeypatch.setattr(H, "noise", no_noise)
+    z, rc = H.reference(a, b, SALT, 0, ROOTS, stream=True, gated=[0, 0, 0, 0])
+    assert z == live[0] and [_s32(v) for v in z] == _served(a, b) and rc == [0] * len(live[1]) and any(live[1])
+    empty = [[0] * 64 for _ in range(4)]
+    assert H.reference(empty, b, SALT, 0, ROOTS, stream=True, gated=[0] * 4) == ([0] * 32, [0] * len(live[1]))
+
+
+def _remap(rs):
+    """v3's refs in v4's numbering: v4's admit is parameter 2, so salt, position and roots move up one."""
+    return [(s, i + (i >= 2), lo, hi) if s == "p" else (s, i, lo, hi) for s, i, lo, hi in rs]
+
+
+def test_v4_masks_only_the_receipt():
+    """v4's body is v3's node for node (its parameters renumbered), then `PouwOrBit` over the admit bits and one `PouwMask32`
+    a receipt word of v3's by their OR; z is v3's refs, so a live or dead tile's z is v3's, and only the receipt is masked."""
+    b3, b4 = _v(H.PouwH1Tile3).body, _v(H.PouwH1Tile4).body
+    n = len(b3.nodes)
+    for x, y in zip(b3.nodes, b4.nodes[:n]):
+        assert (x.form, x.fn, x.axes, x.n) == (y.form, y.fn, y.axes, y.n)
+        assert [_remap(runs(c.refs)) for c in x.args] == [runs(c.refs) for c in y.args]
+    tail = [getattr(nd.fn, "defn", nd.fn) for nd in b4.nodes[n:]]
+    words = 2 * H.Layout(4, 8, 64).sets
+    assert tail == [H.PouwOrBit] * 3 + [H.PouwMask32] * words
+    ors = b4.nodes[n:n + 3]
+    assert [[runs(c.refs) for c in o.args] for o in ors] == [
+        [[("p", 2, 0, 1)], [("p", 2, 1, 2)]], [[("p", 2, 2, 3)], [("p", 2, 3, 4)]],
+        [[("n", n, 0, 1)], [("n", n + 1, 0, 1)]]]
+    zl = 32 * len(GRID48)
+    assert runs(b4.ret.slice(0, zl)) == _remap(runs(b3.ret.slice(0, zl)))
+    for w, m in enumerate(b4.nodes[n + 3:]):
+        assert [runs(c.refs) for c in m.args] == [runs(b3.ret.slice(zl + 32 * w, zl + 32 * w + 32)), [("n", n + 2, 0, 1)]]
+    assert runs(b4.ret.slice(zl, len(b4.ret))) == [("n", n + 3 + w, 0, 32) for w in range(words)]
+
+
+@pytest.mark.slow
+def test_h1_tile_v4_is_its_reference():
+    """On bits, a 4 × 8 tile at K = 64 with full-range rows (xa fires): a dead tile's served z is A Bᵀ and its receipt the
+    zero words; a tile with one admitted row is v3's `reference(stream=True)`, z and receipt. Slow (about 180 s, two
+    evaluations): the only test that v4's gates compute its reference; `test_v4_masks_only_the_receipt` is its structure."""
+    rng = random.Random(9)
+    a, b = _full(rng, 4, 64), _rows(rng, 8, 64, -128, 127)
+    args = [[v for row in a for v in _bits(row)], [v for row in b for v in _bits(row)]]
+    tail = [SD.leaves(SALT, True), SD.position_leaves(0, True), SD.leaves(ROOTS[0] + ROOTS[1], True)]
+    zl = 32 * len(GRID48)
+    for admit in ([0, 0, 0, 0], [0, 0, 1, 0]):
+        got = list(evaluate(_v(H.PouwH1Tile4), *args, admit, *tail))
+        z, rc = H.reference(a, b, SALT, 0, ROOTS, stream=True, gated=admit)
+        assert _words(got[:zl]) == z and [_s32(v) for v in z] == _served(a, b) and _words(got[zl:]) == rc
+        assert any(rc) == any(admit)

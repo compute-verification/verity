@@ -25,6 +25,17 @@ anything runs. A preset's model is a Hugging Face id at a pinned `revision`, or 
 `model_digest` (`presets.local_checkpoint`'s hash of its files), which a dispatched point recomputes and refuses to run on
 when it differs.
 
+A protocol arm (`pouw:SCHEME`, `pous:SCHEME`, `sampled-proofs:SCHEME`) runs the preset's precision with stock FP8 as its
+control, unless the spec's `[arm_settings."ARM"]` table says otherwise: its `precision` (PoUW's Pearl-C loads the BF16
+checkpoint and quantizes it itself), its `control` (another arm of the spec, or `"none"`), and its `protocols_config`,
+which `verity_vllm.LLM` takes as it is, `{protocol: {...}}`, except that a string `"$NAME"` is the point's environment
+variable NAME (the cubin the spec's setup builds, say). The harness gives an arm with PoUW an in-process challenger as
+its `coins` (`pouw.challenged`), and makes each engine step one Pearl-C pass, as the experimental arm does; the passes'
+counts (`passes`, `units`, `tiles`, screened, failing and unsure rows) are each timed rep's `pearl_c` spans, and the
+experimental arm's call check on the installed run is the arm's own gate. Pearl-C's y carries the epoch's live salt, so
+no stock arm is its token control (`llama31-8b-1gpu-pouw-protocol` has `"none"`). The table is part of the resolved spec
+and so of every point's identity, and the arm's cubin digest is its `kernel_digest`.
+
 A sweep is the product of its batches, prompt lengths, traffic shapes and samplings: `greedy`, or `stochastic`
 (temperature 0.8, top-p 0.95). Every request carries its own seed, so a stochastic point's tokens are a function of the
 engine's numerics like a greedy one's.
@@ -50,20 +61,26 @@ export their paths, say), are part of the resolved spec and so of every point's 
      `resident_kv_cache_memory_bytes` and `block_kv_cache_memory_bytes`. An engine that doesn't report its pool fails it.
    - `arm`: the arm's own gate, when it provides one.
 
-   An arm can't be its own control. An arm without a control (the stock references, or an experimental arm such as
-   Pearl-C's that computes different tokens) has only its own gate, and the table names it. Tokens are compared, not
+   An arm can't be its own control. An arm without a control (the stock references, an experimental arm such as
+   Pearl-C's that computes different tokens, or a protocol arm whose `control` is `"none"`) has only its own gate, and
+   the table names it. Tokens are compared, not
    logits. One failed gate times nothing: the result keeps its gates and has no points. Three gates run after timing,
    and a failure there keeps the gates and drops the points:
    - `timed-tokens`: each timed rep of an arm with a control produces the control's tokens in that rep, so an arm can't
-     compute something else only when timed.
+     compute something else only when timed. In `resident`, each timed rep of an arm without a control produces the
+     tokens its own gate saw from the same engine (`"against": "gate"`).
    - `engine-identity`: in `blocks`, each timed engine reports the gated engine's KV pool, kernel digest, versions,
      GPU and overrides.
    - `arm-closing`: after an engine's warm-up and timed runs, before it closes, the runner reads the arm's own gate again
      (in `blocks`, one per engine lifetime, with its `cycle`), so an arm that judges every run it saw judges those too.
 2. **Resident interleaving, else alternating blocks.** When every arm's engine fits on the GPU at once (`resident`), each
-   point is warmed once per arm (discarded), then each rep runs every arm once. The baseline alternates between the first
+   point is warmed per arm (discarded), then each rep runs every arm once. The baseline alternates between the first
    and last slot (`interleave_order`). An arm that needs its own engine lifetime makes the whole run `blocks`: each arm
-   gets its own engine for two cycles, the second in reverse arm order, with a discarded warm-up per point in each.
+   gets its own engine for two cycles, the second in reverse arm order, with discarded warm-ups per point in each. The
+   spec's `warmups` (default 1) is how many discarded runs each engine makes of a point before timing it; with
+   `max_warmups` above it, the engine keeps warming, up to that many runs, until two consecutive runs' wall times agree
+   within 5% (`WARMUP_AGREEMENT`), and an engine that never settles is marked `settled: false` in the schedule. Both
+   are part of the identity. The schedule keeps each warm-up's wall time, time to first token and host counters.
    Either way each arm's mean timed position is the same over an even number of reps, so drift over the run (clocks,
    heat) cancels in the means; with odd reps it doesn't quite. `execution` records the mode, why resident failed, and the
    full warm-up and timed schedule. Prefix caching is off, so no run reuses an earlier run's KV.
@@ -96,6 +113,12 @@ Each timed rep records:
 An optional metric is recorded for an arm's point only when every rep and every baseline rep has it (the engine's
 scheduler is reachable; the requests generate more than one token), and the table shows the row only where every arm has
 it.
+
+Each timed rep also keeps where its time went: `trace` (every `step()` iteration's host time and its prefill and decode
+tokens, every request's arrival and first output from the run's start, and the seconds since its engine became ready) and
+`host` (the process's CPU time, the engine thread's, context switches, page faults and garbage-collection time over the
+run, the 1-minute load average when it began, and under `device` the caching allocator's device allocations, frees,
+out-of-memory retries and all-stream synchronizations).
 
 Every metric is reported as a mean, and as a ratio to the baseline (`stock-fp8`, else `stock`) paired by rep, each with
 `n` and, from two reps, a 95% Student-t interval (`ci95`, the quantile of the largest tabulated degrees of freedom at

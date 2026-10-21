@@ -1,5 +1,6 @@
 """One-stage audit, run A7: the requirement's two proof units (I4), sampled in one audit and wired to the remote bandwidth
-audit's ledger as its requirement link. `PlanMatch_v1` (each pass's plan is the blocks its step reads, `PlanMatches`) and
+audit's ledger as its requirement link. `PlanMatch_v1` (each pass's plan is exactly the blocks its step reads, which gives
+`PlanMatches`) and
 `MemoryMapStep_v3` (the blocks a step writes carry its values, written at their step and freed at their last read, each
 registered block freed at its values' last read, and each re-key's old block written below the cap the committed pass
 row and the public lifetime cap give), one instance of each per step (`verity.ml.circuits.requirement_units`), the
@@ -44,9 +45,9 @@ layout row at two epochs a value.
   plan unit's public count, each pass's seed binds the units' chain of the steps before it (`units_heads`), and the
   registered blocks released after each step are its map unit's public frees. The one canonical row it opens is the
   pass row, whose words are the passes' steps v0's wire carries, until the record commits to them. The ledger then
-  credits each pass min(n D, read_bits(s)) on `RequirementLink` (`UnitsLink`), D = 16,384 bits (a written block holds
-  at least one value), the session 1 − ε of their sum, ε the share of it the wrong units the draw allows can carry
-  (`uncertified`), its δ added to the ledger's error.
+  credits each pass the bits its step reads from complete blocks, less a block for each planned block it credits no
+  receipt of (`audit.linked_bits` on `RequirementLink`, `UnitsLink`), the session 1 − ε of their sum, ε the share of
+  it the wrong units the draw allows can carry (`uncertified`), its δ added to the ledger's error.
 * **Check 3.** The session draws ``--samples`` receipts a window, and nothing is opened: each draw goes through the
   remote audit's opening unit (`remote_bandwidth.opening`, `verity.ml.commitments.gates.block_check`, §8's checks 1-3
   and 5 as one unit): the receipt leaf on its path to the pass's receipt root and the step's plan row holding the block
@@ -315,7 +316,7 @@ def remote_session(req, layout, store, plans: dict[int, list[int]], salts: dict[
     rs = C3.Store(audit.register(SOURCE, NODE, NR, root, P512, nonce=bytes(32)), payloads, ys)
     p = audit.Params(blocks=NR, deadline_ns=10**6, windows=WINDOWS, samples=c3.samples, delta=1e-6, window_ns=10, codec=P512)
     clock = Clock()
-    s = C3.Session(p, rs.registration, None, coins.Challenger(rs.registration.digest, 0, p.coins, entropy=Entropy(b"a7 coins")),
+    s = C3.Session(p, rs.registration, None, coins.local(rs.registration.digest, 0, p.windows, Entropy(b"a7 coins")),
                    not_before_ns=0, clock=clock)
     prover = audit.Prover(rs, None, s.commitment, entropy=Entropy(b"a7 receipt salts"))
     head = MM.Header(rs.registration.digest, NR)
@@ -439,12 +440,13 @@ class UnitsLink:
     the one `appends` the map units' writes make, each pass's head (`audit.WindowRecord.heads`) the chain through those
     of the steps below its own (`heads`, `units_heads`), and the map units' public lifetime cap (`life`) the record's.
     The stale bound, which no public input carries, is then what each re-key's old block is held below in the unit, which
-    computes it from its committed pass row and that cap. `epsilon` and `delta` are what the units' draw established
+    computes it from its committed pass row and that cap. `read_bits` is the step's reads from complete blocks
+    (`RQ.credited_reads`, `creditedReadBits`). `epsilon` and `delta` are what the units' draw established
     (`uncertified`): the most share of the linked credit the wrong units it allows can carry, at the audit's delta; until
     they are set, the link credits nothing."""
     holds: bool
-    density_bits: int
     req: RQ.Requirement
+    layout: RQ.Layout
     appends: bytes | None = None
     proved: bool = False
     epsilon: float = 1.0
@@ -453,7 +455,7 @@ class UnitsLink:
     life: int | None = None
 
     def read_bits(self, step: int) -> int:
-        return self.req.read_bits(step)
+        return self.req.bits(RQ.credited_reads(self.req, self.layout, step))
 
     def mapped(self, record: audit.Record) -> bool:
         passes = [(s, h) for w in record.windows for s, h in zip(w.steps, w.heads, strict=True)]
@@ -1045,8 +1047,8 @@ def main() -> int:
     proved = units_ok and map_m.get("drawn") == list(range(map_m["n"]))
     heads = units_heads(map_m, map_m["args"], rs.registration)
     lives = {x["life"] for x in map_m["args"]}
-    link = UnitsLink(holds=units_ok and session_ok and br["ok"] and all(v["ok"] for v in checks.values()), density_bits=VW,
-                     req=req, appends=heads[-1], proved=proved, heads=tuple(heads),
+    link = UnitsLink(holds=units_ok and session_ok and br["ok"] and all(v["ok"] for v in checks.values()),
+                     req=req, layout=layout, appends=heads[-1], proved=proved, heads=tuple(heads),
                      life=min(lives) if len(lives) == 1 else None)
     rrec = rs.session.record()
     mapped = link.mapped(rrec)
@@ -1067,7 +1069,7 @@ def main() -> int:
                        "life": link.life, "lifetime": rrec.lifetime, "pass_row": pi,
                        "units": units_ok, "session": session_ok, "check3": check3["accepted"], "bridge": br,
                        "epsilon": link.epsilon, "delta": link.delta,
-                       "density_bits": VW, "verdicts": [v.accepted for v in rs.verdicts], "uncertified": uncert,
+                       "verdicts": [v.accepted for v in rs.verdicts], "uncertified": uncert,
                        "circuit_read_bytes": sum(req.read_bits(s) for s in range(req.steps)) // 8,
                        "ledgers": {k: {"gamma": v["gamma"], "timing": v["terms"]["timing"], "linked": v.get("linked"),
                                        "credited_bytes": round((1 - v["terms"]["timing"]) * whole)} for k, v in ledgers.items()}}
@@ -1129,8 +1131,8 @@ def uncertified(result: dict, rrec, view: dict, store, req, link, common, member
     w_plan, w_map = (per_t[P.template_id(m["defn"])] for m in members)
     credit = {}
     for w in rrec.windows:
-        for n, s in zip(w.credited(True), w.steps):
-            credit[s] = min(n * link.density_bits, req.read_bits(s)) / 8
+        for c, s in zip(audit.linked_bits(w, link, rrec.block_bytes, True), w.steps, strict=True):
+            credit[s] = c / 8
     whole = common["capacity_bytes_per_s"] * rrec.span_ns / 1e9
     top_plan = sum(sorted(credit.values(), reverse=True)[:w_plan])
     reach = {t: sum(c for s, c in credit.items() if s > t and set(view["plans"].get(s, ())) & set(js)) for t, js in store.written.items()}
@@ -1432,7 +1434,7 @@ def negatives(a, out, rec, receipt, result, members, canons, sd, layout, store, 
     br = bridge(rs, plan_m, map_m, req_steps, canons["passes"], sm)
     neg["session-registered-release-not-the-map's (bridge: rfree)"] = {"refused": not br["ok"], "block": jx, "detail": br["detail"]}
     try:
-        audit.ledger(rrec, **common, requirement=UnitsLink(False, VW, req))
+        audit.ledger(rrec, **common, requirement=UnitsLink(False, req, layout))
         neg["ledger-on-a-link-that-does-not-hold"] = {"refused": False}
     except ValueError as e:
         neg["ledger-on-a-link-that-does-not-hold"] = {"refused": "don't hold" in str(e), "why": str(e)}

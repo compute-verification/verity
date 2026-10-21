@@ -194,20 +194,33 @@ def _canonicalize(dp, canon: dict[str, tuple[Any, dict]] | None = None) -> None:
 
 
 def _repoint(fn, subst: dict[str, Any]) -> None:
+    """Re-point `fn`'s node callees and function-valued statics at their canonical objects (`subst`, by `_spec_id`), in
+    place. Each substitute must have the id it replaces (`_canonical`): a complete specialization's id is formatted once
+    from its bindings, so a static swapped for another id would leave it stale."""
     if fn._body is None:
         return
     for n in fn.body.nodes:
-        c = subst.get(_spec_id(n.fn))
-        if c is not None and c is not n.fn:
+        c = _canonical(n.fn, subst)
+        if c is not n.fn:
             n.fn = c
     for k, v in list(fn.bindings.items()):
         fn.bindings[k] = _subst_static(v, subst)
 
 
+def _canonical(v, subst):
+    """`v`'s substitute in `subst`, or `v` itself; refused (IdentityConflict) before it is applied when its id is not `v`'s."""
+    from verity.ml.circuits.defs import IdentityConflict
+    key = _spec_id(v)
+    c = subst.get(key, v)
+    if c is not v and _spec_id(c) != key:
+        raise IdentityConflict(f"E_IDENTITY: {key!r} would be re-pointed to a definition of another id, {_spec_id(c)!r}")
+    return c
+
+
 def _subst_static(v, subst):
     from verity.ml.circuits.defs import PrimitiveDefinition, SpecializedDefinition
     if isinstance(v, SpecializedDefinition):
-        return subst.get(_spec_id(v), v)
+        return _canonical(v, subst)
     if isinstance(v, PrimitiveDefinition):
         return v
     if isinstance(v, tuple):

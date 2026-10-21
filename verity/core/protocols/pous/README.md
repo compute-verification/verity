@@ -90,9 +90,11 @@ DIGESTS.bin SESSION.json SESSION_ID` (`check/`) is the same check in Lean.
 challenger fills every memory tier of one server with labels it derives itself (SHA-512 under a key fresh for the server
 and the wipe), then reveals `k` indices drawn on live coins once the fill is complete and checks each answer against its
 own label, under a deadline per batch. `Pous.SecurityProofs.StreamedWipe` bounds what an accepted wipe leaves of the
-prior content, with no named assumption, for the sequential reveal; at 2.6 TB and `k = 74,000`, the egress plus 1.075
-GB at `2^-40` (`StreamedWipeMeets2600GB`). `PROTOCOL.md` ("The streamed-label wipe") has the messages, the bound, the
-measured fill and round trips, and the holes.
+prior content, with no named assumption, for the sequential reveal, the only one the verdict accepts (batch size 1); at
+2.6 TB and `k = 74,000`, the egress plus 1.075 GB at `2^-40` (`StreamedWipeMeets2600GB`). `PROTOCOL.md` ("The
+streamed-label wipe") has the messages, the bound, the measured fill and round trips, and the holes. The verdict is decided by its Lean port, `MemoryChallenger.StreamedWipe`
+(`streamed-wipe-verdict` in `verity/core/devices/memory_challenger/lean/`), through `wipe_verdict.judge` there;
+`streamed_wipe.verdict` is the reference it is difftested against, and runs beside it under `both`.
 
 ~~~python
 from verity.core.protocols.pous import streamed_wipe as sw
@@ -103,7 +105,8 @@ for start, data in c.fill(chunk=1 << 20):                                     # 
     send(start, data)
 c.run(lambda indices: ask(indices))                                           # one batch at a time; no retry
 signed = c.close(egress_bits=certified)                                        # the network certifier's count
-print(sw.verdict(signed, c.commitment, trusted={signer.public_key}).public())  # {"accepted": ..., "egress_mib": ...}
+v, sides = wipe_verdict.judge(signed, c.commitment, trusted={signer.public_key})  # wipe_verdict.py, loaded by its path
+print(v.public())                                                              # {"accepted": ..., "egress_mib": ...}
 ~~~
 
 Tests: `uv run pytest verity/core/protocols/pous` (about 8 s). P3's 64 KB-label segment vector runs with `VERITY_POUS_SLOW=1`.

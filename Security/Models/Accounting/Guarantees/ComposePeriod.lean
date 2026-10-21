@@ -182,7 +182,8 @@ fleet runs one period per stream: adding GPUs doesn't shorten a period.
 *Each window's writers.* `Declared.periodLayer` puts every position's writer in its own window by definition (its
 `src` at window `w` names a tile of window `w`, `periodLayer_src` by `rfl`, so a late edge stays in its window,
 `late_one`), and nothing is assumed for it. That a late edge's cone lies in the IR's rests on `Scope`'s `Declared.Wf`
-and `LayerCommitted`, the service committing each value it writes by its IR cut. Today's code doesn't meet
+and `LayerCommitted`, the service committing each value it writes by its IR cut, or a computed value only its own
+unit reads by the draw. Today's code doesn't meet
 `LayerCommitted` (one salt a window, opened before the activations are committed), so a live window it serves is out
 of scope.
 
