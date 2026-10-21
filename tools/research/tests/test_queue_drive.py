@@ -4,10 +4,11 @@ from __future__ import annotations
 
 import itertools
 import os
+import threading
 import pytest
 
-from research import merge
-from research.drive import CHECK_STEPS, PUBLISH_GRACE_S, Driver
+from research import drive, merge
+from research.drive import CHECK_STEPS, PUBLISH_GRACE_S, Driver, launch_vars
 from research.cli import main as research_main
 from test_merge_gate import CHECKED
 from test_queue import World, _git
@@ -17,7 +18,9 @@ class Harness:
     def __init__(self, world: World, monkeypatch, **kw):
         self.world, self.launched, self.posts, self.after, self.cancelled = world, [], [], [], []
         self.run_state: dict[str, tuple] = {}
+        self.lock = threading.Lock()
         self.clock = 1_000_000.0
+        monkeypatch.setattr(drive, "LAUNCH_JOBS", 1)                    # in order; a test of launching at once sets its own
         monkeypatch.setattr(merge, "caught_up", lambda repo, remote, tool, since="", log=print, runs=None:
                             self.after.append((since, runs)))
         monkeypatch.setattr(merge, "_sweep_after", lambda *a: None)
@@ -30,9 +33,10 @@ class Harness:
         self.d.launch_touched = lambda repo, commit, machine, base: ([], "")      # a test that wants one sets its own
 
     def launch(self, repo, commit, machine, agreement):
-        rid = f"r20261012-0000{len(self.launched):02d}-abcd"
-        self.launched.append((commit, machine, agreement))
-        self.run_state[rid] = ("running", None, None)
+        with self.lock:                                     # a tick launches its trains from several threads
+            rid = f"r20261012-0000{len(self.launched):02d}-abcd"
+            self.launched.append((commit, machine, agreement))
+            self.run_state[rid] = ("running", None, None)
         return [rid], ""
 
     def tick(self, **kw) -> str:
@@ -62,20 +66,27 @@ def world(tmp_path):
     return World(tmp_path)
 
 
-def test_a_train_s_check_is_launched_with_its_rank_for_the_slot_queue(world, monkeypatch):
+def test_a_tick_launches_its_trains_at_once_each_with_its_rank_for_the_slot_queue(world, monkeypatch):
     """CI-110: the train that lands next takes a node's next free slot (`slot.py --rank`), so drive launches each train's check with
-    CHECK_SLOT_RANK set to its members above `main`, and leaves the variable as it was."""
+    CHECK_SLOT_RANK set to its members above `main`, and leaves os.environ as it was.  A tick's launches run at once
+    (`LAUNCH_JOBS`: 21 Oct, seven one after another took 40 min), each thread with its own rank."""
     monkeypatch.delenv("CHECK_SLOT_RANK", raising=False)
+    pools = []
+    each = drive._each
+    monkeypatch.setattr(drive, "_each", lambda fn, items, jobs=drive.STATUS_JOBS: pools.append((len(items), jobs)) or each(
+        fn, items, jobs))
     h = Harness(world, monkeypatch)
-    h.d.train_size, h.d.max_running = 1, 2
-    ranks = []
+    monkeypatch.setattr(drive, "LAUNCH_JOBS", 4)
+    h.d.train_size, h.d.max_running = 1, 3
+    ranks = {}
     plain = h.launch
-    h.d.launch = lambda repo, commit, machine, agreement: ranks.append(os.environ.get("CHECK_SLOT_RANK")) or plain(
+    h.d.launch = lambda repo, commit, machine, agreement: ranks.__setitem__(commit, launch_vars().get("CHECK_SLOT_RANK")) or plain(
         repo, commit, machine, agreement)
-    world.gh.put(1, world.change({"a.txt": "1\n"}))
-    world.gh.put(2, world.change({"b.txt": "2\n"}))
-    h.tick()
-    assert ranks == ["1", "2"] and "CHECK_SLOT_RANK" not in os.environ
+    for n, f in enumerate("abc", 1):
+        world.gh.put(n, world.change({f"{f}.txt": f"{n}\n"}))
+    assert h.tick().count("launched") == 3
+    assert (3, 4) in pools and "CHECK_SLOT_RANK" not in os.environ
+    assert ranks == {m.commit: str(k) for k, m in enumerate(h.q.chain(), 1)}
 
 
 def test_an_unchecked_tip_is_checked_once_with_agreement_only_for_a_guarantee_change(world, monkeypatch):

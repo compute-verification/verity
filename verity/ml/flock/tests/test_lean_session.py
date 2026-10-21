@@ -271,9 +271,38 @@ def zk(tmp_path_factory):
         pytest.skip(f"the evidence store is not reachable: {e}")
 
 
-def _answer(key_top: int = 0) -> bytes:
-    """`Hello`'s answer: a root and a session key, 20 words, the key's last byte `key_top`."""
-    return coins([b"\x11" * 16] * 4 + [b"\x22" * 16] * 15 + [b"\x22" * 15 + bytes([key_top])])
+def _answer(key_top: int = 0, root: int = 0x11) -> bytes:
+    """`Hello`'s answer: a root (every byte `root`) and a session key, 20 words, the key's last byte `key_top`."""
+    return coins([bytes([root]) * 16] * 4 + [b"\x22" * 16] * 15 + [b"\x22" * 15 + bytes([key_top])])
+
+
+def _name(answer: bytes) -> str:
+    """The session's name on the loop's frames port (`Level0.nameOf`): its coin tree root's hex."""
+    return answer[5:69].hex()
+
+
+class Sessions:
+    """A scripted auditor whose every `Hello` is answered with a coin tree root of its own, on a loop at `args`."""
+
+    def __init__(self, args: list[str]):
+        roots = iter(range(1, 256))
+        answers = {10: draw("null"), 7: coins([])}
+        self.auditor = Auditor(lambda f: _answer(root=next(roots)) if f[0] == 1 else answers[f[0]])
+        self.lp = Loop(self.auditor, args)
+
+    def session(self) -> tuple[socket.socket, str]:
+        """A session past its `Hello`'s answer, and its name."""
+        s = self.lp.connect()
+        call(s, REGISTER)
+        a = call(s, hello(""))
+        assert a[:1] == b"\x02" and len(a) == 5 + 16 * 20, a[:40]
+        return s, _name(a)
+
+    def ended(self) -> str:
+        """The loop's next line on its standard error that a session ended and its level 0 were freed."""
+        while not (line := self.lp.p.stderr.readline().decode()).startswith("level 0: session "):
+            assert line, "the loop's standard error closed"
+        return line.rstrip("\n")
 
 
 @pytest.mark.slow
@@ -311,10 +340,11 @@ def commit(roots: list[tuple[str, bytes]]) -> bytes:
             + struct.pack("<I", 0))
 
 
-def level0(lp: Loop, m: int, z: bytes):
-    """The loop's answer to `level0 M LEN` and the witness `z` on its frames port: `(line, draws, root)`, or the line."""
+def level0(lp: Loop, m: int, z: bytes, name: str = "00" * 64):
+    """The loop's answer to `level0 SESSION M LEN` and the witness `z` on its frames port, for the session named `name`:
+    `(line, draws, root)`, or the line."""
     with socket.create_connection(lp.frames) as s, s.makefile("rb") as r:
-        s.sendall(f"level0 {m} {len(z)}\n".encode() + z)
+        s.sendall(f"level0 {name} {m} {len(z)}\n".encode() + z)
         line = r.readline().decode().rstrip("\n")
         if not line.startswith("ok "):
             return line
@@ -331,43 +361,67 @@ def test_a_level_0_the_loop_cannot_draw(loop, m, z, why):
     assert isinstance(got, str) and got.startswith(why), got
 
 
+def _zeros(m: int) -> bytes:
+    """A zero packed witness at `m`."""
+    return b"\0" * 16 * 2 ** (m - 7)
+
+
 @pytest.mark.slow
 def test_a_commit_leaves_only_with_the_loops_level_0(zk):
     """The loop draws a table's level-0 hiding and salts itself, fresh for each table: two draws over one witness differ,
-    in the hiding and the root. A `Commit` leaves only when each root it carries is one the loop drew at its table's `m`,
-    which the session then owns: a root drawn at another `m` is refused, never reaching the auditor, and one at the
-    statement's leaves, its opening then checked (zero words refused)."""
-    auditor = Auditor(lambda f: {10: draw("null"), 1: _answer(), 7: coins([])}[f[0]])
-    lp = Loop(auditor, _args(zk, "pub-16.bin"))
-
-    def session():
-        s = lp.connect()
-        call(s, REGISTER)
-        assert call(s, hello("")) == _answer()
-        return s
-
-    s = session()
+    in the hiding and the root. A `Commit` leaves only when each root it carries is one the loop drew for its own session
+    at its table's `m`: a root drawn for another session, or at another `m`, is refused, never reaching the auditor, and
+    one at the statement's leaves, its opening then checked (zero words refused)."""
+    S = Sessions(_args(zk, "pub-16.bin"))
+    s, name = S.session()
     why = reason(call(s, COMMIT))
     [table] = re.search(r"tables are \[(.*)\]$", why)[1].split(", ")
-    s.close()
     other = 25
-    _, d0, r0 = level0(lp, other, b"\0" * 16 * 2 ** (other - 7))
-    _, d1, r1 = level0(lp, other, b"\0" * 16 * 2 ** (other - 7))
+    _, d0, r0 = level0(S.lp, other, _zeros(other), name)
+    _, d1, r1 = level0(S.lp, other, _zeros(other), name)
     assert len(d0) == len(d1) and d0 != d1 and r0 != r1
-    s = session()
-    why = reason(call(s, commit([(table, r0)])))
+    s2, _ = S.session()
+    assert reason(call(s2, commit([(table, r0)]))) == STOP + f"a Commit whose root of {table} no Lean level 0 drew for this session"
+    s.close()
+    s2.close()
+    s, name = S.session()
+    _, _, r = level0(S.lp, other, _zeros(other), name)
+    why = reason(call(s, commit([(table, r)])))
     s.close()
     if "drawn at m" in why:
         m = int(re.search(r"its statement's is (\d+)$", why)[1])
         assert why == STOP + f"a Commit whose root of {table} was drawn at m = {other}, where its statement's is {m}"
-        _, _, r = level0(lp, m, b"\0" * 16 * 2 ** (m - 7))
-        s = session()
+        s, name = S.session()
+        _, _, r = level0(S.lp, m, _zeros(m), name)
         why = reason(call(s, commit([(table, r)])))
         s.close()
     assert why.startswith(STOP + "coin opening of session round 0: 0 words"), why
-    lp.close()
-    assert [[f[0] for f in c] for c in auditor.got][-1] == [10, 1, 7]
-    assert all([f[0] for f in c] == [10, 1] for c in auditor.got[:-1])
+    S.lp.close()
+    assert [[f[0] for f in c] for c in S.auditor.got][-1] == [10, 1, 7]
+    assert all([f[0] for f in c] == [10, 1] for c in S.auditor.got[:-1])
+
+
+@pytest.mark.slow
+def test_a_sessions_level_0_lives_only_as_long_as_it(zk):
+    """A level 0 is drawn only for a session the loop is serving, named by its coin tree root, and every one drawn for a
+    session, committed or not, is freed when that session ends, whatever the others hold (PRF-125): a prover that draws
+    and never commits leaves nothing behind."""
+    S = Sessions(_args(zk, "pub-16.bin"))
+    got = level0(S.lp, 25, _zeros(25), "ab" * 64)
+    assert got == f"err a level-0 request for a session the loop is not serving (coin tree root {'ab' * 64})", got
+    s, name = S.session()
+    for _ in range(2):
+        assert level0(S.lp, 25, _zeros(25), name)[0].startswith("ok ")
+    s.close()
+    assert S.ended() == "level 0: session 0 ended; 2 drawn for it freed, 0 kept"
+    (s1, n1), (s2, n2) = S.session(), S.session()
+    for n in (n1, n2):
+        assert level0(S.lp, 25, _zeros(25), n)[0].startswith("ok ")
+    s1.close()
+    assert S.ended() == "level 0: session 1 ended; 1 drawn for it freed, 1 kept"
+    s2.close()
+    assert S.ended() == "level 0: session 2 ended; 1 drawn for it freed, 0 kept"
+    S.lp.close()
 
 
 @pytest.mark.slow

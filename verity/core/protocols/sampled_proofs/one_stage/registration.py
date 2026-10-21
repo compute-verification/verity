@@ -138,14 +138,16 @@ def check(rec: Mapping[str, Any], program: Program, query: Mapping[str, Any], la
           work_table: Mapping[str, Any] | None = None, registered: Mapping[str, int] | None = None,
           supplied: Mapping[str, Any] | None = None, pinned: Mapping[str, str] | None = None,
           binding: Mapping[str, str] | None = None,
-          outputs: Mapping[str, Mapping[str, str]] | None = None) -> Verdict:
+          outputs: Mapping[str, Mapping[str, str]] | None = None,
+          schemas: Mapping[str, str] | None = None) -> Verdict:
     """R1-R7 against the verifier's own copies: its program and query, its law and scheme, the ports its layout derives
     (`{port: {"leaves", "domain"}}`), the digest of its copy of the leaf layer, its anchors, its log of this prover's
     earlier records, the parameters it expects registered (`registered`: `{parameter: words}`), of those the ones it
     fills itself (`supplied`: `{parameter: [[source, ...], ...]}`, `registered.sources`) and the roots it held before the
     record for others (`pinned`: `{parameter: root}`, the weights' root recorded before the salt, say), and of the rest the
-    ones that are outputs of an earlier run (`outputs`: `{parameter: {"record", "port"}}`); ValueError without
-    `registered`, or in another form.  `binding`: the stream and prover the verifier registers this record for
+    ones that are outputs of an earlier run (`outputs`: `{parameter: {"record", "port"}}`); and of the ones it doesn't fill,
+    those whose rows are not `row/v1` rows (`schemas`: `{parameter: schema}`, `registered.SCHEMAS`), whose rows R7 counts in
+    that format (`registered_entries`); ValueError without `registered`, or in another form.  `binding`: the stream and prover the verifier registers this record for
     (`{"stream", "prover"}`, `_binding`), which R6 holds the window to name and a window salt binds.  `partition`: the
     verifier's own partition object when it isn't the canonical one (a record made before the canonical envelope); its
     program must still be `program`'s, and the population is `query`'s.  R1 holds the registered law to the verifier's own
@@ -163,6 +165,7 @@ def check(rec: Mapping[str, Any], program: Program, query: Mapping[str, Any], la
         raise ValueError("supplied values are registered values: the verifier expects none registered")
     pins = _pins(pinned, registered or {}, sup)
     outs = _outputs(outputs, registered or {}, sup, pins)
+    formats = _schemas(schemas, registered or {}, sup)
     bound = _binding(binding)
     keys = _KEYS | {"registered"} if v2 else _KEYS
     if not isinstance(rec, Mapping) or set(rec) != keys:
@@ -239,7 +242,7 @@ def check(rec: Mapping[str, Any], program: Program, query: Mapping[str, Any], la
     # R7
     if v2:
         _check_registered(c, rec["registered"], program, registered, {**held_roots(earlier), **pins}, rec, sup, earlier,
-                          bound, outs)
+                          bound, outs, formats)
     return c.verdict()
 
 
@@ -261,6 +264,19 @@ def _outputs(outputs: Mapping[str, Mapping[str, str]] | None, registered: Mappin
                              f"record's digest and a port: {o!r}")
         out[v] = (o["record"], o["port"])
     return out
+
+
+def _schemas(schemas: Mapping[str, str] | None, registered: Mapping[str, int], supplied: Mapping[str, Any]) -> dict[str, str]:
+    """The verifier's row formats, each of a value it expects registered and doesn't fill, one of `registered.SCHEMAS`;
+    ValueError otherwise, which the Lean verifier refuses too (`OneStage.paramsOfJson`)."""
+    if schemas is None:
+        return {}
+    if not isinstance(schemas, Mapping) or not registered:
+        raise ValueError(f"row formats are an object of registered values' formats: {schemas!r}")
+    for v, s in schemas.items():
+        if v not in registered or v in supplied or not isinstance(s, str) or s not in G.SCHEMAS:
+            raise ValueError(f"row format of {v!r}: not a registered value it doesn't fill, in one of {G.SCHEMAS}: {s!r}")
+    return dict(schemas)
 
 
 def _output_port(log: Sequence[Mapping[str, Any]], record: str, port: str) -> Mapping[str, Any] | None:
@@ -310,9 +326,10 @@ def _binding(binding: Mapping[str, str] | None) -> dict[str, str] | None:
 def _check_registered(c: _Collect, got: Any, program: Program, values: Mapping[str, int], held: Mapping[str, str],
                       rec: Mapping[str, Any], supplied: Mapping[str, Any], log: Sequence[Mapping[str, Any]],
                       binding: Mapping[str, str] | None = None,
-                      outputs: Mapping[str, tuple[str, str]] | None = None) -> None:
+                      outputs: Mapping[str, tuple[str, str]] | None = None,
+                      schemas: Mapping[str, str] | None = None) -> None:
     try:
-        mine = G.registered_entries(program, values)
+        mine = G.registered_entries(program, values, schemas)
     except ValueError as e:
         c.fail("R7-registered", {"verifier": f"{dict(values)} does not apply: {e}"})
         return
