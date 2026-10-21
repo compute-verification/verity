@@ -57,11 +57,6 @@ the earlier reps', at its `k`-th round that absorbs a message (`RecVStar.commitR
 def msgRound (rs : Array RecVStar.SchedRound) (r k : ℕ) : Option ℕ :=
   ((RecVStar.commitRounds rs)[k]?).map (r * rs.size + ·)
 
-/-- A part's circuit, as the setup parses it (`ProvedScope.circuitOf`) at its session's tags. -/
-def partCircuit (p : PartX) : Option Circuit := do
-  let ins ← p.base.ins.toOption
-  (ProvedScope.circuitOf ins.read.tags p.base.circuit p.base.tables).toOption
-
 /-- The input column of row bit `i` of the circuit's port `q` in unit `u`: bit `i % 16` of the unit input leaf that
 reads the port's word `i / 16` (`leavesIn`), the ports' words in order. -/
 def portCol (c : Circuit) (u q i : ℕ) : Option ℕ := do
@@ -243,7 +238,7 @@ that meets the spec, as `KSA` is `KS`. Its level (`Claims.Recursion.lam`) is abo
 deployed shape (one inner table at `m = 35`, `γ`'s weight at `IVStar` at `coverW`), below the 100-bit floor and the
 `2^-128` target under every weight (ASK-73). Route 2C's bound λ₂ (`lamLin2`) evaluates to at least 100 at the deployed
 records (`RecDeploy.lamLin2_deployed_ge_dep`), but `KSLin2` at the deployment is not yet established: it takes `HeldB`,
-false at the deployed V\*, and open premises, and `BitsLin2` is not yet derived from it. -/
+false at the deployed V\*, and open premises, and `BitsLin2` follows from it (`bitsLin2_of_ksLin2`). -/
 theorem ksFlock_deployed_concrete (rel relO : Flock.Readable.Parsed → Flock.Readable.Relation)
     (ivScope : Msg → Bool) (b : Brings) (opening : Claims.Recursion.Opening)
     (hF : Claims.Flock.KS FlockDeploy.sha512 (deployZkRec relO))

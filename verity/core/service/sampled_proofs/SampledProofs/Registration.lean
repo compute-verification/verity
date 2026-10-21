@@ -31,9 +31,9 @@ A verifier bound to a stream and a prover (`binding`: its stream's digest and th
 holds the record's window to name both (`R6-stream`, `R6-prover`), and a window salt is bound to them, so a tile seeded
 for one prover's stream is refused in any other's.
 
-A value that is an output of an earlier run (`outputs`: the NCI baseline's `output` provenance) reuses that run's
-commitment: its entry has the domain and root of the port in the `roots` of the log's record with that digest, whose leaf
-count must be the value's rows (`R7-output` otherwise).
+A value that is an output of an earlier run (`outputs`; never NCI's baseline θ, which holds registered public data only)
+reuses that run's commitment: its entry has the domain and root of the port in the `roots` of the log's record with that
+digest, whose leaf count must be the value's rows (`R7-output` otherwise).
 -/
 import SampledProofs.Draw
 import SampledProofs.Registered

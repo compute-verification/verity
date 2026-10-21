@@ -14,7 +14,7 @@ deployed shape (`m = 35`, weight `coverW`), below the 100-bit floor under every 
 (`lamLin2`) evaluates to at least 100 at the deployed records (`RecDeploy.lamLin2_deployed_ge_dep`, about 165.8), but
 `KSLin2` at the deployment is not yet established: it takes `HeldB` (false at the deployed V\*, which has no holder of
 round 0's `root_B`) and open premises (`PartChecksB`, `PartOpensB`, `DecompB`, the readers' facts; the full list is
-`RecDeploy.ksLin2_deployed_plain`'s), and `BitsLin2` is not yet derived from it.
+`RecDeploy.ksLin2_deployed_plain`'s), and `BitsLin2` follows from it (`bitsLin2_of_ksLin2`).
 
 What stays open is the hypotheses the discharge takes, `hbr_honest_reg`'s (`C3/Compose/Discharge.lean`, `_hbr` itself;
 at the honest source, `hbr_honest_src`'s) and `srcOK_holo_rs`'s (`C3/Compose/AtHolo.lean`, `SrcOK` at the checked
