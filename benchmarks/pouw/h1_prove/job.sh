@@ -92,9 +92,13 @@ mkdir -p "$OUT/verifier" && cp "$WK"/verifier/*.pub.bin "$WK"/verifier/*.registe
 # ---- proofs: one --zk session per statement ------------------------------------------------------------------------------
 # a firewalled prover's Lean Hello sets each session up at the verifier's own statement, partition and window Program (live
 # PROTOCOL.md §10.4); the registered reads are the offline verifier's, outside the session's spec
+VLIMIT=$(declare -f vlimit)
 if [ "$FW" = 1 ]; then
   export FC_FIREWALL=1 FC_HOST_WITNESS=1 FC_FIREWALL_STATEMENT=verity/flock-circuit
   export FC_FIREWALL_HELLO_ARGS="--partition $WK/verifier/partition.json --program $WK/verifier/program.json"
+  # the firewall's Lean processes are the prover's children, and under an address-space cap (ulimit -v) their runtime
+  # can't create its threads: a firewalled session is bounded by the run's cgroup (--mem-gb) alone
+  vlimit() { :; }
 fi
 log "prove: firewall $FW"
 while IFS=$'\t' read -r kind tag D n; do
@@ -109,6 +113,7 @@ while IFS=$'\t' read -r kind tag D n; do
   log "prove $tag: $(cat "$OUT/$tag/prove.time" 2>/dev/null)"
 done < "$WK/plan.tsv"
 unset FC_FIREWALL FC_HOST_WITNESS FC_FIREWALL_STATEMENT FC_FIREWALL_HELLO_ARGS
+eval "$VLIMIT"
 
 # ---- Lean: the plan's checks, then the selftest build's controls on the drawn units' statement ----------------------------
 each=$(( $(stat -L -c %s "$SW/circuit.txt") * 6 / 1024 / 1024 / 1024 + 4 ))
