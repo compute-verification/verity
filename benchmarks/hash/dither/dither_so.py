@@ -158,6 +158,7 @@ class SoWindow(DO.Window):
         self.mf_pool: list[torch.Tensor] = []
         self.starts_ms: list[float] = []
         self.rtts: list[float] = []
+        self.order_due: list[tuple] = []
         self.cap_of: dict[int, str] = {}
         self.m_of: dict[int, int] = {}
         self.stashed: set[int] = set()
@@ -191,8 +192,10 @@ class SoWindow(DO.Window):
         self.k += 1
         self.s0 = self.s
         self.coins, self.rounds = coins, coins.rounds
-        broots = [unwords(self.bset.root(w)) for w in range(self.L)]
-        self.epoch_root = CM.step_root(CM.domain({"window": self.window, "linears": self.L}, self.L, "b-step"), broots)
+        br = self.bset.roots.cpu()
+        self.b_roots = [unwords(br[8 * w:8 * w + 8]) for w in range(self.L)]
+        self.epoch_root = CM.step_root(CM.domain({"window": self.window, "linears": self.L}, self.L, "b-step"),
+                                       self.b_roots)
         self.open_root = CO.stand_in_root(at.id) if at is not None else self.epoch_root
         self.salt_open = coins.salt(self.open_root)
         opening = self.rounds.record(self.epoch_root)
@@ -327,33 +330,36 @@ class SoWindow(DO.Window):
         if withheld is not None:
             late = self.pipe.send(MF.late_root(W, tail[-1], withheld))
             self.pipe.opening(late)
-        self._harvest()
+        self._harvest(now=False)
         self.pipe.close()
-        t_end = time.perf_counter()
+        t_close = time.perf_counter()
         self.open = False
         n = s1 - s0
-        e = {"k": self.k, "name": self.end_name, "fault": self.end_fault, "s0": s0, "steps": n, "tail": len(tail),
-             "units_pending_at_end": pending, "final_index": i_f, "end_ms": 1e3 * (t_end - t0),
-             "split_ms": {"tail_units": 1e3 * (t_units - t0), "tail_sync": 1e3 * (t_sync - t_units),
-                          "receipt_tail_roots": 1e3 * (t_rr - t_sync), "final_round": 1e3 * (t_final - t_rr),
-                          "manifest_root": 1e3 * (t_mf - t_final), "draw_coin": 1e3 * (t_draw - t_mf),
-                          "close": 1e3 * (t_end - t_draw)}}
-        e["amortized_ms_per_step"] = e["end_ms"] / n
-        self.ends.append(e)
         live = self.coins.source == "off-node"
-        rows = torch.cat(self.mf_chunks)[:n].numpy() if self.mf_chunks and (self.end_name or live) else None
-        self.mf_pool.extend(self.mf_chunks)
-        self.mf_chunks = []
-        rec = {"k": self.k, "fault": self.end_fault, "s0": s0, "s1": s1, "tail": tail, "rr": rr, "final_leaves": leaves,
-               "withheld": withheld, "i_f": i_f, "late_index": late, "mroot": mroot, "draw": draw, "draw_at": draw_at,
-               "pipe": self.pipe, "coins": self.coins, "open_root": self.open_root, "salt_open": self.salt_open,
-               "rows": rows, "disp_at": self.disp_at, "salt_of": self.salt_of, "cap_at": self.cap_at,
-               "b_roots": [unwords(self.bset.root(w)) for w in range(L)]}
+        rec = None
+        if self.end_name is not None or live:
+            rows = torch.cat(self.mf_chunks)[:n].numpy() if self.mf_chunks else None
+            rec = {"k": self.k, "fault": self.end_fault, "s0": s0, "s1": s1, "tail": tail, "rr": rr,
+                   "final_leaves": leaves, "withheld": withheld, "i_f": i_f, "late_index": late, "mroot": mroot,
+                   "draw": draw, "draw_at": draw_at, "pipe": self.pipe, "coins": self.coins, "open_root": self.open_root,
+                   "salt_open": self.salt_open, "rows": rows, "disp_at": self.disp_at, "salt_of": self.salt_of,
+                   "cap_at": self.cap_at, "b_roots": self.b_roots}
         if self.end_name is not None:
             p = (s1 - 1) % D
             rec["last"] = {"a": [x.clone() for x in sd.ring_slot[p]], "sa": [x.clone() for x in sd.ring_scale[p].unbind(0)],
                            "receipts": self.plan.out.clone(), "m": self.m_last}
             self.end_recs[self.end_name] = rec
+        self.mf_pool.extend(self.mf_chunks)
+        self.mf_chunks = []
+        t_end = time.perf_counter()
+        e = {"k": self.k, "name": self.end_name, "fault": self.end_fault, "s0": s0, "steps": n, "tail": len(tail),
+             "units_pending_at_end": pending, "final_index": i_f, "end_ms": 1e3 * (t_end - t0),
+             "split_ms": {"tail_units": 1e3 * (t_units - t0), "tail_sync": 1e3 * (t_sync - t_units),
+                          "receipt_tail_roots": 1e3 * (t_rr - t_sync), "final_round": 1e3 * (t_final - t_rr),
+                          "manifest_root": 1e3 * (t_mf - t_final), "draw_coin": 1e3 * (t_draw - t_mf),
+                          "close": 1e3 * (t_close - t_draw), "record": 1e3 * (t_end - t_close)}}
+        e["amortized_ms_per_step"] = e["end_ms"] / n
+        self.ends.append(e)
         if live and os.environ.get(MANIFEST_ENV):
             e["manifest"] = write_manifest(self, rec, os.environ[MANIFEST_ENV])
         return e
@@ -370,17 +376,25 @@ class SoWindow(DO.Window):
         self.open = False
         return None
 
-    def _harvest(self) -> None:
-        """The round trips and the order of each coin come back since the last harvest of this window's pipe."""
+    def _harvest(self, now: bool = True) -> None:
+        """The round trips of each coin come back since the last harvest of this window's pipe, and each one's order
+        (`live_reason`) now, or at the next `stats` (`order_due`: a timed end leaves this check of its own coins out)."""
         pipe = self.pipe
         n = len(pipe.openings)
         self.rtts += [1e3 * (pipe.got_at[i] - pipe.sent_at[i]) for i in range(self.rtt_from, n)
                       if i in pipe.got_at and i in pipe.sent_at]
         self.rtt_from = n
-        for i in range(self.order_from, n):
-            if self.order_why is None:
-                self.order_why = CO.Ch.live_reason(self.coins.commitment, pipe.openings[i], pipe.label, i, pipe.roots[i])
+        self.order_due.append((pipe, self.order_from, n))
         self.order_from = n
+        if now:
+            self._order()
+
+    def _order(self) -> None:
+        for pipe, a, b in self.order_due:
+            for i in range(a, b):
+                if self.order_why is None:
+                    self.order_why = CO.Ch.live_reason(pipe.commitment, pipe.openings[i], pipe.label, i, pipe.roots[i])
+        self.order_due = []
 
     def host_ms(self) -> dict:
         t_end = time.perf_counter()
@@ -615,6 +629,7 @@ class SoWindow(DO.Window):
         pipe = self.pipe
         if self.open:
             self._harvest()
+        self._order()
         rtt, self.rtts = sorted(self.rtts), []
         waits, self.coin_waits = sorted(self.coin_waits), []
         sent = list(pipe.roots)
