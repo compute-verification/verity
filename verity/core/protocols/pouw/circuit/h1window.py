@@ -23,6 +23,9 @@ path registers the trees it commits as the Program's parameters (`one_stage.serv
   number. The Program's result is each call's tiles' outputs in turn (their widths depend on K), and unit u's outputs are
   row u of the window's ``z`` and ``receipt``. `unit_reads` gives, from the Program's own references, the row of each
   parameter that each of a unit's template parameters reads.
+* **Ports.** ``salt`` is the units' coin (`In(kind="coin")`), ``position`` their positions (`In(kind="position")`), and each
+  unit's receipt a sink of the result (`Out(sink=True)`, `_ports`): the window is no seed, so the port rules follow the coin
+  into every tile, and a unit that returns no sink is refused.
 * **Names.** Every parameter is named ``prefix`` and its role (`roles`), so a served path can name each after the
   registered value its tree commits.
 """
@@ -33,7 +36,7 @@ from typing import Any, Callable, Iterable, Sequence
 
 from verity.ml.circuits.defs import CompositeDefinition, bind
 from verity.ml.circuits.ops.boolean import gemm as BG
-from verity.ml.circuits.ports import In, Ports
+from verity.ml.circuits.ports import In, Leaves, Out, Ports, port_types
 from verity.ml.circuits.program import Program, is_input
 from verity.ml.circuits.refs import coll_concat, runs
 from verity.ml.circuits.types import Array, Tuple
@@ -153,9 +156,29 @@ def _body(B: Any, S: Any, *params: Any) -> Any:
     return coll_concat(_signature(S)[1], outs)
 
 
+def _ports(S: Any) -> Ports:
+    """The salt is the units' coin and ``position`` their positions, and every leaf a unit's template returns as a sink (its
+    receipt) is a sink of the window's result. A Definition with a coin and a position port and no sink in its return is a
+    seed, whose body no port rule follows (`ports._coin_role`), so without them the tiles' coin flow would go unchecked."""
+    ks, at, sinks = _k(S), 0, []
+    of = {k: (t.signature()[1].leaves, _sinks(t)) for k, t in S.TILES}
+    for (lin, _blk), n in zip(S.CALLS, _tiles(S)):
+        width, own = of[ks[lin]]
+        for _ in range(n):
+            sinks += [(at + lo, at + hi, Out(sink=True)) for lo, hi in own]
+            at += width
+    return Ports(params={S.PREFIX + "salt": In(kind="coin"), S.PREFIX + "position": In(kind="position")},
+                 ret=Leaves(tuple(sinks)))
+
+
+def _sinks(unit: Any) -> list[tuple[int, int]]:
+    """The leaf ranges of ``unit``'s return it declares sinks (`Out(sink=True)`, its receipt)."""
+    pt = port_types(unit)
+    return [(lo, hi) for lo, hi, o, _w in (pt.ret if pt is not None else ()) if o.sink]
+
+
 PouwH1Window = CompositeDefinition(
-    "PouwH1Window", 2, ("TILES", "LINEARS", "CALLS", "M", "PREFIX"), _signature, _body, register=False,
-    ports=lambda S: Ports(params={S.PREFIX + "salt": In(kind="coin")}),
+    "PouwH1Window", 2, ("TILES", "LINEARS", "CALLS", "M", "PREFIX"), _signature, _body, register=False, ports=_ports,
     doc="One H1 window's tiles, call by call and row block major: TILES[K] on rows block M + [R ti, R ti + R) of a/K (each "
         "K's A blocks of M rows) and on rows [C tj, C tj + C) of the call's linear in b/K (each K's LINEARS' B rows once, "
         "linear after linear), the salt, the tile's position and the window's roots; every parameter named PREFIX and its "
@@ -194,6 +217,9 @@ def program(linears: Sequence[tuple[str, int, int]], calls: Sequence[tuple[str, 
             raise ValueError(f"the tile unit at K = {k} is no {r} × {c} tile over {TILE_PARAMS}: {sig}")
         if shared is not None and tuple(t for _n, t in sig[2:]) != shared:
             raise ValueError(f"the tile unit at K = {k} takes other {SHARED} than at K = {units[0][0]}")
+        if not _sinks(t):
+            raise ValueError(f"the tile unit at K = {k} returns no sink (Out(sink=True), its receipt): the window, with the "
+                             "salt and the positions as its coin and position ports, would be a seed no port rule follows")
         shared = tuple(t for _n, t in sig[2:])
     tiles = tuple((k, template(k, t)) for k, t in units)
     return Program(bind(PouwH1Window, TILES=tiles, LINEARS=linears, CALLS=calls, M=int(m), PREFIX=str(prefix)))
