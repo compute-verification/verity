@@ -748,6 +748,60 @@ def test_a_paced_group_is_drawn_as_its_k_th_root_arrives(k):
     assert [w["draws_sent_ns"] for w in r["windows_seen"]] == [w["arrivals_ns"][-1] for w in r["windows_seen"]]
 
 
+@pytest.mark.parametrize("k", [1, 3])
+def test_a_k_1_paced_root_asks_the_challenger_for_its_two_coins_in_one_round_trip(tmp_path, monkeypatch, k):
+    """At k = 1 a group's root closes it and the next boundary is due at once, so the group's openings coin and the
+    challenge the boundary releases, σ_(g+2), go to the challenger in one round trip, in that order, both after that
+    root (`coins.Coins.ahead`); the last two groups' boundaries release no coin, so their openings coins go alone. At
+    k = 3 a coin leaves at the following group's second root, so every coin goes alone. The session's transcript
+    replays to its verdict through both verifiers. The clock ticks as each pass starts as well as when it ends, so
+    time passes between a coin leaving and the root after it, as on the verifier's own clock: at one tick a pass, a
+    paced window's 1 ns is a whole pass and each boundary waits for the tick its next root comes at."""
+    monkeypatch.syspath_prepend(str(HERE.parents[2] / "verity/core/protocols/remote_bandwidth/lean/tests"))
+    ticking = TickingBackend.run_pass
+
+    def run_pass(self, seed: bytes, plan=None):
+        self.clock.tick()
+        return ticking(self, seed, plan)
+
+    monkeypatch.setattr(TickingBackend, "run_pass", run_pass)
+    import json
+
+    import challengers
+    import replay
+    from verity.core.protocols.remote_bandwidth import coins
+    from verity.core.protocols.sampled_proofs import challenger as C
+
+    asked = []
+
+    class Asked(C.LiveChallenger):
+        def open(self, label, index, after):
+            return self.open_many([(label, index, after)])[0]
+
+        def open_many(self, requests):
+            asked.append([(label, index, bytes(after)) for label, index, after in requests])
+            return [C.LiveChallenger.open(self, *r) for r in requests]
+
+    monkeypatch.setattr(challengers.Local, "open", lambda self, registration, e, windows, appends: Asked(
+        coins.SCHEME, e, coins.families(windows, appends), os.urandom))
+    (r,), _ = run("honest", paces=[verifier.pace_of(f"{k}:{4 * k}:40:2", 1.0)], transcript=tmp_path)
+    assert r["accepted"] and r["challenger"]["reason"] is None
+    case = json.loads(Path(r["transcript"]["path"]).read_bytes())
+    roots = [bytes.fromhex(e["root"]) for e in case["events"] if e["kind"] == "receive"]
+    n, last = r["windows"], [roots[k * g + k - 1] for g in range(r["windows"])]
+    window = asked[0][0][2]
+    if k == 1:
+        assert asked == ([[("challenge", 0, window)], [("challenge", 1, window)]]
+                         + [[("openings", g, last[g]), ("challenge", g + 2, last[g])] for g in range(n - 2)]
+                         + [[("openings", g, last[g])] for g in (n - 2, n - 1)])
+    else:
+        assert all(len(b) == 1 for b in asked) and len(asked) == 2 * n
+        assert [b[0][2] for b in asked if b[0][0] == "openings"] == last
+    with replay.server() as s:
+        row = replay.replay(case, s)
+    assert row["agree"] and row["lean"]["outcome"] == "accepted" and row["lean"]["refused"] == 0, row
+
+
 def test_the_auditor_line_reads_each_groups_coin_and_last_root_off_the_challengers_log():
     """`auditor_line.auditor_seen`: group g's coin at challenge coin g's release, and its last root at the first request
     on the challenger's log that names the root openings coin g was asked after. On a log that is the verifier's stamps
