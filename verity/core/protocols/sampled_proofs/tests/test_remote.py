@@ -7,7 +7,7 @@ a batch with any bad answer raises whole.  The verifier, reading the challenger'
 ledger, trusts only the one session the ledger opens for the window under the pinned key, ended closed, its commitment
 and the roots its signed log shows, so a prover that rewrites a coin's root, an entry of the log or the ledger, or
 presents an unsigned log, an unclosed session, a second session, a ledger signed under its own key or one older than the
-session's end is refused."""
+session's end, or a session its host wrote at a commit outside main's first-parent history, is refused."""
 
 from __future__ import annotations
 
@@ -35,6 +35,10 @@ from test_challenger import HOST, entropy, lms_key, lms_verify
 SCHEME = "verity/test/coins/v1"
 FAMILIES = [("positions", 3), ("replay", 2)]
 WINDOW = {"root": "11" * 64}
+#: the commit of the host's tree that writes every entry of the auditor's ledger, one of `MAIN`, the verifier's copy of
+#: main's first-parent history
+PIN = "ab" * 20
+MAIN = ["0f" * 20, PIN, "c3" * 20]
 #: the challenger key the window's deployment pins: sixteen leaves, four a session (the ledger's open, the record, the
 #: close and the ledger's end)
 PINNED = lms.keygen(lms.Params(64, 4, 4), bytes([9]) * 64)
@@ -93,7 +97,7 @@ class Ledger:
 
     def reserve(self, session: str, **changes) -> None:
         """infra's reserve of `session`: the window's request, its start and its expiry; the session's open binds it."""
-        body = {k: v for k, v in {**RESERVE, **changes}.items() if v is not DROP}
+        body = {k: v for k, v in {**RESERVE, "pinned": PIN, **changes}.items() if v is not DROP}
         self.reserves[session] = (len(self.lines), body)
         self.append("reserve", session, body)
 
@@ -104,7 +108,7 @@ class Ledger:
             seq, r = self.reserves[session]
             extra = {**{k: r[k] for k in C.RESERVED if k in r}, "reserve": seq, "opened_by": r.get("for") or r["by"],
                      "started_utc": "2026-10-20T12:05:00Z", **extra}
-        body = {"window": window, "host": f"{HOST}.{session}", "pinned": "ab" * 20, "key_sha512": self.key_sha512,
+        body = {"window": window, "host": f"{HOST}.{session}", "pinned": PIN, "key_sha512": self.key_sha512,
                 "port": 7811, "by": "proofs", **extra}
         self.append("open", session, {k: v for k, v in body.items() if v is not DROP})
 
@@ -114,7 +118,7 @@ class Ledger:
         hellos = (directory / R.HELLOS).read_text().count("\n") if (directory / R.HELLOS).is_file() else 0
         body = {"closed": closed, "files": files, "rc": 0 if closed else 1, "record_leaf": record_leaf(directory),
                 "commitment": record["commitment"]["root"], "refused_hellos": hellos, "complete": closed,
-                "ended": "closed by the client" if closed else "the stream closed"}
+                "ended": "closed by the client" if closed else "the stream closed", "pinned": PIN}
         self.append("end", session, {k: v for k, v in {**body, **changes}.items() if v is not DROP})
 
 
@@ -180,12 +184,13 @@ class Host:
 
     def trusted(self, window: dict = WINDOW, key: C.ChallengerKey | None = None, ledger=None):
         """`remote.trusted_session` over this host's directory and the ledger's file (or `ledger`), its one head."""
-        return R.trusted_session(self.directory, [ledger or self.ledger.path], window, key or pinned_key(), lms_verify)
+        return R.trusted_session(self.directory, [ledger or self.ledger.path], window, key or pinned_key(), MAIN,
+                                 lms_verify)
 
     def trusted_of(self, window: dict = WINDOW):
         """`challenger.trusted_session_of` over this host's files as they are, past `remote`'s check of the sealed bytes."""
-        return C.trusted_session_of(R.ledger_lines(self.ledger.path), window, pinned_key(), R.session_files(self.directory),
-                                    lms_verify)
+        return C.trusted_session_of(R.ledger_lines(self.ledger.path), window, pinned_key(), MAIN,
+                                    R.session_files(self.directory), lms_verify)
 
 
 def honest(host: Host) -> dict[str, C.LiveRecord]:
@@ -884,21 +889,21 @@ def test_a_ledger_that_reuses_or_goes_back_on_a_leaf_is_refused(leaves):
     def ledger(qs):
         sign, lines, entries = at(*qs), [], []
         for n, r in ((1, "11"), (2, "22")):
-            entries += [("open", f"s-{n}", {"window": {"root": r * 64}, "host": f"{HOST}.s-{n}", "pinned": "ab" * 20,
+            entries += [("open", f"s-{n}", {"window": {"root": r * 64}, "host": f"{HOST}.s-{n}", "pinned": PIN,
                                             "key_sha512": key_sha512, "by": "proofs"}),
                         ("end", f"s-{n}", {"closed": True, "files": {f: "00" * 64 for f in C.SEALED_FILES},
                                            "record_leaf": (qs + [0, 0])[2 * n - 2] + 1, "commitment": "00" * 64,
-                                           "refused_hellos": 0, "complete": True})]
+                                           "refused_hellos": 0, "complete": True, "pinned": PIN})]
         for kind, session, body in entries[:len(qs)]:
             lines.append(C.ledger_line(lines, kind, session, body, lms.public_key(PINNED)[:16], sign))
         return lines
 
-    assert C.audited_session(ledger([2 * q + 1 for q in range(len(leaves))]), WINDOW, pinned_key(),
+    assert C.audited_session(ledger([2 * q + 1 for q in range(len(leaves))]), WINDOW, pinned_key(), MAIN,
                              lms_verify).session == "s-1"
     i = next(i for i in range(1, len(leaves)) if leaves[i] <= leaves[i - 1])
     with pytest.raises(C.CoinError, match=f"entry {i}: signed at leaf {leaves[i]}, not after the last entry's "
                                           f"{leaves[i - 1]}"):
-        C.audited_session(ledger(leaves), WINDOW, pinned_key(), lms_verify)
+        C.audited_session(ledger(leaves), WINDOW, pinned_key(), MAIN, lms_verify)
 
 
 def test_a_record_leaf_outside_its_session_or_at_another_entry_is_refused(tmp_path, signer):
@@ -999,27 +1004,29 @@ def test_the_refused_hellos_are_the_ones_the_end_sealed_and_counted(tmp_path, si
 def test_a_windows_prover_is_the_lane_its_open_names_it_for_else_its_opener(tmp_path, signer):
     host = Host(tmp_path, signer)
     honest(host)
-    assert C.audited_session(R.ledger_lines(host.ledger.path), WINDOW, pinned_key(), lms_verify).prover == "proofs"
+    assert C.audited_session(R.ledger_lines(host.ledger.path), WINDOW, pinned_key(), MAIN, lms_verify).prover == "proofs"
     named = Ledger(tmp_path / "for.jsonl", at(0, 3))
     named.open("s-1", **{"for": "vllm"})
     named.end("s-1", host.directory, True)
-    assert C.audited_session(named.lines, WINDOW, pinned_key(), lms_verify).prover == "vllm"
+    assert C.audited_session(named.lines, WINDOW, pinned_key(), MAIN, lms_verify).prover == "vllm"
     host.trusted(ledger=named.path)
     unnamed = Ledger(tmp_path / "unnamed.jsonl", at(0))
     unnamed.open("s-1", **{"for": 7})
     with pytest.raises(C.CoinError, match="ledger entry 0 is malformed"):
-        C.audited_session(unnamed.lines, WINDOW, pinned_key(), lms_verify)
+        C.audited_session(unnamed.lines, WINDOW, pinned_key(), MAIN, lms_verify)
 
 
 def _period_open(ledger: Ledger, name: str = "p-0", lane: str = "proofs", **changes) -> None:
-    body = {"period": name, "lane": lane, "by": lane, "cap": 4, "circuit": "cd" * 64, "pinned": "ab" * 20,
+    body = {"period": name, "lane": lane, "by": lane, "cap": 4, "circuit": "cd" * 64, "pinned": PIN,
             "key_sha512": ledger.key_sha512, "opened_utc": "2026-10-20T12:00:00Z", **changes}
     ledger.append("period-open", None, {k: v for k, v in body.items() if v is not DROP})
 
 
-def _period_close(ledger: Ledger, windows: list, complete: bool, name: str = "p-0", lane: str = "proofs") -> None:
-    ledger.append("period-close", None, {"period": name, "lane": lane, "by": lane, "windows": windows,
-                                         "complete": complete, "closed_utc": "2026-10-20T13:00:00Z"})
+def _period_close(ledger: Ledger, windows: list, complete: bool, name: str = "p-0", lane: str = "proofs",
+                  **changes) -> None:
+    body = {"period": name, "lane": lane, "by": lane, "windows": windows, "complete": complete,
+            "closed_utc": "2026-10-20T13:00:00Z", "pinned": PIN, **changes}
+    ledger.append("period-close", None, {k: v for k, v in body.items() if v is not DROP})
 
 
 def test_a_ledger_with_periods_is_read_and_a_close_that_misstates_its_windows_is_refused(tmp_path, signer):
@@ -1036,7 +1043,7 @@ def test_a_ledger_with_periods_is_read_and_a_close_that_misstates_its_windows_is
     verify = lambda m, sig: lms_verify(pinned_key(), m, sig)
     periods = C.verify_periods([line.encode() for line in ledger.lines], ledger.I, verify)
     assert periods["p-0"]["windows"] == ["s-1"] and periods["p-0"]["close"] is not None
-    audited = C.audited_session(ledger.lines, WINDOW, pinned_key(), lms_verify)
+    audited = C.audited_session(ledger.lines, WINDOW, pinned_key(), MAIN, lms_verify)
     assert (audited.period, audited.cap, audited.circuit) == ("p-0", 4, "cd" * 64)
     for windows, complete in (([{"root": WINDOW["root"], "session": "s-1", "complete": True}], False), ([], False),
                               ([{"root": WINDOW["root"], "session": "s-1", "complete": False}], False)):
@@ -1047,11 +1054,11 @@ def test_a_ledger_with_periods_is_read_and_a_close_that_misstates_its_windows_is
     other = Ledger(tmp_path / "other.jsonl", at(0))
     _period_open(other, key_sha512="00" * 64)
     with pytest.raises(C.CoinError, match="ledger entry 0 is signed under challenger key 0{16}..., not the window's"):
-        C.audited_session(other.lines, WINDOW, pinned_key(), lms_verify)
+        C.audited_session(other.lines, WINDOW, pinned_key(), MAIN, lms_verify)
     v1 = Ledger(tmp_path / "v1.jsonl", at(0), schema=C.LEDGER_SCHEMA_V1)
     _period_open(v1)
     with pytest.raises(C.CoinError, match="entry 0: a period-open is v2 and names its period and its lane"):
-        C.audited_session(v1.lines, WINDOW, pinned_key(), lms_verify)
+        C.audited_session(v1.lines, WINDOW, pinned_key(), MAIN, lms_verify)
 
 
 def test_a_reserved_window_is_read_when_its_open_binds_its_reserve(tmp_path, signer):
@@ -1064,7 +1071,7 @@ def test_a_reserved_window_is_read_when_its_open_binds_its_reserve(tmp_path, sig
     host = Host(tmp_path, signer, RESERVED_SESSION, ledger=ledger)
     honest(host)
     assert host.trusted()[0] == host.challenger.commitment
-    audited = C.audited_session(ledger.lines, WINDOW, pinned_key(), lms_verify)
+    audited = C.audited_session(ledger.lines, WINDOW, pinned_key(), MAIN, lms_verify)
     assert (audited.session, audited.prover, audited.period, audited.cap) == (RESERVED_SESSION, "proofs", "p-0", 4)
     unopened = "s20261020T121000Z-cd34"
     ledger.reserve(unopened)
@@ -1092,16 +1099,16 @@ def test_a_reserved_window_is_read_when_its_open_binds_its_reserve(tmp_path, sig
         bad.reserve(RESERVED_SESSION, **reserve)
         bad.open(RESERVED_SESSION, **opened)
         with pytest.raises(C.CoinError, match=re.escape(refusal)):
-            C.audited_session(bad.lines, WINDOW, pinned_key(), lms_verify)
+            C.audited_session(bad.lines, WINDOW, pinned_key(), MAIN, lms_verify)
     unbound = Ledger(tmp_path / "unbound.jsonl", at(0, 1))
     unbound.reserve(RESERVED_SESSION)
     unbound.open("s-1")
     with pytest.raises(C.CoinError, match="entry 1: a v2 open without a reserve after the ledger's first reserve"):
-        C.audited_session(unbound.lines, WINDOW, pinned_key(), lms_verify)
+        C.audited_session(unbound.lines, WINDOW, pinned_key(), MAIN, lms_verify)
     loose = Ledger(tmp_path / "loose.jsonl", at(0))
     loose.reserve("s-1")
     with pytest.raises(C.CoinError, match="entry 0: a reserve is v2 and the first entry of its session s-1"):
-        C.audited_session(loose.lines, WINDOW, pinned_key(), lms_verify)
+        C.audited_session(loose.lines, WINDOW, pinned_key(), MAIN, lms_verify)
 
 
 def test_a_period_commits_its_cap_and_circuit_and_holds_no_window_past_its_cap(tmp_path, signer):
@@ -1121,17 +1128,17 @@ def test_a_period_commits_its_cap_and_circuit_and_holds_no_window_past_its_cap(t
         bad = Ledger(tmp_path / f"bad{i}.jsonl", at(0))
         _period_open(bad, **changes)
         with pytest.raises(C.CoinError, match="entry 0: period p-0's cap is a positive integer and its circuit"):
-            C.audited_session(bad.lines, WINDOW, pinned_key(), lms_verify)
+            C.audited_session(bad.lines, WINDOW, pinned_key(), MAIN, lms_verify)
     old = Ledger(tmp_path / "old.jsonl", at(0, 1, 4))
     _period_open(old, cap=DROP, circuit=DROP)
     old.open("s-1")
     old.end("s-1", host.directory, True)
     with pytest.raises(C.CoinError, match="period p-0, which holds session s-1, commits no cap or circuit"):
-        C.audited_session(old.lines, WINDOW, pinned_key(), lms_verify)
+        C.audited_session(old.lines, WINDOW, pinned_key(), MAIN, lms_verify)
     named = Ledger(tmp_path / "named.jsonl", at(0))
     _period_open(named, circuit="verity/pouw/h1@v1")
     with pytest.raises(C.CoinError, match="entry 0: period p-0's cap is a positive integer and its circuit a SHA-512"):
-        C.audited_session(named.lines, WINDOW, pinned_key(), lms_verify)
+        C.audited_session(named.lines, WINDOW, pinned_key(), MAIN, lms_verify)
 
 
 XOR8 = PrimitiveDefinition("RemoteTestXor8", 1, (("a", Value(8)), ("b", Value(8))), Value(8), lambda a, b: a ^ b,
@@ -1178,7 +1185,7 @@ def test_a_window_counts_toward_its_period_only_when_it_proves_the_circuit_the_p
     assert hashlib.sha512(descriptor).hexdigest() == digest == _declared(4, annotate=True)[1]
     host = _rehearsal(tmp_path / "honest", signer, digest)
     lines = R.ledger_lines(host.ledger.path)
-    audited = C.credited_session(lines, WINDOW, pinned_key(), descriptor, lms_verify)
+    audited = C.credited_session(lines, WINDOW, pinned_key(), MAIN, descriptor, lms_verify)
     assert (audited.session, audited.prover, audited.period, audited.cap, audited.circuit) == (
         RESERVED_SESSION, "vllm", "p-0", 1, digest)
     assert C.circuit_reason("p-0", digest, descriptor) is None
@@ -1190,19 +1197,19 @@ def test_a_window_counts_toward_its_period_only_when_it_proves_the_circuit_the_p
                 f"the circuit the window's sessions prove (descriptor SHA-512 {got[:16]}...) is not {digest[:16]}..., "
                 "the one period p-0 committed: prove the period's declared circuit, or open a period whose --circuit "
                 "is this descriptor's SHA-512")):
-            C.credited_session(lines, WINDOW, pinned_key(), wrong, lms_verify)
+            C.credited_session(lines, WINDOW, pinned_key(), MAIN, wrong, lms_verify)
     for bad in (descriptor.decode(), json.loads(descriptor), bytearray(descriptor), None):
         with pytest.raises(C.CoinError, match=re.escape(C.DESCRIPTOR_FORM)):
-            C.credited_session(lines, WINDOW, pinned_key(), bad, lms_verify)
+            C.credited_session(lines, WINDOW, pinned_key(), MAIN, bad, lms_verify)
     assert C.circuit_reason("p-0", None, descriptor) == (
         "period p-0 commits no circuit, so no window counts toward it: open a period whose --circuit is the declared "
         "circuit's SHA-512")
     loose = _rehearsal(tmp_path / "loose", signer, digest, period=False)
-    assert C.audited_session(R.ledger_lines(loose.ledger.path), WINDOW, pinned_key(), lms_verify).period is None
+    assert C.audited_session(R.ledger_lines(loose.ledger.path), WINDOW, pinned_key(), MAIN, lms_verify).period is None
     with pytest.raises(C.CoinError, match=re.escape("holds the window's session in no period, so it counts toward none")):
-        C.credited_session(R.ledger_lines(loose.ledger.path), WINDOW, pinned_key(), descriptor, lms_verify)
+        C.credited_session(R.ledger_lines(loose.ledger.path), WINDOW, pinned_key(), MAIN, descriptor, lms_verify)
     with pytest.raises(C.CoinError, match="the auditor's ledger opens no challenger session for this window"):
-        C.credited_session(lines, {"root": "22" * 64}, pinned_key(), descriptor, lms_verify)
+        C.credited_session(lines, {"root": "22" * 64}, pinned_key(), MAIN, descriptor, lms_verify)
 
 
 def test_the_ledger_is_the_longest_of_infras_heads_when_each_extends_the_others(tmp_path, signer):
@@ -1216,18 +1223,18 @@ def test_the_ledger_is_the_longest_of_infras_heads_when_each_extends_the_others(
     second = Host(tmp_path, signer, "s-2", "two", ledger=first.ledger, window=later)
     honest(second)
     for heads in ([early, first.ledger.path], [first.ledger.path, early, first.ledger.path]):
-        assert R.trusted_session(second.directory, heads, later, pinned_key(), lms_verify)[0] == second.challenger.commitment
+        assert R.trusted_session(second.directory, heads, later, pinned_key(), MAIN, lms_verify)[0] == second.challenger.commitment
     with pytest.raises(C.CoinError, match="opens no challenger session for this window"):
-        R.trusted_session(second.directory, [early], later, pinned_key(), lms_verify)
+        R.trusted_session(second.directory, [early], later, pinned_key(), MAIN, lms_verify)
     fork = Ledger(tmp_path / "fork.jsonl", at(8))
     fork.lines = R.ledger_lines(early)
     fork.open("s-9", {"root": "99" * 64})
     with pytest.raises(C.CoinError, match="published heads 1 and 2 don't extend one another: its ledger was forked"):
-        R.trusted_session(second.directory, [early, first.ledger.path, fork.path], later, pinned_key(), lms_verify)
+        R.trusted_session(second.directory, [early, first.ledger.path, fork.path], later, pinned_key(), MAIN, lms_verify)
     torn = tmp_path / "torn.jsonl"
     torn.write_text(first.ledger.path.read_text()[:-9] + "\n")
     with pytest.raises(C.CoinError, match="published head 1 is refused: the auditor's ledger entry 3 is malformed"):
-        R.trusted_session(second.directory, [early, torn], later, pinned_key(), lms_verify)
+        R.trusted_session(second.directory, [early, torn], later, pinned_key(), MAIN, lms_verify)
     for heads, why in ((None, C.NO_AUDIT), ([], C.NO_AUDIT), ("lines", C.HEADS_FORM)):
         with pytest.raises(C.CoinError, match=re.escape(why)):
             C.ledger_head(heads, pinned_key(), lms_verify)
@@ -1239,6 +1246,68 @@ def test_an_end_whose_reason_is_past_ascii_is_read_escaped(tmp_path, signer):
     path = _resealed(tmp_path, host, ended="the client closed it \u2026")
     assert "\\u2026" in path.read_text()
     assert host.trusted(ledger=path)[0] == host.challenger.commitment
+
+
+def test_a_session_counts_only_when_its_host_ran_a_commit_of_mains_first_parent_history(tmp_path, signer):
+    """RT4-INT-40: each entry the verifier reads of a session (its reserve, open and end) and of its period (its open and
+    close) names the commit of the host's tree that wrote it, and the session counts only when each is a commit of
+    main's first-parent history as the verifier's own copy lists it, the session's all one.  A host pinned to a pushed
+    commit (one that merged later is main's ancestor but no first-parent commit) or to no commit, or repinned
+    mid-session, is refused, as is a verifier holding no copy of main's history; a period spans repins, so its entries
+    may name other commits of main."""
+    ledger = Ledger(tmp_path / "windows.jsonl", signer)
+    _period_open(ledger, pinned=MAIN[0])
+    ledger.reserve(RESERVED_SESSION)
+    host = Host(tmp_path, signer, RESERVED_SESSION, ledger=ledger)
+    honest(host)
+    _period_close(ledger, [{"root": WINDOW["root"], "session": RESERVED_SESSION, "complete": True}], True)
+    copy = tmp_path / "main.txt"
+    copy.write_text("".join(c + "\n" for c in MAIN))
+    assert R.main_lines(copy) == MAIN
+    assert R.trusted_session(host.directory, [ledger.path], WINDOW, pinned_key(), R.main_lines(copy),
+                             lms_verify)[0] == host.challenger.commitment
+
+    def variant(name: str, reserve=PIN, opened=PIN, end=PIN, period=MAIN[0], closed=PIN):
+        """The host's ledger again, at its leaves, each entry pinned as given (period-open 0, reserve 1, open 2, end 3,
+        period-close 4)."""
+        v = Ledger(tmp_path / f"{name}.jsonl", at(0, 1, 2, 5, 6))
+        _period_open(v, pinned=period)
+        v.reserve(RESERVED_SESSION, pinned=reserve)
+        v.open(RESERVED_SESSION, pinned=opened)
+        v.end(RESERVED_SESSION, host.directory, True, pinned=end)
+        _period_close(v, [{"root": WINDOW["root"], "session": RESERVED_SESSION, "complete": True}], True, pinned=closed)
+        return v.path
+
+    assert host.trusted(ledger=variant("honest"))[0] == host.challenger.commitment
+    assert host.trusted(ledger=variant("spans", period=MAIN[2], closed=MAIN[0]))[0] == host.challenger.commitment
+    pushed = "9e" * 20
+    for name, pins, why in (
+            ("pushed", {"reserve": pushed, "opened": pushed, "end": pushed},
+             f"reserve entry 1 was written by the host's tree at {pushed}, which is not a commit of main's first-parent "
+             f"history: {C.REPIN}"),
+            ("period-pushed", {"period": pushed}, f"period-open entry 0 was written by the host's tree at {pushed}"),
+            ("close-pushed", {"closed": pushed}, f"period-close entry 4 was written by the host's tree at {pushed}"),
+            ("repinned", {"end": MAIN[2]}, f"writes session {RESERVED_SESSION}'s entries from the host's trees at {PIN} "
+                                           f"and {MAIN[2]}: the host was repinned mid-session"),
+            ("reserved-before", {"reserve": MAIN[0]}, f"from the host's trees at {MAIN[0]} and {PIN}: the host was "
+                                                      "repinned mid-session"),
+            ("unpinned", {"end": DROP}, f"end entry 3 names no pinned tree: {C.REPIN}"),
+            ("unpinned-reserve", {"reserve": None}, f"reserve entry 1 names no pinned tree: {C.REPIN}"),
+            ("unpinned-close", {"closed": DROP}, f"period-close entry 4 names no pinned tree: {C.REPIN}"),
+            ("malformed", {"end": PIN.upper()},
+             f"end entry 3 names a pinned tree that is not a commit (40 lowercase hex): {C.REPIN}"),
+            ("short", {"reserve": PIN[:-2]}, "reserve entry 1 names a pinned tree that is not a commit")):
+        with pytest.raises(C.CoinError, match=re.escape(why)):
+            host.trusted(ledger=variant(name, **pins))
+    with pytest.raises(C.CoinError, match=re.escape(f"reserve entry 1 was written by the host's tree at {PIN}, which is "
+                                                    "not a commit of main's first-parent history")):
+        R.trusted_session(host.directory, [ledger.path], WINDOW, pinned_key(), [c for c in MAIN if c != PIN], lms_verify)
+    for main, why in ((None, C.NO_MAIN), ("\n".join(MAIN), C.MAIN_FORM), ([*MAIN, PIN.upper()], C.MAIN_FORM),
+                      ([*MAIN, None], C.MAIN_FORM), ([c + "\n" for c in MAIN], C.MAIN_FORM)):
+        with pytest.raises(C.CoinError, match=re.escape(why)):
+            R.trusted_session(host.directory, [ledger.path], WINDOW, pinned_key(), main, lms_verify)
+    with pytest.raises(C.CoinError, match=re.escape(C.NO_MAIN)):
+        R.main_lines(tmp_path / "no-main.txt")
 
 
 def test_the_pin_is_read_from_infras_key_record():
