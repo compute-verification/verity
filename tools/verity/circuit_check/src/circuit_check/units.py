@@ -18,9 +18,11 @@ are the ones it lists; else its binding is built as the catalog builds it and it
 what `cli._tasks` would build: `targets.select` over what the roots reach in `targets.reachable`'s order, PoUW's roots whole,
 each target's units (`targets.BINDINGS`), whether it is a Call (`targets.call_families`: the word Call families, and the
 Boolean version of each suite Definition of one, made from its binding where no built binding holds it, `_materialize`) and
-its key.  A target that misses is made from a binding that reaches it, along the path its record lists, and its descriptor
-computed again: one that differs from its record's, or two records that differ on one Definition, is `Stale`, and the run
-builds the whole catalog.  What a body build registers (a constant's primitive, a lifted Definition) is never a root: the
+its key.  Two bindings can reach two Definitions of one id (`AttnDotStep_v1` with its DOT bound, from `boolean_version`, and
+unbound, from its sidecar): `targets.reachable` keeps the one it pops first, and so each id is taken from the record of the
+binding it is first reached through (`derive`).  A target that misses is made from that binding, along the path its record
+lists, and its descriptor computed again: one that differs from its record's is `Stale`, and the run builds the whole
+catalog.  What a body build registers (a constant's primitive, a lifted Definition) is never a root: the
 catalog's registered roots are taken before any binding runs, here and in `targets.catalog`, and `cli._tasks` reads the Calls
 off that one suite.  A full build stores every binding's record only when the task list derived from those records is the one
 it built (`cli._record_units`).
@@ -127,22 +129,6 @@ def _reach(roots: list[Any]) -> tuple[dict[str, dict], dict[str, Any]]:
     return nodes, objs
 
 
-def _merged(entries: list[Entry]) -> dict[str, dict]:
-    out: dict[str, dict] = {}
-    for e in entries:
-        for fid, info in e.nodes.items():
-            have = out.get(fid)
-            if have is None:
-                out[fid] = dict(info)
-                continue
-            for k in have.keys() & info.keys():
-                if have[k] != info[k]:
-                    raise Stale(f"{fid}: two bindings' records differ on its {k} ({e.name}'s and an earlier one's)")
-            for k in info.keys() - have.keys():
-                have[k] = info[k]
-    return out
-
-
 def _select(reached: dict[str, dict]) -> set[str]:
     """`targets.select` over records."""
     by: dict[str, list[tuple[str, dict]]] = {}
@@ -159,41 +145,33 @@ def _select(reached: dict[str, dict]) -> set[str]:
     return out
 
 
-def _closure(ids: list[str], nodes: dict[str, dict]) -> set[str]:
-    out: set[str] = set()
-    stack = list(ids)
-    while stack:
-        fid = stack.pop()
-        if fid in out:
-            continue
-        out.add(fid)
-        stack.extend(nodes[fid].get("c", ()))
-    return out
-
-
 @dataclass
 class Derived:
-    """The suite as the records give it: its ids in order, each one's units and the merged records."""
+    """The suite as the records give it: its ids in order, each one's units, and of each id reached its record and the binding
+    it was taken from (``via``)."""
     ids: list[str]
     units: dict[str, set[str]]
     nodes: dict[str, dict]
+    via: dict[str, Entry] = field(default_factory=dict)
 
 
 def derive(entries: list[Entry]) -> Derived:
     """`targets.suite` and its `targets.BINDINGS` over records: what the catalog's roots (each entry's, in catalog order)
-    reach, in `targets.reachable`'s order, `select`'s, PoUW's roots whole."""
-    nodes = _merged(entries)
-    stack = [fid for e in entries for fid in e.root_ids]
-    reached: dict[str, dict] = {}
+    reach, in `targets.reachable`'s order, `select`'s, PoUW's roots whole.  Each id is the record's of the binding it is first
+    reached through, as `reachable` keeps the object it pops first, and each binding's units go to what its own record
+    reaches, as `targets.suite` gives each binding what its own roots reach."""
+    stack = [(fid, e) for e in entries for fid in e.root_ids]
+    nodes: dict[str, dict] = {}
+    via: dict[str, Entry] = {}
     while stack:
-        fid = stack.pop()
-        if fid in reached:
+        fid, e = stack.pop()
+        if fid in nodes:
             continue
-        if fid not in nodes:
-            raise Stale(f"{fid}: no record holds what it reaches")
-        reached[fid] = nodes[fid]
-        stack.extend(nodes[fid].get("c", ()))
-    out = _select(reached)
+        if fid not in e.nodes:
+            raise Stale(f"{fid}: {e.name}'s record doesn't hold what its roots reach")
+        nodes[fid], via[fid] = e.nodes[fid], e
+        stack.extend((c, e) for c in e.nodes[fid].get("c", ()))
+    out = _select(nodes)
     for e in entries:
         if e.kind == "_pouw_roots":
             out.update(e.root_ids)
@@ -201,12 +179,12 @@ def derive(entries: list[Entry]) -> Derived:
     for e in entries:
         if e.units == REGISTERED:
             continue
-        for fid in _closure(e.root_ids, nodes) & out:
+        for fid in e.nodes.keys() & out:
             units.setdefault(fid, set()).update(e.units)
     for fid in out:
         if "d" not in nodes[fid]:
             raise Stale(f"{fid}: its record has no descriptor")
-    return Derived(sorted(out), units, nodes)
+    return Derived(sorted(out), units, nodes, via)
 
 
 def _path(e: Entry, fid: str) -> list[str] | None:
@@ -227,12 +205,13 @@ def _path(e: Entry, fid: str) -> list[str] | None:
     return None
 
 
-def _materialize(entries: list[Entry], objects: dict[str, Any], fid: str, in_unit: bool = True) -> Any:
-    """The object of ``fid``: one built now, else made from the first binding whose record reaches it, building each body on
-    the path its record lists (a model's under its units, as the catalog builds a model's body)."""
+def _materialize(entries: list[Entry], objects: dict[str, Any], fid: str, in_unit: bool = True, via: Entry | None = None) -> Any:
+    """The object of ``fid``: one built now, else made from ``via`` (the binding `derive` took it from) or else the first binding
+    whose record reaches it, building each body on the path its record lists (a model's under its units, as the catalog builds
+    a model's body)."""
     if fid in objects:
         return objects[fid]
-    for e in entries:
+    for e in ([via] if via is not None else []) + [e for e in entries if e is not via]:
         if fid not in e.nodes or (path := _path(e, fid)) is None:
             continue
         fn = next(r for r in e.roots if r.id == path[0])
@@ -265,7 +244,7 @@ def call_families(entries: list[Entry], d: Derived, objects: dict[str, Any], in_
         for fid in wordy:
             n = d.nodes[fid]
             if fid not in objects and (n.get("di", fid) in keys or n.get("n") in names):
-                if (f := TG.boolean_family(_materialize(entries, objects, fid, in_unit))) is not None:
+                if (f := TG.boolean_family(_materialize(entries, objects, fid, in_unit, d.via.get(fid)))) is not None:
                     found.add(f)
     return words | found
 
@@ -367,16 +346,20 @@ def plan(cache: Path, repo: Path, log: Callable[[str], None] | None = None) -> P
         entries[0].nodes, entries[0].reused = rec["nodes"], True
     if not any(e.reused for e in entries):
         return None
-    objects: dict[str, Any] = {}
+    made: list[dict[str, Any]] = []
     for e in entries:
-        for fn in e.roots:
-            if _kind(fn) is not None:
-                objects.setdefault(fn.id, fn)
+        made.append({fn.id: fn for fn in e.roots if _kind(fn) is not None})
         if not e.reused:
             e.nodes, objs = _reach(e.roots)
-            for fid, fn in objs.items():
-                objects.setdefault(fid, fn)
+            made[-1].update(objs)
     d = derive(entries)
+    # an object built now stands for an id when its binding's record holds the descriptor of the one `derive` took
+    objects: dict[str, Any] = {}
+    for e, objs in zip(entries, made):
+        for fid, fn in objs.items():
+            if fid not in objects and (v := d.via.get(fid)) is not None and \
+                    (v is e or e.nodes.get(fid, {}).get("d") == v.nodes[fid].get("d")):
+                objects[fid] = fn
     calls = call_families(entries, d, objects)
     if log:
         log(f"circuit-check: catalog from records: {sum(e.reused for e in entries)} of {len(entries)} bindings reused, "

@@ -143,7 +143,7 @@ def _planned(plan: UN.Plan, opts: CK.Options, cache: Path) -> tuple[list[tuple],
         if (hit := CC.lookup(cache, k, REPO)) is not None and not _errored(hit[0]):
             hits[len(tasks)] = hit
         else:
-            fn = UN._materialize(plan.entries, plan.objects, fid)
+            fn = UN._materialize(plan.entries, plan.objects, fid, via=d.via.get(fid))
             if CC.descriptor(fn) != node["d"]:
                 raise UN.Stale(f"{fid}: its descriptor is not the one its binding's record holds")
         units = d.units.get(fid, set())

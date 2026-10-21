@@ -183,6 +183,65 @@ def test_a_binding_that_makes_no_root_is_held_by_every_record(tmp_path):
     assert out["values"] == _fresh(root)["values"] and out["values"]["SynKn_v1"] == [3 + 3 * 0x0105]
 
 
+#: SynStep at a static Definition its body doesn't call, bound by one binding and unbound by another (as `AttnDotStep_v1` takes
+#: its DOT from `boolean_version` and from its sidecar): two Definitions of one id whose descriptors differ
+STEP = """
+from verity.ml.circuits import composite
+
+from syn.prims import SynAdd, V
+
+
+@composite("SynInner", 1, [], lambda S: ((("a", V), ("b", V)), V))
+def SynInner(B, S, a, b):
+    return B.call(SynAdd, a, b)
+
+
+@composite("SynStep", 1, ["OP"], lambda S: ((("a", V), ("b", V)), V))
+def SynStep(B, S, a, b):
+    return B.call(SynAdd, b, a)
+"""
+STEP_BINDINGS = """def unbound():
+    from syn import step
+    return [bind(step.SynStep, OP=step.SynInner)]
+
+
+def bound():
+    from syn import step
+    return [bind(step.SynStep, OP=bind(step.SynInner))]
+
+
+"""
+
+
+def test_two_definitions_of_one_id_are_the_one_the_catalog_keeps(tmp_path):
+    """Two bindings reach two Definitions of one id (SynStep with its OP bound and unbound): the suite holds the one
+    `targets.reachable` keeps, and so does the task list from the records, which takes each id from the record of the binding it
+    is reached through, so a full build stores every record, a run from them reuses every target, and a target that misses (its
+    pin changed) is made from that binding's root, not the other's."""
+    from test_cache import _set_pin
+
+    root = _tree(tmp_path / "t")
+    (root / "syn/step.py").write_text(STEP.lstrip("\n"))
+    _edit(root, "syn/catalog.py", "BINDINGS = [", STEP_BINDINGS + "BINDINGS = [")
+    _bindings(root, '(("_unbound_roots",), unbound)', '(("_bound_roots",), bound)')
+    first = _run(root)
+    assert first["stats"]["units"] == {"stored": 5}, first["stats"]["units"]
+    step = "SynStep_v1{OP=SynInner_v1}"
+    assert step in first["values"]
+    _edit(root, "syn/idle.py", "B.call(SynAdd, a, a)", "B.call(SynAdd, b, b)")    # no binding reads it: the task list misses
+    out = _run(root)
+    assert out["stats"]["units"].get("reused") == 5 and out["stats"]["units"].get("rebuilt") == [], out["stats"]["units"]
+    assert out["hits"] == sorted(out["values"])
+    _set_pin(root, step, {"and": 1})
+    out = _run(root)
+    assert out["stats"]["units"].get("reused") == 5 and "stale" not in out["stats"]["units"], out["stats"]["units"]
+    assert out["hits"] == sorted(set(out["values"]) - {step})
+    _edit(root, "syn/step.py", "B.call(SynAdd, b, a)", "B.call(SynAdd, a, b)")
+    out = _run(root)
+    assert sorted(out["stats"]["units"]["rebuilt"]) == ["_bound_roots", "_unbound_roots"], out["stats"]["units"]
+    assert out["values"] == _fresh(root)["values"]
+
+
 def test_the_calls_from_records_are_the_catalogs_for_made_on_demand_and_unbound_kinds(monkeypatch):
     """`units.call_families` gives `targets.call_families`' Calls: a word Call family made on demand (`Const32[0x..]_v1`) has
     its Boolean version among them though no record holds one, and a vocabulary kind that doesn't bind refuses them by name, as
