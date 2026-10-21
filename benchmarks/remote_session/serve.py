@@ -192,7 +192,7 @@ def main() -> int:
     ap.add_argument("--samples", type=int, default=4096, help="with --local")
     ap.add_argument("--lifetime", type=int, default=1, help="with --local: L, windows")
     ap.add_argument("--verdict", choices=("lean", "both", "python"),
-                    help="with --local: who decides (`verifier.py --verdict`; default its own, both)")
+                    help="with --local: who decides (`verifier.py --verdict`; default its own, lean)")
     a = ap.parse_args()
     if "," in a.plan:
         ap.error("one session a process: a Store serves one session")

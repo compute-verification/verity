@@ -43,7 +43,8 @@ at the draws on the server's tape (`LeanRelease.draws`):
 * the link (round `1`) and the `Finish` (round `LeanRelease.last`) are the firewall's own (`recomputed`,
   `LeanRelease.ownMsg`, the stop where the frame refuses the coins): the link's level-0 roots, which the firewall
   computes from the leaves under salts the worker never sees (`Firewall::new`'s recheck, sent by `Firewall::root` in
-  `flock-circuit`), and `Final.encode` of the record and proof files the firewall builds itself (`Firewall::finish`).
+  `flock-circuit`), and `Final.encode` of the record and proof files the firewall builds itself (the session's Lean
+  finish, `Flock.Firewall.Finish`, whose files `flock-circuit` sends).
   The worker's value there passes where it is the firewall's: a device root other than the recheck's fails the rep, and
   a worker whose proof the firewall's checks fail sends any other value;
 * every other round is a frame round: the worker's value is its device round, the mask is the frame's release, and the
@@ -53,7 +54,7 @@ The firewall stops a session only at its `Finish` (§10.1): once a round fails, 
 device's place (`LeanRelease.scheduled`), and the last round is the stop. That is the deferred server `ZkServer.nextD` at
 `L.toSrv` with the stand-in `LeanRelease.fillOf`. Every way a worker fails is a round that fails:
 * an error, output that does not decode, a panic or silence is no value (`LeanRelease.pass_of_none`);
-* a tree at another size than the shadow's, or any round Rust's checks, the frame's pass decision or the frame refuses, is
+* a tree at another size than the Lean finish's opening's, or any round Rust's checks, the frame's pass decision or the frame refuses, is
   a value that fails.
 
 From that round on, below the last round, the release is the frame's release of the scheduled round as a stopped rep's,
@@ -245,8 +246,10 @@ end PassDecision
 
 /-! ## The transport's coin check
 
-`coin_tree::Checked` asks `flock-firewall coins` (`Flock.Firewall.Coins.cmd`) at the prover's `Hello`, at `Hello`'s
-answer and at each opening, and hands the frame no coins past its first refusal. -/
+The coin check (`Flock.Firewall.Coins`) reads the session's `Hello` (its tree, link points and nonce), checks `Hello`'s
+answer and each opening, and hands the frame no coins past its first refusal: the session loop (`flock-firewall session`)
+at the `Hello` its setup's values give (`Flock.Firewall.Session.helloOf`), `coin_tree::Checked` asking
+`flock-firewall coins` at the parse of the `Hello`'s bytes (`coinHello`). -/
 
 /-- `flock-firewall coins`' reading of the server's `Hello` `hb`, `Req::Hello`'s frame (its tag, its `u32le` length, the
 bytes): the bytes as UTF-8, parsed (`Hello.parse`). -/
@@ -255,10 +258,11 @@ def coinHello (hb : Msg) : Except String _root_.Flock.Firewall.Coins.Hello :=
   | some s => _root_.Flock.Firewall.Coins.Hello.parse s
   | none => .error "a Hello that is not UTF-8"
 
-/-- **`flock-firewall coins`' verdict** on a session: the `Hello` `hb`, then its answer `a` (`Session.start`), then the
-openings `os` in order (`Session.openAll`). -/
-def coinVerdict (hb a : Msg) (os : List (String × ℕ × Msg)) : Except String _root_.Flock.Firewall.Coins.Session :=
-  (coinHello hb).bind fun hl => (_root_.Flock.Firewall.Coins.Session.start hl a).bind fun S => S.openAll os
+/-- **The coin check's verdict** on a session: its reading of the `Hello`, `hl`, then `Hello`'s answer `a`
+(`Session.start`), then the openings `os` in order (`Session.openAll`). -/
+def coinVerdict (hl : Except String _root_.Flock.Firewall.Coins.Hello) (a : Msg) (os : List (String × ℕ × Msg)) :
+    Except String _root_.Flock.Firewall.Coins.Session :=
+  hl.bind fun hl => (_root_.Flock.Firewall.Coins.Session.start hl a).bind fun S => S.openAll os
 
 /-- The openings `ms` as `flock-firewall coins` takes them, from the `j`-th on: each with the stream and coin count of
 its request (`req`). -/
@@ -287,18 +291,19 @@ structure LeanRelease (W R : Type) where
   coins of the last round); a function of the statement and the history, never of the tape. Its `stopped` is not
   read. -/
   prog : Msg → List (Msg × Msg) → Masker
-  /-- the transport: the coins of the stream's answer to a round, as the frame takes them (`coins N`) -/
-  coinsOf : Msg → Array _root_.Flock.F128
+  /-- the transport: the coins the frame takes (`coins N`) after the rounds of `h`, for the stream's last answer (the
+  session loop's `Frames.feedOf` of it, `LeanRelease.loop`) -/
+  coinsOf : Msg → List (Msg × Msg) → Array _root_.Flock.F128
   /-- the device round at honest worker values, given the values the firewall fixes by its own computation, by name -/
   device : Msg → W → R → List (Msg × Msg) → (String → Option ByteArray) → Msg
   /-- the firewall's transcript after the rounds of `h`, whose own values the device round reads -/
   computed : Msg → W → R → List (Msg × Msg) → _root_.Flock.Firewall.Contract.Transcript
   /-- Rust's own checks on a worker's device round (`firewall::Checker` against the algebraic phase's skeleton,
-  `ShadowLink::check` against the opening's shadow), which run before the Lean frame's pass decision (`pass`) and can only
+  `ShadowLink::check` against the Lean finish's opening), which run before the Lean frame's pass decision (`pass`) and can only
   fail a round more: any decision at all -/
   cross : Msg → ℕ → W → R → List (Msg × Msg) → Msg → Bool
   /-- the device round the firewall sends in the device's place once a round failed: the skeleton's round with zero
-  values in the algebraic phase, the shadow's round in the opening, and at the inner proof's rounds, which the firewall
+  values in the algebraic phase, the Lean finish's round in the opening, and at the inner proof's rounds, which the firewall
   sends alone, the firewall's own round itself (`check_self`), given the values the firewall fixes by its own
   computation, by name -/
   scheduled : Msg → W → R → List (Msg × Msg) → (String → Option ByteArray) → Msg
@@ -309,15 +314,21 @@ structure LeanRelease (W R : Type) where
   stop : Msg
   /-- round `0`, the server's own `Hello` at the tape's nonce (`CoinLayer.helloD` at the deployed coin layer) -/
   hello : Msg → R → Msg
+  /-- the transport: what its coin check reads of the session's `Hello`, the tree, the session stream's coin count and the
+  nonce (`Flock.Firewall.Session.helloOf` from the setup's values in the session loop; `coinHello` of `hello`, a parse of
+  its bytes, under `coin_tree::Checked`), or why it reads none -/
+  helloChk : Msg → R → Except String _root_.Flock.Firewall.Coins.Hello
   /-- the transport: the stream and coin count it requests the `j`-th opening at, by the statement's schedule
   (`coin_tree::Checked`'s request at `Req::Commit` and `Req::Round`) -/
   req : Msg → ℕ → String × ℕ
   /-- round `1`, the link, the firewall's own: level 0's roots as its recheck commits them, from the leaves under the
   salts on its tape (`Firewall::root`, `Firewall::new` in `flock-circuit`), never the worker's -/
   link : Msg → W → R → List (Msg × Msg) → Msg
-  /-- the record and proof files the firewall builds itself at the session's `Finish` (`Firewall::finish`) -/
+  /-- the record and proof files the firewall builds itself at the session's `Finish` (the session's Lean finish,
+  `Flock.Firewall.Finish`) -/
   files : Msg → W → R → List (Msg × Msg) → String × Array ByteArray
-  /-- whether the firewall's own `Finish` stops (`Firewall::finish`, `flock-firewall finish` answering `err`): where a
+  /-- whether the firewall's own `Finish` stops (on the constraints the Lean finish replays: `repFw`'s `failingOn`, and
+  `flock-circuit`'s `constraints_failing_on_pads` on those `innerLive` answers): where a
   constraint fails at the rep's drawn pads, a function of the witness and the workers' values, which the server's tape
   fixes -/
   finStops : Msg → W → R → List (Msg × Msg) → Bool
@@ -345,9 +356,9 @@ theorem cfg_root {W R : Type} (L : LeanRelease W R) (x : Msg) (ρ : R) (h : List
     (L.cfg x ρ h).root = padsRoot (L.lay x (L.rep x h.length)) (L.drawsAt x ρ (L.rep x h.length)) :=
   rfl
 
-/-- **Whether the transport's coin check passes the history `h`** at the tape `ρ`: `flock-firewall coins` on the server's
-own `Hello` at the tape (`hello`, at the tape's nonce), then `Hello`'s answer, then each later answer as the opening of
-the transport's request (`coinVerdict`). A history with no opening passes. The deployed transport checks `Hello`'s
+/-- **Whether the transport's coin check passes the history `h`** at the tape `ρ`: the coin check at its reading of the
+session's `Hello` at the tape (`helloChk`, at the tape's nonce), then `Hello`'s answer, then each later answer as the
+opening of the transport's request (`coinVerdict`). A history with no opening passes. The deployed transport checks `Hello`'s
 answer as it arrives (`coin_tree::Checked`) and stops before the link where it is malformed; the committed-coin
 prover's link (`strat` at no opening) reads nothing of the answer, so a release that stopped there could not be its
 message (`OwnRefine`), and here the stop comes at the first opening instead, which a malformed answer fails
@@ -355,14 +366,14 @@ message (`OwnRefine`), and here the stop comes at the first opening instead, whi
 the link's place: a function of the verifier's own answer, which is the coin layer's and not the witness's, so it adds
 nothing for the stop-leak bound to charge. -/
 def opens {W R : Type} (L : LeanRelease W R) (x : Msg) (ρ : R) : List (Msg × Msg) → Bool
-  | (_, a) :: o :: ops => (coinVerdict (L.hello x ρ) a (reqsFrom (L.req x) 0 ((o :: ops).map Prod.snd))).isOk
+  | (_, a) :: o :: ops => (coinVerdict (L.helloChk x ρ) a (reqsFrom (L.req x) 0 ((o :: ops).map Prod.snd))).isOk
   | _ => true
 
 /-- **The frame takes the stream's coins** for the last round of `h`, at the round's rep's configuration
 (`Masker.answer`): the rep's state after them, or the frame's refusal of them. -/
 def frameAnswer {W R : Type} (L : LeanRelease W R) (x : Msg) (ρ : R) (h : List (Msg × Msg)) : Except String Masker :=
   match h.getLast? with
-  | some (_, cs) => (L.prog x h).answer (L.cfg x ρ h) (L.coinsOf cs)
+  | some _ => (L.prog x h).answer (L.cfg x ρ h) (L.coinsOf x h)
   | none => pure (L.prog x h)
 
 /-- The transport's stop where its coin check refuses. -/
@@ -384,14 +395,14 @@ theorem answered_of_not_opens {W R : Type} (L : LeanRelease W R) (x : Msg) (ρ :
   unfold answered
   exact if_neg (by rw [ho]; exact Bool.false_ne_true)
 
-/-- Past `Hello`'s answer and one opening, where `flock-firewall coins` reads the server's `Hello` as `hl`, the check is
+/-- Past `Hello`'s answer and one opening, where the coin check reads the session's `Hello` as `hl`, the check is
 `Session.start` at the answer, then `Session.openAll` over the openings. -/
 theorem opens_of_hello {W R : Type} (L : LeanRelease W R) (x : Msg) (ρ : R) (m₀ a : Msg) (o : Msg × Msg)
-    (ops : List (Msg × Msg)) {hl : _root_.Flock.Firewall.Coins.Hello} (hp : coinHello (L.hello x ρ) = .ok hl) :
+    (ops : List (Msg × Msg)) {hl : _root_.Flock.Firewall.Coins.Hello} (hp : L.helloChk x ρ = .ok hl) :
     L.opens x ρ ((m₀, a) :: o :: ops) =
       ((_root_.Flock.Firewall.Coins.Session.start hl a).bind fun S =>
         S.openAll (reqsFrom (L.req x) 0 ((o :: ops).map Prod.snd))).isOk := by
-  show (coinVerdict (L.hello x ρ) a (reqsFrom (L.req x) 0 ((o :: ops).map Prod.snd))).isOk = _
+  show (coinVerdict (L.helloChk x ρ) a (reqsFrom (L.req x) 0 ((o :: ops).map Prod.snd))).isOk = _
   unfold coinVerdict
   rw [hp]
   try rfl

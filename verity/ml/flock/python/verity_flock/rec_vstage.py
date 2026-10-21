@@ -2,6 +2,8 @@
 statement (`verity_flock.rec_outer`) and the algebra's `InnerRepCheck` (`verity_flock.rec_residuals`), staged from the inner
 session's directory (`verity_flock.rec_live.Proxy.write`: ``public.json``, ``private.json``, ``session/``). The algebra is
 staged as its parts (`rec_residuals.parts`, ``alg/p<j>/``), each within --zk's coin schedule, and holds when every part does.
+With level 0, the table's level-0 cap is staged too, every node of ``root_B`` held at a fixed row (`rec_cap`, ``cap/``,
+`stage_cap`).
 
     python -m verity_flock.rec_vstage points INNER CIRCUIT PUBLIC > points.json
     inner-fold [--partition FILE] verity/flock-circuit CIRCUIT PUBLIC points.json os > fold.json    (tests/lean/InnerFold.lean)
@@ -75,6 +77,7 @@ from types import SimpleNamespace
 from verity.ml.circuits.ops.boolean import gf2k as G
 
 from . import rec_algebra as A
+from . import rec_cap as RC
 from . import rec_live as RL
 from . import rec_open as R
 from . import rec_outer as O
@@ -302,12 +305,14 @@ def stage_stacked(public: dict, private: dict, program: str, sr: SimpleNamespace
     return {"m": sr.sh.m, "openings": len(sr.qs), "levels": levels, "opening": opening}
 
 
-def shared_rows(algebra, stacked=()) -> dict:
+def shared_rows(algebra, stacked=(), tops=()) -> dict:
     """The verifier's record of V*'s shared rows (`--rec-rows`: `RecVStar.checkRows`, `checkAcc`, `checkShared`) from staged
     statement directories: every row port of the algebra's parts ``algebra`` (all but ``v`` and ``out``), and, under its value,
-    the ``out`` entry of each of R's levels ``stacked`` (`stage_stacked`'s ``L<l>``, reading ``rec-top-stacked-L<l>``). Each
-    session's port reading a value listed here must be that registration but in reads (`checkShared`, the first entry of the
-    value), so two entries of one name, or of one value, that differ are refused here."""
+    the ``out`` entry of each of R's levels ``stacked`` (`stage_stacked`'s ``L<l>``, reading ``rec-top-stacked-L<l>``) and the
+    port reading the table's level-0 cap ``rec-top-L0`` of each of ``tops`` (level 0's ``L0``, its ``out``, and RecCap's
+    ``cap``, its ``top``), which every session reading it must hold (`checkShared`). Each session's port reading a value
+    listed here must be that registration but in reads (`checkShared`, the first entry of the value), so two entries of one
+    name, or of one value, that differ are refused here."""
     ports: dict = {}
     for d, top in [(Path(d), False) for d in algebra] + [(Path(d), True) for d in stacked]:
         for nm, e in json.loads((d / "registered.json").read_text())["ports"].items():
@@ -318,11 +323,28 @@ def shared_rows(algebra, stacked=()) -> dict:
             if ports.setdefault(e["value"] if top else nm, e) != e:
                 raise ValueError(f"{d}: its port {nm} is not the other statements' {e['value'] if top else nm}")
     site = lambda e: {k: x for k, x in e.items() if k != "reads"}  # noqa: E731
+    for d in map(Path, tops):
+        es = [e for e in json.loads((d / "registered.json").read_text())["ports"].values() if e["value"] == RC.TOP_VALUE]
+        if len(es) != 1:
+            raise ValueError(f"{d}: {len(es)} ports read {RC.TOP_VALUE}, not one")
+        if site(ports.setdefault(RC.TOP_VALUE, es[0])) != site(es[0]):
+            raise ValueError(f"{d}: its {RC.TOP_VALUE} is not the other statements' registration of it")
     first: dict = {}
     for nm, e in ports.items():
         if site(first.setdefault(e["value"], e)) != site(e):
             raise ValueError(f"the shared rows register {e['value']} twice: {nm} is not the first entry of that value")
     return {"format": "verity/registered-reads/v0", "ports": ports}
+
+
+def stage_cap(inner: Path, out: Path, evaluate: bool = True) -> dict:
+    """RecCap alone over the inner session ``inner`` (`rec_cap.stage`, under ``out``): level 0's tops rebuilt from the
+    recorded ``b || c`` and the salts the firewall committed ``root_B`` under, at `rec_outer.session_program` of
+    ``public.json``, as `stage` builds them for level 0."""
+    inner = Path(inner)
+    public_b = (inner / "public.json").read_bytes()
+    public, private, proofs = V.load(inner, TABLE)
+    ts = {rep: V.tops(public, private, f"{TABLE}/rep{rep}", TABLE) for rep in sorted(proofs)}
+    return RC.stage(O.TopValue.build(O.session_program(public_b), 0, {rep: t_[0] for rep, t_ in ts.items()}), Path(out), evaluate)
 
 
 def coefficients(vf: SimpleNamespace, queries: list[V.Query]) -> dict:
@@ -447,7 +469,8 @@ def stage(inner: Path, fold: dict, out: Path, levels: list[int] | None = None, a
     session whose V* is not the cap's shape (`rec_shape.check`) before staging. ``sparse``: the bucket's `rec_sparse.Shape`
     and META's range of the hidden circuit; the sparse phase's RecSparse statement over both reps (`sparse_reps`), its
     messages read as the firewall committed them (`sparse_messages`, h as the algebra's h round), under ``out/sparse``; with
-    R in the session, `stage_stacked` under ``out/stacked``. ``version``: the levels' population programs'
+    R in the session, `stage_stacked` under ``out/stacked``. With level 0 staged and no forgery, the table's level-0 cap
+    under ``out/cap`` (`rec_cap.stage`). ``version``: the levels' population programs'
     (`rec_outer.stage`; 0 restages levels recorded before v1).
     Returns what each statement costs and holds, and the verifier's own seconds."""
     inner, out = Path(inner), Path(out)
@@ -512,6 +535,10 @@ def stage(inner: Path, fold: dict, out: Path, levels: list[int] | None = None, a
                 res[f"forged_{forge}"] = {"level": lv["level"], "instance": 0, "rep": q.rep, "j": q.j, "word": 0, "bit": 0}
             s["stage_s"] = round(time.perf_counter() - t0, 1)
             res["levels"][f"L{lv['level']}"] = s
+    if forge is None and (want is None or 0 in want):
+        t0 = time.perf_counter()
+        res["cap"] = RC.stage(O.TopValue.build(program, 0, {rep: t_[0] for rep, t_ in ts.items()}), out / "cap", evaluate)
+        res["cap"]["stage_s"] = round(time.perf_counter() - t0, 1)
     if algebra or sparse:
         t0 = time.perf_counter()
         mrs = message_rounds(public, private, sh)
@@ -609,7 +636,8 @@ def main(argv=None) -> int:
     if a.forge is not None:
         return 0
     held = all(not s["not_opened"] and not s["not_summed"] for s in res["levels"].values())
-    sp, sr = res.get("sparse"), res.get("stacked")
+    sp, sr, cap = res.get("sparse"), res.get("stacked"), res.get("cap")
+    held = held and (cap is None or cap["unit_agrees"] in (None, [True] * cap["instances"]))
     held = held and (sr is None or (all(not s["not_opened"] and not s["not_summed"] for s in sr["levels"].values())
                                     and all(all(p["holds"]) for p in sr["opening"])))
     return 0 if held and all(all(p["holds"]) for p in alg) and (sp is None or all(sp["holds"])) else 1

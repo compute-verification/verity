@@ -37,6 +37,7 @@ def test_every_spec_parses_with_its_scope_and_plain_arm():
         want[f"vllm-int8{v}"] = ("all", "int8-all", False)
         if v:
             want[f"co32c-u16-cohalf{v}"] = ("all", "int8-all", True)
+    want["vllm-int8-lm"] = want["vllm-int8-lut-cal-lm"] = ("all", "int8-all", False)
     for g in ("fp4c", "fp4", "int5"):
         for m in ("dither", "round"):
             want[f"{g}-{m}"] = want[f"{g}-{m}-all"] = ("all", "int8-all", True)

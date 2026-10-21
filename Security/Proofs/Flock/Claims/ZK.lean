@@ -105,6 +105,7 @@ import Proofs.Flock.Claims.ZK.FinishRank
 import Proofs.Flock.Claims.ZK.FinishSrc
 import Proofs.Flock.Claims.ZK.FinishBridge
 import Proofs.Flock.Claims.ZK.HelloLean
+import Proofs.Flock.Claims.ZK.SessionLean
 
 /-!
 # Flock's zero knowledge against a malicious verifier
@@ -450,16 +451,24 @@ import Proofs.Flock.Claims.ZK.HelloLean
   history only through the decoded coins on the histories its check passes (`LeanRelease.ReadsCoins`) gives the rule
   and `StopsAt` (`LeanRelease.rfOf`, `stopsAt_of_readsCoins`). `Flock.zk_server_lean_coinLayer` is it at the deployed
   coin layer (`CoinLayer.session`) at SHA-512 from the transport's trusts alone, each named for its reason:
-  `FinalRoundEq`, `ReqsFollow` and `ReadsCoins` are facts about what Rust computes (`Firewall::finish`,
-  `coin_tree::Checked`, `LeanFrame`), `LeanRelease.HelloIs` one about what the transport hands `flock-firewall hello`
-  (`HelloLean`; `HelloEq` follows, `helloEq_of_helloIs`), `LinkRoundEq` one about what the transport hands
-  `flock-firewall link` (`LinkRecheck`), and `HelloDParses` one about Lean's own `Hello.parse` of `CoinLayer.helloD`,
-  which the kernel cannot evaluate (`Lean.Json.parse` is `partial`); `CheckIs` is proved from them
-  (`LeanRelease.checkIs_coinLayer`, `helloParses_of_helloEq`).
+  `FinalRoundEq` is a fact about the proof files the session's Lean finish computes (`Flock.Firewall.Finish`), which
+  `flock-circuit` sends, `ProgReads` one about what Rust hands the frame (`LeanFrame`), `LinkRoundEq` one
+  about what the transport hands `Flock.Firewall.Link` (`LinkRecheck`), and `LeanRelease.HelloIs` (`HelloLean`;
+  `HelloEq` follows, `helloEq_of_helloIs`), `HelloParses`, `ReqsFollow`, `CoinsRead` (`ReadsCoins` is `ProgReads` and
+  `CoinsRead`) and the `Finish`'s round facts about the session loop
+  (`flock-firewall session`), where they are theorems (`SessionLean`); `CheckIs` is proved from them
+  (`LeanRelease.checkIs_coinLayer`). The released bytes are read only through `LiveRoundEq`, `FillRoundEq`,
+  `FinalRoundEq` (from `FrameAdmits` and `FinishIs`), `LinkRoundEq` (from `LinkIs`) and `ProgReads`, none of them yet
+  proved about the live path, so the deployed ZK server is not yet proved zero-knowledge.
+* `SessionLean`: the release at the session loop (`LeanRelease.loop`): its `Hello`, its coin check's reading of it and its
+  requests are the loop's pure functions at the statement's setup (`Flock.Firewall.Session.helloOf`, `planOf`, `reqAt`),
+  so `HelloIs`, `HelloParses` and `ReqsFollow` hold at every statement and `Finish` is one past the last coin
+  (`LeanRelease.loop_helloIs`, `loop_helloParses`, `loop_reqsFollow`, `loop_last`), and
+  **`Flock.zk_server_lean_loop`** is `Flock.zk_server_lean_coinLayer` there.
 * `HelloLean`: the server's `Hello` at Lean's `flock-firewall hello`. Its `Hello` is the coin layer's
   (`Flock.Firewall.Hello.json_eq`, `CoinLayer.helloD_eq`, by `rfl`), so `HelloEq` follows from the server's `Hello`
   being that command's message (`LeanRelease.HelloIs`, **`LeanRelease.helloEq_of_helloIs`**).
-* `LinkRecheck`: the firewall's link at the Lean recheck. `flock-firewall link`'s root (`Flock.Firewall.Link.root`, its
+* `LinkRecheck`: the firewall's link at the Lean recheck. `Flock.Firewall.Link`'s root (`Flock.Firewall.Link.root`, its
   tree built in tasks) is `layerOf`'s cap over `hm96-sha512/v1`'s leaves of `encodeRowsZk`'s rows
   (`Flock.Firewall.Link.root_eq`, `cap_eq`), the switched prover's level-0 leaves are the honest prover's
   (`swExeOf_inl`, `Masked.leafAt_swCutAt`), so the recheck's link message at the tape (`Masked.linkMsg`) is round `0`'s
@@ -475,9 +484,9 @@ import Proofs.Flock.Claims.ZK.HelloLean
   `encodeRowsZk`'s where the padding fits below `2^cols` and `cols < d ≤ 64` (`Flock.Firewall.Link.rowsFft_eq`), so
   `rows` is `encodeRowsZk` on both of its paths (`rows_eq`).
 * `FinishCommit`: the firewall's own `Finish` (`Flock.Firewall.Finish`) commits as the masked prover does. Its codeword
-  by the FFT is `encodeRows`'s (`Flock.Firewall.Finish.rowsFft_eq`, `rowsOf_eq`), so at SHA-512 and `hm96-sha512/v1`,
-  in any lawful monad, `FlockComplete.commitP` returns `commitFw`'s commitment and `FlockComplete.commitPZk` of the
-  table `flock-firewall link` reads returns `commit0`'s (**`commitP_eq`**, **`commitPZk_eq`**, through `Commit.toC`), and
+  by the FFT is `encodeRows`'s (`Flock.Firewall.Finish.rowsFft_eq`, `rowsOf_eq`), so at SHA-512 and `hm96-sha512/v1`, in
+  any lawful monad, `FlockComplete.commitP` returns `commitFw`'s commitment and `FlockComplete.commitPZk` of the table
+  `Flock.Firewall.Link` reads returns `commit0`'s (**`commitP_eq`**, **`commitPZk_eq`**, through `Commit.toC`), and
   their openings agree (`openP_eq`).
 * `FinishPiop`: the firewall's transcript, zerocheck, lincheck and ring switch are the masked session's from its source,
   by unfolding through `Asks.toC`: **`Flock.Firewall.Finish.zerocheckFw_eq`**, **`lincheckFw_eq`** (`zerocheckCut`,

@@ -1,18 +1,33 @@
-import Models.Accounting.Guarantees.Actual.WipePool
+import Mathlib.Analysis.SpecialFunctions.Log.Basic
+import Definitions.Accounting.Actual.WipePool
 import Proofs.Core.Game.Prob
 
 /-!
-# The memory cap's lifetime pool
+# The memory cap's lifetime pool, as lemmas over an abstract run tree
 
-`Accounting.Guarantees.Actual.WipePool` and `WipePoolDelta`, by Ville's inequality on the run tree, proved by finite
-optional stopping: from an un-held total `a`, the probability that every wipe passes with the total at least `H` is at
-most `exp(k (a − H))` (`WipePlay.prEv_le_exp`), by induction on the tree. At a wipe the draws that pass challenge no
-un-held block, which happens with probability `(1 − x)^k ≤ exp(−k x)` (`WipePlay.prCoin_miss_le`), and each
-continuation is at most `exp(k (a + x − H))`, so the wipe is at most `exp(−k x) · exp(k (a + x − H)) = exp(k (a − H))`.
+Step 7 of the memory-cap restatement ("One delta"), by Ville's inequality over a run tree of wipes
+(`Accounting.WipePlay`), each fixing its un-held set `U` and so its fraction `x_t = |U| / |B|` before its fresh coins:
 
-The honest wipe (`WipePlay.oneWipe`), which passes exactly when no draw challenges an un-held block, meets the premise
-(`oneWipe_sound`) and has the event at `H = x` with probability `((|B| − |U|) / |B|)^k` (`oneWipe_prEv`), which is
-positive when some block is held.
+* `WipePool`: on a tree meeting `UnheldFails`, `Pr[every wipe passes ∧ Σ_t x_t ≥ H] ≤ exp(−k H)`.
+* `WipePoolDelta`: at `H = ln(1/δ)/k`, at most `δ`.
+
+Neither bound depends on the number of wipes: the tree is finite, of any depth. At `k = 1` each wipe is one read with
+its own `U`, which gives the pool per read, adaptive within a wipe as well.
+
+They are lemmas, not guarantees. `U` is a label on the tree, and `UnheldFails` (a passing draw challenges no block of
+`U`) holds of every tree once each `U` is empty, so it is no physical premise. The pool's physical premise is
+memory-accounting's restatement of it on the challenger's verdicts (MEM-55), which uses these lemmas at `k = 1`. The
+lemmas count only what the wipes see: a block dropped after one wipe and rebuilt before the next is in no `U`.
+
+The proof is finite optional stopping: from an un-held total `a`, the probability that every wipe passes with the total
+at least `H` is at most `exp(k (a − H))` (`WipePlay.prEv_le_exp`), by induction on the tree. At a wipe the draws that
+pass challenge no un-held block, which happens with probability `(1 − x)^k ≤ exp(−k x)` (`WipePlay.prCoin_miss_le`),
+and each continuation is at most `exp(k (a + x − H))`, so the wipe is at most
+`exp(−k x) · exp(k (a + x − H)) = exp(k (a − H))`.
+
+The honest wipe (`WipePlay.oneWipe`), which passes exactly when no draw challenges an un-held block, meets
+`UnheldFails` (`oneWipe_sound`) and has the event at `H = x` with probability `((|B| − |U|) / |B|)^k`
+(`oneWipe_prEv`), which is positive when some block is held.
 -/
 
 namespace Accounting
@@ -123,7 +138,7 @@ def oneWipe (B : Type) [Fintype B] [Nonempty B] [DecidableEq B] (U : Finset B) :
   .wipe B U (fun ω => decide (∀ i, ω i ∉ U)) fun _ => .stop
 
 theorem oneWipe_sound (B : Type) [Fintype B] [Nonempty B] [DecidableEq B] (U : Finset B) :
-    Assumptions.TimedRoundSound (oneWipe (k := k) B U) := by
+    (oneWipe (k := k) B U).UnheldFails := by
   show (∀ ω : Fin k → B, decide (∀ i, ω i ∉ U) = true → ∀ i, ω i ∉ U) ∧ ∀ _ : Fin k → B, True
   exact ⟨fun _ hω => of_decide_eq_true hω, fun _ => trivial⟩
 
@@ -143,12 +158,21 @@ end WipePlay
 
 namespace SecurityProofs.Actual
 
-theorem WipePool : Guarantees.Actual.WipePool := by
+/-- **The lifetime pool.** For any run tree of wipes of `k` rounds (`P : WipePlay k`, any finite number of wipes, each
+fixing its un-held set before its coins) on which a passing draw challenges no block of a wipe's un-held set, and any
+`H`, the probability that every wipe passes and the un-held fractions sum to at least `H` is at most `exp(−k H)`. -/
+theorem WipePool :
+    ∀ (k : ℕ) (P : WipePlay k) (H : ℝ), P.UnheldFails →
+      P.prEv (fun x => H ≤ x) 0 ≤ ENNReal.ofReal (Real.exp (-((k : ℝ) * H))) := by
   intro k P H hP
   have key := WipePlay.prEv_le_exp H P 0 hP
   rwa [zero_sub, mul_neg] at key
 
-theorem WipePoolDelta : Guarantees.Actual.WipePoolDelta := by
+/-- **The lifetime pool at `δ`.** For `k > 0` rounds a wipe and `δ > 0`, on a run tree meeting `UnheldFails`, the
+probability that every wipe passes and the un-held fractions sum to at least `ln(1/δ)/k` is at most `δ`. -/
+theorem WipePoolDelta :
+    ∀ (k : ℕ) (P : WipePlay k) (δ : ℝ), 0 < k → 0 < δ → P.UnheldFails →
+      P.prEv (fun x => Real.log (1 / δ) / k ≤ x) 0 ≤ ENNReal.ofReal δ := by
   intro k P δ hk hδ hP
   refine (WipePool k P (Real.log (1 / δ) / k) hP).trans (le_of_eq ?_)
   rw [mul_div_cancel₀ _ (Nat.cast_ne_zero.2 hk.ne'), one_div, Real.log_inv, neg_neg, Real.exp_log hδ]

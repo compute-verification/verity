@@ -3,7 +3,7 @@ import Proofs.Flock.Claims.ZK.Refine
 /-!
 # The `Finish` round where neither the frame nor the firewall's own `Finish` stops
 
-`FinalRoundEq` holds the firewall's `Finish` (`Firewall::finish`, Lean's `flock-firewall finish`) to the session's
+`FinalRoundEq` holds the firewall's `Finish` (the session's Lean finish, `Flock.Firewall.Finish`) to the session's
 switched last message, which is `fin` of the tables' switched views where every table admits the opened coins and `off`
 of the cut where one does not (`RefSession.swMsgAt`). Here it is split at that branch:
 

@@ -4,19 +4,21 @@ import Mathlib.Data.Fintype.Pi
 /-!
 # The run tree of a prover's wipes (trusted)
 
-The memory cap's lifetime pool (the memory-cap restatement's step 7, "One delta"): over a prover's whole life, every
-wipe is `k` timed rounds, each challenging a block drawn uniformly from the wiped store `B` by the verifier's fresh
-coins (the deployed challenger's index stream is a PRF of its live seed, `prf/sha-512`, which the uniform draws
-idealize). A wipe's *un-held set* `U ⊆ B` is the blocks the prover cannot serve within a round's deadline, fixed by
-everything before the wipe's coins, so its *un-held fraction* `x = |U| / |B|` lies in `[0, 1]`.
+The abstract run tree the memory cap's lifetime pool (the memory-cap restatement's step 7, "One delta") is a lemma
+over: over a prover's whole life, every wipe is `k` timed rounds, each challenging a block drawn uniformly from the
+wiped store `B` by the verifier's fresh coins (the deployed challenger's index stream is a PRF of its live seed,
+`prf/sha-512`, which the uniform draws idealize). A wipe's *un-held set* `U ⊆ B` is a label on the tree, fixed by
+everything before the wipe's coins, so its *un-held fraction* `x = |U| / |B|` lies in `[0, 1]`; nothing here ties `U`
+to what the prover holds.
 
 * `WipePlay k`: one prover strategy as a finite run tree. `wipe B U pass next` is a wipe over the store `B` whose
   un-held set `U` and pass `pass` the history fixes before its `k` draws `ω : Fin k → B`; a wipe that passes continues
   with `next ω`, one that fails ends the run, caught. `coin` is any other verifier coin, and `stop` ends the run with
   every wipe passed. A tree is finite, of any depth, so it covers any number of wipes, each choosing `U` adaptively.
 * `prEv E P a`: the probability that every wipe of `P` passes and the run's un-held total `a + Σ_t x_t` satisfies `E`.
-* `UnheldFails`: at every wipe, a draw that challenges a block of `U` fails it, the timed-round premise
-  (`Accounting.Assumptions.TimedRoundSound`).
+* `UnheldFails`: at every wipe, a draw that challenges a block of `U` fails it, the pool lemmas' hypothesis
+  (`Accounting.SecurityProofs.Actual.WipePool`). Every tree meets it once each `U` is empty, so it is no physical
+  premise; the pool's physical premise is memory-accounting's restatement on the challenger's verdicts (MEM-55).
 -/
 
 namespace Accounting

@@ -7,7 +7,10 @@ with none.
 * a word primitive made on demand (`Const<w>[0x..]_v1`, `GatherBf16x{V}_v1`, `GatherI32x{V}_v1`, whole and as a tree of
   1024-word chunks) has a Boolean version made on demand;
 * `sigma_lift`'s Definitions (`registry.boolean_sigma`) compute their word composites at small statics, are Boolean throughout,
-  and are refused, naming every gap, when their word body Calls a Definition with no Boolean version.
+  and are refused, naming every gap, when their word body Calls a Definition with no Boolean version;
+* GLM-5.3 TP8's embedding shard selects the rows of its own tokens and zeros the rest on bits, its fused all-reduce + RMSNorm
+  computes its word composite on every branch the served descriptor takes, and the constants, residual add and fused norm its
+  B1 request Calls with no Boolean version of their own resolve to Boolean ones at their served descriptors.
 """
 from __future__ import annotations
 
@@ -22,8 +25,8 @@ from verity.ml.circuits.ops import prims as MP
 from verity.ml.circuits.ops import scalar as S
 from verity.ml.circuits.types import Array, Value
 from verity_vllm.program import boolean as BB
-from verity_vllm.program.registry import b1, dsv4_decode_indices as DI, hopper, inductor as I, marlin_moe as MM, moe
-from verity_vllm.program.registry import prims as P, ref_prims as R
+from verity_vllm.program.registry import b1, b1_tp2, dsv4_decode_indices as DI, hopper, inductor as I, marlin_moe as MM, moe
+from verity_vllm.program.registry import prims as P, ref_prims as R, tp_allreduce as TA
 
 F32 = Value(32)
 SPECIAL32 = [0, 0x80000000, 0x7F800000, 0xFF800000, 0x7FC00000, 0x7FFFFFFF, 0xFFC00001, 0x00000001, 0x807FFFFF, 0x3F800000,
@@ -108,6 +111,60 @@ SIGMA = [bind(b1.ResidualAdd, N=4), bind(b1.Gemm, K=32, N=2), bind(I.InductorRoP
 def test_a_sigma_definition_computes_its_word_composite_on_bits(word):
     bits = _agrees(word)
     assert getattr(bits.defn, "sigma_of", None) is word.defn
+    assert [BB._fid(n.fn) for n in bits.body.nodes] == [BB._fid(BB.boolean_version(n.fn)) for n in word.body.nodes]
+
+
+@pytest.mark.parametrize("start", [0, 16])
+def test_an_embedding_shard_on_bits_selects_its_own_tokens_rows_and_zeros_the_rest(start):
+    """`EmbeddingShard_v2` over a 16-row shard starting at 0 (rank 0's) and at 16, on the tokens at and past either end of the
+    shard, at the sign boundary, and inside it, where a random 32-bit token almost never is."""
+    VS, H = 16, 2
+    word = bind(b1_tp2.EmbeddingShard, VS=VS, H=H, START=start)
+    bits = bind(BB.boolean_version(word))
+    assert BL.is_boolean(bits) and bits.defn.sigma_of is word.defn
+    rng = np.random.default_rng(start)
+    tokens = [(start - 1) & 0xFFFFFFFF, start, start + 1, start + VS - 1, start + VS, 0, 0x7FFFFFFF, 0x80000000, 0xFFFFFFFF,
+              *rng.integers(start, start + VS, 7).tolist()]
+    table = rng.integers(0, 1 << 16, size=(len(tokens), VS, H), dtype=np.uint64)
+    want = [table[i, t - start].tolist() if start <= t < start + VS else [0] * H for i, t in enumerate(tokens)]
+    tok = np.array(tokens, np.uint64)
+    assert np.asarray(evaluate_batch(word, tok, table)).tolist() == want
+    assert np.asarray(evaluate_words(bits, tok, table)).tolist() == want
+
+
+#: FlashInfer's fused all-reduce + RMSNorm on the branches GLM-5.3 TP8's served descriptor takes (eight ranks, an eight-CTA
+#: cluster, the scale's FFMA, one-shot; at N = 2048, a warp a CTA), and two-shot over one CTA of two warps
+MNNVL = [bind(TA.AllReduceRmsNormMnnvl, WORLD=2, N=512, SHOT=2, CLUSTER=1, EPS=1e-5, FMA=True),
+         bind(TA.AllReduceRmsNormMnnvl, WORLD=8, N=2048, SHOT=1, CLUSTER=8, EPS=1e-5, FMA=True)]
+
+
+@pytest.mark.slow
+@pytest.mark.parametrize("word", MNNVL, ids=lambda d: d.id)
+def test_the_fused_all_reduce_rms_norm_on_bits_computes_its_word_composite(word):
+    """`AllReduceRmsNormMnnvl_v2` (17M gates two-shot, about 6 s; 79M at GLM-5.3's branches, about 17 s), on branches
+    circuit-check's binding (one-shot over one warp, the scale an FMUL and an FADD) does not take."""
+    bits = _agrees(word, n=16)
+    assert bits.defn.sigma_of is word.defn
+
+
+#: the word Definitions GLM-5.3 TP8 B1's request Calls as root Calls with no Boolean version of their own, at their descriptors
+#: there, but the embedding shard (19360 x 6144, whose body views its table element by element), which is above at 16 x 2
+GLM53_TP8 = [MP.const(32, 1), MP.const(32, 0x11F), bind(b1.ResidualAdd, N=6144),
+             pytest.param(bind(TA.AllReduceRmsNormMnnvl, WORLD=8, N=6144, SHOT=1, CLUSTER=8, EPS=1e-5, FMA=True),
+                          marks=pytest.mark.slow)]
+
+
+@pytest.mark.parametrize("word", GLM53_TP8, ids=lambda d: d.id)
+def test_glm53_tp8s_word_calls_resolve_to_boolean_versions_at_their_served_descriptors(word):
+    """Each resolves to a Boolean Definition of its name: a constant to its bits (made on demand), a composite to its σ
+    Definition at the same statics, whose body is its word body with each Call's Boolean version."""
+    bits = BB.boolean_version(word)
+    bits = bind(bits) if isinstance(bits, CompositeDefinition) else bits
+    assert BL.is_boolean(bits) and bits.name == word.name and bits.version > word.version
+    if isinstance(word, PrimitiveDefinition):
+        assert (sum(b << i for i, b in enumerate(evaluate(bits))),) == evaluate(word)
+        return
+    assert bits.defn.sigma_of is word.defn and bits.bindings == word.bindings
     assert [BB._fid(n.fn) for n in bits.body.nodes] == [BB._fid(BB.boolean_version(n.fn)) for n in word.body.nodes]
 
 

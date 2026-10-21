@@ -1,7 +1,9 @@
 #!/usr/bin/env bash
 # One-stage audit, run A5, over a TP Commit's windows, one per rank (a5.py --tp-commit), on a CPU machine: each rank's served
 # window through registration, the verifier's Lean draw, M0's prover and the Lean verifier of record. M0's flock-circuit and
-# Lean's flock-verify are built from this tree, in scratch.
+# Lean's flock-verify are built from this tree, in scratch. A5 takes a TP window as served only under a SHA-512 TP run root
+# (tp.serving_rows.source: sha512): a TP Commit's ranks, the stand-in's too, commit under rows-sha512 under the SHA-512 TP run
+# root (tp.run_root, verity/tp-run-root/v2); an old record's SHA-256 v1 root is refused before the draw.
 #   GLM-5.3 TP8: A5_TP=DIR holds the TP Commit's record (commit/runs.jsonl, commit/versions.json) and its windows (serving-rows/
 #     rank<r>/), A5_BUILD=DIR each rank's Programs of record (rank<r>/); the workload (integrations/vllm/workloads/$ROW.json) and
 #     the partition file (glm53_silu_mul_v2_tp8.json) are this tree's.

@@ -857,9 +857,19 @@ src = "tools/research/src/research/pods/sh/gpu_lease.sh"
 nodes = ["vy-nebius-2"]
 owner = "compute-accounting"
 
+# the live agent's code and description, at a fixed path the src evictor never touches (it was evicted from
+# /workspace/research/src/<commit>/ on 16 Oct)
+[[tree]]
+path = "/workspace/verity-guest/cluster-agent"
+src = "infra/cluster"
+nodes = ["vy-nebius-2"]
+run = ["systemd:vy-cluster-agent"]
+required = true
+owner = "infra"
+
 [[file]]
 path = "/etc/systemd/system/vy-cluster-agent.service"
-by = "infra/cluster/vy-cluster-agent.service"
+src = "infra/cluster/vy-cluster-agent.service"
 nodes = ["vy-nebius-2"]
 run = ["systemd:vy-cluster-agent"]
 owner = "infra"
