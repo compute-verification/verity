@@ -15,6 +15,8 @@ import Proofs.Accounting.Actual.WipePool
 import Proofs.Accounting.Actual.WipeReadPool
 import Proofs.Accounting.Actual.WipeLag
 import Proofs.Accounting.Actual.WipeBridge
+import Proofs.Accounting.Actual.WipePrf
+import Proofs.Accounting.Actual.WipeDraw
 
 /-!
 # The actual circuit's guarantees
@@ -81,4 +83,13 @@ The model of `note:console/20261012T0645Z-draft-actual-circuit-model` (`Security
   of the coins, from the latency ceiling, the late-answer rule (`verdictBinds_of_lateAnswers`), quiet and live reads
   and uniform labels; `WipeReadHeld`, the two composed with `WipeReadPool`: `K` narrow reads among accepted ones on
   at most `exp(−K (1 − (a − 1)/|B|)) + n |T| 2^m C(|B|, a) 2^{-a b}` of the coins.
+* `Actual/WipePrf.lean`: `WipeReadHeldPrf`, `WipeReadHeld` on the deployed labels, one lifetime table `prf s` of the
+  wipes' labels for uniform secrets `s`, with no label assumption: a uniform table meets `UniformLabels` given the
+  devices' coins (`uniformLabels_table`), and the step to `prf s` adds the PRF's advantage against the distinguisher
+  that runs the system once and outputs the event.
+* `Actual/WipeDraw.lean`: `WipeReadHeldPrfDraw`, `WipeReadHeldPrf` on the deployed index draw too, each read's index
+  the deployed rejection sampler on its first word of a keyed function of the challenger's uniform coin secret, with no
+  index assumption: the step from uniform words adds the coin function's advantage against the distinguisher that
+  runs the system once, and the sampler adds `n (2^w mod N) / 2^w`, below `2^-54` at the deployed wipe
+  (`drawRejection_deployed`).
 -/

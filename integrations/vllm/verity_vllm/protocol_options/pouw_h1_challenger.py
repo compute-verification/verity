@@ -162,12 +162,14 @@ def pinned_key(path: str | Path, public_sha512: str) -> ChallengerKey:
     return key
 
 
-def _window_reason(commits: Mapping[str, Any], trusted: LiveCommitment, received: Mapping[str, Sequence[bytes]],
-                   rounds: Callable[[list], str | None], session: str, root: str) -> str | None:
-    """Why the window's coins (its H1 commitment `commits`) aren't those of the session `session`, which the auditor's
-    ledger opened on `root` (hex), whose signed coin commitment is `trusted` and whose log shows it received `received`,
-    its salt coin opened after the window's own open root (`core_check.salt`) and its round log held to `rounds`; None
-    when they are."""
+def _window_reason(commits: Mapping[str, Any], key: ChallengerKey, lines: list[str], window: Mapping[str, Any],
+                   files: Mapping[str, Any], trusted: LiveCommitment, received: Mapping[str, Sequence[bytes]],
+                   session: str, verify: Any) -> str | None:
+    """Why the window's coins (its H1 commitment `commits`) aren't those of the session `session`, the one the auditor's
+    ledger `lines` (core's check of it under `key`) opened for `window` (``{root}``), whose files are `files`, whose
+    signed coin commitment is `trusted` and whose signed log shows it received `received`: its salt coin opened after the
+    window's own open root (`core_check.salt`, S from the ledger's reserve and R from its open) and its round log held to
+    `core_check.rounds`; None when they are."""
     for name in ("round_coins", "coins"):
         try:
             c = LiveCommitment.from_json(commits.get(name))
@@ -180,8 +182,8 @@ def _window_reason(commits: Mapping[str, Any], trusted: LiveCommitment, received
     named = given.get("session") if isinstance(given, Mapping) else None
     if named != session:
         return f"the window records session {named!r}, not {session}, the one the auditor's ledger opened on its root"
-    refused = CC.salt(trusted.to_json(), session, root, commits.get("weights_root"), commits.get("requests_root"),
-                      [r.hex() for r in received.get(Wd.SALT, ())], commits.get("salt_opening"))
+    refused = CC.salt(key.to_json(), lines, window, files, commits.get("weights_root"), commits.get("requests_root"),
+                      commits.get("salt_opening"), verify)
     if refused is not None:
         return f"the window's salt: {refused[1]}"
     log = list(commits.get("rounds") or ())
@@ -191,9 +193,10 @@ def _window_reason(commits: Mapping[str, Any], trusted: LiveCommitment, received
         return "the round log is not rounds 0, 1, ... in order"
     if (log[0].get("requests") if log else None) != commits.get("requests_root"):
         return "round 0's request table is not the one the window's open root is over (its requests_root)"
-    why = rounds(log)
-    if why is not None:
-        return f"the window's rounds: {why}"
+    refused = CC.rounds(key.to_json(), lines, window, files, [x.get("root") for x in log], [x.get("coin") for x in log],
+                        verify)
+    if refused is not None:
+        return f"the window's rounds: {refused[1]}"
     return draw_reason(commits, trusted, received.get(Wd.DRAW, ()))
 
 
@@ -213,13 +216,7 @@ def trusted_rounds_reason(commits: Mapping[str, Any], directory: str | Path, hea
         sid = Ch.audited_session(lines, window, key, verify).session
     except CoinError as e:
         return f"the challenger's session is not trusted: {e}"
-
-    def rounds(log: list) -> str | None:
-        refused = CC.rounds(key.to_json(), lines, window, files, [x.get("root") for x in log],
-                            [x.get("coin") for x in log], verify)
-        return None if refused is None else refused[1]
-
-    return _window_reason(commits, trusted, received, rounds, sid, window["root"])
+    return _window_reason(commits, key, lines, window, files, trusted, received, sid, verify)
 
 
 def draw_reason(commits: Mapping[str, Any], trusted: LiveCommitment, received: Sequence[bytes]) -> str | None:

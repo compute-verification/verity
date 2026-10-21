@@ -1,21 +1,28 @@
 """The rounds and salt difftests' cases: `core_check.rounds`'s arguments, ``{"key", "ledger", "window", "session",
-"roots", "openings"}``, and `core_check.salt`'s, ``{"coins", "session", "root", "weights", "requests", "received",
+"roots", "openings"}``, and `core_check.salt`'s, ``{"key", "ledger", "window", "session", "weights", "requests",
 "opening"}``.
 
-A rounds case is an honest live window read through its challenger's session: a live epoch's coins (`window.live_challenger`),
-the challenger's record of them signed at leaf `RECORD_LEAF` of a small LMS key (the window's pinned key), its release
-log (the salt coin opened after a root, sometimes, then each round root recorded in order and its coin opened after it,
-the challenger's `LiveRecord`, in canonical JSON on an integer clock), the session's close signed at the next leaf over
-the log's chain, no refused hellos, and the auditor's v2 ledger opening that session for the window (``{root}``) under
-the key's hash, among others and sometimes inside a period with its cap and circuit, and ending it closed, sealing the
-log and hellos the session's challenger left and naming its record's leaf and commitment; its entries up to the
-session's open sign at leaves 0, 1, …, and those after at `RECORD_LEAF` + 2 on.  Then one mutation (`ROUNDS_NAMES`)
-aimed at one refusal of `rounds`: the session's (an in-process challenger's coins, an unsigned or tampered log, a ledger
-signed under another key, under v1, cut before the session's end or at a reused leaf, a second session for the window's
-root, an end naming another record leaf or no hellos, hellos it didn't seal, …) or the coin rule's.  A salt case is an
-honest live window's salt coin (its session's open root, `salt.window_open_root` of its weights' root, its round-0
-request table's root and the session, recorded, and the salt coin opened after it), then one mutation (`SALT_NAMES`)
-aimed at one refusal of `salt`.  `tests/test_difftest.py` draws them for the harness, and
+A rounds case is an honest live window read through its challenger's session: a live epoch's coins
+(`window.live_challenger`), the challenger's record of them signed at leaf `RECORD_LEAF` of a small LMS key (the
+window's pinned key), its release log (the salt coin opened after a root, sometimes, then each round root recorded in
+order and its coin opened after it, the challenger's `LiveRecord`, in canonical JSON on an integer clock), the session's
+close signed at the next leaf over the log's chain, no refused hellos, and the auditor's v2 ledger opening that session
+for the window (``{root}``) under the key's hash, among others and sometimes inside a period with its cap and circuit,
+and ending it closed, sealing the log and hellos the session's challenger left and naming its record's leaf and
+commitment; its entries up to the session's open sign at leaves 0, 1, …, and those after at `RECORD_LEAF` + 2 on.  Then
+one mutation (`ROUNDS_NAMES`) aimed at one refusal of `rounds`: the session's (an in-process challenger's coins, an
+unsigned or tampered log, a ledger signed under another key, under v1, cut before the session's end or at a reused leaf,
+a second session for the window's root, an end naming another record leaf or no hellos, hellos it didn't seal, …) or the
+coin rule's.
+
+A salt case is an honest live window's salt coin read through its challenger's session the same way: the session S a
+reserve entry of the auditor's ledger names (every session of that ledger reserved first, the gate's two-step open),
+opened on the window's root R, `salt.window_open_root` of its weights' root, its round-0 request table's root and S, and
+its challenger's salt coin opened after R.  Then one mutation (`SALT_NAMES`) aimed at one refusal of `salt`: the
+session's, a session opened without a reserve, R under another session's id, another window's weights or requests, H1's
+salt opened after the weights' root, a log showing another root, or the coin rule's.
+
+`tests/test_difftest.py` draws them for the harness, and
 `verity/core/protocols/pouw/tests/test_pouw_core_check.py` holds each mutation to the refusal it aims at.
 """
 from __future__ import annotations
@@ -70,13 +77,15 @@ def _record(ch: Ch.LiveChallenger, roots: list[bytes]) -> list[dict]:
 class Session:
     """A challenger's session over `ch`'s coins as its host leaves it, its record and close signed under key `seed`: its
     salt coin opened after root `salt` (none when None), then round coins after `roots`, then its draw coin after the
-    root `draw` makes of the round coins' record (none when None)."""
+    root `draw` makes of the round coins' record (none when None); its record signed at leaf `leaf` and its close at the
+    next."""
 
     def __init__(self, rng: random.Random, ch: Ch.LiveChallenger, roots: list[bytes], salt: bytes | None, seed: int = 0,
-                 sid: str = "s-1", draw: Callable[[Ch.LiveRecord | None], bytes] | None = None) -> None:
-        self.ch, self.k, self.sid = ch, _key(seed), sid
+                 sid: str = "s-1", draw: Callable[[Ch.LiveRecord | None], bytes] | None = None,
+                 leaf: int = RECORD_LEAF) -> None:
+        self.ch, self.k, self.sid, self.leaf = ch, _key(seed), sid, leaf
         self.pub = lms.public_key(self.k)
-        ch.sign_record(HOST, self.pub, lambda m: lms.sign_at(self.k, RECORD_LEAF, m).encode())
+        ch.sign_record(HOST, self.pub, lambda m: lms.sign_at(self.k, leaf, m).encode())
         clock = itertools.count(rng.choice([0, 1, 10 ** 12])).__next__
         self.lines = [canonical_json_text({"event": "commitment", "root": ch.commitment.root.hex()})]
         records = [] if salt is None else [Ch.LiveRecord(ch, Wd.SALT, clock)]
@@ -97,7 +106,7 @@ class Session:
         sid = self.sid if sid is None else sid
         chain = Ch.log_chain(lines)
         m = Ch.close_message(self.pub[:16], HOST, self.ch.commitment, sid, len(lines), chain, ended)
-        return Ch.ChallengerClose(sid, len(lines), chain, ended, lms.sign_at(self.k, RECORD_LEAF + 1, m).encode()).to_json()
+        return Ch.ChallengerClose(sid, len(lines), chain, ended, lms.sign_at(self.k, self.leaf + 1, m).encode()).to_json()
 
     def files(self) -> dict:
         return {"close": self.close, "hellos": list(self.hellos), "log": list(self.lines), "record": self.ch.record.to_json()}
@@ -145,18 +154,42 @@ def _end(s: Session, **changes) -> dict:
     files = {Ch.LOG_FILE: Ch.log_digest(s.sealed), Ch.HELLOS_FILE: Ch.log_digest(s.sealed_hellos),
              Ch.RECORD_FILE: hashlib.sha512(canonical_json_text(s.ch.record.to_json()).encode()).hexdigest(),
              Ch.CLOSE_FILE: hashlib.sha512(canonical_json_text(s.close).encode()).hexdigest()}
-    body = {"closed": True, "files": files, "rc": 0, "record_leaf": RECORD_LEAF, "commitment": s.ch.commitment.root.hex(),
+    body = {"closed": True, "files": files, "rc": 0, "record_leaf": s.leaf, "commitment": s.ch.commitment.root.hex(),
             "refused_hellos": len(s.sealed_hellos), "complete": True}
     return {k: v for k, v in {**body, **changes}.items() if v is not None}
 
 
-def ledger_events(rng: random.Random, window: dict, s: Session, **end) -> list[tuple[str, str | None, dict]]:
+def _reserved(rng: random.Random, sid: str, body: dict) -> list[tuple[str, str | None, dict]]:
+    """Session `sid`'s reserve, then its open with `body` carrying the reserve's request, by its prover, inside its
+    minutes; `_bind` names the reserve's seq in the open once the ledger is laid out."""
+    minutes = rng.choice([1, 30, 720])
+    start = f"2026-10-{rng.randint(10, 28)}T{rng.randrange(24):02d}:{rng.randrange(60):02d}:{rng.randrange(60):02d}Z"
+    asked = {**{k: body[k] for k in ("by", "for") if k in body}, "minutes": minutes}
+    opened = Ch.later(start, rng.randint(0, minutes))
+    return [("reserve", sid, {**asked, "started_utc": start, "expires_utc": Ch.later(start, minutes)}),
+            ("open", sid, {**body, **asked, "opened_by": LANE, "started_utc": opened})]
+
+
+def _bind(events: list) -> list:
+    """`events` with each open of a reserved session naming its reserve's seq."""
+    at = {sid: i for i, (kind, sid, _) in enumerate(events) if kind == "reserve"}
+    return [(k, sid, {**b, "reserve": at[sid]}) if k == "open" and sid in at else (k, sid, b) for k, sid, b in events]
+
+
+def ledger_events(rng: random.Random, window: dict, s: Session, *, reserved: bool = False, **end
+                  ) -> list[tuple[str, str | None, dict]]:
     """The window's session `s` opened and ended closed (its end's body changed by `end`), sealing the log and hellos its
-    challenger left, among up to two others, sometimes inside a period of lane `LANE` that a close ends."""
-    named = [("open", s.sid, _open(rng, window, s.pub)), ("end", s.sid, _end(s, **end))]
-    others = [[("open", f"o-{i}", _open(rng, _window(rng), s.pub)),
-               ("end", f"o-{i}", {"closed": True, "files": {}, "rc": 0, "complete": True})]
-              for i in range(rng.randint(0, 2))]
+    challenger left, among up to two others, sometimes inside a period of lane `LANE` that a close ends.  `reserved`
+    reserves every session first, as the gate's two-step open does (`_reserved`), among up to one other: the period
+    counts its windows at their reserves."""
+    o = _open(rng, window, s.pub)
+    named = (_reserved(rng, s.sid, o) if reserved else [("open", s.sid, o)]) + [("end", s.sid, _end(s, **end))]
+    others = []
+    for i in range(rng.randint(0, 1 if reserved else 2)):
+        sid = session_id(rng) if reserved else f"o-{i}"
+        o = _open(rng, _window(rng), s.pub)
+        others.append((_reserved(rng, sid, o) if reserved else [("open", sid, o)])
+                      + [("end", sid, {"closed": True, "files": {}, "rc": 0, "complete": True})])
     queues = [named] + others
     events = []
     while any(queues):
@@ -167,11 +200,12 @@ def ledger_events(rng: random.Random, window: dict, s: Session, **end) -> list[t
                                                 "circuit": rng.choice(CIRCUITS), "pinned": "ab" * 20,
                                                 "key_sha512": hashlib.sha512(s.pub).hexdigest()}))
         if rng.random() < 0.5:
-            windows = [{"root": b["window"]["root"], "session": sid, "complete": True}
-                       for kind, sid, b in events if kind == "open"]
+            roots = {sid: b["window"]["root"] for kind, sid, b in events if kind == "open"}
+            windows = [{"root": roots[sid], "session": sid, "complete": True}
+                       for kind, sid, b in events if kind == ("reserve" if reserved else "open")]
             events.append(("period-close", None, {"period": name, "lane": LANE, "by": LANE, "windows": windows,
                                                   "complete": True}))
-    return events
+    return _bind(events)
 
 
 def honest_rounds(rng: random.Random, name: str = "honest") -> tuple[dict, Session]:
@@ -354,91 +388,139 @@ def rounds_args(d: dict) -> tuple:
     return d["key"], d["ledger"], d["window"], d["session"], d["roots"], d["openings"], lms_verify
 
 
-
 def session_id(rng: random.Random) -> str:
     """A session id of the auditor's gate's form, ``s<date>T<time>Z-<4 hex>``."""
     return f"s{rng.randrange(10 ** 8):08d}T{rng.randrange(10 ** 6):06d}Z-{rng.randbytes(2).hex()}"
 
 
-def honest_salt(rng: random.Random) -> tuple[dict, Ch.LiveChallenger]:
-    """An honest live window's salt coin: its session's open root recorded, and the salt coin opened after it."""
+def _salted(rng: random.Random, c: Ch.LiveCommitment, sid: str, salt: bytes | None, epoch: int | None = None
+            ) -> Session:
+    """Session `sid` over a fresh challenger of `c`'s layout (of epoch `epoch`, `c`'s by default), signed under key 0:
+    its salt coin opened after root `salt` (none when None), then some of its round coins."""
+    rounds = c.family(Wd.ROUND)
+    ch = Wd.live_challenger(c.epoch if epoch is None else epoch, rounds, rng.randbytes)
+    return Session(rng, ch, [rng.randbytes(64) for _ in range(rng.randint(0, rounds))], salt=salt, sid=sid)
+
+
+def honest_salt(rng: random.Random) -> tuple[dict, Session]:
+    """An honest live window's salt coin, read through its challenger's session: the session S the auditor's gate
+    reserved, its open root R (`salt.window_open_root` of the window's weights' root, its round-0 request table's root
+    and S), and the challenger's salt coin opened after R, then some round coins; the case holds the key, the window
+    (``{R}``), the session's files, the weights' and requests' roots and the salt coin (the auditor's ledger is
+    `with_salt_ledger`'s, once the case is mutated)."""
     ch = Wd.live_challenger(rng.randrange(4), rng.choice([1, 2, 4]), rng.randbytes)
-    weights, requests, session = rng.randbytes(64), rng.randbytes(64), session_id(rng)
-    root = PS.window_open_root(weights, requests, session)
-    opening = Ch.LiveRecord(ch, Wd.SALT).record(root).to_json()
-    return {"coins": ch.commitment.to_json(), "session": session, "root": root.hex(), "weights": weights.hex(),
-            "requests": requests.hex(), "received": [root.hex()], "opening": opening}, ch
+    weights, requests, sid = rng.randbytes(64), rng.randbytes(64), session_id(rng)
+    root = PS.window_open_root(weights, requests, sid)
+    s = _salted(rng, ch.commitment, sid, root)
+    return {"key": s.key(), "window": {"root": root.hex()}, "session": s.files(), "weights": weights.hex(),
+            "requests": requests.hex(), "opening": s.salt[0].to_json()}, s
 
 
-def _fresh(c: Ch.LiveCommitment, rng: random.Random) -> Ch.LiveChallenger:
-    """Another challenger of `c`'s epoch and layout, whose salt coin is still unopened."""
-    return Wd.live_challenger(c.epoch, c.family(Wd.ROUND), rng.randbytes)
+def salt_ledger(rng: random.Random, window: dict, s: Session, reserved: bool = True, k: int = 0) -> list[str]:
+    """The auditor's ledger opening session `s` for `window`, every session reserved first unless not `reserved`,
+    signed under key `k`."""
+    events = ledger_events(rng, window, s, reserved=reserved)
+    return ledger_lines(events, _key(k), leaves_of(events, s.sid))
 
 
-def _mutate_salt(d: dict, ch: Ch.LiveChallenger, name: str, rng: random.Random) -> None:
-    c, root = ch.commitment, bytes.fromhex(d["root"])
+def with_salt_ledger(d: dict, s: Session, rng: random.Random) -> dict:
+    """Case `d` with the auditor's ledger reserving and opening session `s` for its window, unless its mutation wrote
+    its own."""
+    if "ledger" not in d:
+        d["ledger"] = salt_ledger(rng, d["window"], s)
+    return {k: d[k] for k in ("key", "ledger", "window", "session", "weights", "requests", "opening")}
+
+
+def _resalted(d: dict, s: Session, rng: random.Random, root: bytes) -> Session:
+    """Case `d` as a session S of the same id opened on root `root`, its salt coin opened after it."""
+    n = _salted(rng, s.ch.commitment, s.sid, root)
+    d.update(window={"root": root.hex()}, session=n.files(), opening=n.salt[0].to_json())
+    return n
+
+
+def _mutate_salt(d: dict, s: Session, name: str, rng: random.Random) -> Session:
+    """Mutation `name` of salt case `d` over session `s`, and the session the auditor's ledger opens."""
+    c, op, files = s.ch.commitment, d["opening"], d["session"]
+    root, w, t = (bytes.fromhex(x) for x in (d["window"]["root"], d["weights"], d["requests"]))
     match name:
-        case "verifier-coins":
-            d["coins"] = rng.choice([None, {**d["coins"], "root": "00"}, {**d["coins"], "epoch": -1},
-                                     Co.Challenger(c.epoch, rng.randbytes).commitment.to_json()])
+        case "key-form":
+            d["key"] = rng.choice([None, {**d["key"], "public": "00"}, {**d["key"], "W": 3}, {**d["key"], "H": 0}])
+        case "no-ledger":
+            d["ledger"] = None
+        case "no-session":
+            d["ledger"] = salt_ledger(rng, d["window"], s)
+            d["window"] = _window(rng)
+        case "forged-ledger":
+            d["ledger"] = salt_ledger(rng, d["window"], s, k=1)
+        case "in-process":
+            other = Session(rng, Wd.live_challenger(c.epoch, c.family(Wd.ROUND), rng.randbytes), [], salt=root, seed=1,
+                            sid=s.sid)
+            d["session"], d["opening"], s.sealed, s.ch = other.files(), other.salt[0].to_json(), other.lines, other.ch
+        case "unsealed":
+            s.sealed = s.lines + s.lines[-1:]
+        case "other-session":
+            files["close"] = s.signed(sid=session_id(rng))
         case "not-live":
             scheme, layout = rng.choice([("verity/vllm/commit-coins/v1", Wd.live_families(1)),
                                          (Wd.LIVE_SCHEME, ((Wd.DRAW, 1), (Wd.SALT, 1), (Wd.ROUND, 1)))])
-            d["coins"] = Ch.LiveChallenger(scheme, c.epoch, layout, rng.randbytes).commitment.to_json()
+            other = Session(rng, Ch.LiveChallenger(scheme, c.epoch, layout, rng.randbytes), [], salt=None, sid=s.sid)
+            d["session"], s.sealed, s.ch = other.files(), other.lines, other.ch
+        case "no-reserve":
+            d["ledger"] = salt_ledger(rng, d["window"], s, reserved=False)
         case "form":
-            k = rng.choice(["root", "weights", "requests", "session"])
-            d[k] = rng.choice([None, "", "-s1", "s 1", "s" * 65, "s/1", 7] if k == "session"
-                              else [None, d[k].upper(), d[k][:-2], 5])
+            k = rng.choice(["weights", "requests"])
+            d[k] = rng.choice([None, d[k].upper(), d[k][:-2], 5, [d[k]]])
         case "weights":
             d["weights"] = rng.randbytes(64).hex()
         case "requests":
             d["requests"] = rng.randbytes(64).hex()
         case "session":
-            d["session"] = session_id(rng)
+            # the window's open root under another session's id than the one the ledger reserved
+            return _resalted(d, s, rng, PS.window_open_root(w, t, session_id(rng)))
         case "weights-root":
             # H1's salt before the window-open root: the session opened on the weights' root, its salt coin after it
-            w, fresh = bytes.fromhex(d["weights"]), _fresh(c, rng)
-            d.update(coins=fresh.commitment.to_json(), root=w.hex(), received=[w.hex()],
-                     opening=Ch.LiveRecord(fresh, Wd.SALT).record(w).to_json())
+            return _resalted(d, s, rng, w)
         case "received":
-            d["received"] = rng.choice([[], [d["weights"]], [d["root"], d["root"]], [rng.randbytes(64).hex()], None,
-                                        d["root"], [d["root"].upper()]])
+            other = _salted(rng, c, s.sid, rng.choice([None, rng.randbytes(64), w]))
+            d["session"] = other.files()
+            if other.salt:
+                d["opening"] = other.salt[0].to_json()
+            return other
         case "opening-form":
             k = rng.choice(["coin", "path", "label", "index", "epoch", "after"])
             bad = {"coin": ["zz", None], "path": [None, 4, [rng.randbytes(33).hex()]], "label": [5, None],
                    "index": ["0", None, True, 1.5], "epoch": [str(c.epoch), None], "after": ["zz", 3]}[k]
-            d["opening"] = rng.choice([{**d["opening"], k: rng.choice(bad)}, None, [d["opening"]]])
+            d["opening"] = rng.choice([{**op, k: rng.choice(bad)}, None, [op]])
         case "after":
-            fresh = _fresh(c, rng)
-            d["coins"] = fresh.commitment.to_json()
-            d["opening"] = Ch.LiveRecord(fresh, Wd.SALT).record(rng.choice([bytes.fromhex(d["weights"]),
-                                                                            rng.randbytes(64)])).to_json()
+            d["opening"] = {**op, "after": _flip(op["after"])}
         case "label":
-            d["opening"] = ch.open(rng.choice([Wd.DRAW, Wd.ROUND]), 0, root).to_json()
+            d["opening"] = s.ch.open(Wd.DRAW, 0, root).to_json()
         case "foreign":
-            d["opening"] = Ch.LiveRecord(_fresh(c, rng), Wd.SALT).record(root).to_json()
+            d["opening"] = _salted(rng, c, s.sid, root).salt[0].to_json()
         case "foreign-epoch":
-            d["opening"] = Ch.LiveRecord(Wd.live_challenger(c.epoch + 1, c.family(Wd.ROUND), rng.randbytes),
-                                         Wd.SALT).record(root).to_json()
+            d["opening"] = _salted(rng, c, s.sid, root, epoch=c.epoch + 1).salt[0].to_json()
         case "tampered":
-            d["opening"] = {**d["opening"], "salt": _flip(d["opening"]["salt"])}
+            d["opening"] = {**op, "salt": _flip(op["salt"])}
         case "malformed":
-            d["opening"] = {**d["opening"], "coin": d["opening"]["coin"][:-2]}
+            d["opening"] = {**op, "coin": op["coin"][:-2]}
         case _:
             raise ValueError(name)
+    return s
 
 
-SALT_NAMES = ["verifier-coins", "not-live", "form", "weights", "requests", "session", "weights-root", "received",
+SALT_NAMES = ["key-form", "no-ledger", "no-session", "forged-ledger", "in-process", "unsealed", "other-session",
+              "not-live", "no-reserve", "form", "weights", "requests", "session", "weights-root", "received",
               "opening-form", "after", "label", "foreign", "foreign-epoch", "tampered", "malformed"]
 
 
 def salt_instance(rng: random.Random, name: str = "honest") -> dict:
     """One `salt` case: an honest live window's salt coin, then mutation `name`."""
-    d, ch = honest_salt(rng)
+    d, s = honest_salt(rng)
     if name != "honest":
-        _mutate_salt(d, ch, name, rng)
-    return d
+        s = _mutate_salt(d, s, name, rng)
+    return with_salt_ledger(d, s, rng)
 
 
 def salt_args(d: dict) -> tuple:
-    return d["coins"], d["session"], d["root"], d["weights"], d["requests"], d["received"], d["opening"]
+    """`core_check.salt`'s arguments for case `d`, the challenger's signatures checked with `lms_verify`."""
+    return d["key"], d["ledger"], d["window"], d["session"], d["weights"], d["requests"], d["opening"], lms_verify

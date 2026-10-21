@@ -12,7 +12,7 @@ ASK-39; `PouwWindow.Length`).
 | module | `window.py` |
 | --- | --- |
 | `PouwWindow.Grid` | `GRID_BITS`, `on_grid`, `floor_point`, `pad`, `level`, `point`, `levels`, `Work`, `bucket`, with their refusals |
-| `PouwWindow.Draw` | `k_prime` (K′, exact: `missAtMost`, then bisection), `sampling` |
+| `PouwWindow.Draw` | `k_prime` (K′, exact: `missAtMost`, then bisection), `eps_at` (`k_prime` inverted: the least grid ε whose K′ is at most K), `sampling` |
 | `PouwWindow.Public` | `PUBLIC`, `REGISTERED`, `LEGACY_REGISTERED`, `KINDS` |
 | `PouwWindow.Length` | `STOP_FIXED`, `LENGTH_KEYS`, `length_item`, `length_problem`: the rows of record's fixed length (Daniel, 19 Oct, ASK-39) |
 | `PouwWindow.Json` | integers read as Python's `json` reads them; the items written as Python writes them |
