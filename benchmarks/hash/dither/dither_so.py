@@ -115,6 +115,16 @@ class SoWindow(DO.Window):
         # node; in process nothing else does)
         self.order_from, self.order_why = 0, None
         self.ev_w = [torch.cuda.Event(enable_timing=True) for _ in range(2)]
+        # the engine's own host time a step (from one `after`'s end to the next `before`), and `before`'s
+        self.t_b0 = self.t_after_end = 0.0
+
+    def host_ms(self) -> dict:
+        t_end = time.perf_counter()
+        x = {"before_ms": 1e3 * (self.t_before - self.t_b0)}
+        if self.t_after_end:
+            x["engine_ms"] = 1e3 * (self.t_b0 - self.t_after_end)
+        self.t_after_end = t_end
+        return x
 
     def _a_step(self) -> None:
         if not self.a_once:
@@ -130,6 +140,7 @@ class SoWindow(DO.Window):
         return out
 
     def before(self, m: int) -> None:
+        self.t_b0 = time.perf_counter()
         super().before(m)
         self.m_of[self.s] = m
         if self.cap is not None:
@@ -278,7 +289,7 @@ class SoWindow(DO.Window):
               "dispatch_ms": 1e3 * (t_disp - t_coin), "between_ms": 1e3 * (t_end - t_fwd)}
         if units_wait is not None:
             ph["units_wait_ms"] = units_wait
-        self.phases.append(ph)
+        self.phases.append({**ph, **self.host_ms()})
         self.round_log.append({"s": s, "m": m, "root": root.hex()[:32]})
         self.s += 1
         self.steps += 1
@@ -327,7 +338,7 @@ class SoWindow(DO.Window):
         self.phase(None)
         self.phases.append({"s": s, "m": m, "forward_ms": 1e3 * (t_fwd - self.t_before),
                             "ring_wait_ms": 1e3 * (t_ring - t_fwd), "stash_ms": 1e3 * (t_end - t_ring),
-                            "between_ms": 1e3 * (t_end - t_fwd)})
+                            "between_ms": 1e3 * (t_end - t_fwd), **self.host_ms()})
         self.s += 1
         self.steps += 1
         if self.s + 1 >= DF.ROUNDS:
@@ -532,10 +543,10 @@ class SoSide(DA.Side):
                 "overlap": None if self.ov is None else {"order": OV_ORDER, "ring": self.ov.R}}
 
 
-def _remap(c, st, data=None, out=None):
-    """A set of `st`'s tables over its own levels and roots, each table's rows at data(w, tab) and root at out(w) where
+def _remap(c, st, data: list | None = None, out: list | None = None):
+    """A set of `st`'s tables over its own levels and roots, table w's rows at data[w] and its root at out[w] where
     given."""
-    return c.set([dataclasses.replace(t, data=t.data if data is None else data(w, t), out=t.out if out is None else out(w))
+    return c.set([dataclasses.replace(t, data=t.data if data is None else data[w], out=t.out if out is None else out[w])
                   for w, t in enumerate(st.tabs)])
 
 
@@ -554,16 +565,15 @@ class Ov:
         self.win, self.sd, self.R = win, sd, ring
         dev, c, L = win.dev, win.c, win.L
         # the live records as one buffer each (no forward has written them yet), so a step's ring copy is a launch each
-        old = list(sd.zy)
+        yu_off = [t.data.data_ptr() - sd.zy[w].data_ptr() for w, t in enumerate(sd.yuset.tabs)]
         self.zl, self.yl = [x.numel() for x in sd.zy], [x.numel() for x in sd.ysv]
         self.zy = torch.empty(sum(self.zl), dtype=torch.uint8, device=dev)
         self.ysv = torch.empty(sum(self.yl), dtype=torch.uint8, device=dev)
         sd.zy, sd.ysv = list(self.zy.split(self.zl)), list(self.ysv.split(self.yl))
-        sd.zyset = _remap(c, sd.zyset, data=lambda w, t: sd.zy[w])
-        sd.ysset = _remap(c, sd.ysset, data=lambda w, t: sd.ysv[w])
-        sd.yuset = _remap(c, sd.yuset, data=lambda w, t: sd.zy[w][t.data.data_ptr() - old[w].data_ptr():])
+        sd.zyset = _remap(c, sd.zyset, data=sd.zy)
+        sd.ysset = _remap(c, sd.ysset, data=sd.ysv)
+        sd.yuset = _remap(c, sd.yuset, data=[sd.zy[w][o:] for w, o in enumerate(yu_off)])
         win.pre["z"] = sd.zyset
-        del old
         kinds = win.round_kinds
         self.yi, self.zi, self.ri = kinds.index("y-step"), kinds.index("z-step"), kinds.index("receipt-step")
         self.zy_r = [torch.empty_like(self.zy) for _ in range(ring)]
@@ -572,19 +582,21 @@ class Ov:
         self.stepv_r = [torch.empty_like(win.stepv) for _ in range(ring)]
         self.a_off = win.pre["mid"].level_off[0]
         self.sets = []
+        def leaves(st, at: int) -> list[int]:
+            return [at + 64 * w for w in range(len(st.tabs))]
         for q in range(ring):
             zv, yv = self.zy_r[q].split(self.zl), self.ysv_r[q].split(self.yl)
             rnd = c.set(list(win.pre["round"].tabs))
-            mid = _remap(c, win.pre["mid"], out=lambda i: rnd.leaves_addr(0) + 64 * i)
+            mid = _remap(c, win.pre["mid"], out=leaves(win.pre["mid"], rnd.leaves_addr(0)))
             if mid.level_off != win.pre["mid"].level_off:
                 raise RuntimeError("dither-a-so -ov: the ring's step trees are not laid out as the window's")
+            ad = win.pre["admit"]
             self.sets.append({
                 "round": rnd, "mid": mid,
-                "admit": _remap(c, win.pre["admit"], data=lambda w, t: self.admit_r[q],
-                                out=lambda w: mid.leaves_addr(1) + 64 * w),
-                "zy": _remap(c, sd.zyset, data=lambda w, t: zv[w], out=lambda w: mid.leaves_addr(2) + 64 * w),
-                "ys": _remap(c, sd.ysset, data=lambda w, t: yv[w], out=lambda w: mid.leaves_addr(self.yi) + 64 * w),
-                "yu": _remap(c, sd.yuset, data=lambda w, t: zv[w][t.data.data_ptr() - sd.zy[w].data_ptr():])})
+                "admit": _remap(c, ad, data=[self.admit_r[q]] * len(ad.tabs), out=leaves(ad, mid.leaves_addr(1))),
+                "zy": _remap(c, sd.zyset, data=zv, out=leaves(sd.zyset, mid.leaves_addr(2))),
+                "ys": _remap(c, sd.ysset, data=yv, out=leaves(sd.ysset, mid.leaves_addr(self.yi))),
+                "yu": _remap(c, sd.yuset, data=[zv[w][o:] for w, o in enumerate(yu_off)])})
         if win.tree_streams is not None:
             self.ts, self.ads = win.tree_streams
         else:
@@ -695,14 +707,16 @@ class Ov:
         t_start = time.perf_counter()
         with self.phase("ov_leaf_tables"), torch.cuda.stream(ts):
             ts.wait_event(self.ev["copied"][e])
-            if cap == "fault_ring":
-                # during step s + 1, before round s's tables: bit 0 of call 0's first z word in step s's ring copy
+            if s in self.watch:
+                # a captured step's round starts once forward s + 1 has, so the gate holds a round built beside it
                 self.wait(lambda: self.fwd_upto > s or self.draining)
                 if self.fwd_upto > s:
                     ts.wait_event(self.ev["fwd0"][(s + 1) % self.EV])
-                self.zy_r[q][0:1].bitwise_xor_(1)
-                self.ev["fault"][e].record(ts)
-                self.faulted.add(s)
+                if cap == "fault_ring":
+                    # bit 0 of call 0's first z word in step s's ring copy, during step s + 1, before round s's tables
+                    self.zy_r[q][0:1].bitwise_xor_(1)
+                    self.ev["fault"][e].record(ts)
+                    self.faulted.add(s)
             self.ev["t0"][e].record(ts)
             if ads is not None:
                 self.fork.record(ts)
