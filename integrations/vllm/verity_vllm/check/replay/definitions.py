@@ -1,13 +1,21 @@
-"""The Definitions the sampled replay evaluates are the ones the Build of record bound.
+"""The Definitions the sampled replay evaluates are the ones the Build of record bound, and its row kernels compute them.
 
-A row kernel answers for its family's Definition in the replay's own tree (`kernel_registry`, checked by core `self_check`), and
-the Commit bound the Program the Build of record compiled from the Build's tree.  A Definition whose body moved between the two
-trees would have the replay grade the committed words against a circuit the Commit never bound, and the Program digest the
-loaders check is the Build's recorded string, which no tree change moves.  `refusal` reads the Build's ``descriptor.json.gz``,
-holds it to the digest of record, and holds each specialization the replay evaluates, with every Definition it reaches, to the
-descriptor's entry for it (`verity.ml.circuits.annotations.definition_digest`: the entry with the v1 interning resolved, the same
-for one Definition in any Program).  A primitive is held to its entry (signature and ports); its evaluator is code, named by its
-id.
+A row kernel answers for its family's Definition in the replay's own tree, and the Commit bound the Program the Build of record
+compiled from the Build's tree.  A Definition whose body moved between the two trees would have the replay grade the committed
+words against a circuit the Commit never bound, and the Program digest the loaders check is the Build's recorded string, which no
+tree change moves.  `refusal` reads the Build's ``descriptor.json.gz``, holds it to the digest of record, and holds each
+specialization the replay evaluates, with every Definition it reaches, to the descriptor's entry for it
+(`verity.ml.circuits.annotations.definition_digest`: the entry with the v1 interning resolved, the same for one Definition in any
+Program).
+
+That holds the Definitions, not the code that grades by them.  A primitive is held to its entry, its signature and ports only:
+its evaluator is code, named by its id.  And the replay grades a row by its family's row kernel, not by the Definition.  So
+before any row is graded, `kernel_refusal` runs core `self_check` of each graded family's row kernel against the Definition's
+reference, which evaluates through the primitives' evaluators (`kernel_registry.check`, once a family per process).  That is a
+sample, the limit of what this module holds: 6 seeded instances of each of the kernel's check specialisations, small statics the
+reference evaluates, not the served ones.  A kernel that is its Definition there but not on a committed row's operands, or not at
+the served statics, grades that row by the kernel; what holds it there is the kernel's own tests, not this check.  A delegate's
+family (`delegate.DELEGATES`) has no row kernel and is not self-checked here: its protocol answers for it.
 """
 from __future__ import annotations
 
@@ -18,6 +26,8 @@ from types import SimpleNamespace
 from typing import Any, Iterable
 
 SHOWN = 5
+#: family -> why its row kernel is not its Definition in this tree ([] when it is), checked once a process
+_KERNEL_CHECKS: dict[str, list[str]] = {}
 
 
 def evaluated_specs(rows: Iterable[dict[str, Any]]) -> list[str]:
@@ -30,8 +40,9 @@ def evaluated_specs(rows: Iterable[dict[str, Any]]) -> list[str]:
 
 
 def of_record(dirs: dict[str, str], digs: dict[str, str], rows: dict[str, list[dict[str, Any]]], *, what: str) -> None:
-    """Raise, by name, unless each request's Build dir (``dirs``) holds its Program of record (``digs``) and the Definitions this
-    tree evaluates its rows (``rows``) by are the ones that Build bound.  One check per Build dir."""
+    """Raise, by name, unless each request's Build dir (``dirs``) holds its Program of record (``digs``), the Definitions this
+    tree evaluates its rows (``rows``) by are the ones that Build bound, and the row kernels it evaluates them with pass their
+    self-check (`kernel_refusal`).  One check per Build dir."""
     by_dir: dict[str, tuple[str, set[str]]] = {}
     for k, d in dirs.items():
         by_dir.setdefault(d, (digs[k], set()))[1].update(evaluated_specs(rows[k]))
@@ -39,6 +50,27 @@ def of_record(dirs: dict[str, str], digs: dict[str, str], rows: dict[str, list[d
         why = refusal(d, digest, sorted(specs))
         if why:
             raise RuntimeError(f"{what}: REFUSED (not the Definitions of record): {why}")
+    why = kernel_refusal(set().union(*(s for _, s in by_dir.values())))
+    if why:
+        raise RuntimeError(f"{what}: REFUSED (a row kernel is not its Definition): {why}")
+
+
+def kernel_refusal(specs: Iterable[str]) -> str | None:
+    """Why a row kernel this tree grades ``specs`` by is not its family's Definition, or None: each family's row kernel against
+    the reference by core `self_check` (`kernel_registry.check`; module docstring), once a family per process."""
+    from verity_vllm.program.kernels import kernel_registry as KR
+    from verity_vllm.program.kernels.rows import KERNEL, ROWS
+    from verity_vllm.query.manifest.format import spec_family
+
+    bad: list[str] = []
+    for family in sorted({spec_family(str(s)) for s in specs} & set(ROWS)):
+        if family not in _KERNEL_CHECKS:
+            _KERNEL_CHECKS[family] = KR.check(family, KERNEL)
+        bad += [f"{family}: {why}" for why in _KERNEL_CHECKS[family]]
+    if not bad:
+        return None
+    more = f" (and {len(bad) - SHOWN} more)" if len(bad) > SHOWN else ""
+    return "; ".join(bad[:SHOWN]) + more
 
 
 def refusal(program_dir: str, digest: str, specs: Iterable[str]) -> str | None:
