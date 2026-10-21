@@ -799,11 +799,14 @@ stream, byte for byte and at its coin count, or at the stream's first round as t
 of a frame bound to none, which is then bound to it (`Frames.carry`); anything else is refused before it reaches the
 auditor. Once a round's coins open the tree, the loop sets them as its frame's coins before the prover receives them
 (`Frames.feedOf`), and the frame's `coins N` takes those and no others (`Frames.take`: Rust's bytes must be them).
-A connection there whose first line is `level0 M LEN`, followed by a table's `LEN`-byte packed witness, is that table's
-level 0 (`Session.level0`, §10.2): answered `ok N R` and the `N` bytes of the extra lanes, the paddings and the salts the
-loop drew, then its `R`-byte root, or `err WHY`. The session's `Commit` leaves only when its roots are its tables', in
-order, each a root the loop drew at its table's statement's `m` (`Level0.commit`; a root drawn at a smaller `m` would pad
-too few positions), and the session then owns those tables' `Level0` until it ends.
+A connection there whose first line is `level0 SESSION M LEN`, followed by a table's `LEN`-byte packed witness, is that
+table's level 0 (`Session.level0`, §10.2) for the live session named `SESSION`: the hex of its coin tree's root, the first
+four words of its `Hello`'s answer (`Level0.nameOf`, `firewall::level0_session`). It is answered `ok N R` and the `N`
+bytes of the extra lanes, the paddings and the salts the loop drew, then its `R`-byte root, or `err WHY`, and a session
+the loop isn't serving is refused. The session's `Commit` leaves only when its roots are its tables', in order, each a
+root the loop drew for that session at its table's statement's `m` (`Level0.commit`; a root drawn at a smaller `m` would
+pad too few positions). Every `Level0` drawn for a session, committed or not, is freed when it ends
+(`Level0.Registry.close`).
 `FC_FIREWALL_SESSION=0`, or `FC_FIREWALL_TRANSCRIPT`, keeps the prover's own connection, Rust's checks and a frame
 process per rep. `Proof` and `Finish` leave as the prover sends them. The analysis's release is this loop
 (`Claims.ZKServer.LeanRelease.loop`, `Flock.zk_server_lean_loop`): its `Hello`, requests, last request and the coins its

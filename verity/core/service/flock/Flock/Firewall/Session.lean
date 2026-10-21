@@ -20,9 +20,10 @@ each connection is one session, relayed on a connection of its own to the audito
   once opened, are the frame's (`Frames.feedOf`, `Frames.feed`), set before the prover receives them; the frame takes no
   others (`Frames.take`).
 * Each table's level 0 is the loop's: on its frames port the loop draws a table's level-0 hiding and salts from the
-  operating system for the packed witness the prover hands it, and commits level 0 on them (`level0`, `Level0.draw`). A
-  `Commit`'s roots leave only as those roots, each drawn at its table's `m` (`Level0.commit`), and the session then owns
-  its tables' `Level0`, until it ends.
+  operating system for the packed witness the prover hands it, and commits level 0 on them (`level0`, `Level0.draw`),
+  for the live session the request names (by its coin tree's root, `Level0.nameOf`). A `Commit`'s roots leave only as
+  roots drawn for its own session, each at its table's `m` (`Level0.commit`). Every level 0 drawn for a session, bound
+  or not, is gone when it ends (`Level0.Registry.close`).
 * `Finish` leaves only once the schedule's last opening has (`State.request`). What it carries is `Firewall::finish`'s
   (ZKFIN's), relayed as it is.
 * Every other frame is relayed as it is. For now that is `Proof`, which `Firewall::finish` decides.
@@ -392,6 +393,7 @@ def relay (S : Hello.Setup) (specs : Hello.Specs) (reg : IO.Ref Frames.Registry)
         sendFrame a h
         let some r ← recvFrame a | break
         let (st', out) := st.answer .hello r
+        if st.session.isNone && st'.session.isSome then l0s.modify (·.name (Level0.nameOf r) sid)
         st := st'
         sendFrame p out
     | .ok k =>
@@ -514,20 +516,24 @@ def sockChan (c : Socket.Client) : IO Frame.Chan := do
     return b.extract 0 n
   return { getLine, readExact, write := fun b => (c.sendAll #[b]).block, flush := pure () }
 
-/-- **A table's level 0, drawn by the loop**, for the request line `line` on `ch`: `level0 M LEN` followed by the `LEN`
-bytes of the table's packed witness is answered `ok N R` followed by the `N` bytes of the hiding the loop drew for it from
-the operating system and the root it committed, the last `R` of them (`Level0.draw`, `Level0.drawsOf`), and the table's `Level0` is kept in
-`l0s` for the session whose `Commit` carries its root. Anything else is answered `err WHY`. -/
+/-- **A table's level 0, drawn by the loop**, for the request line `line` on `ch`: `level0 SESSION M LEN` followed by the
+`LEN` bytes of the table's packed witness is answered `ok N R` followed by the `N` bytes of the hiding the loop drew for
+it from the operating system and the root it committed, the last `R` of them (`Level0.draw`, `Level0.drawsOf`). The
+table's `Level0` is kept in `l0s` for the live session named `SESSION` (`Level0.nameOf`: the hex of its coin tree's root)
+until that session ends, and only that session's `Commit` may carry its root. Anything else is answered `err WHY`. -/
 def level0 (ch : Frame.Chan) (l0s : IO.Ref Level0.Registry) (line : String) : IO Unit := do
   let say := fun (s : String) => ch.write (s ++ "\n").toUTF8
   match (line.replace "\n" "").splitOn " " with
-  | ["level0", m, len] =>
+  | ["level0", name, m, len] =>
     let (some m, some len) := (m.toNat?, len.toNat?) | say s!"err a request `{line.trim}`"
     let b ← ch.readExact len
     if len % 16 != 0 then return (← say s!"err a {len}-byte witness, not whole words")
     match ← Level0.draw IO.getRandomBytes m (Frame.words b 0 (len / 16)) with
     | .ok l =>
-      l0s.modify (·.push { l0 := l })
+      let kept : Except String Unit ← l0s.modifyGet fun R => match R.draw name l with
+        | .ok R' => (.ok (), R')
+        | .error e => (.error e, R)
+      if let .error e := kept then return (← say s!"err {e}")
       let d := Level0.drawsOf l
       say s!"ok {d.size} {l.root.size}"
       ch.write d
@@ -562,7 +568,9 @@ def frames (srv : Socket.Server) (reg : IO.Ref Frames.Registry) (l0s : IO.Ref Le
 flags `Hello.FLAGS`): the firewall's session loop. It listens on `127.0.0.1:PORT` (by default a port the system picks)
 for sessions and on a port the system picks for the reps' frames and the tables' level 0, prints `LISTENING 127.0.0.1:PORT` and then
 `FRAMES 127.0.0.1:PORT` once it does, and serves each connection as one session (`serve`) or one frame (`frames`), each
-on its own thread, every session's `Hello` at one statement set up once a draw (`Hello.Setup.specAt`). It runs until its standard
+on its own thread, every session's `Hello` at one statement set up once a draw (`Hello.Setup.specAt`). When a session
+ends, every level 0 drawn for it is freed (`Level0.Registry.close`), and where there were any, its standard error says
+`level 0: session SID ended; K drawn for it freed, N kept`. It runs until its standard
 input closes. `flock-firewall session --schedule …` instead reads a draw's JSON (`null` for none) on its standard input
 and prints the openings after the session stream's at it (`planOf`), `ok N` and a line `STREAM COINS` each, or
 `refused WHY`. `run` is the same loop with each session held by a hold `mkHold` makes for it (`core-firewall session`). -/
@@ -589,7 +597,7 @@ def run (usage : String) (args : List String) (mkHold : Option (IO Hold)) : IO U
   let auditor ← resolve verifier
   let specs : Hello.Specs ← IO.mkRef #[]
   let reg : IO.Ref Frames.Registry ← IO.mkRef #[]
-  let l0s : IO.Ref Level0.Registry ← IO.mkRef #[]
+  let l0s : IO.Ref Level0.Registry ← IO.mkRef {}
   let sids ← IO.mkRef 0
   let srv ← Socket.Server.mk
   srv.bind (.v4 { addr := IPv4Addr.ofParts 127 0 0 1, port := listen.toUInt16 })
@@ -612,7 +620,12 @@ def run (usage : String) (args : List String) (mkHold : Option (IO Hold)) : IO U
             | none => pure none
           serve S specs auditor reg l0s sid p hold
         catch e => IO.eprintln s!"session: {e}"
-        l0s.modify (·.filter (·.bound.map (·.1) != some sid))
+        let (k, n) ← l0s.modifyGet fun R =>
+          let R' := R.close sid
+          ((R.slots.size - R'.slots.size, R'.slots.size), R')
+        if k > 0 then
+          IO.eprintln s!"level 0: session {sid} ended; {k} drawn for it freed, {n} kept"
+          (← IO.getStderr).flush
   let stdin ← IO.getStdin
   repeat
     if (← stdin.getLine).isEmpty then break
