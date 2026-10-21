@@ -24,6 +24,10 @@ With `k = α Γ` this is `size(d) ≥ α₀ b Γ / (k² + b k) · size(c)`: the 
 when the counted products are a fraction `α₀` of `c`'s gates. The products are counted at the granularity of `c`'s gates
 (a Dot16 step, not a scalar product), and `UpdateHardness` is needed at the block size in bits,
 `s = w₀ Γ + α Γ + width(θ)`.
+
+`CoverTrainingAligned` is the width variant when every activation region is a set of whole words at least `f` bits wide:
+the blocks are whole words too, so the width premise holds of them, and the factor is `α₀ b f Γ / (k² + b f k)`, up to
+`f` times `CoverTraining`'s, with no premise beyond `UpdateHardness`.
 -/
 
 namespace Nci.Cover.Guarantees
@@ -43,5 +47,21 @@ def CoverTraining : Prop :=
     (∀ g, c.D.w g ≤ w₀) → w₀ * Γ + α * Γ + c.D.width c.θ ≤ s →
     α₀ * c.D.size c.D.computed ≤ Mb.P.card →
       α₀ * b * c.D.size c.D.computed ≤ (α * α * Γ + b * α) * d.D.size d.D.computed
+
+/-- **On whole-word activations, training through a compliant declaration pays the width factor**: `CoverTraining` with
+each use's activation region the bits of a set `Aw j` of `c`'s gates (`wordBits`), each at least `f` bits wide, has
+`α₀ b f size(c) ≤ (α² Γ + b f α) size(d)`, under `UpdateHardness` alone. A block of whole words handed a bit of a region
+of whole words is handed all of that word's bits, so each use of its whole products costs it `f` bits of its region. -/
+def CoverTrainingAligned : Prop :=
+  ∀ (Γ : ℕ) (α b α₀ : ℝ) (c d : Verity.Declaration) (M : Verity.Containment c.D d.D)
+    {J L : Type} [DecidableEq J] [DecidableEq L] (Mb : MulBlocks (Circuit.ofDecl c) J L)
+    (Aw : J → Finset (Fin c.D.N)) (s D w₀ f : ℕ),
+    0 < b → 0 ≤ α → Nci.Complies Γ α d →
+    Nci.Assumptions.BaselineRegistered c d (Nci.PartialContainment.ofContainment M) →
+    Assumptions.UpdateHardness Mb s b → Mb.Upstream (fun j => wordBits c (Aw j)) D → α * Γ < b * D →
+    (∀ j ∈ Mb.uses, ∀ a ∈ Aw j, f ≤ c.D.w a) →
+    (∀ g, c.D.w g ≤ w₀) → w₀ * Γ + α * Γ + c.D.width c.θ ≤ s →
+    α₀ * c.D.size c.D.computed ≤ Mb.P.card →
+      α₀ * b * f * c.D.size c.D.computed ≤ (α * α * Γ + b * f * α) * d.D.size d.D.computed
 
 end Nci.Cover.Guarantees

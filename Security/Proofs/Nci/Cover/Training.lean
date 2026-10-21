@@ -12,7 +12,8 @@ reads at most `α σ_u` bits of novel information (`novelReads_pull`). Its block
 `k_u ≤ α σ_u` bits outside the free bits (`translation`) and has at most `s` bits (`card_block_le`), so it finishes at
 most `(k_u² + b k_u) / b` counted products (`intensity_of_card_le`). Every counted product's output bit reads something,
 so its gate is a computed gate of `c`, in some piece, whose block computes it (`mem_computed_block_of_pred`). Summed over
-the IUs (`sum_area_le`), `b #P ≤ (α² Γ + b α) size(d)`.
+the IUs (`sum_area_le`), `b #P ≤ (α² Γ + b α) size(d)`. `training_of_block_bound` is this route for any per-block
+bound of the same form, which the whole-word variant (`Aligned`) reuses.
 -/
 
 namespace Nci.Cover.SecurityProofs
@@ -40,8 +41,23 @@ theorem card_P_le_sum_finished {c d : Verity.Declaration} (M : Verity.Containmen
     ((Nci.SecurityProofs.pull M P).mem_gates).2 hu
   exact mem_biUnion.2 ⟨u, mem_univ _, mem_filter.2 ⟨hp, mem_computed_block_of_pred hne hgR⟩⟩
 
-theorem CoverTraining : Guarantees.CoverTraining := by
-  intro Γ α b α₀ c d M J L _ _ Mb A s D w₀ hb hα ⟨n, P, hP⟩ hB hH hU hk hw hs hα₀
+/-- **The per-block bounds summed over a compliant division pulled back to `c`**: if the block of every set of `c`'s
+gates, when it has at most `s` bits and is handed `k < b D` bits outside the free bits, finishes at most `(k² + e k) / e`
+counted products, then `α₀ e size(c) ≤ (α² Γ + e α) size(d)`. `CoverTraining` is this at `e = b`, from `Intensity`. -/
+theorem training_of_block_bound {Γ : ℕ} {α b α₀ e : ℝ} {c d : Verity.Declaration} (M : Verity.Containment c.D d.D)
+    {J L : Type} [DecidableEq J] [DecidableEq L] (Mb : MulBlocks (Circuit.ofDecl c) J L) {s D w₀ : ℕ}
+    (he : 0 ≤ e) (hα : 0 ≤ α) (hC : Nci.Complies Γ α d)
+    (hB : Nci.Assumptions.BaselineRegistered c d (Nci.PartialContainment.ofContainment M)) (hk : α * Γ < b * D)
+    (hw : ∀ g, c.D.w g ≤ w₀) (hs : w₀ * Γ + α * Γ + c.D.width c.θ ≤ s)
+    (hα₀ : α₀ * c.D.size c.D.computed ≤ Mb.P.card)
+    (hblk : ∀ R : Finset (Fin c.D.N), (block c R).card ≤ s →
+      (((Circuit.ofDecl c).inputs (block c R) \ (Circuit.ofDecl c).θ).card : ℝ) < b * D →
+      e * (Mb.finished (block c R)).card ≤
+        ((Circuit.ofDecl c).inputs (block c R) \ (Circuit.ofDecl c).θ).card *
+          ((Circuit.ofDecl c).inputs (block c R) \ (Circuit.ofDecl c).θ).card +
+        e * ((Circuit.ofDecl c).inputs (block c R) \ (Circuit.ofDecl c).θ).card) :
+    α₀ * e * c.D.size c.D.computed ≤ (α * α * Γ + e * α) * d.D.size d.D.computed := by
+  obtain ⟨n, P, hP⟩ := hC
   set R : Fin n → Finset (Fin c.D.N) := fun u => (Nci.SecurityProofs.pull M P).gates u with hR
   set σ : Fin n → ℝ := fun u => (d.D.size (P.gates u) : ℝ) with hσdef
   set k : Fin n → ℕ := fun u =>
@@ -65,10 +81,10 @@ theorem CoverTraining : Guarantees.CoverTraining := by
     have h4 := (hnov u).trans (hαΓ u)
     have h5 : ((block c (R u)).card : ℝ) ≤ s := by linarith
     exact_mod_cast h5
-  have hI : ∀ u, b * ((Mb.finished (block c (R u))).card : ℝ) ≤ k u * k u + b * k u := fun u =>
-    intensity_of_card_le Mb A hb hH hU (hkD u) (hcard u) le_rfl
+  have hI : ∀ u, e * ((Mb.finished (block c (R u))).card : ℝ) ≤ k u * k u + e * k u := fun u =>
+    hblk (R u) (hcard u) (hkD u)
   have hsum := sum_area_le univ (f := fun u => ((Mb.finished (block c (R u))).card : ℝ))
-    (k := fun u => (k u : ℝ)) (σ := σ) hb.le hα (fun u _ => Nat.cast_nonneg _) (fun u _ => Nat.cast_nonneg _)
+    (k := fun u => (k u : ℝ)) (σ := σ) he hα (fun u _ => Nat.cast_nonneg _) (fun u _ => Nat.cast_nonneg _)
     (fun u _ => hI u) (fun u _ => hku u) (fun u _ => hσΓ u)
   have hσsum : ∑ u, σ u = d.D.size d.D.computed := by
     simp only [hσdef, Verity.Circuit.size]
@@ -76,9 +92,14 @@ theorem CoverTraining : Guarantees.CoverTraining := by
   have hPcard : (Mb.P.card : ℝ) ≤ ∑ u, ((Mb.finished (block c (R u))).card : ℝ) := by
     exact_mod_cast card_P_le_sum_finished M P Mb
   rw [hσsum] at hsum
-  calc α₀ * b * c.D.size c.D.computed = b * (α₀ * c.D.size c.D.computed) := by ring
-    _ ≤ b * Mb.P.card := mul_le_mul_of_nonneg_left hα₀ hb.le
-    _ ≤ b * ∑ u, ((Mb.finished (block c (R u))).card : ℝ) := mul_le_mul_of_nonneg_left hPcard hb.le
-    _ ≤ (α * α * Γ + b * α) * d.D.size d.D.computed := hsum
+  calc α₀ * e * c.D.size c.D.computed = e * (α₀ * c.D.size c.D.computed) := by ring
+    _ ≤ e * Mb.P.card := mul_le_mul_of_nonneg_left hα₀ he
+    _ ≤ e * ∑ u, ((Mb.finished (block c (R u))).card : ℝ) := mul_le_mul_of_nonneg_left hPcard he
+    _ ≤ (α * α * Γ + e * α) * d.D.size d.D.computed := hsum
+
+theorem CoverTraining : Guarantees.CoverTraining := by
+  intro Γ α b α₀ c d M J L _ _ Mb A s D w₀ hb hα hC hB hH hU hk hw hs hα₀
+  exact training_of_block_bound M Mb hb.le hα hC hB hk hw hs hα₀ fun R hR hkR =>
+    intensity_of_card_le Mb A hb hH hU hkR hR le_rfl
 
 end Nci.Cover.SecurityProofs

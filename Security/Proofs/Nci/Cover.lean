@@ -8,6 +8,7 @@ import Proofs.Nci.Cover.Bits
 import Proofs.Nci.Cover.AtMost
 import Proofs.Nci.Cover.Sum
 import Proofs.Nci.Cover.Training
+import Proofs.Nci.Cover.Aligned
 import Proofs.Nci.Cover.Checked
 
 /-!
@@ -19,6 +20,7 @@ block pays for the products it finishes (`Charge`), the area bound (`Area`), its
 cover theorem counts: the block of a set of gates, what it computes and what it is handed. `AtMost` gives the per-block
 bounds on blocks of at most `s` gates, from the guarantees at the block's own size, and `Sum` adds them over a division
 at the NCI policy's rate. `Training` joins them to a declaration that complies with the NCI policy
-(`Models.Nci.Guarantees.CoverTraining`), and `Checked` carries it to a verdict of the NCI check: the gate-level check's,
-and the check of record's given `DescAgrees`'s open statements.
+(`Models.Nci.Guarantees.CoverTraining`), `Aligned` gives its width variant on whole-word activations, and `Checked`
+carries it to a verdict of the NCI check: the gate-level check's, and the check of record's given `DescAgrees`'s open
+statements.
 -/
