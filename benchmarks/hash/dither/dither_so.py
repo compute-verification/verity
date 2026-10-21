@@ -785,7 +785,7 @@ class SoSide(DA.Side):
             rc = win.a_call(w, win.slot[w], win.scale[w], ast.cuda_stream)
             self.a_used.add(i)
         self.gemm(w, xq, s_a, wt, s_w, y)
-        self.ycommit(w, y)
+        self.ycommit(w, y, s_w)
         if rc:
             raise RuntimeError(f"dither-a-so call {w} (M={M}): its A table's launch returned {rc}")
         if not self.a_once and self.a_used and (w == win.L - 1 or (w % 4 == 0 and DA._piecewise())):
@@ -1645,7 +1645,8 @@ def open_spill(win: SoWindow, rec: dict, kinds: tuple) -> dict | None:
     """After the draw, the prover's openings from an ended window's spill (`Spill`): three uncaptured steps (its first,
     its last, and one its draw coin picks), each at a call the draw coin picks.  The call's A table rehashed from the
     held rows and scales (zero past m) against its manifest row's A root; its z/y records recomputed from them (z = A B^T
-    by int_mm, y = dequant(z), zero past m) against the row's z root; and under "azy" the held records against both."""
+    by int_mm, y = dequant(z) at the slot's s_a, so past m z 0 and y dq(0, +0, s_w)) against the row's z root; and under
+    "azy" the held records against both."""
     from verity_vllm.engine import int8_exact as E
     sp = rec.get("spill")
     if sp is None:
@@ -1674,9 +1675,8 @@ def open_spill(win: SoWindow, rec: dict, kinds: tuple) -> dict | None:
         a_ok = (CM.s8_table(CM.domain(fa, t, "a-table"), key, f"a/{s}/{w}", a, sc).root
                 == unwords(row[ai * L8 + 8 * w:ai * L8 + 8 * w + 8]))
         z = torch.zeros((t, n), dtype=torch.int32, device=win.dev)
-        y = torch.zeros((t, n), dtype=torch.bfloat16, device=win.dev)
         z[:m] = E.int_mm(torch.from_numpy(a[:m]).to(win.dev), win.wt[w])
-        y[:m] = E.dequantize(z[:m], torch.from_numpy(sc[:m]).to(win.dev), win.sw[w])
+        y = E.dequantize(z, torch.from_numpy(sc).to(win.dev), win.sw[w])
         recs = DA.zy_join(z, y, u).cpu().numpy()
         cnt = recs.shape[0]
         zd = CM.domain(DA.zy_fields(win, w, s, u), cnt, DA.ZY_KIND)
