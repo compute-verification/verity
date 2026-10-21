@@ -19,13 +19,21 @@
 //
 // A row is `body` bytes at data + i stride, then len - body bytes at tail + i tail_stride (an A or B row's f32 scale).
 // H1C_HB = 1: h1c_build's four kernels hash through Hb (below: the state in registers, the block in shared memory) rather
-// than Hs, the same bytes in the same order.
+// than Hs, the same bytes in the same order.  With it, H1C_LVF = L >= 0 builds every level from L up in one launch (a
+// block a table, h1c_levels) and H1C_DOMSEG = 1 the domains in the segments' launch (its first block row), beside them.
 #include <cstdint>
 #include <cuda_runtime.h>
 
 #ifndef H1C_HB
 #define H1C_HB 0
 #endif
+#ifndef H1C_LVF
+#define H1C_LVF -1
+#endif
+#ifndef H1C_DOMSEG
+#define H1C_DOMSEG 0
+#endif
+static_assert(H1C_HB || (H1C_LVF < 0 && !H1C_DOMSEG), "H1C_LVF and H1C_DOMSEG are H1C_HB's");
 
 namespace sh {
 typedef unsigned long long u64;
@@ -702,13 +710,8 @@ __device__ __forceinline__ void hb_row(Hb& s, const H1Tab& T, long long i, int o
   }
 }
 
-extern "C" __global__ void __launch_bounds__(64) h1c_domains(H1Tab* __restrict__ tabs, int ntab, const int* __restrict__ step) {
-  __shared__ __align__(16) uint8_t bf[64 * HB];
-  const int t = blockIdx.x * blockDim.x + threadIdx.x;
-  if (t >= ntab) return;
-  const H1Tab& T = tabs[t];
+__device__ __forceinline__ void hb_domain(H1Tab& T, u64 st, uint8_t* b) {
   const H1Dom& D = T.dm;
-  const u64 st = (u64)(long long)*step;
   uint8_t d[2][20];
   int dl[2] = {0, 0};
   long long jl = D.js_len[0] + D.js_len[1] + D.js_len[2];
@@ -717,7 +720,6 @@ extern "C" __global__ void __launch_bounds__(64) h1c_domains(H1Tab* __restrict__
     jl += dl[v];
   }
   Hb s;
-  uint8_t* b = bf + threadIdx.x * HB;
   hb_init(s, b);
   hb_bytes(s, D.bind, D.bind_len);
   hb_be(s, (u64)jl, 8);
@@ -739,9 +741,23 @@ extern "C" __global__ void __launch_bounds__(64) h1c_domains(H1Tab* __restrict__
   hb_final(s, T.dom);
 }
 
-extern "C" __global__ void __launch_bounds__(HT) h1c_segs(const H1Tab* __restrict__ tabs, int ntab) {
+extern "C" __global__ void __launch_bounds__(64) h1c_domains(H1Tab* __restrict__ tabs, int ntab, const int* __restrict__ step) {
+  __shared__ __align__(16) uint8_t bf[64 * HB];
+  const int t = blockIdx.x * blockDim.x + threadIdx.x;
+  if (t >= ntab) return;
+  hb_domain(tabs[t], (u64)(long long)*step, bf + threadIdx.x * HB);
+}
+
+// dom = 1 (H1C_DOMSEG): block row 0 is h1c_domains' work, a thread a table, and row y + 1 table y's segments
+extern "C" __global__ void __launch_bounds__(HT) h1c_segs(H1Tab* __restrict__ tabs, int ntab, const int* __restrict__ step,
+                                                         int dom) {
   __shared__ __align__(16) uint8_t bf[HT * HB];
-  const H1Tab& T = tabs[blockIdx.y];
+  if ((int)blockIdx.y < dom) {
+    const int t = blockIdx.x * blockDim.x + threadIdx.x;
+    if (t < ntab) hb_domain(tabs[t], (u64)(long long)*step, bf + threadIdx.x * HB);
+    return;
+  }
+  const H1Tab& T = tabs[blockIdx.y - dom];
   if (!T.data) return;
   const int ns = nseg_of(T.len);
   const long long t = (long long)blockIdx.x * blockDim.x + threadIdx.x;
@@ -852,19 +868,14 @@ extern "C" __global__ void __launch_bounds__(HT) h1c_leaves(const H1Tab* __restr
     for (int k = 0; k < 8; ++k) T.root[k] = out[k];
 }
 
-extern "C" __global__ void __launch_bounds__(HT) h1c_level(const H1Tab* __restrict__ tabs, int ntab, int lv) {
-  __shared__ __align__(16) uint8_t bf[HT * HB];
-  const H1Tab& T = tabs[blockIdx.y];
-  if (lv >= T.depth) return;
-  const long long width = 1LL << T.depth, nodes = width >> (lv + 1);
-  const long long idx = (long long)blockIdx.x * blockDim.x + threadIdx.x;
-  if (idx >= nodes) return;
+__device__ __forceinline__ void hb_node(const H1Tab& T, uint8_t* b, int lv, long long idx) {
+  const long long width = 1LL << T.depth;
   long long off = 0;
   for (int e = 0; e < lv; ++e) off += width >> e;
   const u64* in = T.level + 8 * (off + 2 * idx);
   u64* o = T.level + 8 * (off + (width >> lv) + idx);
   Hb s;
-  hb_init(s, bf + threadIdx.x * HB);
+  hb_init(s, b);
   hb_frame(s, "node", 4);
   hb_be(s, 64, 8);
   hb_words(s, T.dom, 8);
@@ -881,6 +892,28 @@ extern "C" __global__ void __launch_bounds__(HT) h1c_level(const H1Tab* __restri
   if (lv == T.depth - 1)
 #pragma unroll
     for (int k = 0; k < 8; ++k) T.root[k] = out[k];
+}
+
+extern "C" __global__ void __launch_bounds__(HT) h1c_level(const H1Tab* __restrict__ tabs, int ntab, int lv) {
+  __shared__ __align__(16) uint8_t bf[HT * HB];
+  const H1Tab& T = tabs[blockIdx.y];
+  if (lv >= T.depth) return;
+  const long long idx = (long long)blockIdx.x * blockDim.x + threadIdx.x;
+  if (idx >= (1LL << T.depth) >> (lv + 1)) return;
+  hb_node(T, bf + threadIdx.x * HB, lv, idx);
+}
+
+// H1C_LVF = L >= 0: a table's levels from L up in one block (LT threads), a barrier between levels, so the levels whose
+// nodes a block covers cost one launch rather than one each
+constexpr int LT = 256;
+extern "C" __global__ void __launch_bounds__(LT) h1c_levels(const H1Tab* __restrict__ tabs, int ntab, int lv0) {
+  __shared__ __align__(16) uint8_t bf[LT * HB];
+  const H1Tab& T = tabs[blockIdx.x];
+  for (int lv = lv0; lv < T.depth; ++lv) {
+    const long long nodes = (1LL << T.depth) >> (lv + 1);
+    for (long long idx = threadIdx.x; idx < nodes; idx += LT) hb_node(T, bf + threadIdx.x * HB, lv, idx);
+    __syncthreads();
+  }
 }
 #endif
 
@@ -1649,12 +1682,25 @@ extern "C" int h1c_build(const H1Tab* tabs, H1Tab* tabs_dev, int ntab, const int
     }
   }
   if (ntab > 65535) return 99;
+#if H1C_HB
+  const int ds = H1C_DOMSEG && domains && max_segs;
+  if (domains && !ds) h1c_domains<<<(ntab + 63) / 64, 64, 0, stream>>>(tabs_dev, ntab, step_dev);
+  if (max_segs) {
+    const unsigned bx = (unsigned)max((max_segs + 127) / 128, ds ? (long long)(ntab + 127) / 128 : 1LL);
+    h1c_segs<<<dim3(bx, ntab + ds), 128, 0, stream>>>(tabs_dev, ntab, step_dev, ds);
+  }
+#else
   if (domains) h1c_domains<<<(ntab + 63) / 64, 64, 0, stream>>>(tabs_dev, ntab, step_dev);
   if (max_segs) h1c_segs<<<dim3((unsigned)((max_segs + 127) / 128), ntab), 128, 0, stream>>>(tabs_dev, ntab);
+#endif
   h1c_leaves<<<dim3((unsigned)((max_width + 127) / 128), ntab), 128, 0, stream>>>(tabs_dev, ntab, step_dev, btab);
-  for (int lv = 0; lv < max_depth; ++lv) {
+  const int lvf = H1C_LVF < 0 ? max_depth : min(H1C_LVF, max_depth);
+  for (int lv = 0; lv < lvf; ++lv) {
     const long long nodes = max_width >> (lv + 1);
     h1c_level<<<dim3((unsigned)((nodes + 127) / 128), ntab), 128, 0, stream>>>(tabs_dev, ntab, lv);
   }
+#if H1C_HB
+  if (lvf < max_depth) h1c_levels<<<ntab, LT, 0, stream>>>(tabs_dev, ntab, lvf);
+#endif
   return (int)cudaGetLastError();
 }
