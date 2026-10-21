@@ -227,7 +227,7 @@ UNIT_REFUSED = [
     ("E_PORT_KIND" if SEEDS else "position", "own-position", _own_position),
     ("position", "own-roots", _own_roots),
     ("E_COIN_FLOW" if SEEDS else "salt-flow", "salt-leak", _salt_leak),
-    ("E_COIN_FLOW" if SEEDS else "noise-in-z", "noised-z", _noised_z),
+    ("noise-in-z", "noised-z", _noised_z),
 ]
 UNIT_REFUSED = [pytest.param(code, _bad(name, body), id=name) for code, name, body in UNIT_REFUSED]
 
