@@ -30,6 +30,11 @@ each connection is one session, relayed on a connection of its own to the audito
 A refusal answers the prover `Resp::Refused(WHY)`, and every coin after it is refused too, without asking the auditor: no
 coin after a refused one reaches the prover. `kind` and `State` are pure; `cmd` only
 moves frames.
+
+The release side (live PROTOCOL.md §10.5) is `core-firewall session`'s, around this loop (`run` with a `Hold`): a held
+session's `Ping`s are answered here until its first other request, which the hold admits or refuses before anything
+reaches the auditor, and its `Proof`s and `Finish` are held until the hold lets them go. `flock-firewall session` has no
+hold.
 -/
 import Flock.Firewall.SessionPlan
 import Flock.Firewall.Frames
@@ -242,6 +247,79 @@ def recvFrame (c : Socket.Client) : IO (Option ByteArray) := do
 def sendFrame (c : Socket.Client) (f : ByteArray) : IO Unit :=
   (c.sendAll #[u32le f.size, f]).block
 
+/-- `Resp::Ok`'s frame. -/
+def ok : ByteArray := ByteArray.mk #[1]
+
+/-- The prefix of what a held session's prover is told when the release side refuses or stops it. -/
+def REFUSED : String := "FIREWALL-REFUSED: "
+
+/-- `Resp::Verdict`'s frame for the loop's own verdict on a session the release side refused or stopped:
+`{"accepted": false, "why": WHY}`, tag `4`, the JSON's UTF-8 length-prefixed. -/
+def notAccepted (why : String) : ByteArray :=
+  let v := (Json.mkObj [("accepted", false), ("why", why)]).compress
+  ByteArray.mk #[4] ++ u32le v.utf8ByteSize ++ v.toUTF8
+
+/-- Whether `r` is a `Resp::Verdict` that accepts (`"accepted": true`). -/
+def accepts (r : ByteArray) : Bool :=
+  match byte? r 0, getBytes r 1 with
+  | some 4, some (v, _) => match (String.fromUTF8? v).map Json.parse with
+    | some (.ok j) => j.getObjValD "accepted" == Json.bool true
+    | _ => false
+  | _, _ => false
+
+/-- **An outer session's release side** around the loop (`core-firewall session`), each hook run on the session's own
+thread. -/
+structure Hold where
+  /-- At the session's first request other than `Ping`, before anything of it reaches the auditor: `none` serves it, else
+  why it is refused. -/
+  admit : IO (Option String)
+  /-- At the session's `Finish`: given why the loop stopped the session, if it did (`State.finish`), and how many of its
+  `need` proofs the loop holds, `none` once they and `Finish` may leave (at the session's release time), else what the
+  prover is told of its stop. -/
+  barrier : (stopped : Option String) → (proofs need : Nat) → IO (Option String)
+  /-- The auditor's verdict on what left (whether it accepts), or the fault that cut the session while it left. -/
+  sent : Except String Bool → IO Unit
+  /-- An admitted session ended before its `Finish` was decided: why. -/
+  cut : String → IO Unit
+  /-- The session is over, whatever its outcome. -/
+  leave : IO Unit
+
+/-- A refused session's requests from `f` on, each answered with the refusal `why` (`Finish` with a verdict that names
+it) until the prover stops; nothing reaches the auditor. -/
+def refuseAll (p : Socket.Client) (f : ByteArray) (why : String) : IO Unit := do
+  let mut f := f
+  repeat
+    if byte? f 0 == some 6 then
+      sendFrame p (notAccepted why)
+      return
+    sendFrame p (refused why)
+    let some g ← recvFrame p | return
+    f := g
+
+/-- A held session up to its first request other than `Ping` (each `Ping` answered here), then `Hold.admit`: that
+request, where it is admitted; `none` where the prover ended first, or where it is refused, its requests then answered
+with the refusal once it has left the slot. -/
+def admitted (p : Socket.Client) (h : Hold) : IO (Option ByteArray) := do
+  repeat
+    let some f ← recvFrame p | return none
+    if byte? f 0 == some 9 then
+      sendFrame p ok
+      continue
+    match ← h.admit with
+    | none => return some f
+    | some why =>
+      h.leave
+      refuseAll p f (REFUSED ++ why)
+      return none
+  return none
+
+/-- Where a held session stands: relaying, its proofs and `Finish` leaving, or its outcome given to the hold. -/
+inductive Phase where
+  | relay
+  | sending
+  | done
+  deriving BEq
+
 /-- The address `HOST:PORT` names, resolved. -/
 def resolve (addr : String) : IO SocketAddress := do
   let (host, port) := match addr.splitOn ":" with
@@ -254,19 +332,47 @@ def resolve (addr : String) : IO SocketAddress := do
   | .v4 a => pure (.v4 { addr := a, port := p.toUInt16 })
   | .v6 a => pure (.v6 { addr := a, port := p.toUInt16 })
 
-/-- **One session**, the `sid`-th: the prover's connection `p`, relayed on a connection of its own to the auditor at
-`auditor` until either side closes. Each request is read whole, decided (`kind`, `State.sendHello`, `State.request`, a
-`Round` against the frames `reg`, `Frames.carry`, a `Commit` against the tables' level 0 `l0s`, `Level0.commit`) and
-only then sent; a `Round`'s coins, once opened (`State.answer`), are fed to its frame (`Frames.feed`) before the prover
-receives them. -/
-def serve (S : Hello.Setup) (specs : Hello.Specs) (auditor : SocketAddress) (reg : IO.Ref Frames.Registry)
-    (l0s : IO.Ref Level0.Registry) (sid : Nat) (p : Socket.Client) : IO Unit := do
-  let a ← Socket.Client.mk
-  (a.connect auditor).block
-  a.noDelay
+/-- **A session's relay** once it reaches the auditor `a` (`serve`), from its first request `first` if the hold read it:
+each request decided and relayed, and with a hold its proofs and `Finish` held for `Hold.barrier`. `phase` is where a held
+session stands, and `ended` why it ended if the hold has no outcome of it. -/
+def relay (S : Hello.Setup) (specs : Hello.Specs) (reg : IO.Ref Frames.Registry) (l0s : IO.Ref Level0.Registry) (sid : Nat)
+    (p : Socket.Client) (hold : Option Hold) (a : Socket.Client) (first : Option ByteArray) (phase : IO.Ref Phase)
+    (ended : IO.Ref String) : IO Unit := do
   let mut st : State := {}
+  let mut next := first
+  let mut held : Array ByteArray := #[]
   repeat
-    let some f ← recvFrame p | break
+    let mut f := ByteArray.empty
+    if let some g := next then
+      f := g
+      next := none
+    else
+      let some g ← recvFrame p | break
+      f := g
+    if let some h := hold then
+      if byte? f 0 == some 5 then
+        held := held.push f
+        sendFrame p ok
+        continue
+      if byte? f 0 == some 6 then
+        let stopped := match st.finish with
+          | some (S', _) => S'.stop
+          | none => none
+        phase.set .done
+        match ← h.barrier stopped held.size (2 * st.tables.size) with
+        | some why => sendFrame p (notAccepted (REFUSED ++ why))
+        | none =>
+          phase.set .sending
+          for pf in held do
+            sendFrame a pf
+            let some r ← recvFrame a | throw (IO.userError "the auditor ended the session before its verdict")
+            unless byte? r 0 == some 1 do throw (IO.userError "the auditor did not take a proof")
+          sendFrame a f
+          let some r ← recvFrame a | throw (IO.userError "the auditor ended the session before its verdict")
+          phase.set .done
+          h.sent (.ok (accepts r))
+          sendFrame p r
+        break
     match kind f with
     | .error e =>
       sendFrame p (refused s!"{Coins.STOP}{e}")
@@ -315,14 +421,61 @@ def serve (S : Hello.Setup) (specs : Hello.Specs) (auditor : SocketAddress) (reg
           sendFrame p out
           continue
       sendFrame a f
-      let some r ← recvFrame a | break
+      let some r ← recvFrame a | ended.set "the auditor ended the session"; break
       let (st', out) := st.answer k r
       st := st'
       if let (some i, .round _ n, some 2, none) := (slot, k, byte? r 0, st.stop) then
         reg.modify (Frames.feed · i (Frames.feedOf n r.data.toList))
       sendFrame p out
-  (a.shutdown).block
-  (p.shutdown).block
+
+/-- **One session**, the `sid`-th: the prover's connection `p`, relayed on a connection of its own to the auditor at
+`auditor` until either side closes. Each request is read whole, decided (`kind`, `State.sendHello`, `State.request`, a
+`Round` against the frames `reg`, `Frames.carry`, a `Commit` against the tables' level 0 `l0s`, `Level0.commit`) and
+only then sent; a `Round`'s coins, once opened (`State.answer`), are fed to its frame (`Frames.feed`) before the prover
+receives them.
+
+With a hold `h`, the session is admitted first (`admitted`), and only then is the auditor reached. Its `Proof`s are
+held, each answered `Resp::Ok`, and at its `Finish` the hold decides (`Hold.barrier`, given the loop's own refusal and the
+proofs held, two a table): a stop is answered with a verdict that does not accept and cuts the auditor's connection
+without `Finish`; otherwise the held proofs and `Finish` leave, and the auditor's verdict goes to the hold
+(`Hold.sent`) before the prover receives it. A session that ends before its `Finish` is decided, or a fault of the
+loop's, is the hold's to record (`Hold.cut`). -/
+def serve (S : Hello.Setup) (specs : Hello.Specs) (auditor : SocketAddress) (reg : IO.Ref Frames.Registry)
+    (l0s : IO.Ref Level0.Registry) (sid : Nat) (p : Socket.Client) (hold : Option Hold := none) : IO Unit := do
+  let mut first : Option ByteArray := none
+  if let some h := hold then
+    match ← admitted p h with
+    | some f => first := some f
+    | none =>
+      try (p.shutdown).block catch _ => pure ()
+      return
+  let phase ← IO.mkRef Phase.relay
+  let ended ← IO.mkRef "the prover ended the session before its Finish"
+  try
+    let a ← Socket.Client.mk
+    (a.connect auditor).block
+    a.noDelay
+    relay S specs reg l0s sid p hold a first phase ended
+    if let some h := hold then
+      if (← phase.get) == .relay then
+        phase.set .done
+        h.cut (← ended.get)
+    try (a.shutdown).block catch _ => pure ()
+  catch e =>
+    match hold with
+    | none => throw e
+    | some h =>
+      match ← phase.get with
+      | .relay =>
+        phase.set .done
+        h.cut s!"the firewall's fault ({e})"
+      | .sending =>
+        phase.set .done
+        h.sent (.error s!"{e}")
+      | .done => pure ()
+  finally
+    if let some h := hold then h.leave
+  try (p.shutdown).block catch _ => pure ()
 
 /-- The first byte `v` of `b`, if any. -/
 def findByte (b : ByteArray) (v : UInt8) : Option Nat := Id.run do
@@ -408,9 +561,8 @@ for sessions and on a port the system picks for the reps' frames and the tables'
 on its own thread, every session's `Hello` at one statement set up once a draw (`Hello.Setup.specAt`). It runs until its standard
 input closes. `flock-firewall session --schedule …` instead reads a draw's JSON (`null` for none) on its standard input
 and prints the openings after the session stream's at it (`planOf`), `ok N` and a line `STREAM COINS` each, or
-`refused WHY`. -/
-def cmd (args : List String) : IO UInt32 := do
-  let usage := s!"usage: flock-firewall session (--verifier HOST:PORT [--listen PORT] | --schedule) {Hello.FLAGS}"
+`refused WHY`. `run` is the same loop with each session held by a hold `mkHold` makes for it (`core-firewall session`). -/
+def run (usage : String) (args : List String) (mkHold : Option (IO Hold)) : IO UInt32 := do
   let S ← match ← Hello.Setup.ofArgs usage args with
     | .ok S => pure S
     | .error e => IO.eprintln e; return 2
@@ -450,12 +602,20 @@ def cmd (args : List String) : IO UInt32 := do
       let p ← srv.accept.block
       let sid ← sids.modifyGet fun n => (n, n + 1)
       let _ ← IO.asTask (prio := .dedicated) do
-        try serve S specs auditor reg l0s sid p
+        try
+          let hold ← match mkHold with
+            | some m => some <$> m
+            | none => pure none
+          serve S specs auditor reg l0s sid p hold
         catch e => IO.eprintln s!"session: {e}"
         l0s.modify (·.filter (·.bound.map (·.1) != some sid))
   let stdin ← IO.getStdin
   repeat
     if (← stdin.getLine).isEmpty then break
   IO.Process.exit 0
+
+/-- `flock-firewall session`: `run`, with no hold. -/
+def cmd (args : List String) : IO UInt32 :=
+  run s!"usage: flock-firewall session (--verifier HOST:PORT [--listen PORT] | --schedule) {Hello.FLAGS}" args none
 
 end Flock.Firewall.Session
