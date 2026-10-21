@@ -31,9 +31,11 @@
         the drawn units' rows (their public row's and ok row's too) and salts for staging, and each A row's, B row's and
         record's registered value, position and path (OUT_DIR/rows.npz, the prover's: ``v_``, ``r_`` and ``p_`` of its
         port), and their opening (OUT_DIR/opening.json: each committed row's b || c and its path to its tree's root). The ok
-        row is the one word 1 under its public salt (`h1unit.ok_salt`), what the verifier accepts. ``--tamper-a``: the rows
-        a prover that serves an A row the registration does not hold stages, the first unit's a0 row (at every unit that
-        reads it) with code 0's low bit flipped under a fresh salt, its registered path kept; the opening is the honest one
+        row is the one word 1 under its public salt (`h1unit.ok_salt`), what the verifier accepts, registered at its
+        row of its call's ok table (`h1unit.ok_tables`, which anyone computes; ``v_o1``, ``r_o1``, ``p_o1``).
+        ``--tamper-a``: the rows a prover that serves an A row the registration does not hold stages, the first unit's a0
+        row (at every unit that reads it) with code 0's low bit flipped under a fresh salt, its registered path kept; the
+        opening is the honest one
 
 A tile is (call, ti, tj): A rows [R ti, R (ti + 1)) of the slot and B rows [C tj, C (tj + 1)) of the call's; tiles are
 numbered call by call, row block major, and a tile's number is its position, the unit's ``position`` input
@@ -423,7 +425,7 @@ def cmd_open(a) -> int:
     reg_ports = [f"a{i}" for i in range(R)] + [f"b{j}" for j in range(C)] + ["zy"]
     rows = {p: [] for p in reg_ports} | {"pub": [], "o0": [], "o1": []}
     salts = {p: [] for p in rows}
-    values, positions, paths = {p: [] for p in reg_ports}, {p: [] for p in reg_ports}, {p: [] for p in reg_ports}
+    values, positions, paths = ({p: [] for p in [*reg_ports, "o1"]} for _ in range(3))
     openings = []
     for u in units:
         c, ti, tj = tile_of(com, u)
@@ -443,6 +445,8 @@ def cmd_open(a) -> int:
         salts["o0"].append(bytes(priv["sr"][u]))
         rows["o1"].append(U.OK)
         salts["o1"].append(U.ok_salt(w, u))
+        for got, x in zip((values, positions, paths), U.ok_read(prog, w, U.call_tiles(com), u)):
+            got["o1"].append(x)
         op["rows"]["o0"] = {"value": "receipt", "index": u, "bc": bytes(priv["bcr"][u]).hex(), "path": U.path(lr, u)}
         openings.append(op)
     tampered = None

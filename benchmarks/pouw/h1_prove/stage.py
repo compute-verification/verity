@@ -8,8 +8,9 @@ for each statement, ``NAME.json`` ``{"rows": rows.npz, "set": SET, "out": DIR, "
 rows, the drawn units' instances in order, and their indices in the Program), and this stages it with C-Flock's
 `UnitStager.stage` under the window's own salts as a shared-row statement (`h1unit.statement_tables`): each A port's, B
 port's and the record's table the registered rows its instances read, with their value, positions and paths (one call's
-units a statement: its A table, z table and b/<K>), so the statement's committed rows are the registered values' and the
-window's leaves. DIR gets inst.bin, pub.bin (the prover's), outs.npz
+units a statement: its A table, z table and b/<K>), and each instance's ok row's position and path in its call's ok
+table (``ok@<c>``, `h1unit.ok_tables`), so the statement's committed rows are the registered values' and the window's
+leaves. DIR gets inst.bin, pub.bin (the prover's), outs.npz
 (the staged output rows, ``o0`` and ``o1`` per instance) and stage.json, the last one written, which says at which
 instances each staged output row is not the one the rows commit (``outputs_differ``: an honest window's none, a changed
 record's its ok). WORK/requests/END stops it.

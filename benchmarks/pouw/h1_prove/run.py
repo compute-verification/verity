@@ -21,7 +21,8 @@ challenger and the verifier never hold a row, a salt or a served value):
 3. the verifier draws ``--draw`` units of the window's tiles by Lean ``flock-verify draw`` on the coin's stream, groups
    them by call (a registered port reads one value, and a call's units read its own tables, so a statement holds one
    call's units), and writes each call's ``--registered`` file (`registered_file`: `h1unit.registered_reads` from its
-   own Program under the window's roots, WORK/verifier/w1-c<c>.registered.json);
+   own Program under the window's roots and the call's ok table, whose root it computes itself (`h1unit.ok_tables`: one
+   row a unit, the one word 1 under its public salt), WORK/verifier/w1-c<c>.registered.json);
 4. the prover opens the drawn units call by call (`window.py open`), and the verifier checks each opened row is the one
    the Program's unit reads (`h1unit.unit_reads`) with a path to its root (its call's A table's and z table's and
    b/<K>'s registered roots under the Program's digest, the receipt's under the window's), and builds its own public
@@ -32,8 +33,9 @@ challenger and the verifier never hold a row, a salt or a served value):
    shared-row statement on the prover's rows at their indices (``honest``, the first drawn unit's call, and
    ``honest-c<c>`` each other drawn call), and each prover's pub.bin must be the verifier's byte for byte: every unit's
    ok is 1, its record the tile's product and dequant. Lean (``verify --zk --registered``) derives each instance's unit
-   from its own Program, and an accepted check must say so (``units: derived``), and opens each A row, B row and record
-   against its registered root at the position its Program reads.
+   from its own Program, and an accepted check must say so (``units: derived``), and opens each A row, B row, record and
+   ok row against its registered root at the position its Program reads: ``o1`` is a port of the verifier's ``own``, so
+   a unit's ok is bound by the registered reads and not by the public file alone.
 
 The negatives are on ``honest``'s units, the drawn units of the first drawn unit's call.
 
@@ -206,7 +208,7 @@ def check_opening(win: SimpleNamespace, com: dict, served: dict, op: dict, u: in
     the Program by `check_registration`, ``served`` its receipt root): each committed row is the one the Program's unit
     ``u`` reads (`h1unit.unit_reads`), and its path reaches that value's registered root: its call's A table's and z
     table's and b/<K>'s under the verifier's own Program digest (`h1unit.verify_registered`), the receipt's under the
-    window's domain. The ok row is the verifier's own."""
+    window's domain. The ok row is the verifier's own, at its own ok table (`h1unit.ok_tables`)."""
     w, T, why = com["window"], com["tiles"], []
     trees = U.registered_of(com) | {"receipt": (T, served["receipt_root"])}
     if op.get("unit") != u:
@@ -242,22 +244,27 @@ def unit_bcs(shape: U.Shape, com: dict, salt: bytes, op: dict) -> dict[str, byte
     return {**{p: bytes.fromhex(op["rows"][p]["bc"]) for p in [*shape.in_rows, "o0"]}, "pub": pub, "o1": ok}
 
 
-def unit_registered(win: SimpleNamespace, k: int, op: dict, u: int) -> dict[str, tuple[str, int, str]]:
+def unit_registered(win: SimpleNamespace, com: dict, op: dict, u: int) -> dict[str, tuple[str, int, str]]:
     """Unit ``u``'s registered reads as the verifier's public file states them (`h1unit.verifier_pub`'s ``reads``): each
-    registered port's value, the position the verifier's Program reads (`h1unit.unit_reads`) and the opened path."""
-    reg = set(U.Shape(k).in_rows)
-    return {port: (value, index, "".join(op["rows"][port]["path"]))
-            for port, (value, index) in U.unit_reads(win.program, win.tp, u).items() if port in reg}
+    registered port's value, the position the verifier's Program reads (`h1unit.unit_reads`) and the opened path, and
+    its ok row's at its call's ok table, the path the verifier's own (`h1unit.ok_read`, of ``com``'s window)."""
+    reg, reads = set(U.Shape(com["unit"]["k"]).in_rows), U.unit_reads(win.program, win.tp, u)
+    ok = U.ok_read(win.obj["program"], com["window"], U.HW.call_units(win.program), u)
+    if ok[:2] != reads["o1"]:
+        raise SystemExit(f"unit {u}: its ok row is row {ok[1]} of {ok[0]}, and the Program reads {reads['o1']}")
+    return {**{port: (value, index, "".join(op["rows"][port]["path"])) for port, (value, index) in reads.items()
+               if port in reg}, "o1": ok}
 
 
 def registered_file(path: Path, win: SimpleNamespace, com: dict, call: int, units: list[int]) -> tuple[dict, dict]:
     """The verifier's ``--registered`` file of a statement over call ``call``'s units (`h1unit.registered_reads`, under
-    its commitment's roots), written to ``path``, held to the h1 window's own reads (`h1unit.unit_reads`) at the drawn
-    ``units``. Returns what it wrote and the file."""
-    k, t = com["unit"]["k"], time.time()
-    reg = set(U.Shape(k).in_rows)
-    doc = U.registered_reads(win.program, win.tp, call, {v: r for v, (_n, r) in U.registered_of(com).items()},
-                             win.obj["program"])
+    its commitment's roots and the verifier's own ok tables, `h1unit.ok_tables` of its window and Program), written to
+    ``path``, held to the h1 window's own reads (`h1unit.unit_reads`) at the drawn ``units``. Returns what it wrote and
+    the file."""
+    k, t, prog = com["unit"]["k"], time.time(), win.obj["program"]
+    reg = {*U.Shape(k).in_rows, "o1"}
+    trees = U.registered_of(com) | U.ok_tables(prog, com["window"], U.HW.call_units(win.program))
+    doc = U.registered_reads(win.program, win.tp, call, {v: r for v, (_n, r) in trees.items()}, prog)
     for u in units:
         want = {p: (v, i) for p, (v, i) in U.unit_reads(win.program, win.tp, u).items() if p in reg}
         got = {p: (e["value"], e["reads"][u]) for p, e in doc["ports"].items()}
@@ -270,13 +277,14 @@ def registered_file(path: Path, win: SimpleNamespace, com: dict, call: int, unit
 
 def registered_opens(pub: bytes, ports: list, port: str, row: int, win: SimpleNamespace, com: dict) -> bool:
     """Whether table row ``row`` of registered port ``port`` in a shared-row public file opens its value's registered root
-    at the position and through the path its header states: the check flock-verify ``--registered`` makes of each table
-    row (`h1unit.verify_registered`)."""
+    (the window's registration's, or the verifier's own ok table's, `h1unit.ok_tables`) at the position and through the
+    path its header states: the check flock-verify ``--registered`` makes of each table row (`h1unit.verify_registered`)."""
     nl = pub.index(b"\n") + 1
     head, body, names = json.loads(pub[:nl]), pub[nl:], [p.name for p in ports]
     at = sum(int(head["shared_rows"][q]) for q in names[:names.index(port)]) + row
     e = head["registered"][port]
-    leaves, root = U.registered_of(com)[e["value"]]
+    trees = U.registered_of(com) | U.ok_tables(win.obj["program"], com["window"], U.call_tiles(com))
+    leaves, root = trees[e["value"]]
     return U.verify_registered(win.obj["program"], e["value"], leaves, bytes.fromhex(root), e["positions"][row],
                                body[128 * at:128 * (at + 1)], [e["paths"][row]])
 
@@ -438,7 +446,7 @@ def cmd_prepare(a) -> int:
         why = {u: check_opening(win, com_t, served_t, op, u) for u, op in zip(us, ops)}
         why_vs_honest = {u: check_opening(win, com1, served1, op, u) for u, op in zip(us, ops)}
         opened[tag] = [unit_bcs(shape, com_t, salt1, op) for op in ops]
-        reads[tag] = [unit_registered(win, k, op, u) for u, op in zip(us, ops)]
+        reads[tag] = [unit_registered(win, com_t, op, u) for u, op in zip(us, ops)]
         zy = f"zy@{U.HW.call_of(win.program, us[0])[0]}"
         record.setdefault("openings", {})[tag] = {
             "units": us, "registered": {zy: U.registered_of(com_t)[zy][1], "receipt_root": served_t["receipt_root"]},
@@ -492,7 +500,7 @@ def cmd_prepare(a) -> int:
     files = {**{h: (sets[c], opened[h], by_call[c], reads[h]) for c, h in honest.items()},
              **{t: (set_h, opened[t], units0, reads[t]) for t in (*BINDING, *IN_PROOF)},
              "other-window": (set_o, [opened["honest"][0]], [u0], [reads["honest"][0]]),
-             "other-window-own": (set_o, [unit_bcs(shape, com2, salt2, op2)], [u0], [unit_registered(win, k, op2, u0)])}
+             "other-window-own": (set_o, [unit_bcs(shape, com2, salt2, op2)], [u0], [unit_registered(win, com2, op2, u0)])}
     for tag, (set_name, bcs, indices, rd) in files.items():
         (vp / f"{tag}.pub.bin").write_bytes(U.verifier_pub(head, set_name, head["subcircuit"], bcs, indices, rd))
     for name, r in stmts.items():
