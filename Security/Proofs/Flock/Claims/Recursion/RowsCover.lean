@@ -60,9 +60,7 @@ theorem roundListed_of_check {i : RecVStar.Inner} {ss : Array VStar.Stmt} {rs : 
   cases hf : (List.range (RecVStar.commitRounds rs).length).find? (!RecVStar.roundListed ss ·) with
   | some k' =>
     rw [hf] at h
-    first
-    | cases h
-    | simp [throw, throwThe, MonadExceptOf.throw] at h
+    cases h
   | none =>
     simpa using List.find?_eq_none.1 hf k (List.mem_range.2 hk)
 
@@ -92,24 +90,13 @@ theorem port_of_portsNamed {parts : List PartX} {vs : Array VStar.Stmt} (h : por
   cases hc : parts[s]?.bind partCircuit with
   | none =>
     simp only [hc] at hall
-    first
-    | (rw [List.isEmpty_iff] at hall; rw [hall] at hneed; cases hneed)
-    | simp_all
+    rw [List.isEmpty_iff] at hall; rw [hall] at hneed; cases hneed
   | some c =>
     simp only [hc] at hall
     have hany := List.all_eq_true.1 hall q hneed
     refine ⟨c, rfl, ?_⟩
     rw [← Option.isSome_iff_exists]
-    first
-    | (rw [Array.findIdx?_isSome]; exact hany)
-    | simpa [Array.findIdx?_isSome] using hany
-    | (cases he : c.ports.findIdx? (·.name == q.1) with
-        | some _ => rfl
-        | none =>
-          exfalso
-          obtain ⟨p, hp, hpn⟩ := Array.any_eq_true'.1 hany
-          simp only [Array.findIdx?_eq_none_iff] at he
-          exact absurd hpn (by simpa using he p hp))
+    rw [Array.findIdx?_isSome]; exact hany
 
 /-- **`RowsCover` at every shape**: a stream round `j` that absorbs a message is rep `j / R`'s round `j % R` (`R` the
 rep schedule's rounds), its `k`-th message round for some `k` (`RecVStar.commitRounds`). V*'s list registers `rec-c<k>`
@@ -156,6 +143,7 @@ theorem rowsCover (shape : Claims.Recursion.Form → Prop) : RowsCover shape := 
       exact Array.getElem?_eq_getElem hs
     have hrep : j / rs.size = 0 ∨ j / rs.size = 1 := by
       have : j / rs.size < 2 := (Nat.div_lt_iff_lt_mul hpos).2 (by omega)
+      generalize j / rs.size = d at this ⊢
       omega
     have hrow : some (j / rs.size) ∈ q.2.2.toList := by
       rw [hqr]
