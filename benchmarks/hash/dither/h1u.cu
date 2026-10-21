@@ -230,6 +230,11 @@ __device__ __forceinline__ uint4 ld4(const void* p) {
 #ifndef H1S_EVL
 #define H1S_EVL 0
 #endif
+// H1U_EVFU = 0 (with H1U_EVF): h1u's B loads keep the normal policy, since a warp reads a row's 128-byte line over four
+// segments and an evict-first line can go before its last; h1k's producers read a line in one round
+#ifndef H1U_EVFU
+#define H1U_EVFU 1
+#endif
 template <int H, bool EF>
 __device__ __forceinline__ uint2 ld2e(const void* p) {
   if constexpr (!EF) {
@@ -550,7 +555,7 @@ __global__ void __launch_bounds__(32 * WARPS, H1U_MINB) h1u(const int8_t* __rest
 #pragma unroll
     for (int r = 0; r < 4; ++r) {
       a[r] = ld2<H1U_L2HINT>(Ab + (u64)(16 * (r >> 1) + g + 8 * (r & 1)) * K + kofs);
-      b[r] = ld2e<H1U_L2HINT, H1U_EVF>(Bb + (u64)(8 * r + g) * K + kofs);
+      b[r] = ld2e<H1U_L2HINT, H1U_EVF && H1U_EVFU>(Bb + (u64)(8 * r + g) * K + kofs);
     }
   };
   if (PF) {
@@ -648,7 +653,7 @@ __global__ void __launch_bounds__(32 * WARPS, H1U_MINB) h1u(const int8_t* __rest
 #pragma unroll
           for (int r = 0; r < 4; ++r) {
             ca[r] = ld2<H1U_L2HINT>(Ab + (u64)(16 * (r >> 1) + g + 8 * (r & 1)) * K + kofs);
-            cw[r] = ld2e<H1U_L2HINT, H1U_EVF>(Bb + (u64)(8 * r + g) * K + kofs);
+            cw[r] = ld2e<H1U_L2HINT, H1U_EVF && H1U_EVFU>(Bb + (u64)(8 * r + g) * K + kofs);
           }
         }
         u32 af[2][4], bf[4][2];
