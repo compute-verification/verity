@@ -13,7 +13,7 @@ gate of the set reads, the output.
 namespace Nci.Cover.SecurityProofs
 
 theorem mem_inputs {C : Circuit} {I : Finset (Fin C.N)} {g : Fin C.N} :
-    g ∈ C.inputs I ↔ g ∈ I ∧ Disjoint (C.pred g) I :=
+    g ∈ C.inputs I ↔ g ∈ I ∧ (C.pred g = ∅ ∨ ¬ C.pred g ⊆ I) :=
   Finset.mem_filter
 
 theorem mem_computed {C : Circuit} {I : Finset (Fin C.N)} {g : Fin C.N} :
@@ -27,16 +27,15 @@ theorem mem_outputs {C : Circuit} {I : Finset (Fin C.N)} {g : Fin C.N} :
 theorem computed_subset (C : Circuit) (I : Finset (Fin C.N)) : C.computed I ⊆ I :=
   Finset.sdiff_subset
 
-/-- A gate a subcircuit computes reads only gates of the subcircuit. -/
-theorem pred_subset_of_mem_computed {C : Circuit} {I : Finset (Fin C.N)} (hI : C.Subcircuit I) {g : Fin C.N}
-    (hg : g ∈ C.computed I) : C.pred g ⊆ I := by
+/-- A gate a set computes reads only gates of the set. -/
+theorem pred_subset_of_mem_computed {C : Circuit} {I : Finset (Fin C.N)} {g : Fin C.N} (hg : g ∈ C.computed I) :
+    C.pred g ⊆ I := by
   obtain ⟨hgI, hgn⟩ := mem_computed.1 hg
-  rcases hI.2 g hgI with h | h
-  · exact h
-  · exact absurd (mem_inputs.2 ⟨hgI, h⟩) hgn
+  by_contra h
+  exact hgn (mem_inputs.2 ⟨hgI, Or.inr h⟩)
 
-/-- A chain of gates that ends in a subcircuit `I` either meets an input of `I` or lies in `computed I`. -/
-theorem chain_entry {C : Circuit} {I : Finset (Fin C.N)} (hI : C.Subcircuit I) {l : List (Fin C.N)}
+/-- A chain of gates that ends in a set `I` either meets an input of `I` or lies in `computed I`. -/
+theorem chain_entry {C : Circuit} {I : Finset (Fin C.N)} {l : List (Fin C.N)}
     (hl : l.IsChain fun u v => u ∈ C.pred v) {y : Fin C.N} (hy : l.getLast? = some y) (hyI : y ∈ I) :
     (∃ g ∈ l, g ∈ C.inputs I) ∨ ∀ g ∈ l, g ∈ C.computed I := by
   induction hl with
@@ -53,7 +52,7 @@ theorem chain_entry {C : Circuit} {I : Finset (Fin C.N)} (hI : C.Subcircuit I) {
     rw [List.getLast?_cons_cons] at hy
     rcases ih hy with ⟨g, hg, hgI⟩ | hall
     · exact Or.inl ⟨g, List.mem_cons_of_mem a hg, hgI⟩
-    · have haI : a ∈ I := pred_subset_of_mem_computed hI (hall b List.mem_cons_self) hr
+    · have haI : a ∈ I := pred_subset_of_mem_computed (hall b List.mem_cons_self) hr
       by_cases ha : a ∈ C.inputs I
       · exact Or.inl ⟨a, List.mem_cons_self, ha⟩
       · refine Or.inr fun g hg => ?_
@@ -62,14 +61,14 @@ theorem chain_entry {C : Circuit} {I : Finset (Fin C.N)} (hI : C.Subcircuit I) {
         · exact hall g hg
 
 theorem Entry : Guarantees.Entry := by
-  intro C I π x y hI ⟨hx, hy, hπ⟩ hyI hxc
-  rcases chain_entry hI hπ hy hyI with h | hall
+  intro C I π x y ⟨hx, hy, hπ⟩ hyI hxc
+  rcases chain_entry hπ hy hyI with h | hall
   · exact h
   · exact absurd (hall x (List.mem_of_mem_head? hx)) hxc
 
 theorem BackwardClosure : Guarantees.BackwardClosure := by
-  intro C I A a x hI haI hA ⟨π, ⟨hx, hy, hπ⟩, hπA⟩
-  rcases chain_entry hI hπ hy haI with ⟨g, hg, hgI⟩ | hall
+  intro C I A a x haI hA ⟨π, ⟨hx, hy, hπ⟩, hπA⟩
+  rcases chain_entry hπ hy haI with ⟨g, hg, hgI⟩ | hall
   · have : g ∈ C.inputs I ∩ A := Finset.mem_inter.2 ⟨hgI, hπA g hg⟩
     rw [hA] at this
     exact absurd this (Finset.notMem_empty g)
