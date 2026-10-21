@@ -235,6 +235,18 @@ def test_a_k32_and_k322_window_names_every_read_its_own_port():
     assert (ports["a_k32[20]"], ports["a_k322[0]"]) == ("a_k32_20", "a_k322_0")
 
 
+def test_the_declared_program_is_the_served_windows_before_it_serves():
+    """`declared` from the window's public shapes, modules, rows and steps alone is the Program `close` built, under the
+    window's prefix; with none it names no window, so two windows' served Programs differ and their declared one doesn't."""
+    run, _ws, _inputs = _window(W1)
+    other, _ws, _inputs = _window(W2, seed=1)
+    decl = SV.declared(SHAPES, MODULES, T, STEPS, TILE, BLOCKS, unit=_unit())
+    assert P.program_digest(SV.declared(SHAPES, MODULES, T, STEPS, TILE, BLOCKS, SV.prefix(W1), _unit())) == \
+        P.program_digest(run.served.program) != P.program_digest(other.served.program)
+    assert P.program_digest(decl) == P.program_digest(SV.declared(SHAPES, MODULES, T, STEPS, TILE, BLOCKS, unit=_unit()))
+    assert decl.fn.bindings["CALLS"] == tuple(run.served.calls) and decl.fn.bindings["LINEARS"] == tuple(run.served.linears)
+
+
 def test_y_z_and_the_scale_stay_under_the_round_roots_alone():
     """The registered rows are A's codes and B's: no y, z or scale. Each call's A (with its scale), y and z tables stay
     committed, and each round's root is over them."""

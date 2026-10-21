@@ -84,6 +84,36 @@ def served_tree(reg: G.Registered) -> ServedTree:
     return ServedTree(e["value"], e["root"], e["leaves"], e["words"], e["domain"], reg.word_bits, row_schema=reg.schema)
 
 
+def layout(shapes: Sequence[tuple[int, int]], calls: Sequence[tuple[int, int]],
+           blocks: Sequence[int] | None = None) -> list[int]:
+    """Each call's A block of its K, ``calls`` each call's (step, linear) and ``blocks`` each linear's input block within a
+    step (`Served`'s): call (s, w) reads block s·B_K + i, i the place of ``blocks[w]`` among the blocks K's linears read."""
+    per = list(blocks) if blocks is not None else list(range(len(shapes)))
+    if len(per) != len(shapes):
+        raise ValueError(f"blocks {per} are not one input block for each of the window's {len(shapes)} linears")
+    of_k: dict[int, list[int]] = {}
+    for w, (_n, k) in enumerate(shapes):
+        of_k.setdefault(k, [])
+        if per[w] not in of_k[k]:
+            of_k[k].append(per[w])
+    of_k = {k: sorted(b) for k, b in of_k.items()}
+    return [s * len(of_k[shapes[w][1]]) + of_k[shapes[w][1]].index(per[w]) for s, w in calls]
+
+
+def declared(shapes: Sequence[tuple[int, int]], modules: Mapping[int, str], rows: int, steps: int,
+             tile: tuple[int, int] = PH.TILE, blocks: Sequence[int] | None = None, prefix: str = "",
+             unit: Callable[[int], Any] | None = None) -> Program:
+    """The window Program a static window declares before it serves: ``steps`` steps, each calling every linear (``shapes``,
+    each ``(n, K)``, named by ``modules``) in order, laid out as `Served.close` lays out the calls it records, its A slot
+    for ``rows`` token rows. With no ``prefix`` it names no window, so it is one for every window of the declaration (a
+    period's ``--circuit``, its `program_digest`); with a window's `prefix` it is that window's `Served.program`."""
+    mods = [modules.get(w, str(w)) for w in range(len(shapes))]
+    calls = [(s, w) for s in range(steps) for w in range(len(shapes))]
+    return HW.program([(mods[w], k, n) for w, (n, k) in enumerate(shapes)],
+                      [(mods[w], b) for (_s, w), b in zip(calls, layout(shapes, calls, blocks))], HW.slot(rows, tile), tile,
+                      prefix, unit)
+
+
 @dataclass
 class Served:
     """How an `H1Run` commits its window as the window Program's registered values. ``tile``: the Program's R × C
@@ -136,23 +166,11 @@ class Served:
         elif not np.array_equal(held[1], w):
             self.refused.append(f"call {call.index}: linear {call.layer}'s weight changed within the window")
 
-    def _layout(self, shapes: Sequence[tuple[int, int]]) -> list[int]:
-        """Each recorded call's A block of its K (`Served`'s blocks)."""
-        per = list(self.blocks) if self.blocks is not None else list(range(len(shapes)))
-        if len(per) != len(shapes):
-            raise ValueError(f"blocks {per} are not one input block for each of the window's {len(shapes)} linears")
-        of_k: dict[int, list[int]] = {}
-        for w, (_n, k) in enumerate(shapes):
-            of_k.setdefault(k, [])
-            if per[w] not in of_k[k]:
-                of_k[k].append(per[w])
-        of_k = {k: sorted(b) for k, b in of_k.items()}
-        return [c.step * len(of_k[c.k]) + of_k[c.k].index(per[c.layer]) for c, _codes in self._got]
-
     def close(self, run: Any) -> None:
         """Commit the window's A and B trees under the window Program, after the run's last round."""
         try:
-            key, blocks = self.key(run.commits), self._layout(run.shapes_)
+            key = self.key(run.commits)
+            blocks = layout(run.shapes_, [(c.step, c.layer) for c, _codes in self._got], self.blocks)
         except ValueError as e:
             self.refused.append(str(e))
         if not run.static():
@@ -267,5 +285,5 @@ def register(run: Any, log: Sequence[Mapping[str, Any]] = (), directory: str | P
     return reg
 
 
-__all__ = ["FILE", "NONCE", "PREFIX", "Served", "V2", "digest_of", "held", "nonce", "prefix", "register", "row_words",
-           "served_tree", "trees"]
+__all__ = ["FILE", "NONCE", "PREFIX", "Served", "V2", "declared", "digest_of", "held", "layout", "nonce", "prefix", "register",
+           "row_words", "served_tree", "trees"]

@@ -443,6 +443,12 @@ def fill(a: argparse.Namespace) -> dict[str, Any]:
     return doc
 
 
+def layout_of(linears: Any, calls: Any, m: int, tile: Any) -> dict[str, Any]:
+    """A window Program's layout as a record keeps it: its linears, A slot and tile, and the SHA-512 of its calls."""
+    return {"linears": [list(x) for x in linears], "m": int(m), "tile": list(tile),
+            "calls_sha512": hashlib.sha512(json.dumps([list(c) for c in calls]).encode()).hexdigest()}
+
+
 def served_check(h1: Any, served: Any, tdir: Path) -> dict[str, Any]:
     """The window's served trees (`pouw_h1_served`): each committed value's entry, what `close` refused, and the outcome of
     `pouw_h1_served.register` (``register_served`` reads ``hm96-sha512/row/v1`` rows alone until proofs' REGV2 follow-up,
@@ -451,7 +457,8 @@ def served_check(h1: Any, served: Any, tdir: Path) -> dict[str, Any]:
     doc: dict[str, Any] = {"entries": served.entries(), "refused": served.refused[:20], "ks": served.ks() if served.registered else [],
                            "committed": bool(served.registered) and not served.refused,
                            "in_commitment": h1.commits.get("served") == {"entries": served.entries(),
-                                                                         "refused": list(served.refused)}}
+                                                                         "refused": list(served.refused)},
+                           "layout": layout_of(served.linears, served.calls, served.m, served.tile)}
     try:
         SV.register(h1, directory=tdir)
         doc["register"] = {"registered": SV.FILE}
