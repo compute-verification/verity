@@ -43,6 +43,9 @@ TESTS = {
         "the descriptor's port entry a batched seed encodes to, as the expected value",
     "verity/ml/circuits/tests/test_ports.py::test_a_position_is_a_run_input_passed_through":
         "E_PORT_KIND's negatives: a seed whose position is computed, not a run input",
+    "verity/ml/circuits/tests/test_ports_one_use.py::ROOT_PORTS":
+        "the one-use check's random and negative Programs: a root's positions, read by seeds batched over them",
+    "verity/ml/circuits/tests/test_ports_one_use.py::Seed": "the seed those Programs batch, to hold E_COIN_REUSE's position rule",
 }
 ALLOWED = SEEDS | UNITS | TESTS
 
