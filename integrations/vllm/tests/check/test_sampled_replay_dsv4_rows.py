@@ -12,19 +12,26 @@ import pytest
 from verity.ml.circuits.defs import bind
 from verity.ml.circuits.evaluation import evaluate_batch
 from verity.ml.circuits.evaluation.batch import type_dtype, type_shape
-from verity.ml.circuits.evaluation.reference import signature_of
+from verity.ml.circuits.evaluation.reference import signature_of, statics_of
 from verity_vllm.program.kernels import dsv4_rows, rows
-from verity_vllm.program.registry import dsv4_compressor, dsv4_decode_indices, mhc
+from verity_vllm.program.kernels.kernel_registry import Declined
+from verity_vllm.program.registry import dsv4_compressor, dsv4_decode_indices, dsv4_qnorm_insert, flashmla, flashmla_prefill, mhc
+from verity_vllm.program.registry.hopper import HopperBF16WgmmaDot16
 from verity_vllm.query.manifest import format as RM
 
 #: the families the per-rank no-evaluator rule failed DeepSeek-V4-Pro B1's deferred replay r20261021-114900-5d55 on that this
 #: module evaluates
 DSV4_B1_FAMILIES = ("MhcPostPreTf32_v1", "GatherI32x129280_v1", "MhcFusedPostPre_v1", "Dsv4MlaCompressC4_v1", "MhcPreBroadcast_v1",
-                    "MhcResidualBroadcast_v1", "MhcPost_v1", "HcHead_v1", "Dsv4MlaCompressC128_v1")
+                    "MhcResidualBroadcast_v1", "MhcPost_v1", "HcHead_v1", "Dsv4MlaCompressC128_v1", "FlashMlaGatherRow_v1",
+                    "Dsv4QNormRopeKvInsert_v1", "FlashMlaPrefill_v1", "FlashMlaDecode_v1")
 
 EPS = '{"f64":"0x1.0c6f7a0b5ed8dp-20"}'
 FUSE = dict(REPEAT=2, EPS=1e-6, HC_EPS=1e-6)
 FUSE_TEXT = f"REPEAT=2,EPS={EPS},HC_EPS={EPS}"
+ATTN = dict(DOT=HopperBF16WgmmaDot16, SCALE=32 ** -0.5)
+ATTN_TEXT = f'DOT={{"fn":"{HopperBF16WgmmaDot16.id}"}},SCALE={{"f64":"{float.hex(32 ** -0.5)}"}}'
+DECODE = dict(NH=2, DN=16, DR=16, QT=16, BN=16, **ATTN)
+DECODE_TEXT = f"NH=2,DN=16,DR=16,QT=16,BN=16,{ATTN_TEXT}"
 
 #: (spec text as a Program spells it, the Definition bound at the same statics)
 CASES = [
@@ -39,7 +46,16 @@ CASES = [
     (f"Dsv4MlaCompressC128_v1{{W=2,R=4,D=32,QB=16,EPS={EPS}}}",
      bind(dsv4_compressor.Dsv4MlaCompressC128, W=2, R=4, D=32, QB=16, EPS=1e-6)),
     ("GatherI32x129280_v1", dsv4_decode_indices.gather_i32(129280)),
+    (f"FlashMlaDecode_v1{{SPLITS=[0,1,2],NW=16,{DECODE_TEXT}}}", bind(flashmla.FlashMlaDecode, SPLITS=(0, 1, 2), NW=16, **DECODE)),
+    (f"FlashMlaDecode_v1{{SPLITS=[0,2],NW=32,{DECODE_TEXT}}}", bind(flashmla.FlashMlaDecode, SPLITS=(0, 2), NW=32, **DECODE)),
+    (f"FlashMlaPrefill_v1{{NH=2,NP=1,D=32,BN=16,{ATTN_TEXT}}}", bind(flashmla_prefill.FlashMlaPrefill, NH=2, NP=1, D=32, BN=16, **ATTN)),
+    ("FlashMlaGatherRow_v1{DN=32,DR=16,QT=16}", bind(flashmla_prefill.FlashMlaGatherRow, DN=32, DR=16, QT=16)),
+    (f"Dsv4QNormRopeKvInsert_v1{{NH=2,NHP=4,DN=48,DR=16,QB=16,EPS={EPS}}}",
+     bind(dsv4_qnorm_insert.Dsv4QNormRopeKvInsert, NH=2, NHP=4, DN=48, DR=16, QB=16, EPS=1e-6)),
 ]
+
+#: the families whose operands are drawn with their twin's sampler (indices, lengths and e4m3 / e8m0 bytes a uniform draw rarely makes live)
+DRAWN = ("FlashMlaDecode_v1", "FlashMlaPrefill_v1", "FlashMlaGatherRow_v1", "Dsv4QNormRopeKvInsert_v1")
 
 
 def _words(rng: np.random.Generator, pt) -> np.ndarray:
@@ -70,8 +86,9 @@ def test_the_row_kernel_on_spec_text_statics_is_the_definition(spec, d):
     family, statics = RM.spec_family(spec), RM.spec_statics(spec)
     params, _ = signature_of(d)
     rng = np.random.default_rng(len(spec))
+    sample = dsv4_rows.SAMPLES.get(family) if family in DRAWN else None
     for k in range(3):
-        args = [_words(rng, p) for p in params]
+        args = [a[0] for a in sample()(rng, 1, params, **statics_of(d))] if sample else [_words(rng, p) for p in params]
         if family.startswith("GatherI32x"):
             args[0] = np.asarray([(5, -1, 129280)[k]], dtype=np.int64).astype(np.uint32)
         got, want = _row(family, statics, args), _reference(d, params, args)
@@ -86,3 +103,10 @@ def test_the_gather_reads_a_committed_i32_token_word_as_signed(token):
     got = rows.ROWS["GatherI32x129280_v1"].fn({}, [np.asarray([token]), col])["0"]
     want = _reference(d, signature_of(d)[0], [np.asarray([token]).view(np.uint32), col])
     assert got.astype(np.uint64).tolist() == want.tolist()
+
+
+@pytest.mark.parametrize("family", ["FlashMlaDecode_v1", "FlashMlaPrefill_v1"])
+def test_a_flashmla_row_at_another_dot_step_is_declined(family):
+    spec = next(s for s, _ in CASES if RM.spec_family(s) == family).replace(HopperBF16WgmmaDot16.id, "HopperBF16WgmmaDot8_v1")
+    with pytest.raises(Declined, match="no twin for DOT"):
+        rows.ROWS[family].fn(RM.spec_statics(spec), [])
