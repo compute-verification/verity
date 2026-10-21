@@ -177,7 +177,7 @@ def test_credit_is_the_served_rows_and_the_padding_is_shown_beside_it():
     run.close()
     c = run.credit()
     served = (3 * 32 + 2 * 40) * K
-    assert c["credited"] == {"rows": 0, "macs": 0}
+    assert c["gate_passed"] == {"rows": 0, "macs": 0}
     assert (c["refused"]["calls"], c["refused"]["rows"], c["refused"]["macs"]) == (2, 5, served)
     assert c["padded"]["rows"] == 4 * 32 - 5 and c["padded"]["macs"] == (2 * 32 * 32 + 2 * 32 * 64) * K - served
     assert c["units"] == 6 == run.commits["units"]

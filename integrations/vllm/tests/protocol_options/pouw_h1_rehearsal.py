@@ -28,7 +28,10 @@ step, a pin that isn't the gate key's; and with the local gate, sessions forged 
 (a period of their own), opened on the bare weights' root and on another window's root with the window's other coins
 after its own roots. The verdict is ``$OUT/rehearsal.json``: ``ok`` when the honest window is accepted by
 ``session_reason``, ``trusted_rounds_reason``, ``manifest_reason`` and ``period_reason``, each of its calls' A tables is
-under its round's root (``a_roots``), its served layout is the declared one's, and every red-team case is refused.
+under its round's root (``a_roots``), its served layout is the declared one's, the salt key is kept past the close in
+the prover's own directory and published nowhere under ``$OUT`` (``key_custody``), and every red-team case is refused.
+Its ``credit`` is the gate-passed rows beside core's verdict (`pouw_h1_challenger.credit_reason`: ``credited``,
+``a_link``, ``outcome``), which credits nothing until each drawn unit's proof outcome exists.
 
 **The rehearsal** (a research run on vy-nebius-2; the gate's tree is proofs' #2953, ``cursor/challenger-ledger-v2-7c3e``,
 whose serve.py ends a session with its record leaf and refused hellos and seals ``hellos.jsonl``):
@@ -161,20 +164,28 @@ def serve(a: argparse.Namespace, gate: Gate, reserved: dict[str, Any], out: Path
     """The window in two stages, both logged to ``serve.log``: served on the GPU (under ``gpu-lease`` with
     ``--gpu-lease``), which hands its window and its session's stream to this process (`pouw_h1_handoff.Holder`) and
     exits, ending its lease; then closed and released on no GPU (``pouw_h1_gpu.py --close-from``) on that stream. The
-    window's state holds its salt key, so it is kept in a scratch directory outside the run's, deleted once closed."""
+    window's salt key, its saved state and each call's values are the prover's (`pouw_h1_prover`, DRAWN1): kept past the
+    close in ``--prover-root``/SESSION, owner-only and outside the run's directory, under a ``research keep`` record."""
     import os
     import shutil
     import time
     from verity_vllm.protocol_options import pouw_h1_handoff as HO
+    from verity_vllm.protocol_options import pouw_h1_prover as PV
+    prover = PV.private(Path(a.prover_root) / reserved["session"])
     scratch = Path(tempfile.mkdtemp(prefix="h1-handoff-"))
     holder = HO.Holder(scratch / "stream.sock")
     gpu = [sys.executable, "-m", "tests.protocol_options.pouw_h1_gpu", "--workload", "fill", "--out", str(out)]
     argv = [*gpu, *(["--served"] if a.served else []), "--challenger", a.at_addr, "--session", json.dumps(reserved),
-            "--gate", shlex.join(gate.argv), "--at", a.pin_at, "--by", a.pin_by,
-            "--handoff", str(holder.path), "--handoff-state", str(scratch / "state")]
+            "--gate", shlex.join(gate.argv), "--at", a.pin_at, "--by", a.pin_by, "--prover-dir", str(prover),
+            "--handoff", str(holder.path), "--handoff-state", str(prover / PV.STATE)]
     if a.gpu_lease:
         argv = ["gpu-lease", "1", "--wait", "--max-min", str(a.gpu_lease), "--", *argv]
-    doc: dict[str, Any] = {"serving_start_unix": round(time.time(), 3)}
+    doc: dict[str, Any] = {"serving_start_unix": round(time.time(), 3), "prover": {"directory": str(prover)}}
+    if shutil.which("research"):
+        keep = subprocess.run(["research", "keep", str(prover), "--owner", "@vllm", "--expires", "never", "--priority",
+                               "keep", "--why", "an H1 window's salt key and values: a drawn unit opens from them (DRAWN1)"],
+                              capture_output=True, text=True)
+        doc["prover"]["keep"] = {"rc": keep.returncode, "out": (keep.stdout + keep.stderr)[-1000:]}
     try:
         with open(out.parent / "serve.log", "wb") as log:
             doc["serving_rc"] = subprocess.run(argv, stdout=log, stderr=subprocess.STDOUT, cwd=HERE.parents[1]).returncode
@@ -185,7 +196,7 @@ def serve(a: argparse.Namespace, gate: Gate, reserved: dict[str, Any], out: Path
                 doc["holder"] = holder.error or "the serving stage handed no stream over"
                 return {**doc, "rc": doc["serving_rc"] or 1}
             try:
-                doc["close_rc"] = subprocess.run([*gpu, "--close-from", str(scratch / "state"), "--stream-fd", str(fd)],
+                doc["close_rc"] = subprocess.run([*gpu, "--close-from", str(prover / PV.STATE), "--stream-fd", str(fd)],
                                                  stdout=log, stderr=subprocess.STDOUT, cwd=HERE.parents[1], pass_fds=(fd,),
                                                  env={**os.environ, "CUDA_VISIBLE_DEVICES": ""}).returncode
             finally:
@@ -194,6 +205,30 @@ def serve(a: argparse.Namespace, gate: Gate, reserved: dict[str, Any], out: Path
     finally:
         shutil.rmtree(scratch, ignore_errors=True)
     return {**doc, "rc": doc["serving_rc"] or doc["close_rc"]}
+
+
+def key_custody(prover: Path, published: Path) -> dict[str, Any]:
+    """The salt key past the close: kept in `prover` (owner-only), and neither its bytes nor its hex in any file under
+    `published` (the run's ``$OUT``)."""
+    import os
+    import stat
+    from verity_vllm.protocol_options import pouw_h1_prover as PV
+    path = prover / PV.KEY
+    if not path.is_file():
+        return {"kept": False, "ok": False}
+    key = path.read_bytes()
+    modes = {"directory": oct(stat.S_IMODE(os.stat(prover).st_mode)), "key": oct(stat.S_IMODE(os.stat(path).st_mode))}
+    needles, found = (key, key.hex().encode()), []
+    for f in sorted(p for p in published.rglob("*") if p.is_file()):
+        with open(f, "rb") as fh:
+            tail = b""
+            while chunk := fh.read(1 << 24):
+                if any(n in tail + chunk for n in needles):
+                    found.append(str(f.relative_to(published)))
+                    break
+                tail = chunk[-128:]
+    return {"kept": True, "modes": modes, "published_in": found,
+            "ok": not found and modes == {"directory": "0o700", "key": "0o600"}}
 
 
 def evidence(gate: Gate, session: str, d: Path) -> dict[str, Any]:
@@ -222,7 +257,7 @@ def check(calls: Path, tree: Path, pin: str, ledger: list[Path], out: Path, wind
         wfile.write_text(json.dumps(window) + "\n")
     doc = GPU.check_challenger(str(calls), str(tree / "out" if window is not None else tree), pin, str(out),
                                [str(p) for p in ledger], None if wfile is None else str(wfile), period)
-    return {k: doc.get(k) for k in ("ok", "reason", "manifest", "period")}
+    return {k: doc.get(k) for k in ("ok", "reason", "manifest", "period", "credit")}
 
 
 def _edited(record: dict, edit: Any, path: Path) -> Path:
@@ -363,6 +398,7 @@ def rehearse(a: argparse.Namespace) -> dict[str, Any]:
     sid = reserved["session"]
     doc["stages"] = serve(a, gate, reserved, out / "serve")
     doc["serve_rc"] = doc["stages"]["rc"]
+    doc["key_custody"] = key_custody(Path(doc["stages"]["prover"]["directory"]), out)
     status = gate("status", sid)
     if status.get("open") is not None:
         doc["unit"] = gate("wait", sid) if a.gate is None else _poll_end(gate, sid)
@@ -377,7 +413,7 @@ def rehearse(a: argparse.Namespace) -> dict[str, Any]:
         doc["serve"] = {"ok": serve_doc["ok"], "u": h.get("u"), "same_tokens": h.get("same_tokens"),
                         "decode_step_s_median": h.get("decode_step_s_median"), "close_s": h.get("close_s"),
                         "handoff": h.get("handoff"), "a_roots": (h.get("requests") or {}).get("a_roots"),
-                        "credit": h.get("credit"), "step_rows": h.get("step_rows"),
+                        "gate": h.get("gate"), "step_rows": h.get("step_rows"),
                         "z_exact": [z.get("y_exact") for z in h.get("z") or []],
                         "challenger": h.get("challenger"), "served": {k: v for k, v in (h.get("served") or {}).items()
                                                                       if k != "entries"},
@@ -399,8 +435,11 @@ def rehearse(a: argparse.Namespace) -> dict[str, Any]:
         doc["red_team"] = red_team(out, pin, a.period, gate if a.gate is None else None, a.peer, a.at_addr, circuit)
     doc["gate_log"] = gate.log
     v = doc.get("verify") or {}
+    cr = (v.get("trusted") or {}).get("credit") or {}
+    doc["credit"] = {"gate_passed": ((doc.get("serve") or {}).get("gate") or {}).get("gate_passed"),
+                     **{k: cr.get(k) for k in ("credit", "calls", "credited", "a_link", "outcome", "manifest")}}
     doc["ok"] = bool(doc.get("serve", {}).get("ok") and (v.get("session") or {}).get("ok") and (v.get("trusted") or {}).get("ok")
-                     and str(doc["serve"].get("a_roots")).startswith("bound")
+                     and str(doc["serve"].get("a_roots")).startswith("bound") and doc["key_custody"]["ok"]
                      and (doc.get("red_team") or {}).get("all_refused")
                      and (doc["serve"].get("declared") or {}).get("layout_matches", not a.served))
     return doc
@@ -428,6 +467,8 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--minutes", type=int, default=300, help="the reserve's minutes, which also bound the session")
     ap.add_argument("--pin-at", default="2026-10-21T00:00:00Z", help="pouw_h1_gpu.py's --at (resolved_at, if a pin is made)")
     ap.add_argument("--pin-by", default="vllm", help="pouw_h1_gpu.py's --by")
+    ap.add_argument("--prover-root", default="/workspace/vllm-h1-prover", help="the prover's private directories, one a "
+                                                                               "session (pouw_h1_prover), outside --out")
     ap.add_argument("--red-team", metavar="RUN_OUT", help="CPU only: rerun the red team's edited copies on a run's fetched out/ "
                                                          "(its serve/, gate/ and rehearsal.json), into --out")
     a = ap.parse_args(argv)
@@ -459,7 +500,8 @@ def main(argv: list[str] | None = None) -> int:
     rt = doc.get("red_team") or {}
     print(f"POUW-H1-REHEARSAL {'OK' if doc.get('ok') else 'FAIL'} serve={doc.get('serve', {}).get('ok')} "
           f"session={(doc.get('verify') or {}).get('session')} trusted={(doc.get('verify') or {}).get('trusted')} "
-          f"red_team_all_refused={rt.get('all_refused')}", flush=True)
+          f"red_team_all_refused={rt.get('all_refused')} key_custody={(doc.get('key_custody') or {}).get('ok')} "
+          f"credit={json.dumps(doc.get('credit'), default=str)}", flush=True)
     return 0 if doc.get("ok") else 1
 
 

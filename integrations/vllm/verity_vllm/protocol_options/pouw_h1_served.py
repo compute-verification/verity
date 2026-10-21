@@ -120,13 +120,16 @@ class Served:
     (`pouw_h1.TILE`). ``unit(k)``: the tile unit at contraction k (default `h1window.tile_unit`, the H1 tile; a stand-in
     of its parameter shape in tests). ``blocks``: each linear's input block within a step (default each its own;
     ``(0, 0, 0, 1)`` for q, k, v and o). ``window``: the window's key, else the window-open root its commitment names.
-    After `close`: ``program`` (None when refused), ``registered`` (each K's A then B, `registered.Registered`),
-    ``linears`` and ``calls`` (the Program's), ``m`` (its A slot) and ``refused`` (why there are no trees)."""
+    ``prover``: the prover's private directory the run keeps its salt key and each call's values in (`pouw_h1_prover`), so a
+    drawn unit opens after the close. After `close`: ``program`` (None when refused), ``registered`` (each K's A then B,
+    `registered.Registered`), ``linears`` and ``calls`` (the Program's), ``m`` (its A slot) and ``refused`` (why there are
+    no trees)."""
 
     tile: tuple[int, int] = PH.TILE
     unit: Callable[[int], Any] | None = None
     blocks: Sequence[int] | None = None
     window: bytes | None = None
+    prover: str | None = None
     program: Program | None = None
     registered: list[G.Registered] = field(default_factory=list)
     linears: list[tuple[str, int, int]] = field(default_factory=list)

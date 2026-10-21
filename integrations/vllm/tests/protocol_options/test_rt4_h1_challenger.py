@@ -685,7 +685,7 @@ def test_coins_held_in_the_serving_process_are_no_session_and_credit_nothing(tmp
     assert RQ.rounds_reason(local["rounds"], LiveCommitment.from_json(local["round_coins"])) is None
     assert PHC.session_reason(local, _gate().ledger(), {}.get).startswith(
         "the window's coins were held in the serving process")
-    assert run.credit()["coins"] == "in-process" and run.credit()["credited"] == {"rows": 0, "macs": 0}
+    assert run.credit()["coins"] == "in-process" and run.credit()["gate_passed"] == {"rows": 0, "macs": 0}
     auditor = _Session(tmp_path, monkeypatch, "auditor", leaf=1, seed=14)
     auditor.client.close()
     assert auditor.ended() is None
@@ -821,7 +821,7 @@ def test_a_window_admits_in_round_0_only_unless_its_admission_is_per_round():
     assert once["admission"] == RQ.ROUND0 and [e.round for e in run.requests] == [0]
     assert run.refused_requests == [{"round": 1, "reason": RQ.late_admission(1)}] * 2
     assert run.request_gaps() == ["step 1: 1 row of a request with no entry", "step 1: 31 rows of a request with no entry"]
-    assert run.credit()["credited"] == {"rows": 0, "macs": 0}
+    assert run.credit()["gate_passed"] == {"rows": 0, "macs": 0}
     _c, every = _serve(T._settings(), run=True)
     coins = every.rounds.challenger.commitment
     e = every.requests[1]

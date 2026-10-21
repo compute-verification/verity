@@ -7,6 +7,7 @@ is every way of handing over a z or records the served kernel didn't write for t
 from __future__ import annotations
 
 import hashlib
+import json
 import random
 from types import SimpleNamespace
 
@@ -15,6 +16,7 @@ import pytest
 
 torch = pytest.importorskip("torch")
 
+from verity.core.protocols.pouw import credit as CR  # noqa: E402
 from verity.core.protocols.pouw import window as Wd  # noqa: E402
 from verity.core.protocols.pouw.coins import Challenger  # noqa: E402
 from verity.core.protocols.sampled_proofs import remote as R  # noqa: E402
@@ -25,6 +27,8 @@ from verity_vllm.engine import int8_ops  # noqa: E402
 from verity_vllm.protocol_options import credit_gate as CG  # noqa: E402
 from verity_vllm.protocol_options import pouw  # noqa: E402
 from verity_vllm.protocol_options import pouw_h1 as PH  # noqa: E402
+from verity_vllm.protocol_options import pouw_h1_challenger as PHC  # noqa: E402
+from verity_vllm.protocol_options import pouw_h1_prover as PV  # noqa: E402
 from verity_vllm.protocol_options import pouw_h1_records as ZR  # noqa: E402
 from verity_vllm.protocol_options import pouw_h1_requests as RQ  # noqa: E402
 
@@ -216,7 +220,7 @@ def _refused(run, reason, m=3, n=32):
     (v,) = run.verdicts.values()
     assert not v["credit"] and (v["reason"].startswith(reason) if reason.endswith(" ") else v["reason"] == reason), v
     c = run.credit()
-    assert c["credited"] == {"rows": 0, "macs": 0}
+    assert c["gate_passed"] == {"rows": 0, "macs": 0}
     assert c["refused"] == {"calls": 1, "rows": m, "macs": m * n * K, "reasons": {v["reason"]: 1}}
     return v
 
@@ -233,7 +237,7 @@ def test_the_int8_arm_under_h1_serves_scaled_mm_zy_and_is_credited(auditor):
     assert v["credit"] and "reason" not in v
     assert (v["kernel"], v["y_from"], v["z_from"]) == (ZY,) * 3 and v["gemms"] == [ZY]
     c = run.credit()
-    assert c["credited"] == {"rows": 3, "macs": 3 * 64 * K} and c["refused"]["calls"] == 0
+    assert c["gate_passed"] == {"rows": 3, "macs": 3 * 64 * K} and c["refused"]["calls"] == 0
     assert set(run.tables[0]) == {"a", "z"} and all(run.tables[0].values())
     _index, xq, _sa, z = run.retained[-1]
     assert np.array_equal(z, xq.astype(np.int64) @ Linear(64, 1, None).weight.numpy().astype(np.int64).T)
@@ -291,7 +295,7 @@ def test_a_credited_call_in_a_window_whose_coins_were_held_in_process_credits_no
     (v,) = run.verdicts.values()
     assert v["credit"] and run.coin_source == "in-process"
     c = run.credit()
-    assert c["credited"] == {"rows": 0, "macs": 0} and c["coins"] == "in-process"
+    assert c["gate_passed"] == {"rows": 0, "macs": 0} and c["coins"] == "in-process"
     assert c["refused"] == {"calls": 1, "rows": 3, "macs": 3 * 32 * K, "reasons": {PH.IN_PROCESS: 1}}
 
 
@@ -302,7 +306,7 @@ def test_a_credited_call_in_a_window_serving_a_request_without_an_entry_credits_
     (v,) = run.verdicts.values()
     assert v["credit"]
     c = run.credit()
-    assert c["credited"] == {"rows": 0, "macs": 0} and c["requests"] == ["step 0: 3 rows of a request with no entry"]
+    assert c["gate_passed"] == {"rows": 0, "macs": 0} and c["requests"] == ["step 0: 3 rows of a request with no entry"]
     assert c["refused"] == {"calls": 1, "rows": 3, "macs": 3 * 32 * K, "reasons": {RQ.UNENTERED: 1}}
 
 
@@ -440,5 +444,95 @@ def test_a_call_recorded_outside_a_traced_apply_is_not_credited():
     run.record(0, torch.zeros(2, K, dtype=torch.int8), torch.ones(2), torch.zeros(32, K, dtype=torch.int8), torch.ones(32, 1))
     run.close()
     c = run.credit()
-    assert c["credited"] == {"rows": 0, "macs": 0}
+    assert c["gate_passed"] == {"rows": 0, "macs": 0}
     assert c["refused"]["reasons"] == {"credit: untraced: q call 0 was recorded outside a traced apply": 1}
+
+
+def _record(run):
+    return {"commitment": run.commits, "calls": run.manifest()}
+
+
+def test_the_gate_passed_call_is_credited_by_cores_rules_only_with_every_drawn_units_proof_accepted(auditor):
+    """PRF-132: the gate-passed call's manifest row carries its credit bit and its z root under calls_root, so core's
+    `credited` (through the auditor's ledger and the session's files) names it; the window credits nothing while a
+    drawn unit's proof outcome is missing or rejected (`outcome`), and nothing until every A value is the round roots'
+    tree (`a_link`)."""
+    _y, run = _serve(ZyArm(), remote=True, n=64)
+    assert auditor.ended() is None
+    rec = _record(run)
+    assert [(r["index"], r[CR.CREDIT]) for r in rec["calls"]] == [(0, True)] and rec["calls"][0]["tables"]["z"]
+
+    def verdict(drawn=None, proofs=None):
+        return PHC.credit_reason(rec, auditor.directory, [auditor.ledger.path], auditor.window, auditor.key, drawn, proofs)
+    out = verdict()
+    assert out["manifest"] is None and out["credited"] is None and out["calls"] == [0], out
+    assert out["outcome"] == ("outcome", CR.DRAWN_FORM) and out["credit"] is None
+    missing = verdict([0, 1], [{"unit": 0, "verdict": "accept"}])
+    assert missing["outcome"][0] == "missing" and "drawn unit 1 has no proof outcome" in missing["outcome"][1]
+    assert missing["credit"] is None
+    failed = verdict([0, 1], [{"unit": 0, "verdict": "accept"}, {"unit": 1, "verdict": "reject"}])
+    assert failed["outcome"][0] == "failed" and failed["credit"] is None
+    accepted = verdict([0, 1], [{"unit": 0, "verdict": "accept"}, {"unit": 1, "verdict": "accept"}])
+    assert accepted["outcome"] is None and accepted["credited"] is None
+    assert accepted["a_link"] is not None and accepted["credit"] is None
+
+
+def test_a_credit_bit_changed_after_the_draw_coin_is_refused(auditor):
+    """PRF-132: the credit bit is under calls_root and so under the draw root the draw coin followed: flipping it after
+    the draw is refused, whether the draw root is left (it is no longer over the manifest) or recomputed (it is no longer
+    the one root the challenger's log shows its draw coin followed)."""
+    _y, run = _serve(ZyArm(), remote=True, n=64)
+    assert auditor.ended() is None
+    rec = _record(run)
+    rows = [{**rec["calls"][0], CR.CREDIT: False}]
+    c = rec["commitment"]
+
+    def credited(commitment, calls):
+        return PHC.credit_reason({"commitment": commitment, "calls": calls}, auditor.directory, [auditor.ledger.path],
+                                 auditor.window, auditor.key)["credited"]
+    assert credited(c, rec["calls"]) is None
+    assert credited(c, rows) == ("draw", CR.DRAW_ROOT)
+    salt = PHC.program_salt_of(c)
+    root = CR.draw_root(CR.calls_root(salt, rows), bytes.fromhex(c["draw"]["receipts"]), c["rounds"])
+    assert credited({**c, "draw": {**c["draw"], "root": root.hex()}}, rows) == ("draw", CR.CHANGED)
+    assert credited(c, [{k: v for k, v in rec["calls"][0].items() if k != CR.CREDIT}]) == ("credit", CR.no_bit(0))
+    no_z = [{**rec["calls"][0], "tables": {**rec["calls"][0]["tables"], "z": None}}]
+    assert credited(c, no_z) == ("credit", CR.no_z(0))
+
+
+def test_the_salt_key_and_a_calls_values_outlive_the_close_in_the_provers_directory_only(tmp_path):
+    """DRAWN1: with a prover directory the run keeps its salt key and each served call's A rows, scales and z/y records
+    there, owner-only, past the close; the run's published output (its transcript) holds neither the key's bytes nor
+    its hex; and the call's A and z tables rebuilt from them have the roots its manifest row carries, so a drawn unit
+    opens after the close, while a kept row changed afterwards is refused."""
+    import stat
+    prover, out, key = tmp_path / "prover", tmp_path / "out", bytes(range(32))
+    salt = hashlib.sha512(b"salt").digest()
+    rounds = LiveRecord(Wd.live_challenger(0, 1, random.Random(1).randbytes), Wd.ROUND, clock=lambda: 0.0)
+    run = PH.H1Run("t", salt, {0: "q"}, [(64, K)], ROWS, 1, transcript_dir=str(out), rounds=rounds, key=key,
+                   prover=str(prover))
+    layer = Linear(64, 1, None)
+    x = (torch.randn(3, K, generator=torch.Generator().manual_seed(9)) * 3).bfloat16()
+    xq, s_a = int8_ops.row_quant(x)
+    _y, zy = int8_ops.scaled_mm_zy(xq, s_a, layer.weight, layer.weight_scale, ROWS)
+    run.record(0, xq, s_a, layer.weight, layer.weight_scale, zy)
+    run.finish()
+    del run
+    assert PV.key_of(prover) == key
+    assert stat.S_IMODE(prover.stat().st_mode) == 0o700
+    assert all(stat.S_IMODE(p.stat().st_mode) == 0o600 for p in prover.rglob("*") if p.is_file())
+    published = [p for p in out.rglob("*") if p.is_file()]
+    assert published and not any(key in p.read_bytes() or key.hex().encode() in p.read_bytes() for p in published)
+    record = json.loads((out / PH.CALLS_FILE).read_text())
+    assert PV.locate(record["calls"], 1) == (0, 1)
+    opened = PV.open_call(prover, record, 0, salt)
+    assert opened.a.commitment.root.hex() == record["calls"][0]["tables"]["a"]
+    assert opened.z.commitment.root.hex() == record["calls"][0]["tables"]["z"]
+    assert opened.z.open(1).position == 1
+    kept = prover / PV.CALLS / "0.npz"
+    with np.load(kept) as f:
+        a, s, r = f["a"].copy(), f["s_a"], f["records"]
+    a[0, 0] ^= 1
+    PV.keep_call(prover, 0, a, s, r)
+    with pytest.raises(ValueError, match="call 0's a table, rebuilt from the prover's directory, is not the one"):
+        PV.open_call(prover, record, 0, salt)

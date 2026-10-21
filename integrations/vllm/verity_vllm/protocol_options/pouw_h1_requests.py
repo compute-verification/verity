@@ -53,6 +53,7 @@ from typing import Any, Mapping, Sequence
 import numpy as np
 from verity.core.protocols.pouw import window as Wd
 from verity.core.protocols.pouw.audit import HM96, HM96_SALT, ROW_SCHEMA, rows_domain
+from verity.core.protocols.pouw.credit import CREDIT
 from verity.core.protocols.pouw.protocol import tagged
 from verity.core.protocols.sampled_proofs.challenger import CoinError, LiveCommitment, LiveOpening, live_reason
 from verity.ml.commitments import Commitment, MerkleTree, Opening, VerificationLimits, verify_opening
@@ -86,8 +87,12 @@ EMPTY_SLOT = bytes(4)
 #: draws its own salt key (`pouw_h1.H1Run`'s ``key``), which nothing persists
 REQUESTS_NONCE = 1 << 61
 SLOTS_NONCE = REQUESTS_NONCE + (1 << 40)
-#: call c's A and z tables' nonces are TABLES_NONCE + 3c + 0 and 2 (`pouw_h1.TABLE_NONCES`; 1 was the retired y table's)
+#: call c's A and z tables' nonces are TABLES_NONCE + 3c + 0 and 2 (`TABLE_NONCES`; 1 was the retired y table's)
 TABLES_NONCE = REQUESTS_NONCE + (1 << 41)
+#: a call's hiding tables under the run's salt key (`pouw_h1.H1Run`): A's T slot rows and scales, z's records
+#: (`pouw_h1_records`)
+TABLE_TAGS = {"a": "verity/pouw/h1/a-table/v1", "z": "verity/pouw/h1/z-table/v2"}
+TABLE_NONCES = {"a": 0, "z": 2}    # j of each table's hm96 nonces
 ROUND_TAG = "verity/pouw/h1/round/v3"
 STEP_TAG = "verity/pouw/h1/step-calls/v1"
 REQUESTS_TAG = "verity/pouw/h1/requests/v2"
@@ -146,6 +151,12 @@ def slot_table(salt: bytes, r: int, rows: int, owners: Sequence[int | None], key
     return hiding_rows(slots_binding(salt, r), r, values, key, SLOTS_NONCE + r)
 
 
+def table_leaves(rows: int, width: int, m: int, *parts: np.ndarray) -> list[bytes]:
+    """A call's table leaves: slot i < m the bytes of row i of each of `parts` in turn, every later slot `width` zero bytes."""
+    out = [b"".join(p[i].tobytes() for p in parts) for i in range(m)]
+    return out + [bytes(width)] * (rows - m)
+
+
 def hiding_rows(binding: bytes, owner: int, values: Sequence[bytes], key: bytes, nonce: int) -> MerkleTree:
     """``audit.commit_rows(binding, owner, values, hash=HM96, salt_key=key, nonce=nonce)``, its leaf salts drawn as one
     keystream: leaf i's (`audit.hm96_salt`) is ChaCha20 blocks 3i..3i + 2 at a 64-bit counter and nonce, which is RFC
@@ -159,8 +170,10 @@ def hiding_rows(binding: bytes, owner: int, values: Sequence[bytes], key: bytes,
 
 def step_digest(salt: bytes, s: int, rows: Sequence[Mapping[str, Any]]) -> bytes:
     """Step s's calls: SHA-512 over their manifest rows (`pouw_h1.H1Run.manifest`), in order, with what each call's listeners
-    bound (root(A) among it, once AROW binds it)."""
-    return tagged(STEP_TAG, salt, s, *(json.dumps(row, sort_keys=True) for row in rows))
+    bound (root(A) among it, once AROW binds it), each without its credit bit (`credit.CREDIT`): the step's last verdict
+    comes after its round closes, and calls_root commits the bits before the draw root."""
+    return tagged(STEP_TAG, salt, s, *(json.dumps({k: v for k, v in row.items() if k != CREDIT}, sort_keys=True)
+                                       for row in rows))
 
 
 def _root64(h: Any) -> bool:
@@ -377,7 +390,7 @@ def batch_order(runner: Any, scheduler_output: Any) -> list[tuple[str, int]]:
 
 __all__ = ["ADMISSIONS", "EMPTY_REQUEST", "EMPTY_SLOT", "HM96_SALT", "NO_RECEIPTS", "OPEN_REQUESTS_TAG", "PER_ROUND",
            "REQUESTS_NONCE", "ROUND0",
-           "RequestEntry", "RoundOpening", "SLOTS_NONCE", "TABLES_NONCE", "UNENTERED", "batch_order", "draw_root", "hiding_rows",
+           "RequestEntry", "RoundOpening", "SLOTS_NONCE", "TABLES_NONCE", "TABLE_NONCES", "TABLE_TAGS", "UNENTERED", "batch_order", "draw_root", "hiding_rows",
            "late_admission", "new_requests", "receipts_digest", "request_reason", "request_table", "requests_binding",
-           "round_root", "rounds_reason", "slot_leaf", "slot_owner", "slot_reason", "slot_table", "slots_binding",
+           "round_root", "rounds_reason", "slot_leaf", "slot_owner", "slot_reason", "slot_table", "slots_binding", "table_leaves",
            "sort_batch_req_ids", "step_digest", "tables_reason"]

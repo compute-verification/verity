@@ -252,7 +252,7 @@ def run(a: argparse.Namespace) -> dict[str, Any]:
                         "static": h1.static(), "refused": h1.refused[:20], "steps_served": h1.details["steps_served"],
                         "last_step_complete": h1.details["last_step_complete"],
                         "served_rows_per_step": [max((c.m for c in h1.calls if c.step == s), default=0) for s in range(h1.steps)],
-                        "credit": h1.credit()}
+                        "gate": h1.credit()}
         print(f"[h1] calls {json.dumps(doc['calls'])}", flush=True)
         doc["requests"] = requests_check(h1, len(plain))
         print(f"[h1] requests {json.dumps(doc['requests'])}", flush=True)
@@ -396,7 +396,7 @@ def fill(a: argparse.Namespace) -> dict[str, Any]:
 
     def window(name: str, want: list[dict[str, Any]], tdir: Path) -> dict[str, Any]:
         nonlocal layers
-        served = SV.Served() if a.served and name == "fill" else None
+        served = SV.Served(prover=a.prover_dir) if a.served and name == "fill" else None
         ctx = PO.Context(stage="serve", enabled=(entry_name,),
                          settings=h1_settings(eng, decl.rows, decl.steps, a.challenger, a.session, a.gate, retain_steps=a.retain,
                                               transcript_dir=str(tdir), admission="round-0", served=served))
@@ -484,8 +484,8 @@ def closed_measures(h1: Any, out: dict[str, Any], want: int, weight_of: Any, bad
         "steps_in_layer_order": all([c.layer for c in h1.calls if c.step == s] == list(range(len(h1.shapes_)))
                                     for s in range(h1.steps)),
         "z": zs, "shapes": [list(x) for x in h1.shapes()], "requests": requests_check(h1, want),
-        "credit": {"credited": credit["credited"], "refused": credit["refused"], "padded": credit["padded"],
-                   "units": credit["units"], "served_frac_of_macs": credit["served_frac_of_macs"]}})
+        "gate": {"gate_passed": credit["gate_passed"], "refused": credit["refused"], "padded": credit["padded"],
+                 "units": credit["units"], "served_frac_of_macs": credit["served_frac_of_macs"]}})
     out["ok"] = bool(out["same_tokens"] and out["static_schedule"]["ok"] and not out["schedule_problems"]
                      and out["u"] == out["u_declared"] and out["layout_static"] and not bad and out["steps_in_layer_order"]
                      and zs and all(z["y_exact"] for z in zs) and out["requests"]["ok"]
@@ -568,7 +568,7 @@ def fill_record(doc: dict[str, Any], outdir: Path) -> dict[str, Any]:
     (outdir / RECORD).write_text(json.dumps(doc, indent=1, default=str) + "\n")
     h = doc["h1"]
     print(f"POUW-H1-FILL {'OK' if doc['ok'] else 'FAIL'} u={h['u']} rows={h['step_rows']} same_tokens={h['same_tokens']} "
-          f"credited_rows={h['credit']['credited']['rows']} refused_calls={h['credit']['refused']['calls']} "
+          f"gate_passed_rows={h['gate']['gate_passed']['rows']} refused_calls={h['gate']['refused']['calls']} "
           f"step_s(64)={h['decode_step_s_median']} step_s(1)={doc['h1_solo'].get('decode_step_s_median')} "
           f"tok/s(64)={h['serve']['tokens_per_s']} tok/s(1)={doc['h1_solo'].get('serve', {}).get('tokens_per_s')} "
           f"digest={h['tokens_digest'][:16]}", flush=True)
@@ -675,6 +675,9 @@ def check_challenger(calls_file: str, directory: str, public_sha512: str, out: s
     except Exception as e:  # noqa: BLE001
         doc["reason"] = f"{type(e).__name__}: {e}"
     doc["manifest"] = PHC.manifest_reason(rec)
+    if key is not None:
+        win = doc.get("window") or {"root": (rec["commitment"].get("session") or {}).get("root")}
+        doc["credit"] = PHC.credit_reason(rec, d, ledger, win, key)
     if period is not None:
         try:
             if key is None:
@@ -693,7 +696,8 @@ def check_challenger(calls_file: str, directory: str, public_sha512: str, out: s
     Path(out).mkdir(parents=True, exist_ok=True)
     (Path(out) / "pouw_h1_challenger.json").write_text(json.dumps(doc, indent=1, default=str) + "\n")
     print(f"POUW-H1-CHALLENGER {'OK' if doc['ok'] else 'FAIL'} rounds={doc['rounds']} host={doc[remote.RECORD].get('host')} "
-          f"reason={doc['reason']} manifest={doc['manifest']} period={doc.get('period')}", flush=True)
+          f"reason={doc['reason']} manifest={doc['manifest']} period={doc.get('period')} "
+          f"credit={json.dumps(doc.get('credit'), default=str)[:2000]}", flush=True)
     return doc
 
 
@@ -745,6 +749,8 @@ def main(argv: list[str] | None = None) -> int:
                                                      "--handoff-state) and its session's stream (to the holder at SOCK) "
                                                      "off and exit, the close left to --close-from (pouw_h1_handoff)")
     ap.add_argument("--handoff-state", metavar="DIR", help="with --handoff: the prover's scratch the window is saved in")
+    ap.add_argument("--prover-dir", metavar="DIR", help="fill with --served: the prover's private directory, kept past the "
+                                                       "close, outside --out (pouw_h1_prover: its salt key and values)")
     ap.add_argument("--close-from", metavar="DIR", help="no GPU: close and release the window a --handoff run saved in DIR, "
                                                         "on the session's stream --stream-fd, completing --out's record")
     ap.add_argument("--stream-fd", type=int, metavar="FD", help="with --close-from: the session's stream, as the holder "

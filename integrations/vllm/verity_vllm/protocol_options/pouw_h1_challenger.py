@@ -45,6 +45,10 @@ verifier's check that a served window's coins are that challenger's.
   `period_reason` refuses a period the ledger doesn't close, one whose close isn't complete (an empty one, or a window
   never opened, never ended, unclosed or short of its coins), an accepted window that isn't one of its windows, and a
   window of it that has no accepted window (abandoned after its coins).
+* **Credit** (`credit_reason`) is core's rules of record (`verity.core.protocols.pouw.credit`, PRF-132): the calls whose
+  manifest rows' credit bits the draw coin followed (`credited`), only when every A value is the tree the round roots
+  commit (`a_link`) and every drawn unit's proof was verified and accepted (`outcome`). The serving process's gate-passed
+  count (`pouw_h1.H1Run.credit`) is never credit.
 """
 from __future__ import annotations
 
@@ -721,17 +725,13 @@ def manifest_reason(record: Mapping[str, Any]) -> str | None:
     s's calls digest over the record's rows of step s, their tables' roots among them: `pouw_h1_requests.tables_reason`),
     and ``calls_root`` over every row and, with ``served``, the served trees' entries
     (`pouw_h1_served.digest_of`); None when it is. The coins themselves are `session_reason`'s and
-    `trusted_rounds_reason`'s to check."""
-    from verity.core.protocols.pouw.audit import salt_of
-
+    `trusted_rounds_reason`'s to check; their credit is `credit_reason`'s."""
     from verity_vllm.protocol_options import pouw_h1 as PH
     from verity_vllm.protocol_options import pouw_h1_served as SV
 
     c, rows = record.get("commitment") or {}, list(record.get("calls") or ())
     try:
-        opening = LiveOpening.from_json(c.get("salt_opening"))
-        salt = PH.program_salt(salt_of(LiveCommitment.from_json(c.get("coins")), opening.coin,
-                                       bytes.fromhex(c["weights_root"])))
+        salt = program_salt_of(c)
     except (CoinError, KeyError, TypeError, ValueError) as e:
         return f"the window's salt can't be derived from its record ({e})"
     for row in c.get("rounds") or ():
@@ -756,7 +756,45 @@ def manifest_reason(record: Mapping[str, Any]) -> str | None:
     return None
 
 
+def program_salt_of(c: Mapping[str, Any]) -> bytes:
+    """The window's Program salt, from its H1 commitment `c`'s salt coin over its weights' root."""
+    from verity.core.protocols.pouw.audit import salt_of
+
+    from verity_vllm.protocol_options import pouw_h1 as PH
+    return PH.program_salt(salt_of(LiveCommitment.from_json(c.get("coins")), LiveOpening.from_json(c.get("salt_opening")).coin,
+                                   bytes.fromhex(c["weights_root"])))
+
+
+def credit_reason(record: Mapping[str, Any], directory: str | Path, heads: Sequence[str | Path], window: Mapping[str, Any],
+                  key: ChallengerKey, drawn: Any = None, proofs: Any = None, verify: Any = lms_verify) -> dict[str, Any]:
+    """The window's credit by core's rules (`credit`, PRF-132), on its record, its session `directory` and ledger `heads`
+    for `window` (``{root}``) under `key` (as `trusted_rounds_reason` reads them), the draw's units `drawn` and their
+    proofs' outcomes `proofs` (``{unit, verdict}``): the refusal (or None) of ``credited`` (each credit bit fixed before
+    the draw coin), ``a_link``, ``outcome`` and ``manifest``; ``calls``, the indices `credited` returns; and ``credit``,
+    those only when all four accept, else None (no partial credit)."""
+    from verity.core.protocols.pouw import credit as CR
+
+    from verity_vllm.protocol_options import pouw_h1_served as SV
+    c, rows = record.get("commitment") or {}, list(record.get("calls") or ())
+    out: dict[str, Any] = {"manifest": manifest_reason(record), "calls": None}
+    try:
+        lines = ledger_head([remote.ledger_lines(p) for p in heads], key, verify)
+        served = c.get("served")
+        digest = None if served is None else SV.digest_of(served["entries"], served["refused"]).hex()
+        out["calls"], out["credited"] = CR.credited(key.to_json(), lines, window, remote.session_files(directory),
+                                                    program_salt_of(c).hex(), rows, digest, c.get("rounds"), c.get("draw"),
+                                                    verify)
+    except (CoinError, KeyError, TypeError, ValueError) as e:
+        out["credited"] = ("coin", f"the window's coins or salt can't be read ({e})")
+    out["a_link"] = CR.a_link(c.get("rounds"), (c.get("served") or {}).get("entries"))
+    out["outcome"] = CR.outcome(drawn, proofs)
+    ok = all(out[k] is None for k in ("manifest", "credited", "a_link", "outcome"))
+    out["credit"] = out["calls"] if ok else None
+    return out
+
+
 __all__ = ["ENTRY_TAGS", "Fetch", "LEDGER_ROLE", "LEDGER_SCHEMA", "LEDGER_V1", "Ledger", "PERIOD_KINDS",
-           "REPLY_FIELDS", "RESERVED", "SCHEME", "SEALED", "SESSION_FIELDS", "address", "carried", "draw_reason",
-           "entry_message", "evidence", "families", "held", "leaf_of", "lines_of", "lms_verify", "manifest_reason",
-           "pinned_key", "period_reason", "released_sealed", "root_of", "session_of", "session_reason", "trusted_rounds_reason"]
+           "REPLY_FIELDS", "RESERVED", "SCHEME", "SEALED", "SESSION_FIELDS", "address", "carried", "credit_reason",
+           "draw_reason", "entry_message", "evidence", "families", "held", "leaf_of", "lines_of", "lms_verify",
+           "manifest_reason", "pinned_key", "period_reason", "program_salt_of", "released_sealed", "root_of", "session_of",
+           "session_reason", "trusted_rounds_reason"]
