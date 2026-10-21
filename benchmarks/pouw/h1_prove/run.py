@@ -552,9 +552,16 @@ def cmd_summarize(a) -> int:
     for s in plan["statements"]:
         t = _time(out / s["tag"] / "prove.time")
         po = out / s["tag"] / "prove.out"
-        proofs[s["tag"]] = {"instances": s["n"], "prove": t, "prove_out": po.read_text()[-1500:] if po.exists() else None,
-                            "serve": _time(out / s["tag"] / "serve.time")}
+        text = po.read_text(errors="replace") if po.exists() else ""
+        pe = out / s["tag"] / "prove.err"
+        fw = text + (pe.read_text(errors="replace") if pe.exists() else "")
+        proofs[s["tag"]] = {"instances": s["n"], "prove": t, "prove_out": text[-1500:] or None,
+                            "serve": _time(out / s["tag"] / "serve.time"), "firewall_timed": "t.firewall" in fw}
+    firewall = a.firewall == "1"
     checks, ok = [], True
+    if firewall and not proofs.get("honest", {}).get("firewall_timed"):
+        print("FAIL: H1_FIREWALL=1 but the honest prover's records carry no firewall times")
+        ok = False
     for c in plan["checks"] + [{"tag": f"st-{x}", "statement": "honest", "expect": "ACCEPT" if x == "honest" else "REJECT"}
                                for x in a.controls.split()]:
         v = _verdict(out / "lean" / f"{c['tag']}.out")
@@ -580,7 +587,7 @@ def cmd_summarize(a) -> int:
                        "lean_maxrss_gb": t and round(t["maxrss_kb"] / 2**20, 1), "sessions": (v or {}).get("sessions"),
                        "lean_phases": lean_phases(out / "lean" / f"{c['tag']}.err"), **extra})
     honest = next(c for c in checks if c["tag"] == "honest")
-    summary = {"schema": "verity/pouw/h1-prove/summary/v0", "pass": ok,
+    summary = {"schema": "verity/pouw/h1-prove/summary/v0", "pass": ok, "firewall": firewall,
                "unit": record["circuit"]["definition"], "k": record["circuit"]["k"], "tile": [R, C],
                "ands": record["circuit"]["ands"], "k_log": record["circuit"]["k_log"],
                "circuit_bytes": record["circuit"]["circuit_bytes"], "circuit_build_seconds": record["circuit"]["build_seconds"],
@@ -632,6 +639,8 @@ def main(argv=None) -> int:
     p.add_argument("--work", required=True)
     p.add_argument("--out", required=True)
     p.add_argument("--controls", default="")
+    p.add_argument("--firewall", default="0", help="1: the provers ran under the firewall (FC_FIREWALL=1), whose times "
+                                                    "the honest prover's records must carry")
     a = ap.parse_args(argv)
     return {"prepare": cmd_prepare, "summarize": cmd_summarize}[a.cmd](a)
 
