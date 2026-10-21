@@ -1125,18 +1125,6 @@ def _coin_role(fn: Any) -> int | None:
     return _FOLD if _covered(sinks, 0, ret.leaves) is None else _NOISE
 
 
-def called_root(fn: Any) -> bool:
-    """Whether a Program rooted at ``fn`` calls it rather than inlining its body: ``fn`` is a seed (`_coin_role`) none of whose
-    nodes takes a coin, so its body reads its coin only as values, which only a seed's own body may."""
-    if _coin_role(fn) != _SEED or getattr(fn, "body", None) is None:
-        return False
-    for node in fn.body.nodes:
-        pt = port_types(node.fn)
-        if pt is not None and any(p.kind == "coin" for rs in pt.params for _lo, _hi, p, _w in rs):
-            return False
-    return True
-
-
 def _spaces(r: Refs, out: set) -> None:
     if isinstance(r, Concat):
         for p in r.parts:

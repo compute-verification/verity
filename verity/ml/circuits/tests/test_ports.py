@@ -992,18 +992,6 @@ def test_no_port_rule_follows_a_seeds_noise():
                            lambda B, S, salt, position: B.call(Seed, salt, position), ports=SEED)))
 
 
-def test_a_program_rooted_at_a_seed_calls_it():
-    """A unit whose template is a seed (H1's leaf seeds) is the Program of the seed: its root calls the seed, whose body reads
-    the coin as a value, rather than inlining that body over the coin input. A root that passes its coin on to a callee's coin
-    port (a seed, a unit) is inlined, as before."""
-    _desc, dec = roundtrip(Program(bind(Seed)))
-    assert [n.fn.id for n in dec.root.body.nodes][-1] == "PortsTestSeed_v1"
-    assert P.called_root(bind(Seed))
-    seed_out = comp("PortsTestSeedRoot", [("salt", V32), ("position", V32)], V32,
-                    lambda B, S, salt, position: B.call(Seed, salt, position), ports=SEED)
-    assert not any(P.called_root(bind(d)) for d in (Unit, seed_out, units("PortsTestUnitsRoot")))
-
-
 def test_a_harness_evaluates_a_seed():
     assert evaluate(bind(Seed), 5, 7) == (12,)
     assert evaluate(bind(Unit), 1, 2, 5, 7) == (3, Fold.evaluate((24 + 13) & 0xFFFFFFFF))
