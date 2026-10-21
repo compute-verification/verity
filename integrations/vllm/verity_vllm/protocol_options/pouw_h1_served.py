@@ -5,8 +5,9 @@ them as ports of the verifier's own ``--registered`` file (`one_stage.served.reg
 
 * **Values.** The Program's parameters are ``h1/<window>/`` and their role (`prefix`, `h1window.roles`): ``<window>`` the
   window's key (`Served.key`: the window-open root, `salt.window_open_root` of the weights' root, round 0's request table
-  and the session, or the key the run is given), so each window's values are its own and a log's R7-held rule never meets
-  one twice.
+  and the session, or the key the run is given, 64 bytes), so each window's values are its own, and every value's domain
+  binds that key as the window's open root (`registered.domain`'s ``window``, `Served.root`): a value the run commits
+  afresh each window, as it does its A and its B, is held by none (`register_served`'s ``held``).
 * **The tile** is the served path's R × C, `pouw_h1.TILE` (32 × 32) unless given, over the tile unit at each K
   (`h1window.tile_unit`, or ``unit``), each K's template reading its A and B rows as ``a_k<K>`` and ``b_k<K>``
   (`h1window.template_params`). A unit of K's R A rows are ports ``a_k<K>_0`` .. ``a_k<K>_<R-1>`` of one value and its C
@@ -19,20 +20,19 @@ them as ports of the verifier's own ``--registered`` file (`one_stage.served.reg
   once per window (Σn rows): every step's units read them.
 * **Rows** are ``hm96-sha512/row/v2`` bit rows (`V2`): an A row is its K int8 codes only, a B row its K weight codes, each
   as K/2 u16 words, code t's bits leaves 8t .. 8t + 7 (`row_words`, the tile's port rows), committed by
-  `registered.Registered.commit` in `V2` under the registered-value domain of the Program's digest, the value, K/2 words
-  and its rows, row i's salt `audit.hm96_salt` of the run's key at the value's nonce (`nonce`). The A scale is no value
+  `registered.Registered.commit` in `V2` under the registered-value domain of the Program's digest, the value, K/2 words,
+  its rows and the window's open root, row i's salt `audit.hm96_salt` of the run's key at the value's nonce (`nonce`). The A scale is no value
   of the window Program: no unit reads it, and it stays bound in each call's A table under its round root, with y and z
   (`pouw_h1.H1Run`).
 * **When.** `Served.record` keeps each call's codes as the run records it and `Served.close` commits the trees at the
   run's `close`, after its last round; `calls_root` binds their entries (`digest`), so the draw's coin opens after them.
-  What `close` refuses (a window that isn't static, no key, blocks that aren't one per linear, a call whose codes aren't
+  What `close` refuses (a window that isn't static, no key of 64 bytes, blocks that aren't one per linear, a call whose codes aren't
   its shared block's, an odd K, a linear with no weight or whose weight isn't its n × K int8 codes or changes within the
   window, what `h1window.program` refuses) leaves no tree, and `trees` raises it.
 * `trees` gives the window's `ServedTree`s, each K's A then B, and `register` registers them all at once: a window is one
   statement, one C-Flock session and one registration, so one ``--registered`` file (`FILE`) in the window's directory,
-  whatever its K. It refuses a value an earlier record of the log registered under another root (R7-held, `held`) before
-  `register_served`, which reads ``hm96-sha512/row/v1`` rows alone until proofs' REGV2 follow-up (after #2971 and #2979
-  land).
+  whatever its K, under the window's root (`register_served`'s ``window_root``), which refuses a value an earlier record
+  of the log registered under the same domain with another root (R7-held).
 """
 from __future__ import annotations
 
@@ -46,7 +46,7 @@ import numpy as np
 from verity.core.protocols.pouw import salt as PS
 from verity.core.protocols.pouw.audit import hm96_salt
 from verity.core.protocols.pouw.circuit import h1window as HW
-from verity.core.protocols.sampled_proofs.one_stage import partition as P, registered as G, registration as R
+from verity.core.protocols.sampled_proofs.one_stage import partition as P, registered as G
 from verity.core.protocols.sampled_proofs.one_stage.served import ServedRegistration, ServedTree, register_served
 from verity.ml.circuits.codec import canonical_json
 from verity.ml.circuits.program import Program
@@ -79,25 +79,22 @@ def row_words(codes: np.ndarray) -> np.ndarray:
     return b.reshape(len(b), -1).view("<u2").astype(np.uint16)
 
 
-def served_tree(reg: G.Registered) -> ServedTree:
-    e = reg.entry()
-    return ServedTree(e["value"], e["root"], e["leaves"], e["words"], e["domain"], reg.word_bits, row_schema=reg.schema)
-
-
 @dataclass
 class Served:
     """How an `H1Run` commits its window as the window Program's registered values. ``tile``: the Program's R × C
     (`pouw_h1.TILE`). ``unit(k)``: the tile unit at contraction k (default `h1window.tile_unit`, the H1 tile; a stand-in
     of its parameter shape in tests). ``blocks``: each linear's input block within a step (default each its own;
     ``(0, 0, 0, 1)`` for q, k, v and o). ``window``: the window's key, else the window-open root its commitment names.
-    After `close`: ``program`` (None when refused), ``registered`` (each K's A then B, `registered.Registered`),
-    ``linears`` and ``calls`` (the Program's), ``m`` (its A slot) and ``refused`` (why there are no trees)."""
+    After `close`: ``program`` (None when refused), ``root`` (the window's open root its values' domains bind, hex),
+    ``registered`` (each K's A then B, `registered.Registered`), ``linears`` and ``calls`` (the Program's), ``m`` (its A
+    slot) and ``refused`` (why there are no trees)."""
 
     tile: tuple[int, int] = PH.TILE
     unit: Callable[[int], Any] | None = None
     blocks: Sequence[int] | None = None
     window: bytes | None = None
     program: Program | None = None
+    root: str | None = None
     registered: list[G.Registered] = field(default_factory=list)
     linears: list[tuple[str, int, int]] = field(default_factory=list)
     calls: list[tuple[str, int]] = field(default_factory=list)
@@ -153,6 +150,7 @@ class Served:
         """Commit the window's A and B trees under the window Program, after the run's last round."""
         try:
             key, blocks = self.key(run.commits), self._layout(run.shapes_)
+            root = G.window_root(key.hex())
         except ValueError as e:
             self.refused.append(str(e))
         if not run.static():
@@ -190,8 +188,10 @@ class Served:
                 if kk == k:
                     ak[blk * self.m:blk * self.m + len(codes)] = codes
             rows += [ak, np.concatenate([self._weights[w][1] for w, (_n, kw) in enumerate(run.shapes_) if kw == k])]
+        self.root = root
         self.registered = [G.Registered.commit(digest, pre + role, row_words(r).tolist(),
-                                               [hm96_salt(run._key, nonce(i), j) for j in range(len(r))], schema=V2)
+                                               [hm96_salt(run._key, nonce(i), j) for j in range(len(r))], schema=V2,
+                                               window=root)
                            for i, (role, r) in enumerate(zip(HW.roles(ks), rows))]
         self._got, self._weights = [], {}
 
@@ -232,29 +232,19 @@ def trees(run: Any) -> list[ServedTree]:
         raise ValueError(f"{run.entry}: the window isn't closed, so its trees aren't committed")
     if served.refused or not served.registered:
         raise ValueError(f"{run.entry}: the window's trees were refused: {'; '.join(served.refused) or 'none committed'}")
-    return [served_tree(r) for r in served.registered]
-
-
-def held(got: Sequence[ServedTree], log: Sequence[Mapping[str, Any]]) -> None:
-    """R7-held: refused (ValueError) when an earlier record of the log registered one of `got`'s values under another
-    root, as a later window keyed as an earlier one would."""
-    roots = R.held_roots(log)
-    for t in got:
-        if roots.get(t.value, t.root) != t.root:
-            raise ValueError(f"served tree {t.value!r}: an earlier record of the log registered it under root "
-                             f"{roots[t.value][:16]}..., and a value is committed once (R7-held)")
+    return [ServedTree.of(r) for r in served.registered]
 
 
 def register(run: Any, log: Sequence[Mapping[str, Any]] = (), directory: str | Path | None = None,
              ports: Mapping[str, str] | None = None) -> ServedRegistration:
     """The window's trees registered on its window Program and query, every K's A and B in one registration
     (`register_served`, after this prover's earlier records `log`, under the circuit ports `ports`, default the window's
-    own, `Served.ports`), written as `FILE` in `directory` (default the run's ``transcript_dir``): the one file
-    ``flock-verify --zk --registered`` reads for the window's session."""
+    own, `Served.ports`, and the window's open root `Served.root`), written as `FILE` in `directory` (default the run's
+    ``transcript_dir``): the one file ``flock-verify --zk --registered`` reads for the window's session."""
     got = trees(run)
-    held(got, log)
     served = run.served
-    reg = register_served(served.program, served.query(), got, log=log, ports=served.ports() if ports is None else ports)
+    reg = register_served(served.program, served.query(), got, log=log, ports=served.ports() if ports is None else ports,
+                          window_root=served.root)
     d = directory if directory is not None else run.transcript_dir
     if d is not None:
         Path(d).mkdir(parents=True, exist_ok=True)
@@ -262,5 +252,4 @@ def register(run: Any, log: Sequence[Mapping[str, Any]] = (), directory: str | P
     return reg
 
 
-__all__ = ["FILE", "NONCE", "PREFIX", "Served", "V2", "held", "nonce", "prefix", "register", "row_words",
-           "served_tree", "trees"]
+__all__ = ["FILE", "NONCE", "PREFIX", "Served", "V2", "nonce", "prefix", "register", "row_words", "trees"]

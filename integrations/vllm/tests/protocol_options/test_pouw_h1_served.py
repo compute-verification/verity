@@ -6,12 +6,10 @@ recomputed here from the served tensors. B is each linear's weight rows once a w
 (``a_k<K>_0`` .. ``a_k<K>_31``, ``b_k<K>_0`` .. ``b_k<K>_31``; ``a_k<K>`` → ``a_k<K>_0`` for a tile of one row,
 ``b_k<K>`` → ``b_k<K>_0`` for one column),
 to the trees' rows, and a read opened with a row of another A block or another B row is refused; `register` registers
-the window once, in one file. A call whose codes aren't its shared block's is refused; y, z and the scale stay under the
-round roots only; a second window reusing the first's names is refused (R7-held); `calls_root` binds the trees.
-
-The registration through `register_served` is a strict xfail: its served trees are ``hm96-sha512/row/v1`` alone
-(`served.READ`) until proofs' REGV2 follow-up. A stand-in tile unit of the H1 tile's parameter shape (one-bit A and B
-leaves, 8K a row) keeps the Program small."""
+the window once, in one file, through `register_served` under the window's open root. A call whose codes aren't its shared
+block's is refused; y, z and the scale stay under the round roots only; a second window reusing the first's key is
+refused (R7-held); `calls_root` binds the trees. A stand-in tile unit of the H1 tile's parameter shape (one-bit A and B
+leaves, 8K a row, its receipt a sink of the salt as `test_circuit_h1window`'s) keeps the Program small."""
 from __future__ import annotations
 
 import hashlib
@@ -26,7 +24,9 @@ from verity.core.protocols.pouw.audit import hm96_salt  # noqa: E402
 from verity.core.protocols.pouw.circuit import h1window as HW  # noqa: E402
 from verity.core.protocols.sampled_proofs.one_stage import partition as P, registered as G  # noqa: E402
 from verity.ml.circuits.defs import CompositeDefinition, PrimitiveDefinition, bind  # noqa: E402
-from verity.ml.circuits.types import Array, Value  # noqa: E402
+from verity.ml.circuits.ports import In, Out, Ports  # noqa: E402
+from verity.ml.circuits.refs import coll_concat  # noqa: E402
+from verity.ml.circuits.types import Array, Record, Value  # noqa: E402
 from verity.ml.commitments import hm96  # noqa: E402
 from verity.ml.commitments.merkle import tree_levels  # noqa: E402
 from verity.ml.commitments.rowleaf import row_leaf, sha512_row_v2_digest  # noqa: E402
@@ -45,15 +45,25 @@ SALT = hashlib.sha512(b"salt").digest()
 W1, W2 = hashlib.sha512(b"window 1").digest(), hashlib.sha512(b"window 2").digest()
 V1, V16 = Value(1), Value(16)
 XOR1 = PrimitiveDefinition("H1ServedTestXor1", 1, (("a", V1), ("b", V1)), V1, lambda a, b: a ^ b, register=False)
+XOR16 = PrimitiveDefinition("H1ServedTestXor16", 1, (("a", V16), ("b", V16)), V16, lambda a, b: a ^ b, register=False)
+FOLD16 = PrimitiveDefinition("H1ServedTestFold16", 1, (("key", V16), ("x", V16)), V16, lambda key, x: key ^ x,
+                             register=False, ports=Ports(params={"key": In(kind="coin")}, ret=Out(sink=True)))
+OUT = Record(("z", V1), ("receipt", V16))
 
 
 def _sig(S):
     return ((("a", Array(S.R, Array(8 * S.K, V1))), ("b", Array(S.C, Array(8 * S.K, V1))), ("salt", Array(4, V16)),
-             ("position", V16), ("roots", Array(2, Array(4, V16)))), V1)
+             ("position", V16), ("roots", Array(2, Array(4, V16)))), OUT)
 
 
-StandIn = CompositeDefinition("H1ServedTestTile", 0, ("K", "R", "C"), _sig,
-                              lambda B, S, a, b, salt, position, roots: B.call(XOR1, a[0][0], b[0][0]), register=False)
+def _body(B, S, a, b, salt, position, roots):
+    return coll_concat(OUT, [B.call(XOR1, a[0][0], b[0][0]),
+                             B.call(FOLD16, salt[0], B.call(XOR16, position, roots[0][0]))])
+
+
+StandIn = CompositeDefinition("H1ServedTestTile", 0, ("K", "R", "C"), _sig, _body, register=False,
+                              ports=Ports(params={"salt": In(kind="coin"), "position": In(kind="position")},
+                                          ret={"receipt": Out(sink=True)}))
 
 
 def _unit(tile=TILE):
@@ -123,7 +133,10 @@ def test_a_mixed_k_window_commits_the_rows_its_programs_units_read():
     assert [t.value for t in trees] == [pre + r for r in HW.roles(KS)[:4]]
     assert [(t.leaves, t.words, t.word_bits, t.row_schema) for t in trees] == [
         (sig[t.value].n, k // 2, 16, SV.V2) for t, k in zip(trees, (16, 16, 32, 32))]
-    assert [t.domain for t in trees] == [G.domain(digest, t.value, t.words, t.leaves).domain_id.hex() for t in trees]
+    assert served.root == W1.hex()
+    assert [t.domain for t in trees] == [G.domain(digest, t.value, t.words, t.leaves, window=W1.hex()).domain_id.hex()
+                                         for t in trees]
+    assert not {t.domain for t in trees} & {G.domain(digest, t.value, t.words, t.leaves).domain_id.hex() for t in trees}
     tp = P.evaluate(prog, served.query())
     want = _expected(run, ws, steps_in)
     assert tp.population == len(want) == STEPS * (2 * 2 + 2 + 2)
@@ -183,7 +196,7 @@ def test_one_read_resolves_every_units_ports_across_k_and_refuses_another_row():
     pre = SV.prefix(W1)
     assert sorted(by) == sorted(pre + f"{t}/{k}" for t in "ab" for k in KS), "each K's A and B is one value"
     roots = {r.value: r.root.hex() for r in served.registered}
-    f = G.reads_file(prog, q, served.values(), roots, ports=served.ports(), schemas=served.schemas())
+    f = G.reads_file(prog, q, served.values(), roots, ports=served.ports(), schemas=served.schemas(), window=served.root)
     assert set(f["ports"]) == {f"{t}_k{k}_{i}" for t in "ab" for k in KS for i in range(32)}
     assert {(p["row_schema"], p["word_bits"]) for p in f["ports"].values()} == {(SV.V2, 16)}
     for k in KS:
@@ -254,7 +267,7 @@ def test_calls_root_binds_the_trees():
     run.served = served
     a = served.registered[0]
     served.registered[0] = G.Registered.commit(a.program, a.value, [[w ^ 1 for w in r] for r in a.rows], a.salts,
-                                               schema=SV.V2)
+                                               schema=SV.V2, window=a.window)
     assert run.calls_root() != got
 
 
@@ -274,19 +287,19 @@ def test_a_window_off_the_programs_layout_commits_no_tree(why, kw):
         SV.trees(run)
 
 
-def test_a_second_window_reusing_the_first_windows_names_is_refused():
-    """R7-held: a later window keyed as the first commits under the first's names and other roots, and is refused before
-    the registration; keyed as its own window its names are its own."""
+def test_a_second_window_reusing_the_first_windows_key_is_refused():
+    """R7-held: a later window keyed as the first commits under the first's names and domains with other roots, and
+    `register_served` refuses it; keyed as its own window its names and domains are its own, and it registers."""
     first, _ws, _inputs = _window(W1)
-    log = [{"registered": first.served.entries()}]
+    log = [{"registered": SV.register(first).registered}]
     again, _ws, _inputs = _window(W2, seed=1, served_key=W1)
-    with pytest.raises(ValueError, match="R7-held"):
-        SV.held(SV.trees(again), log)
     with pytest.raises(ValueError, match="R7-held"):
         SV.register(again, log=log)
     own, _ws, _inputs = _window(W2, seed=1)
-    SV.held(SV.trees(own), log)
-    assert not {t.value for t in SV.trees(own)} & {e["value"] for e in log[0]["registered"]}
+    SV.register(own, log=log)
+    mine, theirs = SV.trees(own), log[0]["registered"]
+    assert not {t.value for t in mine} & {e["value"] for e in theirs}
+    assert not {t.domain for t in mine} & {e["domain"] for e in theirs}
 
 
 def test_the_window_key_is_its_window_open_root():
@@ -314,23 +327,28 @@ def test_register_registers_the_whole_window_once_in_one_file(tmp_path, monkeypa
         def write(self, path):
             path.write_text("registered")
 
-    def fake(program, query, served, log=(), ports=None):
-        calls.append((program, query, [t.value for t in served], ports))
+    def fake(program, query, served, log=(), ports=None, window_root=None):
+        calls.append((program, query, [t.value for t in served], ports, window_root))
         return Reg()
 
     monkeypatch.setattr(SV, "register_served", fake)
     SV.register(run, directory=tmp_path)
     pre = SV.prefix(W1)
     assert calls == [(run.served.program, run.served.query(), [pre + r for r in HW.roles(KS)[:4]],
-                      HW.window_ports(run.served.program))]
+                      HW.window_ports(run.served.program), W1.hex())]
     assert sorted(p.name for p in tmp_path.iterdir()) == [SV.FILE] == ["pouw-h1-registered.json"]
     SV.register(run, directory=tmp_path, ports={"a_k16[0]": "a0"})
     assert calls[-1][3] == {"a_k16[0]": "a0"}
 
 
-@pytest.mark.xfail(reason="REGV2 follow-up (after #2971 and #2979 land): register_served refuses hm96-sha512/row/v2 served "
-                          "trees (served.READ is row/v1 alone) and doesn't pass their schemas to registered.reads",
-                   raises=ValueError, strict=True)
-def test_the_window_registers():
+def test_the_window_registers(tmp_path):
+    """`register_served` takes the window's row/v2 trees under its root: one registered entry a tree, each port of the
+    window's `--registered` file in row/v2 with its tree's root and domain, and the file written as `FILE`."""
     run, _ws, _inputs = _window(W1)
-    SV.register(run)
+    reg = SV.register(run, directory=tmp_path)
+    by = {t.value: t for t in SV.trees(run)}
+    assert reg.window_root == W1.hex() and [e["value"] for e in reg.registered] == list(by)
+    assert set(reg.ports) == set(HW.window_ports(run.served.program).values())
+    assert all((p["row_schema"], p["root"], p["domain"]) == (SV.V2, by[p["value"]].root, by[p["value"]].domain)
+               for p in reg.ports.values())
+    assert (tmp_path / SV.FILE).read_bytes() == reg.file_bytes()
