@@ -190,9 +190,9 @@ def State.sendHello (S : State) (s : V (SessionSpec × Array Stmt)) (nonce : Byt
   | none, .ok (spec, sts) =>
     match Hello.msg spec nonce with
     | [] => .error (S.refuse s!"{Coins.STOP}the Lean Hello: the verifier's Hello is not JSON")
-    | m => .ok ({ S with sent := true, hello := helloOf spec sts nonce, plan := planOf spec sts,
-        domains := spec.repStreams.map fun (i, r, s) => (s, Frames.domainFrame (spec.domain spec.tables[i]! r)) },
-      ⟨m.toArray⟩)
+    | m =>
+      let domains := spec.repStreams.map fun (i, r, s) => (s, Frames.domainFrame (spec.domain spec.tables[i]! r))
+      .ok ({ S with sent := true, hello := helloOf spec sts nonce, plan := planOf spec sts, domains }, ⟨m.toArray⟩)
 
 /-- A `Round` frame's content. -/
 def roundContent (f : ByteArray) : ByteArray :=
@@ -270,7 +270,7 @@ def serve (S : Hello.Setup) (specs : Hello.Specs) (auditor : SocketAddress) (reg
       let mut slot : Option Nat := none
       if let .round stream n := k then
         let dom := ((st.domains.find? (·.1 == stream)).map (·.2)).getD .empty
-        let carried ← reg.modifyGet fun R => match Frames.carry R sid stream dom (roundContent f) n with
+        let carried : Except String Nat ← reg.modifyGet fun R => match Frames.carry R sid stream dom (roundContent f) n with
           | .ok (R', i) => (.ok i, R')
           | .error e => (.error e, R)
         match carried with
