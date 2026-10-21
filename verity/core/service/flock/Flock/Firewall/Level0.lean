@@ -70,8 +70,11 @@ theorem tower_fst (d : Nat) (lf : Nat → ByteArray) (k : Nat) : (tower d lf k).
 theorem tower_snd (d : Nat) (lf : Nat → ByteArray) (k : Nat) :
     (tower d lf k).2 = (Array.range (k + 1)).map (Link.layer d lf) := by
   induction k with
-  | zero => simp [tower, Array.range_succ]
-  | succ k ih => simp only [tower, ih, tower_fst, layer_succ, Array.range_succ, Array.map_push]
+  | zero =>
+    simp only [tower, Array.range_succ, Array.append_singleton, Array.map_push,
+      Array.range_eq_empty_iff.mpr (rfl : 0 = 0), Array.map_empty, Array.push_empty]
+  | succ k ih =>
+    simp only [tower, ih, tower_fst, layer_succ, Array.range_succ, Array.append_singleton, Array.map_push]
 
 /-- **A table's level 0** at level `lv` with `t_pad` paddings, from its packed witness `g` and the drawn hiding: the rows,
 layers and root committed on them, as `Link` commits `toIn` (`build_rows`, `build_layers`, `build_root`). -/
@@ -148,10 +151,14 @@ theorem ofDraws_ok {m : Nat} {g : Array F128} {d : ByteArray} {l : Level0} (h : 
     rw [hz] at h
     simp only [bind, Except.bind, pure, Except.pure] at h
     repeat (split at h; · cases h)
-    cases h
-    refine ⟨rfl, rfl, ⟨s, hz, rfl⟩, build_rows rfl, build_layers rfl, ?_⟩
-    rw [root_of _ s hz rfl]
-    exact build_root rfl
+    injection h with h
+    have hb := h.symm
+    have hm : l.m = m := by subst hb; rfl
+    have ht : l.tPad = tPad := by subst hb; rfl
+    have hl : l.lv = s.levels.getD 0 default := by subst hb; rfl
+    refine ⟨hm, by subst hb; rfl, ⟨s, by rw [ht], hl⟩, build_rows hb, build_layers hb, ?_⟩
+    rw [root_of l s (by rw [hm, ht]; exact hz) hl]
+    exact build_root hb
 
 /-- **A table's level 0** at `m` from its packed witness `g`, its hiding drawn from `get` in one read. -/
 def draw (get : USize → IO ByteArray) (m : Nat) (g : Array F128) : IO (V Level0) := do
