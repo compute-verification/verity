@@ -158,13 +158,13 @@ _BLOCK_NORM_PROVENANCE = {
     "property": None,
     "run": "r20261021-092814-0b1c",
     "art": None,
-    "device": "the H200s of DeepSeek-V4-Pro B1 attempt 3's Commit (cc 9.0), vLLM d9105ea80, Triton 3.7.1",
+    "device": "cc 9.0, the eight devices of the row's attempt-3 Commit (the run above), vLLM d9105ea80, Triton 3.7.1",
     "captured_utc": "2026-10-21",
     "cases": "the q norm (N 1536 of a 2048 block on 8 warps, eps 1e-6): 1,230 committed rows (308 distinct) on 8 ranks, read by "
              "r20261021-180952-300c (out/rows.npz) from the Commit's bundles and the checkpoint's q_norm weights, every committed "
              "output the Definition's; eps + DivFullScaleA(sum, N) * DivFullRcp(N) in two roundings misses 5 of the 308 by 1-4 "
              "bf16 words, which tests/properties/fixtures/dsv4_q_norm_commit_20261021.json holds with 4 controls",
-    "sass": "r20261021-181759-65f9: the served kernel's sm_90 SASS (Triton 3.7.1, 8 warps at BLOCK 2048) is MUFU.RCP of the scaled "
+    "sass": "r20261021-181759-65f9: the served kernel's cc 9.0 SASS (Triton 3.7.1, 8 warps at BLOCK 2048) is MUFU.RCP of the scaled "
             "SIZE, FFMA rcp, scaled sum, eps, then MUFU.RSQ",
     "gap": "no probe launch of _fused_q_kv_rmsnorm_kernel: the reduction tree is the PTX's, pinned on the device only by committed "
            "rows; the kv norm (N 512, a power of two, so either epilogue) only by the re-judge's sampled kv rows (306 a rank, all "
@@ -174,7 +174,7 @@ _BLOCK_NORM_PROVENANCE = {
     "related": "glm53_fused_rmsnorm_capture (art:e98ef16cd853c142ba5f8fa7f82335e8e26d73fcb7bae2ad3e5d2888d8394e74): the same "
                "tl.sum lowering at the unmasked four-warp block (DsaRMSNorm_v1, TritonBlockRMSNorm_v1{N, N, 4, EPS}) in GLM-5.3's "
                "_fused_norm_rope_kernel",
-    "tests": ["tests/properties/test_dsv4_q_norm_commit.py (the Definition and the row kernel against the committed H200 rows)",
+    "tests": ["tests/properties/test_dsv4_q_norm_commit.py (the Definition and the row kernel against the committed rows)",
               "tests/program/test_dsa_norm.py (the Definition against the PTX model)",
               "tests/program/test_kernel_self_check.py (each row kernel against its Definition)",
               "tests/check/test_sampled_replay_dsv4_rows.py (each row kernel on spec-text statics against its Definition)"],

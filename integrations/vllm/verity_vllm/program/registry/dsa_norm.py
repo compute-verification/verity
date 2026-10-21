@@ -63,7 +63,7 @@ THREADS, WARP = 128, 32
 _CONF = ("model-untested: read from the Triton kernel and its PTX at the commits the module docstring pins; "
          "tests/properties/glm53_fused_rmsnorm_capture_gpu.py is its hardware check")
 _BLOCK_CONF = ("model-untested: read from vLLM d9105ea80's _fused_q_kv_rmsnorm_kernel and the cc 9.0 PTX and SASS Triton 3.7.1 compiles "
-               "from it (the module docstring); DeepSeek-V4-Pro B1's committed H200 q rows (N 1536) are its words "
+               "from it (the module docstring); the q rows (N 1536) Commit r20261021-092814-0b1c committed on cc 9.0 are its words "
                "(tests/properties/test_dsv4_q_norm_commit.py), with no probe launch yet")
 
 
