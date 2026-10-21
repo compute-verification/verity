@@ -165,6 +165,25 @@ def test_the_session_the_ledger_opens_for_its_window_is_trusted(store, tmp_path,
     assert all(v.accepted for v in verdicts) and service.close() is None
     ledger.end(service)
     assert s.trusted_reason(service.directory, [ledger.path], key(), verify) is None
+    assert s.trusted_reason(service.directory, [ledger.path], key(), verify, "p-1") is None
+
+
+@pytest.mark.parametrize("held", ["p-2", None])
+def test_a_session_is_bound_to_the_audits_period(store, tmp_path, sign, held):
+    """The audit names its period on the ledger: a session whose window the ledger holds in another period, or in none,
+    is refused though its coins are the challenger's."""
+    ledger = Ledger(tmp_path / "windows.jsonl", sign)
+    if held is not None:
+        ledger.period(held)
+    ledger.open("s-r", coins.window_root(store.registration.digest, 0))
+    service = Service(tmp_path / "s-r", sign, "s-r", 0, params().windows, b"service")
+    s, verdicts = served_session(store, service)
+    assert all(v.accepted for v in verdicts) and service.close() is None
+    ledger.end(service)
+    assert s.trusted_reason(service.directory, [ledger.path], key(), verify) is None
+    why = s.trusted_reason(service.directory, [ledger.path], key(), verify, "p-1")
+    assert why == ("the challenger's session for this session's window is not trusted: the auditor's ledger holds the "
+                   f"session's window in period {held}, not the audit's period p-1")
 
 
 def test_an_openings_coin_opened_before_its_windows_root_is_refused(store, tmp_path, sign):

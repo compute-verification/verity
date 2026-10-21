@@ -332,9 +332,10 @@ recorded for it, and the challenger logs both before the coin leaves its host an
 The verifier holds that log to its own record (`Session.released_reason`): the commitment it used, the same roots in
 the same order, σ_0 after \(R\), and each window's openings coin after that window's last root, so a coin opened before
 its window's root is refused. On the auditor's host the session is the one window \(\{R\}\) of the auditor's signed
-ledger (`remote.trusted_session`), which opens one challenger session a root, ever, inside the period that holds it: a
-session whose coins came from a second challenger session for the same (period, registration) is refused, so a prover
-can't run two and keep the coins it likes (RT4-INT-17).
+ledger (`remote.trusted_session`), which opens one challenger session a root, ever, and the window one of the audit's
+period's (`coins.trusted`'s `period`): a session whose coins came from a second challenger session for the same
+(period, registration), or whose window the ledger holds in another period, is refused, so a prover can't run two and
+keep the coins it likes (RT4-INT-17).
 
 The verifier releases \(\sigma_0\) at the session's start (`Session.start`). At window \(t\)'s end it sends the boundary
 message, which is \(\sigma_{t+1}\), or the close after the last window (`Session.boundary`). Each is one-way: no round

@@ -37,7 +37,8 @@ from typing import Any
 
 from verity.core.protocols.sampled_proofs import remote
 from verity.core.protocols.sampled_proofs.challenger import (ChallengerKey, CoinError, LiveChallenger, LiveCommitment,
-                                                             LiveOpening, LiveRecord, Verify, live_reason, order_reason)
+                                                             LiveOpening, LiveRecord, Verify, audited_session,
+                                                             ledger_head, live_reason, order_reason)
 
 SCHEME = "verity/remote-bandwidth/coins/v1"
 CHALLENGE, OPENINGS, APPEND = "challenge", "openings", "append"
@@ -194,13 +195,22 @@ def released_reason(coins: Coins, windows: Sequence[Sequence[bytes]], appends: S
     return None
 
 
-def trusted(coins: Coins, directory: Any, heads: Sequence[Any], key: ChallengerKey,
-            verify: Verify) -> tuple[LiveCommitment, dict[str, tuple[bytes, ...]]]:
+def trusted(coins: Coins, directory: Any, heads: Sequence[Any], key: ChallengerKey, verify: Verify,
+            period: str | None = None) -> tuple[LiveCommitment, dict[str, tuple[bytes, ...]]]:
     """What the challenger signed for the session's window, read on the auditor's side (`remote.trusted_session`): the
     one challenger session the auditor's ledger (the heads infra published at `heads`) opens for ``{root: R}``, R the
     session's own (`window`), its files in `directory`, under the pinned `key`; its commitment and the roots its signed
-    release log shows it received.  Raises `CoinError` naming why."""
-    return remote.trusted_session(directory, heads, window(coins.registration, coins.session), key, verify)
+    release log shows it received.  With `period`, the audit's period on the ledger, the window must be one of that
+    period's (`challenger.audited_session`), so the session is bound to its (period, registration).  Raises
+    `CoinError` naming why."""
+    w = window(coins.registration, coins.session)
+    got = remote.trusted_session(directory, heads, w, key, verify)
+    if period is not None:
+        held = audited_session(ledger_head([remote.ledger_lines(p) for p in heads], key, verify), w, key, verify).period
+        if held != period:
+            raise CoinError(f"the auditor's ledger holds the session's window in period {held}, not the audit's "
+                            f"period {period}")
+    return got
 
 
 __all__ = ["APPEND", "APPENDS", "CHALLENGE", "COIN_BYTES", "Coins", "LABELS", "OPENINGS", "SCHEME", "WINDOW_DOMAIN",
