@@ -112,7 +112,9 @@ class Option:
     """An `Installed` an adapter can return as it is: ``commits`` and ``details`` are its commitment and info,
     ``decoded`` returns the plaintext of what it released (`Installed.weights`), and ``release`` runs once after its
     hooks are off.  ``end_pass``, on an option that commits in passes (PoUW's Pearl-C device path), ends the open pass and
-    begins the next; a server calls it at each engine step's end, which nothing hands an option.  None: no passes."""
+    begins the next.  That option ends its pass itself at each engine step, on the model runner's ``execute_model``, so a
+    caller needs it only for forwards outside a runner's step; called after a step, it ends nothing and returns that step's
+    commitment.  None: no passes."""
 
     name: str
     hooks: Hooks

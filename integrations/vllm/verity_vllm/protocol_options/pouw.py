@@ -20,9 +20,10 @@ layer's weight root); `commitment` is the scheme, the salt, the weights root the
 commitment and its salt coin's opening and, once closed,
 the transcript root with its unit and tile counts.  Pearl-C's also says what it claims of the weights (``registration``,
 `weights_claim`): the executor applies no keyed rotation and reads no curated list, so it claims nothing about which
-weights were served.  The audit (drawing tiles, opening them) is `verity.core.protocols.pouw.audit`'s,
-after the run.  Beside sampled proofs the composition asks `verity.core.protocols.pouw.circuit` (`protocol_options.CIRCUITS`), and only
-``ncp-v2`` has a circuit.  Under ``ncp-v2`` each weight's side (its Y strips and c₀) is instead bound to its own
+weights were served.  Pearl-C commits one pass per engine step: its option ends the pass when the model runner's
+``execute_model`` returns (`pouw_pass`), so serving needs no caller to end it.  The audit (drawing tiles, opening
+them) is `verity.core.protocols.pouw.audit`'s, after the run.  Beside sampled proofs the composition asks
+`verity.core.protocols.pouw.circuit` (`protocol_options.CIRCUITS`), and only ``ncp-v2`` has a circuit.  Under ``ncp-v2`` each weight's side (its Y strips and c₀) is instead bound to its own
 `NcpWeight_v1` Program call, once per run, and each call to its own `NcpLinear_v1` Program call reading it, their units
 computed natively and committed a leaf per unit (`pouw_native`, `pouw_circuit`); the replay draws each call's units under
 its window's key, regenerates them and checks each against its template (`check.replay.pouw_circuit`).
@@ -72,6 +73,7 @@ from verity_vllm.protocol_options import pouw_h1_challenger as PHC
 from verity_vllm.protocol_options import pouw_h1_settings as PHS
 from verity_vllm.protocol_options import pouw_h1_requests as RQ
 from verity_vllm.protocol_options import pouw_native as PN
+from verity_vllm.protocol_options import pouw_pass as PP
 from verity_vllm.protocol_options import pouw_pearl_c_device as PPD
 from verity_vllm.protocol_options.interface import Context, Option, Target
 
@@ -704,6 +706,7 @@ def install(scheme: str, target: Target) -> Option:
         h = target.hooks(entry)
         for w, layer in enumerate(layers):
             h.wrap(layer.quant_method, "apply", lambda orig, w=w: _executor(run, w))
+        PP.hook_steps(h, run)
         return Option(name=entry, hooks=h, commits=run.commits, details=run.details, release=run.finish,
                       end_pass=run.end_pass)
     else:

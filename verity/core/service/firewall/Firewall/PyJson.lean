@@ -1,6 +1,6 @@
 /-
 JSON as Python's `json.dumps(v, sort_keys=True)` writes it, the form of every line of the firewall's record and of the
-values its error messages quote (Rust's `release::py_json`): `", "` and `": "` between items, keys sorted, and every
+values its error messages quote: `", "` and `": "` between items, keys sorted, and every
 character outside `' '`..`'~'` escaped (`\"`, `\\`, `\n`, `\r`, `\t`, `\b`, `\f`, else `\uXXXX` in lowercase hex, a
 character above U+FFFF as its UTF-16 surrogate pair).
 -/
@@ -45,7 +45,7 @@ partial def pyJson : Json → String
     let items := kvs.toArray.qsort (fun a b => a.1 < b.1)
     "{" ++ ", ".intercalate (items.toList.map fun (k, v) => pyStr k ++ ": " ++ pyJson v) ++ "}"
 
--- `release::tests::py_json_matches_python`'s value
+-- the line `json.dumps(v, sort_keys=True)` writes for this value
 #guard pyJson (Json.mkObj [("b", Json.arr #[Json.num 1, Json.str "x"]),
     ("a", Json.mkObj [("z", Json.null), ("y", Json.bool true)]),
     ("c", Json.str ("é" ++ (Char.ofNat 0x1F600).toString ++ "\"\\\n" ++ (Char.ofNat 1).toString ++ "~" ++

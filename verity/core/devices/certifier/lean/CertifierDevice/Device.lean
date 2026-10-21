@@ -17,14 +17,16 @@ proxy event by event:
   reads the link's backlog (`Event.tick`'s `backlog`): over a bucket's bytes it is `delivery-refused`, and over four the
   bucket isn't written at all. It then checks forwarding, ticks the shaper, writes the row and r − n padding frames,
   starts window w's online choice if it is tick w·T − lag, and publishes the window's record at its last bucket. An
-  ingress tick ticks the bucketer, hands each released `DATA` or `LAST` frame to its stream (opening the stream's server
-  connection at its first frame), records the stream's anchor at its first `LAST`, and publishes the record at the
-  window's last bucket.
+  ingress tick ticks the bucketer, cuts each released `DATA` frame's payload into requests by their lengths
+  (`Requests.feed`: the k-th request on the link is stream k) and hands its bytes to their stream (opening the stream's
+  server connection at its first frame), records the stream's anchor at its request's last frame, and publishes the
+  record at the window's last bucket.
 * **Streams.** A stream's connection is `connect`ed at its first released frame. Until it opens (`connected`), its
-  frames wait; then each is written in order (`writeUpstream`), and the first `LAST` written waits for its drain
-  (`drain := true`, answered by `delivered`), which is when the request reached the server. A refused connection is
-  `delivery-refused` on ingress. The server's bytes are cut into events, each read at time s ready at bucket
-  ⌊(s − origin)/τ_b⌋ + 1. An event without a position, too long for a frame, or on a stream with no released request is
+  bytes wait; then each frame's are written in order (`writeUpstream`), and the request's last written waits for its
+  drain (`drain := true`, answered by `delivered`), which is when the request reached the server. A refused connection
+  is `delivery-refused` on ingress. The server's bytes are cut into events, each read at time s ready at bucket
+  ⌊(s − origin)/τ_b⌋ + 1, and an event's frame is what follows its `id:` line (`eventBody`) on `canonicalStream`. An
+  event without a position, whose body is too long for a frame, or on a stream with no released request is
   `malformed`, as are bytes left unframed at the stream's end. A frame the shaper hands at a bucket after its `h`
   (ready after it, or read after that bucket's tick) is late, and faults the window it is handed in
   `coverage-never-established`.
@@ -145,6 +147,7 @@ structure State where
   shaper : Shaper
   bucketer : Bucketer
   streams : Std.HashMap Nat Stream := {}
+  requests : Requests := {}
   linkOpen : Bool := true
   linkBuffer : ByteArray := ByteArray.empty
   released : Array Nat := #[]
@@ -189,7 +192,7 @@ def stream (st : State) (s : Nat) : Stream := st.streams.getD s {}
 def setStream (st : State) (s : Nat) (x : Stream) : State := { st with streams := st.streams.insert s x }
 
 /-- A stream's pump: if its connection is open and no write waits for its drain, write what waits, in order, up to and
-including the first `LAST` while its request is undelivered, which then waits for its drain. -/
+including its request's last frame while the request is undelivered, which then waits for its drain. -/
 def pump (st : State) (s : Nat) : State × Array Action := Id.run do
   let mut x := st.stream s
   if x.phase != .open || x.draining then return (st, #[])
@@ -268,15 +271,17 @@ def ingressTick (st : State) (now : Nat) : State × Array Action := Id.run do
   let anchor := t * p.bucketMs / e.bucketMs
   let mut started := #[]
   for slot in row.extract 0 (rowCount row) do
-    let (kind, s, payload) := decodeFrame (slot.getD ByteArray.empty)
-    if kind != kindData && kind != kindLast then continue
+    let (kind, _, payload) := decodeFrame (slot.getD ByteArray.empty)
+    if kind != kindData then continue
+    let (requests, s, data, last) := st.requests.feed payload
+    st := { st with requests }
     if !st.streams.contains s then
       st := st.setStream s {}
       started := started.push (Started.connect s)
     let mut x := st.stream s
     if x.phase == .open && !x.draining && x.out.isEmpty then started := started.push (.pump s)
-    x := { x with out := x.out.push (payload, kind == kindLast) }
-    if kind == kindLast && x.anchor.isNone then
+    x := { x with out := x.out.push (data, last) }
+    if last && x.anchor.isNone then
       x := { x with anchor := some anchor, window := some (t / p.buckets),
                     deadline := some (st.config.origin +
                       min (t * p.bucketMs * nsPerMs + st.config.slack) ((anchor + 1) * e.bucketMs * nsPerMs)) }
@@ -306,11 +311,12 @@ def linkRead (st : State) (now : Nat) (data : ByteArray) : State := Id.run do
   return { st with bucketer := b, linkBuffer := buffer.extract whole buffer.size,
                    linkFramesRead := st.linkFramesRead + whole / size }
 
-/-- `_egress_event`: an event at its position, framed with its stream's anchor and its index there. -/
+/-- `_egress_event`: an event at its position, its body framed on `canonicalStream` with its stream's anchor and its
+index there. -/
 def egressEvent (st : State) (s : Nat) (event : ByteArray) (ready : Int) : State :=
   let x := st.stream s
   let B := st.config.egress.frameBytes
-  match eventPosition event, x.anchor, encodeFrame kindData s event B with
+  match eventPosition event, x.anchor, encodeFrame kindData canonicalStream (eventBody event) B with
   | some position, some anchor, some bytes =>
     let st := st.setStream s { x with count := x.count + 1 }
     { st with frames := st.frames.push (position, s, x.count, anchor, ready),

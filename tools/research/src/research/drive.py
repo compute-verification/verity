@@ -12,7 +12,8 @@ agent acts unless the automation refuses).  A loop runs it every few minutes; ea
 3. Check `next` in trains of `train_size` PRs, each stacked on the one below (every `train_size`-th member's commit, and the
    tip): `train.sh COMMIT MACHINE`, with `--agreement` when the train changes a `lean-audit.json` (the lander's rule; train.sh
    itself sends the build for C-Flock's paths), the lowest unchecked first, while fewer than `max_running` checks run, and
-   none above a member whose failure drive is still settling, which it would hold.  A former tip a re-cut left inside a train
+   none above a member whose failure drive is still settling, which it would hold; a tick's launches run at once
+   (`LAUNCH_JOBS`), each with its train's rank in the slot queue.  A former tip a re-cut left inside a train
    runs on as a hedge outside the count, until a train above it passes its check (`drop_hedges`).
 
 What it refuses goes to `@ci` in the merge thread, once per commit or head, with the owner of the PR it concerns: a failed
@@ -60,6 +61,7 @@ import shutil
 import subprocess
 import sys
 import tempfile
+import threading
 import time
 from dataclasses import dataclass
 from pathlib import Path
@@ -163,27 +165,35 @@ SLOT_RANK = "CHECK_SLOT_RANK"
 PER_PR_ENV = {SLOT_RANK: None, "TRAIN_ORDINARY": "1", "TRAIN_QUIET": "1"}
 
 
+#: this thread's `launch_env` values: a tick launches its trains at once (`LAUNCH_JOBS`), each with its own rank, so they
+#: never go through os.environ, which every thread shares
+_LAUNCH = threading.local()
+
+
 @contextlib.contextmanager
 def launch_env(values: dict[str, str | None]):
-    """os.environ with ``values`` set (a None unset) for a launch's train.sh."""
-    was = {k: os.environ.get(k) for k in values}
-    for k, v in values.items():
-        if v is None:
-            os.environ.pop(k, None)
-        else:
-            os.environ[k] = v
+    """``values`` set (a None unset) over os.environ for the train.sh launches this thread makes inside (`launch_vars`)."""
+    was = getattr(_LAUNCH, "values", {})
+    _LAUNCH.values = {**was, **values}
     try:
         yield
     finally:
-        for k, v in was.items():
-            if v is None:
-                os.environ.pop(k, None)
-            else:
-                os.environ[k] = v
+        _LAUNCH.values = was
+
+
+def launch_vars() -> dict[str, str]:
+    """The environment a launch's train.sh gets: os.environ with this thread's `launch_env` values."""
+    env = dict(os.environ)
+    for k, v in getattr(_LAUNCH, "values", {}).items():
+        if v is None:
+            env.pop(k, None)
+        else:
+            env[k] = v
+    return env
 
 
 def slot_rank(rank: int | None):
-    """os.environ with SLOT_RANK set to ``rank`` (unset when None) for a launch's train.sh."""
+    """SLOT_RANK set to ``rank`` (unset when None) for this thread's launches (`launch_env`)."""
     return launch_env({SLOT_RANK: None if rank is None else str(rank)})
 
 
@@ -212,7 +222,7 @@ def train_launch(repo: Path, commit: str, machine: str, agreement: bool, auth: t
     argv = ["bash", "tools/verity/check/train.sh", commit, machine, *(["--agreement"] if agreement else []),
             *(["--deferred", deferred] if deferred else [])]
     r = subprocess.run(argv, cwd=repo, capture_output=True, text=True, stdin=subprocess.DEVNULL,
-                       env={**os.environ, **auth_env(auth), "GIT_TERMINAL_PROMPT": "0", "TRAIN_AS": "ci"})
+                       env={**launch_vars(), **auth_env(auth), "GIT_TERMINAL_PROMPT": "0", "TRAIN_AS": "ci"})
     m = RUN_RE.search(r.stdout)
     return (m[1].split() if m else []), (r.stdout + r.stderr).strip()[-600:]
 
@@ -278,13 +288,17 @@ def run_states(repo: Path, ids: list[str]) -> dict[str, tuple[str, int | None, s
 #: how many runs drive reads at once: each `research status` is an ssh round trip to the run's node (20 Oct: the control pod's
 #: first tick took 33 min reading about 40 runs one at a time)
 STATUS_JOBS = 8
+#: how many trains' checks a tick launches at once: each train.sh waits minutes for check.py to gather verdicts and launch a
+#: run per twin (21 Oct 06:08Z: a tick launched seven trains one after another, in 40 min, and landed nothing meanwhile); the
+#: control pod has 2 cores
+LAUNCH_JOBS = 4
 
 
-def _each(fn, items: list) -> list:
-    """``fn`` of each of ``items``, `STATUS_JOBS` at a time, in their order."""
+def _each(fn, items: list, jobs: int = STATUS_JOBS) -> list:
+    """``fn`` of each of ``items``, ``jobs`` at a time, in their order."""
     if len(items) < 2:
         return [fn(x) for x in items]
-    with concurrent.futures.ThreadPoolExecutor(max_workers=STATUS_JOBS) as ex:
+    with concurrent.futures.ThreadPoolExecutor(max_workers=jobs) as ex:
         return list(ex.map(fn, items))
 
 
@@ -1590,19 +1604,35 @@ class Driver:
         """Check ``m``'s commit (`train.sh`), with the suites its change reaches beside it when pytest is deferred, and record
         the launch: (the check's run ids, train.sh's output's tail)."""
         agreement = needs_agreement(self.repo, main, m.commit)
-        rank = next((i + 1 for i, x in enumerate(self.q.chain()) if x.commit == m.commit), None)
+        started = self._start(m, main, agreement, self._rank(m.commit))
+        self._record(drive, m, agreement, started)
+        return started[0], started[1]
+
+    def _rank(self, commit: str, chain: list | None = None) -> int | None:
+        """``commit``'s train's rank for the slot queue (`SLOT_RANK`): its members above `main`."""
+        return next((i + 1 for i, x in enumerate(self.q.chain() if chain is None else chain) if x.commit == commit), None)
+
+    def _start(self, m: Member, main: str, agreement: bool, rank: int | None) -> tuple[list[str], str, list[str] | None, str]:
+        """Launch ``m``'s check and, with pytest deferred, the suites its change reaches once the check registered: (the check's
+        ids, train.sh's tail, the touched run's ids or None, its output).  It records nothing, so a tick starts several at once."""
         with slot_rank(rank):
             ids, tail = self.launch(self.repo, m.commit, self.on, agreement)
+        if not ids or "pytest" not in self.defer:
+            return ids, tail, None, ""
+        touched, out = self.launch_touched(self.repo, m.commit, self.on, main)
+        return ids, tail, touched, out
+
+    def _record(self, drive: dict, m: Member, agreement: bool, started: tuple) -> None:
+        """Record what `_start` launched for ``m`` under ``drive["launched"]``."""
+        ids, _, touched, out = started
         if not ids:
-            return ids, tail
+            return
         drive["launched"][m.commit] = {"ids": ids, "at": self.now(), "agreement": agreement}
-        if "pytest" in self.defer:
-            touched, out = self.launch_touched(self.repo, m.commit, self.on, main)
+        if touched is not None:
             drive["launched"][m.commit]["touched"] = touched
             if not touched:
                 self.q.log(f"research queue drive: {m.commit[:12]}'s touched-suites run registered no run ({out[-200:]}); its "
                            "landing waits until one passes")
-        return ids, tail
 
     def resend(self, drive: dict, m: Member, prs: str, v: Verdict,
                because: str = "no PR's change touches what failed, so no PR is ejected") -> None:
@@ -2075,6 +2105,7 @@ class Driver:
         settling = {chain[i].commit for i in failed_at if f"failed:{chain[i].commit}" not in drive["told"]} | {
             c for c in drive["resent"] if self.verdict(c, main, drive).state != "passed"}
         stop = next((k for k, x in enumerate(members) if x.commit in settling), len(members))
+        todo: list[tuple[int, Member, str, bool]] = []          # (its place in `what`, the train's tip, its PRs, agreement)
         for i in trains:
             m, prs = members[i], " ".join(f"#{x.pr}" for x in members[: i + 1])
             v = self.verdict(m.commit, main, drive)
@@ -2102,15 +2133,20 @@ class Driver:
                 what.append(f"would check {m.commit[:12]}")
                 running += 1
                 continue
-            ids, tail = self._launch(drive, m, main)
+            todo.append((len(what), m, prs, agreement))
+            what.append("")
+            running += 1
+        chain = q.chain() if todo else []
+        started = _each(lambda t: self._start(t[1], main, t[3], self._rank(t[1].commit, chain)), todo, LAUNCH_JOBS)
+        for (k, m, prs, agreement), (ids, tail, *rest) in zip(todo, started):
+            self._record(drive, m, agreement, (ids, tail, *rest))
             if not ids:
                 self.refuse(drive, f"launch:{m.commit}", f"train.sh {m.commit[:12]} {self.on} registered no run: {tail}")
-                what.append("launch failed")
-                break
+                what[k] = "launch failed"
+                continue
             q.log(f"research queue drive: checking {m.commit[:12]} ({prs}): {' '.join(ids)}" + (" with agreement" if agreement else "")
                   + (f", touched suites {' '.join(drive['launched'][m.commit].get('touched') or [])}" if "pytest" in self.defer else ""))
-            what.append(f"launched {' '.join(ids)}")
-            running += 1
+            what[k] = f"launched {' '.join(ids)}"
         if shadowed := self.per_pr(drive):
             what.append(shadowed)
         if not dry_run:

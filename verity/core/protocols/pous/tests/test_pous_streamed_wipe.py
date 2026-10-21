@@ -1,7 +1,7 @@
-"""The streamed-label wipe (`streamed_wipe`): the label format, an honest session accepted at batch sizes 1 and 8, a
-wrong or late batch that ends the session with no retry, the fill before any challenge, the tiers the fill covers, a
-verdict that fails closed, and the guarantee's bound at the deployed instance and against an exhaustive count on a tiny
-one.  Every clock is injected."""
+"""The streamed-label wipe (`streamed_wipe`): the label format, an honest session accepted at batch size 1 and refused
+above it, which the guarantee doesn't cover, a wrong or late batch that ends the session with no retry, the fill before
+any challenge, the tiers the fill covers, a verdict that fails closed, and the guarantee's bound at the deployed instance
+and against an exhaustive count on a tiny one.  Every clock is injected."""
 from __future__ import annotations
 
 import dataclasses
@@ -76,8 +76,10 @@ def test_draws_are_uniform_indices_from_the_coin_secret():
     assert all(0 <= i < N for i in idx) and idx != sw.draw_indices(b"other", SERVER, SESSION, N, K)
 
 
-@pytest.mark.parametrize("batch", [1, 8, K])
-def test_honest_session_is_accepted(batch):
+@pytest.mark.parametrize("batch", [1, 2, 8, K])
+def test_honest_session_is_accepted_at_batch_1_and_refused_above(batch):
+    """An honest session runs to completion at any batch size, but only the sequential reveal is accepted: the guarantee
+    doesn't cover a larger batch, so the verdict refuses it by name."""
     clock = Clock()
     signer = ts.TestSigner(b"wipe challenger", height=2)
     c = challenger(params(batch), clock=clock, signer=signer)
@@ -85,8 +87,9 @@ def test_honest_session_is_accepted(batch):
     assert signed.ended == sw.COMPLETE and len(signed.batches) == -(-K // batch)
     assert sum(r.count for r in signed.batches) == K and all(r.wrong == 0 for r in signed.batches)
     v = sw.verdict(signed, c.commitment, trusted={signer.public_key}, schemes=ts.SCHEMES)
-    assert v.accepted, v.reasons
-    assert v.public() == {"accepted": True, "egress_mib": 1}
+    uncovered = f"batch size {batch} is uncovered: the guarantee covers the sequential reveal, batch size 1"
+    assert v.reasons == (() if batch == 1 else (uncovered,))
+    assert v.public() == {"accepted": batch == 1, "egress_mib": 1}
     assert c.coins() == sw.draw_indices(b"coins", SERVER, SESSION, N, K)
     assert c.params.covered == (batch == 1)
 
