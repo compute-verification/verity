@@ -111,23 +111,25 @@ DC_DEV void lane_ops(Lane& l) {
 // through a generic address (ATOM.E, ATOME32); redg: the same to a global address (REDG.E, REDG32); atoms:
 // red.shared.xor (ATOMS, ATOMS32); lds128: ld.shared.v4.u32 (LDS.128, LDS128). A global access goes to its warp's own
 // 8 KB of `g`, a 128-byte line an access and the trip's parity picking one of two sets of lines, so the lane warps' loads
-// stay in L1; a shared one to its warp's own 1 KB of scratch. A loaded word is XORed into a chain; an atomic XORs a chain
-// into memory.
+// stay in L1. Shared accesses go to the block's SX bytes of scratch: an atomic to its warp's own MEM_SX of it, an
+// LDS.128 to a 512-byte line of its own among the trip's R (ptxas merges two loads of one address), so SX holds a warp's
+// MEM_SX each and R lines. A loaded word is XORed into a chain; an atomic XORs a chain into memory.
 enum { M_LDE, M_ATOME, M_REDG, M_ATOMS, M_LDS128 };
 constexpr int MEM_WARP_BYTES = 8192, MEM_BLOCK_BYTES = 32 * MEM_WARP_BYTES, MEM_SX = 1024;
 DC_DEV unsigned char* mem_global(unsigned char* g) {
   return g + (size_t)blockIdx.x * MEM_BLOCK_BYTES + (threadIdx.x >> 5) * MEM_WARP_BYTES + (threadIdx.x & 31) * 4;
 }
-// The warp's scratch in `sx` (MEM_SX bytes a warp), each word set to its own offset; read after OP_BEGIN's barrier.
+// `sx`'s words each set to its own offset (read after OP_BEGIN's barrier); its shared address.
+template <int SX>
 DC_DEV uint32_t mem_shared(unsigned char* sx) {
-  uint32_t* w = reinterpret_cast<uint32_t*>(sx + (threadIdx.x >> 5) * MEM_SX);
-#pragma unroll
-  for (int i = 0; i < MEM_SX / 128; i++) w[i * 32 + (threadIdx.x & 31)] = i * 32 + (threadIdx.x & 31);
-  return smem_u32(sx + (threadIdx.x >> 5) * MEM_SX);
+  uint32_t* w = reinterpret_cast<uint32_t*>(sx);
+  for (int i = threadIdx.x; i < SX / 4; i += blockDim.x) w[i] = i;
+  return smem_u32(sx);
 }
-template <int M, int R>
-DC_DEV void mem_ops(Lane& l, unsigned char* gp, uint32_t sp, int n) {
-  const uint32_t lane = threadIdx.x & 31;
+template <int M, int R, int SX>
+DC_DEV void mem_ops(Lane& l, unsigned char* gp, uint32_t sb, int n) {
+  static_assert(M != M_LDS128 || SX / 512 >= R, "an LDS.128 lane needs a line of scratch an access");
+  const uint32_t lane = threadIdx.x & 31, sp = sb + (threadIdx.x >> 5) * MEM_SX;
 #pragma unroll
   for (int q = 0; q < R; q++) {
     unsigned char* p = gp + (((n & 1) * R + q) % (MEM_WARP_BYTES / 128)) * 128;
@@ -148,7 +150,7 @@ DC_DEV void mem_ops(Lane& l, unsigned char* gp, uint32_t sp, int n) {
       uint32_t a, b, c, d;
       asm volatile("ld.shared.v4.u32 {%0,%1,%2,%3},[%4];"
                    : "=r"(a), "=r"(b), "=r"(c), "=r"(d)
-                   : "r"(sp + ((q + n) & 1) * 512 + lane * 16)
+                   : "r"(sb + (((n & 1) * R + q) % (SX / 512)) * 512 + lane * 16)
                    : "memory");
       x ^= a ^ b ^ c ^ d;
     }

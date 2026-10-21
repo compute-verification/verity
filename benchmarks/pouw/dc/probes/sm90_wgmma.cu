@@ -91,13 +91,14 @@ DC_DEV void wg_until(const OpArgs& a) {
 template <int M, int R>
 DC_DEV void wg_until_mem(const OpArgs& a) {
   __shared__ __align__(1024) unsigned char sm[(AROWS + BROWS) * KB];
-  __shared__ __align__(16) unsigned char sx[12 * MEM_SX];
+  constexpr int SX = 16 * MEM_SX;  // 12 warps' scratch, and 32 LDS.128 lines
+  __shared__ __align__(16) unsigned char sx[SX];
   const Tiles t = fill_tiles<0>(sm, a.mode);
   const bool mma_role = threadIdx.x < 256;
   int d[128] = {};
   Lane l(threadIdx.x);
   unsigned char* gp = mem_global(a.g);
-  const uint32_t sp = mem_shared(sx);
+  const uint32_t sb = mem_shared<SX>(sx);
   OP_BEGIN_STOP
   if (mma_role) {
     OP_LOOP(it) {
@@ -108,7 +109,7 @@ DC_DEV void wg_until_mem(const OpArgs& a) {
     OP_DONE
     wgmma_hold(d);
   } else {
-    OP_UNTIL(n) { mem_ops<M, R>(l, gp, sp, n); }
+    OP_UNTIL(n) { mem_ops<M, R, SX>(l, gp, sb, n); }
     OP_TRIPS(n)
   }
   OP_END_STOP
@@ -119,16 +120,17 @@ DC_DEV void wg_until_mem(const OpArgs& a) {
 template <int M, int R>
 DC_DEV void wg_mix_mem(const OpArgs& a) {
   __shared__ __align__(1024) unsigned char sm[(AROWS + BROWS) * KB];
-  __shared__ __align__(16) unsigned char sx[8 * MEM_SX];
+  constexpr int SX = 8 * MEM_SX;
+  __shared__ __align__(16) unsigned char sx[SX];
   const Tiles t = fill_tiles<0>(sm, a.mode);
   int d[128] = {};
   Lane l(threadIdx.x);
   unsigned char* gp = mem_global(a.g);
-  const uint32_t sp = mem_shared(sx);
+  const uint32_t sb = mem_shared<SX>(sx);
   OP_BEGIN
   OP_LOOP(it) {
     group4<F_s8_n256>(d, t);
-    mem_ops<M, R>(l, gp, sp, it);
+    mem_ops<M, R, SX>(l, gp, sb, it);
     wgmma_wait<0>();
   }
   wgmma_hold(d);

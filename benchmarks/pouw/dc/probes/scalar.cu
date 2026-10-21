@@ -23,12 +23,13 @@ DC_DEV void s_alone(const OpArgs& a) {
 // A memory lane alone (lanes.cuh's mem_ops): 32 accesses a trip.
 template <int M>
 DC_DEV void s_mem(const OpArgs& a) {
-  __shared__ __align__(16) unsigned char sx[32 * MEM_SX];
+  constexpr int SX = 32 * MEM_SX;
+  __shared__ __align__(16) unsigned char sx[SX];
   Lane l(threadIdx.x ^ (uint32_t)a.mode);
   unsigned char* gp = mem_global(a.g);
-  const uint32_t sp = mem_shared(sx);
+  const uint32_t sb = mem_shared<SX>(sx);
   OP_BEGIN
-  OP_LOOP(it) { mem_ops<M, 32>(l, gp, sp, it); }
+  OP_LOOP(it) { mem_ops<M, 32, SX>(l, gp, sb, it); }
   OP_END
   OP_SINK(l.fold() ^ threadIdx.x)
 }
