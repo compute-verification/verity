@@ -434,6 +434,16 @@ ENTRIES: dict[str, Entry] = {e.id: e for e in (
           "C-Flock's rows link covers the served roots: outside δ_s, where flock-verify accepts a session and every "
           "drawn unit is right at its owned reads, the session's extracted value layer is the served layer's opening "
           "(the round's served leaves, committed before σ_w)", "TS served roots linked", "conjectured"),
+    Entry("accounting-ts-leaf-checks", "assumption",
+          "Each of a leaf's 33 option-A statements (h1zy.PouwH1LaneZy_v1's 32 lanes and PouwH1Combine_v1) computes its "
+          "Definition at its decoded registered ports: on every wire assignment its circuit's evaluation agrees with, "
+          "an ok word of 1 means the lane's partials row is the honest one and its 32 cells have z = A·Bᵀ and "
+          "y = dq(z), or for the combine that the rows' XOR is the receipt", "TS leaf checks", "conjectured"),
+    Entry("accounting-ts-leaf-shared", "assumption",
+          "A leaf's 33 sessions open one leaf, one partials record and one receipt: the service registers each "
+          "committed row (the leaf's A, B and z/y rows, the post-draw partials) with one commit-time opening in every "
+          "session that reads it, and the verifier registers each lane's salt, position, roots, admit bits, index and "
+          "every ok row at their known content", "TS leaf shared", "standard"),
     Entry("accounting-ts-lin-steer", "assumption",
           "LIN-STEER, false for a segmented consumer whose noise-active segments carry unequal counts: zeroing a "
           "fraction φ of a row's noise-active coordinates saves at most φ of the consumer's work",
