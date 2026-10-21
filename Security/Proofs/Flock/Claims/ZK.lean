@@ -556,7 +556,8 @@ import Proofs.Flock.Claims.ZK.SessionLean
   switched vectors `repCut_fw`'s `hpiop` asks of it.
 * `FinishSwMk`: that source's masked values. Where a table's rows hold at its base, rep `r`'s masked value `n` is the
   worker's clear value plus the base's pad, as the firewall's words (**`Masked.swSrcE_masked_of_rowsAt`**); below
-  `h_ab` that pad is the session's pad array's (**`Masked.swSrcE_masked_pad`**), toward `repCut_fw`'s `hmk` there.
+  `h_ab` that pad is the session's pad array's (**`Masked.swSrcE_masked_pad`**). At the workers' values read from arrays
+  by pad index (`Masked.valsOfArr`), that is `repCut_fw`'s `hmk` there (**`Masked.swSrcE_hmk`**).
 * `FinishRows`: the replay's rows on a view's masked values, constants included. Where the proof's masked messages are
   the view's, the coins `c`'s and the switched vectors `ŝ`'s, `Zk.replay`'s three constraints and the two ring-switch
   rows are `rowsOf`'s first five as whole forms (**`Composed.replay_rows`**), as the firewall's stop reads them.
