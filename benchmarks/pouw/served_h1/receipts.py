@@ -167,9 +167,11 @@ def _xor_reduce(x: torch.Tensor) -> torch.Tensor:
     return x[..., 0]
 
 
-def tile_receipts(a: torch.Tensor, b: torch.Tensor, noise: torch.Tensor, keys: torch.Tensor) -> torch.Tensor:
+def tile_receipts(a: torch.Tensor, b: torch.Tensor, noise: torch.Tensor, keys: torch.Tensor,
+                  lanes: bool = False) -> torch.Tensor:
     """Receipts (U, 2 sets) int64 of U units: a (U, 32, K) and b (U, 32, K) int64 s8 values, noise (U, blocks, 16) seed_j's
-    halves, keys (U, LANES, 16) σ_R's."""
+    halves, keys (U, LANES, 16) σ_R's.  With `lanes`, each lane's words before the XOR across lanes, (U, LANES, 2 sets):
+    word 2 s the XOR of the lane's 8 chains' y after set s, 2 s + 1 of their z."""
     nu, r, k = a.shape
     lay, dev = layout(k), a.device
     ks, m = lay.ks, lay.m
@@ -202,6 +204,7 @@ def tile_receipts(a: torch.Tensor, b: torch.Tensor, noise: torch.Tensor, keys: t
     p = mul32(sets[:, :, cs["ri"], cs["ci"]], cs["fx1"])
     st = keys.clone()
     out = torch.empty(nu, lay.sets, 2, dtype=torch.int64, device=dev)
+    per = torch.empty(nu, LANES, lay.sets, 2, dtype=torch.int64, device=dev) if lanes else None
     for s in range(lay.sets):
         yv, zv = st[..., :8], st[..., 8:]
         ps = p[:, s]
@@ -210,8 +213,11 @@ def tile_receipts(a: torch.Tensor, b: torch.Tensor, noise: torch.Tensor, keys: t
             yv = (mul32(uu, cs["ka"][i]) + zv) & M32
             zv = (rotl(uu, cs["rot"][i]) + yv) & M32
         st = torch.cat([yv, zv], -1)
-        out[:, s] = _xor_reduce(st.view(nu, LANES, 2, 8).transpose(1, 2).reshape(nu, 2, LANES * 8))
-    return out.reshape(nu, 2 * lay.sets)
+        if lanes:
+            per[:, :, s] = _xor_reduce(st.view(nu, LANES, 2, 8))
+        else:
+            out[:, s] = _xor_reduce(st.view(nu, LANES, 2, 8).transpose(1, 2).reshape(nu, 2, LANES * 8))
+    return per.reshape(nu, LANES, 2 * lay.sets) if lanes else out.reshape(nu, 2 * lay.sets)
 
 
 @dataclass
@@ -227,8 +233,9 @@ class Call:
 
 
 def call_receipts(call: Call, salt: bytes, base: int, root_a: bytes, root_b: bytes, cubin: Cubin | None = None,
-                  chunk: int | None = None, only: list[int] | None = None) -> np.ndarray:
-    """The call's receipts (units, 2 sets) uint32, unit u at position base + u (`only`: those units, in that order)."""
+                  chunk: int | None = None, only: list[int] | None = None, lanes: bool = False) -> np.ndarray:
+    """The call's receipts (units, 2 sets) uint32, unit u at position base + u (`only`: those units, in that order); with
+    `lanes` each lane's words (units, LANES, 2 sets), whose XOR over lanes is the receipt (`tile_receipts`)."""
     k = call.a.shape[1]
     lay = layout(k)
     chunk = chunk or max(16, (1 << 20) // k)
@@ -236,7 +243,7 @@ def call_receipts(call: Call, salt: bytes, base: int, root_a: bytes, root_b: byt
     pick = list(range(len(us))) if only is None else list(only)
     dev = call.a.device
     ar = torch.arange(R, device=dev)
-    out = np.empty((len(pick), 2 * lay.sets), dtype=np.uint32)
+    out = np.empty((len(pick),) + ((LANES,) if lanes else ()) + (2 * lay.sets,), dtype=np.uint32)
     for at in range(0, len(pick), chunk):
         part = pick[at:at + chunk]
         seeds, sigmas = unit_seeds(salt, [base + u for u in part], root_a, root_b)
@@ -246,7 +253,7 @@ def call_receipts(call: Call, salt: bytes, base: int, root_a: bytes, root_b: byt
         cj = torch.tensor([us[u][1] for u in part], device=dev)
         a = call.a[ri[:, None] * R + ar].to(torch.int64)
         b = call.b[cj[:, None] * C_ + ar].to(torch.int64)
-        out[at:at + len(part)] = tile_receipts(a, b, noise, keys).cpu().numpy().astype(np.uint32)
+        out[at:at + len(part)] = tile_receipts(a, b, noise, keys, lanes).cpu().numpy().astype(np.uint32)
     return out
 
 
