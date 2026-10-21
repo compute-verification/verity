@@ -152,9 +152,9 @@ class Family:
 # route (`counted`), while the cheater's menu holds them all. A uniform instruction heads up to 2 words
 # (UIMAD.WIDE.U32 writes a UR pair, RT-HOPPER-7), so UNI's ω is 2.
 # The measured reading and its twin read ln(8/7) ≥ 2/15 (`LN_P_M`), as sm_120's measured headline does. The twin is
-# the same reading under (I3) `ScalarRoute` at q = q_T = 3/5 (`accounting-ts-scalar-route`, assumed), the simplest
-# fraction at which the bound reaches its floor (from q ≈ 0.5884 up; 10/17 is above it): a twin beside the ½ floor A6
-# proves, not a replacement. Both are over 1%, so both are held to the measured target.
+# the same reading under (I3) `ScalarRoute` at q = q_T = 3/5 (`accounting-ts-scalar-route`, assumed), the least floor
+# of denominator at most 5 at which the bound reaches its floor (from q ≈ 0.5884 up; at 10/17 it is above it): a twin
+# beside the ½ floor A6 proves, not a replacement. Both are over 1%, so both are held to the measured target.
 SM90 = Family("Sm90", "H200", "sm_90", "dither-2s-licpw-redux-p1-l32", "DS-90", "DC-90-ri", 1980,
               "EPS1 DC's measured f_max at default clocks; the sheet's TOPS are at 1830 MHz", {"UNI": 2},
               Fraction(1, 100), Fraction(3, 100), honest_menu=True, ln_p_m=LH.LN_P_M, twin=Fraction(3, 5))

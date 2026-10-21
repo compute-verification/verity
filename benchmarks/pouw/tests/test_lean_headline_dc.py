@@ -56,8 +56,8 @@ def test_each_certificate_is_one_and_prices_the_bound():
 def test_the_i3_twin_is_dc_90_ri_at_three_fifths():
     """DC-90-ri's twin (`Sm90MeasuredI3.lean`) reads (I3) `ScalarRoute` at q = q_T = 3/5, an assumed premise
     (`accounting-ts-scalar-route`), beside A6's proved ½ floor, not in its place: the measured file's machine, menu,
-    routes and ♭, its own π*, both at ln(8/7) ≥ 2/15. 3/5 is the simplest fraction at which the bound is at its floor
-    (10/17, below it, reads a little more). Both are over 1%, the twin below the ½ floor, and both are held to the
+    routes and ♭, its own π*, both at ln(8/7) ≥ 2/15. 3/5 is the least floor of denominator at most 5 at which the
+    bound is at its floor, which starts at q ≈ 0.5884 (10/17, below it, reads a little more). Both are over 1%, the twin below the ½ floor, and both are held to the
     measured target."""
     fam = H.SM90
     assert [f.ns for f in H.FAMILIES if f.twin] == ["Sm90"] and fam.twin == Fraction(3, 5)
@@ -89,8 +89,8 @@ def _price(x, lam: dict, n: dict) -> Fraction:
 def test_folds_meet_fold_opt_at_pi_star():
     """FOLD-OPT at each statement's π* (`FoldOptFoldedAt`, a conjecture under Security/lean-audit.json's
     `shape.conjectures`), which a fold priced below N_w·φ* at π* falsifies. It is open at all five π*, and on the H200
-    a premise only about folds off the menu, which holds every counted fold known (RT4-SHEET-13, -14, -17, -22): at the
-    (I3) twin's π* li-bulk's trimmed W = ∞ member is the menu's cheapest. Every class a fold issues prices above 0 at
+    a premise only about folds off the cheater's menu, which holds every counted fold known (RT4-SHEET-13, -14, -17,
+    -22): at the (I3) twin's π* li-bulk's trimmed W = ∞ member is that menu's cheapest. Every class a fold issues prices above 0 at
     each π* (the stores carry the JI90 lines r20261021-161119-62ac measured). ♭'s fold meets it, and so does ♭'s fold
     with each IMAD (its one IMAD-pipe class) replaced by 32 ALU shift-adds, at over ten times N_w·φ*. On the B200 that
     fold is why FOLD-OPT at every certificate (`FoldOptFolded`) is not asked (RT3-LOGIC-6): at 1/20 issue + 19/20 IMAD
