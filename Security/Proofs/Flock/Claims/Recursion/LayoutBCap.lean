@@ -23,11 +23,12 @@ as its port `top`, through its hm96 slot. `layoutBCap` is `layoutBDeployed` with
 
 `heldB_layoutBCap` proves `HeldB` there from named facts. RecCap discharges round 0 outright: the list ends with it
 and the parts number as the list's statements (`capAt_readX`), so the one fact left at round 0 is that its part's
-circuit has its port `top` (`CapPorts`). The rest:
+circuit has its port `top` (`CapPorts`), proved at every shape (`capPorts`, `CapPorts.lean`, from `readX`'s
+`capPorted`). The rest:
 
 * `SchedMatches` (`DeployLayout.lean`): the shape's rep schedule is the inner verifier's.
 * `RowsCover`: each absorbing stream round with no tops is some part's, through a port under its `rec-c<k>`
-  (`heldRows`), as `PortsCover` is for `partHolds`.
+  (`heldRows`), as `PortsCover` is for `partHolds`. Proved at every shape (`rowsCover`, `RowsCover.lean`).
 * `TopsHeld topsAt`: each stream round that commits tops is held whole by some part. No part holds one whole: the
   round's message is its tops' strings and then one row, and the row is another part's. At `topsAt` none, `HeldB`
   fails at every statement of the shape with such a round (`not_heldB_layoutBCap_none`), and level 0's round of each
@@ -86,7 +87,7 @@ theorem readX_statements {x : Msg} {r : XR} (h : readX x = some r) :
   · simp at h
   have h' : (⟨w, ri, pa, sh, dims⟩ : XR) = r := by simpa using h
   subst h'
-  exact ⟨vs, toOption_eq_some hvs, by simpa using hl⟩
+  exact ⟨vs, toOption_eq_some hvs, not_not.1 (not_or.1 hl).1⟩
 
 /-- **RecCap is the last part** wherever `readX` reads the statement: V*'s list ends with RecCap
 (`FlockC3.Reps.list_ok`), and the parts number as the list's statements. -/

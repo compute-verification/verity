@@ -47,6 +47,32 @@
    "imports": ["CoreProtocol.Cli", "PouwCheck.Check"],
    "except": [],
    "why": "the program is code: Lean core only, no Mathlib and nothing of Security (Daniel's layout ruling, 5 Oct)"
+  },
+  "PouwCheck.Pass": {
+   "imports": [
+    "Flock.Draw",
+    "PouwCommit.Draws",
+    "PouwWindow.Rounds",
+    "PouwCheck.Inputs",
+    "SampledProofs.ChallengerRecord"
+   ],
+   "except": [],
+   "why": "the program is code: Lean core only, no Mathlib and nothing of Security (Daniel's layout ruling, 5 Oct)"
+  },
+  "PouwCheck.Credit": {
+   "imports": [
+    "Std.Data.HashMap",
+    "Flock.Program",
+    "PouwCommit.Frame",
+    "PouwCheck.Json",
+    "PouwCheck.Pass",
+    "PouwWindow.Draw",
+    "PouwWindow.Rounds",
+    "SampledProofs.ChallengerSession",
+    "SampledProofs.PyJson"
+   ],
+   "except": [],
+   "why": "the program is code: Lean core only, no Mathlib and nothing of Security (Daniel's layout ruling, 5 Oct)"
   }
  },
  "dependencies": {

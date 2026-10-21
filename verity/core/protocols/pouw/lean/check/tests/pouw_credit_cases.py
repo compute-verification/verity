@@ -259,7 +259,8 @@ def _template(k: int, r: int, c: int, unit: dict) -> dict:
     ``a_k<K>`` and ``b_k<K>``."""
     word = ["Value", 16]
     params = [[f"a_k{k}", ["Array", r, ["Array", 2, word]]], [f"b_k{k}", ["Array", c, ["Array", 2, word]]],
-              ["salt", ["Array", 4, word]], ["position", word], ["roots", ["Array", 2, ["Array", 4, word]]]]
+              ["zy", ["Array", 3 * r * c, word]], ["salt", ["Array", 4, word]], ["position", word],
+              ["roots", ["Array", 2, ["Array", 4, word]]]]
     return {"form": "composite", "id": Cr.TILE_FN, "bindings": {"K": k, "UNIT": unit},
             "body": {"params": params, "ret_type": word, "nodes": [{"form": "call", "fn": 0, "args": [], "out": 0}],
                      "ret": {"affine": ["n", 0, 0, 1]}}}
@@ -351,7 +352,7 @@ def _break_desc(rng: random.Random, lay: dict, name: str) -> str:
         case "not-window":
             pairs = Cr._record(fn)
             other = rng.choice([
-                "PouwH1Window_v3" + fn[len(Cr.WINDOW_FN):],
+                "PouwH1Window_v2" + fn[len(Cr.WINDOW_FN):],
                 Cr.WINDOW_FN + "{" + ",".join(f"{k}={v}" for k, v in pairs[:-1]) + "}",
                 Cr.WINDOW_FN + "{" + ",".join(f"{k}={v}" for k, v in [pairs[1], pairs[0], *pairs[2:]]) + "}",
                 fn.replace(f"M={lay['m']}", f"M= {lay['m']}"), fn.replace(f"M={lay['m']}", f"M=0{lay['m']}"),
