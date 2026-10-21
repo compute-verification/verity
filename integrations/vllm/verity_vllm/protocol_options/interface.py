@@ -111,7 +111,8 @@ class Installed(Protocol):
 class Option:
     """An `Installed` an adapter can return as it is: ``commits`` and ``details`` are its commitment and info,
     ``decoded`` returns the plaintext of what it released (`Installed.weights`), and ``release`` runs once after its
-    hooks are off."""
+    hooks are off.  ``end_pass``, on an option that commits in passes (PoUW's Pearl-C device path), ends the open pass and
+    begins the next; a server calls it at each engine step's end, which nothing hands an option.  None: no passes."""
 
     name: str
     hooks: Hooks
@@ -119,6 +120,7 @@ class Option:
     details: dict[str, Any] = field(default_factory=dict)
     decoded: Callable[[], Mapping[str, Any]] | None = None
     release: Callable[[], Any] | None = None
+    end_pass: Callable[[], Any] | None = None
     closed: bool = False
 
     def commitment(self) -> dict[str, Any]:
