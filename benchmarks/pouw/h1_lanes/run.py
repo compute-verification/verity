@@ -17,8 +17,8 @@ statement reading the leaf's lane partials, a value committed after the draw (`o
   l lane l's (`h1zy.lane_partial`, 2 (KS + m) u32), `produced.commit`'s tree under D, with `produced.record`'s record,
   which `produced.check` holds to the verifier's own entry (``produced_check``).
 * **Each statement's rows** are `leaf_lanes.reads`' ports: lane l's ``a0..a3``, ``b0..b7``, ``admit``, ``zy`` and
-  ``partials`` (row l), and ``pub`` (salt, position, roots and the lane index, whose content the verifier computes under
-  `h1unit.pub_salt`); the combine's ``p0..p31`` and ``receipt``. Each output ``o0`` is ok, a known row of 1 under
+  ``partials`` (row l), and ``pub`` (salt, position, roots and the lane index as a u16 word, `lane_word`, whose content
+  the verifier computes under `h1unit.pub_salt`); the combine's ``p0..p31`` and ``receipt``. Each output ``o0`` is ok, a known row of 1 under
   `h1unit.ok_salt`. The ``--registered`` file is `leaf_lanes.registered_file`'s, the public file `h1unit.verifier_pub`'s.
 * **The negatives**, each a statement proved and checked like the others:
   ``swap-lane3`` and ``swap-lane4``: a partials tree with rows 3 and 4 swapped (its record well-formed); each lane reads
@@ -53,9 +53,12 @@ HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE.parent / "h1_prove"))
 
 import h1unit as U  # noqa: E402
+from verity.ml.circuits import boolean as BL  # noqa: E402
 from verity.ml.circuits.codec import canonical_json, encode_program  # noqa: E402
 from verity.ml.circuits.defs import CompositeDefinition, bind  # noqa: E402
 from verity.ml.circuits.program import Program  # noqa: E402
+from verity.ml.circuits.refs import Coll, concat  # noqa: E402
+from verity.ml.circuits.types import Array  # noqa: E402
 from verity.ml.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2 as V2  # noqa: E402
 from verity.core.protocols.pouw import leaf_lanes as LL  # noqa: E402
 from verity.core.protocols.pouw.circuit import h1tile as H  # noqa: E402
@@ -113,6 +116,21 @@ def _template(name: str, d):
     ports = {} if decl is None else {"ports": (lambda S: decl(d.S())) if callable(decl) else (lambda S: decl)}
     return bind(CompositeDefinition(name, 1, (), lambda S: d.signature(), lambda B, S, *args: B.call(d, *args),
                                     conformance="protocol-defined", register=False, **ports))
+
+
+def lane_word(d):
+    """STAND-IN: the lane ``d`` with its index read from a whole u16 word, its low `h1zy.lane_bits` bits, the rest unread. A
+    C-Flock row is whole u16 words, and the index (5 bits at 32 × 32) leaves ``pub`` 1605 bits."""
+    params, ret = d.signature()
+    nb = params[-1][1].n
+
+    def body(B, S, *args):
+        *rest, word = args
+        return B.call(d, *rest, Coll(Array(nb, BL.BIT), concat([word[t].refs for t in range(nb)])))
+
+    decl = d.defn.ports
+    return bind(CompositeDefinition("H1LanesLaneWord", 1, (), lambda S: ((*params[:-1], ("lane", Array(16, BL.BIT))), ret), body,
+                                    conformance="protocol-defined", register=False, ports=lambda S: decl(d.S())))
 
 
 @dataclass
@@ -246,7 +264,7 @@ def known(words, salt: bytes) -> dict:
 def pub_row(ctx, w: World, ln: int) -> dict:
     lf = w.leaf
     bits = (SD.leaves(lf.salt, True) + SD.position_leaves(lf.position, True) + SD.leaves(w.roots[0], True)
-            + SD.leaves(w.roots[1], True) + [(ln >> t) & 1 for t in range(ctx.lane_bits)])
+            + SD.leaves(w.roots[1], True) + [(ln >> t) & 1 for t in range(16)])
     return known(bits_words(bits), U.pub_salt(f"{ctx.name}#lane{ln}", lf.position))
 
 
@@ -264,7 +282,7 @@ def stager(ctx, kind: str):
         rows = ([(f"a{s}", V2, ab, [f"a[{s}]"]) for s in range(LL.LANE_ROWS)]
                 + [(f"b{t}", V2, ab, [f"b[{t}]"]) for t in range(LL.LANE_COLS)]
                 + [(LL.ADMIT, V2, RC[0], [LL.ADMIT]), (LL.ZY, V2, 48 * RC[0] * RC[1], [LL.ZY]),
-                   (LL.PARTIALS, V2, 16 * ctx.wp, [LL.PARTIALS]), ("pub", V2, U.PUB_BITS + ctx.lane_bits, list(LL.PUBLIC))])
+                   (LL.PARTIALS, V2, 16 * ctx.wp, [LL.PARTIALS]), ("pub", V2, U.PUB_BITS + 16, list(LL.PUBLIC))])
         return CS.UnitStager(b.defn, "unit/pouw-h1-lane", rows, [(V2, (0,))], circuit=circuit, bind=b.bind)
     rows = ([(f"p{x}", V2, 16 * ctx.wp, [f"{LL.PARTIALS}[{x}]"]) for x in range(LL.lanes(*RC))]
             + [(LL.RECEIPT, V2, 16 * ctx.wp, [LL.RECEIPT])])
@@ -377,7 +395,6 @@ class Ctx:
     k: int
     position: int
     wp: int = 0
-    lane_bits: int = 0
     lane: Bound | None = None
     combine: Bound | None = None
     reg: Bound | None = None
@@ -394,11 +411,11 @@ def prepare(args) -> None:
         (work / d).mkdir(parents=True, exist_ok=True)
     ctx = Ctx(work, args.name, args.k, args.position)
     t = tile(args.k)
-    ctx.wp, ctx.lane_bits = 2 * LL.words(args.k), Z.lane_bits(*RC)
+    ctx.wp = 2 * LL.words(args.k)
     if 2 * ctx.wp + 17 <= 128:
         raise SystemExit(f"K={args.k}: a partial row of {16 * ctx.wp} bits is one SHA-512 block, and every row of the combine's "
                          f"statement is one, but C-Flock needs a row with a compression before its last block: K >= 384")
-    ctx.lane, ctx.combine = bound("H1LanesLaneStatement", Z.lane(t)), bound("H1LanesCombineStatement", Z.combine(t))
+    ctx.lane, ctx.combine = bound("H1LanesLaneStatement", lane_word(Z.lane(t))), bound("H1LanesCombineStatement", Z.combine(t))
     ctx.reg = ctx.lane
     ctx.prog = P.program_digest(ctx.reg.program)
     for kind, b in ((LL.LANE, ctx.lane), (LL.COMBINE, ctx.combine)):
@@ -515,7 +532,7 @@ def cost(args) -> None:
     lane = ([(f"a{s}", [f"a[{s}]"]) for s in range(LL.LANE_ROWS)] + [(f"b{s}", [f"b[{s}]"]) for s in range(LL.LANE_COLS)]
             + [(LL.ADMIT, [LL.ADMIT]), (LL.ZY, [LL.ZY]), (LL.PARTIALS, [LL.PARTIALS]), ("pub", list(LL.PUBLIC))])
     units = {"combine": (Z.combine(t), [(f"p{x}", [f"{LL.PARTIALS}[{x}]"]) for x in range(n)] + [(LL.RECEIPT, [LL.RECEIPT])]),
-             "lane": (Z.lane(t), lane)}
+             "lane": (lane_word(Z.lane(t)), lane)}
     out = {"k": args.k, "tile": U.tile(), "lanes": n, "words": LL.words(args.k)}
     for name, (d, rows) in units.items():
         t0 = time.time()
