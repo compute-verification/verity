@@ -101,14 +101,31 @@ on a rank off by 0.02 or a missing rank.
 |---|---|---|---|---|---|
 | B1 greedy | r20261020-233119-e40c (`vllm.match` r20261020-233150-30e7, art:4cf0a6018fe689dd8622cac371ecd114475f612f43f542e21b23530181b5dd54) | c8695f2187 | PASS, 805 s (the first load from a cold page cache took 416 s) | 104 GiB | 1,098,214 files |
 | B8 greedy | r20261020-235054-0dfc (`vllm.match` r20261020-235116-20b7, art:8c26cb7f88573090904af9763fba5703eae0d1443141bc4e1a37119b5d4c3fd9) | de6ca12b5f | PASS, 677 s | 312 GiB | 1,193,569 files |
-| B8 stochastic | r20261020-235116-5968, waiting for 360 GiB free | de6ca12b5f | | | |
+| B8 stochastic | r20261020-235116-5968, started 00:43Z once the v1 rows' deletion made 360 GiB | de6ca12b5f | | | |
 
-eu's `/workspace` (3.0 TB) had 477 GiB free at the start: the GLM-5.3 checkpoint (704 GiB) and @circuits' v1 rows (1.44 TiB:
-`fs/glm53-m1`'s B8 rows 970 GiB, `cp/circuits/glm-aot` 183, `cp/circuits-prefix-tp` 177, `fs/glm53-failfast` 112) hold the rest.
-So a finished row's legs move to its CPU node (`copy_rowdir.sh`, about 117 MB/s through the VM) and eu's copy is removed
-(`research retention rm`, owner @circuits) before the next capture fits; B32's (about 1100 GiB) and DeepSeek-V4-Pro's
-checkpoint (865 GB) need room beyond that, and so does window B (a B8 row's dir after the CPU phase, about 580 GiB, and its
-Commit's bundles, 244 GiB in v1's B8 greedy).
+eu's `/workspace` (3.0 TB) had 477 GiB free at the start: the GLM-5.3 checkpoint (704 GiB) and @circuits' v1 rows held the rest.
+The v1 rows (1.4 TiB: `fs/glm53-m1` 965 GiB, `cp/circuits/glm-aot` 181, `cp/circuits-prefix-tp` 176, `fs/glm53-failfast`
+110) were deleted at 00:42Z 21 Oct with `research retention rm --approved-by @circuits --ref CIR-25-v2-batch`
+(r20261021-004135-4cb2, logged in eu's `research/retention/deletions.jsonl`), once its check found no live run, job script,
+process or outside symlink that names or holds them; two run records from 16 and 18 Oct still read `running`, their processes
+gone since eu's boot at 23:24Z 20 Oct. `cp/glm53-ckpt` stays, and so do the rows' legs, which window B reads on eu. Window B
+also needs room (a B8 row's dir after the CPU phase, about 580 GiB, and its Commit's bundles, 244 GiB in v1's B8 greedy), so
+DeepSeek-V4-Pro's checkpoint (865 GB, staged from the hub by r20261021-005054-35cc) leaves eu once its B1 legs pass
+(`research retention rm`) and is staged again for its window B; B32's legs (about 1100 GiB) wait for room.
+
+Each row's Match CPU phase (`match_cpu.sh`), placed by circuits (23:40Z and 00:30Z 21 Oct): CPU Match may run on eu's own
+CPUs while the GPU batch holds it, 750 GB in all at most, and stops if a GPU leg or a Commit needs the memory. A B8 row runs
+one GM-01 at a time at 450, as it would at 750: (750 − 80) / 370 = 1.
+
+| row | Match CPU phase | node, `--mem-gb` | legs on the node |
+|---|---|---|---|
+| B1 greedy | r20261021-001940-db82, from 00:19Z | vy-glm53-cpu-2, 280 (three ranks at once) | copied from eu, every file checked |
+| B8 greedy | once its legs are copied and B32's Build d435 is cancelled | vy-glm53-cpu-2, 450 | 1,011,902 of its files copied again after the VM's restore cut the first copy |
+| B8 stochastic | once its legs pass and its Build of record is copied in from cpu-2 | vy-glm53-eu, 450 | its own |
+| DeepSeek-V4-Pro B1 | once its legs pass (its Build of record is on eu, 214 files and `.tree` copied from vy-nebius-cpu-3) | vy-glm53-eu, 290 (the dsv4 tree's three ranks) | its own |
+
+B32's Build of record r20261020-192024-d435 is cancelled by circuits' standing rule (19:25Z 20 Oct) when B8 greedy's Match needs
+cpu-2's memory, and restarts with `RESUME=1` after B1's Match ends.
 
 ## GPU batch
 
