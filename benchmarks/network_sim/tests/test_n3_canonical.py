@@ -1,13 +1,15 @@
 """N3Window_v5 with the canonical framing's templates (`workload.n3_canonical`) on the active replay's raw records, on an
 injected clock: an honest run is accepted on every window, egress and ingress, and so is one whose tokens are longer
-than an event (cut over events of `TOKEN_BYTES`), empty or of every byte value, and whose prompt takes five frames. A
-byte flipped in a frame's text, header, suffix or fill, a request byte that isn't the peer's, or one more event than
+than an event (cut over events of `TOKEN_BYTES`), empty or of every byte value, and whose prompt takes five frames, and
+so is a live endpoint's behind the shim, with a token of 200 bytes in every response. A byte flipped in a frame's text, header, suffix or fill, a request byte that isn't the peer's, or one more event than
 the Program has, is refused in its own window and nowhere else."""
 
 from __future__ import annotations
 
+import asyncio
 import importlib
 import importlib.util
+import json
 import sys
 from pathlib import Path
 
@@ -86,6 +88,49 @@ def test_long_tokens_and_a_long_prompt_are_accepted_on_every_window(m, tmp_path)
     plan, s = replay(m, long_trace(m), tmp_path, tokens=tokens)
     assert max(q["frames"] for q in plan["requests"]) == 5
     assert verdicts(m, plan, s, tmp_path) == EVERY
+
+
+LIVE_TOKENS = [" t0", "é" * 100, "", " t3"]
+
+
+async def _fake_vllm(reader, writer):
+    """A streaming completions endpoint that answers at once with `LIVE_TOKENS`' chunks and `[DONE]`: a token of 200
+    bytes, which `active_replay.canonical_events` cuts over four events, and an empty one, an event of no bytes."""
+    head = await reader.readuntil(b"\r\n\r\n")
+    await reader.readexactly(int(head.lower().split(b"content-length: ")[1].split(b"\r\n")[0]))
+    chunks = [b"data: " + json.dumps({"choices": [{"text": t}]}).encode() + b"\n\n" for t in LIVE_TOKENS]
+    writer.write(b"HTTP/1.1 200 OK\r\ncontent-type: text/event-stream\r\ntransfer-encoding: chunked\r\n\r\n"
+                 + b"".join(b"%x\r\n%s\r\n" % (len(p), p) for p in [*chunks, b"data: [DONE]\n\n"]) + b"0\r\n\r\n")
+    await writer.drain()
+    writer.close()
+
+
+def test_a_live_endpoint_behind_the_shim_is_accepted_on_every_window(m, tmp_path):
+    """The live shim (`active_replay.LiveServer`), the path a served vLLM endpoint takes, writes each completion chunk's
+    text as canonical events: with a token of 200 bytes and an empty one in every response, v5 accepts every window."""
+    doc = m.trace()
+    report = calibration.calibrate(doc)
+    s = m.ar.Setup(report)
+
+    async def go(plan):
+        server = await asyncio.start_server(_fake_vllm, "127.0.0.1", 0)
+        await asyncio.to_thread(m.ar.run_virtual, plan, report, tmp_path, server.sockets[0].getsockname()[:2])
+        server.close()
+
+    with pytest.MonkeyPatch.context() as mp:
+        mp.setattr(m.ar, "live_body", lambda session, model: {"model": model, "prompt": [1, 2, 3],
+                                                              "max_tokens": len(LIVE_TOKENS), "stream": True})
+        plan = m.ar.plan_configuration(doc["configurations"][0], s, "served", "envelope")
+        asyncio.run(go(plan))
+        got = verdicts(m, plan, s, tmp_path)
+    responses: dict[str, list] = {}
+    for _, session, k, _, e in sorted(m.ar.read_events(tmp_path / "server.events.gz")):
+        responses.setdefault(session, []).append((k, active.event_data(active.event_body(e))))
+    long = ("é" * 100).encode()
+    each = [b" t0", long[:64], long[64:128], long[128:192], long[192:], b"", b" t3"]
+    assert len(responses) == len(plan["requests"])
+    assert all([d for _, d in sorted(r)] == each for r in responses.values())
+    assert got == EVERY
 
 
 def flip(recs: dict, link: str, window: int, k: int, at: int) -> dict:
