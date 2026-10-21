@@ -7,7 +7,7 @@ import Proofs.Flock.Soundness.Game.Basic
 PROTOCOL.md §9.2 (Z1–Z7), §10 (L1–L5), §11 and §12 (O1–O6), as `Game` programs: a `recv` is a
 prover message the spec absorbs, a `draw` is a round's live coins. Messages that the spec reads
 from the proof but that are forced (`final_c_eval` must equal `Pc(z)`, A4; `matrix_evals` is
-ignored, A7) are not messages here. A program returns `none` where the spec rejects.
+empty, A7) are not messages here. A program returns `none` where the spec rejects.
 
 The Merkle cap, the statement digest and the labels that round 0 absorbs (§9.1) fix no
 prover choice in this model: the level-0 table is committed before the rep (the session's

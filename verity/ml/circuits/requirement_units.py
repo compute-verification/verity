@@ -1,5 +1,5 @@
-"""The requirement's two proof units (I4): the plan unit, which holds a pass's plan to the blocks the declared circuit reads at
-the pass's step (`Accounting.Requirement`'s `PlanMatches`), and the memory-map unit, which holds the blocks a step writes to the
+"""The requirement's two proof units (I4): the plan unit, which holds a pass's plan to hold every block the declared circuit
+reads at the pass's step (`Accounting.Requirement`'s `PlanMatches`), and the memory-map unit, which holds the blocks a step writes to the
 circuit's values and every free, of a written block or a registered one, to its values' last read (`StoreMatches`' L1, L2 and
 L4), and each re-key to the lifetime cap. The plan unit is PlanMatch, or PlanShard for a store past PlanMatch's 16-bit
 indices. Each is a Boolean Definition, one instance per step (PlanShard's one per shard of the store), each returning one ok
@@ -58,9 +58,9 @@ value leaf.
 for j < NR), the block of each gathered table row (``gmask``'s bit g for each of the G gathers: the table's row ``tok[g]``,
 a value of the circuit, at block TB + tok[g] / RPB, RPB rows a block, the table's blocks TB ... NR - 1), and the block of each
 written value t reads (``kvmask``'s bit i for position i: block ``lam[2 i]``). The plan is ``plan[0 .. count)``, strictly
-increasing, zero after; the unit's ok is that it is exactly that set: `PlanMatches`' ``plan = readBlocks t``, with every
-receipted block one the circuit reads at t (a gather's unselected rows and a paused request's pages are in no plan) and every
-block it reads planned. ``count`` is at most P, and a gathered row is one of the table's.
+increasing, zero after; the unit's ok is that it is exactly that set, ``plan = readBlocks t``: every block t reads is
+planned, which is `PlanMatches`' ``blocks (creditedReads t) ⊆ plan``, and no other is (a gather's unselected rows and a
+paused request's pages are in no plan). ``count`` is at most P, and a gathered row is one of the table's.
 
 **PlanShard**, at step t, for a store of registered blocks only (no step writes one) too large for one PlanMatch: the store's
 N blocks are cut into public shards, shard k the ``size`` blocks from k S (`plan_shards`; S for every shard but the last), and
@@ -81,7 +81,7 @@ its next re-key), and its committed value is ``val[k]``. Its ok is that, for eve
 ``ep[k] V + pos[k]`` puts it in a block the step wrote, in a slot below SLOTS,
 no two in one slot, and that block's payload ``pay[j - first]`` carries ``val[k]`` there (L4, Carries); and, for each block
 the step wrote: ``phi`` records it written at t (each write at its values' production step or their re-key's), it holds at
-least one value (so a planned block carries at least VW bits: D = VW, and no re-key carries a payload the map doesn't), its
+least one value (so no re-key carries a payload the map doesn't), its
 empty slots are zero, and ``phi`` frees it at the last read of its
 values, the greatest ``last[k]`` among them: an earlier free drops a value still to be read (L2), a later one keeps a block
 no step reads (L1). And each registered block whose values' last read is t (``rfree``'s bit j, from the public schedule and

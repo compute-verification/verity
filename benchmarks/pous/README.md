@@ -133,7 +133,8 @@ fingerprint say `timed: false` and `audits: skipped (untimed placement)`, so no 
 `streamed_wipe/` times the streamed-label wipe (`verity/core/protocols/pous/PROTOCOL.md`, "The streamed-label wipe")
 on one node: the labels one GPU derives (`labels.cu`, gated against `streamed_wipe.label`), what reaches pinned host
 memory, the NIC's line rate and RDMA loopback, and 74,000-challenge round trips at batch sizes from 1 to 74,000, plus one
-whole reference session. `bench.py`'s docstring lists the steps; `run.sh` builds for sm_120, takes one GPU through
+whole reference session, judged by the Lean verdict (`--verdict lean|both|python`, `wipe_verdict.py`'s `VERDICT` by
+default). `bench.py`'s docstring lists the steps; `run.sh` builds for sm_120, takes one GPU through
 `gpu-lease` and writes `timing.json`:
 
 ~~~bash

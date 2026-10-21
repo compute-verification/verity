@@ -61,7 +61,9 @@ theorem site_of_portDiff {a b : Flock.Registered.Port} (h : Flock.RecVStar.portD
     simp [Flock.RecVStar.portDiff?, e1, e2, e3, e4, hne] at h
   have e6 : a.domain = b.domain := Classical.byContradiction fun hne => by
     simp [Flock.RecVStar.portDiff?, e1, e2, e3, e4, e5, hne] at h
-  simp only [FlockVBridge.Family.site, e1, e2, e3, e4, e5, e6]
+  have e7 : a.schema = b.schema := Classical.byContradiction fun hne => by
+    simp [Flock.RecVStar.portDiff?, e1, e2, e3, e4, e5, e6, hne] at h
+  simp only [FlockVBridge.Family.site, e1, e2, e3, e4, e5, e6, e7]
 
 /-- **`checkAcc` names each port once** (`checkNames`): two entries of `own` with one name are one. -/
 theorem names_of_checkAcc {s : VStar.Stmt} {own : Array Flock.Registered.Port}

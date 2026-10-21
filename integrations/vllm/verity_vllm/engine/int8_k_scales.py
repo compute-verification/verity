@@ -52,6 +52,15 @@ def table(revision: str, path: str | Path | None = None) -> np.ndarray:
     return s
 
 
+def rank_table(s: np.ndarray, kv_heads: int, rank: int = 0, world: int = 1) -> np.ndarray:
+    """The columns of s_k [L, G] that tensor-parallel rank `rank` of `world` serves, [L, kv_heads]: vLLM gives each rank G / world
+    consecutive KV heads, rank r heads [r * G / world, (r + 1) * G / world).  Refuses any other split."""
+    G = s.shape[1]
+    if world < 1 or not 0 <= rank < world or G % world or G // world != kv_heads:
+        raise ValueError(f"int8 attention: K scales for {G} KV heads, rank {rank} of {world} has {kv_heads}")
+    return np.ascontiguousarray(s[:, rank * kv_heads:(rank + 1) * kv_heads])
+
+
 def entry(revision: str, repo: str, amax: np.ndarray, calibration: dict[str, Any]) -> dict[str, Any]:
     """The table entry of a calibration: its recipe, what it read, amax and s_k as float.hex of float32."""
     hexes = lambda t: [[float(x).hex() for x in row] for row in np.asarray(t, dtype=np.float32)]

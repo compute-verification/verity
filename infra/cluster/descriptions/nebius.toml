@@ -18,6 +18,7 @@ drain_s = 7200  # admissions end 2 h before the stop, leaving the final backups 
 service = 1000  # the node's own daemons: sampler, exporters, the node agent
 timed = 900     # quiet whole-node windows
 session = 700   # a lease taken by hand: a kernel inner loop, a debugger
+gate = 650      # drive's merge-path gates: ahead of every lane job in node 2's cpu-hold line (INF-147, infra 19 Oct)
 # capture > work > bench is kueue.yaml's order, which is policy (the steward, 30 Sep 19:40Z): capture 1100 > sweep-night
 # 1000 > a vLLM deployment's GPU work 600 > its CPU work 500 > prover-bench 300 > dev 100 > backfill 10
 capture = 600   # port captures

@@ -24,7 +24,12 @@ variable {Ω : Type} {S nπ : ℕ} {V : Type}
 
 /-- `accounting-ts-accepted-live` (the proof service's acceptance rule; owner @proofs). **A proof is credited only after
 flock-verify `--zk --registered` accepts its session**: on every path, `pf` accepts proof `i` of round `w` only where
-flock-verify accepts its session's outcome (`LiveAcceptsZKR`). `Flock.SoundAtBridge.AcceptedLive` is the same `Prop`. -/
+flock-verify accepts its session's outcome (`LiveAcceptsZKR`). `Flock.SoundAtBridge.AcceptedLive` is the same `Prop`.
+
+Every served path today verifies with plain `flock-verify --zk` and binds its served values through the public file
+(served_zk's Lean checks, `served_commit`'s verdict, `h1_prove`); of the audit's runners only `one_stage/a0.py` passes
+`--registered`. So no served path meets it until the served trees are registered as ports of `own`
+(`RowsSession.ServedRegistered`), or a bridge for public-file binding is stated. -/
 def AcceptedLive (pf : ProofLayer Ω S nπ V) (sess : Paths Ω S → Fin S → Fin nπ → RowsSession)
     (out : ∀ x w i, (sess x w i).Out) : Prop :=
   ∀ x w i, pf.accepted x w i → LiveAcceptsZKR (sess x w i).I (sess x w i).own (out x w i)
@@ -33,7 +38,7 @@ def AcceptedLive (pf : ProofLayer Ω S nπ V) (sess : Paths Ω S → Fin S → F
 **At each round and proof, the window's coins read through the session have the session game's law**: for every event
 `E` of a session's outcome, its probability over the window's paths at `(w, i)` is at most the average over the paths
 of its probability in the session's own game (`Flock.SoundAtBridge.SessionLaw`). Read with every `E` it is equality of
-the two laws; `Flock.SoundAtBridge.WindowLaw` is the same `Prop`. The equality rests on four facts of the proof service
+the two laws; `Flock.SoundAtBridge.WindowLaw` is the same `Prop`. The equality rests on five facts of the proof service
 and of how `sess` is built:
 1. **No retry or redraw.** `out x w i` is the outcome of the session's one run on its draw: a refused session is a
    visible failure and is never rerun on a fresh draw. Otherwise the kept outcome leans toward acceptance, and `δ`
@@ -46,11 +51,20 @@ and of how `sess` is built:
 4. **The path carries the draw.** On `Paths Ω S` round `w`'s coin is σ_w, which the session's unit reads, so the draw
    is a later coin, or `Ω` carries each round's draw beside σ_w, revealed after the registration. Round `S − 1`'s
    sessions have no later coin, so there `Ω` carries the draw; whoever builds `sess` says which.
+5. **The audit coins are the auditor's.** The session's game also randomizes C-Flock's own live audit coins, and
+   `EndToEndRegisteredRows`' `bound` is small only because they are fresh and uniform given the prover. Under `--zk`
+   they are the verifier's keyed coin tree, committed at `Hello` after the prover's nonce and opened round by round.
+   So the session's audit coins come from the auditor's verifier, on a machine the prover doesn't control, fresh for
+   each session, under the named assumption `trusted-nebius-host`. Neither `CoinTree.checkFresh`, which refuses only a
+   key reused within a run, nor the coin tree's commitment, which protects the prover, gives this.
 
-If 1 fails, `δ` weakens; if 2 or 3 fails, it breaks. 1–3 are the challenger's and the firewall's code, which a check can
-test. Under full checking (`kd = n`) the draw is every unit, whatever its bytes, and the law says only that `out` is the
-session's outcome at its setting. It stays a premise until a window is modelled as C-Flock games run on one coin
-tape. -/
+If 1 fails, `δ` weakens; if 2, 3 or 5 fails, it breaks. 1–3 are the challenger's and the firewall's code, which a check
+can test; 5 is where the verifier runs. Under full checking (`kd = n`) the draw is every unit, whatever its bytes, so
+2–4 constrain nothing, but the law still says that `out` is the session's outcome at its setting on audit coins fresh
+and uniform given the prover (5). served_zk's per-tile sessions are that case (one instance, `--draw subset:1`), and
+today they draw their coin tree from a `serve --zk --operator loopback` that the job starts beside `prove --zk` on the
+prover's node (`hidden_zk/job.sh`'s `session`), which doesn't meet 5. It stays a premise until a window is modelled as
+C-Flock games run on one coin tape. -/
 def WindowLaw [Fintype Ω] (sess : Paths Ω S → Fin S → Fin nπ → RowsSession) (out : ∀ x w i, (sess x w i).Out) :
     Prop :=
   ∀ w i, SessionLaw (Out := fun s : RowsSession => s.Out) (fun s => s.G) (fun s => s.τ) (fun x => sess x w i)
@@ -74,8 +88,11 @@ over the window's paths that flock-verify accepts the session, every drawn unit 
 yet `rows` of the session's value layer is not `pf`'s opening (`pf.opened x w i`: the round's served leaves, committed
 before σ_w) is at most `δs`. It is #2909's `OpenedPlurAt` on those sessions. `EndToEndRegisteredRows` links only
 registered reads, and the served trees are hiding commitments that bind nothing on their own;
-`Flock.SecurityProofs.ServedRowsLinked` links them pointwise where the service registers each served tree as a port of
-`own` (`RowsSession.ServedRegistered`), which with a `rows` that reads the served reads gives this at `δs = 0`. -/
+`Flock.SecurityProofs.ServedRowsLinked` links them pointwise, but only at drawn units, at a circuit that names each port
+once, and where the service registers each served tree as a port of `own` (`RowsSession.ServedRegistered`). With a
+`rows` that reads the served reads it gives this at `δs = 0` only under full checking (`kd = n`), port uniqueness and
+`ServedRegistered` at every unit: under a sampled draw nothing proved ties an undrawn unit's value layer to the served
+leaves, and `rows` can't see the draw. -/
 def ServedRootsLinked [Fintype Ω] (pf : ProofLayer Ω S nπ V) (sess : Paths Ω S → Fin S → Fin nπ → RowsSession)
     (out : ∀ x w i, (sess x w i).Out) (rows : ∀ s : RowsSession, (Fin s.Circ.N → Bool) → V) (δs : ℝ) : Prop :=
   ∀ w i, Pouw.RelativeSecurity.prob (fun x =>
