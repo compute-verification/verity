@@ -68,10 +68,11 @@ SYNC = {"imma_s8_k32": ("IMMA16832_S8", 32), "imma_s8_k16": ("IMMA16816_S8", 16)
         "sync_f16_k16": ("HMMA16816_F16", 16), "sync_bf16_k16": ("HMMA16816_BF16", 16), "sync_tf32_k8": ("HMMA1688_TF32", 8)}
 #: scalar kinds: (row, the alone probes whose fastest pattern gives its rate). The memory and multiply classes have no
 #: pipe row: their lines are the issue row's and the joint rows' (each timed beside the honest form, sm90_wgmma.cu's
-#: memory and imadw lanes); LD.E, which no class names, prices UNLISTED, the measured readings' catch-all.
+#: memory and imadw lanes). LD.E and IMAD.WIDE, which no class names, price UNLISTED, the measured readings' catch-all:
+#: a class of IMAD.WIDE's own would carry the same lines.
 SCALAR = {"ALU": ("A", {"s_lop3": "LOP3.LUT", "s_shf": "SHF.L.W.U32.HI", "s_lea": "LEA.HI"}),
           "IMAD": ("I", {"s_imad": "IMAD"}), "SHFL": ("SHFL", {"s_shfl": "SHFL.BFLY"}), "FFMA": (None, {"s_ffma": "FFMA"}),
-          "IMADW": (None, {"s_imadw": "IMAD.WIDE.U32"}), "UNLISTED": (None, {"s_lde": "LD.E*"}),
+          "UNLISTED": (None, {"s_lde": "LD.E*", "s_imadw": "IMAD.WIDE.U32"}),
           "ATOME32": (None, {"s_atome": "ATOM.E*"}), "REDG32": (None, {"s_redg": "REDG*"}),
           "ATOMS32": (None, {"s_atoms": "ATOMS*"}), "LDS128": (None, {"s_lds128": "LDS.128"}),
           "REDUX": (None, {"s_redux": "REDUX*"})}
