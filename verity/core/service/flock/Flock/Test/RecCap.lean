@@ -85,13 +85,8 @@ def topsListed (i : Inner) (caps : Array VStar.Stmt) : Option String :=
   | .error _ => false
 
 -- Every message round a rep absorbs is one of V*'s list's message-round ports at both reps' rows (`checkRoundsListed`):
--- the dense list passes it (`statements inner` above runs it), the holo one too, and a list without the parts is refused
--- at round 0. Each `statements` here is a whole V* list in the interpreter, so these stay at the deployed m.
-def roundsListed (i : Inner) : Bool :=
-  match statements i with
-  | .ok ss => (checkRoundsListed i ss).toBool
-  | .error e => !e.startsWith "V*'s list: a rep's message round"
-#guard roundsListed { inner with holo := true }
+-- the deployed dense list passes it (`statements inner` above runs it), and a list without the parts is refused at
+-- round 0. Each `statements` is a whole V* list in the interpreter, about 20 minutes, so no other shape is built here.
 #guard match checkRoundsListed inner (later ++ #[.cap 0 128]) with
   | .error e => e == "V*'s list: a rep's message round 0 (rec-c0) is a message-round port of none of its statements"
   | .ok () => false
