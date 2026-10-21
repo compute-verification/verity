@@ -663,7 +663,8 @@ and needs the inner transcript, whose `root_B` or both reps' level-`l` tops its 
 needs the inner statement's files, on which its setup first checks check 5's sparse refusals (`RecCoins.checkAtC3`), and
 the inner transcript and R's registration (`RecSetup.checks`, `RecSetup.commits`).
 Each DIR holds `session.json`
-and `<table>.rep<r>.bin` for each table and rep. The statement is set up once; one verdict line per session, in order.
+and `<table>.rep<r>.bin` for each table and rep. The statement is set up once; one verdict line per session, in order,
+naming with `--program` the SHA-512 of the verifier's own program bytes it verified against (`program_sha512`).
 A session whose draw is by a law no soundness claim draws by is refused at setup (`ProvedScope.drawLaw`: a bernoulli or
 work draw, whatever flags it holds, or a subset draw without `--zk`). Every session of a statement whose form the
 soundness proof does not cover (`ProvedScope.check`, then its tables' `m`, `ProvedScope.sizesOk`, §16.15) is refused, and
@@ -784,6 +785,7 @@ def verifyCmd (args : List String) : IO UInt32 := do
     | .ok (spec, sts) => (if draw.isSome then ProvedScope.drawLaw zk draw else .ok ()).map fun () =>
         (spec, sts.map Setup.ofCircuit, (sts[0]?.map (·.partition)).getD Lean.Json.null)
     | .error e => Except.error s!"setup: {e}"
+  let programSha := program.map fun p => hexOf (Sha512.hash p)
   IO.eprintln s!"inputs: {(← IO.monoMsNow) - t0} ms"
   -- each statement is set up once, when a session first needs it: the population's, and each draw's
   let mut setups : Array (Option String × Except String (SessionSpec × Array Setup × Lean.Json)) := #[]
@@ -838,6 +840,7 @@ def verifyCmd (args : List String) : IO UInt32 := do
     let part := match st with | .ok (_, _, p) => p | .error _ => Lean.Json.null
     let line := Lean.Json.mkObj ([("session", Lean.Json.str dir), ("accepted", Lean.Json.bool ok), ("why", Lean.Json.str why)] ++
       (if part.isNull then [] else [("partition", part)]) ++
+      (match programSha with | some h => [("program_sha512", Lean.Json.str h)] | none => []) ++
       (match registered with | some r => [("registered", Registered.finding r)] | none => []) ++
       (match identifier with | some (j, _) => [("identifier", j)] | none => []) ++
       -- the verifier's own inner shape's word, never the prover's META
