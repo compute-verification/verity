@@ -12,7 +12,10 @@ the GPU is held only while it serves (a run without ``--gpus`` sees no GPU, and 
 ``gpu-lease`` hands out): the window opens its session through ``GATE open --session S --root R`` once round
 0 is admitted, R = `salt.window_open_root(weights' root, round 0's request table root, S)`, its salt coin opens after R,
 and its A codes and B rows are committed as the window Program's registered values (`pouw_h1_served.Served`), which
-``calls_root`` binds; the served Program's layout must be the declared one's. Once the session has its ``end`` entry it
+``calls_root`` binds; the served Program's layout must be the declared one's. The serving process stops at its last
+served step: it hands the window and its session's stream to this process (``--handoff``, `pouw_h1_handoff`) and exits,
+ending its lease, and ``pouw_h1_gpu.py --close-from`` closes and releases the window on no GPU, on the same session
+(`serve`; the verdict's ``stages`` has when each stage exited and ``lease_after_served_s``). Once the session has its ``end`` entry it
 closes the period, takes the ledger (``GATE ledger``), the session's tree (``GATE fetch S``) and the key's pin (``GATE
 pubkey``), and runs the verifier's side on them (`pouw_h1_gpu.check_challenger`): `pouw_h1_challenger.session_reason`
 against the ledger's newest head, `trusted_rounds_reason` on the session's ``out/`` with the window's ``{root}``,
@@ -20,11 +23,12 @@ against the ledger's newest head, `trusted_rounds_reason` on the session's ``out
 (its ``register_served`` reads row/v1 alone until proofs' REGV2 follow-up, so it refuses the v2 trees until then). Then
 the red team (`red_team`), CPU only, reruns the verifier's side on edited copies of the record and the ledger, each of
 which must be refused: R replaced by the bare weights' root, R replaced by another window's root, the ledger cut before
-the session's end entry, a call's table root changed, a pin that isn't the gate key's; and with the local gate, sessions forged through the gate itself
+the session's end entry, a call's table root changed, a call with no A table root, the round log cut before the last
+step, a pin that isn't the gate key's; and with the local gate, sessions forged through the gate itself
 (a period of their own), opened on the bare weights' root and on another window's root with the window's other coins
 after its own roots. The verdict is ``$OUT/rehearsal.json``: ``ok`` when the honest window is accepted by
-``session_reason``, ``trusted_rounds_reason``, ``manifest_reason`` and ``period_reason``, its served layout is the
-declared one's, and every red-team case is refused.
+``session_reason``, ``trusted_rounds_reason``, ``manifest_reason`` and ``period_reason``, each of its calls' A tables is
+under its round's root (``a_roots``), its served layout is the declared one's, and every red-team case is refused.
 
 **The rehearsal** (a research run on vy-nebius-2; the gate's tree is proofs' #2953, ``cursor/challenger-ledger-v2-7c3e``,
 whose serve.py ends a session with its record leaf and refused hellos and seals ``hellos.jsonl``):
@@ -152,14 +156,43 @@ def _poll_end(gate: Gate, session: str) -> dict[str, Any]:
     return gate("status", session)
 
 
-def serve(a: argparse.Namespace, gate: Gate, reserved: dict[str, Any], out: Path) -> int:
-    argv = [sys.executable, "-m", "tests.protocol_options.pouw_h1_gpu", "--workload", "fill", *(["--served"] if a.served else []), "--out", str(out),
-            "--challenger", a.at_addr, "--session", json.dumps(reserved), "--gate", shlex.join(gate.argv),
-            "--at", a.pin_at, "--by", a.pin_by]
+def serve(a: argparse.Namespace, gate: Gate, reserved: dict[str, Any], out: Path) -> dict[str, Any]:
+    """The window in two stages, both logged to ``serve.log``: served on the GPU (under ``gpu-lease`` with
+    ``--gpu-lease``), which hands its window and its session's stream to this process (`pouw_h1_handoff.Holder`) and
+    exits, ending its lease; then closed and released on no GPU (``pouw_h1_gpu.py --close-from``) on that stream. The
+    window's state holds its salt key, so it is kept in a scratch directory outside the run's, deleted once closed."""
+    import os
+    import shutil
+    import time
+    from verity_vllm.protocol_options import pouw_h1_handoff as HO
+    scratch = Path(tempfile.mkdtemp(prefix="h1-handoff-"))
+    holder = HO.Holder(scratch / "stream.sock")
+    gpu = [sys.executable, "-m", "tests.protocol_options.pouw_h1_gpu", "--workload", "fill", "--out", str(out)]
+    argv = [*gpu, *(["--served"] if a.served else []), "--challenger", a.at_addr, "--session", json.dumps(reserved),
+            "--gate", shlex.join(gate.argv), "--at", a.pin_at, "--by", a.pin_by,
+            "--handoff", str(holder.path), "--handoff-state", str(scratch / "state")]
     if a.gpu_lease:
         argv = ["gpu-lease", "1", "--wait", "--max-min", str(a.gpu_lease), "--", *argv]
-    with open(out.parent / "serve.log", "wb") as log:
-        return subprocess.run(argv, stdout=log, stderr=subprocess.STDOUT, cwd=HERE.parents[1]).returncode
+    doc: dict[str, Any] = {"serving_start_unix": round(time.time(), 3)}
+    try:
+        with open(out.parent / "serve.log", "wb") as log:
+            doc["serving_rc"] = subprocess.run(argv, stdout=log, stderr=subprocess.STDOUT, cwd=HERE.parents[1]).returncode
+            doc["serving_exit_unix"] = round(time.time(), 3)
+            fd = holder.take()
+            doc["stream_taken"] = fd is not None
+            if fd is None:
+                doc["holder"] = holder.error or "the serving stage handed no stream over"
+                return {**doc, "rc": doc["serving_rc"] or 1}
+            try:
+                doc["close_rc"] = subprocess.run([*gpu, "--close-from", str(scratch / "state"), "--stream-fd", str(fd)],
+                                                 stdout=log, stderr=subprocess.STDOUT, cwd=HERE.parents[1], pass_fds=(fd,),
+                                                 env={**os.environ, "CUDA_VISIBLE_DEVICES": ""}).returncode
+            finally:
+                os.close(fd)
+            doc["close_exit_unix"] = round(time.time(), 3)
+    finally:
+        shutil.rmtree(scratch, ignore_errors=True)
+    return {**doc, "rc": doc["serving_rc"] or doc["close_rc"]}
 
 
 def evidence(gate: Gate, session: str, d: Path) -> dict[str, Any]:
@@ -260,6 +293,8 @@ def red_team(out: Path, pin: str, period: str, gate: Gate | None, peer: str, at:
     case("ledger_cut_before_end", record_path, led=[cut])
     first = next(i for i, x in enumerate(record["calls"]) if x.get("tables"))
     case("table_root_changed", _edited(record, lambda d: d["calls"][first]["tables"].update(a="00" * 64), rt / "table.json"))
+    case("table_a_root_unbound", _edited(record, lambda d: d["calls"][first]["tables"].update(a=None), rt / "unbound.json"))
+    case("table_rounds_cut", _edited(record, lambda d: d["commitment"]["rounds"].pop(), rt / "rounds-cut.json"))
     got = check(record_path, tree, "ab" * 64, ledger, rt / "other_pin", None, period)
     cases["other_pin"] = {**got, "refused": not got["ok"]}
     if gate is not None:
@@ -325,7 +360,8 @@ def rehearse(a: argparse.Namespace) -> dict[str, Any]:
         doc["gate_log"] = gate.log
         return doc
     sid = reserved["session"]
-    doc["serve_rc"] = serve(a, gate, reserved, out / "serve")
+    doc["stages"] = serve(a, gate, reserved, out / "serve")
+    doc["serve_rc"] = doc["stages"]["rc"]
     status = gate("status", sid)
     if status.get("open") is not None:
         doc["unit"] = gate("wait", sid) if a.gate is None else _poll_end(gate, sid)
@@ -334,8 +370,12 @@ def rehearse(a: argparse.Namespace) -> dict[str, Any]:
     try:
         serve_doc = json.loads((out / "serve" / "pouw_h1_gpu.json").read_text())
         h = serve_doc["h1"]
+        st = doc["stages"]
+        if h.get("served_end_unix") and st.get("serving_exit_unix"):
+            st["lease_after_served_s"] = round(st["serving_exit_unix"] - h["served_end_unix"], 1)
         doc["serve"] = {"ok": serve_doc["ok"], "u": h.get("u"), "same_tokens": h.get("same_tokens"),
                         "decode_step_s_median": h.get("decode_step_s_median"), "close_s": h.get("close_s"),
+                        "handoff": h.get("handoff"), "a_roots": (h.get("requests") or {}).get("a_roots"),
                         "challenger": h.get("challenger"), "served": {k: v for k, v in (h.get("served") or {}).items()
                                                                       if k != "entries"},
                         "served_values": [(e["value"], e["leaves"], e["words"]) for e in (h.get("served") or {}).get("entries", [])]}
@@ -357,6 +397,7 @@ def rehearse(a: argparse.Namespace) -> dict[str, Any]:
     doc["gate_log"] = gate.log
     v = doc.get("verify") or {}
     doc["ok"] = bool(doc.get("serve", {}).get("ok") and (v.get("session") or {}).get("ok") and (v.get("trusted") or {}).get("ok")
+                     and str(doc["serve"].get("a_roots")).startswith("bound")
                      and (doc.get("red_team") or {}).get("all_refused")
                      and (doc["serve"].get("declared") or {}).get("layout_matches", not a.served))
     return doc

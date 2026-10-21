@@ -50,6 +50,14 @@ ALLOWED: dict[str, str] = {
     "integrations/vllm/tests/protocol_options/pouw_h1_gpu.py::run": "the GPU run records its install, serve and compile seconds; nothing reads them",
     "integrations/vllm/tests/protocol_options/pouw_h1_gpu.py::compile_from": "the host compile records its seconds; nothing reads them",
     "integrations/vllm/tests/protocol_options/pouw_h1_gpu.py::fill": "the GPU run records its serve and step seconds; nothing reads them",
+    "integrations/vllm/tests/protocol_options/pouw_h1_gpu.py::served_measures":
+        "the GPU run records its step seconds and when serving ended; nothing reads them",
+    "integrations/vllm/tests/protocol_options/pouw_h1_gpu.py::hand_off": "the GPU run records its suspend's seconds; nothing reads them",
+    "integrations/vllm/tests/protocol_options/pouw_h1_gpu.py::fill_close": "the close stage records its seconds; nothing reads them",
+    "integrations/vllm/tests/protocol_options/pouw_h1_rehearsal.py::build_program":
+        "the by-hand rehearsal (not collected) records the declared Program's build and encode seconds; nothing reads them",
+    "integrations/vllm/tests/protocol_options/pouw_h1_rehearsal.py::serve":
+        "the by-hand rehearsal (not collected) records when each stage exited, how long the GPU lease outlived serving",
     "integrations/vllm/tests/properties/router_tap_exactness_gpu.py::check_config": "the GPU run records the IR pass's seconds; nothing reads them",
     "integrations/vllm/tests/properties/router_tap_exactness_gpu.py::check_live": "the GPU run records the IR pass's seconds; nothing reads them",
     "tests/test_no_wall_clock.py::test_the_scan_sees_each_form": "the scan's own fixture: source it must flag, held in a string",
