@@ -11,10 +11,12 @@ guarantee's own record holds the text from then on.
 
 The recursion's KS (`KS`, `Bits`, `KSFlock`, `KSBound`, and the private variant's) is at its level
 `Claims.Recursion.lam`, about 65 bits per SHA-512 call at the deployed shape (one inner table at `m = 35`, the deployed
-bound record's weight at `IVStar` at `coverW`, ASK-72), below the 100-bit floor (ASK-73). The recursion's level is
-route 2C's level (`KSLin2`, `Definitions.Claims.RecursionLin`): its bits `lamLin2` are at least 100 per SHA-512 call at the
-deployed records (`RecDeploy.lamLin2_deployed_ge`), and `KSLin2` holds there from its named premises
-(`RecDeploy.ksLin2_deployed_plain`).
+bound record's weight at `IVStar` at `coverW`, ASK-72), below the 100-bit floor and the `2^-128` target under every
+weight (ASK-73). Route 2C's bound λ₂ (`lamLin2`) evaluates to at least 100 at the deployed records
+(`RecDeploy.lamLin2_deployed_ge_dep`, about 165.8), but `KSLin2` at the deployment is not yet established: it takes
+`HeldB` (false at the deployed V\*, which has no holder of round 0's `root_B`) and open premises (`PartChecksB`,
+`PartOpensB`, `DecompB`, the readers' facts; the full list is `RecDeploy.ksLin2_deployed_plain`'s), and `BitsLin2` is
+not yet derived from it.
 -/
 
 namespace Flock.Guarantees

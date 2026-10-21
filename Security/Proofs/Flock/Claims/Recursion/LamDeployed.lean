@@ -4,10 +4,10 @@ import Proofs.Flock.Soundness.Refine.Seam
 import Definitions.Claims.RecursionLin
 
 /-!
-# Route 2C's bits at the deployed shape: `λ₂ ≥ 100`
+# Route 2C's bound at the deployed shape: `λ₂ ≥ 100`
 
-`Claims.Recursion.lamLin2` is the level `BitsLin2` states the recursion's KS at, with the inner Flock's roots linear
-(`KSLin2`, route 2C). Here it is evaluated at the deployed records `KSLin2` is proved at (`ksLin2_deployed`,
+`Claims.Recursion.lamLin2` is the number `BitsLin2` states route 2C's bits at, with the inner Flock's roots linear
+(`KSLin2`). Here it is evaluated at the deployed records `KSLin2` is stated at from its premises (`ksLin2_deployed`,
 `ksLin2_deployed_plain`): the compiled record `recBoundAt rel b L` whose inner view runs `IVStar` of the deployed bound
 record `bdDeployed`, over the bound record's inner Flock (`Bound.deploy`, the deployed plain record's numbers).
 
@@ -15,17 +15,20 @@ record `bdDeployed`, over the bound record's inner Flock (`Bound.deploy`, the de
 (`FlockDeploy.PlainIn`: up to `200` tables, each at an `m` the plain verifier serves and of a planned shape) and each of
 whose `nS x ≤ 2^16` V* parts sets up, at the inner rounds `nums` reads it at, within the masked verifier's served shapes
 (`PartIn`, `ZkIn`'s fields at the recursive setup `setupO`), at inner caps of at most `2^64` positions; the deployed
-caps `CpDep` are (`CpDep_width_le`), so `lamLin2_deployed_ge_dep` states it at them with no width premise. Each of `λ₂`'s
-six terms is at least `103 > 100 + log₂ 6`, from bounds that are exact rational and real inequalities:
+caps `CpDep` are (`CpDep_width_le`), so `lamLin2_deployed_ge_dep` states it at them with no width premise. Each of
+`λ₂`'s six terms is at least `103 > 100 + log₂ 6`, from bounds that are exact rational and real inequalities:
 
 * the inner Flock: `κ_I ≤ 200·2^{−202.98}` (`FlockDeploy.κ_plain_le`), `k_I ≤ 2^32`, `m′ = 210`, rounds `≤ 2^20`;
 * each part: `κ_O ≤ 200·2^{−202.98}` (`numsOf_κ_le`, `Flock.Numbers.κ_le_mul` at `Nums`), `k_O ≤ 2^32`, rounds
   `≤ 880002` and `γ_O ≤ 2^68` (`numsOf_γ_le`);
 * so `N_I ≤ 2^40`, `c_Be ≤ 2^57`, `k(x) ≤ 2^37`, `κ ≤ 2^{−137}`, `γ ≤ 2^218` and `β₂ ≤ 2^88` (`lamLin2_core`).
 
-The bound is crude (route 2C's `λ₂` there is about 165.8 bits, `κ` binding); it is what the parameters guarantee at every
-such statement. It is a statement about `λ₂`'s numbers only: that `Pr[acc ∧ ¬R] ≤ t·2^{−λ₂}` holds is `BitsLin2`, which
-nothing derives from `KSLin2` yet, and `KSLin2` at the deployment rests on the premises `ksLin2_deployed_plain` takes.
+The bound is crude (`λ₂` there is about 165.8, `κ` binding); it is what the parameters give at every such statement.
+It bounds a number and establishes no security level: `KSLin2` at the deployment is not yet established, since it takes
+`HeldB` (false at the deployed V\*, which has no holder of round 0's `root_B`) and open premises (`PartChecksB`,
+`PartOpensB`, `DecompB`, the readers' facts; the full list is `ksLin2_deployed_plain`'s), and `BitsLin2`, that
+`Pr[acc ∧ ¬R] ≤ t·2^{−λ₂}`, is not yet derived from it. The proved level at the deployment is still
+`Claims.Recursion.lam`'s, about 65 bits, below the 100-bit floor (ASK-73).
 -/
 
 namespace RecDeploy
@@ -322,13 +325,14 @@ end Part
 
 /-! ## At the deployment -/
 
-/-- **Route 2C's bits at the deployed shape are at least `100`**: `λ₂(x) = lamLin2` at the compiled record whose inner
-view runs the deployed bound record's `IVStar` (`recBoundAt rel b L`, `bdDeployed`) and at the bound record's inner
-Flock (`Bound.deploy`), at every statement whose inner statement is in the plain scope (`hin`), each of whose
-`nS x ≤ 2^16` V* parts sets up within the masked verifier's served shapes at the inner rounds its numbers are read at
-(`hO`), at inner caps `Cp` of at most `2^64` positions (`hW`). The element-level steps, columns and weight of `DE`
+/-- **Route 2C's bound `λ₂` evaluates to at least `100` at the deployed shape**: `λ₂(x) = lamLin2` at the compiled
+record whose inner view runs the deployed bound record's `IVStar` (`recBoundAt rel b L`, `bdDeployed`) and at the bound
+record's inner Flock (`Bound.deploy`), at every statement whose inner statement is in the plain scope (`hin`), each of
+whose `nS x ≤ 2^16` V* parts sets up within the masked verifier's served shapes at the inner rounds its numbers are
+read at (`hO`), at inner caps `Cp` of at most `2^64` positions (`hW`). The element-level steps, columns and weight of `DE`
 (`nextE`, `colsE`, `wE`), the code side's `join`, `rowIn`, `final` and `γ`'s weight at `IVStar` (`w`) are any: `λ₂`
-reads none of them. -/
+reads none of them. This bounds a number: `KSLin2` at the deployment is not yet established (it takes `HeldB`, false at
+the deployed V\*, and open premises), and `BitsLin2` is not yet derived from it. -/
 theorem lamLin2_deployed_ge (rel : _root_.Flock.Readable.Parsed → _root_.Flock.Readable.Relation) (b : Brings)
     (L : Claims.Recursion.VStarB.LayoutB) (nextE : Msg → List Msg → List Coin → Claims.OC Out)
     (colsE : Claims.Seen → ℕ → List (ℕ × List FlockLevel3.GF128)) (wE : Msg → ℝ) (join : List Msg → Msg)
@@ -440,8 +444,10 @@ theorem CpDep_width_le (x : Msg) : FlockDeploy.KS.CpDep.width x ≤ 2 ^ 64 := by
     _ ≤ 2 * (7 * 2 ^ 56) := by gcongr
     _ ≤ 2 ^ 64 := by norm_num
 
-/-- **Route 2C's bits are at least `100` at the deployed caps**: `lamLin2_deployed_ge` at `CpDep`, the caps
-`ksLin2_deployed_plain` proves `KSLin2` at, whose width bound is `CpDep_width_le`. -/
+/-- **Route 2C's bound `λ₂` evaluates to at least `100` at the deployed caps**: `lamLin2_deployed_ge` at `CpDep`, the
+caps `ksLin2_deployed_plain` states `KSLin2` at from its premises, whose width bound is `CpDep_width_le`. This bounds a
+number: `KSLin2` at the deployment is not yet established (it takes `HeldB`, false at the deployed V\*, and open
+premises), and `BitsLin2` is not yet derived from it. -/
 theorem lamLin2_deployed_ge_dep (rel : _root_.Flock.Readable.Parsed → _root_.Flock.Readable.Relation) (b : Brings)
     (L : Claims.Recursion.VStarB.LayoutB) (nextE : Msg → List Msg → List Coin → Claims.OC Out)
     (colsE : Claims.Seen → ℕ → List (ℕ × List FlockLevel3.GF128)) (wE : Msg → ℝ) (join : List Msg → Msg)
