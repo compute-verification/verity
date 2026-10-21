@@ -20,7 +20,8 @@
   (`layout`: `window.LIVE_SCHEME`, the window's epoch, `window.live_families(rounds)`), and the client refuses a
   commitment of any other, or of another root than the gate's open answered.
   Each coin opens there, after the root the serving loop sends, and the challenger logs both before the coin leaves its
-  host. The prover's record says only ``coins=off-node session ID at HOST:PORT (unchecked)``: what it writes about its
+  host. `RoundPipe` sends a window's round roots without waiting on each coin (a ring of steps whose units wait on their
+  round's coin), every coin still opened after its own root and checked as it comes back. The prover's record says only ``coins=off-node session ID at HOST:PORT (unchecked)``: what it writes about its
   coins is the prover's.
 * **In-process** (no address): `window.live_challenger` in the serving process, on the prover's node. It stays for CPU
   tests, and every run that uses it carries `IN_PROCESS`, ``coins=in-process (not certified)``.
@@ -48,6 +49,7 @@ three are they ``off-node HOST (checked)``.
 from __future__ import annotations
 
 import argparse
+import collections
 import hashlib
 import inspect
 import json
@@ -56,6 +58,8 @@ import re
 import shlex
 import subprocess
 import sys
+import threading
+import time
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -226,6 +230,130 @@ class Coins:
     def record(self) -> dict:
         s = self.session
         return {"source": self.source, "label": self.label, "challenger": s and s.address, "session": s and s.id}
+
+
+class RoundPipe:
+    """A window's round coins without a wait on each, after the rounds `coins.rounds` already recorded: `send(root)`
+    records the next round's root, after which alone the challenger opens its coin, and `opening(i)` is round i's coin
+    once it is back (`wait=False`: None until then).  Off the node the opens go out on the session's one stream without
+    waiting on the answers, since `remote.serve` answers each after its own root and in order; a thread of the pipe's
+    reads them back and holds each to `live_reason` (a refusal, a broken stream or a bad opening ends the session and
+    refuses every later coin: a retry never redraws).  In process each opens at once.  `roots` and `openings` are
+    `LiveRecord`'s, `reason` its `order_reason`, and `sent_at` / `got_at` each round's times on `clock`."""
+
+    def __init__(self, coins: Coins, clock: Callable[[], float] = time.monotonic) -> None:
+        rec = coins.rounds
+        self.coins, self.commitment, self.label = coins, coins.commitment, rec.label
+        self.roots, self.openings = list(rec.roots), list(rec.openings)
+        self._clock = clock
+        self.sent_at: dict[int, float] = {}
+        self.got_at: dict[int, float] = {}
+        self._got = dict(enumerate(self.openings))
+        self._error: str | None = None
+        self._closed = False
+        self._pending: collections.deque = collections.deque()
+        self._cv = threading.Condition()
+        self.remote = coins.source == "off-node"
+        self._thread = None
+        if self.remote:
+            self._thread = threading.Thread(target=self._read, name="round-coins", daemon=True)
+            self._thread.start()
+
+    def _fail(self, why: str) -> None:
+        with self._cv:
+            if self._error is None:
+                self._error = why
+            self._cv.notify_all()
+        if self.remote and self.coins.challenger._ended is None:
+            self.coins.challenger._end(why)
+
+    def _read(self) -> None:
+        wire = self.coins.challenger._wire
+        while True:
+            with self._cv:
+                while not self._pending and not self._closed and self._error is None:
+                    self._cv.wait()
+                if not self._pending:
+                    return
+                i, root = self._pending[0]
+            try:
+                reply = wire.recv()
+            except (Ch.CoinError, OSError) as e:
+                return self._fail(f"the stream broke ({e})")
+            if reply.get("type") == "refused" and sorted(reply) == ["reason", "type"]:
+                return self._fail(f"the challenger refused: {reply['reason']}")
+            if reply.get("type") != "opening" or sorted(reply) != ["opening", "type"]:
+                return self._fail("the challenger did not answer with 'opening'")
+            try:
+                o = Ch.LiveOpening.from_json(reply["opening"])
+                why = Ch.live_reason(self.commitment, o, self.label, i, root)
+            except Ch.CoinError as e:
+                why = str(e)
+            if why is not None:
+                return self._fail(f"the challenger's {self.label} coin {i}: {why}")
+            with self._cv:
+                self._pending.popleft()
+                self._got[i] = o
+                self.openings.append(o)
+                self.got_at[i] = self._clock()
+                self._cv.notify_all()
+
+    def send(self, root: bytes) -> int:
+        """Record round i's root (the next), its coin opened after it; i."""
+        root = bytes(root)
+        with self._cv:
+            if self._error is not None:
+                raise Ch.CoinError(f"the challenger's session ended ({self._error}): a retry never redraws")
+            if self._closed:
+                raise Ch.CoinError("the round coins are closed")
+            if len(self.roots) == self.commitment.family(self.label):
+                raise Ch.CoinError(f"every {self.label} coin of the epoch is open")
+            i = len(self.roots)
+            self.roots.append(root)
+            self.sent_at[i] = self._clock()
+            if self.remote:
+                self._pending.append((i, root))
+                self._cv.notify_all()
+        if not self.remote:
+            o = self.coins.challenger.open(self.label, i, root)
+            with self._cv:
+                self._got[i] = o
+                self.openings.append(o)
+                self.got_at[i] = self._clock()
+            return i
+        try:
+            self.coins.challenger._wire.send({"type": "open", "label": self.label, "index": i, "after": root.hex()})
+        except OSError as e:
+            self._fail(f"the stream broke ({e})")
+            raise Ch.CoinError(f"the stream broke ({e})") from e
+        return i
+
+    def opening(self, i: int, wait: bool = True) -> Ch.LiveOpening | None:
+        with self._cv:
+            while i not in self._got and self._error is None and wait:
+                if i >= len(self.roots):
+                    raise Ch.CoinError(f"{self.label} coin {i}'s root is not recorded")
+                self._cv.wait()
+            if i in self._got:
+                return self._got[i]
+            if self._error is not None:
+                raise Ch.CoinError(f"the challenger's session ended ({self._error}): a retry never redraws")
+            return None
+
+    def reason(self) -> str | None:
+        return Ch.order_reason(self.commitment, self.label, self.roots, self.openings)
+
+    def close(self) -> None:
+        """Every sent round's coin back, then the session closed (`Coins.close`)."""
+        with self._cv:
+            while self._pending and self._error is None:
+                self._cv.wait()
+            self._closed = True
+            self._cv.notify_all()
+        if self._thread is not None:
+            self._thread.join()
+        if self._error is None:
+            self.coins.close()
 
 
 def open_coins(at: Session | None, epoch: int, rounds: int, entropy: Callable[[int], bytes] | None = None,
