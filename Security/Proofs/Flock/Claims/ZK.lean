@@ -102,6 +102,7 @@ import Proofs.Flock.Claims.ZK.FinishInner
 import Proofs.Flock.Claims.ZK.FinishLig
 import Proofs.Flock.Claims.ZK.FinishRep
 import Proofs.Flock.Claims.ZK.FinishRank
+import Proofs.Flock.Claims.ZK.FinishSrc
 import Proofs.Flock.Claims.ZK.HelloLean
 import Proofs.Flock.Claims.ZK.SessionLean
 
@@ -500,6 +501,10 @@ import Proofs.Flock.Claims.ZK.SessionLean
   (**`Flock.Firewall.Finish.repFw_eq`**, at pads with `h_ab = h_a·h_b` and `w = x·y`, in a monad where a throw ends the
   run, as `flock-firewall finish`'s does, `throw_bind_sv`). Where no constraint fails on the pads the batched
   constraint holds whatever the constraints' lengths (`batched_of_noFail`, by `evalL_combo_linAt`).
+* `FinishSrc`: the firewall's rep against the rep from a source. Answered by `asksCut`, where the source's masked values
+  are `vals + h`, its switched vectors the firewall's at the claims, the rank check passes, and the session's Ligerito
+  and inner hybrids hold (`LigHyp`, `InnerSrc`), `FlockComplete.repCut` at level 0's commitment erased returns the
+  firewall's transcript and log, and its proof up to `eraseZ` (**`Flock.Firewall.Finish.repCut_fw`**).
 * `FinishRank`: the rank check of `FinishSrc`'s rep from a source. Answered by `asksCut`, a rep's zerocheck and lincheck
   leave rounds carrying the coins of their sends whatever the masked values (`FlockComplete.RankAt.growS`), so the check
   reads the claim points at the coins from the rep's first send (`FlockComplete.RankAt.roundPoints_cut`); where every
