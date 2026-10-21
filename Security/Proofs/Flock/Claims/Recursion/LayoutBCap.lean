@@ -23,7 +23,8 @@ as its port `top`, through its hm96 slot. `layoutBCap` is `layoutBDeployed` with
 
 `heldB_layoutBCap` proves `HeldB` there from named facts. RecCap discharges round 0 outright: the list ends with it
 and the parts number as the list's statements (`capAt_readX`), so the one fact left at round 0 is that its part's
-circuit has its port `top` (`CapPorts`). The rest:
+circuit has its port `top` (`CapPorts`), proved at every shape (`capPorts`, `CapPorts.lean`, from `readX`'s
+`capPorted`). The rest:
 
 * `SchedMatches` (`DeployLayout.lean`): the shape's rep schedule is the inner verifier's.
 * `RowsCover`: each absorbing stream round with no tops is some part's, through a port under its `rec-c<k>`
