@@ -1,18 +1,19 @@
-"""The firewall's final round in Lean against Rust's: the session's Lean finish (`Flock.Firewall.Finish`, the session loop's,
-`Finish.serveLoop`) held byte for byte to what Rust computed, on what a firewalled `flock-circuit prove --zk` session dumped
-(`FC_FINISH_DUMP`), and `flock-firewall finish` on the dumped requests.
+"""The firewall's final round in Lean, live against replayed: what a firewalled `flock-circuit prove --zk` session's Lean
+finish (`Flock.Firewall.Finish`, the session loop's, `Finish.serveLoop`) wrote while it held the device's opening and the
+inner proof's rounds itself (`open`, `inner`), held byte for byte to `flock-firewall finish` on the requests the session
+dumped (`FC_FINISH_DUMP`).
 
     python firewall_finish_agree.py --lean flock-firewall --dump DIR --out DIR -- FINISH_ARG...
 
 `DIR` holds, per firewalled table `T`, `table{T}.req` (its level-0 request, `flock-firewall finish`'s `table`),
-`table{T}.root` (the root of record, the Lean loop's), `table{T}.finish_root` (the session's Lean finish's) and
-`table{T}.rust_root` (`commit_zk`'s); and per rep `R`, `table{T}-rep{R}.req` (`Finish.parseRep`'s request),
-`table{T}-rep{R}.proof` (`zk_finish`'s proof file) and `table{T}-rep{R}.lean` (the session's Lean finish's, on salts for
-levels ≥ 1 it drew itself and the prover's trees took). Each table's three roots must be one, and each rep's two files
-one. Then one `flock-firewall finish FINISH_ARG...` process (the session's statement: `--circuit`, `--public`, `--draw`
-its `session.json`, ...) gets every table's request, answered with the root of record. Then each rep's request with its
-passed values moved (`table{T}-rep{R}.vals` says where they sit), after the rep's salts (`salts T R`), must stop
-`finish` with no file: a constraint fails on the rep's pads (`stopped`). Writes DIR/result.json; exits 1 on any
+`table{T}.root` (the root of record, the Lean loop's) and `table{T}.finish_root` (the session's Lean finish's); and per rep
+`R`, `table{T}-rep{R}.req` (`Finish.parseRep`'s request, with the coins of every round the session answered) and
+`table{T}-rep{R}.lean` (the session's Lean finish's proof file, on salts for levels ≥ 1 it drew itself and the prover's
+trees took). Each table's two roots must be one. Then one `flock-firewall finish FINISH_ARG...` process (the session's
+statement: `--circuit`, `--public`, `--draw` its `session.json`, ...) gets every table's request, answered with the root of
+record. Each rep, in a process of its own, after its table and its salts (`salts T R`): its request must give the session's
+proof file byte for byte, and the same request with its passed values moved (`table{T}-rep{R}.vals` says where they sit)
+must stop `finish` with no file: a constraint fails on the rep's pads (`stopped`). Writes DIR/result.json; exits 1 on any
 disagreement.
 """
 from __future__ import annotations
@@ -41,14 +42,15 @@ def ask(p: subprocess.Popen, line: str, body: bytes) -> tuple[bytes | None, str]
 STOPPED = "stopped on perturbed values"
 
 
-def stopped(lean: str, args: list[str], dump: Path, t: int, r: int) -> dict:
-    """Rep `r` of table `t` again in a process of its own (a refusal ends one), every passed value moved by a random word: a
-    constraint then fails on the rep's pads, and `finish` must stop with no file (Rust's `constraints_failing_on_pads`)."""
-    off, n = map(int, (dump / f"table{t}-rep{r}.vals").read_text().split())
+def rep(lean: str, args: list[str], dump: Path, t: int, r: int, moved: bool) -> tuple[bytes | None, str]:
+    """Rep `r` of table `t` in a process of its own (a refusal ends one), after its table and its salts: its request as the
+    session dumped it, or (`moved`) with every passed value moved by a random word."""
     req = bytearray((dump / f"table{t}-rep{r}.req").read_bytes())
-    rng = random.Random(f"firewall-finish-agree/{t}/{r}")
-    for k in range(16 * n):
-        req[off + k] ^= rng.randrange(256)
+    if moved:
+        off, n = map(int, (dump / f"table{t}-rep{r}.vals").read_text().split())
+        rng = random.Random(f"firewall-finish-agree/{t}/{r}")
+        for k in range(16 * n):
+            req[off + k] ^= rng.randrange(256)
     p = subprocess.Popen([lean, "finish", *args], stdin=subprocess.PIPE, stdout=subprocess.PIPE)
     got, head = ask(p, f"table {t}", (dump / f"table{t}.req").read_bytes())
     if got is not None:
@@ -57,6 +59,13 @@ def stopped(lean: str, args: list[str], dump: Path, t: int, r: int) -> dict:
         got, head = ask(p, f"rep {t} {r}", bytes(req))
     p.stdin.close()
     p.wait()
+    return got, head
+
+
+def stopped(lean: str, args: list[str], dump: Path, t: int, r: int) -> dict:
+    """The rep's passed values moved: a constraint then fails on the rep's pads, and `finish` must stop with no file (Rust's
+    `constraints_failing_on_pads`)."""
+    got, head = rep(lean, args, dump, t, r, moved=True)
     ok = got is None and head.startswith("err PROVER-STOPPED: the constraints ") and head.endswith(" fail on the rep's pads")
     return {"what": f"table {t} rep {r} {STOPPED}", "ok": ok, "lean": head}
 
@@ -80,19 +89,18 @@ def main(argv=None) -> int:
     rows, ok = [], True
     for t in tables:
         root = (a.dump / f"table{t}.root").read_bytes()
-        got = {k: (a.dump / f"table{t}.{k}").read_bytes() for k in ("finish_root", "rust_root")}
-        row = {"what": f"table {t} root in the session", "ok": all(v == root for v in got.values()),
-               "agree": [k for k, v in got.items() if v == root]}
+        row = {"what": f"table {t} root in the session", "ok": (a.dump / f"table{t}.finish_root").read_bytes() == root}
         rows.append(row)
         ok &= row["ok"]
         for f in sorted(a.dump.glob(f"table{t}-rep*.req")):
             r = int(re.fullmatch(rf"table{t}-rep(\d+)\.req", f.name).group(1))
-            want = (a.dump / f"table{t}-rep{r}.proof").read_bytes()
             lp = a.dump / f"table{t}-rep{r}.lean"
-            got = lp.read_bytes() if lp.exists() else None
-            row = {"what": f"table {t} rep {r} proof file", "ok": got == want, "bytes": len(want),
-                   "lean": "no file" if got is None else f"{len(got)} bytes"}
-            if got is not None and got != want:
+            want = lp.read_bytes() if lp.exists() else None
+            got, head = rep(a.lean, args, a.dump, t, r, moved=False)
+            row = {"what": f"table {t} rep {r} proof file", "ok": want is not None and got == want,
+                   "session": "no file" if want is None else f"{len(want)} bytes",
+                   "replayed": head if got is None else f"{len(got)} bytes"}
+            if got is not None and want is not None and got != want:
                 row["first_diff"] = first_diff(got, want)
                 row["bytes_differing"] = sum(x != y for x, y in zip(got, want)) + abs(len(got) - len(want))
             rows.append(row)

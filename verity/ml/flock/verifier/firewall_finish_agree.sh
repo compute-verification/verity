@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
-# The firewall's final round, Lean against Rust (firewall_finish_agree.py): one firewalled CPU `prove --zk` session
-# (FC_FIREWALL=1 FC_HOST_WITNESS=1, through the Lean session loop of this tree, whose finish reads each table's level 0 from
-# the loop and draws each rep's salts for levels ≥ 1) that dumps each table's roots and requests and each rep's proof files,
-# the Lean finish's beside Rust's `zk_finish`'s (FC_FINISH_DUMP), then `flock-firewall finish` on the requests. Run from the
-# source tree's root:
+# The firewall's final round in Lean, live against replayed (firewall_finish_agree.py): one firewalled CPU `prove --zk`
+# session (FC_FIREWALL=1 FC_HOST_WITNESS=1, through the Lean session loop of this tree, whose finish reads each table's level 0
+# from the loop, draws each rep's salts for levels ≥ 1 and holds the opening's and the inner proof's rounds itself) that dumps
+# each table's roots and requests and each rep's request and Lean proof file (FC_FINISH_DUMP), then `flock-firewall finish`
+# on the requests. Run from the source tree's root:
 #   research run --on vy-nebius-1 --project verity --source . --cwd source --declared-output 'out/*' --cpus 16 --mem-gb 48 \
 #     -- bash verity/ml/flock/verifier/firewall_finish_agree.sh
 # The builds, the staging and their cache are benchmarks/pouw/hidden_zk/job.sh's (HZ_CACHE); the statement is one of its

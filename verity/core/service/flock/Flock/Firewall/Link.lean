@@ -20,7 +20,8 @@ commitment (`FlockComplete.commitPZk` in the analysis), here as the code the fir
 
 The firewall's code reaches it through the session loop's `Flock.Firewall.Level0`, which commits the level 0 it draws,
 and `flock-firewall finish`'s `table` request (`Flock.Firewall.Finish.commit0`, on `parse`'s bytes). The root that
-leaves is one of these; Rust's `commit_zk`, whose output the firewall's shadow opening reads, must have the same root.
+leaves is one of these, and the finish keeps the table's tree for its reps' openings (`Finish.openLive`): Rust commits
+nothing of level 0 under the firewall.
 -/
 import Flock.Firewall.Coins
 import Flock.Ligerito

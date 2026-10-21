@@ -1,6 +1,6 @@
 //! The firewall's send check on the outer `--zk` prover (PROTOCOL.md §10.1): every live round the device frames is held to
-//! the statement's skeleton in the algebraic phase, and byte for byte to an opening the firewall computes itself (the shadow,
-//! in lock-step on the same coins) in the opening phase, before the masking challenger sends any of it. A failed check is a
+//! the statement's skeleton in the algebraic phase, and byte for byte to the opening the session's Lean finish computes (the
+//! shadow, `Flock.Firewall.Finish.openLive`, in lock-step on the same coins) in the opening phase, before the masking challenger sends any of it. A failed check is a
 //! `FIREWALL-REFUSED: <what>` reason, and nothing of the refused round leaves: the rep goes on releasing the statement's
 //! schedule in the device's place ([`Checker::scheduled`], the shadow's rounds) and the session stops at its `Finish`. So does
 //! a worker that fails ([`run_worker`]: an error, a panic, silence past the deadline): a rep's end never depends on its worker.
@@ -257,7 +257,8 @@ impl Checker {
 }
 
 /// The firewall's end of the shadow opening's lock-step: each of the shadow's rounds, to compare with the device's, and the coins
-/// back. The shadow ([`ShadowEnd`] in a [`Framer`]) runs on its own thread.
+/// back. The shadow ([`ShadowEnd`]: the thread that relays the Lean finish's `open` rounds, [`LeanFinish::open`]) runs on its
+/// own thread.
 pub struct ShadowLink {
     rx: Receiver<(Vec<u8>, usize)>,
     tx: Option<Sender<Vec<F128>>>,
@@ -416,8 +417,8 @@ pub fn run_worker<T: Send + 'static>(work: impl FnOnce(WorkerEnd<T>) -> Result<T
 }
 
 /// Frames every call as the device prover's challenger does (`FsChallenger` under its live hook) and hands each round to
-/// `rounds` at its squeeze: M1's CPU prover takes the device path's host side through it (`FC_ZK_FRAMED`), and the firewall's
-/// shadow opening frames its rounds through it for the comparison.
+/// `rounds` at its squeeze: M1's CPU prover takes the device path's host side through it (`FC_ZK_FRAMED`), as does the
+/// firewalled CPU device.
 pub struct Framer<'a> {
     pub pending: Vec<u8>,
     pub rounds: &'a mut (dyn FnMut(&[u8], usize) -> Vec<F128> + Send),
