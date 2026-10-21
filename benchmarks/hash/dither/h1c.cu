@@ -20,7 +20,8 @@
 // A row is `body` bytes at data + i stride, then len - body bytes at tail + i tail_stride (an A or B row's f32 scale).
 // H1C_HB = 1: h1c_build's four kernels hash through Hb (below: the state in registers, the block in shared memory) rather
 // than Hs, the same bytes in the same order.  With it, H1C_LVF = L >= 0 builds every level from L up in one launch (a
-// block a table, h1c_levels) and H1C_DOMSEG = 1 the domains in the segments' launch (its first block row), beside them.
+// block a table, h1c_levels), H1C_DOMSEG = 1 the domains in the segments' launch (its first block row), beside them, and
+// H1C_MK = 1 a leaf's M_key y from M_key's columns, a block's stage of them in shared memory, not 192 byte-table rows.
 #include <cstdint>
 #include <cuda_runtime.h>
 
@@ -33,7 +34,10 @@
 #ifndef H1C_DOMSEG
 #define H1C_DOMSEG 0
 #endif
-static_assert(H1C_HB || (H1C_LVF < 0 && !H1C_DOMSEG), "H1C_LVF and H1C_DOMSEG are H1C_HB's");
+#ifndef H1C_MK
+#define H1C_MK 0
+#endif
+static_assert(H1C_HB || (H1C_LVF < 0 && !H1C_DOMSEG && !H1C_MK), "H1C_LVF, H1C_DOMSEG and H1C_MK are H1C_HB's");
 
 namespace sh {
 typedef unsigned long long u64;
@@ -775,17 +779,142 @@ extern "C" __global__ void __launch_bounds__(HT) h1c_segs(H1Tab* __restrict__ ta
   hb_final(s, T.segs + t * 8);
 }
 
+// H1C_MK: byte table p's row v is the XOR of M_key's columns 8p + s over v's set bits s, column 8p + s its row 1 << s,
+// so M_key y is the XOR of the columns of y's set bits.  The block stages MKW words' columns at a time in bf (every
+// thread of the block, at its barriers), and its threads read each column at one address: a broadcast, 1536 columns
+// from shared memory rather than 192 rows from L2.  y comes back in its order (24 rotations).
+constexpr int MKW = 4;  // y words a stage: 8 MKW positions of 8 columns of 64 bytes
+static_assert(MKW * 8 * 8 * 64 <= HT * HB && 24 % MKW == 0, "a stage fits bf and the stages cover y");
+__device__ __forceinline__ void hb_mk(u64 y[24], u64 mk[8], const u64* __restrict__ btab, uint8_t* bf, bool real) {
+  uint4* cs = reinterpret_cast<uint4*>(bf);
+#pragma unroll
+  for (int k = 0; k < 8; ++k) mk[k] = 0;
+#pragma unroll 1
+  for (int wd = 0; wd < 24; ++wd) {
+    if (wd % MKW == 0) {
+      __syncthreads();
+      for (int q = threadIdx.x; q < MKW * 8 * 8 * 4; q += HT) {
+        const int c = q >> 2, p = 8 * wd + (c >> 3);
+        cs[q] = __ldg(reinterpret_cast<const uint4*>(btab + ((size_t)p * 256 + (1u << (c & 7))) * 8) + (q & 3));
+      }
+      __syncthreads();
+    }
+    u64 w = y[0];
+#pragma unroll
+    for (int k = 0; k < 23; ++k) y[k] = y[k + 1];
+    y[23] = w;
+    if (!real) continue;
+    const uint4* cw = cs + (wd % MKW) * 64 * 4;
+#pragma unroll 1
+    for (int e = 0; e < 8; ++e) {
+      const u32 v = (u32)(w >> 56);
+      w <<= 8;
+#pragma unroll
+      for (int sb = 0; sb < 8; ++sb) {
+        const u32 m = 0u - ((v >> sb) & 1u);
+        const uint4* q4 = cw + (8 * e + sb) * 4;
+#pragma unroll
+        for (int k = 0; k < 4; ++k) {
+          const uint4 q = q4[k];
+          mk[2 * k] ^= (u64)(q.y & m) << 32 | (q.x & m);
+          mk[2 * k + 1] ^= (u64)(q.w & m) << 32 | (q.z & m);
+        }
+      }
+    }
+  }
+  __syncthreads();
+}
+
+// row leaf i's x = SHA-512(Q(n_bits) || d_0 || ..), its salt y, and (mk = M_key y on entry) its frame leaf
+__device__ __forceinline__ void leaf_x(const H1Tab& T, long long i, uint8_t* b, u64 x[8]) {
+  const int ns = nseg_of(T.len);
+  Hb s;
+  hb_init(s, b);
+  hb_bytes(s, HC.qtag, HC.qtag_len);
+  hb_be(s, 8ull * T.len, 8);
+  hb_be(s, (u64)ns, 8);
+  hb_be(s, 1024, 4);
+  hb_zeros(s, 128 - HC.qtag_len - 20);
+  hb_words(s, T.segs + i * ns * 8, 8 * ns);
+  hb_final(s, x);
+}
+__device__ __forceinline__ void leaf_salt(const H1Tab& T, long long i, const int* __restrict__ step, uint8_t* b,
+                                          u64 y[24]) {
+  uint8_t d[20];
+  int dl = 0;
+  if (T.labs) dl = dec((u64)(long long)*step, d);
+  const int ll = T.lab_len[0] + (T.labs ? dl + T.lab_len[1] : 0);
+  Hb s;
+  for (int cc = 0; cc < 3; ++cc) {
+    hb_init(s, b);
+    hb_bytes(s, HC.head, HC.head_len);
+    hb_be(s, (u64)ll, 4);
+    hb_bytes(s, T.lab[0], T.lab_len[0]);
+    if (T.labs) {
+      hb_bytes(s, d, dl);
+      hb_bytes(s, T.lab[1], T.lab_len[1]);
+    }
+    hb_be(s, (u64)i, 8);
+    hb_u8(s, (u32)cc);
+    hb_final(s, y + 8 * cc);
+  }
+}
+__device__ __forceinline__ void leaf_out(const H1Tab& T, long long i, uint8_t* b, const u64 x[8], const u64 y[24],
+                                         u64 mk[8], u64 out[8]) {
+  u64 c[8], h[8];
+  Hb s;
+  hb_init(s, b);
+  hb_words(s, HC.salt_prefix, 16);
+  hb_words(s, y, 24);
+  hb_final(s, c);
+#pragma unroll
+  for (int k = 0; k < 8; ++k) mk[k] ^= x[k];
+  hb_init(s, b);
+  hb_words(s, HC.leaf_prefix, 16);
+  hb_words(s, mk, 8);
+  hb_words(s, c, 8);
+  hb_final(s, h);
+  hb_init(s, b);
+  hb_frame(s, "leaf", 4);
+  hb_be(s, 64, 8);
+  hb_words(s, T.dom, 8);
+  hb_uint(s, (u64)i);
+  hb_uint(s, (u64)i);
+  hb_be(s, (u64)HC.schema_len, 8);
+  hb_bytes(s, HC.schema, HC.schema_len);
+  hb_be(s, 64, 8);
+  hb_words(s, h, 8);
+  hb_final(s, out);
+}
+
 extern "C" __global__ void __launch_bounds__(HT) h1c_leaves(const H1Tab* __restrict__ tabs, int ntab,
                                                            const int* __restrict__ step, const u64* __restrict__ btab) {
   __shared__ __align__(16) uint8_t bf[HT * HB];
   const H1Tab& T = tabs[blockIdx.y];
   const long long width = 1LL << T.depth;
   const long long i = (long long)blockIdx.x * blockDim.x + threadIdx.x;
-  if (i >= width) return;
-  Hb s;
   uint8_t* b = bf + threadIdx.x * HB;
   u64 out[8];
+#if H1C_MK
+  if ((long long)blockIdx.x * blockDim.x >= width) return;
+  if (T.data && (long long)blockIdx.x * blockDim.x < T.count) {
+    // a block with a row leaf: every thread runs hb_mk's barriers, the row leaves' threads hash their salts first
+    const bool real = i < T.count;
+    u64 x[8], y[24], mk[8];
+    if (real) leaf_salt(T, i, step, b, y);
+    hb_mk(y, mk, btab, bf, real);
+    if (real) {
+      leaf_x(T, i, b, x);
+      leaf_out(T, i, b, x, y, mk, out);
+    }
+  }
+  if (i >= width || (i < T.count && !T.data)) return;
   if (i >= T.count) {
+#else
+  if (i >= width) return;
+  if (i >= T.count) {
+#endif
+    Hb s;
     hb_init(s, b);
     hb_frame(s, "pad", 3);
     hb_be(s, 64, 8);
@@ -793,34 +922,11 @@ extern "C" __global__ void __launch_bounds__(HT) h1c_leaves(const H1Tab* __restr
     hb_uint(s, (u64)i);
     hb_final(s, out);
   } else {
+#if !H1C_MK
     if (!T.data) return;
-    const int ns = nseg_of(T.len);
-    u64 x[8], y[24], mk[8], c[8], h[8];
-    hb_init(s, b);
-    hb_bytes(s, HC.qtag, HC.qtag_len);
-    hb_be(s, 8ull * T.len, 8);
-    hb_be(s, (u64)ns, 8);
-    hb_be(s, 1024, 4);
-    hb_zeros(s, 128 - HC.qtag_len - 20);
-    hb_words(s, T.segs + i * ns * 8, 8 * ns);
-    hb_final(s, x);
-    uint8_t d[20];
-    int dl = 0;
-    if (T.labs) dl = dec((u64)(long long)*step, d);
-    const int ll = T.lab_len[0] + (T.labs ? dl + T.lab_len[1] : 0);
-    for (int cc = 0; cc < 3; ++cc) {
-      hb_init(s, b);
-      hb_bytes(s, HC.head, HC.head_len);
-      hb_be(s, (u64)ll, 4);
-      hb_bytes(s, T.lab[0], T.lab_len[0]);
-      if (T.labs) {
-        hb_bytes(s, d, dl);
-        hb_bytes(s, T.lab[1], T.lab_len[1]);
-      }
-      hb_be(s, (u64)i, 8);
-      hb_u8(s, (u32)cc);
-      hb_final(s, y + 8 * cc);
-    }
+    u64 x[8], y[24], mk[8];
+    leaf_x(T, i, b, x);
+    leaf_salt(T, i, step, b, y);
 #pragma unroll
     for (int k = 0; k < 8; ++k) mk[k] = 0;
 #pragma unroll
@@ -838,28 +944,8 @@ extern "C" __global__ void __launch_bounds__(HT) h1c_leaves(const H1Tab* __restr
         }
       }
     }
-    hb_init(s, b);
-    hb_words(s, HC.salt_prefix, 16);
-    hb_words(s, y, 24);
-    hb_final(s, c);
-#pragma unroll
-    for (int k = 0; k < 8; ++k) mk[k] ^= x[k];
-    hb_init(s, b);
-    hb_words(s, HC.leaf_prefix, 16);
-    hb_words(s, mk, 8);
-    hb_words(s, c, 8);
-    hb_final(s, h);
-    hb_init(s, b);
-    hb_frame(s, "leaf", 4);
-    hb_be(s, 64, 8);
-    hb_words(s, T.dom, 8);
-    hb_uint(s, (u64)i);
-    hb_uint(s, (u64)i);
-    hb_be(s, (u64)HC.schema_len, 8);
-    hb_bytes(s, HC.schema, HC.schema_len);
-    hb_be(s, 64, 8);
-    hb_words(s, h, 8);
-    hb_final(s, out);
+    leaf_out(T, i, b, x, y, mk, out);
+#endif
   }
 #pragma unroll
   for (int k = 0; k < 8; ++k) T.level[i * 8 + k] = out[k];
