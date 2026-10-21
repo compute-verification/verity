@@ -51,6 +51,8 @@
 //   kh_one_noise(the same), kh_one_units(the same)   kh_one's noise launch and its units launch, apart
 //   kh_one_j10(A, B, rows, N, K, seeds, cseed, live, out, ws, J, z, zo, y, ydump, sa, sw, step, M, stream)   kh_one's
 //              two-launch form on J10-R's call-scale noise (measured only; at the end of this file)
+//   kh_lanes(A, B, L, K, seeds, out, lr, stream)   L drawn leaves on gathered operands: their receipts and lane records
+//              (option A's partials, partials.py; at the end of this file)
 //   kh_words(K), kh_digits(K), kh_ws_bytes(M, N, K), kh_j10_ws_bytes(rows, N, K), kh_noise_blocks(K), kh_fault_shift()
 #include "h1sha.cuh"
 #include <cuda_bf16.h>
@@ -492,19 +494,21 @@ __device__ __forceinline__ u32* lane_rec(const OneOut& oo, u32 u, u32 nwords) {
 // and b = 1] (where the int8 X = A + b wraps, X = A + b - 256 xa), X (B + c)^T - X c^T - b B^T + 256 xa B^T = A B^T, so
 // z = O' - sum_d 128^d D_d + 256 (X WB^T + xa B^T) - (X c^T + b B^T): two more MMAs a fragment (X by the coins c, the
 // dither bits b by B) into a fourth accumulator, and xa by B into the wrap term's, in a segment where a lane has an xa.
-template <int MD, bool WS, bool OS, bool J10 = false, bool PL = false>
+// DG (kh_lanes): the units are the diagonal of gathered A [M, K] and B [M, K], unit u rows 32 u .. of both (N unused).
+template <int MD, bool WS, bool OS, bool J10 = false, bool PL = false, bool DG = false>
 __global__ void __launch_bounds__(32 * WARPS, H1U_MINB) h1u(const int8_t* __restrict__ A, const int8_t* __restrict__ B, u32 M, u32 N,
                                                   u32 K, const u64* __restrict__ seeds, const uint8_t* __restrict__ live,
                                                   u32* __restrict__ out, const u32* __restrict__ ws, OneOut oo) {
+  static_assert(!DG || !(WS || OS || J10 || PL), "a gathered diagonal is the fused receipts-only form");
   constexpr bool PF = WS || H1U_PF;
   constexpr int PD = H1U_PD, NS = H1U_PD + H1U_RING;
   __shared__ WarpSmem smem[WARPS];
   const u32 lane = threadIdx.x & 31, wp = threadIdx.x >> 5;
   const u32 g = lane >> 2, q = lane & 3;
-  const u32 ncb = N / 32, units = (M / 32) * ncb;
+  const u32 ncb = DG ? 1 : N / 32, units = (M / 32) * ncb;
   const u32 u = blockIdx.x * WARPS + wp;
   if (u >= units) return;
-  const u32 ri = u / ncb, cj = u % ncb;
+  const u32 ri = u / ncb, cj = DG ? u : u % ncb;
   const u32 ks = K / 32, chunks = ks / 16, rb = chunks + 1, cb = chunks + 1;
   const u32 nwords = 2 * (ks + MD);
   u32* o = out + (u64)u * nwords;
@@ -2036,3 +2040,37 @@ extern "C" int kh_one_j10(const void* A, const void* B, unsigned rows, unsigned 
 }
 
 extern "C" int kh_fault_shift() { return FAULT_SHIFT; }
+
+// Option A's prover side (partials.py): drawn leaves' lane partials after the draw. L units on gathered operands, unit u
+// A rows 32 u .. 32 u + 31 and B rows 32 u .. 32 u + 31 (A and B each [32 L, K] s8: leaf u's 32 A rows and 32 B rows),
+// seeds 16 a unit as kh_seeds writes them (seed_j's 8 big-endian words, then sigma_R's). out: L x kh_words(K) u32, the
+// leaves' receipts; lr: L x 32 x kh_words(K) u32, kh_one_lr's record of each (lane l's words at l kh_words(K), lanes and
+// words in its order), so the XOR over a record's lanes is its receipt. The fused h1u, every unit live.
+__device__ int kh_lanes_step[4];
+
+template <int MD>
+static void launch_lanes(unsigned L, cudaStream_t s, const void* A, const void* B, unsigned K, const void* seeds,
+                         void* out, const OneOut& oo) {
+  carve<h1u<MD, false, false, false, false, true>>();
+  h1u<MD, false, false, false, false, true><<<(L + WARPS - 1) / WARPS, 32 * WARPS, 0, s>>>(
+      (const int8_t*)A, (const int8_t*)B, 32 * L, 32, K, (const u64*)seeds, nullptr, (u32*)out, nullptr, oo);
+}
+
+extern "C" int kh_lanes(const void* A, const void* B, unsigned L, unsigned K, const void* seeds, void* out, void* lr,
+                        void* stream) {
+  if (K % 512 || !out || !lr || L > (1u << 26)) return 2;
+  const int m = n_digits((int)(K / 32));
+  if (m != 2 && m != 3) return 2;
+  if (!L) return 0;
+  void* step = nullptr;
+  if (cudaGetSymbolAddress(&step, kh_lanes_step) != cudaSuccess) return 3;
+  OneOut oo{};
+  oo.lr = (u32*)lr;
+  oo.lrs = (const int*)step;
+  cudaStream_t s = (cudaStream_t)stream;
+  if (m == 2)
+    launch_lanes<2>(L, s, A, B, K, seeds, out, oo);
+  else
+    launch_lanes<3>(L, s, A, B, K, seeds, out, oo);
+  return cudaGetLastError() == cudaSuccess ? 0 : 3;
+}
