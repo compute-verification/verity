@@ -180,8 +180,7 @@ class Settings:
     #: H1's ``gate(session, root)``: the challenger gate's open of the reserved session on the window's open root
     #: (`pouw_h1_window.Gate`, `pouw_h1_window.Window`)
     gate: Any = None
-    #: H1's served trees (`pouw_h1_served.Served`): the window's A codes and B rows committed as the window Program's
-    #: registered values at its close, which `calls_root` binds
+    #: H1's served trees (`pouw_h1_served.Served`): its A codes and B rows, registered at its close under `calls_root`
     served: Any = None
 
     @classmethod
@@ -752,11 +751,10 @@ def _install_h1(entry: str, settings: Settings, target: Target) -> Option:
     setting ``challenger`` the salt, round and draw coins are the auditor host's, from the one session infra's gate
     reserved for the window (``session``, the gate's reserve answer) and ``gate`` opened on its window-open root (the
     open answer, which the commitment carries without its secret; `pouw_h1_window.Window`), closed once the window
-    has finished; without it the coins are this process's and the
-    window credits nothing (`pouw_h1.IN_PROCESS`). ``admission`` is the run's (`pouw_h1_requests.ADMISSIONS`, round 0
-    only by default). On an arm that serves z/y records (``zy_rows``, `engine.int8_vllm.Int8PlainLinearMethod`) each
-    committed layer whose N is whole 32-column units serves through ``scaled_mm_zy`` over T slots, the records its z. The
-    served values are the arm's, untouched."""
+    has finished; without it the coins are this process's and the window credits nothing (`pouw_h1.IN_PROCESS`).
+    ``admission`` is the run's (`pouw_h1_requests.ADMISSIONS`, round 0 only by default). On an arm serving z/y records
+    (``zy_rows``, `engine.int8_vllm.Int8PlainLinearMethod`) each committed layer of whole 32-column units serves
+    ``scaled_mm_zy`` over T slots, the records its z. The served values are the arm's, untouched."""
     layers = PHK.layers(target.model, linear_types())
     committed = target.weight_commitments.get(entry) or commit_weights(PH.SCHEME, target)
     roots = {int(w): bytes.fromhex(r) for w, r in committed["weight_roots"].items()}
@@ -766,8 +764,7 @@ def _install_h1(entry: str, settings: Settings, target: Target) -> Option:
         raise ValueError(f"{entry}: the static layout needs the pouw settings 'rows' (T) and 'steps' (S)")
     session, rounds, draw, salt, opener = None, settings.rounds, None, None, None
     if settings.challenger is not None:
-        session = PHW.Window(entry, settings.challenger, settings.steps, weights_root(roots), settings.session,
-                             settings.gate)
+        session = PHW.Window(entry, settings.challenger, settings.steps, weights_root(roots), settings.session, settings.gate)
 
         def opener(requests_root: bytes) -> tuple[bytes, Any, Any, Mapping[str, Any]]:
             epoch_salt, *opened = session.open(requests_root)
