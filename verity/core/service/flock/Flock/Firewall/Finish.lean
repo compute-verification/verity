@@ -434,7 +434,7 @@ def serveLoop (ch : Frame.Chan) (S : Hello.Setup) (specs : Hello.Specs) (l0s : I
       | .ok (spec, sts) =>
         say "ok 0"
         let _ ← serve ch IO.getRandomBytes spec (sts.map Setup.ofCircuit) fun r => do
-          return ((← l0s.get).find? (·.l0.root == r)).map (·.l0)
+          return ((← l0s.get).slots.find? (·.l0.root == r)).map (·.l0)
   | _ => say s!"err a request `{line.trim}`"
 
 end Flock.Firewall.Finish

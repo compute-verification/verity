@@ -4,7 +4,7 @@
 //! or `{"error": why}` for a request it can't take. Each request runs on a fresh state directory under STATE_DIR holding
 //! the input's record, and its output carries the record as the request left it. `release-reference STATE_DIR CORE_FIREWALL`
 //! runs each outer session with the Lean decision as its judge (`release::lean_judge`, `CORE_FIREWALL decide`), as
-//! `flock-circuit prove --firewall-state` does.
+//! `flock-circuit prove --firewall-state` did before the Lean session loop took the release side (`core-firewall session`).
 #[allow(dead_code)]
 #[path = "../../../../../../ml/flock/live/src/release.rs"]
 mod release;

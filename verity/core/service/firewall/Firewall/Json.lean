@@ -11,8 +11,8 @@ writes them (`live/src/firewall_record_vectors.json`):
 * `decide`, `{"now_ms", "part", "prove", "ready", "record", "session"}`: the firewall's decision before anything is sent
   (`decide`), `{"decision", "record", "release_ms", "why"}`: `decision` is `refused`, `stop` or `go`, `release_ms` a go's
   release time (null if it has none, and for a refusal or a stop), and `record` the record after the session's slot and
-  admission, a stop's event not yet recorded. Rust's `release::outer_session` holds its own decision to this one
-  (`core-firewall decide`, `decideMain`) and sends nothing unless they are the same.
+  admission, a stop's event not yet recorded. The Rust reference's `release::outer_session` (`tests/rust`) holds its own
+  decision to this one (`core-firewall decide`, `decideMain`) and sends nothing unless they are the same.
 
 A record the firewall can't read, and an op that isn't one of these with arguments of their types, are rejected. An open's
 statements, budget and schedule are checked before the record is read, as Rust and Python check them.

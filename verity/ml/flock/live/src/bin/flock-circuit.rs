@@ -200,10 +200,12 @@ fn level0_zk(st: &Stmt, rng: &mut flock_live::zk_hooks::ProverRng, zero: bool, t
 /// Under the Lean session loop (`plan.lean_frames`), a firewalled table's level-0 hiding and salts are the loop's: it draws
 /// them for the host's packed witness `z` and commits level 0 on them (`Flock.Firewall.Level0`). They replace `l0`'s and
 /// the table's level-0 salts, so the prover commits the codeword the loop did, and the loop's root is returned: the root of
-/// record. Without the loop, nothing changes and nothing is returned.
+/// record. The loop keeps it for the session whose `Hello` was answered `coins`, until that session ends. Without the loop,
+/// nothing changes and nothing is returned.
 #[cfg(feature = "sha512")]
-fn lean_level0(plan: &Plan, st: &Stmt, lig: LigeritoProfile, z: &[F128], l0: &mut flock_core::pcs::ligerito::zk::Level0Zk,
-               salts: &Mutex<flock_live::zk_hooks::LeafSalts>) -> Result<Option<Vec<u8>>, String> {
+fn lean_level0(plan: &Plan, st: &Stmt, lig: LigeritoProfile, coins: &[F128], z: &[F128],
+               l0: &mut flock_core::pcs::ligerito::zk::Level0Zk, salts: &Mutex<flock_live::zk_hooks::LeafSalts>)
+               -> Result<Option<Vec<u8>>, String> {
     use flock_core::pcs::ligerito::zk::EXTRA_LANES;
     let Some(addr) = plan.lean_frames.as_deref() else { return Ok(None) };
     if plan.zk_zero_pads {
@@ -211,7 +213,7 @@ fn lean_level0(plan: &Plan, st: &Stmt, lig: LigeritoProfile, z: &[F128], l0: &mu
     }
     let pcs = pcs_of(st, lig);
     let lc = pcs.ligerito_prover_config().expect("Ligerito config");
-    let got = flock_live::firewall::lean_level0(addr, st.m, z, 1 << lc.initial_log_msg_cols, (1 << lc.initial_k) + EXTRA_LANES,
+    let got = flock_live::firewall::lean_level0(addr, &flock_live::firewall::level0_session(coins), st.m, z, 1 << lc.initial_log_msg_cols, (1 << lc.initial_k) + EXTRA_LANES,
                                                 l0.t_pad, pcs.n_leaves())?;
     l0.extra = got.extra.try_into().map_err(|_| "the Lean loop's level 0: not four extra lanes".to_string())?;
     l0.pads = got.pads;
@@ -220,7 +222,7 @@ fn lean_level0(plan: &Plan, st: &Stmt, lig: LigeritoProfile, z: &[F128], l0: &mu
 }
 
 #[cfg(not(feature = "sha512"))]
-fn lean_level0(_: &Plan, _: &Stmt, _: LigeritoProfile, _: &[F128], _: &mut flock_core::pcs::ligerito::zk::Level0Zk,
+fn lean_level0(_: &Plan, _: &Stmt, _: LigeritoProfile, _: &[F128], _: &[F128], _: &mut flock_core::pcs::ligerito::zk::Level0Zk,
                _: &Mutex<flock_live::zk_hooks::LeafSalts>) -> Result<Option<Vec<u8>>, String> {
     Ok(None)
 }
@@ -1164,13 +1166,19 @@ fn lean_statement_args(st: &Stmt, public: &std::path::Path, tables: usize) -> Ve
     args
 }
 
+/// Whether a firewalled statement's sessions go through the firewall's Lean session loop: unless `FC_FIREWALL_SESSION=0` or
+/// `FC_FIREWALL_TRANSCRIPT` (whose recording is the prover's side of the wire).
+fn lean_session_on(st: &Stmt) -> bool {
+    firewall_on(st) && std::env::var("FC_FIREWALL_SESSION").as_deref() != Ok("0") && std::env::var_os("FC_FIREWALL_TRANSCRIPT").is_none()
+}
+
 /// Where a session of `tables` tables against the auditor at `verifier` connects, and, where that is the firewall's Lean
 /// session loop (`firewall::LeanSession`, one process for every such session), which then owns the auditor's connection,
-/// where its reps' Lean frames connect: a firewalled statement's, unless `FC_FIREWALL_SESSION=0` or `FC_FIREWALL_TRANSCRIPT`
-/// (whose recording is the prover's side of the wire) keep the Rust checks (`coin_tree::Checked` with `LeanCoins`,
-/// `lean_hello`) and frame processes of their own on the auditor's own address.
-fn session_addr(st: &Stmt, inst: &Instances, tables: usize, verifier: &str) -> Result<(String, Option<String>), String> {
-    if !firewall_on(st) || std::env::var("FC_FIREWALL_SESSION").as_deref() == Ok("0") || std::env::var_os("FC_FIREWALL_TRANSCRIPT").is_some() {
+/// where its reps' Lean frames connect: a firewalled statement's ([`lean_session_on`]); otherwise the Rust checks
+/// (`coin_tree::Checked` with `LeanCoins`, `lean_hello`) and frame processes of their own on the auditor's own address.
+/// With `fw` (`--firewall-state`) the loop is `core-firewall session`, the release side around it (PROTOCOL.md §10.5).
+fn session_addr(st: &Stmt, inst: &Instances, tables: usize, verifier: &str, fw: Option<&ReleaseArgs>) -> Result<(String, Option<String>), String> {
+    if !lean_session_on(st) {
         return Ok((verifier.to_string(), None));
     }
     static SESSIONS: Mutex<Vec<(String, usize, flock_live::firewall::LeanSession)>> = Mutex::new(Vec::new());
@@ -1179,7 +1187,15 @@ fn session_addr(st: &Stmt, inst: &Instances, tables: usize, verifier: &str) -> R
         return Ok((s.addr().to_string(), Some(s.frames().to_string())));
     }
     let public = lean_public(inst, "session", tables)?;
-    let s = flock_live::firewall::LeanSession::start(&flock_live::firewall::lean_frame_exe(), verifier, &lean_statement_args(st, &public, tables));
+    let mut args = lean_statement_args(st, &public, tables);
+    let exe = match fw {
+        Some(fw) => {
+            args.extend(["--state".into(), fw.state.display().to_string(), "--session".into(), fw.session.clone(), "--part".into(), fw.part.clone()]);
+            fw.lean.clone()
+        }
+        None => flock_live::firewall::lean_frame_exe(),
+    };
+    let s = flock_live::firewall::LeanSession::start(&exe, verifier, &args);
     let _ = std::fs::remove_file(&public);
     let s = s?;
     let (addr, frames) = (s.addr().to_string(), s.frames().to_string());
@@ -3783,7 +3799,7 @@ fn session_proved(st: &Arc<Stmt>, inst: &Arc<Instances>, t: SharedTransport, pla
             let mut prng = flock_live::zk_hooks::ProverRng::for_table(seed, j as u64);
             let mut l0 = is_zk(&tb.st).then(|| level0_zk(&tb.st, &mut prng, plan.zk_zero_pads, plan.zk_l0_tamper));
             let lean = match (firewall_on(&tb.st), l0.as_mut(), wits[j].1.as_ref()) {
-                (true, Some(l), Some(WitData::Host((z, ..)))) => lean_level0(plan, &tb.st, lig, z, l, &salts_t[j])?,
+                (true, Some(l), Some(WitData::Host((z, ..)))) => lean_level0(plan, &tb.st, lig, &commit, z, l, &salts_t[j])?,
                 _ => None,
             };
             let host = level0_root(&tb.st, wits[j].1.as_ref().expect("a table's witness"), lig, l0.as_ref(), &salts_t[j]);
@@ -3816,7 +3832,7 @@ fn session_proved(st: &Arc<Stmt>, inst: &Arc<Instances>, t: SharedTransport, pla
             let tl0 = Instant::now();
             let mut zk_level0 = if j == 0 { (is_zk(st) && zk_pre.is_none()).then(|| level0_zk(st, &mut prng, plan.zk_zero_pads, plan.zk_l0_tamper)) } else { table_level0 };
             let lean_root0 = match (j, firewalled, zk_level0.as_mut(), wt0.as_ref()) {
-                (0, true, Some(l0), Some(WitData::Host((z, ..)))) => lean_level0(plan, st, lig, z, l0, salts)?,
+                (0, true, Some(l0), Some(WitData::Host((z, ..)))) => lean_level0(plan, st, lig, &commit, z, l0, salts)?,
                 _ => None,
             };
             let t_level0 = if zk_pre.is_some() { t_zk_pre_wait } else { tl0.elapsed().as_secs_f64() + t_table };
@@ -5461,11 +5477,11 @@ fn selftest(st: &Arc<Stmt>, inst: &Arc<Instances>, gpu: bool) {
 /// `verify_ahead` proved sessions send their proofs and wait for their verdicts on their own threads while the next session
 /// proves (0: each verdict before the next session starts); every warm verdict comes before the first timed session starts.
 /// `emit` takes each session's record and proofs, in session order.
-/// With `fw` (`--firewall-state`), each session is an outer session of `fw`'s recursive session at its part, run through
-/// `flock_live::release::outer_session`: it takes the firewall's outer slot, is admitted or refused on the firewall's record
-/// before it connects, leaves its proofs at their release time if the recursive session has a schedule, and every stop
-/// reaches the challenger as a cut, never as `Finish`. The Lean decision (`core-firewall decide`) is the decision of record:
-/// a session it doesn't decide as Rust did is a stop, and nothing leaves that it doesn't release.
+/// With `fw` (`--firewall-state`), each session is an outer session of `fw`'s recursive session at its part, through the
+/// release side around the Lean session loop (`core-firewall session`, [`session_addr`]): it takes the firewall's outer
+/// slot and is admitted or refused on the firewall's record before anything of it reaches the challenger, its proofs and
+/// `Finish` leave at their release time if the recursive session has a schedule, and every stop reaches the challenger as
+/// a cut, never as `Finish`. The session's record carries the outcome the loop recorded ([`firewall_outcome`]).
 #[allow(clippy::too_many_arguments)]
 fn prove_sessions(st: &Arc<Stmt>, inst: &Arc<Instances>, base: &Plan, seeds: &[ProverSeed], warm: usize, addr: &str, verify_ahead: usize,
                   fw: Option<&ReleaseArgs>, emit: &mut dyn FnMut(usize, Value, Vec<Vec<u8>>)) {
@@ -5518,29 +5534,19 @@ fn prove_sessions(st: &Arc<Stmt>, inst: &Arc<Instances>, base: &Plan, seeds: &[P
                 emit_one(r, join(h), rtt);
             }
         }
-        let (addr, frames) = session_addr(st, inst, table_names(plan.tables).len(), addrs[run % addrs.len()]).unwrap_or_else(|e| refuse(e));
+        let (addr, frames) = session_addr(st, inst, table_names(plan.tables).len(), addrs[run % addrs.len()], fw).unwrap_or_else(|e| refuse(e));
         plan.lean_session = frames.is_some();
         plan.lean_frames = frames;
         let addr = addr.as_str();
-        if let Some(fw) = fw {
-            let mut rtt = (0.0, 0.0, 0);
-            let out = flock_live::release::outer_session(&fw.rec, &fw.session, &fw.part, &flock_live::release::SystemClock,
-                || eprintln!("firewall: {} at {} waits for the outer slot", fw.session, fw.part),
-                || {
-                    let mut tcp = TcpTransport::connect(addr).map_err(|e| format!("the challenger at {addr}: {e}"))?;
-                    rtt = tcp.ping_rtt(30);
-                    session_proved(st, inst, shared(tcp), &plan, seeds[run])
-                        .map_err(|(v, _)| v["why"].as_str().map_or_else(|| v["why"].to_string(), str::to_string))
-                },
-                |p: &Proved| p.res.clone(),
-                |p| {
-                    let (v, proofs) = session_finish(p);
-                    (v["accepted"] == true, (v, proofs))
-                },
-                Some(&flock_live::release::lean_judge(&fw.lean)))
-                .unwrap_or_else(|e| refuse(format!("--firewall-state {}: {e}", fw.rec.state.display())));
-            let (mut v, proofs) = out.sent.unwrap_or_else(|| (json!({"accepted": false, "why": out.why}), Vec::new()));
-            v["firewall"] = json!({"session": fw.session, "part": fw.part, "outcome": out.outcome, "why": out.why});
+        let seen = fw.map(|fw| firewall_events(&fw.state).len());
+        if let (Some(fw), Some(seen)) = (fw, seen) {
+            let mut tcp = TcpTransport::connect(addr).unwrap_or_else(|e| refuse(format!("the firewall's session loop at {addr}: {e}")));
+            let rtt = tcp.ping_rtt(30);
+            let (mut v, proofs) = match session_proved(st, inst, shared(tcp), &plan, seeds[run]) {
+                Ok(p) => session_finish(p),
+                Err(stopped) => stopped,
+            };
+            v["firewall"] = firewall_outcome(fw, seen, &v);
             emit_one(run, (v, proofs), rtt);
             continue;
         }
@@ -5567,12 +5573,12 @@ fn prove_sessions(st: &Arc<Stmt>, inst: &Arc<Instances>, base: &Plan, seeds: &[P
 }
 
 /// `prove --firewall-state DIR --session ID --part NAME`: the firewall's release side (PROTOCOL.md §10.5) on the state
-/// directory `verity_flock.firewall` shares. It runs behind the send check only, proves one session (the firewall serves
-/// each statement of a recursive session once), and refuses `FC_VERIFY_AHEAD`: the outer slot is held until each
-/// session's verdict, so no session's verdict can wait while the next one proves. The release decision is Lean's
-/// (`core-firewall decide`): `FC_CORE_FIREWALL`, else the build in this checkout's verity/core/service/firewall.
+/// directory `verity_flock.firewall` shares, run by the Lean session loop it goes through (`core-firewall session`:
+/// `FC_CORE_FIREWALL`, else the build in this checkout's verity/core/service/firewall). It runs behind the send check
+/// only, through the Lean session loop ([`lean_session_on`]), proves one session (the firewall serves each statement of a
+/// recursive session once), and refuses `FC_VERIFY_AHEAD`: the outer slot is held until each session's verdict.
 struct ReleaseArgs {
-    rec: flock_live::release::Record,
+    state: std::path::PathBuf,
     session: String,
     part: String,
     lean: std::path::PathBuf,
@@ -5583,8 +5589,8 @@ fn release_args(st: &Stmt, sessions: usize) -> Option<ReleaseArgs> {
     if state.is_empty() {
         return None;
     }
-    if !firewall_on(st) {
-        refuse("--firewall-state: the release side runs behind the send check (--zk with FC_FIREWALL=1)".into());
+    if !lean_session_on(st) {
+        refuse("--firewall-state: the release side runs around the Lean session loop (--zk with FC_FIREWALL=1, not FC_FIREWALL_SESSION=0 or FC_FIREWALL_TRANSCRIPT)".into());
     }
     if sessions != 1 {
         refuse(format!("--firewall-state proves one session (--warm 0 --runs 1), not {sessions}: the firewall serves each statement once"));
@@ -5596,10 +5602,29 @@ fn release_args(st: &Stmt, sessions: usize) -> Option<ReleaseArgs> {
     if session.is_empty() || part.is_empty() {
         refuse("--firewall-state takes --session ID (the recursive session: rec_live's firewall.json) and --part NAME".into());
     }
-    let rec = flock_live::release::Record::new(&state).unwrap_or_else(|e| refuse(format!("--firewall-state {state}: {e}")));
     let lean = std::env::var_os("FC_CORE_FIREWALL").map(Into::into)
         .unwrap_or_else(|| std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../../core/service/firewall/.lake/build/bin/core-firewall"));
-    Some(ReleaseArgs { rec, session, part, lean })
+    Some(ReleaseArgs { state: state.into(), session, part, lean })
+}
+
+/// The firewall's record (`record.jsonl` in `state`), its events in order; none where it can't be read.
+fn firewall_events(state: &std::path::Path) -> Vec<Value> {
+    std::fs::read_to_string(state.join("record.jsonl")).unwrap_or_default().lines().filter(|l| !l.is_empty())
+        .filter_map(|l| serde_json::from_str(l).ok()).collect()
+}
+
+/// What the firewall recorded of `fw`'s outer session after its first `seen` events: the last outcome of its recursive
+/// session (`release`, `stop` or `refused`) and why (a stop's, else the verdict `v`'s), or `"outcome": null` where it
+/// recorded none.
+fn firewall_outcome(fw: &ReleaseArgs, seen: usize, v: &Value) -> Value {
+    let last = firewall_events(&fw.state).into_iter().skip(seen).filter(|e| e["session"] == fw.session.as_str())
+        .filter(|e| matches!(e["event"].as_str(), Some("release" | "stop" | "refused"))).last();
+    let (outcome, why) = match &last {
+        Some(e) if e["event"] == "release" => (e["event"].clone(), Value::Null),
+        Some(e) => (e["event"].clone(), if e["why"].is_string() { e["why"].clone() } else { v["why"].clone() }),
+        None => (Value::Null, v["why"].clone()),
+    };
+    json!({"session": fw.session, "part": fw.part, "outcome": outcome, "why": why})
 }
 
 fn serve_loop(make: impl Fn() -> Server) {
