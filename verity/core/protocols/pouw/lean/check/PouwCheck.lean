@@ -6,6 +6,7 @@ import PouwCheck.Protocol
 import PouwCheck.Opening
 import PouwCheck.Pass
 import PouwCheck.Rounds
+import PouwCheck.Credit
 
 /-!
 # PoUW's window check as a core protocol
@@ -16,4 +17,7 @@ which `tests/test_difftest.py` holds to the Python through `pouw-check serve`; a
 (`PouwCheck.Opening`), held to `core_check.opening` through `pouw-check-difftest`, as are the rules on the window's pass and
 draw (`PouwCheck.Pass`) and on a live window's salt and round coins (`PouwCheck.Rounds`). Code: Lean core only, and never
 `Security/`. Its properties are stated in `Security/Properties/Pouw/Check.lean`.
+
+The rules on a served window's credited set, its drawn units' outcome and its A rows (`PouwCheck.Credit`) are held to
+`credit.py` the same way, through `pouw-check-difftest` (`PouwCheck.CreditDifftest`).
 -/
