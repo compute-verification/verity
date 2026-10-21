@@ -1,8 +1,8 @@
 /-
 # The firewall's final round (live PROTOCOL.md §10.1): a firewalled rep's proof file, computed by the firewall itself
 
-At a firewalled rep's end the proof file that leaves is the firewall's own (`flock-circuit`'s `Firewall::finish` and
-`zk_finish`): the zerocheck and lincheck sent as the values that passed the firewall, masked by the rep's pads, `final_c`
+At a firewalled rep's end the proof file that leaves is the firewall's own, this code's (`flock-circuit` sends it, in
+`zk_finish_fw`, after its end check `Firewall::finish`): the zerocheck and lincheck sent as the values that passed the firewall, masked by the rep's pads, `final_c`
 the one those values fix; the ring switch, the masked Ligerito opening and the levels above it computed from the host's
 witness, the table's level-0 hiding and the rep's salts; and the inner proof on the rep's pads. Here that file is code the
 firewall runs, the analysis's masked prover (`Flock.Firewall.Finish`'s copies, `FinishProver`) on what the firewall holds:
@@ -208,7 +208,7 @@ def repCons (io : Asks M) (commit : Level → Array F128 → (Nat → ByteArray)
   return (p, zl, rp.cons ++ #[("ring switch ab", rp.abValue.addConst ccAb), ("ring switch c", rp.cValue.addConst ccC)] ++ lgc)
 
 /-- **The firewall's proof of one rep**: `repCons`, then the inner proof on the rep's pads and the constraints it returns.
-A constraint that fails on the pads stops the rep before its inner proof, and no file leaves (`zk_finish`'s
+A constraint that fails on the pads stops the rep before its inner proof, and no file leaves (`zk_finish_fw`'s
 `constraints_failing_on_pads`, which stops the session at its `Finish`). -/
 def repFw (io : Asks M) (hs : Hashes M) (commit : Level → Array F128 → (Nat → ByteArray) → M Commit) (st : Setup)
     (sch : Flock.Schedule) (tPad rep : Nat) (dom : ByteArray) (g : Array F128) (cm0 : Commit) (extras : Array Claim)

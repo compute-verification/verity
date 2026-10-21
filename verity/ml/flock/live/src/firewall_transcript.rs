@@ -6,7 +6,7 @@
 //! computation; the transcript carries none of it, and the outer agreement holds every session to the honest sessions'
 //! one). The recorder
 //! reads the wire's requests and coins (a [`Recording`] transport after `coin_tree::Checked`) and the firewall's candidates and
-//! wants (one-line hooks in `Firewall`, `ShadowLink::check` and `zk_finish`); it changes nothing the firewall sends.
+//! wants (one-line hooks in `Firewall`, `ShadowLink::check` and `zk_finish_fw`); it changes nothing the firewall sends.
 //!
 //! Items, in the order they leave:
 //! - `Register` (fixed by the statement), `Hello` (the firewall's own, on its word), each rep's `Open` (the statement: the
@@ -18,7 +18,7 @@
 //!   finish's `open` rounds), level 0's observed values `masked`; then the round's `coins` (the wire's, after the coin tree's opening is checked and
 //!   stripped) and the ones the firewall relayed;
 //! - the inner proof's rounds (the firewall's own stream, nothing relayed): `final_c'`, `ρ = ε h_fa + h_x` and `σ = h_fb + h_y`
-//!   masked; then one `check` per constraint row the verifier checks (`zk_finish`'s rows and the triple's), its outcome
+//!   masked; then one `check` per constraint row the verifier checks (the Lean finish's rows and the triple's), its outcome
 //!   `Lin.eval(h) = 0` with its affine `form` beside it; then `τ`'s commitment and `Y` (the firewall's own, recomputed here
 //!   from the pads, on every pad used);
 //! - each rep's `Proof`: its shape (the statement), masked zerocheck and lincheck (the firewall's own, from the values it
@@ -294,7 +294,7 @@ impl Rec {
     }
 
     /// A rep starts: its layout, pads and their root, domain, the recheck's commitment, the statement's skeleton and the
-    /// replay's constraint names (the relations, with `zk_finish`'s and the triple's).
+    /// replay's constraint names (the relations, with the Lean finish's and the triple's).
     #[allow(clippy::too_many_arguments)]
     pub fn begin_rep(&mut self, rep: usize, lay: Layout, pads: &zkv::Pads, pads_root: &[u8], domain: &[u8], cm: &Commitment,
                      skeleton: &[Item], replay_names: &[&str]) {
@@ -371,7 +371,7 @@ impl Rec {
         self.pending = Some(Pending::Proof { proof: Box::new(proof.clone()) });
     }
 
-    /// The constraints `zk_finish` hands the inner proof (the triple's are added after `ε`).
+    /// The constraints the Lean finish replays for the inner proof, as `zk_finish_fw` hands them on (the triple's are added after `ε`).
     pub fn constraints(&mut self, cons: &[(&'static str, Lin)]) {
         if let Some(r) = self.reps.last_mut() {
             r.cons = Some(cons.to_vec());
