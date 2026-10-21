@@ -141,18 +141,23 @@ class World:
     record: dict
 
 
-def register(prog: str, leaf: Leaf, receipt_flip: int | None = None) -> tuple[dict, tuple, list[int]]:
+def register(prog: str, leaf: Leaf) -> tuple[dict, tuple, list[int]]:
     regs = {"a": G.Registered.commit(prog, "a", code_words(leaf.a, leaf.sa).tolist(), None, G.WORD_BITS, V2),
             "b": G.Registered.commit(prog, "b", code_words(leaf.b, leaf.sw).tolist(), None, G.WORD_BITS, V2),
             "zy": G.Registered.commit(prog, "zy", [U.record_words(*leaf.zy).tolist()], None, G.WORD_BITS, V2)}
     roots = (hashlib.sha512(ROOTS_TAG + regs["a"].root).digest(), regs["b"].root)
     z, receipt = H.reference(leaf.a, leaf.b, leaf.salt, leaf.position, roots, stream=U.tile() == "v3")
     assert [v & 0xFFFFFFFF for v in z] == [v & 0xFFFFFFFF for v in leaf.zy[0]], "the record's z is the tile's"
-    if receipt_flip is not None:
-        receipt = list(receipt)
-        receipt[receipt_flip // 32] ^= 1 << (receipt_flip % 32)
-    regs["receipt"] = G.Registered.commit(prog, "receipt", [U.receipt_words(receipt).tolist()], None, G.WORD_BITS, V2)
+    regs["receipt"] = receipt_reg(prog, receipt)
     return regs, roots, list(receipt)
+
+
+def receipt_reg(prog: str, receipt: list[int], flip: int | None = None) -> G.Registered:
+    """The registered receipt, with bit ``flip`` of it flipped when given."""
+    receipt = list(receipt)
+    if flip is not None:
+        receipt[flip // 32] ^= 1 << (flip % 32)
+    return G.Registered.commit(prog, "receipt", [U.receipt_words(receipt).tolist()], None, G.WORD_BITS, V2)
 
 
 def seeds_row(leaf: Leaf, roots: tuple) -> list[int]:
@@ -408,7 +413,7 @@ def prepare(args) -> None:
 
     salt = hashlib.sha512(SALT_TAG + args.name.encode()).digest()
     la, lb = leaf_data(args.seed, args.k, salt, args.position), leaf_data(args.seed + 1, args.k, salt, args.position + 1)
-    regs, roots, _receipt = register(ctx.prog, la)
+    regs, roots, receipt = register(ctx.prog, la)
     pa = partials(la, roots, ctx.lay)
     A = world("honest", ctx, la, regs, roots, pa)
     regs_b, roots_b, _ = register(ctx.prog, lb)
@@ -417,12 +422,10 @@ def prepare(args) -> None:
     swapped[3], swapped[4] = pa[4], pa[3]
     mixed = list(pa)
     mixed[5] = list(B.trees[PARTIAL].rows[5])
-    regs_bad, roots_bad, _ = register(ctx.prog, la, receipt_flip=3 * 32 + 17)
-    assert roots_bad == roots
     ctx.worlds = {"honest": A, "other": B,
                   "swap": replace(world("swap", ctx, la, regs, roots, swapped), name="swap"),
                   "mixed": world("mixed", ctx, la, regs, roots, mixed),
-                  "receipt": world("receipt", ctx, la, {**regs, "receipt": regs_bad["receipt"]}, roots, pa)}
+                  "receipt": world("receipt", ctx, la, {**regs, "receipt": receipt_reg(ctx.prog, receipt, flip=3 * 32 + 17)}, roots, pa)}
     for nm in ("swap", "mixed"):   # the honest registration: only the produced trees differ
         w = ctx.worlds[nm]
         assert w.registration == A.registration
@@ -454,7 +457,7 @@ def prepare(args) -> None:
                "ands": {"seeds": by["seeds"]["ands"], "lane": lane_ands, "combine": by["combine"]["ands"],
                         "combine_k4096": k4096["ands"], "combine_k4096_W": k4096["W"]},
                "binding": {t: by[t]["binding"] for t in checks},
-               "outs_ok": {t: [by[t]["outs"][p][0] for p in by[t]["outs"] if len(by[t]["outs"][p]) == 1] for t in checks},
+               "outs": {t: by[t]["outs"] for t in checks},
                "seconds": round(time.time() - t0, 1)}
     (work / "prepare.json").write_text(json.dumps(summary, indent=1))
     print("PREPARED " + json.dumps({x: summary[x] for x in ("k", "tile", "units", "ands", "produced_check", "seconds")}),
