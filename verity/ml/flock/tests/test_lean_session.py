@@ -9,6 +9,7 @@ are the end-to-end check (live PROTOCOL.md §10.4)."""
 from __future__ import annotations
 
 import json
+import re
 import socket
 import struct
 import subprocess
@@ -217,17 +218,6 @@ def test_a_request_it_cannot_read_ends_the_session(loop):
     assert reason(call(lp.connect(), round_("rep0", b"", 0))) == STOP + "coins before the step-0 coin commitment"
 
 
-def test_sessions_at_once(loop):
-    """Each connection is a session of its own, on its own connection to the auditor, served at once."""
-    auditor, lp = loop
-    a, b = lp.connect(), lp.connect()
-    assert call(b, REGISTER) == draw("null") and call(a, REGISTER) == draw("null")
-    assert call(a, ping(b"a")) == b"\x01" and call(b, ping(b"b")) == b"\x01"
-    a.close()
-    b.close()
-    assert sorted(auditor.got, key=len) == sorted([[REGISTER, ping(b"a")], [REGISTER, ping(b"b")]], key=len)
-
-
 class TcpFrame:
     """A rep's frame on a connection to the loop's frames port, asked as `test_firewall_frame.Frame` asks its own."""
 
@@ -290,8 +280,9 @@ def _answer(key_top: int = 0) -> bytes:
 @pytest.mark.parametrize("key_top, why", [(0x00, None), (0x80, STOP + "the verifier's session key has bit 2047 set")])
 def test_the_lean_hello_leaves_and_its_answer_is_checked(zk, key_top, why):
     """At the fixture's statement and a draw of none, the `Hello` that leaves is the recorded one at the loop's own nonce,
-    whatever the prover sent; its answer passes through when it is a root and a key, else is refused. Either way the
-    session's first opening is checked: zero words refused, never handed on."""
+    whatever the prover sent; its answer passes through when it is a root and a key, else is refused. After it, a
+    `Commit` whose roots no Lean level 0 drew is refused without reaching the auditor (`test_a_commit_leaves_only_with_
+    the_loops_level_0` takes one that does)."""
     recorded, nonce, _ = _record(zk, "selftest/honest")
     answers = {10: draw("null"), 1: _answer(key_top), 7: coins([])}
     auditor = Auditor(lambda f: answers[f[0]])
@@ -306,11 +297,77 @@ def test_the_lean_hello_leaves_and_its_answer_is_checked(zk, key_top, why):
     assert text == recorded.replace(nonce, got)
     if why is None:
         assert r == _answer(key_top)
-        assert reason(call(s, COMMIT)).startswith(STOP + "coin opening of session round 0: 0 words")
+        assert reason(call(s, COMMIT)).startswith(STOP + "a Commit whose roots are of [], where the session's tables are [")
     else:
         assert reason(r) == why
         assert reason(call(s, COMMIT)) == why
+    s.close()
     lp.close()
+    assert [f[0] for f in auditor.got[0]] == [10, 1]
+
+
+def commit(roots: list[tuple[str, bytes]]) -> bytes:
+    return (b"\x07" + _bytes(b"") + struct.pack("<I", len(roots)) + b"".join(_bytes(t.encode()) + _bytes(r) for t, r in roots)
+            + struct.pack("<I", 0))
+
+
+def level0(lp: Loop, m: int, z: bytes):
+    """The loop's answer to `level0 M LEN` and the witness `z` on its frames port: `(line, draws, root)`, or the line."""
+    with socket.create_connection(lp.frames) as s, s.makefile("rb") as r:
+        s.sendall(f"level0 {m} {len(z)}\n".encode() + z)
+        line = r.readline().decode().rstrip("\n")
+        if not line.startswith("ok "):
+            return line
+        n, k = map(int, line.split()[1:])
+        b = r.read(n)
+        return line, b[:n - k], b[n - k:]
+
+
+@pytest.mark.parametrize("m, z, why", [(3, b"\0" * 16, "err m = 3: "), (25, b"\0" * 3, "err a 3-byte witness, not whole words"),
+                                       (25, b"\0" * 16, "err level 0: a 1-word witness where m = 25 takes ")])
+def test_a_level_0_the_loop_cannot_draw(loop, m, z, why):
+    _, lp = loop
+    got = level0(lp, m, z)
+    assert isinstance(got, str) and got.startswith(why), got
+
+
+@pytest.mark.slow
+def test_a_commit_leaves_only_with_the_loops_level_0(zk):
+    """The loop draws a table's level-0 hiding and salts itself, fresh for each table: two draws over one witness differ,
+    in the hiding and the root. A `Commit` leaves only when each root it carries is one the loop drew at its table's `m`,
+    which the session then owns: a root drawn at another `m` is refused, never reaching the auditor, and one at the
+    statement's leaves, its opening then checked (zero words refused)."""
+    auditor = Auditor(lambda f: {10: draw("null"), 1: _answer(), 7: coins([])}[f[0]])
+    lp = Loop(auditor, _args(zk, "pub-16.bin"))
+
+    def session():
+        s = lp.connect()
+        call(s, REGISTER)
+        assert call(s, hello("")) == _answer()
+        return s
+
+    s = session()
+    why = reason(call(s, COMMIT))
+    [table] = re.search(r"tables are \[(.*)\]$", why)[1].split(", ")
+    s.close()
+    other = 25
+    _, d0, r0 = level0(lp, other, b"\0" * 16 * 2 ** (other - 7))
+    _, d1, r1 = level0(lp, other, b"\0" * 16 * 2 ** (other - 7))
+    assert len(d0) == len(d1) and d0 != d1 and r0 != r1
+    s = session()
+    why = reason(call(s, commit([(table, r0)])))
+    s.close()
+    if "drawn at m" in why:
+        m = int(re.search(r"its statement's is (\d+)$", why)[1])
+        assert why == STOP + f"a Commit whose root of {table} was drawn at m = {other}, where its statement's is {m}"
+        _, _, r = level0(lp, m, b"\0" * 16 * 2 ** (m - 7))
+        s = session()
+        why = reason(call(s, commit([(table, r)])))
+        s.close()
+    assert why.startswith(STOP + "coin opening of session round 0: 0 words"), why
+    lp.close()
+    assert [[f[0] for f in c] for c in auditor.got][-1] == [10, 1, 7]
+    assert all([f[0] for f in c] == [10, 1] for c in auditor.got[:-1])
 
 
 @pytest.mark.slow

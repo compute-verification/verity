@@ -316,7 +316,7 @@ def remote_session(req, layout, store, plans: dict[int, list[int]], salts: dict[
     rs = C3.Store(audit.register(SOURCE, NODE, NR, root, P512, nonce=bytes(32)), payloads, ys)
     p = audit.Params(blocks=NR, deadline_ns=10**6, windows=WINDOWS, samples=c3.samples, delta=1e-6, window_ns=10, codec=P512)
     clock = Clock()
-    s = C3.Session(p, rs.registration, None, coins.Challenger(rs.registration.digest, 0, p.coins, entropy=Entropy(b"a7 coins")),
+    s = C3.Session(p, rs.registration, None, coins.local(rs.registration.digest, 0, p.windows, Entropy(b"a7 coins")),
                    not_before_ns=0, clock=clock)
     prover = audit.Prover(rs, None, s.commitment, entropy=Entropy(b"a7 receipt salts"))
     head = MM.Header(rs.registration.digest, NR)

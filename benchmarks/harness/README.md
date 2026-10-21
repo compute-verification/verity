@@ -25,6 +25,17 @@ anything runs. A preset's model is a Hugging Face id at a pinned `revision`, or 
 `model_digest` (`presets.local_checkpoint`'s hash of its files), which a dispatched point recomputes and refuses to run on
 when it differs.
 
+A protocol arm (`pouw:SCHEME`, `pous:SCHEME`, `sampled-proofs:SCHEME`) runs the preset's precision with stock FP8 as its
+control, unless the spec's `[arm_settings."ARM"]` table says otherwise: its `precision` (PoUW's Pearl-C loads the BF16
+checkpoint and quantizes it itself), its `control` (another arm of the spec, or `"none"`), and its `protocols_config`,
+which `verity_vllm.LLM` takes as it is, `{protocol: {...}}`, except that a string `"$NAME"` is the point's environment
+variable NAME (the cubin the spec's setup builds, say). The harness gives an arm with PoUW an in-process challenger as
+its `coins` (`pouw.challenged`), and makes each engine step one Pearl-C pass, as the experimental arm does; the passes'
+counts (`passes`, `units`, `tiles`, screened, failing and unsure rows) are each timed rep's `pearl_c` spans, and the
+experimental arm's call check on the installed run is the arm's own gate. Pearl-C's y carries the epoch's live salt, so
+no stock arm is its token control (`llama31-8b-1gpu-pouw-protocol` has `"none"`). The table is part of the resolved spec
+and so of every point's identity, and the arm's cubin digest is its `kernel_digest`.
+
 A sweep is the product of its batches, prompt lengths, traffic shapes and samplings: `greedy`, or `stochastic`
 (temperature 0.8, top-p 0.95). Every request carries its own seed, so a stochastic point's tokens are a function of the
 engine's numerics like a greedy one's.
@@ -50,12 +61,14 @@ export their paths, say), are part of the resolved spec and so of every point's 
      `resident_kv_cache_memory_bytes` and `block_kv_cache_memory_bytes`. An engine that doesn't report its pool fails it.
    - `arm`: the arm's own gate, when it provides one.
 
-   An arm can't be its own control. An arm without a control (the stock references, or an experimental arm such as
-   Pearl-C's that computes different tokens) has only its own gate, and the table names it. Tokens are compared, not
+   An arm can't be its own control. An arm without a control (the stock references, an experimental arm such as
+   Pearl-C's that computes different tokens, or a protocol arm whose `control` is `"none"`) has only its own gate, and
+   the table names it. Tokens are compared, not
    logits. One failed gate times nothing: the result keeps its gates and has no points. Three gates run after timing,
    and a failure there keeps the gates and drops the points:
    - `timed-tokens`: each timed rep of an arm with a control produces the control's tokens in that rep, so an arm can't
-     compute something else only when timed.
+     compute something else only when timed. In `resident`, each timed rep of an arm without a control produces the
+     tokens its own gate saw from the same engine (`"against": "gate"`).
    - `engine-identity`: in `blocks`, each timed engine reports the gated engine's KV pool, kernel digest, versions,
      GPU and overrides.
    - `arm-closing`: after an engine's warm-up and timed runs, before it closes, the runner reads the arm's own gate again

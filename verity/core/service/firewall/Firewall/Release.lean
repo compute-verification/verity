@@ -8,6 +8,7 @@ firewall's own decision, which `Firewall.Protocol` checks with the send check as
 the send check and the send are given here as what they returned, a fault (Rust's panic) included: a fault anywhere is a
 stop, never the firewall's end. Each of the session's ops on the record is one `Record.op`, which reads the record again,
 as Rust's does: an error is a record the firewall can't read, and the session ends there with nothing sent.
+`Firewall.Loop` runs these same decisions on the record's file around the session loop (`core-firewall session`).
 -/
 import Firewall.Record
 
@@ -49,11 +50,15 @@ def Decision.after (a : Admitted) (now : Nat) (prove ready : Run) : Decision :=
       | some t => if now > t then .stop s!"missed its release time ({now} ms, after {t} ms)" else .go a
       | none => .go a
 
+/-- The session's ops once it holds the slot: the slot's events, then its admission, and the record after them. -/
+def seat (r : Record) (s part : String) : V (Except String Admitted × Record) := do
+  let ((), r) ← r.op fun evs => ((), slot evs s part)
+  r.op (admit · s part)
+
 /-- Everything before the send, at time `now` (ms): the decision and the record after it. A stop's event is not yet
 recorded (`outerSession` records it). -/
 def decide (r : Record) (s part : String) (now : Nat) (prove ready : Run) : V (Decision × Record) := do
-  let ((), r) ← r.op fun evs => ((), slot evs s part)
-  match ← r.op (admit · s part) with
+  match ← seat r s part with
   | (.error why, r) => pure (.refused why, r)
   | (.ok a, r) => pure (.after a now prove ready, r)
 

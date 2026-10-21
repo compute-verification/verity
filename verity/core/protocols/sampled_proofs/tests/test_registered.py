@@ -3,6 +3,7 @@ R7, the verifier's read map from its own program, the read check, and the audit 
 from __future__ import annotations
 
 import hashlib
+import re
 
 import pytest
 
@@ -328,6 +329,34 @@ def test_a_parameter_of_several_rows_reads_each_at_its_own_port():
     crossed = _tiles(lambda A, B, u: coll_concat(Array(2, A_ROW), [A[3 - u], A[u]]))
     assert G.reads(crossed, QT, {"A": K // 2}, {"A": G.SCHEMA_V2}) == {"a[0]": {"value": "A", "rows": [3, 2]},
                                                                   "a[1]": {"value": "A", "rows": [0, 1]}}
+
+
+def test_two_reads_under_one_port_name_are_refused():
+    """A port is one read: a parameter named `a[0]` beside row 0 of the parameter `a`, or a `ports` map naming two reads
+    one port, is refused, naming the port and both reads, never merged into one port's rows."""
+    tile = bind(CompositeDefinition("RegisteredTestTileNamed", 0, (), lambda S: ((("a", Array(2, A_ROW)), ("a[0]", A_ROW)), Value(1)),
+                                    lambda B, S, a, a0: B.call(XOR1, a[0][0], a0[0]), register=False))
+
+    def sig(S):
+        return (("A", Array(4, A_ROW)), ("B", Array(4, A_ROW))), Array(2, Value(1))
+
+    prog = Program(bind(CompositeDefinition("RegisteredTestTilesNamed", 0, (), sig,
+                                            lambda B_, S, A, B: coll_concat(sig(S)[1], [B_.call(tile, A[2 * u:2 * u + 2], B[u])
+                                                                                        for u in range(2)]),
+                                            register=False)))
+    with pytest.raises(ValueError, match=r"port 'a\[0\]' names two reads: row 0 of parameter 'a' of template .* and "
+                                         r"parameter 'a\[0\]' of template "):
+        G.reads(prog, P.template_instance_query(tile.id), {"A": K // 2, "B": K // 2}, {"A": G.SCHEMA_V2, "B": G.SCHEMA_V2})
+    tiles = _tiles()
+    roots = {"A": "ab" * 64}
+    for ports, want in (({"a[0]": "a", "a[1]": "a"}, "port 'a' names two reads: 'a[0]' of 'A' and 'a[1]' of 'A'"),
+                        ({"a[0]": "a[1]"}, "port 'a[1]' names two reads: 'a[0]' of 'A' and 'a[1]' of 'A'")):
+        with pytest.raises(ValueError, match=re.escape(want)):
+            G.reads_file(tiles, QT, {"A": K // 2}, roots, ports=ports, schemas={"A": G.SCHEMA_V2})
+    with pytest.raises(ValueError, match=re.escape("port 'w' names two reads: 'x' of 'x' and 'w' of 'W'")):
+        G.reads_file(_program(), Q, {"W": 2, "x": 2}, {"W": "ab" * 64, "x": "cd" * 64}, ports={"x": "w"})
+    assert G.reads_file(tiles, QT, {"A": K // 2}, roots, ports={"a[0]": "a0", "a[1]": "a1"},
+                        schemas={"A": G.SCHEMA_V2})["ports"].keys() == {"a0", "a1"}
 
 
 def test_a_parameter_of_several_rows_that_are_not_whole_rows_of_one_value_is_refused():

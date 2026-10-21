@@ -1360,13 +1360,15 @@ class UnitTable:
     domains: list[bytes]
     trees: dict[str, Tree]
     data: dict[str, bytes]
+    program: bytes = b""
+    seed: bytes = b""
 
     @classmethod
     def register(cls, outboxes: dict[str, bytes], B: int, program: bytes, seed: bytes) -> "UnitTable":
         """Each unit's outbox registered, the units in the order given."""
         trees = {u: register_outbox(program, u, x, B, seed) for u, x in outboxes.items()}
         return cls(list(trees), tuple(t.depth for t in trees.values()), [t.root for t in trees.values()],
-                   [t.domain_id for t in trees.values()], trees, dict(outboxes))
+                   [t.domain_id for t in trees.values()], trees, dict(outboxes), program, seed)
 
     def index(self, key: tuple) -> int:
         return self.names.index(key[0])

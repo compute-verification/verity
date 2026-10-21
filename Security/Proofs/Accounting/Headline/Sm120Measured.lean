@@ -19,6 +19,10 @@ with the data's hypotheses discharged and the terms bounded as at the data sheet
   `(N_w w* + N_w φ*)/B_♭ · (1 − 41/48000)` (`Whole.unfolded_floor`), below `591/100000` by `decide`
   (`sm120m_unfolded`);
 * (I7) at `7/8` is the receipt split's (`luck_of_receipt_half`).
+
+The argument is `sm120MeasuredHeadline_bind`, with binding at `δ_bind` (`ProofLayer.BindingAt`), and
+`Sm120MeasuredHeadline` takes it at `√δ_fork` (`Whole.moved_le_sqrt`), as the sheet's `Sm120SheetHeadline` takes
+`sm120SheetHeadline_bind`.
 -/
 
 namespace Accounting.SecurityProofs.TS.Headline
@@ -313,18 +317,28 @@ namespace Accounting.SecurityProofs.TS
 open Accounting.TS Accounting.TS.Headline Accounting.Assumptions.TS Pouw.RelativeSecurity
   Accounting.SecurityProofs.TS.Headline
 
-/-- sm_120's headline on VF3s-16: `Whole.dIdealFloor_whole` at `π*`, `p = 7/8`, `p₀ = ½`,
-`Λ = max(κ/ln(8/7), (κ + f)/ln 2)`, `S = 48,000` and `δ = 2^-40`, (I7) from the receipt split
-(`luck_of_receipt_half`), (I8) from its pieces (`ProofsSoundOfPinned`, binding at `√δ_fork` by
-`Whole.moved_le_sqrt`), (I5) `SideUnits` and FILL-OPT from the data,
-and the terms bounded by `Whole.headline_of_branches`: the folded branch by `sm120m_eps_le`, the unfolded one by
-`sm120m_unfolded`. -/
-theorem Sm120MeasuredHeadline : Accounting.Guarantees.TS.Sm120MeasuredHeadline := by
-  intro Ω _ Pl G Uf V nπ pf δfork δzk hδ hSplit h1 hW hSR hN hF hG hPinG hOp hRL hWL hOf hB hZK hPin hRF
-  set δbind := Real.sqrt δfork
+/-- sm_120's headline on VF3s-16 with binding at `δ_bind` (`ProofLayer.BindingAt`), the form (I8)'s pieces take:
+`Whole.dIdealFloor_whole` at `π*`, `p = 7/8`, `p₀ = ½`, `Λ = max(κ/ln(8/7), (κ + f)/ln 2)`, `S = 48,000` and
+`δ = 2^-40`, (I7) from the receipt split (`luck_of_receipt_half`), (I8) from its pieces (`ProofsSoundOfPinned`),
+(I5) `SideUnits` and FILL-OPT from the data, and the terms bounded by `Whole.headline_of_branches`: the folded branch by
+`sm120m_eps_le`, the unfolded one by `sm120m_unfolded`. The 0.591% rests on the record's premises, (I3) at `9/8`
+(`ScalarRoute`) among them, which is assumed: at A6's proved `½` floor the same bound is 7.791%. -/
+theorem sm120MeasuredHeadline_bind {Ω : Type} [Fintype Ω] (Pl : Play Ω Sm120.checks (Fin 122) (Fin 15) Unit Empty)
+    (G : ReceiptGame Ω Sm120.checks) (Uf : Unfolded Ω Sm120.checks) {V : Type} {nπ : ℕ}
+    (pf : ProofLayer Ω Sm120.checks nπ V) (δbind δzk : ℝ)
+    (hδ : (Sm120.checks : ℝ) * (δbind + nπ * δzk) ≤ (1 / 2) ^ 41) (hSplit : ∀ x, (Pl.run x).Split)
+    (h1 : ∀ x, FacetCeilings Sm120Measured.machine (Pl.run x).run)
+    (hW : ∀ x, WordsWritten Sm120Measured.model (Pl.run x)) (hSR : ∀ x, ScalarRoute Sm120Measured.model (Pl.run x))
+    (hN : ∀ x, NoSum (Pl.run x))
+    (hF : ∀ x, FoldOptFoldedAt Sm120Measured.model (Pl.run x)
+      ((1 - Uf.share x / Sm120.checks) * Sm120Measured.model.Nw) (onFacet Sm120Measured.piStar))
+    (hG : Pl.game = G.game) (hPinG : G.Pinned) (hOp : OperandHMu (3 / 4) G) (hRL : ReceiptLuckAt (1 / 2) G)
+    (hWL : WholeLuckAt (1 / 2) G Uf) (hOf : pf.Of Pl) (hB : pf.BindingAt δbind) (hZK : ProofSoundAt pf δzk)
+    (hPin : ProofsPin pf) (hRF : RightFixed Pl pf Sm120Measured.model.Nw) :
+    prob (fun x => Pl.accepts x ∧
+      (Pl.run x).run.time / Sm120Measured.model.credit Sm120Measured.flat < 1 - 591 / 100000) ≤ (1 / 2) ^ 40 := by
   have hL := luck_of_receipt_half Pl.game G hG hPinG hOp hRL
-  have hPS := ProofsSoundOfPinned Ω Sm120.checks nπ Pl pf Sm120Measured.model.Nw δbind δzk hOf
-    (Whole.moved_le_sqrt pf δfork hB) hZK hPin hRF
+  have hPS := ProofsSoundOfPinned Ω Sm120.checks nπ Pl pf Sm120Measured.model.Nw δbind δzk hOf hB hZK hPin hRF
   have hδlo : (1 / 2 : ℝ) ^ 41 ≤ (1 / 2) ^ 40 - (Sm120.checks : ℝ) * (δbind + nπ * δzk) := by
     have e : ((1 : ℝ) / 2) ^ 40 = 2 * (1 / 2) ^ 41 := by norm_num
     linarith
@@ -346,5 +360,12 @@ theorem Sm120MeasuredHeadline : Accounting.Guarantees.TS.Sm120MeasuredHeadline :
   exact ⟨ha, lt_of_lt_of_le hlt (Whole.headline_of_branches Sm120Measured.model Sm120Measured.flat
     (onFacet Sm120Measured.piStar) (isCert_onFacet _) sm120m_wf Sm120.checks sm120_S _ hδlo _
     (sm120m_eps_le _ hδlo) sm120m_unfolded)⟩
+
+/-- sm_120's headline on VF3s-16: `sm120MeasuredHeadline_bind` at binding `√δ_fork`, from the fork form by
+`Whole.moved_le_sqrt` (`BindingOfFork`). -/
+theorem Sm120MeasuredHeadline : Accounting.Guarantees.TS.Sm120MeasuredHeadline := by
+  intro Ω _ Pl G Uf V nπ pf δfork δzk hδ hSplit h1 hW hSR hN hF hG hPinG hOp hRL hWL hOf hB hZK hPin hRF
+  exact sm120MeasuredHeadline_bind Pl G Uf pf (Real.sqrt δfork) δzk hδ hSplit h1 hW hSR hN hF hG hPinG hOp hRL hWL
+    hOf (Whole.moved_le_sqrt pf δfork hB) hZK hPin hRF
 
 end Accounting.SecurityProofs.TS
