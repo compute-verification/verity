@@ -14,6 +14,7 @@ import Models.Accounting.Guarantees.Compose
 import Models.Accounting.Guarantees.ComposePeriod
 import Models.Accounting.Guarantees.Confidence
 import Models.Accounting.Guarantees.FillerLuck
+import Models.Accounting.Guarantees.FpG1
 import Models.Accounting.Guarantees.HMu
 import Models.Accounting.Guarantees.DeclaredCircuit
 import Models.Accounting.Guarantees.Gates

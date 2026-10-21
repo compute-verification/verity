@@ -1153,6 +1153,14 @@
    "owner": "@compute-accounting",
    "digest": "ef3e5acc5423c8a6eab3ad67be8ddc3fa6c5ae38afe8f5784630ea198756c785"
   },
+  "Pouw.FpG1.Leaves.Fp8": {
+   "owner": "@compute-accounting",
+   "digest": "881fe7602bcca20287b67054e76f3cadff019a7458cfb0b5546052274ad61428"
+  },
+  "Pouw.FpG1.Leaves.W4a8": {
+   "owner": "@compute-accounting",
+   "digest": "7cfd18e0250ce18f4e28679c438c71ac38537b955ef174309651294dde643402"
+  },
   "Pouw.Gγ": {
    "owner": "@compute-accounting",
    "digest": "09f42b57cb73d9645e95b4480fa95b4479fde6cd18c00a646b8aa0e3f1badc68"
@@ -2455,6 +2463,22 @@
    "signature": ["Accounting.SecurityProofs.Fit.{u_1} : Accounting.Guarantees.Fit"],
    "assumptions": [],
    "type_hash": "7a94747611d0047831949e30d92a30156cb3773cfefb2fba15f03b7f71b3df88"
+  },
+  "Accounting.SecurityProofs.FpG1.Sm120FpG1SheetHeadline": {
+   "owner": "@compute-accounting",
+   "signature": [
+    "Accounting.SecurityProofs.FpG1.Sm120FpG1SheetHeadline : Accounting.Guarantees.FpG1.Sm120FpG1SheetHeadline"
+   ],
+   "assumptions": [],
+   "type_hash": "9bf83cdf3cfbd6f55a855ddf9851c188eff696b8cae663149595ba04195c05b3"
+  },
+  "Accounting.SecurityProofs.FpG1.Sm120W4a8G1SheetHeadline": {
+   "owner": "@compute-accounting",
+   "signature": [
+    "Accounting.SecurityProofs.FpG1.Sm120W4a8G1SheetHeadline : Accounting.Guarantees.FpG1.Sm120W4a8G1SheetHeadline"
+   ],
+   "assumptions": [],
+   "type_hash": "6c06bedfd43b7247cad9f07acdb7000a59c322e75e2f825d7e4f100a8adc4f85"
   },
   "Accounting.SecurityProofs.Gates.Bf16ToF32Affine": {
    "owner": "@memory-accounting",
@@ -9759,7 +9783,9 @@
    "Accounting.SecurityProofs.ComposePeriod.CircuitCreditPeriod": "frozen (no-function,world-unlisted): CircuitWorkPeriod's credit in live words (RT4-INT-8): under its premises at a, b > 0, an accepted period has at least (1 - eps(j))+ of its accepted prefix's live words fixed right (Accounting.Compose.creditPrefix), eps(j) = r(j) N_w/(min(a, b) N_live) at the realized prefix j = PeriodRun.prefixLen (Accounting.Compose.epsPrefix), never at the cap n, except with probability delta_s + n (delta_bind + delta_ks), so a prefix whose eps is at least 1 earns nothing; not a Lean function, an Accounting.TS.prob event that shape.events does not list, with CircuitWorkPeriod's claims off the premises list. Proved from CircuitWorkPeriod's assembly (creditPrefix_le, with UnitFixed keeping an accepted run's fixed words nonnegative). A credit of words, not of time: the headline's time credit needs CreditOfWork on each credited window's run and is not stated.",
    "Accounting.SecurityProofs.TS.SessionSoundAt": "frozen (no-function,world-unlisted): #2909's SoundAt bridge on #2855's proof layer through its C-Flock sessions, over every window of sessions, not a Lean function; it takes EndToEndRegisteredRows' collision bounds at every session (RowsSession.CR) as hypotheses, and its premises AcceptedLive, WindowLaw, ServedChecksHold and ServedRootsLinked (Proofs.Accounting.TS.Session.Assumptions) are not on the premises list.",
    "Pouw.Guarantees.FiatShamir.FiatShamirFloor": "unstated: proofs' gap (7), the Fiat-Shamir floor per prover (breakBoundFS, ecr/sha-512 at each adversary's collision finders within budgets computed from its time, plus eps_id and T*tau, the grinding term T*mu^m of Daniel's 17 Oct ruling on per-matmul Fiat-Shamir seeds); stated for red team and proofs' review (RT-DELTA r2, CMP-33, CMP-59), not proved yet",
-   "Pouw.Guarantees.FiatShamir.SteerBoundOfMoment": "unstated: GRIND's per-query moment as SteerBound's instance (proofs' gap (7)); stated, not proved yet"
+   "Pouw.Guarantees.FiatShamir.SteerBoundOfMoment": "unstated: GRIND's per-query moment as SteerBound's instance (proofs' gap (7)); stated, not proved yet",
+   "Accounting.SecurityProofs.FpG1.Sm120FpG1SheetHeadline": "frozen (conjecture,no-function,world-unlisted): FP8-g1's headline on sm_120 at 5.860%, Accounting.SecurityProofs.TS.Sm120SheetHeadline (whose reason is this one's) at proof layers whose values are a round's operand leaves beside any other values (Leaves x W) with n_pi + 1 proofs a round, with binding at delta_bind (ProofLayer.BindingAt, #2855's form, which ProofsSoundOfPinned takes) in place of the record's fork form at delta_fork (BindingForkAt, read at sqrt(delta_fork) by BindingOfFork), so the budget reads delta_bind where the record's reads sqrt(delta_fork) and no number moves, and one hypothesis more over Definitions, every committed leaf FP8-g1's on H1's grids (Pouw.FpG1.Leaves.Fp8 at Pouw.FpG1.Grids.h1: E4M3's integers to 120 and to 104), which is not on the premises list; its conclusion reads no operand value, so the bound is the record's at g1's windows.",
+   "Accounting.SecurityProofs.FpG1.Sm120W4a8G1SheetHeadline": "frozen (conjecture,no-function,world-unlisted): W4A8-g1's headline on sm_120 at 5.860%, Accounting.SecurityProofs.TS.Sm120SheetHeadline (whose reason is this one's) at proof layers whose values are a round's operand leaves beside any other values (Leaves x W) with n_pi + 1 proofs a round, with binding at delta_bind (ProofLayer.BindingAt, #2855's form, which ProofsSoundOfPinned takes) in place of the record's fork form at delta_fork (BindingForkAt, read at sqrt(delta_fork) by BindingOfFork), so the budget reads delta_bind where the record's reads sqrt(delta_fork) and no number moves, and one hypothesis more over Definitions, every committed leaf W4A8-g1's on H1's grids (Pouw.FpG1.Leaves.W4a8 at Pouw.FpG1.Grids.h1: int8 activations in [-126, 126], doubled E2M1 weights under block scales to 9), which is not on the premises list; its conclusion reads no operand value, so the bound is the record's at g1's windows."
   },
   "conjectures": {
    "Pous.P2.Assumptions.P2RingAuditSecure": {
@@ -10974,6 +11000,8 @@
     "Accounting.SecurityProofs.Compose.CircuitWork",
     "Accounting.SecurityProofs.ComposePeriod.CircuitCreditPeriod",
     "Accounting.SecurityProofs.ComposePeriod.CircuitWorkPeriod",
+    "Accounting.SecurityProofs.FpG1.Sm120FpG1SheetHeadline",
+    "Accounting.SecurityProofs.FpG1.Sm120W4a8G1SheetHeadline",
     "Accounting.SecurityProofs.HMu.CoinPointMass",
     "Accounting.SecurityProofs.HMu.CoinPointMassHalf",
     "Accounting.SecurityProofs.HMu.LemmaB",
@@ -11012,7 +11040,12 @@
     "Accounting.TS.Headline.labelled": "4d15c0c955724b0182fb7b37f0589ab47a2087a7e52f5ac3a2d63bd72bd7da58",
     "Accounting.TS.Headline.rowsMachine": "5e9aabf80511ea661b5ff64967978bde21f94bfab89db17b7c9a4d9099354a0b"
    },
-   "guarantees": ["Accounting.SecurityProofs.TS.Sm120MeasuredHeadline", "Accounting.SecurityProofs.TS.Sm120SheetHeadline"]
+   "guarantees": [
+    "Accounting.SecurityProofs.FpG1.Sm120FpG1SheetHeadline",
+    "Accounting.SecurityProofs.FpG1.Sm120W4a8G1SheetHeadline",
+    "Accounting.SecurityProofs.TS.Sm120MeasuredHeadline",
+    "Accounting.SecurityProofs.TS.Sm120SheetHeadline"
+   ]
   },
   "Definitions.Accounting.Headline.Sm120": {
    "digest": "0645a51843070602775f7653106ad4cdfec7ceb7b6756402a28742fd30ac6101",
@@ -11039,7 +11072,12 @@
     "Accounting.TS.Headline.Sm120.piStar": "168fae4183bb819574bb473cfabe7a5f13d5faf90a988b79a30c23a8d05f81c9",
     "Accounting.TS.Headline.Sm120.sheet": "d04a18d0b47bd9bea70b7ce3c1d5686023929761a8bd6cea221fbdc82b970f88"
    },
-   "guarantees": ["Accounting.SecurityProofs.TS.Sm120MeasuredHeadline", "Accounting.SecurityProofs.TS.Sm120SheetHeadline"]
+   "guarantees": [
+    "Accounting.SecurityProofs.FpG1.Sm120FpG1SheetHeadline",
+    "Accounting.SecurityProofs.FpG1.Sm120W4a8G1SheetHeadline",
+    "Accounting.SecurityProofs.TS.Sm120MeasuredHeadline",
+    "Accounting.SecurityProofs.TS.Sm120SheetHeadline"
+   ]
   },
   "Definitions.Accounting.Headline.Sm120Measured": {
    "digest": "382797e234f81375e846f98ef896092b89329dadf4e2c789c2a924b61dee47a6",
@@ -12131,6 +12169,8 @@
     "Accounting.SecurityProofs.Compose.ServiceCovers",
     "Accounting.SecurityProofs.ComposePeriod.CircuitCreditPeriod",
     "Accounting.SecurityProofs.ComposePeriod.CircuitWorkPeriod",
+    "Accounting.SecurityProofs.FpG1.Sm120FpG1SheetHeadline",
+    "Accounting.SecurityProofs.FpG1.Sm120W4a8G1SheetHeadline",
     "Accounting.SecurityProofs.TS.BindingFacetD1",
     "Accounting.SecurityProofs.TS.CompilerC",
     "Accounting.SecurityProofs.TS.CompilerStage",
@@ -12179,6 +12219,8 @@
     "Accounting.SecurityProofs.FillerLuck.FillerLuckAt",
     "Accounting.SecurityProofs.FillerLuck.PinnedFillBudget",
     "Accounting.SecurityProofs.FillerLuck.PinnedFillLuckAt",
+    "Accounting.SecurityProofs.FpG1.Sm120FpG1SheetHeadline",
+    "Accounting.SecurityProofs.FpG1.Sm120W4a8G1SheetHeadline",
     "Accounting.SecurityProofs.TS.CompilerC",
     "Accounting.SecurityProofs.TS.CompilerStage",
     "Accounting.SecurityProofs.TS.DIdeal",
@@ -12228,6 +12270,8 @@
     "Accounting.SecurityProofs.Compose.CircuitWorkSeeded",
     "Accounting.SecurityProofs.ComposePeriod.CircuitCreditPeriod",
     "Accounting.SecurityProofs.ComposePeriod.CircuitWorkPeriod",
+    "Accounting.SecurityProofs.FpG1.Sm120FpG1SheetHeadline",
+    "Accounting.SecurityProofs.FpG1.Sm120W4a8G1SheetHeadline",
     "Accounting.SecurityProofs.TS.AdditiveFixed",
     "Accounting.SecurityProofs.TS.BindingOfFork",
     "Accounting.SecurityProofs.TS.DrawnBindingOfFork",
@@ -12315,6 +12359,8 @@
     "Accounting.SecurityProofs.Compose.CircuitWork",
     "Accounting.SecurityProofs.ComposePeriod.CircuitCreditPeriod",
     "Accounting.SecurityProofs.ComposePeriod.CircuitWorkPeriod",
+    "Accounting.SecurityProofs.FpG1.Sm120FpG1SheetHeadline",
+    "Accounting.SecurityProofs.FpG1.Sm120W4a8G1SheetHeadline",
     "Accounting.SecurityProofs.TS.CondReceiptLuckMarginal",
     "Accounting.SecurityProofs.TS.DuoSegmentsBind",
     "Accounting.SecurityProofs.TS.Fx1SegmentsBind",
@@ -12340,6 +12386,8 @@
     "Accounting.SecurityProofs.Compose.CircuitWork",
     "Accounting.SecurityProofs.ComposePeriod.CircuitCreditPeriod",
     "Accounting.SecurityProofs.ComposePeriod.CircuitWorkPeriod",
+    "Accounting.SecurityProofs.FpG1.Sm120FpG1SheetHeadline",
+    "Accounting.SecurityProofs.FpG1.Sm120W4a8G1SheetHeadline",
     "Accounting.SecurityProofs.TS.Sm120MeasuredHeadline",
     "Accounting.SecurityProofs.TS.Sm120SheetHeadline"
    ]
@@ -12424,6 +12472,8 @@
     "Accounting.SecurityProofs.Compose.ServiceCovers",
     "Accounting.SecurityProofs.ComposePeriod.CircuitCreditPeriod",
     "Accounting.SecurityProofs.ComposePeriod.CircuitWorkPeriod",
+    "Accounting.SecurityProofs.FpG1.Sm120FpG1SheetHeadline",
+    "Accounting.SecurityProofs.FpG1.Sm120W4a8G1SheetHeadline",
     "Accounting.SecurityProofs.TS.BindingFacetD1",
     "Accounting.SecurityProofs.TS.CompilerC",
     "Accounting.SecurityProofs.TS.CompilerStage",
@@ -12480,6 +12530,8 @@
     "Accounting.SecurityProofs.Compose.CircuitCredit",
     "Accounting.SecurityProofs.Compose.CircuitCreditSeeded",
     "Accounting.SecurityProofs.Compose.CreditOfWork",
+    "Accounting.SecurityProofs.FpG1.Sm120FpG1SheetHeadline",
+    "Accounting.SecurityProofs.FpG1.Sm120W4a8G1SheetHeadline",
     "Accounting.SecurityProofs.TS.SheetDIdealFloor",
     "Accounting.SecurityProofs.TS.SheetFacetCeilings",
     "Accounting.SecurityProofs.TS.Sm120SheetHeadline"
@@ -12582,7 +12634,12 @@
     "Accounting.TS.Unfolded.round": "7d37232d94dabc302c97bc664c8b1e986e5ee1578f7e8e582682e288e324bb86",
     "Accounting.TS.Unfolded.share": "378870a4b597b08fc1c4a5ae28c39f9eb10c60ab9486286b57d4b2e25804b50d"
    },
-   "guarantees": ["Accounting.SecurityProofs.TS.Sm120MeasuredHeadline", "Accounting.SecurityProofs.TS.Sm120SheetHeadline"]
+   "guarantees": [
+    "Accounting.SecurityProofs.FpG1.Sm120FpG1SheetHeadline",
+    "Accounting.SecurityProofs.FpG1.Sm120W4a8G1SheetHeadline",
+    "Accounting.SecurityProofs.TS.Sm120MeasuredHeadline",
+    "Accounting.SecurityProofs.TS.Sm120SheetHeadline"
+   ]
   },
   "Definitions.Accounting.Tag.PolyHash": {
    "digest": "745bfb72ad4da7469d679c4cb9bc2be42ca7640140c26059793b094d186a1f6f",
@@ -15935,6 +15992,45 @@
    },
    "guarantees": ["Pouw.Fp8Atom.H1T.Proofs.h1tGamma"]
   },
+  "Definitions.Pouw.FpG1.Encoding": {
+   "digest": "d02079a1db3ee60f58f1c2431dff87b509346a77983836f5b5c09ba5288c0b1f",
+   "definitions": {
+    "Pouw.FpG1.E2M1x2Nat": "076676250b0ffb460b9b8240376ae7b4ce2ec3bda6223330f636efea3be7428a",
+    "Pouw.FpG1.E4M3Nat": "fd5a155bba503b075b9f75d0d6b077fae059ffba1cbc25357b9edd0c99af8a5c",
+    "Pouw.FpG1.Grids": "2c0868fe3093b7ad5f5a39a9a3d626d93dc076756e6b79ca1773b5c4463649e1",
+    "Pouw.FpG1.Grids.act": "0d9d1d4467df5fcb4965251cee2357b58660c85680b93bd4d5b0ada54ef1a178",
+    "Pouw.FpG1.Grids.scale": "8eff7424a5a5173e9b246dc2fa098df8b02c9492429f96236772a350b4f031df",
+    "Pouw.FpG1.Grids.wt": "10d27f6e052cce965f5b062ccb1827b0289e80bb073dfa6c2706c10a9b81c745",
+    "Pouw.FpG1.e2m1x2Grid": "9e8ef481b346ec482a402d77713be91e0d4918ed6b0a749a8fbed58c67e8ec14",
+    "Pouw.FpG1.e4m3Grid": "2fdf73b8a7295edee2a28ddb84063bd50f805aaec112b867deb7cbd1b27de611",
+    "Pouw.FpG1.grid": "1e1f3e336b6d03bffe23c5d5a2d6ceface8dd4435f2b7ec03a87883910ab92d3",
+    "Pouw.FpG1.instDecidablePredE2M1x2Nat": "81b559fdf2920de4d289cf19312b32bb84249a8042817919b412cce4b7416e5e",
+    "Pouw.FpG1.instDecidablePredE4M3Nat": "526915b0330ba3929f6abb76e69f31df11fc22bd8d50f0ebcf9964e2e0037692"
+   },
+   "guarantees": [
+    "Accounting.SecurityProofs.FpG1.Sm120FpG1SheetHeadline",
+    "Accounting.SecurityProofs.FpG1.Sm120W4a8G1SheetHeadline"
+   ]
+  },
+  "Definitions.Pouw.FpG1.H1": {
+   "digest": "405ed512825a3ce82fc984692777e9c0b7f991a6c84be67d3a897bb0ac71a8bb",
+   "definitions": {
+    "Pouw.FpG1.Grids.h1": "60b1afdc2bd1cc568ef9c22565e6e3b11330cca6e1ea50ca2dcf53f580159b4d",
+    "Pouw.FpG1.Leaves": "42d9c345f00329666b350be98111b0ddabd1a467dc1c2d12b9f2af47f8f09f29",
+    "Pouw.FpG1.Leaves.Fp8": "881fe7602bcca20287b67054e76f3cadff019a7458cfb0b5546052274ad61428",
+    "Pouw.FpG1.Leaves.W4a8": "7cfd18e0250ce18f4e28679c438c71ac38537b955ef174309651294dde643402",
+    "Pouw.FpG1.Leaves.act": "20c98f9f1987a4547f2028b23506ee6c5eb27106260bcd72efcc6e8d71f03fad",
+    "Pouw.FpG1.Leaves.wt": "c459dbdaffe07c787c72bccb421b84fee93ff79cec62b323161e81c4fb5d6114",
+    "Pouw.FpG1.Level": "0cf9dbc28d9f936a22fb885014b0b7198bc4cf2386c50fdd194076c1fdc98fc3",
+    "Pouw.FpG1.Level.fp4": "11887085bd1c808fa9c199fcfbb46d4d977a119b56a1aca1a6aded858029eada",
+    "Pouw.FpG1.Level.fp8": "533779fb6ab3ae558a486d0c554ac8a98bb2ec86b123c7530d2d7025d660f017",
+    "Pouw.FpG1.Level.int8": "b9e394d4d9a7b4ba06082916111fbb0e0a10f2189fe292d7010eb605cc081dee"
+   },
+   "guarantees": [
+    "Accounting.SecurityProofs.FpG1.Sm120FpG1SheetHeadline",
+    "Accounting.SecurityProofs.FpG1.Sm120W4a8G1SheetHeadline"
+   ]
+  },
   "Definitions.Pouw.Game.Defs": {
    "digest": "58b56dd0d334b1d128502e86299fa8399332d65ed7fb8d2c739d8bfc94fa1d4c",
    "definitions": {
@@ -18766,6 +18862,8 @@
     "Accounting.SecurityProofs.FillerLuck.PinnedFillBlocksDeficit",
     "Accounting.SecurityProofs.FillerLuck.PinnedFillBudget",
     "Accounting.SecurityProofs.FillerLuck.PinnedFillLuckAt",
+    "Accounting.SecurityProofs.FpG1.Sm120FpG1SheetHeadline",
+    "Accounting.SecurityProofs.FpG1.Sm120W4a8G1SheetHeadline",
     "Accounting.SecurityProofs.HMu.CoinPointMass",
     "Accounting.SecurityProofs.HMu.CoinPointMassHalf",
     "Accounting.SecurityProofs.HMu.LemmaB",
@@ -24066,6 +24164,8 @@
     "Accounting.SecurityProofs.Compose.CircuitCredit",
     "Accounting.SecurityProofs.Compose.CircuitCreditSeeded",
     "Accounting.SecurityProofs.Compose.CreditOfWork",
+    "Accounting.SecurityProofs.FpG1.Sm120FpG1SheetHeadline",
+    "Accounting.SecurityProofs.FpG1.Sm120W4a8G1SheetHeadline",
     "Accounting.SecurityProofs.TS.SheetDIdealFloor",
     "Accounting.SecurityProofs.TS.SheetFacetCeilings",
     "Accounting.SecurityProofs.TS.SheetScalarRouteHalf",
@@ -24129,6 +24229,8 @@
     "Accounting.SecurityProofs.ComposePeriod.CircuitWorkPeriod",
     "Accounting.SecurityProofs.FillerLuck.FillerLuckAt",
     "Accounting.SecurityProofs.FillerLuck.PinnedFillLuckAt",
+    "Accounting.SecurityProofs.FpG1.Sm120FpG1SheetHeadline",
+    "Accounting.SecurityProofs.FpG1.Sm120W4a8G1SheetHeadline",
     "Accounting.SecurityProofs.TS.AdaptSteerFail",
     "Accounting.SecurityProofs.TS.CompilerC",
     "Accounting.SecurityProofs.TS.CompilerStage",
@@ -24414,6 +24516,17 @@
     "Accounting.SecurityProofs.FillerLuck.PinnedFillBlocksDeficit",
     "Accounting.SecurityProofs.FillerLuck.PinnedFillBudget",
     "Accounting.SecurityProofs.FillerLuck.PinnedFillLuckAt"
+   ]
+  },
+  "Models.Accounting.Guarantees.FpG1": {
+   "digest": "7297e683773877092b8981f9224e81970da2fdba8d9c6650b8f4472b3cab2f64",
+   "definitions": {
+    "Accounting.Guarantees.FpG1.Sm120FpG1SheetHeadline": "7a08d8ea36e23b38e12a914529b83204294a0bdeed2582a718f998b025101a2a",
+    "Accounting.Guarantees.FpG1.Sm120W4a8G1SheetHeadline": "eb7646db3e1481aee6d8b41906c88408ce615e373a6ed7429b1fdcac4dd1cd41"
+   },
+   "guarantees": [
+    "Accounting.SecurityProofs.FpG1.Sm120FpG1SheetHeadline",
+    "Accounting.SecurityProofs.FpG1.Sm120W4a8G1SheetHeadline"
    ]
   },
   "Models.Accounting.Guarantees.Gates": {
