@@ -71,8 +71,8 @@ activation and entry width `a`, an inference block finishes at most `k² / (b f 
 products, with `Y` its crossings at rate `f a` (`Cube.crossings`): `b f a · #(finished) ≤ k² + a k √(b f Y) + b f a k`.
 
 The products it computes whole at tokens it reads at least `f a` gates of number at most one per token and weight
-(`cell_inj`): at most `(k / b) (k / (f a))`. The others, by Loomis–Whitney on each matrix and Cauchy–Schwarz over the
-matrices, at most `√(p Q Y)` with `b p ≤ k` (`UpdateHardness`) and `f Q ≤ k` (`ActivationReads`). Products it
+(`cell_inj`): at most `(k / b) (k / (f a))`. The others, by Loomis–Whitney on their cells (matrix and row, column,
+token), at most `√(p Q Y)` with `b p ≤ k` (`UpdateHardness`) and `f Q ≤ k` (`ActivationReads`). Products it
 finishes without computing them whole are at most `k`, as in `Intensity`.
 
 A block's crossings are paid by the blocks that finish their entries (`PartialSumsRead`), so this bounds a block on its
