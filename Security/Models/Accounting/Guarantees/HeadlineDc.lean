@@ -85,7 +85,7 @@ Per device:
   carries SHFL's joint issue lines there; RT4-SHEET-9's unlisted instructions count in it. On DC-90-ri it carries the
   JI90 lines too: IMAD.WIDE and LD.E, which count in it, were timed beside the IGMMA (d06c; RT4-SHEET-14). Without
   ffill in ♭, `setup`'s floor program on DC-90-ri writes every word on the IGMMA, and `Sm90Measured.flat` is that
-  floor, its fold's shares exact (`B_♭` 195.30 a unit, binding on `JPA90_0`; the machine model's reading is 1.485% at
+  floor, its fold's shares exact (`B_♭` 195.30 a unit, binding on `JPA90_0`; the machine model's reading is 1.473% at
   `q = ½`). It is over 1%;
   crediting ffill would need a check that reads its chains (RT-HB-HEAD-1). ε_skip prices the P·V peel at sm_90a's own
   instruction counts (`eps_budget`'s `SASS`: RT-ISA-7's static nvdisasm counts with ncu's rule applied, not ncu):
