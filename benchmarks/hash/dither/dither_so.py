@@ -1,6 +1,7 @@
 """dither-a in the statement's order (RT4-INT-12; CA's decision, thread 1792447454.296229): the arms
-`dither-a-{hbk,hbr}-zy-{aom,aomn,ab,abn}[-pt]-so<D>[-ov|-ov1|-ovp]`, labelled form=ASK-71 A (provisional) as every
-dither-a arm.
+`dither-a-{hbk,hbr}-zy-{aom,aomn,ab,abn}[-pt]-so<D>[-ov|-ov1|-ovp]`, labelled by their unit as every dither-a arm
+(`dither_a.form_of`, RT4-INT-39): form=beside, receipts beside the served GEMM, since neither unit commits z (hbr's write
+none; hbk's write z and y into scratch, which nothing commits).
 
 A step's A, scales and z/y leaves go under its round's root before its round's coin; its units read that coin and run
 after it, beside a later step's forward; their receipts go under a later round.  Step s, in order:
@@ -75,7 +76,6 @@ import dither_one as DO
 from dither_fused import CO, Call, unwords, words
 from hb_side import auto_j
 
-FORM = DA.FORM
 LIB_ENV = DA.LIB_ENV
 CG = None
 ORDER = "statement (RT4-INT-12): A, scales, z/y under round s before coin s; units after coin s; receipts under round s + D - 1"
@@ -917,7 +917,7 @@ def check(win: SoWindow, lib_h1o: str, which: str = "gate", n_cpu_units: int = 3
                    and order["receipts_round_after_coin"])
     r_round = {"s": g["late_s"], "leaves": g["late_leaves"], "root": g["late_root"]}
     doc = DA.check(win, lib_h1o, which, n_cpu_units, g={**g, "salt": salt}, r_round=r_round)
-    doc["order"], doc["form"], doc["depth"] = order, FORM, win.depth
+    doc["order"], doc["depth"] = order, win.depth
     rd = doc["round"]
     rest_ok = not (doc["receipts_vs_h1r_bad"] or doc["z_vs_int_mm_bad"] or doc["y_vs_dequant_z_bad"]
                    or doc["y_leaf_vs_dequant_z_bad"] or doc["a_roots_bad"] or doc["admit_roots_bad"] or doc["z_roots_bad"]
