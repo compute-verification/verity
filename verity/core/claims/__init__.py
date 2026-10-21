@@ -343,7 +343,8 @@ ENTRIES: dict[str, Entry] = {e.id: e for e in (
           "the headlines (sm_120's, the H200's and the B200's) ask it only at their own certificate π*, N the words "
           "the run folds (FoldOptFoldedAt), an open conjecture checked within a stated menu by test_lean_headline.py "
           "(the Lean menu, the bit-exact lane folds, the bulk-reduction floors and fold_bulk.cu's whole-block folds) "
-          "and on bit-exact folds by test_lean_headline_dc.py",
+          "and on bit-exact folds by test_lean_headline_dc.py; at DC-90-ri's π* it is false for counted, unbuilt "
+          "memory round-trip folds (RT4-SHEET-13, -14) until the classes no run timed beside an IGMMA have JI90 lines",
           "FOLD-OPT", "conjectured"),
     Entry("accounting-ts-fill-opt", "assumption",
           "FILL-OPT: no program runs the verified filler at a certificate's price below (1 − μ_x)·χ*(π), for every "

@@ -127,8 +127,11 @@ class Family:
 # the issue row alone (RT4-SHEET-12), `setup`'s floor on DC-90-ri folds by the generic CP_RED8 alone and heads
 # 0.047% of the words on the design's lane baseline (dp4a), the rest on the IGMMA; `_flat_shares` makes the split exact.
 # FOLD-OPT at its π* is false for a memory round trip's XOR (an ATOM.E.XOR and a load back, counted but not built, fold
-# a word at 0.5038 φ*; RT4-SHEET-13), so the statement says nothing about such a run, though that run's most-loaded
-# row still holds the conclusion (+0.072 on issue).
+# a word at 0.5038 φ*; RT4-SHEET-13), so the statement says nothing about such a run. With only the XOR moved, the
+# run's most-loaded row still holds the conclusion (+0.072 on issue); mixed with IMAD.WIDE, which counts in UNLISTED
+# (0.0036 at π* against IMAD's 0.9788), every row of the counted run is under the line, at most 0.9062·B_♭ with
+# ptxas's forced overhead (RT4-SHEET-14). The classes no run timed beside an IGMMA carry no JI90 line, while π* is
+# 96.7% JI90_0.
 # A uniform instruction heads up to 2 words (UIMAD.WIDE.U32 writes a UR pair, RT-HOPPER-7), so UNI's ω is 2.
 SM90 = Family("Sm90", "H200", "sm_90", "dither-2s-licpw-redux-p1-l32", "DS-90", "DC-90-ri", 1980,
               "EPS1 DC's measured f_max at default clocks; the sheet's TOPS are at 1830 MHz", {"UNI": 2},
