@@ -1005,6 +1005,9 @@
    "owner": "@lean",
    "digest": "57196e4e385bfd389cdc6a3776b00da99c4df976b913c3e02e1c956b0f49c44e"
   },
+  "Nci.Cover.Assumptions.ColumnsIncompressible": {
+   "owner": "@training"
+  },
   "Nci.Cover.Assumptions.ConditionalUpdateHardness": {
    "owner": "@training",
    "digest": "51cdeb0b80f7afbb568fdd7bd837c37887629958a22a9786216886bd90ac8c69"
@@ -1012,6 +1015,9 @@
   "Nci.Cover.Assumptions.UpdateHardness": {
    "owner": "@training",
    "digest": "9df3e75114d3a5f882d8ae26ec4045370e7aba15045792f486f7781b24d05a23"
+  },
+  "Nci.Cover.Assumptions.ValueReadHardness": {
+   "owner": "@training"
   },
   "Nci.Cover.Assumptions.Width": {
    "owner": "@training",
@@ -1032,6 +1038,17 @@
   "Nci.Cover.Circuit.ReachesIn": {
    "owner": "@training",
    "digest": "addd81d473b14cda9dcd751e8d4437fc7d54d65e22983a1bbfc6db5d14c16b97"
+  },
+  "Nci.Cover.Keyed.PerValueCut": {
+   "owner": "@training"
+  },
+  "Nci.Cover.MulBlocks.CutWidth": {
+   "owner": "@training",
+   "digest": "7d95acbfefad918ed93f2773d780f3bea8d21baaaba3eeec7464d0776deb8db5"
+  },
+  "Nci.Cover.MulBlocks.DisjointUpstreams": {
+   "owner": "@training",
+   "digest": "5519048b7b60b47ddcfa93790a0c4d1c9f96a65510adb0bab89fba115d0ea823"
   },
   "Nci.Cover.MulBlocks.Upstream": {
    "owner": "@training",
@@ -1428,14 +1445,6 @@
   "Verity.Declaration.Contains": {
    "owner": "@lean",
    "digest": "6c8b0ffd3222a58091c7755158d171c1f1f37b959832b0ad5b40c4452c431481"
-  },
-  "Nci.Cover.MulBlocks.CutWidth": {
-   "owner": "@training",
-   "digest": "7d95acbfefad918ed93f2773d780f3bea8d21baaaba3eeec7464d0776deb8db5"
-  },
-  "Nci.Cover.MulBlocks.DisjointUpstreams": {
-   "owner": "@training",
-   "digest": "5519048b7b60b47ddcfa93790a0c4d1c9f96a65510adb0bab89fba115d0ea823"
   }
  },
  "meaning": [
@@ -7084,6 +7093,24 @@
    "assumptions": [],
    "type_hash": "6681e575760ca805e4586d48ed45c43b7a03fde01c00a86fc97c07759df23dba"
   },
+  "Nci.Cover.SecurityProofs.FanOutCoverBound": {
+   "owner": "@training"
+  },
+  "Nci.Cover.SecurityProofs.FanOutIntensity": {
+   "owner": "@training"
+  },
+  "Nci.Cover.SecurityProofs.FanOutReadCoverBound": {
+   "owner": "@training"
+  },
+  "Nci.Cover.SecurityProofs.FanOutReadCoverBoundStructural": {
+   "owner": "@training"
+  },
+  "Nci.Cover.SecurityProofs.FanOutReadIntensity": {
+   "owner": "@training"
+  },
+  "Nci.Cover.SecurityProofs.FanOutReadIntensityStructural": {
+   "owner": "@training"
+  },
   "Nci.Cover.SecurityProofs.Intensity": {
    "owner": "@training",
    "signature": ["Nci.Cover.SecurityProofs.Intensity : Nci.Cover.Guarantees.Intensity"],
@@ -9983,7 +10010,13 @@
    "Nci.Cover.SecurityProofs.WidthCoverBound": "frozen (no-function): It is about an arbitrary training circuit, its products with an upstream certificate and inference blocks of it (Security/Definitions/Nci/Cover.lean), under the named ConditionalUpdateHardness and Width (Security/Models/Nci/Assumptions/Cover.lean), not about the NCI check's code; a check of declared inference blocks joined to it is what would give it an acceptance.",
    "Nci.Cover.SecurityProofs.WidthOfCut": "frozen (no-function): It is about an arbitrary training circuit, its products with the activation's cut width (Security/Definitions/Nci/CoverWidth.lean) and inference blocks of it (Security/Definitions/Nci/Cover.lean), under the named UpdateHardness (Security/Models/Nci/Assumptions/Cover.lean), not about the NCI check's code; a check of declared inference blocks joined to it is what would give it an acceptance.",
    "Nci.Cover.SecurityProofs.CutOfDisjointUpstreams": "frozen (no-function): It is about an arbitrary training circuit and its products, two structural properties of their wiring (Security/Definitions/Nci/CoverWidth.lean), not about the NCI check's code; a check of a circuit's disjoint upstreams, joined to the cover theorem, is what would give it an acceptance.",
-   "Nci.Cover.SecurityProofs.CutWidthCoverBound": "frozen (no-function): It is about an arbitrary training circuit, its products with an upstream certificate and the activation's cut width and inference blocks of it (Security/Definitions/Nci/Cover.lean, Security/Definitions/Nci/CoverWidth.lean), under the named ConditionalUpdateHardness (Security/Models/Nci/Assumptions/Cover.lean), not about the NCI check's code; a check of declared inference blocks joined to it is what would give it an acceptance."
+   "Nci.Cover.SecurityProofs.CutWidthCoverBound": "frozen (no-function): It is about an arbitrary training circuit, its products with an upstream certificate and the activation's cut width and inference blocks of it (Security/Definitions/Nci/Cover.lean, Security/Definitions/Nci/CoverWidth.lean), under the named ConditionalUpdateHardness (Security/Models/Nci/Assumptions/Cover.lean), not about the NCI check's code; a check of declared inference blocks joined to it is what would give it an acceptance.",
+   "Nci.Cover.SecurityProofs.FanOutIntensity": "frozen (no-function): It is about an arbitrary training circuit, its products with a keyed token structure and inference blocks of it (Security/Definitions/Nci/Cover.lean, Security/Definitions/Nci/CoverFanOut.lean), under the named UpdateHardness and ColumnsIncompressible (Security/Models/Nci/Assumptions/Cover.lean, Security/Models/Nci/Assumptions/CoverFanOut.lean), not about the NCI check's code; a check of declared inference blocks joined to it is what would give it an acceptance.",
+   "Nci.Cover.SecurityProofs.FanOutCoverBound": "frozen (no-function): It is about an arbitrary training circuit, its products with a keyed token structure and inference blocks of it (Security/Definitions/Nci/Cover.lean, Security/Definitions/Nci/CoverFanOut.lean), under the named UpdateHardness and ColumnsIncompressible (Security/Models/Nci/Assumptions/Cover.lean, Security/Models/Nci/Assumptions/CoverFanOut.lean), not about the NCI check's code; a check of declared inference blocks joined to it is what would give it an acceptance.",
+   "Nci.Cover.SecurityProofs.FanOutReadIntensity": "frozen (no-function): It is about an arbitrary training circuit, its products with a keyed token structure and inference blocks of it (Security/Definitions/Nci/Cover.lean, Security/Definitions/Nci/CoverFanOut.lean), under the named ValueReadHardness and ColumnsIncompressible (Security/Models/Nci/Assumptions/Cover.lean, Security/Models/Nci/Assumptions/CoverFanOut.lean), not about the NCI check's code; a check of declared inference blocks joined to it is what would give it an acceptance.",
+   "Nci.Cover.SecurityProofs.FanOutReadCoverBound": "frozen (no-function): It is about an arbitrary training circuit, its products with a keyed token structure and inference blocks of it (Security/Definitions/Nci/Cover.lean, Security/Definitions/Nci/CoverFanOut.lean), under the named ValueReadHardness and ColumnsIncompressible (Security/Models/Nci/Assumptions/Cover.lean, Security/Models/Nci/Assumptions/CoverFanOut.lean), not about the NCI check's code; a check of declared inference blocks joined to it is what would give it an acceptance.",
+   "Nci.Cover.SecurityProofs.FanOutReadIntensityStructural": "frozen (no-function): It is about an arbitrary training circuit, its products with a keyed token structure and inference blocks of it (Security/Definitions/Nci/Cover.lean, Security/Definitions/Nci/CoverFanOut.lean), under the named ConditionalUpdateHardness, ColumnsIncompressible and PerValueCut (Security/Models/Nci/Assumptions/Cover.lean, Security/Models/Nci/Assumptions/CoverFanOut.lean, Security/Definitions/Nci/CoverFanOutValue.lean), not about the NCI check's code; a check of declared inference blocks joined to it is what would give it an acceptance.",
+   "Nci.Cover.SecurityProofs.FanOutReadCoverBoundStructural": "frozen (no-function): It is about an arbitrary training circuit, its products with a keyed token structure and inference blocks of it (Security/Definitions/Nci/Cover.lean, Security/Definitions/Nci/CoverFanOut.lean), under the named ConditionalUpdateHardness, ColumnsIncompressible and PerValueCut (Security/Models/Nci/Assumptions/Cover.lean, Security/Models/Nci/Assumptions/CoverFanOut.lean, Security/Definitions/Nci/CoverFanOutValue.lean), not about the NCI check's code; a check of declared inference blocks joined to it is what would give it an acceptance."
   },
   "conjectures": {
    "Pous.P2.Assumptions.P2RingAuditSecure": {
