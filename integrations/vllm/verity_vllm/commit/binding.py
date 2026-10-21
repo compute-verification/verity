@@ -54,9 +54,7 @@ MEMBER_RULES: dict[str, tuple[str, ...]] = {
 }
 FIRST_NORM_SUFFIX = ".layers.0.input_layernorm"
 
-#: [R19 int-20, F-r19-int-20] a promoted member's observation point (`PROMOTED_INPUT_RULE`, `promoted_input_acquisition`): the manifest
-#: module owns the rule (manifest_format.PROMOTED_OBSERVATION_RULE / promoted_observation, shared by the collector's arming, this map and
-#: the layout-level manifest.bind.coverage_check); imported above under the binding's names for its callers (bench.commit_delta, tests).
+#: [R19 int-20] a promoted member's observation point: the manifest module owns the rule (format.PROMOTED_OBSERVATION_RULE), re-exported above.
 
 
 # ---------------------------------------------------------------------- names -> identity parts
@@ -111,16 +109,14 @@ def build_binding_map(layouts: dict[int, list], steps: list, run_root: bytes, pr
                       binder: Any = None) -> dict[str, Any]:
     """identity -> commitment location, for every committed tensor of every step, from the published layouts + the step roots.
 
-    A leaf index is in the unit of the layout's own leaves, each meta's `chunk` (the committer's: 256 B under vllm-v1, rows-sha512's
-    4 KiB rows), the index `open` and `identity_of` read; a `chunk` passed that differs from a meta's is refused.
-
     `request_rows[step]` = [(request_id, row_lo, row_hi)] splits the leading (token/row) dimension of a batched member between the
     requests of that step (the scheduler's row order, recorded by the engine wrapper); without it the whole member binds `request_id`.
     A MoE block plane whose rows are not a token multiple binds no request: its entry is request `*` with `refused`, the reason.
     Entries are compact (one per tensor x request); `digest` is over the canonical JSON of the entries -- recorded in the Commit record and
     mixed into the challenge, so the map cannot be chosen after the openings.
     `binder` (`query.manifest.bind.Binder`, from the required manifest): each tensor's identity, a call boundary's under each request's
-    own spelling (`Binder.spellings`), and how if not by label or slot (`observation`); without one a name is its identity (`split_name`)."""
+    own spelling (`Binder.spellings`), and how if not by label or slot (`observation`); without one a name is its identity (`split_name`).
+    A leaf index counts each meta's own leaves, its `chunk` (256 B under vllm-v1, rows-sha512's 4 KiB rows); a differing `chunk` is refused."""
     entries: list[dict[str, Any]] = []
     for step in sorted(layouts):
         metas = layouts[step]
@@ -136,10 +132,8 @@ def build_binding_map(layouts: dict[int, list], steps: list, run_root: bytes, pr
                 seen[m.name] += 1
         for m, (op, member, k, how) in zip(metas, bound):
             numel = _numel(m.shape)
-            leaf = int(m.chunk)
-            if chunk is not None and int(chunk) != leaf:
-                raise ValueError(f"build_binding_map: chunk={chunk} but {m.name} (step {step}) is laid out in {leaf}-byte leaves; "
-                                 f"pass the committer's chunk or none")
+            if chunk is not None and int(chunk) != int(m.chunk):
+                raise ValueError(f"build_binding_map: chunk={chunk} but {m.name} (step {step}) has {m.chunk}-byte leaves; pass the committer's or none")
             off = m.stream_off if m.stream_off is not None and m.stream_off >= 0 else m.first_leaf * m.chunk
             rr = (request_rows or {}).get(step)
             splits: list[tuple[str, int, int, int]] = []            # (request, request-local lo, request-local hi, global element offset)
@@ -159,8 +153,7 @@ def build_binding_map(layouts: dict[int, list], steps: list, run_root: bytes, pr
                 # addresses pair p = t*TOPK + k): router_w/router_ids [M, TOPK], up/down [M, TOPK, N], sum [M, H] have rows == tokens, act
                 # [M*TOPK, I] has rows == tokens*TOPK.  Request r's rows are ITS token rows (x TOPK for act) -- the required set is
                 # routing-independent (M_r*TOPK pairs whatever the experts chose) and its position comes from the step's request->row map,
-                # never from the routing.  Binding the whole batched plane to every request (the hidden-launch rule below) pointed r1's
-                # request-local range at r0's rows and let a range beyond r1's own rows pass by containment.
+                # never from the routing: the hidden-launch rule below would point r1's request-local range at r0's rows, passed by containment.
                 rows = int(m.shape[0])
                 tokens = max(hi for _r, _lo, hi in rr)
                 if tokens > 0 and rows >= tokens and rows % tokens == 0:
@@ -180,7 +173,7 @@ def build_binding_map(layouts: dict[int, list], steps: list, run_root: bytes, pr
                 entries.append({
                     "identity": identity_dict(identity(program_digest, rid, step, k_r, op_r, member_r, lo, hi, rank)),
                     "kind": "leaf", "step_root": step_root, "layout": layout_version, "chunk": int(m.chunk),
-                    "leaf_lo": int(off // leaf), "leaf_hi": int((off + max(m.nbytes, 1) - 1) // leaf + 1),
+                    "leaf_lo": int(off // m.chunk), "leaf_hi": int((off + max(m.nbytes, 1) - 1) // m.chunk + 1),
                     "stream_offset": int(off), "width_bytes": int(m.nbytes), "encoding": {"dtype": m.dtype, "shape": list(m.shape)}, "element_offset": int(goff),
                     "tensor_ordinal": int(m.ordinal), "name": m.name,
                     **({"observation": how} if how not in ("label", "slot") else {}),
