@@ -1,5 +1,5 @@
-"""The wrap correction's pieces against CA's H1V3 on the CPU, before sbench.sh asks for a GPU (H1V3's tree at
-DITHER_H1V3_TREE, run through `h1v3_ref.py`):
+"""The wrap correction's pieces against CA's H1V3 on the CPU, before sbench.sh asks for a GPU (`dither_one.h1v3_itself`'s
+tree, this source's own unless DITHER_H1V3_TREE names another, run through `h1v3_ref.py`):
 
 * the byte-mask rule `h1r.cu` computes wb with (`badd`, `wrap_masks`, `wrap_s8`, emulated here word for word) equals
   H1V3's `wrap_bits` on every (B, c, U) byte triple, and on random words (4 entries at once);
@@ -11,12 +11,11 @@ DITHER_H1V3_TREE, run through `h1v3_ref.py`):
   first formula as written misses are counted), and the peeled kernel's operands (`is80` of X's byte and b for xw, b and
   c times 0xFF for -b and -c, emulated) are those values on every byte and bit.
 
-    python wrapcheck.py    # one JSON line; exit 1 on any difference, 2 without a tree
+    python wrapcheck.py    # one JSON line; exit 1 on any difference
 """
 from __future__ import annotations
 
 import json
-import os
 import random
 import sys
 
@@ -63,9 +62,6 @@ def kernel_wb(bw: int, uw: int, c4: int) -> list[int]:
 
 
 def main() -> int:
-    if not os.environ.get("DITHER_H1V3_TREE"):
-        print(json.dumps({"ok": False, "why": "no DITHER_H1V3_TREE"}))
-        return 2
     tab = DO.h1v3_itself({"wrap_table": True})
     if "wrap" not in tab:
         print(json.dumps({"ok": False, "h1v3": tab}))

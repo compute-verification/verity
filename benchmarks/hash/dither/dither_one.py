@@ -16,8 +16,15 @@ forward's stream, is two launches: its A slot and table (`h1c_a_call`, the root 
 (each unit's seeds, receipt, z and y; DITHER_UNITS picks the form, `block` (`h1o_unitsb`, a unit a block, the default),
 `split` (`h1o_unitss`, a unit a block of six warps) or `warp` (`h1o_units`, a unit a warp)).  After step s's forward: its
 admit and z tables, the a-step,
-admit-step and z-step trees, the round over them, and the receipt trees, then the round root recorded
-(`sampled_proofs.challenger.LiveRecord`; its coin is not read: no seed waits on it).
+admit-step and z-step trees, the round over them, and the receipt trees (with `Window.tree_streams` set, the receipt
+trees and the admit tables on streams of their own beside the rest), then the round root recorded
+(`sampled_proofs.challenger.LiveRecord`; its coin is not read: no seed waits on it).  With `Window.step_salt` set (CA's
+PERIOD-PATH ask 11) the salt is each step's instead: after step s's round is recorded, step s + 1's seeds read
+`h1tile.live_salt` of that round's opened coin and root, copied to the device between steps (in record_host_ms), so
+each step's noise comes from the round before it.  The rounds' coins are `dither_fused`'s switch (`coins.open_coins`):
+the challenger off the node with ``$POUW_CHALLENGER`` and ``$POUW_CHALLENGER_SESSION``, so the auditor host's round
+trip is in record_host_ms, else in
+this process, labelled ``in-process (not certified)`` in `stats`.
 
 The served value is the dithered product z = X (B + c)^T, exact for every int8 B, with X the int8 A + b the MMA reads (it
 wraps where A = 127 and b = 1), so y is not today's served y (`gate` measures how far) and the tokens are not the exact
@@ -41,12 +48,18 @@ import numpy as np
 import torch
 
 import dither_fused as DF
-from dither_fused import CM, CR, SV, H1C, Dom, Tab, unwords, words, H1R, Call
+from dither_fused import CM, CO, CR, SV, H1C, Dom, Tab, unwords, words, H1R, Call
 import h1c as H1CM
 
 F_DUMP, F_NW_TILES, F_NW_UNITS, F_FAULT, F_FAULT_WB, F_FAULT_XA = 1, 2, 4, 8, 16, 32     # h1o.cu's H1OStep.flags
+F_FAULT_Y = 64      # dither_a's ycommit only: bit 0 of the served y[0, 0] flipped, in place, every call
+# the round's leaves past a-step, admit-step and z-step (set before the window is built): "y-step" the calls' served-y
+# roots (an arm's Side fills them in `before_mid`), "receipt-step" the calls' receipt-table roots (RT4-INT-13), both
+# under the round recorded before the next coin
+ROUND_EXTRA: tuple = ()
 CAPTURES = ("gate", "control", "fault", "fault_wb")     # a peeled window's add "fault_xa" (`Window.captures`)
 LIB_ENV = "DITHER_H1O"
+PHASE_RANGE = "verity/dither/phase/"    # `Window.phase`'s NVTX ranges, under DITHER_NSYS=prof only
 UNITS_ENV = "DITHER_UNITS"
 UNITS_FORMS = {"split": "h1o_unitss_launch", "block": "h1o_unitsb_launch", "warp": "h1o_units_launch",   # h1o.cu's forms of the same units
                "split2": "h1o_unitss2_launch", "block2": "h1o_unitsb2_launch"}   # those two at the maximum carveout (`h1o_init`)
@@ -174,8 +187,12 @@ class Window:
         self.S = torch.zeros(4, dtype=torch.int32, device=dev)
         self.units = [self.plan.offs[w][1] for w in range(L)]
         self.salt = torch.zeros(8, dtype=torch.int64, device=dev)
+        self.step_salt = False
         self.step_base = torch.zeros(1, dtype=torch.int64, device=dev)
         self.stepv = torch.zeros(2, dtype=torch.int32, device=dev)
+        # the engine's own forwards (its profile run, its graph captures) come before any step's `before`, and
+        # h1c_a_call3_k traps on node and leaf prefixes h1c_a_step hasn't written
+        self._a_step()
         self.s, self.flags, self.m = 0, 0, 0
         self.calls = self.steps = 0
         self.arms: list[str] = []
@@ -185,21 +202,25 @@ class Window:
         self.round_log: list[dict] = []
         self.phases: list[dict] = []
         self.t_before = 0.0
-        self.ev = [torch.cuda.Event(enable_timing=True) for _ in range(5)]
+        self.ev = [torch.cuda.Event(enable_timing=True) for _ in range(8)]
+        # (receipt trees', admit tables') streams: between steps those two builds run beside the z tables and the step
+        # trees (they read none of each other's outputs; the round waits on the admit tables, the record on all)
+        self.tree_streams: tuple | None = None
+        # called on the serving stream after the z tables and before the step trees (an arm's leaves of its own)
+        self.before_mid: list = []
+        self.nvtx = os.environ.get("DITHER_NSYS") == "prof"
+        self.phase_open = False
         self._epoch()
 
     def _epoch(self) -> None:
-        from verity.core.protocols.pouw import verifier
-        from verity.core.protocols.pouw import window as Wd
         from verity.core.protocols.pouw.circuit import h1tile as HT
-        from verity.core.protocols.sampled_proofs import challenger as Ch
         self.HT = HT
-        self.lch = Wd.live_challenger(1, DF.ROUNDS, verifier.coins)
-        self.rounds = Ch.LiveRecord(self.lch, Wd.ROUND)
+        self.coins = CO.open_coins(CO.session(), 1, DF.ROUNDS)
+        self.rounds = self.coins.rounds
         broots = [unwords(self.bset.root(w)) for w in range(self.L)]
         self.epoch_root = CM.step_root(CM.domain({"window": self.window, "linears": self.L}, self.L, "b-step"), broots)
         opening = self.rounds.record(self.epoch_root)
-        self.salt_bytes = HT.live_salt(self.lch.commitment, opening.coin, 0, self.epoch_root)
+        self.salt_bytes = HT.live_salt(self.coins.commitment, opening.coin, 0, self.epoch_root)
         self.salt.copy_(torch.from_numpy(words(self.salt_bytes)))
 
     def arm(self, m: int, names: tuple | None = None) -> None:
@@ -216,11 +237,12 @@ class Window:
     def _pre_sets(self) -> dict:
         c, W, t, L = self.c, self.window, self.t, self.L
         f_step = {"window": W, "step": 0, "linears": L}
-        rnd = c.set([Tab(Dom("round", {"window": W, "step": 0, "leaves": "a-step root, admit-step root, z-step root"}, 3,
-                             {"step": (1, 0)}), 3)])
-        mid = c.set([Tab(Dom("a-step", f_step, L, {"step": (1, 0)}), L, out=rnd.leaves_addr(0)),
-                     Tab(Dom("admit-step", f_step, L, {"step": (1, 0)}), L, out=rnd.leaves_addr(0) + 64),
-                     Tab(Dom("z-step", f_step, L, {"step": (1, 0)}), L, out=rnd.leaves_addr(0) + 128)])
+        self.round_kinds = ("a-step", "admit-step", "z-step") + tuple(ROUND_EXTRA)
+        nr = len(self.round_kinds)
+        rnd = c.set([Tab(Dom("round", {"window": W, "step": 0, "leaves": round_leaves(self.round_kinds)}, nr,
+                             {"step": (1, 0)}), nr)])
+        mid = c.set([Tab(Dom(kd, f_step, L, {"step": (1, 0)}), L, out=rnd.leaves_addr(0) + 64 * i)
+                     for i, kd in enumerate(self.round_kinds)])
         at, st, zt = [], [], []
         for w, (n, k) in enumerate(self.nk):
             fa = {"window": W, "step": 0, "linear": w, "module": self.names[w], "slots": t, "k": k, "schema": CM.SCHEMA}
@@ -267,17 +289,37 @@ class Window:
         for x in ts:
             x.view(torch.uint8).fill_(DF.POISON)
 
+    def phase(self, name: str | None) -> None:
+        """Under DITHER_NSYS=prof, close the open phase's NVTX range and open PHASE_RANGE/NAME's (stepprof.py gives each
+        kernel the phase its launch was in)."""
+        if not self.nvtx:
+            return
+        if self.phase_open:
+            torch.cuda.nvtx.range_pop()
+        self.phase_open = name is not None
+        if name is not None:
+            torch.cuda.nvtx.range_push(PHASE_RANGE + name)
+
+    def _a_step(self) -> None:
+        a = self.pre["a"]
+        rc = self.c.lib.h1c_a_step(a.dev.data_ptr(), self.L, self.apre.data_ptr(), self.awords, self.stepv.data_ptr(),
+                                   self.c.btab.data_ptr(), self.S.data_ptr(), torch.cuda.current_stream().cuda_stream)
+        if rc:
+            raise RuntimeError(f"h1c_a_step returned {rc}")
+
     def before(self, m: int) -> None:
         if m > self.t:
             raise RuntimeError(f"a step of {m} tokens in a window of T = {self.t} slots")
+        self.phase("before")
         self.m, self.flags, self.cap = m, 0, None
         if self.arms and m == self.arm_m:
             self.cap = name = self.arms.pop(0)
             self.flags = (F_DUMP | ((F_NW_TILES | F_NW_UNITS) if name == "control" else 0) | (F_FAULT if name == "fault" else 0)
-                          | (F_FAULT_WB if name == "fault_wb" else 0) | (F_FAULT_XA if name == "fault_xa" else 0))
+                          | (F_FAULT_WB if name == "fault_wb" else 0) | (F_FAULT_XA if name == "fault_xa" else 0)
+                          | (F_FAULT_Y if name == "fault_y" else 0))
             self._poison(self.slot + self.scale + self.z + list(self.ydump or [])
                          + [self.plan.out, self.plan.seeds, self.pre["mid"].level, self.pre["a"].level])
-            self.caps[name] = {"s": self.s, "m": m}
+            self.caps[name] = {"s": self.s, "m": m, "salt": self.salt_bytes}
         t, s = self.t, self.s
         bits = np.arange(t) < m
         self.live.copy_(torch.from_numpy((np.arange(t // 32) * 32 < m).astype(np.uint8)))
@@ -285,36 +327,81 @@ class Window:
         self.stepv.copy_(torch.tensor([s, s], dtype=torch.int32))
         self.step_base.fill_(s * self.u_step)
         self.S.copy_(torch.tensor([0, m, 0, self.flags], dtype=torch.int32))
-        a = self.pre["a"]
-        rc = self.c.lib.h1c_a_step(a.dev.data_ptr(), self.L, self.apre.data_ptr(), self.awords, self.stepv.data_ptr(),
-                                   self.c.btab.data_ptr(), self.S.data_ptr(), torch.cuda.current_stream().cuda_stream)
-        if rc:
-            raise RuntimeError(f"h1c_a_step returned {rc}")
+        self._a_step()
         if self.cap:
             torch.cuda.synchronize()
+        self.phase(None)
         self.t_before = time.perf_counter()
 
     def after(self) -> None:
+        self.phase("forward_wait")
         torch.cuda.synchronize()
         t_fwd = time.perf_counter()
         s, m, pre, ev = self.s, self.m, self.pre, self.ev
+        par = self.tree_streams is not None
+        main = torch.cuda.current_stream()
+        self.phase("admit_tables")
         ev[0].record()
-        self.c.build(pre["admit"], self.stepv[0:1])
+        if par:
+            rs, ads = self.tree_streams
+            for x in (rs, ads):
+                x.wait_event(ev[0])
+            with torch.cuda.stream(rs):
+                ev[5].record(rs)
+                self.c.build(self.rset, self.stepv[0:1])
+                ev[6].record(rs)
+            with torch.cuda.stream(ads):
+                self.c.build(pre["admit"], self.stepv[0:1])
+                ev[7].record(ads)
+        else:
+            self.c.build(pre["admit"], self.stepv[0:1])
         ev[1].record()
+        self.phase("z_tables")
         self.c.build(pre["z"], self.stepv[0:1])
+        for f in self.before_mid:
+            f()
         ev[2].record()
+        self.phase("step_trees")
+        rleaf = "receipt-step" in self.round_kinds
+        if par:
+            main.wait_event(ev[7])
+            if rleaf:
+                main.wait_event(ev[6])
+        elif rleaf:
+            self.c.build(self.rset, self.stepv[0:1])
+        if rleaf:
+            # the receipt roots under the round, so the round recorded before the next coin fixes them; "fault_rr"
+            # records the round without them (`check` must refuse it)
+            o = pre["mid"].level_off[self.round_kinds.index("receipt-step")]
+            lv = pre["mid"].level[o:o + 8 * self.L]
+            if self.cap == "fault_rr":
+                lv.view(torch.uint8).fill_(DF.POISON)
+            else:
+                lv.copy_(self.rset.roots)
         self.c.build(pre["mid"], self.stepv[0:1])
         self.c.build(pre["round"], self.stepv[0:1])
         ev[3].record()
-        self.c.build(self.rset, self.stepv[0:1])
+        self.phase("receipt_trees")
+        if par:
+            main.wait_event(ev[6])
+        elif not rleaf:
+            self.c.build(self.rset, self.stepv[0:1])
         ev[4].record()
+        self.phase("root_read")
         root = unwords(pre["round"].root(0))
         t_root = time.perf_counter()
-        self.rounds.record(root)
+        self.phase("record_host")
+        opening = self.rounds.record(root)
+        if self.step_salt:
+            self.salt_bytes = self.HT.live_salt(self.coins.commitment, opening.coin, opening.index, root)
+            self.salt.copy_(torch.from_numpy(words(self.salt_bytes)))
         t_end = time.perf_counter()
-        self.phases.append({"m": m, "forward_ms": 1e3 * (t_fwd - self.t_before), "admit_tables_ms": ev[0].elapsed_time(ev[1]),
+        self.phase(None)
+        self.phases.append({"m": m, "forward_ms": 1e3 * (t_fwd - self.t_before),
+                            "admit_tables_ms": ev[0].elapsed_time(ev[7] if par else ev[1]),
                             "z_tables_ms": ev[1].elapsed_time(ev[2]), "step_trees_ms": ev[2].elapsed_time(ev[3]),
-                            "receipt_trees_ms": ev[3].elapsed_time(ev[4]), "record_host_ms": 1e3 * (t_end - t_root),
+                            "receipt_trees_ms": ev[5].elapsed_time(ev[6]) if par else ev[3].elapsed_time(ev[4]),
+                            "trees_ms": ev[0].elapsed_time(ev[4]), "record_host_ms": 1e3 * (t_end - t_root),
                             "between_ms": 1e3 * (t_end - t_fwd)})
         if self.cap is not None:
             self.caps[self.cap].update(
@@ -323,7 +410,7 @@ class Window:
                 r_roots=self.rset.roots.clone(), a_roots=[unwords(pre["mid"].leaf(0, w)) for w in range(self.L)],
                 admit_roots=[unwords(pre["mid"].leaf(1, w)) for w in range(self.L)],
                 z_roots=[unwords(pre["mid"].leaf(2, w)) for w in range(self.L)],
-                leaves=[unwords(pre["round"].leaf(0, i)) for i in range(3)],
+                leaves=[unwords(pre["round"].leaf(0, i)) for i in range(len(self.round_kinds))],
                 b_roots=[unwords(self.bset.root(w)) for w in range(self.L)])
         self.round_log.append({"s": s, "m": m, "root": root.hex()[:32]})
         self.s += 1
@@ -341,8 +428,13 @@ class Window:
                for m, xs in sorted(by.items(), key=lambda kv: -len(kv[1]))[:4]}
         pc = None if self.percall is None else {**self.percall, "rounds_served": int(self.o.h1o_percall_done())}
         return {"steps": self.steps, "one_calls_eager": self.calls, "t": self.t, "s": self.s, "epsilon": "seeded",
-                "units_form": self.units_form, "peel": self.peel, "percall": pc, "phases_by_m": med,
-                "call_forms": {DF.SITES[w % 4]: self.call_forms[w] for w in range(min(4, self.L))}}
+                "salt": "step" if self.step_salt else "epoch", "coins": self.coins.label, "units_form": self.units_form, "peel": self.peel,
+                "percall": pc, "phases_by_m": med, "call_forms": {DF.SITES[w % 4]: self.call_forms[w] for w in range(min(4, self.L))}}
+
+
+def round_leaves(kinds) -> str:
+    """The round domain's "leaves" field: "a-step root, admit-step root, z-step root" and ROUND_EXTRA's."""
+    return ", ".join(f"{k} root" for k in kinds)
 
 
 # -- the op and the patch --------------------------------------------------------------------------------------------------
@@ -481,6 +573,12 @@ def _s32(v: np.ndarray) -> np.ndarray:
     return np.where(v >> 31, v - (1 << 32), v)
 
 
+def cap_salt(win, g: dict) -> tuple[bytes, torch.Tensor]:
+    """The salt capture g's step ran under (the epoch's, or with step_salt its round's) and its words on the device."""
+    b = g.get("salt", win.salt_bytes)
+    return b, torch.from_numpy(words(b)).to(win.dev)
+
+
 def h1v3_unit(a32: np.ndarray, b32: np.ndarray, salt: bytes, position: int, roots: tuple[bytes, bytes]) -> dict:
     """CA's definition on the CPU for one 32 x 32 unit (`h1tile.noise`, `segment.call_words` and the CP-W fold, as
     `h1tile.reference`): z = O' - sum_d 128^d D_d + 256 X (wb⁺ - wb⁻)^T per cell (s32), wb⁺ = [B + c + U > 127] and
@@ -559,16 +657,33 @@ def xa_fault_expected(a: np.ndarray, b: np.ndarray, salt: bytes, position: int, 
     return [(256 * d * int(b[j, 0])) & M32 for j in range(32)]
 
 
+def a_bad_diag(g: dict, bad: list[int]) -> list[dict]:
+    """For each call whose A root is off commit.py's, what of its saved slot rows and scales the A kernel left unwritten
+    or wrote wrong: live rows still all 0xA5, live scales still 0xA5 or not positive, dead rows not zero."""
+    m, out = g["m"], []
+    for w in bad:
+        q, sc = g["a"][w], g["sa"][w].reshape(-1).contiguous()
+        rows_p = (q.view(torch.uint8) == DF.POISON).all(dim=1)
+        sc_p = (sc.view(torch.uint8).view(-1, sc.element_size()) == DF.POISON).all(dim=1)
+        out.append({"call": w, "live_rows_poison": rows_p[:m].nonzero().flatten().tolist()[:8],
+                    "live_scales_poison": sc_p[:m].nonzero().flatten().tolist()[:8],
+                    "live_scales_not_positive": (sc[:m].float() <= 0).nonzero().flatten().tolist()[:8],
+                    "dead_rows_nonzero": (q[m:] != 0).any(dim=1).nonzero().flatten().add(m).tolist()[:8],
+                    "dead_scales_nonzero": (sc[m:] != 0).nonzero().flatten().add(m).tolist()[:8]})
+    return out
+
+
 def h1v3_itself(units: list[dict]) -> dict:
-    """`h1v3_ref.py` under the H1V3 tree sbench.sh extracted (DITHER_H1V3_TREE): z and receipt of each unit by CA's own
-    `h1tile.reference(stream=True)`; {"tree": None} when there is none."""
+    """`h1v3_ref.py` under CA's tree: z and receipt of each unit by CA's own `h1tile.reference(stream=True)`. The tree is
+    this source's own (PouwH1Tile_v4, ungated: v3's z, receipts and wrap bits with the peel) unless DITHER_H1V3_TREE
+    names another (a launcher's H1V3_SHA)."""
     import json
     import subprocess
     import sys
     import tempfile
-    tree = os.environ.get("DITHER_H1V3_TREE")
-    if not tree:
-        return {"tree": None}
+    tree = os.environ.get("DITHER_H1V3_TREE") or os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(
+        os.path.abspath(__file__)))))
+    sha = os.environ.get("DITHER_H1V3_SHA") or os.environ.get("RESEARCH_SOURCE_SHA") or "source"
     with tempfile.TemporaryDirectory() as td:
         src, dst = os.path.join(td, "in.json"), os.path.join(td, "out.json")
         with open(src, "w") as f:
@@ -577,10 +692,10 @@ def h1v3_itself(units: list[dict]) -> dict:
         p = subprocess.run([sys.executable, os.path.join(os.path.dirname(os.path.abspath(__file__)), "h1v3_ref.py"), src, dst],
                            env=env, capture_output=True, text=True)
         if p.returncode:
-            return {"tree": tree, "sha": os.environ.get("DITHER_H1V3_SHA"), "error": p.stderr[-2000:]}
+            return {"tree": tree, "sha": sha, "error": p.stderr[-2000:]}
         with open(dst) as f:
             doc = json.load(f)
-    return {"tree": tree, "sha": os.environ.get("DITHER_H1V3_SHA"), **doc}
+    return {"tree": tree, "sha": sha, **doc}
 
 
 def check(win: Window, lib_h1o: str, which: str = "gate", n_cpu_units: int = 3,
@@ -596,12 +711,11 @@ def check(win: Window, lib_h1o: str, which: str = "gate", n_cpu_units: int = 3,
     perturbed MMA word reached what serves).  "fault_wb" wants every receipt unmoved (wb is not receipted), z moved only in
     column 0 of unit 0, by `wb_fault_expected` on CPU_CALLS and by multiples of 256 elsewhere, and y = dequant of that z.
     Peeled (`Window.peel`), z's reference is A B^T itself (a float64 product on the device, exact: every partial sum is
-    an integer below 2^53), y must be today's served y (`int8_ops.scaled_mm`) on every call, the CPU units' z the kernel's
+    an integer below 2^53), y must be today's served y (`int8_ops.scaled_mm`'s body) on every call, the CPU units' z the kernel's
     peel of their z, and each fault wants what it wants unpeeled against A B^T: so a z that reads no noised word (one
     computed beside the receipted MMAs) is refused at "fault".  "fault_xa" (peeled) wants every receipt unmoved, z moved
     only in row 0 of unit 0, by `xa_fault_expected` on CPU_CALLS and by ±256 B[:32, 0] elsewhere, and y = dequant of it."""
     from verity_vllm.engine import int8_exact as E
-    from verity_vllm.engine import int8_ops
     g = win.caps.get(which, {})
     if "receipts" not in g or "a" not in g:
         return {"ok": False, "complete": False, "why": f"{which} step incomplete: {sorted(g)}"}
@@ -625,6 +739,7 @@ def check(win: Window, lib_h1o: str, which: str = "gate", n_cpu_units: int = 3,
         zrows = g["z"][w].cpu().numpy().astype("<i4").view(np.uint8)
         z_cpu[w] = CM.levels(zd, [CM.leaf(zd, key, f"z/{s}/{w}", i, bytes(zrows[i]))[0] for i in range(t)])[-1][0]
     doc["a_roots_bad"] = [w for w in range(L) if a_cpu[w] != g["a_roots"][w]]
+    doc["a_bad_diag"] = a_bad_diag(g, doc["a_roots_bad"])
     doc["admit_roots_bad"] = [w for w in range(L) if s_cpu[w] != g["admit_roots"][w]]
     doc["z_roots_bad"] = [w for w in range(L) if z_cpu[w] != g["z_roots"][w]]
     f_step = {"window": W, "step": s, "linears": L}
@@ -645,7 +760,7 @@ def check(win: Window, lib_h1o: str, which: str = "gate", n_cpu_units: int = 3,
     roots = [torch.from_numpy(np.concatenate([np.frombuffer(a_cpu[w], ">u8"), np.frombuffer(g["b_roots"][w], ">u8")])
                               .astype("<u8").view("<i8").copy()).to(win.dev) for w in range(L)]
     plan = r.plan([Call(g["a"][w], win.wt[w], s * win.u_step + win.offs[w], roots[w], live) for w in range(L)])
-    r.launch(plan, win.salt, version=1)
+    r.launch(plan, cap_salt(win, g)[1], version=1)
     cb = r.lib.h1r_call_bytes()
     zref = [torch.empty(t, n, dtype=torch.int32, device=win.dev) for n, _ in win.nk]
     for w in range(L):
@@ -746,7 +861,8 @@ def check(win: Window, lib_h1o: str, which: str = "gate", n_cpu_units: int = 3,
     if g["y"] is not None and which == "gate":
         eq, rel = 0, []
         for w in range(L):
-            yt = int8_ops.scaled_mm(g["a"][w][:m], g["sa"][w][:m], win.wt[w], REG[w][1].weight_scale).float()
+            # the op's own body, not the op: an -xl arm serves verity_int8::scaled_mm from exactlin
+            yt = E.dequantize(E.int_mm(g["a"][w][:m], win.wt[w]), g["sa"][w][:m], REG[w][1].weight_scale).float()
             yk = g["y"][w].float()
             eq += int(torch.equal(yt, yk))
             rel.append(float((yk - yt).norm() / yt.norm().clamp_min(1e-30)))
@@ -794,8 +910,7 @@ def check(win: Window, lib_h1o: str, which: str = "gate", n_cpu_units: int = 3,
                 x["h1v3_receipt_equal"] = rk == hu["receipt"]
         doc["h1v3"] = {k_: v for k_, v in hv.items() if k_ != "units"}
     doc["vs_h1v3_cpu"] = units_doc
-    h1v3_ok = which != "gate" or doc["h1v3"].get("tree") is None or (
-        "units" in hv and all(x["h1v3_z_equal"] and x["h1v3_receipt_equal"] for x in units_doc))
+    h1v3_ok = which != "gate" or ("units" in hv and all(x["h1v3_z_equal"] and x["h1v3_receipt_equal"] for x in units_doc))
     today_ok = not (win.peel and which == "gate") or doc.get("y_vs_today", {}).get("calls_equal") == L
     doc["ok"] = (not rc_bad and not z_bad and (g["y"] is None or not y_bad) and today_ok
                  and all(x["z_equal"] and x["receipt_equal"] and x["cells_z_ne_x_bc"] == 0

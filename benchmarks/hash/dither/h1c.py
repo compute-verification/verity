@@ -8,10 +8,13 @@
 A table's domain is `commit.domain(fields, count, kind)`, with `splice` naming the fields that move with the step (each
 a s + b), so a step's sequence is the same launches with the step read from the device.  Its label is `lab[0]` + str(s)
 + `lab[1]` (or `lab[0]` alone).  `Tab.out` points a table's root into another table's leaves (a given table: no data).
+DITHER_A_FORM=2 (or `lib.form(2)`) serves each call's A table through h1c_a_call2_k, its compressions paired, and 3
+through h1c_a_call3_k, paired with its messages in registers.
 """
 from __future__ import annotations
 
 import ctypes as C
+import os
 import sys
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -30,6 +33,7 @@ from verity.ml.commitments.indexed import RangeIndexedDomain  # noqa: E402
 from verity.ml.commitments.merkle import merkle_depth  # noqa: E402
 
 U64_8, U64_16 = C.c_uint64 * 8, C.c_uint64 * 16
+A_FORM_ENV = "DITHER_A_FORM"
 
 
 class _Const(C.Structure):
@@ -215,10 +219,20 @@ class H1C:
         rc = self.lib.h1c_const(C.byref(k))
         if rc:
             raise RuntimeError(f"h1c_const returned {rc}")
+        self.a_form = int(os.environ.get(A_FORM_ENV, "0"))
+        if self.a_form:
+            self.form(self.a_form)
         tabs = inst.byte_tables(CM.KEY)
         raw = b"".join(v.to_bytes(64, "little") for row in tabs for v in row)
         self.btab = torch.from_numpy(words(raw)).to(dev)
         self.dev = dev
+
+    def form(self, f: int) -> None:
+        """h1c_a_call's kernel from here on (0 h1c_a_call_k, 2 h1c_a_call2_k, its compressions paired, 3 h1c_a_call3_k)."""
+        rc = self.lib.h1c_a_form(f)
+        if rc:
+            raise RuntimeError(f"h1c_a_form({f}) returned {rc}")
+        self.a_form = f
 
     def set(self, tabs: list[Tab]) -> Set:
         return Set(tabs, self.dev)

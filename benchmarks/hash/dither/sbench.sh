@@ -4,6 +4,8 @@
 # --t 64); SBENCH_SCRIPT runs another script with the same libraries and environment (h1ogate.py: the units kernels at
 # kernel level).  DITHER_NSYS=1 runs it under nsys, recording the kernels inside the gate's CUDA profiler range (each graph's
 # kernels as nodes), then the dither worker's kernels inside the gate's NVTX range (kernels.py over the SQLite export).
+# DITHER_NSYS=prof captures the prof op's range instead (the gate unprofiled): steps.py's and stepprof.py's step by part.
+# An exact-fused or -xl arm runs only after exactlin's kgate.py passes in the same lease (SBENCH_KGATE=0|1 overrides).
 # DITHER_NCU=REGEX runs it under ncu instead (--clock-control none): the first DITHER_NCU_COUNT (16) launches of kernels
 # matching REGEX, their throughput, occupancy, scheduler, warp-state and instruction sections, as ncu.ncu-rep and ncu.csv.
 #   research run --on vy-nebius-2 --project verity --campaign dither-loop --source . --cwd source \
@@ -24,28 +26,75 @@ done
 grep -B1 -A2 "h1f_k\|h1r_units" "$OUT/build-h1f.log" | grep -i "registers\|spill" | head -6
 grep -B1 -A2 "h1o_units" "$OUT/build-h1o.log" | grep -i "registers\|spill" | head -8
 grep -B1 -A2 "h1c_a_" "$OUT/build-h1c.log" | grep -i "registers\|spill" | head -6
+# dither-a-kh's side unit: h1u.cu's kh_unit_ws, built here for sm_120a (HB_H1U)
+case " $* " in *dither-a-kh*)
+  nvcc -O3 -std=c++17 --expt-relaxed-constexpr -gencode arch=compute_120a,code=sm_120a -Xptxas -v -Xcompiler -fPIC -shared \
+    -o "$S/h1u.so" benchmarks/hash/dither/h1u.cu > "$OUT/build-h1u.log" 2>&1 \
+    || { echo "sbench: NVCC_FAIL h1u"; grep -v "^ptxas info" "$OUT/build-h1u.log" | tail -30; exit 11; }
+  grep -B1 -A2 "h1u_ws\|h1s_noise" "$OUT/build-h1u.log" | grep -i "registers\|spill" | head -6
+  export HB_H1U=$S/h1u.so ;;
+esac
+# dither-a-hbk's: the K split's kh_one (H1U_KSPLIT = 4, H1K_AUTO), as job.sh's ka variant (HB_H1U_KSPLIT)
+case " $* " in *dither-a-hbk*)
+  nvcc -O3 -std=c++17 --expt-relaxed-constexpr -gencode arch=compute_120a,code=sm_120a -Xptxas -v -Xcompiler -fPIC -shared \
+    -DH1U_KSPLIT=4 -DH1K_AUTO=1 -o "$S/h1u_ka.so" benchmarks/hash/dither/h1u.cu > "$OUT/build-h1u_ka.log" 2>&1 \
+    || { echo "sbench: NVCC_FAIL h1u_ka"; grep -v "^ptxas info" "$OUT/build-h1u_ka.log" | tail -30; exit 11; }
+  grep -B1 -A2 "h1k" "$OUT/build-h1u_ka.log" | grep -i "registers\|spill" | head -6
+  export HB_H1U_KSPLIT=$S/h1u_ka.so ;;
+esac
+# dither-a-hbr's: the same K split built receipts only (H1K_RONLY), as job.sh's kr variant (HB_H1U_KRONLY)
+case " $* " in *dither-a-hbr*)
+  nvcc -O3 -std=c++17 --expt-relaxed-constexpr -gencode arch=compute_120a,code=sm_120a -Xptxas -v -Xcompiler -fPIC -shared \
+    -DH1U_KSPLIT=4 -DH1K_AUTO=1 -DH1K_RONLY=1 -o "$S/h1u_kr.so" benchmarks/hash/dither/h1u.cu > "$OUT/build-h1u_kr.log" 2>&1 \
+    || { echo "sbench: NVCC_FAIL h1u_kr"; grep -v "^ptxas info" "$OUT/build-h1u_kr.log" | tail -30; exit 11; }
+  grep -B1 -A2 "h1k" "$OUT/build-h1u_kr.log" | grep -i "registers\|spill" | head -6
+  export HB_H1U_KRONLY=$S/h1u_kr.so ;;
+esac
 [ -n "${BUILD_ONLY:-}" ] && { echo "sbench: built (BUILD_ONLY)"; exit 0; }
 # the dither windows' coins are the Lean verifier of record's (pouw.verifier.coins): built before the lease, not inside it
 command -v lake >/dev/null || export PATH="$HOME/.elan/bin:$PATH"
 (cd verity/core/protocols/pouw/lean/check && lake build pouw-check-difftest) > "$OUT/lean-coins-build.log" 2>&1 \
   || { echo "sbench: LEAN_BUILD_FAIL"; tail -20 "$OUT/lean-coins-build.log"; exit 13; }
+# coins off the node (sbench.py's "Coins"): every port the arms' windows connect to (POUW_CHALLENGER, DITHER_CHALLENGERS'
+# {arm: {"session": ID, "address": HOST:PORT, "secret_file": F}}), each its own session from infra's gate first (`coins.py open`:
+# reserved in a dev period, opened on its stand-in root, its secret in F on this node), waited for with ss -ltn
+# before the lease (never a probe connect: a challenger serves the first connection whose hello it accepts); none: in-process
+# (not certified)
+if [ -n "${POUW_CHALLENGER:-}${POUW_CHALLENGER_SESSION:-}" ] && { [ -z "${POUW_CHALLENGER:-}" ] || [ -z "${POUW_CHALLENGER_SESSION:-}" ]; }; then
+  echo "sbench: NO_CHALLENGER: a challenger session is POUW_CHALLENGER and POUW_CHALLENGER_SESSION together"; exit 15
+fi
+ats=$(python3 -c 'import json, os; m = json.loads(os.environ.get("DITHER_CHALLENGERS") or "{}"); ok = isinstance(m, dict) and all(isinstance(v, dict) and sorted(v) in (["address", "session"], ["address", "secret_file", "session"]) and all(isinstance(x, str) and x for x in v.values()) for v in m.values()); print(*(v["address"] for v in m.values())) if ok else exit(1)') \
+  || { echo "sbench: NO_CHALLENGER: DITHER_CHALLENGERS is not {arm: {\"session\": ID, \"address\": HOST:PORT[, \"secret_file\": F]}}"; exit 15; }
+ats=$(echo ${POUW_CHALLENGER:-} $ats)
+for at in $ats; do
+  for _ in $(seq $((${CHALLENGER_WAIT_S:-900} * 20))); do ss -Hltn "sport = :${at##*:}" | grep -q . && break; sleep 0.05; done
+  ss -Hltn "sport = :${at##*:}" | grep -q . || { echo "sbench: NO_CHALLENGER at $at"; exit 15; }
+done
+echo "sbench: coins ${ats:-in-process (not certified)}" | tee "$OUT/coins.txt"
 export DITHER_H1C=$S/libh1c.so DITHER_H1F=$S/libh1f.so DITHER_H1O=$S/libh1o.so VLLM_DISABLE_COMPILE_CACHE=1
+# SBENCH_PICK pins Inductor's autotune picks (picks.py); the node's shared Inductor cache would hand back another run's
+# timed .best_config, so a pinned run compiles into its own
+[ -n "${SBENCH_PICK:-}" ] && export TORCHINDUCTOR_CACHE_DIR=$S/inductor-cache
 # CA's credit gate (#2684) at its pinned head, for the dither-1s-credit arm
 CREDIT_GATE_SHA=${CREDIT_GATE_SHA:-b25b34d96e}
 git show "$CREDIT_GATE_SHA:integrations/vllm/verity_vllm/protocol_options/credit_gate.py" > "$S/credit_gate.py" 2>/dev/null \
   && export DITHER_CREDIT_GATE=$S/credit_gate.py || echo "sbench: no credit_gate.py at $CREDIT_GATE_SHA"
-# CA's H1V3 (#2776, cursor/h1-v3-1172, with the wrap correction and the peel, z = A B^T) at its pinned head: dither_one's
-# gate runs its h1tile.reference.  From this repository, else (the node's lacks the commit) the archive sent with the run:
-# `git archive --format=tar.gz $H1V3_SHA verity > h1v3-$H1V3_SHA.tar.gz`, `research run --send` it
-H1V3_SHA=${H1V3_SHA:-f56cbc3a04}
-mkdir -p "$S/h1v3"
-if git cat-file -e "$H1V3_SHA^{commit}" 2>/dev/null; then
-  git archive "$H1V3_SHA" verity | tar -x -C "$S/h1v3"
-elif [ -f "$D/inputs/h1v3-$H1V3_SHA.tar.gz" ]; then
-  tar -xzf "$D/inputs/h1v3-$H1V3_SHA.tar.gz" -C "$S/h1v3"
+# CA's H1V3 (with the wrap correction and the peel, z = A B^T): dither_one's gate runs its h1tile.reference.  By default
+# this source's own (PouwH1Tile_v4, ungated); H1V3_SHA names another commit, from this repository, else (the node's lacks
+# the commit) the archive sent with the run: `git archive --format=tar.gz $H1V3_SHA verity > h1v3-$H1V3_SHA.tar.gz`,
+# `research run --send` it
+if [ -n "${H1V3_SHA:-}" ]; then
+  mkdir -p "$S/h1v3"
+  if git cat-file -e "$H1V3_SHA^{commit}" 2>/dev/null; then
+    git archive "$H1V3_SHA" verity | tar -x -C "$S/h1v3"
+  elif [ -f "$D/inputs/h1v3-$H1V3_SHA.tar.gz" ]; then
+    tar -xzf "$D/inputs/h1v3-$H1V3_SHA.tar.gz" -C "$S/h1v3"
+  fi
+  [ -f "$S/h1v3/verity/core/protocols/pouw/circuit/h1tile.py" ] || { echo "sbench: H1V3_NO_TREE at $H1V3_SHA"; exit 14; }
+  export DITHER_H1V3_TREE=$S/h1v3 DITHER_H1V3_SHA=$H1V3_SHA
+else
+  export DITHER_H1V3_TREE=$ROOT DITHER_H1V3_SHA=${RESEARCH_SOURCE_SHA:-source}
 fi
-[ -f "$S/h1v3/verity/core/protocols/pouw/circuit/h1tile.py" ] \
-  && export DITHER_H1V3_TREE=$S/h1v3 DITHER_H1V3_SHA=$H1V3_SHA || echo "sbench: no H1V3 tree at $H1V3_SHA"
 # ASK-64's measured round trips (percall_rtt.py's percall-wait-ns.txt, sent with the run) for the dither-1s-percall-rtt arm
 [ -f "$D/inputs/percall-wait-ns.txt" ] && export DITHER_PERCALL_WAITS=$D/inputs/percall-wait-ns.txt
 cd integrations/vllm
@@ -55,9 +104,9 @@ export PYTHONPATH=.:$ROOT:$ROOT/tools/research/src:$ROOT/benchmarks/pouw/served_
 export HF_HOME=${HF_HOME:-/workspace/hf} FLASHINFER_CUDA_ARCH_LIST=12.0f
 # the wrap correction's pieces against H1V3 on the CPU, before the lease
 "$PY" "$ROOT/benchmarks/hash/dither/wrapcheck.py" | tee "$OUT/wrapcheck.json"
-case ${PIPESTATUS[0]} in 0) ;; 2) echo "sbench: wrapcheck skipped (no H1V3 tree)" ;; *) echo "sbench: WRAPCHECK_FAIL"; exit 12 ;; esac
+[ "${PIPESTATUS[0]}" = 0 ] || { echo "sbench: WRAPCHECK_FAIL"; exit 12; }
 NSYS=()
-if [ "${DITHER_NSYS:-}" = 1 ]; then
+if [ "${DITHER_NSYS:-}" = 1 ] || [ "${DITHER_NSYS:-}" = prof ]; then
   NSYS=("$CUDA/bin/nsys" profile -t cuda,nvtx --cuda-graph-trace=node --sample=none --cpuctxsw=none
         --capture-range=cudaProfilerApi --capture-range-end=stop -o "$S/gate" --force-overwrite true)
 elif [ -n "${DITHER_NCU:-}" ]; then
@@ -65,11 +114,24 @@ elif [ -n "${DITHER_NCU:-}" ]; then
         --section SpeedOfLight --section Occupancy --section LaunchStats --section SchedulerStats --section WarpStateStats
         --section ComputeWorkloadAnalysis --section InstructionStats -o "$OUT/ncu" -f)
 fi
+# an exact-fused or -xl arm is timed only after exactlin's kgate.py passes on this GPU, in the same lease (OUT/kgate)
+case " $* " in *exact-fused*|*-xl[\ ,-]*) KGATE=1 ;; *) KGATE=0 ;; esac
+export KGATE=${SBENCH_KGATE:-$KGATE} KGATE_PY=$PY KGATE_SCRIPT=$ROOT/benchmarks/hash/exactlin/kgate.py
 echo "sbench: asking for one GPU at $(date -u +%H:%M:%SZ)"
 nvidia-smi --query-gpu=index,clocks.sm,clocks.mem,power.draw,temperature.gpu,utilization.gpu --format=csv -l 2 > "$OUT/smi.csv" 2>/dev/null &
 SMI=$!
 MAX_MIN=${SBENCH_MAX_MIN:-40}
-gpu-lease 1 --wait --max-min "$MAX_MIN" -- timeout $((60 * MAX_MIN - 50)) "${NSYS[@]}" "$PY" \
+# SBENCH_PREEMPTIBLE=1: the lease may be taken back by a non-preemptible one (which ends the run unfinished)
+PRE=(); [ "${SBENCH_PREEMPTIBLE:-}" = 1 ] && PRE=(--preemptible)
+gpu-lease 1 --wait "${PRE[@]}" --max-min "$MAX_MIN" -- bash -c '
+  if [ "$KGATE" = 1 ]; then
+    timeout 900 "$KGATE_PY" "$KGATE_SCRIPT" --out "$0/kgate" --shapes all --models llama-3.1-8b,qwen3-8b --no-stock \
+      > "$0/kgate.log" 2>&1
+    g=$?
+    tail -1 "$0/kgate.log"
+    if [ $g -ne 0 ]; then echo "sbench: kgate rc $g, nothing timed"; exit 4; fi
+  fi
+  exec timeout $((60 * '"$MAX_MIN"' - 50 - SECONDS)) "$@"' "$OUT" "${NSYS[@]}" "$PY" \
   "$ROOT/benchmarks/hash/dither/${SBENCH_SCRIPT:-sbench.py}" --out "$OUT" --scratch "$S" "$@"
 rc=$?
 kill "$SMI" 2>/dev/null
@@ -80,6 +142,9 @@ if [ -f "$S/gate.nsys-rep" ]; then
   "$PY" "$ROOT/benchmarks/hash/dither/kernels.py" "$S/gate.sqlite" | tee "$OUT/kernels.json"
   # the prof op's ranges: each arm's kernels a decode step (exactlin/steps.py); the report kept when under 200 MB
   "$PY" "$ROOT/benchmarks/hash/exactlin/steps.py" "$S/gate.sqlite" > "$OUT/steps.json" || echo "sbench: steps.py rc $?"
+  "$PY" "$ROOT/benchmarks/hash/dither/stepprof.py" "$S/gate.sqlite" > "$OUT/stepprof.json" \
+    && "$PY" "$ROOT/benchmarks/hash/dither/stepprof.py" --table "$OUT/stepprof.json" | tee "$OUT/stepprof.txt" \
+    || echo "sbench: stepprof.py rc $?"
   [ "$(stat -c %s "$S/gate.nsys-rep")" -lt 209715200 ] && cp "$S/gate.nsys-rep" "$OUT/"
 fi
 if [ -f "$OUT/ncu.ncu-rep" ]; then
