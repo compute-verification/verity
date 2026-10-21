@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import cProfile
 import pstats
+import random
 
 import pytest
 
@@ -151,6 +152,68 @@ def test_a_mixed_k_window_registers_in_one_read_each_k_under_its_own_ports():
         "a/32", 18, roots["a/32"], "a/64", 34, roots["a/64"])
     assert (zy["value"], zy["words"], zy["leaves"]) == ("zy", 96, 16)
     assert len({ports[f"{t}_k{k}[0]"]["domain"] for k in (32, 64) for t in "ab"}) == 4
+
+
+def test_each_unit_reads_its_a_rows_and_record_at_its_calls_tables():
+    """A unit's A rows and record are committed in its call's tables before its round's coin, so `table_reads` re-bases them
+    there: tile t of call c, on rows R ti .. R ti + R - 1 of its A block, reads A row i at row R ti + i of call c's A table
+    and its record at row t of call c's z table; its B rows and the rest are `unit_reads`'."""
+    m = HW.slot(5, TILE)
+    prog = HW.program(LINEARS, CALLS, m, TILE, prefix="h1/w/", unit=unit)
+    tp = P.evaluate(prog, HW.query(prog))
+    want, units, k_of = _expected(LINEARS, CALLS, m), HW.call_units(prog), {name: k for name, k, _n in LINEARS}
+    assert units == [(0, 4), (4, 2), (6, 2), (8, 4), (12, 2), (14, 2)]
+    for c, (u0, n) in enumerate(units):
+        lin, blk = CALLS[c]
+        k = k_of[lin]
+        assert (HW.table(prog, "a", c), HW.table(prog, "zy", c)) == (f"h1/w/a/{k}@{c}", f"h1/w/zy@{c}")
+        for t in range(n):
+            got, base, (_k, a0, _b) = HW.table_reads(prog, tp, u0 + t), HW.unit_reads(prog, tp, u0 + t), want[u0 + t]
+            assert HW.call_of(prog, u0 + t) == (c, t)
+            assert got == {**base, **{f"a_k{k}[{i}]": (f"h1/w/a/{k}@{c}", a0 - blk * m + i) for i in range(R)},
+                           "zy": (f"h1/w/zy@{c}", t)}
+            assert all(0 <= got[f"a_k{k}[{i}]"][1] < m for i in range(R))
+    with pytest.raises(ValueError, match="no unit"):
+        HW.call_of(prog, tp.population)
+    with pytest.raises(ValueError, match="a call's tables"):
+        HW.table(prog, "b", 0)
+
+
+def test_a_calls_statement_opens_its_units_rows_at_its_tables_and_at_no_other_calls():
+    """`table_reads_file` holds a statement to one call's units. With the call's A table, its z table and the weights' b/32
+    committed as ``row/v2`` registered values under their own names, every A row, B row and record a unit of the call reads
+    opens its port's root at its position (`registered.verify_read`, the check ``--registered`` makes of a table row), a
+    unit of another call reads nothing, and another call's A table, of the same rows under the same salts, opens none of
+    them: its leaves are framed under its own name's domain."""
+    m = HW.slot(5, TILE)
+    prog = HW.program(LINEARS, CALLS, m, TILE, unit=unit)
+    tp, digest, rng = P.evaluate(prog, HW.query(prog)), P.program_digest(prog), random.Random(7)
+
+    def commit(value: str, rows: int, words: int) -> G.Registered:
+        return G.Registered.commit(digest, value, [[rng.randrange(1 << 16) for _ in range(words)] for _ in range(rows)],
+                                   schema=G.SCHEMA_V2)
+
+    c, a = 3, HW.table(prog, "a", 3)
+    u0, n = HW.call_units(prog)[c]
+    tabs = {a: commit(a, m, _words(32)), HW.table(prog, "zy", c): commit(HW.table(prog, "zy", c), n, 3 * R * C),
+            "b/32": commit("b/32", 24, _words(32))}
+    twin = G.Registered.commit(digest, HW.table(prog, "a", 0), tabs[a].rows, tabs[a].salts, schema=G.SCHEMA_V2)
+    assert twin.bcs == tabs[a].bcs and twin.root != tabs[a].root
+    file = HW.table_reads_file(prog, tp, c, {v: r.root.hex() for v, r in tabs.items()}, ports=HW.window_ports(prog))
+    assert file["format"] == G.READS and sorted(file["ports"]) == sorted(
+        [f"a_k32_{i}" for i in range(R)] + [f"b_k32_{j}" for j in range(C)] + ["zy"])
+    for port, e in file["ports"].items():
+        reg, dom = tabs[e["value"]], G.domain(digest, e["value"], e["words"], e["leaves"])
+        assert (e["leaves"], e["words"], e["domain"], e["row_schema"]) == (reg.leaves, reg.words, dom.domain_id.hex(),
+                                                                             G.SCHEMA_V2), port
+        assert all(r is None for u, r in enumerate(e["reads"]) if not u0 <= u < u0 + n), port
+        for u in range(u0, u0 + n):
+            p = e["reads"][u]
+            assert G.verify_read(dom, reg.root, p, reg.bcs[p], reg.path(p), G.SCHEMA_V2), (port, u)
+            if e["value"] == a:
+                assert not G.verify_read(dom, reg.root, p, twin.bcs[p], twin.path(p), G.SCHEMA_V2), (port, u)
+    with pytest.raises(ValueError, match="roots the verifier does not hold"):
+        HW.table_reads_file(prog, tp, c, {"b/32": "00" * 64})
 
 
 def test_a_window_at_k_32_and_322_reads_each_row_under_its_own_port():
@@ -315,13 +378,13 @@ def test_a_unit_whose_shared_parameters_differ_by_k_is_refused():
 
 
 def _z_alone(r: int, c: int) -> Record:
-    return Record(("z", Array(r * c, Z.U32)))
+    return Record(("z", Array(r * c, Z.S32)))
 
 
 @pytest.mark.parametrize("name,sig,why", [
     ("H1WindowTestZAlone", lambda S: _tile_sig(S, record=_z_alone), "a record of z alone leaves the served y unproved"),
     ("H1WindowTestYAlone", lambda S: _tile_sig(S, record=lambda r, c: Record(("y", Array(r * c, Z.BF16)))), "512-bit record"),
-    ("H1WindowTestCodesOnly", lambda S: _tile_sig(S, row=lambda k: Array(k, Z.I8)), "and the row's f32 scale"),
+    ("H1WindowTestCodesOnly", lambda S: _tile_sig(S, row=lambda k: Array(k, Z.S8)), "and the row's f32 scale"),
     ("H1WindowTestZOut", lambda S: _tile_sig(S, out=("z", "receipt")), "not \\('receipt', 'ok'\\)"),
 ])
 def test_a_unit_that_doesnt_prove_its_record_against_its_scaled_rows_is_refused(name, sig, why):

@@ -364,7 +364,7 @@ def record_words(z, y) -> np.ndarray:
 
 
 def split_record(words, cells: int) -> tuple[list[int], list[int]]:
-    """`record_words`' one row back: its cells' z (u32 encodings) and y (bf16 encodings)."""
+    """`record_words`' one row back: its cells' z (s32 words, two's complement in 32 bits) and y (bf16 encodings)."""
     w = np.asarray(words, np.uint16)
     return [int(v) for v in np.ascontiguousarray(w[:2 * cells].astype("<u2")).view("<u4")], [int(v) for v in w[2 * cells:]]
 
