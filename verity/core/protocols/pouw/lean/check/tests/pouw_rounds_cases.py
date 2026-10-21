@@ -66,13 +66,15 @@ def _record(ch: Ch.LiveChallenger, roots: list[bytes]) -> list[dict]:
 class Session:
     """A challenger's session over `ch`'s coins as its host leaves it, its record and close signed under key `seed`: its
     salt coin opened after root `salt` (none when None), then round coins after `roots`, then its draw coin after the
-    root `draw` makes of the round coins' record (none when None)."""
+    root `draw` makes of the round coins' record (none when None); its record signed at leaf `leaf` and its close at the
+    next."""
 
     def __init__(self, rng: random.Random, ch: Ch.LiveChallenger, roots: list[bytes], salt: bytes | None, seed: int = 0,
-                 sid: str = "s-1", draw: Callable[[Ch.LiveRecord | None], bytes] | None = None) -> None:
-        self.ch, self.k, self.sid = ch, _key(seed), sid
+                 sid: str = "s-1", draw: Callable[[Ch.LiveRecord | None], bytes] | None = None,
+                 leaf: int = RECORD_LEAF) -> None:
+        self.ch, self.k, self.sid, self.leaf = ch, _key(seed), sid, leaf
         self.pub = lms.public_key(self.k)
-        ch.sign_record(HOST, self.pub, lambda m: lms.sign_at(self.k, RECORD_LEAF, m).encode())
+        ch.sign_record(HOST, self.pub, lambda m: lms.sign_at(self.k, leaf, m).encode())
         clock = itertools.count(rng.choice([0, 1, 10 ** 12])).__next__
         self.lines = [canonical_json_text({"event": "commitment", "root": ch.commitment.root.hex()})]
         records = [] if salt is None else [Ch.LiveRecord(ch, Wd.SALT, clock)]
@@ -93,7 +95,7 @@ class Session:
         sid = self.sid if sid is None else sid
         chain = Ch.log_chain(lines)
         m = Ch.close_message(self.pub[:16], HOST, self.ch.commitment, sid, len(lines), chain, ended)
-        return Ch.ChallengerClose(sid, len(lines), chain, ended, lms.sign_at(self.k, RECORD_LEAF + 1, m).encode()).to_json()
+        return Ch.ChallengerClose(sid, len(lines), chain, ended, lms.sign_at(self.k, self.leaf + 1, m).encode()).to_json()
 
     def files(self) -> dict:
         return {"close": self.close, "hellos": list(self.hellos), "log": list(self.lines), "record": self.ch.record.to_json()}
@@ -141,7 +143,7 @@ def _end(s: Session, **changes) -> dict:
     files = {Ch.LOG_FILE: Ch.log_digest(s.sealed), Ch.HELLOS_FILE: Ch.log_digest(s.sealed_hellos),
              Ch.RECORD_FILE: hashlib.sha512(canonical_json_text(s.ch.record.to_json()).encode()).hexdigest(),
              Ch.CLOSE_FILE: hashlib.sha512(canonical_json_text(s.close).encode()).hexdigest()}
-    body = {"closed": True, "files": files, "rc": 0, "record_leaf": RECORD_LEAF, "commitment": s.ch.commitment.root.hex(),
+    body = {"closed": True, "files": files, "rc": 0, "record_leaf": s.leaf, "commitment": s.ch.commitment.root.hex(),
             "refused_hellos": len(s.sealed_hellos), "complete": True}
     return {k: v for k, v in {**body, **changes}.items() if v is not None}
 

@@ -7,7 +7,7 @@ import SampledProofs.ChallengerSession
 import SampledProofs.PyJson
 
 /-!
-# A served window's credited set, its drawn units' outcome and its A rows (`credit.py`; RT4-INT-32, RT4-INT-34)
+# A served window's credited set, its drawn units and their outcome, its A rows and its period (`credit.py`; RT4-INT-32, -34 and -42)
 
 The verifier of record of `verity/core/protocols/pouw/credit.py`, which the difftest (`tests/test_difftest.py`) holds to
 it, string for string:
@@ -17,8 +17,14 @@ it, string for string:
   `json.dumps(row, sort_keys=True)`), the last round's receipts and every round's root and coin (`drawRoot`) must be the
   one root the challenger's log shows its draw coin followed, read through the session the auditor's signed ledger opens
   for the window (`trustedSessionOf`). So a credit bit changed after the draw coin is refused.
-* `outcome` is `credit.outcome`: every drawn unit has exactly one proof outcome and it is an accept, else the whole
-  window is refused (no partial credit).
+* `drawn` is `credit.drawn`: the units the draw coin draws from the window's own layout, `drawCheck`'s rule under the
+  law `work:k` (`workUnits`), one stratum per K (`strata`, over `h1window.program`'s unit order) at K = min(`RECORD_K`,
+  N) (`law`). Never a list the prover hands in.
+* `outcome` is `credit.outcome`: every unit `drawn` draws has exactly one proof outcome and it is an accept, else the
+  whole window is refused (no partial credit). `window` is `credit.window`: `credited`, then `outcome` under the served
+  window's arguments (the stream its root, the registration its draw root, the receipt `{"receipts": …}`).
+* `period` is `credit.period`: the windows presented are exactly those the auditor's ledger lists in the period's
+  close, in its order, and the close is complete; `periodCredit` is `credit.period_credit`, every window of it credited.
 * `aLink` is `credit.a_link`: each registered A value (`…/a/<K>`) is the frame-v3 SHA-512 tree over the aligned subtrees
   each round's root commits (`roundRoot`), round s's tiling the value's rows `[s·L/S, (s+1)·L/S)`.
 
@@ -54,7 +60,21 @@ def CHANGED : String :=
   "root and coin is not the one root the challenger's log shows its draw coin followed: a credit bit or a call " ++
   "changed after the draw coin, or the draw opened after another root. Commit every call's credit bit in its " ++
   "manifest row before the draw root, and never change it after the draw coin"
-def DRAWN_FORM : String := "the drawn units are not a nonempty list of distinct unit indices"
+def RECORD_K : Nat := 27713
+def LAYOUT_KEYS : List String := ["calls", "linears", "m", "tile"]
+def LAYOUT_FORM : String :=
+  "the window's layout is not {calls, linears, m, tile}, h1window.program's arguments: its calls " ++
+  "[[linear, A block], ...] in order, its linears [[name, K, n], ...] each once, its A slot m and its tile " ++
+  "[R, C], every number a natural number and R, C at least one"
+def COIN_FORM : String := "the draw coin is not a SHA-512 digest (128 lowercase hex)"
+def DRAW_ARGS : String :=
+  "the draw's stream is not a string, its registration not a SHA-512 digest, or its receipt not an object of " ++
+  "printable ASCII strings"
+def WINDOW_KEYS : List String :=
+  ["calls", "draw", "layout", "proofs", "rounds", "salt", "served", "session", "window"]
+def WINDOWS_FORM : String :=
+  "the period's windows are not a list of each window's evidence {" ++ ", ".intercalate WINDOW_KEYS ++ "}, " ++
+  "in its close's order"
 def PROOFS_FORM : String := "the drawn units' proof outcomes are not a list of {unit, verdict}, verdict accept or reject"
 def LOG_FORM : String := "the round log is not a nonempty list"
 def ENTRIES_FORM : String := "the window's registered entries are not a list of objects"
@@ -154,35 +174,209 @@ def credited (key ledger window session salt calls served rounds draw : Json) : 
   if let some w := why then throw ("coin", s!"the draw coin: {w}")
   pure out
 
-/-- `credit.outcome`: none when every drawn unit has exactly one outcome and it is an accept, and no other unit has one;
-else the refusal (`outcome`, `missing` or `failed`). -/
-def outcome (drawn proofs : Json) : R Unit := do
-  let some ds := (match drawn with
-      | .arr a => a.toList.mapM nat?
-      | _ => none) | throw ("outcome", DRAWN_FORM)
-  unless !ds.isEmpty && ds.eraseDups.length == ds.length do throw ("outcome", DRAWN_FORM)
+def layoutRefuse {α : Type} (why : String) : R α := throw ("layout", why)
+
+/-- `[a, b, …]`, as Python writes a list of integers. -/
+def listStr (xs : List Nat) : String := "[" ++ ", ".intercalate (xs.map toString) ++ "]"
+
+/-- `credit.strata`: the work strata of the served H1 window whose Program is `h1window.program` of `layout`
+(`{calls, linears, m, tile}`), else the refusal. Its units are the Program's, call by call, each call's (m/R)·(n/C)
+tiles row block major; K's stratum is the units of the calls of K's linears, template `k<K>`, its ranges in order
+(adjacent ones merged), the strata in the order of their first unit, each unit's work R·C·K and every floor one. Its cost
+is the layout's calls, never its units. -/
+def strata (layout : Json) : R (Array Flock.Draw.WorkStratum) := do
+  unless keys layout == some LAYOUT_KEYS do layoutRefuse LAYOUT_FORM
+  let (.arr tile, some m, .arr linears, .arr calls) :=
+      (get layout "tile", nat? (get layout "m"), get layout "linears", get layout "calls") | layoutRefuse LAYOUT_FORM
+  let some [r, c] := tile.toList.mapM nat? | layoutRefuse LAYOUT_FORM
+  unless 1 ≤ r && 1 ≤ c && !linears.isEmpty && !calls.isEmpty do layoutRefuse LAYOUT_FORM
+  let mut ks : Array (String × Nat × Nat) := #[]
+  for x in linears do
+    let some (name, k, n) := (match x with
+        | .arr a => match a.toList with
+          | [.str s, k, n] => do pure (s, ← nat? k, ← nat? n)
+          | _ => none
+        | _ => none) | layoutRefuse LAYOUT_FORM
+    if ks.any (·.1 == name) then layoutRefuse s!"linear {name} is named twice: a window names each of its weights once"
+    ks := ks.push (name, k, n)
+  let mut cs : Array (String × Nat) := #[]
+  for x in calls do
+    let some (lin, blk) := (match x with
+        | .arr a => match a.toList with
+          | [.str s, b] => (s, ·) <$> nat? b
+          | _ => none
+        | _ => none) | layoutRefuse LAYOUT_FORM
+    unless ks.any (·.1 == lin) do
+      layoutRefuse s!"a call of {lin}, which is no linear of the window: every call is of one of its linears"
+    cs := cs.push (lin, blk)
+  for (name, _) in ks do
+    unless cs.any (·.1 == name) do layoutRefuse s!"linear {name} is never called: every linear of the window is called"
+  if m < r || m &&& (m - 1) != 0 then
+    layoutRefuse s!"the A slot {m} is no power of two of at least the tile's {r} rows (h1window.slot)"
+  for (name, k, n) in ks do
+    if k < 1 || n < c || n % c != 0 then
+      layoutRefuse s!"linear {name}: K = {k} and n = {n} are not K >= 1 and n whole blocks of the tile's {c} columns"
+  let kOf : String → Nat := fun lin => ((ks.find? (·.1 == lin)).map (·.2.1)).getD 0
+  for k in (ks.toList.map (·.2.1)).eraseDups.mergeSort (· ≤ ·) do
+    let used := ((cs.toList.filter fun (lin, _) => kOf lin == k).map (·.2)).eraseDups.mergeSort (· ≤ ·)
+    unless used == List.range used.length do
+      layoutRefuse s!"the A blocks of K = {k} are {listStr used}: each of 0, 1, ... is read by some call of K"
+  let mut out : Array Flock.Draw.WorkStratum := #[]
+  let mut at_ := 0
+  for (lin, _) in cs do
+    let some (_, k, n) := ks.find? (·.1 == lin) | layoutRefuse LAYOUT_FORM
+    let size := (m / r) * (n / c)
+    let t := s!"k{k}"
+    match out.findIdx? (·.template == t) with
+    | none => out := out.push { template := t, units := #[(at_, at_ + size)], k := 0, work := r * c * k, floor := 1 }
+    | some i => out := out.modify i fun s =>
+        match s.units.back? with
+        | some (lo, hi) =>
+          if hi == at_ then { s with units := s.units.pop.push (lo, at_ + size) }
+          else { s with units := s.units.push (at_, at_ + size) }
+        | none => { s with units := s.units.push (at_, at_ + size) }
+    at_ := at_ + size
+  pure out
+
+/-- `credit.law`: the strata under the work law `work:k` at K = min(`RECORD_K`, N), each stratum's `k_s`
+`Flock.Draw.workK`. -/
+def law (ss : Array Flock.Draw.WorkStratum) : Array Flock.Draw.Stratum :=
+  let k := min RECORD_K (ss.foldl (fun a s => a + s.size) 0)
+  let total := Flock.Draw.totalWork ss
+  ss.map fun s => { s.toStratum with k := Flock.Draw.workK k s.work s.size total s.floor }
+
+/-- `credit._drawn`: the units the draw coin `coin` draws over `ss` (`workUnits`), else the refusal. -/
+def drawnOf (coin : ByteArray) (stream registration receipt : Json) (ss : Array Flock.Draw.WorkStratum) :
+    R (Array Nat) := do
+  let some (st, reg, kvs) := (match stream, registration, digest? registration, receipt with
+      | .str st, .str reg, some _, .obj kv => (st, reg, ·) <$> kv.toArray.toList.mapM fun (x, v) => match v with
+        | .str s => if _root_.PouwCheck.plain x && _root_.PouwCheck.plain s then some (x, s) else none
+        | _ => none
+      | _, _, _, _ => none) | throw ("draw", DRAW_ARGS)
+  let some units ← port (workUnits coin st reg kvs (law ss)) | throw ("sampler", "the draw's stream ran out")
+  pure units
+
+/-- `credit._proved`: none when every unit of `drawn` has exactly one outcome and it is an accept, and no other unit
+has one; else the refusal (`outcome`, `missing` or `failed`). -/
+def proved (drawn : Array Nat) (proofs : Json) : R Unit := do
+  let picked : Std.HashMap Nat Unit := drawn.foldl (fun m u => m.insert u ()) {}
   let .arr ps := proofs | throw ("outcome", PROOFS_FORM)
-  let mut seen : List (Nat × String) := []
+  let mut seen : Std.HashMap Nat String := {}
   for p in ps.toList do
     let some (u, v) := (if keys p == some ["unit", "verdict"] then
         match nat? (get p "unit"), get p "verdict" with
         | some u, .str v => if VERDICTS.contains v then some (u, v) else none
         | _, _ => none
       else none) | throw ("outcome", PROOFS_FORM)
-    if (seen.lookup u).isSome then
+    if seen.contains u then
       throw ("outcome", s!"unit {u} has two proof outcomes: a drawn unit is proved and verified once, and a retry " ++
         "never reproves it")
-    unless ds.contains u do
+    unless picked.contains u do
       throw ("outcome", s!"unit {u} has a proof outcome and was not drawn: only the draw's units are proved")
-    seen := seen ++ [(u, v)]
-  for u in ds do
-    match seen.lookup u with
+    seen := seen.insert u v
+  for u in drawn do
+    match seen.get? u with
     | none => throw ("missing", s!"drawn unit {u} has no proof outcome: every drawn unit's proof is verified, and a " ++
         "window with one missing is refused whole (no partial credit). Prove and verify every drawn unit")
     | some v =>
       unless v == "accept" do
         throw ("failed", s!"drawn unit {u}'s proof was rejected: a failed drawn unit refuses the whole window, not " ++
           "only its call (no partial credit, and no retry)")
+
+/-- `credit.drawn`: the units the draw coin `coin` (its value, a SHA-512 digest in hex) draws from the window `layout`,
+ascending, else the refusal (`layout`, `draw` or `sampler`). -/
+def drawn (coin stream registration receipt layout : Json) : R (Array Nat) := do
+  let ss ← strata layout
+  let some c := digest? coin | throw ("draw", COIN_FORM)
+  drawnOf c stream registration receipt ss
+
+/-- `credit.outcome`: none when every unit the draw coin draws from the window (`drawn`) has exactly one outcome and it
+is an accept, and no other unit has one; else the refusal. -/
+def outcome (coin stream registration receipt layout proofs : Json) : R Unit := do
+  proved (← drawn coin stream registration receipt layout) proofs
+
+/-- `credit.window`: a served H1 window's credited calls (`credited`), its manifest one row per call of `layout`, and
+`outcome` of the draw coin `credited` read, the stream the window's root, the registration its draw root and the receipt
+`{"receipts": …}`, its last round's receipts; else the refusal. -/
+def window (key ledger window session salt calls served rounds draw layout proofs : Json) : R (List Nat) := do
+  let got ← credited key ledger window session salt calls served rounds draw
+  let ss ← strata layout
+  let (.arr rows, .arr lcalls) := (calls, get layout "calls") | layoutRefuse LAYOUT_FORM
+  unless rows.size == lcalls.size do
+    throw ("manifest", s!"the manifest's {rows.size} rows are not the layout's {lcalls.size} calls: each call of the " ++
+      "window's Program is one manifest row, in order")
+  let o ← (LiveOpening.ofJson (get draw "coin")).mapError fun e => ("coin", s!"the draw coin: {e}")
+  proved (← drawnOf o.coin (get window "root") (get draw "root") (Json.mkObj [("receipts", get draw "receipts")]) ss)
+    proofs
+  pure got
+
+/-- `credit.period`: none when `roots` are exactly the windows the auditor's ledger lists in period `name`'s close, in
+its order, and that close is complete (`checked`, under the pinned key `key`); else the refusal (`coin`, `period`,
+`missing` or `order`). -/
+def period (key ledger name roots : Json) : R Unit := do
+  let k ← (ChallengerKey.ofJson key).mapError fun e => ("coin", s!"the verifier's challenger key is malformed: {e}")
+  discard <| (SampledProofs.Challenger.checked ledger k).mapError fun e =>
+    ("coin", s!"the auditor's ledger is not trusted: {e}")
+  let .str name := name | throw ("period", "the period is not named")
+  let .arr lines := ledger | throw ("period", "the period is not named")
+  let es := lines.filterMap SampledProofs.Challenger.ledgerEntry?
+  let named := fun (e : SampledProofs.Challenger.LedgerEntry) => get e.body "period" == Json.str name
+  unless es.any (fun e => e.kind == "period-open" && named e) do
+    throw ("period", s!"the auditor's ledger opens no period {name}: credit counts only a period the ledger opens " ++
+      "and closes")
+  let some close := (es.find? fun e => e.kind == "period-close" && named e).map (·.body)
+    | throw ("period", s!"period {name} has no close in the auditor's ledger, so it earns nothing: close it " ++
+        "(period-close) and present the ledger after its close")
+  let ws := match get close "windows" with
+    | .arr a => a
+    | _ => #[]
+  unless get close "complete" == Json.bool true do
+    match ws.findIdx? (fun w => get w "complete" != Json.bool true) with
+    | none => throw ("period", s!"period {name} closed with no window, so it earns nothing")
+    | some i => throw ("period", s!"period {name} closed incomplete: its window {i} (session " ++
+        s!"{(str? (get ws[i]! "session")).getD ""}) never opened or didn't end complete before the close, so the " ++
+        "period earns nothing")
+  let some rs := (match roots with
+      | .arr a => a.toList.mapM fun r => if (digest? r).isSome then str? r else none
+      | _ => none) | throw ("period", "the period's windows are not a list of window roots (SHA-512 digests)")
+  let want := ws.toList.map fun w => (str? (get w "root")).getD ""
+  let wanted : Std.HashMap String Unit := want.foldl (fun m r => m.insert r ()) {}
+  let presented : Std.HashMap String Unit := rs.foldl (fun m r => m.insert r ()) {}
+  for i in [0:max want.length rs.length] do
+    if i ≥ want.length then
+      throw ("period", s!"the windows presented run past the {want.length} that period {name}'s close lists: only " ++
+        "its close's windows count, each once")
+    let w := want[i]!
+    if i ≥ rs.length || (rs[i]! != w && !presented.contains w) then
+      throw ("missing", s!"window {i} of period {name} ({w.take 16}...) is missing: every window between the " ++
+        "period's open and its close counts, so present them all, in the close's order")
+    let r := rs[i]!
+    if r != w then
+      if !wanted.contains r then
+        throw ("period", s!"window {r.take 16}... is not one of period {name}'s windows: only the windows its close " ++
+          "lists count")
+      throw ("order", s!"window {i} of period {name} is {r.take 16}..., not {w.take 16}..., the close's window {i}: " ++
+        "present the period's windows in the order its close lists them")
+
+/-- `credit.period_credit`: each window's credited calls of period `name`, in its close's order: the period's windows
+are exactly its close's (`period`) and each window is credited (`window`), a refused window refusing the period. -/
+def periodCredit (key ledger name windows : Json) : R (List (List Nat)) := do
+  let some ws := (match windows with
+      | .arr a => if a.all (fun w => keys w == some WINDOW_KEYS) then some a.toList else none
+      | _ => none) | throw ("period", WINDOWS_FORM)
+  let roots := Json.arr (ws.toArray.map fun w => match get w "window" with
+    | j@(.obj _) => get j "root"
+    | _ => .null)
+  period key ledger name roots
+  let nm := (str? name).getD ""
+  let mut out : List (List Nat) := []
+  for (w, i) in ws.zipIdx do
+    let f := get w
+    let got ← (window key ledger (f "window") (f "session") (f "salt") (f "calls") (f "served") (f "rounds") (f "draw")
+      (f "layout") (f "proofs")).mapError fun (c, why) =>
+        ("window", s!"window {i} of period {nm} is refused, so the period earns nothing: {c}: {why}")
+    out := out ++ [got]
+  pure out
 
 /-- An A value's segments by name, each `(level, index, root)` in row order. -/
 abbrev Segments := List (String × List (Nat × Nat × ByteArray))
