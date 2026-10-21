@@ -1,5 +1,6 @@
 """The first served H1 window end to end against a challenger gate: rehearsed against infra's gate on the serving node
-(`local_gate.py`), and the same script run live against vy-challenger-1's. Run by hand or as a research run; never collected.
+(`local_gate.py`), and the same script run live against vy-challenger-1's. Run by hand or as a research run; never collected. ``--red-team RUN_OUT`` reruns the red team's edited copies of a
+fetched run on any CPU.
 
 **What it does.** Opens the lane's period (``period-open --name P --cap 1 --circuit C``), reserves the window's session
 (``reserve --peer PEER --scheme S --families F``), and serves `pouw_h1.FILL` (Llama-3.1-8B int8, 64 in flight, T = 64,
@@ -320,7 +321,22 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--minutes", type=int, default=300, help="the reserve's minutes, which also bound the session")
     ap.add_argument("--pin-at", default="2026-10-21T00:00:00Z", help="pouw_h1_gpu.py's --at (resolved_at, if a pin is made)")
     ap.add_argument("--pin-by", default="vllm", help="pouw_h1_gpu.py's --by")
+    ap.add_argument("--red-team", metavar="RUN_OUT", help="CPU only: rerun the red team's edited copies on a run's fetched out/ "
+                                                         "(its serve/, gate/ and rehearsal.json), into --out")
     a = ap.parse_args(argv)
+    if a.red_team:
+        src = Path(a.red_team)
+        done = json.loads((src / RECORD).read_text())
+        out = Path(a.out)
+        if out.resolve() != src.resolve():
+            import shutil
+            for d in ("serve", "gate"):
+                shutil.copytree(src / d, out / d, dirs_exist_ok=True)
+        rt = red_team(out, done["key_sha512"], done["period"], None, a.peer, a.at or "127.0.0.1:1")
+        Path(out, "red_team.json").write_text(json.dumps(rt, indent=1, default=str) + "\n")
+        print(f"POUW-H1-RED-TEAM all_refused={rt['all_refused']} "
+              + " ".join(f"{k}={'refused' if v.get('refused') else 'ACCEPTED'}" for k, v in rt["cases"].items()), flush=True)
+        return 0 if rt["all_refused"] else 1
     if a.gate is None and not (a.tree and a.commit):
         ap.error("the local gate needs --tree and --commit")
     if a.gate is not None and not (a.key_sha512 and a.at):
