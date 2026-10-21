@@ -24,7 +24,8 @@
 #      H1_MEM_GB=500), and the selftest build's controls on
 #      the drawn units' statement (H1_CONTROLS; at K = 4096 a selftest, prover and verifier in one process, peaks past
 #      170 GB)
-#   5. run.py summarize: out/summary.json
+#   5. run.py summarize: out/summary.json, with window credit's registration step (credit._registration) on the honest
+#      checks' Lean findings under the window's open root, which every per-window registered value binds (PRF-127)
 # env: H1_MEM_GB (the job's --mem-gb)  H1_K (4096; a smaller K truncates every row: a smoke)  H1_COLS (each call's first
 #      N weight rows; 0 all)  H1_DRAW (8)  H1_TOKENS (16)  H1_LAYER (0)  H1_HUB (/workspace/hf/hub)
 #      H1_FIREWALL (1)  H1_ONLY (the plan's tags to prove and check, space-separated: "honest other-window-own" skips the negatives; all)

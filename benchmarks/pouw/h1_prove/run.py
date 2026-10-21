@@ -100,8 +100,16 @@ verifier, Lean) and with what message. A registration of z alone (``z-only-regis
 rows of 2 R C words, no y) is refused by the verifier's own check of the registration (`check_registration`) before any
 draw.
 
+Every per-window registered value (each call's A table and z table, and ``ok``) is registered under the window's open root
+(PRF-127: `h1unit.open_root`, a stand-in, as this harness has no auditor's ledger), and only the weights' b/<K> under none;
+the verifier computes the root itself and refuses a commitment that registers its tables without it
+(``unrooted-registration``). Window credit's last two steps (`credit_registration`: the layout of the descriptor, one
+accepted outcome per drawn unit, and `credit._registration`) take the window's evidence: in ``prepare`` with each drawn
+unit's finding the ports of its call's ``--registered`` file, and refused for entries without the root, an ``ok``
+without it and another window's root; in ``summarize`` on Lean's own VERDICT findings.
+
 ``summarize`` reads the job's proving and Lean records into OUT/summary.json: the unit and statement counts, proving
-time and Lean verify time, and every check's verdict against its expectation.
+time and Lean verify time, every check's verdict against its expectation, and credit's registration on Lean's findings.
 """
 from __future__ import annotations
 
@@ -126,6 +134,7 @@ from verity.ml.randomness import derive  # noqa: E402
 from verity.core.protocols.sampled_proofs.one_stage import partition as P  # noqa: E402
 from verity.core.protocols.sampled_proofs.one_stage import registered as G  # noqa: E402
 from verity.core.protocols.pouw import core_check as CC  # noqa: E402
+from verity.core.protocols.pouw import credit as CR  # noqa: E402
 from verity.core.protocols.pouw import verifier  # noqa: E402
 from verity.core.protocols.pouw.coins import Challenger, coin_reason  # noqa: E402
 
@@ -195,14 +204,21 @@ def check_registration(win: SimpleNamespace, com: dict) -> list[str]:
     """Why a window commitment's registration is not of the verifier's own Program (``win``): it registers under the
     Program's digest, and its values are the weights' b/<K> (the calls' B rows) and each call's A table (the slot's rows)
     and z table (its tiles' records), the tables the verifier's Program names (`h1unit.program_tables`), each its own
-    width of 16-bit leaves (`h1unit.value_words`), under that digest's domains (`h1unit.registered_domain`), with the
-    commitment's roots."""
+    width of 16-bit leaves (`h1unit.value_words`), under that digest's domains (`h1unit.registered_domain`), each table's
+    binding the window's open root, which the verifier computes itself (`h1unit.window_open_root`) and the commitment
+    records, and b/<K>'s none (PRF-127), with the commitment's roots."""
     k, prog, why = com["unit"]["k"], win.obj["program"], []
     if com.get("program_sha512") != prog:
         why.append(f"it registers under Program {com.get('program_sha512')}, not the verifier's {prog}")
     roots = {e.get("value"): e.get("root") for e in com.get("registered", [])}
+    try:
+        wr = U.window_open_root(com)
+    except (KeyError, TypeError, ValueError) as e:
+        return [*why, f"it registers no b/{k} root to compute the window's open root from: {e!r}"]
+    if com.get("window_root") != wr:
+        why.append(f"it records the window's open root as {com.get('window_root')}, not the verifier's {wr}")
     want = [{"value": v, "root": roots.get(v), "leaves": n, "words": U.value_words(v),
-             "domain": U.registered_domain(prog, v, n).domain_id.hex()} for v, n in U.program_tables(win.program, k).items()]
+             "domain": U.registered_domain(prog, v, n, wr).domain_id.hex()} for v, n in U.program_tables(win.program, k).items()]
     if com.get("registered") != want:
         why.append(f"its registered entries {com.get('registered')} are not the verifier's {want}")
     return why
@@ -211,9 +227,16 @@ def check_registration(win: SimpleNamespace, com: dict) -> list[str]:
 def z_only(com: dict) -> dict:
     """``com`` as a prover that registers its records' z alone states it: its z tables' entries rows of 2 R C words, no y."""
     words = 2 * R * C
-    return dict(com, registered=[dict(e, words=words, domain=G.domain(com["program_sha512"], e["value"], words,
-                                                                       e["leaves"]).domain_id.hex())
+    return dict(com, registered=[dict(e, words=words, domain=G.domain(com["program_sha512"], e["value"], words, e["leaves"],
+                                                                       window=com["window_root"]).domain_id.hex())
                                  if e["value"].startswith("zy@") else e for e in com["registered"]])
+
+
+def unrooted(com: dict) -> dict:
+    """``com`` as a prover that registers its per-window values with no window root states it (main's form before
+    PRF-127): every entry's domain the registered domain of its value with no window bound."""
+    return dict(com, registered=[dict(e, domain=G.domain(com["program_sha512"], e["value"], e["words"],
+                                                         e["leaves"]).domain_id.hex()) for e in com["registered"]])
 
 
 def check_opening(win: SimpleNamespace, com: dict, served: dict, op: dict, u: int) -> list[str]:
@@ -241,7 +264,8 @@ def check_opening(win: SimpleNamespace, com: dict, served: dict, op: dict, u: in
         if value == "receipt":
             ok = U.verify(U.domain(w, value, count), bytes.fromhex(root), index, bc, r["path"])
         else:
-            ok = U.verify_registered(win.obj["program"], value, count, bytes.fromhex(root), index, bc, r["path"])
+            ok = U.verify_registered(win.obj["program"], value, count, bytes.fromhex(root), index, bc, r["path"],
+                                     U.window_open_root(com))
         if not ok:
             why.append(f"{port}: its path does not reach the registered {value} root")
     return why
@@ -259,8 +283,9 @@ def unit_bcs(shape: U.Shape, com: dict, salt: bytes, op: dict) -> dict[str, byte
 
 def ok_registration(win: SimpleNamespace, com: dict) -> "U.G.Registered":
     """The verifier's own registration of a window's ok rows (`h1unit.register_ok`: the one word 1 under each unit's public
-    salt), under its own Program's digest, from the window's name and the Program's population alone."""
-    return U.register_ok(win.obj["program"], com["window"], win.tp.population)
+    salt), under its own Program's digest and the window's open root (`h1unit.window_open_root`, the verifier's own), from
+    the window's name, its b/<K> root and the Program's population alone."""
+    return U.register_ok(win.obj["program"], com["window"], win.tp.population, U.window_open_root(com))
 
 
 def roots_of(com: dict, okr) -> dict[str, tuple[int, str]]:
@@ -287,7 +312,7 @@ def registered_file(path: Path, win: SimpleNamespace, com: dict, call: int, unit
     k, t = com["unit"]["k"], time.time()
     reg = {*U.Shape(k).in_rows, "o1"}
     doc = U.registered_reads(win.program, win.tp, call, {v: r for v, (_n, r) in roots_of(com, okr).items()},
-                             win.obj["program"])
+                             U.window_open_root(com), win.obj["program"])
     for u in units:
         want = {p: (v, i) for p, (v, i) in U.unit_reads(win.program, win.tp, u).items() if p in reg}
         got = {p: (e["value"], e["reads"][u]) for p, e in doc["ports"].items()}
@@ -298,17 +323,50 @@ def registered_file(path: Path, win: SimpleNamespace, com: dict, call: int, unit
             "roots": {e["value"]: e["root"] for e in doc["ports"].values()}, "seconds": round(time.time() - t, 1)}, doc
 
 
-def registered_opens(pub: bytes, ports: list, port: str, row: int, win: SimpleNamespace, roots: dict) -> bool:
+def registered_opens(pub: bytes, ports: list, port: str, row: int, win: SimpleNamespace, roots: dict, window_root: str
+                     ) -> bool:
     """Whether table row ``row`` of registered port ``port`` in a shared-row public file opens its value's registered root
-    (``roots``, `roots_of`) at the position and through the path its header states: the check flock-verify
-    ``--registered`` makes of each table row (`h1unit.verify_registered`)."""
+    (``roots``, `roots_of`, of the window whose open root is ``window_root``) at the position and through the path its
+    header states: the check flock-verify ``--registered`` makes of each table row (`h1unit.verify_registered`)."""
     nl = pub.index(b"\n") + 1
     head, body, names = json.loads(pub[:nl]), pub[nl:], [p.name for p in ports]
     at = sum(int(head["shared_rows"][q]) for q in names[:names.index(port)]) + row
     e = head["registered"][port]
     leaves, root = roots[e["value"]]
     return U.verify_registered(win.obj["program"], e["value"], leaves, bytes.fromhex(root), e["positions"][row],
-                               body[128 * at:128 * (at + 1)], [e["paths"][row]])
+                               body[128 * at:128 * (at + 1)], [e["paths"][row]], window_root)
+
+
+def credit_descriptor(win: SimpleNamespace) -> bytes:
+    """The window Program's descriptor as a period's ``circuit`` hashes it and `credit.layout_of` reads it: canonical JSON
+    without annotations (`codec.program_digest`'s bytes, so its SHA-512 is the Program's digest)."""
+    return canonical_json({k: v for k, v in encode_program(win.program).items() if k != "annotations"})
+
+
+def findings_of(doc: dict) -> dict:
+    """A ``--registered`` file's ports as a session verified against it states them (flock-verify's VERDICT
+    ``registered``, `Registered.finding`: ``{port: {value, root}}``)."""
+    return {p: {"value": e["value"], "root": e["root"]} for p, e in doc["ports"].items()}
+
+
+def credit_registration(descriptor: bytes, drawn: list[int], entries: list, findings: dict[int, dict], window_root: str
+                        ) -> list | None:
+    """Window credit's last two steps (`credit.window`'s 5 and 6) on h1_prove's evidence, ``[code, why]`` of the first
+    that refuses, or None: the layout of ``descriptor`` (`credit.layout_of`, `credit.strata`), one accepted outcome per
+    drawn unit (`credit._proved`, ``drawn`` h1_prove's own draw, not credit's work-law draw), and the registration
+    (`credit._registration`): the window's registered ``entries`` (the commitment's and the verifier's ``ok``), each
+    proof's ``registered`` the finding of the session that proved the unit (``findings``, unit -> `findings_of`), under
+    the open root ``window_root``. Each proof's ``program`` is the descriptor's SHA-512, the Program Lean was given. The
+    steps before them (the challenger's log, the credit bits, the round roots) need a served window's ledger, which this
+    harness has none of."""
+    layout, why = CR.layout_of(descriptor)
+    if why is None:
+        ss, why = CR.strata(layout)
+    if why is None:
+        program = hashlib.sha512(descriptor).hexdigest()
+        proofs = [{"program": program, "registered": f, "unit": int(u), "verdict": "accept"} for u, f in sorted(findings.items())]
+        why = CR._proved(sorted(drawn), proofs) or CR._registration(window_root, program, entries, ss, layout, proofs)
+    return None if why is None else list(why)
 
 
 def forge(base: Path, out: Path, pub: bytes, outs: dict, rows: dict, circuit: Path) -> list[dict]:
@@ -421,6 +479,9 @@ def cmd_prepare(a) -> int:
     record["z_only_registration"] = {"refused": check_registration(win, z_only(com1))}
     if not record["z_only_registration"]["refused"]:
         raise SystemExit("a registration of the records' z alone is accepted")
+    record["unrooted_registration"] = {"refused": check_registration(win, unrooted(com1))}
+    if not record["unrooted_registration"]["refused"]:
+        raise SystemExit("a registration of the window's tables with no window root is accepted")
     ok1 = ok_registration(win, com1)
     record["ok_registration"] = {w1: ok1.entry()}
     reg = registration(com1, served1)
@@ -443,9 +504,9 @@ def cmd_prepare(a) -> int:
     log(f"drew {units} of {T}: {record['draw']['calls']}")
     k = com1["unit"]["k"]
     shape = U.Shape(k, R, C)
-    regs1, record["registered_reads"] = {c: vp / f"w1-c{c}.registered.json" for c in by_call}, {}
+    regs1, docs1, record["registered_reads"] = {c: vp / f"w1-c{c}.registered.json" for c in by_call}, {}, {}
     for c, us in by_call.items():
-        record["registered_reads"][f"w1-c{c}"], _doc = registered_file(regs1[c], win, com1, c, us, ok1)
+        record["registered_reads"][f"w1-c{c}"], docs1[c] = registered_file(regs1[c], win, com1, c, us, ok1)
     log(f"the verifier's registered reads of {w1}: {record['registered_reads']}")
 
     # the honest openings, a drawn call's units each, and each negative's tampered window's on the first drawn call's
@@ -509,6 +570,27 @@ def cmd_prepare(a) -> int:
                                           "against_own_window": check_opening(win, com2, served2, op2, u0)}
     log(f"opening other-window: refused against window 1 for {len(record['openings']['other-window']['refused'])} rows")
 
+    # window credit's registration step on this window's evidence, each drawn unit's finding the ports of its call's
+    # --registered file (what a session verified against it states; `summarize` repeats it on Lean's own findings), and
+    # refused for entries without the window root, an ok without it, and another window's root
+    descriptor_c = credit_descriptor(win)
+    (vp / "descriptor.json").write_bytes(descriptor_c)
+    wr1, okd = U.window_open_root(com1), G.domain(win.obj["program"], U.OK_VALUE, len(U.OK), T).domain_id.hex()
+    entries1 = [*com1["registered"], ok1.entry()]
+    found = {u: findings_of(docs1[c]) for c, us in by_call.items() for u in us}
+    cr = {"window": w1, "window_root": wr1, "descriptor_sha512_is_program": hashlib.sha512(descriptor_c).hexdigest() == win.obj["program"],
+          "reads": credit_registration(descriptor_c, units, entries1, found, wr1),
+          "unrooted": credit_registration(descriptor_c, units, [*unrooted(com1)["registered"], dict(ok1.entry(), domain=okd)],
+                                          found, wr1),
+          "ok-unrooted": credit_registration(descriptor_c, units, [*com1["registered"], dict(ok1.entry(), domain=okd)],
+                                             found, wr1),
+          "other-window-root": credit_registration(descriptor_c, units, entries1, found, U.window_open_root(com2))}
+    record["credit_registration"] = cr
+    log(f"credit's registration on {w1}'s reads: {cr}")
+    if (not cr["descriptor_sha512_is_program"] or cr["reads"] is not None
+            or any((cr[x] or [None])[0] != "registration" for x in ("unrooted", "ok-unrooted", "other-window-root"))):
+        raise SystemExit(f"window credit's registration step does not take {w1}'s evidence and refuse the unrooted: {cr}")
+
     # the statements: each drawn call's units on the honest rows, the other window's unit, the tampered A row, and each
     # in-proof negative's base (the first drawn call's units on its window's rows) where its records are not the honest
     # window's
@@ -561,7 +643,7 @@ def cmd_prepare(a) -> int:
     ta = record["tampered_a"]
     roots1 = roots_of(com1, ok1)
     record["tampered_a"]["table_row_0_opens"] = {
-        x: registered_opens((sw / f"st-{x}" / "pub.bin").read_bytes(), shape.ports(), ta["port"], 0, win, roots1)
+        x: registered_opens((sw / f"st-{x}" / "pub.bin").read_bytes(), shape.ports(), ta["port"], 0, win, roots1, wr1)
         for x in ("honest", "tampered-a")}
     log(f"tampered-a: {ta}")
     if ta["table_row_0_opens"] != {"honest": True, "tampered-a": False}:
@@ -576,9 +658,10 @@ def cmd_prepare(a) -> int:
     pubs = {x: (sw / f"st-{x}" / "pub.bin").read_bytes() for x in ("honest", "ok-unregistered", f"base-{OK_ZERO}")}
     heads = {x: json.loads(p[:p.index(b"\n")]) for x, p in pubs.items()}
     record["ok_negatives"] = {
-        "honest_rows_open": [registered_opens(pubs["honest"], shape.ports(), "o1", i, win, roots1) for i in range(len(units0))],
+        "honest_rows_open": [registered_opens(pubs["honest"], shape.ports(), "o1", i, win, roots1, wr1)
+                             for i in range(len(units0))],
         "ok_zero": {"unit": zero, "instance": zi, "table_row_opens": registered_opens(
-            pubs[f"base-{OK_ZERO}"], shape.ports(), "o1", zi, win, roots1)},
+            pubs[f"base-{OK_ZERO}"], shape.ports(), "o1", zi, win, roots1, wr1)},
         "ok_unregistered": {"registered_ports": sorted(heads["ok-unregistered"]["registered"])}}
     log(f"ok: {record['ok_negatives']}")
     if (not all(record["ok_negatives"]["honest_rows_open"]) or record["ok_negatives"]["ok_zero"]["table_row_opens"]
@@ -723,6 +806,31 @@ def refused_by(lay: dict, lean: str, why: str) -> list[str]:
     return out
 
 
+def lean_credit(work: Path, out: Path, record: dict) -> dict:
+    """`credit_registration` of the first window on Lean's own findings: each drawn unit's the ``registered`` of the
+    VERDICTs of the honest check of its call (every session of a check the same), under the verifier's own descriptor,
+    the window's public commitment and ``ok``, and the open root the verifier computes. Not run (``ran`` false) when an
+    honest check has no VERDICT (``--only``)."""
+    cr = record.get("credit_registration")
+    if not cr:
+        return {"ran": False, "why": "the record has no credit registration (a window from before PRF-127)"}
+    found: dict[int, dict] = {}
+    for tag, call in record["draw"]["calls"].items():
+        p = out / "lean" / f"{tag}.out"
+        regs = [json.loads(x[8:]).get("registered") for x in p.read_text().splitlines() if x.startswith("VERDICT ")] \
+            if p.exists() else []
+        if not regs:
+            return {"ran": False, "why": f"{tag} has no Lean VERDICT"}
+        if any(r != regs[0] for r in regs):
+            return {"ran": True, "result": ["registration", f"{tag}'s sessions state different registered findings"]}
+        found.update({u: regs[0] for u in call["units"]})
+    com = json.loads((work / f"{cr['window']}-commitment.json").read_text())
+    entries = [*com["registered"], record["ok_registration"][cr["window"]]]
+    got = credit_registration((work / "verifier" / "descriptor.json").read_bytes(), record["draw"]["units"], entries, found,
+                              U.window_open_root(com))
+    return {"ran": True, "units": sorted(found), "result": got}
+
+
 def cmd_summarize(a) -> int:
     work, out = Path(a.work), Path(a.out)
     plan = json.loads((work / "plan.json").read_text())
@@ -765,6 +873,8 @@ def cmd_summarize(a) -> int:
                        "why": (v or {}).get("why", "")[:300], "lean_seconds": t and t["wall_s"],
                        "lean_maxrss_gb": t and round(t["maxrss_kb"] / 2**20, 1), "sessions": (v or {}).get("sessions"),
                        "lean_phases": lean_phases(out / "lean" / f"{c['tag']}.err"), **extra})
+    credit = lean_credit(work, out, record)
+    ok &= not credit["ran"] or credit["result"] is None
     honest = next(c for c in checks if c["tag"] == "honest")
     summary = {"schema": "verity/pouw/h1-prove/summary/v1", "pass": ok, "firewall": firewall,
                "unit": record["circuit"]["definition"], "k": record["circuit"]["k"], "tile_shape": [R, C],
@@ -782,6 +892,8 @@ def cmd_summarize(a) -> int:
                "registered_reads": record.get("registered_reads"), "tampered_a": record.get("tampered_a"),
                "tampered": record.get("tampered"), "forged": record.get("forged"),
                "z_only_registration": record["z_only_registration"],
+               "unrooted_registration": record.get("unrooted_registration"),
+               "credit_registration": {"from_reads": record.get("credit_registration"), "from_lean": credit},
                "windows": {w: {k: v[k] for k in ("tiles", "slot", "calls", "commit_seconds", "serve_seconds") if k in v}
                            for w, v in record["windows"].items()},
                "tile": U.tile(), "z_is_served_product": {w: v["served"].get("z_is_served_product")
@@ -793,6 +905,7 @@ def cmd_summarize(a) -> int:
     print(json.dumps({k: summary[k] for k in ("pass", "unit", "k", "ands", "window_tiles", "drawn_units", "statements",
                                                 "proving_seconds", "lean_verify_seconds")}))
     print(f"  z-only-registration  refused by check_registration: {bool(record['z_only_registration']['refused'])}")
+    print(f"  credit-registration  on Lean's findings: {'accepted' if credit['ran'] and credit['result'] is None else credit}")
     for c in checks:
         print(f"  {c['tag']:<20} expect {c['expect']:<7} got {c['verdict']:<8} {'ok' if c['pass'] else 'FAIL'}  "
               f"{c['lean_seconds']} s  units {c['partition_units']}  {c['why'][:120]}")
