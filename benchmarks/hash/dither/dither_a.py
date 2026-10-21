@@ -1,7 +1,10 @@
-"""The `dither-a` arm: ASK-71's option A (CA's card), the provisional credit form since Daniel's 21:59Z ruling (19 Oct),
-labelled `form=ASK-71 A (provisional)` on every run.  Under it the noised work is credited on the operands A, B of a
-served product that is value-checked (on every drawn unit z_u = A_u B_u^T, proved and committed before the draw, y from
-the committed z), so the served product may come from a plain GEMM beside the receipted one.
+"""The `dither-a` arm: ASK-71's option A (CA's card), the provisional credit form since Daniel's 21:59Z ruling (19 Oct).
+Under it the noised work is credited on the operands A, B of a served product that is value-checked (on every drawn
+unit z_u = A_u B_u^T, proved and committed before the draw, y from the committed z), so the served product may come from
+a plain GEMM beside the receipted one.  Every run is labelled by its z commitment (`form_of`, RT4-INT-39 as the kernels
+coordinator narrowed it, 14:37Z on CA's 14:34Z): form=ASK-71 A (provisional) under -zy, whose served epilogue commits
+#3018's per-unit z/y records under round s's root before coin s (the receipts need no z of their own), whatever the unit;
+form=beside, receipts beside the served GEMM, without -zy (the row z tables, or no z).
 
 Serving stream, per int8-exact linear (`dithera::mm`, one op opaque to Inductor): exactlin's quantizer, which also stores
 the call's live rows and scales (rows < m, unless the step's flags say no-write) into the window's A slot
@@ -83,7 +86,22 @@ from hb_side import auto_j
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "exactlin"))
 import exactlin as EL
 
-FORM = "ASK-71 A (provisional)"
+FORM_A = "ASK-71 A (provisional)"
+BESIDE = "beside"
+# each z commitment's form and why (RT4-INT-39, narrowed 14:37Z): ASK-71 A only under -zy
+FORMS = {"zy": (FORM_A, ("the served epilogue commits #3018's per-unit z/y records under round s's root before coin "
+                         "s; the receipts need no z of their own")),
+         "row": (BESIDE, ("receipts beside the served GEMM; z committed as the window's row tables, not #3018's "
+                          "per-unit records (ambiguous: the same z under the same round, in another leaf shape)")),
+         "none": (BESIDE, "receipts beside the served GEMM; no z committed (y only, never credited)")}
+
+
+def form_of(z: str | None) -> str:
+    return FORMS[z][0] if z in FORMS else BESIDE
+
+
+def form_basis(z: str | None) -> str:
+    return FORMS[z][1] if z in FORMS else "no dither-a side"
 # "fault_y" (the served y tampered after the GEMM) and "fault_rr" (the round recorded without the receipt roots), set
 # by `patch`: "fault_y" only under z="zy", which has the units' y to compare
 CAPTURES = ("gate", "control", "fault", "fault_rr")
@@ -106,6 +124,7 @@ ZY_KIND = "zy-unit-table"
 # a call's y alone, one hiding leaf a unit (its UR x UC bf16, dq(0, +0, s_w) past m): the served y's table and the units' (the -zy
 # records' y halves) in this one domain and label, so their roots are equal exactly when the bytes are
 Y_KIND = "y-unit-table"
+ZY1_ENV = "DITHER_ZY1"
 UNIT = (32, 32)     # (UR, UC): the receipts' units; a narrower down_proj unit changes only this
 H1R_BLOCK, H1R_SPLIT = 3, 4     # h1r_launch's versions: a unit a block, a unit six warps
 M32 = DO.M32
@@ -372,6 +391,11 @@ class Side:
                                         lab=("y/", f"/{w}")) for w in range(win.L)])
             self.ybad = torch.zeros(win.L, dtype=torch.bool, device=dev)
             self.y_refused: list[dict] = []
+            # DITHER_ZY1=1: the y tables read nothing the z tables write and are built right after them, so the three
+            # sets go through one h1c_build in the z tables' place, each table into its own set's buffers
+            self.zy1 = os.environ.get(ZY1_ENV) == "1"
+            if self.zy1:
+                win.pre["z"] = win.c.union([self.zyset, self.ysset, self.yuset])
             win.before_mid.append(self.y_leaves)
         if unit in ("kh",) + KONE:
             if not h1u:
@@ -455,10 +479,12 @@ class Side:
 
     def y_leaves(self) -> None:
         """Between steps (the window's `before_mid`): the served y's tables, whose roots are the round's y-step leaves,
-        and the units' y tables; `ybad` the calls whose two roots differ (a refused window, RT4-INT-11)."""
+        and the units' y tables (under DITHER_ZY1 built with the z tables); `ybad` the calls whose two roots differ (a
+        refused window, RT4-INT-11)."""
         win = self.win
-        win.c.build(self.ysset, win.stepv[0:1])
-        win.c.build(self.yuset, win.stepv[0:1])
+        if not self.zy1:
+            win.c.build(self.ysset, win.stepv[0:1])
+            win.c.build(self.yuset, win.stepv[0:1])
         o = win.pre["mid"].level_off[win.round_kinds.index("y-step")]
         self.ybad = (win.pre["mid"].level[o:o + 8 * win.L].view(win.L, 8) != self.yuset.roots.view(win.L, 8)).any(1)
 
@@ -569,7 +595,7 @@ class Side:
                 "build_reads": recs + 64 * segs, "build_writes": 64 * segs + 64 * 2 * leaves}
 
     def info(self) -> dict:
-        return {"form": FORM, "unit": self.unit, "z": self.z, "a_overlap": self.ao, "trees_parallel": self.pt,
+        return {"form": form_of(self.z), "form_basis": form_basis(self.z), "unit": self.unit, "z": self.z, "a_overlap": self.ao, "trees_parallel": self.pt,
                 "leaf_bytes_per_step": self.leaf_bytes(), "round_leaves": list(self.win.round_kinds),
                 "y_root_refused_steps": self.y_refused[:8] if self.zy else None,
                 "a_form": self.win.c.a_form, "calls": self.calls, "joins": self.joins,
@@ -730,15 +756,21 @@ def stats(win: DO.Window):
 
 # -- the gate ----------------------------------------------------------------------------------------------------------------
 
-def check(win: DO.Window, lib_h1o: str, which: str = "gate", n_cpu_units: int = 3) -> dict:
-    """`which`'s capture against references other than the served kernels (the module docstring's list)."""
+def check(win: DO.Window, lib_h1o: str, which: str = "gate", n_cpu_units: int = 3, g: dict | None = None,
+          r_round: dict | None = None) -> dict:
+    """`which`'s capture (`g`, else the window's) against references other than the served kernels (the module
+    docstring's list).  `r_round` ({"s", "leaves", "root"}: dither_so's round s + D - 1) is the round that carries the
+    capture's receipts when that is not the capture's own: its receipt-step leaf and its root are checked there
+    (round's "receipt_step" and "receipt_root"), and the capture's own round's receipt-step leaf, an earlier step's
+    receipts, is read as recorded; "fault_rr" then wants that round refused."""
     from verity_vllm.engine import int8_exact as E
-    g = win.caps.get(which, {})
+    g = win.caps.get(which, {}) if g is None else g
     if "receipts" not in g or "a" not in g:
         return {"ok": False, "complete": False, "why": f"{which} step incomplete: {sorted(g)}"}
     m, s, t, L = g["m"], g["s"], win.t, win.L
-    doc: dict = {"which": which, "form": FORM, "complete": True, "s": s, "m": m, "t": t, "poison": f"{DF.POISON:#04x}",
-                 "epsilon": "seeded", "unit": SIDE[0].unit if SIDE else None}
+    unit = SIDE[0].unit if SIDE else None
+    doc: dict = {"which": which, "form": form_of(SIDE[0].z if SIDE else None), "complete": True, "s": s, "m": m, "t": t,
+                 "poison": f"{DF.POISON:#04x}", "epsilon": "seeded", "unit": unit}
     key, W = win.key, win.window
     zy = bool(SIDE) and bool(SIDE[0].zy)
     bits = np.arange(t) < m
@@ -803,10 +835,16 @@ def check(win: DO.Window, lib_h1o: str, which: str = "gate", n_cpu_units: int = 
         doc["y_served_vs_dump_bad"] = dump_bad if g["y"] is not None else None
         if which == "fault_y":
             doc["fault_y_bad"] = fy_bad[:4]
+    rleaf = None
     if "receipt-step" in kinds:
         # RT4-INT-13: the receipt roots under the round; three calls' roots rehashed from the captured receipts
         r_dev = [unwords(g["r_roots"][8 * w:8 * w + 8]) for w in range(L)]
-        step_cpu["receipt-step"] = CM.step_root(CM.domain(f_step, L, "receipt-step"), r_dev)
+        rs = s if r_round is None else r_round["s"]
+        rleaf = CM.step_root(CM.domain({"window": W, "step": rs, "linears": L}, L, "receipt-step"), r_dev)
+        step_cpu["receipt-step"] = rleaf if r_round is None else g["leaves"][kinds.index("receipt-step")]
+        if "lane-step" in kinds:
+            # dither_so -lr: an earlier step's lane-table roots, read as recorded; the capture's own under r_round
+            step_cpu["lane-step"] = g["leaves"][kinds.index("lane-step")]
         rr_bad = []
         for w in sorted({0, 2, L - 1}):
             o_, units, nw = win.plan.offs[w]
@@ -821,6 +859,20 @@ def check(win: DO.Window, lib_h1o: str, which: str = "gate", n_cpu_units: int = 
                        [step_cpu[k] for k in kinds])
     doc["round"] = {**{k.replace("-", "_"): step_cpu[k] == g["leaves"][i] for i, k in enumerate(kinds)},
                     "root": rnd == g["root"]}
+    doc["step_roots"] = {k: v.hex() for k, v in step_cpu.items()}
+    if r_round is not None and rleaf is not None:
+        ri, lv = kinds.index("receipt-step"), list(r_round["leaves"])
+        doc["round"]["receipt_step"] = rleaf == lv[ri]
+        lv[ri] = rleaf
+        if "lane-step" in kinds and "lanes" in g:
+            li = kinds.index("lane-step")
+            l_dev = [unwords(g["lanes"]["l_roots"][8 * w:8 * w + 8]) for w in range(L)]
+            lleaf = CM.step_root(CM.domain({"window": W, "step": r_round["s"], "linears": L}, L, "lane-step"), l_dev)
+            doc["round"]["lane_step"] = lleaf == lv[li]
+            lv[li] = lleaf
+        doc["round"]["receipt_root"] = CM.step_root(CM.domain(
+            {"window": W, "step": r_round["s"], "leaves": DO.round_leaves(kinds)}, len(kinds), "round"), lv) == r_round["root"]
+        doc["receipt_round"] = r_round["s"]
     # z = A B^T by int_mm on the committed A, zero past m; the served y = dequant(z); under "zy" the leaf's y = dequant
     # of the leaf's z = the served y, and dq(0, +0, s_w) past m
     z_bad, y_bad, yleaf_bad = [], [], []
@@ -886,8 +938,9 @@ def check(win: DO.Window, lib_h1o: str, which: str = "gate", n_cpu_units: int = 
         return doc
     if which == "fault_rr":
         # the round recorded without the receipt roots: refused on its receipt-step leaf and root alone
-        others = all(v for k, v in doc["round"].items() if k not in ("receipt_step", "root"))
-        doc["conforming"] = (not doc["round"]["receipt_step"] and not doc["round"]["root"] and others and rest_ok
+        rr = "root" if r_round is None else "receipt_root"
+        others = all(v for k, v in doc["round"].items() if k not in ("receipt_step", rr))
+        doc["conforming"] = (not doc["round"]["receipt_step"] and not doc["round"][rr] and others and rest_ok
                              and y_match and y_ok and not doc["a_roots_bad"] and not doc["admit_roots_bad"]
                              and not doc["z_roots_bad"] and not doc.get("receipt_roots_bad"))
         doc["ok"] = commits_ok and doc["conforming"]
@@ -942,7 +995,8 @@ def gate_verdict(gate: dict, control: dict, fault: dict, *more: dict) -> dict:
     fault_refused = bool(fault.get("complete") and not fault.get("ok") and fault.get("conforming"))
     extra = {f"{x.get('which')}_refused": bool(x.get("complete") and not x.get("ok") and x.get("conforming"))
              for x in more}
-    return {"ok": bool(gate.get("ok")) and refused and fault_refused and all(extra.values()), "form": FORM,
+    return {"ok": bool(gate.get("ok")) and refused and fault_refused and all(extra.values()),
+            "form": gate.get("form", form_of(SIDE[0].z if SIDE else None)),
             "gate_ok": bool(gate.get("ok")), "control_refused": refused, "fault_refused": fault_refused, **extra,
             "control_bad": {k: len(control.get(k) or []) for k in ("z_vs_int_mm_bad", "y_vs_dequant_z_bad",
                                                                     "receipts_vs_h1r_bad", "a_roots_bad", "z_roots_bad")},
