@@ -699,6 +699,14 @@ root leaves in the `Commit` and the session stops at its `Finish` (`FIREWALL-REF
 statement as `FIREWALL` lines (`t.firewall_recheck` wall seconds and `cpu.firewall_recheck` the process's CPU seconds of
 `commit_zk`, `t.lean_link` the Lean link's wall seconds, `rust_root_agrees`), beside the device's `t.encoding_commitment`.
 
+Through the Lean session loop (§10.4) level 0's hiding is the loop's, not the host's: for each firewalled table the prover
+sends the loop its packed witness (`firewall::lean_level0`), and the loop draws the four extra lanes, every lane's padding
+and the level-0 salts from the OS, commits level 0 on them and keeps the table's `Flock.Firewall.Level0` (its `m`, level
+0's schedule and `t_pad`, the witness, the draws, the codeword's rows, the Merkle layers from the leaves to the cap, and
+the root, each `Link`'s function of the witness and draws: `Level0.ofDraws_ok`). The prover takes the draws in place of
+its own (`Level0Zk`'s `extra` and `pads`, `LeafSalts::set_level0`), so `commit_zk` and the device commit the codeword the
+loop did; the loop's root is the root of record (`t.lean_link` 0), and `commit_zk`'s must be it.
+
 ### 10.3 The rule, inner phase (`rec_live`)
 
 | item | rule | why the M0 prover has no free choice |
@@ -791,10 +799,15 @@ stream, byte for byte and at its coin count, or at the stream's first round as t
 of a frame bound to none, which is then bound to it (`Frames.carry`); anything else is refused before it reaches the
 auditor. Once a round's coins open the tree, the loop sets them as its frame's coins before the prover receives them
 (`Frames.feedOf`), and the frame's `coins N` takes those and no others (`Frames.take`: Rust's bytes must be them).
+A connection there whose first line is `level0 M LEN`, followed by a table's `LEN`-byte packed witness, is that table's
+level 0 (`Session.level0`, §10.2): answered `ok N R` and the `N` bytes of the extra lanes, the paddings and the salts the
+loop drew, then its `R`-byte root, or `err WHY`. The session's `Commit` leaves only when its roots are its tables', in
+order, each a root the loop drew at its table's statement's `m` (`Level0.commit`; a root drawn at a smaller `m` would pad
+too few positions), and the session then owns those tables' `Level0` until it ends.
 `FC_FIREWALL_SESSION=0`, or `FC_FIREWALL_TRANSCRIPT`, keeps the prover's own connection, Rust's checks and a frame
 process per rep. `Proof` and `Finish` leave as the prover sends them. The analysis's release is this loop
 (`Claims.ZKServer.LeanRelease.loop`, `Flock.zk_server_lean_loop`): its `Hello`, requests, last request and the coins its
-frames take are proved (`loop_coinsRead`), and its link and the frames' state (`ProgReads`: the `prior` coins and the
+frames take are proved (`loop_coinsRead`), and its link (`LinkRoundEq`) and the frames' state (`ProgReads`: the `prior` coins and the
 rounds Rust hands them) are still assumed.
 
 The frame's protocol:

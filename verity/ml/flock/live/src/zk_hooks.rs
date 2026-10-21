@@ -167,6 +167,17 @@ impl LeafSalts {
         s
     }
 
+    /// The level-0 tree's salts drawn elsewhere (the Lean session loop's, `Flock.Firewall.Level0`), before anything reads them:
+    /// every later [`Self::level0`] answers these bytes.
+    pub fn set_level0(&self, s: Vec<u8>) -> Result<(), String> {
+        let mut k = self.kept.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
+        if k.level0.is_some() {
+            return Err("level 0's salts were read before the Lean loop drew them".into());
+        }
+        k.level0 = Some(std::sync::Arc::new(s));
+        Ok(())
+    }
+
     /// Tree `id`'s salts, `leaves` × 192 bytes (level 0's: [`Self::level0`]'s). Under a fork, the first of the two draws of a
     /// tree reads them and the second takes the same bytes; otherwise every call reads a tree's salts afresh. The two draws pair
     /// by id and size: a device that draws a tree at another size than the shadow's gets salts of its own, its tree is not the
