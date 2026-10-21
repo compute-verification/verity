@@ -1,6 +1,7 @@
 """The catalog bindings' records (`circuit_check.units`), on the synthetic tree of `test_cache`: `cli.run`'s ``--all`` path with
 the real `targets.catalog`, `targets.suite` and `targets.select` over the tree's bindings (its ``syn/catalog.py``), first as a
-full build, which stores each binding's record, then from the records, building only the bindings whose record misses."""
+full build, which stores each binding's record, then from the records, building only the bindings whose record misses.  And
+`units.call_families` against `targets.call_families`' rules for word Call families made on demand and unbound kinds."""
 from __future__ import annotations
 
 import json
@@ -9,6 +10,8 @@ import shutil
 import subprocess
 import sys
 from pathlib import Path
+
+import pytest
 
 from test_cache import REPO, _bindings, _edit, _tree
 
@@ -45,7 +48,7 @@ TG.catalog_units = bindings
 TG.pouw_bindings = lambda: []
 TG.templates = lambda: []
 TG.word_call_families = lambda: set()
-TG.row_families = lambda: set()
+TG.on_demand_boolean_families = lambda words: set()
 TG.boolean_call_candidates = lambda words: set()
 CK.check_definition = check.check_definition
 rep = cli.run([], CK.Options(), everything=True, log=None, cache=root / "cache", units=True)
@@ -178,3 +181,24 @@ def test_a_binding_that_makes_no_root_is_held_by_every_record(tmp_path):
     out = _run(root)
     assert out["stats"]["units"] == {"stored": 5} and out["hits"] == ["SynAdd_v1", "SynOther_v1", "SynSub_v1", "SynTop_v1"]
     assert out["values"] == _fresh(root)["values"] and out["values"]["SynKn_v1"] == [3 + 3 * 0x0105]
+
+
+def test_the_calls_from_records_are_the_catalogs_for_made_on_demand_and_unbound_kinds(monkeypatch):
+    """`units.call_families` gives `targets.call_families`' Calls: a word Call family made on demand (`Const32[0x..]_v1`) has
+    its Boolean version among them though no record holds one, and a vocabulary kind that doesn't bind refuses them by name, as
+    `targets.word_call_families` does (left out, its family's partition would be judged as no Call's)."""
+    from circuit_check import targets as TG, units as UN
+
+    nothing = UN.Derived([], {}, {})
+    with monkeypatch.context() as m:
+        m.setattr(TG, "word_call_families", lambda: {"Const32[0x00000001]_v1", "GatherI32x16_v1"})
+        m.setattr(TG, "boolean_call_candidates", lambda words: set())
+        assert UN.call_families([], nothing, {}) == {"Const32[0x00000001]_v1", "GatherI32x16_v1",
+                                                    "Const32[0x00000001]_v2", "GatherI32x16_v2"}
+    monkeypatch.setattr(TG, "_SHORT", {})
+    monkeypatch.setattr(TG, "_BOUND", {})
+    monkeypatch.setattr(TG, "load_registries", lambda: None)
+    monkeypatch.setattr(TG, "templates", lambda: [])
+    monkeypatch.setattr(TG, "_vocabulary_bindings", lambda: [("b1-eager-v3/dsv4_indexer_compress", "KeyError: 'ROPE'")])
+    with pytest.raises(RuntimeError, match=r"b1-eager-v3/dsv4_indexer_compress: KeyError: 'ROPE'"):
+        UN.call_families([], nothing, {})

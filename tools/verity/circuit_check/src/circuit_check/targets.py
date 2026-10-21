@@ -700,13 +700,6 @@ def boolean_call_families(word_calls: set[str], found: dict[str, Any] | None = N
     return out
 
 
-def row_families() -> set[str]:
-    """The replay's row families (`verity_vllm.program.kernels.rows.ROWS`), word Call families whatever the catalog holds."""
-    from verity_vllm.program.kernels import rows
-
-    return set(rows.ROWS)
-
-
 def boolean_family(fn: Any) -> str | None:
     """The family of ``fn``'s Boolean version (`verity_vllm.program.boolean.boolean_version`), or None when it has none."""
     from verity_vllm.program.boolean import NoBooleanVersion, boolean_version
@@ -851,4 +844,4 @@ __all__ = ["CATALOGS", "MAX_GATES", "REACHED", "REGISTERED", "ROOT_ERRORS", "ROO
            "binding_files", "binding_roots", "boolean_call_candidates", "boolean_call_families", "boolean_family",
            "boolean_links", "call_families", "catalog", "catalog_units", "certified_boolean_calls", "definition", "family",
            "instance_statics", "is_call", "kind_of", "load_registries", "pouw_bindings", "reachable", "root_functions",
-           "row_families", "select", "subcircuit", "suite", "table_probe", "template_params", "templates", "word_call_families"]
+           "select", "subcircuit", "suite", "table_probe", "template_params", "templates", "word_call_families"]

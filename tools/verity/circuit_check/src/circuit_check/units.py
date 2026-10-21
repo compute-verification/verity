@@ -247,15 +247,15 @@ def _materialize(entries: list[Entry], objects: dict[str, Any], fid: str, in_uni
 
 
 def call_families(entries: list[Entry], d: Derived, objects: dict[str, Any], in_unit: bool = True) -> set[str]:
-    """The families of `targets.call_families` the suite's Definitions are of: the word Call families (the replay's rows, the
-    vocabulary kinds', the templates' Definitions) and of those Boolean versions of a suite Definition of one
-    (`targets.boolean_family`) that are of a suite family: each from its object, made (`_materialize`) only where it could be
-    of a suite family no other one gave (`targets.boolean_links`)."""
-    vocab = next((e for e in entries if e.kind == "_vocabulary_roots"), None)
-    words = TG.row_families() | {TG.family(fn) for fn in (vocab.roots if vocab else ())}
-    words |= {TG.family(fn) for e in entries if e.kind == "template" for fn in e.roots[0::2]}
+    """The families of `targets.call_families` the suite's Definitions are of: the word Call families (`targets.
+    word_call_families`, which refuses a vocabulary kind that doesn't bind), the Boolean version of each one made on demand
+    (`targets.on_demand_boolean_families`) and of those Boolean versions of a suite Definition of one (`targets.boolean_family`)
+    that are of a suite family: each from its object, made (`_materialize`) only where it could be of a suite family no other
+    one gave (`targets.boolean_links`)."""
+    words = TG.word_call_families()
     wordy = [fid for fid in d.ids if (n := d.nodes[fid])["f"] in words and n["k"] != "R" and not n["b"]]
-    found = {f for fid in wordy if fid in objects and (f := TG.boolean_family(objects[fid])) is not None}
+    found = TG.on_demand_boolean_families(words)
+    found |= {f for fid in wordy if fid in objects and (f := TG.boolean_family(objects[fid])) is not None}
     families = {d.nodes[fid]["f"] for fid in d.ids}
     open_ = (families - words - found) & TG.boolean_call_candidates(words)
     if open_:
