@@ -1,8 +1,9 @@
 """N3Window_v5 with the canonical framing's templates (`workload.n3_canonical`) on the active replay's raw records, on an
 injected clock: an honest run is accepted on every window, egress and ingress, and so is one whose tokens are longer
 than an event (cut over events of `TOKEN_BYTES`), empty or of every byte value, and whose prompt takes five frames, and
-so is a live endpoint's behind the shim, with a token of 200 bytes in every response. A byte flipped in a frame's text, header, suffix or fill, a request byte that isn't the peer's, or one more event than
-the Program has, is refused in its own window and nowhere else."""
+so is a live endpoint's behind the shim, with a token of 200 bytes in every response. A byte flipped in a frame's text,
+header, suffix or fill, a request byte that isn't the peer's, or one more event than the Program has, is refused in its
+own window and nowhere else."""
 
 from __future__ import annotations
 
