@@ -425,8 +425,9 @@ against every committed coin sequence: the prover must also refuse a zerocheck o
   one more, padded with `H_ν(PAD)`. The 64-byte root and the key are `Hello`'s answer, before the prover's first message
   (`Commit`).
 - Every answer is the round's `n` coins, `T_n`, the salt and the path (`Spec::opening_words(n)`), so an opening reveals only
-  the coins the round uses. The prover checks every opening against the root before it uses a coin (`coin_tree::Checked`)
-  and stops at one that does not open, before it answers anything that depends on it.
+  the coins the round uses. The prover checks every opening against the root before it uses a coin (`coin_tree::Checked`,
+  or under the firewall the Lean session loop, §10.4) and stops at one that does not open, before it answers anything that
+  depends on it.
 - This replaces M0's step 0 (a seed commitment with derived streams): no PRF. The prover's refusals (`β = 0`, the mask
   rank, dependent `ρ`, an outer coin `r_j = 1`) stay functions of committed coins.
 - **Two properties, two roles.** *Hiding* of the unopened coins is what soundness uses: statistical in the standard model
@@ -770,6 +771,15 @@ statement (by default the build's, `+seed-injection` under that feature), and `F
 `--partition F --program F` for a statement whose setup reads them, and the verifier's own draw-law inputs as
 `flock-verify verify` takes them, which a stratified, work or closure draw sets up only on (U2, U3): `--stratified K`,
 `--work K --work-table F`, `--closure F`.
+
+The session itself goes through Lean: one `flock-firewall session` process (`Flock.Firewall.Session`,
+`firewall::LeanSession`) per verifier address and table count, on the same statement arguments, listens on loopback and
+holds the auditor's connection for every session the prover opens to it. It relays the prover's frames, but sends its own
+`Hello` (the Lean `Hello` at the auditor's draw and a nonce it draws from the OS) in place of the prover's, checks
+`Hello`'s answer (20 words, key bit 2047 clear) and every coin opening against the root, and hands the prover only the
+coins, as `coin_tree::Checked` does. A coin it refuses, or one asked for after a refusal, is answered
+`Refused("PROVER-STOPPED: …")`. `FC_FIREWALL_SESSION=0`, or `FC_FIREWALL_TRANSCRIPT`, keeps the prover's own connection
+and Rust's checks. `Proof` and `Finish` are still relayed as the prover sends them.
 
 The frame's protocol:
 - **start**: one JSON line with the rep's layout (`n_mlv`, `n_lc`, `n_ood0`, `k0`) and the statement's mask slot (`w0`,

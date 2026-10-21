@@ -952,6 +952,52 @@ impl Drop for LeanHello {
     }
 }
 
+/// The firewall's session loop of record: `flock-firewall session` (`Flock.Firewall.Session` in the Lean verifier) owns the
+/// auditor's connection. The prover connects to [`LeanSession::addr`] as it would to the auditor, and each connection is one
+/// session, which the Lean loop relays on its own connection to `verifier`: the `Hello` that leaves is its own (at the
+/// statement `args` name, `flock-verify verify --zk`'s flags, and the auditor's draw), `Hello`'s answer and every coin are
+/// checked there, and only the coins, without their openings, come back. It runs until this handle drops.
+#[cfg(feature = "sha512")]
+pub struct LeanSession {
+    child: std::process::Child,
+    _stdin: std::process::ChildStdin,
+    addr: String,
+}
+
+#[cfg(feature = "sha512")]
+impl LeanSession {
+    pub fn start(exe: &std::path::Path, verifier: &str, args: &[String]) -> Result<Self, String> {
+        use std::io::BufRead;
+        use std::process::{Command, Stdio};
+        let mut child = Command::new(exe).arg("session").arg("--verifier").arg(verifier).args(args)
+            .stdin(Stdio::piped()).stdout(Stdio::piped()).spawn()
+            .map_err(|e| refused(format!("the Lean session {} does not start ({e}): `lake build flock-firewall` in verity/core/service/flock, or FC_FIREWALL_LEAN", exe.display())))?;
+        let stdin = child.stdin.take().expect("piped stdin");
+        let mut stdout = std::io::BufReader::new(child.stdout.take().expect("piped stdout"));
+        let mut line = String::new();
+        stdout.read_line(&mut line).map_err(|e| refused(format!("the Lean session's start: {e}")))?;
+        let Some(addr) = line.trim_end().strip_prefix("LISTENING ").map(str::to_string) else {
+            let _ = child.kill();
+            let _ = child.wait();
+            return Err(refused(format!("the Lean session did not start: {:?}", line.trim_end())));
+        };
+        Ok(LeanSession { child, _stdin: stdin, addr })
+    }
+
+    /// Where the prover connects for a session.
+    pub fn addr(&self) -> &str {
+        &self.addr
+    }
+}
+
+#[cfg(feature = "sha512")]
+impl Drop for LeanSession {
+    fn drop(&mut self) {
+        let _ = self.child.kill();
+        let _ = self.child.wait();
+    }
+}
+
 /// The masking challenger's inner challenger under the firewall. While a round's `release` is set (the Lean frame's round for
 /// the device round the firewall passed), it frames what the masking challenger hands it, as the device's challenger frames,
 /// and at the round's squeeze holds that (the speed reference) to the release byte for byte, then hands the release, and
