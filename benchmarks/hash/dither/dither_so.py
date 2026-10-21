@@ -47,9 +47,9 @@ units' ring, as without -ov); a sender thread builds round s's tables and tree o
 forward s + 1, and sends round s's root; a dispatcher thread dispatches step s's units as soon as coin s is back.  The
 host holds the rings: step s's copies wait until round s - R is sent and step s - D's units are dispatched (and, on the
 GPU, done).  `check` holds each capture to what forward s committed, cloned on the serving stream at its end, against
-round s as built beside forward s + 1 (the GPU's events give how long it ran beside it), and "fault_ring" overwrites a
-bit of step s's ring copy of call 0's z during step s + 1, before round s's tables: refused on round s's z-step leaf and
-root alone.
+round s as built from the ring once forward s + 1 had started (a captured step's round waits for it; the GPU's events
+give how long the build ran beside it), and "fault_ring" overwrites a bit of step s's ring copy of call 0's z on the
+serving stream as forward s + 1 starts, before round s's tables: refused on round s's z-step leaf and root alone.
 
     import dither_so as SO
     SO.patch(t=T, h1c="libh1c.so", h1o="libh1o.so", unit="hbr", h1u="h1u_kr.so", ao="m", pt=True, depth=4)
@@ -641,8 +641,14 @@ class Ov:
             self.cv.notify_all()
 
     def forward_starts(self, s: int) -> None:
-        """Step s's forward is next on the serving stream (its `before` done)."""
+        """Step s's forward is next on the serving stream (its `before` done).  After a fault_ring step, its fault:
+        bit 0 of call 0's first z word in step s - 1's ring copy, on the serving stream as forward s starts, before
+        round s - 1's tables (its round waits for it)."""
         self.ev["fwd0"][s % self.EV].record()
+        if self.win.cap_of.get(s - 1) == "fault_ring":
+            self.zy_r[(s - 1) % self.R][0:1].bitwise_xor_(1)
+            self.ev["fault"][(s - 1) % self.EV].record()
+            self.faulted.add(s - 1)
         self._set(fwd_upto=s)
 
     def put(self, s: int) -> None:
@@ -711,15 +717,11 @@ class Ov:
         with self.phase("ov_leaf_tables"), torch.cuda.stream(ts):
             ts.wait_event(self.ev["copied"][e])
             if s in self.watch:
-                # a captured step's round starts once forward s + 1 has, so the gate holds a round built beside it
+                # a captured step's round starts once forward s + 1 has (once it may write the live records), and
+                # fault_ring's once its fault is in (`forward_starts`)
                 self.wait(lambda: self.fwd_upto > s or self.draining)
                 if self.fwd_upto > s:
-                    ts.wait_event(self.ev["fwd0"][(s + 1) % self.EV])
-                if cap == "fault_ring":
-                    # bit 0 of call 0's first z word in step s's ring copy, during step s + 1, before round s's tables
-                    self.zy_r[q][0:1].bitwise_xor_(1)
-                    self.ev["fault"][e].record(ts)
-                    self.faulted.add(s)
+                    ts.wait_event(self.ev["fault"][e] if cap == "fault_ring" else self.ev["fwd0"][(s + 1) % self.EV])
             self.ev["t0"][e].record(ts)
             if ads is not None:
                 self.fork.record(ts)
@@ -923,14 +925,14 @@ def check(win: SoWindow, lib_h1o: str, which: str = "gate", n_cpu_units: int = 3
     ov = None
     if win.overlap:
         # what forward s committed (the capture: cloned on the serving stream at its end, before forward s + 1) against
-        # round s as the sender built it from the ring, and how long that build ran beside forward s + 1 (GPU events,
-        # ms from the ring copy)
+        # round s as the sender built it from the ring, its tables started once forward s + 1 had (from then on that
+        # forward writes the live records), and how long the build ran beside it (GPU events, ms from the ring copy)
         t = DA.SIDE[0].ov.t.get(s, {})
         ov = {"ring": win.overlap, **{k: round(v, 3) for k, v in t.items()},
               "covers_forward_s": (all(rd[k] for k in ("a_step", "admit_step", "z_step", "y_step")) and rd["root"]
                                    and not (doc["a_roots_bad"] or doc["admit_roots_bad"] or doc["z_roots_bad"]
                                             or doc["y_served_roots_bad"])),
-              "beside_forward": t.get("beside_forward_ms", 0.0) > 0.0}
+              "after_forward_next_start": t.get("copied_to_tree_ms", -1.0) >= t.get("forward_next_start_ms", 0.0)}
         doc["ov"] = ov
     if which == "fault_ring" and ov is not None:
         # step s's ring copy of call 0's z overwritten during step s + 1, before round s's tables: refused on call 0's
@@ -967,7 +969,7 @@ def check(win: SoWindow, lib_h1o: str, which: str = "gate", n_cpu_units: int = 3
         return doc
     good = order["ok"] and order["units_salt_is_the_coins"]
     if ov is not None and which == "gate":
-        good = good and ov["covers_forward_s"] and ov["beside_forward"]
+        good = good and ov["covers_forward_s"] and ov["after_forward_next_start"]
     if "conforming" in doc:
         doc["conforming"] = doc["conforming"] and good
     doc["ok"] = doc["ok"] and good
@@ -982,8 +984,9 @@ def gate_verdict(gate: dict, control: dict, fault: dict, *more: dict) -> dict:
     v["order_ok"] = bool(gate.get("order", {}).get("ok"))
     v["ok"] = v["ok"] and v["order_ok"]
     if "ov" in gate:
-        # -ov: round s built beside forward s + 1 covers what forward s committed, and fault_ring (in `more`) refused
+        # -ov: round s built once forward s + 1 had started covers what forward s committed, and fault_ring (in `more`)
+        # refused
         v["ov"] = OV_ORDER
-        v["ov_ok"] = bool(gate["ov"].get("covers_forward_s") and gate["ov"].get("beside_forward"))
+        v["ov_ok"] = bool(gate["ov"].get("covers_forward_s") and gate["ov"].get("after_forward_next_start"))
         v["ok"] = v["ok"] and v["ov_ok"] and any(x.get("which") == "fault_ring" for x in more)
     return v
