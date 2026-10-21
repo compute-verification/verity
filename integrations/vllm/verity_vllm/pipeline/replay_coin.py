@@ -18,8 +18,7 @@ import secrets
 from typing import Any, Mapping
 
 from verity.core.protocols.sampled_proofs import remote
-from verity.core.protocols.sampled_proofs.challenger import (CoinError, LiveCommitment, LiveOpening, live_reason,
-                                                             trusted_commitment)
+from verity.core.protocols.sampled_proofs.challenger import CoinError, LiveCommitment, LiveOpening, live_reason
 
 from verity_vllm.protocol_options import pouw_h1_challenger as PHC
 from verity_vllm.protocol_options import pouw_h1_window as PHW
@@ -110,7 +109,7 @@ def session_reason(record: Mapping[str, Any], challenge_hex: str, run_root: byte
                    commit: str | None = None) -> str | None:
     """Why the replay challenge isn't the replay coin of the one session the auditor's `ledger` opened for the record's
     Commit root (`commit`, the Commit root the verifier holds, when given), ended closed and complete under the record's
-    commitment (`pouw_h1_challenger.held`), read from that session's tree as `fetch` gives it
+    commitment (`pouw_h1_challenger.held`), read from that session's tree as `fetch` gives it, as core reads a session
     (`pouw_h1_challenger.evidence`); None when it is."""
     if record.get("source") != "challenger":
         return f"the replay challenge's source is {record.get('source')!r}, not the auditor host's challenger"
@@ -118,8 +117,7 @@ def session_reason(record: Mapping[str, Any], challenge_hex: str, run_root: byte
     if why is not None:
         return f"the replay challenge: {why}"
     try:
-        out = PHC.evidence(window, fetch, ledger.key)
-        trusted = trusted_commitment(out / remote.RECORD, ledger.key, PHC.lms_verify)
+        _files, trusted, _received = PHC.evidence(ledger, record["session"]["root"], fetch)
     except CoinError as e:
         return f"the replay challenge's session {window['open']['session']} is not trusted: {e}"
     return reason(record, challenge_hex, run_root, trusted)
