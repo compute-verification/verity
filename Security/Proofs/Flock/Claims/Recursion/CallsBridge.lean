@@ -7,7 +7,8 @@ import Proofs.Flock.Claims.Recursion.RepBindProof
 `RecDeploy.PlainCallsBindOrSlack` compares the calls of two decisions the deployed plain verifier accepts after the
 same rounds and coins. They split at their proof files:
 
-* where the files agree, the two decisions' calls are one set (`RecDeploy.PlainCallsOfProofs`, open);
+* where the files agree, the two decisions' calls are one set (`RecDeploy.PlainCallsOfProofs`, proved at SHA-512 in
+  `CallsOfProofs`);
 * where a file differs, custody pins both records' rounds to the same round messages at the counts the statement fixes,
   so the two sessions have the same rounds on every rep stream, the same points and the same `root_B`
   (`sess_rounds_eq`). The two files are then accepted as one rep on one session (`verifyRep_congr`), and
@@ -445,10 +446,11 @@ open FlockDeploy (Coin)
 
 /-- **The calls half where the proof files agree**: two last messages the deployed plain verifier accepts after the
 same rounds and coins, where it answered each earlier round with that round's coin, with the same proof files, make
-the same set of calls. Open. Every call `Record.decodeWith` makes hashes a value custody or the statement pins
-(`root_B`, `root_F = Σ`, the publics, `H(ε)`, the rounds' bytes, S13's roots, S14's exchange), the S17 digests are of
-the files, and each rep reads its session only through what `sess_rounds_eq` pins (`verifyRep_congr`). Its proof must
-also show that S11 leaves no stream outside the rep streams, which needs the tables' names distinct. -/
+the same set of calls. Proved at SHA-512 (`RecDeploy.plainCallsOfProofs_sha512`): every call `Record.decodeWith`
+makes hashes a value custody or the statement pins (`root_B`, `root_F = Σ`, the publics, `H(ε)`, the rounds' bytes,
+S13's roots, S14's exchange), the S17 digests are of the files, each rep reads its session only through what
+`sess_rounds_eq` pins (`verifyRep_congr`), and S11 leaves no stream outside the rep streams, whose names are distinct
+(`FlockDeploy.KS.plain_calls_agree`). -/
 def PlainCallsOfProofs (H : Msg → Msg) : Prop :=
   ∀ (x : Msg) (ms : List Msg) (l l' : Msg) (cs : List Coin) (f f' : FlockDeploy.Final),
     ms.length + 1 = (FlockDeploy.V false).k x → cs.length = ms.length + 1 →
@@ -469,14 +471,5 @@ theorem plainCallsBindOrSlack_of_proofs (hR : PlainCallsOfProofs FlockDeploy.sha
   · exact absurd (hR x ms l l' cs f f' hk hc hearly hacc hacc' hfl hfl' hpf) hne
   · exact Or.inl ⟨u, hu, v, hv, hcol⟩
   · exact Or.inr hsl
-
-/-- **(P4) at the deployed bound record, at SHA-512**, from the decoder's canonicity and the calls half where the
-proof files agree. -/
-theorem lastBindsEC_deployed_sha512_of_proofs (rel : _root_.Flock.Readable.Parsed → _root_.Flock.Readable.Relation)
-    (wE : Msg → ℝ) (join : List Msg → Msg) (final : Msg → Option (List (List (Msg × Salt)) × Msg)) (w : Msg → ℝ)
-    (hC : CanonicalProofFiles) (hR : PlainCallsOfProofs FlockDeploy.sha512) :
-    (bdDeployed rel (FlockDeploy.V false).next (FlockDeploy.deployPlainTrim rel).cols wE join rowInDeployed final
-      w).LastBindsEC FlockDeploy.sha512 :=
-  lastBindsEC_deployed_sha512 rel wE join final w hC (plainCallsBindOrSlack_of_proofs hR)
 
 end RecDeploy
