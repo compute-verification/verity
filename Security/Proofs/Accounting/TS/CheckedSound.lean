@@ -44,7 +44,7 @@ end FlockSoundness.Audit.Law
 namespace Flock.SoundAtBridge
 
 open FlockSoundness FlockSoundness.Game FlockSoundness.Audit FlockSoundness.Discharge.Exec
-  FlockSoundness.Discharge.Composed FlockSoundness.Discharge.ZkReg
+  FlockSoundness.Discharge.Composed FlockSoundness.Discharge.ZkHidden FlockSoundness.Discharge.ZkReg
 open FlockSoundness.Discharge.Tables (LiveOutJ)
 open Accounting.TS.Checked
 open scoped ENNReal
@@ -64,8 +64,9 @@ theorem perm_onto_range (π : Equiv.Perm ℕ) {n : ℕ} (hπ : ∀ t < n, π t <
 
 /-- **The live audit's event of probability `0`** (`auditLive`, unfolded): an event whose probability is `0` in the
 live session at every registration `R` and draw coin `ω` has probability `0` at every strategy. -/
-theorem prob_audit_eq_zero {n : ℕ} (L : Law n) (Reg : Type) (live : Finset (Fin n) → Reg → Game Transcript)
-    (p : Reg × Finset (Fin n) × Transcript → Prop)
+theorem prob_audit_eq_zero {n : ℕ} (L : Law n) (Reg : Type)
+    (live : Finset (Fin n) → Reg → Game Discharge.Exec.Transcript)
+    (p : Reg × Finset (Fin n) × Discharge.Exec.Transcript → Prop)
     (h : ∀ R ω (s' : Strategy (live (L.draw ω) R)), prob (fun t => p (R, L.draw ω, t)) (live (L.draw ω) R) s' = 0)
     (τ : Strategy (Game.send Reg fun R => Game.coin L.Ω fun ω => (live (L.draw ω) R).map fun t => (R, L.draw ω, t))) :
     prob p (Game.send Reg fun R => Game.coin L.Ω fun ω => (live (L.draw ω) R).map fun t => (R, L.draw ω, t)) τ = 0 := by
