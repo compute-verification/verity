@@ -8,7 +8,8 @@ circuit), unless ``--program DIR`` names a ``--program-only`` run's. Then opens 
 --cap 1 --circuit DIGEST``), reserves the window's session (``reserve --peer PEER --scheme S --families F``), and serves
 `pouw_h1.FILL` (Llama-3.1-8B int8, 64 in flight, T = 64, S = 18) with ``pouw_h1_gpu.py --workload fill --served
 --challenger AT --session RESERVE --gate GATE``, under ``gpu-lease 1 --wait --max-min MIN`` with ``--gpu-lease MIN``, so
-the GPU is held only while it serves: the window opens its session through ``GATE open --session S --root R`` once round
+the GPU is held only while it serves (a run without ``--gpus`` sees no GPU, and gets the one its own
+``gpu-lease`` hands out): the window opens its session through ``GATE open --session S --root R`` once round
 0 is admitted, R = `salt.window_open_root(weights' root, round 0's request table root, S)`, its salt coin opens after R,
 and its A codes and B rows are committed as the window Program's registered values (`pouw_h1_served.Served`), which
 ``calls_root`` binds; the served Program's layout must be the declared one's. Once the session has its ``end`` entry it
@@ -29,22 +30,22 @@ declared one's, and every red-team case is refused.
 whose serve.py ends a session with its record leaf and refused hellos and seals ``hellos.jsonl``):
 
     git archive --format=tar.gz -o gate-tree.tgz 882770e6009e73bdf015f4069fa77ef698d7f326 verity benchmarks/live_challenger
-    research run --on vy-nebius-2 --project verity --source . --cwd source --send gate-tree.tgz --gpu-host \
-      --mem-gb 300 --mem-wait 600 --max-min 240 --declared-output 'out/*' -- bash -lc 'cd integrations/vllm && \
-      PYTHONPATH=$PWD/../..:$PWD HF_HOME=/workspace/hf /workspace/jobs/venv312/bin/python \
-      -m tests.protocol_options.pouw_h1_rehearsal --out $OUT --gpu-lease 90 \
+    research run --on vy-nebius-2 --project verity --source . --cwd source --send gate-tree.tgz \\
+      --mem-gb 300 --mem-wait 600 --declared-output 'out/*' -- bash -lc 'cd integrations/vllm && \\
+      PYTHONPATH=$PWD/../..:$PWD HF_HOME=/workspace/hf /workspace/jobs/venv312/bin/python \\
+      -m tests.protocol_options.pouw_h1_rehearsal --out $OUT --gpu-lease 90 \\
       --tree $RESEARCH_RUN_DIR/inputs/gate-tree.tgz --commit 882770e6009e73bdf015f4069fa77ef698d7f326'
 
 **The live run** is the same command with the gate vy-challenger-1's, over the lane's own gate key (INF-170, on
 vy-nebius-2), the auditor's pin (art:d12f85becc), the declared Program a ``--program-only`` run built (its
 ``window-program.meta.json`` sent), and no ``--tree``:
 
-    research run --on vy-nebius-2 --project verity --source . --cwd source --send window-program.meta.json --gpu-host \
-      --mem-gb 300 --mem-wait 600 --max-min 240 --declared-output 'out/*' -- bash -lc 'cd integrations/vllm && \
-      PYTHONPATH=$PWD/../..:$PWD HF_HOME=/workspace/hf /workspace/jobs/venv312/bin/python \
-      -m tests.protocol_options.pouw_h1_rehearsal --out $OUT --gpu-lease 90 --program $RESEARCH_RUN_DIR/inputs \
-      --gate "ssh -i $HOME/.local/state/vllm-gate/id_ed25519 -o IdentitiesOnly=yes -o BatchMode=yes research@204.12.178.84" \
-      --peer vy-nebius-2 --at 127.0.0.1:7811 --period vllm-h1-live-1 \
+    research run --on vy-nebius-2 --project verity --source . --cwd source --send window-program.meta.json \\
+      --mem-gb 300 --mem-wait 600 --declared-output 'out/*' -- bash -lc 'cd integrations/vllm && \\
+      PYTHONPATH=$PWD/../..:$PWD HF_HOME=/workspace/hf /workspace/jobs/venv312/bin/python \\
+      -m tests.protocol_options.pouw_h1_rehearsal --out $OUT --gpu-lease 90 --program $RESEARCH_RUN_DIR/inputs \\
+      --gate "ssh -i $HOME/.local/state/vllm-gate/id_ed25519 -o IdentitiesOnly=yes -o BatchMode=yes research@204.12.178.84" \\
+      --peer vy-nebius-2 --at 127.0.0.1:7811 --period vllm-h1-live-1 \\
       --key-sha512 27271eaf917d1a817198cbcfe7684debd9bdb11b9e386460948bb981642fab3ae065c0a877330a0da68ae76969550eb786dc172319876aaca21fd116e5a193bc'
 
 What changes from the rehearsal: the gate is vy-challenger-1's forced command over ssh (``by`` the lane the key is
@@ -375,8 +376,8 @@ def main(argv: list[str] | None = None) -> int:
                                                                "(build_program) and stop")
     ap.add_argument("--program", metavar="DIR", help="a --program-only run's out/ (its Program's digest is the period's "
                                                     "--circuit), not built again")
-    ap.add_argument("--gpu-lease", type=int, metavar="MIN", help="serve under `gpu-lease 1 --wait --max-min MIN` (a "
-                                                                "--gpu-host research run: the GPU held only while it serves)")
+    ap.add_argument("--gpu-lease", type=int, metavar="MIN", help="serve under `gpu-lease 1 --wait --max-min MIN` (in a "
+                                                                "research run without --gpus: the GPU held only while it serves)")
     ap.add_argument("--minutes", type=int, default=300, help="the reserve's minutes, which also bound the session")
     ap.add_argument("--pin-at", default="2026-10-21T00:00:00Z", help="pouw_h1_gpu.py's --at (resolved_at, if a pin is made)")
     ap.add_argument("--pin-by", default="vllm", help="pouw_h1_gpu.py's --by")
