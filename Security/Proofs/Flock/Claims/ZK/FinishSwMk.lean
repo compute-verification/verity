@@ -1,5 +1,6 @@
 import Proofs.Flock.Claims.ZK.FinishSwSv
 import Proofs.Flock.Level3.ArithFacts
+import Proofs.Flock.Claims.ZK.PiopSrcVals
 
 /-!
 # The switched source's masked values
@@ -10,6 +11,9 @@ plus the base's pad, each as the firewall's words (`GF128.val`).
 
 * **`Masked.swSrcE_masked_of_rowsAt`**: that reading, from the switched cut's masked values being the worker's view's
   (`swCutE_masked_of_rowsAt`), whose masked values are `v + h` (`Table.view`, at `Table.onVals`'s values).
+* `Masked.swSrcE_masked`, **`Masked.swSrcE_masked_pad`**: the pad there is the tape's, and below `h_ab` it is the
+  session's pad array's entry (`padsOf`), as `srcE_masked` and `srcE_masked_pad` have the honest source's: the switched
+  source's masked values are `vals + pads.h` at the worker's values and the session's pads.
 -/
 
 namespace Claims.ZKMal
@@ -40,6 +44,70 @@ theorem swSrcE_masked_of_rowsAt (x : Msg) (c : Fin (refK x) → FlockDeploy.Coin
   simp only [dif_pos hi, dif_pos hr, repSrcCut, dif_pos hn]
   exact congrArg FlockLevel3.GF128.val
     (congrFun (congrFun (swCutE_masked_of_rowsAt x c w v τ ⟨i, hi⟩ hrows) ⟨r, hr⟩) ⟨n, hn⟩)
+
+/-- **The switched source's masked value at a sent index** `k < n_E`, where table `j`'s rows hold at its base, is the
+worker's clear value there plus the tape's pad `k` of table `j`'s rep `r`, as `srcE_masked` has the honest source's. -/
+theorem swSrcE_masked (x : Msg) (c : Fin (refK x) → FlockDeploy.Coin) (w : Claims.Flock.Wit)
+    (v : ∀ j, ((tabC PE x j).T (czExe PE x c j)).tab.Vals) (τ : UE.Tape) (j : Fin (jOf x)) (r : Fin 2)
+    (hrows : ((tabC PE x j).T (czExe PE x c j)).tab.onVals.RowsAt (wtOf PE x w j, v j)
+      (((tabC PE x j).T (czExe PE x c j)).randOf ((UE.tape x τ).1 j) 0).1
+      (((tabC PE x j).T (czExe PE x c j)).randOf ((UE.tape x τ).1 j) 0).2.1.2.1)
+    {k : ℕ} (hk : k < (tabC PE x j).z.nE) :
+    ((swSrcE x c w v τ j.val).rep r.val).masked k =
+      FlockLevel3.GF128.val (v j r (wtOf PE x w j)
+          (((tabC PE x j).T (czExe PE x c j)).randOf ((UE.tape x τ).1 j) 0).1
+          (((tabC PE x j).T (czExe PE x c j)).randOf ((UE.tape x τ).1 j) 0).2.1.2.1 ⟨k, hk⟩) +
+        (UE.tapeZk τ).h j.val r.val k := by
+  obtain ⟨t, rfl⟩ : ∃ t' : Fin Claims.Flock.zkTableCap → ExeCell, t' = τ := ⟨τ, rfl⟩
+  have hc : j.val < Claims.Flock.zkTableCap := lt_of_lt_of_le j.isLt (jOf_le_cap x)
+  have hz := fits_zkTab PE (zkTab x j)
+  have hE64 : (tabC PE x j).z.nE ≤ 2 ^ 64 := hz.nE
+  have tH : ∀ q : Fin (2 ^ 64 + 4), FlockLevel3.GF128.of ((UE.tapeZk t).h j.val r.val q.val) =
+      (t ⟨j.val, hc⟩).1.2.2.1 r q := fun q => by
+    show FlockLevel3.GF128.of (fAt 0 (fun r => fAt 0 ((cellAt t j.val).1.2.2.1 r) q.val) r.val) = _
+    rw [cellAt_lt t hc, fAt_lt _ _ r.isLt]
+    exact fAt_lt _ _ q.isLt
+  unfold swSrcE tabSrcCut
+  rw [dite_eq_left j.isLt]
+  show (if hr : r.val < 2 then repSrcCut PE x (czExe PE x c) (swCutE x c w v t) j ⟨r.val, hr⟩ else default).masked k =
+    _
+  rw [dite_eq_left r.isLt]
+  show (if h : k < ((tabC PE x j).T (czExe PE x c j)).tab.nE then
+      FlockLevel3.GF128.val ((swCutE x c w v t j).masked r ⟨k, h⟩) else 0) = _
+  rw [dite_eq_left (show k < ((tabC PE x j).T (czExe PE x c j)).tab.nE from hk), swCutE_masked_of_rowsAt x c w v t j hrows]
+  show FlockLevel3.GF128.val (v j r (wtOf PE x w j)
+      (((tabC PE x j).T (czExe PE x c j)).randOf ((UE.tape x t).1 j) 0).1
+      (((tabC PE x j).T (czExe PE x c j)).randOf ((UE.tape x t).1 j) 0).2.1.2.1 ⟨k, hk⟩ +
+    (t ⟨j.val, hc⟩).1.2.2.1 r (hEmb hz (.inl ⟨k, hk⟩))) = _
+  rw [FlockLevel3.val_add]
+  congr 1
+  exact (congrArg FlockLevel3.GF128.val (tH ⟨k, by omega⟩)).symm
+
+/-- At table `j`, `n_E` is the layout's `h_ab`. -/
+theorem nE_eq_hab (x : Msg) (j : Fin (jOf x)) : (tabC PE x j).z.nE = (layE x j).hab := by
+  show (layE x j).len - 4 = (layE x j).hab
+  simp only [_root_.Flock.Zk.PadLayout.len, _root_.Flock.Zk.PadLayout.tw]
+  omega
+
+/-- **The switched source's masked value below `h_ab`**, where table `j`'s rows hold at its base, is the worker's clear
+value plus the session's pad (`padsOf`), as `srcE_masked_pad` has the honest source's. Below `h_ab` is below `n_E`
+(`nE_eq_hab`). -/
+theorem swSrcE_masked_pad (x : Msg) (c : Fin (refK x) → FlockDeploy.Coin) (w : Claims.Flock.Wit)
+    (v : ∀ j, ((tabC PE x j).T (czExe PE x c j)).tab.Vals) (τ : UE.Tape) (j : Fin (jOf x)) (r : Fin 2)
+    (hrows : ((tabC PE x j).T (czExe PE x c j)).tab.onVals.RowsAt (wtOf PE x w j, v j)
+      (((tabC PE x j).T (czExe PE x c j)).randOf ((UE.tape x τ).1 j) 0).1
+      (((tabC PE x j).T (czExe PE x c j)).randOf ((UE.tape x τ).1 j) 0).2.1.2.1)
+    {k : ℕ} (hkE : k < (tabC PE x j).z.nE) :
+    ((swSrcE x c w v τ j.val).rep r.val).masked k =
+      FlockLevel3.GF128.val (v j r (wtOf PE x w j)
+          (((tabC PE x j).T (czExe PE x c j)).randOf ((UE.tape x τ).1 j) 0).1
+          (((tabC PE x j).T (czExe PE x c j)).randOf ((UE.tape x τ).1 j) 0).2.1.2.1 ⟨k, hkE⟩) +
+        (FlockComplete.padsOf (UE.tapeZk τ) j.val r.val (layE x j)).h[k]! := by
+  have hk : k < (layE x j).hab := by rw [← nE_eq_hab x j]; exact hkE
+  have hlen : (layE x j).len = (layE x j).tw + 1 := rfl
+  have htw : (layE x j).tw = (layE x j).hab + 3 := rfl
+  rw [swSrcE_masked x c w v τ j r hrows hkE,
+    FlockComplete.padsOf_get (UE.tapeZk τ) j.val r.val (layE x j) k (by omega) (by omega) (by omega)]
 
 end Masked
 end Claims.ZKMal
