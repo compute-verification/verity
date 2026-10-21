@@ -30,10 +30,11 @@ hypothesis `WorkHardness b 1 c_root cost` is false for Sloth at one round with t
 red team's F27: a 2-dimensional lattice completes a word's bottom third at 0.003–0.025 of a root against the per-bit
 0.32–0.33). They carry a deployed codec at `k ≥ 2` rounds, where `WorkHardness` is the residual conjecture.
 
-**The price is a parameter, and `k = 3` is the stated instance** (`WorkHardness b 3 c_root cost`), pending Daniel's card
-for the codec: at `k = 2`, 512 bits rest on the reduction's operation-count floor, an estimate, not a measurement. A
-masked codec (a public XOR `σ_K` between rounds, lane ra-codec-mix's draft verity#1894, not adopted) would be another
-instance, with the price justified by no completion skipping the inner root.
+**The price is a parameter, and `k = 3` is the stated instance** (`WorkHardness b 3 c_root cost`), the deployed codec's:
+Sloth over `p = 2^1024 − 105`, masked with a public XOR `σ_K` between rounds (lane ra-codec-mix, verity#1894; Daniel's
+ruling, #1884, 12 Oct), its price justified by no completion skipping the inner root. The mask changes no statement:
+`WorkHardness` reads the codec only through `b`, `rounds` and `c_root`. Unmasked at `k = 2`, 512 bits rest on the
+reduction's operation-count floor, an estimate, not a measurement.
 -/
 
 namespace Accounting.Guarantees

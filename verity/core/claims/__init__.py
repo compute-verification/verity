@@ -224,6 +224,15 @@ ENTRIES: dict[str, Entry] = {e.id: e for e in (
           "Every uplink of the spatial unit passes through a network certifier the auditor trusts, with its parameters "
           "fixed before the run: every boundary link is certified, and nothing leaves the unit another way",
           "Certifier coverage", "standard"),
+    # `Accounting.Placed.LatencyAtMost` (Security/Definitions/Accounting/Physical.lean) is its Lean form, a premise of the
+    # proof-of-space pool's count (Accounting.Guarantees.Actual.AnsweredOfQuiet, WipeReadHeld): with the memory
+    # challenger's acceptance of late answers only (Accounting.Assumptions.LateAnswers) it refuses a label sent before
+    # its read (red team 3's H2). Falsified by a delivery slower than the ceiling, measured on the server's certified
+    # egress links
+    Entry("latency-ceiling", "assumption",
+          "Latency ceiling: every wire from the audited server to the network certifier on its egress delivers within "
+          "the stated ceiling of its send, and nothing between them holds a value longer",
+          "Latency ceiling", "measured"),
     Entry("transparent-setup", "guarantee", "Transparent setup (no trusted setup)", "Transparent setup"),
     # `Pous.EndToEnd.EndToEndRing`'s steps to the deployed system (Security/Properties/Pous/EndToEnd.lean), beside
     # prf/sha-512 for the memory challenger's index streams: the model, the numbers and the instantiation.  Its one
@@ -305,14 +314,18 @@ ENTRIES: dict[str, Entry] = {e.id: e for e in (
     Entry("accounting-sheet-clock", "assumption",
           "A1 CLOCK: the SM clock never exceeds the device's f_max, from the device's own source. Assumed: sm_120's "
           "2430 MHz, like the B200's f_max, is the maximum SM clock its driver reports (nvidia-smi), not a data "
-          "sheet's, and nothing checks a clock offset at run time; our nodes' driver allows none (NVML's offset range "
+          "sheet's, the H200's 1980 MHz is EPS1 DC's measured f_max at default clocks (its sheet quotes TOPS at "
+          "1830 MHz), and nothing checks a clock offset at run time; our nodes' driver allows none (NVML's offset range "
           "[0, 0], r20261019-121222-faa3)", "A1 clock (assumed)", "measured"),
     Entry("accounting-sheet-dispatch", "assumption",
           "A2 DISPATCH: each SMSP issues at most one warp instruction a cycle, whatever its pipe, uniform-datapath "
           "instructions included (A2u, which no vendor document states), and every warp instruction takes at least one "
           "issue slot whether or not its class is listed: one no other class names counts in the device's catch-all "
-          "class at its issue slot alone (sm_120's NOROW); a device whose classes have none leaves it free. A bulk or "
-          "TMA instruction of size S counts S/99 KB in sm_120's UTMABIG, at most its one slot (A5b's count)",
+          "class at its issue slot (NOROW on sm_120 and on the H200's and B200's sheets, UNLISTED on the measured issue "
+          "row on their measured readings, and on DC-90-ri the JI90 lines too, its instructions timed beside the "
+          "IGMMA, r20261021-070616-d06c); a reading whose classes have none (sm_120's measured "
+          "reading) leaves it free. A bulk or TMA instruction of size S counts S/99 KB in sm_120's UTMABIG, at most "
+          "its one slot (A5b's count)",
           "A2 dispatch (whitepapers)", "measured"),
     Entry("accounting-sheet-tensor", "assumption",
           "A3 TENSOR: the tensor cores do at most the data sheet's dense MACs per SM clock for each operand type",
@@ -336,9 +349,13 @@ ENTRIES: dict[str, Entry] = {e.id: e for e in (
     Entry("accounting-ts-fold-opt", "assumption",
           "FOLD-OPT: no program folds N committed words at a certificate's price below (1 − μ_f)·N·φ*(π). The TS "
           "statements ask it at every certificate π (FoldOpt), where a bit-exact fold falsifies it on DS-120 "
-          "(RT2-LOGIC-1's IMAD rotate); the sm_120 headlines ask it only at their own certificate π*, N the words the "
-          "run folds (FoldOptFoldedAt), an open conjecture checked within a stated menu by test_lean_headline.py: "
-          "the Lean menu, the bit-exact lane folds, the bulk-reduction floors and fold_bulk.cu's whole-block folds",
+          "(RT2-LOGIC-1's IMAD rotate) and an ALU fold of ♭'s IMADs on the H200's and B200's readings (RT3-LOGIC-6); "
+          "the headlines (sm_120's, the H200's and the B200's) ask it only at their own certificate π*, N the words "
+          "the run folds (FoldOptFoldedAt), an open conjecture checked within a stated menu by test_lean_headline.py "
+          "(the Lean menu, the bit-exact lane folds, the bulk-reduction floors and fold_bulk.cu's whole-block folds) "
+          "and on bit-exact folds by test_lean_headline_dc.py; at DC-90-ri's π* the counted, unbuilt memory "
+          "round-trip folds mixed with IMAD.WIDE (RT4-SHEET-13, -14) price at 1.0245 φ* or more, their classes on "
+          "the JI90 lines the H200 measured beside the IGMMA (r20261021-070616-d06c, r20261021-074303-da7f)",
           "FOLD-OPT", "conjectured"),
     Entry("accounting-ts-fill-opt", "assumption",
           "FILL-OPT: no program runs the verified filler at a certificate's price below (1 − μ_x)·χ*(π), for every "
@@ -374,10 +391,11 @@ ENTRIES: dict[str, Entry] = {e.id: e for e in (
           "order, pinning (accounting-ts-proofs-pin) and E1(c) (accounting-ts-right-fixed), ProofsSound: outside an "
           "event of probability at most S·(δ_bind + n_π·δ_ZK), an accepted window is accepted by the ideal game and its "
           "owned right fixed words per unit are at least (1 − Σ_w d_w/S)·N_w, rightness read on the path's coins. The "
-          "sm_120 headlines take the two alone as named premises: binding in its fork form at "
-          "δ_fork (BindingForkAt: at every round w, on a run and on its continuation from w on fresh coins, which share "
-          "w's commitment, every proof of round w is accepted and some proof opens w's leaves differently, with "
-          "probability at most δ_fork), read at δ_bind = √δ_fork through BindingOfFork; and each proof's soundness at "
+          "headlines (sm_120's, the H200's and the B200's) take the two alone as named premises: binding in its fork "
+          "form at δ_fork (BindingForkAt: at every round w, on a run and on its continuation from w on fresh coins, "
+          "which share w's commitment, every proof of round w is accepted and some proof opens w's leaves differently, "
+          "with probability at most δ_fork), read at δ_bind = √δ_fork through BindingOfFork; and each proof's "
+          "soundness at "
           "δ_ZK (ProofSoundAt: a proof is accepted with an opening that fails its relation with probability at most "
           "δ_ZK), which C-Flock's EndToEndHiddenDrawn gives only for a cheater whose hash calls over the window are "
           "capped, and only against its committed transcript: that the relation's rows are the leaves' committed rows "
@@ -391,16 +409,23 @@ ENTRIES: dict[str, Entry] = {e.id: e for e in (
           "recompute every word they absorb, and nothing states that the served relations are PIN's", "TS proofs pin",
           "conjectured"),
     Entry("accounting-ts-accepted-live", "assumption",
-          "A proof is credited only after flock-verify --zk --registered accepts its session", "TS accepted live",
-          "standard"),
+          "A proof is credited only after flock-verify --zk --registered accepts its session. Every served path today "
+          "verifies with plain flock-verify --zk and binds its served values through the public file (served_zk's Lean "
+          "checks, served_commit's verdict, h1_prove); of the audit's runners only one_stage/a0.py passes --registered. "
+          "So no served path meets it until the served trees are registered as ports, or a bridge for public-file "
+          "binding is stated", "TS accepted live", "standard"),
     Entry("accounting-ts-window-law", "assumption",
           "The proof service's draws and audit coins are the window's live coins: at each round and proof, given what "
           "the path fixes before the session (its setting and its prover), the session's coins are the path's next "
-          "coins, fresh and uniform. This rests on four facts: a refused session is never rerun on a fresh draw (no "
+          "coins, fresh and uniform. This rests on five facts: a refused session is never rerun on a fresh draw (no "
           "retry or redraw); the draw is revealed only after the session's registration and prover are fixed; the draw "
           "is no coin the setting reads (not σ_w, nothing derived from σ_w or from a prover's salt, not another "
-          "session's draw); and the path carries the draw (a later round's coin, or a draw beside σ_w in each round's "
-          "coin, which the last round needs)", "TS window law", "standard"),
+          "session's draw); the path carries the draw (a later round's coin, or a draw beside σ_w in each round's "
+          "coin, which the last round needs); and the session's audit coins (C-Flock's --zk coin tree) come from the "
+          "auditor's verifier, on a machine the prover doesn't control, fresh for each session (trusted-nebius-host). "
+          "Under full checking the draw is every unit, but the law still holds the audit coins fresh and uniform given "
+          "the prover. served_zk's per-tile sessions today draw their coin tree from a serve --zk --operator loopback "
+          "beside the prover, which doesn't meet the fifth fact", "TS window law", "standard"),
     Entry("accounting-ts-served-checks", "assumption",
           "A proof's relation (its served Definition's check) holds at its C-Flock session's extracted value layer "
           "wherever flock-verify accepts the session and every drawn unit is right at its own owned reads; under a "

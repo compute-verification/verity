@@ -1,6 +1,8 @@
 import Models.Accounting.Guarantees.Actual
 import Models.Accounting.Guarantees.Actual.Threaded
-import Models.Accounting.Guarantees.Actual.WipePool
+import Models.Accounting.Guarantees.Actual.WipeBridge
+import Models.Accounting.Guarantees.Actual.WipeDraw
+import Models.Accounting.Guarantees.Actual.WipePrf
 import Models.Accounting.Guarantees.Actual.Dampener
 import Models.Accounting.Guarantees.Bandwidth
 import Models.Accounting.Guarantees.Bandwidth.Causal
@@ -14,10 +16,12 @@ import Models.Accounting.Guarantees.Compose
 import Models.Accounting.Guarantees.ComposePeriod
 import Models.Accounting.Guarantees.Confidence
 import Models.Accounting.Guarantees.FillerLuck
+import Models.Accounting.Guarantees.FpG1
 import Models.Accounting.Guarantees.HMu
 import Models.Accounting.Guarantees.DeclaredCircuit
 import Models.Accounting.Guarantees.Gates
 import Models.Accounting.Guarantees.Headline
+import Models.Accounting.Guarantees.HeadlineDc
 import Models.Accounting.Guarantees.Joint
 import Models.Accounting.Guarantees.Localization
 import Models.Accounting.Guarantees.Memory
@@ -59,7 +63,7 @@ tiers and chained passes, the causal horizon bound on its samples and its conser
 composed guarantee for the remote bandwidth audit as deployed and its deployed instance, the remote
 bandwidth audit's conservation and node-level guarantees on the actual-circuit model, the actual circuit's capacity
 theorem, runtime corollary, memory cap over threads with its rate, dark gates and the compute dampener's windows,
-the memory cap's lifetime pool over wipes, localization, composition and fit,
+localization, composition and fit,
 the obligations B1, B2 and B4, the tag and sketch guarantees, Lemma B with (H-μ⁺) derived from fresh coins and Lemma B′
 for a persistent pattern, the view independence the Build's coin rules give it, co-location and the link relay for
 receipts bound to the matmul, what a relay of the deployed bound receipt's sketch must exchange, the bandwidth audit's

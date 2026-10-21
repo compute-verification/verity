@@ -18,7 +18,7 @@ import hashlib
 import os
 from typing import Any
 
-from verity_vllm.commit.committer.native_host import GPU_CHUNK_BYTES, NativeHostCommitter, TensorMeta
+from verity_vllm.commit.committer.native_host import NativeHostCommitter, TensorMeta
 
 PLACEHOLDER = ("placeholder", b"\0" * 4)
 
@@ -28,11 +28,11 @@ def _spec(t: tuple, i: int) -> tuple[str, Any, int, str, tuple | None]:
     return str(t[0]), t[1], ordinal, (str(t[3]) if len(t) > 3 else "uint8"), (tuple(t[4]) if len(t) > 4 else None)
 
 
-def committer(retain: str = "host", run_id: str = "opened-test") -> NativeHostCommitter:
+def committer(retain: str = "host", run_id: str = "opened-test", commit_scheme: str | None = None) -> NativeHostCommitter:
     saved = os.environ.get("VERITY_RETAIN")
     os.environ["VERITY_RETAIN"] = retain
     try:
-        return NativeHostCommitter(None, run_id=run_id, gpu_tree=True)
+        return NativeHostCommitter(None, run_id=run_id, gpu_tree=True, commit_scheme=commit_scheme)
     finally:
         if saved is None:
             del os.environ["VERITY_RETAIN"]
@@ -40,11 +40,12 @@ def committer(retain: str = "host", run_id: str = "opened-test") -> NativeHostCo
             os.environ["VERITY_RETAIN"] = saved
 
 
-def commit_steps(steps: dict[int, list[tuple]], *, retain: str = "host", run_id: str = "opened-test"):
+def commit_steps(steps: dict[int, list[tuple]], *, retain: str = "host", run_id: str = "opened-test", commit_scheme: str | None = None):
     """Commit `steps[s]` (tensors in acquisition order) as packed step blocks -> (committer, run commitment).  Tensors sit at 4-byte-aligned
-    offsets of the step block; a step missing below the last one is a one-tensor placeholder (steps are numbered densely)."""
-    com = committer(retain, run_id)
-    C = GPU_CHUNK_BYTES
+    offsets of the step block; a step missing below the last one is a one-tensor placeholder (steps are numbered densely).  `commit_scheme`
+    rows-sha512: the step trees are `step_rows`'s (the committer's `row_keys` hold their salt keys)."""
+    com = committer(retain, run_id, commit_scheme)
+    C = com.chunk
     for s in range(max(steps) + 1 if steps else 0):
         metas, buf = [], bytearray()
         for i, t in enumerate(steps.get(s) or [PLACEHOLDER]):

@@ -89,7 +89,8 @@ required, name a model.
 `compiled_source.py` / `compiled_kernel_source.py` / `partial_source.py` / `moe_align_source.py` / `norm_scale_source.py` /
 `router_softmax_source.py` / `vocab_range_source.py`, attached by `taps.py`; `kv_slots_source.py`, each KV layer's slots for the
 memory map, attached by `commit --memory-map`; `oracle_witness.py` judges the TP match oracle, where an MoE align witness that
-differs between the runs fails by name), `fa2_plane_classes.py`, `committer_api.py`, and the shipped tap sources (`fa2_tap_src/`,
+differs between the runs fails by name, and the Commit replays the capture's MoE align schedule, `moe_align_source.arm_replay`),
+`fa2_plane_classes.py`, `committer_api.py`, and the shipped tap sources (`fa2_tap_src/`,
 `fa3_tap_src/`, `norm_tap_src/`, `router_tap_src/`).  `gate.py` is the CPU gate (one row's acquisition plan, off-pod).  Four taps are
 on by default; `NORM_TAP=0`, `GUARDED_MAX_TAP=0`, `ROUTER_TAP=0` or `VOCAB_TAP=0` turns one off, for A/B only.  The guarded-max tap
 (`query/guarded_max.py`) runs on every row, whose attention is FA2 or FA3: the tap builds of `pod_fa2_tap.sh FA2_TAP_ROW_GUARD=1` /
@@ -413,6 +414,7 @@ also backfills one from other evidence).  A new model's module carries the marke
 `verity-vllm rejudge RUN` (`pipeline/tp/rejudge.py`) recomputes a finished TP Commit's gates that need no GPU from what it saved
 (its runs in the row's `runs.jsonl`, each run's verdict from its ranks', manifest agreement, the cross-rank check, `summary.pass`),
 so a fix to gate code can be judged against a failed Commit without rerunning it; it names the gates that need the live values.
+A Commit whose rank verdict is still pending (a deferred replay not yet run) rejudges PENDING, exit 3, rather than FAIL.
 
 The pod runtime (Python 3.12, torch cu129, vLLM `d9105ea80`, native taps, `hidden_gpu`) is built by `verity_vllm/ops/pod_bootstrap.sh`
 and exercised through `research run --source <sha> --on <machine>`.  On a pod without a GPU (`nvidia-smi` absent, or `--cpu`)

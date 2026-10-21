@@ -16,11 +16,16 @@ Its `pass` and `draw` against `core_check.pass_epoch` and `core_check.draw`: one
 `pouw_pass_cases` generates (honest passes of each coin version and a recorded beacon's, and honest draws, then one
 mutation each aimed at every refusal), compared output for output: how the salt was had, or the same refusal.
 
+Its `credit`, `outcome` and `a-link` against `credit.credited`, `credit.outcome` and `credit.a_link`: one `Port` each,
+over the cases `pouw_credit_cases` generates (a served window whose draw coin opened after its draw root over the
+manifest's credit bits, a draw's units each proved, a window's A trees under its round roots, then one mutation each aimed
+at every refusal), compared output for output: the credited calls or null, or the same refusal.
+
 Its `rounds` against `core_check.rounds`: one `Port`, over the live windows `pouw_rounds_cases` generates (a live epoch's
 round coins, each opened after its recorded round root, read through the challenger's signed session the auditor's signed
 ledger opens and ends for the window, then one mutation each aimed at every refusal), compared output for output: null, or the same refusal.
-Its `salt` against `core_check.salt` likewise, over the live windows' salt coins the same module generates
-(opened after the session's open root, `salt.window_open_root`).
+Its `salt` against `core_check.salt` likewise, over the live windows' salt coins the same module generates, read through
+the same session, reserved before it opened (opened after the session's open root, `salt.window_open_root`).
 """
 from __future__ import annotations
 
@@ -36,10 +41,12 @@ import verity_difftest as D
 from hypothesis import strategies as st
 
 import pouw_check_cases as cases
+import pouw_credit_cases as credit_cases
 import pouw_opening_cases as openings
 import pouw_pass_cases as passes
 import pouw_rounds_cases as rounds_cases
 from verity.core.protocols.pouw import core_check as CC
+from verity.core.protocols.pouw import credit as Cr
 from verity.core.protocols.pouw import verifier as V
 
 pytestmark = pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
@@ -73,10 +80,15 @@ server = D.server_fixture(PORT)
 
 @pytest.mark.slow
 def test_pouw_check(server):
+    """Generated cases, then each mutation over a few seeds (`replay`), so every verdict is reached whatever the draw: the
+    seeded draw moves whenever the cases' modules change, and a run of it has drawn no `answer-undecided`."""
     RULES.clear()
     stats = D.run(PORT, examples=EXAMPLES, server=server)
-    print(f"pouw-check difftest: {stats}; by rule: {dict(sorted(RULES.items()))}")
-    assert stats.counts.get("accept") and stats.counts.get("reject") and stats.counts.get("undecided")
+    swept = Counter(D.replay(PORT, cases.instance(random.Random(f"{name}/{seed}"), name), server)[0]
+                    for name in ["honest", *cases.NAMES] for seed in range(3))
+    print(f"pouw-check difftest: {stats}, and {sum(swept.values())} swept ({dict(swept)}); by rule: "
+          f"{dict(sorted(RULES.items()))}")
+    assert {"accept", "reject", "undecided"} <= set(swept), dict(swept)
 
 
 def _template(why: str) -> str:
@@ -216,6 +228,68 @@ def test_pass_and_draw(pass_server):
         D.replay(DRAW, early, pass_server), D.replay(DRAW, live, pass_server)
 
 
+CREDITED: Counter[str] = Counter()
+
+
+def _counted(refused: tuple[str, str] | None, what: str) -> None:
+    CREDITED[f"{what} " + (f"{refused[0]}: {_template(refused[1])}" if refused else "accept")] += 1
+
+
+def credit(case: dict) -> dict:
+    got, refused = Cr.credited(*credit_cases.credit_args(case))
+    _counted(refused, "credit")
+    return {"credited": got} if refused is None else {"refused": list(refused)}
+
+
+def outcome(case: dict) -> dict | None:
+    refused = Cr.outcome(case["drawn"], case["proofs"])
+    _counted(refused, "outcome")
+    return None if refused is None else {"refused": list(refused)}
+
+
+def a_link(case: dict) -> dict | None:
+    refused = Cr.a_link(case["rounds"], case["entries"])
+    _counted(refused, "a-link")
+    return None if refused is None else {"refused": list(refused)}
+
+
+def _port(name: str, fn, instance, names: list[str]) -> D.Port:
+    return D.Port("pouw-check-difftest", name, fn, package=LEAN, need_rejects=False, of_record=V.RECORD_VERDICT,
+                  inputs=st.builds(instance, st.randoms(use_true_random=False),
+                                   st.sampled_from(["honest"] * (len(names) // 4) + names)))
+
+
+CREDIT = _port("credit", credit, credit_cases.credit_instance, credit_cases.CREDIT_NAMES)
+OUTCOME = _port("outcome", outcome, credit_cases.outcome_instance, credit_cases.OUTCOME_NAMES)
+A_LINK = _port("a-link", a_link, credit_cases.a_link_instance, credit_cases.A_LINK_NAMES)
+
+
+def test_credit(pass_server):
+    """Generated served windows' credited sets, drawn units' outcomes and A rows, then each mutation over a few seeds
+    (`replay`): a credit bit flipped after the draw coin, a drawn unit failed or missing, an A tree the round roots
+    didn't commit, and every other refusal of `credit.credited`, `credit.outcome` and `credit.a_link`."""
+    CREDITED.clear()
+    stats = {p.fn: D.run(p, examples=n, server=pass_server) for p, n in ((CREDIT, 300), (OUTCOME, 400), (A_LINK, 400))}
+    swept = Counter()
+    for port, instance, names in ((CREDIT, credit_cases.credit_instance, credit_cases.CREDIT_NAMES),
+                                  (OUTCOME, credit_cases.outcome_instance, credit_cases.OUTCOME_NAMES),
+                                  (A_LINK, credit_cases.a_link_instance, credit_cases.A_LINK_NAMES)):
+        swept += Counter(D.replay(port, instance(random.Random(f"{name}/{seed}"), name), pass_server)[0]
+                         for name in ["honest", *names] for seed in range(3))
+    print(f"pouw-check-difftest credit: {stats}; and {sum(swept.values())} swept ({dict(swept)}); by outcome: "
+          f"{dict(sorted(CREDITED.items()))}")
+    assert {"credit accept", "outcome accept", "a-link accept"} <= set(CREDITED)
+    for part in ("credit draw: the draw root over the manifest", "credit draw: the window's draw root is not",
+                 "credit draw: the challenger's session closed with no draw coin", "credit credit: manifest row # has no",
+                 "credit credit: call # is credited with no z", "credit coin: the draw coin: ",
+                 "credit coin: the challenger's session is not trusted", "outcome missing: ", "outcome failed: ",
+                 "outcome outcome: unit # has two", "outcome outcome: unit # has a proof outcome and was not drawn",
+                 "a-link a-link: registered A value h#/w#/a/#'s root is not the tree",
+                 "a-link a-link: round #'s root is not over", "don't tile its rows",
+                 "a-link a-link: the window registers no A value", "which is no registered A value"):
+        assert any(part in k for k in CREDITED), part
+
+
 ROUNDED: Counter[str] = Counter()
 
 
@@ -272,9 +346,10 @@ SALT = D.Port("pouw-check-difftest", "salt", salt, package=LEAN, need_rejects=Fa
 
 
 def test_salt(pass_server):
-    """Generated live windows' salt coins, then each mutation over a few seeds (`replay`): another window's weights,
-    requests or session under the session's open root, H1's salt opened after the weights' root, a log showing another
-    root, and every other refusal of `core_check.salt`."""
+    """Generated live windows' salt coins, read through the challenger's signed session the auditor's signed ledger
+    reserves, opens and ends for the window, then each mutation over a few seeds (`replay`): a session opened without a
+    reserve, the open root under another session's id or of another window's weights or requests, H1's salt opened
+    after the weights' root, a log showing another root, and every other refusal of `core_check.salt`."""
     SALTED.clear()
     stats = D.run(SALT, examples=400, server=pass_server)
     swept = Counter(D.replay(SALT, rounds_cases.salt_instance(random.Random(f"{name}/{seed}"), name), pass_server)[0]
@@ -282,7 +357,9 @@ def test_salt(pass_server):
     print(f"pouw-check-difftest salt: {stats}; and {sum(swept.values())} swept ({dict(swept)}); by outcome: "
           f"{dict(sorted(SALTED.items()))}")
     assert "accept" in SALTED
-    for part in (CC.SALT_FORM, CC.OTHER_WINDOW, CC.NOT_RECEIVED, "the verifier's coins are malformed",
+    for part in (CC.NO_RESERVE, CC.SALT_FORM, CC.OTHER_WINDOW, CC.NOT_RECEIVED,
+                 "the verifier's challenger key is malformed",
+                 "not trusted: no auditor's ledger", "not trusted: the challenger record's signature does not verify",
                  "the coin commitment's ", "the salt's a live coin opening is", "the salt's coin was not opened after",
                  "not its pouw/salt coin #", "the salt's coin does not open", "the salt's coin is epoch #",
                  "the salt's coin opening is malformed"):

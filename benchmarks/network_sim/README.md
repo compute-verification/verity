@@ -65,8 +65,10 @@ research run --on vy-nebius-cpu-2 --project verity --source . --cwd source -- \
 proxy (`verity.core.protocols.certifier.active.Proxy`, unmodified), and on the outside host the peer, whose connection
 crosses the fabric. Each block's server plays one strategy: `honest`; `bits`, whose write times carry a random bit per
 session; `late`, which holds a session in window 0 past every sync; `extra`, which writes one event at a position the
-Program doesn't have; or `maintenance`, honest with its certifier down for window 1 (below). Each block is audited twice. The certifier's audit is `audit.Audit`'s `check_link` and
-`check_ingress_link` on its raw and committed records. The datacenter record check is `datacenter.check_records` on its
+Program doesn't have; or `maintenance`, honest with its certifier down for window 1 (below). Each block is audited three
+times. The certifier's audit is `audit.Audit`'s `check_link` and `check_ingress_link` on its raw and committed records.
+N3Window_v5's reference checks every raw window against the canonical framing's templates (`workload.n3_canonical`).
+The datacenter record check is `datacenter.check_records` on its
 records as `datacenter.observe.Record`s against the ones an honest run of the Program publishes: each port (`b0.cert:out`
 for what leaves the block, `b0.cert:in` for what enters it) needs a record for each window, with the declared counts
 and digest, and each carried window leaves log2 of the sync set's size bits of timing advice. The declaration's cadence
@@ -85,9 +87,8 @@ Run `r20261018-073637-e25f`, on vy-nebius-cpu-2 at a load of about 120:
 
 `bits` is the covert channel the certifier closes: it is accepted because its wire is the honest one, byte for byte. The
 latest tick was 4.2 ms late against the proxy's 25 ms slack. Each bucket reached the peer about 5.4 ms after its tick
-from the blocks on `na-leaf0`, and about 9.8 ms after it from those behind the spine. The earlier runs gave the same
-certifier verdicts: `r20261018-065536-38c4`, before the declarations, and `r20261018-071731-392a`, on the first
-`datacenter` API.
+from the blocks on `na-leaf0`, and about 9.8 ms after it from those behind the spine. On the canonical framing
+(`r20261021-083115-dae5`, below) the verdicts are the table's, and v5 refuses only the windows the certifier refuses.
 
 ### With the salt
 
@@ -100,8 +101,8 @@ salt frame first, and the certifier's audit (`active_replay.audit_salt`) reads e
 revealed salt's width and counts the salt frames in each ingress window and in egress. The salt takes one of the ingress side's frames in each window's first bucket, so a
 request enqueued in that bucket can go out a bucket later.
 
-Run `r20261018-092640-66bf` (`run --salt`), on vy-nebius-cpu-2 at a load of about 35, before the salt frame carried
-the placeholder instead of the salt's commitment, gave the table's verdicts on every block, under both audits. On
+Run `r20261018-092640-66bf` (`run --salt`), before the salt frame carried the placeholder instead of the salt's
+commitment, gave the table's verdicts on every block, under both audits. On
 every block, each ingress window held one salt frame and egress none, no egress frame held a salt or its commitment,
 the certifier's audit accepted each window's commitment against the revealed salt, and the block's server received
 every salt. The latest tick was 4.3 ms late against the 25 ms slack.
@@ -163,7 +164,7 @@ and 14 links.
 - The Program is the same, one outside peer per link (see Limits), so what crosses the WAN is the east blocks' traffic
   with the outside host.
 
-Each block gets both audits, as on one site. Then the record check runs once more, on every block's records together
+Each block gets every audit, as on one site. Then the record check runs once more, on every block's records together
 against every block's declared ones, over the merged fleet's ports, with the account's charge for the whole run
 (`mockdc.charge` under the whole plan). `run.py` runs the fleet twice, with the first four strategies swapped between
 the sites, so that each is played across the WAN once. Run `r20261018-112635-7b3b` (the whole night, below):
@@ -181,7 +182,8 @@ the sites, so that each is played across the WAN once. Run `r20261018-112635-7b3
 | fleet-swapped | west.b1 | late | refused: `responses` window 0 | refused: `port west.b1.cert:out [0, 6000)` | 9.8 ms | 3.6 ms |
 | fleet-swapped | all 8 ports | | | 22 port-windows carried, the two above refused; not sound: 88 bits + 4.8e12 | | |
 
-The verdicts are the single site's, block for block. What the WAN adds:
+The verdicts are the single site's, block for block, and on the canonical framing (`r20261021-083115-dae5`) too, v5's
+included. What the WAN adds:
 - **To δ, nothing.** A frame's release is counted in buckets from its anchor, the bucket its request entered at the
   block's own certifier, and the frame is handed at that certifier, so both ends of δ are at the block's uplink and the
   WAN is outside it. Every block on both sites declared the same sync, δ = 3 buckets at ρ = 1, and was accepted or
@@ -198,10 +200,6 @@ The verdicts are the single site's, block for block. What the WAN adds:
   bucket late and an honest block's ingress records would be refused, unless the Program sent them earlier.
 - **To the proxy's slack, nothing.** The latest tick in the fleet's runs was 4.3 ms late against the 25 ms slack, as on
   one site. The slack bounds the proxy's own scheduling on its host, which the WAN doesn't touch.
-
-The night before, `r20261018-110501-432f`, ran the same fleet with the WAN between two certifiers of their own, one on
-each spine, that watched no block: the same verdicts, and each east path 4 ms longer for the two hops to and from them
-(a median wire lag of 35.3 ms).
 
 ## Limits
 
@@ -220,22 +218,25 @@ each spine, that watched no block: the same verdicts, and each east path 4 ms lo
 237,846 gates, a pipeline stage a block) on the lab's declaration. Each block's server runs in the block's namespace,
 mockdc's proxy in its certifier's, and the client on `na-ext0`. A block reaches only its certifier, so the client relays
 every message between blocks: it leaves its source as server-sent events of a response and enters its destination in a
-request (`workload/lab.py`). Each block is checked three ways: the certifier's audit (`audit.Audit` in `active_replay`'s
-live mode, on the block's event log), N3 over the certifier's records (`workload.lab.check`), and the answers against
-the Program evaluated in one process. Every window declares the calibration's envelope, δ = 12 buckets of 100 ms. The
-run needs a Python with torch; the recorded one builds it with `uv` in a scratch directory.
+request (`workload/lab.py`), both on the canonical framing (`active.event`, `active.request_frames`).
+Each block is checked four ways: the certifier's audit (`audit.Audit` in `active_replay`'s live mode, on the block's
+event log), N3 over the certifier's records (`workload.lab.check`), N3Window_v5's reference on each link-window
+(`n3_unit.lab_windows`), and the answers against the Program
+evaluated in one process. Every window declares the calibration's envelope, δ = 12 buckets of 100 ms. The run needs a
+Python with torch (below).
 
-Run `r20261018-084303-dae6`, on vy-nebius-cpu-2 with the lab up in its default shape:
+The night `r20261021-083115-dae5`, on vy-nebius-cpu-2 with the lab up in its default shape:
 
-| Run | Certifier audit | N3 | Answers |
-|---|---|---|---|
-| honest | accepts all four blocks | holds | equal the reference |
-| `--tamper b1:flip-bit` | accepts all four blocks | refuses b1's responses (`content`) and b2's request, which carried the flipped message | equal the reference: the bit doesn't change the token |
-| `--tamper b2:late` | refuses b2: `responses` window 0, `status:coverage-never-established` | refuses b2 and the blocks it starves (`missing`, `values`) | none |
+| Run | Certifier audit | N3 | N3 v5 (8 windows a block) | Answers |
+|---|---|---|---|---|
+| honest | accepts all four blocks | holds | accepts all 32 | equal the reference |
+| `--tamper b1:flip-bit` | accepts all four blocks | refuses b1's responses (`content`) and b2's request, which carried the flipped message | refuses b1's `responses` window 0 and b2's `requests` window 0 | equal the reference: the bit doesn't change the token |
+| `--tamper b2:late` | refuses b2: `responses` window 0, `status:coverage-never-established` | refuses b2 and the blocks it starves (`missing`, `values`) | refuses window 0 of b0's `responses` and of b1's and b2's two links; b3 records nothing | none |
 
-The latest proxy tick was 4.1 ms late against the 25 ms slack. Each first event left its block at most 186 ms after its
-request, against δ's 1.2 s, and each bucket reached the client a median 5.4 ms after its tick from the blocks on
-`na-leaf0` and 9.8 ms from those behind the spine.
+Under `late` v5 refuses each window that carried bytes of a block that committed no values, which no committed outbox
+holds. The same run's honest 40-token prompt (`--prompt 40 --steps 2`, `out/long-prompt`) is accepted by all four
+checks, v5 on all 68 windows of each block. Its timings and the earlier runs are in
+note:network-accounting/20261021T0615Z-report-net53-canonical-framing.
 
 ## The whole night
 
@@ -255,6 +256,7 @@ it leaves the lab up in its default shape.
 `DIR/summary.txt` has a row per block of each run with:
 - the certifier's verdicts, and the salt check's;
 - the record check's verdicts, or N3's;
+- N3Window_v5's, as the windows it accepts of those the block recorded;
 - the account's covert budget;
 - the median lag from a bucket's tick to its bytes reaching the peer;
 - the latest proxy tick against the slack.
@@ -268,12 +270,13 @@ research run --on vy-nebius-cpu-2 --project verity --source . --cwd source --tim
   bash -c 'python3 -B benchmarks/network_sim/run.py --out "$OUT"'
 ~~~
 
-Run `r20261018-112635-7b3b` exited 0. It took 6.5 minutes on vy-nebius-cpu-2 and gave every expected verdict, the
-tables above. Each mockdc run's check on every port refused exactly what its blocks' own checks refused. With the
-salt, b4's proxy revealed the salts of windows 0 and 2 only. Its record check under the plan was unchanged, and the
-certifier's salt check, like its audit, found nothing for window 1. The latest proxy tick was 4.4 ms late against the
-25 ms slack. `run.py`'s tests render the summary of `r20261018-110501-432f`, the night before, and the night before
-the fleet was `r20261018-102319-bb80`.
+Run `r20261021-083115-dae5` (`out/night`), the first on the canonical framing, exited 0 with "every verdict is the
+expected one" in 8.1 minutes. The certifier and record verdicts are those of `r20261018-112635-7b3b`. v5 accepts
+every window a block recorded but the one the certifier refuses, and on the lab the table's. Each mockdc run's check
+on every port refused exactly what its blocks' own checks refused.
+With the salt, b4's proxy revealed the salts of windows 0 and 2 only. Its record check under the plan was unchanged,
+and the certifier's salt check, like its audit, found nothing for window 1. The latest proxy tick was 5.9 ms late
+against the 25 ms slack. `run.py`'s tests render the summary of `r20261018-110501-432f`.
 
 ## N3 in zero knowledge
 
@@ -389,13 +392,10 @@ frames root and the head's opening (v2: the stand-in's digest and opening).
 | Lab: b0's responses, window 0 (6 frames) | 1,483,550,450 | 56,473,643 | 25,976,556 | 8,298,180 | 8,675,448 | 13,523,424 |
 
 The simulator's windows run from 3.4M to 10.2M (v2: 5.0M to 12.7M) and the lab's from 10.7M to 56.5M (v2: 31.1M to
-1.48B). At the lab's largest window v3 is 26 times smaller:
-
-- Row reads fall from 1.31B to 26.0M. A 4,096-byte frame reads one segment, one 8,192-byte row, instead of up to 255
-  scattered value rows. Each read is 4.33M ANDs, most of it the row's 65 compressions.
-- Descriptor reads fall from 31.9M to 8.3M: a descriptor is 383 bits, not v2's 69,920 bits of masks.
-- Frames fall from 124M to 8.7M: one shift a segment (0.92M at 4,096 bytes) replaces the compaction.
-- The record rises from 11.7M to 13.5M, nearly all of it N2's frames root, which v2's stand-in didn't compute.
+1.48B). At the lab's largest window v3 is 26 times smaller: a 4,096-byte frame reads one 8,192-byte row (4.33M ANDs,
+most of it the row's 65 compressions) instead of up to 255 scattered value rows, a descriptor is 383 bits instead of
+69,920 bits of masks, and one shift a segment (0.92M) replaces the compaction. The record rises from 11.7M to 13.5M,
+nearly all of it N2's frames root, which v2's stand-in didn't compute.
 
 The demo stays the size v2 was. At 16 bytes a row read is mostly the hm96 leaf and the path, and one 32-byte outbox row
 costs what one 256-bit value row did. Rows of B bytes, two per segment, were measured and set aside: they make the demo
@@ -417,30 +417,37 @@ its links (above), whatever N3 costs there.
 
 At the shape of llama8b-node1's served rows (`SERVED`, from run `r20261006-035423-2cd5`: T = 600 buckets of 100 ms,
 slots of 4,096 bytes, 1,440 windows a day, busy egress link-windows of 34,499 and 35,386 frames, and 21,372 ingress
-frames for 715,340 egress), each part is traced at its statics and no served value is read. Egress port-windows are
+frames for 715,340 egress), each part is traced at its statics and no served value is read: AND counts at the served
+shape, not a run on served traffic (run `r20261021-020337-2a6e`, at 17ddf3f34a). Egress port-windows are
 unsalted with one segment a frame and ingress ones salted with two, as the lab's are, and an event's JSON is guessed at
-256 bytes before its crossing text and 64 after. At the lab's depths the outboxes and the layout are the lab's trees; at
-a day's, every outbox has 2^26 rows and the layout two ports of 2^26 positions.
+256 bytes before its crossing text and 64 after. At the lab's depths the outboxes and the layout are the lab's trees. At
+one window's, every outbox has 2^16 rows and the layout two ports of 2^16 positions, the least that hold a busy
+window's 35,386 frames. At a day's, 2^26 rows and two ports of 2^26. The lab's layout of 2^6 positions doesn't hold a
+busy window, so its rows price a window the service refuses (`Window.why`).
 
 | Depths | Egress frames | Ingress frames | N3 egress | N3 ingress | N3 a link-window | N3 a day, one link | N3 ÷ N2 |
 |---|---|---|---|---|---|---|---|
-| Lab's | 34,499 | 1,031 | 325.6B | 15.2B | 340.8B | 4.91 × 10^14 | 89,879 |
-| Lab's | 35,386 | 1,057 | 334.0B | 15.6B | 349.6B | 5.03 × 10^14 | 92,188 |
-| A day's | 34,499 | 1,031 | 592.2B | 27.5B | 619.7B | 8.92 × 10^14 | 163,424 |
-| A day's | 35,386 | 1,057 | 607.5B | 28.2B | 635.7B | 9.15 × 10^14 | 167,623 |
+| Lab's | 34,499 | 1,031 | 325.6B | 15.2B | 340.8B | 4.91 × 10^14 | 89,869 |
+| Lab's | 35,386 | 1,057 | 334.0B | 15.6B | 349.6B | 5.03 × 10^14 | 92,178 |
+| One window's | 34,499 | 1,031 | 475.6B | 22.3B | 497.9B | 7.17 × 10^14 | 131,287 |
+| One window's | 35,386 | 1,057 | 487.8B | 22.8B | 510.7B | 7.35 × 10^14 | 134,660 |
+| A day's | 34,499 | 1,031 | 592.2B | 27.5B | 619.7B | 8.92 × 10^14 | 163,414 |
+| A day's | 35,386 | 1,057 | 607.4B | 28.2B | 635.6B | 9.15 × 10^14 | 167,612 |
 
 N2 is 5.46 × 10^9 ANDs a day on one link. N3 is linear in the frames: a least-squares line through each ladder (7
-points from 2 frames, to 35,386 egress and 16,384 ingress) gives 9.44M ANDs an egress frame at the lab's depths and
-17.2M at a day's, and 14.8M and 26.7M an ingress frame, with the largest residual 3.0%. At the lab's depths a busy
-egress window is 46% row reads, 21.5% the frames root, 16% descriptor reads, 10% segments and 7% frames; at a day's,
-the deeper trees make it 50% row reads and 29% descriptor reads.
+points from 2 frames, to 35,386 egress and 16,384 ingress) gives 9.44M ANDs an egress frame at the lab's depths, 13.8M
+at one window's and 17.2M at a day's, and 14.7M, 21.6M and 26.7M an ingress frame, with the largest residual 3.0%. At
+the lab's depths a busy egress window is 46% row reads, 21.5% the frames root, 16% descriptor reads, 10% segments and
+7% frames; at a day's, the deeper trees make it 50% row reads and 29% descriptor reads. `N3Window_v4` and `N3Window_v5`
+(below) bring a busy link-window to 320.1B and 123.9B.
 
 `composed` equals the whole trace (`checked`) at the served format, at the lab's depths, on unsalted one-segment
-windows of 2, 3, 64, 257 and 1,024 frames and salted two-segment ones of 2, 3 and 64. The run's next check, a salted
-window of 257 frames, was killed at the run's 32 GiB memory cap, so the busy windows, and every count at a day's depths,
-are composed only. `workload/tests/test_n3_cost.py` holds `composed` to the trace at the demo's format.
+windows of 2, 3, 64, 257 and 1,024 frames and salted two-segment ones of 2, 3 and 64 (run `r20261019-171031-6fa8`, at
+8450bbaa73). That run's next check, a salted window of 257 frames, was killed at its 32 GiB memory cap, so the busy
+windows, and every count at one window's and a day's depths, are composed only. `workload/tests/test_n3_cost.py` holds
+`composed` to the trace at the demo's format.
 
-The tests (`workload/tests/test_n3_unit.py`, 45 quick and 6 slow, about 100 s) check the following:
+The tests (`workload/tests/test_n3_unit.py`, 46 quick and 6 slow, about 100 s) check the following:
 
 - `N3Frame` against `assemble` on every descriptor of the demo's, the simulator's and the lab's windows, honest and
   tampered, and on random descriptors; `N3Seg` against `segment`;
@@ -454,6 +461,7 @@ The tests (`workload/tests/test_n3_unit.py`, 45 quick and 6 slow, about 100 s) c
 - every link-window of the simulator committed under its ports' profiles, with N2's head checks and N3's bit on each
   port-window: frames edited in content alone pass N2 everywhere and N3 refuses exactly N3 in the clear's ports, and
   an extra frame is refused by N2 too;
+- N3Window_v5 with the requests' template (`sim_v5`) on every simulator window, refusing exactly what v3 refuses;
 - the whole circuit against the reference on the demo (thirteen instances) and on a salted lab window (three), and
   `N3RowRead` on rows past a unit's depth and of another unit.
 
@@ -467,7 +475,8 @@ The evaluations, `python -m workload.n3_unit sim` and `lab`:
   `link_windows_ok` and `n2_not_ok`): the honest run is 12 of 12 ok. `flip-bit` and `fill` pass N2 on every
   link-window, so N3 alone refuses them. `extra-frame` is off the profile at b1's uplink in window 0 and b2's in
   window 1, which N2 refuses too; b1's uplink in window 1 has the profile's count with its frames shifted, which N3
-  alone refuses.
+  alone refuses. v5 with the template (`n3_v5`) accepts all 24 port-windows of the honest run and refuses exactly
+  those above.
 - Run `r20261018-084303-dae6`'s records, reference only (the circuit at 4,096-byte frames is too large for an agent
   VM). The honest run is 15 of 15 ok. `flip-bit` is not-ok at b1's responses and b2's requests in window 0. `late` is
   not-ok at the four windows that carry values b0 and b1 never committed, and refuses b2's responses on their status.
@@ -476,8 +485,8 @@ The evaluations, `python -m workload.n3_unit sim` and `lab`:
 `python -m workload.n3_unit circuit-check --parts --out FILE` runs circuit-check's checks on the demo format's SHA-free
 parts: `N3Frame` (12,448 gates; lowered to C-Flock, 4,983 ANDs) and `N3Seg` (3,882 gates, 1,524 ANDs). In 71 s it finds
 no failures and no dead or redundant gates, and warns only that neither has pinned counts. Without `--parts` it also
-checks the whole window, which wasn't run for v3: v2's window, of the same size, took 42 minutes, nearly all of it
-circuit-check's reference evaluator running 67.4M gates on four vectors.
+checks the whole window. `python -m workload.n3_v4 circuit-check --out FILE [--window]` checks v4's new parts and,
+with `--window`, its window, and `workload.n3_v5`'s the same for v5; the gaps below are theirs too.
 
 Its gaps:
 
@@ -524,13 +533,51 @@ Open items:
   that opens the layout at the position after the port's last recorded frame and shows that the descriptor there is
   the invalid one.
 - **What the size class discloses.** FMT gives the run's widest prefix and suffix, the most segments any frame reads,
-  and each unit's outbox depth; G gives the most segments of the port's frames. A port's occupancy already bounds the
+  and each unit's outbox depth; G gives the most segments of the port's frames, and v4's R (below) the most runs its
+  reads need. A port's occupancy already bounds the
   bytes it carried, but a depth is per unit, which is new where one port carries several units' traffic. Padding every
   outbox to the run's deepest would hide the depths at no cost in the unit, which climbs the deepest tree's levels for
   every unit's row; it costs only larger trees to register.
 - **The order of frames from several sources.** The lab's order is fixed by the Program (events by position, requests
   by session). Traffic whose interleaving the prover chooses needs that order as witness, checked in the unit.
-- **Further cuts.** A window's descriptors sit at consecutive public positions, so one multiproof over at ... at + n − 1
-  would share their paths' upper levels, about n + DL node hashes instead of n·DL. Descriptor reads are 61% of the
-  simulator's largest window. N2's frames root is the record's largest part in the lab: 33 compressions a 4,096-byte
-  frame, fill included, plus the tree's nodes. It is N2's tree, so the unit can't skip the fill.
+- **Further cuts.** What is left after `N3Window_v5`, below, is under its table. N2's frames root, fill included, is
+  the floor: it is N2's tree, so the unit can't skip the fill.
+
+### N3Window_v4 and N3Window_v5
+
+`workload/n3_v4.py` builds `N3Window_v4{FMT, N, G, SALTED, REC, R}`: v3's parts with a window's descriptors opened as
+one run of the layout (`N3Range`) and its rows as R runs at private starts, each read fresh or a repeat, R public as G
+is (`runs_of`). `workload/n3_v5.py` builds `N3Window_v5{FMT, N, G, SALTED, REC, R, TPL, FB}` on v4's runs, with
+NET-52's levers as statics; both stay:
+
+- **Lever 1:** outbox rows of B bytes, each byte in one row; a read hashes the one row it adds to its run's two.
+- **Lever 2:** a public template TPL fixes every frame's prefix, text and suffix (`N3FrameFixed`); a descriptor keeps
+  only r and the segments.
+- **Lever 4:** with a template, frames of FB bytes on rows of fewer (`prepare(setup, RB)`, `resplit`). A served
+  egress frame is one token's event, so egress rows of 64 bytes hold its data; ingress keeps rows of B.
+- **Lever 3**, each range level's shared first block hashed once, is estimated only: it needs a node part that takes
+  a midstate.
+
+A busy served link-window of 35,386 egress and 1,057 ingress frames (run `r20261021-052039-10ee`, composed from the
+parts, egress reads in one run and salted ingress ones in two). The floor is N2's frames root, 73.9B, which every
+variant keeps.
+
+| Variant | Built | One window's depths | ÷ floor | A day's depths | ÷ floor |
+|---|---|---|---|---|---|
+| v4 | yes | 320.1B | 4.33 | 320.4B | 4.33 |
+| Lever 1 | yes | 253.3B | 3.43 | 253.6B | 3.43 |
+| Lever 2, on v4 | yes | 298.2B | 4.03 | 298.4B | 4.04 |
+| Levers 1 and 2 | yes | 231.4B | 3.13 | 231.6B | 3.13 |
+| Levers 1, 2 and 4 | yes | 123.9B | 1.68 | 124.1B | 1.68 |
+| Lever 3 on levers 1 and 2 | estimated | 227.0B | 3.07 | 227.2B | 3.07 |
+| Lever 3 on levers 1, 2 and 4 | estimated | 119.5B | 1.62 | 119.7B | 1.62 |
+| Frame j reads row j, no descriptors | estimated | 147.5B | 2.00 | 147.6B | 2.00 |
+
+Lever 1 rests on nothing new: v5 accepts exactly where v4 does on every window the tests cover, and refuses what v4
+refuses elsewhere by each leaf's binding under SHA-512, as v4 does. Lever 2 rests on a canonical framing the certifier
+doesn't have yet, each port's frames one public template; N3 checks the template itself, so its verdict takes no new
+assumption, and the framing owes completeness. Lever 4 rests on that framing and on every egress frame's data being at
+most 64 bytes, one token's text, a longer one cut over frames. Egress rows of 16, 256 and 512 bytes give 1.67, 1.76 and
+1.84 at one window's depths; 512 hold any token of GLM-5.3's vocabulary (the one on the node), so a framing that cuts no token is 1.84. Each
+lever's mechanism, what the certifier's framing must change, the tests (`workload/tests/test_n3_v5.py`) and
+circuit-check: note:network-accounting/20261021T0520Z-finding-n3-v5-levers.

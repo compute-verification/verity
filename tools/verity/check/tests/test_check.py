@@ -490,6 +490,17 @@ def test_circuit_check_has_the_whole_slot_only_when_neither_pytest_nor_lean_runs
     assert CHECK.cc_mem_gb(400, True) == 100 and CHECK.cc_mem_gb(100, True) == 25
 
 
+def test_a_cached_circuit_check_keeps_the_catalog_bindings_records_and_an_uncached_one_does_not(tmp_path):
+    """With the cache, a run whose task list misses builds only the catalog bindings whose record misses
+    (`circuit_check.units`); the uncached run builds the whole catalog, as the nightly check that must agree with it does."""
+    def cc(cache):
+        [s] = [s for g in CHECK.groups(tmp_path, 16, cache=cache) for s in g if s[0] == "circuit-check"]
+        return s[1]
+
+    assert "--catalog-units" in cc(True) and "--cache" in cc(True)
+    assert "--catalog-units" not in cc(False) and "--cache" not in cc(False)
+
+
 def test_beside_pytest_alone_circuit_check_takes_the_share_lean_suites_would_have(tmp_path, monkeypatch):
     """A post-landing run (`--deferred circuit-check,pytest`) runs no Lean step, yet circuit-check got 210 GiB of a 560 GiB slot
     while pytest kept to its half of the rest, 175: lean-suites' 175 went unused, and the 147-167 GiB SHA-512 targets ran one at
@@ -1349,9 +1360,9 @@ def _train_repo(tmp_path):
     for k in ("VERITY_SKIP_STORE", "AWS_SESSION_TOKEN"):
         env.pop(k, None)
 
-    def train(*a):
+    def train(*a, **extra):
         return subprocess.run(["bash", str(ROOT / "tools" / "verity" / "check" / "train.sh"), *a], capture_output=True, text=True,
-                              cwd=tmp_path / "repo", env=env)
+                              cwd=tmp_path / "repo", env={**env, **extra})
 
     return git, train, argv
 
@@ -1415,6 +1426,25 @@ def test_train_sh_posts_a_launch_that_registered_nothing_and_stays_quiet_on_one_
     p = train("HEAD", "vy-x")
     posted = (tmp_path / "posted").read_text()
     assert p.returncode == 1 and "read guard: refused" in posted and "exited 0 before launching a run" in posted, posted
+
+
+def test_train_sh_runs_drives_shadow_as_an_ordinary_quiet_job_and_a_train_with_priority_and_its_post(tmp_path):
+    """drive's per-PR shadow (`TRAIN_ORDINARY=1 TRAIN_QUIET=1`) must never take a check slot ahead of a lane's or a train's, nor
+    ring anyone when its launch registers nothing (ci, 21 Oct); a train keeps `--priority` and its post."""
+    git, train, argv = _train_repo(tmp_path)
+    (tmp_path / "repo" / "a").write_text("b\n")
+    git("commit", "-q", "-am", "change")
+    git("push", "-q", "origin", "HEAD:main")
+    assert train("HEAD", "vy-x").returncode == 0 and "--priority" in argv.read_text().split()
+    p = train("HEAD", "vy-x", "--agreement", TRAIN_ORDINARY="1", TRAIN_QUIET="1")
+    args = argv.read_text().split()
+    assert p.returncode == 0 and "--priority" not in args and {"--record", "--keep-going", "--agreement"} <= set(args), args
+
+    (tmp_path / "origin.git").rename(tmp_path / "gone.git")
+    p = train("HEAD", "vy-x", TRAIN_ORDINARY="1", TRAIN_QUIET="1")
+    assert p.returncode == 1 and "git fetch origin failed" in p.stderr and not (tmp_path / "posted").exists(), p.stderr
+    p = train("HEAD", "vy-x")
+    assert p.returncode == 1 and "git fetch origin failed" in (tmp_path / "posted").read_text()
 
 
 def test_train_sh_takes_a_restack_by_merge_head_and_refuses_one_with_mains_tree(tmp_path):

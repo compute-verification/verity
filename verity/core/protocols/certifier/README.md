@@ -82,11 +82,11 @@ uv run network-certifier-calibrate trace.json --ingress-bucket-ms 100
 
 ## Not yet zero-knowledge
 
-Every protocol is to be zero-knowledge, and the network audit isn't yet. Nothing may call it zero-knowledge until both
-of these gaps are closed:
-- **N2's grid comparison.** `service.LinkWindows.verify` compares each certified egress digest with the Program's grid
-  in the clear (`check_link` with `grid` on), and that reads witness. It goes once N3 runs on every link-window
-  (NET-38): N2 then switches to `check_link(grid=False)`.
+Every protocol is to be zero-knowledge, and the network audit isn't yet. Its claim today is counts only: N2 holds each
+window's per-bucket counts to the occupancy profile on every link-window, beside the proved timing bound, while N3, the
+content check, is the design (Daniel's provisional call on ASK-70, 19 Oct). N2 no longer compares the grid in the clear
+(`LinkWindows.verify` runs `check_link(grid=False)`, NET-38). Nothing may call the count check zero-knowledge until
+these are closed:
 - **The certificate's signature check.** The certificate signs an unsalted digest of the record head, which holds its
   counts and an unsalted root of the raw frames. The host checks that signature, so it reads a hash of witness. The fix
   is NET-42:
@@ -94,5 +94,8 @@ of these gaps are closed:
     per record and handed to the prover as witness only;
   - the head-check unit proves `R = H(head)` and that `H(salt_c ‖ R)` is the signed digest;
   - the host's LMS check then reads only public fields and that hiding digest.
+- **N2's unit isn't proved yet.** `LinkWindows.verify`, the verifier of record, runs `head_check.reference` on the
+  host over the opening, so it reads the heads. When the unit is proved, its head-check gate must bind
+  `NetworkHeadCheck_v1`'s circuit digest, and the verifier must refuse a proof of any other circuit (NET-43).
 
 Tests: `uv run tools/verity/check/suites.py verity/core/protocols/certifier`.

@@ -41,9 +41,13 @@ without `--rec-inner` (`Flock.RecSetup.fullDraw`, PROTOCOL.md).
 
 ~~~text
 cd verity/core/service/flock && lake build          # .lake/build/bin/flock-verify
-flock-verify verify [--statement ID] [--archive DIR] --circuit F [--comp comp.rows] --public pub.bin [--tables DIR] [--coins seed|os] --session DIR...
+flock-verify verify [--statement ID] [--archive DIR] --circuit F [--comp comp.rows] --public pub.bin [--tables DIR] [--coins seed|os] [--upstream-plain] --session DIR...
 flock-verify statement [--statement ID] --circuit F [--comp comp.rows] --public pub.bin [--tables DIR] [--coins seed|os]   # digest, Σ, Hello
 ~~~
+
+Each plain proof file is taken in one form (PROTOCOL.md §8.1): by default the deployed prover's, the zk patch's build,
+which writes a `zk_level0 = None` byte after the pair; `--upstream-plain` takes upstream's builds' form, without it, as
+the agreement job's sessions from upstream's binaries are. Each refuses the other.
 
 `ID` names a version:
 - `verity/flock-circuit`: the default, and the statement M0 stages today: `@967b8d06`'s with every output a hidden row

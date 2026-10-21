@@ -15,7 +15,10 @@ v1 session and inside a period of its lane, then a close, log or ledger entry ed
 another key, a ledger signed under its own key, one cut before the session's end, a second session for the window, a v1
 window, a v1 entry after a v2, a record leaf outside its session, an entry's or used twice, a period named twice, past
 its cap, committing no cap or circuit or closing with other windows, a record on another host or at another leaf, a log
-or refused hellos the ledger didn't seal, infra's published heads forked, each malformed form. Each piece answers
+or refused hellos the ledger didn't seal, infra's published heads forked, each malformed form. The pins log's
+(`PINNED`) are a session whose open seals the host's pins log and pins its commit, then a commit off main or pinned
+after the open, no pins log, a malformed one or line, one cut or with a sealed line edited, and an open sealing
+none. Each piece answers
 ``{"refused": why}`` where the challenger refuses, so the reasons are compared too.
 """
 
@@ -574,6 +577,25 @@ def session(j: Any) -> Any:
         c, roots = Ch.trusted_session_of(j["ledger"], j["window"], Ch.ChallengerKey.from_json(j["key"]), j["session"],
                                          lms_verify)
         return {"commitment": c.to_json(), "roots": _roots(roots)}
+    return _refusing(go)
+
+
+def credited(j: Any) -> Any:
+    _request(j, ["descriptor", "key", "ledger", "window"])
+    d = _hex(j["descriptor"])
+
+    def go():
+        return Ch.credited_session(j["ledger"], j["window"], Ch.ChallengerKey.from_json(j["key"]), d,
+                                   lms_verify)._asdict()
+    return _refusing(go)
+
+
+def pinned(j: Any) -> Any:
+    _request(j, ["key", "ledger", "pins", "window"])
+
+    def go():
+        return Ch.pinned_session(j["ledger"], j["window"], Ch.ChallengerKey.from_json(j["key"]), j["pins"],
+                                 lms_verify)._asdict()
     return _refusing(go)
 
 
@@ -1319,6 +1341,109 @@ def session_case(rng: random.Random, name: str) -> Any:
     return j
 
 
+CREDITED_NAMES = ["honest", "other-circuit", "descriptor-edited", "no-period", "ledger", "descriptor-form"]
+
+
+def _descriptor(rng: random.Random) -> bytes:
+    """A declared window Program's descriptor as the verifier holds it (canonical JSON), or bytes of any kind."""
+    if rng.random() < 0.3:
+        return rng.randbytes(rng.choice([1, 64, 1000]))
+    calls = [{"module": f"model.layers.{i}.mlp", "k": rng.choice([4096, 14336])} for i in range(rng.randint(0, 6))]
+    return canonical_json_text({"calls": calls, "root": "RemoteWindow", "schema": "verity-program/v1"}).encode()
+
+
+def credited_case(rng: random.Random, name: str) -> Any:
+    """A window in its lane's period whose circuit is the SHA-512 of the descriptor the verifier holds; then a period
+    committing another circuit, the descriptor edited, the window in no period, a refused ledger, a descriptor not hex."""
+    if name == "ledger":
+        j = ledger_case(rng, rng.choice(LEDGER_NAMES[1:]))
+        if isinstance(j, dict):
+            j["descriptor"] = _descriptor(rng).hex()
+        return j
+    s = _ledger_session(rng)
+    lg = Ledger(rng, s, period=rng.choice(["open", "closed"]))
+    d = _descriptor(rng)
+    lg.period_open["circuit"] = rng.choice(CIRCUITS) if name == "other-circuit" else hashlib.sha512(d).hexdigest()
+    j = {"descriptor": d.hex(), "key": s.key.to_json(), "ledger": lg.lines(), "window": lg.window}
+    match name:
+        case "descriptor-edited":
+            j["descriptor"] = rng.choice([_flip(d.hex(), rng.randrange(len(d))), (d + b"\n").hex(), d[:-1].hex()])
+        case "no-period":
+            j["ledger"] = lg.lines([e for e in lg.events if not e[0].startswith("period")])
+        case "descriptor-form":
+            j["descriptor"] = rng.choice([None, 5, d.hex().upper() + "AB", d.hex() + "0", ["00"]])
+    return j
+
+
+PINNED_NAMES = ["honest", "off-main", "pinned-later", "no-pins", "pins-form", "line-form", "cut", "edited", "no-seal",
+                "ledger", "request"]
+
+
+def _pin_lines(rng: random.Random, n: int) -> list[str]:
+    return [Ch.pin_line(rng.randbytes(20).hex(), rng.randbytes(20).hex(), rng.choice(STARTS)) for _ in range(n)]
+
+
+def pinned_case(rng: random.Random, name: str) -> Any:
+    """A window whose open names its host's pin and seals the first lines of the host's pins log, one of which pins it,
+    the published log those lines and sometimes later pins; then a commit off main or pinned only after the open, no
+    pins log, one of another form or with a malformed line, one cut short of the seal or with a sealed line edited,
+    dropped or moved, an open sealing none or a malformed seal, a refused ledger, a request without a key."""
+    if name == "ledger":
+        j = ledger_case(rng, rng.choice(LEDGER_NAMES[1:]))
+        if isinstance(j, dict):
+            j["pins"] = _pin_lines(rng, rng.randint(1, 3))
+        return j
+    s = _ledger_session(rng)
+    lg = Ledger(rng, s)
+    n = rng.randint(1, 4)
+    pins = _pin_lines(rng, n + rng.choice([0, 0, 1, 2]))
+    at = rng.randrange(n)
+    pins[at] = Ch.pin_line(lg.opened["pinned"], rng.randbytes(20).hex(), rng.choice(STARTS))
+    lg.opened["pins"] = Ch.pins_seal(pins[:n])
+    match name:
+        case "off-main":
+            pins[at] = Ch.pin_line(rng.randbytes(20).hex(), rng.randbytes(20).hex(), rng.choice(STARTS))
+            lg.opened["pins"] = Ch.pins_seal(pins[:n])
+        case "pinned-later":
+            pins[at] = Ch.pin_line(rng.randbytes(20).hex(), rng.randbytes(20).hex(), rng.choice(STARTS))
+            lg.opened["pins"] = Ch.pins_seal(pins[:n])
+            pins.append(Ch.pin_line(lg.opened["pinned"], rng.randbytes(20).hex(), rng.choice(STARTS)))
+        case "no-seal":
+            d = Ch.log_digest(pins[:n])
+            lg.opened["pins"] = rng.choice([
+                DROP, None, {"lines": 0, "sha512": Ch.log_digest([])}, {"lines": True, "sha512": d},
+                {"lines": str(n), "sha512": d}, {**Ch.pins_seal(pins[:n]), "at": 1}, {"lines": n, "sha512": d.upper()},
+                {"lines": n}, [n, d]])
+            if lg.opened["pins"] is DROP:
+                del lg.opened["pins"]
+    j = {"key": s.key.to_json(), "ledger": lg.lines(), "pins": pins, "window": lg.window}
+    match name:
+        case "no-pins":
+            j["pins"] = None
+        case "pins-form":
+            j["pins"] = rng.choice(["\n".join(pins), {"lines": pins}, 5, True])
+        case "line-form":
+            line = pins[rng.randrange(len(pins))]
+            bad = rng.choice([line.replace('"main"', '"Main"'), line.replace(":", ": ", 1), line[:-1] + ',"x":1}',
+                              line.upper(), line[:-2] + '"}', line + " ", 5, None, json.loads(line), "",
+                              line.replace("Z\"", "+00:00\""), line[:12] + line[13:]])
+            j["pins"] = [bad if p == line else p for p in pins]
+        case "cut":
+            j["pins"] = pins[:rng.randrange(n)]
+        case "edited":
+            k = rng.randrange(n)
+            moved = Ch.pin_line(json.loads(pins[k])["commit"], rng.randbytes(20).hex(), rng.choice(STARTS))
+            edits = [pins[:k] + [moved] + pins[k + 1:]]
+            if n > 1:
+                edits.append(pins[:k] + pins[k + 1:])
+                edits.append([pins[(k + 1) % n] if i == k else pins[k] if i == (k + 1) % n else p
+                              for i, p in enumerate(pins)])
+            j["pins"] = rng.choice(edits)
+        case "request":
+            del j[rng.choice(sorted(j))]
+    return j
+
+
 COMMITMENT = D.Port(PIECES, "challenger_commitment", commitment, _cases(commitment_case, COMMITMENT_NAMES),
                     package=PACKAGE, need_rejects=False, of_record="lean")
 OPENING = D.Port(PIECES, "challenger_opening", opening, _cases(opening_case, OPENING_NAMES), package=PACKAGE,
@@ -1340,6 +1465,10 @@ HEAD = D.Port(PIECES, "challenger_head", head, _cases(head_case, HEAD_NAMES), pa
               of_record="lean")
 SESSION = D.Port(PIECES, "challenger_session", session, _cases(session_case, SESSION_NAMES), package=PACKAGE,
                  need_rejects=False, of_record="lean")
+CREDITED = D.Port(PIECES, "challenger_credited", credited, _cases(credited_case, CREDITED_NAMES), package=PACKAGE,
+                  need_rejects=False, of_record="lean")
+PINNED = D.Port(PIECES, "challenger_pinned", pinned, _cases(pinned_case, PINNED_NAMES), package=PACKAGE,
+                need_rejects=False, of_record="lean")
 
 pieces = D.server_fixture(COMMITMENT)
 
@@ -1348,7 +1477,8 @@ RUNS = [(COMMITMENT, commitment_case, COMMITMENT_NAMES, 300), (OPENING, opening_
         (RECORD, record_case, RECORD_NAMES, 200), (TRUSTED, trusted_case, TRUSTED_NAMES, 300),
         (CLOSE, close_case, CLOSE_NAMES, 200), (RELEASED, released_case, RELEASED_NAMES, 300),
         (LEDGER, ledger_case, LEDGER_NAMES, 300), (HEAD, head_case, HEAD_NAMES, 100),
-        (SESSION, session_case, SESSION_NAMES, 300)]
+        (SESSION, session_case, SESSION_NAMES, 300), (CREDITED, credited_case, CREDITED_NAMES, 200),
+        (PINNED, pinned_case, PINNED_NAMES, 200)]
 
 
 @pytest.mark.parametrize("port, make, names, examples", RUNS, ids=[r[0].fn for r in RUNS])

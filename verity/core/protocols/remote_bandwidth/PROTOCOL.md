@@ -15,8 +15,9 @@ input from serving) and `timing.py` (the honest schedule, and where the sketch's
 checks are the specification of what each zero-knowledge proof unit proves on the deployed path (§8). The verifier's
 definition is Lean code, `lean/` (`RemoteAudit`: `verifyWindow`, a window's draw and its openings' checks, and
 `RemoteAudit.Session`, the session's bookkeeping call for call), which `audit.py` mirrors and is held to by
-`lean/tests/`' difftest, comparing every event's result, the outcome and the record; `audit.py` is still the verifier
-of record (`README.md`). The Lean refuses a registration that binds PoUW's tiles.
+`lean/tests/`' difftest, comparing every event's result, the outcome and the record. The Lean is the verifier of
+record, and `audit.py` is the reference that runs beside it (`README.md`). Both refuse a registration that binds PoUW's
+tiles.
 
 ## 1. What an accepted session certifies
 
@@ -144,8 +145,9 @@ session's two ends (§5). The live-coin design needs a trusted floor to be affor
 - **The prover** is the node. It registers a store and runs chained passes (inference reads every weight block and the
   live KV pages once a decode step, topped up with filler reads). It sends each pass's plan with the root of its
   receipts, and opens what the verifier draws.
-- **The challenger** is the auditor's online service. It draws every coin of a session from its own generator, commits
-  to them before the session, and releases each once (`coins.Challenger`).
+- **The challenger** is the proof service's one challenger (`sampled_proofs.challenger`, on the auditor's host through
+  `sampled_proofs.remote` when it is remote). It draws every coin of a session, commits to them before the session,
+  and releases each once, after the root the verifier recorded for it, in a release log it signs (`coins.Coins`).
 - **The verifier** is remote. It holds a secret `source` (for the codec seed) and a clock, keeps the record, and checks.
   In the reference, `audit.Session` is the verifier and drives the challenger.
 
@@ -309,20 +311,31 @@ process ends early, until `--close`. The registry's record holds digests and out
 
 ## 4. The coins and the chained passes
 
-Before a session the challenger draws its \(2W\) coins and commits to them (`coins.py`), and the prover receives the
-commitment before the first coin:
+Before a session the challenger draws its coins and commits to them, one epoch of the proof service's live coins
+(`coins.py`, `sampled_proofs.challenger`), and the prover receives the commitment before the first coin:
 
 ~~~text
-c_k         32 bytes from the challenger's generator; window t's challenge σ_t = c_t, its openings coin c_(W+t)
-x_k         SHA512("verity/remote-bandwidth/coin/v0\0" ‖ c_k)
-value_k     hm96-sha512 tree_leaf(key, commit_string(key, x_k, y_k)), y_k a fresh 192-byte salt, key hm96-sha512's pinned key
-root        frame-v3-sha512 over value_0 … value_(2W−1): CommitmentDomain(SHA512("verity/remote-bandwidth/coins/v0\0" ‖
-            registration digest ‖ u64be session), −1, positions 0 … 2W − 1, "sha512"), schema "verity/remote-bandwidth/coins/v0"
-opening     (k, c_k, y_k, path): checked by the prover against the root (`coin_reason`)
+layout      scheme verity/remote-bandwidth/coins/v1, epoch k (the session's index over its registration), families
+            challenge W, openings W and append A (`coins.APPENDS` unless the session names its own)
+c           64 bytes a coin from the challenger's generator, committed whole (`challenger.live_leaf`, hm96-sha512 under
+            a fresh salt, frame-v3-sha512 over the layout); the audit's coin is its first 32 bytes (`coins.coin`):
+            window t's challenge σ_t is challenge coin t, its openings coin openings coin t, append i's c_a append coin i
+R           SHA512("verity/remote-bandwidth/window/v1\0" ‖ registration digest ‖ u64be k): the session's window
+after       σ_0 after R; σ_t (t ≥ 1) after the last root received when it leaves; window t's openings coin after window
+            t's last root; append i's coin after append i's root
+opening     (epoch, label, index, after, coin, salt, path): checked by the prover against the commitment (`coin_reason`)
 ~~~
 
 The challenger can't choose a coin after seeing a root, and hm96 keeps every coin hidden until it is released. This
-is the construction of PoUW's epoch coins.
+is the construction of PoUW's epoch coins, from the same challenger. Each coin leaves once, after the root the verifier
+recorded for it, and the challenger logs both before the coin leaves its host and signs the log when the session ends.
+The verifier holds that log to its own record (`Session.released_reason`): the commitment it used, the same roots in
+the same order, σ_0 after \(R\), and each window's openings coin after that window's last root, so a coin opened before
+its window's root is refused. On the auditor's host the session is the one window \(\{R\}\) of the auditor's signed
+ledger (`remote.trusted_session`), which opens one challenger session a root, ever, and the window one of the audit's
+period's (`coins.trusted`'s `period`): a session whose coins came from a second challenger session for the same
+(period, registration), or whose window the ledger holds in another period, is refused, so a prover can't run two and
+keep the coins it likes (RT4-INT-17).
 
 The verifier releases \(\sigma_0\) at the session's start (`Session.start`). At window \(t\)'s end it sends the boundary
 message, which is \(\sigma_{t+1}\), or the close after the last window (`Session.boundary`). Each is one-way: no round
@@ -365,7 +378,8 @@ share one even if their previous roots collide.
 The prover sends each root with its pass's plan and its step as the pass ends (`Session.receive`), the plan whole or
 as its change from the session's previous pass's plan (`Plan.changed`: the blocks it adds and removes, the result in
 store order; before the first pass, the registered store's). A pass covers one step \(s\) of the served circuit's
-execution, the engine step, and its plan is the blocks the circuit reads at \(s\) (§8, "The pass and its step"). The
+execution, the engine step, and its plan holds every complete block the circuit reads at \(s\), filler beside them
+allowed (§8, "The pass and its step"). The
 step is public, an integer below \(2^{64}\), and the steps strictly increase over the session's passes, across its
 windows, so no two passes cover one step. A root out of turn rejects with `order`: a window's roots come in index
 order, and a window's first root makes the window before it final. A root with no step, or with a step not above the
@@ -375,12 +389,12 @@ hold or adds one it does, rejects with `plan`.
 **Appends and releases.** Blocks written after the codec seed (KV pages) join the store mid-session. The prover commits
 their payloads in an append tree (`append_tree`: the payload tree's leaves, \(x_j = d_j\), in a frame-v3-sha512 domain
 bound to the registration's digest over the indices it takes) and sends its root and size (`Session.append`). The
-verifier assigns the store's next fresh indices, from \(N\) up, draws the append's coin \(c_a\) from the challenger's
-generator (`Challenger.append_coin`), and replies with the first index and the coin:
+verifier assigns the store's next fresh indices, from \(N\) up, asks the challenger for the append's coin \(c_a\), its
+next append coin, opened after the append's root (`Coins.append`), and replies with the first index and the coin:
 
 ~~~text
 prover → verifier   {"type": "append", "root": hex(append tree's root), "count": n}
-verifier → prover   {"type": "appended", "first": j, "coin": hex(c_a)}      c_a 32 bytes, drawn when the root arrives
+verifier → prover   {"type": "appended", "first": j, "coin": hex(c_a)}      c_a 32 bytes, released after the root arrives
 ~~~
 
 So each block's index, and with \(d_j\) and \(c_a\) its bound key and its encoding (§3), is fixed before any pass whose
@@ -504,7 +518,9 @@ What each kind rests on:
   the guarantee is conservation over one undifferentiated resource, with no identity to bind). Under it \(z\) enters
   before the sketch, \(e = E_j \oplus \text{spread}(z)\), as §8's third rule requires, and XOR with a fixed \(z\)
   permutes each sector, so each sector's fiber is the same. But #1849's digest is of the tile alone, so that form
-  needs #1849 restated over the block and \(z\) together, and it is not part of the stated guarantee.
+  needs #1849 restated over the block and \(z\) together, and it is not part of the stated guarantee. The verifier's
+  registry (`RemoteAudit.Registry.register`, and `audit.Registry.register` beside it) refuses such a registration
+  until its definition covers it.
 
 **Where sketch-sha512's bound is read** (`timing.sketch_reading`, `timing.sketch_failure`, pinned by
 `tests/test_sketch_reading.py`). The field is \(\mathbb{Q}\). The sketch's sums never wrap (\(|\sigma[c]| \le
@@ -702,7 +718,10 @@ before it.)
 
 ## 6. Openings and the accept rule
 
-Window \(t\)'s roots are final once the next window's first root has arrived, or \(D_t\) has passed. A window with
+Window \(t\)'s roots are final once the next window's first root has arrived, or \(D_t\) has passed, or, in a paced
+session (§7, "Pacing"), once it holds its \(k\) roots, past which it takes none, and its boundary has left (so \(D_t\) is
+set): so the challenger's signed log, where
+the openings coin's request names the window's last root, fixes a paced window's end at that root. A window with
 fewer than `min_passes` roots then rejects with `few`. Otherwise the challenger releases the window's openings coin
 \(c_{W+t}\), and the verifier draws \(s\) distinct receipts uniformly from the window's \(U_t\) with it
 (`Session.close`): `derive(c_(W+t), "verity/remote-bandwidth/openings/v0", {registration, window: t}).subset(min(s,
@@ -914,7 +933,7 @@ over them. Until `public()` is trimmed to match (after #2519, which keeps `stale
     committed KV values the circuit wrote to block \(j\), under the layout: each of those values opens under its
     value commitment's root (the vLLM Commit's hiding leaves). So the receipted block is the circuit's KV, not bytes
     the prover chose.
-  - *Output*: the unit's verdict, accepted or §6's failure name, within the 16-bit output limit. The record and
+  - *Output*: the unit's verdict, accepted or §6's failure name, within the 16-bit size class, the least public one. The record and
     `ledger` read only verdicts, and nothing an opening carries leaves the unit.
 
   The formats already hide: payload blocks and receipt leaves are `hm96-sha512/row/v2` leaves under fresh salts, and
@@ -953,9 +972,10 @@ over them. Until `public()` is trimmed to match (after #2519, which keeps `stale
   need it).
 - **The pass and its step.** A pass covers one step \(s\) of the served circuit's execution, which it names with its
   root (§4; for vLLM, the engine step its Store backend tags each pass with). The step is the requirement's (the Lean
-  module `Definitions.Accounting.Requirement` in `Security/`), and the pass's plan is to be the
-  blocks the circuit reads at \(s\), `readBlocks s` (`PlanMatches`). For a store that holds only what the circuit
-  keeps live, that is the store resident when \(s\) begins (`Store.resident s`, under `StoreMatches`): the blocks
+  module `Definitions.Accounting.Requirement` in `Security/`), and the pass's plan is to hold every complete block
+  the circuit reads at \(s\), `blocks (creditedReads s) ⊆ plan` (`PlanMatches`), and may hold others (filler, a
+  gathered table's unselected rows, a paused request's pages). The honest plan is the store resident when \(s\)
+  begins (`Store.resident s`, which holds them under `StoreMatches`): the blocks
   registered or written at a step before \(s\), less those freed or overwritten at one. So a step's memory-map record
   takes effect after the step's reads: its writes are of blocks the step completed, or an earlier step did and the
   device has since encoded (deferred residency, §4), and its frees are of blocks whose values the step read last. A
@@ -964,9 +984,9 @@ over them. Until `public()` is trimmed to match (after #2519, which keeps `stale
   has applied, or before the last pass's, and a record of a step before the last pass's (`memory_map.py`). The step
   is public structure, and the map and the plan are witness. Because the steps strictly increase, a step has at most
   one pass, so its reads are credited at most once; a step with no pass is credited nothing. Open:
-  - *The plan's check.* That a pass's plan is the circuit's reads at its step, block for block, is the plan's proof
-    unit's to check, inside zero knowledge, against the prover's memory map and the circuit's requirement (I4). The
-    verifier here checks only that each pass names a step above the last.
+  - *The plan's check.* That a pass's plan holds every complete block the circuit reads at its step is the plan's
+    proof unit's to check, inside zero knowledge, against the prover's memory map and the circuit's requirement
+    (I4). The verifier here checks only that each pass names a step above the last.
   - *The timing.* The step says which reads a pass stands for, not when serving made them: nothing yet shows that the
     pass at \(s\) ran while serving executed \(s\). A certifier that stamps each step's record and each pass's root
     on one clock would. A prover may run serving ahead of its passes (`Ahead` in `benchmarks/remote_session/prover.py`),
@@ -981,28 +1001,40 @@ over them. Until `public()` is trimmed to match (after #2519, which keeps `stale
 - **The requirement's link.** What the audit credits is the node's reads of its store. Counting them as the served
   circuit's reads needs A1's link (`StoreMatches`, `PlanMatches`, note:20261017T1847Z-draft-a1-requirement), and three
   of its gaps are on the audit's side. `ledger` takes the link as `requirement`, a `RequirementLink`: whether its
-  proofs hold, the density \(D\), the circuit's read bits at each step, and the memory-map unit's verdict on the
-  session's appends and its passes' heads (`mapped`, below). On it, a pass's credit is its credited
-  receipts at \(D\) bits each, at most the circuit's read bits at the pass's step, and the ledger says it is linked
-  (`Ledger.linked`); without it, the credit is the store's, flagged as such. The checks behind the link belong to the
+  proofs hold, the circuit's read bits from complete blocks at each step \(r_s\), and the memory-map unit's verdict
+  on the session's appends and its passes' heads (`mapped`, below). On it, a pass's credit is the circuit's read bits
+  at its step, less a block for each planned block it credits no receipt of (`linked_bits`, by `RequirementMoved`
+  below), and the ledger says it is linked (`Ledger.linked`); without it, the credit is the store's, flagged as
+  such. The checks behind the link belong to the
   units named below, and the ledger takes them as given. Those units are sampled, so the link carries what their draw
   established: \(\varepsilon\), the most share of the linked credit the units it leaves unproved can carry (the
   passes whose plan unit is wrong and those holding a block a wrong memory-map unit wrote), except with
-  probability \(\delta\). The session is credited \((1 - \varepsilon)\sum_\text{passes} \min(nD, r_s)\), a window
+  probability \(\delta\). The session is credited \((1 - \varepsilon)\sum_\text{passes} \max(0, r_s - u_s B)\),
+  \(u_s\) the pass's planned blocks it credits no receipt of (0 when its receipts cover its plan), a window
   its own sum less \(\varepsilon\) of the session's (the unproved share may all be one window's), and \(\delta\) adds
   to the ledger's error (`Ledger.error`, `error_horizon`). That \(\varepsilon\) bounds the unproved credit, not only
   the share of units drawn wrong, is the link's to establish: a wrong unit at a heavy step carries more than its
   share.
   - *Reads the circuit doesn't make.* The plan is the resident set, and the circuit's reads at a step can be fewer: a
-    gather's unselected rows, requests absent from the step's batch, unrouted experts. Their receipts are capped at
-    the circuit's reads at the pass's step (`read_bits`, `requirement.Requirement.read_bits`). That each receipted
-    block is one the circuit reads at that step (`plan = readBlocks s`, so a block of an unread row is in no plan)
-    is the plan unit's to prove (I4), against the memory map and the requirement, inside zero knowledge.
-  - *Partly filled blocks.* A block holding fewer than \(B\) bits of the circuit's values (a request's last block,
-    values of different lifetimes sharing a block) would overstate the credit by \(B/D\) if it counted whole. On the
-    link, a receipt counts \(D\) bits, the fewest any planned block carries. \(D\) is the census's to prove from its
-    layout rule (`Packs`), and \(D = B\) is the rule "full blocks only". The sampling term still charges a whole
-    block for a wrong receipt.
+    gather's unselected rows, requests absent from the step's batch, unrouted experts, filler. `PlanMatches` is
+    one-sided: the plan holds every complete block the circuit reads at the step, and the blocks beyond those carry
+    none of its reads, so a pass is credited the circuit's reads at its step (`read_bits`, its `creditedReadBits`:
+    the bits of `requirement.credited_reads`), never its receipts. That the plan holds every complete block read at
+    its step is the plan unit's to prove (I4: PlanMatch, which proves the plan is exactly the blocks the step reads,
+    or PlanShard, which proves the inclusion over a registered store), against the memory map and the requirement,
+    inside zero knowledge. PlanShard at GAPS > 0 lets a shard's plan leave blocks out and makes each shard's count
+    public, so how many of a shard's blocks each plan holds; at GAPS = 0 every count is its shard's size, and a plan
+    is the whole store.
+  - *Partly filled blocks.* A block holding fewer than \(B\) bits of the circuit's reads (a request's last block,
+    values of different lifetimes sharing a block, a table block with one row selected, filler) would overstate the
+    credit if its receipt counted whole, so the credit counts reads, not receipts (`linked_bits`).
+    `Accounting.Guarantees.RequirementMoved`: under `PlanMatches`, a pass that moved the planned blocks \(M\) moved
+    every bit the circuit reads from complete blocks at its step but at most \(B\) for each planned block outside
+    \(M\). So a pass whose credited receipts cover its plan is credited \(r_s\), and one that credits no receipt of
+    \(u_s\) of its planned blocks (post-seed ones, without the property's verdict) \(\max(0, r_s - u_s B)\). No
+    planned block need carry any of the circuit's bits, and a wrong receipt, a planned block outside \(M\), is what
+    the sampling term charges a whole block for. `PlanMatches` packs the reads into the planned blocks (`Packs`), so
+    \(r_s\) is at most \(L B\), and the ledger refuses a link reading more.
   - *Registered blocks past their last read.* memory-map/v1 frees a registered block like a written one: a free of a
     slot below \(N\) releases it, and no later plan may hold it (`Session.release`). The writer records the free at
     the step that reads the block's values for the last time. That each free is at its values' last read is the

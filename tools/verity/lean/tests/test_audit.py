@@ -27,6 +27,43 @@ def sha(s: str) -> str:
     return hashlib.sha256(s.encode()).hexdigest()
 
 
+#: the functions whose failures make up a report, and where in what each returns its failures are (None: all of it)
+EMITTERS = {"judge": 0, "unreported": None, "dropped": None, "verifier_failures": None, "claim_failures": None,
+            "assumption_records": 1, "shape": None, "spec_reads": None, "scans": None, "listings": 0, "dependency_scans": 0,
+            "assign": 1, "proved": 0, "replay_step": 0, "tests": 0, "run_paths": None}
+
+
+def coded(failures) -> list:
+    """``failures``, each asserted a `Failure` whose code names its check as its text's leading word does."""
+    for f in failures:
+        assert isinstance(f, A.Failure) and f.code, f"a failure without a code: {f!r}"
+        assert f.code.split(".")[0] == f.split(":", 1)[0].replace(" ", "-"), (f.code, str(f))
+    return failures
+
+
+@pytest.fixture(autouse=True)
+def every_failure_has_a_code(monkeypatch):
+    """Every failure any test here provokes, from each function a report's failures come from and from `audit` itself, has a
+    code (`Failure`), and a report lists the codes beside its failures (`failure_codes`)."""
+    def checked(name, f, at):
+        def g(*args, **kw):
+            got = f(*args, **kw)
+            coded(got if at is None else got[at])
+            return got
+        return g
+
+    for name, at in EMITTERS.items():
+        monkeypatch.setattr(A, name, checked(name, getattr(A, name), at))
+    audit = A.audit
+
+    def audited(*args, **kw):
+        rep = audit(*args, **kw)
+        assert rep["failure_codes"] == [f.code for f in coded(rep["failures"])]
+        return rep
+
+    monkeypatch.setattr(A, "audit", audited)
+
+
 def unshaped(rep: dict) -> list[str]:
     """A report's failures other than the shape rule's, for a test of something else that adds guarantees to the control
     without entering them under `shape.properties`."""
@@ -326,6 +363,89 @@ def test_only_record_differences_are_regenerated_and_the_regenerated_record_pass
                                (pol | {"guarantees": {"P.t": pol["guarantees"]["P.t"] | {"owner": "lean"}}}, facts(), FILES),
                                (pol, signed, FILES | {"Scratch": "Scratch.lean"})]:        # a difference beside an orphan
         assert A.regenerated(policy, now, files, A.judge(policy, now, files)[0]) is None
+
+
+def test_every_record_difference_code_is_one_update_settles():
+    """Each code of `RECORD_DIFFERENCE` comes from a record that differs from the build, and `regenerated` writes the record
+    that then passes: what a train commits is the code set, so a code in it that no case provokes fails here."""
+    pol = recorded()
+    group = pol["reads"]["P.Defs"]
+    entry = pol["guarantees"]["P.t"]
+    premised = fact(signature="P.t (n : Nat) (h : P.Premises.Hyp n) : P.f n = n",
+                    hyps=[{"binder": "h", "type": "P.Premises.Hyp n", "closed": False, "named": None, "module": None}])
+    premised["premises"] = [{"binder": "h", "head": "P.Hyp", "module": "P.Assumptions"}]
+    hyp = [{"name": "P.f", "module": "P.Defs", "kind": "def", "hash": "1" * 32, "own": ["P.f.match_1"]},
+           {"name": "P.f.match_1", "module": "P.Defs", "kind": "def", "hash": "2" * 32},
+           {"name": "P.Hyp", "module": "P.Assumptions", "kind": "def", "hash": "8" * 32}]
+    cases = {
+        "guarantees.unrecorded": (POLICY, facts()),
+        "assumptions.unrecorded": (pol | {"assumptions": {"P.Hyp": {"owner": "@lean"}}}, facts()),
+        "assumptions.unlisted-premise": ({**A.judge(POLICY, facts(pins={"P.t": premised}), FILES, update=True)[1],
+                                          "assumptions": {}}, facts(pins={"P.t": premised})),
+        "guarantees.signature": (pol, facts(pins={"P.t": fact(signature="P.t (h : P.Hyp) (n : Nat) : P.f n ≤ n")})),
+        "guarantees.assumptions": (pol | {"guarantees": {"P.t": entry | {"assumptions": []}}}, facts()),
+        "guarantees.type-hash": (pol | {"guarantees": {"P.t": entry | {"type_hash": sha("00000000000000bb")}}}, facts()),
+        "guarantees.reads-new": (pol | {"reads": {m: g for m, g in pol["reads"].items() if m != "P.Defs"}}, facts()),
+        "guarantees.reads-gone": (pol | {"reads": pol["reads"] | {"P.Old": group}}, facts()),
+        "guarantees.reads-changed": (pol, facts(pins={"P.t": fact(reads=[{**hyp[0], "hash": "9" * 32}, *hyp[1:2],
+                                                                          fact()["reads"][2]])})),
+        "guarantees.readers": (pol | {"reads": pol["reads"] | {"P.Defs": group | {"guarantees": ["P.t", "P.u"]}}}, facts()),
+        "guarantees.reads-digest": (pol | {"reads": pol["reads"] | {"P.Defs": group | {"digest": "0" * 64}}}, facts()),
+        "assumptions.digest": (pol, facts(pins={"P.t": fact(reads=hyp)})),
+    }
+    assert set(cases) == A.RECORD_DIFFERENCE
+    for code, (policy, now) in cases.items():
+        fails = A.judge(policy, now, FILES)[0]
+        assert code in {f.code for f in fails} and all(map(A.RECORD_DIFFERENCE.match, fails)), (code, fails)
+        regen = A.regenerated(policy, now, FILES, fails)
+        assert regen is not None and A.judge(regen, now, FILES)[0] == [], code
+
+
+def test_what_settles_is_keyed_on_codes_not_text():
+    """A record difference reworded still settles, and a string that reads like one but has no record-difference code (a
+    bare string, or another check's failure) settles nothing: rewording a message changes nothing a train commits."""
+    now = facts()
+    (unrecorded, *_) = A.judge(POLICY, now, FILES)[0]
+    assert unrecorded.code == "guarantees.unrecorded" and unrecorded.entry == "P.t"
+    reworded = A.Failure(unrecorded.code, unrecorded.entry, "guarantees: P.t is not recorded yet")
+    assert A.regenerated(POLICY, now, FILES, [reworded]) == A.judge(POLICY, now, FILES, update=True)[1]
+    assert A.regenerated(POLICY, now, FILES, [str(unrecorded)]) is None, "the same text without its code settles nothing"
+    lookalike = A.Failure("guarantees.no-owner", "P.t", str(unrecorded))
+    assert A.regenerated(POLICY, now, FILES, [lookalike]) is None
+    assert A.regenerated(POLICY, now, FILES, [reworded, lookalike]) is None
+    assert A.code_of(unrecorded) == "guarantees.unrecorded" and A.code_of(str(unrecorded)) is None
+    import copy
+    back = copy.deepcopy(unrecorded)
+    assert (back, back.code, back.entry) == (unrecorded, unrecorded.code, unrecorded.entry)
+    assert json.loads(json.dumps([unrecorded])) == [str(unrecorded)], "a report holds its failures' text"
+
+
+def test_reports_list_their_failures_codes_beside_them(tmp_path, monkeypatch):
+    """`report.json`'s and `audit.json`'s packages carry `failure_codes`, one per failure in its order, and a train's
+    `--regenerate` moves the codes with the failures it settles (`settled_codes`)."""
+    a = tmp_path / "a"
+    a.mkdir()
+    (a / A.POLICY).write_text("{}")
+    gone = A.Failure("guarantees.reads-gone", "P.Defs", "guarantees: they no longer read P.Defs")
+    orphan = A.Failure("orphan.file", "X.lean", "orphan: X.lean is not imported by the roots (P) nor under `exempt`: nothing "
+                       "builds or audits it")
+
+    def fake(pkg, out, *args, **_):
+        rec = out / f"audit-{pkg.name}" / A.POLICY
+        rec.parent.mkdir(parents=True, exist_ok=True)
+        rec.write_text("{}")
+        return {"package": str(pkg), "seconds": {}, "failures": list(fails)} | (
+            {"regenerated": str(rec)} if all(map(A.RECORD_DIFFERENCE.match, fails)) else {})
+
+    monkeypatch.setattr(A, "audit", fake)
+    out = tmp_path / "out"
+    for fails, flags, codes, settled in (([gone, orphan], [], ["guarantees.reads-gone", "orphan.file"], None),
+                                         ([gone], ["--regenerate"], [], ["guarantees.reads-gone"])):
+        A.main([str(a), *flags, "--out", str(out), "--repo", str(tmp_path)])
+        (rep,) = json.loads((out / "audit.json").read_text())["packages"]
+        assert rep["failure_codes"] == codes and rep.get("settled_codes") == settled
+        assert len(rep["failures"]) == len(rep["failure_codes"])
+    assert A.reported({"failures": [gone, "a bare string"]})["failure_codes"] == ["guarantees.reads-gone", None]
 
 
 def test_a_32_bit_record_is_checked_as_it_is_and_rehashed_by_update():
@@ -1788,7 +1908,7 @@ def test_the_steps_reading_only_the_packages_own_facts_start_before_its_proved_i
     monkeypatch.setattr(A, "facts_of", lambda *a: own)
     monkeypatch.setattr(A, "proved", proved)
     monkeypatch.setattr(A, "replay_step", stub("replay_step", ([], {"checked": 1, "reused": 0})))
-    monkeypatch.setattr(A, "dependency_scans", stub("dependency_scans", (["unchecked: a hit"], 7)))
+    monkeypatch.setattr(A, "dependency_scans", stub("dependency_scans", ([A.Failure("unchecked.dependency", None, "unchecked: a hit")], 7)))
     monkeypatch.setattr(A, "dependency_digests", stub("dependency_digests", {"mathlib": "d1"}))
     monkeypatch.setattr(A, "sibling", lambda name: type("U", (), {"pinned": staticmethod(stub("pinned", ({"x": 1}, [])))}))
     for name, value in (("judge", ([], {})), ("dropped", []), ("spec_reads", []), ("shape", []), ("unread_spec", {}),
@@ -2230,3 +2350,49 @@ def test_a_property_on_a_conjecture_lists_it_and_one_on_a_falsified_conjecture_c
         == [True] * 3, out
     bad["shape"]["conjectures"]["P.Conj"] = {"status": "maybe", "why": "x"}
     assert "has no status" in A.shape(bad, facts)[1]
+
+
+def test_a_dev_cache_run_restores_dependencies_and_is_never_a_verdict(monkeypatch):
+    """`--dev-cache` lets setup.sh and Lake restore the verified build cache (no `LEAN_CACHE=off`, no
+    `LAKE_ARTIFACT_CACHE=false`), so its reports carry the fast path's kind, which `check` and `research merge` refuse:
+    the gate's from-source build is the cache's root of trust and must never read it."""
+    monkeypatch.setattr(A, "ARTIFACTS", None)
+    monkeypatch.setattr(A, "DEV_CACHE", False)
+    env = A.lake_env()
+    assert env["LEAN_CACHE"] == "off" and env["LAKE_ARTIFACT_CACHE"] == "false"
+    monkeypatch.setenv("LEAN_CACHE", "off")
+    monkeypatch.setenv("LAKE_ARTIFACT_CACHE", "false")
+    monkeypatch.setattr(A, "DEV_CACHE", True)
+    env = A.lake_env()
+    assert "LEAN_CACHE" not in env and "LAKE_ARTIFACT_CACHE" not in env
+    spec = importlib.util.spec_from_file_location("lean_changed_under_test", HERE.parent / "lean_changed.py")
+    LC = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(LC)
+    assert A.DEV_KIND == LC.FAST_KIND
+
+
+def test_a_dev_cache_setup_restores_the_packages_required_by_path_too(monkeypatch, tmp_path):
+    """Security/Proofs at the published commit rebuilt 1,607 of its modules with `--dev-cache` (21 Oct), because only its
+    own build was restored: Security and Flock, which it requires by path, were built again, not byte-identically, and
+    everything above them compiled. With `--dev-cache`, setup restores each path dependency's build too, lending one with no fetched dependencies of its own the root's for the restore; without it, or
+    after a failed setup.sh, it restores nothing more."""
+    calls, seen = [], []
+    deps = [tmp_path / "Security", tmp_path / "flock"]
+    (tmp_path / "Proofs" / ".lake" / "packages" / "mathlib").mkdir(parents=True)
+    (tmp_path / "flock" / ".lake" / "packages").mkdir(parents=True)
+
+    def run(argv, cwd, log=None, timeout=0):
+        calls.append(argv)
+        seen.append({d.name: (d / ".lake" / "packages").is_symlink() for d in deps})
+        return 0, ""
+
+    monkeypatch.setattr(A, "run", run)
+    monkeypatch.setattr(A, "path_deps", lambda p: deps)
+    monkeypatch.setattr(A, "DEV_CACHE", True)
+    assert A.dev_restore(tmp_path / "Proofs", 0, "", tmp_path / "setup.log") == (0, "")
+    assert calls == [[A.sys.executable, str(A.TOOL / "cache.py"), "get", *map(str, deps)]]
+    assert seen == [{"Security": True, "flock": False}] and not (deps[0] / ".lake" / "packages").exists()
+    calls.clear()
+    assert A.dev_restore(tmp_path / "Proofs", 2, "x", tmp_path / "setup.log") == (2, "x") and calls == []
+    monkeypatch.setattr(A, "DEV_CACHE", False)
+    assert A.dev_restore(tmp_path / "Proofs", 0, "", tmp_path / "setup.log") == (0, "") and calls == []
