@@ -4,6 +4,7 @@
     st = lib.set([Tab(...), ...])                # one launch set: its device table and buffers, allocated once
     lib.build(st, step)                          # domains, segments, leaves, levels on the current stream; step (1,) int32
     st.root(i)                                   # table i's root: 8 int64 big-endian words, a device view
+    lib.build(lib.union([st, st2]), step)        # both sets in one h1c_build (`Union`), into each set's own buffers
 
 A table's domain is `commit.domain(fields, count, kind)`, with `splice` naming the fields that move with the step (each
 a s + b), so a step's sequence is the same launches with the step read from the device.  Its label is `lab[0]` + str(s)
@@ -192,6 +193,24 @@ class Set:
         return self.level[o:o + 8]
 
 
+class Union:
+    """Sets built as one launch set: their tables in one h1c_build, each table's buffers and root its own set's, so a
+    build of the union writes what the sets' own builds write.  No table's root may go into a union table's levels
+    (h1c_build hashes a set's leaves before any root is written)."""
+
+    def __init__(self, sets: list[Set], dev):
+        self.sets, self.tabs = sets, [t for st in sets for t in st.tabs]
+        self.n = sum(st.n for st in sets)
+        levels = [(st.level.data_ptr(), st.level.data_ptr() + 8 * st.level.numel()) for st in sets]
+        for st in sets:
+            for i in range(st.n):
+                r = st.host[i].root or 0
+                if any(lo <= r < hi for lo, hi in levels):
+                    raise ValueError(f"a table's root goes into a union table's levels ({r:#x}): build those sets apart")
+        self.host = (_Tab * self.n)(*[st.host[i] for st in sets for i in range(st.n)])
+        self.dev = torch.frombuffer(bytearray(bytes(self.host)), dtype=torch.uint8).to(dev)
+
+
 class H1C:
     def __init__(self, path: str, key: bytes, dev=None):
         dev = dev or torch.device("cuda")
@@ -237,7 +256,10 @@ class H1C:
     def set(self, tabs: list[Tab]) -> Set:
         return Set(tabs, self.dev)
 
-    def build(self, st: Set, step: torch.Tensor, domains: bool = True) -> None:
+    def union(self, sets: list[Set]) -> Union:
+        return Union(sets, self.dev)
+
+    def build(self, st: Set | Union, step: torch.Tensor, domains: bool = True) -> None:
         rc = self.lib.h1c_build(C.addressof(st.host), st.dev.data_ptr(), st.n, step.data_ptr(), self.btab.data_ptr(),
                                 int(domains), torch.cuda.current_stream().cuda_stream)
         if rc:
