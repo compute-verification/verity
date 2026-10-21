@@ -74,8 +74,14 @@ routed experts read, since the router's products read the BF16 word it codes (F)
 accumulation chains, the narrowest kv_b's over the 512-wide kv latent (`d = 512`). The lookups are the trained
 embedding's gathers (`V = 163840`). The value reaching the most products is the MoE input: the router's 384 products
 plus 9 × (gate + up) × 2048, so `aOut = 37248`. Merging a version into its value doesn't change this, since the
-products whose key paths reach the version already reach the value. The backward's Dgrad products are counted as
-their own tokens' (`c = 1`), and the merged MoE-output gradient reaches 9 × 2048 = 18432 of them.
+products whose key paths reach the version already reach the value.
+
+With the backward's Dgrad products counted, backward values share their forward token (`c = 2`: a weight's forward
+product and its Dgrad, per token). Each keys into that token's forward values (dk_nope to a q_nope root, dgate to an
+up root), `d` stays 512, and the merged MoE-output gradient reaches 9 × 2048 = 18432 products. Dgrad can't be counted
+as its own tokens' (`c = 1`): a backward-only token has no valid lookup, and even with one, (I) would merge a head's 128
+dk_nope into one value reaching 65536 products, more than `aOut`. Counting Dgrad raises `α₀` from 0.148 to 0.301
+(`kappa.py` at sequence 4096).
 
 Scope, the red team's conditions:
 
@@ -85,6 +91,9 @@ Scope, the red team's conditions:
 * norm-γ and NVFP4 block-scale products are not counted: either kind, keyed into the MoE input, would raise its reach
   past `aOut` (to 37249 and 74112). The counted products are `kappa.py`'s matrix products, 8 routed slots per token,
   without recomputed ones;
+* with Dgrad counted, position 0's dq_rope has 4096 entries on 128 keys, so (I) merges them 32 to a value, reaching
+  49152 products. The W_q_b Dgrad products of 1024 of those entries per layer are not counted (3.8·10⁻⁷ of the counted
+  products), which leaves at most 24 to a value; keeping them takes `aOut = 49152`;
 * with `d ≥ 1`, roots' legs key down to lookups, since every exit of a value is entered by a link and no link ends at an
   input gate, and a lookup's gates come after its column's updated entries. So a model with a frozen embedding has no
   such structure, and the guarantees say nothing about it. -/
@@ -108,7 +117,7 @@ structure Keyed {C : Circuit} {J L : Type*} (M : MulBlocks C J L) (Tok Val : Typ
   act_width : ∀ p ∈ M.P, ∃ H ⊆ C.exits (gates (act p)), f ≤ H.card ∧
     ∀ h ∈ H, ∃ x ∈ M.m p, h ∈ C.pred x ∧ C.ReachesIn (M.m p) x (M.o p)
   /-- At most `c` counted products per token and updated parameter (`c = 1` for the forward pass without weight
-  sharing). -/
+  sharing, `c = 2` with Dgrad on the forward's tokens). -/
   mult_le : ∀ (i : Tok) (l : L) (X : Finset (J × L)), X ⊆ M.P → (∀ p ∈ X, tok (act p) = i ∧ p.2 = l) → X.card ≤ c
   /-- The roots: whole accumulation chains. -/
   roots : Finset Val
