@@ -448,8 +448,129 @@ def test_a_value_is_committed_once_and_the_log_holds_its_root():
     assert R.check(later(8, rec, reg.entry()), prog, Q, **kw, log=[rec]).ok
     assert R.check(later(8, rec, _registered(prog).entry()), prog, Q, **kw, log=[rec]).codes == ("R7-held",)
     v1 = later(8, rec, None)
-    assert R.held_roots([rec, v1]) == {"W": reg.root.hex()} and R.held_roots([v1]) == {}
+    assert R.held_roots([rec, v1]) == {("W", reg.entry()["domain"]): reg.root.hex()} and R.held_roots([v1]) == {}
     assert R.check(later(9, v1, _registered(prog).entry()), prog, Q, **kw, log=[rec, v1]).codes == ("R7-held",)
+
+
+#: two windows' open roots, as the challenger's signed opens name them
+WINDOWS = ("a1" * 64, "b2" * 64)
+#: the window's own rows: x, which a window-independent program registers under the same name every window
+X_ROWS = [[i, 2 * i] for i in range(len(POS))]
+
+
+def _windows(prog: Program, xs, w: G.Registered):
+    """A record per window, each the next's `previous`, registering x's commitment of that window and the weights W."""
+    base, ports = _record(prog, w)
+    out = []
+    for i, x in enumerate(xs):
+        out.append(R.record(prog, Q, LAW, SCHEME, base["roots"], {**SERVED, "row": 7 + i},
+                            previous=R.digest(out[-1]) if out else None, registered=[x.entry(), w.entry()]))
+    return out, {"law": LAW, "scheme": SCHEME, "ports": ports, "registered": {"x": 2, "W": 2}}
+
+
+def test_two_honest_windows_register_the_same_names_under_their_own_roots():
+    """PRF-127 (a), (c): a window-independent program registers x afresh every window under the same name. Without the
+    window's open root R, x's domain is the same in both windows, so R7 holds the second window's x to the first's root
+    and refuses an honest second window (`R7-held`). With R (`window_root`, from the challenger's signed open), x's
+    domain binds its window and both windows are accepted, while W, which the verifier holds across windows (`held`),
+    keeps one window-independent domain and its first root."""
+    prog = _program()
+    d = P.program_digest(prog)
+    w = _registered(prog)
+    plain, kw = _windows(prog, [G.Registered.commit(d, "x", X_ROWS) for _ in WINDOWS], w)
+    assert R.check(plain[0], prog, Q, **kw).ok
+    assert R.check(plain[1], prog, Q, **kw, log=plain[:1]).codes == ("R7-held",)
+    xs = [G.Registered.commit(d, "x", X_ROWS, window=r) for r in WINDOWS]
+    recs, kw = _windows(prog, xs, w)
+    for i, (r, rec) in enumerate(zip(WINDOWS, recs)):
+        assert R.check(rec, prog, Q, **kw, log=recs[:i], window_root=r, held=["W"]).ok
+        assert rec["registered"][0]["domain"] == G.domain(d, "x", 2, len(POS), window=r).domain_id.hex()
+        assert rec["registered"][1]["domain"] == w.entry()["domain"] == G.domain(d, "W", 2, len(TABLE)).domain_id.hex()
+    assert xs[0].entry()["domain"] != xs[1].entry()["domain"] and xs[0].root != xs[1].root
+    # (c) the weights are held across the windows: a second window's W under another root, or under its window's
+    # domain, is refused
+    other = G.Registered.commit(d, "W", TABLE)
+    moved = {**recs[1], "registered": [xs[1].entry(), other.entry()]}
+    assert R.check(moved, prog, Q, **kw, log=recs[:1], window_root=WINDOWS[1], held=["W"]).codes == ("R7-held",)
+    windowed = {**recs[1], "registered": [xs[1].entry(), G.Registered.commit(d, "W", TABLE, window=WINDOWS[1]).entry()]}
+    assert R.check(windowed, prog, Q, **kw, log=recs[:1], window_root=WINDOWS[1], held=["W"]).codes == ("R7-domain",
+                                                                                                         "R7-held")
+    # a verifier that doesn't hold W takes it per window too: then the weights' window-independent entry is refused
+    assert R.check(recs[1], prog, Q, **kw, log=recs[:1], window_root=WINDOWS[1]).codes == ("R7-domain",)
+    # the reads file opens each value under the domain R7 took
+    reads = G.reads_file(prog, Q, {"x": 2, "W": 2}, {"x": xs[1].root.hex(), "W": w.root.hex()}, window=WINDOWS[1],
+                         fixed=["W"])["ports"]
+    assert {p: e["domain"] for p, e in reads.items() if p in ("x", "w")} == {"x": xs[1].entry()["domain"],
+                                                                           "w": w.entry()["domain"]}
+
+
+def test_a_window_replaying_an_earlier_windows_root_is_refused():
+    """PRF-127 (b): a second window that names the first window's x root opens it under no domain R7 takes. Under the
+    first window's domain R7 refuses the entry (`R7-domain`); under its own window's domain the entry passes R7, which
+    holds a per-window value to nothing, but no row of the first window's tree opens that root under the second
+    window's domain, so every registered read of the replayed root is refused (`verify_read`, the Lean verifier's
+    `Flock.Registered` check of each table row against its `--registered` port)."""
+    prog = _program()
+    d = P.program_digest(prog)
+    w = _registered(prog)
+    xs = [G.Registered.commit(d, "x", X_ROWS, window=r) for r in WINDOWS]
+    recs, kw = _windows(prog, xs, w)
+    win = {"window_root": WINDOWS[1], "held": ["W"], "log": recs[:1]}
+    replay = {**recs[1], "registered": [xs[0].entry(), w.entry()]}
+    assert R.check(replay, prog, Q, **kw, **win).codes == ("R7-domain",)
+    renamed = {**recs[1], "registered": [{**xs[0].entry(), "domain": xs[1].entry()["domain"]}, w.entry()]}
+    assert R.check(renamed, prog, Q, **kw, **win).ok
+    first, second = (G.domain(d, "x", 2, len(POS), window=r) for r in WINDOWS)
+    for r in range(len(POS)):
+        assert G.verify_read(first, xs[0].root, r, xs[0].bcs[r], xs[0].path(r))
+        assert not G.verify_read(second, xs[0].root, r, xs[0].bcs[r], xs[0].path(r))
+    port = G.reads_file(prog, Q, {"x": 2, "W": 2}, {"x": xs[0].root.hex(), "W": w.root.hex()}, window=WINDOWS[1],
+                        fixed=["W"])["ports"]["x"]
+    assert port["domain"] == second.domain_id.hex()
+
+
+def _prefixed(prefix: str) -> Program:
+    """The program as a window-dependent path wrote it before the window's root was in the domain: every parameter's name
+    carries its window's prefix."""
+    def sig(S):
+        return ((f"{prefix}x", Array(len(POS), Array(2, Value(8)))),
+                (f"{prefix}W", Array(len(TABLE), Array(2, Value(8))))), Array(len(POS), Value(8))
+
+    return Program(bind(CompositeDefinition("RegisteredTestProgram", 0, (), sig,
+                                            lambda B, S, x, W: coll_concat(sig(S)[1], [B.call(MIX, x[i], W[p])
+                                                                                       for i, p in enumerate(POS)]),
+                                            register=False)))
+
+
+def test_the_window_prefixed_form_still_verifies():
+    """PRF-127 (d): a registration whose names carry their window's prefix is still accepted, with or without the window's
+    root: each window's values are other names, so nothing in the log holds them. (It holds nothing across windows
+    either, the weights included, which is what the window's root in the domain gives back.)"""
+    for windowed in (False, True):
+        log: list = []
+        for i, r in enumerate(WINDOWS):
+            prog, x, w, window_root = _prefixed(f"w{i}/"), f"w{i}/x", f"w{i}/W", r if windowed else None
+            d = P.program_digest(prog)
+            base, ports = _record(prog, G.Registered.commit(d, w, TABLE))
+            rec = R.record(prog, Q, LAW, SCHEME, base["roots"], {**SERVED, "row": 7 + i},
+                           previous=R.digest(log[-1]) if log else None,
+                           registered=[G.Registered.commit(d, x, X_ROWS, window=window_root).entry(),
+                                       G.Registered.commit(d, w, TABLE).entry()])
+            assert R.check(rec, prog, Q, LAW, SCHEME, ports, log=log, registered={x: 2, w: 2}, window_root=window_root,
+                           held=[w] if windowed else None).ok, (i, windowed)
+            log.append(rec)
+
+
+def test_a_window_root_and_held_values_are_the_verifiers_in_one_form():
+    prog = _program()
+    w = _registered(prog)
+    recs, kw = _windows(prog, [G.Registered.commit(P.program_digest(prog), "x", X_ROWS, window=WINDOWS[0])], w)
+    for bad in ("A1" * 64, "a1" * 63, "a1" * 63 + "a\n", 1, b"\xa1" * 64):
+        with pytest.raises(ValueError, match="window root"):
+            R.check(recs[0], prog, Q, **kw, window_root=bad)
+    for bad in (["V"], "W", [1], {"W": 1}):
+        with pytest.raises(ValueError, match="held values"):
+            R.check(recs[0], prog, Q, **kw, window_root=WINDOWS[0], held=bad)
 
 
 def test_a_record_without_registered_values_keeps_v1s_bytes():

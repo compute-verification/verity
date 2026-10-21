@@ -36,8 +36,15 @@
 * **Registered values** (`verity/registration/v2`): the record adds `"registered": [{"value", "root", "leaves", "words",
   "domain"}, ...]` (with `"word_bits"` for a value whose leaves are not 16 bits), the program's weights, constants and
   tables committed once under hiding leaves (`registered`), and R7 holds them to the verifier's own list and to the roots
-  the log's earlier records registered, or to a root the verifier held before the record (`pinned`: weights recorded
-  before the salt). A record registers values exactly when it is v2; v1's bytes are unchanged.
+  the log's earlier records registered under the same domain, or to a root the verifier held before the record
+  (`pinned`: weights recorded before the salt). A record registers values exactly when it is v2; v1's bytes are
+  unchanged.
+* **Per-window values** (`window_root`, `held`): a window-independent program registers its window's values under the
+  same names every window. The verifier takes the window's open root R from the challenger's signed open of the
+  window, never from the record, and every registered value's domain binds R but the ones it holds across windows
+  (`held`, the weights, and its pinned, supplied and output values), so a window's values are held to no earlier
+  window's roots, and a root registered in another window opens under no domain R7 takes. A verifier that names no R
+  takes every domain as before.
 * **Supplied values**: a registered value the verifier fills itself (`supplied`, `registered.supplied_root`: rows of the
   record's roots, positions after the log's, its coin bound to its binding and the record's window and its own bytes,
   under public salts). R7 recomputes its root and refuses a record that names another (`R7-supplied`); it is the
@@ -117,12 +124,14 @@ def digest(rec: Mapping[str, Any]) -> str:
     return hashlib.sha512(tag.encode() + b"\0" + canonical_json(dict(rec))).hexdigest()
 
 
-def held_roots(log: Iterable[Mapping[str, Any]]) -> dict[str, str]:
-    """`{value: root}` for every value an earlier record of the log registered, the root of its first registration."""
-    held: dict[str, str] = {}
+def held_roots(log: Iterable[Mapping[str, Any]]) -> dict[tuple[str, str], str]:
+    """`{(value, domain): root}` for every value an earlier record of the log registered, the root of its first
+    registration under that domain: R7 holds a value to the root registered under the domain it takes now, so a
+    per-window value, whose domain binds its window, is held to none of another window's."""
+    held: dict[tuple[str, str], str] = {}
     for rec in log:
         for e in rec.get("registered") or ():
-            held.setdefault(e["value"], e["root"])
+            held.setdefault((e["value"], e["domain"]), e["root"])
     return held
 
 
@@ -138,7 +147,8 @@ def check(rec: Mapping[str, Any], program: Program, query: Mapping[str, Any], la
           work_table: Mapping[str, Any] | None = None, registered: Mapping[str, int] | None = None,
           supplied: Mapping[str, Any] | None = None, pinned: Mapping[str, str] | None = None,
           binding: Mapping[str, str] | None = None,
-          outputs: Mapping[str, Mapping[str, str]] | None = None) -> Verdict:
+          outputs: Mapping[str, Mapping[str, str]] | None = None, window_root: str | None = None,
+          held: Sequence[str] | None = None) -> Verdict:
     """R1-R7 against the verifier's own copies: its program and query, its law and scheme, the ports its layout derives
     (`{port: {"leaves", "domain"}}`), the digest of its copy of the leaf layer, its anchors, its log of this prover's
     earlier records, the parameters it expects registered (`registered`: `{parameter: words}`), of those the ones it
@@ -151,11 +161,16 @@ def check(rec: Mapping[str, Any], program: Program, query: Mapping[str, Any], la
     program must still be `program`'s, and the population is `query`'s.  R1 holds the registered law to the verifier's own
     law expanded over its program and query (`draw.derive`): for `stratified`, the strata by template descriptor id and
     each stratum's k by the rule; for `work`, also its own `work_table`.  R7 holds the registered values to the verifier's
-    own (`registered_entries`), a pinned value to its pinned root, and a value an earlier record of the log registered to
-    that record's root (`held_roots`): a value is committed once; a supplied value's root is the one it recomputes from
-    this record and the log (`registered.supplied_root`) instead, and an output value's domain and root are its earlier
-    record's port's (`R7-output`, in the values' sorted order before the other R7 codes).  R3 reads `ports` by name, so
-    its codes come in the ports' sorted order whatever order the mapping has, as the Lean port reads them."""
+    own (`registered_entries`), a pinned value to its pinned root, and a value an earlier record of the log registered
+    under the domain it takes now to that record's root (`held_roots`): a value is committed once a domain; a supplied
+    value's root is the one it recomputes from this record and the log (`registered.supplied_root`) instead, and an output
+    value's domain and root are its earlier record's port's (`R7-output`, in the values' sorted order before the other R7
+    codes).  `window_root`: the window's open root R, which the verifier reads from the challenger's signed open of this
+    record's window (never from the record), and which every registered value's domain binds but the ones it holds
+    across windows: `held` (registered values, the weights, say), and its pinned, supplied and output values
+    (`registered.domain`).  So a per-window value registered in one window is held to nothing in the next, and a root of
+    another window's opens under no domain R7 takes.  R3 reads `ports` by name, so its codes come in the ports' sorted
+    order whatever order the mapping has, as the Lean port reads them."""
     c = _Collect()
     v2 = bool(registered)
     sup = G.sources(supplied if supplied is not None else {})
@@ -164,6 +179,7 @@ def check(rec: Mapping[str, Any], program: Program, query: Mapping[str, Any], la
     pins = _pins(pinned, registered or {}, sup)
     outs = _outputs(outputs, registered or {}, sup, pins)
     bound = _binding(binding)
+    window, fixed = _window(window_root, held, registered or {}, sup, pins, outs)
     keys = _KEYS | {"registered"} if v2 else _KEYS
     if not isinstance(rec, Mapping) or set(rec) != keys:
         c.fail("keys", sorted(set(rec) ^ keys) if isinstance(rec, Mapping) else rec)
@@ -238,9 +254,20 @@ def check(rec: Mapping[str, Any], program: Program, query: Mapping[str, Any], la
                 c.fail(f"R6-{k}", {"registered": w.get(k), "verifier": bound[k]})
     # R7
     if v2:
-        _check_registered(c, rec["registered"], program, registered, {**held_roots(earlier), **pins}, rec, sup, earlier,
-                          bound, outs)
+        _check_registered(c, rec["registered"], program, registered, pins, rec, sup, earlier, bound, outs, window, fixed)
     return c.verdict()
+
+
+def _window(window_root: str | None, held: Sequence[str] | None, registered: Mapping[str, int],
+            supplied: Mapping[str, Any], pinned: Mapping[str, str],
+            outputs: Mapping[str, tuple[str, str]]) -> tuple[str | None, tuple[str, ...]]:
+    """The window's open root (`registered.window_root`) and the values whose domain leaves it out: `held`, a list of
+    values it expects registered, then its pinned, supplied and output values; ValueError otherwise, which the Lean
+    verifier refuses too (`OneStage.paramsOfJson`)."""
+    if held is not None and not (isinstance(held, (list, tuple)) and all(isinstance(v, str) and v in registered
+                                                                          for v in held)):
+        raise ValueError(f"held values are a list of registered values: {held!r}")
+    return G.window_root(window_root), (*(held or ()), *pinned, *supplied, *outputs)
 
 
 def _outputs(outputs: Mapping[str, Mapping[str, str]] | None, registered: Mapping[str, int], supplied: Mapping[str, Any],
@@ -307,16 +334,19 @@ def _binding(binding: Mapping[str, str] | None) -> dict[str, str] | None:
     return {"stream": s, "prover": p}
 
 
-def _check_registered(c: _Collect, got: Any, program: Program, values: Mapping[str, int], held: Mapping[str, str],
+def _check_registered(c: _Collect, got: Any, program: Program, values: Mapping[str, int], pinned: Mapping[str, str],
                       rec: Mapping[str, Any], supplied: Mapping[str, Any], log: Sequence[Mapping[str, Any]],
                       binding: Mapping[str, str] | None = None,
-                      outputs: Mapping[str, tuple[str, str]] | None = None) -> None:
+                      outputs: Mapping[str, tuple[str, str]] | None = None, window: str | None = None,
+                      fixed: Sequence[str] = ()) -> None:
     try:
-        mine = G.registered_entries(program, values)
+        mine = G.registered_entries(program, values, window=window, fixed=fixed)
     except ValueError as e:
         c.fail("R7-registered", {"verifier": f"{dict(values)} does not apply: {e}"})
         return
-    held = dict(held)
+    logged = held_roots(log)
+    held = {v: logged[(v, m["domain"])] for v, m in mine.items() if (v, m["domain"]) in logged}
+    held.update(pinned)
     for v, (d, p) in sorted((outputs or {}).items()):
         port = _output_port(log, d, p)
         ok = (port is not None and type(port.get("leaves")) is int and port["leaves"] == mine[v]["leaves"]

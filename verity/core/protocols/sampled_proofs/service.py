@@ -1391,12 +1391,12 @@ class Stream:
         else:
             self._windows.setdefault(key, []).append(at)
         for e in logged.get("registered") or ():
-            self._first.setdefault(e["value"], at)
+            self._first.setdefault((e["value"], e["domain"]), at)
 
     def _earlier(self, record: Mapping[str, Any], supplied: Mapping[str, Any] | None = None) -> list[dict[str, Any]]:
         """The records of the log that one-stage's R6 and R7 read for `record`, in log order: the last (R6's `previous`),
         every one whose window may equal `record`'s (R6's window: the same `_window_key`, or none), and each registered
-        value's first registration (R7's held roots, `registration.held_roots`). Both verifiers of record give the same
+        value's first registration under each domain (R7's held roots, `registration.held_roots`). Both verifiers of record give the same
         verdict on them as on the whole log. A record whose window has no key, or that has no window, gets the whole
         log, and so does one whose `supplied` values read a position, which follows every record of the log
         (`registered.log_base`)."""
