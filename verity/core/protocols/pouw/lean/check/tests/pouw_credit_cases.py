@@ -9,26 +9,30 @@ mutation (`CREDIT_NAMES`) aimed at one refusal: a credit bit flipped after the d
 (``changed``, RT4-INT-32's withdrawn verdict), a row changed likewise, a missing or malformed bit, a credited row with no
 z root, the draw root left stale, no draw coin, a coin of another family, and the forms.
 
-A `drawn` case is a draw coin, the draw's stream, registration and receipt, and a window's layout
+A `drawn` case is a draw coin, the draw's stream, registration and receipt, a window's layout
 (`circuit.h1window.program`'s arguments, `layout`): linears at one or two K, called step by step in a shuffled order, so
-each K's stratum has ranges apart. Its mutations break each rule `credit.strata` mirrors from `h1window.program`, the
-coin's and the arguments' forms, and ``budget`` draws at K = `credit.RECORD_K` from a population larger than it (each
-stratum's k_s rounded up, so a unit or two past K).
+each K's stratum has ranges apart, and the committed K the draw is sized at (one to the window's units). Its mutations
+break each rule `credit.strata` mirrors from `h1window.program`, the coin's, the arguments' and K's forms, give a K past
+the window's units, and ``budget`` draws at K = `PLAN_K` from a population larger than it (each stratum's k_s rounded
+up, so a unit or two past K).
 
 An `outcome` case is a `drawn` case's arguments and one accepted proof outcome for each unit the coin draws; its
 mutations drop one (``missing``), reject one (``failed``), repeat one, add an undrawn unit, prove the units of another
 coin the prover chose (``chosen``), and break the forms.
 
-A `window` case is a `credited` case with its layout, one call per manifest row, and an accepted proof of each unit its
-draw coin draws under the served window's arguments; its mutations add a call the manifest lacks, prove units the prover
-chose under its own stream, fail or drop a drawn unit, and pass a `credited` refusal through.
+A `window` case is a `credited` case with its layout, a committed K, one call per manifest row, and an accepted proof of
+each unit its draw coin draws at K under the served window's arguments; its mutations add a call the manifest lacks,
+prove units the prover chose under its own stream, fail or drop a drawn unit, break K's form or give one past the
+window's units, and pass a `credited` refusal through.
 
 A `period` case is one to three such windows in one period of the auditor's ledger (`period-open` committing the SHA-512
-of a circuit's descriptor, each window's session opened and ended, then the `period-close` listing them), presented in
-its close's order, each with that descriptor, a window of no period beside it in the ledger. Its mutations (RT4-INT-42)
-leave the period unclosed or a window incomplete, drop, reorder or add a window, present the window of no period among
-the period's, name a period never opened or no period, forge the ledger, refuse one window, give one window another
-circuit's descriptor (``other-circuit``) or open the period committing no circuit, and break the forms.
+of a circuit's descriptor and the K every window is drawn at, `credit.K_FIELD`, each window's session opened and ended,
+then the `period-close` listing them), presented in its close's order, each with that descriptor, a window of no period
+beside it in the ledger. Its mutations (RT4-INT-42) leave the period unclosed or a window incomplete, drop, reorder or
+add a window, present the window of no period among the period's, name a period never opened or no period, forge the
+ledger, refuse one window, give one window another circuit's descriptor (``other-circuit``) or open the period
+committing no circuit, open it committing no K or a malformed one, commit a K past a window's units, prove one window's
+draw at another K (``other-k``), and break the forms.
 
 An `a_link` case is a window's registered entries, among them one or two A values (``…/a/<K>``) whose trees are frame-v3
 SHA-512 trees (`verity.ml.commitments.merkle.tree_levels`) of `steps` equal blocks, and its round log: each round's
@@ -205,6 +209,23 @@ def layout(rng: random.Random, big: bool = False) -> dict:
     return {"calls": calls, "linears": linears, "m": m, "tile": [r, c]}
 
 
+def units_of(lay: dict) -> int:
+    """The window's units N under `lay`."""
+    ss, why = Cr.strata(lay)
+    assert why is None, why
+    return sum(hi - lo for s in ss for lo, hi in s["units"])
+
+
+def _k(rng: random.Random, lay: dict) -> int:
+    """A committed K the window `lay` can be drawn at: one to its N units."""
+    n = units_of(lay)
+    return rng.choice([1, n, rng.randint(1, n), rng.randint(1, n)])
+
+
+def _bad_k(rng: random.Random) -> object:
+    return rng.choice([0, -1, True, "3", None, [2], Cr.MAX_K + 1])
+
+
 def _draw_args(rng: random.Random) -> dict:
     stream = rng.choice([_hex(rng), "h1/w-3", ""])
     receipt = rng.choice([{"receipts": _hex(rng)}, {}, {"a": "b", "pass": "x y~"}])
@@ -239,9 +260,14 @@ def _break_layout(lay: dict, rng: random.Random, name: str) -> dict:
 def drawn_instance(rng: random.Random, name: str = "honest") -> dict:
     """One `drawn` case: a draw coin's arguments and a window's layout, then mutation `name`."""
     d = {**_draw_args(rng), "layout": layout(rng, big=name == "budget")}
+    d["k"] = PLAN_K if name == "budget" else _k(rng, d["layout"])
     match name:
         case "honest" | "budget":
             pass
+        case "k-form":
+            d["k"] = _bad_k(rng)
+        case "k-past-units":
+            d["k"] = units_of(d["layout"]) + rng.randint(1, 5)
         case "coin-form":
             d["coin"] = rng.choice([None, d["coin"][:-2], d["coin"].upper(), 5])
         case "args-form":
@@ -251,13 +277,15 @@ def drawn_instance(rng: random.Random, name: str = "honest") -> dict:
                                  ("receipt", {"a": "é"})])
             d[k] = bad
         case _:
-            d["layout"] = _break_layout(d["layout"], rng, name)
+            d["layout"], d["k"] = _break_layout(d["layout"], rng, name), 1
     return d
 
 
+#: `circuit.plan.RECORD_K`, the K a period commits for ε = 0.1% at δ = 2⁻⁴⁰
+PLAN_K = 27_713
 DRAWN_NAMES = ["budget", "coin-form", "args-form", "layout-form", "named-twice", "unknown-linear", "uncalled", "slot", "kn",
-               "blocks"]
-DRAWN_KEYS = ("coin", "stream", "registration", "receipt", "layout")
+               "blocks", "k-form", "k-past-units"]
+DRAWN_KEYS = ("coin", "stream", "registration", "receipt", "layout", "k")
 
 
 def _proofs(rng: random.Random, units: list[int]) -> list[dict]:
@@ -292,6 +320,7 @@ def _partial(rng: random.Random) -> tuple[dict, list[int]]:
     """A draw whose coin leaves some of the window's units undrawn, and its units."""
     while True:
         d = {**_draw_args(rng), "layout": layout(rng)}
+        d["k"] = _k(rng, d["layout"])
         units, _ = Cr.drawn(*(d[k] for k in DRAWN_KEYS))
         if len(units) < sum(hi - lo for s in Cr.strata(d["layout"])[0] for lo, hi in s["units"]):
             return d, units
@@ -305,6 +334,7 @@ def outcome_instance(rng: random.Random, name: str = "honest") -> dict:
         chosen, _ = Cr.drawn(*(other[k] for k in DRAWN_KEYS))
         return {**d, "proofs": _proofs(rng, chosen if chosen != units else units[1:] + [max(units) + 1])}
     d = {**_draw_args(rng), "layout": layout(rng)}
+    d["k"] = _k(rng, d["layout"])
     units, _ = Cr.drawn(*(d[k] for k in DRAWN_KEYS))
     proofs = _proofs(rng, units)
     return {**d, "proofs": proofs if name == "honest" else _mutate_proofs(proofs, rng, name, units)}
@@ -314,22 +344,23 @@ OUTCOME_NAMES = ["missing", "failed", "twice", "undrawn", "chosen", "proofs-form
 OUTCOME_KEYS = (*DRAWN_KEYS, "proofs")
 
 
-def _served_units(d: dict, stream: str | None = None) -> list[int]:
-    """The units `d`'s draw coin draws under the served window's arguments (`credit.window`'s), or under `stream`."""
+def _served_units(d: dict, stream: str | None = None, k: int | None = None) -> list[int]:
+    """The units `d`'s draw coin draws at its K (or `k`) under the served window's arguments (`credit.window`'s), or
+    under `stream`."""
     coin = d["draw"]["coin"]["coin"]
     got, why = Cr.drawn(coin, d["window"]["root"] if stream is None else stream, d["draw"]["root"],
-                        {"receipts": d["draw"]["receipts"]}, d["layout"])
+                        {"receipts": d["draw"]["receipts"]}, d["layout"], d["k"] if k is None else k)
     assert why is None, why
     return got
 
 
 def honest_window(rng: random.Random, name: str = "honest", sid: str = "s-1", leaf: int = rc.RECORD_LEAF
                   ) -> tuple[dict, rc.Session]:
-    """An honest served window (`honest_credit`) with its layout, one call per manifest row, and an accepted proof of
-    each unit its draw coin draws."""
+    """An honest served window (`honest_credit`) with its layout, a K it can be drawn at, one call per manifest row, and
+    an accepted proof of each unit its draw coin draws at that K."""
     lay = layout(rng)
     d, s = honest_credit(rng, name if name in CREDIT_NAMES else "honest", rows=len(lay["calls"]), sid=sid, leaf=leaf)
-    d["layout"] = lay
+    d["layout"], d["k"] = lay, _k(rng, lay)
     d["proofs"] = _proofs(rng, _served_units(d))
     return d, s
 
@@ -356,6 +387,10 @@ def window_instance(rng: random.Random, name: str = "honest") -> dict:
             d["proofs"] = _mutate_proofs(d["proofs"], rng, name, [])
         case "layout-form":
             d["layout"] = _break_layout(d["layout"], rng, "layout-form")
+        case "k-form":
+            d["k"] = _bad_k(rng)
+        case "k-past-units":
+            d["k"] = units_of(d["layout"]) + rng.randint(1, 5)
         case _ if credit in CREDIT_NAMES:
             _mutate_credit(d, s, credit, rng)
         case _:
@@ -366,10 +401,11 @@ def window_instance(rng: random.Random, name: str = "honest") -> dict:
 
 
 WINDOW_NAMES = ["manifest-count", "chosen", "failed", "missing", "layout-form", "credit-changed", "credit-no-draw",
-                "credit-forged-ledger"]
-WINDOW_KEYS = ("key", "ledger", *Cr.WINDOW_KEYS)
+                "credit-forged-ledger", "k-form", "k-past-units"]
+WINDOW_KEYS = ("key", "ledger", *Cr.WINDOW_KEYS, "k")
 #: `credit.window`'s arguments, in order
-WINDOW_ARGS = ("key", "ledger", "window", "session", "salt", "calls", "served", "rounds", "draw", "layout", "proofs")
+WINDOW_ARGS = ("key", "ledger", "window", "session", "salt", "calls", "served", "rounds", "draw", "layout", "proofs",
+               "k")
 
 
 def window_args(d: dict) -> tuple:
@@ -397,10 +433,26 @@ def period_instance(rng: random.Random, name: str = "honest") -> dict:
     foreign = honest_window(rng, sid="o-1", leaf=4 * n + 3)
     pub = wins[0][1].pub
     descriptor = _descriptor(rng)
+    least = min(units_of(d["layout"]) for d, _s in wins + [foreign])
+    big_k = rng.choice([1, least, rng.randint(1, least)])
+    for d, _s in wins + [foreign]:
+        d["proofs"] = _proofs(rng, _served_units(d, k=big_k))
     ends = [{} for _ in wins]
     if name == "incomplete":
         ends[rng.randrange(n)] = {"complete": False}
-    committed = {} if name == "no-circuit" else {"cap": 4, "circuit": hashlib.sha512(descriptor).hexdigest()}
+    committed = {"cap": 4, "circuit": hashlib.sha512(descriptor).hexdigest(), Cr.K_FIELD: big_k}
+    match name:
+        case "no-circuit":
+            committed = {Cr.K_FIELD: big_k}
+        case "no-k":
+            del committed[Cr.K_FIELD]
+        case "k-form":
+            committed[Cr.K_FIELD] = _bad_k(rng)
+        case "k-past-units":
+            committed[Cr.K_FIELD] = past = min(units_of(d["layout"]) for d, _s in wins) + rng.randint(1, 5)
+            for d, _s in wins:
+                if units_of(d["layout"]) >= past:
+                    d["proofs"] = _proofs(rng, _served_units(d, k=past))
     events = [("period-open", None, {"period": pname, "lane": rc.LANE, "by": rc.LANE, **committed, "pinned": "ab" * 20,
                                      "key_sha512": hashlib.sha512(pub).hexdigest()})]
     for (d, s), end in zip(wins, ends):
@@ -419,8 +471,17 @@ def period_instance(rng: random.Random, name: str = "honest") -> dict:
     out = {"key": wins[0][0]["key"], "ledger": ledger, "name": pname}
     i = rng.randrange(n)
     match name:
-        case "honest" | "incomplete" | "no-close" | "forged-ledger" | "no-circuit":
+        case "honest" | "incomplete" | "no-close" | "forged-ledger" | "no-circuit" | "no-k" | "k-form" | "k-past-units":
             pass
+        case "other-k":
+            d = wins[i][0]
+            n = units_of(d["layout"])
+            other = rng.choice([k for k in (big_k - 1, big_k + 1, rng.randint(1, n)) if 1 <= k <= n and k != big_k]
+                               or [None])
+            if other is None:
+                windows[i]["proofs"] = windows[i]["proofs"][1:]
+            else:
+                windows[i]["proofs"] = _proofs(rng, _served_units(d, k=other))
         case "missing":
             del windows[i]
         case "order":
@@ -457,7 +518,8 @@ def period_instance(rng: random.Random, name: str = "honest") -> dict:
 
 
 PERIOD_NAMES = ["no-close", "incomplete", "missing", "order", "extra", "foreign", "unopened", "name", "window-refused",
-                "windows-form", "forged-ledger", "key-form", "other-circuit", "no-circuit", "descriptor-form"]
+                "windows-form", "forged-ledger", "key-form", "other-circuit", "no-circuit", "descriptor-form", "no-k",
+                "k-form", "k-past-units", "other-k"]
 PERIOD_KEYS = ("key", "ledger", "name", "windows")
 
 

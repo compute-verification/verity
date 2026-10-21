@@ -14,8 +14,14 @@ reference of the Lean `PouwCheck.Credit` (`lean/check`), held to it by the difft
   (`core_check.work_units`), over the window's own units. The window's layout is its Program's,
   ``h1window.program(linears, calls, m, tile)``, and its units are in that Program's order: call by call, each call's
   tiles row block major. There is one stratum per template, that is per K (`strata`), each unit's work its tile's
-  R·C·K served MACs, at K = min(`RECORD_K`, N) (`law`). The served window's arguments are fixed (`window`): the stream
-  is the window's root, the registration its draw root, and the receipt ``{"receipts": …}``, its last round's receipts.
+  R·C·K served MACs, at the K its period's open committed (`law`). The served window's arguments are fixed (`window`):
+  the stream is the window's root, the registration its draw root, and the receipt ``{"receipts": …}``, its last
+  round's receipts.
+* **K is committed, and ε is what it established** (`committed_k`, `established`): K is the proof service's selection,
+  committed in the period-open (`K_FIELD`, in the auditor's signed ledger beside the period's circuit and cap) before
+  any window's draw. A period whose open commits none is refused, and so is a window with fewer than K units, whose
+  draw would not be K's. PoUW carries no ε target: `period_credit` reports the ε each window's draw of K established at
+  `DELTA`, `window.eps_at` (`window.k_prime` inverted) at the window's inputs.
 * **No partial credit** (`outcome`): the window is accepted only when every unit the draw coin draws has exactly one
   proof outcome and it is an accept. A drawn unit whose proof failed or is missing refuses the whole window, not only
   its call. A unit with two outcomes is refused, since a retry never reproves, and so is an outcome for a unit the draw
@@ -24,7 +30,8 @@ reference of the Lean `PouwCheck.Credit` (`lean/check`), held to it by the difft
   ledger lists in the period's close, in that order, each opened and ended complete. A period with no close, or with
   a window missing, out of order or not its own, earns nothing, so no window is chosen after the fact. Under
   `period_credit` each window must also prove the circuit the period's open committed (`challenger.credited_session`:
-  the SHA-512 of the descriptor its proofs were verified against), and a refused window refuses its period.
+  the SHA-512 of the descriptor its proofs were verified against) and is drawn at the period's K, and a refused window
+  refuses its period.
 * **The A rows are the round roots'** (`a_link`): each registered A value of the window (a value named ``…/a/<K>``,
   `h1window.roles`) over L rows and S steps is the tree whose rows ``[s·L/S, (s+1)·L/S)`` round s's root commits as
   aligned subtrees. Each round's ``a`` lists, for every A value, its ``[level, index, root]`` subtrees in row order, and
@@ -40,6 +47,7 @@ from __future__ import annotations
 import hashlib
 import json
 import re
+from fractions import Fraction
 from typing import Any
 
 from verity.core.protocols.pouw import core_check as CC
@@ -76,9 +84,13 @@ CHANGED = ("the draw root over the manifest (each call's credit bit among it), i
            "root and coin is not the one root the challenger's log shows its draw coin followed: a credit bit or a call "
            "changed after the draw coin, or the draw opened after another root. Commit every call's credit bit in its "
            "manifest row before the draw root, and never change it after the draw coin")
-#: a served H1 window's draw budget K: `circuit.plan.RECORD_K`, the least K with (1 − ε)^K ≤ δ at ε = 0.1% and
-#: δ = 2⁻⁴⁰ (`plan.record_k`), capped at the window's units
-RECORD_K = 27_713
+#: the period-open's field holding the draw's K, the proof service's selection, committed before any draw
+K_FIELD = "draw_k"
+#: the most a committed K may be
+MAX_K = 1 << 24
+#: the δ the period's ε is reported at
+DELTA = Fraction(1, 1 << 40)
+K_FORM = f"the draw's K is not a positive integer at most 2^24 (the K its period's open committed as {K_FIELD})"
 #: a window's layout: `circuit.h1window.program`'s arguments
 LAYOUT_KEYS = ("calls", "linears", "m", "tile")
 LAYOUT_FORM = ("the window's layout is not {calls, linears, m, tile}, h1window.program's arguments: its calls "
@@ -283,22 +295,43 @@ def strata(layout: Any) -> tuple[list[dict] | None, tuple[str, str] | None]:
     return out, None
 
 
-def law(ss: list[dict]) -> int:
-    """`ss` (`strata`'s) under the work law ``work:k`` at K = min(`RECORD_K`, N), N its units: each stratum's k_s
-    (`core_check.work_k`, over the population's work W = Σ w_s·n_s), set in place. Returns K."""
+def law(ss: list[dict], k: Any) -> tuple[str, str] | None:
+    """`ss` (`strata`'s) under the work law ``work:k`` at the committed K `k`: each stratum's k_s (`core_check.work_k`,
+    over the population's work W = Σ w_s·n_s), set in place; else the refusal (``budget``): `k` isn't a positive integer
+    at most `MAX_K`, or the window has fewer than K units, so its draw would not be K's."""
+    if not (type(k) is int and 1 <= k <= MAX_K):
+        return "budget", K_FORM
     sizes = [sum(hi - lo for lo, hi in s["units"]) for s in ss]
-    k, total = min(RECORD_K, sum(sizes)), sum(s["work"] * n for s, n in zip(ss, sizes))
+    if sum(sizes) < k:
+        return "budget", (f"the window's {sum(sizes)} units are fewer than K = {k}, the K its period committed, so its "
+                          f"draw would not be K's: the proof service commits a K at most every window's units "
+                          f"({K_FIELD} in the period-open)")
+    total = sum(s["work"] * n for s, n in zip(ss, sizes))
     for s, n in zip(ss, sizes):
         s["k"] = CC.work_k(k, s["work"], n, total, s["floor"])
-    return k
+    return None
 
 
-def _drawn(coin: bytes, stream: Any, registration: Any, receipt: Any, ss: list[dict]
+def established(ss: list[dict], k: int) -> Fraction:
+    """The ε a draw of K = `k` under the work law over `ss` establishes at `DELTA`: a wrong set holding a share ε of
+    the window's work W = Σ w_s·n_s goes undrawn with probability at most δ. Stratum s draws k_s >= K·W_s/W of its
+    n_s units (or all of them) without replacement, on its own stream, so it misses its b_s wrong units with
+    probability at most (1 − x_s)^(K·W_s/W),
+    x_s = b_s/n_s; their product is at most (1 − Σ (W_s/W)·x_s)^K = (1 − ε)^K by concavity of the logarithm, the miss
+    of subset:K over W tiles of equal work. So ε is `window.eps_at` at K, δ and those inputs (credited = n = W,
+    w_max = 1)."""
+    total = sum(s["work"] * sum(hi - lo for lo, hi in s["units"]) for s in ss)
+    return Wd.eps_at(k, DELTA, total, total, 1)
+
+
+def _drawn(coin: bytes, stream: Any, registration: Any, receipt: Any, ss: list[dict], k: Any
            ) -> tuple[list[int] | None, tuple[str, str] | None]:
     if not (type(stream) is str and _digest(registration) is not None and isinstance(receipt, dict)
             and all(_printable(x) and _printable(v) for x, v in receipt.items())):
         return None, ("draw", DRAW_ARGS)
-    law(ss)
+    why = law(ss, k)
+    if why is not None:
+        return None, why
     got = CC.work_units(coin, stream, registration, receipt, ss)
     return (None, ("sampler", "the draw's stream ran out")) if got is None else (got, None)
 
@@ -329,37 +362,39 @@ def _proved(drawn: list[int], proofs: Any) -> tuple[str, str] | None:
     return None
 
 
-def drawn(coin: Any, stream: Any, registration: Any, receipt: Any, layout: Any
+def drawn(coin: Any, stream: Any, registration: Any, receipt: Any, layout: Any, k: Any
           ) -> tuple[list[int] | None, tuple[str, str] | None]:
     """The units the draw coin `coin` (its value, a SHA-512 digest in hex) draws from the window `layout` (`strata`)
-    under `law`, ascending (`core_check.work_units` under the stream's digest `stream`, the registration `registration`
-    and its `receipt`), and None; or None and the refusal (``layout``, ``draw`` or ``sampler``, and why)."""
+    under `law` at the committed K `k`, ascending (`core_check.work_units` under the stream's digest `stream`, the
+    registration `registration` and its `receipt`), and None; or None and the refusal (``layout``, ``draw``,
+    ``budget`` or ``sampler``, and why)."""
     ss, why = strata(layout)
     if why is not None:
         return None, why
     c = _digest(coin)
     if c is None:
         return None, ("draw", COIN_FORM)
-    return _drawn(c, stream, registration, receipt, ss)
+    return _drawn(c, stream, registration, receipt, ss, k)
 
 
-def outcome(coin: Any, stream: Any, registration: Any, receipt: Any, layout: Any, proofs: Any) -> tuple[str, str] | None:
+def outcome(coin: Any, stream: Any, registration: Any, receipt: Any, layout: Any, k: Any, proofs: Any
+            ) -> tuple[str, str] | None:
     """None when every unit the draw coin draws from the window (`drawn`, never a list the prover hands in) has exactly
     one outcome in `proofs` (each ``{unit, verdict}``, verdict ``accept`` or ``reject``) and it is ``accept``, and no
     other unit has one; else the refusal (``layout``, ``draw``, ``sampler``, ``outcome``, ``missing`` or ``failed``, and
     why): the whole window is refused, with no partial credit."""
-    got, why = drawn(coin, stream, registration, receipt, layout)
+    got, why = drawn(coin, stream, registration, receipt, layout, k)
     return why if got is None else _proved(got, proofs)
 
 
 def window(key: Any, ledger: Any, window: Any, session: Any, salt: Any, calls: Any, served: Any, rounds: Any, draw: Any,
-           layout: Any, proofs: Any, verify: Ch.Verify) -> tuple[list[int] | None, tuple[str, str] | None]:
+           layout: Any, proofs: Any, k: Any, verify: Ch.Verify) -> tuple[list[int] | None, tuple[str, str] | None]:
     """A served H1 window's credited calls and None, or None and the refusal: `credited` (the credit bits fixed before
     the draw coin, read through the challenger's session), the manifest one row per call of `layout` (``manifest``),
-    and `outcome` of the draw coin `credited` read, under the served window's arguments: the stream is the window's
-    root (``window.root``, the root the auditor's ledger opens its session for), the registration its draw root
-    (``draw.root``, the one root the draw coin followed) and the receipt ``{"receipts": draw.receipts}``, the last
-    round's receipts."""
+    and `outcome` of the draw coin `credited` read at its period's committed K `k`, under the served window's
+    arguments: the stream is the window's root (``window.root``, the root the auditor's ledger opens its session for),
+    the registration its draw root (``draw.root``, the one root the draw coin followed) and the receipt
+    ``{"receipts": draw.receipts}``, the last round's receipts."""
     got, why = credited(key, ledger, window, session, salt, calls, served, rounds, draw, verify)
     if why is not None:
         return None, why
@@ -370,7 +405,7 @@ def window(key: Any, ledger: Any, window: Any, session: Any, salt: Any, calls: A
         return None, ("manifest", f"the manifest's {len(calls)} rows are not the layout's {len(layout['calls'])} calls: "
                                   "each call of the window's Program is one manifest row, in order")
     units, why = _drawn(Ch.LiveOpening.from_json(draw["coin"]).coin, window["root"], draw["root"],
-                        {"receipts": draw["receipts"]}, ss)
+                        {"receipts": draw["receipts"]}, ss, k)
     if why is None:
         why = _proved(units, proofs)
     return (None, why) if why is not None else (got, None)
@@ -426,22 +461,41 @@ def period(key: Any, ledger: Any, name: Any, roots: Any, verify: Ch.Verify) -> t
     return None
 
 
+def committed_k(ledger: list, name: str) -> tuple[int | None, tuple[str, str] | None]:
+    """The K period `name`'s open committed (`K_FIELD`, a positive integer at most `MAX_K`) in the auditor's ledger
+    `ledger`, one `period` has trusted, and None; or None and the refusal (``budget``)."""
+    body = next(e["body"] for e in map(json.loads, ledger)
+                if e["kind"] == "period-open" and e["body"]["period"] == name)
+    k = body.get(K_FIELD)
+    if not (type(k) is int and 1 <= k <= MAX_K):
+        return None, ("budget", f"period {name}'s open commits no draw K ({K_FIELD}, a positive integer at most 2^24), "
+                                "so its windows have no K to be drawn with: the proof service commits K in the "
+                                "period-open, beside its circuit and cap, before any draw")
+    return k, None
+
+
 def period_credit(key: Any, ledger: Any, name: Any, windows: Any, verify: Ch.Verify
-                  ) -> tuple[list[list[int]] | None, tuple[str, str] | None]:
-    """Each window's credited calls, in the close's order, of period `name`, and None; or None and the refusal: the
-    period's windows are exactly its close's (`period`), each window proves the circuit the period's open committed
-    (``circuit``: its ``descriptor``, the bytes in hex of the circuit its proofs were verified against, hashes to it,
-    `challenger.credited_session`), and each window's evidence (``{window, session, salt, calls, served, rounds, draw,
-    layout, proofs}``, as `window` reads it, under the same ledger) is credited by `window`. A refused window refuses
-    the whole period (``circuit`` or ``window``), so a period earns only when every window in it does."""
+                  ) -> tuple[dict | None, tuple[str, str] | None]:
+    """Period `name`'s credit and None, or None and the refusal. The credit is ``{windows, k, delta, eps}``: each
+    window's credited calls in the close's order, the K the period's open committed (`committed_k`), the δ the ε is
+    reported at (`DELTA`), and each window's ε, what its draw of K established (`established`). The period's windows
+    are exactly its close's (`period`), its open committed K (``budget``), each window proves the circuit the period's
+    open committed (``circuit``: its ``descriptor``, the bytes in hex of the circuit its proofs were verified against,
+    hashes to it, `challenger.credited_session`), and each window's evidence (``{window, session, salt, calls, served,
+    rounds, draw, layout, proofs}``, as `window` reads it, under the same ledger) is credited by `window`, drawn at K.
+    A refused window refuses the whole period (``circuit`` or ``window``), so a period earns only when every window in
+    it does."""
     if not (type(windows) is list and all(isinstance(w, dict) and sorted(w) == list(PERIOD_KEYS) for w in windows)):
         return None, ("period", WINDOWS_FORM)
     roots = [w["window"].get("root") if isinstance(w["window"], dict) else None for w in windows]
     why = period(key, ledger, name, roots, verify)
     if why is not None:
         return None, why
+    big_k, why = committed_k(ledger, name)
+    if why is not None:
+        return None, why
     k = Ch.ChallengerKey.from_json(key)
-    out = []
+    out, eps = [], []
     for i, w in enumerate(windows):
         if not (type(w["descriptor"]) is str and _HEX.fullmatch(w["descriptor"])):
             return None, ("circuit", f"window {i} of period {name}: {DESCRIPTOR_HEX}")
@@ -451,12 +505,13 @@ def period_credit(key: Any, ledger: Any, name: Any, windows: Any, verify: Ch.Ver
             return None, ("circuit", f"window {i} of period {name} doesn't count toward it, so the period earns "
                                      f"nothing: {e}")
         got, why = window(key, ledger, w["window"], w["session"], w["salt"], w["calls"], w["served"], w["rounds"],
-                          w["draw"], w["layout"], w["proofs"], verify)
+                          w["draw"], w["layout"], w["proofs"], big_k, verify)
         if why is not None:
             return None, ("window", f"window {i} of period {name} is refused, so the period earns nothing: {why[0]}: "
                                     f"{why[1]}")
         out.append(got)
-    return out, None
+        eps.append(str(established(strata(w["layout"])[0], big_k)))
+    return {"windows": out, "k": big_k, "delta": str(DELTA), "eps": eps}, None
 
 
 def _uint(n: int) -> bytes:
@@ -593,6 +648,7 @@ def a_link(rounds: Any, entries: Any) -> tuple[str, str] | None:
     return None
 
 
-__all__ = ["CALLS_TAG", "CREDIT", "DEPTH", "DRAW_TAG", "LAYOUT_KEYS", "LEVELS", "PERIOD_KEYS", "RECORD_K", "ROUND_TAG",
-           "VERDICTS", "WINDOW_KEYS", "a_link", "calls_root", "cover", "credited", "draw_root", "drawn", "is_a", "law",
-           "merkle_depth", "outcome", "period", "period_credit", "round_root", "strata", "tree_root", "window"]
+__all__ = ["CALLS_TAG", "CREDIT", "DELTA", "DEPTH", "DRAW_TAG", "K_FIELD", "LAYOUT_KEYS", "LEVELS", "MAX_K",
+           "PERIOD_KEYS", "ROUND_TAG", "VERDICTS", "WINDOW_KEYS", "a_link", "calls_root", "committed_k", "cover",
+           "credited", "draw_root", "drawn", "established", "is_a", "law", "merkle_depth", "outcome", "period",
+           "period_credit", "round_root", "strata", "tree_root", "window"]

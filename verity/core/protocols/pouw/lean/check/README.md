@@ -74,20 +74,23 @@ first 32 bytes of `tagged`).
 `credited`: each manifest row (the window's calls in order, `index` 0, 1, …) carries its call's verdict as `credit`, a
 credited row its z table's root (`tables.z`), and the draw root over the rows (`calls_root`), the last round's receipts
 and every round's root and coin must be the one root the challenger's log shows its draw coin followed, read through the
-session the auditor's ledger opens for the window; so a bit changed after the draw coin is refused, and the credited calls
-are the rows whose bit is true. `drawn`: the units the draw coin draws, never a list handed in: `drawCheck`'s rule under
-the law `work:k` (`workUnits`), over the window's layout (`h1window.program`'s arguments, its units the compiled
+session the auditor's ledger opens for the window; so a bit changed after the draw coin is refused, and the credited
+calls are the rows whose bit is true. `drawn`: the units the draw coin draws, never a list handed in: `drawCheck`'s rule
+under the law `work:k` (`workUnits`), over the window's layout (`h1window.program`'s arguments, its units the compiled
 Program's, call by call, each call's tiles row block major), one stratum per K (`strata`), each unit's work R·C·K, at
-K = min(27,713, N) (`law`). `outcome`: the window is accepted only when every unit `drawn` draws has exactly one proof
-outcome and it is an accept; a failed or missing one refuses the whole window. `window` is both on one served window,
-the stream its root, the registration its draw root and the receipt `{"receipts": …}`. `period`: the windows presented
-are exactly those the auditor's ledger lists in the period's close, in its order, and the close is complete, so a period
-with no close or with a window missing, out of order or not its own earns nothing; `periodCredit` also requires each of
-them to prove the circuit the period's open committed (its descriptor's SHA-512,
-`SampledProofs.Challenger.creditedSession`) and credits it (`window`), a refused one refusing the period. `aLink`: each round's root (the one the
-challenger received before that round's coin) is `credit.round_root` of the serving process's own round root and that
-round's rows of every registered A value (`…/a/<K>`) as aligned subtrees (`credit.cover`), and each A value's registered
-root must be the frame-v3 SHA-512 tree over those subtrees and its domain's pads.
+the K its period's open committed (`law`; `committedK` reads `draw_k`, and a window with fewer units than K is refused).
+`established`: the ε that draw established at δ = 2⁻⁴⁰, `PouwWindow.epsAt` (`k_prime` inverted), which `periodCredit`
+reports; PoUW has no ε target. `outcome`: the window is accepted only when every unit `drawn` draws has exactly one
+proof outcome and it is an accept; a failed or missing one refuses the whole window. `window` is both on one served
+window, the stream its root, the registration its draw root and the receipt `{"receipts": …}`. `period`: the windows
+presented are exactly those the auditor's ledger lists in the period's close, in its order, and the close is complete,
+so a period with no close or with a window missing, out of order or not its own earns nothing; `periodCredit` also
+requires each of them to prove the circuit the period's open committed (its descriptor's SHA-512,
+`SampledProofs.Challenger.creditedSession`) and credits it (`window`) drawn at the period's K, a refused one refusing
+the period. `aLink`: each round's root (the one the challenger received before that round's coin) is `credit.round_root`
+of the serving process's own round root and that round's rows of every registered A value (`…/a/<K>`) as aligned
+subtrees (`credit.cover`), and each A value's registered root must be the frame-v3 SHA-512 tree over those subtrees and
+its domain's pads.
 
 The properties are stated in `Security/Properties/Pouw/Check.lean` and proved in
 `Security/Properties/Proofs/Pouw/Check.lean`.

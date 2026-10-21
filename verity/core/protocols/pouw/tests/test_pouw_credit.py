@@ -9,9 +9,12 @@ import random
 import sys
 from pathlib import Path
 
+from fractions import Fraction
+
 import pytest
 
 from verity.core.protocols.pouw import credit as Cr
+from verity.core.protocols.pouw import window as Wd
 from verity.core.protocols.pouw.circuit import plan
 
 PKG = Path(__file__).resolve().parents[1] / "lean/check/tests"
@@ -36,11 +39,14 @@ CREDIT_EXPECT = {
     "forged-ledger": ("coin", "the challenger's session is not trusted"),
 }
 NOT_DRAWN = "has a proof outcome and was not drawn"
+FEWER = "units are fewer than K = "
+NO_K = "commits no draw K (draw_k"
 DRAWN_EXPECT = {
     "coin-form": ("draw", Cr.COIN_FORM), "args-form": ("draw", Cr.DRAW_ARGS), "layout-form": ("layout", Cr.LAYOUT_FORM),
     "named-twice": ("layout", "is named twice"), "unknown-linear": ("layout", "which is no linear of the window"),
     "uncalled": ("layout", "is never called"), "slot": ("layout", "(h1window.slot)"),
     "kn": ("layout", "n whole blocks of the tile's"), "blocks": ("layout", "is read by some call of K"),
+    "k-form": ("budget", Cr.K_FORM), "k-past-units": ("budget", FEWER),
 }
 OUTCOME_EXPECT = {
     "missing": ("missing", "Prove and verify every drawn unit"), "failed": ("failed", "refuses the whole window"),
@@ -52,6 +58,7 @@ WINDOW_EXPECT = {
     "chosen": ("outcome", NOT_DRAWN), "failed": ("failed", "no partial credit"), "missing": ("missing", "no partial credit"),
     "layout-form": ("layout", Cr.LAYOUT_FORM), "credit-changed": ("draw", Cr.CHANGED), "credit-no-draw": ("draw", Cr.NO_DRAW),
     "credit-forged-ledger": ("coin", "the challenger's session is not trusted"),
+    "k-form": ("budget", Cr.K_FORM), "k-past-units": ("budget", FEWER),
 }
 PERIOD_EXPECT = {
     "no-close": ("period", "present the ledger after its close"), "incomplete": ("period", "closed incomplete"),
@@ -63,6 +70,8 @@ PERIOD_EXPECT = {
     "key-form": ("coin", "the verifier's challenger key is malformed"),
     "other-circuit": ("circuit", "prove the period's declared circuit"),
     "no-circuit": ("circuit", "commits no cap or circuit"), "descriptor-form": ("circuit", Cr.DESCRIPTOR_HEX),
+    "no-k": ("budget", NO_K), "k-form": ("budget", NO_K), "k-past-units": ("window", FEWER),
+    "other-k": ("window", "so the period earns nothing"),
 }
 UNTIED = "Register the A value whose rows each round's root committed"
 A_LINK_EXPECT = {
@@ -190,14 +199,15 @@ def _period(name: str, seed: int):
     return Cr.period_credit(*(d[k] for k in cases.PERIOD_KEYS), rc.lms_verify)
 
 
-def test_the_budget_is_the_record_k():
-    """K = min(`RECORD_K`, N): `plan.RECORD_K`, the least K with (1 − ε)^K ≤ δ at ε = 0.1% and δ = 2⁻⁴⁰."""
-    assert Cr.RECORD_K == plan.RECORD_K == plan.record_k(plan.Fraction(1, 1000), plan.Fraction(1, 2 ** 40))
+def test_a_draw_at_the_record_k():
+    """At a committed K = `plan.RECORD_K` (the least K with (1 − ε)^K ≤ δ at ε = 0.1% and δ = 2⁻⁴⁰) over a larger
+    population, the work law draws K units, each stratum's k_s rounded up, so at most one more a stratum."""
+    assert cases.PLAN_K == plan.RECORD_K == plan.record_k(plan.Fraction(1, 1000), plan.Fraction(1, 2 ** 40))
     for seed in range(2):
         got, refused = _drawn("budget", seed)
         ss, _ = Cr.strata(cases.drawn_instance(random.Random(f"budget/{seed}"), "budget")["layout"])
-        assert refused is None and sum(hi - lo for s in ss for lo, hi in s["units"]) > Cr.RECORD_K
-        assert Cr.RECORD_K <= len(got) < Cr.RECORD_K + len(ss) and got == sorted(set(got))
+        assert refused is None and sum(hi - lo for s in ss for lo, hi in s["units"]) > plan.RECORD_K
+        assert plan.RECORD_K <= len(got) < plan.RECORD_K + len(ss) and got == sorted(set(got))
 
 
 @pytest.mark.parametrize("seed", SEEDS)
@@ -208,11 +218,11 @@ def test_the_drawn_units_are_the_draw_coins(seed):
     args = [d[k] for k in cases.DRAWN_KEYS]
     got, refused = Cr.drawn(*args)
     ss, _ = Cr.strata(d["layout"])
-    Cr.law(ss)
+    assert Cr.law(ss, d["k"]) is None
     assert refused is None and got == sorted(set(got))
     for s in ss:
         assert sum(any(lo <= u < hi for lo, hi in s["units"]) for u in got) == s["k"]
-    big = {**d, "layout": cases.layout(random.Random(f"wide/{seed}"), big=True)}
+    big = {**d, "layout": cases.layout(random.Random(f"wide/{seed}"), big=True), "k": 100}
     base, _ = Cr.drawn(*(big[k] for k in cases.DRAWN_KEYS))
     for k, v in (("coin", "ab" * 64), ("stream", "another"), ("registration", "cd" * 64), ("receipt", {"receipts": "x"})):
         assert Cr.drawn(*({**big, k: v}[x] for x in cases.DRAWN_KEYS))[0] != base, k
@@ -247,7 +257,8 @@ def test_a_period_counts_only_closed_and_complete(seed):
     incomplete, missing or out of order, or one of no period among it, it earns nothing."""
     d = cases.period_instance(random.Random(f"honest/{seed}"))
     got, refused = Cr.period_credit(*(d[k] for k in cases.PERIOD_KEYS), rc.lms_verify)
-    assert refused is None and got == [[i for i, row in enumerate(w["calls"]) if row[Cr.CREDIT]] for w in d["windows"]]
+    assert refused is None
+    assert got["windows"] == [[i for i, row in enumerate(w["calls"]) if row[Cr.CREDIT]] for w in d["windows"]]
     for name in ("no-close", "incomplete", "missing", "order", "foreign"):
         assert _period(name, seed)[0] is None, name
 
@@ -258,13 +269,61 @@ def test_a_window_proving_another_circuit_refuses_the_period(seed):
     toward no period (`challenger.credited_session`), so its period earns nothing, though every window is otherwise
     credited; so does a period that committed no circuit."""
     d = cases.period_instance(random.Random(f"other-circuit/{seed}"), "other-circuit")
+    big_k, _ = Cr.committed_k(d["ledger"], d["name"])
     for w in d["windows"]:
-        assert Cr.window(d["key"], d["ledger"], *(w[k] for k in cases.WINDOW_ARGS[2:]), rc.lms_verify)[1] is None
+        args = (w[k] for k in cases.WINDOW_ARGS[2:-1])
+        assert Cr.window(d["key"], d["ledger"], *args, big_k, rc.lms_verify)[1] is None
     got, refused = Cr.period_credit(*(d[k] for k in cases.PERIOD_KEYS), rc.lms_verify)
     assert got is None and refused[0] == "circuit" and "is not" in refused[1] and "the one period" in refused[1]
     assert "doesn't count toward it, so the period earns nothing" in refused[1]
     got, refused = _period("no-circuit", seed)
     assert got is None and refused[0] == "circuit"
+
+
+def _work(layout: dict) -> int:
+    ss, _ = Cr.strata(layout)
+    return sum(s["work"] * sum(hi - lo for lo, hi in s["units"]) for s in ss)
+
+
+@pytest.mark.parametrize("seed", SEEDS)
+def test_the_reported_eps_is_window_samplings_at_the_committed_k(seed):
+    """PoUW carries no ε target: the period's open commits K, and the credit reports the ε that K establishes at
+    `DELTA`, `window.k_prime` inverted at each window's inputs: `window.sampling` at that ε draws no more than K, and at
+    the next grid point down more than K. At K = `plan.RECORD_K` it is at most 0.1%."""
+    d = cases.period_instance(random.Random(f"honest/{seed}"))
+    got, refused = Cr.period_credit(*(d[k] for k in cases.PERIOD_KEYS), rc.lms_verify)
+    big_k, _ = Cr.committed_k(d["ledger"], d["name"])
+    assert refused is None and got["k"] == big_k and got["delta"] == str(Cr.DELTA)
+    grid = Fraction(1, 1 << Wd.EPS_BITS)
+    for w, eps in zip(d["windows"], got["eps"], strict=True):
+        eps, work = Fraction(eps), Wd.Work(0, _work(w["layout"]), _work(w["layout"]))
+        assert eps == Wd.eps_at(big_k, Cr.DELTA, work.credited, work.n, 1)
+        assert Wd.sampling(eps, Cr.DELTA, work, 1)["law"]["k"] <= big_k
+        assert eps == grid or Wd.sampling(eps - grid, Cr.DELTA, work, 1)["law"]["k"] > big_k
+    at_record = Cr.established([{"template": "k64", "units": [[0, 1 << 20]], "work": 64, "floor": 1}], plan.RECORD_K)
+    assert at_record <= Fraction(1, 1000)
+    assert plan.record_k(at_record, Cr.DELTA) <= plan.RECORD_K < plan.record_k(at_record - grid, Cr.DELTA)
+
+
+@pytest.mark.parametrize("seed", SEEDS)
+def test_a_period_open_with_no_k_refuses(seed):
+    """K is the proof service's selection, committed in the period-open before any draw: a period whose open commits
+    none, or a malformed one, earns nothing."""
+    for name in ("no-k", "k-form"):
+        got, refused = _period(name, seed)
+        assert got is None and refused[0] == "budget" and NO_K in refused[1] and "before any draw" in refused[1]
+
+
+@pytest.mark.parametrize("seed", SEEDS)
+def test_a_drawn_count_other_than_k_refuses(seed):
+    """A window is drawn at its period's committed K: one with fewer units than K (its draw would be sized at N, not
+    K) is refused, and so is one whose proofs are of a draw at another K."""
+    got, refused = _window("k-past-units", seed)
+    assert got is None and refused[0] == "budget" and FEWER in refused[1]
+    for name in ("k-past-units", "other-k"):
+        got, refused = _period(name, seed)
+        assert got is None and refused[0] == "window" and "so the period earns nothing" in refused[1], (name, refused)
+    assert FEWER in _period("k-past-units", seed)[1][1]
 
 
 @pytest.mark.parametrize("name", sorted(A_LINK_EXPECT))

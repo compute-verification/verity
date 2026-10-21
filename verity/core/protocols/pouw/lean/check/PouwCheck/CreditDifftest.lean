@@ -32,22 +32,23 @@ def creditOf (j : Json) : Except String Json := do
 def drawnOf (j : Json) : Except String Json := do
   let f := PouwCheck.Difftest.get j
   PouwCheck.Difftest.refusal (fun out => Json.mkObj [("drawn", toJson out)])
-    (Credit.drawn (← f "coin") (← f "stream") (← f "registration") (← f "receipt") (← f "layout"))
+    (Credit.drawn (← f "coin") (← f "stream") (← f "registration") (← f "receipt") (← f "layout") (← f "k"))
 
 def outcomeOf (j : Json) : Except String Json := do
   let f := PouwCheck.Difftest.get j
   PouwCheck.Difftest.refusal (fun _ => Json.null)
-    (Credit.outcome (← f "coin") (← f "stream") (← f "registration") (← f "receipt") (← f "layout") (← f "proofs"))
+    (Credit.outcome (← f "coin") (← f "stream") (← f "registration") (← f "receipt") (← f "layout") (← f "k")
+      (← f "proofs"))
 
 def windowOf (j : Json) : Except String Json := do
   let f := PouwCheck.Difftest.get j
   PouwCheck.Difftest.refusal (fun out => Json.mkObj [("credited", toJson out)])
     (Credit.window (← f "key") (← f "ledger") (← f "window") (← f "session") (← f "salt") (← f "calls")
-      (← f "served") (← f "rounds") (← f "draw") (← f "layout") (← f "proofs"))
+      (← f "served") (← f "rounds") (← f "draw") (← f "layout") (← f "proofs") (← f "k"))
 
 def periodOf (j : Json) : Except String Json := do
   let f := PouwCheck.Difftest.get j
-  PouwCheck.Difftest.refusal (fun out => Json.mkObj [("credited", toJson out)])
+  PouwCheck.Difftest.refusal (fun out => Json.mkObj [("credited", out.toJson)])
     (Credit.periodCredit (← f "key") (← f "ledger") (← f "name") (← f "windows"))
 
 def aLinkOf (j : Json) : Except String Json := do

@@ -320,6 +320,8 @@ def test_credit(pass_server):
                  "period period: period ", "period missing: window #", "period order: window #",
                  "period period: the windows presented run past", "period period: window ", "period window: window #",
                  "period coin: the auditor's ledger is not trusted", "period circuit: window # of period ",
+                 "drawn budget: the draw's K is not",
+                 "drawn budget: the window's # units are fewer than K", "period budget: period ",
                  "the one period", "commits no cap or circuit", "the window's descriptor is not the bytes",
                  "a-link a-link: registered A value h#/w#/a/#'s root is not the tree",
                  "a-link a-link: round #'s root is not over", "don't tile its rows",
