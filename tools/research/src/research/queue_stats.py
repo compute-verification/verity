@@ -12,8 +12,11 @@ ends) and the PR's newest `ready` label at the head that landed:
 
 `--per-pr` reads drive's per-PR shadow instead (`research.drive`, `--per-pr-shadow N`), from its records in drive's state file:
 each PR it sampled in the window (its first check launched there), when its landing commit would have landed and how, and when
-the trains landed it (`shadow_rows`).  Its `first check -> would land` is the per-PR landing's own path with a check slot free;
-`mark -> first check` is the shadow's queue for its N slots, which a per-PR drive with the trains' slots wouldn't have."""
+the trains landed it (`shadow_rows`).  Its `first check's slot -> would land` is the per-PR landing's own path from the moment a
+check slot took its first check (`slot.json`'s `took`).  What comes before it isn't a per-PR drive's: `mark -> first launch` is the
+shadow's queue for its N checks, and `first launch -> its slot` the wait of an ordinary job behind every priority check and in
+turn with lane checks (the shadow never takes a priority slot, ci 21 Oct), where a per-PR drive's checks would have the trains'
+priority."""
 from __future__ import annotations
 
 import json
@@ -163,7 +166,8 @@ def shadow_rows(state: dict, start: datetime, end: datetime) -> list[dict]:
             continue
         wl, ended = rec.get("would_land") or {}, rec.get("ended") or {}
         out.append({"pr": rec["pr"], "head": rec["head"], "outcome": rec["phase"], "ended": ended.get("why"),
-                    "marked": _at(rec.get("marked")), "sampled": sampled, "would_land": _at(wl.get("at")),
+                    "marked": _at(rec.get("marked")), "sampled": sampled, "took": _at(rec.get("took")),
+                    "would_land": _at(wl.get("at")),
                     "full": _at(wl.get("full_at")), "via": wl.get("via"), "revert": wl.get("revert") or rec.get("revert"),
                     "landed": _at(ended.get("at")) if ended.get("why") == "landed" else None,
                     "checks": len(rec.get("checks") or []), "plans": [p.get("result") for p in rec.get("plans") or []],
@@ -172,9 +176,10 @@ def shadow_rows(state: dict, start: datetime, end: datetime) -> list[dict]:
 
 
 SHADOW_SPANS = {"would_land": ("marked", "would_land", "ready mark -> would land"),
-                "path": ("sampled", "would_land", "  first check -> would land (drive's rule)"),
-                "whole": ("sampled", "full", "  first check -> whole check passed"),
-                "queue": ("marked", "sampled", "  mark -> first check (the shadow's own N slots)"),
+                "path": ("took", "would_land", "  first check's slot -> would land (drive's rule)"),
+                "whole": ("took", "full", "  first check's slot -> whole check passed"),
+                "queue": ("marked", "sampled", "  mark -> first launch (the shadow's own N checks)"),
+                "slot": ("sampled", "took", "  first launch -> its slot (an ordinary job's wait)"),
                 "trains": ("marked", "landed", "the same PRs: ready mark -> landed by the trains")}
 
 
@@ -185,7 +190,7 @@ def shadow_summary(rs: list[dict]) -> dict:
         out["spans"][k] = {"n": len(vals), "median_h": statistics.median(vals), "p90_h": p90(vals)} if vals else {"n": 0}
     for k in ("would-land", "failed", "conflict", "queued", "checking", "planning"):
         out[k] = sum(r["outcome"] == k for r in rs)
-    out["under_1h"] = sum(1 for r in rs if (h := _hours(r["sampled"], r["would_land"])) is not None and h < 1)
+    out["under_1h"] = sum(1 for r in rs if (h := _hours(r["took"], r["would_land"])) is not None and h < 1)
     out["rechecked"] = sum(r["checks"] > 1 for r in rs)
     out["would_revert"] = sum(bool(r["revert"]) for r in rs)
     plans = [x for r in rs for x in r["plans"]]
@@ -202,13 +207,13 @@ def shadow_render(s: dict, rs: list[dict], start: datetime, end: datetime) -> st
         v = s["spans"][k]
         lines.append(f"{name:52} " + (f"median {v['median_h']:5.2f} h  p90 {v['p90_h']:5.2f} h  (n={v['n']})" if v["n"] else
                                       "no data"))
-    lines.append(f"would land within 1 h of its first check: {s['under_1h']}; checked more than once: {s['rechecked']}; a "
+    lines.append(f"would land within 1 h of its first check's slot: {s['under_1h']}; checked more than once: {s['rechecked']}; a "
                  f"deferred step failed after it passed drive's rule (a revert): {s['would_revert']}")
     if s["plans"]:
         lines.append("plans on a moved `main`: " + ", ".join(f"{n} {k}" for k, n in s["plans"].items())
                      + f" ({s['plan_refusals_naming_lean_audit']} refusal(s) name a lean-audit part)")
     for r in sorted(rs, key=lambda r: r["sampled"]):
-        h = _hours(r["sampled"], r["would_land"])
+        h = _hours(r["took"], r["would_land"])
         lines.append(f"  #{r['pr']} {r['head'][:8]} {r['outcome']:10} " + (f"{h:5.2f} h " if h is not None else "      ")
                      + f"checks {r['checks']} plans {len(r['plans'])}" + (f" ended {r['ended']}" if r["ended"] else "")
                      + (f": {r['via']}" if r["via"] else ""))

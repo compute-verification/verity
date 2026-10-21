@@ -14,11 +14,12 @@ from datetime import datetime, timezone
 import pytest
 
 from research import merge, queue_stats
-from research.drive import PER_PR_RANK, plan_launch, plan_state, undeferred
+from research.drive import plan_launch, plan_state, undeferred
 from research.queue import main as queue_main
 from test_queue import World, _git
 from test_queue_drive import Harness, _check, _tip
 
+ENV = ("CHECK_SLOT_RANK", "TRAIN_ORDINARY", "TRAIN_QUIET")
 MARKS = {1: "2026-10-20T10:00:00Z", 2: "2026-10-20T11:00:00Z", 3: "2026-10-20T09:00:00Z"}
 
 
@@ -28,16 +29,17 @@ def world(tmp_path):
 
 
 class Shadow(Harness):
-    """The harness with the shadow on (``n`` checks at once), each launch's slot rank recorded, and its plans injected: a plan
-    of COMMIT stays running until `plans[COMMIT]` holds its (state, docs, log tail), and `judged[COMMIT]` is what judging a
-    plan of it says."""
+    """The harness with the shadow on (``n`` checks at once), each launch's train.sh environment recorded, its runs' check slots
+    (`took[RID]`, the `slot.json` a fetch of RID finds) and its plans injected: a plan of COMMIT stays running until
+    `plans[COMMIT]` holds its (state, docs, log tail), and `judged[COMMIT]` is what judging a plan of it says."""
 
     def __init__(self, world: World, monkeypatch, n: int = 2, trains: int = 0, **kw):
         kw.setdefault("marked_at", lambda pr, head: MARKS.get(pr))
         super().__init__(world, monkeypatch, **kw)
         self.d.per_pr_shadow, self.d.max_running, self.d.train_size = n, trains, 1
-        self.d.fetch = lambda rid, names: None
-        self.ranks: dict[str, str | None] = {}
+        self.took: dict[str, str] = {}
+        self.d.fetch = self.fetch
+        self.envs: dict[str, tuple] = {}
         self.planned: list[dict] = []
         self.plans: dict[str, tuple] = {}
         self.judged: dict[str, tuple] = {}
@@ -47,8 +49,16 @@ class Shadow(Harness):
 
     def launch(self, repo, commit, machine, agreement):
         ids = super().launch(repo, commit, machine, agreement)
-        self.ranks[commit] = os.environ.get("CHECK_SLOT_RANK")
+        self.envs[commit] = tuple(os.environ.get(k) for k in ENV)
         return ids
+
+    def fetch(self, rid, names):
+        if rid not in self.took:
+            return None
+        d = self.world.tmp / "fetched" / rid
+        d.mkdir(parents=True, exist_ok=True)
+        (d / "slot.json").write_text(json.dumps({"state": "held", "took": self.took[rid]}))
+        return d, {}
 
     def plan_launch(self, repo, commit, base, runs, machines, out):
         self.planned.append({"commit": commit, "base": base, "runs": runs, "machines": machines})
@@ -78,7 +88,8 @@ def _parents(repo, commit: str) -> list[str]:
 
 def test_ready_prs_get_one_check_each_of_their_merge_onto_main_oldest_mark_first_up_to_the_cap(world, monkeypatch):
     """The shadow's N slots go to the oldest ready marks, each checking exactly `main` merged with that head (pushed as
-    per-pr/N, which train.sh checks out of origin), ranked after every train; the next one starts when a slot frees."""
+    per-pr/N, which train.sh checks out of origin), each an ordinary quiet job (no `--priority`, no rank, no post: it never
+    takes a lane's or a train's slot); the next one starts when one of the N frees."""
     h = Shadow(world, monkeypatch, n=2)
     heads = {n: world.change({f"f{n}.txt": f"{n}\n"}) for n in (1, 2, 3)}
     for n, head in heads.items():
@@ -92,7 +103,7 @@ def test_ready_prs_get_one_check_each_of_their_merge_onto_main_oldest_mark_first
         commit = h.check_of(n)["commit"]
         assert _parents(world.origin, commit) == [main, heads[n]] and h.check_of(n)["main"] == main
         assert _git(world.origin, "rev-parse", f"refs/heads/per-pr/{n}") == commit
-        assert h.ranks[commit] == str(PER_PR_RANK)
+        assert h.envs[commit] == (None, "1", "1")
     assert "CHECK_SLOT_RANK" not in os.environ and h.q.load_state()["drive"]["launched"] == {}
     h.tick()
     assert len(h.launched) == 2                                          # both still run: the cap holds
@@ -131,8 +142,11 @@ def test_a_pass_on_the_main_it_was_built_on_would_land_without_pushing_main_or_e
     assert _git(world.origin, "log", "-1", "--format=%cn", commit) == "research queue per-PR shadow" != \
         _git(world.origin, "log", "-1", "--format=%cn", _tip(world))     # never `next`'s commit, whose attempts are the trains'
     h.clock += 1800
+    h.took[h.check_of(1)["ids"][0]] = "2026-10-20T12:05:00Z"             # when a slot took it, behind the priority checks
     _check(world, monkeypatch, commit)
     assert "1 would land" in h.tick()
+    took = datetime(2026, 10, 20, 12, 5, tzinfo=timezone.utc).timestamp()
+    assert h.rec(1)["took"] == h.check_of(1)["took"] == took
     wl = h.rec(1)["would_land"]
     assert h.rec(1)["phase"] == "would-land" and wl["commit"] == commit and wl["main"] == main and wl["via"].startswith("check r")
     assert wl["at"] - h.rec(1)["sampled"] == 1800 and h.planned == []
@@ -211,6 +225,7 @@ def test_the_shadow_never_touches_next_main_or_the_trains_records(world, monkeyp
     assert trees == plain_trees and [m.pr for m in h.q.chain()] == [m.pr for m in plain.q.chain()] == [1, 2]
     assert len(launched) == len(plain.q.load_state()["drive"]["launched"]) == 2 and set(launched) <= set(chain)
     ours = {h.check_of(n)["commit"] for n in (1, 2)}
+    assert {h.envs[c][1:] for c in launched} == {(None, None)} and {h.envs[c] for c in ours} == {(None, "1", "1")}
     assert not ours & set(launched) and "per_pr" not in plain.q.load_state()["drive"]
     assert _branches(world) == {"main", "next", "per-pr/1", "per-pr/2"} and _branches(plain.world) == {"main", "next"}
     _check(world, monkeypatch, h.check_of(2)["commit"], ("false",))      # the shadow's #2 fails: the trains don't hear of it
@@ -313,7 +328,7 @@ def test_the_plan_job_runs_detached_on_each_machine_until_one_is_fully_passed_an
 
 def _rec(pr: int, marked: float, sampled: float, would: float | None, landed: float | None, **kw) -> dict:
     return {"pr": pr, "head": f"{pr:08d}", "marked": marked, "sampled": sampled, "phase": "would-land" if would else "checking",
-            "checks": [{}] * kw.get("checks", 1), "plans": kw.get("plans", []),
+            "took": kw.get("took", sampled + 900), "checks": [{}] * kw.get("checks", 1), "plans": kw.get("plans", []),
             **({"would_land": {"at": would, "via": "check r", **kw.get("wl", {})}} if would else {}),
             **({"ended": {"at": landed, "why": "landed"}} if landed else {})}
 
@@ -331,7 +346,8 @@ def test_stats_per_pr_reads_the_shadows_records_from_drives_state_file(tmp_path,
     assert sorted(r["pr"] for r in rows) == [1, 2, 3]                    # #4 was sampled before the window
     s = queue_stats.shadow_summary(rows)
     assert s["sampled"] == 3 and s["would-land"] == 2 and s["checking"] == 1 and s["rechecked"] == 1 and s["would_revert"] == 1
-    assert s["spans"]["path"] == {"n": 2, "median_h": 1.25, "p90_h": 2.0} and s["spans"]["trains"]["median_h"] == 7.5
+    assert s["spans"]["path"] == {"n": 2, "median_h": 1.0, "p90_h": 1.75} and s["spans"]["trains"]["median_h"] == 7.5
+    assert s["spans"]["slot"]["median_h"] == 0.25 and s["spans"]["queue"]["median_h"] == 0.75
     assert s["under_1h"] == 1 and s["plans"] == {"passed": 1, "refused": 1} and s["plan_refusals_naming_lean_audit"] == 1
     workdir = tmp_path / "q" / "verity"
     workdir.parent.mkdir(parents=True)
@@ -339,4 +355,5 @@ def test_stats_per_pr_reads_the_shadows_records_from_drives_state_file(tmp_path,
     assert queue_main(["stats", "--per-pr", "--workdir", str(workdir), "--until", "2026-10-22T00:00:00Z"]) == 0
     out = capsys.readouterr().out
     assert "the per-PR shadow sampled 3 PR(s): 2 would land, 0 failed, 0 conflict with `main`, 1 still going" in out
-    assert "first check -> would land (drive's rule)" in out and "median  1.25 h  p90  2.00 h  (n=2)" in out
+    assert "first check's slot -> would land (drive's rule)" in out and "median  1.00 h  p90  1.75 h  (n=2)" in out
+    assert "first launch -> its slot (an ordinary job's wait)" in out

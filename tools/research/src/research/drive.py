@@ -38,8 +38,8 @@ broken before them); a run the machine killed runs again once.
 
 `--per-pr-shadow N` (drive.toml's `per_pr_shadow`, 0 is off) runs the per-PR landing (parallel landing's step 3) in shadow beside
 the trains, to measure it: it lands, ejects and posts nothing, and never touches `next`, `main` or the trains' records.  Each
-ready PR, oldest mark first, while fewer than N of its checks run, gets one check (`train.sh`, ranked after every train's,
-`PER_PR_RANK`) of its landing commit L, `main` merged with its head, pushed as `per-pr/N` (train.sh checks what origin holds).
+ready PR, oldest mark first, while fewer than N of its checks run, gets one check (`train.sh`, as an ordinary quiet job,
+`PER_PR_ENV`) of its landing commit L, `main` merged with its head, pushed as `per-pr/N` (train.sh checks what origin holds).
 A new head restarts only that PR's check.  L would land once its check passes by drive's rule (every step but the deferred
 ones, as a train lands; the whole check too is recorded), when `main` is still the one L was built on; on a moved `main`, the
 new L is planned by its parts' keys (`check.py --plan --packs-only --from` its checks, on the node its check ran on: `plan_launch`,
@@ -66,6 +66,7 @@ from typing import Callable
 
 from .queue import (CHECK_TOOLING, IDENTITY, PR, TOUCHED_LOGS, TOUCHED_REPORT, Member, Queue, QueueError, RemoteSuites, _git,
                     _message, _out, built_on, changed, hold, touched_suites)
+from .runs import SLOT_FILE
 
 #: who hears what drive can't settle (13 Oct: the other Project's lander, its addressee before, acts on none of it)
 CI = "@ci"
@@ -122,8 +123,6 @@ RUN_RE = re.compile(r"^RUN ((?:r20\d{6}-\d{6}-[0-9a-f]{4} ?)+)$", re.M)
 REVERTS_RE = re.compile(r"^This reverts commit ([0-9a-f]{40})", re.M)
 #: the per-PR shadow's branch of a PR's landing commit, which train.sh needs on origin (`--per-pr-shadow`)
 PER_PR_BRANCH = "per-pr/"
-#: its checks' place in a node's slot queue (`slot.py --rank`, below 1,000,000): after every train's, so the trains keep their slots
-PER_PR_RANK = 999_999
 #: its records kept once they end
 PER_PR_DONE = 1000
 #: its landing commits' identity, so none equals a commit of `next`
@@ -158,23 +157,33 @@ def auth_env(auth: tuple[str, ...]) -> dict[str, str]:
 #: what train.sh's check.py passes on as `slot.py --rank`: a train's members above `main` (1 for the lowest), 0 for the post-landing
 #: run, so the train that lands next takes a node's next free check slot (CI-110)
 SLOT_RANK = "CHECK_SLOT_RANK"
+#: the per-PR shadow's checks' train.sh: an ordinary job, no `--priority` or rank, behind every priority check and in turn with
+#: lane checks, so it never takes a lane's or a train's slot; and quiet, posting nothing when a launch registers nothing (ci, 21 Oct)
+PER_PR_ENV = {SLOT_RANK: None, "TRAIN_ORDINARY": "1", "TRAIN_QUIET": "1"}
 
 
 @contextlib.contextmanager
-def slot_rank(rank: int | None):
-    """os.environ with SLOT_RANK set to ``rank`` (unset when None) for a launch's train.sh."""
-    was = os.environ.get(SLOT_RANK)
-    if rank is None:
-        os.environ.pop(SLOT_RANK, None)
-    else:
-        os.environ[SLOT_RANK] = str(rank)
+def launch_env(values: dict[str, str | None]):
+    """os.environ with ``values`` set (a None unset) for a launch's train.sh."""
+    was = {k: os.environ.get(k) for k in values}
+    for k, v in values.items():
+        if v is None:
+            os.environ.pop(k, None)
+        else:
+            os.environ[k] = v
     try:
         yield
     finally:
-        if was is None:
-            os.environ.pop(SLOT_RANK, None)
-        else:
-            os.environ[SLOT_RANK] = was
+        for k, v in was.items():
+            if v is None:
+                os.environ.pop(k, None)
+            else:
+                os.environ[k] = v
+
+
+def slot_rank(rank: int | None):
+    """os.environ with SLOT_RANK set to ``rank`` (unset when None) for a launch's train.sh."""
+    return launch_env({SLOT_RANK: None if rank is None else str(rank)})
 
 
 @contextlib.contextmanager
@@ -1756,7 +1765,7 @@ class Driver:
 
     def _per_pr_check(self, rec: dict, main: str) -> None:
         """Check ``rec``'s landing commit on the current ``main``: build it, push it as its `per-pr/N` branch, and launch
-        `train.sh` on it, ranked after every train (`PER_PR_RANK`)."""
+        `train.sh` on it as an ordinary job that never posts (`PER_PR_ENV`)."""
         n, now = rec["pr"], self.now()
         commit, why = self._per_pr_commit(rec, main)
         if commit is None:
@@ -1772,7 +1781,7 @@ class Driver:
         if p.returncode:
             self._say(f"pushing {branch} was refused ({(p.stderr or p.stdout).strip()[-200:]}); #{n} waits for the next tick")
             return
-        with slot_rank(PER_PR_RANK):
+        with launch_env(PER_PR_ENV):
             ids, tail = self.launch(self.repo, commit, self.on, agreement)
         if not ids:
             self._say(f"#{n}'s check of {commit[:12]} registered no run ({tail[-200:]}); it waits for the next tick")
@@ -1798,7 +1807,20 @@ class Driver:
         if rec["phase"] == "planning":
             self._per_pr_follow_plan(rec, rec["plans"][-1], main)
 
+    def _per_pr_took(self, rec: dict, c: dict) -> None:
+        """When a check slot took ``c``'s run (its `slot.json`'s `took`; of twins, the one that ran), kept on ``c`` and, for its
+        first check, on ``rec``: the shadow's checks wait as ordinary jobs, a wait a per-PR drive's wouldn't have."""
+        for rid in [] if c.get("took") else c["ids"]:
+            got, took = self.fetch(rid, [SLOT_FILE]), None
+            with contextlib.suppress(OSError, ValueError, AttributeError):
+                took = json.loads((got[0] / SLOT_FILE).read_text()).get("took") if got else None
+            if took and (t := _utc(took)) is not None:
+                c["took"] = t
+                rec.setdefault("took", t)
+                return
+
     def _per_pr_follow_check(self, rec: dict, c: dict, main: str) -> None:
+        self._per_pr_took(rec, c)
         n, now, v = rec["pr"], self.now(), self._per_pr_verdict(c)
         if v.state == "running":
             if self.defer and not c.get("ready") and (rid := self._passed_but_deferred(c["ids"])):
