@@ -153,7 +153,8 @@ theorem rowPiece_lt {r : XR} {j : ℕ} {p : ℕ × List (Msg × List HmNets.Lin)
 /-- A round with no tops has no pieces of its own. -/
 theorem topsPiecesAt_empty {r : XR} {rs : Array RecVStar.SchedRound} {j : ℕ}
     (ht : ((rs.getD (j % rs.size) default).2.1).isEmpty = true) : topsPiecesAt r rs j = [] := by
-  simp only [topsPiecesAt, ht, ↓reduceIte]
+  unfold topsPiecesAt
+  rw [if_pos ht]
 
 /-- **A round that commits tops is assembled from parts' pieces**: it has some, its first its first top's, and each is
 a part's, where the later caps are as many as the schedule's tops and V\*'s list holds them before its last statement. -/
@@ -167,7 +168,8 @@ theorem topsPiecesAt_held {r : XR} {rs : Array RecVStar.SchedRound} {j : ℕ} (h
       cases ht
   have he : topsPiecesAt r rs j =
       (List.range ((rs.getD (j % rs.size) default).2.1).size).map (capPieceAt r rs j) ++ rowPiece r j := by
-    simp only [topsPiecesAt, ht, Bool.false_eq_true, ↓reduceIte]
+    unfold topsPiecesAt
+    rw [if_neg (ne_true_of_eq_false ht)]
   rw [he]
   refine ⟨fun h => ?_, fun p hp => ?_⟩
   · have := congrArg List.length h
@@ -189,7 +191,7 @@ theorem topsLen_readX {x : Msg} {r : XR} {rs : Array RecVStar.SchedRound} (h : r
   obtain ⟨vs, hvs, hlen⟩ := readX_statements h
   obtain ⟨_, _, _, _, _, _, A, C, _, _, _, _, _, _, _, K, N, -, hT, rfl⟩ := FlockC3.Reps.list_ok hvs
   rw [hlen, ← topsListed_size hT hrs]
-  simp only [Array.size_append, List.size_toArray, List.length_cons, List.length_nil]
+  simp only [Array.size_append, Array.size_singleton]
   omega
 
 /-! ## `HeldB` at `layoutBTops` -/

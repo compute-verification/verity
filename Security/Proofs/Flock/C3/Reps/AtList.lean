@@ -82,7 +82,7 @@ theorem list_ok {i : RecVStar.Inner} {ss : Array VStar.Stmt} (h : RecVStar.state
   obtain ⟨sp, hsp, hps⟩ := FlockC3.VStarList.eok_bind (ok_of_mapError hps)
   obtain ⟨GS, hGS, hgs⟩ := FlockC3.VStarList.eok_bind (ok_of_mapError hgs)
   exact ⟨sh0, hsh, sp, ps, GS, gs, A, C, hsp, hps, hGS, hgs, by simpa using hsz, hA, hC, K, n, hK, ht,
-    Array.append_assoc _ _ _⟩
+    Array.append_assoc⟩
 
 /-- **Candidate 3's statements** are RecSparse, R's levels and the parts of R's opening. -/
 theorem candidate3_kinds {i : RecVStar.Inner} {C : Array VStar.Stmt} (h : RecVStar.candidate3Statements i = .ok C) :
