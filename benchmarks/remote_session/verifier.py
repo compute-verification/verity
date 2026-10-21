@@ -71,11 +71,11 @@ auditor host's challenger through its gate, a session reserved in the audit's pe
 window root (`--challenger gate`, `challengers.Gate`). Each coin is asked for after the root it follows, the Lean takes
 it with the event that released it, and once the session ends what the challenger signed holds the session's coins
 (`Session.released_reason`, and under the gate the auditor's ledger, `Session.trusted_reason`): a session whose coins
-fail it is refused as `coins`, the reason in its `challenger`. Each session reserves the coins it will use: W
-challenges, W openings coins and `--appends` append coins, none by default (`coins.families`), so the challenger's
-close of an honest session that ran to its end is complete, and a session whose prover appends (kv, serve) names its
-count. An append past them refuses the session: `coin` on the books, and under the Lean, whose session holds only
-the append coins released, `disagreement`.
+fail it is refused as `coins`, the reason in its `challenger`. Each session reserves W challenges, W openings coins
+and `--appends` append coins, `coins.APPENDS` by default, or none, and no append family, when the prover's hello says
+its sessions append nothing (a plan of honest and skip sessions, `Verifier.appends_of`), so the challenger's close of
+such a session that ran to its end is complete. An append past them refuses the session: `coin` on the books, and
+under the Lean, whose session holds only the append coins released, `disagreement`.
 
 Openings are checked in the clear: zero-knowledge proof units are not in this harness (PROTOCOL.md §8).
 
@@ -766,13 +766,14 @@ class Verifier:
                  transcript: Path | None = None, disk_bytes_per_s: float = 0.0, link_bytes_per_s: float = 0.0,
                  disk_burst_bytes: float | None = None, link_burst_bytes: float | None = None,
                  challenger: challengers.Local | challengers.Serve | challengers.Gate | None = None,
-                 appends: int = 0) -> None:
+                 appends: int | None = None) -> None:
         if verdict not in VERDICTS:
             raise ValueError(f"the verdict is one of {VERDICTS}")
         self.conn, self.source, self.W, self.T, self.lifetime = conn, source, windows, window_ns, lifetime
         self.transcript = transcript
         self.challenger, self.appends = challengers.Local() if challenger is None else challenger, appends
         self.hbm_bytes, self.host_bytes, self.regions, self.deferred = hbm_bytes, host_bytes, None, False
+        self.appending = True
         self.ingress_bytes_per_s = ingress_bytes_per_s
         self.disk_bytes_per_s, self.link_bytes_per_s = disk_bytes_per_s, link_bytes_per_s
         self.disk_burst_bytes, self.link_burst_bytes = disk_burst_bytes, link_burst_bytes
@@ -867,6 +868,9 @@ class Verifier:
         try:
             self.regions = regions_of(hello.get("layout"), hello["blocks"])
             self.deferred = audit.Params(1, 1, 1, lifetime=self.lifetime, deferred=hello.get("deferred", False)).deferred
+            if type(hello.get("appends", True)) is not bool:
+                raise ValueError("the hello's appends says whether the prover's sessions append, true or false")
+            self.appending = hello.get("appends", True)
         except ValueError as e:
             self.conn.send({"type": "bye", "why": f"refused: {e}"})
             raise
@@ -900,6 +904,14 @@ class Verifier:
         ready, _, _ = self.expect("ready")
         self.calibration = ready["calibration"]
         return self.registration, self.calibration
+
+    def appends_of(self) -> int:
+        """A session's append coins (`coins.families`): `appends` if given, else `coins.APPENDS`, or none, and no append
+        family, when the hello said the prover's sessions append nothing (`prover.BANDWIDTH`).  That says only what
+        the prover will forgo: an append it sends then has no coin and refuses the session."""
+        if self.appends is not None:
+            return self.appends
+        return coins.APPENDS if self.appending else 0
 
     def ping(self, n: int) -> dict:
         rtts = []
@@ -937,8 +949,9 @@ class Verifier:
                               receipt=reg.receipt, rows=reg.rows, lifetime=self.lifetime, deferred=self.deferred,
                               pace=None if pace is None else audit.Pace(K, round(pace["t_ms"] * 1e6)))
         not_before_ns = self.registered_ns if not_before_ns is None else not_before_ns
+        appends = self.appends_of()
         books = self.registry.session(params, reg, None, clock=self._now, not_before_ns=not_before_ns, index=k,
-                                      challenger=lambda e: self.challenger.open(reg.digest, e, W, self.appends))
+                                      challenger=lambda e: self.challenger.open(reg.digest, e, W, appends))
         case = None if self.transcript is None else lv.Transcript(
             self.transcript / f"{reg.digest.hex()[:16]}-session-{k}.json", reg, params, not_before_ns)
         session = Pair(self, books, k, case)
@@ -1449,11 +1462,9 @@ def main() -> int:
                     help="gate: the audit's period, open on the ledger (period-open) before the first session")
     ap.add_argument("--challenger-minutes", type=int, default=120, metavar="M",
                     help="gate: each session's reserve, the most it serves")
-    ap.add_argument("--appends", type=int, default=0, metavar="A",
-                    help="each session's append coins, the most appends it takes (`coins.families`): none by default, "
-                         "so a session that appends nothing reserves no append family and its challenger releases "
-                         "every coin it reserved; a session whose prover appends (kv, serve) names its count, such as "
-                         f"{coins.APPENDS}")
+    ap.add_argument("--appends", type=int, metavar="A",
+                    help=f"each session's append coins, the most appends it takes (`coins.families`): by default "
+                         f"{coins.APPENDS}, or none when the prover's hello says its sessions append nothing")
     ap.add_argument("--memory-of", type=Path, metavar="VERIFIER_JSON",
                     help="print each accepted session's memory line in both forms from a verifier.json written "
                          "before the average form (`recorded_memory`, with --host-bytes the node line), and a paced "
@@ -1486,7 +1497,7 @@ def main() -> int:
         return 0
     if a.out is None:
         ap.error("--out is required")
-    if a.appends < 0:
+    if a.appends is not None and a.appends < 0:
         ap.error("--appends is a count, 0 or more")
     a.out.mkdir(parents=True, exist_ok=True)
     if a.challenger == "gate" and a.port in challengers.GATE_PORTS:
