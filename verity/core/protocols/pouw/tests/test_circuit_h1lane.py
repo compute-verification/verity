@@ -110,15 +110,15 @@ def test_signatures_and_ports():
         u = L.lane(tile, 5)
         params, ret = u.signature()
         assert [(n, t.leaves) for n, t in params] == [("a", 4 * (8 * 64 + 32)), ("b", 8 * (8 * 64 + 32)),
-                                                      ("zy", 48 * 32 * 32),
-                                                      *((n, t.leaves) for n, t in tile.signature()[0][2:])]
+                                                      ("zy", 48 * 32 * 32), ("seeds", 2 * 512)]
         lay = H.Layout(32, 32, 64)
         assert [(n, t.leaves) for n, t in ret.fields] == [("partial", 32 * 2 * lay.sets), ("ok", 1)]
-        assert {n: p.kind for n, p in u.defn.ports(u.S()).params.items()} == {"salt": "coin", "position": "position"}
+        assert u.defn.ports(u.S()).params == {}, "a lane reads no coin and no position: the leaf's seeds unit does"
         c = L.combine(lay)
         (pn, pt), (rn, rt) = c.signature()[0]
         assert (pn, pt.leaves, rn, rt.leaves, c.signature()[1].leaves) == ("p", 32 * 32 * 2 * lay.sets, "receipt",
                                                                              32 * 2 * lay.sets, 1)
+        assert c.defn.ports(c.S()).params["p"].receipt, "the partials are sinks, which reach only a receipt port"
         leaf = bind(L.PouwH1Leaf, TILE=tile)
         assert [n for n, _t in leaf.signature()[0]] == list(L.LEAF_PARAMS)
         assert leaf.signature()[1].leaves == 32 * (32 * 2 * lay.sets + 1) + 1
@@ -160,13 +160,16 @@ def _row_bits(codes, scale):
     return [x for v in codes for x in _bits(v, 8)] + _bits(scale, 32)
 
 
-def _lane_bits(tile, ln, a, b, sa, sw, zy, lay):
+def _seeds_bits():
+    return evaluate(bind(SD.PouwUnitSeedsBits), SD.leaves(SALT, True), SD.position_leaves(POSITION, True),
+                    [x for r in ROOTS for x in SD.leaves(r, True)])
+
+
+def _lane_bits(tile, ln, a, b, sa, sw, zy, lay, seeds):
     rows, cols = lay.rows(ln), lay.cols(ln)
     out = evaluate(L.lane(tile, ln), [x for i in rows for x in _row_bits(a[i], sa[i])],
                    [x for j in cols for x in _row_bits(b[j], sw[j])],
-                   [x for v in zy[0] for x in _bits(v, 32)] + [x for v in zy[1] for x in _bits(v, 16)],
-                   SD.leaves(SALT, True), SD.position_leaves(POSITION, True),
-                   [x for r in ROOTS for x in SD.leaves(r, True)])
+                   [x for v in zy[0] for x in _bits(v, 32)] + [x for v in zy[1] for x in _bits(v, 16)], seeds)
     w = 2 * lay.sets
     return [_int(out[32 * t:32 * t + 32]) for t in range(w)], int(out[32 * w])
 
@@ -179,8 +182,30 @@ def test_a_lane_on_bits_is_its_word_view(defn):
     a, b, sa, sw, zy = _leaf(6)
     lay = H.Layout(32, 32, 64)
     ln = 13
-    want = _lanes(a, b, sa, sw, zy, lay)[ln]
-    assert _lane_bits(_tile(defn), ln, a, b, sa, sw, zy, lay) == want and want[1] == 1
+    want, seeds = _lanes(a, b, sa, sw, zy, lay)[ln], list(_seeds_bits())
+    assert _lane_bits(_tile(defn), ln, a, b, sa, sw, zy, lay, seeds) == want and want[1] == 1
     zr = list(zy[0])
     zr[L.cells(lay, ln)[3]] ^= 4
-    assert _lane_bits(_tile(defn), ln, a, b, sa, sw, (zr, zy[1]), lay) == (want[0], 0)
+    assert _lane_bits(_tile(defn), ln, a, b, sa, sw, (zr, zy[1]), lay, seeds) == (want[0], 0)
+
+
+@pytest.mark.slow
+def test_the_leaf_program_is_its_seeds_lanes_and_combine_and_its_reads_are_the_cut():
+    """The leaf's Program at 32 × 32, K = 64 passes the port rules (one seed of the leaf's position, the partials reaching
+    only the combine's receipt port), and the produced reads are the cut: lane l's output row and the combine's ``p[l]``
+    read row l of ``partial``, every lane reads the one row of the seeds. Slow: building the Program checks its ports over
+    the 32 lanes (about 30 s)."""
+    from verity.ml.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2 as V2
+    from verity.core.protocols.sampled_proofs.one_stage import produced as PR
+
+    tile = _tile()
+    lay = L.layout(tile)
+    w = 4 * lay.sets
+    program, query = L.program(tile), L.query(tile)
+    r = PR.reads(program, query, {L.PRODUCED: w, L.PRODUCED_SEEDS: 64}, {L.PRODUCED: V2, L.PRODUCED_SEEDS: V2})
+    lanes = [None] + list(range(32)) + [None]
+    assert r[L.PRODUCED] == {"value": L.PRODUCED, "rows": lanes}
+    assert r[L.PRODUCED_SEEDS] == {"value": L.PRODUCED_SEEDS, "rows": [0] + [None] * 33}
+    assert r["seeds"] == {"value": L.PRODUCED_SEEDS, "rows": [None] + [0] * 32 + [None]}
+    assert all(r[f"p[{ln}]"] == {"value": L.PRODUCED, "rows": [None] * 33 + [ln]} for ln in range(32))
+    assert len(r) == 3 + 32

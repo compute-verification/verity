@@ -3,8 +3,9 @@ opened against the one root it was output under (PRF-134; a served H1 leaf prove
 `pouw.circuit.h1lane`).
 
 A *produced value* is a field of a template's result that another unit of the same Program reads: H1's lane partials,
-each lane unit's ``partial``, which the combine unit reads as its parameter ``p``. Its row ``r`` is the field of the
-``r``-th unit (in population order) whose template returns it; the rows are committed as a registered value's
+each lane unit's ``partial``, which the combine unit reads as its parameter ``p``; or the whole result of a template that
+returns no record, named by the template's id: H1's leaf seeds, ``PouwUnitSeeds_v2``, which every lane reads as its
+``seeds``. Its row ``r`` is the field of the ``r``-th unit (in population order) whose template returns it; the rows are committed as a registered value's
 (`registered.Registered.commit`, in the row format of the ports that hold them), after the draw, since they are outputs
 of the drawn units' statements, whose inputs were committed before it. They stay hidden: the statements commit them under
 the produced tree's salts, and only the units' check bits leave.
@@ -34,6 +35,7 @@ from __future__ import annotations
 import re
 from typing import Any, Mapping, Sequence
 
+from verity.ml.circuits.codec import descriptor_id
 from verity.ml.commitments.merkle import CommitmentDomain
 from verity.ml.circuits.partition_object import TemplatePartition
 from verity.ml.circuits.program import Program
@@ -93,10 +95,9 @@ def _producers(program: Program, tp: TemplatePartition, values: Mapping[str, int
     for u in range(tp.population):
         k, _m = tp.locate(u)
         ret = nodes[k].fn.signature()[1]
-        if not isinstance(ret, Record):
-            continue
+        fields = ret.fields if isinstance(ret, Record) else ((descriptor_id(nodes[k].fn), ret),)
         outs, at = tp.outputs(u), 0
-        for name, t in ret.fields:
+        for name, t in fields:
             gates, at = outs[at:at + t.leaves], at + t.leaves
             if name not in values:
                 continue
@@ -108,7 +109,8 @@ def _producers(program: Program, tp: TemplatePartition, values: Mapping[str, int
             rows[name].append((u, gates))
     missing = [v for v in values if not rows[v]]
     if missing:
-        raise ValueError(f"no unit returns {missing}: a produced value is a template's result field")
+        raise ValueError(f"no unit returns {missing}: a produced value is a template's result field, or the whole result of "
+                         f"a template that returns no record, named by the template's id")
     return rows, bits
 
 

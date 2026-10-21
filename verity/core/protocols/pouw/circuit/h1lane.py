@@ -3,10 +3,10 @@ XOR receipt, and its proof is one statement a lane plus one that combines them, 
 
 * **A lane** of the leaf's H1 tile (`h1tile`) is lane (g, q), LANE = g Q + q, G = R / 4 and Q = C / 8: rows ``g + G s``
   (s < 4) and columns ``2 q + 2 Q (s >> 1) + (s & 1)`` (s < 8), at 32 × 32 rows g + 8 s and columns 2 q + 8 (s >> 1) + (s & 1).
-  `PouwH1LaneZy_v1{TILE, LANE}` is ``(a: its 4 A rows, b: its 8 B rows, zy: the leaf's whole record, salt, position, roots)
-  -> {partial, ok}``. TILE is the leaf's tile (`h1tile.PouwH1Tile` v1 or v3 on its full R × C grid, `h1zy.TILES`), which
-  fixes R, C and K. The lane takes the leaf's seed_j and σ_R (one `PouwUnitSeeds` on the leaf's salt, position and roots),
-  its rows' and columns' noise blocks at their offsets in the R × C layout (`h1tile.Layout.row`, `col`), and its fold keys
+  `PouwH1LaneZy_v1{TILE, LANE}` is ``(a: its 4 A rows, b: its 8 B rows, zy: the leaf's whole record, seeds: the leaf's
+  [seed_j, σ_R]) -> {partial, ok}``. TILE is the leaf's tile (`h1tile.PouwH1Tile` v1 or v3 on its full R × C grid,
+  `h1zy.TILES`), which fixes R, C and K. The lane takes its rows' and columns' noise blocks from seed_j at their offsets in
+  the R × C layout (`h1tile.Layout.row`, `col`), and its fold keys
   at block LANE of σ_R's stream, so its sets and its fold are the tile's for that lane, gate for gate.
 * **The partial** is the lane's share of CP-W: after set s, word 2 s is the XOR of the lane's chains' y (`PouwXinFinal` of
   its state's first half) and word 2 s + 1 of z, 2 (KS + m) words. The tile's receipt is the XOR over its lanes of their
@@ -17,13 +17,16 @@ XOR receipt, and its proof is one statement a lane plus one that combines them, 
   record is one lane's, so the 32 lanes check every cell once.
 * **The combine** `PouwH1Combine_v1{N, W}` is ``(p: N rows of W u32, receipt: W u32) -> ok``, 1 exactly when the XOR of the
   rows is the receipt word for word (`segment.PouwEq32`, `h1zy.PouwAndBit`).
+* **The seeds** are the leaf's one `seeds.PouwUnitSeeds` (`_v2`, on bits) on its salt, position and roots, a unit of its own:
+  a position seeds one unit (`ml.circuits.ports`, ``E_COIN_REUSE``), and the lanes share the leaf's seed_j and σ_R, as the
+  tile's rows and columns do. No lane reads the coin or the position.
 * **The leaf** `PouwH1Leaf_v1{TILE}` is the leaf's Program (`program`): ``(a: R rows, b: C rows, zy, receipt, salt,
-  position, roots)``, its lanes in order, each on its rows of ``a`` and ``b``, then the combine on their partials and the
-  leaf's committed ``receipt``; it returns each lane's {partial, ok} and the combine's ok. Its `query` makes each lane and
-  the combine a unit (units 0 .. N - 1 the lanes, N the combine), one template each, so one statement each. A lane's
-  partial reaches the combine as a wire between units of two statements: the registered route carries it as a value
-  produced after the draw (`one_stage.registered.produced_reads`), the lane's output row and the combine's input row
-  opening one root (`PRODUCED`, `PARTIAL_PORT`).
+  position, roots)``, its seeds, its lanes in order, each on its rows of ``a`` and ``b`` and the seeds, then the combine on
+  their partials and the leaf's committed ``receipt``; it returns each lane's {partial, ok} and the combine's ok. Its
+  `query` makes the seeds, each lane and the combine a unit (unit 0 the seeds, units 1 .. N the lanes, N + 1 the combine),
+  one template each, so one statement each. The seed pair and each lane's partial reach their readers as wires between
+  units of two statements: the registered route carries them as values produced after the draw (`one_stage.produced`),
+  the producer's output row and the reader's input row opening one root (`PRODUCED_SEEDS`, `PRODUCED`, `PARTIAL_PORT`).
 
 `lane_reference` is a lane on words, ``(partial, ok)``, and `combine_reference` the combine.
 """
@@ -49,8 +52,10 @@ BIT, U32 = BL.BIT, H.U32
 M32 = (1 << 32) - 1
 #: a lane's rows and columns
 LANE_R, LANE_C = 4, 8
-#: the produced value a leaf's partials are, by the leaf's unit in its window: one row a lane
-PRODUCED = "partial"
+#: the leaf's seed pair [seed_j, σ_R] on bits, the seeds unit's result and every lane's ``seeds``
+SEEDS = BL.bit_type(SD.SEED_PAIR)
+#: the produced values of a leaf, by its result field or template: its one seed pair, and its partials, one row a lane
+PRODUCED_SEEDS, PRODUCED = "PouwUnitSeeds_v2", "partial"
 #: the lane statement's output row of its partial, and the combine's input row of lane l's (`partial_port`)
 PARTIAL_PORT = "o0"
 
@@ -138,16 +143,15 @@ def _scales(rows: Coll, n: int) -> Coll:
 
 def _lane_signature(S: Any) -> tuple:
     r, c, k = _tile(S.TILE)
-    params = S.TILE.signature()[0]
-    return ((("a", Array(LANE_R, Z.ROW(k))), ("b", Array(LANE_C, Z.ROW(k))), ("zy", Z.RECORD(r, c)), *params[2:]),
+    return ((("a", Array(LANE_R, Z.ROW(k))), ("b", Array(LANE_C, Z.ROW(k))), ("zy", Z.RECORD(r, c)), ("seeds", SEEDS)),
             Record(("partial", Array(2 * H.Layout(r, c, k).sets, U32)), ("ok", BIT)))
 
 
-def _lane_body(B: Any, S: Any, a: Coll, b: Coll, zy: Coll, salt: Coll, position: Coll, roots: Coll) -> Coll:
+def _lane_body(B: Any, S: Any, a: Coll, b: Coll, zy: Coll, seeds: Coll) -> Coll:
     lay = layout(S.TILE)
     k, ks, ln = lay.k, lay.ks, S.LANE
     rows, cols = lay.rows(ln), lay.cols(ln)
-    seed_j, sigma_r = SD.unit_seeds_call(B, salt, position, roots, True)
+    seed_j, sigma_r = seeds[0], seeds[1]
     _blocks_at = _blocks(B)
     ac, bc = _codes(a, LANE_R), _codes(b, LANE_C)
     X, A, XIN = [], [], []
@@ -208,15 +212,14 @@ def _lane_body(B: Any, S: Any, a: Coll, b: Coll, zy: Coll, salt: Coll, position:
 
 
 def _lane_ports(S: Any) -> Any:
-    return _ports.Ports(params={"salt": _ports.In(kind="coin"), "position": _ports.In(kind="position")},
-                        ret={"partial": _ports.Out(sink=True)})
+    return _ports.Ports(ret={"partial": _ports.Out(sink=True)})
 
 
 PouwH1LaneZy = CompositeDefinition(
     "PouwH1LaneZy", 1, ("TILE", "LANE"), _lane_signature, _lane_body, conformance="protocol-defined", refuse=_refuse_lane,
     register=SG is not None, ports=_lane_ports,
     doc="Lane LANE of the H1 tile TILE with its cells' z/y record checked (`circuit.h1lane`): its 4 A rows and 8 B rows, the "
-        "leaf's whole record, salt, position and roots, to {partial: the lane's CP-W share, its XinFinal of each state half "
+        "leaf's whole record and the leaf's [seed_j, σ_R], to {partial: the lane's CP-W share, its XinFinal of each state half "
         "after each set, whose XOR over the lanes is TILE's receipt; ok: PouwZyCheck{4, 8} on its 32 cells of the record}.")
 
 
@@ -247,8 +250,13 @@ def _combine_body(B: Any, S: Any, p: Coll, receipt: Coll) -> Coll:
     return Z._and_all(B, [eq[w] for w in range(S.W)])
 
 
+def _combine_ports(S: Any) -> Any:
+    return _ports.Ports(params={"p": _ports.In(receipt=True)}, ret=_ports.Out(sink=True))
+
+
 PouwH1Combine = CompositeDefinition(
     "PouwH1Combine", 1, ("N", "W"), _combine_signature, _combine_body, conformance="protocol-defined", refuse=_refuse_nw,
+    ports=_combine_ports,
     doc="1 exactly when the XOR of the N rows p (W u32 each) is the receipt, word for word (`circuit.h1lane`): a leaf's "
         "lanes' partials against its committed receipt.")
 
@@ -280,8 +288,8 @@ def _pick(rows: Coll, which: Sequence[int]) -> Coll:
 
 def _leaf_body(B: Any, S: Any, a: Coll, b: Coll, zy: Coll, receipt: Coll, salt: Coll, position: Coll, roots: Coll) -> Coll:
     lay = layout(S.TILE)
-    outs = [B.call(lane(S.TILE, ln), _pick(a, lay.rows(ln)), _pick(b, lay.cols(ln)), zy, salt, position, roots)
-            for ln in range(lay.lanes)]
+    seeds = B.call(SD.PouwUnitSeedsBits, salt, position, roots)
+    outs = [B.call(lane(S.TILE, ln), _pick(a, lay.rows(ln)), _pick(b, lay.cols(ln)), zy, seeds) for ln in range(lay.lanes)]
     ok = B.call(combine(lay), array_of([o.field("partial") for o in outs]), receipt)
     return Coll(_leaf_signature(S)[1], concat([o.refs for o in outs] + [ok.refs]))
 
@@ -308,13 +316,14 @@ def program(tile: Any) -> Program:
 
 
 def templates(tile: Any) -> list[Any]:
-    """The leaf's templates, in unit order: its lanes, then the combine."""
+    """The leaf's templates, in unit order: its seeds, its lanes, then the combine."""
     lay = layout(tile)
-    return [lane(tile, ln) for ln in range(lay.lanes)] + [combine(lay)]
+    return [bind(SD.PouwUnitSeedsBits)] + [lane(tile, ln) for ln in range(lay.lanes)] + [combine(lay)]
 
 
 def query(tile: Any) -> dict[str, Any]:
-    """The leaf's partition query: each lane and the combine one unit (units 0 .. N - 1 the lanes, N the combine)."""
+    """The leaf's partition query: the seeds, each lane and the combine one unit (unit 0 the seeds, units 1 .. N the lanes
+    in order, N + 1 the combine)."""
     return P.template_instances_query(templates(tile))
 
 
