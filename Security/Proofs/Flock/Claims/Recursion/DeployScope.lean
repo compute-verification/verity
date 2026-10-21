@@ -230,7 +230,7 @@ theorem decide_scope (H : Claims.Msg → Claims.Msg) {s j : ℕ} {xO : Claims.Ms
   · unfold RecScope.accepts readOf
     rw [(readX_spec hr).2.2, Bool.true_and, ← hc3,
       checkInner_checkAtC3 (RecIns.setup_checkInner hsu)]
-    change (Except.ok () : Except String Unit).isOk && (RecSetup.checkShape (some r.shape) (filesOf r)).isOk = true
+    change ((Except.ok () : Except String Unit).isOk && (RecSetup.checkShape (some r.shape) (filesOf r)).isOk) = true
     rw [← hcs, checkInner_checkShape (RecIns.setup_checkInner hsu)]
     rfl
   · have hio : innerOfO xO = some r.shape := by
