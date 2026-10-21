@@ -256,11 +256,13 @@ at `π*` is open: `φ*` is CP_RED's and CP_RED2's price (their generic and IMAD.
 fold route issues prices above 0 there, the stores and ISETP at the JI90 lines r20261021-161119-62ac measured.
 FOLD-OPT's premise has no slack; the reading reaches its 3% target with every fold route 2.79% cheaper. Its twin at
 (I3)'s `q = q_T = ¾` is `Sm90MeasuredI3Headline`.
-`NoSum` carries the tensor forms off the menu: DC-90-ri prices them at the scalar coefficient on its joint rows. Two of
-them would move the reading if they were on it: the register-sourced IGMMA form, whose coefficient fitted from the
-H200's probes gives about 1.64% in the machine model at #2699's earlier design, and DMMA, which at the scalar
+`NoSum` carries the tensor forms off the menu: DC-90-ri prices them at the scalar coefficient on its joint rows. Three
+kinds would move the reading if they were on it: the register-sourced IGMMA form, whose coefficient fitted from the
+H200's probes gives about 1.64% in the machine model at #2699's earlier design; DMMA, which at the scalar
 coefficient heads a word for about 0.0077 against honest's 0.0153 (at its tensor-pipe coefficient, about 0.031, it
-moves nothing). -/
+moves nothing); and the 2:4-sparse forms, whose classes carry the issue row alone (no run timed them beside the
+IGMMA), so that chained into a dense product they head a word for under `2·10⁻⁶` at this `π*` and for 0 at the
+twin's (RT4-SHEET-19). -/
 def Sm90MeasuredHeadline : Prop :=
   ∀ (Ω : Type) [Fintype Ω] (Pl : Play Ω Sm90.checks (Fin 50) (Fin 2) Unit Empty) (G : ReceiptGame Ω Sm90.checks)
     (Uf : Unfolded Ω Sm90.checks) {V : Type} {nπ : ℕ} (pf : ProofLayer Ω Sm90.checks nπ V) (δfork δzk : ℝ),
