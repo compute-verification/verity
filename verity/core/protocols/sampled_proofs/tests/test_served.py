@@ -274,3 +274,99 @@ def test_r7_refuses_a_row_format_of_another_form(schemas, registered):
     rec, ports = _record(prog, [])
     with pytest.raises(ValueError, match="row format"):
         R.check(rec, prog, Q, LAW, SCHEME, ports, registered=registered, schemas=schemas)
+
+
+def test_a_value_twice_no_tree_or_one_no_unit_reads_is_refused():
+    prog = _program()
+    _, tree = _tree(prog)
+    with pytest.raises(ValueError, match="a value twice"):
+        register_served(prog, Q, [tree, dataclasses.replace(tree, root="cd" * 64)])
+    with pytest.raises(ValueError, match="no served tree"):
+        register_served(prog, Q, [])
+    with pytest.raises(ValueError, match="a ServedTree"):
+        register_served(prog, Q, [tree.entry()])
+    both = _program(unread=True)
+    w = ServedTree.of(G.Registered.commit(P.program_digest(both), "W", TABLE))
+    v = ServedTree.of(G.Registered.commit(P.program_digest(both), "V", TABLE[:1]))
+    with pytest.raises(ValueError, match=r"served trees \['V'\]: no unit of the population reads them"):
+        register_served(both, Q, [w, v])
+
+
+def test_a_tree_the_log_registered_under_another_root_is_refused():
+    """R7-held: a value the verifier holds across windows that an earlier record of the log registered keeps that root, so
+    a later window's tree under another root is refused here, as R7 would refuse its record."""
+    prog = _program()
+    reg, tree = _tree(prog)
+    first, _ = _record(prog, [reg.entry()])
+    assert register_served(prog, Q, [tree], log=[first], held=["W"]).roots == {"W": reg.root.hex()}
+    _, other = _tree(prog)
+    with pytest.raises(ValueError, match="R7-held"):
+        register_served(prog, Q, [other], log=[first], held=["W"])
+
+
+def test_a_fixed_name_served_again_without_the_windows_root_is_refused():
+    """PRF-127, fail closed: without the window's open root every window's domain is the same, so a value the log
+    registered that the verifier doesn't hold is a fixed-name per-window value from its second window on, and both
+    `register_served` and R7's verifier refuse their inputs, naming `window_root` and `held`, whatever the root: the first
+    window's (a replay) or a fresh one. The first window, and a window whose values take fresh names, need no root."""
+    prog = _program()
+    reg, tree = _tree(prog)
+    sr = register_served(prog, Q, [tree])
+    first, ports = _record(prog, sr.registered)
+    assert R.check(first, prog, Q, LAW, SCHEME, ports, registered=sr.values).ok
+    _, fresh = _tree(prog)
+    for again in (tree, fresh):
+        with pytest.raises(ValueError, match=r"registered values \['W'\].*`window_root`.*`held`"):
+            register_served(prog, Q, [again], log=[first])
+    second, ports = _record(prog, sr.registered, window={**SERVED, "row": 8}, previous=R.digest(first))
+    with pytest.raises(ValueError, match=r"registered values \['W'\].*`window_root`"):
+        R.check(second, prog, Q, LAW, SCHEME, ports, log=[first], registered=sr.values)
+    assert R.check(second, prog, Q, LAW, SCHEME, ports, log=[first], registered=sr.values, held=["W"]).ok
+
+
+WINDOWS = ("a1" * 64, "b2" * 64)
+
+
+def test_each_window_registers_its_own_trees_under_its_root_and_the_weights_once():
+    """PRF-127: under the window's open root a window-independent program's per-window tree (x) is served afresh every
+    window under the same name, R7 accepts each window's record with the returned copies, and the weights (W, `held`)
+    keep their window-independent domain and first root. A second window that serves the first window's x tree is
+    refused: its domain is the first window's."""
+    prog = _program()
+    d = P.program_digest(prog)
+    w = G.Registered.commit(d, "W", TABLE)
+    xs = [G.Registered.commit(d, "x", [[i, i] for i in range(len(POS))], window=r) for r in WINDOWS]
+    log: list = []
+    for r, x in zip(WINDOWS, xs):
+        sr = register_served(prog, Q, [ServedTree.of(x), ServedTree.of(w)], log=log, window_root=r, held=["W"])
+        assert sr.window_root == r and sr.held == ["W"]
+        assert sr.ports["x"]["domain"] == x.entry()["domain"] and sr.ports["w"]["domain"] == w.entry()["domain"]
+        rec, ports = _record(prog, sr.registered, window={**SERVED, "row": 7 + len(log)},
+                             previous=R.digest(log[-1]) if log else None)
+        assert R.check(rec, prog, Q, LAW, SCHEME, ports, log=log, registered=sr.values, window_root=sr.window_root,
+                       held=sr.held).ok
+        log.append(rec)
+    with pytest.raises(ValueError, match="registered-value domain"):
+        register_served(prog, Q, [ServedTree.of(xs[0]), ServedTree.of(w)], log=log[:1], window_root=WINDOWS[1],
+                        held=["W"])
+    with pytest.raises(ValueError, match="R7-held"):
+        register_served(prog, Q, [ServedTree.of(xs[1]), ServedTree.of(G.Registered.commit(d, "W", TABLE))], log=log[:1],
+                        window_root=WINDOWS[1], held=["W"])
+    with pytest.raises(ValueError, match="held values"):
+        register_served(prog, Q, [ServedTree.of(xs[1])], window_root=WINDOWS[1], held=["W"])
+
+
+def test_a_served_tree_cannot_hold_itself_across_windows():
+    """PRF-127: which values are held across windows is the verifier's (`held`), never the served tree's. A per-window tree
+    committed under the window-independent domain, as if held, is refused under the window's root, and the `--registered`
+    file names each port's domain as the verifier derived it, with no window root or held values of its own."""
+    prog = _program()
+    d = P.program_digest(prog)
+    w = G.Registered.commit(d, "W", TABLE)
+    unwindowed = G.Registered.commit(d, "x", [[i, i] for i in range(len(POS))])
+    with pytest.raises(ValueError, match="registered-value domain"):
+        register_served(prog, Q, [ServedTree.of(unwindowed), ServedTree.of(w)], window_root=WINDOWS[0], held=["W"])
+    x = G.Registered.commit(d, "x", [[i, i] for i in range(len(POS))], window=WINDOWS[0])
+    sr = register_served(prog, Q, [ServedTree.of(x), ServedTree.of(w)], window_root=WINDOWS[0], held=["W"])
+    assert set(sr.file) == {"format", "ports"}
+    assert all("held" not in e and "window_root" not in e for e in sr.ports.values())

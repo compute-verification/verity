@@ -629,6 +629,57 @@ def test_every_rounds_mutation_hits_its_refusal():
                 (name, seed, got)
 
 
+#: the refusal each salt mutation aims at: its code and a part of its reason
+SALT_EXPECT = {
+    "honest": None, "key-form": ("coin", "the verifier's challenger key is malformed: "),
+    "no-ledger": ("coin", "not trusted: no auditor's ledger"),
+    "no-session": ("coin", "not trusted: the auditor's ledger opens no challenger session for this window"),
+    "forged-ledger": ("coin", "not trusted: the auditor's ledger is refused: entry 0: its signature doesn't verify"),
+    "in-process": ("coin", "not trusted: the challenger record's signature does not verify"),
+    "unsealed": ("coin", "not trusted: the challenger's release log is not the one the auditor's ledger sealed"),
+    "other-session": ("coin", ", the one the auditor's ledger opens for this window"),
+    "not-live": ("coin", "the coin commitment's "), "no-reserve": ("salt", CC.NO_RESERVE),
+    "form": ("salt", CC.SALT_FORM),
+    "weights": ("salt", CC.OTHER_WINDOW), "requests": ("salt", CC.OTHER_WINDOW), "session": ("salt", CC.OTHER_WINDOW),
+    "weights-root": ("salt", CC.OTHER_WINDOW), "received": ("salt", CC.NOT_RECEIVED),
+    "opening-form": ("coin", "the salt's a live coin opening is"),
+    "after": ("coin", "the salt's coin was not opened after what the verifier recorded"),
+    "label": ("coin", "coin 0, not its pouw/salt coin 0"), "foreign": ("coin", "the salt's coin does not open against"),
+    "foreign-epoch": ("coin", "the salt's coin is epoch "), "tampered": ("coin", "the salt's coin does not open against"),
+    "malformed": ("coin", "the salt's coin opening is malformed"),
+}
+
+
+def test_every_salt_mutation_hits_its_refusal():
+    """`core_check.salt` accepts an honest live window's salt coin, read through the challenger's signed session the
+    auditor's signed ledger reserves, opens and ends for the window, and refuses each mutation with the refusal it aims
+    at: the session's (no ledger, a forged one, an in-process challenger's coins, a log the ledger didn't seal, another
+    session's files), a session opened without a reserve, the open root under another session's id than the reserve's
+    or of another window's weights or requests (so one session salts one window), H1's salt before the open root (the
+    session opened on the weights' root, the same in every window), a log showing another root, and a coin that isn't
+    the epoch's salt coin opened after it."""
+    assert set(SALT_EXPECT) == set(rounds_cases.SALT_NAMES) | {"honest"}
+    for name, want in SALT_EXPECT.items():
+        for seed in range(6):
+            got = CC.salt(*rounds_cases.salt_args(rounds_cases.salt_instance(random.Random(f"{name}/{seed}"), name)))
+            assert (got is None) if want is None else (got is not None and got[0] == want[0] and want[1] in got[1]), \
+                (name, seed, got)
+
+
+def test_one_session_salts_one_window():
+    """Two windows of one model (one weights' root) with their own request tables: the salt opened in the first's
+    session passes the first and is refused for the second, and a second session for the first window has another open
+    root."""
+    from verity.core.protocols.pouw import salt as PS
+
+    d = rounds_cases.salt_instance(random.Random("one session, one window"))
+    second = random.Random("the second window's requests").randbytes(64).hex()
+    assert CC.salt(*rounds_cases.salt_args(d)) is None
+    assert CC.salt(*rounds_cases.salt_args({**d, "requests": second})) == ("salt", CC.OTHER_WINDOW)
+    assert PS.window_open_root(bytes.fromhex(d["weights"]), bytes.fromhex(d["requests"]),
+                               "s20261020T120000Z-0002") != bytes.fromhex(d["window"]["root"])
+
+
 def test_the_versioned_coin_rule_is_the_coins_on_the_current_version():
     """On `coins.SCHEME`, `core_check.coin_reason` and `weights_root` are `coins.coin_reason` and `audit.weights_root`;
     the recorded version differs from it in its binding and weights' root."""

@@ -1271,7 +1271,9 @@ SHA-512, and the unit draw is live (§7.3). `Flock.HmRow` is its statement; the 
   for byte: one input port `top` and one output port `out` of 64 u16 words each, `out` being `top`'s words 32 to 63
   then 32 zero words, with no AND. Instance `i` reads node `i` of `rec-top-L0`, at the registration the shared rows
   hold, and `out` the verifier's zero rows `rec-cap-zero` (D19), so every node of `root_B` is held at a fixed row
-  whatever the query coins draw.
+  whatever the query coins draw. Each later level `l ≥ 1` is held the same way by `rec-cap/n<N>-l<l>`, the statements
+  just before level 0's in level order, at `N = 2 · 2^cap_l` (both reps' level-`l` tops): instance `i` reads row `i` of
+  `rec-top-L<l>`, rep 0's top then rep 1's.
 
   So must a unit net whose name starts with `rec-residuals/` (a part of V*'s algebra, `rec_residuals.lowering`):
   - its name must be `rec-residuals/m<m>-k<k_log>-c<claims>-p<j>`, with a `fast100` schedule at `m`, `k_log ≥ 6` and
@@ -1855,11 +1857,13 @@ expectation):
   the unit. V*'s populations are their units `0..n-1`, so its honest statements pass. Upstream reads no inner shape; the
   spec refuses at setup. No vector exercises it; `Flock.Test.Labels` runs it on synthetic draws and labels, and
   `test_the_honest_level_passes_setup_at_the_honest_inner_session` passes it on an honest V* level.
-- **D19:** V*'s list holds the table's level-0 cap (`RecCap`, `rec-cap/n<N>`, `N = 2^cap₀`, its last statement), and a
-  session of it must read node `i` of `rec-top-L0` in instance `i`, at the registration the verifier's shared rows
-  (`--rec-rows`) hold, every row the node the coin server committed, its outputs the verifier's zero rows
-  `rec-cap-zero` (`RecVStar.checkCapListed`, `RecCoins.checkCap`, `RecVStar.checkShared`, `checkTopRows`); a session
-  whose port reads `rec-top-L0` without that shared row is refused, level 0's included. Upstream reads no inner shape
+- **D19:** V*'s list holds the table's level-0 cap (`RecCap`, `rec-cap/n<N>`, `N = 2^cap₀`, its last statement) and,
+  just before it, one cap per later level `l` (`rec-cap/n<N>-l<l>`, `N = 2 · 2^cap_l`, the rep schedule's tops rounds
+  in order, `RecVStar.checkTopsListed`). A session of level `l`'s cap must read row `i` of `rec-top-L<l>` in instance
+  `i`, at the registration the verifier's shared rows (`--rec-rows`) hold, every row the node the coin server
+  committed, its outputs the verifier's zero rows `rec-cap-zero` (`RecVStar.checkCapListed`, `RecCoins.checkCap`,
+  `RecVStar.checkShared`, `checkTopRows`); a session whose port reads a `rec-top-L<l>` without that shared row is
+  refused, at every level. Upstream reads no inner shape
   and verifies such a session as any flock-circuit; the spec refuses at setup. No vector exercises it;
   `Flock.Test.RecCap` runs the list's and `checkCap`'s refusals, and `test_lean_rec_coins`' RecCap tests the honest cap
   and its refusals on the Lean verifier.

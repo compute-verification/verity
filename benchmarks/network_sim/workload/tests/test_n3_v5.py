@@ -9,7 +9,7 @@ import random
 import numpy as np
 import pytest
 
-from test_n3_unit import (BLOCK, INGRESS, OTHER, SALTED_B, TAMPERS, bits, data_end, flip, lab_setup, lab_windows,
+from test_n3_unit import (BLOCK, INGRESS, LAB_B, OTHER, SALTED_B, TAMPERS, bits, data_end, flip, lab_setup, lab_windows,
                           payloads, sim_run)
 from test_n3_v4 import v3_cases
 from verity.ml.circuits.defs import bind
@@ -191,7 +191,7 @@ def test_v5_accepts_exactly_where_v4_does_on_the_simulators_windows():
 
 @pytest.fixture(scope="module")
 def lab():
-    return lab_setup(54)
+    return lab_setup(LAB_B)
 
 
 @pytest.mark.parametrize("edit", [
@@ -221,10 +221,10 @@ def test_v5_accepts_exactly_where_v4_does_on_salted_lab_windows(salted_lab):
 
 @pytest.mark.slow
 def test_v5_accepts_exactly_where_v4_does_on_a_lab_whose_outboxes_are_two_rows_deep():
-    """At width 32 each unit's outbox is two of v4's rows and three of v5's, and later windows' runs start past row 0:
-    the one test of whole windows whose v5 runs open at a private start past 0 with their heads. About 80 s, most of
-    it committing the wider MLP."""
-    lab = lab_setup(54, d=32)
+    """At width 8 over 32 requests each unit's outbox is two of v4's rows or more and three of v5's, and later
+    windows' runs start past row 0: the one test of whole windows whose v5 runs open at a private start past 0 with
+    their heads. About 80 s, most of it committing the larger MLP."""
+    lab = lab_setup(LAB_B, d=8, requests=32)
     for edit, ok in ((None, True), (lambda e, i: ([flip(e[0], data_end(e[0]))] + e[1:], i), False)):
         setup, windows = lab_windows(lab, edit)
         assert all(x >= 1 for x in V5.prepare(setup).layout.fmt.DEPTHS)
@@ -435,8 +435,9 @@ def test_the_demo_window_is_its_reference(demo):
 
 @pytest.mark.slow
 def test_a_salted_window_is_its_reference(salted_lab):
-    """The salted lab window (B = 96) as v5: honest, with a wrong salt payload, and with the salt frame's slot moved:
-    the one test of v5 with the salt path, one segment and one run. About 10 s after the demo window's test."""
+    """The salted lab window (B = 240) as v5: honest, with a wrong salt payload, and with the salt frame's slot moved:
+    the one test of v5 with the salt path, two segments and two runs (a request's frame reads the outside
+    host's length and head, then the message). About 10 s after the demo window's test."""
     setup, windows = lab_windows(salted_lab, salts=payloads(salted_lab))
     w = next(w for w in windows if w.port == INGRESS and w.window == 0)
     honest = V5.instance(setup, w)
@@ -445,7 +446,7 @@ def test_a_salted_window_is_its_reference(salted_lab):
     moved = copy.deepcopy(honest)
     moved.args["slot"] = 1
     cases = [honest, wrong, moved]
-    assert honest.salted and honest.R == 1
+    assert honest.salted and honest.R == 2
     assert V5.evaluate(*cases) == [int(V5.reference(x)) for x in cases] == [1, 0, 0]
 
 
