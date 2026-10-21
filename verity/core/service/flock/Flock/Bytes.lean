@@ -192,6 +192,19 @@ theorem runPlain_of_run {α} {m : M α} {bytes : ByteArray} {what : String} {a :
   rw [h]
   simp only [hr, ite_true]
 
+theorem runPlain_of_run_tag {α} {m : M α} {b : ByteArray} {what : String} {a : α} {r : Reader}
+    (h : m.run ⟨b ++ ByteArray.mk #[0], 0⟩ = .ok (a, r)) (hr : r.pos = b.size) :
+    runPlain m (b ++ ByteArray.mk #[0]) what = .ok a := by
+  have hs : (b ++ ByteArray.mk #[0]).size = b.size + 1 := by rw [ByteArray.size_append]; rfl
+  have h0 : (b ++ ByteArray.mk #[0])[b.size]! = 0 := by
+    rw [getElem!_pos (b ++ ByteArray.mk #[0]) b.size (by omega), ByteArray.getElem_append_right (by omega)]
+    simp only [Nat.sub_self]
+    rfl
+  unfold runPlain
+  rw [h]
+  simp only [hs, hr, ite_true]
+  simp [h0]
+
 end Reader
 
 end Flock

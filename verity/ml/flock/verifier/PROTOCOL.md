@@ -457,11 +457,17 @@ struct                  its fields in the order below, no tags
 
 Decoding is a total function `decode : Bytes → Except Reason Proof`. It rejects a truncated input, an enum index out of
 range and an `Option` tag other than 0 or 1. Every `Vec` length is compared with the expected length of §8.3 before the
-elements are read; `matrix_evals`, which no check reads, must be empty (D18). The pair ends after
-`consistency_batch_grinding_nonces`, upstream's form, or after one more byte 0: the zk patch's `zk_level0: Option<…>`,
-which it puts last in `LigeritoProof` and writes as `None` on every plain proof. Any other byte after that is refused (D17,
-`Reader.runPlain`): S17 hashes the whole file, so a byte the decoder doesn't read would be one the record's digest binds
-and nothing else does. A plain proof thus has two encodings, with and without the tag; a `--zk` file has one.
+elements are read; `matrix_evals`, which no check reads, must be empty (D18). A plain file is the pair, then the zk
+patch's `zk_level0: Option<…>`, which it puts last in `LigeritoProof` and writes as one byte 0 (`None`) on every plain
+proof: every deployed prover is that build (`pod/60-circuit.sh` applies `flock-zk-b684b12.patch`, which has carried the
+field since it was added). The decoder accepts that form alone, and a file only if it is the one encoding of the proof it
+decodes to (`decodeProof` compares it with `Wire.proofFile`): S17 hashes the whole file, so a byte the decoder doesn't
+read, or a second encoding of one proof, would be one the record's digest binds and nothing else does. Upstream's builds
+end the file after `consistency_batch_grinding_nonces`; a statement takes that form only when it says so
+(`Tags.upstreamPlain`, `flock-verify verify --upstream-plain`: the agreement corpus's sessions from upstream's binaries,
+D17), and the verifier then decodes each plain file as the file then the tag (`verifyFiles (plainBytes true)`), while
+S17 still hashes the file as the server received it. Under either pin, and at each
+`--zk` statement, a proof thus has one file (`Flock.decodeProof_canonical`, `Flock.plainBytes_canonical`).
 
 ### 8.2 Layout
 
@@ -481,7 +487,7 @@ LigeritoProof       = initial_cap: Vec<H> ‖ initial_proof: LevelProof ‖ recu
                       ‖ sumcheck_transcript: Vec<(F, F)> ‖ sumcheck_transcript_f256: Vec<(K, K)>
                       ‖ grinding_nonces: Vec<u64> ‖ ood_values: Vec<F> ‖ fold_grinding_nonces: Vec<u64>
                       ‖ claim_batch_grinding_nonces: Vec<u64> ‖ consistency_batch_grinding_nonces: Vec<u64>
-                      [‖ zk_level0: Option<Level0ZkProof>, = None, the zk patch's builds only]
+                      ‖ zk_level0: Option<Level0ZkProof>, = None (absent under --upstream-plain)
 LevelProof          = opened_rows: Vec<Vec<F>> ‖ merkle_proof: Vec<H>
 FinalProof          = yr: Vec<F> ‖ opened_rows: Vec<Vec<F>> ‖ merkle_proof: Vec<H>
 ~~~
@@ -1854,16 +1860,17 @@ expectation):
   `Flock.Test.RecCap` runs the list's and `checkCap`'s refusals, and `test_lean_rec_coins`' RecCap tests the honest cap
   and its refusals on the Lean verifier.
 
-- **D17:** a byte after the proof pair and its optional `zk_level0 = None` tag (§8.1), a tag other than 0 there, or a
-  byte after a `--zk` file's inner proof (`Zk.decode`). Upstream's `bincode::deserialize` ignores them; the spec refuses
-  the file (`proof: the file has N bytes and its encoding ends at byte M`, `zk_level0: tag T, want 0: …`, `zk proof: …`
-  under `--zk`). S17 hashes the whole file, and the recursion's binding of a session's last message needs every byte S17
-  hashes to be one the transcript absorbs, a Merkle path hashes or a check pins. Honest files end at the pair
-  (`bincode::serialize(&(commitment, proof))`, `(commitment, masked, inner)` under `--zk`), with the tag from the zk
-  patch's builds (the hidden-output selftest sessions) and without it from upstream's. Which of the two a plain file
-  takes is the one choice left: pinning it per statement (`Tags`) needs each statement's writer known. No plain vector
-  exercises it; `Flock.Test.ProofCanon` runs it on the Lean verifier, and `zk_mutants.py`'s `zk-trailing-bytes` on a
-  `--zk` session (`upstream_accepted`).
+- **D17:** a plain file in the form its statement doesn't pin (§8.1: the zk patch's `zk_level0 = None` tag after the
+  pair, by default, as every deployed prover writes it, or none under `--upstream-plain`), a tag other than 0 there, a
+  byte after it, or a byte after a `--zk` file's inner proof (`Zk.decode`). Upstream's `bincode::deserialize` ignores
+  them; the spec refuses the file (`zk_level0: the file ends without the None tag …` by default, `proof: the file has N
+  bytes and its encoding ends at byte M` for a tagged file under `--upstream-plain` or any byte after the end,
+  `zk_level0: tag T, want 0: …`, `zk proof: …` under `--zk`). S17 hashes the whole file, and the recursion's binding of a session's last message needs
+  every byte S17 hashes to be one the transcript absorbs, a Merkle path hashes or a check pins, so a proof has one file
+  at a statement (`Flock.decodeProof_canonical`). The agreement job runs upstream's binaries' sessions under
+  `--upstream-plain` (`agree.py`) and the live sets' (the zk patch's builds) without it. No plain vector exercises a
+  file in the other form; `Flock.Test.ProofCanon` runs each under each pin on the Lean verifier, and `zk_mutants.py`'s
+  `zk-trailing-bytes` a trailing byte on a `--zk` session (`upstream_accepted`).
 - **D18:** a non-empty `matrix_evals` (§8.1, §10). Upstream reads and ignores it; the spec refuses it
   (`matrix_evals: length N, want 0`), for D17's reason: no check reads it. Every honest prover writes it empty. No vector
   exercises it; `Flock.Test.ProofCanon` runs it on the Lean verifier.
