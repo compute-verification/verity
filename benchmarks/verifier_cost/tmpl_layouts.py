@@ -7,7 +7,8 @@ as JSON lines (PRF-133).
   row j at ``start + j·2^m + i``, the start aligned to 2^m times the Definition's own alignment, so the copy index is the
   low m bits and j the high ones. Applied recursively, a copy's local row j already holds its own inner runs' copy bits,
   so the outermost run's copy bits are the lowest. A single copy keeps its columns, at its Definition's alignment. A run
-  whose copies read one another (a binding into the run's own columns: chained, as a K loop's accumulator is) can't
+  whose copies read one another (a binding into the run's own columns, directly or through an input of the Definition
+  that some instance binds to its own columns: chained, as a K loop's accumulator is) can't
   interleave and keep each row reading earlier columns, so it falls back to ``contiguous`` (its copies side by side at
   L, the carry fold's case) or ``pow2``.
 
@@ -53,6 +54,7 @@ def layout(t: T.Tmpl, mode: str, fallback: str = "contiguous") -> tuple[np.ndarr
     size, align = [0] * len(defs), [1] * len(defs)
     rnd, gap = [0] * len(defs), [0] * len(defs)  # rows each definition adds: copies rounded up, alignment gaps
     kinds: list[list[tuple]] = [[] for _ in defs]  # per def: (call, kind, 2^m)
+    alias = _aliases(t) if mode == "interleaved" else [{} for _ in defs]
     st = {"runs": 0, "fixed_runs": 0, "lanes_runs": 0, "chained_runs": 0, "rows_lanes": 0, "rows_chained": 0,
           "pow2_runs": 0, "rows_pow2": 0}
     for d, D in enumerate(defs):
@@ -97,7 +99,7 @@ def layout(t: T.Tmpl, mode: str, fallback: str = "contiguous") -> tuple[np.ndarr
             elif c.count == 1:
                 kind, S, nb = "contig", size[e], T._up(pos, align[e])
                 al = max(al, align[e])
-            elif mode == "interleaved" and not _chained(c, Le):
+            elif mode == "interleaved" and not _chained(c, Le, D, alias[d]):
                 M = 1 << _log(c.count)
                 kind, S, nb = "lanes", M, T._up(pos, M * align[e])
                 al = max(al, M * align[e])
@@ -138,18 +140,48 @@ def layout(t: T.Tmpl, mode: str, fallback: str = "contiguous") -> tuple[np.ndarr
            "rows_rounding": rnd[t.root], "rows_alignment": gap[t.root], **st}
     if mode == "interleaved":
         out |= _bindings(defs, maps, size, kinds, urows)
+        out["aliased_inputs"] = {"defs": sum(1 for a in alias if a), "inputs": sum(len(a) for a in alias)}
     return maps[t.root], out
 
 
-def _chained(c: T.Call, Le: int) -> bool:
-    lo, hi = c.base, c.base + c.count * Le
+def _reads(c: T.Call, D: T.Def, al: dict[int, set[int]]):
+    """Per segment of ``c``'s bindings, its offset among the callee's inputs and the caller's own columns copy j's input
+    reads as (j, input, column) arrays: the column bound, or the columns an input of the caller it is bound to aliases."""
     j = np.arange(c.count, dtype=np.int64)[:, None]
+    q0 = 0
     for ln, at, sp in c.segs:
         if ln:
             v = at + j * sp + np.arange(ln, dtype=np.int64)[None, :]
-            if ((v >= lo) & (v < hi)).any():
-                return True
-    return False
+            jj, qq = np.nonzero(v < D.cols)
+            parts = [(jj, qq, v[jj, qq])]
+            for p, cols in al.items():
+                pj, pq = np.nonzero(v == D.cols + p)
+                for col in cols:
+                    parts.append((pj, pq, np.full(len(pj), col, np.int64)))
+            yield q0, tuple(np.concatenate(x) for x in zip(*parts))
+        q0 += ln
+
+
+def _aliases(t: T.Tmpl) -> list[dict[int, set[int]]]:
+    """Per Definition, each input that some instance binds to one of that instance's own columns, and those columns
+    (local). A Definition is laid out once, so a run inside it whose copies read such an input is chained."""
+    defs = t.defs
+    al: list[dict[int, set[int]]] = [{} for _ in defs]
+    for d in range(len(defs) - 1, -1, -1):
+        D = defs[d]
+        for c in D.calls:
+            Le = defs[c.e].cols
+            for q0, (jj, qq, col) in _reads(c, D, al[d]):
+                u = col - c.base - jj * Le
+                ok = (u >= 0) & (u < Le)
+                for q, x in zip((q0 + qq[ok]).tolist(), u[ok].tolist()):
+                    al[c.e].setdefault(q, set()).add(x)
+    return al
+
+
+def _chained(c: T.Call, Le: int, D: T.Def, al: dict[int, set[int]]) -> bool:
+    lo, hi = c.base, c.base + c.count * Le
+    return any(((col >= lo) & (col < hi)).any() for _, (_, _, col) in _reads(c, D, al))
 
 
 def _bindings(defs, maps, size, kinds, urows) -> dict:
