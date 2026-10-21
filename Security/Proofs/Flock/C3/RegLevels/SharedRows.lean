@@ -56,8 +56,8 @@ theorem site_of_checkShared {s : VStar.Stmt} {own : Array Flock.Registered.Port}
       cases hs : (RecVStar.stackedTopLevel p.value).isSome
       · rfl
       · first | (rw [hs] at hr; cases hr) | (simp only [hs] at hr; cases hr) | simp [hs] at hr
-    have ht : (RecVStar.topLevel p.value == some 0) = false := by
-      cases ht : (RecVStar.topLevel p.value == some 0)
+    have ht : (RecVStar.topLevel p.value).isSome = false := by
+      cases ht : (RecVStar.topLevel p.value).isSome
       · rfl
       · first | (rw [hs, ht] at hr; cases hr) | (simp only [hs, ht] at hr; cases hr) | simp [hs, ht] at hr
     first | rw [hs, ht] at hr | simp only [hs, ht, Bool.false_eq_true, ↓reduceIte] at hr
