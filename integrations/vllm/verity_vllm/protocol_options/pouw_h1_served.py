@@ -34,9 +34,10 @@ them as ports of the verifier's own ``--registered`` file (`one_stage.served.reg
   window, what `h1window.program` refuses) leaves no tree, and `trees` raises it.
 * `trees` gives the window's `ServedTree`s, each K's A then B, and `register` registers them all at once: a window is one
   statement, one C-Flock session and one registration, so one ``--registered`` file (`FILE`) in the window's directory,
-  whatever its K. It refuses a value an earlier record of the log registered under another root (R7-held, `held`) before
-  `register_served`, which reads ``hm96-sha512/row/v1`` rows alone until proofs' REGV2 follow-up (after #2971 and #2979
-  land).
+  whatever its K. It refuses a value an earlier record of the log registered under its domain and another root (R7-held,
+  `held`) before `register_served`.
+* `declared_layout` and `Served.layout` give the window Program's `h1window.program` arguments, the layout the record
+  commits and core's credit draws from (`credit.strata`).
 """
 from __future__ import annotations
 
@@ -114,11 +115,18 @@ def declared(shapes: Sequence[tuple[int, int]], modules: Mapping[int, str], rows
     each ``(n, K)``, named by ``modules``) in order, laid out as `Served.close` lays out the calls it records, its A slot
     for ``rows`` token rows. With no ``prefix`` it names no window, so it is one for every window of the declaration (a
     period's ``--circuit``, its `program_digest`); with a window's `prefix` it is that window's `Served.program`."""
+    lay = declared_layout(shapes, modules, rows, steps, tile, blocks)
+    return HW.program([tuple(x) for x in lay["linears"]], [tuple(x) for x in lay["calls"]], lay["m"], tile, prefix, unit)
+
+
+def declared_layout(shapes: Sequence[tuple[int, int]], modules: Mapping[int, str], rows: int, steps: int,
+                    tile: tuple[int, int] = PH.TILE, blocks: Sequence[int] | None = None) -> dict[str, Any]:
+    """`declared`'s arguments to `h1window.program` as the window's layout, the form `credit.strata` reads (its units and
+    their order, so the draw's population): ``{calls: [[linear, A block], ...], linears: [[name, K, n], ...], m, tile}``."""
     mods = [modules.get(w, str(w)) for w in range(len(shapes))]
     calls = [(s, w) for s in range(steps) for w in range(len(shapes))]
-    return HW.program([(mods[w], k, n) for w, (n, k) in enumerate(shapes)],
-                      [(mods[w], b) for (_s, w), b in zip(calls, layout(shapes, calls, blocks))], HW.slot(rows, tile), tile,
-                      prefix, unit)
+    return {"calls": [[mods[w], b] for (_s, w), b in zip(calls, layout(shapes, calls, blocks))],
+            "linears": [[mods[w], k, n] for w, (n, k) in enumerate(shapes)], "m": HW.slot(rows, tile), "tile": list(tile)}
 
 
 @dataclass
@@ -274,6 +282,13 @@ class Served:
         if why is not None:
             self.refused.append(why[1])
 
+    def layout(self) -> dict[str, Any] | None:
+        """The committed Program's `h1window.program` arguments (`declared_layout`'s form), None when `close` refused it."""
+        if self.program is None:
+            return None
+        return {"calls": [list(x) for x in self.calls], "linears": [list(x) for x in self.linears], "m": self.m,
+                "tile": list(self.tile)}
+
     def ks(self) -> list[int]:
         """The window's contractions, ascending: one tile template, one A and one B value each."""
         return sorted({int(r.value.rsplit("/", 1)[1]) for r in self.registered})
@@ -329,13 +344,13 @@ def trees(run: Any) -> list[ServedTree]:
 
 
 def held(got: Sequence[ServedTree], log: Sequence[Mapping[str, Any]]) -> None:
-    """R7-held: refused (ValueError) when an earlier record of the log registered one of `got`'s values under another
-    root, as a later window keyed as an earlier one would."""
+    """R7-held: refused (ValueError) when an earlier record of the log registered one of `got`'s values under its domain
+    and another root, as a later window keyed as an earlier one would (`registration.held_roots`, by value and domain)."""
     roots = R.held_roots(log)
     for t in got:
-        if roots.get(t.value, t.root) != t.root:
+        if roots.get((t.value, t.domain), t.root) != t.root:
             raise ValueError(f"served tree {t.value!r}: an earlier record of the log registered it under root "
-                             f"{roots[t.value][:16]}..., and a value is committed once (R7-held)")
+                             f"{roots[(t.value, t.domain)][:16]}..., and a value is committed once (R7-held)")
 
 
 def register(run: Any, log: Sequence[Mapping[str, Any]] = (), directory: str | Path | None = None,

@@ -9,8 +9,7 @@ to the trees' rows, and a read opened with a row of another A block or another B
 the window once, in one file. A call whose codes aren't its shared block's is refused; y, z and the scale stay under the
 round roots only; a second window reusing the first's names is refused (R7-held); `calls_root` binds the trees.
 
-The registration through `register_served` is a strict xfail: its served trees are ``hm96-sha512/row/v1`` alone
-(`served.READ`) until proofs' REGV2 follow-up. A stand-in tile unit of the H1 tile's parameter shape (one-bit A and B
+A stand-in tile unit of the H1 tile's parameter shape (one-bit A and B
 leaves, 8K a row) keeps the Program small."""
 from __future__ import annotations
 
@@ -354,9 +353,6 @@ def test_register_registers_the_whole_window_once_in_one_file(tmp_path, monkeypa
     assert calls[-1][3] == {"a_k16[0]": "a0"}
 
 
-@pytest.mark.xfail(reason="REGV2 follow-up (after #2971 and #2979 land): register_served refuses hm96-sha512/row/v2 served "
-                          "trees (served.READ is row/v1 alone) and doesn't pass their schemas to registered.reads",
-                   raises=ValueError, strict=True)
 def test_the_window_registers():
     run, _ws, _inputs = _window(W1)
     SV.register(run)
