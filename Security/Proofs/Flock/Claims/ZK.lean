@@ -101,6 +101,9 @@ import Proofs.Flock.Claims.ZK.FinishPiop
 import Proofs.Flock.Claims.ZK.FinishInner
 import Proofs.Flock.Claims.ZK.FinishLig
 import Proofs.Flock.Claims.ZK.FinishRep
+import Proofs.Flock.Claims.ZK.FinishRank
+import Proofs.Flock.Claims.ZK.FinishSrc
+import Proofs.Flock.Claims.ZK.FinishBridge
 import Proofs.Flock.Claims.ZK.FinishStop
 import Proofs.Flock.Claims.ZK.HelloLean
 import Proofs.Flock.Claims.ZK.SessionLean
@@ -500,6 +503,20 @@ import Proofs.Flock.Claims.ZK.SessionLean
   (**`Flock.Firewall.Finish.repFw_eq`**, at pads with `h_ab = h_a·h_b` and `w = x·y`, in a monad where a throw ends the
   run, as `flock-firewall finish`'s does, `throw_bind_sv`). Where no constraint fails on the pads the batched
   constraint holds whatever the constraints' lengths (`batched_of_noFail`, by `evalL_combo_linAt`).
+* `FinishBridge`: the firewall's rounds as the session's. Its rep counts rounds from zero in `StateT Nat V`; the session
+  logs every send in `FlockComplete.PS`. The state map `Flock.Firewall.Finish.bridge base` relates a rep at round `k` to
+  a log of `base + k` sends, and every prover the rep calls is walked once, generic in its `Sim`, so a `repFw` run that
+  returns at round `k'` is `repFwC` answered by `asksCut` at its coins from round `base` (`coinsFrom`), returning the
+  same with a log of `base + k'` (**`Flock.Firewall.Finish.repFw_cut`**).
+* `FinishSrc`: the firewall's rep against the rep from a source. Answered by `asksCut`, where the source's masked values
+  are `vals + h`, its switched vectors the firewall's at the claims, the rank check passes, and the session's Ligerito
+  and inner hybrids hold (`LigHyp`, `InnerSrc`), `FlockComplete.repCut` at level 0's commitment erased returns the
+  firewall's transcript and log, and its proof up to `eraseZ` (**`Flock.Firewall.Finish.repCut_fw`**).
+* `FinishRank`: the rank check of `FinishSrc`'s rep from a source. Answered by `asksCut`, a rep's zerocheck and lincheck
+  leave rounds carrying the coins of their sends whatever the masked values (`FlockComplete.RankAt.growS`), so the check
+  reads the claim points at the coins from the rep's first send (`FlockComplete.RankAt.roundPoints_cut`); where every
+  table admits the opened coins no refusal shows, so table `j`'s rep `r`'s check passes at coins that are the opened
+  ones through it (**`Claims.ZKMal.Masked.rank_at_admits`**).
 * `FinishStop`: the firewall's stop at a worker's values. At constraints whose forms are rep `r`'s first seven rows on
   the masked values, none fails on the drawn pads exactly where those rows vanish at the clear values at zero pads
   (**`Composed.noFail_iff_rows`**, by `rows_padFree`), so the stop bit reads no pad; and where they vanish for both
