@@ -20,19 +20,23 @@ An `outcome` case is a `drawn` case's arguments and one accepted proof outcome f
 mutations drop one (``missing``), reject one (``failed``), repeat one, add an undrawn unit, prove the units of another
 coin the prover chose (``chosen``), and break the forms.
 
-A `window` case is a `credited` case with its layout, a committed K, one call per manifest row, and an accepted proof of
-each unit its draw coin draws at K under the served window's arguments; its mutations add a call the manifest lacks,
-prove units the prover chose under its own stream, fail or drop a drawn unit, break K's form or give one past the
-window's units, and pass a `credited` refusal through.
+A `window` case is a `credited` case with its circuit's descriptor (`window_desc`: `h1window.program`'s encoding as far
+as `credit.layout_of` reads it, each call's tiles a call node each or one batch), a committed K, one call per manifest
+row, and an accepted proof of each unit its draw coin draws at K under the served window's arguments; its mutations add
+a call the manifest lacks, prove units the prover chose under its own stream, fail or drop a drawn unit, break K's form
+or give one past the window's units, pass a `credited` refusal through, and break the descriptor (`DESC_NAMES`): its
+form, its program function's record, a template, a K no linear has, the root's nodes, the record's layout, or a record
+naming another layout over the same nodes (``alt-layout``).
 
-A `period` case is one to three such windows in one period of the auditor's ledger (`period-open` committing the SHA-512
-of a circuit's descriptor and the K every window is drawn at, `credit.K_FIELD`, each window's session opened and ended,
-then the `period-close` listing them), presented in its close's order, each with that descriptor, a window of no period
-beside it in the ledger. Its mutations (RT4-INT-42) leave the period unclosed or a window incomplete, drop, reorder or
-add a window, present the window of no period among the period's, name a period never opened or no period, forge the
-ledger, refuse one window, give one window another circuit's descriptor (``other-circuit``) or open the period
-committing no circuit, open it committing no K or a malformed one, commit a K past a window's units, prove one window's
-draw at another K (``other-k``), and break the forms.
+A `period` case is one to three such windows of one circuit in one period of the auditor's ledger (`period-open`
+committing the SHA-512 of the circuit's descriptor and the K every window is drawn at, `credit.K_FIELD`, each window's
+session opened and ended, then the `period-close` listing them), presented in its close's order, each with that
+descriptor, a window of no period beside it in the ledger. Its mutations (RT4-INT-42) leave the period unclosed or a
+window incomplete, drop, reorder or add a window, present the window of no period among the period's, name a period
+never opened or no period, forge the ledger, refuse one window, give one window another circuit's descriptor
+(``other-circuit``, or the descriptor of another layout, ``alt-layout``) or open the period committing no circuit or
+one that is no H1 window's (``bad-circuit``), open it committing no K or a malformed one, commit a K past a window's
+units, prove one window's draw at another K (``other-k``), and break the forms.
 
 An `a_link` case is a window's registered entries, among them one or two A values (``…/a/<K>``) whose trees are frame-v3
 SHA-512 trees (`verity.ml.commitments.merkle.tree_levels`) of `steps` equal blocks, and its round log: each round's

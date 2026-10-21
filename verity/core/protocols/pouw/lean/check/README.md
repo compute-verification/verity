@@ -26,7 +26,7 @@ Python reference held to it.
 | `PouwCheck.Rounds` | `salt`, `rounds`: a live window's salt coin, opened once after its open root (`salt.window_open_root` of its record and the session the auditor's ledger reserved), and its round coins, each opened once after its recorded round root (`window.rounds_reason`'s rules, `PouwWindow.roundsReason`), both read through the challenger's session the ledger opens for the window (`SampledProofs.Challenger.auditedSession`, `sessionNamed`) |
 | `PouwCheck.Difftest` | the difftest's functions behind `pouw-check-difftest` (`opening`, `registered`, `pass`, `draw`, `salt`, `rounds`) |
 | `PouwCheck.DifftestMain` | `pouw-check-difftest`'s server, and its `coins n`: `n` bytes of `IO.getRandomBytes` (A3), the challenger's entropy (`verifier.coins`; `tests/test_coins.py`) |
-| `PouwCheck.Credit` | `credit.py`'s `credited`, `drawn`, `outcome`, `window`, `period`, `period_credit` and `a_link`: a served window's credit bits fixed before its draw coin, its drawn units the draw coin's over its own layout, no partial credit over them, a period counted only closed and complete, and its A trees tied to its round roots (RT4-INT-32, -34 and -42) |
+| `PouwCheck.Credit` | `credit.py`'s `credited`, `drawn`, `outcome`, `layout_of`, `window`, `period`, `period_credit` and `a_link`: a served window's credit bits fixed before its draw coin, its drawn units the draw coin's over its committed circuit's layout, no partial credit over them, a period counted only closed and complete, and its A trees tied to its round roots (RT4-INT-32, -34 and -42) |
 | `PouwCheck.CreditDifftest` | the difftest's `credit`, `drawn`, `outcome`, `window`, `period` and `a-link` behind `pouw-check-difftest` (`CreditDifftest.all`, the functions `DifftestMain` serves) |
 
 `opening` holds a tile proof's public file to the registered window: the unit drawn (or opened undrawn, the filler's),
@@ -82,12 +82,16 @@ the K its period's open committed (`law`; `committedK` reads `draw_k`, and a win
 `established`: the ε that draw established at δ = 2⁻⁴⁰ over the window's credited work, `PouwWindow.epsAt` (`k_prime`
 inverted) as `epsAt K δ C W 1`, C the credited calls' work and W the window's (`callWork`), which `periodCredit`
 reports, null when it establishes no ε ≤ 1; PoUW has no ε target. `outcome`: the window is accepted only when every unit `drawn` draws has exactly one
-proof outcome and it is an accept; a failed or missing one refuses the whole window. `window` is both on one served
-window, the stream its root, the registration its draw root and the receipt `{"receipts": …}`. `period`: the windows
+proof outcome and it is an accept; a failed or missing one refuses the whole window. `layoutOf`: the layout is the
+committed circuit's, never the window's evidence: read from the descriptor whose SHA-512 the period's open committed
+(its program function's record, its templates' A and B rows for R and C), whose root's nodes other than inputs must be
+each call's (M/R)·(n/C) instances of K's template in order. `window` is `credited`, `layoutOf` and `outcome` on one
+served window, the stream its root, the registration its draw root and the receipt `{"receipts": …}`. `period`: the windows
 presented are exactly those the auditor's ledger lists in the period's close, in its order, and the close is complete,
 so a period with no close or with a window missing, out of order or not its own earns nothing; `periodCredit` also
 requires each of them to prove the circuit the period's open committed (its descriptor's SHA-512,
-`SampledProofs.Challenger.creditedSession`) and credits it (`window`) drawn at the period's K, a refused one refusing
+`SampledProofs.Challenger.creditedSession`, the same bytes `layoutOf` reads) and credits it (`window`) drawn at the
+period's K, a refused one refusing
 the period. `aLink`: each round's root (the one the challenger received before that round's coin) is `credit.round_root`
 of the serving process's own round root and that round's rows of every registered A value (`…/a/<K>`) as aligned
 subtrees (`credit.cover`), and each A value's registered root must be the frame-v3 SHA-512 tree over those subtrees and
@@ -115,8 +119,8 @@ layout's). `verity/core/protocols/pouw/tests/test_pouw_core_check.py` checks tha
 aims at. Its `credit`, `drawn`, `outcome`, `window`, `period` and `a-link` go against `credit.credited`,
 `credit.drawn`, `credit.outcome`, `credit.window`, `credit.period_credit` and `credit.a_link` over
 `tests/pouw_credit_cases.py` (a credit bit flipped after the draw coin, units the prover chose, a drawn unit failed or
-missing, a period unclosed or a window of it missing or out of order, an A tree the round roots didn't commit, and one
-mutation per other refusal), and `verity/core/protocols/pouw/tests/test_pouw_credit.py`
+missing, a period unclosed or a window of it missing or out of order, an A tree the round roots didn't commit, a
+descriptor whose record names another layout than its nodes, and one mutation per other refusal), and `verity/core/protocols/pouw/tests/test_pouw_credit.py`
 holds each mutation to its refusal.
 
 ~~~text

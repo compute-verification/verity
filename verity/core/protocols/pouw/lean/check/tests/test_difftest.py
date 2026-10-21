@@ -19,7 +19,8 @@ mutation each aimed at every refusal), compared output for output: how the salt 
 Its `credit`, `drawn`, `outcome`, `window`, `period` and `a-link` against `credit.credited`, `credit.drawn`,
 `credit.outcome`, `credit.window`, `credit.period_credit` and `credit.a_link`: one `Port` each, over the cases
 `pouw_credit_cases` generates (a served window whose draw coin opened after its draw root over the manifest's credit bits,
-the units a draw coin draws from a window's layout and each of them proved, a served window whole, a period of the
+the units a draw coin draws from a window's layout and each of them proved, a served window whole with its layout read
+from its circuit's descriptor (`credit.layout_of`), a period of the
 auditor's ledger and its windows, a window's A trees under its round roots, then one mutation each aimed at every
 refusal), compared output for output: the credited calls, the drawn units or null, or the same refusal.
 
@@ -323,6 +324,12 @@ def test_credit(pass_server):
                  "drawn budget: the draw's K is not",
                  "drawn budget: the window's # units are fewer than K", "period budget: period ",
                  "the one period", "commits no cap or circuit", "the window's descriptor is not the bytes",
+                 "window layout: the window's circuit's units are not its record's tiles",
+                 "window layout: the window's circuit is not an H# window",
+                 "window layout: the window's template at K = # is not h#window's",
+                 "window layout: the window's descriptor is not a verity-ir/descriptor/v#",
+                 "window layout: the window's TILES are at K = ", "window layout: the window's layout is not",
+                 "window layout: a call of lm_head", "so the period earns nothing: layout: ",
                  "a-link a-link: registered A value h#/w#/a/#'s root is not the tree",
                  "a-link a-link: round #'s root is not over", "don't tile its rows",
                  "a-link a-link: the window registers no A value", "which is no registered A value"):

@@ -1,7 +1,7 @@
 """`credit.py`'s rules on a served window and its period (RT4-INT-32, -34 and -42; PRF-132): each mutation of
 `pouw_credit_cases` is refused by the rule it aims at, its message naming the fix, and the honest windows and periods are
-accepted. The drawn units are the draw coin's over the window's own layout, whose strata are the compiled
-`h1window.program`'s. The Lean (`PouwCheck.Credit`) is held to the same cases by `lean/check/tests/test_difftest.py`."""
+accepted. The drawn units are the draw coin's over the window's own layout, read from the descriptor of the circuit the
+period committed (`credit.layout_of`), whose strata are the compiled `h1window.program`'s. The Lean (`PouwCheck.Credit`) is held to the same cases by `lean/check/tests/test_difftest.py`."""
 from __future__ import annotations
 
 import importlib.util
