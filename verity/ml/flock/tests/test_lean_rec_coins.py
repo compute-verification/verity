@@ -982,6 +982,6 @@ def test_the_inner_statements_setup_flags_go_with_its_statement(built, tmp_path)
     p = subprocess.run([*base, "--rec-inner-draw", str(tmp_path / "empty")], capture_output=True, text=True)
     assert "--rec-inner-statement-coins, --rec-inner-tables and --rec-inner-draw go with --rec-inner-statement" in (
         p.stdout + p.stderr), (p.returncode, p.stdout, p.stderr)
-    p = subprocess.run([*base, "--rec-inner-statement", FORM, "--rec-inner-statement-coins", "live"], capture_output=True,
+    p = subprocess.run([*base, "--rec-inner-statement", FORM, "--rec-inner-statement-coins", "keyed"], capture_output=True,
                        text=True)
-    assert "--rec-inner-statement-coins live: not os or seed" in p.stdout + p.stderr, (p.returncode, p.stdout, p.stderr)
+    assert "--rec-inner-statement-coins keyed: not os or seed" in p.stdout + p.stderr, (p.returncode, p.stdout, p.stderr)
